@@ -5,8 +5,7 @@
   "private": true,
   "type": "module",
   "workspaces": [
-    "apps/*",
-    "workflows/*"
+    "apps/*"
   ],
   "scripts": {
     "build": "npm run build --workspaces --if-present",
