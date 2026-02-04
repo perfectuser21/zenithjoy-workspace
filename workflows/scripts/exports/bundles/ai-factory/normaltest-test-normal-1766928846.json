@@ -1,0 +1,80 @@
+{
+  "name": "Normal Test",
+  "nodes": [
+    {
+      "id": "trigger-1",
+      "name": "定时触发器",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1,
+      "position": [
+        250,
+        300
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 1
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "ssh-1",
+      "name": "检查磁盘空间",
+      "type": "n8n-nodes-base.ssh",
+      "typeVersion": 1,
+      "position": [
+        450,
+        300
+      ],
+      "parameters": {
+        "command": "df -h /"
+      }
+    },
+    {
+      "id": "http-1",
+      "name": "发送飞书告警",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        650,
+        300
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.FEISHU_BOT_WEBHOOK }}"
+      }
+    }
+  ],
+  "connections": {
+    "定时触发器": {
+      "main": [
+        [
+          {
+            "node": "检查磁盘空间",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "检查磁盘空间": {
+      "main": [
+        [
+          {
+            "node": "发送飞书告警",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "n8n_id": "test-workflow-1766928846-31480"
+}

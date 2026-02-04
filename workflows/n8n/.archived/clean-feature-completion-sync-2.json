@@ -1,0 +1,678 @@
+{
+  "name": "Feature Completion Sync",
+  "description": null,
+  "active": false,
+  "nodes": [
+    {
+      "id": "schedule-trigger",
+      "name": "每5分钟触发",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        240,
+        300
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 5
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "manual-trigger",
+      "name": "手动触发",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        240,
+        500
+      ]
+    },
+    {
+      "id": "query-ai-done",
+      "name": "查询 AI Done 的 Feature Check",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        520,
+        400
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.notion.com/v1/databases/54fe0d4c-f434-4e91-8bb0-e33967661c42/query",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{ $env.NOTION_API_KEY }}"
+            },
+            {
+              "name": "Notion-Version",
+              "value": "2022-06-28"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\n  \"filter\": {\n    \"and\": [\n      { \"property\": \"Daily Highlight\", \"checkbox\": { \"equals\": true } },\n      { \"property\": \"AI Task\", \"checkbox\": { \"equals\": true } },\n      { \"property\": \"Coding Type\", \"select\": { \"equals\": \"Check\" } },\n      { \"property\": \"Status\", \"status\": { \"equals\": \"AI Done\" } }\n    ]\n  },\n  \"page_size\": 10\n}",
+        "options": {}
+      }
+    },
+    {
+      "id": "query-completed",
+      "name": "查询 Completed 的 Feature Check",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        520,
+        600
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.notion.com/v1/databases/54fe0d4c-f434-4e91-8bb0-e33967661c42/query",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{ $env.NOTION_API_KEY }}"
+            },
+            {
+              "name": "Notion-Version",
+              "value": "2022-06-28"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\n  \"filter\": {\n    \"and\": [\n      { \"property\": \"Daily Highlight\", \"checkbox\": { \"equals\": true } },\n      { \"property\": \"AI Task\", \"checkbox\": { \"equals\": true } },\n      { \"property\": \"Coding Type\", \"select\": { \"equals\": \"Check\" } },\n      { \"property\": \"Status\", \"status\": { \"equals\": \"Completed\" } }\n    ]\n  },\n  \"page_size\": 10\n}",
+        "options": {}
+      }
+    },
+    {
+      "id": "merge-results",
+      "name": "合并结果",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [
+        780,
+        500
+      ],
+      "parameters": {
+        "mode": "append",
+        "options": {}
+      }
+    },
+    {
+      "id": "process-features",
+      "name": "处理 Feature",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1040,
+        500
+      ],
+      "parameters": {
+        "jsCode": "const items = $input.all();\n\n// 分类处理 AI Done 和 Completed\nconst results = [];\n\nfor (const item of items) {\n  const pageResults = item.json.results || [];\n  \n  for (const page of pageResults) {\n    const status = page.properties?.Status?.status?.name;\n    const taskId = page.id;\n    const taskName = page.properties?.Name?.title?.map(t => t.plain_text).join('') || 'Unknown';\n    const projectId = page.properties?.Project?.relation?.[0]?.id;\n    \n    results.push({\n      task_id: taskId,\n      task_name: taskName,\n      status: status,\n      project_id: projectId,\n      action: status === 'AI Done' ? 'notify_review' : 'sync_completed'\n    });\n  }\n}\n\nif (results.length === 0) {\n  return { no_tasks: true };\n}\n\nreturn results;"
+      }
+    },
+    {
+      "id": "check-has-tasks",
+      "name": "有任务?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1300,
+        500
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "leftValue": "",
+            "caseSensitive": true,
+            "typeValidation": "strict"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "check-no-tasks",
+              "operator": {
+                "type": "boolean",
+                "operation": "false"
+              },
+              "leftValue": "={{ $json.no_tasks || false }}"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "no-tasks",
+      "name": "无任务",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        1560,
+        660
+      ]
+    },
+    {
+      "id": "split-features",
+      "name": "拆分 Feature",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        1560,
+        500
+      ],
+      "parameters": {
+        "batchSize": 1,
+        "options": {}
+      }
+    },
+    {
+      "id": "check-action",
+      "name": "检查操作类型",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1820,
+        500
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "leftValue": "",
+            "caseSensitive": true,
+            "typeValidation": "strict"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "check-action",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              },
+              "leftValue": "={{ $json.action }}",
+              "rightValue": "notify_review"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "read-check-report",
+      "name": "读取检查报告",
+      "type": "n8n-nodes-base.ssh",
+      "typeVersion": 1,
+      "position": [
+        2080,
+        400
+      ],
+      "parameters": {
+        "authentication": "privateKey",
+        "host": "146.190.52.84",
+        "port": 22,
+        "user": "xx",
+        "command": "=# 读取 Feature Check 的执行结果\nRUN_DIR=$(ls -td /home/xx/data/runs/*{{ $json.task_id.slice(0,8) }}* 2>/dev/null | head -1)\nif [[ -f \"$RUN_DIR/result.json\" ]]; then\n  cat \"$RUN_DIR/result.json\"\nelse\n  echo '{\"success\": true, \"score\": 100, \"message\": \"No report found\"}'\nfi"
+      },
+      "credentials": {
+        "sshPrivateKey": {
+          "id": "vvJsQOZ95sqzemla",
+          "name": "VPS SSH Key"
+        }
+      }
+    },
+    {
+      "id": "parse-report",
+      "name": "解析报告",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2340,
+        400
+      ],
+      "parameters": {
+        "jsCode": "const stdout = $input.first().json.stdout || '{}';\nconst taskInfo = $('拆分 Feature').first().json;\n\nlet report = { success: true, score: 100 };\ntry {\n  report = JSON.parse(stdout);\n} catch (e) {\n  // 解析失败使用默认值\n}\n\n// 提取分数\nconst score = report.score || report.scores?.total || 100;\nconst passed = score >= 80;\n\nreturn {\n  ...taskInfo,\n  score: score,\n  passed: passed,\n  report: report\n};"
+      }
+    },
+    {
+      "id": "notify-review",
+      "name": "通知验收",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2600,
+        400
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.FEISHU_BOT_WEBHOOK }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"msg_type\": \"interactive\",\n  \"card\": {\n    \"header\": {\n      \"title\": { \"tag\": \"plain_text\", \"content\": \"{{ $json.passed ? '✅' : '⚠️' }} Feature 执行完成，请验收\" },\n      \"template\": \"{{ $json.passed ? 'green' : 'orange' }}\"\n    },\n    \"elements\": [\n      {\n        \"tag\": \"div\",\n        \"text\": {\n          \"tag\": \"lark_md\",\n          \"content\": \"**Feature**: {{ $json.task_name }}\\n**评分**: {{ $json.score }}/100\\n\\n{{ $json.passed ? '所有任务执行成功！' : '评分不足 80 分，请检查。' }}\\n\\n**操作**:\\n• 通过 → 改成 Completed\\n• 不通过 → 写反馈后改成 Next Action\"\n        }\n      },\n      {\n        \"tag\": \"action\",\n        \"actions\": [\n          {\n            \"tag\": \"button\",\n            \"text\": { \"tag\": \"plain_text\", \"content\": \"查看 Feature\" },\n            \"url\": \"https://www.notion.so/{{ $json.task_id.replace(/-/g, '') }}\",\n            \"type\": \"primary\"\n          }\n        ]\n      }\n    ]\n  }\n}",
+        "options": {}
+      }
+    },
+    {
+      "id": "sync-completed",
+      "name": "同步完成状态",
+      "type": "n8n-nodes-base.ssh",
+      "typeVersion": 1,
+      "position": [
+        2080,
+        600
+      ],
+      "parameters": {
+        "authentication": "privateKey",
+        "host": "146.190.52.84",
+        "port": 22,
+        "user": "xx",
+        "command": "=# 将 Feature 下所有任务改成 Completed\n# 这里简化处理，实际需要查询 Project 下所有任务\necho '同步完成状态: {{ $json.task_id }}'"
+      },
+      "credentials": {
+        "sshPrivateKey": {
+          "id": "vvJsQOZ95sqzemla",
+          "name": "VPS SSH Key"
+        }
+      }
+    },
+    {
+      "id": "query-project-tasks",
+      "name": "查询 Project 任务",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2340,
+        600
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.notion.com/v1/databases/54fe0d4c-f434-4e91-8bb0-e33967661c42/query",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{ $env.NOTION_API_KEY }}"
+            },
+            {
+              "name": "Notion-Version",
+              "value": "2022-06-28"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"filter\": {\n    \"and\": [\n      { \"property\": \"Project\", \"relation\": { \"contains\": \"{{ $json.project_id }}\" } },\n      { \"property\": \"AI Task\", \"checkbox\": { \"equals\": true } },\n      { \"property\": \"Status\", \"status\": { \"does_not_equal\": \"Completed\" } }\n    ]\n  },\n  \"page_size\": 50\n}",
+        "options": {}
+      }
+    },
+    {
+      "id": "batch-update-completed",
+      "name": "批量更新为 Completed",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2600,
+        600
+      ],
+      "parameters": {
+        "jsCode": "const taskInfo = $('拆分 Feature').first().json;\nconst queryResult = $input.first().json;\nconst tasksToUpdate = queryResult.results || [];\n\n// 准备批量更新\nconst updates = tasksToUpdate.map(task => ({\n  task_id: task.id,\n  task_name: task.properties?.Name?.title?.map(t => t.plain_text).join('') || 'Unknown'\n}));\n\nreturn {\n  feature_name: taskInfo.task_name,\n  tasks_to_sync: updates.length,\n  tasks: updates\n};"
+      }
+    },
+    {
+      "id": "update-each-task",
+      "name": "逐个更新任务",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2860,
+        600
+      ],
+      "parameters": {
+        "method": "PATCH",
+        "url": "=https://api.notion.com/v1/pages/{{ $json.tasks[0]?.task_id || '' }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{ $env.NOTION_API_KEY }}"
+            },
+            {
+              "name": "Notion-Version",
+              "value": "2022-06-28"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\n  \"properties\": {\n    \"Status\": { \"status\": { \"name\": \"Completed\" } }\n  }\n}",
+        "options": {}
+      }
+    },
+    {
+      "id": "notify-synced",
+      "name": "通知已同步",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3120,
+        600
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.FEISHU_BOT_WEBHOOK }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"msg_type\": \"interactive\",\n  \"card\": {\n    \"header\": {\n      \"title\": { \"tag\": \"plain_text\", \"content\": \"🎉 Feature 验收通过\" },\n      \"template\": \"green\"\n    },\n    \"elements\": [\n      {\n        \"tag\": \"div\",\n        \"text\": {\n          \"tag\": \"lark_md\",\n          \"content\": \"**Feature**: {{ $('拆分 Feature').first().json.task_name }}\\n\\n已同步 {{ $json.tasks_to_sync }} 个任务为 Completed。\"\n        }\n      }\n    ]\n  }\n}",
+        "options": {}
+      }
+    },
+    {
+      "id": "loop-back",
+      "name": "继续下一个",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        3120,
+        500
+      ]
+    }
+  ],
+  "connections": {
+    "每5分钟触发": {
+      "main": [
+        [
+          {
+            "node": "查询 AI Done 的 Feature Check",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "查询 Completed 的 Feature Check",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "手动触发": {
+      "main": [
+        [
+          {
+            "node": "查询 AI Done 的 Feature Check",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "查询 Completed 的 Feature Check",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "查询 AI Done 的 Feature Check": {
+      "main": [
+        [
+          {
+            "node": "合并结果",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "查询 Completed 的 Feature Check": {
+      "main": [
+        [
+          {
+            "node": "合并结果",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "合并结果": {
+      "main": [
+        [
+          {
+            "node": "处理 Feature",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "处理 Feature": {
+      "main": [
+        [
+          {
+            "node": "有任务?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "有任务?": {
+      "main": [
+        [
+          {
+            "node": "拆分 Feature",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "无任务",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "拆分 Feature": {
+      "main": [
+        [
+          {
+            "node": "检查操作类型",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "检查操作类型": {
+      "main": [
+        [
+          {
+            "node": "读取检查报告",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "同步完成状态",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "读取检查报告": {
+      "main": [
+        [
+          {
+            "node": "解析报告",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "解析报告": {
+      "main": [
+        [
+          {
+            "node": "通知验收",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "通知验收": {
+      "main": [
+        [
+          {
+            "node": "继续下一个",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "同步完成状态": {
+      "main": [
+        [
+          {
+            "node": "查询 Project 任务",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "查询 Project 任务": {
+      "main": [
+        [
+          {
+            "node": "批量更新为 Completed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "批量更新为 Completed": {
+      "main": [
+        [
+          {
+            "node": "更新每个任务",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "更新每个任务": {
+      "main": [
+        [
+          {
+            "node": "通知已同步",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "通知已同步": {
+      "main": [
+        [
+          {
+            "node": "继续下一个",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "继续下一个": {
+      "main": [
+        [
+          {
+            "node": "拆分 Feature",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false
+  },
+  "staticData": {
+    "node:每5分钟触发": {
+      "recurrenceRules": []
+    }
+  },
+  "meta": null,
+  "pinData": null,
+  "versionCounter": 7,
+  "shared": [
+    {
+      "updatedAt": "2025-12-29T12:53:34.544Z",
+      "createdAt": "2025-12-29T12:53:34.544Z",
+      "role": "workflow:owner",
+      "workflowId": "wAp3FlamQUENKBgu",
+      "projectId": "XvpIUT75BWOBRhfk",
+      "project": {
+        "updatedAt": "2025-12-19T12:48:01.773Z",
+        "createdAt": "2025-12-19T12:44:28.241Z",
+        "id": "XvpIUT75BWOBRhfk",
+        "name": "Alex Xu  <zenithjoycloud@gmail.com>",
+        "type": "personal",
+        "icon": null,
+        "description": null,
+        "projectRelations": [
+          {
+            "updatedAt": "2025-12-19T12:44:28.241Z",
+            "createdAt": "2025-12-19T12:44:28.241Z",
+            "userId": "57fa6390-a40c-4605-97ed-6ca13f0b80a7",
+            "projectId": "XvpIUT75BWOBRhfk",
+            "user": {
+              "updatedAt": "2025-12-30T16:01:06.000Z",
+              "createdAt": "2025-12-19T12:44:26.915Z",
+              "id": "57fa6390-a40c-4605-97ed-6ca13f0b80a7",
+              "email": "zenithjoycloud@gmail.com",
+              "firstName": "Alex",
+              "lastName": "Xu ",
+              "personalizationAnswers": null,
+              "settings": {
+                "userActivated": true,
+                "userClaimedAiCredits": true,
+                "easyAIWorkflowOnboarded": true,
+                "firstSuccessfulWorkflowId": "Ar2BwcAElSsexIKC",
+                "userActivatedAt": 1766314472886
+              },
+              "disabled": false,
+              "mfaEnabled": false,
+              "lastActiveAt": "2025-12-30",
+              "isPending": false
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

@@ -1,25 +1,16 @@
 # Dependencies
 node_modules/
-package-lock.json
+.pnp
+.pnp.js
 
-# Build outputs
+# Build
 dist/
 build/
-.next/
 
 # Environment
 .env
 .env.local
 .env.*.local
-
-# Logs
-logs/
-*.log
-npm-debug.log*
-
-# OS
-.DS_Store
-Thumbs.db
 
 # IDE
 .idea/
@@ -27,6 +18,13 @@ Thumbs.db
 *.swp
 *.swo
 
-# Temp
-tmp/
-.tmp/
+# OS
+.DS_Store
+Thumbs.db
+
+# Dev mode (temporary)
+.dev-mode
+
+# Logs
+*.log
+npm-debug.log*

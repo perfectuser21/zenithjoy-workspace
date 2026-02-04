@@ -1,0 +1,375 @@
+{
+  "name": "Feature Entry Checker",
+  "description": null,
+  "active": false,
+  "nodes": [
+    {
+      "id": "schedule-trigger",
+      "name": "每5分钟触发",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        240,
+        300
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 5
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "manual-trigger",
+      "name": "手动触发",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        240,
+        500
+      ]
+    },
+    {
+      "id": "query-feature-checks",
+      "name": "查询 Feature Check 任务",
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 2.2,
+      "position": [
+        520,
+        400
+      ],
+      "parameters": {
+        "resource": "databasePage",
+        "operation": "getAll",
+        "databaseId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "54fe0d4cf4344e918bb0e33967661c42"
+        },
+        "returnAll": false,
+        "limit": 10,
+        "filterType": "json",
+        "filterJson": "{\"and\":[{\"property\":\"Daily Highlight\",\"checkbox\":{\"equals\":true}},{\"property\":\"AI Task\",\"checkbox\":{\"equals\":true}},{\"property\":\"Coding Type\",\"select\":{\"equals\":\"Check\"}},{\"property\":\"Status\",\"status\":{\"equals\":\"Next Action\"}}]}",
+        "options": {}
+      },
+      "credentials": {
+        "notionApi": {
+          "id": "KOSUxBByCoMPR3Au",
+          "name": "Notion API"
+        }
+      }
+    },
+    {
+      "id": "check-has-tasks",
+      "name": "有任务?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        780,
+        400
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "leftValue": "",
+            "caseSensitive": true,
+            "typeValidation": "strict"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "check-results",
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              },
+              "leftValue": "={{ $input.all().length }}",
+              "rightValue": 0
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "no-tasks",
+      "name": "无任务",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        1040,
+        560
+      ]
+    },
+    {
+      "id": "run-entry-check",
+      "name": "执行入口检查",
+      "type": "n8n-nodes-base.ssh",
+      "typeVersion": 1,
+      "position": [
+        1040,
+        400
+      ],
+      "parameters": {
+        "authentication": "privateKey",
+        "host": "146.190.52.84",
+        "port": 22,
+        "user": "xx",
+        "command": "=/home/xx/bin/ai-factory-v2/feature-entry-check.sh \"{{ $json.id }}\""
+      },
+      "credentials": {
+        "sshPrivateKey": {
+          "id": "vvJsQOZ95sqzemla",
+          "name": "VPS SSH Key"
+        }
+      }
+    },
+    {
+      "id": "parse-result",
+      "name": "解析结果",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1300,
+        400
+      ],
+      "parameters": {
+        "jsCode": "const stdout = $input.first().json.stdout || '{}';\nlet result = { passed: false, errors: [] };\ntry {\n  result = JSON.parse(stdout);\n} catch (e) {\n  result.parse_error = e.message;\n}\nreturn result;"
+      }
+    },
+    {
+      "id": "check-passed",
+      "name": "检查通过?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1560,
+        400
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "leftValue": "",
+            "caseSensitive": true,
+            "typeValidation": "strict"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "check-passed",
+              "operator": {
+                "type": "boolean",
+                "operation": "true"
+              },
+              "leftValue": "={{ $json.passed }}"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "handle-passed",
+      "name": "处理通过",
+      "type": "n8n-nodes-base.ssh",
+      "typeVersion": 1,
+      "position": [
+        1820,
+        300
+      ],
+      "parameters": {
+        "authentication": "privateKey",
+        "host": "146.190.52.84",
+        "port": 22,
+        "user": "xx",
+        "command": "=source /home/xx/dev/zenithjoy-autopilot/workflows/.secrets && /home/xx/bin/ai-factory-v2/feature-entry-passed.sh \"{{ $json.feature_check_id }}\" \"{{ $json.project_id }}\" \"{{ $json.feature_name }}\""
+      },
+      "credentials": {
+        "sshPrivateKey": {
+          "id": "vvJsQOZ95sqzemla",
+          "name": "VPS SSH Key"
+        }
+      }
+    },
+    {
+      "id": "handle-failed",
+      "name": "处理失败",
+      "type": "n8n-nodes-base.ssh",
+      "typeVersion": 1,
+      "position": [
+        1820,
+        500
+      ],
+      "parameters": {
+        "authentication": "privateKey",
+        "host": "146.190.52.84",
+        "port": 22,
+        "user": "xx",
+        "command": "=source /home/xx/dev/zenithjoy-autopilot/workflows/.secrets && /home/xx/bin/ai-factory-v2/feature-entry-failed.sh '{{ JSON.stringify($json) }}'"
+      },
+      "credentials": {
+        "sshPrivateKey": {
+          "id": "vvJsQOZ95sqzemla",
+          "name": "VPS SSH Key"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "每5分钟触发": {
+      "main": [
+        [
+          {
+            "node": "查询 Feature Check 任务",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "手动触发": {
+      "main": [
+        [
+          {
+            "node": "查询 Feature Check 任务",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "查询 Feature Check 任务": {
+      "main": [
+        [
+          {
+            "node": "有任务?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "有任务?": {
+      "main": [
+        [
+          {
+            "node": "执行入口检查",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "无任务",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "执行入口检查": {
+      "main": [
+        [
+          {
+            "node": "解析结果",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "解析结果": {
+      "main": [
+        [
+          {
+            "node": "检查通过?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "检查通过?": {
+      "main": [
+        [
+          {
+            "node": "处理通过",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "处理失败",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false
+  },
+  "staticData": {
+    "node:每5分钟触发": {
+      "recurrenceRules": []
+    }
+  },
+  "meta": null,
+  "pinData": null,
+  "versionCounter": 19,
+  "shared": [
+    {
+      "updatedAt": "2025-12-29T12:47:34.701Z",
+      "createdAt": "2025-12-29T12:47:34.701Z",
+      "role": "workflow:owner",
+      "workflowId": "R2CEgYfomNIamCTn",
+      "projectId": "XvpIUT75BWOBRhfk",
+      "project": {
+        "updatedAt": "2025-12-19T12:48:01.773Z",
+        "createdAt": "2025-12-19T12:44:28.241Z",
+        "id": "XvpIUT75BWOBRhfk",
+        "name": "Alex Xu  <zenithjoycloud@gmail.com>",
+        "type": "personal",
+        "icon": null,
+        "description": null,
+        "projectRelations": [
+          {
+            "updatedAt": "2025-12-19T12:44:28.241Z",
+            "createdAt": "2025-12-19T12:44:28.241Z",
+            "userId": "57fa6390-a40c-4605-97ed-6ca13f0b80a7",
+            "projectId": "XvpIUT75BWOBRhfk",
+            "user": {
+              "updatedAt": "2025-12-30T16:01:06.000Z",
+              "createdAt": "2025-12-19T12:44:26.915Z",
+              "id": "57fa6390-a40c-4605-97ed-6ca13f0b80a7",
+              "email": "zenithjoycloud@gmail.com",
+              "firstName": "Alex",
+              "lastName": "Xu ",
+              "personalizationAnswers": null,
+              "settings": {
+                "userActivated": true,
+                "userClaimedAiCredits": true,
+                "easyAIWorkflowOnboarded": true,
+                "firstSuccessfulWorkflowId": "Ar2BwcAElSsexIKC",
+                "userActivatedAt": 1766314472886
+              },
+              "disabled": false,
+              "mfaEnabled": false,
+              "lastActiveAt": "2025-12-30",
+              "isPending": false
+            }
+          }
+        ]
+      }
+    }
+  ]
+}
