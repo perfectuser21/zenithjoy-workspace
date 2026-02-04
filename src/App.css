@@ -1,0 +1,795 @@
+/* ============================================
+   CSS Variables - 主题配置
+   ============================================ */
+:root {
+  /* 主色调 - 由 InstanceContext 动态设置 */
+  --primary-color: #3467D6;
+  --primary-color-light: #3467D620;
+  --primary-color-medium: #3467D640;
+  --primary-color-dark: #2856B8;
+
+  /* 侧边栏渐变 */
+  --sidebar-gradient: linear-gradient(180deg, #1e3a8a 0%, #1e2a5e 100%);
+}
+
+/* Custom Scrollbar Styles */
+
+/* Webkit browsers (Chrome, Safari, Edge) */
+::-webkit-scrollbar {
+  width: 3px;
+  height: 3px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, #3467D6 0%, #3C8CFD 50%, #01C7D2 100%);
+  border-radius: 4px;
+  transition: background 0.3s ease;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, #2856B8 0%, #2A6FE0 50%, #00A8B3 100%);
+}
+
+/* Firefox */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #3C8CFD transparent;
+}
+
+/* Core 冷灰滚动条 */
+.instance-cecilia ::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, #475569 0%, #64748b 50%, #94a3b8 100%);
+}
+
+.instance-cecilia ::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, #334155 0%, #475569 50%, #64748b 100%);
+}
+
+.instance-cecilia * {
+  scrollbar-color: #64748b transparent;
+}
+
+/* ============================================
+   Core 主题覆盖 - 冷灰色系
+   ============================================ */
+
+/* Core 背景 */
+.instance-cecilia .premium-bg {
+  background:
+    radial-gradient(circle at 1px 1px, rgba(100, 116, 139, 0.02) 1px, transparent 1px),
+    radial-gradient(ellipse at 0% 0%, rgba(100, 116, 139, 0.06) 0%, transparent 50%),
+    radial-gradient(ellipse at 100% 100%, rgba(148, 163, 184, 0.04) 0%, transparent 50%),
+    linear-gradient(145deg, #f1f5f9 0%, #e2e8f0 50%, #f1f5f9 100%);
+  background-size: 20px 20px, 100% 100%, 100% 100%, 100% 100%;
+}
+
+.instance-cecilia.dark .premium-bg,
+.instance-cecilia .dark .premium-bg {
+  background:
+    radial-gradient(circle at 1px 1px, rgba(148, 163, 184, 0.015) 1px, transparent 1px),
+    radial-gradient(ellipse at 0% 0%, rgba(100, 116, 139, 0.04) 0%, transparent 50%),
+    radial-gradient(ellipse at 100% 100%, rgba(148, 163, 184, 0.03) 0%, transparent 50%),
+    linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%);
+  background-size: 24px 24px, 100% 100%, 100% 100%, 100% 100%;
+}
+
+/* Core shimmer 效果 - 冷灰色 */
+.instance-cecilia .shimmer-card:hover {
+  border-color: rgba(100, 116, 139, 0.2);
+  box-shadow:
+    0 0 0 1px rgba(100, 116, 139, 0.08),
+    0 8px 24px -8px rgba(100, 116, 139, 0.15);
+}
+
+.instance-cecilia.dark .shimmer-card:hover,
+.instance-cecilia .dark .shimmer-card:hover {
+  border-color: rgba(148, 163, 184, 0.15);
+  box-shadow:
+    0 0 0 1px rgba(148, 163, 184, 0.08),
+    0 8px 24px -8px rgba(148, 163, 184, 0.2);
+}
+
+.instance-cecilia .shimmer-card::before {
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(100, 116, 139, 0.08),
+    rgba(148, 163, 184, 0.15),
+    rgba(100, 116, 139, 0.08),
+    transparent
+  );
+}
+
+/* Core tilt 效果 - 冷灰色 */
+.instance-cecilia .tilt-card:hover {
+  border-color: rgba(100, 116, 139, 0.15);
+  box-shadow:
+    0 0 0 1px rgba(100, 116, 139, 0.06),
+    0 8px 20px -8px rgba(100, 116, 139, 0.12);
+}
+
+.instance-cecilia.dark .tilt-card:hover,
+.instance-cecilia .dark .tilt-card:hover {
+  border-color: rgba(148, 163, 184, 0.12);
+  box-shadow:
+    0 0 0 1px rgba(148, 163, 184, 0.06),
+    0 8px 20px -8px rgba(148, 163, 184, 0.15);
+}
+
+/* Core glow 效果 - 冷灰色 */
+.instance-cecilia .glow-pulse {
+  box-shadow:
+    0 0 6px rgba(100, 116, 139, 0.4),
+    0 0 12px rgba(100, 116, 139, 0.2);
+}
+
+.instance-cecilia.dark .glow-pulse,
+.instance-cecilia .dark .glow-pulse {
+  box-shadow:
+    0 0 8px rgba(148, 163, 184, 0.3),
+    0 0 16px rgba(148, 163, 184, 0.15);
+}
+
+/* Core 导航发光 - 冷灰色 */
+.instance-cecilia .nav-active-glow::after {
+  background: linear-gradient(180deg, #64748b, #94a3b8, #64748b);
+}
+
+/* Core body 背景色 - 防止滚动露底 */
+.instance-cecilia {
+  background: linear-gradient(135deg, #cbd5e1 0%, #94a3b8 100%);
+}
+
+.instance-cecilia.dark,
+.instance-cecilia .dark {
+  background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+}
+
+/* Core magnetic button - 冷灰色 */
+.instance-cecilia .magnetic-btn:hover {
+  border-color: rgba(100, 116, 139, 0.3) !important;
+  box-shadow:
+    0 10px 30px -8px rgba(100, 116, 139, 0.35),
+    0 0 0 1px rgba(100, 116, 139, 0.1);
+}
+
+.instance-cecilia.dark .magnetic-btn:hover,
+.instance-cecilia .dark .magnetic-btn:hover {
+  border-color: rgba(148, 163, 184, 0.3) !important;
+  box-shadow:
+    0 10px 30px -8px rgba(148, 163, 184, 0.4),
+    0 0 0 1px rgba(148, 163, 184, 0.15);
+}
+
+/* Core flowing light - 冷灰色 */
+.instance-cecilia .flowing-light-hover::before {
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(100, 116, 139, 0.1) 25%,
+    rgba(148, 163, 184, 0.15) 50%,
+    rgba(100, 116, 139, 0.1) 75%,
+    transparent 100%
+  );
+}
+
+/* Core gradient border - 冷灰色 */
+.instance-cecilia .gradient-border::before {
+  background: conic-gradient(
+    from var(--angle),
+    #475569,
+    #64748b,
+    #94a3b8,
+    #64748b,
+    #475569
+  );
+}
+
+/* Core particle - 冷灰色 */
+.instance-cecilia .particle {
+  background: linear-gradient(135deg, #475569, #94a3b8);
+}
+
+/* Core text shine - 冷灰色 */
+.instance-cecilia .text-shine {
+  background: linear-gradient(
+    90deg,
+    #334155 0%,
+    #475569 25%,
+    #94a3b8 50%,
+    #475569 75%,
+    #334155 100%
+  );
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  background-clip: text;
+}
+
+/* Core inner glow - 冷灰色 */
+.instance-cecilia .inner-glow:hover {
+  box-shadow:
+    inset 0 0 30px rgba(100, 116, 139, 0.1),
+    0 10px 40px -10px rgba(0, 0, 0, 0.15);
+}
+
+/* Core 紫色点缀 - 用于强调元素 */
+.instance-cecilia .accent-glow {
+  box-shadow:
+    0 0 8px rgba(139, 92, 246, 0.4),
+    0 0 16px rgba(139, 92, 246, 0.2);
+}
+
+.instance-cecilia.dark .accent-glow,
+.instance-cecilia .dark .accent-glow {
+  box-shadow:
+    0 0 10px rgba(167, 139, 250, 0.4),
+    0 0 20px rgba(167, 139, 250, 0.2);
+}
+
+/* Core 滚动条紫色点缀版 */
+.instance-cecilia .scrollbar-accent::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, #7c3aed 0%, #8b5cf6 50%, #a78bfa 100%);
+}
+
+/* Core nav active with purple accent */
+.instance-cecilia .nav-active-purple::after {
+  background: linear-gradient(180deg, #7c3aed, #a78bfa, #7c3aed);
+}
+
+/* ============================================
+   WOW EFFECTS - ZenithJoy Dashboard
+   ============================================ */
+
+/* 页面切换淡入动画 - 更明显的科幻效果 */
+@keyframes pageFadeIn {
+  0% {
+    opacity: 0;
+    transform: translateY(20px) scale(0.98);
+    filter: blur(4px);
+  }
+  60% {
+    opacity: 1;
+    filter: blur(0px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    filter: blur(0px);
+  }
+}
+
+@keyframes pageGlowIn {
+  0% {
+    box-shadow: inset 0 0 60px rgba(139, 92, 246, 0.15);
+  }
+  100% {
+    box-shadow: inset 0 0 0px transparent;
+  }
+}
+
+.page-fade-in {
+  animation: pageFadeIn 0.5s cubic-bezier(0.16, 1, 0.3, 1), pageGlowIn 0.8s ease-out;
+}
+
+/* ============================================
+   1. 高级背景 - 淡蓝灰渐变 + 微妙纹理
+   ============================================ */
+
+/* 浅色模式：高级淡蓝灰背景 - 平衡版 */
+.premium-bg {
+  background:
+    /* 微妙的点阵纹理 */
+    radial-gradient(circle at 1px 1px, rgba(52, 103, 214, 0.025) 1px, transparent 1px),
+    /* 左上角光晕 */
+    radial-gradient(ellipse at 0% 0%, rgba(52, 103, 214, 0.08) 0%, transparent 50%),
+    /* 右下角光晕 */
+    radial-gradient(ellipse at 100% 100%, rgba(1, 199, 210, 0.06) 0%, transparent 50%),
+    /* 基础渐变 - 柔和的蓝灰色 */
+    linear-gradient(145deg, #f1f5f9 0%, #e5e9ef 50%, #f1f5f9 100%);
+  background-size: 20px 20px, 100% 100%, 100% 100%, 100% 100%;
+  background-attachment: fixed;
+}
+
+/* 深色模式保持原样 */
+.dark .premium-bg {
+  background:
+    radial-gradient(circle at 1px 1px, rgba(56, 189, 248, 0.02) 1px, transparent 1px),
+    radial-gradient(ellipse at 0% 0%, rgba(56, 189, 248, 0.05) 0%, transparent 50%),
+    radial-gradient(ellipse at 100% 100%, rgba(1, 199, 210, 0.04) 0%, transparent 50%),
+    linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%);
+  background-size: 24px 24px, 100% 100%, 100% 100%, 100% 100%;
+}
+
+/* 兼容旧类名 */
+.animated-gradient-bg {
+  /* 保留空，使用 premium-bg 替代 */
+}
+
+/* 白色卡片柔和阴影 */
+.premium-bg .bg-white,
+.premium-bg [class*="bg-white"] {
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04), 0 2px 8px rgba(0, 0, 0, 0.03);
+}
+
+/* ============================================
+   2. 光泽扫过效果 (Shimmer Sweep) - 性能优化
+   ============================================ */
+@keyframes shimmerSweep {
+  0% {
+    transform: translateX(-100%) skewX(-15deg);
+  }
+  100% {
+    transform: translateX(200%) skewX(-15deg);
+  }
+}
+
+.shimmer-card {
+  position: relative;
+  overflow: hidden;
+  will-change: transform, box-shadow, border-color;
+  /* 浅色模式：悬停时蓝色边框 + 强阴影 */
+  border: 1px solid transparent;
+  transition: all 0.3s ease;
+}
+
+.shimmer-card:hover {
+  border-color: rgba(52, 103, 214, 0.3);
+  box-shadow:
+    0 0 0 1px rgba(52, 103, 214, 0.1),
+    0 10px 40px -10px rgba(52, 103, 214, 0.3),
+    0 0 20px -5px rgba(60, 140, 253, 0.2);
+}
+
+.dark .shimmer-card:hover {
+  border-color: rgba(56, 189, 248, 0.3);
+  box-shadow:
+    0 0 0 1px rgba(56, 189, 248, 0.1),
+    0 10px 40px -10px rgba(56, 189, 248, 0.4),
+    0 0 20px -5px rgba(56, 189, 248, 0.3);
+}
+
+.shimmer-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 50%;
+  height: 100%;
+  /* 浅色模式：更明显的蓝色光泽 */
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(52, 103, 214, 0.12),
+    rgba(60, 140, 253, 0.25),
+    rgba(52, 103, 214, 0.12),
+    transparent
+  );
+  transform: translateX(-100%) skewX(-15deg);
+  pointer-events: none;
+  z-index: 10;
+  will-change: transform;
+}
+
+.shimmer-card:hover::before {
+  animation: shimmerSweep 1.2s ease-in-out;
+}
+
+/* Dark mode shimmer */
+.dark .shimmer-card::before {
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(56, 189, 248, 0.08),
+    rgba(56, 189, 248, 0.2),
+    rgba(56, 189, 248, 0.08),
+    transparent
+  );
+}
+
+/* ============================================
+   3. 3D 倾斜卡片效果
+   ============================================ */
+.tilt-card {
+  transform-style: preserve-3d;
+  perspective: 1000px;
+  transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+  border: 1px solid transparent;
+}
+
+.tilt-card:hover {
+  transform: perspective(1000px) rotateX(2deg) rotateY(-2deg) scale(1.02);
+  /* 浅色模式：蓝色边框 + 彩色阴影 */
+  border-color: rgba(52, 103, 214, 0.25);
+  box-shadow:
+    0 0 0 1px rgba(52, 103, 214, 0.08),
+    0 15px 35px -10px rgba(52, 103, 214, 0.25),
+    0 5px 15px -5px rgba(60, 140, 253, 0.15);
+}
+
+.dark .tilt-card:hover {
+  border-color: rgba(56, 189, 248, 0.25);
+  box-shadow:
+    0 0 0 1px rgba(56, 189, 248, 0.1),
+    0 15px 35px -10px rgba(56, 189, 248, 0.35),
+    0 5px 15px -5px rgba(56, 189, 248, 0.2);
+}
+
+.tilt-card-content {
+  transform: translateZ(20px);
+  transition: transform 0.3s ease;
+}
+
+.tilt-card:hover .tilt-card-content {
+  transform: translateZ(30px);
+}
+
+/* ============================================
+   4. 发光脉冲效果 (Glow Pulse) - 性能优化版
+   ============================================ */
+@keyframes glowPulse {
+  0%, 100% {
+    opacity: 0.6;
+    transform: scaleY(1);
+  }
+  50% {
+    opacity: 1;
+    transform: scaleY(1.1);
+  }
+}
+
+.glow-pulse {
+  animation: glowPulse 2s ease-in-out infinite;
+  will-change: opacity, transform;
+  /* 浅色模式更强的阴影 */
+  box-shadow:
+    0 0 8px rgba(52, 103, 214, 0.6),
+    0 0 16px rgba(52, 103, 214, 0.4);
+}
+
+.dark .glow-pulse {
+  box-shadow:
+    0 0 10px rgba(56, 189, 248, 0.6),
+    0 0 20px rgba(56, 189, 248, 0.3);
+}
+
+/* 活跃导航项的发光边框 */
+@keyframes borderGlow {
+  0%, 100% {
+    opacity: 0.7;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+.nav-active-glow {
+  position: relative;
+}
+
+.nav-active-glow::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 3px;
+  height: 60%;
+  background: linear-gradient(180deg, #3467D6, #3C8CFD, #3467D6);
+  border-radius: 0 4px 4px 0;
+  animation: borderGlow 2s ease-in-out infinite;
+  will-change: opacity;
+}
+
+/* ============================================
+   5. 流光悬停效果 (Flowing Light)
+   ============================================ */
+@keyframes flowingLight {
+  0% {
+    background-position: -200% center;
+  }
+  100% {
+    background-position: 200% center;
+  }
+}
+
+.flowing-light-hover {
+  position: relative;
+  overflow: hidden;
+}
+
+.flowing-light-hover::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(56, 189, 248, 0.1) 25%,
+    rgba(59, 130, 246, 0.15) 50%,
+    rgba(56, 189, 248, 0.1) 75%,
+    transparent 100%
+  );
+  background-size: 200% 100%;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  pointer-events: none;
+}
+
+.flowing-light-hover:hover::before {
+  opacity: 1;
+  animation: flowingLight 1.5s linear infinite;
+}
+
+/* ============================================
+   6. 弹性悬停效果 (Spring Hover)
+   ============================================ */
+.spring-hover {
+  transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.spring-hover:hover {
+  transform: translateY(-6px) scale(1.01);
+}
+
+.spring-hover:active {
+  transform: translateY(-3px) scale(1.005);
+  transition: transform 0.1s ease;
+}
+
+/* ============================================
+   7. 磁性按钮效果
+   ============================================ */
+.magnetic-btn {
+  transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+  border: 1px solid transparent !important;
+}
+
+.magnetic-btn:hover {
+  transform: scale(1.05);
+  border-color: rgba(52, 103, 214, 0.3) !important;
+  box-shadow:
+    0 10px 30px -8px rgba(52, 103, 214, 0.35),
+    0 0 0 1px rgba(52, 103, 214, 0.1);
+}
+
+.dark .magnetic-btn:hover {
+  border-color: rgba(56, 189, 248, 0.3) !important;
+  box-shadow:
+    0 10px 30px -8px rgba(56, 189, 248, 0.4),
+    0 0 0 1px rgba(56, 189, 248, 0.15);
+}
+
+.magnetic-btn:active {
+  transform: scale(0.98);
+}
+
+/* ============================================
+   8. 数字计数动画样式
+   ============================================ */
+.counter-number {
+  display: inline-block;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ============================================
+   9. 图标浮动动画
+   ============================================ */
+@keyframes iconFloat {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-3px);
+  }
+}
+
+.icon-float {
+  animation: iconFloat 2s ease-in-out infinite;
+}
+
+.icon-float-delayed {
+  animation: iconFloat 2s ease-in-out infinite;
+  animation-delay: 0.5s;
+}
+
+/* ============================================
+   10. 渐变边框动画
+   ============================================ */
+@keyframes borderRotate {
+  0% {
+    --angle: 0deg;
+  }
+  100% {
+    --angle: 360deg;
+  }
+}
+
+@property --angle {
+  syntax: '<angle>';
+  initial-value: 0deg;
+  inherits: false;
+}
+
+.gradient-border {
+  position: relative;
+  background: white;
+  border-radius: 16px;
+}
+
+.gradient-border::before {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  background: conic-gradient(
+    from var(--angle),
+    #3467D6,
+    #3C8CFD,
+    #01C7D2,
+    #3C8CFD,
+    #3467D6
+  );
+  border-radius: inherit;
+  z-index: -1;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  animation: borderRotate 3s linear infinite;
+}
+
+.gradient-border:hover::before {
+  opacity: 1;
+}
+
+/* ============================================
+   11. 粒子背景点缀
+   ============================================ */
+@keyframes particleFloat {
+  0%, 100% {
+    transform: translateY(0) translateX(0);
+    opacity: 0.3;
+  }
+  25% {
+    transform: translateY(-10px) translateX(5px);
+    opacity: 0.6;
+  }
+  50% {
+    transform: translateY(-5px) translateX(-5px);
+    opacity: 0.4;
+  }
+  75% {
+    transform: translateY(-15px) translateX(3px);
+    opacity: 0.5;
+  }
+}
+
+.particle {
+  position: absolute;
+  width: 4px;
+  height: 4px;
+  background: linear-gradient(135deg, #3467D6, #01C7D2);
+  border-radius: 50%;
+  animation: particleFloat 4s ease-in-out infinite;
+  pointer-events: none;
+}
+
+/* ============================================
+   12. 卡片入场交错动画
+   ============================================ */
+@keyframes cardReveal {
+  from {
+    opacity: 0;
+    transform: translateY(30px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.card-reveal {
+  animation: cardReveal 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+  opacity: 0;
+}
+
+.card-reveal:nth-child(1) { animation-delay: 0.1s; }
+.card-reveal:nth-child(2) { animation-delay: 0.2s; }
+.card-reveal:nth-child(3) { animation-delay: 0.3s; }
+.card-reveal:nth-child(4) { animation-delay: 0.4s; }
+
+/* ============================================
+   13. 悬停时的内发光效果
+   ============================================ */
+.inner-glow:hover {
+  box-shadow:
+    inset 0 0 30px rgba(52, 103, 214, 0.1),
+    0 10px 40px -10px rgba(0, 0, 0, 0.15);
+}
+
+/* ============================================
+   14. 文字渐变动画
+   ============================================ */
+@keyframes textShine {
+  0% {
+    background-position: -100% center;
+  }
+  100% {
+    background-position: 200% center;
+  }
+}
+
+.text-shine {
+  background: linear-gradient(
+    90deg,
+    #1e3a8a 0%,
+    #3467D6 25%,
+    #01C7D2 50%,
+    #3467D6 75%,
+    #1e3a8a 100%
+  );
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: textShine 3s linear infinite;
+}
+
+/* ============================================
+   15. 呼吸灯效果
+   ============================================ */
+@keyframes breathe {
+  0%, 100% {
+    opacity: 0.4;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.8;
+    transform: scale(1.05);
+  }
+}
+
+.breathe {
+  animation: breathe 3s ease-in-out infinite;
+}
+
+/* ============================================
+   16. 页面加载器脉冲效果
+   ============================================ */
+@keyframes loaderPulse {
+  0%, 100% {
+    opacity: 0.3;
+    transform: scale(0.95);
+  }
+  50% {
+    opacity: 0.5;
+    transform: scale(1.05);
+  }
+}
+
+.page-loader-bg {
+  animation: loaderPulse 2s ease-in-out infinite;
+}
+
+/* ============================================
+   17. 卡片淡入上浮动画 (用于 Core Dashboard)
+   ============================================ */
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in-up {
+  animation: fadeInUp 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+  opacity: 0;
+}
