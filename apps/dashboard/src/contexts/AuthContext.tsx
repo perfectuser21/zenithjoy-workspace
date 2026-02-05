@@ -46,6 +46,15 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+// 开发模式配置
+const SKIP_AUTH = import.meta.env.VITE_SKIP_AUTH === 'true';
+const MOCK_USER: User | null = SKIP_AUTH ? {
+  id: import.meta.env.VITE_MOCK_USER_ID || 'dev-user-001',
+  name: import.meta.env.VITE_MOCK_USER_NAME || '开发者',
+  avatar: import.meta.env.VITE_MOCK_USER_AVATAR || 'https://api.dicebear.com/7.x/avataaars/svg?seed=dev',
+  email: 'dev@zenjoymedia.media',
+} : null;
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [token, setToken] = useState<string | null>(null);
@@ -53,6 +62,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // 初始化时从 cookie 读取用户信息（跨子域名共享）
   useEffect(() => {
+    // 开发模式：跳过登录，直接使用 mock 用户
+    if (SKIP_AUTH && MOCK_USER) {
+      console.log('🔧 开发模式：跳过登录，使用 mock 用户');
+      setUser(MOCK_USER);
+      setToken('dev-token-mock');
+      setAuthLoading(false);
+      return;
+    }
+
     console.log('🔍 AuthProvider init, checking cookies...');
     console.log('🍪 All cookies:', document.cookie);
     const savedUser = getCookie('user');
