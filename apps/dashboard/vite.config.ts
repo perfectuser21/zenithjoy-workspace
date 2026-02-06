@@ -4,8 +4,10 @@ import { VitePWA } from 'vite-plugin-pwa'
 import path from 'path'
 
 // Core features path: real cecelia features locally, stub in CI
-const coreFeaturesPath = process.env.CORE_FEATURES_PATH
-  || path.resolve(__dirname, '../../../../cecelia/workspace/apps/core/features');
+const coreFeaturesPath = path.resolve(
+  __dirname,
+  process.env.CORE_FEATURES_PATH || '../../../../cecelia/workspace/apps/core/features'
+);
 
 export default defineConfig({
   resolve: {
