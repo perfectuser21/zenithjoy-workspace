@@ -14,6 +14,7 @@ import {
   Users,
   KeyRound,
   LayoutGrid,
+  Image,
 } from 'lucide-react';
 
 // ============ 类型定义 ============
@@ -57,6 +58,7 @@ export const autopilotPageComponents: Record<string, () => Promise<{ default: Co
   'ScrapingPage': () => import('../pages/ScrapingPage'),
   'MediaScenarioPage': () => import('../pages/MediaScenarioPage'),
   'AiEmployeesPage': () => import('../pages/AiEmployeesPage'),
+  'WorksGalleryPage': () => import('../pages/WorksGalleryPage'),
   'AiEmployeeDetailPage': () => import('../pages/AiEmployeeDetailPage'),
   'AiAbilityDetailPage': () => import('../pages/AiAbilityDetailPage'),
   'AccountsList': () => import('../pages/accounts/AccountsList'),
@@ -104,6 +106,13 @@ export const autopilotNavGroups: NavGroup[] = [
         label: 'AI 员工',
         featureKey: 'ai-employees',
         component: 'AiEmployeesPage'
+      },
+      {
+        path: '/works',
+        icon: Image,
+        label: '作品库',
+        featureKey: 'works-gallery',
+        component: 'WorksGalleryPage'
       },
       {
         path: '/accounts',

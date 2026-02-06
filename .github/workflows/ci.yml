@@ -29,6 +29,9 @@ jobs:
       #   working-directory: apps/dashboard
       #   run: npm run lint
 
+      - name: Create gallery placeholder for CI
+        run: mkdir -p apps/dashboard/public/gallery/chatgpt-cards apps/dashboard/public/gallery/deep-post-cards
+
       - name: Build
         working-directory: apps/dashboard
         run: npm run build
