@@ -25,6 +25,9 @@ Thumbs.db
 # Dev mode (temporary)
 .dev-mode
 
+# Gallery assets (local symlinks, not for git)
+public/gallery/
+
 # Logs
 *.log
 npm-debug.log*
