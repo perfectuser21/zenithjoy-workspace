@@ -113,6 +113,7 @@ export default function DynamicRouter({ children }: DynamicRouterProps) {
         routes.push({
           path: route.path,
           component: route.component,
+          redirect: route.redirect,
           requireAuth: route.requireAuth ?? true,
         });
       }

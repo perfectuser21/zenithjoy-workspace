@@ -3,10 +3,13 @@ import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
 import path from 'path'
 
+const coreFeaturesPath = process.env.CORE_FEATURES_PATH
+  || path.resolve(__dirname, '../../../../cecelia/workspace/apps/core/features');
+
 export default defineConfig({
   resolve: {
     alias: [
-      { find: '@features/core', replacement: path.resolve(__dirname, './src/stubs/core-features') },
+      { find: '@features/core', replacement: coreFeaturesPath },
       { find: '@', replacement: path.resolve(__dirname, './src') },
     ],
     dedupe: [
