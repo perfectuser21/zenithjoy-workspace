@@ -35,6 +35,8 @@ jobs:
       - name: Build
         working-directory: apps/dashboard
         run: npm run build
+        env:
+          CORE_FEATURES_PATH: ./src/stubs/core-features
 
       - name: Upload build artifact
         if: github.ref == 'refs/heads/main'

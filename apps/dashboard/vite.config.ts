@@ -3,10 +3,16 @@ import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
 import path from 'path'
 
+// Core features path: real cecelia features locally, stub in CI
+const coreFeaturesPath = path.resolve(
+  __dirname,
+  process.env.CORE_FEATURES_PATH || '../../../../cecelia/workspace/apps/core/features'
+);
+
 export default defineConfig({
   resolve: {
     alias: [
-      { find: '@features/core', replacement: path.resolve(__dirname, './src/stubs/core-features') },
+      { find: '@features/core', replacement: coreFeaturesPath },
       { find: '@', replacement: path.resolve(__dirname, './src') },
     ],
     dedupe: [
