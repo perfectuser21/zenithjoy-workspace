@@ -36,6 +36,7 @@ const autopilotConfig: InstanceConfig = {
     'ai-employees': true,    // AI 员工
     'accounts': true,        // 账号管理
     'works-gallery': true,   // 作品库
+    'platform-data': true,   // 平台数据展示
     // 旧 features（保留用于兼容，实际已合并到 media-scenario）
     'execution-status': true,
     'tasks': true,
