@@ -107,16 +107,11 @@ export default defineConfig({
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api\/n8n/, '/api/v1')
       },
-      // N8N Webhooks (US N8N via Tailscale for dev)
+      // N8N Webhooks incl. feishu-login (US N8N via Tailscale for dev)
       '/api/n8n-webhook/': {
         target: 'http://100.71.32.28:5679',
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api\/n8n-webhook/, '')
-      },
-      // Feishu auth backend (US server)
-      '/api/feishu-login': {
-        target: 'http://100.71.32.28:3002',
-        changeOrigin: true,
       },
     }
   },
