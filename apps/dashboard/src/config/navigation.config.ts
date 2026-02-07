@@ -15,6 +15,7 @@ import {
   KeyRound,
   LayoutGrid,
   Image,
+  Database,
 } from 'lucide-react';
 
 // ============ 类型定义 ============
@@ -62,6 +63,7 @@ export const autopilotPageComponents: Record<string, () => Promise<{ default: Co
   'AiEmployeeDetailPage': () => import('../pages/AiEmployeeDetailPage'),
   'AiAbilityDetailPage': () => import('../pages/AiAbilityDetailPage'),
   'AccountsList': () => import('../pages/accounts/AccountsList'),
+  'PlatformDataPage': () => import('../pages/PlatformDataPage'),
   // FeatureDashboard and CommandCenter moved to Core features/business
 };
 
@@ -117,6 +119,13 @@ export const autopilotNavGroups: NavGroup[] = [
         label: '账号管理',
         featureKey: 'accounts',
         component: 'AccountsList'
+      },
+      {
+        path: '/platform-data',
+        icon: Database,
+        label: '平台数据',
+        featureKey: 'platform-data',
+        component: 'PlatformDataPage'
       },
     ]
   }
