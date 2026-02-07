@@ -1,0 +1,120 @@
+{
+  "name": "[Unit] 快手数据爬取",
+  "nodes": [
+    {
+      "id": "placeholder-trigger",
+      "name": "\\u5360\\u4f4d\\u89e6\\u53d1\\u5668",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        240,
+        200
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "days",
+              "daysInterval": 999
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "manual-trigger",
+      "name": "\\u624b\\u52a8\\u89e6\\u53d1",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        240,
+        400
+      ]
+    },
+    {
+      "id": "ssh-scrape",
+      "name": "\\u6267\\u884cCDP\\u722c\\u866b",
+      "type": "n8n-nodes-base.ssh",
+      "typeVersion": 1,
+      "position": [
+        520,
+        300
+      ],
+      "parameters": {
+        "authentication": "privateKey",
+        "host": "146.190.52.84",
+        "port": 22,
+        "user": "xx",
+        "command": "bash ~/platform_scrape.sh kuaishou 2>/dev/null"
+      },
+      "credentials": {
+        "sshPrivateKey": {
+          "id": "vvJsQOZ95sqzemla",
+          "name": "VPS SSH Key"
+        }
+      }
+    },
+    {
+      "id": "parse-result",
+      "name": "\\u89e3\\u6790\\u7ed3\\u679c",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        760,
+        300
+      ],
+      "parameters": {
+        "jsCode": "const stdout = $input.first().json.stdout || '';\\ntry {\\n  const data = JSON.parse(stdout.trim());\\n  return [{ json: data }];\\n} catch (e) {\\n  return [{ json: { success: false, error: e.message } }];\\n}"
+      }
+    }
+  ],
+  "connections": {
+    "\\u5360\\u4f4d\\u89e6\\u53d1\\u5668": {
+      "main": [
+        [
+          {
+            "node": "\\u6267\\u884cCDP\\u722c\\u866b",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "\\u624b\\u52a8\\u89e6\\u53d1": {
+      "main": [
+        [
+          {
+            "node": "\\u6267\\u884cCDP\\u722c\\u866b",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "\\u6267\\u884cCDP\\u722c\\u866b": {
+      "main": [
+        [
+          {
+            "node": "\\u89e3\\u6790\\u7ed3\\u679c",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": true,
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "staticData": {
+    "node:\\u5b9a\\u65f6\\u89e6\\u53d1": {
+      "recurrenceRules": []
+    },
+    "node:\\u5360\\u4f4d\\u89e6\\u53d1\\u5668": {
+      "recurrenceRules": []
+    }
+  },
+  "active": true
+}
