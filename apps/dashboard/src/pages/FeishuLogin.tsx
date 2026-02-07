@@ -1,7 +1,6 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { useInstance } from '../contexts/InstanceContext';
 import { BarChart3, Shield, Zap, RefreshCw, Smartphone, ExternalLink } from 'lucide-react';
 
 // 声明全局 QRLogin 函数类型
@@ -24,7 +23,6 @@ declare global {
 export default function FeishuLogin() {
   const navigate = useNavigate();
   const { login } = useAuth();
-  const { isCore } = useInstance();
   const [searchParams] = useSearchParams();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -222,9 +220,7 @@ export default function FeishuLogin() {
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center" style={{
-        background: isCore
-          ? 'linear-gradient(135deg, #1e293b 0%, #0f172a 100%)'
-          : 'linear-gradient(135deg, #1e3a8a 0%, #0f172a 100%)'
+        background: 'linear-gradient(135deg, #1e3a8a 0%, #0f172a 100%)'
       }}>
         <div className="text-center">
           <img src="/logo-white.png" alt="Logo" className="h-14 mx-auto mb-8" />
@@ -234,9 +230,7 @@ export default function FeishuLogin() {
             <div
               className="h-full rounded-full"
               style={{
-                background: isCore
-                  ? 'linear-gradient(90deg, #475569, #64748b, #94a3b8)'
-                  : 'linear-gradient(90deg, #3467D6, #3C8CFD, #01C7D2)',
+                background: 'linear-gradient(90deg, #3467D6, #3C8CFD, #01C7D2)',
                 animation: 'progressSlide 1.5s ease-in-out infinite',
               }}
             />
@@ -254,14 +248,14 @@ export default function FeishuLogin() {
   }
 
   return (
-    <div className="min-h-screen flex" style={{ background: isCore ? 'linear-gradient(135deg, #1e293b 0%, #0f172a 100%)' : 'linear-gradient(135deg, #1e3a8a 0%, #0f172a 100%)' }}>
+    <div className="min-h-screen flex" style={{ background: 'linear-gradient(135deg, #1e3a8a 0%, #0f172a 100%)' }}>
       {/* 左侧 - 品牌展示区 */}
       <div className="hidden lg:flex lg:w-1/2 xl:w-3/5 flex-col justify-between p-12 relative overflow-hidden">
         {/* 背景装饰 */}
         <div className="absolute inset-0 overflow-hidden">
-          <div className={`absolute -top-40 -left-40 w-80 h-80 rounded-full opacity-10 ${isCore ? 'bg-slate-400' : 'bg-blue-500'}`} />
-          <div className={`absolute top-1/3 -right-20 w-60 h-60 rounded-full opacity-10 ${isCore ? 'bg-slate-300' : 'bg-sky-400'}`} />
-          <div className={`absolute -bottom-20 left-1/4 w-40 h-40 rounded-full opacity-5 ${isCore ? 'bg-slate-200' : 'bg-cyan-400'}`} />
+          <div className={`absolute -top-40 -left-40 w-80 h-80 rounded-full opacity-10 bg-blue-500`} />
+          <div className={`absolute top-1/3 -right-20 w-60 h-60 rounded-full opacity-10 bg-sky-400`} />
+          <div className={`absolute -bottom-20 left-1/4 w-40 h-40 rounded-full opacity-5 bg-cyan-400`} />
         </div>
 
         {/* Logo */}
@@ -274,7 +268,7 @@ export default function FeishuLogin() {
           <h2 className="text-4xl xl:text-5xl font-bold text-white leading-tight mb-6">
             回来啦
             <br />
-            <span className={isCore ? 'text-slate-300' : 'text-sky-400'}>这里一直等着你</span>
+            <span className="text-sky-400">这里一直等着你</span>
           </h2>
           <p className="text-white/60 text-lg leading-relaxed">
             你的专属空间，熟悉的工具，顺手的节奏。
@@ -289,7 +283,7 @@ export default function FeishuLogin() {
             { icon: Zap, label: '简单顺手', desc: '少点折腾' },
           ].map((item, i) => (
             <div key={i} className="p-4 rounded-xl bg-white/5 backdrop-blur border border-white/10">
-              <item.icon className={`w-6 h-6 mb-3 ${isCore ? 'text-slate-300' : 'text-sky-400'}`} />
+              <item.icon className={`w-6 h-6 mb-3 text-sky-400`} />
               <p className="text-white font-medium">{item.label}</p>
               <p className="text-white/50 text-sm">{item.desc}</p>
             </div>
@@ -321,7 +315,7 @@ export default function FeishuLogin() {
             {/* 飞书扫码二维码容器 */}
             <div className="flex flex-col items-center mb-6">
               {/* 二维码外框 - 210px 显示区域 */}
-              <div className={`rounded-2xl border-2 ${isCore ? 'border-slate-400/50' : 'border-sky-400/50'} bg-white p-2`}>
+              <div className={`rounded-2xl border-2 border-sky-400/50 bg-white p-2`}>
                 {/* 裁剪容器 */}
                 <div style={{ width: 210, height: 210, overflow: 'hidden', borderRadius: 8 }}>
                   {/* SDK 生成 300x300，缩放到 70% = 210px */}
@@ -333,7 +327,7 @@ export default function FeishuLogin() {
                   >
                     {(!qrReady || refreshing) && !error && (
                       <div className="w-full h-full flex flex-col items-center justify-center bg-gray-50 rounded-lg">
-                        <div className={`animate-spin rounded-full h-8 w-8 border-2 border-t-transparent mb-3 ${isCore ? 'border-slate-500' : 'border-blue-600'}`}></div>
+                        <div className={`animate-spin rounded-full h-8 w-8 border-2 border-t-transparent mb-3 border-blue-600`}></div>
                         <p className="text-gray-400 text-sm">{refreshing ? '刷新中...' : '加载中...'}</p>
                       </div>
                     )}
@@ -355,11 +349,7 @@ export default function FeishuLogin() {
             {/* 一键登录按钮 */}
             <button
               onClick={handleClickLogin}
-              className={`w-full flex items-center justify-center gap-2 px-6 py-3 rounded-xl font-medium transition-all duration-200 ${
-                isCore
-                  ? 'bg-slate-600 hover:bg-slate-500 text-white'
-                  : 'bg-blue-700 hover:bg-blue-600 text-white'
-              }`}
+              className="w-full flex items-center justify-center gap-2 px-6 py-3 rounded-xl font-medium transition-all duration-200 bg-blue-700 hover:bg-blue-600 text-white"
             >
               <ExternalLink className="w-5 h-5" />
               飞书一键登录
