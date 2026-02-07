@@ -1,19 +1,5 @@
 dev
-branch: cp-decouple-from-cecelia
-session_id: 9be9cf24713f
-tty: not a tty
-not a tty
+branch: cp-feishu-login-via-n8n
 prd: .prd.md
-started: 2026-02-07T12:01:20+08:00
+started: 2026-02-07T00:00:00+00:00
 tasks_created: true
-step_1_prd: done
-step_2_detect: done
-step_3_branch: done
-step_4_dod: pending
-step_5_code: pending
-step_6_test: pending
-step_7_quality: pending
-step_8_pr: pending
-step_9_ci: pending
-step_10_learning: pending
-step_11_cleanup: pending

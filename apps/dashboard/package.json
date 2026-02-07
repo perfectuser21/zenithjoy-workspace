@@ -1,6 +1,6 @@
 {
   "name": "@zenithjoy/dashboard",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "ZenithJoy Dashboard: Social media automation platform for teams",
   "private": true,
   "type": "module",
