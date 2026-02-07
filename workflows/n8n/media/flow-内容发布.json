@@ -1,0 +1,227 @@
+{
+  "name": "[Flow] 内容发布",
+  "nodes": [
+    {
+      "id": "n1",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        200,
+        300
+      ],
+      "webhookId": "content-publish",
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "content-publish",
+        "responseMode": "onReceived"
+      }
+    },
+    {
+      "id": "n2",
+      "name": "\\u51c6\\u5907",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        420,
+        300
+      ],
+      "parameters": {
+        "jsCode": "const body = $input.first().json.body || $input.first().json;\\nconst taskId = body.taskId || '';\\nconst title = body.title || '(\\u65e0\\u6807\\u9898)';\\nconst platforms = body.targetPlatforms || [];\\n\\nconst supported = ['douyin'];\\nconst valid = platforms.filter(p => supported.includes(p));\\n\\nif (valid.length === 0) {\\n  return [{ json: { skip: true, taskId, title, reason: '\\u6ca1\\u6709\\u652f\\u6301\\u7684\\u5e73\\u53f0' } }];\\n}\\n\\nreturn [{ json: { skip: false, taskId, title, platform: valid[0] } }];"
+      }
+    },
+    {
+      "id": "n3",
+      "name": "\\u662f\\u5426\\u8df3\\u8fc7",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        640,
+        300
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "typeValidation": "loose"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "c1",
+              "operator": {
+                "type": "boolean",
+                "operation": "true"
+              },
+              "leftValue": "={{ $json.skip }}"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "n4",
+      "name": "SSH\\u53d1\\u5e03",
+      "type": "n8n-nodes-base.ssh",
+      "typeVersion": 1,
+      "position": [
+        880,
+        400
+      ],
+      "credentials": {
+        "sshPrivateKey": {
+          "id": "vvJsQOZ95sqzemla",
+          "name": "VPS SSH Key"
+        }
+      },
+      "parameters": {
+        "authentication": "privateKey",
+        "host": "146.190.52.84",
+        "port": 22,
+        "user": "xx",
+        "command": "=NODE_PATH=/home/xx/node_modules node /home/xx/vps_publisher.js {{ $json.taskId }} {{ $json.platform }} 2>&1"
+      }
+    },
+    {
+      "id": "n5",
+      "name": "\\u89e3\\u6790\\u5e76\\u6784\\u5efa\\u901a\\u77e5",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1120,
+        400
+      ],
+      "parameters": {
+        "jsCode": "const stdout = $input.first().json.stdout || '';\\nconst prev = $('\\u51c6\\u5907').first().json;\\n\\nlet success = false;\\nlet error = '';\\n\\ntry {\\n  const m = stdout.match(/\\\\{[\\\\s\\\\S]*?\\\\}/);\\n  if (m) {\\n    const r = JSON.parse(m[0]);\\n    success = r.success === true;\\n    error = r.error || '';\\n  }\\n} catch (e) {\\n  error = '\\u89e3\\u6790\\u5931\\u8d25';\\n}\\n\\nconst emoji = success ? '\\u2705' : '\\u274c';\\nconst status = success ? '\\u53d1\\u5e03\\u6210\\u529f' : '\\u53d1\\u5e03\\u5931\\u8d25';\\nlet text = emoji + ' ' + status + '\\\\n';\\ntext += '\\u5e73\\u53f0: \\u6296\\u97f3\\\\n';\\ntext += '\\u6807\\u9898: ' + prev.title;\\nif (error) text += '\\\\n\\u9519\\u8bef: ' + error;\\n\\nreturn [{\\n  json: {\\n    taskId: prev.taskId,\\n    success,\\n    feishuBody: { msg_type: 'text', content: { text } }\\n  }\\n}];"
+      }
+    },
+    {
+      "id": "n6",
+      "name": "\\u98de\\u4e66\\u901a\\u77e5",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1360,
+        400
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://open.feishu.cn/open-apis/bot/v2/hook/5bde68e0-9879-4a45-88ed-461a88229136",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.feishuBody }}"
+      }
+    },
+    {
+      "id": "n7",
+      "name": "\\u8df3\\u8fc7\\u901a\\u77e5",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
+        200
+      ],
+      "parameters": {
+        "jsCode": "const prev = $input.first().json;\\nreturn [{ json: { feishuBody: { msg_type: 'text', content: { text: '\\u23ed\\ufe0f \\u53d1\\u5e03\\u8df3\\u8fc7\\\\n\\u539f\\u56e0: ' + prev.reason } } } }];"
+      }
+    },
+    {
+      "id": "n8",
+      "name": "\\u98de\\u4e66-\\u8df3\\u8fc7",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1120,
+        200
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://open.feishu.cn/open-apis/bot/v2/hook/5bde68e0-9879-4a45-88ed-461a88229136",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.feishuBody }}"
+      }
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "\\u51c6\\u5907",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "\\u51c6\\u5907": {
+      "main": [
+        [
+          {
+            "node": "\\u662f\\u5426\\u8df3\\u8fc7",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "\\u662f\\u5426\\u8df3\\u8fc7": {
+      "main": [
+        [
+          {
+            "node": "\\u8df3\\u8fc7\\u901a\\u77e5",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "SSH\\u53d1\\u5e03",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SSH\\u53d1\\u5e03": {
+      "main": [
+        [
+          {
+            "node": "\\u89e3\\u6790\\u5e76\\u6784\\u5efa\\u901a\\u77e5",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "\\u89e3\\u6790\\u5e76\\u6784\\u5efa\\u901a\\u77e5": {
+      "main": [
+        [
+          {
+            "node": "\\u98de\\u4e66\\u901a\\u77e5",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "\\u8df3\\u8fc7\\u901a\\u77e5": {
+      "main": [
+        [
+          {
+            "node": "\\u98de\\u4e66-\\u8df3\\u8fc7",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false
+  },
+  "staticData": null,
+  "active": true
+}
