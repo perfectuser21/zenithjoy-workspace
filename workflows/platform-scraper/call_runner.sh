@@ -1,9 +1,12 @@
 #!/bin/bash
 # Windows Runner 调用脚本
 
-ROG_IP="100.98.253.95"
-RUNNER_PORT="3000"
-API_KEY="runner-secure-key-ax2024-9f8e7d6c5b4a"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+source "$SCRIPT_DIR/runner_config.sh"
+
+ROG_IP="$WINDOWS_IP"
+RUNNER_PORT="${RUNNER_PORT:-3000}"
+API_KEY="$RUNNER_API_KEY"
 
 PLATFORM=$1
 MODE=${2:-script}
