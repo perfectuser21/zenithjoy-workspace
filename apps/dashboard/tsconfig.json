@@ -30,8 +30,11 @@
     // Path aliases
     "baseUrl": ".",
     "paths": {
+      "@features/core": [
+        "src/stubs/core-features"
+      ],
       "@features/core/*": [
-        "../../core/features/*"
+        "src/stubs/core-features/*"
       ],
       "@/*": ["src/*"]
     }

@@ -26,7 +26,7 @@ import './App.css';
 
 // 将 Core 的 NavGroup 格式转换为带 LucideIcon 的格式
 function convertCoreNavGroups(
-  coreNavGroups: Array<{ title: string; items: Array<{ path: string; icon: string; label: string; featureKey: string; component?: string }> }>
+  coreNavGroups: Array<{ title: string; items: Array<{ path: string; icon: any; label: string; featureKey: string; component?: string }> }>
 ): NavGroup[] {
   return coreNavGroups.map(group => ({
     title: group.title,
