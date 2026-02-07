@@ -18,8 +18,13 @@ if [ -z "$CONTAINER_IP" ]; then
   exit 1
 fi
 
-# Run scraping script
-SCRIPT_FILE="$HOME/platform_scrape_${PLATFORM}_v3.js"
+# Run scraping script - check multiple naming conventions
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+SCRIPT_FILE="$SCRIPT_DIR/platform_scrape_${PLATFORM}.js"
+
+if [ ! -f "$SCRIPT_FILE" ]; then
+  SCRIPT_FILE="$HOME/scraper-${PLATFORM}-v3.js"
+fi
 
 if [ ! -f "$SCRIPT_FILE" ]; then
   SCRIPT_FILE="$HOME/platform_scrape_${PLATFORM}.js"

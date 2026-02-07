@@ -2,7 +2,12 @@
 # 抓取所有平台数据并同步到 Dashboard API
 # Usage: ./scrape_and_sync.sh [platform]
 
-DASHBOARD_API="http://localhost:3333"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+if [ -f "$SCRIPT_DIR/.env" ]; then
+    source "$SCRIPT_DIR/.env"
+fi
+
+DASHBOARD_API="${DASHBOARD_API:-http://localhost:3333}"
 
 # 如果指定了平台，只处理该平台
 SINGLE_PLATFORM=$1
@@ -26,7 +31,8 @@ for platform in $PLATFORMS; do
   echo ">>> 处理 $platform ..."
 
   # 抓取数据 (stderr 输出日志，stdout 输出 JSON)
-  result=$(cd /home/xx && node vps_scraper.js "$platform" 2>/dev/null)
+  SCRAPER_PATH="${VPS_SCRAPER_PATH:-$HOME/vps_scraper.js}"
+  result=$(node "$SCRAPER_PATH" "$platform" 2>/dev/null)
 
   success=$(echo "$result" | jq -r '.success // false')
   count=$(echo "$result" | jq -r '.count // 0')
