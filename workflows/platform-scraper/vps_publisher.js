@@ -13,13 +13,13 @@ const https = require('https');
 const fs = require('fs');
 const path = require('path');
 
-// ============ 配置 ============
+// ============ 配置（从环境变量读取） ============
 
-const WINDOWS_IP = '100.97.242.124';  // node 机器（原 ROG: 100.98.253.95）
-const FILE_RECEIVER_PORT = 3001;  // Windows file-receiver.js
+const WINDOWS_IP = process.env.WINDOWS_IP || '127.0.0.1';
+const FILE_RECEIVER_PORT = parseInt(process.env.FILE_RECEIVER_PORT || '3001', 10);
 
-const DASHBOARD_API = 'http://localhost:3333';
-const API_KEY = 'dev-api-key-2025';
+const DASHBOARD_API = process.env.DASHBOARD_API || 'http://localhost:3333';
+const API_KEY = process.env.RUNNER_API_KEY || '';
 
 const TEMP_DIR = '/tmp/publish-files';
 if (!fs.existsSync(TEMP_DIR)) fs.mkdirSync(TEMP_DIR, { recursive: true });

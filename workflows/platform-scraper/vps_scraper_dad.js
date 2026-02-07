@@ -1,13 +1,13 @@
 /**
  * 爸爸公司 - VPS 端采集脚本 v2
  * 5个平台：抖音、视频号、快手、小红书、B站
- * Windows IP: 100.121.181.100
+ * Windows IP: set via WINDOWS_IP_DAD env var
  */
 
 const puppeteer = require('puppeteer-core');
 const http = require('http');
 
-const WINDOWS_IP = '100.121.181.100';
+const WINDOWS_IP = process.env.WINDOWS_IP_DAD || '127.0.0.1';
 
 const PLATFORMS = {
   'douyin': { name: '抖音', cdpPort: 9222, dataUrl: 'https://creator.douyin.com/creator-micro/content/manage', extract: extractDouyin },
