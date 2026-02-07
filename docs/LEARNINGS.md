@@ -18,3 +18,18 @@
   - 使用 Database icon 代表数据相关页面
   - 功能开关通过 InstanceContext 的 features 配置控制
 
+
+### [2026-02-07] Platform Data API Backend
+
+- **Bug**: None - implementation went smoothly
+- **优化点**: 
+  - Created lightweight Node.js/Express API service for platform data
+  - Used Docker for deployment with health checks
+  - Updated nginx config to proxy /api/media/* requests
+  - Proper separation: frontend (static) vs backend (API)
+- **影响程度**: Medium - Unblocks platform data display feature
+- **技术点**:
+  - PostgreSQL connection pooling with `pg` library
+  - Docker `host.docker.internal` for container-to-host DB access
+  - nginx reverse proxy configuration for multiple API endpoints
+
