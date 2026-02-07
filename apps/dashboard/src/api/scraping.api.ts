@@ -4,8 +4,7 @@
  * 通过 N8N webhook 触发爬虫任务
  */
 
-const API_BASE = import.meta.env.VITE_API_URL || '';
-const N8N_WEBHOOK_BASE = import.meta.env.VITE_N8N_WEBHOOK_URL || 'http://localhost:5678/webhook';
+// Webhook calls go through Nginx proxy: /api/n8n-webhook/ → N8N webhook port
 
 // ============ 类型定义 ============
 
@@ -108,7 +107,7 @@ let taskStatusCache: Map<string, Partial<ScrapingTask>> = new Map();
 export async function fetchScrapingTasks(): Promise<ScrapingTask[]> {
   // 尝试从后端获取任务状态
   try {
-    const response = await fetch(`${API_BASE}/api/v1/scraping/tasks`);
+    const response = await fetch('/api/n8n/executions?limit=20');
     if (response.ok) {
       const data = await response.json();
       return data.tasks || SCRAPING_TASKS;
@@ -149,7 +148,7 @@ export async function triggerScrapingTask(taskId: string): Promise<TriggerResult
 
   try {
     // 调用 N8N webhook
-    const response = await fetch(`${N8N_WEBHOOK_BASE}${task.webhookPath}`, {
+    const response = await fetch(`/api/n8n-webhook${task.webhookPath}`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

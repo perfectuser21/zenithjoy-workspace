@@ -1,0 +1,119 @@
+{
+  "name": "[Unit] 公众号数据爬取",
+  "nodes": [
+    {
+      "id": "t1",
+      "name": "占位触发器",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        240,
+        200
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "days",
+              "daysInterval": 999
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "t2",
+      "name": "手动触发",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        240,
+        400
+      ]
+    },
+    {
+      "id": "ssh",
+      "name": "执行CDP爬虫",
+      "type": "n8n-nodes-base.ssh",
+      "typeVersion": 1,
+      "position": [
+        520,
+        300
+      ],
+      "credentials": {
+        "sshPrivateKey": {
+          "id": "vvJsQOZ95sqzemla",
+          "name": "VPS SSH Key"
+        }
+      },
+      "parameters": {
+        "authentication": "privateKey",
+        "host": "146.190.52.84",
+        "port": 22,
+        "user": "xx",
+        "command": "bash ~/platform_scrape.sh gongzhonghao 2>/dev/null"
+      }
+    },
+    {
+      "id": "code",
+      "name": "解析结果",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        760,
+        300
+      ],
+      "parameters": {
+        "jsCode": "const stdout = $input.first().json.stdout || \"\"; try { return [{ json: JSON.parse(stdout.trim()) }]; } catch (e) { return [{ json: { success: false, error: e.message } }]; }"
+      }
+    }
+  ],
+  "connections": {
+    "占位触发器": {
+      "main": [
+        [
+          {
+            "node": "执行CDP爬虫",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "手动触发": {
+      "main": [
+        [
+          {
+            "node": "执行CDP爬虫",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "执行CDP爬虫": {
+      "main": [
+        [
+          {
+            "node": "解析结果",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": true,
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "staticData": {
+    "node:占位触发器": {
+      "recurrenceRules": [
+        359
+      ]
+    }
+  },
+  "active": true
+}

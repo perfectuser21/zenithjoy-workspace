@@ -6,7 +6,6 @@ import path from 'path'
 export default defineConfig({
   resolve: {
     alias: [
-      { find: '@features/core', replacement: path.resolve(__dirname, './src/stubs/core-features') },
       { find: '@', replacement: path.resolve(__dirname, './src') },
     ],
     dedupe: [
@@ -102,11 +101,18 @@ export default defineConfig({
   server: {
     port: 3001,
     proxy: {
-      '/api': {
-        target: 'http://localhost:3000',
+      // N8N REST API (US N8N via Tailscale for dev)
+      '/api/n8n/': {
+        target: 'http://100.71.32.28:5679',
         changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/api/, '')
-      }
+        rewrite: (path) => path.replace(/^\/api\/n8n/, '/api/v1')
+      },
+      // N8N Webhooks incl. feishu-login (US N8N via Tailscale for dev)
+      '/api/n8n-webhook/': {
+        target: 'http://100.71.32.28:5679',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api\/n8n-webhook/, '')
+      },
     }
   },
   build: {

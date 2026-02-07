@@ -59,8 +59,6 @@ interface LiveStatusOverview {
 
 // ============ API 函数 ============
 
-const API_BASE = import.meta.env.VITE_API_URL || '';
-
 /**
  * 获取 Dashboard 首页统计数据
  *
@@ -150,15 +148,19 @@ async function fetchAccountStats(): Promise<{ value: number; delta: number }> {
  */
 async function fetchAiExecutionStats(): Promise<{ value: number; delta: number }> {
   try {
-    const response = await fetch(`${API_BASE}/api/v1/n8n-live-status/instances/local/overview`);
+    const response = await fetch('/api/n8n/executions?limit=50&status=success,error,running');
     if (!response.ok) {
       throw new Error(`API error: ${response.status}`);
     }
 
-    const liveStatus: LiveStatusOverview = await response.json();
+    const data = await response.json();
+    const executions = data?.data || [];
 
-    // 今日执行总数
-    const todayTotal = liveStatus.todayStats?.total || 0;
+    // Count today's executions
+    const today = new Date().toISOString().split('T')[0];
+    const todayTotal = executions.filter((e: any) =>
+      e.startedAt?.startsWith(today)
+    ).length;
 
     // 变化值暂时不追踪
     return { value: todayTotal, delta: 0 };
