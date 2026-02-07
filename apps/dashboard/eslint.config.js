@@ -29,6 +29,7 @@ export default [
         clearInterval: 'readonly',
         HTMLElement: 'readonly',
         HTMLInputElement: 'readonly',
+        HTMLLinkElement: 'readonly',
         MouseEvent: 'readonly',
         KeyboardEvent: 'readonly',
         FormData: 'readonly',
@@ -50,6 +51,9 @@ export default [
         performance: 'readonly',
         requestAnimationFrame: 'readonly',
         cancelAnimationFrame: 'readonly',
+        React: 'readonly',
+        process: 'readonly',
+        __dirname: 'readonly',
       },
     },
     plugins: {
@@ -64,6 +68,8 @@ export default [
       'react-hooks/rules-of-hooks': 'error',
       'react-hooks/exhaustive-deps': 'warn',
       'no-console': 'off',
+      'no-undef': 'off',
+      'no-redeclare': 'off',
     },
     settings: {
       react: {
