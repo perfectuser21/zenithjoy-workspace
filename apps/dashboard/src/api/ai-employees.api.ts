@@ -12,8 +12,6 @@ import {
   matchAbilityByWorkflow,
 } from '../config/ai-employees.config';
 
-const API_BASE = import.meta.env.VITE_API_URL || '';
-
 // ============ 类型定义 ============
 
 // n8n 执行记录（简化版）
@@ -83,19 +81,49 @@ export interface DepartmentWithStats extends Department {
 
 // ============ API 函数 ============
 
-async function fetchApi<T>(endpoint: string): Promise<T> {
-  const response = await fetch(`${API_BASE}${endpoint}`);
-  if (!response.ok) {
-    throw new Error(`API error: ${response.status}`);
-  }
-  return response.json();
-}
-
 /**
- * 获取 n8n live status 概览
+ * 获取 n8n 执行数据并转换为 LiveStatusOverview 格式
  */
-async function fetchLiveStatus(instance: 'cloud' | 'local' = 'local'): Promise<LiveStatusOverview> {
-  return fetchApi(`/api/v1/n8n-live-status/instances/${instance}/overview`);
+async function fetchLiveStatus(): Promise<LiveStatusOverview> {
+  const response = await fetch('/api/n8n/executions?limit=50');
+  if (!response.ok) {
+    throw new Error(`N8N API error: ${response.status}`);
+  }
+  const data = await response.json();
+  const executions = data?.data || [];
+
+  const today = new Date().toISOString().split('T')[0];
+  const todayExecs = executions.filter((e: any) => e.startedAt?.startsWith(today));
+
+  const running = todayExecs.filter((e: any) => e.status === 'running');
+  const completed = todayExecs.filter((e: any) => e.status !== 'running');
+
+  return {
+    todayStats: {
+      running: running.length,
+      success: todayExecs.filter((e: any) => e.status === 'success').length,
+      error: todayExecs.filter((e: any) => e.status === 'error').length,
+      total: todayExecs.length,
+    },
+    runningExecutions: running.map((e: any) => ({
+      id: e.id,
+      workflowId: e.workflowId,
+      workflowName: e.workflowName || '',
+      startedAt: e.startedAt,
+      duration: e.stoppedAt
+        ? new Date(e.stoppedAt).getTime() - new Date(e.startedAt).getTime()
+        : Date.now() - new Date(e.startedAt).getTime(),
+    })),
+    recentCompleted: completed.map((e: any) => ({
+      id: e.id,
+      workflowId: e.workflowId,
+      workflowName: e.workflowName || '',
+      status: e.status,
+      startedAt: e.startedAt,
+      stoppedAt: e.stoppedAt,
+    })),
+    timestamp: Date.now(),
+  };
 }
 
 /**
@@ -154,7 +182,7 @@ function createDefaultDepartments(): DepartmentWithStats[] {
  */
 export async function fetchAiEmployeesWithStats(): Promise<DepartmentWithStats[]> {
   try {
-    const liveStatus = await fetchLiveStatus('local');
+    const liveStatus = await fetchLiveStatus();
 
     // 创建员工统计映射
     const employeeStatsMap = new Map<string, EmployeeTaskStats>();
@@ -234,7 +262,7 @@ export async function fetchAiEmployeesWithStats(): Promise<DepartmentWithStats[]
  */
 export async function fetchEmployeeTasks(employeeId: string): Promise<EmployeeTask[]> {
   try {
-    const liveStatus = await fetchLiveStatus('local');
+    const liveStatus = await fetchLiveStatus();
 
     const allExecutions: N8nExecution[] = [
       ...liveStatus.runningExecutions.map(r => ({

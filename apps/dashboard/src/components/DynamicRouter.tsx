@@ -15,9 +15,7 @@ import {
   additionalRoutes,
   autopilotPageComponents,
   type RouteConfig,
-  type NavGroup,
 } from '../config/navigation.config';
-import * as LucideIcons from 'lucide-react';
 
 // 加载状态组件
 function LoadingFallback() {
@@ -33,20 +31,12 @@ const componentCache: Record<string, ComponentType> = {};
 
 function getLazyComponent(
   name: string,
-  corePageComponents?: Record<string, () => Promise<{ default: any }>>
 ): ComponentType | null {
-  // 检查缓存
   if (componentCache[name]) {
     return componentCache[name];
   }
 
-  // 先从 Autopilot 组件查找
-  let loader = autopilotPageComponents[name];
-
-  // 如果没有，从 Core 组件查找
-  if (!loader && corePageComponents) {
-    loader = corePageComponents[name];
-  }
+  const loader = autopilotPageComponents[name];
 
   if (!loader) {
     console.warn(`Page component not found: ${name}`);
@@ -56,22 +46,6 @@ function getLazyComponent(
   const LazyComponent = lazy(loader);
   componentCache[name] = LazyComponent;
   return LazyComponent;
-}
-
-// 将 Core 的 NavGroup 格式转换为 Autopilot 的 NavGroup 格式
-function convertCoreNavGroups(
-  coreNavGroups: Array<{ title: string; items: Array<{ path: string; icon: any; label: string; featureKey: string; component?: string }> }>
-): NavGroup[] {
-  return coreNavGroups.map(group => ({
-    title: group.title,
-    items: group.items.map(item => ({
-      path: item.path,
-      icon: (LucideIcons as any)[item.icon] || LucideIcons.Circle,
-      label: item.label,
-      featureKey: item.featureKey,
-      component: item.component,
-    })),
-  }));
 }
 
 // 占位页面组件
@@ -90,51 +64,31 @@ interface DynamicRouterProps {
 
 export default function DynamicRouter({ children }: DynamicRouterProps) {
   const { isSuperAdmin } = useAuth();
-  const { isCore, isFeatureEnabled, coreConfig } = useInstance();
+  const { isFeatureEnabled } = useInstance();
 
-  // 获取当前实例的导航配置
   const navGroups = useMemo(() => {
-    if (isCore && coreConfig) {
-      return convertCoreNavGroups(coreConfig.navGroups);
-    }
     return getAutopilotNavGroups();
-  }, [isCore, coreConfig]);
-
-  // 获取页面组件映射
-  const corePageComponents = coreConfig?.pageComponents;
+  }, []);
 
   // 收集所有需要的路由
   const allRoutes: RouteConfig[] = useMemo(() => {
     const routes: RouteConfig[] = [];
 
-    // Core: 使用 allRoutes（包含所有路由，不仅是导航项）
-    if (isCore && coreConfig?.allRoutes) {
-      for (const route of coreConfig.allRoutes) {
+    for (const group of navGroups) {
+      for (const item of group.items) {
         routes.push({
-          path: route.path,
-          component: route.component,
-          requireAuth: route.requireAuth ?? true,
+          path: item.path,
+          component: item.component,
+          redirect: item.redirect,
+          requireAuth: true,
+          requireSuperAdmin: item.requireSuperAdmin,
         });
       }
-    } else {
-      // Autopilot: 从导航配置中提取路由
-      for (const group of navGroups) {
-        for (const item of group.items) {
-          routes.push({
-            path: item.path,
-            component: item.component,
-            redirect: item.redirect,
-            requireAuth: true,
-            requireSuperAdmin: item.requireSuperAdmin,
-          });
-        }
-      }
-      // 添加额外路由
-      routes.push(...additionalRoutes);
     }
+    routes.push(...additionalRoutes);
 
     return routes;
-  }, [navGroups, isCore, coreConfig]);
+  }, [navGroups]);
 
   // 渲染单个路由
   const renderRoute = (route: RouteConfig) => {
@@ -154,8 +108,7 @@ export default function DynamicRouter({ children }: DynamicRouterProps) {
       return null;
     }
 
-    // 获取组件（支持 Core 动态组件）
-    const Component = getLazyComponent(route.component, corePageComponents);
+    const Component = getLazyComponent(route.component);
 
     // 占位页面
     if (!Component) {

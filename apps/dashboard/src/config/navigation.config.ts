@@ -65,8 +65,6 @@ export const autopilotPageComponents: Record<string, () => Promise<{ default: Co
   // FeatureDashboard and CommandCenter moved to Core features/business
 };
 
-// 向后兼容：保留 pageComponents 导出（仅 Autopilot 组件）
-// Core 组件现在从 coreConfig.pageComponents 动态加载
 export const pageComponents = autopilotPageComponents;
 
 // 获取懒加载组件
@@ -79,8 +77,7 @@ export function getPageComponent(name: string) {
   return lazy(loader);
 }
 
-// ============ Autopilot 实例导航配置 ============
-// Core 导航现在从 InstanceContext.coreConfig.navGroups 动态加载
+// ============ 导航配置 ============
 
 export const autopilotNavGroups: NavGroup[] = [
   {
@@ -121,7 +118,6 @@ export const autopilotNavGroups: NavGroup[] = [
         featureKey: 'accounts',
         component: 'AccountsList'
       },
-      // 管理员设置已迁移到 Core: core.zenjoymedia.media
     ]
   }
 ];
@@ -154,16 +150,12 @@ export const additionalRoutes: RouteConfig[] = [
   { path: '/command', component: 'CommandCenter', requireAuth: true },
   { path: '/command/*', component: 'CommandCenter', requireAuth: true },
 
-  // 管理员子页面已迁移到 Core
-  // ClaudeMonitor, VpsMonitor, ClaudeStats, N8n*, Canvas 等
-  // 通过 Core 实例访问: core.zenjoymedia.media
 ];
 
 // ============ 辅助函数 ============
 
 /**
- * 获取 Autopilot 导航配置
- * Core 导航现在通过 InstanceContext.coreConfig.navGroups 获取
+ * 获取导航配置
  */
 export function getAutopilotNavGroups(): NavGroup[] {
   return autopilotNavGroups;

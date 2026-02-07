@@ -3,16 +3,9 @@ import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
 import path from 'path'
 
-// Core features path: real cecelia features locally, stub in CI
-const coreFeaturesPath = path.resolve(
-  __dirname,
-  process.env.CORE_FEATURES_PATH || '../../../../cecelia/workspace/apps/core/features'
-);
-
 export default defineConfig({
   resolve: {
     alias: [
-      { find: '@features/core', replacement: coreFeaturesPath },
       { find: '@', replacement: path.resolve(__dirname, './src') },
     ],
     dedupe: [
@@ -108,11 +101,23 @@ export default defineConfig({
   server: {
     port: 3001,
     proxy: {
-      '/api': {
-        target: 'http://localhost:3000',
+      // N8N REST API (US N8N via Tailscale for dev)
+      '/api/n8n/': {
+        target: 'http://100.71.32.28:5679',
         changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/api/, '')
-      }
+        rewrite: (path) => path.replace(/^\/api\/n8n/, '/api/v1')
+      },
+      // N8N Webhooks (US N8N via Tailscale for dev)
+      '/api/n8n-webhook/': {
+        target: 'http://100.71.32.28:5679',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api\/n8n-webhook/, '')
+      },
+      // Feishu auth backend (US server)
+      '/api/feishu-login': {
+        target: 'http://100.71.32.28:3002',
+        changeOrigin: true,
+      },
     }
   },
   build: {
