@@ -1979,14 +1979,36 @@ async function publishToutiao(cdp, task, files) {
       return { success: false, error: '未找到发布按钮' };
     }
 
-    // 9. 处理可能的确认弹窗
+    // 9. 处理"云端自动同步"弹窗（必须先处理这个）
     await sleep(2000);
+    log('头条', '处理云端同步弹窗...');
+    const popupResult = await cdp.send('Runtime.evaluate', {
+      expression: `
+        (function() {
+          const buttons = document.querySelectorAll('button');
+          for (const btn of buttons) {
+            const text = btn.textContent.trim();
+            if (text.includes('知道了') && !btn.disabled && btn.offsetWidth > 0) {
+              btn.click();
+              return 'closed_sync_popup: ' + text;
+            }
+          }
+          return 'no_sync_popup';
+        })()
+      `
+    });
+    log('头条', `云端同步弹窗: ${popupResult.result.value}`);
+    await sleep(2000);
+
+    // 10. 处理其他可能的确认弹窗
+    log('头条', '处理其他确认弹窗...');
     await cdp.send('Runtime.evaluate', {
       expression: `
         (function() {
           const buttons = document.querySelectorAll('button');
           for (const btn of buttons) {
-            if ((btn.textContent.includes('确定') || btn.textContent.includes('发布')) && !btn.disabled) {
+            const text = btn.textContent.trim();
+            if ((text === '确定' || text === '发布' || text === '确认发布') && !btn.disabled && btn.offsetWidth > 0) {
               btn.click();
               return true;
             }
@@ -1996,9 +2018,9 @@ async function publishToutiao(cdp, task, files) {
       `
     });
 
-    // 10. 验证发布结果
+    // 11. 验证发布结果
     log('头条', '验证发布结果...');
-    await sleep(3000);
+    await sleep(5000);  // 增加等待时间，确保页面跳转完成
     const verifyResult = await h.verifyPublishSuccess(cdp, 30000);
     log('头条', `验证结果: ${verifyResult}`);
 
