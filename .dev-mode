@@ -1,20 +1,18 @@
 dev
-branch: cp-weibo-analysis
-session_id: 9f7690ea34f5
-tty: not a tty
-not a tty
-prd: .prd-weibo-analysis.md
-started: 2026-02-08T15:35:11+08:00
+branch: cp-fix-stop-hook-double-key
+session_id: manual-fix
+tty: /dev/pts/1
+prd: .prd.md
+started: 2026-02-08T12:00:00Z
 step_1_prd: done
 step_2_detect: done
 step_3_branch: done
 step_4_dod: pending
-step_5_code: done
-step_6_test: done
+step_5_code: pending
+step_6_test: pending
 step_7_quality: pending
 step_8_pr: pending
 step_9_ci: pending
 step_10_learning: pending
 step_11_cleanup: pending
-tasks_created: true
-retry_count: 1
+retry_count: 2
