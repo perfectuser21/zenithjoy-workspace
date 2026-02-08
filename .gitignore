@@ -29,3 +29,9 @@ Thumbs.db
 # Temp
 tmp/
 .tmp/
+
+# Dev workflow 运行时文件
+.dev-mode
+.dev-mode.*
+.dev-lock
+.dev-lock.*
