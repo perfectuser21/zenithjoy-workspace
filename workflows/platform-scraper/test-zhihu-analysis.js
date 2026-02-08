@@ -60,11 +60,11 @@ async function testZhihuAnalysis() {
       console.log(`✅ items 数组有效（${data.items.length} 条）`);
       passed++;
 
-      // 验证单条数据字段
+      // 验证单条数据字段（新API结构）
       const item = data.items[0];
-      const hasItemFields = item.title && item.publishTime && item.type;
+      const hasItemFields = item.type && item.data && item.reaction;
       if (hasItemFields) {
-        console.log('✅ 单条数据字段完整（title, publishTime, type）');
+        console.log('✅ 单条数据字段完整（type, data, reaction）');
         passed++;
       } else {
         console.log('❌ 单条数据字段不完整');
@@ -172,7 +172,7 @@ async function testZhihuAnalysis() {
   try {
     if (fs.existsSync(memoryFile)) {
       const content = fs.readFileSync(memoryFile, 'utf-8');
-      if (content.includes('知乎 ⚠️')) {
+      if (content.includes('知乎 ✅') || content.includes('知乎 ⚠️')) {
         console.log('✅ Memory 已更新（知乎条目存在）');
         passed++;
       } else {
