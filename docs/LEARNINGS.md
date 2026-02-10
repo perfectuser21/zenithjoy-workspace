@@ -129,3 +129,51 @@
   - Phase 2: 前端实现（作品列表 Database View）
   - 集成测试可以在本地运行，也可以在 CI 中运行
   - 考虑添加 API 文档生成（Swagger/OpenAPI）
+
+### [2026-02-10] Works List Frontend (Database View)
+
+- **Bug**:
+  - React Query v5 兼容性：`keepPreviousData` 已移除，需要使用 `placeholderData: keepPreviousData`（本次直接删除）
+  - Mutations API 变化：`isLoading` 改为 `isPending`
+  - ESLint 严格检查：空接口需要显式禁用规则，`Record<string, any>` 需改为 `Record<string, unknown>`
+  - vitest 未安装，不应创建 vitest 测试文件（按 DoD 使用手动测试）
+
+- **优化点**:
+  - 配置驱动导航系统运作良好，添加新页面只需三步
+  - React Query 数据层架构清晰，useQuery + useMutation 模式简洁
+  - 筛选、排序、分页逻辑统一，URL 参数自动同步
+  - 空状态、加载状态、错误状态处理完善
+  - TypeScript 类型定义完整，类型安全性高
+
+- **影响程度**: Low-Medium（兼容性问题需要了解，但解决后不影响功能）
+
+- **技术要点**:
+  - **React Query v5 迁移**：
+    - ❌ `keepPreviousData: true` → 删除或使用 `placeholderData`
+    - ❌ `isLoading` (mutations) → ✅ `isPending`
+  - **筛选器实现**：
+    - URL 参数管理：filters 对象 → query params
+    - 组合筛选：type + status + account + search
+    - 分页重置：筛选变化时 `offset: 0`
+  - **排序实现**：
+    - 点击表头切换排序字段
+    - 再次点击切换 asc/desc
+    - 显示排序方向指示器（↑↓）
+  - **分页实现**：
+    - 计算：currentPage = offset / limit + 1
+    - 切换页码：更新 offset
+    - 切换页大小：重置 offset
+  - **新建对话框**：
+    - useMutation + queryClient.invalidateQueries
+    - 表单验证：必填字段检查
+    - 成功后自动刷新列表
+  - **UI 设计**：
+    - Tailwind CSS 响应式布局
+    - 毛玻璃效果对话框
+    - Lucide Icons 图标
+    - 深色模式支持
+
+- **下一步**:
+  - Phase 3: 作品详情页 (Page View) + 富文本编辑器 (TipTap)
+  - 集成 Works API (apps/api) 进行完整的端到端测试
+  - 添加批量操作、导出等高级功能（后续优化）
