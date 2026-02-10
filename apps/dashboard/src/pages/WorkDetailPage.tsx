@@ -71,11 +71,14 @@ export default function WorkDetailPage() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [triggerSave]);
 
-  // ID 检查（在所有 hooks 之后）
-  if (!id) {
-    useEffect(() => {
+  // ID 检查（在所有 hooks 之后，但不能在条件中使用 hooks）
+  useEffect(() => {
+    if (!id) {
       navigate('/works');
-    }, [navigate]);
+    }
+  }, [id, navigate]);
+
+  if (!id) {
     return null;
   }
 
