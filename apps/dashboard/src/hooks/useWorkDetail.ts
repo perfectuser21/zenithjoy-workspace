@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { getWork, updateWork, type Work, type UpdateWorkInput } from '../api/works.api';
+import { getWork, updateWork, type UpdateWorkInput } from '../api/works.api';
 
 export function useWorkDetail(workId: string) {
   const queryClient = useQueryClient();

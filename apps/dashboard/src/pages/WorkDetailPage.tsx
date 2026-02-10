@@ -12,14 +12,7 @@ export default function WorkDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
 
-  if (!id) {
-    navigate('/works');
-    return null;
-  }
-
-  const { work, isLoading, error, updateWork, isUpdating } = useWorkDetail(id);
-
-  // 本地编辑状态
+  // 本地编辑状态 (必须在 early return 之前声明所有 hooks)
   const [title, setTitle] = useState('');
   const [contentType, setContentType] = useState<ContentType>('text');
   const [status, setStatus] = useState<WorkStatus>('draft');
@@ -27,6 +20,9 @@ export default function WorkDetailPage() {
   const [contentText, setContentText] = useState('');
   const [mediaFiles, setMediaFiles] = useState<Array<{ url: string; type: 'image' | 'video' }>>([]);
   const [customFields, setCustomFields] = useState<Record<string, unknown>>({});
+
+  // Hooks 必须在条件返回之前调用
+  const { work, isLoading, error, updateWork, isUpdating } = useWorkDetail(id || '');
 
   // 初始化编辑状态
   useEffect(() => {
@@ -74,6 +70,14 @@ export default function WorkDetailPage() {
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [triggerSave]);
+
+  // ID 检查（在所有 hooks 之后）
+  if (!id) {
+    useEffect(() => {
+      navigate('/works');
+    }, [navigate]);
+    return null;
+  }
 
   if (isLoading) {
     return (
