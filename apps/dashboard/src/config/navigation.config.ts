@@ -59,6 +59,7 @@ export const autopilotPageComponents: Record<string, () => Promise<{ default: Co
   'ScrapingPage': () => import('../pages/ScrapingPage'),
   'MediaScenarioPage': () => import('../pages/MediaScenarioPage'),
   'AiEmployeesPage': () => import('../pages/AiEmployeesPage'),
+  'WorksListPage': () => import('../pages/WorksListPage'),
   'WorksGalleryPage': () => import('../pages/WorksGalleryPage'),
   'AiEmployeeDetailPage': () => import('../pages/AiEmployeeDetailPage'),
   'AiAbilityDetailPage': () => import('../pages/AiAbilityDetailPage'),
@@ -108,10 +109,10 @@ export const autopilotNavGroups: NavGroup[] = [
       },
       {
         path: '/works',
-        icon: Image,
-        label: '作品库',
-        featureKey: 'works-gallery',
-        component: 'WorksGalleryPage'
+        icon: Database,
+        label: '作品管理',
+        featureKey: 'works-management',
+        component: 'WorksListPage'
       },
       {
         path: '/accounts',
@@ -141,6 +142,9 @@ export const additionalRoutes: RouteConfig[] = [
   // === 新媒体运营场景子路由 ===
   // 这些路由由 MediaScenarioPage 内部处理嵌套路由
   { path: '/media/*', component: 'MediaScenarioPage', requireAuth: true },
+
+  // === 作品相关路由 ===
+  { path: '/works/gallery', component: 'WorksGalleryPage', requireAuth: true },
 
   // === 旧路由重定向（兼容） ===
   { path: '/content', redirect: '/media/content' },
