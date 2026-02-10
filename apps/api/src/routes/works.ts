@@ -1,0 +1,24 @@
+import { Router } from 'express';
+import { WorksController } from '../controllers/works.controller';
+import { validate } from '../middleware/validate';
+import { createWorkSchema, updateWorkSchema } from '../models/schemas';
+
+const router = Router();
+const controller = new WorksController();
+
+// GET /api/works - List works
+router.get('/', controller.getWorks);
+
+// GET /api/works/:id - Get single work
+router.get('/:id', controller.getWorkById);
+
+// POST /api/works - Create work
+router.post('/', validate(createWorkSchema), controller.createWork);
+
+// PUT /api/works/:id - Update work
+router.put('/:id', validate(updateWorkSchema), controller.updateWork);
+
+// DELETE /api/works/:id - Delete work
+router.delete('/:id', controller.deleteWork);
+
+export default router;
