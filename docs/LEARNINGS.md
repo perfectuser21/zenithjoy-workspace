@@ -62,3 +62,70 @@
   - Phase 2: API 实现（Node.js + Express）
   - Phase 3: 前端实现（React + TipTap 富文本编辑器）
   - Phase 4+: 多平台发布、时序数据追踪、数据分析
+
+
+### [2026-02-10] Works Management API (CRUD)
+
+- **Bug**: None - 流程非常顺畅
+
+- **优化点**:
+  - TypeScript 严格模式 + MVC 架构：代码结构清晰，类型安全
+  - Zod 验证统一在 middleware：所有 POST/PUT 端点自动验证，代码简洁
+  - 错误处理中间件统一格式：从 Zod/PostgreSQL/自定义错误统一转换为标准格式
+  - 参数化查询防 SQL 注入：所有数据库操作使用 $1, $2 参数
+  - 测试覆盖全面：31 个集成测试覆盖所有 CRUD 和错误场景
+  - CI 一次性通过：类型检查 + 测试全部通过
+
+- **影响程度**: Medium - 完成 Phase 1，为前端实现打好基础
+
+- **技术要点**:
+  - **MVC 架构**: routes (定义端点) → controllers (处理请求) → services (业务逻辑)
+  - **Zod 验证**:
+    - 创建 schema (createWorkSchema, updateWorkSchema 等)
+    - 使用 validate() 中间件自动验证
+    - 验证失败自动返回 400 + 详细错误
+  - **错误处理**:
+    - ZodError → VALIDATION_ERROR (400)
+    - ApiError → 自定义状态码
+    - PostgreSQL 23505 → CONFLICT (409, 唯一约束)
+    - PostgreSQL 23503 → VALIDATION_ERROR (400, 外键)
+    - 其他 → INTERNAL_ERROR (500)
+  - **PostgreSQL 连接池**:
+    - pg.Pool (max: 20 connections)
+    - 参数化查询：query(sql, [param1, param2])
+    - 动态 WHERE 条件构建
+  - **动态 UPDATE 查询**:
+    ```typescript
+    Object.entries(updates).forEach(([key, value]) => {
+      fields.push(`${key} = $${paramIndex++}`);
+      values.push(value);
+    });
+    ```
+  - **JSON 字段处理**:
+    - 写入：JSON.stringify(value)
+    - 读取：PostgreSQL 自动解析 JSONB
+  - **级联删除**: DELETE works 自动删除 publish_logs (ON DELETE CASCADE)
+  - **唯一约束测试**: 测试 field_name 唯一性和 (work_id, platform) 唯一性
+
+- **API 设计亮点**:
+  - REST 风格一致：GET/POST/PUT/DELETE 语义清晰
+  - 筛选参数：type/status/account/limit/offset/sort/order
+  - 嵌套资源：/api/works/:workId/publish-logs
+  - 统一响应格式：ListResponse<T> { data, total, limit, offset }
+
+- **测试策略**:
+  - Jest + Supertest 集成测试
+  - afterAll 自动清理测试数据
+  - 测试所有成功路径 + 错误路径
+  - 约束测试（唯一性、外键、NOT NULL）
+
+- **文档完整性**:
+  - README 包含所有端点的 curl 示例
+  - 环境变量说明清晰
+  - 项目结构可视化
+  - 错误码表格
+
+- **下一步**:
+  - Phase 2: 前端实现（作品列表 Database View）
+  - 集成测试可以在本地运行，也可以在 CI 中运行
+  - 考虑添加 API 文档生成（Swagger/OpenAPI）
