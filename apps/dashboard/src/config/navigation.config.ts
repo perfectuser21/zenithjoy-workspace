@@ -13,8 +13,6 @@ import {
   Video,
   Users,
   KeyRound,
-  LayoutGrid,
-  Image,
   Database,
 } from 'lucide-react';
 

@@ -15,7 +15,7 @@ export interface Work {
   account: Account;
   content_text?: string;
   media_files?: Array<{ url: string; type: 'image' | 'video'; }>;
-  custom_fields?: Record<string, any>;
+  custom_fields?: Record<string, unknown>;
   created_at: string;
   updated_at: string;
   first_published_at?: string;
@@ -47,7 +47,7 @@ export interface CreateWorkInput {
   status?: WorkStatus;
   content_text?: string;
   media_files?: Array<{ url: string; type: 'image' | 'video'; }>;
-  custom_fields?: Record<string, any>;
+  custom_fields?: Record<string, unknown>;
 }
 
 export interface UpdateWorkInput {
@@ -57,7 +57,7 @@ export interface UpdateWorkInput {
   status?: WorkStatus;
   content_text?: string;
   media_files?: Array<{ url: string; type: 'image' | 'video'; }>;
-  custom_fields?: Record<string, any>;
+  custom_fields?: Record<string, unknown>;
 }
 
 // ============ API 函数 ============
