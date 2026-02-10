@@ -35,7 +35,8 @@ const autopilotConfig: InstanceConfig = {
     'media-scenario': true,  // 新媒体运营场景
     'ai-employees': true,    // AI 员工
     'accounts': true,        // 账号管理
-    'works-gallery': true,   // 作品库
+    'works-management': true, // 作品管理 (Database View)
+    'works-gallery': true,   // 作品库 (Gallery View)
     'platform-data': true,   // 平台数据展示
     // 旧 features（保留用于兼容，实际已合并到 media-scenario）
     'execution-status': true,
