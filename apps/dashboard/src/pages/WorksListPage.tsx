@@ -5,6 +5,7 @@ import { getWorks, createWork, deleteWork, type Work, type WorkFilters, type Con
 
 // ============ 类型定义 ============
 
+// eslint-disable-next-line @typescript-eslint/no-empty-object-type
 interface WorksListPageProps {}
 
 // ============ 常量 ============
@@ -33,7 +34,7 @@ const PAGE_SIZES = [10, 20, 50, 100];
 
 // ============ 主组件 ============
 
-export default function WorksListPage({}: WorksListPageProps) {
+export default function WorksListPage() {
   const queryClient = useQueryClient();
 
   // ========== 筛选状态 ==========
@@ -51,7 +52,6 @@ export default function WorksListPage({}: WorksListPageProps) {
   const { data, isLoading, error } = useQuery({
     queryKey: ['works', filters],
     queryFn: () => getWorks(filters),
-    keepPreviousData: true,
   });
 
   // ========== 分页计算 ==========
@@ -458,10 +458,10 @@ function CreateWorkDialog({ onClose, onSuccess }: CreateWorkDialogProps) {
             </button>
             <button
               type="submit"
-              disabled={createMutation.isLoading}
+              disabled={createMutation.isPending}
               className="flex-1 px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {createMutation.isLoading ? '创建中...' : '创建'}
+              {createMutation.isPending ? '创建中...' : '创建'}
             </button>
           </div>
         </form>
