@@ -101,6 +101,16 @@ export default defineConfig({
   server: {
     port: 3001,
     proxy: {
+      // Works Management API - 字段管理
+      '/api/fields': {
+        target: 'http://localhost:5200/api',
+        changeOrigin: true,
+      },
+      // Works Management API - 作品管理
+      '/api/works': {
+        target: 'http://localhost:5200/api',
+        changeOrigin: true,
+      },
       // N8N REST API (US N8N via Tailscale for dev)
       '/api/n8n/': {
         target: 'http://100.71.32.28:5679',

@@ -217,3 +217,68 @@
   - Phase 4: 字段管理（动态字段配置）
   - 媒体文件上传集成（云存储或服务器）
   - 端到端测试（前端 + API）
+
+### [2026-02-10] Field Management (Phase 4)
+
+- **Bug**: None - 流程极其顺畅，一次性通过
+
+- **优化点**:
+  - @hello-pangea/dnd 拖拽库已安装，直接使用
+  - 分组展示设计（核心字段 vs 自定义字段）提高了可维护性
+  - 字段类型选择器封装良好，支持 7 种类型
+  - 模态对话框编辑器 UX 流畅（新增/编辑共用组件，根据 field 参数判断模式）
+  - 字段排序逻辑清晰：分别管理核心字段和自定义字段的顺序
+  - TypeScript 类型定义完整，CORE_FIELDS 常量确保核心字段不可删除
+
+- **影响程度**: Low - 整个开发过程无阻碍
+
+- **技术要点**:
+  - **@hello-pangea/dnd 拖拽实现**:
+    - DragDropContext 包裹整个列表
+    - 两个独立的 Droppable 区域（core-fields, custom-fields）
+    - Draggable 包裹每个 FieldItem
+    - onDragEnd 处理排序逻辑，调用 onReorder 更新后端
+  - **字段类型系统**:
+    - FieldType 联合类型：'text' | 'textarea' | 'select' | 'multiselect' | 'date' | 'number' | 'checkbox'
+    - FIELD_TYPE_LABELS 映射中文标签
+    - CORE_FIELDS 常量定义不可删除字段
+  - **编辑器组件设计**:
+    - field 参数为空 = 新增模式
+    - field 参数有值 = 编辑模式
+    - 编辑模式下 field_name 和 field_type 不可修改（disabled）
+    - select/multiselect 类型动态显示选项编辑器
+    - checkbox 类型使用特殊的默认值控件
+  - **React Query 集成**:
+    - useFieldDefinitions hook 封装所有操作
+    - createField/updateField/deleteField mutations
+    - reorderFields mutation 批量更新 display_order
+    - 自动 invalidateQueries 刷新列表
+  - **UI 交互细节**:
+    - 拖拽时显示半透明效果（isDragging）
+    - 删除操作需要确认对话框（window.confirm）
+    - 核心字段隐藏"编辑"和"删除"按钮
+    - 显示/隐藏切换使用 Eye/EyeOff 图标
+  - **路由配置**:
+    - /works/fields 页面路径
+    - requireAuth: true 权限控制
+    - FieldManagementPage 懒加载
+
+- **设计亮点**:
+  - 核心字段与自定义字段分组：清晰区分系统字段和用户字段
+  - 拖拽手柄 GripVertical：直观的拖拽交互
+  - 字段卡片设计：包含所有关键信息（类型、选项、默认值、必填标识）
+  - 模态编辑器：避免页面跳转，提高操作效率
+
+- **版本号管理**:
+  - feat 类型 commit → minor 版本（1.3.0 → 1.4.0）
+  - 同步更新 package.json、VERSION 文件、package-lock.json
+
+- **DoD 执行经验**:
+  - 11 个功能区域全部使用 manual 测试方法
+  - TypeScript typecheck + Vite build 作为基础质量保证
+  - CI 一次性通过，无需修复
+
+- **下一步**:
+  - Phase 5: 多平台发布功能（使用 field_definitions 配置）
+  - 在 Works Detail Page 集成动态字段显示
+  - 添加字段导入/导出功能（可选优化）
