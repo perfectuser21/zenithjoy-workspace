@@ -60,6 +60,7 @@ export const autopilotPageComponents: Record<string, () => Promise<{ default: Co
   'WorksListPage': () => import('../pages/WorksListPage'),
   'WorksGalleryPage': () => import('../pages/WorksGalleryPage'),
   'WorkDetailPage': () => import('../pages/WorkDetailPage'),
+  'FieldManagementPage': () => import('../pages/FieldManagementPage'),
   'AiEmployeeDetailPage': () => import('../pages/AiEmployeeDetailPage'),
   'AiAbilityDetailPage': () => import('../pages/AiAbilityDetailPage'),
   'AccountsList': () => import('../pages/accounts/AccountsList'),
@@ -144,6 +145,7 @@ export const additionalRoutes: RouteConfig[] = [
 
   // === 作品相关路由 ===
   { path: '/works/gallery', component: 'WorksGalleryPage', requireAuth: true },
+  { path: '/works/fields', component: 'FieldManagementPage', requireAuth: true },
   { path: '/works/:id', component: 'WorkDetailPage', requireAuth: true },
 
   // === 旧路由重定向（兼容） ===
