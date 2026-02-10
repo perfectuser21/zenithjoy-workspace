@@ -174,6 +174,46 @@
     - 深色模式支持
 
 - **下一步**:
-  - Phase 3: 作品详情页 (Page View) + 富文本编辑器 (TipTap)
   - 集成 Works API (apps/api) 进行完整的端到端测试
   - 添加批量操作、导出等高级功能（后续优化）
+
+### [2026-02-10] Works Detail Page (Phase 3)
+
+- **Bug**:
+  - React Hooks 规则违规：early return 不能在 hooks 之前
+  - 解决：将所有 hooks 移到组件顶层，使用 useEffect 处理 ID 检查，条件返回放在所有 hooks 之后
+
+- **优化点**:
+  - TipTap 编辑器集成顺利，工具栏和基础功能实现完整
+  - useAutoSave hook 设计良好，2秒延迟 + Ctrl+S 手动保存
+  - MediaUploader 支持拖拽上传，用户体验好
+  - CustomFieldsEditor 使用预定义字段，简化了 Phase 3 范围
+
+- **影响程度**: Low-Medium
+
+- **技术要点**:
+  - **React Hooks 规则**：所有 hooks 必须在组件顶层无条件调用
+    - ❌ 错误：`if (!id) return null; const { work } = useWorkDetail(id);`
+    - ✅ 正确：`const { work } = useWorkDetail(id || ''); if (!id) return null;`
+  - **TipTap 集成**：
+    - StarterKit + Image + Link extensions
+    - 自定义工具栏（粗体、斜体、标题、列表、代码、链接、图片）
+    - EditorContent 组件负责渲染
+  - **自动保存策略**：
+    - useAutoSave hook 使用 useRef 保存状态，避免不必要的重新渲染
+    - 组件卸载时自动保存
+    - 防抖设计（clearTimeout + setTimeout）
+  - **URL 对象内存管理**：
+    - MediaUploader 使用 `URL.createObjectURL()` 预览本地文件
+    - 实际项目需要上传到服务器或云存储
+  - **版本号升级**：feat 类型 → minor 版本（1.2.1 → 1.3.0）
+
+- **CI 经验**:
+  - ESLint rules-of-hooks 检查非常严格
+  - 需要理解 React Hooks 的底层原理（调用顺序一致性）
+  - 修复后立即 push，避免本地积累多个 commit
+
+- **下一步**:
+  - Phase 4: 字段管理（动态字段配置）
+  - 媒体文件上传集成（云存储或服务器）
+  - 端到端测试（前端 + API）
