@@ -1,6 +1,6 @@
 {
-  "branch": "cp-20260212-ai-video-generation",
-  "head_sha": "497a6c4",
-  "timestamp": "2026-02-12T02:03:32Z",
+  "branch": "cp-20260212-fix-ai-video-status",
+  "head_sha": "2edb2f2",
+  "timestamp": "2026-02-12T07:19:11Z",
   "note": "Quality 只汇总，不判定。CI 是最终裁判。"
 }
