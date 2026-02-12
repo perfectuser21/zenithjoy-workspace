@@ -23,6 +23,7 @@ interface ToAPITask {
   created_at?: number;
   completed_at?: number;
   video_url?: string;
+  fail_reason?: string;  // ToAPI bug: video URL is here instead of video_url
   error?: { code?: string; message?: string; };
 }
 
@@ -108,6 +109,12 @@ export class ToAPIPlatform extends VideoPlatform {
         break;
     }
 
+    // Video URL mapping: ToAPI bug - video URL is in fail_reason field
+    let videoUrl = task.video_url;
+    if (!videoUrl && task.fail_reason?.startsWith('http')) {
+      videoUrl = task.fail_reason;
+    }
+
     return {
       id: task.id,
       platform: this.id,
@@ -116,7 +123,7 @@ export class ToAPIPlatform extends VideoPlatform {
       progress,
       created_at: task.created_at,
       completed_at: task.completed_at,
-      videoUrl: task.video_url,
+      videoUrl,
       error: task.error,
     };
   }
