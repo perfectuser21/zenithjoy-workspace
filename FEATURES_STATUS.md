@@ -16,7 +16,7 @@
 |------|------|------|--------|------|------|
 | Works Gallery | ✅ 已跑通 | /works | P0 | ✅ 5 tests | 33 张卡片展示 + 标签筛选 + 详情面板 |
 | Platform Data | ✅ 已跑通 | /platform-data | P0 | ✅ 5 tests | 7平台切换 + 数据表格 + 刷新 + 状态 |
-| AI Video | 🟡 半成品 | /ai-video | P1 | ⏳ 待测试 | 菜单刚启用，功能需验证 |
+| AI Video | 🟡 半成品 | /ai-video | P1 | ✅ 5 tests | 基础 UI 测试（模型选择+提示词+按钮）|
 | Works Management | ❓ 未测试 | /works-management | P1 | ⏳ 待测试 | 数据库视图 |
 | Field Management | ❓ 未测试 | /fields | P2 | ⏳ 待测试 | 字段管理 |
 | 新媒体运营 | ❓ 未测试 | /media-scenario | P2 | ⏳ 待测试 | - |
