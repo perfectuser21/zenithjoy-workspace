@@ -12,7 +12,7 @@
  */
 
 import { useState } from 'react';
-import { Sparkles, AlertCircle } from 'lucide-react';
+import { Sparkles, AlertCircle, Loader2 } from 'lucide-react';
 import ModelSelector, { MODEL_CONFIGS } from '../components/video-generation/ModelSelector';
 import ImageUploader from '../components/video-generation/ImageUploader';
 import VideoParams from '../components/video-generation/VideoParams';
@@ -221,12 +221,23 @@ export default function AiVideoGenerationPage() {
           )}
 
           {/* 生成中：任务监控 */}
-          {pageState === 'generating' && taskId && (
-            <TaskMonitor
-              taskId={taskId}
-              onComplete={handleTaskComplete}
-              onError={handleTaskError}
-            />
+          {pageState === 'generating' && (
+            <>
+              {taskId ? (
+                <TaskMonitor
+                  taskId={taskId}
+                  onComplete={handleTaskComplete}
+                  onError={handleTaskError}
+                />
+              ) : (
+                <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-6">
+                  <div className="flex flex-col items-center justify-center py-12">
+                    <Loader2 className="w-8 h-8 text-blue-500 animate-spin mb-4" />
+                    <p className="text-slate-600 dark:text-slate-400">正在提交任务...</p>
+                  </div>
+                </div>
+              )}
+            </>
           )}
 
           {/* 完成：视频预览 */}

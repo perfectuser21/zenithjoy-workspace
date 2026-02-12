@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import AiVideoGenerationPage from '../AiVideoGenerationPage';
+import * as videoGenApi from '../../api/video-generation.api';
 
 // Mock the API
 vi.mock('../../api/video-generation.api', async (importOriginal) => {
@@ -11,6 +12,8 @@ vi.mock('../../api/video-generation.api', async (importOriginal) => {
     pollTaskStatus: vi.fn(),
   };
 });
+
+const mockCreateVideoGeneration = videoGenApi.createVideoGeneration as ReturnType<typeof vi.fn>;
 
 describe('AiVideoGenerationPage', () => {
   it('应该展示页面标题', () => {
@@ -60,5 +63,31 @@ describe('AiVideoGenerationPage', () => {
 
     // 按钮应该启用
     expect(generateButton).not.toBeDisabled();
+  });
+
+  it('点击生成按钮后应该立即显示加载提示', async () => {
+    // Mock API 返回一个延迟的 Promise
+    mockCreateVideoGeneration.mockImplementation(() => {
+      return new Promise((resolve) => {
+        setTimeout(() => {
+          resolve({ id: 'task_123', status: 'queued', progress: 0 });
+        }, 1000);
+      });
+    });
+
+    render(<AiVideoGenerationPage />);
+
+    // 输入提示词
+    const textarea = screen.getByRole('textbox');
+    fireEvent.change(textarea, { target: { value: '测试视频生成' } });
+
+    // 点击生成按钮
+    const generateButton = screen.getByRole('button', { name: /开始生成视频/ });
+    fireEvent.click(generateButton);
+
+    // 应该立即显示"正在提交任务..."加载提示（不等待 API 返回）
+    await waitFor(() => {
+      expect(screen.getByText('正在提交任务...')).toBeInTheDocument();
+    });
   });
 });
