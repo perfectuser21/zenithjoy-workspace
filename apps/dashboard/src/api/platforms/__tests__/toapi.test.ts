@@ -218,6 +218,72 @@ describe('ToAPIPlatform', () => {
     });
   });
 
+  describe('video URL mapping', () => {
+    it('should use video_url when present', async () => {
+      const mockResponse = {
+        code: 'success',
+        data: {
+          id: 'task_7',
+          model: 'veo3.1-fast',
+          status: 'SUCCESS',
+          video_url: 'https://example.com/video1.mp4',
+          fail_reason: 'https://example.com/video2.mp4',
+          created_at: Date.now(),
+        },
+      };
+
+      (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+        ok: true,
+        json: async () => mockResponse,
+      });
+
+      const result = await platform.getTaskStatus('task_7');
+      expect(result.videoUrl).toBe('https://example.com/video1.mp4');
+    });
+
+    it('should fallback to fail_reason when video_url is missing', async () => {
+      const mockResponse = {
+        code: 'success',
+        data: {
+          id: 'task_8',
+          model: 'veo3.1-fast',
+          status: 'SUCCESS',
+          fail_reason: 'https://files.toapis.com/flow/abc-123.mp4',
+          created_at: Date.now(),
+        },
+      };
+
+      (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+        ok: true,
+        json: async () => mockResponse,
+      });
+
+      const result = await platform.getTaskStatus('task_8');
+      expect(result.videoUrl).toBe('https://files.toapis.com/flow/abc-123.mp4');
+    });
+
+    it('should not use fail_reason if it is not a URL', async () => {
+      const mockResponse = {
+        code: 'success',
+        data: {
+          id: 'task_9',
+          model: 'veo3.1-fast',
+          status: 'FAILED',
+          fail_reason: 'Generation failed due to invalid prompt',
+          created_at: Date.now(),
+        },
+      };
+
+      (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+        ok: true,
+        json: async () => mockResponse,
+      });
+
+      const result = await platform.getTaskStatus('task_9');
+      expect(result.videoUrl).toBeUndefined();
+    });
+  });
+
   describe('createVideoGeneration', () => {
     it('should create video with platform parameter', async () => {
       const mockResponse = {
