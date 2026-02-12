@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react';
 import { X, Image as ImageIcon } from 'lucide-react';
+import { uploadImage } from '../../api/video-generation.api';
 
 interface ImageUploaderProps {
   label: string;
@@ -36,15 +37,12 @@ export default function ImageUploader({ label, value, onChange, disabled = false
 
     setUploading(true);
     try {
-      const dataUrl = await new Promise<string>((resolve) => {
-        const reader = new FileReader();
-        reader.onload = (e) => resolve(e.target?.result as string);
-        reader.readAsDataURL(file);
-      });
-      onChange(dataUrl);
-      setError('⚠️ 图片已选择，但需要配置图片上传服务才能使用');
+      const result = await uploadImage(file);
+      onChange(result.url);
+      setError(null);
     } catch (err) {
-      setError('上传失败');
+      setError(err instanceof Error ? err.message : '上传失败');
+      setPreviewUrl(null);
     } finally {
       setUploading(false);
     }
