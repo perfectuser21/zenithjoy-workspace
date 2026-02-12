@@ -400,6 +400,41 @@
   - 添加字段导入/导出功能（可选优化）
 
 
+### [2026-02-12] ToAPI 大写状态映射 Bug 修复
+
+- **Bug**:
+  - 用户反馈视频生成任务最终显示 "Task timeout"，任务实际已完成但前端一直超时
+  - Console 日志显示：`status: "SUCCESS"` (大写)，视频 URL 在 `fail_reason` 字段
+
+- **根本原因**:
+  - ToAPI 生产环境返回大写状态：`"SUCCESS"`, `"FAILED"`, `"PROCESSING"`
+  - 代码 switch 语句只匹配小写：`case 'success'`, `case 'failed'`
+  - 大写状态不匹配任何 case，导致 status 保持默认值 `'queued'`
+  - 任务永远不会完成，轮询持续 5 分钟直到超时
+
+- **解决方案**:
+  - 在 `mapToUnifiedTask()` 方法中统一转换为小写
+  - `const normalizedStatus = task.status.toLowerCase()`
+  - switch 语句使用 normalized status
+  - 添加 3 个大写状态测试用例验证修复
+
+- **影响程度**: Critical - 功能完全不可用
+
+- **技术要点**:
+  - **第三方 API 集成的防御性编程**：永远不要假设 API 返回格式的大小写
+  - **测试覆盖真实场景**：生产环境可能与文档/开发环境不同
+  - **Console 日志的价值**：通过日志发现了大写 SUCCESS 状态
+  - **toLowerCase() 的健壮性**：比添加多个 case 更简洁，支持任何大小写组合
+  - **快速修复流程**：发现问题 → 分析日志 → 定位代码 → 添加测试 → 修复 → CI → 合并，完整流程 < 20 分钟
+
+- **教训**:
+  - 测试时应该覆盖大小写变体，特别是与第三方 API 集成时
+  - 字符串匹配前先 normalize（toLowerCase/toUpperCase）
+  - 实际测试要等到任务完成，不要只看前几秒就认为成功
+
+- **CI 执行**: 一次性通过，13 个测试全部通过
+
+
 ### [2026-02-12] AI 视频生成平台抽象层重构
 
 - **Bug**:
