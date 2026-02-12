@@ -16,6 +16,8 @@ describe('PlatformDataPage', () => {
     // Default mock: return empty data successfully
     vi.mocked(platformDataApi.fetchPlatformData).mockResolvedValue({
       success: true,
+      platform: 'douyin',
+      count: 0,
       data: [],
     });
   });
@@ -68,7 +70,7 @@ describe('PlatformDataPage', () => {
     // Mock API 返回一个延迟的 Promise
     vi.mocked(platformDataApi.fetchPlatformData).mockImplementation(
       () => new Promise((resolve) => {
-        setTimeout(() => resolve({ success: true, data: [] }), 100);
+        setTimeout(() => resolve({ success: true, platform: 'douyin', count: 0, data: [] }), 100);
       })
     );
 
@@ -84,6 +86,8 @@ describe('PlatformDataPage', () => {
     // Mock API 返回错误
     vi.mocked(platformDataApi.fetchPlatformData).mockResolvedValue({
       success: false,
+      platform: 'douyin',
+      count: 0,
       error: '网络错误',
       data: [],
     });
