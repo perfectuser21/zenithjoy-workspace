@@ -3,21 +3,21 @@
  */
 
 import { Download } from 'lucide-react';
-import type { VideoGenerationTask } from '../../types/video-generation.types';
+import type { UnifiedTask } from '../../types/video-generation.types';
 
 interface VideoPreviewProps {
-  task: VideoGenerationTask;
+  task: UnifiedTask;
   onReset: () => void;
 }
 
 export default function VideoPreview({ task, onReset }: VideoPreviewProps) {
-  if (!task.result) {
+  if (!task.videoUrl) {
     return null;
   }
 
   const handleDownload = () => {
     const a = document.createElement('a');
-    a.href = task.result!.video_url;
+    a.href = task.videoUrl;
     a.download = `video-${task.id}.mp4`;
     a.click();
   };
@@ -27,17 +27,16 @@ export default function VideoPreview({ task, onReset }: VideoPreviewProps) {
       {/* 视频播放器 */}
       <div className="relative bg-black aspect-video">
         <video
-          src={task.result.video_url}
+          src={task.videoUrl}
           controls
           className="w-full h-full"
-          poster={task.result.thumbnail_url}
         />
         <div className="absolute top-4 left-4 flex gap-2">
           <span className="px-3 py-1 bg-black/60 backdrop-blur-sm text-white text-xs rounded-lg">
-            {task.result.resolution}
+            {task.platform}
           </span>
           <span className="px-3 py-1 bg-black/60 backdrop-blur-sm text-white text-xs rounded-lg">
-            {task.result.duration}s
+            {task.model}
           </span>
         </div>
       </div>
@@ -73,7 +72,7 @@ export default function VideoPreview({ task, onReset }: VideoPreviewProps) {
               <div className="text-slate-500 dark:text-slate-400">完成时间</div>
               <div className="text-slate-900 dark:text-white font-medium mt-1">
                 {task.completed_at
-                  ? new Date(task.completed_at * 1000).toLocaleString('zh-CN', {
+                  ? new Date(task.completed_at).toLocaleString('zh-CN', {
                       hour: '2-digit',
                       minute: '2-digit',
                     })
@@ -84,7 +83,7 @@ export default function VideoPreview({ task, onReset }: VideoPreviewProps) {
               <div className="text-slate-500 dark:text-slate-400">耗时</div>
               <div className="text-slate-900 dark:text-white font-medium mt-1">
                 {task.completed_at && task.created_at
-                  ? `${Math.floor((task.completed_at - task.created_at) / 60)}m ${(task.completed_at - task.created_at) % 60}s`
+                  ? `${Math.floor((task.completed_at - task.created_at) / 1000 / 60)}m ${Math.floor((task.completed_at - task.created_at) / 1000) % 60}s`
                   : '-'}
               </div>
             </div>

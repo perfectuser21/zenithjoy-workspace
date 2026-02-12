@@ -1,54 +1,11 @@
 import { useState } from 'react';
 import { ChevronDown } from 'lucide-react';
-import type { VideoModel, ModelConfig } from '../../types/video-generation.types';
+import type { VideoModel } from '../../types/video-generation.types';
+import { getPlatform } from '../../api/video-generation.api';
 
-const MODEL_CONFIGS: ModelConfig[] = [
-  {
-    id: 'MiniMax-Hailuo-02',
-    name: 'MiniMax 海螺 02',
-    description: '高质量视频生成，支持 5-10 秒',
-    maxDuration: 10,
-    supportedResolutions: ['512p', '768p', '1080p'],
-    supportFirstFrame: true,
-    supportLastFrame: true,
-  },
-  {
-    id: 'Sora-2',
-    name: 'Sora 2',
-    description: 'OpenAI 最新视频生成模型',
-    maxDuration: 10,
-    supportedResolutions: ['512p', '768p', '1080p'],
-    supportFirstFrame: true,
-    supportLastFrame: false,
-  },
-  {
-    id: 'Vail-3',
-    name: 'Vail 3',
-    description: '快速视频生成',
-    maxDuration: 5,
-    supportedResolutions: ['512p', '768p'],
-    supportFirstFrame: false,
-    supportLastFrame: false,
-  },
-  {
-    id: 'Douyin-VideoGen',
-    name: '豆包视频生成',
-    description: '字节跳动视频生成',
-    maxDuration: 10,
-    supportedResolutions: ['512p', '768p', '1080p'],
-    supportFirstFrame: true,
-    supportLastFrame: true,
-  },
-  {
-    id: 'Luma-1.6',
-    name: 'Luma 1.6',
-    description: '高清视频生成',
-    maxDuration: 10,
-    supportedResolutions: ['768p', '1080p'],
-    supportFirstFrame: true,
-    supportLastFrame: true,
-  },
-];
+// 获取 ToAPI 平台模型
+const toapi = getPlatform('toapi');
+const MODEL_CONFIGS = toapi.models;
 
 interface ModelSelectorProps {
   value: VideoModel;
@@ -85,7 +42,7 @@ export default function ModelSelector({ value, onChange, disabled = false }: Mod
               <button
                 key={model.id}
                 type="button"
-                onClick={() => { onChange(model.id); setIsOpen(false); }}
+                onClick={() => { onChange(model.id as VideoModel); setIsOpen(false); }}
                 className={`w-full px-4 py-3 text-left hover:bg-slate-50 dark:hover:bg-slate-700 ${value === model.id ? 'bg-blue-50 dark:bg-blue-900/20' : ''}`}
               >
                 <div className="font-medium">{model.name}</div>

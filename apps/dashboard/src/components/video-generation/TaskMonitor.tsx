@@ -4,22 +4,24 @@
 
 import { useEffect, useState } from 'react';
 import { Loader2, CheckCircle, XCircle, Clock } from 'lucide-react';
-import type { VideoGenerationTask } from '../../types/video-generation.types';
+import type { UnifiedTask } from '../../types/video-generation.types';
 import { pollTaskStatus } from '../../api/video-generation.api';
 
 interface TaskMonitorProps {
   taskId: string;
-  onComplete: (task: VideoGenerationTask) => void;
+  platform: string;
+  onComplete: (task: UnifiedTask) => void;
   onError: (error: Error) => void;
 }
 
-export default function TaskMonitor({ taskId, onComplete, onError }: TaskMonitorProps) {
-  const [task, setTask] = useState<VideoGenerationTask | null>(null);
+export default function TaskMonitor({ taskId, platform, onComplete, onError }: TaskMonitorProps) {
+  const [task, setTask] = useState<UnifiedTask | null>(null);
   const [elapsedTime, setElapsedTime] = useState(0);
 
   useEffect(() => {
     // 轮询任务状态
     pollTaskStatus(
+      platform,
       taskId,
       (updatedTask) => {
         setTask(updatedTask);
@@ -37,7 +39,7 @@ export default function TaskMonitor({ taskId, onComplete, onError }: TaskMonitor
     }, 1000);
 
     return () => clearInterval(timer);
-  }, [taskId, onComplete, onError]);
+  }, [taskId, platform, onComplete, onError]);
 
   if (!task) {
     return (
@@ -134,17 +136,23 @@ export default function TaskMonitor({ taskId, onComplete, onError }: TaskMonitor
       )}
 
       {/* 统计信息 */}
-      <div className="grid grid-cols-2 gap-4 pt-4 border-t border-slate-200 dark:border-slate-700">
+      <div className="grid grid-cols-3 gap-4 pt-4 border-t border-slate-200 dark:border-slate-700">
+        <div>
+          <div className="text-xs text-slate-500 dark:text-slate-400">平台</div>
+          <div className="text-sm font-medium text-slate-900 dark:text-white mt-1">
+            {task.platform}
+          </div>
+        </div>
+        <div>
+          <div className="text-xs text-slate-500 dark:text-slate-400">模型</div>
+          <div className="text-sm font-medium text-slate-900 dark:text-white mt-1">
+            {task.model}
+          </div>
+        </div>
         <div>
           <div className="text-xs text-slate-500 dark:text-slate-400">耗时</div>
           <div className="text-sm font-medium text-slate-900 dark:text-white mt-1">
             {formatTime(elapsedTime)}
-          </div>
-        </div>
-        <div>
-          <div className="text-xs text-slate-500 dark:text-slate-400">创建时间</div>
-          <div className="text-sm font-medium text-slate-900 dark:text-white mt-1">
-            {formatDateTime(task.created_at)}
           </div>
         </div>
       </div>
@@ -157,14 +165,4 @@ function formatTime(seconds: number): string {
   const mins = Math.floor(seconds / 60);
   const secs = seconds % 60;
   return `${mins}:${secs.toString().padStart(2, '0')}`;
-}
-
-// 格式化日期时间
-function formatDateTime(timestamp: number): string {
-  const date = new Date(timestamp * 1000);
-  return date.toLocaleString('zh-CN', {
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-  });
 }

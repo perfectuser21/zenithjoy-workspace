@@ -15,20 +15,20 @@ import { useState } from 'react';
 import { Sparkles, AlertCircle, Loader2 } from 'lucide-react';
 import ModelSelector, { MODEL_CONFIGS } from '../components/video-generation/ModelSelector';
 import ImageUploader from '../components/video-generation/ImageUploader';
-import VideoParams from '../components/video-generation/VideoParams';
 import TaskMonitor from '../components/video-generation/TaskMonitor';
 import VideoPreview from '../components/video-generation/VideoPreview';
-import type { VideoModel, VideoDuration, VideoResolution, VideoGenerationTask } from '../types/video-generation.types';
+import type { VideoModel, VideoDuration, VideoResolution, AspectRatio, UnifiedTask } from '../types/video-generation.types';
 import { createVideoGeneration } from '../api/video-generation.api';
 
 type PageState = 'input' | 'generating' | 'completed' | 'error';
 
 export default function AiVideoGenerationPage() {
   // 模型和参数
-  const [model, setModel] = useState<VideoModel>('MiniMax-Hailuo-02');
+  const [model, setModel] = useState<VideoModel>('veo3.1-fast');
   const [prompt, setPrompt] = useState('');
-  const [duration, setDuration] = useState<VideoDuration>(5);
-  const [resolution, setResolution] = useState<VideoResolution>('768p');
+  const [duration] = useState<VideoDuration>(8); // ToAPI 固定 8 秒
+  const [resolution, setResolution] = useState<VideoResolution>('1080p');
+  const [aspectRatio, setAspectRatio] = useState<AspectRatio>('16:9');
   const [promptOptimizer, setPromptOptimizer] = useState(true);
   const [fastPretreatment, setFastPretreatment] = useState(false);
   const [watermark, setWatermark] = useState(false);
@@ -40,7 +40,7 @@ export default function AiVideoGenerationPage() {
   // 任务状态
   const [pageState, setPageState] = useState<PageState>('input');
   const [taskId, setTaskId] = useState<string | null>(null);
-  const [completedTask, setCompletedTask] = useState<VideoGenerationTask | null>(null);
+  const [completedTask, setCompletedTask] = useState<UnifiedTask | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   // 获取当前模型配置
@@ -57,17 +57,22 @@ export default function AiVideoGenerationPage() {
     setPageState('generating');
 
     try {
+      const imageUrls: string[] = [];
+      if (firstFrameImage) imageUrls.push(firstFrameImage);
+      if (lastFrameImage) imageUrls.push(lastFrameImage);
+
       const response = await createVideoGeneration({
+        platform: 'toapi',
         model,
         prompt: prompt.trim(),
         duration,
+        aspectRatio,
+        resolution,
+        imageUrls: imageUrls.length > 0 ? imageUrls : undefined,
         metadata: {
-          resolution,
           prompt_optimizer: promptOptimizer,
           fast_pretreatment: fastPretreatment,
           watermark,
-          first_frame_image: firstFrameImage || undefined,
-          last_frame_image: lastFrameImage || undefined,
         },
       });
 
@@ -79,7 +84,7 @@ export default function AiVideoGenerationPage() {
   };
 
   // 任务完成回调
-  const handleTaskComplete = (task: VideoGenerationTask) => {
+  const handleTaskComplete = (task: UnifiedTask) => {
     setCompletedTask(task);
     setPageState('completed');
   };
@@ -134,26 +139,25 @@ export default function AiVideoGenerationPage() {
           </div>
 
           {/* 图片上传 */}
-          {modelConfig?.supportFirstFrame && (
-            <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-6">
-              <ImageUploader
-                label="首帧图片（可选）"
-                value={firstFrameImage}
-                onChange={setFirstFrameImage}
-                disabled={pageState === 'generating'}
-              />
-            </div>
-          )}
-
-          {modelConfig?.supportLastFrame && (
-            <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-6">
-              <ImageUploader
-                label="尾帧图片（可选）"
-                value={lastFrameImage}
-                onChange={setLastFrameImage}
-                disabled={pageState === 'generating'}
-              />
-            </div>
+          {modelConfig?.capabilities?.supportImages && (
+            <>
+              <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-6">
+                <ImageUploader
+                  label="首帧图片（可选）"
+                  value={firstFrameImage}
+                  onChange={setFirstFrameImage}
+                  disabled={pageState === 'generating'}
+                />
+              </div>
+              <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-6">
+                <ImageUploader
+                  label="尾帧图片（可选）"
+                  value={lastFrameImage}
+                  onChange={setLastFrameImage}
+                  disabled={pageState === 'generating'}
+                />
+              </div>
+            </>
           )}
 
           {/* 参数配置 */}
@@ -161,20 +165,55 @@ export default function AiVideoGenerationPage() {
             <h3 className="text-lg font-semibold text-slate-800 dark:text-white mb-4">
               参数配置
             </h3>
-            <VideoParams
-              duration={duration}
-              resolution={resolution}
-              promptOptimizer={promptOptimizer}
-              fastPretreatment={fastPretreatment}
-              watermark={watermark}
-              onDurationChange={setDuration}
-              onResolutionChange={setResolution}
-              onPromptOptimizerChange={setPromptOptimizer}
-              onFastPretreatmentChange={setFastPretreatment}
-              onWatermarkChange={setWatermark}
-              disabled={pageState === 'generating'}
-              maxDuration={modelConfig?.maxDuration}
-            />
+            <div className="space-y-6">
+              {/* 固定时长提示 */}
+              <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-xl">
+                <div className="text-sm text-blue-700 dark:text-blue-400">
+                  视频时长：8 秒（固定）
+                </div>
+              </div>
+
+              {/* 宽高比 */}
+              <div>
+                <label className="block text-sm font-medium mb-2">宽高比</label>
+                <div className="flex gap-2">
+                  {(['16:9', '9:16'] as AspectRatio[]).map((ratio) => (
+                    <button
+                      key={ratio}
+                      onClick={() => setAspectRatio(ratio)}
+                      disabled={pageState === 'generating'}
+                      className={`flex-1 px-4 py-2 rounded-xl font-medium ${aspectRatio === ratio ? 'bg-blue-500 text-white' : 'bg-slate-100 text-slate-700'} ${pageState === 'generating' ? 'opacity-50' : ''}`}
+                    >
+                      {ratio}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* 分辨率 */}
+              <div>
+                <label className="block text-sm font-medium mb-2">分辨率</label>
+                <div className="flex gap-2">
+                  {(['720p', '1080p', '4k'] as VideoResolution[]).map((r) => (
+                    <button
+                      key={r}
+                      onClick={() => setResolution(r)}
+                      disabled={pageState === 'generating'}
+                      className={`flex-1 px-4 py-2 rounded-xl font-medium ${resolution === r ? 'bg-blue-500 text-white' : 'bg-slate-100 text-slate-700'} ${pageState === 'generating' ? 'opacity-50' : ''}`}
+                    >
+                      {r}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* 开关选项 */}
+              <div className="space-y-3">
+                <Toggle label="提示词优化器" checked={promptOptimizer} onChange={setPromptOptimizer} disabled={pageState === 'generating'} />
+                <Toggle label="快速预处理" checked={fastPretreatment} onChange={setFastPretreatment} disabled={pageState === 'generating'} />
+                <Toggle label="水印" checked={watermark} onChange={setWatermark} disabled={pageState === 'generating'} />
+              </div>
+            </div>
           </div>
         </div>
 
@@ -226,6 +265,7 @@ export default function AiVideoGenerationPage() {
               {taskId ? (
                 <TaskMonitor
                   taskId={taskId}
+                  platform="toapi"
                   onComplete={handleTaskComplete}
                   onError={handleTaskError}
                 />
@@ -272,6 +312,22 @@ export default function AiVideoGenerationPage() {
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+// Toggle 开关组件
+function Toggle({ label, checked, onChange, disabled }: { label: string; checked: boolean; onChange: (v: boolean) => void; disabled?: boolean }) {
+  return (
+    <div className="flex items-center justify-between p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50">
+      <span className="text-sm font-medium">{label}</span>
+      <button
+        onClick={() => onChange(!checked)}
+        disabled={disabled}
+        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${disabled ? 'opacity-50 cursor-not-allowed' : ''} ${checked ? 'bg-blue-500' : 'bg-slate-300'}`}
+      >
+        <span className={`inline-block h-4 w-4 rounded-full bg-white transform transition-transform ${checked ? 'translate-x-6' : 'translate-x-1'}`} />
+      </button>
     </div>
   );
 }
