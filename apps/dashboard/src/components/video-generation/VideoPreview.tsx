@@ -1,23 +1,23 @@
 /**
- * 视频预览组件
+ * 视频预览组件（多平台支持）
  */
 
 import { Download } from 'lucide-react';
-import type { VideoGenerationTask } from '../../types/video-generation.types';
+import type { UnifiedTask } from '../../api/platforms';
 
 interface VideoPreviewProps {
-  task: VideoGenerationTask;
+  task: UnifiedTask;
   onReset: () => void;
 }
 
 export default function VideoPreview({ task, onReset }: VideoPreviewProps) {
-  if (!task.result) {
+  if (!task.videoUrl) {
     return null;
   }
 
   const handleDownload = () => {
     const a = document.createElement('a');
-    a.href = task.result!.video_url;
+    a.href = task.videoUrl!;
     a.download = `video-${task.id}.mp4`;
     a.click();
   };
@@ -27,19 +27,10 @@ export default function VideoPreview({ task, onReset }: VideoPreviewProps) {
       {/* 视频播放器 */}
       <div className="relative bg-black aspect-video">
         <video
-          src={task.result.video_url}
+          src={task.videoUrl}
           controls
           className="w-full h-full"
-          poster={task.result.thumbnail_url}
         />
-        <div className="absolute top-4 left-4 flex gap-2">
-          <span className="px-3 py-1 bg-black/60 backdrop-blur-sm text-white text-xs rounded-lg">
-            {task.result.resolution}
-          </span>
-          <span className="px-3 py-1 bg-black/60 backdrop-blur-sm text-white text-xs rounded-lg">
-            {task.result.duration}s
-          </span>
-        </div>
       </div>
 
       {/* 操作按钮 */}
@@ -70,6 +61,12 @@ export default function VideoPreview({ task, onReset }: VideoPreviewProps) {
               </div>
             </div>
             <div>
+              <div className="text-slate-500 dark:text-slate-400">平台</div>
+              <div className="text-slate-900 dark:text-white font-medium mt-1">
+                {task.platform.toUpperCase()}
+              </div>
+            </div>
+            <div>
               <div className="text-slate-500 dark:text-slate-400">完成时间</div>
               <div className="text-slate-900 dark:text-white font-medium mt-1">
                 {task.completed_at
@@ -80,15 +77,14 @@ export default function VideoPreview({ task, onReset }: VideoPreviewProps) {
                   : '-'}
               </div>
             </div>
-            <div>
-              <div className="text-slate-500 dark:text-slate-400">耗时</div>
-              <div className="text-slate-900 dark:text-white font-medium mt-1">
-                {task.completed_at && task.created_at
-                  ? `${Math.floor((task.completed_at - task.created_at) / 60)}m ${(task.completed_at - task.created_at) % 60}s`
-                  : '-'}
-              </div>
-            </div>
           </div>
+        </div>
+
+        {/* 提示 */}
+        <div className="mt-4 p-3 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-xl">
+          <p className="text-xs text-yellow-700 dark:text-yellow-400">
+            ⚠️ 视频链接有效期为 24 小时，请及时下载保存
+          </p>
         </div>
       </div>
     </div>

@@ -1,25 +1,72 @@
 /**
- * AI 视频生成类型定义
+ * AI 视频生成类型定义（多平台支持）
  */
 
-// 支持的 AI 模型
+// ==================== 平台相关类型 ====================
+
+// 支持的平台
+export type VideoPlatform = 'toapi' | 'replicate' | 'runwayml';
+
+// 宽高比
+export type AspectRatio = '16:9' | '9:16' | '1:1';
+
+// 视频分辨率
+export type VideoResolution = '720p' | '1080p' | '4k';
+
+// 任务状态
+export type TaskStatus = 'queued' | 'in_progress' | 'completed' | 'failed';
+
+// ==================== 统一的任务类型 ====================
+
+/**
+ * 视频生成任务（统一格式）
+ */
+export interface VideoGenerationTask {
+  id: string;
+  platform: string;
+  model: string;
+  status: TaskStatus;
+  progress: number;
+  created_at?: number;
+  completed_at?: number;
+  videoUrl?: string;
+  error?: {
+    code?: string;
+    message: string;
+  };
+}
+
+/**
+ * 图片上传响应
+ */
+export interface ImageUploadResponse {
+  url: string;
+  filename: string;
+  size: number;
+}
+
+// ==================== 向后兼容的类型（已废弃） ====================
+
+/**
+ * @deprecated 使用统一的平台模型 ID 替代
+ */
 export type VideoModel =
   | 'MiniMax-Hailuo-02'
   | 'Sora-2'
   | 'Vail-3'
   | 'Douyin-VideoGen'
-  | 'Luma-1.6';
+  | 'Luma-1.6'
+  | 'veo3.1-fast'
+  | 'veo3.1-quality';
 
-// 视频时长（秒）
-export type VideoDuration = 5 | 10;
+/**
+ * @deprecated 使用 AspectRatio 替代
+ */
+export type VideoDuration = 5 | 8 | 10;
 
-// 视频分辨率
-export type VideoResolution = '512p' | '768p' | '1080p';
-
-// 任务状态
-export type TaskStatus = 'queued' | 'in_progress' | 'completed' | 'failed';
-
-// 模型配置
+/**
+ * @deprecated 使用新的 PlatformModel 类型
+ */
 export interface ModelConfig {
   id: VideoModel;
   name: string;
@@ -30,7 +77,9 @@ export interface ModelConfig {
   supportLastFrame: boolean;
 }
 
-// 视频生成参数
+/**
+ * @deprecated 使用 UnifiedVideoParams 替代
+ */
 export interface VideoGenerationParams {
   model: VideoModel;
   prompt: string;
@@ -45,27 +94,9 @@ export interface VideoGenerationParams {
   };
 }
 
-// 任务响应
-export interface VideoGenerationTask {
-  id: string;
-  object: 'generation.task';
-  status: TaskStatus;
-  progress: number;
-  created_at: number;
-  completed_at?: number;
-  error?: {
-    message: string;
-    code?: string;
-  };
-  result?: {
-    video_url: string;
-    thumbnail_url?: string;
-    duration: number;
-    resolution: string;
-  };
-}
-
-// API 请求
+/**
+ * @deprecated 使用 UnifiedVideoParams 替代
+ */
 export interface CreateVideoRequest {
   model: VideoModel;
   prompt: string;
@@ -73,7 +104,9 @@ export interface CreateVideoRequest {
   metadata?: VideoGenerationParams['metadata'];
 }
 
-// API 响应
+/**
+ * @deprecated 使用 VideoGenerationTask 替代
+ */
 export interface CreateVideoResponse {
   id: string;
   object: 'generation.task';
@@ -82,12 +115,7 @@ export interface CreateVideoResponse {
   created_at: number;
 }
 
-// 查询任务响应
+/**
+ * @deprecated 使用 VideoGenerationTask 替代
+ */
 export type GetTaskResponse = VideoGenerationTask;
-
-// 图片上传响应
-export interface ImageUploadResponse {
-  url: string;
-  filename: string;
-  size: number;
-}

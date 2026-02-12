@@ -1,51 +1,40 @@
 /**
- * 任务监控组件
+ * 任务监控组件（多平台支持）
  */
 
-import { useEffect, useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Loader2, CheckCircle, XCircle, Clock } from 'lucide-react';
-import type { VideoGenerationTask } from '../../types/video-generation.types';
-import { pollTaskStatus } from '../../api/video-generation.api';
+import type { UnifiedTask } from '../../api/platforms';
 
 interface TaskMonitorProps {
-  taskId: string;
-  onComplete: (task: VideoGenerationTask) => void;
+  task: UnifiedTask;
+  onComplete: () => void;
   onError: (error: Error) => void;
 }
 
-export default function TaskMonitor({ taskId, onComplete, onError }: TaskMonitorProps) {
-  const [task, setTask] = useState<VideoGenerationTask | null>(null);
+export default function TaskMonitor({ task, onComplete, onError }: TaskMonitorProps) {
   const [elapsedTime, setElapsedTime] = useState(0);
 
   useEffect(() => {
-    // 轮询任务状态
-    pollTaskStatus(
-      taskId,
-      (updatedTask) => {
-        setTask(updatedTask);
-      },
-      3000, // 每 3 秒轮询一次
-      300000 // 5 分钟超时
-    )
-      .then(onComplete)
-      .catch(onError);
+    // 检查完成状态
+    if (task.status === 'completed') {
+      onComplete();
+      return;
+    }
+
+    if (task.status === 'failed') {
+      onError(new Error(task.error?.message || 'Task failed'));
+      return;
+    }
 
     // 计时器
-    const startTime = Date.now();
+    const startTime = task.created_at ? task.created_at * 1000 : Date.now();
     const timer = setInterval(() => {
       setElapsedTime(Math.floor((Date.now() - startTime) / 1000));
     }, 1000);
 
     return () => clearInterval(timer);
-  }, [taskId, onComplete, onError]);
-
-  if (!task) {
-    return (
-      <div className="flex items-center justify-center py-12">
-        <Loader2 className="w-8 h-8 text-blue-500 animate-spin" />
-      </div>
-    );
-  }
+  }, [task.status, task.created_at, onComplete, onError]);
 
   const statusConfig = {
     queued: {
@@ -74,18 +63,7 @@ export default function TaskMonitor({ taskId, onComplete, onError }: TaskMonitor
     }
   };
 
-  const config = statusConfig[task.status] || {
-    // 兜底配置：当状态未知时显示加载状态
-    icon: Loader2,
-    color: 'text-blue-500',
-    bgColor: 'bg-blue-50 dark:bg-blue-900/20',
-    label: '加载中'
-  };
-
-  if (!statusConfig[task.status]) {
-    console.warn('Unknown task status, using fallback:', task.status);
-  }
-
+  const config = statusConfig[task.status] || statusConfig.queued;
   const Icon = config.icon;
 
   return (
@@ -100,7 +78,7 @@ export default function TaskMonitor({ taskId, onComplete, onError }: TaskMonitor
             {config.label}
           </h3>
           <div className="text-sm text-slate-500 dark:text-slate-400">
-            任务 ID: {taskId.slice(0, 8)}...
+            任务 ID: {task.id.slice(0, 12)}...
           </div>
         </div>
       </div>
@@ -142,9 +120,9 @@ export default function TaskMonitor({ taskId, onComplete, onError }: TaskMonitor
           </div>
         </div>
         <div>
-          <div className="text-xs text-slate-500 dark:text-slate-400">创建时间</div>
+          <div className="text-xs text-slate-500 dark:text-slate-400">平台</div>
           <div className="text-sm font-medium text-slate-900 dark:text-white mt-1">
-            {formatDateTime(task.created_at)}
+            {task.platform.toUpperCase()}
           </div>
         </div>
       </div>
@@ -157,14 +135,4 @@ function formatTime(seconds: number): string {
   const mins = Math.floor(seconds / 60);
   const secs = seconds % 60;
   return `${mins}:${secs.toString().padStart(2, '0')}`;
-}
-
-// 格式化日期时间
-function formatDateTime(timestamp: number): string {
-  const date = new Date(timestamp * 1000);
-  return date.toLocaleString('zh-CN', {
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-  });
 }

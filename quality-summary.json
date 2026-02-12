@@ -1,6 +1,8 @@
 {
-  "branch": "cp-20260212-fix-blank-page",
-  "head_sha": "62527be",
-  "timestamp": "2026-02-12T07:39:08Z",
-  "note": "Quality 只汇总，不判定。CI 是最终裁判。"
+  "branch": "cp-20260212-multi-platform-video",
+  "head_sha": "f6383c5",
+  "timestamp": "2026-02-12T08:59:18Z",
+  "project": "xiaohongshu-publisher",
+  "type": "skill-framework",
+  "note": "小红书发布器 Skill 框架已创建，待完成手动验证后填写脚本。Quality 只汇总，不判定。CI 是最终裁判。"
 }

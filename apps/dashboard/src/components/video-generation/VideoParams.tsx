@@ -1,76 +1,100 @@
-import type { VideoDuration, VideoResolution } from '../../types/video-generation.types';
+/**
+ * 视频参数配置组件（多平台支持）
+ */
+
+import { getPlatform } from '../../api/video-generation.api';
+import type { AspectRatio, VideoResolution } from '../../types/video-generation.types';
 
 interface VideoParamsProps {
-  duration: VideoDuration;
+  platform: string;
+  model: string;
+  aspectRatio: AspectRatio;
   resolution: VideoResolution;
-  promptOptimizer: boolean;
-  fastPretreatment: boolean;
-  watermark: boolean;
-  onDurationChange: (duration: VideoDuration) => void;
+  onAspectRatioChange: (ratio: AspectRatio) => void;
   onResolutionChange: (resolution: VideoResolution) => void;
-  onPromptOptimizerChange: (enabled: boolean) => void;
-  onFastPretreatmentChange: (enabled: boolean) => void;
-  onWatermarkChange: (enabled: boolean) => void;
   disabled?: boolean;
-  maxDuration?: VideoDuration;
 }
 
 export default function VideoParams(props: VideoParamsProps) {
-  const durationOptions: VideoDuration[] = [5, 10];
-  const resolutionOptions: VideoResolution[] = ['512p', '768p', '1080p'];
+  // 获取平台和模型配置
+  const platformInstance = getPlatform(props.platform);
+  const modelConfig = platformInstance.getModel(props.model);
+
+  if (!modelConfig) {
+    return <div className="text-red-500">模型配置未找到</div>;
+  }
+
+  const { capabilities } = modelConfig;
 
   return (
     <div className="space-y-6">
-      <div>
-        <label className="block text-sm font-medium mb-2">视频时长</label>
-        <div className="flex gap-2">
-          {durationOptions.map((d) => (
-            <button
-              key={d}
-              onClick={() => props.onDurationChange(d)}
-              disabled={props.disabled || d > (props.maxDuration || 10)}
-              className={`flex-1 px-4 py-2 rounded-xl font-medium ${props.duration === d ? 'bg-blue-500 text-white' : 'bg-slate-100 text-slate-700'}`}
-            >
-              {d} 秒
-            </button>
-          ))}
+      {/* 时长显示（ToAPI 固定 8秒） */}
+      {capabilities.fixedDuration && (
+        <div>
+          <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+            视频时长
+          </label>
+          <div className="px-4 py-3 bg-slate-100 dark:bg-slate-700 rounded-xl text-center">
+            <span className="font-medium text-slate-900 dark:text-white">
+              {capabilities.fixedDuration} 秒（固定）
+            </span>
+          </div>
         </div>
-      </div>
-      <div>
-        <label className="block text-sm font-medium mb-2">分辨率</label>
-        <div className="flex gap-2">
-          {resolutionOptions.map((r) => (
-            <button
-              key={r}
-              onClick={() => props.onResolutionChange(r)}
-              disabled={props.disabled || (r === '1080p' && props.duration === 10)}
-              className={`flex-1 px-4 py-2 rounded-xl font-medium ${props.resolution === r ? 'bg-blue-500 text-white' : 'bg-slate-100 text-slate-700'}`}
-            >
-              {r}
-            </button>
-          ))}
-        </div>
-      </div>
-      <div className="space-y-3">
-        <Toggle label="提示词优化器" checked={props.promptOptimizer} onChange={props.onPromptOptimizerChange} disabled={props.disabled} />
-        <Toggle label="快速预处理" checked={props.fastPretreatment} onChange={props.onFastPretreatmentChange} disabled={props.disabled} />
-        <Toggle label="水印" checked={props.watermark} onChange={props.onWatermarkChange} disabled={props.disabled} />
-      </div>
-    </div>
-  );
-}
+      )}
 
-function Toggle({ label, checked, onChange, disabled }: { label: string; checked: boolean; onChange: (v: boolean) => void; disabled?: boolean }) {
-  return (
-    <div className="flex items-center justify-between p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50">
-      <span className="text-sm font-medium">{label}</span>
-      <button
-        onClick={() => onChange(!checked)}
-        disabled={disabled}
-        className={`relative inline-flex h-6 w-11 items-center rounded-full ${checked ? 'bg-blue-500' : 'bg-slate-300'}`}
-      >
-        <span className={`inline-block h-4 w-4 rounded-full bg-white transform ${checked ? 'translate-x-6' : 'translate-x-1'}`} />
-      </button>
+      {/* 宽高比选择 */}
+      <div>
+        <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+          宽高比
+        </label>
+        <div className="flex gap-2">
+          {capabilities.aspectRatios.map((ratio) => (
+            <button
+              key={ratio}
+              onClick={() => props.onAspectRatioChange(ratio as AspectRatio)}
+              disabled={props.disabled}
+              className={`
+                flex-1 px-4 py-2 rounded-xl font-medium transition-colors
+                ${props.aspectRatio === ratio
+                  ? 'bg-blue-500 text-white'
+                  : 'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600'
+                }
+                ${props.disabled ? 'opacity-50 cursor-not-allowed' : ''}
+              `}
+            >
+              {ratio}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* 分辨率选择 */}
+      {capabilities.resolutions && capabilities.resolutions.length > 0 && (
+        <div>
+          <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+            分辨率
+          </label>
+          <div className="flex gap-2">
+            {capabilities.resolutions.map((res) => (
+              <button
+                key={res}
+                onClick={() => props.onResolutionChange(res as VideoResolution)}
+                disabled={props.disabled}
+                className={`
+                  flex-1 px-4 py-2 rounded-xl font-medium transition-colors
+                  ${props.resolution === res
+                    ? 'bg-blue-500 text-white'
+                    : 'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600'
+                  }
+                  ${props.disabled ? 'opacity-50 cursor-not-allowed' : ''}
+                `}
+              >
+                {res}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

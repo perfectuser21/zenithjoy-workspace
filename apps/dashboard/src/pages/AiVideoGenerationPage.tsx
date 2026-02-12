@@ -1,50 +1,34 @@
 /**
- * AI 视频生成页面
- *
- * 功能：
- * - 选择 AI 模型
- * - 上传首帧/尾帧图片
- * - 配置参数（时长、分辨率、开关选项）
- * - 输入提示词
- * - 提交生成请求
- * - 监控任务状态
- * - 预览和下载视频
+ * AI 视频生成页面（多平台支持）
  */
 
 import { useState } from 'react';
 import { Sparkles, AlertCircle, Loader2 } from 'lucide-react';
-import ModelSelector, { MODEL_CONFIGS } from '../components/video-generation/ModelSelector';
-import ImageUploader from '../components/video-generation/ImageUploader';
+import PlatformSelector from '../components/video-generation/PlatformSelector';
+import ModelSelector from '../components/video-generation/ModelSelector';
 import VideoParams from '../components/video-generation/VideoParams';
 import TaskMonitor from '../components/video-generation/TaskMonitor';
 import VideoPreview from '../components/video-generation/VideoPreview';
-import type { VideoModel, VideoDuration, VideoResolution, VideoGenerationTask } from '../types/video-generation.types';
-import { createVideoGeneration } from '../api/video-generation.api';
+import { createVideoGeneration, pollTaskStatus } from '../api/video-generation.api';
+import type { AspectRatio, VideoResolution } from '../types/video-generation.types';
+import type { UnifiedTask } from '../api/platforms';
 
 type PageState = 'input' | 'generating' | 'completed' | 'error';
 
 export default function AiVideoGenerationPage() {
-  // 模型和参数
-  const [model, setModel] = useState<VideoModel>('MiniMax-Hailuo-02');
+  // 平台和模型
+  const [platform, setPlatform] = useState('toapi');
+  const [model, setModel] = useState('veo3.1-fast');
   const [prompt, setPrompt] = useState('');
-  const [duration, setDuration] = useState<VideoDuration>(5);
-  const [resolution, setResolution] = useState<VideoResolution>('768p');
-  const [promptOptimizer, setPromptOptimizer] = useState(true);
-  const [fastPretreatment, setFastPretreatment] = useState(false);
-  const [watermark, setWatermark] = useState(false);
 
-  // 图片
-  const [firstFrameImage, setFirstFrameImage] = useState<string | null>(null);
-  const [lastFrameImage, setLastFrameImage] = useState<string | null>(null);
+  // 参数
+  const [aspectRatio, setAspectRatio] = useState<AspectRatio>('16:9');
+  const [resolution, setResolution] = useState<VideoResolution>('720p');
 
   // 任务状态
   const [pageState, setPageState] = useState<PageState>('input');
-  const [taskId, setTaskId] = useState<string | null>(null);
-  const [completedTask, setCompletedTask] = useState<VideoGenerationTask | null>(null);
+  const [currentTask, setCurrentTask] = useState<UnifiedTask | null>(null);
   const [error, setError] = useState<string | null>(null);
-
-  // 获取当前模型配置
-  const modelConfig = MODEL_CONFIGS.find(m => m.id === model);
 
   // 提交生成请求
   const handleSubmit = async () => {
@@ -55,50 +39,56 @@ export default function AiVideoGenerationPage() {
 
     setError(null);
     setPageState('generating');
+    setCurrentTask(null);
 
     try {
-      const response = await createVideoGeneration({
+      // 创建任务
+      const task = await createVideoGeneration({
+        platform,
         model,
         prompt: prompt.trim(),
-        duration,
-        metadata: {
-          resolution,
-          prompt_optimizer: promptOptimizer,
-          fast_pretreatment: fastPretreatment,
-          watermark,
-          first_frame_image: firstFrameImage || undefined,
-          last_frame_image: lastFrameImage || undefined,
-        },
+        aspectRatio,
+        resolution,
       });
 
-      setTaskId(response.id);
+      console.log('[Page] Task created:', task);
+      setCurrentTask(task);
+
+      // 开始轮询状态
+      pollTaskStatus(
+        platform,
+        task.id,
+        (updatedTask) => {
+          console.log('[Page] Task updated:', updatedTask);
+          setCurrentTask(updatedTask);
+        },
+        3000,  // 3秒轮询
+        300000 // 5分钟超时
+      )
+        .then((completedTask) => {
+          console.log('[Page] Task completed:', completedTask);
+          setCurrentTask(completedTask);
+          setPageState('completed');
+        })
+        .catch((err) => {
+          console.error('[Page] Task error:', err);
+          setError(err.message || '生成失败');
+          setPageState('error');
+        });
+
     } catch (err) {
+      console.error('[Page] Submit error:', err);
       setError(err instanceof Error ? err.message : '提交失败');
       setPageState('error');
     }
   };
 
-  // 任务完成回调
-  const handleTaskComplete = (task: VideoGenerationTask) => {
-    setCompletedTask(task);
-    setPageState('completed');
-  };
-
-  // 任务错误回调
-  const handleTaskError = (err: Error) => {
-    setError(err.message);
-    setPageState('error');
-  };
-
-  // 重置状态，生成新视频
+  // 重置状态
   const handleReset = () => {
     setPageState('input');
-    setTaskId(null);
-    setCompletedTask(null);
+    setCurrentTask(null);
     setError(null);
     setPrompt('');
-    setFirstFrameImage(null);
-    setLastFrameImage(null);
   };
 
   return (
@@ -122,39 +112,30 @@ export default function AiVideoGenerationPage() {
 
       {/* 主内容区域 */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* 左侧：输入区域 */}
+        {/* 左侧：配置区域 */}
         <div className="space-y-6">
+          {/* 平台选择 */}
+          <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-6">
+            <PlatformSelector
+              value={platform}
+              onChange={(p) => {
+                setPlatform(p);
+                // 切换平台时重置模型
+                setModel('veo3.1-fast');
+              }}
+              disabled={pageState === 'generating'}
+            />
+          </div>
+
           {/* 模型选择 */}
           <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-6">
             <ModelSelector
+              platform={platform}
               value={model}
               onChange={setModel}
               disabled={pageState === 'generating'}
             />
           </div>
-
-          {/* 图片上传 */}
-          {modelConfig?.supportFirstFrame && (
-            <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-6">
-              <ImageUploader
-                label="首帧图片（可选）"
-                value={firstFrameImage}
-                onChange={setFirstFrameImage}
-                disabled={pageState === 'generating'}
-              />
-            </div>
-          )}
-
-          {modelConfig?.supportLastFrame && (
-            <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-6">
-              <ImageUploader
-                label="尾帧图片（可选）"
-                value={lastFrameImage}
-                onChange={setLastFrameImage}
-                disabled={pageState === 'generating'}
-              />
-            </div>
-          )}
 
           {/* 参数配置 */}
           <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-6">
@@ -162,18 +143,13 @@ export default function AiVideoGenerationPage() {
               参数配置
             </h3>
             <VideoParams
-              duration={duration}
+              platform={platform}
+              model={model}
+              aspectRatio={aspectRatio}
               resolution={resolution}
-              promptOptimizer={promptOptimizer}
-              fastPretreatment={fastPretreatment}
-              watermark={watermark}
-              onDurationChange={setDuration}
+              onAspectRatioChange={setAspectRatio}
               onResolutionChange={setResolution}
-              onPromptOptimizerChange={setPromptOptimizer}
-              onFastPretreatmentChange={setFastPretreatment}
-              onWatermarkChange={setWatermark}
               disabled={pageState === 'generating'}
-              maxDuration={modelConfig?.maxDuration}
             />
           </div>
         </div>
@@ -223,11 +199,14 @@ export default function AiVideoGenerationPage() {
           {/* 生成中：任务监控 */}
           {pageState === 'generating' && (
             <>
-              {taskId ? (
+              {currentTask ? (
                 <TaskMonitor
-                  taskId={taskId}
-                  onComplete={handleTaskComplete}
-                  onError={handleTaskError}
+                  task={currentTask}
+                  onComplete={() => setPageState('completed')}
+                  onError={(err) => {
+                    setError(err.message);
+                    setPageState('error');
+                  }}
                 />
               ) : (
                 <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-6">
@@ -241,9 +220,9 @@ export default function AiVideoGenerationPage() {
           )}
 
           {/* 完成：视频预览 */}
-          {pageState === 'completed' && completedTask && (
+          {pageState === 'completed' && currentTask && (
             <VideoPreview
-              task={completedTask}
+              task={currentTask}
               onReset={handleReset}
             />
           )}
@@ -257,7 +236,7 @@ export default function AiVideoGenerationPage() {
                   <h3 className="font-semibold text-red-700 dark:text-red-400 mb-2">
                     生成失败
                   </h3>
-                  <p className="text-sm text-red-600 dark:text-red-300 mb-4">
+                  <p className="text-sm text-red-600 dark:text-red-300 mb-4 whitespace-pre-wrap">
                     {error}
                   </p>
                   <button
