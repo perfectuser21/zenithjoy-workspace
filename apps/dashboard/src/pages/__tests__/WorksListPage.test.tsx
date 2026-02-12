@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import WorksListPage from '../WorksListPage';
@@ -37,6 +37,8 @@ describe('WorksListPage', () => {
     vi.mocked(worksApi.getWorks).mockResolvedValue({
       data: [],
       total: 0,
+      limit: 10,
+      offset: 0,
     });
   });
 
