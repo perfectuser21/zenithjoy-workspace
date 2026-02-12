@@ -10,7 +10,7 @@ export interface UnifiedVideoParams {
   aspectRatio?: '16:9' | '9:16' | '1:1';
   resolution?: '720p' | '1080p' | '4k';
   imageUrls?: string[];
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
 }
 
 export interface UnifiedTask {

@@ -12,7 +12,7 @@ interface ToAPIRequest {
   duration: number;
   aspect_ratio: string;
   image_urls?: string[];
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
 }
 
 interface ToAPITask {

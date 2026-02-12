@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { ChevronDown } from 'lucide-react';
-import type { VideoModel, PlatformModel } from '../../types/video-generation.types';
+import type { VideoModel } from '../../types/video-generation.types';
 import { getPlatform } from '../../api/video-generation.api';
 
 // 获取 ToAPI 平台模型
