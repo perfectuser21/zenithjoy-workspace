@@ -38,6 +38,7 @@ const autopilotConfig: InstanceConfig = {
     'works-management': true, // 作品管理 (Database View)
     'works-gallery': true,   // 作品库 (Gallery View)
     'platform-data': true,   // 平台数据展示
+    'ai-video-generation': true, // AI 视频生成
     // 旧 features（保留用于兼容，实际已合并到 media-scenario）
     'execution-status': true,
     'tasks': true,
