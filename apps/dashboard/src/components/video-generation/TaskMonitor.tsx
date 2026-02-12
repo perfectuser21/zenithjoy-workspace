@@ -74,7 +74,8 @@ export default function TaskMonitor({ taskId, onComplete, onError }: TaskMonitor
     }
   };
 
-  const config = statusConfig[task.status];
+  // 容错处理：如果 status 未知，使用默认的"生成中"状态
+  const config = statusConfig[task.status] || statusConfig.in_progress;
   const Icon = config.icon;
 
   return (
