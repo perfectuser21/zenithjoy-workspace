@@ -14,11 +14,13 @@ import type {
 // ToAPI 基础 URL
 const TOAPI_BASE_URL = 'https://toapis.com/v1';
 
-// 获取 API Token（从环境变量或配置）
+// 获取 API Token（从环境变量读取）
 function getApiToken(): string {
-  // TODO: 从环境变量或凭据管理系统读取
-  // 暂时使用占位符，实际使用时需要配置
-  return process.env.TOAPI_TOKEN || '';
+  const token = import.meta.env.VITE_TOAPIS_API_KEY;
+  if (!token) {
+    throw new Error('ToAPI API Key not configured. Please set VITE_TOAPIS_API_KEY in environment variables.');
+  }
+  return token;
 }
 
 /**
@@ -106,9 +108,45 @@ export async function pollTaskStatus(
 }
 
 /**
- * 上传图片到服务器
- * TODO: 实现图片上传逻辑
+ * 上传图片到 VPS 服务器
  */
 export async function uploadImage(file: File): Promise<ImageUploadResponse> {
-  throw new Error('Image upload not implemented. Please configure an image hosting service.');
+  // 转换为 base64
+  const base64 = await fileToBase64(file);
+
+  // 调用上传 API（N8N webhook）
+  const response = await fetch('/api/n8n-webhook/upload-video-frame', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      filename: file.name,
+      base64: base64,
+      size: file.size,
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Upload failed: ${response.statusText}`);
+  }
+
+  return response.json();
+}
+
+/**
+ * 将 File 转换为 base64
+ */
+function fileToBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = reader.result as string;
+      // 移除 data:image/xxx;base64, 前缀
+      const base64 = result.split(',')[1];
+      resolve(base64);
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
 }
