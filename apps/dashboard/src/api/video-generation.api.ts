@@ -14,11 +14,13 @@ import type {
 // ToAPI 基础 URL
 const TOAPI_BASE_URL = 'https://toapis.com/v1';
 
-// 获取 API Token（从环境变量或配置）
+// 获取 API Token（从环境变量读取）
 function getApiToken(): string {
-  // TODO: 从环境变量或凭据管理系统读取
-  // 暂时使用占位符，实际使用时需要配置
-  return process.env.TOAPI_TOKEN || '';
+  const token = import.meta.env.VITE_TOAPIS_API_KEY;
+  if (!token) {
+    throw new Error('ToAPI API Key not configured. Please set VITE_TOAPIS_API_KEY in environment variables.');
+  }
+  return token;
 }
 
 /**
