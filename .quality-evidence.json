@@ -1,0 +1,64 @@
+{
+  "manual_tests": {
+    "CDP测试填写成功，字数统计显示正确": {
+      "status": "pass",
+      "evidence": "通过多次CDP测试验证，标题和内容能够正确填写到编辑器，字数统计正常显示（如'共 140 字'）",
+      "timestamp": "2026-02-08T16:05:00Z"
+    },
+    "CDP测试页面跳转到设置页": {
+      "status": "pass",
+      "evidence": "点击'预览并发布'后页面显示设置选项（封面选择、位置、广告等），确认进入设置页面",
+      "timestamp": "2026-02-08T16:05:00Z"
+    },
+    "CDP测试无封面被选中": {
+      "status": "pass",
+      "evidence": "通过CDP radio input点击测试，'无封面'选项成功被选中，避免图片上传要求",
+      "timestamp": "2026-02-08T16:05:00Z"
+    },
+    "CDP测试预览窗口打开": {
+      "status": "pass",
+      "evidence": "点击'预览'按钮后，检测到blob URL窗口打开（/tmp/modal-500ms.png截图显示预览内容）",
+      "timestamp": "2026-02-08T16:05:00Z"
+    },
+    "CDP测试发布按钮点击": {
+      "status": "pass",
+      "evidence": "预览打开后，页面按钮列表中出现'发布'按钮（从'开始创作, 添加至合集, 关闭预览, 定时发布, 发布'可见），成功点击",
+      "timestamp": "2026-02-08T16:05:00Z"
+    },
+    "CDP测试URL不包含/publish": {
+      "status": "pending",
+      "evidence": "需要完整测试验证页面跳转（当前测试中页面未跳转，需要进一步调试或等待更长时间）",
+      "timestamp": "2026-02-08T16:05:00Z"
+    },
+    "触发N8N workflow并验证发布成功": {
+      "status": "pending",
+      "evidence": "需要在部署后通过N8N workflow进行端到端测试",
+      "timestamp": "2026-02-08T16:05:00Z"
+    },
+    "代码审查确认handleCloudSyncPopup存在": {
+      "status": "pass",
+      "evidence": "新脚本scripts/notion-toutiao-publisher.js包含云端同步弹窗处理逻辑（第167-181行）",
+      "timestamp": "2026-02-08T16:05:00Z"
+    },
+    "代码审查确认nativeInputValueSetter使用正确": {
+      "status": "pass",
+      "evidence": "脚本第80行使用Object.getOwnPropertyDescriptor正确绕过React受控输入",
+      "timestamp": "2026-02-08T16:05:00Z"
+    },
+    "代码审查确认setTimeout值≥20000": {
+      "status": "pass",
+      "evidence": "CDP超时设置为30000ms（第49行），满足要求",
+      "timestamp": "2026-02-08T16:05:00Z"
+    },
+    "代码审查确认sleep时间正确": {
+      "status": "pass",
+      "evidence": "等待时间：进入设置3000ms（第129行），选择封面1500ms（第151行），打开预览2500ms（第174行），符合测试结果",
+      "timestamp": "2026-02-08T16:05:00Z"
+    },
+    "执行node notion_toutiao_publisher.js并验证": {
+      "status": "pending",
+      "evidence": "需要部署后执行完整测试，使用scripts/test-toutiao-publisher.sh进行验证",
+      "timestamp": "2026-02-08T16:05:00Z"
+    }
+  }
+}
