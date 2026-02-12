@@ -1,4 +1,34 @@
 
+### [2026-02-12] AI 视频生成任务状态显示修复
+
+- **Bug**:
+  - ToAPI 返回的任务对象 `status` 字段为 undefined，导致 TaskMonitor 组件返回 null，页面空白
+  - Console 显示重复错误："Unknown task status: undefined"
+  - 前端期望 status 值为 'queued' | 'in_progress' | 'completed' | 'failed'
+  - ToAPI 实际可能返回不同的字段名（如 'state'）或不同的状态值（如 'pending', 'processing', 'success'）
+
+- **解决方案**:
+  - 添加 `mapToAPIResponse()` 数据映射层，处理字段名和状态值差异
+  - 支持多种字段名映射（state → status）
+  - 支持多种状态值映射（pending → queued, processing → in_progress, success → completed）
+  - TaskMonitor 添加兜底配置，undefined status 显示"加载中"而非空白
+  - 添加调试日志打印 ToAPI 原始响应格式
+
+- **优化点**:
+  - 通过 Export mapToAPIResponse 使其可测试
+  - 添加全面的单元测试覆盖映射逻辑（8个测试用例）
+  - 添加 TaskMonitor 兜底行为测试（6个测试用例）
+  - CI 第一次失败（TypeScript + ESLint 错误），修复后一次通过
+
+- **影响程度**: Medium - 用户无法看到视频生成进度是功能性问题，需要尽快修复
+
+- **技术要点**:
+  - 第三方 API 集成时需要考虑数据格式不匹配
+  - 添加数据映射层比直接修改类型定义更安全
+  - 组件应该有兜底 UI，避免因意外数据导致空白页面
+  - 使用 `vi.mock()` 和 ES6 imports 避免 ESLint 的 `@typescript-eslint/no-require-imports` 错误
+
+
 ### [2026-02-07] 平台数据展示页面开发
 
 - **Bug**: 
