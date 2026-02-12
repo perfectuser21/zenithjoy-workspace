@@ -14,7 +14,7 @@
 
 | 功能 | 状态 | 路由 | 优先级 | 测试 | 备注 |
 |------|------|------|--------|------|------|
-| Works Gallery | ✅ 已跑通 | /works | P0 | ⏳ 待测试 | 33 张卡片展示 |
+| Works Gallery | ✅ 已跑通 | /works | P0 | ✅ 5 tests | 33 张卡片展示 + 标签筛选 + 详情面板 |
 | Platform Data | ✅ 已跑通 | /platform-data | P0 | ⏳ 待测试 | 数据看板 |
 | AI Video | 🟡 半成品 | /ai-video | P1 | ⏳ 待测试 | 菜单刚启用，功能需验证 |
 | Works Management | ❓ 未测试 | /works-management | P1 | ⏳ 待测试 | 数据库视图 |
