@@ -1,19 +1,23 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import TaskMonitor from '../TaskMonitor';
 import type { VideoGenerationTask } from '../../../types/video-generation.types';
+import * as videoGenApi from '../../../api/video-generation.api';
 
 // Mock the API
 vi.mock('../../../api/video-generation.api', () => ({
-  pollTaskStatus: vi.fn((taskId, onProgress) => {
-    // 立即返回模拟任务
-    return Promise.resolve();
-  }),
+  pollTaskStatus: vi.fn(),
 }));
+
+const mockPollTaskStatus = videoGenApi.pollTaskStatus as ReturnType<typeof vi.fn>;
 
 describe('TaskMonitor', () => {
   const mockOnComplete = vi.fn();
   const mockOnError = vi.fn();
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
 
   it('应该显示排队中状态', () => {
     const mockTask: VideoGenerationTask = {
@@ -24,9 +28,7 @@ describe('TaskMonitor', () => {
       created_at: 1234567890,
     };
 
-    // 使用 pollTaskStatus mock 来模拟任务
-    const { pollTaskStatus } = require('../../../api/video-generation.api');
-    pollTaskStatus.mockImplementation((taskId: string, onProgress: (task: VideoGenerationTask) => void) => {
+    mockPollTaskStatus.mockImplementation((_, onProgress: (task: VideoGenerationTask) => void) => {
       onProgress(mockTask);
       return Promise.resolve(mockTask);
     });
@@ -45,8 +47,7 @@ describe('TaskMonitor', () => {
       created_at: 1234567890,
     };
 
-    const { pollTaskStatus } = require('../../../api/video-generation.api');
-    pollTaskStatus.mockImplementation((taskId: string, onProgress: (task: VideoGenerationTask) => void) => {
+    mockPollTaskStatus.mockImplementation((_, onProgress: (task: VideoGenerationTask) => void) => {
       onProgress(mockTask);
       return Promise.resolve(mockTask);
     });
@@ -73,8 +74,7 @@ describe('TaskMonitor', () => {
       },
     };
 
-    const { pollTaskStatus } = require('../../../api/video-generation.api');
-    pollTaskStatus.mockImplementation((taskId: string, onProgress: (task: VideoGenerationTask) => void) => {
+    mockPollTaskStatus.mockImplementation((_, onProgress: (task: VideoGenerationTask) => void) => {
       onProgress(mockTask);
       return Promise.resolve(mockTask);
     });
@@ -96,8 +96,7 @@ describe('TaskMonitor', () => {
       },
     };
 
-    const { pollTaskStatus } = require('../../../api/video-generation.api');
-    pollTaskStatus.mockImplementation((taskId: string, onProgress: (task: VideoGenerationTask) => void) => {
+    mockPollTaskStatus.mockImplementation((_, onProgress: (task: VideoGenerationTask) => void) => {
       onProgress(mockTask);
       return Promise.resolve(mockTask);
     });
@@ -113,13 +112,12 @@ describe('TaskMonitor', () => {
     const mockTask = {
       id: 'task_123',
       object: 'generation.task',
-      status: 'unknown_status' as any,
+      status: 'unknown_status',
       progress: 0,
       created_at: 1234567890,
     };
 
-    const { pollTaskStatus } = require('../../../api/video-generation.api');
-    pollTaskStatus.mockImplementation((taskId: string, onProgress: (task: any) => void) => {
+    mockPollTaskStatus.mockImplementation((_, onProgress) => {
       onProgress(mockTask);
       return Promise.resolve(mockTask);
     });
@@ -131,9 +129,7 @@ describe('TaskMonitor', () => {
   });
 
   it('初始状态应该显示加载动画', () => {
-    // 不立即调用 onProgress，模拟加载状态
-    const { pollTaskStatus } = require('../../../api/video-generation.api');
-    pollTaskStatus.mockImplementation(() => {
+    mockPollTaskStatus.mockImplementation(() => {
       return new Promise(() => {}); // 永不 resolve，保持加载状态
     });
 

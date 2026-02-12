@@ -8,7 +8,8 @@ import type {
   CreateVideoResponse,
   GetTaskResponse,
   ImageUploadResponse,
-  VideoGenerationTask
+  VideoGenerationTask,
+  TaskStatus
 } from '../types/video-generation.types';
 
 // ToAPI 基础 URL
