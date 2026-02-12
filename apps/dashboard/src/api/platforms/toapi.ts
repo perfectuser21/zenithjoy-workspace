@@ -83,7 +83,10 @@ export class ToAPIPlatform extends VideoPlatform {
     let status: UnifiedTask['status'] = 'queued';
     let progress = 0;
 
-    switch (task.status) {
+    // Normalize status to lowercase for case-insensitive matching
+    const normalizedStatus = task.status.toLowerCase();
+
+    switch (normalizedStatus) {
       case 'queued':
         status = 'queued';
         progress = 0;

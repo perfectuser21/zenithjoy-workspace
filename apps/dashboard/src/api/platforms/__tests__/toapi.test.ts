@@ -151,6 +151,71 @@ describe('ToAPIPlatform', () => {
       expect(result.status).toBe('failed');
       expect(result.error?.message).toBe('Generation failed');
     });
+
+    // Uppercase status tests (ToAPI returns uppercase in production)
+    it('should map uppercase SUCCESS to completed', async () => {
+      const mockResponse = {
+        code: 'success',
+        data: {
+          id: 'task_4',
+          model: 'veo3.1-fast',
+          status: 'SUCCESS', // UPPERCASE as returned by ToAPI
+          progress: 100,
+          created_at: Date.now(),
+        },
+      };
+
+      (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+        ok: true,
+        json: async () => mockResponse,
+      });
+
+      const result = await platform.getTaskStatus('task_4');
+      expect(result.status).toBe('completed');
+    });
+
+    it('should map uppercase FAILED to failed', async () => {
+      const mockResponse = {
+        code: 'success',
+        data: {
+          id: 'task_5',
+          model: 'veo3.1-fast',
+          status: 'FAILED', // UPPERCASE
+          progress: 0,
+          created_at: Date.now(),
+          error: { message: 'Task failed' },
+        },
+      };
+
+      (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+        ok: true,
+        json: async () => mockResponse,
+      });
+
+      const result = await platform.getTaskStatus('task_5');
+      expect(result.status).toBe('failed');
+    });
+
+    it('should map uppercase PROCESSING to in_progress', async () => {
+      const mockResponse = {
+        code: 'success',
+        data: {
+          id: 'task_6',
+          model: 'veo3.1-fast',
+          status: 'PROCESSING', // UPPERCASE
+          progress: 75,
+          created_at: Date.now(),
+        },
+      };
+
+      (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+        ok: true,
+        json: async () => mockResponse,
+      });
+
+      const result = await platform.getTaskStatus('task_6');
+      expect(result.status).toBe('in_progress');
+    });
   });
 
   describe('createVideoGeneration', () => {
