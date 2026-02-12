@@ -83,7 +83,7 @@ export interface CreateVideoResponse {
 }
 
 // 查询任务响应
-export interface GetTaskResponse extends VideoGenerationTask {}
+export type GetTaskResponse = VideoGenerationTask;
 
 // 图片上传响应
 export interface ImageUploadResponse {
