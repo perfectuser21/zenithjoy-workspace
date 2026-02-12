@@ -44,7 +44,14 @@ export async function createVideoGeneration(
     throw new Error(error.message || `API Error: ${response.status}`);
   }
 
-  return response.json();
+  const toApiResponse = await response.json();
+
+  // ToAPI 返回 {code, data} 结构，需要解包
+  if (toApiResponse.code === 'success' && toApiResponse.data) {
+    return mapToAPIResponse(toApiResponse.data);
+  }
+
+  throw new Error(`ToAPI error: ${toApiResponse.code || 'Unknown error'}`);
 }
 
 /**
@@ -53,13 +60,18 @@ export async function createVideoGeneration(
  * @internal - Exported for testing
  */
 export function mapToAPIResponse(rawResponse: any): GetTaskResponse {
-  console.log('[ToAPI Debug] Raw response:', JSON.stringify(rawResponse, null, 2));
+  console.log('[ToAPI Debug] Raw response (after unwrap):', JSON.stringify(rawResponse, null, 2));
 
-  // 处理字段名差异（state → status）
+  // ToAPI 返回大写状态值: SUCCESS, FAILED, PROCESSING
   const status = rawResponse.status || rawResponse.state;
 
-  // 处理状态值差异
+  // 处理状态值差异（包括大写）
   const statusMap: Record<string, TaskStatus> = {
+    // ToAPI 大写格式
+    'SUCCESS': 'completed',
+    'FAILED': 'failed',
+    'PROCESSING': 'in_progress',
+    // 其他可能的格式
     'pending': 'queued',
     'queued': 'queued',
     'processing': 'in_progress',
@@ -70,22 +82,38 @@ export function mapToAPIResponse(rawResponse: any): GetTaskResponse {
     'error': 'failed',
   };
 
-  const mappedStatus: TaskStatus = statusMap[status?.toLowerCase()] || 'queued';
+  const mappedStatus: TaskStatus = statusMap[status] || 'queued';
+
+  // 解析进度: "100%" -> 100
+  let progress = 0;
+  if (typeof rawResponse.progress === 'string') {
+    progress = parseInt(rawResponse.progress.replace('%', '')) || 0;
+  } else {
+    progress = rawResponse.progress || 0;
+  }
+
+  // ToAPI bug: 视频 URL 在 fail_reason 字段
+  let result = rawResponse.result;
+  if (rawResponse.fail_reason && typeof rawResponse.fail_reason === 'string' && rawResponse.fail_reason.startsWith('http')) {
+    result = { video_url: rawResponse.fail_reason };
+  }
 
   console.log('[ToAPI Debug] Status mapping:', {
     raw: status,
-    mapped: mappedStatus
+    mapped: mappedStatus,
+    progress: { raw: rawResponse.progress, parsed: progress },
+    result: result
   });
 
   return {
-    id: rawResponse.id,
+    id: rawResponse.task_id || rawResponse.id,
     object: rawResponse.object || 'generation.task',
     status: mappedStatus,
-    progress: rawResponse.progress || 0,
+    progress,
     created_at: rawResponse.created_at,
     completed_at: rawResponse.completed_at,
     error: rawResponse.error,
-    result: rawResponse.result,
+    result,
   };
 }
 
@@ -105,8 +133,14 @@ export async function getTaskStatus(taskId: string): Promise<GetTaskResponse> {
     throw new Error(error.message || `API Error: ${response.status}`);
   }
 
-  const rawResponse = await response.json();
-  return mapToAPIResponse(rawResponse);
+  const toApiResponse = await response.json();
+
+  // ToAPI 返回 {code, data} 结构，需要解包
+  if (toApiResponse.code === 'success' && toApiResponse.data) {
+    return mapToAPIResponse(toApiResponse.data);
+  }
+
+  throw new Error(`ToAPI error: ${toApiResponse.code || 'Unknown error'}`);
 }
 
 /**
