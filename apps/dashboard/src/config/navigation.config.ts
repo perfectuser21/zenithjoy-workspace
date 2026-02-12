@@ -14,6 +14,7 @@ import {
   Users,
   KeyRound,
   Database,
+  Sparkles,
 } from 'lucide-react';
 
 // ============ 类型定义 ============
@@ -65,6 +66,7 @@ export const autopilotPageComponents: Record<string, () => Promise<{ default: Co
   'AiAbilityDetailPage': () => import('../pages/AiAbilityDetailPage'),
   'AccountsList': () => import('../pages/accounts/AccountsList'),
   'PlatformDataPage': () => import('../pages/PlatformDataPage'),
+  'AiVideoGenerationPage': () => import('../pages/AiVideoGenerationPage'),
   // FeatureDashboard and CommandCenter moved to Core features/business
 };
 
@@ -127,6 +129,13 @@ export const autopilotNavGroups: NavGroup[] = [
         label: '平台数据',
         featureKey: 'platform-data',
         component: 'PlatformDataPage'
+      },
+      {
+        path: '/ai-video',
+        icon: Sparkles,
+        label: 'AI 视频',
+        featureKey: 'ai-video-generation',
+        component: 'AiVideoGenerationPage'
       },
     ]
   }
