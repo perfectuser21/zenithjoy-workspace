@@ -5,7 +5,7 @@ import * as videoGenerationApi from '../../api/video-generation.api';
 
 // Mock the API
 vi.mock('../../api/video-generation.api', async (importOriginal) => {
-  const actual = await importOriginal();
+  const actual = await importOriginal<typeof import('../../api/video-generation.api')>();
   return {
     ...actual,
     createVideoGeneration: vi.fn(),
