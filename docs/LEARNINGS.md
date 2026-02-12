@@ -1,3 +1,60 @@
+### [2026-02-12] ToAPI 响应解析 - 嵌套结构和状态映射问题
+
+- **Bug**:
+  - 用户反馈视频生成完成后错误地显示为"排队中"状态，长达 3 分 46 秒
+  - 实际上视频已经生成完成，但前端无法正确识别状态
+  - 根本原因：ToAPI 返回嵌套的 `{code: "success", data: {...}}` 结构，我们的代码未正确解包
+  - 我们读取了内层的 `data.data.status` (queued, 旧数据) 而不是外层的 `data.status` (SUCCESS, 真实状态)
+
+- **ToAPI 响应格式发现**:
+  ```json
+  {
+    "code": "success",
+    "data": {
+      "task_id": "task_xxx",
+      "status": "SUCCESS",           // 真实状态（大写）
+      "progress": "100%",             // 字符串格式
+      "fail_reason": "https://...",   // 视频 URL（bug）
+      "data": {
+        "id": "task_xxx",
+        "status": "queued",           // 旧数据（小写）
+        "progress": 0
+      }
+    }
+  }
+  ```
+
+- **解决方案**:
+  1. **解包嵌套结构**: 在 `createVideoGeneration` 和 `getTaskStatus` 中检查 `response.code === 'success'`，只传 `response.data` 给 `mapToAPIResponse`
+  2. **支持大写状态值**: statusMap 添加 "SUCCESS" → "completed", "FAILED" → "failed", "PROCESSING" → "in_progress"
+  3. **解析进度字符串**: `parseInt(progress.replace('%', ''))` 将 "100%" 转为 100
+  4. **提取视频 URL**: 从 `fail_reason` 字段提取视频 URL（ToAPI 的 bug）
+  5. **优先 task_id**: `task_id || id` 确保使用 ToAPI 的标准字段名
+
+- **优化点**:
+  - 添加 8 个单元测试覆盖所有响应格式（大写/小写状态，字符串/数字进度，task_id/id）
+  - 保持向后兼容：同时支持新旧两种响应格式
+  - 调试日志更新为 "after unwrap" 确认解包成功
+  - 构建成功，所有测试通过
+
+- **影响程度**: High - 视频生成功能核心流程，直接影响用户是否能看到生成结果
+
+- **技术要点**:
+  - 第三方 API 集成需要仔细分析实际响应格式，不能只依赖文档
+  - Console 日志是发现响应结构的最佳途径，应该保留详细的调试日志
+  - 嵌套响应结构需要在最外层解包，避免在映射函数中处理
+  - 状态映射应该同时支持大写和小写，提高健壮性
+  - 字符串和数字类型的转换需要显式处理，不能依赖隐式转换
+
+- **ToAPI 的 API Bug**:
+  - 视频 URL 放在 `fail_reason` 字段而不是 `result.video_url`
+  - 这需要在映射层做特殊处理：`if (fail_reason.startsWith('http')) { result = { video_url: fail_reason } }`
+  - 应该向 ToAPI 报告此问题，但在修复前需要保持 workaround
+
+- **CI 执行**: 一次性通过，无需修复
+
+---
+
 ### [2026-02-12] AI 视频生成页面空白问题修复
 
 - **Bug**:
