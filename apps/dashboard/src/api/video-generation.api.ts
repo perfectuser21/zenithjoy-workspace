@@ -8,7 +8,8 @@ import type {
   CreateVideoResponse,
   GetTaskResponse,
   ImageUploadResponse,
-  VideoGenerationTask
+  VideoGenerationTask,
+  TaskStatus
 } from '../types/video-generation.types';
 
 // ToAPI 基础 URL
@@ -47,6 +48,48 @@ export async function createVideoGeneration(
 }
 
 /**
+ * 映射 ToAPI 响应到前端类型
+ * 处理字段名和状态值的差异
+ * @internal - Exported for testing
+ */
+export function mapToAPIResponse(rawResponse: any): GetTaskResponse {
+  console.log('[ToAPI Debug] Raw response:', JSON.stringify(rawResponse, null, 2));
+
+  // 处理字段名差异（state → status）
+  const status = rawResponse.status || rawResponse.state;
+
+  // 处理状态值差异
+  const statusMap: Record<string, TaskStatus> = {
+    'pending': 'queued',
+    'queued': 'queued',
+    'processing': 'in_progress',
+    'in_progress': 'in_progress',
+    'completed': 'completed',
+    'success': 'completed',
+    'failed': 'failed',
+    'error': 'failed',
+  };
+
+  const mappedStatus: TaskStatus = statusMap[status?.toLowerCase()] || 'queued';
+
+  console.log('[ToAPI Debug] Status mapping:', {
+    raw: status,
+    mapped: mappedStatus
+  });
+
+  return {
+    id: rawResponse.id,
+    object: rawResponse.object || 'generation.task',
+    status: mappedStatus,
+    progress: rawResponse.progress || 0,
+    created_at: rawResponse.created_at,
+    completed_at: rawResponse.completed_at,
+    error: rawResponse.error,
+    result: rawResponse.result,
+  };
+}
+
+/**
  * 查询任务状态
  */
 export async function getTaskStatus(taskId: string): Promise<GetTaskResponse> {
@@ -62,7 +105,8 @@ export async function getTaskStatus(taskId: string): Promise<GetTaskResponse> {
     throw new Error(error.message || `API Error: ${response.status}`);
   }
 
-  return response.json();
+  const rawResponse = await response.json();
+  return mapToAPIResponse(rawResponse);
 }
 
 /**

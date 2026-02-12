@@ -67,7 +67,7 @@ function SubTabs({ tabs }: { tabs: TabItem[] }) {
 
   return (
     <div className="flex flex-wrap gap-2 mb-6">
-      {tabs.map((tab) => {
+      {tabs.filter(tab => tab && tab.icon).map((tab) => {
         const active = isActive(tab.path);
         const Icon = tab.icon;
 

@@ -74,7 +74,18 @@ export default function TaskMonitor({ taskId, onComplete, onError }: TaskMonitor
     }
   };
 
-  const config = statusConfig[task.status];
+  const config = statusConfig[task.status] || {
+    // 兜底配置：当状态未知时显示加载状态
+    icon: Loader2,
+    color: 'text-blue-500',
+    bgColor: 'bg-blue-50 dark:bg-blue-900/20',
+    label: '加载中'
+  };
+
+  if (!statusConfig[task.status]) {
+    console.warn('Unknown task status, using fallback:', task.status);
+  }
+
   const Icon = config.icon;
 
   return (

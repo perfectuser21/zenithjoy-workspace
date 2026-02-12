@@ -605,7 +605,7 @@ export default function Dashboard() {
           快捷操作
         </h2>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          {QUICK_ACTIONS.map((action, idx) => {
+          {QUICK_ACTIONS.filter(a => a && a.icon).map((action, idx) => {
             const Icon = action.icon;
             return (
               <button
@@ -635,7 +635,7 @@ export default function Dashboard() {
             数据采集
           </h3>
           <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-            {SCRAPING_PLATFORMS.map((platform) => {
+            {SCRAPING_PLATFORMS.filter(p => p && p.icon).map((platform) => {
               const Icon = platform.icon;
               const isRunning = tasks.some(
                 t => t.platform === platform.name && t.status === 'running'
@@ -665,7 +665,7 @@ export default function Dashboard() {
       <div className="mb-8">
         <h2 className="text-lg font-semibold text-slate-800 dark:text-white mb-4">功能模块</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-          {MAIN_FEATURES.map((feature, idx) => {
+          {MAIN_FEATURES.filter(f => f && f.icon).map((feature, idx) => {
             const Icon = feature.icon;
             return (
               <a

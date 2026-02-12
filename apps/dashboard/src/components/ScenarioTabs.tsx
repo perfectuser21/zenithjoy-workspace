@@ -30,7 +30,7 @@ export default function ScenarioTabs({ tabs, basePath }: ScenarioTabsProps) {
   return (
     <div className="border-b border-slate-200 dark:border-slate-700 mb-6">
       <nav className="-mb-px flex gap-1 overflow-x-auto scrollbar-hide px-1" aria-label="Tabs">
-        {tabs.map((tab) => {
+        {tabs.filter(tab => tab && tab.icon).map((tab) => {
           const active = isActive(tab.path);
           const Icon = tab.icon;
 
