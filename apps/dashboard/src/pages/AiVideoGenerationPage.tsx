@@ -11,18 +11,22 @@
  * - 预览和下载视频
  */
 
-import { useState } from 'react';
-import { Sparkles, AlertCircle, Loader2 } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { Sparkles, AlertCircle, Loader2, History } from 'lucide-react';
 import ModelSelector, { MODEL_CONFIGS } from '../components/video-generation/ModelSelector';
 import ImageUploader from '../components/video-generation/ImageUploader';
 import TaskMonitor from '../components/video-generation/TaskMonitor';
 import VideoPreview from '../components/video-generation/VideoPreview';
 import type { VideoModel, VideoDuration, VideoResolution, AspectRatio, UnifiedTask } from '../types/video-generation.types';
 import { createVideoGeneration } from '../api/video-generation.api';
+import { aiVideoApi } from '../api/ai-video.api';
 
 type PageState = 'input' | 'generating' | 'completed' | 'error';
 
 export default function AiVideoGenerationPage() {
+  const navigate = useNavigate();
+
   // 模型和参数
   const [model, setModel] = useState<VideoModel>('veo3.1-fast');
   const [prompt, setPrompt] = useState('');
@@ -45,6 +49,34 @@ export default function AiVideoGenerationPage() {
 
   // 获取当前模型配置
   const modelConfig = MODEL_CONFIGS.find(m => m.id === model);
+
+  // 恢复进行中的任务（页面加载时）
+  useEffect(() => {
+    const restoreActiveTask = async () => {
+      try {
+        // 1. 从 localStorage 读取最后的 taskId（兜底）
+        const lastTaskId = localStorage.getItem('last_video_task_id');
+
+        if (lastTaskId) {
+          // 2. 调用 API 查询该任务状态
+          const task = await aiVideoApi.getGenerationById(lastTaskId);
+
+          if (task && (task.status === 'in_progress' || task.status === 'queued')) {
+            // 恢复任务状态
+            setTaskId(task.id);
+            setPageState('generating');
+            setPrompt(task.prompt);
+            console.log('恢复进行中的任务:', task.id);
+          }
+        }
+      } catch (error) {
+        console.error('恢复任务失败:', error);
+        // 失败不影响正常使用
+      }
+    };
+
+    restoreActiveTask();
+  }, []);
 
   // 提交生成请求
   const handleSubmit = async () => {
@@ -77,6 +109,25 @@ export default function AiVideoGenerationPage() {
       });
 
       setTaskId(response.id);
+
+      // 保存到数据库
+      try {
+        await aiVideoApi.createGeneration({
+          id: response.id,
+          platform: 'toapi',
+          model,
+          prompt: prompt.trim(),
+          duration,
+          aspect_ratio: aspectRatio,
+          resolution,
+        });
+
+        // 保存到 localStorage（兜底）
+        localStorage.setItem('last_video_task_id', response.id);
+      } catch (dbError) {
+        console.error('保存到数据库失败:', dbError);
+        // 保存失败不影响视频生成
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : '提交失败');
       setPageState('error');
@@ -84,9 +135,25 @@ export default function AiVideoGenerationPage() {
   };
 
   // 任务完成回调
-  const handleTaskComplete = (task: UnifiedTask) => {
+  const handleTaskComplete = async (task: UnifiedTask) => {
     setCompletedTask(task);
     setPageState('completed');
+
+    // 更新数据库状态
+    try {
+      await aiVideoApi.updateGeneration(task.id, {
+        status: task.status,
+        progress: task.progress,
+        video_url: task.videoUrl,
+        error_message: task.error?.message,
+        completed_at: task.status === 'completed' ? new Date().toISOString() : undefined,
+      });
+
+      // 清除 localStorage（任务已完成）
+      localStorage.removeItem('last_video_task_id');
+    } catch (error) {
+      console.error('更新数据库失败:', error);
+    }
   };
 
   // 任务错误回调
@@ -110,18 +177,29 @@ export default function AiVideoGenerationPage() {
     <div className="px-4 sm:px-0 pb-8">
       {/* 页面标题 */}
       <div className="mb-8">
-        <div className="flex items-center gap-3 mb-2">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center">
-            <Sparkles className="w-6 h-6 text-white" />
+        <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center">
+              <Sparkles className="w-6 h-6 text-white" />
+            </div>
+            <div>
+              <h1 className="text-3xl font-semibold text-slate-800 dark:text-white">
+                AI 视频生成
+              </h1>
+              <p className="text-slate-500 dark:text-slate-400 mt-1">
+                使用 AI 模型生成专业级视频内容
+              </p>
+            </div>
           </div>
-          <div>
-            <h1 className="text-3xl font-semibold text-slate-800 dark:text-white">
-              AI 视频生成
-            </h1>
-            <p className="text-slate-500 dark:text-slate-400 mt-1">
-              使用 AI 模型生成专业级视频内容
-            </p>
-          </div>
+
+          {/* 查看历史按钮 */}
+          <button
+            onClick={() => navigate('/ai-video/history')}
+            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors"
+          >
+            <History className="w-4 h-4" />
+            查看历史
+          </button>
         </div>
       </div>
 
