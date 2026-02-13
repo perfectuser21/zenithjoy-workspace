@@ -65,7 +65,7 @@ jobs:
 
       - name: Security Audit
         working-directory: apps/dashboard
-        run: npm audit --audit-level=high
+        run: npm audit --audit-level=moderate
 
   build:
     runs-on: ubuntu-latest
