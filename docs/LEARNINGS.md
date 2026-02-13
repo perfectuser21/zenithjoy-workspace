@@ -400,6 +400,46 @@
   - 添加字段导入/导出功能（可选优化）
 
 
+### [2026-02-12] ToAPI 视频 URL 映射 Bug 修复
+
+- **Bug**:
+  - 用户反馈任务完成后右侧内容消失，看不到视频
+  - Console 显示视频 URL 在 `fail_reason` 字段：`fail_reason: "https://files.toapis.com/flow/abc-123.mp4"`
+  - 代码只映射 `video_url` 字段，导致 videoUrl 为 undefined
+
+- **根本原因**:
+  - ToAPI API 设计 bug：成功生成的视频 URL 放在 `fail_reason` 字段
+  - 预期应该在 `video_url` 或 `result.video_url` 字段
+  - VideoPreview 组件检查 `if (!task.videoUrl) return null;` 导致不显示
+
+- **解决方案**:
+  - 添加 `fail_reason?: string` 到 ToAPITask 接口
+  - 修改映射逻辑：优先 video_url，回退到 fail_reason（如果是 URL）
+  - 添加 3 个测试覆盖不同场景
+
+- **影响程度**: Critical - 用户完全看不到生成的视频
+
+- **技术要点**:
+  - **第三方 API 的不规范设计**：字段命名和用途不一致
+  - **防御性编程的重要性**：检查 fail_reason 是否为 URL (`startsWith('http')`)
+  - **优先级策略**：先检查标准字段，再回退到非标准字段
+  - **测试的完整性**：覆盖所有分支（有 video_url、有 fail_reason URL、有 fail_reason 非 URL）
+  - **Console 日志的调试价值**：通过日志发现非标准字段的使用
+
+- **连锁 Bug 修复**:
+  - 第一个 bug：大写状态映射（SUCCESS → completed）
+  - 第二个 bug：视频 URL 字段映射（fail_reason → videoUrl）
+  - 两个 bug 都是 ToAPI 返回格式与预期不符导致
+
+- **教训**:
+  - 第三方 API 集成需要充分测试真实响应
+  - 不要只依赖文档，要观察实际返回的数据
+  - 字段映射要考虑多种可能性和回退策略
+  - 完整测试要等到最终结果（视频显示），不是中间状态
+
+- **CI 执行**: 一次性通过，16 个测试全部通过
+
+
 ### [2026-02-12] ToAPI 大写状态映射 Bug 修复
 
 - **Bug**:
@@ -524,3 +564,66 @@
   - 集成更多视频平台（Sora, Vail, Kling 等）
   - 添加视频编辑功能（剪辑、特效、配音）
   - 实现视频历史记录和管理功能
+### [2026-02-13] AI 视频生成历史记录功能
+
+- **Bug 1: Branch-protect Hook PRD 文件名不匹配**:
+  - Hook 期望 PRD 文件名格式：`.prd-${CURRENT_BRANCH}.md`
+  - Worktree 自动生成的分支名：`cp-MMDDHHmm-<feature>` (例如 cp-02130912-ai-video-history)
+  - 初始错误创建为：`.prd-cp-20260212-ai-video-history.md` (日期格式不同)
+  - **修复**：重命名 PRD/DoD 文件匹配分支名，更新 .dev-mode 中的 prd 字段
+  - **教训**：文件名必须与 `git rev-parse --abbrev-ref HEAD` 完全一致
+
+- **Bug 2: TypeScript 默认导出类型不匹配**:
+  - 导航配置系统期望组件使用默认导出（`export default function`）
+  - AiVideoHistoryPage 初始使用命名导出（`export function AiVideoHistoryPage()`）
+  - TypeScript 错误：`Property 'default' is missing`
+  - **修复**：改为默认导出 `export default function AiVideoHistoryPage()`
+  - **教训**：页面组件必须使用默认导出以配合 lazy loading
+
+- **Bug 3: ESLint 警告数量超限（80 > 79）**:
+  - AiVideoHistoryPage 引入 2 个未使用的 import：`useEffect` 和 `AiVideoGeneration`
+  - 原有警告 78 个 + 新增 2 个 = 80 个，超过上限 79
+  - **修复**：删除未使用的 import
+  - **教训**：写代码时就清理未使用的 import，不要依赖 ESLint 警告
+
+- **优化点**:
+  - **数据库持久化**：使用 PostgreSQL 存储视频生成历史，支持复杂查询和分页
+  - **自动恢复机制**：页面刷新后从数据库恢复进行中的任务，结合 localStorage 作为降级方案
+  - **历史页面独立**：专用页面展示所有记录，支持状态筛选、视频预览、下载、删除
+  - **Service/Controller/Routes 分层**：后端采用清晰的三层架构，易于测试和维护
+  - **Migration 脚本幂等性**：使用 `IF NOT EXISTS` 确保可重复执行
+
+- **影响程度**: Medium - 功能性增强，解决了用户痛点（历史记录丢失）
+
+- **技术要点**:
+  - **数据库设计**：
+    - 状态枚举约束（queued/in_progress/completed/failed）
+    - 进度范围约束（0-100）
+    - 自动更新 updated_at 的 trigger
+    - 索引优化（status, created_at, platform）
+  - **API 设计**：
+    - RESTful 端点：GET /history, GET /active, GET /task/:id, POST /generate, PUT /task/:id, DELETE /task/:id
+    - 分页支持（limit/offset）
+    - 状态过滤
+  - **前端状态管理**：
+    - TanStack Query 处理数据获取和缓存
+    - localStorage 作为 fallback
+    - useEffect 自动恢复进行中的任务
+  - **测试策略**：
+    - Mock database pool 避免真实数据库依赖
+    - 覆盖 CRUD 所有操作
+    - 边界情况测试（not found, empty results）
+
+- **CI 执行经验**:
+  - **第 1 轮**：ESLint 警告超限（useEffect 和 AiVideoGeneration 未使用）
+  - **第 2 轮**：成功通过，PR #50 合并
+
+- **版本号管理**:
+  - feat 类型 commit → minor 版本（1.4.4 → 1.5.0）
+  - 同步更新 package.json、VERSION 文件、package-lock.json
+
+- **下一步**:
+  - 运行数据库 migration 脚本创建表
+  - 手动测试完整流程（创建任务 → 刷新页面 → 查看历史）
+  - 部署到香港生产环境
+
