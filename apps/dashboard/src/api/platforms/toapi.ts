@@ -1,39 +1,16 @@
 /**
  * ToAPI 平台适配器（Google VEO3）
+ *
+ * 架构说明：
+ * - 前端通过后端 API 代理访问 ToAPI，不直接持有 API Key
+ * - API Key 安全存储在后端环境变量中
+ * - 所有 ToAPI 调用由后端统一管理
  */
 
 import { VideoPlatform, type UnifiedVideoParams, type UnifiedTask, type PlatformModel } from './base';
+import { aiVideoApi } from '../ai-video.api';
 
-const TOAPI_BASE_URL = 'https://toapis.com/v1';
-
-interface ToAPIRequest {
-  model: string;
-  prompt: string;
-  duration: number;
-  aspect_ratio: string;
-  image_urls?: string[];
-  metadata?: Record<string, unknown>;
-}
-
-interface ToAPITask {
-  id: string;
-  model: string;
-  status: string;
-  progress?: number;
-  created_at?: number;
-  completed_at?: number;
-  video_url?: string;
-  fail_reason?: string;  // ToAPI bug: video URL is here instead of video_url
-  error?: { code?: string; message?: string; };
-}
-
-function getApiToken(): string {
-  const token = import.meta.env.VITE_TOAPIS_API_KEY;
-  if (!token) {
-    throw new Error('ToAPI API key not configured');
-  }
-  return token;
-}
+// No longer needed - API Key is managed by backend
 
 export class ToAPIPlatform extends VideoPlatform {
   readonly id = 'toapi';
@@ -66,67 +43,7 @@ export class ToAPIPlatform extends VideoPlatform {
     },
   ];
 
-  private mapToToAPIRequest(params: UnifiedVideoParams): ToAPIRequest {
-    return {
-      model: params.model,
-      prompt: params.prompt,
-      duration: 8,
-      aspect_ratio: params.aspectRatio || '16:9',
-      image_urls: params.imageUrls,
-      metadata: {
-        generation_type: params.imageUrls?.length === 2 ? 'frame' : 'reference',
-        resolution: params.resolution,
-      },
-    };
-  }
-
-  private mapToUnifiedTask(task: ToAPITask): UnifiedTask {
-    let status: UnifiedTask['status'] = 'queued';
-    let progress = 0;
-
-    // Normalize status to lowercase for case-insensitive matching
-    const normalizedStatus = task.status.toLowerCase();
-
-    switch (normalizedStatus) {
-      case 'queued':
-        status = 'queued';
-        progress = 0;
-        break;
-      case 'in_progress':
-      case 'processing':
-        status = 'in_progress';
-        progress = task.progress || 50;
-        break;
-      case 'completed':
-      case 'success':
-        status = 'completed';
-        progress = 100;
-        break;
-      case 'failed':
-      case 'error':
-        status = 'failed';
-        progress = 0;
-        break;
-    }
-
-    // Video URL mapping: ToAPI bug - video URL is in fail_reason field
-    let videoUrl = task.video_url;
-    if (!videoUrl && task.fail_reason?.startsWith('http')) {
-      videoUrl = task.fail_reason;
-    }
-
-    return {
-      id: task.id,
-      platform: this.id,
-      model: task.model,
-      status,
-      progress,
-      created_at: task.created_at,
-      completed_at: task.completed_at,
-      videoUrl,
-      error: task.error,
-    };
-  }
+// Mapping functions no longer needed - backend handles ToAPI response parsing
 
   async createVideoGeneration(params: UnifiedVideoParams): Promise<UnifiedTask> {
     const validation = this.validateParams(params);
@@ -134,57 +51,53 @@ export class ToAPIPlatform extends VideoPlatform {
       throw new Error(`Invalid params: ${validation.error}`);
     }
 
-    const requestBody = this.mapToToAPIRequest(params);
-    console.log('[ToAPI] Creating video generation:', requestBody);
+    console.log('[ToAPI] Creating video generation via backend:', params);
 
-    const response = await fetch(`${TOAPI_BASE_URL}/videos/generations`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${getApiToken()}`,
-      },
-      body: JSON.stringify(requestBody),
+    // Call backend API (which proxies to ToAPI)
+    const generation = await aiVideoApi.createGeneration({
+      platform: this.id,
+      model: params.model,
+      prompt: params.prompt,
+      duration: 8,  // ToAPI fixed duration
+      aspect_ratio: params.aspectRatio || '16:9',
+      resolution: params.resolution,
+      image_urls: params.imageUrls,
     });
 
-    if (!response.ok) {
-      const error = await response.text();
-      console.error('[ToAPI] Create error:', error);
-      throw new Error(`ToAPI error: ${response.status} - ${error}`);
-    }
+    console.log('[ToAPI] Backend response:', generation);
 
-    const task: ToAPITask = await response.json();
-    console.log('[ToAPI] Response:', task);
-
-    return this.mapToUnifiedTask(task);
+    // Map backend response to UnifiedTask
+    return {
+      id: generation.id,
+      platform: generation.platform,
+      model: generation.model,
+      status: generation.status,
+      progress: generation.progress,
+      created_at: generation.created_at ? new Date(generation.created_at).getTime() / 1000 : undefined,
+      completed_at: generation.completed_at ? new Date(generation.completed_at).getTime() / 1000 : undefined,
+      videoUrl: generation.video_url,
+      error: generation.error_message ? { message: generation.error_message } : undefined,
+    };
   }
 
   async getTaskStatus(taskId: string): Promise<UnifiedTask> {
-    console.log('[ToAPI] Getting task status:', taskId);
+    console.log('[ToAPI] Getting task status via backend:', taskId);
 
-    const response = await fetch(`${TOAPI_BASE_URL}/videos/generations/${taskId}`, {
-      method: 'GET',
-      headers: {
-        Authorization: `Bearer ${getApiToken()}`,
-      },
-    });
+    // Call backend API (which syncs from ToAPI)
+    const generation = await aiVideoApi.getGenerationById(taskId);
+    console.log('[ToAPI] Backend response:', generation);
 
-    if (!response.ok) {
-      throw new Error(`ToAPI error: ${response.status}`);
-    }
-
-    const responseData = await response.json();
-    console.log('[ToAPI] Task status response:', responseData);
-
-    // ⚠️ CRITICAL FIX: ToAPI returns {code, message, data} wrapper when polling
-    let task: ToAPITask;
-    if (responseData.code === 'success' && responseData.data) {
-      task = responseData.data;
-      console.log('[ToAPI] Unwrapped task:', task);
-    } else {
-      task = responseData;
-      console.log('[ToAPI] Direct task:', task);
-    }
-
-    return this.mapToUnifiedTask(task);
+    // Map backend response to UnifiedTask
+    return {
+      id: generation.id,
+      platform: generation.platform,
+      model: generation.model,
+      status: generation.status,
+      progress: generation.progress,
+      created_at: generation.created_at ? new Date(generation.created_at).getTime() / 1000 : undefined,
+      completed_at: generation.completed_at ? new Date(generation.completed_at).getTime() / 1000 : undefined,
+      videoUrl: generation.video_url,
+      error: generation.error_message ? { message: generation.error_message } : undefined,
+    };
   }
 }

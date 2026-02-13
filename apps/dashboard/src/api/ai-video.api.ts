@@ -20,13 +20,13 @@ export interface AiVideoGeneration {
 }
 
 export interface CreateAiVideoParams {
-  id: string;
   platform: string;
   model: string;
   prompt: string;
   duration?: number;
   aspect_ratio?: string;
   resolution?: string;
+  image_urls?: string[];
 }
 
 export interface UpdateAiVideoParams {
