@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { aiVideoApi, type AiVideoGeneration } from '../api/ai-video.api';
+import { aiVideoApi } from '../api/ai-video.api';
 import { Trash2, Download } from 'lucide-react';
 
 export default function AiVideoHistoryPage() {
