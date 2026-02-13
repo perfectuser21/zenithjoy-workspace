@@ -27,7 +27,7 @@ export default function TaskMonitor({ taskId, platform, onComplete, onError }: T
         setTask(updatedTask);
       },
       3000, // 每 3 秒轮询一次
-      300000 // 5 分钟超时
+      1800000 // 30 分钟超时（AI 视频生成通常需要 10-20 分钟）
     )
       .then(onComplete)
       .catch(onError);
