@@ -1,10 +1,6 @@
 {
-  "branch": "cp-20260210-works-detail-page",
-  "head_sha": "e88458b",
-  "timestamp": "2026-02-10T01:31:00Z",
-  "note": "Quality 只汇总，不判定。CI 是最终裁判。",
-  "checks": {
-    "typecheck": "passed",
-    "build": "passed"
-  }
+  "branch": "cp-02130912-ai-video-history",
+  "head_sha": "daefc8a",
+  "timestamp": "2026-02-13T01:23:52Z",
+  "note": "Quality 只汇总，不判定。CI 是最终裁判。"
 }

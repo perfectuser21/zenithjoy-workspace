@@ -94,7 +94,7 @@ export default function DynamicSidebar({
               <div className="mx-2 mb-2 border-t border-white/5" />
             )}
             <div className="space-y-1">
-              {group.items.map((item) => {
+              {group.items.filter(item => item && item.icon).map((item) => {
                 const Icon = item.icon;
                 const isActive = location.pathname === item.path || location.pathname.startsWith(item.path + '/');
                 return (

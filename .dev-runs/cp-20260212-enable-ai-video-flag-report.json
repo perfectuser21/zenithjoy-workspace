@@ -1,0 +1,42 @@
+{
+  "task_id": "cp-20260212-enable-ai-video-flag",
+  "project": "zenithjoy-workspace",
+  "branch": "cp-20260212-enable-ai-video-flag",
+  "base_branch": "develop",
+  "mode": "interactive",
+  "timestamp": "2026-02-12 17:50",
+  "date": "2026-02-12",
+  "quality_report": {
+    "L1_automated": "unknown",
+    "L2_verification": "unknown",
+    "L3_acceptance": "unknown",
+    "overall": "unknown"
+  },
+  "ci_cd": {
+    "pr_url": "https://github.com/perfectuser21/zenithjoy-workspace/pull/47",
+    "pr_merged": true
+  },
+  "version": "1.8.3",
+  "files_changed": [
+  ".dev-sentinel",
+  ".dod-cp-20260212-enable-ai-video-flag.md",
+  ".prd-cp-20260212-enable-ai-video-flag.md",
+  "VERSION",
+  "apps/dashboard/apps/dashboard/src/api/platforms/base.ts",
+  "apps/dashboard/package-lock.json",
+  "apps/dashboard/package.json",
+  "apps/dashboard/src/api/__tests__/video-generation.api.test.ts",
+  "apps/dashboard/src/api/__tests__/video-generation.test.ts",
+  "apps/dashboard/src/api/platforms/__tests__/index.test.ts",
+  "apps/dashboard/src/api/platforms/__tests__/toapi.test.ts",
+  "apps/dashboard/src/api/platforms/base.ts",
+  "apps/dashboard/src/api/platforms/index.ts",
+  "apps/dashboard/src/api/platforms/toapi.ts",
+  "apps/dashboard/src/api/video-generation.api.ts",
+  "apps/dashboard/src/components/video-generation/ModelSelector.tsx",
+  "apps/dashboard/src/components/video-generation/TaskMonitor.tsx",
+  "apps/dashboard/src/components/video-generation/VideoParams.tsx",
+  "apps/dashboard/src/components/video-generation/VideoPreview.tsx",
+  "apps/dashboard/src/components/video-generation/__tests__/TaskMonitor.test.tsx"
+]
+}

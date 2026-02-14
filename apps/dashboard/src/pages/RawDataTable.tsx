@@ -5,8 +5,6 @@ import {
   ChevronDown,
   ChevronUp,
   Search,
-  Calendar as CalendarIcon,
-  Download
 } from 'lucide-react';
 
 interface ContentItem {

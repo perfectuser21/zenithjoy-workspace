@@ -14,6 +14,7 @@ import {
   Users,
   KeyRound,
   Database,
+  Sparkles,
 } from 'lucide-react';
 
 // ============ 类型定义 ============
@@ -65,6 +66,8 @@ export const autopilotPageComponents: Record<string, () => Promise<{ default: Co
   'AiAbilityDetailPage': () => import('../pages/AiAbilityDetailPage'),
   'AccountsList': () => import('../pages/accounts/AccountsList'),
   'PlatformDataPage': () => import('../pages/PlatformDataPage'),
+  'AiVideoGenerationPage': () => import('../pages/AiVideoGenerationPage'),
+  'AiVideoHistoryPage': () => import('../pages/AiVideoHistoryPage'),
   // FeatureDashboard and CommandCenter moved to Core features/business
 };
 
@@ -128,6 +131,13 @@ export const autopilotNavGroups: NavGroup[] = [
         featureKey: 'platform-data',
         component: 'PlatformDataPage'
       },
+      {
+        path: '/ai-video',
+        icon: Sparkles,
+        label: 'AI 视频',
+        featureKey: 'ai-video-generation',
+        component: 'AiVideoGenerationPage'
+      },
     ]
   }
 ];
@@ -147,6 +157,9 @@ export const additionalRoutes: RouteConfig[] = [
   { path: '/works/gallery', component: 'WorksGalleryPage', requireAuth: true },
   { path: '/works/fields', component: 'FieldManagementPage', requireAuth: true },
   { path: '/works/:id', component: 'WorkDetailPage', requireAuth: true },
+
+  // === AI 视频相关路由 ===
+  { path: '/ai-video/history', component: 'AiVideoHistoryPage', requireAuth: true },
 
   // === 旧路由重定向（兼容） ===
   { path: '/content', redirect: '/media/content' },

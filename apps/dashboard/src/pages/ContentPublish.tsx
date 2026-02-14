@@ -91,9 +91,8 @@ const platformDisplayNames: Record<string, string> = {
 };
 
 // Result status badge component
-function ResultStatusBadge({ result, platform, isProcessing }: {
+function ResultStatusBadge({ result, isProcessing }: {
   result?: { success: boolean; url?: string; error?: string };
-  platform: string;
   isProcessing: boolean;
 }) {
   if (!result) {
@@ -1386,7 +1385,6 @@ export default function ContentPublish() {
                         <td className="px-6 py-4">
                           <ResultStatusBadge
                             result={result}
-                            platform={platform}
                             isProcessing={isProcessing}
                           />
                         </td>

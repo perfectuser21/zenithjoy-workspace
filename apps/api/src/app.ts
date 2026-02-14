@@ -3,6 +3,7 @@ import cors from 'cors';
 import worksRouter from './routes/works';
 import fieldsRouter from './routes/fields';
 import publishRouter from './routes/publish';
+import aiVideoRouter from './routes/ai-video';
 import { errorHandler, notFoundHandler } from './middleware/error';
 
 const app = express();
@@ -20,6 +21,7 @@ app.get('/health', (req, res) => {
 app.use('/api/works', worksRouter);
 app.use('/api/fields', fieldsRouter);
 app.use('/api', publishRouter);
+app.use('/api/ai-video', aiVideoRouter);
 
 // Error handling
 app.use(notFoundHandler);
