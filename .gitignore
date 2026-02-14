@@ -1,0 +1,95 @@
+# Environment variables
+.env
+.env.*
+!.env.example
+*.env
+
+# Credentials
+credentials/
+*.key
+*.pem
+*.p12
+*-credentials.json
+*-secret.json
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Node.js
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+package-lock.json
+yarn.lock
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+.venv
+
+# Build outputs
+dist/
+build/
+*.egg-info/
+.cache/
+
+# Logs
+logs/
+*.log
+log/
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+*.sql
+*.dump
+
+# Backup files
+*.bak
+*.backup
+*.old
+*.orig
+*~
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+.temp/
+
+# Test coverage
+coverage/
+.coverage
+*.cover
+.nyc_output/
+
+# Docker
+.dockerignore
+
+# OS files
+Thumbs.db
+desktop.ini
+
+# Work tree directories (Claude Code temporary)
+*-wt-*
+
+# Archive directories
+.archive/
+
+# Custom
+*.local
+.secrets/
