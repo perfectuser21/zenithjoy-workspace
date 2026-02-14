@@ -1,8 +1,6 @@
 {
-  "branch": "cp-02142124-refactor-dashboard-drilldown",
-  "head_sha": "aed42ab",
-  "timestamp": "2026-02-14T13:31:19Z",
-  "note": "Quality 只汇总，不判定。CI 是最终裁判。",
-  "build": "✅ passed",
-  "typescript": "✅ passed"
+  "branch": "cp-02130912-ai-video-history",
+  "head_sha": "daefc8a",
+  "timestamp": "2026-02-13T01:23:52Z",
+  "note": "Quality 只汇总，不判定。CI 是最终裁判。"
 }
