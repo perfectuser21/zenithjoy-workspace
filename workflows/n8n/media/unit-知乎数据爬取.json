@@ -1,0 +1,106 @@
+{
+  "name": "[Unit] 知乎数据爬取",
+  "nodes": [
+    {
+      "id": "manual-trigger",
+      "name": "手动触发",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        240,
+        300
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "schedule-trigger",
+      "name": "占位触发器",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        240,
+        500
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "triggerAtHour": 2
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "ssh-scrape",
+      "name": "执行CDP爬虫",
+      "type": "n8n-nodes-base.ssh",
+      "typeVersion": 1,
+      "position": [
+        520,
+        300
+      ],
+      "parameters": {
+        "authentication": "privateKey",
+        "host": "146.190.52.84",
+        "port": 22,
+        "user": "xx",
+        "command": "bash ~/.zhihu/vnc_scrape.sh 2>/dev/null"
+      },
+      "credentials": {
+        "sshPrivateKey": {
+          "id": "vvJsQOZ95sqzemla",
+          "name": "VPS SSH Key"
+        }
+      }
+    },
+    {
+      "id": "parse-result",
+      "name": "解析结果",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        760,
+        300
+      ],
+      "parameters": {
+        "jsCode": "const stdout = $input.first().json.stdout || \"\";\ntry {\n  const data = JSON.parse(stdout.trim());\n  return [{ json: data }];\n} catch (e) {\n  return [{ json: { success: false, error: e.message, raw: stdout } }];\n}"
+      }
+    }
+  ],
+  "connections": {
+    "手动触发": {
+      "main": [
+        [
+          {
+            "node": "执行CDP爬虫",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "执行CDP爬虫": {
+      "main": [
+        [
+          {
+            "node": "解析结果",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false
+  },
+  "staticData": {
+    "node:占位触发器": {
+      "recurrenceRules": []
+    }
+  },
+  "active": true
+}

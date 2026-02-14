@@ -1,0 +1,30 @@
+import express from 'express';
+import cors from 'cors';
+import worksRouter from './routes/works';
+import fieldsRouter from './routes/fields';
+import publishRouter from './routes/publish';
+import aiVideoRouter from './routes/ai-video';
+import { errorHandler, notFoundHandler } from './middleware/error';
+
+const app = express();
+
+// Middleware
+app.use(cors());
+app.use(express.json());
+
+// Health check
+app.get('/health', (req, res) => {
+  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
+// API routes
+app.use('/api/works', worksRouter);
+app.use('/api/fields', fieldsRouter);
+app.use('/api', publishRouter);
+app.use('/api/ai-video', aiVideoRouter);
+
+// Error handling
+app.use(notFoundHandler);
+app.use(errorHandler);
+
+export default app;

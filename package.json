@@ -1,0 +1,30 @@
+{
+  "name": "zenithjoy-workspace",
+  "version": "1.8.4",
+  "description": "ZenithJoy Workspace - Social media automation platform monorepo",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "apps/*"
+  ],
+  "scripts": {
+    "build": "npm run build --workspaces --if-present",
+    "build:dashboard": "npm run build --workspace=apps/dashboard",
+    "dev:dashboard": "npm run dev --workspace=apps/dashboard",
+    "lint": "npm run lint --workspaces --if-present",
+    "clean": "find . -name 'node_modules' -type d -prune -exec rm -rf '{}' +",
+    "clean:dist": "find . -name 'dist' -type d -prune -exec rm -rf '{}' +"
+  },
+  "keywords": [
+    "monorepo",
+    "zenithjoy",
+    "social-media",
+    "automation"
+  ],
+  "author": "ZenithJoy Team",
+  "license": "MIT",
+  "engines": {
+    "node": ">=20.0.0",
+    "npm": ">=9.0.0"
+  }
+}

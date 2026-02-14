@@ -1,0 +1,61 @@
+================================================================================
+                          任务完成报告
+================================================================================
+
+任务ID:     cp-20260212-enable-ai-video-flag
+项目:       zenithjoy-workspace
+分支:       cp-20260212-enable-ai-video-flag -> develop
+模式:       interactive
+时间:       2026-02-12 17:50
+
+--------------------------------------------------------------------------------
+质检详情 (重点)
+--------------------------------------------------------------------------------
+
+Layer 1: 自动化测试
+  - 状态: unknown
+
+Layer 2: 效果验证
+  - 状态: unknown
+
+Layer 3: 需求验收 (DoD)
+  - 状态: unknown
+
+质检结论: unknown
+
+--------------------------------------------------------------------------------
+CI/CD
+--------------------------------------------------------------------------------
+PR:         https://github.com/perfectuser21/zenithjoy-workspace/pull/47
+PR 状态:    已合并
+
+--------------------------------------------------------------------------------
+变更文件
+--------------------------------------------------------------------------------
+.dev-sentinel
+.dod-cp-20260212-enable-ai-video-flag.md
+.prd-cp-20260212-enable-ai-video-flag.md
+VERSION
+apps/dashboard/apps/dashboard/src/api/platforms/base.ts
+apps/dashboard/package-lock.json
+apps/dashboard/package.json
+apps/dashboard/src/api/__tests__/video-generation.api.test.ts
+apps/dashboard/src/api/__tests__/video-generation.test.ts
+apps/dashboard/src/api/platforms/__tests__/index.test.ts
+apps/dashboard/src/api/platforms/__tests__/toapi.test.ts
+apps/dashboard/src/api/platforms/base.ts
+apps/dashboard/src/api/platforms/index.ts
+apps/dashboard/src/api/platforms/toapi.ts
+apps/dashboard/src/api/video-generation.api.ts
+apps/dashboard/src/components/video-generation/ModelSelector.tsx
+apps/dashboard/src/components/video-generation/TaskMonitor.tsx
+apps/dashboard/src/components/video-generation/VideoParams.tsx
+apps/dashboard/src/components/video-generation/VideoPreview.tsx
+apps/dashboard/src/components/video-generation/__tests__/TaskMonitor.test.tsx
+
+--------------------------------------------------------------------------------
+版本
+--------------------------------------------------------------------------------
+当前版本:   1.8.3
+
+================================================================================

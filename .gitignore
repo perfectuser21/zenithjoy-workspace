@@ -45,6 +45,7 @@ dist/
 build/
 *.egg-info/
 .cache/
+.next/
 
 # Logs
 logs/
@@ -63,13 +64,13 @@ log/
 *.backup
 *.old
 *.orig
-*~
 
 # Temporary files
 tmp/
 temp/
 *.tmp
 .temp/
+.tmp/
 
 # Test coverage
 coverage/
@@ -89,6 +90,19 @@ desktop.ini
 
 # Archive directories
 .archive/
+
+# Dev workflow 运行时文件
+.dev-mode
+.dev-mode.*
+.dev-lock
+.dev-lock.*
+.dev-runs/
+
+# Audit/quality reports (generated, not committed)
+*AUDIT*.md
+*REPORT*.md
+*SUMMARY*.md
+!README.md
 
 # Custom
 *.local
