@@ -35,3 +35,13 @@ tmp/
 .dev-mode.*
 .dev-lock
 .dev-lock.*
+.dev-runs/
+
+# Test coverage
+coverage/
+
+# Audit/quality reports (generated, not committed)
+*AUDIT*.md
+*REPORT*.md
+*SUMMARY*.md
+!README.md

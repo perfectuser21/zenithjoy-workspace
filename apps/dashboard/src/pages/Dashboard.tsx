@@ -1,6 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import {
-  LayoutGrid,
   TrendingUp,
   TrendingDown,
   Users,
@@ -84,18 +83,6 @@ const getDayOfYear = () => {
   const diff = now.getTime() - start.getTime();
   const oneDay = 1000 * 60 * 60 * 24;
   return Math.floor(diff / oneDay);
-};
-
-// 历史上的今天（简单版）
-const TODAY_IN_HISTORY: Record<string, string> = {
-  '01-01': '1912年，中华民国成立',
-  '03-08': '1917年，国际妇女节设立',
-  '04-01': '1976年，苹果公司成立',
-  '05-04': '1919年，五四运动爆发',
-  '07-01': '1997年，香港回归',
-  '10-01': '1949年，中华人民共和国成立',
-  '12-23': '1888年，梵高割下自己的耳朵',
-  '12-25': '1642年，艾萨克·牛顿出生',
 };
 
 // 获取今日一言（基于日期的伪随机，同一天显示相同的句子）
@@ -468,7 +455,7 @@ export default function Dashboard() {
       } else {
         throw new Error('采集失败');
       }
-    } catch (error) {
+    } catch {
       setTasks(prev =>
         prev.map(task =>
           task.id === newTask.id
@@ -665,7 +652,7 @@ export default function Dashboard() {
       <div className="mb-8">
         <h2 className="text-lg font-semibold text-slate-800 dark:text-white mb-4">功能模块</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-          {MAIN_FEATURES.filter(f => f && f.icon).map((feature, idx) => {
+          {MAIN_FEATURES.filter(f => f && f.icon).map((feature) => {
             const Icon = feature.icon;
             return (
               <a

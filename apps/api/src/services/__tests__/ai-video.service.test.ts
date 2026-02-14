@@ -8,8 +8,8 @@
 import { AiVideoService, type CreateAiVideoParams } from '../ai-video.service';
 import pool from '../../db/connection';
 
-// Skip unit tests - require proper mock configuration for pool and ToAPIClient
-describe.skip('AiVideoService (Unit tests - TODO: configure mocks properly)', () => {
+// Skip: integration tests require database and ToAPI connection
+describe.skip('AiVideoService', () => {
   let service: AiVideoService;
   let mockQuery: jest.Mock;
 

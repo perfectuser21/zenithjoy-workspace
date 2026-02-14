@@ -20,6 +20,7 @@ export interface AiVideoGeneration {
 }
 
 export interface CreateAiVideoParams {
+  id?: string;
   platform: string;
   model: string;
   prompt: string;
