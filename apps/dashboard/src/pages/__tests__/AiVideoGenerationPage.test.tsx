@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { BrowserRouter } from 'react-router-dom';
 import AiVideoGenerationPage from '../AiVideoGenerationPage';
 import * as videoGenApi from '../../api/video-generation.api';
 
@@ -15,9 +16,18 @@ vi.mock('../../api/video-generation.api', async (importOriginal) => {
 
 const mockCreateVideoGeneration = videoGenApi.createVideoGeneration as ReturnType<typeof vi.fn>;
 
+// Helper function to render with Router
+function renderWithRouter(component: React.ReactElement) {
+  return render(
+    <BrowserRouter>
+      {component}
+    </BrowserRouter>
+  );
+}
+
 describe('AiVideoGenerationPage', () => {
   it('应该展示页面标题', () => {
-    render(<AiVideoGenerationPage />);
+    renderWithRouter(<AiVideoGenerationPage />);
 
     // 验证标题存在
     expect(screen.getByText('AI 视频生成')).toBeInTheDocument();
@@ -25,7 +35,7 @@ describe('AiVideoGenerationPage', () => {
   });
 
   it('应该有提示词输入框', () => {
-    render(<AiVideoGenerationPage />);
+    renderWithRouter(<AiVideoGenerationPage />);
 
     // 查找 textarea（提示词输入框）
     const textarea = screen.getByRole('textbox');
@@ -33,7 +43,7 @@ describe('AiVideoGenerationPage', () => {
   });
 
   it('应该有生成按钮', () => {
-    render(<AiVideoGenerationPage />);
+    renderWithRouter(<AiVideoGenerationPage />);
 
     // 查找生成按钮
     const generateButton = screen.getByRole('button', { name: /开始生成视频/ });
@@ -41,7 +51,7 @@ describe('AiVideoGenerationPage', () => {
   });
 
   it('空提示词时按钮应该禁用', () => {
-    render(<AiVideoGenerationPage />);
+    renderWithRouter(<AiVideoGenerationPage />);
 
     // 找到生成按钮
     const generateButton = screen.getByRole('button', { name: /开始生成视频/ });
@@ -51,7 +61,7 @@ describe('AiVideoGenerationPage', () => {
   });
 
   it('输入提示词后按钮应该启用', () => {
-    render(<AiVideoGenerationPage />);
+    renderWithRouter(<AiVideoGenerationPage />);
 
     // 找到生成按钮（初始应该禁用）
     const generateButton = screen.getByRole('button', { name: /开始生成视频/ });
@@ -75,7 +85,7 @@ describe('AiVideoGenerationPage', () => {
       });
     });
 
-    render(<AiVideoGenerationPage />);
+    renderWithRouter(<AiVideoGenerationPage />);
 
     // 输入提示词
     const textarea = screen.getByRole('textbox');

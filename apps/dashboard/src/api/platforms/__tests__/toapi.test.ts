@@ -1,12 +1,25 @@
 /**
  * ToAPI Platform Tests
+ *
+ * Tests the ToAPIPlatform adapter which maps between
+ * aiVideoApi responses and UnifiedTask format.
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { ToAPIPlatform } from '../toapi';
 
-// Mock fetch
-global.fetch = vi.fn();
+// Mock the aiVideoApi module
+vi.mock('../../ai-video.api', () => ({
+  aiVideoApi: {
+    getGenerationById: vi.fn(),
+    createGeneration: vi.fn(),
+  },
+}));
+
+import { aiVideoApi } from '../../ai-video.api';
+
+const mockGetGenerationById = vi.mocked(aiVideoApi.getGenerationById);
+const mockCreateGeneration = vi.mocked(aiVideoApi.createGeneration);
 
 describe('ToAPIPlatform', () => {
   let platform: ToAPIPlatform;
@@ -37,266 +50,141 @@ describe('ToAPIPlatform', () => {
     });
   });
 
-  describe('response unwrapping', () => {
-    it('should unwrap {code: success, data: ...} format', async () => {
-      const mockResponse = {
-        code: 'success',
-        message: 'OK',
-        data: {
-          id: 'task_123',
-          model: 'veo3.1-fast',
-          status: 'processing', // lowercase as per ToAPI format
-          progress: 50,
-          created_at: Date.now(),
-        },
-      };
-
-      (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
-        ok: true,
-        json: async () => mockResponse,
+  describe('getTaskStatus', () => {
+    it('should map backend response to UnifiedTask', async () => {
+      mockGetGenerationById.mockResolvedValueOnce({
+        id: 'task_123',
+        platform: 'toapi',
+        model: 'veo3.1-fast',
+        prompt: 'test prompt',
+        status: 'in_progress',
+        progress: 50,
+        created_at: '2026-02-14T00:00:00.000Z',
+        updated_at: '2026-02-14T00:01:00.000Z',
       });
 
       const result = await platform.getTaskStatus('task_123');
 
+      expect(mockGetGenerationById).toHaveBeenCalledWith('task_123');
       expect(result.id).toBe('task_123');
+      expect(result.platform).toBe('toapi');
+      expect(result.model).toBe('veo3.1-fast');
       expect(result.status).toBe('in_progress');
       expect(result.progress).toBe(50);
     });
 
-    it('should handle direct response format', async () => {
-      const mockResponse = {
+    it('should map completed status with video_url', async () => {
+      mockGetGenerationById.mockResolvedValueOnce({
         id: 'task_456',
+        platform: 'toapi',
         model: 'veo3.1-fast',
+        prompt: 'test prompt',
         status: 'completed',
         progress: 100,
-        video_url: 'https://example.com/video.mp4', // correct field name
-        created_at: Date.now(),
-      };
-
-      (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
-        ok: true,
-        json: async () => mockResponse,
+        video_url: 'https://example.com/video.mp4',
+        created_at: '2026-02-14T00:00:00.000Z',
+        completed_at: '2026-02-14T00:05:00.000Z',
+        updated_at: '2026-02-14T00:05:00.000Z',
       });
 
       const result = await platform.getTaskStatus('task_456');
 
-      expect(result.id).toBe('task_456');
       expect(result.status).toBe('completed');
       expect(result.videoUrl).toBe('https://example.com/video.mp4');
-    });
-  });
-
-  describe('status mapping', () => {
-    it('should map processing to in_progress', async () => {
-      const mockResponse = {
-        code: 'success',
-        data: {
-          id: 'task_1',
-          model: 'veo3.1-fast',
-          status: 'processing', // lowercase
-          progress: 30,
-          created_at: Date.now(),
-        },
-      };
-
-      (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
-        ok: true,
-        json: async () => mockResponse,
-      });
-
-      const result = await platform.getTaskStatus('task_1');
-      expect(result.status).toBe('in_progress');
+      expect(result.completed_at).toBeDefined();
     });
 
-    it('should map success to completed', async () => {
-      const mockResponse = {
-        code: 'success',
-        data: {
-          id: 'task_2',
-          model: 'veo3.1-fast',
-          status: 'success', // lowercase
-          progress: 100,
-          created_at: Date.now(),
-        },
-      };
-
-      (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
-        ok: true,
-        json: async () => mockResponse,
+    it('should map failed status with error_message', async () => {
+      mockGetGenerationById.mockResolvedValueOnce({
+        id: 'task_789',
+        platform: 'toapi',
+        model: 'veo3.1-fast',
+        prompt: 'test prompt',
+        status: 'failed',
+        progress: 0,
+        error_message: 'Generation failed due to invalid prompt',
+        created_at: '2026-02-14T00:00:00.000Z',
+        updated_at: '2026-02-14T00:01:00.000Z',
       });
 
-      const result = await platform.getTaskStatus('task_2');
-      expect(result.status).toBe('completed');
-    });
+      const result = await platform.getTaskStatus('task_789');
 
-    it('should map failed to failed', async () => {
-      const mockResponse = {
-        code: 'success',
-        data: {
-          id: 'task_3',
-          model: 'veo3.1-fast',
-          status: 'failed', // lowercase
-          progress: 50,
-          created_at: Date.now(),
-          error: { message: 'Generation failed' },
-        },
-      };
-
-      (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
-        ok: true,
-        json: async () => mockResponse,
-      });
-
-      const result = await platform.getTaskStatus('task_3');
       expect(result.status).toBe('failed');
-      expect(result.error?.message).toBe('Generation failed');
-    });
-
-    // Uppercase status tests (ToAPI returns uppercase in production)
-    it('should map uppercase SUCCESS to completed', async () => {
-      const mockResponse = {
-        code: 'success',
-        data: {
-          id: 'task_4',
-          model: 'veo3.1-fast',
-          status: 'SUCCESS', // UPPERCASE as returned by ToAPI
-          progress: 100,
-          created_at: Date.now(),
-        },
-      };
-
-      (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
-        ok: true,
-        json: async () => mockResponse,
-      });
-
-      const result = await platform.getTaskStatus('task_4');
-      expect(result.status).toBe('completed');
-    });
-
-    it('should map uppercase FAILED to failed', async () => {
-      const mockResponse = {
-        code: 'success',
-        data: {
-          id: 'task_5',
-          model: 'veo3.1-fast',
-          status: 'FAILED', // UPPERCASE
-          progress: 0,
-          created_at: Date.now(),
-          error: { message: 'Task failed' },
-        },
-      };
-
-      (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
-        ok: true,
-        json: async () => mockResponse,
-      });
-
-      const result = await platform.getTaskStatus('task_5');
-      expect(result.status).toBe('failed');
-    });
-
-    it('should map uppercase PROCESSING to in_progress', async () => {
-      const mockResponse = {
-        code: 'success',
-        data: {
-          id: 'task_6',
-          model: 'veo3.1-fast',
-          status: 'PROCESSING', // UPPERCASE
-          progress: 75,
-          created_at: Date.now(),
-        },
-      };
-
-      (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
-        ok: true,
-        json: async () => mockResponse,
-      });
-
-      const result = await platform.getTaskStatus('task_6');
-      expect(result.status).toBe('in_progress');
-    });
-  });
-
-  describe('video URL mapping', () => {
-    it('should use video_url when present', async () => {
-      const mockResponse = {
-        code: 'success',
-        data: {
-          id: 'task_7',
-          model: 'veo3.1-fast',
-          status: 'SUCCESS',
-          video_url: 'https://example.com/video1.mp4',
-          fail_reason: 'https://example.com/video2.mp4',
-          created_at: Date.now(),
-        },
-      };
-
-      (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
-        ok: true,
-        json: async () => mockResponse,
-      });
-
-      const result = await platform.getTaskStatus('task_7');
-      expect(result.videoUrl).toBe('https://example.com/video1.mp4');
-    });
-
-    it('should fallback to fail_reason when video_url is missing', async () => {
-      const mockResponse = {
-        code: 'success',
-        data: {
-          id: 'task_8',
-          model: 'veo3.1-fast',
-          status: 'SUCCESS',
-          fail_reason: 'https://files.toapis.com/flow/abc-123.mp4',
-          created_at: Date.now(),
-        },
-      };
-
-      (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
-        ok: true,
-        json: async () => mockResponse,
-      });
-
-      const result = await platform.getTaskStatus('task_8');
-      expect(result.videoUrl).toBe('https://files.toapis.com/flow/abc-123.mp4');
-    });
-
-    it('should not use fail_reason if it is not a URL', async () => {
-      const mockResponse = {
-        code: 'success',
-        data: {
-          id: 'task_9',
-          model: 'veo3.1-fast',
-          status: 'FAILED',
-          fail_reason: 'Generation failed due to invalid prompt',
-          created_at: Date.now(),
-        },
-      };
-
-      (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
-        ok: true,
-        json: async () => mockResponse,
-      });
-
-      const result = await platform.getTaskStatus('task_9');
+      expect(result.error?.message).toBe('Generation failed due to invalid prompt');
       expect(result.videoUrl).toBeUndefined();
+    });
+
+    it('should map queued status', async () => {
+      mockGetGenerationById.mockResolvedValueOnce({
+        id: 'task_q',
+        platform: 'toapi',
+        model: 'veo3.1-quality',
+        prompt: 'test',
+        status: 'queued',
+        progress: 0,
+        created_at: '2026-02-14T00:00:00.000Z',
+        updated_at: '2026-02-14T00:00:00.000Z',
+      });
+
+      const result = await platform.getTaskStatus('task_q');
+
+      expect(result.status).toBe('queued');
+      expect(result.progress).toBe(0);
+    });
+
+    it('should convert date strings to timestamps', async () => {
+      const createdAt = '2026-02-14T12:00:00.000Z';
+      const completedAt = '2026-02-14T12:05:00.000Z';
+
+      mockGetGenerationById.mockResolvedValueOnce({
+        id: 'task_date',
+        platform: 'toapi',
+        model: 'veo3.1-fast',
+        prompt: 'test',
+        status: 'completed',
+        progress: 100,
+        created_at: createdAt,
+        completed_at: completedAt,
+        updated_at: completedAt,
+      });
+
+      const result = await platform.getTaskStatus('task_date');
+
+      expect(result.created_at).toBe(new Date(createdAt).getTime() / 1000);
+      expect(result.completed_at).toBe(new Date(completedAt).getTime() / 1000);
+    });
+
+    it('should handle missing optional fields', async () => {
+      mockGetGenerationById.mockResolvedValueOnce({
+        id: 'task_min',
+        platform: 'toapi',
+        model: 'veo3.1-fast',
+        prompt: 'test',
+        status: 'in_progress',
+        progress: 25,
+        created_at: '2026-02-14T00:00:00.000Z',
+        updated_at: '2026-02-14T00:00:00.000Z',
+      });
+
+      const result = await platform.getTaskStatus('task_min');
+
+      expect(result.videoUrl).toBeUndefined();
+      expect(result.error).toBeUndefined();
+      expect(result.completed_at).toBeUndefined();
     });
   });
 
   describe('createVideoGeneration', () => {
-    it('should create video with platform parameter', async () => {
-      const mockResponse = {
+    it('should create video with correct parameters', async () => {
+      mockCreateGeneration.mockResolvedValueOnce({
         id: 'task_new',
+        platform: 'toapi',
         model: 'veo3.1-fast',
+        prompt: 'A cat running in a field',
         status: 'queued',
         progress: 0,
-        created_at: Date.now(),
-      };
-
-      (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
-        ok: true,
-        json: async () => mockResponse,
+        created_at: '2026-02-14T00:00:00.000Z',
+        updated_at: '2026-02-14T00:00:00.000Z',
       });
 
       const result = await platform.createVideoGeneration({
@@ -308,10 +196,58 @@ describe('ToAPIPlatform', () => {
         resolution: '1080p',
       });
 
+      expect(mockCreateGeneration).toHaveBeenCalledWith({
+        platform: 'toapi',
+        model: 'veo3.1-fast',
+        prompt: 'A cat running in a field',
+        duration: 8,
+        aspect_ratio: '16:9',
+        resolution: '1080p',
+        image_urls: undefined,
+      });
+
       expect(result.id).toBe('task_new');
       expect(result.status).toBe('queued');
       expect(result.platform).toBe('toapi');
       expect(result.model).toBe('veo3.1-fast');
+    });
+
+    it('should pass image_urls when provided', async () => {
+      mockCreateGeneration.mockResolvedValueOnce({
+        id: 'task_img',
+        platform: 'toapi',
+        model: 'veo3.1-fast',
+        prompt: 'Animate this image',
+        status: 'queued',
+        progress: 0,
+        created_at: '2026-02-14T00:00:00.000Z',
+        updated_at: '2026-02-14T00:00:00.000Z',
+      });
+
+      await platform.createVideoGeneration({
+        platform: 'toapi',
+        model: 'veo3.1-fast',
+        prompt: 'Animate this image',
+        duration: 8,
+        imageUrls: ['https://example.com/img.jpg'],
+      });
+
+      expect(mockCreateGeneration).toHaveBeenCalledWith(
+        expect.objectContaining({
+          image_urls: ['https://example.com/img.jpg'],
+        })
+      );
+    });
+
+    it('should reject invalid model', async () => {
+      await expect(
+        platform.createVideoGeneration({
+          platform: 'toapi',
+          model: 'invalid-model',
+          prompt: 'test',
+          duration: 8,
+        })
+      ).rejects.toThrow('Invalid params');
     });
   });
 });

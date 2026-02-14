@@ -1,12 +1,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, Search, Filter, ChevronLeft, ChevronRight } from 'lucide-react';
-import { getWorks, createWork, deleteWork, type Work, type WorkFilters, type ContentType, type WorkStatus, type Account } from '../api/works.api';
-
-// ============ 类型定义 ============
-
-// eslint-disable-next-line @typescript-eslint/no-empty-object-type
-interface WorksListPageProps {}
+import { Plus, Search, ChevronLeft, ChevronRight } from 'lucide-react';
+import { getWorks, createWork, type WorkFilters, type ContentType, type WorkStatus, type Account } from '../api/works.api';
 
 // ============ 常量 ============
 

@@ -1,5 +1,6 @@
 import pool from '../db/connection';
 import { ApiError } from '../middleware/error';
+import { ToAPIClient } from '../clients/toapi.client';
 
 export interface AiVideoGeneration {
   id: string;
@@ -19,13 +20,13 @@ export interface AiVideoGeneration {
 }
 
 export interface CreateAiVideoParams {
-  id: string;
   platform: string;
   model: string;
   prompt: string;
   duration?: number;
   aspect_ratio?: string;
   resolution?: string;
+  image_urls?: string[];
 }
 
 export interface UpdateAiVideoParams {
@@ -37,6 +38,12 @@ export interface UpdateAiVideoParams {
 }
 
 export class AiVideoService {
+  private toapiClient: ToAPIClient;
+
+  constructor() {
+    this.toapiClient = new ToAPIClient();
+  }
+
   async getAllGenerations(filters?: {
     status?: string;
     limit?: number;
@@ -83,12 +90,53 @@ export class AiVideoService {
   }
 
   async getGenerationById(id: string): Promise<AiVideoGeneration | null> {
+    // Get from database first
     const query = `
       SELECT * FROM zenithjoy.ai_video_generations
       WHERE id = $1
     `;
     const result = await pool.query(query, [id]);
-    return result.rows[0] || null;
+    const generation = result.rows[0];
+
+    if (!generation) {
+      return null;
+    }
+
+    // If task is not completed/failed, sync latest status from ToAPI
+    if (generation.platform === 'toapi' &&
+        generation.status !== 'completed' &&
+        generation.status !== 'failed') {
+      try {
+        const toapiTask = await this.toapiClient.getTaskStatus(id);
+
+        // Update database with latest status
+        const updateQuery = `
+          UPDATE zenithjoy.ai_video_generations
+          SET status = $1, progress = $2, video_url = $3, error_message = $4,
+              completed_at = $5, updated_at = NOW()
+          WHERE id = $6
+          RETURNING *
+        `;
+
+        const updateValues = [
+          toapiTask.status,
+          toapiTask.progress,
+          toapiTask.video_url || null,
+          toapiTask.error_message || null,
+          toapiTask.completed_at ? new Date(toapiTask.completed_at * 1000) : null,
+          id,
+        ];
+
+        const updateResult = await pool.query(updateQuery, updateValues);
+        return updateResult.rows[0];
+      } catch (error) {
+        console.error('[AiVideoService] Failed to sync ToAPI status:', error);
+        // Return cached database record if ToAPI sync fails
+        return generation;
+      }
+    }
+
+    return generation;
   }
 
   async getActiveGenerations(): Promise<AiVideoGeneration[]> {
@@ -102,6 +150,27 @@ export class AiVideoService {
   }
 
   async createGeneration(params: CreateAiVideoParams): Promise<AiVideoGeneration> {
+    // Step 1: Call ToAPI to create video generation task
+    let toapiTask;
+    try {
+      toapiTask = await this.toapiClient.createVideoGeneration({
+        model: params.model,
+        prompt: params.prompt,
+        duration: params.duration,
+        aspectRatio: params.aspect_ratio,
+        resolution: params.resolution,
+        imageUrls: params.image_urls,
+      });
+    } catch (error) {
+      console.error('[AiVideoService] ToAPI create error:', error);
+      throw new ApiError(
+        'TOAPI_ERROR',
+        `Failed to create video generation: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        500
+      );
+    }
+
+    // Step 2: Save to database with ToAPI task ID
     const query = `
       INSERT INTO zenithjoy.ai_video_generations (
         id, platform, model, prompt, status, progress,
@@ -111,12 +180,12 @@ export class AiVideoService {
     `;
 
     const values = [
-      params.id,
+      toapiTask.id,  // Use ToAPI task ID
       params.platform,
       params.model,
       params.prompt,
-      'queued',
-      0,
+      toapiTask.status,
+      toapiTask.progress,
       params.duration || null,
       params.aspect_ratio || null,
       params.resolution || null,
