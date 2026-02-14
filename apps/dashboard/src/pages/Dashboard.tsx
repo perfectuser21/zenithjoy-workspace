@@ -4,17 +4,9 @@ import {
   TrendingDown,
   Users,
   BarChart3,
-  Target,
-  Zap,
   Clock,
   CheckCircle,
   Video,
-  MessageCircle,
-  Image as ImageIcon,
-  Newspaper,
-  Tv,
-  Database,
-  FileText,
   Sparkles,
   Activity,
   Sun,
@@ -152,92 +144,66 @@ const getWeatherIcon = (code: string) => {
   return 'cloud'; // 多云
 };
 
-// 主要功能模块 - 蓝色系渐变
-const MAIN_FEATURES = [
+// 业务模块卡片 - 钻取式架构
+const BUSINESS_MODULES = [
   {
-    id: 'data-center',
-    title: '数据中心',
-    description: '实时监控各平台数据，查看历史趋势',
-    icon: BarChart3,
-    color: 'from-blue-500 to-blue-600',
-    badge: '实时',
-    link: '/data-center'
+    id: 'media',
+    title: '新媒体运营',
+    description: '内容采集、发布管理、数据分析',
+    icon: Video,
+    color: 'from-pink-500 to-rose-600',
+    link: '/media',
+    stats: {
+      label: '平台运营',
+      value: '7个',
+      subLabel: '今日发布',
+      subValue: '3条'
+    }
   },
   {
-    id: 'accounts',
-    title: '账号管理',
-    description: '管理多平台账号，统一授权和配置',
-    icon: Users,
-    color: 'from-indigo-500 to-indigo-600',
-    badge: '',
-    link: '/accounts'
-  },
-  {
-    id: 'content',
-    title: '内容管理',
-    description: '素材库、内容编辑、发布排期',
-    icon: FileText,
-    color: 'from-sky-500 to-cyan-600',
-    badge: '即将上线',
-    link: '#'
-  },
-  {
-    id: 'tools',
-    title: '工具箱',
-    description: '热点追踪、竞品分析、AI 助手',
+    id: 'ai',
+    title: 'AI 能力中心',
+    description: 'AI 员工、视频生成、自动化工作流',
     icon: Sparkles,
     color: 'from-violet-500 to-purple-600',
-    badge: '',
-    link: '/tools'
+    link: '/ai',
+    stats: {
+      label: 'AI 员工',
+      value: '8个',
+      subLabel: '视频生成',
+      subValue: '3次'
+    }
+  },
+  {
+    id: 'data',
+    title: '数据中心',
+    description: '跨平台数据分析、趋势洞察',
+    icon: BarChart3,
+    color: 'from-blue-500 to-cyan-600',
+    link: '/data',
+    stats: {
+      label: '播放量',
+      value: '1.2M',
+      subLabel: '互动率',
+      subValue: '5%'
+    }
+  },
+  {
+    id: 'system',
+    title: '系统监控',
+    description: '服务状态、任务执行、实时日志',
+    icon: Activity,
+    color: 'from-green-500 to-emerald-600',
+    link: '/system',
+    stats: {
+      label: '服务状态',
+      value: '正常',
+      subLabel: '运行任务',
+      subValue: '5个'
+    }
   }
 ];
 
-// 数据采集平台
-const SCRAPING_PLATFORMS = [
-  {
-    id: 'douyin',
-    name: '抖音',
-    icon: Video,
-    color: 'bg-pink-500',
-    endpoint: '/webhook/douyin-scraper'
-  },
-  {
-    id: 'xiaohongshu',
-    name: '小红书',
-    icon: ImageIcon,
-    color: 'bg-red-500',
-    endpoint: '/webhook/xhs-scraper'
-  },
-  {
-    id: 'weibo',
-    name: '微博',
-    icon: MessageCircle,
-    color: 'bg-orange-500',
-    endpoint: '/webhook/weibo-scraper'
-  },
-  {
-    id: 'toutiao',
-    name: '今日头条',
-    icon: Newspaper,
-    color: 'bg-blue-500',
-    endpoint: '/webhook/toutiao-scraper'
-  },
-  {
-    id: 'shipin',
-    name: '视频号',
-    icon: Tv,
-    color: 'bg-green-500',
-    endpoint: '/webhook/shipin-scraper'
-  }
-];
-
-// 快捷操作 - 立体卡片风格
-const QUICK_ACTIONS = [
-  { id: 'scrape', title: '数据采集', icon: Database, color: 'text-blue-600 dark:text-blue-400 bg-white dark:bg-slate-800 border-slate-300 dark:border-slate-600' },
-  { id: 'report', title: '生成报表', icon: FileText, color: 'text-indigo-600 dark:text-indigo-400 bg-white dark:bg-slate-800 border-slate-300 dark:border-slate-600' },
-  { id: 'hot', title: '热点监控', icon: Target, color: 'text-sky-600 dark:text-sky-400 bg-white dark:bg-slate-800 border-slate-300 dark:border-slate-600' },
-  { id: 'analysis', title: '数据分析', icon: Activity, color: 'text-violet-600 dark:text-violet-400 bg-white dark:bg-slate-800 border-slate-300 dark:border-slate-600' }
-];
 
 interface Task {
   id: string;
@@ -250,7 +216,6 @@ interface Task {
 export default function Dashboard() {
   const { user } = useAuth();
   const [tasks, setTasks] = useState<Task[]>([]);
-  const [showScrapingPanel, setShowScrapingPanel] = useState(false);
   const [dashboardStats, setDashboardStats] = useState<DashboardStats | null>(null);
   const [statsLoading, setStatsLoading] = useState(true);
 
@@ -414,58 +379,6 @@ export default function Dashboard() {
 
   const greeting = getDynamicGreeting();
 
-  const handleQuickAction = (actionId: string) => {
-    if (actionId === 'scrape') {
-      setShowScrapingPanel(!showScrapingPanel);
-    }
-  };
-
-  const handleStartScraping = async (platform: typeof SCRAPING_PLATFORMS[0]) => {
-    const newTask: Task = {
-      id: `${platform.id}-${Date.now()}`,
-      platform: platform.name,
-      status: 'running',
-      startTime: new Date()
-    };
-
-    setTasks(prev => [newTask, ...prev]);
-
-    try {
-      const response = await fetch(
-        `${import.meta.env.VITE_N8N_WEBHOOK_BASE}${platform.endpoint}`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            userId: user?.id,
-            platform: platform.id,
-            timestamp: new Date().toISOString()
-          })
-        }
-      );
-
-      if (response.ok) {
-        setTasks(prev =>
-          prev.map(task =>
-            task.id === newTask.id
-              ? { ...task, status: 'success', message: '采集完成' }
-              : task
-          )
-        );
-      } else {
-        throw new Error('采集失败');
-      }
-    } catch {
-      setTasks(prev =>
-        prev.map(task =>
-          task.id === newTask.id
-            ? { ...task, status: 'failed', message: '采集失败' }
-            : task
-        )
-      );
-    }
-  };
-
   return (
     <div className="px-4 sm:px-0 pb-8">
       {/* 欢迎区域 */}
@@ -585,105 +498,56 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* 快捷操作 */}
+      {/* 业务模块 - 钻取式入口 */}
       <div className="mb-8">
-        <h2 className="text-lg font-semibold text-slate-800 dark:text-white mb-4 flex items-center">
-          <Zap className="w-5 h-5 mr-2 text-blue-500 icon-float" />
-          快捷操作
-        </h2>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          {QUICK_ACTIONS.filter(a => a && a.icon).map((action, idx) => {
-            const Icon = action.icon;
-            return (
-              <button
-                key={action.id}
-                onClick={() => handleQuickAction(action.id)}
-                className={`group ${action.color} rounded-2xl p-5 flex flex-col items-center justify-center shadow-[0_4px_16px_-2px_rgba(0,0,0,0.1),0_2px_6px_-2px_rgba(0,0,0,0.06)] border border-slate-200 dark:border-slate-700 magnetic-btn relative overflow-hidden`}
-                style={{ animationDelay: `${idx * 0.05}s` }}
-              >
-                {/* 悬停光效 */}
-                <div className="absolute inset-0 bg-gradient-to-br from-blue-500/0 via-blue-500/5 to-cyan-500/0 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-
-                <div className="relative">
-                  <Icon className="w-6 h-6 mb-2 transition-all duration-500 group-hover:scale-125 group-hover:rotate-12 group-hover:text-blue-500 dark:group-hover:text-blue-400" />
-                </div>
-                <span className="text-sm font-medium text-slate-700 dark:text-slate-200 relative">{action.title}</span>
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* 数据采集面板（可展开） */}
-      {showScrapingPanel && (
-        <div className="mb-8 bg-white dark:bg-slate-800 rounded-2xl p-6 border border-slate-200 dark:border-slate-700 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.1)] hover:shadow-lg transition-all duration-300">
-          <h3 className="text-lg font-semibold text-slate-800 dark:text-white mb-5 flex items-center">
-            <Database className="w-5 h-5 mr-2 text-blue-500" />
-            数据采集
-          </h3>
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-            {SCRAPING_PLATFORMS.filter(p => p && p.icon).map((platform) => {
-              const Icon = platform.icon;
-              const isRunning = tasks.some(
-                t => t.platform === platform.name && t.status === 'running'
-              );
-              return (
-                <button
-                  key={platform.id}
-                  onClick={() => handleStartScraping(platform)}
-                  disabled={isRunning}
-                  className={`${platform.color} text-white rounded-xl p-5 flex flex-col items-center justify-center hover:shadow-lg hover:-translate-y-0.5 transition-all duration-300 ${
-                    isRunning ? 'opacity-60 cursor-not-allowed' : ''
-                  }`}
-                >
-                  <Icon className="w-8 h-8 mb-2" />
-                  <span className="text-sm font-medium">{platform.name}</span>
-                  {isRunning && (
-                    <div className="mt-2 text-xs opacity-90">采集中...</div>
-                  )}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
-      {/* 主要功能模块 */}
-      <div className="mb-8">
-        <h2 className="text-lg font-semibold text-slate-800 dark:text-white mb-4">功能模块</h2>
+        <h2 className="text-lg font-semibold text-slate-800 dark:text-white mb-4">业务总览</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-          {MAIN_FEATURES.filter(f => f && f.icon).map((feature) => {
-            const Icon = feature.icon;
+          {BUSINESS_MODULES.filter(m => m && m.icon).map((module) => {
+            const Icon = module.icon;
             return (
               <a
-                key={feature.id}
-                href={feature.link}
+                key={module.id}
+                href={module.link}
                 className="group relative bg-white dark:bg-slate-800 rounded-2xl shadow-[0_4px_24px_-2px_rgba(0,0,0,0.12),0_2px_8px_-2px_rgba(0,0,0,0.08)] hover:shadow-[0_15px_40px_-10px_rgba(52,103,214,0.25)] transition-all duration-300 overflow-hidden border border-slate-200 dark:border-slate-700 shimmer-card spring-hover"
               >
-                {/* 渐变背景 - 浅色模式更明显 */}
-                <div className={`absolute inset-0 bg-gradient-to-br ${feature.color} opacity-0 group-hover:opacity-[0.08] dark:group-hover:opacity-[0.15] transition-opacity duration-300`}></div>
+                {/* 渐变背景 */}
+                <div className={`absolute inset-0 bg-gradient-to-br ${module.color} opacity-0 group-hover:opacity-[0.08] dark:group-hover:opacity-[0.15] transition-opacity duration-300`}></div>
 
                 <div className="relative p-7">
+                  {/* 图标 + 标题 */}
                   <div className="flex items-start justify-between mb-4">
                     <div
-                      className={`bg-gradient-to-br ${feature.color} rounded-xl p-3 shadow-lg ring-4 ring-white/20 dark:ring-slate-700/50 group-hover:shadow-xl group-hover:scale-110 transition-transform duration-300`}
+                      className={`bg-gradient-to-br ${module.color} rounded-xl p-3 shadow-lg ring-4 ring-white/20 dark:ring-slate-700/50 group-hover:shadow-xl group-hover:scale-110 transition-transform duration-300`}
                     >
                       <Icon className="w-6 h-6 text-white" />
                     </div>
-                    {feature.badge && (
-                      <span className="text-xs font-medium px-2.5 py-1 bg-blue-50 dark:bg-blue-900/50 text-blue-600 dark:text-blue-300 rounded-lg border border-blue-100 dark:border-blue-800 shadow-sm group-hover:shadow-md transition-shadow">
-                        {feature.badge}
-                      </span>
-                    )}
                   </div>
+
+                  {/* 模块标题 */}
                   <h3 className="text-xl font-semibold text-slate-800 dark:text-white mb-2 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors duration-300">
-                    {feature.title}
+                    {module.title}
                   </h3>
-                  <p className="text-slate-500 dark:text-slate-400 text-sm leading-relaxed">
-                    {feature.description}
+
+                  {/* 模块描述 */}
+                  <p className="text-slate-500 dark:text-slate-400 text-sm leading-relaxed mb-4">
+                    {module.description}
                   </p>
-                  <div className="mt-5 flex items-center text-sm font-medium text-slate-700 dark:text-slate-300 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-all duration-300">
-                    进入 <span className="ml-1 group-hover:translate-x-2 transition-transform duration-300">→</span>
+
+                  {/* 汇总数据 */}
+                  <div className="grid grid-cols-2 gap-3 mb-4">
+                    <div className="bg-slate-50 dark:bg-slate-700/50 rounded-lg p-3">
+                      <div className="text-xs text-slate-500 dark:text-slate-400 mb-1">{module.stats.label}</div>
+                      <div className="text-lg font-bold text-slate-800 dark:text-white">{module.stats.value}</div>
+                    </div>
+                    <div className="bg-slate-50 dark:bg-slate-700/50 rounded-lg p-3">
+                      <div className="text-xs text-slate-500 dark:text-slate-400 mb-1">{module.stats.subLabel}</div>
+                      <div className="text-lg font-bold text-slate-800 dark:text-white">{module.stats.subValue}</div>
+                    </div>
+                  </div>
+
+                  {/* 查看详情箭头 */}
+                  <div className="flex items-center text-sm font-medium text-slate-700 dark:text-slate-300 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-all duration-300">
+                    查看详情 <span className="ml-1 group-hover:translate-x-2 transition-transform duration-300">→</span>
                   </div>
                 </div>
               </a>
