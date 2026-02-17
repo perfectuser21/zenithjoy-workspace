@@ -1,6 +1,6 @@
 {
   "name": "zenithjoy-workspace",
-  "version": "1.8.4",
+  "version": "1.9.0",
   "description": "ZenithJoy Workspace - Social media automation platform monorepo",
   "private": true,
   "type": "module",
