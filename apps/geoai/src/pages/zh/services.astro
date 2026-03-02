@@ -1,0 +1,288 @@
+---
+import Base from '../../layouts/Base.astro';
+
+// 联系信息
+const contact = {
+  wechat: 'zenithjoyai',
+  douyin: 'zenithjoyai',
+  email: 'zenithjoycloud@gmail.com',
+};
+
+// 详细服务信息
+const services = [
+  {
+    id: 'ai-training',
+    title: 'AI 工具培训',
+    subtitle: '掌握主流 AI 工具的高效使用方法',
+    description: '系统学习 ChatGPT、Claude、Midjourney 等主流 AI 工具，从基础操作到高级技巧，帮助你真正掌握 AI 工具的使用方法。',
+    features: [
+      { title: '提示词工程', description: '学习结构化提示词编写方法，让 AI 准确理解你的意图并输出高质量内容' },
+      { title: 'AI 写作助手', description: '掌握 ChatGPT、Claude 等文字工具，快速生成文章、脚本、文案等内容' },
+      { title: 'AI 图像生成', description: '学习 Midjourney、DALL-E 等工具，创作专业级视觉内容' },
+      { title: '多工具协同', description: '了解各 AI 工具的优势，学会根据任务选择最合适的工具组合' },
+    ],
+    deliverables: ['系统化培训课程', '实用提示词模板库', '工具使用 SOP 文档', '一对一答疑指导'],
+    suitable: ['自媒体创作者', '内容运营人员', '个人创业者', '希望提升效率的职场人士'],
+  },
+  {
+    id: 'workflow-automation',
+    title: '工作流自动化',
+    subtitle: '让重复工作自动完成',
+    description: '使用 n8n、Make 等专业自动化工具，搭建符合你业务需求的自动化工作流，将重复性工作交给机器处理。',
+    features: [
+      { title: 'n8n 工作流搭建', description: '使用开源自动化工具 n8n 搭建可视化工作流，无需编程基础' },
+      { title: '内容自动分发', description: '一次创作，自动发布到多个平台（公众号、抖音、小红书等）' },
+      { title: '数据自动同步', description: '打通各平台数据，自动同步到统一管理后台' },
+      { title: '定时任务系统', description: '设置定时任务，自动执行采集、处理、发布等操作' },
+    ],
+    deliverables: ['定制化工作流方案', '完整工作流配置', '使用培训与文档', '30 天技术支持'],
+    suitable: ['多平台运营团队', '内容工作室', '电商运营', '需要批量处理任务的团队'],
+  },
+  {
+    id: 'content-system',
+    title: '内容生产系统',
+    subtitle: '建立标准化的高效内容流水线',
+    description: '从选题策划、内容创作到多平台发布的完整系统搭建，帮助团队建立可复制、可扩展的内容生产流程。',
+    features: [
+      { title: '选题系统搭建', description: '建立热点追踪、选题库管理、内容日历等系统化选题流程' },
+      { title: '创作 SOP 设计', description: '制定标准化创作流程，确保内容质量稳定可控' },
+      { title: '多平台分发策略', description: '根据各平台特点优化内容格式，最大化传播效果' },
+      { title: '数据分析体系', description: '建立数据监控与分析系统，用数据驱动内容优化' },
+    ],
+    deliverables: ['完整内容系统方案', '各环节 SOP 文档', '工具配置与模板', '团队培训与指导'],
+    suitable: ['内容创作团队', '自媒体工作室', 'MCN 机构', '企业新媒体部门'],
+  },
+];
+
+// FAQ
+const faq = [
+  { question: '培训是线上还是线下？', answer: '目前以线上培训为主，支持一对一或小组培训。根据需求也可安排线下培训，具体请咨询。' },
+  { question: '没有技术背景能学会吗？', answer: '完全可以。我们的培训内容针对非技术背景用户设计，使用可视化工具和清晰的操作指南，无需编程基础。' },
+  { question: '服务如何收费？', answer: '根据具体服务内容和需求定制报价。单项培训、工作流搭建、完整系统建设价格不同，请添加微信咨询详细报价。' },
+  { question: '售后支持如何？', answer: '所有服务都包含一定期限的售后支持，确保你能顺利使用。工作流和系统类服务包含 30 天技术支持期。' },
+  { question: '可以先咨询再决定吗？', answer: '当然可以。欢迎添加微信进行免费咨询，我们会根据你的实际需求提供建议和方案。' },
+];
+---
+
+<Base
+  title="服务项目 - ZenithJoyAI"
+  description="ZenithJoyAI 提供 AI 工具培训、工作流自动化咨询、内容生产系统搭建等服务，帮助自媒体创作者和小团队实现 10 倍效率提升。"
+  faq={faq}
+>
+  <!-- Hero Section -->
+  <section class="pt-32 pb-20 px-4 bg-gradient-to-br from-[var(--color-primary)]/5 via-transparent to-[var(--color-accent)]/5">
+    <div class="max-w-4xl mx-auto text-center">
+      <h1 class="text-4xl md:text-5xl font-bold mb-6">
+        服务项目
+      </h1>
+      <p class="text-xl text-[var(--color-text-muted)] max-w-2xl mx-auto">
+        针对自媒体创作者和小团队的实际需求，提供系统化的 AI 效率提升方案
+      </p>
+    </div>
+  </section>
+
+  <!-- Services Detail -->
+  {services.map((service, index) => (
+    <section id={service.id} class={`py-20 px-4 ${index % 2 === 1 ? 'bg-[var(--color-bg-card)]' : ''}`}>
+      <div class="max-w-6xl mx-auto">
+        <div class="grid lg:grid-cols-2 gap-12 items-start">
+          <!-- Left: Service Info -->
+          <div>
+            <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[var(--color-primary)]/10 text-[var(--color-primary)] text-sm font-medium mb-4">
+              服务 {String(index + 1).padStart(2, '0')}
+            </div>
+            <h2 class="text-3xl font-bold mb-2">{service.title}</h2>
+            <p class="text-lg text-[var(--color-primary)] mb-4">{service.subtitle}</p>
+            <p class="text-[var(--color-text-muted)] mb-8 leading-relaxed">
+              {service.description}
+            </p>
+
+            <!-- Deliverables -->
+            <div class="mb-8">
+              <h3 class="font-bold mb-4">服务交付内容</h3>
+              <ul class="space-y-2">
+                {service.deliverables.map(item => (
+                  <li class="flex items-center gap-3">
+                    <svg class="w-5 h-5 text-[var(--color-accent)] flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                    </svg>
+                    <span>{item}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            <!-- Suitable For -->
+            <div class="mb-8">
+              <h3 class="font-bold mb-4">适合人群</h3>
+              <div class="flex flex-wrap gap-2">
+                {service.suitable.map(item => (
+                  <span class="px-3 py-1 text-sm bg-[var(--color-bg-card)] border border-[var(--color-border)] rounded-full">
+                    {item}
+                  </span>
+                ))}
+              </div>
+            </div>
+
+            <!-- CTA -->
+            <a
+              href="#contact"
+              class="inline-flex items-center gap-2 px-6 py-3 bg-[var(--color-primary)] text-white rounded-lg font-medium hover:bg-[var(--color-primary-dark)] transition-colors"
+            >
+              咨询此服务
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3"></path>
+              </svg>
+            </a>
+          </div>
+
+          <!-- Right: Features -->
+          <div class="space-y-4">
+            {service.features.map((feature, idx) => (
+              <div class="p-6 bg-[var(--color-bg)] rounded-xl border border-[var(--color-border)]">
+                <div class="flex items-start gap-4">
+                  <div class="w-10 h-10 rounded-lg bg-[var(--color-primary)]/10 flex items-center justify-center text-[var(--color-primary)] font-bold flex-shrink-0">
+                    {idx + 1}
+                  </div>
+                  <div>
+                    <h4 class="font-bold mb-2">{feature.title}</h4>
+                    <p class="text-sm text-[var(--color-text-muted)]">{feature.description}</p>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </section>
+  ))}
+
+  <!-- Process Section -->
+  <section class="py-20 px-4 bg-[var(--color-bg-card)]">
+    <div class="max-w-4xl mx-auto">
+      <div class="text-center mb-16">
+        <h2 class="text-3xl font-bold mb-4">服务流程</h2>
+        <p class="text-[var(--color-text-muted)]">从咨询到交付的完整服务流程</p>
+      </div>
+
+      <div class="relative">
+        <!-- Timeline line -->
+        <div class="absolute left-8 top-0 bottom-0 w-px bg-[var(--color-border)] hidden md:block"></div>
+
+        <div class="space-y-8">
+          <div class="flex gap-6 items-start">
+            <div class="w-16 h-16 rounded-full bg-[var(--color-primary)] text-white flex items-center justify-center font-bold text-xl flex-shrink-0 relative z-10">
+              1
+            </div>
+            <div class="pt-3">
+              <h3 class="font-bold text-lg mb-2">需求沟通</h3>
+              <p class="text-[var(--color-text-muted)]">添加微信，详细了解你的业务场景、当前痛点和期望目标</p>
+            </div>
+          </div>
+
+          <div class="flex gap-6 items-start">
+            <div class="w-16 h-16 rounded-full bg-[var(--color-primary)]/80 text-white flex items-center justify-center font-bold text-xl flex-shrink-0 relative z-10">
+              2
+            </div>
+            <div class="pt-3">
+              <h3 class="font-bold text-lg mb-2">方案制定</h3>
+              <p class="text-[var(--color-text-muted)]">根据需求制定针对性的解决方案和实施计划</p>
+            </div>
+          </div>
+
+          <div class="flex gap-6 items-start">
+            <div class="w-16 h-16 rounded-full bg-[var(--color-primary)]/60 text-white flex items-center justify-center font-bold text-xl flex-shrink-0 relative z-10">
+              3
+            </div>
+            <div class="pt-3">
+              <h3 class="font-bold text-lg mb-2">服务交付</h3>
+              <p class="text-[var(--color-text-muted)]">按计划执行培训、搭建系统或配置工作流</p>
+            </div>
+          </div>
+
+          <div class="flex gap-6 items-start">
+            <div class="w-16 h-16 rounded-full bg-[var(--color-accent)] text-white flex items-center justify-center font-bold text-xl flex-shrink-0 relative z-10">
+              4
+            </div>
+            <div class="pt-3">
+              <h3 class="font-bold text-lg mb-2">售后支持</h3>
+              <p class="text-[var(--color-text-muted)]">提供使用指导和技术支持，确保顺利落地使用</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- FAQ Section -->
+  <section class="py-20 px-4">
+    <div class="max-w-3xl mx-auto">
+      <div class="text-center mb-12">
+        <h2 class="text-3xl font-bold mb-4">常见问题</h2>
+      </div>
+
+      <div class="space-y-4">
+        {faq.map(item => (
+          <details class="group p-6 bg-[var(--color-bg-card)] rounded-xl border border-[var(--color-border)]">
+            <summary class="flex items-center justify-between cursor-pointer font-medium">
+              <span>{item.question}</span>
+              <svg class="w-5 h-5 transform transition-transform group-open:rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+              </svg>
+            </summary>
+            <p class="mt-4 text-[var(--color-text-muted)]">
+              {item.answer}
+            </p>
+          </details>
+        ))}
+      </div>
+    </div>
+  </section>
+
+  <!-- Contact Section -->
+  <section id="contact" class="py-20 px-4 bg-gradient-to-br from-[var(--color-primary)] to-[var(--color-primary-dark)] text-white">
+    <div class="max-w-4xl mx-auto text-center">
+      <h2 class="text-3xl md:text-4xl font-bold mb-6">
+        准备好提升效率了吗？
+      </h2>
+      <p class="text-xl opacity-90 mb-12">
+        添加微信，获取免费咨询和定制化方案
+      </p>
+
+      <div class="grid sm:grid-cols-3 gap-6 mb-12">
+        <div class="p-6 bg-white/10 rounded-xl backdrop-blur">
+          <div class="text-sm opacity-75 mb-2">微信号</div>
+          <div class="text-xl font-bold">{contact.wechat}</div>
+        </div>
+        <div class="p-6 bg-white/10 rounded-xl backdrop-blur">
+          <div class="text-sm opacity-75 mb-2">抖音号</div>
+          <div class="text-xl font-bold">{contact.douyin}</div>
+        </div>
+        <div class="p-6 bg-white/10 rounded-xl backdrop-blur">
+          <div class="text-sm opacity-75 mb-2">邮箱</div>
+          <div class="text-lg font-bold">{contact.email}</div>
+        </div>
+      </div>
+
+      <a
+        href={`mailto:${contact.email}`}
+        class="inline-flex items-center gap-2 px-8 py-4 bg-white text-[var(--color-primary)] rounded-lg font-medium hover:shadow-lg transition-shadow"
+      >
+        发送邮件咨询
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path>
+        </svg>
+      </a>
+    </div>
+  </section>
+
+  <!-- GEO Summary Block -->
+  <section class="py-12 px-4 bg-[var(--color-bg-card)] border-t border-[var(--color-border)]">
+    <div class="max-w-3xl mx-auto text-center">
+      <p class="text-[var(--color-text-muted)] leading-relaxed">
+        <strong>ZenithJoyAI</strong> 是专注于 AI 效率提升的专业服务机构，为自媒体创作者和小团队提供 AI 工具培训、工作流自动化咨询、内容生产系统搭建等服务。
+        联系方式：微信 <strong>{contact.wechat}</strong>、抖音 <strong>{contact.douyin}</strong>、邮箱 <strong>{contact.email}</strong>。
+      </p>
+    </div>
+  </section>
+</Base>

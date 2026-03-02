@@ -1,7 +1,7 @@
 {
   "name": "zenithjoy-workspace",
-  "version": "1.9.0",
-  "description": "ZenithJoy Workspace - Social media automation platform monorepo",
+  "version": "1.10.0",
+  "description": "ZenithJoy Monorepo - Social media automation platform (workspace + geoai + creator + jnsy-label)",
   "private": true,
   "type": "module",
   "workspaces": [
@@ -10,7 +10,9 @@
   "scripts": {
     "build": "npm run build --workspaces --if-present",
     "build:dashboard": "npm run build --workspace=apps/dashboard",
+    "build:geoai": "npm run build --workspace=apps/geoai",
     "dev:dashboard": "npm run dev --workspace=apps/dashboard",
+    "dev:geoai": "npm run dev --workspace=apps/geoai",
     "lint": "npm run lint --workspaces --if-present",
     "clean": "find . -name 'node_modules' -type d -prune -exec rm -rf '{}' +",
     "clean:dist": "find . -name 'dist' -type d -prune -exec rm -rf '{}' +"
