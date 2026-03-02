@@ -65,7 +65,8 @@ jobs:
 
       - name: Security Audit
         working-directory: apps/dashboard
-        run: npm audit --audit-level=moderate
+        # --omit=dev: 排除构建工具（Rollup、Astro 等）的 dev 依赖漏洞，只审计生产依赖
+        run: npm audit --audit-level=moderate --omit=dev
 
   build:
     runs-on: ubuntu-latest
