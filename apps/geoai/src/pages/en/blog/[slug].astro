@@ -1,0 +1,110 @@
+---
+import Article from '../../../layouts/Article.astro';
+import Post from '../../../layouts/Post.astro';
+import { getPostBySlug, getAllPosts } from '../../../data/posts';
+
+// Static path generation
+export async function getStaticPaths() {
+  const posts = await getAllPosts('en');
+  return posts.map(post => ({
+    params: { slug: post.slug },
+  }));
+}
+
+const { slug } = Astro.params;
+const post = await getPostBySlug(slug!, 'en');
+
+if (!post) {
+  return Astro.redirect('/en/blog');
+}
+
+// Determine if short post or long article
+const isShortPost = post.content.length < 500 &&
+                    (!post.faq || post.faq.length === 0) &&
+                    (!post.keyTakeaways || post.keyTakeaways.length === 0);
+
+// Simple Markdown to HTML
+function simpleMarkdownToHtml(md: string): string {
+  return md
+    .replace(/```(\w*)\n([\s\S]*?)```/g, '<pre><code class="language-$1">$2</code></pre>')
+    .replace(/`([^`]+)`/g, '<code>$1</code>')
+    .replace(/^### (.*$)/gim, '<h3>$1</h3>')
+    .replace(/^## (.*$)/gim, '<h2>$1</h2>')
+    .replace(/^# (.*$)/gim, '<h1>$1</h1>')
+    .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*([^*]+)\*/g, '<em>$1</em>')
+    .replace(/^> (.*$)/gim, '<blockquote><p>$1</p></blockquote>')
+    .replace(/^- (.*$)/gim, '<li>$1</li>')
+    .replace(/^\d+\. (.*$)/gim, '<li>$1</li>')
+    .replace(/\|(.+)\|/g, (match, content) => {
+      const cells = content.split('|').map((c: string) => c.trim());
+      if (cells.every((c: string) => /^[-:]+$/.test(c))) return '';
+      const tag = content.includes('---') ? 'th' : 'td';
+      return '<tr>' + cells.map((c: string) => `<${tag}>${c}</${tag}>`).join('') + '</tr>';
+    })
+    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2">$1</a>')
+    .replace(/\n\n/g, '</p><p>');
+}
+
+const contentHtml = simpleMarkdownToHtml(post.content);
+---
+
+{isShortPost ? (
+  <!-- Short content: Social post style -->
+  <Post
+    title={post.title}
+    content={post.content}
+    image={post.thumbnailUrl}
+    publishDate={post.publishDate}
+    slug={slug}
+  />
+) : (
+  <!-- Long article: Blog style -->
+  <Article
+    slug={slug}
+    title={post.title}
+    description={post.description}
+    publishDate={post.publishDate}
+    modifiedDate={post.modifiedDate}
+    tags={post.tags}
+    readingTime={post.readingTime}
+    faq={post.faq}
+    image={post.thumbnailUrl}
+  >
+    <!-- Key Takeaways (GEO Optimization) -->
+    {post.keyTakeaways && post.keyTakeaways.length > 0 && (
+      <aside class="not-prose mb-8 p-6 bg-gradient-to-br from-[var(--color-primary)]/5 to-[var(--color-accent)]/5 rounded-xl border border-[var(--color-primary)]/20">
+        <h2 class="text-lg font-bold mb-4 uppercase tracking-wide">
+          Key Takeaways
+        </h2>
+        <ul class="space-y-2">
+          {post.keyTakeaways.map((point) => (
+            <li class="flex items-start gap-2">
+              <svg class="w-4 h-4 text-[var(--color-accent)] mt-1 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+              </svg>
+              <span>{point}</span>
+            </li>
+          ))}
+        </ul>
+      </aside>
+    )}
+
+    <!-- Main Content -->
+    <Fragment set:html={contentHtml} />
+
+    <!-- Quotable Insights (GEO) -->
+    {post.quotableInsights && post.quotableInsights.length > 0 && (
+      <aside class="not-prose mt-12 space-y-4">
+        <h2 class="text-lg font-bold uppercase tracking-wide">
+          Expert Insights
+        </h2>
+        {post.quotableInsights.map((insight) => (
+          <blockquote class="p-4 bg-[var(--color-bg-card)] border-l-4 border-[var(--color-primary)] rounded-r-lg italic">
+            "{insight}"
+          </blockquote>
+        ))}
+      </aside>
+    )}
+  </Article>
+)}

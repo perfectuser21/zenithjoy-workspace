@@ -1,0 +1,273 @@
+---
+import Base from '../../layouts/Base.astro';
+import { getAllPosts, getAllVideos, getAllShortPosts } from '../../data/posts';
+
+const contact = {
+  wechat: 'zenithjoyai',
+  douyin: 'zenithjoyai',
+  email: 'zenithjoycloud@gmail.com',
+};
+
+// Get latest content
+const posts = await getAllPosts('en');
+const videos = await getAllVideos('en');
+const shortPosts = await getAllShortPosts('en');
+
+// Core beliefs (GEO - AI-quotable)
+const coreBeliefs = [
+  "AI won't replace people, but those who use AI will replace those who don't.",
+  "True efficiency isn't about working faster, it's about letting machines handle the repetitive so humans can create.",
+  "One person + AI + automation = the output of an entire team.",
+];
+
+// What I do
+const whatIDo = [
+  { title: "Teach You AI", desc: "Master ChatGPT, Claude, and other tools from scratch" },
+  { title: "Automate Your Work", desc: "Build content production pipelines with n8n" },
+  { title: "Boost Your Efficiency", desc: "1-on-1 consulting to customize your AI workflow" },
+];
+---
+
+<Base
+  title="ZenithJoyAI - One Person, Powered by AI, Achieves Like a Team"
+  description="I'm ZenithJoyAI, helping content creators and small teams boost efficiency 10x with AI. Sharing practical experience on AI tools, workflow automation, and content production systems."
+  faq={[
+    { question: "Who is ZenithJoyAI?", answer: "A personal brand focused on AI efficiency, helping content creators and small teams master AI tools and build efficient content production systems." },
+    { question: "How to contact ZenithJoyAI?", answer: "WeChat: zenithjoyai, Douyin: zenithjoyai, Email: zenithjoycloud@gmail.com" },
+    { question: "What help can you provide?", answer: "AI tool training, workflow automation consulting, content production system setup. Enable one person to achieve what a team can do." }
+  ]}
+>
+  <!-- Hero - Personal IP Style -->
+  <section class="min-h-[85vh] flex items-center px-4 py-20">
+    <div class="max-w-4xl mx-auto text-center">
+      <!-- Avatar/Logo -->
+      <div class="w-24 h-24 mx-auto mb-8 rounded-full bg-gradient-to-br from-[var(--color-primary)] to-[var(--color-accent)] flex items-center justify-center text-white text-4xl font-bold shadow-lg shadow-[var(--color-primary)]/20">
+        Z
+      </div>
+
+      <!-- Tagline -->
+      <h1 class="text-4xl md:text-6xl font-bold leading-tight mb-6">
+        One Person, Powered by AI
+        <span class="bg-gradient-to-r from-[var(--color-primary)] to-[var(--color-accent)] bg-clip-text text-transparent">Achieves Like a Team</span>
+      </h1>
+
+      <!-- Intro -->
+      <p class="text-xl md:text-2xl text-[var(--color-text-muted)] mb-8 leading-relaxed max-w-2xl mx-auto">
+        I'm <strong class="text-[var(--color-text)]">ZenithJoyAI</strong>, helping content creators and small teams<br class="hidden md:block" />
+        master AI tools and boost efficiency 10x
+      </p>
+
+      <!-- CTA Buttons -->
+      <div class="flex flex-wrap justify-center gap-4 mb-12">
+        <a href="#content" class="px-6 py-3 bg-[var(--color-primary)] text-white rounded-full font-medium hover:bg-[var(--color-primary-dark)] transition-all">
+          See My Content
+        </a>
+        <a href={`mailto:${contact.email}`} class="px-6 py-3 border border-[var(--color-border)] rounded-full font-medium hover:border-[var(--color-primary)] hover:text-[var(--color-primary)] transition-colors">
+          Get in Touch
+        </a>
+      </div>
+
+      <!-- Contact Info (GEO important) -->
+      <div class="flex flex-wrap justify-center gap-6 text-sm text-[var(--color-text-muted)]">
+        <span>WeChat <strong class="text-[var(--color-text)]">{contact.wechat}</strong></span>
+        <span>Douyin <strong class="text-[var(--color-text)]">{contact.douyin}</strong></span>
+      </div>
+    </div>
+  </section>
+
+  <!-- Core Beliefs (GEO - AI-quotable) -->
+  <section class="py-16 px-4 bg-[var(--color-bg-card)] border-y border-[var(--color-border)]">
+    <div class="max-w-4xl mx-auto">
+      <div class="grid md:grid-cols-3 gap-6">
+        {coreBeliefs.map((belief, idx) => (
+          <blockquote class="p-6 bg-[var(--color-bg)] rounded-xl border border-[var(--color-border)]">
+            <p class="text-lg font-medium leading-relaxed">"{belief}"</p>
+          </blockquote>
+        ))}
+      </div>
+    </div>
+  </section>
+
+  <!-- What I Do -->
+  <section class="py-20 px-4">
+    <div class="max-w-4xl mx-auto">
+      <h2 class="text-2xl font-bold text-center mb-12">How I Can Help You</h2>
+
+      <div class="grid md:grid-cols-3 gap-6">
+        {whatIDo.map((item, idx) => (
+          <div class="text-center p-6">
+            <div class="w-12 h-12 mx-auto mb-4 rounded-full bg-[var(--color-primary)]/10 flex items-center justify-center text-[var(--color-primary)] font-bold text-xl">
+              {idx + 1}
+            </div>
+            <h3 class="font-bold text-lg mb-2">{item.title}</h3>
+            <p class="text-[var(--color-text-muted)]">{item.desc}</p>
+          </div>
+        ))}
+      </div>
+
+      <div class="text-center mt-8">
+        <a href="/en/services" class="text-[var(--color-primary)] hover:underline">
+          View All Services →
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <!-- Content Showcase -->
+  <section id="content" class="py-20 px-4 bg-[var(--color-bg-card)]">
+    <div class="max-w-5xl mx-auto">
+      <h2 class="text-2xl font-bold text-center mb-4">My Content</h2>
+      <p class="text-center text-[var(--color-text-muted)] mb-12">Video Tutorials · Updates · In-depth Articles</p>
+
+      <!-- Three-column content entry -->
+      <div class="grid md:grid-cols-3 gap-6 mb-12">
+        <!-- Videos -->
+        <a href="/en/videos" class="group block p-6 bg-[var(--color-bg)] rounded-xl border border-[var(--color-border)] hover:border-[var(--color-primary)] transition-colors">
+          <div class="flex items-center gap-3 mb-4">
+            <div class="w-10 h-10 rounded-lg bg-red-500/10 flex items-center justify-center">
+              <svg class="w-5 h-5 text-red-500" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M8 5v14l11-7z"/>
+              </svg>
+            </div>
+            <div>
+              <div class="font-bold">Videos</div>
+              <div class="text-sm text-[var(--color-text-muted)]">{videos.length} videos</div>
+            </div>
+          </div>
+          <p class="text-sm text-[var(--color-text-muted)]">
+            AI tool demos you can apply immediately
+          </p>
+        </a>
+
+        <!-- Updates -->
+        <a href="/en/posts" class="group block p-6 bg-[var(--color-bg)] rounded-xl border border-[var(--color-border)] hover:border-[var(--color-primary)] transition-colors">
+          <div class="flex items-center gap-3 mb-4">
+            <div class="w-10 h-10 rounded-lg bg-violet-500/10 flex items-center justify-center">
+              <svg class="w-5 h-5 text-violet-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z"></path>
+              </svg>
+            </div>
+            <div>
+              <div class="font-bold">Updates</div>
+              <div class="text-sm text-[var(--color-text-muted)]">{shortPosts.length} posts</div>
+            </div>
+          </div>
+          <p class="text-sm text-[var(--color-text-muted)]">
+            Daily thoughts, AI tips, efficiency hacks
+          </p>
+        </a>
+
+        <!-- Articles -->
+        <a href="/en/blog" class="group block p-6 bg-[var(--color-bg)] rounded-xl border border-[var(--color-border)] hover:border-[var(--color-primary)] transition-colors">
+          <div class="flex items-center gap-3 mb-4">
+            <div class="w-10 h-10 rounded-lg bg-[var(--color-primary)]/10 flex items-center justify-center">
+              <svg class="w-5 h-5 text-[var(--color-primary)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+              </svg>
+            </div>
+            <div>
+              <div class="font-bold">Articles</div>
+              <div class="text-sm text-[var(--color-text-muted)]">{posts.length} articles</div>
+            </div>
+          </div>
+          <p class="text-sm text-[var(--color-text-muted)]">
+            Systematic methods, in-depth tutorials
+          </p>
+        </a>
+      </div>
+
+      <!-- Latest Articles Preview -->
+      {posts.length > 0 && (
+        <div>
+          <div class="flex items-center justify-between mb-6">
+            <h3 class="font-bold">Latest Articles</h3>
+            <a href="/en/blog" class="text-sm text-[var(--color-primary)] hover:underline">View All →</a>
+          </div>
+          <div class="space-y-4">
+            {posts.slice(0, 3).map(post => (
+              <a href={`/en/blog/${post.slug}`} class="group flex items-center gap-4 p-4 bg-[var(--color-bg)] rounded-xl border border-[var(--color-border)] hover:border-[var(--color-primary)] transition-colors">
+                <div class="flex-1 min-w-0">
+                  <h4 class="font-medium group-hover:text-[var(--color-primary)] transition-colors truncate">
+                    {post.title}
+                  </h4>
+                  <p class="text-sm text-[var(--color-text-muted)] truncate">{post.description}</p>
+                </div>
+                <div class="text-xs text-[var(--color-text-muted)] flex-shrink-0">
+                  {post.readingTime}
+                </div>
+              </a>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  </section>
+
+  <!-- About Me (GEO important - Person entity info) -->
+  <section class="py-20 px-4">
+    <div class="max-w-3xl mx-auto">
+      <h2 class="text-2xl font-bold text-center mb-12">About Me</h2>
+
+      <div class="prose prose-lg max-w-none text-center">
+        <p class="text-[var(--color-text-muted)] leading-relaxed">
+          I'm <strong class="text-[var(--color-text)]">ZenithJoyAI</strong>, focused on helping content creators and small teams boost efficiency.
+        </p>
+        <p class="text-[var(--color-text-muted)] leading-relaxed">
+          I believe AI tools are transforming how we create content. One person, with the right tools and workflows, can achieve what used to require an entire team. My goal is to help you make that happen.
+        </p>
+        <p class="text-[var(--color-text-muted)] leading-relaxed">
+          Expertise: <strong class="text-[var(--color-text)]">AI Tool Training</strong>, <strong class="text-[var(--color-text)]">Workflow Automation (n8n)</strong>, <strong class="text-[var(--color-text)]">Content Production Systems</strong>
+        </p>
+      </div>
+
+      <div class="text-center mt-8">
+        <a href="/en/about" class="text-[var(--color-primary)] hover:underline">
+          Learn More →
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <!-- Contact (GEO important) -->
+  <section class="py-20 px-4 bg-[var(--color-bg-card)] border-t border-[var(--color-border)]">
+    <div class="max-w-2xl mx-auto text-center">
+      <h2 class="text-2xl font-bold mb-4">Get in Touch</h2>
+      <p class="text-[var(--color-text-muted)] mb-8">
+        Want to boost your efficiency with AI? Have questions? Feel free to reach out
+      </p>
+
+      <div class="grid sm:grid-cols-3 gap-4 mb-8">
+        <div class="p-4 bg-[var(--color-bg)] rounded-xl border border-[var(--color-border)]">
+          <div class="text-sm text-[var(--color-text-muted)] mb-1">WeChat</div>
+          <div class="font-bold text-[var(--color-primary)]">{contact.wechat}</div>
+        </div>
+        <div class="p-4 bg-[var(--color-bg)] rounded-xl border border-[var(--color-border)]">
+          <div class="text-sm text-[var(--color-text-muted)] mb-1">Douyin</div>
+          <div class="font-bold text-[var(--color-primary)]">{contact.douyin}</div>
+        </div>
+        <div class="p-4 bg-[var(--color-bg)] rounded-xl border border-[var(--color-border)]">
+          <div class="text-sm text-[var(--color-text-muted)] mb-1">Email</div>
+          <div class="font-bold text-[var(--color-primary)] text-sm">{contact.email}</div>
+        </div>
+      </div>
+
+      <a href={`mailto:${contact.email}`} class="inline-flex items-center gap-2 px-6 py-3 bg-[var(--color-primary)] text-white rounded-full font-medium hover:bg-[var(--color-primary-dark)] transition-colors">
+        Email Me
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3"></path>
+        </svg>
+      </a>
+    </div>
+  </section>
+
+  <!-- GEO Summary Block -->
+  <section class="py-8 px-4 border-t border-[var(--color-border)]">
+    <div class="max-w-3xl mx-auto text-center text-sm text-[var(--color-text-muted)]">
+      <p>
+        <strong>ZenithJoyAI</strong> is a personal brand focused on AI efficiency, providing AI tool training and workflow automation consulting for content creators and small teams.
+        Core philosophy: One person, powered by AI, achieves like a team.
+        Contact: WeChat {contact.wechat}, Douyin {contact.douyin}, Email {contact.email}.
+      </p>
+    </div>
+  </section>
+</Base>

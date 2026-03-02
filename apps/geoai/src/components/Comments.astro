@@ -1,0 +1,256 @@
+---
+// 评论组件 - 匿名评论 + 点赞
+interface Props {
+  slug: string;
+  locale?: string;
+}
+
+const { slug, locale = 'zh' } = Astro.props;
+---
+
+<div class="comments-section mt-12 pt-8 border-t border-[var(--color-border)]" data-slug={slug} data-locale={locale} data-api="https://zenithjoyai-page-counter.zenithjoyai.workers.dev">
+  <!-- 点赞按钮 -->
+  <div class="flex items-center gap-4 mb-8">
+    <button id="like-btn" class="flex items-center gap-2 px-4 py-2 rounded-full border border-[var(--color-border)] hover:border-red-400 hover:text-red-500 transition-colors">
+      <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"></path>
+      </svg>
+      <span id="like-count">0</span>
+      <span>{locale === 'zh' ? '点赞' : 'Like'}</span>
+    </button>
+  </div>
+
+  <!-- 评论输入 -->
+  <div class="mb-6">
+    <h3 class="text-lg font-bold mb-4">{locale === 'zh' ? '留言' : 'Comments'}</h3>
+    <div class="space-y-3">
+      <input
+        type="text"
+        id="nickname-input"
+        placeholder={locale === 'zh' ? '昵称（选填）' : 'Nickname (optional)'}
+        class="w-full px-4 py-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] text-[var(--color-text)] focus:outline-none focus:border-[var(--color-primary)]"
+        maxlength="20"
+      />
+      <textarea
+        id="comment-input"
+        placeholder={locale === 'zh' ? '说点什么...' : 'Write a comment...'}
+        class="w-full px-4 py-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] text-[var(--color-text)] focus:outline-none focus:border-[var(--color-primary)] resize-none"
+        rows="3"
+        maxlength="500"
+      ></textarea>
+      <div class="flex justify-between items-center">
+        <span id="char-count" class="text-xs text-[var(--color-text-muted)]">0/500</span>
+        <div class="flex items-center gap-3">
+          <span id="submit-status" class="text-xs text-[var(--color-text-muted)] hidden"></span>
+          <button
+            id="submit-btn"
+            class="px-6 py-2 bg-[var(--color-primary)] text-white rounded-lg hover:opacity-90 transition-opacity disabled:opacity-50"
+          >
+            {locale === 'zh' ? '发送' : 'Send'}
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 评论列表 -->
+  <div id="comments-list" class="space-y-4">
+    <div class="text-center text-[var(--color-text-muted)] py-4">
+      {locale === 'zh' ? '加载中...' : 'Loading...'}
+    </div>
+  </div>
+</div>
+
+<script is:inline>
+  (function() {
+    const section = document.querySelector('.comments-section');
+    if (!section) {
+      console.error('Comments: .comments-section not found');
+      return;
+    }
+
+    const slug = section.dataset.slug;
+    const locale = section.dataset.locale || 'zh';
+    const API = section.dataset.api;
+
+    console.log('Comments init:', { slug, locale, API });
+
+    const likeBtn = section.querySelector('#like-btn');
+    const likeCount = section.querySelector('#like-count');
+    const nicknameInput = section.querySelector('#nickname-input');
+    const commentInput = section.querySelector('#comment-input');
+    const charCount = section.querySelector('#char-count');
+    const submitBtn = section.querySelector('#submit-btn');
+    const submitStatus = section.querySelector('#submit-status');
+    const commentsList = section.querySelector('#comments-list');
+
+    // Helper to show status
+    function showStatus(msg, isError = false) {
+      if (!submitStatus) return;
+      submitStatus.textContent = msg;
+      submitStatus.classList.remove('hidden', 'text-red-500', 'text-green-500');
+      submitStatus.classList.add(isError ? 'text-red-500' : 'text-green-500');
+      if (msg) {
+        setTimeout(() => submitStatus.classList.add('hidden'), 3000);
+      }
+    }
+
+    if (!slug || !API) return;
+
+    // 检查是否已点赞
+    const likedKey = `liked:${slug}`;
+    let hasLiked = localStorage.getItem(likedKey) === 'true';
+
+    // 更新点赞按钮状态
+    function updateLikeBtn() {
+      if (hasLiked && likeBtn) {
+        likeBtn.classList.add('text-red-500', 'border-red-400');
+        const svg = likeBtn.querySelector('svg');
+        if (svg) svg.setAttribute('fill', 'currentColor');
+      }
+    }
+
+    // 加载点赞数
+    fetch(`${API}/likes?slug=${encodeURIComponent(slug)}`)
+      .then(r => r.json())
+      .then(data => {
+        if (likeCount) likeCount.textContent = data.likes || 0;
+        updateLikeBtn();
+      })
+      .catch(e => console.error('Load likes error:', e));
+
+    // 点赞
+    if (likeBtn) {
+      likeBtn.addEventListener('click', async () => {
+        if (hasLiked) return;
+
+        try {
+          const res = await fetch(`${API}/likes?slug=${encodeURIComponent(slug)}`, { method: 'POST' });
+          const data = await res.json();
+          if (likeCount) likeCount.textContent = data.likes;
+          hasLiked = true;
+          localStorage.setItem(likedKey, 'true');
+          updateLikeBtn();
+        } catch (e) {
+          console.error('Like error:', e);
+        }
+      });
+    }
+
+    // 字数统计
+    if (commentInput && charCount) {
+      commentInput.addEventListener('input', () => {
+        charCount.textContent = `${commentInput.value.length}/500`;
+      });
+    }
+
+    // 加载评论
+    async function loadComments() {
+      try {
+        const res = await fetch(`${API}/comments?slug=${encodeURIComponent(slug)}`);
+        const data = await res.json();
+        renderComments(data.comments || []);
+      } catch (e) {
+        console.error('Load comments error:', e);
+        if (commentsList) {
+          commentsList.innerHTML = `<div class="text-center text-[var(--color-text-muted)] py-4">${locale === 'zh' ? '加载失败' : 'Failed to load'}</div>`;
+        }
+      }
+    }
+
+    // 渲染评论
+    function renderComments(comments) {
+      if (!commentsList) return;
+
+      if (comments.length === 0) {
+        commentsList.innerHTML = `<div class="text-center text-[var(--color-text-muted)] py-4">${locale === 'zh' ? '暂无评论，快来抢沙发！' : 'No comments yet. Be the first!'}</div>`;
+        return;
+      }
+
+      commentsList.innerHTML = comments.map(c => `
+        <div class="p-4 bg-[var(--color-bg-card)] rounded-lg border border-[var(--color-border)]">
+          <div class="flex items-center gap-2 mb-2">
+            <div class="w-8 h-8 rounded-full bg-gradient-to-br from-[var(--color-primary)] to-[var(--color-accent)] flex items-center justify-center text-white text-xs font-bold">
+              ${c.nickname.charAt(0).toUpperCase()}
+            </div>
+            <span class="font-medium text-[var(--color-text)]">${escapeHtml(c.nickname)}</span>
+            <span class="text-xs text-[var(--color-text-muted)]">${formatTime(c.createdAt)}</span>
+          </div>
+          <p class="text-[var(--color-text)] whitespace-pre-wrap">${escapeHtml(c.content)}</p>
+        </div>
+      `).join('');
+    }
+
+    // 发送评论
+    if (submitBtn) {
+      console.log('Comments: submit button found, attaching handler');
+      submitBtn.addEventListener('click', async (e) => {
+        e.preventDefault();
+        console.log('Comments: submit clicked');
+        const content = commentInput ? commentInput.value.trim() : '';
+        if (!content) {
+          showStatus(locale === 'zh' ? '请输入内容' : 'Please enter content', true);
+          commentInput && commentInput.focus();
+          return;
+        }
+
+        submitBtn.disabled = true;
+        showStatus(locale === 'zh' ? '发送中...' : 'Sending...');
+
+        try {
+          console.log('Comments: sending to API', { slug, content });
+          const res = await fetch(`${API}/comments?slug=${encodeURIComponent(slug)}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              content,
+              nickname: nicknameInput ? nicknameInput.value.trim() : ''
+            })
+          });
+
+          console.log('Comments: response status', res.status);
+          if (res.ok) {
+            if (commentInput) commentInput.value = '';
+            if (charCount) charCount.textContent = '0/500';
+            showStatus(locale === 'zh' ? '发送成功!' : 'Sent!');
+            loadComments();
+          } else {
+            const errText = await res.text();
+            console.error('Submit comment failed:', errText);
+            showStatus(locale === 'zh' ? '发送失败' : 'Failed', true);
+          }
+        } catch (e) {
+          console.error('Submit comment error:', e);
+          showStatus(locale === 'zh' ? '网络错误' : 'Network error', true);
+        } finally {
+          submitBtn.disabled = false;
+        }
+      });
+    } else {
+      console.error('Comments: submit button not found');
+    }
+
+    // 辅助函数
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    function formatTime(iso) {
+      const d = new Date(iso);
+      const now = new Date();
+      const diff = (now - d) / 1000;
+
+      if (diff < 60) return locale === 'zh' ? '刚刚' : 'Just now';
+      if (diff < 3600) return `${Math.floor(diff / 60)} ${locale === 'zh' ? '分钟前' : 'min ago'}`;
+      if (diff < 86400) return `${Math.floor(diff / 3600)} ${locale === 'zh' ? '小时前' : 'h ago'}`;
+      if (diff < 604800) return `${Math.floor(diff / 86400)} ${locale === 'zh' ? '天前' : 'd ago'}`;
+
+      return d.toLocaleDateString(locale === 'zh' ? 'zh-CN' : 'en-US', { month: 'short', day: 'numeric' });
+    }
+
+    // 初始化
+    loadComments();
+  })();
+</script>

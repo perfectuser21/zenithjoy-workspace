@@ -1,0 +1,190 @@
+---
+import Base from '../../../layouts/Base.astro';
+import { getPaginatedPosts, POSTS_PER_PAGE } from '../../../data/posts';
+
+const { posts, totalPages, currentPage, totalPosts } = await getPaginatedPosts('zh', 1);
+---
+
+<Base
+  title="博客 - AI 创作实战教程"
+  description="AI 自媒体培训博客，分享 AI 工具使用技巧、自动化工作流、内容创作方法论。帮助创作者用 AI 提升 10 倍效率。"
+  faq={[
+    { question: "这个博客主要写什么内容？", answer: "主要分享 AI 工具使用技巧、自动化工作流搭建、内容创作方法论，帮助自媒体创作者提升效率。" },
+    { question: "内容适合什么人看？", answer: "适合自媒体创作者、小团队运营者、想要用 AI 提升工作效率的人。" },
+    { question: "更新频率是怎样的？", answer: "每周更新 1-2 篇深度文章，保证内容质量和实用性。" }
+  ]}
+>
+  <section class="max-w-4xl mx-auto px-4 py-12">
+    <!-- Header -->
+    <header class="mb-12">
+      <h1 class="text-4xl font-bold mb-4">博客</h1>
+      <p class="text-xl text-[var(--color-text-muted)]">
+        AI 创作实战教程，助你提升 10 倍效率
+      </p>
+    </header>
+
+    <!-- Featured Quote (GEO Optimization) -->
+    <blockquote class="mb-12 p-6 bg-gradient-to-br from-[var(--color-primary)]/5 to-[var(--color-accent)]/5 rounded-xl border border-[var(--color-border)]">
+      <p class="text-lg font-medium">
+        "掌握 AI 工具不是为了取代创作，而是为了<span class="text-[var(--color-primary)]">释放更多时间专注于真正重要的创意工作</span>。"
+      </p>
+    </blockquote>
+
+    <!-- Posts List - Dan Koe 风格：左文字右小图 -->
+    <div class="divide-y divide-[var(--color-border)]">
+      {posts.map(post => (
+        <article class="group py-6 first:pt-0">
+          <a href={`/zh/blog/${post.slug}`} class="flex gap-6 items-start">
+            <!-- 左侧文字 -->
+            <div class="flex-1 min-w-0">
+              <!-- 标题 -->
+              <h2 class="text-lg md:text-xl font-bold mb-2 text-[var(--color-primary)] group-hover:opacity-80 transition-opacity">
+                {post.title}
+              </h2>
+
+              <!-- 描述 -->
+              <p class="text-[var(--color-text-muted)] line-clamp-2 mb-3 text-sm">
+                {post.description || post.content?.slice(0, 120)}
+              </p>
+
+              <!-- 日期和互动数据 -->
+              <div class="flex items-center gap-4 text-xs text-[var(--color-text-muted)]">
+                <span>{post.publishDate.toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' })}</span>
+                <span class="flex items-center gap-1">
+                  <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
+                  <span class="like-count" data-slug={post.slug}>0</span>
+                </span>
+                <span class="flex items-center gap-1">
+                  <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
+                  <span class="view-count" data-slug={post.slug}>0</span>
+                </span>
+              </div>
+            </div>
+
+            <!-- 右侧小图 -->
+            {post.thumbnailUrl && (
+              <div class="flex-shrink-0 w-28 h-28 md:w-36 md:h-36 overflow-hidden rounded-lg bg-[var(--color-bg-card)]">
+                <img
+                  src={post.thumbnailUrl}
+                  alt={post.title}
+                  class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                  loading="lazy"
+                />
+              </div>
+            )}
+          </a>
+        </article>
+      ))}
+    </div>
+
+    <!-- Topics Overview (GEO - helps AI understand content scope) -->
+    <section class="mt-16 p-8 bg-[var(--color-bg-card)] rounded-xl border border-[var(--color-border)]">
+      <h2 class="text-2xl font-bold mb-6">内容主题</h2>
+      <div class="grid md:grid-cols-3 gap-4">
+        <div class="p-4 bg-[var(--color-bg)] rounded-lg">
+          <div class="text-2xl mb-2">&#x1F916;</div>
+          <h3 class="font-bold mb-1">AI 工具</h3>
+          <p class="text-sm text-[var(--color-text-muted)]">ChatGPT、Claude、Midjourney 等工具的实战技巧</p>
+        </div>
+        <div class="p-4 bg-[var(--color-bg)] rounded-lg">
+          <div class="text-2xl mb-2">&#x26A1;</div>
+          <h3 class="font-bold mb-1">自动化</h3>
+          <p class="text-sm text-[var(--color-text-muted)]">n8n、Make 工作流搭建，节省重复工作</p>
+        </div>
+        <div class="p-4 bg-[var(--color-bg)] rounded-lg">
+          <div class="text-2xl mb-2">&#x270D;&#xFE0F;</div>
+          <h3 class="font-bold mb-1">内容创作</h3>
+          <p class="text-sm text-[var(--color-text-muted)]">写作方法论、提示词工程、效率提升</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Pagination -->
+    {totalPages > 1 && (
+      <nav class="mt-12 flex justify-center items-center gap-2">
+        {currentPage > 1 && (
+          <a
+            href={currentPage === 2 ? '/zh/blog' : `/zh/blog/page/${currentPage - 1}`}
+            class="px-4 py-2 rounded-lg border border-[var(--color-border)] hover:bg-[var(--color-bg-card)] transition-colors"
+          >
+            ← 上一页
+          </a>
+        )}
+
+        <div class="flex items-center gap-1">
+          {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
+            <a
+              href={page === 1 ? '/zh/blog' : `/zh/blog/page/${page}`}
+              class={`w-10 h-10 flex items-center justify-center rounded-lg transition-colors ${
+                page === currentPage
+                  ? 'bg-[var(--color-primary)] text-white'
+                  : 'border border-[var(--color-border)] hover:bg-[var(--color-bg-card)]'
+              }`}
+            >
+              {page}
+            </a>
+          ))}
+        </div>
+
+        {currentPage < totalPages && (
+          <a
+            href={`/zh/blog/page/${currentPage + 1}`}
+            class="px-4 py-2 rounded-lg border border-[var(--color-border)] hover:bg-[var(--color-bg-card)] transition-colors"
+          >
+            下一页 →
+          </a>
+        )}
+      </nav>
+    )}
+
+    <!-- Post Count -->
+    <div class="mt-6 text-center text-sm text-[var(--color-text-muted)]">
+      共 {totalPosts} 篇文章
+    </div>
+
+    <!-- CTA -->
+    <div class="mt-12 text-center p-8 bg-gradient-to-br from-[var(--color-primary)]/5 to-[var(--color-accent)]/5 rounded-xl border border-[var(--color-border)]">
+      <a href="/zh" class="text-[var(--color-primary)] hover:underline">
+        返回首页 →
+      </a>
+    </div>
+  </section>
+
+  <script>
+    // 获取所有文章的统计数据
+    const API = 'https://zenithjoyai-page-counter.zenithjoyai.workers.dev';
+
+    // 获取阅读量
+    document.querySelectorAll('.view-count').forEach(async (el) => {
+      const slug = el.dataset.slug;
+      if (!slug) return;
+      try {
+        const res = await fetch(`${API}?slug=${encodeURIComponent(slug)}`);
+        const data = await res.json();
+        el.textContent = data.views || 0;
+      } catch (e) {}
+    });
+
+    // 获取点赞数
+    document.querySelectorAll('.like-count').forEach(async (el) => {
+      const slug = el.dataset.slug;
+      if (!slug) return;
+      try {
+        const res = await fetch(`${API}/likes?slug=${encodeURIComponent(slug)}`);
+        const data = await res.json();
+        el.textContent = data.likes || 0;
+      } catch (e) {}
+    });
+
+    // 获取评论数
+    document.querySelectorAll('.comment-count').forEach(async (el) => {
+      const slug = el.dataset.slug;
+      if (!slug) return;
+      try {
+        const res = await fetch(`${API}/comments?slug=${encodeURIComponent(slug)}`);
+        const data = await res.json();
+        el.textContent = data.comments?.length || 0;
+      } catch (e) {}
+    });
+  </script>
+</Base>

@@ -1,0 +1,15 @@
+name = "zenithjoyai-page-counter"
+main = "src/index.js"
+compatibility_date = "2024-12-01"
+workers_dev = true
+
+[[kv_namespaces]]
+binding = "PAGE_VIEWS"
+id = "4d3402434715457792eb10acbdf9c2ea"
+
+[[kv_namespaces]]
+binding = "COMMENTS"
+id = "78d54f0070b94e7db32dc6c6afb721c0"
+
+[vars]
+ALLOWED_ORIGIN = "https://zenithjoyai.com"

@@ -1,0 +1,32 @@
+version: "3.8"
+
+services:
+  ai-trainer:
+    build: .
+    container_name: ai-trainer
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./ai_trainer.db:/app/ai_trainer.db
+      - ./app/ui:/app/ui
+      - ./app/main.py:/app/app/main.py
+      - ./app/routers:/app/app/routers
+      - ./app/data:/app/data
+    environment:
+      - TZ=Asia/Shanghai
+
+  label-studio:
+    image: heartexlabs/label-studio:latest
+    container_name: label-studio
+    restart: unless-stopped
+    ports:
+      - "8085:8080"
+    volumes:
+      - label-studio-data:/label-studio/data
+    environment:
+      - TZ=Asia/Shanghai
+      - LABEL_STUDIO_ENABLE_LEGACY_API_TOKEN=true
+
+volumes:
+  label-studio-data:

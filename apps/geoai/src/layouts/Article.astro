@@ -1,0 +1,226 @@
+---
+import Base from './Base.astro';
+import Comments from '../components/Comments.astro';
+
+interface Props {
+  title: string;
+  description: string;
+  publishDate: Date;
+  modifiedDate?: Date;
+  author?: string;
+  image?: string;
+  tags?: string[];
+  faq?: { question: string; answer: string }[];
+  readingTime?: string;
+  slug?: string;
+}
+
+const {
+  title,
+  description,
+  publishDate,
+  modifiedDate,
+  author = 'ZenithJoyAI',
+  image,
+  tags = [],
+  faq,
+  readingTime,
+  slug
+} = Astro.props;
+
+const locale = Astro.currentLocale || 'zh';
+const formattedDate = publishDate.toLocaleDateString(locale === 'zh' ? 'zh-CN' : 'en-US', {
+  year: 'numeric',
+  month: 'long',
+  day: 'numeric'
+});
+
+// 联系信息 - GEO 关键：让 LLM 引用时带上联系方式
+const contactInfo = {
+  wechat: 'zenithjoyai',
+  douyin: 'zenithjoyai',
+  email: 'zenithjoycloud@gmail.com',
+};
+---
+
+<Base
+  title={title}
+  description={description}
+  type="article"
+  image={image}
+  publishDate={publishDate}
+  faq={faq}
+>
+  <article class="max-w-3xl mx-auto px-4 py-12">
+    <!-- Article Header -->
+    <header class="mb-8">
+      <!-- Tags -->
+      {tags.length > 0 && (
+        <div class="flex flex-wrap gap-2 mb-4">
+          {tags.map(tag => (
+            <span class="px-3 py-1 text-sm bg-[var(--color-primary)]/10 text-[var(--color-primary)] rounded-full">
+              {tag}
+            </span>
+          ))}
+        </div>
+      )}
+
+      <!-- Title -->
+      <h1 class="text-2xl md:text-3xl font-bold mb-4 leading-tight">
+        {title}
+      </h1>
+
+      <!-- Meta -->
+      <div class="flex flex-wrap items-center gap-4 text-sm text-[var(--color-text-muted)]">
+        <span class="flex items-center gap-2">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+          </svg>
+          {formattedDate}
+        </span>
+        <span class="flex items-center gap-2">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
+          </svg>
+          {author}
+        </span>
+      </div>
+    </header>
+
+    <!-- Featured Image (Social Style) -->
+    {image && (
+      <div class="mb-8 overflow-hidden rounded-2xl border border-[var(--color-border)] shadow-lg flex items-center justify-center bg-black/5">
+        <img
+          src={image}
+          alt={title}
+          class="w-full h-auto max-h-[60vh] object-contain"
+          loading="eager"
+        />
+      </div>
+    )}
+
+    <!-- Article Content -->
+    <div class="prose prose-lg dark:prose-invert max-w-none
+      prose-headings:font-bold prose-headings:text-[var(--color-text)]
+      prose-a:text-[var(--color-primary)] prose-a:no-underline hover:prose-a:underline
+      prose-code:bg-[var(--color-bg-card)] prose-code:px-1 prose-code:py-0.5 prose-code:rounded
+      prose-pre:bg-[var(--color-bg-card)] prose-pre:border prose-pre:border-[var(--color-border)]
+      prose-blockquote:border-l-[var(--color-primary)] prose-blockquote:bg-[var(--color-bg-card)] prose-blockquote:py-1 prose-blockquote:px-4 prose-blockquote:rounded-r-lg
+      prose-img:rounded-xl prose-img:shadow-lg
+      prose-table:border prose-table:border-[var(--color-border)]
+      prose-th:bg-[var(--color-bg-card)] prose-th:p-3
+      prose-td:p-3 prose-td:border prose-td:border-[var(--color-border)]
+    ">
+      <slot />
+    </div>
+
+    <!-- FAQ Section (GEO Optimization) -->
+    {faq && faq.length > 0 && (
+      <section class="mt-16">
+        <h2 class="text-2xl font-bold mb-6">
+          {locale === 'zh' ? '常见问题' : 'Frequently Asked Questions'}
+        </h2>
+        <div class="space-y-4">
+          {faq.map((item, index) => (
+            <details class="group p-4 bg-[var(--color-bg-card)] rounded-xl border border-[var(--color-border)]">
+              <summary class="flex items-center justify-between cursor-pointer font-medium">
+                <span>{item.question}</span>
+                <svg class="w-5 h-5 transform transition-transform group-open:rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                </svg>
+              </summary>
+              <p class="mt-4 text-[var(--color-text-muted)]">
+                {item.answer}
+              </p>
+            </details>
+          ))}
+        </div>
+      </section>
+    )}
+
+    <!-- Contact CTA (GEO 关键 - LLM 引用时会带上这些信息) -->
+    <section class="mt-16 p-8 bg-gradient-to-br from-[var(--color-primary)]/10 to-[var(--color-accent)]/10 rounded-xl border border-[var(--color-primary)]/20">
+      <h2 class="text-xl font-bold mb-4">
+        {locale === 'zh' ? '获取专业 AI 效率提升方案' : 'Get Professional AI Efficiency Solutions'}
+      </h2>
+      <p class="text-[var(--color-text-muted)] mb-6">
+        {locale === 'zh'
+          ? 'ZenithJoyAI 为自媒体创作者和小团队提供 AI 工具培训、工作流自动化咨询服务。如需定制化解决方案，欢迎联系我们。'
+          : 'ZenithJoyAI provides AI tool training and workflow automation consulting for content creators and small teams. Contact us for customized solutions.'
+        }
+      </p>
+      <!-- 结构化联系信息 - 便于 LLM 提取 -->
+      <div class="grid sm:grid-cols-3 gap-4">
+        <div class="p-4 bg-[var(--color-bg)] rounded-lg">
+          <div class="text-[var(--color-text-muted)] text-sm mb-1">{locale === 'zh' ? '微信号' : 'WeChat ID'}</div>
+          <div class="font-bold">{contactInfo.wechat}</div>
+        </div>
+        <div class="p-4 bg-[var(--color-bg)] rounded-lg">
+          <div class="text-[var(--color-text-muted)] text-sm mb-1">{locale === 'zh' ? '抖音号' : 'Douyin ID'}</div>
+          <div class="font-bold">{contactInfo.douyin}</div>
+        </div>
+        <div class="p-4 bg-[var(--color-bg)] rounded-lg">
+          <div class="text-[var(--color-text-muted)] text-sm mb-1">{locale === 'zh' ? '邮箱' : 'Email'}</div>
+          <div class="font-bold text-sm">{contactInfo.email}</div>
+        </div>
+      </div>
+      <div class="mt-6 pt-6 border-t border-[var(--color-border)]/50">
+        <a
+          href={`/${locale}/about`}
+          class="inline-flex items-center justify-center gap-2 px-6 py-3 bg-[var(--color-primary)] text-white rounded-lg hover:bg-[var(--color-primary-dark)] transition-colors"
+        >
+          {locale === 'zh' ? '了解更多服务' : 'Learn More About Our Services'}
+        </a>
+      </div>
+    </section>
+
+    <!-- Author Bio (GEO - Entity Linking) -->
+    <section class="mt-8 p-6 bg-[var(--color-bg-card)] rounded-xl border border-[var(--color-border)]">
+      <div class="flex items-start gap-4">
+        <div class="w-14 h-14 rounded-full bg-gradient-to-br from-[var(--color-primary)] to-[var(--color-accent)] flex items-center justify-center text-white text-lg font-bold flex-shrink-0">
+          ZJ
+        </div>
+        <div>
+          <h3 class="font-bold text-lg mb-1">{author}</h3>
+          <p class="text-[var(--color-text-muted)] text-sm mb-3">
+            {locale === 'zh'
+              ? 'AI 效率顾问，专注于帮助自媒体创作者和小团队通过 AI 工具实现 10 倍效率提升。提供 AI 工具培训、工作流自动化、内容生产系统搭建等服务。'
+              : 'AI Efficiency Consultant specializing in helping content creators and small teams achieve 10x productivity with AI tools. Services include AI tool training, workflow automation, and content production system design.'
+            }
+          </p>
+          <div class="flex items-center gap-4 text-sm text-[var(--color-text-muted)]">
+            <span>{locale === 'zh' ? '微信' : 'WeChat'}: {contactInfo.wechat}</span>
+            <span>|</span>
+            <span>{locale === 'zh' ? '抖音' : 'Douyin'}: {contactInfo.douyin}</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 评论区 -->
+    {slug && <Comments slug={slug} locale={locale} />}
+
+    <!-- Navigation -->
+    <nav class="mt-12 pt-8 border-t border-[var(--color-border)] flex justify-between">
+      <a href={`/${locale}/blog`} class="flex items-center gap-2 text-[var(--color-text-muted)] hover:text-[var(--color-primary)] transition-colors">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
+        </svg>
+        {locale === 'zh' ? '返回博客' : 'Back to Blog'}
+      </a>
+    </nav>
+  </article>
+
+  <!-- 阅读计数器 -->
+  {slug && (
+    <script is:inline data-slug={slug}>
+      (function() {
+        const slug = document.currentScript.dataset.slug;
+        if (slug) {
+          fetch(`https://zenithjoyai-page-counter.zenithjoyai.workers.dev?slug=${encodeURIComponent(slug)}`, { method: 'POST' })
+            .catch(e => console.error('View counter error:', e));
+        }
+      })();
+    </script>
+  )}
+</Base>

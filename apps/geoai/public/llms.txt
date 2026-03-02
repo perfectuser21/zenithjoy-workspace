@@ -1,0 +1,63 @@
+# ZenithJoyAI
+
+> AI 自媒体培训 | 帮助创作者和小团队用 AI 提升 10 倍效率
+> AI Media Training | Helping creators and small teams boost efficiency 10x with AI
+
+## About / 关于
+
+ZenithJoyAI is a personal brand focused on AI-powered content creation and small team efficiency.
+We teach creators and small businesses how to leverage AI tools to:
+- Create content faster
+- Automate repetitive workflows
+- Build personal brands at scale
+- Optimize social media presence
+
+顶峰悦AI 专注于 AI 驱动的内容创作和小团队效率提升。
+我们帮助创作者和小企业学习如何：
+- 更快速地创作内容
+- 自动化重复性工作流程
+- 规模化打造个人品牌
+- 优化社交媒体运营
+
+## Core Topics / 核心主题
+
+### AI Tools & Workflows / AI 工具与工作流
+- AI writing assistants (ChatGPT, Claude, etc.)
+- AI image generation (Midjourney, DALL-E)
+- Workflow automation (n8n, Make, Zapier)
+- Prompt engineering techniques
+
+### Content Creation / 内容创作
+- Writing frameworks and templates
+- Video scripting with AI
+- Social media content strategies
+- Repurposing content across platforms
+
+### Small Business Efficiency / 小团队效率
+- One-person business operations
+- Team collaboration with AI
+- Cost-effective tech stack
+- Scaling without hiring
+
+## Author / 作者
+
+[Name TBD] is an AI media trainer who has helped 100+ creators and small teams
+implement AI into their workflows, achieving measurable productivity improvements.
+
+## Popular Content / 热门内容
+
+- /zh/blog/ai-content-workflow - AI 内容创作工作流完整指南
+- /zh/blog/prompt-engineering-101 - 提示词工程入门教程
+- /en/blog/ai-tools-comparison - AI Tools Comparison for Content Creators
+
+## Contact / 联系
+
+Website: https://zenithjoyai.com
+WeChat: zenithjoyai
+Douyin: zenithjoyai
+Email: zenithjoycloud@gmail.com
+
+## License
+
+Content on this site is available under CC BY-NC-SA 4.0 unless otherwise noted.
+You may cite and reference this content with proper attribution.

@@ -1,0 +1,92 @@
+---
+import Base from '../../../layouts/Base.astro';
+import { getAllShortPosts } from '../../../data/posts';
+
+const posts = await getAllShortPosts('en');
+---
+
+<Base
+  title="Updates - AI Insights & Daily Thoughts"
+  description="ZenithJoyAI updates sharing AI tips, efficiency hacks, and industry insights. Short and sweet, perfect for daily reading."
+  faq={[
+    { question: "What do you share in updates?", answer: "AI usage tips, productivity hacks, industry observations, and daily thoughts. Short and actionable." },
+    { question: "How often do you post?", answer: "Almost daily. Follow for the latest updates." }
+  ]}
+>
+  <section class="max-w-2xl mx-auto px-4 py-12">
+    <header class="mb-12">
+      <h1 class="text-4xl font-bold mb-4">Updates</h1>
+      <p class="text-xl text-[var(--color-text-muted)]">
+        AI Insights & Daily Thoughts
+      </p>
+    </header>
+
+    {posts.length > 0 ? (
+      <div class="space-y-6">
+        {posts.map(post => (
+          <article class="p-6 bg-[var(--color-bg-card)] rounded-xl border border-[var(--color-border)]">
+            <div class="prose prose-sm max-w-none mb-4">
+              <p class="whitespace-pre-wrap">{post.content}</p>
+            </div>
+
+            {post.mediaUrls && post.mediaUrls.length > 0 && (
+              <div class={`grid gap-2 mb-4 ${post.mediaUrls.length === 1 ? '' : post.mediaUrls.length === 2 ? 'grid-cols-2' : 'grid-cols-3'}`}>
+                {post.mediaUrls.slice(0, 9).map((url, idx) => (
+                  <div class="aspect-square rounded-lg overflow-hidden bg-[var(--color-bg)]">
+                    <img src={url} alt="" class="w-full h-full object-cover" loading="lazy" />
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {post.tags.length > 0 && (
+              <div class="flex flex-wrap gap-2 mb-4">
+                {post.tags.map(tag => (
+                  <span class="text-sm text-[var(--color-primary)]">#{tag}</span>
+                ))}
+              </div>
+            )}
+
+            <div class="flex items-center justify-between text-sm text-[var(--color-text-muted)]">
+              <span>{post.publishDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
+              {post.likes && (
+                <span class="flex items-center gap-1">
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"></path>
+                  </svg>
+                  {post.likes}
+                </span>
+              )}
+            </div>
+          </article>
+        ))}
+      </div>
+    ) : (
+      <div class="text-center py-20">
+        <div class="text-6xl mb-6">💭</div>
+        <h2 class="text-2xl font-bold mb-4">Updates Coming Soon</h2>
+        <p class="text-[var(--color-text-muted)] mb-6">
+          We're preparing daily AI insights and tips
+        </p>
+        <div class="flex justify-center gap-4">
+          <a href="/en/blog" class="px-6 py-3 bg-[var(--color-primary)] text-white rounded-lg hover:bg-[var(--color-primary-dark)] transition-colors">
+            Read Articles
+          </a>
+          <a href="/en/videos" class="px-6 py-3 border border-[var(--color-border)] rounded-lg hover:border-[var(--color-primary)] transition-colors">
+            Watch Videos
+          </a>
+        </div>
+      </div>
+    )}
+
+    <div class="mt-12 p-6 bg-gradient-to-br from-[var(--color-primary)]/5 to-[var(--color-accent)]/5 rounded-xl border border-[var(--color-border)] text-center">
+      <p class="text-[var(--color-text-muted)] mb-2">
+        Follow for more AI efficiency insights
+      </p>
+      <div class="flex justify-center gap-6 font-medium">
+        <span>WeChat: <span class="text-[var(--color-primary)]">zenithjoyai</span></span>
+        <span>Douyin: <span class="text-[var(--color-primary)]">zenithjoyai</span></span>
+      </div>
+    </div>
+  </section>
+</Base>
