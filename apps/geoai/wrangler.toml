@@ -1,0 +1,4 @@
+# Cloudflare Pages 配置
+name = "zenithjoyai"
+pages_build_output_dir = "dist"
+compatibility_date = "2024-12-01"

@@ -1,0 +1,288 @@
+---
+import Base from '../../layouts/Base.astro';
+
+// Contact info
+const contact = {
+  wechat: 'zenithjoyai',
+  douyin: 'zenithjoyai',
+  email: 'zenithjoycloud@gmail.com',
+};
+
+// Detailed service information
+const services = [
+  {
+    id: 'ai-training',
+    title: 'AI Tool Training',
+    subtitle: 'Master efficient AI tool usage',
+    description: 'Systematic learning of ChatGPT, Claude, Midjourney and other mainstream AI tools, from basic operations to advanced techniques, helping you truly master AI tools.',
+    features: [
+      { title: 'Prompt Engineering', description: 'Learn structured prompt writing methods to make AI accurately understand your intent and output high-quality content' },
+      { title: 'AI Writing Assistant', description: 'Master text tools like ChatGPT and Claude for rapid article, script, and copy generation' },
+      { title: 'AI Image Generation', description: 'Learn tools like Midjourney and DALL-E to create professional-grade visual content' },
+      { title: 'Multi-tool Synergy', description: 'Understand each AI tool\'s strengths and learn to choose the right combination for your tasks' },
+    ],
+    deliverables: ['Systematic training course', 'Practical prompt template library', 'Tool usage SOP documents', 'One-on-one Q&A guidance'],
+    suitable: ['Content creators', 'Marketing professionals', 'Entrepreneurs', 'Anyone seeking efficiency improvement'],
+  },
+  {
+    id: 'workflow-automation',
+    title: 'Workflow Automation',
+    subtitle: 'Automate repetitive work',
+    description: 'Use professional automation tools like n8n and Make to build automated workflows tailored to your business needs, letting machines handle repetitive tasks.',
+    features: [
+      { title: 'n8n Workflow Setup', description: 'Build visual workflows using the open-source automation tool n8n, no programming required' },
+      { title: 'Content Auto-Distribution', description: 'Create once, automatically publish to multiple platforms' },
+      { title: 'Data Auto-Sync', description: 'Connect platform data, automatically sync to unified management dashboard' },
+      { title: 'Scheduled Tasks', description: 'Set up scheduled tasks for automatic collection, processing, and publishing' },
+    ],
+    deliverables: ['Customized workflow solution', 'Complete workflow configuration', 'Training and documentation', '30-day technical support'],
+    suitable: ['Multi-platform teams', 'Content studios', 'E-commerce operations', 'Teams with batch processing needs'],
+  },
+  {
+    id: 'content-system',
+    title: 'Content Production System',
+    subtitle: 'Build standardized efficient content pipelines',
+    description: 'Complete system setup from topic planning, content creation to multi-platform publishing, helping teams establish replicable, scalable content production processes.',
+    features: [
+      { title: 'Topic System Setup', description: 'Build systematic topic flows including trend tracking, topic library management, and content calendars' },
+      { title: 'Creation SOP Design', description: 'Define standardized creation processes to ensure stable and controllable content quality' },
+      { title: 'Multi-platform Distribution Strategy', description: 'Optimize content format based on platform characteristics to maximize reach' },
+      { title: 'Data Analytics System', description: 'Build data monitoring and analysis systems for data-driven content optimization' },
+    ],
+    deliverables: ['Complete content system solution', 'SOP documents for each stage', 'Tool configuration and templates', 'Team training and guidance'],
+    suitable: ['Content creation teams', 'Media studios', 'MCN agencies', 'Corporate social media departments'],
+  },
+];
+
+// FAQ
+const faq = [
+  { question: 'Is training online or offline?', answer: 'Currently primarily online training, supporting one-on-one or group sessions. Offline training can be arranged based on needs, please inquire for details.' },
+  { question: 'Can I learn without technical background?', answer: 'Absolutely. Our training content is designed for non-technical users, using visual tools and clear operation guides, no programming required.' },
+  { question: 'How is pricing structured?', answer: 'Pricing is customized based on specific service content and needs. Single training, workflow setup, and complete system building have different prices. Please add WeChat for detailed quotes.' },
+  { question: 'What after-sales support is provided?', answer: 'All services include a certain period of after-sales support to ensure smooth usage. Workflow and system services include 30-day technical support.' },
+  { question: 'Can I consult before deciding?', answer: 'Of course. Feel free to add WeChat for free consultation, we will provide suggestions and solutions based on your actual needs.' },
+];
+---
+
+<Base
+  title="Services - ZenithJoyAI"
+  description="ZenithJoyAI provides AI tool training, workflow automation consulting, and content production system setup services, helping content creators and small teams achieve 10x efficiency improvement."
+  faq={faq}
+>
+  <!-- Hero Section -->
+  <section class="pt-32 pb-20 px-4 bg-gradient-to-br from-[var(--color-primary)]/5 via-transparent to-[var(--color-accent)]/5">
+    <div class="max-w-4xl mx-auto text-center">
+      <h1 class="text-4xl md:text-5xl font-bold mb-6">
+        Our Services
+      </h1>
+      <p class="text-xl text-[var(--color-text-muted)] max-w-2xl mx-auto">
+        Systematic AI efficiency solutions tailored for content creators and small teams
+      </p>
+    </div>
+  </section>
+
+  <!-- Services Detail -->
+  {services.map((service, index) => (
+    <section id={service.id} class={`py-20 px-4 ${index % 2 === 1 ? 'bg-[var(--color-bg-card)]' : ''}`}>
+      <div class="max-w-6xl mx-auto">
+        <div class="grid lg:grid-cols-2 gap-12 items-start">
+          <!-- Left: Service Info -->
+          <div>
+            <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[var(--color-primary)]/10 text-[var(--color-primary)] text-sm font-medium mb-4">
+              Service {String(index + 1).padStart(2, '0')}
+            </div>
+            <h2 class="text-3xl font-bold mb-2">{service.title}</h2>
+            <p class="text-lg text-[var(--color-primary)] mb-4">{service.subtitle}</p>
+            <p class="text-[var(--color-text-muted)] mb-8 leading-relaxed">
+              {service.description}
+            </p>
+
+            <!-- Deliverables -->
+            <div class="mb-8">
+              <h3 class="font-bold mb-4">Deliverables</h3>
+              <ul class="space-y-2">
+                {service.deliverables.map(item => (
+                  <li class="flex items-center gap-3">
+                    <svg class="w-5 h-5 text-[var(--color-accent)] flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                    </svg>
+                    <span>{item}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            <!-- Suitable For -->
+            <div class="mb-8">
+              <h3 class="font-bold mb-4">Best For</h3>
+              <div class="flex flex-wrap gap-2">
+                {service.suitable.map(item => (
+                  <span class="px-3 py-1 text-sm bg-[var(--color-bg-card)] border border-[var(--color-border)] rounded-full">
+                    {item}
+                  </span>
+                ))}
+              </div>
+            </div>
+
+            <!-- CTA -->
+            <a
+              href="#contact"
+              class="inline-flex items-center gap-2 px-6 py-3 bg-[var(--color-primary)] text-white rounded-lg font-medium hover:bg-[var(--color-primary-dark)] transition-colors"
+            >
+              Inquire About This Service
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3"></path>
+              </svg>
+            </a>
+          </div>
+
+          <!-- Right: Features -->
+          <div class="space-y-4">
+            {service.features.map((feature, idx) => (
+              <div class="p-6 bg-[var(--color-bg)] rounded-xl border border-[var(--color-border)]">
+                <div class="flex items-start gap-4">
+                  <div class="w-10 h-10 rounded-lg bg-[var(--color-primary)]/10 flex items-center justify-center text-[var(--color-primary)] font-bold flex-shrink-0">
+                    {idx + 1}
+                  </div>
+                  <div>
+                    <h4 class="font-bold mb-2">{feature.title}</h4>
+                    <p class="text-sm text-[var(--color-text-muted)]">{feature.description}</p>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </section>
+  ))}
+
+  <!-- Process Section -->
+  <section class="py-20 px-4 bg-[var(--color-bg-card)]">
+    <div class="max-w-4xl mx-auto">
+      <div class="text-center mb-16">
+        <h2 class="text-3xl font-bold mb-4">Service Process</h2>
+        <p class="text-[var(--color-text-muted)]">Complete service flow from consultation to delivery</p>
+      </div>
+
+      <div class="relative">
+        <!-- Timeline line -->
+        <div class="absolute left-8 top-0 bottom-0 w-px bg-[var(--color-border)] hidden md:block"></div>
+
+        <div class="space-y-8">
+          <div class="flex gap-6 items-start">
+            <div class="w-16 h-16 rounded-full bg-[var(--color-primary)] text-white flex items-center justify-center font-bold text-xl flex-shrink-0 relative z-10">
+              1
+            </div>
+            <div class="pt-3">
+              <h3 class="font-bold text-lg mb-2">Needs Assessment</h3>
+              <p class="text-[var(--color-text-muted)]">Connect via WeChat to understand your business context, pain points, and goals</p>
+            </div>
+          </div>
+
+          <div class="flex gap-6 items-start">
+            <div class="w-16 h-16 rounded-full bg-[var(--color-primary)]/80 text-white flex items-center justify-center font-bold text-xl flex-shrink-0 relative z-10">
+              2
+            </div>
+            <div class="pt-3">
+              <h3 class="font-bold text-lg mb-2">Solution Design</h3>
+              <p class="text-[var(--color-text-muted)]">Create targeted solutions and implementation plans based on your needs</p>
+            </div>
+          </div>
+
+          <div class="flex gap-6 items-start">
+            <div class="w-16 h-16 rounded-full bg-[var(--color-primary)]/60 text-white flex items-center justify-center font-bold text-xl flex-shrink-0 relative z-10">
+              3
+            </div>
+            <div class="pt-3">
+              <h3 class="font-bold text-lg mb-2">Service Delivery</h3>
+              <p class="text-[var(--color-text-muted)]">Execute training, build systems, or configure workflows according to plan</p>
+            </div>
+          </div>
+
+          <div class="flex gap-6 items-start">
+            <div class="w-16 h-16 rounded-full bg-[var(--color-accent)] text-white flex items-center justify-center font-bold text-xl flex-shrink-0 relative z-10">
+              4
+            </div>
+            <div class="pt-3">
+              <h3 class="font-bold text-lg mb-2">After-sales Support</h3>
+              <p class="text-[var(--color-text-muted)]">Provide usage guidance and technical support to ensure smooth implementation</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- FAQ Section -->
+  <section class="py-20 px-4">
+    <div class="max-w-3xl mx-auto">
+      <div class="text-center mb-12">
+        <h2 class="text-3xl font-bold mb-4">Frequently Asked Questions</h2>
+      </div>
+
+      <div class="space-y-4">
+        {faq.map(item => (
+          <details class="group p-6 bg-[var(--color-bg-card)] rounded-xl border border-[var(--color-border)]">
+            <summary class="flex items-center justify-between cursor-pointer font-medium">
+              <span>{item.question}</span>
+              <svg class="w-5 h-5 transform transition-transform group-open:rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+              </svg>
+            </summary>
+            <p class="mt-4 text-[var(--color-text-muted)]">
+              {item.answer}
+            </p>
+          </details>
+        ))}
+      </div>
+    </div>
+  </section>
+
+  <!-- Contact Section -->
+  <section id="contact" class="py-20 px-4 bg-gradient-to-br from-[var(--color-primary)] to-[var(--color-primary-dark)] text-white">
+    <div class="max-w-4xl mx-auto text-center">
+      <h2 class="text-3xl md:text-4xl font-bold mb-6">
+        Ready to Boost Your Efficiency?
+      </h2>
+      <p class="text-xl opacity-90 mb-12">
+        Connect with us for free consultation and customized solutions
+      </p>
+
+      <div class="grid sm:grid-cols-3 gap-6 mb-12">
+        <div class="p-6 bg-white/10 rounded-xl backdrop-blur">
+          <div class="text-sm opacity-75 mb-2">WeChat ID</div>
+          <div class="text-xl font-bold">{contact.wechat}</div>
+        </div>
+        <div class="p-6 bg-white/10 rounded-xl backdrop-blur">
+          <div class="text-sm opacity-75 mb-2">Douyin ID</div>
+          <div class="text-xl font-bold">{contact.douyin}</div>
+        </div>
+        <div class="p-6 bg-white/10 rounded-xl backdrop-blur">
+          <div class="text-sm opacity-75 mb-2">Email</div>
+          <div class="text-lg font-bold">{contact.email}</div>
+        </div>
+      </div>
+
+      <a
+        href={`mailto:${contact.email}`}
+        class="inline-flex items-center gap-2 px-8 py-4 bg-white text-[var(--color-primary)] rounded-lg font-medium hover:shadow-lg transition-shadow"
+      >
+        Send Email Inquiry
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path>
+        </svg>
+      </a>
+    </div>
+  </section>
+
+  <!-- GEO Summary Block -->
+  <section class="py-12 px-4 bg-[var(--color-bg-card)] border-t border-[var(--color-border)]">
+    <div class="max-w-3xl mx-auto text-center">
+      <p class="text-[var(--color-text-muted)] leading-relaxed">
+        <strong>ZenithJoyAI</strong> is a professional AI efficiency consulting firm providing AI tool training, workflow automation consulting, and content production system setup services for content creators and small teams.
+        Contact: WeChat <strong>{contact.wechat}</strong>, Douyin <strong>{contact.douyin}</strong>, Email <strong>{contact.email}</strong>.
+      </p>
+    </div>
+  </section>
+</Base>

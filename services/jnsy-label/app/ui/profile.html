@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>金诺AI - 个人中心</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #6366f1;
+            --primary-light: #a5b4fc;
+            --secondary: #10b981;
+            --bg-dark: #0f172a;
+            --bg-darker: #020617;
+            --bg-card: #1e293b;
+            --text-primary: #f1f5f9;
+            --text-secondary: #94a3b8;
+            --text-muted: #64748b;
+            --border: #334155;
+            --success: #22c55e;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: Inter, -apple-system, sans-serif; background: var(--bg-darker); color: var(--text-primary); min-height: 100vh; }
+        .navbar { position: fixed; top: 0; left: 0; right: 0; height: 64px; background: rgba(15, 23, 42, 0.95); backdrop-filter: blur(20px); border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; padding: 0 32px; z-index: 100; }
+        .nav-left { display: flex; align-items: center; gap: 24px; }
+        .back-btn { display: flex; align-items: center; gap: 8px; color: var(--text-secondary); text-decoration: none; padding: 8px 16px; border-radius: 8px; font-size: 14px; }
+        .back-btn:hover { color: var(--text-primary); background: var(--bg-card); }
+        .page-title { font-size: 16px; font-weight: 600; display: flex; align-items: center; gap: 10px; }
+        .page-title i { color: var(--primary); }
+        .main-container { padding: 96px 32px 32px; max-width: 900px; margin: 0 auto; }
+        .profile-header { display: flex; align-items: center; gap: 24px; margin-bottom: 32px; padding: 32px; background: var(--bg-card); border: 1px solid var(--border); border-radius: 16px; }
+        .avatar { width: 80px; height: 80px; border-radius: 50%; background: linear-gradient(135deg, var(--primary), var(--secondary)); display: flex; align-items: center; justify-content: center; font-size: 32px; font-weight: 700; }
+        .profile-info h1 { font-size: 24px; margin-bottom: 4px; }
+        .profile-info p { color: var(--text-secondary); font-size: 14px; }
+        .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 32px; }
+        .stat-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px; padding: 20px; text-align: center; }
+        .stat-card .icon { width: 40px; height: 40px; border-radius: 10px; display: flex; align-items: center; justify-content: center; margin: 0 auto 12px; font-size: 18px; }
+        .stat-card .icon.blue { background: rgba(99, 102, 241, 0.2); color: var(--primary); }
+        .stat-card .icon.green { background: rgba(16, 185, 129, 0.2); color: var(--secondary); }
+        .stat-card .icon.yellow { background: rgba(245, 158, 11, 0.2); color: #f59e0b; }
+        .stat-card .icon.purple { background: rgba(139, 92, 246, 0.2); color: #8b5cf6; }
+        .stat-card .value { font-size: 28px; font-weight: 700; }
+        .stat-card .label { font-size: 12px; color: var(--text-muted); margin-top: 4px; }
+        .section { margin-bottom: 32px; }
+        .section-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+        .section-header h2 { font-size: 16px; display: flex; align-items: center; gap: 8px; }
+        .section-header h2 i { color: var(--primary); }
+        .history-list { background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+        .history-item { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px; border-bottom: 1px solid var(--border); }
+        .history-item:last-child { border-bottom: none; }
+        .history-item .left { display: flex; align-items: center; gap: 12px; }
+        .history-item .type-icon { width: 36px; height: 36px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 14px; }
+        .history-item .type-icon.text { background: rgba(59, 130, 246, 0.2); color: #3b82f6; }
+        .history-item .type-icon.image { background: rgba(16, 185, 129, 0.2); color: #10b981; }
+        .history-item .type-icon.audio { background: rgba(245, 158, 11, 0.2); color: #f59e0b; }
+        .history-item .type-icon.video { background: rgba(239, 68, 68, 0.2); color: #ef4444; }
+        .history-item .info h4 { font-size: 14px; font-weight: 500; margin-bottom: 2px; }
+        .history-item .info p { font-size: 12px; color: var(--text-muted); }
+        .history-item .right { text-align: right; }
+        .history-item .time { font-size: 12px; color: var(--text-muted); }
+        .history-item .status { display: inline-block; padding: 4px 8px; border-radius: 4px; font-size: 11px; margin-top: 4px; }
+        .history-item .status.success { background: rgba(34, 197, 94, 0.2); color: var(--success); }
+        .empty-state { text-align: center; padding: 48px; color: var(--text-muted); }
+        .empty-state i { font-size: 48px; margin-bottom: 16px; opacity: 0.5; }
+        .loading { text-align: center; padding: 32px; color: var(--text-muted); }
+        .loading i { font-size: 24px; animation: spin 1s linear infinite; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        @media (max-width: 768px) { .stats-grid { grid-template-columns: repeat(2, 1fr); } .profile-header { flex-direction: column; text-align: center; } }
+    </style>
+</head>
+<body>
+    <nav class="navbar">
+        <div class="nav-left">
+            <a href="index.html" class="back-btn"><i class="fas fa-arrow-left"></i> 返回首页</a>
+            <div class="page-title"><i class="fas fa-user-circle"></i><span>个人中心</span></div>
+        </div>
+    </nav>
+
+    <main class="main-container">
+        <div class="profile-header">
+            <div class="avatar" id="avatar">学</div>
+            <div class="profile-info">
+                <h1 id="username">学员</h1>
+                <p id="user-role">学员账号</p>
+            </div>
+        </div>
+
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="icon blue"><i class="fas fa-tasks"></i></div>
+                <div class="value" id="total-annotations">0</div>
+                <div class="label">总标注数</div>
+            </div>
+            <div class="stat-card">
+                <div class="icon green"><i class="fas fa-check-circle"></i></div>
+                <div class="value" id="completed-today">0</div>
+                <div class="label">今日完成</div>
+            </div>
+            <div class="stat-card">
+                <div class="icon yellow"><i class="fas fa-fire"></i></div>
+                <div class="value" id="streak">7</div>
+                <div class="label">连续天数</div>
+            </div>
+            <div class="stat-card">
+                <div class="icon purple"><i class="fas fa-star"></i></div>
+                <div class="value" id="accuracy">--</div>
+                <div class="label">准确率</div>
+            </div>
+        </div>
+
+        <section class="section">
+            <div class="section-header">
+                <h2><i class="fas fa-history"></i> 最近标注记录</h2>
+            </div>
+            <div class="history-list" id="history-list">
+                <div class="loading"><i class="fas fa-spinner fa-spin"></i><p>加载中...</p></div>
+            </div>
+        </section>
+    </main>
+
+    <script>
+        // 加载用户信息
+        const user = JSON.parse(localStorage.getItem('jinuo_user') || '{}');
+        if (user.username) {
+            document.getElementById('username').textContent = user.username;
+            document.getElementById('avatar').textContent = user.username.charAt(0);
+            document.getElementById('user-role').textContent = user.role === 'admin' ? '管理员账号' : '学员账号';
+        }
+
+        // 加载用户标注历史
+        async function loadHistory() {
+            const historyList = document.getElementById('history-list');
+            try {
+                const response = await fetch('/api/stats/user/' + (user.phone || 'guest') + '/history?limit=10');
+                const data = await response.json();
+
+                if (!data.annotations || data.annotations.length === 0) {
+                    historyList.innerHTML = '<div class="empty-state"><i class="fas fa-inbox"></i><p>暂无标注记录</p></div>';
+                    return;
+                }
+
+                document.getElementById('total-annotations').textContent = data.total || 0;
+
+                let html = '';
+                const typeMap = { text: '文本标注', image: '图像标注', audio: '语音标注', video: '视频标注' };
+                const iconMap = { text: 'fa-align-left', image: 'fa-image', audio: 'fa-microphone', video: 'fa-video' };
+
+                data.annotations.forEach(a => {
+                    const type = a.type || 'text';
+                    const typeName = typeMap[type] || '标注任务';
+                    const icon = iconMap[type] || 'fa-tag';
+                    const time = a.created_at ? new Date(a.created_at).toLocaleString('zh-CN') : '刚刚';
+
+                    html += `
+                        <div class="history-item">
+                            <div class="left">
+                                <div class="type-icon ${type}"><i class="fas ${icon}"></i></div>
+                                <div class="info">
+                                    <h4>${typeName}</h4>
+                                    <p>任务 #${a.task || a.id || '--'}</p>
+                                </div>
+                            </div>
+                            <div class="right">
+                                <div class="time">${time}</div>
+                                <div class="status success">已提交</div>
+                            </div>
+                        </div>
+                    `;
+                });
+
+                historyList.innerHTML = html;
+            } catch (e) {
+                console.log('History load failed:', e);
+                historyList.innerHTML = '<div class="empty-state"><i class="fas fa-inbox"></i><p>暂无标注记录</p></div>';
+            }
+        }
+
+        loadHistory();
+    </script>
+</body>
+</html>

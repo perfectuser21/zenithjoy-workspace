@@ -1,0 +1,1211 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI训练师 - 后台管理</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif;
+        }
+        
+        body {
+            background-color: #f5f5f5;
+            color: #333;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #182848 0%, #4b6cb7 100%);
+            color: white;
+            padding: 15px 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+        
+        .logo {
+            font-size: 20px;
+            font-weight: bold;
+            letter-spacing: 1px;
+        }
+        
+        .user-info {
+            display: flex;
+            align-items: center;
+            gap: 25px;
+        }
+        
+        .user-name {
+            font-weight: bold;
+            color: white;
+            font-size: 16px;
+        }
+        
+        .nav-links {
+            display: flex;
+            gap: 20px;
+        }
+        
+        .nav-links a {
+            color: white;
+            text-decoration: none;
+            padding: 8px 15px;
+            border-radius: 4px;
+            transition: background-color 0.3s;
+        }
+        
+        .nav-links a:hover {
+            background-color: rgba(255, 255, 255, 0.1);
+        }
+        
+        .nav-links a.active {
+            background-color: rgba(255, 255, 255, 0.2);
+        }
+        
+        .logout-btn {
+            background: #dc3545;
+            color: white;
+            border: none;
+            padding: 8px 15px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            text-decoration: none;
+            transition: background-color 0.3s;
+        }
+        
+        .logout-btn:hover {
+            background: #c82333;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 30px auto;
+            padding: 0 20px;
+        }
+        
+        .dashboard {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 25px;
+            margin-bottom: 40px;
+        }
+        
+        .card {
+            background: white;
+            border-radius: 10px;
+            padding: 25px;
+            box-shadow: 0 3px 10px rgba(0, 0, 0, 0.08);
+        }
+        
+        .card h2 {
+            margin-bottom: 20px;
+            color: #182848;
+            font-size: 18px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .card h2 i {
+            color: #4b6cb7;
+        }
+        
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+            margin-bottom: 30px;
+        }
+        
+        .stat-item {
+            text-align: center;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 8px;
+        }
+        
+        .stat-value {
+            font-size: 28px;
+            font-weight: bold;
+            color: #4b6cb7;
+            margin-bottom: 5px;
+        }
+        
+        .stat-label {
+            font-size: 14px;
+            color: #666;
+        }
+        
+        .form-group {
+            margin-bottom: 20px;
+        }
+        
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            color: #333;
+            font-weight: 500;
+        }
+        
+        .form-control {
+            width: 100%;
+            padding: 10px 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 16px;
+            transition: border-color 0.3s;
+        }
+        
+        .form-control:focus {
+            border-color: #4b6cb7;
+            outline: none;
+            box-shadow: 0 0 0 2px rgba(75, 108, 183, 0.2);
+        }
+        
+        textarea.form-control {
+            min-height: 100px;
+            resize: vertical;
+        }
+        
+        .form-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        
+        .btn {
+            padding: 10px 25px;
+            background: #4b6cb7;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: background-color 0.3s;
+            text-decoration: none;
+            display: inline-block;
+        }
+        
+        .btn:hover {
+            background: #3a5ba0;
+        }
+        
+        .btn-primary {
+            background: #4b6cb7;
+        }
+        
+        .btn-success {
+            background: #28a745;
+        }
+        
+        .btn-success:hover {
+            background: #218838;
+        }
+        
+        .btn-danger {
+            background: #dc3545;
+        }
+        
+        .btn-danger:hover {
+            background: #c82333;
+        }
+        
+        .btn-sm {
+            padding: 5px 10px;
+            font-size: 14px;
+        }
+        
+        .question-list {
+            margin-top: 20px;
+        }
+        
+        .question-item {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 15px;
+            border-left: 4px solid #4b6cb7;
+        }
+        
+        .question-header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 10px;
+            align-items: center;
+        }
+        
+        .question-title {
+            font-weight: bold;
+            color: #182848;
+        }
+        
+        .question-type {
+            background: #4b6cb7;
+            color: white;
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+        }
+        
+        .question-meta {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 10px;
+            font-size: 14px;
+            color: #666;
+        }
+        
+        .question-actions {
+            display: flex;
+            gap: 10px;
+            margin-top: 15px;
+        }
+        
+        .tab-container {
+            background: white;
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: 0 3px 10px rgba(0, 0, 0, 0.08);
+            margin-bottom: 30px;
+        }
+        
+        .tabs {
+            display: flex;
+            background: #f8f9fa;
+            border-bottom: 1px solid #ddd;
+        }
+        
+        .tab {
+            padding: 15px 30px;
+            cursor: pointer;
+            border-bottom: 3px solid transparent;
+            transition: all 0.3s;
+        }
+        
+        .tab:hover {
+            background: #e9ecef;
+        }
+        
+        .tab.active {
+            background: white;
+            border-bottom: 3px solid #4b6cb7;
+            font-weight: bold;
+        }
+        
+        .tab-content {
+            padding: 30px;
+        }
+        
+        .tab-pane {
+            display: none;
+        }
+        
+        .tab-pane.active {
+            display: block;
+        }
+        
+        .login-prompt, .admin-only {
+            text-align: center;
+            padding: 60px 40px;
+            background: white;
+            border-radius: 10px;
+            margin: 50px auto;
+            max-width: 500px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+        }
+        
+        .login-prompt h3, .admin-only h3 {
+            color: #333;
+            margin-bottom: 15px;
+            font-size: 24px;
+        }
+        
+        .loading, .error {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+        }
+        
+        .error {
+            color: #dc3545;
+        }
+        
+        .success-message {
+            background: #d4edda;
+            color: #155724;
+            padding: 10px 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+            display: none;
+        }
+        
+        .options-container {
+            margin-top: 15px;
+        }
+        
+        .option-item {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 10px;
+            align-items: center;
+        }
+        
+        .option-item input[type="radio"] {
+            margin-right: 5px;
+        }
+        
+        .option-item input[type="text"] {
+            flex: 1;
+        }
+        
+        .add-option-btn {
+            margin-top: 10px;
+        }
+        
+        @media (max-width: 768px) {
+            .header {
+                flex-direction: column;
+                gap: 15px;
+                padding: 15px;
+            }
+            
+            .user-info {
+                flex-wrap: wrap;
+                justify-content: center;
+            }
+            
+            .dashboard {
+                grid-template-columns: 1fr;
+            }
+            
+            .stats-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+            
+            .tabs {
+                flex-direction: column;
+            }
+            
+            .tab {
+                padding: 12px 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- 如果是管理员登录状态，显示完整页面 -->
+    <div id="adminContent" style="display: none;">
+        <div class="header">
+            <div class="logo">AI训练师 - 后台管理</div>
+            <div class="user-info">
+                <span class="user-name" id="username">管理员</span>
+                <div class="nav-links">
+                    <a href="/ui/index.html">首页</a>
+                    <a href="/ui/training.html">训练</a>
+                    <a href="/ui/admin.html" class="active">管理</a>
+                </div>
+                <button class="logout-btn" onclick="logout()">退出登录</button>
+            </div>
+        </div>
+        
+        <div class="container">
+            <!-- 仪表板统计 -->
+            <div class="dashboard" id="dashboard">
+                <div class="card">
+                    <h2><i>📊</i> 系统统计</h2>
+                    <div class="stats-grid" id="stats">
+                        <div class="loading">加载统计数据中...</div>
+                    </div>
+                </div>
+                
+                <div class="card">
+                    <h2><i>🚀</i> 快捷操作</h2>
+                    <div style="display: flex; flex-direction: column; gap: 15px; margin-top: 20px;">
+                        <button class="btn btn-primary" onclick="switchTab('add-question')">
+                            <i>➕</i> 添加新题目
+                        </button>
+                        <button class="btn btn-success" onclick="switchTab('manage-questions')">
+                            <i>📝</i> 管理现有题目
+                        </button>
+                        <button class="btn" onclick="refreshAllData()">
+                            <i>🔄</i> 刷新数据
+                        </button>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 选项卡容器 -->
+            <div class="tab-container">
+                <div class="tabs">
+                    <div class="tab active" onclick="switchTab('add-question')">添加题目</div>
+                    <div class="tab" onclick="switchTab('manage-questions')">管理题目</div>
+                    <div class="tab" onclick="switchTab('user-stats')">用户统计</div>
+                    <div class="tab" onclick="switchTab('system-settings')">系统设置</div>
+                </div>
+                
+                <div class="tab-content">
+                    <!-- 添加题目面板 -->
+                    <div id="add-question" class="tab-pane active">
+                        <h2>添加新题目</h2>
+                        <div class="success-message" id="successMessage"></div>
+                        
+                        <form id="addQuestionForm">
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="questionType">题目类型</label>
+                                    <select id="questionType" class="form-control" required onchange="onQuestionTypeChange()">
+                                        <option value="">选择题目类型</option>
+                                        <option value="text_classification">文本分类</option>
+                                        <option value="python_programming">Python编程</option>
+                                        <option value="multiple_choice">选择题</option>
+                                        <option value="code_review">代码审查</option>
+                                    </select>
+                                </div>
+                                
+                                <div class="form-group">
+                                    <label for="difficulty">难度等级</label>
+                                    <select id="difficulty" class="form-control" required>
+                                        <option value="1">★☆☆☆☆ (简单)</option>
+                                        <option value="2">★★☆☆☆ (初级)</option>
+                                        <option value="3">★★★☆☆ (中等)</option>
+                                        <option value="4">★★★★☆ (困难)</option>
+                                        <option value="5">★★★★★ (专家)</option>
+                                    </select>
+                                </div>
+                                
+                                <div class="form-group">
+                                    <label for="score">分值</label>
+                                    <input type="number" id="score" class="form-control" min="1" max="100" value="10" required>
+                                </div>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label for="stem">题目描述</label>
+                                <textarea id="stem" class="form-control" placeholder="请输入题目描述..." required></textarea>
+                            </div>
+                            
+                            <!-- 动态选项区域 -->
+                            <div id="dynamicOptions" style="display: none;">
+                                <div class="form-group">
+                                    <label>选项设置</label>
+                                    <div class="options-container" id="optionsContainer">
+                                        <!-- 选项会动态添加到这里 -->
+                                    </div>
+                                    <button type="button" class="btn btn-sm add-option-btn" onclick="addOption()">添加选项</button>
+                                </div>
+                                
+                                <div class="form-group">
+                                    <label for="correctAnswer">正确答案</label>
+                                    <input type="text" id="correctAnswer" class="form-control" placeholder="请输入正确答案">
+                                </div>
+                            </div>
+                            
+                            <!-- Python编程特定字段 -->
+                            <div id="pythonFields" style="display: none;">
+                                <div class="form-group">
+                                    <label for="functionName">函数名称</label>
+                                    <input type="text" id="functionName" class="form-control" placeholder="请输入函数名称">
+                                </div>
+                                
+                                <div class="form-group">
+                                    <label for="testCases">测试用例 (JSON格式)</label>
+                                    <textarea id="testCases" class="form-control" placeholder='[{"input": [1, 2, 3], "output": 6}]'></textarea>
+                                </div>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label for="explanation">题目解析 (可选)</label>
+                                <textarea id="explanation" class="form-control" placeholder="请输入题目解析..."></textarea>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label for="tags">标签 (用逗号分隔)</label>
+                                <input type="text" id="tags" class="form-control" placeholder="AI, Python, 算法">
+                            </div>
+                            
+                            <button type="submit" class="btn btn-primary">添加题目</button>
+                            <button type="button" class="btn" onclick="resetForm()">重置表单</button>
+                        </form>
+                    </div>
+                    
+                    <!-- 管理题目面板 -->
+                    <div id="manage-questions" class="tab-pane">
+                        <h2>管理题目</h2>
+                        <div class="question-list" id="questionList">
+                            <div class="loading">加载题目中...</div>
+                        </div>
+                    </div>
+                    
+                    <!-- 用户统计面板 -->
+                    <div id="user-stats" class="tab-pane">
+                        <h2>用户统计</h2>
+                        <div id="userStatsContent">
+                            <div class="loading">加载用户统计数据中...</div>
+                        </div>
+                    </div>
+                    
+                    <!-- 系统设置面板 -->
+                    <div id="system-settings" class="tab-pane">
+                        <h2>系统设置</h2>
+                        <div style="max-width: 600px;">
+                            <div class="form-group">
+                                <label>系统名称</label>
+                                <input type="text" class="form-control" value="AI训练师" disabled>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label>API服务器地址</label>
+                                <input type="text" class="form-control" id="apiUrl" value="http://127.0.0.1:8001">
+                            </div>
+                            
+                            <div class="form-group">
+                                <label>数据备份</label>
+                                <div style="display: flex; gap: 15px; margin-top: 10px;">
+                                    <button class="btn btn-primary" onclick="backupData()">备份数据</button>
+                                    <button class="btn btn-success" onclick="importData()">导入数据</button>
+                                </div>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label>系统维护</label>
+                                <div style="display: flex; gap: 15px; margin-top: 10px;">
+                                    <button class="btn" onclick="clearCache()">清除缓存</button>
+                                    <button class="btn btn-danger" onclick="resetSystem()">重置系统</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 如果是未登录状态，显示登录提示 -->
+    <div id="loginPrompt" class="login-prompt" style="display: none;">
+        <h3>请先登录</h3>
+        <p>您需要登录后才能访问后台管理</p>
+        <a href="/ui/login.html" class="btn btn-primary" style="display: inline-block; margin-top: 20px;">前往登录</a>
+    </div>
+    
+    <!-- 如果是非管理员登录，显示权限提示 -->
+    <div id="notAdminPrompt" class="admin-only" style="display: none;">
+        <h3>权限不足</h3>
+        <p>只有管理员可以访问后台管理页面</p>
+        <a href="/ui/training.html" class="btn btn-primary" style="display: inline-block; margin-top: 20px;">前往训练页面</a>
+    </div>
+    
+    <script>
+        // 检查登录状态和权限
+        function checkAdminAccess() {
+            try {
+                const user = JSON.parse(localStorage.getItem('user'));
+                const isLoggedIn = localStorage.getItem('isLoggedIn');
+                
+                if(!user || !user.isAuthenticated || isLoggedIn !== 'true') {
+                    // 未登录
+                    document.getElementById('adminContent').style.display = 'none';
+                    document.getElementById('loginPrompt').style.display = 'block';
+                    document.getElementById('notAdminPrompt').style.display = 'none';
+                    return false;
+                }
+                
+                // 检查是否为管理员
+                if(user.role !== 'admin') {
+                    // 不是管理员
+                    document.getElementById('adminContent').style.display = 'none';
+                    document.getElementById('loginPrompt').style.display = 'none';
+                    document.getElementById('notAdminPrompt').style.display = 'block';
+                    return false;
+                }
+                
+                // 是管理员，显示内容
+                document.getElementById('adminContent').style.display = 'block';
+                document.getElementById('loginPrompt').style.display = 'none';
+                document.getElementById('notAdminPrompt').style.display = 'none';
+                
+                // 设置用户名
+                document.getElementById('username').textContent = user.username || '管理员';
+                
+                // 初始化页面
+                loadDashboardStats();
+                loadAllQuestions();
+                
+                return true;
+            } catch (e) {
+                console.error('检查权限失败:', e);
+                document.getElementById('adminContent').style.display = 'none';
+                document.getElementById('loginPrompt').style.display = 'block';
+                document.getElementById('notAdminPrompt').style.display = 'none';
+                return false;
+            }
+        }
+        
+        // 退出登录
+        function logout() {
+            if(confirm('确定要退出登录吗？')) {
+                localStorage.removeItem('user');
+                localStorage.removeItem('isLoggedIn');
+                window.location.href = '/ui/login.html';
+            }
+        }
+        
+        // 加载仪表板统计数据
+        async function loadDashboardStats() {
+            try {
+                const statsElement = document.getElementById('stats');
+                statsElement.innerHTML = '<div class="loading">加载统计数据中...</div>';
+                
+                // 这里可以调用多个API获取不同统计数据
+                const [questionsRes, usersRes, attemptsRes] = await Promise.all([
+                    fetch('http://127.0.0.1:8001/api/questions').catch(() => null),
+                    fetch('http://127.0.0.1:8001/api/users').catch(() => null),
+                    fetch('http://127.0.0.1:8001/api/stats').catch(() => null)
+                ]);
+                
+                let questionsCount = 0;
+                let usersCount = 0;
+                let attemptsCount = 0;
+                let avgScore = 0;
+                
+                if (questionsRes && questionsRes.ok) {
+                    const questions = await questionsRes.json();
+                    questionsCount = questions.length || 0;
+                }
+                
+                // 这里假设有用户API，如果没有可以调整
+                usersCount = 5; // 示例数据
+                
+                if (attemptsRes && attemptsRes.ok) {
+                    const stats = await attemptsRes.json();
+                    attemptsCount = stats.total_attempts || 0;
+                    avgScore = stats.avg_score || 0;
+                }
+                
+                statsElement.innerHTML = `
+                    <div class="stat-item">
+                        <div class="stat-value">${questionsCount}</div>
+                        <div class="stat-label">题目总数</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-value">${usersCount}</div>
+                        <div class="stat-label">注册用户</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-value">${attemptsCount}</div>
+                        <div class="stat-label">练习次数</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-value">${avgScore.toFixed(1)}</div>
+                        <div class="stat-label">平均分</div>
+                    </div>
+                `;
+                
+            } catch (error) {
+                console.error('加载仪表板数据失败:', error);
+                document.getElementById('stats').innerHTML = `
+                    <div class="error">
+                        <p>加载数据失败: ${error.message}</p>
+                        <button class="btn btn-sm" onclick="loadDashboardStats()">重试</button>
+                    </div>
+                `;
+            }
+        }
+        
+        // 加载所有题目
+        async function loadAllQuestions() {
+            try {
+                const questionListElement = document.getElementById('questionList');
+                questionListElement.innerHTML = '<div class="loading">加载题目中...</div>';
+                
+                const response = await fetch('http://127.0.0.1:8001/api/questions');
+                
+                if (!response.ok) {
+                    throw new Error(`网络响应异常: ${response.status} ${response.statusText}`);
+                }
+                
+                const questions = await response.json();
+                
+                if (questions.length === 0) {
+                    questionListElement.innerHTML = `
+                        <div class="loading">
+                            <p>暂无题目</p>
+                            <button class="btn btn-sm" onclick="loadAllQuestions()">刷新</button>
+                        </div>
+                    `;
+                    return;
+                }
+                
+                let questionsHTML = '';
+                questions.forEach(question => {
+                    const typeText = getQuestionTypeText(question.type);
+                    const difficultyStars = '★'.repeat(question.difficulty) + '☆'.repeat(5 - question.difficulty);
+                    
+                    questionsHTML += `
+                        <div class="question-item" data-id="${question.id}">
+                            <div class="question-header">
+                                <div class="question-title">${question.stem.substring(0, 50)}${question.stem.length > 50 ? '...' : ''}</div>
+                                <div class="question-type">${typeText}</div>
+                            </div>
+                            <div class="question-meta">
+                                <span>难度: ${difficultyStars}</span>
+                                <span>分值: ${question.score}</span>
+                                <span>类型: ${typeText}</span>
+                                <span>创建: ${new Date(question.created_at).toLocaleDateString()}</span>
+                            </div>
+                            <div class="question-actions">
+                                <button class="btn btn-sm" onclick="editQuestion(${question.id})">编辑</button>
+                                <button class="btn btn-sm btn-danger" onclick="deleteQuestion(${question.id})">删除</button>
+                                <button class="btn btn-sm btn-success" onclick="previewQuestion(${question.id})">预览</button>
+                            </div>
+                        </div>
+                    `;
+                });
+                
+                questionListElement.innerHTML = questionsHTML;
+                
+            } catch (error) {
+                console.error('加载题目失败:', error);
+                document.getElementById('questionList').innerHTML = `
+                    <div class="error">
+                        <p>加载题目失败: ${error.message}</p>
+                        <button class="btn btn-sm" onclick="loadAllQuestions()">重试</button>
+                    </div>
+                `;
+            }
+        }
+        
+        // 获取题目类型文本
+        function getQuestionTypeText(type) {
+            const typeMap = {
+                'text_classification': '文本分类',
+                'python_programming': 'Python编程',
+                'multiple_choice': '选择题',
+                'code_review': '代码审查'
+            };
+            return typeMap[type] || type;
+        }
+        
+        // 切换选项卡
+        function switchTab(tabId) {
+            // 更新选项卡样式
+            document.querySelectorAll('.tab').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            document.querySelectorAll('.tab').forEach(tab => {
+                if (tab.textContent.includes(tabId.replace('-', ' ')) || tab.onclick.toString().includes(tabId)) {
+                    tab.classList.add('active');
+                }
+            });
+            
+            // 更新内容区域
+            document.querySelectorAll('.tab-pane').forEach(pane => {
+                pane.classList.remove('active');
+            });
+            document.getElementById(tabId).classList.add('active');
+            
+            // 如果是管理题目标签，刷新题目列表
+            if (tabId === 'manage-questions') {
+                loadAllQuestions();
+            }
+            
+            // 如果是用户统计标签，加载用户统计数据
+            if (tabId === 'user-stats') {
+                loadUserStats();
+            }
+        }
+        
+        // 题目类型改变事件
+        function onQuestionTypeChange() {
+            const questionType = document.getElementById('questionType').value;
+            const dynamicOptions = document.getElementById('dynamicOptions');
+            const pythonFields = document.getElementById('pythonFields');
+            
+            // 隐藏所有动态字段
+            dynamicOptions.style.display = 'none';
+            pythonFields.style.display = 'none';
+            
+            // 根据类型显示相应字段
+            if (questionType === 'multiple_choice') {
+                dynamicOptions.style.display = 'block';
+                initializeOptions();
+            } else if (questionType === 'python_programming') {
+                pythonFields.style.display = 'block';
+            }
+        }
+        
+        // 初始化选项
+        function initializeOptions() {
+            const optionsContainer = document.getElementById('optionsContainer');
+            optionsContainer.innerHTML = '';
+            
+            // 添加初始选项
+            addOption();
+            addOption();
+        }
+        
+        // 添加选项
+        function addOption() {
+            const optionsContainer = document.getElementById('optionsContainer');
+            const optionCount = optionsContainer.children.length + 1;
+            
+            const optionHTML = `
+                <div class="option-item">
+                    <input type="radio" name="correctOption" value="option${optionCount}">
+                    <label>选项 ${optionCount}:</label>
+                    <input type="text" class="form-control" placeholder="请输入选项内容">
+                </div>
+            `;
+            
+            optionsContainer.insertAdjacentHTML('beforeend', optionHTML);
+        }
+        
+        // 添加题目表单提交
+        document.getElementById('addQuestionForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            try {
+                const questionType = document.getElementById('questionType').value;
+                const difficulty = parseInt(document.getElementById('difficulty').value);
+                const score = parseInt(document.getElementById('score').value);
+                const stem = document.getElementById('stem').value.trim();
+                const explanation = document.getElementById('explanation').value.trim();
+                const tags = document.getElementById('tags').value.trim();
+                
+                if (!stem) {
+                    alert('请输入题目描述');
+                    return;
+                }
+                
+                // 构建题目数据
+                const questionData = {
+                    type: questionType,
+                    difficulty: difficulty,
+                    score: score,
+                    stem: stem,
+                    explanation: explanation || null,
+                    tags: tags ? tags.split(',').map(tag => tag.trim()) : []
+                };
+                
+                // 根据题目类型添加额外字段
+                if (questionType === 'multiple_choice') {
+                    const options = [];
+                    const optionElements = document.querySelectorAll('#optionsContainer .option-item');
+                    
+                    optionElements.forEach((item, index) => {
+                        const input = item.querySelector('input[type="text"]');
+                        const radio = item.querySelector('input[type="radio"]');
+                        
+                        if (input && input.value.trim()) {
+                            options.push({
+                                id: index + 1,
+                                text: input.value.trim(),
+                                is_correct: radio ? radio.checked : false
+                            });
+                        }
+                    });
+                    
+                    if (options.length < 2) {
+                        alert('请至少添加两个选项');
+                        return;
+                    }
+                    
+                    const hasCorrect = options.some(opt => opt.is_correct);
+                    if (!hasCorrect) {
+                        alert('请设置正确答案');
+                        return;
+                    }
+                    
+                    questionData.options = options;
+                    questionData.correct_answer = options.find(opt => opt.is_correct)?.id.toString();
+                    
+                } else if (questionType === 'python_programming') {
+                    const functionName = document.getElementById('functionName').value.trim();
+                    const testCases = document.getElementById('testCases').value.trim();
+                    
+                    if (functionName) {
+                        questionData.function_name = functionName;
+                    }
+                    
+                    if (testCases) {
+                        try {
+                            questionData.test_cases = JSON.parse(testCases);
+                        } catch (e) {
+                            alert('测试用例格式错误，请输入有效的JSON');
+                            return;
+                        }
+                    }
+                    
+                } else if (questionType === 'text_classification') {
+                    const correctAnswer = document.getElementById('correctAnswer')?.value.trim();
+                    if (correctAnswer) {
+                        questionData.correct_answer = correctAnswer;
+                    }
+                }
+                
+                // 显示加载状态
+                const submitBtn = this.querySelector('button[type="submit"]');
+                const originalText = submitBtn.textContent;
+                submitBtn.textContent = '添加中...';
+                submitBtn.disabled = true;
+                
+                // 发送请求
+                const response = await fetch('http://127.0.0.1:8001/api/questions', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(questionData)
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`添加题目失败: ${response.status} ${response.statusText}`);
+                }
+                
+                const result = await response.json();
+                
+                // 显示成功消息
+                const successMessage = document.getElementById('successMessage');
+                successMessage.textContent = '题目添加成功！';
+                successMessage.style.display = 'block';
+                
+                // 重置表单
+                resetForm();
+                
+                // 刷新题目列表
+                loadAllQuestions();
+                loadDashboardStats();
+                
+                // 3秒后隐藏成功消息
+                setTimeout(() => {
+                    successMessage.style.display = 'none';
+                }, 3000);
+                
+            } catch (error) {
+                console.error('添加题目失败:', error);
+                alert('添加题目失败: ' + error.message);
+            } finally {
+                // 恢复按钮状态
+                const submitBtn = document.querySelector('#addQuestionForm button[type="submit"]');
+                submitBtn.textContent = '添加题目';
+                submitBtn.disabled = false;
+            }
+        });
+        
+        // 重置表单
+        function resetForm() {
+            document.getElementById('addQuestionForm').reset();
+            document.getElementById('dynamicOptions').style.display = 'none';
+            document.getElementById('pythonFields').style.display = 'none';
+            document.getElementById('optionsContainer').innerHTML = '';
+        }
+        
+        // 删除题目
+        async function deleteQuestion(questionId) {
+            if (!confirm('确定要删除这个题目吗？此操作不可恢复。')) {
+                return;
+            }
+            
+            try {
+                const response = await fetch(`http://127.0.0.1:8001/api/questions/${questionId}`, {
+                    method: 'DELETE'
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`删除失败: ${response.status} ${response.statusText}`);
+                }
+                
+                alert('题目删除成功！');
+                loadAllQuestions();
+                loadDashboardStats();
+                
+            } catch (error) {
+                console.error('删除题目失败:', error);
+                alert('删除题目失败: ' + error.message);
+            }
+        }
+        
+        // 编辑题目
+        async function editQuestion(questionId) {
+            try {
+                const response = await fetch(`http://127.0.0.1:8001/api/questions/${questionId}`);
+                
+                if (!response.ok) {
+                    throw new Error(`获取题目详情失败: ${response.status} ${response.statusText}`);
+                }
+                
+                const question = await response.json();
+                
+                // 切换到添加题目标签并填充表单
+                switchTab('add-question');
+                
+                // 填充表单数据
+                document.getElementById('questionType').value = question.type;
+                document.getElementById('difficulty').value = question.difficulty;
+                document.getElementById('score').value = question.score;
+                document.getElementById('stem').value = question.stem;
+                document.getElementById('explanation').value = question.explanation || '';
+                document.getElementById('tags').value = question.tags?.join(', ') || '';
+                
+                // 触发类型变化事件
+                onQuestionTypeChange();
+                
+                // 根据类型填充额外字段
+                if (question.type === 'multiple_choice' && question.options) {
+                    // 填充选项
+                    const optionsContainer = document.getElementById('optionsContainer');
+                    optionsContainer.innerHTML = '';
+                    
+                    question.options.forEach((option, index) => {
+                        const optionHTML = `
+                            <div class="option-item">
+                                <input type="radio" name="correctOption" value="option${index + 1}" ${option.is_correct ? 'checked' : ''}>
+                                <label>选项 ${index + 1}:</label>
+                                <input type="text" class="form-control" value="${option.text}">
+                            </div>
+                        `;
+                        optionsContainer.insertAdjacentHTML('beforeend', optionHTML);
+                    });
+                    
+                } else if (question.type === 'python_programming') {
+                    if (question.function_name) {
+                        document.getElementById('functionName').value = question.function_name;
+                    }
+                    if (question.test_cases) {
+                        document.getElementById('testCases').value = JSON.stringify(question.test_cases, null, 2);
+                    }
+                }
+                
+                // 修改表单提交按钮文字
+                const submitBtn = document.querySelector('#addQuestionForm button[type="submit"]');
+                submitBtn.textContent = '更新题目';
+                submitBtn.setAttribute('data-edit-id', questionId);
+                
+                // 临时修改提交事件
+                const form = document.getElementById('addQuestionForm');
+                const originalSubmit = form.onsubmit;
+                
+                form.onsubmit = async function(e) {
+                    e.preventDefault();
+                    
+                    // 更新题目逻辑（与添加类似，但使用PUT请求）
+                    // 这里省略详细实现
+                    alert('编辑功能正在开发中...');
+                    
+                    // 恢复原始事件
+                    form.onsubmit = originalSubmit;
+                    submitBtn.textContent = '添加题目';
+                    submitBtn.removeAttribute('data-edit-id');
+                    
+                    return false;
+                };
+                
+            } catch (error) {
+                console.error('编辑题目失败:', error);
+                alert('获取题目详情失败: ' + error.message);
+            }
+        }
+        
+        // 预览题目
+        function previewQuestion(questionId) {
+            alert(`预览题目 #${questionId}，此功能正在开发中...`);
+        }
+        
+        // 加载用户统计数据
+        async function loadUserStats() {
+            try {
+                const userStatsContent = document.getElementById('userStatsContent');
+                userStatsContent.innerHTML = '<div class="loading">加载用户统计数据中...</div>';
+                
+                // 这里可以调用用户统计API
+                // 暂时使用模拟数据
+                setTimeout(() => {
+                    userStatsContent.innerHTML = `
+                        <div class="stats-grid">
+                            <div class="stat-item">
+                                <div class="stat-value">5</div>
+                                <div class="stat-label">活跃用户</div>
+                            </div>
+                            <div class="stat-item">
+                                <div class="stat-value">12</div>
+                                <div class="stat-label">总练习次数</div>
+                            </div>
+                            <div class="stat-item">
+                                <div class="stat-value">85%</div>
+                                <div class="stat-label">平均完成率</div>
+                            </div>
+                            <div class="stat-item">
+                                <div class="stat-value">3.2</div>
+                                <div class="stat-label">平均得分</div>
+                            </div>
+                        </div>
+                        <div style="margin-top: 30px;">
+                            <h3>用户活跃度</h3>
+                            <p>用户统计图表正在开发中...</p>
+                        </div>
+                    `;
+                }, 500);
+                
+            } catch (error) {
+                console.error('加载用户统计失败:', error);
+                document.getElementById('userStatsContent').innerHTML = `
+                    <div class="error">
+                        <p>加载用户统计失败: ${error.message}</p>
+                        <button class="btn btn-sm" onclick="loadUserStats()">重试</button>
+                    </div>
+                `;
+            }
+        }
+        
+        // 刷新所有数据
+        function refreshAllData() {
+            loadDashboardStats();
+            loadAllQuestions();
+            
+            // 显示刷新提示
+            alert('数据刷新成功！');
+        }
+        
+        // 备份数据
+        function backupData() {
+            alert('数据备份功能正在开发中...');
+        }
+        
+        // 导入数据
+        function importData() {
+            alert('数据导入功能正在开发中...');
+        }
+        
+        // 清除缓存
+        function clearCache() {
+            localStorage.removeItem('cache');
+            alert('缓存清除成功！');
+        }
+        
+        // 重置系统
+        function resetSystem() {
+            if (confirm('确定要重置系统吗？这将清除所有本地数据，但不会影响服务器数据。')) {
+                localStorage.clear();
+                alert('系统重置成功！页面将重新加载。');
+                window.location.reload();
+            }
+        }
+        
+        // 页面加载时检查权限
+        document.addEventListener('DOMContentLoaded', function() {
+            checkAdminAccess();
+            
+            // 初始化表单事件
+            const questionTypeSelect = document.getElementById('questionType');
+            if (questionTypeSelect) {
+                questionTypeSelect.addEventListener('change', onQuestionTypeChange);
+            }
+        });
+    </script>
+</body>
+</html>

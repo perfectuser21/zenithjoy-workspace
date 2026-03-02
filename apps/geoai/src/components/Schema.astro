@@ -1,0 +1,130 @@
+---
+interface Props {
+  type: 'website' | 'article' | 'person';
+  data?: {
+    title?: string;
+    description?: string;
+    url?: string;
+    image?: string;
+    publishDate?: Date;
+    modifiedDate?: Date;
+    author?: string;
+    faq?: { question: string; answer: string }[];
+  };
+}
+
+const { type, data = {} } = Astro.props;
+
+const siteUrl = 'https://zenithjoyai.com';
+const currentUrl = data.url || Astro.url.href;
+
+// Person Schema - 个人信息（GEO 关键）
+const personSchema = {
+  "@context": "https://schema.org",
+  "@type": "Person",
+  "name": "ZenithJoyAI",
+  "alternateName": "顶峰悦AI",
+  "url": siteUrl,
+  "image": `${siteUrl}/avatar.png`,
+  "sameAs": [
+    // 社交媒体链接待填充
+  ],
+  "jobTitle": "AI 自媒体培训师",
+  "description": "帮助自媒体创作者和小团队用 AI 提升 10 倍效率",
+  "knowsAbout": [
+    "Artificial Intelligence",
+    "AI Tools",
+    "Content Creation",
+    "Social Media Marketing",
+    "Small Business Efficiency",
+    "Workflow Automation",
+    "Prompt Engineering",
+    "自媒体运营",
+    "内容创作",
+    "AI 工具",
+    "效率提升"
+  ],
+  "knowsLanguage": ["zh-CN", "en-US"]
+};
+
+// WebSite Schema with SearchAction
+const websiteSchema = {
+  "@context": "https://schema.org",
+  "@type": "WebSite",
+  "name": "ZenithJoyAI",
+  "alternateName": "顶峰悦AI",
+  "url": siteUrl,
+  "description": "AI 自媒体培训 | 帮助创作者和小团队用 AI 提升效率",
+  "inLanguage": ["zh-CN", "en-US"],
+  "potentialAction": {
+    "@type": "SearchAction",
+    "target": {
+      "@type": "EntryPoint",
+      "urlTemplate": `${siteUrl}/search?q={search_term_string}`
+    },
+    "query-input": "required name=search_term_string"
+  }
+};
+
+// Article Schema
+const articleSchema = data.title ? {
+  "@context": "https://schema.org",
+  "@type": "Article",
+  "headline": data.title,
+  "description": data.description,
+  "url": currentUrl,
+  "image": data.image || `${siteUrl}/og-default.png`,
+  "datePublished": data.publishDate?.toISOString(),
+  "dateModified": data.modifiedDate?.toISOString() || data.publishDate?.toISOString(),
+  "author": {
+    "@type": "Person",
+    "name": data.author || "ZenithJoyAI",
+    "url": siteUrl
+  },
+  "publisher": {
+    "@type": "Person",
+    "name": "ZenithJoyAI",
+    "url": siteUrl
+  },
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": currentUrl
+  }
+} : null;
+
+// FAQ Schema（GEO 最爱）
+const faqSchema = data.faq && data.faq.length > 0 ? {
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  "mainEntity": data.faq.map(item => ({
+    "@type": "Question",
+    "name": item.question,
+    "acceptedAnswer": {
+      "@type": "Answer",
+      "text": item.answer
+    }
+  }))
+} : null;
+
+// Breadcrumb Schema
+const breadcrumbSchema = {
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  "itemListElement": [
+    {
+      "@type": "ListItem",
+      "position": 1,
+      "name": "首页",
+      "item": siteUrl
+    }
+  ]
+};
+
+const schemas = [personSchema, websiteSchema];
+if (type === 'article' && articleSchema) schemas.push(articleSchema);
+if (faqSchema) schemas.push(faqSchema);
+---
+
+{schemas.map(schema => (
+  <script type="application/ld+json" set:html={JSON.stringify(schema)} />
+))}

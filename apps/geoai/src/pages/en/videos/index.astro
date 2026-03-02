@@ -1,0 +1,119 @@
+---
+import Base from '../../../layouts/Base.astro';
+import { getAllVideos } from '../../../data/posts';
+
+const videos = await getAllVideos('en');
+
+const platformLabels: Record<string, string> = {
+  douyin: 'Douyin',
+  bilibili: 'Bilibili',
+  youtube: 'YouTube',
+  other: 'Video',
+};
+---
+
+<Base
+  title="Videos - AI Efficiency Tutorials"
+  description="ZenithJoyAI video tutorials on AI tools, automation workflows, and productivity tips. Short-form content for quick learning."
+  faq={[
+    { question: "What topics do the videos cover?", answer: "AI tool demonstrations, workflow automation tutorials, and productivity tips in short video format." },
+    { question: "Where can I watch?", answer: "Videos are primarily on Douyin, with some content on Bilibili. Follow zenithjoyai for updates." }
+  ]}
+>
+  <section class="max-w-5xl mx-auto px-4 py-12">
+    <header class="mb-12">
+      <h1 class="text-4xl font-bold mb-4">Videos</h1>
+      <p class="text-xl text-[var(--color-text-muted)]">
+        AI efficiency tutorials in short video format
+      </p>
+    </header>
+
+    {videos.length > 0 ? (
+      <div class="space-y-8">
+        {videos.map(video => {
+          const isDirectVideo = video.videoUrl.endsWith('.mp4') || video.videoUrl.endsWith('.mov') || video.videoUrl.endsWith('.webm');
+          return (
+            <article class="bg-[var(--color-bg-card)] rounded-2xl border border-[var(--color-border)] overflow-hidden">
+              <div class="aspect-[9/16] max-h-[70vh] bg-black flex items-center justify-center">
+                {isDirectVideo ? (
+                  <video
+                    src={video.videoUrl}
+                    controls
+                    playsinline
+                    preload="metadata"
+                    class="w-full h-full object-contain"
+                    poster={video.thumbnailUrl}
+                  >
+                    Your browser does not support video playback
+                  </video>
+                ) : (
+                  <a href={video.videoUrl} target="_blank" rel="noopener noreferrer" class="block w-full h-full relative group">
+                    {video.thumbnailUrl ? (
+                      <img src={video.thumbnailUrl} alt={video.title} class="w-full h-full object-cover" />
+                    ) : (
+                      <div class="w-full h-full flex items-center justify-center bg-[var(--color-bg)]">
+                        <svg class="w-20 h-20 text-[var(--color-text-muted)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"></path>
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                        </svg>
+                      </div>
+                    )}
+                    <div class="absolute inset-0 flex items-center justify-center bg-black/30 group-hover:bg-black/50 transition-colors">
+                      <div class="w-16 h-16 rounded-full bg-white/90 flex items-center justify-center">
+                        <svg class="w-8 h-8 text-[var(--color-primary)] ml-1" fill="currentColor" viewBox="0 0 24 24">
+                          <path d="M8 5v14l11-7z"/>
+                        </svg>
+                      </div>
+                    </div>
+                    <span class="absolute top-3 right-3 px-3 py-1 text-sm bg-black/70 text-white rounded-lg">
+                      {platformLabels[video.platform] || 'Watch Video'}
+                    </span>
+                  </a>
+                )}
+              </div>
+
+              <div class="p-5">
+                <h2 class="text-xl font-bold mb-2">
+                  {video.title}
+                </h2>
+                {video.description && (
+                  <p class="text-[var(--color-text-muted)] mb-3">
+                    {video.description}
+                  </p>
+                )}
+                <div class="flex items-center gap-3 text-sm text-[var(--color-text-muted)]">
+                  <span>{video.publishDate.toLocaleDateString('en-US')}</span>
+                  {video.tags.length > 0 && video.tags.map(tag => (
+                    <span class="px-2 py-0.5 bg-[var(--color-primary)]/10 text-[var(--color-primary)] rounded">#{tag}</span>
+                  ))}
+                </div>
+              </div>
+            </article>
+          );
+        })}
+      </div>
+    ) : (
+      <div class="text-center py-20">
+        <div class="text-6xl mb-6">🎬</div>
+        <h2 class="text-2xl font-bold mb-4">Videos Coming Soon</h2>
+        <p class="text-[var(--color-text-muted)] mb-6">
+          We're preparing AI efficiency video tutorials
+        </p>
+        <div class="flex justify-center gap-4">
+          <a href="/en/blog" class="px-6 py-3 bg-[var(--color-primary)] text-white rounded-lg hover:bg-[var(--color-primary-dark)] transition-colors">
+            Read Articles
+          </a>
+        </div>
+      </div>
+    )}
+
+    <div class="mt-12 p-6 bg-gradient-to-br from-[var(--color-primary)]/5 to-[var(--color-accent)]/5 rounded-xl border border-[var(--color-border)] text-center">
+      <p class="text-[var(--color-text-muted)] mb-2">
+        More videos coming soon. Follow for updates!
+      </p>
+      <p class="font-medium">
+        Douyin: <span class="text-[var(--color-primary)]">zenithjoyai</span>
+      </p>
+    </div>
+  </section>
+</Base>

@@ -1,0 +1,128 @@
+---
+import Base from '../../../layouts/Base.astro';
+import { getAllVideos } from '../../../data/posts';
+
+const videos = await getAllVideos('zh');
+
+const platformLabels: Record<string, string> = {
+  douyin: '抖音',
+  bilibili: 'B站',
+  youtube: 'YouTube',
+  other: '视频',
+};
+---
+
+<Base
+  title="视频 - AI 效率提升实战"
+  description="ZenithJoyAI 视频教程，分享 AI 工具使用技巧、自动化工作流演示、效率提升方法。短视频形式，快速上手。"
+  faq={[
+    { question: "视频主要讲什么？", answer: "AI 工具实操演示、工作流自动化教程、效率提升技巧，用短视频形式快速讲解。" },
+    { question: "在哪些平台可以看？", answer: "主要发布在抖音，部分内容同步到 B站。关注 zenithjoyai 获取最新更新。" }
+  ]}
+>
+  <section class="max-w-5xl mx-auto px-4 py-12">
+    <header class="mb-12">
+      <h1 class="text-4xl font-bold mb-4">视频</h1>
+      <p class="text-xl text-[var(--color-text-muted)]">
+        AI 效率提升实战教程，短视频快速上手
+      </p>
+    </header>
+
+    {videos.length > 0 ? (
+      <div class="space-y-8">
+        {videos.map(video => {
+          const isDirectVideo = video.videoUrl.endsWith('.mp4') || video.videoUrl.endsWith('.mov') || video.videoUrl.endsWith('.webm');
+          return (
+            <article class="bg-[var(--color-bg-card)] rounded-2xl border border-[var(--color-border)] overflow-hidden">
+              {/* 视频播放器 */}
+              <div class="aspect-[9/16] max-h-[70vh] bg-black flex items-center justify-center">
+                {isDirectVideo ? (
+                  <video
+                    src={video.videoUrl}
+                    controls
+                    playsinline
+                    preload="metadata"
+                    class="w-full h-full object-contain"
+                    poster={video.thumbnailUrl}
+                  >
+                    您的浏览器不支持视频播放
+                  </video>
+                ) : (
+                  <a href={video.videoUrl} target="_blank" rel="noopener noreferrer" class="block w-full h-full relative group">
+                    {video.thumbnailUrl ? (
+                      <img src={video.thumbnailUrl} alt={video.title} class="w-full h-full object-cover" />
+                    ) : (
+                      <div class="w-full h-full flex items-center justify-center bg-[var(--color-bg)]">
+                        <svg class="w-20 h-20 text-[var(--color-text-muted)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"></path>
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                        </svg>
+                      </div>
+                    )}
+                    {/* 播放按钮 */}
+                    <div class="absolute inset-0 flex items-center justify-center bg-black/30 group-hover:bg-black/50 transition-colors">
+                      <div class="w-16 h-16 rounded-full bg-white/90 flex items-center justify-center">
+                        <svg class="w-8 h-8 text-[var(--color-primary)] ml-1" fill="currentColor" viewBox="0 0 24 24">
+                          <path d="M8 5v14l11-7z"/>
+                        </svg>
+                      </div>
+                    </div>
+                    {/* 平台标签 */}
+                    <span class="absolute top-3 right-3 px-3 py-1 text-sm bg-black/70 text-white rounded-lg">
+                      {platformLabels[video.platform] || '查看原视频'}
+                    </span>
+                  </a>
+                )}
+              </div>
+
+              {/* 内容 */}
+              <div class="p-5">
+                <h2 class="text-xl font-bold mb-2">
+                  {video.title}
+                </h2>
+                {video.description && (
+                  <p class="text-[var(--color-text-muted)] mb-3">
+                    {video.description}
+                  </p>
+                )}
+                <div class="flex items-center gap-3 text-sm text-[var(--color-text-muted)]">
+                  <span>{video.publishDate.toLocaleDateString('zh-CN')}</span>
+                  {video.tags.length > 0 && video.tags.map(tag => (
+                    <span class="px-2 py-0.5 bg-[var(--color-primary)]/10 text-[var(--color-primary)] rounded">#{tag}</span>
+                  ))}
+                </div>
+              </div>
+            </article>
+          );
+        })}
+      </div>
+    ) : (
+      <div class="text-center py-20">
+        <div class="text-6xl mb-6">🎬</div>
+        <h2 class="text-2xl font-bold mb-4">视频即将上线</h2>
+        <p class="text-[var(--color-text-muted)] mb-6">
+          正在准备精彩的 AI 效率提升视频教程
+        </p>
+        <div class="flex justify-center gap-4">
+          <a href="https://www.douyin.com/user/zenithjoyai" target="_blank" rel="noopener noreferrer"
+             class="px-6 py-3 bg-[var(--color-primary)] text-white rounded-lg hover:bg-[var(--color-primary-dark)] transition-colors">
+            关注抖音
+          </a>
+          <a href="/zh/blog" class="px-6 py-3 border border-[var(--color-border)] rounded-lg hover:border-[var(--color-primary)] transition-colors">
+            先看文章
+          </a>
+        </div>
+      </div>
+    )}
+
+    {/* 关注提示 */}
+    <div class="mt-12 p-6 bg-gradient-to-br from-[var(--color-primary)]/5 to-[var(--color-accent)]/5 rounded-xl border border-[var(--color-border)] text-center">
+      <p class="text-[var(--color-text-muted)] mb-2">
+        更多视频持续更新中，关注获取最新内容
+      </p>
+      <p class="font-medium">
+        抖音：<span class="text-[var(--color-primary)]">zenithjoyai</span>
+      </p>
+    </div>
+  </section>
+</Base>

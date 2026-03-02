@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>金诺AI - 数据标注平台</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #6366f1;
+            --primary-light: #a5b4fc;
+            --secondary: #10b981;
+            --accent: #f59e0b;
+            --bg-dark: #0f172a;
+            --bg-darker: #020617;
+            --bg-card: #1e293b;
+            --text-primary: #f1f5f9;
+            --text-secondary: #94a3b8;
+            --text-muted: #64748b;
+            --border: #334155;
+            --success: #22c55e;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: Inter, -apple-system, sans-serif; background: var(--bg-darker); color: var(--text-primary); min-height: 100vh; }
+        .navbar { position: fixed; top: 0; left: 0; right: 0; height: 64px; background: rgba(15, 23, 42, 0.95); backdrop-filter: blur(20px); border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; padding: 0 32px; z-index: 100; }
+        .logo { display: flex; align-items: center; gap: 12px; font-size: 18px; font-weight: 700; }
+        .logo-icon { width: 36px; height: 36px; background: linear-gradient(135deg, var(--primary), var(--secondary)); border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 16px; }
+        .nav-links { display: flex; gap: 8px; }
+        .nav-links a { color: var(--text-secondary); text-decoration: none; padding: 8px 16px; border-radius: 8px; font-size: 14px; transition: all 0.2s; }
+        .nav-links a:hover, .nav-links a.active { color: var(--text-primary); background: var(--bg-card); }
+        .user-info { display: flex; align-items: center; gap: 12px; padding: 6px 12px; background: var(--bg-card); border-radius: 10px; cursor: pointer; }
+        .user-info img { width: 32px; height: 32px; border-radius: 8px; }
+        .user-info span { font-size: 14px; font-weight: 500; }
+        .main-container { padding: 96px 32px 32px; max-width: 1200px; margin: 0 auto; }
+        .welcome-section { display: grid; grid-template-columns: 1fr 320px; gap: 24px; margin-bottom: 40px; }
+        .welcome-card { background: linear-gradient(135deg, rgba(99, 102, 241, 0.15), rgba(16, 185, 129, 0.1)); border: 1px solid var(--border); border-radius: 20px; padding: 40px; }
+        .welcome-card h1 { font-size: 28px; margin-bottom: 8px; }
+        .welcome-card h1 span { background: linear-gradient(135deg, var(--primary-light), var(--secondary)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        .welcome-card p { color: var(--text-secondary); margin-bottom: 32px; }
+        .stats-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+        .stat-box { background: rgba(30, 41, 59, 0.6); padding: 20px; border-radius: 12px; text-align: center; }
+        .stat-box .value { font-size: 28px; font-weight: 700; }
+        .stat-box .value.loading { font-size: 16px; color: var(--text-muted); }
+        .stat-box .label { font-size: 12px; color: var(--text-muted); margin-top: 4px; }
+        .streak-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 20px; padding: 24px; text-align: center; }
+        .streak-card h3 { font-size: 14px; color: var(--text-secondary); margin-bottom: 20px; }
+        .streak-circle { width: 100px; height: 100px; background: linear-gradient(135deg, var(--accent), #ea580c); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 36px; font-weight: 700; margin: 0 auto 16px; box-shadow: 0 8px 24px rgba(245, 158, 11, 0.3); }
+        .streak-label { font-size: 13px; color: var(--text-secondary); }
+        .section-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
+        .section-header h2 { font-size: 18px; display: flex; align-items: center; gap: 10px; }
+        .section-header h2 i { color: var(--primary); }
+        .module-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 20px; }
+        .module-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 16px; padding: 24px; cursor: pointer; transition: all 0.3s; text-decoration: none; color: inherit; }
+        .module-card:hover { transform: translateY(-4px); border-color: var(--primary); box-shadow: 0 8px 32px rgba(99, 102, 241, 0.15); }
+        .module-card.locked { opacity: 0.5; cursor: not-allowed; }
+        .module-card.locked:hover { transform: none; border-color: var(--border); box-shadow: none; }
+        .module-icon { width: 48px; height: 48px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 20px; margin-bottom: 16px; }
+        .module-icon.data { background: linear-gradient(135deg, #6366f1, #8b5cf6); color: white; }
+        .module-icon.profile { background: linear-gradient(135deg, #10b981, #059669); color: white; }
+        .module-icon.admin { background: linear-gradient(135deg, #f59e0b, #d97706); color: white; }
+        .module-card h3 { font-size: 16px; margin-bottom: 8px; }
+        .module-card p { font-size: 13px; color: var(--text-secondary); line-height: 1.5; margin-bottom: 16px; }
+        .module-meta { display: flex; gap: 12px; font-size: 12px; color: var(--text-muted); }
+        .module-meta span { display: flex; align-items: center; gap: 4px; }
+        .progress-bar { height: 4px; background: var(--bg-dark); border-radius: 2px; margin-top: 16px; overflow: hidden; }
+        .progress-fill { height: 100%; background: linear-gradient(90deg, var(--primary), var(--secondary)); border-radius: 2px; transition: width 0.5s; }
+        .logout-btn { color: var(--text-secondary); text-decoration: none; font-size: 13px; }
+        .logout-btn:hover { color: var(--text-primary); }
+        .admin-only { display: none; }
+        @media (max-width: 900px) { .welcome-section { grid-template-columns: 1fr; } .streak-card { display: none; } .stats-row { grid-template-columns: repeat(2, 1fr); } }
+    </style>
+</head>
+<body>
+    <nav class="navbar">
+        <div style="display: flex; align-items: center; gap: 32px;">
+            <div class="logo"><div class="logo-icon"><i class="fas fa-brain"></i></div><span>金诺AI</span></div>
+            <div class="nav-links">
+                <a href="index.html" class="active"><i class="fas fa-home"></i> 首页</a>
+                <a href="module-select.html"><i class="fas fa-tags"></i> 标注中心</a>
+                <a href="profile.html"><i class="fas fa-user"></i> 个人中心</a>
+                <a href="admin.html" class="admin-only" id="admin-link"><i class="fas fa-cog"></i> 管理后台</a>
+            </div>
+        </div>
+        <div style="display: flex; align-items: center; gap: 16px;">
+            <div class="user-info">
+                <img src="https://ui-avatars.com/api/?name=学员&background=6366f1&color=fff" alt="" id="user-avatar">
+                <span id="username-display">学员</span>
+            </div>
+            <a href="login.html" class="logout-btn" onclick="localStorage.clear()"><i class="fas fa-sign-out-alt"></i></a>
+        </div>
+    </nav>
+
+    <main class="main-container">
+        <section class="welcome-section">
+            <div class="welcome-card">
+                <h1>欢迎使用 <span>金诺AI</span></h1>
+                <p>智能数据标注平台 · 金诺盛源科技有限公司</p>
+                <div class="stats-row">
+                    <div class="stat-box">
+                        <div class="value loading" id="stat-projects"><i class="fas fa-spinner fa-spin"></i></div>
+                        <div class="label">活跃项目</div>
+                    </div>
+                    <div class="stat-box">
+                        <div class="value loading" id="stat-total"><i class="fas fa-spinner fa-spin"></i></div>
+                        <div class="label">总任务数</div>
+                    </div>
+                    <div class="stat-box">
+                        <div class="value loading" id="stat-completed"><i class="fas fa-spinner fa-spin"></i></div>
+                        <div class="label">已完成</div>
+                    </div>
+                    <div class="stat-box">
+                        <div class="value loading" id="stat-rate"><i class="fas fa-spinner fa-spin"></i></div>
+                        <div class="label">完成率</div>
+                    </div>
+                </div>
+            </div>
+            <div class="streak-card">
+                <h3><i class="fas fa-fire"></i> 连续学习</h3>
+                <div class="streak-circle" id="streak-count">7</div>
+                <div class="streak-label">已连续 <span id="streak-days">7</span> 天</div>
+            </div>
+        </section>
+
+        <section>
+            <div class="section-header"><h2><i class="fas fa-th-large"></i> 功能模块</h2></div>
+            <div class="module-grid">
+                <a href="module-select.html" class="module-card">
+                    <div class="module-icon data"><i class="fas fa-tags"></i></div>
+                    <h3>数据标注中心</h3>
+                    <p>文本、图像、音频、视频标注任务，支持多种标注类型</p>
+                    <div class="module-meta">
+                        <span><i class="fas fa-tasks"></i> <span id="task-types">4</span>类任务</span>
+                        <span><i class="fas fa-database"></i> 实时数据</span>
+                    </div>
+                    <div class="progress-bar"><div class="progress-fill" id="progress-fill" style="width: 0%"></div></div>
+                </a>
+                <a href="profile.html" class="module-card">
+                    <div class="module-icon profile"><i class="fas fa-user-circle"></i></div>
+                    <h3>个人中心</h3>
+                    <p>查看我的标注历史、统计数据和学习进度</p>
+                    <div class="module-meta">
+                        <span><i class="fas fa-history"></i> 标注记录</span>
+                        <span><i class="fas fa-chart-line"></i> 数据统计</span>
+                    </div>
+                </a>
+                <a href="admin.html" class="module-card admin-only" id="admin-card">
+                    <div class="module-icon admin"><i class="fas fa-cogs"></i></div>
+                    <h3>管理后台</h3>
+                    <p>用户管理、数据分析、系统设置</p>
+                    <div class="module-meta">
+                        <span><i class="fas fa-users"></i> 用户管理</span>
+                        <span><i class="fas fa-chart-bar"></i> 数据分析</span>
+                    </div>
+                </a>
+            </div>
+        </section>
+    </main>
+
+    <script>
+        // 检查登录状态
+        const user = JSON.parse(localStorage.getItem('jinuo_user') || '{}');
+        if (user.username) {
+            document.getElementById('username-display').textContent = user.username;
+            document.getElementById('user-avatar').src = 'https://ui-avatars.com/api/?name=' + encodeURIComponent(user.username) + '&background=6366f1&color=fff';
+        }
+
+        // 显示管理员入口
+        if (user.role === 'admin' || user.username === '管理员') {
+            document.querySelectorAll('.admin-only').forEach(el => el.style.display = 'block');
+        }
+
+        // 加载 Dashboard 统计数据（使用新 API）
+        async function loadDashboard() {
+            try {
+                const response = await fetch('/api/stats/dashboard');
+                const data = await response.json();
+
+                document.getElementById('stat-projects').textContent = data.total_projects || 0;
+                document.getElementById('stat-projects').classList.remove('loading');
+
+                document.getElementById('stat-total').textContent = data.total_tasks || 0;
+                document.getElementById('stat-total').classList.remove('loading');
+
+                document.getElementById('stat-completed').textContent = data.completed_tasks || 0;
+                document.getElementById('stat-completed').classList.remove('loading');
+
+                document.getElementById('stat-rate').textContent = (data.completion_rate || 0) + '%';
+                document.getElementById('stat-rate').classList.remove('loading');
+
+                // 更新进度条
+                document.getElementById('progress-fill').style.width = (data.completion_rate || 0) + '%';
+            } catch (e) {
+                console.log('Dashboard load failed:', e);
+                document.querySelectorAll('.stat-box .value').forEach(el => {
+                    el.textContent = '--';
+                    el.classList.remove('loading');
+                });
+            }
+        }
+
+        loadDashboard();
+    </script>
+</body>
+</html>

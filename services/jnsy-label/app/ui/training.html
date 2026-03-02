@@ -1,0 +1,1098 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI训练师 - 学员后台</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif;
+        }
+        
+        body {
+            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+            color: #333;
+            line-height: 1.6;
+        }
+        
+        /* 顶部导航栏 - 与学员门户保持一致 */
+        .header {
+            background: linear-gradient(135deg, #4b6cb7 0%, #182848 100%);
+            color: white;
+            padding: 0 30px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+        }
+        
+        .header-container {
+            max-width: 1400px;
+            margin: 0 auto;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            height: 70px;
+        }
+        
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+        
+        .logo-icon {
+            font-size: 32px;
+            color: #ffd700;
+        }
+        
+        .logo-text {
+            font-size: 28px;
+            font-weight: 700;
+            letter-spacing: 1px;
+        }
+        
+        .logo-subtitle {
+            font-size: 14px;
+            opacity: 0.8;
+            margin-top: 2px;
+        }
+        
+        .user-info {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+        
+        .user-avatar {
+            width: 45px;
+            height: 45px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #ffd700 0%, #ff8c00 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 20px;
+            color: white;
+        }
+        
+        .user-name {
+            font-size: 18px;
+            font-weight: 600;
+        }
+        
+        .logout-btn {
+            padding: 8px 20px;
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 20px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .logout-btn:hover {
+            background: rgba(255, 255, 255, 0.3);
+            transform: translateY(-2px);
+        }
+        
+        /* 主内容区 */
+        .main-container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 30px 20px;
+        }
+        
+        /* 侧边栏 + 内容布局 */
+        .dashboard-container {
+            display: flex;
+            gap: 30px;
+            margin-top: 30px;
+        }
+        
+        /* 侧边栏 */
+        .sidebar {
+            width: 280px;
+            flex-shrink: 0;
+        }
+        
+        .sidebar-nav {
+            background: white;
+            border-radius: 15px;
+            padding: 20px 0;
+            box-shadow: 0 5px 20px rgba(0, 0, 0, 0.08);
+        }
+        
+        .nav-section {
+            padding: 0 20px;
+            margin-bottom: 20px;
+        }
+        
+        .nav-section-title {
+            color: #6c757d;
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 15px;
+            padding-left: 10px;
+        }
+        
+        .nav-item {
+            margin-bottom: 5px;
+        }
+        
+        .nav-link {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 15px 20px;
+            color: #495057;
+            text-decoration: none;
+            border-radius: 10px;
+            transition: all 0.3s;
+            font-weight: 500;
+        }
+        
+        .nav-link:hover {
+            background: rgba(75, 108, 183, 0.1);
+            color: #4b6cb7;
+        }
+        
+        .nav-link.active {
+            background: linear-gradient(135deg, #4b6cb7 0%, #182848 100%);
+            color: white;
+            box-shadow: 0 4px 15px rgba(75, 108, 183, 0.3);
+        }
+        
+        .nav-link i {
+            width: 20px;
+            text-align: center;
+            font-size: 18px;
+        }
+        
+        /* 仪表板内容区 */
+        .dashboard-content {
+            flex: 1;
+        }
+        
+        /* 页面标题 */
+        .page-header {
+            background: white;
+            border-radius: 15px;
+            padding: 25px 30px;
+            margin-bottom: 30px;
+            box-shadow: 0 5px 20px rgba(0, 0, 0, 0.08);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .page-title {
+            color: #182848;
+            font-size: 28px;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+        
+        .page-subtitle {
+            color: #6c757d;
+            font-size: 16px;
+            margin-top: 8px;
+        }
+        
+        /* 快速操作按钮 */
+        .quick-actions {
+            display: flex;
+            gap: 15px;
+        }
+        
+        .btn {
+            padding: 12px 25px;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 15px;
+            transition: all 0.3s;
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, #4b6cb7 0%, #182848 100%);
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 8px 20px rgba(75, 108, 183, 0.3);
+        }
+        
+        .btn-success {
+            background: linear-gradient(135deg, #28a745 0%, #1e7e34 100%);
+            color: white;
+        }
+        
+        .btn-success:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 8px 20px rgba(40, 167, 69, 0.3);
+        }
+        
+        /* 数据卡片网格 */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 25px;
+            margin-bottom: 30px;
+        }
+        
+        .stat-card {
+            background: white;
+            border-radius: 15px;
+            padding: 25px;
+            box-shadow: 0 5px 20px rgba(0, 0, 0, 0.08);
+            transition: all 0.3s;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .stat-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.12);
+        }
+        
+        .stat-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 5px;
+        }
+        
+        .stat-card.completed::before { background: linear-gradient(135deg, #28a745 0%, #1e7e34 100%); }
+        .stat-card.in-progress::before { background: linear-gradient(135deg, #ffc107 0%, #fd7e14 100%); }
+        .stat-card.waiting::before { background: linear-gradient(135deg, #6c757d 0%, #495057 100%); }
+        .stat-card.failed::before { background: linear-gradient(135deg, #dc3545 0%, #c82333 100%); }
+        
+        .stat-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        
+        .stat-icon {
+            width: 50px;
+            height: 50px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            color: white;
+        }
+        
+        .stat-icon.completed { background: linear-gradient(135deg, #28a745 0%, #1e7e34 100%); }
+        .stat-icon.in-progress { background: linear-gradient(135deg, #ffc107 0%, #fd7e14 100%); }
+        .stat-icon.waiting { background: linear-gradient(135deg, #6c757d 0%, #495057 100%); }
+        .stat-icon.failed { background: linear-gradient(135deg, #dc3545 0%, #c82333 100%); }
+        
+        .stat-number {
+            font-size: 36px;
+            font-weight: 700;
+            color: #182848;
+            line-height: 1;
+        }
+        
+        .stat-label {
+            font-size: 14px;
+            color: #6c757d;
+            margin-top: 8px;
+        }
+        
+        .stat-change {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            font-size: 13px;
+            margin-top: 15px;
+        }
+        
+        .stat-change.positive { color: #28a745; }
+        .stat-change.negative { color: #dc3545; }
+        
+        /* 内容卡片 */
+        .content-card {
+            background: white;
+            border-radius: 15px;
+            padding: 30px;
+            box-shadow: 0 5px 20px rgba(0, 0, 0, 0.08);
+            margin-bottom: 30px;
+        }
+        
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 25px;
+            padding-bottom: 20px;
+            border-bottom: 2px solid #f0f0f0;
+        }
+        
+        .card-title {
+            color: #182848;
+            font-size: 22px;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        
+        /* 表格样式 */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        
+        thead {
+            background: #f8f9fa;
+        }
+        
+        th {
+            padding: 18px 15px;
+            text-align: left;
+            font-weight: 600;
+            color: #495057;
+            border-bottom: 2px solid #e9ecef;
+            font-size: 15px;
+        }
+        
+        td {
+            padding: 18px 15px;
+            border-bottom: 1px solid #e9ecef;
+        }
+        
+        tr:hover {
+            background-color: #f8f9fa;
+        }
+        
+        .status-badge {
+            display: inline-block;
+            padding: 6px 15px;
+            border-radius: 20px;
+            font-size: 13px;
+            font-weight: 600;
+            min-width: 80px;
+            text-align: center;
+        }
+        
+        .status-completed {
+            background: #d4edda;
+            color: #155724;
+        }
+        
+        .status-in-progress {
+            background: #fff3cd;
+            color: #856404;
+        }
+        
+        .status-waiting {
+            background: #e2e3e5;
+            color: #383d41;
+        }
+        
+        .status-failed {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        
+        /* 进度条 */
+        .progress-bar {
+            width: 100%;
+            height: 8px;
+            background: #e9ecef;
+            border-radius: 4px;
+            overflow: hidden;
+        }
+        
+        .progress-fill {
+            height: 100%;
+            border-radius: 4px;
+        }
+        
+        /* 项目网格 */
+        .projects-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 25px;
+        }
+        
+        .project-card {
+            background: white;
+            border-radius: 15px;
+            padding: 25px;
+            box-shadow: 0 5px 20px rgba(0, 0, 0, 0.08);
+            transition: all 0.3s;
+            border: 1px solid #eaeaea;
+        }
+        
+        .project-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.12);
+            border-color: #4b6cb7;
+        }
+        
+        .project-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 20px;
+        }
+        
+        .project-title {
+            font-size: 18px;
+            font-weight: 700;
+            color: #182848;
+            margin-bottom: 5px;
+        }
+        
+        .project-type {
+            font-size: 13px;
+            color: #6c757d;
+        }
+        
+        .project-stats {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 20px;
+            padding-top: 20px;
+            border-top: 1px solid #eaeaea;
+        }
+        
+        /* 活动时间线 */
+        .timeline {
+            position: relative;
+            padding-left: 30px;
+        }
+        
+        .timeline::before {
+            content: '';
+            position: absolute;
+            left: 10px;
+            top: 0;
+            bottom: 0;
+            width: 2px;
+            background: #e9ecef;
+        }
+        
+        .timeline-item {
+            position: relative;
+            margin-bottom: 25px;
+        }
+        
+        .timeline-item::before {
+            content: '';
+            position: absolute;
+            left: -20px;
+            top: 5px;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #4b6cb7;
+            border: 3px solid white;
+            box-shadow: 0 0 0 3px rgba(75, 108, 183, 0.2);
+        }
+        
+        .timeline-time {
+            font-size: 13px;
+            color: #6c757d;
+            margin-bottom: 5px;
+        }
+        
+        .timeline-content {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 10px;
+        }
+        
+        /* 响应式设计 */
+        @media (max-width: 1200px) {
+            .dashboard-container {
+                flex-direction: column;
+            }
+            
+            .sidebar {
+                width: 100%;
+            }
+            
+            .sidebar-nav {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 10px;
+                padding: 15px;
+            }
+            
+            .nav-section {
+                flex: 1;
+                min-width: 200px;
+                margin-bottom: 0;
+            }
+        }
+        
+        @media (max-width: 768px) {
+            .page-header {
+                flex-direction: column;
+                gap: 20px;
+                align-items: flex-start;
+            }
+            
+            .quick-actions {
+                width: 100%;
+                justify-content: space-between;
+            }
+            
+            .btn {
+                flex: 1;
+                justify-content: center;
+            }
+            
+            .stats-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+            
+            table {
+                display: block;
+                overflow-x: auto;
+            }
+        }
+        
+        @media (max-width: 576px) {
+            .stats-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .projects-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .header-container {
+                flex-direction: column;
+                height: auto;
+                padding: 15px 0;
+                gap: 15px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- 顶部导航栏 -->
+    <header class="header">
+        <div class="header-container">
+            <div class="logo">
+                <div class="logo-icon">
+                    <i class="fas fa-robot"></i>
+                </div>
+                <div>
+                    <div class="logo-text">AI训练师</div>
+                    <div class="logo-subtitle">学员技术后台</div>
+                </div>
+            </div>
+            
+            <div class="user-info">
+                <div class="user-avatar" id="userAvatar">学</div>
+                <div class="user-name" id="userName">学员小明</div>
+                <button class="logout-btn" onclick="logout()">
+                    <i class="fas fa-sign-out-alt"></i> 退出
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- 主内容区 -->
+    <main class="main-container">
+        <!-- 侧边栏 + 内容布局 -->
+        <div class="dashboard-container">
+            <!-- 侧边栏导航 -->
+            <aside class="sidebar">
+                <nav class="sidebar-nav">
+                    <div class="nav-section">
+                        <div class="nav-section-title">主菜单</div>
+                        <div class="nav-item">
+                            <a href="#" class="nav-link active" data-page="dashboard">
+                                <i class="fas fa-tachometer-alt"></i>
+                                <span>仪表板</span>
+                            </a>
+                        </div>
+                        <div class="nav-item">
+                            <a href="#" class="nav-link" data-page="training">
+                                <i class="fas fa-dumbbell"></i>
+                                <span>我的训练</span>
+                            </a>
+                        </div>
+                        <div class="nav-item">
+                            <a href="#" class="nav-link" data-page="projects">
+                                <i class="fas fa-project-diagram"></i>
+                                <span>我的项目</span>
+                            </a>
+                        </div>
+                        <div class="nav-item">
+                            <a href="module-select.html" class="nav-link">
+                                <i class="fas fa-graduation-cap"></i>
+                                <span>学习中心</span>
+                            </a>
+                        </div>
+                    </div>
+                    
+                    <div class="nav-section">
+                        <div class="nav-section-title">模型管理</div>
+                        <div class="nav-item">
+                            <a href="#" class="nav-link" data-page="models">
+                                <i class="fas fa-brain"></i>
+                                <span>我的模型</span>
+                            </a>
+                        </div>
+                        <div class="nav-item">
+                            <a href="#" class="nav-link" data-page="datasets">
+                                <i class="fas fa-database"></i>
+                                <span>数据集</span>
+                            </a>
+                        </div>
+                        <div class="nav-item">
+                            <a href="#" class="nav-link" data-page="deploy">
+                                <i class="fas fa-server"></i>
+                                <span>模型部署</span>
+                            </a>
+                        </div>
+                    </div>
+                    
+                    <div class="nav-section">
+                        <div class="nav-section-title">个人中心</div>
+                        <div class="nav-item">
+                            <a href="#" class="nav-link" data-page="profile">
+                                <i class="fas fa-user-circle"></i>
+                                <span>个人资料</span>
+                            </a>
+                        </div>
+                        <div class="nav-item">
+                            <a href="#" class="nav-link" data-page="settings">
+                                <i class="fas fa-cog"></i>
+                                <span>设置</span>
+                            </a>
+                        </div>
+                        <div class="nav-item">
+                            <a href="#" class="nav-link" data-page="help">
+                                <i class="fas fa-question-circle"></i>
+                                <span>帮助中心</span>
+                            </a>
+                        </div>
+                    </div>
+                </nav>
+            </aside>
+            
+            <!-- 仪表板内容区 -->
+            <div class="dashboard-content">
+                <!-- 页面标题 -->
+                <div class="page-header">
+                    <div>
+                        <h1 class="page-title">
+                            <i class="fas fa-tachometer-alt"></i> 学员技术后台
+                        </h1>
+                        <p class="page-subtitle">管理和监控您的AI模型训练任务，查看训练进度和结果</p>
+                    </div>
+                    <div class="quick-actions">
+                        <button class="btn btn-primary" onclick="startNewTraining()">
+                            <i class="fas fa-plus-circle"></i> 新建训练
+                        </button>
+                        <button class="btn btn-success" onclick="createNewProject()">
+                            <i class="fas fa-project-diagram"></i> 新建项目
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- 统计数据 -->
+                <div class="stats-grid">
+                    <div class="stat-card completed">
+                        <div class="stat-header">
+                            <div class="stat-icon completed">
+                                <i class="fas fa-check-circle"></i>
+                            </div>
+                            <div class="stat-change positive">
+                                <i class="fas fa-arrow-up"></i> 12%
+                            </div>
+                        </div>
+                        <div class="stat-number">42</div>
+                        <div class="stat-label">已完成训练</div>
+                    </div>
+                    
+                    <div class="stat-card in-progress">
+                        <div class="stat-header">
+                            <div class="stat-icon in-progress">
+                                <i class="fas fa-sync-alt"></i>
+                            </div>
+                            <div class="stat-change positive">
+                                <i class="fas fa-arrow-up"></i> 8%
+                            </div>
+                        </div>
+                        <div class="stat-number">8</div>
+                        <div class="stat-label">训练中</div>
+                    </div>
+                    
+                    <div class="stat-card waiting">
+                        <div class="stat-header">
+                            <div class="stat-icon waiting">
+                                <i class="fas fa-clock"></i>
+                            </div>
+                            <div class="stat-change negative">
+                                <i class="fas fa-arrow-down"></i> 5%
+                            </div>
+                        </div>
+                        <div class="stat-number">15</div>
+                        <div class="stat-label">等待训练</div>
+                    </div>
+                    
+                    <div class="stat-card failed">
+                        <div class="stat-header">
+                            <div class="stat-icon failed">
+                                <i class="fas fa-times-circle"></i>
+                            </div>
+                            <div class="stat-change positive">
+                                <i class="fas fa-arrow-down"></i> 2%
+                            </div>
+                        </div>
+                        <div class="stat-number">3</div>
+                        <div class="stat-label">训练失败</div>
+                    </div>
+                </div>
+                
+                <!-- 训练任务表格 -->
+                <div class="content-card">
+                    <div class="card-header">
+                        <h2 class="card-title">
+                            <i class="fas fa-tasks"></i> 训练任务列表
+                        </h2>
+                        <button class="btn btn-primary" onclick="viewAllTasks()">
+                            <i class="fas fa-list"></i> 查看全部
+                        </button>
+                    </div>
+                    
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>任务ID</th>
+                                <th>模型名称</th>
+                                <th>训练类型</th>
+                                <th>开始时间</th>
+                                <th>进度</th>
+                                <th>状态</th>
+                                <th>操作</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>#001</td>
+                                <td><strong>图片分类模型</strong></td>
+                                <td>图像识别</td>
+                                <td>2023-11-05 09:30</td>
+                                <td>
+                                    <div class="progress-bar">
+                                        <div class="progress-fill" style="width: 85%; background: #ffc107;"></div>
+                                    </div>
+                                    <small>85%</small>
+                                </td>
+                                <td><span class="status-badge status-in-progress">训练中</span></td>
+                                <td>
+                                    <button class="btn" style="padding: 6px 12px; font-size: 13px;" onclick="viewTaskDetails(1)">
+                                        <i class="fas fa-eye"></i> 查看
+                                    </button>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td>#002</td>
+                                <td><strong>文本分类模型</strong></td>
+                                <td>自然语言处理</td>
+                                <td>2023-11-04 14:20</td>
+                                <td>
+                                    <div class="progress-bar">
+                                        <div class="progress-fill" style="width: 100%; background: #28a745;"></div>
+                                    </div>
+                                    <small>100%</small>
+                                </td>
+                                <td><span class="status-badge status-completed">已完成</span></td>
+                                <td>
+                                    <button class="btn btn-success" style="padding: 6px 12px; font-size: 13px;" onclick="evaluateModel(2)">
+                                        <i class="fas fa-chart-bar"></i> 评估
+                                    </button>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td>#003</td>
+                                <td><strong>目标检测模型</strong></td>
+                                <td>计算机视觉</td>
+                                <td>2023-11-03 11:15</td>
+                                <td>
+                                    <div class="progress-bar">
+                                        <div class="progress-fill" style="width: 45%; background: #fd7e14;"></div>
+                                    </div>
+                                    <small>45%</small>
+                                </td>
+                                <td><span class="status-badge status-in-progress">训练中</span></td>
+                                <td>
+                                    <button class="btn" style="padding: 6px 12px; font-size: 13px;" onclick="viewTaskDetails(3)">
+                                        <i class="fas fa-eye"></i> 查看
+                                    </button>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                
+                <!-- 我的项目 -->
+                <div class="content-card">
+                    <div class="card-header">
+                        <h2 class="card-title">
+                            <i class="fas fa-project-diagram"></i> 我的项目
+                        </h2>
+                        <button class="btn btn-primary" onclick="viewAllProjects()">
+                            <i class="fas fa-folder-open"></i> 全部项目
+                        </button>
+                    </div>
+                    
+                    <div class="projects-grid">
+                        <div class="project-card">
+                            <div class="project-header">
+                                <div>
+                                    <h3 class="project-title">智能图像识别系统</h3>
+                                    <div class="project-type">计算机视觉 · 个人项目</div>
+                                </div>
+                                <span class="status-badge status-in-progress">进行中</span>
+                            </div>
+                            <p>基于深度学习的图像分类和目标检测系统，支持多种图像格式和实时识别。</p>
+                            <div class="project-stats">
+                                <div>
+                                    <div class="stat-number">3</div>
+                                    <div class="stat-label">模型</div>
+                                </div>
+                                <div>
+                                    <div class="stat-number">85%</div>
+                                    <div class="stat-label">完成度</div>
+                                </div>
+                                <div>
+                                    <div class="stat-number">12</div>
+                                    <div class="stat-label">天数</div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="project-card">
+                            <div class="project-header">
+                                <div>
+                                    <h3 class="project-title">情感分析平台</h3>
+                                    <div class="project-type">自然语言处理 · 团队项目</div>
+                                </div>
+                                <span class="status-badge status-completed">已完成</span>
+                            </div>
+                            <p>实时分析社交媒体文本情感倾向，支持多语言和自定义情感词典。</p>
+                            <div class="project-stats">
+                                <div>
+                                    <div class="stat-number">5</div>
+                                    <div class="stat-label">模型</div>
+                                </div>
+                                <div>
+                                    <div class="stat-number">100%</div>
+                                    <div class="stat-label">完成度</div>
+                                </div>
+                                <div>
+                                    <div class="stat-number">28</div>
+                                    <div class="stat-label">天数</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- 最近活动 -->
+                <div class="content-card">
+                    <div class="card-header">
+                        <h2 class="card-title">
+                            <i class="fas fa-history"></i> 最近活动
+                        </h2>
+                    </div>
+                    
+                    <div class="timeline">
+                        <div class="timeline-item">
+                            <div class="timeline-time">今天 15:08</div>
+                            <div class="timeline-content">开始训练 "语音识别模型 V2.0"</div>
+                        </div>
+                        <div class="timeline-item">
+                            <div class="timeline-time">今天 14:30</div>
+                            <div class="timeline-content">完成了 "文本分类模型" 的训练和评估</div>
+                        </div>
+                        <div class="timeline-item">
+                            <div class="timeline-time">昨天 11:20</div>
+                            <div class="timeline-content">上传了新的图像数据集 (5000张图片)</div>
+                        </div>
+                        <div class="timeline-item">
+                            <div class="timeline-time">前天 09:45</div>
+                            <div class="timeline-content">部署了 "智能客服系统" 到测试环境</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        // 页面加载时
+        document.addEventListener('DOMContentLoaded', function() {
+            // 检查登录状态
+            checkLoginStatus();
+            
+            // 设置用户信息
+            setUserInfo();
+            
+            // 设置导航
+            setupNavigation();
+            
+            console.log('🚀 学员技术后台已加载');
+        });
+        
+        // 检查登录状态
+        function checkLoginStatus() {
+            const user = JSON.parse(localStorage.getItem('user') || 'null');
+            const isLoggedIn = localStorage.getItem('isLoggedIn');
+            
+            // 先检查是否登录
+            if (!user || isLoggedIn !== 'true') {
+                console.log('用户未登录，跳转到登录页');
+                window.location.href = 'login.html';
+                return;
+            }
+            
+            // 如果是管理员，跳转到管理后台
+            if (user.role === 'admin') {
+                window.location.href = 'admin.html';
+                return;
+            }
+        }
+        
+        // 设置用户信息
+        function setUserInfo() {
+            const user = JSON.parse(localStorage.getItem('user') || 'null');
+            
+            if (user) {
+                // 设置用户名
+                const userNameElement = document.getElementById('userName');
+                userNameElement.textContent = user.name || '学员';
+                
+                // 设置用户头像
+                const userAvatarElement = document.getElementById('userAvatar');
+                const firstChar = (user.name || '学').charAt(0).toUpperCase();
+                userAvatarElement.textContent = firstChar;
+                
+                // 随机头像背景
+                const gradients = [
+                    'linear-gradient(135deg, #ffd700 0%, #ff8c00 100%)',
+                    'linear-gradient(135deg, #4b6cb7 0%, #182848 100%)',
+                    'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                    'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)'
+                ];
+                userAvatarElement.style.background = gradients[Math.floor(Math.random() * gradients.length)];
+            }
+        }
+        
+        // 设置导航
+        function setupNavigation() {
+            // 侧边栏链接点击事件
+            const navLinks = document.querySelectorAll('.nav-link');
+            navLinks.forEach(link => {
+                link.addEventListener('click', function(e) {
+                    // 排除外部链接（带href的）
+                    if (this.getAttribute('href') && this.getAttribute('href') !== '#') {
+                        return;
+                    }
+                    
+                    e.preventDefault();
+                    
+                    // 更新活动状态
+                    navLinks.forEach(l => l.classList.remove('active'));
+                    this.classList.add('active');
+                    
+                    // 获取页面标识
+                    const pageId = this.getAttribute('data-page');
+                    if (pageId) {
+                        showPage(pageId);
+                    }
+                });
+            });
+        }
+        
+        // 显示页面内容（简化版）
+        function showPage(pageId) {
+            alert(`切换到 ${pageId} 页面（功能开发中）`);
+            // 在实际应用中，这里会动态加载不同页面的内容
+        }
+        
+        // 功能函数
+        function startNewTraining() {
+            alert('新建训练任务功能开发中...');
+        }
+        
+        function createNewProject() {
+            alert('新建项目功能开发中...');
+        }
+        
+        function viewAllTasks() {
+            alert('查看全部训练任务功能开发中...');
+        }
+        
+        function viewAllProjects() {
+            alert('查看全部项目功能开发中...');
+        }
+        
+        function viewTaskDetails(taskId) {
+            alert(`查看任务 #${taskId} 的详细信息（功能开发中）`);
+        }
+        
+        function evaluateModel(modelId) {
+            alert(`评估模型 #${modelId}（功能开发中）`);
+        }
+        
+        // 退出登录
+        function logout() {
+            if (confirm('确定要退出登录吗？')) {
+                // 清除登录状态
+                localStorage.removeItem('user');
+                localStorage.removeItem('isLoggedIn');
+                localStorage.removeItem('loginTime');
+                
+                // 跳转到登录页
+                window.location.href = 'login.html';
+            }
+        }
+        
+        // 模拟实时更新
+        function updateTrainingProgress() {
+            // 在实际应用中，这里会通过WebSocket或轮询API获取实时进度
+            console.log('更新训练进度...');
+        }
+        
+        // 每30秒更新一次进度
+        setInterval(updateTrainingProgress, 30000);
+    </script>
+</body>
+</html>

@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>测试跳转</title>
+</head>
+<body>
+    <h1>测试页面跳转</h1>
+    
+    <button onclick="testTrainingToLabeling()">
+        测试 training.html → image-labeling.html
+    </button>
+    
+    <button onclick="testModuleToLabeling()">
+        测试 module-select.html → image-labeling.html
+    </button>
+    
+    <script>
+        function testTrainingToLabeling() {
+            // 模拟 training.html 的跳转
+            window.location.href = 'image-labeling.html?exercise=101';
+        }
+        
+        function testModuleToLabeling() {
+            // 模拟 module-select.html 的跳转
+            window.location.href = 'image-labeling.html';
+        }
+    </script>
+</body>
+</html>
