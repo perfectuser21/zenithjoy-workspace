@@ -15,7 +15,7 @@ if [ -f "$PID_FILE" ]; then
     echo "   目录: $QUEUE_DIR"
     echo ""
     echo "访问地址:"
-    echo "  http://146.190.52.84:$PORT/"
+    echo "  http://134.199.234.147:$PORT/"
     echo ""
     exit 0
   else
@@ -62,7 +62,7 @@ if ps -p "$PID" > /dev/null 2>&1; then
   echo "日志: /tmp/toutiao-file-server.log"
   echo ""
   echo "访问地址:"
-  echo "  http://146.190.52.84:$PORT/"
+  echo "  http://134.199.234.147:$PORT/"
   echo "  http://localhost:$PORT/"
   echo ""
   echo "停止服务器："

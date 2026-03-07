@@ -75,7 +75,7 @@
       },
       "parameters": {
         "authentication": "privateKey",
-        "host": "146.190.52.84",
+        "host": "134.199.234.147",
         "port": 22,
         "user": "xx",
         "command": "=NODE_PATH=/home/xx/node_modules node /home/xx/vps_publisher.js {{ $json.taskId }} {{ $json.platform }} 2>&1"

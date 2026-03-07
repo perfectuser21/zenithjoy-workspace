@@ -68,5 +68,5 @@ console.log('========================================');
 console.log('服务器已启动');
 console.log('========================================\n');
 console.log('Windows 客户端连接地址:');
-console.log(`  ws://146.190.52.84:${WS_PORT}`);
+console.log(`  ws://134.199.234.147:${WS_PORT}`);
 console.log('\n按 Ctrl+C 停止服务器\n');

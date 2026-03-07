@@ -14,7 +14,7 @@ const fs = require('fs');
 
 const CDP_PORT = 19225;
 const WINDOWS_IP = '100.97.242.124';
-const VPS_IP = '146.190.52.84';
+const VPS_IP = '134.199.234.147';
 const VPS_PORT = 8899;
 
 async function sleep(ms) {

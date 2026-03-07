@@ -42,7 +42,7 @@
       ],
       "parameters": {
         "authentication": "privateKey",
-        "host": "146.190.52.84",
+        "host": "134.199.234.147",
         "port": 22,
         "user": "xx",
         "command": "bash ~/.zhihu/vnc_scrape.sh 2>/dev/null"
