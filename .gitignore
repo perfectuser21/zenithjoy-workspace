@@ -121,3 +121,5 @@ services/creator/data/
 
 # 重复 checkout（workspace/ 是主 repo 的副本，不追踪）
 workspace/
+# Claude Code worktrees
+.claude/worktrees/
