@@ -1,0 +1,190 @@
+---
+import Base from '../../../layouts/Base.astro';
+import { getPaginatedPosts, POSTS_PER_PAGE } from '../../../data/posts';
+
+const { posts, totalPages, currentPage, totalPosts } = await getPaginatedPosts('en', 1);
+---
+
+<Base
+  title="Blog - AI Content Creation Tutorials"
+  description="AI media training blog sharing AI tool tips, automation workflows, and content creation methodologies. Help creators boost efficiency 10x with AI."
+  faq={[
+    { question: "What topics does this blog cover?", answer: "AI tool usage tips, automation workflow building, and content creation methodologies to help creators boost efficiency." },
+    { question: "Who is this content for?", answer: "Content creators, small team operators, and anyone looking to improve work efficiency with AI." },
+    { question: "How often is new content published?", answer: "1-2 in-depth articles per week, ensuring quality and practical value." }
+  ]}
+>
+  <section class="max-w-4xl mx-auto px-4 py-12">
+    <!-- Header -->
+    <header class="mb-12">
+      <h1 class="text-4xl font-bold mb-4">Blog</h1>
+      <p class="text-xl text-[var(--color-text-muted)]">
+        AI content creation tutorials to boost your efficiency 10x
+      </p>
+    </header>
+
+    <!-- Featured Quote (GEO Optimization) -->
+    <blockquote class="mb-12 p-6 bg-gradient-to-br from-[var(--color-primary)]/5 to-[var(--color-accent)]/5 rounded-xl border border-[var(--color-border)]">
+      <p class="text-lg font-medium">
+        "Mastering AI tools isn't about replacing creativity—it's about <span class="text-[var(--color-primary)]">freeing up time to focus on what truly matters</span>."
+      </p>
+    </blockquote>
+
+    <!-- Posts List - Dan Koe style: left text, right thumbnail -->
+    <div class="divide-y divide-[var(--color-border)]">
+      {posts.map(post => (
+        <article class="group py-6 first:pt-0">
+          <a href={`/en/blog/${post.slug}`} class="flex gap-6 items-start">
+            <!-- Left side text -->
+            <div class="flex-1 min-w-0">
+              <!-- Title -->
+              <h2 class="text-lg md:text-xl font-bold mb-2 text-[var(--color-primary)] group-hover:opacity-80 transition-opacity">
+                {post.title}
+              </h2>
+
+              <!-- Description -->
+              <p class="text-[var(--color-text-muted)] line-clamp-2 mb-3 text-sm">
+                {post.description || post.content?.slice(0, 120)}
+              </p>
+
+              <!-- Date and engagement stats -->
+              <div class="flex items-center gap-4 text-xs text-[var(--color-text-muted)]">
+                <span>{post.publishDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
+                <span class="flex items-center gap-1">
+                  <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
+                  <span class="like-count" data-slug={post.slug}>0</span>
+                </span>
+                <span class="flex items-center gap-1">
+                  <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
+                  <span class="view-count" data-slug={post.slug}>0</span>
+                </span>
+              </div>
+            </div>
+
+            <!-- Right side thumbnail -->
+            {post.thumbnailUrl && (
+              <div class="flex-shrink-0 w-28 h-28 md:w-36 md:h-36 overflow-hidden rounded-lg bg-[var(--color-bg-card)]">
+                <img
+                  src={post.thumbnailUrl}
+                  alt={post.title}
+                  class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                  loading="lazy"
+                />
+              </div>
+            )}
+          </a>
+        </article>
+      ))}
+    </div>
+
+    <!-- Topics Overview (GEO - helps AI understand content scope) -->
+    <section class="mt-16 p-8 bg-[var(--color-bg-card)] rounded-xl border border-[var(--color-border)]">
+      <h2 class="text-2xl font-bold mb-6">Topics We Cover</h2>
+      <div class="grid md:grid-cols-3 gap-4">
+        <div class="p-4 bg-[var(--color-bg)] rounded-lg">
+          <div class="text-2xl mb-2">&#x1F916;</div>
+          <h3 class="font-bold mb-1">AI Tools</h3>
+          <p class="text-sm text-[var(--color-text-muted)]">Practical tips for ChatGPT, Claude, Midjourney and more</p>
+        </div>
+        <div class="p-4 bg-[var(--color-bg)] rounded-lg">
+          <div class="text-2xl mb-2">&#x26A1;</div>
+          <h3 class="font-bold mb-1">Automation</h3>
+          <p class="text-sm text-[var(--color-text-muted)]">n8n, Make workflows to eliminate repetitive tasks</p>
+        </div>
+        <div class="p-4 bg-[var(--color-bg)] rounded-lg">
+          <div class="text-2xl mb-2">&#x270D;&#xFE0F;</div>
+          <h3 class="font-bold mb-1">Content Creation</h3>
+          <p class="text-sm text-[var(--color-text-muted)]">Writing methods, prompt engineering, productivity</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Pagination -->
+    {totalPages > 1 && (
+      <nav class="mt-12 flex justify-center items-center gap-2">
+        {currentPage > 1 && (
+          <a
+            href={currentPage === 2 ? '/en/blog' : `/en/blog/page/${currentPage - 1}`}
+            class="px-4 py-2 rounded-lg border border-[var(--color-border)] hover:bg-[var(--color-bg-card)] transition-colors"
+          >
+            ← Previous
+          </a>
+        )}
+
+        <div class="flex items-center gap-1">
+          {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
+            <a
+              href={page === 1 ? '/en/blog' : `/en/blog/page/${page}`}
+              class={`w-10 h-10 flex items-center justify-center rounded-lg transition-colors ${
+                page === currentPage
+                  ? 'bg-[var(--color-primary)] text-white'
+                  : 'border border-[var(--color-border)] hover:bg-[var(--color-bg-card)]'
+              }`}
+            >
+              {page}
+            </a>
+          ))}
+        </div>
+
+        {currentPage < totalPages && (
+          <a
+            href={`/en/blog/page/${currentPage + 1}`}
+            class="px-4 py-2 rounded-lg border border-[var(--color-border)] hover:bg-[var(--color-bg-card)] transition-colors"
+          >
+            Next →
+          </a>
+        )}
+      </nav>
+    )}
+
+    <!-- Post Count -->
+    <div class="mt-6 text-center text-sm text-[var(--color-text-muted)]">
+      {totalPosts} articles total
+    </div>
+
+    <!-- CTA -->
+    <div class="mt-12 text-center p-8 bg-gradient-to-br from-[var(--color-primary)]/5 to-[var(--color-accent)]/5 rounded-xl border border-[var(--color-border)]">
+      <a href="/en" class="text-[var(--color-primary)] hover:underline">
+        Back to Home →
+      </a>
+    </div>
+  </section>
+
+  <script>
+    // Fetch all stats for posts
+    const API = 'https://zenithjoyai-page-counter.zenithjoyai.workers.dev';
+
+    // Views
+    document.querySelectorAll('.view-count').forEach(async (el) => {
+      const slug = el.dataset.slug;
+      if (!slug) return;
+      try {
+        const res = await fetch(`${API}?slug=${encodeURIComponent(slug)}`);
+        const data = await res.json();
+        el.textContent = data.views || 0;
+      } catch (e) {}
+    });
+
+    // Likes
+    document.querySelectorAll('.like-count').forEach(async (el) => {
+      const slug = el.dataset.slug;
+      if (!slug) return;
+      try {
+        const res = await fetch(`${API}/likes?slug=${encodeURIComponent(slug)}`);
+        const data = await res.json();
+        el.textContent = data.likes || 0;
+      } catch (e) {}
+    });
+
+    // Comments
+    document.querySelectorAll('.comment-count').forEach(async (el) => {
+      const slug = el.dataset.slug;
+      if (!slug) return;
+      try {
+        const res = await fetch(`${API}/comments?slug=${encodeURIComponent(slug)}`);
+        const data = await res.json();
+        el.textContent = data.comments?.length || 0;
+      } catch (e) {}
+    });
+  </script>
+</Base>

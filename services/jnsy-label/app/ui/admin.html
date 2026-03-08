@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>金诺AI - 管理后台</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root {
+            --primary: #6366f1;
+            --primary-light: #a5b4fc;
+            --secondary: #10b981;
+            --accent: #f59e0b;
+            --danger: #ef4444;
+            --bg-dark: #0f172a;
+            --bg-darker: #020617;
+            --bg-card: #1e293b;
+            --text-primary: #f1f5f9;
+            --text-secondary: #94a3b8;
+            --text-muted: #64748b;
+            --border: #334155;
+            --success: #22c55e;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: Inter, -apple-system, sans-serif; background: var(--bg-darker); color: var(--text-primary); min-height: 100vh; display: flex; }
+
+        /* Sidebar */
+        .sidebar { width: 240px; background: var(--bg-dark); border-right: 1px solid var(--border); height: 100vh; position: fixed; padding: 20px 0; }
+        .sidebar-header { padding: 0 20px 20px; border-bottom: 1px solid var(--border); margin-bottom: 20px; }
+        .sidebar-header h1 { font-size: 18px; display: flex; align-items: center; gap: 10px; }
+        .sidebar-header h1 i { color: var(--primary); }
+        .nav-menu { list-style: none; }
+        .nav-item a { display: flex; align-items: center; gap: 12px; padding: 12px 20px; color: var(--text-secondary); text-decoration: none; transition: all 0.2s; border-left: 3px solid transparent; }
+        .nav-item a:hover { background: var(--bg-card); color: var(--text-primary); }
+        .nav-item a.active { background: rgba(99, 102, 241, 0.1); color: var(--primary); border-left-color: var(--primary); }
+        .nav-item a i { width: 20px; text-align: center; }
+        .nav-divider { height: 1px; background: var(--border); margin: 16px 0; }
+
+        /* Main */
+        .main-content { margin-left: 240px; flex: 1; padding: 24px; }
+        .page-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; }
+        .page-header h1 { font-size: 24px; display: flex; align-items: center; gap: 10px; }
+        .page-header h1 i { color: var(--primary); }
+        .back-btn { color: var(--text-secondary); text-decoration: none; font-size: 14px; display: flex; align-items: center; gap: 6px; }
+        .back-btn:hover { color: var(--text-primary); }
+
+        /* Stats Grid */
+        .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 24px; }
+        .stat-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px; padding: 20px; }
+        .stat-card .icon { width: 40px; height: 40px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 16px; margin-bottom: 12px; }
+        .stat-card .icon.blue { background: rgba(99, 102, 241, 0.2); color: var(--primary); }
+        .stat-card .icon.green { background: rgba(16, 185, 129, 0.2); color: var(--secondary); }
+        .stat-card .icon.yellow { background: rgba(245, 158, 11, 0.2); color: var(--accent); }
+        .stat-card .icon.red { background: rgba(239, 68, 68, 0.2); color: var(--danger); }
+        .stat-card .value { font-size: 28px; font-weight: 700; }
+        .stat-card .label { font-size: 12px; color: var(--text-muted); margin-top: 4px; }
+
+        /* Page content */
+        .page { display: none; }
+        .page.active { display: block; }
+
+        /* Table */
+        .table-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+        .table-header { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px; border-bottom: 1px solid var(--border); }
+        .table-header h3 { font-size: 16px; }
+        .btn { padding: 8px 16px; border-radius: 8px; border: none; font-size: 13px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
+        .btn-primary { background: var(--primary); color: white; }
+        .btn-primary:hover { background: #5558e3; }
+        .btn-danger { background: var(--danger); color: white; }
+        .btn-danger:hover { background: #dc2626; }
+        .btn-sm { padding: 6px 12px; font-size: 12px; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { padding: 12px 20px; text-align: left; }
+        th { background: var(--bg-dark); font-size: 12px; color: var(--text-muted); text-transform: uppercase; }
+        td { border-bottom: 1px solid var(--border); font-size: 14px; }
+        tr:hover td { background: rgba(99, 102, 241, 0.05); }
+        .badge { display: inline-block; padding: 4px 8px; border-radius: 4px; font-size: 11px; }
+        .badge-admin { background: rgba(245, 158, 11, 0.2); color: var(--accent); }
+        .badge-student { background: rgba(99, 102, 241, 0.2); color: var(--primary); }
+
+        /* Chart */
+        .chart-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px; padding: 20px; margin-bottom: 24px; }
+        .chart-card h3 { font-size: 16px; margin-bottom: 16px; display: flex; align-items: center; gap: 8px; }
+        .chart-card h3 i { color: var(--primary); }
+        .chart-container { height: 300px; }
+
+        /* Modal */
+        .modal { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); z-index: 1000; align-items: center; justify-content: center; }
+        .modal.active { display: flex; }
+        .modal-content { background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px; width: 400px; max-width: 90%; }
+        .modal-header { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px; border-bottom: 1px solid var(--border); }
+        .modal-header h3 { font-size: 16px; }
+        .modal-close { background: none; border: none; color: var(--text-muted); font-size: 20px; cursor: pointer; }
+        .modal-body { padding: 20px; }
+        .form-group { margin-bottom: 16px; }
+        .form-group label { display: block; font-size: 13px; color: var(--text-secondary); margin-bottom: 6px; }
+        .form-group input, .form-group select { width: 100%; padding: 10px 12px; background: var(--bg-dark); border: 1px solid var(--border); border-radius: 8px; color: var(--text-primary); font-size: 14px; }
+        .form-group input:focus, .form-group select:focus { outline: none; border-color: var(--primary); }
+        .modal-footer { padding: 16px 20px; border-top: 1px solid var(--border); display: flex; justify-content: flex-end; gap: 10px; }
+
+        @media (max-width: 1024px) { .stats-grid { grid-template-columns: repeat(2, 1fr); } }
+        @media (max-width: 768px) { .sidebar { display: none; } .main-content { margin-left: 0; } }
+    </style>
+</head>
+<body>
+    <aside class="sidebar">
+        <div class="sidebar-header">
+            <h1><i class="fas fa-brain"></i> 金诺AI</h1>
+        </div>
+        <ul class="nav-menu">
+            <li class="nav-item"><a href="#dashboard" class="active" data-page="dashboard"><i class="fas fa-tachometer-alt"></i> 系统概览</a></li>
+            <li class="nav-item"><a href="#users" data-page="users"><i class="fas fa-users"></i> 用户管理</a></li>
+            <li class="nav-item"><a href="#analytics" data-page="analytics"><i class="fas fa-chart-line"></i> 数据分析</a></li>
+            <div class="nav-divider"></div>
+            <li class="nav-item"><a href="index.html"><i class="fas fa-home"></i> 返回首页</a></li>
+        </ul>
+    </aside>
+
+    <main class="main-content">
+        <!-- Dashboard -->
+        <div id="dashboard" class="page active">
+            <div class="page-header">
+                <h1><i class="fas fa-tachometer-alt"></i> 系统概览</h1>
+            </div>
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="icon blue"><i class="fas fa-folder-open"></i></div>
+                    <div class="value" id="dash-projects">0</div>
+                    <div class="label">活跃项目</div>
+                </div>
+                <div class="stat-card">
+                    <div class="icon green"><i class="fas fa-tasks"></i></div>
+                    <div class="value" id="dash-tasks">0</div>
+                    <div class="label">总任务数</div>
+                </div>
+                <div class="stat-card">
+                    <div class="icon yellow"><i class="fas fa-check-circle"></i></div>
+                    <div class="value" id="dash-completed">0</div>
+                    <div class="label">已完成</div>
+                </div>
+                <div class="stat-card">
+                    <div class="icon red"><i class="fas fa-users"></i></div>
+                    <div class="value" id="dash-users">0</div>
+                    <div class="label">注册用户</div>
+                </div>
+            </div>
+            <div class="chart-card">
+                <h3><i class="fas fa-chart-bar"></i> 项目完成率</h3>
+                <div class="chart-container"><canvas id="projectsChart"></canvas></div>
+            </div>
+        </div>
+
+        <!-- Users -->
+        <div id="users" class="page">
+            <div class="page-header">
+                <h1><i class="fas fa-users"></i> 用户管理</h1>
+                <button class="btn btn-primary" onclick="showAddUser()"><i class="fas fa-plus"></i> 添加用户</button>
+            </div>
+            <div class="table-card">
+                <table>
+                    <thead>
+                        <tr><th>手机号</th><th>姓名</th><th>角色</th><th>操作</th></tr>
+                    </thead>
+                    <tbody id="users-table"><tr><td colspan="4" style="text-align:center;color:var(--text-muted);">加载中...</td></tr></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Analytics -->
+        <div id="analytics" class="page">
+            <div class="page-header">
+                <h1><i class="fas fa-chart-line"></i> 数据分析</h1>
+            </div>
+            <div class="chart-card">
+                <h3><i class="fas fa-chart-pie"></i> 各项目任务分布</h3>
+                <div class="chart-container"><canvas id="analyticsChart"></canvas></div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Add/Edit User Modal -->
+    <div class="modal" id="userModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="modalTitle">添加用户</h3>
+                <button class="modal-close" onclick="closeModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="editPhone">
+                <div class="form-group">
+                    <label>手机号</label>
+                    <input type="text" id="userPhone" placeholder="请输入手机号">
+                </div>
+                <div class="form-group">
+                    <label>姓名</label>
+                    <input type="text" id="userName" placeholder="请输入姓名">
+                </div>
+                <div class="form-group">
+                    <label>密码</label>
+                    <input type="password" id="userPassword" placeholder="请输入密码">
+                </div>
+                <div class="form-group">
+                    <label>角色</label>
+                    <select id="userRole">
+                        <option value="student">学员</option>
+                        <option value="admin">管理员</option>
+                    </select>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn" onclick="closeModal()">取消</button>
+                <button class="btn btn-primary" onclick="saveUser()">保存</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Page navigation
+        document.querySelectorAll('[data-page]').forEach(link => {
+            link.addEventListener('click', (e) => {
+                e.preventDefault();
+                const page = link.dataset.page;
+                document.querySelectorAll('.nav-item a').forEach(a => a.classList.remove('active'));
+                link.classList.add('active');
+                document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+                document.getElementById(page).classList.add('active');
+                if (page === 'users') loadUsers();
+                if (page === 'analytics') loadAnalytics();
+            });
+        });
+
+        // Load dashboard stats
+        async function loadDashboard() {
+            try {
+                const statsRes = await fetch('/api/stats/dashboard');
+                const stats = await statsRes.json();
+                document.getElementById('dash-projects').textContent = stats.total_projects || 0;
+                document.getElementById('dash-tasks').textContent = stats.total_tasks || 0;
+                document.getElementById('dash-completed').textContent = stats.completed_tasks || 0;
+
+                const usersRes = await fetch('/api/users');
+                const users = await usersRes.json();
+                document.getElementById('dash-users').textContent = users.length || 0;
+
+                // Load projects chart
+                const projectsRes = await fetch('/api/stats/projects');
+                const projects = await projectsRes.json();
+
+                const ctx = document.getElementById('projectsChart').getContext('2d');
+                new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: projects.map(p => p.title.substring(0, 15)),
+                        datasets: [{
+                            label: '完成率 (%)',
+                            data: projects.map(p => p.completion_rate),
+                            backgroundColor: 'rgba(99, 102, 241, 0.6)',
+                            borderColor: 'rgba(99, 102, 241, 1)',
+                            borderWidth: 1
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        scales: { y: { beginAtZero: true, max: 100 } },
+                        plugins: { legend: { display: false } }
+                    }
+                });
+            } catch (e) { console.log('Dashboard error:', e); }
+        }
+
+        // Load users
+        async function loadUsers() {
+            try {
+                const res = await fetch('/api/users');
+                const users = await res.json();
+                const tbody = document.getElementById('users-table');
+                if (users.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--text-muted);">暂无用户</td></tr>';
+                    return;
+                }
+                tbody.innerHTML = users.map(u => `
+                    <tr>
+                        <td>${u.phone}</td>
+                        <td>${u.name}</td>
+                        <td><span class="badge badge-${u.role}">${u.role === 'admin' ? '管理员' : '学员'}</span></td>
+                        <td>
+                            <button class="btn btn-sm" onclick="editUser('${u.phone}')"><i class="fas fa-edit"></i></button>
+                            ${u.phone !== 'admin' ? `<button class="btn btn-sm btn-danger" onclick="deleteUser('${u.phone}')"><i class="fas fa-trash"></i></button>` : ''}
+                        </td>
+                    </tr>
+                `).join('');
+            } catch (e) { console.log('Users error:', e); }
+        }
+
+        // Load analytics
+        async function loadAnalytics() {
+            try {
+                const res = await fetch('/api/stats/analytics');
+                const data = await res.json();
+
+                const ctx = document.getElementById('analyticsChart').getContext('2d');
+                new Chart(ctx, {
+                    type: 'doughnut',
+                    data: {
+                        labels: data.projects.labels,
+                        datasets: [{
+                            data: data.projects.data,
+                            backgroundColor: ['#6366f1', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899']
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: { legend: { position: 'right' } }
+                    }
+                });
+            } catch (e) { console.log('Analytics error:', e); }
+        }
+
+        // User CRUD
+        function showAddUser() {
+            document.getElementById('modalTitle').textContent = '添加用户';
+            document.getElementById('editPhone').value = '';
+            document.getElementById('userPhone').value = '';
+            document.getElementById('userPhone').disabled = false;
+            document.getElementById('userName').value = '';
+            document.getElementById('userPassword').value = '';
+            document.getElementById('userRole').value = 'student';
+            document.getElementById('userModal').classList.add('active');
+        }
+
+        async function editUser(phone) {
+            try {
+                const res = await fetch('/api/users/' + phone);
+                const user = await res.json();
+                document.getElementById('modalTitle').textContent = '编辑用户';
+                document.getElementById('editPhone').value = phone;
+                document.getElementById('userPhone').value = phone;
+                document.getElementById('userPhone').disabled = true;
+                document.getElementById('userName').value = user.name;
+                document.getElementById('userPassword').value = '';
+                document.getElementById('userRole').value = user.role;
+                document.getElementById('userModal').classList.add('active');
+            } catch (e) { alert('加载用户失败'); }
+        }
+
+        async function saveUser() {
+            const editPhone = document.getElementById('editPhone').value;
+            const phone = document.getElementById('userPhone').value;
+            const name = document.getElementById('userName').value;
+            const password = document.getElementById('userPassword').value;
+            const role = document.getElementById('userRole').value;
+
+            if (!phone || !name) { alert('请填写完整信息'); return; }
+
+            try {
+                if (editPhone) {
+                    // Update
+                    await fetch('/api/users/' + editPhone, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ name, password: password || undefined, role })
+                    });
+                } else {
+                    // Create
+                    if (!password) { alert('请输入密码'); return; }
+                    await fetch('/api/users', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ phone, name, password, role })
+                    });
+                }
+                closeModal();
+                loadUsers();
+            } catch (e) { alert('保存失败'); }
+        }
+
+        async function deleteUser(phone) {
+            if (!confirm('确定删除该用户吗？')) return;
+            try {
+                await fetch('/api/users/' + phone, { method: 'DELETE' });
+                loadUsers();
+            } catch (e) { alert('删除失败'); }
+        }
+
+        function closeModal() {
+            document.getElementById('userModal').classList.remove('active');
+        }
+
+        // Init
+        loadDashboard();
+    </script>
+</body>
+</html>

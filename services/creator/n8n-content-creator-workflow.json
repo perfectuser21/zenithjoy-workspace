@@ -1,0 +1,172 @@
+{
+  "name": "[Flow] 内容创作完整工作流 v1.0",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "content-creator",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "name": "1. Webhook 触发",
+      "type": "n8n-nodes-base.webhook",
+      "position": [250, 400],
+      "webhookId": "content-creator",
+      "notes": "接收参数：type, title, count, notebook_id"
+    },
+    {
+      "parameters": {
+        "jsCode": "// 生成 content_id\nconst now = new Date();\nconst id = now.toISOString().replace(/[-:T]/g, '').slice(0, 15);\n\nconst input = $input.first().json.body;\n\nreturn [{\n  json: {\n    content_id: id,\n    type: input.type || 'deep-post',\n    title: input.title || '未命名内容',\n    count: input.count || 1,\n    notebook_id: input.notebook_id || 'bd630b56-afb1-478b-aab9-9dba5a762f7d'\n  }\n}];"
+      },
+      "name": "2. 生成 Content ID",
+      "type": "n8n-nodes-base.code",
+      "position": [500, 400],
+      "notes": "生成时间戳格式的 ID"
+    },
+    {
+      "parameters": {
+        "command": "=# 使用 NotebookLM 生成文案\n# TODO: 替换为实际的 NotebookLM 调用\necho '这是生成的文案内容（示例）\n\n标题：{{ $json.title }}\n\n正文内容...' > /tmp/content-{{ $json.content_id }}.md\n\ncat /tmp/content-{{ $json.content_id }}.md"
+      },
+      "name": "3. 生成文案 (NotebookLM)",
+      "type": "n8n-nodes-base.executeCommand",
+      "position": [750, 400],
+      "notes": "调用 NotebookLM 生成文案，保存到 /tmp/"
+    },
+    {
+      "parameters": {
+        "command": "=# 调用 ChatGPT 生成配图\nssh hk \"/home/ubuntu/scripts/chatgpt-generate.sh '根据以下文案生成 9:16 配图：{{ $json.title }}' --output /tmp/card-{{ $json.content_id }}.png\" > /tmp/chatgpt-log.txt 2>&1\n\n# 检查是否成功\nif ssh hk \"test -f /tmp/card-{{ $json.content_id }}.png\"; then\n  echo \"SUCCESS\"\nelse\n  echo \"FAILED\"\nfi"
+      },
+      "name": "4. 生成配图 (ChatGPT)",
+      "type": "n8n-nodes-base.executeCommand",
+      "position": [1000, 400],
+      "notes": "SSH 到 HK VPS，调用 chatgpt-generate.sh"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "leftValue": "",
+            "caseSensitive": true,
+            "typeValidation": "strict"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "1",
+              "leftValue": "={{ $json.stdout }}",
+              "rightValue": "SUCCESS",
+              "operator": {
+                "type": "string",
+                "operation": "contains"
+              }
+            }
+          ]
+        }
+      },
+      "name": "4.1 检查配图是否成功",
+      "type": "n8n-nodes-base.if",
+      "position": [1250, 400]
+    },
+    {
+      "parameters": {
+        "command": "=# 下载配图到本地 VPS\nscp hk:/tmp/card-{{ $('2. 生成 Content ID').item.json.content_id }}.png /tmp/card-{{ $('2. 生成 Content ID').item.json.content_id }}.png\n\nls -lh /tmp/card-{{ $('2. 生成 Content ID').item.json.content_id }}.png"
+      },
+      "name": "4.2 下载配图到本地",
+      "type": "n8n-nodes-base.executeCommand",
+      "position": [1500, 300]
+    },
+    {
+      "parameters": {
+        "command": "=# 创建 NAS 内容\nbash /home/xx/perfect21/infrastructure/scripts/nas-content-manager.sh create {{ $('2. 生成 Content ID').item.json.content_id }} \"{{ $('2. 生成 Content ID').item.json.title }}\" {{ $('2. 生成 Content ID').item.json.type }}\n\necho \"NAS 内容已创建\""
+      },
+      "name": "5. 创建 NAS 内容",
+      "type": "n8n-nodes-base.executeCommand",
+      "position": [1750, 300]
+    },
+    {
+      "parameters": {
+        "command": "=# 上传文案到 NAS\nbash /home/xx/perfect21/infrastructure/scripts/nas-content-manager.sh update-text {{ $('2. 生成 Content ID').item.json.content_id }} /tmp/content-{{ $('2. 生成 Content ID').item.json.content_id }}.md\n\necho \"文案已上传\""
+      },
+      "name": "6. 上传文案到 NAS",
+      "type": "n8n-nodes-base.executeCommand",
+      "position": [2000, 300]
+    },
+    {
+      "parameters": {
+        "command": "=# 上传配图到 NAS\nbash /home/xx/perfect21/infrastructure/scripts/nas-content-manager.sh upload-image {{ $('2. 生成 Content ID').item.json.content_id }} /tmp/card-{{ $('2. 生成 Content ID').item.json.content_id }}.png cover\n\necho \"配图已上传\""
+      },
+      "name": "7. 上传配图到 NAS",
+      "type": "n8n-nodes-base.executeCommand",
+      "position": [2250, 300]
+    },
+    {
+      "parameters": {
+        "command": "=# 更新状态为 ready\nbash /home/xx/perfect21/infrastructure/scripts/nas-content-manager.sh update-status {{ $('2. 生成 Content ID').item.json.content_id }} ready\n\necho \"状态已更新为 ready\""
+      },
+      "name": "8. 更新状态为 ready",
+      "type": "n8n-nodes-base.executeCommand",
+      "position": [2500, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({\n  status: 'success',\n  content_id: $('2. 生成 Content ID').item.json.content_id,\n  title: $('2. 生成 Content ID').item.json.title,\n  type: $('2. 生成 Content ID').item.json.type,\n  nas_path: '/volume1/workspace/vault/zenithjoy-creator/content/' + $('2. 生成 Content ID').item.json.content_id,\n  message: '内容创作完成，已保存到 NAS'\n}) }}"
+      },
+      "name": "9. 返回成功",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "position": [2750, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({\n  status: 'failed',\n  error: '配图生成失败',\n  content_id: $('2. 生成 Content ID').item.json.content_id\n}) }}"
+      },
+      "name": "返回失败（配图失败）",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "position": [1500, 500]
+    }
+  ],
+  "connections": {
+    "1. Webhook 触发": {
+      "main": [[{"node": "2. 生成 Content ID", "type": "main", "index": 0}]]
+    },
+    "2. 生成 Content ID": {
+      "main": [[{"node": "3. 生成文案 (NotebookLM)", "type": "main", "index": 0}]]
+    },
+    "3. 生成文案 (NotebookLM)": {
+      "main": [[{"node": "4. 生成配图 (ChatGPT)", "type": "main", "index": 0}]]
+    },
+    "4. 生成配图 (ChatGPT)": {
+      "main": [[{"node": "4.1 检查配图是否成功", "type": "main", "index": 0}]]
+    },
+    "4.1 检查配图是否成功": {
+      "main": [
+        [{"node": "4.2 下载配图到本地", "type": "main", "index": 0}],
+        [{"node": "返回失败（配图失败）", "type": "main", "index": 0}]
+      ]
+    },
+    "4.2 下载配图到本地": {
+      "main": [[{"node": "5. 创建 NAS 内容", "type": "main", "index": 0}]]
+    },
+    "5. 创建 NAS 内容": {
+      "main": [[{"node": "6. 上传文案到 NAS", "type": "main", "index": 0}]]
+    },
+    "6. 上传文案到 NAS": {
+      "main": [[{"node": "7. 上传配图到 NAS", "type": "main", "index": 0}]]
+    },
+    "7. 上传配图到 NAS": {
+      "main": [[{"node": "8. 更新状态为 ready", "type": "main", "index": 0}]]
+    },
+    "8. 更新状态为 ready": {
+      "main": [[{"node": "9. 返回成功", "type": "main", "index": 0}]]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "meta": {
+    "description": "完整的内容创作工作流：NotebookLM 生成文案 → ChatGPT 生成配图 → 保存到 NAS",
+    "version": "1.0.0",
+    "created": "2026-02-13"
+  }
+}

@@ -107,3 +107,19 @@ desktop.ini
 # Custom
 *.local
 .secrets/
+
+# Services - Python 虚拟环境（子项目各自的 venv）
+services/*/venv/
+services/*/.venv/
+services/*/env/
+
+# Services - 生成内容（不提交到 git）
+services/creator/assets/generated/
+services/creator/output/
+services/creator/content/
+services/creator/data/
+
+# 重复 checkout（workspace/ 是主 repo 的副本，不追踪）
+workspace/
+# Claude Code worktrees
+.claude/worktrees/

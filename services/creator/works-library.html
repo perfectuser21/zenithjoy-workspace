@@ -1,0 +1,1401 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>作品库 - ZenithJoy</title>
+    <style>
+        :root {
+            --bg: #191919;
+            --bg-elevated: #202020;
+            --bg-hover: rgba(255,255,255,0.055);
+            --bg-active: rgba(255,255,255,0.08);
+            --border: rgba(255,255,255,0.094);
+            --text: rgba(255,255,255,0.91);
+            --text-secondary: rgba(255,255,255,0.6);
+            --text-muted: rgba(255,255,255,0.4);
+            --blue: #2383e2;
+            --blue-bg: rgba(35,131,226,0.15);
+            --red: #e16f6a;
+            --green: #4dab9a;
+            --yellow: #cb9c3e;
+            --orange: #e9a558;
+            --purple: #9a6dd7;
+            --pink: #e255a1;
+            --gray: #9a9a9a;
+            --brown: #c4a68c;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            font-size: 14px;
+            line-height: 1.5;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        /* === FULL SCREEN LAYOUT === */
+        .app { display: flex; height: 100vh; }
+
+        /* Sidebar - Collapsible */
+        .sidebar {
+            width: 240px;
+            background: var(--bg-elevated);
+            border-right: 1px solid var(--border);
+            flex-shrink: 0;
+            display: flex;
+            flex-direction: column;
+            transition: width 0.2s, margin 0.2s;
+        }
+        .sidebar.collapsed { width: 0; margin-left: -1px; overflow: hidden; }
+        .sidebar-toggle {
+            position: fixed;
+            left: 8px;
+            top: 8px;
+            z-index: 100;
+            width: 28px;
+            height: 28px;
+            border-radius: 4px;
+            border: none;
+            background: var(--bg-hover);
+            color: var(--text-secondary);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .sidebar-toggle:hover { background: var(--bg-active); color: var(--text); }
+        .sidebar-header {
+            padding: 44px 12px 12px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-weight: 500;
+        }
+        .sidebar-nav { flex: 1; padding: 4px 8px; overflow-y: auto; }
+        .nav-item {
+            padding: 5px 10px;
+            border-radius: 4px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: var(--text-secondary);
+            font-size: 14px;
+            margin-bottom: 1px;
+        }
+        .nav-item:hover { background: var(--bg-hover); }
+        .nav-item.active { background: var(--bg-active); color: var(--text); }
+        .nav-section {
+            padding: 16px 10px 4px;
+            font-size: 11px;
+            color: var(--text-muted);
+            font-weight: 500;
+        }
+
+        /* Main */
+        .main { flex: 1; display: flex; flex-direction: column; overflow: hidden; min-width: 0; }
+
+        /* Top Bar */
+        .topbar {
+            height: 44px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            padding: 0 12px 0 44px;
+            flex-shrink: 0;
+        }
+        .breadcrumb {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            font-size: 14px;
+            color: var(--text-secondary);
+        }
+        .breadcrumb span { cursor: pointer; }
+        .breadcrumb span:hover { color: var(--text); }
+
+        /* Page Content */
+        .page-wrapper { flex: 1; overflow-y: auto; }
+        .page-content { max-width: 100%; padding: 0 96px; }
+        @media (max-width: 900px) { .page-content { padding: 0 24px; } }
+
+        .page-header { padding: 80px 0 12px; }
+        .page-icon { font-size: 60px; margin-bottom: 8px; cursor: pointer; }
+        .page-title {
+            font-size: 32px;
+            font-weight: 700;
+            outline: none;
+            width: 100%;
+        }
+        .page-title:empty:before { content: "Untitled"; color: var(--text-muted); }
+
+        /* Database Controls */
+        .db-controls {
+            display: flex;
+            align-items: center;
+            height: 42px;
+            gap: 2px;
+            border-bottom: 1px solid var(--border);
+            position: sticky;
+            top: 0;
+            background: var(--bg);
+            z-index: 20;
+            padding-right: 8px;
+        }
+        .view-tabs { display: flex; }
+        .view-tab {
+            padding: 8px 10px;
+            border: none;
+            background: transparent;
+            color: var(--text-secondary);
+            cursor: pointer;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            border-bottom: 2px solid transparent;
+            margin-bottom: -1px;
+        }
+        .view-tab:hover { color: var(--text); }
+        .view-tab.active { color: var(--text); border-bottom-color: var(--text); }
+        .view-tab svg { width: 14px; height: 14px; }
+
+        .ctrl-divider { width: 1px; height: 20px; background: var(--border); margin: 0 6px; }
+        .ctrl-btn {
+            padding: 4px 8px;
+            border-radius: 4px;
+            border: none;
+            background: transparent;
+            color: var(--text-secondary);
+            cursor: pointer;
+            font-size: 13px;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+        .ctrl-btn:hover { background: var(--bg-hover); color: var(--text); }
+        .ctrl-btn.active { background: var(--blue-bg); color: var(--blue); }
+        .ctrl-btn svg { width: 14px; height: 14px; }
+        .ctrl-spacer { flex: 1; }
+        .ctrl-search {
+            padding: 4px 8px;
+            border-radius: 4px;
+            border: 1px solid var(--border);
+            background: transparent;
+            color: var(--text);
+            font-size: 13px;
+            width: 200px;
+        }
+        .ctrl-search:focus { outline: none; border-color: var(--blue); }
+        .ctrl-search::placeholder { color: var(--text-muted); }
+        .btn-new {
+            background: var(--blue);
+            color: #fff;
+            padding: 4px 10px;
+            border-radius: 4px;
+            border: none;
+            font-size: 13px;
+            cursor: pointer;
+            margin-left: 8px;
+        }
+        .btn-new:hover { opacity: 0.9; }
+
+        /* Table */
+        .table-view { display: none; }
+        .table-view.active { display: block; }
+        .db-table { width: 100%; border-collapse: collapse; }
+        .db-table th {
+            text-align: left;
+            padding: 6px 8px;
+            font-weight: 400;
+            font-size: 12px;
+            color: var(--text-secondary);
+            border-bottom: 1px solid var(--border);
+            position: sticky;
+            top: 42px;
+            background: var(--bg);
+            cursor: pointer;
+            z-index: 10;
+            white-space: nowrap;
+        }
+        .db-table th:hover { background: var(--bg-hover); }
+        .db-table td {
+            padding: 4px 8px;
+            border-bottom: 1px solid rgba(255,255,255,0.04);
+            height: 32px;
+            vertical-align: middle;
+        }
+        .db-table tbody tr { cursor: pointer; }
+        .db-table tbody tr:hover td { background: var(--bg-hover); }
+
+        .cell-title { display: flex; align-items: center; gap: 6px; }
+        .cell-title .icon { font-size: 15px; }
+        .cell-title .text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .cell-open {
+            margin-left: auto;
+            padding: 2px 6px;
+            font-size: 10px;
+            color: var(--text-muted);
+            background: var(--bg-hover);
+            border-radius: 3px;
+            opacity: 0;
+            text-transform: uppercase;
+        }
+        tr:hover .cell-open { opacity: 1; }
+
+        /* Tags & Status */
+        .tag {
+            display: inline-flex;
+            align-items: center;
+            padding: 0 6px;
+            height: 18px;
+            border-radius: 3px;
+            font-size: 12px;
+        }
+        .tag-gray { background: rgba(151,154,155,0.2); color: #9a9a9a; }
+        .tag-brown { background: rgba(147,114,100,0.2); color: #c4a68c; }
+        .tag-orange { background: rgba(255,163,68,0.2); color: #e9a558; }
+        .tag-yellow { background: rgba(255,220,73,0.2); color: #cb9c3e; }
+        .tag-green { background: rgba(77,171,154,0.2); color: #4dab9a; }
+        .tag-blue { background: rgba(82,156,202,0.2); color: #529cca; }
+        .tag-purple { background: rgba(154,109,215,0.2); color: #9a6dd7; }
+        .tag-pink { background: rgba(226,85,161,0.2); color: #e255a1; }
+        .tag-red { background: rgba(212,76,71,0.2); color: #e16f6a; }
+        .tag-default { background: rgba(255,255,255,0.06); color: var(--text-secondary); }
+
+        .status { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; }
+        .status-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+
+        .checkbox {
+            width: 14px;
+            height: 14px;
+            border: 1.5px solid var(--text-secondary);
+            border-radius: 2px;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .checkbox.checked { background: var(--blue); border-color: var(--blue); }
+        .checkbox.checked:after { content: "✓"; color: #fff; font-size: 10px; }
+
+        .date { color: var(--text-secondary); font-size: 12px; white-space: nowrap; }
+
+        /* Board View */
+        .board-view { display: none; padding: 16px 0; overflow-x: auto; }
+        .board-view.active { display: flex; gap: 8px; }
+        .board-col { width: 264px; flex-shrink: 0; }
+        .board-col-header {
+            padding: 8px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 14px;
+            font-weight: 500;
+        }
+        .board-col-count {
+            font-size: 12px;
+            color: var(--text-muted);
+            font-weight: 400;
+        }
+        .board-cards { min-height: 50px; }
+        .board-card {
+            background: var(--bg-elevated);
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            padding: 8px 10px;
+            margin-bottom: 6px;
+            cursor: pointer;
+        }
+        .board-card:hover { background: var(--bg-hover); }
+        .board-card-title { font-size: 14px; margin-bottom: 6px; }
+        .board-card-tags { display: flex; flex-wrap: wrap; gap: 4px; }
+
+        /* Calendar View */
+        .calendar-view { display: none; padding: 16px 0; flex-direction: column; height: calc(100vh - 220px); }
+        .calendar-view.active { display: flex; }
+        .cal-nav { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+        .cal-nav-btn {
+            padding: 4px 8px;
+            border-radius: 4px;
+            border: 1px solid var(--border);
+            background: transparent;
+            color: var(--text);
+            cursor: pointer;
+        }
+        .cal-nav-btn:hover { background: var(--bg-hover); }
+        .cal-title { font-size: 16px; font-weight: 500; }
+        .cal-grid {
+            flex: 1;
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            grid-template-rows: auto 1fr 1fr 1fr 1fr 1fr 1fr;
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            overflow: hidden;
+        }
+        .cal-weekday {
+            padding: 6px;
+            text-align: center;
+            font-size: 11px;
+            color: var(--text-muted);
+            background: var(--bg-elevated);
+            border-bottom: 1px solid var(--border);
+        }
+        .cal-day {
+            border-right: 1px solid var(--border);
+            border-bottom: 1px solid var(--border);
+            padding: 4px;
+            overflow: hidden;
+        }
+        .cal-day:nth-child(7n) { border-right: none; }
+        .cal-day.other { opacity: 0.3; }
+        .cal-day.today { background: var(--blue-bg); }
+        .cal-day-num { font-size: 11px; color: var(--text-secondary); margin-bottom: 2px; }
+        .cal-item {
+            padding: 1px 4px;
+            margin-bottom: 2px;
+            border-radius: 2px;
+            font-size: 11px;
+            cursor: pointer;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        /* List View */
+        .list-view { display: none; padding: 8px 0; }
+        .list-view.active { display: block; }
+        .list-item {
+            display: flex;
+            align-items: center;
+            padding: 6px 8px;
+            gap: 10px;
+            cursor: pointer;
+            border-radius: 4px;
+        }
+        .list-item:hover { background: var(--bg-hover); }
+        .list-item .icon { font-size: 16px; }
+        .list-item .title { flex: 1; }
+        .list-item .meta { display: flex; gap: 8px; align-items: center; }
+
+        /* Gallery View */
+        .gallery-view { display: none; padding: 16px 0; flex-wrap: wrap; gap: 12px; }
+        .gallery-view.active { display: flex; }
+        .gallery-card {
+            width: 200px;
+            background: var(--bg-elevated);
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            overflow: hidden;
+            cursor: pointer;
+        }
+        .gallery-card:hover { border-color: var(--text-muted); }
+        .gallery-cover {
+            height: 100px;
+            background: linear-gradient(135deg, #252525, #1a1a1a);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 32px;
+        }
+        .gallery-info { padding: 8px; }
+        .gallery-title { font-size: 13px; margin-bottom: 6px; }
+
+        /* === MODAL === */
+        .modal-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.7);
+            z-index: 100;
+            display: none;
+            justify-content: center;
+            overflow-y: auto;
+        }
+        .modal-overlay.open { display: flex; }
+        .modal {
+            width: 100%;
+            max-width: 900px;
+            min-height: 100vh;
+            background: var(--bg-elevated);
+        }
+        .modal-topbar {
+            position: sticky;
+            top: 0;
+            background: var(--bg-elevated);
+            padding: 10px 14px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            border-bottom: 1px solid var(--border);
+            z-index: 10;
+        }
+        .modal-close {
+            width: 28px;
+            height: 28px;
+            border-radius: 4px;
+            border: none;
+            background: transparent;
+            color: var(--text-secondary);
+            cursor: pointer;
+            font-size: 18px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .modal-close:hover { background: var(--bg-hover); }
+        .modal-status { font-size: 12px; color: var(--text-muted); }
+        .modal-actions { margin-left: auto; }
+
+        .modal-body { padding: 60px 96px 100px; }
+        .modal-icon { font-size: 60px; margin-bottom: 8px; cursor: pointer; }
+        .modal-title {
+            font-size: 40px;
+            font-weight: 700;
+            outline: none;
+            width: 100%;
+            line-height: 1.2;
+        }
+        .modal-title:empty:before { content: "Untitled"; color: var(--text-muted); }
+
+        /* Properties */
+        .props-section { margin: 20px 0; border-top: 1px solid var(--border); }
+        .prop-row {
+            display: flex;
+            min-height: 32px;
+            border-bottom: 1px solid var(--border);
+        }
+        .prop-row:hover { background: rgba(255,255,255,0.02); }
+        .prop-name {
+            width: 160px;
+            padding: 6px 8px;
+            color: var(--text-secondary);
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .prop-value {
+            flex: 1;
+            padding: 6px 8px;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            cursor: pointer;
+        }
+        .prop-value:hover { background: rgba(255,255,255,0.03); }
+        .prop-value.empty { color: var(--text-muted); }
+        .prop-value.empty:before { content: "Empty"; }
+
+        /* Block Editor */
+        .block-area { margin-top: 32px; }
+        .block {
+            padding: 3px 2px;
+            outline: none;
+            min-height: 1.5em;
+            font-size: 16px;
+            line-height: 1.5;
+        }
+        .block:empty:before {
+            content: "输入内容...按 Enter 创建新块";
+            color: var(--text-muted);
+        }
+        .block:focus { background: rgba(255,255,255,0.02); border-radius: 3px; }
+        .block.heading-1 { font-size: 1.875em; font-weight: 600; margin-top: 1.4em; }
+        .block.heading-2 { font-size: 1.5em; font-weight: 600; margin-top: 1.2em; }
+        .block.heading-3 { font-size: 1.25em; font-weight: 600; margin-top: 1em; }
+        .block.bulleted:before { content: "•"; margin-right: 8px; color: var(--text-secondary); }
+        .block.numbered { counter-increment: list-counter; }
+        .block.numbered:before { content: counter(list-counter) "."; margin-right: 8px; color: var(--text-secondary); }
+        .block-divider { height: 1px; background: var(--border); margin: 8px 0; }
+
+        /* === DROPDOWN === */
+        .dropdown {
+            position: fixed;
+            background: var(--bg-elevated);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+            min-width: 220px;
+            max-width: 300px;
+            max-height: 400px;
+            overflow-y: auto;
+            z-index: 200;
+            display: none;
+            padding: 6px;
+        }
+        .dropdown.open { display: block; }
+        .dropdown-header {
+            padding: 6px 8px;
+            font-size: 11px;
+            color: var(--text-muted);
+            font-weight: 500;
+            text-transform: uppercase;
+        }
+        .dropdown-item {
+            padding: 6px 8px;
+            border-radius: 4px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 14px;
+        }
+        .dropdown-item:hover { background: var(--bg-hover); }
+        .dropdown-item.selected { background: var(--blue-bg); }
+        .dropdown-item .check { margin-left: auto; color: var(--blue); }
+        .dropdown-divider { height: 1px; background: var(--border); margin: 4px 0; }
+        .dropdown-search {
+            width: 100%;
+            padding: 6px 8px;
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            background: transparent;
+            color: var(--text);
+            font-size: 13px;
+            margin-bottom: 4px;
+        }
+        .dropdown-search:focus { outline: none; border-color: var(--blue); }
+
+        /* Toast */
+        .toast {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%) translateY(80px);
+            background: var(--bg-elevated);
+            border: 1px solid var(--border);
+            padding: 8px 16px;
+            border-radius: 6px;
+            font-size: 14px;
+            z-index: 300;
+            transition: transform 0.2s;
+        }
+        .toast.show { transform: translateX(-50%) translateY(0); }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.12); border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.2); }
+    </style>
+</head>
+<body>
+    <div class="app">
+        <!-- Sidebar Toggle -->
+        <button class="sidebar-toggle" id="sidebar-toggle">☰</button>
+
+        <!-- Sidebar -->
+        <div class="sidebar" id="sidebar">
+            <div class="sidebar-header">
+                <span style="font-size:20px">📚</span>
+                <span>ZenithJoy</span>
+            </div>
+            <nav class="sidebar-nav">
+                <div class="nav-item active" data-filter="">
+                    <span>📚</span><span>全部作品</span>
+                </div>
+                <div class="nav-section">内容形态</div>
+                <div class="nav-item" data-filter="type:深度帖"><span>📖</span><span>深度帖</span></div>
+                <div class="nav-item" data-filter="type:短贴"><span>💬</span><span>短贴</span></div>
+                <div class="nav-item" data-filter="type:日常文章"><span>📝</span><span>日常文章</span></div>
+                <div class="nav-item" data-filter="type:深度文章"><span>📚</span><span>深度文章</span></div>
+                <div class="nav-section">标记</div>
+                <div class="nav-item" data-filter="爆款"><span>🔥</span><span>爆款</span></div>
+                <div class="nav-item" data-filter="精品"><span>⭐</span><span>精品</span></div>
+                <div class="nav-item" data-filter="视频化"><span>🎬</span><span>视频化</span></div>
+                <div class="nav-section">数据源</div>
+                <div class="nav-item" data-source="local"><span>💾</span><span>本地文件</span></div>
+                <div class="nav-item" data-source="notion"><span>🔗</span><span>Notion 直连</span></div>
+            </nav>
+        </div>
+
+        <!-- Main Content -->
+        <div class="main">
+            <div class="topbar">
+                <div class="breadcrumb">
+                    <span>ZenithJoy</span>
+                    <span style="opacity:0.3;margin:0 4px">/</span>
+                    <span>作品库</span>
+                </div>
+            </div>
+
+            <div class="page-wrapper">
+                <div class="page-content">
+                    <div class="page-header">
+                        <div class="page-icon">📚</div>
+                        <div class="page-title" contenteditable>作品库</div>
+                    </div>
+
+                    <!-- Database Controls -->
+                    <div class="db-controls">
+                        <div class="view-tabs">
+                            <button class="view-tab active" data-view="table">
+                                <svg viewBox="0 0 16 16" fill="currentColor"><path d="M0 1h16v3H0V1zm0 5h16v3H0V6zm0 5h16v3H0v-3z"/></svg>
+                                Table
+                            </button>
+                            <button class="view-tab" data-view="board">
+                                <svg viewBox="0 0 16 16" fill="currentColor"><path d="M0 0h4v16H0zm6 0h4v10H6zm12 0h4v14h-4z"/></svg>
+                                Board
+                            </button>
+                            <button class="view-tab" data-view="list">
+                                <svg viewBox="0 0 16 16" fill="currentColor"><path d="M0 2h2v2H0zm4 0h12v2H4zM0 7h2v2H0zm4 0h12v2H4zm-4 5h2v2H0zm4 0h12v2H4z"/></svg>
+                                List
+                            </button>
+                            <button class="view-tab" data-view="calendar">
+                                <svg viewBox="0 0 16 16" fill="currentColor"><path d="M4 0v2H1v14h14V2h-3V0h-2v2H6V0H4zM3 6h10v8H3V6z"/></svg>
+                                Calendar
+                            </button>
+                            <button class="view-tab" data-view="gallery">
+                                <svg viewBox="0 0 16 16" fill="currentColor"><path d="M0 0h7v7H0zm9 0h7v7H9zM0 9h7v7H0zm9 0h7v7H9z"/></svg>
+                                Gallery
+                            </button>
+                        </div>
+                        <div class="ctrl-divider"></div>
+                        <button class="ctrl-btn" id="btn-filter">
+                            <svg viewBox="0 0 16 16" fill="currentColor"><path d="M1 2l5 6v6l4-2V8l5-6H1z"/></svg>
+                            Filter
+                        </button>
+                        <button class="ctrl-btn" id="btn-sort">
+                            <svg viewBox="0 0 16 16" fill="currentColor"><path d="M3 1v12l-3-3v2l4 4 4-4v-2l-3 3V1H3zm10 2V1H8v2h5zm-1 4V5H8v2h4zm-2 4V9H8v2h2z"/></svg>
+                            Sort
+                        </button>
+                        <div class="ctrl-divider"></div>
+                        <button class="ctrl-btn" id="btn-props">Properties</button>
+                        <div class="ctrl-spacer"></div>
+                        <input type="text" class="ctrl-search" id="search" placeholder="Search...">
+                        <button class="btn-new" id="btn-new">+ New</button>
+                    </div>
+
+                    <!-- Views -->
+                    <div class="table-view active" id="view-table">
+                        <table class="db-table">
+                            <thead id="table-head"></thead>
+                            <tbody id="table-body"></tbody>
+                        </table>
+                    </div>
+                    <div class="board-view" id="view-board"></div>
+                    <div class="list-view" id="view-list"></div>
+                    <div class="calendar-view" id="view-calendar">
+                        <div class="cal-nav">
+                            <button class="cal-nav-btn" id="cal-prev">←</button>
+                            <span class="cal-title" id="cal-title"></span>
+                            <button class="cal-nav-btn" id="cal-next">→</button>
+                            <button class="cal-nav-btn" id="cal-today" style="margin-left:auto">Today</button>
+                        </div>
+                        <div class="cal-grid" id="cal-grid"></div>
+                    </div>
+                    <div class="gallery-view" id="view-gallery"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal -->
+    <div class="modal-overlay" id="modal-overlay">
+        <div class="modal">
+            <div class="modal-topbar">
+                <button class="modal-close" id="modal-close">✕</button>
+                <span class="modal-status" id="modal-status"></span>
+                <div class="modal-actions">
+                    <button class="ctrl-btn" id="btn-copy">Copy link</button>
+                </div>
+            </div>
+            <div class="modal-body">
+                <div class="modal-icon" id="modal-icon">📄</div>
+                <div class="modal-title" contenteditable id="modal-title"></div>
+                <div class="props-section" id="props-section"></div>
+                <div class="block-area" id="block-area"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Dropdown -->
+    <div class="dropdown" id="dropdown"></div>
+
+    <!-- Toast -->
+    <div class="toast" id="toast"></div>
+
+    <script>
+        const API = '/api';
+        let works = [];
+        let currentWork = null;
+        let currentView = 'table';
+        let currentFilter = '';
+        let currentSort = { key: 'created_at', dir: 'desc' };
+        let currentMonth = new Date();
+        let saveTimer = null;
+        let visibleColumns = ['title', 'type', 'status', 'can_upgrade', 'word_count', 'created_at'];
+        let dataSource = 'local'; // 'local' or 'notion'
+        let notionPages = [];
+
+        // Property configs from Notion
+        const propConfigs = {
+            type: {
+                name: '内容形态',
+                icon: '📋',
+                type: 'select',
+                options: [
+                    { value: '短贴', color: 'green' },
+                    { value: '深度帖', color: 'blue' },
+                    { value: '日常文章', color: 'pink' },
+                    { value: '深度文章', color: 'purple' }
+                ]
+            },
+            level: {
+                name: '内容层级',
+                icon: '📊',
+                type: 'select',
+                options: [
+                    { value: '文本', color: 'gray' },
+                    { value: '卡片', color: 'green' },
+                    { value: '音频', color: 'yellow' },
+                    { value: '视频', color: 'orange' },
+                    { value: '长文', color: 'blue' }
+                ]
+            },
+            status: {
+                name: '发布状态',
+                icon: '🚀',
+                type: 'status',
+                options: [
+                    { value: '未开始', color: 'gray' },
+                    { value: '已发布', color: 'green' }
+                ]
+            },
+            theme: {
+                name: '内容主题',
+                icon: '🎯',
+                type: 'select',
+                options: [
+                    { value: '创作系统', color: 'orange' },
+                    { value: '执行系统', color: 'pink' },
+                    { value: '趋势判断', color: 'gray' },
+                    { value: '生活场景', color: 'purple' }
+                ]
+            },
+            account: {
+                name: '账号',
+                icon: '👤',
+                type: 'select',
+                options: [
+                    { value: 'XXIP', color: 'brown' },
+                    { value: 'XXAI', color: 'blue' }
+                ]
+            },
+            can_upgrade: { name: '爆款', icon: '🔥', type: 'checkbox' },
+            is_premium: { name: '精品', icon: '⭐', type: 'checkbox' },
+            is_video: { name: '视频化', icon: '🎬', type: 'checkbox' },
+            word_count: { name: '字数', icon: '📝', type: 'number' },
+            created_at: { name: '创建日期', icon: '📅', type: 'date' }
+        };
+
+        const columns = [
+            { key: 'title', name: '标题', width: '35%' },
+            { key: 'type', name: '内容形态', width: '90px' },
+            { key: 'status', name: '发布状态', width: '90px' },
+            { key: 'can_upgrade', name: '爆款', width: '50px' },
+            { key: 'word_count', name: '字数', width: '60px' },
+            { key: 'created_at', name: '日期', width: '90px' }
+        ];
+
+        // API
+        async function fetchWorks() {
+            const res = await fetch(`${API}/works`);
+            const data = await res.json();
+            works = data.works || [];
+            render();
+        }
+
+        async function fetchNotionPages() {
+            const res = await fetch(`${API}/notion/database/pages?page_size=100`);
+            const data = await res.json();
+            notionPages = data.pages || [];
+            render();
+        }
+
+        async function fetchWork(id) {
+            const res = await fetch(`${API}/works/${encodeURIComponent(id)}`);
+            return await res.json();
+        }
+
+        async function updateWork(id, data) {
+            await fetch(`${API}/works/${encodeURIComponent(id)}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            });
+        }
+
+        // Render
+        function getFilteredWorks() {
+            // 根据数据源选择数据
+            let items = dataSource === 'notion' ? notionPages.map(p => ({
+                id: p.id,
+                title: p.title,
+                type: p.type || '未分类',
+                status: p.status,
+                can_upgrade: p.is_hit,
+                word_count: 0,
+                created_at: p.date || p.created_at,
+                isNotion: true
+            })) : works;
+
+            let filtered = items.filter(w => {
+                const search = document.getElementById('search').value.toLowerCase();
+                if (search && !(w.title || '').toLowerCase().includes(search)) return false;
+                if (currentFilter === '爆款' && !w.can_upgrade) return false;
+                if (currentFilter === '精品' && !w.is_premium) return false;
+                if (currentFilter === '视频化' && !w.is_video) return false;
+                if (currentFilter.startsWith('type:')) {
+                    const type = currentFilter.split(':')[1];
+                    const typeMap = { 'deep-posts': '深度帖', 'broad-posts': '短贴', 'short-posts': '短贴' };
+                    const itemType = dataSource === 'notion' ? w.type : (typeMap[w.type] || w.type);
+                    if (itemType !== type) return false;
+                }
+                return true;
+            });
+
+            filtered.sort((a, b) => {
+                let va = a[currentSort.key] || '';
+                let vb = b[currentSort.key] || '';
+                if (currentSort.key === 'word_count') { va = va || 0; vb = vb || 0; }
+                const cmp = va > vb ? 1 : va < vb ? -1 : 0;
+                return currentSort.dir === 'desc' ? -cmp : cmp;
+            });
+
+            return filtered;
+        }
+
+        function render() {
+            const filtered = getFilteredWorks();
+            document.querySelectorAll('.view-tab').forEach(t => t.classList.toggle('active', t.dataset.view === currentView));
+            document.querySelectorAll('[id^="view-"]').forEach(v => v.classList.remove('active'));
+            document.getElementById(`view-${currentView}`).classList.add('active');
+
+            switch (currentView) {
+                case 'table': renderTable(filtered); break;
+                case 'board': renderBoard(filtered); break;
+                case 'list': renderList(filtered); break;
+                case 'calendar': renderCalendar(filtered); break;
+                case 'gallery': renderGallery(filtered); break;
+            }
+        }
+
+        function getTypeDisplay(type) {
+            const map = { 'deep-posts': { name: '深度帖', color: 'blue' }, 'broad-posts': { name: '泛贴', color: 'green' }, 'short-posts': { name: '短贴', color: 'yellow' }, 'ai-generated': { name: 'AI生成', color: 'purple' } };
+            return map[type] || { name: type || '-', color: 'default' };
+        }
+
+        function renderTable(items) {
+            const cols = columns.filter(c => visibleColumns.includes(c.key));
+            document.getElementById('table-head').innerHTML = `<tr>${cols.map(c => `<th style="width:${c.width}" data-sort="${c.key}">${c.name}${currentSort.key === c.key ? (currentSort.dir === 'desc' ? ' ↓' : ' ↑') : ''}</th>`).join('')}</tr>`;
+
+            document.getElementById('table-body').innerHTML = items.map(w => {
+                const type = dataSource === 'notion'
+                    ? { name: w.type || '未分类', color: getNotionTypeColor(w.type) }
+                    : getTypeDisplay(w.type);
+                const status = propConfigs.status.options.find(o => o.value === (w.status || '未开始')) || propConfigs.status.options[0];
+                const rowAttr = w.isNotion ? `data-notion-id="${w.id}"` : `data-id="${w.id}"`;
+                return `<tr ${rowAttr}>
+                    ${cols.map(c => {
+                        if (c.key === 'title') return `<td><div class="cell-title"><span class="icon">${w.isNotion ? '🔗' : '📄'}</span><span class="text">${w.title || 'Untitled'}</span><span class="cell-open">open</span></div></td>`;
+                        if (c.key === 'type') return `<td><span class="tag tag-${type.color}">${type.name}</span></td>`;
+                        if (c.key === 'status') return `<td><span class="status"><span class="status-dot" style="background:var(--${status.color})"></span>${status.value}</span></td>`;
+                        if (c.key === 'can_upgrade') return `<td><span class="checkbox ${w.can_upgrade ? 'checked' : ''}" data-action="toggle" data-field="can_upgrade"></span></td>`;
+                        if (c.key === 'word_count') return `<td class="date">${w.word_count || '-'}</td>`;
+                        if (c.key === 'created_at') return `<td class="date">${(w.created_at || '').slice(0, 10)}</td>`;
+                        return `<td>-</td>`;
+                    }).join('')}
+                </tr>`;
+            }).join('');
+        }
+
+        function getNotionTypeColor(type) {
+            const map = { '短贴': 'green', '深度帖': 'blue', '日常文章': 'pink', '深度文章': 'purple' };
+            return map[type] || 'default';
+        }
+
+        function renderBoard(items) {
+            const groups = {};
+            propConfigs.status.options.forEach(o => groups[o.value] = []);
+            items.forEach(w => groups[w.status || '未开始']?.push(w));
+
+            document.getElementById('view-board').innerHTML = propConfigs.status.options.map(opt => `
+                <div class="board-col">
+                    <div class="board-col-header">
+                        <span class="status-dot" style="background:var(--${opt.color})"></span>
+                        ${opt.value}
+                        <span class="board-col-count">${groups[opt.value].length}</span>
+                    </div>
+                    <div class="board-cards">
+                        ${groups[opt.value].map(w => {
+                            const type = getTypeDisplay(w.type);
+                            return `<div class="board-card" data-id="${w.id}">
+                                <div class="board-card-title">${w.title || 'Untitled'}</div>
+                                <div class="board-card-tags">
+                                    <span class="tag tag-${type.color}">${type.name}</span>
+                                    ${w.can_upgrade ? '<span class="tag tag-red">🔥</span>' : ''}
+                                </div>
+                            </div>`;
+                        }).join('')}
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function renderList(items) {
+            document.getElementById('view-list').innerHTML = items.map(w => {
+                const type = getTypeDisplay(w.type);
+                return `<div class="list-item" data-id="${w.id}">
+                    <span class="icon">📄</span>
+                    <span class="title">${w.title || 'Untitled'}</span>
+                    <div class="meta">
+                        <span class="tag tag-${type.color}">${type.name}</span>
+                        ${w.can_upgrade ? '<span>🔥</span>' : ''}
+                        <span class="date">${(w.created_at || '').slice(0, 10)}</span>
+                    </div>
+                </div>`;
+            }).join('');
+        }
+
+        function renderCalendar(items) {
+            const y = currentMonth.getFullYear(), m = currentMonth.getMonth();
+            document.getElementById('cal-title').textContent = `${y}年${m + 1}月`;
+
+            const firstDay = new Date(y, m, 1).getDay();
+            const daysInMonth = new Date(y, m + 1, 0).getDate();
+            const today = new Date().toISOString().slice(0, 10);
+
+            const byDate = {};
+            items.forEach(w => { const d = (w.created_at || '').slice(0, 10); if (d) (byDate[d] = byDate[d] || []).push(w); });
+
+            let html = ['日', '一', '二', '三', '四', '五', '六'].map(d => `<div class="cal-weekday">${d}</div>`).join('');
+            for (let i = 0; i < 42; i++) {
+                const day = i - firstDay + 1;
+                const date = new Date(y, m, day);
+                const ds = date.toISOString().slice(0, 10);
+                const isOther = day < 1 || day > daysInMonth;
+                const dayItems = byDate[ds] || [];
+                html += `<div class="cal-day ${isOther ? 'other' : ''} ${ds === today ? 'today' : ''}">
+                    <div class="cal-day-num">${date.getDate()}</div>
+                    ${dayItems.slice(0, 2).map(w => `<div class="cal-item tag-${getTypeDisplay(w.type).color}" data-id="${w.id}">${w.title || 'Untitled'}</div>`).join('')}
+                    ${dayItems.length > 2 ? `<div style="font-size:10px;color:var(--text-muted)">+${dayItems.length - 2}</div>` : ''}
+                </div>`;
+            }
+            document.getElementById('cal-grid').innerHTML = html;
+        }
+
+        function renderGallery(items) {
+            document.getElementById('view-gallery').innerHTML = items.map(w => {
+                const type = getTypeDisplay(w.type);
+                return `<div class="gallery-card" data-id="${w.id}">
+                    <div class="gallery-cover">📄</div>
+                    <div class="gallery-info">
+                        <div class="gallery-title">${w.title || 'Untitled'}</div>
+                        <span class="tag tag-${type.color}">${type.name}</span>
+                    </div>
+                </div>`;
+            }).join('');
+        }
+
+        // Modal
+        async function openPage(id) {
+            currentWork = await fetchWork(id);
+            document.getElementById('modal-icon').textContent = '📄';
+            document.getElementById('modal-title').textContent = currentWork.title || '';
+            document.getElementById('modal-status').textContent = 'Loading...';
+
+            // Props
+            const type = getTypeDisplay(currentWork.type);
+            const status = propConfigs.status.options.find(o => o.value === (currentWork.status || '未开始')) || propConfigs.status.options[0];
+
+            document.getElementById('props-section').innerHTML = `
+                <div class="prop-row"><div class="prop-name">📋 内容形态</div><div class="prop-value" data-prop="type"><span class="tag tag-${type.color}">${type.name}</span></div></div>
+                <div class="prop-row"><div class="prop-name">🚀 发布状态</div><div class="prop-value" data-prop="status"><span class="status"><span class="status-dot" style="background:var(--${status.color})"></span>${status.value}</span></div></div>
+                <div class="prop-row"><div class="prop-name">📅 创建日期</div><div class="prop-value">${(currentWork.created_at || '').slice(0, 10) || '-'}</div></div>
+                <div class="prop-row"><div class="prop-name">🔥 爆款</div><div class="prop-value" data-prop="can_upgrade"><span class="checkbox ${currentWork.can_upgrade ? 'checked' : ''}" id="chk-upgrade"></span></div></div>
+                <div class="prop-row"><div class="prop-name">📝 字数</div><div class="prop-value">${currentWork.word_count || 0}</div></div>
+            `;
+
+            // 先显示 modal
+            document.getElementById('modal-overlay').classList.add('open');
+
+            // 从 Notion 获取 blocks
+            try {
+                const notionRes = await fetch(`${API}/works/${encodeURIComponent(id)}/notion-content`);
+                const notionData = await notionRes.json();
+
+                if (notionData.blocks && notionData.blocks.length > 0) {
+                    document.getElementById('block-area').innerHTML = renderBlocks(notionData.blocks);
+                    document.getElementById('modal-status').textContent = '';
+                } else {
+                    // 没有 Notion 内容，显示本地内容
+                    const content = currentWork.content || '';
+                    const blocks = content.split('\n\n').filter(b => b.trim());
+                    if (blocks.length === 0) blocks.push('');
+                    document.getElementById('block-area').innerHTML = blocks.map(b => `<div class="block" contenteditable>${escapeHtml(b)}</div>`).join('');
+                    document.getElementById('modal-status').textContent = '';
+                }
+            } catch (e) {
+                console.error('Failed to fetch Notion content:', e);
+                document.getElementById('modal-status').textContent = '';
+                // 回退到本地内容
+                const content = currentWork.content || '';
+                const blocks = content.split('\n\n').filter(b => b.trim());
+                if (blocks.length === 0) blocks.push('');
+                document.getElementById('block-area').innerHTML = blocks.map(b => `<div class="block" contenteditable>${escapeHtml(b)}</div>`).join('');
+            }
+        }
+
+        function escapeHtml(text) {
+            return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        }
+
+        function renderBlocks(blocks) {
+            let html = '';
+            let listCounter = 0;
+
+            for (const block of blocks) {
+                const text = escapeHtml(block.text || '');
+
+                switch (block.type) {
+                    case 'paragraph':
+                        if (text) html += `<div class="block" contenteditable>${text}</div>`;
+                        break;
+                    case 'heading_1':
+                        html += `<div class="block heading-1" contenteditable>${text}</div>`;
+                        break;
+                    case 'heading_2':
+                        html += `<div class="block heading-2" contenteditable>${text}</div>`;
+                        break;
+                    case 'heading_3':
+                        html += `<div class="block heading-3" contenteditable>${text}</div>`;
+                        break;
+                    case 'bulleted_list_item':
+                        html += `<div class="block bulleted" contenteditable>${text}</div>`;
+                        break;
+                    case 'numbered_list_item':
+                        listCounter++;
+                        html += `<div class="block numbered" contenteditable data-num="${listCounter}">${text}</div>`;
+                        break;
+                    case 'to_do':
+                        html += `<div class="block" contenteditable><span class="checkbox ${block.checked ? 'checked' : ''}"></span> ${text}</div>`;
+                        break;
+                    case 'quote':
+                        html += `<div class="block" style="border-left:3px solid var(--text-muted);padding-left:12px;color:var(--text-secondary)" contenteditable>${text}</div>`;
+                        break;
+                    case 'callout':
+                        html += `<div class="block" style="background:var(--bg-hover);padding:12px;border-radius:4px;display:flex;gap:8px" contenteditable><span>${block.icon || '💡'}</span><span>${text}</span></div>`;
+                        break;
+                    case 'code':
+                        html += `<pre class="block" style="background:var(--bg);padding:12px;border-radius:4px;font-family:monospace;overflow-x:auto" contenteditable>${text}</pre>`;
+                        break;
+                    case 'divider':
+                        html += `<div class="block-divider"></div>`;
+                        listCounter = 0;
+                        break;
+                    case 'image':
+                        if (block.url) html += `<div class="block"><img src="${block.url}" style="max-width:100%;border-radius:4px"></div>`;
+                        break;
+                    default:
+                        if (text) html += `<div class="block" contenteditable>${text}</div>`;
+                }
+
+                // Reset list counter if not a numbered list
+                if (block.type !== 'numbered_list_item') listCounter = 0;
+            }
+
+            return html || '<div class="block" contenteditable></div>';
+        }
+
+        function closePage() {
+            document.getElementById('modal-overlay').classList.remove('open');
+            currentWork = null;
+            fetchWorks();
+        }
+
+        function scheduleAutoSave(field, value) {
+            document.getElementById('modal-status').textContent = 'Saving...';
+            clearTimeout(saveTimer);
+            saveTimer = setTimeout(async () => {
+                if (!currentWork) return;
+                await updateWork(currentWork.id, { [field]: value });
+                document.getElementById('modal-status').textContent = 'Saved';
+                setTimeout(() => { const el = document.getElementById('modal-status'); if (el?.textContent === 'Saved') el.textContent = ''; }, 2000);
+            }, 500);
+        }
+
+        function collectContent() {
+            return Array.from(document.querySelectorAll('#block-area .block')).map(b => b.textContent).join('\n\n');
+        }
+
+        // Dropdown
+        function showDropdown(anchor, content) {
+            const dd = document.getElementById('dropdown');
+            const rect = anchor.getBoundingClientRect();
+            dd.innerHTML = content;
+            dd.style.top = rect.bottom + 4 + 'px';
+            dd.style.left = Math.min(rect.left, window.innerWidth - 240) + 'px';
+            dd.classList.add('open');
+        }
+
+        function hideDropdown() { document.getElementById('dropdown').classList.remove('open'); }
+
+        function showToast(msg) {
+            const t = document.getElementById('toast');
+            t.textContent = msg;
+            t.classList.add('show');
+            setTimeout(() => t.classList.remove('show'), 2000);
+        }
+
+        // Filter dropdown
+        function showFilterDropdown() {
+            showDropdown(document.getElementById('btn-filter'), `
+                <div class="dropdown-header">Filter by</div>
+                <div class="dropdown-item" data-filter="">All</div>
+                <div class="dropdown-divider"></div>
+                <div class="dropdown-header">内容形态</div>
+                ${propConfigs.type.options.map(o => `<div class="dropdown-item" data-filter="type:${o.value}"><span class="tag tag-${o.color}">${o.value}</span></div>`).join('')}
+                <div class="dropdown-divider"></div>
+                <div class="dropdown-header">标记</div>
+                <div class="dropdown-item" data-filter="爆款">🔥 爆款</div>
+                <div class="dropdown-item" data-filter="精品">⭐ 精品</div>
+                <div class="dropdown-item" data-filter="视频化">🎬 视频化</div>
+            `);
+        }
+
+        // Sort dropdown
+        function showSortDropdown() {
+            showDropdown(document.getElementById('btn-sort'), `
+                <div class="dropdown-header">Sort by</div>
+                ${columns.map(c => `<div class="dropdown-item" data-sort="${c.key}">${c.name}${currentSort.key === c.key ? '<span class="check">✓</span>' : ''}</div>`).join('')}
+                <div class="dropdown-divider"></div>
+                <div class="dropdown-item" data-dir="asc">↑ Ascending</div>
+                <div class="dropdown-item" data-dir="desc">↓ Descending</div>
+            `);
+        }
+
+        // Properties dropdown
+        function showPropsDropdown() {
+            showDropdown(document.getElementById('btn-props'), `
+                <div class="dropdown-header">Show columns</div>
+                ${columns.map(c => `<div class="dropdown-item" data-col="${c.key}"><span class="checkbox ${visibleColumns.includes(c.key) ? 'checked' : ''}"></span>${c.name}</div>`).join('')}
+            `);
+        }
+
+        // Events
+        document.querySelectorAll('.view-tab').forEach(t => t.onclick = () => { currentView = t.dataset.view; render(); });
+        document.querySelectorAll('.nav-item').forEach(n => n.onclick = async () => {
+            // 处理数据源切换
+            if (n.dataset.source) {
+                dataSource = n.dataset.source;
+                document.querySelectorAll('.nav-item[data-source]').forEach(x => x.classList.remove('active'));
+                n.classList.add('active');
+                if (dataSource === 'notion' && notionPages.length === 0) {
+                    await fetchNotionPages();
+                } else {
+                    render();
+                }
+                return;
+            }
+            // 处理过滤器
+            document.querySelectorAll('.nav-item[data-filter]').forEach(x => x.classList.remove('active'));
+            n.classList.add('active');
+            currentFilter = n.dataset.filter || '';
+            render();
+        });
+
+        document.getElementById('sidebar-toggle').onclick = () => document.getElementById('sidebar').classList.toggle('collapsed');
+        document.getElementById('search').oninput = render;
+
+        document.getElementById('btn-filter').onclick = showFilterDropdown;
+        document.getElementById('btn-sort').onclick = showSortDropdown;
+        document.getElementById('btn-props').onclick = showPropsDropdown;
+
+        document.getElementById('table-head').onclick = e => {
+            const th = e.target.closest('th[data-sort]');
+            if (th) {
+                if (currentSort.key === th.dataset.sort) currentSort.dir = currentSort.dir === 'desc' ? 'asc' : 'desc';
+                else { currentSort.key = th.dataset.sort; currentSort.dir = 'desc'; }
+                render();
+            }
+        };
+
+        document.getElementById('table-body').onclick = e => {
+            const chk = e.target.closest('[data-action="toggle"]');
+            if (chk) {
+                e.stopPropagation();
+                const row = chk.closest('tr');
+                const work = works.find(w => w.id === row.dataset.id);
+                if (work) {
+                    work[chk.dataset.field] = !work[chk.dataset.field];
+                    updateWork(work.id, { [chk.dataset.field]: work[chk.dataset.field] });
+                    chk.classList.toggle('checked');
+                }
+                return;
+            }
+            // 处理 Notion 页面
+            const notionRow = e.target.closest('tr[data-notion-id]');
+            if (notionRow) {
+                openNotionPage(notionRow.dataset.notionId);
+                return;
+            }
+            // 处理本地页面
+            const row = e.target.closest('tr[data-id]');
+            if (row) openPage(row.dataset.id);
+        };
+
+        ['view-board', 'view-list', 'view-gallery'].forEach(id => {
+            document.getElementById(id).onclick = e => {
+                const item = e.target.closest('[data-id]');
+                if (item) openPage(item.dataset.id);
+            };
+        });
+
+        document.getElementById('cal-grid').onclick = e => {
+            const item = e.target.closest('[data-id]');
+            if (item) openPage(item.dataset.id);
+        };
+        document.getElementById('cal-prev').onclick = () => { currentMonth.setMonth(currentMonth.getMonth() - 1); render(); };
+        document.getElementById('cal-next').onclick = () => { currentMonth.setMonth(currentMonth.getMonth() + 1); render(); };
+        document.getElementById('cal-today').onclick = () => { currentMonth = new Date(); render(); };
+
+        document.getElementById('modal-close').onclick = closePage;
+        document.getElementById('modal-overlay').onclick = e => { if (e.target.id === 'modal-overlay') closePage(); };
+        document.getElementById('modal-title').oninput = e => scheduleAutoSave('title', e.target.textContent);
+        document.getElementById('block-area').oninput = e => { if (e.target.classList.contains('block')) scheduleAutoSave('content', collectContent()); };
+        document.getElementById('block-area').onkeydown = e => {
+            if (e.key === 'Enter' && !e.shiftKey && e.target.classList.contains('block')) {
+                e.preventDefault();
+                const nb = document.createElement('div');
+                nb.className = 'block';
+                nb.contentEditable = true;
+                e.target.after(nb);
+                nb.focus();
+            }
+        };
+
+        document.getElementById('props-section').onclick = async e => {
+            const pv = e.target.closest('.prop-value');
+            if (!pv || !currentWork) return;
+            const prop = pv.dataset.prop;
+
+            if (prop === 'can_upgrade') {
+                currentWork.can_upgrade = !currentWork.can_upgrade;
+                await updateWork(currentWork.id, { can_upgrade: currentWork.can_upgrade });
+                document.getElementById('chk-upgrade').classList.toggle('checked', currentWork.can_upgrade);
+                showToast('Saved');
+            } else if (prop === 'status') {
+                showDropdown(pv, propConfigs.status.options.map(o =>
+                    `<div class="dropdown-item" data-status="${o.value}"><span class="status-dot" style="background:var(--${o.color})"></span>${o.value}</div>`
+                ).join(''));
+            } else if (prop === 'type') {
+                showDropdown(pv, propConfigs.type.options.map(o =>
+                    `<div class="dropdown-item" data-type="${o.value}"><span class="tag tag-${o.color}">${o.value}</span></div>`
+                ).join(''));
+            }
+        };
+
+        document.getElementById('btn-copy').onclick = () => { navigator.clipboard.writeText(location.href); showToast('Link copied'); };
+
+        document.getElementById('dropdown').onclick = async e => {
+            const item = e.target.closest('.dropdown-item');
+            if (!item) return;
+
+            if (item.dataset.filter !== undefined) { currentFilter = item.dataset.filter; render(); hideDropdown(); }
+            else if (item.dataset.sort) { currentSort.key = item.dataset.sort; render(); hideDropdown(); }
+            else if (item.dataset.dir) { currentSort.dir = item.dataset.dir; render(); hideDropdown(); }
+            else if (item.dataset.col) {
+                const col = item.dataset.col;
+                if (visibleColumns.includes(col)) visibleColumns = visibleColumns.filter(c => c !== col);
+                else visibleColumns.push(col);
+                item.querySelector('.checkbox').classList.toggle('checked');
+                render();
+            }
+            else if (item.dataset.status && currentWork) {
+                currentWork.status = item.dataset.status;
+                await updateWork(currentWork.id, { status: item.dataset.status });
+                const opt = propConfigs.status.options.find(o => o.value === item.dataset.status);
+                document.querySelector('[data-prop="status"]').innerHTML = `<span class="status"><span class="status-dot" style="background:var(--${opt.color})"></span>${opt.value}</span>`;
+                showToast('Saved');
+                hideDropdown();
+            }
+            else if (item.dataset.type && currentWork) {
+                const typeKey = { '短贴': 'broad-posts', '深度帖': 'deep-posts', '日常文章': 'broad-posts', '深度文章': 'deep-posts' }[item.dataset.type] || 'deep-posts';
+                currentWork.type = typeKey;
+                await updateWork(currentWork.id, { type: typeKey });
+                const opt = propConfigs.type.options.find(o => o.value === item.dataset.type);
+                document.querySelector('[data-prop="type"]').innerHTML = `<span class="tag tag-${opt.color}">${opt.value}</span>`;
+                showToast('Saved');
+                hideDropdown();
+            }
+        };
+
+        document.onclick = e => { if (!e.target.closest('.dropdown') && !e.target.closest('.ctrl-btn') && !e.target.closest('.prop-value')) hideDropdown(); };
+        document.onkeydown = e => {
+            if (e.key === 'Escape') {
+                if (document.getElementById('dropdown').classList.contains('open')) hideDropdown();
+                else if (document.getElementById('modal-overlay').classList.contains('open')) closePage();
+            }
+        };
+
+        // Init
+        (async () => {
+            await fetchWorks();
+            // 检查 URL hash，自动打开指定的作品
+            if (location.hash === '#open-first' && works.length > 0) {
+                setTimeout(() => openPage(works[0].id), 300);
+            } else if (location.hash.startsWith('#open:')) {
+                const id = decodeURIComponent(location.hash.slice(6));
+                setTimeout(() => openPage(id), 300);
+            } else if (location.hash.startsWith('#notion:')) {
+                // 直接用 notion page ID 打开
+                const notionId = location.hash.slice(8);
+                setTimeout(() => openNotionPage(notionId), 300);
+            }
+        })();
+
+        // 直接打开 Notion 页面
+        async function openNotionPage(notionId) {
+            document.getElementById('modal-icon').textContent = '📄';
+            document.getElementById('modal-title').textContent = 'Loading...';
+            document.getElementById('modal-status').textContent = '';
+            document.getElementById('props-section').innerHTML = '';
+            document.getElementById('block-area').innerHTML = '<div style="color:var(--text-muted)">Loading from Notion...</div>';
+            document.getElementById('modal-overlay').classList.add('open');
+
+            try {
+                const res = await fetch(`${API}/notion/page/${notionId}/blocks`);
+                const data = await res.json();
+                console.log('Loaded blocks:', data.blocks?.length);
+
+                if (data.blocks && data.blocks.length > 0) {
+                    // 找标题（第一个 heading 或第一个有文本的 paragraph）
+                    const titleBlock = data.blocks.find(b => b.type.startsWith('heading') || (b.type === 'paragraph' && b.text));
+                    document.getElementById('modal-title').textContent = titleBlock?.text || 'Untitled';
+
+                    const rendered = renderBlocks(data.blocks);
+                    console.log('Rendered HTML length:', rendered.length);
+                    document.getElementById('block-area').innerHTML = rendered;
+
+                    // 更新状态显示 block 数量
+                    document.getElementById('modal-status').textContent = `${data.blocks.length} blocks`;
+                } else {
+                    document.getElementById('modal-title').textContent = 'Empty page';
+                    document.getElementById('block-area').innerHTML = '<div class="block" contenteditable></div>';
+                }
+            } catch (e) {
+                console.error('Failed to fetch Notion page:', e);
+                document.getElementById('modal-title').textContent = 'Error loading page';
+                document.getElementById('block-area').innerHTML = `<div style="color:var(--red)">${e.message}</div>`;
+            }
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>金诺AI - 标注中心</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #6366f1;
+            --primary-light: #a5b4fc;
+            --secondary: #10b981;
+            --accent: #f59e0b;
+            --pink: #ec4899;
+            --bg-dark: #0f172a;
+            --bg-darker: #020617;
+            --bg-card: #1e293b;
+            --text-primary: #f1f5f9;
+            --text-secondary: #94a3b8;
+            --text-muted: #64748b;
+            --border: #334155;
+            --success: #22c55e;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: Inter, -apple-system, sans-serif;
+            background: var(--bg-darker);
+            color: var(--text-primary);
+            min-height: 100vh;
+        }
+        .navbar {
+            position: fixed;
+            top: 0; left: 0; right: 0;
+            height: 64px;
+            background: rgba(15, 23, 42, 0.95);
+            backdrop-filter: blur(20px);
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            padding: 0 32px;
+            z-index: 100;
+        }
+        .back-btn {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: var(--text-secondary);
+            text-decoration: none;
+            padding: 8px 16px;
+            border-radius: 8px;
+            font-size: 14px;
+            margin-right: 24px;
+        }
+        .back-btn:hover {
+            color: var(--text-primary);
+            background: var(--bg-card);
+        }
+        .page-title {
+            font-size: 16px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .page-title i { color: var(--primary); }
+        .main-container {
+            padding: 96px 32px 32px;
+            max-width: 1100px;
+            margin: 0 auto;
+        }
+        .page-header {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+        .page-header h1 {
+            font-size: 28px;
+            margin-bottom: 8px;
+        }
+        .page-header h1 span {
+            background: linear-gradient(135deg, var(--primary-light), var(--secondary));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .page-header p {
+            color: var(--text-secondary);
+        }
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 16px;
+            margin-bottom: 40px;
+        }
+        .stat-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 20px;
+            text-align: center;
+        }
+        .stat-card .icon {
+            width: 40px;
+            height: 40px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+            margin: 0 auto 12px;
+        }
+        .stat-card .icon.text { background: rgba(99, 102, 241, 0.15); color: var(--primary-light); }
+        .stat-card .icon.image { background: rgba(16, 185, 129, 0.15); color: var(--secondary); }
+        .stat-card .icon.audio { background: rgba(245, 158, 11, 0.15); color: var(--accent); }
+        .stat-card .icon.video { background: rgba(236, 72, 153, 0.15); color: var(--pink); }
+        .stat-card .value { font-size: 24px; font-weight: 700; }
+        .stat-card .label { font-size: 12px; color: var(--text-muted); margin-top: 4px; }
+        .course-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+            gap: 20px;
+        }
+        .course-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            overflow: hidden;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-decoration: none;
+            color: inherit;
+        }
+        .course-card:hover {
+            transform: translateY(-4px);
+            border-color: var(--primary);
+            box-shadow: 0 8px 32px rgba(99, 102, 241, 0.15);
+        }
+        .course-card.locked {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        .course-card.locked:hover {
+            transform: none;
+            border-color: var(--border);
+            box-shadow: none;
+        }
+        .course-thumb {
+            height: 120px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 40px;
+            color: white;
+            position: relative;
+        }
+        .course-thumb.text { background: linear-gradient(135deg, #6366f1, #8b5cf6); }
+        .course-thumb.image { background: linear-gradient(135deg, #10b981, #059669); }
+        .course-thumb.audio { background: linear-gradient(135deg, #f59e0b, #d97706); }
+        .course-thumb.video { background: linear-gradient(135deg, #ec4899, #db2777); }
+        .course-thumb.locked { background: linear-gradient(135deg, #475569, #334155); }
+        .course-badge {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            padding: 4px 10px;
+            background: rgba(0,0,0,0.5);
+            border-radius: 12px;
+            font-size: 11px;
+        }
+        .course-badge.ready { background: var(--success); }
+        .course-content {
+            padding: 20px;
+        }
+        .course-content h3 {
+            font-size: 15px;
+            margin-bottom: 8px;
+        }
+        .course-content p {
+            font-size: 12px;
+            color: var(--text-secondary);
+            line-height: 1.5;
+            margin-bottom: 12px;
+        }
+        .course-meta {
+            display: flex;
+            gap: 12px;
+            font-size: 11px;
+            color: var(--text-muted);
+        }
+        .course-meta span {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+        .progress-bar {
+            height: 4px;
+            background: var(--bg-dark);
+            border-radius: 2px;
+            margin-top: 12px;
+            overflow: hidden;
+        }
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--primary), var(--secondary));
+        }
+        @media (max-width: 768px) {
+            .stats-grid { grid-template-columns: repeat(2, 1fr); }
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar">
+        <a href="index.html" class="back-btn">
+            <i class="fas fa-arrow-left"></i> 返回首页
+        </a>
+        <div class="page-title">
+            <i class="fas fa-tags"></i>
+            <span>标注中心</span>
+        </div>
+    </nav>
+
+    <main class="main-container">
+        <div class="page-header">
+            <h1>数据 <span>标注中心</span></h1>
+            <p>选择标注类型，开始数据标注任务</p>
+        </div>
+
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="icon text"><i class="fas fa-file-alt"></i></div>
+                <div class="value" id="text-count">-</div>
+                <div class="label">文本标注</div>
+            </div>
+            <div class="stat-card">
+                <div class="icon image"><i class="fas fa-image"></i></div>
+                <div class="value" id="image-count">-</div>
+                <div class="label">图像标注</div>
+            </div>
+            <div class="stat-card">
+                <div class="icon audio"><i class="fas fa-microphone"></i></div>
+                <div class="value" id="audio-count">-</div>
+                <div class="label">语音标注</div>
+            </div>
+            <div class="stat-card">
+                <div class="icon video"><i class="fas fa-video"></i></div>
+                <div class="value" id="video-count">-</div>
+                <div class="label">视频标注</div>
+            </div>
+        </div>
+
+        <div class="course-grid">
+            <a href="text-labeling.html?project=2" class="course-card">
+                <div class="course-thumb text">
+                    <i class="fas fa-file-alt"></i>
+                    <span class="course-badge ready"><i class="fas fa-check"></i> 可用</span>
+                </div>
+                <div class="course-content">
+                    <h3>文本情感分类</h3>
+                    <p>识别文本中的情感倾向：正面、负面、中性</p>
+                    <div class="course-meta">
+                        <span><i class="fas fa-tasks"></i> <span id="text-tasks">-</span> 个任务</span>
+                    </div>
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="text-progress" style="width: 0%"></div>
+                    </div>
+                </div>
+            </a>
+
+            <a href="image-labeling.html?project=4" class="course-card">
+                <div class="course-thumb image">
+                    <i class="fas fa-image"></i>
+                    <span class="course-badge ready"><i class="fas fa-check"></i> 可用</span>
+                </div>
+                <div class="course-content">
+                    <h3>图像物体识别</h3>
+                    <p>识别图像中的物体类型并进行分类标注</p>
+                    <div class="course-meta">
+                        <span><i class="fas fa-tasks"></i> <span id="image-tasks">-</span> 个任务</span>
+                    </div>
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="image-progress" style="width: 0%"></div>
+                    </div>
+                </div>
+            </a>
+
+            <a href="audio-labeling.html?project=9" class="course-card">
+                <div class="course-thumb audio">
+                    <i class="fas fa-microphone"></i>
+                    <span class="course-badge ready"><i class="fas fa-check"></i> 可用</span>
+                </div>
+                <div class="course-content">
+                    <h3>语音转写标注</h3>
+                    <p>将语音转写为文字，并标注说话者情感</p>
+                    <div class="course-meta">
+                        <span><i class="fas fa-tasks"></i> <span id="audio-tasks">-</span> 个任务</span>
+                    </div>
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="audio-progress" style="width: 0%"></div>
+                    </div>
+                </div>
+            </a>
+
+            <a href="video-labeling.html?project=12" class="course-card">
+                <div class="course-thumb video">
+                    <i class="fas fa-video"></i>
+                    <span class="course-badge ready"><i class="fas fa-check"></i> 可用</span>
+                </div>
+                <div class="course-content">
+                    <h3>视频内容分类</h3>
+                    <p>观看视频并标注内容类型和主题</p>
+                    <div class="course-meta">
+                        <span><i class="fas fa-tasks"></i> <span id="video-tasks">-</span> 个任务</span>
+                    </div>
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="video-progress" style="width: 0%"></div>
+                    </div>
+                </div>
+            </a>
+
+            <div class="course-card locked">
+                <div class="course-thumb locked">
+                    <i class="fab fa-python"></i>
+                </div>
+                <div class="course-content">
+                    <h3>代码质量评测</h3>
+                    <p>评估代码质量、风格和正确性</p>
+                    <div class="course-meta">
+                        <span><i class="fas fa-lock"></i> 即将开放</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="course-card locked">
+                <div class="course-thumb locked">
+                    <i class="fas fa-cube"></i>
+                </div>
+                <div class="course-content">
+                    <h3>3D点云标注</h3>
+                    <p>自动驾驶领域3D数据标注</p>
+                    <div class="course-meta">
+                        <span><i class="fas fa-lock"></i> 即将开放</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        async function loadStats() {
+            const projects = { 2: 'text', 4: 'image', 9: 'audio', 12: 'video' };
+            for (const [id, type] of Object.entries(projects)) {
+                try {
+                    const res = await fetch('/api/labeling/projects/' + id + '/tasks');
+                    const data = await res.json();
+                    const tasks = data.tasks || data;
+                    const total = tasks.length;
+                    const completed = tasks.filter(t => t.is_labeled).length;
+                    
+                    document.getElementById(type + '-count').textContent = total;
+                    document.getElementById(type + '-tasks').textContent = total;
+                    if (total > 0) {
+                        document.getElementById(type + '-progress').style.width = (completed / total * 100) + '%';
+                    }
+                } catch (e) {
+                    document.getElementById(type + '-count').textContent = '0';
+                    document.getElementById(type + '-tasks').textContent = '0';
+                }
+            }
+        }
+        loadStats();
+    </script>
+</body>
+</html>

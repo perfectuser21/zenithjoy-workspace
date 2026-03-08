@@ -6,7 +6,7 @@
  * 或者通过 CDP 在浏览器中执行下载逻辑
  *
  * 使用：
- * node download-to-windows.cjs --content /path/to/content.json --vps-host 146.190.52.84 --vps-port 8899
+ * node download-to-windows.cjs --content /path/to/content.json --vps-host 134.199.234.147 --vps-port 8899
  */
 
 const http = require('http');
@@ -17,7 +17,7 @@ const path = require('path');
 // 命令行参数
 const args = process.argv.slice(2);
 const contentFile = args[args.indexOf('--content') + 1];
-const vpsHost = args[args.indexOf('--vps-host') + 1] || '146.190.52.84';
+const vpsHost = args[args.indexOf('--vps-host') + 1] || '134.199.234.147';
 const vpsPort = args[args.indexOf('--vps-port') + 1] || '8899';
 const targetBase = args[args.indexOf('--target') + 1] || 'C:\\Users\\Administrator\\Desktop\\toutiao-media';
 

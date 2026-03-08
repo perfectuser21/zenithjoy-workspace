@@ -48,7 +48,7 @@
       },
       "parameters": {
         "authentication": "privateKey",
-        "host": "146.190.52.84",
+        "host": "134.199.234.147",
         "port": 22,
         "user": "xx",
         "command": "bash ~/platform_scrape.sh gongzhonghao 2>/dev/null"

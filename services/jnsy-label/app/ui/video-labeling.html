@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>金诺AI - 视频标注</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #ec4899;
+            --primary-light: #f472b6;
+            --bg-dark: #0f172a;
+            --bg-darker: #020617;
+            --bg-card: #1e293b;
+            --text-primary: #f1f5f9;
+            --text-secondary: #94a3b8;
+            --text-muted: #64748b;
+            --border: #334155;
+            --success: #22c55e;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: Inter, -apple-system, sans-serif; background: var(--bg-darker); color: var(--text-primary); min-height: 100vh; }
+        .navbar { position: fixed; top: 0; left: 0; right: 0; height: 64px; background: rgba(15, 23, 42, 0.95); backdrop-filter: blur(20px); border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; padding: 0 32px; z-index: 100; }
+        .nav-left { display: flex; align-items: center; gap: 24px; }
+        .back-btn { display: flex; align-items: center; gap: 8px; color: var(--text-secondary); text-decoration: none; padding: 8px 16px; border-radius: 8px; font-size: 14px; }
+        .back-btn:hover { color: var(--text-primary); background: var(--bg-card); }
+        .page-title { font-size: 16px; font-weight: 600; display: flex; align-items: center; gap: 10px; }
+        .page-title i { color: var(--primary); }
+        .progress-chip { padding: 6px 14px; background: var(--bg-card); border-radius: 16px; font-size: 13px; color: var(--text-secondary); }
+        .progress-chip .current { color: var(--primary-light); font-weight: 600; }
+        .main-container { padding: 96px 32px 32px; max-width: 900px; margin: 0 auto; }
+        .task-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 16px; padding: 28px; }
+        .task-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; padding-bottom: 16px; border-bottom: 1px solid var(--border); }
+        .task-num { display: flex; align-items: center; gap: 12px; }
+        .task-num span:first-child { width: 36px; height: 36px; background: var(--primary); border-radius: 10px; display: flex; align-items: center; justify-content: center; font-weight: 700; }
+        .task-badge { padding: 4px 12px; background: rgba(236, 72, 153, 0.15); color: var(--primary-light); border-radius: 12px; font-size: 12px; }
+        .video-box { background: #000; border-radius: 12px; overflow: hidden; margin-bottom: 24px; }
+        .video-wrapper { position: relative; width: 100%; padding-top: 56.25%; }
+        .video-wrapper video { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: contain; }
+        .video-placeholder { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; color: var(--text-muted); }
+        .video-placeholder i { font-size: 48px; margin-bottom: 12px; }
+        .video-controls { padding: 12px 16px; background: var(--bg-dark); display: flex; align-items: center; gap: 12px; }
+        .ctrl-btn { width: 40px; height: 40px; background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; color: var(--text-secondary); font-size: 14px; cursor: pointer; }
+        .ctrl-btn:hover { background: var(--primary); border-color: var(--primary); color: white; }
+        .video-progress { flex: 1; height: 4px; background: var(--border); border-radius: 2px; cursor: pointer; }
+        .video-progress-fill { height: 100%; background: linear-gradient(90deg, var(--primary), #db2777); width: 0%; }
+        .video-time { font-size: 12px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+        .label-section h4 { font-size: 13px; color: var(--text-secondary); margin-bottom: 12px; }
+        .label-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 24px; }
+        .label-btn { padding: 14px 10px; background: var(--bg-dark); border: 2px solid var(--border); border-radius: 10px; cursor: pointer; text-align: center; }
+        .label-btn:hover { border-color: var(--text-muted); }
+        .label-btn.selected { border-color: var(--primary); background: rgba(236, 72, 153, 0.1); }
+        .label-btn .icon { font-size: 20px; margin-bottom: 6px; color: var(--text-secondary); }
+        .label-btn.selected .icon { color: var(--primary); }
+        .label-btn .text { font-size: 12px; }
+        .action-bar { display: flex; justify-content: space-between; padding-top: 20px; border-top: 1px solid var(--border); }
+        .skip-btn { padding: 12px 20px; background: transparent; border: 1px solid var(--border); border-radius: 10px; color: var(--text-secondary); font-size: 14px; cursor: pointer; }
+        .submit-btn { padding: 12px 28px; background: linear-gradient(135deg, var(--primary), #db2777); border: none; border-radius: 10px; color: white; font-size: 14px; font-weight: 600; cursor: pointer; }
+        .submit-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        .loading, .completed, .empty { text-align: center; padding: 60px; }
+        .loading i { font-size: 48px; color: var(--primary); animation: spin 1s linear infinite; }
+        .completed i { font-size: 48px; color: var(--success); }
+        .empty i { font-size: 48px; color: var(--text-muted); }
+        .loading p, .completed p, .empty p { color: var(--text-secondary); margin-top: 16px; }
+        .completed .btn, .empty .btn { display: inline-block; margin-top: 20px; padding: 12px 24px; background: var(--primary); color: white; text-decoration: none; border-radius: 10px; font-size: 14px; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        .toast { position: fixed; top: 80px; right: 32px; padding: 14px 20px; background: var(--bg-card); border: 1px solid var(--success); border-radius: 10px; display: none; align-items: center; gap: 10px; z-index: 200; }
+        .toast i { color: var(--success); }
+        @media (max-width: 600px) { .label-grid { grid-template-columns: repeat(2, 1fr); } }
+    </style>
+</head>
+<body>
+    <nav class="navbar">
+        <div class="nav-left">
+            <a href="module-select.html" class="back-btn"><i class="fas fa-arrow-left"></i> 返回</a>
+            <div class="page-title"><i class="fas fa-video"></i><span>视频内容分类</span></div>
+        </div>
+        <div class="progress-chip"><span class="current" id="current-idx">0</span> / <span id="total-count">0</span></div>
+    </nav>
+    <main class="main-container">
+        <div class="task-card">
+            <div class="loading" id="loading"><i class="fas fa-spinner"></i><p>正在加载任务...</p></div>
+            <div id="task-content" style="display: none;">
+                <div class="task-header">
+                    <div class="task-num"><span id="task-idx">1</span><span>观看视频并分类</span></div>
+                    <div class="task-badge">视频分类</div>
+                </div>
+                <div class="video-box">
+                    <div class="video-wrapper">
+                        <video id="video" preload="metadata"></video>
+                        <div class="video-placeholder" id="placeholder"><i class="fas fa-video"></i><p>加载中...</p></div>
+                    </div>
+                    <div class="video-controls">
+                        <button class="ctrl-btn" onclick="toggleVideo()"><i class="fas fa-play" id="play-icon"></i></button>
+                        <div class="video-progress" onclick="seekVideo(event)"><div class="video-progress-fill" id="progress"></div></div>
+                        <span class="video-time"><span id="time-current">0:00</span> / <span id="time-total">0:00</span></span>
+                    </div>
+                </div>
+                <div class="label-section">
+                    <h4><i class="fas fa-tags"></i> 选择视频类型：</h4>
+                    <div class="label-grid">
+                        <div class="label-btn" data-value="education" onclick="selectLabel(this)"><div class="icon"><i class="fas fa-graduation-cap"></i></div><div class="text">教育</div></div>
+                        <div class="label-btn" data-value="entertainment" onclick="selectLabel(this)"><div class="icon"><i class="fas fa-laugh"></i></div><div class="text">娱乐</div></div>
+                        <div class="label-btn" data-value="news" onclick="selectLabel(this)"><div class="icon"><i class="fas fa-newspaper"></i></div><div class="text">新闻</div></div>
+                        <div class="label-btn" data-value="tech" onclick="selectLabel(this)"><div class="icon"><i class="fas fa-laptop-code"></i></div><div class="text">科技</div></div>
+                        <div class="label-btn" data-value="lifestyle" onclick="selectLabel(this)"><div class="icon"><i class="fas fa-heart"></i></div><div class="text">生活</div></div>
+                        <div class="label-btn" data-value="sports" onclick="selectLabel(this)"><div class="icon"><i class="fas fa-futbol"></i></div><div class="text">体育</div></div>
+                        <div class="label-btn" data-value="music" onclick="selectLabel(this)"><div class="icon"><i class="fas fa-music"></i></div><div class="text">音乐</div></div>
+                        <div class="label-btn" data-value="other" onclick="selectLabel(this)"><div class="icon"><i class="fas fa-question"></i></div><div class="text">其他</div></div>
+                    </div>
+                </div>
+                <div class="action-bar">
+                    <button class="skip-btn" onclick="skipTask()"><i class="fas fa-forward"></i> 跳过</button>
+                    <button class="submit-btn" id="submit-btn" onclick="submitLabel()" disabled><i class="fas fa-check"></i> 提交</button>
+                </div>
+            </div>
+            <div class="completed" id="completed" style="display: none;"><i class="fas fa-check-circle"></i><p>所有任务已完成！</p><button onclick="resetTasks()" class="btn" style="margin-right:10px;cursor:pointer;border:none;">重新开始</button><a href="module-select.html" class="btn">返回</a></div>
+            <div class="empty" id="empty" style="display: none;"><i class="fas fa-inbox"></i><p>暂无标注任务</p><a href="module-select.html" class="btn">返回</a></div>
+        </div>
+    </main>
+    <div class="toast" id="toast"><i class="fas fa-check-circle"></i><span>标注成功！</span></div>
+    <script>
+        const projectId = new URLSearchParams(window.location.search).get('project') || '12';
+        let tasks = [], currentIdx = 0, selectedLabel = null, isPlaying = false;
+        const video = document.getElementById('video');
+        const progress = document.getElementById('progress');
+
+        // Fallback 示例视频（使用 Cloudflare 等更快的 CDN）
+        const SAMPLE_VIDEOS = [
+            { id: 'sample-1', data: { video: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4' }, is_labeled: false },
+            { id: 'sample-2', data: { video: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4' }, is_labeled: false },
+            { id: 'sample-3', data: { video: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/Sintel.mp4' }, is_labeled: false }
+        ];
+        let usingSamples = false;
+
+        video.addEventListener('loadedmetadata', () => { document.getElementById('time-total').textContent = formatTime(video.duration); document.getElementById('placeholder').style.display = 'none'; });
+        video.addEventListener('timeupdate', () => { progress.style.width = (video.currentTime / video.duration * 100) + '%'; document.getElementById('time-current').textContent = formatTime(video.currentTime); });
+        video.addEventListener('ended', () => { isPlaying = false; document.getElementById('play-icon').className = 'fas fa-play'; });
+        video.addEventListener('error', () => { document.getElementById('placeholder').innerHTML = '<i class="fas fa-exclamation-triangle"></i><p>视频加载失败</p>'; document.getElementById('placeholder').style.display = 'block'; });
+
+        async function loadTasks() {
+            try {
+                const res = await fetch('/api/labeling/projects/' + projectId + '/tasks');
+                if (!res.ok) throw new Error('API error');
+                const data = await res.json();
+                tasks = (data.tasks || data).filter(t => !t.is_labeled);
+                if (tasks.length === 0) { tasks = SAMPLE_VIDEOS; usingSamples = true; }
+                document.getElementById('total-count').textContent = tasks.length;
+                if (tasks.length > 0) showTask(); else showEmpty();
+            } catch (e) {
+                console.log('Using sample videos as fallback');
+                tasks = SAMPLE_VIDEOS;
+                usingSamples = true;
+                document.getElementById('total-count').textContent = tasks.length;
+                showTask();
+            }
+        }
+
+        function showTask() {
+            document.getElementById('loading').style.display = 'none';
+            document.getElementById('task-content').style.display = 'block';
+            const task = tasks[currentIdx];
+            document.getElementById('task-idx').textContent = currentIdx + 1;
+            document.getElementById('current-idx').textContent = currentIdx + 1;
+            const url = task.data?.video || task.data?.url;
+            if (url) { video.src = url; video.load(); document.getElementById('placeholder').style.display = 'block'; document.getElementById('placeholder').innerHTML = '<i class="fas fa-spinner fa-spin"></i><p>加载中...</p>'; }
+            selectedLabel = null;
+            document.querySelectorAll('.label-btn').forEach(b => b.classList.remove('selected'));
+            document.getElementById('submit-btn').disabled = true;
+            document.getElementById('submit-btn').innerHTML = '<i class="fas fa-check"></i> 提交';
+            isPlaying = false;
+            document.getElementById('play-icon').className = 'fas fa-play';
+            progress.style.width = '0%';
+            document.getElementById('time-current').textContent = '0:00';
+        }
+
+        function toggleVideo() { if (isPlaying) { video.pause(); document.getElementById('play-icon').className = 'fas fa-play'; } else { video.play(); document.getElementById('play-icon').className = 'fas fa-pause'; } isPlaying = !isPlaying; }
+        function seekVideo(e) { const rect = e.target.getBoundingClientRect(); video.currentTime = ((e.clientX - rect.left) / rect.width) * video.duration; }
+        function formatTime(s) { return Math.floor(s/60) + ':' + (Math.floor(s%60)+'').padStart(2,'0'); }
+        function selectLabel(btn) { document.querySelectorAll('.label-btn').forEach(b => b.classList.remove('selected')); btn.classList.add('selected'); selectedLabel = btn.dataset.value; document.getElementById('submit-btn').disabled = false; }
+
+        async function submitLabel() {
+            if (!selectedLabel) return;
+            const btn = document.getElementById('submit-btn');
+            btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+            try {
+                if (!usingSamples) {
+                    await fetch('/api/labeling/tasks/' + tasks[currentIdx].id + '/submit', {
+                        method: 'POST', headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ result: [{ value: { choices: [selectedLabel] }, from_name: 'category', to_name: 'video', type: 'choices' }] })
+                    });
+                }
+                showToast();
+                currentIdx++;
+                if (currentIdx < tasks.length) setTimeout(showTask, 500); else showCompleted();
+            } catch (e) {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-check"></i> 提交';
+            }
+        }
+
+        function skipTask() { video.pause(); isPlaying = false; document.getElementById('play-icon').className = 'fas fa-play'; currentIdx = (currentIdx + 1) % tasks.length; showTask(); }
+        function showCompleted() { document.getElementById('loading').style.display = 'none'; document.getElementById('task-content').style.display = 'none'; document.getElementById('completed').style.display = 'block'; }
+        function showEmpty() { document.getElementById('loading').style.display = 'none'; document.getElementById('task-content').style.display = 'none'; document.getElementById('empty').style.display = 'block'; }
+        function showToast() { const t = document.getElementById('toast'); t.style.display = 'flex'; setTimeout(() => t.style.display = 'none', 2000); }
+        function resetTasks() { video.pause(); isPlaying = false; currentIdx = 0; document.getElementById('completed').style.display = 'none'; showTask(); }
+        loadTasks();
+    </script>
+</body>
+</html>

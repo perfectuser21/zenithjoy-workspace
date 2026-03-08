@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Test Blocks</title>
+    <style>
+        body { background: #191919; color: #fff; font-family: sans-serif; padding: 20px; }
+        .block { padding: 4px 8px; margin: 4px 0; background: #252525; border-radius: 4px; }
+        .heading-3 { font-size: 1.25em; font-weight: bold; }
+        .divider { height: 1px; background: #444; margin: 8px 0; }
+    </style>
+</head>
+<body>
+    <h1>Testing Notion Blocks</h1>
+    <div id="status">Loading...</div>
+    <div id="content"></div>
+    
+    <script>
+        async function load() {
+            const notionId = '11953f41-3ec5-80ca-ae9b-cec2cc4e6c93';
+            document.getElementById('status').textContent = 'Fetching...';
+            
+            try {
+                const res = await fetch(`/api/notion/page/${notionId}/blocks`);
+                const data = await res.json();
+                
+                document.getElementById('status').textContent = `Loaded ${data.blocks.length} blocks`;
+                
+                let html = '';
+                for (const block of data.blocks) {
+                    if (block.type === 'divider') {
+                        html += '<div class="divider"></div>';
+                    } else if (block.text) {
+                        const cls = block.type.startsWith('heading') ? 'block ' + block.type.replace('_', '-') : 'block';
+                        html += `<div class="${cls}">[${block.type}] ${block.text}</div>`;
+                    } else {
+                        html += `<div class="block" style="opacity:0.5">[${block.type}] (no text)</div>`;
+                    }
+                }
+                document.getElementById('content').innerHTML = html;
+            } catch (e) {
+                document.getElementById('status').textContent = 'Error: ' + e.message;
+            }
+        }
+        load();
+    </script>
+</body>
+</html>

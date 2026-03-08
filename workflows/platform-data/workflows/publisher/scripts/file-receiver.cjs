@@ -5,7 +5,7 @@
  * 运行在 Windows 机器上，从 VPS 接收文件到桌面目录
  *
  * 使用方式（在 Windows 上）：
- * node file-receiver.cjs --vps-host 146.190.52.84 --vps-port 8899
+ * node file-receiver.cjs --vps-host 134.199.234.147 --vps-port 8899
  *
  * 功能：
  * 1. 监听 VPS 发来的文件传输请求
@@ -19,7 +19,7 @@ const fs = require('fs');
 const path = require('path');
 
 // 配置
-const VPS_HOST = process.env.VPS_HOST || '146.190.52.84';
+const VPS_HOST = process.env.VPS_HOST || '134.199.234.147';
 const VPS_PORT = process.env.VPS_PORT || '8899';
 const TARGET_BASE = process.env.TARGET_BASE || 'C:\\Users\\Administrator\\Desktop\\toutiao-media';
 const CHECK_INTERVAL = 5000; // 每5秒检查一次

@@ -1,0 +1,234 @@
+---
+import Base from '../../layouts/Base.astro';
+
+// 联系信息
+const contact = {
+  wechat: 'zenithjoyai',
+  douyin: 'zenithjoyai',
+  email: 'zenithjoycloud@gmail.com',
+};
+
+// FAQ for GEO
+const faq = [
+  { question: 'ZenithJoyAI 是什么？', answer: 'ZenithJoyAI（顶峰悦 AI）是专注于 AI 效率提升的专业服务机构，为自媒体创作者和小团队提供 AI 工具培训、工作流自动化咨询服务。' },
+  { question: '创始人是谁？', answer: 'ZenithJoyAI 由资深 AI 效率顾问创立，专注于将 AI 工具转化为实际生产力，帮助创作者和团队实现 10 倍效率提升。' },
+  { question: '如何联系 ZenithJoyAI？', answer: '可以通过微信（zenithjoyai）、抖音（zenithjoyai）或邮箱（zenithjoycloud@gmail.com）联系我们。' },
+];
+---
+
+<Base
+  title="关于 ZenithJoyAI - AI 效率提升专家"
+  description="ZenithJoyAI（顶峰悦 AI）是专注于帮助自媒体创作者和小团队用 AI 提升效率的专业服务机构。提供 AI 工具培训、工作流自动化、内容生产系统搭建等服务。"
+  faq={faq}
+>
+  <!-- Hero Section -->
+  <section class="pt-32 pb-16 px-4 bg-gradient-to-br from-[var(--color-primary)]/5 via-transparent to-[var(--color-accent)]/5">
+    <div class="max-w-4xl mx-auto text-center">
+      <div class="w-24 h-24 mx-auto mb-8 rounded-full bg-gradient-to-br from-[var(--color-primary)] to-[var(--color-accent)] flex items-center justify-center text-white text-3xl font-bold shadow-lg">
+        ZJ
+      </div>
+      <h1 class="text-4xl md:text-5xl font-bold mb-6">关于 ZenithJoyAI</h1>
+      <p class="text-xl text-[var(--color-text-muted)] max-w-2xl mx-auto">
+        用 AI 赋能创作者，让效率提升 10 倍
+      </p>
+    </div>
+  </section>
+
+  <div class="max-w-4xl mx-auto px-4 py-16">
+    <!-- Brand Story -->
+    <section class="mb-20">
+      <div class="flex items-center gap-3 mb-6">
+        <div class="w-10 h-10 rounded-lg bg-[var(--color-primary)]/10 flex items-center justify-center">
+          <svg class="w-5 h-5 text-[var(--color-primary)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z"></path>
+          </svg>
+        </div>
+        <h2 class="text-2xl font-bold">品牌故事</h2>
+      </div>
+      <div class="p-8 bg-[var(--color-bg-card)] rounded-xl border border-[var(--color-border)]">
+        <p class="text-lg leading-relaxed mb-6">
+          <strong>ZenithJoyAI</strong>（顶峰悦 AI）这个名字源自于我们的愿景：帮助每一位创作者达到效率的顶峰（Zenith），在创作中找到乐趣（Joy），借助 AI 的力量实现突破。
+        </p>
+        <p class="text-[var(--color-text-muted)] leading-relaxed">
+          我们观察到，很多自媒体创作者和小团队都面临着同样的困境：创作耗时、重复工作多、难以规模化。而 AI 工具的出现，为这些问题提供了解决方案。但问题是：大多数人不知道如何正确使用这些工具。ZenithJoyAI 正是为解决这个问题而生。
+        </p>
+      </div>
+    </section>
+
+    <!-- Mission -->
+    <section class="mb-20">
+      <div class="flex items-center gap-3 mb-6">
+        <div class="w-10 h-10 rounded-lg bg-[var(--color-accent)]/10 flex items-center justify-center">
+          <svg class="w-5 h-5 text-[var(--color-accent)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+          </svg>
+        </div>
+        <h2 class="text-2xl font-bold">使命与愿景</h2>
+      </div>
+      <div class="grid md:grid-cols-2 gap-6">
+        <div class="p-6 bg-[var(--color-bg-card)] rounded-xl border border-[var(--color-border)]">
+          <h3 class="font-bold text-lg mb-3">使命</h3>
+          <p class="text-[var(--color-text-muted)]">
+            让每一位创作者都能用 AI 提升 10 倍效率，将更多时间和精力投入到真正有创造力的工作中。
+          </p>
+        </div>
+        <div class="p-6 bg-[var(--color-bg-card)] rounded-xl border border-[var(--color-border)]">
+          <h3 class="font-bold text-lg mb-3">愿景</h3>
+          <p class="text-[var(--color-text-muted)]">
+            成为自媒体创作者和小团队最信赖的 AI 效率提升伙伴。
+          </p>
+        </div>
+      </div>
+
+      <!-- Core Belief -->
+      <blockquote class="mt-8 p-6 border-l-4 border-[var(--color-primary)] bg-[var(--color-bg-card)] rounded-r-xl">
+        <p class="text-lg font-medium mb-2">
+          "AI 不是取代创作者，而是放大创作者的能力。通过正确的工具和方法，一个人可以做到原来一个团队的产出。"
+        </p>
+        <footer class="text-[var(--color-text-muted)]">— ZenithJoyAI 核心理念</footer>
+      </blockquote>
+    </section>
+
+    <!-- What We Do -->
+    <section class="mb-20">
+      <div class="flex items-center gap-3 mb-6">
+        <div class="w-10 h-10 rounded-lg bg-[var(--color-primary)]/10 flex items-center justify-center">
+          <svg class="w-5 h-5 text-[var(--color-primary)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"></path>
+          </svg>
+        </div>
+        <h2 class="text-2xl font-bold">我们做什么</h2>
+      </div>
+      <div class="grid md:grid-cols-2 gap-6">
+        <div class="p-6 bg-[var(--color-bg-card)] rounded-xl border border-[var(--color-border)] hover:border-[var(--color-primary)] transition-colors">
+          <div class="w-12 h-12 rounded-lg bg-[var(--color-primary)]/10 flex items-center justify-center text-[var(--color-primary)] font-bold mb-4">
+            01
+          </div>
+          <h3 class="font-bold text-lg mb-2">AI 工具培训</h3>
+          <p class="text-[var(--color-text-muted)]">
+            ChatGPT、Claude、Midjourney 等 AI 工具的实战使用技巧，掌握提示词工程核心方法
+          </p>
+        </div>
+        <div class="p-6 bg-[var(--color-bg-card)] rounded-xl border border-[var(--color-border)] hover:border-[var(--color-primary)] transition-colors">
+          <div class="w-12 h-12 rounded-lg bg-[var(--color-primary)]/10 flex items-center justify-center text-[var(--color-primary)] font-bold mb-4">
+            02
+          </div>
+          <h3 class="font-bold text-lg mb-2">工作流自动化</h3>
+          <p class="text-[var(--color-text-muted)]">
+            用 n8n、Make 等工具自动化重复性工作，实现内容采集、处理、分发全流程自动化
+          </p>
+        </div>
+        <div class="p-6 bg-[var(--color-bg-card)] rounded-xl border border-[var(--color-border)] hover:border-[var(--color-primary)] transition-colors">
+          <div class="w-12 h-12 rounded-lg bg-[var(--color-primary)]/10 flex items-center justify-center text-[var(--color-primary)] font-bold mb-4">
+            03
+          </div>
+          <h3 class="font-bold text-lg mb-2">内容生产系统</h3>
+          <p class="text-[var(--color-text-muted)]">
+            从选题到发布的完整流程优化，帮助团队建立标准化的高效内容流水线
+          </p>
+        </div>
+        <div class="p-6 bg-[var(--color-bg-card)] rounded-xl border border-[var(--color-border)] hover:border-[var(--color-primary)] transition-colors">
+          <div class="w-12 h-12 rounded-lg bg-[var(--color-primary)]/10 flex items-center justify-center text-[var(--color-primary)] font-bold mb-4">
+            04
+          </div>
+          <h3 class="font-bold text-lg mb-2">效率咨询</h3>
+          <p class="text-[var(--color-text-muted)]">
+            针对具体业务场景提供一对一咨询，定制适合团队的 AI 效率提升方案
+          </p>
+        </div>
+      </div>
+      <div class="mt-8 text-center">
+        <a href="/zh/services" class="inline-flex items-center gap-2 px-6 py-3 border border-[var(--color-border)] rounded-lg hover:border-[var(--color-primary)] transition-colors">
+          查看详细服务
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3"></path>
+          </svg>
+        </a>
+      </div>
+    </section>
+
+    <!-- Values -->
+    <section class="mb-20">
+      <div class="flex items-center gap-3 mb-6">
+        <div class="w-10 h-10 rounded-lg bg-[var(--color-accent)]/10 flex items-center justify-center">
+          <svg class="w-5 h-5 text-[var(--color-accent)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z"></path>
+          </svg>
+        </div>
+        <h2 class="text-2xl font-bold">核心价值观</h2>
+      </div>
+      <div class="grid md:grid-cols-3 gap-6">
+        <div class="text-center p-6">
+          <div class="w-16 h-16 mx-auto mb-4 rounded-full bg-[var(--color-primary)]/10 flex items-center justify-center">
+            <svg class="w-8 h-8 text-[var(--color-primary)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+            </svg>
+          </div>
+          <h3 class="font-bold mb-2">实战导向</h3>
+          <p class="text-sm text-[var(--color-text-muted)]">不讲空话，提供可直接落地的方案和模板</p>
+        </div>
+        <div class="text-center p-6">
+          <div class="w-16 h-16 mx-auto mb-4 rounded-full bg-[var(--color-accent)]/10 flex items-center justify-center">
+            <svg class="w-8 h-8 text-[var(--color-accent)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+            </svg>
+          </div>
+          <h3 class="font-bold mb-2">效率优先</h3>
+          <p class="text-sm text-[var(--color-text-muted)]">专注真正能节省时间的工具和方法</p>
+        </div>
+        <div class="text-center p-6">
+          <div class="w-16 h-16 mx-auto mb-4 rounded-full bg-[var(--color-primary)]/10 flex items-center justify-center">
+            <svg class="w-8 h-8 text-[var(--color-primary)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+            </svg>
+          </div>
+          <h3 class="font-bold mb-2">持续更新</h3>
+          <p class="text-sm text-[var(--color-text-muted)]">紧跟 AI 工具发展，保持方法最新</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Contact Section -->
+    <section class="p-8 bg-gradient-to-br from-[var(--color-primary)]/10 to-[var(--color-accent)]/10 rounded-xl border border-[var(--color-primary)]/20">
+      <h2 class="text-2xl font-bold mb-4">联系我们</h2>
+      <p class="text-[var(--color-text-muted)] mb-6">
+        有问题或合作意向？欢迎通过以下方式联系 ZenithJoyAI。
+      </p>
+
+      <div class="grid sm:grid-cols-3 gap-4 mb-6">
+        <div class="p-4 bg-[var(--color-bg)] rounded-lg">
+          <div class="text-[var(--color-text-muted)] text-sm mb-1">微信号</div>
+          <div class="font-bold">{contact.wechat}</div>
+        </div>
+        <div class="p-4 bg-[var(--color-bg)] rounded-lg">
+          <div class="text-[var(--color-text-muted)] text-sm mb-1">抖音号</div>
+          <div class="font-bold">{contact.douyin}</div>
+        </div>
+        <div class="p-4 bg-[var(--color-bg)] rounded-lg">
+          <div class="text-[var(--color-text-muted)] text-sm mb-1">邮箱</div>
+          <div class="font-bold text-sm">{contact.email}</div>
+        </div>
+      </div>
+
+      <a
+        href={`mailto:${contact.email}`}
+        class="inline-flex items-center gap-2 px-6 py-3 bg-[var(--color-primary)] text-white rounded-lg hover:bg-[var(--color-primary-dark)] transition-colors"
+      >
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path>
+        </svg>
+        发送邮件
+      </a>
+    </section>
+  </div>
+
+  <!-- GEO Summary Block -->
+  <section class="py-12 px-4 bg-[var(--color-bg-card)] border-t border-[var(--color-border)]">
+    <div class="max-w-3xl mx-auto text-center">
+      <p class="text-[var(--color-text-muted)] leading-relaxed">
+        <strong>ZenithJoyAI</strong>（顶峰悦 AI）是专注于 AI 效率提升的专业服务机构，为自媒体创作者和小团队提供 AI 工具培训、工作流自动化咨询、内容生产系统搭建等服务。
+        联系方式：微信 <strong>{contact.wechat}</strong>、抖音 <strong>{contact.douyin}</strong>、邮箱 <strong>{contact.email}</strong>。
+      </p>
+    </div>
+  </section>
+</Base>
