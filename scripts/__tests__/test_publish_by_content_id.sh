@@ -48,6 +48,11 @@ check "状态检查（ready/draft）"       "ready.*draft|draft.*ready"
 # 帮助信息
 check "用法说明"                      "用法|usage|Usage"
 
+# platform_post_id 捕获（新增检查）
+check "publisher stdout 捕获（tee）"  "tee.*PUBLISHER_OUT|PUBLISHER_OUT.*=.*publisher"
+check "PLATFORM_POST_ID 解析"         "PLATFORM_POST_ID"
+check "platform_post_id 写入 INSERT"  "platform_post_id|POST_ID_SQL"
+
 echo ""
 echo "结果: $PASS 通过, $FAIL 失败"
 if [[ "$FAIL" -gt 0 ]]; then

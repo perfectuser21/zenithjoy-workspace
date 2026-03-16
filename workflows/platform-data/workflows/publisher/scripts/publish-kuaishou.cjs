@@ -635,11 +635,59 @@ async function main() {
 
     await screenshot(cdp, '06-result');
 
+    // ========== 步骤7.5: 提取 platform_post_id ==========
+    log('\n7️⃣.5  提取 platform_post_id...');
+
+    let platformPostId = '';
+    try {
+      // 尝试从当前 URL 中解析 post ID（快手发布后跳转 URL 可能含 photoId/workId）
+      const currentUrl = await cdp.eval('window.location.href');
+      if (currentUrl) {
+        // 尝试多种参数名
+        const urlObj = new URL(currentUrl);
+        const photoId = urlObj.searchParams.get('photoId')
+          || urlObj.searchParams.get('workId')
+          || urlObj.searchParams.get('id');
+        if (photoId) {
+          platformPostId = photoId;
+          log(`   ✅ 从 URL 参数提取 post ID: ${platformPostId}`);
+        } else {
+          // 尝试从 URL 路径提取数字 ID（如 /detail/123456）
+          const pathMatch = currentUrl.match(/\/(detail|work|photo|video)\/(\d+)/);
+          if (pathMatch) {
+            platformPostId = pathMatch[2];
+            log(`   ✅ 从 URL 路径提取 post ID: ${platformPostId}`);
+          }
+        }
+      }
+
+      // URL 未能提取时，尝试从页面内容提取（作品 ID 标签）
+      if (!platformPostId) {
+        const pagePostId = await cdp.eval(`(function() {
+          // 快手后台可能展示 "作品ID: xxxx" 或 data-id 属性
+          const idEl = document.querySelector('[data-photoid],[data-work-id],[data-id]');
+          if (idEl) return idEl.getAttribute('data-photoid') || idEl.getAttribute('data-work-id') || idEl.getAttribute('data-id');
+          const match = document.body.innerText.match(/作品[ID号][:：\\s]*(\\d+)/);
+          return match ? match[1] : '';
+        })()`);
+        if (pagePostId) {
+          platformPostId = pagePostId;
+          log(`   ✅ 从页面内容提取 post ID: ${platformPostId}`);
+        }
+      }
+    } catch (idErr) {
+      log(`   ⚠️  post ID 提取失败（非阻塞）: ${idErr.message}`, 'WARN');
+    }
+
+    // 输出机器可读的 PLATFORM_POST_ID 行（供 publish-by-content-id.sh 解析）
+    console.log(`PLATFORM_POST_ID:${platformPostId}`);
+
     // ========== 步骤8: 更新状态文件 ==========
     log('\n8️⃣  更新状态文件...');
 
     content.status = 'published';
     content.publishedAt = new Date().toISOString();
+    if (platformPostId) content.platformPostId = platformPostId;
     fs.writeFileSync(contentFile, JSON.stringify(content, null, 2));
 
     log(`   ✅ 状态已写回: ${contentFile}`);
