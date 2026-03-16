@@ -189,22 +189,29 @@ PLATFORM_POST_ID=""
 
 case "$PLATFORM" in
     kuaishou)
-        if node "$PUBLISHER_DIR/publish-kuaishou.cjs" --content "$PUBLISH_JSON" 2>&1; then
+        PUBLISHER_OUT="$TMP_DIR/publisher-stdout.txt"
+        if node "$PUBLISHER_DIR/publish-kuaishou.cjs" --content "$PUBLISH_JSON" 2>&1 | tee "$PUBLISHER_OUT"; then
             PUBLISH_SUCCESS=true
+            # 提取 PLATFORM_POST_ID（格式：PLATFORM_POST_ID:<id>）
+            PLATFORM_POST_ID=$(grep -o 'PLATFORM_POST_ID:.*' "$PUBLISHER_OUT" | head -1 | cut -d: -f2 | xargs)
         else
             PUBLISH_ERROR="publish-kuaishou.cjs 执行失败"
         fi
         ;;
     weibo)
-        if node "$PUBLISHER_DIR/publish-weibo.cjs" --content "$PUBLISH_JSON" 2>&1; then
+        PUBLISHER_OUT="$TMP_DIR/publisher-stdout.txt"
+        if node "$PUBLISHER_DIR/publish-weibo.cjs" --content "$PUBLISH_JSON" 2>&1 | tee "$PUBLISHER_OUT"; then
             PUBLISH_SUCCESS=true
+            PLATFORM_POST_ID=$(grep -o 'PLATFORM_POST_ID:.*' "$PUBLISHER_OUT" | head -1 | cut -d: -f2 | xargs)
         else
             PUBLISH_ERROR="publish-weibo.cjs 执行失败"
         fi
         ;;
     toutiao)
-        if node "$PUBLISHER_DIR/publish-micro.cjs" --content "$PUBLISH_JSON" 2>&1; then
+        PUBLISHER_OUT="$TMP_DIR/publisher-stdout.txt"
+        if node "$PUBLISHER_DIR/publish-micro.cjs" --content "$PUBLISH_JSON" 2>&1 | tee "$PUBLISHER_OUT"; then
             PUBLISH_SUCCESS=true
+            PLATFORM_POST_ID=$(grep -o 'PLATFORM_POST_ID:.*' "$PUBLISHER_OUT" | head -1 | cut -d: -f2 | xargs)
         else
             PUBLISH_ERROR="publish-micro.cjs 执行失败"
         fi
