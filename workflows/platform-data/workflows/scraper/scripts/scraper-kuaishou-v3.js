@@ -23,6 +23,15 @@ const dbClient = new Client({
   database: 'social_media_raw'
 });
 
+// 第二个连接：cecelia 数据库，用于 zenithjoy.publish_logs 关联
+const zenithjoyClient = new Client({
+  host: 'localhost',
+  port: 5432,
+  user: 'cecelia',
+  password: 'CeceliaUS2026',
+  database: 'cecelia'
+});
+
 // 解析数字（支持万、亿等单位）
 function parseNumber(str) {
   if (!str) return 0;
@@ -67,10 +76,41 @@ function parseTimeToISO(publishTime) {
   return new Date(`${year}-${month}-${day}T${hour}:${min}:00+08:00`).toISOString();
 }
 
+// 通过 platform_post_id 关联 zenithjoy.publish_logs，回填 metrics
+async function linkWorkId(platformPostId, metrics) {
+  try {
+    const result = await zenithjoyClient.query(
+      `SELECT id, work_id FROM zenithjoy.publish_logs WHERE platform_post_id = $1 AND platform = 'kuaishou' LIMIT 1`,
+      [platformPostId]
+    );
+    if (result.rows.length === 0) return null;
+
+    const { id, work_id } = result.rows[0];
+    await zenithjoyClient.query(
+      `UPDATE zenithjoy.publish_logs SET metrics = $1 WHERE id = $2`,
+      [JSON.stringify(metrics), id]
+    );
+    return work_id;
+  } catch (e) {
+    console.error('[快手] publish_logs 关联失败（非致命）: ' + e.message);
+    return null;
+  }
+}
+
 async function scrapeKuaishou() {
   let client;
   const allItems = [];
   const seen = new Set();
+
+  // 尝试连接 zenithjoy 数据库（失败不影响主流程）
+  let zenithjoyConnected = false;
+  try {
+    await zenithjoyClient.connect();
+    zenithjoyConnected = true;
+    console.error('[快手] zenithjoy 数据库连接成功');
+  } catch (e) {
+    console.error('[快手] zenithjoy 数据库连接失败（将跳过 work_id 关联）: ' + e.message);
+  }
 
   try {
     await dbClient.connect();
@@ -167,7 +207,7 @@ async function scrapeKuaishou() {
 
     // 保存到数据库
     const today = new Date().toISOString().split('T')[0];
-    let newCount = 0, snapshotCount = 0;
+    let newCount = 0, snapshotCount = 0, workIdLinked = 0;
 
     for (const item of allItems) {
       try {
@@ -198,12 +238,27 @@ async function scrapeKuaishou() {
           `, [masterId, today, item.views || 0, item.likes || 0, item.comments || 0, item.shares || 0, item.favorites || 0]);
           snapshotCount++;
         }
+        // 关联 zenithjoy.publish_logs（通过 platform_post_id → work_id）
+        if (zenithjoyConnected && item.workId) {
+          const metrics = {
+            views: item.views || 0,
+            likes: item.likes || 0,
+            comments: item.comments || 0,
+            shares: item.shares || 0,
+            favorites: item.favorites || 0
+          };
+          const workId = await linkWorkId(item.workId, metrics);
+          if (workId) {
+            item.work_id = workId;
+            workIdLinked++;
+          }
+        }
       } catch (e) {
         console.error('[快手] 保存失败: ' + e.message);
       }
     }
 
-    console.error('[快手] 数据库: 内容 ' + newCount + ' 条, 快照 ' + snapshotCount + ' 条');
+    console.error(`[快手] 数据库: 内容 ${newCount} 条, 快照 ${snapshotCount} 条, work_id 关联 ${workIdLinked} 条`);
 
     // 保存 JSON 文件
     const output = {
@@ -214,6 +269,7 @@ async function scrapeKuaishou() {
       total_on_page: totalFromApi,
       new_content: newCount,
       snapshots: snapshotCount,
+      work_id_linked: workIdLinked,
       scraped_at: new Date().toISOString(),
       items: allItems
     };
@@ -236,11 +292,13 @@ async function scrapeKuaishou() {
       total: totalFromApi,
       new_content: newCount,
       snapshots: snapshotCount,
+      work_id_linked: workIdLinked,
       file: filename
     }));
 
     await client.close();
     await dbClient.end();
+    if (zenithjoyConnected) await zenithjoyClient.end();
 
   } catch (e) {
     console.error('[快手] 错误: ' + e.message);
@@ -252,6 +310,7 @@ async function scrapeKuaishou() {
     }));
     if (client) try { await client.close(); } catch (ex) {}
     if (dbClient) try { await dbClient.end(); } catch (ex) {}
+    if (zenithjoyConnected) try { await zenithjoyClient.end(); } catch (ex) {}
     process.exit(1);
   }
 }
