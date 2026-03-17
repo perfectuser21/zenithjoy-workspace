@@ -23,6 +23,15 @@ const dbClient = new Client({
   database: 'social_media_raw'
 });
 
+// Cecelia DB — 用于关联 zenithjoy.publish_logs（通过 platform_post_id）
+const ceceliaClient = new Client({
+  host: process.env.CECELIA_DB_HOST || 'localhost',
+  port: parseInt(process.env.CECELIA_DB_PORT || '5432', 10),
+  user: process.env.CECELIA_DB_USER || 'cecelia',
+  password: process.env.CECELIA_DB_PASSWORD || '',
+  database: process.env.CECELIA_DB_NAME || 'cecelia',
+});
+
 // 解析数字（支持万、亿等单位）
 function parseNumber(str) {
   if (!str) return 0;
@@ -72,9 +81,20 @@ async function scrapeKuaishou() {
   const allItems = [];
   const seen = new Set();
 
+  let ceceliaConnected = false;
+
   try {
     await dbClient.connect();
     console.error('[快手] 数据库连接成功');
+
+    // 连接 Cecelia DB（非阻塞，失败不影响主流程）
+    try {
+      await ceceliaClient.connect();
+      ceceliaConnected = true;
+      console.error('[快手] Cecelia DB 连接成功');
+    } catch (e) {
+      console.error('[快手] Cecelia DB 连接失败（跳过 publish_logs 关联）:', e.message);
+    }
 
     client = await CDP({ host: NODE_PC_HOST, port: PORT, timeout: 30000 });
     const { Runtime, Page, Network } = client;
@@ -205,6 +225,43 @@ async function scrapeKuaishou() {
 
     console.error('[快手] 数据库: 内容 ' + newCount + ' 条, 快照 ' + snapshotCount + ' 条');
 
+    // 关联 zenithjoy.publish_logs（通过 platform_post_id）
+    if (ceceliaConnected) {
+      let publishLogUpdated = 0;
+      for (const item of allItems) {
+        if (!item.workId) continue;
+        try {
+          const logResult = await ceceliaClient.query(
+            `SELECT id FROM zenithjoy.publish_logs
+             WHERE platform_post_id = $1 AND platform = 'kuaishou'
+             LIMIT 1`,
+            [item.workId]
+          );
+          if (logResult.rows.length === 0) continue;
+
+          const logId = logResult.rows[0].id;
+          const metrics = {
+            views: item.views || 0,
+            likes: item.likes || 0,
+            comments: item.comments || 0,
+            shares: item.shares || 0,
+            favorites: item.favorites || 0,
+            synced_at: new Date().toISOString(),
+          };
+          await ceceliaClient.query(
+            `UPDATE zenithjoy.publish_logs
+             SET response = jsonb_set(COALESCE(response, '{}'), '{metrics}', $1::jsonb)
+             WHERE id = $2`,
+            [JSON.stringify(metrics), logId]
+          );
+          publishLogUpdated++;
+        } catch (e) {
+          console.error('[快手] publish_logs 更新失败 workId=' + item.workId + ':', e.message);
+        }
+      }
+      console.error('[快手] publish_logs 关联更新: ' + publishLogUpdated + ' 条');
+    }
+
     // 保存 JSON 文件
     const output = {
       success: true,
@@ -241,6 +298,7 @@ async function scrapeKuaishou() {
 
     await client.close();
     await dbClient.end();
+    if (ceceliaConnected) try { await ceceliaClient.end(); } catch (ex) {}
 
   } catch (e) {
     console.error('[快手] 错误: ' + e.message);
@@ -252,6 +310,7 @@ async function scrapeKuaishou() {
     }));
     if (client) try { await client.close(); } catch (ex) {}
     if (dbClient) try { await dbClient.end(); } catch (ex) {}
+    if (ceceliaConnected) try { await ceceliaClient.end(); } catch (ex) {}
     process.exit(1);
   }
 }
