@@ -23,6 +23,15 @@ const dbClient = new Client({
   database: 'social_media_raw'
 });
 
+// zenithjoy DB（cecelia 库，存放 zenithjoy schema + publish_logs）
+const zenithjoyClient = new Client({
+  host: process.env.ZENITHJOY_DB_HOST || 'localhost',
+  port: parseInt(process.env.ZENITHJOY_DB_PORT || '5432'),
+  user: process.env.ZENITHJOY_DB_USER || 'n8n_user',
+  password: process.env.ZENITHJOY_DB_PASSWORD || 'n8n_password_2025',
+  database: process.env.ZENITHJOY_DB_NAME || 'cecelia'
+});
+
 // 解析数字（支持万、亿等单位）
 function parseNumber(str) {
   if (!str) return 0;
@@ -67,14 +76,47 @@ function parseTimeToISO(publishTime) {
   return new Date(`${year}-${month}-${day}T${hour}:${min}:00+08:00`).toISOString();
 }
 
+// 通过 platform_post_id 查询 zenithjoy.publish_logs，若找到则更新 metrics
+async function lookupWorkId(platformPostId, metrics) {
+  if (!platformPostId) return null;
+  try {
+    const result = await zenithjoyClient.query(
+      `SELECT work_id FROM zenithjoy.publish_logs WHERE platform_post_id = $1 AND platform = 'kuaishou' LIMIT 1`,
+      [platformPostId]
+    );
+    if (result.rows.length > 0) {
+      const workId = result.rows[0].work_id;
+      await zenithjoyClient.query(
+        `UPDATE zenithjoy.publish_logs SET metrics = $1 WHERE platform_post_id = $2 AND platform = 'kuaishou'`,
+        [metrics, platformPostId]
+      );
+      console.error(`[快手] work_id 关联成功: ${platformPostId} → ${workId}`);
+      return workId;
+    }
+  } catch (e) {
+    console.error(`[快手] zenithjoy 查询失败（不影响主流程）: ${e.message}`);
+  }
+  return null;
+}
+
 async function scrapeKuaishou() {
   let client;
   const allItems = [];
   const seen = new Set();
+  let zenithjoyConnected = false;
 
   try {
     await dbClient.connect();
     console.error('[快手] 数据库连接成功');
+
+    // 尝试连接 zenithjoy DB（失败不影响主流程）
+    try {
+      await zenithjoyClient.connect();
+      zenithjoyConnected = true;
+      console.error('[快手] zenithjoy DB 连接成功');
+    } catch (e) {
+      console.error(`[快手] zenithjoy DB 连接失败（跳过 work_id 关联）: ${e.message}`);
+    }
 
     client = await CDP({ host: NODE_PC_HOST, port: PORT, timeout: 30000 });
     const { Runtime, Page, Network } = client;
@@ -167,7 +209,7 @@ async function scrapeKuaishou() {
 
     // 保存到数据库
     const today = new Date().toISOString().split('T')[0];
-    let newCount = 0, snapshotCount = 0;
+    let newCount = 0, snapshotCount = 0, workIdLinkedCount = 0;
 
     for (const item of allItems) {
       try {
@@ -198,12 +240,19 @@ async function scrapeKuaishou() {
           `, [masterId, today, item.views || 0, item.likes || 0, item.comments || 0, item.shares || 0, item.favorites || 0]);
           snapshotCount++;
         }
+
+        // 通过 platform_post_id 关联 zenithjoy.works
+        if (zenithjoyConnected && item.workId) {
+          const metrics = { views: item.views || 0, likes: item.likes || 0, comments: item.comments || 0, shares: item.shares || 0 };
+          const workId = await lookupWorkId(item.workId, metrics);
+          if (workId) workIdLinkedCount++;
+        }
       } catch (e) {
         console.error('[快手] 保存失败: ' + e.message);
       }
     }
 
-    console.error('[快手] 数据库: 内容 ' + newCount + ' 条, 快照 ' + snapshotCount + ' 条');
+    console.error('[快手] 数据库: 内容 ' + newCount + ' 条, 快照 ' + snapshotCount + ' 条, work_id 关联 ' + workIdLinkedCount + ' 条');
 
     // 保存 JSON 文件
     const output = {
@@ -236,11 +285,13 @@ async function scrapeKuaishou() {
       total: totalFromApi,
       new_content: newCount,
       snapshots: snapshotCount,
+      work_id_linked: workIdLinkedCount,
       file: filename
     }));
 
     await client.close();
     await dbClient.end();
+    if (zenithjoyConnected) await zenithjoyClient.end();
 
   } catch (e) {
     console.error('[快手] 错误: ' + e.message);
@@ -252,6 +303,7 @@ async function scrapeKuaishou() {
     }));
     if (client) try { await client.close(); } catch (ex) {}
     if (dbClient) try { await dbClient.end(); } catch (ex) {}
+    if (zenithjoyConnected) try { await zenithjoyClient.end(); } catch (ex) {}
     process.exit(1);
   }
 }
