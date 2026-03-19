@@ -1,0 +1,138 @@
+{
+  "ocrId": "33a45167-f12e-4972-a33a-9553626363c1",
+  "krIds": {
+    "kr1": "d947e4c7-815e-454c-a8fb-0aa79d8024fb",
+    "kr2": "3e3f713f-8ecb-429d-abc1-8018d308c7b5",
+    "kr3": "fedab43c-a8b8-428c-bcc1-6aad6e6210fc"
+  },
+  "projects": [
+    {
+      "id": "proj-kr1-001",
+      "title": "KR1: 发布接口通 — 8平台API集成",
+      "description": "完成抖音、小红书、快手、微博、知乎、微信公众号、今日头条、视频号 8 个平台的发布 API 接口开发，包括 token 管理、请求适配、错误处理。目标：8 个平台的发布接口全部可用。",
+      "parent_id": "d947e4c7-815e-454c-a8fb-0aa79d8024fb",
+      "owner_agent": "caramel",
+      "target_date": "2026-03-25T23:59:59Z",
+      "priority": "P0",
+      "metadata": {
+        "platforms": [
+          "抖音",
+          "小红书",
+          "快手",
+          "微博",
+          "知乎",
+          "微信公众号",
+          "今日头条",
+          "视频号"
+        ],
+        "phase": "infrastructure"
+      }
+    },
+    {
+      "id": "proj-kr1-002",
+      "title": "KR1: 发布功能测试 — 8平台端到端验证",
+      "description": "对 8 个平台的发布功能进行端到端测试（正常发布、错误处理、边界条件、重试机制），生成测试报告，确保发布成功率 ≥ 98%。",
+      "parent_id": "d947e4c7-815e-454c-a8fb-0aa79d8024fb",
+      "owner_agent": "caramel",
+      "target_date": "2026-03-27T23:59:59Z",
+      "priority": "P0",
+      "metadata": {
+        "phase": "validation"
+      }
+    },
+    {
+      "id": "proj-kr1-003",
+      "title": "KR1: 发布优化 — 并发、重试、监控",
+      "description": "优化发布系统的并发能力（同时发布多个平台）、智能重试（指数退避）、实时监控（发布日志、成功率、延迟）。目标：月内自动发布 ≥ 500 条内容，成功率 ≥ 98%。",
+      "parent_id": "d947e4c7-815e-454c-a8fb-0aa79d8024fb",
+      "owner_agent": "caramel",
+      "target_date": "2026-03-29T23:59:59Z",
+      "priority": "P0",
+      "metadata": {
+        "phase": "optimization"
+      }
+    },
+    {
+      "id": "proj-kr2-001",
+      "title": "KR2: 数据采集框架 — 8平台数据接口",
+      "description": "建立统一的数据采集框架，对接 8 个平台的数据 API（播放、点赞、涨粉、评论等），包括认证、请求适配、数据标准化、存储方案。",
+      "parent_id": "3e3f713f-8ecb-429d-abc1-8018d308c7b5",
+      "owner_agent": "caramel",
+      "target_date": "2026-03-24T23:59:59Z",
+      "priority": "P0",
+      "metadata": {
+        "platforms": [
+          "抖音",
+          "小红书",
+          "快手",
+          "微博",
+          "知乎",
+          "微信公众号",
+          "今日头条",
+          "视频号"
+        ],
+        "phase": "infrastructure"
+      }
+    },
+    {
+      "id": "proj-kr2-002",
+      "title": "KR2: 数据采集适配 — 8平台采集脚本部署",
+      "description": "为 8 个平台编写采集脚本，部署到定时任务系统（n8n / cron），实现日常自动采集，数据入库 PostgreSQL，检验数据完整性和准确性。",
+      "parent_id": "3e3f713f-8ecb-429d-abc1-8018d308c7b5",
+      "owner_agent": "caramel",
+      "target_date": "2026-03-26T23:59:59Z",
+      "priority": "P0",
+      "metadata": {
+        "phase": "deployment"
+      }
+    },
+    {
+      "id": "proj-kr2-003",
+      "title": "KR2: 数据采集验证 — 质量保证与报告",
+      "description": "建立数据质量检验流程（重复排查、格式验证、缺失检测），生成每日/周采集报告，异常告警。确保数据可用于分析和决策。",
+      "parent_id": "3e3f713f-8ecb-429d-abc1-8018d308c7b5",
+      "owner_agent": "caramel",
+      "target_date": "2026-03-28T23:59:59Z",
+      "priority": "P1",
+      "metadata": {
+        "phase": "validation"
+      }
+    },
+    {
+      "id": "proj-kr3-001",
+      "title": "KR3: 内容框架 — AI 选题、文案、素材基础能力",
+      "description": "建立 AI 内容生成的基础框架，包括：1) 选题库（从平台数据中自动识别热点），2) 文案生成（GPT API），3) 素材编排（NAS 查询 + 自动组合）。",
+      "parent_id": "fedab43c-a8b8-428c-bcc1-6aad6e6210fc",
+      "owner_agent": "caramel",
+      "target_date": "2026-03-23T23:59:59Z",
+      "priority": "P0",
+      "metadata": {
+        "phase": "infrastructure"
+      }
+    },
+    {
+      "id": "proj-kr3-002",
+      "title": "KR3: AI 选题 — 热点识别与内容规划",
+      "description": "实现热点自动识别（基于平台数据、搜索趋势、用户行为），生成每日选题清单，支持优先级排序。与内容生成模块集成。",
+      "parent_id": "fedab43c-a8b8-428c-bcc1-6aad6e6210fc",
+      "owner_agent": "caramel",
+      "target_date": "2026-03-26T23:59:59Z",
+      "priority": "P1",
+      "metadata": {
+        "phase": "feature"
+      }
+    },
+    {
+      "id": "proj-kr3-003",
+      "title": "KR3: 内容生成 — AI 文案+素材组装",
+      "description": "实现完整的内容生成流水线：1) 根据选题生成文案（AI 改写、多版本选择），2) 自动选择素材（图片、视频、动画），3) 排版组装，生成多平台格式内容。目标：无人工干预每日生成 20+ 条内容。",
+      "parent_id": "fedab43c-a8b8-428c-bcc1-6aad6e6210fc",
+      "owner_agent": "caramel",
+      "target_date": "2026-03-29T23:59:59Z",
+      "priority": "P0",
+      "metadata": {
+        "phase": "integration"
+      }
+    }
+  ]
+}
