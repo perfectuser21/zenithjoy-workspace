@@ -15,6 +15,7 @@ import {
   KeyRound,
   Database,
   Sparkles,
+  Factory,
 } from 'lucide-react';
 
 // ============ 类型定义 ============
@@ -68,6 +69,7 @@ export const autopilotPageComponents: Record<string, () => Promise<{ default: Co
   'PlatformDataPage': () => import('../pages/PlatformDataPage'),
   'AiVideoGenerationPage': () => import('../pages/AiVideoGenerationPage'),
   'AiVideoHistoryPage': () => import('../pages/AiVideoHistoryPage'),
+  'ContentFactoryPage': () => import('../pages/ContentFactoryPage'),
   // FeatureDashboard and CommandCenter moved to Core features/business
 };
 
@@ -137,6 +139,13 @@ export const autopilotNavGroups: NavGroup[] = [
         label: 'AI 视频',
         featureKey: 'ai-video-generation',
         component: 'AiVideoGenerationPage'
+      },
+      {
+        path: '/content-factory',
+        icon: Factory,
+        label: '内容工厂',
+        featureKey: 'content-factory',
+        component: 'ContentFactoryPage'
       },
     ]
   }
