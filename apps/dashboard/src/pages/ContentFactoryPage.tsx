@@ -16,22 +16,26 @@ import {
   ThumbsUp,
   ThumbsDown,
   Eye,
+  Plus,
+  Search,
+  X,
 } from 'lucide-react'
 
 // ─── 类型 ─────────────────────────────────────────────────────
 
 type ContentType = 'video' | 'article' | 'post'
-type PipelineStatus = 'content-research' | 'content-generate' | 'content-review' | 'content-export' | 'completed' | 'failed'
+type PipelineStatus = 'queued' | 'in_progress' | 'completed' | 'failed' | 'quarantined'
 
 interface Pipeline {
   id: string
   title: string
   status: PipelineStatus
-  priority: number
+  priority: string
   payload: {
     content_type?: string
-    content_series?: string
     keyword?: string
+    notebook_id?: string
+    angle?: string
     [key: string]: unknown
   }
   created_at: string
@@ -39,11 +43,12 @@ interface Pipeline {
   completed_at?: string
 }
 
-interface ContentTypeInfo {
-  id: string
-  name: string
-  type: ContentType
-  series: string[]
+const PIPELINE_STAGES = ['content-research', 'content-generate', 'content-review', 'content-export'] as const
+const STAGE_LABELS: Record<string, string> = {
+  'content-research': '调研',
+  'content-generate': '生成',
+  'content-review': '审核',
+  'content-export': '导出',
 }
 
 // ─── 工具函数 ─────────────────────────────────────────────────
@@ -54,30 +59,21 @@ const CONTENT_TYPE_MAP: Record<string, { label: string; type: ContentType; icon:
   post: { label: '图文', type: 'post', icon: Image },
 }
 
-const STATUS_LABELS: Record<PipelineStatus, string> = {
-  'content-research': '调研中',
-  'content-generate': '生成中',
-  'content-review': '待审核',
-  'content-export': '导出中',
+const STATUS_LABELS: Record<string, string> = {
+  queued: '排队中',
+  in_progress: '进行中',
   completed: '已完成',
   failed: '失败',
+  quarantined: '已暂停',
 }
 
-const STATUS_COLORS: Record<PipelineStatus, string> = {
-  'content-research': 'bg-blue-100 text-blue-700 border-blue-200',
-  'content-generate': 'bg-purple-100 text-purple-700 border-purple-200',
-  'content-review': 'bg-amber-100 text-amber-700 border-amber-200',
-  'content-export': 'bg-cyan-100 text-cyan-700 border-cyan-200',
+const STATUS_COLORS: Record<string, string> = {
+  queued: 'bg-gray-100 text-gray-600 border-gray-200',
+  in_progress: 'bg-blue-100 text-blue-700 border-blue-200',
   completed: 'bg-green-100 text-green-700 border-green-200',
   failed: 'bg-red-100 text-red-700 border-red-200',
+  quarantined: 'bg-amber-100 text-amber-700 border-amber-200',
 }
-
-const KANBAN_COLUMNS: { key: PipelineStatus; label: string }[] = [
-  { key: 'content-research', label: '调研中' },
-  { key: 'content-generate', label: '生成中' },
-  { key: 'content-review', label: '待审核' },
-  { key: 'completed', label: '已完成' },
-]
 
 function getContentType(p: Pipeline): ContentType {
   const ct = p.payload?.content_type || ''
@@ -96,22 +92,223 @@ function formatTime(dateStr?: string) {
   return new Date(dateStr).toLocaleString('zh-CN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
 }
 
+function getStageStatuses(pipelineStatus: PipelineStatus): ('pending' | 'active' | 'done' | 'failed')[] {
+  if (pipelineStatus === 'queued') return ['pending', 'pending', 'pending', 'pending']
+  if (pipelineStatus === 'completed') return ['done', 'done', 'done', 'done']
+  if (pipelineStatus === 'failed' || pipelineStatus === 'quarantined') return ['done', 'failed', 'pending', 'pending']
+  return ['active', 'pending', 'pending', 'pending']
+}
+
 // ─── API ──────────────────────────────────────────────────────
 
 async function fetchPipelines(): Promise<Pipeline[]> {
   const res = await fetch('/api/brain/pipelines')
   if (!res.ok) throw new Error('加载失败')
   const data = await res.json()
-  return data.pipelines || []
+  return Array.isArray(data) ? data : data.pipelines || []
 }
 
-// ─── 看板视图 ────────────────────────────────────────────────
+async function fetchContentTypes(): Promise<string[]> {
+  const res = await fetch('/api/brain/content-types')
+  if (!res.ok) return []
+  return res.json()
+}
+
+async function createPipeline(params: {
+  keyword: string
+  content_type: string
+  priority?: string
+}): Promise<Pipeline> {
+  const res = await fetch('/api/brain/pipelines', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(params),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: '创建失败' }))
+    throw new Error(err.error || '创建失败')
+  }
+  return res.json()
+}
+
+// ─── 阶段进度条 ────────────────────────────────────────────────
+
+function StageProgress({ status }: { status: PipelineStatus }) {
+  const stages = getStageStatuses(status)
+  return (
+    <div className="mt-2">
+      <div className="flex items-center gap-1">
+        {PIPELINE_STAGES.map((stage, i) => {
+          const s = stages[i]
+          const color = s === 'done' ? 'bg-green-500' : s === 'active' ? 'bg-blue-500 animate-pulse' : s === 'failed' ? 'bg-red-500' : 'bg-gray-200'
+          return <div key={stage} className={`h-1.5 rounded-full flex-1 ${color}`} />
+        })}
+      </div>
+      <div className="flex items-center gap-1 mt-1">
+        {PIPELINE_STAGES.map((stage) => (
+          <div key={stage} className="flex-1 text-center">
+            <span className="text-[10px] text-gray-400">{STAGE_LABELS[stage]}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+// ─── 创建 Pipeline 表单 ─────────────────────────────────────────
+
+function CreatePipelineForm({ onCreated }: { onCreated: () => void }) {
+  const [open, setOpen] = useState(false)
+  const [keyword, setKeyword] = useState('')
+  const [contentType, setContentType] = useState('')
+  const [notebookId, setNotebookId] = useState('')
+  const [angle, setAngle] = useState('')
+  const [contentTypes, setContentTypes] = useState<string[]>([])
+  const [creating, setCreating] = useState(false)
+  const [createError, setCreateError] = useState('')
+
+  useEffect(() => {
+    fetchContentTypes().then(types => {
+      setContentTypes(types)
+      if (types.length > 0 && !contentType) setContentType(types[0])
+    })
+  }, [])
+
+  const handleCreate = async () => {
+    const trimmed = keyword.trim()
+    if (!trimmed) {
+      setCreateError('关键词不能为空')
+      return
+    }
+    if (!contentType) {
+      setCreateError('请选择内容系列')
+      return
+    }
+    setCreating(true)
+    setCreateError('')
+    try {
+      await createPipeline({ keyword: trimmed, content_type: contentType })
+      setKeyword('')
+      setAngle('')
+      setNotebookId('')
+      setOpen(false)
+      onCreated()
+    } catch (err) {
+      setCreateError(err instanceof Error ? err.message : '创建失败')
+    } finally {
+      setCreating(false)
+    }
+  }
+
+  if (!open) {
+    return (
+      <button
+        onClick={() => setOpen(true)}
+        className="inline-flex items-center gap-2 px-4 py-2 mb-6 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 transition-colors"
+      >
+        <Plus className="w-4 h-4" />
+        新建 Pipeline
+      </button>
+    )
+  }
+
+  return (
+    <div className="bg-white rounded-xl border border-indigo-200 shadow-lg p-5 mb-6">
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="text-sm font-semibold text-gray-800">新建内容 Pipeline</h3>
+        <button onClick={() => { setOpen(false); setCreateError('') }} className="text-gray-400 hover:text-gray-600">
+          <X className="w-4 h-4" />
+        </button>
+      </div>
+
+      <div className="grid grid-cols-2 gap-4">
+        <div>
+          <label className="block text-xs font-medium text-gray-600 mb-1">
+            关键词 <span className="text-red-500">*</span>
+          </label>
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
+            <input
+              type="text"
+              value={keyword}
+              onChange={e => { setKeyword(e.target.value); setCreateError('') }}
+              placeholder="如：马斯克、Dan Koe、八平台分发"
+              className="w-full pl-9 pr-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400"
+              onKeyDown={e => { if (e.key === 'Enter') handleCreate() }}
+            />
+          </div>
+        </div>
+
+        <div>
+          <label className="block text-xs font-medium text-gray-600 mb-1">
+            内容系列 <span className="text-red-500">*</span>
+          </label>
+          <select
+            value={contentType}
+            onChange={e => { setContentType(e.target.value); setCreateError('') }}
+            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400 bg-white"
+          >
+            <option value="">选择系列...</option>
+            {contentTypes.map(ct => (
+              <option key={ct} value={ct}>{ct}</option>
+            ))}
+          </select>
+        </div>
+
+        <div>
+          <label className="block text-xs font-medium text-gray-600 mb-1">
+            NotebookLM ID <span className="text-gray-400 font-normal">(可选)</span>
+          </label>
+          <input
+            type="text"
+            value={notebookId}
+            onChange={e => setNotebookId(e.target.value)}
+            placeholder="已有调研的 Notebook ID"
+            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400"
+          />
+        </div>
+
+        <div>
+          <label className="block text-xs font-medium text-gray-600 mb-1">
+            切入角度 <span className="text-gray-400 font-normal">(可选)</span>
+          </label>
+          <input
+            type="text"
+            value={angle}
+            onChange={e => setAngle(e.target.value)}
+            placeholder="如：能力密度、极致效率"
+            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400"
+          />
+        </div>
+      </div>
+
+      {createError && (
+        <div className="mt-3 flex items-center gap-1.5 text-sm text-red-600">
+          <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />
+          {createError}
+        </div>
+      )}
+
+      <div className="mt-4 flex justify-end">
+        <button
+          onClick={handleCreate}
+          disabled={creating}
+          className="inline-flex items-center gap-2 px-5 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+        >
+          {creating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+          {creating ? '创建中...' : '创建 Pipeline'}
+        </button>
+      </div>
+    </div>
+  )
+}
+
+// ─── Pipeline 卡片 ─────────────────────────────────────────────
 
 function PipelineCard({ pipeline }: { pipeline: Pipeline }) {
   const ct = getContentType(pipeline)
   const { label: typeLabel, icon: Icon } = CONTENT_TYPE_MAP[ct] || CONTENT_TYPE_MAP.post
   const keyword = pipeline.payload?.keyword as string | undefined
-  const series = pipeline.payload?.content_series as string | undefined
 
   return (
     <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-3 hover:shadow-md transition-shadow">
@@ -125,11 +322,12 @@ function PipelineCard({ pipeline }: { pipeline: Pipeline }) {
         </span>
       </div>
       <div className="text-sm font-medium text-gray-800 mb-1 line-clamp-2">
-        {pipeline.title || keyword || '未命名'}
+        {keyword || pipeline.title || '未命名'}
       </div>
-      {series && (
-        <div className="text-xs text-gray-400 mb-1">系列：{series}</div>
+      {pipeline.payload?.content_type && (
+        <div className="text-xs text-gray-400 mb-0.5">{pipeline.payload.content_type}</div>
       )}
+      <StageProgress status={pipeline.status} />
       <div className="text-xs text-gray-400 mt-2 flex items-center gap-1">
         <Clock className="w-3 h-3" />
         {formatDate(pipeline.created_at)}
@@ -138,60 +336,36 @@ function PipelineCard({ pipeline }: { pipeline: Pipeline }) {
   )
 }
 
+// ─── 看板视图 ────────────────────────────────────────────────
+
 function KanbanView({ pipelines }: { pipelines: Pipeline[] }) {
-  const grouped = KANBAN_COLUMNS.map(col => ({
-    ...col,
-    items: pipelines.filter(p => p.status === col.key || (col.key === 'completed' && p.status === 'content-export')),
-  }))
-
-  // 视频/长文/图文分组筛选
-  const [activeType, setActiveType] = useState<ContentType | 'all'>('all')
-
-  const filtered = grouped.map(col => ({
-    ...col,
-    items: activeType === 'all' ? col.items : col.items.filter(p => getContentType(p) === activeType),
-  }))
+  const columns = [
+    { label: '排队中', filter: (p: Pipeline) => p.status === 'queued' },
+    { label: '进行中', filter: (p: Pipeline) => p.status === 'in_progress' },
+    { label: '已完成', filter: (p: Pipeline) => p.status === 'completed' },
+    { label: '异常', filter: (p: Pipeline) => p.status === 'failed' || p.status === 'quarantined' },
+  ]
 
   return (
-    <div>
-      {/* 类型筛选 */}
-      <div className="flex gap-2 mb-4">
-        <button
-          onClick={() => setActiveType('all')}
-          className={`px-3 py-1.5 rounded-lg text-sm transition-colors ${activeType === 'all' ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
-        >
-          全部
-        </button>
-        {Object.entries(CONTENT_TYPE_MAP).map(([key, { label, icon: Icon }]) => (
-          <button
-            key={key}
-            onClick={() => setActiveType(key as ContentType)}
-            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm transition-colors ${activeType === key ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
-          >
-            <Icon className="w-3.5 h-3.5" />
-            {label}
-          </button>
-        ))}
-      </div>
-
-      {/* 看板列 */}
-      <div className="grid grid-cols-4 gap-4">
-        {filtered.map(col => (
-          <div key={col.key} className="bg-gray-50 rounded-xl p-3">
+    <div className="grid grid-cols-4 gap-4">
+      {columns.map((col, ci) => {
+        const items = pipelines.filter(col.filter)
+        return (
+          <div key={ci} className="bg-gray-50 rounded-xl p-3">
             <div className="flex items-center justify-between mb-3">
               <span className="text-sm font-medium text-gray-700">{col.label}</span>
-              <span className="text-xs bg-gray-200 text-gray-600 px-1.5 py-0.5 rounded-full">{col.items.length}</span>
+              <span className="text-xs bg-gray-200 text-gray-600 px-1.5 py-0.5 rounded-full">{items.length}</span>
             </div>
             <div className="space-y-2">
-              {col.items.length === 0 ? (
-                <div className="text-xs text-gray-400 text-center py-4">暂无内容</div>
+              {items.length === 0 ? (
+                <div className="text-xs text-gray-400 text-center py-4">暂无</div>
               ) : (
-                col.items.map(p => <PipelineCard key={p.id} pipeline={p} />)
+                items.map(p => <PipelineCard key={p.id} pipeline={p} />)
               )}
             </div>
           </div>
-        ))}
-      </div>
+        )
+      })}
     </div>
   )
 }
@@ -199,15 +373,12 @@ function KanbanView({ pipelines }: { pipelines: Pipeline[] }) {
 // ─── 排期日历 ─────────────────────────────────────────────────
 
 function ScheduleView({ pipelines }: { pipelines: Pipeline[] }) {
-  const [selectedDate, setSelectedDate] = useState<string>(
-    new Date().toISOString().split('T')[0]
-  )
+  const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().split('T')[0])
   const [weekOffset, setWeekOffset] = useState(0)
 
-  // 生成本周日期列表
   const today = new Date()
   const weekStart = new Date(today)
-  weekStart.setDate(today.getDate() - today.getDay() + 1 + weekOffset * 7) // 周一开始
+  weekStart.setDate(today.getDate() - today.getDay() + 1 + weekOffset * 7)
 
   const weekDates = Array.from({ length: 7 }, (_, i) => {
     const d = new Date(weekStart)
@@ -217,7 +388,6 @@ function ScheduleView({ pipelines }: { pipelines: Pipeline[] }) {
 
   const DAY_LABELS = ['一', '二', '三', '四', '五', '六', '日']
 
-  // 按日期归档 pipeline（按 created_at 日期）
   const byDate = pipelines.reduce<Record<string, Pipeline[]>>((acc, p) => {
     const date = p.created_at?.split('T')[0] || ''
     if (!acc[date]) acc[date] = []
@@ -229,26 +399,18 @@ function ScheduleView({ pipelines }: { pipelines: Pipeline[] }) {
 
   return (
     <div className="grid grid-cols-[280px_1fr] gap-6">
-      {/* 左栏：日历 */}
       <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
         <div className="flex items-center justify-between mb-4">
-          <button
-            onClick={() => setWeekOffset(w => w - 1)}
-            className="p-1 rounded-lg hover:bg-gray-100 text-gray-500"
-          >
+          <button onClick={() => setWeekOffset(w => w - 1)} className="p-1 rounded-lg hover:bg-gray-100 text-gray-500">
             <ChevronLeft className="w-4 h-4" />
           </button>
           <span className="text-sm font-medium text-gray-700">
             {new Date(weekDates[0]).toLocaleDateString('zh-CN', { month: 'long' })}
           </span>
-          <button
-            onClick={() => setWeekOffset(w => w + 1)}
-            className="p-1 rounded-lg hover:bg-gray-100 text-gray-500"
-          >
+          <button onClick={() => setWeekOffset(w => w + 1)} className="p-1 rounded-lg hover:bg-gray-100 text-gray-500">
             <ChevronRight className="w-4 h-4" />
           </button>
         </div>
-
         <div className="space-y-1">
           {weekDates.map((date, i) => {
             const count = (byDate[date] || []).length
@@ -277,7 +439,6 @@ function ScheduleView({ pipelines }: { pipelines: Pipeline[] }) {
         </div>
       </div>
 
-      {/* 右栏：当天内容 */}
       <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
         <h3 className="text-sm font-medium text-gray-700 mb-4">
           {new Date(selectedDate + 'T12:00:00').toLocaleDateString('zh-CN', { month: 'long', day: 'numeric', weekday: 'long' })}
@@ -299,17 +460,15 @@ function ScheduleView({ pipelines }: { pipelines: Pipeline[] }) {
                     <Icon className="w-4 h-4 text-indigo-600" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-0.5">
-                      <span className="text-sm font-medium text-gray-800 truncate">{p.title || p.payload?.keyword || '未命名'}</span>
-                    </div>
-                    <div className="flex items-center gap-2 text-xs text-gray-400">
+                    <span className="text-sm font-medium text-gray-800 truncate block">{p.title || p.payload?.keyword || '未命名'}</span>
+                    <div className="flex items-center gap-2 text-xs text-gray-400 mt-0.5">
                       <span>{typeLabel}</span>
-                      {p.payload?.content_series && <><span>·</span><span>{p.payload.content_series as string}</span></>}
                       <span>·</span>
                       <span className={`px-1.5 py-0.5 rounded border ${STATUS_COLORS[p.status] || ''}`}>
                         {STATUS_LABELS[p.status] || p.status}
                       </span>
                     </div>
+                    <StageProgress status={p.status} />
                   </div>
                   <div className="text-xs text-gray-400 flex-shrink-0">{formatTime(p.started_at || p.created_at)}</div>
                 </div>
@@ -322,47 +481,47 @@ function ScheduleView({ pipelines }: { pipelines: Pipeline[] }) {
   )
 }
 
-// ─── 审核队列 ─────────────────────────────────────────────────
+// ─── 执行状态 ─────────────────────────────────────────────────
 
-function ReviewQueue({ pipelines }: { pipelines: Pipeline[] }) {
-  const reviewItems = pipelines.filter(p => p.status === 'content-review')
+function ExecutionView({ pipelines }: { pipelines: Pipeline[] }) {
+  const activeItems = pipelines.filter(p => p.status === 'in_progress' || p.status === 'queued')
 
   return (
     <div>
       <div className="flex items-center gap-2 mb-4">
-        <span className="text-sm text-gray-500">待审核</span>
-        <span className="bg-amber-100 text-amber-700 text-xs px-2 py-0.5 rounded-full">{reviewItems.length}</span>
+        <span className="text-sm text-gray-500">执行中 / 排队中</span>
+        <span className="bg-blue-100 text-blue-700 text-xs px-2 py-0.5 rounded-full">{activeItems.length}</span>
       </div>
 
-      {reviewItems.length === 0 ? (
+      {activeItems.length === 0 ? (
         <div className="bg-white rounded-xl border border-gray-100 shadow-sm flex flex-col items-center justify-center h-48 text-gray-400">
           <CheckCircle2 className="w-8 h-8 mb-2 opacity-40" />
-          <p className="text-sm">没有待审核的内容</p>
+          <p className="text-sm">没有进行中的 Pipeline</p>
         </div>
       ) : (
         <div className="space-y-3">
-          {reviewItems.map(p => {
+          {activeItems.map(p => {
             const ct = getContentType(p)
             const { label: typeLabel, icon: Icon } = CONTENT_TYPE_MAP[ct] || CONTENT_TYPE_MAP.post
             return (
-              <div key={p.id} className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 hover:border-amber-200 transition-colors">
+              <div key={p.id} className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 hover:border-blue-200 transition-colors">
                 <div className="flex items-start gap-3">
-                  <div className="w-10 h-10 rounded-lg bg-amber-50 flex items-center justify-center flex-shrink-0">
-                    <Icon className="w-5 h-5 text-amber-600" />
+                  <div className="w-10 h-10 rounded-lg bg-blue-50 flex items-center justify-center flex-shrink-0">
+                    <Icon className="w-5 h-5 text-blue-600" />
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1">
                       <span className="font-medium text-gray-800">{p.title || p.payload?.keyword || '未命名'}</span>
                       <span className="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">{typeLabel}</span>
-                      {p.payload?.content_series && (
-                        <span className="text-xs text-gray-400">{p.payload.content_series as string}</span>
-                      )}
+                      <span className={`text-xs px-2 py-0.5 rounded-full border ${STATUS_COLORS[p.status]}`}>
+                        {STATUS_LABELS[p.status]}
+                      </span>
                     </div>
                     <div className="text-xs text-gray-400 mb-3">
-                      进入审核：{formatTime(p.started_at || p.created_at)}
+                      开始：{formatTime(p.started_at || p.created_at)}
                     </div>
-                    {/* 操作按钮 */}
-                    <div className="flex items-center gap-2">
+                    <StageProgress status={p.status} />
+                    <div className="flex items-center gap-2 mt-3">
                       <button className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg bg-gray-100 text-gray-600 hover:bg-gray-200 transition-colors">
                         <Eye className="w-3.5 h-3.5" />
                         预览
@@ -389,12 +548,12 @@ function ReviewQueue({ pipelines }: { pipelines: Pipeline[] }) {
 
 // ─── 主页面 ─────────────────────────────────────────────────────
 
-type Tab = 'kanban' | 'schedule' | 'review'
+type Tab = 'kanban' | 'schedule' | 'execution'
 
 const TABS: { key: Tab; label: string; icon: typeof LayoutGrid }[] = [
   { key: 'kanban', label: '生产看板', icon: LayoutGrid },
   { key: 'schedule', label: '排期日历', icon: CalendarDays },
-  { key: 'review', label: '审核队列', icon: ClipboardCheck },
+  { key: 'execution', label: '执行状态', icon: ClipboardCheck },
 ]
 
 export default function ContentFactoryPage() {
@@ -424,20 +583,17 @@ export default function ContentFactoryPage() {
     return () => clearInterval(t)
   }, [])
 
-  const reviewCount = pipelines.filter(p => p.status === 'content-review').length
+  const activeCount = pipelines.filter(p => p.status === 'in_progress' || p.status === 'queued').length
 
   return (
     <div className="max-w-7xl mx-auto">
-      {/* 头部 */}
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-semibold text-gray-900">内容工厂</h1>
-          <p className="text-sm text-gray-500 mt-1">内容生产排期 · Pipeline 进度 · 审核管理</p>
+          <p className="text-sm text-gray-500 mt-1">内容生产排期 · Pipeline 进度 · 执行管理</p>
         </div>
         <div className="flex items-center gap-3">
-          {lastUpdate && (
-            <span className="text-xs text-gray-400">{lastUpdate} 更新</span>
-          )}
+          {lastUpdate && <span className="text-xs text-gray-400">{lastUpdate} 更新</span>}
           <button
             onClick={load}
             disabled={loading}
@@ -448,30 +604,26 @@ export default function ContentFactoryPage() {
         </div>
       </div>
 
-      {/* Tab 栏 */}
+      <CreatePipelineForm onCreated={load} />
+
       <div className="flex gap-1 bg-gray-100 p-1 rounded-xl mb-6 w-fit">
         {TABS.map(({ key, label, icon: Icon }) => (
           <button
             key={key}
             onClick={() => setActiveTab(key)}
             className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-              activeTab === key
-                ? 'bg-white text-indigo-700 shadow-sm'
-                : 'text-gray-500 hover:text-gray-700'
+              activeTab === key ? 'bg-white text-indigo-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'
             }`}
           >
             <Icon className="w-4 h-4" />
             {label}
-            {key === 'review' && reviewCount > 0 && (
-              <span className="ml-0.5 bg-amber-500 text-white text-xs px-1.5 py-0.5 rounded-full">
-                {reviewCount}
-              </span>
+            {key === 'execution' && activeCount > 0 && (
+              <span className="ml-0.5 bg-blue-500 text-white text-xs px-1.5 py-0.5 rounded-full">{activeCount}</span>
             )}
           </button>
         ))}
       </div>
 
-      {/* 内容区 */}
       {loading && pipelines.length === 0 ? (
         <div className="flex items-center justify-center h-64">
           <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
@@ -485,7 +637,7 @@ export default function ContentFactoryPage() {
         <>
           {activeTab === 'kanban' && <KanbanView pipelines={pipelines} />}
           {activeTab === 'schedule' && <ScheduleView pipelines={pipelines} />}
-          {activeTab === 'review' && <ReviewQueue pipelines={pipelines} />}
+          {activeTab === 'execution' && <ExecutionView pipelines={pipelines} />}
         </>
       )}
     </div>
