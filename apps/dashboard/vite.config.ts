@@ -123,6 +123,11 @@ export default defineConfig({
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api\/n8n-webhook/, '')
       },
+      // Brain API — 内容工厂、Pipeline 等
+      '/api/brain': {
+        target: 'http://localhost:5221',
+        changeOrigin: true,
+      },
     }
   },
   build: {
