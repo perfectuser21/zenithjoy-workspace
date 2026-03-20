@@ -118,9 +118,9 @@ jobs:
       - name: Install dependencies
         working-directory: apps/dashboard
         run: npm ci
-      - name: Run tests
+      - name: Run tests with coverage
         working-directory: apps/dashboard
-        run: npx vitest run
+        run: npx vitest run --coverage
 
   dashboard-build:
     name: Dashboard Build
@@ -207,9 +207,9 @@ jobs:
           cache-dependency-path: package-lock.json
       - name: Install dependencies
         run: npm ci --workspace=apps/api
-      - name: Run tests
+      - name: Run tests with coverage
         working-directory: apps/api
-        run: npx vitest run
+        run: npx vitest run --coverage
 
   # ─── GeoAI Checks ───────────────────────────────────────────────────
   geoai-build:
@@ -250,6 +250,50 @@ jobs:
         working-directory: apps/dashboard
         run: npm audit --audit-level=moderate --omit=dev
 
+  # ─── Sensitive File Scan ──────────────────────────────────────────────
+  sensitive-files:
+    name: Sensitive File Scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check for sensitive files
+        run: |
+          echo "Checking for sensitive files..."
+          PATTERNS=(
+            "*.key"
+            "*.pem"
+            "*.p12"
+            "*.env"
+            "*password*"
+            "*secret*"
+            "credentials.json"
+          )
+
+          FOUND=0
+          for pattern in "${PATTERNS[@]}"; do
+            MATCHES=$(find . -name "$pattern" \
+              -not -name "*.example" \
+              -not -name "*.sample" \
+              -not -path "./.git/*" \
+              -not -path "./.github/*" \
+              -not -path "./.claude/*" \
+              -not -path "*/node_modules/*" \
+              -not -path "*/.env.example" 2>/dev/null || true)
+            if [ -n "$MATCHES" ]; then
+              echo "WARN: Found files matching '$pattern':"
+              echo "$MATCHES"
+              FOUND=1
+            fi
+          done
+
+          if [ "$FOUND" -ne 0 ]; then
+            echo ""
+            echo "Sensitive files detected — verify they are in .gitignore"
+            exit 1
+          fi
+          echo "No sensitive files found"
+
   # ─── Gate Job ────────────────────────────────────────────────────────
   ci-passed:
     name: CI Passed
@@ -264,6 +308,7 @@ jobs:
       - api-test
       - geoai-build
       - security
+      - sensitive-files
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -328,6 +373,12 @@ jobs:
           # Security is always required
           if [ "${{ needs.security.result }}" != "success" ]; then
             echo "FAIL: Security Audit (${{ needs.security.result }})"
+            FAILED=true
+          fi
+
+          # Sensitive files scan is always required
+          if [ "${{ needs.sensitive-files.result }}" != "success" ]; then
+            echo "FAIL: Sensitive File Scan (${{ needs.sensitive-files.result }})"
             FAILED=true
           fi
 
