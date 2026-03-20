@@ -6,11 +6,18 @@ on:
   pull_request:
     branches: [main, develop]
 
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   lint:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -21,7 +28,7 @@ jobs:
 
       - name: Install dependencies
         working-directory: apps/dashboard
-        run: npm install
+        run: npm ci
 
       - name: Lint
         working-directory: apps/dashboard
@@ -29,8 +36,11 @@ jobs:
 
   typecheck:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -41,7 +51,7 @@ jobs:
 
       - name: Install dependencies
         working-directory: apps/dashboard
-        run: npm install
+        run: npm ci
 
       - name: Typecheck
         working-directory: apps/dashboard
@@ -49,8 +59,11 @@ jobs:
 
   security:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -61,17 +74,19 @@ jobs:
 
       - name: Install dependencies
         working-directory: apps/dashboard
-        run: npm install
+        run: npm ci
 
       - name: Security Audit
         working-directory: apps/dashboard
-        # --omit=dev: 排除构建工具（Rollup、Astro 等）的 dev 依赖漏洞，只审计生产依赖
         run: npm audit --audit-level=moderate --omit=dev
 
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -82,7 +97,7 @@ jobs:
 
       - name: Install dependencies
         working-directory: apps/dashboard
-        run: npm install
+        run: npm ci
 
       - name: Create gallery placeholder for CI
         run: mkdir -p apps/dashboard/public/gallery/chatgpt-cards apps/dashboard/public/gallery/deep-post-cards
