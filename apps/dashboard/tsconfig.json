@@ -1,7 +1,7 @@
 {
   "$schema": "https://json.schemastore.org/tsconfig",
+  "extends": "../../tsconfig.base.json",
   "compilerOptions": {
-    // React + Vite settings
     "jsx": "react-jsx",
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "module": "ESNext",
@@ -9,33 +9,16 @@
     "moduleResolution": "bundler",
     "allowImportingTsExtensions": true,
     "noEmit": true,
-    // Module interop
-    "esModuleInterop": true,
-    "skipLibCheck": true,
-    "resolveJsonModule": true,
-    "isolatedModules": true,
-    "forceConsistentCasingInFileNames": true,
-    // Relaxed type checking (project preference)
-    "strict": false,
     "noUnusedLocals": false,
     "noUnusedParameters": false,
-    "noImplicitAny": false,
-    "noImplicitReturns": false,
-    "noUncheckedIndexedAccess": false,
-    "exactOptionalPropertyTypes": false,
     "verbatimModuleSyntax": false,
     "declaration": false,
     "declarationMap": false,
     "sourceMap": false,
-    // Path aliases
     "baseUrl": ".",
     "paths": {
-      "@features/core": [
-        "src/stubs/core-features"
-      ],
-      "@features/core/*": [
-        "src/stubs/core-features/*"
-      ],
+      "@features/core": ["src/stubs/core-features"],
+      "@features/core/*": ["src/stubs/core-features/*"],
       "@/*": ["src/*"]
     }
   },

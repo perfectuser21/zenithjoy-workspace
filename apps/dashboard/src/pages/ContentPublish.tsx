@@ -168,7 +168,7 @@ function ResultSummary({ task }: { task: PublishTask }) {
 
           // 状态：成功=绿色边框，失败=红色边框，处理中=蓝色脉冲，待处理=灰色
           let statusClass = 'border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700';
-          let statusIcon = null;
+          let statusIcon: React.ReactNode = null;
 
           if (result?.success) {
             statusClass = 'border-green-400 bg-green-50 dark:bg-green-900/30';

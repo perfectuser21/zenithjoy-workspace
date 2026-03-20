@@ -17,7 +17,7 @@ export default function VideoPreview({ task, onReset }: VideoPreviewProps) {
 
   const handleDownload = () => {
     const a = document.createElement('a');
-    a.href = task.videoUrl;
+    a.href = task.videoUrl!;
     a.download = `video-${task.id}.mp4`;
     a.click();
   };

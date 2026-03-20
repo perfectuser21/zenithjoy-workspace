@@ -2,112 +2,149 @@ name: CI
 
 on:
   push:
-    branches: [main, develop]
+    branches: [main]
   pull_request:
-    branches: [main, develop]
+    branches: [main]
 
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  lint:
+  # ─── Change Detection ────────────────────────────────────────────────
+  changes:
+    name: Detect Changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      dashboard: ${{ steps.filter.outputs.dashboard }}
+      api: ${{ steps.filter.outputs.api }}
+      geoai: ${{ steps.filter.outputs.geoai }}
+      ci: ${{ steps.filter.outputs.ci }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect changed modules
+        id: filter
+        run: |
+          BEFORE="${{ github.event.before }}"
+          AFTER="${{ github.event.after }}"
+
+          if [ "${{ github.event_name }}" = "push" ]; then
+            if [ "$BEFORE" = "0000000000000000000000000000000000000000" ]; then
+              echo "dashboard=true" >> $GITHUB_OUTPUT
+              echo "api=true" >> $GITHUB_OUTPUT
+              echo "geoai=true" >> $GITHUB_OUTPUT
+              echo "ci=true" >> $GITHUB_OUTPUT
+              exit 0
+            fi
+            CHANGED=$(git diff --name-only "$BEFORE" "$AFTER" 2>/dev/null || git diff --name-only HEAD~1 HEAD)
+          else
+            BASE_REF="${{ github.base_ref }}"
+            CHANGED=$(git diff --name-only "origin/${BASE_REF}...HEAD" 2>/dev/null || echo "")
+          fi
+
+          echo "$CHANGED" | grep -q "^apps/dashboard/" \
+            && echo "dashboard=true" >> $GITHUB_OUTPUT || echo "dashboard=false" >> $GITHUB_OUTPUT
+
+          echo "$CHANGED" | grep -q "^apps/api/" \
+            && echo "api=true" >> $GITHUB_OUTPUT || echo "api=false" >> $GITHUB_OUTPUT
+
+          echo "$CHANGED" | grep -q "^apps/geoai/" \
+            && echo "geoai=true" >> $GITHUB_OUTPUT || echo "geoai=false" >> $GITHUB_OUTPUT
+
+          echo "$CHANGED" | grep -qE "^\.github/|^tsconfig\.base\.json$|^package\.json$" \
+            && echo "ci=true" >> $GITHUB_OUTPUT || echo "ci=false" >> $GITHUB_OUTPUT
+
+  # ─── Dashboard Checks ───────────────────────────────────────────────
+  dashboard-lint:
+    name: Dashboard Lint
+    needs: changes
+    if: needs.changes.outputs.dashboard == 'true' || needs.changes.outputs.ci == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 1
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: '20'
           cache: 'npm'
           cache-dependency-path: apps/dashboard/package-lock.json
-
       - name: Install dependencies
         working-directory: apps/dashboard
         run: npm ci
-
       - name: Lint
         working-directory: apps/dashboard
         run: npx eslint . --max-warnings 79
 
-  typecheck:
+  dashboard-typecheck:
+    name: Dashboard Typecheck
+    needs: changes
+    if: needs.changes.outputs.dashboard == 'true' || needs.changes.outputs.ci == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 1
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: '20'
           cache: 'npm'
           cache-dependency-path: apps/dashboard/package-lock.json
-
       - name: Install dependencies
         working-directory: apps/dashboard
         run: npm ci
-
       - name: Typecheck
         working-directory: apps/dashboard
         run: npx tsc --noEmit
 
-  security:
+  dashboard-test:
+    name: Dashboard Test
+    needs: changes
+    if: needs.changes.outputs.dashboard == 'true' || needs.changes.outputs.ci == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 1
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: '20'
           cache: 'npm'
           cache-dependency-path: apps/dashboard/package-lock.json
-
       - name: Install dependencies
         working-directory: apps/dashboard
         run: npm ci
-
-      - name: Security Audit
+      - name: Run tests
         working-directory: apps/dashboard
-        run: npm audit --audit-level=moderate --omit=dev
+        run: npx vitest run
 
-  build:
+  dashboard-build:
+    name: Dashboard Build
+    needs: changes
+    if: needs.changes.outputs.dashboard == 'true' || needs.changes.outputs.ci == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 1
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: '20'
           cache: 'npm'
           cache-dependency-path: apps/dashboard/package-lock.json
-
       - name: Install dependencies
         working-directory: apps/dashboard
         run: npm ci
-
       - name: Create gallery placeholder for CI
         run: mkdir -p apps/dashboard/public/gallery/chatgpt-cards apps/dashboard/public/gallery/deep-post-cards
-
       - name: Build
         working-directory: apps/dashboard
         run: npm run build
         env:
           CORE_FEATURES_PATH: ./src/stubs/core-features
-
       - name: Upload build artifact
         if: github.ref == 'refs/heads/main'
         uses: actions/upload-artifact@v4
@@ -116,8 +153,178 @@ jobs:
           path: apps/dashboard/dist
           retention-days: 7
 
-  ci-passed:
+  # ─── API Checks ─────────────────────────────────────────────────────
+  api-typecheck:
+    name: API Typecheck
+    needs: changes
+    if: needs.changes.outputs.api == 'true' || needs.changes.outputs.ci == 'true'
     runs-on: ubuntu-latest
-    needs: [lint, typecheck, security, build]
+    timeout-minutes: 10
     steps:
-      - run: echo "All checks passed"
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: apps/api/package-lock.json
+      - name: Install dependencies
+        working-directory: apps/api
+        run: npm ci
+      - name: Typecheck
+        working-directory: apps/api
+        run: npx tsc --noEmit
+
+  api-test:
+    name: API Test
+    needs: changes
+    if: needs.changes.outputs.api == 'true' || needs.changes.outputs.ci == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: apps/api/package-lock.json
+      - name: Install dependencies
+        working-directory: apps/api
+        run: npm ci
+      - name: Run tests
+        working-directory: apps/api
+        run: npx vitest run
+
+  # ─── GeoAI Checks ───────────────────────────────────────────────────
+  geoai-build:
+    name: GeoAI Build
+    needs: changes
+    if: needs.changes.outputs.geoai == 'true' || needs.changes.outputs.ci == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: apps/geoai/package-lock.json
+      - name: Install dependencies
+        working-directory: apps/geoai
+        run: npm ci
+      - name: Build
+        working-directory: apps/geoai
+        run: npm run build
+
+  # ─── Security Audit ─────────────────────────────────────────────────
+  security:
+    name: Security Audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: apps/dashboard/package-lock.json
+      - name: Install dependencies
+        working-directory: apps/dashboard
+        run: npm ci
+      - name: Security Audit
+        working-directory: apps/dashboard
+        run: npm audit --audit-level=moderate --omit=dev
+
+  # ─── Gate Job ────────────────────────────────────────────────────────
+  ci-passed:
+    name: CI Passed
+    needs:
+      - changes
+      - dashboard-lint
+      - dashboard-typecheck
+      - dashboard-test
+      - dashboard-build
+      - api-typecheck
+      - api-test
+      - geoai-build
+      - security
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: CI Gate
+        run: |
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "  CI Gate"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+          FAILED=false
+
+          if [ "${{ needs.changes.result }}" = "failure" ]; then
+            echo "FAIL: Detect Changes (${{ needs.changes.result }})"
+            FAILED=true
+          fi
+
+          # Dashboard checks (required when dashboard or ci config changed)
+          if [ "${{ needs.changes.outputs.dashboard }}" = "true" ] || [ "${{ needs.changes.outputs.ci }}" = "true" ]; then
+            if [ "${{ needs.dashboard-lint.result }}" != "success" ]; then
+              echo "FAIL: Dashboard Lint (${{ needs.dashboard-lint.result }})"
+              FAILED=true
+            fi
+            if [ "${{ needs.dashboard-typecheck.result }}" != "success" ]; then
+              echo "FAIL: Dashboard Typecheck (${{ needs.dashboard-typecheck.result }})"
+              FAILED=true
+            fi
+            if [ "${{ needs.dashboard-test.result }}" != "success" ]; then
+              echo "FAIL: Dashboard Test (${{ needs.dashboard-test.result }})"
+              FAILED=true
+            fi
+            if [ "${{ needs.dashboard-build.result }}" != "success" ]; then
+              echo "FAIL: Dashboard Build (${{ needs.dashboard-build.result }})"
+              FAILED=true
+            fi
+          fi
+
+          # API checks (required when api or ci config changed)
+          if [ "${{ needs.changes.outputs.api }}" = "true" ] || [ "${{ needs.changes.outputs.ci }}" = "true" ]; then
+            if [ "${{ needs.api-typecheck.result }}" != "success" ]; then
+              echo "FAIL: API Typecheck (${{ needs.api-typecheck.result }})"
+              FAILED=true
+            fi
+            if [ "${{ needs.api-test.result }}" != "success" ]; then
+              echo "FAIL: API Test (${{ needs.api-test.result }})"
+              FAILED=true
+            fi
+          fi
+
+          # GeoAI checks (required when geoai or ci config changed)
+          if [ "${{ needs.changes.outputs.geoai }}" = "true" ] || [ "${{ needs.changes.outputs.ci }}" = "true" ]; then
+            if [ "${{ needs.geoai-build.result }}" != "success" ]; then
+              echo "FAIL: GeoAI Build (${{ needs.geoai-build.result }})"
+              FAILED=true
+            fi
+          fi
+
+          # Security is always required
+          if [ "${{ needs.security.result }}" != "success" ]; then
+            echo "FAIL: Security Audit (${{ needs.security.result }})"
+            FAILED=true
+          fi
+
+          if [ "$FAILED" = "true" ]; then
+            echo ""
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            echo "  CI Gate FAILED"
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            exit 1
+          fi
+
+          echo ""
+          echo "Module check results:"
+          [ "${{ needs.changes.outputs.dashboard }}" = "true" ] && echo "  Dashboard: checked" || echo "  Dashboard: skipped (no changes)"
+          [ "${{ needs.changes.outputs.api }}" = "true" ] && echo "  API: checked" || echo "  API: skipped (no changes)"
+          [ "${{ needs.changes.outputs.geoai }}" = "true" ] && echo "  GeoAI: checked" || echo "  GeoAI: skipped (no changes)"
+
+          echo ""
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "  CI Gate PASSED"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
