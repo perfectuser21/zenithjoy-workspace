@@ -5,17 +5,18 @@
  * Integration tests with real database are in DoD manual testing checklist.
  */
 
+import { vi } from 'vitest';
 import { AiVideoService, type CreateAiVideoParams } from '../ai-video.service';
 import pool from '../../db/connection';
 
 // Skip: integration tests require database and ToAPI connection
 describe.skip('AiVideoService', () => {
   let service: AiVideoService;
-  let mockQuery: jest.Mock;
+  let mockQuery: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
     service = new AiVideoService();
-    mockQuery = pool.query as jest.Mock;
+    mockQuery = pool.query as ReturnType<typeof vi.fn>;
     mockQuery.mockClear();
   });
 
