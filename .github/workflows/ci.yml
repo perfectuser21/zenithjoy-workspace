@@ -118,9 +118,9 @@ jobs:
       - name: Install dependencies
         working-directory: apps/dashboard
         run: npm ci
-      - name: Run tests with coverage
+      - name: Run tests
         working-directory: apps/dashboard
-        run: npx vitest run --coverage.enabled --coverage.reporter=text
+        run: npx vitest run
 
   dashboard-build:
     name: Dashboard Build
@@ -207,9 +207,9 @@ jobs:
           cache-dependency-path: package-lock.json
       - name: Install dependencies
         run: npm ci --workspace=apps/api
-      - name: Run tests with coverage
+      - name: Run tests
         working-directory: apps/api
-        run: npx vitest run --coverage.enabled --coverage.reporter=text
+        run: npx vitest run
 
   # ─── GeoAI Checks ───────────────────────────────────────────────────
   geoai-build:
