@@ -1,0 +1,179 @@
+name: L2 Consistency Gate
+
+# L2: 一致性检查 — 每次 push/PR 必跑（~5min）
+# 职责：TypeScript 配置继承、敏感文件扫描、engines 一致性
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: l2-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  tsconfig-inheritance:
+    name: TSConfig Inheritance Check
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check tsconfig.base.json exists
+        run: |
+          if [ ! -f "tsconfig.base.json" ]; then
+            echo "tsconfig.base.json not found at repo root"
+            exit 1
+          fi
+          echo "tsconfig.base.json exists"
+
+      - name: Check apps inherit from base
+        run: |
+          FAILED=false
+
+          for app in apps/dashboard apps/api; do
+            TSCONFIG="$app/tsconfig.json"
+            if [ ! -f "$TSCONFIG" ]; then
+              echo "SKIP: $TSCONFIG not found"
+              continue
+            fi
+
+            # Check if extends contains tsconfig.base.json
+            if grep -q "tsconfig.base.json" "$TSCONFIG"; then
+              echo "PASS: $TSCONFIG extends tsconfig.base.json"
+            else
+              echo "FAIL: $TSCONFIG does not extend tsconfig.base.json"
+              FAILED=true
+            fi
+          done
+
+          if [ "$FAILED" = "true" ]; then
+            echo ""
+            echo "Fix: add '\"extends\": \"../../tsconfig.base.json\"' to each app's tsconfig.json"
+            exit 1
+          fi
+
+  engines-consistency:
+    name: Engines Consistency Check
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check Node.js version consistency
+        run: |
+          echo "Checking engines.node consistency across workspace..."
+
+          ROOT_NODE=$(node -e "const p=require('./package.json'); console.log(p.engines?.node || 'not set')")
+          echo "Root engines.node: $ROOT_NODE"
+
+          FAILED=false
+
+          # Check Dockerfiles use matching Node version
+          for dockerfile in $(find . -name "Dockerfile" -not -path "*/node_modules/*" -not -path "*/.git/*"); do
+            NODE_VER=$(grep -oE "node:[0-9]+" "$dockerfile" | head -1 || echo "")
+            if [ -n "$NODE_VER" ]; then
+              MAJOR=$(echo "$NODE_VER" | grep -oE "[0-9]+")
+              if echo "$ROOT_NODE" | grep -q "$MAJOR"; then
+                echo "PASS: $dockerfile uses $NODE_VER (matches root)"
+              else
+                echo "FAIL: $dockerfile uses $NODE_VER (root requires $ROOT_NODE)"
+                FAILED=true
+              fi
+            fi
+          done
+
+          if [ "$FAILED" = "true" ]; then
+            exit 1
+          fi
+          echo "All Node.js versions consistent"
+
+  sensitive-files:
+    name: Sensitive File Scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check for sensitive files
+        run: |
+          echo "Checking for sensitive files..."
+          PATTERNS=(
+            "*.key"
+            "*.pem"
+            "*.p12"
+            "*.env"
+            "*password*"
+            "*secret*"
+            "credentials.json"
+          )
+
+          FOUND=0
+          for pattern in "${PATTERNS[@]}"; do
+            MATCHES=$(find . -name "$pattern" \
+              -not -name "*.example" \
+              -not -name "*.sample" \
+              -not -path "./.git/*" \
+              -not -path "./.github/*" \
+              -not -path "./.claude/*" \
+              -not -path "*/node_modules/*" \
+              -not -path "*/.env.example" 2>/dev/null || true)
+            if [ -n "$MATCHES" ]; then
+              echo "WARN: Found files matching '$pattern':"
+              echo "$MATCHES"
+              FOUND=1
+            fi
+          done
+
+          if [ "$FOUND" -ne 0 ]; then
+            echo ""
+            echo "Sensitive files detected — verify they are in .gitignore"
+            exit 1
+          fi
+          echo "No sensitive files found"
+
+  # ─── L2 Gate ──────────────────────────────────────────────────────────
+  l2-passed:
+    name: L2 Consistency Gate Passed
+    needs: [tsconfig-inheritance, engines-consistency, sensitive-files]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: L2 Consistency Gate
+        run: |
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "  L2 Consistency Gate"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+          FAILED=false
+
+          if [ "${{ needs.tsconfig-inheritance.result }}" != "success" ]; then
+            echo "FAIL: TSConfig Inheritance (${{ needs.tsconfig-inheritance.result }})"
+            FAILED=true
+          fi
+
+          if [ "${{ needs.engines-consistency.result }}" != "success" ]; then
+            echo "FAIL: Engines Consistency (${{ needs.engines-consistency.result }})"
+            FAILED=true
+          fi
+
+          if [ "${{ needs.sensitive-files.result }}" != "success" ]; then
+            echo "FAIL: Sensitive File Scan (${{ needs.sensitive-files.result }})"
+            FAILED=true
+          fi
+
+          if [ "$FAILED" = "true" ]; then
+            echo ""
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            echo "  L2 Consistency Gate FAILED"
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            exit 1
+          fi
+
+          echo ""
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "  L2 Consistency Gate PASSED"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"

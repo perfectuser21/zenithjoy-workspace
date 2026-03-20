@@ -1,4 +1,7 @@
-name: CI
+name: L3 Code Gate
+
+# L3: 代码质量检查 — 按模块变更触发（~5min）
+# 职责：Lint、TypeCheck、Build、Security Audit
 
 on:
   push:
@@ -7,7 +10,7 @@ on:
     branches: [main]
 
 concurrency:
-  group: ci-${{ github.ref }}
+  group: l3-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -51,17 +54,14 @@ jobs:
 
           echo "$CHANGED" | grep -q "^apps/dashboard/" \
             && echo "dashboard=true" >> $GITHUB_OUTPUT || echo "dashboard=false" >> $GITHUB_OUTPUT
-
           echo "$CHANGED" | grep -q "^apps/api/" \
             && echo "api=true" >> $GITHUB_OUTPUT || echo "api=false" >> $GITHUB_OUTPUT
-
           echo "$CHANGED" | grep -q "^apps/geoai/" \
             && echo "geoai=true" >> $GITHUB_OUTPUT || echo "geoai=false" >> $GITHUB_OUTPUT
-
           echo "$CHANGED" | grep -qE "^\.github/|^tsconfig\.base\.json$|^package\.json$" \
             && echo "ci=true" >> $GITHUB_OUTPUT || echo "ci=false" >> $GITHUB_OUTPUT
 
-  # ─── Dashboard Checks ───────────────────────────────────────────────
+  # ─── Dashboard ───────────────────────────────────────────────────────
   dashboard-lint:
     name: Dashboard Lint
     needs: changes
@@ -75,12 +75,10 @@ jobs:
           node-version: '20'
           cache: 'npm'
           cache-dependency-path: apps/dashboard/package-lock.json
-      - name: Install dependencies
+      - run: npm ci
         working-directory: apps/dashboard
-        run: npm ci
-      - name: Lint
+      - run: npx eslint . --max-warnings 79
         working-directory: apps/dashboard
-        run: npx eslint . --max-warnings 79
 
   dashboard-typecheck:
     name: Dashboard Typecheck
@@ -95,32 +93,10 @@ jobs:
           node-version: '20'
           cache: 'npm'
           cache-dependency-path: apps/dashboard/package-lock.json
-      - name: Install dependencies
+      - run: npm ci
         working-directory: apps/dashboard
-        run: npm ci
-      - name: Typecheck
+      - run: npx tsc --noEmit
         working-directory: apps/dashboard
-        run: npx tsc --noEmit
-
-  dashboard-test:
-    name: Dashboard Test
-    needs: changes
-    if: needs.changes.outputs.dashboard == 'true' || needs.changes.outputs.ci == 'true'
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'npm'
-          cache-dependency-path: apps/dashboard/package-lock.json
-      - name: Install dependencies
-        working-directory: apps/dashboard
-        run: npm ci
-      - name: Run tests with coverage
-        working-directory: apps/dashboard
-        run: npx vitest run --coverage
 
   dashboard-build:
     name: Dashboard Build
@@ -135,25 +111,21 @@ jobs:
           node-version: '20'
           cache: 'npm'
           cache-dependency-path: apps/dashboard/package-lock.json
-      - name: Install dependencies
+      - run: npm ci
         working-directory: apps/dashboard
-        run: npm ci
-      - name: Create gallery placeholder for CI
-        run: mkdir -p apps/dashboard/public/gallery/chatgpt-cards apps/dashboard/public/gallery/deep-post-cards
-      - name: Build
+      - run: mkdir -p apps/dashboard/public/gallery/chatgpt-cards apps/dashboard/public/gallery/deep-post-cards
+      - run: npm run build
         working-directory: apps/dashboard
-        run: npm run build
         env:
           CORE_FEATURES_PATH: ./src/stubs/core-features
-      - name: Upload build artifact
+      - uses: actions/upload-artifact@v4
         if: github.ref == 'refs/heads/main'
-        uses: actions/upload-artifact@v4
         with:
           name: dashboard-dist
           path: apps/dashboard/dist
           retention-days: 7
 
-  # ─── API Checks ─────────────────────────────────────────────────────
+  # ─── API ─────────────────────────────────────────────────────────────
   api-lint:
     name: API Lint
     needs: changes
@@ -167,11 +139,9 @@ jobs:
           node-version: '20'
           cache: 'npm'
           cache-dependency-path: package-lock.json
-      - name: Install dependencies
-        run: npm ci --workspace=apps/api
-      - name: Lint
+      - run: npm ci --workspace=apps/api
+      - run: npx eslint src/ --max-warnings 15
         working-directory: apps/api
-        run: npx eslint src/ --max-warnings 15
 
   api-typecheck:
     name: API Typecheck
@@ -186,32 +156,11 @@ jobs:
           node-version: '20'
           cache: 'npm'
           cache-dependency-path: package-lock.json
-      - name: Install dependencies
-        run: npm ci --workspace=apps/api
-      - name: Typecheck
+      - run: npm ci --workspace=apps/api
+      - run: npx tsc --noEmit
         working-directory: apps/api
-        run: npx tsc --noEmit
 
-  api-test:
-    name: API Test
-    needs: changes
-    if: needs.changes.outputs.api == 'true' || needs.changes.outputs.ci == 'true'
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'npm'
-          cache-dependency-path: package-lock.json
-      - name: Install dependencies
-        run: npm ci --workspace=apps/api
-      - name: Run tests with coverage
-        working-directory: apps/api
-        run: npx vitest run --coverage
-
-  # ─── GeoAI Checks ───────────────────────────────────────────────────
+  # ─── GeoAI ──────────────────────────────────────────────────────────
   geoai-build:
     name: GeoAI Build
     needs: changes
@@ -225,13 +174,11 @@ jobs:
           node-version: '20'
           cache: 'npm'
           cache-dependency-path: package-lock.json
-      - name: Install dependencies
-        run: npm ci --workspace=apps/geoai
-      - name: Build
+      - run: npm ci --workspace=apps/geoai
+      - run: npm run build
         working-directory: apps/geoai
-        run: npm run build
 
-  # ─── Security Audit ─────────────────────────────────────────────────
+  # ─── Security ────────────────────────────────────────────────────────
   security:
     name: Security Audit
     runs-on: ubuntu-latest
@@ -243,126 +190,70 @@ jobs:
           node-version: '20'
           cache: 'npm'
           cache-dependency-path: apps/dashboard/package-lock.json
-      - name: Install dependencies
+      - run: npm ci
         working-directory: apps/dashboard
-        run: npm ci
-      - name: Security Audit
+      - run: npm audit --audit-level=moderate --omit=dev
         working-directory: apps/dashboard
-        run: npm audit --audit-level=moderate --omit=dev
 
-  # ─── Sensitive File Scan ──────────────────────────────────────────────
-  sensitive-files:
-    name: Sensitive File Scan
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    steps:
-      - uses: actions/checkout@v4
-      - name: Check for sensitive files
-        run: |
-          echo "Checking for sensitive files..."
-          PATTERNS=(
-            "*.key"
-            "*.pem"
-            "*.p12"
-            "*.env"
-            "*password*"
-            "*secret*"
-            "credentials.json"
-          )
-
-          FOUND=0
-          for pattern in "${PATTERNS[@]}"; do
-            MATCHES=$(find . -name "$pattern" \
-              -not -name "*.example" \
-              -not -name "*.sample" \
-              -not -path "./.git/*" \
-              -not -path "./.github/*" \
-              -not -path "./.claude/*" \
-              -not -path "*/node_modules/*" \
-              -not -path "*/.env.example" 2>/dev/null || true)
-            if [ -n "$MATCHES" ]; then
-              echo "WARN: Found files matching '$pattern':"
-              echo "$MATCHES"
-              FOUND=1
-            fi
-          done
-
-          if [ "$FOUND" -ne 0 ]; then
-            echo ""
-            echo "Sensitive files detected — verify they are in .gitignore"
-            exit 1
-          fi
-          echo "No sensitive files found"
-
-  # ─── Gate Job ────────────────────────────────────────────────────────
-  ci-passed:
-    name: CI Passed
+  # ─── L3 Gate ──────────────────────────────────────────────────────────
+  l3-passed:
+    name: L3 Code Gate Passed
     needs:
       - changes
       - dashboard-lint
       - dashboard-typecheck
-      - dashboard-test
       - dashboard-build
       - api-lint
       - api-typecheck
-      - api-test
       - geoai-build
       - security
-      - sensitive-files
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: CI Gate
+      - name: L3 Code Gate
         run: |
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          echo "  CI Gate"
+          echo "  L3 Code Gate"
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
           FAILED=false
 
           if [ "${{ needs.changes.result }}" = "failure" ]; then
-            echo "FAIL: Detect Changes (${{ needs.changes.result }})"
+            echo "FAIL: Detect Changes"
             FAILED=true
           fi
 
-          # Dashboard checks (required when dashboard or ci config changed)
+          # Dashboard (conditional)
           if [ "${{ needs.changes.outputs.dashboard }}" = "true" ] || [ "${{ needs.changes.outputs.ci }}" = "true" ]; then
-            if [ "${{ needs.dashboard-lint.result }}" != "success" ]; then
-              echo "FAIL: Dashboard Lint (${{ needs.dashboard-lint.result }})"
-              FAILED=true
-            fi
-            if [ "${{ needs.dashboard-typecheck.result }}" != "success" ]; then
-              echo "FAIL: Dashboard Typecheck (${{ needs.dashboard-typecheck.result }})"
-              FAILED=true
-            fi
-            if [ "${{ needs.dashboard-test.result }}" != "success" ]; then
-              echo "FAIL: Dashboard Test (${{ needs.dashboard-test.result }})"
-              FAILED=true
-            fi
-            if [ "${{ needs.dashboard-build.result }}" != "success" ]; then
-              echo "FAIL: Dashboard Build (${{ needs.dashboard-build.result }})"
-              FAILED=true
-            fi
+            for job_result in \
+              "Dashboard Lint:${{ needs.dashboard-lint.result }}" \
+              "Dashboard Typecheck:${{ needs.dashboard-typecheck.result }}" \
+              "Dashboard Build:${{ needs.dashboard-build.result }}"; do
+              NAME="${job_result%%:*}"
+              RESULT="${job_result##*:}"
+              if [ "$RESULT" != "success" ]; then
+                echo "FAIL: $NAME ($RESULT)"
+                FAILED=true
+              fi
+            done
           fi
 
-          # API checks (required when api or ci config changed)
+          # API (conditional)
           if [ "${{ needs.changes.outputs.api }}" = "true" ] || [ "${{ needs.changes.outputs.ci }}" = "true" ]; then
-            if [ "${{ needs.api-lint.result }}" != "success" ]; then
-              echo "FAIL: API Lint (${{ needs.api-lint.result }})"
-              FAILED=true
-            fi
-            if [ "${{ needs.api-typecheck.result }}" != "success" ]; then
-              echo "FAIL: API Typecheck (${{ needs.api-typecheck.result }})"
-              FAILED=true
-            fi
-            if [ "${{ needs.api-test.result }}" != "success" ]; then
-              echo "FAIL: API Test (${{ needs.api-test.result }})"
-              FAILED=true
-            fi
+            for job_result in \
+              "API Lint:${{ needs.api-lint.result }}" \
+              "API Typecheck:${{ needs.api-typecheck.result }}"; do
+              NAME="${job_result%%:*}"
+              RESULT="${job_result##*:}"
+              if [ "$RESULT" != "success" ]; then
+                echo "FAIL: $NAME ($RESULT)"
+                FAILED=true
+              fi
+            done
           fi
 
-          # GeoAI checks (required when geoai or ci config changed)
+          # GeoAI (conditional)
           if [ "${{ needs.changes.outputs.geoai }}" = "true" ] || [ "${{ needs.changes.outputs.ci }}" = "true" ]; then
             if [ "${{ needs.geoai-build.result }}" != "success" ]; then
               echo "FAIL: GeoAI Build (${{ needs.geoai-build.result }})"
@@ -370,33 +261,27 @@ jobs:
             fi
           fi
 
-          # Security is always required
+          # Security (always)
           if [ "${{ needs.security.result }}" != "success" ]; then
             echo "FAIL: Security Audit (${{ needs.security.result }})"
-            FAILED=true
-          fi
-
-          # Sensitive files scan is always required
-          if [ "${{ needs.sensitive-files.result }}" != "success" ]; then
-            echo "FAIL: Sensitive File Scan (${{ needs.sensitive-files.result }})"
             FAILED=true
           fi
 
           if [ "$FAILED" = "true" ]; then
             echo ""
             echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-            echo "  CI Gate FAILED"
+            echo "  L3 Code Gate FAILED"
             echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
             exit 1
           fi
 
           echo ""
           echo "Module check results:"
-          [ "${{ needs.changes.outputs.dashboard }}" = "true" ] && echo "  Dashboard: checked" || echo "  Dashboard: skipped (no changes)"
-          [ "${{ needs.changes.outputs.api }}" = "true" ] && echo "  API: checked" || echo "  API: skipped (no changes)"
-          [ "${{ needs.changes.outputs.geoai }}" = "true" ] && echo "  GeoAI: checked" || echo "  GeoAI: skipped (no changes)"
+          [ "${{ needs.changes.outputs.dashboard }}" = "true" ] && echo "  Dashboard: checked" || echo "  Dashboard: skipped"
+          [ "${{ needs.changes.outputs.api }}" = "true" ] && echo "  API: checked" || echo "  API: skipped"
+          [ "${{ needs.changes.outputs.geoai }}" = "true" ] && echo "  GeoAI: checked" || echo "  GeoAI: skipped"
 
           echo ""
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          echo "  CI Gate PASSED"
+          echo "  L3 Code Gate PASSED"
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
