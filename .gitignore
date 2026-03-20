@@ -124,12 +124,25 @@ workspace/
 # Claude Code worktrees
 .claude/worktrees/
 
-# 遗留临时目录（不提交）
+# 遗留临时目录和过程产物（不提交）
 debug-toutiao-screenshots/
 .reports/
 content-output/
 .heartbeat-*
 .worktrees/
+.security/
+docs/heartbeat/
+
+# 过期的一次性文档（不提交）
+.prd.md
+.prd-*.md
+.dod-*.md
+.dod.md
+quality-summary.json
+.quality-evidence.json
+FEATURES.md
+FEATURES_STATUS.md
+LEARNINGS.md
 
 # Dev workflow 产物
 .task-*.md
