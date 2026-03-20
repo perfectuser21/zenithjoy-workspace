@@ -166,10 +166,9 @@ jobs:
         with:
           node-version: '20'
           cache: 'npm'
-          cache-dependency-path: apps/api/package-lock.json
+          cache-dependency-path: package-lock.json
       - name: Install dependencies
-        working-directory: apps/api
-        run: npm ci
+        run: npm ci --workspace=apps/api
       - name: Typecheck
         working-directory: apps/api
         run: npx tsc --noEmit
@@ -186,10 +185,9 @@ jobs:
         with:
           node-version: '20'
           cache: 'npm'
-          cache-dependency-path: apps/api/package-lock.json
+          cache-dependency-path: package-lock.json
       - name: Install dependencies
-        working-directory: apps/api
-        run: npm ci
+        run: npm ci --workspace=apps/api
       - name: Run tests
         working-directory: apps/api
         run: npx vitest run
@@ -207,10 +205,9 @@ jobs:
         with:
           node-version: '20'
           cache: 'npm'
-          cache-dependency-path: apps/geoai/package-lock.json
+          cache-dependency-path: package-lock.json
       - name: Install dependencies
-        working-directory: apps/geoai
-        run: npm ci
+        run: npm ci --workspace=apps/geoai
       - name: Build
         working-directory: apps/geoai
         run: npm run build
