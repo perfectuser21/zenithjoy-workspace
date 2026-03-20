@@ -71,7 +71,7 @@ function AppContent() {
   }
 
   // 如果未登录且不在登录页，且当前路由需要认证，显示登录页
-  if (!isAuthenticated && !location.pathname.startsWith('/login') && !currentRouteAllowsUnauthenticated) {
+  if (!isAuthenticated && !location.pathname.startsWith('/login') && !location.pathname.startsWith('/content-factory') && !currentRouteAllowsUnauthenticated) {
     return <FeishuLogin />;
   }
 
