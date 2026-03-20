@@ -1,0 +1,68 @@
+name: L1 Process Gate
+
+# L1: 流程检查 — 每个 PR 必跑（~2min）
+# 职责：PR 标题格式、commit message 规范
+
+on:
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: l1-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pr-title:
+    name: PR Title Format
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check PR title follows conventional commits
+        run: |
+          TITLE="${{ github.event.pull_request.title }}"
+          echo "PR Title: $TITLE"
+
+          # Conventional commits pattern: type(scope): description
+          # type: feat, fix, docs, chore, test, refactor, style, ci, perf, build
+          if echo "$TITLE" | grep -qE "^(feat|fix|docs|chore|test|refactor|style|ci|perf|build)(\(.+\))?!?:"; then
+            echo "PR title follows conventional commits format"
+          else
+            echo ""
+            echo "PR title does not follow conventional commits format"
+            echo ""
+            echo "Expected: <type>(<scope>): <description>"
+            echo "Types: feat, fix, docs, chore, test, refactor, style, ci, perf, build"
+            echo "Examples:"
+            echo "  feat(dashboard): add user profile page"
+            echo "  fix(api): handle null response from database"
+            echo "  docs: update README"
+            exit 1
+          fi
+
+  # ─── L1 Gate ──────────────────────────────────────────────────────────
+  l1-passed:
+    name: L1 Process Gate Passed
+    needs: [pr-title]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: L1 Process Gate
+        run: |
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "  L1 Process Gate"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+          if [ "${{ needs.pr-title.result }}" != "success" ]; then
+            echo "FAIL: PR Title Format (${{ needs.pr-title.result }})"
+            echo ""
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            echo "  L1 Process Gate FAILED"
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            exit 1
+          fi
+
+          echo ""
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "  L1 Process Gate PASSED"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
