@@ -154,6 +154,25 @@ jobs:
           retention-days: 7
 
   # ─── API Checks ─────────────────────────────────────────────────────
+  api-lint:
+    name: API Lint
+    needs: changes
+    if: needs.changes.outputs.api == 'true' || needs.changes.outputs.ci == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: package-lock.json
+      - name: Install dependencies
+        run: npm ci --workspace=apps/api
+      - name: Lint
+        working-directory: apps/api
+        run: npx eslint src/ --max-warnings 15
+
   api-typecheck:
     name: API Typecheck
     needs: changes
@@ -240,6 +259,7 @@ jobs:
       - dashboard-typecheck
       - dashboard-test
       - dashboard-build
+      - api-lint
       - api-typecheck
       - api-test
       - geoai-build
@@ -283,6 +303,10 @@ jobs:
 
           # API checks (required when api or ci config changed)
           if [ "${{ needs.changes.outputs.api }}" = "true" ] || [ "${{ needs.changes.outputs.ci }}" = "true" ]; then
+            if [ "${{ needs.api-lint.result }}" != "success" ]; then
+              echo "FAIL: API Lint (${{ needs.api-lint.result }})"
+              FAILED=true
+            fi
             if [ "${{ needs.api-typecheck.result }}" != "success" ]; then
               echo "FAIL: API Typecheck (${{ needs.api-typecheck.result }})"
               FAILED=true

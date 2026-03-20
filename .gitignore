@@ -123,3 +123,16 @@ services/creator/data/
 workspace/
 # Claude Code worktrees
 .claude/worktrees/
+
+# 遗留临时目录（不提交）
+debug-toutiao-screenshots/
+.reports/
+content-output/
+.heartbeat-*
+.worktrees/
+
+# Dev workflow 产物
+.task-*.md
+.dev-agent-seal.*
+.dev-seal.*
+.cecelia-run-id
