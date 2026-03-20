@@ -118,6 +118,7 @@ async function createPipeline(params: {
   keyword: string
   content_type: string
   priority?: string
+  platforms?: string[]
 }): Promise<Pipeline> {
   const res = await fetch('/api/brain/pipelines', {
     method: 'POST',
@@ -130,6 +131,39 @@ async function createPipeline(params: {
   }
   return res.json()
 }
+
+async function runPipeline(id: string): Promise<void> {
+  const res = await fetch(`/api/brain/pipelines/${id}/run`, { method: 'POST' })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: '执行失败' }))
+    throw new Error(err.error || '执行失败')
+  }
+}
+
+async function fetchPipelineStages(id: string): Promise<Record<string, { status: string }>> {
+  const res = await fetch(`/api/brain/pipelines/${id}/stages`)
+  if (!res.ok) return {}
+  const data = await res.json()
+  return data.stages || {}
+}
+
+async function fetchPipelineOutput(id: string): Promise<{ keyword: string; images?: { cover: string; cards: string[] } } | null> {
+  const res = await fetch(`/api/brain/pipelines/${id}/output`)
+  if (!res.ok) return null
+  const data = await res.json()
+  return data.output || null
+}
+
+const ALL_PLATFORMS = [
+  { id: 'douyin', label: '抖音' },
+  { id: 'xiaohongshu', label: '小红书' },
+  { id: 'wechat', label: '公众号' },
+  { id: 'zhihu', label: '知乎' },
+  { id: 'weibo', label: '微博' },
+  { id: 'toutiao', label: '头条' },
+  { id: 'kuaishou', label: '快手' },
+  { id: 'shipinhao', label: '视频号' },
+]
 
 // ─── 阶段进度条 ────────────────────────────────────────────────
 
@@ -163,6 +197,7 @@ function CreatePipelineForm({ onCreated }: { onCreated: () => void }) {
   const [contentType, setContentType] = useState('')
   const [notebookId, setNotebookId] = useState('')
   const [angle, setAngle] = useState('')
+  const [platforms, setPlatforms] = useState<string[]>(['douyin', 'xiaohongshu', 'wechat'])
   const [contentTypes, setContentTypes] = useState<string[]>([])
   const [creating, setCreating] = useState(false)
   const [createError, setCreateError] = useState('')
@@ -187,7 +222,7 @@ function CreatePipelineForm({ onCreated }: { onCreated: () => void }) {
     setCreating(true)
     setCreateError('')
     try {
-      await createPipeline({ keyword: trimmed, content_type: contentType })
+      await createPipeline({ keyword: trimmed, content_type: contentType, platforms })
       setKeyword('')
       setAngle('')
       setNotebookId('')
@@ -282,6 +317,33 @@ function CreatePipelineForm({ onCreated }: { onCreated: () => void }) {
         </div>
       </div>
 
+      <div className="mt-4">
+          <label className="block text-xs font-medium text-gray-600 mb-2">
+            目标平台
+          </label>
+          <div className="flex flex-wrap gap-2">
+            {ALL_PLATFORMS.map(p => {
+              const selected = platforms.includes(p.id)
+              return (
+                <button
+                  key={p.id}
+                  type="button"
+                  onClick={() => setPlatforms(prev =>
+                    selected ? prev.filter(x => x !== p.id) : [...prev, p.id]
+                  )}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
+                    selected
+                      ? 'bg-indigo-50 text-indigo-700 border-indigo-300'
+                      : 'bg-white text-gray-500 border-gray-200 hover:border-gray-300'
+                  }`}
+                >
+                  {p.label}
+                </button>
+              )
+            })}
+          </div>
+        </div>
+
       {createError && (
         <div className="mt-3 flex items-center gap-1.5 text-sm text-red-600">
           <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />
@@ -305,10 +367,33 @@ function CreatePipelineForm({ onCreated }: { onCreated: () => void }) {
 
 // ─── Pipeline 卡片 ─────────────────────────────────────────────
 
-function PipelineCard({ pipeline }: { pipeline: Pipeline }) {
+function PipelineCard({ pipeline, onRefresh }: { pipeline: Pipeline; onRefresh?: () => void }) {
   const ct = getContentType(pipeline)
   const { label: typeLabel, icon: Icon } = CONTENT_TYPE_MAP[ct] || CONTENT_TYPE_MAP.post
   const keyword = pipeline.payload?.keyword as string | undefined
+  const [running, setRunning] = useState(false)
+  const [showOutput, setShowOutput] = useState(false)
+  const [output, setOutput] = useState<{ keyword: string; images?: { cover: string; cards: string[] } } | null>(null)
+
+  const handleRun = async () => {
+    setRunning(true)
+    try {
+      await runPipeline(pipeline.id)
+      onRefresh?.()
+    } catch {
+      // 静默处理
+    } finally {
+      setRunning(false)
+    }
+  }
+
+  const handlePreview = async () => {
+    if (!showOutput) {
+      const data = await fetchPipelineOutput(pipeline.id)
+      setOutput(data)
+    }
+    setShowOutput(!showOutput)
+  }
 
   return (
     <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-3 hover:shadow-md transition-shadow">
@@ -328,17 +413,55 @@ function PipelineCard({ pipeline }: { pipeline: Pipeline }) {
         <div className="text-xs text-gray-400 mb-0.5">{pipeline.payload.content_type}</div>
       )}
       <StageProgress status={pipeline.status} />
-      <div className="text-xs text-gray-400 mt-2 flex items-center gap-1">
-        <Clock className="w-3 h-3" />
-        {formatDate(pipeline.created_at)}
+      <div className="flex items-center justify-between mt-2">
+        <div className="text-xs text-gray-400 flex items-center gap-1">
+          <Clock className="w-3 h-3" />
+          {formatDate(pipeline.created_at)}
+        </div>
+        <div className="flex gap-1">
+          {pipeline.status === 'queued' && (
+            <button
+              onClick={handleRun}
+              disabled={running}
+              className="inline-flex items-center gap-1 px-2 py-1 text-xs bg-indigo-600 text-white rounded-md hover:bg-indigo-700 disabled:opacity-50 transition-colors"
+            >
+              {running ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
+              {running ? '执行中' : '开始执行'}
+            </button>
+          )}
+          {pipeline.status === 'completed' && (
+            <button
+              onClick={handlePreview}
+              className="inline-flex items-center gap-1 px-2 py-1 text-xs bg-green-50 text-green-700 rounded-md hover:bg-green-100 transition-colors"
+            >
+              <Eye className="w-3 h-3" />
+              {showOutput ? '收起' : '查看产出'}
+            </button>
+          )}
+        </div>
       </div>
+      {showOutput && output?.images && (
+        <div className="mt-3 border-t border-gray-100 pt-3">
+          <div className="grid grid-cols-3 gap-1.5">
+            <img src={output.images.cover} alt="封面" className="rounded-lg w-full aspect-[3/4] object-cover" />
+            {output.images.cards.slice(0, 2).map((url, i) => (
+              <img key={i} src={url} alt={`卡片${i + 1}`} className="rounded-lg w-full aspect-[9/16] object-cover" />
+            ))}
+          </div>
+          {output.images.cards.length > 2 && (
+            <div className="text-xs text-gray-400 text-center mt-1">
+              共 {output.images.cards.length} 张内容卡
+            </div>
+          )}
+        </div>
+      )}
     </div>
   )
 }
 
 // ─── 看板视图 ────────────────────────────────────────────────
 
-function KanbanView({ pipelines }: { pipelines: Pipeline[] }) {
+function KanbanView({ pipelines, onRefresh }: { pipelines: Pipeline[]; onRefresh?: () => void }) {
   const columns = [
     { label: '排队中', filter: (p: Pipeline) => p.status === 'queued' },
     { label: '进行中', filter: (p: Pipeline) => p.status === 'in_progress' },
@@ -360,7 +483,7 @@ function KanbanView({ pipelines }: { pipelines: Pipeline[] }) {
               {items.length === 0 ? (
                 <div className="text-xs text-gray-400 text-center py-4">暂无</div>
               ) : (
-                items.map(p => <PipelineCard key={p.id} pipeline={p} />)
+                items.map(p => <PipelineCard key={p.id} pipeline={p} onRefresh={onRefresh} />)
               )}
             </div>
           </div>
@@ -579,9 +702,15 @@ export default function ContentFactoryPage() {
 
   useEffect(() => {
     load()
-    const t = setInterval(load, 30000)
-    return () => clearInterval(t)
   }, [])
+
+  // 有活跃 pipeline 时 5 秒轮询，否则 30 秒
+  useEffect(() => {
+    const hasActive = pipelines.some(p => p.status === 'in_progress')
+    const interval = hasActive ? 5000 : 30000
+    const t = setInterval(load, interval)
+    return () => clearInterval(t)
+  }, [pipelines])
 
   const activeCount = pipelines.filter(p => p.status === 'in_progress' || p.status === 'queued').length
 
@@ -635,7 +764,7 @@ export default function ContentFactoryPage() {
         </div>
       ) : (
         <>
-          {activeTab === 'kanban' && <KanbanView pipelines={pipelines} />}
+          {activeTab === 'kanban' && <KanbanView pipelines={pipelines} onRefresh={load} />}
           {activeTab === 'schedule' && <ScheduleView pipelines={pipelines} />}
           {activeTab === 'execution' && <ExecutionView pipelines={pipelines} />}
         </>
