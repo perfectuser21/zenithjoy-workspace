@@ -1,12 +1,14 @@
 /**
- * Jest Test Setup
+ * Vitest Test Setup
  * 为所有测试提供统一的 mock 和配置
  */
 
+import { vi } from 'vitest';
+
 // Mock database connection for all tests
-jest.mock('../db/connection', () => {
-  const mockQuery = jest.fn();
-  const mockEnd = jest.fn();
+vi.mock('../db/connection', () => {
+  const mockQuery = vi.fn();
+  const mockEnd = vi.fn();
 
   return {
     default: {
@@ -17,17 +19,17 @@ jest.mock('../db/connection', () => {
 });
 
 // Mock ToAPI client for unit tests
-jest.mock('../clients/toapi.client', () => {
+vi.mock('../clients/toapi.client', () => {
   return {
-    ToAPIClient: jest.fn().mockImplementation(() => ({
-      createVideoGeneration: jest.fn().mockResolvedValue({
+    ToAPIClient: vi.fn().mockImplementation(() => ({
+      createVideoGeneration: vi.fn().mockResolvedValue({
         id: 'mock-task-id',
         model: 'veo3.1-fast',
         status: 'queued',
         progress: 0,
         created_at: Date.now(),
       }),
-      getTaskStatus: jest.fn().mockResolvedValue({
+      getTaskStatus: vi.fn().mockResolvedValue({
         id: 'mock-task-id',
         model: 'veo3.1-fast',
         status: 'completed',
