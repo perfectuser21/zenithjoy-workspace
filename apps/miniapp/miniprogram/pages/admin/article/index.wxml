@@ -1,0 +1,46 @@
+<!--pages/admin/article/index.wxml-->
+<view class="container">
+  <view class="header">
+    <view class="title">文章管理</view>
+    <view class="add-btn" bindtap="navigateToAdd">添加文章</view>
+  </view>
+  
+  <view class="article-list">
+    <block wx:if="{{articles.length > 0}}">
+      <view class="article-item" wx:for="{{articles}}" wx:key="_id">
+        <view class="article-content" data-id="{{item._id}}" bindtap="previewArticle">
+          <image class="article-cover" src="{{item.cover}}" mode="aspectFill"></image>
+          <view class="article-info">
+            <view class="article-title">{{item.title}}</view>
+            <view class="article-desc">{{item.desc}}</view>
+            <view class="article-meta">
+              <text>{{item.date}}</text>
+              <text>{{item.author}}</text>
+              <text>浏览 {{item.views}}</text>
+            </view>
+          </view>
+        </view>
+        <view class="article-actions">
+          <view class="action-btn edit" data-id="{{item._id}}" bindtap="navigateToEdit">编辑</view>
+          <view class="action-btn delete" data-id="{{item._id}}" bindtap="deleteArticle">删除</view>
+        </view>
+      </view>
+      
+      <view class="load-more" bindtap="loadMore" wx:if="{{hasMore}}">
+        <text>加载更多</text>
+      </view>
+      <view class="no-more" wx:else>
+        <text>没有更多文章了</text>
+      </view>
+    </block>
+    
+    <view class="no-data" wx:elif="{{!isLoading}}">
+      <text>暂无文章</text>
+      <view class="add-first" bindtap="navigateToAdd">添加第一篇文章</view>
+    </view>
+    
+    <view class="loading" wx:if="{{isLoading}}">
+      <text>加载中...</text>
+    </view>
+  </view>
+</view> 

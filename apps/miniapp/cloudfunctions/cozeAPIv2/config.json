@@ -1,0 +1,8 @@
+{
+  "timeout": 600,
+  "envVariables": {},
+  "vpc": {
+    "enableAccess": false
+  },
+  "triggers": []
+} 

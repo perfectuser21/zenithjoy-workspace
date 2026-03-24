@@ -1,0 +1,81 @@
+<!--pages/user/user.wxml-->
+<view class="container">
+  <!-- 用户信息区域 -->
+  <view class="user-section">
+    <!-- 用户头像和昵称 -->
+    <view class="avatar-section" wx:if="{{!hasUserInfo && canIUseGetUserProfile}}">
+      <view class="avatar-wrapper">
+        <image class="avatar" src="/images/default-avatar.png"></image>
+      </view>
+      <view class="user-info">
+        <view class="nickname">未登录</view>
+        <view class="login-btn-container">
+          <button class="login-btn" bindtap="startLogin">微信一键登录</button>
+        </view>
+      </view>
+    </view>
+    <view class="avatar-section" wx:else>
+      <view class="avatar-wrapper">
+        <image class="avatar" src="{{hasUserInfo ? userInfo.avatarUrl : '/images/default-avatar.png'}}"></image>
+      </view>
+      <view class="user-info">
+        <view class="nickname">{{hasUserInfo ? userInfo.nickName : '点击登录'}}</view>
+        <view class="member-tag {{membership.level === 'premium' ? 'vip' : (membership.level === 'standard' ? 'standard' : '')}}">
+          {{membership.name || '普通会员'}}
+        </view>
+        <!-- 显示已绑定的手机号 -->
+        <view class="phone-info" wx:if="{{phoneNumber}}">
+          <text class="phone-text">{{phoneNumber}}</text>
+        </view>
+        <!-- 用于手动绑定手机号的按钮 -->
+        <view class="phone-btn-container" wx:else>
+          <button class="phone-btn" open-type="getPhoneNumber" bindgetphonenumber="getPhoneNumber">绑定手机号</button>
+        </view>
+      </view>
+    </view>
+  </view>
+  
+  <!-- 隐藏的获取手机号按钮，仅在需要时触发 -->
+  <button class="hidden-btn" open-type="getPhoneNumber" bindgetphonenumber="getPhoneNumber" id="phoneBtn"></button>
+  
+  <!-- 功能区域 -->
+  <view class="section-title">我的服务</view>
+  
+  <view class="menu-list">
+    <!-- 会员中心 -->
+    <view class="menu-item" bindtap="navigateToMembership">
+      <view class="menu-icon vip-icon">👑</view>
+      <view class="menu-text">会员中心</view>
+      <view class="menu-arrow">›</view>
+    </view>
+    
+    <!-- 聊天记录 -->
+    <view class="menu-item" bindtap="navigateToChatHistory">
+      <view class="menu-icon chat-icon">💬</view>
+      <view class="menu-text">聊天记录</view>
+      <view class="menu-arrow">›</view>
+    </view>
+    
+    <!-- 管理员入口 -->
+    <view class="menu-item" bindtap="navigateToAdmin" wx:if="{{isAdmin}}">
+      <view class="menu-icon admin-icon">🔒</view>
+      <view class="menu-text">管理中心</view>
+      <view class="menu-arrow">›</view>
+    </view>
+  </view>
+  
+  <view class="section-title">更多</view>
+  
+  <view class="menu-list">
+    <!-- 清除缓存 -->
+    <view class="menu-item" bindtap="clearCache">
+      <view class="menu-icon setting-icon">🗑️</view>
+      <view class="menu-text">清除缓存</view>
+      <view class="menu-arrow">›</view>
+    </view>
+  </view>
+  
+  <view class="footer">
+    <view class="footer-text">AI智能助手 v1.0.1</view>
+  </view>
+</view>

@@ -1,0 +1,28 @@
+<!--聊天记录页面-->
+<view class="container">
+  <view class="header">
+    <view class="title">聊天记录</view>
+  </view>
+  
+  <view class="chat-list" wx:if="{{chatRecords && chatRecords.length > 0}}">
+    <view class="chat-item" wx:for="{{chatRecords}}" wx:key="index" bindtap="navigateToChat" data-id="{{item._id}}">
+      <view class="chat-date">{{item.formatDate}}</view>
+      <view class="chat-content">
+        <view class="chat-question">{{item.question}}</view>
+        <view class="chat-answer" wx:if="{{item.answer}}">{{item.answer}}</view>
+        <view class="chat-status" wx:else>{{item.status || '处理中'}}</view>
+      </view>
+    </view>
+  </view>
+  
+  <view class="empty-state" wx:else>
+    <image class="empty-image" src="/images/empty-chat.png" mode="aspectFit"></image>
+    <view class="empty-text">暂无聊天记录</view>
+    <view class="empty-tip">前往首页开始与AI助手对话</view>
+    <button class="go-chat-btn" bindtap="navigateToIndex">立即对话</button>
+  </view>
+  
+  <view class="loading" wx:if="{{isLoading}}">
+    <view class="loading-icon"></view>
+  </view>
+</view> 

@@ -1,0 +1,6 @@
+{
+  "dependencies": {
+    "@babel/runtime": "^7.26.10",
+    "@vant/weapp": "^1.11.7"
+  }
+}
