@@ -1,0 +1,110 @@
+<view class="membership-container">
+  <!-- 用户信息区 -->
+  <view class="user-section">
+    <view class="avatar-container" bindtap="getUserProfile" wx:if="{{!hasUserInfo}}">
+      <image class="avatar" src="/images/default-avatar.png" mode="aspectFill"></image>
+      <view class="get-info-text">点击授权</view>
+    </view>
+    <view class="avatar-container" wx:else>
+      <image class="avatar" src="{{userInfo.avatarUrl}}" mode="aspectFill"></image>
+    </view>
+    <view class="user-info">
+      <view class="nickname" wx:if="{{hasUserInfo}}">{{userInfo.nickName}}</view>
+      <view class="nickname" wx:else>未登录</view>
+      <view class="member-tag {{membership.level === 'premium' ? 'vip' : (membership.level === 'standard' ? 'standard' : '')}}">
+        {{membership.name || '普通会员'}}
+      </view>
+    </view>
+  </view>
+  
+  <!-- 会员卡片区 -->
+  <view class="member-card {{membership.level === 'premium' ? 'premium-card' : (membership.level === 'standard' ? 'standard-card' : 'free-card')}}">
+    <view class="member-card-header">
+      <view class="member-title">{{membership.name || '普通会员'}}</view>
+    </view>
+    <view class="member-card-body">
+      <view class="member-info-item">
+        <view class="info-label">会员状态</view>
+        <view class="info-value">{{membership.level !== 'free' ? '已开通' : '未开通'}}</view>
+      </view>
+      <view class="member-info-item" wx:if="{{membership.level !== 'free'}}">
+        <view class="info-label">到期时间</view>
+        <view class="info-value">{{formatDate(membership.expireDate)}}</view>
+      </view>
+      <view class="member-info-item">
+        <view class="info-label">今日使用</view>
+        <view class="info-value">{{usageToday}} 次</view>
+      </view>
+      <view class="member-info-item">
+        <view class="info-label">剩余次数</view>
+        <view class="info-value">{{remainingQuota < 0 ? '无限' : remainingQuota}} 次</view>
+      </view>
+    </view>
+  </view>
+  
+  <!-- 使用记录 -->
+  <view class="usage-records">
+    <view class="section-title">使用记录</view>
+    <view class="record-list" wx:if="{{usageRecords.length > 0}}">
+      <view class="record-item" wx:for="{{usageRecords}}" wx:key="index">
+        <view class="record-time">{{item.time}}</view>
+        <view class="record-count">{{item.count}} 次</view>
+      </view>
+    </view>
+    <view class="no-records" wx:else>
+      暂无使用记录
+    </view>
+  </view>
+  
+  <!-- 会员权益区 -->
+  <view class="member-benefits">
+    <view class="section-title">会员权益</view>
+    <view class="benefits-list">
+      <block wx:for="{{membershipPlan.benefits}}" wx:key="index">
+        <view class="benefit-item">
+          <icon type="success" size="18" color="#07c160"></icon>
+          <text>{{item}}</text>
+        </view>
+      </block>
+    </view>
+  </view>
+  
+  <!-- 会员套餐列表 -->
+  <view class="membership-plans">
+    <view class="section-title">会员套餐</view>
+    <view class="plans-list">
+      <block wx:for="{{plans}}" wx:key="id">
+        <view class="plan-item {{item.id === membership.level ? 'current-plan' : ''}}">
+          <view class="plan-header">
+            <view class="plan-name">{{item.name}}</view>
+            <view class="plan-tag" wx:if="{{item.id === membership.level}}">当前</view>
+          </view>
+          <view class="plan-price">
+            <text class="price-unit">¥</text>
+            <text class="price-value">{{item.price}}</text>
+            <text class="price-original" wx:if="{{item.originalPrice > 0}}">¥{{item.originalPrice}}</text>
+          </view>
+          <view class="plan-desc">{{item.duration === 0 ? '永久有效' : item.duration + '天'}}</view>
+          <view class="plan-features">
+            <view class="feature-item" wx:for="{{item.benefits}}" wx:for-item="benefit" wx:key="index">
+              <icon type="success" size="14" color="#07c160"></icon>
+              <text>{{benefit}}</text>
+            </view>
+          </view>
+          <view class="plan-action">
+            <button 
+              class="btn-purchase {{item.id === membership.level ? 'btn-disabled' : ''}}" 
+              disabled="{{item.id === membership.level}}">
+              {{item.id === 'free' ? '免费会员' : (item.id === membership.level ? '当前套餐' : '后台开通')}}
+            </button>
+          </view>
+        </view>
+      </block>
+    </view>
+  </view>
+  
+  <!-- 加载状态 -->
+  <view class="loading-container" wx:if="{{isLoading}}">
+    <view class="loading"></view>
+  </view>
+</view> 

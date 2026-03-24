@@ -1,0 +1,247 @@
+/* pages/user/user.wxss */
+.container {
+  padding: 0 0 40rpx 0;
+  background-color: #f7f7f7;
+  min-height: 100vh;
+}
+
+/* 用户信息区域 */
+.user-section {
+  position: relative;
+  padding: 40rpx 30rpx;
+  background-color: #fff;
+  margin-bottom: 20rpx;
+  border-bottom-left-radius: 20rpx;
+  border-bottom-right-radius: 20rpx;
+  box-shadow: 0 2rpx 10rpx rgba(0, 0, 0, 0.05);
+}
+
+.avatar-section {
+  display: flex;
+  align-items: center;
+}
+
+.avatar-wrapper {
+  width: 120rpx;
+  height: 120rpx;
+  border-radius: 50%;
+  overflow: hidden;
+  margin-right: 30rpx;
+  box-shadow: 0 2rpx 10rpx rgba(0, 0, 0, 0.1);
+  border: 4rpx solid #ffffff;
+}
+
+.avatar {
+  width: 100%;
+  height: 100%;
+}
+
+.user-info {
+  flex: 1;
+}
+
+.nickname {
+  font-size: 36rpx;
+  font-weight: bold;
+  color: #333;
+  margin-bottom: 10rpx;
+}
+
+.login-btn-container {
+  margin-top: 16rpx;
+}
+
+.login-btn {
+  background-color: #07c160;
+  color: white;
+  font-size: 26rpx;
+  padding: 6rpx 24rpx;
+  border-radius: 30rpx;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.member-tag {
+  font-size: 12px;
+  color: #888;
+  background: #f1f1f1;
+  padding: 2px 8px;
+  border-radius: 10px;
+  margin-top: 5px;
+}
+
+/* 手机号样式 */
+.phone-info {
+  margin-top: 8px;
+  font-size: 12px;
+  color: #666;
+}
+
+.phone-text {
+  display: inline-block;
+  padding: 2px 0;
+}
+
+.phone-btn-container {
+  margin-top: 8px;
+}
+
+.phone-btn {
+  font-size: 12px;
+  padding: 0 12px;
+  height: 28px;
+  line-height: 28px;
+  background: #f8f8f8;
+  color: #07c160;
+  border: 1px solid #07c160;
+  border-radius: 14px;
+}
+
+.phone-btn::after {
+  border: none;
+}
+
+.vip {
+  color: #ff9c00;
+  background: #ffefd7;
+}
+
+.member-tag.vip {
+  background-color: #FFD700;
+  color: #8B4513;
+}
+
+.member-tag.standard {
+  background-color: #87CEEB;
+  color: #104E8B;
+}
+
+/* 会员卡片 */
+.member-card {
+  margin: 30rpx;
+  padding: 30rpx;
+  border-radius: 16rpx;
+  background-color: #f9f9f9;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  box-shadow: 0 4rpx 12rpx rgba(0, 0, 0, 0.08);
+  position: relative;
+  overflow: hidden;
+}
+
+.free-card {
+  background-color: #f9f9f9;
+}
+
+.standard-card {
+  background: linear-gradient(135deg, #87CEEB, #4682B4);
+}
+
+.premium-card {
+  background: linear-gradient(135deg, #FFD700, #DAA520);
+}
+
+.card-content {
+  flex: 1;
+}
+
+.card-title {
+  font-size: 32rpx;
+  font-weight: bold;
+  margin-bottom: 10rpx;
+  color: #333;
+}
+
+.standard-card .card-title,
+.premium-card .card-title,
+.standard-card .card-desc,
+.premium-card .card-desc {
+  color: #fff;
+}
+
+.card-desc {
+  font-size: 24rpx;
+  color: #666;
+}
+
+.card-action {
+  margin-left: 20rpx;
+}
+
+.action-btn {
+  padding: 10rpx 30rpx;
+  background-color: #007AFF;
+  color: #fff;
+  border-radius: 30rpx;
+  font-size: 24rpx;
+}
+
+/* 功能区域 */
+.section-title {
+  padding: 30rpx 30rpx 20rpx;
+  font-size: 28rpx;
+  color: #888;
+  font-weight: 500;
+}
+
+.menu-list {
+  background-color: #fff;
+  border-radius: 16rpx;
+  margin: 0 30rpx 30rpx;
+  box-shadow: 0 2rpx 10rpx rgba(0, 0, 0, 0.05);
+}
+
+.menu-item {
+  display: flex;
+  align-items: center;
+  padding: 30rpx;
+  border-bottom: 1rpx solid #f5f5f5;
+}
+
+.menu-item:last-child {
+  border-bottom: none;
+}
+
+.menu-icon {
+  width: 40rpx;
+  height: 40rpx;
+  margin-right: 20rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 36rpx;
+}
+
+.menu-text {
+  flex: 1;
+  font-size: 28rpx;
+  color: #333;
+}
+
+.menu-arrow {
+  color: #ccc;
+  font-size: 36rpx;
+}
+
+/* 页脚 */
+.footer {
+  text-align: center;
+  padding: 40rpx 0;
+}
+
+.footer-text {
+  font-size: 24rpx;
+  color: #999;
+}
+
+/* 隐藏按钮样式 */
+.hidden-btn {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+  padding: 0;
+  margin: 0;
+  overflow: hidden;
+}

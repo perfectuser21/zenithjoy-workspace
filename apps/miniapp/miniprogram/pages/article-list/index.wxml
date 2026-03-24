@@ -1,0 +1,31 @@
+<view class="container">
+  <view class="article-list">
+    <block wx:if="{{articles.length > 0}}">
+      <view 
+        class="article-item" 
+        wx:for="{{articles}}" 
+        wx:key="_id" 
+        bindtap="goToDetail" 
+        data-id="{{item._id}}"
+      >
+        <view class="article-title">{{item.title}}</view>
+        <view class="article-summary">{{item.content}}</view>
+        <view class="article-meta">
+          <text class="article-date">{{item.createTime}}</text>
+        </view>
+      </view>
+    </block>
+    
+    <view wx:if="{{isLoading}}" class="loading">
+      <view class="loading-text">加载中...</view>
+    </view>
+    
+    <view wx:if="{{!isLoading && articles.length === 0}}" class="empty-tip">
+      暂无文章
+    </view>
+    
+    <view wx:if="{{!isLoading && !hasMore && articles.length > 0}}" class="no-more">
+      - 没有更多了 -
+    </view>
+  </view>
+</view> 

@@ -1,0 +1,16 @@
+{
+  "name": "@zenithjoy/miniapp",
+  "version": "0.1.0",
+  "description": "ZenithJoy 微信小程序 - ToC 产品入口",
+  "private": true,
+  "scripts": {
+    "upload": "node scripts/upload.js",
+    "preview": "node scripts/preview.js"
+  },
+  "dependencies": {
+    "@babel/runtime": "^7.24.0"
+  },
+  "devDependencies": {
+    "miniprogram-ci": "^1.9.8"
+  }
+}

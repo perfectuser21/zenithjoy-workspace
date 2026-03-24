@@ -1,0 +1,38 @@
+<!--pages/article-list/article-list.wxml-->
+<view class="container">
+  <view class="header">
+    <image class="logo" src="/images/ai-logo.png" mode="aspectFit"></image>
+    <view class="title">精选文章</view>
+  </view>
+  
+  <!-- 文章列表 -->
+  <view class="article-list">
+    <view class="list-header">
+      <text>推荐文章</text>
+    </view>
+    <block wx:if="{{articles.length > 0}}">
+      <block wx:for="{{articles}}" wx:key="index">
+        <view class="article-item" bindtap="goToDetail" data-url="{{item.url}}" data-id="{{item.id}}">
+          <image class="cover" src="{{item.cover || '/images/default-cover.png'}}" mode="aspectFill"></image>
+          <view class="info">
+            <view class="title">{{item.title}}</view>
+            <view class="desc">{{item.desc}}</view>
+            <view class="footer">
+              <text class="date">{{item.date}}</text>
+              <text class="tag" wx:if="{{item.tags && item.tags[0]}}">{{item.tags[0]}}</text>
+              <text class="tag" wx:else>技术前沿</text>
+            </view>
+          </view>
+        </view>
+      </block>
+    </block>
+    <view wx:elif="{{isLoading}}" class="loading">
+      <image class="loading-icon" src="/images/loading.gif" mode="aspectFit"></image>
+      <text>加载中...</text>
+    </view>
+    <view wx:else class="empty-list">
+      <image src="/images/empty-article.png" mode="aspectFit"></image>
+      <text>暂无文章，敬请期待</text>
+    </view>
+  </view>
+</view>

@@ -1,0 +1,8 @@
+{
+  "usingComponents": {
+    "no-data": "../../components/common/no-data"
+  },
+  "navigationBarTitleText": "AI智能助手",
+  "enablePullDownRefresh": true,
+  "backgroundColor": "#F6F6F6"
+}

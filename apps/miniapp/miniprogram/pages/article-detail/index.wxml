@@ -1,0 +1,24 @@
+<view class="container">
+  <block wx:if="{{isLoading}}">
+    <view class="loading">正在加载文章...</view>
+  </block>
+  
+  <block wx:elif="{{!article}}">
+    <view class="empty-tip">文章不存在或已被删除</view>
+  </block>
+  
+  <block wx:else>
+    <view class="article-header">
+      <view class="article-title">{{article.title}}</view>
+      <view class="article-meta">
+        <text class="article-date">{{article.createTime}}</text>
+      </view>
+    </view>
+    
+    <view class="article-content">{{article.content}}</view>
+    
+    <view class="action-buttons">
+      <button class="copy-btn" bindtap="copyContent">复制全文</button>
+    </view>
+  </block>
+</view> 

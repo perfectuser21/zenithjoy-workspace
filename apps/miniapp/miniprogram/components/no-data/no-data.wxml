@@ -1,0 +1,8 @@
+<view class="no-data-container">
+  <view class="no-data-icon">
+    <icon type="{{icon}}" size="64" color="#dddddd"></icon>
+  </view>
+  <view class="no-data-text">{{text}}</view>
+  <view class="no-data-subtext" wx:if="{{subText}}">{{subText}}</view>
+  <button class="no-data-button" wx:if="{{showButton && buttonText}}" bindtap="handleButtonTap">{{buttonText}}</button>
+</view> 

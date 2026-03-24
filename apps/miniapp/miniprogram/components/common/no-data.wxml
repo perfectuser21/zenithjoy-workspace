@@ -1,0 +1,5 @@
+<!--components/common/no-data.wxml-->
+<view class="no-data-container">
+  <icon type="{{icon}}" size="64"></icon>
+  <text class="no-data-text">{{text}}</text>
+</view> 

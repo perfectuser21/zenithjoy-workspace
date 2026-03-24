@@ -1,0 +1,54 @@
+<!--pages/admin/article/edit.wxml-->
+<view class="container" wx:if="{{!isLoading}}">
+  <view class="form-group">
+    <view class="form-label">文章标题</view>
+    <input class="form-input" placeholder="请输入文章标题" value="{{title}}" bindinput="onTitleInput" maxlength="50" />
+    <view class="form-tips">标题最多50个字符</view>
+  </view>
+
+  <view class="form-group">
+    <view class="form-label">文章摘要</view>
+    <textarea class="form-textarea desc" placeholder="请输入文章摘要（选填，如不填写将自动截取内容前100字符）" value="{{desc}}" bindinput="onDescInput" maxlength="200" />
+    <view class="form-tips">摘要最多200个字符</view>
+  </view>
+
+  <view class="form-group">
+    <view class="form-label">文章内容</view>
+    <textarea class="form-textarea content" placeholder="请输入文章内容" value="{{content}}" bindinput="onContentInput" maxlength="20000" />
+    <view class="form-tips">内容最多20000个字符</view>
+  </view>
+
+  <view class="form-group">
+    <view class="form-label">文章封面</view>
+    <view class="cover-box" bindtap="chooseCover">
+      <image class="cover-preview" src="{{coverPreview}}" mode="aspectFill"></image>
+      <view class="cover-tips">点击更换封面</view>
+    </view>
+  </view>
+
+  <view class="form-group">
+    <view class="form-label">文章标签</view>
+    <view class="tags-container">
+      <view class="tag-item" wx:for="{{tags}}" wx:key="*this">
+        {{item}}
+        <view class="tag-delete" data-index="{{index}}" bindtap="removeTag">×</view>
+      </view>
+      <view class="tag-add" bindtap="addTag" wx:if="{{tags.length < 5}}">+</view>
+    </view>
+    <view class="form-tips">点击"+"添加标签，最多可添加5个标签</view>
+  </view>
+
+  <view class="form-group">
+    <view class="form-label">文章作者</view>
+    <input class="form-input" placeholder="请输入作者名称" value="{{author}}" bindinput="onAuthorInput" maxlength="20" />
+  </view>
+
+  <view class="btn-group">
+    <button class="btn preview" bindtap="previewArticle">预览效果</button>
+    <button class="btn submit" bindtap="submitForm" loading="{{submitting}}">保存更新</button>
+  </view>
+</view>
+
+<view class="loading-container" wx:else>
+  <view class="loading">加载中...</view>
+</view> 

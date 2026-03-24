@@ -1,0 +1,36 @@
+<!--pages/ai-features/ai-features.wxml-->
+<view class="container">
+  <view class="header">
+    <text class="title">AI智能功能</text>
+    <text class="subtitle">由Coze提供支持</text>
+  </view>
+  
+  <view class="feature-list">
+    <view class="feature-item" bindtap="navigateToChat">
+      <view class="feature-icon ai-chat-icon"></view>
+      <view class="feature-content">
+        <text class="feature-title">智能聊天助手</text>
+        <text class="feature-desc">专业AI助手，为您解答各类问题</text>
+      </view>
+      <view class="feature-arrow"></view>
+    </view>
+    
+    <!-- 其他AI功能可以在这里添加 -->
+  </view>
+  
+  <view class="tips">
+    <text class="tips-title">使用提示</text>
+    <view class="tips-item">
+      <text class="tips-dot">•</text>
+      <text class="tips-text">清晰描述您的需求，AI将更好地理解</text>
+    </view>
+    <view class="tips-item">
+      <text class="tips-dot">•</text>
+      <text class="tips-text">可以随时结束对话，开始新的对话</text>
+    </view>
+    <view class="tips-item">
+      <text class="tips-dot">•</text>
+      <text class="tips-text">AI助手持续升级中，体验会越来越好</text>
+    </view>
+  </view>
+</view>
