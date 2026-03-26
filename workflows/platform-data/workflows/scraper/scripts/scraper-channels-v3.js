@@ -1,6 +1,11 @@
 #!/usr/bin/env node
 /**
  * 视频号采集器 V3 - 通过 API 拦截获取数据
+ *
+ * work_id 关联：channels 不在 zenithjoy.publish_logs platform 约束内
+ * （约束为 wechat/douyin/xiaohongshu/zhihu/toutiao/kuaishou/weibo），
+ * 因此本采集器无法通过 publish_logs 进行 work_id 关联。
+ * 如需添加，需先扩展 publish_logs_platform_check 约束并注册发布流程。
  */
 const CDP = require('chrome-remote-interface');
 const { Client } = require('pg');
