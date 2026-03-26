@@ -19,6 +19,41 @@ const dbClient = new Client({
   database: 'social_media_raw'
 });
 
+// 第二个连接：cecelia 数据库，用于 zenithjoy.works + publish_logs 关联
+// 公众号无直接 platform_post_id，通过 title 匹配 zenithjoy.works 获取 work_id
+const zenithjoyClient = new Client({
+  host: 'localhost',
+  port: 5432,
+  user: 'cecelia',
+  password: 'CeceliaUS2026',
+  database: 'cecelia'
+});
+
+// 通过文章标题匹配 zenithjoy.works，回填 metrics 到 publish_logs
+async function linkWorkId(title, metrics) {
+  try {
+    const result = await zenithjoyClient.query(
+      `SELECT pl.id, pl.work_id
+       FROM zenithjoy.publish_logs pl
+       JOIN zenithjoy.works w ON pl.work_id = w.id
+       WHERE w.title ILIKE $1 AND pl.platform = 'wechat'
+       LIMIT 1`,
+      [title]
+    );
+    if (result.rows.length === 0) return null;
+
+    const { id, work_id } = result.rows[0];
+    await zenithjoyClient.query(
+      `UPDATE zenithjoy.publish_logs SET metrics = $1 WHERE id = $2`,
+      [JSON.stringify(metrics), id]
+    );
+    return work_id;
+  } catch (e) {
+    console.error('[公众号] publish_logs 关联失败（非致命）: ' + e.message);
+    return null;
+  }
+}
+
 async function ensureSchema() {
   try {
     console.error('[公众号] 初始化数据库 schema...');
@@ -51,6 +86,16 @@ async function scrapeWechat() {
   let client;
   const allItems = [];
   const seen = new Set();
+
+  // 尝试连接 zenithjoy 数据库（失败不影响主流程）
+  let zenithjoyConnected = false;
+  try {
+    await zenithjoyClient.connect();
+    zenithjoyConnected = true;
+    console.error('[公众号] zenithjoy 数据库连接成功');
+  } catch (e) {
+    console.error('[公众号] zenithjoy 数据库连接失败（将跳过 work_id 关联）: ' + e.message);
+  }
 
   try {
     await dbClient.connect();
@@ -359,6 +404,29 @@ async function scrapeWechat() {
 
     console.error('[公众号] 保存到数据库: ' + savedCount + ' 条');
 
+    // 关联 zenithjoy.publish_logs（通过 title 匹配 zenithjoy.works → work_id）
+    let workIdLinked = 0;
+    if (zenithjoyConnected) {
+      for (const item of allItems) {
+        if (item.title) {
+          const metrics = {
+            views: item.views || 0,
+            watching: item.watching || 0,
+            likes: item.likes || 0,
+            shares: item.shares || 0,
+            favorites: item.favorites || 0,
+            comments: item.comments || 0
+          };
+          const workId = await linkWorkId(item.title, metrics);
+          if (workId) {
+            item.work_id = workId;
+            workIdLinked++;
+          }
+        }
+      }
+      console.error('[公众号] work_id 关联完成: ' + workIdLinked + ' 条');
+    }
+
     // Save to JSON
     const output = {
       success: true,
@@ -366,21 +434,24 @@ async function scrapeWechat() {
       platform_code: 'wechat',
       count: allItems.length,
       saved: savedCount,
+      work_id_linked: workIdLinked,
       scraped_at: scrapedAt,
       items: allItems
     };
     const filename = '/home/xx/.platform-data/wechat_' + Date.now() + '.json';
     fs.writeFileSync(filename, JSON.stringify(output, null, 2));
     console.error('[公众号] 保存到 ' + filename);
-    console.log(JSON.stringify({ success: true, platform: '公众号', count: allItems.length, saved: savedCount }));
+    console.log(JSON.stringify({ success: true, platform: '公众号', count: allItems.length, saved: savedCount, work_id_linked: workIdLinked }));
 
     await client.close();
     await dbClient.end();
+    if (zenithjoyConnected) await zenithjoyClient.end();
   } catch (e) {
     console.error('[公众号] 错误: ' + e.message);
     console.log(JSON.stringify({ success: false, platform: '公众号', error: e.message }));
     if (client) try { await client.close(); } catch (e) {}
     if (dbClient) try { await dbClient.end(); } catch (e) {}
+    if (zenithjoyConnected) try { await zenithjoyClient.end(); } catch (e) {}
   }
 }
 

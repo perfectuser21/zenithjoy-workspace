@@ -14,10 +14,50 @@ const dbClient = new Client({
   password: 'n8n_password_2025', database: 'social_media_raw'
 });
 
+// 第二个连接：cecelia 数据库，用于 zenithjoy.publish_logs 关联
+const zenithjoyClient = new Client({
+  host: 'localhost',
+  port: 5432,
+  user: 'cecelia',
+  password: 'CeceliaUS2026',
+  database: 'cecelia'
+});
+
+// 通过 platform_post_id 关联 zenithjoy.publish_logs，回填 metrics
+async function linkWorkId(platformPostId, metrics) {
+  try {
+    const result = await zenithjoyClient.query(
+      `SELECT id, work_id FROM zenithjoy.publish_logs WHERE platform_post_id = $1 AND platform = 'toutiao' LIMIT 1`,
+      [String(platformPostId)]
+    );
+    if (result.rows.length === 0) return null;
+
+    const { id, work_id } = result.rows[0];
+    await zenithjoyClient.query(
+      `UPDATE zenithjoy.publish_logs SET metrics = $1 WHERE id = $2`,
+      [JSON.stringify(metrics), id]
+    );
+    return work_id;
+  } catch (e) {
+    console.error('[今日头条] publish_logs 关联失败（非致命）: ' + e.message);
+    return null;
+  }
+}
+
 async function scrapeToutiao() {
   let client;
   const allItems = [];
   const seen = new Set();
+
+  // 尝试连接 zenithjoy 数据库（失败不影响主流程）
+  let zenithjoyConnected = false;
+  try {
+    await zenithjoyClient.connect();
+    zenithjoyConnected = true;
+    console.error('[今日头条] zenithjoy 数据库连接成功');
+  } catch (e) {
+    console.error('[今日头条] zenithjoy 数据库连接失败（将跳过 work_id 关联）: ' + e.message);
+  }
 
   try {
     await dbClient.connect();
@@ -32,7 +72,7 @@ async function scrapeToutiao() {
 
     // 获取总数和总页数
     const { result: infoRes } = await Runtime.evaluate({
-      expression: `(function(){ 
+      expression: `(function(){
         const totalMatch = document.body.innerText.match(/共\\s*(\\d+)\\s*条内容/);
         const total = totalMatch ? parseInt(totalMatch[1]) : 0;
         const pageItems = document.querySelectorAll('.fake-pagination-item');
@@ -75,7 +115,7 @@ async function scrapeToutiao() {
         await new Promise(r => setTimeout(r, 2000));
       }
 
-      // 提取当前页数据 - 修复日期解析
+      // 提取当前页数据 - 修复日期解析，并提取 article_id
       const { result } = await Runtime.evaluate({
         expression: `
           (function() {
@@ -84,22 +124,22 @@ async function scrapeToutiao() {
             const now = new Date();
             const currentMonth = now.getMonth() + 1;
             const currentYear = now.getFullYear();
-            
+
             for (const card of cards) {
               const text = card.innerText || '';
               const lines = text.split('\\n').map(l => l.trim()).filter(l => l);
-              
+
               let title = '';
               let publishTime = '';
               let views = 0;
               let reads = 0;
               let likes = 0;
               let comments = 0;
-              
+
               if (lines[0] && lines[0].length > 5 && !lines[0].match(/^\\d/)) {
                 title = lines[0];
               }
-              
+
               // 修复日期解析
               for (const line of lines) {
                 let match = line.match(/(\\d{2})-(\\d{2})\\s+(\\d{2}):(\\d{2})/);
@@ -108,13 +148,13 @@ async function scrapeToutiao() {
                   const day = match[2];
                   const hour = match[3];
                   const minute = match[4];
-                  
+
                   // 如果月份大于当前月份，说明是去年的内容
                   let year = currentYear;
                   if (month > currentMonth) {
                     year = currentYear - 1;
                   }
-                  
+
                   publishTime = year + '年' + String(month).padStart(2,'0') + '月' + day + '日 ' + hour + ':' + minute;
                   break;
                 }
@@ -128,14 +168,14 @@ async function scrapeToutiao() {
                   }
                 }
               }
-              
+
               for (const line of lines) {
                 if (line.includes('展现') || line.includes('阅读')) {
                   const viewMatch = line.match(/展现\\s*([\\d,.万]+)/);
                   const readMatch = line.match(/阅读\\s*([\\d,.万]+)/);
                   const likeMatch = line.match(/点赞\\s*([\\d,.万]+)/);
                   const commentMatch = line.match(/评论\\s*([\\d,.万]+)/);
-                  
+
                   if (viewMatch) views = parseNum(viewMatch[1]);
                   if (readMatch) reads = parseNum(readMatch[1]);
                   if (likeMatch) likes = parseNum(likeMatch[1]);
@@ -143,19 +183,39 @@ async function scrapeToutiao() {
                   break;
                 }
               }
-              
+
+              // 尝试从卡片链接提取 article_id
+              let articleId = '';
+              const detailLink = card.querySelector('a[href*="article"]') ||
+                                 card.querySelector('a[href*="pgc_id"]') ||
+                                 card.querySelector('a[href]');
+              if (detailLink) {
+                const href = detailLink.href || detailLink.getAttribute('href') || '';
+                const idMatch = href.match(/article\\/(\\d+)/) ||
+                               href.match(/pgc_id=(\\d+)/) ||
+                               href.match(/item_id=(\\d+)/);
+                if (idMatch) articleId = idMatch[1];
+              }
+              // 也尝试从 data 属性提取
+              if (!articleId) {
+                const dataId = card.getAttribute('data-id') ||
+                               card.getAttribute('data-article-id') ||
+                               card.querySelector('[data-id]')?.getAttribute('data-id');
+                if (dataId) articleId = dataId;
+              }
+
               if (title && title.length > 3) {
-                items.push({ title: title.substring(0, 200), publishTime, views, reads, likes, comments });
+                items.push({ title: title.substring(0, 200), publishTime, articleId, views, reads, likes, comments });
               }
             }
-            
+
             function parseNum(str) {
               if (!str) return 0;
               const s = String(str).replace(/,/g, '').trim();
               if (s.includes('万')) return Math.floor(parseFloat(s) * 10000);
               return parseInt(s) || 0;
             }
-            
+
             return JSON.stringify(items);
           })()
         `
@@ -173,7 +233,7 @@ async function scrapeToutiao() {
           newOnPage++;
         }
       }
-      
+
       if (newOnPage === 0 && pageNum > 2) {
         console.error('[今日头条] 没有新数据，停止');
         break;
@@ -189,7 +249,7 @@ async function scrapeToutiao() {
     for (const item of allItems) {
       try {
         if (!item.publishTime) continue;
-        
+
         const match = item.publishTime.match(/(\d{4})年(\d{2})月(\d{2})日\s+(\d{2}):(\d{2})/);
         if (!match) continue;
         const [_, year, month, day, hour, min] = match;
@@ -220,9 +280,31 @@ async function scrapeToutiao() {
       }
     }
 
+    // 关联 zenithjoy.publish_logs（通过 articleId → platform_post_id → work_id）
+    let workIdLinked = 0;
+    if (zenithjoyConnected) {
+      for (const item of allItems) {
+        if (item.articleId) {
+          const metrics = {
+            views: item.views || 0,
+            reads: item.reads || 0,
+            likes: item.likes || 0,
+            comments: item.comments || 0
+          };
+          const workId = await linkWorkId(item.articleId, metrics);
+          if (workId) {
+            item.work_id = workId;
+            workIdLinked++;
+          }
+        }
+      }
+      console.error('[今日头条] work_id 关联完成: ' + workIdLinked + ' 条');
+    }
+
     const totalViews = allItems.reduce((sum, i) => sum + (i.views || 0), 0);
     const output = { success: true, platform: '今日头条', platform_code: 'toutiao',
       count: allItems.length, new_content: newCount, snapshots: snapshotCount,
+      work_id_linked: workIdLinked,
       total_views: totalViews,
       scraped_at: new Date().toISOString(), items: allItems };
 
@@ -230,15 +312,17 @@ async function scrapeToutiao() {
     fs.writeFileSync(filename, JSON.stringify(output, null, 2));
     console.error('[今日头条] 保存到 ' + filename);
     console.error('[今日头条] 总展现量: ' + totalViews);
-    console.log(JSON.stringify({ success: true, platform: '今日头条', count: allItems.length, total_views: totalViews }));
+    console.log(JSON.stringify({ success: true, platform: '今日头条', count: allItems.length, total_views: totalViews, work_id_linked: workIdLinked }));
 
     await client.close();
     await dbClient.end();
+    if (zenithjoyConnected) await zenithjoyClient.end();
   } catch (e) {
     console.error('[今日头条] 错误: ' + e.message);
     console.log(JSON.stringify({ success: false, platform: '今日头条', error: e.message }));
     if (client) try { await client.close(); } catch (e) {}
     if (dbClient) try { await dbClient.end(); } catch (e) {}
+    if (zenithjoyConnected) try { await zenithjoyClient.end(); } catch (e) {}
     process.exit(1);
   }
 }
