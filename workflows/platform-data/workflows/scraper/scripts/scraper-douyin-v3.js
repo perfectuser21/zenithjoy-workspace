@@ -17,13 +17,44 @@ const dbClient = new Client({
   password: 'CeceliaUS2026', database: 'social_media_raw'
 });
 
+const zenithjoyClient = new Client({
+  host: 'localhost', port: 5432, user: 'cecelia',
+  password: 'CeceliaUS2026', database: 'cecelia'
+});
+
+async function linkWorkId(platformPostId, metrics) {
+  try {
+    const result = await zenithjoyClient.query(
+      `SELECT id, work_id FROM zenithjoy.publish_logs WHERE platform_post_id = $1 AND platform = 'douyin' LIMIT 1`,
+      [platformPostId]
+    );
+    if (result.rows.length === 0) return null;
+    const { id, work_id } = result.rows[0];
+    await zenithjoyClient.query(
+      `UPDATE zenithjoy.publish_logs SET metrics = $1 WHERE id = $2`,
+      [JSON.stringify(metrics), id]
+    );
+    return work_id;
+  } catch (e) {
+    console.error('[抖音] publish_logs 关联失败（非致命）: ' + e.message);
+    return null;
+  }
+}
+
 async function scrapeDouyin() {
   let client;
   const allItems = [];
   const seen = new Set();
+  let zenithjoyConnected = false;
 
   try {
     await dbClient.connect();
+    try {
+      await zenithjoyClient.connect();
+      zenithjoyConnected = true;
+    } catch (e) {
+      console.error('[抖音] zenithjoy DB 连接失败（非致命）: ' + e.message);
+    }
     client = await CDP({ host: NODE_PC_HOST, port: PORT, timeout: 30000 });
     const { Runtime, Page, Network } = client;
     await Runtime.enable();
@@ -355,14 +386,36 @@ async function scrapeDouyin() {
 
     console.error('[抖音] 保存完成:', savedCount, '/' + allItems.length);
 
+    // 关联 zenithjoy.publish_logs（通过 platform_post_id → work_id）
+    let workIdLinked = 0;
+    if (zenithjoyConnected) {
+      for (const item of allItems) {
+        if (item.aweme_id) {
+          const metrics = {
+            views: item.views || 0,
+            likes: item.likes || 0,
+            comments: item.comments || 0,
+            shares: item.shares || 0,
+            favorites: item.favorites || 0
+          };
+          const workId = await linkWorkId(item.aweme_id, metrics);
+          if (workId) {
+            item.work_id = workId;
+            workIdLinked++;
+          }
+        }
+      }
+      console.error('[抖音] work_id 关联完成: ' + workIdLinked + ' 条');
+    }
+
     const output = {
       success: true,
       platform: '抖音',
       platform_code: 'douyin',
       count: allItems.length,
-      new_content: newCount,
-      snapshots: snapshotCount,
+      saved: savedCount,
       detailed_metrics_merged: mergedCount,
+      work_id_linked: workIdLinked,
       scraped_at: new Date().toISOString(),
       items: allItems
     };
@@ -374,18 +427,20 @@ async function scrapeDouyin() {
       success: true,
       platform: '抖音',
       count: allItems.length,
-      new_content: newCount,
-      snapshots: snapshotCount,
-      detailed_metrics: mergedCount
+      saved: savedCount,
+      detailed_metrics: mergedCount,
+      work_id_linked: workIdLinked
     }));
 
     await client.close();
     await dbClient.end();
+    if (zenithjoyConnected) await zenithjoyClient.end();
   } catch (e) {
     console.error('[抖音] 错误: ' + e.message);
     console.log(JSON.stringify({ success: false, platform: '抖音', error: e.message }));
     if (client) try { await client.close(); } catch (e) {}
     if (dbClient) try { await dbClient.end(); } catch (e) {}
+    try { await zenithjoyClient.end(); } catch (e) {}
     process.exit(1);
   }
 }
