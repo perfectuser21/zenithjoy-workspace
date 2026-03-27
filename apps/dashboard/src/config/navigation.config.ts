@@ -16,6 +16,7 @@ import {
   Database,
   Sparkles,
   Factory,
+  Settings,
 } from 'lucide-react';
 
 // ============ 类型定义 ============
@@ -70,6 +71,7 @@ export const autopilotPageComponents: Record<string, () => Promise<{ default: Co
   'AiVideoGenerationPage': () => import('../pages/AiVideoGenerationPage'),
   'AiVideoHistoryPage': () => import('../pages/AiVideoHistoryPage'),
   'ContentFactoryPage': () => import('../pages/ContentFactoryPage'),
+  'ContentTypeConfigPage': () => import('../pages/ContentTypeConfigPage'),
   // FeatureDashboard and CommandCenter moved to Core features/business
 };
 
@@ -147,6 +149,13 @@ export const autopilotNavGroups: NavGroup[] = [
         featureKey: 'content-factory',
         component: 'ContentFactoryPage'
       },
+      {
+        path: '/content-factory/config',
+        icon: Settings,
+        label: '配置管理',
+        featureKey: 'content-factory',
+        component: 'ContentTypeConfigPage'
+      },
     ]
   }
 ];
@@ -167,7 +176,10 @@ export const additionalRoutes: RouteConfig[] = [
   { path: '/works/fields', component: 'FieldManagementPage', requireAuth: true },
   { path: '/works/:id', component: 'WorkDetailPage', requireAuth: true },
 
-  // === AI 视频相关路由 ===
+  // === 内容工厂配置路由 ===
+  { path: "/content-factory/config", component: "ContentTypeConfigPage", requireAuth: true },
+
+    // === AI 视频相关路由 ===
   { path: '/ai-video/history', component: 'AiVideoHistoryPage', requireAuth: true },
 
   // === 旧路由重定向（兼容） ===
