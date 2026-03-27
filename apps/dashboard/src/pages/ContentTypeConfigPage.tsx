@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import {
   Settings,
   Save,
@@ -12,6 +12,7 @@ import {
   Clock,
   Zap,
   ChevronDown,
+  ArrowRight,
 } from 'lucide-react'
 
 // ─── 节点定义 ─────────────────────────────────────────────────
@@ -20,7 +21,7 @@ const PIPELINE_NODES = [
   {
     key: 'content-research',
     label: '调研',
-    icon: '\u{1F50D}',
+    icon: '🔍',
     promptField: 'template.research_prompt',
     inputDesc: '关键词',
     outputDesc: 'findings 调研结果',
@@ -29,7 +30,7 @@ const PIPELINE_NODES = [
   {
     key: 'content-copywriting',
     label: '文案生成',
-    icon: '\u270D\uFE0F',
+    icon: '✍️',
     promptField: 'template.generate_prompt',
     inputDesc: '关键词 + 调研结果',
     outputDesc: '社媒文案 + 公众号长文',
@@ -38,7 +39,7 @@ const PIPELINE_NODES = [
   {
     key: 'content-copy-review',
     label: '文案审核',
-    icon: '\u{1F4CB}',
+    icon: '📋',
     promptField: 'template.review_prompt',
     inputDesc: '文案内容',
     outputDesc: 'PASS/FAIL + 问题列表',
@@ -47,16 +48,16 @@ const PIPELINE_NODES = [
   {
     key: 'content-generate',
     label: '图片生成',
-    icon: '\u{1F5BC}\uFE0F',
+    icon: '🖼️',
     promptField: 'template.image_prompt',
     inputDesc: '定稿文案',
-    outputDesc: '9:16 卡片 \u00D7 N',
+    outputDesc: '9:16 卡片 × N',
     configKey: 'generate',
   },
   {
     key: 'content-image-review',
     label: '图片审核',
-    icon: '\u{1F441}\uFE0F',
+    icon: '👁️',
     promptField: 'template.image_review_prompt',
     inputDesc: '图片文件',
     outputDesc: 'PASS/FAIL + 问题列表',
@@ -65,7 +66,7 @@ const PIPELINE_NODES = [
   {
     key: 'content-export',
     label: '导出',
-    icon: '\u{1F4E6}',
+    icon: '📦',
     promptField: 'template.export_prompt',
     inputDesc: '全部产物',
     outputDesc: 'manifest + 发布任务',
@@ -76,9 +77,15 @@ const PIPELINE_NODES = [
 type NodeKey = (typeof PIPELINE_NODES)[number]['key']
 
 const MODEL_OPTIONS = [
-  { value: 'claude-sonnet', label: 'Claude Sonnet' },
-  { value: 'claude-opus', label: 'Claude Opus' },
+  { value: 'claude-sonnet-4-20250514', label: 'Claude Sonnet 4' },
+  { value: 'claude-opus-4-20250514', label: 'Claude Opus 4' },
   { value: 'gpt-4o', label: 'GPT-4o' },
+]
+
+const PROVIDER_OPTIONS = [
+  { value: 'anthropic', label: '无头/Codex（默认）' },
+  { value: 'anthropic-api', label: 'Anthropic API 直连' },
+  { value: 'openai', label: 'OpenAI' },
 ]
 
 // ─── 类型 ─────────────────────────────────────────────────────
@@ -134,6 +141,7 @@ async function testStep(payload: {
   step: string
   prompt: string
   model: string
+  provider: string
   input: Record<string, unknown>
 }): Promise<TestResult> {
   const res = await fetch('/api/brain/content-types/test-step', {
@@ -189,16 +197,13 @@ function PipelineVisualizer({
   selectedNode: NodeKey | null
   onSelectNode: (key: NodeKey) => void
 }) {
-  const _containerRef = useRef<HTMLDivElement>(null)
-
   return (
-    <div className="relative" ref={_containerRef}>
+    <div className="relative">
       <div className="flex items-center justify-between gap-2 px-4">
         {PIPELINE_NODES.map((node, idx) => {
           const isSelected = selectedNode === node.key
           return (
             <div key={node.key} className="flex items-center flex-1 min-w-0">
-              {/* 节点卡片 */}
               <button
                 onClick={() => onSelectNode(node.key)}
                 className={`
@@ -225,19 +230,13 @@ function PipelineVisualizer({
                 )}
               </button>
 
-              {/* 连接箭头 */}
               {idx < PIPELINE_NODES.length - 1 && (
                 <div className="flex items-center mx-1 flex-shrink-0">
                   <svg width="32" height="12" viewBox="0 0 32 12" className="flex-shrink-0">
-                    <line
-                      x1="0" y1="6" x2="24" y2="6"
-                      className="stroke-slate-300 dark:stroke-slate-600"
-                      strokeWidth="2"
-                    />
-                    <polygon
-                      points="24,1 32,6 24,11"
-                      className="fill-slate-300 dark:fill-slate-600"
-                    />
+                    <line x1="0" y1="6" x2="24" y2="6"
+                      className="stroke-slate-300 dark:stroke-slate-600" strokeWidth="2" />
+                    <polygon points="24,1 32,6 24,11"
+                      className="fill-slate-300 dark:fill-slate-600" />
                   </svg>
                 </div>
               )}
@@ -249,31 +248,105 @@ function PipelineVisualizer({
   )
 }
 
-// ─── 节点详情面板 ──────────────────────────────────────────────
+// ─── 测试结果展示 ──────────────────────────────────────────────
+
+function TestResultView({ result, testing }: { result: TestResult | null; testing: boolean }) {
+  if (testing) {
+    return (
+      <div className="flex-1 flex items-center justify-center py-8">
+        <div className="text-center">
+          <Loader2 className="w-7 h-7 text-blue-500 animate-spin mx-auto mb-2" />
+          <div className="text-xs text-slate-400">执行中...</div>
+        </div>
+      </div>
+    )
+  }
+
+  if (!result) {
+    return (
+      <div className="flex-1 flex items-center justify-center py-8">
+        <div className="text-center text-slate-300 dark:text-slate-600">
+          <Play className="w-8 h-8 mx-auto mb-2 opacity-30" />
+          <div className="text-xs">点击测试查看输出</div>
+        </div>
+      </div>
+    )
+  }
+
+  if (result.error) {
+    return (
+      <div className="p-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 mt-2">
+        <div className="flex items-center gap-1.5 text-red-700 dark:text-red-300 text-xs font-medium mb-1">
+          <AlertCircle className="w-3.5 h-3.5" />
+          测试失败
+        </div>
+        <div className="text-xs text-red-600 dark:text-red-400 break-words">{result.error}</div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="flex-1 flex flex-col mt-2 min-h-0">
+      <div className="flex items-center gap-3 mb-2 text-xs text-slate-500 dark:text-slate-400">
+        <span className="flex items-center gap-1">
+          <Clock className="w-3 h-3" />
+          {(result.duration_ms / 1000).toFixed(1)}s
+        </span>
+        {result.tokens && (
+          <span className="flex items-center gap-1">
+            <Zap className="w-3 h-3" />
+            {result.tokens.input + result.tokens.output} tokens
+          </span>
+        )}
+      </div>
+      <div className="flex-1 overflow-auto rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 p-3">
+        <pre className="text-xs text-slate-800 dark:text-slate-200 whitespace-pre-wrap font-mono leading-relaxed">
+          {result.output}
+        </pre>
+      </div>
+    </div>
+  )
+}
+
+// ─── 节点详情面板（双侧对比）──────────────────────────────────
 
 function NodeDetailPanel({
   node,
-  prompt,
-  onPromptChange,
+  savedPrompt,
+  modifiedPrompt,
+  onModifiedChange,
   model,
   onModelChange,
-  onTest,
+  provider,
+  onProviderChange,
+  onTestOriginal,
+  onTestModified,
   onSave,
-  testResult,
-  testing,
+  testResultOriginal,
+  testResultModified,
+  testingOriginal,
+  testingModified,
   saving,
 }: {
   node: (typeof PIPELINE_NODES)[number]
-  prompt: string
-  onPromptChange: (v: string) => void
+  savedPrompt: string
+  modifiedPrompt: string
+  onModifiedChange: (v: string) => void
   model: string
   onModelChange: (v: string) => void
-  onTest: () => void
+  provider: string
+  onProviderChange: (v: string) => void
+  onTestOriginal: () => void
+  onTestModified: () => void
   onSave: () => void
-  testResult: TestResult | null
-  testing: boolean
+  testResultOriginal: TestResult | null
+  testResultModified: TestResult | null
+  testingOriginal: boolean
+  testingModified: boolean
   saving: boolean
 }) {
+  const hasChanges = modifiedPrompt !== savedPrompt
+
   return (
     <div className="mt-6 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
       {/* 标题栏 */}
@@ -282,147 +355,121 @@ function NodeDetailPanel({
           <span className="text-xl">{node.icon}</span>
           <h3 className="font-semibold text-slate-900 dark:text-white">{node.label}</h3>
           <span className="text-xs text-slate-400 dark:text-slate-500 font-mono">{node.key}</span>
+          {hasChanges && (
+            <span className="px-2 py-0.5 text-xs bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 rounded-full border border-amber-200 dark:border-amber-700">
+              已修改
+            </span>
+          )}
         </div>
-        <div className="flex items-center gap-2 text-xs text-slate-400 dark:text-slate-500">
-          <span className="px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-700">{node.promptField}</span>
+
+        {/* Provider + 模型选择 */}
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-1.5">
+            <label className="text-xs text-slate-400 dark:text-slate-500">Provider</label>
+            <select
+              value={provider}
+              onChange={e => onProviderChange(e.target.value)}
+              className="px-2 py-1 text-xs rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            >
+              {PROVIDER_OPTIONS.map(opt => (
+                <option key={opt.value} value={opt.value}>{opt.label}</option>
+              ))}
+            </select>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <label className="text-xs text-slate-400 dark:text-slate-500">模型</label>
+            <select
+              value={model}
+              onChange={e => onModelChange(e.target.value)}
+              className="px-2 py-1 text-xs rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            >
+              {MODEL_OPTIONS.map(opt => (
+                <option key={opt.value} value={opt.value}>{opt.label}</option>
+              ))}
+            </select>
+          </div>
         </div>
       </div>
 
-      {/* 三栏内容 */}
-      <div className="grid grid-cols-12 divide-x divide-slate-200 dark:divide-slate-700" style={{ minHeight: 400 }}>
-        {/* 左：输入 */}
-        <div className="col-span-2 p-4">
-          <h4 className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-3">
-            Input
-          </h4>
-          <div className="space-y-3">
-            <div className="p-3 rounded-lg bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800">
-              <div className="text-xs font-medium text-green-700 dark:text-green-300 mb-1">输入数据</div>
-              <div className="text-sm text-green-600 dark:text-green-400">{node.inputDesc}</div>
-            </div>
-            {PIPELINE_NODES.findIndex(n => n.key === node.key) > 0 && (
-              <div className="text-xs text-slate-400 dark:text-slate-500 flex items-center gap-1">
-                <Zap className="w-3 h-3" />
-                来自上一步输出
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* 中：Prompt 编辑器 */}
-        <div className="col-span-6 p-4 flex flex-col">
+      {/* 双栏对比 */}
+      <div className="grid grid-cols-2 divide-x divide-slate-200 dark:divide-slate-700" style={{ minHeight: 420 }}>
+        {/* 左：当前已保存 */}
+        <div className="p-5 flex flex-col">
           <div className="flex items-center justify-between mb-3">
             <h4 className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-              Prompt
+              当前（已保存）
+            </h4>
+            <button
+              onClick={onTestOriginal}
+              disabled={testingOriginal || !savedPrompt.trim()}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300 rounded-lg transition-colors disabled:opacity-50"
+            >
+              {testingOriginal ? <Loader2 className="w-3 h-3 animate-spin" /> : <Play className="w-3 h-3" />}
+              测试当前
+            </button>
+          </div>
+
+          {savedPrompt ? (
+            <div className="flex-shrink-0 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 p-3 overflow-auto" style={{ maxHeight: 200 }}>
+              <pre className="text-xs text-slate-600 dark:text-slate-400 whitespace-pre-wrap font-mono leading-relaxed">
+                {savedPrompt}
+              </pre>
+            </div>
+          ) : (
+            <div className="flex-shrink-0 rounded-lg border border-dashed border-slate-200 dark:border-slate-700 p-4 text-center">
+              <span className="text-xs text-slate-400">暂无已保存的 Prompt</span>
+            </div>
+          )}
+
+          <TestResultView result={testResultOriginal} testing={testingOriginal} />
+        </div>
+
+        {/* 右：修改版本 */}
+        <div className="p-5 flex flex-col">
+          <div className="flex items-center justify-between mb-3">
+            <h4 className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+              修改版本
             </h4>
             <div className="flex items-center gap-2">
-              <label className="text-xs text-slate-400 dark:text-slate-500">模型</label>
-              <select
-                value={model}
-                onChange={e => onModelChange(e.target.value)}
-                className="px-3 py-1.5 text-sm rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              <button
+                onClick={onTestModified}
+                disabled={testingModified || !modifiedPrompt.trim()}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-emerald-100 dark:bg-emerald-900/40 hover:bg-emerald-200 dark:hover:bg-emerald-900/60 text-emerald-700 dark:text-emerald-300 rounded-lg transition-colors disabled:opacity-50"
               >
-                {MODEL_OPTIONS.map(opt => (
-                  <option key={opt.value} value={opt.value}>{opt.label}</option>
-                ))}
-              </select>
+                {testingModified ? <Loader2 className="w-3 h-3 animate-spin" /> : <Play className="w-3 h-3" />}
+                测试修改
+              </button>
+              <button
+                onClick={onSave}
+                disabled={saving || !hasChanges}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors disabled:opacity-50"
+              >
+                {saving ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
+                保存
+              </button>
             </div>
           </div>
 
           <textarea
-            value={prompt}
-            onChange={e => onPromptChange(e.target.value)}
+            value={modifiedPrompt}
+            onChange={e => onModifiedChange(e.target.value)}
             placeholder={`编辑 ${node.label} 的 prompt...`}
-            className="flex-1 w-full px-4 py-3 rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-slate-100 text-sm font-mono leading-relaxed focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
-            style={{ minHeight: 280 }}
+            className="flex-shrink-0 w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-slate-100 text-xs font-mono leading-relaxed focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+            style={{ height: 200 }}
           />
 
-          <div className="flex items-center gap-3 mt-3">
-            <button
-              onClick={onTest}
-              disabled={testing || !prompt.trim()}
-              className="flex items-center gap-2 px-5 py-2.5 text-sm font-medium bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition-colors disabled:opacity-50 shadow-sm"
-            >
-              {testing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
-              测试
-            </button>
-            <button
-              onClick={onSave}
-              disabled={saving}
-              className="flex items-center gap-2 px-5 py-2.5 text-sm font-medium bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors disabled:opacity-50 shadow-sm"
-            >
-              {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-              保存
-            </button>
-          </div>
+          <TestResultView result={testResultModified} testing={testingModified} />
         </div>
+      </div>
 
-        {/* 右：输出 */}
-        <div className="col-span-4 p-4 flex flex-col">
-          <h4 className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-3">
-            Output
-          </h4>
-
-          <div className="p-3 rounded-lg bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 mb-3">
-            <div className="text-xs font-medium text-purple-700 dark:text-purple-300 mb-1">预期输出</div>
-            <div className="text-sm text-purple-600 dark:text-purple-400">{node.outputDesc}</div>
-          </div>
-
-          {testing && (
-            <div className="flex-1 flex items-center justify-center">
-              <div className="text-center">
-                <Loader2 className="w-8 h-8 text-blue-500 animate-spin mx-auto mb-2" />
-                <div className="text-sm text-slate-400">执行中...</div>
-              </div>
-            </div>
-          )}
-
-          {!testing && testResult && (
-            <div className="flex-1 flex flex-col min-h-0">
-              {testResult.error ? (
-                <div className="p-4 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800">
-                  <div className="flex items-center gap-2 text-red-700 dark:text-red-300 text-sm font-medium mb-1">
-                    <AlertCircle className="w-4 h-4" />
-                    测试失败
-                  </div>
-                  <div className="text-sm text-red-600 dark:text-red-400">{testResult.error}</div>
-                </div>
-              ) : (
-                <>
-                  <div className="flex items-center gap-4 mb-3 text-xs text-slate-500 dark:text-slate-400">
-                    <span className="flex items-center gap-1">
-                      <Clock className="w-3 h-3" />
-                      {(testResult.duration_ms / 1000).toFixed(1)}s
-                    </span>
-                    {testResult.tokens && (
-                      <span className="flex items-center gap-1">
-                        <Zap className="w-3 h-3" />
-                        {testResult.tokens.input + testResult.tokens.output} tokens
-                        <span className="text-slate-400">
-                          ({testResult.tokens.input}in / {testResult.tokens.output}out)
-                        </span>
-                      </span>
-                    )}
-                  </div>
-                  <div className="flex-1 overflow-auto rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 p-4">
-                    <pre className="text-sm text-slate-800 dark:text-slate-200 whitespace-pre-wrap font-mono leading-relaxed">
-                      {testResult.output}
-                    </pre>
-                  </div>
-                </>
-              )}
-            </div>
-          )}
-
-          {!testing && !testResult && (
-            <div className="flex-1 flex items-center justify-center">
-              <div className="text-center text-slate-300 dark:text-slate-600">
-                <Play className="w-10 h-10 mx-auto mb-2 opacity-30" />
-                <div className="text-sm">点击「测试」查看输出</div>
-              </div>
-            </div>
-          )}
-        </div>
+      {/* 底部：节点 I/O 说明 */}
+      <div className="px-6 py-3 border-t border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 flex items-center gap-4 text-xs text-slate-500 dark:text-slate-400">
+        <span className="font-medium text-slate-600 dark:text-slate-300">输入</span>
+        <span>{node.inputDesc}</span>
+        <ArrowRight className="w-3 h-3 flex-shrink-0" />
+        <span className="font-medium text-slate-600 dark:text-slate-300">输出</span>
+        <span>{node.outputDesc}</span>
+        <span className="ml-auto font-mono text-slate-300 dark:text-slate-600">{node.promptField}</span>
       </div>
     </div>
   )
@@ -438,13 +485,22 @@ export default function ContentTypeConfigPage() {
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
   const [seeding, setSeeding] = useState(false)
-  const [testing, setTesting] = useState(false)
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
   const [configUpdatedAt, setConfigUpdatedAt] = useState<string>('')
   const [configSource, setConfigSource] = useState<string>('')
-  const [testModel, setTestModel] = useState('claude-sonnet')
-  const [testResults, setTestResults] = useState<Record<string, TestResult>>({})
+
+  // 测试配置
+  const [testModel, setTestModel] = useState('claude-sonnet-4-20250514')
+  const [testProvider, setTestProvider] = useState('anthropic')
+
+  // 修改中的 prompts（keyed by node key）
   const [editingPrompts, setEditingPrompts] = useState<Record<string, string>>({})
+
+  // 测试结果：original（已保存版本）和 modified（修改版本）
+  const [testResultsOriginal, setTestResultsOriginal] = useState<Record<string, TestResult>>({})
+  const [testResultsModified, setTestResultsModified] = useState<Record<string, TestResult>>({})
+  const [testingOriginal, setTestingOriginal] = useState(false)
+  const [testingModified, setTestingModified] = useState(false)
 
   const loadTypes = useCallback(async () => {
     const data = await fetchContentTypes()
@@ -458,7 +514,8 @@ export default function ContentTypeConfigPage() {
     setMessage(null)
     setSelectedNode(null)
     setEditingPrompts({})
-    setTestResults({})
+    setTestResultsOriginal({})
+    setTestResultsModified({})
     const data = await fetchTypeConfig(type)
     if (data) {
       setConfig(data.config)
@@ -478,15 +535,32 @@ export default function ContentTypeConfigPage() {
     loadConfig(type)
   }
 
-  const getNodePrompt = (nodeKey: NodeKey): string => {
-    if (editingPrompts[nodeKey] !== undefined) return editingPrompts[nodeKey]
+  // 选中节点时，预填充 editingPrompts（从 config 读取）
+  const handleSelectNode = (key: NodeKey) => {
+    setSelectedNode(key)
+    if (!editingPrompts[key] && config) {
+      const node = PIPELINE_NODES.find(n => n.key === key)
+      if (node) {
+        const saved = getNestedValue(config as Record<string, unknown>, node.promptField)
+        setEditingPrompts(prev => ({ ...prev, [key]: saved }))
+      }
+    }
+  }
+
+  // 获取已保存的 prompt（始终来自 config，不受编辑影响）
+  const getSavedPrompt = (nodeKey: NodeKey): string => {
     if (!config) return ''
     const node = PIPELINE_NODES.find(n => n.key === nodeKey)
     if (!node) return ''
     return getNestedValue(config as Record<string, unknown>, node.promptField)
   }
 
-  const setNodePrompt = (nodeKey: NodeKey, value: string) => {
+  // 获取修改中的 prompt
+  const getModifiedPrompt = (nodeKey: NodeKey): string => {
+    return editingPrompts[nodeKey] ?? getSavedPrompt(nodeKey)
+  }
+
+  const setModifiedPrompt = (nodeKey: NodeKey, value: string) => {
     setEditingPrompts(prev => ({ ...prev, [nodeKey]: value }))
   }
 
@@ -498,7 +572,7 @@ export default function ContentTypeConfigPage() {
     const node = PIPELINE_NODES.find(n => n.key === selectedNode)
     if (!node) { setSaving(false); return }
 
-    const prompt = getNodePrompt(selectedNode)
+    const prompt = getModifiedPrompt(selectedNode)
     const updatedConfig = setNestedValue(config as Record<string, unknown>, node.promptField, prompt)
     setConfig(updatedConfig)
 
@@ -506,29 +580,49 @@ export default function ContentTypeConfigPage() {
     if (ok) {
       setMessage({ type: 'success', text: `${node.label} 的配置已保存` })
       setConfigUpdatedAt(new Date().toISOString())
+      setEditingPrompts(prev => {
+        const next = { ...prev }
+        delete next[selectedNode]
+        return next
+      })
     } else {
       setMessage({ type: 'error', text: '保存失败' })
     }
     setSaving(false)
   }
 
-  const handleTest = async () => {
+  const handleTestOriginal = async () => {
     if (!selectedNode) return
-    setTesting(true)
+    setTestingOriginal(true)
 
-    const node = PIPELINE_NODES.find(n => n.key === selectedNode)
-    if (!node) { setTesting(false); return }
-
-    const prompt = getNodePrompt(selectedNode)
+    const prompt = getSavedPrompt(selectedNode)
     const result = await testStep({
       step: selectedNode,
       prompt,
       model: testModel,
+      provider: testProvider,
       input: { keyword: '示例关键词' },
     })
 
-    setTestResults(prev => ({ ...prev, [selectedNode]: result }))
-    setTesting(false)
+    setTestResultsOriginal(prev => ({ ...prev, [selectedNode]: result }))
+    setTestingOriginal(false)
+  }
+
+  const handleTestModified = async () => {
+    if (!selectedNode) return
+    setTestingModified(true)
+
+    const prompt = getModifiedPrompt(selectedNode)
+    const result = await testStep({
+      step: selectedNode,
+      prompt,
+      model: testModel,
+      provider: testProvider,
+      input: { keyword: '示例关键词' },
+    })
+
+    setTestResultsModified(prev => ({ ...prev, [selectedNode]: result }))
+    setTestingModified(false)
   }
 
   const handleSeed = async () => {
@@ -670,22 +764,28 @@ export default function ContentTypeConfigPage() {
                 <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-4">
                   <PipelineVisualizer
                     selectedNode={selectedNode}
-                    onSelectNode={setSelectedNode}
+                    onSelectNode={handleSelectNode}
                   />
                 </div>
 
-                {/* 节点详情面板 */}
-                {currentNode && (
+                {/* 节点详情面板（双侧对比） */}
+                {currentNode && selectedNode && (
                   <NodeDetailPanel
                     node={currentNode}
-                    prompt={getNodePrompt(selectedNode!)}
-                    onPromptChange={v => setNodePrompt(selectedNode!, v)}
+                    savedPrompt={getSavedPrompt(selectedNode)}
+                    modifiedPrompt={getModifiedPrompt(selectedNode)}
+                    onModifiedChange={v => setModifiedPrompt(selectedNode, v)}
                     model={testModel}
                     onModelChange={setTestModel}
-                    onTest={handleTest}
+                    provider={testProvider}
+                    onProviderChange={setTestProvider}
+                    onTestOriginal={handleTestOriginal}
+                    onTestModified={handleTestModified}
                     onSave={handleSaveNode}
-                    testResult={testResults[selectedNode!] || null}
-                    testing={testing}
+                    testResultOriginal={testResultsOriginal[selectedNode] || null}
+                    testResultModified={testResultsModified[selectedNode] || null}
+                    testingOriginal={testingOriginal}
+                    testingModified={testingModified}
                     saving={saving}
                   />
                 )}
