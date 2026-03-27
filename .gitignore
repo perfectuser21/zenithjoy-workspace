@@ -123,6 +123,13 @@ services/creator/data/
 workspace/
 # Claude Code worktrees
 .claude/worktrees/
+.claude/agent-memory/
+.claude/agents/
+.EMERGENCY*.txt
+memory-architecture.html
+openclaw-vs-cecelia.html
+apps/dashboard/public/cecelia-memory.html
+apps/dashboard/public/openclaw-vs-cecelia.html
 
 # 遗留临时目录和过程产物（不提交）
 debug-toutiao-screenshots/
@@ -149,3 +156,4 @@ LEARNINGS.md
 .dev-agent-seal.*
 .dev-seal.*
 .cecelia-run-id
+services/creator/scripts/publishers/
