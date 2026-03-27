@@ -43,11 +43,13 @@ interface Pipeline {
   completed_at?: string
 }
 
-const PIPELINE_STAGES = ['content-research', 'content-generate', 'content-review', 'content-export'] as const
+const PIPELINE_STAGES = ['content-research', 'content-copywriting', 'content-copy-review', 'content-generate', 'content-image-review', 'content-export'] as const
 const STAGE_LABELS: Record<string, string> = {
   'content-research': '调研',
-  'content-generate': '生成',
-  'content-review': '审核',
+  'content-copywriting': '文案',
+  'content-copy-review': '文案审核',
+  'content-generate': '图片',
+  'content-image-review': '图片审核',
   'content-export': '导出',
 }
 
