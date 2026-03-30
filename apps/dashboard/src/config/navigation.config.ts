@@ -72,6 +72,7 @@ export const autopilotPageComponents: Record<string, () => Promise<{ default: Co
   'AiVideoHistoryPage': () => import('../pages/AiVideoHistoryPage'),
   'ContentFactoryPage': () => import('../pages/ContentFactoryPage'),
   'ContentTypeConfigPage': () => import('../pages/ContentTypeConfigPage'),
+  'PipelineOutputPage': () => import('../pages/PipelineOutputPage'),
   // FeatureDashboard and CommandCenter moved to Core features/business
 };
 
@@ -178,6 +179,7 @@ export const additionalRoutes: RouteConfig[] = [
 
   // === 内容工厂配置路由 ===
   { path: "/content-factory/config", component: "ContentTypeConfigPage", requireAuth: true },
+  { path: '/content-factory/:id/output', component: 'PipelineOutputPage', requireAuth: true },
 
     // === AI 视频相关路由 ===
   { path: '/ai-video/history', component: 'AiVideoHistoryPage', requireAuth: true },

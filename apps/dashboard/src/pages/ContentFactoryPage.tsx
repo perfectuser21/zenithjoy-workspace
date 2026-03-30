@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import {
   LayoutGrid,
   CalendarDays,
@@ -163,13 +164,6 @@ async function fetchPipelineStages(id: string): Promise<Record<string, StageInfo
   if (!res.ok) return {}
   const data = await res.json()
   return data.stages || {}
-}
-
-async function fetchPipelineOutput(id: string): Promise<{ keyword: string; images?: { cover: string; cards: string[] } } | null> {
-  const res = await fetch(`/api/brain/pipelines/${id}/output`)
-  if (!res.ok) return null
-  const data = await res.json()
-  return data.output || null
 }
 
 const ALL_PLATFORMS = [
@@ -482,9 +476,8 @@ function PipelineCard({ pipeline, onRefresh }: { pipeline: Pipeline; onRefresh?:
   const ct = getContentType(pipeline)
   const { label: typeLabel, icon: Icon } = CONTENT_TYPE_MAP[ct] || CONTENT_TYPE_MAP.post
   const keyword = pipeline.payload?.keyword as string | undefined
+  const navigate = useNavigate()
   const [running, setRunning] = useState(false)
-  const [showOutput, setShowOutput] = useState(false)
-  const [output, setOutput] = useState<{ keyword: string; images?: { cover: string; cards: string[] } } | null>(null)
   const [expanded, setExpanded] = useState(false)
   const [stages, setStages] = useState<Record<string, StageInfo>>({})
   const [loadingStages, setLoadingStages] = useState(false)
@@ -501,12 +494,8 @@ function PipelineCard({ pipeline, onRefresh }: { pipeline: Pipeline; onRefresh?:
     }
   }
 
-  const handlePreview = async () => {
-    if (!showOutput) {
-      const data = await fetchPipelineOutput(pipeline.id)
-      setOutput(data)
-    }
-    setShowOutput(!showOutput)
+  const handlePreview = () => {
+    navigate(`/content-factory/${pipeline.id}/output`)
   }
 
   const handleToggleExpand = async () => {
@@ -566,28 +555,13 @@ function PipelineCard({ pipeline, onRefresh }: { pipeline: Pipeline; onRefresh?:
               className="inline-flex items-center gap-1 px-2 py-1 text-xs bg-green-50 text-green-700 rounded-md hover:bg-green-100 transition-colors"
             >
               <Eye className="w-3 h-3" />
-              {showOutput ? '收起产出' : '查看产出'}
+              查看产出
             </button>
           )}
         </div>
       </div>
       {expanded && (
         <StageDetailView stages={stages} loading={loadingStages} />
-      )}
-      {showOutput && output?.images && (
-        <div className="mt-3 border-t border-gray-100 pt-3">
-          <div className="grid grid-cols-3 gap-1.5">
-            <img src={output.images.cover} alt="封面" className="rounded-lg w-full aspect-[3/4] object-cover" />
-            {output.images.cards.slice(0, 2).map((url, i) => (
-              <img key={i} src={url} alt={`卡片${i + 1}`} className="rounded-lg w-full aspect-[9/16] object-cover" />
-            ))}
-          </div>
-          {output.images.cards.length > 2 && (
-            <div className="text-xs text-gray-400 text-center mt-1">
-              共 {output.images.cards.length} 张内容卡
-            </div>
-          )}
-        </div>
       )}
     </div>
   )
