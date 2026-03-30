@@ -11,7 +11,7 @@ NC='\033[0m'
 
 REPO_ROOT="$(cd "$(dirname "$0")" && pwd)"
 APP_DIR="$REPO_ROOT/apps/dashboard"
-HK_DEST="hk:/opt/zenithjoy/autopilot-dashboard/dist/"
+HK_DEST="hk-vps:/opt/zenithjoy/autopilot-dashboard/dist/"
 
 echo "========================================="
 echo "  Autopilot Dashboard → 香港 VPS 部署"
