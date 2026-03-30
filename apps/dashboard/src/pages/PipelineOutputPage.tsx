@@ -56,14 +56,14 @@ const STAGE_LABELS: Record<string, string> = {
 }
 
 const PLATFORMS = [
-  { key: 'douyin',      name: '抖音',    emoji: '🎵', metric: '播放' },
-  { key: 'xiaohongshu', name: '小红书',  emoji: '📕', metric: '曝光' },
-  { key: 'wechat',      name: '微信公众号', emoji: '💬', metric: '阅读' },
-  { key: 'shipinhao',   name: '视频号',  emoji: '📱', metric: '播放' },
-  { key: 'toutiao',     name: '今日头条', emoji: '🔥', metric: '阅读' },
-  { key: 'weibo',       name: '微博',    emoji: '🐦', metric: '转发' },
-  { key: 'kuaishou',    name: '快手',    emoji: '▶',  metric: '播放' },
-  { key: 'zhihu',       name: '知乎',    emoji: '🔵', metric: '浏览' },
+  { key: 'douyin',      name: '抖音',       color: '#fe2c55', metric: '播放' },
+  { key: 'xiaohongshu', name: '小红书',     color: '#ff2442', metric: '曝光' },
+  { key: 'wechat',      name: '微信公众号', color: '#07c160', metric: '阅读' },
+  { key: 'shipinhao',   name: '视频号',     color: '#1aad19', metric: '播放' },
+  { key: 'toutiao',     name: '今日头条',   color: '#e53935', metric: '阅读' },
+  { key: 'weibo',       name: '微博',       color: '#e6162d', metric: '转发' },
+  { key: 'kuaishou',    name: '快手',       color: '#ffd000', metric: '播放' },
+  { key: 'zhihu',       name: '知乎',       color: '#1772f6', metric: '浏览' },
 ]
 
 // ─── 工具函数 ─────────────────────────────────────────────────
@@ -90,10 +90,21 @@ function renderMarkdown(text: string): string {
 
 // ─── API ──────────────────────────────────────────────────────
 
+const IMG_PROXY = '/content-images/'
+const IMG_ORIGIN = 'http://38.23.47.81:9998/images/'
+
+function rewriteImageUrl(url: string): string {
+  return url.startsWith(IMG_ORIGIN) ? url.replace(IMG_ORIGIN, IMG_PROXY) : url
+}
+
 async function fetchOutput(id: string): Promise<PipelineOutput | null> {
   const res = await fetch(`/api/brain/pipelines/${id}/output`)
   if (!res.ok) return null
-  return (await res.json()).output || null
+  const data: PipelineOutput | null = (await res.json()).output || null
+  if (data?.image_urls) {
+    data.image_urls = data.image_urls.map(img => ({ ...img, url: rewriteImageUrl(img.url) }))
+  }
+  return data
 }
 
 async function fetchStages(id: string): Promise<Record<string, StageInfo>> {
@@ -265,7 +276,7 @@ function SummaryTab({ output, stages }: { output: PipelineOutput | null; stages:
         <div style={{ padding: '14px 20px 12px', borderBottom: '1px solid rgba(255,255,255,0.05)', fontSize: 11, fontWeight: 600, color: 'rgba(255,255,255,0.25)', letterSpacing: 3, textTransform: 'uppercase' as const }}>平台发布概览</div>
         {PLATFORMS.map((p, i) => (
           <div key={p.key} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 20px', borderBottom: i < PLATFORMS.length - 1 ? '1px solid rgba(255,255,255,0.04)' : 'none' }}>
-            <span style={{ fontSize: 16 }}>{p.emoji}</span>
+            <div style={{ width: 7, height: 7, borderRadius: '50%', background: p.color, boxShadow: `0 0 6px ${p.color}80`, flexShrink: 0 }} />
             <span style={{ fontSize: 13, color: 'rgba(255,255,255,0.5)', flex: 1 }}>{p.name}</span>
             <PubBadge status="pending" />
           </div>
@@ -405,7 +416,7 @@ function PublishTab() {
       </div>
       {PLATFORMS.map((p, i) => (
         <div key={p.key} style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '13px 20px', borderBottom: i < PLATFORMS.length - 1 ? '1px solid rgba(255,255,255,0.04)' : 'none' }}>
-          <span style={{ fontSize: 18, flexShrink: 0 }}>{p.emoji}</span>
+          <div style={{ width: 8, height: 8, borderRadius: '50%', background: p.color, boxShadow: `0 0 6px ${p.color}80`, flexShrink: 0 }} />
           <span style={{ fontSize: 13, color: 'rgba(255,255,255,0.6)', width: 80, flexShrink: 0 }}>{p.name}</span>
           <PubBadge status="pending" />
           <div style={{ marginLeft: 'auto' }}>
@@ -429,7 +440,7 @@ function AnalyticsTab() {
         <div style={{ padding: '14px 20px 12px', borderBottom: '1px solid rgba(255,255,255,0.05)', fontSize: 11, fontWeight: 600, color: 'rgba(255,255,255,0.25)', letterSpacing: 3, textTransform: 'uppercase' as const }}>平台数据</div>
         {PLATFORMS.map((p, i) => (
           <div key={p.key} style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '13px 20px', borderBottom: i < PLATFORMS.length - 1 ? '1px solid rgba(255,255,255,0.04)' : 'none' }}>
-            <span style={{ fontSize: 18 }}>{p.emoji}</span>
+            <div style={{ width: 8, height: 8, borderRadius: '50%', background: p.color, boxShadow: `0 0 6px ${p.color}80`, flexShrink: 0 }} />
             <span style={{ fontSize: 13, color: 'rgba(255,255,255,0.5)', width: 80 }}>{p.name}</span>
             <PubBadge status="pending" />
             <div style={{ marginLeft: 'auto', display: 'flex', gap: 24 }}>
@@ -460,7 +471,7 @@ export default function PipelineOutputPage() {
   const [output, setOutput] = useState<PipelineOutput | null>(null)
   const [stages, setStages] = useState<Record<string, StageInfo>>({})
   const [loading, setLoading] = useState(true)
-  const [activeTab, setActiveTab] = useState<TabKey>('summary')
+  const [activeTab, setActiveTab] = useState<TabKey>('generation')
   const [lightbox, setLightbox] = useState<LightboxState | null>(null)
 
   useEffect(() => {
@@ -516,16 +527,29 @@ export default function PipelineOutputPage() {
       ) : (
         <>
           {/* Hero */}
-          <div style={{ maxWidth: 1100, margin: '0 auto', padding: '48px 40px 36px', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-            <div style={{ fontSize: 11, fontWeight: 600, color: 'rgba(192,132,252,0.5)', letterSpacing: 3, textTransform: 'uppercase', marginBottom: 12 }}>内容产出</div>
-            <div style={{ fontSize: 44, fontWeight: 800, letterSpacing: -1.5, lineHeight: 1.1, background: 'linear-gradient(135deg,#ffffff 0%,#c084fc 55%,#7c3aed 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text', maxWidth: 700 }}>
-              {output?.keyword || '内容产出'}
+          <div style={{ maxWidth: 1100, margin: '0 auto', padding: '48px 40px 36px', borderBottom: '1px solid rgba(255,255,255,0.05)', display: 'flex', gap: 40, alignItems: 'flex-start' }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 11, fontWeight: 600, color: 'rgba(192,132,252,0.5)', letterSpacing: 3, textTransform: 'uppercase', marginBottom: 12 }}>内容产出</div>
+              <div style={{ fontSize: 44, fontWeight: 800, letterSpacing: -1.5, lineHeight: 1.1, background: 'linear-gradient(135deg,#ffffff 0%,#c084fc 55%,#7c3aed 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text' }}>
+                {output?.keyword || '内容产出'}
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 20, marginTop: 16, flexWrap: 'wrap' }}>
+                <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.28)', display: 'flex', alignItems: 'center', gap: 5 }}><ImageIcon size={12} />{output?.image_urls?.length || 0} 张图片</span>
+                {output?.article_text && <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.28)', display: 'flex', alignItems: 'center', gap: 5 }}><BookOpen size={12} />文章</span>}
+                {output?.cards_text && <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.28)', display: 'flex', alignItems: 'center', gap: 5 }}><FileText size={12} />卡片文案</span>}
+              </div>
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 20, marginTop: 16, flexWrap: 'wrap' }}>
-              <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.28)', display: 'flex', alignItems: 'center', gap: 5 }}><ImageIcon size={12} />{output?.image_urls?.length || 0} 张图片</span>
-              {output?.article_text && <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.28)', display: 'flex', alignItems: 'center', gap: 5 }}><BookOpen size={12} />文章</span>}
-              {output?.cards_text && <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.28)', display: 'flex', alignItems: 'center', gap: 5 }}><FileText size={12} />卡片文案</span>}
-            </div>
+            {(() => {
+              const cover = output?.image_urls?.find(u => u.type === 'cover')
+              return cover ? (
+                <div
+                  onClick={() => handleImageOpen(output!.image_urls.indexOf(cover), output!.image_urls.map(u => u.url))}
+                  style={{ flexShrink: 0, width: 120, borderRadius: 12, overflow: 'hidden', boxShadow: '0 16px 48px rgba(0,0,0,0.6)', cursor: 'zoom-in', border: '1px solid rgba(255,255,255,0.08)' }}
+                >
+                  <img src={cover.url} alt="封面" style={{ width: '100%', display: 'block' }} />
+                </div>
+              ) : null
+            })()}
           </div>
 
           {/* Tabs + 内容 */}
