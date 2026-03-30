@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { ArrowLeft, Loader2, Clock, Image as ImageIcon, FileText, BookOpen, Layers, Send, BarChart2, Radio } from 'lucide-react'
+import { ArrowLeft, Loader2, Clock, Image as ImageIcon, FileText, BookOpen, Layers, Send, BarChart2, Radio, Maximize2, Minimize2, ChevronLeft, ChevronRight, X } from 'lucide-react'
 
 // ─── 类型 ─────────────────────────────────────────────────────
 
@@ -24,6 +24,11 @@ interface StageInfo {
   started_at?: string
   completed_at?: string
   review_issues?: unknown[]
+}
+
+interface LightboxState {
+  index: number
+  urls: string[]
 }
 
 type TabKey = 'summary' | 'generation' | 'publish' | 'analytics'
@@ -129,6 +134,109 @@ function PubBadge({ status }: { status: PubStatus }) {
   return <span style={{ fontSize: 10, fontWeight: 600, padding: '2px 8px', borderRadius: 6, background: `${color}18`, color, border: `1px solid ${color}30` }}>{label}</span>
 }
 
+// ─── 全屏灯箱 ─────────────────────────────────────────────────
+
+function Lightbox({ state, onClose }: { state: LightboxState; onClose: () => void }) {
+  const [isFullscreen, setIsFullscreen] = useState(false)
+  const containerRef = useRef<HTMLDivElement>(null)
+  const { index, urls } = state
+  const [currentIndex, setCurrentIndex] = useState(index)
+
+  const goNext = useCallback(() => setCurrentIndex(i => (i + 1) % urls.length), [urls.length])
+  const goPrev = useCallback(() => setCurrentIndex(i => (i - 1 + urls.length) % urls.length), [urls.length])
+
+  const toggleFullscreen = useCallback(async () => {
+    if (!document.fullscreenElement) {
+      await containerRef.current?.requestFullscreen()
+      setIsFullscreen(true)
+    } else {
+      await document.exitFullscreen()
+      setIsFullscreen(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'ArrowRight') goNext()
+      else if (e.key === 'ArrowLeft') goPrev()
+      else if (e.key === 'Escape') { if (!document.fullscreenElement) onClose() }
+      else if (e.key === 'f' || e.key === 'F') toggleFullscreen()
+    }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [goNext, goPrev, onClose, toggleFullscreen])
+
+  useEffect(() => {
+    const handler = () => setIsFullscreen(!!document.fullscreenElement)
+    document.addEventListener('fullscreenchange', handler)
+    return () => document.removeEventListener('fullscreenchange', handler)
+  }, [])
+
+  return (
+    <div
+      ref={containerRef}
+      onClick={onClose}
+      style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.95)', zIndex: 100, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}
+    >
+      {/* 顶部工具栏 */}
+      <div onClick={e => e.stopPropagation()} style={{ position: 'absolute', top: 0, left: 0, right: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 18px', background: 'linear-gradient(to bottom, rgba(0,0,0,0.7), transparent)', zIndex: 1 }}>
+        <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.5)', fontVariantNumeric: 'tabular-nums' }}>
+          {currentIndex + 1} / {urls.length}
+        </span>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button onClick={toggleFullscreen} title={isFullscreen ? '退出全屏 (F)' : '全屏 (F)'} style={{ width: 34, height: 34, borderRadius: 8, background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.12)', color: 'rgba(255,255,255,0.7)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            {isFullscreen ? <Minimize2 size={15} /> : <Maximize2 size={15} />}
+          </button>
+          <button onClick={onClose} title="关闭 (Esc)" style={{ width: 34, height: 34, borderRadius: 8, background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.12)', color: 'rgba(255,255,255,0.7)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <X size={15} />
+          </button>
+        </div>
+      </div>
+
+      {/* 左右切换按钮 */}
+      {urls.length > 1 && (
+        <>
+          <button
+            onClick={e => { e.stopPropagation(); goPrev() }}
+            style={{ position: 'absolute', left: 16, top: '50%', transform: 'translateY(-50%)', width: 42, height: 42, borderRadius: '50%', background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.15)', color: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1, transition: 'background 0.15s' }}
+          >
+            <ChevronLeft size={20} />
+          </button>
+          <button
+            onClick={e => { e.stopPropagation(); goNext() }}
+            style={{ position: 'absolute', right: 16, top: '50%', transform: 'translateY(-50%)', width: 42, height: 42, borderRadius: '50%', background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.15)', color: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1, transition: 'background 0.15s' }}
+          >
+            <ChevronRight size={20} />
+          </button>
+        </>
+      )}
+
+      {/* 图片 */}
+      <img
+        src={urls[currentIndex]}
+        alt={`图片 ${currentIndex + 1}`}
+        onClick={e => e.stopPropagation()}
+        style={{ maxWidth: '90vw', maxHeight: '88vh', borderRadius: isFullscreen ? 0 : 10, objectFit: 'contain', boxShadow: '0 32px 80px rgba(0,0,0,0.8)', transition: 'max-width 0.2s, max-height 0.2s' }}
+      />
+
+      {/* 底部缩略图条（多图时显示） */}
+      {urls.length > 1 && (
+        <div onClick={e => e.stopPropagation()} style={{ position: 'absolute', bottom: 16, display: 'flex', gap: 6, padding: '6px 10px', background: 'rgba(0,0,0,0.5)', borderRadius: 10, backdropFilter: 'blur(8px)' }}>
+          {urls.map((url, i) => (
+            <div
+              key={i}
+              onClick={() => setCurrentIndex(i)}
+              style={{ width: 40, height: 40, borderRadius: 6, overflow: 'hidden', cursor: 'pointer', border: `2px solid ${i === currentIndex ? '#a78bfa' : 'transparent'}`, opacity: i === currentIndex ? 1 : 0.5, transition: 'all 0.15s', flexShrink: 0 }}
+            >
+              <img src={url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ─── Summary Tab ──────────────────────────────────────────────
 
 function SummaryTab({ output, stages }: { output: PipelineOutput | null; stages: Record<string, StageInfo> }) {
@@ -169,20 +277,21 @@ function SummaryTab({ output, stages }: { output: PipelineOutput | null; stages:
 
 // ─── Generation Tab ───────────────────────────────────────────
 
-function GenerationTab({ output, stages, isTimingReliable, onImageClick }: {
+function GenerationTab({ output, stages, isTimingReliable, onImageOpen }: {
   output: PipelineOutput | null
   stages: Record<string, StageInfo>
   isTimingReliable: boolean
-  onImageClick: (url: string) => void
+  onImageOpen: (index: number, urls: string[]) => void
 }) {
   const [textTab, setTextTab] = useState<'article' | 'cards'>('article')
   const coverImage = output?.image_urls?.find(u => u.type === 'cover')
   const cardImages = output?.image_urls?.filter(u => u.type === 'card') || []
   const hasImages = (output?.image_urls?.length || 0) > 0
+  const allUrls = output?.image_urls?.map(u => u.url) || []
 
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: '1fr 260px', gap: 24, alignItems: 'start' }}>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+    <div style={{ display: 'grid', gridTemplateColumns: '1fr minmax(220px,260px)', gap: 24, alignItems: 'start' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 20, minWidth: 0 }}>
         {/* 图片区 */}
         <div style={{ background: 'rgba(255,255,255,0.025)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 14, overflow: 'hidden' }}>
           <div style={{ padding: '14px 18px 12px', borderBottom: '1px solid rgba(255,255,255,0.05)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -191,16 +300,23 @@ function GenerationTab({ output, stages, isTimingReliable, onImageClick }: {
           </div>
           <div style={{ padding: 18 }}>
             {hasImages ? (
-              <div style={{ display: 'flex', gap: 14, alignItems: 'flex-start' }}>
+              <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start', flexWrap: 'wrap' }}>
                 {coverImage && (
-                  <div onClick={() => onImageClick(coverImage.url)} style={{ flexShrink: 0, width: 110, borderRadius: 10, overflow: 'hidden', boxShadow: '0 8px 32px rgba(0,0,0,0.5)', cursor: 'zoom-in' }}>
+                  <div
+                    onClick={() => onImageOpen(allUrls.indexOf(coverImage.url), allUrls)}
+                    style={{ flexShrink: 0, width: 160, borderRadius: 10, overflow: 'hidden', boxShadow: '0 8px 32px rgba(0,0,0,0.5)', cursor: 'zoom-in' }}
+                  >
                     <img src={coverImage.url} alt="封面" style={{ width: '100%', display: 'block' }} />
+                    <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.25)', textAlign: 'center', padding: '5px 0', background: 'rgba(0,0,0,0.3)' }}>封面</div>
                   </div>
                 )}
-                <div style={{ flex: 1, display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 8 }}>
-                  {cardImages.slice(0, 6).map((img, i) => (
+                <div style={{ flex: 1, display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(90px,1fr))', gap: 8 }}>
+                  {cardImages.map((img, i) => (
                     <div key={i}>
-                      <div onClick={() => onImageClick(img.url)} style={{ borderRadius: 8, overflow: 'hidden', cursor: 'zoom-in', boxShadow: '0 4px 16px rgba(0,0,0,0.4)' }}>
+                      <div
+                        onClick={() => onImageOpen(allUrls.indexOf(img.url), allUrls)}
+                        style={{ borderRadius: 8, overflow: 'hidden', cursor: 'zoom-in', boxShadow: '0 4px 16px rgba(0,0,0,0.4)' }}
+                      >
                         <img src={img.url} alt={`卡片${i + 1}`} style={{ width: '100%', aspectRatio: '9/16', objectFit: 'cover', display: 'block' }} />
                       </div>
                       <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.2)', textAlign: 'center', marginTop: 4 }}>{String(i + 1).padStart(2, '0')}</div>
@@ -212,6 +328,7 @@ function GenerationTab({ output, stages, isTimingReliable, onImageClick }: {
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '32px 0', color: 'rgba(255,255,255,0.2)' }}>
                 <ImageIcon size={28} style={{ marginBottom: 8, opacity: 0.3 }} />
                 <div style={{ fontSize: 13 }}>暂无图片</div>
+                <div style={{ fontSize: 11, marginTop: 4, color: 'rgba(255,255,255,0.12)' }}>图片生成完成后将在此显示</div>
               </div>
             )}
           </div>
@@ -228,7 +345,7 @@ function GenerationTab({ output, stages, isTimingReliable, onImageClick }: {
               </button>
             ))}
           </div>
-          <div style={{ padding: 20, maxHeight: 300, overflowY: 'auto' }}>
+          <div style={{ padding: 20, maxHeight: 600, overflowY: 'auto' }}>
             {textTab === 'article' ? (
               output?.article_text ? (
                 <div style={{ fontSize: 13, lineHeight: 1.8, color: 'rgba(255,255,255,0.5)' }} dangerouslySetInnerHTML={{ __html: `<p style="margin-bottom:10px">${renderMarkdown(output.article_text)}</p>` }} />
@@ -344,7 +461,7 @@ export default function PipelineOutputPage() {
   const [stages, setStages] = useState<Record<string, StageInfo>>({})
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState<TabKey>('summary')
-  const [lightbox, setLightbox] = useState<string | null>(null)
+  const [lightbox, setLightbox] = useState<LightboxState | null>(null)
 
   useEffect(() => {
     if (!id) return
@@ -367,6 +484,10 @@ export default function PipelineOutputPage() {
     { key: 'publish',    label: '发布记录', Icon: Send },
     { key: 'analytics',  label: '数据记录', Icon: BarChart2 },
   ]
+
+  const handleImageOpen = useCallback((index: number, urls: string[]) => {
+    setLightbox({ index, urls })
+  }, [])
 
   return (
     <div style={{ minHeight: '100vh', background: '#07050f', color: '#fff', fontFamily: "-apple-system,'SF Pro Display','Helvetica Neue',Arial,sans-serif" }}>
@@ -421,7 +542,7 @@ export default function PipelineOutputPage() {
             </div>
 
             {activeTab === 'summary'    && <SummaryTab output={output} stages={stages} />}
-            {activeTab === 'generation' && <GenerationTab output={output} stages={stages} isTimingReliable={isTimingReliable} onImageClick={setLightbox} />}
+            {activeTab === 'generation' && <GenerationTab output={output} stages={stages} isTimingReliable={isTimingReliable} onImageOpen={handleImageOpen} />}
             {activeTab === 'publish'    && <PublishTab />}
             {activeTab === 'analytics'  && <AnalyticsTab />}
 
@@ -430,13 +551,8 @@ export default function PipelineOutputPage() {
         </>
       )}
 
-      {/* 灯箱 */}
-      {lightbox && (
-        <div onClick={() => setLightbox(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.92)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
-          <button onClick={() => setLightbox(null)} style={{ position: 'absolute', top: 18, right: 18, width: 34, height: 34, borderRadius: '50%', background: 'rgba(255,255,255,0.1)', border: 'none', color: '#fff', fontSize: 16, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>✕</button>
-          <img src={lightbox} alt="预览" onClick={e => e.stopPropagation()} style={{ maxWidth: '100%', maxHeight: '95vh', borderRadius: 12, objectFit: 'contain', boxShadow: '0 32px 100px rgba(0,0,0,0.8)' }} />
-        </div>
-      )}
+      {/* 全屏灯箱 */}
+      {lightbox && <Lightbox state={lightbox} onClose={() => setLightbox(null)} />}
     </div>
   )
 }
