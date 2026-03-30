@@ -1,18 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import {
-  ArrowLeft,
-  CheckCircle2,
-  AlertCircle,
-  Loader2,
-  Clock,
-  Image as ImageIcon,
-  FileText,
-  BookOpen,
-  Layers,
-  FolderOpen,
-  Send,
-} from 'lucide-react'
+import { ArrowLeft, Loader2, Clock, Image as ImageIcon, FileText, BookOpen, Layers, Send, BarChart2, Radio } from 'lucide-react'
 
 // ─── 类型 ─────────────────────────────────────────────────────
 
@@ -36,10 +24,11 @@ interface StageInfo {
   started_at?: string
   completed_at?: string
   review_issues?: unknown[]
-  review_passed?: boolean
 }
 
-// ─── 工具函数 ─────────────────────────────────────────────────
+type TabKey = 'summary' | 'generation' | 'publish' | 'analytics'
+
+// ─── 常量 ─────────────────────────────────────────────────────
 
 const PIPELINE_STAGES = [
   'content-research',
@@ -61,29 +50,37 @@ const STAGE_LABELS: Record<string, string> = {
   'content-publish': '发布',
 }
 
+const PLATFORMS = [
+  { key: 'douyin',      name: '抖音',    emoji: '🎵', metric: '播放' },
+  { key: 'xiaohongshu', name: '小红书',  emoji: '📕', metric: '曝光' },
+  { key: 'wechat',      name: '微信公众号', emoji: '💬', metric: '阅读' },
+  { key: 'shipinhao',   name: '视频号',  emoji: '📱', metric: '播放' },
+  { key: 'toutiao',     name: '今日头条', emoji: '🔥', metric: '阅读' },
+  { key: 'weibo',       name: '微博',    emoji: '🐦', metric: '转发' },
+  { key: 'kuaishou',    name: '快手',    emoji: '▶',  metric: '播放' },
+  { key: 'zhihu',       name: '知乎',    emoji: '🔵', metric: '浏览' },
+]
+
+// ─── 工具函数 ─────────────────────────────────────────────────
+
 function formatDuration(start?: string, end?: string): string {
   if (!start) return '—'
-  const s = new Date(start).getTime()
-  const e = end ? new Date(end).getTime() : Date.now()
-  const ms = e - s
+  const ms = (end ? new Date(end).getTime() : Date.now()) - new Date(start).getTime()
   if (ms < 1000) return '< 1s'
-  const secs = Math.round(ms / 1000)
-  if (secs < 60) return `${secs}s`
-  return `${Math.floor(secs / 60)}m${secs % 60}s`
+  const s = Math.round(ms / 1000)
+  return s < 60 ? `${s}s` : `${Math.floor(s / 60)}m${s % 60}s`
 }
 
-// 简单的 markdown 渲染（加粗、斜体、标题、段落）
 function renderMarkdown(text: string): string {
   return text
-    .replace(/^### (.+)$/gm, '<h3 class="text-base font-semibold text-slate-800 dark:text-slate-200 mt-4 mb-1">$1</h3>')
-    .replace(/^## (.+)$/gm, '<h2 class="text-lg font-bold text-slate-900 dark:text-white mt-5 mb-2">$1</h2>')
-    .replace(/^# (.+)$/gm, '<h1 class="text-xl font-bold text-slate-900 dark:text-white mt-6 mb-3">$1</h1>')
-    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/^### (.+)$/gm, '<h3 style="font-size:13px;font-weight:600;margin:14px 0 4px;color:rgba(255,255,255,0.8)">$1</h3>')
+    .replace(/^## (.+)$/gm, '<h2 style="font-size:15px;font-weight:700;margin:18px 0 6px;color:rgba(255,255,255,0.9)">$1</h2>')
+    .replace(/^# (.+)$/gm, '<h1 style="font-size:17px;font-weight:800;margin:20px 0 8px;color:#fff">$1</h1>')
+    .replace(/\*\*(.+?)\*\*/g, '<strong style="color:rgba(255,255,255,0.85)">$1</strong>')
     .replace(/\*(.+?)\*/g, '<em>$1</em>')
-    .replace(/^> (.+)$/gm, '<blockquote class="border-l-4 border-violet-300 dark:border-violet-700 pl-4 text-slate-600 dark:text-slate-400 italic my-2">$1</blockquote>')
-    .replace(/^---+$/gm, '<hr class="border-slate-200 dark:border-slate-700 my-3" />')
-    .replace(/\n\n/g, '</p><p class="mb-3">')
-    .replace(/^(?!<[h1-6]|<blockquote|<hr)(.+)$/gm, (match) => match.startsWith('<') ? match : match)
+    .replace(/^> (.+)$/gm, '<blockquote style="border-left:3px solid #7c3aed;padding-left:12px;color:rgba(255,255,255,0.4);font-style:italic;margin:8px 0">$1</blockquote>')
+    .replace(/^---+$/gm, '<hr style="border:none;border-top:1px solid rgba(255,255,255,0.07);margin:12px 0" />')
+    .replace(/\n\n/g, '</p><p style="margin-bottom:10px">')
 }
 
 // ─── API ──────────────────────────────────────────────────────
@@ -91,111 +88,248 @@ function renderMarkdown(text: string): string {
 async function fetchOutput(id: string): Promise<PipelineOutput | null> {
   const res = await fetch(`/api/brain/pipelines/${id}/output`)
   if (!res.ok) return null
-  const data = await res.json()
-  return data.output || null
+  return (await res.json()).output || null
 }
 
 async function fetchStages(id: string): Promise<Record<string, StageInfo>> {
   const res = await fetch(`/api/brain/pipelines/${id}/stages`)
   if (!res.ok) return {}
-  const data = await res.json()
-  return data.stages || {}
+  return (await res.json()).stages || {}
 }
 
-// ─── 子组件 ──────────────────────────────────────────────────
+// ─── 原子组件 ─────────────────────────────────────────────────
 
-function StageStatusIcon({ status }: { status: string }) {
-  if (status === 'completed') return <CheckCircle2 className="w-4 h-4 text-emerald-500" />
-  if (status === 'failed') return <AlertCircle className="w-4 h-4 text-red-400" />
-  if (status === 'in_progress') return <Loader2 className="w-4 h-4 text-violet-500 animate-spin" />
-  return <div className="w-4 h-4 rounded-full border-2 border-slate-200 dark:border-slate-600" />
+function StageDot({ status }: { status: string }) {
+  const base: React.CSSProperties = { width: 8, height: 8, borderRadius: '50%', flexShrink: 0 }
+  if (status === 'completed') return <div style={{ ...base, background: '#4ade80', boxShadow: '0 0 6px rgba(74,222,128,0.5)' }} />
+  if (status === 'failed') return <div style={{ ...base, background: '#f87171' }} />
+  if (status === 'in_progress') return <div style={{ ...base, background: '#a78bfa', boxShadow: '0 0 6px rgba(167,139,250,0.5)', animation: 'pulse 1.5s ease-in-out infinite' }} />
+  return <div style={{ ...base, background: 'rgba(255,255,255,0.12)' }} />
 }
 
 function StageBadge({ status }: { status: string }) {
-  const clsMap: Record<string, string> = {
-    completed: 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400',
-    failed: 'bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400',
-    in_progress: 'bg-violet-50 dark:bg-violet-900/30 text-violet-700 dark:text-violet-300',
+  const map: Record<string, [string, string]> = {
+    completed: ['完成', '#4ade80'],
+    failed: ['失败', '#f87171'],
+    in_progress: ['进行中', '#a78bfa'],
   }
-  const labelMap: Record<string, string> = {
-    completed: '完成',
-    failed: '失败',
-    in_progress: '进行中',
-    queued: '待执行',
-  }
-  const cls = clsMap[status] || 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400'
-  return (
-    <span className={`text-xs px-2 py-0.5 rounded-full flex-shrink-0 ${cls}`}>
-      {labelMap[status] || '待执行'}
-    </span>
-  )
+  const [label, color] = map[status] || ['待执行', 'rgba(255,255,255,0.25)']
+  return <span style={{ fontSize: 10, fontWeight: 600, padding: '2px 7px', borderRadius: 5, background: `${color}18`, color }}>{label}</span>
 }
 
-function StagesPanel({ stages, isTimingReliable }: { stages: Record<string, StageInfo>; isTimingReliable: boolean }) {
-  return (
-    <div className="space-y-0.5">
-      {PIPELINE_STAGES.map(key => {
-        const stage = stages[key]
-        const status = stage?.status || 'pending'
-        const duration = isTimingReliable && stage ? formatDuration(stage.started_at, stage.completed_at) : '—'
-        const issues = stage?.review_issues as string[] | undefined
+type PubStatus = 'live' | 'scheduled' | 'pending' | 'failed'
+function PubBadge({ status }: { status: PubStatus }) {
+  const map: Record<PubStatus, [string, string]> = {
+    live: ['已发布', '#4ade80'],
+    scheduled: ['定时发布', '#fbbf24'],
+    pending: ['未发布', 'rgba(255,255,255,0.25)'],
+    failed: ['发布失败', '#f87171'],
+  }
+  const [label, color] = map[status]
+  return <span style={{ fontSize: 10, fontWeight: 600, padding: '2px 8px', borderRadius: 6, background: `${color}18`, color, border: `1px solid ${color}30` }}>{label}</span>
+}
 
-        return (
-          <div key={key} className="flex items-start gap-3 py-2.5 border-b border-slate-50 dark:border-slate-800 last:border-0">
-            <div className="mt-0.5 flex-shrink-0">
-              <StageStatusIcon status={status} />
-            </div>
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2">
-                <span className="text-sm font-medium text-slate-700 dark:text-slate-300">
-                  {STAGE_LABELS[key]}
-                </span>
-                {duration !== '—' && (
-                  <span className="text-xs text-slate-400 dark:text-slate-500 flex items-center gap-0.5">
-                    <Clock className="w-3 h-3" />{duration}
-                  </span>
-                )}
-              </div>
-              {issues && issues.length > 0 && (
-                <ul className="mt-1 space-y-0.5">
-                  {(issues as string[]).map((issue, i) => (
-                    <li key={i} className="text-xs text-red-500 dark:text-red-400">• {issue}</li>
-                  ))}
-                </ul>
-              )}
-            </div>
-            <StageBadge status={status} />
+// ─── Summary Tab ──────────────────────────────────────────────
+
+function SummaryTab({ output, stages }: { output: PipelineOutput | null; stages: Record<string, StageInfo> }) {
+  const doneCount = PIPELINE_STAGES.filter(k => stages[k]?.status === 'completed').length
+  const imgCount = output?.image_urls?.length || 0
+
+  const cards = [
+    { num: '—', label: '总曝光', sub: '发布后可见' },
+    { num: '—', label: '总互动', sub: '点赞+评论+收藏' },
+    { num: `${doneCount}/${PIPELINE_STAGES.length}`, label: '生成阶段', sub: '已完成' },
+    { num: `${imgCount}`, label: '图片产出', sub: '张' },
+  ]
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,1fr)', gap: 12 }}>
+        {cards.map((c, i) => (
+          <div key={i} style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 14, padding: '18px 20px' }}>
+            <div style={{ fontSize: 28, fontWeight: 800, letterSpacing: -0.5, background: 'linear-gradient(135deg,#a78bfa,#7c3aed)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text' }}>{c.num}</div>
+            <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.55)', marginTop: 4 }}>{c.label}</div>
+            <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.22)', marginTop: 2 }}>{c.sub}</div>
           </div>
-        )
-      })}
+        ))}
+      </div>
+      <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 14, overflow: 'hidden' }}>
+        <div style={{ padding: '14px 20px 12px', borderBottom: '1px solid rgba(255,255,255,0.05)', fontSize: 11, fontWeight: 600, color: 'rgba(255,255,255,0.25)', letterSpacing: 3, textTransform: 'uppercase' as const }}>平台发布概览</div>
+        {PLATFORMS.map((p, i) => (
+          <div key={p.key} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 20px', borderBottom: i < PLATFORMS.length - 1 ? '1px solid rgba(255,255,255,0.04)' : 'none' }}>
+            <span style={{ fontSize: 16 }}>{p.emoji}</span>
+            <span style={{ fontSize: 13, color: 'rgba(255,255,255,0.5)', flex: 1 }}>{p.name}</span>
+            <PubBadge status="pending" />
+          </div>
+        ))}
+      </div>
     </div>
   )
 }
 
-function ExportPathPanel({ keyword, exportPath }: { keyword?: string; exportPath?: string }) {
-  const displayPath = exportPath || (keyword ? `~/perfect21/zenithjoy/content-output/*-${keyword}/` : null)
-  if (!displayPath) return null
+// ─── Generation Tab ───────────────────────────────────────────
+
+function GenerationTab({ output, stages, isTimingReliable, onImageClick }: {
+  output: PipelineOutput | null
+  stages: Record<string, StageInfo>
+  isTimingReliable: boolean
+  onImageClick: (url: string) => void
+}) {
+  const [textTab, setTextTab] = useState<'article' | 'cards'>('article')
+  const coverImage = output?.image_urls?.find(u => u.type === 'cover')
+  const cardImages = output?.image_urls?.filter(u => u.type === 'card') || []
+  const hasImages = (output?.image_urls?.length || 0) > 0
 
   return (
-    <div className="bg-white dark:bg-slate-800/50 rounded-xl border border-slate-200 dark:border-slate-700/50 shadow-sm p-4">
-      <div className="flex items-center gap-2 mb-3">
-        <div className="w-7 h-7 rounded-lg bg-slate-100 dark:bg-slate-700 flex items-center justify-center">
-          <FolderOpen className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400" />
+    <div style={{ display: 'grid', gridTemplateColumns: '1fr 260px', gap: 24, alignItems: 'start' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+        {/* 图片区 */}
+        <div style={{ background: 'rgba(255,255,255,0.025)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 14, overflow: 'hidden' }}>
+          <div style={{ padding: '14px 18px 12px', borderBottom: '1px solid rgba(255,255,255,0.05)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span style={{ fontSize: 11, fontWeight: 600, color: 'rgba(255,255,255,0.25)', letterSpacing: 3, textTransform: 'uppercase' as const }}>内容图片</span>
+            <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.2)' }}>{output?.image_urls?.length || 0} 张</span>
+          </div>
+          <div style={{ padding: 18 }}>
+            {hasImages ? (
+              <div style={{ display: 'flex', gap: 14, alignItems: 'flex-start' }}>
+                {coverImage && (
+                  <div onClick={() => onImageClick(coverImage.url)} style={{ flexShrink: 0, width: 110, borderRadius: 10, overflow: 'hidden', boxShadow: '0 8px 32px rgba(0,0,0,0.5)', cursor: 'zoom-in' }}>
+                    <img src={coverImage.url} alt="封面" style={{ width: '100%', display: 'block' }} />
+                  </div>
+                )}
+                <div style={{ flex: 1, display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 8 }}>
+                  {cardImages.slice(0, 6).map((img, i) => (
+                    <div key={i}>
+                      <div onClick={() => onImageClick(img.url)} style={{ borderRadius: 8, overflow: 'hidden', cursor: 'zoom-in', boxShadow: '0 4px 16px rgba(0,0,0,0.4)' }}>
+                        <img src={img.url} alt={`卡片${i + 1}`} style={{ width: '100%', aspectRatio: '9/16', objectFit: 'cover', display: 'block' }} />
+                      </div>
+                      <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.2)', textAlign: 'center', marginTop: 4 }}>{String(i + 1).padStart(2, '0')}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '32px 0', color: 'rgba(255,255,255,0.2)' }}>
+                <ImageIcon size={28} style={{ marginBottom: 8, opacity: 0.3 }} />
+                <div style={{ fontSize: 13 }}>暂无图片</div>
+              </div>
+            )}
+          </div>
         </div>
-        <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300">导出路径</h3>
+
+        {/* 文本内容 */}
+        <div style={{ background: 'rgba(255,255,255,0.025)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 14, overflow: 'hidden' }}>
+          <div style={{ padding: '4px 6px', borderBottom: '1px solid rgba(255,255,255,0.05)', display: 'flex', gap: 4 }}>
+            {(['article', 'cards'] as const).map(t => (
+              <button key={t} onClick={() => setTextTab(t)} style={{ flex: 1, padding: '9px 12px', borderRadius: 8, border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: textTab === t ? 600 : 400, transition: 'all 0.15s', background: textTab === t ? 'rgba(124,58,237,0.2)' : 'transparent', color: textTab === t ? '#c084fc' : 'rgba(255,255,255,0.3)', borderBottom: `2px solid ${textTab === t ? '#a78bfa' : 'transparent'}` }}>
+                <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5 }}>
+                  {t === 'article' ? <><BookOpen size={12} />文章</> : <><FileText size={12} />卡片文案</>}
+                </span>
+              </button>
+            ))}
+          </div>
+          <div style={{ padding: 20, maxHeight: 300, overflowY: 'auto' }}>
+            {textTab === 'article' ? (
+              output?.article_text ? (
+                <div style={{ fontSize: 13, lineHeight: 1.8, color: 'rgba(255,255,255,0.5)' }} dangerouslySetInnerHTML={{ __html: `<p style="margin-bottom:10px">${renderMarkdown(output.article_text)}</p>` }} />
+              ) : <div style={{ textAlign: 'center', padding: '24px 0', color: 'rgba(255,255,255,0.2)', fontSize: 13 }}>暂无文章内容</div>
+            ) : (
+              output?.cards_text ? (
+                <div style={{ fontSize: 13, lineHeight: 1.8, color: 'rgba(255,255,255,0.5)', whiteSpace: 'pre-wrap' }} dangerouslySetInnerHTML={{ __html: `<p style="margin-bottom:10px">${renderMarkdown(output.cards_text)}</p>` }} />
+              ) : <div style={{ textAlign: 'center', padding: '24px 0', color: 'rgba(255,255,255,0.2)', fontSize: 13 }}>暂无卡片文案</div>
+            )}
+          </div>
+        </div>
       </div>
-      <p className="text-xs font-mono text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-800 rounded-lg px-3 py-2 break-all leading-relaxed">
-        {displayPath}
-      </p>
-      <div className="mt-2 space-y-1">
-        <div className="flex items-center gap-1.5 text-xs text-slate-400 dark:text-slate-500">
-          <FileText className="w-3 h-3 flex-shrink-0" />
-          <span>article/article.md</span>
+
+      {/* 右侧：阶段 + 路径 */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+        <div style={{ background: 'rgba(255,255,255,0.025)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 14, overflow: 'hidden' }}>
+          <div style={{ padding: '14px 18px 12px', borderBottom: '1px solid rgba(255,255,255,0.05)', fontSize: 11, fontWeight: 600, color: 'rgba(255,255,255,0.25)', letterSpacing: 3, textTransform: 'uppercase' as const }}>生成阶段</div>
+          {PIPELINE_STAGES.map(key => {
+            const s = stages[key]
+            const status = s?.status || 'pending'
+            const dur = isTimingReliable && s ? formatDuration(s.started_at, s.completed_at) : null
+            return (
+              <div key={key} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 18px', borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+                <StageDot status={status} />
+                <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.55)', flex: 1 }}>{STAGE_LABELS[key]}</span>
+                {dur && <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', gap: 3 }}><Clock size={9} />{dur}</span>}
+                <StageBadge status={status} />
+              </div>
+            )
+          })}
         </div>
-        <div className="flex items-center gap-1.5 text-xs text-slate-400 dark:text-slate-500">
-          <FileText className="w-3 h-3 flex-shrink-0" />
-          <span>cards/copy.md</span>
+
+        {output?.keyword && (
+          <div style={{ background: 'rgba(255,255,255,0.025)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 14, padding: '14px 18px' }}>
+            <div style={{ fontSize: 11, fontWeight: 600, color: 'rgba(255,255,255,0.25)', letterSpacing: 3, textTransform: 'uppercase' as const, marginBottom: 10 }}>导出路径</div>
+            <div style={{ fontFamily: 'SF Mono,Menlo,monospace', fontSize: 11, color: 'rgba(255,255,255,0.3)', background: 'rgba(0,0,0,0.25)', borderRadius: 8, padding: '10px 12px', lineHeight: 1.8 }}>
+              <span style={{ color: '#a78bfa' }}>content-output/</span><br />
+              *-{output.keyword}/
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// ─── Publish Tab ──────────────────────────────────────────────
+
+function PublishTab() {
+  return (
+    <div style={{ background: 'rgba(255,255,255,0.025)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 14, overflow: 'hidden' }}>
+      <div style={{ padding: '14px 20px 12px', borderBottom: '1px solid rgba(255,255,255,0.05)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <span style={{ fontSize: 11, fontWeight: 600, color: 'rgba(255,255,255,0.25)', letterSpacing: 3, textTransform: 'uppercase' as const }}>平台发布记录</span>
+        <button style={{ fontSize: 11, fontWeight: 600, padding: '5px 12px', borderRadius: 7, border: '1px solid rgba(124,58,237,0.3)', background: 'rgba(124,58,237,0.15)', color: '#c084fc', cursor: 'pointer' }}>
+          + 发布到平台
+        </button>
+      </div>
+      {PLATFORMS.map((p, i) => (
+        <div key={p.key} style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '13px 20px', borderBottom: i < PLATFORMS.length - 1 ? '1px solid rgba(255,255,255,0.04)' : 'none' }}>
+          <span style={{ fontSize: 18, flexShrink: 0 }}>{p.emoji}</span>
+          <span style={{ fontSize: 13, color: 'rgba(255,255,255,0.6)', width: 80, flexShrink: 0 }}>{p.name}</span>
+          <PubBadge status="pending" />
+          <div style={{ marginLeft: 'auto' }}>
+            <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.2)' }}>—</div>
+          </div>
         </div>
+      ))}
+      <div style={{ padding: '12px 20px', borderTop: '1px solid rgba(255,255,255,0.05)', fontSize: 12, color: 'rgba(255,255,255,0.2)', textAlign: 'center' as const }}>
+        发布后数据将自动同步到「数据记录」
+      </div>
+    </div>
+  )
+}
+
+// ─── Analytics Tab ────────────────────────────────────────────
+
+function AnalyticsTab() {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <div style={{ background: 'rgba(255,255,255,0.025)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 14, overflow: 'hidden' }}>
+        <div style={{ padding: '14px 20px 12px', borderBottom: '1px solid rgba(255,255,255,0.05)', fontSize: 11, fontWeight: 600, color: 'rgba(255,255,255,0.25)', letterSpacing: 3, textTransform: 'uppercase' as const }}>平台数据</div>
+        {PLATFORMS.map((p, i) => (
+          <div key={p.key} style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '13px 20px', borderBottom: i < PLATFORMS.length - 1 ? '1px solid rgba(255,255,255,0.04)' : 'none' }}>
+            <span style={{ fontSize: 18 }}>{p.emoji}</span>
+            <span style={{ fontSize: 13, color: 'rgba(255,255,255,0.5)', width: 80 }}>{p.name}</span>
+            <PubBadge status="pending" />
+            <div style={{ marginLeft: 'auto', display: 'flex', gap: 24 }}>
+              {['曝光', '互动', '转化'].map(label => (
+                <div key={label} style={{ textAlign: 'right' as const }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: 'rgba(255,255,255,0.2)' }}>—</div>
+                  <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.15)', marginTop: 1 }}>{label}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+      <div style={{ background: 'rgba(124,58,237,0.05)', border: '1px dashed rgba(124,58,237,0.2)', borderRadius: 12, padding: '20px', textAlign: 'center' as const }}>
+        <BarChart2 size={22} style={{ color: 'rgba(167,139,250,0.4)', margin: '0 auto 8px' }} />
+        <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.3)' }}>数据接入开发中</div>
+        <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.18)', marginTop: 4 }}>发布完成后可手动录入，或等待各平台 API 自动同步</div>
       </div>
     </div>
   )
@@ -209,8 +343,8 @@ export default function PipelineOutputPage() {
   const [output, setOutput] = useState<PipelineOutput | null>(null)
   const [stages, setStages] = useState<Record<string, StageInfo>>({})
   const [loading, setLoading] = useState(true)
-  const [activeTab, setActiveTab] = useState<'article' | 'cards' | 'images'>('article')
-  const [selectedImage, setSelectedImage] = useState<string | null>(null)
+  const [activeTab, setActiveTab] = useState<TabKey>('summary')
+  const [lightbox, setLightbox] = useState<string | null>(null)
 
   useEffect(() => {
     if (!id) return
@@ -218,248 +352,89 @@ export default function PipelineOutputPage() {
     Promise.all([fetchOutput(id), fetchStages(id)]).then(([out, stg]) => {
       setOutput(out)
       setStages(stg)
-      // 自动定位到有内容的 tab
-      if (!out?.article_text && out?.image_urls?.length) setActiveTab('images')
-      else if (!out?.article_text && out?.cards_text) setActiveTab('cards')
     }).finally(() => setLoading(false))
   }, [id])
 
   const allTs = Object.values(stages)
     .flatMap(s => [s.started_at, s.completed_at])
-    .filter(Boolean)
-    .map(t => new Date(t!).getTime())
+    .filter(Boolean).map(t => new Date(t!).getTime())
   const isTimingReliable = allTs.length >= 2
-    ? (Math.max(...allTs) - Math.min(...allTs)) >= 5000
-    : false
+    ? (Math.max(...allTs) - Math.min(...allTs)) >= 5000 : false
 
-  const coverImage = output?.image_urls?.find(u => u.type === 'cover')
-  const cardImages = output?.image_urls?.filter(u => u.type === 'card') || []
-  const allImages = output?.image_urls || []
-
-  const statusConfig: Record<string, { label: string; cls: string }> = {
-    completed: { label: '已完成', cls: 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400' },
-    failed: { label: '失败', cls: 'bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400' },
-  }
-  const statusInfo = output?.status
-    ? (statusConfig[output.status] || { label: output.status, cls: 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400' })
-    : null
+  const TABS: { key: TabKey; label: string; Icon: typeof Layers }[] = [
+    { key: 'summary',    label: 'Summary',  Icon: Radio },
+    { key: 'generation', label: '生成记录', Icon: Layers },
+    { key: 'publish',    label: '发布记录', Icon: Send },
+    { key: 'analytics',  label: '数据记录', Icon: BarChart2 },
+  ]
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-900">
-      {/* 顶部导航 */}
-      <div className="bg-white dark:bg-slate-900/80 border-b border-slate-200 dark:border-slate-700/50 sticky top-0 z-10 backdrop-blur-sm">
-        <div className="max-w-6xl mx-auto px-6 py-3 flex items-center gap-4">
-          <button
-            onClick={() => navigate('/content-factory')}
-            className="inline-flex items-center gap-1.5 text-sm text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 transition-colors"
-          >
-            <ArrowLeft className="w-4 h-4" />
-            返回内容工厂
-          </button>
-          <div className="h-4 w-px bg-slate-200 dark:bg-slate-700" />
-          <h1 className="text-sm font-semibold text-slate-800 dark:text-slate-200 truncate">
-            {output?.keyword || '内容产出'}
-          </h1>
-          {statusInfo && (
-            <span className={`ml-auto text-xs px-2.5 py-0.5 rounded-full font-medium ${statusInfo.cls}`}>
-              {statusInfo.label}
-            </span>
-          )}
+    <div style={{ minHeight: '100vh', background: '#07050f', color: '#fff', fontFamily: "-apple-system,'SF Pro Display','Helvetica Neue',Arial,sans-serif" }}>
+      <style>{`@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}@keyframes spin{to{transform:rotate(360deg)}}`}</style>
+
+      {/* 导航 */}
+      <div style={{ padding: '14px 40px', borderBottom: '1px solid rgba(255,255,255,0.06)', display: 'flex', alignItems: 'center', gap: 14, background: 'rgba(7,5,15,0.9)', backdropFilter: 'blur(12px)', position: 'sticky', top: 0, zIndex: 20 }}>
+        <button onClick={() => navigate('/content-factory')} style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, color: 'rgba(255,255,255,0.3)', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
+          <ArrowLeft size={14} /> 内容工厂
+        </button>
+        <div style={{ width: 1, height: 14, background: 'rgba(255,255,255,0.1)' }} />
+        <span style={{ fontSize: 13, color: 'rgba(255,255,255,0.4)' }}>作品主页</span>
+        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 7 }}>
+          <div style={{ width: 6, height: 6, borderRadius: '50%', background: output?.status === 'completed' ? '#4ade80' : '#fbbf24', boxShadow: output?.status === 'completed' ? '0 0 6px rgba(74,222,128,0.5)' : 'none' }} />
+          <span style={{ fontSize: 12, color: output?.status === 'completed' ? '#4ade80' : '#fbbf24' }}>
+            {output?.status === 'completed' ? '已完成' : (output?.status || '加载中')}
+          </span>
         </div>
       </div>
 
       {loading ? (
-        <div className="flex items-center justify-center h-64">
-          <Loader2 className="w-5 h-5 animate-spin text-violet-500 mr-2" />
-          <span className="text-slate-500 dark:text-slate-400 text-sm">加载产出内容...</span>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 300, gap: 10, color: 'rgba(255,255,255,0.3)' }}>
+          <Loader2 size={18} style={{ animation: 'spin 1s linear infinite' }} />
+          <span style={{ fontSize: 13 }}>加载中...</span>
         </div>
       ) : (
-        <div className="max-w-6xl mx-auto px-6 py-6">
-          <div className="grid grid-cols-[1fr_280px] gap-6">
-            {/* 左侧主内容 */}
-            <div className="space-y-4">
-              {/* Hero 封面图 */}
-              {coverImage && (
-                <div
-                  className="hero relative rounded-xl overflow-hidden bg-slate-900 cursor-pointer group shadow-sm"
-                  onClick={() => setSelectedImage(coverImage.url)}
-                  style={{ maxHeight: '320px' }}
-                >
-                  <img
-                    src={coverImage.url}
-                    alt="封面"
-                    className="w-full object-contain max-h-80 group-hover:opacity-90 transition-opacity"
-                  />
-                  <div className="absolute bottom-0 left-0 right-0 h-16 bg-gradient-to-t from-black/40 to-transparent flex items-end px-4 pb-3">
-                    <span className="text-xs text-white/80 flex items-center gap-1">
-                      <ImageIcon className="w-3 h-3" /> 封面图 · 点击查看大图
-                    </span>
-                  </div>
-                </div>
-              )}
-
-              {/* Tab 切换 */}
-              <div className="flex gap-1 bg-white dark:bg-slate-800/50 rounded-xl border border-slate-200 dark:border-slate-700/50 p-1 shadow-sm">
-                {[
-                  { key: 'article', label: '文章', icon: BookOpen, disabled: !output?.article_text },
-                  { key: 'cards', label: '卡片文案', icon: FileText, disabled: !output?.cards_text },
-                  { key: 'images', label: `图片 (${allImages.length})`, icon: ImageIcon, disabled: allImages.length === 0 },
-                ].map(tab => (
-                  <button
-                    key={tab.key}
-                    onClick={() => !tab.disabled && setActiveTab(tab.key as typeof activeTab)}
-                    disabled={tab.disabled}
-                    className={`flex-1 inline-flex items-center justify-center gap-1.5 px-4 py-2 text-sm rounded-lg font-medium transition-colors ${
-                      activeTab === tab.key
-                        ? 'bg-violet-600 dark:bg-violet-500 text-white shadow-sm'
-                        : tab.disabled
-                        ? 'text-slate-300 dark:text-slate-600 cursor-not-allowed'
-                        : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700/50'
-                    }`}
-                  >
-                    <tab.icon className="w-4 h-4" />
-                    {tab.label}
-                  </button>
-                ))}
-              </div>
-
-              {/* 文章内容 */}
-              {activeTab === 'article' && (
-                <div className="bg-white dark:bg-slate-800/50 rounded-xl border border-slate-200 dark:border-slate-700/50 shadow-sm p-6">
-                  {output?.article_text ? (
-                    <div
-                      className="prose prose-sm max-w-none text-slate-700 dark:text-slate-300 leading-relaxed"
-                      dangerouslySetInnerHTML={{
-                        __html: `<p class="mb-3">${renderMarkdown(output.article_text)}</p>`
-                      }}
-                    />
-                  ) : (
-                    <div className="flex flex-col items-center justify-center py-16 text-slate-400 dark:text-slate-500">
-                      <BookOpen className="w-10 h-10 mb-3 opacity-30" />
-                      <p className="text-sm">暂无文章内容</p>
-                      <p className="text-xs mt-1">Pipeline 完成后文章将显示在这里</p>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* 卡片文案 */}
-              {activeTab === 'cards' && (
-                <div className="bg-white dark:bg-slate-800/50 rounded-xl border border-slate-200 dark:border-slate-700/50 shadow-sm p-6">
-                  {output?.cards_text ? (
-                    <div
-                      className="prose prose-sm max-w-none text-slate-700 dark:text-slate-300 leading-relaxed whitespace-pre-wrap"
-                      dangerouslySetInnerHTML={{
-                        __html: `<p class="mb-3">${renderMarkdown(output.cards_text)}</p>`
-                      }}
-                    />
-                  ) : (
-                    <div className="flex flex-col items-center justify-center py-16 text-slate-400 dark:text-slate-500">
-                      <FileText className="w-10 h-10 mb-3 opacity-30" />
-                      <p className="text-sm">暂无卡片文案</p>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* 图片 */}
-              {activeTab === 'images' && (
-                <div className="bg-white dark:bg-slate-800/50 rounded-xl border border-slate-200 dark:border-slate-700/50 shadow-sm p-6">
-                  {allImages.length > 0 ? (
-                    <div>
-                      {coverImage && (
-                        <div className="mb-4">
-                          <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-2">封面</p>
-                          <img
-                            src={coverImage.url}
-                            alt="封面"
-                            className="rounded-xl max-h-80 object-contain cursor-pointer hover:opacity-90 transition-opacity"
-                            onClick={() => setSelectedImage(coverImage.url)}
-                          />
-                        </div>
-                      )}
-                      {cardImages.length > 0 && (
-                        <div>
-                          <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-2">内容卡片（{cardImages.length} 张）</p>
-                          <div className="grid grid-cols-3 gap-3">
-                            {cardImages.map((img, i) => (
-                              <img
-                                key={i}
-                                src={img.url}
-                                alt={`卡片 ${img.index}`}
-                                className="rounded-lg w-full aspect-[9/16] object-cover cursor-pointer hover:opacity-90 transition-opacity"
-                                onClick={() => setSelectedImage(img.url)}
-                              />
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  ) : (
-                    <div className="flex flex-col items-center justify-center py-16 text-slate-400 dark:text-slate-500">
-                      <ImageIcon className="w-10 h-10 mb-3 opacity-30" />
-                      <p className="text-sm">暂无图片</p>
-                      <p className="text-xs mt-1">图片生成阶段完成后将显示在这里</p>
-                    </div>
-                  )}
-                </div>
-              )}
+        <>
+          {/* Hero */}
+          <div style={{ maxWidth: 1100, margin: '0 auto', padding: '48px 40px 36px', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+            <div style={{ fontSize: 11, fontWeight: 600, color: 'rgba(192,132,252,0.5)', letterSpacing: 3, textTransform: 'uppercase', marginBottom: 12 }}>内容产出</div>
+            <div style={{ fontSize: 44, fontWeight: 800, letterSpacing: -1.5, lineHeight: 1.1, background: 'linear-gradient(135deg,#ffffff 0%,#c084fc 55%,#7c3aed 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text', maxWidth: 700 }}>
+              {output?.keyword || '内容产出'}
             </div>
-
-            {/* 右侧面板 */}
-            <div className="space-y-4">
-              {/* 执行阶段 */}
-              <div className="bg-white dark:bg-slate-800/50 rounded-xl border border-slate-200 dark:border-slate-700/50 shadow-sm p-4">
-                <div className="flex items-center gap-2 mb-3">
-                  <div className="w-7 h-7 rounded-lg bg-slate-100 dark:bg-slate-700 flex items-center justify-center">
-                    <Layers className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400" />
-                  </div>
-                  <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-300">执行阶段</h2>
-                </div>
-                <StagesPanel stages={stages} isTimingReliable={isTimingReliable} />
-              </div>
-
-              {/* 发布状态（如有 content_publish 阶段） */}
-              {stages['content_publish'] && (
-                <div className="bg-white dark:bg-slate-800/50 rounded-xl border border-slate-200 dark:border-slate-700/50 shadow-sm p-4">
-                  <div className="flex items-center gap-2 mb-3">
-                    <div className="w-7 h-7 rounded-lg bg-violet-50 dark:bg-violet-900/30 flex items-center justify-center">
-                      <Send className="w-3.5 h-3.5 text-violet-500 dark:text-violet-400" />
-                    </div>
-                    <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-300">发布状态</h2>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-slate-600 dark:text-slate-400">内容发布</span>
-                    <StageBadge status={stages['content_publish'].status} />
-                  </div>
-                </div>
-              )}
-
-              {/* 导出路径 */}
-              <ExportPathPanel keyword={output?.keyword} exportPath={output?.export_path} />
+            <div style={{ display: 'flex', alignItems: 'center', gap: 20, marginTop: 16, flexWrap: 'wrap' }}>
+              <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.28)', display: 'flex', alignItems: 'center', gap: 5 }}><ImageIcon size={12} />{output?.image_urls?.length || 0} 张图片</span>
+              {output?.article_text && <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.28)', display: 'flex', alignItems: 'center', gap: 5 }}><BookOpen size={12} />文章</span>}
+              {output?.cards_text && <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.28)', display: 'flex', alignItems: 'center', gap: 5 }}><FileText size={12} />卡片文案</span>}
             </div>
           </div>
-        </div>
+
+          {/* Tabs + 内容 */}
+          <div style={{ maxWidth: 1100, margin: '0 auto', padding: '0 40px' }}>
+            <div style={{ display: 'flex', gap: 2, borderBottom: '1px solid rgba(255,255,255,0.07)', marginBottom: 28 }}>
+              {TABS.map(({ key, label, Icon }) => {
+                const active = activeTab === key
+                return (
+                  <button key={key} onClick={() => setActiveTab(key)} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '14px 20px', fontSize: 13, fontWeight: active ? 600 : 400, color: active ? '#c084fc' : 'rgba(255,255,255,0.35)', background: 'none', border: 'none', cursor: 'pointer', borderBottom: `2px solid ${active ? '#a78bfa' : 'transparent'}`, marginBottom: -1, transition: 'all 0.15s' }}>
+                    <Icon size={14} />{label}
+                  </button>
+                )
+              })}
+            </div>
+
+            {activeTab === 'summary'    && <SummaryTab output={output} stages={stages} />}
+            {activeTab === 'generation' && <GenerationTab output={output} stages={stages} isTimingReliable={isTimingReliable} onImageClick={setLightbox} />}
+            {activeTab === 'publish'    && <PublishTab />}
+            {activeTab === 'analytics'  && <AnalyticsTab />}
+
+            <div style={{ height: 60 }} />
+          </div>
+        </>
       )}
 
-      {/* 图片全屏预览 */}
-      {selectedImage && (
-        <div
-          className="fixed inset-0 bg-black/80 dark:bg-black/90 z-50 flex items-center justify-center p-4"
-          onClick={() => setSelectedImage(null)}
-        >
-          <img
-            src={selectedImage}
-            alt="预览"
-            className="max-w-full max-h-full object-contain rounded-lg shadow-2xl"
-            onClick={e => e.stopPropagation()}
-          />
-          <button
-            onClick={() => setSelectedImage(null)}
-            className="absolute top-4 right-4 text-white/70 hover:text-white text-2xl font-light w-10 h-10 flex items-center justify-center rounded-full bg-black/20 hover:bg-black/40 transition-colors"
-          >
-            ✕
-          </button>
+      {/* 灯箱 */}
+      {lightbox && (
+        <div onClick={() => setLightbox(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.92)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+          <button onClick={() => setLightbox(null)} style={{ position: 'absolute', top: 18, right: 18, width: 34, height: 34, borderRadius: '50%', background: 'rgba(255,255,255,0.1)', border: 'none', color: '#fff', fontSize: 16, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>✕</button>
+          <img src={lightbox} alt="预览" onClick={e => e.stopPropagation()} style={{ maxWidth: '100%', maxHeight: '95vh', borderRadius: 12, objectFit: 'contain', boxShadow: '0 32px 100px rgba(0,0,0,0.8)' }} />
         </div>
       )}
     </div>
