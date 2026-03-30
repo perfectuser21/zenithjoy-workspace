@@ -43,6 +43,14 @@ interface Pipeline {
   completed_at?: string
 }
 
+interface StageInfo {
+  status: string
+  started_at?: string
+  completed_at?: string
+  error?: string
+  error_message?: string
+}
+
 const PIPELINE_STAGES = ['content-research', 'content-copywriting', 'content-copy-review', 'content-generate', 'content-image-review', 'content-export'] as const
 const STAGE_LABELS: Record<string, string> = {
   'content-research': '调研',
@@ -116,11 +124,19 @@ async function fetchContentTypes(): Promise<string[]> {
   return res.json()
 }
 
+async function fetchContentTypeConfig(type: string): Promise<{ notebook_id?: string } | null> {
+  const res = await fetch(`/api/brain/content-types/${encodeURIComponent(type)}/config`)
+  if (!res.ok) return null
+  const data = await res.json()
+  return data.config || null
+}
+
 async function createPipeline(params: {
   keyword: string
   content_type: string
   priority?: string
   platforms?: string[]
+  notebook_id?: string
 }): Promise<Pipeline> {
   const res = await fetch('/api/brain/pipelines', {
     method: 'POST',
@@ -142,7 +158,7 @@ async function runPipeline(id: string): Promise<void> {
   }
 }
 
-async function fetchPipelineStages(id: string): Promise<Record<string, { status: string }>> {
+async function fetchPipelineStages(id: string): Promise<Record<string, StageInfo>> {
   const res = await fetch(`/api/brain/pipelines/${id}/stages`)
   if (!res.ok) return {}
   const data = await res.json()
@@ -211,6 +227,14 @@ function CreatePipelineForm({ onCreated }: { onCreated: () => void }) {
     })
   }, [])
 
+  // 选内容类型后自动从配置带入 notebook_id
+  useEffect(() => {
+    if (!contentType) return
+    fetchContentTypeConfig(contentType).then(cfg => {
+      setNotebookId(cfg?.notebook_id || '')
+    })
+  }, [contentType])
+
   const handleCreate = async () => {
     const trimmed = keyword.trim()
     if (!trimmed) {
@@ -224,7 +248,7 @@ function CreatePipelineForm({ onCreated }: { onCreated: () => void }) {
     setCreating(true)
     setCreateError('')
     try {
-      await createPipeline({ keyword: trimmed, content_type: contentType, platforms })
+      await createPipeline({ keyword: trimmed, content_type: contentType, platforms, notebook_id: notebookId || undefined })
       setKeyword('')
       setAngle('')
       setNotebookId('')
@@ -294,14 +318,19 @@ function CreatePipelineForm({ onCreated }: { onCreated: () => void }) {
 
         <div>
           <label className="block text-xs font-medium text-gray-600 mb-1">
-            NotebookLM ID <span className="text-gray-400 font-normal">(可选)</span>
+            NotebookLM ID
+            {notebookId ? (
+              <span className="ml-1 text-xs text-green-600 font-normal">（已从内容类型配置自动填入）</span>
+            ) : (
+              <span className="text-gray-400 font-normal"> (可选)</span>
+            )}
           </label>
           <input
             type="text"
             value={notebookId}
             onChange={e => setNotebookId(e.target.value)}
-            placeholder="已有调研的 Notebook ID"
-            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400"
+            placeholder="选择内容类型后自动填入，或手动输入"
+            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400 font-mono"
           />
         </div>
 
@@ -367,6 +396,86 @@ function CreatePipelineForm({ onCreated }: { onCreated: () => void }) {
   )
 }
 
+// ─── Stage 详情视图 ─────────────────────────────────────────────
+
+function StageDetailView({ stages, loading }: { stages: Record<string, StageInfo>; loading: boolean }) {
+  if (loading) {
+    return (
+      <div className="mt-3 pt-3 border-t border-gray-100 flex items-center justify-center py-4">
+        <Loader2 className="w-4 h-4 animate-spin text-gray-400 mr-2" />
+        <span className="text-xs text-gray-400">加载阶段详情...</span>
+      </div>
+    )
+  }
+
+  const stageOrder = PIPELINE_STAGES
+
+  const formatDuration = (start?: string, end?: string) => {
+    if (!start) return null
+    const s = new Date(start).getTime()
+    const e = end ? new Date(end).getTime() : Date.now()
+    const secs = Math.round((e - s) / 1000)
+    if (secs < 60) return `${secs}s`
+    return `${Math.floor(secs / 60)}m${secs % 60}s`
+  }
+
+  const statusIcon = (status: string) => {
+    if (status === 'completed') return <CheckCircle2 className="w-3.5 h-3.5 text-green-500 flex-shrink-0" />
+    if (status === 'failed') return <AlertCircle className="w-3.5 h-3.5 text-red-500 flex-shrink-0" />
+    if (status === 'in_progress') return <Loader2 className="w-3.5 h-3.5 text-blue-500 animate-spin flex-shrink-0" />
+    return <div className="w-3.5 h-3.5 rounded-full border border-gray-200 flex-shrink-0" />
+  }
+
+  const hasAnyStage = stageOrder.some(s => stages[s])
+
+  if (!hasAnyStage) {
+    return (
+      <div className="mt-3 pt-3 border-t border-gray-100">
+        <p className="text-xs text-gray-400 text-center py-2">暂无阶段数据</p>
+      </div>
+    )
+  }
+
+  return (
+    <div className="mt-3 pt-3 border-t border-gray-100 space-y-1">
+      {stageOrder.map(stageKey => {
+        const stage = stages[stageKey]
+        const label = STAGE_LABELS[stageKey]
+        const status = stage?.status || 'pending'
+        const duration = stage ? formatDuration(stage.started_at, stage.completed_at) : null
+        const errorMsg = stage?.error || stage?.error_message
+
+        return (
+          <div key={stageKey} className="flex items-start gap-2 py-1">
+            {statusIcon(status)}
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-medium text-gray-700">{label}</span>
+                {duration && (
+                  <span className="text-xs text-gray-400 flex items-center gap-0.5">
+                    <Clock className="w-2.5 h-2.5" />{duration}
+                  </span>
+                )}
+              </div>
+              {status === 'failed' && errorMsg && (
+                <p className="text-xs text-red-500 mt-0.5 break-words">{errorMsg}</p>
+              )}
+            </div>
+            <span className={`text-[10px] px-1.5 py-0.5 rounded border flex-shrink-0 ${
+              status === 'completed' ? 'bg-green-50 text-green-700 border-green-200' :
+              status === 'failed' ? 'bg-red-50 text-red-700 border-red-200' :
+              status === 'in_progress' ? 'bg-blue-50 text-blue-700 border-blue-200' :
+              'bg-gray-50 text-gray-500 border-gray-200'
+            }`}>
+              {status === 'completed' ? '完成' : status === 'failed' ? '失败' : status === 'in_progress' ? '进行中' : '待执行'}
+            </span>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
 // ─── Pipeline 卡片 ─────────────────────────────────────────────
 
 function PipelineCard({ pipeline, onRefresh }: { pipeline: Pipeline; onRefresh?: () => void }) {
@@ -376,6 +485,9 @@ function PipelineCard({ pipeline, onRefresh }: { pipeline: Pipeline; onRefresh?:
   const [running, setRunning] = useState(false)
   const [showOutput, setShowOutput] = useState(false)
   const [output, setOutput] = useState<{ keyword: string; images?: { cover: string; cards: string[] } } | null>(null)
+  const [expanded, setExpanded] = useState(false)
+  const [stages, setStages] = useState<Record<string, StageInfo>>({})
+  const [loadingStages, setLoadingStages] = useState(false)
 
   const handleRun = async () => {
     setRunning(true)
@@ -395,6 +507,16 @@ function PipelineCard({ pipeline, onRefresh }: { pipeline: Pipeline; onRefresh?:
       setOutput(data)
     }
     setShowOutput(!showOutput)
+  }
+
+  const handleToggleExpand = async () => {
+    if (!expanded && Object.keys(stages).length === 0) {
+      setLoadingStages(true)
+      const data = await fetchPipelineStages(pipeline.id)
+      setStages(data)
+      setLoadingStages(false)
+    }
+    setExpanded(prev => !prev)
   }
 
   return (
@@ -421,6 +543,13 @@ function PipelineCard({ pipeline, onRefresh }: { pipeline: Pipeline; onRefresh?:
           {formatDate(pipeline.created_at)}
         </div>
         <div className="flex gap-1">
+          <button
+            onClick={handleToggleExpand}
+            className="inline-flex items-center gap-1 px-2 py-1 text-xs bg-gray-50 text-gray-500 rounded-md hover:bg-gray-100 transition-colors border border-gray-100"
+          >
+            {loadingStages ? <Loader2 className="w-3 h-3 animate-spin" /> : <Eye className="w-3 h-3" />}
+            {expanded ? '收起' : '步骤'}
+          </button>
           {pipeline.status === 'queued' && (
             <button
               onClick={handleRun}
@@ -437,11 +566,14 @@ function PipelineCard({ pipeline, onRefresh }: { pipeline: Pipeline; onRefresh?:
               className="inline-flex items-center gap-1 px-2 py-1 text-xs bg-green-50 text-green-700 rounded-md hover:bg-green-100 transition-colors"
             >
               <Eye className="w-3 h-3" />
-              {showOutput ? '收起' : '查看产出'}
+              {showOutput ? '收起产出' : '查看产出'}
             </button>
           )}
         </div>
       </div>
+      {expanded && (
+        <StageDetailView stages={stages} loading={loadingStages} />
+      )}
       {showOutput && output?.images && (
         <div className="mt-3 border-t border-gray-100 pt-3">
           <div className="grid grid-cols-3 gap-1.5">

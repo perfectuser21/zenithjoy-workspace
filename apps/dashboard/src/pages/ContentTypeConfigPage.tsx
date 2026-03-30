@@ -488,6 +488,8 @@ export default function ContentTypeConfigPage() {
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
   const [configUpdatedAt, setConfigUpdatedAt] = useState<string>('')
   const [configSource, setConfigSource] = useState<string>('')
+  const [notebookIdDraft, setNotebookIdDraft] = useState('')
+  const [savingNotebook, setSavingNotebook] = useState(false)
 
   // 测试配置
   const [testModel, setTestModel] = useState('claude-sonnet-4-20250514')
@@ -521,10 +523,12 @@ export default function ContentTypeConfigPage() {
       setConfig(data.config)
       setConfigUpdatedAt(data.updated_at)
       setConfigSource(data.source)
+      setNotebookIdDraft((data.config?.notebook_id as string) || '')
     } else {
       setConfig({})
       setConfigUpdatedAt('')
       setConfigSource('')
+      setNotebookIdDraft('')
       setMessage({ type: 'error', text: '加载配置失败' })
     }
     setLoading(false)
@@ -623,6 +627,22 @@ export default function ContentTypeConfigPage() {
 
     setTestResultsModified(prev => ({ ...prev, [selectedNode]: result }))
     setTestingModified(false)
+  }
+
+  const handleSaveNotebookId = async () => {
+    if (!selectedType || !config) return
+    setSavingNotebook(true)
+    setMessage(null)
+    const updatedConfig = { ...config, notebook_id: notebookIdDraft }
+    const ok = await saveTypeConfig(selectedType, updatedConfig)
+    if (ok) {
+      setConfig(updatedConfig)
+      setMessage({ type: 'success', text: 'NotebookLM ID 已保存' })
+      setConfigUpdatedAt(new Date().toISOString())
+    } else {
+      setMessage({ type: 'error', text: '保存失败' })
+    }
+    setSavingNotebook(false)
   }
 
   const handleSeed = async () => {
@@ -758,6 +778,31 @@ export default function ContentTypeConfigPage() {
                       )}
                     </div>
                   </div>
+                </div>
+
+                {/* NotebookLM ID 配置 */}
+                <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-4 mb-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-semibold text-slate-700 dark:text-slate-300">NotebookLM ID</span>
+                      <span className="text-xs text-slate-400 dark:text-slate-500">（新建 Pipeline 时自动带入）</span>
+                    </div>
+                    <button
+                      onClick={handleSaveNotebookId}
+                      disabled={savingNotebook || notebookIdDraft === ((config?.notebook_id as string) || '')}
+                      className="flex items-center gap-1 px-3 py-1 text-xs font-medium bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors disabled:opacity-50"
+                    >
+                      {savingNotebook ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
+                      保存
+                    </button>
+                  </div>
+                  <input
+                    type="text"
+                    value={notebookIdDraft}
+                    onChange={e => setNotebookIdDraft(e.target.value)}
+                    placeholder="如：abc123def456（来自 NotebookLM URL）"
+                    className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-slate-100 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent font-mono"
+                  />
                 </div>
 
                 {/* 流水线节点可视化 */}
