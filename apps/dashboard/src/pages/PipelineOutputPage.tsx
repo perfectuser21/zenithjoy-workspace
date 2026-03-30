@@ -131,13 +131,13 @@ function StageBadge({ status }: { status: string }) {
   )
 }
 
-function StagesPanel({ stages }: { stages: Record<string, StageInfo> }) {
+function StagesPanel({ stages, isTimingReliable }: { stages: Record<string, StageInfo>; isTimingReliable: boolean }) {
   return (
     <div className="space-y-0.5">
       {PIPELINE_STAGES.map(key => {
         const stage = stages[key]
         const status = stage?.status || 'pending'
-        const duration = stage ? formatDuration(stage.started_at, stage.completed_at) : '—'
+        const duration = isTimingReliable && stage ? formatDuration(stage.started_at, stage.completed_at) : '—'
         const issues = stage?.review_issues as string[] | undefined
 
         return (
@@ -223,6 +223,14 @@ export default function PipelineOutputPage() {
       else if (!out?.article_text && out?.cards_text) setActiveTab('cards')
     }).finally(() => setLoading(false))
   }, [id])
+
+  const allTs = Object.values(stages)
+    .flatMap(s => [s.started_at, s.completed_at])
+    .filter(Boolean)
+    .map(t => new Date(t!).getTime())
+  const isTimingReliable = allTs.length >= 2
+    ? (Math.max(...allTs) - Math.min(...allTs)) >= 5000
+    : false
 
   const coverImage = output?.image_urls?.find(u => u.type === 'cover')
   const cardImages = output?.image_urls?.filter(u => u.type === 'card') || []
@@ -408,7 +416,7 @@ export default function PipelineOutputPage() {
                   </div>
                   <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-300">执行阶段</h2>
                 </div>
-                <StagesPanel stages={stages} />
+                <StagesPanel stages={stages} isTimingReliable={isTimingReliable} />
               </div>
 
               {/* 发布状态（如有 content_publish 阶段） */}
