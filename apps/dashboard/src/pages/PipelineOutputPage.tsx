@@ -19,11 +19,21 @@ interface PipelineOutput {
   export_path?: string
 }
 
+interface RuleScore {
+  id: string
+  score: number
+  pass: boolean
+  comment?: string
+}
+
 interface StageInfo {
   status: string
   started_at?: string
   completed_at?: string
   review_issues?: unknown[]
+  review_passed?: boolean
+  rule_scores?: RuleScore[]
+  llm_reviewed?: boolean
 }
 
 interface LightboxState {
@@ -449,6 +459,24 @@ function GenerationTab({ output, stages, isTimingReliable, onImageOpen, pipeline
                     <div style={{ marginTop: 6, padding: '8px 10px', borderRadius: 8, background: 'rgba(248,113,113,0.07)', border: '1px solid rgba(248,113,113,0.15)' }}>
                       {errors!.map((e, i) => (
                         <div key={i} style={{ fontSize: 11, color: 'rgba(248,113,113,0.8)', lineHeight: 1.6 }}>{typeof e === 'string' ? e : JSON.stringify(e)}</div>
+                      ))}
+                    </div>
+                  )}
+                  {/* AI 审核结果 */}
+                  {s?.review_passed !== undefined && (
+                    <div style={{ marginTop: 6, display: 'inline-flex', alignItems: 'center', gap: 5, padding: '3px 8px', borderRadius: 6, background: s.review_passed ? 'rgba(74,222,128,0.08)' : 'rgba(248,113,113,0.08)', border: `1px solid ${s.review_passed ? 'rgba(74,222,128,0.2)' : 'rgba(248,113,113,0.2)'}` }}>
+                      <span style={{ fontSize: 11, color: s.review_passed ? '#4ade80' : '#f87171' }}>{s.review_passed ? '✓ AI 审核通过' : '✗ AI 审核未通过'}</span>
+                    </div>
+                  )}
+                  {/* 逐条评分 */}
+                  {s?.llm_reviewed && s?.rule_scores && s.rule_scores.length > 0 && (
+                    <div style={{ marginTop: 6, padding: '8px 10px', borderRadius: 8, background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)' }}>
+                      {s.rule_scores.map((r) => (
+                        <div key={r.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 8, padding: '3px 0', borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+                          <span style={{ fontSize: 10, minWidth: 16, textAlign: 'center', fontWeight: 600, color: r.pass ? '#4ade80' : '#f87171', marginTop: 1 }}>{r.score}</span>
+                          <span style={{ fontSize: 11, color: r.pass ? 'rgba(255,255,255,0.5)' : 'rgba(248,113,113,0.7)', flex: 1 }}>{r.id}{r.comment ? `：${r.comment}` : ''}</span>
+                          <span style={{ fontSize: 10, color: r.pass ? 'rgba(74,222,128,0.6)' : 'rgba(248,113,113,0.5)', flexShrink: 0 }}>{r.pass ? '通过' : '未通过'}</span>
+                        </div>
                       ))}
                     </div>
                   )}
