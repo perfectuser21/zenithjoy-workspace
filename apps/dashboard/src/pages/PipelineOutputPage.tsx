@@ -473,6 +473,21 @@ export default function PipelineOutputPage() {
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState<TabKey>('generation')
   const [lightbox, setLightbox] = useState<LightboxState | null>(null)
+  const [isPageFullscreen, setIsPageFullscreen] = useState(false)
+
+  useEffect(() => {
+    const handler = () => setIsPageFullscreen(!!document.fullscreenElement)
+    document.addEventListener('fullscreenchange', handler)
+    return () => document.removeEventListener('fullscreenchange', handler)
+  }, [])
+
+  const togglePageFullscreen = async () => {
+    if (!document.fullscreenElement) {
+      await document.documentElement.requestFullscreen()
+    } else {
+      await document.exitFullscreen()
+    }
+  }
 
   useEffect(() => {
     if (!id) return
@@ -511,11 +526,20 @@ export default function PipelineOutputPage() {
         </button>
         <div style={{ width: 1, height: 14, background: 'rgba(255,255,255,0.1)' }} />
         <span style={{ fontSize: 13, color: 'rgba(255,255,255,0.4)' }}>作品主页</span>
-        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 7 }}>
-          <div style={{ width: 6, height: 6, borderRadius: '50%', background: output?.status === 'completed' ? '#4ade80' : '#fbbf24', boxShadow: output?.status === 'completed' ? '0 0 6px rgba(74,222,128,0.5)' : 'none' }} />
-          <span style={{ fontSize: 12, color: output?.status === 'completed' ? '#4ade80' : '#fbbf24' }}>
-            {output?.status === 'completed' ? '已完成' : (output?.status || '加载中')}
-          </span>
+        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 14 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+            <div style={{ width: 6, height: 6, borderRadius: '50%', background: output?.status === 'completed' ? '#4ade80' : '#fbbf24', boxShadow: output?.status === 'completed' ? '0 0 6px rgba(74,222,128,0.5)' : 'none' }} />
+            <span style={{ fontSize: 12, color: output?.status === 'completed' ? '#4ade80' : '#fbbf24' }}>
+              {output?.status === 'completed' ? '已完成' : (output?.status || '加载中')}
+            </span>
+          </div>
+          <button
+            onClick={togglePageFullscreen}
+            title={isPageFullscreen ? '退出全屏' : '全屏'}
+            style={{ width: 30, height: 30, borderRadius: 7, background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.5)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+          >
+            {isPageFullscreen ? <Minimize2 size={13} /> : <Maximize2 size={13} />}
+          </button>
         </div>
       </div>
 
