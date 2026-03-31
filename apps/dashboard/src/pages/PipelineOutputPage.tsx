@@ -336,11 +336,14 @@ function GenerationTab({ output, stages, isTimingReliable, onImageOpen }: {
 
         {/* 封面图（大） */}
         {coverImage && (
-          <div
-            onClick={() => onImageOpen(allUrls.indexOf(coverImage.url), allUrls)}
-            style={{ borderRadius: 16, overflow: 'hidden', boxShadow: '0 24px 64px rgba(0,0,0,0.7)', cursor: 'zoom-in', border: '1px solid rgba(255,255,255,0.08)' }}
-          >
-            <img src={coverImage.url} alt="封面" style={{ width: '100%', display: 'block' }} />
+          <div>
+            <div style={{ fontSize: 10, fontWeight: 600, color: 'rgba(255,255,255,0.2)', letterSpacing: 2.5, textTransform: 'uppercase' as const, marginBottom: 10 }}>封面图</div>
+            <div
+              onClick={() => onImageOpen(allUrls.indexOf(coverImage.url), allUrls)}
+              style={{ borderRadius: 16, overflow: 'hidden', boxShadow: '0 0 60px rgba(124,58,237,0.2), 0 24px 64px rgba(0,0,0,0.7)', cursor: 'zoom-in', border: '1px solid rgba(124,58,237,0.15)' }}
+            >
+              <img src={coverImage.url} alt="封面" style={{ width: '100%', display: 'block' }} />
+            </div>
           </div>
         )}
 
@@ -377,19 +380,29 @@ function GenerationTab({ output, stages, isTimingReliable, onImageOpen }: {
         {/* 生成阶段 */}
         <div style={{ background: 'rgba(255,255,255,0.025)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 14, overflow: 'hidden' }}>
           <div style={{ padding: '12px 16px 10px', borderBottom: '1px solid rgba(255,255,255,0.05)', fontSize: 11, fontWeight: 600, color: 'rgba(255,255,255,0.25)', letterSpacing: 3, textTransform: 'uppercase' as const }}>生成阶段</div>
-          {PIPELINE_STAGES.map(key => {
+          <div style={{ padding: '6px 0' }}>
+          {PIPELINE_STAGES.map((key, idx) => {
             const s = stages[key]
             const status = s?.status || 'pending'
             const dur = isTimingReliable && s ? formatDuration(s.started_at, s.completed_at) : null
+            const isLast = idx === PIPELINE_STAGES.length - 1
             return (
-              <div key={key} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 16px', borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
-                <StageDot status={status} />
-                <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.55)', flex: 1 }}>{STAGE_LABELS[key]}</span>
-                {dur && <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', gap: 3 }}><Clock size={9} />{dur}</span>}
-                <StageBadge status={status} />
+              <div key={key} style={{ display: 'flex', alignItems: 'flex-start', gap: 0, padding: '0 16px' }}>
+                {/* 时间轴左列 */}
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: 20, flexShrink: 0, paddingTop: 10 }}>
+                  <StageDot status={status} />
+                  {!isLast && <div style={{ width: 1, flex: 1, minHeight: 12, background: status === 'completed' ? 'rgba(74,222,128,0.2)' : 'rgba(255,255,255,0.07)', marginTop: 3 }} />}
+                </div>
+                {/* 内容 */}
+                <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 8, padding: '7px 0 7px 10px' }}>
+                  <span style={{ fontSize: 12, color: status === 'completed' ? 'rgba(255,255,255,0.65)' : 'rgba(255,255,255,0.35)', flex: 1 }}>{STAGE_LABELS[key]}</span>
+                  {dur && <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', gap: 3 }}><Clock size={9} />{dur}</span>}
+                  <StageBadge status={status} />
+                </div>
               </div>
             )
           })}
+          </div>
         </div>
       </div>
     </div>
@@ -498,7 +511,7 @@ export default function PipelineOutputPage() {
     ? (Math.max(...allTs) - Math.min(...allTs)) >= 5000 : false
 
   const TABS: { key: TabKey; label: string; Icon: typeof Layers }[] = [
-    { key: 'summary',    label: 'Summary',  Icon: Radio },
+    { key: 'summary',    label: '概览',     Icon: Radio },
     { key: 'generation', label: '生成记录', Icon: Layers },
     { key: 'publish',    label: '发布记录', Icon: Send },
     { key: 'analytics',  label: '数据记录', Icon: BarChart2 },
@@ -509,7 +522,7 @@ export default function PipelineOutputPage() {
   }, [])
 
   return (
-    <div style={{ minHeight: '100vh', background: '#07050f', color: '#fff', fontFamily: "-apple-system,'SF Pro Display','Helvetica Neue',Arial,sans-serif" }}>
+    <div style={{ minHeight: '100vh', background: '#07050f', color: '#fff', fontFamily: "-apple-system,'SF Pro Display','Helvetica Neue',Arial,sans-serif", backgroundImage: 'radial-gradient(ellipse 900px 700px at 75% -5%, rgba(124,58,237,0.09) 0%, transparent 70%), radial-gradient(ellipse 600px 500px at 10% 80%, rgba(59,7,100,0.07) 0%, transparent 60%)' }}>
       <style>{`@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}@keyframes spin{to{transform:rotate(360deg)}}`}</style>
 
       {/* 导航 */}
@@ -550,10 +563,10 @@ export default function PipelineOutputPage() {
               <div style={{ fontSize: 44, fontWeight: 800, letterSpacing: -1.5, lineHeight: 1.1, background: 'linear-gradient(135deg,#ffffff 0%,#c084fc 55%,#7c3aed 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text' }}>
                 {output?.keyword || '内容产出'}
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 20, marginTop: 16, flexWrap: 'wrap' }}>
-                <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.28)', display: 'flex', alignItems: 'center', gap: 5 }}><ImageIcon size={12} />{output?.image_urls?.length || 0} 张图片</span>
-                {output?.article_text && <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.28)', display: 'flex', alignItems: 'center', gap: 5 }}><BookOpen size={12} />文章</span>}
-                {output?.cards_text && <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.28)', display: 'flex', alignItems: 'center', gap: 5 }}><FileText size={12} />卡片文案</span>}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 16, flexWrap: 'wrap' }}>
+                <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', display: 'flex', alignItems: 'center', gap: 4, padding: '4px 10px', borderRadius: 20, border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(255,255,255,0.04)' }}><ImageIcon size={11} />{output?.image_urls?.length || 0} 张图片</span>
+                {output?.article_text && <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', display: 'flex', alignItems: 'center', gap: 4, padding: '4px 10px', borderRadius: 20, border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(255,255,255,0.04)' }}><BookOpen size={11} />长文</span>}
+                {output?.cards_text && <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', display: 'flex', alignItems: 'center', gap: 4, padding: '4px 10px', borderRadius: 20, border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(255,255,255,0.04)' }}><FileText size={11} />卡片文案</span>}
               </div>
             </div>
             {(() => {
@@ -561,7 +574,7 @@ export default function PipelineOutputPage() {
               return cover ? (
                 <div
                   onClick={() => handleImageOpen(output!.image_urls.indexOf(cover), output!.image_urls.map(u => u.url))}
-                  style={{ flexShrink: 0, width: 120, borderRadius: 12, overflow: 'hidden', boxShadow: '0 16px 48px rgba(0,0,0,0.6)', cursor: 'zoom-in', border: '1px solid rgba(255,255,255,0.08)' }}
+                  style={{ flexShrink: 0, width: 160, borderRadius: 14, overflow: 'hidden', boxShadow: '0 24px 60px rgba(0,0,0,0.7), 0 0 0 1px rgba(124,58,237,0.15)', cursor: 'zoom-in' }}
                 >
                   <img src={cover.url} alt="封面" style={{ width: '100%', display: 'block' }} />
                 </div>
