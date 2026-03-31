@@ -76,6 +76,12 @@ function formatDuration(start?: string, end?: string): string {
   return s < 60 ? `${s}s` : `${Math.floor(s / 60)}m${s % 60}s`
 }
 
+function formatTime(dateStr?: string): string {
+  if (!dateStr) return ''
+  const d = new Date(dateStr)
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+}
+
 function renderMarkdown(text: string): string {
   return text
     .replace(/^### (.+)$/gm, '<h3 style="font-size:13px;font-weight:600;margin:14px 0 4px;color:rgba(255,255,255,0.8)">$1</h3>')
@@ -111,6 +117,11 @@ async function fetchStages(id: string): Promise<Record<string, StageInfo>> {
   const res = await fetch(`/api/brain/pipelines/${id}/stages`)
   if (!res.ok) return {}
   return (await res.json()).stages || {}
+}
+
+async function rerunPipeline(id: string): Promise<boolean> {
+  const res = await fetch(`/api/brain/pipelines/${id}/run`, { method: 'POST' })
+  return res.ok
 }
 
 // ─── 原子组件 ─────────────────────────────────────────────────
@@ -288,13 +299,15 @@ function SummaryTab({ output, stages }: { output: PipelineOutput | null; stages:
 
 // ─── Generation Tab ───────────────────────────────────────────
 
-function GenerationTab({ output, stages, isTimingReliable, onImageOpen }: {
+function GenerationTab({ output, stages, isTimingReliable, onImageOpen, pipelineId }: {
   output: PipelineOutput | null
   stages: Record<string, StageInfo>
   isTimingReliable: boolean
   onImageOpen: (index: number, urls: string[]) => void
+  pipelineId: string
 }) {
   const [textTab, setTextTab] = useState<'article' | 'cards'>('article')
+  const [rerunState, setRerunState] = useState<'idle' | 'loading' | 'done' | 'error'>('idle')
   const coverImage = output?.image_urls?.find(u => u.type === 'cover')
   const cardImages = output?.image_urls?.filter(u => u.type === 'card') || []
   const hasImages = (output?.image_urls?.length || 0) > 0
@@ -379,25 +392,63 @@ function GenerationTab({ output, stages, isTimingReliable, onImageOpen }: {
 
         {/* 生成阶段 */}
         <div style={{ background: 'rgba(255,255,255,0.025)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 14, overflow: 'hidden' }}>
-          <div style={{ padding: '12px 16px 10px', borderBottom: '1px solid rgba(255,255,255,0.05)', fontSize: 11, fontWeight: 600, color: 'rgba(255,255,255,0.25)', letterSpacing: 3, textTransform: 'uppercase' as const }}>生成阶段</div>
+          {/* header + 重新生成按钮 */}
+          <div style={{ padding: '12px 16px 10px', borderBottom: '1px solid rgba(255,255,255,0.05)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <span style={{ fontSize: 11, fontWeight: 600, color: 'rgba(255,255,255,0.25)', letterSpacing: 3, textTransform: 'uppercase' as const }}>生成阶段</span>
+            <button
+              onClick={async () => {
+                setRerunState('loading')
+                const ok = await rerunPipeline(pipelineId)
+                setRerunState(ok ? 'done' : 'error')
+                setTimeout(() => setRerunState('idle'), 3000)
+              }}
+              disabled={rerunState === 'loading'}
+              style={{ fontSize: 11, fontWeight: 600, padding: '4px 12px', borderRadius: 7, border: `1px solid ${rerunState === 'error' ? 'rgba(248,113,113,0.3)' : rerunState === 'done' ? 'rgba(74,222,128,0.3)' : 'rgba(124,58,237,0.3)'}`, background: rerunState === 'error' ? 'rgba(248,113,113,0.1)' : rerunState === 'done' ? 'rgba(74,222,128,0.1)' : 'rgba(124,58,237,0.12)', color: rerunState === 'error' ? '#f87171' : rerunState === 'done' ? '#4ade80' : '#c084fc', cursor: rerunState === 'loading' ? 'not-allowed' : 'pointer', opacity: rerunState === 'loading' ? 0.6 : 1, display: 'flex', alignItems: 'center', gap: 5 }}
+            >
+              {rerunState === 'loading' && <Loader2 size={10} style={{ animation: 'spin 1s linear infinite' }} />}
+              {rerunState === 'done' ? '已触发' : rerunState === 'error' ? '触发失败' : '重新生成'}
+            </button>
+          </div>
           <div style={{ padding: '6px 0' }}>
           {PIPELINE_STAGES.map((key, idx) => {
             const s = stages[key]
             const status = s?.status || 'pending'
             const dur = isTimingReliable && s ? formatDuration(s.started_at, s.completed_at) : null
+            const startTime = formatTime(s?.started_at)
             const isLast = idx === PIPELINE_STAGES.length - 1
+            const errors = s?.review_issues as string[] | undefined
+            const hasError = status === 'failed' && errors && errors.length > 0
             return (
               <div key={key} style={{ display: 'flex', alignItems: 'flex-start', gap: 0, padding: '0 16px' }}>
                 {/* 时间轴左列 */}
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: 20, flexShrink: 0, paddingTop: 10 }}>
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: 20, flexShrink: 0, paddingTop: 12 }}>
                   <StageDot status={status} />
-                  {!isLast && <div style={{ width: 1, flex: 1, minHeight: 12, background: status === 'completed' ? 'rgba(74,222,128,0.2)' : 'rgba(255,255,255,0.07)', marginTop: 3 }} />}
+                  {!isLast && <div style={{ width: 1, flex: 1, minHeight: 16, background: status === 'completed' ? 'rgba(74,222,128,0.2)' : 'rgba(255,255,255,0.07)', marginTop: 3 }} />}
                 </div>
                 {/* 内容 */}
-                <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 8, padding: '7px 0 7px 10px' }}>
-                  <span style={{ fontSize: 12, color: status === 'completed' ? 'rgba(255,255,255,0.65)' : 'rgba(255,255,255,0.35)', flex: 1 }}>{STAGE_LABELS[key]}</span>
-                  {dur && <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', gap: 3 }}><Clock size={9} />{dur}</span>}
-                  <StageBadge status={status} />
+                <div style={{ flex: 1, padding: '8px 0 8px 12px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span style={{ fontSize: 13, color: status === 'completed' ? 'rgba(255,255,255,0.75)' : status === 'in_progress' ? '#c084fc' : status === 'failed' ? '#f87171' : 'rgba(255,255,255,0.3)', flex: 1, fontWeight: status === 'in_progress' ? 500 : 400 }}>{STAGE_LABELS[key]}</span>
+                    <StageBadge status={status} />
+                  </div>
+                  {/* 时间信息行 */}
+                  {(startTime || dur) && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 3 }}>
+                      {startTime && <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', gap: 3 }}><Clock size={9} />开始 {startTime}</span>}
+                      {dur && dur !== '—' && <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.2)' }}>耗时 {dur}</span>}
+                    </div>
+                  )}
+                  {/* 错误详情 */}
+                  {hasError && (
+                    <div style={{ marginTop: 6, padding: '8px 10px', borderRadius: 8, background: 'rgba(248,113,113,0.07)', border: '1px solid rgba(248,113,113,0.15)' }}>
+                      {errors!.map((e, i) => (
+                        <div key={i} style={{ fontSize: 11, color: 'rgba(248,113,113,0.8)', lineHeight: 1.6 }}>{typeof e === 'string' ? e : JSON.stringify(e)}</div>
+                      ))}
+                    </div>
+                  )}
+                  {status === 'failed' && !hasError && (
+                    <div style={{ marginTop: 6, fontSize: 11, color: 'rgba(248,113,113,0.5)' }}>此步骤未通过，点击右上角「重新生成」重试</div>
+                  )}
                 </div>
               </div>
             )
@@ -557,29 +608,16 @@ export default function PipelineOutputPage() {
       ) : (
         <>
           {/* Hero */}
-          <div style={{ padding: '48px 60px 36px', borderBottom: '1px solid rgba(255,255,255,0.05)', display: 'flex', gap: 40, alignItems: 'flex-start' }}>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 11, fontWeight: 600, color: 'rgba(192,132,252,0.5)', letterSpacing: 3, textTransform: 'uppercase', marginBottom: 12 }}>内容产出</div>
-              <div style={{ fontSize: 44, fontWeight: 800, letterSpacing: -1.5, lineHeight: 1.1, background: 'linear-gradient(135deg,#ffffff 0%,#c084fc 55%,#7c3aed 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text' }}>
-                {output?.keyword || '内容产出'}
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 16, flexWrap: 'wrap' }}>
-                <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', display: 'flex', alignItems: 'center', gap: 4, padding: '4px 10px', borderRadius: 20, border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(255,255,255,0.04)' }}><ImageIcon size={11} />{output?.image_urls?.length || 0} 张图片</span>
-                {output?.article_text && <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', display: 'flex', alignItems: 'center', gap: 4, padding: '4px 10px', borderRadius: 20, border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(255,255,255,0.04)' }}><BookOpen size={11} />长文</span>}
-                {output?.cards_text && <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', display: 'flex', alignItems: 'center', gap: 4, padding: '4px 10px', borderRadius: 20, border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(255,255,255,0.04)' }}><FileText size={11} />卡片文案</span>}
-              </div>
+          <div style={{ padding: '48px 60px 36px', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+            <div style={{ fontSize: 11, fontWeight: 600, color: 'rgba(192,132,252,0.5)', letterSpacing: 3, textTransform: 'uppercase', marginBottom: 12 }}>内容产出</div>
+            <div style={{ fontSize: 44, fontWeight: 800, letterSpacing: -1.5, lineHeight: 1.1, background: 'linear-gradient(135deg,#ffffff 0%,#c084fc 55%,#7c3aed 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text' }}>
+              {output?.keyword || '内容产出'}
             </div>
-            {(() => {
-              const cover = output?.image_urls?.find(u => u.type === 'cover')
-              return cover ? (
-                <div
-                  onClick={() => handleImageOpen(output!.image_urls.indexOf(cover), output!.image_urls.map(u => u.url))}
-                  style={{ flexShrink: 0, width: 160, borderRadius: 14, overflow: 'hidden', boxShadow: '0 24px 60px rgba(0,0,0,0.7), 0 0 0 1px rgba(124,58,237,0.15)', cursor: 'zoom-in' }}
-                >
-                  <img src={cover.url} alt="封面" style={{ width: '100%', display: 'block' }} />
-                </div>
-              ) : null
-            })()}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 16, flexWrap: 'wrap' }}>
+              <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', display: 'flex', alignItems: 'center', gap: 4, padding: '4px 10px', borderRadius: 20, border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(255,255,255,0.04)' }}><ImageIcon size={11} />{output?.image_urls?.length || 0} 张图片</span>
+              {output?.article_text && <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', display: 'flex', alignItems: 'center', gap: 4, padding: '4px 10px', borderRadius: 20, border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(255,255,255,0.04)' }}><BookOpen size={11} />长文</span>}
+              {output?.cards_text && <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', display: 'flex', alignItems: 'center', gap: 4, padding: '4px 10px', borderRadius: 20, border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(255,255,255,0.04)' }}><FileText size={11} />卡片文案</span>}
+            </div>
           </div>
 
           {/* Tabs + 内容 */}
@@ -596,7 +634,7 @@ export default function PipelineOutputPage() {
             </div>
 
             {activeTab === 'summary'    && <SummaryTab output={output} stages={stages} />}
-            {activeTab === 'generation' && <GenerationTab output={output} stages={stages} isTimingReliable={isTimingReliable} onImageOpen={handleImageOpen} />}
+            {activeTab === 'generation' && <GenerationTab output={output} stages={stages} isTimingReliable={isTimingReliable} onImageOpen={handleImageOpen} pipelineId={id!} />}
             {activeTab === 'publish'    && <PublishTab />}
             {activeTab === 'analytics'  && <AnalyticsTab />}
 
