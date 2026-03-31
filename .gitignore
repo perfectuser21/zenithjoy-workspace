@@ -156,4 +156,5 @@ LEARNINGS.md
 .dev-agent-seal.*
 .dev-seal.*
 .cecelia-run-id
-services/creator/scripts/publishers/
+services/creator/scripts/publishers/node_modules/
+services/creator/scripts/publishers/**/node_modules/
