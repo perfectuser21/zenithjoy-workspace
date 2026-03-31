@@ -58,6 +58,9 @@ function AppContent() {
     route => location.pathname === route.path && route.requireAuth === false
   );
 
+  // 全宽独立页面（不渲染 sidebar / header / p-8）
+  const isFullBleed = /^\/content-factory\/[^/]+\/output\/?$/.test(location.pathname);
+
   // 配置或认证加载中时显示加载状态
   if (instanceLoading || authLoading) {
     return (
@@ -120,7 +123,7 @@ function AppContent() {
         </div>
       )}
 
-      {isAuthenticated && (
+      {isAuthenticated && !isFullBleed && (
         <>
           {/* 左侧导航栏 - 使用配置的渐变色 */}
           <aside className={`fixed inset-y-0 left-0 ${collapsed ? 'w-16' : 'w-64'} flex flex-col shadow-2xl transition-all duration-300 z-20`} style={{ background: config?.theme.sidebarGradient || 'var(--sidebar-gradient)' }}>
@@ -290,8 +293,8 @@ function AppContent() {
       )}
 
       {/* 主内容区域 - 配置驱动路由 */}
-      <main className={isAuthenticated ? `flex-1 overflow-auto ${collapsed ? 'ml-16' : 'ml-64'} pt-16 transition-all duration-300` : "flex-1 overflow-auto"}>
-        <div key={location.pathname} className={isAuthenticated ? "p-8 page-fade-in" : ""}>
+      <main className={isAuthenticated && !isFullBleed ? `flex-1 overflow-auto ${collapsed ? 'ml-16' : 'ml-64'} pt-16 transition-all duration-300` : "flex-1 overflow-auto"}>
+        <div key={location.pathname} className={isAuthenticated && !isFullBleed ? "p-8 page-fade-in" : ""}>
           <DynamicRouter>
             {/* 登录页面（静态路由） */}
             <Route path="/login" element={<FeishuLogin />} />
