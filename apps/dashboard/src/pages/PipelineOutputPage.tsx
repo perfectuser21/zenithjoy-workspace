@@ -607,8 +607,11 @@ export default function PipelineOutputPage() {
     Promise.all([fetchOutput(id), fetchStages(id)]).then(([out, stg]) => {
       setOutput(out)
       setStages(stg)
+      if (out?.status !== 'completed' && out?.status !== 'failed') {
+        startPolling()
+      }
     }).finally(() => setLoading(false))
-  }, [id])
+  }, [id, startPolling])
 
   const allTs = Object.values(stages)
     .flatMap(s => [s.started_at, s.completed_at])
@@ -640,9 +643,9 @@ export default function PipelineOutputPage() {
         <span style={{ fontSize: 13, color: 'rgba(255,255,255,0.4)' }}>作品主页</span>
         <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 14 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-            <div style={{ width: 6, height: 6, borderRadius: '50%', background: output?.status === 'completed' ? '#4ade80' : '#fbbf24', boxShadow: output?.status === 'completed' ? '0 0 6px rgba(74,222,128,0.5)' : 'none' }} />
-            <span style={{ fontSize: 12, color: output?.status === 'completed' ? '#4ade80' : '#fbbf24' }}>
-              {output?.status === 'completed' ? '已完成' : (output?.status || '加载中')}
+            <div style={{ width: 6, height: 6, borderRadius: '50%', background: output?.status === 'completed' ? '#4ade80' : output?.status === 'failed' ? '#f87171' : '#fbbf24', boxShadow: output?.status === 'completed' ? '0 0 6px rgba(74,222,128,0.5)' : output?.status === 'failed' ? '0 0 6px rgba(248,113,113,0.5)' : 'none' }} />
+            <span style={{ fontSize: 12, color: output?.status === 'completed' ? '#4ade80' : output?.status === 'failed' ? '#f87171' : '#fbbf24' }}>
+              {{ completed: '已完成', failed: '失败', in_progress: '进行中', queued: '排队中' }[output?.status || ''] || output?.status || '加载中'}
             </span>
           </div>
           <button

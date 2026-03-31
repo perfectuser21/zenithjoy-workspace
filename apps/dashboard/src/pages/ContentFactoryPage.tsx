@@ -104,10 +104,11 @@ function formatTime(dateStr?: string) {
 }
 
 function getStageStatuses(pipelineStatus: PipelineStatus): ('pending' | 'active' | 'done' | 'failed')[] {
-  if (pipelineStatus === 'queued') return ['pending', 'pending', 'pending', 'pending']
-  if (pipelineStatus === 'completed') return ['done', 'done', 'done', 'done']
-  if (pipelineStatus === 'failed' || pipelineStatus === 'quarantined') return ['done', 'failed', 'pending', 'pending']
-  return ['active', 'pending', 'pending', 'pending']
+  const n = PIPELINE_STAGES.length
+  if (pipelineStatus === 'queued') return Array(n).fill('pending') as 'pending'[]
+  if (pipelineStatus === 'completed') return Array(n).fill('done') as 'done'[]
+  if (pipelineStatus === 'failed' || pipelineStatus === 'quarantined') return Array(n).fill('pending') as 'pending'[]
+  return ['active', ...Array(n - 1).fill('pending')] as ('active' | 'pending')[]
 }
 
 // ─── API ──────────────────────────────────────────────────────
@@ -812,9 +813,9 @@ export default function ContentFactoryPage() {
     load()
   }, [])
 
-  // 有活跃 pipeline 时 5 秒轮询，否则 30 秒
+  // 有排队或进行中 pipeline 时 5 秒轮询，否则 30 秒
   useEffect(() => {
-    const hasActive = pipelines.some(p => p.status === 'in_progress')
+    const hasActive = pipelines.some(p => p.status === 'in_progress' || p.status === 'queued')
     const interval = hasActive ? 5000 : 30000
     const t = setInterval(load, interval)
     return () => clearInterval(t)
