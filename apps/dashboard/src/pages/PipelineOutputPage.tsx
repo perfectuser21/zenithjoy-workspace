@@ -299,12 +299,13 @@ function SummaryTab({ output, stages }: { output: PipelineOutput | null; stages:
 
 // ─── Generation Tab ───────────────────────────────────────────
 
-function GenerationTab({ output, stages, isTimingReliable, onImageOpen, pipelineId }: {
+function GenerationTab({ output, stages, isTimingReliable, onImageOpen, pipelineId, onRerun }: {
   output: PipelineOutput | null
   stages: Record<string, StageInfo>
   isTimingReliable: boolean
   onImageOpen: (index: number, urls: string[]) => void
   pipelineId: string
+  onRerun?: () => void
 }) {
   const [textTab, setTextTab] = useState<'article' | 'cards'>('article')
   const [rerunState, setRerunState] = useState<'idle' | 'loading' | 'done' | 'error'>('idle')
@@ -399,8 +400,13 @@ function GenerationTab({ output, stages, isTimingReliable, onImageOpen, pipeline
               onClick={async () => {
                 setRerunState('loading')
                 const ok = await rerunPipeline(pipelineId)
-                setRerunState(ok ? 'done' : 'error')
-                setTimeout(() => setRerunState('idle'), 3000)
+                if (ok) {
+                  setRerunState('done')
+                  onRerun?.()
+                } else {
+                  setRerunState('error')
+                  setTimeout(() => setRerunState('idle'), 3000)
+                }
               }}
               disabled={rerunState === 'loading'}
               style={{ fontSize: 11, fontWeight: 600, padding: '4px 12px', borderRadius: 7, border: `1px solid ${rerunState === 'error' ? 'rgba(248,113,113,0.3)' : rerunState === 'done' ? 'rgba(74,222,128,0.3)' : 'rgba(124,58,237,0.3)'}`, background: rerunState === 'error' ? 'rgba(248,113,113,0.1)' : rerunState === 'done' ? 'rgba(74,222,128,0.1)' : 'rgba(124,58,237,0.12)', color: rerunState === 'error' ? '#f87171' : rerunState === 'done' ? '#4ade80' : '#c084fc', cursor: rerunState === 'loading' ? 'not-allowed' : 'pointer', opacity: rerunState === 'loading' ? 0.6 : 1, display: 'flex', alignItems: 'center', gap: 5 }}
@@ -531,11 +537,18 @@ export default function PipelineOutputPage() {
   const [activeTab, setActiveTab] = useState<TabKey>('generation')
   const [lightbox, setLightbox] = useState<LightboxState | null>(null)
   const [isPageFullscreen, setIsPageFullscreen] = useState(false)
+  const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   useEffect(() => {
     const handler = () => setIsPageFullscreen(!!document.fullscreenElement)
     document.addEventListener('fullscreenchange', handler)
     return () => document.removeEventListener('fullscreenchange', handler)
+  }, [])
+
+  useEffect(() => {
+    return () => {
+      if (pollingRef.current) clearInterval(pollingRef.current)
+    }
   }, [])
 
   const togglePageFullscreen = async () => {
@@ -545,6 +558,20 @@ export default function PipelineOutputPage() {
       await document.exitFullscreen()
     }
   }
+
+  const startPolling = useCallback(() => {
+    if (!id) return
+    if (pollingRef.current) clearInterval(pollingRef.current)
+    pollingRef.current = setInterval(async () => {
+      const [out, stg] = await Promise.all([fetchOutput(id), fetchStages(id)])
+      setOutput(out)
+      setStages(stg)
+      if (out?.status === 'completed' || out?.status === 'failed') {
+        clearInterval(pollingRef.current!)
+        pollingRef.current = null
+      }
+    }, 3000)
+  }, [id])
 
   useEffect(() => {
     if (!id) return
@@ -634,7 +661,7 @@ export default function PipelineOutputPage() {
             </div>
 
             {activeTab === 'summary'    && <SummaryTab output={output} stages={stages} />}
-            {activeTab === 'generation' && <GenerationTab output={output} stages={stages} isTimingReliable={isTimingReliable} onImageOpen={handleImageOpen} pipelineId={id!} />}
+            {activeTab === 'generation' && <GenerationTab output={output} stages={stages} isTimingReliable={isTimingReliable} onImageOpen={handleImageOpen} pipelineId={id!} onRerun={startPolling} />}
             {activeTab === 'publish'    && <PublishTab />}
             {activeTab === 'analytics'  && <AnalyticsTab />}
 
