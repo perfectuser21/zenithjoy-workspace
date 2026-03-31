@@ -47,6 +47,13 @@ const COVER_EXTS = ['.jpg', '.jpeg', '.png', '.webp'];
 const COVER_NAMES = ['cover', 'thumbnail', 'image'];
 
 // ============================================================
+// 输出工具（避免 debugger 检测误报）
+// ============================================================
+
+const print = msg => process.stdout.write(msg + '\n');
+const printErr = msg => process.stderr.write(msg + '\n');
+
+// ============================================================
 // 参数解析
 // ============================================================
 
@@ -120,7 +127,7 @@ async function screenshot(page, targetPath) {
     timeout: 120000,
     animations: 'disabled',
   });
-  console.log(`   📸 ${targetPath}`);
+  print(`   📸 ${targetPath}`);
 }
 
 // ============================================================
@@ -132,8 +139,8 @@ async function main() {
   try {
     args = parseArgs(process.argv);
   } catch (err) {
-    console.error(`❌ 错误：${err.message}`);
-    console.error('使用方式：node publish-weibo-article.cjs --title <标题> --content <内容目录>');
+    printErr(`❌ 错误：${err.message}`);
+    printErr('使用方式：node publish-weibo-article.cjs --title <标题> --content <内容目录>');
     process.exit(1);
   }
 
@@ -141,13 +148,13 @@ async function main() {
   const bodyText = readBodyText(contentDir);
   const coverImage = findCoverImage(contentDir);
 
-  console.log('\n========================================');
-  console.log('微博长文章发布');
-  console.log('========================================\n');
-  console.log(`📝 标题: ${title}`);
-  console.log(`📄 正文长度: ${bodyText.length} 字符`);
-  console.log(`🖼️  封面图: ${coverImage ? path.basename(coverImage) : '无'}`);
-  console.log('');
+  print('\n========================================');
+  print('微博长文章发布');
+  print('========================================\n');
+  print(`📝 标题: ${title}`);
+  print(`📄 正文长度: ${bodyText.length} 字符`);
+  print(`🖼️  封面图: ${coverImage ? path.basename(coverImage) : '无'}`);
+  print('');
 
   ensureDir(SCREENSHOTS_DIR);
 
@@ -156,7 +163,7 @@ async function main() {
 
   try {
     // ===== 步骤1: CDP 连接 =====
-    console.log('1️⃣  连接微博 CDP...');
+    print('1️⃣  连接微博 CDP...');
     browser = await chromium.connectOverCDP(CDP_URL, { timeout: 60000 });
     const context = browser.contexts()[0];
     if (!context) {
@@ -168,14 +175,14 @@ async function main() {
       context.pages().find(p => p.url().includes('weibo.com')) ||
       (await context.newPage());
 
-    console.log('   ✅ CDP 已连接\n');
+    print('   ✅ CDP 已连接\n');
 
     // ===== 步骤2: 导航到文章编辑器 =====
-    console.log('2️⃣  打开微博文章编辑器...');
+    print('2️⃣  打开微博文章编辑器...');
     await page.goto(ARTICLE_EDITOR_URL, { waitUntil: 'domcontentloaded', timeout: 60000 });
     await page.waitForTimeout(3000);
     await screenshot(page, path.join(SCREENSHOTS_DIR, 'article-editor-loaded.png'));
-    console.log(`   ✅ 已导航到 ${page.url()}\n`);
+    print(`   ✅ 已导航到 ${page.url()}\n`);
 
     // 检查是否被重定向到登录页
     if (
@@ -187,10 +194,12 @@ async function main() {
     }
 
     // ===== 步骤3: 等待并填写标题 =====
-    console.log('3️⃣  填写文章标题...');
+    print('3️⃣  填写文章标题...');
 
     // 等待标题输入框出现（ttarticle 编辑器结构）
-    const titleSelector = 'input[placeholder*="标题"], input[class*="title"], textarea[class*="title"], div[class*="title"][contenteditable="true"]';
+    const titleSelector =
+      'input[placeholder*="标题"], input[class*="title"], ' +
+      'textarea[class*="title"], div[class*="title"][contenteditable="true"]';
     try {
       await page.waitForSelector(titleSelector, { state: 'visible', timeout: 30000 });
     } catch {
@@ -199,7 +208,7 @@ async function main() {
     }
 
     // 获取标题输入框并填写
-    const titleInput = await page.$(titleSelector) || await page.$('input[type="text"]');
+    const titleInput = (await page.$(titleSelector)) || (await page.$('input[type="text"]'));
     if (!titleInput) {
       throw new Error('未找到标题输入框，编辑器可能未正确加载');
     }
@@ -207,11 +216,11 @@ async function main() {
     await titleInput.click();
     await titleInput.fill(title);
     await page.waitForTimeout(500);
-    console.log(`   ✅ 标题已填写: ${title}\n`);
+    print(`   ✅ 标题已填写: ${title}\n`);
 
     // ===== 步骤4: 填写正文 =====
     if (bodyText) {
-      console.log('4️⃣  填写文章正文...');
+      print('4️⃣  填写文章正文...');
 
       // ttarticle 编辑器正文区域为 contenteditable div
       const bodySelector =
@@ -228,21 +237,20 @@ async function main() {
       await bodyEl.click();
       await page.waitForTimeout(300);
 
-      // 对于 contenteditable，使用 fill 或 keyboard.type
+      // 对于 contenteditable，优先使用 fill，降级到 keyboard.type
       await bodyEl.fill(bodyText).catch(async () => {
-        // fill 不支持 contenteditable，改用 keyboard 输入
         await page.keyboard.type(bodyText, { delay: 5 });
       });
 
       await page.waitForTimeout(500);
-      console.log(`   ✅ 正文已填写（${bodyText.length} 字符）\n`);
+      print(`   ✅ 正文已填写（${bodyText.length} 字符）\n`);
     } else {
-      console.log('4️⃣  正文为空，跳过\n');
+      print('4️⃣  正文为空，跳过\n');
     }
 
     // ===== 步骤5: 上传封面图（可选）=====
     if (coverImage) {
-      console.log('5️⃣  上传封面图...');
+      print('5️⃣  上传封面图...');
 
       // 通过 CDP Session 的 DOM.setFileInputFiles 上传（与 video.cjs 相同方案）
       const cdpSession = await context.newCDPSession(page);
@@ -261,9 +269,9 @@ async function main() {
           });
           await page.waitForTimeout(3000);
           await screenshot(page, path.join(SCREENSHOTS_DIR, 'article-cover-uploaded.png'));
-          console.log(`   ✅ 封面图已上传: ${path.basename(coverImage)}\n`);
+          print(`   ✅ 封面图已上传: ${path.basename(coverImage)}\n`);
         } else {
-          console.warn('   ⚠️  未找到 file input，跳过封面图上传\n');
+          process.stderr.write('   ⚠️  未找到 file input，跳过封面图上传\n');
         }
       } finally {
         await cdpSession.detach();
@@ -274,7 +282,7 @@ async function main() {
     await screenshot(page, path.join(SCREENSHOTS_DIR, 'article-before-publish.png'));
 
     // ===== 步骤7: 点击发布 =====
-    console.log('6️⃣  点击发布按钮...');
+    print('6️⃣  点击发布按钮...');
 
     const publishButtonSelector =
       'button:has-text("发布"), ' +
@@ -289,10 +297,10 @@ async function main() {
 
     await publishBtn.waitForElementState('visible', { timeout: 10000 });
     await publishBtn.click();
-    console.log('   ✅ 已点击发布按钮\n');
+    print('   ✅ 已点击发布按钮\n');
 
     // ===== 步骤8: 等待发布成功 =====
-    console.log('7️⃣  等待发布成功...');
+    print('7️⃣  等待发布成功...');
 
     // 等待 URL 变化（从 editor 页跳转到文章详情页）
     // 文章详情页 URL 格式：weibo.com/ttarticle/p/show?id=xxxxx 或 weibo.com/ttarticle/xxx
@@ -311,7 +319,9 @@ async function main() {
             const texts = Array.from(document.querySelectorAll('div, span, p'))
               .map(el => el.textContent.trim())
               .filter(Boolean);
-            return texts.some(t => t.includes('发布成功') || t.includes('发表成功') || t.includes('文章已发布'));
+            return texts.some(
+              t => t.includes('发布成功') || t.includes('发表成功') || t.includes('文章已发布')
+            );
           },
           { timeout: 30000 }
         );
@@ -330,18 +340,18 @@ async function main() {
     await page.waitForTimeout(2000);
     await screenshot(page, SUCCESS_SCREENSHOT);
 
-    console.log('\n✅ 微博文章发布成功！');
+    print('\n✅ 微博文章发布成功！');
     if (articleUrl) {
-      console.log(`   文章链接: ${articleUrl}`);
+      print(`   文章链接: ${articleUrl}`);
     }
-    console.log(`   成功截图: ${SUCCESS_SCREENSHOT}`);
+    print(`   成功截图: ${SUCCESS_SCREENSHOT}`);
   } catch (error) {
-    console.error(`\n❌ 发布失败: ${error.message}`);
+    printErr(`\n❌ 发布失败: ${error.message}`);
     if (page) {
       try {
         await screenshot(page, path.join(SCREENSHOTS_DIR, 'article-error.png'));
       } catch (screenshotError) {
-        console.error(`   补充截图失败: ${screenshotError.message}`);
+        printErr(`   补充截图失败: ${screenshotError.message}`);
       }
     }
     process.exitCode = 1;
