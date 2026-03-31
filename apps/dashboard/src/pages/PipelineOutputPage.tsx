@@ -301,85 +301,88 @@ function GenerationTab({ output, stages, isTimingReliable, onImageOpen }: {
   const allUrls = output?.image_urls?.map(u => u.url) || []
 
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: '1fr minmax(220px,260px)', gap: 24, alignItems: 'start' }}>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 20, minWidth: 0 }}>
-        {/* 图片区 */}
-        <div style={{ background: 'rgba(255,255,255,0.025)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 14, overflow: 'hidden' }}>
-          <div style={{ padding: '14px 18px 12px', borderBottom: '1px solid rgba(255,255,255,0.05)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={{ fontSize: 11, fontWeight: 600, color: 'rgba(255,255,255,0.25)', letterSpacing: 3, textTransform: 'uppercase' as const }}>内容图片</span>
-            <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.2)' }}>{output?.image_urls?.length || 0} 张</span>
-          </div>
-          <div style={{ padding: 18 }}>
-            {hasImages ? (
-              <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start', flexWrap: 'wrap' }}>
-                {coverImage && (
-                  <div
-                    onClick={() => onImageOpen(allUrls.indexOf(coverImage.url), allUrls)}
-                    style={{ flexShrink: 0, width: 160, borderRadius: 10, overflow: 'hidden', boxShadow: '0 8px 32px rgba(0,0,0,0.5)', cursor: 'zoom-in' }}
-                  >
-                    <img src={coverImage.url} alt="封面" style={{ width: '100%', display: 'block' }} />
-                    <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.25)', textAlign: 'center', padding: '5px 0', background: 'rgba(0,0,0,0.3)' }}>封面</div>
-                  </div>
-                )}
-                <div style={{ flex: 1, display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(90px,1fr))', gap: 8 }}>
-                  {cardImages.map((img, i) => (
-                    <div key={i}>
-                      <div
-                        onClick={() => onImageOpen(allUrls.indexOf(img.url), allUrls)}
-                        style={{ borderRadius: 8, overflow: 'hidden', cursor: 'zoom-in', boxShadow: '0 4px 16px rgba(0,0,0,0.4)' }}
-                      >
-                        <img src={img.url} alt={`卡片${i + 1}`} style={{ width: '100%', aspectRatio: '9/16', objectFit: 'cover', display: 'block' }} />
-                      </div>
-                      <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.2)', textAlign: 'center', marginTop: 4 }}>{String(i + 1).padStart(2, '0')}</div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '32px 0', color: 'rgba(255,255,255,0.2)' }}>
-                <ImageIcon size={28} style={{ marginBottom: 8, opacity: 0.3 }} />
-                <div style={{ fontSize: 13 }}>暂无图片</div>
-                <div style={{ fontSize: 11, marginTop: 4, color: 'rgba(255,255,255,0.12)' }}>图片生成完成后将在此显示</div>
-              </div>
-            )}
-          </div>
-        </div>
+    <div style={{ display: 'flex', gap: 40, alignItems: 'flex-start' }}>
 
-        {/* 文本内容 */}
-        <div style={{ background: 'rgba(255,255,255,0.025)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 14, overflow: 'hidden' }}>
-          <div style={{ padding: '4px 6px', borderBottom: '1px solid rgba(255,255,255,0.05)', display: 'flex', gap: 4 }}>
+      {/* ── 左栏：文章 / 卡片文案 ── */}
+      <div style={{ flex: 3, minWidth: 0, position: 'sticky', top: 70, maxHeight: 'calc(100vh - 140px)', display: 'flex', flexDirection: 'column' }}>
+        <div style={{ background: 'rgba(255,255,255,0.025)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 16, overflow: 'hidden', display: 'flex', flexDirection: 'column', flex: 1 }}>
+          {/* tab 切换 */}
+          <div style={{ padding: '4px 6px', borderBottom: '1px solid rgba(255,255,255,0.05)', display: 'flex', gap: 4, flexShrink: 0 }}>
             {(['article', 'cards'] as const).map(t => (
-              <button key={t} onClick={() => setTextTab(t)} style={{ flex: 1, padding: '9px 12px', borderRadius: 8, border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: textTab === t ? 600 : 400, transition: 'all 0.15s', background: textTab === t ? 'rgba(124,58,237,0.2)' : 'transparent', color: textTab === t ? '#c084fc' : 'rgba(255,255,255,0.3)', borderBottom: `2px solid ${textTab === t ? '#a78bfa' : 'transparent'}` }}>
+              <button key={t} onClick={() => setTextTab(t)} style={{ flex: 1, padding: '10px 14px', borderRadius: 8, border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: textTab === t ? 600 : 400, transition: 'all 0.15s', background: textTab === t ? 'rgba(124,58,237,0.2)' : 'transparent', color: textTab === t ? '#c084fc' : 'rgba(255,255,255,0.3)', borderBottom: `2px solid ${textTab === t ? '#a78bfa' : 'transparent'}` }}>
                 <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5 }}>
-                  {t === 'article' ? <><BookOpen size={12} />文章</> : <><FileText size={12} />卡片文案</>}
+                  {t === 'article' ? <><BookOpen size={12} />长文</> : <><FileText size={12} />卡片文案</>}
                 </span>
               </button>
             ))}
           </div>
-          <div style={{ padding: 20, maxHeight: 600, overflowY: 'auto' }}>
+          {/* 文本内容，可独立滚动 */}
+          <div style={{ padding: '24px 28px', overflowY: 'auto', flex: 1 }}>
             {textTab === 'article' ? (
               output?.article_text ? (
-                <div style={{ fontSize: 13, lineHeight: 1.8, color: 'rgba(255,255,255,0.5)' }} dangerouslySetInnerHTML={{ __html: `<p style="margin-bottom:10px">${renderMarkdown(output.article_text)}</p>` }} />
-              ) : <div style={{ textAlign: 'center', padding: '24px 0', color: 'rgba(255,255,255,0.2)', fontSize: 13 }}>暂无文章内容</div>
+                <div style={{ fontSize: 15, lineHeight: 2, color: 'rgba(255,255,255,0.65)' }} dangerouslySetInnerHTML={{ __html: `<p style="margin-bottom:12px">${renderMarkdown(output.article_text)}</p>` }} />
+              ) : <div style={{ textAlign: 'center' as const, padding: '40px 0', color: 'rgba(255,255,255,0.2)', fontSize: 13 }}>暂无文章内容</div>
             ) : (
               output?.cards_text ? (
-                <div style={{ fontSize: 13, lineHeight: 1.8, color: 'rgba(255,255,255,0.5)', whiteSpace: 'pre-wrap' }} dangerouslySetInnerHTML={{ __html: `<p style="margin-bottom:10px">${renderMarkdown(output.cards_text)}</p>` }} />
-              ) : <div style={{ textAlign: 'center', padding: '24px 0', color: 'rgba(255,255,255,0.2)', fontSize: 13 }}>暂无卡片文案</div>
+                <div style={{ fontSize: 14, lineHeight: 1.9, color: 'rgba(255,255,255,0.6)', whiteSpace: 'pre-wrap' }} dangerouslySetInnerHTML={{ __html: `<p style="margin-bottom:12px">${renderMarkdown(output.cards_text)}</p>` }} />
+              ) : <div style={{ textAlign: 'center' as const, padding: '40px 0', color: 'rgba(255,255,255,0.2)', fontSize: 13 }}>暂无卡片文案</div>
             )}
           </div>
         </div>
       </div>
 
-      {/* 右侧：阶段 + 路径 */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+      {/* ── 右栏：封面 + 卡片图 + 阶段 ── */}
+      <div style={{ flex: 2, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 20 }}>
+
+        {/* 封面图（大） */}
+        {coverImage && (
+          <div
+            onClick={() => onImageOpen(allUrls.indexOf(coverImage.url), allUrls)}
+            style={{ borderRadius: 16, overflow: 'hidden', boxShadow: '0 24px 64px rgba(0,0,0,0.7)', cursor: 'zoom-in', border: '1px solid rgba(255,255,255,0.08)' }}
+          >
+            <img src={coverImage.url} alt="封面" style={{ width: '100%', display: 'block' }} />
+          </div>
+        )}
+
+        {/* 卡片图网格 */}
+        {cardImages.length > 0 && (
+          <div style={{ background: 'rgba(255,255,255,0.025)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 14, overflow: 'hidden' }}>
+            <div style={{ padding: '12px 16px 10px', borderBottom: '1px solid rgba(255,255,255,0.05)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span style={{ fontSize: 11, fontWeight: 600, color: 'rgba(255,255,255,0.25)', letterSpacing: 3, textTransform: 'uppercase' as const }}>卡片图</span>
+              <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.2)' }}>{cardImages.length} 张</span>
+            </div>
+            <div style={{ padding: 14, display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(120px,1fr))', gap: 10 }}>
+              {cardImages.map((img, i) => (
+                <div key={i}>
+                  <div
+                    onClick={() => onImageOpen(allUrls.indexOf(img.url), allUrls)}
+                    style={{ borderRadius: 10, overflow: 'hidden', cursor: 'zoom-in', boxShadow: '0 6px 20px rgba(0,0,0,0.5)' }}
+                  >
+                    <img src={img.url} alt={`卡片${i + 1}`} style={{ width: '100%', aspectRatio: '9/16', objectFit: 'cover', display: 'block' }} />
+                  </div>
+                  <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.2)', textAlign: 'center' as const, marginTop: 5 }}>{String(i + 1).padStart(2, '0')}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {!hasImages && (
+          <div style={{ background: 'rgba(255,255,255,0.025)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 14, padding: '40px 0', display: 'flex', flexDirection: 'column', alignItems: 'center', color: 'rgba(255,255,255,0.2)' }}>
+            <ImageIcon size={28} style={{ marginBottom: 8, opacity: 0.3 }} />
+            <div style={{ fontSize: 13 }}>暂无图片</div>
+          </div>
+        )}
+
+        {/* 生成阶段 */}
         <div style={{ background: 'rgba(255,255,255,0.025)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 14, overflow: 'hidden' }}>
-          <div style={{ padding: '14px 18px 12px', borderBottom: '1px solid rgba(255,255,255,0.05)', fontSize: 11, fontWeight: 600, color: 'rgba(255,255,255,0.25)', letterSpacing: 3, textTransform: 'uppercase' as const }}>生成阶段</div>
+          <div style={{ padding: '12px 16px 10px', borderBottom: '1px solid rgba(255,255,255,0.05)', fontSize: 11, fontWeight: 600, color: 'rgba(255,255,255,0.25)', letterSpacing: 3, textTransform: 'uppercase' as const }}>生成阶段</div>
           {PIPELINE_STAGES.map(key => {
             const s = stages[key]
             const status = s?.status || 'pending'
             const dur = isTimingReliable && s ? formatDuration(s.started_at, s.completed_at) : null
             return (
-              <div key={key} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 18px', borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+              <div key={key} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 16px', borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
                 <StageDot status={status} />
                 <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.55)', flex: 1 }}>{STAGE_LABELS[key]}</span>
                 {dur && <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', gap: 3 }}><Clock size={9} />{dur}</span>}
@@ -388,16 +391,6 @@ function GenerationTab({ output, stages, isTimingReliable, onImageOpen }: {
             )
           })}
         </div>
-
-        {output?.keyword && (
-          <div style={{ background: 'rgba(255,255,255,0.025)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 14, padding: '14px 18px' }}>
-            <div style={{ fontSize: 11, fontWeight: 600, color: 'rgba(255,255,255,0.25)', letterSpacing: 3, textTransform: 'uppercase' as const, marginBottom: 10 }}>导出路径</div>
-            <div style={{ fontFamily: 'SF Mono,Menlo,monospace', fontSize: 11, color: 'rgba(255,255,255,0.3)', background: 'rgba(0,0,0,0.25)', borderRadius: 8, padding: '10px 12px', lineHeight: 1.8 }}>
-              <span style={{ color: '#a78bfa' }}>content-output/</span><br />
-              *-{output.keyword}/
-            </div>
-          </div>
-        )}
       </div>
     </div>
   )
@@ -551,7 +544,7 @@ export default function PipelineOutputPage() {
       ) : (
         <>
           {/* Hero */}
-          <div style={{ maxWidth: 1100, margin: '0 auto', padding: '48px 40px 36px', borderBottom: '1px solid rgba(255,255,255,0.05)', display: 'flex', gap: 40, alignItems: 'flex-start' }}>
+          <div style={{ padding: '48px 60px 36px', borderBottom: '1px solid rgba(255,255,255,0.05)', display: 'flex', gap: 40, alignItems: 'flex-start' }}>
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontSize: 11, fontWeight: 600, color: 'rgba(192,132,252,0.5)', letterSpacing: 3, textTransform: 'uppercase', marginBottom: 12 }}>内容产出</div>
               <div style={{ fontSize: 44, fontWeight: 800, letterSpacing: -1.5, lineHeight: 1.1, background: 'linear-gradient(135deg,#ffffff 0%,#c084fc 55%,#7c3aed 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text' }}>
@@ -577,7 +570,7 @@ export default function PipelineOutputPage() {
           </div>
 
           {/* Tabs + 内容 */}
-          <div style={{ maxWidth: 1100, margin: '0 auto', padding: '0 40px' }}>
+          <div style={{ padding: '0 60px' }}>
             <div style={{ display: 'flex', gap: 2, borderBottom: '1px solid rgba(255,255,255,0.07)', marginBottom: 28 }}>
               {TABS.map(({ key, label, Icon }) => {
                 const active = activeTab === key
