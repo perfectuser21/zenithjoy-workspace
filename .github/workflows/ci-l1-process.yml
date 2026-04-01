@@ -39,10 +39,76 @@ jobs:
             exit 1
           fi
 
+  # ─── Frontend Browser DoD Check ──────────────────────────────────────
+
+  frontend-browser-dod-check:
+    name: Frontend Browser DoD Check
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect frontend changes and check browser DoD
+        env:
+          BRANCH: ${{ github.head_ref }}
+        run: |
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "  Frontend Browser DoD Check"
+          echo "  Branch: $BRANCH"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+          BASE_REF="${{ github.base_ref }}"
+          CHANGED=$(git diff --name-only "origin/${BASE_REF}...HEAD" 2>/dev/null || git diff --name-only HEAD~1 HEAD)
+
+          if ! echo "$CHANGED" | grep -qE "^apps/dashboard/|^apps/api/"; then
+            echo "无前端文件改动，跳过浏览器验证检查"
+            exit 0
+          fi
+
+          echo "检测到前端文件改动，检查 DoD 是否含浏览器验证步骤..."
+
+          # 定位 DoD / Task Card 文件
+          DOD_FILE=""
+          if [ -f ".task-${BRANCH}.md" ]; then
+            DOD_FILE=".task-${BRANCH}.md"
+          elif [ -f ".dod-${BRANCH}.md" ]; then
+            DOD_FILE=".dod-${BRANCH}.md"
+          elif [ -f ".dod.md" ]; then
+            DOD_FILE=".dod.md"
+          fi
+
+          if [ -z "$DOD_FILE" ]; then
+            echo "⚠️  未找到 DoD 文件，跳过浏览器验证检查"
+            exit 0
+          fi
+
+          echo "DoD 文件: $DOD_FILE"
+
+          # 检查浏览器验证关键词：manual:chrome: / localhost:3001
+          if grep -q "manual:chrome:\|localhost:3001" "$DOD_FILE"; then
+            echo "✅ 找到浏览器验证步骤，检查通过"
+            grep -n "manual:chrome:\|localhost:3001" "$DOD_FILE" | head -5
+            exit 0
+          fi
+
+          echo ""
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "  ❌ Frontend Browser DoD Check FAILED"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo ""
+          echo "  本 PR 修改了前端文件，但 DoD 中未找到浏览器验证步骤。"
+          echo ""
+          echo "  请在 DoD 的 [BEHAVIOR] 条目中添加（至少一个）："
+          echo "    Test: manual:chrome: 打开 http://localhost:3001/xxx → 验证主流程"
+          echo ""
+          exit 1
+
   # ─── L1 Gate ──────────────────────────────────────────────────────────
   l1-passed:
     name: L1 Process Gate Passed
-    needs: [pr-title]
+    needs: [pr-title, frontend-browser-dod-check]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -53,8 +119,19 @@ jobs:
           echo "  L1 Process Gate"
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
+          FAILED=false
+
           if [ "${{ needs.pr-title.result }}" != "success" ]; then
             echo "FAIL: PR Title Format (${{ needs.pr-title.result }})"
+            FAILED=true
+          fi
+
+          if [ "${{ needs.frontend-browser-dod-check.result }}" != "success" ]; then
+            echo "FAIL: Frontend Browser DoD Check (${{ needs.frontend-browser-dod-check.result }})"
+            FAILED=true
+          fi
+
+          if [ "$FAILED" = "true" ]; then
             echo ""
             echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
             echo "  L1 Process Gate FAILED"
