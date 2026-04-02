@@ -1,0 +1,135 @@
+name: PR Auto Review (DeepSeek)
+
+# AI 代码审查 — 每个 PR 创建/更新时自动触发
+# 使用 DeepSeek V3 通过 OpenRouter API 对代码变更进行 AI review
+# 结果以评论形式发布到 PR
+# 若发现🔴严重问题 → job 失败，阻塞合并
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+
+jobs:
+  deepseek-review:
+    name: DeepSeek Code Review
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      pull-requests: write
+
+    steps:
+      - name: Checkout 代码
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: 设置 Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: 获取 PR diff
+        id: get-diff
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          PR_DIFF=$(gh pr diff ${{ github.event.pull_request.number }} 2>/dev/null | head -500 || echo "无法获取 diff")
+          echo "PR_DIFF<<DIFF_EOF" >> "$GITHUB_ENV"
+          echo "$PR_DIFF" >> "$GITHUB_ENV"
+          echo "DIFF_EOF" >> "$GITHUB_ENV"
+
+      - name: 调用 OpenRouter API 进行代码审查（含重试，fail-closed）
+        id: ai-review
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+        run: |
+          SYSTEM_PROMPT="你是 ZenithJoy 项目的代码审查员，请用中文对以下代码变更进行审查。
+
+          重点关注以下方面：
+          1. **逻辑问题**：是否有潜在的逻辑错误、边界条件处理不当、空指针/异常未处理
+          2. **安全风险**：是否有凭据泄露、SQL 注入、XSS、不安全的依赖等安全隐患
+          3. **DoD 符合度**：变更是否符合 PR 描述中的 DoD（Definition of Done）条目，是否所有 DoD 条目均已勾选 [x]
+          4. **代码质量**：是否有重复代码、过度复杂的实现、缺少错误处理
+          5. **测试覆盖**：feat 类型的变更是否包含对应的测试文件
+
+          输出格式：
+          - 用简洁的 Markdown 列表总结发现的问题
+          - 区分严重问题（🔴）、建议优化（🟡）、正面反馈（🟢）
+          - 如果没有发现问题，说明代码质量良好"
+
+          USER_PROMPT="请审查以下代码变更：
+
+          \`\`\`diff
+          ${PR_DIFF}
+          \`\`\`"
+
+          MAX_RETRY=3
+          RETRY_COUNT=0
+          REVIEW_CONTENT=""
+
+          while [[ $RETRY_COUNT -lt $MAX_RETRY ]]; do
+            RETRY_COUNT=$((RETRY_COUNT + 1))
+            echo "API 调用尝试 ${RETRY_COUNT}/${MAX_RETRY}..."
+
+            RESPONSE=$(curl -s -X POST "https://openrouter.ai/api/v1/chat/completions" \
+              -H "Authorization: Bearer ${OPENROUTER_API_KEY}" \
+              -H "Content-Type: application/json" \
+              -H "X-Title: ZenithJoy PR Review" \
+              --max-time 60 \
+              -d "$(jq -n \
+                --arg sys "$SYSTEM_PROMPT" \
+                --arg usr "$USER_PROMPT" \
+                '{
+                  "model": "deepseek/deepseek-chat",
+                  "messages": [
+                    {"role": "system", "content": $sys},
+                    {"role": "user", "content": $usr}
+                  ],
+                  "max_tokens": 2000,
+                  "temperature": 0.1
+                }'
+              )" 2>/dev/null || echo "")
+
+            REVIEW_CONTENT=$(echo "$RESPONSE" | jq -r '.choices[0].message.content // empty' 2>/dev/null || echo "")
+
+            if [[ -n "$REVIEW_CONTENT" ]]; then
+              echo "API 调用成功（第 ${RETRY_COUNT} 次）"
+              break
+            fi
+
+            echo "API 调用失败（第 ${RETRY_COUNT} 次），响应：$(echo "$RESPONSE" | head -c 200)"
+            if [[ $RETRY_COUNT -lt $MAX_RETRY ]]; then
+              echo "等待 5 秒后重试..."
+              sleep 5
+            fi
+          done
+
+          if [[ -z "$REVIEW_CONTENT" ]]; then
+            echo "❌ OpenRouter API 调用全部失败（已重试 ${MAX_RETRY} 次），阻止 PR 合并" >&2
+            exit 1
+          fi
+
+          echo "$REVIEW_CONTENT" > /tmp/review-result.txt
+          echo "审查结果已保存"
+
+      - name: 将审查结果发布为 PR 评论
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          REVIEW_CONTENT=$(cat /tmp/review-result.txt)
+          COMMENT_BODY="## 🤖 AI 代码审查（DeepSeek V3）
+
+          ${REVIEW_CONTENT}
+
+          ---
+          *由 [OpenRouter](https://openrouter.ai) 提供 DeepSeek V3 模型审查*"
+
+          gh pr comment ${{ github.event.pull_request.number }} \
+            --body "$COMMENT_BODY" 2>/dev/null || \
+          echo "评论发布失败（可能权限不足），继续执行严重问题检测"
+
+      - name: 检测严重问题（🔴 则 job 失败）
+        run: |
+          echo "正在检测审查结果中是否包含🔴严重问题..."
+          cat /tmp/review-result.txt | node scripts/devgate/detect-review-issues.js
