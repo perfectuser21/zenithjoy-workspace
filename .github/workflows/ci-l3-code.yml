@@ -113,6 +113,9 @@ jobs:
           cache-dependency-path: apps/dashboard/package-lock.json
       - run: npm ci
         working-directory: apps/dashboard
+      - name: Fix rollup optional deps (npm ci bug workaround)
+        working-directory: apps/dashboard
+        run: node -e "try{require('@rollup/rollup-linux-x64-gnu')}catch(e){require('child_process').execSync('npm install --no-save @rollup/rollup-linux-x64-gnu',{stdio:'inherit'})}" || true
       - run: mkdir -p apps/dashboard/public/gallery/chatgpt-cards apps/dashboard/public/gallery/deep-post-cards
       - run: npm run build
         working-directory: apps/dashboard
@@ -174,7 +177,13 @@ jobs:
           node-version: '20'
           cache: 'npm'
           cache-dependency-path: package-lock.json
-      - run: npm ci --workspace=apps/geoai
+      - run: npm ci
+      - name: Fix Linux native optional deps missing from macOS-generated lock file
+        run: |
+          npm install --no-save @rollup/rollup-linux-x64-gnu lightningcss-linux-x64-gnu @tailwindcss/oxide-linux-x64-gnu 2>/dev/null || true
+          src="node_modules/lightningcss-linux-x64-gnu/lightningcss.linux-x64-gnu.node"
+          dst="node_modules/lightningcss/lightningcss.linux-x64-gnu.node"
+          [ -f "$src" ] && [ ! -f "$dst" ] && cp "$src" "$dst" || true
       - run: npm run build
         working-directory: apps/geoai
 

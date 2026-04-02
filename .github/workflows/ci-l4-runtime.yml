@@ -73,6 +73,9 @@ jobs:
           cache-dependency-path: apps/dashboard/package-lock.json
       - run: npm ci
         working-directory: apps/dashboard
+      - name: Fix rollup optional deps (npm ci bug workaround)
+        working-directory: apps/dashboard
+        run: node -e "try{require('@rollup/rollup-linux-x64-gnu')}catch(e){require('child_process').execSync('npm install --no-save @rollup/rollup-linux-x64-gnu',{stdio:'inherit'})}" || true
       - name: Run tests with coverage
         working-directory: apps/dashboard
         run: npx vitest run --coverage
@@ -92,6 +95,8 @@ jobs:
           cache: 'npm'
           cache-dependency-path: package-lock.json
       - run: npm ci --workspace=apps/api
+      - name: Fix rollup optional deps (npm ci bug workaround)
+        run: node -e "try{require('@rollup/rollup-linux-x64-gnu')}catch(e){require('child_process').execSync('npm install --no-save @rollup/rollup-linux-x64-gnu',{stdio:'inherit'})}" || true
       - name: Run tests with coverage
         working-directory: apps/api
         run: npx vitest run --coverage

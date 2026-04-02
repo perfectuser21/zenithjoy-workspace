@@ -1,0 +1,33 @@
+name: Deploy to HK VPS
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'apps/dashboard/**'
+      - 'apps/api/**'
+
+jobs:
+  deploy:
+    name: Build & Deploy Dashboard
+    runs-on: [self-hosted, hk-vps]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: npm ci --workspace=apps/dashboard
+
+      - name: Build dashboard
+        run: npm run build --workspace=apps/dashboard
+
+      - name: Deploy to VPS
+        run: |
+          rsync -avz --delete apps/dashboard/dist/ /opt/zenithjoy/autopilot-dashboard/dist/
+          echo "✅ dist synced"
+
+      - name: Restart container
+        run: |
+          docker restart autopilot-prod
+          echo "✅ autopilot-prod restarted"
