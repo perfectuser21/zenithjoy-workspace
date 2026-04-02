@@ -8,20 +8,21 @@ const CDP = require('chrome-remote-interface');
 const { Client } = require('pg');
 const fs = require('fs');
 const http = require('http');
+const crypto = require('crypto');
 
 function ingestToUS(platform, items) {
   return new Promise((resolve) => {
     try {
       const today = new Date().toISOString().split('T')[0];
       const mapped = items.map(item => ({
-        content_id: item.weiboId || item.id || item.mid || '',
+        content_id: item.content_id || '',
         scraped_date: today,
-        title: item.content || item.title || item.text || '',
-        views: item.views || item.reads_count || 0,
-        likes: item.likes || item.attitudes_count || 0,
-        comments: item.comments || item.comments_count || 0,
-        shares: item.reposts || item.reposts_count || 0,
-        extra_data: { publishTime: item.publishTime }
+        title: item.title || '',
+        views: item.views || 0,
+        likes: item.likes || 0,
+        comments: item.comments || 0,
+        shares: item.shares || 0,
+        extra_data: item.extra_data || {}
       })).filter(i => i.content_id);
       if (!mapped.length) return resolve({ skipped: true });
       const body = JSON.stringify({ platform, items: mapped });
@@ -48,44 +49,13 @@ const dbClient = new Client({
   password: 'n8n_password_2025', database: 'social_media_raw'
 });
 
-const zenithjoyClient = new Client({
-  host: 'localhost', port: 5432, user: 'cecelia',
-  password: 'CeceliaUS2026', database: 'cecelia'
-});
-
-async function linkWorkId(platformPostId, metrics) {
-  try {
-    const result = await zenithjoyClient.query(
-      `SELECT id, work_id FROM zenithjoy.publish_logs WHERE platform_post_id = $1 AND platform = 'weibo' LIMIT 1`,
-      [platformPostId]
-    );
-    if (result.rows.length === 0) return null;
-    const { id, work_id } = result.rows[0];
-    await zenithjoyClient.query(
-      `UPDATE zenithjoy.publish_logs SET metrics = $1 WHERE id = $2`,
-      [JSON.stringify(metrics), id]
-    );
-    return work_id;
-  } catch (e) {
-    console.error('[微博] publish_logs 关联失败（非致命）: ' + e.message);
-    return null;
-  }
-}
-
 async function scrapeWeibo() {
   let client;
   const allItems = [];
   const seen = new Set();
-  let zenithjoyConnected = false;
 
   try {
     await dbClient.connect();
-    try {
-      await zenithjoyClient.connect();
-      zenithjoyConnected = true;
-    } catch (e) {
-      console.error('[微博] zenithjoy DB 连接失败（非致命）: ' + e.message);
-    }
     client = await CDP({ host: NODE_PC_HOST, port: PORT, timeout: 30000 });
     const { Runtime, Page } = client;
     await Runtime.enable();
@@ -226,50 +196,32 @@ async function scrapeWeibo() {
       }
     }
 
-    // 关联 zenithjoy.publish_logs（通过 platform_post_id → work_id）
-    let workIdLinked = 0;
-    if (zenithjoyConnected) {
-      for (const item of allItems) {
-        if (item.weiboId) {
-          const metrics = {
-            views: item.views || 0,
-            likes: item.likes || 0,
-            comments: item.comments || 0,
-            reposts: item.reposts || 0
-          };
-          const workId = await linkWorkId(item.weiboId, metrics);
-          if (workId) {
-            item.work_id = workId;
-            workIdLinked++;
-          }
-        }
-      }
-      console.error('[微博] work_id 关联完成: ' + workIdLinked + ' 条');
-    }
-
     const totalViews = allItems.reduce((sum, i) => sum + (i.views || 0), 0);
     const output = { success: true, platform: '微博', platform_code: 'weibo',
       count: allItems.length, new_content: newCount, snapshots: snapshotCount,
-      work_id_linked: workIdLinked, total_views: totalViews,
+      total_views: totalViews,
       scraped_at: new Date().toISOString(), items: allItems };
 
-    const filename = '/home/xx/.platform-data/weibo_' + Date.now() + '.json';
+    const filename = require('os').homedir() + '/.platform-data/weibo_' + Date.now() + '.json';
     fs.writeFileSync(filename, JSON.stringify(output, null, 2));
     console.error('[微博] 保存到 ' + filename);
     console.error('[微博] 总阅读量: ' + totalViews);
-    const ingestResult = await ingestToUS('weibo', allItems);
+    const ingestItems = allItems.map(i => ({
+      content_id: i.weiboId || crypto.createHash('md5').update((i.title||'')+'|'+(i.publishTime||'')).digest('hex').substring(0,16),
+      title: i.title || '', views: i.views || 0, likes: i.likes || 0,
+      comments: i.comments || 0, shares: i.reposts || 0, extra_data: {}
+    }));
+    const ingestResult = await ingestToUS('weibo', ingestItems);
     console.error('[微博] 已推送到美国 API: ' + JSON.stringify(ingestResult));
-    console.log(JSON.stringify({ success: true, platform: '微博', count: allItems.length, total_views: totalViews, work_id_linked: workIdLinked }));
+    console.log(JSON.stringify({ success: true, platform: '微博', count: allItems.length, total_views: totalViews }));
 
     await client.close();
     await dbClient.end();
-    if (zenithjoyConnected) await zenithjoyClient.end();
   } catch (e) {
     console.error('[微博] 错误: ' + e.message);
     console.log(JSON.stringify({ success: false, platform: '微博', error: e.message }));
     if (client) try { await client.close(); } catch (e) {}
     if (dbClient) try { await dbClient.end(); } catch (e) {}
-    try { await zenithjoyClient.end(); } catch (e) {}
     process.exit(1);
   }
 }

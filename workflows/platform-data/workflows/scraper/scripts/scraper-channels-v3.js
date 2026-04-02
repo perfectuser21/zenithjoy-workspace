@@ -1,11 +1,6 @@
 #!/usr/bin/env node
 /**
  * 视频号采集器 V3 - 通过 API 拦截获取数据
- *
- * work_id 关联：channels 不在 zenithjoy.publish_logs platform 约束内
- * （约束为 wechat/douyin/xiaohongshu/zhihu/toutiao/kuaishou/weibo），
- * 因此本采集器无法通过 publish_logs 进行 work_id 关联。
- * 如需添加，需先扩展 publish_logs_platform_check 约束并注册发布流程。
  */
 const CDP = require('chrome-remote-interface');
 const { Client } = require('pg');
@@ -17,20 +12,16 @@ function ingestToUS(platform, items) {
   return new Promise((resolve) => {
     try {
       const today = new Date().toISOString().split('T')[0];
-      const mapped = items.map(item => {
-        const raw = (item.title || '') + '|' + (item.publishTime || '');
-        const content_id = crypto.createHash('md5').update(raw).digest('hex').substring(0, 16);
-        return {
-          content_id,
-          scraped_date: today,
-          title: item.title || '',
-          views: item.views || 0,
-          likes: item.likes || 0,
-          comments: item.comments || 0,
-          shares: item.shares || 0,
-          extra_data: { publishTime: item.publishTime }
-        };
-      }).filter(i => i.content_id);
+      const mapped = items.map(item => ({
+        content_id: item.content_id || '',
+        scraped_date: today,
+        title: item.title || '',
+        views: item.views || 0,
+        likes: item.likes || 0,
+        comments: item.comments || 0,
+        shares: item.shares || 0,
+        extra_data: item.extra_data || {}
+      })).filter(i => i.content_id);
       if (!mapped.length) return resolve({ skipped: true });
       const body = JSON.stringify({ platform, items: mapped });
       const req = http.request({
@@ -170,10 +161,15 @@ async function scrapeChannels() {
 
     // Save to JSON
     const output = { success: true, platform: '视频号', platform_code: 'channels', count: allItems.length, items: allItems };
-    const filename = '/home/xx/.platform-data/channels_' + Date.now() + '.json';
+    const filename = require('os').homedir() + '/.platform-data/channels_' + Date.now() + '.json';
     fs.writeFileSync(filename, JSON.stringify(output, null, 2));
     console.error('[视频号] 保存到 ' + filename);
-    const ingestResult = await ingestToUS('channels', allItems);
+    const ingestItems = allItems.map(i => ({
+      content_id: crypto.createHash('md5').update((i.title||'')+'|'+(i.publishTime||'')).digest('hex').substring(0,16),
+      title: i.title || '', views: i.views || 0, likes: i.likes || 0,
+      comments: i.comments || 0, shares: i.shares || 0, extra_data: {}
+    }));
+    const ingestResult = await ingestToUS('channels', ingestItems);
     console.error('[视频号] 已推送到美国 API: ' + JSON.stringify(ingestResult));
     console.log(JSON.stringify({ success: true, platform: '视频号', count: allItems.length }));
 
