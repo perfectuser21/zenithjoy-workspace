@@ -1,8 +1,0 @@
-<!--pages/web-view/web-view.wxml-->
-<view class="container">
-  <web-view wx:if="{{url}}" src="{{url}}" bindload="onWebViewLoad" binderror="onWebViewError"></web-view>
-  <view wx:else class="error-container">
-    <icon type="warn" size="64"></icon>
-    <text class="error-text">无法加载页面</text>
-  </view>
-</view> 

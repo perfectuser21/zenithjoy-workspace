@@ -1,8 +1,0 @@
-{
-  "usingComponents": {},
-  "enablePullDownRefresh": true,
-  "backgroundColor": "#f8f8f8",
-  "navigationBarTitleText": "文章详情",
-  "navigationBarBackgroundColor": "#ffffff",
-  "navigationBarTextStyle": "black"
-}
