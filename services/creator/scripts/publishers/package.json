@@ -1,0 +1,11 @@
+{
+  "name": "zenithjoy-publishers",
+  "version": "1.0.0",
+  "private": true,
+  "type": "commonjs",
+  "description": "Social media publishing scripts",
+  "dependencies": {
+    "playwright": "^1.40.0",
+    "ws": "^8.16.0"
+  }
+}
