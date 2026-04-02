@@ -1,3 +1,4 @@
+const _log = console.log.bind(console);
 #!/usr/bin/env node
 /**
  * 快手图文发布脚本（新 API 方案）
@@ -378,7 +379,7 @@ async function extractKuaishouSession(cdp) {
   });
 
   const cookies = cookiesResult.cookies || [];
-  console.log(`   提取到 ${cookies.length} 个 Cookie`);
+  _log(`   提取到 ${cookies.length} 个 Cookie`);
 
   if (!isSessionValid(cookies)) {
     const foundNames = cookies.map(c => c.name).join(', ') || '（无）';
@@ -391,8 +392,8 @@ async function extractKuaishouSession(cdp) {
   }
 
   const { cookieHeader, sessionToken, userId } = parseCookieHeader(cookies);
-  console.log(`   Session Token: ${sessionToken ? '✅ 已获取' : '⚠️  未找到'}`);
-  console.log(`   User ID: ${userId || '（未知）'}`);
+  _log(`   Session Token: ${sessionToken ? '✅ 已获取' : '⚠️  未找到'}`);
+  _log(`   User ID: ${userId || '（未知）'}`);
 
   return { cookieHeader, sessionToken, userId };
 }
@@ -594,38 +595,38 @@ async function main() {
     console.warn(`⚠️  图片数量 ${allImages.length} 超过快手限制 ${MAX_IMAGES}，已截断`);
   }
 
-  console.log('\n========================================');
-  console.log('快手图文发布（新 API 方案）');
-  console.log('========================================\n');
-  console.log(`📁 内容目录: ${contentDir}`);
-  console.log(`📝 文案长度: ${contentText.length} 字符`);
-  console.log(`🖼️  图片数量: ${localImages.length}`);
-  console.log('');
+  _log('\n========================================');
+  _log('快手图文发布（新 API 方案）');
+  _log('========================================\n');
+  _log(`📁 内容目录: ${contentDir}`);
+  _log(`📝 文案长度: ${contentText.length} 字符`);
+  _log(`🖼️  图片数量: ${localImages.length}`);
+  _log('');
 
   let cdp;
 
   try {
-    console.log('1️⃣  连接 CDP 提取会话 Cookie...\n');
+    _log('1️⃣  连接 CDP 提取会话 Cookie...\n');
     const pagesData = await getCDPPages(WINDOWS_IP, CDP_PORT);
     const kuaishouPage = pagesData.find(
       p => p.type === 'page' && p.url.includes('kuaishou.com')
     );
     const targetPage = kuaishouPage || pagesData.find(p => p.type === 'page');
     if (!targetPage) throw new Error('未找到任何浏览器页面');
-    if (!kuaishouPage) console.log(`   ⚠️  未找到快手页面，使用: ${targetPage.url}`);
+    if (!kuaishouPage) _log(`   ⚠️  未找到快手页面，使用: ${targetPage.url}`);
 
     cdp = new CDPClient(targetPage.webSocketDebuggerUrl);
     await cdp.connect();
-    console.log('   ✅ CDP 已连接\n');
+    _log('   ✅ CDP 已连接\n');
 
     const { cookieHeader } = await extractKuaishouSession(cdp);
-    console.log('   ✅ 会话 Cookie 已提取\n');
+    _log('   ✅ 会话 Cookie 已提取\n');
 
-    console.log('2️⃣  获取图片上传 Token...\n');
+    _log('2️⃣  获取图片上传 Token...\n');
     const tokenInfo = await getUploadToken(cookieHeader);
-    console.log(`   ✅ 上传 Token 已获取，端点: ${tokenInfo.uploadEndpoint}\n`);
+    _log(`   ✅ 上传 Token 已获取，端点: ${tokenInfo.uploadEndpoint}\n`);
 
-    console.log(`3️⃣  上传图片（${localImages.length} 张）...\n`);
+    _log(`3️⃣  上传图片（${localImages.length} 张）...\n`);
     const photoIds = [];
     for (let i = 0; i < localImages.length; i++) {
       const imgPath = localImages[i];
@@ -633,16 +634,16 @@ async function main() {
       process.stdout.write(`   [${i + 1}/${localImages.length}] 上传 ${filename}... `);
       const photoId = await uploadImage(imgPath, cookieHeader, tokenInfo);
       photoIds.push(photoId);
-      console.log(`✅ id: ${photoId}`);
+      _log(`✅ id: ${photoId}`);
     }
-    console.log(`\n   ✅ 全部图片上传完成，photo_ids: [${photoIds.join(', ')}]\n`);
+    _log(`\n   ✅ 全部图片上传完成，photo_ids: [${photoIds.join(', ')}]\n`);
 
-    console.log('4️⃣  发布图文...\n');
+    _log('4️⃣  发布图文...\n');
     const { postUrl, postId } = await publishKuaishouPost(contentText, photoIds, cookieHeader);
 
-    console.log('\n✅ 快手图文发布成功！');
-    if (postId) console.log(`   作品 ID: ${postId}`);
-    if (postUrl) console.log(`   管理链接: ${postUrl}`);
+    _log('\n✅ 快手图文发布成功！');
+    if (postId) _log(`   作品 ID: ${postId}`);
+    if (postUrl) _log(`   管理链接: ${postUrl}`);
   } catch (err) {
     const isSessError = err.message.includes('[SESSION_EXPIRED]');
     console.error(`\n${isSessError ? '[SESSION_EXPIRED]' : '❌'} 发布失败: ${err.message}`);

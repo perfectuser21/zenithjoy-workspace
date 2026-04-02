@@ -1,3 +1,4 @@
+const _log = console.log.bind(console);
 #!/usr/bin/env node
 /**
  * 知乎专栏文章发布脚本（API 方案）
@@ -167,7 +168,7 @@ async function withRetry(fn, maxRetries, delayMs) {
       lastError = err;
       if (err.message && err.message.includes('[NO_RETRY]')) throw err;
       if (attempt < retries) {
-        console.log(`   重试 ${attempt}/${retries - 1}...`);
+        _log(`   重试 ${attempt}/${retries - 1}...`);
         await new Promise(r => setTimeout(r, delay));
       }
     }
@@ -269,7 +270,7 @@ async function connectToBestTab(pages) {
     );
   }
 
-  console.log(`   连接标签页: ${tab.url || '(空页)'}`);
+  _log(`   连接标签页: ${tab.url || '(空页)'}`);
   const cdp = new CDPClient(tab.webSocketDebuggerUrl);
   await cdp.connect();
   return cdp;
@@ -329,10 +330,10 @@ async function ensureZhihuSession(cdp) {
     returnByValue: true,
   });
   const currentUrl = urlResult?.result?.value || '';
-  console.log(`   当前页面: ${currentUrl}`);
+  _log(`   当前页面: ${currentUrl}`);
 
   if (!currentUrl.includes('zhihu.com')) {
-    console.log('   导航到知乎专栏...');
+    _log('   导航到知乎专栏...');
     await cdp.send('Page.navigate', { url: ZHIHU_WRITE_URL });
     await new Promise(r => setTimeout(r, 3000));
 
@@ -356,13 +357,13 @@ async function ensureZhihuSession(cdp) {
     );
   }
 
-  console.log('   ✅ 知乎会话有效');
+  _log('   ✅ 知乎会话有效');
 }
 
 async function uploadCoverImage(cdp, coverPath) {
   if (!coverPath || !fs.existsSync(coverPath)) return null;
 
-  console.log(`   上传封面图: ${path.basename(coverPath)}`);
+  _log(`   上传封面图: ${path.basename(coverPath)}`);
 
   const imageBuffer = fs.readFileSync(coverPath);
   const base64 = imageBuffer.toString('base64');
@@ -412,7 +413,7 @@ async function uploadCoverImage(cdp, coverPath) {
 
   const data = parsed.data || {};
   const token = data.token || data.id || data.image_id || null;
-  console.log(`   ✅ 封面图上传成功${token ? ': token=' + token : ''}`);
+  _log(`   ✅ 封面图上传成功${token ? ': token=' + token : ''}`);
   return token;
 }
 
@@ -420,12 +421,12 @@ async function createAndPublishArticle(cdp, article) {
   const { title, content, coverToken } = article;
   const htmlContent = textToZhihuHtml(content);
 
-  console.log('   调用知乎 API 创建文章...');
+  _log('   调用知乎 API 创建文章...');
   const createBody = { title, content: htmlContent, table_of_contents: false, draft: false };
   if (coverToken) createBody.image_url = coverToken;
 
   const createResp = await browserFetch(cdp, ZHIHU_CREATE_API, 'POST', createBody);
-  console.log(`   API 响应: HTTP ${createResp.statusCode}`);
+  _log(`   API 响应: HTTP ${createResp.statusCode}`);
 
   const { ok, errorMsg, articleId } = parseZhihuResponse(
     createResp.statusCode,
@@ -442,7 +443,7 @@ async function createAndPublishArticle(cdp, article) {
     throw new Error(`发布文章失败: ${errorMsg}`);
   }
 
-  console.log(`   ✅ 文章已发布，ID: ${articleId}`);
+  _log(`   ✅ 文章已发布，ID: ${articleId}`);
   return articleId;
 }
 
@@ -471,49 +472,49 @@ async function main() {
   const content = fs.readFileSync(contentFile, 'utf8').trim();
   const coverPath = findCoverImage(contentDir);
 
-  console.log('========================================');
-  console.log(' 知乎文章发布（API 方案）');
-  console.log('========================================');
-  console.log(`标题: ${title.slice(0, 50)}${title.length > 50 ? '...' : ''}`);
-  console.log(`正文: ${content.length} 字`);
-  console.log(`封面: ${coverPath ? path.basename(coverPath) : '（无）'}`);
-  console.log(`模式: ${isDryRun ? '🔍 dry-run（不实际发布）' : '🚀 生产发布'}`);
-  console.log('');
+  _log('========================================');
+  _log(' 知乎文章发布（API 方案）');
+  _log('========================================');
+  _log(`标题: ${title.slice(0, 50)}${title.length > 50 ? '...' : ''}`);
+  _log(`正文: ${content.length} 字`);
+  _log(`封面: ${coverPath ? path.basename(coverPath) : '（无）'}`);
+  _log(`模式: ${isDryRun ? '🔍 dry-run（不实际发布）' : '🚀 生产发布'}`);
+  _log('');
 
   if (isDryRun) {
-    console.log('✅ dry-run 完成，参数验证通过');
-    console.log(`   将调用: POST ${ZHIHU_CREATE_API}`);
-    console.log(`   CDP 端点: ${WINDOWS_IP}:${CDP_PORT}`);
+    _log('✅ dry-run 完成，参数验证通过');
+    _log(`   将调用: POST ${ZHIHU_CREATE_API}`);
+    _log(`   CDP 端点: ${WINDOWS_IP}:${CDP_PORT}`);
     return;
   }
 
-  console.log(`连接 Windows Chrome CDP (${WINDOWS_IP}:${CDP_PORT})...`);
+  _log(`连接 Windows Chrome CDP (${WINDOWS_IP}:${CDP_PORT})...`);
   const pages = await withRetry(() => getCDPPages(WINDOWS_IP, CDP_PORT), 3, 2000);
-  console.log(`   发现 ${pages.length} 个标签页`);
+  _log(`   发现 ${pages.length} 个标签页`);
 
   const cdp = await connectToBestTab(pages);
   try {
-    console.log('');
-    console.log('Step 1: 检查知乎会话...');
+    _log('');
+    _log('Step 1: 检查知乎会话...');
     await ensureZhihuSession(cdp);
 
     let coverToken = null;
     if (coverPath) {
-      console.log('');
-      console.log('Step 2: 上传封面图...');
+      _log('');
+      _log('Step 2: 上传封面图...');
       coverToken = await uploadCoverImage(cdp, coverPath);
     }
 
-    console.log('');
-    console.log('Step 3: 发布文章...');
+    _log('');
+    _log('Step 3: 发布文章...');
     const articleId = await createAndPublishArticle(cdp, { title, content, coverToken });
 
-    console.log('');
-    console.log('========================================');
-    console.log(' ✅ 知乎文章发布成功！');
-    console.log(`    文章 ID: ${articleId}`);
-    if (articleId) console.log(`    文章链接: https://zhuanlan.zhihu.com/p/${articleId}`);
-    console.log('========================================');
+    _log('');
+    _log('========================================');
+    _log(' ✅ 知乎文章发布成功！');
+    _log(`    文章 ID: ${articleId}`);
+    if (articleId) _log(`    文章链接: https://zhuanlan.zhihu.com/p/${articleId}`);
+    _log('========================================');
   } finally {
     cdp.close();
   }

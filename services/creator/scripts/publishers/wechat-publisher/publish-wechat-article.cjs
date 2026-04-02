@@ -1,3 +1,4 @@
+const _log = console.log.bind(console);
 #!/usr/bin/env node
 /**
  * 微信公众号图文发布脚本
@@ -270,12 +271,12 @@ async function getAccessToken(appId, appSecret) {
     try {
       const cached = JSON.parse(fs.readFileSync(TOKEN_CACHE_FILE, 'utf8'));
       if (isTokenCacheValid(cached)) {
-        console.log('   ✅ 使用缓存 Token（有效）');
+        _log('   ✅ 使用缓存 Token（有效）');
         return cached.access_token;
       }
-      console.log('   ⚠️  缓存 Token 已过期，重新获取...');
+      _log('   ⚠️  缓存 Token 已过期，重新获取...');
     } catch {
-      console.log('   ⚠️  Token 缓存读取失败，重新获取...');
+      _log('   ⚠️  Token 缓存读取失败，重新获取...');
     }
   }
 
@@ -284,7 +285,7 @@ async function getAccessToken(appId, appSecret) {
 
   try {
     fs.writeFileSync(TOKEN_CACHE_FILE, JSON.stringify(cache, null, 2), 'utf8');
-    console.log(`   ✅ 新 Token 已缓存（有效期 ${expiresIn}s）`);
+    _log(`   ✅ 新 Token 已缓存（有效期 ${expiresIn}s）`);
   } catch (err) {
     console.warn(`   ⚠️  Token 缓存写入失败: ${err.message}`);
   }
@@ -446,7 +447,7 @@ async function uploadInlineImages(html, accessToken, contentDir) {
 
   if (replacements.length === 0) return html;
 
-  console.log(`   📸 检测到 ${replacements.length} 张内嵌图片，开始上传...`);
+  _log(`   📸 检测到 ${replacements.length} 张内嵌图片，开始上传...`);
 
   let result = html;
   for (const { fullTag, before, src, after, absPath } of replacements) {
@@ -458,7 +459,7 @@ async function uploadInlineImages(html, accessToken, contentDir) {
       const wechatUrl = await uploadContentImage(absPath, accessToken);
       const newTag = `<img${before}src="${wechatUrl}"${after}>`;
       result = result.replace(fullTag, newTag);
-      console.log(`   ✅ ${path.basename(src)} → 微信 CDN`);
+      _log(`   ✅ ${path.basename(src)} → 微信 CDN`);
     } catch (err) {
       console.warn(`   ⚠️  图片上传失败，保留原路径 (${path.basename(src)}): ${err.message}`);
     }
@@ -609,12 +610,12 @@ function parseArgs() {
 // ============================================================
 
 async function main() {
-  console.log('\n========================================');
-  console.log('微信公众号图文发布（官方 API）');
-  console.log('========================================\n');
+  _log('\n========================================');
+  _log('微信公众号图文发布（官方 API）');
+  _log('========================================\n');
 
   const { appId, appSecret } = loadCredentials();
-  console.log(`📋 AppID: ${appId.slice(0, 8)}...`);
+  _log(`📋 AppID: ${appId.slice(0, 8)}...`);
 
   let articleArgs;
   try {
@@ -625,31 +626,31 @@ async function main() {
   }
 
   const { title, content: rawContent, digest, author, coverPath, contentDir: argContentDir } = articleArgs;
-  console.log(`📝 标题: ${title}`);
-  console.log(`📄 正文: ${rawContent.length} 字符`);
-  if (coverPath) console.log(`🖼️  封面: ${coverPath}`);
-  console.log('');
+  _log(`📝 标题: ${title}`);
+  _log(`📄 正文: ${rawContent.length} 字符`);
+  if (coverPath) _log(`🖼️  封面: ${coverPath}`);
+  _log('');
 
   try {
-    console.log('1️⃣  获取 Access Token...\n');
+    _log('1️⃣  获取 Access Token...\n');
     const accessToken = await getAccessToken(appId, appSecret);
-    console.log('');
+    _log('');
 
     let thumbMediaId;
     if (coverPath) {
-      console.log('2️⃣  上传封面图片（永久素材）...\n');
+      _log('2️⃣  上传封面图片（永久素材）...\n');
       try {
         thumbMediaId = await uploadCoverImage(coverPath, accessToken);
-        console.log(`   ✅ 封面已上传，thumb_media_id: ${thumbMediaId.slice(0, 20)}...\n`);
+        _log(`   ✅ 封面已上传，thumb_media_id: ${thumbMediaId.slice(0, 20)}...\n`);
       } catch (err) {
         console.warn(`   ⚠️  封面上传失败，继续发布（无封面）: ${err.message}\n`);
       }
     } else {
-      console.log('2️⃣  未提供封面，从素材库获取默认封面...\n');
+      _log('2️⃣  未提供封面，从素材库获取默认封面...\n');
       try {
         thumbMediaId = await getDefaultThumbMediaId(accessToken);
         if (thumbMediaId) {
-          console.log(`   ✅ 使用默认封面 media_id: ${thumbMediaId.slice(0, 20)}...\n`);
+          _log(`   ✅ 使用默认封面 media_id: ${thumbMediaId.slice(0, 20)}...\n`);
         } else {
           console.warn('   ⚠️  素材库无图片，草稿将不含封面\n');
         }
@@ -658,20 +659,20 @@ async function main() {
       }
     }
 
-    console.log('3️⃣  处理正文内嵌图片...\n');
+    _log('3️⃣  处理正文内嵌图片...\n');
     const content = await uploadInlineImages(rawContent, accessToken, argContentDir);
-    console.log('');
+    _log('');
 
-    console.log('4️⃣  创建草稿...\n');
+    _log('4️⃣  创建草稿...\n');
     const mediaId = await createDraft({ title, content, digest, author, thumbMediaId }, accessToken);
-    console.log(`   ✅ 草稿已创建，media_id: ${mediaId}\n`);
+    _log(`   ✅ 草稿已创建，media_id: ${mediaId}\n`);
 
-    console.log('5️⃣  提交发布...\n');
+    _log('5️⃣  提交发布...\n');
     const publishId = await publishDraft(mediaId, accessToken);
-    console.log(`   ✅ 已提交发布，publish_id: ${publishId}\n`);
+    _log(`   ✅ 已提交发布，publish_id: ${publishId}\n`);
 
-    console.log('✅ 公众号文章发布成功！');
-    console.log('   注意：文章进入发布队列，稍后在公众号后台可查看状态');
+    _log('✅ 公众号文章发布成功！');
+    _log('   注意：文章进入发布队列，稍后在公众号后台可查看状态');
   } catch (err) {
     console.error(`\n❌ 发布失败: ${err.message}`);
     process.exit(1);

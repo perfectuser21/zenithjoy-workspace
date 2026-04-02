@@ -1,3 +1,4 @@
+const _log = console.log.bind(console);
 #!/usr/bin/env node
 'use strict';
 
@@ -80,7 +81,7 @@ function scpToWindows(localFiles, winDir) {
       '-o', 'StrictHostKeyChecking=no',
       f, `${WINDOWS_USER}@${WINDOWS_IP}:${winDirScp}/${path.basename(f)}`,
     ], { timeout: 120000, stdio: 'pipe' });
-    console.log(`[TT-Video]    已复制: ${path.basename(f)}`);
+    _log(`[TT-Video]    已复制: ${path.basename(f)}`);
   }
 }
 
@@ -88,23 +89,23 @@ async function screenshot(page, name) {
   ensureDir(SCREENSHOTS_DIR);
   const out = path.join(SCREENSHOTS_DIR, `${name}.png`);
   await page.screenshot({ path: out, fullPage: true });
-  console.log(`[TT-Video]    截图: ${out}`);
+  _log(`[TT-Video]    截图: ${out}`);
 }
 
 async function main() {
   const { title, video, cover, desc, dryRun } = parseArgs(process.argv);
 
-  console.log('[TT-Video] ========================================');
-  console.log('[TT-Video] 今日头条视频发布');
-  console.log('[TT-Video] ========================================');
-  console.log(`[TT-Video] 标题: ${title}`);
-  console.log(`[TT-Video] 视频: ${video}`);
-  console.log(`[TT-Video] 封面: ${cover || '无'}`);
-  console.log(`[TT-Video] 描述长度: ${desc.length}`);
-  console.log(`[TT-Video] 模式: ${dryRun ? 'dry-run' : 'publish'}`);
+  _log('[TT-Video] ========================================');
+  _log('[TT-Video] 今日头条视频发布');
+  _log('[TT-Video] ========================================');
+  _log(`[TT-Video] 标题: ${title}`);
+  _log(`[TT-Video] 视频: ${video}`);
+  _log(`[TT-Video] 封面: ${cover || '无'}`);
+  _log(`[TT-Video] 描述长度: ${desc.length}`);
+  _log(`[TT-Video] 模式: ${dryRun ? 'dry-run' : 'publish'}`);
 
   if (dryRun) {
-    console.log('[TT-Video] dry-run 完成，未实际上传');
+    _log('[TT-Video] dry-run 完成，未实际上传');
     return;
   }
 
@@ -114,12 +115,12 @@ async function main() {
   const winVideoPath = `${winDir}\\${path.basename(video)}`;
   const winCoverPath = cover ? `${winDir}\\${path.basename(cover)}` : null;
 
-  console.log('[TT-Video] 0. SCP 文件到 Windows...');
+  _log('[TT-Video] 0. SCP 文件到 Windows...');
   scpToWindows(localFiles, winDir);
 
   ensureDir(SCREENSHOTS_DIR);
 
-  console.log('[TT-Video] 1. 连接 CDP...');
+  _log('[TT-Video] 1. 连接 CDP...');
   const browser = await chromium.connectOverCDP(CDP_URL, { timeout: 30000 });
   const context = browser.contexts()[0] || await browser.newContext();
   const page = await context.newPage();
@@ -127,7 +128,7 @@ async function main() {
   page.on('dialog', d => { d.dismiss().catch(() => {}); });
 
   try {
-    console.log('[TT-Video] 2. 打开上传页面...');
+    _log('[TT-Video] 2. 打开上传页面...');
     await page.goto(UPLOAD_URL, { waitUntil: 'domcontentloaded', timeout: 60000 });
     await page.waitForTimeout(5000);
     await screenshot(page, '01-upload-page');
@@ -139,7 +140,7 @@ async function main() {
       await page.waitForTimeout(1500);
     }
 
-    console.log('[TT-Video] 3. 上传视频...');
+    _log('[TT-Video] 3. 上传视频...');
     const cdpSession = await context.newCDPSession(page);
     const { result: videoInputResult } = await cdpSession.send('Runtime.evaluate', {
       expression: 'document.querySelector(\'input[type="file"][accept*="video"]\')',
@@ -147,14 +148,14 @@ async function main() {
     if (!videoInputResult.objectId) throw new Error('未找到视频 file input');
     const { node: videoNode } = await cdpSession.send('DOM.describeNode', { objectId: videoInputResult.objectId });
     await cdpSession.send('DOM.setFileInputFiles', { backendNodeId: videoNode.backendNodeId, files: [winVideoPath] });
-    console.log('[TT-Video]    视频已写入 input，等待标题 input 出现...');
+    _log('[TT-Video]    视频已写入 input，等待标题 input 出现...');
     // 等待标题 input 出现（最多5分钟），selector 为 xigua-input 或 placeholder
     await page.waitForSelector('input.xigua-input, input[placeholder*="请输入"]', { timeout: 300000 });
     await page.waitForTimeout(2000);
-    console.log('[TT-Video]    当前 URL:', page.url());
+    _log('[TT-Video]    当前 URL:', page.url());
     await screenshot(page, '02-video-uploading');
 
-    console.log('[TT-Video] 4. 填写标题...');
+    _log('[TT-Video] 4. 填写标题...');
     const titleFilled = await page.evaluate((titleText) => {
       const input = document.querySelector('input.xigua-input') ||
                     document.querySelector('input[placeholder*="请输入 1～30"]') ||
@@ -166,11 +167,11 @@ async function main() {
       input.dispatchEvent(new Event('change', { bubbles: true }));
       return { success: true, placeholder: input.placeholder, value: input.value };
     }, title);
-    console.log('[TT-Video]    标题填写:', JSON.stringify(titleFilled));
+    _log('[TT-Video]    标题填写:', JSON.stringify(titleFilled));
     await page.waitForTimeout(500);
 
     if (desc) {
-      console.log('[TT-Video] 5. 填写描述...');
+      _log('[TT-Video] 5. 填写描述...');
       const textarea = page.locator('textarea').first();
       if (await textarea.count() > 0) {
         await textarea.fill(desc);
@@ -179,7 +180,7 @@ async function main() {
     }
 
     if (winCoverPath) {
-      console.log('[TT-Video] 6. 上传封面...');
+      _log('[TT-Video] 6. 上传封面...');
       // 先尝试点击"上传封面"按钮
       const coverBtns = page.locator('button, div[class*="upload"]').filter({ hasText: /上传封面|本地上传|选择封面/ });
       if (await coverBtns.count() > 0) {
@@ -207,7 +208,7 @@ async function main() {
 
     await screenshot(page, '04-filled');
 
-    console.log('[TT-Video] 7. 点击发布...');
+    _log('[TT-Video] 7. 点击发布...');
     const publishBtn = page.locator('button').filter({ hasText: /^发布$/ }).first();
     await publishBtn.waitFor({ state: 'visible', timeout: 30000 });
     await publishBtn.click();
@@ -215,8 +216,8 @@ async function main() {
     await screenshot(page, '05-published');
 
     const url = page.url();
-    console.log('[TT-Video] 发布完成');
-    console.log(`[TT-Video] 当前页面: ${url}`);
+    _log('[TT-Video] 发布完成');
+    _log(`[TT-Video] 当前页面: ${url}`);
   } finally {
     await browser.close();
   }

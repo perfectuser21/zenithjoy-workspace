@@ -1,3 +1,4 @@
+const _log = console.log.bind(console);
 #!/usr/bin/env node
 /**
  * 今日头条通用发布脚本
@@ -79,21 +80,21 @@ async function screenshot(cdp, name) {
     const dir = '/tmp/publish-screenshots';
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
     fs.writeFileSync(`${dir}/${name}.png`, result.data, 'base64');
-    console.log(`   📸 ${dir}/${name}.png`);
+    _log(`   📸 ${dir}/${name}.png`);
   } catch (e) {}
 }
 
 async function publishImage(cdp, config) {
-  console.log('\n========== 图文发布流程 ==========\n');
+  _log('\n========== 图文发布流程 ==========\n');
 
   // 1. 进入编辑页面
-  console.log('1️⃣ 进入编辑页面...\n');
+  _log('1️⃣ 进入编辑页面...\n');
   await cdp.send('Page.navigate', { url: 'https://mp.toutiao.com/profile_v4/graphic/publish' });
   await sleep(5000);
   await screenshot(cdp, 'image-01-edit');
 
   // 2. 填写标题
-  console.log('2️⃣ 填写标题...\n');
+  _log('2️⃣ 填写标题...\n');
   await cdp.send('Runtime.evaluate', {
     expression: `(function() {
       const textarea = document.querySelector('textarea[placeholder*="请输入文章标题"]');
@@ -105,10 +106,10 @@ async function publishImage(cdp, config) {
     })()`
   });
   await sleep(1000);
-  console.log(`   ✅ ${config.title}\n`);
+  _log(`   ✅ ${config.title}\n`);
 
   // 3. 填写内容
-  console.log('3️⃣ 填写内容...\n');
+  _log('3️⃣ 填写内容...\n');
   await cdp.send('Runtime.evaluate', {
     expression: `(function() {
       const editor = document.querySelector('.ProseMirror[contenteditable="true"]');
@@ -120,10 +121,10 @@ async function publishImage(cdp, config) {
     })()`
   });
   await sleep(2000);
-  console.log(`   ✅ ${config.content.length} 字\n`);
+  _log(`   ✅ ${config.content.length} 字\n`);
 
   // 4. 点击"预览并发布"
-  console.log('4️⃣ 点击"预览并发布"...\n');
+  _log('4️⃣ 点击"预览并发布"...\n');
   await cdp.send('Runtime.evaluate', {
     expression: `(function() {
       const buttons = Array.from(document.querySelectorAll('button'));
@@ -136,7 +137,7 @@ async function publishImage(cdp, config) {
 
   // 5. 选择封面类型
   const coverType = config.media.length === 1 ? '单图' : (config.media.length === 3 ? '三图' : '单图');
-  console.log(`5️⃣ 选择"${coverType}"...\n`);
+  _log(`5️⃣ 选择"${coverType}"...\n`);
   await cdp.send('Runtime.evaluate', {
     expression: `(function() {
       const labels = Array.from(document.querySelectorAll('label'));
@@ -150,7 +151,7 @@ async function publishImage(cdp, config) {
   await sleep(2000);
 
   // 6. 上传图片
-  console.log('6️⃣ 上传图片...\n');
+  _log('6️⃣ 上传图片...\n');
   
   // 点击"+"打开drawer
   await cdp.send('Runtime.evaluate', {
@@ -179,7 +180,7 @@ async function publishImage(cdp, config) {
     });
 
     await sleep(5000);
-    console.log(`   ✅ ${config.media.length} 张图片已上传\n`);
+    _log(`   ✅ ${config.media.length} 张图片已上传\n`);
   }
 
   await screenshot(cdp, 'image-03-uploaded');
@@ -188,7 +189,7 @@ async function publishImage(cdp, config) {
   await sleep(2000);
 
   // 8. 配置发布选项
-  console.log('7️⃣ 配置发布选项...\n');
+  _log('7️⃣ 配置发布选项...\n');
   await cdp.send('Runtime.evaluate', {
     expression: `(function() {
       const labels = Array.from(document.querySelectorAll('label'));
@@ -202,7 +203,7 @@ async function publishImage(cdp, config) {
   await sleep(1000);
 
   // 9. 发布
-  console.log('8️⃣ 点击发布...\n');
+  _log('8️⃣ 点击发布...\n');
   await cdp.send('Runtime.evaluate', {
     expression: `window.scrollTo(0, document.body.scrollHeight);`
   });
@@ -233,7 +234,7 @@ async function publishImage(cdp, config) {
 
   const modalData = JSON.parse(modalCheck.result.value);
   if (modalData.confirmBtns > 0) {
-    console.log('   处理确认弹窗...\n');
+    _log('   处理确认弹窗...\n');
     await cdp.send('Runtime.evaluate', {
       expression: `(function() {
         const buttons = Array.from(document.querySelectorAll('button'));
@@ -259,13 +260,13 @@ async function publishImage(cdp, config) {
 }
 
 async function publishVideo(cdp, config) {
-  console.log('\n========== 视频发布流程 ==========\n');
+  _log('\n========== 视频发布流程 ==========\n');
   
   // TODO: 实现视频发布流程
   // 视频发布可能在不同的页面：/profile_v4/xigua/publish
   
-  console.log('⚠️  视频发布功能开发中...\n');
-  console.log('提示：今日头条视频发布可能在西瓜视频入口\n');
+  _log('⚠️  视频发布功能开发中...\n');
+  _log('提示：今日头条视频发布可能在西瓜视频入口\n');
   
   return false;
 }
@@ -273,10 +274,10 @@ async function publishVideo(cdp, config) {
 async function main() {
   let cdp;
   try {
-    console.log('\n========== 今日头条通用发布 ==========\n');
-    console.log(`类型: ${config.type === 'image' ? '图文' : '视频'}`);
-    console.log(`标题: ${config.title}`);
-    console.log(`媒体文件: ${config.media.length} 个\n`);
+    _log('\n========== 今日头条通用发布 ==========\n');
+    _log(`类型: ${config.type === 'image' ? '图文' : '视频'}`);
+    _log(`标题: ${config.title}`);
+    _log(`媒体文件: ${config.media.length} 个\n`);
 
     const pagesData = await new Promise((resolve, reject) => {
       http.get('http://' + WINDOWS_IP + ':' + CDP_PORT + '/json', res => {
@@ -294,7 +295,7 @@ async function main() {
     await cdp.send('Runtime.enable');
     await cdp.send('DOM.enable');
 
-    console.log('✅ 已连接\n');
+    _log('✅ 已连接\n');
 
     let success = false;
     if (config.type === 'image') {
@@ -303,11 +304,11 @@ async function main() {
       success = await publishVideo(cdp, config);
     }
 
-    console.log('\n========================================\n');
+    _log('\n========================================\n');
     if (success) {
-      console.log('✅✅✅ 发布成功！\n');
+      _log('✅✅✅ 发布成功！\n');
     } else {
-      console.log('⚠️  发布状态待确认\n');
+      _log('⚠️  发布状态待确认\n');
     }
 
     cdp.close();

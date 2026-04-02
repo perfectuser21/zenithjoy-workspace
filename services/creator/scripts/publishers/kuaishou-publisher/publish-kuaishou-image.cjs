@@ -1,3 +1,4 @@
+const _log = console.log.bind(console);
 #!/usr/bin/env node
 /**
  * 快手图文发布脚本 v2
@@ -69,7 +70,7 @@ function sleep(ms) {
 // SCP：直接从 Mac 复制图片到 Windows
 // ============================================================
 function scpImagesToWindows(localImages, windowsDir) {
-  console.log(`[KS] SCP 图片到 Windows（直连 ${WINDOWS_IP}）...`);
+  _log(`[KS] SCP 图片到 Windows（直连 ${WINDOWS_IP}）...`);
 
   const winDirForward = windowsDir.replace(/\\/g, '/');
   execSync(
@@ -83,10 +84,10 @@ function scpImagesToWindows(localImages, windowsDir) {
       `scp -o StrictHostKeyChecking=no "${imgPath}" "${WINDOWS_USER}@${WINDOWS_IP}:${winDirForward}/${fname}"`,
       { timeout: 60000, stdio: 'pipe' }
     );
-    console.log(`[KS]    已传输: ${fname}`);
+    _log(`[KS]    已传输: ${fname}`);
   }
 
-  console.log(`[KS]    ${localImages.length} 张图片已复制到 Windows`);
+  _log(`[KS]    ${localImages.length} 张图片已复制到 Windows`);
 }
 
 // ============================================================
@@ -131,9 +132,9 @@ async function createCDP(wsUrl) {
       const r = await send('Page.captureScreenshot', { format: 'jpeg', quality: 50 });
       const filepath = path.join(SCREENSHOTS_DIR, `${name}.png`);
       fs.writeFileSync(filepath, Buffer.from(r.data, 'base64'));
-      console.log(`[KS]    截图: ${filepath}`);
+      _log(`[KS]    截图: ${filepath}`);
     } catch (e) {
-      console.log(`[KS]    截图失败: ${e.message}`);
+      _log(`[KS]    截图失败: ${e.message}`);
     }
   };
 
@@ -146,7 +147,7 @@ async function createCDP(wsUrl) {
 // 音乐选择（失败降级跳过）
 // ============================================================
 async function addMusic(cdp, musicQuery) {
-  console.log(`\n[KS] 选择背景音乐（搜索：${musicQuery}）...`);
+  _log(`\n[KS] 选择背景音乐（搜索：${musicQuery}）...`);
   try {
     const musicBtn = await cdp.eval_(`(function() {
       const all = Array.from(document.querySelectorAll('*'));
@@ -161,7 +162,7 @@ async function addMusic(cdp, musicQuery) {
     })()`);
 
     if (!musicBtn?.found) {
-      console.log('[KS]    未找到音乐按钮，跳过音乐选择');
+      _log('[KS]    未找到音乐按钮，跳过音乐选择');
       return;
     }
 
@@ -183,7 +184,7 @@ async function addMusic(cdp, musicQuery) {
     })()`);
 
     if (!searchInput?.found) {
-      console.log('[KS]    未找到音乐搜索框，跳过');
+      _log('[KS]    未找到音乐搜索框，跳过');
       return;
     }
 
@@ -208,9 +209,9 @@ async function addMusic(cdp, musicQuery) {
 
     if (firstResult?.clicked) {
       await sleep(1000);
-      console.log('[KS]    音乐已选择');
+      _log('[KS]    音乐已选择');
     } else {
-      console.log('[KS]    未找到音乐列表结果，跳过');
+      _log('[KS]    未找到音乐列表结果，跳过');
     }
   } catch (e) {
     console.warn(`[KS]    音乐选择失败（降级跳过）: ${e.message}`);
@@ -225,16 +226,16 @@ async function main(contentDir, contentText, windowsImages, musicQuery, isDryRun
     fs.mkdirSync(SCREENSHOTS_DIR, { recursive: true });
   }
 
-  console.log('\n[KS] ========================================');
-  console.log('[KS] 快手图文发布 v2');
-  console.log('[KS] ========================================\n');
-  console.log(`[KS] 内容目录: ${contentDir}`);
-  console.log(`[KS] 文案: ${contentText.length} 字符`);
-  console.log(`[KS] 图片: ${windowsImages.length} 张`);
-  console.log(`[KS] 音乐: ${musicQuery}`);
+  _log('\n[KS] ========================================');
+  _log('[KS] 快手图文发布 v2');
+  _log('[KS] ========================================\n');
+  _log(`[KS] 内容目录: ${contentDir}`);
+  _log(`[KS] 文案: ${contentText.length} 字符`);
+  _log(`[KS] 图片: ${windowsImages.length} 张`);
+  _log(`[KS] 音乐: ${musicQuery}`);
 
   if (isDryRun) {
-    console.log('\n[KS] dry-run 模式，跳过 CDP');
+    _log('\n[KS] dry-run 模式，跳过 CDP');
     return;
   }
 
@@ -245,7 +246,7 @@ async function main(contentDir, contentText, windowsImages, musicQuery, isDryRun
   scpImagesToWindows(localImages, winDir);
 
   // CDP 连接
-  console.log('\n[KS] 连接 CDP...');
+  _log('\n[KS] 连接 CDP...');
   const pagesData = await new Promise((resolve, reject) => {
     http.get(`http://${WINDOWS_IP}:${CDP_PORT}/json`, res => {
       let data = '';
@@ -259,7 +260,7 @@ async function main(contentDir, contentText, windowsImages, musicQuery, isDryRun
   if (!targetPage) throw new Error(`未找到浏览器页面，请在 Chrome (端口 ${CDP_PORT}) 中打开快手创作者中心`);
 
   const cdp = await createCDP(targetPage.webSocketDebuggerUrl);
-  console.log('[KS] CDP 已连接\n');
+  _log('[KS] CDP 已连接\n');
 
   try {
     await cdp.send('Page.enable');
@@ -267,17 +268,17 @@ async function main(contentDir, contentText, windowsImages, musicQuery, isDryRun
     await cdp.send('DOM.enable');
 
     // Step 1: 导航到发布页
-    console.log('[KS] 1. 导航到发布页...');
+    _log('[KS] 1. 导航到发布页...');
     await cdp.send('Page.navigate', { url: PUBLISH_URL });
     await sleep(5000);
     await cdp.screenshot('01-nav');
 
     const currentUrl = await cdp.eval_('location.href');
     if (isLoginError(currentUrl)) throw new Error(`快手未登录，请在 Chrome (${CDP_PORT}) 登录创作者中心`);
-    console.log(`[KS]    URL: ${currentUrl}\n`);
+    _log(`[KS]    URL: ${currentUrl}\n`);
 
     // Step 2: 点击"上传图文"标签
-    console.log('[KS] 2. 点击"上传图文"...');
+    _log('[KS] 2. 点击"上传图文"...');
     await cdp.eval_(`(function() {
       const els = Array.from(document.querySelectorAll('*'));
       for (const el of els) {
@@ -295,11 +296,11 @@ async function main(contentDir, contentText, windowsImages, musicQuery, isDryRun
       }
       return null;
     })()`);
-    if (draftResult) { console.log(`[KS]    草稿处理: ${draftResult}`); await sleep(1500); }
+    if (draftResult) { _log(`[KS]    草稿处理: ${draftResult}`); await sleep(1500); }
     await cdp.screenshot('02-ready');
 
     // Step 4: 上传图片
-    console.log('[KS] 3. 上传图片...');
+    _log('[KS] 3. 上传图片...');
     await cdp.send('Page.setInterceptFileChooserDialog', { enabled: true });
 
     const fcPromise = new Promise((resolve, reject) => {
@@ -325,23 +326,23 @@ async function main(contentDir, contentText, windowsImages, musicQuery, isDryRun
     const fc = await fcPromise;
     await cdp.send('DOM.setFileInputFiles', { backendNodeId: fc.backendNodeId, files: windowsImages });
     await cdp.send('Page.setInterceptFileChooserDialog', { enabled: false });
-    console.log(`[KS]    已选择 ${windowsImages.length} 张图片`);
+    _log(`[KS]    已选择 ${windowsImages.length} 张图片`);
 
     // 等待上传完成（轮询"作品描述"出现）
-    console.log('[KS]    等待上传完成...');
+    _log('[KS]    等待上传完成...');
     let uploaded = false;
     for (let i = 0; i < 90; i++) {
       await sleep(1000);
       const has = await cdp.eval_(`document.body.innerHTML.includes('作品描述')`);
-      if (has) { console.log(`[KS]    上传完成（${i + 1}s）`); uploaded = true; break; }
-      if (i % 10 === 0) console.log(`[KS]    ... 已等待 ${i}s`);
+      if (has) { _log(`[KS]    上传完成（${i + 1}s）`); uploaded = true; break; }
+      if (i % 10 === 0) _log(`[KS]    ... 已等待 ${i}s`);
     }
     if (!uploaded) throw new Error('图片上传超时（90s）');
     await cdp.screenshot('03-uploaded');
 
     // Step 5: 填写文案
     if (contentText) {
-      console.log('\n[KS] 4. 填写文案...');
+      _log('\n[KS] 4. 填写文案...');
       // 坐标 793, 210 是快手"作品描述" Vue 组件的中心区（已验证）
       await cdp.send('Input.dispatchMouseEvent', { type: 'mousePressed', x: 793, y: 210, button: 'left', clickCount: 1 });
       await sleep(100);
@@ -350,7 +351,7 @@ async function main(contentDir, contentText, windowsImages, musicQuery, isDryRun
       await cdp.send('Input.insertText', { text: contentText });
       await sleep(500);
       const descLen = await cdp.eval_(`(document.activeElement?.value?.length || document.activeElement?.textContent?.length || 0)`);
-      console.log(`[KS]    文案长度: ${descLen}`);
+      _log(`[KS]    文案长度: ${descLen}`);
       await cdp.screenshot('04-desc');
     }
 
@@ -359,7 +360,7 @@ async function main(contentDir, contentText, windowsImages, musicQuery, isDryRun
     await cdp.screenshot('05-music');
 
     // Step 7: 点击发布
-    console.log('\n[KS] 5. 点击发布按钮...');
+    _log('\n[KS] 5. 点击发布按钮...');
     const pubBtn = await cdp.eval_(`(function() {
       // TreeWalker 找最后一个可见的"发布"文本节点（跳过"发布图文"等标题）
       const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
@@ -391,7 +392,7 @@ async function main(contentDir, contentText, windowsImages, musicQuery, isDryRun
       throw new Error('未找到发布按钮');
     }
 
-    console.log(`[KS]    发布按钮坐标: (${pubBtn.x}, ${pubBtn.y})`);
+    _log(`[KS]    发布按钮坐标: (${pubBtn.x}, ${pubBtn.y})`);
     await sleep(500);
     await cdp.screenshot('06-before-pub');
 
@@ -399,7 +400,7 @@ async function main(contentDir, contentText, windowsImages, musicQuery, isDryRun
     await sleep(100);
     await cdp.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: pubBtn.x, y: pubBtn.y, button: 'left', clickCount: 1 });
 
-    console.log('[KS]    已点击发布，等待结果...');
+    _log('[KS]    已点击发布，等待结果...');
     await sleep(5000);
     await cdp.screenshot('07-result');
 
@@ -410,11 +411,11 @@ async function main(contentDir, contentText, windowsImages, musicQuery, isDryRun
     );
     const success = finalUrl?.includes('manage') || finalUrl?.includes('success');
 
-    console.log('\n[KS] ========================================');
-    console.log(`[KS] URL: ${finalUrl}`);
-    if (toastText) console.log(`[KS] 提示: ${toastText}`);
-    console.log(`[KS] ${success ? '发布成功' : '仍在发布页（可能审核中）'}`);
-    console.log('[KS] ========================================\n');
+    _log('\n[KS] ========================================');
+    _log(`[KS] URL: ${finalUrl}`);
+    if (toastText) _log(`[KS] 提示: ${toastText}`);
+    _log(`[KS] ${success ? '发布成功' : '仍在发布页（可能审核中）'}`);
+    _log('[KS] ========================================\n');
 
     if (!success && toastText?.includes('失败')) {
       throw new Error(`发布失败: ${toastText}`);

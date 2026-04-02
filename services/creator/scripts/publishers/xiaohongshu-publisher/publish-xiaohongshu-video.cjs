@@ -1,3 +1,4 @@
+const _log = console.log.bind(console);
 #!/usr/bin/env node
 /**
  * 小红书视频发布脚本
@@ -86,7 +87,7 @@ function parseArgs(argv) {
   };
 
   if (args.includes('--help') || args.includes('-h')) {
-    console.log('用法：node publish-xiaohongshu-video.cjs --title "标题" --video /path/to/video.mp4 --desc "正文" --tags "标签1,标签2"');
+    _log('用法：node publish-xiaohongshu-video.cjs --title "标题" --video /path/to/video.mp4 --desc "正文" --tags "标签1,标签2"');
     process.exit(0);
   }
 
@@ -110,7 +111,7 @@ async function screenshot(cdp, name) {
     const result = await cdp.send('Page.captureScreenshot', { format: 'jpeg', quality: 45 });
     const filepath = path.join(SCREENSHOTS_DIR, `${name}.jpg`);
     fs.writeFileSync(filepath, Buffer.from(result.data, 'base64'));
-    console.log(`[XHS-VIDEO]    截图: ${filepath}`);
+    _log(`[XHS-VIDEO]    截图: ${filepath}`);
     return filepath;
   } catch (err) {
     console.warn(`[XHS-VIDEO]    截图失败: ${err.message}`);
@@ -168,7 +169,7 @@ function scpVideoToWindows(localVideo, windowsDir) {
   const filename = path.basename(localVideo);
   const winDirForward = windowsDir.replace(/\\/g, '/');
 
-  console.log('[XHS-VIDEO] 0️⃣  复制视频到 Windows（直连）...');
+  _log('[XHS-VIDEO] 0️⃣  复制视频到 Windows（直连）...');
   run(
     `ssh -o StrictHostKeyChecking=no ${WINDOWS_USER}@${WINDOWS_IP} ` +
     `"powershell -command \\"New-Item -ItemType Directory -Force -Path '${winDirForward}' | Out-Null\\""`,
@@ -179,7 +180,7 @@ function scpVideoToWindows(localVideo, windowsDir) {
     `${WINDOWS_USER}@${WINDOWS_IP}:${JSON.stringify(`${winDirForward}/${filename}`)}`,
     600000
   );
-  console.log('[XHS-VIDEO]    ✅ 视频已复制到 Windows');
+  _log('[XHS-VIDEO]    ✅ 视频已复制到 Windows');
 }
 
 async function evalValue(cdp, expression) {
@@ -214,7 +215,7 @@ async function ensureVideoTab(cdp) {
   })()`);
 
   if (tab?.already) {
-    console.log('[XHS-VIDEO]    当前已是视频发布页');
+    _log('[XHS-VIDEO]    当前已是视频发布页');
     return;
   }
   if (!tab?.found) {
@@ -222,13 +223,13 @@ async function ensureVideoTab(cdp) {
     return;
   }
 
-  console.log('[XHS-VIDEO] 2️⃣  切换到视频发布模式...');
+  _log('[XHS-VIDEO] 2️⃣  切换到视频发布模式...');
   await clickAt(cdp, tab.x, tab.y);
   await sleep(1500);
 }
 
 async function uploadVideo(cdp, windowsVideo) {
-  console.log('[XHS-VIDEO] 3️⃣  上传视频...');
+  _log('[XHS-VIDEO] 3️⃣  上传视频...');
   await cdp.send('Page.setInterceptFileChooserDialog', { enabled: true });
 
   const chooserPromise = new Promise((resolve, reject) => {
@@ -299,17 +300,17 @@ async function uploadVideo(cdp, windowsVideo) {
     throw new Error('未找到视频上传入口');
   }
 
-  console.log(`[XHS-VIDEO]    上传入口: ${uploadBtn.text} <${uploadBtn.tag || 'unknown'}> (${uploadBtn.x}, ${uploadBtn.y})`);
+  _log(`[XHS-VIDEO]    上传入口: ${uploadBtn.text} <${uploadBtn.tag || 'unknown'}> (${uploadBtn.x}, ${uploadBtn.y})`);
   await clickAt(cdp, uploadBtn.x, uploadBtn.y);
 
   const chooser = await chooserPromise;
-  console.log(`[XHS-VIDEO]    文件选择器 backendNodeId: ${chooser.backendNodeId}`);
+  _log(`[XHS-VIDEO]    文件选择器 backendNodeId: ${chooser.backendNodeId}`);
   await cdp.send('DOM.setFileInputFiles', { backendNodeId: chooser.backendNodeId, files: [windowsVideo] });
   await cdp.send('Page.setInterceptFileChooserDialog', { enabled: false });
 }
 
 async function waitForUploadReady(cdp) {
-  console.log('[XHS-VIDEO]    等待上传与转码完成...');
+  _log('[XHS-VIDEO]    等待上传与转码完成...');
   for (let i = 0; i < 300; i++) {
     await sleep(1000);
     const state = await evalValue(cdp, `(function() {
@@ -335,11 +336,11 @@ async function waitForUploadReady(cdp) {
     })()`);
 
     if (state.ready && !state.stillUploading) {
-      console.log(`[XHS-VIDEO]    上传完成（${i + 1}s）`);
+      _log(`[XHS-VIDEO]    上传完成（${i + 1}s）`);
       return;
     }
     if ((i + 1) % 15 === 0) {
-      console.log(`[XHS-VIDEO]    ... ${i + 1}s`);
+      _log(`[XHS-VIDEO]    ... ${i + 1}s`);
     }
   }
   throw new Error('等待视频上传完成超时（300s）');
@@ -347,7 +348,7 @@ async function waitForUploadReady(cdp) {
 
 async function fillTitle(cdp, title) {
   if (!title) return;
-  console.log('[XHS-VIDEO] 4️⃣  填写标题...');
+  _log('[XHS-VIDEO] 4️⃣  填写标题...');
   const escapedTitle = escapeForJS(title);
   const ok = await evalValue(cdp, `(function() {
     const visible = el => {
@@ -385,7 +386,7 @@ async function fillTitle(cdp, title) {
 
 async function fillDescription(cdp, description) {
   if (!description) return;
-  console.log(`[XHS-VIDEO] 5️⃣  填写正文/标签（${description.length} 字符）...`);
+  _log(`[XHS-VIDEO] 5️⃣  填写正文/标签（${description.length} 字符）...`);
 
   const target = await evalValue(cdp, `(function() {
     const visible = el => {
@@ -489,7 +490,7 @@ async function findPublishButton(cdp, texts) {
 }
 
 async function clickPublish(cdp) {
-  console.log('[XHS-VIDEO] 6️⃣  点击发布...');
+  _log('[XHS-VIDEO] 6️⃣  点击发布...');
   const publishBtn = await findPublishButton(cdp, ['发布', '发布笔记']);
   if (!publishBtn?.found) {
     await screenshot(cdp, '06-no-publish-button');
@@ -512,7 +513,7 @@ async function printCurrentState(cdp, label) {
     title: document.title,
     body: (document.body && document.body.innerText ? document.body.innerText.slice(0, 1000) : '')
   })`);
-  console.log(`[XHS-VIDEO] ${label}: ${state}`);
+  _log(`[XHS-VIDEO] ${label}: ${state}`);
 }
 
 async function main() {
@@ -527,17 +528,17 @@ async function main() {
   const { windowsDir, windowsVideo } = makeWindowsTarget(video);
   ensureDir(SCREENSHOTS_DIR);
 
-  console.log('\n[XHS-VIDEO] ========================================');
-  console.log('[XHS-VIDEO] 小红书视频发布');
-  console.log('[XHS-VIDEO] ========================================\n');
-  console.log(`[XHS-VIDEO] 视频: ${video}`);
-  console.log(`[XHS-VIDEO] Windows 目标: ${windowsVideo}`);
-  console.log(`[XHS-VIDEO] 标题: ${title || '（无）'}`);
-  console.log(`[XHS-VIDEO] 正文: ${desc ? `${desc.length} 字符` : '（无）'}`);
-  console.log(`[XHS-VIDEO] 标签: ${tags.length ? tags.join(', ') : '（无）'}`);
+  _log('\n[XHS-VIDEO] ========================================');
+  _log('[XHS-VIDEO] 小红书视频发布');
+  _log('[XHS-VIDEO] ========================================\n');
+  _log(`[XHS-VIDEO] 视频: ${video}`);
+  _log(`[XHS-VIDEO] Windows 目标: ${windowsVideo}`);
+  _log(`[XHS-VIDEO] 标题: ${title || '（无）'}`);
+  _log(`[XHS-VIDEO] 正文: ${desc ? `${desc.length} 字符` : '（无）'}`);
+  _log(`[XHS-VIDEO] 标签: ${tags.length ? tags.join(', ') : '（无）'}`);
 
   if (isDryRun) {
-    console.log('[XHS-VIDEO] dry-run 模式，跳过 SCP/CDP');
+    _log('[XHS-VIDEO] dry-run 模式，跳过 SCP/CDP');
     return;
   }
 
@@ -545,14 +546,14 @@ async function main() {
   try {
     scpVideoToWindows(video, windowsDir);
 
-    console.log('\n[XHS-VIDEO] 连接 CDP...');
+    _log('\n[XHS-VIDEO] 连接 CDP...');
     cdp = await connectCDP();
-    console.log('[XHS-VIDEO] ✅ CDP 已连接');
+    _log('[XHS-VIDEO] ✅ CDP 已连接');
 
     await printCurrentState(cdp, '当前状态');
     await screenshot(cdp, '00-current');
 
-    console.log('[XHS-VIDEO] 1️⃣  导航到发布页...');
+    _log('[XHS-VIDEO] 1️⃣  导航到发布页...');
     await cdp.send('Page.navigate', { url: PUBLISH_URL });
     await sleep(6000);
 
@@ -579,12 +580,12 @@ async function main() {
     const finalUrl = await evalValue(cdp, 'location.href');
     const bodyText = await evalValue(cdp, 'document.body.innerText.slice(0, 1000)');
     if (isPublishSuccess(finalUrl, bodyText)) {
-      console.log('\n[XHS-VIDEO] ✅ 发布成功');
+      _log('\n[XHS-VIDEO] ✅ 发布成功');
     } else {
-      console.log('\n[XHS-VIDEO] ⚠️  发布状态不确定，请检查截图和页面');
+      _log('\n[XHS-VIDEO] ⚠️  发布状态不确定，请检查截图和页面');
     }
-    console.log(`[XHS-VIDEO] 最终 URL: ${finalUrl}`);
-    console.log(`[XHS-VIDEO] 截图目录: ${SCREENSHOTS_DIR}`);
+    _log(`[XHS-VIDEO] 最终 URL: ${finalUrl}`);
+    _log(`[XHS-VIDEO] 截图目录: ${SCREENSHOTS_DIR}`);
   } catch (err) {
     console.error(`\n[XHS-VIDEO] ❌ 发布失败: ${err.message}`);
     if (cdp) {

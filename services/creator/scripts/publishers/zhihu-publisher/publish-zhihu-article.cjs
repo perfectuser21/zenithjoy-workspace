@@ -1,3 +1,4 @@
+const _log = console.log.bind(console);
 #!/usr/bin/env node
 /**
  * 知乎专栏文章发布脚本
@@ -134,7 +135,7 @@ async function screenshot(cdp, name) {
     const result = await cdp.send('Page.captureScreenshot', { format: 'png' });
     const filepath = path.join(SCREENSHOTS_DIR, `${name}.png`);
     fs.writeFileSync(filepath, Buffer.from(result.data, 'base64'));
-    console.log(`[知乎]    📸 ${filepath}`);
+    _log(`[知乎]    📸 ${filepath}`);
     return filepath;
   } catch (e) {
     console.error(`[知乎]    截图失败: ${e.message}`);
@@ -188,7 +189,7 @@ async function connectCDP() {
   }
 
   if (!zhihuPage) {
-    console.log(`[知乎]    ⚠️  未找到知乎页面，使用当前页: ${targetPage.url}`);
+    _log(`[知乎]    ⚠️  未找到知乎页面，使用当前页: ${targetPage.url}`);
   }
 
   const cdp = new CDPClient(targetPage.webSocketDebuggerUrl);
@@ -206,10 +207,10 @@ async function connectCDP() {
 
 async function publishZhihuArticle({ title, content, coverPath, dryRun }) {
   if (dryRun) {
-    console.log('\n[知乎] [DRY-RUN] 参数验证通过，跳过实际发布');
-    console.log(`[知乎]   标题: ${title}`);
-    console.log(`[知乎]   正文长度: ${content.length} 字符`);
-    console.log(`[知乎]   封面: ${coverPath || '无'}`);
+    _log('\n[知乎] [DRY-RUN] 参数验证通过，跳过实际发布');
+    _log(`[知乎]   标题: ${title}`);
+    _log(`[知乎]   正文长度: ${content.length} 字符`);
+    _log(`[知乎]   封面: ${coverPath || '无'}`);
     return { success: true, dryRun: true };
   }
 
@@ -217,12 +218,12 @@ async function publishZhihuArticle({ title, content, coverPath, dryRun }) {
 
   try {
     // ===== 步骤1: 连接 CDP =====
-    console.log('[知乎] 1️⃣  连接 CDP...\n');
+    _log('[知乎] 1️⃣  连接 CDP...\n');
     cdp = await connectCDP();
-    console.log('[知乎] ✅ CDP 已连接\n');
+    _log('[知乎] ✅ CDP 已连接\n');
 
     // ===== 步骤2: 导航到发布页 =====
-    console.log('[知乎] 2️⃣  导航到知乎发布页...\n');
+    _log('[知乎] 2️⃣  导航到知乎发布页...\n');
     await cdp.send('Page.navigate', { url: PUBLISH_URL });
     await sleep(5000);
     await screenshot(cdp, '01-initial');
@@ -232,7 +233,7 @@ async function publishZhihuArticle({ title, content, coverPath, dryRun }) {
       returnByValue: true,
     });
     const currentUrl = urlResult.result.value;
-    console.log(`[知乎]    当前 URL: ${currentUrl}\n`);
+    _log(`[知乎]    当前 URL: ${currentUrl}\n`);
 
     if (isLoginError(currentUrl)) {
       throw new Error(
@@ -243,10 +244,10 @@ async function publishZhihuArticle({ title, content, coverPath, dryRun }) {
     if (!currentUrl.includes(ZHIHU_DOMAIN)) {
       throw new Error(`导航失败，当前页面: ${currentUrl}，期望: ${PUBLISH_URL}`);
     }
-    console.log('[知乎]    ✅ 导航完成\n');
+    _log('[知乎]    ✅ 导航完成\n');
 
     // ===== 步骤3: 填写标题 =====
-    console.log(`[知乎] 3️⃣  填写标题: ${title}\n`);
+    _log(`[知乎] 3️⃣  填写标题: ${title}\n`);
     const escapedTitle = escapeForJS(title);
 
     const titleResult = await cdp.send('Runtime.evaluate', {
@@ -279,7 +280,7 @@ async function publishZhihuArticle({ title, content, coverPath, dryRun }) {
     });
 
     const titleRes = titleResult.result.value;
-    console.log(`[知乎]    标题填写: ${JSON.stringify(titleRes)}`);
+    _log(`[知乎]    标题填写: ${JSON.stringify(titleRes)}`);
     if (!titleRes || !titleRes.success) {
       await screenshot(cdp, '03-title-not-found');
       throw new Error(`标题输入框未找到: ${JSON.stringify(titleRes)}`);
@@ -288,7 +289,7 @@ async function publishZhihuArticle({ title, content, coverPath, dryRun }) {
     await screenshot(cdp, '03-title-filled');
 
     // ===== 步骤4: 填写正文 =====
-    console.log(`[知乎] 4️⃣  填写正文（${content.length} 字符）...\n`);
+    _log(`[知乎] 4️⃣  填写正文（${content.length} 字符）...\n`);
     const escapedContent = escapeForJS(content);
 
     const contentResult = await cdp.send('Runtime.evaluate', {
@@ -320,7 +321,7 @@ async function publishZhihuArticle({ title, content, coverPath, dryRun }) {
     });
 
     const contentRes = contentResult.result.value;
-    console.log(`[知乎]    正文填写: ${JSON.stringify(contentRes)}`);
+    _log(`[知乎]    正文填写: ${JSON.stringify(contentRes)}`);
     if (!contentRes || !contentRes.success) {
       await screenshot(cdp, '04-editor-not-found');
       throw new Error(`正文编辑器未找到: ${JSON.stringify(contentRes)}`);
@@ -330,7 +331,7 @@ async function publishZhihuArticle({ title, content, coverPath, dryRun }) {
 
     // ===== 步骤5: 上传封面图（可选）=====
     if (coverPath) {
-      console.log('[知乎] 5️⃣  上传封面图...\n');
+      _log('[知乎] 5️⃣  上传封面图...\n');
 
       await cdp.send('Runtime.evaluate', {
         expression: `(function() {
@@ -372,17 +373,17 @@ async function publishZhihuArticle({ title, content, coverPath, dryRun }) {
         });
         await sleep(3000);
         await screenshot(cdp, '05-cover-uploaded');
-        console.log('[知乎]    ✅ 封面图已上传\n');
+        _log('[知乎]    ✅ 封面图已上传\n');
       } else {
-        console.log('[知乎]    ⚠️  未找到文件上传 input，跳过封面图\n');
+        _log('[知乎]    ⚠️  未找到文件上传 input，跳过封面图\n');
         await screenshot(cdp, '05-no-cover-input');
       }
     } else {
-      console.log('[知乎] 5️⃣  跳过封面图（无封面）\n');
+      _log('[知乎] 5️⃣  跳过封面图（无封面）\n');
     }
 
     // ===== 步骤6: 点击发布 =====
-    console.log('[知乎] 6️⃣  点击发布...\n');
+    _log('[知乎] 6️⃣  点击发布...\n');
     await sleep(2000);
     await screenshot(cdp, '06-before-publish');
 
@@ -427,7 +428,7 @@ async function publishZhihuArticle({ title, content, coverPath, dryRun }) {
     });
 
     const publishRes = publishResult.result.value;
-    console.log(`[知乎]    发布按钮: ${JSON.stringify(publishRes)}`);
+    _log(`[知乎]    发布按钮: ${JSON.stringify(publishRes)}`);
 
     if (!publishRes || !publishRes.clicked) {
       await screenshot(cdp, '06-publish-btn-not-found');
@@ -435,7 +436,7 @@ async function publishZhihuArticle({ title, content, coverPath, dryRun }) {
     }
 
     // ===== 步骤7: 等待发布完成并验证 =====
-    console.log('[知乎] 7️⃣  等待发布完成...\n');
+    _log('[知乎] 7️⃣  等待发布完成...\n');
     await sleep(8000);
     await screenshot(cdp, '07-after-publish');
 
@@ -448,18 +449,18 @@ async function publishZhihuArticle({ title, content, coverPath, dryRun }) {
     });
 
     const { url: finalUrl, bodyText } = finalResult.result.value;
-    console.log(`[知乎]    最终 URL: ${finalUrl}\n`);
+    _log(`[知乎]    最终 URL: ${finalUrl}\n`);
 
     const success = isPublishSuccess(finalUrl, bodyText);
     if (success) {
-      console.log('\n[知乎] ✅ 知乎文章发布成功！');
-      console.log(`[知乎]    文章链接: ${finalUrl}`);
-      console.log(`[知乎]    截图目录: ${SCREENSHOTS_DIR}`);
+      _log('\n[知乎] ✅ 知乎文章发布成功！');
+      _log(`[知乎]    文章链接: ${finalUrl}`);
+      _log(`[知乎]    截图目录: ${SCREENSHOTS_DIR}`);
       return { success: true, url: finalUrl };
     } else {
-      console.log('\n[知乎] ⚠️  发布状态不确定，请查看截图确认');
-      console.log(`[知乎]    当前 URL: ${finalUrl}`);
-      console.log(`[知乎]    截图目录: ${SCREENSHOTS_DIR}`);
+      _log('\n[知乎] ⚠️  发布状态不确定，请查看截图确认');
+      _log(`[知乎]    当前 URL: ${finalUrl}`);
+      _log(`[知乎]    截图目录: ${SCREENSHOTS_DIR}`);
       return { success: false, url: finalUrl };
     }
   } finally {
@@ -475,12 +476,12 @@ async function main() {
   const args = process.argv.slice(2);
 
   if (args.includes('--help') || args.includes('-h')) {
-    console.log('用法：node publish-zhihu-article.cjs --content /path/to/article-1/');
-    console.log('');
-    console.log('选项：');
-    console.log('  --content <dir>   文章目录（必须包含 title.txt 和 content.txt）');
-    console.log('  --dry-run         仅验证参数，不实际发布');
-    console.log('  --help, -h        显示帮助');
+    _log('用法：node publish-zhihu-article.cjs --content /path/to/article-1/');
+    _log('');
+    _log('选项：');
+    _log('  --content <dir>   文章目录（必须包含 title.txt 和 content.txt）');
+    _log('  --dry-run         仅验证参数，不实际发布');
+    _log('  --help, -h        显示帮助');
     process.exit(0);
   }
 
@@ -531,15 +532,15 @@ async function main() {
   // 读取封面图（可选）
   const coverPath = findCoverImage(contentDir);
 
-  console.log('\n[知乎] ========================================');
-  console.log('[知乎] 知乎文章发布');
-  console.log('[知乎] ========================================\n');
-  console.log(`[知乎] 📁 内容目录: ${contentDir}`);
-  console.log(`[知乎] 📝 标题: ${title}`);
-  console.log(`[知乎] 📝 正文长度: ${content.length} 字符`);
-  console.log(`[知乎] 🖼️  封面: ${coverPath || '无'}`);
-  if (dryRun) console.log('[知乎] 🔍 DRY-RUN 模式\n');
-  console.log('');
+  _log('\n[知乎] ========================================');
+  _log('[知乎] 知乎文章发布');
+  _log('[知乎] ========================================\n');
+  _log(`[知乎] 📁 内容目录: ${contentDir}`);
+  _log(`[知乎] 📝 标题: ${title}`);
+  _log(`[知乎] 📝 正文长度: ${content.length} 字符`);
+  _log(`[知乎] 🖼️  封面: ${coverPath || '无'}`);
+  if (dryRun) _log('[知乎] 🔍 DRY-RUN 模式\n');
+  _log('');
 
   try {
     const result = await publishZhihuArticle({ title, content, coverPath, dryRun });

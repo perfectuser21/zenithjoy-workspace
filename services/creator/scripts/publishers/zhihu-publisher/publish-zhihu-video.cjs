@@ -1,3 +1,4 @@
+const _log = console.log.bind(console);
 #!/usr/bin/env node
 'use strict';
 
@@ -39,7 +40,7 @@ function ensureDir(dir) {
 }
 
 function log(message) {
-  console.log(`[ZhihuVideo] ${message}`);
+  _log(`[ZhihuVideo] ${message}`);
 }
 
 function fail(message) {

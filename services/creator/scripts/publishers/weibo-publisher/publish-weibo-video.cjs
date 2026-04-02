@@ -1,3 +1,4 @@
+const _log = console.log.bind(console);
 #!/usr/bin/env node
 'use strict';
 
@@ -21,7 +22,7 @@ function scpVideoWB(localFile, windowsDir) {
     `scp -o StrictHostKeyChecking=no "${localFile}" "${WINDOWS_USER_WB}@${WINDOWS_IP_WB}:${winDirFwd}/${fname}"`,
     { timeout: 300000, stdio: 'pipe' }
   );
-  console.log(`   ✅ 视频已传输到 Windows`);
+  _log(`   ✅ 视频已传输到 Windows`);
   return path.join(windowsDir, fname);
 }
 
@@ -67,7 +68,7 @@ async function screenshot(page, targetPath) {
     timeout: 120000,
     animations: 'disabled',
   });
-  console.log(`   📸 ${targetPath}`);
+  _log(`   📸 ${targetPath}`);
 }
 
 async function waitForComposer(page) {
@@ -168,7 +169,7 @@ async function verifyLatestPost(page, profileUrl, expectedText) {
   if (!result.found) {
     console.warn(`⚠️  个人主页未找到文本: ${expectedText}（视频帖可能不显示标题，不视为失败）`);
   } else {
-    console.log(`   ✅ 个人主页已找到: ${expectedText}`);
+    _log(`   ✅ 个人主页已找到: ${expectedText}`);
   }
 }
 
@@ -177,19 +178,19 @@ async function main() {
   const content = [title, desc].filter(Boolean).join('\n');
   ensureDir(SCREENSHOTS_DIR);
 
-  console.log('\n========================================');
-  console.log('微博视频发布');
-  console.log('========================================\n');
-  console.log(`📝 标题: ${title}`);
-  console.log(`🎬 视频: ${video}`);
-  console.log(`📄 描述长度: ${desc.length}`);
-  console.log('');
+  _log('\n========================================');
+  _log('微博视频发布');
+  _log('========================================\n');
+  _log(`📝 标题: ${title}`);
+  _log(`🎬 视频: ${video}`);
+  _log(`📄 描述长度: ${desc.length}`);
+  _log('');
 
   let browser;
   let page;
 
   try {
-    console.log('1️⃣  连接微博 CDP...');
+    _log('1️⃣  连接微博 CDP...');
     browser = await chromium.connectOverCDP(CDP_URL, { timeout: 60000 });
     const context = browser.contexts()[0];
     if (!context) {
@@ -198,17 +199,17 @@ async function main() {
 
     page = context.pages().find(item => item.url().includes('weibo.com')) || await context.newPage();
 
-    console.log('2️⃣  打开微博首页...');
+    _log('2️⃣  打开微博首页...');
     await page.goto(HOME_URL, { waitUntil: 'domcontentloaded', timeout: 60000 });
     await waitForComposer(page);
     const profileUrl = await getProfileUrl(page);
     await screenshot(page, path.join(SCREENSHOTS_DIR, 'video-home-ready.png'));
 
-    console.log('3️⃣  SCP 视频到 Windows...');
+    _log('3️⃣  SCP 视频到 Windows...');
     const winVideoDir = `${WINDOWS_BASE_DIR_WB}\\${Date.now()}`;
     const winVideoPath = scpVideoWB(video, winVideoDir);
     
-    console.log('   上传视频到发博框（DOM.setFileInputFiles）...');
+    _log('   上传视频到发博框（DOM.setFileInputFiles）...');
     const wbCdpSession = await context.newCDPSession(page);
     const wbFileRes = await wbCdpSession.send('Runtime.evaluate', { expression: `document.querySelector('input[type="file"]')` });
     if (!wbFileRes.result.objectId) throw new Error('未找到微博 file input');
@@ -219,20 +220,20 @@ async function main() {
     await page.waitForTimeout(3000);
     await screenshot(page, path.join(SCREENSHOTS_DIR, 'video-attached.png'));
 
-    console.log('4️⃣  填写文案并发送...');
+    _log('4️⃣  填写文案并发送...');
     await fillComposer(page, content);
     await page.waitForTimeout(1000);
     await screenshot(page, path.join(SCREENSHOTS_DIR, 'video-filled.png'));
     await clickSend(page);
     await waitForPublishSettled(page);
 
-    console.log('5️⃣  校验个人主页最新微博...');
+    _log('5️⃣  校验个人主页最新微博...');
     await verifyLatestPost(page, profileUrl, title);
     await screenshot(page, SUCCESS_SCREENSHOT);
 
-    console.log('\n✅ 微博视频发布成功');
-    console.log(`   个人主页: ${profileUrl}`);
-    console.log(`   成功截图: ${SUCCESS_SCREENSHOT}`);
+    _log('\n✅ 微博视频发布成功');
+    _log(`   个人主页: ${profileUrl}`);
+    _log(`   成功截图: ${SUCCESS_SCREENSHOT}`);
   } catch (error) {
     console.error(`\n❌ 发布失败: ${error.message}`);
     if (page) {

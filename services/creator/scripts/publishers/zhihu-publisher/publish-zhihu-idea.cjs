@@ -1,3 +1,4 @@
+const _log = console.log.bind(console);
 #!/usr/bin/env node
 'use strict';
 
@@ -25,7 +26,7 @@ const SELECTORS = {
 };
 
 function usage() {
-  console.log('用法: node publish-zhihu-idea.cjs --content "正文内容" [--images "/a.jpg,/b.png"] [--dry-run]');
+  _log('用法: node publish-zhihu-idea.cjs --content "正文内容" [--images "/a.jpg,/b.png"] [--dry-run]');
 }
 
 function parseArgs(argv) {
@@ -102,7 +103,7 @@ function buildWindowsImagePaths(localImages, winDir) {
 function scpToWindows(localImages, winDir) {
   if (!localImages.length) return;
 
-  console.log('[ZH-Idea] 0. SCP 图片到 Windows...');
+  _log('[ZH-Idea] 0. SCP 图片到 Windows...');
   const winDirForScp = toWindowsScpPath(winDir);
 
   execFileSync(
@@ -129,14 +130,14 @@ function scpToWindows(localImages, winDir) {
     );
   }
 
-  console.log(`[ZH-Idea]    ${localImages.length} 张图片已复制到 Windows: ${winDir}`);
+  _log(`[ZH-Idea]    ${localImages.length} 张图片已复制到 Windows: ${winDir}`);
 }
 
 async function screenshot(page, name) {
   ensureDir(SCREENSHOTS_DIR);
   const output = path.join(SCREENSHOTS_DIR, `${name}.png`);
   await page.screenshot({ path: output, fullPage: true });
-  console.log(`[ZH-Idea]    截图: ${output}`);
+  _log(`[ZH-Idea]    截图: ${output}`);
   return output;
 }
 
@@ -157,7 +158,7 @@ async function ensureComposerOpen(page) {
 }
 
 async function fillContent(page, content) {
-  console.log('[ZH-Idea] 2. 填写正文...');
+  _log('[ZH-Idea] 2. 填写正文...');
   const editor = page.locator(SELECTORS.editor).first();
   await editor.click({ timeout: 10000 });
   await page.keyboard.insertText(content);
@@ -215,9 +216,9 @@ async function resolveFileInputBackendNodeId(page, cdpSession) {
 async function uploadImages(page, context, localImages, windowsImages) {
   if (!localImages.length) return;
 
-  console.log('[ZH-Idea] 3. 上传图片...');
+  _log('[ZH-Idea] 3. 上传图片...');
   const chooserOpened = await tryOpenFileChooser(page);
-  console.log(`[ZH-Idea]    filechooser: ${chooserOpened ? '已触发' : '未触发，回退隐藏 input'}`);
+  _log(`[ZH-Idea]    filechooser: ${chooserOpened ? '已触发' : '未触发，回退隐藏 input'}`);
 
   const cdpSession = await context.newCDPSession(page);
   const backendNodeId = await resolveFileInputBackendNodeId(page, cdpSession);
@@ -245,11 +246,11 @@ async function uploadImages(page, context, localImages, windowsImages) {
     throw new Error(`图片上传校验失败，input.files=${state.fileCount}，期望 ${windowsImages.length}`);
   }
 
-  console.log(`[ZH-Idea]    图片已写入 input.files=${state.fileCount}`);
+  _log(`[ZH-Idea]    图片已写入 input.files=${state.fileCount}`);
 }
 
 async function verifyReady(page, expectedContent, expectedImageCount) {
-  console.log('[ZH-Idea] 4. 校验发布态...');
+  _log('[ZH-Idea] 4. 校验发布态...');
   const result = await page.evaluate(({ content, imageSelector }) => {
     const editor = document.querySelector('.WriteArea [contenteditable="true"][role="textbox"]');
     const publishButton = Array.from(document.querySelectorAll('.WriteArea button')).find(
@@ -274,11 +275,11 @@ async function verifyReady(page, expectedContent, expectedImageCount) {
     throw new Error(`发布前校验失败：图片数 ${result.fileCount}，期望 ${expectedImageCount}`);
   }
 
-  console.log(`[ZH-Idea]    校验通过: 正文已填充, 图片 ${result.fileCount} 张`);
+  _log(`[ZH-Idea]    校验通过: 正文已填充, 图片 ${result.fileCount} 张`);
 }
 
 async function publish(page) {
-  console.log('[ZH-Idea] 5. 点击发布...');
+  _log('[ZH-Idea] 5. 点击发布...');
   // 用 JS 点击避免 div 遮挡导致 Playwright click 超时
   await page.evaluate(() => {
     const btn = Array.from(document.querySelectorAll('.WriteArea button')).find(
@@ -314,15 +315,15 @@ async function main() {
   const winDir = `${WINDOWS_BASE_DIR}\\${batchId}-${slug}`;
   const windowsImages = buildWindowsImagePaths(localImages, winDir);
 
-  console.log('[ZH-Idea] ========================================');
-  console.log('[ZH-Idea] 知乎想法发布');
-  console.log('[ZH-Idea] ========================================');
-  console.log(`[ZH-Idea] 正文长度: ${content.length}`);
-  console.log(`[ZH-Idea] 图片数量: ${localImages.length}`);
-  console.log(`[ZH-Idea] 模式: ${dryRun ? 'dry-run' : 'publish'}`);
+  _log('[ZH-Idea] ========================================');
+  _log('[ZH-Idea] 知乎想法发布');
+  _log('[ZH-Idea] ========================================');
+  _log(`[ZH-Idea] 正文长度: ${content.length}`);
+  _log(`[ZH-Idea] 图片数量: ${localImages.length}`);
+  _log(`[ZH-Idea] 模式: ${dryRun ? 'dry-run' : 'publish'}`);
 
   if (localImages.length) {
-    console.log(`[ZH-Idea] Windows 目录: ${winDir}`);
+    _log(`[ZH-Idea] Windows 目录: ${winDir}`);
   }
 
   if (localImages.length) {
@@ -331,13 +332,13 @@ async function main() {
 
   ensureDir(SCREENSHOTS_DIR);
 
-  console.log('[ZH-Idea] 1. 连接远端 Chrome CDP...');
+  _log('[ZH-Idea] 1. 连接远端 Chrome CDP...');
   const browser = await chromium.connectOverCDP(CDP_URL, { timeout: 30000 });
   const context = browser.contexts()[0] || await browser.newContext();
   const page = await context.newPage();
 
   page.on('dialog', dialog => {
-    console.log(`[ZH-Idea]    自动关闭对话框: ${dialog.message()}`);
+    _log(`[ZH-Idea]    自动关闭对话框: ${dialog.message()}`);
     dialog.dismiss().catch(() => {});
   });
 
@@ -360,13 +361,13 @@ async function main() {
     await verifyReady(page, content, localImages.length);
 
     if (dryRun) {
-      console.log('[ZH-Idea] dry-run 完成，未点击发布');
+      _log('[ZH-Idea] dry-run 完成，未点击发布');
       return;
     }
 
     await publish(page);
     await screenshot(page, '04-published');
-    console.log('[ZH-Idea] 发布流程完成');
+    _log('[ZH-Idea] 发布流程完成');
   } finally {
     await browser.close();
   }

@@ -1,3 +1,4 @@
+const _log = console.log.bind(console);
 #!/usr/bin/env node
 /**
  * 今日头条图文发布脚本
@@ -57,14 +58,14 @@ const windowsImages = content.images.map(img => {
   return path.join(baseDir, dateDir, 'images', filename).replace(/\//g, '\\');
 });
 
-console.log('\n========================================');
-console.log('今日头条图文发布');
-console.log('========================================\n');
-console.log(`📄 内容 ID: ${content.id}`);
-console.log(`📝 标题: ${content.title} (${content.title.length} 字符)`);
-console.log(`🖼️  图片数量: ${windowsImages.length}`);
-console.log(`📁 Windows 路径: ${windowsImages[0]}`);
-console.log('');
+_log('\n========================================');
+_log('今日头条图文发布');
+_log('========================================\n');
+_log(`📄 内容 ID: ${content.id}`);
+_log(`📝 标题: ${content.title} (${content.title.length} 字符)`);
+_log(`🖼️  图片数量: ${windowsImages.length}`);
+_log(`📁 Windows 路径: ${windowsImages[0]}`);
+_log('');
 
 class CDPClient {
   constructor(wsUrl) {
@@ -151,7 +152,7 @@ async function main() {
   let cdp;
   try {
     // 连接到浏览器
-    console.log('1️⃣ 连接到 Windows 浏览器...');
+    _log('1️⃣ 连接到 Windows 浏览器...');
     const pagesData = await new Promise((resolve, reject) => {
       http.get(`http://${WINDOWS_IP}:${CDP_PORT}/json`, res => {
         let data = '';
@@ -176,16 +177,16 @@ async function main() {
     await cdp.send('Network.enable');
     await cdp.send('DOM.enable');
 
-    console.log('   ✓ 已连接\n');
+    _log('   ✓ 已连接\n');
 
     // 检查当前页面
     const currentUrl = await cdp.send('Runtime.evaluate', {
       expression: 'window.location.href'
     });
-    console.log(`   当前页面: ${currentUrl.result.value}\n`);
+    _log(`   当前页面: ${currentUrl.result.value}\n`);
 
     // 步骤 1: 填写标题（使用 React 方式）
-    console.log('2️⃣ 填写标题...');
+    _log('2️⃣ 填写标题...');
     await cdp.send('Runtime.evaluate', {
       expression: `
         (function() {
@@ -207,10 +208,10 @@ async function main() {
       `
     });
     await sleep(1000);
-    console.log(`   ✓ 标题已填写: ${content.title}\n`);
+    _log(`   ✓ 标题已填写: ${content.title}\n`);
 
     // 步骤 2: 填写正文（使用 React 方式）
-    console.log('3️⃣ 填写正文...');
+    _log('3️⃣ 填写正文...');
     const contentText = (content.content || '').replace(/\n/g, '</p><p>');
     await cdp.send('Runtime.evaluate', {
       expression: `
@@ -227,10 +228,10 @@ async function main() {
       `
     });
     await sleep(1000);
-    console.log(`   ✓ 正文已填写\n`);
+    _log(`   ✓ 正文已填写\n`);
 
     // 步骤 3: 选择封面类型
-    console.log('4️⃣ 选择封面类型...');
+    _log('4️⃣ 选择封面类型...');
     const coverTypeMap = {
       'single': '单图',
       'three': '三图',
@@ -256,20 +257,20 @@ async function main() {
       `
     });
     await sleep(1000);
-    console.log(`   ✓ 已选择 ${coverText}\n`);
+    _log(`   ✓ 已选择 ${coverText}\n`);
 
     // 滚动到封面选项区域（使上传框可见）
-    console.log('   滚动到封面区域...');
+    _log('   滚动到封面区域...');
     await cdp.send('Runtime.evaluate', {
       expression: `
         window.scrollTo(0, document.body.scrollHeight);
       `
     });
     await sleep(1500);
-    console.log(`   ✓ 滚动完成\n`);
+    _log(`   ✓ 滚动完成\n`);
 
     // 步骤 4: 点击上传框显示文件选择器
-    console.log('5️⃣ 点击上传框...');
+    _log('5️⃣ 点击上传框...');
     const clickResult = await cdp.send('Runtime.evaluate', {
       expression: `
         (function() {
@@ -333,8 +334,8 @@ async function main() {
       throw new Error(`未找到上传框 (找到 ${clickData.boxesCount || 0} 个候选框)`);
     }
 
-    console.log(`   找到上传框 ${clickData.width}x${clickData.height} at (${clickData.x}, ${clickData.y})`);
-    console.log(`   className: ${clickData.className}\n`);
+    _log(`   找到上传框 ${clickData.width}x${clickData.height} at (${clickData.x}, ${clickData.y})`);
+    _log(`   className: ${clickData.className}\n`);
 
     // 使用 CDP 鼠标事件点击（更可靠）
     await cdp.send('Input.dispatchMouseEvent', {
@@ -354,13 +355,13 @@ async function main() {
     });
 
     await sleep(500);
-    console.log(`   ✓ 已点击上传框\n`);
+    _log(`   ✓ 已点击上传框\n`);
 
     // 步骤 5: 上传图片
-    console.log('6️⃣ 上传图片...');
+    _log('6️⃣ 上传图片...');
 
     // 等待模态框完全加载（需要更长时间）
-    console.log('   等待上传模态框加载...');
+    _log('   等待上传模态框加载...');
     await sleep(2500);
 
     // 查找可见的文件输入（在模态框中）
@@ -394,7 +395,7 @@ async function main() {
     });
 
     const inputData = JSON.parse(inputInfo.result.value);
-    console.log(`   查找结果: found=${inputData.found}, index=${inputData.index}, visible=${inputData.visible}`);
+    _log(`   查找结果: found=${inputData.found}, index=${inputData.index}, visible=${inputData.visible}`);
 
     if (!inputData.found) {
       // 尝试截图以便调试
@@ -404,9 +405,9 @@ async function main() {
       throw new Error(`未找到文件输入控件 (见截图: /tmp/debug-no-input-found.png)`);
     }
 
-    console.log(`   找到文件输入 [索引 ${inputData.index}, ${inputData.visible ? '可见' : '隐藏'}]`);
+    _log(`   找到文件输入 [索引 ${inputData.index}, ${inputData.visible ? '可见' : '隐藏'}]`);
     if (inputData.parentClass) {
-      console.log(`   父元素: ${inputData.parentClass.substring(0, 50)}`);
+      _log(`   父元素: ${inputData.parentClass.substring(0, 50)}`);
     }
 
     // 使用正确的索引选择器
@@ -425,7 +426,7 @@ async function main() {
       files: windowsImages
     });
 
-    console.log(`   已设置 ${windowsImages.length} 个文件路径`);
+    _log(`   已设置 ${windowsImages.length} 个文件路径`);
 
     // 等待文件上传完成（需要更长时间）
     await sleep(5000);
@@ -460,16 +461,16 @@ async function main() {
 
     const status = JSON.parse(uploadStatus.result.value);
     if (status.closed) {
-      console.log(`   ✓ 已关闭上传模态框 (${status.button})`);
+      _log(`   ✓ 已关闭上传模态框 (${status.button})`);
     } else {
-      console.log(`   ⚠️  未找到关闭按钮，模态框可能仍打开`);
+      _log(`   ⚠️  未找到关闭按钮，模态框可能仍打开`);
     }
 
     await sleep(1000);
-    console.log(`   ✓ 图片上传流程完成\n`);
+    _log(`   ✓ 图片上传流程完成\n`);
 
     // 步骤 6: 配置选项
-    console.log('7️⃣ 配置发布选项...');
+    _log('7️⃣ 配置发布选项...');
     const options = content.options || {};
 
     if (options.adRevenue !== false) {
@@ -524,10 +525,10 @@ async function main() {
     }
 
     await sleep(500);
-    console.log('   ✓ 选项已配置\n');
+    _log('   ✓ 选项已配置\n');
 
     // 步骤 7: 点击"预览并发布"
-    console.log('8️⃣ 点击"预览并发布"...');
+    _log('8️⃣ 点击"预览并发布"...');
     await cdp.send('Runtime.evaluate', {
       expression: `
         (function() {
@@ -542,10 +543,10 @@ async function main() {
       `
     });
     await sleep(3000);
-    console.log('   ✓ 已进入预览页面\n');
+    _log('   ✓ 已进入预览页面\n');
 
     // 步骤 8: 点击"预览"
-    console.log('9️⃣ 点击"预览"按钮...');
+    _log('9️⃣ 点击"预览"按钮...');
     await cdp.send('Runtime.evaluate', {
       expression: `
         (function() {
@@ -560,10 +561,10 @@ async function main() {
       `
     });
     await sleep(2000);
-    console.log('   ✓ 预览窗口已打开\n');
+    _log('   ✓ 预览窗口已打开\n');
 
     // 步骤 9: 点击"发布"
-    console.log('🔟 点击"发布"按钮...');
+    _log('🔟 点击"发布"按钮...');
     await cdp.send('Runtime.evaluate', {
       expression: `
         (function() {
@@ -578,10 +579,10 @@ async function main() {
       `
     });
     await sleep(2000);
-    console.log('   ✓ 进入确认页面\n');
+    _log('   ✓ 进入确认页面\n');
 
     // 步骤 10: 点击"确认发布"
-    console.log('1️⃣1️⃣ 点击"确认发布"按钮...');
+    _log('1️⃣1️⃣ 点击"确认发布"按钮...');
     const beforeTimestamp = Date.now() / 1000;
 
     await cdp.send('Runtime.evaluate', {
@@ -599,7 +600,7 @@ async function main() {
     });
 
     // 监控发布请求
-    console.log('\n   监控发布请求...');
+    _log('\n   监控发布请求...');
     let foundRequest = false;
     for (let i = 1; i <= 10; i++) {
       await sleep(1000);
@@ -610,7 +611,7 @@ async function main() {
         req.url.includes('submit')
       );
       if (keyRequests.length > 0 && !foundRequest) {
-        console.log(`   ✓ 第 ${i} 秒：检测到发布请求`);
+        _log(`   ✓ 第 ${i} 秒：检测到发布请求`);
         foundRequest = true;
         break;
       } else if (!foundRequest) {
@@ -626,7 +627,7 @@ async function main() {
     });
 
     const finalUrlValue = finalUrl.result.value;
-    console.log(`\n   最终 URL: ${finalUrlValue}\n`);
+    _log(`\n   最终 URL: ${finalUrlValue}\n`);
 
     // 截图
     const screenshot = await cdp.send('Page.captureScreenshot', { format: 'png' });
@@ -636,13 +637,13 @@ async function main() {
     }
     const screenshotPath = path.join(screenshotDir, `${content.id}-final.png`);
     fs.writeFileSync(screenshotPath, screenshot.data, 'base64');
-    console.log(`📸 截图已保存: ${screenshotPath}\n`);
+    _log(`📸 截图已保存: ${screenshotPath}\n`);
 
     // 判断成功
     if (finalUrlValue.includes('/manage') || finalUrlValue.includes('/articles')) {
-      console.log('========================================');
-      console.log('🎉 发布成功！');
-      console.log('========================================\n');
+      _log('========================================');
+      _log('🎉 发布成功！');
+      _log('========================================\n');
 
       updateContentStatus('published', {
         publishedAt: new Date().toISOString(),

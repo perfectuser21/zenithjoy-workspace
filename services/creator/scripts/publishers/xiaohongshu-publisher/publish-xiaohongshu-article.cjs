@@ -1,3 +1,4 @@
+const _log = console.log.bind(console);
 #!/usr/bin/env node
 'use strict';
 
@@ -97,12 +98,12 @@ function parseArgs(argv) {
   };
 
   if (args.includes('--help') || args.includes('-h')) {
-    console.log('用法：node publish-xiaohongshu-article.cjs --title "标题" --content "正文或HTML" [--cover /path/to/cover.png]');
-    console.log('选项：');
-    console.log('  --title <text>    长文标题（必填）');
-    console.log('  --content <text>  正文文本 / HTML 字符串 / 文件路径（必填）');
-    console.log('  --cover <path>    封面图片路径（可选）');
-    console.log('  --dry-run         仅打印参数，不连接 CDP');
+    _log('用法：node publish-xiaohongshu-article.cjs --title "标题" --content "正文或HTML" [--cover /path/to/cover.png]');
+    _log('选项：');
+    _log('  --title <text>    长文标题（必填）');
+    _log('  --content <text>  正文文本 / HTML 字符串 / 文件路径（必填）');
+    _log('  --cover <path>    封面图片路径（可选）');
+    _log('  --dry-run         仅打印参数，不连接 CDP');
     process.exit(0);
   }
 
@@ -144,7 +145,7 @@ async function screenshot(cdp, name) {
     const result = await cdp.send('Page.captureScreenshot', { format: 'jpeg', quality: 45 });
     const filepath = path.join(SCREENSHOTS_DIR, `${name}.jpg`);
     fs.writeFileSync(filepath, Buffer.from(result.data, 'base64'));
-    console.log(`[XHS-ARTICLE]    截图: ${filepath}`);
+    _log(`[XHS-ARTICLE]    截图: ${filepath}`);
     return filepath;
   } catch (err) {
     console.warn(`[XHS-ARTICLE]    截图失败: ${err.message}`);
@@ -290,7 +291,7 @@ async function focusAndInsertText(cdp, selector, text, chunkSize = 800) {
 }
 
 async function uploadCover(cdp, windowsCoverPath) {
-  console.log('[XHS-ARTICLE] 5️⃣  上传封面...');
+  _log('[XHS-ARTICLE] 5️⃣  上传封面...');
   await cdp.send('Page.setInterceptFileChooserDialog', { enabled: true });
 
   const chooserPromise = new Promise((resolve, reject) => {
@@ -326,30 +327,30 @@ async function main(opts) {
   ensureDir(SCREENSHOTS_DIR);
   const { title, content, cover, isDryRun } = opts;
 
-  console.log('\n[XHS-ARTICLE] ========================================');
-  console.log('[XHS-ARTICLE] 小红书长文发布');
-  console.log('[XHS-ARTICLE] ========================================\n');
-  console.log(`[XHS-ARTICLE] 标题: ${title}`);
-  console.log(`[XHS-ARTICLE] 正文长度: ${content.length} 字符`);
-  console.log(`[XHS-ARTICLE] 封面: ${cover || '（使用默认模板封面）'}`);
+  _log('\n[XHS-ARTICLE] ========================================');
+  _log('[XHS-ARTICLE] 小红书长文发布');
+  _log('[XHS-ARTICLE] ========================================\n');
+  _log(`[XHS-ARTICLE] 标题: ${title}`);
+  _log(`[XHS-ARTICLE] 正文长度: ${content.length} 字符`);
+  _log(`[XHS-ARTICLE] 封面: ${cover || '（使用默认模板封面）'}`);
 
   if (isDryRun) {
-    console.log('\n[XHS-ARTICLE] dry-run 模式，跳过 CDP');
+    _log('\n[XHS-ARTICLE] dry-run 模式，跳过 CDP');
     return;
   }
 
   const windowsWorkspace = makeWindowsWorkspace(title);
   const windowsCover = cover ? scpFileToWindows(cover, windowsWorkspace.windowsDir) : '';
   if (windowsCover) {
-    console.log(`[XHS-ARTICLE] 封面已复制到 Windows: ${windowsCover}`);
+    _log(`[XHS-ARTICLE] 封面已复制到 Windows: ${windowsCover}`);
   }
 
   let cdp;
   try {
     cdp = await connectCDP();
-    console.log('[XHS-ARTICLE] ✅ CDP 已连接');
+    _log('[XHS-ARTICLE] ✅ CDP 已连接');
 
-    console.log('[XHS-ARTICLE] 1️⃣  打开发布页...');
+    _log('[XHS-ARTICLE] 1️⃣  打开发布页...');
     await cdp.send('Page.navigate', { url: PUBLISH_URL });
     await sleep(5000);
     await screenshot(cdp, '01-publish-page');
@@ -359,20 +360,20 @@ async function main(opts) {
       throw new Error(`小红书未登录，请在 Chrome (${CDP_PORT}) 中登录`);
     }
 
-    console.log('[XHS-ARTICLE] 2️⃣  进入长文创作...');
+    _log('[XHS-ARTICLE] 2️⃣  进入长文创作...');
     await clickText(cdp, '写长文');
     await waitFor(cdp, '长文首页', `document.body.innerText.includes('新的创作')`, 15000);
     await screenshot(cdp, '02-article-home');
     await clickText(cdp, '新的创作');
 
-    console.log('[XHS-ARTICLE] 3️⃣  填写标题与正文...');
+    _log('[XHS-ARTICLE] 3️⃣  填写标题与正文...');
     await waitFor(cdp, '长文标题输入框', `!!document.querySelector('textarea[placeholder="输入标题"]')`, 15000);
     await setTextareaValue(cdp, 'textarea[placeholder="输入标题"]', title.slice(0, 64));
     await focusAndInsertText(cdp, '.rich-editor-content .ProseMirror, .rich-editor-content [contenteditable="true"], .tiptap.ProseMirror', content);
     await sleep(1000);
     await screenshot(cdp, '03-editor-filled');
 
-    console.log('[XHS-ARTICLE] 4️⃣  一键排版并进入发布页...');
+    _log('[XHS-ARTICLE] 4️⃣  一键排版并进入发布页...');
     await clickText(cdp, '一键排版');
     await waitFor(cdp, '封面设置页', `document.body.innerText.includes('封面设置') && document.body.innerText.includes('下一步')`, 20000);
     await screenshot(cdp, '04-template-page');
@@ -398,7 +399,7 @@ async function main(opts) {
 
     await screenshot(cdp, '05-before-publish');
 
-    console.log('[XHS-ARTICLE] 6️⃣  点击发布...');
+    _log('[XHS-ARTICLE] 6️⃣  点击发布...');
     await clickText(cdp, '发布');
     await sleep(5000);
     await screenshot(cdp, '06-after-publish');
@@ -406,13 +407,13 @@ async function main(opts) {
     const finalUrl = await evalValue(cdp, 'location.href');
     const bodyText = await evalValue(cdp, 'document.body.innerText.slice(0, 2000)');
     if (isPublishSuccess(finalUrl, bodyText)) {
-      console.log('[XHS-ARTICLE] ✅ 发布成功');
-      console.log(`[XHS-ARTICLE] 最终 URL: ${finalUrl}`);
+      _log('[XHS-ARTICLE] ✅ 发布成功');
+      _log(`[XHS-ARTICLE] 最终 URL: ${finalUrl}`);
     } else {
-      console.log('[XHS-ARTICLE] ⚠️  发布状态不确定，请检查截图');
-      console.log(`[XHS-ARTICLE] 当前 URL: ${finalUrl}`);
+      _log('[XHS-ARTICLE] ⚠️  发布状态不确定，请检查截图');
+      _log(`[XHS-ARTICLE] 当前 URL: ${finalUrl}`);
     }
-    console.log(`[XHS-ARTICLE] 截图目录: ${SCREENSHOTS_DIR}`);
+    _log(`[XHS-ARTICLE] 截图目录: ${SCREENSHOTS_DIR}`);
   } catch (err) {
     console.error(`\n[XHS-ARTICLE] ❌ 发布失败: ${err.message}`);
     if (cdp) {

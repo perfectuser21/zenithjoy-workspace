@@ -1,3 +1,4 @@
+const _log = console.log.bind(console);
 #!/usr/bin/env node
 /**
  * 快手视频发布脚本
@@ -152,12 +153,12 @@ async function waitForPublishSuccess(page, title, timeoutMs = 90000) {
 async function main(opts) {
   ensureDir(SCREENSHOTS_DIR);
 
-  console.log('\n[KS] ========================================');
-  console.log('[KS] 快手视频发布');
-  console.log('[KS] ========================================\n');
-  console.log(`[KS] 标题: ${opts.title}`);
-  console.log(`[KS] 视频: ${opts.video}`);
-  if (opts.cover) console.log(`[KS] 封面: ${opts.cover}`);
+  _log('\n[KS] ========================================');
+  _log('[KS] 快手视频发布');
+  _log('[KS] ========================================\n');
+  _log(`[KS] 标题: ${opts.title}`);
+  _log(`[KS] 视频: ${opts.video}`);
+  if (opts.cover) _log(`[KS] 封面: ${opts.cover}`);
 
   const browser = await chromium.connectOverCDP(CDP_URL, { timeout: 60000 });
   const context = browser.contexts()[0] || await browser.newContext();
@@ -165,51 +166,51 @@ async function main(opts) {
   // context is used for CDP sessions in file upload
 
   try {
-    console.log('\n[KS] 1. 打开发布页...');
+    _log('\n[KS] 1. 打开发布页...');
     await page.goto(PUBLISH_URL, { waitUntil: 'domcontentloaded' });
     await sleep(5000);
     const draftAction = await dismissDraftModal(page);
-    if (draftAction) console.log(`[KS]    草稿处理: ${draftAction}`);
+    if (draftAction) _log(`[KS]    草稿处理: ${draftAction}`);
     await takeScreenshot(page, path.join(SCREENSHOTS_DIR, 'ks-video-01-publish-page.png'));
 
     if (isLoginUrl(page.url())) {
       throw new Error('快手未登录，请先在专用 Chrome 中登录创作者中心');
     }
 
-    console.log('\n[KS] 2. SCP 视频到 Windows...');
+    _log('\n[KS] 2. SCP 视频到 Windows...');
     const winVideoDir = `${WINDOWS_BASE_DIR_KS}\\${Date.now()}`;
     const winVideoPath = scpToWindows(opts.video, winVideoDir);
-    console.log(`[KS]    Windows 视频: ${winVideoPath}`);
+    _log(`[KS]    Windows 视频: ${winVideoPath}`);
     
-    console.log('\n[KS] 2. 上传视频...');
+    _log('\n[KS] 2. 上传视频...');
     await uploadVideo(page, context, opts.video, winVideoPath);
     await waitForEditor(page);
     await takeScreenshot(page, path.join(SCREENSHOTS_DIR, 'ks-video-02-editor.png'));
 
-    console.log('\n[KS] 3. 填写作品描述...');
+    _log('\n[KS] 3. 填写作品描述...');
     await fillTitle(page, opts.title);
     await takeScreenshot(page, path.join(SCREENSHOTS_DIR, 'ks-video-03-title.png'));
 
     if (opts.cover) {
-      console.log('\n[KS] 4. 上传封面...');
+      _log('\n[KS] 4. 上传封面...');
       const winCoverPath = scpToWindows(opts.cover, winVideoDir);
     await uploadCover(page, context, opts.cover, winCoverPath);
       await takeScreenshot(page, path.join(SCREENSHOTS_DIR, 'ks-video-04-cover.png'));
     }
 
-    console.log('\n[KS] 5. 点击发布...');
+    _log('\n[KS] 5. 点击发布...');
     await clickPublish(page);
 
-    console.log('\n[KS] 6. 等待平台确认...');
+    _log('\n[KS] 6. 等待平台确认...');
     const final = await waitForPublishSuccess(page, opts.title);
     await takeScreenshot(page, path.join(SCREENSHOTS_DIR, 'ks-video-05-success.png'));
     await takeScreenshot(page, SUCCESS_SCREENSHOT);
 
-    console.log('\n[KS] ========================================');
-    console.log(`[KS] URL: ${final.url}`);
-    console.log(`[KS] 标题确认: ${final.text.includes(opts.title) ? '已看到新作品' : '未确认'}`);
-    console.log(`[KS] 成功截图: ${SUCCESS_SCREENSHOT}`);
-    console.log('[KS] ========================================\n');
+    _log('\n[KS] ========================================');
+    _log(`[KS] URL: ${final.url}`);
+    _log(`[KS] 标题确认: ${final.text.includes(opts.title) ? '已看到新作品' : '未确认'}`);
+    _log(`[KS] 成功截图: ${SUCCESS_SCREENSHOT}`);
+    _log('[KS] ========================================\n');
   } finally {
     await browser.close().catch(() => {});
   }

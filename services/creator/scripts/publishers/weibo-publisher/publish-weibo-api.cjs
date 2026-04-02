@@ -1,3 +1,4 @@
+const _log = console.log.bind(console);
 #!/usr/bin/env node
 /**
  * 微博新接口图文发布脚本
@@ -237,7 +238,7 @@ async function extractWeiboSession(cdp) {
   });
 
   const cookies = cookiesResult.cookies || [];
-  console.log(`   提取到 ${cookies.length} 个 Cookie`);
+  _log(`   提取到 ${cookies.length} 个 Cookie`);
 
   const subCookie = cookies.find(c => c.name === 'SUB');
   if (!subCookie) {
@@ -245,7 +246,7 @@ async function extractWeiboSession(cdp) {
   }
 
   const { cookieHeader, xsrfToken } = parseCookieHeader(cookies);
-  console.log(`   XSRF Token: ${xsrfToken ? '✅ 已获取' : '⚠️  未找到（将尝试无 token 发布）'}`);
+  _log(`   XSRF Token: ${xsrfToken ? '✅ 已获取' : '⚠️  未找到（将尝试无 token 发布）'}`);
 
   return { cookieHeader, xsrfToken };
 }
@@ -392,19 +393,19 @@ async function main() {
     console.warn(`⚠️  图片数量 ${allImages.length} 超过微博限制 ${MAX_IMAGES}，已截断`);
   }
 
-  console.log('\n========================================');
-  console.log('微博图文发布（新 API 方案）');
-  console.log('========================================\n');
-  console.log(`📁 内容目录: ${contentDir}`);
-  console.log(`📝 文案长度: ${contentText.length} 字符`);
-  console.log(`🖼️  图片数量: ${localImages.length}`);
-  console.log('');
+  _log('\n========================================');
+  _log('微博图文发布（新 API 方案）');
+  _log('========================================\n');
+  _log(`📁 内容目录: ${contentDir}`);
+  _log(`📝 文案长度: ${contentText.length} 字符`);
+  _log(`🖼️  图片数量: ${localImages.length}`);
+  _log('');
 
   let cdp;
 
   try {
     // ===== 步骤1: CDP 连接提取 Cookie =====
-    console.log('1️⃣  连接 CDP 提取会话 Cookie...\n');
+    _log('1️⃣  连接 CDP 提取会话 Cookie...\n');
 
     const pagesData = await withRetry(
       () =>
@@ -438,17 +439,17 @@ async function main() {
     const targetPage = weiboPage || pagesData.find(p => p.type === 'page');
     if (!targetPage) throw new Error('未找到任何浏览器页面');
 
-    if (!weiboPage) console.log(`   ⚠️  未找到微博页面，使用: ${targetPage.url}`);
+    if (!weiboPage) _log(`   ⚠️  未找到微博页面，使用: ${targetPage.url}`);
 
     cdp = new CDPClient(targetPage.webSocketDebuggerUrl);
     await cdp.connect();
-    console.log('   ✅ CDP 已连接\n');
+    _log('   ✅ CDP 已连接\n');
 
     const { cookieHeader, xsrfToken } = await extractWeiboSession(cdp);
-    console.log('   ✅ 会话 Cookie 已提取\n');
+    _log('   ✅ 会话 Cookie 已提取\n');
 
     // ===== 步骤2: 上传图片 =====
-    console.log(`2️⃣  上传图片（${localImages.length} 张）...\n`);
+    _log(`2️⃣  上传图片（${localImages.length} 张）...\n`);
     const picIds = [];
 
     for (let i = 0; i < localImages.length; i++) {
@@ -457,13 +458,13 @@ async function main() {
       process.stdout.write(`   [${i + 1}/${localImages.length}] 上传 ${filename}... `);
       const picId = await uploadImage(imgPath, cookieHeader);
       picIds.push(picId);
-      console.log(`✅ pic_id: ${picId}`);
+      _log(`✅ pic_id: ${picId}`);
     }
 
-    console.log(`\n   ✅ 全部图片上传完成，pic_ids: [${picIds.join(', ')}]\n`);
+    _log(`\n   ✅ 全部图片上传完成，pic_ids: [${picIds.join(', ')}]\n`);
 
     // ===== 步骤3: 发布微博 =====
-    console.log('3️⃣  发布微博...\n');
+    _log('3️⃣  发布微博...\n');
 
     const { postUrl, weiboId } = await postWeibo(
       contentText || '',
@@ -472,9 +473,9 @@ async function main() {
       xsrfToken
     );
 
-    console.log('\n✅ 微博发布成功！');
-    if (weiboId) console.log(`   微博 ID: ${weiboId}`);
-    if (postUrl) console.log(`   链接: ${postUrl}`);
+    _log('\n✅ 微博发布成功！');
+    if (weiboId) _log(`   微博 ID: ${weiboId}`);
+    if (postUrl) _log(`   链接: ${postUrl}`);
   } catch (err) {
     console.error(`\n❌ 发布失败: ${err.message}`);
     process.exit(1);

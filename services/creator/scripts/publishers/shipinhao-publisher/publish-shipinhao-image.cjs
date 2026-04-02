@@ -1,3 +1,4 @@
+const _log = console.log.bind(console);
 #!/usr/bin/env node
 'use strict';
 
@@ -53,7 +54,7 @@ function toWindowsScpPath(p) {
 }
 
 function scpToWindows(localImages, winDir) {
-  console.log('[SPH] SCP 图片到 Windows...');
+  _log('[SPH] SCP 图片到 Windows...');
   const winDirForScp = toWindowsScpPath(winDir);
 
   execFileSync(
@@ -80,13 +81,13 @@ function scpToWindows(localImages, winDir) {
     );
   }
 
-  console.log(`[SPH]    ${localImages.length} 张图片已传到 Windows`);
+  _log(`[SPH]    ${localImages.length} 张图片已传到 Windows`);
 }
 
 async function screenshot(page, name) {
   const target = path.join(SHOTS_DIR, `${name}.png`);
   await page.screenshot({ path: target, fullPage: true });
-  console.log(`[SPH]    截图: ${target}`);
+  _log(`[SPH]    截图: ${target}`);
 }
 
 async function waitForReady(page) {
@@ -94,7 +95,7 @@ async function waitForReady(page) {
     await page.goto(CREATE_URL, { waitUntil: 'domcontentloaded', timeout: 60000 });
   } catch (error) {
     if (!String(error.message).includes('net::ERR_ABORTED')) throw error;
-    console.log('[SPH]    导航返回 ERR_ABORTED，继续等待当前页面就绪');
+    _log('[SPH]    导航返回 ERR_ABORTED，继续等待当前页面就绪');
   }
   await page.waitForTimeout(12000);
   await page.locator('text=页面初始化中').waitFor({ state: 'hidden', timeout: INIT_WAIT_MS }).catch(() => {});
@@ -132,11 +133,11 @@ async function getInputFileCount(page) {
 }
 
 async function uploadImages(page, context, localImages, winImages) {
-  console.log('[SPH] 3. 上传图片...');
+  _log('[SPH] 3. 上传图片...');
   const chooserPromise = page.waitForEvent('filechooser', { timeout: 10000 });
   await page.locator(SELECTORS.uploadButton).first().click({ timeout: 10000 });
   const fileChooser = await chooserPromise;
-  console.log('[SPH]    已捕获 filechooser');
+  _log('[SPH]    已捕获 filechooser');
 
   let uploadedBy = 'cdp';
 
@@ -155,18 +156,18 @@ async function uploadImages(page, context, localImages, winImages) {
     }
   } catch (error) {
     uploadedBy = 'playwright-fallback';
-    console.log(`[SPH]    CDP Windows 路径上传未生效，回退本地 setFiles: ${error.message}`);
+    _log(`[SPH]    CDP Windows 路径上传未生效，回退本地 setFiles: ${error.message}`);
     await fileChooser.setFiles(localImages);
     await page.waitForTimeout(1500);
   }
 
   await page.waitForTimeout(8000);
-  console.log(`[SPH]    上传方式: ${uploadedBy}`);
+  _log(`[SPH]    上传方式: ${uploadedBy}`);
 }
 
 async function fillTitle(page, title) {
   if (!title) return;
-  console.log('[SPH] 4. 填写标题...');
+  _log('[SPH] 4. 填写标题...');
   const input = page.locator(SELECTORS.titleInput).first();
   await input.click();
   await input.fill(title);
@@ -174,7 +175,7 @@ async function fillTitle(page, title) {
 
 async function fillDescription(page, content) {
   if (!content) return;
-  console.log('[SPH] 5. 填写描述...');
+  _log('[SPH] 5. 填写描述...');
   const editor = page.locator(SELECTORS.descEditor).first();
   await editor.click();
   await editor.fill(content);
@@ -199,7 +200,7 @@ async function verifyDraft(page, expectedTitle, expectedContent) {
     throw new Error('未检测到图片预览');
   }
 
-  console.log(`[SPH]    校验通过: 图片已显示, 标题="${titleValue}", 发表按钮="${publishText}"`);
+  _log(`[SPH]    校验通过: 图片已显示, 标题="${titleValue}", 发表按钮="${publishText}"`);
 }
 
 async function main() {
@@ -226,29 +227,29 @@ async function main() {
   const winDir = `${WIN_BASE_DIR}\\${dateDir}\\${contentDirName}`;
   const winImages = localImages.map(image => `${winDir}\\${path.basename(image)}`);
 
-  console.log('[SPH] ========================================');
-  console.log('[SPH] 视频号图文发布 (Playwright + CDP)');
-  console.log('[SPH] ========================================');
-  console.log(`[SPH] 图片: ${localImages.length} 张`);
-  console.log(`[SPH] 标题: ${title || '(空)'}`);
-  console.log(`[SPH] 模式: ${isDryRun ? 'dry-run' : 'publish'}`);
+  _log('[SPH] ========================================');
+  _log('[SPH] 视频号图文发布 (Playwright + CDP)');
+  _log('[SPH] ========================================');
+  _log(`[SPH] 图片: ${localImages.length} 张`);
+  _log(`[SPH] 标题: ${title || '(空)'}`);
+  _log(`[SPH] 模式: ${isDryRun ? 'dry-run' : 'publish'}`);
 
   ensureDir(SHOTS_DIR);
   scpToWindows(localImages, winDir);
 
-  console.log('[SPH] 连接 CDP...');
+  _log('[SPH] 连接 CDP...');
   const browser = await chromium.connectOverCDP(CDP_URL, { timeout: 30000 });
   const context = browser.contexts()[0];
   const page = await context.newPage();
-  console.log('[SPH] CDP 已连接，已创建新标签页用于发布');
+  _log('[SPH] CDP 已连接，已创建新标签页用于发布');
 
   page.on('dialog', dialog => {
-    console.log(`[SPH]    关闭对话框: ${dialog.message()}`);
+    _log(`[SPH]    关闭对话框: ${dialog.message()}`);
     dialog.dismiss().catch(() => {});
   });
 
   try {
-    console.log('[SPH] 1. 导航并等待页面初始化完成...');
+    _log('[SPH] 1. 导航并等待页面初始化完成...');
     await waitForReady(page);
     await screenshot(page, '01-ready');
 
@@ -263,15 +264,15 @@ async function main() {
     await verifyDraft(page, title, contentText);
 
     if (isDryRun) {
-      console.log('[SPH] dry-run 完成，未点击发表');
+      _log('[SPH] dry-run 完成，未点击发表');
       return;
     }
 
-    console.log('[SPH] 6. 点击发表...');
+    _log('[SPH] 6. 点击发表...');
     await page.locator(SELECTORS.publishButton).first().click({ timeout: 10000 });
     await page.waitForTimeout(5000);
     await screenshot(page, '04-published');
-    console.log('[SPH] 发布完成');
+    _log('[SPH] 发布完成');
   } finally {
     await browser.close();
   }

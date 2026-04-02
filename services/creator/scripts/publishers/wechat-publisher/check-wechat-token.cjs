@@ -1,3 +1,4 @@
+const _log = console.log.bind(console);
 #!/usr/bin/env node
 /**
  * 微信公众号 Token 有效性检查
@@ -58,7 +59,7 @@ function checkCredentials() {
 }
 
 function main() {
-  console.log('🔍 微信公众号 Token 检查\n');
+  _log('🔍 微信公众号 Token 检查\n');
 
   // 检查凭据
   const { appId, appSecret } = checkCredentials();
@@ -71,13 +72,13 @@ function main() {
     process.exit(2);
   }
 
-  console.log(`📋 AppID: ${appId.slice(0, 8)}...`);
-  console.log(`🔑 AppSecret: ${'*'.repeat(appSecret.length > 8 ? 8 : appSecret.length)}...`);
-  console.log('');
+  _log(`📋 AppID: ${appId.slice(0, 8)}...`);
+  _log(`🔑 AppSecret: ${'*'.repeat(appSecret.length > 8 ? 8 : appSecret.length)}...`);
+  _log('');
 
   // 检查 Token 缓存
   if (!fs.existsSync(TOKEN_CACHE_FILE)) {
-    console.log('[TOKEN_EXPIRED] 无缓存 Token，需要获取（首次运行 publish 时自动完成）');
+    _log('[TOKEN_EXPIRED] 无缓存 Token，需要获取（首次运行 publish 时自动完成）');
     process.exit(1);
   }
 
@@ -105,8 +106,8 @@ function main() {
   const remainMin = Math.floor(remainSec / 60);
 
   if (remainMs <= TOKEN_MARGIN_SECONDS * 1000) {
-    console.log(`[TOKEN_EXPIRED] Token 已过期或即将过期（剩余 ${remainSec}s < 阈值 ${TOKEN_MARGIN_SECONDS}s）`);
-    console.log('   publish 时将自动重新获取');
+    _log(`[TOKEN_EXPIRED] Token 已过期或即将过期（剩余 ${remainSec}s < 阈值 ${TOKEN_MARGIN_SECONDS}s）`);
+    _log('   publish 时将自动重新获取');
     process.exit(1);
   }
 
@@ -114,10 +115,10 @@ function main() {
     ? new Date(cached.obtained_at).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' })
     : '未知';
 
-  console.log('[SESSION_OK] Token 有效 ✅');
-  console.log(`   Token 片段: ${cached.access_token.slice(0, 16)}...`);
-  console.log(`   剩余时间: ${remainMin} 分钟 (${remainSec}s)`);
-  console.log(`   获取时间: ${obtainedAt}`);
+  _log('[SESSION_OK] Token 有效 ✅');
+  _log(`   Token 片段: ${cached.access_token.slice(0, 16)}...`);
+  _log(`   剩余时间: ${remainMin} 分钟 (${remainSec}s)`);
+  _log(`   获取时间: ${obtainedAt}`);
   process.exit(0);
 }
 

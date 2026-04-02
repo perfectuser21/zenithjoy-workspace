@@ -1,3 +1,4 @@
+const _log = console.log.bind(console);
 #!/usr/bin/env node
 /**
  * 快手会话状态检查脚本
@@ -152,7 +153,7 @@ async function checkSession() {
 
     if (isPublishPageReached(currentUrl, CHECK_URL)) {
       const s = formatSessionStatus('ok', currentUrl);
-      console.log(`\n${s.tag} ${s.message}`);
+      _log(`\n${s.tag} ${s.message}`);
       cdp.close();
       process.exit(s.exitCode);
     }
@@ -160,7 +161,7 @@ async function checkSession() {
     // URL 落在 kuaishou.com 但非发布页，也不是登录页 → 仍视为 OK
     if (currentUrl.includes('cp.kuaishou.com')) {
       const s = formatSessionStatus('ok', currentUrl);
-      console.log(`\n${s.tag} ${s.message}`);
+      _log(`\n${s.tag} ${s.message}`);
       cdp.close();
       process.exit(s.exitCode);
     }

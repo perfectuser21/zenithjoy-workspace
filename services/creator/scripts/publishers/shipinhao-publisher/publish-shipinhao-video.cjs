@@ -1,3 +1,4 @@
+const _log = console.log.bind(console);
 #!/usr/bin/env node
 'use strict';
 
@@ -94,7 +95,7 @@ function parseArgs(argv) {
   };
 
   if (args.includes('--help') || args.includes('-h')) {
-    console.log('用法: node publish-shipinhao-video.cjs --title "标题" --video /path/to/video.mp4 [--desc "描述"] [--dry-run]');
+    _log('用法: node publish-shipinhao-video.cjs --title "标题" --video /path/to/video.mp4 [--desc "描述"] [--dry-run]');
     process.exit(0);
   }
 
@@ -131,7 +132,7 @@ function buildWindowsTarget(localVideo) {
 }
 
 function scpToWindows(localVideo, winDir) {
-  console.log('[SPH-VIDEO] SCP 视频到 Windows...');
+  _log('[SPH-VIDEO] SCP 视频到 Windows...');
   const winDirForScp = winDir.replace(/\\/g, '/');
 
   execFileSync('ssh', [
@@ -146,20 +147,20 @@ function scpToWindows(localVideo, winDir) {
     `${WINDOWS_USER}@${WINDOWS_IP}:${winDirForScp}/${path.basename(localVideo)}`,
   ], { timeout: 600000, stdio: 'pipe' });
 
-  console.log(`[SPH-VIDEO]    已传到 Windows: ${winDir}`);
+  _log(`[SPH-VIDEO]    已传到 Windows: ${winDir}`);
 }
 
 async function screenshot(page, name) {
   ensureDir(SHOTS_DIR);
   const target = path.join(SHOTS_DIR, `${name}.png`);
   await page.screenshot({ path: target, fullPage: true });
-  console.log(`[SPH-VIDEO]    截图: ${target}`);
+  _log(`[SPH-VIDEO]    截图: ${target}`);
 }
 
 async function screenshotTo(page, target) {
   ensureDir(path.dirname(target));
   await page.screenshot({ path: target, fullPage: true });
-  console.log(`[SPH-VIDEO]    截图: ${target}`);
+  _log(`[SPH-VIDEO]    截图: ${target}`);
 }
 
 // ── page-level helpers ────────────────────────────────────────────────────────
@@ -189,7 +190,7 @@ async function openCreatePage(context) {
   ));
 
   if (existingPage) {
-    console.log('[SPH-VIDEO] 复用现有视频号标签并刷新到创建页');
+    _log('[SPH-VIDEO] 复用现有视频号标签并刷新到创建页');
     await existingPage.bringToFront().catch(() => {});
     try {
       await existingPage.goto(CREATE_URL, { waitUntil: 'domcontentloaded', timeout: 60000 });
@@ -200,7 +201,7 @@ async function openCreatePage(context) {
   }
 
   const page = await context.newPage();
-  console.log('[SPH-VIDEO] CDP 已连接，已创建新标签页用于发布');
+  _log('[SPH-VIDEO] CDP 已连接，已创建新标签页用于发布');
   try {
     await page.goto(CREATE_URL, { waitUntil: 'domcontentloaded', timeout: 60000 });
   } catch (error) {
@@ -214,7 +215,7 @@ async function openCreatePage(context) {
 async function waitForReady(page) {
   await page.waitForTimeout(8000);
   await dismissCommonDialogs(page);
-  console.log('[SPH-VIDEO] 等待编辑器 iframe 加载...');
+  _log('[SPH-VIDEO] 等待编辑器 iframe 加载...');
   await waitForIframe(page);
 
   // 诊断
@@ -232,7 +233,7 @@ async function waitForReady(page) {
       bodyText: (doc.body?.innerText || '').slice(0, 100),
     };
   }).catch(e => ({ error: e.message }));
-  console.log('[SPH-VIDEO]    iframe 状态:', JSON.stringify(state));
+  _log('[SPH-VIDEO]    iframe 状态:', JSON.stringify(state));
 
   // 等待 fileInput + 发表 button via iframe contentDocument
   await waitForInIframe(page,
@@ -243,7 +244,7 @@ async function waitForReady(page) {
     null, 30000);
 
   await page.waitForTimeout(2000);
-  console.log('[SPH-VIDEO]    编辑器就绪');
+  _log('[SPH-VIDEO]    编辑器就绪');
 }
 
 async function deepResolveFileInput(page, context) {
@@ -264,18 +265,18 @@ async function deepResolveFileInput(page, context) {
 }
 
 async function uploadVideo(page, context, localVideo, windowsTarget) {
-  console.log('[SPH-VIDEO] 上传视频 (SCP + CDP)...');
+  _log('[SPH-VIDEO] 上传视频 (SCP + CDP)...');
   const { winDir, winVideo } = windowsTarget;
   scpToWindows(localVideo, winDir);
 
   const { cdpSession, backendNodeId } = await deepResolveFileInput(page, context);
   await cdpSession.send('DOM.setFileInputFiles', { backendNodeId, files: [winVideo] });
   await page.waitForTimeout(2000);
-  console.log('[SPH-VIDEO]    文件已注入到 input');
+  _log('[SPH-VIDEO]    文件已注入到 input');
 }
 
 async function fillTitle(page, title) {
-  console.log('[SPH-VIDEO] 填写标题...');
+  _log('[SPH-VIDEO] 填写标题...');
   // Wait for title input
   await waitForInIframe(page,
     `return !!doc.querySelector('input[placeholder*="概括视频"]')`,
@@ -296,12 +297,12 @@ async function fillTitle(page, title) {
     input.dispatchEvent(new win.Event('change', { bubbles: true }));
     return { success: true, value: input.value };
   }, title);
-  console.log(`[SPH-VIDEO]    标题填写: ${JSON.stringify(result)}`);
+  _log(`[SPH-VIDEO]    标题填写: ${JSON.stringify(result)}`);
 }
 
 async function fillDescription(page, desc) {
   if (!desc) return;
-  console.log('[SPH-VIDEO] 填写描述...');
+  _log('[SPH-VIDEO] 填写描述...');
   await page.evaluate((descText) => {
     const iframe = document.querySelector('iframe[name="content"]') ||
       Array.from(document.querySelectorAll('iframe')).find(f =>
@@ -315,11 +316,11 @@ async function fillDescription(page, desc) {
     editor.innerText = descText;
     editor.dispatchEvent(new win.Event('input', { bubbles: true }));
   }, desc);
-  console.log('[SPH-VIDEO]    描述已填写');
+  _log('[SPH-VIDEO]    描述已填写');
 }
 
 async function waitForUploadComplete(page) {
-  console.log('[SPH-VIDEO] 等待上传完成...');
+  _log('[SPH-VIDEO] 等待上传完成...');
   const deadline = Date.now() + UPLOAD_WAIT_MS;
   while (Date.now() < deadline) {
     const ready = await page.evaluate(() => {
@@ -340,7 +341,7 @@ async function waitForUploadComplete(page) {
 
     if (ready) {
       await page.waitForTimeout(3000);
-      console.log('[SPH-VIDEO]    上传完成');
+      _log('[SPH-VIDEO]    上传完成');
       return;
     }
     await page.waitForTimeout(2000);
@@ -385,11 +386,11 @@ async function verifyDraft(page, expectedTitle, expectedDesc) {
   if (info.publishDisabled) {
     throw new Error(`发表按钮仍不可用: ${info.publishText}`);
   }
-  console.log(`[SPH-VIDEO]    校验通过: 标题="${info.titleValue}", 发表="${info.publishText}"`);
+  _log(`[SPH-VIDEO]    校验通过: 标题="${info.titleValue}", 发表="${info.publishText}"`);
 }
 
 async function clickPublish(page) {
-  console.log('[SPH-VIDEO] 点击发表...');
+  _log('[SPH-VIDEO] 点击发表...');
   await page.evaluate(() => {
     const iframe = document.querySelector('iframe[name="content"]') ||
       Array.from(document.querySelectorAll('iframe')).find(f =>
@@ -409,21 +410,21 @@ async function main() {
   const { title, desc, video, isDryRun } = parseArgs(process.argv);
   const { winDir, winVideo } = buildWindowsTarget(video);
 
-  console.log('[SPH-VIDEO] ========================================');
-  console.log('[SPH-VIDEO] 视频号视频发布 (Playwright + CDP)');
-  console.log('[SPH-VIDEO] ========================================');
-  console.log(`[SPH-VIDEO] 视频: ${video}`);
-  console.log(`[SPH-VIDEO] 标题: ${title}`);
-  console.log(`[SPH-VIDEO] 描述: ${desc || '(空)'}`);
-  console.log(`[SPH-VIDEO] 模式: ${isDryRun ? 'dry-run' : 'publish'}`);
+  _log('[SPH-VIDEO] ========================================');
+  _log('[SPH-VIDEO] 视频号视频发布 (Playwright + CDP)');
+  _log('[SPH-VIDEO] ========================================');
+  _log(`[SPH-VIDEO] 视频: ${video}`);
+  _log(`[SPH-VIDEO] 标题: ${title}`);
+  _log(`[SPH-VIDEO] 描述: ${desc || '(空)'}`);
+  _log(`[SPH-VIDEO] 模式: ${isDryRun ? 'dry-run' : 'publish'}`);
 
-  console.log('[SPH-VIDEO] 连接 CDP...');
+  _log('[SPH-VIDEO] 连接 CDP...');
   const browser = await chromium.connectOverCDP(CDP_URL, { timeout: 30000 });
   const context = browser.contexts()[0];
   const { page, createdPage } = await openCreatePage(context);
 
   page.on('dialog', dialog => {
-    console.log(`[SPH-VIDEO]    关闭对话框: ${dialog.message()}`);
+    _log(`[SPH-VIDEO]    关闭对话框: ${dialog.message()}`);
     dialog.dismiss().catch(() => {});
   });
 
@@ -444,14 +445,14 @@ async function main() {
     await verifyDraft(page, title, desc);
 
     if (isDryRun) {
-      console.log('[SPH-VIDEO] dry-run 完成，未点击发表');
+      _log('[SPH-VIDEO] dry-run 完成，未点击发表');
       return;
     }
 
     await clickPublish(page);
     await screenshot(page, '05-published');
     await screenshotTo(page, SUCCESS_SHOT);
-    console.log('[SPH-VIDEO] 发布完成');
+    _log('[SPH-VIDEO] 发布完成');
   } finally {
     if (createdPage && !page.isClosed()) {
       await page.close().catch(() => {});

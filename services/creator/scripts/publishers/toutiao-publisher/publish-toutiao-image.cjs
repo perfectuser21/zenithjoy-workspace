@@ -1,3 +1,4 @@
+const _log = console.log.bind(console);
 #!/usr/bin/env node
 
 /**
@@ -85,7 +86,7 @@ async function screenshot(cdp, name) {
     const result = await cdp.send('Page.captureScreenshot', { format: 'png' });
     const filepath = path.join(SCREENSHOTS_DIR, `${name}.png`);
     fs.writeFileSync(filepath, Buffer.from(result.data, 'base64'));
-    console.log(`   📸 ${filepath}`);
+    _log(`   📸 ${filepath}`);
   } catch (e) {
     console.error(`   ❌ 截图失败: ${e.message}`);
   }
@@ -98,15 +99,15 @@ class WeitoutiaoPublisher {
   }
 
   async navigate() {
-    console.log('1️⃣  导航到微头条发布页...\n');
+    _log('1️⃣  导航到微头条发布页...\n');
     await this.cdp.send('Page.navigate', { url: WEITOUTIAO_URL });
     await sleep(3000);
     await screenshot(this.cdp, '01-initial-page');
-    console.log('   ✅ 完成\n');
+    _log('   ✅ 完成\n');
   }
 
   async fillContent() {
-    console.log('2️⃣  填写内容...\n');
+    _log('2️⃣  填写内容...\n');
 
     const content = this.config.content || '';
     if (!content) {
@@ -138,19 +139,19 @@ class WeitoutiaoPublisher {
 
     await sleep(2000);
     await screenshot(this.cdp, '02-content-filled');
-    console.log(`   ✅ 已填写 ${content.length} 字\n`);
+    _log(`   ✅ 已填写 ${content.length} 字\n`);
   }
 
   async uploadImages() {
     if (!this.config.images || this.config.images.length === 0) {
-      console.log('3️⃣  跳过图片上传（无图片）\n');
+      _log('3️⃣  跳过图片上传（无图片）\n');
       return;
     }
 
-    console.log(`3️⃣  上传图片（${this.config.images.length} 张）...\n`);
+    _log(`3️⃣  上传图片（${this.config.images.length} 张）...\n`);
 
     // 点击图片上传按钮（在编辑器下方工具栏）
-    console.log('   查找图片上传按钮...\n');
+    _log('   查找图片上传按钮...\n');
 
     const clickResult = await this.cdp.send('Runtime.evaluate', {
       expression: `(function() {
@@ -193,9 +194,9 @@ class WeitoutiaoPublisher {
     const clickValue = clickResult.result?.value || { success: false };
 
     if (!clickValue.success) {
-      console.log(`   ⚠️  ${clickValue.error || '未找到图片上传按钮'}，尝试直接查找 file input...\n`);
+      _log(`   ⚠️  ${clickValue.error || '未找到图片上传按钮'}，尝试直接查找 file input...\n`);
     } else {
-      console.log(`   ✅ 已点击图片按钮（方式：${clickValue.method}）\n`);
+      _log(`   ✅ 已点击图片按钮（方式：${clickValue.method}）\n`);
       await sleep(2000);
       await screenshot(this.cdp, '03-upload-clicked');
     }
@@ -207,7 +208,7 @@ class WeitoutiaoPublisher {
       selector: 'input[type="file"]'
     });
 
-    console.log(`   找到 ${nodeIds.length} 个 file input\n`);
+    _log(`   找到 ${nodeIds.length} 个 file input\n`);
 
     if (nodeIds.length === 0) {
       throw new Error('未找到 file input，无法上传图片');
@@ -219,7 +220,7 @@ class WeitoutiaoPublisher {
       files: this.config.images
     });
 
-    console.log('   ✅ 文件已设置\n');
+    _log('   ✅ 文件已设置\n');
 
     // 触发 change 事件
     await this.cdp.send('Runtime.evaluate', {
@@ -233,11 +234,11 @@ class WeitoutiaoPublisher {
 
     await sleep(3000);
     await screenshot(this.cdp, '04-images-uploaded');
-    console.log('   ✅ 图片已上传\n');
+    _log('   ✅ 图片已上传\n');
   }
 
   async publish() {
-    console.log('4️⃣  发布...\n');
+    _log('4️⃣  发布...\n');
 
     // 查找发布按钮
     await this.cdp.send('Runtime.evaluate', {
@@ -283,16 +284,16 @@ class WeitoutiaoPublisher {
     const confirmValue = confirmResult.result?.value || { confirmed: false };
 
     if (confirmValue.confirmed) {
-      console.log('   ✅ 已确认发布\n');
+      _log('   ✅ 已确认发布\n');
       await sleep(3000);
       await screenshot(this.cdp, '06-confirmed');
     }
 
-    console.log('   ✅ 发布完成\n');
+    _log('   ✅ 发布完成\n');
   }
 
   async verify() {
-    console.log('5️⃣  验证发布结果...\n');
+    _log('5️⃣  验证发布结果...\n');
 
     await sleep(2000);
 
@@ -302,11 +303,11 @@ class WeitoutiaoPublisher {
     });
 
     const currentUrl = result.value;
-    console.log(`   当前URL: ${currentUrl}\n`);
+    _log(`   当前URL: ${currentUrl}\n`);
 
     // 检查是否跳转到微头条列表页
     if (currentUrl.includes('weitoutiao') && !currentUrl.includes('publish')) {
-      console.log('   ✅ 已跳转到微头条列表，发布成功\n');
+      _log('   ✅ 已跳转到微头条列表，发布成功\n');
       await screenshot(this.cdp, '07-success');
       return true;
     }
@@ -320,12 +321,12 @@ class WeitoutiaoPublisher {
     });
 
     if (hasSuccess.result.value) {
-      console.log('   ✅ 页面显示发布成功\n');
+      _log('   ✅ 页面显示发布成功\n');
       await screenshot(this.cdp, '07-success');
       return true;
     }
 
-    console.log('   ⚠️  无法确认发布状态，请手动检查\n');
+    _log('   ⚠️  无法确认发布状态，请手动检查\n');
     await screenshot(this.cdp, '07-unknown-state');
     return false;
   }
@@ -349,9 +350,9 @@ async function main() {
 
     const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
 
-    console.log('\n========== 微头条自动发布 ==========\n');
-    console.log(`内容: ${config.content?.substring(0, 50)}...`);
-    console.log(`图片: ${config.images?.length || 0} 张\n`);
+    _log('\n========== 微头条自动发布 ==========\n');
+    _log(`内容: ${config.content?.substring(0, 50)}...`);
+    _log(`图片: ${config.images?.length || 0} 张\n`);
 
     // 获取CDP连接
     const pagesData = await new Promise((resolve, reject) => {
@@ -374,7 +375,7 @@ async function main() {
     await cdp.send('Runtime.enable');
     await cdp.send('DOM.enable');
 
-    console.log('✅ CDP 已连接\n');
+    _log('✅ CDP 已连接\n');
 
     // 执行发布流程
     const publisher = new WeitoutiaoPublisher(cdp, config);
@@ -385,13 +386,13 @@ async function main() {
     const success = await publisher.verify();
 
     if (success) {
-      console.log('\n========== ✅ 发布成功 ==========\n');
-      console.log(`截图目录: ${SCREENSHOTS_DIR}\n`);
+      _log('\n========== ✅ 发布成功 ==========\n');
+      _log(`截图目录: ${SCREENSHOTS_DIR}\n`);
       process.exit(0);
     } else {
-      console.log('\n========== ⚠️  发布状态未知 ==========\n');
-      console.log(`截图目录: ${SCREENSHOTS_DIR}\n`);
-      console.log('请手动检查今日头条后台\n');
+      _log('\n========== ⚠️  发布状态未知 ==========\n');
+      _log(`截图目录: ${SCREENSHOTS_DIR}\n`);
+      _log('请手动检查今日头条后台\n');
       process.exit(0);
     }
 

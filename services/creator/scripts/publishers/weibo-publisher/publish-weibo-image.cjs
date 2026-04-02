@@ -1,3 +1,4 @@
+const _log = console.log.bind(console);
 #!/usr/bin/env node
 /**
  * 微博图文发布脚本
@@ -87,16 +88,16 @@ if (allImages.length > MAX_IMAGES) {
 const { dateDir, contentDirName } = extractDirNames(contentDir);
 const windowsImages = convertToWindowsPaths(localImages, WINDOWS_BASE_DIR, dateDir, contentDirName);
 
-console.log('\n========================================');
-console.log('微博图文发布');
-console.log('========================================\n');
-console.log(`📁 内容目录: ${contentDir}`);
-console.log(`📝 文案长度: ${contentText.length} 字符`);
-console.log(`🖼️  图片数量: ${localImages.length}${allImages.length > MAX_IMAGES ? ` (截断自 ${allImages.length})` : ''}`);
+_log('\n========================================');
+_log('微博图文发布');
+_log('========================================\n');
+_log(`📁 内容目录: ${contentDir}`);
+_log(`📝 文案长度: ${contentText.length} 字符`);
+_log(`🖼️  图片数量: ${localImages.length}${allImages.length > MAX_IMAGES ? ` (截断自 ${allImages.length})` : ''}`);
 if (windowsImages.length > 0) {
-  console.log(`📁 Windows 路径: ${windowsImages[0]}`);
+  _log(`📁 Windows 路径: ${windowsImages[0]}`);
 }
-console.log('');
+_log('');
 
 // CDP 客户端
 function sleep(ms) {
@@ -108,7 +109,7 @@ async function screenshot(cdp, name) {
     const result = await cdp.send('Page.captureScreenshot', { format: 'png' });
     const filepath = path.join(SCREENSHOTS_DIR, `${name}.png`);
     fs.writeFileSync(filepath, Buffer.from(result.data, 'base64'));
-    console.log(`   📸 ${filepath}`);
+    _log(`   📸 ${filepath}`);
     return filepath;
   } catch (e) {
     console.error(`   ❌ 截图失败: ${e.message}`);
@@ -125,7 +126,7 @@ async function screenshot(cdp, name) {
  * 3. 模拟人手拖动滑块（含加速度曲线）
  */
 async function handleCaptcha(cdp) {
-  console.log('   🔍 检测验证码...\n');
+  _log('   🔍 检测验证码...\n');
 
   // 检测验证码是否存在
   const captchaCheck = await cdp.send('Runtime.evaluate', {
@@ -149,11 +150,11 @@ async function handleCaptcha(cdp) {
 
   const captchaResult = captchaCheck.result.value;
   if (!captchaResult || !captchaResult.found) {
-    console.log('   ✅ 未检测到验证码\n');
+    _log('   ✅ 未检测到验证码\n');
     return true;
   }
 
-  console.log(`   ⚠️  检测到验证码: ${captchaResult.selector}`);
+  _log(`   ⚠️  检测到验证码: ${captchaResult.selector}`);
   await screenshot(cdp, 'captcha-detected');
 
   // 查找滑块元素
@@ -196,12 +197,12 @@ async function handleCaptcha(cdp) {
 
   const sliderResult = sliderCheck.result.value;
   if (!sliderResult || !sliderResult.found) {
-    console.log('   ❌ 未找到滑块元素，无法自动处理验证码\n');
+    _log('   ❌ 未找到滑块元素，无法自动处理验证码\n');
     await screenshot(cdp, 'captcha-no-slider');
     throw new Error('验证码出现但找不到滑块，需要手动处理');
   }
 
-  console.log(`   🎯 找到滑块: ${sliderResult.selector}`);
+  _log(`   🎯 找到滑块: ${sliderResult.selector}`);
 
   // 计算滑块起始位置（中心点）
   const sliderRect = sliderResult.rect;
@@ -214,7 +215,7 @@ async function handleCaptcha(cdp) {
   const endX = startX + dragDistance;
   const endY = startY;
 
-  console.log(`   🖱️  开始拖动: (${Math.round(startX)}, ${Math.round(startY)}) → (${Math.round(endX)}, ${Math.round(endY)})`);
+  _log(`   🖱️  开始拖动: (${Math.round(startX)}, ${Math.round(startY)}) → (${Math.round(endX)}, ${Math.round(endY)})`);
 
   // 模拟人手拖动（含加速度曲线）
   await simulateDrag(cdp, startX, startY, endX, endY);
@@ -243,12 +244,12 @@ async function handleCaptcha(cdp) {
 
   const verifyResult = verifyCheck.result.value;
   if (!verifyResult.stillVisible || verifyResult.isSuccess) {
-    console.log('   ✅ 验证码处理成功\n');
+    _log('   ✅ 验证码处理成功\n');
     return true;
   }
 
   // 验证码仍然存在，重试一次（不同距离）
-  console.log('   ⚠️  验证码未消失，重试...\n');
+  _log('   ⚠️  验证码未消失，重试...\n');
   await sleep(1000);
 
   const retryDistance = captchaRect.width * 0.65;
@@ -271,11 +272,11 @@ async function handleCaptcha(cdp) {
   });
 
   if (!finalCheck.result.value.stillVisible) {
-    console.log('   ✅ 重试后验证码处理成功\n');
+    _log('   ✅ 重试后验证码处理成功\n');
     return true;
   }
 
-  console.log('   ❌ 验证码处理失败，截图已保存到 ' + SCREENSHOTS_DIR + '\n');
+  _log('   ❌ 验证码处理失败，截图已保存到 ' + SCREENSHOTS_DIR + '\n');
   throw new Error('验证码自动处理失败，请查看截图后手动处理');
 }
 
@@ -331,7 +332,7 @@ async function simulateDrag(cdp, fromX, fromY, toX, toY) {
 
 function scpImagesToWindows(localImages, windowsDir) {
   if (!localImages.length) return;
-  console.log(`[WB] SCP 图片到 Windows（${localImages.length} 张）...`);
+  _log(`[WB] SCP 图片到 Windows（${localImages.length} 张）...`);
   const winDirFwd = windowsDir.replace(/\\/g, '/');
   execSync(
     `ssh -o StrictHostKeyChecking=no ${WINDOWS_USER}@${WINDOWS_IP} "powershell -command \\"New-Item -ItemType Directory -Force -Path '${winDirFwd}' | Out-Null; Write-Host ok\\""`,
@@ -343,9 +344,9 @@ function scpImagesToWindows(localImages, windowsDir) {
       `scp -o StrictHostKeyChecking=no "${img}" "${WINDOWS_USER}@${WINDOWS_IP}:${winDirFwd}/${fname}"`,
       { timeout: 180000, stdio: 'pipe' }
     );
-    console.log(`[WB]    已传输: ${fname}`);
+    _log(`[WB]    已传输: ${fname}`);
   }
-  console.log(`[WB]    ✅ ${localImages.length} 张图片已到 Windows`);
+  _log(`[WB]    ✅ ${localImages.length} 张图片已到 Windows`);
 }
 
 async function main() {
@@ -360,7 +361,7 @@ async function main() {
     }
 
     // 获取 CDP 连接（带重试，处理网络抖动）
-    console.log('🔌 连接 CDP...\n');
+    _log('🔌 连接 CDP...\n');
     const pagesData = await withRetry(
       () => new Promise((resolve, reject) => {
         http.get(`http://${WINDOWS_IP}:${CDP_PORT}/json`, res => {
@@ -385,7 +386,7 @@ async function main() {
     if (!weiboPage) {
       const firstPage = pagesData.find(p => p.type === 'page');
       if (!firstPage) throw new Error('未找到任何浏览器页面');
-      console.log(`   ⚠️  未找到微博页面，使用: ${firstPage.url}`);
+      _log(`   ⚠️  未找到微博页面，使用: ${firstPage.url}`);
       cdp = new CDPClient(firstPage.webSocketDebuggerUrl);
     } else {
       cdp = new CDPClient(weiboPage.webSocketDebuggerUrl);
@@ -395,10 +396,10 @@ async function main() {
     await cdp.send('Page.enable');
     await cdp.send('Runtime.enable');
     await cdp.send('DOM.enable');
-    console.log('✅ CDP 已连接\n');
+    _log('✅ CDP 已连接\n');
 
     // ========== 步骤1: 导航到微博首页并打开发博框 ==========
-    console.log('1️⃣  导航到微博首页...\n');
+    _log('1️⃣  导航到微博首页...\n');
     await cdp.send('Page.navigate', { url: PUBLISH_URL });
     await sleep(5000);
     await screenshot(cdp, '01-initial');
@@ -409,7 +410,7 @@ async function main() {
       returnByValue: true
     });
     const currentUrl = urlResult.result.value;
-    console.log(`   当前 URL: ${currentUrl}\n`);
+    _log(`   当前 URL: ${currentUrl}\n`);
 
     if (!currentUrl.includes('weibo.com')) {
       throw new Error(`导航失败，当前页面: ${currentUrl}`);
@@ -424,10 +425,10 @@ async function main() {
     if (!isPublishPageReached(currentUrl)) {
       throw new Error(`未到达发布页，当前页面: ${currentUrl}，请检查账号状态`);
     }
-    console.log('   ✅ 已到达微博首页\n');
+    _log('   ✅ 已到达微博首页\n');
 
     // 点击"写微博"按钮打开发博框
-    console.log('   点击"写微博"按钮...\n');
+    _log('   点击"写微博"按钮...\n');
     const writeResult = await cdp.send('Runtime.evaluate', {
       expression: `(function() {
         const btns = Array.from(document.querySelectorAll('button'));
@@ -437,7 +438,7 @@ async function main() {
       })()`,
       returnByValue: true
     });
-    console.log(`   写微博按钮: ${JSON.stringify(writeResult.result.value)}`);
+    _log(`   写微博按钮: ${JSON.stringify(writeResult.result.value)}`);
     await sleep(2000);
 
     // 检测验证码（导航后可能触发）
@@ -445,7 +446,7 @@ async function main() {
 
     // ========== 步骤2: 填写文案 ==========
     if (contentText) {
-      console.log('2️⃣  填写文案...\n');
+      _log('2️⃣  填写文案...\n');
 
       const escapedContent = escapeForJS(contentText);
 
@@ -488,21 +489,21 @@ async function main() {
       });
 
       const fillVal = fillResult.result.value;
-      console.log(`   填写结果: ${JSON.stringify(fillVal)}`);
+      _log(`   填写结果: ${JSON.stringify(fillVal)}`);
       await sleep(1000);
       await screenshot(cdp, '02-content-filled');
 
       if (fillVal && fillVal.success) {
-        console.log(`   ✅ 已填写 ${contentText.length} 字\n`);
+        _log(`   ✅ 已填写 ${contentText.length} 字\n`);
       } else {
-        console.log('   ⚠️  文案填写可能未成功，继续上传图片...\n');
+        _log('   ⚠️  文案填写可能未成功，继续上传图片...\n');
       }
     } else {
-      console.log('2️⃣  跳过文案（无文案内容）\n');
+      _log('2️⃣  跳过文案（无文案内容）\n');
     }
 
     // ========== 步骤3: 上传图片 ==========
-    console.log(`3️⃣  上传图片（${windowsImages.length} 张）...\n`);
+    _log(`3️⃣  上传图片（${windowsImages.length} 张）...\n`);
 
     const { root } = await cdp.send('DOM.getDocument', { depth: -1, pierce: true });
     const { nodeIds } = await cdp.send('DOM.querySelectorAll', {
@@ -510,11 +511,11 @@ async function main() {
       selector: 'input[type="file"]'
     });
 
-    console.log(`   找到 ${nodeIds.length} 个 file input\n`);
+    _log(`   找到 ${nodeIds.length} 个 file input\n`);
 
     if (nodeIds.length === 0) {
       // 尝试点击图片上传按钮
-      console.log('   尝试点击图片上传按钮...\n');
+      _log('   尝试点击图片上传按钮...\n');
       await cdp.send('Runtime.evaluate', {
         expression: `(function() {
           const selectors = [
@@ -555,7 +556,7 @@ async function main() {
     }
 
     if (nodeIds.length > 0) {
-      console.log('   设置图片文件...\n');
+      _log('   设置图片文件...\n');
       await cdp.send('DOM.setFileInputFiles', {
         nodeId: nodeIds[0],
         files: windowsImages
@@ -572,14 +573,14 @@ async function main() {
 
       await sleep(6000);
       await screenshot(cdp, '03-images-uploaded');
-      console.log('   ✅ 图片已上传\n');
+      _log('   ✅ 图片已上传\n');
     } else {
-      console.log('   ❌ 未找到文件上传输入框\n');
+      _log('   ❌ 未找到文件上传输入框\n');
       await screenshot(cdp, '03-no-file-input');
     }
 
     // ========== 步骤4: 检测并处理验证码 ==========
-    console.log('4️⃣  检测验证码...\n');
+    _log('4️⃣  检测验证码...\n');
     try {
       await handleCaptcha(cdp);
     } catch (captchaErr) {
@@ -589,7 +590,7 @@ async function main() {
     }
 
     // ========== 步骤5: 发布 ==========
-    console.log('5️⃣  点击发布...\n');
+    _log('5️⃣  点击发布...\n');
 
     const publishResult = await cdp.send('Runtime.evaluate', {
       expression: `(function() {
@@ -614,7 +615,7 @@ async function main() {
       returnByValue: true
     });
 
-    console.log(`   发布按钮: ${JSON.stringify(publishResult.result.value)}`);
+    _log(`   发布按钮: ${JSON.stringify(publishResult.result.value)}`);
     await sleep(3000);
     await screenshot(cdp, '05-publish-clicked');
 
@@ -646,14 +647,14 @@ async function main() {
     await sleep(3000);
 
     // ========== 步骤6: 验证结果 ==========
-    console.log('6️⃣  验证发布结果...\n');
+    _log('6️⃣  验证发布结果...\n');
 
     const finalUrl = await cdp.send('Runtime.evaluate', {
       expression: 'window.location.href',
       returnByValue: true
     });
     const finalUrlValue = finalUrl.result.value;
-    console.log(`   最终 URL: ${finalUrlValue}\n`);
+    _log(`   最终 URL: ${finalUrlValue}\n`);
 
     await screenshot(cdp, '06-final');
 
@@ -671,7 +672,7 @@ async function main() {
     });
 
     const successVal = successCheck.result.value;
-    console.log(`   结果检查: ${JSON.stringify(successVal)}`);
+    _log(`   结果检查: ${JSON.stringify(successVal)}`);
 
     // 检测限频（微博对高频发帖的限制）
     const rateLimitResult = await cdp.send('Runtime.evaluate', {
@@ -700,15 +701,15 @@ async function main() {
     const { postUrl, weiboId } = postInfoResult.result.value;
 
     if (successVal.hasSuccess || successVal.urlChanged) {
-      console.log('\n✅ 微博发布成功！');
-      if (weiboId) console.log(`   微博 ID: ${weiboId}`);
-      if (postUrl && !postUrl.includes('/p/publish')) console.log(`   链接: ${postUrl}`);
-      console.log(`   截图目录: ${SCREENSHOTS_DIR}`);
+      _log('\n✅ 微博发布成功！');
+      if (weiboId) _log(`   微博 ID: ${weiboId}`);
+      if (postUrl && !postUrl.includes('/p/publish')) _log(`   链接: ${postUrl}`);
+      _log(`   截图目录: ${SCREENSHOTS_DIR}`);
     } else if (successVal.hasError) {
       throw new Error('发布失败，请查看截图了解详情');
     } else {
-      console.log('\n⚠️  发布状态不确定，请查看截图确认');
-      console.log(`   截图目录: ${SCREENSHOTS_DIR}`);
+      _log('\n⚠️  发布状态不确定，请查看截图确认');
+      _log(`   截图目录: ${SCREENSHOTS_DIR}`);
     }
 
   } catch (err) {

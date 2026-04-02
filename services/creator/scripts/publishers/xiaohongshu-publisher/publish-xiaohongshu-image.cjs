@@ -1,3 +1,4 @@
+const _log = console.log.bind(console);
 #!/usr/bin/env node
 /**
  * 小红书图文发布脚本 v2
@@ -89,7 +90,7 @@ async function screenshot(cdp, name) {
     const result = await cdp.send('Page.captureScreenshot', { format: 'jpeg', quality: 50 });
     const filepath = path.join(SCREENSHOTS_DIR, `${name}.png`);
     fs.writeFileSync(filepath, Buffer.from(result.data, 'base64'));
-    console.log(`[XHS]    截图: ${filepath}`);
+    _log(`[XHS]    截图: ${filepath}`);
     return filepath;
   } catch (e) {
     console.error(`[XHS]    截图失败: ${e.message}`);
@@ -101,7 +102,7 @@ async function screenshot(cdp, name) {
 // SCP：直接从 Mac 复制图片到 Windows
 // ============================================================
 function scpImagesToWindows(localImages, windowsDir) {
-  console.log(`[XHS] 0️⃣  复制图片到 Windows（直连 ${WINDOWS_IP}）...`);
+  _log(`[XHS] 0️⃣  复制图片到 Windows（直连 ${WINDOWS_IP}）...`);
 
   const winDirForward = windowsDir.replace(/\\/g, '/');
   execSync(
@@ -115,17 +116,17 @@ function scpImagesToWindows(localImages, windowsDir) {
       `scp -o StrictHostKeyChecking=no "${imgPath}" "${WINDOWS_USER}@${WINDOWS_IP}:${winDirForward}/${fname}"`,
       { timeout: 180000, stdio: 'pipe' }
     );
-    console.log(`[XHS]    已传输: ${fname}`);
+    _log(`[XHS]    已传输: ${fname}`);
   }
 
-  console.log(`[XHS]    ✅ ${localImages.length} 张图片已复制到 Windows`);
+  _log(`[XHS]    ✅ ${localImages.length} 张图片已复制到 Windows`);
 }
 
 // ============================================================
 // 音乐选择（失败降级跳过）
 // ============================================================
 async function addMusic(cdp, musicQuery) {
-  console.log(`[XHS] 🎵 选择背景音乐（搜索：${musicQuery}）...`);
+  _log(`[XHS] 🎵 选择背景音乐（搜索：${musicQuery}）...`);
   try {
     // 找到"添加背景音乐"或"添加音乐"按钮
     const musicBtnInfo = await cdp.send('Runtime.evaluate', {
@@ -144,7 +145,7 @@ async function addMusic(cdp, musicQuery) {
     });
 
     if (!musicBtnInfo.result.value?.found) {
-      console.log('[XHS]    ⚠️  未找到音乐按钮，跳过音乐选择');
+      _log('[XHS]    ⚠️  未找到音乐按钮，跳过音乐选择');
       return;
     }
 
@@ -170,7 +171,7 @@ async function addMusic(cdp, musicQuery) {
     });
 
     if (!searchResult.result.value?.found) {
-      console.log('[XHS]    ⚠️  未找到音乐搜索框，跳过');
+      _log('[XHS]    ⚠️  未找到音乐搜索框，跳过');
       return;
     }
 
@@ -203,9 +204,9 @@ async function addMusic(cdp, musicQuery) {
 
     if (firstResult.result.value?.clicked) {
       await sleep(1000);
-      console.log('[XHS]    ✅ 音乐已选择');
+      _log('[XHS]    ✅ 音乐已选择');
     } else {
-      console.log('[XHS]    ⚠️  未找到音乐列表结果，跳过');
+      _log('[XHS]    ⚠️  未找到音乐列表结果，跳过');
     }
   } catch (e) {
     console.warn(`[XHS]    ⚠️  音乐选择失败（降级跳过）: ${e.message}`);
@@ -220,17 +221,17 @@ async function main(contentDir, titleText, contentText, windowsImages, musicQuer
     fs.mkdirSync(SCREENSHOTS_DIR, { recursive: true });
   }
 
-  console.log('\n[XHS] ========================================');
-  console.log('[XHS] 小红书图文发布 v2');
-  console.log('[XHS] ========================================\n');
-  console.log(`[XHS] 内容目录: ${contentDir}`);
-  console.log(`[XHS] 标题: ${titleText || '（无）'}`);
-  console.log(`[XHS] 正文: ${contentText.length} 字符`);
-  console.log(`[XHS] 图片: ${windowsImages.length} 张`);
-  console.log(`[XHS] 音乐: ${musicQuery}`);
+  _log('\n[XHS] ========================================');
+  _log('[XHS] 小红书图文发布 v2');
+  _log('[XHS] ========================================\n');
+  _log(`[XHS] 内容目录: ${contentDir}`);
+  _log(`[XHS] 标题: ${titleText || '（无）'}`);
+  _log(`[XHS] 正文: ${contentText.length} 字符`);
+  _log(`[XHS] 图片: ${windowsImages.length} 张`);
+  _log(`[XHS] 音乐: ${musicQuery}`);
 
   if (isDryRun) {
-    console.log('\n[XHS] dry-run 模式，跳过 CDP');
+    _log('\n[XHS] dry-run 模式，跳过 CDP');
     return;
   }
 
@@ -243,7 +244,7 @@ async function main(contentDir, titleText, contentText, windowsImages, musicQuer
     scpImagesToWindows(localImages, winDir);
 
     // ===== CDP 连接 =====
-    console.log('\n[XHS] 连接 CDP...');
+    _log('\n[XHS] 连接 CDP...');
     const pagesData = await new Promise((resolve, reject) => {
       http.get(`http://${WINDOWS_IP}:${CDP_PORT}/json`, res => {
         let data = '';
@@ -261,10 +262,10 @@ async function main(contentDir, titleText, contentText, windowsImages, musicQuer
     await cdp.send('Page.enable');
     await cdp.send('Runtime.enable');
     await cdp.send('DOM.enable');
-    console.log('[XHS] ✅ CDP 已连接\n');
+    _log('[XHS] ✅ CDP 已连接\n');
 
     // ===== Step 1: 导航到发布页 =====
-    console.log('[XHS] 1️⃣  导航到发布页...');
+    _log('[XHS] 1️⃣  导航到发布页...');
     await cdp.send('Page.navigate', { url: PUBLISH_URL });
     await sleep(5000);
     await screenshot(cdp, '01-nav');
@@ -272,10 +273,10 @@ async function main(contentDir, titleText, contentText, windowsImages, musicQuer
     const urlRes = await cdp.send('Runtime.evaluate', { expression: 'location.href', returnByValue: true });
     const currentUrl = urlRes.result.value;
     if (isLoginError(currentUrl)) throw new Error(`小红书未登录，请在 Chrome (${CDP_PORT}) 登录`);
-    console.log(`[XHS]    URL: ${currentUrl}\n`);
+    _log(`[XHS]    URL: ${currentUrl}\n`);
 
     // ===== Step 2: 选择图文类型 =====
-    console.log('[XHS] 2️⃣  选择图文模式...');
+    _log('[XHS] 2️⃣  选择图文模式...');
     await sleep(2000);
     await cdp.send('Runtime.evaluate', {
       expression: `(function() {
@@ -296,7 +297,7 @@ async function main(contentDir, titleText, contentText, windowsImages, musicQuer
     await sleep(2000);
 
     // ===== Step 3: 上传图片（Input.dispatchMouseEvent + Page.fileChooserOpened）=====
-    console.log(`[XHS] 3️⃣  上传图片（${windowsImages.length} 张）...`);
+    _log(`[XHS] 3️⃣  上传图片（${windowsImages.length} 张）...`);
 
     await cdp.send('Page.setInterceptFileChooserDialog', { enabled: true });
 
@@ -336,19 +337,19 @@ async function main(contentDir, titleText, contentText, windowsImages, musicQuer
     }
 
     const { x: ux, y: uy } = uploadBtnInfo.result.value;
-    console.log(`[XHS]    上传按钮坐标: (${ux}, ${uy})`);
+    _log(`[XHS]    上传按钮坐标: (${ux}, ${uy})`);
 
     await cdp.send('Input.dispatchMouseEvent', { type: 'mousePressed', x: ux, y: uy, button: 'left', clickCount: 1 });
     await sleep(100);
     await cdp.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: ux, y: uy, button: 'left', clickCount: 1 });
 
     const fc = await fcPromise;
-    console.log(`[XHS]    文件选择器 backendNodeId: ${fc.backendNodeId}`);
+    _log(`[XHS]    文件选择器 backendNodeId: ${fc.backendNodeId}`);
 
     await cdp.send('DOM.setFileInputFiles', { backendNodeId: fc.backendNodeId, files: windowsImages });
     await cdp.send('Page.setInterceptFileChooserDialog', { enabled: false });
 
-    console.log('[XHS]    等待上传完成...');
+    _log('[XHS]    等待上传完成...');
     for (let i = 0; i < 60; i++) {
       await sleep(1000);
       const r = await cdp.send('Runtime.evaluate', {
@@ -358,14 +359,14 @@ async function main(contentDir, titleText, contentText, windowsImages, musicQuer
         })()`,
         returnByValue: true
       });
-      if (r.result.value) { console.log(`[XHS]    上传完成（${i}s）`); break; }
-      if (i % 10 === 0 && i > 0) console.log(`[XHS]    ... ${i}s`);
+      if (r.result.value) { _log(`[XHS]    上传完成（${i}s）`); break; }
+      if (i % 10 === 0 && i > 0) _log(`[XHS]    ... ${i}s`);
     }
     await screenshot(cdp, '03-uploaded');
 
     // ===== Step 4: 填写标题 =====
     if (titleText) {
-      console.log(`[XHS] 4️⃣  填写标题...`);
+      _log(`[XHS] 4️⃣  填写标题...`);
       const escapedTitle = escapeForJS(titleText);
       await cdp.send('Runtime.evaluate', {
         expression: `(function() {
@@ -389,7 +390,7 @@ async function main(contentDir, titleText, contentText, windowsImages, musicQuer
 
     // ===== Step 5: 填写正文（Input.insertText）=====
     if (contentText) {
-      console.log(`[XHS] 5️⃣  填写正文（${contentText.length} 字符）...`);
+      _log(`[XHS] 5️⃣  填写正文（${contentText.length} 字符）...`);
       // 先找正文区坐标并点击
       const contentAreaInfo = await cdp.send('Runtime.evaluate', {
         expression: `(function() {
@@ -421,7 +422,7 @@ async function main(contentDir, titleText, contentText, windowsImages, musicQuer
         await sleep(200);
         await cdp.send('Input.insertText', { text: contentText });
         await sleep(500);
-        console.log('[XHS]    正文已填写');
+        _log('[XHS]    正文已填写');
       } else {
         console.warn('[XHS]    ⚠️  未找到正文区域');
       }
@@ -432,7 +433,7 @@ async function main(contentDir, titleText, contentText, windowsImages, musicQuer
     await addMusic(cdp, musicQuery);
 
     // ===== Step 7: 点击发布 =====
-    console.log('[XHS] 7️⃣  点击发布...');
+    _log('[XHS] 7️⃣  点击发布...');
     await sleep(1000);
     await screenshot(cdp, '07-before-pub');
 
@@ -476,12 +477,12 @@ async function main(contentDir, titleText, contentText, windowsImages, musicQuer
     const bodyText = bodyRes.result.value;
 
     if (isPublishSuccess(finalUrl, bodyText)) {
-      console.log('\n[XHS] ✅ 发布成功！');
-      console.log(`[XHS]    最终 URL: ${finalUrl}`);
+      _log('\n[XHS] ✅ 发布成功！');
+      _log(`[XHS]    最终 URL: ${finalUrl}`);
     } else {
-      console.log('\n[XHS] ⚠️  发布状态不确定，请查看截图');
+      _log('\n[XHS] ⚠️  发布状态不确定，请查看截图');
     }
-    console.log(`[XHS]    截图目录: ${SCREENSHOTS_DIR}`);
+    _log(`[XHS]    截图目录: ${SCREENSHOTS_DIR}`);
 
   } catch (err) {
     console.error(`\n[XHS] ❌ 发布失败: ${err.message}`);
@@ -498,10 +499,10 @@ async function main(contentDir, titleText, contentText, windowsImages, musicQuer
 if (require.main === module) {
   const args = process.argv.slice(2);
   if (args.includes('--help') || args.includes('-h')) {
-    console.log('用法：node publish-xiaohongshu-image.cjs --content /path/to/image-xxx/');
-    console.log('选项：');
-    console.log('  --content <dir>   内容目录（必须包含图片）');
-    console.log('  --dry-run         仅打印参数，不连接 CDP');
+    _log('用法：node publish-xiaohongshu-image.cjs --content /path/to/image-xxx/');
+    _log('选项：');
+    _log('  --content <dir>   内容目录（必须包含图片）');
+    _log('  --dry-run         仅打印参数，不连接 CDP');
     process.exit(0);
   }
 

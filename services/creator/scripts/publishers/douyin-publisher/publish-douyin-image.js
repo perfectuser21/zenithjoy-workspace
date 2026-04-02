@@ -1,3 +1,4 @@
+const _log = console.log.bind(console);
 const { chromium } = require('playwright');
 const fs = require('fs');
 const path = require('path');
@@ -9,7 +10,7 @@ const WINDOWS_BASE_DIR = 'C:\\Users\\xuxia\\douyin-media';
 
 function scpImagesToWindows(localImages, windowsDir) {
   if (!localImages.length) return [];
-  console.log(`[DY] SCP ${localImages.length} 张图片到 Windows...`);
+  _log(`[DY] SCP ${localImages.length} 张图片到 Windows...`);
   const winDirFwd = windowsDir.replace(/\\/g, '/');
   execSync(
     `ssh -o StrictHostKeyChecking=no ${WINDOWS_USER}@${WINDOWS_IP} "powershell -command \\"New-Item -ItemType Directory -Force -Path '${winDirFwd}' | Out-Null; Write-Host ok\\""`,
@@ -22,21 +23,21 @@ function scpImagesToWindows(localImages, windowsDir) {
       `scp -o StrictHostKeyChecking=no "${img}" "${WINDOWS_USER}@${WINDOWS_IP}:${winDirFwd}/${fname}"`,
       { timeout: 180000, stdio: 'pipe' }
     );
-    console.log(`[DY]    已传输: ${fname}`);
+    _log(`[DY]    已传输: ${fname}`);
     winPaths.push(path.join(windowsDir, fname).replace(/\//g, '\\'));
   }
-  console.log(`[DY]    ✅ ${localImages.length} 张图片已到 Windows`);
+  _log(`[DY]    ✅ ${localImages.length} 张图片已到 Windows`);
   return winPaths;
 }
 
 async function publishDouyinImage(queueFilePath) {
-  console.log('📝 读取队列文件:', queueFilePath);
+  _log('📝 读取队列文件:', queueFilePath);
 
   const queueData = JSON.parse(fs.readFileSync(queueFilePath, 'utf-8'));
 
-  console.log('标题:', queueData.title || '（自动生成）');
-  console.log('内容:', queueData.content?.substring(0, 50) + '...');
-  console.log('图片:', queueData.images?.join(', ') || '（无图片）');
+  _log('标题:', queueData.title || '（自动生成）');
+  _log('内容:', queueData.content?.substring(0, 50) + '...');
+  _log('图片:', queueData.images?.join(', ') || '（无图片）');
 
   // SCP 图片到 Windows
   const localImages = (queueData.images || []).filter(f => fs.existsSync(f));
@@ -46,7 +47,7 @@ async function publishDouyinImage(queueFilePath) {
     windowsImages = scpImagesToWindows(localImages, batchDir);
   }
 
-  console.log('\n🔗 连接到现有浏览器...');
+  _log('\n🔗 连接到现有浏览器...');
 
   const browser = await chromium.connectOverCDP('http://100.97.242.124:19222');
   const contexts = browser.contexts();
@@ -54,24 +55,24 @@ async function publishDouyinImage(queueFilePath) {
   const pages = context.pages();
   const page = pages[0];
 
-  console.log('✅ 已连接到浏览器\n');
+  _log('✅ 已连接到浏览器\n');
 
   let publishSuccess = false;
   let itemId = null;
 
   page.on('response', async (res) => {
     const url = res.url();
-    
+
     if (url.includes('/web/api/media/aweme/create_v2/')) {
-      console.log('\n[发布 API]', res.status());
-      
+      _log('\n[发布 API]', res.status());
+
       if (res.headers()['content-type']?.includes('application/json')) {
         try {
           const json = await res.json();
           if (json.status_code === 0 && json.item_id) {
             publishSuccess = true;
             itemId = json.item_id;
-            console.log('✅ 发布成功！作品ID:', itemId);
+            _log('✅ 发布成功！作品ID:', itemId);
           }
         } catch (e) {}
       }
@@ -79,14 +80,14 @@ async function publishDouyinImage(queueFilePath) {
   });
 
   try {
-    console.log('📍 Step 1: 导航到发布图文页面');
-    await page.goto('https://creator.douyin.com/creator-micro/content/upload?default-tab=3', { 
-      waitUntil: 'domcontentloaded' 
+    _log('📍 Step 1: 导航到发布图文页面');
+    await page.goto('https://creator.douyin.com/creator-micro/content/upload?default-tab=3', {
+      waitUntil: 'domcontentloaded'
     });
     await page.waitForTimeout(3000);
 
-    console.log('📍 Step 2: 上传图片（DOM.setFileInputFiles）');
-    
+    _log('📍 Step 2: 上传图片（DOM.setFileInputFiles）');
+
     if (windowsImages.length > 0) {
       // 使用 DOM.setFileInputFiles 传 Windows 路径（跨机器 CDP 必须用此方式）
       const cdpSession = await context.newCDPSession(page);
@@ -100,20 +101,20 @@ async function publishDouyinImage(queueFilePath) {
         backendNodeId: node.backendNodeId,
         files: windowsImages,
       });
-      console.log(`✅ 已设置 ${windowsImages.length} 张图片（Windows 路径）`);
+      _log(`✅ 已设置 ${windowsImages.length} 张图片（Windows 路径）`);
     } else {
       throw new Error('没有图片文件');
     }
 
-    console.log('⏳ 等待图片上传及页面跳转（30秒）');
+    _log('⏳ 等待图片上传及页面跳转（30秒）');
     // 等待页面从上传页导航到编辑页
     await page.waitForURL(/\/content\/post\/image/, { timeout: 45000 }).catch(() => {});
     await page.waitForTimeout(5000);
-    console.log('当前 URL:', page.url());
+    _log('当前 URL:', page.url());
 
-    console.log('📍 Step 3: 填写标题（必填！）');
+    _log('📍 Step 3: 填写标题（必填！）');
     const title = queueData.title || `图文作品 ${Date.now()}`;
-    
+
     // 使用 evaluate 直接操作 DOM（避免 Playwright locator 帧同步问题）
     const titleFilled = await page.evaluate((titleText) => {
       const input = document.querySelector('input[placeholder*="标题"]');
@@ -125,9 +126,9 @@ async function publishDouyinImage(queueFilePath) {
       input.dispatchEvent(new Event('change', {bubbles: true}));
       return {success: true, placeholder: input.placeholder};
     }, title);
-    
+
     if (!titleFilled.success) {
-      console.log('   ⚠️  标题填写失败:', titleFilled.error, '等待5秒重试...');
+      _log('   ⚠️  标题填写失败:', titleFilled.error, '等待5秒重试...');
       await page.waitForTimeout(5000);
       const titleFilled2 = await page.evaluate((titleText) => {
         const input = document.querySelector('input[placeholder*="标题"]');
@@ -137,12 +138,12 @@ async function publishDouyinImage(queueFilePath) {
         input.dispatchEvent(new Event('input', {bubbles: true}));
         return {success: true};
       }, title);
-      console.log('   重试结果:', JSON.stringify(titleFilled2));
+      _log('   重试结果:', JSON.stringify(titleFilled2));
     } else {
-      console.log('✅ 标题已填写:', title.substring(0, 30));
+      _log('✅ 标题已填写:', title.substring(0, 30));
     }
 
-    console.log('📍 Step 4: 填写文案');
+    _log('📍 Step 4: 填写文案');
     if (queueData.content) {
       const contentFilled = await page.evaluate((contentText) => {
         const editable = document.querySelector('[contenteditable="true"]');
@@ -152,18 +153,18 @@ async function publishDouyinImage(queueFilePath) {
         editable.dispatchEvent(new Event('input', {bubbles: true}));
         return {success: true};
       }, queueData.content);
-      
+
       if (!contentFilled.success) {
         // 降级：用 keyboard.type
         await page.keyboard.type(queueData.content);
       }
-      console.log('✅ 文案已填写');
+      _log('✅ 文案已填写');
     }
 
     await page.waitForTimeout(2000);
 
-    console.log('\n📍 Step 5: 点击发布按钮');
-    
+    _log('\n📍 Step 5: 点击发布按钮');
+
     const waitForPublish = page.waitForResponse(
       res => res.url().includes('/web/api/media/aweme/create_v2/'),
       { timeout: 30000 }
@@ -171,20 +172,20 @@ async function publishDouyinImage(queueFilePath) {
 
     const publishBtn = page.locator('button:has-text("发布")').last();
     await publishBtn.click();
-    console.log('✅ 已点击发布');
+    _log('✅ 已点击发布');
 
-    console.log('\n⏳ 等待发布完成...');
+    _log('\n⏳ 等待发布完成...');
     await page.waitForTimeout(15000);
-      
+
     const currentUrl = page.url();
     if (currentUrl.includes('/content/manage')) {
-      console.log('✅ 已跳转到内容管理页面');
+      _log('✅ 已跳转到内容管理页面');
       publishSuccess = true;
     }
-      
+
     if (publishSuccess) {
-      console.log('\n🎉 图文发布成功！');
-      if (itemId) console.log('   作品ID:', itemId);
+      _log('\n🎉 图文发布成功！');
+      if (itemId) _log('   作品ID:', itemId);
     } else {
       throw new Error('发布失败，页面未跳转到内容管理');
     }
@@ -203,7 +204,7 @@ if (!queueFilePath) {
 
 publishDouyinImage(queueFilePath)
   .then(() => {
-    console.log('\n✅ 全部完成');
+    _log('\n✅ 全部完成');
     process.exit(0);
   })
   .catch((error) => {
