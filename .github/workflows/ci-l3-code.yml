@@ -180,7 +180,7 @@ jobs:
       - run: npm ci
       - name: Fix Linux native optional deps missing from macOS-generated lock file
         run: |
-          npm install --no-save @rollup/rollup-linux-x64-gnu lightningcss-linux-x64-gnu 2>/dev/null || true
+          npm install --no-save @rollup/rollup-linux-x64-gnu lightningcss-linux-x64-gnu @tailwindcss/oxide-linux-x64-gnu 2>/dev/null || true
           src="node_modules/lightningcss-linux-x64-gnu/lightningcss.linux-x64-gnu.node"
           dst="node_modules/lightningcss/lightningcss.linux-x64-gnu.node"
           [ -f "$src" ] && [ ! -f "$dst" ] && cp "$src" "$dst" || true
