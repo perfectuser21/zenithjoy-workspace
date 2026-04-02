@@ -3,23 +3,23 @@
  * 知乎 API 完整采集器（分页获取所有数据）
  */
 const CDP = require('chrome-remote-interface');
-const { Client } = require('pg');
 const fs = require('fs');
 const http = require('http');
+const crypto = require('crypto');
 
 function ingestToUS(platform, items) {
   return new Promise((resolve) => {
     try {
       const today = new Date().toISOString().split('T')[0];
       const mapped = items.map(item => ({
-        content_id: String(item.id || item.question_id || ''),
+        content_id: item.content_id || '',
         scraped_date: today,
-        title: item.title || item.excerpt || '',
-        views: item.voteup_count || item.views || 0,
-        likes: item.voteup_count || 0,
-        comments: item.comment_count || item.comments || 0,
-        shares: 0,
-        extra_data: { type: item.type, favorites: item.favorites_count || 0 }
+        title: item.title || '',
+        views: item.views || 0,
+        likes: item.likes || 0,
+        comments: item.comments || 0,
+        shares: item.shares || 0,
+        extra_data: item.extra_data || {}
       })).filter(i => i.content_id);
       if (!mapped.length) return resolve({ skipped: true });
       const body = JSON.stringify({ platform, items: mapped });
@@ -40,48 +40,8 @@ function ingestToUS(platform, items) {
 const NODE_PC_HOST = '100.97.242.124';
 const PORT = 19229;
 
-// 第二个连接：cecelia 数据库，用于 zenithjoy.publish_logs 关联
-const zenithjoyClient = new Client({
-  host: 'localhost',
-  port: 5432,
-  user: 'cecelia',
-  password: 'CeceliaUS2026',
-  database: 'cecelia'
-});
-
-// 通过 platform_post_id 关联 zenithjoy.publish_logs，回填 metrics
-async function linkWorkId(platformPostId, metrics) {
-  try {
-    const result = await zenithjoyClient.query(
-      `SELECT id, work_id FROM zenithjoy.publish_logs WHERE platform_post_id = $1 AND platform = 'zhihu' LIMIT 1`,
-      [String(platformPostId)]
-    );
-    if (result.rows.length === 0) return null;
-
-    const { id, work_id } = result.rows[0];
-    await zenithjoyClient.query(
-      `UPDATE zenithjoy.publish_logs SET metrics = $1 WHERE id = $2`,
-      [JSON.stringify(metrics), id]
-    );
-    return work_id;
-  } catch (e) {
-    console.error('[知乎] publish_logs 关联失败（非致命）: ' + e.message);
-    return null;
-  }
-}
-
 async function scrapeZhihuComplete() {
   let client;
-
-  // 尝试连接 zenithjoy 数据库（失败不影响主流程）
-  let zenithjoyConnected = false;
-  try {
-    await zenithjoyClient.connect();
-    zenithjoyConnected = true;
-    console.error('[知乎] zenithjoy 数据库连接成功');
-  } catch (e) {
-    console.error('[知乎] zenithjoy 数据库连接失败（将跳过 work_id 关联）: ' + e.message);
-  }
 
   try {
     console.log('[知乎] 连接到浏览器...');
@@ -211,56 +171,38 @@ async function scrapeZhihuComplete() {
     console.log(`  总计: ${stats.total} 条`);
     console.log('='.repeat(60));
 
-    // 关联 zenithjoy.publish_logs（通过 item.id → platform_post_id → work_id）
-    let workIdLinked = 0;
-    if (zenithjoyConnected) {
-      for (const item of allItems) {
-        if (item.id) {
-          const metrics = {
-            views: item.voteup_count || item.read_count || 0,
-            likes: item.voteup_count || 0,
-            comments: item.comment_count || 0,
-            shares: item.share_count || 0
-          };
-          const workId = await linkWorkId(item.id, metrics);
-          if (workId) {
-            item.work_id = workId;
-            workIdLinked++;
-          }
-        }
-      }
-      console.error('[知乎] work_id 关联完成: ' + workIdLinked + ' 条');
-    }
-
     // 保存原始数据
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-    const outputFile = `/home/xx/.platform-data/zhihu_${timestamp}.json`;
+    const outputFile = `/Users/jinnuoshengyuan/.platform-data/zhihu_${timestamp}.json`;
 
     const outputData = {
       platform: '知乎',
       platform_code: 'zhihu',
       count: allItems.length,
-      work_id_linked: workIdLinked,
       scraped_at: new Date().toISOString(),
       items: allItems
     };
 
     fs.writeFileSync(outputFile, JSON.stringify(outputData, null, 2));
     console.log(`\n✅ 数据已保存到: ${outputFile}`);
+    const ingestItems = allItems.map(i => ({
+      content_id: String(i.id || i.question_id || '') || crypto.createHash('md5').update(i.title||i.excerpt||'').digest('hex').substring(0,16),
+      title: i.title || i.excerpt || '', views: i.read_count || i.voteup_count || 0,
+      likes: i.voteup_count || i.like_count || 0, comments: i.comment_count || 0,
+      shares: i.share_count || 0, extra_data: { type: i.type || '' }
+    }));
+    const ingestResult = await ingestToUS('zhihu', ingestItems);
+    console.log('[知乎] 已推送到美国 API: ' + JSON.stringify(ingestResult));
 
     // 保存一份到 /tmp 方便查看
     fs.writeFileSync('/tmp/zhihu-complete-data.json', JSON.stringify(outputData, null, 2));
     console.log('✅ 副本已保存到: /tmp/zhihu-complete-data.json');
-
-    const ingestResult = await ingestToUS('zhihu', allItems);
-    console.log('[知乎] 已推送到美国 API: ' + JSON.stringify(ingestResult));
 
   } catch (error) {
     console.error('[知乎] 采集失败:', error);
     process.exit(1);
   } finally {
     if (client) await client.close();
-    if (zenithjoyConnected) try { await zenithjoyClient.end(); } catch (e) {}
   }
 }
 

@@ -6,27 +6,23 @@
 const CDP = require('chrome-remote-interface');
 const { Client } = require('pg');
 const fs = require('fs');
-const http = require('http');
 const crypto = require('crypto');
+const http = require('http');
 
 function ingestToUS(platform, items) {
   return new Promise((resolve) => {
     try {
       const today = new Date().toISOString().split('T')[0];
-      const mapped = items.map(item => {
-        const raw = (item.title || '') + '|' + (item.publishTime || item.published_at || '');
-        const content_id = crypto.createHash('md5').update(raw).digest('hex').substring(0, 16);
-        return {
-          content_id,
-          scraped_date: today,
-          title: item.title || '',
-          views: item.views || item.read_num || 0,
-          likes: item.likes || item.like_num || 0,
-          comments: item.comments || 0,
-          shares: 0,
-          extra_data: { publishTime: item.publishTime || item.published_at }
-        };
-      }).filter(i => i.content_id);
+      const mapped = items.map(item => ({
+        content_id: item.content_id || '',
+        scraped_date: today,
+        title: item.title || '',
+        views: item.views || 0,
+        likes: item.likes || 0,
+        comments: item.comments || 0,
+        shares: item.shares || 0,
+        extra_data: item.extra_data || {}
+      })).filter(i => i.content_id);
       if (!mapped.length) return resolve({ skipped: true });
       const body = JSON.stringify({ platform, items: mapped });
       const req = http.request({
@@ -42,7 +38,6 @@ function ingestToUS(platform, items) {
     } catch (e) { resolve({ error: e.message }); }
   });
 }
-const crypto = require('crypto');
 
 const NODE_PC_HOST = '100.97.242.124';
 const PORT = 19229;
@@ -54,41 +49,6 @@ const dbClient = new Client({
   password: 'CeceliaUS2026',
   database: 'social_media_raw'
 });
-
-// 第二个连接：cecelia 数据库，用于 zenithjoy.works + publish_logs 关联
-// 公众号无直接 platform_post_id，通过 title 匹配 zenithjoy.works 获取 work_id
-const zenithjoyClient = new Client({
-  host: 'localhost',
-  port: 5432,
-  user: 'cecelia',
-  password: 'CeceliaUS2026',
-  database: 'cecelia'
-});
-
-// 通过文章标题匹配 zenithjoy.works，回填 metrics 到 publish_logs
-async function linkWorkId(title, metrics) {
-  try {
-    const result = await zenithjoyClient.query(
-      `SELECT pl.id, pl.work_id
-       FROM zenithjoy.publish_logs pl
-       JOIN zenithjoy.works w ON pl.work_id = w.id
-       WHERE w.title ILIKE $1 AND pl.platform = 'wechat'
-       LIMIT 1`,
-      [title]
-    );
-    if (result.rows.length === 0) return null;
-
-    const { id, work_id } = result.rows[0];
-    await zenithjoyClient.query(
-      `UPDATE zenithjoy.publish_logs SET metrics = $1 WHERE id = $2`,
-      [JSON.stringify(metrics), id]
-    );
-    return work_id;
-  } catch (e) {
-    console.error('[公众号] publish_logs 关联失败（非致命）: ' + e.message);
-    return null;
-  }
-}
 
 async function ensureSchema() {
   try {
@@ -122,16 +82,6 @@ async function scrapeWechat() {
   let client;
   const allItems = [];
   const seen = new Set();
-
-  // 尝试连接 zenithjoy 数据库（失败不影响主流程）
-  let zenithjoyConnected = false;
-  try {
-    await zenithjoyClient.connect();
-    zenithjoyConnected = true;
-    console.error('[公众号] zenithjoy 数据库连接成功');
-  } catch (e) {
-    console.error('[公众号] zenithjoy 数据库连接失败（将跳过 work_id 关联）: ' + e.message);
-  }
 
   try {
     await dbClient.connect();
@@ -440,29 +390,6 @@ async function scrapeWechat() {
 
     console.error('[公众号] 保存到数据库: ' + savedCount + ' 条');
 
-    // 关联 zenithjoy.publish_logs（通过 title 匹配 zenithjoy.works → work_id）
-    let workIdLinked = 0;
-    if (zenithjoyConnected) {
-      for (const item of allItems) {
-        if (item.title) {
-          const metrics = {
-            views: item.views || 0,
-            watching: item.watching || 0,
-            likes: item.likes || 0,
-            shares: item.shares || 0,
-            favorites: item.favorites || 0,
-            comments: item.comments || 0
-          };
-          const workId = await linkWorkId(item.title, metrics);
-          if (workId) {
-            item.work_id = workId;
-            workIdLinked++;
-          }
-        }
-      }
-      console.error('[公众号] work_id 关联完成: ' + workIdLinked + ' 条');
-    }
-
     // Save to JSON
     const output = {
       success: true,
@@ -470,26 +397,28 @@ async function scrapeWechat() {
       platform_code: 'wechat',
       count: allItems.length,
       saved: savedCount,
-      work_id_linked: workIdLinked,
       scraped_at: scrapedAt,
       items: allItems
     };
-    const filename = '/home/xx/.platform-data/wechat_' + Date.now() + '.json';
+    const filename = require('os').homedir() + '/.platform-data/wechat_' + Date.now() + '.json';
     fs.writeFileSync(filename, JSON.stringify(output, null, 2));
     console.error('[公众号] 保存到 ' + filename);
-    const ingestResult = await ingestToUS('wechat', allItems);
+    const ingestItems = allItems.map(i => ({
+      content_id: crypto.createHash('md5').update((i.title||'')+'|'+(i.publishTime||'')).digest('hex').substring(0,16),
+      title: i.title || '', views: i.views || 0, likes: i.likes || 0,
+      comments: i.comments || 0, shares: i.shares || 0, extra_data: { favorites: i.favorites || 0 }
+    }));
+    const ingestResult = await ingestToUS('wechat', ingestItems);
     console.error('[公众号] 已推送到美国 API: ' + JSON.stringify(ingestResult));
-    console.log(JSON.stringify({ success: true, platform: '公众号', count: allItems.length, saved: savedCount, work_id_linked: workIdLinked }));
+    console.log(JSON.stringify({ success: true, platform: '公众号', count: allItems.length, saved: savedCount }));
 
     await client.close();
     await dbClient.end();
-    if (zenithjoyConnected) await zenithjoyClient.end();
   } catch (e) {
     console.error('[公众号] 错误: ' + e.message);
     console.log(JSON.stringify({ success: false, platform: '公众号', error: e.message }));
     if (client) try { await client.close(); } catch (e) {}
     if (dbClient) try { await dbClient.end(); } catch (e) {}
-    if (zenithjoyConnected) try { await zenithjoyClient.end(); } catch (e) {}
   }
 }
 

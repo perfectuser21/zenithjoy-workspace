@@ -11,20 +11,21 @@ const { Client } = require('pg');
 const fs = require('fs');
 const path = require('path');
 const http = require('http');
+const crypto = require('crypto');
 
 function ingestToUS(platform, items) {
   return new Promise((resolve) => {
     try {
       const today = new Date().toISOString().split('T')[0];
       const mapped = items.map(item => ({
-        content_id: item.workId || item.photoId || item.publishId || '',
+        content_id: item.content_id || '',
         scraped_date: today,
-        title: item.title || item.caption || '',
+        title: item.title || '',
         views: item.views || 0,
         likes: item.likes || 0,
         comments: item.comments || 0,
         shares: item.shares || 0,
-        extra_data: { favorites: item.favorites || 0, publishTime: item.publishTime }
+        extra_data: item.extra_data || {}
       })).filter(i => i.content_id);
       if (!mapped.length) return resolve({ skipped: true });
       const body = JSON.stringify({ platform, items: mapped });
@@ -314,7 +315,12 @@ async function scrapeKuaishou() {
 
     fs.writeFileSync(filename, JSON.stringify(output, null, 2));
     console.error('[快手] 数据已保存到 ' + filename);
-    const ingestResult = await ingestToUS('kuaishou', allItems);
+    const ingestItems = allItems.map(i => ({
+      content_id: i.workId || crypto.createHash('md5').update((i.title||'')+'|'+(i.publishTime||'')).digest('hex').substring(0,16),
+      title: i.title || '', views: i.views || 0, likes: i.likes || 0,
+      comments: i.comments || 0, shares: i.shares || 0, extra_data: { favorites: i.favorites || 0 }
+    }));
+    const ingestResult = await ingestToUS('kuaishou', ingestItems);
     console.error('[快手] 已推送到美国 API: ' + JSON.stringify(ingestResult));
 
     // 输出最终结果

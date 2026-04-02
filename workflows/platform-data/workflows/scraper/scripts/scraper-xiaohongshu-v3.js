@@ -3,20 +3,21 @@ const CDP = require('chrome-remote-interface');
 const { Client } = require('pg');
 const fs = require('fs');
 const http = require('http');
+const crypto = require('crypto');
 
 function ingestToUS(platform, items) {
   return new Promise((resolve) => {
     try {
       const today = new Date().toISOString().split('T')[0];
       const mapped = items.map(item => ({
-        content_id: item.noteId || item.note_id || item.id || '',
+        content_id: item.content_id || '',
         scraped_date: today,
-        title: item.title || item.desc || '',
+        title: item.title || '',
         views: item.views || 0,
         likes: item.likes || 0,
         comments: item.comments || 0,
         shares: item.shares || 0,
-        extra_data: { favorites: item.favorites || 0, exposure: item.exposure || 0 }
+        extra_data: item.extra_data || {}
       })).filter(i => i.content_id);
       if (!mapped.length) return resolve({ skipped: true });
       const body = JSON.stringify({ platform, items: mapped });
@@ -41,36 +42,6 @@ const dbClient = new Client({
   host: 'localhost', port: 5432, user: 'n8n_user',
   password: 'n8n_password_2025', database: 'social_media_raw'
 });
-
-// 第二个连接：cecelia 数据库，用于 zenithjoy.publish_logs 关联
-const zenithjoyClient = new Client({
-  host: 'localhost',
-  port: 5432,
-  user: 'cecelia',
-  password: 'CeceliaUS2026',
-  database: 'cecelia'
-});
-
-// 通过 platform_post_id 关联 zenithjoy.publish_logs，回填 metrics
-async function linkWorkId(platformPostId, metrics) {
-  try {
-    const result = await zenithjoyClient.query(
-      `SELECT id, work_id FROM zenithjoy.publish_logs WHERE platform_post_id = $1 AND platform = 'xiaohongshu' LIMIT 1`,
-      [String(platformPostId)]
-    );
-    if (result.rows.length === 0) return null;
-
-    const { id, work_id } = result.rows[0];
-    await zenithjoyClient.query(
-      `UPDATE zenithjoy.publish_logs SET metrics = $1 WHERE id = $2`,
-      [JSON.stringify(metrics), id]
-    );
-    return work_id;
-  } catch (e) {
-    console.error('[小红书] publish_logs 关联失败（非致命）: ' + e.message);
-    return null;
-  }
-}
 
 function parseNumber(str) {
   if (!str) return 0;
@@ -102,22 +73,10 @@ async function extractPageData(Runtime) {
                 title = line.trim();
               }
             }
-            // 尝试从第一列链接提取 note_id（URL 格式：/explore/<note_id>）
-            const link = cells[0]?.querySelector('a[href*="explore"]') ||
-                         cells[0]?.querySelector('a[href*="note"]');
-            let noteId = '';
-            if (link) {
-              const href = link.href || link.getAttribute('href') || '';
-              const noteMatch = href.match(/\\/explore\\/([a-f0-9]{24})/i) ||
-                                href.match(/\\/note\\/([a-f0-9]{24})/i) ||
-                                href.match(/noteId=([a-f0-9]{24})/i);
-              if (noteMatch) noteId = noteMatch[1];
-            }
             if (title && title.length >= 3) {
               data.push({
                 title: title.substring(0, 200),
                 publishTime: publishTime,
-                noteId: noteId,
                 exposure: cells[1]?.innerText?.trim() || '0',
                 views: cells[2]?.innerText?.trim() || '0',
                 likes: cells[4]?.innerText?.trim() || '0',
@@ -139,16 +98,6 @@ async function scrapeXiaohongshu() {
   let client;
   const allItems = [];
 
-  // 尝试连接 zenithjoy 数据库（失败不影响主流程）
-  let zenithjoyConnected = false;
-  try {
-    await zenithjoyClient.connect();
-    zenithjoyConnected = true;
-    console.error('[小红书] zenithjoy 数据库连接成功');
-  } catch (e) {
-    console.error('[小红书] zenithjoy 数据库连接失败（将跳过 work_id 关联）: ' + e.message);
-  }
-
   try {
     await dbClient.connect();
     client = await CDP({ host: NODE_PC_HOST, port: PORT, timeout: 30000 });
@@ -169,7 +118,7 @@ async function scrapeXiaohongshu() {
 
     for (let page = 1; page <= totalPages; page++) {
       console.error('[小红书] 采集第 ' + page + '/' + totalPages + ' 页...');
-
+      
       if (page > 1) {
         // 点击页码：文本以页码开头（因为实际是 "2\n2" 格式）
         const { result: clickRes } = await Runtime.evaluate({
@@ -190,13 +139,13 @@ async function scrapeXiaohongshu() {
         console.error('  点击结果: ' + clickRes.value);
         await new Promise(r => setTimeout(r, 3000));
       }
-
+      
       const pageData = await extractPageData(Runtime);
       console.error('  采集到 ' + pageData.length + ' 条');
-
+      
       pageData.forEach(item => item._page = page);
       allItems.push(...pageData);
-
+      
       await new Promise(r => setTimeout(r, 500));
     }
 
@@ -251,49 +200,30 @@ async function scrapeXiaohongshu() {
       }
     }
 
-    // 关联 zenithjoy.publish_logs（通过 noteId → platform_post_id → work_id）
-    let workIdLinked = 0;
-    if (zenithjoyConnected) {
-      for (const item of uniqueItems) {
-        if (item.noteId) {
-          const metrics = {
-            views: parseNumber(item.views),
-            likes: parseNumber(item.likes),
-            comments: parseNumber(item.comments),
-            shares: parseNumber(item.shares),
-            favorites: parseNumber(item.favorites)
-          };
-          const workId = await linkWorkId(item.noteId, metrics);
-          if (workId) {
-            item.work_id = workId;
-            workIdLinked++;
-          }
-        }
-      }
-      console.error('[小红书] work_id 关联完成: ' + workIdLinked + ' 条');
-    }
-
     const output = { success: true, platform: '小红书', platform_code: 'xiaohongshu',
       count: uniqueItems.length, new_content: newCount, snapshots: snapshotCount,
-      work_id_linked: workIdLinked,
       scraped_at: new Date().toISOString(), items: uniqueItems };
 
-    const filename = '/home/xx/.platform-data/xiaohongshu_' + Date.now() + '.json';
+    const filename = require('os').homedir() + '/.platform-data/xiaohongshu_' + Date.now() + '.json';
     fs.writeFileSync(filename, JSON.stringify(output, null, 2));
     console.error('[小红书] 数据已保存到 ' + filename);
-    const ingestResult = await ingestToUS('xiaohongshu', uniqueItems);
+    const parseNum = s => { if (!s) return 0; const str = String(s).replace(/,/g,'').trim(); if (str.includes('万')) return Math.floor(parseFloat(str)*10000); return parseInt(str)||0; };
+    const ingestItems = uniqueItems.map(i => ({
+      content_id: crypto.createHash('md5').update((i.title||'')+'|'+(i.publishTime||'')).digest('hex').substring(0,16),
+      title: i.title || '', views: parseNum(i.views), likes: parseNum(i.likes),
+      comments: parseNum(i.comments), shares: parseNum(i.shares), extra_data: { favorites: parseNum(i.favorites) }
+    }));
+    const ingestResult = await ingestToUS('xiaohongshu', ingestItems);
     console.error('[小红书] 已推送到美国 API: ' + JSON.stringify(ingestResult));
-    console.log(JSON.stringify({ success: true, platform: '小红书', count: uniqueItems.length, new_content: newCount, snapshots: snapshotCount, work_id_linked: workIdLinked }));
+    console.log(JSON.stringify({ success: true, platform: '小红书', count: uniqueItems.length, new_content: newCount, snapshots: snapshotCount }));
 
     await client.close();
     await dbClient.end();
-    if (zenithjoyConnected) await zenithjoyClient.end();
   } catch (e) {
     console.error('[小红书] 错误: ' + e.message);
     console.log(JSON.stringify({ success: false, platform: '小红书', error: e.message }));
     if (client) try { await client.close(); } catch (e) {}
     if (dbClient) try { await dbClient.end(); } catch (e) {}
-    if (zenithjoyConnected) try { await zenithjoyClient.end(); } catch (e) {}
     process.exit(1);
   }
 }
