@@ -180,7 +180,7 @@ jobs:
       - run: npm ci --workspace=apps/geoai
       - name: Fix native optional deps (npm ci bug workaround)
         run: |
-          node -e "try{require('lightningcss')}catch(e){require('child_process').execSync('npm install --no-save lightningcss',{stdio:'inherit'})}" || true
+          test -f node_modules/lightningcss/lightningcss.linux-x64-gnu.node || npm install --no-save lightningcss || true
           node -e "try{require('@rollup/rollup-linux-x64-gnu')}catch(e){require('child_process').execSync('npm install --no-save @rollup/rollup-linux-x64-gnu',{stdio:'inherit'})}" || true
       - run: npm run build
         working-directory: apps/geoai
