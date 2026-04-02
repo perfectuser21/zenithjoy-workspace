@@ -1,0 +1,317 @@
+# API Registry — ZenithJoy
+# 更新时间: 2026-04-02
+#
+# services:
+#   api      — Node.js/Express (apps/api)，端口 3001
+#   creator  — Python/FastAPI (services/creator)，端口 8000
+#
+# auth: bearer | none | feishu-oauth
+
+version: "1.0.0"
+updated: "2026-04-02"
+
+# ============================================================
+# apps/api (Node.js/Express)
+# ============================================================
+
+# ── works ────────────────────────────────────────────────────
+
+endpoints:
+
+  - method: GET
+    path: /api/works
+    service: api
+    purpose: 内容作品列表，支持分页和状态过滤
+    code_file: apps/api/src/routes/works.ts
+    covers_feature: media_works_management
+    auth: bearer
+    params:
+      - name: status
+        type: string
+        example: "published"
+      - name: limit
+        type: number
+        example: 20
+
+  - method: GET
+    path: /api/works/:id
+    service: api
+    purpose: 获取单个作品详情
+    code_file: apps/api/src/routes/works.ts
+    covers_feature: media_works_management
+    auth: bearer
+
+  - method: POST
+    path: /api/works
+    service: api
+    purpose: 创建内容作品
+    code_file: apps/api/src/routes/works.ts
+    covers_feature: media_works_management
+    auth: bearer
+
+  - method: PUT
+    path: /api/works/:id
+    service: api
+    purpose: 更新内容作品
+    code_file: apps/api/src/routes/works.ts
+    covers_feature: media_works_management
+    auth: bearer
+
+  - method: DELETE
+    path: /api/works/:id
+    service: api
+    purpose: 删除内容作品（软删除）
+    code_file: apps/api/src/routes/works.ts
+    covers_feature: media_works_management
+    auth: bearer
+
+  # ── fields ───────────────────────────────────────────────────
+
+  - method: GET
+    path: /api/fields
+    service: api
+    purpose: 获取自定义字段列表
+    code_file: apps/api/src/routes/fields.ts
+    covers_feature: crm_field_management
+    auth: bearer
+
+  - method: POST
+    path: /api/fields
+    service: api
+    purpose: 创建自定义字段
+    code_file: apps/api/src/routes/fields.ts
+    covers_feature: crm_field_management
+    auth: bearer
+
+  - method: PUT
+    path: /api/fields/:id
+    service: api
+    purpose: 更新字段定义
+    code_file: apps/api/src/routes/fields.ts
+    covers_feature: crm_field_management
+    auth: bearer
+
+  - method: DELETE
+    path: /api/fields/:id
+    service: api
+    purpose: 删除自定义字段
+    code_file: apps/api/src/routes/fields.ts
+    covers_feature: crm_field_management
+    auth: bearer
+
+  # ── publish-logs ─────────────────────────────────────────────
+
+  - method: GET
+    path: /api/works/:workId/publish-logs
+    service: api
+    purpose: 获取作品的发布日志（各平台状态）
+    code_file: apps/api/src/routes/publish.ts
+    covers_feature: media_platform_publish
+    auth: bearer
+
+  - method: POST
+    path: /api/works/:workId/publish-logs
+    service: api
+    purpose: 创建发布记录（触发发布流程）
+    code_file: apps/api/src/routes/publish.ts
+    covers_feature: media_platform_publish
+    auth: bearer
+
+  - method: PUT
+    path: /api/publish-logs/:id
+    service: api
+    purpose: 更新发布状态（回调更新）
+    code_file: apps/api/src/routes/publish.ts
+    covers_feature: media_platform_publish
+    auth: bearer
+
+  # ── platform-data ─────────────────────────────────────────────
+
+  - method: GET
+    path: /api/platform-data
+    service: api
+    purpose: 获取平台数据统计（阅读/点赞/粉丝等聚合）
+    code_file: apps/api/src/routes/platform-data.ts
+    covers_feature: media_platform_data
+    auth: bearer
+
+  # ── ai-video ─────────────────────────────────────────────────
+
+  - method: GET
+    path: /api/ai-video/history
+    service: api
+    purpose: AI 视频历史任务列表
+    code_file: apps/api/src/routes/ai-video.ts
+    covers_feature: ai_video_history
+    auth: bearer
+
+  - method: GET
+    path: /api/ai-video/active
+    service: api
+    purpose: 当前活跃的视频生成任务
+    code_file: apps/api/src/routes/ai-video.ts
+    covers_feature: ai_video_task_monitor
+    auth: bearer
+
+  - method: GET
+    path: /api/ai-video/task/:id
+    service: api
+    purpose: 获取单个视频任务详情和进度
+    code_file: apps/api/src/routes/ai-video.ts
+    covers_feature: ai_video_task_monitor
+    auth: bearer
+
+  - method: POST
+    path: /api/ai-video/generate
+    service: api
+    purpose: 创建 AI 视频生成任务
+    code_file: apps/api/src/routes/ai-video.ts
+    covers_feature: ai_video_generate
+    auth: bearer
+    body:
+      - name: prompt
+        type: string
+        required: true
+      - name: imageUrl
+        type: string
+        required: false
+
+  - method: PUT
+    path: /api/ai-video/task/:id
+    service: api
+    purpose: 更新视频任务参数
+    code_file: apps/api/src/routes/ai-video.ts
+    covers_feature: ai_video_generate
+    auth: bearer
+
+  - method: DELETE
+    path: /api/ai-video/task/:id
+    service: api
+    purpose: 取消/删除视频任务
+    code_file: apps/api/src/routes/ai-video.ts
+    covers_feature: ai_video_generate
+    auth: bearer
+
+# ============================================================
+# services/creator (Python/FastAPI)
+# ============================================================
+
+  # ── creator works ─────────────────────────────────────────────
+
+  - method: GET
+    path: /api/works
+    service: creator
+    purpose: 获取 Creator 服务的作品列表（含 Notion 同步状态）
+    code_file: services/creator/api/server.py
+    covers_feature: media_works_management
+    auth: none
+
+  - method: GET
+    path: /api/works/{work_id}
+    service: creator
+    purpose: 获取单个作品及其 Notion 内容
+    code_file: services/creator/api/server.py
+    covers_feature: media_works_management
+    auth: none
+
+  - method: PATCH
+    path: /api/works/{work_id}
+    service: creator
+    purpose: 更新作品元数据
+    code_file: services/creator/api/server.py
+    covers_feature: media_works_management
+    auth: none
+
+  - method: PUT
+    path: /api/works/{work_id}/publications/{platform_id}
+    service: creator
+    purpose: 发布作品到指定平台（触发自动化发布脚本）
+    code_file: services/creator/api/server.py
+    covers_feature: media_platform_publish
+    auth: none
+
+  # ── notion ────────────────────────────────────────────────────
+
+  - method: GET
+    path: /api/notion/page/{notion_id}/blocks
+    service: creator
+    purpose: 获取 Notion 页面 blocks（文章内容解析）
+    code_file: services/creator/api/server.py
+    covers_feature: media_notion_sync
+    auth: none
+
+  - method: GET
+    path: /api/works/{work_id}/notion-content
+    service: creator
+    purpose: 获取作品关联的 Notion 全文内容
+    code_file: services/creator/api/server.py
+    covers_feature: media_notion_sync
+    auth: none
+
+  - method: GET
+    path: /api/notion/database/pages
+    service: creator
+    purpose: 列出 Notion 数据库所有页面（内容来源选择）
+    code_file: services/creator/api/server.py
+    covers_feature: media_notion_sync
+    auth: none
+
+  # ── platforms & properties ────────────────────────────────────
+
+  - method: GET
+    path: /api/platforms
+    service: creator
+    purpose: 获取支持的发布平台列表（抖音/小红书/微信等）
+    code_file: services/creator/api/server.py
+    covers_feature: media_platform_publish
+    auth: none
+
+  - method: GET
+    path: /api/properties
+    service: creator
+    purpose: 获取内容属性字段列表
+    code_file: services/creator/api/server.py
+    covers_feature: crm_field_management
+    auth: none
+
+  - method: POST
+    path: /api/properties
+    service: creator
+    purpose: 创建内容属性字段
+    code_file: services/creator/api/server.py
+    covers_feature: crm_field_management
+    auth: none
+
+  - method: PATCH
+    path: /api/properties/{prop_id}
+    service: creator
+    purpose: 更新属性字段定义
+    code_file: services/creator/api/server.py
+    covers_feature: crm_field_management
+    auth: none
+
+  # ── stats & settings ─────────────────────────────────────────
+
+  - method: GET
+    path: /api/stats
+    service: creator
+    purpose: 发布统计数据（各平台发布量/成功率）
+    code_file: services/creator/api/server.py
+    covers_feature: media_platform_data
+    auth: none
+
+  - method: GET
+    path: /api/settings
+    service: creator
+    purpose: 获取 Creator 服务配置（平台凭据状态等）
+    code_file: services/creator/api/server.py
+    covers_feature: media_platform_publish
+    auth: none
+
+  - method: PATCH
+    path: /api/settings
+    service: creator
+    purpose: 更新 Creator 服务配置
+    code_file: services/creator/api/server.py
+    covers_feature: media_platform_publish
+    auth: none

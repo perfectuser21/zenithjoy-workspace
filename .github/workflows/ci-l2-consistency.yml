@@ -134,10 +134,70 @@ jobs:
           fi
           echo "No sensitive files found"
 
+  orphan-test-check:
+    name: Orphan Test Check
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check all test files are registered in test-registry.yaml
+        run: |
+          echo "Scanning for unregistered test files..."
+
+          if [ ! -f "test-registry.yaml" ]; then
+            echo "SKIP: test-registry.yaml not found at repo root"
+            exit 0
+          fi
+
+          # Find all test/spec files, exclude node_modules and generated dirs
+          FOUND_FILES=$(find . \
+            \( -name "*.test.ts" -o -name "*.test.tsx" -o -name "*.test.js" -o -name "*.spec.ts" -o -name "*.spec.tsx" -o -name "*.spec.js" \) \
+            -not -path "*/node_modules/*" \
+            -not -path "*/.git/*" \
+            -not -path "*/dist/*" \
+            -not -path "*/build/*" \
+            -not -path "*/coverage/*" \
+            2>/dev/null | sed 's|^\./||' | sort)
+
+          if [ -z "$FOUND_FILES" ]; then
+            echo "No test files found — nothing to check"
+            exit 0
+          fi
+
+          echo "Found $(echo "$FOUND_FILES" | wc -l | tr -d ' ') test file(s)"
+
+          # Extract all registered paths from test-registry.yaml
+          REGISTERED=$(grep -E '^\s+path:\s+' test-registry.yaml | sed 's/.*path:[[:space:]]*//' | tr -d '"' | sort)
+
+          # Find orphans: test files not in registry
+          ORPHANS=""
+          while IFS= read -r file; do
+            if ! echo "$REGISTERED" | grep -qF "$file"; then
+              ORPHANS="$ORPHANS\n  - $file"
+            fi
+          done <<< "$FOUND_FILES"
+
+          if [ -n "$ORPHANS" ]; then
+            echo ""
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            echo "  FAIL: Unregistered test files found"
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            printf "%b\n" "$ORPHANS"
+            echo ""
+            echo "Fix: add each file to test-registry.yaml with id/path/type/ci/status/product fields"
+            echo "Docs: docs/registry/feature-registry.yml"
+            exit 1
+          fi
+
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "  PASS: All test files are registered"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
   # ─── L2 Gate ──────────────────────────────────────────────────────────
   l2-passed:
     name: L2 Consistency Gate Passed
-    needs: [tsconfig-inheritance, engines-consistency, sensitive-files]
+    needs: [tsconfig-inheritance, engines-consistency, sensitive-files, orphan-test-check]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -162,6 +222,11 @@ jobs:
 
           if [ "${{ needs.sensitive-files.result }}" != "success" ]; then
             echo "FAIL: Sensitive File Scan (${{ needs.sensitive-files.result }})"
+            FAILED=true
+          fi
+
+          if [ "${{ needs.orphan-test-check.result }}" != "success" ]; then
+            echo "FAIL: Orphan Test Check (${{ needs.orphan-test-check.result }})"
             FAILED=true
           fi
 

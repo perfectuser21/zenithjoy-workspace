@@ -1,0 +1,228 @@
+# Test Registry — ZenithJoy
+# SSOT for all test files. Every *.test.* / *.spec.* file must be registered here.
+# CI L2 (orphan-test-check) enforces this: unregistered tests block PR merge.
+#
+# Fields:
+#   id       — unique identifier (kebab-case)
+#   path     — relative path from repo root
+#   type     — unit | integration | e2e
+#   ci       — L3 | L4
+#   status   — active | deprecated | pending-ci
+#   product  — 中台认证 | 新媒体运营 | 私域运营 | AI员工 | AI视频
+#   note     — optional context
+#
+# Taxonomy:
+#   unit        — single module, deps mocked, no I/O. Runs in L3.
+#   integration — crosses a real boundary (DB/HTTP). Runs in L4.
+#   e2e         — full workflow from external perspective. Runs in L4.
+
+version: "1.0.0"
+updated: "2026-04-02"
+
+# ─── Suite-level (managed by vitest configs) ──────────────────────────────────
+
+dashboard_suite:
+  managed_by: apps/dashboard/vitest.config.ts
+  ci: L3
+  type: unit
+  count: 12
+  note: "Dashboard 页面/组件/API 单元测试，覆盖率目标 70%"
+
+api_suite:
+  managed_by: apps/api/vitest.config.ts
+  ci: L3
+  type: unit
+  count: 2
+  note: "API 服务层单元测试，覆盖率目标 65%"
+
+# ─── 逐文件注册 ────────────────────────────────────────────────────────────────
+
+tests:
+
+  # ── AI 视频 ──────────────────────────────────────────────────────────────────
+
+  - id: ai-video-generation-api
+    path: apps/dashboard/src/api/__tests__/video-generation.api.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: AI视频
+    note: "AI 视频生成 API 客户端调用逻辑"
+
+  - id: ai-video-generation
+    path: apps/dashboard/src/api/__tests__/video-generation.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: AI视频
+    note: "AI 视频生成核心逻辑"
+
+  - id: ai-video-task-monitor
+    path: apps/dashboard/src/components/video-generation/__tests__/TaskMonitor.test.tsx
+    type: unit
+    ci: L3
+    status: active
+    product: AI视频
+    note: "视频任务状态监控组件"
+
+  - id: ai-video-generation-page
+    path: apps/dashboard/src/pages/__tests__/AiVideoGenerationPage.test.tsx
+    type: unit
+    ci: L3
+    status: active
+    product: AI视频
+    note: "AI 视频生成页面集成"
+
+  - id: ai-video-service
+    path: apps/api/src/services/__tests__/ai-video.service.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: AI视频
+    note: "AI 视频服务层逻辑（任务创建/状态查询）"
+
+  # ── 新媒体运营 ────────────────────────────────────────────────────────────────
+
+  - id: platform-data-route
+    path: apps/api/src/routes/platform-data.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 新媒体运营
+    note: "平台数据 API 路由测试"
+
+  - id: platform-api-index
+    path: apps/dashboard/src/api/platforms/__tests__/index.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 新媒体运营
+    note: "多平台 API 客户端封装"
+
+  - id: platform-api-toapi
+    path: apps/dashboard/src/api/platforms/__tests__/toapi.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 新媒体运营
+    note: "平台数据格式转换（toApi 映射）"
+
+  - id: platform-data-page
+    path: apps/dashboard/src/pages/__tests__/PlatformDataPage.test.tsx
+    type: unit
+    ci: L3
+    status: active
+    product: 新媒体运营
+    note: "平台数据展示页面"
+
+  - id: works-list-page
+    path: apps/dashboard/src/pages/__tests__/WorksListPage.test.tsx
+    type: unit
+    ci: L3
+    status: active
+    product: 新媒体运营
+    note: "内容作品列表页面"
+
+  - id: works-gallery-page
+    path: apps/dashboard/src/pages/__tests__/WorksGalleryPage.test.tsx
+    type: unit
+    ci: L3
+    status: active
+    product: 新媒体运营
+    note: "内容作品图库页面"
+
+  # ── 中台认证 ─────────────────────────────────────────────────────────────────
+
+  - id: ab-testing-lib
+    path: apps/dashboard/src/lib/__tests__/ab-testing.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 中台认证
+    note: "A/B 测试分流逻辑"
+
+  - id: ab-test-component
+    path: apps/dashboard/src/components/__tests__/ABTest.test.tsx
+    type: unit
+    ci: L3
+    status: active
+    product: 中台认证
+    note: "ABTest 组件渲染逻辑"
+
+  # ── 私域运营 ─────────────────────────────────────────────────────────────────
+
+  - id: field-management-page
+    path: apps/dashboard/src/pages/__tests__/FieldManagementPage.test.tsx
+    type: unit
+    ci: L3
+    status: active
+    product: 私域运营
+    note: "字段管理页面（自定义属性配置）"
+
+  # ── API 路由测试 ──────────────────────────────────────────────────────────────
+
+  - id: api-works-route
+    path: apps/api/tests/works.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 新媒体运营
+    note: "Works CRUD 路由单元测试（mock DB）"
+
+  - id: api-fields-route
+    path: apps/api/tests/fields.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 私域运营
+    note: "Fields CRUD 路由单元测试（mock DB）"
+
+  - id: api-publish-route
+    path: apps/api/tests/publish.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 新媒体运营
+    note: "Publish 发布日志路由单元测试（mock DB）"
+
+  - id: api-snapshots-route
+    path: apps/api/tests/snapshots.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 新媒体运营
+    note: "每日快照 API 路由测试（mock DB）"
+
+  - id: api-contract
+    path: apps/api/tests/contract.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 新媒体运营
+    note: "API 合约测试：固化 works/fields/publish-logs response shape，防止 dashboard 静默崩溃"
+
+  # ── E2E（待建）────────────────────────────────────────────────────────────────
+
+  # - id: e2e-content-publish
+  #   path: tests/e2e/content-publish.spec.ts
+  #   type: e2e
+  #   ci: L4
+  #   status: pending-ci
+  #   product: 新媒体运营
+  #   note: "内容从创建到发布完整流程（Playwright）"
+
+  # - id: e2e-ai-video-generate
+  #   path: tests/e2e/ai-video-generate.spec.ts
+  #   type: e2e
+  #   ci: L4
+  #   status: pending-ci
+  #   product: AI视频
+  #   note: "AI 视频任务创建到完成完整流程（Playwright）"
+
+  # - id: e2e-login-feishu
+  #   path: tests/e2e/login-feishu.spec.ts
+  #   type: e2e
+  #   ci: L4
+  #   status: pending-ci
+  #   product: 中台认证
+  #   note: "飞书登录完整流程（Playwright）"
