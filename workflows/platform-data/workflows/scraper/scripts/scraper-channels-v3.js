@@ -10,7 +10,7 @@
 const CDP = require('chrome-remote-interface');
 const { Client } = require('pg');
 const fs = require('fs');
-const https = require('https');
+const http = require('http');
 const crypto = require('crypto');
 
 function ingestToUS(platform, items) {
@@ -33,8 +33,8 @@ function ingestToUS(platform, items) {
       }).filter(i => i.content_id);
       if (!mapped.length) return resolve({ skipped: true });
       const body = JSON.stringify({ platform, items: mapped });
-      const req = https.request({
-        hostname: '38.23.47.81', port: 5200, path: '/api/snapshots/ingest',
+      const req = http.request({
+        hostname: '100.71.151.105', port: 5200, path: '/api/snapshots/ingest',
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) }
       }, res => {
