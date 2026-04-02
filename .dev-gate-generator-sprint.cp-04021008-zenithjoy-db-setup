@@ -1,0 +1,14 @@
+{
+  "sealed_by": "generator-subagent",
+  "branch": "cp-04021008-zenithjoy-db-setup",
+  "timestamp": "2026-04-02T10:10:00Z",
+  "sprint_plan": {
+    "F1": "psql check daily_snapshots table + index",
+    "F2": "curl POST ingest endpoint",
+    "F3": "curl GET platform endpoint",
+    "F4": "curl GET work endpoint via publish_logs join",
+    "F5": "grep scraper scripts for ingest keyword",
+    "F6": "ssh xian-mac check tables deleted",
+    "F7": "grep frontend api file for /api/snapshots"
+  }
+}

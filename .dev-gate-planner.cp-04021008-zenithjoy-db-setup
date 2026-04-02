@@ -1,0 +1,15 @@
+{
+  "sealed_by": "planner-subagent",
+  "branch": "cp-04021008-zenithjoy-db-setup",
+  "timestamp": "2026-04-02T10:08:00Z",
+  "blocker_count": 0,
+  "independent_test_plans": [
+    {"dod_id":"F1","test_type":"integration"},
+    {"dod_id":"F2","test_type":"integration"},
+    {"dod_id":"F3","test_type":"integration"},
+    {"dod_id":"F4","test_type":"integration"},
+    {"dod_id":"F5","test_type":"static"},
+    {"dod_id":"F6","test_type":"integration"},
+    {"dod_id":"F7","test_type":"static"}
+  ]
+}

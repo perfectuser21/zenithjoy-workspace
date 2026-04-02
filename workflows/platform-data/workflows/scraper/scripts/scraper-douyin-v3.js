@@ -8,6 +8,38 @@
 const CDP = require('chrome-remote-interface');
 const { Client } = require('pg');
 const fs = require('fs');
+const https = require('https');
+
+// 采集完后直接推送到美国 API
+function ingestToUS(platform, items) {
+  return new Promise((resolve) => {
+    try {
+      const today = new Date().toISOString().split('T')[0];
+      const mapped = items.map(item => ({
+        content_id: item.aweme_id || item.content_id || '',
+        scraped_date: today,
+        title: item.title || '',
+        views: item.views || 0,
+        likes: item.likes || 0,
+        comments: item.comments || 0,
+        shares: item.shares || 0,
+        extra_data: { favorites: item.favorites || 0 }
+      })).filter(i => i.content_id);
+      if (!mapped.length) return resolve({ skipped: true });
+      const body = JSON.stringify({ platform, items: mapped });
+      const req = https.request({
+        hostname: '38.23.47.81', port: 5200, path: '/api/snapshots/ingest',
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) }
+      }, res => {
+        let d = ''; res.on('data', c => d += c);
+        res.on('end', () => { try { resolve(JSON.parse(d)); } catch { resolve({ raw: d }); } });
+      });
+      req.on('error', e => resolve({ error: e.message }));
+      req.write(body); req.end();
+    } catch (e) { resolve({ error: e.message }); }
+  });
+}
 
 const NODE_PC_HOST = '100.97.242.124';
 const PORT = 19222;
@@ -423,6 +455,8 @@ async function scrapeDouyin() {
     const filename = '/home/xx/.platform-data/douyin_' + Date.now() + '.json';
     fs.writeFileSync(filename, JSON.stringify(output, null, 2));
     console.error('[抖音] 数据已保存到 ' + filename);
+    const ingestResult = await ingestToUS('douyin', allItems);
+    console.error('[抖音] 已推送到美国 API: ' + JSON.stringify(ingestResult));
     console.log(JSON.stringify({
       success: true,
       platform: '抖音',

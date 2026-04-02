@@ -116,7 +116,7 @@ export interface PlatformDataResponse {
  */
 export async function fetchPlatformData(platform: Platform): Promise<PlatformDataResponse> {
   try {
-    const response = await fetch(`/api/media/platform-data/${platform}`);
+    const response = await fetch(`/api/snapshots/${platform}`);
     if (!response.ok) {
       throw new Error(`HTTP ${response.status}`);
     }

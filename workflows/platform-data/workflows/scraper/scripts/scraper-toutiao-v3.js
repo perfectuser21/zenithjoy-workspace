@@ -5,6 +5,37 @@
 const CDP = require('chrome-remote-interface');
 const { Client } = require('pg');
 const fs = require('fs');
+const https = require('https');
+
+function ingestToUS(platform, items) {
+  return new Promise((resolve) => {
+    try {
+      const today = new Date().toISOString().split('T')[0];
+      const mapped = items.map(item => ({
+        content_id: item.articleId || item.article_id || item.id || '',
+        scraped_date: today,
+        title: item.title || '',
+        views: item.views || item.read_count || 0,
+        likes: item.likes || item.digg_count || 0,
+        comments: item.comments || item.comment_count || 0,
+        shares: item.shares || item.repost_count || 0,
+        extra_data: { publishTime: item.publishTime }
+      })).filter(i => i.content_id);
+      if (!mapped.length) return resolve({ skipped: true });
+      const body = JSON.stringify({ platform, items: mapped });
+      const req = https.request({
+        hostname: '38.23.47.81', port: 5200, path: '/api/snapshots/ingest',
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) }
+      }, res => {
+        let d = ''; res.on('data', c => d += c);
+        res.on('end', () => { try { resolve(JSON.parse(d)); } catch { resolve({ raw: d }); } });
+      });
+      req.on('error', e => resolve({ error: e.message }));
+      req.write(body); req.end();
+    } catch (e) { resolve({ error: e.message }); }
+  });
+}
 
 const NODE_PC_HOST = '100.97.242.124';
 const PORT = 19225;
@@ -312,6 +343,8 @@ async function scrapeToutiao() {
     fs.writeFileSync(filename, JSON.stringify(output, null, 2));
     console.error('[今日头条] 保存到 ' + filename);
     console.error('[今日头条] 总展现量: ' + totalViews);
+    const ingestResult = await ingestToUS('toutiao', allItems);
+    console.error('[今日头条] 已推送到美国 API: ' + JSON.stringify(ingestResult));
     console.log(JSON.stringify({ success: true, platform: '今日头条', count: allItems.length, total_views: totalViews, work_id_linked: workIdLinked }));
 
     await client.close();

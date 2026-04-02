@@ -5,6 +5,37 @@
 const CDP = require('chrome-remote-interface');
 const { Client } = require('pg');
 const fs = require('fs');
+const https = require('https');
+
+function ingestToUS(platform, items) {
+  return new Promise((resolve) => {
+    try {
+      const today = new Date().toISOString().split('T')[0];
+      const mapped = items.map(item => ({
+        content_id: String(item.id || item.question_id || ''),
+        scraped_date: today,
+        title: item.title || item.excerpt || '',
+        views: item.voteup_count || item.views || 0,
+        likes: item.voteup_count || 0,
+        comments: item.comment_count || item.comments || 0,
+        shares: 0,
+        extra_data: { type: item.type, favorites: item.favorites_count || 0 }
+      })).filter(i => i.content_id);
+      if (!mapped.length) return resolve({ skipped: true });
+      const body = JSON.stringify({ platform, items: mapped });
+      const req = https.request({
+        hostname: '38.23.47.81', port: 5200, path: '/api/snapshots/ingest',
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) }
+      }, res => {
+        let d = ''; res.on('data', c => d += c);
+        res.on('end', () => { try { resolve(JSON.parse(d)); } catch { resolve({ raw: d }); } });
+      });
+      req.on('error', e => resolve({ error: e.message }));
+      req.write(body); req.end();
+    } catch (e) { resolve({ error: e.message }); }
+  });
+}
 
 const NODE_PC_HOST = '100.97.242.124';
 const PORT = 19229;
@@ -220,6 +251,9 @@ async function scrapeZhihuComplete() {
     // 保存一份到 /tmp 方便查看
     fs.writeFileSync('/tmp/zhihu-complete-data.json', JSON.stringify(outputData, null, 2));
     console.log('✅ 副本已保存到: /tmp/zhihu-complete-data.json');
+
+    const ingestResult = await ingestToUS('zhihu', allItems);
+    console.log('[知乎] 已推送到美国 API: ' + JSON.stringify(ingestResult));
 
   } catch (error) {
     console.error('[知乎] 采集失败:', error);
