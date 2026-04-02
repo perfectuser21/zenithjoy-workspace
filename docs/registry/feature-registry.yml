@@ -1,0 +1,321 @@
+# Feature Registry — ZenithJoy
+# 更新时间: 2026-04-02
+# 说明: 每个 feature 是"系统能做的事"（动词+对象）
+#
+# maturity 成熟度（0-5）:
+#   0 = 只有代码
+#   1 = +文档（PRD/DoD）
+#   2 = +unit test
+#   3 = +integration test + ADR
+#   4 = +e2e + api_docs
+#   5 = +runbook + regression（生产级）
+
+version: "1.0.0"
+updated: "2026-04-02"
+
+features:
+
+  # ============================================================
+  # 中台认证 (auth)
+  # ============================================================
+
+  - feature_id: auth_feishu_login
+    name: 飞书登录
+    product: 中台认证
+    purpose: 用户通过飞书 OAuth 完成身份验证，获取访问令牌
+    code_path: apps/dashboard/src/pages/FeishuLogin.tsx
+    docs:
+      prd: null
+      dod: null
+      adr: null
+      api: null
+      runbook: null
+    tests:
+      unit: null
+      integration: null
+      e2e: null
+      regression: null
+    ci_coverage: []
+    maturity: 0
+
+  - feature_id: auth_ab_testing
+    name: A/B 测试分流
+    product: 中台认证
+    purpose: 按用户 ID 分流到不同功能版本，支持实验功能灰度
+    code_path: apps/dashboard/src/lib/ab-testing.ts
+    docs:
+      prd: null
+      dod: null
+      adr: null
+      api: null
+      runbook: null
+    tests:
+      unit: apps/dashboard/src/lib/__tests__/ab-testing.test.ts
+      integration: null
+      e2e: null
+      regression: null
+    ci_coverage: [L3]
+    maturity: 2
+
+  # ============================================================
+  # 新媒体运营 (media)
+  # ============================================================
+
+  - feature_id: media_content_factory
+    name: 内容工厂 Pipeline
+    product: 新媒体运营
+    purpose: 通过 AI Pipeline 自动生成多平台发布内容（研究→文案→审核→生成→导出）
+    code_path: apps/dashboard/src/pages/ContentFactoryPage.tsx
+    docs:
+      prd: null
+      dod: null
+      adr: null
+      api: docs/registry/api-registry.yml#creator-backend
+      runbook: null
+    tests:
+      unit: null
+      integration: null
+      e2e: null
+      regression: null
+    ci_coverage: []
+    maturity: 0
+
+  - feature_id: media_works_management
+    name: 内容作品管理
+    product: 新媒体运营
+    purpose: 创建/编辑/查看/删除内容作品，关联 Notion 文档同步
+    code_path: apps/api/src/controllers/works.controller.ts
+    docs:
+      prd: null
+      dod: null
+      adr: null
+      api: docs/registry/api-registry.yml#works
+      runbook: null
+    tests:
+      unit: apps/dashboard/src/pages/__tests__/WorksListPage.test.tsx
+      integration: null
+      e2e: null
+      regression: null
+    ci_coverage: [L3]
+    maturity: 2
+
+  - feature_id: media_platform_publish
+    name: 多平台发布
+    product: 新媒体运营
+    purpose: 将内容作品一键发布到抖音/小红书/微信公众号等平台
+    code_path: apps/api/src/controllers/publish.controller.ts
+    docs:
+      prd: null
+      dod: null
+      adr: null
+      api: docs/registry/api-registry.yml#publish
+      runbook: null
+    tests:
+      unit: apps/dashboard/src/api/platforms/__tests__/index.test.ts
+      integration: null
+      e2e: null
+      regression: null
+    ci_coverage: [L3]
+    maturity: 2
+
+  - feature_id: media_platform_data
+    name: 平台数据看板
+    product: 新媒体运营
+    purpose: 聚合各平台发布数据（阅读/点赞/转发），展示内容效果
+    code_path: apps/dashboard/src/pages/PlatformDataPage.tsx
+    docs:
+      prd: null
+      dod: null
+      adr: null
+      api: docs/registry/api-registry.yml#platform-data
+      runbook: null
+    tests:
+      unit: apps/dashboard/src/pages/__tests__/PlatformDataPage.test.tsx
+      integration: null
+      e2e: null
+      regression: null
+    ci_coverage: [L3]
+    maturity: 2
+
+  - feature_id: media_notion_sync
+    name: Notion 内容同步
+    product: 新媒体运营
+    purpose: 从 Notion 数据库拉取文章 blocks，作为内容 pipeline 输入源
+    code_path: services/creator/api/server.py
+    docs:
+      prd: null
+      dod: null
+      adr: null
+      api: docs/registry/api-registry.yml#notion
+      runbook: null
+    tests:
+      unit: null
+      integration: null
+      e2e: null
+      regression: null
+    ci_coverage: []
+    maturity: 0
+
+  # ============================================================
+  # 私域运营 (crm)
+  # ============================================================
+
+  - feature_id: crm_field_management
+    name: 自定义字段管理
+    product: 私域运营
+    purpose: 定义和管理内容/用户的自定义属性字段，支持私域标签体系
+    code_path: apps/api/src/controllers/fields.controller.ts
+    docs:
+      prd: null
+      dod: null
+      adr: null
+      api: docs/registry/api-registry.yml#fields
+      runbook: null
+    tests:
+      unit: apps/dashboard/src/pages/__tests__/FieldManagementPage.test.tsx
+      integration: null
+      e2e: null
+      regression: null
+    ci_coverage: [L3]
+    maturity: 2
+
+  - feature_id: crm_scraping
+    name: 数据抓取
+    product: 私域运营
+    purpose: 抓取外部平台数据（评论/粉丝/互动），写入私域数据库
+    code_path: apps/dashboard/src/pages/ScrapingPage.tsx
+    docs:
+      prd: null
+      dod: null
+      adr: null
+      api: null
+      runbook: null
+    tests:
+      unit: null
+      integration: null
+      e2e: null
+      regression: null
+    ci_coverage: []
+    maturity: 0
+
+  # ============================================================
+  # AI 员工 (ai-employee)
+  # ============================================================
+
+  - feature_id: ai_employee_list
+    name: AI 员工列表
+    product: AI员工
+    purpose: 展示所有 AI 员工（角色/能力/状态），支持查看详情
+    code_path: apps/dashboard/src/pages/AiEmployeesPage.tsx
+    docs:
+      prd: null
+      dod: null
+      adr: null
+      api: null
+      runbook: null
+    tests:
+      unit: null
+      integration: null
+      e2e: null
+      regression: null
+    ci_coverage: []
+    maturity: 0
+
+  - feature_id: ai_employee_ability
+    name: AI 员工能力配置
+    product: AI员工
+    purpose: 为 AI 员工配置任务能力（Skill）和执行参数
+    code_path: apps/dashboard/src/pages/AiAbilityDetailPage.tsx
+    docs:
+      prd: null
+      dod: null
+      adr: null
+      api: null
+      runbook: null
+    tests:
+      unit: null
+      integration: null
+      e2e: null
+      regression: null
+    ci_coverage: []
+    maturity: 0
+
+  - feature_id: ai_employee_execution_status
+    name: AI 员工执行状态
+    product: AI员工
+    purpose: 实时展示 AI 员工的 Pipeline 执行状态和日志
+    code_path: apps/dashboard/src/pages/ExecutionStatus.tsx
+    docs:
+      prd: null
+      dod: null
+      adr: null
+      api: null
+      runbook: null
+    tests:
+      unit: null
+      integration: null
+      e2e: null
+      regression: null
+    ci_coverage: []
+    maturity: 0
+
+  # ============================================================
+  # AI 视频 (ai-video)
+  # ============================================================
+
+  - feature_id: ai_video_generate
+    name: AI 视频生成
+    product: AI视频
+    purpose: 输入文案/图片，调用 AI 生成短视频任务，返回视频文件
+    code_path: apps/api/src/services/ai-video.service.ts
+    docs:
+      prd: null
+      dod: null
+      adr: null
+      api: docs/registry/api-registry.yml#ai-video
+      runbook: null
+    tests:
+      unit: apps/api/src/services/__tests__/ai-video.service.test.ts
+      integration: null
+      e2e: null
+      regression: null
+    ci_coverage: [L3]
+    maturity: 2
+
+  - feature_id: ai_video_task_monitor
+    name: 视频任务状态监控
+    product: AI视频
+    purpose: 轮询视频生成任务状态，展示进度和完成结果
+    code_path: apps/dashboard/src/components/video-generation/TaskMonitor.tsx
+    docs:
+      prd: null
+      dod: null
+      adr: null
+      api: docs/registry/api-registry.yml#ai-video
+      runbook: null
+    tests:
+      unit: apps/dashboard/src/components/video-generation/__tests__/TaskMonitor.test.tsx
+      integration: null
+      e2e: null
+      regression: null
+    ci_coverage: [L3]
+    maturity: 2
+
+  - feature_id: ai_video_history
+    name: 视频历史记录
+    product: AI视频
+    purpose: 查看历史视频生成任务列表及结果
+    code_path: apps/dashboard/src/pages/AiVideoHistoryPage.tsx
+    docs:
+      prd: null
+      dod: null
+      adr: null
+      api: docs/registry/api-registry.yml#ai-video
+      runbook: null
+    tests:
+      unit: null
+      integration: null
+      e2e: null
+      regression: null
+    ci_coverage: []
+    maturity: 0
