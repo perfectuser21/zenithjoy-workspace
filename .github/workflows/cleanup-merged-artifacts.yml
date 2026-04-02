@@ -1,0 +1,53 @@
+name: Cleanup Merged Artifacts
+
+# 每次 PR 合并到 main 后，自动删除该 PR 遗留的 .prd-*.md / .task-*.md 文件
+# 这些文件只在 PR review 期间需要（CI 检查 GITHUB_HEAD_REF），合并后是死重
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  cleanup:
+    name: Remove prd/task artifacts
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Find and remove prd/task artifacts
+        id: cleanup
+        run: |
+          FILES=$(git ls-files | grep -E "^\.(prd|task)-" || true)
+
+          if [ -z "$FILES" ]; then
+            echo "✅ 无 prd/task 残留文件，跳过"
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          COUNT=$(echo "$FILES" | wc -l | tr -d ' ')
+          echo "🗑️  发现 $COUNT 个残留文件，开始清理..."
+          echo "$FILES"
+
+          echo "$FILES" | xargs git rm -q
+
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+          echo "count=$COUNT" >> "$GITHUB_OUTPUT"
+
+      - name: Commit cleanup
+        if: steps.cleanup.outputs.changed == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git commit -m "chore(cleanup): 自动清理合并后的 prd/task 文件（${{ steps.cleanup.outputs.count }} 个）
+
+这些文件由 /dev 工作流生成，仅在 PR review 期间需要，合并后自动清除。
+Auto-cleanup by cleanup-merged-artifacts.yml"
+          git push

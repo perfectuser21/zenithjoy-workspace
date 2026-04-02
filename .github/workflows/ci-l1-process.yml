@@ -1,17 +1,43 @@
 name: L1 Process Gate
 
 # L1: 流程检查 — 每个 PR 必跑（~2min）
-# 职责：PR 标题格式、commit message 规范
+# 职责：分支命名 / PR 标题格式 / CI 配置审计 / 密钥扫描 / 前端 Browser DoD
 
 on:
   pull_request:
     branches: [main]
+  workflow_dispatch:
 
 concurrency:
   group: l1-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
+  # ─── /dev 分支命名验证 ─────────────────────────────────────────────────────
+
+  verify-dev-workflow:
+    name: Verify /dev Workflow (Branch Name Check)
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: 验证分支必须通过 /dev 创建
+        run: |
+          BRANCH="${{ github.head_ref || github.ref_name }}"
+          echo "检查分支名: $BRANCH"
+          if ! echo "$BRANCH" | grep -qP '^cp-\d{8}-[a-z0-9-]+$'; then
+            echo ""
+            echo "❌ 分支名不符合 /dev 工作流规范"
+            echo "   当前分支: $BRANCH"
+            echo "   要求格式: cp-XXXXXXXX-task-name（例: cp-02281200-fix-login）"
+            echo ""
+            echo "   所有代码改动必须通过 /dev 工作流创建分支。"
+            echo "   请运行 /dev 重新开始开发流程。"
+            exit 1
+          fi
+          echo "✅ 分支名验证通过: $BRANCH"
+
+  # ─── PR 标题格式（Conventional Commits）─────────────────────────────────
+
   pr-title:
     name: PR Title Format
     runs-on: ubuntu-latest
@@ -22,9 +48,10 @@ jobs:
           TITLE="${{ github.event.pull_request.title }}"
           echo "PR Title: $TITLE"
 
-          # Conventional commits pattern: type(scope): description
-          # type: feat, fix, docs, chore, test, refactor, style, ci, perf, build
-          if echo "$TITLE" | grep -qE "^(feat|fix|docs|chore|test|refactor|style|ci|perf|build)(\(.+\))?!?:"; then
+          # 去掉 [CONFIG] / [INFRA] 前缀后再校验 conventional commits
+          STRIPPED=$(echo "$TITLE" | sed 's/^\[CONFIG\][[:space:]]*//' | sed 's/^\[INFRA\][[:space:]]*//')
+
+          if echo "$STRIPPED" | grep -qE "^(feat|fix|docs|chore|test|refactor|style|ci|perf|build)(\(.+\))?!?:"; then
             echo "PR title follows conventional commits format"
           else
             echo ""
@@ -35,11 +62,95 @@ jobs:
             echo "Examples:"
             echo "  feat(dashboard): add user profile page"
             echo "  fix(api): handle null response from database"
-            echo "  docs: update README"
+            echo "  [CONFIG] ci(l1): add branch naming check"
             exit 1
           fi
 
-  # ─── Frontend Browser DoD Check ──────────────────────────────────────
+  # ─── CI Config Audit ──────────────────────────────────────────────────────
+
+  ci-config-audit:
+    name: CI Config Audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Audit CI config changes
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          BASE_REF: ${{ github.base_ref || 'main' }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "  CI Config Audit"
+          echo "  Branch: ${{ github.head_ref }}"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo ""
+
+          CHANGED=$(git diff --name-only "origin/${BASE_REF}...HEAD" 2>/dev/null || git diff --name-only HEAD~1 HEAD)
+          CI_CHANGED=$(echo "$CHANGED" | grep "^\.github/workflows/" || true)
+
+          if [ -z "$CI_CHANGED" ]; then
+            echo "No CI workflow files changed — audit not required"
+            echo ""
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            echo "  ✅ CI Config Audit PASSED (no CI changes)"
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            exit 0
+          fi
+
+          echo "CI workflow files changed:"
+          echo "$CI_CHANGED" | sed 's/^/  - /'
+          echo ""
+
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            echo "workflow_dispatch: 跳过 PR 标题 [CONFIG] 检查"
+          elif [[ ! "$PR_TITLE" =~ \[CONFIG\] ]] && [[ ! "$PR_TITLE" =~ \[INFRA\] ]]; then
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            echo "  ❌ CI Config Audit FAILED"
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            echo ""
+            echo "  .github/workflows/** was modified but PR title is missing [CONFIG] or [INFRA] tag."
+            echo "  CI config changes are high-risk and require explicit labeling."
+            echo ""
+            echo "  Fix: update PR title to include [CONFIG] or [INFRA]"
+            echo "  Example: [CONFIG] ci(l1): add branch naming check"
+            echo ""
+            exit 1
+          fi
+
+          echo "PR title contains [CONFIG] or [INFRA] tag — audit passed"
+          echo ""
+          echo "Changed files summary:"
+          git diff --stat "origin/${BASE_REF}...HEAD" -- '.github/workflows/' | tail -5
+          echo ""
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "  ✅ CI Config Audit PASSED"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+  # ─── Secrets Scan ────────────────────────────────────────────────────────
+
+  secrets-scan:
+    name: Secrets Scan (gitleaks)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Scan for secrets
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_LICENSE: ${{ secrets.GITLEAKS_LICENSE }}
+
+  # ─── Frontend Browser DoD Check ──────────────────────────────────────────
 
   frontend-browser-dod-check:
     name: Frontend Browser DoD Check
@@ -69,7 +180,6 @@ jobs:
 
           echo "检测到前端文件改动，检查 DoD 是否含浏览器验证步骤..."
 
-          # 定位 DoD / Task Card 文件
           DOD_FILE=""
           if [ -f ".task-${BRANCH}.md" ]; then
             DOD_FILE=".task-${BRANCH}.md"
@@ -86,7 +196,6 @@ jobs:
 
           echo "DoD 文件: $DOD_FILE"
 
-          # 检查浏览器验证关键词：manual:chrome: / localhost:3001
           if grep -q "manual:chrome:\|localhost:3001" "$DOD_FILE"; then
             echo "✅ 找到浏览器验证步骤，检查通过"
             grep -n "manual:chrome:\|localhost:3001" "$DOD_FILE" | head -5
@@ -105,10 +214,11 @@ jobs:
           echo ""
           exit 1
 
-  # ─── L1 Gate ──────────────────────────────────────────────────────────
+  # ─── Gate job ─────────────────────────────────────────────────────────────
+
   l1-passed:
     name: L1 Process Gate Passed
-    needs: [pr-title, frontend-browser-dod-check]
+    needs: [verify-dev-workflow, pr-title, ci-config-audit, secrets-scan, frontend-browser-dod-check]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -121,8 +231,23 @@ jobs:
 
           FAILED=false
 
+          if [ "${{ needs.verify-dev-workflow.result }}" != "success" ]; then
+            echo "FAIL: /dev Workflow Verification (${{ needs.verify-dev-workflow.result }})"
+            FAILED=true
+          fi
+
           if [ "${{ needs.pr-title.result }}" != "success" ]; then
             echo "FAIL: PR Title Format (${{ needs.pr-title.result }})"
+            FAILED=true
+          fi
+
+          if [ "${{ needs.ci-config-audit.result }}" != "success" ]; then
+            echo "FAIL: CI Config Audit (${{ needs.ci-config-audit.result }})"
+            FAILED=true
+          fi
+
+          if [ "${{ needs.secrets-scan.result }}" != "success" ]; then
+            echo "FAIL: Secrets Scan (${{ needs.secrets-scan.result }})"
             FAILED=true
           fi
 
@@ -134,12 +259,12 @@ jobs:
           if [ "$FAILED" = "true" ]; then
             echo ""
             echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-            echo "  L1 Process Gate FAILED"
+            echo "  ❌ L1 Process Gate FAILED"
             echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
             exit 1
           fi
 
           echo ""
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          echo "  L1 Process Gate PASSED"
+          echo "  ✅ L1 Process Gate PASSED"
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
