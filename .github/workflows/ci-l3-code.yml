@@ -113,6 +113,9 @@ jobs:
           cache-dependency-path: apps/dashboard/package-lock.json
       - run: npm ci
         working-directory: apps/dashboard
+      - name: Fix rollup optional deps (npm ci bug workaround)
+        working-directory: apps/dashboard
+        run: node -e "try{require('@rollup/rollup-linux-x64-gnu')}catch(e){require('child_process').execSync('npm install --no-save @rollup/rollup-linux-x64-gnu',{stdio:'inherit'})}" || true
       - run: mkdir -p apps/dashboard/public/gallery/chatgpt-cards apps/dashboard/public/gallery/deep-post-cards
       - run: npm run build
         working-directory: apps/dashboard
@@ -175,6 +178,9 @@ jobs:
           cache: 'npm'
           cache-dependency-path: package-lock.json
       - run: npm ci --workspace=apps/geoai
+      - name: Fix rollup optional deps (npm ci bug workaround)
+        working-directory: apps/geoai
+        run: node -e "try{require('@rollup/rollup-linux-x64-gnu')}catch(e){require('child_process').execSync('npm install --no-save @rollup/rollup-linux-x64-gnu',{stdio:'inherit'})}" || true
       - run: npm run build
         working-directory: apps/geoai
 
