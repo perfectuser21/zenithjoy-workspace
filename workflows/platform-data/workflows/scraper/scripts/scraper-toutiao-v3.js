@@ -38,7 +38,7 @@ function ingestToUS(platform, items) {
 }
 
 const NODE_PC_HOST = '100.97.242.124';
-const PORT = 19225;
+const PORT = 19226;
 
 const dbClient = new Client({
   host: 'localhost', port: 5432, user: 'n8n_user',
