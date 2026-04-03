@@ -194,10 +194,22 @@ jobs:
           echo "  PASS: All test files are registered"
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
+  registry-sync-check:
+    name: Registry Sync Check
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Run registry sync check
+        run: node scripts/sync-registry.cjs
+
   # ─── L2 Gate ──────────────────────────────────────────────────────────
   l2-passed:
     name: L2 Consistency Gate Passed
-    needs: [tsconfig-inheritance, engines-consistency, sensitive-files, orphan-test-check]
+    needs: [tsconfig-inheritance, engines-consistency, sensitive-files, orphan-test-check, registry-sync-check]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -227,6 +239,11 @@ jobs:
 
           if [ "${{ needs.orphan-test-check.result }}" != "success" ]; then
             echo "FAIL: Orphan Test Check (${{ needs.orphan-test-check.result }})"
+            FAILED=true
+          fi
+
+          if [ "${{ needs.registry-sync-check.result }}" != "success" ]; then
+            echo "FAIL: Registry Sync Check (${{ needs.registry-sync-check.result }})"
             FAILED=true
           fi
 
