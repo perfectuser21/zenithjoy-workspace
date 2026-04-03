@@ -1,5 +1,5 @@
-const _log = console.log.bind(console);
 #!/usr/bin/env node
+const _log = console.log.bind(console);
 'use strict';
 
 /**

@@ -4,6 +4,11 @@
   "private": true,
   "type": "commonjs",
   "description": "Social media publishing scripts",
+  "scripts": {
+    "test": "node --test ./**/__tests__/*.test.cjs",
+    "test:unit": "node --test ./**/__tests__/utils.test.cjs ./**/__tests__/cdp-client.test.cjs",
+    "validate": "node validate-registry.cjs"
+  },
   "dependencies": {
     "playwright": "^1.40.0",
     "ws": "^8.16.0"
