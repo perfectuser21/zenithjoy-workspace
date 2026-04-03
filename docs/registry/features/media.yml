@@ -38,6 +38,15 @@ features:
       jobs: []
       layers: []
     runtime: {}
+    capabilities:
+      - id: media_content_factory
+        name: 内容工厂 Pipeline
+        entry_file: ContentFactoryPage.tsx
+        maturity: 0
+        tests:
+          unit: []
+          integration: []
+        status: active
 
   - feature_id: media_works_management
     name: 内容作品管理
@@ -78,6 +87,16 @@ features:
       jobs: []
       layers: [L3]
     runtime: {}
+    capabilities:
+      - id: media_works_management
+        name: 内容作品管理
+        entry_file: works.controller.ts
+        maturity: 2
+        tests:
+          unit:
+            - apps/dashboard/src/pages/__tests__/WorksListPage.test.tsx
+          integration: []
+        status: active
 
   - feature_id: media_platform_publish
     name: 多平台发布
@@ -117,6 +136,16 @@ features:
       jobs: []
       layers: [L3]
     runtime: {}
+    capabilities:
+      - id: media_platform_publish
+        name: 多平台发布
+        entry_file: publish.controller.ts
+        maturity: 2
+        tests:
+          unit:
+            - apps/dashboard/src/api/platforms/__tests__/index.test.ts
+          integration: []
+        status: active
 
   - feature_id: media_platform_data
     name: 平台数据看板
@@ -151,6 +180,16 @@ features:
       jobs: []
       layers: [L3]
     runtime: {}
+    capabilities:
+      - id: media_platform_data
+        name: 平台数据看板
+        entry_file: PlatformDataPage.tsx
+        maturity: 2
+        tests:
+          unit:
+            - apps/dashboard/src/pages/__tests__/PlatformDataPage.test.tsx
+          integration: []
+        status: active
 
   - feature_id: media_notion_sync
     name: Notion 内容同步
@@ -183,3 +222,12 @@ features:
       jobs: []
       layers: []
     runtime: {}
+    capabilities:
+      - id: media_notion_sync
+        name: Notion 内容同步
+        entry_file: server.py
+        maturity: 0
+        tests:
+          unit: []
+          integration: []
+        status: active

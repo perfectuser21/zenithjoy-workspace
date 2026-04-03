@@ -34,6 +34,15 @@ features:
       jobs: []
       layers: []
     runtime: {}
+    capabilities:
+      - id: auth_feishu_login
+        name: 飞书登录
+        entry_file: FeishuLogin.tsx
+        maturity: 0
+        tests:
+          unit: []
+          integration: []
+        status: active
 
   - feature_id: auth_ab_testing
     name: A/B 测试分流
@@ -62,3 +71,13 @@ features:
       jobs: []
       layers: [L3]
     runtime: {}
+    capabilities:
+      - id: auth_ab_testing
+        name: A/B 测试分流
+        entry_file: ab-testing.ts
+        maturity: 2
+        tests:
+          unit:
+            - apps/dashboard/src/lib/__tests__/ab-testing.test.ts
+          integration: []
+        status: active

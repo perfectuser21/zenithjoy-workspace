@@ -452,13 +452,14 @@ function main() {
     }
 
     // ── maturity 不诚实检查 ──
+    // 0=只有代码  1=+文档  2=+unit test  3=+integration+ADR  4=+e2e+api_doc  5=+runbook+regression
     if (regFeature.maturity >= 2 && regFeature.tests_unit.length === 0) {
       checker.fail(featureId, 'maturity', `maturity=${regFeature.maturity} 但 tests.unit 为空`);
-    } else if (regFeature.maturity >= 1) {
-      // maturity >= 1 但 docs 全是 null（STATUS.md 算 runbook）
+    } else if (regFeature.maturity === 1) {
+      // maturity=1 要求有文档（STATUS.md 算 runbook）
       const allDocsNull = Object.values(regFeature.docs).every(v => v === null);
       if (allDocsNull && !scan.hasStatusMd) {
-        checker.fail(featureId, 'maturity', `maturity=${regFeature.maturity} 但 docs 全为 null 且无 STATUS.md`);
+        checker.fail(featureId, 'maturity', `maturity=1 但 docs 全为 null 且无 STATUS.md`);
       } else {
         checker.pass(featureId, 'maturity', `${regFeature.maturity}（合理）`);
       }

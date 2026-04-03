@@ -52,6 +52,34 @@ features:
         image: douyin-publisher/publish-douyin-image.js
         video: douyin-publisher/publish-douyin-video.js
         article: douyin-publisher/publish-douyin-article.js
+    capabilities:
+      - id: pub_douyin_image
+        name: 抖音图文发布
+        entry_file: publish-douyin-image.js
+        content_type: image
+        maturity: 0
+        tests:
+          unit: []
+          integration: []
+        status: active
+      - id: pub_douyin_video
+        name: 抖音视频发布
+        entry_file: publish-douyin-video.js
+        content_type: video
+        maturity: 0
+        tests:
+          unit: []
+          integration: []
+        status: active
+      - id: pub_douyin_article
+        name: 抖音文章发布
+        entry_file: publish-douyin-article.js
+        content_type: article
+        maturity: 0
+        tests:
+          unit: []
+          integration: []
+        status: active
 
   - feature_id: pub_kuaishou
     name: 快手发布
@@ -92,6 +120,27 @@ features:
       scripts:
         video: kuaishou-publisher/publish-kuaishou-video.cjs
         image: kuaishou-publisher/publish-kuaishou-image.cjs
+    capabilities:
+      - id: pub_kuaishou_video
+        name: 快手视频发布
+        entry_file: publish-kuaishou-video.cjs
+        content_type: video
+        maturity: 2
+        tests:
+          unit:
+            - services/creator/scripts/publishers/kuaishou-publisher/__tests__/publish-kuaishou-api.test.cjs
+          integration: []
+        status: active
+      - id: pub_kuaishou_image
+        name: 快手图文发布
+        entry_file: publish-kuaishou-image.cjs
+        content_type: image
+        maturity: 2
+        tests:
+          unit:
+            - services/creator/scripts/publishers/kuaishou-publisher/__tests__/publish-kuaishou-api.test.cjs
+          integration: []
+        status: active
 
   - feature_id: pub_xiaohongshu
     name: 小红书发布
@@ -133,6 +182,35 @@ features:
         video: xiaohongshu-publisher/publish-xiaohongshu-video.cjs
         image: xiaohongshu-publisher/publish-xiaohongshu-image.cjs
         article: xiaohongshu-publisher/publish-xiaohongshu-article.cjs
+    capabilities:
+      - id: pub_xiaohongshu_video
+        name: 小红书视频发布
+        entry_file: publish-xiaohongshu-video.cjs
+        content_type: video
+        maturity: 0
+        tests:
+          unit: []
+          integration: []
+        status: active
+      - id: pub_xiaohongshu_image
+        name: 小红书图文发布
+        entry_file: publish-xiaohongshu-image.cjs
+        content_type: image
+        maturity: 2
+        tests:
+          unit:
+            - services/creator/scripts/publishers/xiaohongshu-publisher/__tests__/publish-xiaohongshu-image.test.cjs
+          integration: []
+        status: active
+      - id: pub_xiaohongshu_article
+        name: 小红书文章发布
+        entry_file: publish-xiaohongshu-article.cjs
+        content_type: article
+        maturity: 0
+        tests:
+          unit: []
+          integration: []
+        status: active
 
   - feature_id: pub_toutiao
     name: 头条发布
@@ -175,6 +253,43 @@ features:
         image: toutiao-publisher/publish-toutiao-image.cjs
         article: toutiao-publisher/publish-toutiao-article.cjs
         post: toutiao-publisher/publish-toutiao-post.cjs
+    capabilities:
+      - id: pub_toutiao_video
+        name: 头条视频发布
+        entry_file: publish-toutiao-video.cjs
+        content_type: video
+        maturity: 0
+        tests:
+          unit: []
+          integration: []
+        status: active
+      - id: pub_toutiao_image
+        name: 头条图文发布
+        entry_file: publish-toutiao-image.cjs
+        content_type: image
+        maturity: 0
+        tests:
+          unit: []
+          integration: []
+        status: active
+      - id: pub_toutiao_article
+        name: 头条文章发布
+        entry_file: publish-toutiao-article.cjs
+        content_type: article
+        maturity: 0
+        tests:
+          unit: []
+          integration: []
+        status: active
+      - id: pub_toutiao_post
+        name: 头条微头条发布
+        entry_file: publish-toutiao-post.cjs
+        content_type: post
+        maturity: 0
+        tests:
+          unit: []
+          integration: []
+        status: active
 
   - feature_id: pub_weibo
     name: 微博发布
@@ -219,6 +334,36 @@ features:
         video: weibo-publisher/publish-weibo-video.cjs
         image: weibo-publisher/publish-weibo-image.cjs
         article: weibo-publisher/publish-weibo-article.cjs
+    capabilities:
+      - id: pub_weibo_video
+        name: 微博视频发布
+        entry_file: publish-weibo-video.cjs
+        content_type: video
+        maturity: 0
+        tests:
+          unit: []
+          integration: []
+        status: active
+      - id: pub_weibo_image
+        name: 微博图文发布
+        entry_file: publish-weibo-image.cjs
+        content_type: image
+        maturity: 2
+        tests:
+          unit:
+            - services/creator/scripts/publishers/weibo-publisher/__tests__/publish-weibo-image.test.cjs
+          integration: []
+        status: active
+      - id: pub_weibo_article
+        name: 微博文章发布
+        entry_file: publish-weibo-article.cjs
+        content_type: article
+        maturity: 2
+        tests:
+          unit:
+            - services/creator/scripts/publishers/weibo-publisher/__tests__/publish-weibo-article.test.cjs
+          integration: []
+        status: active
 
   - feature_id: pub_shipinhao
     name: 视频号发布
@@ -255,6 +400,25 @@ features:
         video: shipinhao-publisher/publish-shipinhao-video.cjs
         image: shipinhao-publisher/publish-shipinhao-image.cjs
       keepalive: keepalive-all.cjs --frequent
+    capabilities:
+      - id: pub_shipinhao_video
+        name: 视频号视频发布
+        entry_file: publish-shipinhao-video.cjs
+        content_type: video
+        maturity: 0
+        tests:
+          unit: []
+          integration: []
+        status: active
+      - id: pub_shipinhao_image
+        name: 视频号图文发布
+        entry_file: publish-shipinhao-image.cjs
+        content_type: image
+        maturity: 0
+        tests:
+          unit: []
+          integration: []
+        status: active
 
   - feature_id: pub_zhihu
     name: 知乎发布
@@ -296,6 +460,35 @@ features:
         video: zhihu-publisher/publish-zhihu-video.cjs
         article: zhihu-publisher/publish-zhihu-article.cjs
         idea: zhihu-publisher/publish-zhihu-idea.cjs
+    capabilities:
+      - id: pub_zhihu_video
+        name: 知乎视频发布
+        entry_file: publish-zhihu-video.cjs
+        content_type: video
+        maturity: 0
+        tests:
+          unit: []
+          integration: []
+        status: active
+      - id: pub_zhihu_article
+        name: 知乎文章发布
+        entry_file: publish-zhihu-article.cjs
+        content_type: article
+        maturity: 2
+        tests:
+          unit:
+            - services/creator/scripts/publishers/zhihu-publisher/__tests__/publish-zhihu-article.test.cjs
+          integration: []
+        status: active
+      - id: pub_zhihu_idea
+        name: 知乎想法发布
+        entry_file: publish-zhihu-idea.cjs
+        content_type: idea
+        maturity: 0
+        tests:
+          unit: []
+          integration: []
+        status: active
 
   - feature_id: pub_wechat
     name: 微信公众号发布
@@ -332,6 +525,17 @@ features:
       content_types: [article]
       scripts:
         article: wechat-publisher/publish-wechat-article.cjs
+    capabilities:
+      - id: pub_wechat_article
+        name: 微信公众号文章发布
+        entry_file: publish-wechat-article.cjs
+        content_type: article
+        maturity: 2
+        tests:
+          unit:
+            - services/creator/scripts/publishers/wechat-publisher/__tests__/publish-wechat-article.test.cjs
+          integration: []
+        status: active
 
   # ============================================================
   # 基础设施（4 个）
