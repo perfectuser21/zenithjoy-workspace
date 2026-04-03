@@ -84,7 +84,7 @@ features:
   - feature_id: pub_kuaishou
     name: 快手发布
     purpose: 通过 CDP 自动化发布图文/视频到快手创作者平台
-    maturity: 0
+    maturity: 2
     code:
       root: services/creator/scripts/publishers/kuaishou-publisher/
       entry_files:
@@ -128,6 +128,7 @@ features:
         maturity: 2
         tests:
           unit:
+            - services/creator/scripts/publishers/kuaishou-publisher/__tests__/utils.test.cjs
             - services/creator/scripts/publishers/kuaishou-publisher/__tests__/publish-kuaishou-api.test.cjs
           integration: []
         status: active
@@ -138,6 +139,7 @@ features:
         maturity: 2
         tests:
           unit:
+            - services/creator/scripts/publishers/kuaishou-publisher/__tests__/utils.test.cjs
             - services/creator/scripts/publishers/kuaishou-publisher/__tests__/publish-kuaishou-api.test.cjs
           integration: []
         status: active
@@ -145,7 +147,7 @@ features:
   - feature_id: pub_xiaohongshu
     name: 小红书发布
     purpose: 通过 CDP 自动化发布图文/视频/文章到小红书创作者中心
-    maturity: 0
+    maturity: 2
     code:
       root: services/creator/scripts/publishers/xiaohongshu-publisher/
       entry_files:
@@ -187,9 +189,10 @@ features:
         name: 小红书视频发布
         entry_file: publish-xiaohongshu-video.cjs
         content_type: video
-        maturity: 0
+        maturity: 2
         tests:
-          unit: []
+          unit:
+            - services/creator/scripts/publishers/xiaohongshu-publisher/__tests__/utils.test.cjs
           integration: []
         status: active
       - id: pub_xiaohongshu_image
@@ -199,6 +202,7 @@ features:
         maturity: 2
         tests:
           unit:
+            - services/creator/scripts/publishers/xiaohongshu-publisher/__tests__/utils.test.cjs
             - services/creator/scripts/publishers/xiaohongshu-publisher/__tests__/publish-xiaohongshu-image.test.cjs
           integration: []
         status: active
@@ -206,9 +210,10 @@ features:
         name: 小红书文章发布
         entry_file: publish-xiaohongshu-article.cjs
         content_type: article
-        maturity: 0
+        maturity: 2
         tests:
-          unit: []
+          unit:
+            - services/creator/scripts/publishers/xiaohongshu-publisher/__tests__/utils.test.cjs
           integration: []
         status: active
 
@@ -294,7 +299,7 @@ features:
   - feature_id: pub_weibo
     name: 微博发布
     purpose: 通过 CDP 自动化发布图文/视频/文章到微博
-    maturity: 0
+    maturity: 2
     code:
       root: services/creator/scripts/publishers/weibo-publisher/
       entry_files:
@@ -339,9 +344,12 @@ features:
         name: 微博视频发布
         entry_file: publish-weibo-video.cjs
         content_type: video
-        maturity: 0
+        maturity: 2
         tests:
-          unit: []
+          unit:
+            - services/creator/scripts/publishers/weibo-publisher/__tests__/utils.test.cjs
+            - services/creator/scripts/publishers/weibo-publisher/__tests__/cdp-client.test.cjs
+            - services/creator/scripts/publishers/weibo-publisher/__tests__/publish-weibo-api.test.cjs
           integration: []
         status: active
       - id: pub_weibo_image
@@ -351,6 +359,9 @@ features:
         maturity: 2
         tests:
           unit:
+            - services/creator/scripts/publishers/weibo-publisher/__tests__/utils.test.cjs
+            - services/creator/scripts/publishers/weibo-publisher/__tests__/cdp-client.test.cjs
+            - services/creator/scripts/publishers/weibo-publisher/__tests__/publish-weibo-api.test.cjs
             - services/creator/scripts/publishers/weibo-publisher/__tests__/publish-weibo-image.test.cjs
           integration: []
         status: active
@@ -361,6 +372,9 @@ features:
         maturity: 2
         tests:
           unit:
+            - services/creator/scripts/publishers/weibo-publisher/__tests__/utils.test.cjs
+            - services/creator/scripts/publishers/weibo-publisher/__tests__/cdp-client.test.cjs
+            - services/creator/scripts/publishers/weibo-publisher/__tests__/publish-weibo-api.test.cjs
             - services/creator/scripts/publishers/weibo-publisher/__tests__/publish-weibo-article.test.cjs
           integration: []
         status: active
@@ -423,7 +437,7 @@ features:
   - feature_id: pub_zhihu
     name: 知乎发布
     purpose: 通过 CDP 自动化发布视频/文章/想法到知乎
-    maturity: 0
+    maturity: 2
     code:
       root: services/creator/scripts/publishers/zhihu-publisher/
       entry_files:
@@ -465,9 +479,10 @@ features:
         name: 知乎视频发布
         entry_file: publish-zhihu-video.cjs
         content_type: video
-        maturity: 0
+        maturity: 2
         tests:
-          unit: []
+          unit:
+            - services/creator/scripts/publishers/zhihu-publisher/__tests__/publish-zhihu-api.test.cjs
           integration: []
         status: active
       - id: pub_zhihu_article
@@ -477,6 +492,7 @@ features:
         maturity: 2
         tests:
           unit:
+            - services/creator/scripts/publishers/zhihu-publisher/__tests__/publish-zhihu-api.test.cjs
             - services/creator/scripts/publishers/zhihu-publisher/__tests__/publish-zhihu-article.test.cjs
           integration: []
         status: active
@@ -484,16 +500,17 @@ features:
         name: 知乎想法发布
         entry_file: publish-zhihu-idea.cjs
         content_type: idea
-        maturity: 0
+        maturity: 2
         tests:
-          unit: []
+          unit:
+            - services/creator/scripts/publishers/zhihu-publisher/__tests__/publish-zhihu-api.test.cjs
           integration: []
         status: active
 
   - feature_id: pub_wechat
     name: 微信公众号发布
     purpose: 通过微信官方 API 发布文章到公众号（不走 CDP）
-    maturity: 0
+    maturity: 2
     code:
       root: services/creator/scripts/publishers/wechat-publisher/
       entry_files:
