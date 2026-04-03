@@ -1,0 +1,88 @@
+{
+  "platforms": {
+    "douyin": {
+      "name": "抖音",
+      "mode": "cdp",
+      "cdp_port": 19222,
+      "content_types": ["image", "video", "article"],
+      "scripts": {
+        "image": "douyin-publisher/publish-douyin-image.js",
+        "video": "douyin-publisher/publish-douyin-video.js",
+        "article": "douyin-publisher/publish-douyin-article.js"
+      }
+    },
+    "kuaishou": {
+      "name": "快手",
+      "mode": "cdp",
+      "cdp_port": 19223,
+      "content_types": ["image", "video"],
+      "scripts": {
+        "video": "kuaishou-publisher/publish-kuaishou-video.cjs",
+        "image": "kuaishou-publisher/publish-kuaishou-image.cjs"
+      }
+    },
+    "xiaohongshu": {
+      "name": "小红书",
+      "mode": "cdp",
+      "cdp_port": 19224,
+      "content_types": ["image", "video", "article"],
+      "scripts": {
+        "video": "xiaohongshu-publisher/publish-xiaohongshu-video.cjs",
+        "image": "xiaohongshu-publisher/publish-xiaohongshu-image.cjs",
+        "article": "xiaohongshu-publisher/publish-xiaohongshu-article.cjs"
+      }
+    },
+    "toutiao": {
+      "name": "头条",
+      "mode": "cdp",
+      "cdp_port": [19225, 19226],
+      "content_types": ["image", "video", "article", "post"],
+      "scripts": {
+        "video": "toutiao-publisher/publish-toutiao-video.cjs",
+        "image": "toutiao-publisher/publish-toutiao-image.cjs",
+        "article": "toutiao-publisher/publish-toutiao-article.cjs",
+        "post": "toutiao-publisher/publish-toutiao-post.cjs"
+      }
+    },
+    "weibo": {
+      "name": "微博",
+      "mode": "cdp",
+      "cdp_port": 19227,
+      "content_types": ["image", "video", "article"],
+      "scripts": {
+        "video": "weibo-publisher/publish-weibo-video.cjs",
+        "image": "weibo-publisher/publish-weibo-image.cjs",
+        "article": "weibo-publisher/publish-weibo-article.cjs"
+      }
+    },
+    "shipinhao": {
+      "name": "视频号",
+      "mode": "cdp",
+      "cdp_port": 19228,
+      "content_types": ["image", "video"],
+      "scripts": {
+        "video": "shipinhao-publisher/publish-shipinhao-video.cjs",
+        "image": "shipinhao-publisher/publish-shipinhao-image.cjs"
+      }
+    },
+    "zhihu": {
+      "name": "知乎",
+      "mode": "cdp",
+      "cdp_port": 19230,
+      "content_types": ["video", "article", "idea"],
+      "scripts": {
+        "video": "zhihu-publisher/publish-zhihu-video.cjs",
+        "article": "zhihu-publisher/publish-zhihu-article.cjs",
+        "idea": "zhihu-publisher/publish-zhihu-idea.cjs"
+      }
+    },
+    "wechat": {
+      "name": "微信公众号",
+      "mode": "api",
+      "content_types": ["article"],
+      "scripts": {
+        "article": "wechat-publisher/publish-wechat-article.cjs"
+      }
+    }
+  }
+}

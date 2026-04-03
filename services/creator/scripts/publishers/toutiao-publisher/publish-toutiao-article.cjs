@@ -1,5 +1,5 @@
-const _log = console.log.bind(console);
 #!/usr/bin/env node
+const _log = console.log.bind(console);
 /**
  * 今日头条通用发布脚本
  * 支持图文和视频发布

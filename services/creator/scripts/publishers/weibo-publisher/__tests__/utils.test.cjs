@@ -210,9 +210,9 @@ describe('extractDirNames', () => {
 // PUBLISH_URL
 // ============================================================
 describe('PUBLISH_URL', () => {
-  test('包含 weibo.com/p/publish/', () => {
+  test('包含 weibo.com', () => {
     assert.ok(typeof PUBLISH_URL === 'string');
-    assert.ok(PUBLISH_URL.includes('weibo.com/p/publish'));
+    assert.ok(PUBLISH_URL.includes('weibo.com'));
   });
 
   test('是有效 HTTPS URL', () => {
@@ -281,8 +281,8 @@ describe('isPublishPageReached', () => {
     assert.equal(isPublishPageReached('https://passport.weibo.com/signin/login'), false);
   });
 
-  test('weibo.com 首页（未到发布页）→ false', () => {
-    assert.equal(isPublishPageReached('https://weibo.com'), false);
+  test('weibo.com 首页（现在在首页发布）→ true', () => {
+    assert.equal(isPublishPageReached('https://weibo.com'), true);
   });
 
   test('null → false', () => {

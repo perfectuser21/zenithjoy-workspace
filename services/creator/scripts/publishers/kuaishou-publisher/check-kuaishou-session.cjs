@@ -1,5 +1,5 @@
-const _log = console.log.bind(console);
 #!/usr/bin/env node
+const _log = console.log.bind(console);
 /**
  * 快手会话状态检查脚本
  *

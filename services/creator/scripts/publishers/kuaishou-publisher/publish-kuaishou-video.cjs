@@ -1,5 +1,5 @@
-const _log = console.log.bind(console);
 #!/usr/bin/env node
+const _log = console.log.bind(console);
 /**
  * 快手视频发布脚本
  *
