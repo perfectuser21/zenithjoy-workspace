@@ -1,0 +1,90 @@
+# Feature Details — ai_employee (AI 员工)
+# 隶属 system: ai_employee
+# 更新时间: 2026-04-03
+
+schema_version: "2.0.0"
+system_id: ai_employee
+system_name: AI 员工
+
+features:
+
+  - feature_id: ai_employee_list
+    name: AI 员工列表
+    purpose: 展示所有 AI 员工（角色/能力/状态），支持查看详情
+    maturity: 0
+    code:
+      root: apps/dashboard/src/pages/
+      entry_files: [AiEmployeesPage.tsx]
+      language: TypeScript
+      runtime: browser
+    docs:
+      prd: null
+      dod: null
+      adr: null
+      api_doc: null
+      runbook: null
+    skills: []
+    apis: []
+    tests:
+      unit: []
+      integration: []
+      e2e: []
+      regression: []
+    ci:
+      jobs: []
+      layers: []
+    runtime: {}
+
+  - feature_id: ai_employee_ability
+    name: AI 员工能力配置
+    purpose: 为 AI 员工配置任务能力（Skill）和执行参数
+    maturity: 0
+    code:
+      root: apps/dashboard/src/pages/
+      entry_files: [AiAbilityDetailPage.tsx]
+      language: TypeScript
+      runtime: browser
+    docs:
+      prd: null
+      dod: null
+      adr: null
+      api_doc: null
+      runbook: null
+    skills: []
+    apis: []
+    tests:
+      unit: []
+      integration: []
+      e2e: []
+      regression: []
+    ci:
+      jobs: []
+      layers: []
+    runtime: {}
+
+  - feature_id: ai_employee_execution_status
+    name: AI 员工执行状态
+    purpose: 实时展示 AI 员工的 Pipeline 执行状态和日志
+    maturity: 0
+    code:
+      root: apps/dashboard/src/pages/
+      entry_files: [ExecutionStatus.tsx]
+      language: TypeScript
+      runtime: browser
+    docs:
+      prd: null
+      dod: null
+      adr: null
+      api_doc: null
+      runbook: null
+    skills: []
+    apis: []
+    tests:
+      unit: []
+      integration: []
+      e2e: []
+      regression: []
+    ci:
+      jobs: []
+      layers: []
+    runtime: {}

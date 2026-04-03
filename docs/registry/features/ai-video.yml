@@ -1,0 +1,104 @@
+# Feature Details — ai_video (AI 视频)
+# 隶属 system: ai_video
+# 更新时间: 2026-04-03
+
+schema_version: "2.0.0"
+system_id: ai_video
+system_name: AI 视频
+
+features:
+
+  - feature_id: ai_video_generate
+    name: AI 视频生成
+    purpose: 输入文案/图片，调用 AI 生成短视频任务，返回视频文件
+    maturity: 2
+    code:
+      root: apps/api/src/services/
+      entry_files: [ai-video.service.ts]
+      language: TypeScript
+      runtime: node
+    docs:
+      prd: null
+      dod: null
+      adr: null
+      api_doc: docs/registry/api-registry.yml#ai-video
+      runbook: null
+    skills: []
+    apis:
+      - service: api
+        endpoints:
+          - "POST /api/ai-video/generate"
+          - "PUT /api/ai-video/task/:id"
+          - "DELETE /api/ai-video/task/:id"
+    tests:
+      unit:
+        - apps/api/src/services/__tests__/ai-video.service.test.ts
+      integration: []
+      e2e: []
+      regression: []
+    ci:
+      jobs: []
+      layers: [L3]
+    runtime: {}
+
+  - feature_id: ai_video_task_monitor
+    name: 视频任务状态监控
+    purpose: 轮询视频生成任务状态，展示进度和完成结果
+    maturity: 2
+    code:
+      root: apps/dashboard/src/components/video-generation/
+      entry_files: [TaskMonitor.tsx]
+      language: TypeScript
+      runtime: browser
+    docs:
+      prd: null
+      dod: null
+      adr: null
+      api_doc: docs/registry/api-registry.yml#ai-video
+      runbook: null
+    skills: []
+    apis:
+      - service: api
+        endpoints:
+          - "GET /api/ai-video/active"
+          - "GET /api/ai-video/task/:id"
+    tests:
+      unit:
+        - apps/dashboard/src/components/video-generation/__tests__/TaskMonitor.test.tsx
+      integration: []
+      e2e: []
+      regression: []
+    ci:
+      jobs: []
+      layers: [L3]
+    runtime: {}
+
+  - feature_id: ai_video_history
+    name: 视频历史记录
+    purpose: 查看历史视频生成任务列表及结果
+    maturity: 0
+    code:
+      root: apps/dashboard/src/pages/
+      entry_files: [AiVideoHistoryPage.tsx]
+      language: TypeScript
+      runtime: browser
+    docs:
+      prd: null
+      dod: null
+      adr: null
+      api_doc: docs/registry/api-registry.yml#ai-video
+      runbook: null
+    skills: []
+    apis:
+      - service: api
+        endpoints:
+          - "GET /api/ai-video/history"
+    tests:
+      unit: []
+      integration: []
+      e2e: []
+      regression: []
+    ci:
+      jobs: []
+      layers: []
+    runtime: {}

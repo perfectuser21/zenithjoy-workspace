@@ -1,0 +1,185 @@
+# Feature Details — media (新媒体运营)
+# 隶属 system: media
+# 更新时间: 2026-04-03
+
+schema_version: "2.0.0"
+system_id: media
+system_name: 新媒体运营
+
+features:
+
+  - feature_id: media_content_factory
+    name: 内容工厂 Pipeline
+    purpose: 通过 AI Pipeline 自动生成多平台发布内容（研究→文案→审核→生成→导出）
+    maturity: 0
+    code:
+      root: apps/dashboard/src/pages/
+      entry_files: [ContentFactoryPage.tsx]
+      language: TypeScript
+      runtime: browser
+    docs:
+      prd: null
+      dod: null
+      adr: null
+      api_doc: docs/registry/api-registry.yml#creator-backend
+      runbook: null
+    skills: []
+    apis:
+      - service: creator
+        endpoints:
+          - "GET /api/works"
+          - "GET /api/works/{work_id}"
+    tests:
+      unit: []
+      integration: []
+      e2e: []
+      regression: []
+    ci:
+      jobs: []
+      layers: []
+    runtime: {}
+
+  - feature_id: media_works_management
+    name: 内容作品管理
+    purpose: 创建/编辑/查看/删除内容作品，关联 Notion 文档同步
+    maturity: 2
+    code:
+      root: apps/api/src/controllers/
+      entry_files: [works.controller.ts]
+      language: TypeScript
+      runtime: node
+    docs:
+      prd: null
+      dod: null
+      adr: null
+      api_doc: docs/registry/api-registry.yml#works
+      runbook: null
+    skills: []
+    apis:
+      - service: api
+        endpoints:
+          - "GET /api/works"
+          - "GET /api/works/:id"
+          - "POST /api/works"
+          - "PUT /api/works/:id"
+          - "DELETE /api/works/:id"
+      - service: creator
+        endpoints:
+          - "GET /api/works"
+          - "GET /api/works/{work_id}"
+          - "PATCH /api/works/{work_id}"
+    tests:
+      unit:
+        - apps/dashboard/src/pages/__tests__/WorksListPage.test.tsx
+      integration: []
+      e2e: []
+      regression: []
+    ci:
+      jobs: []
+      layers: [L3]
+    runtime: {}
+
+  - feature_id: media_platform_publish
+    name: 多平台发布
+    purpose: 将内容作品一键发布到抖音/小红书/微信公众号等平台
+    maturity: 2
+    code:
+      root: apps/api/src/controllers/
+      entry_files: [publish.controller.ts]
+      language: TypeScript
+      runtime: node
+    docs:
+      prd: null
+      dod: null
+      adr: null
+      api_doc: docs/registry/api-registry.yml#publish
+      runbook: null
+    skills: []
+    apis:
+      - service: api
+        endpoints:
+          - "GET /api/works/:workId/publish-logs"
+          - "POST /api/works/:workId/publish-logs"
+          - "PUT /api/publish-logs/:id"
+      - service: creator
+        endpoints:
+          - "PUT /api/works/{work_id}/publications/{platform_id}"
+          - "GET /api/platforms"
+          - "GET /api/settings"
+          - "PATCH /api/settings"
+    tests:
+      unit:
+        - apps/dashboard/src/api/platforms/__tests__/index.test.ts
+      integration: []
+      e2e: []
+      regression: []
+    ci:
+      jobs: []
+      layers: [L3]
+    runtime: {}
+
+  - feature_id: media_platform_data
+    name: 平台数据看板
+    purpose: 聚合各平台发布数据（阅读/点赞/转发），展示内容效果
+    maturity: 2
+    code:
+      root: apps/dashboard/src/pages/
+      entry_files: [PlatformDataPage.tsx]
+      language: TypeScript
+      runtime: browser
+    docs:
+      prd: null
+      dod: null
+      adr: null
+      api_doc: docs/registry/api-registry.yml#platform-data
+      runbook: null
+    skills: []
+    apis:
+      - service: api
+        endpoints:
+          - "GET /api/platform-data"
+      - service: creator
+        endpoints:
+          - "GET /api/stats"
+    tests:
+      unit:
+        - apps/dashboard/src/pages/__tests__/PlatformDataPage.test.tsx
+      integration: []
+      e2e: []
+      regression: []
+    ci:
+      jobs: []
+      layers: [L3]
+    runtime: {}
+
+  - feature_id: media_notion_sync
+    name: Notion 内容同步
+    purpose: 从 Notion 数据库拉取文章 blocks，作为内容 pipeline 输入源
+    maturity: 0
+    code:
+      root: services/creator/api/
+      entry_files: [server.py]
+      language: Python
+      runtime: fastapi
+    docs:
+      prd: null
+      dod: null
+      adr: null
+      api_doc: docs/registry/api-registry.yml#notion
+      runbook: null
+    skills: []
+    apis:
+      - service: creator
+        endpoints:
+          - "GET /api/notion/page/{notion_id}/blocks"
+          - "GET /api/works/{work_id}/notion-content"
+          - "GET /api/notion/database/pages"
+    tests:
+      unit: []
+      integration: []
+      e2e: []
+      regression: []
+    ci:
+      jobs: []
+      layers: []
+    runtime: {}
