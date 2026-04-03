@@ -1,0 +1,75 @@
+# Feature Details — crm (私域运营)
+# 隶属 system: crm
+# 更新时间: 2026-04-03
+
+schema_version: "2.0.0"
+system_id: crm
+system_name: 私域运营
+
+features:
+
+  - feature_id: crm_field_management
+    name: 自定义字段管理
+    purpose: 定义和管理内容/用户的自定义属性字段，支持私域标签体系
+    maturity: 2
+    code:
+      root: apps/api/src/controllers/
+      entry_files: [fields.controller.ts]
+      language: TypeScript
+      runtime: node
+    docs:
+      prd: null
+      dod: null
+      adr: null
+      api_doc: docs/registry/api-registry.yml#fields
+      runbook: null
+    skills: []
+    apis:
+      - service: api
+        endpoints:
+          - "GET /api/fields"
+          - "POST /api/fields"
+          - "PUT /api/fields/:id"
+          - "DELETE /api/fields/:id"
+      - service: creator
+        endpoints:
+          - "GET /api/properties"
+          - "POST /api/properties"
+          - "PATCH /api/properties/{prop_id}"
+    tests:
+      unit:
+        - apps/dashboard/src/pages/__tests__/FieldManagementPage.test.tsx
+      integration: []
+      e2e: []
+      regression: []
+    ci:
+      jobs: []
+      layers: [L3]
+    runtime: {}
+
+  - feature_id: crm_scraping
+    name: 数据抓取
+    purpose: 抓取外部平台数据（评论/粉丝/互动），写入私域数据库
+    maturity: 0
+    code:
+      root: apps/dashboard/src/pages/
+      entry_files: [ScrapingPage.tsx]
+      language: TypeScript
+      runtime: browser
+    docs:
+      prd: null
+      dod: null
+      adr: null
+      api_doc: null
+      runbook: null
+    skills: []
+    apis: []
+    tests:
+      unit: []
+      integration: []
+      e2e: []
+      regression: []
+    ci:
+      jobs: []
+      layers: []
+    runtime: {}

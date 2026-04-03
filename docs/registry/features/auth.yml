@@ -1,0 +1,64 @@
+# Feature Details — auth (中台认证)
+# 隶属 system: auth
+# 更新时间: 2026-04-03
+
+schema_version: "2.0.0"
+system_id: auth
+system_name: 中台认证
+
+features:
+
+  - feature_id: auth_feishu_login
+    name: 飞书登录
+    purpose: 用户通过飞书 OAuth 完成身份验证，获取访问令牌
+    maturity: 0
+    code:
+      root: apps/dashboard/src/pages/
+      entry_files: [FeishuLogin.tsx]
+      language: TypeScript
+      runtime: browser
+    docs:
+      prd: null
+      dod: null
+      adr: null
+      api_doc: null
+      runbook: null
+    skills: []
+    apis: []
+    tests:
+      unit: []
+      integration: []
+      e2e: []
+      regression: []
+    ci:
+      jobs: []
+      layers: []
+    runtime: {}
+
+  - feature_id: auth_ab_testing
+    name: A/B 测试分流
+    purpose: 按用户 ID 分流到不同功能版本，支持实验功能灰度
+    maturity: 2
+    code:
+      root: apps/dashboard/src/lib/
+      entry_files: [ab-testing.ts]
+      language: TypeScript
+      runtime: browser
+    docs:
+      prd: null
+      dod: null
+      adr: null
+      api_doc: null
+      runbook: null
+    skills: []
+    apis: []
+    tests:
+      unit:
+        - apps/dashboard/src/lib/__tests__/ab-testing.test.ts
+      integration: []
+      e2e: []
+      regression: []
+    ci:
+      jobs: []
+      layers: [L3]
+    runtime: {}

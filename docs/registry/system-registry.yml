@@ -1,0 +1,88 @@
+# System Registry — ZenithJoy
+# 更新时间: 2026-04-03
+# 说明: 两层结构的总表。每个 system 对应一个 features/<system>.yml 详情文件。
+#
+# maturity 成熟度（0-5）:
+#   0 = 只有代码
+#   1 = +文档（PRD/DoD/STATUS）
+#   2 = +unit test
+#   3 = +integration test + ADR
+#   4 = +e2e + api_docs
+#   5 = +runbook + regression（生产级）
+
+schema_version: "2.0.0"
+updated: "2026-04-03"
+
+systems:
+
+  - id: auth
+    name: 中台认证
+    purpose: 用户身份验证与实验分流
+    package: apps/dashboard
+    features_file: features/auth.yml
+    feature_count: 2
+    owner: zenithjoy
+    ci_jobs: [L3]
+    health: stable
+
+  - id: media
+    name: 新媒体运营
+    purpose: AI 内容生产 + 多平台发布 + 数据看板 + Notion 同步
+    package: apps/dashboard + apps/api + services/creator
+    features_file: features/media.yml
+    feature_count: 5
+    owner: zenithjoy
+    ci_jobs: [L3]
+    health: stable
+
+  - id: publisher
+    name: 多平台发布器
+    purpose: 通过 CDP/API 自动化发布内容到 8 个平台，含探测/告警/保活基础设施
+    package: services/creator/scripts/publishers
+    features_file: features/publisher.yml
+    feature_count: 12
+    owner: zenithjoy
+    ci_jobs: []
+    health: stable
+
+  - id: crm
+    name: 私域运营
+    purpose: 自定义字段管理 + 外部数据抓取，支撑私域标签体系
+    package: apps/api + apps/dashboard
+    features_file: features/crm.yml
+    feature_count: 2
+    owner: zenithjoy
+    ci_jobs: [L3]
+    health: stable
+
+  - id: ai_employee
+    name: AI 员工
+    purpose: AI 员工管理、能力配置与执行状态监控
+    package: apps/dashboard
+    features_file: features/ai-employee.yml
+    feature_count: 3
+    owner: zenithjoy
+    ci_jobs: []
+    health: early
+
+  - id: ai_video
+    name: AI 视频
+    purpose: AI 驱动的视频生成、任务监控与历史管理
+    package: apps/api + apps/dashboard
+    features_file: features/ai-video.yml
+    feature_count: 3
+    owner: zenithjoy
+    ci_jobs: [L3]
+    health: stable
+
+summary:
+  total_systems: 6
+  total_features: 27
+  maturity_distribution:
+    "0": 8
+    "1": 6
+    "2": 13
+    "3": 0
+    "4": 0
+    "5": 0
+  last_updated: "2026-04-03"

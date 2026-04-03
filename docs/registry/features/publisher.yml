@@ -1,0 +1,449 @@
+# Feature Details — publisher (多平台发布器)
+# 隶属 system: publisher
+# 更新时间: 2026-04-03
+# SSOT: 此文件是发布器功能的唯一真实源，registry.json 保留作为脚本运行时读取用。
+
+schema_version: "2.0.0"
+system_id: publisher
+system_name: 多平台发布器
+
+features:
+
+  # ============================================================
+  # 8 个平台发布器
+  # ============================================================
+
+  - feature_id: pub_douyin
+    name: 抖音发布
+    purpose: 通过 CDP 自动化发布图文/视频/文章到抖音创作者平台
+    maturity: 1
+    code:
+      root: services/creator/scripts/publishers/douyin-publisher/
+      entry_files:
+        - publish-douyin-image.js
+        - publish-douyin-video.js
+        - publish-douyin-article.js
+      language: JavaScript
+      runtime: node + playwright
+    docs:
+      prd: null
+      dod: null
+      adr: null
+      api_doc: null
+      runbook: services/creator/scripts/publishers/douyin-publisher/STATUS.md
+    skills:
+      - name: douyin-publisher
+        trigger: "发布抖音、douyin、抖音发布"
+        skill_file: services/creator/scripts/publishers/douyin-publisher/SKILL.md
+    apis: []
+    tests:
+      unit: []
+      integration: []
+      e2e: []
+      regression: []
+    ci:
+      jobs: []
+      layers: []
+    runtime:
+      mode: cdp
+      cdp_port: 19222
+      content_types: [image, video, article]
+      scripts:
+        image: douyin-publisher/publish-douyin-image.js
+        video: douyin-publisher/publish-douyin-video.js
+        article: douyin-publisher/publish-douyin-article.js
+
+  - feature_id: pub_kuaishou
+    name: 快手发布
+    purpose: 通过 CDP 自动化发布图文/视频到快手创作者平台
+    maturity: 2
+    code:
+      root: services/creator/scripts/publishers/kuaishou-publisher/
+      entry_files:
+        - publish-kuaishou-video.cjs
+        - publish-kuaishou-image.cjs
+      language: JavaScript (CommonJS)
+      runtime: node + playwright
+    docs:
+      prd: null
+      dod: null
+      adr: null
+      api_doc: null
+      runbook: null
+    skills:
+      - name: kuaishou-publisher
+        trigger: "发布快手、kuaishou、快手发布"
+    apis: []
+    tests:
+      unit:
+        - services/creator/scripts/publishers/kuaishou-publisher/__tests__/utils.test.cjs
+        - services/creator/scripts/publishers/kuaishou-publisher/__tests__/publish-kuaishou-api.test.cjs
+      integration: []
+      e2e: []
+      regression: []
+    ci:
+      jobs: []
+      layers: []
+    runtime:
+      mode: cdp
+      cdp_port: 19223
+      content_types: [image, video]
+      scripts:
+        video: kuaishou-publisher/publish-kuaishou-video.cjs
+        image: kuaishou-publisher/publish-kuaishou-image.cjs
+
+  - feature_id: pub_xiaohongshu
+    name: 小红书发布
+    purpose: 通过 CDP 自动化发布图文/视频/文章到小红书创作者中心
+    maturity: 2
+    code:
+      root: services/creator/scripts/publishers/xiaohongshu-publisher/
+      entry_files:
+        - publish-xiaohongshu-video.cjs
+        - publish-xiaohongshu-image.cjs
+        - publish-xiaohongshu-article.cjs
+      language: JavaScript (CommonJS)
+      runtime: node + playwright
+    docs:
+      prd: null
+      dod: null
+      adr: null
+      api_doc: null
+      runbook: null
+    skills:
+      - name: xiaohongshu-publisher
+        trigger: "发布小红书、xiaohongshu、小红书发布"
+    apis: []
+    tests:
+      unit:
+        - services/creator/scripts/publishers/xiaohongshu-publisher/__tests__/utils.test.cjs
+        - services/creator/scripts/publishers/xiaohongshu-publisher/__tests__/publish-xiaohongshu-image.test.cjs
+      integration: []
+      e2e: []
+      regression: []
+    ci:
+      jobs: []
+      layers: []
+    runtime:
+      mode: cdp
+      cdp_port: 19224
+      content_types: [image, video, article]
+      scripts:
+        video: xiaohongshu-publisher/publish-xiaohongshu-video.cjs
+        image: xiaohongshu-publisher/publish-xiaohongshu-image.cjs
+        article: xiaohongshu-publisher/publish-xiaohongshu-article.cjs
+
+  - feature_id: pub_toutiao
+    name: 头条发布
+    purpose: 通过 CDP 自动化发布图文/视频/文章/微头条到今日头条
+    maturity: 1
+    code:
+      root: services/creator/scripts/publishers/toutiao-publisher/
+      entry_files:
+        - publish-toutiao-video.cjs
+        - publish-toutiao-image.cjs
+        - publish-toutiao-article.cjs
+        - publish-toutiao-post.cjs
+      language: JavaScript (CommonJS)
+      runtime: node + playwright
+    docs:
+      prd: null
+      dod: null
+      adr: null
+      api_doc: null
+      runbook: null
+    skills:
+      - name: toutiao-publisher
+        trigger: "发布今日头条、toutiao、头条发布"
+        skill_file: services/creator/scripts/publishers/toutiao-publisher/SKILL.md
+    apis: []
+    tests:
+      unit: []
+      integration: []
+      e2e: []
+      regression: []
+    ci:
+      jobs: []
+      layers: []
+    runtime:
+      mode: cdp
+      cdp_port: [19225, 19226]
+      content_types: [image, video, article, post]
+      scripts:
+        video: toutiao-publisher/publish-toutiao-video.cjs
+        image: toutiao-publisher/publish-toutiao-image.cjs
+        article: toutiao-publisher/publish-toutiao-article.cjs
+        post: toutiao-publisher/publish-toutiao-post.cjs
+
+  - feature_id: pub_weibo
+    name: 微博发布
+    purpose: 通过 CDP 自动化发布图文/视频/文章到微博
+    maturity: 2
+    code:
+      root: services/creator/scripts/publishers/weibo-publisher/
+      entry_files:
+        - publish-weibo-video.cjs
+        - publish-weibo-image.cjs
+        - publish-weibo-article.cjs
+      language: JavaScript (CommonJS)
+      runtime: node + playwright
+    docs:
+      prd: null
+      dod: null
+      adr: null
+      api_doc: null
+      runbook: null
+    skills:
+      - name: weibo-publisher
+        trigger: "发布微博、weibo、微博发布"
+    apis: []
+    tests:
+      unit:
+        - services/creator/scripts/publishers/weibo-publisher/__tests__/utils.test.cjs
+        - services/creator/scripts/publishers/weibo-publisher/__tests__/cdp-client.test.cjs
+        - services/creator/scripts/publishers/weibo-publisher/__tests__/publish-weibo-api.test.cjs
+        - services/creator/scripts/publishers/weibo-publisher/__tests__/publish-weibo-image.test.cjs
+        - services/creator/scripts/publishers/weibo-publisher/__tests__/publish-weibo-article.test.cjs
+      integration: []
+      e2e: []
+      regression: []
+    ci:
+      jobs: []
+      layers: []
+    runtime:
+      mode: cdp
+      cdp_port: 19227
+      content_types: [image, video, article]
+      scripts:
+        video: weibo-publisher/publish-weibo-video.cjs
+        image: weibo-publisher/publish-weibo-image.cjs
+        article: weibo-publisher/publish-weibo-article.cjs
+
+  - feature_id: pub_shipinhao
+    name: 视频号发布
+    purpose: 通过 CDP 自动化发布图文/视频到微信视频号（session 需定期扫码）
+    maturity: 1
+    code:
+      root: services/creator/scripts/publishers/shipinhao-publisher/
+      entry_files:
+        - publish-shipinhao-video.cjs
+        - publish-shipinhao-image.cjs
+      language: JavaScript (CommonJS)
+      runtime: node + playwright
+    docs:
+      prd: null
+      dod: null
+      adr: null
+      api_doc: null
+      runbook: null
+    skills: []
+    apis: []
+    tests:
+      unit: []
+      integration: []
+      e2e: []
+      regression: []
+    ci:
+      jobs: []
+      layers: []
+    runtime:
+      mode: cdp
+      cdp_port: 19228
+      content_types: [image, video]
+      scripts:
+        video: shipinhao-publisher/publish-shipinhao-video.cjs
+        image: shipinhao-publisher/publish-shipinhao-image.cjs
+      keepalive: keepalive-all.cjs --frequent
+
+  - feature_id: pub_zhihu
+    name: 知乎发布
+    purpose: 通过 CDP 自动化发布视频/文章/想法到知乎
+    maturity: 1
+    code:
+      root: services/creator/scripts/publishers/zhihu-publisher/
+      entry_files:
+        - publish-zhihu-video.cjs
+        - publish-zhihu-article.cjs
+        - publish-zhihu-idea.cjs
+      language: JavaScript (CommonJS)
+      runtime: node + playwright
+    docs:
+      prd: null
+      dod: null
+      adr: null
+      api_doc: null
+      runbook: null
+    skills:
+      - name: zhihu-publisher
+        trigger: "发布知乎、zhihu、知乎发布"
+    apis: []
+    tests:
+      unit:
+        - services/creator/scripts/publishers/zhihu-publisher/__tests__/publish-zhihu-api.test.cjs
+        - services/creator/scripts/publishers/zhihu-publisher/__tests__/publish-zhihu-article.test.cjs
+      integration: []
+      e2e: []
+      regression: []
+    ci:
+      jobs: []
+      layers: []
+    runtime:
+      mode: cdp
+      cdp_port: 19230
+      content_types: [video, article, idea]
+      scripts:
+        video: zhihu-publisher/publish-zhihu-video.cjs
+        article: zhihu-publisher/publish-zhihu-article.cjs
+        idea: zhihu-publisher/publish-zhihu-idea.cjs
+
+  - feature_id: pub_wechat
+    name: 微信公众号发布
+    purpose: 通过微信官方 API 发布文章到公众号（不走 CDP）
+    maturity: 1
+    code:
+      root: services/creator/scripts/publishers/wechat-publisher/
+      entry_files:
+        - publish-wechat-article.cjs
+      language: JavaScript (CommonJS)
+      runtime: node
+    docs:
+      prd: null
+      dod: null
+      adr: null
+      api_doc: null
+      runbook: null
+    skills:
+      - name: wechat-publisher
+        trigger: "发布微信公众号、wechat、公众号发布"
+    apis: []
+    tests:
+      unit:
+        - services/creator/scripts/publishers/wechat-publisher/__tests__/publish-wechat-article.test.cjs
+      integration: []
+      e2e: []
+      regression: []
+    ci:
+      jobs: []
+      layers: []
+    runtime:
+      mode: api
+      content_types: [article]
+      scripts:
+        article: wechat-publisher/publish-wechat-article.cjs
+
+  # ============================================================
+  # 基础设施（4 个）
+  # ============================================================
+
+  - feature_id: pub_probe
+    name: 全平台状态探测
+    purpose: 一条命令探测 8 个 CDP 连接的连通性和登录状态
+    maturity: 1
+    code:
+      root: services/creator/scripts/publishers/
+      entry_files: [probe-all-platforms.cjs]
+      language: JavaScript (CommonJS)
+      runtime: node
+    docs:
+      prd: null
+      dod: null
+      adr: null
+      api_doc: null
+      runbook: null
+    skills: []
+    apis: []
+    tests:
+      unit: []
+      integration: []
+      e2e: []
+      regression: []
+    ci:
+      jobs: []
+      layers: []
+    runtime: {}
+
+  - feature_id: pub_alert
+    name: 掉线飞书告警
+    purpose: 每 15 分钟巡检，掉线自动发飞书 webhook 告警
+    maturity: 1
+    code:
+      root: services/creator/scripts/publishers/
+      entry_files: [alert-offline.cjs]
+      language: JavaScript (CommonJS)
+      runtime: node + cron
+    docs:
+      prd: null
+      dod: null
+      adr: null
+      api_doc: null
+      runbook: null
+    skills: []
+    apis: []
+    tests:
+      unit: []
+      integration: []
+      e2e: []
+      regression: []
+    ci:
+      jobs: []
+      layers: []
+    runtime:
+      schedule: "*/15 * * * *"
+      webhook: feishu
+
+  - feature_id: pub_keepalive
+    name: 全平台心跳保活
+    purpose: 视频号 30 分钟、其他 12 小时定期模拟活跃延长 session
+    maturity: 1
+    code:
+      root: services/creator/scripts/publishers/
+      entry_files: [keepalive-all.cjs]
+      language: JavaScript (CommonJS)
+      runtime: node + cron
+    docs:
+      prd: null
+      dod: null
+      adr: null
+      api_doc: null
+      runbook: null
+    skills: []
+    apis: []
+    tests:
+      unit: []
+      integration: []
+      e2e: []
+      regression: []
+    ci:
+      jobs: []
+      layers: []
+    runtime:
+      schedule_shipinhao: "*/30 * * * *"
+      schedule_others: "0 */12 * * *"
+
+  - feature_id: pub_registry
+    name: 发布器功能注册表
+    purpose: 8 平台 21 脚本的功能映射 + 验证（npm run validate）
+    maturity: 2
+    code:
+      root: services/creator/scripts/publishers/
+      entry_files: [registry.json]
+      language: JSON
+      runtime: node
+    docs:
+      prd: null
+      dod: null
+      adr: null
+      api_doc: null
+      runbook: null
+    skills: []
+    apis: []
+    tests:
+      unit:
+        - services/creator/scripts/publishers/validate-registry.cjs
+      integration: []
+      e2e: []
+      regression: []
+    ci:
+      jobs: []
+      layers: []
+    runtime: {}
