@@ -15,7 +15,7 @@ const { chromium } = require('playwright');
 const https = require('https');
 
 const WINDOWS_IP = '100.97.242.124';
-const PROBE_TIMEOUT = 8000;
+const PROBE_TIMEOUT = 15000;
 const FEISHU_WEBHOOK = 'https://open.feishu.cn/open-apis/bot/v2/hook/5bde68e0-9879-4a45-88ed-461a88229136';
 
 const PLATFORMS = [

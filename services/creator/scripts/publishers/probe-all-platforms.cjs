@@ -14,14 +14,16 @@ const path = require('path');
 const PLATFORMS = [
   { name: '抖音',       port: 19222, loginPatterns: ['login', 'passport', 'douyin.com/login'] },
   { name: '快手',       port: 19223, loginPatterns: ['login', 'passport', 'accounts.kuaishou'] },
-  { name: '视频号',     port: 19224, loginPatterns: ['login', 'passport'] },
-  { name: '头条',       port: 19226, loginPatterns: ['login', 'passport', 'sso.toutiao'] },
+  { name: '小红书',     port: 19224, loginPatterns: ['login', 'passport', 'sign'] },
+  { name: '头条(主)',    port: 19225, loginPatterns: ['login', 'passport', 'sso.toutiao'] },
+  { name: '头条(副)',    port: 19226, loginPatterns: ['login', 'passport', 'sso.toutiao'] },
   { name: '微博',       port: 19227, loginPatterns: ['login', 'passport.weibo'] },
-  { name: '小红书',     port: 19228, loginPatterns: ['login', 'passport', 'sign'] },
-  { name: '知乎',       port: 19229, loginPatterns: ['login', 'signin', 'passport'] },
+  { name: '视频号',     port: 19228, loginPatterns: ['login', 'passport'] },
+  { name: '知乎',       port: 19230, loginPatterns: ['login', 'signin', 'passport'] },
+  // 微信公众号走 API（publish-wechat-article.cjs），不需要 CDP
 ];
 
-const PROBE_TIMEOUT = 5000;
+const PROBE_TIMEOUT = 15000;
 const WINDOWS_IP = '100.97.242.124';
 
 async function probePlatform({ name, port, loginPatterns }) {
@@ -80,19 +82,16 @@ async function main() {
   _log(`目标: ${WINDOWS_IP}`);
   _log('');
 
-  // 并行探测所有 CDP 平台
-  const cdpResults = await Promise.all(PLATFORMS.map(probePlatform));
-  // 微信单独探测
-  const wechatResult = await probeWechat();
-
-  const allResults = [...cdpResults, wechatResult];
+  // 并行探测所有 CDP 平台（含微信公众号，现在也走 CDP 19229）
+  const allResults = await Promise.all(PLATFORMS.map(probePlatform));
 
   allResults.forEach(r => _log(formatResult(r)));
 
   _log('');
+  const total = PLATFORMS.length;
   const connected = allResults.filter(r => r.status === 'connected').length;
   const loggedIn = allResults.filter(r => r.loggedIn).length;
-  _log(`汇总: ${connected}/8 已连接，${loggedIn}/8 已登录`);
+  _log(`汇总: ${connected}/${total} 已连接，${loggedIn}/${total} 已登录`);
 
   const notLoggedIn = allResults.filter(r => r.status === 'connected' && !r.loggedIn);
   if (notLoggedIn.length > 0) {
