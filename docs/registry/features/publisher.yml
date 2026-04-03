@@ -56,12 +56,13 @@ features:
   - feature_id: pub_kuaishou
     name: 快手发布
     purpose: 通过 CDP 自动化发布图文/视频到快手创作者平台
-    maturity: 2
+    maturity: 0
     code:
       root: services/creator/scripts/publishers/kuaishou-publisher/
       entry_files:
         - publish-kuaishou-video.cjs
         - publish-kuaishou-image.cjs
+        - check-kuaishou-session.cjs
       language: JavaScript (CommonJS)
       runtime: node + playwright
     docs:
@@ -95,7 +96,7 @@ features:
   - feature_id: pub_xiaohongshu
     name: 小红书发布
     purpose: 通过 CDP 自动化发布图文/视频/文章到小红书创作者中心
-    maturity: 2
+    maturity: 0
     code:
       root: services/creator/scripts/publishers/xiaohongshu-publisher/
       entry_files:
@@ -136,7 +137,7 @@ features:
   - feature_id: pub_toutiao
     name: 头条发布
     purpose: 通过 CDP 自动化发布图文/视频/文章/微头条到今日头条
-    maturity: 1
+    maturity: 0
     code:
       root: services/creator/scripts/publishers/toutiao-publisher/
       entry_files:
@@ -178,7 +179,7 @@ features:
   - feature_id: pub_weibo
     name: 微博发布
     purpose: 通过 CDP 自动化发布图文/视频/文章到微博
-    maturity: 2
+    maturity: 0
     code:
       root: services/creator/scripts/publishers/weibo-publisher/
       entry_files:
@@ -222,7 +223,7 @@ features:
   - feature_id: pub_shipinhao
     name: 视频号发布
     purpose: 通过 CDP 自动化发布图文/视频到微信视频号（session 需定期扫码）
-    maturity: 1
+    maturity: 0
     code:
       root: services/creator/scripts/publishers/shipinhao-publisher/
       entry_files:
@@ -258,7 +259,7 @@ features:
   - feature_id: pub_zhihu
     name: 知乎发布
     purpose: 通过 CDP 自动化发布视频/文章/想法到知乎
-    maturity: 1
+    maturity: 0
     code:
       root: services/creator/scripts/publishers/zhihu-publisher/
       entry_files:
@@ -299,11 +300,12 @@ features:
   - feature_id: pub_wechat
     name: 微信公众号发布
     purpose: 通过微信官方 API 发布文章到公众号（不走 CDP）
-    maturity: 1
+    maturity: 0
     code:
       root: services/creator/scripts/publishers/wechat-publisher/
       entry_files:
         - publish-wechat-article.cjs
+        - check-wechat-token.cjs
       language: JavaScript (CommonJS)
       runtime: node
     docs:
