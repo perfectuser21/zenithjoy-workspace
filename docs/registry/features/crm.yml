@@ -46,6 +46,16 @@ features:
       jobs: []
       layers: [L3]
     runtime: {}
+    capabilities:
+      - id: crm_field_management
+        name: 自定义字段管理
+        entry_file: fields.controller.ts
+        maturity: 2
+        tests:
+          unit:
+            - apps/dashboard/src/pages/__tests__/FieldManagementPage.test.tsx
+          integration: []
+        status: active
 
   - feature_id: crm_scraping
     name: 数据抓取
@@ -73,3 +83,12 @@ features:
       jobs: []
       layers: []
     runtime: {}
+    capabilities:
+      - id: crm_scraping
+        name: 数据抓取
+        entry_file: ScrapingPage.tsx
+        maturity: 0
+        tests:
+          unit: []
+          integration: []
+        status: active

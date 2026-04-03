@@ -40,6 +40,16 @@ features:
       jobs: []
       layers: [L3]
     runtime: {}
+    capabilities:
+      - id: ai_video_generate
+        name: AI 视频生成
+        entry_file: ai-video.service.ts
+        maturity: 2
+        tests:
+          unit:
+            - apps/api/src/services/__tests__/ai-video.service.test.ts
+          integration: []
+        status: active
 
   - feature_id: ai_video_task_monitor
     name: 视频任务状态监控
@@ -72,6 +82,16 @@ features:
       jobs: []
       layers: [L3]
     runtime: {}
+    capabilities:
+      - id: ai_video_task_monitor
+        name: 视频任务状态监控
+        entry_file: TaskMonitor.tsx
+        maturity: 2
+        tests:
+          unit:
+            - apps/dashboard/src/components/video-generation/__tests__/TaskMonitor.test.tsx
+          integration: []
+        status: active
 
   - feature_id: ai_video_history
     name: 视频历史记录
@@ -102,3 +122,12 @@ features:
       jobs: []
       layers: []
     runtime: {}
+    capabilities:
+      - id: ai_video_history
+        name: 视频历史记录
+        entry_file: AiVideoHistoryPage.tsx
+        maturity: 0
+        tests:
+          unit: []
+          integration: []
+        status: active

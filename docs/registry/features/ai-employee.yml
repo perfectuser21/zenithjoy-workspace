@@ -34,6 +34,15 @@ features:
       jobs: []
       layers: []
     runtime: {}
+    capabilities:
+      - id: ai_employee_list
+        name: AI 员工列表
+        entry_file: AiEmployeesPage.tsx
+        maturity: 0
+        tests:
+          unit: []
+          integration: []
+        status: active
 
   - feature_id: ai_employee_ability
     name: AI 员工能力配置
@@ -61,6 +70,15 @@ features:
       jobs: []
       layers: []
     runtime: {}
+    capabilities:
+      - id: ai_employee_ability
+        name: AI 员工能力配置
+        entry_file: AiAbilityDetailPage.tsx
+        maturity: 0
+        tests:
+          unit: []
+          integration: []
+        status: active
 
   - feature_id: ai_employee_execution_status
     name: AI 员工执行状态
@@ -88,3 +106,12 @@ features:
       jobs: []
       layers: []
     runtime: {}
+    capabilities:
+      - id: ai_employee_execution_status
+        name: AI 员工执行状态
+        entry_file: ExecutionStatus.tsx
+        maturity: 0
+        tests:
+          unit: []
+          integration: []
+        status: active
