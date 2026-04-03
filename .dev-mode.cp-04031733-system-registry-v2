@@ -1,0 +1,9 @@
+dev
+branch: cp-04031733-system-registry-v2
+task_card: .task-cp-04031733-system-registry-v2.md
+started: 2026-04-03T17:33:00+08:00
+step_0_worktree: done
+step_1_spec: done
+step_2_code: pending
+step_3_integrate: pending
+step_4_ship: pending
