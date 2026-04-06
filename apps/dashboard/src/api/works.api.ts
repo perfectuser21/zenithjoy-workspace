@@ -100,8 +100,10 @@ export interface PublishLog {
   platform_url?: string;
   scheduled_at?: string;
   published_at?: string;
-  status: 'scheduled' | 'publishing' | 'success' | 'failed';
+  status: 'scheduled' | 'publishing' | 'success' | 'failed' | 'published' | 'pending';
   error_message?: string;
+  response?: Record<string, unknown> | null;
+  retry_count?: number;
   created_at: string;
   updated_at: string;
 }
