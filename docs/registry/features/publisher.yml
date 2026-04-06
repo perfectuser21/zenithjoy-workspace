@@ -388,6 +388,8 @@ features:
       entry_files:
         - publish-shipinhao-video.cjs
         - publish-shipinhao-image.cjs
+        - publish-shipinhao-async.js
+        - publish-shipinhao-playwright.js
       language: JavaScript (CommonJS)
       runtime: node + playwright
     docs:

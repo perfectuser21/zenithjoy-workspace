@@ -12,11 +12,9 @@ import {
   LayoutDashboard,
   Video,
   Users,
-  KeyRound,
   Database,
   Sparkles,
   Factory,
-  Settings,
 } from 'lucide-react';
 
 // ============ 类型定义 ============
