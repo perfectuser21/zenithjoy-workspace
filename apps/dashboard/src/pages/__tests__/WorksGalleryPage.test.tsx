@@ -1,76 +1,133 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import WorksGalleryPage from '../WorksGalleryPage';
+import * as worksApi from '../../api/works.api';
+
+// Mock getWorks API
+vi.mock('../../api/works.api', () => ({
+  getWorks: vi.fn(),
+}));
+
+const mockWorks = [
+  {
+    id: 'work-1',
+    title: '别把存档当成学会',
+    content_type: 'image' as const,
+    status: 'published' as const,
+    account: 'XXIP' as const,
+    content_text: '你的收藏夹里躺着几十篇干货。',
+    media_files: [{ url: '/img/01.png', type: 'image' as const }],
+    custom_fields: { keyword: '认知' },
+    created_at: '2026-01-01T00:00:00Z',
+    updated_at: '2026-01-01T00:00:00Z',
+  },
+  {
+    id: 'work-2',
+    title: '礼貌的暴政',
+    content_type: 'text' as const,
+    status: 'published' as const,
+    account: 'XXAI' as const,
+    content_text: '你明明不想去那个聚局。',
+    media_files: [],
+    custom_fields: { keyword: '社交' },
+    created_at: '2026-01-02T00:00:00Z',
+    updated_at: '2026-01-02T00:00:00Z',
+  },
+];
+
+function createWrapper() {
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
+  return ({ children }: { children: React.ReactNode }) => (
+    <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+  );
+}
 
 describe('WorksGalleryPage', () => {
-  it('应该展示 33 张卡片', () => {
-    render(<WorksGalleryPage />);
-
-    // 标题应该显示 33 张
-    expect(screen.getByText(/33 张 ChatGPT 风格卡片/)).toBeInTheDocument();
-
-    // 检查是否有第一张卡片的标题
-    expect(screen.getByText('别把存档当成学会')).toBeInTheDocument();
+  beforeEach(() => {
+    vi.clearAllMocks();
   });
 
-  it('应该有标签筛选功能（认知/社交/效率）', () => {
-    render(<WorksGalleryPage />);
-
-    // 应该有三个标签按钮
-    const 认知Button = screen.getByRole('button', { name: '认知' });
-    const 社交Button = screen.getByRole('button', { name: '社交' });
-    const 效率Button = screen.getByRole('button', { name: '效率' });
-
-    expect(认知Button).toBeInTheDocument();
-    expect(社交Button).toBeInTheDocument();
-    expect(效率Button).toBeInTheDocument();
-  });
-
-  it('点击标签应该筛选卡片', async () => {
-    render(<WorksGalleryPage />);
-
-    // 点击"认知"标签
-    const 认知Button = screen.getByRole('button', { name: '认知' });
-    fireEvent.click(认知Button);
-
-    // 等待筛选生效
-    await waitFor(() => {
-      // 应该显示筛选后的数量（不是 33）
-      const countText = screen.queryByText(/33 张 ChatGPT 风格卡片/);
-      expect(countText).not.toBeInTheDocument();
+  it('API 有数据时应该展示作品卡片', async () => {
+    vi.mocked(worksApi.getWorks).mockResolvedValue({
+      data: mockWorks,
+      total: 2,
+      limit: 100,
+      offset: 0,
     });
 
-    // 应该出现"清除"按钮
-    expect(screen.getByRole('button', { name: '清除' })).toBeInTheDocument();
-  });
+    render(<WorksGalleryPage />, { wrapper: createWrapper() });
 
-  it('点击"清除"应该重置筛选', async () => {
-    render(<WorksGalleryPage />);
-
-    // 先筛选
-    const 认知Button = screen.getByRole('button', { name: '认知' });
-    fireEvent.click(认知Button);
-
-    // 点击清除
+    // 等待数据加载
     await waitFor(() => {
-      const clearButton = screen.getByRole('button', { name: '清除' });
-      fireEvent.click(clearButton);
+      expect(screen.getByText('别把存档当成学会')).toBeInTheDocument();
     });
 
-    // 应该恢复显示 33 张
-    expect(screen.getByText(/33 张 ChatGPT 风格卡片/)).toBeInTheDocument();
+    expect(screen.getByText('礼貌的暴政')).toBeInTheDocument();
+    expect(screen.getByText('2 件作品')).toBeInTheDocument();
   });
 
-  it('点击卡片应该打开详情面板', async () => {
-    render(<WorksGalleryPage />);
+  it('API 返回空数据时应该显示空状态提示', async () => {
+    vi.mocked(worksApi.getWorks).mockResolvedValue({
+      data: [],
+      total: 0,
+      limit: 100,
+      offset: 0,
+    });
 
-    // 点击第一张卡片（"别把存档当成学会"）
-    const firstCard = screen.getByText('别把存档当成学会');
-    fireEvent.click(firstCard);
+    render(<WorksGalleryPage />, { wrapper: createWrapper() });
 
-    // 应该出现详情面板（包含完整正文）
     await waitFor(() => {
-      expect(screen.getByText(/你的收藏夹里躺着几十篇干货/)).toBeInTheDocument();
+      expect(screen.getByText(/作品库暂无内容，Cecelia 生成内容后将自动显示/)).toBeInTheDocument();
+    });
+  });
+
+  it('数据加载时应该显示 spinner', () => {
+    vi.mocked(worksApi.getWorks).mockReturnValue(new Promise(() => {})); // 永不 resolve
+
+    render(<WorksGalleryPage />, { wrapper: createWrapper() });
+
+    // 加载中显示"加载中…"文字
+    expect(screen.getByText(/加载中/)).toBeInTheDocument();
+  });
+
+  it('有多种 content_type 时应该显示动态筛选按钮', async () => {
+    vi.mocked(worksApi.getWorks).mockResolvedValue({
+      data: mockWorks,
+      total: 2,
+      limit: 100,
+      offset: 0,
+    });
+
+    render(<WorksGalleryPage />, { wrapper: createWrapper() });
+
+    await waitFor(() => {
+      // image → 图文，text → 文本
+      expect(screen.getByRole('button', { name: '图文' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: '文本' })).toBeInTheDocument();
+    });
+  });
+
+  it('点击筛选按钮后应该出现"清除"按钮', async () => {
+    vi.mocked(worksApi.getWorks).mockResolvedValue({
+      data: mockWorks,
+      total: 2,
+      limit: 100,
+      offset: 0,
+    });
+
+    render(<WorksGalleryPage />, { wrapper: createWrapper() });
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: '图文' })).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: '图文' }));
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: '清除' })).toBeInTheDocument();
     });
   });
 });

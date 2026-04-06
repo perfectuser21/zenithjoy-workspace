@@ -1,0 +1,24 @@
+dev
+branch: cp-04061205-works-gallery-real-data
+harness_mode: false
+task_id: none
+started: 2026-04-06T12:05:00+08:00
+step_0_worktree: done
+step_1_spec: done
+step_2_code: pending
+step_3_integrate: pending
+step_4_ship: pending
+
+## Task Card
+title: WorksGalleryPage 从硬编码改为读取真实 API
+scope: apps/dashboard/src/pages/WorksGalleryPage.tsx
+
+## DoD
+- [ ] 删除 TITLES/BODIES/TAG_MAP/CARD_NUMS/ALL_ITEMS 等所有硬编码常量（~75行）
+- [ ] 用 useQuery + getWorks() 从 API 获取作品数据
+- [ ] 字段映射：title→title, content_text→body, content_type→标签, media_files[0].url→封面图
+- [ ] API 返回 0 条时显示"作品库暂无内容，Cecelia 生成内容后将自动显示"空状态
+- [ ] 加载中显示 spinner
+- [ ] 加载错误显示错误提示
+- [ ] 标签筛选改为按 content_type 动态生成
+- [ ] TypeScript 编译无报错
