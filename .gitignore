@@ -158,3 +158,12 @@ LEARNINGS.md
 .cecelia-run-id
 services/creator/scripts/publishers/node_modules/
 services/creator/scripts/publishers/**/node_modules/
+services/creator/scripts/publishers/**/.cookie-backups/
+services/creator/scripts/publishers/.cookie-backups/
+
+# 本地 ghostty 配置
+ghostty
+
+# 发布器临时调试脚本
+services/creator/scripts/publishers/sph-*.cjs
+services/creator/scripts/publishers/sph-*.js
