@@ -6,15 +6,14 @@ export class WorksService {
   async getWorks(params: {
     type?: string;
     status?: string;
-    account?: string;
     limit?: number;
     offset?: number;
     sort?: string;
     order?: 'asc' | 'desc';
   }): Promise<ListResponse<Work>> {
-    const { type, status, account, limit = 20, offset = 0, sort = 'created_at', order = 'desc' } = params;
+    const { type, status, limit = 20, offset = 0, sort = 'created_at', order = 'desc' } = params;
 
-    let whereClause = 'WHERE archived = false';
+    let whereClause = 'WHERE archived_at IS NULL';
     const values: any[] = [];
     let paramIndex = 1;
 
@@ -25,10 +24,6 @@ export class WorksService {
     if (status) {
       whereClause += ` AND status = $${paramIndex++}`;
       values.push(status);
-    }
-    if (account) {
-      whereClause += ` AND account = $${paramIndex++}`;
-      values.push(account);
     }
 
     const countQuery = `SELECT COUNT(*) as total FROM zenithjoy.works ${whereClause}`;

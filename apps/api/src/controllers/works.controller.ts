@@ -6,12 +6,11 @@ const worksService = new WorksService();
 export class WorksController {
   async getWorks(req: Request, res: Response, next: NextFunction) {
     try {
-      const { type, status, account, limit, offset, sort, order } = req.query;
+      const { type, status, limit, offset, sort, order } = req.query;
 
       const result = await worksService.getWorks({
         type: type as string,
         status: status as string,
-        account: account as string,
         limit: limit ? parseInt(limit as string) : undefined,
         offset: offset ? parseInt(offset as string) : undefined,
         sort: sort as string,
