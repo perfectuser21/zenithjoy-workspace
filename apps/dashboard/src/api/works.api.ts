@@ -12,7 +12,8 @@ export interface Work {
   title: string;
   content_type: ContentType;
   status: WorkStatus;
-  account: Account;
+  account?: Account;
+  body?: string | null;
   content_text?: string;
   media_files?: Array<{ url: string; type: 'image' | 'video'; }>;
   custom_fields?: Record<string, unknown>;
