@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import {
   ArrowLeft, Save, Loader2,
@@ -316,8 +316,10 @@ function PipelineTab({ workId, work }: { workId: string; work: WorkSummary }) {
 export default function WorkDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
 
-  const [activeTab, setActiveTab] = useState<'edit' | 'pipeline'>('edit');
+  const initialTab = searchParams.get('tab') === 'pipeline' ? 'pipeline' : 'edit';
+  const [activeTab, setActiveTab] = useState<'edit' | 'pipeline'>(initialTab);
   const [title, setTitle] = useState('');
   const [contentType, setContentType] = useState<ContentType>('text');
   const [status, setStatus] = useState<WorkStatus>('draft');
@@ -333,8 +335,8 @@ export default function WorkDetailPage() {
       setTitle(work.title);
       setContentType(work.content_type);
       setStatus(work.status);
-      setAccount(work.account);
-      setContentText(work.content_text || '');
+      setAccount(work.account ?? 'XXIP');
+      setContentText(work.body || work.content_text || '');
       setMediaFiles(work.media_files || []);
       setCustomFields(work.custom_fields || {});
     }
