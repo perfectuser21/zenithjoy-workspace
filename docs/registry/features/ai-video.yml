@@ -41,14 +41,33 @@ features:
       layers: [L3]
     runtime: {}
     capabilities:
-      - id: ai_video_generate
-        name: AI 视频生成
+      - id: ai_video_generate.prompt_build
+        name: 构建视频生成 prompt
         entry_file: ai-video.service.ts
         maturity: 2
         tests:
           unit:
             - apps/api/src/services/__tests__/ai-video.service.test.ts
           integration: []
+          e2e: []
+        status: active
+      - id: ai_video_generate.submit
+        name: 提交生成任务
+        entry_file: ai-video.service.ts
+        maturity: 2
+        tests:
+          unit: []
+          integration: []
+          e2e: []
+        status: active
+      - id: ai_video_generate.provider_select
+        name: 选择生成服务商
+        entry_file: ai-video.service.ts
+        maturity: 2
+        tests:
+          unit: []
+          integration: []
+          e2e: []
         status: active
 
   - feature_id: ai_video_task_monitor
@@ -83,14 +102,33 @@ features:
       layers: [L3]
     runtime: {}
     capabilities:
-      - id: ai_video_task_monitor
-        name: 视频任务状态监控
+      - id: ai_video_task_monitor.polling
+        name: 轮询生成进度
         entry_file: TaskMonitor.tsx
         maturity: 2
         tests:
           unit:
             - apps/dashboard/src/components/video-generation/__tests__/TaskMonitor.test.tsx
           integration: []
+          e2e: []
+        status: active
+      - id: ai_video_task_monitor.webhook
+        name: webhook 回调处理
+        entry_file: TaskMonitor.tsx
+        maturity: 2
+        tests:
+          unit: []
+          integration: []
+          e2e: []
+        status: active
+      - id: ai_video_task_monitor.timeout_handling
+        name: 超时处理
+        entry_file: TaskMonitor.tsx
+        maturity: 2
+        tests:
+          unit: []
+          integration: []
+          e2e: []
         status: active
 
   - feature_id: ai_video_history
@@ -123,11 +161,21 @@ features:
       layers: []
     runtime: {}
     capabilities:
-      - id: ai_video_history
-        name: 视频历史记录
+      - id: ai_video_history.list
+        name: 历史记录列表
         entry_file: AiVideoHistoryPage.tsx
         maturity: 0
         tests:
           unit: []
           integration: []
+          e2e: []
+        status: active
+      - id: ai_video_history.download
+        name: 视频下载
+        entry_file: AiVideoHistoryPage.tsx
+        maturity: 0
+        tests:
+          unit: []
+          integration: []
+          e2e: []
         status: active

@@ -348,7 +348,7 @@ async def publish_weibo_image(content: str, image_paths: list[str]) -> bool:
                     const allBtns = document.querySelectorAll('button, a, div[role="button"]');
                     for (const btn of allBtns) {
                         const text = btn.textContent.trim();
-                        if ((text === '发布' || text === '发微博') && !btn.disabled) {
+                        if ((text === '发布' || text === '发微博' || text === '发送') && !btn.disabled) {
                             btn.click();
                             return 'CLICKED_TEXT:' + text;
                         }

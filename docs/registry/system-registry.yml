@@ -78,6 +78,14 @@ systems:
 summary:
   total_systems: 6
   total_features: 27
+  total_capabilities: 63
+  capabilities_by_system:
+    auth: 6
+    media: 13
+    publisher: 21
+    crm: 6
+    ai_employee: 9
+    ai_video: 8
   maturity_distribution:
     "0": 15
     "1": 2
@@ -85,4 +93,4 @@ summary:
     "3": 0
     "4": 0
     "5": 0
-  last_updated: "2026-04-03"
+  last_updated: "2026-04-04"

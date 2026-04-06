@@ -35,13 +35,32 @@ features:
       layers: []
     runtime: {}
     capabilities:
-      - id: ai_employee_list
-        name: AI 员工列表
+      - id: ai_employee_list.directory
+        name: 员工目录和角色定义
         entry_file: AiEmployeesPage.tsx
         maturity: 0
         tests:
           unit: []
           integration: []
+          e2e: []
+        status: active
+      - id: ai_employee_list.availability
+        name: 可用性查询
+        entry_file: AiEmployeesPage.tsx
+        maturity: 0
+        tests:
+          unit: []
+          integration: []
+          e2e: []
+        status: active
+      - id: ai_employee_list.profile
+        name: 员工详情和能力清单
+        entry_file: AiEmployeesPage.tsx
+        maturity: 0
+        tests:
+          unit: []
+          integration: []
+          e2e: []
         status: active
 
   - feature_id: ai_employee_ability
@@ -71,13 +90,32 @@ features:
       layers: []
     runtime: {}
     capabilities:
-      - id: ai_employee_ability
-        name: AI 员工能力配置
+      - id: ai_employee_ability.skill_definition
+        name: 技能定义和注册
         entry_file: AiAbilityDetailPage.tsx
         maturity: 0
         tests:
           unit: []
           integration: []
+          e2e: []
+        status: active
+      - id: ai_employee_ability.invocation
+        name: 技能调用执行
+        entry_file: AiAbilityDetailPage.tsx
+        maturity: 0
+        tests:
+          unit: []
+          integration: []
+          e2e: []
+        status: active
+      - id: ai_employee_ability.parameter_binding
+        name: 参数绑定
+        entry_file: AiAbilityDetailPage.tsx
+        maturity: 0
+        tests:
+          unit: []
+          integration: []
+          e2e: []
         status: active
 
   - feature_id: ai_employee_execution_status
@@ -107,11 +145,30 @@ features:
       layers: []
     runtime: {}
     capabilities:
-      - id: ai_employee_execution_status
-        name: AI 员工执行状态
+      - id: ai_employee_execution_status.realtime
+        name: 实时状态推送
         entry_file: ExecutionStatus.tsx
         maturity: 0
         tests:
           unit: []
           integration: []
+          e2e: []
+        status: active
+      - id: ai_employee_execution_status.history
+        name: 历史执行记录
+        entry_file: ExecutionStatus.tsx
+        maturity: 0
+        tests:
+          unit: []
+          integration: []
+          e2e: []
+        status: active
+      - id: ai_employee_execution_status.error_reporting
+        name: 错误上报
+        entry_file: ExecutionStatus.tsx
+        maturity: 0
+        tests:
+          unit: []
+          integration: []
+          e2e: []
         status: active

@@ -47,14 +47,33 @@ features:
       layers: [L3]
     runtime: {}
     capabilities:
-      - id: crm_field_management
-        name: 自定义字段管理
+      - id: crm_field_management.schema
+        name: 字段 schema 定义
+        entry_file: fields.controller.ts
+        maturity: 2
+        tests:
+          unit: []
+          integration: []
+          e2e: []
+        status: active
+      - id: crm_field_management.crud
+        name: 字段值增删改查
         entry_file: fields.controller.ts
         maturity: 2
         tests:
           unit:
             - apps/dashboard/src/pages/__tests__/FieldManagementPage.test.tsx
           integration: []
+          e2e: []
+        status: active
+      - id: crm_field_management.validation
+        name: 字段值验证
+        entry_file: fields.controller.ts
+        maturity: 2
+        tests:
+          unit: []
+          integration: []
+          e2e: []
         status: active
 
   - feature_id: crm_scraping
@@ -84,11 +103,30 @@ features:
       layers: []
     runtime: {}
     capabilities:
-      - id: crm_scraping
-        name: 数据抓取
+      - id: crm_scraping.profile_extract
+        name: 提取用户公开信息
         entry_file: ScrapingPage.tsx
         maturity: 0
         tests:
           unit: []
           integration: []
+          e2e: []
+        status: active
+      - id: crm_scraping.data_normalize
+        name: 数据标准化
+        entry_file: ScrapingPage.tsx
+        maturity: 0
+        tests:
+          unit: []
+          integration: []
+          e2e: []
+        status: active
+      - id: crm_scraping.rate_limit
+        name: 速率限制和反检测
+        entry_file: ScrapingPage.tsx
+        maturity: 0
+        tests:
+          unit: []
+          integration: []
+          e2e: []
         status: active

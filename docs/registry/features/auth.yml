@@ -35,13 +35,41 @@ features:
       layers: []
     runtime: {}
     capabilities:
-      - id: auth_feishu_login
-        name: 飞书登录
+      - id: auth_feishu_login.oauth_flow
+        name: OAuth 授权流程（飞书登录 redirect/callback）
         entry_file: FeishuLogin.tsx
         maturity: 0
         tests:
           unit: []
           integration: []
+          e2e: []
+        status: active
+      - id: auth_feishu_login.token_management
+        name: token 获取和刷新
+        entry_file: FeishuLogin.tsx
+        maturity: 0
+        tests:
+          unit: []
+          integration: []
+          e2e: []
+        status: active
+      - id: auth_feishu_login.session
+        name: session 管理和用户信息存储
+        entry_file: FeishuLogin.tsx
+        maturity: 0
+        tests:
+          unit: []
+          integration: []
+          e2e: []
+        status: active
+      - id: auth_feishu_login.middleware
+        name: 认证中间件守卫
+        entry_file: FeishuLogin.tsx
+        maturity: 0
+        tests:
+          unit: []
+          integration: []
+          e2e: []
         status: active
 
   - feature_id: auth_ab_testing
@@ -72,12 +100,22 @@ features:
       layers: [L3]
     runtime: {}
     capabilities:
-      - id: auth_ab_testing
-        name: A/B 测试分流
+      - id: auth_ab_testing.assignment
+        name: 用户分配到实验组
         entry_file: ab-testing.ts
         maturity: 2
         tests:
           unit:
             - apps/dashboard/src/lib/__tests__/ab-testing.test.ts
           integration: []
+          e2e: []
+        status: active
+      - id: auth_ab_testing.config
+        name: 实验配置管理
+        entry_file: ab-testing.ts
+        maturity: 2
+        tests:
+          unit: []
+          integration: []
+          e2e: []
         status: active

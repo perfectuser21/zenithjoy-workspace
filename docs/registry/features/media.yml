@@ -39,13 +39,32 @@ features:
       layers: []
     runtime: {}
     capabilities:
-      - id: media_content_factory
-        name: 内容工厂 Pipeline
+      - id: media_content_factory.pipeline_trigger
+        name: 触发内容生产流水线
         entry_file: ContentFactoryPage.tsx
         maturity: 0
         tests:
           unit: []
           integration: []
+          e2e: []
+        status: active
+      - id: media_content_factory.status_tracking
+        name: 追踪内容生产状态
+        entry_file: ContentFactoryPage.tsx
+        maturity: 0
+        tests:
+          unit: []
+          integration: []
+          e2e: []
+        status: active
+      - id: media_content_factory.batch_management
+        name: 批量管理内容任务
+        entry_file: ContentFactoryPage.tsx
+        maturity: 0
+        tests:
+          unit: []
+          integration: []
+          e2e: []
         status: active
 
   - feature_id: media_works_management
@@ -88,14 +107,33 @@ features:
       layers: [L3]
     runtime: {}
     capabilities:
-      - id: media_works_management
-        name: 内容作品管理
+      - id: media_works_management.crud
+        name: 作品增删改查
         entry_file: works.controller.ts
         maturity: 2
         tests:
           unit:
             - apps/dashboard/src/pages/__tests__/WorksListPage.test.tsx
           integration: []
+          e2e: []
+        status: active
+      - id: media_works_management.search_filter
+        name: 搜索和过滤
+        entry_file: works.controller.ts
+        maturity: 2
+        tests:
+          unit: []
+          integration: []
+          e2e: []
+        status: active
+      - id: media_works_management.tagging
+        name: 标签管理
+        entry_file: works.controller.ts
+        maturity: 2
+        tests:
+          unit: []
+          integration: []
+          e2e: []
         status: active
 
   - feature_id: media_platform_publish
@@ -137,14 +175,33 @@ features:
       layers: [L3]
     runtime: {}
     capabilities:
-      - id: media_platform_publish
-        name: 多平台发布
+      - id: media_platform_publish.dispatch
+        name: 派发发布任务到各平台
         entry_file: publish.controller.ts
         maturity: 2
         tests:
           unit:
             - apps/dashboard/src/api/platforms/__tests__/index.test.ts
           integration: []
+          e2e: []
+        status: active
+      - id: media_platform_publish.status
+        name: 发布状态追踪
+        entry_file: publish.controller.ts
+        maturity: 2
+        tests:
+          unit: []
+          integration: []
+          e2e: []
+        status: active
+      - id: media_platform_publish.retry
+        name: 失败重试
+        entry_file: publish.controller.ts
+        maturity: 2
+        tests:
+          unit: []
+          integration: []
+          e2e: []
         status: active
 
   - feature_id: media_platform_data
@@ -181,14 +238,24 @@ features:
       layers: [L3]
     runtime: {}
     capabilities:
-      - id: media_platform_data
-        name: 平台数据看板
+      - id: media_platform_data.collection
+        name: 数据采集
         entry_file: PlatformDataPage.tsx
         maturity: 2
         tests:
           unit:
             - apps/dashboard/src/pages/__tests__/PlatformDataPage.test.tsx
           integration: []
+          e2e: []
+        status: active
+      - id: media_platform_data.aggregation
+        name: 数据聚合和统计
+        entry_file: PlatformDataPage.tsx
+        maturity: 2
+        tests:
+          unit: []
+          integration: []
+          e2e: []
         status: active
 
   - feature_id: media_notion_sync
@@ -223,11 +290,21 @@ features:
       layers: []
     runtime: {}
     capabilities:
-      - id: media_notion_sync
-        name: Notion 内容同步
+      - id: media_notion_sync.push
+        name: 推送内容到 Notion
         entry_file: server.py
         maturity: 0
         tests:
           unit: []
           integration: []
+          e2e: []
+        status: active
+      - id: media_notion_sync.pull
+        name: 从 Notion 拉取更新
+        entry_file: server.py
+        maturity: 0
+        tests:
+          unit: []
+          integration: []
+          e2e: []
         status: active
