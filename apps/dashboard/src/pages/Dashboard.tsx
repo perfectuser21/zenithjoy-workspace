@@ -29,7 +29,9 @@ import {
   Bot
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
-import { dashboardApi, type DashboardStats } from '../api';
+import { dashboardApi } from '../api';
+import type { DashboardStats } from '../api/dashboard.api';
+import { useNavigate } from 'react-router-dom';
 
 // 每日一言库
 const DAILY_QUOTES = [
@@ -249,8 +251,8 @@ interface Task {
 
 export default function Dashboard() {
   const { user } = useAuth();
-  const [tasks, setTasks] = useState<Task[]>([]);
-  const [showScrapingPanel, setShowScrapingPanel] = useState(false);
+  const navigate = useNavigate();
+  const [tasks] = useState<Task[]>([]);
   const [dashboardStats, setDashboardStats] = useState<DashboardStats | null>(null);
   const [statsLoading, setStatsLoading] = useState(true);
 
@@ -414,58 +416,6 @@ export default function Dashboard() {
 
   const greeting = getDynamicGreeting();
 
-  const handleQuickAction = (actionId: string) => {
-    if (actionId === 'scrape') {
-      setShowScrapingPanel(!showScrapingPanel);
-    }
-  };
-
-  const handleStartScraping = async (platform: typeof SCRAPING_PLATFORMS[0]) => {
-    const newTask: Task = {
-      id: `${platform.id}-${Date.now()}`,
-      platform: platform.name,
-      status: 'running',
-      startTime: new Date()
-    };
-
-    setTasks(prev => [newTask, ...prev]);
-
-    try {
-      const response = await fetch(
-        `${import.meta.env.VITE_N8N_WEBHOOK_BASE}${platform.endpoint}`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            userId: user?.id,
-            platform: platform.id,
-            timestamp: new Date().toISOString()
-          })
-        }
-      );
-
-      if (response.ok) {
-        setTasks(prev =>
-          prev.map(task =>
-            task.id === newTask.id
-              ? { ...task, status: 'success', message: '采集完成' }
-              : task
-          )
-        );
-      } else {
-        throw new Error('采集失败');
-      }
-    } catch {
-      setTasks(prev =>
-        prev.map(task =>
-          task.id === newTask.id
-            ? { ...task, status: 'failed', message: '采集失败' }
-            : task
-        )
-      );
-    }
-  };
-
   return (
     <div className="px-4 sm:px-0 pb-8">
       {/* 欢迎区域 */}
@@ -544,152 +494,110 @@ export default function Dashboard() {
         {/* 数据概览卡片 */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <StatCard
-            title="今日发布"
-            value={dashboardStats?.todayPublished.value ?? 0}
-            delta={dashboardStats?.todayPublished.delta ?? 0}
-            icon={Send}
+            title="作品总数"
+            value={dashboardStats?.totalWorks ?? 0}
+            icon={FileText}
             color="blue"
-            subtitle="较昨日"
+            subtitle="累计生成"
             loading={statsLoading}
             index={0}
           />
           <StatCard
-            title="待处理任务"
-            value={dashboardStats?.pendingTasks.value ?? 0}
-            icon={ClipboardList}
+            title="已发布"
+            value={dashboardStats?.publishedWorks ?? 0}
+            icon={Send}
             color="purple"
-            subtitle="等待发布"
+            subtitle="各平台合计"
             loading={statsLoading}
             index={1}
           />
           <StatCard
-            title="活跃账号"
-            value={dashboardStats?.activeAccounts.value ?? 0}
-            delta={dashboardStats?.activeAccounts.delta ?? 0}
-            icon={Users}
+            title="今日生成"
+            value={dashboardStats?.todayGenerated ?? 0}
+            icon={Sparkles}
             color="green"
-            subtitle="登录有效"
+            subtitle="Cecelia 生产"
             loading={statsLoading}
             index={2}
           />
           <StatCard
-            title="AI 执行"
-            value={dashboardStats?.aiExecutions.value ?? 0}
-            delta={dashboardStats?.aiExecutions.delta ?? 0}
-            icon={Bot}
+            title="今日发布"
+            value={dashboardStats?.todayPublished ?? 0}
+            icon={CheckCircle}
             color="orange"
-            subtitle="今日任务"
+            subtitle="成功发布"
             loading={statsLoading}
             index={3}
           />
         </div>
       </div>
 
-      {/* 快捷操作 */}
+      {/* 最近作品 */}
       <div className="mb-8">
-        <h2 className="text-lg font-semibold text-slate-800 dark:text-white mb-4 flex items-center">
-          <Zap className="w-5 h-5 mr-2 text-blue-500 icon-float" />
-          快捷操作
-        </h2>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          {QUICK_ACTIONS.filter(a => a && a.icon).map((action, idx) => {
-            const Icon = action.icon;
-            return (
-              <button
-                key={action.id}
-                onClick={() => handleQuickAction(action.id)}
-                className={`group ${action.color} rounded-2xl p-5 flex flex-col items-center justify-center shadow-[0_4px_16px_-2px_rgba(0,0,0,0.1),0_2px_6px_-2px_rgba(0,0,0,0.06)] border border-slate-200 dark:border-slate-700 magnetic-btn relative overflow-hidden`}
-                style={{ animationDelay: `${idx * 0.05}s` }}
-              >
-                {/* 悬停光效 */}
-                <div className="absolute inset-0 bg-gradient-to-br from-blue-500/0 via-blue-500/5 to-cyan-500/0 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-
-                <div className="relative">
-                  <Icon className="w-6 h-6 mb-2 transition-all duration-500 group-hover:scale-125 group-hover:rotate-12 group-hover:text-blue-500 dark:group-hover:text-blue-400" />
-                </div>
-                <span className="text-sm font-medium text-slate-700 dark:text-slate-200 relative">{action.title}</span>
-              </button>
-            );
-          })}
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg font-semibold text-slate-800 dark:text-white flex items-center">
+            <Zap className="w-5 h-5 mr-2 text-blue-500" />
+            最近作品
+          </h2>
+          <button
+            onClick={() => navigate('/works')}
+            className="text-sm text-blue-500 hover:text-blue-700 transition-colors"
+          >
+            查看全部 →
+          </button>
         </div>
-      </div>
 
-      {/* 数据采集面板（可展开） */}
-      {showScrapingPanel && (
-        <div className="mb-8 bg-white dark:bg-slate-800 rounded-2xl p-6 border border-slate-200 dark:border-slate-700 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.1)] hover:shadow-lg transition-all duration-300">
-          <h3 className="text-lg font-semibold text-slate-800 dark:text-white mb-5 flex items-center">
-            <Database className="w-5 h-5 mr-2 text-blue-500" />
-            数据采集
-          </h3>
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-            {SCRAPING_PLATFORMS.filter(p => p && p.icon).map((platform) => {
-              const Icon = platform.icon;
-              const isRunning = tasks.some(
-                t => t.platform === platform.name && t.status === 'running'
-              );
+        {statsLoading ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {[1,2,3,4,5,6].map(i => (
+              <div key={i} className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-5 animate-pulse">
+                <div className="h-4 bg-slate-200 dark:bg-slate-600 rounded w-3/4 mb-3" />
+                <div className="h-3 bg-slate-100 dark:bg-slate-700 rounded w-1/2" />
+              </div>
+            ))}
+          </div>
+        ) : !dashboardStats?.recentWorks.length ? (
+          <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-10 text-center text-slate-400">
+            <FileText className="w-10 h-10 mx-auto mb-3 opacity-30" />
+            <p>作品库为空，Cecelia 生成内容后将自动显示</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {dashboardStats.recentWorks.map((work) => {
+              const TYPE_LABEL: Record<string, string> = {
+                text: '长文', image: '图文', video: '视频', article: '文章', audio: '音频'
+              };
+              const STATUS_COLOR: Record<string, string> = {
+                published: 'bg-green-100 text-green-700',
+                draft: 'bg-gray-100 text-gray-500',
+                pending: 'bg-yellow-100 text-yellow-700',
+                archived: 'bg-slate-100 text-slate-500',
+              };
               return (
                 <button
-                  key={platform.id}
-                  onClick={() => handleStartScraping(platform)}
-                  disabled={isRunning}
-                  className={`${platform.color} text-white rounded-xl p-5 flex flex-col items-center justify-center hover:shadow-lg hover:-translate-y-0.5 transition-all duration-300 ${
-                    isRunning ? 'opacity-60 cursor-not-allowed' : ''
-                  }`}
+                  key={work.id}
+                  onClick={() => navigate(`/works/${work.id}?tab=pipeline`)}
+                  className="group bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-5 text-left hover:shadow-md hover:-translate-y-0.5 transition-all duration-200"
                 >
-                  <Icon className="w-8 h-8 mb-2" />
-                  <span className="text-sm font-medium">{platform.name}</span>
-                  {isRunning && (
-                    <div className="mt-2 text-xs opacity-90">采集中...</div>
-                  )}
+                  <div className="flex items-start justify-between mb-2">
+                    <span className="text-xs px-2 py-0.5 rounded-full bg-blue-50 text-blue-600 font-medium">
+                      {TYPE_LABEL[work.content_type] ?? work.content_type}
+                    </span>
+                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${STATUS_COLOR[work.status] ?? 'bg-gray-100 text-gray-500'}`}>
+                      {work.status === 'published' ? '已发布' : work.status === 'draft' ? '草稿' : work.status === 'pending' ? '待发布' : '归档'}
+                    </span>
+                  </div>
+                  <p className="text-sm font-medium text-slate-800 dark:text-white line-clamp-2 mt-2 mb-3 group-hover:text-blue-600 transition-colors">
+                    {work.title}
+                  </p>
+                  <p className="text-xs text-slate-400">
+                    {new Date(work.created_at).toLocaleDateString('zh-CN')}
+                  </p>
                 </button>
               );
             })}
           </div>
-        </div>
-      )}
-
-      {/* 主要功能模块 */}
-      <div className="mb-8">
-        <h2 className="text-lg font-semibold text-slate-800 dark:text-white mb-4">功能模块</h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-          {MAIN_FEATURES.filter(f => f && f.icon).map((feature) => {
-            const Icon = feature.icon;
-            return (
-              <a
-                key={feature.id}
-                href={feature.link}
-                className="group relative bg-white dark:bg-slate-800 rounded-2xl shadow-[0_4px_24px_-2px_rgba(0,0,0,0.12),0_2px_8px_-2px_rgba(0,0,0,0.08)] hover:shadow-[0_15px_40px_-10px_rgba(52,103,214,0.25)] transition-all duration-300 overflow-hidden border border-slate-200 dark:border-slate-700 shimmer-card spring-hover"
-              >
-                {/* 渐变背景 - 浅色模式更明显 */}
-                <div className={`absolute inset-0 bg-gradient-to-br ${feature.color} opacity-0 group-hover:opacity-[0.08] dark:group-hover:opacity-[0.15] transition-opacity duration-300`}></div>
-
-                <div className="relative p-7">
-                  <div className="flex items-start justify-between mb-4">
-                    <div
-                      className={`bg-gradient-to-br ${feature.color} rounded-xl p-3 shadow-lg ring-4 ring-white/20 dark:ring-slate-700/50 group-hover:shadow-xl group-hover:scale-110 transition-transform duration-300`}
-                    >
-                      <Icon className="w-6 h-6 text-white" />
-                    </div>
-                    {feature.badge && (
-                      <span className="text-xs font-medium px-2.5 py-1 bg-blue-50 dark:bg-blue-900/50 text-blue-600 dark:text-blue-300 rounded-lg border border-blue-100 dark:border-blue-800 shadow-sm group-hover:shadow-md transition-shadow">
-                        {feature.badge}
-                      </span>
-                    )}
-                  </div>
-                  <h3 className="text-xl font-semibold text-slate-800 dark:text-white mb-2 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors duration-300">
-                    {feature.title}
-                  </h3>
-                  <p className="text-slate-500 dark:text-slate-400 text-sm leading-relaxed">
-                    {feature.description}
-                  </p>
-                  <div className="mt-5 flex items-center text-sm font-medium text-slate-700 dark:text-slate-300 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-all duration-300">
-                    进入 <span className="ml-1 group-hover:translate-x-2 transition-transform duration-300">→</span>
-                  </div>
-                </div>
-              </a>
-            );
-          })}
-        </div>
+        )}
       </div>
 
       {/* 最近活动 */}
