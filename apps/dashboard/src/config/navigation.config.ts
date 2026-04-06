@@ -12,11 +12,9 @@ import {
   LayoutDashboard,
   Video,
   Users,
-  KeyRound,
   Database,
   Sparkles,
   Factory,
-  Settings,
 } from 'lucide-react';
 
 // ============ 类型定义 ============
@@ -123,13 +121,6 @@ export const autopilotNavGroups: NavGroup[] = [
         component: 'WorksListPage'
       },
       {
-        path: '/accounts',
-        icon: KeyRound,
-        label: '账号管理',
-        featureKey: 'accounts',
-        component: 'AccountsList'
-      },
-      {
         path: '/platform-data',
         icon: Database,
         label: '平台数据',
@@ -149,13 +140,6 @@ export const autopilotNavGroups: NavGroup[] = [
         label: '内容工厂',
         featureKey: 'content-factory',
         component: 'ContentFactoryPage'
-      },
-      {
-        path: '/content-factory/config',
-        icon: Settings,
-        label: '配置管理',
-        featureKey: 'content-factory',
-        component: 'ContentTypeConfigPage'
       },
     ]
   }

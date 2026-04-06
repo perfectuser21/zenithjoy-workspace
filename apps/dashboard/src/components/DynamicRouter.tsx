@@ -8,7 +8,6 @@ import type { ComponentType} from 'react';
 import { Suspense, lazy, useMemo } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { useInstance } from '../contexts/InstanceContext';
 import PrivateRoute from './PrivateRoute';
 import {
   getAutopilotNavGroups,
@@ -64,7 +63,6 @@ interface DynamicRouterProps {
 
 export default function DynamicRouter({ children }: DynamicRouterProps) {
   const { isSuperAdmin } = useAuth();
-  const { isFeatureEnabled } = useInstance();
 
   const navGroups = useMemo(() => {
     return getAutopilotNavGroups();
