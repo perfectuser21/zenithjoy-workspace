@@ -126,6 +126,8 @@ describe('WorksGalleryPage', () => {
 
     fireEvent.click(screen.getByRole('button', { name: '图文' }));
 
-    expect(screen.getByRole('button', { name: '清除' })).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: '清除' })).toBeInTheDocument();
+    });
   });
 });

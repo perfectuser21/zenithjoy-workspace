@@ -240,8 +240,8 @@ export default function WorksGalleryPage() {
         </p>
       </div>
 
-      {/* 类型筛选（动态，仅在有数据时显示） */}
-      {availableTypes.length > 0 && (
+      {/* 类型筛选（动态，仅在有数据时显示类型按钮；清除按钮只要有激活筛选就显示） */}
+      {(availableTypes.length > 0 || typeFilter) && (
         <div className="flex gap-2 mb-6 flex-wrap">
           {availableTypes.map((type) => (
             <button
