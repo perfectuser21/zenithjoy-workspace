@@ -44,11 +44,12 @@ router.get('/auth/douyin/callback', async (req: Request, res: Response) => {
         </body></html>
       `);
     }
-  } catch (err: any) {
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
     return res.status(500).send(`
       <html><body style="font-family:sans-serif;text-align:center;padding:60px">
         <h2>❌ 请求失败</h2>
-        <pre>${err.message}</pre>
+        <pre>${message}</pre>
       </body></html>
     `);
   }
