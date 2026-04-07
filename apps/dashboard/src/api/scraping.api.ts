@@ -1,10 +1,6 @@
 /**
  * Scraping API - 管理数据采集任务
- *
- * 通过 N8N webhook 触发爬虫任务
  */
-
-// Webhook calls go through Nginx proxy: /api/n8n-webhook/ → N8N webhook port
 
 // ============ 类型定义 ============
 
@@ -106,16 +102,6 @@ let taskStatusCache: Map<string, Partial<ScrapingTask>> = new Map();
  */
 export async function fetchScrapingTasks(): Promise<ScrapingTask[]> {
   // 尝试从后端获取任务状态
-  try {
-    const response = await fetch('/api/n8n/executions?limit=20');
-    if (response.ok) {
-      const data = await response.json();
-      return data.tasks || SCRAPING_TASKS;
-    }
-  } catch {
-    // 后端不可用时使用本地缓存
-  }
-
   // 使用预定义任务 + 本地缓存状态
   return SCRAPING_TASKS.map((task) => ({
     ...task,
@@ -146,73 +132,8 @@ export async function triggerScrapingTask(taskId: string): Promise<TriggerResult
     lastExecutedAt: new Date().toISOString(),
   });
 
-  try {
-    // 调用 N8N webhook
-    const response = await fetch(`/api/n8n-webhook${task.webhookPath}`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        triggeredAt: new Date().toISOString(),
-        source: 'dashboard',
-      }),
-    });
-
-    if (response.ok) {
-      const data = await response.json();
-
-      // 更新状态为成功
-      taskStatusCache.set(taskId, {
-        status: 'success',
-        lastExecutedAt: new Date().toISOString(),
-        lastResult: {
-          success: true,
-          dataCount: data.dataCount || 0,
-        },
-      });
-
-      return {
-        success: true,
-        executionId: data.executionId,
-        message: '任务已触发',
-      };
-    } else {
-      const errorText = await response.text();
-
-      // 更新状态为错误
-      taskStatusCache.set(taskId, {
-        status: 'error',
-        lastExecutedAt: new Date().toISOString(),
-        lastResult: {
-          success: false,
-          error: errorText,
-        },
-      });
-
-      return {
-        success: false,
-        error: `触发失败: ${response.status}`,
-      };
-    }
-  } catch (err) {
-    const errorMessage = err instanceof Error ? err.message : '网络错误';
-
-    // 更新状态为错误
-    taskStatusCache.set(taskId, {
-      status: 'error',
-      lastExecutedAt: new Date().toISOString(),
-      lastResult: {
-        success: false,
-        error: errorMessage,
-      },
-    });
-
-    return {
-      success: false,
-      error: errorMessage,
-    };
-  }
+  taskStatusCache.set(taskId, { status: 'idle' });
+  return { success: false, error: '采集功能暂不可用' };
 }
 
 /**

@@ -46,8 +46,7 @@ export default function FeishuLogin() {
     try {
       console.log('Received code from Feishu:', code);
 
-      // 调用 N8N webhook 处理飞书登录（N8N 有 app_secret）
-      const response = await fetch('/api/n8n-webhook/webhook/feishu-login', {
+      const response = await fetch('/api/feishu-login', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

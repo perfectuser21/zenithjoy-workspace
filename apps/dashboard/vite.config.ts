@@ -112,18 +112,6 @@ export default defineConfig({
         target: 'http://localhost:5200/api',
         changeOrigin: true,
       },
-      // N8N REST API (US N8N via Tailscale for dev)
-      '/api/n8n/': {
-        target: 'http://100.71.32.28:5679',
-        changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/api\/n8n/, '/api/v1')
-      },
-      // N8N Webhooks incl. feishu-login (US N8N via Tailscale for dev)
-      '/api/n8n-webhook/': {
-        target: 'http://100.71.32.28:5679',
-        changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/api\/n8n-webhook/, '')
-      },
       // Brain API — 内容工厂、Pipeline 等
       '/api/brain': {
         target: 'http://localhost:5221',

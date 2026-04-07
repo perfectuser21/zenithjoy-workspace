@@ -1,7 +1,5 @@
 /**
- * AI 员工 API - 聚合 n8n 数据，按员工视角展示
- *
- * 复用 zenithjoy-core 的 n8n API，按员工聚合数据
+ * AI 员工 API - 按员工视角展示任务统计
  */
 
 import type {
@@ -14,8 +12,8 @@ import {
 
 // ============ 类型定义 ============
 
-// n8n 执行记录（简化版）
-interface N8nExecution {
+// 执行记录（简化版）
+interface Execution {
   id: string;
   workflowId: string;
   workflowName?: string;
@@ -32,7 +30,7 @@ interface TodayStats {
   total: number;
 }
 
-// Live Status Overview（从 n8n-live-status API）
+// Live Status Overview
 interface LiveStatusOverview {
   todayStats: TodayStats;
   runningExecutions: Array<{
@@ -42,7 +40,7 @@ interface LiveStatusOverview {
     startedAt: string;
     duration: number;
   }>;
-  recentCompleted: N8nExecution[];
+  recentCompleted: Execution[];
   timestamp: number;
 }
 
@@ -81,55 +79,19 @@ export interface DepartmentWithStats extends Department {
 
 // ============ API 函数 ============
 
-/**
- * 获取 n8n 执行数据并转换为 LiveStatusOverview 格式
- */
 async function fetchLiveStatus(): Promise<LiveStatusOverview> {
-  const response = await fetch('/api/n8n/executions?limit=50');
-  if (!response.ok) {
-    throw new Error(`N8N API error: ${response.status}`);
-  }
-  const data = await response.json();
-  const executions = data?.data || [];
-
-  const today = new Date().toISOString().split('T')[0];
-  const todayExecs = executions.filter((e: any) => e.startedAt?.startsWith(today));
-
-  const running = todayExecs.filter((e: any) => e.status === 'running');
-  const completed = todayExecs.filter((e: any) => e.status !== 'running');
-
   return {
-    todayStats: {
-      running: running.length,
-      success: todayExecs.filter((e: any) => e.status === 'success').length,
-      error: todayExecs.filter((e: any) => e.status === 'error').length,
-      total: todayExecs.length,
-    },
-    runningExecutions: running.map((e: any) => ({
-      id: e.id,
-      workflowId: e.workflowId,
-      workflowName: e.workflowName || '',
-      startedAt: e.startedAt,
-      duration: e.stoppedAt
-        ? new Date(e.stoppedAt).getTime() - new Date(e.startedAt).getTime()
-        : Date.now() - new Date(e.startedAt).getTime(),
-    })),
-    recentCompleted: completed.map((e: any) => ({
-      id: e.id,
-      workflowId: e.workflowId,
-      workflowName: e.workflowName || '',
-      status: e.status,
-      startedAt: e.startedAt,
-      stoppedAt: e.stoppedAt,
-    })),
+    todayStats: { running: 0, success: 0, error: 0, total: 0 },
+    runningExecutions: [],
+    recentCompleted: [],
     timestamp: Date.now(),
   };
 }
 
 /**
- * 将 n8n 执行记录映射到员工任务
+ * 将执行记录映射到员工任务
  */
-function mapExecutionToTask(execution: N8nExecution): EmployeeTask | null {
+function mapExecutionToTask(execution: Execution): EmployeeTask | null {
   const workflowName = execution.workflowName || '';
   const match = matchAbilityByWorkflow(workflowName);
 
@@ -177,8 +139,6 @@ function createDefaultDepartments(): DepartmentWithStats[] {
 
 /**
  * 获取所有员工的任务统计
- *
- * 从 n8n-live-status API 获取实时数据，按员工聚合统计
  */
 export async function fetchAiEmployeesWithStats(): Promise<DepartmentWithStats[]> {
   try {
@@ -188,7 +148,7 @@ export async function fetchAiEmployeesWithStats(): Promise<DepartmentWithStats[]
     const employeeStatsMap = new Map<string, EmployeeTaskStats>();
 
     // 处理所有执行记录
-    const allExecutions: N8nExecution[] = [
+    const allExecutions: Execution[] = [
       ...liveStatus.runningExecutions.map(r => ({
         id: r.id,
         workflowId: r.workflowId,
@@ -264,7 +224,7 @@ export async function fetchEmployeeTasks(employeeId: string): Promise<EmployeeTa
   try {
     const liveStatus = await fetchLiveStatus();
 
-    const allExecutions: N8nExecution[] = [
+    const allExecutions: Execution[] = [
       ...liveStatus.runningExecutions.map(r => ({
         id: r.id,
         workflowId: r.workflowId,
