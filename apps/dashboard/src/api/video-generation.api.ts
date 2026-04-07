@@ -69,7 +69,7 @@ export async function pollTaskStatus(
 export async function uploadImage(file: File): Promise<ImageUploadResponse> {
   const base64 = await fileToBase64(file);
 
-  const response = await fetch('/api/n8n-webhook/upload-video-frame', {
+  const response = await fetch('/api/upload-video-frame', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ filename: file.name, base64, size: file.size }),

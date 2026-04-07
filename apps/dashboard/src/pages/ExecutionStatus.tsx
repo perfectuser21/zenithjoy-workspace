@@ -59,19 +59,9 @@ export default function ExecutionStatus() {
   const [lastUpdate, setLastUpdate] = useState('');
 
   const fetchData = async () => {
-    try {
-      setLoading(true);
-      const res = await fetch('/api/v1/n8n-live-status/instances/local/overview');
-      if (!res.ok) throw new Error('API error');
-      const json = await res.json();
-      setData(json);
-      setError('');
-      setLastUpdate(new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }));
-    } catch {
-      setError('加载失败');
-    } finally {
-      setLoading(false);
-    }
+    setLoading(false);
+    setData(null);
+    setError('');
   };
 
   useEffect(() => {

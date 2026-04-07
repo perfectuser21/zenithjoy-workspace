@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { MonitorDot, Server, DollarSign, Workflow, Radio } from 'lucide-react';
+import { MonitorDot, Server, DollarSign } from 'lucide-react';
 
 const AdminSettingsPage: React.FC = () => {
   return (
@@ -29,22 +29,6 @@ const AdminSettingsPage: React.FC = () => {
           <DollarSign className="w-10 h-10 text-emerald-500 mb-3" />
           <h3 className="font-medium text-gray-900 dark:text-white mb-1">Claude Stats</h3>
           <p className="text-sm text-gray-500 dark:text-gray-400">费用统计、Token 使用趋势分析</p>
-        </Link>
-        <Link
-          to="/settings/n8n-workflows"
-          className="bg-white dark:bg-slate-800 rounded-lg shadow p-6 hover:shadow-md transition-shadow border border-slate-200 dark:border-slate-700"
-        >
-          <Workflow className="w-10 h-10 text-orange-500 mb-3" />
-          <h3 className="font-medium text-gray-900 dark:text-white mb-1">N8n 工作流</h3>
-          <p className="text-sm text-gray-500 dark:text-gray-400">监控自动化工作流执行状态</p>
-        </Link>
-        <Link
-          to="/settings/n8n-status"
-          className="bg-white dark:bg-slate-800 rounded-lg shadow p-6 hover:shadow-md transition-shadow border border-slate-200 dark:border-slate-700"
-        >
-          <Radio className="w-10 h-10 text-green-500 mb-3" />
-          <h3 className="font-medium text-gray-900 dark:text-white mb-1">N8n 实时状态</h3>
-          <p className="text-sm text-gray-500 dark:text-gray-400">实时监控工作流执行、今日统计</p>
         </Link>
       </div>
     </div>

@@ -263,7 +263,7 @@ export default function ScrapingPage() {
         <div className="text-center py-12">
           <Database className="w-16 h-16 mx-auto text-gray-400 dark:text-gray-500 mb-4" />
           <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">暂无采集任务</h3>
-          <p className="text-gray-500 dark:text-gray-400">配置 N8N 工作流后即可在此管理</p>
+          <p className="text-gray-500 dark:text-gray-400">暂无可用采集任务</p>
         </div>
       )}
     </div>
