@@ -25,7 +25,7 @@ app.use('/api/fields', fieldsRouter);
 app.use('/api', publishRouter);
 app.use('/api/ai-video', aiVideoRouter);
 app.use('/api/snapshots', snapshotsRouter);
-app.use('/', douyinAuthRouter);
+app.use('/api', douyinAuthRouter);
 
 // Error handling
 app.use(notFoundHandler);

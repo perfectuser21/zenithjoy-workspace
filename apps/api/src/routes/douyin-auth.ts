@@ -4,7 +4,7 @@ import axios from 'axios';
 const router = Router();
 
 // 抖音 OAuth 回调 - 用 code 换 access_token
-router.get('/auth/douyin/callback', async (req: Request, res: Response) => {
+router.get('/douyin-auth/callback', async (req: Request, res: Response) => {
   const { code } = req.query;
 
   if (!code) {
