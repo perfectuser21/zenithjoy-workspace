@@ -5,6 +5,7 @@ import fieldsRouter from './routes/fields';
 import publishRouter from './routes/publish';
 import aiVideoRouter from './routes/ai-video';
 import snapshotsRouter from './routes/snapshots';
+import douyinAuthRouter from './routes/douyin-auth';
 import { errorHandler, notFoundHandler } from './middleware/error';
 
 const app = express();
@@ -24,6 +25,7 @@ app.use('/api/fields', fieldsRouter);
 app.use('/api', publishRouter);
 app.use('/api/ai-video', aiVideoRouter);
 app.use('/api/snapshots', snapshotsRouter);
+app.use('/api', douyinAuthRouter);
 
 // Error handling
 app.use(notFoundHandler);
