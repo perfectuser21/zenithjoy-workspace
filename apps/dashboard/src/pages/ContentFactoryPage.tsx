@@ -233,7 +233,10 @@ function CreatePipelineForm({ onCreated }: { onCreated: () => void }) {
   useEffect(() => {
     fetchContentTypes().then(types => {
       setContentTypes(types)
-      if (types.length > 0 && !contentType) setContentType(types[0])
+      // 默认选中 solo-company-case（人物案例 pipeline）
+      if (types.length > 0 && !contentType) {
+        setContentType(types.includes('solo-company-case') ? 'solo-company-case' : types[0])
+      }
     })
   }, [])
 
