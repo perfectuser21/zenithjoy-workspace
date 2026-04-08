@@ -117,6 +117,12 @@ export default defineConfig({
         target: 'http://localhost:5221',
         changeOrigin: true,
       },
+      // 内容图片代理 — ~/claude-output/images/
+      '/content-images': {
+        target: 'http://localhost:9998',
+        changeOrigin: true,
+        rewrite: (path: string) => path.replace(/^\/content-images/, '/images'),
+      },
     }
   },
   build: {
