@@ -260,6 +260,20 @@ async function fetchNewToken(appId, appSecret) {
 }
 
 /**
+ * 从缓存读取有效 Token（不需要凭据）
+ *
+ * @returns {string|null} access_token 或 null
+ */
+function getCachedToken() {
+  if (!fs.existsSync(TOKEN_CACHE_FILE)) return null;
+  try {
+    const cached = JSON.parse(fs.readFileSync(TOKEN_CACHE_FILE, 'utf8'));
+    if (isTokenCacheValid(cached)) return cached.access_token;
+  } catch {}
+  return null;
+}
+
+/**
  * 获取有效 Access Token（优先读缓存，过期则重新获取）
  *
  * @param {string} appId
@@ -267,18 +281,12 @@ async function fetchNewToken(appId, appSecret) {
  * @returns {Promise<string>} access_token
  */
 async function getAccessToken(appId, appSecret) {
-  if (fs.existsSync(TOKEN_CACHE_FILE)) {
-    try {
-      const cached = JSON.parse(fs.readFileSync(TOKEN_CACHE_FILE, 'utf8'));
-      if (isTokenCacheValid(cached)) {
-        _log('   ✅ 使用缓存 Token（有效）');
-        return cached.access_token;
-      }
-      _log('   ⚠️  缓存 Token 已过期，重新获取...');
-    } catch {
-      _log('   ⚠️  Token 缓存读取失败，重新获取...');
-    }
+  const cached = getCachedToken();
+  if (cached) {
+    _log('   ✅ 使用缓存 Token（有效）');
+    return cached;
   }
+  _log('   ⚠️  缓存 Token 已过期，重新获取...');
 
   const { accessToken, expiresIn } = await fetchNewToken(appId, appSecret);
   const cache = buildTokenCache(accessToken, expiresIn);
@@ -469,17 +477,17 @@ async function uploadInlineImages(html, accessToken, contentDir) {
 }
 
 // ============================================================
-// 草稿 & 发布
+// 图文素材 & 群发
 // ============================================================
 
 /**
- * 创建草稿文章
+ * 上传图文消息素材（media/uploadnews），用于群发
  *
  * @param {{ title: string, content: string, digest: string, author: string, thumbMediaId?: string }} article
  * @param {string} accessToken
- * @returns {Promise<string>} media_id（草稿 ID）
+ * @returns {Promise<string>} media_id
  */
-async function createDraft(article, accessToken) {
+async function uploadNews(article, accessToken) {
   const articleData = {
     title: article.title,
     author: article.author || '',
@@ -495,35 +503,57 @@ async function createDraft(article, accessToken) {
   }
 
   const payload = JSON.stringify({ articles: [articleData] });
-  const url = `${WECHAT_API_BASE}/cgi-bin/draft/add?access_token=${encodeURIComponent(accessToken)}`;
+  const url = `${WECHAT_API_BASE}/cgi-bin/media/uploadnews?access_token=${encodeURIComponent(accessToken)}`;
   const response = await httpsPost(url, payload, {
     'Content-Type': 'application/json; charset=utf-8',
   });
 
-  const result = parseWechatResponse(response, '创建草稿');
+  const result = parseWechatResponse(response, '上传图文素材');
   if (!result.media_id) {
-    throw new Error(`创建草稿失败：响应中无 media_id: ${JSON.stringify(result)}`);
+    throw new Error(`上传图文素材失败：响应中无 media_id: ${JSON.stringify(result)}`);
   }
 
   return result.media_id;
 }
 
 /**
- * 提交草稿发布
+ * 群发图文消息给所有粉丝（message/mass/sendall）
+ * 文章将出现在公众号文章列表，订阅号每天限 1 次
  *
- * @param {string} mediaId - 草稿 media_id
+ * @param {string} mediaId - uploadnews 返回的 media_id
  * @param {string} accessToken
- * @returns {Promise<string>} publish_id 或 'ok'
+ * @returns {Promise<string>} msg_id
  */
-async function publishDraft(mediaId, accessToken) {
-  const payload = JSON.stringify({ media_id: mediaId });
-  const url = `${WECHAT_API_BASE}/cgi-bin/freepublish/submit?access_token=${encodeURIComponent(accessToken)}`;
+async function massSend(mediaId, accessToken) {
+  const payload = JSON.stringify({
+    filter: { is_to_all: true },
+    mpnews: { media_id: mediaId },
+    msgtype: 'mpnews',
+    send_ignore_reprint: 0,
+  });
+  const url = `${WECHAT_API_BASE}/cgi-bin/message/mass/sendall?access_token=${encodeURIComponent(accessToken)}`;
   const response = await httpsPost(url, payload, {
     'Content-Type': 'application/json; charset=utf-8',
   });
 
-  const result = parseWechatResponse(response, '提交发布');
-  return result.publish_id || result.publishId || 'ok';
+  let result;
+  try {
+    result = JSON.parse(response.body);
+  } catch {
+    throw new Error(`群发响应解析失败: ${response.body.slice(0, 200)}`);
+  }
+
+  if (result.errcode && result.errcode !== 0) {
+    if (result.errcode === 45028) {
+      throw new Error(`今日群发次数已达上限（订阅号每天限 1 次），请明天再发 errcode=45028`);
+    }
+    if (result.errcode === 45029) {
+      throw new Error(`距上次群发不足 1 分钟，请稍后重试 errcode=45029`);
+    }
+    throw new Error(`群发失败 errcode=${result.errcode} errmsg=${result.errmsg}`);
+  }
+
+  return result.msg_id || result.msgid || 'ok';
 }
 
 // ============================================================
@@ -572,6 +602,9 @@ function parseArgs() {
     const idx = args.indexOf(flag);
     return idx >= 0 ? args[idx + 1] : null;
   };
+  const has = flag => args.includes(flag);
+
+  const dryRun = has('--dry-run');
 
   const contentDir = get('--content-dir');
   if (contentDir) {
@@ -579,7 +612,7 @@ function parseArgs() {
       console.error(`❌ 内容目录不存在: ${contentDir}`);
       process.exit(1);
     }
-    return { ...readContentDir(contentDir), contentDir };
+    return { ...readContentDir(contentDir), contentDir, dryRun };
   }
 
   const title = get('--title');
@@ -590,6 +623,7 @@ function parseArgs() {
     console.error('用法：');
     console.error('  node publish-wechat-article.cjs --title "标题" --content "正文内容"');
     console.error('  node publish-wechat-article.cjs --content-dir /path/to/content/');
+    console.error('  node publish-wechat-article.cjs --title "标题" --content "内容" --dry-run');
     process.exit(1);
   }
   if (!contentRaw) {
@@ -602,7 +636,7 @@ function parseArgs() {
   const author = get('--author') || '';
   const coverPath = get('--cover') || null;
 
-  return { title, content, digest, author, coverPath, contentDir: null };
+  return { title, content, digest, author, coverPath, contentDir: null, dryRun };
 }
 
 // ============================================================
@@ -611,11 +645,20 @@ function parseArgs() {
 
 async function main() {
   _log('\n========================================');
-  _log('微信公众号图文发布（官方 API）');
+  _log('微信公众号图文发布（群发 API）');
   _log('========================================\n');
 
-  const { appId, appSecret } = loadCredentials();
-  _log(`📋 AppID: ${appId.slice(0, 8)}...`);
+  // 先尝试用缓存 token，缓存无效才需要凭据
+  const cachedToken = getCachedToken();
+  let appId, appSecret;
+  if (!cachedToken) {
+    const creds = loadCredentials();
+    appId = creds.appId;
+    appSecret = creds.appSecret;
+    _log(`📋 AppID: ${appId.slice(0, 8)}...`);
+  } else {
+    _log('📋 使用缓存凭据');
+  }
 
   let articleArgs;
   try {
@@ -625,10 +668,11 @@ async function main() {
     process.exit(1);
   }
 
-  const { title, content: rawContent, digest, author, coverPath, contentDir: argContentDir } = articleArgs;
+  const { title, content: rawContent, digest, author, coverPath, contentDir: argContentDir, dryRun } = articleArgs;
   _log(`📝 标题: ${title}`);
   _log(`📄 正文: ${rawContent.length} 字符`);
   if (coverPath) _log(`🖼️  封面: ${coverPath}`);
+  if (dryRun) _log(`🧪 模式: dry-run（只上传素材，不群发）`);
   _log('');
 
   try {
@@ -652,7 +696,7 @@ async function main() {
         if (thumbMediaId) {
           _log(`   ✅ 使用默认封面 media_id: ${thumbMediaId.slice(0, 20)}...\n`);
         } else {
-          console.warn('   ⚠️  素材库无图片，草稿将不含封面\n');
+          console.warn('   ⚠️  素材库无图片，将不含封面\n');
         }
       } catch (err) {
         console.warn(`   ⚠️  获取默认封面失败: ${err.message}\n`);
@@ -663,16 +707,22 @@ async function main() {
     const content = await uploadInlineImages(rawContent, accessToken, argContentDir);
     _log('');
 
-    _log('4️⃣  创建草稿...\n');
-    const mediaId = await createDraft({ title, content, digest, author, thumbMediaId }, accessToken);
-    _log(`   ✅ 草稿已创建，media_id: ${mediaId}\n`);
+    _log('4️⃣  上传图文素材（uploadnews）...\n');
+    const mediaId = await uploadNews({ title, content, digest, author, thumbMediaId }, accessToken);
+    _log(`   ✅ 图文素材已上传，media_id: ${mediaId}\n`);
 
-    _log('5️⃣  提交发布...\n');
-    const publishId = await publishDraft(mediaId, accessToken);
-    _log(`   ✅ 已提交发布，publish_id: ${publishId}\n`);
+    if (dryRun) {
+      _log('🧪 dry-run 完成，跳过群发');
+      _log(`   media_id: ${mediaId}`);
+      return;
+    }
 
-    _log('✅ 公众号文章发布成功！');
-    _log('   注意：文章进入发布队列，稍后在公众号后台可查看状态');
+    _log('5️⃣  群发给所有粉丝（masssend）...\n');
+    const msgId = await massSend(mediaId, accessToken);
+    _log(`   ✅ 群发成功，msg_id: ${msgId}\n`);
+
+    _log('✅ 公众号文章发布成功！文章将出现在公众号文章列表。');
+    _log('   注意：订阅号每天限群发 1 次');
   } catch (err) {
     console.error(`\n❌ 发布失败: ${err.message}`);
     process.exit(1);
