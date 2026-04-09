@@ -16,7 +16,7 @@ const WORK = {
   status: 'draft',
   body: '# Test content',
   custom_fields: { tags: ['test'] },
-  archived: false,
+  archived_at: null,   // DB 实际列名，非 archived
   created_at: '2026-01-01T00:00:00Z',
   updated_at: '2026-01-01T00:00:00Z',
 };
@@ -79,6 +79,19 @@ describe('Works API', () => {
       expect(response.body).toHaveProperty('limit');
       expect(response.body).toHaveProperty('offset');
       expect(Array.isArray(response.body.data)).toBe(true);
+    });
+
+    it('[SCHEMA GUARD] should use archived_at IS NULL, not archived = false', async () => {
+      mockQuery
+        .mockResolvedValueOnce({ rows: [{ total: '0' }] })
+        .mockResolvedValueOnce({ rows: [] });
+
+      await request(app).get('/api/works');
+
+      // 取第一次 pool.query 调用的 SQL（COUNT 查询）
+      const countSql: string = mockQuery.mock.calls[0][0];
+      expect(countSql).toContain('archived_at IS NULL');
+      expect(countSql).not.toMatch(/archived\s*=/);
     });
 
     it('should filter by content_type', async () => {
