@@ -100,7 +100,8 @@ const jobs = targetPlatforms.map(platformId => {
     fs.writeFileSync(jsonFile, JSON.stringify({ content, images: imageFiles }), 'utf8');
     spawnArgs = [scriptPath, jsonFile];
   } else if (argStyle === 'zhihu-idea') {
-    spawnArgs = [scriptPath, '--content', content, '--images', imageFiles.join(',')];
+    const imgArg = (imageFiles && imageFiles.length > 0) ? ['--images', imageFiles.join(',')] : [];
+    spawnArgs = [scriptPath, '--content', content, ...imgArg];
   } else {
     spawnArgs = [scriptPath, '--content', tmpDir];
   }
