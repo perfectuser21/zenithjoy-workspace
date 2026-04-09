@@ -12,7 +12,7 @@
  *
  * 支持平台（默认全发）：
  *   douyin 抖音 / xiaohongshu 小红书 / weibo 微博 /
- *   kuaishou 快手 / shipinhao 视频号 / toutiao 头条
+ *   kuaishou 快手 / shipinhao 视频号 / toutiao 头条 / zhihu 知乎想法
  *
  * 工作方式：
  *   1. 在 /tmp 创建临时内容目录（title.txt / content.txt / image1.jpg ...）
@@ -27,9 +27,10 @@ const { spawnSync, spawn } = require('child_process');
 
 // ── 平台配置 ─────────────────────────────────────────────────
 // argStyle:
-//   'content-dir' → node script.js --content <dir>  （小红书/微博/快手/视频号）
+//   'content-dir'  → node script.js --content <dir>  （小红书/微博/快手/视频号）
 //   'json-douyin'  → node script.js <queue.json>，JSON: { title, content, images: [mac路径] }
 //   'json-toutiao' → node script.js <config.json>，JSON: { content, images: [mac路径] }
+//   'zhihu-idea'   → node script.js --content "文字" --images "img1,img2,..."
 const PLATFORMS = {
   douyin:      { name: '抖音',   script: 'douyin-publisher/publish-douyin-image.js',           argStyle: 'json-douyin' },
   xiaohongshu: { name: '小红书', script: 'xiaohongshu-publisher/publish-xiaohongshu-image.cjs', argStyle: 'content-dir' },
@@ -37,6 +38,7 @@ const PLATFORMS = {
   kuaishou:    { name: '快手',   script: 'kuaishou-publisher/publish-kuaishou-image.cjs',       argStyle: 'content-dir' },
   shipinhao:   { name: '视频号', script: 'shipinhao-publisher/publish-shipinhao-image.cjs',     argStyle: 'content-dir' },
   toutiao:     { name: '头条',   script: 'toutiao-publisher/publish-toutiao-image.cjs',         argStyle: 'json-toutiao' },
+  zhihu:       { name: '知乎',   script: 'zhihu-publisher/publish-zhihu-idea.cjs',              argStyle: 'zhihu-idea' },
 };
 
 const SCRIPT_DIR = __dirname;
@@ -97,6 +99,8 @@ const jobs = targetPlatforms.map(platformId => {
     jsonFile = path.join(os.tmpdir(), `publish-toutiao-${Date.now()}.json`);
     fs.writeFileSync(jsonFile, JSON.stringify({ content, images: imageFiles }), 'utf8');
     spawnArgs = [scriptPath, jsonFile];
+  } else if (argStyle === 'zhihu-idea') {
+    spawnArgs = [scriptPath, '--content', content, '--images', imageFiles.join(',')];
   } else {
     spawnArgs = [scriptPath, '--content', tmpDir];
   }
