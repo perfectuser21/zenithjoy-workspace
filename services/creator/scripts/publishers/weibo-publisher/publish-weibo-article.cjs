@@ -37,7 +37,7 @@ const { chromium } = require('playwright');
 // 配置
 // ============================================================
 
-const CDP_URL = 'http://100.97.242.124:19227';
+const CDP_URL = 'http://localhost:19227';
 const ARTICLE_EDITOR_URL = 'https://www.weibo.com/ttarticle/editor';
 const SCREENSHOTS_DIR = '/tmp/weibo-article-screenshots';
 const SUCCESS_SCREENSHOT = '/tmp/weibo-article-success.png';

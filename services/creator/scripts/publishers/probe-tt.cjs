@@ -1,7 +1,7 @@
 const _log = console.log.bind(console);
 const { chromium } = require('playwright');
 (async () => {
-  const browser = await chromium.connectOverCDP('http://100.97.242.124:19226', { timeout: 30000 });
+  const browser = await chromium.connectOverCDP('http://localhost:19226', { timeout: 30000 });
   const context = browser.contexts()[0];
   const pages = context.pages();
   const page = pages[0];

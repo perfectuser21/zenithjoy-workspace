@@ -33,6 +33,7 @@ const {
 } = require('./utils.cjs');
 
 const CDP_PORT = 19227;
+const CDP_HOST = 'localhost';
 const WINDOWS_IP = '100.97.242.124';
 const WINDOWS_USER = 'xuxia';
 const SCREENSHOTS_DIR = '/tmp/weibo-publish-screenshots';
@@ -364,7 +365,7 @@ async function main() {
     _log('🔌 连接 CDP...\n');
     const pagesData = await withRetry(
       () => new Promise((resolve, reject) => {
-        http.get(`http://${WINDOWS_IP}:${CDP_PORT}/json`, res => {
+        http.get(`http://${CDP_HOST}:${CDP_PORT}/json`, res => {
           let data = '';
           res.on('data', chunk => (data += chunk));
           res.on('end', () => {
@@ -372,7 +373,7 @@ async function main() {
             catch (e) { reject(new Error(`CDP 响应解析失败: ${e.message}`)); }
           });
         }).on('error', err => {
-          reject(new Error(`CDP 连接失败 (${WINDOWS_IP}:${CDP_PORT}): ${err.message}\n排查命令：curl http://${WINDOWS_IP}:${CDP_PORT}/json`));
+          reject(new Error(`CDP 连接失败 (${CDP_HOST}:${CDP_PORT}): ${err.message}\n排查命令：curl http://localhost:${CDP_PORT}/json`));
         });
       }),
       3,

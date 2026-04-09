@@ -6,7 +6,7 @@ const fs = require('fs');
 const path = require('path');
 const { chromium } = require('playwright');
 
-const CDP_URL = 'http://100.97.242.124:19230';
+const CDP_URL = 'http://localhost:19230';
 const UPLOAD_URL = 'https://www.zhihu.com/upload-video';
 const SCREENSHOTS_DIR = '/tmp/zhihu-video-publish';
 const SUCCESS_SCREENSHOT = '/tmp/zhihu-video-success.png';

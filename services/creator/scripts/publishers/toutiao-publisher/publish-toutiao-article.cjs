@@ -10,6 +10,7 @@ const http = require('http');
 const fs = require('fs');
 
 const CDP_PORT = 19226;
+const CDP_HOST = 'localhost';
 const WINDOWS_IP = '100.97.242.124';
 
 // 从命令行参数读取配置
@@ -280,7 +281,7 @@ async function main() {
     _log(`媒体文件: ${config.media.length} 个\n`);
 
     const pagesData = await new Promise((resolve, reject) => {
-      http.get('http://' + WINDOWS_IP + ':' + CDP_PORT + '/json', res => {
+      http.get('http://' + CDP_HOST + ':' + CDP_PORT + '/json', res => {
         let data = '';
         res.on('data', chunk => data += chunk);
         res.on('end', () => resolve(JSON.parse(data)));

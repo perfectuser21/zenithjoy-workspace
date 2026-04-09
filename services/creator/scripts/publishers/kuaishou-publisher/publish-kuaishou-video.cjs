@@ -49,7 +49,7 @@ async function setFileInputViaCDP(context, page, selector, windowsPath) {
   await cdpSession.detach();
 }
 
-const CDP_URL = 'http://100.97.242.124:19223';
+const CDP_URL = 'http://localhost:19223';
 const PUBLISH_URL = 'https://cp.kuaishou.com/article/publish/video';
 const MANAGE_URL = 'https://cp.kuaishou.com/article/manage/video?status=2&from=publish';
 const SCREENSHOTS_DIR = '/tmp/kuaishou-publish-screenshots';

@@ -4,7 +4,7 @@ const path = require('path');
 const { spawn } = require('child_process');
 const { chromium } = require('playwright');
 
-const CDP_URL = 'http://100.97.242.124:19228';
+const CDP_URL = 'http://localhost:19228';
 const WINDOWS_IP = '100.97.242.124';
 const WINDOWS_USER = 'xuxia';
 const WIN_BASE_DIR = 'C:\\Users\\xuxia\\shipinhao-media';

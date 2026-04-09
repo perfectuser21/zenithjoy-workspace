@@ -27,7 +27,7 @@ const { execSync } = require('child_process');
 const { CDPClient } = require('../weibo-publisher/cdp-client.cjs');
 const { escapeForJS } = require('./utils.cjs');
 
-const CDP_HOST = process.env.XHS_CDP_HOST || '100.97.242.124';
+const CDP_HOST = process.env.XHS_CDP_HOST || 'localhost';
 const CDP_PORT = Number(process.env.XHS_CDP_PORT || 19224);
 const WINDOWS_IP = process.env.XHS_WINDOWS_IP || '100.97.242.124';
 const WINDOWS_USER = process.env.XHS_WINDOWS_USER || 'xuxia';
