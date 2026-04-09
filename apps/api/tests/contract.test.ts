@@ -42,8 +42,7 @@ const WORK_ROW = {
   is_featured: false,
   is_viral: false,
   custom_fields: null,
-  scheduled_at: null,
-  archived: false,
+  archived_at: null,   // DB 实际列名（非 archived），防止字段名回退
   created_at: '2026-01-01T00:00:00Z',
   updated_at: '2026-01-01T00:00:00Z',
 };
@@ -114,7 +113,7 @@ describe('API Contract — Works', () => {
     expect(body).toHaveProperty('content_type');
     expect(body).toHaveProperty('status');
     expect(body).toHaveProperty('body');
-    expect(body).toHaveProperty('archived');
+    expect(body).toHaveProperty('archived_at');  // DB 实际列名
     expect(body).toHaveProperty('created_at');
     expect(body).toHaveProperty('updated_at');
   });
