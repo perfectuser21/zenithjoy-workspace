@@ -26,13 +26,17 @@ const os   = require('os');
 const { spawnSync, spawn } = require('child_process');
 
 // ── 平台配置 ─────────────────────────────────────────────────
+// argStyle:
+//   'content-dir' → node script.js --content <dir>  （小红书/微博/快手/视频号）
+//   'json-douyin'  → node script.js <queue.json>，JSON: { title, content, images: [mac路径] }
+//   'json-toutiao' → node script.js <config.json>，JSON: { content, images: [mac路径] }
 const PLATFORMS = {
-  douyin:      { name: '抖音',   script: 'douyin-publisher/publish-douyin-image.js' },
-  xiaohongshu: { name: '小红书', script: 'xiaohongshu-publisher/publish-xiaohongshu-image.cjs' },
-  weibo:       { name: '微博',   script: 'weibo-publisher/publish-weibo-image.cjs' },
-  kuaishou:    { name: '快手',   script: 'kuaishou-publisher/publish-kuaishou-image.cjs' },
-  shipinhao:   { name: '视频号', script: 'shipinhao-publisher/publish-shipinhao-image.cjs' },
-  toutiao:     { name: '头条',   script: 'toutiao-publisher/publish-toutiao-image.cjs' },
+  douyin:      { name: '抖音',   script: 'douyin-publisher/publish-douyin-image.js',           argStyle: 'json-douyin' },
+  xiaohongshu: { name: '小红书', script: 'xiaohongshu-publisher/publish-xiaohongshu-image.cjs', argStyle: 'content-dir' },
+  weibo:       { name: '微博',   script: 'weibo-publisher/publish-weibo-image.cjs',             argStyle: 'content-dir' },
+  kuaishou:    { name: '快手',   script: 'kuaishou-publisher/publish-kuaishou-image.cjs',       argStyle: 'content-dir' },
+  shipinhao:   { name: '视频号', script: 'shipinhao-publisher/publish-shipinhao-image.cjs',     argStyle: 'content-dir' },
+  toutiao:     { name: '头条',   script: 'toutiao-publisher/publish-toutiao-image.cjs',         argStyle: 'json-toutiao' },
 };
 
 const SCRIPT_DIR = __dirname;
@@ -78,12 +82,27 @@ console.log(`📢 发布平台：${targetPlatforms.map(k => PLATFORMS[k].name).j
 // ── 并行发布 ─────────────────────────────────────────────────
 const startAll = Date.now();
 const jobs = targetPlatforms.map(platformId => {
-  const { name, script } = PLATFORMS[platformId];
+  const { name, script, argStyle } = PLATFORMS[platformId];
   const scriptPath = path.join(SCRIPT_DIR, script);
   const start = Date.now();
 
+  // 根据 argStyle 决定调用参数
+  let spawnArgs;
+  let jsonFile = null;
+  if (argStyle === 'json-douyin') {
+    jsonFile = path.join(os.tmpdir(), `publish-douyin-${Date.now()}.json`);
+    fs.writeFileSync(jsonFile, JSON.stringify({ title, content, images: imageFiles }), 'utf8');
+    spawnArgs = [scriptPath, jsonFile];
+  } else if (argStyle === 'json-toutiao') {
+    jsonFile = path.join(os.tmpdir(), `publish-toutiao-${Date.now()}.json`);
+    fs.writeFileSync(jsonFile, JSON.stringify({ content, images: imageFiles }), 'utf8');
+    spawnArgs = [scriptPath, jsonFile];
+  } else {
+    spawnArgs = [scriptPath, '--content', tmpDir];
+  }
+
   return new Promise(resolve => {
-    const proc = spawn('node', [scriptPath, '--content', tmpDir], {
+    const proc = spawn('node', spawnArgs, {
       env: { ...process.env, NODE_PATH },
       stdio: ['ignore', 'pipe', 'pipe'],
     });
@@ -93,6 +112,7 @@ const jobs = targetPlatforms.map(platformId => {
     proc.stderr.on('data', d => { stderr += d; });
 
     proc.on('close', code => {
+      if (jsonFile) try { fs.unlinkSync(jsonFile); } catch {}
       resolve({
         id: platformId,
         name,
