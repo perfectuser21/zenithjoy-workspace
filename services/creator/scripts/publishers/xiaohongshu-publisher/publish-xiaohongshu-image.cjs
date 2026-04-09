@@ -45,6 +45,7 @@ const {
 // 配置
 // ============================================================
 const CDP_PORT = 19224;
+const CDP_HOST = 'localhost';
 const WINDOWS_IP = '100.97.242.124';
 const WINDOWS_USER = 'xuxia';
 const SCREENSHOTS_DIR = '/tmp/xiaohongshu-publish-screenshots';
@@ -246,11 +247,11 @@ async function main(contentDir, titleText, contentText, windowsImages, musicQuer
     // ===== CDP 连接 =====
     _log('\n[XHS] 连接 CDP...');
     const pagesData = await new Promise((resolve, reject) => {
-      http.get(`http://${WINDOWS_IP}:${CDP_PORT}/json`, res => {
+      http.get(`http://${CDP_HOST}:${CDP_PORT}/json`, res => {
         let data = '';
         res.on('data', c => (data += c));
         res.on('end', () => { try { resolve(JSON.parse(data)); } catch(e) { reject(e); } });
-      }).on('error', err => reject(new Error(`CDP 连接失败 (${WINDOWS_IP}:${CDP_PORT}): ${err.message}`)));
+      }).on('error', err => reject(new Error(`CDP 连接失败 (${CDP_HOST}:${CDP_PORT}): ${err.message}`)));
     });
 
     const xhsPage = pagesData.find(p => p.type === 'page' && p.url.includes(XHS_DOMAIN));

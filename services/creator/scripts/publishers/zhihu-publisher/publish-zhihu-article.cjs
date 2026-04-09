@@ -39,6 +39,7 @@ const { escapeForJS, withRetry } = require('../weibo-publisher/utils.cjs');
 // ============================================================
 
 const CDP_PORT = 19230;
+const CDP_HOST = 'localhost';
 const WINDOWS_IP = '100.97.242.124';
 const WINDOWS_BASE_DIR = 'C:\\Users\\xuxia\\zhihu-media';
 const PUBLISH_URL = 'https://zhuanlan.zhihu.com/write';
@@ -151,7 +152,7 @@ async function connectCDP() {
     () =>
       new Promise((resolve, reject) => {
         http
-          .get(`http://${WINDOWS_IP}:${CDP_PORT}/json`, res => {
+          .get(`http://${CDP_HOST}:${CDP_PORT}/json`, res => {
             let data = '';
             res.on('data', chunk => (data += chunk));
             res.on('end', () => {
@@ -165,8 +166,8 @@ async function connectCDP() {
           .on('error', err => {
             reject(
               new Error(
-                `CDP 连接失败 (${WINDOWS_IP}:${CDP_PORT}): ${err.message}\n` +
-                  `排查：curl http://${WINDOWS_IP}:${CDP_PORT}/json\n` +
+                `CDP 连接失败 (${CDP_HOST}:${CDP_PORT}): ${err.message}\n` +
+                  `排查：curl http://localhost:${CDP_PORT}/json\n` +
                   `确认 Chrome 以 --remote-debugging-port=${CDP_PORT} 启动`
               )
             );

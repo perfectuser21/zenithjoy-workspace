@@ -42,7 +42,7 @@ async function publishDouyinVideo(queueFilePath) {
 
   _log('\n🔗 连接到现有浏览器...');
 
-  const browser = await chromium.connectOverCDP('http://100.97.242.124:19222');
+  const browser = await chromium.connectOverCDP('http://localhost:19222');
   const contexts = browser.contexts();
   const context = contexts[0];
   const pages = context.pages();

@@ -3,7 +3,7 @@ const fs = require('fs');
 const path = require('path');
 const { chromium } = require('playwright');
 
-const CDP_URL = 'http://100.97.242.124:19228';
+const CDP_URL = 'http://localhost:19228';
 const SHOTS_DIR = '/tmp/shipinhao-screenshots';
 const CREATE_URL = 'https://channels.weixin.qq.com/platform/post/finderNewLifeCreate';
 const INIT_WAIT_MS = 120000;

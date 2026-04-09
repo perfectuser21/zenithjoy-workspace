@@ -26,7 +26,7 @@ function scpVideoWB(localFile, windowsDir) {
   return path.join(windowsDir, fname);
 }
 
-const CDP_URL = 'http://100.97.242.124:19227';
+const CDP_URL = 'http://localhost:19227';
 const HOME_URL = 'https://weibo.com/';
 const SCREENSHOTS_DIR = '/tmp/weibo-publish-screenshots';
 const SUCCESS_SCREENSHOT = '/tmp/weibo-video-success.png';

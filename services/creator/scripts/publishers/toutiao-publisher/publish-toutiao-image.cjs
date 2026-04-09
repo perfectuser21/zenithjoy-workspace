@@ -28,6 +28,7 @@ const fs = require('fs');
 const path = require('path');
 
 const CDP_PORT = 19226;
+const CDP_HOST = 'localhost';
 const WINDOWS_IP = '100.97.242.124';
 const SCREENSHOTS_DIR = '/tmp/weitoutiao-publish-screenshots';
 const WEITOUTIAO_URL = 'https://mp.toutiao.com/profile_v4/weitoutiao/publish';
@@ -356,7 +357,7 @@ async function main() {
 
     // 获取CDP连接
     const pagesData = await new Promise((resolve, reject) => {
-      http.get(`http://${WINDOWS_IP}:${CDP_PORT}/json`, res => {
+      http.get(`http://${CDP_HOST}:${CDP_PORT}/json`, res => {
         let data = '';
         res.on('data', chunk => data += chunk);
         res.on('end', () => resolve(JSON.parse(data)));

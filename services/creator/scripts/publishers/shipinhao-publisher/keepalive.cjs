@@ -14,7 +14,7 @@ const { chromium } = require('playwright');
 const fs = require('fs');
 const path = require('path');
 
-const CDP_URL = 'http://100.97.242.124:19228';
+const CDP_URL = 'http://localhost:19228';
 const CONNECT_TIMEOUT = 10000;
 const COOKIE_BACKUP_DIR = path.join(__dirname, '.cookie-backups');
 const LOGIN_PATTERNS = ['login', 'passport'];

@@ -7,7 +7,7 @@ const path = require('path');
 const { execFileSync } = require('child_process');
 const { chromium } = require('playwright');
 
-const CDP_URL = 'http://100.97.242.124:19230';
+const CDP_URL = 'http://localhost:19230';
 const WINDOWS_IP = '100.97.242.124';
 const WINDOWS_USER = 'xuxia';
 const WINDOWS_BASE_DIR = 'C:\\Users\\xuxia\\zhihu-media';

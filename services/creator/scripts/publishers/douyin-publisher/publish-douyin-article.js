@@ -48,7 +48,7 @@ async function publishDouyinArticle(queueFilePath) {
   _log('[DY] Windows 封面路径:', windowsCoverPath);
 
   _log('\n🔗 连接到现有浏览器（端口 19222）...');
-  const browser = await chromium.connectOverCDP('http://100.97.242.124:19222');
+  const browser = await chromium.connectOverCDP('http://localhost:19222');
   const context = browser.contexts()[0];
   const page = context.pages()[0];
   _log('✅ 已连接到浏览器\n');
