@@ -69,7 +69,7 @@ if ((contentArg.startsWith('/') || contentArg.startsWith('./')) && fs.existsSync
   contentBody = fs.readFileSync(contentArg, 'utf8');
 }
 
-const isHtml = /^(<html|<!DOCTYPE)/i.test(contentBody.trimStart());
+const isHtml = contentBody.trimStart().startsWith('<');
 
 // ── 创建临时内容目录 ──────────────────────────────────────────
 const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'publish-article-'));
