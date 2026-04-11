@@ -191,7 +191,7 @@ tests:
     ci: L3
     status: active
     product: 新媒体运营
-    note: "Pipeline 触发/回调/统计路由单元测试（mock DB + fetch）"
+    note: "Pipeline 触发/回调/统计路由单元测试（mock DB + fetch）+ cecelia payload contract（防 task_type 字段变更）"
 
   - id: api-publish-route
     path: apps/api/tests/publish.test.ts
