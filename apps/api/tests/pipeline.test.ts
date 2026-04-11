@@ -263,4 +263,72 @@ describe('Pipeline API', () => {
       expect(response.status).toBe(500);
     });
   });
+
+  // ── cecelia contract tests ─────────────────────────────────────────────────
+  // 防止字段变更（如 task_type underscore bug）导致 cecelia 静默拒绝请求
+  describe('cecelia payload contract', () => {
+    it('task_type must be content-pipeline (hyphen, not underscore)', async () => {
+      mockQuery
+        .mockResolvedValueOnce({ rows: [PIPELINE_RUN] })
+        .mockResolvedValueOnce({ rows: [] });
+      mockFetch.mockResolvedValueOnce({ ok: true, json: async () => ({ id: 'task-abc' }) });
+
+      await request(app)
+        .post('/api/pipeline/trigger')
+        .send({ content_type: 'solo-company-case', topic: 'contract-test' });
+
+      const [, fetchOptions] = mockFetch.mock.calls[0];
+      const body = JSON.parse(fetchOptions.body);
+      expect(body.task_type).toBe('content-pipeline');
+      expect(body.task_type).not.toContain('_');
+    });
+
+    it('payload must include zenithjoy_pipeline_run_id', async () => {
+      mockQuery
+        .mockResolvedValueOnce({ rows: [PIPELINE_RUN] })
+        .mockResolvedValueOnce({ rows: [] });
+      mockFetch.mockResolvedValueOnce({ ok: true, json: async () => ({ id: 'task-abc' }) });
+
+      await request(app)
+        .post('/api/pipeline/trigger')
+        .send({ content_type: 'solo-company-case', topic: 'contract-test' });
+
+      const [, fetchOptions] = mockFetch.mock.calls[0];
+      const body = JSON.parse(fetchOptions.body);
+      expect(body.payload.zenithjoy_pipeline_run_id).toBe(PIPELINE_RUN.id);
+    });
+
+    it('payload.callback_url must point to /api/pipeline/callback', async () => {
+      mockQuery
+        .mockResolvedValueOnce({ rows: [PIPELINE_RUN] })
+        .mockResolvedValueOnce({ rows: [] });
+      mockFetch.mockResolvedValueOnce({ ok: true, json: async () => ({ id: 'task-abc' }) });
+
+      await request(app)
+        .post('/api/pipeline/trigger')
+        .send({ content_type: 'solo-company-case', topic: 'contract-test' });
+
+      const [, fetchOptions] = mockFetch.mock.calls[0];
+      const body = JSON.parse(fetchOptions.body);
+      expect(body.payload.callback_url).toContain('/api/pipeline/callback');
+    });
+
+    it('payload must forward content_type and topic correctly', async () => {
+      mockQuery
+        .mockResolvedValueOnce({ rows: [PIPELINE_RUN] })
+        .mockResolvedValueOnce({ rows: [] });
+      mockFetch.mockResolvedValueOnce({ ok: true, json: async () => ({ id: 'task-abc' }) });
+
+      await request(app)
+        .post('/api/pipeline/trigger')
+        .send({ content_type: 'solo-company-case', topic: 'AI大模型趋势' });
+
+      const [fetchUrl, fetchOptions] = mockFetch.mock.calls[0];
+      const body = JSON.parse(fetchOptions.body);
+      expect(fetchUrl).toContain('/api/brain/tasks');
+      expect(fetchOptions.method).toBe('POST');
+      expect(body.payload.content_type).toBe('solo-company-case');
+      expect(body.payload.topic).toBe('AI大模型趋势');
+    });
+  });
 });
