@@ -1,0 +1,10 @@
+dev
+branch: cp-04081743-connect-pipeline-dashboard-entry
+harness_mode: false
+task_id: none
+started: 2026-04-08T17:30:00+08:00
+step_0_worktree: done
+step_1_spec: pending
+step_2_code: pending
+step_3_integrate: pending
+step_4_ship: pending
