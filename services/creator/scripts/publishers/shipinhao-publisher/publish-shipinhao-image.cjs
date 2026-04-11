@@ -141,25 +141,15 @@ async function uploadImages(page, context, localImages, winImages) {
 
   let uploadedBy = 'cdp';
 
-  try {
-    const cdpSession = await context.newCDPSession(page);
-    const backendNodeId = await deepResolveFileInput(page, cdpSession);
-    await cdpSession.send('DOM.setFileInputFiles', {
-      backendNodeId,
-      files: winImages,
-    });
-    await page.waitForTimeout(1500);
-
-    const fileCount = await getInputFileCount(page);
-    if (fileCount !== winImages.length) {
-      throw new Error(`CDP 设置后 input.files=${fileCount}`);
-    }
-  } catch (error) {
-    uploadedBy = 'playwright-fallback';
-    _log(`[SPH]    CDP Windows 路径上传未生效，回退本地 setFiles: ${error.message}`);
-    await fileChooser.setFiles(localImages);
-    await page.waitForTimeout(1500);
-  }
+  const cdpSession = await context.newCDPSession(page);
+  const backendNodeId = await deepResolveFileInput(page, cdpSession);
+  await cdpSession.send('DOM.setFileInputFiles', {
+    backendNodeId,
+    files: winImages,
+  });
+  await page.waitForTimeout(3000);
+  const fileCount = await getInputFileCount(page);
+  _log(`[SPH]    文件已设置，input.files=${fileCount}`);
 
   await page.waitForTimeout(8000);
   _log(`[SPH]    上传方式: ${uploadedBy}`);

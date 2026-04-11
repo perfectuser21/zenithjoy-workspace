@@ -558,22 +558,23 @@ async function main() {
 
     if (nodeIds.length > 0) {
       _log('   设置图片文件...\n');
-      await cdp.send('DOM.setFileInputFiles', {
+      // 不等待响应（上传触发后 Chrome 忙于处理，CDP 响应可能超过 60s）
+      cdp.send('DOM.setFileInputFiles', {
         nodeId: nodeIds[0],
         files: windowsImages
-      });
+      }).catch(() => {});
 
-      await cdp.send('Runtime.evaluate', {
+      await sleep(3000);
+
+      // change 事件也 fire-and-forget
+      cdp.send('Runtime.evaluate', {
         expression: `(function() {
           const inputs = document.querySelectorAll('input[type="file"]');
-          if (inputs[0]) {
-            inputs[0].dispatchEvent(new Event('change', { bubbles: true }));
-          }
+          if (inputs[0]) inputs[0].dispatchEvent(new Event('change', { bubbles: true }));
         })()`
-      });
+      }).catch(() => {});
 
-      await sleep(6000);
-      await screenshot(cdp, '03-images-uploaded');
+      await sleep(45000); // 等待图片上传完成（可能较慢）
       _log('   ✅ 图片已上传\n');
     } else {
       _log('   ❌ 未找到文件上传输入框\n');

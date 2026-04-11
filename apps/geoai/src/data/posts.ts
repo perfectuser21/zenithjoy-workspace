@@ -1024,6 +1024,53 @@ export interface ShortPost {
   platform?: string;       // 原发平台
 }
 
+// 静态短帖 fallback（后台 API 不可达时使用）
+const zhShortPosts: ShortPost[] = [
+  {
+    id: 'ai-efficiency-tip-001',
+    content: '用 AI 写内容，一个被严重低估的技巧：先写角色设定，再写任务。\n\n不要直接说"帮我写一篇关于AI效率的文章"，而是先说："你是一位在自媒体领域深耕3年的AI效率专家，有10万粉丝，擅长用简单案例解释复杂工具。"\n\n然后再说："现在给你的新粉丝写一条关于AI效率的动态。"\n\n同样的 Claude，输出质量差一个档次。\n\n#AI工具 #内容创作 #效率提升',
+    publishDate: new Date('2026-04-08'),
+    tags: ['AI工具', '内容创作', '效率提升'],
+    likes: 128,
+    platform: 'website',
+  },
+  {
+    id: 'ai-efficiency-tip-002',
+    content: '我用了 3 个月 AI 自动化内容，最大的收获不是省时间，而是找到了「内容杠杆点」。\n\n人工写内容：每篇花 4 小时，每周 2 篇 = 8 小时\nAI 辅助写内容：每篇花 45 分钟，每周 10 篇 = 7.5 小时\n\n时间差不多，但产出是 5 倍。更关键的是：10 篇中总有 1-2 篇会爆，这就是流量飞轮的起点。\n\nAI 不是替代创作，是放大创意的乘法器。\n\n#AI自媒体 #一人公司 #ZenithJoyAI',
+    publishDate: new Date('2026-04-07'),
+    tags: ['AI自媒体', '一人公司'],
+    likes: 256,
+    platform: 'website',
+  },
+  {
+    id: 'ai-efficiency-tip-003',
+    content: 'Claude vs ChatGPT 选哪个？我的实战对比：\n\nClaude 更适合：长文章深度内容、逻辑分析方案规划、代码审查技术文档\nChatGPT 更适合：快速头脑风暴、图像生成（DALL-E）、第三方插件\n\n对于自媒体内容创作，我 80% 的时间用 Claude，20% 用 ChatGPT 做创意发散。\n\n#AI工具对比 #Claude #ChatGPT',
+    publishDate: new Date('2026-04-06'),
+    tags: ['AI工具对比', 'Claude', 'ChatGPT'],
+    likes: 189,
+    platform: 'website',
+  },
+  {
+    id: 'ai-efficiency-tip-004',
+    content: '一个人也能做内容矩阵：我的「1变9」内容复用系统\n\n1篇深度长文可以变成：3条知识点短帖（抖音/小红书）+ 3条观点讨论帖（微博/知乎）+ 1个视频脚本 + 1条公众号文章 + 1条私域朋友圈\n\nAI 负责改写和适配各平台风格，我只需要把关质量。每周产出1篇长文 = 矩阵9条内容。\n\n#内容矩阵 #AI效率 #一人公司',
+    publishDate: new Date('2026-04-05'),
+    tags: ['内容矩阵', 'AI效率', '一人公司'],
+    likes: 312,
+    platform: 'website',
+  },
+];
+
+const enShortPosts: ShortPost[] = [
+  {
+    id: 'ai-efficiency-en-001',
+    content: 'Underrated AI tip: Always set a role before giving a task.\n\nInstead of: "Write an article about AI efficiency"\nTry: "You are an AI efficiency expert with 100k followers. Write a post for your new followers about AI efficiency."\n\nSame Claude. Completely different output quality.\n\n#AITools #ContentCreation #Efficiency',
+    publishDate: new Date('2026-04-08'),
+    tags: ['AITools', 'ContentCreation', 'Efficiency'],
+    likes: 98,
+    platform: 'website',
+  },
+];
+
 export async function getAllShortPosts(locale: 'zh' | 'en'): Promise<ShortPost[]> {
   try {
     const response = await fetch(`${BACKEND_API}/api/contents?type=post&lang=${locale}`);
@@ -1038,7 +1085,7 @@ export async function getAllShortPosts(locale: 'zh' | 'en'): Promise<ShortPost[]
       tags: item.tags || [],
     }));
   } catch (error) {
-    console.warn('Failed to fetch short posts from API');
-    return [];
+    console.warn('Failed to fetch short posts from API, using static fallback');
+    return locale === 'zh' ? zhShortPosts : enShortPosts;
   }
 }

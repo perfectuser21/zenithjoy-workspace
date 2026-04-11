@@ -14,6 +14,7 @@ interface Props {
 
 const { title, description, type = 'website', image, publishDate, faq } = Astro.props;
 const locale = Astro.currentLocale || 'zh';
+const GA_MEASUREMENT_ID = import.meta.env.PUBLIC_GA_MEASUREMENT_ID;
 ---
 
 <!DOCTYPE html>
@@ -50,6 +51,19 @@ const locale = Astro.currentLocale || 'zh';
         faq
       }}
     />
+
+    <!-- Google Analytics (GA4) — 通过 PUBLIC_GA_MEASUREMENT_ID 环境变量启用 -->
+    {GA_MEASUREMENT_ID && (
+      <>
+        <script async src={`https://www.googletagmanager.com/gtag/js?id=${GA_MEASUREMENT_ID}`} is:inline></script>
+        <script is:inline define:vars={{ GA_MEASUREMENT_ID }}>
+          window.dataLayer = window.dataLayer || [];
+          function gtag(){dataLayer.push(arguments);}
+          gtag('js', new Date());
+          gtag('config', GA_MEASUREMENT_ID, { anonymize_ip: true });
+        </script>
+      </>
+    )}
 
     <!-- Theme Detection -->
     <script is:inline>
