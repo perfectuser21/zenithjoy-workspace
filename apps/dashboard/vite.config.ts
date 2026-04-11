@@ -112,7 +112,12 @@ export default defineConfig({
         target: 'http://localhost:5200/api',
         changeOrigin: true,
       },
-      // Brain API — 内容工厂、Pipeline 等
+      // Pipeline API — zenithjoy 数据所有权
+      '/api/pipeline': {
+        target: 'http://localhost:5200',
+        changeOrigin: true,
+      },
+      // Brain API — 内容工厂配置（content-types）等
       '/api/brain': {
         target: 'http://localhost:5221',
         changeOrigin: true,

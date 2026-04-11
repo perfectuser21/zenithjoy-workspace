@@ -13,6 +13,15 @@ router.post('/callback', controller.callback);
 // GET /api/pipeline/dashboard-stats
 router.get('/dashboard-stats', controller.dashboardStats);
 
+// GET /api/pipeline/:id/output  ← cecelia 透传
+router.get('/:id/output', controller.getOutput);
+
+// GET /api/pipeline/:id/stages  ← cecelia 透传
+router.get('/:id/stages', controller.getStages);
+
+// POST /api/pipeline/:id/rerun  ← cecelia 透传
+router.post('/:id/rerun', controller.rerun);
+
 // GET /api/pipeline/:id
 router.get('/:id', controller.getOne);
 

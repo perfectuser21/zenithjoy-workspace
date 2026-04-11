@@ -114,10 +114,17 @@ function getStageStatuses(pipelineStatus: PipelineStatus): ('pending' | 'active'
 // ─── API ──────────────────────────────────────────────────────
 
 async function fetchPipelines(): Promise<Pipeline[]> {
-  const res = await fetch('/api/brain/pipelines')
+  const res = await fetch('/api/pipeline')
   if (!res.ok) throw new Error('加载失败')
-  const data = await res.json()
-  return Array.isArray(data) ? data : data.pipelines || []
+  const runs: Record<string, unknown>[] = await res.json()
+  return runs.map(r => ({
+    id: r.id as string,
+    title: (r.topic as string) || (r.content_type as string) || '未命名',
+    status: r.status === 'pending' ? 'queued' : r.status === 'running' ? 'in_progress' : r.status as PipelineStatus,
+    priority: 'P2',
+    payload: { content_type: r.content_type as string, keyword: r.topic as string },
+    created_at: r.created_at as string,
+  }))
 }
 
 async function fetchContentTypes(): Promise<string[]> {
@@ -140,20 +147,28 @@ async function createPipeline(params: {
   platforms?: string[]
   notebook_id?: string
 }): Promise<Pipeline> {
-  const res = await fetch('/api/brain/pipelines', {
+  const res = await fetch('/api/pipeline/trigger', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(params),
+    body: JSON.stringify({ content_type: params.content_type, topic: params.keyword, triggered_by: 'manual' }),
   })
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: '创建失败' }))
     throw new Error(err.error || '创建失败')
   }
-  return res.json()
+  const r = await res.json()
+  return {
+    id: r.id,
+    title: r.topic || r.content_type || '未命名',
+    status: r.status === 'pending' ? 'queued' : r.status === 'running' ? 'in_progress' : r.status,
+    priority: 'P2',
+    payload: { content_type: r.content_type, keyword: r.topic },
+    created_at: r.created_at,
+  }
 }
 
 async function runPipeline(id: string): Promise<void> {
-  const res = await fetch(`/api/brain/pipelines/${id}/run`, { method: 'POST' })
+  const res = await fetch(`/api/pipeline/${id}/rerun`, { method: 'POST' })
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: '执行失败' }))
     throw new Error(err.error || '执行失败')
@@ -161,7 +176,7 @@ async function runPipeline(id: string): Promise<void> {
 }
 
 async function fetchPipelineStages(id: string): Promise<Record<string, StageInfo>> {
-  const res = await fetch(`/api/brain/pipelines/${id}/stages`)
+  const res = await fetch(`/api/pipeline/${id}/stages`)
   if (!res.ok) return {}
   const data = await res.json()
   return data.stages || {}

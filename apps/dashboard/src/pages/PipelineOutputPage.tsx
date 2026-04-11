@@ -114,7 +114,7 @@ function rewriteImageUrl(url: string): string {
 }
 
 async function fetchOutput(id: string): Promise<PipelineOutput | null> {
-  const res = await fetch(`/api/brain/pipelines/${id}/output`)
+  const res = await fetch(`/api/pipeline/${id}/output`)
   if (!res.ok) return null
   const data: PipelineOutput | null = (await res.json()).output || null
   if (data?.image_urls) {
@@ -124,13 +124,13 @@ async function fetchOutput(id: string): Promise<PipelineOutput | null> {
 }
 
 async function fetchStages(id: string): Promise<Record<string, StageInfo>> {
-  const res = await fetch(`/api/brain/pipelines/${id}/stages`)
+  const res = await fetch(`/api/pipeline/${id}/stages`)
   if (!res.ok) return {}
   return (await res.json()).stages || {}
 }
 
 async function rerunPipeline(id: string): Promise<boolean> {
-  const res = await fetch(`/api/brain/pipelines/${id}/run`, { method: 'POST' })
+  const res = await fetch(`/api/pipeline/${id}/rerun`, { method: 'POST' })
   return res.ok
 }
 

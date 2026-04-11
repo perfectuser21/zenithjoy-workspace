@@ -172,6 +172,75 @@ describe('Pipeline API', () => {
     });
   });
 
+  describe('GET /api/pipeline/:id/output', () => {
+    it('should proxy to cecelia and return output', async () => {
+      const runWithTask = { ...PIPELINE_RUN, cecelia_task_id: 'cecelia-task-123' };
+      mockQuery.mockResolvedValueOnce({ rows: [runWithTask] });
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ keyword: '测试', status: 'completed', article_text: 'content', cards_text: null, image_urls: [] }),
+      });
+
+      const response = await request(app).get(`/api/pipeline/${PIPELINE_RUN.id}/output`);
+
+      expect(response.status).toBe(200);
+      expect(response.body).toHaveProperty('keyword');
+      expect(mockFetch).toHaveBeenCalledWith(expect.stringContaining('cecelia-task-123/output'));
+    });
+
+    it('should return 404 when cecelia_task_id is null', async () => {
+      mockQuery.mockResolvedValueOnce({ rows: [PIPELINE_RUN] }); // cecelia_task_id is null
+
+      const response = await request(app).get(`/api/pipeline/${PIPELINE_RUN.id}/output`);
+
+      expect(response.status).toBe(404);
+    });
+  });
+
+  describe('GET /api/pipeline/:id/stages', () => {
+    it('should proxy to cecelia and return stages', async () => {
+      const runWithTask = { ...PIPELINE_RUN, cecelia_task_id: 'cecelia-task-123' };
+      mockQuery.mockResolvedValueOnce({ rows: [runWithTask] });
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ stages: { 'content-research': { status: 'completed' } } }),
+      });
+
+      const response = await request(app).get(`/api/pipeline/${PIPELINE_RUN.id}/stages`);
+
+      expect(response.status).toBe(200);
+      expect(response.body).toHaveProperty('stages');
+    });
+
+    it('should return empty stages when cecelia_task_id is null', async () => {
+      mockQuery.mockResolvedValueOnce({ rows: [PIPELINE_RUN] });
+
+      const response = await request(app).get(`/api/pipeline/${PIPELINE_RUN.id}/stages`);
+
+      expect(response.status).toBe(200);
+      expect(response.body).toEqual({ stages: {} });
+    });
+  });
+
+  describe('POST /api/pipeline/:id/rerun', () => {
+    it('should proxy rerun to cecelia', async () => {
+      const runWithTask = { ...PIPELINE_RUN, cecelia_task_id: 'cecelia-task-123' };
+      mockQuery.mockResolvedValueOnce({ rows: [runWithTask] });
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ ok: true }),
+      });
+
+      const response = await request(app).post(`/api/pipeline/${PIPELINE_RUN.id}/rerun`);
+
+      expect(response.status).toBe(200);
+      expect(mockFetch).toHaveBeenCalledWith(
+        expect.stringContaining('cecelia-task-123/run'),
+        expect.objectContaining({ method: 'POST' })
+      );
+    });
+  });
+
   describe('GET /api/pipeline/dashboard-stats', () => {
     it('should return today stats', async () => {
       mockQuery.mockResolvedValueOnce({

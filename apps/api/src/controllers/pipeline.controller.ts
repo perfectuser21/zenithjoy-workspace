@@ -112,6 +112,60 @@ export class PipelineController {
     }
   };
 
+  // GET /api/pipeline/:id/output  ← 透传到 cecelia
+  getOutput = async (req: Request, res: Response): Promise<void> => {
+    try {
+      const { rows } = await pool.query(
+        'SELECT cecelia_task_id FROM zenithjoy.pipeline_runs WHERE id = $1',
+        [req.params.id]
+      );
+      if (!rows.length) { res.status(404).json({ error: 'Not found' }); return; }
+      const ceceliaTaskId = rows[0].cecelia_task_id;
+      if (!ceceliaTaskId) { res.status(404).json({ error: '尚无 cecelia task' }); return; }
+      const upstream = await fetch(`${CECELIA_BRAIN_URL}/api/brain/pipelines/${ceceliaTaskId}/output`);
+      if (!upstream.ok) { res.status(upstream.status).json({ error: 'upstream error' }); return; }
+      res.json(await upstream.json());
+    } catch (err) {
+      res.status(500).json({ error: String(err) });
+    }
+  };
+
+  // GET /api/pipeline/:id/stages  ← 透传到 cecelia
+  getStages = async (req: Request, res: Response): Promise<void> => {
+    try {
+      const { rows } = await pool.query(
+        'SELECT cecelia_task_id FROM zenithjoy.pipeline_runs WHERE id = $1',
+        [req.params.id]
+      );
+      if (!rows.length) { res.status(404).json({ error: 'Not found' }); return; }
+      const ceceliaTaskId = rows[0].cecelia_task_id;
+      if (!ceceliaTaskId) { res.json({ stages: {} }); return; }
+      const upstream = await fetch(`${CECELIA_BRAIN_URL}/api/brain/pipelines/${ceceliaTaskId}/stages`);
+      if (!upstream.ok) { res.json({ stages: {} }); return; }
+      res.json(await upstream.json());
+    } catch (err) {
+      res.status(500).json({ error: String(err) });
+    }
+  };
+
+  // POST /api/pipeline/:id/rerun  ← 透传到 cecelia
+  rerun = async (req: Request, res: Response): Promise<void> => {
+    try {
+      const { rows } = await pool.query(
+        'SELECT cecelia_task_id FROM zenithjoy.pipeline_runs WHERE id = $1',
+        [req.params.id]
+      );
+      if (!rows.length) { res.status(404).json({ error: 'Not found' }); return; }
+      const ceceliaTaskId = rows[0].cecelia_task_id;
+      if (!ceceliaTaskId) { res.status(400).json({ error: '尚无 cecelia task，无法重跑' }); return; }
+      const upstream = await fetch(`${CECELIA_BRAIN_URL}/api/brain/pipelines/${ceceliaTaskId}/run`, { method: 'POST' });
+      if (!upstream.ok) { res.status(upstream.status).json({ error: 'upstream error' }); return; }
+      res.json(await upstream.json());
+    } catch (err) {
+      res.status(500).json({ error: String(err) });
+    }
+  };
+
   // GET /api/pipeline/dashboard-stats
   dashboardStats = async (_req: Request, res: Response): Promise<void> => {
     try {
