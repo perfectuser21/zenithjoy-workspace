@@ -136,8 +136,12 @@ function scpToWindows(localImages, winDir) {
 async function screenshot(page, name) {
   ensureDir(SCREENSHOTS_DIR);
   const output = path.join(SCREENSHOTS_DIR, `${name}.png`);
-  await page.screenshot({ path: output, fullPage: true });
-  _log(`[ZH-Idea]    截图: ${output}`);
+  try {
+    await page.screenshot({ path: output, fullPage: false, timeout: 10000 });
+    _log(`[ZH-Idea]    截图: ${output}`);
+  } catch (e) {
+    _log(`[ZH-Idea]    截图失败(跳过): ${e.message.slice(0, 60)}`);
+  }
   return output;
 }
 
@@ -171,14 +175,15 @@ async function fillContent(page, content) {
 }
 
 async function tryOpenFileChooser(page) {
+  const chooserPromise = page.waitForEvent('filechooser', { timeout: 3000 }).catch(() => null);
   try {
-    const chooserPromise = page.waitForEvent('filechooser', { timeout: 3000 });
     await page.locator(`${SELECTORS.writeArea} button:visible`).nth(2).click({ timeout: 5000 });
-    await chooserPromise;
-    return true;
   } catch (_) {
+    await chooserPromise;
     return false;
   }
+  const chooser = await chooserPromise;
+  return !!chooser;
 }
 
 async function resolveFileInputBackendNodeId(page, cdpSession) {

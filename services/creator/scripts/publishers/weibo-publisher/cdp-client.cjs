@@ -52,7 +52,7 @@ class CDPClient {
           delete this.callbacks[id];
           reject(new Error(`CDP timeout: ${method}`));
         }
-      }, 60000);
+      }, 120000);
       this.callbacks[id] = msg => {
         clearTimeout(timer);
         if (msg.error) reject(new Error(msg.error.message));

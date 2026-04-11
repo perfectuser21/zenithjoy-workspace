@@ -54,7 +54,7 @@ async function keepalivePlatform(platform) {
   const ts = new Date().toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' });
   let browser;
   try {
-    browser = await chromium.connectOverCDP(`http://${WINDOWS_IP}:${platform.port}`, { timeout: CONNECT_TIMEOUT });
+    browser = await chromium.connectOverCDP(`http://localhost:${platform.port}`, { timeout: CONNECT_TIMEOUT });
   } catch (err) {
     _log(`  ❌ ${platform.name} [${platform.port}] CDP 连接失败`);
     return { name: platform.name, ok: false, reason: 'unreachable' };

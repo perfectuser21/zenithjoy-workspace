@@ -96,8 +96,18 @@ const jobs = targetPlatforms.map(platformId => {
     fs.writeFileSync(jsonFile, JSON.stringify({ title, content, images: imageFiles }), 'utf8');
     spawnArgs = [scriptPath, jsonFile];
   } else if (argStyle === 'json-toutiao') {
+    // 头条脚本需要 Windows 路径，先 SCP 图片到 Windows
+    const winSubDir = `publish-${Date.now()}`;
+    // 先刷新头条 Chrome 页面（避免上次发布后 Chrome 处于忙碌状态）
+    spawnSync('bash', ['-c', `curl -s http://localhost:19226/json | python3 -c "import json,sys; tabs=json.load(sys.stdin); tab=next((t for t in tabs if 'toutiao' in t.get('url','')), tabs[0]); print(tab['webSocketDebuggerUrl'])" | xargs -I{} node -e "const ws=require('/Users/administrator/perfect21/cecelia/node_modules/ws'); const s=new ws('{}'); s.on('open',()=>{s.send(JSON.stringify({id:1,method:'Page.reload',params:{}})); setTimeout(()=>s.close(),2000);})" 2>/dev/null || true`]);
+    spawnSync('bash', ['-c', 'sleep 4']);
+    // SCP 图片到 Windows（用相对路径，从 home dir）
+    for (const img of imageFiles) {
+      spawnSync('scp', ['-o', 'StrictHostKeyChecking=no', img, `xuxia@100.97.242.124:toutiao-media/${path.basename(img)}`]);
+    }
+    const winImages = imageFiles.map(img => `C:\\Users\\xuxia\\toutiao-media\\${path.basename(img)}`);
     jsonFile = path.join(os.tmpdir(), `publish-toutiao-${Date.now()}.json`);
-    fs.writeFileSync(jsonFile, JSON.stringify({ content, images: imageFiles }), 'utf8');
+    fs.writeFileSync(jsonFile, JSON.stringify({ content, images: winImages }), 'utf8');
     spawnArgs = [scriptPath, jsonFile];
   } else if (argStyle === 'zhihu-idea') {
     const imgArg = (imageFiles && imageFiles.length > 0) ? ['--images', imageFiles.join(',')] : [];
@@ -128,8 +138,9 @@ const jobs = targetPlatforms.map(platformId => {
       });
     });
 
-    // 超时 5 分钟
-    setTimeout(() => { proc.kill(); resolve({ id: platformId, name, code: -1, ms: 300000, stdout: '', stderr: 'timeout' }); }, 300000);
+    // 超时 8 分钟（微博上传 7 张图片需要更长时间）
+    const TIMEOUT_MS = platformId === 'weibo' ? 480000 : 300000;
+    setTimeout(() => { proc.kill(); resolve({ id: platformId, name, code: -1, ms: TIMEOUT_MS, stdout: '', stderr: 'timeout' }); }, TIMEOUT_MS);
   });
 });
 

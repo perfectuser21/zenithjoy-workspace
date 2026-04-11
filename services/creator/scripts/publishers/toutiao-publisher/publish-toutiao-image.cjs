@@ -156,39 +156,26 @@ class WeitoutiaoPublisher {
 
     const clickResult = await this.cdp.send('Runtime.evaluate', {
       expression: `(function() {
-        // 查找编辑器下方工具栏中的"图片"按钮
-        // 微头条的图片按钮通常是一个 div 或 button，包含"图片"文本或图标
+        // 方法1：按文字查找 button
+        const btns = Array.from(document.querySelectorAll('button'));
+        const imgBtn = btns.find(b => b.textContent.trim() === '图片' && b.offsetWidth > 0);
+        if (imgBtn) { imgBtn.click(); return { success: true, method: 'button-text' }; }
+
+        // 方法2：syl-toolbar-button class（头条微头条工具栏）
+        const sylBtns = Array.from(document.querySelectorAll('button.syl-toolbar-button'));
+        const sylImg = sylBtns.find(b => b.textContent.trim() === '图片' && b.offsetWidth > 0);
+        if (sylImg) { sylImg.click(); return { success: true, method: 'syl-button' }; }
+
+        // 方法3：ProseMirror 工具栏
         const toolbar = document.querySelector('.ProseMirror')?.closest('div')?.parentElement;
-        if (!toolbar) return { success: false, error: '未找到工具栏' };
-
-        // 方法1：查找包含"图片"文本的元素
-        const allElements = Array.from(toolbar.querySelectorAll('div, button, span, a'));
-        const imageBtn = allElements.find(el => {
-          const text = el.textContent?.trim();
-          const title = el.getAttribute('title');
-          return (text === '图片' || title === '图片') && el.offsetWidth > 0;
-        });
-
-        if (imageBtn) {
-          imageBtn.click();
-          return { success: true, method: 'text' };
+        if (toolbar) {
+          const el = Array.from(toolbar.querySelectorAll('div, button, span, a')).find(e =>
+            (e.textContent?.trim() === '图片' || e.getAttribute('title') === '图片') && e.offsetWidth > 0
+          );
+          if (el) { el.click(); return { success: true, method: 'toolbar' }; }
         }
 
-        // 方法2：查找图标（SVG 或 icon class）
-        const icons = Array.from(toolbar.querySelectorAll('[class*="icon"]'));
-        for (const icon of icons) {
-          const parent = icon.closest('div, button');
-          if (parent && parent.offsetWidth > 0) {
-            // 尝试点击可能的图片图标
-            const classList = parent.className || '';
-            if (classList.includes('image') || classList.includes('picture') || classList.includes('photo')) {
-              parent.click();
-              return { success: true, method: 'icon' };
-            }
-          }
-        }
-
-        return { success: false, error: '未找到图片按钮' };
+        return { success: false, error: '未找到图片按钮', btns: btns.map(b=>b.textContent.trim()).filter(t=>t).slice(0,10) };
       })()`
     });
 
