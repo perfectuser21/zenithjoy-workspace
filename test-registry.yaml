@@ -177,6 +177,14 @@ tests:
     product: 私域运营
     note: "Fields CRUD 路由单元测试（mock DB）"
 
+  - id: api-pipeline-route
+    path: apps/api/tests/pipeline.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 新媒体运营
+    note: "Pipeline 触发/回调/统计路由单元测试（mock DB + fetch）"
+
   - id: api-publish-route
     path: apps/api/tests/publish.test.ts
     type: unit
