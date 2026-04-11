@@ -29,7 +29,7 @@ export class PipelineController {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           title: `Content Pipeline: ${content_type}${topic ? ' - ' + topic : ''}`,
-          task_type: 'content_pipeline',
+          task_type: 'content-pipeline',
           priority: 'P2',
           payload: {
             content_type,
