@@ -75,13 +75,22 @@ async function api<T>(
   init: RequestInit = {}
 ): Promise<T> {
   const url = `${CREATOR_BASE}/api/topics${path}`
-  const res = await fetch(url, {
-    headers: {
-      'Content-Type': 'application/json',
-      ...(init.headers || {}),
-    },
-    ...init,
-  })
+
+  let res: Response
+  try {
+    res = await fetch(url, {
+      headers: {
+        'Content-Type': 'application/json',
+        ...(init.headers || {}),
+      },
+      ...init,
+    })
+  } catch (e) {
+    // 网络错误 / DNS / CORS 等 fetch 自身失败
+    throw new Error(
+      `请求失败（网络）：${e instanceof Error ? e.message : String(e)}`
+    )
+  }
 
   let body: ApiEnvelope<T> | { detail?: { error?: { message?: string } } } | null = null
   try {
@@ -91,12 +100,19 @@ async function api<T>(
   }
 
   if (!res.ok) {
-    const msg =
-      (body as { detail?: { error?: { message?: string } } })?.detail?.error
-        ?.message ||
-      (body as ApiEnvelope<T>)?.error?.message ||
-      `请求失败：${res.status}`
-    throw new Error(msg)
+    const detailMsg =
+      body && typeof body === 'object'
+        ? (body as { detail?: { error?: { message?: string } } }).detail?.error?.message
+        : undefined
+    const envelopeMsg =
+      body && typeof body === 'object'
+        ? (body as ApiEnvelope<T>).error?.message
+        : undefined
+    throw new Error(detailMsg || envelopeMsg || `请求失败：${res.status}`)
+  }
+
+  if (!body || typeof body !== 'object') {
+    throw new Error('响应解析失败')
   }
   return (body as ApiEnvelope<T>).data
 }

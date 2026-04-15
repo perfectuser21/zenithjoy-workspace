@@ -160,14 +160,19 @@ function TopicForm({ initial, onSubmit, onCancel, submitting }: TopicFormProps) 
       return
     }
     setErr('')
-    await onSubmit({
-      title: title.trim(),
-      angle: angle.trim() || undefined,
-      priority,
-      status,
-      target_platforms: platforms,
-      scheduled_date: scheduledDate || null,
-    })
+    try {
+      await onSubmit({
+        title: title.trim(),
+        angle: angle.trim() || undefined,
+        priority,
+        status,
+        target_platforms: platforms,
+        scheduled_date: scheduledDate || null,
+      })
+    } catch (e) {
+      // 外层已有 flash 提示，这里补一层本地错误避免吞异常
+      setErr(e instanceof Error ? e.message : '提交失败')
+    }
   }
 
   const togglePlatform = (p: string) => {
