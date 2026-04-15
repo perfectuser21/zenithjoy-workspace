@@ -7,19 +7,29 @@ export class PipelineController {
   // POST /api/pipeline/trigger
   trigger = async (req: Request, res: Response): Promise<void> => {
     try {
-      const { content_type, topic, triggered_by = 'manual' } = req.body;
+      const { content_type, topic, topic_id, triggered_by = 'manual' } = req.body;
       if (!content_type) {
         res.status(400).json({ error: 'content_type 为必填字段' });
         return;
       }
 
+      // 选题池 v1：拒绝无 topic_id 的请求；除非 X-Manual-Override: true
+      const manualOverride = (req.headers['x-manual-override'] || '').toString().toLowerCase() === 'true';
+      if (!topic_id && !manualOverride) {
+        res.status(400).json({
+          error: 'topic_id 为必填（选题池 v1 强校验）。如确需手动创建，请加 header X-Manual-Override: true',
+          code: 'TOPIC_ID_REQUIRED',
+        });
+        return;
+      }
+
       const outputDir = process.env.CONTENT_OUTPUT_DIR || `${process.env.HOME}/content-output`;
 
-      // 在 zenithjoy DB 创建 pipeline_run 记录
+      // 在 zenithjoy DB 创建 pipeline_run 记录（topic_id 由 PR2 加列）
       const { rows } = await pool.query(
-        `INSERT INTO zenithjoy.pipeline_runs (content_type, topic, status, output_dir, triggered_by)
-         VALUES ($1, $2, 'pending', $3, $4) RETURNING *`,
-        [content_type, topic || null, outputDir, triggered_by]
+        `INSERT INTO zenithjoy.pipeline_runs (content_type, topic, topic_id, status, output_dir, triggered_by)
+         VALUES ($1, $2, $3, 'pending', $4, $5) RETURNING *`,
+        [content_type, topic || null, topic_id || null, outputDir, triggered_by]
       );
       const pipelineRun = rows[0];
 
