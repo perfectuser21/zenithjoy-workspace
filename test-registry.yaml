@@ -139,6 +139,14 @@ tests:
     product: 新媒体运营
     note: "内容作品图库页面"
 
+  - id: topic-pool-tab
+    path: apps/dashboard/src/pages/content-factory/__tests__/TopicPoolTab.test.tsx
+    type: unit
+    ci: L3
+    status: active
+    product: 新媒体运营
+    note: "内容工厂选题池 Tab（选题池 v1）"
+
   # ── 中台认证 ─────────────────────────────────────────────────────────────────
 
   - id: ab-testing-lib
