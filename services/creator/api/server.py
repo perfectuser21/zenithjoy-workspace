@@ -14,6 +14,12 @@ from datetime import datetime
 import uvicorn
 import httpx
 
+# topics 模块（同包下，运行时和包内 import 都兼容）
+try:
+    from api import topics as topics_module  # 当 PYTHONPATH 含 services/creator
+except ImportError:  # pragma: no cover
+    import topics as topics_module  # type: ignore  # fallback：直接在 api/ 下运行
+
 # Notion API - 从环境变量或凭据文件读取
 def get_notion_token():
     # 先尝试环境变量
@@ -644,6 +650,11 @@ def get_stats():
 
 # 初始化
 init_db()
+
+# 选题池路由（topics）
+topics_module.set_db_path(DB_PATH)
+topics_module.ensure_schema(DB_PATH)
+app.include_router(topics_module.router)
 
 # 静态文件
 parent_dir = Path(__file__).parent.parent

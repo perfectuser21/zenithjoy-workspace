@@ -58,6 +58,9 @@ log/
 *.sqlite3
 *.sql
 *.dump
+# 例外：迁移脚本必须入库
+!services/creator/migrations/*.sql
+!apps/api/db/migrations/*.sql
 
 # Backup files
 *.bak
