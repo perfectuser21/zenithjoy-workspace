@@ -1,6 +1,5 @@
 import dotenv from 'dotenv';
 import app from './app';
-import { startPipelineScheduler } from './services/pipeline-scheduler.service';
 
 dotenv.config();
 
@@ -10,5 +9,5 @@ app.listen(PORT, () => {
   console.log(`🚀 Works Management API running on port ${PORT}`);
   console.log(`   Health check: http://localhost:${PORT}/health`);
   console.log(`   API docs: http://localhost:${PORT}/api/works`);
-  startPipelineScheduler();
+  // 选题池 v1 阶段2：老 pipeline-scheduler 已废除，改由 topic-worker.py LaunchAgent 每日 09:00 触发
 });

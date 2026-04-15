@@ -81,14 +81,6 @@ tests:
     product: AI视频
     note: "AI 视频服务层逻辑（任务创建/状态查询）"
 
-  - id: api-pipeline-scheduler-service
-    path: apps/api/src/services/__tests__/pipeline-scheduler.service.test.ts
-    type: unit
-    ci: L3
-    status: active
-    product: 新媒体运营
-    note: "Pipeline 调度服务单元测试"
-
   # ── 新媒体运营 ────────────────────────────────────────────────────────────────
 
   - id: platform-data-route
