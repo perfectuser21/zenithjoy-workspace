@@ -1,9 +1,11 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
+import TopicPoolTab from './content-factory/TopicPoolTab'
 import {
   LayoutGrid,
   CalendarDays,
   ClipboardCheck,
+  ListChecks,
   RefreshCw,
   ChevronLeft,
   ChevronRight,
@@ -798,16 +800,17 @@ function ExecutionView({ pipelines }: { pipelines: Pipeline[] }) {
 
 // ─── 主页面 ─────────────────────────────────────────────────────
 
-type Tab = 'kanban' | 'schedule' | 'execution'
+type Tab = 'topic-pool' | 'kanban' | 'schedule' | 'execution'
 
 const TABS: { key: Tab; label: string; icon: typeof LayoutGrid }[] = [
+  { key: 'topic-pool', label: '选题池', icon: ListChecks },
   { key: 'kanban', label: '生产看板', icon: LayoutGrid },
   { key: 'schedule', label: '排期日历', icon: CalendarDays },
   { key: 'execution', label: '执行状态', icon: ClipboardCheck },
 ]
 
 export default function ContentFactoryPage() {
-  const [activeTab, setActiveTab] = useState<Tab>('kanban')
+  const [activeTab, setActiveTab] = useState<Tab>('topic-pool')
   const [pipelines, setPipelines] = useState<Pipeline[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -860,7 +863,7 @@ export default function ContentFactoryPage() {
         </div>
       </div>
 
-      <CreatePipelineForm onCreated={load} />
+      {activeTab !== 'topic-pool' && <CreatePipelineForm onCreated={load} />}
 
       <div className="flex gap-1 bg-gray-100 p-1 rounded-xl mb-6 w-fit">
         {TABS.map(({ key, label, icon: Icon }) => (
@@ -891,6 +894,7 @@ export default function ContentFactoryPage() {
         </div>
       ) : (
         <>
+          {activeTab === 'topic-pool' && <TopicPoolTab />}
           {activeTab === 'kanban' && <KanbanView pipelines={pipelines} onRefresh={load} />}
           {activeTab === 'schedule' && <ScheduleView pipelines={pipelines} />}
           {activeTab === 'execution' && <ExecutionView pipelines={pipelines} />}
