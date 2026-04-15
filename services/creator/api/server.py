@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """作品库 API 服务"""
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Header, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -655,6 +655,86 @@ init_db()
 topics_module.set_db_path(DB_PATH)
 topics_module.ensure_schema(DB_PATH)
 app.include_router(topics_module.router)
+
+
+# ─── pipeline 入口强校验（选题池 v1）──────────────────────────────────
+# server.py 不直接创建 pipeline（实际 pipeline 在 apps/api 维护），
+# 但提供一个本地代理入口供脚本/n8n 复用，统一做 topic_id 校验，
+# 防止任何"扩词机器"绕过主理人清单。
+#
+# 真正派发：转发到 apps/api 的 POST /api/pipeline/trigger。
+# 头 X-Manual-Override: true 可豁免（主理人手动场景）。
+
+PIPELINE_API_BASE = os.environ.get("CREATOR_PIPELINE_API", "http://localhost:3001")
+
+
+@app.post("/api/pipelines")
+async def create_pipeline(
+    request: Request,
+    x_manual_override: Optional[str] = Header(default=None),
+):
+    """选题池 v1：拒绝无 topic_id 的 pipeline 创建请求（除非主理人手动 override）。"""
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+
+    if not body.get("content_type"):
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "success": False,
+                "data": None,
+                "error": {
+                    "code": "CONTENT_TYPE_REQUIRED",
+                    "message": "content_type 为必填字段",
+                },
+            },
+        )
+
+    manual_override = (x_manual_override or "").lower() == "true"
+    if not body.get("topic_id") and not manual_override:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "success": False,
+                "data": None,
+                "error": {
+                    "code": "TOPIC_ID_REQUIRED",
+                    "message": "topic_id 为必填（选题池 v1 强校验）。如需手动创建，请加 header X-Manual-Override: true",
+                },
+            },
+        )
+
+    # 真正派发交给 apps/api（由它和 cecelia Brain 通信）
+    async with httpx.AsyncClient() as client:
+        headers = {"Content-Type": "application/json"}
+        if manual_override:
+            headers["X-Manual-Override"] = "true"
+        try:
+            resp = await client.post(
+                f"{PIPELINE_API_BASE.rstrip('/')}/api/pipeline/trigger",
+                json=body,
+                headers=headers,
+                timeout=30.0,
+            )
+        except httpx.RequestError as e:
+            raise HTTPException(
+                status_code=502,
+                detail={"success": False, "data": None, "error": {"code": "UPSTREAM_UNREACHABLE", "message": str(e)}},
+            )
+
+    try:
+        data = resp.json()
+    except Exception:
+        data = {"raw": resp.text}
+
+    if resp.status_code >= 400:
+        raise HTTPException(
+            status_code=resp.status_code,
+            detail={"success": False, "data": None, "error": {"code": "UPSTREAM_ERROR", "message": data}},
+        )
+    return {"success": True, "data": data, "error": None}
 
 # 静态文件
 parent_dir = Path(__file__).parent.parent

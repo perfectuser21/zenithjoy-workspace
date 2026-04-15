@@ -43,7 +43,7 @@ describe('Pipeline API', () => {
 
       const response = await request(app)
         .post('/api/pipeline/trigger')
-        .send({ content_type: 'tech_insight', topic: '2026年AI趋势' });
+        .send({ content_type: 'tech_insight', topic: '2026年AI趋势', topic_id: 'topic-001' });
 
       expect(response.status).toBe(201);
       expect(response.body.cecelia_task_id).toBe('cecelia-task-123');
@@ -60,6 +60,31 @@ describe('Pipeline API', () => {
       expect(response.body.error).toContain('content_type');
     });
 
+    // 选题池 v1：topic_id 强校验
+    it('should return 400 when topic_id is missing (no manual override)', async () => {
+      const response = await request(app)
+        .post('/api/pipeline/trigger')
+        .send({ content_type: 'tech_insight', topic: '裸跑' });
+
+      expect(response.status).toBe(400);
+      expect(response.body.code).toBe('TOPIC_ID_REQUIRED');
+      expect(response.body.error).toContain('topic_id');
+    });
+
+    it('should accept request when X-Manual-Override is true (no topic_id)', async () => {
+      mockQuery
+        .mockResolvedValueOnce({ rows: [PIPELINE_RUN] })
+        .mockResolvedValueOnce({ rows: [] });
+      mockFetch.mockResolvedValueOnce({ ok: true, json: async () => ({ id: 'task-x' }) });
+
+      const response = await request(app)
+        .post('/api/pipeline/trigger')
+        .set('X-Manual-Override', 'true')
+        .send({ content_type: 'tech_insight', topic: '手动' });
+
+      expect(response.status).toBe(201);
+    });
+
     it('should return 502 when cecelia Brain is unreachable', async () => {
       mockQuery
         .mockResolvedValueOnce({ rows: [PIPELINE_RUN] })   // INSERT
@@ -72,7 +97,7 @@ describe('Pipeline API', () => {
 
       const response = await request(app)
         .post('/api/pipeline/trigger')
-        .send({ content_type: 'tech_insight' });
+        .send({ content_type: 'tech_insight', topic_id: 'topic-002' });
 
       expect(response.status).toBe(502);
       expect(response.body.error).toContain('cecelia Brain');
@@ -83,7 +108,7 @@ describe('Pipeline API', () => {
 
       const response = await request(app)
         .post('/api/pipeline/trigger')
-        .send({ content_type: 'tech_insight' });
+        .send({ content_type: 'tech_insight', topic_id: 'topic-003' });
 
       expect(response.status).toBe(500);
     });
@@ -275,7 +300,7 @@ describe('Pipeline API', () => {
 
       await request(app)
         .post('/api/pipeline/trigger')
-        .send({ content_type: 'solo-company-case', topic: 'contract-test' });
+        .send({ content_type: 'solo-company-case', topic: 'contract-test', topic_id: 'topic-contract' });
 
       const [, fetchOptions] = mockFetch.mock.calls[0];
       const body = JSON.parse(fetchOptions.body);
@@ -291,7 +316,7 @@ describe('Pipeline API', () => {
 
       await request(app)
         .post('/api/pipeline/trigger')
-        .send({ content_type: 'solo-company-case', topic: 'contract-test' });
+        .send({ content_type: 'solo-company-case', topic: 'contract-test', topic_id: 'topic-contract' });
 
       const [, fetchOptions] = mockFetch.mock.calls[0];
       const body = JSON.parse(fetchOptions.body);
@@ -306,7 +331,7 @@ describe('Pipeline API', () => {
 
       await request(app)
         .post('/api/pipeline/trigger')
-        .send({ content_type: 'solo-company-case', topic: 'contract-test' });
+        .send({ content_type: 'solo-company-case', topic: 'contract-test', topic_id: 'topic-contract' });
 
       const [, fetchOptions] = mockFetch.mock.calls[0];
       const body = JSON.parse(fetchOptions.body);
@@ -321,7 +346,7 @@ describe('Pipeline API', () => {
 
       await request(app)
         .post('/api/pipeline/trigger')
-        .send({ content_type: 'solo-company-case', topic: 'AI大模型趋势' });
+        .send({ content_type: 'solo-company-case', topic: 'AI大模型趋势', topic_id: 'topic-contract-3' });
 
       const [fetchUrl, fetchOptions] = mockFetch.mock.calls[0];
       const body = JSON.parse(fetchOptions.body);
