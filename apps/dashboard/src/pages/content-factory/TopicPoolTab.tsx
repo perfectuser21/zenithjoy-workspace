@@ -159,6 +159,18 @@ function TopicForm({ initial, onSubmit, onCancel, submitting }: TopicFormProps) 
       setErr('标题不能为空')
       return
     }
+    if (!Number.isFinite(priority) || priority < 0 || priority > 9999) {
+      setErr('优先级必须是 0–9999 的数字')
+      return
+    }
+    if (!TOPIC_STATUSES.includes(status)) {
+      setErr('非法状态')
+      return
+    }
+    if (platforms.length === 0) {
+      setErr('至少选择 1 个目标平台')
+      return
+    }
     setErr('')
     try {
       await onSubmit({

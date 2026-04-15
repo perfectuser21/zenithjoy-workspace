@@ -70,26 +70,40 @@ interface ApiEnvelope<T> {
   error: null | { code: string; message: string }
 }
 
+// 默认请求超时（毫秒）。NotebookLM/cecelia 返回较慢，给 30s。
+const DEFAULT_TIMEOUT_MS = 30_000
+
 async function api<T>(
   path: string,
   init: RequestInit = {}
 ): Promise<T> {
   const url = `${CREATOR_BASE}/api/topics${path}`
 
+  // 超时控制（fetch 默认无超时）
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), DEFAULT_TIMEOUT_MS)
+
   let res: Response
   try {
     res = await fetch(url, {
+      // 注：本应用与后端同源，CSRF 由 SameSite cookie + 同源策略覆盖；
+      // 如未来跨域，需在此追加 X-CSRF-Token header。
       headers: {
         'Content-Type': 'application/json',
         ...(init.headers || {}),
       },
+      signal: controller.signal,
       ...init,
     })
   } catch (e) {
-    // 网络错误 / DNS / CORS 等 fetch 自身失败
+    if ((e as { name?: string })?.name === 'AbortError') {
+      throw new Error(`请求超时（${DEFAULT_TIMEOUT_MS / 1000}s）`)
+    }
     throw new Error(
       `请求失败（网络）：${e instanceof Error ? e.message : String(e)}`
     )
+  } finally {
+    clearTimeout(timer)
   }
 
   let body: ApiEnvelope<T> | { detail?: { error?: { message?: string } } } | null = null
