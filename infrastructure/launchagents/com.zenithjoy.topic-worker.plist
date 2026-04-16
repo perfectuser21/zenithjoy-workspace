@@ -28,5 +28,27 @@
     <string>/tmp/topic-worker.log</string>
     <key>StandardErrorPath</key>
     <string>/tmp/topic-worker.log</string>
+
+    <!--
+        PR-c：worker 全 HTTP 化，需要 apps/api base + 内部 token。
+        部署步骤：
+          1. cp 本文件到 ~/Library/LaunchAgents/
+          2. /usr/libexec/PlistBuddy -c "Set :EnvironmentVariables:ZENITHJOY_INTERNAL_TOKEN $(grep -m1 '^ZENITHJOY_INTERNAL_TOKEN=' ~/.credentials/zenithjoy-internal-token | cut -d= -f2-)" ~/Library/LaunchAgents/com.zenithjoy.topic-worker.plist
+          3. launchctl unload ~/Library/LaunchAgents/com.zenithjoy.topic-worker.plist
+          4. launchctl load ~/Library/LaunchAgents/com.zenithjoy.topic-worker.plist
+    -->
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>APPS_API_BASE</key>
+        <string>http://localhost:5200</string>
+        <key>ZENITHJOY_INTERNAL_TOKEN</key>
+        <string>PLACEHOLDER_TOKEN</string>
+        <key>PATH</key>
+        <string>/usr/local/bin:/usr/bin:/bin:/opt/homebrew/bin</string>
+        <key>LANG</key>
+        <string>zh_CN.UTF-8</string>
+        <key>TZ</key>
+        <string>Asia/Shanghai</string>
+    </dict>
 </dict>
 </plist>
