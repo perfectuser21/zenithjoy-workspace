@@ -1,179 +1,194 @@
 #!/usr/bin/env python3
 """选题池 worker — 每日按节奏从 topics 表挑 N 条建 pipeline。
 
+PR-c 起：本脚本不再直连 SQLite，全部改走 apps/api HTTP 端点。
+- 数据源：apps/api (默认 http://localhost:5200)
+- 鉴权：Authorization: Bearer ${ZENITHJOY_INTERNAL_TOKEN}
+
 挑选规则：
-- status='已通过' AND deleted_at IS NULL
-- AND (scheduled_date IS NULL OR scheduled_date <= today)
-- ORDER BY priority ASC, created_at ASC
+- status='已通过'（由 apps/api 侧按 priority ASC, created_at ASC 排序）
+- scheduled_date IS NULL 或 scheduled_date <= today（服务器不支持日期比较参数，本地过滤）
 - LIMIT N（N = pacing_config.daily_limit，env TOPIC_DAILY_LIMIT 优先，默认 1）
 
 行为：
-- 选中后置 status='研究中'，记录 pipeline_id（可选，由 pipeline 创建接口回填）
-- 真正派发 pipeline 走 apps/api 的 POST /api/pipeline/trigger（带 topic_id）
-  - 默认 dry-run（只打印挑选结果），加 --apply 才真正派发
-  - 派发地址通过 env CREATOR_PIPELINE_API 控制（默认 http://localhost:3001）
+- 默认 dry-run（只打印挑选结果），加 --apply 才真正派发
+- 派发成功 → PATCH /api/topics/{id} 将 status 置 '研究中' + 写入 pipeline_id
+- 派发失败 → topic 保持 '已通过'，下轮再试
 
-Brain Task: 4aac48fe-048a-4f82-9750-57e6614e0c62
+环境变量：
+    APPS_API_BASE               apps/api 地址（默认 http://localhost:5200；兼容 CREATOR_PIPELINE_API）
+    ZENITHJOY_INTERNAL_TOKEN    内部 API 鉴权 token（401/403 → 退出）
+    TOPIC_DAILY_LIMIT           覆盖每日限额（优先于 apps/api 的 pacing_config）
+    DEFAULT_CONTENT_TYPE        触发 pipeline 用的 content_type（默认 'post'）
+
+Brain Task: fff07775-ce14-45cd-b4ee-2be074353267
 """
 
 from __future__ import annotations
 
 import argparse
 import json
+import logging
 import os
-import sqlite3
 import sys
-import urllib.error
-import urllib.request
-from datetime import date, datetime, timezone
+from datetime import date
 from pathlib import Path
 from typing import Any, Optional
 
-DEFAULT_DB = Path(__file__).parent.parent / "data" / "creator.db"
-DEFAULT_PIPELINE_API = "http://localhost:3001"
+# 允许 `python3 topic-worker.py` 直接跑（把 services/creator 加入 path）
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from lib.http_client import ZenithJoyAPIError, ZenithJoyClient  # noqa: E402
+
+logger = logging.getLogger("topic-worker")
 
 
-def _now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
-
-
-def get_daily_limit(conn: sqlite3.Connection) -> int:
-    """优先 env，其次 pacing_config，默认 1。"""
+def _resolve_daily_limit(client: ZenithJoyClient) -> int:
+    """优先 env TOPIC_DAILY_LIMIT；否则 apps/api /api/pacing-config.daily_limit；再默认 1。"""
     env = os.environ.get("TOPIC_DAILY_LIMIT")
     if env:
         try:
             return max(0, int(env))
         except ValueError:
-            pass
+            logger.warning("TOPIC_DAILY_LIMIT=%s 不是整数，忽略", env)
 
-    cur = conn.execute("SELECT value FROM pacing_config WHERE key = 'daily_limit'")
-    row = cur.fetchone()
-    if row:
-        try:
-            return max(0, int(row[0]))
-        except (TypeError, ValueError):
-            return 1
-    return 1
+    try:
+        data = client.get_pacing_config()
+    except ZenithJoyAPIError as e:
+        if e.status_code in (401, 403):
+            raise  # 鉴权错误由上层退出
+        logger.warning("GET /api/pacing-config 失败，退回默认 1: %s", e)
+        return 1
+
+    value = data.get("daily_limit", 1)
+    try:
+        return max(0, int(value))
+    except (TypeError, ValueError):
+        logger.warning("pacing-config 返回非整数 daily_limit=%r，退回 1", value)
+        return 1
 
 
-def select_topics(
-    conn: sqlite3.Connection,
-    limit: int,
-    today: Optional[str] = None,
+def _filter_by_schedule(
+    topics: list[dict[str, Any]],
+    today: Optional[str],
 ) -> list[dict[str, Any]]:
-    """选出今日可派发的 topic 列表。"""
-    if limit <= 0:
-        return []
-
+    """本地过滤 scheduled_date <= today 或 NULL。apps/api 不支持日期比较参数。"""
     today = today or date.today().isoformat()
-    conn.row_factory = sqlite3.Row
-    cur = conn.execute(
-        """
-        SELECT id, title, angle, priority, status, target_platforms,
-               scheduled_date, created_at
-        FROM topics
-        WHERE status = '已通过'
-          AND deleted_at IS NULL
-          AND (scheduled_date IS NULL OR scheduled_date <= ?)
-        ORDER BY priority ASC, created_at ASC
-        LIMIT ?
-        """,
-        (today, limit),
-    )
-    return [dict(r) for r in cur.fetchall()]
-
-
-def mark_topic_in_progress(
-    conn: sqlite3.Connection,
-    topic_id: str,
-    pipeline_id: Optional[str] = None,
-) -> None:
-    now = _now_iso()
-    if pipeline_id:
-        conn.execute(
-            "UPDATE topics SET status = '研究中', pipeline_id = ?, updated_at = ? WHERE id = ?",
-            (pipeline_id, now, topic_id),
-        )
-    else:
-        conn.execute(
-            "UPDATE topics SET status = '研究中', updated_at = ? WHERE id = ?",
-            (now, topic_id),
-        )
-    conn.commit()
-
-
-def dispatch_pipeline(
-    api_base: str,
-    topic: dict[str, Any],
-    timeout: int = 30,
-) -> dict[str, Any]:
-    """通过 HTTP 调用 apps/api 的 POST /api/pipeline/trigger。"""
-    payload = {
-        "content_type": "post",
-        "topic": topic.get("title"),
-        "topic_id": topic.get("id"),
-        "triggered_by": "topic-worker",
-    }
-    data = json.dumps(payload).encode("utf-8")
-    req = urllib.request.Request(
-        f"{api_base.rstrip('/')}/api/pipeline/trigger",
-        data=data,
-        headers={"Content-Type": "application/json"},
-        method="POST",
-    )
-    with urllib.request.urlopen(req, timeout=timeout) as resp:  # nosec B310
-        body = resp.read().decode("utf-8")
-        return json.loads(body) if body else {}
+    out: list[dict[str, Any]] = []
+    for t in topics:
+        sched = t.get("scheduled_date")
+        if not sched or str(sched) <= today:
+            out.append(t)
+    return out
 
 
 def run(
-    db_path: Path,
+    *,
     apply: bool = False,
     api_base: Optional[str] = None,
     today: Optional[str] = None,
+    client: Optional[ZenithJoyClient] = None,
 ) -> dict[str, Any]:
-    """主入口；返回包含 dispatch 结果的字典（便于测试）。"""
-    api_base = api_base or os.environ.get("CREATOR_PIPELINE_API", DEFAULT_PIPELINE_API)
-    conn = sqlite3.connect(db_path)
+    """主入口；返回包含 dispatch 结果的字典（便于测试）。
+
+    参数：
+        apply     True 才真正派发；否则 dry-run
+        api_base  apps/api 地址；默认走 env
+        today     覆盖"今日"，主要供测试
+        client    注入 ZenithJoyClient（测试）；否则由 env 构造
+    """
+    owns_client = client is None
+    if client is None:
+        if api_base:
+            token = os.environ.get("ZENITHJOY_INTERNAL_TOKEN")
+            client = ZenithJoyClient(base_url=api_base, token=token)
+        else:
+            client = ZenithJoyClient.from_env()
+
     try:
-        limit = get_daily_limit(conn)
-        topics = select_topics(conn, limit, today=today)
+        limit = _resolve_daily_limit(client)
+
+        # 选 topics（apps/api 已按 priority/created_at 排序）
+        if limit <= 0:
+            items: list[dict[str, Any]] = []
+        else:
+            # 多取一些以防 scheduled_date 过滤后不够；上限 max(limit*4, limit+10)
+            fetch_n = max(limit * 4, limit + 10)
+            try:
+                raw = client.list_topics(status="已通过", limit=fetch_n)
+            except ZenithJoyAPIError as e:
+                if e.status_code in (401, 403):
+                    raise
+                logger.error("GET /api/topics 失败：%s", e)
+                return {"limit": limit, "selected": 0, "apply": apply, "results": [], "error": str(e)}
+            items = _filter_by_schedule(raw, today)[:limit]
+
+        content_type = os.environ.get("DEFAULT_CONTENT_TYPE", "post")
         results: list[dict[str, Any]] = []
 
-        for t in topics:
-            entry: dict[str, Any] = {"topic_id": t["id"], "title": t["title"]}
+        for t in items:
+            entry: dict[str, Any] = {"topic_id": t.get("id"), "title": t.get("title")}
+
             if not apply:
                 entry["dispatched"] = False
                 entry["dry_run"] = True
-            else:
-                try:
-                    resp = dispatch_pipeline(api_base, t)
+                results.append(entry)
+                continue
+
+            try:
+                resp = client.trigger_pipeline({
+                    "content_type": content_type,
+                    "topic": t.get("title"),
+                    "topic_id": t.get("id"),
+                    "triggered_by": "topic-worker",
+                })
+                data = resp.get("data") if isinstance(resp, dict) else None
+                pipeline_id = None
+                if isinstance(resp, dict):
                     pipeline_id = (
                         resp.get("id")
                         or resp.get("pipeline_id")
-                        or resp.get("data", {}).get("id")
+                        or (data or {}).get("id")
+                        or (data or {}).get("pipeline_id")
                     )
-                    mark_topic_in_progress(conn, t["id"], pipeline_id)
-                    entry["dispatched"] = True
-                    entry["pipeline_id"] = pipeline_id
-                except (urllib.error.URLError, urllib.error.HTTPError, ValueError) as e:
-                    entry["dispatched"] = False
-                    entry["error"] = str(e)
+
+                patch_body: dict[str, Any] = {"status": "研究中"}
+                if pipeline_id:
+                    patch_body["pipeline_id"] = pipeline_id
+                try:
+                    client.patch_topic(t["id"], patch_body)
+                except ZenithJoyAPIError as patch_err:
+                    logger.warning(
+                        "PATCH /api/topics/%s 失败（pipeline 已触发 id=%s）：%s",
+                        t.get("id"), pipeline_id, patch_err,
+                    )
+                    entry["patch_error"] = str(patch_err)
+
+                entry["dispatched"] = True
+                entry["pipeline_id"] = pipeline_id
+            except ZenithJoyAPIError as e:
+                if e.status_code in (401, 403):
+                    raise
+                entry["dispatched"] = False
+                entry["error"] = str(e)
+
             results.append(entry)
 
         return {
             "limit": limit,
-            "selected": len(topics),
+            "selected": len(items),
             "apply": apply,
             "results": results,
         }
     finally:
-        conn.close()
+        if owns_client:
+            client.close()
 
 
 def main(argv: Optional[list[str]] = None) -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--db", type=Path, default=DEFAULT_DB)
     parser.add_argument(
         "--apply",
         action="store_true",
@@ -182,16 +197,31 @@ def main(argv: Optional[list[str]] = None) -> int:
     parser.add_argument(
         "--api-base",
         default=None,
-        help="apps/api 地址；默认从 env CREATOR_PIPELINE_API 读，否则 http://localhost:3001",
+        help="apps/api 地址；默认从 env APPS_API_BASE / CREATOR_PIPELINE_API 读，否则 http://localhost:5200",
     )
     parser.add_argument("--today", default=None, help="覆盖今日日期（YYYY-MM-DD），主要供测试")
+    parser.add_argument(
+        "--log-level",
+        default=os.environ.get("LOG_LEVEL", "INFO"),
+        help="日志级别（DEBUG/INFO/WARNING/ERROR）",
+    )
     args = parser.parse_args(argv)
 
-    if not args.db.exists():
-        print(f"DB 不存在：{args.db}（先跑 apply-migrations.py）", file=sys.stderr)
-        return 2
+    logging.basicConfig(
+        level=getattr(logging, args.log_level.upper(), logging.INFO),
+        format="%(asctime)s [%(name)s] %(levelname)s %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+    )
 
-    summary = run(args.db, apply=args.apply, api_base=args.api_base, today=args.today)
+    try:
+        summary = run(apply=args.apply, api_base=args.api_base, today=args.today)
+    except ZenithJoyAPIError as e:
+        if e.status_code in (401, 403):
+            logger.error("apps/api 鉴权失败（%s），请检查 ZENITHJOY_INTERNAL_TOKEN", e.status_code)
+            return 3
+        logger.error("apps/api 调用异常：%s", e)
+        return 4
+
     print(json.dumps(summary, ensure_ascii=False, indent=2))
     return 0
 

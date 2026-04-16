@@ -27,10 +27,20 @@
     <key>StandardErrorPath</key>
     <string>/tmp/pipeline-worker.log</string>
 
+    <!--
+        PR-c：worker 全 HTTP 化，不再直连 SQLite。
+        部署步骤：
+          1. cp 本文件到 ~/Library/LaunchAgents/
+          2. /usr/libexec/PlistBuddy -c "Set :EnvironmentVariables:ZENITHJOY_INTERNAL_TOKEN $(grep -m1 '^ZENITHJOY_INTERNAL_TOKEN=' ~/.credentials/zenithjoy-internal-token | cut -d= -f2-)" ~/Library/LaunchAgents/com.zenithjoy.pipeline-worker.plist
+          3. launchctl unload ~/Library/LaunchAgents/com.zenithjoy.pipeline-worker.plist
+          4. launchctl load ~/Library/LaunchAgents/com.zenithjoy.pipeline-worker.plist
+    -->
     <key>EnvironmentVariables</key>
     <dict>
-        <key>CREATOR_API_BASE</key>
-        <string>http://localhost:8899</string>
+        <key>APPS_API_BASE</key>
+        <string>http://localhost:5200</string>
+        <key>ZENITHJOY_INTERNAL_TOKEN</key>
+        <string>PLACEHOLDER_TOKEN</string>
         <key>BRAIN_URL</key>
         <string>http://localhost:5221</string>
         <key>NAS_USER</key>
