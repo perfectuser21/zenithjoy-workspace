@@ -71,9 +71,24 @@ def execute_research(run_data: dict) -> dict:
     Returns:
         {success: bool, findings_path?: str, findings_count?: int, error?: str}
     """
+    from ._fake import fake_output_dir, is_fake_mode
+
     keyword = run_data.get("keyword", "")
     notebook_id = run_data.get("notebook_id")
     content_type = run_data.get("content_type", "solo-company-case")
+
+    # PR-e/5 端到端 CI fake 模式：跳过 NotebookLM
+    if is_fake_mode():
+        out_dir = fake_output_dir(run_data, "research")
+        fp = Path(out_dir) / "findings.json"
+        import json as _json
+
+        fp.write_text(
+            _json.dumps({"keyword": keyword, "findings": [], "fake": True}, ensure_ascii=False),
+            encoding="utf-8",
+        )
+        logger.info("[research] fake mode: skipping NotebookLM, stub at %s", fp)
+        return {"success": True, "findings_path": str(fp), "findings_count": 0, "output_dir": out_dir}
 
     logger.info("[research] 开始: %s (notebook=%s)", keyword, notebook_id or "无")
 

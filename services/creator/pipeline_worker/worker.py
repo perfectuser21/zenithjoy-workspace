@@ -77,7 +77,14 @@ def process_pipeline(
         True if completed, False if failed.
     """
     pid = pipeline["id"]
-    keyword = pipeline.get("keyword") or pipeline.get("topic") or "unknown"
+    # PR-e/5: apps/api /api/pipelines/running 已经 COALESCE(topic.title, pr.topic) 返回 keyword
+    # 这里优先用 topic_title（真选题 SoT），退回 keyword（来自 SQL coalesce），再退回 'unknown'
+    keyword = (
+        pipeline.get("topic_title")
+        or pipeline.get("keyword")
+        or pipeline.get("topic")
+        or "unknown"
+    )
     topic_id = pipeline.get("topic_id")
     current_stage = pipeline.get("current_stage") or ""
 

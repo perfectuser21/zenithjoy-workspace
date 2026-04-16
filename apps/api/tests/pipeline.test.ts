@@ -46,8 +46,11 @@ describe('Pipeline API', () => {
         .send({ content_type: 'tech_insight', topic: '2026年AI趋势', topic_id: 'topic-001' });
 
       expect(response.status).toBe(201);
-      expect(response.body.cecelia_task_id).toBe('cecelia-task-123');
-      expect(response.body.status).toBe('running');
+      // PR-e/5: 响应格式统一为 { success, data, error, timestamp }
+      expect(response.body.success).toBe(true);
+      expect(response.body.data.cecelia_task_id).toBe('cecelia-task-123');
+      expect(response.body.data.status).toBe('running');
+      expect(response.body.error).toBeNull();
       expect(mockFetch).toHaveBeenCalledTimes(1);
     });
 
@@ -57,7 +60,9 @@ describe('Pipeline API', () => {
         .send({ topic: '没有类型' });
 
       expect(response.status).toBe(400);
-      expect(response.body.error).toContain('content_type');
+      expect(response.body.success).toBe(false);
+      expect(response.body.error.code).toBe('CONTENT_TYPE_REQUIRED');
+      expect(response.body.error.message).toContain('content_type');
     });
 
     // 选题池 v1：topic_id 强校验
@@ -67,8 +72,9 @@ describe('Pipeline API', () => {
         .send({ content_type: 'tech_insight', topic: '裸跑' });
 
       expect(response.status).toBe(400);
-      expect(response.body.code).toBe('TOPIC_ID_REQUIRED');
-      expect(response.body.error).toContain('topic_id');
+      expect(response.body.success).toBe(false);
+      expect(response.body.error.code).toBe('TOPIC_ID_REQUIRED');
+      expect(response.body.error.message).toContain('topic_id');
     });
 
     it('should accept request when X-Manual-Override is true (no topic_id)', async () => {
@@ -100,7 +106,9 @@ describe('Pipeline API', () => {
         .send({ content_type: 'tech_insight', topic_id: 'topic-002' });
 
       expect(response.status).toBe(502);
-      expect(response.body.error).toContain('cecelia Brain');
+      expect(response.body.success).toBe(false);
+      expect(response.body.error.code).toBe('CECELIA_CALL_FAILED');
+      expect(response.body.error.message).toContain('cecelia Brain');
     });
 
     it('should return 500 on DB error', async () => {

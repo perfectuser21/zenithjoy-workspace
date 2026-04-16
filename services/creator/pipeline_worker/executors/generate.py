@@ -64,8 +64,16 @@ def execute_generate(run_data: dict) -> dict:
     Returns:
         {success: bool, output_dir?: str, image_count: int, error?: str}
     """
+    from ._fake import fake_output_dir, is_fake_mode
+
     keyword = run_data.get("keyword", "")
     image_count = run_data.get("image_count", 9)
+
+    # PR-e/5 端到端 CI fake 模式：不生成真图
+    if is_fake_mode():
+        out_dir = fake_output_dir(run_data, "generate")
+        logger.info("[generate] fake mode: skipping image generation, dir=%s", out_dir)
+        return {"success": True, "output_dir": out_dir, "image_count": 0}
 
     logger.info("[generate] 开始图片生成: %s", keyword)
 

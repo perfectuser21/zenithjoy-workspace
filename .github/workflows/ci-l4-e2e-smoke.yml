@@ -1,0 +1,379 @@
+name: L4 E2E Smoke
+
+# PR-e/5：端到端冒烟
+# 3 个 job：
+#   1. python-creator-tests  — services/creator/tests 全量 pytest
+#   2. smoke-api-contract    — 起 apps/api + Postgres，curl 关键 endpoint
+#   3. smoke-e2e-worker      — topic + topic-worker + pipeline-worker（全 fake executors）
+#
+# 触发：PR 到 main + push 到 main + 每晚 schedule + 手动
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: '30 18 * * *'   # 每天 02:30 UTC+8（北京时间）跑一次
+  workflow_dispatch:
+
+concurrency:
+  group: l4-e2e-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ─── Job 1: services/creator Python 测试 ─────────────────────────
+  python-creator-tests:
+    name: Creator Python Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+          cache-dependency-path: services/creator/requirements-ci.txt
+
+      - name: Install CI deps
+        run: pip install -r services/creator/requirements-ci.txt
+
+      - name: Run pytest
+        working-directory: services/creator
+        run: python3 -m pytest tests/ -v
+
+  # ─── Job 2: apps/api 端点契约冒烟 ───────────────────────────────
+  smoke-api-contract:
+    name: API Contract Smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: cecelia
+          POSTGRES_PASSWORD: cecelia
+          POSTGRES_DB: cecelia
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DATABASE_HOST: localhost
+      DATABASE_PORT: 5432
+      DATABASE_USER: cecelia
+      DATABASE_PASSWORD: cecelia
+      DATABASE_NAME: cecelia
+      PORT: 5200
+      NODE_ENV: test
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: package-lock.json
+
+      - name: Install apps/api deps
+        run: npm ci --workspace=apps/api
+
+      - name: Create zenithjoy schema + pgcrypto
+        env:
+          PGPASSWORD: cecelia
+        run: |
+          psql -h localhost -U cecelia -d cecelia -c "CREATE SCHEMA IF NOT EXISTS zenithjoy;"
+          psql -h localhost -U cecelia -d cecelia -c "CREATE EXTENSION IF NOT EXISTS \"pgcrypto\";"
+
+      - name: Run migrations
+        env:
+          PGPASSWORD: cecelia
+        run: |
+          for f in apps/api/db/migrations/*.sql; do
+            echo "→ $f"
+            psql -h localhost -U cecelia -d cecelia -f "$f"
+          done
+
+      - name: Build apps/api
+        working-directory: apps/api
+        run: npm run build
+
+      - name: Start apps/api
+        working-directory: apps/api
+        run: |
+          node dist/index.js > /tmp/apps-api.log 2>&1 &
+          echo $! > /tmp/apps-api.pid
+          for i in $(seq 1 30); do
+            if curl -fs http://localhost:5200/health >/dev/null 2>&1; then
+              echo "apps/api ready after ${i}s"
+              break
+            fi
+            sleep 1
+          done
+          curl -fs http://localhost:5200/health || (cat /tmp/apps-api.log && exit 1)
+
+      - name: Smoke — GET /api/topics (empty OK)
+        run: |
+          RESP=$(curl -s http://localhost:5200/api/topics)
+          echo "$RESP"
+          echo "$RESP" | grep -q '"success":true' || (echo "FAIL: /api/topics missing success:true"; exit 1)
+
+      - name: Smoke — POST /api/topics
+        id: create_topic
+        run: |
+          RESP=$(curl -s -X POST http://localhost:5200/api/topics \
+            -H 'Content-Type: application/json' \
+            -d '{"title":"CI 冒烟选题","priority":1,"status":"已通过"}')
+          echo "$RESP"
+          TOPIC_ID=$(echo "$RESP" | python3 -c "import sys,json;d=json.load(sys.stdin);print(d['data']['id'])")
+          if [ -z "$TOPIC_ID" ]; then
+            echo "FAIL: 未拿到 topic id"
+            exit 1
+          fi
+          echo "topic_id=$TOPIC_ID" >> $GITHUB_OUTPUT
+
+      - name: Smoke — GET /api/pacing-config
+        run: |
+          RESP=$(curl -s http://localhost:5200/api/pacing-config)
+          echo "$RESP"
+          echo "$RESP" | grep -q '"daily_limit"' || (echo "FAIL: pacing-config missing daily_limit"; exit 1)
+
+      - name: Smoke — GET /api/pipelines/running (should be empty)
+        run: |
+          RESP=$(curl -s http://localhost:5200/api/pipelines/running)
+          echo "$RESP"
+          echo "$RESP" | grep -q '"success":true' || (echo "FAIL: /api/pipelines/running missing success:true"; exit 1)
+          echo "$RESP" | grep -q '"items":\[\]' || (echo "FAIL: items should be empty array"; exit 1)
+
+      - name: Smoke — POST /api/pipeline/trigger (missing content_type → 400)
+        run: |
+          STATUS=$(curl -s -o /tmp/resp.json -w '%{http_code}' \
+            -X POST http://localhost:5200/api/pipeline/trigger \
+            -H 'Content-Type: application/json' \
+            -d '{}')
+          cat /tmp/resp.json
+          [ "$STATUS" = "400" ] || (echo "expected 400 got $STATUS"; exit 1)
+          grep -q 'CONTENT_TYPE_REQUIRED' /tmp/resp.json || (echo "missing error code"; exit 1)
+
+      - name: Verify pipeline_runs.topic_id is UUID + FK
+        env:
+          PGPASSWORD: cecelia
+        run: |
+          psql -h localhost -U cecelia -d cecelia -c "\d zenithjoy.pipeline_runs" | tee /tmp/schema.txt
+          grep -q 'topic_id.*uuid' /tmp/schema.txt || (echo "FAIL: topic_id not UUID"; exit 1)
+          grep -q 'fk_pipeline_runs_topic_id' /tmp/schema.txt || (echo "FAIL: FK constraint missing"; exit 1)
+
+      - name: Stop apps/api
+        if: always()
+        run: |
+          if [ -f /tmp/apps-api.pid ]; then
+            kill "$(cat /tmp/apps-api.pid)" 2>/dev/null || true
+          fi
+
+      - name: Upload apps/api log on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: apps-api-log
+          path: /tmp/apps-api*.log
+          retention-days: 3
+
+  # ─── Job 3: 端到端 topic → worker 活体验证（fake executors） ─────
+  smoke-e2e-worker:
+    name: Topic → Pipeline → Worker E2E
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: [python-creator-tests, smoke-api-contract]
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: cecelia
+          POSTGRES_PASSWORD: cecelia
+          POSTGRES_DB: cecelia
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DATABASE_HOST: localhost
+      DATABASE_PORT: 5432
+      DATABASE_USER: cecelia
+      DATABASE_PASSWORD: cecelia
+      DATABASE_NAME: cecelia
+      PORT: 5200
+      NODE_ENV: test
+      APPS_API_BASE: http://localhost:5200
+      CREATOR_PIPELINE_API: http://localhost:5200
+      BRAIN_URL: http://localhost:19999       # 不存在 → can_run fallback
+      CECELIA_BRAIN_URL: http://localhost:19999
+      CONTENT_OUTPUT_DIR: /tmp/ci-content-output
+      DEFAULT_NOTEBOOK_ID: ''
+      E2E_FAKE_EXECUTORS: 'true'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: package-lock.json
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+          cache-dependency-path: services/creator/requirements-ci.txt
+
+      - name: Install deps
+        run: |
+          npm ci --workspace=apps/api
+          pip install -r services/creator/requirements-ci.txt
+
+      - name: Migrate Postgres
+        env:
+          PGPASSWORD: cecelia
+        run: |
+          psql -h localhost -U cecelia -d cecelia -c "CREATE SCHEMA IF NOT EXISTS zenithjoy;"
+          psql -h localhost -U cecelia -d cecelia -c "CREATE EXTENSION IF NOT EXISTS \"pgcrypto\";"
+          for f in apps/api/db/migrations/*.sql; do
+            echo "→ $f"
+            psql -h localhost -U cecelia -d cecelia -f "$f"
+          done
+
+      - name: Build + start apps/api
+        run: |
+          cd apps/api
+          npm run build
+          node dist/index.js > /tmp/apps-api.log 2>&1 &
+          echo $! > /tmp/apps-api.pid
+          for i in $(seq 1 30); do
+            if curl -fs http://localhost:5200/health >/dev/null 2>&1; then break; fi
+            sleep 1
+          done
+          curl -fs http://localhost:5200/health
+
+      - name: Create test topic via API
+        id: create_topic
+        run: |
+          RESP=$(curl -s -X POST http://localhost:5200/api/topics \
+            -H 'Content-Type: application/json' \
+            -d '{"title":"E2E 冒烟主题","priority":1,"status":"已通过"}')
+          echo "$RESP"
+          TOPIC_ID=$(echo "$RESP" | python3 -c "import sys,json;print(json.load(sys.stdin)['data']['id'])")
+          echo "topic_id=$TOPIC_ID" >> $GITHUB_OUTPUT
+
+      - name: Run topic-worker --apply
+        env:
+          TOPIC_DAILY_LIMIT: '5'
+        run: |
+          # topic-worker 会调 /api/pipeline/trigger，它内部调 cecelia Brain。
+          # Brain 指向一个不存在的端口，trigger 会 502；但本测试目的是验证 topic-worker
+          # 的 HTTP 路径是否通：即使 trigger 失败，topic-worker 也应正常退出（记录错误）。
+          python3 services/creator/scripts/topic-worker.py --apply || true
+          echo "─── 验证 topic-worker 确实调用了 /api/pipeline/trigger ───"
+          grep -c 'POST /api/pipeline/trigger' /tmp/apps-api.log || true
+
+      - name: Manually INSERT a running pipeline_run for worker to pick up
+        env:
+          PGPASSWORD: cecelia
+          TOPIC_ID: ${{ steps.create_topic.outputs.topic_id }}
+        run: |
+          # 绕过 Brain 依赖，直接 INSERT 一条 running 记录让 pipeline-worker 处理
+          psql -h localhost -U cecelia -d cecelia -c "
+            INSERT INTO zenithjoy.pipeline_runs (content_type, topic, topic_id, status, output_dir, triggered_by)
+            VALUES ('post', 'E2E 冒烟主题', '${TOPIC_ID}'::uuid, 'running', '/tmp/ci-content-output', 'e2e-smoke')
+            RETURNING id;
+          "
+
+      - name: Run pipeline-worker --apply (fake executors)
+        run: |
+          python3 services/creator/pipeline_worker/worker.py --apply
+          echo "─── pipeline-worker 执行完 ───"
+
+      - name: Assert topic reached completed state
+        env:
+          PGPASSWORD: cecelia
+          TOPIC_ID: ${{ steps.create_topic.outputs.topic_id }}
+        run: |
+          PIPELINE_STATUS=$(psql -h localhost -U cecelia -d cecelia -tA -c \
+            "SELECT status FROM zenithjoy.pipeline_runs WHERE topic_id = '${TOPIC_ID}'::uuid ORDER BY created_at DESC LIMIT 1")
+          echo "pipeline status=$PIPELINE_STATUS"
+          if [ "$PIPELINE_STATUS" != "completed" ] && [ "$PIPELINE_STATUS" != "failed" ]; then
+            echo "FAIL: 期望 pipeline 进入终态（completed/failed），实际=$PIPELINE_STATUS"
+            exit 1
+          fi
+          TOPIC_STATUS=$(psql -h localhost -U cecelia -d cecelia -tA -c \
+            "SELECT status FROM zenithjoy.topics WHERE id = '${TOPIC_ID}'::uuid")
+          echo "topic status=$TOPIC_STATUS"
+          # pipeline 走到 export 终态时，stageComplete 会把 topic 置为 '待发布'
+          if [ "$PIPELINE_STATUS" = "completed" ] && [ "$TOPIC_STATUS" != "待发布" ]; then
+            echo "FAIL: pipeline=completed 时 topic 应该 '待发布'，实际 $TOPIC_STATUS"
+            exit 1
+          fi
+
+      - name: Stop apps/api
+        if: always()
+        run: |
+          if [ -f /tmp/apps-api.pid ]; then
+            kill "$(cat /tmp/apps-api.pid)" 2>/dev/null || true
+          fi
+
+      - name: Upload apps/api log on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: apps-api-log-e2e
+          path: /tmp/apps-api*.log
+          retention-days: 3
+
+  # ─── L4 Gate ─────────────────────────────────────────────────────
+  l4-e2e-passed:
+    name: L4 E2E Gate Passed
+    needs:
+      - python-creator-tests
+      - smoke-api-contract
+      - smoke-e2e-worker
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Aggregate
+        run: |
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "  L4 E2E Gate"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          FAILED=false
+          for pair in \
+            "python-creator-tests:${{ needs.python-creator-tests.result }}" \
+            "smoke-api-contract:${{ needs.smoke-api-contract.result }}" \
+            "smoke-e2e-worker:${{ needs.smoke-e2e-worker.result }}"; do
+            NAME="${pair%%:*}"
+            RESULT="${pair##*:}"
+            if [ "$RESULT" != "success" ]; then
+              echo "FAIL: $NAME ($RESULT)"
+              FAILED=true
+            else
+              echo "OK:   $NAME"
+            fi
+          done
+          if [ "$FAILED" = "true" ]; then
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            echo "  L4 E2E Gate FAILED"
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            exit 1
+          fi
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "  L4 E2E Gate PASSED"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"

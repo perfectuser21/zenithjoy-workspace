@@ -52,18 +52,22 @@ export class PipelinesWorkerController {
       if (isNaN(limit) || limit < 1) limit = 50;
       if (limit > 500) limit = 500;
 
+      // PR-e/5: topic_id 已是 UUID + FK，直接 JOIN。
+      // 额外回填 topic_title / topic_platforms 供 worker 作为 keyword 使用。
       const { rows } = await pool.query(
         `SELECT pr.id, pr.topic_id, pr.status,
                 pr.created_at, pr.updated_at,
                 pr.content_type, pr.topic, pr.output_dir, pr.triggered_by,
                 pr.output_manifest,
                 pr.cecelia_task_id,
-                t.title AS keyword, t.angle, t.status AS topic_status
+                t.title  AS topic_title,
+                t.angle  AS topic_angle,
+                t.status AS topic_status,
+                t.target_platforms AS topic_platforms,
+                -- worker 侧 keyword 优先序：topic.title > pr.topic > 'unknown'
+                COALESCE(t.title, pr.topic) AS keyword
          FROM zenithjoy.pipeline_runs pr
-         LEFT JOIN zenithjoy.topics t
-                ON pr.topic_id IS NOT NULL
-               AND pr.topic_id ~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
-               AND t.id = pr.topic_id::uuid
+         LEFT JOIN zenithjoy.topics t ON pr.topic_id = t.id
          WHERE pr.status = 'running'
          ORDER BY pr.created_at ASC
          LIMIT $1`,

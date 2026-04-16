@@ -107,8 +107,18 @@ def execute_copywriting(run_data: dict) -> dict:
     Returns:
         {success: bool, output_dir?: str, files?: list, error?: str}
     """
+    from ._fake import fake_output_dir, is_fake_mode
+
     keyword = run_data.get("keyword", "")
     previous_feedback = run_data.get("previous_feedback")
+
+    # PR-e/5 端到端 CI fake 模式：跳过 LLM 调用
+    if is_fake_mode():
+        out_dir = fake_output_dir(run_data, "copywriting")
+        fp = Path(out_dir) / "content.md"
+        fp.write_text(f"# {keyword}\n\n(fake copywriting output for e2e CI)\n", encoding="utf-8")
+        logger.info("[copywriting] fake mode: skipping LLM, stub at %s", fp)
+        return {"success": True, "output_dir": out_dir, "files": [str(fp)]}
 
     logger.info("[copywriting] 开始: %s", keyword)
 

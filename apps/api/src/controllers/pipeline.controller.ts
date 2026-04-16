@@ -3,29 +3,45 @@ import pool from '../db/connection';
 
 const CECELIA_BRAIN_URL = process.env.CECELIA_BRAIN_URL || 'http://localhost:5221';
 
+// PR-e/5: 统一响应契约 { success, data, error, timestamp }
+function ok<T>(data: T) {
+  return { success: true, data, error: null, timestamp: new Date().toISOString() };
+}
+
+function fail(code: string, message: string, details?: unknown) {
+  return {
+    success: false,
+    data: null,
+    error: { code, message, details: details ?? {} },
+    timestamp: new Date().toISOString(),
+  };
+}
+
 export class PipelineController {
   // POST /api/pipeline/trigger
   trigger = async (req: Request, res: Response): Promise<void> => {
     try {
       const { content_type, topic, topic_id, triggered_by = 'manual' } = req.body;
       if (!content_type) {
-        res.status(400).json({ error: 'content_type 为必填字段' });
+        res.status(400).json(fail('CONTENT_TYPE_REQUIRED', 'content_type 为必填字段'));
         return;
       }
 
       // 选题池 v1：拒绝无 topic_id 的请求；除非 X-Manual-Override: true
       const manualOverride = (req.headers['x-manual-override'] || '').toString().toLowerCase() === 'true';
       if (!topic_id && !manualOverride) {
-        res.status(400).json({
-          error: 'topic_id 为必填（选题池 v1 强校验）。如确需手动创建，请加 header X-Manual-Override: true',
-          code: 'TOPIC_ID_REQUIRED',
-        });
+        res.status(400).json(
+          fail(
+            'TOPIC_ID_REQUIRED',
+            'topic_id 为必填（选题池 v1 强校验）。如确需手动创建，请加 header X-Manual-Override: true'
+          )
+        );
         return;
       }
 
       const outputDir = process.env.CONTENT_OUTPUT_DIR || `${process.env.HOME}/content-output`;
 
-      // 在 zenithjoy DB 创建 pipeline_run 记录（topic_id 由 PR2 加列）
+      // 在 zenithjoy DB 创建 pipeline_run 记录
       const { rows } = await pool.query(
         `INSERT INTO zenithjoy.pipeline_runs (content_type, topic, topic_id, status, output_dir, triggered_by)
          VALUES ($1, $2, $3, 'pending', $4, $5) RETURNING *`,
@@ -58,21 +74,21 @@ export class PipelineController {
           `UPDATE zenithjoy.pipeline_runs SET status = 'failed', updated_at = NOW() WHERE id = $1`,
           [pipelineRun.id]
         );
-        res.status(502).json({ error: `cecelia Brain 调用失败: ${err}` });
+        res.status(502).json(fail('CECELIA_CALL_FAILED', `cecelia Brain 调用失败: ${err}`));
         return;
       }
 
-      const ceceliaTask = await ceceliaRes.json() as { id: string };
+      const ceceliaTask = (await ceceliaRes.json()) as { id: string };
       // 记录 cecelia task id
       await pool.query(
         `UPDATE zenithjoy.pipeline_runs SET cecelia_task_id = $1, status = 'running', updated_at = NOW() WHERE id = $2`,
         [ceceliaTask.id, pipelineRun.id]
       );
 
-      res.status(201).json({ ...pipelineRun, cecelia_task_id: ceceliaTask.id, status: 'running' });
+      res.status(201).json(ok({ ...pipelineRun, cecelia_task_id: ceceliaTask.id, status: 'running' }));
     } catch (err) {
       console.error('[pipeline] trigger error:', err);
-      res.status(500).json({ error: String(err) });
+      res.status(500).json(fail('INTERNAL_ERROR', String(err)));
     }
   };
 
