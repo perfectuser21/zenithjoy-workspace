@@ -25,7 +25,20 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from api import topics as topics_module  # noqa: E402
+# PR-b 起 topics 模块转发到 apps/api，不再保有 ensure_schema 的 SQLite 建表逻辑，
+# 本测试直接跑 migration SQL 建表（worker 属 PR-c scope，当前仍直连 SQLite）。
+MIGRATION_SQL = (ROOT / "migrations" / "001_create_topics.sql").read_text(encoding="utf-8")
+
+
+def _ensure_topics_schema(db: Path) -> None:
+    db.parent.mkdir(parents=True, exist_ok=True)
+    conn = sqlite3.connect(db)
+    try:
+        conn.executescript(MIGRATION_SQL)
+        conn.commit()
+    finally:
+        conn.close()
+
 
 # 加载 topic-worker（带连字符）
 WORKER_PATH = ROOT / "scripts" / "topic-worker.py"
@@ -43,7 +56,7 @@ def _now_iso() -> str:
 @pytest.fixture()
 def db_path(tmp_path):
     db = tmp_path / "creator.db"
-    topics_module.ensure_schema(db)
+    _ensure_topics_schema(db)
     return db
 
 

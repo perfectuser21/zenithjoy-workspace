@@ -651,9 +651,8 @@ def get_stats():
 # 初始化
 init_db()
 
-# 选题池路由（topics）
-topics_module.set_db_path(DB_PATH)
-topics_module.ensure_schema(DB_PATH)
+# 选题池路由（topics）— 从 PR-b 起不再读写 SQLite，路由层做 HTTP 转发到 apps/api。
+# set_db_path / ensure_schema 保留为 no-op shim，避免老调用方报错；可在后续 PR 清理。
 app.include_router(topics_module.router)
 
 
@@ -665,7 +664,7 @@ app.include_router(topics_module.router)
 # 真正派发：转发到 apps/api 的 POST /api/pipeline/trigger。
 # 头 X-Manual-Override: true 可豁免（主理人手动场景）。
 
-PIPELINE_API_BASE = os.environ.get("CREATOR_PIPELINE_API", "http://localhost:3001")
+PIPELINE_API_BASE = os.environ.get("CREATOR_PIPELINE_API", "http://localhost:5200")
 
 
 @app.post("/api/pipelines")
