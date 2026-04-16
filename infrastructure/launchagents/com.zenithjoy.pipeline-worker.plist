@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.zenithjoy.pipeline-worker</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Users/administrator/perfect21/zenithjoy/services/creator/.venv/bin/python3</string>
+        <string>/Users/administrator/perfect21/zenithjoy/services/creator/pipeline_worker/worker.py</string>
+        <string>--apply</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>/Users/administrator/perfect21/zenithjoy</string>
+
+    <key>StartInterval</key>
+    <integer>60</integer>
+
+    <key>KeepAlive</key>
+    <false/>
+
+    <key>StandardOutPath</key>
+    <string>/tmp/pipeline-worker.log</string>
+
+    <key>StandardErrorPath</key>
+    <string>/tmp/pipeline-worker.log</string>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>CREATOR_API_BASE</key>
+        <string>http://localhost:8899</string>
+        <key>BRAIN_URL</key>
+        <string>http://localhost:5221</string>
+        <key>NAS_USER</key>
+        <string>徐啸</string>
+        <key>NAS_HOST</key>
+        <string>100.110.241.76</string>
+        <key>NAS_BASE</key>
+        <string>/volume1/workspace/vault/zenithjoy-creator/content</string>
+        <key>PATH</key>
+        <string>/usr/local/bin:/usr/bin:/bin:/opt/homebrew/bin</string>
+        <key>LANG</key>
+        <string>zh_CN.UTF-8</string>
+        <key>TZ</key>
+        <string>Asia/Shanghai</string>
+    </dict>
+</dict>
+</plist>
