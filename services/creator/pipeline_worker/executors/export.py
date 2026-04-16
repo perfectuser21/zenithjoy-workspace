@@ -48,9 +48,34 @@ def execute_export(run_data: dict) -> dict:
     Returns:
         {success: bool, manifest_path?: str, card_count: int, export_path?: str, error?: str}
     """
+    from ._fake import fake_output_dir, is_fake_mode
+
     keyword = run_data.get("keyword", "")
     content_type = run_data.get("content_type", "solo-company-case")
     pipeline_id = run_data.get("pipeline_id")
+
+    # PR-e/5 端到端 CI fake 模式：跳过 rsync 到 NAS，只产一个本地 manifest
+    if is_fake_mode():
+        import json as _json
+
+        out_dir = fake_output_dir(run_data, "export")
+        manifest = {
+            "keyword": keyword,
+            "content_type": content_type,
+            "pipeline_id": pipeline_id,
+            "fake": True,
+            "cards": [],
+        }
+        manifest_path = Path(out_dir) / "manifest.json"
+        manifest_path.write_text(_json.dumps(manifest, ensure_ascii=False), encoding="utf-8")
+        logger.info("[export] fake mode: skipping NAS upload, manifest=%s", manifest_path)
+        return {
+            "success": True,
+            "manifest_path": str(manifest_path),
+            "card_count": 0,
+            "export_path": out_dir,
+            "output_dir": out_dir,
+        }
 
     logger.info("[export] 开始: %s", keyword)
 

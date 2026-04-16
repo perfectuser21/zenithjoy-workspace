@@ -34,9 +34,9 @@ fi
 echo "[pipeline-worker] 安装依赖..."
 "${VENV_DIR}/bin/pip" install -q -r services/creator/requirements.txt 2>/dev/null || true
 
-# 3. 运行 migration
-echo "[pipeline-worker] 运行 migrations..."
-"${VENV_DIR}/bin/python3" services/creator/scripts/apply-migrations.py 2>/dev/null || true
+# 3. 运行 migration — PR-e/5 起 SQLite 已冻结，apps/api 管理 Postgres migrations
+#    保留 skip 作为占位，便于以后在 worker 启动前加启动探针（ping apps/api）。
+echo "[pipeline-worker] SQLite migrations 跳过（已 cutover 到 Postgres）"
 
 # 4. 部署 plist
 echo "[pipeline-worker] 部署 LaunchAgent: ${PLIST_DST}"

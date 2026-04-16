@@ -41,8 +41,21 @@ def execute_image_review(run_data: dict) -> dict:
     Returns:
         {success: bool, review_passed: bool, card_count: int, issues: list, quality_score: int}
     """
+    from ._fake import is_fake_mode
+
     keyword = run_data.get("keyword", "")
     max_images = run_data.get("image_count", 9)
+
+    # PR-e/5 端到端 CI fake 模式：自动判定通过
+    if is_fake_mode():
+        logger.info("[image-review] fake mode: skipping image checks")
+        return {
+            "success": True,
+            "review_passed": True,
+            "card_count": 0,
+            "issues": [],
+            "quality_score": 100,
+        }
 
     logger.info("[image-review] 开始: %s", keyword)
 

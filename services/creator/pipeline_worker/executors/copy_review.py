@@ -54,7 +54,15 @@ def execute_copy_review(run_data: dict) -> dict:
     Returns:
         {success: bool, review_passed: bool, issues: list, quality_score: int}
     """
+    from ._fake import is_fake_mode
+
     keyword = run_data.get("keyword", "")
+
+    # PR-e/5 端到端 CI fake 模式：自动判定通过
+    if is_fake_mode():
+        logger.info("[copy-review] fake mode: skipping review checks")
+        return {"success": True, "review_passed": True, "issues": [], "quality_score": 100}
+
     logger.info("[copy-review] 开始: %s", keyword)
 
     out_dir = _find_output_dir(keyword)
