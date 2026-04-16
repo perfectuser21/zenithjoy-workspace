@@ -46,7 +46,7 @@ export class PipelineController {
             topic,
             output_dir: outputDir,
             zenithjoy_pipeline_run_id: pipelineRun.id,
-            callback_url: `${process.env.ZENITHJOY_API_URL || 'http://localhost:3001'}/api/pipeline/callback`,
+            callback_url: `${process.env.ZENITHJOY_API_URL || 'http://localhost:5200'}/api/pipeline/callback`,
           },
         }),
       });

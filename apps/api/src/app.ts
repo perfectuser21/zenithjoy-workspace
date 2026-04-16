@@ -7,6 +7,9 @@ import aiVideoRouter from './routes/ai-video';
 import snapshotsRouter from './routes/snapshots';
 import douyinAuthRouter from './routes/douyin-auth';
 import pipelineRouter from './routes/pipeline';
+import topicsRouter from './routes/topics';
+import pacingConfigRouter from './routes/pacing-config';
+import pipelinesWorkerRouter from './routes/pipelines-worker';
 import { errorHandler, notFoundHandler } from './middleware/error';
 
 const app = express();
@@ -28,6 +31,9 @@ app.use('/api/ai-video', aiVideoRouter);
 app.use('/api/snapshots', snapshotsRouter);
 app.use('/api', douyinAuthRouter);
 app.use('/api/pipeline', pipelineRouter);
+app.use('/api/topics', topicsRouter);
+app.use('/api/pacing-config', pacingConfigRouter);
+app.use('/api/pipelines', pipelinesWorkerRouter);
 
 // Error handling
 app.use(notFoundHandler);

@@ -193,6 +193,30 @@ tests:
     product: 新媒体运营
     note: "Pipeline 触发/回调/统计路由单元测试（mock DB + fetch）+ cecelia payload contract（防 task_type 字段变更）"
 
+  - id: api-topics-route
+    path: apps/api/tests/topics.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 新媒体运营
+    note: "Topics CRUD 路由单元测试（mock DB + internal-auth 鉴权）— 彻底重构 PR-a"
+
+  - id: api-pacing-config-route
+    path: apps/api/tests/pacing-config.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 新媒体运营
+    note: "Pacing Config GET/PATCH 路由单元测试（mock DB）— 彻底重构 PR-a"
+
+  - id: api-pipelines-worker-route
+    path: apps/api/tests/pipelines-worker.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 新媒体运营
+    note: "Pipelines Worker running/stage-complete/fail 路由单元测试（mock DB + 事务）— 彻底重构 PR-a"
+
   - id: api-publish-route
     path: apps/api/tests/publish.test.ts
     type: unit
