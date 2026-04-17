@@ -127,6 +127,7 @@ export class TopicsController {
         status = '待研究',
         target_platforms,
         scheduled_date = null,
+        notebook_id = null,
       } = req.body || {};
 
       if (!title || typeof title !== 'string' || title.trim().length === 0) {
@@ -145,6 +146,15 @@ export class TopicsController {
         res.status(400).json(err('INVALID_PRIORITY', 'priority 必须是 0-999 的整数'));
         return;
       }
+      // notebook_id：可选、字符串、长度 <=100
+      let notebookIdClean: string | null = null;
+      if (notebook_id !== null && notebook_id !== undefined && notebook_id !== '') {
+        if (typeof notebook_id !== 'string' || notebook_id.length > 100) {
+          res.status(400).json(err('INVALID_NOTEBOOK_ID', 'notebook_id 必须是长度 ≤100 的字符串或 null'));
+          return;
+        }
+        notebookIdClean = notebook_id.trim();
+      }
 
       const platforms =
         target_platforms === undefined || target_platforms === null
@@ -154,14 +164,15 @@ export class TopicsController {
             : null;
 
       const { rows } = await pool.query(
-        `INSERT INTO zenithjoy.topics (title, angle, priority, status, target_platforms, scheduled_date)
+        `INSERT INTO zenithjoy.topics (title, angle, priority, status, target_platforms, scheduled_date, notebook_id)
          VALUES (
            $1, $2, $3, $4,
            COALESCE($5::jsonb, '["xiaohongshu","douyin","kuaishou","shipinhao","x","toutiao","weibo","wechat"]'::jsonb),
-           $6::date
+           $6::date,
+           $7
          )
          RETURNING *`,
-        [title.trim(), angle, priority, status, platforms, scheduled_date]
+        [title.trim(), angle, priority, status, platforms, scheduled_date, notebookIdClean]
       );
 
       res.status(201).json(ok(rows[0]));
@@ -235,6 +246,18 @@ export class TopicsController {
       if (body.published_at !== undefined) {
         params.push(body.published_at);
         sets.push(`published_at = $${params.length}::timestamptz`);
+      }
+      if (body.notebook_id !== undefined) {
+        if (body.notebook_id !== null && body.notebook_id !== '') {
+          if (typeof body.notebook_id !== 'string' || body.notebook_id.length > 100) {
+            res.status(400).json(err('INVALID_NOTEBOOK_ID', 'notebook_id 必须是长度 ≤100 的字符串或 null'));
+            return;
+          }
+          params.push(body.notebook_id.trim());
+        } else {
+          params.push(null);
+        }
+        sets.push(`notebook_id = $${params.length}`);
       }
 
       if (!sets.length) {

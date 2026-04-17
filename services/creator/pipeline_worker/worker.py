@@ -98,12 +98,16 @@ def process_pipeline(
         return True
 
     # 构建执行上下文（executors 只吃 run_data dict，不感知 DB/HTTP）
+    # 阶段 A+：notebook_id 来自 apps/api /running 端点（COALESCE pr.notebook_id, t.notebook_id）。
+    # 若 API 未下发，研究 executor 内部再 fallback env CREATOR_DEFAULT_NOTEBOOK_ID（兼容老 DEFAULT_NOTEBOOK_ID）。
     run_data = {
         "keyword": keyword,
         "pipeline_id": pid,
         "topic_id": topic_id,
         "content_type": pipeline.get("content_type") or "solo-company-case",
-        "notebook_id": os.environ.get("DEFAULT_NOTEBOOK_ID"),
+        "notebook_id": pipeline.get("notebook_id")
+        or os.environ.get("CREATOR_DEFAULT_NOTEBOOK_ID")
+        or os.environ.get("DEFAULT_NOTEBOOK_ID"),
     }
     if pipeline.get("output_dir"):
         run_data["output_dir"] = pipeline["output_dir"]

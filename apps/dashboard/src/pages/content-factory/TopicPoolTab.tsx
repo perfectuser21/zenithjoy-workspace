@@ -152,6 +152,7 @@ function TopicForm({ initial, onSubmit, onCancel, submitting }: TopicFormProps) 
   const [scheduledDate, setScheduledDate] = useState(
     initial?.scheduled_date || ''
   )
+  const [notebookId, setNotebookId] = useState(initial?.notebook_id || '')
   const [err, setErr] = useState('')
 
   const handleSubmit = async () => {
@@ -171,6 +172,11 @@ function TopicForm({ initial, onSubmit, onCancel, submitting }: TopicFormProps) 
       setErr('至少选择 1 个目标平台')
       return
     }
+    const nbTrim = notebookId.trim()
+    if (nbTrim && nbTrim.length > 100) {
+      setErr('NotebookLM ID 长度不能超过 100')
+      return
+    }
     setErr('')
     try {
       await onSubmit({
@@ -180,6 +186,7 @@ function TopicForm({ initial, onSubmit, onCancel, submitting }: TopicFormProps) 
         status,
         target_platforms: platforms,
         scheduled_date: scheduledDate || null,
+        notebook_id: nbTrim || null,
       })
     } catch (e) {
       // 外层已有 flash 提示，这里补一层本地错误避免吞异常
@@ -268,6 +275,23 @@ function TopicForm({ initial, onSubmit, onCancel, submitting }: TopicFormProps) 
             onChange={(e) => setScheduledDate(e.target.value)}
             className="px-3 py-2 border border-gray-200 rounded-lg text-sm"
           />
+        </div>
+
+        <div className="col-span-2">
+          <label className="block text-xs font-medium text-gray-600 mb-1">
+            NotebookLM ID <span className="text-gray-400 font-normal">(可选)</span>
+          </label>
+          <input
+            type="text"
+            value={notebookId}
+            onChange={(e) => setNotebookId(e.target.value)}
+            placeholder="留空使用默认 notebook（env CREATOR_DEFAULT_NOTEBOOK_ID）"
+            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm font-mono focus:outline-none focus:border-indigo-400"
+            aria-label="NotebookLM ID"
+          />
+          <p className="text-xs text-gray-400 mt-1">
+            research 阶段调研用。手填 UUID，留空则 fallback 到全局默认。
+          </p>
         </div>
 
         <div className="col-span-2">
@@ -376,6 +400,12 @@ function TopicRow({
       <td className="px-3 py-2 text-xs text-gray-500">
         {topic.target_platforms.slice(0, 3).join('/')}
         {topic.target_platforms.length > 3 && ` +${topic.target_platforms.length - 3}`}
+      </td>
+      <td
+        className="px-3 py-2 text-xs text-gray-500 font-mono w-24"
+        title={topic.notebook_id || '未配置（将 fallback 到默认 notebook）'}
+      >
+        {topic.notebook_id ? topic.notebook_id.slice(0, 8) : '—'}
       </td>
       <td className="px-3 py-2 text-right whitespace-nowrap">
         <button
@@ -648,6 +678,7 @@ export default function TopicPoolTab() {
                 <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">状态</th>
                 <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">计划</th>
                 <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">平台</th>
+                <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Notebook</th>
                 <th className="px-3 py-2 text-right text-xs font-medium text-gray-500">操作</th>
               </tr>
             </thead>

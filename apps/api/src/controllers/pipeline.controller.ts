@@ -41,11 +41,26 @@ export class PipelineController {
 
       const outputDir = process.env.CONTENT_OUTPUT_DIR || `${process.env.HOME}/content-output`;
 
+      // 阶段 A+：从 topic 复制 notebook_id 到 pipeline_runs，方便 pipeline-worker 直接读
+      let notebookId: string | null = null;
+      if (topic_id) {
+        try {
+          const { rows: topicRows } = await pool.query<{ notebook_id: string | null }>(
+            'SELECT notebook_id FROM zenithjoy.topics WHERE id = $1 AND deleted_at IS NULL',
+            [topic_id]
+          );
+          notebookId = topicRows[0]?.notebook_id ?? null;
+        } catch (lookupErr) {
+          // 查询失败不阻断 pipeline 创建（worker 会 fallback 到 env），仅记录
+          console.warn('[pipeline] trigger 查 topic.notebook_id 失败（忽略，继续）:', lookupErr);
+        }
+      }
+
       // 在 zenithjoy DB 创建 pipeline_run 记录
       const { rows } = await pool.query(
-        `INSERT INTO zenithjoy.pipeline_runs (content_type, topic, topic_id, status, output_dir, triggered_by)
-         VALUES ($1, $2, $3, 'pending', $4, $5) RETURNING *`,
-        [content_type, topic || null, topic_id || null, outputDir, triggered_by]
+        `INSERT INTO zenithjoy.pipeline_runs (content_type, topic, topic_id, status, output_dir, triggered_by, notebook_id)
+         VALUES ($1, $2, $3, 'pending', $4, $5, $6) RETURNING *`,
+        [content_type, topic || null, topic_id || null, outputDir, triggered_by, notebookId]
       );
       const pipelineRun = rows[0];
 

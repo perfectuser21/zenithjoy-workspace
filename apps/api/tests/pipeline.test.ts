@@ -33,8 +33,9 @@ describe('Pipeline API', () => {
   describe('POST /api/pipeline/trigger', () => {
     it('should create pipeline run and call cecelia Brain', async () => {
       mockQuery
-        .mockResolvedValueOnce({ rows: [PIPELINE_RUN] })       // INSERT pipeline_run
-        .mockResolvedValueOnce({ rows: [] });                   // UPDATE cecelia_task_id
+        .mockResolvedValueOnce({ rows: [{ notebook_id: null }] }) // SELECT topic.notebook_id
+        .mockResolvedValueOnce({ rows: [PIPELINE_RUN] })          // INSERT pipeline_run
+        .mockResolvedValueOnce({ rows: [] });                      // UPDATE cecelia_task_id
 
       mockFetch.mockResolvedValueOnce({
         ok: true,
@@ -52,6 +53,31 @@ describe('Pipeline API', () => {
       expect(response.body.data.status).toBe('running');
       expect(response.body.error).toBeNull();
       expect(mockFetch).toHaveBeenCalledTimes(1);
+    });
+
+    it('should copy notebook_id from topic into pipeline_runs（阶段 A+）', async () => {
+      const NB = '1d928181-4462-47d4-b4c0-89d3696344ab';
+      mockQuery
+        .mockResolvedValueOnce({ rows: [{ notebook_id: NB }] })   // SELECT topic.notebook_id
+        .mockResolvedValueOnce({ rows: [{ ...PIPELINE_RUN, notebook_id: NB }] }) // INSERT
+        .mockResolvedValueOnce({ rows: [] });                       // UPDATE cecelia_task_id
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ id: 'task-nb' }),
+      });
+
+      const response = await request(app)
+        .post('/api/pipeline/trigger')
+        .send({ content_type: 'tech_insight', topic: '龙虾', topic_id: 'topic-lb' });
+
+      expect(response.status).toBe(201);
+      // INSERT 调用是第 2 次，最后一个参数应为 notebook_id
+      const insertCall = mockQuery.mock.calls[1];
+      const sql = insertCall[0] as string;
+      const args = insertCall[1] as unknown[];
+      expect(sql).toContain('notebook_id');
+      expect(args[args.length - 1]).toBe(NB);
     });
 
     it('should return 400 when content_type is missing', async () => {
@@ -78,6 +104,7 @@ describe('Pipeline API', () => {
     });
 
     it('should accept request when X-Manual-Override is true (no topic_id)', async () => {
+      // 无 topic_id → 跳过 SELECT notebook_id，直接 INSERT + UPDATE
       mockQuery
         .mockResolvedValueOnce({ rows: [PIPELINE_RUN] })
         .mockResolvedValueOnce({ rows: [] });
@@ -93,8 +120,9 @@ describe('Pipeline API', () => {
 
     it('should return 502 when cecelia Brain is unreachable', async () => {
       mockQuery
-        .mockResolvedValueOnce({ rows: [PIPELINE_RUN] })   // INSERT
-        .mockResolvedValueOnce({ rows: [] });               // UPDATE failed status
+        .mockResolvedValueOnce({ rows: [{ notebook_id: null }] }) // SELECT topic.notebook_id
+        .mockResolvedValueOnce({ rows: [PIPELINE_RUN] })           // INSERT
+        .mockResolvedValueOnce({ rows: [] });                       // UPDATE failed status
 
       mockFetch.mockResolvedValueOnce({
         ok: false,
@@ -112,7 +140,10 @@ describe('Pipeline API', () => {
     });
 
     it('should return 500 on DB error', async () => {
-      mockQuery.mockRejectedValueOnce(new Error('DB connection failed'));
+      // SELECT notebook_id 失败被 catch（走 warn），INSERT 失败才冒泡到 500
+      mockQuery
+        .mockResolvedValueOnce({ rows: [{ notebook_id: null }] }) // SELECT OK
+        .mockRejectedValueOnce(new Error('DB connection failed')); // INSERT 失败
 
       const response = await request(app)
         .post('/api/pipeline/trigger')
@@ -302,6 +333,7 @@ describe('Pipeline API', () => {
   describe('cecelia payload contract', () => {
     it('task_type must be content-pipeline (hyphen, not underscore)', async () => {
       mockQuery
+        .mockResolvedValueOnce({ rows: [{ notebook_id: null }] }) // SELECT topic.notebook_id
         .mockResolvedValueOnce({ rows: [PIPELINE_RUN] })
         .mockResolvedValueOnce({ rows: [] });
       mockFetch.mockResolvedValueOnce({ ok: true, json: async () => ({ id: 'task-abc' }) });
@@ -318,6 +350,7 @@ describe('Pipeline API', () => {
 
     it('payload must include zenithjoy_pipeline_run_id', async () => {
       mockQuery
+        .mockResolvedValueOnce({ rows: [{ notebook_id: null }] }) // SELECT topic.notebook_id
         .mockResolvedValueOnce({ rows: [PIPELINE_RUN] })
         .mockResolvedValueOnce({ rows: [] });
       mockFetch.mockResolvedValueOnce({ ok: true, json: async () => ({ id: 'task-abc' }) });
@@ -333,6 +366,7 @@ describe('Pipeline API', () => {
 
     it('payload.callback_url must point to /api/pipeline/callback', async () => {
       mockQuery
+        .mockResolvedValueOnce({ rows: [{ notebook_id: null }] }) // SELECT topic.notebook_id
         .mockResolvedValueOnce({ rows: [PIPELINE_RUN] })
         .mockResolvedValueOnce({ rows: [] });
       mockFetch.mockResolvedValueOnce({ ok: true, json: async () => ({ id: 'task-abc' }) });
@@ -348,6 +382,7 @@ describe('Pipeline API', () => {
 
     it('payload must forward content_type and topic correctly', async () => {
       mockQuery
+        .mockResolvedValueOnce({ rows: [{ notebook_id: null }] }) // SELECT topic.notebook_id
         .mockResolvedValueOnce({ rows: [PIPELINE_RUN] })
         .mockResolvedValueOnce({ rows: [] });
       mockFetch.mockResolvedValueOnce({ ok: true, json: async () => ({ id: 'task-abc' }) });

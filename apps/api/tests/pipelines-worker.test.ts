@@ -59,6 +59,28 @@ describe('Pipelines Worker API', () => {
       expect(res.body.data.total).toBe(0);
     });
 
+    it('SELECT 带 notebook_id 字段（阶段 A+）', async () => {
+      const NB = '1d928181-4462-47d4-b4c0-89d3696344ab';
+      mockQuery.mockResolvedValueOnce({
+        rows: [
+          {
+            id: PIPELINE_ID,
+            topic_id: TOPIC_ID,
+            status: 'running',
+            keyword: '龙虾',
+            notebook_id: NB,
+          },
+        ],
+      });
+      const res = await request(app).get('/api/pipelines/running');
+      expect(res.status).toBe(200);
+      expect(res.body.data.items[0].notebook_id).toBe(NB);
+      // SQL 必须 SELECT notebook_id 且做 COALESCE(pr.notebook_id, t.notebook_id)
+      const sql = mockQuery.mock.calls[0][0] as string;
+      expect(sql).toContain('notebook_id');
+      expect(sql).toMatch(/COALESCE\(\s*pr\.notebook_id\s*,\s*t\.notebook_id\s*\)/);
+    });
+
     it('returns 500 on DB error', async () => {
       mockQuery.mockRejectedValueOnce(new Error('DB down'));
       const res = await request(app).get('/api/pipelines/running');

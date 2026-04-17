@@ -147,6 +147,75 @@ describe('Topics API', () => {
     });
   });
 
+  describe('notebook_id CRUD（阶段 A+）', () => {
+    const NB = '1d928181-4462-47d4-b4c0-89d3696344ab';
+
+    it('POST 支持传 notebook_id 并透传给 INSERT', async () => {
+      mockQuery.mockResolvedValueOnce({
+        rows: [{ ...TOPIC_ROW, notebook_id: NB }],
+      });
+      const res = await request(app)
+        .post('/api/topics')
+        .send({ title: '龙虾', notebook_id: NB });
+      expect(res.status).toBe(201);
+      expect(res.body.data.notebook_id).toBe(NB);
+      const args = mockQuery.mock.calls[0][1] as unknown[];
+      // INSERT 参数末尾必须是 notebookIdClean
+      expect(args[args.length - 1]).toBe(NB);
+    });
+
+    it('POST 不传 notebook_id 时默认为 null', async () => {
+      mockQuery.mockResolvedValueOnce({
+        rows: [{ ...TOPIC_ROW, notebook_id: null }],
+      });
+      const res = await request(app).post('/api/topics').send({ title: '龙虾' });
+      expect(res.status).toBe(201);
+      const args = mockQuery.mock.calls[0][1] as unknown[];
+      expect(args[args.length - 1]).toBeNull();
+    });
+
+    it('POST 传超长 notebook_id 返回 400', async () => {
+      const res = await request(app)
+        .post('/api/topics')
+        .send({ title: '龙虾', notebook_id: 'x'.repeat(101) });
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('INVALID_NOTEBOOK_ID');
+    });
+
+    it('PATCH notebook_id 写入 SQL SET', async () => {
+      mockQuery.mockResolvedValueOnce({
+        rows: [{ ...TOPIC_ROW, notebook_id: NB }],
+      });
+      const res = await request(app)
+        .patch(`/api/topics/${UUID}`)
+        .send({ notebook_id: NB });
+      expect(res.status).toBe(200);
+      expect(res.body.data.notebook_id).toBe(NB);
+      const sql = mockQuery.mock.calls[0][0] as string;
+      expect(sql).toContain('notebook_id = $');
+    });
+
+    it('PATCH notebook_id=null 清空', async () => {
+      mockQuery.mockResolvedValueOnce({
+        rows: [{ ...TOPIC_ROW, notebook_id: null }],
+      });
+      const res = await request(app)
+        .patch(`/api/topics/${UUID}`)
+        .send({ notebook_id: null });
+      expect(res.status).toBe(200);
+      const args = mockQuery.mock.calls[0][1] as unknown[];
+      expect(args[0]).toBeNull();
+    });
+
+    it('PATCH 非字符串 notebook_id 返回 400', async () => {
+      const res = await request(app)
+        .patch(`/api/topics/${UUID}`)
+        .send({ notebook_id: 12345 });
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('INVALID_NOTEBOOK_ID');
+    });
+  });
+
   describe('DELETE /api/topics/:id', () => {
     it('soft-deletes by default', async () => {
       mockQuery.mockResolvedValueOnce({ rows: [{ id: UUID }] });
