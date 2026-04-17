@@ -92,8 +92,21 @@ def execute_research(run_data: dict) -> dict:
 
     logger.info("[research] 开始: %s (notebook=%s)", keyword, notebook_id or "无")
 
+    # 阶段 A+：若 run_data 未传 notebook_id，fallback env（兼容旧 DEFAULT_NOTEBOOK_ID）
     if not notebook_id:
-        return {"success": False, "error": "notebook_id 未配置"}
+        notebook_id = (
+            os.environ.get("CREATOR_DEFAULT_NOTEBOOK_ID")
+            or os.environ.get("DEFAULT_NOTEBOOK_ID")
+        )
+        if notebook_id:
+            logger.warning(
+                "[research] topic 未配 notebook_id，fallback env: %s", notebook_id
+            )
+    if not notebook_id:
+        return {
+            "success": False,
+            "error": "notebook_id 未配置（topic 和 env 都没有）",
+        }
 
     today_str = date.today().isoformat()
     out_dir = Path(OUTPUT_BASE) / "research" / f"{content_type}-{_slug(keyword)}-{today_str}"

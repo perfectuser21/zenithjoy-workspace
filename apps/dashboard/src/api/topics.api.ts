@@ -29,6 +29,7 @@ export interface Topic {
   target_platforms: string[]
   scheduled_date?: string | null
   pipeline_id?: string | null
+  notebook_id?: string | null
   created_at: string
   updated_at: string
   published_at?: string | null
@@ -53,6 +54,7 @@ export interface CreateTopicInput {
   status?: TopicStatus
   target_platforms?: string[]
   scheduled_date?: string | null
+  notebook_id?: string | null
 }
 
 export interface UpdateTopicInput {
@@ -62,6 +64,7 @@ export interface UpdateTopicInput {
   status?: TopicStatus
   target_platforms?: string[]
   scheduled_date?: string | null
+  notebook_id?: string | null
 }
 
 interface ApiEnvelope<T> {

@@ -43,6 +43,8 @@
         <string>PLACEHOLDER_TOKEN</string>
         <key>BRAIN_URL</key>
         <string>http://localhost:5221</string>
+        <key>CREATOR_DEFAULT_NOTEBOOK_ID</key>
+        <string>1d928181-4462-47d4-b4c0-89d3696344ab</string>
         <key>NAS_USER</key>
         <string>徐啸</string>
         <key>NAS_HOST</key>

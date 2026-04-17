@@ -54,6 +54,7 @@ export class PipelinesWorkerController {
 
       // PR-e/5: topic_id 已是 UUID + FK，直接 JOIN。
       // 额外回填 topic_title / topic_platforms 供 worker 作为 keyword 使用。
+      // 阶段 A+: 返回 notebook_id（pr 上的快照，为空则 fallback 到 topic.notebook_id）。
       const { rows } = await pool.query(
         `SELECT pr.id, pr.topic_id, pr.status,
                 pr.created_at, pr.updated_at,
@@ -65,7 +66,9 @@ export class PipelinesWorkerController {
                 t.status AS topic_status,
                 t.target_platforms AS topic_platforms,
                 -- worker 侧 keyword 优先序：topic.title > pr.topic > 'unknown'
-                COALESCE(t.title, pr.topic) AS keyword
+                COALESCE(t.title, pr.topic) AS keyword,
+                -- notebook_id 优先序：pr.notebook_id（trigger 时快照）> t.notebook_id（当前值）
+                COALESCE(pr.notebook_id, t.notebook_id) AS notebook_id
          FROM zenithjoy.pipeline_runs pr
          LEFT JOIN zenithjoy.topics t ON pr.topic_id = t.id
          WHERE pr.status = 'running'
