@@ -89,20 +89,19 @@ def execute_generate(run_data: dict) -> dict:
     if GEN_V6_SCRIPT.exists():
         person_data_path = out_dir / "person-data.json"
 
-        # 如果 person-data.json 不存在，从 findings 用 LLM 生成合规 JSON
-        # （旧版直接塞整段 keyword → 头像圈只显前 2 字、卡片底部被裁切）
-        if not person_data_path.exists():
-            findings = _load_findings(keyword)
-            if findings:
-                from ..person_data_builder import build_person_data
-                person_data = build_person_data(keyword, findings)
-                person_data_path.write_text(
-                    json.dumps(person_data, ensure_ascii=False, indent=2), encoding="utf-8",
-                )
-                logger.info(
-                    "[generate] person-data 已生成: name=%s handle=%s",
-                    person_data.get("name"), person_data.get("handle"),
-                )
+        # 总是用当前 findings 重建 person-data.json。
+        # Why: 复用当天 output_dir 时，上次跑剩的文件会服老数据给 V6 渲染。
+        findings = _load_findings(keyword)
+        if findings:
+            from ..person_data_builder import build_person_data
+            person_data = build_person_data(keyword, findings)
+            person_data_path.write_text(
+                json.dumps(person_data, ensure_ascii=False, indent=2), encoding="utf-8",
+            )
+            logger.info(
+                "[generate] person-data 已生成: name=%s handle=%s",
+                person_data.get("name"), person_data.get("handle"),
+            )
 
         if person_data_path.exists():
             keyword_slug = _slug(keyword)
