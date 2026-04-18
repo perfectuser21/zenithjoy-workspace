@@ -7,6 +7,7 @@ import aiVideoRouter from './routes/ai-video';
 import snapshotsRouter from './routes/snapshots';
 import douyinAuthRouter from './routes/douyin-auth';
 import pipelineRouter from './routes/pipeline';
+import contentImagesRouter from './routes/content-images';
 import topicsRouter from './routes/topics';
 import pacingConfigRouter from './routes/pacing-config';
 import pipelinesWorkerRouter from './routes/pipelines-worker';
@@ -31,6 +32,8 @@ app.use('/api/ai-video', aiVideoRouter);
 app.use('/api/snapshots', snapshotsRouter);
 app.use('/api', douyinAuthRouter);
 app.use('/api/pipeline', pipelineRouter);
+// content-images：公开访问（图片由 <img> 直接加载，不能加鉴权中间件）
+app.use('/api/content-images', contentImagesRouter);
 app.use('/api/topics', topicsRouter);
 app.use('/api/pacing-config', pacingConfigRouter);
 app.use('/api/pipelines', pipelinesWorkerRouter);

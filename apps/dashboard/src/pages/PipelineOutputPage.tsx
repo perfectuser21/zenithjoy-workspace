@@ -106,6 +106,7 @@ function renderMarkdown(text: string): string {
 
 // ─── API ──────────────────────────────────────────────────────
 
+// 历史兼容：把老的 cecelia 直链（http://IP:9998/images/xxx）改写成当前 API 代理
 const IMG_PROXY = '/content-images/'
 const IMG_ORIGIN = 'http://38.23.47.81:9998/images/'
 
@@ -116,7 +117,9 @@ function rewriteImageUrl(url: string): string {
 async function fetchOutput(id: string): Promise<PipelineOutput | null> {
   const res = await fetch(`/api/pipeline/${id}/output`)
   if (!res.ok) return null
-  const data: PipelineOutput | null = (await res.json()).output || null
+  const body = await res.json()
+  // 兼容两种结构：{ output: {...} }（当前）或直接平铺
+  const data: PipelineOutput | null = body?.output ?? (body?.pipeline_id ? body : null)
   if (data?.image_urls) {
     data.image_urls = data.image_urls.map(img => ({ ...img, url: rewriteImageUrl(img.url) }))
   }
@@ -323,6 +326,19 @@ function GenerationTab({ output, stages, isTimingReliable, onImageOpen, pipeline
   const cardImages = output?.image_urls?.filter(u => u.type === 'card') || []
   const hasImages = (output?.image_urls?.length || 0) > 0
   const allUrls = output?.image_urls?.map(u => u.url) || []
+
+  // pipeline 还在跑或没产出任何内容：显示全局 empty state，不显示空面板
+  const isEmpty =
+    !hasImages && !output?.article_text && !output?.cards_text
+  if (isEmpty) {
+    return (
+      <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 14, padding: '60px 20px', display: 'flex', flexDirection: 'column', alignItems: 'center', color: 'rgba(255,255,255,0.4)' }}>
+        <Loader2 size={28} style={{ animation: 'spin 1.5s linear infinite', marginBottom: 12, opacity: 0.6 }} />
+        <div style={{ fontSize: 14, fontWeight: 500, marginBottom: 4 }}>pipeline 还在跑，请稍后刷新</div>
+        <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.25)' }}>状态：{output?.status || '未知'}</div>
+      </div>
+    )
+  }
 
   return (
     <div style={{ display: 'flex', gap: 40, alignItems: 'flex-start' }}>
