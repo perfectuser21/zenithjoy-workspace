@@ -80,7 +80,9 @@ def _call_llm(prompt: str, max_tokens: int = 8192, timeout: int = 180) -> str | 
     try:
         with urllib.request.urlopen(req, timeout=timeout) as resp:
             data = json.loads(resp.read().decode("utf-8"))
-            return data.get("text") or data.get("content", "")
+            # 兼容新格式 {success, data: {text, content}, error} 和旧格式 {text}
+            payload = data.get("data") if isinstance(data.get("data"), dict) else data
+            return payload.get("text") or payload.get("content", "")
     except Exception as e:
         logger.warning("LLM via Cecelia 失败: %s", e)
 
