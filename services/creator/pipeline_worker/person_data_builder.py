@@ -110,8 +110,11 @@ def _call_cecelia_llm(prompt: str) -> str | None:
     Returns: 生成的文本；失败返回 None。
     """
     brain_url = os.environ.get("BRAIN_URL", "http://localhost:5221")
+    # tier=cortex 目前走 codex（本机 sandbox 失败）；thalamus 走 anthropic-api+bridge，可用。
+    # 按简单抽取任务用 haiku 足够，且可 env 覆盖。
+    tier = os.environ.get("PERSON_DATA_TIER", "thalamus")
     body = json.dumps({
-        "tier": "cortex",
+        "tier": tier,
         "prompt": prompt,
         "max_tokens": LLM_MAX_TOKENS,
         "timeout": LLM_TIMEOUT_SEC,
