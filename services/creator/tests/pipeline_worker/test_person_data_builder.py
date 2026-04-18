@@ -115,7 +115,7 @@ class TestPersonDataBuilderLLM(unittest.TestCase):
     ]
 
     def test_llm_happy_path(self):
-        """LLM 返回合规 JSON → 成功落库合规 person-data"""
+        """LLM 返回合规 JSON（含 timeline/schedule/qa）→ 成功落库合规 person-data"""
         LLMMockHandler.response_text = json.dumps({
             "name": "龙虾效应",
             "handle": "@solo-lobster",
@@ -128,6 +128,25 @@ class TestPersonDataBuilderLLM(unittest.TestCase):
             "flywheel": ["输入", "加工", "分发", "反哺"],
             "flywheel_insight": "一次投入，无限次收益",
             "quote": "系统是最好的员工，个体即企业。",
+            "timeline": [
+                {"year": "2023", "title": "AI 工具普及", "desc": "GPT-4 让个体具备专家级输出"},
+                {"year": "2024", "title": "Agent 爆发", "desc": "智能体可以自主执行多步任务"},
+                {"year": "2025", "title": "一人公司兴起", "desc": "个体独立开发全球级产品"},
+                {"year": "2026", "title": "龙虾时代", "desc": "AI 让一人公司成为主流"},
+                {"year": "未来", "title": "个体即企业", "desc": "调度千万虚拟团队"},
+            ],
+            "day_schedule": [
+                {"time": "早上", "title": "战略规划", "desc": "读取昨日数据，制定今日优先级"},
+                {"time": "上午", "title": "深度输出", "desc": "核心创作和产品研发"},
+                {"time": "下午", "title": "分发协作", "desc": "调度 AI 团队处理杂事"},
+                {"time": "晚上", "title": "复盘迭代", "desc": "看反馈，调整明天动作"},
+            ],
+            "qa": [
+                {"q": "什么是一人公司", "a": "一个人用 AI 完成传统公司的工作"},
+                {"q": "门槛有多高", "a": "会用工具即可，不需要编程背景"},
+                {"q": "如何起步", "a": "先做一个小产品 MVP 验证"},
+                {"q": "最大挑战是什么", "a": "保持专注和自律"},
+            ],
         })
 
         with patch.dict(os.environ, {"BRAIN_URL": f"http://127.0.0.1:{self.port}"}):
@@ -144,6 +163,27 @@ class TestPersonDataBuilderLLM(unittest.TestCase):
         # 骨架字段齐全
         for k in ("timeline", "day_schedule", "qa", "avatar_b64_file"):
             self.assertIn(k, result)
+        # 数组长度严格 == 模板要求
+        self.assertEqual(len(result["timeline"]), 5)
+        self.assertEqual(len(result["day_schedule"]), 4)
+        self.assertEqual(len(result["qa"]), 4)
+        # 字段预算
+        for t in result["timeline"]:
+            self.assertLessEqual(len(t["year"]), BUDGET["timeline_year"])
+            self.assertLessEqual(len(t["title"]), BUDGET["timeline_title"])
+            self.assertLessEqual(len(t["desc"]), BUDGET["timeline_desc"])
+        for s in result["day_schedule"]:
+            self.assertLessEqual(len(s["time"]), BUDGET["schedule_time"])
+            self.assertLessEqual(len(s["title"]), BUDGET["schedule_title"])
+            self.assertLessEqual(len(s["desc"]), BUDGET["schedule_desc"])
+        for q in result["qa"]:
+            self.assertLessEqual(len(q["q"]), BUDGET["qa_q"])
+            self.assertLessEqual(len(q["a"]), BUDGET["qa_a"])
+        # 确认没有占位文本污染
+        serialized = json.dumps(result, ensure_ascii=False)
+        self.assertNotIn("待补充", serialized)
+        self.assertNotIn("暂无数据", serialized)
+        self.assertNotIn("待产出", serialized)
 
     def test_llm_json_with_markdown_fence(self):
         """LLM 输出包裹在 ```json ... ``` 里 → 自动剥离"""
@@ -202,8 +242,78 @@ class TestPersonDataBuilderLLM(unittest.TestCase):
         self.assertLessEqual(len(result["flywheel_insight"]), BUDGET["flywheel_insight"])
         self.assertLessEqual(len(result["quote"]), BUDGET["quote"])
 
+    def test_llm_missing_timeline_schedule_qa_fields(self):
+        """LLM 返回 JSON 但缺 timeline/schedule/qa → parser 用 findings 真字段补齐，不留占位符"""
+        LLMMockHandler.response_text = json.dumps({
+            "name": "龙虾效应",
+            "handle": "@solo-lobster",
+            "headline": "一人公司的终极形态",
+            "key_stats": [
+                {"val": "千万", "label": "虚拟团队", "sub": "AI 调度"},
+                {"val": "0", "label": "研发成本", "sub": "近似免费"},
+                {"val": "10x", "label": "人效跃升", "sub": "对比传统"},
+            ],
+            "flywheel": ["输入", "加工", "分发", "反哺"],
+            "flywheel_insight": "一次投入，无限次收益",
+            "quote": "系统即员工。",
+            # 故意不带 timeline / day_schedule / qa 字段
+        })
+
+        with patch.dict(os.environ, {"BRAIN_URL": f"http://127.0.0.1:{self.port}"}):
+            result = build_person_data(self.LOBSTER_KEYWORD, self.LOBSTER_FINDINGS)
+
+        # 应当自动补齐长度
+        self.assertEqual(len(result["timeline"]), 5)
+        self.assertEqual(len(result["day_schedule"]), 4)
+        self.assertEqual(len(result["qa"]), 4)
+        # 最关键：不得出现任何占位符
+        serialized = json.dumps(result, ensure_ascii=False)
+        self.assertNotIn("待补充", serialized)
+        self.assertNotIn("暂无数据", serialized)
+        self.assertNotIn("待产出", serialized)
+        # timeline 的 desc 应该包含 findings 里的真实内容片段
+        joined_desc = " ".join(t["desc"] for t in result["timeline"])
+        # 应至少匹配一条 finding 的 title 或 content 前缀
+        has_real_content = any(
+            f.get("title", "")[:5] in joined_desc or f.get("content", "")[:5] in joined_desc
+            for f in self.LOBSTER_FINDINGS
+        )
+        self.assertTrue(has_real_content, f"timeline 没用到 findings 真内容: {joined_desc}")
+
+    def test_llm_returns_placeholder_text_gets_cleaned(self):
+        """LLM 偷懒回 '待补充' 被 parser 清洗为真内容"""
+        LLMMockHandler.response_text = json.dumps({
+            "name": "龙虾效应",
+            "handle": "@solo",
+            "headline": "主张",
+            "key_stats": [
+                {"val": "1", "label": "待补充", "sub": ""},
+                {"val": "2", "label": "x", "sub": ""},
+                {"val": "3", "label": "y", "sub": ""},
+            ],
+            "flywheel": ["输入", "待补充", "输出", "反哺"],
+            "flywheel_insight": "暂无数据",
+            "quote": "q",
+            "timeline": [
+                {"year": "-", "title": "待补充", "desc": "暂无数据"},
+            ],
+            "day_schedule": [],
+            "qa": [],
+        })
+
+        with patch.dict(os.environ, {"BRAIN_URL": f"http://127.0.0.1:{self.port}"}):
+            result = build_person_data(self.LOBSTER_KEYWORD, self.LOBSTER_FINDINGS)
+
+        serialized = json.dumps(result, ensure_ascii=False)
+        self.assertNotIn("待补充", serialized)
+        self.assertNotIn("暂无数据", serialized)
+        self.assertNotIn("待产出", serialized)
+        self.assertEqual(len(result["timeline"]), 5)
+        self.assertEqual(len(result["day_schedule"]), 4)
+        self.assertEqual(len(result["qa"]), 4)
+
     def test_llm_invalid_json_fallback(self):
-        """LLM 返回非 JSON 文本 → fallback（不能塞整段 keyword）"""
+        """LLM 返回非 JSON 文本 → fallback（不能塞整段 keyword，且无占位符）"""
         LLMMockHandler.response_text = "这不是 JSON 只是自然语言废话。"
 
         with patch.dict(os.environ, {"BRAIN_URL": f"http://127.0.0.1:{self.port}"}):
@@ -215,9 +325,18 @@ class TestPersonDataBuilderLLM(unittest.TestCase):
         # key_stats 也必须合规（即使 fallback）
         for s in result["key_stats"]:
             self.assertLessEqual(len(s["label"]), BUDGET["stat_label"])
+        # fallback 也不得出现占位符
+        serialized = json.dumps(result, ensure_ascii=False)
+        self.assertNotIn("待补充", serialized)
+        self.assertNotIn("暂无数据", serialized)
+        self.assertNotIn("待产出", serialized)
+        # timeline/schedule/qa 长度必须对
+        self.assertEqual(len(result["timeline"]), 5)
+        self.assertEqual(len(result["day_schedule"]), 4)
+        self.assertEqual(len(result["qa"]), 4)
 
     def test_llm_unreachable_fallback(self):
-        """Cecelia 不可达 → fallback"""
+        """Cecelia 不可达 → fallback（无占位符）"""
         with patch.dict(os.environ, {"BRAIN_URL": "http://127.0.0.1:1"}):
             result = build_person_data(self.LOBSTER_KEYWORD, self.LOBSTER_FINDINGS)
 
@@ -226,14 +345,26 @@ class TestPersonDataBuilderLLM(unittest.TestCase):
         # 整段 keyword 不能出现在任何字段里
         for s in result["key_stats"]:
             self.assertNotIn(self.LOBSTER_KEYWORD, s["label"])
+        serialized = json.dumps(result, ensure_ascii=False)
+        self.assertNotIn("待补充", serialized)
+        self.assertNotIn("暂无数据", serialized)
+        self.assertNotIn("待产出", serialized)
 
     def test_empty_findings_fallback(self):
-        """findings 空 → fallback（不调 LLM）"""
+        """findings 空 → fallback（不调 LLM），仍产出合法长度的 timeline/schedule/qa"""
         # 不设置 BRAIN_URL，也不该挂（走 fallback）
         result = build_person_data("某话题", [])
         self.assertLessEqual(len(result["name"]), BUDGET["name"])
         self.assertEqual(len(result["key_stats"]), 3)
         self.assertEqual(len(result["flywheel"]), 4)
+        self.assertEqual(len(result["timeline"]), 5)
+        self.assertEqual(len(result["day_schedule"]), 4)
+        self.assertEqual(len(result["qa"]), 4)
+        # 即使 findings 空，也不得出现官方占位符（用启发式默认词兜底）
+        serialized = json.dumps(result, ensure_ascii=False)
+        self.assertNotIn("待补充", serialized)
+        self.assertNotIn("暂无数据", serialized)
+        self.assertNotIn("待产出", serialized)
 
 
 class TestFallbackName(unittest.TestCase):
@@ -260,20 +391,39 @@ class TestEnforceBudget(unittest.TestCase):
     """_enforce_budget 单元测试（不走 HTTP）"""
 
     def test_fills_missing_fields(self):
-        result = _enforce_budget({}, "测试")
+        findings = [{"title": "真实标题 A", "content": "真实内容 A"}]
+        result = _enforce_budget({}, "测试", findings)
         self.assertEqual(len(result["key_stats"]), 3)
         self.assertEqual(len(result["flywheel"]), 4)
-        self.assertIn("timeline", result)
+        self.assertEqual(len(result["timeline"]), 5)
+        self.assertEqual(len(result["day_schedule"]), 4)
+        self.assertEqual(len(result["qa"]), 4)
         self.assertIn("avatar_b64_file", result)
+        # 不得出现占位符
+        serialized = json.dumps(result, ensure_ascii=False)
+        self.assertNotIn("待补充", serialized)
+        self.assertNotIn("暂无数据", serialized)
+        self.assertNotIn("待产出", serialized)
 
     def test_handle_without_at_prefix(self):
         result = _enforce_budget({"handle": "noprefix"}, "test")
         self.assertTrue(result["handle"].startswith("@"))
 
-    def test_key_stats_padding(self):
-        result = _enforce_budget({"key_stats": [{"val": "1", "label": "x"}]}, "test")
+    def test_key_stats_padding_uses_findings(self):
+        """key_stats 不足时，用 findings 真实 title 补齐，不能写"待补充"。"""
+        findings = [
+            {"title": "标题甲", "content": "内容甲"},
+            {"title": "标题乙", "content": "内容乙"},
+            {"title": "标题丙", "content": "内容丙"},
+        ]
+        result = _enforce_budget(
+            {"key_stats": [{"val": "1", "label": "x"}]},
+            "test",
+            findings,
+        )
         self.assertEqual(len(result["key_stats"]), 3)
-        self.assertEqual(result["key_stats"][1]["label"], "待补充")
+        self.assertNotEqual(result["key_stats"][1]["label"], "待补充")
+        self.assertNotEqual(result["key_stats"][2]["label"], "待补充")
 
 
 class TestStripJsonFence(unittest.TestCase):
