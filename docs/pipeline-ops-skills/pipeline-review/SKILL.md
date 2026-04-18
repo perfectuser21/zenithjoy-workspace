@@ -1,5 +1,5 @@
 ---
-name: pipeline-ops-stage-review
+name: pipeline-review
 description: /pipeline-review、审图、vision 审查 — Content Pipeline Stage 5 (图片审查) 运维 skill，手动跑 Claude Vision 检查文字溢出/布局错位
 ---
 

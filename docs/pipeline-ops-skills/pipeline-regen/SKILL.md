@@ -1,5 +1,5 @@
 ---
-name: pipeline-ops-stage-generate
+name: pipeline-regen
 description: /pipeline-regen、重生图、V6 出图失败 — Content Pipeline Stage 4 (V6 图片生成) 运维 skill
 ---
 

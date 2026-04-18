@@ -1,5 +1,5 @@
 ---
-name: pipeline-ops-diagnose
+name: pipeline-diagnose
 description: /pipeline-diagnose、pipeline 挂了、看 pipeline 状态 — Content Pipeline 总体健康诊断，一键输出所有关键状态并引导到具体 stage skill
 ---
 

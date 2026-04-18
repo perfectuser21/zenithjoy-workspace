@@ -1,5 +1,5 @@
 ---
-name: pipeline-ops-stage-copywrite
+name: pipeline-copywrite
 description: /pipeline-copywrite、重写文案、copy.md 不满意 — Content Pipeline Stage 2 (LLM 写稿) 运维 skill
 ---
 

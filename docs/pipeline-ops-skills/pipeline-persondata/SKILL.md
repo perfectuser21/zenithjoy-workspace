@@ -1,5 +1,5 @@
 ---
-name: pipeline-ops-stage-person-data
+name: pipeline-persondata
 description: /pipeline-persondata、修待补充、人物数据占位符 — Content Pipeline Stage 4 (person-data 构造) 运维 skill，修 "待补充/暂无数据" 导致的图片占位符问题
 ---
 
@@ -17,12 +17,15 @@ description: /pipeline-persondata、修待补充、人物数据占位符 — Con
 
 ```bash
 KEYWORD="<关键词>"
-# 1. 定位 output_dir
-OUT_DIR=$(ls -d ~/content-output/*${KEYWORD}* 2>/dev/null | grep -v research | head -1)
+# 1. 把 keyword slug 化（中文关键词带空格，直接 glob 会失败）
+SLUG=$(python3 -c "import re; print(re.sub(r'-+','-',re.sub(r'[^a-zA-Z0-9\u4e00-\u9fff-]','-','${KEYWORD}'))[:40])")
+# 2. 定位 output_dir（用 slug）
+OUT_DIR=$(ls -d ~/content-output/*"${SLUG}"* 2>/dev/null | grep -v research | head -1)
+echo "SLUG=${SLUG}"
 echo "OUT_DIR=${OUT_DIR}"
 
 # 2. 看现有 person-data 是否含占位符
-grep -cE "待补充|暂无数据|待产出" "${OUT_DIR}/cards/person-data.json" 2>/dev/null
+grep -cE "待补充|暂无数据|待产出" "${OUT_DIR}/person-data.json" 2>/dev/null
 
 # 3. 看 findings 数量（决定限制数）
 find ~/content-output/research -name findings.json | xargs -I {} \
@@ -35,7 +38,7 @@ find ~/content-output/research -name findings.json | xargs -I {} \
 
 ```bash
 # 不清会导致 V6 脚本沿用旧 person-data + 老 PNG 混在 cards/
-rm -f "${OUT_DIR}/cards/person-data.json"
+rm -f "${OUT_DIR}/person-data.json"
 rm -f "${OUT_DIR}/cards/"*.png
 rm -f ~/claude-output/images/*.png   # V6 输出默认位置
 ```
@@ -69,9 +72,9 @@ print("name=", person["name"], "handle=", person["handle"])
 print("timeline=", len(person["timeline"]), "schedule=", len(person["day_schedule"]), "qa=", len(person["qa"]))
 
 (OUT_DIR / "cards").mkdir(parents=True, exist_ok=True)
-(OUT_DIR / "cards" / "person-data.json").write_text(
+(OUT_DIR / "person-data.json").write_text(
     json.dumps(person, ensure_ascii=False, indent=2), encoding="utf-8")
-print("→", OUT_DIR / "cards" / "person-data.json")
+print("→", OUT_DIR / "person-data.json")
 PYEOF
 ```
 
@@ -86,7 +89,7 @@ print(re.sub(r'-+', '-', re.sub(r'[^a-zA-Z0-9\u4e00-\u9fff-]', '-', '${KEYWORD}'
 ")
 
 node /Users/administrator/claude-output/scripts/gen-v6-person.mjs \
-  --data "${OUT_DIR}/cards/person-data.json" \
+  --data "${OUT_DIR}/person-data.json" \
   --slug "${KEYWORD_SLUG}"
 # 产出 9 张 PNG 到 ~/claude-output/images/
 ```
@@ -116,7 +119,7 @@ tar -cf - -C "${OUT_DIR}" . | ssh nas "cd '${NAS_PATH}' && tar -xf -"
 
 ```bash
 # 占位符数 = 0
-grep -cE "待补充|暂无数据|待产出" "${OUT_DIR}/cards/person-data.json"
+grep -cE "待补充|暂无数据|待产出" "${OUT_DIR}/person-data.json"
 # 期望：0
 
 # 9 张 PNG

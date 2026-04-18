@@ -1,5 +1,5 @@
 ---
-name: pipeline-ops-stage-research
+name: pipeline-research
 description: /pipeline-research、手动跑调研、findings 重抓 — Content Pipeline Stage 1 (NotebookLM 调研) 运维 skill
 ---
 
