@@ -647,7 +647,7 @@ export default function PipelineOutputPage() {
   }, [])
 
   return (
-    <div style={{ minHeight: '100vh', background: '#07050f', color: '#fff', fontFamily: "-apple-system,'SF Pro Display','Helvetica Neue',Arial,sans-serif", backgroundImage: 'radial-gradient(ellipse 900px 700px at 75% -5%, rgba(124,58,237,0.09) 0%, transparent 70%), radial-gradient(ellipse 600px 500px at 10% 80%, rgba(59,7,100,0.07) 0%, transparent 60%)' }}>
+    <div style={{ minHeight: '100vh', width: '100%', overflowX: 'hidden', background: '#07050f', color: '#fff', fontFamily: "-apple-system,'SF Pro Display','Helvetica Neue',Arial,sans-serif", backgroundImage: 'radial-gradient(ellipse 900px 700px at 75% -5%, rgba(124,58,237,0.09) 0%, transparent 70%), radial-gradient(ellipse 600px 500px at 10% 80%, rgba(59,7,100,0.07) 0%, transparent 60%)' }}>
       <style>{`@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}@keyframes spin{to{transform:rotate(360deg)}}`}</style>
 
       {/* 导航 */}
@@ -682,7 +682,7 @@ export default function PipelineOutputPage() {
       ) : (
         <>
           {/* Hero */}
-          <div style={{ padding: '48px 60px 36px', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+          <div style={{ padding: '48px 60px 36px', maxWidth: 1440, margin: '0 auto', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
             <div style={{ fontSize: 11, fontWeight: 600, color: 'rgba(192,132,252,0.5)', letterSpacing: 3, textTransform: 'uppercase', marginBottom: 12 }}>内容产出</div>
             <div style={{ fontSize: 44, fontWeight: 800, letterSpacing: -1.5, lineHeight: 1.1, background: 'linear-gradient(135deg,#ffffff 0%,#c084fc 55%,#7c3aed 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text' }}>
               {output?.keyword || '内容产出'}
@@ -695,7 +695,7 @@ export default function PipelineOutputPage() {
           </div>
 
           {/* Tabs + 内容 */}
-          <div style={{ padding: '0 60px' }}>
+          <div style={{ padding: '0 60px', maxWidth: 1440, margin: '0 auto' }}>
             <div style={{ display: 'flex', gap: 2, borderBottom: '1px solid rgba(255,255,255,0.07)', marginBottom: 28 }}>
               {TABS.map(({ key, label, Icon }) => {
                 const active = activeTab === key
