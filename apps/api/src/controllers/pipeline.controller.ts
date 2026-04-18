@@ -1,7 +1,53 @@
 import { Request, Response } from 'express';
+import { readFileSync, existsSync, statSync } from 'fs';
+import { resolve, sep } from 'path';
 import pool from '../db/connection';
 
 const CECELIA_BRAIN_URL = process.env.CECELIA_BRAIN_URL || 'http://localhost:5221';
+
+// 安全地把 baseDir + relPath 拼成绝对路径，并确保结果仍在 baseDir 内。
+// 失败返回 null。
+function safeJoin(baseDir: string, relPath: string): string | null {
+  if (!baseDir || !relPath) return null;
+  if (relPath.includes('\0')) return null;
+  const normalizedBase = resolve(baseDir);
+  const full = resolve(normalizedBase, relPath);
+  if (full !== normalizedBase && !full.startsWith(normalizedBase + sep)) {
+    return null;
+  }
+  return full;
+}
+
+function readFileIfExists(baseDir: string, relPath: string | undefined): string | null {
+  if (!relPath) return null;
+  const full = safeJoin(baseDir, relPath);
+  if (!full) return null;
+  try {
+    if (!existsSync(full) || !statSync(full).isFile()) return null;
+    return readFileSync(full, 'utf-8');
+  } catch {
+    return null;
+  }
+}
+
+interface ManifestImageSet {
+  files?: string[];
+  status?: string;
+  framework?: string;
+}
+
+interface PipelineManifest {
+  status?: string;
+  keyword?: string;
+  article?: { path?: string; status?: string };
+  copy?: { path?: string; status?: string };
+  image_set?: ManifestImageSet;
+  platforms?: Record<string, string[]>;
+  version?: string;
+  pipeline_id?: string;
+  content_type?: string;
+  created_at?: string;
+}
 
 // PR-e/5: 统一响应契约 { success, data, error, timestamp }
 function ok<T>(data: T) {
@@ -153,38 +199,91 @@ export class PipelineController {
     }
   };
 
-  // GET /api/pipeline/:id/output  ← 透传到 cecelia
+  // GET /api/pipeline/:id/output  ← 本地读 pipeline_runs.output_manifest + 文件系统
   getOutput = async (req: Request, res: Response): Promise<void> => {
     try {
+      const pipelineId = req.params.id;
       const { rows } = await pool.query(
-        'SELECT cecelia_task_id FROM zenithjoy.pipeline_runs WHERE id = $1',
-        [req.params.id]
+        `SELECT id, topic, status, output_dir, output_manifest, topic_id, notebook_id, cecelia_task_id
+         FROM zenithjoy.pipeline_runs WHERE id = $1`,
+        [pipelineId]
       );
       if (!rows.length) { res.status(404).json({ error: 'Not found' }); return; }
-      const ceceliaTaskId = rows[0].cecelia_task_id;
-      if (!ceceliaTaskId) { res.status(404).json({ error: '尚无 cecelia task' }); return; }
-      const upstream = await fetch(`${CECELIA_BRAIN_URL}/api/brain/pipelines/${ceceliaTaskId}/output`);
-      if (!upstream.ok) { res.status(upstream.status).json({ error: 'upstream error' }); return; }
-      res.json(await upstream.json());
+
+      const row = rows[0];
+      const manifest: PipelineManifest | null = row.output_manifest || null;
+      const outputDir: string | null = row.output_dir || null;
+
+      // 若尚无 manifest（pipeline 还在跑或未产出）→ 返回 pending，不回退到 cecelia
+      if (!manifest) {
+        res.json({
+          output: {
+            pipeline_id: row.id,
+            keyword: row.topic || '',
+            status: row.status || 'pending',
+            article_text: null,
+            cards_text: null,
+            image_urls: [],
+            export_path: outputDir,
+            images: null,
+          },
+        });
+        return;
+      }
+
+      // 读正文
+      const articleText = outputDir
+        ? readFileIfExists(outputDir, manifest.article?.path)
+        : null;
+      const cardsText = outputDir
+        ? readFileIfExists(outputDir, manifest.copy?.path)
+        : null;
+
+      const files = manifest.image_set?.files || [];
+      const imageUrls = files.map((f) => ({
+        type: f.toLowerCase().includes('cover') ? 'cover' : 'card',
+        url: `/api/content-images/${row.id}/${encodeURIComponent(f)}`,
+      }));
+
+      res.json({
+        output: {
+          pipeline_id: row.id,
+          keyword: manifest.keyword || row.topic || '',
+          status: manifest.status || row.status || 'unknown',
+          article_text: articleText,
+          cards_text: cardsText,
+          image_urls: imageUrls,
+          export_path: outputDir,
+          images: manifest.image_set || null,
+        },
+      });
     } catch (err) {
+      console.error('[pipeline] getOutput error:', err);
       res.status(500).json({ error: String(err) });
     }
   };
 
-  // GET /api/pipeline/:id/stages  ← 透传到 cecelia
+  // GET /api/pipeline/:id/stages  ← 本地读 pipeline_runs.status + manifest.status
   getStages = async (req: Request, res: Response): Promise<void> => {
     try {
+      const pipelineId = req.params.id;
       const { rows } = await pool.query(
-        'SELECT cecelia_task_id FROM zenithjoy.pipeline_runs WHERE id = $1',
-        [req.params.id]
+        `SELECT id, status, output_manifest FROM zenithjoy.pipeline_runs WHERE id = $1`,
+        [pipelineId]
       );
       if (!rows.length) { res.status(404).json({ error: 'Not found' }); return; }
-      const ceceliaTaskId = rows[0].cecelia_task_id;
-      if (!ceceliaTaskId) { res.json({ stages: {} }); return; }
-      const upstream = await fetch(`${CECELIA_BRAIN_URL}/api/brain/pipelines/${ceceliaTaskId}/stages`);
-      if (!upstream.ok) { res.json({ stages: {} }); return; }
-      res.json(await upstream.json());
+
+      const row = rows[0];
+      const manifest: PipelineManifest | null = row.output_manifest || null;
+
+      // 暂时不追踪每个阶段的单独状态（未来可扩展 pipeline_stages 表）
+      // 先返回 overall status，供前端兜底显示
+      res.json({
+        stages: {},
+        overall_status: manifest?.status || row.status || 'pending',
+      });
     } catch (err) {
+      console.error('[pipeline] getStages error:', err);
       res.status(500).json({ error: String(err) });
     }
   };

@@ -237,52 +237,95 @@ describe('Pipeline API', () => {
   });
 
   describe('GET /api/pipeline/:id/output', () => {
-    it('should proxy to cecelia and return output', async () => {
-      const runWithTask = { ...PIPELINE_RUN, cecelia_task_id: 'cecelia-task-123' };
-      mockQuery.mockResolvedValueOnce({ rows: [runWithTask] });
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ keyword: '测试', status: 'completed', article_text: 'content', cards_text: null, image_urls: [] }),
-      });
+    it('should return output from local pipeline_runs.output_manifest (not fallback to cecelia)', async () => {
+      const MANIFEST = {
+        status: 'ready_for_publish',
+        keyword: '龙虾',
+        article: { path: 'article/article.md', status: 'ready' },
+        copy: { path: 'cards/copy.md', status: 'ready' },
+        image_set: {
+          files: ['龙虾-cover.png', '龙虾-01.png', '龙虾-02.png'],
+          status: 'ready',
+          framework: '/share-card',
+        },
+      };
+      const runWithManifest = {
+        ...PIPELINE_RUN,
+        status: 'completed',
+        output_manifest: MANIFEST,
+      };
+      mockQuery.mockResolvedValueOnce({ rows: [runWithManifest] });
 
       const response = await request(app).get(`/api/pipeline/${PIPELINE_RUN.id}/output`);
 
       expect(response.status).toBe(200);
-      expect(response.body).toHaveProperty('keyword');
-      expect(mockFetch).toHaveBeenCalledWith(expect.stringContaining('cecelia-task-123/output'));
+      expect(response.body).toHaveProperty('output');
+      expect(response.body.output.pipeline_id).toBe(PIPELINE_RUN.id);
+      expect(response.body.output.keyword).toBe('龙虾');
+      expect(response.body.output.status).toBe('ready_for_publish');
+      expect(response.body.output.image_urls).toHaveLength(3);
+      // URL 必须是 /api/content-images/<pipelineId>/<encoded-filename>
+      for (const img of response.body.output.image_urls) {
+        expect(img.url).toMatch(/^\/api\/content-images\//);
+        expect(img.url).toContain(PIPELINE_RUN.id);
+      }
+      // cover 检测
+      const cover = response.body.output.image_urls.find(
+        (i: { type: string }) => i.type === 'cover'
+      );
+      expect(cover).toBeDefined();
+      // 不应调 cecelia（本地读完即止）
+      expect(mockFetch).not.toHaveBeenCalled();
     });
 
-    it('should return 404 when cecelia_task_id is null', async () => {
-      mockQuery.mockResolvedValueOnce({ rows: [PIPELINE_RUN] }); // cecelia_task_id is null
+    it('should return 404 when pipeline_run does not exist', async () => {
+      mockQuery.mockResolvedValueOnce({ rows: [] });
+
+      const response = await request(app).get('/api/pipeline/00000000-0000-0000-0000-000000000000/output');
+
+      expect(response.status).toBe(404);
+    });
+
+    it('should return pending output when output_manifest is null (not fallback to cecelia)', async () => {
+      // output_manifest null → 直接返回 pending 态，不回退到老 cecelia
+      mockQuery.mockResolvedValueOnce({ rows: [{ ...PIPELINE_RUN, status: 'running', output_manifest: null }] });
 
       const response = await request(app).get(`/api/pipeline/${PIPELINE_RUN.id}/output`);
 
-      expect(response.status).toBe(404);
+      expect(response.status).toBe(200);
+      expect(response.body.output.pipeline_id).toBe(PIPELINE_RUN.id);
+      expect(response.body.output.status).toBe('running');
+      expect(response.body.output.article_text).toBeNull();
+      expect(response.body.output.cards_text).toBeNull();
+      expect(response.body.output.image_urls).toEqual([]);
+      // 严禁 fallback 到 cecelia
+      expect(mockFetch).not.toHaveBeenCalled();
     });
   });
 
   describe('GET /api/pipeline/:id/stages', () => {
-    it('should proxy to cecelia and return stages', async () => {
-      const runWithTask = { ...PIPELINE_RUN, cecelia_task_id: 'cecelia-task-123' };
-      mockQuery.mockResolvedValueOnce({ rows: [runWithTask] });
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ stages: { 'content-research': { status: 'completed' } } }),
-      });
+    it('should return local status without calling cecelia', async () => {
+      const runWithManifest = {
+        ...PIPELINE_RUN,
+        status: 'completed',
+        output_manifest: { status: 'ready_for_publish' },
+      };
+      mockQuery.mockResolvedValueOnce({ rows: [runWithManifest] });
 
       const response = await request(app).get(`/api/pipeline/${PIPELINE_RUN.id}/stages`);
 
       expect(response.status).toBe(200);
       expect(response.body).toHaveProperty('stages');
+      expect(response.body.overall_status).toBe('ready_for_publish');
+      expect(mockFetch).not.toHaveBeenCalled();
     });
 
-    it('should return empty stages when cecelia_task_id is null', async () => {
-      mockQuery.mockResolvedValueOnce({ rows: [PIPELINE_RUN] });
+    it('should return 404 when pipeline_run does not exist', async () => {
+      mockQuery.mockResolvedValueOnce({ rows: [] });
 
       const response = await request(app).get(`/api/pipeline/${PIPELINE_RUN.id}/stages`);
 
-      expect(response.status).toBe(200);
-      expect(response.body).toEqual({ stages: {} });
+      expect(response.status).toBe(404);
     });
   });
 
