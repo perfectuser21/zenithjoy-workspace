@@ -152,7 +152,8 @@ class TestCallVisionSubprocess(unittest.TestCase):
         return fake
 
     def test_subprocess_called_with_correct_args_and_env(self):
-        """claude CLI 被调用时带 -p, --image, --dangerously-skip-permissions；
+        """claude CLI 被调用时带 -p / --dangerously-skip-permissions；
+        图片路径嵌在 prompt 里（由 Claude 的 Read 工具读取）；
         env 里 CLAUDE_CONFIG_DIR 指向订阅账号；CLAUDECODE 被移除。"""
         with tempfile.TemporaryDirectory() as tmp:
             img = Path(tmp) / "x.png"
@@ -163,7 +164,7 @@ class TestCallVisionSubprocess(unittest.TestCase):
             )
             with patch.dict(
                 os.environ,
-                {"CLAUDECODE": "1", "VISION_CLAUDE_ACCOUNT": "account1"},
+                {"CLAUDECODE": "1", "VISION_CLAUDE_ACCOUNT": "account2"},
                 clear=False,
             ):
                 with patch("subprocess.run", return_value=fake_result) as mock_run:
@@ -176,19 +177,22 @@ class TestCallVisionSubprocess(unittest.TestCase):
             mock_run.assert_called_once()
             args, kwargs = mock_run.call_args
             cmd = args[0]
-            # 参数必须包含 -p / --image <path> / --dangerously-skip-permissions
+            # 参数必须包含 -p / --dangerously-skip-permissions / --output-format
             self.assertIn("-p", cmd)
-            self.assertIn("--image", cmd)
-            img_idx = cmd.index("--image")
-            self.assertEqual(cmd[img_idx + 1], str(img))
             self.assertIn("--dangerously-skip-permissions", cmd)
             self.assertIn("--output-format", cmd)
+            # claude CLI 不支持 --image，图路径应通过 prompt 传
+            self.assertNotIn("--image", cmd)
+            # prompt 里必须包含图片绝对路径
+            p_idx = cmd.index("-p")
+            prompt_text = cmd[p_idx + 1]
+            self.assertIn(str(img), prompt_text)
 
             # env：CLAUDE_CONFIG_DIR 指向订阅账号；CLAUDECODE 被移除
             env = kwargs.get("env") or {}
             self.assertEqual(
                 env.get("CLAUDE_CONFIG_DIR"),
-                str(Path.home() / ".claude-account1"),
+                str(Path.home() / ".claude-account2"),
             )
             self.assertNotIn("CLAUDECODE", env)
 
@@ -199,7 +203,8 @@ class TestCallVisionSubprocess(unittest.TestCase):
             self.assertTrue(kwargs.get("text"))
 
     def test_custom_account_from_env(self):
-        """VISION_CLAUDE_ACCOUNT=account2 → CLAUDE_CONFIG_DIR=~/.claude-account2"""
+        """VISION_CLAUDE_ACCOUNT=account3 → CLAUDE_CONFIG_DIR=~/.claude-account3
+        （覆盖默认 account2，证明环境变量优先生效）"""
         with tempfile.TemporaryDirectory() as tmp:
             img = Path(tmp) / "x.png"
             img.write_bytes(b"\x89PNG\r\n\x1a\n")
@@ -207,7 +212,7 @@ class TestCallVisionSubprocess(unittest.TestCase):
             fake_result = self._mock_run_ok(
                 '{"pass": true, "severity": "ok", "issues": []}'
             )
-            with patch.dict(os.environ, {"VISION_CLAUDE_ACCOUNT": "account2"}, clear=False):
+            with patch.dict(os.environ, {"VISION_CLAUDE_ACCOUNT": "account3"}, clear=False):
                 with patch("subprocess.run", return_value=fake_result) as mock_run:
                     ivr._call_vision(img)
 
@@ -215,7 +220,7 @@ class TestCallVisionSubprocess(unittest.TestCase):
             env = kwargs.get("env") or {}
             self.assertEqual(
                 env.get("CLAUDE_CONFIG_DIR"),
-                str(Path.home() / ".claude-account2"),
+                str(Path.home() / ".claude-account3"),
             )
 
     def test_nonzero_returncode_returns_none(self):

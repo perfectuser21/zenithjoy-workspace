@@ -28,31 +28,27 @@ from typing import Any
 logger = logging.getLogger("pipeline-worker.image_vision_review")
 
 CLAUDE_CLI_PATH = os.environ.get("CLAUDE_CLI_PATH", "/opt/homebrew/bin/claude")
-PER_IMAGE_TIMEOUT_SEC = int(os.environ.get("IMAGE_VISION_TIMEOUT", "60"))
-DEFAULT_VISION_ACCOUNT = os.environ.get("VISION_CLAUDE_ACCOUNT", "account1")
+PER_IMAGE_TIMEOUT_SEC = int(os.environ.get("IMAGE_VISION_TIMEOUT", "90"))
+# 默认走 account2 避免与当前对话的 account1 context 污染（subprocess 会继承 CLAUDE.md/memory）
+DEFAULT_VISION_ACCOUNT = os.environ.get("VISION_CLAUDE_ACCOUNT", "account2")
 
-VISION_PROMPT = """你是严格的社交媒体卡片图片质检员。
-请仔细看这张卡片图（1080×1080 或 1080×1920），回答下面 4 个问题：
+_VISION_PROMPT_TEMPLATE = """请用 Read 工具读取这张图 {image_path}，判断是否存在问题：
 
-1. 文字是否溢出/贴边/被裁切？（尤其看卡片四边文字是否完整）
-2. 是否存在文字重叠、布局错位？
-3. 中文字体是否正常渲染？（不应该出现豆腐方块 □□□）
-4. 整体视觉是否专业可接受？（不能有明显丑陋/错位/破图）
+1. 文字溢出/贴边/被裁切（尤其四边文字是否完整）
+2. 文字重叠、布局错位
+3. 中文字体异常（豆腐方块 □□□）
+4. 明显丑陋/错位/破图
 
-请严格输出一个合法 JSON 对象（不要 markdown fence，不要解释）：
-{
-  "pass": true 或 false,
-  "severity": "ok" 或 "minor" 或 "major",
-  "issues": ["问题1", "问题2"]
-}
+严格输出一行合法 JSON（无 markdown fence，无解释）：
+{{"pass":true或false,"severity":"ok"或"minor"或"major","issues":["问题1","问题2"]}}
 
-判定规则：
-- 任何文字被裁切/溢出 → severity=major, pass=false
-- 豆腐方块 → severity=major, pass=false
-- 明显布局错位 → severity=major, pass=false
-- 轻微美学问题（如配色一般）→ severity=minor, pass=true
-- 全部正常 → severity=ok, pass=true, issues=[]
+判定：任何文字裁切/溢出/豆腐块/明显错位 → severity=major + pass=false；
+轻微美学问题 → severity=minor + pass=true；全部正常 → severity=ok + pass=true + issues=[]。
 """
+
+
+def _build_prompt(image_path: Path) -> str:
+    return _VISION_PROMPT_TEMPLATE.format(image_path=str(image_path))
 
 
 def _strip_json_fence(text: str) -> str:
@@ -65,11 +61,12 @@ def _strip_json_fence(text: str) -> str:
 
 def _call_vision(
     image_path: Path,
-    prompt: str = VISION_PROMPT,
+    prompt: str | None = None,
     timeout: int = PER_IMAGE_TIMEOUT_SEC,
 ) -> dict[str, Any] | None:
-    """调 `claude -p --image` 走 Claude Max 订阅（零 API 扣费）。
+    """调 `claude -p` 走 Claude Max 订阅（零 API 扣费）。
 
+    image_path 通过 prompt 传给 Claude，由它自己的 Read 工具读。
     通过 CLAUDE_CONFIG_DIR 切到订阅账号，subprocess 非交互调用。
 
     Returns: {pass: bool, severity: str, issues: [str]} 或 None（调用失败）
@@ -77,15 +74,15 @@ def _call_vision(
     account = os.environ.get("VISION_CLAUDE_ACCOUNT", DEFAULT_VISION_ACCOUNT)
     env = os.environ.copy()
     env["CLAUDE_CONFIG_DIR"] = str(Path.home() / f".claude-{account}")
-    # 非交互 + 不让 claude CLI 以为自己嵌在 Claude Code 里
+    # 非交互 + 不让 claude CLI 以为自己嵌在 Claude Code 里（避免 context 污染父会话）
     env.pop("CLAUDECODE", None)
+
+    effective_prompt = prompt if prompt is not None else _build_prompt(image_path)
 
     cmd = [
         CLAUDE_CLI_PATH,
         "-p",
-        prompt,
-        "--image",
-        str(image_path),
+        effective_prompt,
         "--output-format",
         "text",
         "--dangerously-skip-permissions",
