@@ -1,16 +1,20 @@
 """Stage 5: 图片审查（文件完整性 + 尺寸检查）
 
-检查图片文件是否存在、尺寸是否符合要求。
+检查图片文件是否存在、尺寸是否符合要求，以及 person-data.json 是否含占位符。
 """
 
 from __future__ import annotations
 
+import json
 import logging
 import os
 import re
 from pathlib import Path
 
 logger = logging.getLogger("pipeline-worker.image_review")
+
+# person-data.json 里不允许出现的占位关键词（会直接 FAIL）
+PERSON_DATA_PLACEHOLDERS = ("待补充", "暂无数据", "待产出")
 
 OUTPUT_BASE = os.environ.get(
     "CONTENT_OUTPUT_DIR",
@@ -22,6 +26,40 @@ IMAGES_DIR = Path(os.environ.get("HOME", "/Users/administrator")) / "claude-outp
 
 def _slug(text: str) -> str:
     return re.sub(r"-+", "-", re.sub(r"[^a-zA-Z0-9\u4e00-\u9fff-]", "-", text))[:40]
+
+
+def _check_person_data_placeholders(out_dir: Path) -> list[str]:
+    """检查 person-data.json 是否含占位文本。
+
+    返回发现的 issue 列表，空列表表示干净。
+    """
+    pd_path = out_dir / "cards" / "person-data.json"
+    if not pd_path.exists():
+        return []
+    try:
+        raw = pd_path.read_text(encoding="utf-8")
+    except OSError as e:
+        return [f"person-data.json 读取失败: {e}"]
+
+    hits: list[str] = []
+    for ph in PERSON_DATA_PLACEHOLDERS:
+        if ph in raw:
+            hits.append(f'person-data.json 含占位符 "{ph}"')
+
+    # 再深一层：解析 JSON 检查 key_stats.val 和 timeline.year 是否为纯 "-"
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError:
+        # 已经在上面的字符串扫描里找过了，解析失败不是 image_review 该管的
+        return hits
+
+    for i, s in enumerate(data.get("key_stats") or []):
+        if isinstance(s, dict) and str(s.get("val") or "").strip() == "-":
+            hits.append(f'person-data.key_stats[{i}].val 为空占位 "-"')
+    for i, t in enumerate(data.get("timeline") or []):
+        if isinstance(t, dict) and str(t.get("year") or "").strip() == "-":
+            hits.append(f'person-data.timeline[{i}].year 为空占位 "-"')
+    return hits
 
 
 def _find_output_dir(keyword: str) -> Path | None:
@@ -85,6 +123,12 @@ def execute_image_review(run_data: dict) -> dict:
     if not card_content.exists():
         issues.append("缺少 cards/llm-card-content.json 卡片内容")
 
+    # 新增硬规则：person-data.json 含占位符 → 直接 FAIL
+    person_data_issues = _check_person_data_placeholders(out_dir)
+    if person_data_issues:
+        issues.append("person-data 含占位符，LLM 生成不完整")
+        issues.extend(person_data_issues)
+
     # 检查图片文件
     topic_slug = _slug(keyword)
     card_count = 0
@@ -134,6 +178,12 @@ def execute_image_review(run_data: dict) -> dict:
     if vision_severity == "major":
         passed = False
         logger.warning("[image-review] vision major 问题实锤 FAIL")
+    # person-data.json 含占位符 → 实锤 FAIL（对应 severity=major）
+    if person_data_issues:
+        passed = False
+        if vision_severity != "major":
+            vision_severity = "major"
+        logger.warning("[image-review] person-data 含占位符实锤 FAIL")
 
     logger.info(
         "[image-review] %s: quality=%d, cards=%d, issues=%d, vision_severity=%s",
