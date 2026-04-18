@@ -2,19 +2,23 @@
 
 覆盖：
 - 无图：空返回
-- 无 API key：跳过所有图（保守 pass，不阻塞 pipeline）
 - vision 返回 major → review_passed=False
 - vision 返回 minor → review_passed=True（轻微不阻断）
 - 多张图聚合 severity
-- vision 调用失败（HTTP error）→ skipped 计数，不阻塞
+- vision 调用失败（subprocess 返回 None）→ skipped 计数，不阻塞
+- subprocess 调用参数/env 正确性（-p, --image, --dangerously-skip-permissions,
+  CLAUDE_CONFIG_DIR）
 
-所有 vision 调用通过 monkeypatch `_call_vision` 实现，不走真实网络。
+所有 vision 调用通过 mock `subprocess.run` 或 `_call_vision` 实现，不走真实 CLI。
 """
 
+import os
+import subprocess
 import sys
+import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
@@ -22,16 +26,6 @@ from pipeline_worker import image_vision_review as ivr  # noqa: E402
 
 
 class TestReviewImages(unittest.TestCase):
-    def setUp(self):
-        # 确保测试不读真实 credentials
-        self.env_patcher = patch.dict(
-            "os.environ", {"ANTHROPIC_API_KEY": "test-key-ignored"}
-        )
-        self.env_patcher.start()
-
-    def tearDown(self):
-        self.env_patcher.stop()
-
     def _make_fake_png(self, tmp_path: Path, name: str) -> Path:
         p = tmp_path / name
         p.write_bytes(b"\x89PNG\r\n\x1a\n" + b"\x00" * 100)  # minimal PNG-ish bytes
@@ -45,12 +39,11 @@ class TestReviewImages(unittest.TestCase):
 
     def test_all_major_fail(self):
         """所有图都 major → review_passed=False"""
-        import tempfile
         with tempfile.TemporaryDirectory() as tmp:
             tmpd = Path(tmp)
             imgs = [self._make_fake_png(tmpd, f"{i}.png") for i in range(3)]
 
-            def fake_call(path, api_key):
+            def fake_call(path, *args, **kwargs):
                 return {"pass": False, "severity": "major",
                         "issues": ["文字溢出"]}
 
@@ -65,12 +58,11 @@ class TestReviewImages(unittest.TestCase):
         self.assertTrue(any("0.png" in i for i in result["issues"]))
 
     def test_all_ok_pass(self):
-        import tempfile
         with tempfile.TemporaryDirectory() as tmp:
             tmpd = Path(tmp)
             imgs = [self._make_fake_png(tmpd, f"{i}.png") for i in range(2)]
 
-            def fake_call(path, api_key):
+            def fake_call(path, *args, **kwargs):
                 return {"pass": True, "severity": "ok", "issues": []}
 
             with patch.object(ivr, "_call_vision", side_effect=fake_call):
@@ -83,12 +75,11 @@ class TestReviewImages(unittest.TestCase):
 
     def test_minor_still_passes(self):
         """minor 问题 → review_passed=True，但上报 issues"""
-        import tempfile
         with tempfile.TemporaryDirectory() as tmp:
             tmpd = Path(tmp)
             imgs = [self._make_fake_png(tmpd, "a.png")]
 
-            def fake_call(path, api_key):
+            def fake_call(path, *args, **kwargs):
                 return {"pass": True, "severity": "minor",
                         "issues": ["配色一般"]}
 
@@ -101,7 +92,6 @@ class TestReviewImages(unittest.TestCase):
 
     def test_mixed_severity_aggregates_to_worst(self):
         """ok + minor + major → 聚合 major + FAIL"""
-        import tempfile
         with tempfile.TemporaryDirectory() as tmp:
             tmpd = Path(tmp)
             imgs = [
@@ -115,7 +105,7 @@ class TestReviewImages(unittest.TestCase):
                 "major.png": ("major", False, ["溢出"]),
             }
 
-            def fake_call(path, api_key):
+            def fake_call(path, *args, **kwargs):
                 sev, p, iss = severity_map[path.name]
                 return {"pass": p, "severity": sev, "issues": iss}
 
@@ -127,8 +117,7 @@ class TestReviewImages(unittest.TestCase):
         self.assertEqual(result["checked"], 3)
 
     def test_vision_failure_skip_not_block(self):
-        """vision API 调用返回 None → skipped，不判 FAIL"""
-        import tempfile
+        """vision 调用返回 None → skipped，不判 FAIL"""
         with tempfile.TemporaryDirectory() as tmp:
             tmpd = Path(tmp)
             imgs = [self._make_fake_png(tmpd, "a.png"), self._make_fake_png(tmpd, "b.png")]
@@ -140,25 +129,9 @@ class TestReviewImages(unittest.TestCase):
         self.assertEqual(result["checked"], 0)
         self.assertEqual(result["skipped"], 2)
 
-    def test_missing_api_key(self):
-        """无 API key → 全部跳过，保守 pass"""
-        with patch.dict("os.environ", {}, clear=False):
-            # 覆盖 env 并保证不读 ~/.credentials
-            with patch("os.environ.get", side_effect=lambda k, d=None: None if k == "ANTHROPIC_API_KEY" else d):
-                with patch.object(ivr, "_load_anthropic_api_key", return_value=None):
-                    import tempfile
-                    with tempfile.TemporaryDirectory() as tmp:
-                        tmpd = Path(tmp)
-                        imgs = [self._make_fake_png(tmpd, "a.png")]
-                        result = ivr.review_images(imgs)
-
-        self.assertTrue(result["review_passed"])
-        self.assertEqual(result["skipped"], 1)
-        self.assertTrue(any("ANTHROPIC_API_KEY" in i for i in result["issues"]))
-
     def test_missing_image_path(self):
         """图文件不存在 → skipped"""
-        def fake_call(path, api_key):
+        def fake_call(path, *args, **kwargs):
             raise AssertionError("不应被调用")
 
         with patch.object(ivr, "_call_vision", side_effect=fake_call):
@@ -168,9 +141,152 @@ class TestReviewImages(unittest.TestCase):
         self.assertEqual(result["skipped"], 1)
 
 
+class TestCallVisionSubprocess(unittest.TestCase):
+    """验证 _call_vision 正确调 subprocess 并传参。"""
+
+    def _mock_run_ok(self, stdout_text: str) -> MagicMock:
+        fake = MagicMock()
+        fake.returncode = 0
+        fake.stdout = stdout_text
+        fake.stderr = ""
+        return fake
+
+    def test_subprocess_called_with_correct_args_and_env(self):
+        """claude CLI 被调用时带 -p / --dangerously-skip-permissions；
+        图片路径嵌在 prompt 里（由 Claude 的 Read 工具读取）；
+        env 里 CLAUDE_CONFIG_DIR 指向订阅账号；CLAUDECODE 被移除。"""
+        with tempfile.TemporaryDirectory() as tmp:
+            img = Path(tmp) / "x.png"
+            img.write_bytes(b"\x89PNG\r\n\x1a\n")
+
+            fake_result = self._mock_run_ok(
+                '{"pass": true, "severity": "ok", "issues": []}'
+            )
+            with patch.dict(
+                os.environ,
+                {"CLAUDECODE": "1", "VISION_CLAUDE_ACCOUNT": "account2"},
+                clear=False,
+            ):
+                with patch("subprocess.run", return_value=fake_result) as mock_run:
+                    resp = ivr._call_vision(img)
+
+            self.assertIsNotNone(resp)
+            self.assertEqual(resp["severity"], "ok")
+            self.assertTrue(resp["pass"])
+
+            mock_run.assert_called_once()
+            args, kwargs = mock_run.call_args
+            cmd = args[0]
+            # 参数必须包含 -p / --dangerously-skip-permissions / --output-format
+            self.assertIn("-p", cmd)
+            self.assertIn("--dangerously-skip-permissions", cmd)
+            self.assertIn("--output-format", cmd)
+            # claude CLI 不支持 --image，图路径应通过 prompt 传
+            self.assertNotIn("--image", cmd)
+            # prompt 里必须包含图片绝对路径
+            p_idx = cmd.index("-p")
+            prompt_text = cmd[p_idx + 1]
+            self.assertIn(str(img), prompt_text)
+
+            # env：CLAUDE_CONFIG_DIR 指向订阅账号；CLAUDECODE 被移除
+            env = kwargs.get("env") or {}
+            self.assertEqual(
+                env.get("CLAUDE_CONFIG_DIR"),
+                str(Path.home() / ".claude-account2"),
+            )
+            self.assertNotIn("CLAUDECODE", env)
+
+            # subprocess 的 timeout/cwd/capture_output 都正确
+            self.assertIn("timeout", kwargs)
+            self.assertEqual(kwargs.get("cwd"), "/tmp")
+            self.assertTrue(kwargs.get("capture_output"))
+            self.assertTrue(kwargs.get("text"))
+
+    def test_custom_account_from_env(self):
+        """VISION_CLAUDE_ACCOUNT=account3 → CLAUDE_CONFIG_DIR=~/.claude-account3
+        （覆盖默认 account2，证明环境变量优先生效）"""
+        with tempfile.TemporaryDirectory() as tmp:
+            img = Path(tmp) / "x.png"
+            img.write_bytes(b"\x89PNG\r\n\x1a\n")
+
+            fake_result = self._mock_run_ok(
+                '{"pass": true, "severity": "ok", "issues": []}'
+            )
+            with patch.dict(os.environ, {"VISION_CLAUDE_ACCOUNT": "account3"}, clear=False):
+                with patch("subprocess.run", return_value=fake_result) as mock_run:
+                    ivr._call_vision(img)
+
+            _args, kwargs = mock_run.call_args
+            env = kwargs.get("env") or {}
+            self.assertEqual(
+                env.get("CLAUDE_CONFIG_DIR"),
+                str(Path.home() / ".claude-account3"),
+            )
+
+    def test_nonzero_returncode_returns_none(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            img = Path(tmp) / "x.png"
+            img.write_bytes(b"\x89PNG\r\n\x1a\n")
+            fail = MagicMock()
+            fail.returncode = 1
+            fail.stdout = ""
+            fail.stderr = "some cli error"
+            with patch("subprocess.run", return_value=fail):
+                self.assertIsNone(ivr._call_vision(img))
+
+    def test_timeout_returns_none(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            img = Path(tmp) / "x.png"
+            img.write_bytes(b"\x89PNG\r\n\x1a\n")
+            with patch("subprocess.run",
+                       side_effect=subprocess.TimeoutExpired(cmd="claude", timeout=1)):
+                self.assertIsNone(ivr._call_vision(img, timeout=1))
+
+    def test_cli_missing_returns_none(self):
+        """claude CLI 不存在 → 返回 None（不抛，pipeline 不阻塞）"""
+        with tempfile.TemporaryDirectory() as tmp:
+            img = Path(tmp) / "x.png"
+            img.write_bytes(b"\x89PNG\r\n\x1a\n")
+            with patch("subprocess.run", side_effect=FileNotFoundError("no claude")):
+                self.assertIsNone(ivr._call_vision(img))
+
+    def test_stdout_with_markdown_fence_parsed(self):
+        """claude -p 输出带 ```json 栅栏也能解析。"""
+        with tempfile.TemporaryDirectory() as tmp:
+            img = Path(tmp) / "x.png"
+            img.write_bytes(b"\x89PNG\r\n\x1a\n")
+            fenced = '```json\n{"pass": false, "severity": "major", "issues": ["溢出"]}\n```'
+            fake_result = self._mock_run_ok(fenced)
+            with patch("subprocess.run", return_value=fake_result):
+                resp = ivr._call_vision(img)
+            self.assertIsNotNone(resp)
+            self.assertEqual(resp["severity"], "major")
+            self.assertFalse(resp["pass"])
+            self.assertIn("溢出", resp["issues"])
+
+    def test_invalid_json_returns_none(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            img = Path(tmp) / "x.png"
+            img.write_bytes(b"\x89PNG\r\n\x1a\n")
+            fake_result = self._mock_run_ok("this is not json at all")
+            with patch("subprocess.run", return_value=fake_result):
+                self.assertIsNone(ivr._call_vision(img))
+
+    def test_empty_stdout_returns_none(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            img = Path(tmp) / "x.png"
+            img.write_bytes(b"\x89PNG\r\n\x1a\n")
+            fake_result = self._mock_run_ok("")
+            with patch("subprocess.run", return_value=fake_result):
+                self.assertIsNone(ivr._call_vision(img))
+
+
 class TestStripJsonFence(unittest.TestCase):
     def test_basic(self):
         self.assertEqual(ivr._strip_json_fence('```json\n{"a":1}\n```'), '{"a":1}')
+
+    def test_no_fence(self):
+        self.assertEqual(ivr._strip_json_fence('{"a":1}'), '{"a":1}')
 
 
 if __name__ == "__main__":
