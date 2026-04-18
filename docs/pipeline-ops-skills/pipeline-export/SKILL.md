@@ -1,5 +1,5 @@
 ---
-name: pipeline-ops-stage-export
+name: pipeline-export
 description: /pipeline-export、NAS 上传、重传 — Content Pipeline Stage 6 (tar over ssh 同步 NAS) 运维 skill
 ---
 
