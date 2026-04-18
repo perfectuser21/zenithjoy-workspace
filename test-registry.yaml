@@ -241,6 +241,14 @@ tests:
     product: 新媒体运营
     note: "API 合约测试：固化 works/fields/publish-logs response shape，防止 dashboard 静默崩溃"
 
+  - id: api-content-images-route
+    path: apps/api/tests/content-images.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 新媒体运营
+    note: "content-images HTTP 路由：按 pipeline_id + 文件名从 output_dir 读图（cards/ images/ 根目录候选），含路径穿越防护"
+
   # ── E2E（待建）────────────────────────────────────────────────────────────────
 
   # - id: e2e-content-publish
