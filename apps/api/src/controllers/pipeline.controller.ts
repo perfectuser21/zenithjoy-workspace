@@ -240,9 +240,11 @@ export class PipelineController {
         : null;
 
       const files = manifest.image_set?.files || [];
+      // v=updated_at 作为 cache buster，绕开 Cloudflare 对旧 404 的 4h cache
+      const cacheBuster = row.updated_at ? new Date(row.updated_at).getTime() : Date.now();
       const imageUrls = files.map((f) => ({
         type: f.toLowerCase().includes('cover') ? 'cover' : 'card',
-        url: `/api/content-images/${row.id}/${encodeURIComponent(f)}`,
+        url: `/api/content-images/${row.id}/${encodeURIComponent(f)}?v=${cacheBuster}`,
       }));
 
       res.json({

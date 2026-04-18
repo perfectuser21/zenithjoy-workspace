@@ -80,6 +80,8 @@ export class ContentImagesController {
       }
 
       if (!found) {
+        // 不缓存 404 — 避免 Cloudflare 持有旧 404 影响后续正确响应
+        res.setHeader('Cache-Control', 'no-store, max-age=0');
         res.status(404).json({ error: 'image not found' });
         return;
       }
