@@ -25,7 +25,8 @@ def _slug(text: str) -> str:
 
 
 def _find_output_dir(keyword: str) -> Path | None:
-    base = Path(OUTPUT_BASE)
+    # 动态读 env，方便测试 patch
+    base = Path(os.environ.get("CONTENT_OUTPUT_DIR", OUTPUT_BASE))
     if not base.exists():
         return None
     s = _slug(keyword)
@@ -87,24 +88,57 @@ def execute_image_review(run_data: dict) -> dict:
     # 检查图片文件
     topic_slug = _slug(keyword)
     card_count = 0
-    if IMAGES_DIR.exists():
-        card_count = len([
+    card_paths: list[Path] = []
+
+    # 1. 优先看 out_dir/cards/*.png（V6 模板输出在此）
+    cards_dir = out_dir / "cards"
+    if cards_dir.exists():
+        card_paths = sorted(
+            f for f in cards_dir.iterdir() if f.suffix == ".png"
+        )
+
+    # 2. 兜底看 IMAGES_DIR
+    if not card_paths and IMAGES_DIR.exists():
+        card_paths = sorted(
             f for f in IMAGES_DIR.iterdir()
             if f.name.startswith(topic_slug) and f.suffix == ".png"
-        ])
+        )
 
+    card_count = len(card_paths)
     if card_count > max_images:
         issues.append(f"图片数量 {card_count} 超过限制（最多 {max_images} 张）")
+
+    # 新增：Vision 视觉检查（检查文字溢出/布局重叠/字体异常）
+    vision_report: dict = {"review_passed": True, "severity": "ok", "issues": [], "per_image": []}
+    vision_severity = "ok"
+    if card_paths and os.environ.get("SKIP_VISION_REVIEW") != "1":
+        try:
+            from ..image_vision_review import review_images
+            vision_report = review_images(card_paths)
+            vision_severity = vision_report.get("severity", "ok")
+            for v_issue in vision_report.get("issues", []):
+                issues.append(f"vision: {v_issue}")
+        except Exception as e:
+            # vision 模块异常也不阻塞（保守策略）
+            logger.warning("[image-review] vision 模块异常，跳过视觉检查: %s", e)
+            issues.append(f"vision 模块异常: {e}")
 
     # 质量评分
     quality_score = 8
     if issues:
-        # 文案文件缺失扣分多，内容 JSON 缺失扣分少
         blocking = sum(1 for i in issues if "缺少 cards/copy" in i or "缺少 article" in i)
         quality_score = max(2, 8 - blocking * 3 - (len(issues) - blocking))
 
     passed = quality_score >= 6
-    logger.info("[image-review] %s: quality=%d, cards=%d, issues=%d", "PASS" if passed else "FAIL", quality_score, card_count, len(issues))
+    # Vision major 问题强制 FAIL（即使 quality_score 够）
+    if vision_severity == "major":
+        passed = False
+        logger.warning("[image-review] vision major 问题实锤 FAIL")
+
+    logger.info(
+        "[image-review] %s: quality=%d, cards=%d, issues=%d, vision_severity=%s",
+        "PASS" if passed else "FAIL", quality_score, card_count, len(issues), vision_severity,
+    )
 
     return {
         "success": True,
@@ -112,4 +146,6 @@ def execute_image_review(run_data: dict) -> dict:
         "card_count": card_count,
         "issues": issues,
         "quality_score": quality_score,
+        "vision_severity": vision_severity,
+        "vision_report": vision_report,
     }

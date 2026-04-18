@@ -89,29 +89,19 @@ def execute_generate(run_data: dict) -> dict:
     if GEN_V6_SCRIPT.exists():
         person_data_path = out_dir / "person-data.json"
 
-        # 如果 person-data.json 不存在，从 findings 生成
+        # 如果 person-data.json 不存在，从 findings 用 LLM 生成合规 JSON
+        # （旧版直接塞整段 keyword → 头像圈只显前 2 字、卡片底部被裁切）
         if not person_data_path.exists():
             findings = _load_findings(keyword)
             if findings:
-                # 创建基本的 person-data 结构
-                person_data = {
-                    "name": keyword,
-                    "handle": f"@{_slug(keyword)}",
-                    "headline": findings[0].get("title", keyword)[:30] if findings else keyword,
-                    "key_stats": [
-                        {"val": str(i + 1), "label": f.get("title", "")[:20], "sub": ""}
-                        for i, f in enumerate(findings[:3])
-                    ],
-                    "timeline": [],
-                    "flywheel": [f.get("title", "")[:20] for f in findings[:4]],
-                    "flywheel_insight": keyword,
-                    "day_schedule": [],
-                    "qa": [],
-                    "quote": findings[0].get("content", "")[:50] if findings else "",
-                    "avatar_b64_file": None,
-                }
+                from ..person_data_builder import build_person_data
+                person_data = build_person_data(keyword, findings)
                 person_data_path.write_text(
                     json.dumps(person_data, ensure_ascii=False, indent=2), encoding="utf-8",
+                )
+                logger.info(
+                    "[generate] person-data 已生成: name=%s handle=%s",
+                    person_data.get("name"), person_data.get("handle"),
                 )
 
         if person_data_path.exists():
