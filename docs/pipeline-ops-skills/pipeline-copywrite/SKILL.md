@@ -150,3 +150,21 @@ cat "${OUT_DIR}/cards/copy.md" "${OUT_DIR}/article/article.md" | \
 - Review: `/Users/administrator/perfect21/zenithjoy/services/creator/pipeline_worker/executors/copy_review.py`
 - 输出位置: `<out_dir>/cards/copy.md` + `<out_dir>/article/article.md`
 - LLM 接口: `POST http://localhost:5221/api/brain/llm-service/generate`（tier=thalamus）
+
+## LangGraph Contract
+
+### Input（从 ContentPipelineState 读）
+- `pipeline_id`: UUID
+- `keyword`: 关键词
+- `output_dir`: 产物根目录
+- `findings_path`: 上游 research 产物（读 findings.json 做输入）
+- `copy_review_feedback` (可选): REVISION 回路时上一轮 reviewer 的反馈，LLM 据此改稿
+
+### Output（写回 state）
+- `copy_path`: `<output_dir>/cards/copy.md`
+- `article_path`: `<output_dir>/article/article.md`
+- `trace`: "copywrite"
+- `error`: null | 错误字符串
+
+### 失败策略
+LLM 调用失败抛错，让 LangGraph 决定路由。

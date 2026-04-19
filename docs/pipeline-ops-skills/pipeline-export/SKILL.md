@@ -116,3 +116,26 @@ ssh nas "test -f '${NAS_PATH}/manifest.json' && echo OK"
 - SSH 配置: `~/.ssh/config` `Host nas` 块
 - 环境变量: `NAS_SSH_ALIAS`（默认 `nas`）、`NAS_BASE`（默认 `/volume1/workspace/vault/zenithjoy-creator/content`）
 - NAS 路径格式: `{NAS_BASE}/{pipeline_id}/{cards,article,manifest.json,...}`
+
+## LangGraph Contract
+
+### Input（从 ContentPipelineState 读）
+- `pipeline_id`: UUID
+- `keyword`: 关键词
+- `output_dir`: 产物根目录（日期-slug 完整路径）
+- `cards_dir`: 9 张 PNG 目录
+- `copy_path` / `article_path`: 文案产物
+- `person_data_path`: person-data.json
+
+### Output（写回 state）
+- `manifest_path`: `<output_dir>/manifest.json`
+- `nas_url`: `{NAS_BASE}/{pipeline_id}/`
+- `trace`: "export"
+- `error`: null | 错误字符串
+
+### 条件边（content-pipeline-graph 里定义）
+- 无条件 → END（pipeline 完成）
+
+### 失败策略
+- tar over ssh 失败 → 默认 3 次重试（nas_uploader 内置）
+- 3 次都失败 → 抛错，graph 停在 export 节点（checkpoint 保留，主理人跑 `/pipeline-export` 手动重传）
