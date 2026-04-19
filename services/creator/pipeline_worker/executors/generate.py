@@ -9,9 +9,12 @@ import json
 import logging
 import os
 import re
+import shutil
 import subprocess
 from datetime import date
 from pathlib import Path
+
+V6_OUTPUT_DIR = Path.home() / "claude-output" / "images"
 
 logger = logging.getLogger("pipeline-worker.generate")
 
@@ -25,6 +28,18 @@ GEN_V6_SCRIPT = Path.home() / "claude-output" / "scripts" / "gen-v6-person.mjs"
 
 def _slug(text: str) -> str:
     return re.sub(r"-+", "-", re.sub(r"[^a-zA-Z0-9\u4e00-\u9fff-]", "-", text))[:40]
+
+
+def _copy_v6_pngs_to_cards(slug: str, out_dir: Path) -> int:
+    # V6 脚本硬编码写到 ~/claude-output/images/，pipeline 的 cards/ 需要这些图给
+    # content-images HTTP 路由读。把 slug-*.png 复制过去。
+    cards_dir = out_dir / "cards"
+    cards_dir.mkdir(parents=True, exist_ok=True)
+    matches = sorted(V6_OUTPUT_DIR.glob(f"{slug}-*.png"))
+    for src in matches:
+        shutil.copy2(src, cards_dir / src.name)
+    logger.info("[generate] 拷贝 %d 张 PNG 到 cards/: %s", len(matches), cards_dir)
+    return len(matches)
 
 
 def _find_output_dir(keyword: str) -> Path | None:
@@ -112,6 +127,7 @@ def execute_generate(run_data: dict) -> dict:
                 )
                 if result.returncode == 0:
                     logger.info("[generate] V6 生成器完成: %s", result.stdout[:300])
+                    _copy_v6_pngs_to_cards(keyword_slug, out_dir)
                 else:
                     logger.warning("[generate] V6 生成器失败: %s", result.stderr[:300])
             except Exception as e:
