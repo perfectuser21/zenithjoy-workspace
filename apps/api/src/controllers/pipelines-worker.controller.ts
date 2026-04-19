@@ -105,6 +105,14 @@ export class PipelinesWorkerController {
 
       const isFinal = Boolean(is_final) && stage === 'export';
 
+      // 从 output 里提 output_dir（worker 在 generate 阶段完成时会带上真实的日期-slug 路径）
+      // Why: 触发时 DB 只存了根路径 /Users/.../content-output，前端 content-images
+      // HTTP 路由会在 root/cards/ 找图 404。generate 后必须更新到真实路径。
+      const nextOutputDir: string | null =
+        output && typeof output === 'object' && typeof (output as { output_dir?: unknown }).output_dir === 'string'
+          ? ((output as { output_dir: string }).output_dir)
+          : null;
+
       // 查当前 pipeline 存在性
       const cur = await pool.query(
         'SELECT id, status, topic_id FROM zenithjoy.pipeline_runs WHERE id = $1',
@@ -124,10 +132,11 @@ export class PipelinesWorkerController {
             `UPDATE zenithjoy.pipeline_runs
              SET status = 'completed',
                  output_manifest = COALESCE($1::jsonb, output_manifest),
+                 output_dir = COALESCE($3, output_dir),
                  updated_at = NOW()
              WHERE id = $2
              RETURNING *`,
-            [output ? JSON.stringify(output) : null, id]
+            [output ? JSON.stringify(output) : null, id, nextOutputDir]
           );
 
           // 若 topic_id 指向合法 topic，同步置为 '待发布'
@@ -146,14 +155,15 @@ export class PipelinesWorkerController {
           return;
         }
 
-        // 非终态：仅 touch updated_at（current_stage 字段在 pipeline_runs 暂未有列，按幂等策略）
+        // 非终态：touch updated_at + 若 output 带了 output_dir 则 update
         const { rows } = await client.query(
           `UPDATE zenithjoy.pipeline_runs
            SET updated_at = NOW(),
-               status = CASE WHEN status = 'pending' THEN 'running' ELSE status END
+               status = CASE WHEN status = 'pending' THEN 'running' ELSE status END,
+               output_dir = COALESCE($2, output_dir)
            WHERE id = $1
            RETURNING id, status`,
-          [id]
+          [id, nextOutputDir]
         );
         await client.query('COMMIT');
         res.json(ok({ id: rows[0].id, status: rows[0].status, stage }));
