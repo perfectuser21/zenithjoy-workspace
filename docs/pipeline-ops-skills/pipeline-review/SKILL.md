@@ -117,4 +117,34 @@ unset SKIP_VISION_REVIEW
 - Vision 模块: `/Users/administrator/perfect21/zenithjoy/services/creator/pipeline_worker/image_vision_review.py`
 - Executor: `/Users/administrator/perfect21/zenithjoy/services/creator/pipeline_worker/executors/image_review.py`
 - 凭据（/credentials skill 管理）: `~/.credentials/anthropic.json`
-- 环境变量: `IMAGE_VISION_MODEL`（默认 `claude-sonnet-4-5`）、`SKIP_VISION_REVIEW=1` 跳过
+- 环境变量: `IMAGE_VISION_MODEL`（默认 `claude-sonnet-4-5`）、`SKIP_VISION_REVIEW=1` 跳过、`STRICT_VISION_FAIL=1` 严格模式（vision major 阻塞）
+
+## LangGraph Contract
+
+此 skill 对应 content-pipeline-graph 的 `image_review` 节点。
+
+### Input（从 ContentPipelineState 读）
+- `pipeline_id`: UUID
+- `keyword`: 关键词
+- `output_dir`: 产物根目录
+- `cards_dir`: 上游 generate 产物（9 张 PNG 所在目录）
+- `person_data_path`: 上游 generate 产物（用于占位符检查）
+
+### Output（写回 state）
+- `image_review_verdict`: `"PASS"` | `"FAIL"`
+- `image_review_feedback`: FAIL 时非空字符串（vision issues 拼接），PASS 时 null
+- `image_review_round`: 累加计数
+- `trace`: "image_review"
+- `error`: null | 错误字符串
+
+### 条件边（content-pipeline-graph 里定义）
+- `PASS` → 进入 `export` 节点
+- `FAIL` → 回 `generate` 节点重生图，feedback 作为 generate 下一轮的输入
+
+### 裁决规则
+- 默认宽容模式：vision major 不阻塞（只 warn），判 `PASS`
+- `STRICT_VISION_FAIL=1` 时 vision major 直接 `FAIL`
+- `person-data` 含占位符（"待补充"等）始终 `FAIL`（数据错误 ≠ 视觉瑕疵）
+
+### 失败策略
+节点本身执行失败（subprocess 超时）抛错；裁决 FAIL 不是失败，是正常流转。

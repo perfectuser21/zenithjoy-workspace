@@ -134,3 +134,21 @@ find ~/content-output/research -name findings.json -newer /tmp -mmin -30 \
 - findings 目录模式: `~/content-output/research/<content_type>-<slug>-<YYYY-MM-DD>/findings.json`
 - notebooklm CLI: `notebooklm` skill（独立存在）
 - env 备选: `CREATOR_DEFAULT_NOTEBOOK_ID`
+
+## LangGraph Contract
+
+当 content-pipeline-graph.js research 节点调用本 skill 时遵守的契约。
+
+### Input（从 ContentPipelineState 读）
+- `pipeline_id`: UUID（必填）
+- `keyword`: 关键词（LLM 扩展后的长查询）
+- `output_dir`: pipeline 产物根目录（日期-slug 全路径，首次 research 可能为空，本节点创建）
+
+### Output（写回 state）
+- `findings_path`: `~/content-output/research/<content_type>-<slug>-<YYYY-MM-DD>/findings.json`
+- `output_dir`: 如首次 research 此节点创建则写入完整路径
+- `trace`: "research"
+- `error`: null | 错误字符串
+
+### 失败策略
+不自己 retry，抛错让 LangGraph 按条件边路由。pipeline-worker 老路径的 fallback 逻辑（ask 空答、wait 超时等）保留在 executor 内部；skill 对外只关心「产物是否达标」。

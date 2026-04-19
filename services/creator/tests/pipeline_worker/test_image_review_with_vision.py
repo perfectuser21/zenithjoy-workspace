@@ -45,6 +45,7 @@ def _setup_minimal_content(base: Path, slug: str, person_data: dict | None = Non
 
 class TestImageReviewWithVision(unittest.TestCase):
     def test_vision_major_forces_fail(self):
+        # STRICT_VISION_FAIL=1 恢复严格模式（PR #194/195 后默认宽容，strict 才 FAIL）
         with tempfile.TemporaryDirectory() as tmp:
             base = Path(tmp)
             slug = "test-slug"
@@ -53,6 +54,7 @@ class TestImageReviewWithVision(unittest.TestCase):
             with patch.dict(os.environ, {
                 "CONTENT_OUTPUT_DIR": str(base),
                 "SKIP_VISION_REVIEW": "",
+                "STRICT_VISION_FAIL": "1",
             }, clear=False):
                 from pipeline_worker.executors import image_review
                 # mock vision 返回 major
