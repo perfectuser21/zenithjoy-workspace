@@ -168,16 +168,19 @@ def execute_image_review(run_data: dict) -> dict:
             issues.append(f"vision 模块异常: {e}")
 
     # 质量评分
+    # 宽容模式（STRICT_VISION_FAIL!=1）下，vision issue 不计入 quality_score，
+    # 否则"只 warn 不阻塞"只是口号 —— 分数仍被拉低到 <6 导致整体 FAIL。
+    strict_vision = os.environ.get("STRICT_VISION_FAIL", "0") == "1"
+    scoring_issues = issues if strict_vision else [i for i in issues if not i.startswith("vision: ")]
     quality_score = 8
-    if issues:
-        blocking = sum(1 for i in issues if "缺少 cards/copy" in i or "缺少 article" in i)
-        quality_score = max(2, 8 - blocking * 3 - (len(issues) - blocking))
+    if scoring_issues:
+        blocking = sum(1 for i in scoring_issues if "缺少 cards/copy" in i or "缺少 article" in i)
+        quality_score = max(2, 8 - blocking * 3 - (len(scoring_issues) - blocking))
 
     passed = quality_score >= 6
     # Vision major 默认宽容（只 warn 不阻塞 pipeline），STRICT_VISION_FAIL=1 则恢复旧行为
     # Why: V6 字符预算过松 → 渲染超界 → vision 真实检出大量 issue → 整条 pipeline 挂，
     # 前端永远拿不到产物。宽容模式让有瑕疵的图仍然上 NAS，主理人可人工挑/重跑。
-    strict_vision = os.environ.get("STRICT_VISION_FAIL", "0") == "1"
     if vision_severity == "major":
         if strict_vision:
             passed = False
