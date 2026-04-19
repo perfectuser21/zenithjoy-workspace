@@ -52,25 +52,27 @@ from typing import Any
 
 logger = logging.getLogger("pipeline-worker.person_data_builder")
 
-# V6 模板字段预算（字符数上限）
+# V6 模板字段预算（字符数上限）—— 2026-04-19 收紧约 30%
+# 旧值按纯字符计但中文在 SVG 里占双宽，Resvg 渲染到右边界被硬切，
+# vision 审查实测大量溢出。新值是实测安全上限（截到字符级即不再溢出）。
 BUDGET: dict[str, int] = {
-    "name": 8,
-    "handle": 18,
-    "headline": 20,
-    "stat_val": 8,
-    "stat_label": 12,
-    "stat_sub": 15,
-    "flywheel_item": 6,
-    "flywheel_insight": 28,
-    "quote": 36,
-    "timeline_year": 10,
-    "timeline_title": 16,
-    "timeline_desc": 28,
-    "schedule_time": 12,
-    "schedule_title": 12,
-    "schedule_desc": 30,
-    "qa_q": 20,
-    "qa_a": 40,
+    "name": 6,
+    "handle": 14,
+    "headline": 14,
+    "stat_val": 6,
+    "stat_label": 8,
+    "stat_sub": 10,
+    "flywheel_item": 4,
+    "flywheel_insight": 20,
+    "quote": 24,
+    "timeline_year": 7,
+    "timeline_title": 11,
+    "timeline_desc": 20,
+    "schedule_time": 8,
+    "schedule_title": 8,
+    "schedule_desc": 20,
+    "qa_q": 14,
+    "qa_a": 28,
 }
 
 # 模板要求的数组长度
