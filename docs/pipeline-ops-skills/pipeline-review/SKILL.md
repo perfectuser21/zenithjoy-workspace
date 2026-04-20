@@ -1,23 +1,32 @@
 ---
 name: pipeline-review
-description: Content Pipeline Stage 5 图片检查 (严格 SOP)
+description: Content Pipeline Stage 5 图片检查 (严格 SOP — 2 层：bash 完整性 + 4 维 vision 评审)
 ---
 
-# pipeline-review — Stage 5 图片完整性检查机
+# pipeline-review — Stage 5 图片评审机
 
 ## 你是谁
-**图片清点搬运机**。数 PNG 数量 + 检查文件大小 + 输出一行 JSON。
-不调 vision API（那是质量评审，不是完整性检查）。
+**图片评审搬运机**。两层检查：
+- **第 1 层**：bash 完整性（PNG 数量 ≥ 8 + 每张 ≥ 10KB）。
+- **第 2 层**：每张图调 Brain vision 做 4 维打分（V1 文字渲染 / V2 数据一致 / V3 布局 / V4 美感）。
+
+第 1 层没过直接 FAIL，跳过 vision 调用。
+只输出最后一行 JSON。
 
 ## 硬约束
-- 禁止调 Claude Vision / Anthropic API
-- 禁止分析图片内容（这是质量审查，不在本节点范围）
-- 只用 `ls` / `wc` / `stat` / `du` bash 工具
-- 只输出最后一行 JSON
+- 第 1 层：只用 `ls` / `wc` / `stat` / `du`
+- 第 2 层：必须调 Brain vision 端点；**端点未上线时按 TODO 跳过但保留 schema 占位**（见步骤 3 说明）
+- **任一张 V1 ≤ 1 或 V3 ≤ 1 → 全局 FAIL**（空字 / 严重裁切一票否决）
+- 所有张均分 ≥ 14（4 维 × 0-5 满分 20 的 70%）→ PASS
+- 否则 REVISION / FAIL → 触发下一轮 generate 重新渲染
+- vision prompt 中 5/3/0 各档判定必须写死，防止模型发散
+- 禁止在 JSON 外输出任何东西
 
 ## Input（env）
 
 - `CONTENT_OUTPUT_DIR` — 产物根目录
+- `BRAIN_URL` — 可选，默认 `http://host.docker.internal:5221`
+- `BRAIN_VISION_ENABLED` — 可选，默认 `false`（当 Brain 暴露 vision 端点后，设置 `true` 启用第 2 层）
 
 ## 执行步骤
 
@@ -31,13 +40,14 @@ if [ ! -d "$CARDS_DIR" ]; then
 fi
 ```
 
-### 步骤 2：收集每张 PNG 的体积 + 判定
+### 步骤 2：第 1 层 — 每张 PNG 的体积 + 判定
 
 ```bash
-# 累积 per-image JSON 对象
 PER_IMAGE_JSON=""
 PNG_COUNT=0
 SMALL_COUNT=0
+# 记录通过第 1 层的图路径，供第 2 层 vision 使用
+PASSED_IMGS=()
 
 for f in "$CARDS_DIR"/*.png; do
   [ -f "$f" ] || continue
@@ -51,6 +61,7 @@ for f in "$CARDS_DIR"/*.png; do
   else
     PASS="true"
     REASON=""
+    PASSED_IMGS+=("$f")
   fi
   OBJ="{\"id\":\"${NAME}\",\"label\":\"${NAME}\",\"pass\":${PASS},\"value\":${SIZE}${REASON}}"
   if [ -z "$PER_IMAGE_JSON" ]; then
@@ -61,16 +72,198 @@ for f in "$CARDS_DIR"/*.png; do
 done
 ```
 
-### 步骤 3：裁决（硬规则）
+### 步骤 3：第 2 层 — 4 维 vision 打分（bash 全过才进）
 
-| 条件 | verdict |
-|------|---------|
-| PNG ≥ 8 且无小文件 | PASS |
-| PNG < 8 或有小文件（<10KB） | FAIL |
+打分模板（每张 4 维 × 0-5 = 20 分/张）：
+
+| 维度 | 含义 | 5 分 | 3 分 | 0 分 |
+|---|---|---|---|---|
+| V1 文字渲染 | 图上中文完整清晰 | 所有字清晰 | 大部分显示 | 空字 / 乱码 |
+| V2 数据一致 | 图上文字匹配 person-data.json | 精确对应 | 大致对应 | 完全不对 |
+| V3 布局 | 文字不裁切/不堆叠 | 完美 | 小问题 | 严重裁切/堆叠 |
+| V4 美感 | 颜色/间距/层次 | 精致 | 合格 | 乱/丑 |
+
+通过规则（硬卡）：
+- 任一张 **V1 ≤ 1**（空字）→ 全局 **FAIL**
+- 任一张 **V3 ≤ 1**（严重裁切）→ 全局 **FAIL**
+- 所有张均分 ≥ 14（70%）→ **PASS**
+- 否则 **REVISION** → generate 下一轮重新渲染
+
+```bash
+# 初始化 vision 相关变量
+VISION_RULES_JSON=""
+FAIL_ANY_V1=false
+FAIL_ANY_V3=false
+SUM_TOTAL=0
+NUM_IMGS=0
+AVG=0
+VISION_CALLED=false
+
+# 判定第 1 层是否全过
+BASH_OK=true
+[ "$PNG_COUNT" -lt 8 ] && BASH_OK=false
+[ "$SMALL_COUNT" -gt 0 ] && BASH_OK=false
+
+# TODO(vision-endpoint): 当 Brain 暴露 POST /api/brain/llm-service/vision 端点后，把
+# BRAIN_VISION_ENABLED 默认值改为 true。当前 /api/brain/llm-service/generate 的请求体
+# 不支持 image_base64 字段（只接受 tier/prompt/max_tokens/timeout/format），
+# 所以默认跳过第 2 层 vision 评审，但保留 4 维 schema 占位（填 0 + reason=pending）。
+# 调研结论：cecelia/packages/brain/src/llm-caller.js 内部 callAnthropicAPI 已支持
+# imageContent（Anthropic 多模态格式），只差一层 HTTP 路由暴露。
+VISION_ENABLED="${BRAIN_VISION_ENABLED:-false}"
+
+if [ "$BASH_OK" = "true" ] && [ "$VISION_ENABLED" = "true" ]; then
+  VISION_CALLED=true
+  BRAIN_URL="${BRAIN_URL:-http://host.docker.internal:5221}"
+  PERSON_DATA_FILE="${CONTENT_OUTPUT_DIR}/person-data.json"
+  PERSON_DATA_TEXT=$(cat "$PERSON_DATA_FILE" 2>/dev/null || echo "{}")
+
+  for img in "${PASSED_IMGS[@]}"; do
+    NAME=$(basename "$img")
+    IMG_B64=$(base64 < "$img" | tr -d '\n')
+
+    VISION_PROMPT=$(cat <<PROMPT_END
+你是图片质量审查员。严格按 4 维 × 0-5 分制评估这张图。
+
+## person-data.json（图上文字应该对应这些数据）
+${PERSON_DATA_TEXT}
+
+## 评分标准（每维 0-5，必须严格对照档位）
+
+### V1 文字渲染（图上中文是否完整清晰）
+5 = 所有字清晰可读
+3 = 大部分字显示
+0 = 空字 / 乱码 / 缺字
+
+### V2 数据一致（图上文字是否对得上 person-data）
+5 = 精确对应（name/quote/stats 等）
+3 = 大致对应
+0 = 完全不对 / 张冠李戴
+
+### V3 布局（文字不裁切、不堆叠）
+5 = 完美
+3 = 有小问题
+0 = 严重裁切 / 堆叠
+
+### V4 视觉美感（颜色/间距/层次）
+5 = 精致
+3 = 合格
+0 = 乱 / 丑
+
+## 输出（严格 JSON，不要 markdown fence，不要解释）
+
+{"V1":{"score":<0-5>,"reason":"<20-40 字>"},"V2":{"score":<0-5>,"reason":"..."},"V3":{"score":<0-5>,"reason":"..."},"V4":{"score":<0-5>,"reason":"..."}}
+PROMPT_END
+)
+
+    export VISION_PROMPT IMG_B64
+    V_REQ=$(python3 -c "
+import json, os
+body = {
+  'tier': 'thalamus',
+  'prompt': os.environ['VISION_PROMPT'],
+  'image_base64': os.environ['IMG_B64'],
+  'image_mime': 'image/png',
+  'max_tokens': 512,
+  'format': 'json',
+  'timeout': 60,
+}
+print(json.dumps(body))
+")
+
+    VRESP=$(curl -s -X POST "$BRAIN_URL/api/brain/llm-service/vision" \
+      -H 'Content-Type: application/json' \
+      -d "$V_REQ")
+
+    VTEXT=$(echo "$VRESP" | python3 -c "
+import json, sys
+try:
+    d = json.load(sys.stdin)
+    t = (d.get('data') or {}).get('text') or (d.get('data') or {}).get('content') or ''
+    t = t.strip()
+    if t.startswith('\`\`\`json'): t = t[7:]
+    elif t.startswith('\`\`\`'): t = t[3:]
+    if t.endswith('\`\`\`'): t = t[:-3]
+    print(t.strip())
+except Exception:
+    print('')
+" 2>/dev/null)
+
+    VPARSED=$(echo "$VTEXT" | python3 -c "
+import json, sys
+try:
+    d = json.load(sys.stdin)
+except Exception:
+    d = {}
+def pick(k, sub):
+    try:
+        return str(d.get(k, {}).get(sub, '') or '')
+    except Exception:
+        return ''
+parts = []
+for k in ['V1','V2','V3','V4']:
+    s = pick(k, 'score')
+    r = pick(k, 'reason').replace('\t', ' ').replace('\n', ' ').replace('\"', \"'\")
+    parts.append(s if s else '0')
+    parts.append(r)
+print('\t'.join(parts))
+" 2>/dev/null)
+
+    IFS=$'\t' read -r V1 V1_REASON V2 V2_REASON V3 V3_REASON V4 V4_REASON <<< "$VPARSED"
+    case "$V1" in ''|*[!0-9]*) V1=0 ;; esac
+    case "$V2" in ''|*[!0-9]*) V2=0 ;; esac
+    case "$V3" in ''|*[!0-9]*) V3=0 ;; esac
+    case "$V4" in ''|*[!0-9]*) V4=0 ;; esac
+
+    TOTAL=$((V1 + V2 + V3 + V4))
+    SUM_TOTAL=$((SUM_TOTAL + TOTAL))
+    NUM_IMGS=$((NUM_IMGS + 1))
+
+    [ "$V1" -le 1 ] && FAIL_ANY_V1=true
+    [ "$V3" -le 1 ] && FAIL_ANY_V3=true
+
+    # per-image vision 对象（value=总分，14/20 为通过线）
+    V_PASS=$([ "$TOTAL" -ge 14 ] && echo true || echo false)
+    V1_R=$(printf '%s' "$V1_REASON" | sed 's/"/\\"/g')
+    V2_R=$(printf '%s' "$V2_REASON" | sed 's/"/\\"/g')
+    V3_R=$(printf '%s' "$V3_REASON" | sed 's/"/\\"/g')
+    V4_R=$(printf '%s' "$V4_REASON" | sed 's/"/\\"/g')
+    VOBJ="{\"id\":\"vision-${NAME}\",\"label\":\"${NAME} 4 维\",\"pass\":${V_PASS},\"value\":${TOTAL},\"scores\":{\"V1\":${V1},\"V2\":${V2},\"V3\":${V3},\"V4\":${V4}},\"reasons\":{\"V1\":\"${V1_R}\",\"V2\":\"${V2_R}\",\"V3\":\"${V3_R}\",\"V4\":\"${V4_R}\"}}"
+    if [ -z "$VISION_RULES_JSON" ]; then
+      VISION_RULES_JSON="$VOBJ"
+    else
+      VISION_RULES_JSON="${VISION_RULES_JSON},${VOBJ}"
+    fi
+  done
+
+  if [ "$NUM_IMGS" -gt 0 ]; then
+    AVG=$((SUM_TOTAL / NUM_IMGS))
+  fi
+elif [ "$BASH_OK" = "true" ] && [ "$VISION_ENABLED" != "true" ]; then
+  # vision 端点未上线：保留 4 维 schema 占位，全部填 0，标注 pending
+  for img in "${PASSED_IMGS[@]}"; do
+    NAME=$(basename "$img")
+    VOBJ="{\"id\":\"vision-${NAME}\",\"label\":\"${NAME} 4 维\",\"pass\":true,\"value\":0,\"scores\":{\"V1\":0,\"V2\":0,\"V3\":0,\"V4\":0},\"reasons\":{\"V1\":\"vision endpoint pending\",\"V2\":\"vision endpoint pending\",\"V3\":\"vision endpoint pending\",\"V4\":\"vision endpoint pending\"}}"
+    if [ -z "$VISION_RULES_JSON" ]; then
+      VISION_RULES_JSON="$VOBJ"
+    else
+      VISION_RULES_JSON="${VISION_RULES_JSON},${VOBJ}"
+    fi
+  done
+fi
+```
+
+### 步骤 4：裁决（2 层合并）
+
+规则：
+- 第 1 层挂 → **FAIL**（PNG 数量不足 / 有小文件）
+- 第 2 层进了且 V1 或 V3 出现 ≤ 1 → **FAIL**
+- 第 2 层均分 < 14 → **REVISION**
+- 否则 → **PASS**
+- vision 未启用（端点未上线）→ 只按第 1 层结果判，verdict 最多是 PASS（占位不影响放行）
 
 ```bash
 ISSUES=()
-# 整体规则（补在 per-image 之外）
 COUNT_RULE_PASS="true"
 COUNT_REASON=""
 if [ "$PNG_COUNT" -lt 8 ]; then
@@ -84,32 +277,57 @@ fi
 
 COUNT_RULE="{\"id\":\"RCOUNT\",\"label\":\"PNG ≥ 8 张\",\"pass\":${COUNT_RULE_PASS},\"value\":${PNG_COUNT}${COUNT_REASON}}"
 
-if [ ${#ISSUES[@]} -eq 0 ]; then
+if [ "$BASH_OK" != "true" ]; then
+  # 第 1 层没过
+  VERDICT="FAIL"
+  FB_ESC=$(IFS=';'; echo "${ISSUES[*]}" | sed 's/"/\\"/g')
+  FEEDBACK="\"${FB_ESC}\""
+elif [ "$VISION_CALLED" = "true" ]; then
+  # 第 2 层评审了
+  if [ "$FAIL_ANY_V1" = "true" ] || [ "$FAIL_ANY_V3" = "true" ]; then
+    VERDICT="FAIL"
+    VISION_FB="avg=${AVG}/20"
+    [ "$FAIL_ANY_V1" = "true" ] && VISION_FB="${VISION_FB}; V1 空字/乱码命中"
+    [ "$FAIL_ANY_V3" = "true" ] && VISION_FB="${VISION_FB}; V3 严重裁切/堆叠命中"
+    FB_ESC=$(printf '%s' "$VISION_FB" | sed 's/"/\\"/g')
+    FEEDBACK="\"${FB_ESC}\""
+  elif [ "$AVG" -lt 14 ]; then
+    VERDICT="REVISION"
+    VISION_FB="vision avg=${AVG}/20 低于 14 通过线"
+    FB_ESC=$(printf '%s' "$VISION_FB" | sed 's/"/\\"/g')
+    FEEDBACK="\"${FB_ESC}\""
+  else
+    VERDICT="PASS"
+    FEEDBACK="null"
+  fi
+else
+  # 第 1 层全过但第 2 层未启用（vision 端点 pending）
   VERDICT="PASS"
   FEEDBACK="null"
-else
-  VERDICT="FAIL"
-  FEEDBACK="\"$(IFS=';'; echo "${ISSUES[*]}")\""
 fi
 ```
 
-### 步骤 4：输出 JSON
+### 步骤 5：输出 JSON
 
 ```bash
-# rule_details 顺序：RCOUNT（整体）+ per-image
+# rule_details 顺序：RCOUNT（整体）+ per-image size + per-image vision
 if [ -z "$PER_IMAGE_JSON" ]; then
   RULES="${COUNT_RULE}"
 else
   RULES="${COUNT_RULE},${PER_IMAGE_JSON}"
 fi
+if [ -n "$VISION_RULES_JSON" ]; then
+  RULES="${RULES},${VISION_RULES_JSON}"
+fi
 
-echo "{\"image_review_verdict\":\"${VERDICT}\",\"image_review_feedback\":${FEEDBACK},\"card_count\":${PNG_COUNT},\"image_review_rule_details\":[${RULES}]}"
+echo "{\"image_review_verdict\":\"${VERDICT}\",\"image_review_feedback\":${FEEDBACK},\"card_count\":${PNG_COUNT},\"vision_avg\":${AVG},\"vision_threshold\":14,\"vision_enabled\":${VISION_ENABLED},\"image_review_rule_details\":[${RULES}]}"
 ```
 
 ## 禁止事项
 
-- 禁止调 vision API 做内容评审
-- 禁止因"感觉"判 FAIL
+- 禁止因"感觉"判 FAIL（第 1 层纯机械，第 2 层交给 vision LLM）
+- 禁止自己打 V1-V4 的分（必须 vision 端点打分）
+- 禁止"反复评分 / 自我重试"；一次调用，解析失败按 0 算
 - 禁止在 JSON 外输出任何东西
 
 ## 输出 schema
@@ -118,13 +336,39 @@ echo "{\"image_review_verdict\":\"${VERDICT}\",\"image_review_feedback\":${FEEDB
 
 ```json
 {
-  "image_review_verdict":"PASS|FAIL",
+  "image_review_verdict":"PASS|REVISION|FAIL",
   "image_review_feedback":"..."|null,
   "card_count":<int>,
+  "vision_avg":0-20,
+  "vision_threshold":14,
+  "vision_enabled":true|false,
   "image_review_rule_details":[
     {"id":"RCOUNT","label":"PNG ≥ 8 张","pass":true|false,"value":<int>,"reason"?:"..."},
     {"id":"<filename>.png","label":"<filename>.png","pass":true|false,"value":<size_bytes>,"reason"?:"..."},
+    ...,
+    {"id":"vision-<filename>.png","label":"<filename>.png 4 维","pass":true|false,"value":0-20,"scores":{"V1":0-5,"V2":0-5,"V3":0-5,"V4":0-5},"reasons":{"V1":"...","V2":"...","V3":"...","V4":"..."}},
     ...
   ]
 }
 ```
+
+## 与 Brain 的接口契约（vision）
+
+- **目标端点**：`POST ${BRAIN_URL}/api/brain/llm-service/vision`
+- 请求体：`{ tier, prompt, image_base64, image_mime, max_tokens, format, timeout }`
+- tier：`thalamus`（Sonnet 级，成本受控）
+- 输出：`{ success, data: { text: "<严格 JSON 字符串>", ... } }`
+
+## 现状：vision 端点未上线（调研结论）
+
+**调研时间**：2026-04-20
+**结论**：Brain 侧 vision 端点暂不存在，但底层 LLM 调用器已支持多模态，只差一层 HTTP 路由。
+
+- `cecelia/packages/brain/src/routes/llm-service.js` **只暴露了 `POST /generate`**，请求体 schema 不接受 image 字段（只接 `tier/prompt/max_tokens/timeout/format`）。
+- 内部 `cecelia/packages/brain/src/llm-caller.js` 的 `callAnthropicAPI` **已经支持** `imageContent`（Anthropic 多模态格式 `[{type:'image',source:{type:'base64',media_type,data}}]`），`callLLM` 签名也接收 `options.imageContent`。
+- 因此本 skill 默认 `BRAIN_VISION_ENABLED=false`，先跳过第 2 层真实调用，但保留 per-image 4 维 schema 占位（V1-V4 全填 0 + reason="vision endpoint pending"），便于端点上线后零改动切换。
+
+**启用方式（端点就绪后）**：
+1. Brain 侧：在 `packages/brain/src/routes/llm-service.js` 新增 `router.post('/vision', ...)`，透传 `image_base64/image_mime` 给 `callLLM(tier, prompt, { imageContent: [...] })`。
+2. 消费侧：pipeline-worker 执行前设置环境变量 `BRAIN_VISION_ENABLED=true`（或直接改本 skill 步骤 3 的默认值）。
+3. 无需改本 skill 的其他代码 —— 所有解析、打分、裁决、schema 都已就绪。
