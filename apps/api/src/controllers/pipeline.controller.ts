@@ -324,6 +324,11 @@ export class PipelineController {
           res.json({
             stages: buildStagesFromEvents(events),
             overall_status: overallStatusFromEvents(events),
+            events: events.map((e) => ({
+              id: e.id,
+              created_at: e.created_at,
+              payload: e.payload,
+            })),
           });
           return;
         }
@@ -335,6 +340,7 @@ export class PipelineController {
       res.json({
         stages: {},
         overall_status: manifest?.status || row.status || 'pending',
+        events: [],
       });
     } catch (err) {
       console.error('[pipeline] getStages error:', err);
