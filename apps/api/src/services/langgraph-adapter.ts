@@ -16,7 +16,8 @@ export function translateDockerPath(p: string | null | undefined): string | null
   return p;
 }
 
-interface EventPayload {
+// EventPayload 导出供外部（路由/测试）引用
+export interface EventPayload {
   node: string;
   step_index: number;
   error?: string | null;
@@ -31,6 +32,21 @@ interface EventPayload {
   image_review_verdict?: 'PASS' | 'FAIL';
   image_review_round?: number;
   image_review_rule_details?: RuleDetail[];
+  // ─── WF-3 观察性字段（Brain 侧每步 Docker 执行元数据） ───
+  // Brain content-pipeline-graph-runner.js 每步通过 onStep 回调写入：
+  //   prompt_sent    Brain 发给 Claude 的 prompt（前 8KB）
+  //   raw_stdout     Claude 吐的 stdout（前 10KB）
+  //   raw_stderr     Claude 吐的 stderr（前 2KB）
+  //   exit_code      容器退出码
+  //   duration_ms    节点耗时毫秒
+  //   container_id   容器 ID 前 12 位（--cidfile）
+  // API 不做任何加工，原样透传给前端（pipeline 详情页事件展开后展示）。
+  prompt_sent?: string;
+  raw_stdout?: string;
+  raw_stderr?: string;
+  exit_code?: number | null;
+  duration_ms?: number;
+  container_id?: string | null;
   [k: string]: unknown;
 }
 

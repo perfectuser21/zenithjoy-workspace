@@ -21,6 +21,15 @@ export interface EventPayload {
   image_review_verdict?: 'PASS' | 'FAIL'
   image_review_round?: number
   image_review_rule_details?: RuleDetail[]
+  // ─── WF-3 观察性字段（Brain 侧每步 Docker 执行元数据） ───
+  // 来自 cecelia brain content-pipeline-graph-runner.js 的 onStep 透传，
+  // PipelineOutputPage 详情页事件展开后展示（输入 / 输出 / 元数据 tab）。
+  prompt_sent?: string
+  raw_stdout?: string
+  raw_stderr?: string
+  exit_code?: number | null
+  duration_ms?: number
+  container_id?: string | null
   [k: string]: unknown
 }
 

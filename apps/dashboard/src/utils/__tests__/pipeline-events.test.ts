@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { formatEventNode, formatDurationMs } from '../pipeline-events'
+import { formatEventNode, formatDurationMs, type EventPayload } from '../pipeline-events'
 
 describe('formatEventNode', () => {
   it('research: 提取 findings 路径尾', () => {
@@ -88,5 +88,61 @@ describe('formatDurationMs', () => {
     expect(formatDurationMs(60000)).toBe('1m0s')
     expect(formatDurationMs(125000)).toBe('2m5s')
     expect(formatDurationMs(3600000)).toBe('60m0s')
+  })
+})
+
+describe('EventPayload — WF-3 观察性字段', () => {
+  it('类型接受新增 meta 字段 (prompt_sent / raw_stdout / raw_stderr / exit_code / duration_ms / container_id)', () => {
+    // 用运行时 assertion 代替 expectTypeOf（vitest 配置简单稳），确保 TS 编译通过 = 类型正确
+    const p: EventPayload = {
+      node: 'research',
+      step_index: 1,
+      prompt_sent: 'Hello',
+      raw_stdout: 'some stdout',
+      raw_stderr: 'some stderr',
+      exit_code: 0,
+      duration_ms: 12345,
+      container_id: 'abc123def456',
+    }
+    expect(p.prompt_sent).toBe('Hello')
+    expect(p.raw_stdout).toBe('some stdout')
+    expect(p.raw_stderr).toBe('some stderr')
+    expect(p.exit_code).toBe(0)
+    expect(p.duration_ms).toBe(12345)
+    expect(p.container_id).toBe('abc123def456')
+  })
+
+  it('meta 字段全部 optional（不传也合法；旧事件兼容）', () => {
+    const p: EventPayload = { node: 'research', step_index: 1 }
+    expect(p.prompt_sent).toBeUndefined()
+    expect(p.raw_stdout).toBeUndefined()
+    expect(p.container_id).toBeUndefined()
+  })
+
+  it('exit_code 允许 null（spawn 失败场景）', () => {
+    const p: EventPayload = {
+      node: 'research',
+      step_index: 1,
+      exit_code: null,
+      container_id: null,
+    }
+    expect(p.exit_code).toBeNull()
+    expect(p.container_id).toBeNull()
+  })
+
+  it('formatEventNode 对带 meta 的 event 不崩溃、不干扰 icon/label/detail', () => {
+    const r = formatEventNode({
+      node: 'research',
+      findings_path: '/home/cecelia/content-output/foo/findings.json',
+      prompt_sent: 'x'.repeat(8000),
+      raw_stdout: 'stdout' + '\n'.repeat(500),
+      exit_code: 0,
+      duration_ms: 99999,
+      container_id: 'abcdef012345',
+    })
+    // 原 display 逻辑只消费业务字段，meta 不影响
+    expect(r.icon).toBe('🔬')
+    expect(r.label).toBe('调研')
+    expect(r.detail).toBe('→ foo/findings.json')
   })
 })

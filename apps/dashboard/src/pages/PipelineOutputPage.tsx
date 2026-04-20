@@ -343,6 +343,138 @@ function RuleDetailsTable({ title, details }: { title: string; details?: RuleDet
   )
 }
 
+// ─── 事件展开详情（三 tab：输出 / 输入 / 元数据） ───────────
+
+type EventDetailTab = 'output' | 'input' | 'meta'
+
+// 长文本查看器：默认显示前 30 行，展开/收起查看完整内容
+function LongTextViewer({ text, language }: { text: string; language?: string }) {
+  const [expanded, setExpanded] = useState(false)
+  if (!text) {
+    return <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.25)', fontStyle: 'italic', padding: '8px 10px' }}>（空）</div>
+  }
+  const lines = text.split('\n')
+  const HEAD = 30
+  const isLong = lines.length > HEAD
+  const shown = expanded || !isLong ? text : lines.slice(0, HEAD).join('\n')
+  return (
+    <div>
+      <pre style={{ fontSize: 10, color: 'rgba(255,255,255,0.7)', margin: 0, padding: '8px 10px', background: 'rgba(0,0,0,0.35)', borderRadius: 6, border: '1px solid rgba(255,255,255,0.06)', overflowX: 'auto', whiteSpace: 'pre-wrap' as const, wordBreak: 'break-word' as const, lineHeight: 1.55, maxHeight: expanded ? 520 : undefined, overflowY: 'auto' }}>
+        {shown}
+      </pre>
+      {isLong && (
+        <button
+          onClick={() => setExpanded(v => !v)}
+          style={{ marginTop: 6, fontSize: 10, color: '#c084fc', background: 'transparent', border: '1px solid rgba(124,58,237,0.3)', borderRadius: 5, padding: '3px 9px', cursor: 'pointer' }}
+        >
+          {expanded ? `收起 (${lines.length} 行)` : `展开剩余 ${lines.length - HEAD} 行`}
+        </button>
+      )}
+      {language && <div style={{ fontSize: 9, color: 'rgba(255,255,255,0.2)', marginTop: 3, textAlign: 'right' as const }}>{language}</div>}
+    </div>
+  )
+}
+
+// 元数据 key-value 表
+function MetaTable({ rows }: { rows: Array<{ label: string; value: React.ReactNode; mono?: boolean }> }) {
+  return (
+    <div style={{ border: '1px solid rgba(255,255,255,0.06)', borderRadius: 6, overflow: 'hidden' }}>
+      {rows.map((r, i) => (
+        <div key={r.label} style={{ display: 'grid', gridTemplateColumns: '140px 1fr', fontSize: 11, borderBottom: i < rows.length - 1 ? '1px solid rgba(255,255,255,0.04)' : 'none' }}>
+          <div style={{ padding: '6px 10px', color: 'rgba(255,255,255,0.35)', background: 'rgba(255,255,255,0.02)' }}>{r.label}</div>
+          <div style={{ padding: '6px 10px', color: 'rgba(255,255,255,0.75)', fontFamily: r.mono ? 'SFMono-Regular, Consolas, monospace' : undefined, fontVariantNumeric: 'tabular-nums', wordBreak: 'break-all' as const }}>
+            {r.value}
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function EventDetailTabs({ event }: { event: PipelineEvent }) {
+  const [tab, setTab] = useState<EventDetailTab>('output')
+  const p = event.payload
+
+  const tabs: Array<{ key: EventDetailTab; label: string; count?: number }> = [
+    { key: 'output', label: '输出', count: p.raw_stdout ? p.raw_stdout.length : 0 },
+    { key: 'input', label: '输入', count: p.prompt_sent ? p.prompt_sent.length : 0 },
+    { key: 'meta', label: '元数据' },
+  ]
+
+  const metaRows: Array<{ label: string; value: React.ReactNode; mono?: boolean }> = [
+    { label: 'event id', value: `#${event.id}`, mono: true },
+    { label: '时间', value: new Date(event.created_at).toLocaleString(), mono: true },
+    { label: 'node', value: p.node || '—' },
+    { label: 'step_index', value: p.step_index ?? '—', mono: true },
+    {
+      label: 'exit_code',
+      value: p.exit_code === 0
+        ? <span style={{ color: '#4ade80' }}>0 ✓</span>
+        : p.exit_code === null || p.exit_code === undefined
+          ? <span style={{ color: 'rgba(255,255,255,0.3)' }}>—</span>
+          : <span style={{ color: '#f87171' }}>{String(p.exit_code)} ✗</span>,
+      mono: true,
+    },
+    {
+      label: 'duration',
+      value: typeof p.duration_ms === 'number' ? formatDurationMs(p.duration_ms) : '—',
+      mono: true,
+    },
+    {
+      label: 'container_id',
+      value: p.container_id || <span style={{ color: 'rgba(255,255,255,0.3)' }}>—</span>,
+      mono: true,
+    },
+  ]
+
+  return (
+    <div>
+      <div style={{ display: 'flex', gap: 2, borderBottom: '1px solid rgba(255,255,255,0.06)', marginBottom: 8 }}>
+        {tabs.map(t => {
+          const active = tab === t.key
+          return (
+            <button
+              key={t.key}
+              onClick={() => setTab(t.key)}
+              style={{ fontSize: 10, fontWeight: active ? 600 : 400, padding: '5px 12px', border: 'none', background: 'none', color: active ? '#c084fc' : 'rgba(255,255,255,0.4)', borderBottom: `2px solid ${active ? '#a78bfa' : 'transparent'}`, cursor: 'pointer', marginBottom: -1 }}
+            >
+              {t.label}
+              {typeof t.count === 'number' && t.count > 0 && (
+                <span style={{ marginLeft: 4, color: 'rgba(255,255,255,0.25)', fontVariantNumeric: 'tabular-nums' }}>
+                  · {t.count >= 1024 ? `${(t.count / 1024).toFixed(1)}KB` : `${t.count}B`}
+                </span>
+              )}
+            </button>
+          )
+        })}
+      </div>
+      {tab === 'output' && (
+        <>
+          {p.raw_stdout
+            ? <LongTextViewer text={p.raw_stdout} language="stdout" />
+            : <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.25)', fontStyle: 'italic', padding: '8px 10px' }}>（旧事件无 raw_stdout，需 brain 侧 WF-3 开启后重跑）</div>}
+          {p.raw_stderr && (
+            <div style={{ marginTop: 8 }}>
+              <div style={{ fontSize: 9, fontWeight: 600, color: 'rgba(248,113,113,0.6)', letterSpacing: 2, textTransform: 'uppercase' as const, marginBottom: 4 }}>stderr</div>
+              <LongTextViewer text={p.raw_stderr} language="stderr" />
+            </div>
+          )}
+          <div style={{ marginTop: 8 }}>
+            <RuleDetailsTable title="文案 5 条硬规则（此轮）" details={p.copy_review_rule_details} />
+            <RuleDetailsTable title="图片逐张检查（此轮）" details={p.image_review_rule_details} />
+          </div>
+        </>
+      )}
+      {tab === 'input' && (
+        p.prompt_sent
+          ? <LongTextViewer text={p.prompt_sent} language="prompt" />
+          : <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.25)', fontStyle: 'italic', padding: '8px 10px' }}>（旧事件无 prompt_sent，需 brain 侧 WF-3 开启后重跑）</div>
+      )}
+      {tab === 'meta' && <MetaTable rows={metaRows} />}
+    </div>
+  )
+}
+
 function ExecutionTimeline({ events }: { events: PipelineEvent[] }) {
   const [expanded, setExpanded] = useState<number | null>(null)
   if (events.length === 0) return null
@@ -354,7 +486,7 @@ function ExecutionTimeline({ events }: { events: PipelineEvent[] }) {
     <div style={{ background: 'rgba(255,255,255,0.025)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 14, overflow: 'hidden' }}>
       <div style={{ padding: '12px 16px 10px', borderBottom: '1px solid rgba(255,255,255,0.05)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <span style={{ fontSize: 11, fontWeight: 600, color: 'rgba(255,255,255,0.25)', letterSpacing: 3, textTransform: 'uppercase' as const }}>完整执行流 · {events.length} 步</span>
-        <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.2)' }}>点击行展开原始 payload</span>
+        <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.2)' }}>点击行展开 · 输出/输入/元数据</span>
       </div>
       <div style={{ padding: '4px 0' }}>
         {events.map((e, i) => {
@@ -386,21 +518,11 @@ function ExecutionTimeline({ events }: { events: PipelineEvent[] }) {
               {isExpanded && (
                 <div style={{ padding: '4px 16px 14px 16px', background: 'rgba(0,0,0,0.2)' }}>
                   {hasError && (
-                    <div style={{ fontSize: 11, color: '#f87171', marginBottom: 6, padding: '6px 8px', background: 'rgba(248,113,113,0.08)', borderRadius: 6 }}>
+                    <div style={{ fontSize: 11, color: '#f87171', marginBottom: 8, padding: '6px 8px', background: 'rgba(248,113,113,0.08)', borderRadius: 6 }}>
                       ❌ error: {String(e.payload.error)}
                     </div>
                   )}
-                  <RuleDetailsTable
-                    title="文案 5 条硬规则（此轮）"
-                    details={e.payload.copy_review_rule_details}
-                  />
-                  <RuleDetailsTable
-                    title="图片逐张检查（此轮）"
-                    details={e.payload.image_review_rule_details}
-                  />
-                  <pre style={{ fontSize: 10, color: 'rgba(255,255,255,0.5)', margin: 0, padding: '8px 10px', background: 'rgba(255,255,255,0.02)', borderRadius: 6, border: '1px solid rgba(255,255,255,0.04)', overflowX: 'auto', lineHeight: 1.5 }}>
-                    {JSON.stringify(e.payload, null, 2)}
-                  </pre>
+                  <EventDetailTabs event={e} />
                 </div>
               )}
             </div>
