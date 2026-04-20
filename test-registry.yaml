@@ -81,6 +81,16 @@ tests:
     product: AI视频
     note: "AI 视频服务层逻辑（任务创建/状态查询）"
 
+  # ── 内容 Pipeline ─────────────────────────────────────────────────────────────
+
+  - id: pipeline-event-timeline-helpers
+    path: apps/dashboard/src/utils/__tests__/pipeline-events.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 内容Pipeline
+    note: "ExecutionTimeline 的 formatEventNode/formatDurationMs 显示逻辑"
+
   # ── 新媒体运营 ────────────────────────────────────────────────────────────────
 
   - id: platform-data-route

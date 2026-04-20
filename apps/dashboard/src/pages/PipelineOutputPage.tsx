@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { ArrowLeft, Loader2, Clock, Image as ImageIcon, FileText, BookOpen, Layers, Send, BarChart2, Radio, Maximize2, Minimize2, ChevronLeft, ChevronRight, X } from 'lucide-react'
+import type { EventPayload, PipelineEvent } from '../utils/pipeline-events'
+import { formatEventNode, formatDurationMs } from '../utils/pipeline-events'
 
 // ─── 类型 ─────────────────────────────────────────────────────
 
@@ -126,10 +128,11 @@ async function fetchOutput(id: string): Promise<PipelineOutput | null> {
   return data
 }
 
-async function fetchStages(id: string): Promise<Record<string, StageInfo>> {
+async function fetchStages(id: string): Promise<{ stages: Record<string, StageInfo>; events: PipelineEvent[] }> {
   const res = await fetch(`/api/pipeline/${id}/stages`)
-  if (!res.ok) return {}
-  return (await res.json()).stages || {}
+  if (!res.ok) return { stages: {}, events: [] }
+  const body = await res.json()
+  return { stages: body.stages || {}, events: body.events || [] }
 }
 
 async function rerunPipeline(id: string): Promise<boolean> {
@@ -310,11 +313,74 @@ function SummaryTab({ output, stages }: { output: PipelineOutput | null; stages:
   )
 }
 
+// ─── Execution Timeline（完整事件流，含重试轮次）───────────────
+
+function ExecutionTimeline({ events }: { events: PipelineEvent[] }) {
+  const [expanded, setExpanded] = useState<number | null>(null)
+  if (events.length === 0) return null
+
+  const accentColor = (a: 'ok' | 'bad' | 'neutral') =>
+    a === 'ok' ? '#4ade80' : a === 'bad' ? '#f87171' : 'rgba(255,255,255,0.35)'
+
+  return (
+    <div style={{ background: 'rgba(255,255,255,0.025)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 14, overflow: 'hidden' }}>
+      <div style={{ padding: '12px 16px 10px', borderBottom: '1px solid rgba(255,255,255,0.05)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <span style={{ fontSize: 11, fontWeight: 600, color: 'rgba(255,255,255,0.25)', letterSpacing: 3, textTransform: 'uppercase' as const }}>完整执行流 · {events.length} 步</span>
+        <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.2)' }}>点击行展开原始 payload</span>
+      </div>
+      <div style={{ padding: '4px 0' }}>
+        {events.map((e, i) => {
+          const info = formatEventNode(e.payload)
+          const color = accentColor(info.accent)
+          const prev = i > 0 ? new Date(events[i - 1].created_at).getTime() : null
+          const cur = new Date(e.created_at).getTime()
+          const gap = prev !== null ? formatDurationMs(cur - prev) : null
+          const isExpanded = expanded === e.id
+          const hasError = !!e.payload.error
+          return (
+            <div key={e.id} style={{ borderBottom: i < events.length - 1 ? '1px solid rgba(255,255,255,0.04)' : 'none' }}>
+              <div
+                onClick={() => setExpanded(isExpanded ? null : e.id)}
+                style={{ display: 'grid', gridTemplateColumns: '80px 20px 1fr 80px', gap: 12, padding: '10px 16px', cursor: 'pointer', alignItems: 'center' }}
+              >
+                <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.25)', fontVariantNumeric: 'tabular-nums' }}>{formatTime(e.created_at)}</span>
+                <span style={{ fontSize: 14, textAlign: 'center' }}>{info.icon}</span>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
+                  <span style={{ fontSize: 12, fontWeight: 500, color }}>{info.label}</span>
+                  {info.detail && (
+                    <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.35)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{info.detail}</span>
+                  )}
+                </div>
+                <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.25)', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
+                  {gap ? `+${gap}` : '—'}
+                </span>
+              </div>
+              {isExpanded && (
+                <div style={{ padding: '4px 16px 14px 16px', background: 'rgba(0,0,0,0.2)' }}>
+                  {hasError && (
+                    <div style={{ fontSize: 11, color: '#f87171', marginBottom: 6, padding: '6px 8px', background: 'rgba(248,113,113,0.08)', borderRadius: 6 }}>
+                      ❌ error: {String(e.payload.error)}
+                    </div>
+                  )}
+                  <pre style={{ fontSize: 10, color: 'rgba(255,255,255,0.5)', margin: 0, padding: '8px 10px', background: 'rgba(255,255,255,0.02)', borderRadius: 6, border: '1px solid rgba(255,255,255,0.04)', overflowX: 'auto', lineHeight: 1.5 }}>
+                    {JSON.stringify(e.payload, null, 2)}
+                  </pre>
+                </div>
+              )}
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
 // ─── Generation Tab ───────────────────────────────────────────
 
-function GenerationTab({ output, stages, isTimingReliable, onImageOpen, pipelineId, onRerun }: {
+function GenerationTab({ output, stages, events, isTimingReliable, onImageOpen, pipelineId, onRerun }: {
   output: PipelineOutput | null
   stages: Record<string, StageInfo>
+  events: PipelineEvent[]
   isTimingReliable: boolean
   onImageOpen: (index: number, urls: string[]) => void
   pipelineId: string
@@ -341,6 +407,7 @@ function GenerationTab({ output, stages, isTimingReliable, onImageOpen, pipeline
   }
 
   return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
     <div style={{ display: 'flex', gap: 40, alignItems: 'flex-start' }}>
 
       {/* ── 左栏：文章 / 卡片文案 ── */}
@@ -507,6 +574,8 @@ function GenerationTab({ output, stages, isTimingReliable, onImageOpen, pipeline
         </div>
       </div>
     </div>
+      <ExecutionTimeline events={events} />
+    </div>
   )
 }
 
@@ -577,6 +646,7 @@ export default function PipelineOutputPage() {
   const navigate = useNavigate()
   const [output, setOutput] = useState<PipelineOutput | null>(null)
   const [stages, setStages] = useState<Record<string, StageInfo>>({})
+  const [events, setEvents] = useState<PipelineEvent[]>([])
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState<TabKey>('generation')
   const [lightbox, setLightbox] = useState<LightboxState | null>(null)
@@ -609,7 +679,8 @@ export default function PipelineOutputPage() {
     pollingRef.current = setInterval(async () => {
       const [out, stg] = await Promise.all([fetchOutput(id), fetchStages(id)])
       setOutput(out)
-      setStages(stg)
+      setStages(stg.stages)
+      setEvents(stg.events)
       if (out?.status === 'completed' || out?.status === 'failed') {
         clearInterval(pollingRef.current!)
         pollingRef.current = null
@@ -622,7 +693,8 @@ export default function PipelineOutputPage() {
     setLoading(true)
     Promise.all([fetchOutput(id), fetchStages(id)]).then(([out, stg]) => {
       setOutput(out)
-      setStages(stg)
+      setStages(stg.stages)
+      setEvents(stg.events)
       if (out?.status !== 'completed' && out?.status !== 'failed') {
         startPolling()
       }
@@ -708,7 +780,7 @@ export default function PipelineOutputPage() {
             </div>
 
             {activeTab === 'summary'    && <SummaryTab output={output} stages={stages} />}
-            {activeTab === 'generation' && <GenerationTab output={output} stages={stages} isTimingReliable={isTimingReliable} onImageOpen={handleImageOpen} pipelineId={id!} onRerun={startPolling} />}
+            {activeTab === 'generation' && <GenerationTab output={output} stages={stages} events={events} isTimingReliable={isTimingReliable} onImageOpen={handleImageOpen} pipelineId={id!} onRerun={startPolling} />}
             {activeTab === 'publish'    && <PublishTab />}
             {activeTab === 'analytics'  && <AnalyticsTab />}
 
