@@ -18,17 +18,16 @@ jobs:
 
       - name: Install dependencies
         run: |
-          # npm ci 对 rollup 的 platform-specific optional deps 有 bug
-          # (https://github.com/npm/cli/issues/4828)，若失败回退到 npm install
-          if ! npm ci --include=optional --workspace=apps/dashboard; then
-            echo "npm ci failed (rollup optional deps bug), fallback to npm install"
-            # 明确限定路径范围，避免 rm -rf 意外
-            rm -rf "apps/dashboard/node_modules" "node_modules"
-            npm install --include=optional --workspace=apps/dashboard || {
-              echo "fallback install also failed"
-              exit 1
-            }
-          fi
+          # npm ci 存在 rollup platform-specific optional deps bug
+          # (https://github.com/npm/cli/issues/4828) — ci 返回 0 但不真装
+          # 平台 binary。只能删干净用 npm install 从零装。
+          rm -rf "apps/dashboard/node_modules" "node_modules"
+          npm install --include=optional --workspace=apps/dashboard || {
+            echo "npm install failed"
+            exit 1
+          }
+          # 双保险：显式补装 linux x64 rollup binary（若上一步仍漏）
+          npm install @rollup/rollup-linux-x64-gnu --workspace=apps/dashboard --no-save --no-package-lock || true
 
       - name: Build dashboard
         run: npm run build --workspace=apps/dashboard
