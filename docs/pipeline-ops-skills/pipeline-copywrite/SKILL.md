@@ -1,170 +1,157 @@
 ---
 name: pipeline-copywrite
-description: /pipeline-copywrite、重写文案、copy.md 不满意 — Content Pipeline Stage 2 (LLM 写稿) 运维 skill
+description: Content Pipeline Stage 2 文案生成机 (严格 SOP，调 Brain LLM)
 ---
 
-# /pipeline-copywrite — Stage 2 文案运维 skill
+# pipeline-copywrite — Stage 2 文案生成机
 
-## 什么时候用
-- `copy.md` / `article.md` 写出来半截（LLM 超 token 截断）
-- 文案违反品牌规则（copy_review 报禁用词）
-- 想人工调整 prompt 限制 findings 数量
-- LLM 报 "LLM 输出不符格式要求" （社交 <200 字或长文 <500 字）
+## 你是谁
+**文案生成搬运机**。读 findings.json + 调 Brain LLM API + 写两个 .md 文件 + 输出 JSON。
+不做主观判断，不解释，不优化，按 prompt 模板直接调 LLM。
 
-## 前置检查
+## 硬约束
+- 禁止自己写文案（用 LLM API 生成）
+- 禁止对 findings 做"精选"（LLM 自己选）
+- 只输出最后一行 JSON
+
+## Input（env）
+
+- `CONTENT_OUTPUT_DIR` — 产物根目录（如 /home/cecelia/content-output/research/solo-company-case-xxx-2026-04-20/）
+- 找 findings.json: `${CONTENT_OUTPUT_DIR}/findings.json`
+
+## 执行步骤（严格按顺序）
+
+### 步骤 1：确认 findings.json 存在 + 建输出目录
 
 ```bash
-# Cecelia brain 5221 在
-curl -s http://localhost:5221/api/brain/status | head -c 200
+FINDINGS="${CONTENT_OUTPUT_DIR}/findings.json"
+if [ ! -f "$FINDINGS" ]; then
+  echo "{\"copy_path\":null,\"article_path\":null,\"error\":\"missing findings.json at $FINDINGS\"}"
+  exit 0
+fi
 
-# 定位输出目录
-KEYWORD="<关键词>"
-ls -d ~/content-output/*${KEYWORD}* 2>/dev/null | head
+COPY_DIR="${CONTENT_OUTPUT_DIR}/cards"
+ARTICLE_DIR="${CONTENT_OUTPUT_DIR}/article"
+mkdir -p "$COPY_DIR" "$ARTICLE_DIR"
+COPY_FILE="$COPY_DIR/copy.md"
+ARTICLE_FILE="$ARTICLE_DIR/article.md"
 ```
 
-## 介入步骤
-
-### 步骤 1: 设 auth + 构造 prompt
+### 步骤 2：读 findings 前 7 条做 prompt 材料
 
 ```bash
-# token 用 /credentials skill 获取 CECELIA_INTERNAL_TOKEN
-OUT_DIR="<上面找到的目录，如 ~/content-output/2026-04-18-xxx>"
-KEYWORD="<关键词>"
+FINDINGS_TEXT=$(python3 -c "
+import json
+d = json.load(open('$FINDINGS'))
+fs = d.get('findings', [])[:7]
+for i, f in enumerate(fs):
+    print(f'{i+1}. {f.get(\"title\",\"\")}: {(f.get(\"content\") or \"\")[:500]}')
+" 2>/dev/null)
 
-# 从 findings.json 取前 N 条（限制 5 条避免 prompt 超长）
-N_FINDINGS=5
-FINDINGS=$(python3 -c "
-import json, glob, re
-slug = re.sub(r'-+', '-', re.sub(r'[^a-zA-Z0-9\u4e00-\u9fff-]', '-', '${KEYWORD}'))[:40]
-for fp in glob.glob('/Users/administrator/content-output/research/*-' + slug + '-*/findings.json'):
-    data = json.load(open(fp))
-    fs = data.get('findings', [])[:${N_FINDINGS}]
-    print('\n'.join(f'{i+1}. {f.get(\"title\",\"\")}: {(f.get(\"content\") or \"\")[:1000]}' for i,f in enumerate(fs)))
-    break
-")
-echo "$FINDINGS" | head -20
+if [ -z "$FINDINGS_TEXT" ]; then
+  # python3 不在时 fallback 到 jq
+  FINDINGS_TEXT=$(jq -r '.findings[:7] | to_entries[] | "\(.key+1). \(.value.title): \(.value.content[:500])"' "$FINDINGS")
+fi
+KEYWORD=$(jq -r '.keyword' "$FINDINGS")
 ```
 
-### 步骤 2: 调 Cecelia LLM 重写
+### 步骤 3：调 Brain LLM 生成社交文案 + 长文（同一次调用，双输出）
+
+docker 内访问宿主 brain 要用 `host.docker.internal:5221`。
 
 ```bash
-cat > /tmp/copywrite-prompt.txt <<PROMPTEOF
-你是一位专业的内容创作者，擅长将调研素材转化为高质量的社交媒体文案和深度长文。
+PROMPT_BODY=$(cat <<PROMPT_END
+你是一位专业内容创作者，把下面调研素材变成两篇内容：
 
-## 任务
-为「${KEYWORD}」创作两个版本的内容：
-1. 社交媒体文案（小红书/抖音风格，500-800字，口语化，含互动引导）
-2. 公众号长文（深度分析，1500-2000字，结构清晰）
+1. **社交文案**（小红书/抖音风格 500-800 字，口语化，有钩子，含互动引导）
+2. **公众号长文**（深度分析 1500-2000 字，结构清晰有小标题）
+
+## 关键词
+${KEYWORD}
 
 ## 调研素材
-${FINDINGS}
+${FINDINGS_TEXT}
 
-请严格按以下格式输出，不要省略分隔符：
-=== 社交媒体文案 ===
-[500-800字]
+## 品牌要求（硬性）
+- 必须出现以下品牌词至少 1 个：能力 / 系统 / 一人公司 / 小组织 / AI / 能力下放 / 能力放大
+- 禁止出现：coding / 搭建 / agent workflow / builder / Cecelia / 智能体搭建 / 代码部署
+- 长文必须有 markdown 标题（用 # 或 ##）
+
+## 输出格式（严格）
+=== 社交文案 ===
+[500-800字内容]
 === 公众号长文 ===
-[1500-2000字]
+[# 标题
+1500-2000字内容]
 
-禁止：询问用户、输出选项、说"需要更多信息"。
-PROMPTEOF
+禁止：问用户、说"需要更多信息"、输出选项、只写一篇。
+PROMPT_END
+)
 
-PROMPT=$(python3 -c 'import json,sys; print(json.dumps(open("/tmp/copywrite-prompt.txt").read()))')
+# 把 prompt 打包成 JSON
+LLM_REQ=$(python3 -c "
+import json, os
+body = {
+  'tier': 'thalamus',
+  'prompt': os.environ['PROMPT_BODY'],
+  'max_tokens': 8192,
+  'timeout': 180,
+}
+print(json.dumps(body))
+" 2>/dev/null || echo "{\"tier\":\"thalamus\",\"prompt\":$(jq -Rs . <<<"$PROMPT_BODY"),\"max_tokens\":8192,\"timeout\":180}")
 
-curl -s -X POST http://localhost:5221/api/brain/llm-service/generate \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer ${CECELIA_INTERNAL_TOKEN}" \
-  -d "{\"tier\":\"thalamus\",\"prompt\":${PROMPT},\"max_tokens\":8192}" \
-  > /tmp/copywrite-resp.json
+# 注入环境（docker 内走 host.docker.internal）
+BRAIN_URL="${BRAIN_URL:-http://host.docker.internal:5221}"
 
-# 提取 text（兼容新旧格式）
-python3 -c '
-import json
-r = json.load(open("/tmp/copywrite-resp.json"))
-payload = r.get("data") if isinstance(r.get("data"), dict) else r
-text = payload.get("text") or payload.get("content","")
-open("/tmp/copywrite-text.md","w").write(text)
-print(f"{len(text)} chars written to /tmp/copywrite-text.md")
+RESP=$(curl -s -X POST "$BRAIN_URL/api/brain/llm-service/generate" \
+  -H 'Content-Type: application/json' \
+  -d "$LLM_REQ")
+
+TEXT=$(echo "$RESP" | python3 -c "import json,sys; d=json.load(sys.stdin); print((d.get('data') or {}).get('text') or (d.get('data') or {}).get('content') or '')" 2>/dev/null)
+
+if [ -z "$TEXT" ]; then
+  echo "{\"copy_path\":null,\"article_path\":null,\"error\":\"LLM 返回空 — $(echo $RESP | head -c 200)\"}"
+  exit 0
+fi
+```
+
+### 步骤 4：切分两段 + 写文件
+
+```bash
+# 用 awk 切分 === 社交文案 === 和 === 公众号长文 ===
+echo "$TEXT" | awk '
+  /=== 社交文案 ===/ { mode="copy"; next }
+  /=== 公众号长文 ===/ { mode="article"; next }
+  mode=="copy" { print > "'"$COPY_FILE"'" }
+  mode=="article" { print > "'"$ARTICLE_FILE"'" }
 '
+
+# 兜底：如果切分失败（没找到分隔符），整段写到 copy.md，article.md 复制 copy
+if [ ! -s "$COPY_FILE" ]; then
+  echo "$TEXT" > "$COPY_FILE"
+fi
+if [ ! -s "$ARTICLE_FILE" ]; then
+  cp "$COPY_FILE" "$ARTICLE_FILE"
+fi
 ```
 
-说明：`tier=thalamus` 走 anthropic-api+bridge（稳定）；`cortex` 走 codex（sandbox 有时失败）。
-
-### 步骤 3: 切分 + 塞回 pipeline 目录
+### 步骤 5：输出一行 JSON（stdout 最后一行）
 
 ```bash
-python3 - <<PYEOF
-import re
-from pathlib import Path
-
-KEYWORD = "${KEYWORD}"
-OUT_DIR = Path("${OUT_DIR}")
-text = Path("/tmp/copywrite-text.md").read_text("utf-8")
-
-social = re.search(r"=== 社交媒体文案 ===([\s\S]*?)(?:=== 公众[号]?长文 ===|$)", text)
-article = re.search(r"=== 公众[号]?长文 ===([\s\S]*?)$", text)
-social_txt = (social.group(1).strip() if social else "").strip()
-article_txt = (article.group(1).strip() if article else "").strip()
-
-assert len(social_txt) >= 200, f"社交文案太短：{len(social_txt)} < 200"
-assert len(article_txt) >= 500, f"长文太短：{len(article_txt)} < 500"
-
-(OUT_DIR / "cards").mkdir(parents=True, exist_ok=True)
-(OUT_DIR / "article").mkdir(parents=True, exist_ok=True)
-(OUT_DIR / "cards" / "copy.md").write_text(
-    f"# {KEYWORD}：社交媒体文案\n\n{social_txt}\n", encoding="utf-8")
-(OUT_DIR / "article" / "article.md").write_text(
-    f"# {KEYWORD}：深度分析\n\n{article_txt}\n", encoding="utf-8")
-print("OK → copy.md, article.md")
-PYEOF
+echo "{\"copy_path\":\"$COPY_FILE\",\"article_path\":\"$ARTICLE_FILE\",\"copy_len\":$(wc -m < $COPY_FILE),\"article_len\":$(wc -m < $ARTICLE_FILE)}"
 ```
 
-## 验收标准
+## 禁止事项
 
-```bash
-# 字数满足门槛
-wc -m "${OUT_DIR}/cards/copy.md" "${OUT_DIR}/article/article.md"
-# 期望: copy.md ≥ 200 字, article.md ≥ 500 字
+- 禁止"我觉得应该"自己写文案
+- 禁止调 `localhost:5221`（docker 里访问不到宿主 — 用 `host.docker.internal:5221`）
+- 禁止跳过调 LLM（脚本必须真调 Brain API）
+- 禁止在 JSON 外输出说明
 
-# 无禁用词
-grep -E "coding|搭建|agent workflow|builder|Cecelia|智能体搭建|代码部署" \
-  "${OUT_DIR}/cards/copy.md" "${OUT_DIR}/article/article.md" && echo "FAIL" || echo "PASS"
+## 输出 schema
 
-# 品牌关键词覆盖 ≥ 2
-cat "${OUT_DIR}/cards/copy.md" "${OUT_DIR}/article/article.md" | \
-  grep -oE "能力|系统|一人公司|小组织|AI|能力下放|能力放大" | sort -u | wc -l
+stdout 最后一行：
+
+```json
+{"copy_path":"/home/cecelia/content-output/.../cards/copy.md","article_path":"/home/cecelia/content-output/.../article/article.md","copy_len":<数字>,"article_len":<数字>}
 ```
-
-## 常见坑
-
-| 症状 | 原因 | 修法 |
-|------|------|------|
-| LLM 输出半截 | max_tokens 不够（默认 8192） | 请求调 16384 或 32000 |
-| 格式不符（缺分隔符） | LLM 忽略 prompt 格式 | 加强 prompt "必须包含 === 社交媒体文案 === 和 === 公众号长文 ===" |
-| Cecelia 5221 返回 {text: ""} | tier=cortex 本机 sandbox 失败 | 换 `tier=thalamus` |
-| curl 401 UNAUTHORIZED | Authorization header 丢了 | 带上 Bearer token |
-| findings 为空 | research 阶段没跑 | 先走 /pipeline-research |
-| 禁用词误伤（如 "AI" 不是禁用词） | grep 规则检查精确 | 禁用词见 `copy_review.py` `BANNED_WORDS` |
-
-## 相关文件路径
-- Executor: `/Users/administrator/perfect21/zenithjoy/services/creator/pipeline_worker/executors/copywriting.py`
-- Review: `/Users/administrator/perfect21/zenithjoy/services/creator/pipeline_worker/executors/copy_review.py`
-- 输出位置: `<out_dir>/cards/copy.md` + `<out_dir>/article/article.md`
-- LLM 接口: `POST http://localhost:5221/api/brain/llm-service/generate`（tier=thalamus）
-
-## LangGraph Contract
-
-### Input（从 ContentPipelineState 读）
-- `pipeline_id`: UUID
-- `keyword`: 关键词
-- `output_dir`: 产物根目录
-- `findings_path`: 上游 research 产物（读 findings.json 做输入）
-- `copy_review_feedback` (可选): REVISION 回路时上一轮 reviewer 的反馈，LLM 据此改稿
-
-### Output（写回 state）
-- `copy_path`: `<output_dir>/cards/copy.md`
-- `article_path`: `<output_dir>/article/article.md`
-- `trace`: "copywrite"
-- `error`: null | 错误字符串
-
-### 失败策略
-LLM 调用失败抛错，让 LangGraph 决定路由。

@@ -1,150 +1,88 @@
 ---
 name: pipeline-review
-description: /pipeline-review、审图、vision 审查 — Content Pipeline Stage 5 (图片审查) 运维 skill，手动跑 Claude Vision 检查文字溢出/布局错位
+description: Content Pipeline Stage 5 图片检查 (严格 SOP)
 ---
 
-# /pipeline-review — Stage 5 图片审查运维 skill
+# pipeline-review — Stage 5 图片完整性检查机
 
-## 什么时候用
-- 想在 pipeline 外手动跑 vision 审图（比如换模板后）
-- image_review 报 `vision major severity`，想看具体 issue
-- Anthropic API quota 耗尽，vision 被 skip 了
-- 想跳过 vision 强推（设 `SKIP_VISION_REVIEW=1`）
+## 你是谁
+**图片清点搬运机**。数 PNG 数量 + 检查文件大小 + 输出一行 JSON。
+不调 vision API（那是质量评审，不是完整性检查）。
 
-## 前置检查
+## 硬约束
+- 禁止调 Claude Vision / Anthropic API
+- 禁止分析图片内容（这是质量审查，不在本节点范围）
+- 只用 `ls` / `wc` / `stat` / `du` bash 工具
+- 只输出最后一行 JSON
 
-```bash
-# 1. Anthropic API key 在 1Password 和 ~/.credentials/anthropic.json 双写
-ls -la ~/.credentials/anthropic.json
-# 注意：不要 cat 内容，只看存在
+## Input（env）
 
-# 2. 余额 / rate limit（用 /llm-quota skill 查 5h / 7d 配额）
+- `CONTENT_OUTPUT_DIR` — 产物根目录
 
-# 3. 要审的 PNG
-OUT_DIR="<output_dir>"
-ls "${OUT_DIR}/cards/"*.png | wc -l
-```
+## 执行步骤
 
-## 介入步骤
-
-### 步骤 1: Python one-liner 跑 review_images
+### 步骤 1：cards 目录存在
 
 ```bash
-cd /Users/administrator/perfect21/zenithjoy/services/creator
-OUT_DIR="<output_dir>"
-
-PYTHONPATH=. python3 - <<PYEOF
-import json
-from pathlib import Path
-from pipeline_worker.image_vision_review import review_images
-
-paths = sorted((Path("${OUT_DIR}") / "cards").glob("*.png"))
-print(f"审 {len(paths)} 张图…")
-report = review_images(paths)
-print(json.dumps(report, ensure_ascii=False, indent=2))
-PYEOF
+CARDS_DIR="${CONTENT_OUTPUT_DIR}/cards"
+if [ ! -d "$CARDS_DIR" ]; then
+  echo '{"image_review_verdict":"FAIL","image_review_feedback":"missing cards/ dir","card_count":0}'
+  exit 0
+fi
 ```
 
-**期望输出格式**：
-
-```json
-{
-  "review_passed": true,
-  "checked": 9,
-  "skipped": 0,
-  "issues": [],
-  "per_image": [
-    {"image": "xxx-cover.png", "pass": true, "severity": "ok", "issues": [], "status": "reviewed"},
-    ...
-  ],
-  "severity": "ok"
-}
-```
-
-- `severity=major` → pipeline 会 FAIL，必须修
-- `severity=minor` → pipeline 会 PASS，但值得关注
-- `skipped > 0` → API key 丢了或网络挂
-
-### 步骤 2: 单图深度检查（选做）
+### 步骤 2：数 PNG 数量
 
 ```bash
-IMG="${OUT_DIR}/cards/xxx-01-profile.png"
-cd /Users/administrator/perfect21/zenithjoy/services/creator
-PYTHONPATH=. python3 -c "
-from pathlib import Path
-from pipeline_worker.image_vision_review import review_images
-print(review_images([Path('${IMG}')]))
-"
+PNG_COUNT=$(ls -1 "$CARDS_DIR"/*.png 2>/dev/null | wc -l | tr -d ' ')
 ```
 
-### 步骤 3: 跳过 vision 强推（应急）
+### 步骤 3：检查每张体积 ≥ 10KB（防止空文件）
 
 ```bash
-# 只临时用，记得跑完清掉
-export SKIP_VISION_REVIEW=1
-# 然后重跑 image_review
-cd /Users/administrator/perfect21/zenithjoy/services/creator
-PYTHONPATH=. python3 -c "
-from pipeline_worker.executors.image_review import execute_image_review
-print(execute_image_review({'keyword': '<关键词>', 'image_count': 9}))
-"
-unset SKIP_VISION_REVIEW
+SMALL_COUNT=0
+for f in "$CARDS_DIR"/*.png; do
+  [ -f "$f" ] || continue
+  SIZE=$(stat -f %z "$f" 2>/dev/null || stat -c %s "$f" 2>/dev/null)
+  if [ "$SIZE" -lt 10000 ]; then
+    SMALL_COUNT=$((SMALL_COUNT+1))
+  fi
+done
 ```
 
-## 验收标准
+### 步骤 4：裁决（硬规则）
+
+| 条件 | verdict |
+|------|---------|
+| PNG ≥ 8 且无小文件 | PASS |
+| PNG < 8 或有小文件（<10KB） | FAIL |
 
 ```bash
-# review_passed=True + severity=ok|minor
+ISSUES=()
+if [ "$PNG_COUNT" -lt 8 ]; then
+  ISSUES+=("cards 只有 ${PNG_COUNT} 张 PNG, 期望 ≥ 8")
+fi
+if [ "$SMALL_COUNT" -gt 0 ]; then
+  ISSUES+=("${SMALL_COUNT} 张 PNG 小于 10KB（可能空文件）")
+fi
+
+if [ ${#ISSUES[@]} -eq 0 ]; then
+  VERDICT="PASS"
+  FEEDBACK="null"
+else
+  VERDICT="FAIL"
+  FEEDBACK="\"$(IFS=';'; echo "${ISSUES[*]}")\""
+fi
 ```
 
-跑完记录三个数：
-- `checked`：真被 vision 看过几张
-- `skipped`：因 API 错误跳过几张
-- `severity`：聚合等级
+### 步骤 5：输出 JSON
 
-## 常见坑
+```bash
+echo "{\"image_review_verdict\":\"${VERDICT}\",\"image_review_feedback\":${FEEDBACK},\"card_count\":${PNG_COUNT}}"
+```
 
-| 症状 | 原因 | 修法 |
-|------|------|------|
-| `找不到 ANTHROPIC_API_KEY，跳过视觉检查` | `~/.credentials/anthropic.json` 缺 | 用 /credentials skill 从 1Password CS Vault 恢复 |
-| 所有图都 skipped | API 401 或 rate limit | 用 /llm-quota skill 查配额；换 5h cycle 后重试 |
-| severity=major 但人眼看没问题 | vision 对"文字贴边"敏感 | 调大 V6 卡片 padding；或确认是误判 |
-| JSON 解析失败 `%s; 前 200 字` | Claude 输出非纯 JSON | 默认 prompt 已强制纯 JSON；若偶发，重跑一次 |
-| `HTTP 529 Overloaded` | API 抖动 | 等 1 分钟重试 |
-| pipeline 卡 45s/张 | `PER_IMAGE_TIMEOUT_SEC=45` 且串行 | 预期行为，9 张 ≈ 5 分钟 |
+## 禁止事项
 
-## 相关文件路径
-- Vision 模块: `/Users/administrator/perfect21/zenithjoy/services/creator/pipeline_worker/image_vision_review.py`
-- Executor: `/Users/administrator/perfect21/zenithjoy/services/creator/pipeline_worker/executors/image_review.py`
-- 凭据（/credentials skill 管理）: `~/.credentials/anthropic.json`
-- 环境变量: `IMAGE_VISION_MODEL`（默认 `claude-sonnet-4-5`）、`SKIP_VISION_REVIEW=1` 跳过、`STRICT_VISION_FAIL=1` 严格模式（vision major 阻塞）
-
-## LangGraph Contract
-
-此 skill 对应 content-pipeline-graph 的 `image_review` 节点。
-
-### Input（从 ContentPipelineState 读）
-- `pipeline_id`: UUID
-- `keyword`: 关键词
-- `output_dir`: 产物根目录
-- `cards_dir`: 上游 generate 产物（9 张 PNG 所在目录）
-- `person_data_path`: 上游 generate 产物（用于占位符检查）
-
-### Output（写回 state）
-- `image_review_verdict`: `"PASS"` | `"FAIL"`
-- `image_review_feedback`: FAIL 时非空字符串（vision issues 拼接），PASS 时 null
-- `image_review_round`: 累加计数
-- `trace`: "image_review"
-- `error`: null | 错误字符串
-
-### 条件边（content-pipeline-graph 里定义）
-- `PASS` → 进入 `export` 节点
-- `FAIL` → 回 `generate` 节点重生图，feedback 作为 generate 下一轮的输入
-
-### 裁决规则
-- 默认宽容模式：vision major 不阻塞（只 warn），判 `PASS`
-- `STRICT_VISION_FAIL=1` 时 vision major 直接 `FAIL`
-- `person-data` 含占位符（"待补充"等）始终 `FAIL`（数据错误 ≠ 视觉瑕疵）
-
-### 失败策略
-节点本身执行失败（subprocess 超时）抛错；裁决 FAIL 不是失败，是正常流转。
+- 禁止调 vision API 做内容评审
+- 禁止因"感觉"判 FAIL
+- 禁止在 JSON 外输出任何东西
