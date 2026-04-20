@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { createReadStream, existsSync, statSync } from 'fs';
 import { resolve, extname, sep } from 'path';
 import pool from '../db/connection';
+import { resolveTaskDirByPipelineId } from '../services/langgraph-adapter';
 
 const MIME_MAP: Record<string, string> = {
   '.png': 'image/png',
@@ -53,29 +54,28 @@ export class ContentImagesController {
         'SELECT output_dir FROM zenithjoy.pipeline_runs WHERE id = $1',
         [pipelineId]
       );
-      if (!rows.length) {
+      const outputDir = rows[0]?.output_dir || null;
+
+      // 收集候选 baseDir：先用 pipeline_runs.output_dir，再用 cecelia_events 里的实际任务目录兜底
+      const baseDirs: string[] = [];
+      if (outputDir) baseDirs.push(outputDir);
+      const { taskDir: langGraphTaskDir } = await resolveTaskDirByPipelineId(pipelineId);
+      if (langGraphTaskDir && !baseDirs.includes(langGraphTaskDir)) baseDirs.push(langGraphTaskDir);
+
+      if (baseDirs.length === 0) {
         res.status(404).json({ error: 'pipeline not found' });
-        return;
-      }
-      const outputDir = rows[0].output_dir;
-      if (!outputDir) {
-        res.status(404).json({ error: 'pipeline has no output_dir' });
         return;
       }
 
       // 尝试多个候选路径（manifest 可能将图片放 cards/ 或 images/ 或根目录）
-      const candidates = [
-        `cards/${decoded}`,
-        `images/${decoded}`,
-        decoded,
-      ];
-
       let found: string | null = null;
-      for (const rel of candidates) {
-        const full = resolveSafe(outputDir, rel);
-        if (full && existsSync(full) && statSync(full).isFile()) {
-          found = full;
-          break;
+      outer: for (const baseDir of baseDirs) {
+        for (const rel of [`cards/${decoded}`, `images/${decoded}`, decoded]) {
+          const full = resolveSafe(baseDir, rel);
+          if (full && existsSync(full) && statSync(full).isFile()) {
+            found = full;
+            break outer;
+          }
         }
       }
 
