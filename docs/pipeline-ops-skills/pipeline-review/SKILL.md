@@ -89,13 +89,16 @@ done
 - 所有张均分 ≥ 14（70%）→ **PASS**
 - 否则 **REVISION** → generate 下一轮重新渲染
 
+**严格执行**：本步骤必须**原样 copy-paste 整段 bash 跑**。禁止你（Claude）阅读 curl 返回后"觉得账号没额度就跳过循环"——必须让每张图都进 curl，失败的 graceful degrade 由 bash 自己处理。输出字段 `vision_enabled` / `vision_failed_count` 必须**严格由下面 bash 逻辑产生**，你不得改写数值。
+
 ```bash
 # 初始化 vision 相关变量
 VISION_RULES_JSON=""
 FAIL_ANY_V1=false
 FAIL_ANY_V3=false
 SUM_TOTAL=0
-NUM_IMGS=0
+NUM_IMGS=0           # 成功完成 vision 打分的图片数（失败不计入）
+VISION_FAIL_COUNT=0  # vision 调用失败（endpoint 报错或解析不出 score）的图片数
 AVG=0
 VISION_CALLED=false
 
@@ -106,7 +109,7 @@ BASH_OK=true
 
 # Brain 已暴露 POST /api/brain/llm-service/vision（cecelia PR #2473 已合）。
 # 默认启用第 2 层 vision 评审。需要临时关闭时设 BRAIN_VISION_ENABLED=false
-# 即可降级到占位模式（per-image 填 0 + reason="vision endpoint pending"）。
+# 即可降级到占位模式（per-image 填 0 + reason="vision endpoint disabled"）。
 VISION_ENABLED="${BRAIN_VISION_ENABLED:-true}"
 
 if [ "$BASH_OK" = "true" ] && [ "$VISION_ENABLED" = "true" ]; then
@@ -168,28 +171,64 @@ body = {
 print(json.dumps(body))
 ")
 
-    VRESP=$(curl -s -X POST "$BRAIN_URL/api/brain/llm-service/vision" \
+    # 同时抓 HTTP status code 和 body，便于 graceful degrade
+    VRESP=$(curl -s -w $'\n__HTTP_STATUS__=%{http_code}' \
+      --max-time 90 \
+      -X POST "$BRAIN_URL/api/brain/llm-service/vision" \
       -H 'Content-Type: application/json' \
       -d "$V_REQ")
+    VHTTP=$(printf '%s\n' "$VRESP" | awk -F= '/^__HTTP_STATUS__=/{print $2}' | tail -1)
+    VBODY=$(printf '%s\n' "$VRESP" | sed '$d')
 
-    VTEXT=$(echo "$VRESP" | python3 -c "
-import json, sys
+    # 用 python 统一判断：是 success 还是 error，提取 text 或 error message
+    export VBODY VHTTP
+    VMETA=$(python3 -c "
+import json, os
+body = os.environ.get('VBODY', '').strip()
+http = os.environ.get('VHTTP', '').strip() or '0'
+ok = 'false'
+text = ''
+err = ''
 try:
-    d = json.load(sys.stdin)
-    t = (d.get('data') or {}).get('text') or (d.get('data') or {}).get('content') or ''
-    t = t.strip()
-    if t.startswith('\`\`\`json'): t = t[7:]
-    elif t.startswith('\`\`\`'): t = t[3:]
-    if t.endswith('\`\`\`'): t = t[:-3]
-    print(t.strip())
+    d = json.loads(body) if body else {}
 except Exception:
-    print('')
+    d = {}
+    err = 'vision response not json (http ' + http + ')'
+if not err:
+    success = d.get('success')
+    if http.startswith('2') and success is not False:
+        data = d.get('data') or {}
+        t = data.get('text') or data.get('content') or ''
+        t = t.strip()
+        if t.startswith('\`\`\`json'): t = t[7:]
+        elif t.startswith('\`\`\`'): t = t[3:]
+        if t.endswith('\`\`\`'): t = t[:-3]
+        text = t.strip()
+        if text:
+            ok = 'true'
+        else:
+            err = 'empty text from vision (http ' + http + ')'
+    else:
+        e = d.get('error') or {}
+        msg = e.get('message') or e.get('code') or ('http ' + http)
+        # 截短避免 JSON 过长
+        err = ('vision call failed: ' + str(msg))[:200]
+def esc(s):
+    return s.replace('\t', ' ').replace('\n', ' ').replace('\r', ' ')
+print(ok + '\t' + esc(text) + '\t' + esc(err))
 " 2>/dev/null)
 
-    VPARSED=$(echo "$VTEXT" | python3 -c "
-import json, sys
+    VOK=$(printf '%s' "$VMETA" | awk -F'\t' '{print $1}')
+    VTEXT=$(printf '%s' "$VMETA" | awk -F'\t' '{print $2}')
+    VERR=$(printf '%s' "$VMETA" | awk -F'\t' '{print $3}')
+
+    if [ "$VOK" = "true" ]; then
+      export VTEXT
+      VPARSED=$(python3 -c "
+import json, os
+raw = os.environ.get('VTEXT', '')
 try:
-    d = json.load(sys.stdin)
+    d = json.loads(raw)
 except Exception:
     d = {}
 def pick(k, sub):
@@ -200,32 +239,47 @@ def pick(k, sub):
 parts = []
 for k in ['V1','V2','V3','V4']:
     s = pick(k, 'score')
-    r = pick(k, 'reason').replace('\t', ' ').replace('\n', ' ').replace('\"', \"'\")
+    r = pick(k, 'reason').replace('\t', ' ').replace('\n', ' ').replace('\r', ' ').replace('\"', \"'\")
     parts.append(s if s else '0')
     parts.append(r)
 print('\t'.join(parts))
 " 2>/dev/null)
 
-    IFS=$'\t' read -r V1 V1_REASON V2 V2_REASON V3 V3_REASON V4 V4_REASON <<< "$VPARSED"
-    case "$V1" in ''|*[!0-9]*) V1=0 ;; esac
-    case "$V2" in ''|*[!0-9]*) V2=0 ;; esac
-    case "$V3" in ''|*[!0-9]*) V3=0 ;; esac
-    case "$V4" in ''|*[!0-9]*) V4=0 ;; esac
+      IFS=$'\t' read -r V1 V1_REASON V2 V2_REASON V3 V3_REASON V4 V4_REASON <<< "$VPARSED"
+      case "$V1" in ''|*[!0-9]*) V1=0 ;; esac
+      case "$V2" in ''|*[!0-9]*) V2=0 ;; esac
+      case "$V3" in ''|*[!0-9]*) V3=0 ;; esac
+      case "$V4" in ''|*[!0-9]*) V4=0 ;; esac
 
-    TOTAL=$((V1 + V2 + V3 + V4))
-    SUM_TOTAL=$((SUM_TOTAL + TOTAL))
-    NUM_IMGS=$((NUM_IMGS + 1))
+      # vision 解析完成但打分全 0 → 视为解析失败（避免无意义触发 FAIL）
+      TOTAL=$((V1 + V2 + V3 + V4))
+      if [ "$TOTAL" -eq 0 ] && [ -z "$V1_REASON$V2_REASON$V3_REASON$V4_REASON" ]; then
+        VOK="false"
+        VERR="vision response parse failed (all zero, no reason)"
+      fi
+    fi
 
-    [ "$V1" -le 1 ] && FAIL_ANY_V1=true
-    [ "$V3" -le 1 ] && FAIL_ANY_V3=true
+    if [ "$VOK" = "true" ]; then
+      SUM_TOTAL=$((SUM_TOTAL + TOTAL))
+      NUM_IMGS=$((NUM_IMGS + 1))
 
-    # per-image vision 对象（value=总分，14/20 为通过线）
-    V_PASS=$([ "$TOTAL" -ge 14 ] && echo true || echo false)
-    V1_R=$(printf '%s' "$V1_REASON" | sed 's/"/\\"/g')
-    V2_R=$(printf '%s' "$V2_REASON" | sed 's/"/\\"/g')
-    V3_R=$(printf '%s' "$V3_REASON" | sed 's/"/\\"/g')
-    V4_R=$(printf '%s' "$V4_REASON" | sed 's/"/\\"/g')
-    VOBJ="{\"id\":\"vision-${NAME}\",\"label\":\"${NAME} 4 维\",\"pass\":${V_PASS},\"value\":${TOTAL},\"scores\":{\"V1\":${V1},\"V2\":${V2},\"V3\":${V3},\"V4\":${V4}},\"reasons\":{\"V1\":\"${V1_R}\",\"V2\":\"${V2_R}\",\"V3\":\"${V3_R}\",\"V4\":\"${V4_R}\"}}"
+      [ "$V1" -le 1 ] && FAIL_ANY_V1=true
+      [ "$V3" -le 1 ] && FAIL_ANY_V3=true
+
+      V_PASS=$([ "$TOTAL" -ge 14 ] && echo true || echo false)
+      V1_R=$(printf '%s' "$V1_REASON" | sed 's/\\/\\\\/g; s/"/\\"/g')
+      V2_R=$(printf '%s' "$V2_REASON" | sed 's/\\/\\\\/g; s/"/\\"/g')
+      V3_R=$(printf '%s' "$V3_REASON" | sed 's/\\/\\\\/g; s/"/\\"/g')
+      V4_R=$(printf '%s' "$V4_REASON" | sed 's/\\/\\\\/g; s/"/\\"/g')
+      VOBJ="{\"id\":\"vision-${NAME}\",\"label\":\"${NAME} 4 维\",\"pass\":${V_PASS},\"value\":${TOTAL},\"scores\":{\"V1\":${V1},\"V2\":${V2},\"V3\":${V3},\"V4\":${V4}},\"reasons\":{\"V1\":\"${V1_R}\",\"V2\":\"${V2_R}\",\"V3\":\"${V3_R}\",\"V4\":\"${V4_R}\"}}"
+    else
+      # vision 调用失败 → graceful degrade：填 0 + reason="vision call failed: ..."
+      # 不计入 SUM_TOTAL/NUM_IMGS，不触发 FAIL_ANY_V1/V3，不阻塞 pipeline
+      VISION_FAIL_COUNT=$((VISION_FAIL_COUNT + 1))
+      ERR_R=$(printf '%s' "$VERR" | sed 's/\\/\\\\/g; s/"/\\"/g')
+      VOBJ="{\"id\":\"vision-${NAME}\",\"label\":\"${NAME} 4 维\",\"pass\":true,\"value\":0,\"scores\":{\"V1\":0,\"V2\":0,\"V3\":0,\"V4\":0},\"reasons\":{\"V1\":\"${ERR_R}\",\"V2\":\"${ERR_R}\",\"V3\":\"${ERR_R}\",\"V4\":\"${ERR_R}\"},\"vision_failed\":true}"
+    fi
+
     if [ -z "$VISION_RULES_JSON" ]; then
       VISION_RULES_JSON="$VOBJ"
     else
@@ -237,10 +291,10 @@ print('\t'.join(parts))
     AVG=$((SUM_TOTAL / NUM_IMGS))
   fi
 elif [ "$BASH_OK" = "true" ] && [ "$VISION_ENABLED" != "true" ]; then
-  # vision 端点未上线：保留 4 维 schema 占位，全部填 0，标注 pending
+  # vision 被显式关闭（BRAIN_VISION_ENABLED=false）：保留 schema 占位
   for img in "${PASSED_IMGS[@]}"; do
     NAME=$(basename "$img")
-    VOBJ="{\"id\":\"vision-${NAME}\",\"label\":\"${NAME} 4 维\",\"pass\":true,\"value\":0,\"scores\":{\"V1\":0,\"V2\":0,\"V3\":0,\"V4\":0},\"reasons\":{\"V1\":\"vision endpoint pending\",\"V2\":\"vision endpoint pending\",\"V3\":\"vision endpoint pending\",\"V4\":\"vision endpoint pending\"}}"
+    VOBJ="{\"id\":\"vision-${NAME}\",\"label\":\"${NAME} 4 维\",\"pass\":true,\"value\":0,\"scores\":{\"V1\":0,\"V2\":0,\"V3\":0,\"V4\":0},\"reasons\":{\"V1\":\"vision endpoint disabled\",\"V2\":\"vision endpoint disabled\",\"V3\":\"vision endpoint disabled\",\"V4\":\"vision endpoint disabled\"}}"
     if [ -z "$VISION_RULES_JSON" ]; then
       VISION_RULES_JSON="$VOBJ"
     else
@@ -254,10 +308,11 @@ fi
 
 规则：
 - 第 1 层挂 → **FAIL**（PNG 数量不足 / 有小文件）
-- 第 2 层进了且 V1 或 V3 出现 ≤ 1 → **FAIL**
-- 第 2 层均分 < 14 → **REVISION**
+- 第 2 层进了且 V1 或 V3 出现 ≤ 1 → **FAIL**（只算**打分成功**的图；vision 调用失败的图不参与）
+- 第 2 层均分 < 14 → **REVISION**（均分只用打分成功的图计算）
+- 第 2 层所有图 vision 都失败（`NUM_IMGS=0`）→ 按第 1 层结果判（不阻塞 pipeline），feedback 带 `vision unavailable: all N calls failed`
 - 否则 → **PASS**
-- vision 未启用（端点未上线）→ 只按第 1 层结果判，verdict 最多是 PASS（占位不影响放行）
+- vision 未启用（`BRAIN_VISION_ENABLED=false`）→ 只按第 1 层结果判，verdict 最多是 PASS（占位不影响放行）
 
 ```bash
 ISSUES=()
@@ -281,24 +336,36 @@ if [ "$BASH_OK" != "true" ]; then
   FEEDBACK="\"${FB_ESC}\""
 elif [ "$VISION_CALLED" = "true" ]; then
   # 第 2 层评审了
-  if [ "$FAIL_ANY_V1" = "true" ] || [ "$FAIL_ANY_V3" = "true" ]; then
+  if [ "$NUM_IMGS" -eq 0 ]; then
+    # 所有图 vision 都失败 → 不阻塞 pipeline，按第 1 层 PASS 放行
+    VERDICT="PASS"
+    VISION_FB="vision unavailable: ${VISION_FAIL_COUNT} calls failed; fell back to bash-layer verdict"
+    FB_ESC=$(printf '%s' "$VISION_FB" | sed 's/"/\\"/g')
+    FEEDBACK="\"${FB_ESC}\""
+  elif [ "$FAIL_ANY_V1" = "true" ] || [ "$FAIL_ANY_V3" = "true" ]; then
     VERDICT="FAIL"
-    VISION_FB="avg=${AVG}/20"
+    VISION_FB="avg=${AVG}/20 (n=${NUM_IMGS}, failed=${VISION_FAIL_COUNT})"
     [ "$FAIL_ANY_V1" = "true" ] && VISION_FB="${VISION_FB}; V1 空字/乱码命中"
     [ "$FAIL_ANY_V3" = "true" ] && VISION_FB="${VISION_FB}; V3 严重裁切/堆叠命中"
     FB_ESC=$(printf '%s' "$VISION_FB" | sed 's/"/\\"/g')
     FEEDBACK="\"${FB_ESC}\""
   elif [ "$AVG" -lt 14 ]; then
     VERDICT="REVISION"
-    VISION_FB="vision avg=${AVG}/20 低于 14 通过线"
+    VISION_FB="vision avg=${AVG}/20 (n=${NUM_IMGS}, failed=${VISION_FAIL_COUNT}) 低于 14 通过线"
     FB_ESC=$(printf '%s' "$VISION_FB" | sed 's/"/\\"/g')
     FEEDBACK="\"${FB_ESC}\""
   else
     VERDICT="PASS"
-    FEEDBACK="null"
+    if [ "$VISION_FAIL_COUNT" -gt 0 ]; then
+      VISION_FB="vision avg=${AVG}/20 (n=${NUM_IMGS}, failed=${VISION_FAIL_COUNT})"
+      FB_ESC=$(printf '%s' "$VISION_FB" | sed 's/"/\\"/g')
+      FEEDBACK="\"${FB_ESC}\""
+    else
+      FEEDBACK="null"
+    fi
   fi
 else
-  # 第 1 层全过但第 2 层未启用（vision 端点 pending）
+  # 第 1 层全过但第 2 层显式关闭（BRAIN_VISION_ENABLED=false）
   VERDICT="PASS"
   FEEDBACK="null"
 fi
@@ -317,7 +384,7 @@ if [ -n "$VISION_RULES_JSON" ]; then
   RULES="${RULES},${VISION_RULES_JSON}"
 fi
 
-echo "{\"image_review_verdict\":\"${VERDICT}\",\"image_review_feedback\":${FEEDBACK},\"card_count\":${PNG_COUNT},\"vision_avg\":${AVG},\"vision_threshold\":14,\"vision_enabled\":${VISION_ENABLED},\"image_review_rule_details\":[${RULES}]}"
+echo "{\"image_review_verdict\":\"${VERDICT}\",\"image_review_feedback\":${FEEDBACK},\"card_count\":${PNG_COUNT},\"vision_avg\":${AVG},\"vision_threshold\":14,\"vision_enabled\":${VISION_ENABLED},\"vision_scored_count\":${NUM_IMGS},\"vision_failed_count\":${VISION_FAIL_COUNT},\"image_review_rule_details\":[${RULES}]}"
 ```
 
 ## 禁止事项
@@ -326,6 +393,8 @@ echo "{\"image_review_verdict\":\"${VERDICT}\",\"image_review_feedback\":${FEEDB
 - 禁止自己打 V1-V4 的分（必须 vision 端点打分）
 - 禁止"反复评分 / 自我重试"；一次调用，解析失败按 0 算
 - 禁止在 JSON 外输出任何东西
+- **禁止私自改写 `vision_enabled` / `vision_scored_count` / `vision_failed_count` / 每张图的 reason 内容**。这些字段由 bash 脚本自己产生（包括 vision 调用失败时的 `"vision call failed: ..."`）。你只是 copy-paste bash 代码的搬运工，不是"聪明的降级者"。
+- **禁止看到第一张图 vision 返回 error 就跳过后续循环**——每张图必须独立调用一次 vision，失败由 bash 逻辑 graceful degrade 到占位（`vision_failed:true`、填 0、reason 带具体 error message），避免一两次瞬时故障吞掉所有图的评分
 
 ## 输出 schema
 
@@ -339,11 +408,13 @@ echo "{\"image_review_verdict\":\"${VERDICT}\",\"image_review_feedback\":${FEEDB
   "vision_avg":0-20,
   "vision_threshold":14,
   "vision_enabled":true|false,
+  "vision_scored_count":<int>,
+  "vision_failed_count":<int>,
   "image_review_rule_details":[
     {"id":"RCOUNT","label":"PNG ≥ 8 张","pass":true|false,"value":<int>,"reason"?:"..."},
     {"id":"<filename>.png","label":"<filename>.png","pass":true|false,"value":<size_bytes>,"reason"?:"..."},
     ...,
-    {"id":"vision-<filename>.png","label":"<filename>.png 4 维","pass":true|false,"value":0-20,"scores":{"V1":0-5,"V2":0-5,"V3":0-5,"V4":0-5},"reasons":{"V1":"...","V2":"...","V3":"...","V4":"..."}},
+    {"id":"vision-<filename>.png","label":"<filename>.png 4 维","pass":true|false,"value":0-20,"scores":{"V1":0-5,"V2":0-5,"V3":0-5,"V4":0-5},"reasons":{"V1":"...","V2":"...","V3":"...","V4":"..."},"vision_failed"?:true},
     ...
   ]
 }
@@ -354,7 +425,8 @@ echo "{\"image_review_verdict\":\"${VERDICT}\",\"image_review_feedback\":${FEEDB
 - **目标端点**：`POST ${BRAIN_URL}/api/brain/llm-service/vision`
 - 请求体：`{ tier, prompt, image_base64, image_mime, max_tokens, format, timeout }`
 - tier：`thalamus`（Sonnet 级，成本受控）
-- 输出：`{ success, data: { text: "<严格 JSON 字符串>", ... } }`
+- 成功响应：`{ success: true, data: { text: "<严格 JSON 字符串>", ... } }`
+- 失败响应：`{ success: false, data: null, error: { code, message } }`（本 skill 的 bash 会检测 `success: false` 或非 2xx HTTP，给这张图 graceful degrade）
 
 ## 现状：vision 端点已上线（2026-04-20）
 
@@ -365,4 +437,15 @@ echo "{\"image_review_verdict\":\"${VERDICT}\",\"image_review_feedback\":${FEEDB
 - tier 白名单仅 `thalamus | cortex`（只有 Claude 级支持多模态），pipeline-review 固定用 `thalamus`（成本受控）。
 - image 硬上限 5MB（base64 字符 ~6.99M），超过返回 413 `IMAGE_TOO_LARGE`。
 
-**紧急回退**：如 Brain 账号超配额或端点异常，设置环境变量 `BRAIN_VISION_ENABLED=false` 即降级到占位模式（per-image V1-V4 全填 0，verdict 按第 1 层判，不阻塞管线）。
+## 失败处理（Graceful Degrade）
+
+端点调用可能因多种原因失败（账号余额不足、timeout、413 超大、Brain 服务重启等）。本 skill 在这些情况下**不阻塞 pipeline**：
+
+| 情况 | skill 行为 |
+|---|---|
+| 单张图 vision 失败 | 该图填 V1=V2=V3=V4=0，reason 带具体 error message（如 `vision call failed: credit balance too low`），`vision_failed:true`。**不触发** `FAIL_ANY_V1/V3`，**不计入** `SUM_TOTAL/NUM_IMGS` 均分计算 |
+| 部分图失败（≥1 张成功） | verdict 按成功图的均分判（FAIL/REVISION/PASS），feedback 带 `failed=<N>` 计数 |
+| 全部图失败（`NUM_IMGS=0`） | verdict 降级为第 1 层 PASS，feedback 带 `vision unavailable: N calls failed; fell back to bash-layer verdict`，不阻塞管线 |
+| vision 端点显式关闭 | 设 `BRAIN_VISION_ENABLED=false`，直接走占位（`reason="vision endpoint disabled"`），不调 curl |
+
+**紧急回退**：如果要完全关闭 vision（比如 Anthropic 账号整段时间没额度），在 task payload 或 pipeline env 里设置 `BRAIN_VISION_ENABLED=false` 即可。
