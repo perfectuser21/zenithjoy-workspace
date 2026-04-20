@@ -7,6 +7,7 @@ import {
   buildStagesFromEvents,
   fetchLangGraphEvents,
   isUuid,
+  listLangGraphOnlyRuns,
   overallStatusFromEvents,
 } from '../services/langgraph-adapter';
 
@@ -160,27 +161,41 @@ export class PipelineController {
     }
   };
 
-  // GET /api/pipeline/:id
+  // GET /api/pipeline/:id  支持 :id = pipeline_runs.id 或 cecelia_task_id（LangGraph-only）
   getOne = async (req: Request, res: Response): Promise<void> => {
     try {
+      const pipelineId = req.params.id;
       const { rows } = await pool.query(
         'SELECT * FROM zenithjoy.pipeline_runs WHERE id = $1',
-        [req.params.id]
+        [pipelineId]
       );
-      if (!rows.length) { res.status(404).json({ error: 'Not found' }); return; }
-      res.json(rows[0]);
+      if (rows.length) { res.json(rows[0]); return; }
+
+      // 兜底：:id 当 cecelia_task_id 从 LangGraph-only 列表里找
+      if (isUuid(pipelineId)) {
+        const langGraph = await listLangGraphOnlyRuns(500);
+        const hit = langGraph.find((r) => r.id === pipelineId);
+        if (hit) { res.json(hit); return; }
+      }
+      res.status(404).json({ error: 'Not found' });
     } catch (err) {
       res.status(500).json({ error: String(err) });
     }
   };
 
-  // GET /api/pipeline (list, recent 50)
+  // GET /api/pipeline (list, recent 50 — union zenithjoy.pipeline_runs + LangGraph-only tasks)
   list = async (_req: Request, res: Response): Promise<void> => {
     try {
-      const { rows } = await pool.query(
-        'SELECT * FROM zenithjoy.pipeline_runs ORDER BY created_at DESC LIMIT 50'
-      );
-      res.json(rows);
+      const [{ rows: zenRuns }, langGraphRuns] = await Promise.all([
+        pool.query(
+          'SELECT * FROM zenithjoy.pipeline_runs ORDER BY created_at DESC LIMIT 50'
+        ),
+        listLangGraphOnlyRuns(50),
+      ]);
+      const merged = [...zenRuns.map((r) => ({ ...r, source: 'zenithjoy' })), ...langGraphRuns]
+        .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+        .slice(0, 50);
+      res.json(merged);
     } catch (err) {
       res.status(500).json({ error: String(err) });
     }
@@ -327,16 +342,20 @@ export class PipelineController {
     }
   };
 
-  // POST /api/pipeline/:id/rerun  ← 透传到 cecelia
+  // POST /api/pipeline/:id/rerun  ← 透传到 cecelia（支持 :id = zenithjoy pipeline_run.id 或 cecelia_task_id）
   rerun = async (req: Request, res: Response): Promise<void> => {
     try {
+      const pipelineId = req.params.id;
       const { rows } = await pool.query(
         'SELECT cecelia_task_id FROM zenithjoy.pipeline_runs WHERE id = $1',
-        [req.params.id]
+        [pipelineId]
       );
-      if (!rows.length) { res.status(404).json({ error: 'Not found' }); return; }
-      const ceceliaTaskId = rows[0].cecelia_task_id;
-      if (!ceceliaTaskId) { res.status(400).json({ error: '尚无 cecelia task，无法重跑' }); return; }
+      const ceceliaTaskId: string | null =
+        rows[0]?.cecelia_task_id ?? (isUuid(pipelineId) ? pipelineId : null);
+      if (!ceceliaTaskId) {
+        res.status(404).json({ error: 'Not found' });
+        return;
+      }
       const upstream = await fetch(`${CECELIA_BRAIN_URL}/api/brain/pipelines/${ceceliaTaskId}/run`, { method: 'POST' });
       if (!upstream.ok) { res.status(upstream.status).json({ error: 'upstream error' }); return; }
       res.json(await upstream.json());

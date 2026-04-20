@@ -49,6 +49,75 @@ export async function fetchLangGraphEvents(ceceliaTaskId: string): Promise<Pipel
   return rows;
 }
 
+export interface LangGraphListRow {
+  id: string;
+  cecelia_task_id: string;
+  topic: string;
+  status: 'pending' | 'running' | 'completed' | 'failed';
+  content_type: 'content-pipeline';
+  output_dir: null;
+  output_manifest: null;
+  triggered_by: 'langgraph';
+  topic_id: null;
+  notebook_id: null;
+  created_at: string;
+  updated_at: string;
+  source: 'langgraph';
+}
+
+// 列出"只走 LangGraph、没写 zenithjoy.pipeline_runs"的任务
+export async function listLangGraphOnlyRuns(limit = 50): Promise<LangGraphListRow[]> {
+  const { rows } = await pool.query<{
+    id: string;
+    title: string | null;
+    created_at: string;
+    updated_at: string;
+    last_node: string | null;
+    last_error: string | null;
+  }>(
+    `SELECT t.id::text AS id,
+            t.title,
+            t.created_at,
+            COALESCE(t.updated_at, t.created_at) AS updated_at,
+            last_e.payload->>'node' AS last_node,
+            last_e.payload->>'error' AS last_error
+     FROM tasks t
+     JOIN LATERAL (
+       SELECT payload FROM cecelia_events
+       WHERE task_id = t.id AND event_type = 'content_pipeline_step'
+       ORDER BY id DESC LIMIT 1
+     ) last_e ON TRUE
+     WHERE t.task_type = 'content-pipeline'
+       AND NOT EXISTS (
+         SELECT 1 FROM zenithjoy.pipeline_runs pr
+         WHERE pr.cecelia_task_id::uuid = t.id
+       )
+     ORDER BY t.created_at DESC
+     LIMIT $1`,
+    [limit]
+  );
+
+  return rows.map((r) => ({
+    id: r.id,
+    cecelia_task_id: r.id,
+    topic: (r.title || '').replace(/^\[.*?\]\s*/, ''), // 剥掉 "[内容流水线] " 前缀
+    status: r.last_error
+      ? 'failed'
+      : r.last_node === 'export'
+      ? 'completed'
+      : 'running',
+    content_type: 'content-pipeline',
+    output_dir: null,
+    output_manifest: null,
+    triggered_by: 'langgraph',
+    topic_id: null,
+    notebook_id: null,
+    created_at: r.created_at,
+    updated_at: r.updated_at,
+    source: 'langgraph',
+  }));
+}
+
 const NODE_TO_STAGE: Record<string, string> = {
   research: 'content-research',
   copywrite: 'content-copywriting',

@@ -165,7 +165,9 @@ describe('Pipeline API', () => {
     });
 
     it('should return 404 for non-existent id', async () => {
-      mockQuery.mockResolvedValueOnce({ rows: [] });
+      mockQuery
+        .mockResolvedValueOnce({ rows: [] })  // pipeline_runs miss
+        .mockResolvedValueOnce({ rows: [] }); // LangGraph-only miss
 
       const response = await request(app).get('/api/pipeline/00000000-0000-0000-0000-000000000000');
 
@@ -174,18 +176,36 @@ describe('Pipeline API', () => {
   });
 
   describe('GET /api/pipeline', () => {
-    it('should return list of pipeline runs', async () => {
-      mockQuery.mockResolvedValueOnce({ rows: [PIPELINE_RUN] });
+    it('should return merged list of pipeline_runs + LangGraph-only tasks', async () => {
+      mockQuery
+        .mockResolvedValueOnce({ rows: [PIPELINE_RUN] })
+        .mockResolvedValueOnce({
+          rows: [{
+            id: 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb',
+            title: '[内容流水线] 测试主题 2026-04-20',
+            created_at: '2026-04-20T00:00:00Z',
+            updated_at: '2026-04-20T00:00:00Z',
+            last_node: 'export',
+            last_error: null,
+          }],
+        });
 
       const response = await request(app).get('/api/pipeline');
 
       expect(response.status).toBe(200);
       expect(Array.isArray(response.body)).toBe(true);
-      expect(response.body.length).toBe(1);
+      expect(response.body.length).toBe(2);
+      const sources = response.body.map((r: { source: string }) => r.source).sort();
+      expect(sources).toEqual(['langgraph', 'zenithjoy']);
+      const langGraphRow = response.body.find((r: { source: string }) => r.source === 'langgraph');
+      expect(langGraphRow.topic).toBe('测试主题 2026-04-20');
+      expect(langGraphRow.status).toBe('completed');
     });
 
-    it('should return empty array when no runs', async () => {
-      mockQuery.mockResolvedValueOnce({ rows: [] });
+    it('should return empty array when no runs in either source', async () => {
+      mockQuery
+        .mockResolvedValueOnce({ rows: [] })
+        .mockResolvedValueOnce({ rows: [] });
 
       const response = await request(app).get('/api/pipeline');
 
@@ -338,8 +358,8 @@ describe('Pipeline API', () => {
   });
 
   describe('POST /api/pipeline/:id/rerun', () => {
-    it('should proxy rerun to cecelia', async () => {
-      const runWithTask = { ...PIPELINE_RUN, cecelia_task_id: 'cecelia-task-123' };
+    it('should proxy rerun to cecelia using pipeline_runs.cecelia_task_id', async () => {
+      const runWithTask = { ...PIPELINE_RUN, cecelia_task_id: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaab' };
       mockQuery.mockResolvedValueOnce({ rows: [runWithTask] });
       mockFetch.mockResolvedValueOnce({
         ok: true,
@@ -350,9 +370,35 @@ describe('Pipeline API', () => {
 
       expect(response.status).toBe(200);
       expect(mockFetch).toHaveBeenCalledWith(
-        expect.stringContaining('cecelia-task-123/run'),
+        expect.stringContaining('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaab/run'),
         expect.objectContaining({ method: 'POST' })
       );
+    });
+
+    it('should fall back to :id as cecelia_task_id for LangGraph-only tasks', async () => {
+      const langGraphTaskId = 'cccccccc-cccc-cccc-cccc-cccccccccccc';
+      // pipeline_runs miss → 用 :id 当 cecelia_task_id
+      mockQuery.mockResolvedValueOnce({ rows: [] });
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ ok: true }),
+      });
+
+      const response = await request(app).post(`/api/pipeline/${langGraphTaskId}/rerun`);
+
+      expect(response.status).toBe(200);
+      expect(mockFetch).toHaveBeenCalledWith(
+        expect.stringContaining(`${langGraphTaskId}/run`),
+        expect.objectContaining({ method: 'POST' })
+      );
+    });
+
+    it('should return 404 when :id is not a UUID and no pipeline_run', async () => {
+      mockQuery.mockResolvedValueOnce({ rows: [] });
+
+      const response = await request(app).post('/api/pipeline/not-a-uuid/rerun');
+
+      expect(response.status).toBe(404);
     });
   });
 
