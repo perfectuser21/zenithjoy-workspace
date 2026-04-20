@@ -2,6 +2,13 @@ import { Request, Response } from 'express';
 import { readFileSync, existsSync, statSync } from 'fs';
 import { resolve, sep } from 'path';
 import pool from '../db/connection';
+import {
+  buildOutputFromEvents,
+  buildStagesFromEvents,
+  fetchLangGraphEvents,
+  isUuid,
+  overallStatusFromEvents,
+} from '../services/langgraph-adapter';
 
 const CECELIA_BRAIN_URL = process.env.CECELIA_BRAIN_URL || 'http://localhost:5221';
 
@@ -204,17 +211,36 @@ export class PipelineController {
     try {
       const pipelineId = req.params.id;
       const { rows } = await pool.query(
-        `SELECT id, topic, status, output_dir, output_manifest, topic_id, notebook_id, cecelia_task_id
+        `SELECT id, topic, status, output_dir, output_manifest, topic_id, notebook_id, cecelia_task_id, updated_at
          FROM zenithjoy.pipeline_runs WHERE id = $1`,
         [pipelineId]
       );
-      if (!rows.length) { res.status(404).json({ error: 'Not found' }); return; }
+      const row = rows[0] || null;
 
-      const row = rows[0];
-      const manifest: PipelineManifest | null = row.output_manifest || null;
+      const ceceliaTaskId: string | null =
+        row?.cecelia_task_id ?? (isUuid(pipelineId) ? pipelineId : null);
+
+      // 若 pipeline_runs 无 manifest，但有 cecelia_task_id → 查 LangGraph cecelia_events 兜底
+      const manifest: PipelineManifest | null = row?.output_manifest || null;
+      if (!manifest && ceceliaTaskId) {
+        const events = await fetchLangGraphEvents(ceceliaTaskId);
+        if (events.length > 0) {
+          const output = buildOutputFromEvents(
+            row?.id || pipelineId,
+            events,
+            pipelineId,
+            row?.topic
+          );
+          res.json({ output });
+          return;
+        }
+      }
+
+      if (!row) { res.status(404).json({ error: 'Not found' }); return; }
+
       const outputDir: string | null = row.output_dir || null;
 
-      // 若尚无 manifest（pipeline 还在跑或未产出）→ 返回 pending，不回退到 cecelia
+      // 若尚无 manifest（pipeline 还在跑或未产出）→ 返回 pending
       if (!manifest) {
         res.json({
           output: {
@@ -265,21 +291,32 @@ export class PipelineController {
     }
   };
 
-  // GET /api/pipeline/:id/stages  ← 本地读 pipeline_runs.status + manifest.status
+  // GET /api/pipeline/:id/stages  ← pipeline_runs.status + manifest.status + cecelia_events 兜底
   getStages = async (req: Request, res: Response): Promise<void> => {
     try {
       const pipelineId = req.params.id;
       const { rows } = await pool.query(
-        `SELECT id, status, output_manifest FROM zenithjoy.pipeline_runs WHERE id = $1`,
+        `SELECT id, status, output_manifest, cecelia_task_id FROM zenithjoy.pipeline_runs WHERE id = $1`,
         [pipelineId]
       );
-      if (!rows.length) { res.status(404).json({ error: 'Not found' }); return; }
+      const row = rows[0] || null;
+      const ceceliaTaskId: string | null =
+        row?.cecelia_task_id ?? (isUuid(pipelineId) ? pipelineId : null);
 
-      const row = rows[0];
+      if (ceceliaTaskId) {
+        const events = await fetchLangGraphEvents(ceceliaTaskId);
+        if (events.length > 0) {
+          res.json({
+            stages: buildStagesFromEvents(events),
+            overall_status: overallStatusFromEvents(events),
+          });
+          return;
+        }
+      }
+
+      if (!row) { res.status(404).json({ error: 'Not found' }); return; }
+
       const manifest: PipelineManifest | null = row.output_manifest || null;
-
-      // 暂时不追踪每个阶段的单独状态（未来可扩展 pipeline_stages 表）
-      // 先返回 overall status，供前端兜底显示
       res.json({
         stages: {},
         overall_status: manifest?.status || row.status || 'pending',

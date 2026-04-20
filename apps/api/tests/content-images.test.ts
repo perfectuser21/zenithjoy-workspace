@@ -69,7 +69,9 @@ describe('GET /api/content-images/:pipelineId/:filename', () => {
   });
 
   it('should return 404 when pipeline does not exist', async () => {
-    mockQuery.mockResolvedValueOnce({ rows: [] });
+    mockQuery
+      .mockResolvedValueOnce({ rows: [] })   // pipeline_runs lookup
+      .mockResolvedValueOnce({ rows: [] });  // cecelia_events fallback (empty)
 
     const response = await request(app).get(`/api/content-images/${PIPELINE_ID}/any.png`);
 
@@ -77,7 +79,9 @@ describe('GET /api/content-images/:pipelineId/:filename', () => {
   });
 
   it('should return 404 when file not found in any candidate dir', async () => {
-    mockQuery.mockResolvedValueOnce({ rows: [{ output_dir: tmpRoot }] });
+    mockQuery
+      .mockResolvedValueOnce({ rows: [{ output_dir: tmpRoot, cecelia_task_id: null }] })
+      .mockResolvedValueOnce({ rows: [] });  // cecelia_events fallback (empty)
 
     const response = await request(app).get(`/api/content-images/${PIPELINE_ID}/does-not-exist.png`);
 
@@ -85,7 +89,9 @@ describe('GET /api/content-images/:pipelineId/:filename', () => {
   });
 
   it('should return 404 when pipeline has no output_dir', async () => {
-    mockQuery.mockResolvedValueOnce({ rows: [{ output_dir: null }] });
+    mockQuery
+      .mockResolvedValueOnce({ rows: [{ output_dir: null, cecelia_task_id: null }] })
+      .mockResolvedValueOnce({ rows: [] });  // cecelia_events fallback (empty)
 
     const response = await request(app).get(`/api/content-images/${PIPELINE_ID}/anything.png`);
 
