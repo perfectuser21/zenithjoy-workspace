@@ -26,7 +26,7 @@ description: Content Pipeline Stage 5 图片检查 (严格 SOP — 2 层：bash 
 
 - `CONTENT_OUTPUT_DIR` — 产物根目录
 - `BRAIN_URL` — 可选，默认 `http://host.docker.internal:5221`
-- `BRAIN_VISION_ENABLED` — 可选，默认 `false`（当 Brain 暴露 vision 端点后，设置 `true` 启用第 2 层）
+- `BRAIN_VISION_ENABLED` — 可选，默认 `true`（Brain 已暴露 `/api/brain/llm-service/vision` 端点，见 cecelia PR #2473）。如需临时关闭（例如账号超配额紧急回退），设置 `false` 即可降级到占位模式。
 
 ## 执行步骤
 
@@ -104,13 +104,10 @@ BASH_OK=true
 [ "$PNG_COUNT" -lt 8 ] && BASH_OK=false
 [ "$SMALL_COUNT" -gt 0 ] && BASH_OK=false
 
-# TODO(vision-endpoint): 当 Brain 暴露 POST /api/brain/llm-service/vision 端点后，把
-# BRAIN_VISION_ENABLED 默认值改为 true。当前 /api/brain/llm-service/generate 的请求体
-# 不支持 image_base64 字段（只接受 tier/prompt/max_tokens/timeout/format），
-# 所以默认跳过第 2 层 vision 评审，但保留 4 维 schema 占位（填 0 + reason=pending）。
-# 调研结论：cecelia/packages/brain/src/llm-caller.js 内部 callAnthropicAPI 已支持
-# imageContent（Anthropic 多模态格式），只差一层 HTTP 路由暴露。
-VISION_ENABLED="${BRAIN_VISION_ENABLED:-false}"
+# Brain 已暴露 POST /api/brain/llm-service/vision（cecelia PR #2473 已合）。
+# 默认启用第 2 层 vision 评审。需要临时关闭时设 BRAIN_VISION_ENABLED=false
+# 即可降级到占位模式（per-image 填 0 + reason="vision endpoint pending"）。
+VISION_ENABLED="${BRAIN_VISION_ENABLED:-true}"
 
 if [ "$BASH_OK" = "true" ] && [ "$VISION_ENABLED" = "true" ]; then
   VISION_CALLED=true
@@ -359,16 +356,13 @@ echo "{\"image_review_verdict\":\"${VERDICT}\",\"image_review_feedback\":${FEEDB
 - tier：`thalamus`（Sonnet 级，成本受控）
 - 输出：`{ success, data: { text: "<严格 JSON 字符串>", ... } }`
 
-## 现状：vision 端点未上线（调研结论）
+## 现状：vision 端点已上线（2026-04-20）
 
-**调研时间**：2026-04-20
-**结论**：Brain 侧 vision 端点暂不存在，但底层 LLM 调用器已支持多模态，只差一层 HTTP 路由。
+**结论**：Brain 侧 `POST /api/brain/llm-service/vision` 已上线（cecelia PR #2473），本 skill 默认启用第 2 层。
 
-- `cecelia/packages/brain/src/routes/llm-service.js` **只暴露了 `POST /generate`**，请求体 schema 不接受 image 字段（只接 `tier/prompt/max_tokens/timeout/format`）。
-- 内部 `cecelia/packages/brain/src/llm-caller.js` 的 `callAnthropicAPI` **已经支持** `imageContent`（Anthropic 多模态格式 `[{type:'image',source:{type:'base64',media_type,data}}]`），`callLLM` 签名也接收 `options.imageContent`。
-- 因此本 skill 默认 `BRAIN_VISION_ENABLED=false`，先跳过第 2 层真实调用，但保留 per-image 4 维 schema 占位（V1-V4 全填 0 + reason="vision endpoint pending"），便于端点上线后零改动切换。
+- `cecelia/packages/brain/src/routes/llm-service.js` 暴露 `POST /vision`，请求体 `{ tier, prompt, image_base64, image_mime, max_tokens, format, timeout }`。
+- 底层复用 `callLLM` 的 `options.imageContent`（Anthropic 多模态 content block 格式），走 `anthropic-api` provider 直连。
+- tier 白名单仅 `thalamus | cortex`（只有 Claude 级支持多模态），pipeline-review 固定用 `thalamus`（成本受控）。
+- image 硬上限 5MB（base64 字符 ~6.99M），超过返回 413 `IMAGE_TOO_LARGE`。
 
-**启用方式（端点就绪后）**：
-1. Brain 侧：在 `packages/brain/src/routes/llm-service.js` 新增 `router.post('/vision', ...)`，透传 `image_base64/image_mime` 给 `callLLM(tier, prompt, { imageContent: [...] })`。
-2. 消费侧：pipeline-worker 执行前设置环境变量 `BRAIN_VISION_ENABLED=true`（或直接改本 skill 步骤 3 的默认值）。
-3. 无需改本 skill 的其他代码 —— 所有解析、打分、裁决、schema 都已就绪。
+**紧急回退**：如 Brain 账号超配额或端点异常，设置环境变量 `BRAIN_VISION_ENABLED=false` 即降级到占位模式（per-image V1-V4 全填 0，verdict 按第 1 层判，不阻塞管线）。
