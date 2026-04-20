@@ -355,6 +355,49 @@ describe('Pipeline API', () => {
 
       expect(response.status).toBe(404);
     });
+
+    it('should include raw events array when LangGraph events exist', async () => {
+      // 给 :id=UUID 触发 cecelia_events 兜底；模拟 2 条事件（含重试轮次信息）
+      const fakeEvents = [
+        {
+          id: 100,
+          payload: { node: 'research', step_index: 1, error: null, findings_path: '/tmp/findings.json' },
+          created_at: '2026-04-19T11:00:00.000Z',
+        },
+        {
+          id: 101,
+          payload: { node: 'copy_review', step_index: 3, copy_review_round: 1, copy_review_verdict: 'APPROVED' },
+          created_at: '2026-04-19T11:00:30.000Z',
+        },
+      ];
+      mockQuery
+        .mockResolvedValueOnce({ rows: [] })              // pipeline_runs miss
+        .mockResolvedValueOnce({ rows: fakeEvents });      // cecelia_events hit
+
+      const response = await request(app).get(`/api/pipeline/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa/stages`);
+
+      expect(response.status).toBe(200);
+      expect(response.body.events).toHaveLength(2);
+      expect(response.body.events[0]).toEqual({
+        id: 100,
+        created_at: '2026-04-19T11:00:00.000Z',
+        payload: expect.objectContaining({ node: 'research' }),
+      });
+      expect(response.body.events[1].payload.copy_review_round).toBe(1);
+      expect(response.body.events[1].payload.copy_review_verdict).toBe('APPROVED');
+    });
+
+    it('should return empty events array when no LangGraph events', async () => {
+      const runWithManifest = { ...PIPELINE_RUN, output_manifest: null };
+      mockQuery
+        .mockResolvedValueOnce({ rows: [runWithManifest] })
+        .mockResolvedValueOnce({ rows: [] });
+
+      const response = await request(app).get(`/api/pipeline/${PIPELINE_RUN.id}/stages`);
+
+      expect(response.status).toBe(200);
+      expect(response.body.events).toEqual([]);
+    });
   });
 
   describe('POST /api/pipeline/:id/rerun', () => {
