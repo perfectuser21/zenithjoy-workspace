@@ -91,6 +91,14 @@ tests:
     product: 内容Pipeline
     note: "ExecutionTimeline 的 formatEventNode/formatDurationMs 显示逻辑"
 
+  - id: pipeline-langgraph-adapter
+    path: apps/api/src/services/__tests__/langgraph-adapter.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 内容Pipeline
+    note: "rule_details → StageInfo.rule_scores 映射 + 兼容旧数据"
+
   # ── 新媒体运营 ────────────────────────────────────────────────────────────────
 
   - id: platform-data-route

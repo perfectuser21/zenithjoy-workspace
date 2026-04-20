@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { ArrowLeft, Loader2, Clock, Image as ImageIcon, FileText, BookOpen, Layers, Send, BarChart2, Radio, Maximize2, Minimize2, ChevronLeft, ChevronRight, X } from 'lucide-react'
-import type { EventPayload, PipelineEvent } from '../utils/pipeline-events'
+import type { EventPayload, PipelineEvent, RuleDetail } from '../utils/pipeline-events'
 import { formatEventNode, formatDurationMs } from '../utils/pipeline-events'
 
 // ─── 类型 ─────────────────────────────────────────────────────
@@ -315,6 +315,34 @@ function SummaryTab({ output, stages }: { output: PipelineOutput | null; stages:
 
 // ─── Execution Timeline（完整事件流，含重试轮次）───────────────
 
+function RuleDetailsTable({ title, details }: { title: string; details?: RuleDetail[] }) {
+  if (!details || details.length === 0) return null
+  return (
+    <div style={{ marginBottom: 8, padding: '8px 10px', borderRadius: 6, background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
+      <div style={{ fontSize: 10, fontWeight: 600, color: 'rgba(255,255,255,0.35)', letterSpacing: 2, textTransform: 'uppercase' as const, marginBottom: 6 }}>{title}</div>
+      {details.map((r, i) => {
+        const color = r.pass ? '#4ade80' : '#f87171'
+        const bg = r.pass ? 'rgba(74,222,128,0.05)' : 'rgba(248,113,113,0.06)'
+        return (
+          <div key={`${r.id}-${i}`} style={{ display: 'grid', gridTemplateColumns: '50px 1fr auto', gap: 10, padding: '4px 8px', borderRadius: 4, background: bg, marginBottom: 2, alignItems: 'center' }}>
+            <span style={{ fontSize: 10, fontWeight: 700, color, fontVariantNumeric: 'tabular-nums' }}>{r.id}</span>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 1, minWidth: 0 }}>
+              <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.7)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.label || r.id}</span>
+              {r.reason && (
+                <span style={{ fontSize: 10, color: 'rgba(248,113,113,0.7)' }}>→ {r.reason}</span>
+              )}
+            </div>
+            <span style={{ fontSize: 10, color: r.pass ? 'rgba(74,222,128,0.7)' : '#f87171', fontWeight: 600 }}>
+              {r.value !== null && r.value !== undefined && r.value !== '' ? `${r.value}` : ''}
+              {' '}{r.pass ? '✓' : '✗'}
+            </span>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
 function ExecutionTimeline({ events }: { events: PipelineEvent[] }) {
   const [expanded, setExpanded] = useState<number | null>(null)
   if (events.length === 0) return null
@@ -362,6 +390,14 @@ function ExecutionTimeline({ events }: { events: PipelineEvent[] }) {
                       ❌ error: {String(e.payload.error)}
                     </div>
                   )}
+                  <RuleDetailsTable
+                    title="文案 5 条硬规则（此轮）"
+                    details={e.payload.copy_review_rule_details}
+                  />
+                  <RuleDetailsTable
+                    title="图片逐张检查（此轮）"
+                    details={e.payload.image_review_rule_details}
+                  />
                   <pre style={{ fontSize: 10, color: 'rgba(255,255,255,0.5)', margin: 0, padding: '8px 10px', background: 'rgba(255,255,255,0.02)', borderRadius: 6, border: '1px solid rgba(255,255,255,0.04)', overflowX: 'auto', lineHeight: 1.5 }}>
                     {JSON.stringify(e.payload, null, 2)}
                   </pre>

@@ -27,9 +27,19 @@ interface EventPayload {
   nas_url?: string;
   copy_review_verdict?: 'APPROVED' | 'REVISION';
   copy_review_round?: number;
+  copy_review_rule_details?: RuleDetail[];
   image_review_verdict?: 'PASS' | 'FAIL';
   image_review_round?: number;
+  image_review_rule_details?: RuleDetail[];
   [k: string]: unknown;
+}
+
+export interface RuleDetail {
+  id: string;
+  label?: string;
+  pass: boolean;
+  value?: number | string | null;
+  reason?: string;
 }
 
 export interface PipelineEvent {
@@ -132,6 +142,33 @@ export interface StageInfo {
   started_at?: string;
   completed_at?: string;
   review_passed?: boolean;
+  // 逐条规则打分（给前端现有 rule_scores UI 用；只对 copy_review / image_review 有值）
+  rule_scores?: Array<{
+    id: string;
+    label?: string;
+    score: number;       // 0 或 1，对齐前端 UI
+    pass: boolean;
+    comment?: string;
+  }>;
+  llm_reviewed?: boolean;
+}
+
+function ruleDetailsToScores(details?: RuleDetail[]): StageInfo['rule_scores'] | undefined {
+  if (!details || details.length === 0) return undefined;
+  return details.map((r) => {
+    const commentParts: string[] = [];
+    if (r.value !== null && r.value !== undefined && r.value !== '') {
+      commentParts.push(`${r.value}`);
+    }
+    if (r.reason) commentParts.push(r.reason);
+    return {
+      id: r.id,
+      label: r.label,
+      score: r.pass ? 1 : 0,
+      pass: r.pass,
+      comment: commentParts.length > 0 ? commentParts.join(' · ') : undefined,
+    };
+  });
 }
 
 export function buildStagesFromEvents(events: PipelineEvent[]): Record<string, StageInfo> {
@@ -163,8 +200,14 @@ export function buildStagesFromEvents(events: PipelineEvent[]): Record<string, S
       started_at: evt.created_at,
       completed_at: isLast && node !== 'export' ? undefined : evt.created_at,
     };
-    if (node === 'copy_review') info.review_passed = evt.payload.copy_review_verdict === 'APPROVED';
-    if (node === 'image_review') info.review_passed = evt.payload.image_review_verdict === 'PASS';
+    if (node === 'copy_review') {
+      info.review_passed = evt.payload.copy_review_verdict === 'APPROVED';
+      info.rule_scores = ruleDetailsToScores(evt.payload.copy_review_rule_details);
+    }
+    if (node === 'image_review') {
+      info.review_passed = evt.payload.image_review_verdict === 'PASS';
+      info.rule_scores = ruleDetailsToScores(evt.payload.image_review_rule_details);
+    }
     stages[stageKey] = info;
   }
   return stages;
