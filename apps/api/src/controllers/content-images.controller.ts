@@ -2,7 +2,7 @@ import { Request, Response } from 'express';
 import { createReadStream, existsSync, statSync } from 'fs';
 import { resolve, extname, sep } from 'path';
 import pool from '../db/connection';
-import { resolveTaskDirByPipelineId } from '../services/langgraph-adapter';
+import { fetchLangGraphEvents, isUuid, resolveTaskDir } from '../services/langgraph-adapter';
 
 const MIME_MAP: Record<string, string> = {
   '.png': 'image/png',
@@ -50,36 +50,39 @@ export class ContentImagesController {
         return;
       }
 
-      const { rows } = await pool.query<{ output_dir: string | null }>(
-        'SELECT output_dir FROM zenithjoy.pipeline_runs WHERE id = $1',
+      const { rows } = await pool.query<{ output_dir: string | null; cecelia_task_id: string | null }>(
+        'SELECT output_dir, cecelia_task_id FROM zenithjoy.pipeline_runs WHERE id = $1',
         [pipelineId]
       );
       const outputDir = rows[0]?.output_dir || null;
+      const ceceliaTaskId: string | null =
+        rows[0]?.cecelia_task_id ?? (isUuid(pipelineId) ? pipelineId : null);
 
-      // 收集候选 baseDir：先用 pipeline_runs.output_dir，再用 cecelia_events 里的实际任务目录兜底
-      const baseDirs: string[] = [];
-      if (outputDir) baseDirs.push(outputDir);
-      const { taskDir: langGraphTaskDir } = await resolveTaskDirByPipelineId(pipelineId);
-      if (langGraphTaskDir && !baseDirs.includes(langGraphTaskDir)) baseDirs.push(langGraphTaskDir);
-
-      if (baseDirs.length === 0) {
-        res.status(404).json({ error: 'pipeline not found' });
-        return;
-      }
-
-      // 尝试多个候选路径（manifest 可能将图片放 cards/ 或 images/ 或根目录）
-      let found: string | null = null;
-      outer: for (const baseDir of baseDirs) {
+      const findInDir = (baseDir: string): string | null => {
         for (const rel of [`cards/${decoded}`, `images/${decoded}`, decoded]) {
           const full = resolveSafe(baseDir, rel);
-          if (full && existsSync(full) && statSync(full).isFile()) {
-            found = full;
-            break outer;
-          }
+          if (full && existsSync(full) && statSync(full).isFile()) return full;
+        }
+        return null;
+      };
+
+      let found: string | null = outputDir ? findInDir(outputDir) : null;
+
+      // outputDir 没找到 → 尝试从 cecelia_events 解析 LangGraph 任务目录兜底
+      if (!found && ceceliaTaskId) {
+        const events = await fetchLangGraphEvents(ceceliaTaskId);
+        const langGraphTaskDir = resolveTaskDir(events);
+        if (langGraphTaskDir && langGraphTaskDir !== outputDir) {
+          found = findInDir(langGraphTaskDir);
         }
       }
 
       if (!found) {
+        // outputDir 缺失且无 LangGraph 事件 → 404 pipeline
+        if (!outputDir) {
+          res.status(404).json({ error: 'pipeline not found' });
+          return;
+        }
         // 不缓存 404 — 避免 Cloudflare 持有旧 404 影响后续正确响应
         res.setHeader('Cache-Control', 'no-store, max-age=0');
         res.status(404).json({ error: 'image not found' });

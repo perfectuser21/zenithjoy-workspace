@@ -279,16 +279,20 @@ describe('Pipeline API', () => {
     });
 
     it('should return 404 when pipeline_run does not exist', async () => {
-      mockQuery.mockResolvedValueOnce({ rows: [] });
+      mockQuery
+        .mockResolvedValueOnce({ rows: [] })  // pipeline_runs lookup
+        .mockResolvedValueOnce({ rows: [] }); // cecelia_events fallback: no events
 
       const response = await request(app).get('/api/pipeline/00000000-0000-0000-0000-000000000000/output');
 
       expect(response.status).toBe(404);
     });
 
-    it('should return pending output when output_manifest is null (not fallback to cecelia)', async () => {
-      // output_manifest null → 直接返回 pending 态，不回退到老 cecelia
-      mockQuery.mockResolvedValueOnce({ rows: [{ ...PIPELINE_RUN, status: 'running', output_manifest: null }] });
+    it('should return pending output when output_manifest is null and no LangGraph events', async () => {
+      // pipeline_runs 有 row 但 manifest=null，cecelia_events 也为空 → 返回 pending
+      mockQuery
+        .mockResolvedValueOnce({ rows: [{ ...PIPELINE_RUN, status: 'running', output_manifest: null }] })
+        .mockResolvedValueOnce({ rows: [] }); // no LangGraph events
 
       const response = await request(app).get(`/api/pipeline/${PIPELINE_RUN.id}/output`);
 
@@ -298,19 +302,21 @@ describe('Pipeline API', () => {
       expect(response.body.output.article_text).toBeNull();
       expect(response.body.output.cards_text).toBeNull();
       expect(response.body.output.image_urls).toEqual([]);
-      // 严禁 fallback 到 cecelia
+      // 严禁 HTTP fallback 到 cecelia Brain（只允许本地 cecelia_events 表查询）
       expect(mockFetch).not.toHaveBeenCalled();
     });
   });
 
   describe('GET /api/pipeline/:id/stages', () => {
-    it('should return local status without calling cecelia', async () => {
+    it('should return local status when no LangGraph events', async () => {
       const runWithManifest = {
         ...PIPELINE_RUN,
         status: 'completed',
         output_manifest: { status: 'ready_for_publish' },
       };
-      mockQuery.mockResolvedValueOnce({ rows: [runWithManifest] });
+      mockQuery
+        .mockResolvedValueOnce({ rows: [runWithManifest] })
+        .mockResolvedValueOnce({ rows: [] }); // no LangGraph events
 
       const response = await request(app).get(`/api/pipeline/${PIPELINE_RUN.id}/stages`);
 
@@ -321,7 +327,9 @@ describe('Pipeline API', () => {
     });
 
     it('should return 404 when pipeline_run does not exist', async () => {
-      mockQuery.mockResolvedValueOnce({ rows: [] });
+      mockQuery
+        .mockResolvedValueOnce({ rows: [] })
+        .mockResolvedValueOnce({ rows: [] }); // no LangGraph events
 
       const response = await request(app).get(`/api/pipeline/${PIPELINE_RUN.id}/stages`);
 
