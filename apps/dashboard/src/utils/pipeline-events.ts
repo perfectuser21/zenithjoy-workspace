@@ -1,3 +1,11 @@
+export interface RuleDetail {
+  id: string
+  label?: string
+  pass: boolean
+  value?: number | string | null
+  reason?: string
+}
+
 export interface EventPayload {
   node: string
   step_index?: number
@@ -9,8 +17,10 @@ export interface EventPayload {
   nas_url?: string
   copy_review_verdict?: 'APPROVED' | 'REVISION'
   copy_review_round?: number
+  copy_review_rule_details?: RuleDetail[]
   image_review_verdict?: 'PASS' | 'FAIL'
   image_review_round?: number
+  image_review_rule_details?: RuleDetail[]
   [k: string]: unknown
 }
 
