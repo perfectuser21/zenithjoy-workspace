@@ -250,44 +250,63 @@ interface LangGraphManifestFile {
   size?: number;
   sha256?: string;
 }
-// 兼容两种 manifest schema：
-// 老（zenithjoy callback）：{ article: {path}, copy: {path}, image_set: {files: [...]} }
-// 新（LangGraph export 节点）：{ files: [{path, size, sha256}] }
+// 兼容三种 manifest schema：
+// V1（zenithjoy callback）：{ article: {path}, copy: {path}, image_set: {files: [...]} }
+// V2（LangGraph export 早期）：{ files: [{path, size, sha256}] }
+// V3（LangGraph export 当前）：{ cards: [...], copy: "path", article: "path", findings, person_data }
 interface PipelineManifest {
   status?: string;
   stage?: string;
   keyword?: string;
-  article?: ManifestFile;
-  copy?: ManifestFile;
+  // V1
+  article?: ManifestFile | string;
+  copy?: ManifestFile | string;
   image_set?: { files?: string[]; status?: string; framework?: string };
+  // V2
   files?: LangGraphManifestFile[];
+  // V3
+  cards?: string[];
+  findings?: string;
+  person_data?: string;
   pipeline_id?: string;
   created_at?: string;
 }
 
-function extractArticlePath(m: PipelineManifest | null): string | undefined {
+export function extractArticlePath(m: PipelineManifest | null): string | undefined {
   if (!m) return undefined;
-  if (m.article?.path) return m.article.path;
+  // V1: article 是对象
+  if (typeof m.article === 'object' && m.article?.path) return m.article.path;
+  // V3: article 是字符串
+  if (typeof m.article === 'string') return m.article;
+  // V2: 从 files 数组里找
   const hit = m.files?.find((f) => f.path === 'article/article.md' || f.path.endsWith('/article.md'));
   return hit?.path;
 }
 
-function extractCopyPath(m: PipelineManifest | null): string | undefined {
+export function extractCopyPath(m: PipelineManifest | null): string | undefined {
   if (!m) return undefined;
-  if (m.copy?.path) return m.copy.path;
+  if (typeof m.copy === 'object' && m.copy?.path) return m.copy.path;
+  if (typeof m.copy === 'string') return m.copy;
   const hit = m.files?.find((f) => f.path === 'cards/copy.md' || f.path.endsWith('/copy.md'));
   return hit?.path;
 }
 
-function extractImageFiles(m: PipelineManifest | null): string[] {
+export function extractImageFiles(m: PipelineManifest | null): string[] {
   if (!m) return [];
+  // V1: image_set.files
   if (m.image_set?.files && m.image_set.files.length > 0) return m.image_set.files;
-  // LangGraph manifest：从 files[] 里挑 .png/.jpg/.webp
+  // V3: cards 数组（字符串列表，文件名已不含子目录）
+  if (Array.isArray(m.cards) && m.cards.length > 0) {
+    return m.cards.map((f) => {
+      const idx = f.lastIndexOf('/');
+      return idx >= 0 ? f.slice(idx + 1) : f;
+    });
+  }
+  // V2: files 数组里挑 .png/.jpg/.webp
   const IMG_RE = /\.(png|jpe?g|webp)$/i;
   return (m.files || [])
     .filter((f) => IMG_RE.test(f.path))
     .map((f) => {
-      // 剥掉 cards/ 前缀 — content-images 路由接 filename 不接子目录
       const idx = f.path.lastIndexOf('/');
       return idx >= 0 ? f.path.slice(idx + 1) : f.path;
     });

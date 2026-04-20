@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { buildStagesFromEvents, type PipelineEvent } from '../langgraph-adapter';
+import {
+  buildStagesFromEvents,
+  extractArticlePath,
+  extractCopyPath,
+  extractImageFiles,
+  type PipelineEvent,
+} from '../langgraph-adapter';
 
 function mkEvent(id: number, node: string, extra: Record<string, unknown> = {}): PipelineEvent {
   return {
@@ -82,5 +88,82 @@ describe('buildStagesFromEvents — rule_details 映射到 StageInfo.rule_scores
     ];
     const stages = buildStagesFromEvents(events);
     expect(stages['content-copy-review'].rule_scores).toBeUndefined();
+  });
+});
+
+describe('manifest schema 三版兼容（extractArticlePath/extractCopyPath/extractImageFiles）', () => {
+  it('V1 image_set.files → extractImageFiles 原样返回', () => {
+    const m = { image_set: { files: ['龙虾-cover.png', '龙虾-01.png'] } };
+    expect(extractImageFiles(m)).toEqual(['龙虾-cover.png', '龙虾-01.png']);
+  });
+
+  it('V2 files[{path}] → 剥 cards/ 前缀', () => {
+    const m = {
+      files: [
+        { path: 'cards/prompt-anan-cover.png', size: 500 },
+        { path: 'article/article.md', size: 100 },
+        { path: 'cards/prompt-anan-01.png', size: 300 },
+      ],
+    };
+    expect(extractImageFiles(m)).toEqual(['prompt-anan-cover.png', 'prompt-anan-01.png']);
+  });
+
+  it('V3 cards[] 字符串数组 → 剥子目录前缀', () => {
+    const m = {
+      cards: [
+        'Notion-01-profile.png',
+        'Notion-cover.png',
+        'cards/Notion-lf-01.png',
+      ],
+    };
+    expect(extractImageFiles(m)).toEqual([
+      'Notion-01-profile.png',
+      'Notion-cover.png',
+      'Notion-lf-01.png',
+    ]);
+  });
+
+  it('V3 article/copy 为字符串路径', () => {
+    const m = {
+      article: 'article/article.md',
+      copy: 'cards/copy.md',
+    };
+    expect(extractArticlePath(m)).toBe('article/article.md');
+    expect(extractCopyPath(m)).toBe('cards/copy.md');
+  });
+
+  it('V1 article/copy 为对象', () => {
+    const m = {
+      article: { path: 'article/article.md', status: 'ok' },
+      copy: { path: 'cards/copy.md' },
+    };
+    expect(extractArticlePath(m)).toBe('article/article.md');
+    expect(extractCopyPath(m)).toBe('cards/copy.md');
+  });
+
+  it('V2 files[] 里找 article/copy', () => {
+    const m = {
+      files: [
+        { path: 'article/article.md' },
+        { path: 'cards/copy.md' },
+      ],
+    };
+    expect(extractArticlePath(m)).toBe('article/article.md');
+    expect(extractCopyPath(m)).toBe('cards/copy.md');
+  });
+
+  it('空/null manifest → 返回空/undefined', () => {
+    expect(extractImageFiles(null)).toEqual([]);
+    expect(extractArticlePath(null)).toBeUndefined();
+    expect(extractCopyPath(null)).toBeUndefined();
+    expect(extractImageFiles({})).toEqual([]);
+  });
+
+  it('同时有 V1 image_set 和 V3 cards 时 V1 优先（老 pipeline 兼容）', () => {
+    const m = {
+      image_set: { files: ['v1-a.png'] },
+      cards: ['v3-a.png'],
+    };
+    expect(extractImageFiles(m)).toEqual(['v1-a.png']);
   });
 });
