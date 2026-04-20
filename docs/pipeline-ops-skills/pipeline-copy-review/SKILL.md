@@ -1,104 +1,119 @@
 ---
 name: pipeline-copy-review
-description: /pipeline-copy-review、审文案、文案质检 — Content Pipeline Stage 3 (文案品牌审查) 运维 skill
+description: Content Pipeline Stage 3 文案打分机 (严格 SOP)
 ---
 
-# /pipeline-copy-review — Stage 3 文案审查 skill
+# pipeline-copy-review — Stage 3 文案打分机
 
-## 什么时候用
-- copywriting 产出的 copy.md / article.md 要做品牌对齐 + 禁用词检查
-- 手动复审某条 pipeline 的文案质量
-- 想给 LangGraph 节点做 APPROVED/REVISION 的裁决
+## 你是谁
+**打分搬运机**。不做主观判断。不解释。只跑 bash + 数数 + 查表 + 输出一行 JSON。
 
-## 审查维度
+## 硬约束
+- 禁止分析文案质量、风格、调性、文笔
+- 禁止自己判"这段写得好不好"
+- 只用 bash `grep` / `wc` 做计数
+- 只输出最后一行 JSON
 
-1. **品牌关键词命中**：文案中是否包含 `能力` / `系统` / `一人公司` / `小组织` / `AI` / `能力下放` / `能力放大` 中至少 1 个
-2. **禁用词**：不应出现 `coding` / `搭建` / `agent workflow` / `builder` / `Cecelia` / `智能体搭建` / `代码部署`
-3. **长度**：
-   - `copy.md`（社交文案）≥ 200 字
-   - `article.md`（公众号长文）≥ 500 字
-4. **LLM 品牌符合度**（可选）：调 thalamus LLM 打分，有 feedback 写进 copy_review_feedback
+## Input（env）
 
-## 前置检查
+- `CONTENT_OUTPUT_DIR` — 产物根目录
 
-```bash
-OUT_DIR="<output_dir>"
-[ -f "$OUT_DIR/cards/copy.md" ] && wc -c "$OUT_DIR/cards/copy.md"
-[ -f "$OUT_DIR/article/article.md" ] && wc -c "$OUT_DIR/article/article.md"
-```
+## 执行步骤
 
-## 介入步骤
-
-### 步骤 1：跑程序化检查
+### 步骤 1：文件存在性检查
 
 ```bash
-python3 -c "
-import sys
-sys.path.insert(0, '/Users/administrator/perfect21/zenithjoy/services/creator')
-from pipeline_worker.executors.copy_review import execute_copy_review
-r = execute_copy_review({'keyword': '<关键词>'})
-print(f\"passed={r['review_passed']}, score={r['quality_score']}, issues:\")
-for i in r.get('issues', []):
-    print(' -', i)
-"
+COPY_FILE="${CONTENT_OUTPUT_DIR}/cards/copy.md"
+ARTICLE_FILE="${CONTENT_OUTPUT_DIR}/article/article.md"
+if [ ! -f "$COPY_FILE" ]; then
+  echo '{"copy_review_verdict":"REVISION","copy_review_feedback":"missing copy.md","quality_score":0}'
+  exit 0
+fi
+if [ ! -f "$ARTICLE_FILE" ]; then
+  echo '{"copy_review_verdict":"REVISION","copy_review_feedback":"missing article.md","quality_score":0}'
+  exit 0
+fi
 ```
 
-### 步骤 2：人工审（可选 — LLM 审）
+### 步骤 2：5 项硬规则打分（每项 0/1 分，满分 5）
 
 ```bash
-# 读 copy
-COPY=$(cat <output_dir>/cards/copy.md)
-curl -s -X POST http://localhost:5221/api/brain/llm-service/generate \
-  -H 'Content-Type: application/json' \
-  -d "$(python3 -c "
-import json
-prompt = '''审查以下社交文案，按品牌调性（能力下放/一人公司/AI+个人）打分 1-10 并给改进建议：
+SCORE=0
+ISSUES=()
 
-$COPY
+# R1: 无禁用词
+if ! grep -qE 'coding|搭建|agent workflow|builder|Cecelia|智能体搭建|代码部署' "$COPY_FILE" "$ARTICLE_FILE"; then
+  SCORE=$((SCORE+1))
+else
+  ISSUES+=("R1:命中禁用词")
+fi
 
-只输出 JSON: {\\\"score\\\": int, \\\"feedback\\\": str}
-'''
-print(json.dumps({'tier':'thalamus','prompt':prompt,'max_tokens':500,'format':'json'}))
-")" | python3 -m json.tool | head
+# R2: 品牌词命中 ≥ 1
+BRAND_HITS=$(grep -oE '能力|系统|一人公司|小组织|AI|能力下放|能力放大' "$COPY_FILE" "$ARTICLE_FILE" 2>/dev/null | wc -l)
+if [ "$BRAND_HITS" -ge 1 ]; then
+  SCORE=$((SCORE+1))
+else
+  ISSUES+=("R2:品牌词0命中")
+fi
+
+# R3: copy.md ≥ 200 字
+COPY_LEN=$(wc -m < "$COPY_FILE")
+if [ "$COPY_LEN" -ge 200 ]; then
+  SCORE=$((SCORE+1))
+else
+  ISSUES+=("R3:copy ${COPY_LEN}字")
+fi
+
+# R4: article.md ≥ 500 字
+ART_LEN=$(wc -m < "$ARTICLE_FILE")
+if [ "$ART_LEN" -ge 500 ]; then
+  SCORE=$((SCORE+1))
+else
+  ISSUES+=("R4:article ${ART_LEN}字")
+fi
+
+# R5: article.md 有 markdown 标题
+if grep -qE '^#{1,3} ' "$ARTICLE_FILE"; then
+  SCORE=$((SCORE+1))
+else
+  ISSUES+=("R5:无md标题")
+fi
 ```
 
-### 步骤 3：决定 APPROVED / REVISION
+### 步骤 3：verdict 表
 
-- score ≥ 7 且无禁用词 → APPROVED
-- score < 7 或命中禁用词 → REVISION，feedback 回传给下一轮 copywrite
-
-## 裁决规则（给 LangGraph 用）
-
-| 条件 | verdict |
+| 分数 | verdict |
 |------|---------|
-| 禁用词命中 OR copy.md < 200 字 OR article.md < 500 字 | REVISION |
-| 所有品牌关键词都没命中 | REVISION |
-| 程序化 score ≥ 6 + 无禁用词 | APPROVED |
-| LLM 审查 score ≥ 7 | APPROVED（覆盖程序化） |
+| 4 或 5 | APPROVED |
+| 0-3 | REVISION |
 
-## 相关文件路径
-- Executor: `/Users/administrator/perfect21/zenithjoy/services/creator/pipeline_worker/executors/copy_review.py`
-- Brand voice: `/Users/administrator/.claude-account1/projects/-Users-administrator-perfect21-zenithjoy/memory/brand_voice.md`
+```bash
+if [ "$SCORE" -ge 4 ]; then
+  VERDICT="APPROVED"
+  FEEDBACK="null"
+else
+  VERDICT="REVISION"
+  FEEDBACK="\"$(IFS=';'; echo "${ISSUES[*]}")\""
+fi
+```
 
-## LangGraph Contract
+### 步骤 4：输出一行 JSON（stdout 最后一行）
 
-### Input（从 ContentPipelineState 读）
-- `pipeline_id`: UUID
-- `keyword`: 关键词
-- `output_dir`: 产物根目录
-- `copy_path`: `<output_dir>/cards/copy.md`
-- `article_path`: `<output_dir>/article/article.md`
+```bash
+echo "{\"copy_review_verdict\":\"${VERDICT}\",\"copy_review_feedback\":${FEEDBACK},\"quality_score\":${SCORE}}"
+```
 
-### Output（写回 state）
-- `copy_review_verdict`: `"APPROVED"` | `"REVISION"`
-- `copy_review_feedback`: REVISION 时非空字符串（LLM 或程序化 issues 拼接），APPROVED 时 null
-- `copy_review_round`: 累加计数（graph reducer 负责，节点不关心）
-- `trace`: "copy_review"
-- `error`: null | 错误字符串
+## 禁止事项
 
-### 条件边（content-pipeline-graph 里定义）
-- `APPROVED` → 进入 `generate` 节点
-- `REVISION` → 回 `copywrite` 节点重写，feedback 作为 copywrite 下一轮的输入
+- 禁止因"感觉"判 REVISION。判断纯粹靠上面 5 条 bash 规则。
+- 禁止加额外审查维度。
+- 禁止重试或反复评分。
+- 禁止在 JSON 外输出任何东西。
 
-### 失败策略
-节点本身执行失败（比如读文件失败）抛错让 graph 处理；审查判 REVISION 不是失败，是正常流转。
+## 输出 schema
+
+唯一 stdout 最后一行：
+
+```json
+{"copy_review_verdict":"APPROVED|REVISION","copy_review_feedback":"..."|null,"quality_score":0-5}
+```

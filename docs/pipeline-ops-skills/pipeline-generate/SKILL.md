@@ -1,109 +1,135 @@
 ---
 name: pipeline-generate
-description: /pipeline-generate — Content Pipeline Stage 4 (完整图生流程 = person-data + V6 渲染 + 拷 cards/) 的 task 执行 skill
+description: Content Pipeline Stage 4 图生成机 (严格 SOP，调 Brain LLM 做 person-data + V6 渲染 9 PNG)
 ---
 
-# /pipeline-generate — Stage 4 图片生成完整流程
+# pipeline-generate — Stage 4 图生成机
 
-## 职责
+## 你是谁
+**图生成搬运机**。3 步：
+1. 调 Brain LLM 生成 person-data.json（9 字段齐全）
+2. 调 V6 node 脚本渲染 9 张 PNG
+3. 输出一行 JSON
 
-**Stage 4 端到端出图**。三步：
-1. **person-data 构造**：LLM 按 V6 字段预算把 findings → person-data.json
-2. **V6 渲染**：node 脚本 gen-v6-person.mjs 把 person-data.json → 9 张 PNG（写到 `~/claude-output/images/`）
-3. **拷贝 cards/**：把 PNG 拷到 `<output_dir>/cards/`（content-images HTTP 从这里读）
+## 硬约束
+- 禁止人工写 person-data.json（必须 LLM 生成）
+- 禁止用宿主 Mac 路径 `~/claude-output/scripts/`（容器里看到的是 Mac darwin @resvg）
+- **必须**用 `/home/cecelia/v6-runtime/gen-v6-person.mjs`（预置 linux @resvg symlink）
+- 只输出最后一行 JSON
 
-细粒度运维入口见 `/pipeline-persondata`（只修 person-data）和 `/pipeline-regen`（只 V6 渲染）。
+## Input（env）
 
-## 前置检查
+- `CONTENT_OUTPUT_DIR` — 产物根目录（含 findings.json）
 
-```bash
-# 1. gen-v6-person.mjs 存在
-ls ~/claude-output/scripts/gen-v6-person.mjs
-# 2. findings 已就绪
-OUT_DIR="<output_dir>"
-ls "$OUT_DIR/../research/"*findings.json 2>/dev/null
-```
+## 执行步骤
 
-## 介入步骤（一把梭）
-
-```bash
-KEYWORD="<关键词>"
-python3 -c "
-import sys
-sys.path.insert(0, '/Users/administrator/perfect21/zenithjoy/services/creator')
-from pipeline_worker.executors.generate import execute_generate
-r = execute_generate({'keyword': '$KEYWORD', 'image_count': 9})
-print(r)
-"
-```
-
-成功后：
-- `<output_dir>/person-data.json` 有 9 字段齐全的 JSON（`name` / `handle` / `headline` / `key_stats` / `flywheel` / `flywheel_insight` / `quote` / `timeline` / `day_schedule` / `qa`）
-- `<output_dir>/cards/` 下 9 张 PNG（cover + 01-profile + 02-flywheel + 03-day + 04-qa + lf-01/02/03 + lf-cover）
-
-## 分步介入（如果某一步挂了）
-
-| 症状 | 走哪个子 skill |
-|------|---------------|
-| person-data.json 缺字段 / 含"待补充" | `/pipeline-persondata` |
-| 9 张 PNG 没生成出来 / 文字溢出 | `/pipeline-regen` |
-| PNG 生成了但 cards/ 里没拷进来 | 见下方"仅拷贝" |
-
-### 仅拷贝 PNG 到 cards/（generate.py 最后一步独立跑）
+### 步骤 1：读 findings + 准备 person-data
 
 ```bash
-python3 -c "
-import sys
-sys.path.insert(0, '/Users/administrator/perfect21/zenithjoy/services/creator')
-from pathlib import Path
-from pipeline_worker.executors.generate import _copy_v6_pngs_to_cards, _slug
-keyword = '<关键词>'
-out_dir = Path('<output_dir>')
-n = _copy_v6_pngs_to_cards(_slug(keyword), out_dir)
-print(f'copied {n} PNG to {out_dir}/cards/')
-"
+OUT_DIR="${CONTENT_OUTPUT_DIR}"
+FINDINGS="$OUT_DIR/findings.json"
+PERSON_DATA="$OUT_DIR/person-data.json"
+CARDS_DIR="$OUT_DIR/cards"
+mkdir -p "$CARDS_DIR"
+
+if [ ! -f "$FINDINGS" ]; then
+  echo "{\"person_data_path\":null,\"cards_dir\":\"$CARDS_DIR\",\"error\":\"missing findings\"}"
+  exit 0
+fi
 ```
 
-## 验收标准
+### 步骤 2：调 Brain LLM 按 V6 字段预算生成 person-data.json
 
 ```bash
-OUT_DIR="<output_dir>"
-echo -n "person-data.json: "
-[ -f "$OUT_DIR/person-data.json" ] && echo "OK" || echo "MISSING"
-echo -n "cards/ PNG 数: "
-ls "$OUT_DIR/cards/"*.png 2>/dev/null | wc -l
+KEYWORD=$(python3 -c "import json; print(json.load(open('$FINDINGS')).get('keyword',''))")
+FINDINGS_SUMMARY=$(python3 -c "
+import json
+d = json.load(open('$FINDINGS'))
+fs = d.get('findings', [])[:7]
+for i, f in enumerate(fs):
+    print(f'{i+1}. {f.get(\"title\",\"\")[:80]}: {(f.get(\"content\") or \"\")[:400]}')
+")
+
+PROMPT=$(cat <<PROMPT_END
+为关键词「${KEYWORD}」生成 V6 人物卡片 person-data.json，严格遵守字段字符预算（中文按字符计）。
+
+## findings（参考）
+${FINDINGS_SUMMARY}
+
+## 硬预算（超出会渲染溢出，必须内截断）
+- name ≤ 6, handle ≤ 14, headline ≤ 14
+- key_stats[3]: val ≤ 6, label ≤ 8, sub ≤ 10
+- flywheel[4] 每个 ≤ 4
+- flywheel_insight ≤ 20, quote ≤ 24
+- timeline[5]: year ≤ 7, title ≤ 11, desc ≤ 20
+- day_schedule[4]: time ≤ 8, title ≤ 8, desc ≤ 20
+- qa[4]: q ≤ 14, a ≤ 28
+
+## 硬规则
+- name 不得是整 keyword，要提炼核心短词
+- 数组长度必须精确：key_stats=3, flywheel=4, timeline=5, day_schedule=4, qa=4
+- 禁止输出"待补充"/"暂无数据"
+- handle 用 @<slug> 格式
+
+只输出 JSON（无 fence）。
+PROMPT_END
+)
+
+BRAIN_URL="${BRAIN_URL:-http://host.docker.internal:5221}"
+
+RESP=$(curl -s -X POST "$BRAIN_URL/api/brain/llm-service/generate" \
+  -H 'Content-Type: application/json' \
+  -d "$(python3 -c "
+import json, os
+print(json.dumps({'tier':'thalamus','prompt':os.environ['PROMPT'],'max_tokens':3072,'format':'json'}))
+")")
+
+TEXT=$(echo "$RESP" | python3 -c "import json,sys; d=json.load(sys.stdin); print((d.get('data') or {}).get('text') or '')" 2>/dev/null | sed 's/^```json//' | sed 's/^```//' | sed 's/```$//')
+
+if [ -z "$TEXT" ]; then
+  echo "{\"person_data_path\":null,\"cards_dir\":\"$CARDS_DIR\",\"error\":\"LLM 生成 person-data 失败\"}"
+  exit 0
+fi
+echo "$TEXT" > "$PERSON_DATA"
 ```
 
-期望：`person-data.json OK` + PNG 数 = 9
+### 步骤 3：调 V6 渲染脚本
 
-## 相关文件路径
-- Executor: `services/creator/pipeline_worker/executors/generate.py`
-- person_data_builder: `services/creator/pipeline_worker/person_data_builder.py`
-- V6 脚本: `~/claude-output/scripts/gen-v6-person.mjs`
-- V6 输出（硬编码）: `~/claude-output/images/`
-- 最终 cards: `<output_dir>/cards/`
+```bash
+# 生成 slug 给 V6 --slug 参数
+SLUG=$(echo "$KEYWORD" | python3 -c "
+import sys, re, hashlib
+t = sys.stdin.read().strip()
+t_ascii = re.sub(r'[^a-zA-Z0-9-]', '', t)
+if not t_ascii or len(t_ascii) < 3:
+    # 中文 keyword 用 hash 保证有 slug
+    t_ascii = 'pipe-' + hashlib.md5(t.encode()).hexdigest()[:8]
+print(t_ascii[:40])
+")
 
-## LangGraph Contract
+cd /home/cecelia/v6-runtime
+node gen-v6-person.mjs --data "$PERSON_DATA" --slug "$SLUG" 2>&1 | tail -20
 
-### Input（从 ContentPipelineState 读）
-- `pipeline_id`: UUID
-- `keyword`: 关键词
-- `output_dir`: 产物根目录
-- `findings_path`: 上游 research 产物
-- `copy_path`: 上游 copywrite 产物（可选，某些 V6 会从 copy 摘金句填 quote 字段）
-- `image_review_feedback` (可选): FAIL 回路时上一轮 vision 反馈（本节点可据此调整 BUDGET 或 person-data 策略）
+# V6 把图写到 ~/claude-output/images/（容器内 /home/cecelia/claude-output/images/）
+# 拷到 pipeline 的 cards/
+cp /home/cecelia/claude-output/images/${SLUG}*.png "$CARDS_DIR/" 2>/dev/null || true
+```
 
-### Output（写回 state）
-- `person_data_path`: `<output_dir>/person-data.json`
-- `cards_dir`: `<output_dir>/cards/`
-- `trace`: "generate"
-- `error`: null | 错误字符串
+### 步骤 4：输出 JSON
 
-### 条件边（content-pipeline-graph 里定义）
-- 无条件 → 进入 `image_review` 节点
-- 如果是从 `image_review FAIL` 回来的（`image_review_round` > 0），本节点需要读 `image_review_feedback` 调整策略（收紧 BUDGET 或 prompt）。PR-3 接 docker 时在 skill prompt 里体现。
+```bash
+PNG_COUNT=$(ls "$CARDS_DIR"/*.png 2>/dev/null | wc -l | tr -d ' ')
+echo "{\"person_data_path\":\"$PERSON_DATA\",\"cards_dir\":\"$CARDS_DIR\",\"png_count\":${PNG_COUNT}}"
+```
 
-### 失败策略
-- person_data_builder LLM 挂 → executor 内置硬截断 fallback，**不抛错**（有瑕疵的 person-data 总比无图强）
-- V6 脚本 returncode != 0 → 抛错
-- 拷贝 PNG 数 < 9 → 写 error 但仍返回（让 image_review 决定是否 FAIL）
+## 禁止事项
+
+- 禁止用 `~/claude-output/scripts/gen-v6-person.mjs`（那是 Mac Node，docker 里 ESM resolve 挂）
+- 禁止跳过 V6 脚本（必须真渲染）
+- 禁止 JSON 外输出
+
+## 输出 schema
+
+```json
+{"person_data_path":"...","cards_dir":"...","png_count":9}
+```

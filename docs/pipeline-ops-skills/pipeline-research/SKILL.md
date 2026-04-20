@@ -1,154 +1,108 @@
 ---
 name: pipeline-research
-description: /pipeline-research、手动跑调研、findings 重抓 — Content Pipeline Stage 1 (NotebookLM 调研) 运维 skill
+description: Content Pipeline Stage 1 调研机 (严格 SOP，调 Brain LLM 生成 findings)
 ---
 
-# /pipeline-research — Stage 1 调研运维 skill
+# pipeline-research — Stage 1 调研机
 
-## 什么时候用
-- research 阶段日志报 "NotebookLM 返回空内容或解析失败"
-- findings.json 不存在或 `findings: []`
-- 想换 notebook（topic 关联了新的 notebook_id）
-- 日志里看到 "研究完成(无输出)"，想人工重抓
+## 你是谁
+**调研搬运机**。调 Brain LLM 生成结构化 findings.json + 输出一行 JSON。
+不调 NotebookLM CLI（docker 内无 notebooklm CLI）。直接用业务 LLM 根据 keyword 生成结构化调研素材。
 
-## 前置检查
+## 硬约束
+- 禁止生成小于 8 条 findings
+- 禁止输出纯粹模板内容（每条必须有 title + content ≥ 100 字）
+- 只用 `curl` + `python3` 处理 JSON
+- 只输出最后一行 JSON
 
-```bash
-# 1. notebooklm CLI 可用
-notebooklm --version || echo "CLI 未安装"
+## Input（env）
 
-# 2. 当前 handle（哪个 notebook）
-notebooklm whoami 2>&1 | head -5
+- `CONTENT_PIPELINE_KEYWORD` 或通过 prompt 自带的 keyword
+- 输出目录按 `~/content-output/research/solo-company-case-<slug(keyword)>-<YYYY-MM-DD>/findings.json`
 
-# 3. findings 目录现状
-ls -lt ~/content-output/research/ 2>/dev/null | head -10
-```
+## 执行步骤
 
-## 介入步骤（copy-paste 可跑）
-
-### 步骤 1: 定位 keyword & notebook_id
+### 步骤 1：准备输出目录 + slug
 
 ```bash
-# 从 topic 查 notebook_id（需 auth，见 /pipeline-diagnose 里的 TOKEN 获取）
-curl -s -H "Authorization: Bearer ${CECELIA_INTERNAL_TOKEN}" \
-  "http://localhost:5200/api/topics?limit=20" \
-  | python3 -c 'import json,sys; [print(t["title"], "->", t.get("notebook_id")) for t in json.load(sys.stdin).get("data",{}).get("topics",[])]'
+KEYWORD="${CONTENT_PIPELINE_KEYWORD:-$1}"
+SLUG=$(echo "$KEYWORD" | python3 -c "
+import sys, re
+t = sys.stdin.read().strip()
+t = re.sub(r'[^a-zA-Z0-9\u4e00-\u9fff-]', '-', t)
+t = re.sub(r'-+', '-', t)[:40]
+print(t)
+")
+TODAY=$(date +%Y-%m-%d)
+OUT_DIR="/home/cecelia/content-output/research/solo-company-case-${SLUG}-${TODAY}"
+mkdir -p "$OUT_DIR"
+FINDINGS="$OUT_DIR/findings.json"
 ```
 
-说明：`notebook_id` 在 zenithjoy 数据库的 topic 表 `notebook_id` 字段。若未配置，pipeline 会 fallback 到 env `CREATOR_DEFAULT_NOTEBOOK_ID`。
-
-### 步骤 2: 切换 notebook + 清旧 sources
+### 步骤 2：调 Brain LLM 生成结构化 findings
 
 ```bash
-NOTEBOOK_ID="<你的 notebook id>"
-notebooklm use "$NOTEBOOK_ID"
-notebooklm source clear
+PROMPT=$(cat <<PROMPT_END
+你是内容研究员。为关键词「${KEYWORD}」生成 10 条结构化调研素材。
+
+要求：
+1. 每条 title ≤ 40 字，content 100-400 字
+2. 围绕"超级个体 / 一人公司 / AI 能力下放"的场景
+3. 提供具体数据点、案例、工具名（即使是示例）
+4. 不得输出"待补充"/"暂无"/占位符
+
+只输出严格 JSON，不要 markdown fence，不要解释：
+
+{
+  "keyword": "${KEYWORD}",
+  "series": "solo-company-case",
+  "total_findings": 10,
+  "findings": [
+    {"id":"f001","title":"...","content":"...","source":"LLM","brand_relevance":4,"used_in":[]},
+    ... 10 条
+  ]
+}
+PROMPT_END
+)
+
+BRAIN_URL="${BRAIN_URL:-http://host.docker.internal:5221}"
+
+RESP=$(curl -s -X POST "$BRAIN_URL/api/brain/llm-service/generate" \
+  -H 'Content-Type: application/json' \
+  -d "$(python3 -c "
+import json, os
+print(json.dumps({'tier':'thalamus','prompt':os.environ['PROMPT'],'max_tokens':8192,'timeout':180,'format':'json'}))
+")")
+
+TEXT=$(echo "$RESP" | python3 -c "import json,sys; d=json.load(sys.stdin); print((d.get('data') or {}).get('text') or (d.get('data') or {}).get('content') or '')" 2>/dev/null)
+
+if [ -z "$TEXT" ]; then
+  echo "{\"findings_path\":null,\"output_dir\":\"${OUT_DIR}\",\"error\":\"LLM 返回空\"}"
+  exit 0
+fi
+
+# 去 markdown fence
+TEXT=$(echo "$TEXT" | sed 's/^```json//' | sed 's/^```//' | sed 's/```$//')
+echo "$TEXT" > "$FINDINGS"
 ```
 
-### 步骤 3: 触发 web 深度调研
+### 步骤 3：输出一行 JSON
 
 ```bash
-KEYWORD="<关键词，如 一人公司>"
-notebooklm source add-research "$KEYWORD" --mode deep --no-wait
+COUNT=$(python3 -c "import json; print(len(json.load(open('$FINDINGS')).get('findings', [])))" 2>/dev/null || echo 0)
+echo "{\"findings_path\":\"${FINDINGS}\",\"output_dir\":\"${OUT_DIR}\",\"count\":${COUNT}}"
 ```
 
-说明：`--no-wait` 立刻返回，研究在后台跑（NotebookLM 后端）。
+## 禁止事项
 
-### 步骤 4: 等研究完成
+- 禁止调 notebooklm CLI（docker 内没装）
+- 禁止自己写内容（必须调 LLM）
+- 禁止使用占位符（待补充/暂无数据）
+- 禁止 JSON 外输出
 
-```bash
-notebooklm research wait --timeout 300 --import-all
+## 输出 schema
+
+stdout 最后一行：
+```json
+{"findings_path":"...","output_dir":"...","count":10}
 ```
-
-说明：`--import-all` 会把 web 研究结果导入为 notebook source。若超时，再跑一次即可。日志显示 "研究完成(无输出)" 是正常的（wait 命令成功后 stdout 就是空），**不是故障**。
-
-### 步骤 5: 用 ask 抽取结构化 findings
-
-```bash
-PROMPT="从所有源中，找出能证明'个人也能拥有过去只有公司才有的能力'的证据。关于${KEYWORD}，每条带具体数据和来源。至少8条。"
-notebooklm ask "$PROMPT" --json > /tmp/findings-raw.json
-cat /tmp/findings-raw.json | python3 -m json.tool | head -40
-```
-
-### 步骤 6: 转成 pipeline 兼容的 findings.json
-
-如果懒得手动切分，可以直接让 pipeline 的 research executor 的 `_parse_findings` 重跑——一般 ask 一次就能得到 answer 段，用以下脚本转：
-
-```bash
-# 用 research.py 里同样的切分逻辑
-python3 - <<'PYEOF'
-import json, re
-from datetime import date
-from pathlib import Path
-
-KEYWORD = "<关键词>"
-SLUG = re.sub(r"-+", "-", re.sub(r"[^a-zA-Z0-9\u4e00-\u9fff-]", "-", KEYWORD))[:40]
-raw = json.load(open("/tmp/findings-raw.json"))
-answer = raw.get("answer", "")
-parts = [p for p in re.split(r"\n\*\*\d+\.", answer) if p.strip()]
-
-findings = []
-for i, p in enumerate(parts):
-    title = p.strip().split("\n")[0].replace("*", "").strip()[:100] or f"发现{i+1}"
-    findings.append({
-        "id": f"f{i+1:03d}",
-        "title": title,
-        "content": p.strip(),
-        "source": "NotebookLM",
-        "brand_relevance": 4,
-        "used_in": [],
-    })
-
-today = date.today().isoformat()
-out_dir = Path.home() / "content-output" / "research" / f"solo-company-case-{SLUG}-{today}"
-out_dir.mkdir(parents=True, exist_ok=True)
-fp = out_dir / "findings.json"
-fp.write_text(json.dumps({
-    "keyword": KEYWORD, "series": "solo-company-case",
-    "total_findings": len(findings), "findings": findings
-}, ensure_ascii=False, indent=2), encoding="utf-8")
-print(f"OK {len(findings)} findings → {fp}")
-PYEOF
-```
-
-## 验收标准
-
-```bash
-# findings.json 存在且 >= 5 条
-find ~/content-output/research -name findings.json -newer /tmp -mmin -30 \
-  -exec python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); print(sys.argv[1], "count=", len(d.get("findings",[])))' {} \;
-```
-
-## 常见坑
-
-| 症状 | 原因 | 修法 |
-|------|------|------|
-| "研究完成(无输出)" | wait 命令正常结束，stdout 空是预期 | 不是故障，继续 ask |
-| ask 返回空 answer | notebook 里没 source（import 失败） | 先 `notebooklm source list` 确认有内容 |
-| findings 少于 5 条 | NotebookLM 抓不够 | 换 prompt 或换更明确的 keyword |
-| pipeline 报 "notebook_id 未配置" | topic 没关联 notebook | 在 zenithjoy API 更新 topic 的 notebook_id 字段 |
-| copywriting 阶段找不到 findings | research 目录 slug 不匹配 | 确认 `_slug(keyword)` 和 research 目录名一致 |
-
-## 相关文件路径
-- Executor: `/Users/administrator/perfect21/zenithjoy/services/creator/pipeline_worker/executors/research.py`
-- findings 目录模式: `~/content-output/research/<content_type>-<slug>-<YYYY-MM-DD>/findings.json`
-- notebooklm CLI: `notebooklm` skill（独立存在）
-- env 备选: `CREATOR_DEFAULT_NOTEBOOK_ID`
-
-## LangGraph Contract
-
-当 content-pipeline-graph.js research 节点调用本 skill 时遵守的契约。
-
-### Input（从 ContentPipelineState 读）
-- `pipeline_id`: UUID（必填）
-- `keyword`: 关键词（LLM 扩展后的长查询）
-- `output_dir`: pipeline 产物根目录（日期-slug 全路径，首次 research 可能为空，本节点创建）
-
-### Output（写回 state）
-- `findings_path`: `~/content-output/research/<content_type>-<slug>-<YYYY-MM-DD>/findings.json`
-- `output_dir`: 如首次 research 此节点创建则写入完整路径
-- `trace`: "research"
-- `error`: null | 错误字符串
-
-### 失败策略
-不自己 retry，抛错让 LangGraph 按条件边路由。pipeline-worker 老路径的 fallback 逻辑（ask 空答、wait 超时等）保留在 executor 内部；skill 对外只关心「产物是否达标」。
