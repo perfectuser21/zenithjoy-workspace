@@ -89,7 +89,7 @@ tests:
     ci: L3
     status: active
     product: 内容Pipeline
-    note: "ExecutionTimeline 的 formatEventNode/formatDurationMs 显示逻辑"
+    note: "ExecutionTimeline 的 formatEventNode/formatDurationMs + WF-3 观察性 EventPayload 扩展字段"
 
   - id: pipeline-langgraph-adapter
     path: apps/api/src/services/__tests__/langgraph-adapter.test.ts
@@ -97,7 +97,7 @@ tests:
     ci: L3
     status: active
     product: 内容Pipeline
-    note: "rule_details → StageInfo.rule_scores 映射 + 兼容旧数据"
+    note: "rule_details → StageInfo.rule_scores 映射 + WF-3 meta 字段透传（prompt_sent/raw_stdout/raw_stderr/exit_code/duration_ms/container_id）"
 
   # ── 新媒体运营 ────────────────────────────────────────────────────────────────
 
