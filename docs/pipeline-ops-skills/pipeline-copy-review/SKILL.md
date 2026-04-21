@@ -224,11 +224,18 @@ body = {
 print(json.dumps(body))
 ")
 
-  LLM_RESP=$(curl -s -X POST "$BRAIN_URL/api/brain/llm-service/generate" \
+  # 用 stdin 传 body（避免 prompt + copy/article 全文过大触发 argv too long；argv 上限 ~256KB）
+  # 同时抓 HTTP status + body 前 100 字，LLM 失败时写进 reason 便于 debug
+  LLM_RAW=$(printf '%s' "$LLM_REQ" | curl -s -w $'\n__HTTP_STATUS__=%{http_code}' \
+    --max-time 120 \
+    -X POST "$BRAIN_URL/api/brain/llm-service/generate" \
     -H 'Content-Type: application/json' \
-    -d "$LLM_REQ")
+    --data-binary @-)
+  LLM_HTTP=$(printf '%s\n' "$LLM_RAW" | awk -F= '/^__HTTP_STATUS__=/{print $2}' | tail -1)
+  LLM_RESP=$(printf '%s\n' "$LLM_RAW" | sed '$d')
+  LLM_ERR_BODY=$(printf '%s' "$LLM_RESP" | tr -d '\n\r' | head -c 100)
 
-  LLM_TEXT=$(echo "$LLM_RESP" | python3 -c "
+  LLM_TEXT=$(printf '%s' "$LLM_RESP" | python3 -c "
 import json, sys
 try:
     d = json.load(sys.stdin)
@@ -274,6 +281,26 @@ print('\t'.join(parts))
   case "$D3" in ''|*[!0-9]*) D3=0 ;; esac
   case "$D4" in ''|*[!0-9]*) D4=0 ;; esac
   case "$D5" in ''|*[!0-9]*) D5=0 ;; esac
+
+  # LLM 调用失败（LLM_TEXT 空 → 5 维都是 0 且 reason 全空）→ 给 reason 填 HTTP status + body 片段
+  # 主理人 debug 时能一眼看出是 LLM 故障而不是真的文案差
+  if [ -z "$LLM_TEXT" ] || { [ "$D1" -eq 0 ] && [ "$D2" -eq 0 ] && [ "$D3" -eq 0 ] && [ "$D4" -eq 0 ] && [ "$D5" -eq 0 ] && [ -z "$D1_REASON$D2_REASON$D3_REASON$D4_REASON$D5_REASON" ]; }; then
+    FAIL_MSG="LLM HTTP ${LLM_HTTP:-?} - ${LLM_ERR_BODY}"
+    D1_REASON="$FAIL_MSG"
+    D2_REASON="$FAIL_MSG"
+    D3_REASON="$FAIL_MSG"
+    D4_REASON="$FAIL_MSG"
+    D5_REASON="$FAIL_MSG"
+    [ -z "$SUGGESTIONS" ] && SUGGESTIONS="$FAIL_MSG"
+  fi
+
+  # reason 里要进 JSON，先 escape 掉反斜杠和双引号
+  D1_REASON=$(printf '%s' "$D1_REASON" | sed 's/\\/\\\\/g; s/"/\\"/g')
+  D2_REASON=$(printf '%s' "$D2_REASON" | sed 's/\\/\\\\/g; s/"/\\"/g')
+  D3_REASON=$(printf '%s' "$D3_REASON" | sed 's/\\/\\\\/g; s/"/\\"/g')
+  D4_REASON=$(printf '%s' "$D4_REASON" | sed 's/\\/\\\\/g; s/"/\\"/g')
+  D5_REASON=$(printf '%s' "$D5_REASON" | sed 's/\\/\\\\/g; s/"/\\"/g')
+  SUGGESTIONS=$(printf '%s' "$SUGGESTIONS" | sed 's/\\/\\\\/g; s/"/\\"/g')
 
   # 累积到 RULES_JSON（每维 pass=score>=2）
   append_rule "D1" "钩子力"     "$([ "$D1" -ge 2 ] && echo true || echo false)" "$D1" "$D1_REASON"
@@ -325,23 +352,49 @@ echo "{\"copy_review_verdict\":\"${VERDICT}\",\"copy_review_feedback\":${FEEDBAC
 
 ## 输出 schema
 
-唯一 stdout 最后一行：
+唯一 stdout 最后一行，**必需字段**（缺失 / 类型不符一律视为 skill 失败）：
+
+| 字段 | 类型 | 含义 |
+|---|---|---|
+| `copy_review_verdict` | `"APPROVED" \| "REVISION"` | 双层合并裁决 |
+| `copy_review_feedback` | `string \| null` | REVISION 时必填（bash 规则命中或 D1-D5 suggestions）；APPROVED 时为 `null` |
+| `quality_score` | `int 0-5` | 第 1 层 bash 规则得分（满 5 才会进第 2 层 LLM） |
+| `copy_review_total` | `int 0-25` | 第 2 层 LLM 5 维总分，未进入第 2 层为 `0` |
+| `copy_review_threshold` | `int` | 恒为 `18`（总分阈值，便于前端展示） |
+| `copy_review_rule_details` | `RuleObj[]` | 明细列表，至少含 R1-R5；进入第 2 层时补 D1-D5 |
+
+`RuleObj` 约束：
+- `id` `string`（必填，如 `R1` / `D1`）
+- `label` `string`（必填，中文短标签）
+- `pass` `boolean`（必填）
+- `value` `number`（选填，维度得分或命中计数）
+- `reason` `string`（选填；LLM 调用失败时 D1-D5 的 reason 形如 `"LLM HTTP <status> - <body 前 100 字>"` 便于 debug）
+
+完整示例（LLM 层成功）：
 
 ```json
 {
-  "copy_review_verdict":"APPROVED|REVISION",
-  "copy_review_feedback":"..."|null,
-  "quality_score":0-5,
-  "copy_review_total":0-25,
+  "copy_review_verdict":"APPROVED",
+  "copy_review_feedback":null,
+  "quality_score":5,
+  "copy_review_total":22,
   "copy_review_threshold":18,
   "copy_review_rule_details":[
-    {"id":"R1","label":"无禁用词","pass":true|false,"value":<number>?,"reason":"<str>?"},
-    ... R1-R5 ...,
-    {"id":"D1","label":"钩子力","pass":true|false,"value":0-5,"reason":"..."},
-    ... D1-D5（仅当 SCORE=5 进入第 2 层时出现） ...
+    {"id":"R1","label":"无禁用词","pass":true},
+    {"id":"R2","label":"品牌词命中≥1","pass":true,"value":12,"reason":"匹配: 能力,系统,一人公司"},
+    {"id":"R3","label":"copy ≥200 字","pass":true,"value":680},
+    {"id":"R4","label":"article ≥500 字","pass":true,"value":1820},
+    {"id":"R5","label":"article 有 md 标题","pass":true},
+    {"id":"D1","label":"钩子力","pass":true,"value":4,"reason":"开头用数据反差抓眼"},
+    {"id":"D2","label":"信息密度","pass":true,"value":5,"reason":"有案例+数据+结论"},
+    {"id":"D3","label":"品牌一致性","pass":true,"value":5,"reason":"主动展开能力下放叙事"},
+    {"id":"D4","label":"可读性","pass":true,"value":4,"reason":"小标题+递进清晰"},
+    {"id":"D5","label":"转化力","pass":true,"value":4,"reason":"结尾留互动问题"}
   ]
 }
 ```
+
+LLM 调用失败（HTTP 5xx / timeout / 解析失败）时，D1-D5 的 reason 会变成 `"LLM HTTP 503 - {\"error\":{..."` 形式，主理人一眼能看出是 LLM 故障而不是文案本身 0 分。
 
 ## 与 copywrite 下一轮的握手
 

@@ -103,14 +103,21 @@ print(json.dumps(body))
 # 注入环境（docker 内走 host.docker.internal）
 BRAIN_URL="${BRAIN_URL:-http://host.docker.internal:5221}"
 
-RESP=$(curl -s -X POST "$BRAIN_URL/api/brain/llm-service/generate" \
+# 用 stdin 传 body（避免 prompt + findings 过大触发 argv too long；argv 上限 ~256KB）
+# 同时抓 HTTP status 便于失败 reason 带上下文
+RESP=$(printf '%s' "$LLM_REQ" | curl -s -w $'\n__HTTP_STATUS__=%{http_code}' \
+  --max-time 180 \
+  -X POST "$BRAIN_URL/api/brain/llm-service/generate" \
   -H 'Content-Type: application/json' \
-  -d "$LLM_REQ")
+  --data-binary @-)
+LLM_HTTP=$(printf '%s\n' "$RESP" | awk -F= '/^__HTTP_STATUS__=/{print $2}' | tail -1)
+LLM_BODY=$(printf '%s\n' "$RESP" | sed '$d')
 
-TEXT=$(echo "$RESP" | python3 -c "import json,sys; d=json.load(sys.stdin); print((d.get('data') or {}).get('text') or (d.get('data') or {}).get('content') or '')" 2>/dev/null)
+TEXT=$(printf '%s' "$LLM_BODY" | python3 -c "import json,sys; d=json.load(sys.stdin); print((d.get('data') or {}).get('text') or (d.get('data') or {}).get('content') or '')" 2>/dev/null)
 
 if [ -z "$TEXT" ]; then
-  echo "{\"copy_path\":null,\"article_path\":null,\"error\":\"LLM 返回空 — $(echo $RESP | head -c 200)\"}"
+  LLM_ERR_BODY=$(printf '%s' "$LLM_BODY" | tr -d '\n\r' | head -c 100 | sed 's/"/\\"/g')
+  echo "{\"copy_path\":null,\"article_path\":null,\"error\":\"LLM HTTP ${LLM_HTTP:-?} - ${LLM_ERR_BODY}\"}"
   exit 0
 fi
 ```
@@ -150,8 +157,22 @@ echo "{\"copy_path\":\"$COPY_FILE\",\"article_path\":\"$ARTICLE_FILE\",\"copy_le
 
 ## 输出 schema
 
-stdout 最后一行：
+stdout 最后一行，**必需字段**（缺失 / 类型不符一律视为 skill 失败）：
 
+| 字段 | 类型 | 含义 |
+|---|---|---|
+| `copy_path` | `string \| null` | 社交文案 cards/copy.md 绝对路径；LLM 失败时 `null` |
+| `article_path` | `string \| null` | 长文 article/article.md 绝对路径；LLM 失败时 `null` |
+| `copy_len` | `int` | copy.md 字符数（`wc -m`）；失败时字段可缺省 |
+| `article_len` | `int` | article.md 字符数；失败时字段可缺省 |
+| `error` | `string` | **仅失败时出现**。格式：`"LLM HTTP <status> - <body 前 100 字>"` |
+
+成功示例：
 ```json
-{"copy_path":"/home/cecelia/content-output/.../cards/copy.md","article_path":"/home/cecelia/content-output/.../article/article.md","copy_len":<数字>,"article_len":<数字>}
+{"copy_path":"/home/.../cards/copy.md","article_path":"/home/.../article/article.md","copy_len":680,"article_len":1820}
+```
+
+失败示例：
+```json
+{"copy_path":null,"article_path":null,"error":"LLM HTTP 401 - {\"error\":{\"code\":\"AUTH_ERROR\"..."}
 ```

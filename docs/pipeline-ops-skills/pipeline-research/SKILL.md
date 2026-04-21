@@ -67,17 +67,27 @@ PROMPT_END
 
 BRAIN_URL="${BRAIN_URL:-http://host.docker.internal:5221}"
 
-RESP=$(curl -s -X POST "$BRAIN_URL/api/brain/llm-service/generate" \
-  -H 'Content-Type: application/json' \
-  -d "$(python3 -c "
+# 打包请求体（python 处理 JSON 转义）
+LLM_REQ=$(python3 -c "
 import json, os
 print(json.dumps({'tier':'thalamus','prompt':os.environ['PROMPT'],'max_tokens':8192,'timeout':180,'format':'json'}))
-")")
+")
 
-TEXT=$(echo "$RESP" | python3 -c "import json,sys; d=json.load(sys.stdin); print((d.get('data') or {}).get('text') or (d.get('data') or {}).get('content') or '')" 2>/dev/null)
+# 用 stdin 传 body（避免 prompt 过大时 exec(3) argv too long；argv 上限 ~256KB，走 stdin 无此限制）
+# 同时抓 HTTP status code，便于失败 reason 带上下文
+RESP=$(printf '%s' "$LLM_REQ" | curl -s -w $'\n__HTTP_STATUS__=%{http_code}' \
+  --max-time 180 \
+  -X POST "$BRAIN_URL/api/brain/llm-service/generate" \
+  -H 'Content-Type: application/json' \
+  --data-binary @-)
+LLM_HTTP=$(printf '%s\n' "$RESP" | awk -F= '/^__HTTP_STATUS__=/{print $2}' | tail -1)
+LLM_BODY=$(printf '%s\n' "$RESP" | sed '$d')
+
+TEXT=$(printf '%s' "$LLM_BODY" | python3 -c "import json,sys; d=json.load(sys.stdin); print((d.get('data') or {}).get('text') or (d.get('data') or {}).get('content') or '')" 2>/dev/null)
 
 if [ -z "$TEXT" ]; then
-  echo "{\"findings_path\":null,\"output_dir\":\"${OUT_DIR}\",\"error\":\"LLM 返回空\"}"
+  LLM_ERR_BODY=$(printf '%s' "$LLM_BODY" | tr -d '\n\r' | head -c 100 | sed 's/"/\\"/g')
+  echo "{\"findings_path\":null,\"output_dir\":\"${OUT_DIR}\",\"error\":\"LLM HTTP ${LLM_HTTP:-?} - ${LLM_ERR_BODY}\"}"
   exit 0
 fi
 
@@ -102,7 +112,21 @@ echo "{\"findings_path\":\"${FINDINGS}\",\"output_dir\":\"${OUT_DIR}\",\"count\"
 
 ## 输出 schema
 
-stdout 最后一行：
+stdout 最后一行，**必需字段**（缺失 / 类型不符一律视为 skill 失败）：
+
+| 字段 | 类型 | 含义 |
+|---|---|---|
+| `findings_path` | `string \| null` | findings.json 绝对路径；LLM 失败时为 `null` |
+| `output_dir` | `string` | 产物根目录绝对路径（`~/content-output/research/...`） |
+| `count` | `int` | findings 数量；失败时为 `0` |
+| `error` | `string` | **仅失败时出现**。格式：`"LLM HTTP <status> - <body 前 100 字>"` |
+
+成功示例：
 ```json
-{"findings_path":"...","output_dir":"...","count":10}
+{"findings_path":"/home/.../findings.json","output_dir":"/home/.../solo-company-case-xxx","count":10}
+```
+
+失败示例：
+```json
+{"findings_path":null,"output_dir":"/home/.../solo-company-case-xxx","count":0,"error":"LLM HTTP 503 - {\"error\":{\"code\":\"BRAIN_LLM_TIMEOUT\"..."}
 ```

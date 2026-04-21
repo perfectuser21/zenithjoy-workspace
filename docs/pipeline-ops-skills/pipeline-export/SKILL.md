@@ -97,6 +97,21 @@ echo "{\"manifest_path\":\"$MANIFEST\",\"nas_url\":\"$NAS_DIR\",\"cards_count\":
 
 ## 输出 schema
 
+stdout 最后一行，**必需字段**（缺失 / 类型不符一律视为 skill 失败）：
+
+| 字段 | 类型 | 含义 |
+|---|---|---|
+| `manifest_path` | `string \| null` | manifest.json 绝对路径；产物缺失时 `null` |
+| `nas_url` | `string \| null` | NAS 目标目录绝对路径；上传失败时 `null` |
+| `cards_count` | `int` | 上传的 PNG 张数；失败时字段可缺省 |
+| `error` | `string` | **仅失败时出现**，如 `"missing <path>"` 或 `"tar/ssh 失败"` |
+
+成功示例：
 ```json
-{"manifest_path":"...","nas_url":"/volume1/.../content/<pipeline_id>","cards_count":9}
+{"manifest_path":"/home/.../manifest.json","nas_url":"/volume1/workspace/vault/zenithjoy-creator/content/pl-xxx","cards_count":9}
+```
+
+失败示例：
+```json
+{"manifest_path":null,"nas_url":null,"error":"missing /home/.../article/article.md"}
 ```

@@ -78,17 +78,27 @@ PROMPT_END
 
 BRAIN_URL="${BRAIN_URL:-http://host.docker.internal:5221}"
 
-RESP=$(curl -s -X POST "$BRAIN_URL/api/brain/llm-service/generate" \
-  -H 'Content-Type: application/json' \
-  -d "$(python3 -c "
+# 打包请求体
+LLM_REQ=$(python3 -c "
 import json, os
 print(json.dumps({'tier':'thalamus','prompt':os.environ['PROMPT'],'max_tokens':3072,'format':'json'}))
-")")
+")
 
-TEXT=$(echo "$RESP" | python3 -c "import json,sys; d=json.load(sys.stdin); print((d.get('data') or {}).get('text') or '')" 2>/dev/null | sed 's/^```json//' | sed 's/^```//' | sed 's/```$//')
+# 用 stdin 传 body（避免 prompt + findings 过大触发 argv too long；argv 上限 ~256KB）
+# 同时抓 HTTP status 便于失败 reason 带上下文
+RESP=$(printf '%s' "$LLM_REQ" | curl -s -w $'\n__HTTP_STATUS__=%{http_code}' \
+  --max-time 180 \
+  -X POST "$BRAIN_URL/api/brain/llm-service/generate" \
+  -H 'Content-Type: application/json' \
+  --data-binary @-)
+LLM_HTTP=$(printf '%s\n' "$RESP" | awk -F= '/^__HTTP_STATUS__=/{print $2}' | tail -1)
+LLM_BODY=$(printf '%s\n' "$RESP" | sed '$d')
+
+TEXT=$(printf '%s' "$LLM_BODY" | python3 -c "import json,sys; d=json.load(sys.stdin); print((d.get('data') or {}).get('text') or '')" 2>/dev/null | sed 's/^```json//' | sed 's/^```//' | sed 's/```$//')
 
 if [ -z "$TEXT" ]; then
-  echo "{\"person_data_path\":null,\"cards_dir\":\"$CARDS_DIR\",\"error\":\"LLM 生成 person-data 失败\"}"
+  LLM_ERR_BODY=$(printf '%s' "$LLM_BODY" | tr -d '\n\r' | head -c 100 | sed 's/"/\\"/g')
+  echo "{\"person_data_path\":null,\"cards_dir\":\"$CARDS_DIR\",\"error\":\"LLM HTTP ${LLM_HTTP:-?} - ${LLM_ERR_BODY}\"}"
   exit 0
 fi
 echo "$TEXT" > "$PERSON_DATA"
@@ -153,6 +163,21 @@ echo "{\"person_data_path\":\"$PERSON_DATA\",\"cards_dir\":\"$CARDS_DIR\",\"png_
 
 ## 输出 schema
 
+stdout 最后一行，**必需字段**（缺失 / 类型不符一律视为 skill 失败）：
+
+| 字段 | 类型 | 含义 |
+|---|---|---|
+| `person_data_path` | `string \| null` | person-data.json 绝对路径；LLM 失败时 `null` |
+| `cards_dir` | `string` | 9 张 PNG 所在目录（`<output_dir>/cards/`） |
+| `png_count` | `int` | 成功渲染的 PNG 数量（期望 9） |
+| `error` | `string` | **仅失败时出现**，格式：`"LLM HTTP <status> - <body 前 100 字>"` / `"cover PNG missing"` / `"cover OCR len=<n> < 10, 字体可能未加载"` |
+
+成功示例：
 ```json
-{"person_data_path":"...","cards_dir":"...","png_count":9}
+{"person_data_path":"/home/.../person-data.json","cards_dir":"/home/.../cards","png_count":9}
+```
+
+失败示例（OCR 自检不过）：
+```json
+{"person_data_path":"/home/.../person-data.json","cards_dir":"/home/.../cards","error":"cover OCR len=3 < 10, 字体可能未加载"}
 ```

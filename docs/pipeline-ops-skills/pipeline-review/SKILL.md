@@ -171,12 +171,16 @@ body = {
 print(json.dumps(body))
 ")
 
+    # 关键：body 含 base64 图片（单图 500-900KB），**必须**走 stdin
+    # 否则 macOS / 部分 Linux 下 exec(3) argv 上限（~256KB）会触发 "argument list too long" —
+    # 表现为 curl 启动即失败 / body 被截断 / Brain 收到格式错 JSON 返回 500。
+    # printf + --data-binary @- 走 stdin，无 argv 限制。
     # 同时抓 HTTP status code 和 body，便于 graceful degrade
-    VRESP=$(curl -s -w $'\n__HTTP_STATUS__=%{http_code}' \
+    VRESP=$(printf '%s' "$V_REQ" | curl -s -w $'\n__HTTP_STATUS__=%{http_code}' \
       --max-time 90 \
       -X POST "$BRAIN_URL/api/brain/llm-service/vision" \
       -H 'Content-Type: application/json' \
-      -d "$V_REQ")
+      --data-binary @-)
     VHTTP=$(printf '%s\n' "$VRESP" | awk -F= '/^__HTTP_STATUS__=/{print $2}' | tail -1)
     VBODY=$(printf '%s\n' "$VRESP" | sed '$d')
 
@@ -189,11 +193,12 @@ http = os.environ.get('VHTTP', '').strip() or '0'
 ok = 'false'
 text = ''
 err = ''
+body_snip_raw = body[:100].replace('\t',' ').replace('\n',' ').replace('\r',' ').replace('"',"'")
 try:
     d = json.loads(body) if body else {}
 except Exception:
     d = {}
-    err = 'vision response not json (http ' + http + ')'
+    err = ('vision HTTP ' + http + ' (not json) - ' + body_snip_raw)[:200]
 if not err:
     success = d.get('success')
     if http.startswith('2') and success is not False:
@@ -207,12 +212,17 @@ if not err:
         if text:
             ok = 'true'
         else:
-            err = 'empty text from vision (http ' + http + ')'
+            err = ('vision HTTP ' + http + ' empty text - ' + body_snip_raw)[:200]
     else:
         e = d.get('error') or {}
-        msg = e.get('message') or e.get('code') or ('http ' + http)
-        # 截短避免 JSON 过长
-        err = ('vision call failed: ' + str(msg))[:200]
+        msg = e.get('message') or e.get('code') or ''
+        # 始终带上 HTTP status 方便 debug；截短避免 JSON 过长
+        # body 前 100 字作为兜底上下文（msg 为空时一眼能看出 raw 响应）
+        body_snip = body[:100].replace('\t',' ').replace('\n',' ').replace('\r',' ').replace('"',"'")
+        if msg:
+            err = ('vision HTTP ' + http + ': ' + str(msg))[:200]
+        else:
+            err = ('vision HTTP ' + http + ' - ' + body_snip)[:200]
 def esc(s):
     return s.replace('\t', ' ').replace('\n', ' ').replace('\r', ' ')
 print(ok + '\t' + esc(text) + '\t' + esc(err))
@@ -398,26 +408,48 @@ echo "{\"image_review_verdict\":\"${VERDICT}\",\"image_review_feedback\":${FEEDB
 
 ## 输出 schema
 
-唯一 stdout 最后一行：
+唯一 stdout 最后一行，**必需字段**（缺失 / 类型不符一律视为 skill 失败）：
+
+| 字段 | 类型 | 含义 |
+|---|---|---|
+| `image_review_verdict` | `"PASS" \| "REVISION" \| "FAIL"` | 双层合并裁决 |
+| `image_review_feedback` | `string \| null` | 非 PASS 时必填；PASS 时通常 `null`（但 vision 有 failed 时也会带统计） |
+| `card_count` | `int` | 第 1 层扫到的 PNG 张数 |
+| `vision_avg` | `int 0-20` | 第 2 层 4 维总分均值（只用成功打分的图），未进入第 2 层时为 `0` |
+| `vision_threshold` | `int` | 恒为 `14`（70% 通过线） |
+| `vision_enabled` | `boolean` | `BRAIN_VISION_ENABLED` 最终值，**禁止私改** |
+| `vision_scored_count` | `int` | 成功完成打分的图片数，**禁止私改** |
+| `vision_failed_count` | `int` | vision 调用失败的图片数，**禁止私改** |
+| `image_review_rule_details` | `RuleObj[]` | 顺序：RCOUNT → 每张图 size → 每张图 vision |
+
+`RuleObj`（per-image vision）的 `reasons.V*` 字段约束：
+- LLM 打分成功时是 20-40 字中文描述
+- LLM 调用失败时格式统一为：`"vision HTTP <status>: <error.message>"` 或 `"vision HTTP <status> - <body 前 100 字>"`，便于主理人 debug
+
+完整示例：
 
 ```json
 {
-  "image_review_verdict":"PASS|REVISION|FAIL",
-  "image_review_feedback":"..."|null,
-  "card_count":<int>,
-  "vision_avg":0-20,
+  "image_review_verdict":"PASS",
+  "image_review_feedback":null,
+  "card_count":9,
+  "vision_avg":17,
   "vision_threshold":14,
-  "vision_enabled":true|false,
-  "vision_scored_count":<int>,
-  "vision_failed_count":<int>,
+  "vision_enabled":true,
+  "vision_scored_count":9,
+  "vision_failed_count":0,
   "image_review_rule_details":[
-    {"id":"RCOUNT","label":"PNG ≥ 8 张","pass":true|false,"value":<int>,"reason"?:"..."},
-    {"id":"<filename>.png","label":"<filename>.png","pass":true|false,"value":<size_bytes>,"reason"?:"..."},
-    ...,
-    {"id":"vision-<filename>.png","label":"<filename>.png 4 维","pass":true|false,"value":0-20,"scores":{"V1":0-5,"V2":0-5,"V3":0-5,"V4":0-5},"reasons":{"V1":"...","V2":"...","V3":"...","V4":"..."},"vision_failed"?:true},
-    ...
+    {"id":"RCOUNT","label":"PNG ≥ 8 张","pass":true,"value":9},
+    {"id":"cover.png","label":"cover.png","pass":true,"value":456123},
+    {"id":"vision-cover.png","label":"cover.png 4 维","pass":true,"value":18,"scores":{"V1":5,"V2":4,"V3":5,"V4":4},"reasons":{"V1":"所有字清晰","V2":"name 对得上","V3":"布局完美","V4":"颜色合格"}}
   ]
 }
+```
+
+vision 失败时的 per-image 示例（`vision_failed:true`，reason 带 HTTP status，不触发 FAIL）：
+
+```json
+{"id":"vision-cover.png","label":"cover.png 4 维","pass":true,"value":0,"scores":{"V1":0,"V2":0,"V3":0,"V4":0},"reasons":{"V1":"vision HTTP 413: IMAGE_TOO_LARGE","V2":"vision HTTP 413: IMAGE_TOO_LARGE","V3":"vision HTTP 413: IMAGE_TOO_LARGE","V4":"vision HTTP 413: IMAGE_TOO_LARGE"},"vision_failed":true}
 ```
 
 ## 与 Brain 的接口契约（vision）
