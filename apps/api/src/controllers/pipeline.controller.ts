@@ -353,7 +353,14 @@ export class PipelineController {
         }
       }
 
-      if (!row) { res.status(404).json({ error: 'Not found' }); return; }
+      if (!row) {
+        if (ceceliaTaskId && (await existsLangGraphTask(ceceliaTaskId))) {
+          res.json({ stages: {}, overall_status: 'pending', events: [] });
+          return;
+        }
+        res.status(404).json({ error: 'Not found' });
+        return;
+      }
 
       const manifest: PipelineManifest | null = row.output_manifest || null;
       res.json({
