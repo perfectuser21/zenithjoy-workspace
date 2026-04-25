@@ -75,6 +75,19 @@ export async function fetchLangGraphEvents(ceceliaTaskId: string): Promise<Pipel
   return rows;
 }
 
+/**
+ * 任务存在性探针：查 tasks 表确认 :id 是已派发的 content-pipeline 任务。
+ * 用于 /output /stages 区分"LangGraph 任务刚触发无事件"（→ pending）
+ * 与"任意 UUID 乱输"（→ 404）。
+ */
+export async function existsLangGraphTask(taskId: string): Promise<boolean> {
+  const { rows } = await pool.query(
+    `SELECT 1 FROM tasks WHERE id = $1 AND task_type = 'content-pipeline' LIMIT 1`,
+    [taskId]
+  );
+  return rows.length > 0;
+}
+
 export interface LangGraphListRow {
   id: string;
   cecelia_task_id: string;
