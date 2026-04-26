@@ -12,6 +12,9 @@ python-dotenv>=1.0.0
 # API client（worker/server 必需）
 httpx>=0.24.0
 
+# Pipeline orchestration（worker.py 用 LangGraph 编排 6 阶段）
+langgraph>=0.2.0
+
 # Testing
 pytest>=7.4.0
 pytest-asyncio>=0.21.0
