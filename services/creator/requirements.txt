@@ -14,6 +14,9 @@ httpx>=0.24.0
 openai>=1.0.0
 anthropic>=0.18.0
 
+# Pipeline orchestration（worker 用 LangGraph 编排 6 阶段，替代原 for-loop）
+langgraph>=0.2.0
+
 # Content processing
 python-multipart>=0.0.6
 Pillow>=10.0.0

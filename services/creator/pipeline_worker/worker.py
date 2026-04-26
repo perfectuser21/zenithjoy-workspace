@@ -46,6 +46,7 @@ from pipeline_worker.executors.export import execute_export  # noqa: E402
 from pipeline_worker.executors.generate import execute_generate  # noqa: E402
 from pipeline_worker.executors.image_review import execute_image_review  # noqa: E402
 from pipeline_worker.executors.research import execute_research  # noqa: E402
+from pipeline_worker.graph import build_graph  # noqa: E402
 
 # ─── 日志 ───────────────────────────────────────────────
 logging.basicConfig(
@@ -56,6 +57,8 @@ logging.basicConfig(
 logger = logging.getLogger("pipeline-worker")
 
 # 阶段定义：(名称, cecelia 资源类型, 执行函数)
+# 保留 STAGES 作为向后兼容的元数据（旧测试套件按 stage 顺序 patch）。
+# 真正的调度走 pipeline_worker.graph.build_graph()。
 STAGES: list[tuple[str, str | None, callable]] = [
     ("research", "notebooklm", execute_research),
     ("copywriting", "llm", execute_copywriting),
@@ -66,12 +69,17 @@ STAGES: list[tuple[str, str | None, callable]] = [
 ]
 
 
+def _stage_defs_from_module():
+    """读取本 module 的 STAGES（允许 monkeypatch）→ 返回当前生效的 (name,rtype,executor) 列表。"""
+    return list(STAGES)
+
+
 def process_pipeline(
     client: ZenithJoyClient,
     pipeline: dict,
     dry_run: bool = True,
 ) -> bool:
-    """处理单个 pipeline，执行 6 阶段。
+    """处理单个 pipeline，6 阶段由 LangGraph 编排。
 
     Returns:
         True if completed, False if failed.
@@ -97,100 +105,64 @@ def process_pipeline(
         logger.info("[dry-run] 跳过执行: %s", keyword)
         return True
 
-    # 构建执行上下文（executors 只吃 run_data dict，不感知 DB/HTTP）
+    # 构建初始 state（与原 run_data 字段同义）
     # 阶段 A+：notebook_id 来自 apps/api /running 端点（COALESCE pr.notebook_id, t.notebook_id）。
     # 若 API 未下发，研究 executor 内部再 fallback env CREATOR_DEFAULT_NOTEBOOK_ID（兼容老 DEFAULT_NOTEBOOK_ID）。
-    run_data = {
-        "keyword": keyword,
+    initial_state: dict = {
         "pipeline_id": pid,
+        "keyword": keyword,
         "topic_id": topic_id,
         "content_type": pipeline.get("content_type") or "solo-company-case",
         "notebook_id": pipeline.get("notebook_id")
         or os.environ.get("CREATOR_DEFAULT_NOTEBOOK_ID")
         or os.environ.get("DEFAULT_NOTEBOOK_ID"),
+        "completed_stages": [],
     }
     if pipeline.get("output_dir"):
-        run_data["output_dir"] = pipeline["output_dir"]
+        initial_state["output_dir"] = pipeline["output_dir"]
 
-    # 确定起始阶段
-    stage_names = [s[0] for s in STAGES]
-    start_idx = 0
+    # Resume：根据 current_stage 把已完成 stage 写入 completed_stages，
+    # graph node 内部据此跳过（保持幂等）。
+    stage_names = [s[0] for s in _stage_defs_from_module()]
     if current_stage in stage_names:
-        start_idx = stage_names.index(current_stage) + 1
+        idx = stage_names.index(current_stage)
+        initial_state["completed_stages"] = stage_names[: idx + 1]
 
-    for i in range(start_idx, len(STAGES)):
-        stage_name, resource_type, executor = STAGES[i]
-        logger.info("─── 阶段 %d/6: %s ───", i + 1, stage_name)
+    # 构建 graph 并执行（client/can_run 闭包注入；测试可 patch worker.can_run / worker.STAGES）
+    graph = build_graph(
+        client,
+        dry_run=False,
+        can_run_fn=can_run,
+        stage_defs=_stage_defs_from_module(),
+    )
 
-        # 询问 Cecelia 是否可执行
-        if resource_type:
-            cr = can_run(resource_type)
-            if not cr.get("approved", True):
-                retry_after = cr.get("retry_after")
-                msg = f"Cecelia 拒绝 {resource_type}: {cr.get('reason')}"
-                if retry_after:
-                    msg += f"（建议 {retry_after}s 后重试）"
-                _safe_fail(client, pid, msg, stage=stage_name)
-                return False
+    try:
+        final_state: dict = graph.invoke(
+            initial_state,
+            config={"configurable": {"thread_id": str(pid)}},
+        )
+    except ZenithJoyAPIError as e:
+        # 401/403 由 graph node 直接 raise，让上层 main() 转 exit 3
+        if e.status_code in (401, 403):
+            raise
+        logger.error("graph 执行抛出 APIError：%s", e)
+        _safe_fail(client, pid, f"graph 执行异常: {e}")
+        return False
+    except Exception as e:  # noqa: BLE001
+        tb = traceback.format_exc()
+        logger.error("graph 执行未捕获异常：%s\n%s", e, tb)
+        _safe_fail(client, pid, f"graph 执行未捕获异常: {e}")
+        return False
 
-        # 执行 executor
-        try:
-            result = executor(run_data)
-        except Exception as e:
-            tb = traceback.format_exc()
-            logger.error("阶段 %s 异常: %s\n%s", stage_name, e, tb)
-            _safe_fail(client, pid, f"阶段 {stage_name} 异常: {e}", stage=stage_name)
-            return False
-
-        if not result.get("success", False):
-            error = result.get("error", f"阶段 {stage_name} 失败")
-            _safe_fail(client, pid, error, stage=stage_name)
-            return False
-
-        # copy_review / image_review 失败 → pipeline 失败
-        if "review_passed" in result and not result["review_passed"]:
-            issues = result.get("issues", [])
-            _safe_fail(
-                client,
-                pid,
-                f"审查未通过: {'; '.join(issues)}",
-                stage=stage_name,
-            )
-            return False
-
-        # 把结果合并到 run_data 供后续阶段使用
-        stage_output: dict[str, object] = {}
-        for k in ("output_dir", "findings_path", "export_path"):
-            if result.get(k):
-                stage_output[k] = result[k]
-                run_data[k] = result[k]
-
-        is_final = (i == len(STAGES) - 1)  # export 阶段 = 终态
-        stage_output_for_api = stage_output or None
-        if is_final:
-            # 终态：合并 manifest.json 到 output_manifest
-            manifest = _read_manifest(run_data.get("output_dir"))
-            if manifest:
-                stage_output_for_api = {**(stage_output or {}), **manifest}
-
-        try:
-            client.stage_complete(
-                pid,
-                stage_name,
-                output=stage_output_for_api,
-                is_final=is_final,
-            )
-        except ZenithJoyAPIError as e:
-            logger.error(
-                "stage-complete 上报失败（stage=%s, pipeline=%s）：%s",
-                stage_name, str(pid)[:8], e,
-            )
-            # 上报失败不中断执行，记录即可；pipeline 下轮仍可被拉起
-            if e.status_code in (401, 403):
-                raise
-            return False
-
-        logger.info("阶段 %s 完成", stage_name)
+    # 失败终态：在 graph 内只标记 error，由 worker 调 fail_pipeline 上报
+    if final_state.get("error"):
+        _safe_fail(
+            client,
+            pid,
+            final_state.get("error", "未知错误"),
+            stage=final_state.get("failed_stage"),
+        )
+        return False
 
     logger.info("pipeline %s 全部阶段完成", str(pid)[:8])
     return True
