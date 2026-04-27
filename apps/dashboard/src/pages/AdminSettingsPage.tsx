@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { MonitorDot, Server, DollarSign } from 'lucide-react';
+import { MonitorDot, Server, DollarSign, Bot } from 'lucide-react';
 
 const AdminSettingsPage: React.FC = () => {
   return (
@@ -29,6 +29,14 @@ const AdminSettingsPage: React.FC = () => {
           <DollarSign className="w-10 h-10 text-emerald-500 mb-3" />
           <h3 className="font-medium text-gray-900 dark:text-white mb-1">Claude Stats</h3>
           <p className="text-sm text-gray-500 dark:text-gray-400">费用统计、Token 使用趋势分析</p>
+        </Link>
+        <Link
+          to="/agent-debug"
+          className="bg-white dark:bg-slate-800 rounded-lg shadow p-6 hover:shadow-md transition-shadow border border-slate-200 dark:border-slate-700"
+        >
+          <Bot className="w-10 h-10 text-blue-500 mb-3" />
+          <h3 className="font-medium text-gray-900 dark:text-white mb-1">Agent 调试</h3>
+          <p className="text-sm text-gray-500 dark:text-gray-400">查看 Agent 在线状态并触发测试发布</p>
         </Link>
       </div>
     </div>

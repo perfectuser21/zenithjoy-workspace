@@ -71,6 +71,7 @@ export const autopilotPageComponents: Record<string, () => Promise<{ default: Co
   'ContentFactoryPage': () => import('../pages/ContentFactoryPage'),
   'ContentTypeConfigPage': () => import('../pages/ContentTypeConfigPage'),
   'PipelineOutputPage': () => import('../pages/PipelineOutputPage'),
+  'AgentDebugPage': () => import('../pages/AgentDebugPage'),
   // FeatureDashboard and CommandCenter moved to Core features/business
 };
 
@@ -184,6 +185,9 @@ export const additionalRoutes: RouteConfig[] = [
   { path: '/features', component: 'FeatureDashboard', requireAuth: true },
   { path: '/command', component: 'CommandCenter', requireAuth: true },
   { path: '/command/*', component: 'CommandCenter', requireAuth: true },
+
+  // === Agent 调试页面 ===
+  { path: '/agent-debug', component: 'AgentDebugPage', requireAuth: true },
 
 ];
 
