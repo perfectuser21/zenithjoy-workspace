@@ -267,6 +267,24 @@ tests:
     product: 新媒体运营
     note: "content-images HTTP 路由：按 pipeline_id + 文件名从 output_dir 读图（cards/ images/ 根目录候选），含路径穿越防护"
 
+  # ── AI员工（Agent MVP）────────────────────────────────────────────────────────
+
+  - id: api-agent-protocol-schema
+    path: apps/api/src/schemas/__tests__/agent-protocol.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: AI员工
+    note: "Agent protocol Zod schema 单元测试（请求/响应契约校验）"
+
+  - id: api-agent-registry-service
+    path: apps/api/src/services/__tests__/agent-registry.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: AI员工
+    note: "Agent registry 服务层单元测试（注册/查询/路由）"
+
   # ── E2E（待建）────────────────────────────────────────────────────────────────
 
   # - id: e2e-content-publish

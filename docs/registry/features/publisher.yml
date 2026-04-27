@@ -517,6 +517,7 @@ features:
       root: services/creator/scripts/publishers/wechat-publisher/
       entry_files:
         - publish-wechat-article.cjs
+        - publish-wechat-article-draft.cjs
         - check-wechat-token.cjs
       language: JavaScript (CommonJS)
       runtime: node
@@ -544,6 +545,7 @@ features:
       content_types: [article]
       scripts:
         article: wechat-publisher/publish-wechat-article.cjs
+        article_draft: wechat-publisher/publish-wechat-article-draft.cjs
     capabilities:
       - id: pub_wechat_article
         name: 微信公众号文章发布
@@ -553,6 +555,15 @@ features:
         tests:
           unit:
             - services/creator/scripts/publishers/wechat-publisher/__tests__/publish-wechat-article.test.cjs
+          integration: []
+        status: active
+      - id: pub_wechat_article_draft
+        name: 微信公众号草稿发布（draft-only 变体）
+        entry_file: publish-wechat-article-draft.cjs
+        content_type: article
+        maturity: 2
+        tests:
+          unit: []
           integration: []
         status: active
 
