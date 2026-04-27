@@ -1,0 +1,66 @@
+import type { Server as HttpServer } from 'http';
+import { WebSocketServer, WebSocket } from 'ws';
+import { agentRegistry } from './agent-registry';
+import { AgentMessageSchema, makeMsg } from '../schemas/agent-protocol';
+
+const AGENT_TOKEN = process.env.AGENT_TOKEN || '';
+const WS_PATH = '/agent-ws';
+
+export function attachAgentWS(server: HttpServer): WebSocketServer {
+  const wss = new WebSocketServer({ noServer: true });
+
+  server.on('upgrade', (req, socket, head) => {
+    if (!req.url || !req.url.startsWith(WS_PATH)) return;
+
+    const url = new URL(req.url, 'http://x');
+    const token = url.searchParams.get('token') || (req.headers['x-agent-token'] as string);
+    if (!AGENT_TOKEN || token !== AGENT_TOKEN) {
+      socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n');
+      socket.destroy();
+      return;
+    }
+
+    wss.handleUpgrade(req, socket, head, (ws) => {
+      wss.emit('connection', ws, req);
+    });
+  });
+
+  wss.on('connection', (ws: WebSocket) => {
+    let agentId: string | null = null;
+
+    ws.on('message', (raw) => {
+      try {
+        const obj = JSON.parse(raw.toString());
+        const msg = AgentMessageSchema.parse(obj);
+
+        if (msg.type === 'hello') {
+          agentId = msg.payload.agentId;
+          agentRegistry.register(agentId, {
+            capabilities: msg.payload.capabilities,
+            version: msg.payload.version,
+          }, ws);
+        } else if (msg.type === 'heartbeat') {
+          if (agentId) agentRegistry.heartbeat(agentId, msg.payload);
+        } else if (msg.type === 'task_progress' || msg.type === 'task_result') {
+          // 转发给 dashboard 订阅者（v0.1 用 EventEmitter）
+          agentRegistry.emit(msg.type, { agentId, ...msg });
+        }
+      } catch (err) {
+        console.warn('[agent-ws] invalid message:', err);
+      }
+    });
+
+    ws.on('close', () => {
+      if (agentId) agentRegistry.unregister(agentId);
+    });
+  });
+
+  return wss;
+}
+
+export function sendToAgent(agentId: string, msg: ReturnType<typeof makeMsg>): boolean {
+  const entry = agentRegistry.get(agentId);
+  if (!entry || entry.ws.readyState !== entry.ws.OPEN) return false;
+  entry.ws.send(JSON.stringify(msg));
+  return true;
+}

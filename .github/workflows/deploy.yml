@@ -32,6 +32,9 @@ jobs:
       - name: Build dashboard
         run: npm run build --workspace=apps/dashboard
 
+      - name: Verify build artifacts (防 .env.production 漏注入)
+        run: bash apps/dashboard/scripts/verify-build.sh
+
       - name: Deploy to VPS
         run: |
           rsync -avz --delete apps/dashboard/dist/ /opt/zenithjoy/autopilot-dashboard/dist/

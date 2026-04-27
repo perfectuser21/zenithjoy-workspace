@@ -24,11 +24,12 @@ jobs:
         run: |
           BRANCH="${{ github.head_ref || github.ref_name }}"
           echo "检查分支名: $BRANCH"
-          if ! echo "$BRANCH" | grep -qP '^cp-\d{8}-[a-z0-9-]+$'; then
+          # 兼容 8 位 (MMDDHHNN) 与 10 位 (MMDDHHMMSS) 时间戳
+          if ! echo "$BRANCH" | grep -qP '^cp-\d{8,10}-[a-z0-9-]+$'; then
             echo ""
             echo "❌ 分支名不符合 /dev 工作流规范"
             echo "   当前分支: $BRANCH"
-            echo "   要求格式: cp-XXXXXXXX-task-name（例: cp-02281200-fix-login）"
+            echo "   要求格式: cp-XXXXXXXX-task-name（8 或 10 位时间戳，例: cp-02281200-fix-login / cp-0228120030-fix-login）"
             echo ""
             echo "   所有代码改动必须通过 /dev 工作流创建分支。"
             echo "   请运行 /dev 重新开始开发流程。"
