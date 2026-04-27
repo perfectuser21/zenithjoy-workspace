@@ -2,7 +2,7 @@
  * 智能对标账号采集 API 客户端
  */
 
-const API_BASE = (import.meta.env.VITE_API_URL || 'http://localhost:5200') as string;
+const API_BASE = '';
 
 // ============ 类型定义 ============
 

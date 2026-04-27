@@ -39,7 +39,7 @@ router.post('/start', (req: Request, res: Response) => {
   // 脚本路径
   const scriptPath = path.join(
     __dirname,
-    '../../../services/creator/scripts/publishers/douyin-publisher/sop-account-search.js'
+    '../../../../services/creator/scripts/publishers/douyin-publisher/sop-account-search.js'
   );
   const scriptCwd = path.join(scriptPath, '../../');
 
