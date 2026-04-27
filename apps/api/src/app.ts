@@ -11,6 +11,7 @@ import contentImagesRouter from './routes/content-images';
 import topicsRouter from './routes/topics';
 import pacingConfigRouter from './routes/pacing-config';
 import pipelinesWorkerRouter from './routes/pipelines-worker';
+import competitorResearchRouter from './routes/competitor-research';
 import { errorHandler, notFoundHandler } from './middleware/error';
 
 const app = express();
@@ -37,6 +38,7 @@ app.use('/api/content-images', contentImagesRouter);
 app.use('/api/topics', topicsRouter);
 app.use('/api/pacing-config', pacingConfigRouter);
 app.use('/api/pipelines', pipelinesWorkerRouter);
+app.use('/api/competitor-research', competitorResearchRouter);
 
 // Error handling
 app.use(notFoundHandler);
