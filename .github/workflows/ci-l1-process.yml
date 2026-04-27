@@ -215,11 +215,71 @@ jobs:
           echo ""
           exit 1
 
+  # ─── 测试质量 lint 门禁（5 gates）────────────────────────────────────────
+
+  lint-test-pairing:
+    name: Lint — Test Pairing
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Run lint-test-pairing
+        run: bash .github/workflows/scripts/lint-test-pairing.sh origin/main
+
+  lint-test-quality:
+    name: Lint — Test Quality
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Run lint-test-quality
+        run: bash .github/workflows/scripts/lint-test-quality.sh origin/main
+
+  lint-tdd-commit-order:
+    name: Lint — TDD Commit Order
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Run lint-tdd-commit-order
+        run: bash .github/workflows/scripts/lint-tdd-commit-order.sh origin/main
+
+  lint-no-fake-test:
+    name: Lint — No Fake Test
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Run lint-no-fake-test
+        run: bash .github/workflows/scripts/lint-no-fake-test.sh origin/main
+
+  lint-feature-has-smoke:
+    name: Lint — Feature Has Smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Run lint-feature-has-smoke
+        env:
+          PR_LABELS: ${{ join(github.event.pull_request.labels.*.name, ',') }}
+        run: bash .github/workflows/scripts/lint-feature-has-smoke.sh origin/main
+
   # ─── Gate job ─────────────────────────────────────────────────────────────
 
   l1-passed:
     name: L1 Process Gate Passed
-    needs: [verify-dev-workflow, pr-title, ci-config-audit, secrets-scan, frontend-browser-dod-check]
+    needs: [verify-dev-workflow, pr-title, ci-config-audit, secrets-scan, frontend-browser-dod-check,
+            lint-test-pairing, lint-test-quality, lint-tdd-commit-order, lint-no-fake-test, lint-feature-has-smoke]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -254,6 +314,31 @@ jobs:
 
           if [ "${{ needs.frontend-browser-dod-check.result }}" != "success" ]; then
             echo "FAIL: Frontend Browser DoD Check (${{ needs.frontend-browser-dod-check.result }})"
+            FAILED=true
+          fi
+
+          if [ "${{ needs.lint-test-pairing.result }}" != "success" ]; then
+            echo "FAIL: Lint Test Pairing (${{ needs.lint-test-pairing.result }})"
+            FAILED=true
+          fi
+
+          if [ "${{ needs.lint-test-quality.result }}" != "success" ]; then
+            echo "FAIL: Lint Test Quality (${{ needs.lint-test-quality.result }})"
+            FAILED=true
+          fi
+
+          if [ "${{ needs.lint-tdd-commit-order.result }}" != "success" ]; then
+            echo "FAIL: Lint TDD Commit Order (${{ needs.lint-tdd-commit-order.result }})"
+            FAILED=true
+          fi
+
+          if [ "${{ needs.lint-no-fake-test.result }}" != "success" ]; then
+            echo "FAIL: Lint No Fake Test (${{ needs.lint-no-fake-test.result }})"
+            FAILED=true
+          fi
+
+          if [ "${{ needs.lint-feature-has-smoke.result }}" != "success" ]; then
+            echo "FAIL: Lint Feature Has Smoke (${{ needs.lint-feature-has-smoke.result }})"
             FAILED=true
           fi
 
