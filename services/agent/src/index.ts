@@ -1,6 +1,7 @@
 // services/agent/src/index.ts
 import WebSocket from 'ws';
 import crypto from 'crypto';
+import { handleWechatPublish } from './handlers/wechat-publish';
 
 const API_URL = process.env.ZENITHJOY_API_URL || 'ws://localhost:5200/agent-ws';
 const TOKEN = process.env.AGENT_TOKEN || '';
@@ -42,11 +43,15 @@ function connect() {
     }, 15000);
   });
 
-  ws.on('message', (raw) => {
+  ws.on('message', async (raw) => {
     try {
       const msg = JSON.parse(raw.toString());
       console.log(`[agent] received:`, msg.type, msg.taskId || '');
-      // Task 5 实现 publish_request 处理
+
+      if (msg.type === 'publish_request' && msg.payload.platform === 'wechat') {
+        const emit = (m: any) => ws.send(JSON.stringify(m));
+        await handleWechatPublish(msg.taskId, msg.payload.content, emit, makeMsg);
+      }
     } catch (err) {
       console.warn('[agent] invalid message:', err);
     }
