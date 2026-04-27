@@ -211,12 +211,12 @@ async function fetchUsersByNavigation(page, keyword, limit) {
 // ─── 主流程 ────────────────────────────────────────────────────
 
 async function main() {
-  // ── 参数解析 ──
+  // ── 参数解析（命令行参数优先，其次环境变量，最后默认值）──
   const args = process.argv.slice(2);
   const topicIdx = args.indexOf('--topic');
-  const topic = topicIdx >= 0 ? args[topicIdx + 1] : '一人公司';
   const limitIdx = args.indexOf('--round-limit');
-  const roundLimit = limitIdx >= 0 ? parseInt(args[limitIdx + 1], 10) : 20;
+  const topic = process.env.COMPETITOR_TOPIC || (topicIdx >= 0 ? args[topicIdx + 1] : '一人公司');
+  const roundLimit = parseInt(process.env.COMPETITOR_ROUND_LIMIT || (limitIdx >= 0 ? args[limitIdx + 1] : '20'), 10);
 
   console.log('\n== 抖音对标账号筛选 SOP ==');
   console.log(`   Topic    : ${topic}`);
