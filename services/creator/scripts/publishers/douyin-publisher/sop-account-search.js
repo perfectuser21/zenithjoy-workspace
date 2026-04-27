@@ -338,7 +338,7 @@ async function main() {
   console.log(`\n[保存] 结果已写入：${outFile}`);
   console.log('\n== 账号筛选完成 ==\n');
 
-  browser.disconnect();
+  await browser.close();
 }
 
 if (require.main === module) {
