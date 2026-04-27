@@ -228,7 +228,9 @@ async function checkLogin(page) {
         credentials: 'include',
       });
       const data = await resp.json();
-      return data.status_code === 0;
+      if (data.status_code === 0) return true;
+      if (data.data && (data.data.avatar_url || data.data.app_id)) return true;
+      return false;
     } catch {
       return false;
     }

@@ -38,30 +38,26 @@ const SECONDARY_FILTER = {
  * @param {string} keyword 关键词
  * @returns {object}
  */
-function parseAuthorFromAweme(aweme, round, keyword) {
-  const author = aweme.author || {};
-  const uid = author.uid || author.sec_uid || '';
-  const uniqueId = author.unique_id || author.short_id || '';
-  const profileUrl = uid
-    ? `https://www.douyin.com/user/${uid}`
-    : '';
-
-  // 取两条代表视频（当前视频 + 无法提前知道第二条，先填 share_url）
-  const videoUrl1 = aweme.share_url
-    || (aweme.aweme_id ? `https://www.douyin.com/video/${aweme.aweme_id}` : '');
-
+/**
+ * 解析 user_list 条目（来自 type=user 搜索结果）
+ */
+function parseUserItem(item, round, keyword) {
+  const u = item.user_info || item;
+  const uid = u.uid || u.sec_uid || '';
+  const uniqueId = u.unique_id || u.short_id || '';
+  const profileUrl = uid ? `https://www.douyin.com/user/${uid}` : '';
   return {
     round,
     keyword,
-    creatorName: author.nickname || '',
+    creatorName: u.nickname || '',
     douyinId: uniqueId,
     profileUrl,
-    bio: author.signature || '',
-    followers: author.follower_count ?? 0,
-    following: author.following_count ?? 0,
-    workCount: author.aweme_count ?? 0,
-    videoUrl1,
-    videoUrl2: '', // 后续如有第二条同一作者视频可补填
+    bio: u.signature || '',
+    followers: u.follower_count ?? 0,
+    following: u.following_count ?? 0,
+    workCount: u.aweme_count ?? 0,
+    videoUrl1: '',
+    videoUrl2: '',
     _uid: uid,
   };
 }
@@ -87,9 +83,6 @@ function applySecondaryFilter(accounts, topic) {
       acc.followers >= SECONDARY_FILTER.followersMin &&
       acc.followers <= SECONDARY_FILTER.followersMax;
 
-    // 作品数估算近30天更新 >= 15（workCount 作为估算依据）
-    const hasRecentActivity = acc.workCount >= SECONDARY_FILTER.minRecentVideos;
-
     // 定位匹配：bio 或 creatorName 包含 topic 相关词
     const topicWords = topic.split(/[\s\/，,]+/);
     const bioText = `${acc.bio} ${acc.creatorName}`.toLowerCase();
@@ -102,7 +95,10 @@ function applySecondaryFilter(accounts, topic) {
     ];
     const hasMonetization = monetizationKeywords.some(w => acc.bio.includes(w));
 
-    return inFollowerRange && hasRecentActivity && (matchesTopic || hasMonetization);
+    // 粉丝 > 0（搜索结果 API 不返回作品数，workCount 不作硬性条件）
+    const hasFollowers = acc.followers > 0;
+
+    return hasFollowers && inFollowerRange && (matchesTopic || hasMonetization);
   });
 }
 
@@ -141,7 +137,10 @@ async function checkLogin(page) {
         credentials: 'include',
       });
       const data = await resp.json();
-      return data.status_code === 0;
+      // 已登录时返回 {data: {avatar_url: ...}}，status_code 可能不存在
+      if (data.status_code === 0) return true;
+      if (data.data && (data.data.avatar_url || data.data.app_id)) return true;
+      return false;
     } catch {
       return false;
     }
@@ -162,76 +161,51 @@ async function waitForLogin(page) {
 }
 
 /**
- * 通过视频搜索 API 采集作者信息
- * type=0 综合搜索（视频）
+ * 导航到搜索页并拦截真实 API 响应采集用户
+ * 用页面自带安全签名发出请求，绕过 X-Bogus 限制
  */
-async function fetchAuthorsFromVideoSearch(page, keyword, limit) {
-  const authors = [];
+async function fetchUsersByNavigation(page, keyword, limit) {
+  const userList = [];
   const seenUids = new Set();
-  let cursor = 0;
-  let pageNum = 0;
 
-  while (authors.length < limit) {
-    pageNum++;
-    const params = new URLSearchParams({
-      keyword,
-      type: '0',
-      count: '10',
-      cursor: String(cursor),
-      aid: '6383',
-      channel: 'channel_pc_web',
-    });
-    const url = `https://www.douyin.com/aweme/v1/web/discover/search/?${params}`;
+  const searchUrl = `https://www.douyin.com/search/${encodeURIComponent(keyword)}?type=user`;
 
-    const raw = await page.evaluate(async (fetchUrl) => {
-      const resp = await fetch(fetchUrl, { credentials: 'include' });
-      return resp.text();
-    }, url);
-
-    let data;
+  // 拦截 discover/search 响应
+  const responseHandler = async (response) => {
+    const url = response.url();
+    if (!url.includes('aweme/v1/web/discover/search')) return;
     try {
-      data = JSON.parse(raw);
-    } catch {
-      console.log(`    第 ${pageNum} 页：响应解析失败，停止翻页`);
-      break;
-    }
-
-    if (data.status_code !== 0) {
-      throw new Error(
-        `抖音 API 错误 status_code=${data.status_code}，message=${data.message || '未知'}`
-      );
-    }
-
-    const awemeList = data.aweme_list || data.aweme_infos || [];
-    if (!awemeList.length) {
-      console.log(`    第 ${pageNum} 页：无更多结果`);
-      break;
-    }
-
-    // 按点赞数排序（靠前的已是最多点赞，API 本身已排序，再做一次本地排序保险）
-    const sorted = [...awemeList].sort(
-      (a, b) =>
-        (b.statistics?.digg_count ?? 0) - (a.statistics?.digg_count ?? 0)
-    );
-
-    for (const aweme of sorted) {
-      const uid = aweme.author?.uid || aweme.author?.sec_uid || '';
-      if (uid && !seenUids.has(uid)) {
-        seenUids.add(uid);
-        authors.push(aweme);
+      const text = await response.text();
+      const data = JSON.parse(text);
+      if (data.status_code !== 0) return;
+      for (const item of (data.user_list || [])) {
+        const u = item.user_info || item;
+        const uid = u.uid || u.sec_uid || '';
+        if (uid && !seenUids.has(uid)) {
+          seenUids.add(uid);
+          userList.push(item);
+        }
       }
-    }
+    } catch { /* 跳过解析失败 */ }
+  };
 
-    console.log(
-      `    第 ${pageNum} 页：已采集 ${authors.length} / ${limit} 个独立作者`
-    );
+  page.on('response', responseHandler);
 
-    if (!data.has_more || authors.length >= limit) break;
-    cursor = data.cursor ?? 0;
-    await sleep(900);
+  await page.goto(searchUrl, { waitUntil: 'domcontentloaded', timeout: 15000 }).catch(() => {});
+  await sleep(3000);
+
+  // 滚动加载更多（最多5次）
+  let prev = 0;
+  for (let i = 0; i < 5 && userList.length < limit; i++) {
+    if (userList.length === prev) break; // 没有新数据了
+    prev = userList.length;
+    await page.evaluate(() => window.scrollBy(0, window.innerHeight * 3));
+    await sleep(2000);
   }
 
-  return authors.slice(0, limit);
+  page.off('response', responseHandler);
+  console.log(`    拦截到 ${userList.length} 个用户`);
+  return userList.slice(0, limit);
 }
 
 // ─── 主流程 ────────────────────────────────────────────────────
@@ -296,10 +270,10 @@ async function main() {
     for (const keyword of roundConfig.keywords) {
       console.log(`  搜索: 「${keyword}」`);
       try {
-        const awemeList = await fetchAuthorsFromVideoSearch(page, keyword, roundLimit);
+        const awemeList = await fetchUsersByNavigation(page, keyword, roundLimit);
 
         for (const aweme of awemeList) {
-          const acc = parseAuthorFromAweme(aweme, roundConfig.round, keyword);
+          const acc = parseUserItem(aweme, roundConfig.round, keyword);
           if (acc.profileUrl && !seenProfileUrls.has(acc.profileUrl)) {
             seenProfileUrls.add(acc.profileUrl);
             primaryScreening.push(acc);
