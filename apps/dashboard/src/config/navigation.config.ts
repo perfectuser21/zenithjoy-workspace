@@ -15,6 +15,7 @@ import {
   Database,
   Sparkles,
   Factory,
+  Target,
 } from 'lucide-react';
 
 // ============ 类型定义 ============
@@ -71,6 +72,7 @@ export const autopilotPageComponents: Record<string, () => Promise<{ default: Co
   'ContentFactoryPage': () => import('../pages/ContentFactoryPage'),
   'ContentTypeConfigPage': () => import('../pages/ContentTypeConfigPage'),
   'PipelineOutputPage': () => import('../pages/PipelineOutputPage'),
+  'CompetitorResearchPage': () => import('../pages/CompetitorResearchPage'),
   'AgentDebugPage': () => import('../pages/AgentDebugPage'),
   // FeatureDashboard and CommandCenter moved to Core features/business
 };
@@ -141,6 +143,13 @@ export const autopilotNavGroups: NavGroup[] = [
         label: '内容工厂',
         featureKey: 'content-factory',
         component: 'ContentFactoryPage'
+      },
+      {
+        path: '/competitor-research',
+        icon: Target,
+        label: '智能对标',
+        featureKey: 'competitor_research',
+        component: 'CompetitorResearchPage',
       },
     ]
   }

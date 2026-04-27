@@ -122,6 +122,11 @@ export default defineConfig({
         target: 'http://localhost:5221',
         changeOrigin: true,
       },
+      // 智能对标 — 对标账号采集
+      '/api/competitor-research': {
+        target: 'http://localhost:5200',
+        changeOrigin: true,
+      },
       // 内容图片代理 — ~/claude-output/images/
       '/content-images': {
         target: 'http://localhost:9998',
