@@ -5,6 +5,7 @@ import pool from '../db/connection';
 import {
   buildOutputFromEvents,
   buildStagesFromEvents,
+  existsLangGraphTask,
   fetchLangGraphEvents,
   isUuid,
   listLangGraphOnlyRuns,
@@ -251,7 +252,25 @@ export class PipelineController {
         }
       }
 
-      if (!row) { res.status(404).json({ error: 'Not found' }); return; }
+      if (!row) {
+        if (ceceliaTaskId && (await existsLangGraphTask(ceceliaTaskId))) {
+          res.json({
+            output: {
+              pipeline_id: ceceliaTaskId,
+              keyword: '',
+              status: 'pending',
+              article_text: null,
+              cards_text: null,
+              image_urls: [],
+              export_path: null,
+              images: null,
+            },
+          });
+          return;
+        }
+        res.status(404).json({ error: 'Not found' });
+        return;
+      }
 
       const outputDir: string | null = row.output_dir || null;
 
@@ -334,7 +353,14 @@ export class PipelineController {
         }
       }
 
-      if (!row) { res.status(404).json({ error: 'Not found' }); return; }
+      if (!row) {
+        if (ceceliaTaskId && (await existsLangGraphTask(ceceliaTaskId))) {
+          res.json({ stages: {}, overall_status: 'pending', events: [] });
+          return;
+        }
+        res.status(404).json({ error: 'Not found' });
+        return;
+      }
 
       const manifest: PipelineManifest | null = row.output_manifest || null;
       res.json({

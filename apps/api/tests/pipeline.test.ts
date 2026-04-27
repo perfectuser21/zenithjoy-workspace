@@ -298,12 +298,34 @@ describe('Pipeline API', () => {
       expect(mockFetch).not.toHaveBeenCalled();
     });
 
-    it('should return 404 when pipeline_run does not exist', async () => {
+    it('should return pending when LangGraph task exists but no events yet', async () => {
       mockQuery
-        .mockResolvedValueOnce({ rows: [] })  // pipeline_runs lookup
-        .mockResolvedValueOnce({ rows: [] }); // cecelia_events fallback: no events
+        .mockResolvedValueOnce({ rows: [] })                              // pipeline_runs miss
+        .mockResolvedValueOnce({ rows: [] })                              // cecelia_events empty
+        .mockResolvedValueOnce({ rows: [{ '?column?': 1 }] });            // tasks exists
 
-      const response = await request(app).get('/api/pipeline/00000000-0000-0000-0000-000000000000/output');
+      const taskId = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
+      const response = await request(app).get(`/api/pipeline/${taskId}/output`);
+
+      expect(response.status).toBe(200);
+      expect(response.body.output.pipeline_id).toBe(taskId);
+      expect(response.body.output.status).toBe('pending');
+      expect(response.body.output.article_text).toBeNull();
+      expect(response.body.output.cards_text).toBeNull();
+      expect(response.body.output.image_urls).toEqual([]);
+      expect(response.body.output.export_path).toBeNull();
+      expect(mockFetch).not.toHaveBeenCalled();
+    });
+
+    it('should return 404 when LangGraph task does not exist', async () => {
+      mockQuery
+        .mockResolvedValueOnce({ rows: [] })                              // pipeline_runs miss
+        .mockResolvedValueOnce({ rows: [] })                              // cecelia_events empty
+        .mockResolvedValueOnce({ rows: [] });                             // tasks miss
+
+      const response = await request(app).get(
+        '/api/pipeline/00000000-0000-0000-0000-000000000000/output'
+      );
 
       expect(response.status).toBe(404);
     });
@@ -346,12 +368,30 @@ describe('Pipeline API', () => {
       expect(mockFetch).not.toHaveBeenCalled();
     });
 
-    it('should return 404 when pipeline_run does not exist', async () => {
+    it('should return pending when LangGraph task exists but no events yet', async () => {
       mockQuery
-        .mockResolvedValueOnce({ rows: [] })
-        .mockResolvedValueOnce({ rows: [] }); // no LangGraph events
+        .mockResolvedValueOnce({ rows: [] })                              // pipeline_runs miss
+        .mockResolvedValueOnce({ rows: [] })                              // cecelia_events empty
+        .mockResolvedValueOnce({ rows: [{ '?column?': 1 }] });            // tasks exists
 
-      const response = await request(app).get(`/api/pipeline/${PIPELINE_RUN.id}/stages`);
+      const taskId = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
+      const response = await request(app).get(`/api/pipeline/${taskId}/stages`);
+
+      expect(response.status).toBe(200);
+      expect(response.body.stages).toEqual({});
+      expect(response.body.overall_status).toBe('pending');
+      expect(response.body.events).toEqual([]);
+    });
+
+    it('should return 404 when LangGraph task does not exist', async () => {
+      mockQuery
+        .mockResolvedValueOnce({ rows: [] })                              // pipeline_runs miss
+        .mockResolvedValueOnce({ rows: [] })                              // cecelia_events empty
+        .mockResolvedValueOnce({ rows: [] });                             // tasks miss
+
+      const response = await request(app).get(
+        '/api/pipeline/00000000-0000-0000-0000-000000000000/stages'
+      );
 
       expect(response.status).toBe(404);
     });

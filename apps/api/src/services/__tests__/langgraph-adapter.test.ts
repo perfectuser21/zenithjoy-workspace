@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import {
   buildStagesFromEvents,
   extractArticlePath,
@@ -6,6 +6,15 @@ import {
   extractImageFiles,
   type PipelineEvent,
 } from '../langgraph-adapter';
+
+vi.mock('../../db/connection', () => ({
+  default: { query: vi.fn() },
+}));
+
+import pool from '../../db/connection';
+import { existsLangGraphTask } from '../langgraph-adapter';
+
+const mockQuery = pool.query as unknown as ReturnType<typeof vi.fn>;
 
 function mkEvent(id: number, node: string, extra: Record<string, unknown> = {}): PipelineEvent {
   return {
@@ -241,5 +250,27 @@ describe('manifest schema 三版兼容（extractArticlePath/extractCopyPath/extr
       cards: ['v3-a.png'],
     };
     expect(extractImageFiles(m)).toEqual(['v1-a.png']);
+  });
+});
+
+describe('existsLangGraphTask', () => {
+  beforeEach(() => {
+    mockQuery.mockReset();
+  });
+
+  it('returns true when tasks 表有匹配行', async () => {
+    mockQuery.mockResolvedValueOnce({ rows: [{ '?column?': 1 }] });
+    const ok = await existsLangGraphTask('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa');
+    expect(ok).toBe(true);
+    const call = mockQuery.mock.calls[0];
+    expect(call[0]).toContain('tasks');
+    expect(call[0]).toContain("task_type = 'content-pipeline'");
+    expect(call[1]).toEqual(['aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa']);
+  });
+
+  it('returns false when tasks 表无匹配行', async () => {
+    mockQuery.mockResolvedValueOnce({ rows: [] });
+    const ok = await existsLangGraphTask('00000000-0000-0000-0000-000000000000');
+    expect(ok).toBe(false);
   });
 });
