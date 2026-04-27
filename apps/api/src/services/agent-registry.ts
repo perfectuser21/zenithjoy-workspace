@@ -21,7 +21,11 @@ export class AgentRegistry extends EventEmitter {
   register(agentId: string, meta: AgentMeta, ws: WebSocket): void {
     const existing = this.agents.get(agentId);
     if (existing && existing.ws !== ws) {
-      try { existing.ws.close(4001, 'replaced'); } catch {}
+      try {
+        existing.ws.close(4001, 'replaced');
+      } catch {
+        // ignore close errors on stale ws
+      }
     }
     const entry: AgentEntry = {
       agentId, meta, ws,
