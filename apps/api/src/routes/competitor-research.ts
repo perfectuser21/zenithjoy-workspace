@@ -48,7 +48,7 @@ router.post('/start', (req: Request, res: Response) => {
     job.status = 'running';
     job.logs.push(`[${new Date().toISOString()}] 启动采集任务 topic="${topic}" roundLimit=${roundLimit}`);
 
-    const proc = spawn('node', [
+    const proc = spawn(process.execPath, [
       scriptPath,
       '--topic', topic,
       '--round-limit', String(roundLimit),
