@@ -337,11 +337,15 @@ async function main() {
   fs.writeFileSync(outFile, JSON.stringify(output, null, 2), 'utf8');
   console.log(`\n[保存] 结果已写入：${outFile}`);
   console.log('\n== 账号筛选完成 ==\n');
+
+  browser.disconnect();
 }
 
 if (require.main === module) {
-  main().catch(e => {
-    console.error('\n[ERR] 脚本异常：', e.message);
-    process.exit(1);
-  });
+  main()
+    .then(() => process.exit(0))
+    .catch(e => {
+      console.error('\n[ERR] 脚本异常：', e.message);
+      process.exit(1);
+    });
 }
