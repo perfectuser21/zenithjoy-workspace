@@ -27,19 +27,19 @@ run_case() {
     git checkout -q -b "test-$name"
     eval "$setup_fn"
     git add . && git commit -q -m "test"
-    bash "$LINT" main >/tmp/lint-tp-out.txt 2>&1
-    echo $?
+    set +e; bash "$LINT" main >/tmp/lint-tp-out.txt 2>&1; LINT_RC=$?; set -e
+    echo $LINT_RC
   ) > /tmp/lint-tp-rc.txt
   local rc; rc=$(cat /tmp/lint-tp-rc.txt)
 
   if [ "$expect_fail" = "1" ] && [ "$rc" -ne 0 ]; then
-    echo "  PASS [$name] 正确拒（exit $rc）"
+    echo "  PASS [${name}] 正确拒 exit ${rc}"
     PASSED=$((PASSED+1))
   elif [ "$expect_fail" = "0" ] && [ "$rc" -eq 0 ]; then
-    echo "  PASS [$name] 正确放（exit 0）"
+    echo "  PASS [${name}] 正确放 exit 0"
     PASSED=$((PASSED+1))
   else
-    echo "  FAIL [$name] expect_fail=$expect_fail got rc=$rc"
+    echo "  FAIL [${name}] expect_fail=${expect_fail} got rc=${rc}"
     cat /tmp/lint-tp-out.txt
     FAILED=$((FAILED+1))
   fi
