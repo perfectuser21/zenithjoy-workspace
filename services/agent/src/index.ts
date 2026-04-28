@@ -30,6 +30,12 @@ interface AgentConfig {
   agentId: string;
   apiUrl: string;
   loggedInAt: number;
+  // v1.2 Day 1-2: register 后存的字段，旧 v1.1 config 没有，访问需 optional
+  wsToken?: string;
+  machineId?: string;
+  registerApiUrl?: string;
+  tier?: string;
+  maxMachines?: number;
 }
 
 function getConfigDir(): string {
@@ -153,6 +159,118 @@ function safeHostnameSlug(): string {
   return slug || 'unknown-host';
 }
 
+// v1.2: 硬件指纹 — hostname + 第一块网卡 mac 或 platform-arch，sha256
+//   - 不是绝对唯一（VM 克隆可能撞），但日常单机够用
+//   - 同一台机器重启不变 → register 续签同一记录
+function computeMachineId(): string {
+  const parts: string[] = [
+    safeHostnameSlug(),
+    process.platform,
+    process.arch,
+  ];
+  try {
+    const ifaces = os.networkInterfaces();
+    for (const name of Object.keys(ifaces).sort()) {
+      const arr = ifaces[name] || [];
+      for (const i of arr) {
+        if (!i.internal && i.mac && i.mac !== '00:00:00:00:00:00') {
+          parts.push(i.mac);
+          break;
+        }
+      }
+      if (parts.length > 3) break;
+    }
+  } catch {
+    // ignore — fall back to hostname+platform 已足够
+  }
+  return crypto
+    .createHash('sha256')
+    .update(parts.join('|'))
+    .digest('hex')
+    .slice(0, 32);
+}
+
+// v1.2: 调用 POST /api/agent/register 拿 ws_token
+//   - 失败时打错误，让客户能看到具体原因（License invalid / Quota exceeded 等）
+async function registerWithLicense(cfg: AgentConfig): Promise<{
+  wsToken: string;
+  machineId: string;
+  tier?: string;
+  maxMachines?: number;
+} | null> {
+  const machineId = cfg.machineId || computeMachineId();
+  // wsApiUrl 是 wss://api.../agent-ws，注册端点是 https://api.../api/agent/register
+  // 从 cfg.apiUrl 推导 https base：ws[s]:// → http[s]://，去掉 /agent-ws 后缀
+  let httpBase = cfg.registerApiUrl || '';
+  if (!httpBase) {
+    httpBase = cfg.apiUrl
+      .replace(/^wss:\/\//, 'https://')
+      .replace(/^ws:\/\//, 'http://')
+      .replace(/\/agent-ws\/?$/, '');
+  }
+  const url = `${httpBase}/api/agent/register`;
+
+  const body = JSON.stringify({
+    license_key: cfg.licenseKey,
+    machine_id: machineId,
+    hostname: os.hostname() || undefined,
+    agent_id: cfg.agentId,
+    version: VERSION,
+  });
+
+  console.log(`[agent] registering with license at ${url}...`);
+
+  // Node 18+ 自带 global fetch；pkg 打包也支持
+  let resp: Response;
+  try {
+    resp = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body,
+    });
+  } catch (err) {
+    console.error('[agent] register network error:', err);
+    return null;
+  }
+
+  if (!resp.ok) {
+    const text = await resp.text().catch(() => '');
+    let parsed: { code?: string; message?: string } = {};
+    try {
+      parsed = JSON.parse(text);
+    } catch {
+      // ignore parse error
+    }
+    console.error(
+      `[agent] License 注册失败 [${resp.status}] ${parsed.code || ''}: ${
+        parsed.message || text
+      }`
+    );
+    return null;
+  }
+
+  const data = (await resp.json()) as {
+    ok: boolean;
+    ws_token?: string;
+    registered_machine_id?: string;
+    tier?: string;
+    max_machines?: number;
+  };
+  if (!data.ok || !data.ws_token) {
+    console.error('[agent] register 响应异常:', data);
+    return null;
+  }
+  console.log(
+    `[agent] License 注册成功 — tier=${data.tier} 装机数上限=${data.max_machines}`
+  );
+  return {
+    wsToken: data.ws_token,
+    machineId: data.registered_machine_id || machineId,
+    tier: data.tier,
+    maxMachines: data.max_machines,
+  };
+}
+
 function connect(cfg: AgentConfig): void {
   const url = `${cfg.apiUrl}?token=${encodeURIComponent(cfg.licenseKey)}`;
   console.log(`[agent] connecting to ${cfg.apiUrl}...`);
@@ -245,9 +363,37 @@ process.on('uncaughtException', (err) => {
   console.warn('[agent] uncaughtException:', err);
 });
 
-function main(): void {
+async function main(): Promise<void> {
   const cfg = loadOrInitConfig();
   console.log(`[agent] starting agent ${cfg.agentId} (v${VERSION})`);
+
+  // v1.2 Day 1-2: License 注册流程
+  //   - 旧 v1.1 config 已有连上的 ws，没 wsToken 也能跑（兼容路径）：
+  //     如果环境变量 ZENITHJOY_REQUIRE_LICENSE_REGISTER=1 才强制 register
+  //   - 新装 Agent（config 没 wsToken）：尝试 register，失败就用旧路径继续（不阻塞）
+  //   - 已 register 过：跳过
+  const requireRegister = process.env.ZENITHJOY_REQUIRE_LICENSE_REGISTER === '1';
+  if (!cfg.wsToken) {
+    const result = await registerWithLicense(cfg);
+    if (result) {
+      cfg.wsToken = result.wsToken;
+      cfg.machineId = result.machineId;
+      cfg.tier = result.tier;
+      cfg.maxMachines = result.maxMachines;
+      writeConfig(cfg);
+    } else if (requireRegister) {
+      console.error(
+        '[agent] License 注册失败且 ZENITHJOY_REQUIRE_LICENSE_REGISTER=1 — 退出。'
+      );
+      process.exit(3);
+    } else {
+      console.warn(
+        '[agent] License 注册失败 — 走 v1.1 兼容路径继续连 ws（旧服务端会接受）。'
+      );
+    }
+  } else {
+    console.log('[agent] 已注册过，跳过 license register。');
+  }
 
   // 启动系统托盘
   try {
@@ -273,4 +419,7 @@ function main(): void {
   connect(cfg);
 }
 
-main();
+main().catch((err) => {
+  console.error('[agent] main() 异常退出:', err);
+  process.exit(1);
+});

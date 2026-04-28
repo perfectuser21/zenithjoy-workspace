@@ -1,10 +1,70 @@
 // apps/api/src/routes/agent.ts
-import { Router } from 'express';
+import { Router, Request, Response } from 'express';
 import { agentRegistry } from '../services/agent-registry';
 import { sendToAgent } from '../services/agent-ws';
 import { makeMsg } from '../schemas/agent-protocol';
+import {
+  registerAgent,
+  isValidLicenseKeyFormat,
+} from '../services/license.service';
 
 export const agentRouter = Router();
+
+// ---------- v1.2 Agent License 注册端点（公开，无 internal token） ----------
+//
+// POST /api/agent/register
+//   请求体：{ license_key, machine_id, hostname?, agent_id?, version? }
+//   响应：
+//     200 OK: { ok:true, license_id, tier, max_machines, registered_machine_id, ws_token }
+//     401   : { ok:false, code:'INVALID_LICENSE' }
+//     403   : { ok:false, code:'EXPIRED' | 'SUSPENDED' | 'QUOTA_EXCEEDED' }
+//     400   : { ok:false, code:'BAD_REQUEST' }
+agentRouter.post('/register', async (req: Request, res: Response) => {
+  const { license_key, machine_id, hostname, agent_id, version } =
+    req.body ?? {};
+
+  if (typeof license_key !== 'string' || !isValidLicenseKeyFormat(license_key)) {
+    return res.status(400).json({
+      ok: false,
+      code: 'BAD_REQUEST',
+      message: 'license_key 格式不合法（应为 ZJ-X-XXXXXXXX）',
+    });
+  }
+  if (
+    typeof machine_id !== 'string' ||
+    machine_id.length < 4 ||
+    machine_id.length > 200
+  ) {
+    return res.status(400).json({
+      ok: false,
+      code: 'BAD_REQUEST',
+      message: 'machine_id 长度需 4..200',
+    });
+  }
+
+  try {
+    const result = await registerAgent({
+      license_key,
+      machine_id,
+      hostname: typeof hostname === 'string' ? hostname.slice(0, 200) : undefined,
+      agent_id: typeof agent_id === 'string' ? agent_id.slice(0, 200) : undefined,
+      version: typeof version === 'string' ? version.slice(0, 50) : undefined,
+    });
+
+    if (result.ok) {
+      return res.status(200).json(result);
+    }
+    if (result.code === 'INVALID_LICENSE') return res.status(401).json(result);
+    return res.status(403).json(result);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'unknown';
+    return res.status(500).json({
+      ok: false,
+      code: 'REGISTER_FAILED',
+      message: msg,
+    });
+  }
+});
 
 agentRouter.get('/status', (req, res) => {
   const list = agentRegistry.list().map(e => ({
