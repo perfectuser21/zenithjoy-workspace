@@ -490,3 +490,13 @@ tests:
     status: active
     product: AI员工
     note: "Agent fleet — tenants API"
+
+  # ── Sprint v2 多租户统一（2026-04-28 主理人决策） ───────────────────────────
+
+  - id: api-tenant-context-middleware
+    path: apps/api/tests/middleware/tenant-context.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 中台认证
+    note: "tenant-context 中间件单元测试（feishu_id → tenant_members 解析 + super-admin bypass）"

@@ -9,8 +9,9 @@ vi.mock('../src/db/connection', () => ({
 
 const mockQuery = pool.query as ReturnType<typeof vi.fn>;
 
-// Sprint B 多租户：所有 works 端点要求 X-Feishu-User-Id；fixture 需 owner_id 匹配
+// Sprint v2 tenant 隔离：fixture 需 tenant_id 匹配 TEST_TENANT_ID
 const TEST_USER = 'ou_test_user_001';
+const TEST_TENANT_ID_FIXTURE = 'tttttttt-1111-2222-3333-444444444444';
 
 const WORK = {
   id: 'work-uuid-1',
@@ -21,13 +22,21 @@ const WORK = {
   custom_fields: { tags: ['test'] },
   archived_at: null,   // DB 实际列名，非 archived
   owner_id: TEST_USER,
+  tenant_id: TEST_TENANT_ID_FIXTURE,
   created_at: '2026-01-01T00:00:00Z',
   updated_at: '2026-01-01T00:00:00Z',
 };
 
+// Sprint v2：tenantContext 中间件查询 tenant_members → tenant_id
+const TEST_TENANT_ID = 'tttttttt-1111-2222-3333-444444444444';
+
 describe('Works API', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // tenantContext 解析：每次请求第一个 query 是 tenant_members 查询
+    mockQuery.mockResolvedValueOnce({
+      rows: [{ tenant_id: TEST_TENANT_ID, role: 'member' }],
+    });
   });
 
   describe('POST /api/works', () => {
@@ -99,8 +108,8 @@ describe('Works API', () => {
         .get('/api/works')
         .set('X-Feishu-User-Id', TEST_USER);
 
-      // 取第一次 pool.query 调用的 SQL（COUNT 查询）
-      const countSql: string = mockQuery.mock.calls[0][0];
+      // call 0 = tenantContext 的 tenant_members 查询；call 1 = COUNT 查询
+      const countSql: string = mockQuery.mock.calls[1][0];
       expect(countSql).toContain('archived_at IS NULL');
       expect(countSql).not.toMatch(/archived\s*=/);
     });

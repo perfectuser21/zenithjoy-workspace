@@ -45,7 +45,8 @@ const WORK_ROW = {
   is_viral: false,
   custom_fields: null,
   archived_at: null,   // DB 实际列名（非 archived），防止字段名回退
-  owner_id: TEST_USER, // Sprint B 多租户：必须与请求 X-Feishu-User-Id 匹配
+  owner_id: TEST_USER,
+  tenant_id: 'tttttttt-1111-2222-3333-444444444444', // 匹配 queueTenantMember
   created_at: '2026-01-01T00:00:00Z',
   updated_at: '2026-01-01T00:00:00Z',
 };
@@ -77,8 +78,19 @@ const LOG_ROW = {
 // 注意：vi.clearAllMocks() 在 vitest v4 不清空 mockResolvedValueOnce 队列，
 // 必须用 vi.resetAllMocks() 才能防止跨测试 mock 污染。
 
+// Sprint v2：tenantContext 中间件查询 tenant_members → tenant_id
+const TEST_TENANT_ID = 'tttttttt-1111-2222-3333-444444444444';
+function queueTenantMember() {
+  mockQuery.mockResolvedValueOnce({
+    rows: [{ tenant_id: TEST_TENANT_ID, role: 'member' }],
+  });
+}
+
 describe('API Contract — Works', () => {
-  beforeEach(() => vi.resetAllMocks());
+  beforeEach(() => {
+    vi.resetAllMocks();
+    queueTenantMember();
+  });
 
   it('GET /api/works — list response shape', async () => {
     mockQuery
@@ -275,9 +287,12 @@ describe('API Contract — Publish Logs', () => {
 // ────────────────────────────────────────────────────────────────────────────
 
 describe('API Contract — Error Format Consistency', () => {
+  // 不在 beforeEach 自动 queue tenant_member —— 这个 describe 混合 /api/works 和 /api/fields
+  // 测试，分别按需 inline queue
   beforeEach(() => vi.resetAllMocks());
 
   it('400 VALIDATION_ERROR — error.code 始终存在', async () => {
+    queueTenantMember(); // /api/works 走 tenantContext
     const { status, body } = await request(app)
       .post('/api/works')
       .set('X-Feishu-User-Id', TEST_USER)
@@ -290,6 +305,7 @@ describe('API Contract — Error Format Consistency', () => {
   });
 
   it('404 NOT_FOUND — error.code 始终存在', async () => {
+    queueTenantMember(); // /api/works 走 tenantContext
     mockQuery.mockResolvedValueOnce({ rows: [] });
 
     const fakeId = '00000000-0000-0000-0000-000000000000';
