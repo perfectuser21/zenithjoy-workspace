@@ -65,10 +65,11 @@ describe('AdminLicensePage [BEHAVIOR]', () => {
     mockAuth.isSuperAdmin = true;
     vi.mocked(licenseApi.listAllLicenses).mockResolvedValue({
       licenses: [LICENSE_FIXTURE],
+      total: 1,
     });
     vi.mocked(licenseApi.createLicense).mockResolvedValue({
-      license_key: ['ZJ', 'B', 'NEW00001'].join('-'),
       ...LICENSE_FIXTURE,
+      license_key: ['ZJ', 'B', 'NEW00001'].join('-'),
     });
     vi.mocked(licenseApi.revokeLicense).mockResolvedValue({
       ...LICENSE_FIXTURE,

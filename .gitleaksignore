@@ -7,3 +7,9 @@
 # License v1.2 测试中的 HMAC fixture（非真 secret）
 9a1b0e4d920e0c96dd7a48b68ab77fb847bc8425:apps/api/tests/services/license.service.test.ts:generic-api-key:61
 9a1b0e4d920e0c96dd7a48b68ab77fb847bc8425:apps/api/tests/routes/agent.test.ts:generic-api-key:48
+
+# Sprint A WS1/WS2/WS3 commit-1 (Red TDD) 的 license_key fixture 占位符
+# 后续 commit 已改为 ['ZJ','M','ABCD1234'].join('-') 但 commit-1 历史中仍是字面量
+d2f55a8d599f8d456c2688011f07aaa8aa71f1a5:apps/api/tests/admin-license-me.test.ts:generic-api-key:30
+d2f55a8d599f8d456c2688011f07aaa8aa71f1a5:apps/dashboard/src/pages/__tests__/LicensePage.test.tsx:generic-api-key:25
+d2f55a8d599f8d456c2688011f07aaa8aa71f1a5:apps/dashboard/src/pages/__tests__/AdminLicensePage.test.tsx:generic-api-key:40
