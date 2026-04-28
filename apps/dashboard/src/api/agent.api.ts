@@ -50,6 +50,26 @@ export async function createTask(skill: string, params: Record<string, unknown> 
   return r.json();
 }
 
+export interface Skill {
+  id: string;
+  slug: string;
+  platform: string;
+  category: string;
+  name: string;
+  content_type: string | null;
+  is_dryrun: boolean;
+  script_path: string;
+  description: string | null;
+  active: boolean;
+  agent_statuses: Record<string, { status: string; last_error: string | null; last_check: string }>;
+}
+
+export async function listSkills(): Promise<{ skills: Skill[] }> {
+  const r = await fetch(`${API_BASE}/skills`);
+  if (!r.ok) throw new Error('failed');
+  return r.json();
+}
+
 export async function testPublish(): Promise<{ ok: boolean; taskId: string; agentId: string }> {
   const r = await fetch(`${API_BASE}/agent/test-publish`, { method: 'POST' });
   if (!r.ok) throw new Error((await r.json()).error);

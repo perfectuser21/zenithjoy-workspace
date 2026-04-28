@@ -16,6 +16,7 @@ import { agentRouter } from './routes/agent';
 import { adminLicenseRouter } from './routes/admin-license';
 import { tasksRouter } from './routes/tasks';
 import { tenantsRouter } from './routes/tenants';
+import { skillsRouter } from './routes/skills';
 import { errorHandler, notFoundHandler } from './middleware/error';
 
 const app = express();
@@ -48,6 +49,7 @@ app.use('/api/agent/tasks', tasksRouter);
 app.use('/api/agent', agentRouter);
 app.use('/api/admin/license', adminLicenseRouter);
 app.use('/api/tenants', tenantsRouter);
+app.use('/api/skills', skillsRouter);
 
 // Error handling
 app.use(notFoundHandler);
