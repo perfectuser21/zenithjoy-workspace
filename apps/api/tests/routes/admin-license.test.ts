@@ -50,7 +50,7 @@ describe('POST /api/admin/license', () => {
     const res = await request(app)
       .post('/api/admin/license')
       .send({ tier: 'basic', customer_name: '测试客户' });
-    expect(res.status).toBe(201);
+    expect(res.status).toBe(200);
     expect(res.body.success).toBe(true);
     expect(res.body.data.tier).toBe('basic');
     expect(res.body.data.max_machines).toBe(1);
@@ -70,7 +70,7 @@ describe('POST /api/admin/license', () => {
     const res = await request(app)
       .post('/api/admin/license')
       .send({ tier: 'matrix' });
-    expect(res.status).toBe(201);
+    expect(res.status).toBe(200);
     expect(res.body.data.max_machines).toBe(3);
   });
 
@@ -104,7 +104,7 @@ describe('POST /api/admin/license', () => {
     expect(res.body.error.code).toBe('INVALID_DURATION');
   });
 
-  it('internalAuth 拦截：无 token 时返回 401', async () => {
+  it('superAdminGuard 拦截：无 token 且 ZENITHJOY_INTERNAL_TOKEN 已设置时返回 401', async () => {
     process.env.ZENITHJOY_INTERNAL_TOKEN = 'super-secret';
     const res = await request(app)
       .post('/api/admin/license')
@@ -113,14 +113,14 @@ describe('POST /api/admin/license', () => {
     expect(res.body.error.code).toBe('UNAUTHORIZED');
   });
 
-  it('internalAuth 通过：Bearer token 匹配', async () => {
+  it('superAdminGuard 通过：Bearer token 匹配（internal 服务态 fallback）', async () => {
     process.env.ZENITHJOY_INTERNAL_TOKEN = 'super-secret';
     mockQuery.mockResolvedValueOnce({ rows: [makeLicenseRow()] });
     const res = await request(app)
       .post('/api/admin/license')
       .set('Authorization', 'Bearer super-secret')
       .send({ tier: 'basic' });
-    expect(res.status).toBe(201);
+    expect(res.status).toBe(200);
   });
 });
 
@@ -143,7 +143,7 @@ describe('GET /api/admin/license', () => {
     });
     const res = await request(app).get('/api/admin/license');
     expect(res.status).toBe(200);
-    expect(res.body.data.items).toHaveLength(2);
+    expect(res.body.data.licenses).toHaveLength(2);
     expect(res.body.data.total).toBe(2);
   });
 });
@@ -155,14 +155,16 @@ describe('DELETE /api/admin/license/:id', () => {
   });
 
   it('成功 revoke', async () => {
-    mockQuery.mockResolvedValueOnce({ rowCount: 1 });
+    mockQuery.mockResolvedValueOnce({
+      rows: [makeLicenseRow({ status: 'revoked', revoked_at: '2026-04-28T05:00:00Z' })],
+    });
     const res = await request(app).delete(`/api/admin/license/${LICENSE_UUID}`);
     expect(res.status).toBe(200);
-    expect(res.body.data.revoked).toBe(true);
+    expect(res.body.data.status).toBe('revoked');
   });
 
   it('找不到/已 revoked 返回 404', async () => {
-    mockQuery.mockResolvedValueOnce({ rowCount: 0 });
+    mockQuery.mockResolvedValueOnce({ rows: [] });
     const res = await request(app).delete(`/api/admin/license/${LICENSE_UUID}`);
     expect(res.status).toBe(404);
     expect(res.body.error.code).toBe('NOT_FOUND');
