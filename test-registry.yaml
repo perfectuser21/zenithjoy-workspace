@@ -285,6 +285,38 @@ tests:
     product: AI员工
     note: "Agent registry 服务层单元测试（注册/查询/路由）"
 
+  - id: api-license-service
+    path: apps/api/tests/services/license.service.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: AI员工
+    note: "License v1.2 — service 层：key 格式生成 + isValidLicenseKeyFormat + HMAC ws_token sign/verify + TIER_QUOTA"
+
+  - id: api-admin-license-route
+    path: apps/api/tests/routes/admin-license.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: AI员工
+    note: "License v1.2 — admin POST/GET/DELETE 路由 + internalAuth 鉴权（mock DB）"
+
+  - id: api-agent-route
+    path: apps/api/tests/routes/agent.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: AI员工
+    note: "License v1.2 — POST /api/agent/register 4 大场景 success/invalid/expired/quota_exceeded（mock DB）"
+
+  - id: api-app-entry
+    path: apps/api/tests/app.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: AI员工
+    note: "app.ts 路由挂载冒烟测试（health + 404 + admin-license + agent register 路径）"
+
   # ── E2E（待建）────────────────────────────────────────────────────────────────
 
   # - id: e2e-content-publish
