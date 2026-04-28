@@ -30,7 +30,12 @@ app.use(
     credentials: true,
   })
 );
-app.all('/api/auth/*', toNodeHandler(auth));
+// 单元测试环境跳过 auth 路由挂载：toNodeHandler(auth) 会立即 'handler' in auth 探测，
+// 触发 Proxy lazy-init 然而单元测试 mock 了 pg.Pool → BetterAuthError. 真实 smoke /
+// dev / prod 不受影响（NODE_ENV ≠ test）。
+if (process.env.NODE_ENV !== 'test') {
+  app.all('/api/auth/*', toNodeHandler(auth));
+}
 
 // 之后才挂 body parser
 app.use(express.json());
