@@ -4,6 +4,7 @@ import { EventEmitter } from 'events';
 export interface AgentMeta {
   capabilities: string[];
   version: string;
+  tenantId?: string;   // set by WS upgrade handler (Task 3)
 }
 
 export interface AgentEntry {
