@@ -3,12 +3,14 @@ import { Work, ListResponse } from '../models/types';
 import { ApiError } from '../middleware/error';
 
 /**
- * 多租户隔离上下文
- *  - ownerId: 当前请求者飞书 open_id（必传）
- *  - bypassTenant: super-admin 跨租户访问（true 时跳过 owner_id 过滤）
+ * 多租户隔离上下文（v2 — tenant 级，主理人 2026-04-28 决策）
+ *  - tenantId: 当前请求者所属的 tenant UUID（来源：tenant_members 表反查飞书 ID）
+ *  - feishuUserId: 飞书 open_id（用于 owner_id 审计字段，不参与隔离过滤）
+ *  - bypassTenant: super-admin 跨租户访问（true 时跳过 tenant_id 过滤）
  */
 export interface TenantContext {
-  ownerId: string;
+  tenantId: string;
+  feishuUserId?: string;
   bypassTenant?: boolean;
 }
 
@@ -41,8 +43,8 @@ export class WorksService {
 
     // 多租户过滤：bypassTenant 时不加（admin 跨租户）
     if (!ctx.bypassTenant) {
-      whereClause += ` AND owner_id = $${paramIndex++}`;
-      values.push(ctx.ownerId);
+      whereClause += ` AND tenant_id = $${paramIndex++}`;
+      values.push(ctx.tenantId);
     }
 
     const countQuery = `SELECT COUNT(*) as total FROM zenithjoy.works ${whereClause}`;
@@ -63,7 +65,7 @@ export class WorksService {
       data: dataResult.rows,
       total,
       limit,
-      offset
+      offset,
     };
   }
 
@@ -75,8 +77,8 @@ export class WorksService {
       throw new ApiError('NOT_FOUND', 'Work not found', 404);
     }
     const row = result.rows[0];
-    // 多租户：非 bypass 模式下，owner 不匹配视为不存在（不暴露存在性）
-    if (!ctx.bypassTenant && row.owner_id !== ctx.ownerId) {
+    // 多租户：非 bypass 模式下，tenant 不匹配视为不存在（不暴露存在性）
+    if (!ctx.bypassTenant && row.tenant_id !== ctx.tenantId) {
       throw new ApiError('NOT_FOUND', 'Work not found', 404);
     }
     return row;
@@ -89,12 +91,13 @@ export class WorksService {
     const query = `
       INSERT INTO zenithjoy.works (
         title, body, body_en, content_type, cover_image, media_files,
-        platform_links, status, account, is_featured, is_viral, custom_fields, scheduled_at, owner_id
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+        platform_links, status, account, is_featured, is_viral, custom_fields, scheduled_at,
+        tenant_id, owner_id
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
       RETURNING *
     `;
 
-    // 注意：忽略 work.owner_id，强制使用 ctx.ownerId（防伪造）
+    // 强制使用 ctx.tenantId（防伪造）；owner_id 用 feishuUserId 作审计（"谁创建的"）
     const values = [
       work.title,
       work.body || null,
@@ -109,7 +112,8 @@ export class WorksService {
       work.is_viral || false,
       work.custom_fields ? JSON.stringify(work.custom_fields) : null,
       work.scheduled_at || null,
-      ctx.ownerId,
+      ctx.tenantId,
+      ctx.feishuUserId ?? null,
     ];
 
     const result = await pool.query(query, values);
@@ -125,10 +129,11 @@ export class WorksService {
     let paramIndex = 1;
 
     Object.entries(work).forEach(([key, value]) => {
-      // 禁止客户端覆盖 owner_id（防越权）
+      // 禁止客户端覆盖 tenant_id / owner_id（防越权）
       if (
         key !== 'id' &&
         key !== 'created_at' &&
+        key !== 'tenant_id' &&
         key !== 'owner_id' &&
         value !== undefined
       ) {
@@ -156,7 +161,6 @@ export class WorksService {
   }
 
   async deleteWork(id: string, ctx: TenantContext): Promise<void> {
-    // ownership 校验：跨租户视为 NOT_FOUND
     await this.getWorkById(id, ctx);
 
     const query = 'DELETE FROM zenithjoy.works WHERE id = $1';
