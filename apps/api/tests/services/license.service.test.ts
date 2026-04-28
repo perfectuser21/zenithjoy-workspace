@@ -58,7 +58,7 @@ describe('license.service: key 格式和生成', () => {
 
 describe('license.service: ws_token HMAC', () => {
   beforeEach(() => {
-    process.env.LICENSE_HMAC_SECRET = 'test-secret-at-least-16-chars-long';
+    process.env.LICENSE_HMAC_SECRET = 'test-secret-at-least-16-chars-long'; // gitleaks:allow
   });
 
   it('sign 同一 (license,machine) 结果稳定', () => {

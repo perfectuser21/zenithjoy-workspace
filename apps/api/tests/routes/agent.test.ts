@@ -45,7 +45,7 @@ function makeLicenseRow(overrides: Record<string, unknown> = {}) {
 describe('POST /api/agent/register — 4 大场景', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    process.env.LICENSE_HMAC_SECRET = 'test-secret-at-least-16-chars-long';
+    process.env.LICENSE_HMAC_SECRET = 'test-secret-at-least-16-chars-long'; // gitleaks:allow
   });
 
   const validBody = {
