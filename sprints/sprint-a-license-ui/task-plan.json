@@ -1,0 +1,92 @@
+{
+  "initiative_id": "pending",
+  "tasks": [
+    {
+      "task_id": "ws1",
+      "title": "License 后端：GET /admin/license/me + super-admin 中间件",
+      "scope": "扩展 apps/api 后端：新增基于飞书登录态的 GET /admin/license/me 端点（返回当前用户的 license + machines），新增 super-admin 中间件（基于 ADMIN_FEISHU_OPENIDS 环境变量识别），将现有 POST/GET-list/DELETE 受 super-admin 守卫保护，并扩展 license.service 提供按 customer_id 查询函数。",
+      "dod": [
+        "[BEHAVIOR] curl GET /admin/license/me 携带飞书 cookie，customer_id 已绑定 license 时返回 200 + license 字段非 null + machines 数组",
+        "[BEHAVIOR] curl GET /admin/license/me 无 license 时返回 200 + license=null + machines=[]",
+        "[BEHAVIOR] curl GET /admin/license/me 无登录态返回 401",
+        "[BEHAVIOR] 非 super-admin 用户调 POST /admin/license 返回 403",
+        "[BEHAVIOR] super-admin 用户调 GET /admin/license 返回完整列表 200",
+        "[ARTIFACT] apps/api/src/middleware/super-admin.ts 文件存在",
+        "[ARTIFACT] apps/api/tests/admin-license.test.ts 含至少 5 个测试用例覆盖 /me 与守卫"
+      ],
+      "files": [
+        "apps/api/src/routes/admin-license.ts",
+        "apps/api/src/services/license.service.ts",
+        "apps/api/src/middleware/super-admin.ts",
+        "apps/api/tests/admin-license.test.ts"
+      ],
+      "depends_on": [],
+      "complexity": "M",
+      "estimated_minutes": 45
+    },
+    {
+      "task_id": "ws2",
+      "title": "Dashboard 客户面板 /license（含无 license 状态 + 续费弹窗）",
+      "scope": "新建 apps/dashboard/src/pages/LicensePage.tsx（受飞书登录态保护），通过 fetchMyLicense() 获取数据，渲染套餐 / 配额 / 已用 / 到期日 / 状态 / 机器列表。无 License 时显示'暂无' + 申请微信弹窗。续费按钮触发联系微信弹窗。同时新建 apps/dashboard/src/api/license.api.ts 封装 4 个 client 调用，并把 /license 注册到 navigation.config.ts。",
+      "dod": [
+        "[BEHAVIOR] Playwright 测试：飞书登录后访问 /license 渲染 license tier 文案",
+        "[BEHAVIOR] Playwright 测试：飞书登录但无 license 显示'暂无'文案 + 微信申请按钮",
+        "[BEHAVIOR] Playwright 测试：未登录访问 /license 重定向至飞书登录页",
+        "[BEHAVIOR] navigation 侧边栏含 'License' 入口（所有登录用户可见）",
+        "[ARTIFACT] apps/dashboard/src/pages/LicensePage.tsx 存在",
+        "[ARTIFACT] apps/dashboard/src/api/license.api.ts 存在含 4 个导出函数"
+      ],
+      "files": [
+        "apps/dashboard/src/pages/LicensePage.tsx",
+        "apps/dashboard/src/api/license.api.ts",
+        "apps/dashboard/src/config/navigation.config.ts"
+      ],
+      "depends_on": ["ws1"],
+      "complexity": "M",
+      "estimated_minutes": 50
+    },
+    {
+      "task_id": "ws3",
+      "title": "Dashboard super-admin 后台 /admin/license（创建 + 列表 + 吊销）",
+      "scope": "新建 apps/dashboard/src/pages/AdminLicensePage.tsx，仅 super-admin 可见（路由守卫 + navigation 条件渲染）。包含：(1) 创建表单 — tier 下拉、customer_email、customer_name、duration_days、notes；(2) License 列表 — tier / customer / status / expires_at / 已用机器；(3) 每行有'吊销'按钮（带确认弹窗）。所有操作走 license.api.ts 中的 admin client 函数。",
+      "dod": [
+        "[BEHAVIOR] Playwright 测试：super-admin 登录后访问 /admin/license 看到创建表单 + 列表",
+        "[BEHAVIOR] Playwright 测试：非 super-admin 访问 /admin/license 被重定向至 /license（或返回 403 提示）",
+        "[BEHAVIOR] Playwright 测试：super-admin 提交创建表单后列表新增一行",
+        "[BEHAVIOR] Playwright 测试：super-admin 点击吊销按钮 + 确认后该行 status 显示 'revoked'",
+        "[ARTIFACT] apps/dashboard/src/pages/AdminLicensePage.tsx 存在",
+        "[ARTIFACT] navigation.config.ts 中 /admin/license 入口仅在 super-admin 模式下展示"
+      ],
+      "files": [
+        "apps/dashboard/src/pages/AdminLicensePage.tsx",
+        "apps/dashboard/src/api/license.api.ts",
+        "apps/dashboard/src/config/navigation.config.ts"
+      ],
+      "depends_on": ["ws1"],
+      "complexity": "M",
+      "estimated_minutes": 50
+    },
+    {
+      "task_id": "ws4",
+      "title": "Logo 替换 + smoke 脚本 + Dashboard 顶部 logo 显示",
+      "scope": "替换 services/agent/build/icon.png + tray-icon.png 为 ZenithJoy 品牌图（如缺资源用 ImageMagick convert 生成 256×256 文字 PNG 占位）；如 Windows 需要 .ico 同步生成；apps/dashboard/public/logo-color.png 已存在则核对引用，缺失则补；新建 .github/workflows/scripts/smoke/dashboard-license-smoke.sh 含 ≥5 行 curl 真实链路（覆盖 GET /me、POST、GET list、DELETE、404 路径）。",
+      "dod": [
+        "[ARTIFACT] services/agent/build/icon.png 文件存在且 size > 1000 字节",
+        "[ARTIFACT] services/agent/build/tray-icon.png 文件存在且 size > 1000 字节",
+        "[ARTIFACT] .github/workflows/scripts/smoke/dashboard-license-smoke.sh 存在且至少 5 个 curl 调用",
+        "[BEHAVIOR] dashboard-license-smoke.sh 在本地（API 已起）运行返回 exit 0",
+        "[BEHAVIOR] Dashboard 顶部 navbar 渲染 logo-color.png（Playwright 截图比对或 alt 文本检查）"
+      ],
+      "files": [
+        "services/agent/build/icon.png",
+        "services/agent/build/tray-icon.png",
+        ".github/workflows/scripts/smoke/dashboard-license-smoke.sh",
+        "apps/dashboard/src/components/Navbar.tsx",
+        "apps/dashboard/public/logo-color.png"
+      ],
+      "depends_on": [],
+      "complexity": "S",
+      "estimated_minutes": 30
+    }
+  ]
+}
