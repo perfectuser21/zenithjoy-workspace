@@ -1,27 +1,59 @@
 /**
- * Admin License 路由 — v1.2 Day 1-2
+ * Admin License 路由 — v1.2 Day 1-2 + Sprint A Day 3
  *
- * 鉴权：复用 internalAuth（ZENITHJOY_INTERNAL_TOKEN）
+ * 鉴权：
+ *  - GET  /me         feishuUser（任意飞书登录用户）
+ *  - 其他端点         superAdminGuard（用户态白名单 或 internalAuth 服务态 fallback）
  *
  * 端点：
- *   POST   /admin/license       生成 license
- *   GET    /admin/license       列出 license
- *   DELETE /admin/license/:id   吊销 license
+ *   GET    /admin/license/me   返回当前飞书用户的 license + 已激活机器
+ *   POST   /admin/license      生成 license（super-admin）
+ *   GET    /admin/license      列出 license（super-admin）
+ *   DELETE /admin/license/:id  吊销 license（super-admin）
  */
 
 import { Router, Request, Response } from 'express';
-import { internalAuth } from '../middleware/internal-auth';
+import { feishuUser } from '../middleware/feishu-user';
+import { superAdminGuard } from '../middleware/super-admin';
 import {
   createLicense,
   listLicenses,
   revokeLicense,
+  getLicenseByCustomerId,
   TIER_QUOTA,
   Tier,
 } from '../services/license.service';
 
 export const adminLicenseRouter = Router();
 
-adminLicenseRouter.use(internalAuth);
+// ---------- GET /admin/license/me ----------（用户态，先注册避免与 /:id 冲突）
+
+adminLicenseRouter.get('/me', feishuUser, async (req: Request, res: Response) => {
+  const customerId = req.feishuUserId ?? '';
+  try {
+    const result = await getLicenseByCustomerId(customerId);
+    return res.json({
+      success: true,
+      data: {
+        license: result.license,
+        machines: result.machines,
+      },
+      timestamp: new Date().toISOString(),
+    });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'unknown';
+    return res.status(500).json({
+      success: false,
+      data: null,
+      error: { code: 'FETCH_FAILED', message: msg },
+      timestamp: new Date().toISOString(),
+    });
+  }
+});
+
+// ---------- 后续端点全部 super-admin 鉴权 ----------
+
+adminLicenseRouter.use(superAdminGuard);
 
 // ---------- POST /admin/license ----------
 
@@ -89,7 +121,7 @@ adminLicenseRouter.post('/', async (req: Request, res: Response) => {
       notes,
       duration_days,
     });
-    return res.status(201).json({
+    return res.status(200).json({
       success: true,
       data: {
         id: lic.id,
@@ -97,7 +129,11 @@ adminLicenseRouter.post('/', async (req: Request, res: Response) => {
         tier: lic.tier,
         max_machines: lic.max_machines,
         expires_at: lic.expires_at,
+        customer_id: lic.customer_id,
         customer_name: lic.customer_name,
+        customer_email: lic.customer_email,
+        status: lic.status,
+        created_at: lic.created_at,
       },
       timestamp: new Date().toISOString(),
     });
@@ -119,7 +155,7 @@ adminLicenseRouter.get('/', async (_req: Request, res: Response) => {
     const licenses = await listLicenses();
     return res.json({
       success: true,
-      data: { items: licenses, total: licenses.length },
+      data: { licenses, total: licenses.length },
       timestamp: new Date().toISOString(),
     });
   } catch (err) {
@@ -149,8 +185,8 @@ adminLicenseRouter.delete('/:id', async (req: Request, res: Response) => {
   }
 
   try {
-    const ok = await revokeLicense(id);
-    if (!ok) {
+    const revoked = await revokeLicense(id);
+    if (!revoked) {
       return res.status(404).json({
         success: false,
         data: null,
@@ -163,7 +199,7 @@ adminLicenseRouter.delete('/:id', async (req: Request, res: Response) => {
     }
     return res.json({
       success: true,
-      data: { id, revoked: true },
+      data: revoked,
       timestamp: new Date().toISOString(),
     });
   } catch (err) {

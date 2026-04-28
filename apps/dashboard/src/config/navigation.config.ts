@@ -16,6 +16,8 @@ import {
   Sparkles,
   Factory,
   Target,
+  KeyRound,
+  ShieldCheck,
 } from 'lucide-react';
 
 // ============ 类型定义 ============
@@ -74,6 +76,8 @@ export const autopilotPageComponents: Record<string, () => Promise<{ default: Co
   'PipelineOutputPage': () => import('../pages/PipelineOutputPage'),
   'CompetitorResearchPage': () => import('../pages/CompetitorResearchPage'),
   'AgentDebugPage': () => import('../pages/AgentDebugPage'),
+  'LicensePage': () => import('../pages/LicensePage'),
+  'AdminLicensePage': () => import('../pages/AdminLicensePage'),
   // FeatureDashboard and CommandCenter moved to Core features/business
 };
 
@@ -150,6 +154,21 @@ export const autopilotNavGroups: NavGroup[] = [
         label: '智能对标',
         featureKey: 'competitor_research',
         component: 'CompetitorResearchPage',
+      },
+      {
+        path: '/license',
+        icon: KeyRound,
+        label: 'License',
+        featureKey: 'license',
+        component: 'LicensePage',
+      },
+      {
+        path: '/admin/license',
+        icon: ShieldCheck,
+        label: 'License 管理',
+        featureKey: 'license-admin',
+        requireSuperAdmin: true,
+        component: 'AdminLicensePage',
       },
     ]
   }

@@ -43,6 +43,9 @@ ENV/
 # Build outputs
 dist/
 build/
+# Agent 打包资源（logo / icon）需要纳入版本控制
+!services/agent/build/
+!services/agent/build/**
 *.egg-info/
 .cache/
 .next/
