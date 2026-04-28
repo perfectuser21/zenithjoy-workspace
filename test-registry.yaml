@@ -500,3 +500,11 @@ tests:
     status: active
     product: 中台认证
     note: "tenant-context 中间件单元测试（feishu_id → tenant_members 解析 + super-admin bypass）"
+
+  - id: api-better-auth-config
+    path: apps/api/tests/auth.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 中台认证
+    note: "Better-auth 配置契约（PR-1）— 验证 auth 实例 + signUp/signIn/getSession/forgetPassword 方法导出"

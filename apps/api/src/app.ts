@@ -1,5 +1,7 @@
 import express from 'express';
 import cors from 'cors';
+import { toNodeHandler } from 'better-auth/node';
+import { auth } from './auth';
 import worksRouter from './routes/works';
 import fieldsRouter from './routes/fields';
 import publishRouter from './routes/publish';
@@ -20,8 +22,17 @@ import { errorHandler, notFoundHandler } from './middleware/error';
 
 const app = express();
 
-// Middleware
-app.use(cors());
+// Better-auth 路由必须在 express.json() 之前 mount（否则 body 被消费两次会出错）
+// CORS 须含 credentials 以让 session cookie 跨子域共享
+app.use(
+  cors({
+    origin: (origin, cb) => cb(null, true),
+    credentials: true,
+  })
+);
+app.all('/api/auth/*', toNodeHandler(auth));
+
+// 之后才挂 body parser
 app.use(express.json());
 
 // Health check
