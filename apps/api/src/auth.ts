@@ -86,7 +86,24 @@ function getAuth(): AuthInstance {
 }
 
 export const auth = new Proxy({} as AuthInstance, {
-  get(_, prop, receiver) {
-    return Reflect.get(getAuth(), prop, receiver);
+  get(_, prop) {
+    const target = getAuth();
+    const value = Reflect.get(target, prop);
+    // 函数属性 bind 到 better-auth 实例，避免 this 丢失
+    if (typeof value === 'function') {
+      return value.bind(target);
+    }
+    return value;
+  },
+  // 关键：'handler' in auth 必须返回 true（better-auth 的 toNodeHandler 用此判断）
+  // 否则 Proxy target {} 没 handler，会被当成 handler 函数本身使用 → TypeError
+  has(_, prop) {
+    return prop in getAuth();
+  },
+  ownKeys() {
+    return Reflect.ownKeys(getAuth());
+  },
+  getOwnPropertyDescriptor(_, prop) {
+    return Reflect.getOwnPropertyDescriptor(getAuth(), prop);
   },
 });
