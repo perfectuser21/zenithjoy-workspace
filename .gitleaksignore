@@ -14,5 +14,6 @@ d2f55a8d599f8d456c2688011f07aaa8aa71f1a5:apps/api/tests/admin-license-me.test.ts
 d2f55a8d599f8d456c2688011f07aaa8aa71f1a5:apps/dashboard/src/pages/__tests__/LicensePage.test.tsx:generic-api-key:25
 d2f55a8d599f8d456c2688011f07aaa8aa71f1a5:apps/dashboard/src/pages/__tests__/AdminLicensePage.test.tsx:generic-api-key:40
 
-# PR-1 better-auth smoke 中 PASSWORD 变量字面量（commit 历史中残留）
+# PR-1 better-auth smoke 中 PASSWORD 变量字面量（commit 历史残留 + rebase 后 SHA 变）
 3f722714d631d0959998eb88beedfb3b412b52e8:.github/workflows/scripts/smoke/auth-smoke.sh:generic-api-key:17
+c5a288fabdaebaa386feecf5dbad2edb69bf4bdc:.github/workflows/scripts/smoke/auth-smoke.sh:generic-api-key:17
