@@ -93,21 +93,12 @@ jobs:
           psql -h localhost -U cecelia -d cecelia -c "CREATE SCHEMA IF NOT EXISTS zenithjoy;"
           psql -h localhost -U cecelia -d cecelia -c "CREATE EXTENSION IF NOT EXISTS \"pgcrypto\";"
 
-      - name: Run docs/database migrations (works/publish_logs/field_definitions)
-        env:
-          PGPASSWORD: cecelia
-        run: |
-          # 先跑 docs 目录下的基础表迁移（works 等），保证 apps/api 迁移有依赖
-          for f in docs/database/migrations/*.sql; do
-            [ -f "$f" ] || continue
-            echo "→ $f"
-            psql -h localhost -U cecelia -d cecelia -v ON_ERROR_STOP=1 -f "$f"
-          done
-
       - name: Run apps/api/db migrations
         env:
           PGPASSWORD: cecelia
         run: |
+          # 含 20260210_000000_create_works_tables.sql（works/publish_logs/field_definitions 自治建表）
+          # ON_ERROR_STOP=1 防止 psql 静默吞错（之前 Sprint B owner_id ALTER 因 works 缺失被吞）
           for f in apps/api/db/migrations/*.sql; do
             echo "→ $f"
             psql -h localhost -U cecelia -d cecelia -v ON_ERROR_STOP=1 -f "$f"
