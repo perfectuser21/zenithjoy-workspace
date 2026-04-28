@@ -201,14 +201,42 @@ export async function findLicenseByKey(
   return rows[0] ?? null;
 }
 
-export async function revokeLicense(id: string): Promise<boolean> {
-  const { rowCount } = await pool.query(
+export async function revokeLicense(id: string): Promise<LicenseRow | null> {
+  const { rows } = await pool.query<LicenseRow>(
     `UPDATE zenithjoy.licenses
        SET status = 'revoked', revoked_at = now(), updated_at = now()
-       WHERE id = $1 AND status != 'revoked'`,
+       WHERE id = $1 AND status != 'revoked'
+       RETURNING *`,
     [id]
   );
-  return (rowCount ?? 0) > 0;
+  return rows[0] ?? null;
+}
+
+/**
+ * 按客户飞书 open_id 查询其 license 与已激活机器列表
+ * 返回 license=null 表示该客户尚无 license
+ */
+export async function getLicenseByCustomerId(
+  customerId: string
+): Promise<{ license: LicenseRow | null; machines: LicenseMachineRow[] }> {
+  const licRes = await pool.query<LicenseRow>(
+    `SELECT * FROM zenithjoy.licenses
+       WHERE customer_id = $1
+       ORDER BY status = 'active' DESC, created_at DESC
+       LIMIT 1`,
+    [customerId]
+  );
+  const license = licRes.rows[0] ?? null;
+  if (!license) {
+    return { license: null, machines: [] };
+  }
+  const macRes = await pool.query<LicenseMachineRow>(
+    `SELECT * FROM zenithjoy.license_machines
+       WHERE license_id = $1
+       ORDER BY last_seen DESC`,
+    [license.id]
+  );
+  return { license, machines: macRes.rows };
 }
 
 // ---------- Agent 注册 ----------

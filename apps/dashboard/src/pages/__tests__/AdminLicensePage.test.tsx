@@ -84,7 +84,9 @@ describe('AdminLicensePage [BEHAVIOR]', () => {
     await waitFor(() => {
       expect(screen.getByRole('button', { name: /创建/ })).toBeInTheDocument();
     });
-    expect(screen.getByText(/Alice/)).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByText(/Alice/)).toBeInTheDocument();
+    });
   });
 
   it('AdminLicensePage 非 super-admin 不渲染表单（显示 403 或重定向标识）', async () => {

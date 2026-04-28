@@ -111,7 +111,8 @@ describe('LicensePage [BEHAVIOR]', () => {
     fireEvent.click(renewBtn);
 
     await waitFor(() => {
-      expect(screen.getByText(/微信/)).toBeInTheDocument();
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
     });
+    expect(screen.getByText(/微信号/)).toBeInTheDocument();
   });
 });
