@@ -1,5 +1,7 @@
 import express from 'express';
 import cors from 'cors';
+import { toNodeHandler } from 'better-auth/node';
+import { auth } from './auth';
 import worksRouter from './routes/works';
 import fieldsRouter from './routes/fields';
 import publishRouter from './routes/publish';
@@ -20,8 +22,23 @@ import { errorHandler, notFoundHandler } from './middleware/error';
 
 const app = express();
 
-// Middleware
-app.use(cors());
+// Better-auth 路由必须在 express.json() 之前 mount（否则 body 被消费两次会出错）
+// CORS 须含 credentials 以让 session cookie 跨子域共享
+app.use(
+  cors({
+    origin: (origin, cb) => cb(null, true),
+    credentials: true,
+  })
+);
+// vitest 单元测试跳过 auth 路由挂载：toNodeHandler(auth) 会立即 'handler' in auth 探测，
+// 触发 Proxy lazy-init 然而单元测试 mock 了 pg.Pool → BetterAuthError.
+// 用 VITEST env（vitest 自动设置 'true'）而不是 NODE_ENV（CI smoke 也设 test）。
+// 真实 smoke / dev / prod 都正常 mount auth 路由。
+if (!process.env.VITEST) {
+  app.all('/api/auth/*', toNodeHandler(auth));
+}
+
+// 之后才挂 body parser
 app.use(express.json());
 
 // Health check
