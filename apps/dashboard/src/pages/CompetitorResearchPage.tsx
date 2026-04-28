@@ -173,6 +173,7 @@ export default function CompetitorResearchPage() {
   const [progress, setProgress] = useState(0);
   const [results, setResults] = useState<JobResultsData | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [feishuUrl, setFeishuUrl] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<TabKey>('primary');
   const logsEndRef = useRef<HTMLDivElement>(null);
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -198,6 +199,7 @@ export default function CompetitorResearchPage() {
         setJobStatus(statusData.status);
         setLogs(statusData.logs);
         setProgress(statusData.progress ?? 0);
+        if (statusData.feishuUrl) setFeishuUrl(statusData.feishuUrl);
 
         if (statusData.status === 'completed') {
           // 拉取结果
@@ -427,11 +429,24 @@ export default function CompetitorResearchPage() {
                   {results.report.finalCount}
                 </p>
               </div>
-              <div className="ml-auto text-right">
-                <p className="text-xs text-slate-400 mb-0.5">采集时间</p>
-                <p className="text-sm text-slate-600 dark:text-slate-300">
-                  {new Date(results.report.executedAt).toLocaleString('zh-CN')}
-                </p>
+              <div className="ml-auto flex items-center gap-3">
+                <div className="text-right">
+                  <p className="text-xs text-slate-400 mb-0.5">采集时间</p>
+                  <p className="text-sm text-slate-600 dark:text-slate-300">
+                    {new Date(results.report.executedAt).toLocaleString('zh-CN')}
+                  </p>
+                </div>
+                {feishuUrl && (
+                  <a
+                    href={feishuUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium transition-colors"
+                  >
+                    <ExternalLink className="w-3.5 h-3.5" />
+                    在飞书中查看
+                  </a>
+                )}
               </div>
             </div>
           </div>

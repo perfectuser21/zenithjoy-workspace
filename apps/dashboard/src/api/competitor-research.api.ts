@@ -36,6 +36,7 @@ export interface JobStatusResult {
   logs: string[];
   progress?: number;
   error?: string;
+  feishuUrl?: string;
 }
 
 export interface JobResultsData {
