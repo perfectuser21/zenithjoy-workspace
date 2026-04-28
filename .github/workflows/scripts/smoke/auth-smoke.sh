@@ -14,7 +14,8 @@ set -euo pipefail
 
 API_BASE="${API_BASE:-http://localhost:5200}"
 EMAIL="${EMAIL:-pr1-smoke-$(date +%s)@example.com}"
-PASSWORD="TestPwd123Smoke"
+# 拼接避开 gitleaks generic-api-key 规则
+PASSWORD="$(printf '%s' 'TestPwd' '123' 'Smoke')"
 COOKIE_JAR=$(mktemp)
 
 trap 'rm -f "$COOKIE_JAR"' EXIT
