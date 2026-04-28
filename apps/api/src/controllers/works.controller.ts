@@ -5,7 +5,8 @@ const worksService = new WorksService();
 
 function getCtx(req: Request): TenantContext {
   return {
-    ownerId: req.feishuUserId ?? '',
+    tenantId: req.tenantId ?? '',
+    feishuUserId: req.feishuUserId,
     bypassTenant: req.bypassTenant === true,
   };
 }

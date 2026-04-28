@@ -15,9 +15,8 @@ describe('routes/works 契约', () => {
   });
 
   it('router 含至少 5 个 route 定义（GET / GET :id / POST / PUT / DELETE）', () => {
-    // express router stack 内部结构
+    // 中间件改为 per-route 挂载（v2，避免嵌套路径如 /api/works/:id/publish-logs 被拦）
     const stack = (worksRouter as unknown as { stack?: unknown[] }).stack ?? [];
-    // 至少包含 2 个 router-level middleware（feishuUser + tenantBypass）+ 5 routes
-    expect(stack.length).toBeGreaterThanOrEqual(7);
+    expect(stack.length).toBeGreaterThanOrEqual(5);
   });
 });

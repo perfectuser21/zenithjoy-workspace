@@ -1,5 +1,7 @@
-// apps/dashboard/src/api/agent.api.ts
 const API_BASE = import.meta.env.VITE_API_BASE_URL || '/api';
+
+// 内部租户 ID（ZenithJoy内部，license ZJ-1F636A96）
+export const INTERNAL_TENANT_ID = import.meta.env.VITE_TENANT_ID || '455a8ca9-5f63-4286-83ce-c5cca04cfd58';
 
 export interface AgentStatus {
   agentId: string;
@@ -8,10 +10,62 @@ export interface AgentStatus {
   online: boolean;
   busy: boolean;
   lastHeartbeat: number;
+  connectedAt: number;
+}
+
+export interface AgentTask {
+  id: string;
+  tenantId: string;
+  agentId: string | null;
+  agentText: string | null;
+  skill: string;
+  params: Record<string, unknown>;
+  status: 'pending' | 'running' | 'done' | 'failed';
+  result: Record<string, unknown> | null;
+  error: string | null;
+  createdAt: string;
+  startedAt: string | null;
+  finishedAt: string | null;
 }
 
 export async function getAgentStatus(): Promise<{ agents: AgentStatus[] }> {
   const r = await fetch(`${API_BASE}/agent/status`);
+  if (!r.ok) throw new Error('failed');
+  return r.json();
+}
+
+export async function listTasks(): Promise<{ tasks: AgentTask[] }> {
+  const r = await fetch(`${API_BASE}/agent/tasks?tenantId=${INTERNAL_TENANT_ID}`);
+  if (!r.ok) throw new Error('failed');
+  return r.json();
+}
+
+export async function createTask(skill: string, params: Record<string, unknown> = {}): Promise<{ task: AgentTask }> {
+  const r = await fetch(`${API_BASE}/agent/tasks`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ tenantId: INTERNAL_TENANT_ID, skill, params }),
+  });
+  if (!r.ok) throw new Error((await r.json()).error || 'failed');
+  return r.json();
+}
+
+export interface Skill {
+  id: string;
+  slug: string;
+  platform: string;
+  category: string;
+  name: string;
+  content_type: string | null;
+  is_dryrun: boolean;
+  script_path: string;
+  description: string | null;
+  active: boolean;
+  agent_statuses: Record<string, { status: string; last_error: string | null; last_check: string }>;
+}
+
+export async function listSkills(): Promise<{ skills: Skill[] }> {
+  const r = await fetch(`${API_BASE}/skills`);
   if (!r.ok) throw new Error('failed');
   return r.json();
 }
