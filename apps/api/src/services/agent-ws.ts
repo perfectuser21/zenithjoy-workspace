@@ -4,6 +4,7 @@ import { agentRegistry } from './agent-registry';
 import { AgentMessageSchema, makeMsg } from '../schemas/agent-protocol';
 import { findTenantByLicense } from './tenant-db';
 import { upsertAgent, touchAgentHeartbeat, setAgentOffline } from './agent-db';
+import { upsertAgentSkillStatuses } from './skill-db';
 import { handleTaskResult } from './task-dispatch';
 
 const WS_PATH = '/agent-ws';
@@ -67,6 +68,11 @@ export function attachAgentWS(server: HttpServer): WebSocketServer {
             capabilities: msg.payload.capabilities,
             version: msg.payload.version,
           }).catch((e) => console.warn('[agent-ws] upsertAgent failed:', e));
+          if (msg.payload.skills?.length) {
+            upsertAgentSkillStatuses(agentId, msg.payload.skills).catch(
+              (e) => console.warn('[agent-ws] upsertSkillStatuses failed:', e)
+            );
+          }
         } else if (msg.type === 'heartbeat') {
           if (agentId) {
             agentRegistry.heartbeat(agentId, msg.payload);

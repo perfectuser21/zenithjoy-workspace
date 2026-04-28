@@ -8,10 +8,19 @@ const Envelope = {
 };
 
 // === Agent → Server ===
+
+export const SkillStatusItem = z.object({
+  slug: z.string(),
+  status: z.enum(['ready', 'login_expired', 'unavailable', 'unknown']),
+  error: z.string().optional(),
+});
+export type SkillStatusItem = z.infer<typeof SkillStatusItem>;
+
 export const HelloPayload = z.object({
   agentId: z.string(),
   version: z.string(),
   capabilities: z.array(z.string()),
+  skills: z.array(SkillStatusItem).optional(),
 });
 
 export const HeartbeatPayload = z.object({
