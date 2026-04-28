@@ -38,7 +38,8 @@ features:
         skill_file: services/creator/scripts/publishers/douyin-publisher/SKILL.md
     apis: []
     tests:
-      unit: []
+      unit:
+        - services/creator/scripts/publishers/douyin-publisher/__tests__/sop-account-search.test.cjs
       integration: []
       e2e: []
       regression: []

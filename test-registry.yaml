@@ -490,3 +490,21 @@ tests:
     status: active
     product: AI员工
     note: "Agent fleet — tenants API"
+
+  # ── 抖音对标账号研究（PR #235）─────────────────────────────────────────────
+
+  - id: api-competitor-research-routes
+    path: apps/api/tests/competitor-research.test.ts
+    type: integration
+    ci: L3
+    status: active
+    product: 新媒体运营
+    note: "对标账号研究 API — POST /start / GET /status / GET /results 路由烟雾测试"
+
+  - id: api-feishu-bitable-service
+    path: apps/api/tests/services/feishu-bitable.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 新媒体运营
+    note: "飞书 Bitable 写入服务单元测试（axios mock）"

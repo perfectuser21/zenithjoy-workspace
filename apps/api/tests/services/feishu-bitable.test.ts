@@ -8,7 +8,7 @@ vi.mock('axios', () => ({
 }));
 
 import axios from 'axios';
-import { pushAccountsToBitable, COMPETITOR_BITABLE } from '../src/services/feishu-bitable';
+import { pushAccountsToBitable, COMPETITOR_BITABLE } from '../../src/services/feishu-bitable';
 
 const mockedAxios = vi.mocked(axios, true);
 
