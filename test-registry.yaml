@@ -32,7 +32,7 @@ api_suite:
   managed_by: apps/api/vitest.config.ts
   ci: L3
   type: unit
-  count: 2
+  count: 5
   note: "API 服务层单元测试，覆盖率目标 65%"
 
 # ─── 逐文件注册 ────────────────────────────────────────────────────────────────
@@ -390,6 +390,40 @@ tests:
     status: active
     product: 中台认证
     note: "Sprint B WS2 — WorksController 5 个 handler 契约"
+
+  # ── Skill Registry ────────────────────────────────────────────────────────────
+
+  - id: api-skill-db-service
+    path: apps/api/src/services/__tests__/skill-db.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: AI员工
+    note: "Skill Registry — skill-db 服务层：listSkills/upsertAgentSkillStatuses/getAgentSkillStatuses/getAllAgentSkillStatuses"
+
+  - id: api-agent-ws-service
+    path: apps/api/src/services/__tests__/agent-ws.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: AI员工
+    note: "Skill Registry — agent-ws sendToAgent 函数：agent 不存在/WS 非 OPEN/发送成功三个分支"
+
+  - id: api-skills-route
+    path: apps/api/src/routes/__tests__/skills.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: AI员工
+    note: "Skill Registry — GET /api/skills 路由：skills+agent_statuses 合并、空集、无状态兜底"
+
+  - id: dashboard-agent-api
+    path: apps/dashboard/src/api/__tests__/agent.api.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: AI员工
+    note: "Skill Registry — agent.api listSkills 客户端：正确 URL、非 200 抛异常、INTERNAL_TENANT_ID 导出"
 
   - id: api-works-route-tenant
     path: apps/api/tests/routes/works.test.ts
