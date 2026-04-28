@@ -299,7 +299,63 @@ tests:
     ci: L3
     status: active
     product: AI员工
-    note: "License v1.2 — admin POST/GET/DELETE 路由 + internalAuth 鉴权（mock DB）"
+    note: "License v1.2 — admin POST/GET/DELETE 路由 + superAdminGuard 鉴权（mock DB）"
+
+  - id: api-admin-license-me-route
+    path: apps/api/tests/admin-license-me.test.ts
+    type: integration
+    ci: L3
+    status: active
+    product: 中台认证
+    note: "Sprint A WS1 — GET /api/admin/license/me + super-admin POST/GET/DELETE 集成测试（mock DB + supertest）"
+
+  - id: api-feishu-user-middleware
+    path: apps/api/tests/middleware/feishu-user.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 中台认证
+    note: "Sprint A WS1 — feishu-user 中间件单元测试（X-Feishu-User-Id 头识别）"
+
+  - id: api-super-admin-middleware
+    path: apps/api/tests/middleware/super-admin.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 中台认证
+    note: "Sprint A WS1 — super-admin 中间件双路径鉴权单元测试（飞书白名单 + internal token fallback）"
+
+  - id: dashboard-license-page
+    path: apps/dashboard/src/pages/__tests__/LicensePage.test.tsx
+    type: unit
+    ci: L3
+    status: active
+    product: 中台认证
+    note: "Sprint A WS2 — LicensePage 客户面板（无 license 占位 / tier 渲染 / 机器列表 / 续费弹窗）"
+
+  - id: dashboard-admin-license-page
+    path: apps/dashboard/src/pages/__tests__/AdminLicensePage.test.tsx
+    type: unit
+    ci: L3
+    status: active
+    product: 中台认证
+    note: "Sprint A WS3 — AdminLicensePage super-admin 后台（创建/列表/吊销 + 非 admin 拒绝）"
+
+  - id: dashboard-license-api
+    path: apps/dashboard/src/api/__tests__/license.api.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 中台认证
+    note: "Sprint A WS2/WS3 — license.api 4 个 client 函数导出契约"
+
+  - id: dashboard-navigation-config
+    path: apps/dashboard/src/config/__tests__/navigation.config.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 中台认证
+    note: "Sprint A WS2/WS3 — navigation.config /license 与 /admin/license 入口存在性"
 
   - id: api-agent-route
     path: apps/api/tests/routes/agent.test.ts

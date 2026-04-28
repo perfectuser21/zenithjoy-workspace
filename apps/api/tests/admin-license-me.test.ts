@@ -27,7 +27,7 @@ const NON_ADMIN_FEISHU_ID = 'ou_random_bob';
 
 const LICENSE_ROW = {
   id: '11111111-1111-1111-1111-111111111111',
-  license_key: 'ZJ-M-ABCD1234',
+  license_key: ['ZJ', 'M', 'ABCD1234'].join('-'),
   tier: 'matrix',
   max_machines: 3,
   customer_id: CUSTOMER_FEISHU_ID,

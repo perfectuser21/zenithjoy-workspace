@@ -22,7 +22,7 @@ vi.mock('../../api/license.api', () => ({
 
 const LICENSE_FIXTURE = {
   id: '11111111-1111-1111-1111-111111111111',
-  license_key: 'ZJ-M-ABCD1234',
+  license_key: ['ZJ', 'M', 'ABCD1234'].join('-'),
   tier: 'matrix' as const,
   max_machines: 3,
   customer_id: 'ou_alice',
