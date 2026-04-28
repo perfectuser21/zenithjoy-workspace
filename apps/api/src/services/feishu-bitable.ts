@@ -3,8 +3,8 @@
  */
 import axios from 'axios';
 
-const FEISHU_APP_ID = process.env.FEISHU_APP_ID || '';
-const FEISHU_APP_SECRET = process.env.FEISHU_APP_SECRET || '';
+const getAppId = () => process.env.FEISHU_APP_ID || '';
+const getAppSecret = () => process.env.FEISHU_APP_SECRET || '';
 
 export const COMPETITOR_BITABLE = {
   appToken: process.env.FEISHU_COMPETITOR_APP_TOKEN || 'EK75bB3aca7YXqsXiQBch48Fnzd',
@@ -15,7 +15,7 @@ export const COMPETITOR_BITABLE = {
 async function getTenantToken(): Promise<string> {
   const resp = await axios.post<{ code: number; tenant_access_token: string }>(
     'https://open.feishu.cn/open-apis/auth/v3/tenant_access_token/internal',
-    { app_id: FEISHU_APP_ID, app_secret: FEISHU_APP_SECRET }
+    { app_id: getAppId(), app_secret: getAppSecret() }
   );
   if (resp.data.code !== 0) throw new Error(`飞书获取 Token 失败: code=${resp.data.code}`);
   return resp.data.tenant_access_token;
@@ -38,7 +38,7 @@ export async function pushAccountsToBitable(accounts: AccountForFeishu[]): Promi
   successCount: number;
   url: string;
 }> {
-  if (!FEISHU_APP_ID || !FEISHU_APP_SECRET) {
+  if (!getAppId() || !getAppSecret()) {
     throw new Error('FEISHU_APP_ID / FEISHU_APP_SECRET 未配置');
   }
   if (accounts.length === 0) return { successCount: 0, url: COMPETITOR_BITABLE.url };

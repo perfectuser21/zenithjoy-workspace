@@ -12,7 +12,6 @@
  */
 'use strict';
 
-const { chromium } = require('playwright');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
@@ -211,6 +210,8 @@ async function fetchUsersByNavigation(page, keyword, limit) {
 // ─── 主流程 ────────────────────────────────────────────────────
 
 async function main() {
+  const { chromium } = require('playwright');
+
   // ── 参数解析（命令行参数优先，其次环境变量，最后默认值）──
   const args = process.argv.slice(2);
   const topicIdx = args.indexOf('--topic');
@@ -349,3 +350,5 @@ if (require.main === module) {
       process.exit(1);
     });
 }
+
+module.exports = { parseUserItem, applySecondaryFilter, formatFollowers, SECONDARY_FILTER };
