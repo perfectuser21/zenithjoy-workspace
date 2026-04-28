@@ -10,7 +10,7 @@ on:
 jobs:
   deploy:
     name: Build & Deploy Dashboard
-    runs-on: [self-hosted, hk-vps]
+    runs-on: ubuntu-latest
 
     steps:
       - name: Checkout
@@ -44,3 +44,20 @@ jobs:
         run: |
           docker restart autopilot-prod
           echo "✅ autopilot-prod restarted"
+
+  on_deploy_failure:
+    name: Deploy Failure — Brain P0 Alert
+    runs-on: ubuntu-latest
+    needs: [deploy]
+    if: ${{ failure() && secrets.DEPLOY_TOKEN != '' }}
+    steps:
+      - name: Create Brain P0 task
+        run: |
+          curl -sf -X POST http://38.23.47.81:5221/api/brain/tasks \
+            -H "Content-Type: application/json" \
+            -d '{
+              "title": "ZenithJoy 部署失败",
+              "priority": "P0",
+              "task_type": "dev",
+              "description": "deploy.yml 失败，请人工介入"
+            }' || echo "Brain API 不可达，跳过告警"
