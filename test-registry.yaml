@@ -552,3 +552,11 @@ tests:
     status: active
     product: 新媒体运营
     note: "飞书 Bitable 写入服务单元测试（axios mock）"
+  - id: api-better-auth-config
+    path: apps/api/tests/auth.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 中台认证
+    note: "Better-auth 配置契约（PR-1）— 验证 auth 实例 + signUp/signIn/getSession/forgetPassword 方法导出"
+>>>>>>> c5a288f ([CONFIG] feat(auth-pr1): 接入 better-auth 邮箱+密码登录基础)

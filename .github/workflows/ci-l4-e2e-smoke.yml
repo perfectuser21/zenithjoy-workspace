@@ -73,6 +73,9 @@ jobs:
       NODE_ENV: test
       # Sprint B 多租户 smoke 用：API 识别 super-admin
       ADMIN_FEISHU_OPENIDS: ou_admin_smoke_999
+      # PR-1 better-auth 邮箱+密码登录
+      BETTER_AUTH_SECRET: ci-only-secret-32-chars-min-not-prod-123
+      BETTER_AUTH_URL: http://localhost:5200
 
     steps:
       - uses: actions/checkout@v4
@@ -183,6 +186,13 @@ jobs:
         run: |
           chmod +x .github/workflows/scripts/smoke/multi-tenant-smoke.sh
           bash .github/workflows/scripts/smoke/multi-tenant-smoke.sh
+
+      - name: Smoke — Better-auth email+password (PR-1)
+        env:
+          API_BASE: http://localhost:5200
+        run: |
+          chmod +x .github/workflows/scripts/smoke/auth-smoke.sh
+          bash .github/workflows/scripts/smoke/auth-smoke.sh
 
       - name: Verify pipeline_runs.topic_id is UUID + FK
         env:
