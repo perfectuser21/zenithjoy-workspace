@@ -4,6 +4,7 @@ import { agentRegistry } from './agent-registry';
 import { AgentMessageSchema, makeMsg } from '../schemas/agent-protocol';
 import { findTenantByLicense } from './tenant-db';
 import { upsertAgent, touchAgentHeartbeat, setAgentOffline } from './agent-db';
+import { handleTaskResult } from './task-dispatch';
 
 const WS_PATH = '/agent-ws';
 
@@ -71,8 +72,15 @@ export function attachAgentWS(server: HttpServer): WebSocketServer {
             agentRegistry.heartbeat(agentId, msg.payload);
             touchAgentHeartbeat(agentId).catch((e) => console.warn('[agent-ws] heartbeat DB failed:', e));
           }
-        } else if (msg.type === 'task_progress' || msg.type === 'task_result') {
+        } else if (msg.type === 'task_progress') {
           agentRegistry.emit(msg.type, { agentId, ...msg });
+        } else if (msg.type === 'task_result') {
+          agentRegistry.emit(msg.type, { agentId, ...msg });
+          if (msg.taskId) {
+            handleTaskResult(msg.taskId, msg.payload).catch(
+              (e) => console.warn('[agent-ws] handleTaskResult failed:', e)
+            );
+          }
         }
       } catch (err) {
         console.warn('[agent-ws] invalid message:', err);

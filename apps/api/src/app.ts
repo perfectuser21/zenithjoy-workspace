@@ -14,6 +14,8 @@ import pipelinesWorkerRouter from './routes/pipelines-worker';
 import competitorResearchRouter from './routes/competitor-research';
 import { agentRouter } from './routes/agent';
 import { adminLicenseRouter } from './routes/admin-license';
+import { tasksRouter } from './routes/tasks';
+import { tenantsRouter } from './routes/tenants';
 import { errorHandler, notFoundHandler } from './middleware/error';
 
 const app = express();
@@ -41,8 +43,11 @@ app.use('/api/topics', topicsRouter);
 app.use('/api/pacing-config', pacingConfigRouter);
 app.use('/api/pipelines', pipelinesWorkerRouter);
 app.use('/api/competitor-research', competitorResearchRouter);
+// /api/agent/tasks must be registered before /api/agent to avoid route conflict
+app.use('/api/agent/tasks', tasksRouter);
 app.use('/api/agent', agentRouter);
 app.use('/api/admin/license', adminLicenseRouter);
+app.use('/api/tenants', tenantsRouter);
 
 // Error handling
 app.use(notFoundHandler);
