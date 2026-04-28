@@ -1,0 +1,9 @@
+# gitleaks 误报豁免清单
+# 格式：<commit-sha>:<file>:<rule-id>:<line>
+#
+# 规则：仅当确认是测试 fixture / 公开 demo / 配置占位符时才允许豁免，
+# 真凭据必须立刻 rotate 后用 BFG/git-filter-repo 清历史。
+
+# License v1.2 测试中的 HMAC fixture（非真 secret）
+9a1b0e4d920e0c96dd7a48b68ab77fb847bc8425:apps/api/tests/services/license.service.test.ts:generic-api-key:61
+9a1b0e4d920e0c96dd7a48b68ab77fb847bc8425:apps/api/tests/routes/agent.test.ts:generic-api-key:48
