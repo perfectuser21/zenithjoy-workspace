@@ -3,6 +3,7 @@ import { WebSocketServer, WebSocket } from 'ws';
 import { agentRegistry } from './agent-registry';
 import { AgentMessageSchema, makeMsg } from '../schemas/agent-protocol';
 import { findTenantByLicense } from './tenant-db';
+import { upsertAgent, touchAgentHeartbeat, setAgentOffline } from './agent-db';
 
 const WS_PATH = '/agent-ws';
 
@@ -59,8 +60,17 @@ export function attachAgentWS(server: HttpServer): WebSocketServer {
             version: msg.payload.version,
             tenantId,
           }, ws);
+          upsertAgent({
+            tenantId,
+            agentId,
+            capabilities: msg.payload.capabilities,
+            version: msg.payload.version,
+          }).catch((e) => console.warn('[agent-ws] upsertAgent failed:', e));
         } else if (msg.type === 'heartbeat') {
-          if (agentId) agentRegistry.heartbeat(agentId, msg.payload);
+          if (agentId) {
+            agentRegistry.heartbeat(agentId, msg.payload);
+            touchAgentHeartbeat(agentId).catch((e) => console.warn('[agent-ws] heartbeat DB failed:', e));
+          }
         } else if (msg.type === 'task_progress' || msg.type === 'task_result') {
           agentRegistry.emit(msg.type, { agentId, ...msg });
         }
@@ -70,7 +80,10 @@ export function attachAgentWS(server: HttpServer): WebSocketServer {
     });
 
     ws.on('close', () => {
-      if (agentId) agentRegistry.unregister(agentId);
+      if (agentId) {
+        agentRegistry.unregister(agentId);
+        setAgentOffline(agentId).catch((e) => console.warn('[agent-ws] setAgentOffline failed:', e));
+      }
     });
   });
 
