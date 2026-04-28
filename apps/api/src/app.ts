@@ -13,6 +13,7 @@ import pacingConfigRouter from './routes/pacing-config';
 import pipelinesWorkerRouter from './routes/pipelines-worker';
 import competitorResearchRouter from './routes/competitor-research';
 import { agentRouter } from './routes/agent';
+import { adminLicenseRouter } from './routes/admin-license';
 import { errorHandler, notFoundHandler } from './middleware/error';
 
 const app = express();
@@ -41,6 +42,7 @@ app.use('/api/pacing-config', pacingConfigRouter);
 app.use('/api/pipelines', pipelinesWorkerRouter);
 app.use('/api/competitor-research', competitorResearchRouter);
 app.use('/api/agent', agentRouter);
+app.use('/api/admin/license', adminLicenseRouter);
 
 // Error handling
 app.use(notFoundHandler);
