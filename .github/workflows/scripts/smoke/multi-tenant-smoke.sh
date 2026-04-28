@@ -24,7 +24,7 @@ echo "==> [1/6] A 创建作品"
 RESP_A_POST=$(curl -fsS -X POST \
   -H "Content-Type: application/json" \
   -H "X-Feishu-User-Id: ${ALICE_FEISHU_ID}" \
-  -d '{"title":"Alice MTSmoke 作品","content_type":"article","body":"alice smoke"}' \
+  -d '{"title":"Alice MTSmoke 作品","content_type":"video","body":"alice smoke"}' \
   "${API_BASE}/api/works")
 echo "$RESP_A_POST" | head -c 400
 A_WORK_ID=$(echo "$RESP_A_POST" | sed -E 's/.*"id":"([^"]+)".*/\1/' | head -c 36)
@@ -36,7 +36,7 @@ echo "==> [2/6] B 创建作品"
 RESP_B_POST=$(curl -fsS -X POST \
   -H "Content-Type: application/json" \
   -H "X-Feishu-User-Id: ${BOB_FEISHU_ID}" \
-  -d '{"title":"Bob MTSmoke 作品","content_type":"article","body":"bob smoke"}' \
+  -d '{"title":"Bob MTSmoke 作品","content_type":"video","body":"bob smoke"}' \
   "${API_BASE}/api/works")
 echo "$RESP_B_POST" | head -c 400
 B_WORK_ID=$(echo "$RESP_B_POST" | sed -E 's/.*"id":"([^"]+)".*/\1/' | head -c 36)
