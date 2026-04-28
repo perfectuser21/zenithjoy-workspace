@@ -30,10 +30,11 @@ app.use(
     credentials: true,
   })
 );
-// 单元测试环境跳过 auth 路由挂载：toNodeHandler(auth) 会立即 'handler' in auth 探测，
-// 触发 Proxy lazy-init 然而单元测试 mock 了 pg.Pool → BetterAuthError. 真实 smoke /
-// dev / prod 不受影响（NODE_ENV ≠ test）。
-if (process.env.NODE_ENV !== 'test') {
+// vitest 单元测试跳过 auth 路由挂载：toNodeHandler(auth) 会立即 'handler' in auth 探测，
+// 触发 Proxy lazy-init 然而单元测试 mock 了 pg.Pool → BetterAuthError.
+// 用 VITEST env（vitest 自动设置 'true'）而不是 NODE_ENV（CI smoke 也设 test）。
+// 真实 smoke / dev / prod 都正常 mount auth 路由。
+if (!process.env.VITEST) {
   app.all('/api/auth/*', toNodeHandler(auth));
 }
 
