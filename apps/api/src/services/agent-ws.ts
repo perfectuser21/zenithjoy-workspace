@@ -2,31 +2,50 @@ import type { Server as HttpServer } from 'http';
 import { WebSocketServer, WebSocket } from 'ws';
 import { agentRegistry } from './agent-registry';
 import { AgentMessageSchema, makeMsg } from '../schemas/agent-protocol';
+import { findTenantByLicense } from './tenant-db';
 
-const AGENT_TOKEN = process.env.AGENT_TOKEN || '';
 const WS_PATH = '/agent-ws';
 
 export function attachAgentWS(server: HttpServer): WebSocketServer {
   const wss = new WebSocketServer({ noServer: true });
 
-  server.on('upgrade', (req, socket, head) => {
+  server.on('upgrade', async (req, socket, head) => {
     if (!req.url || !req.url.startsWith(WS_PATH)) return;
 
     const url = new URL(req.url, 'http://x');
-    const token = url.searchParams.get('token') || (req.headers['x-agent-token'] as string);
-    if (!AGENT_TOKEN || token !== AGENT_TOKEN) {
+    const token = url.searchParams.get('token') || (req.headers['x-agent-token'] as string) || '';
+
+    if (!token) {
+      socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n');
+      socket.destroy();
+      return;
+    }
+
+    let tenant: Awaited<ReturnType<typeof findTenantByLicense>>;
+    try {
+      tenant = await findTenantByLicense(token);
+    } catch (err) {
+      console.warn('[agent-ws] DB error during license check:', err);
+      socket.write('HTTP/1.1 503 Service Unavailable\r\n\r\n');
+      socket.destroy();
+      return;
+    }
+
+    if (!tenant) {
       socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n');
       socket.destroy();
       return;
     }
 
     wss.handleUpgrade(req, socket, head, (ws) => {
+      (ws as any).__tenantId = tenant!.id;
       wss.emit('connection', ws, req);
     });
   });
 
   wss.on('connection', (ws: WebSocket) => {
     let agentId: string | null = null;
+    const tenantId: string = (ws as any).__tenantId || '';
 
     ws.on('message', (raw) => {
       try {
@@ -38,11 +57,11 @@ export function attachAgentWS(server: HttpServer): WebSocketServer {
           agentRegistry.register(agentId, {
             capabilities: msg.payload.capabilities,
             version: msg.payload.version,
+            tenantId,
           }, ws);
         } else if (msg.type === 'heartbeat') {
           if (agentId) agentRegistry.heartbeat(agentId, msg.payload);
         } else if (msg.type === 'task_progress' || msg.type === 'task_result') {
-          // 转发给 dashboard 订阅者（v0.1 用 EventEmitter）
           agentRegistry.emit(msg.type, { agentId, ...msg });
         }
       } catch (err) {
