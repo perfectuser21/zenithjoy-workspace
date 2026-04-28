@@ -52,8 +52,25 @@ describe('GET /api/agent/tasks', () => {
 });
 
 describe('GET /api/agent/tasks/:id', () => {
-  it('returns 404 when task not found', async () => {
+  it('returns 400 without tenantId query param', async () => {
     const res = await request(app).get('/api/agent/tasks/no-such-id');
+    expect(res.status).toBe(400);
+  });
+
+  it('returns 404 when task not found', async () => {
+    // getTask mock returns null → 404
+    const res = await request(app).get('/api/agent/tasks/no-such-id?tenantId=tid');
     expect(res.status).toBe(404);
+  });
+
+  it('returns 403 when tenantId does not match task owner', async () => {
+    const { getTask } = await import('../src/services/task-db');
+    (getTask as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      id: 'task-1', tenantId: 'tid-owner', skill: 'wechat_draft', params: {},
+      status: 'pending', agentId: null, agentText: null,
+      result: null, error: null, createdAt: new Date(), startedAt: null, finishedAt: null,
+    });
+    const res = await request(app).get('/api/agent/tasks/task-1?tenantId=tid-other');
+    expect(res.status).toBe(403);
   });
 });

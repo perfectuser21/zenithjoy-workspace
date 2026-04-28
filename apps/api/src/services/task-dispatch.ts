@@ -12,7 +12,7 @@ const pendingTasks = new Map<string, string>();
 export async function dispatchTask(task: Task): Promise<void> {
   // Map skill to platform capability: 'wechat_draft' → 'wechat'
   const capability = task.skill.split('_')[0];
-  const agent = agentRegistry.pickFor(capability);
+  const agent = agentRegistry.pickFor(capability, task.tenantId);
   if (!agent) {
     await failTask(task.id, `no agent online with capability: ${capability}`);
     return;

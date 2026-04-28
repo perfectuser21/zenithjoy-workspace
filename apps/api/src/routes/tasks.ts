@@ -31,10 +31,16 @@ tasksRouter.get('/', async (req, res, next) => {
   }
 });
 
+// Require tenantId to prevent IDOR across tenants
 tasksRouter.get('/:id', async (req, res, next) => {
   try {
+    const { tenantId } = req.query;
+    if (!tenantId || typeof tenantId !== 'string') {
+      return res.status(400).json({ error: 'tenantId query param required' });
+    }
     const task = await getTask(req.params.id);
     if (!task) return res.status(404).json({ error: 'not found' });
+    if (task.tenantId !== tenantId) return res.status(403).json({ error: 'forbidden' });
     return res.json({ task });
   } catch (err) {
     next(err);

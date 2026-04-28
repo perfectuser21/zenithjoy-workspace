@@ -1,13 +1,20 @@
 import { Router } from 'express';
 import { randomUUID } from 'crypto';
 import pool from '../db/connection';
+import { internalAuth } from '../middleware/internal-auth';
 
 export const tenantsRouter = Router();
+
+// All tenant management endpoints require internal auth
+tenantsRouter.use(internalAuth);
 
 tenantsRouter.post('/', async (req, res, next) => {
   try {
     const { name, plan = 'free' } = req.body;
     if (!name) return res.status(400).json({ error: 'name is required' });
+    if (!['free', 'pro', 'enterprise'].includes(plan)) {
+      return res.status(400).json({ error: 'plan must be free, pro, or enterprise' });
+    }
     const licenseKey = `ZJ-${randomUUID().replace(/-/g, '').slice(0, 8).toUpperCase()}`;
     const { rows } = await pool.query(
       `INSERT INTO zenithjoy.tenants (name, license_key, plan)
@@ -19,10 +26,11 @@ tenantsRouter.post('/', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+// Return feishu config without app_secret (write-only credential)
 tenantsRouter.get('/:id/feishu', async (req, res, next) => {
   try {
     const { rows } = await pool.query(
-      `SELECT feishu_app_id, feishu_app_secret, feishu_bitable, feishu_table_crm, feishu_table_log
+      `SELECT feishu_app_id, feishu_bitable, feishu_table_crm, feishu_table_log
        FROM zenithjoy.tenants WHERE id = $1`,
       [req.params.id]
     );
