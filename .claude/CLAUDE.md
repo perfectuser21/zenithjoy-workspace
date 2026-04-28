@@ -147,17 +147,51 @@ DELETE /api/resources/:id # 删除
 - 响应式设计优先
 - 支持暗色模式
 
+## E2E-First 开发规则（CRITICAL）
+
+**核心原则：先定义"完成"长什么样子，再写实现。**
+
+### ZenithJoy 的 E2E 分层
+
+| 功能类型 | E2E 形式 | 存放位置 |
+|---------|---------|--------|
+| API 新端点 | curl smoke test | `.github/workflows/scripts/smoke/<feature>-smoke.sh` |
+| Dashboard 新页面/交互 | Playwright test | `apps/dashboard/e2e/<feature>.spec.ts` |
+| Worker 新行为 | curl + API 验证 smoke | `.github/workflows/scripts/smoke/<feature>-smoke.sh` |
+| Python 服务新逻辑 | pytest E2E | `services/<name>/tests/e2e/test_<feature>.py` |
+
+### 开发顺序（强制，不得跳过）
+
+```
+commit-1：写失败的 E2E/smoke test（定义"什么叫完成"）
+commit-2：写实现，让 E2E 通过，同时包含 unit tests
+```
+
+**第一个 commit 必须是 E2E/smoke，不是 unit test，不是实现。**
+违反顺序 → CI `lint-tdd-commit-order` 拦截 → 无法合并。
+
+### 什么算合格的 E2E/smoke
+
+- smoke.sh：含 `curl`/`psql`/`node` 真实链路调用，≥5 行实质内容，不是 `exit 0` 占位
+- Playwright：`.spec.ts`，测真实浏览器行为，不是 mock
+- pytest E2E：调真实 API endpoint，不是 mock
+
+### 违反会怎样
+
+- `lint-feature-has-smoke`：feat: PR 改了 `apps/*/src/` 但没有 smoke.sh → CI 失败
+- `lint-tdd-commit-order`：src 文件比 test 文件先出现在 commit 历史 → CI 失败
+
 ## 测试要求
 
-### 测试类型
-1. **单元测试**: 测试独立函数和组件
-2. **集成测试**: 测试模块间交互
-3. **E2E 测试**: 测试完整用户流程
+### 测试层级（按写作顺序）
+1. **E2E / smoke test**：先写，定义验收条件
+2. **集成测试**：模块边界验证
+3. **单元测试**：函数级别，与实现同步写
 
 ### 测试覆盖率
 - 目标覆盖率: 80%
 - 关键业务逻辑: 100%
-- 新功能必须包含测试
+- 新功能必须先有 E2E，再有实现
 
 ## 部署流程
 
