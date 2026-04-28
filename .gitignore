@@ -170,3 +170,10 @@ ghostty
 # 发布器临时调试脚本
 services/creator/scripts/publishers/sph-*.cjs
 services/creator/scripts/publishers/sph-*.js
+
+# v1.0 Agent build artifacts (太大，不进 git)
+services/agent/zenithjoy-agent.exe
+services/agent/zenithjoy-agent.exe.gz
+services/agent/dist/
+services/agent/publishers/*/node_modules/
+services/agent/publishers/node_modules/

@@ -1,18 +1,39 @@
 {
   "name": "@zenithjoy/agent",
-  "version": "0.1.0",
-  "type": "module",
-  "main": "src/index.ts",
+  "version": "1.0.0",
+  "description": "ZenithJoy Agent — 后台进程，把 Windows 主机变成 ZenithJoy 中台的发布端",
+  "main": "dist/index.js",
+  "bin": "dist/index.js",
   "scripts": {
-    "start": "tsx src/index.ts"
+    "start": "tsx src/index.ts",
+    "build": "esbuild src/index.ts --bundle --platform=node --target=node18 --format=cjs --outfile=dist/index.js --external:systray2",
+    "package:win": "npm run build && pkg . --targets node18-win-x64 --output zenithjoy-agent.exe",
+    "package:mac": "npm run build && pkg . --targets node18-macos-x64 --output zenithjoy-agent-mac",
+    "package:linux": "npm run build && pkg . --targets node18-linux-x64 --output zenithjoy-agent-linux"
   },
   "dependencies": {
     "ws": "^8.18.0",
-    "tsx": "^4.20.0"
+    "systray2": "^2.1.4"
   },
   "devDependencies": {
-    "@types/ws": "^8.5.0",
     "@types/node": "^20.0.0",
+    "@types/ws": "^8.5.0",
+    "esbuild": "^0.21.0",
+    "pkg": "^5.8.1",
+    "tsx": "^4.20.0",
     "typescript": "^5.0.0"
+  },
+  "pkg": {
+    "//": "publishers/ 不嵌入 .exe — 它们靠 spawn(node, script) 在客户机外部 runtime 执行。客户机需自装 Node + Playwright。",
+    "scripts": [],
+    "assets": [
+      "build/tray-icon.png",
+      "build/icon.png",
+      "node_modules/systray2/traybin/**/*"
+    ],
+    "targets": [
+      "node18-win-x64"
+    ],
+    "outputPath": "dist-pkg"
   }
 }
