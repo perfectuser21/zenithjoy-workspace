@@ -3,6 +3,7 @@ import { spawn } from 'child_process';
 import * as path from 'path';
 import * as fs from 'fs';
 import { randomUUID } from 'crypto';
+import { pushAccountsToBitable } from '../services/feishu-bitable';
 
 const router = Router();
 
@@ -14,6 +15,7 @@ interface Job {
   progress: number;
   resultFile?: string;
   error?: string;
+  feishuUrl?: string;
   createdAt: string;
 }
 
@@ -85,15 +87,47 @@ router.post('/start', (req: Request, res: Response) => {
       chunk.toString().split('\n').forEach(addLog);
     });
 
-    proc.on('close', (code) => {
-      if (code === 0) {
-        job.status = 'completed';
-        job.progress = 100;
-        job.logs.push(`[${new Date().toISOString()}] 采集完成`);
-      } else {
+    proc.on('close', async (code) => {
+      if (code !== 0) {
         job.status = 'failed';
         job.error = `进程退出码 ${code}`;
         job.logs.push(`[${new Date().toISOString()}] 采集失败，退出码 ${code}`);
+        return;
+      }
+
+      job.status = 'completed';
+      job.progress = 100;
+      job.logs.push(`[${new Date().toISOString()}] 采集完成`);
+
+      // ── 推送到飞书多维表格 ──
+      if (job.resultFile) {
+        try {
+          const raw = fs.readFileSync(job.resultFile, 'utf8');
+          const data = JSON.parse(raw) as {
+            primaryScreening: Array<{
+              creatorName: string; douyinId: string; followers: number;
+              bio: string; profileUrl: string; round: number; keyword: string;
+            }>;
+            secondaryScreening: Array<{ profileUrl: string }>;
+            report: { topic: string; executedAt: string };
+          };
+
+          const secondaryUrls = new Set(data.secondaryScreening.map(a => a.profileUrl));
+          const accounts = data.primaryScreening.map(acc => ({
+            ...acc,
+            topic: data.report.topic,
+            passedSecondary: secondaryUrls.has(acc.profileUrl),
+            executedAt: data.report.executedAt,
+          }));
+
+          job.logs.push(`[飞书] 正在写入 ${accounts.length} 条记录...`);
+          const result = await pushAccountsToBitable(accounts);
+          job.logs.push(`[飞书] 写入完成 ${result.successCount} 条 → ${result.url}`);
+          job.feishuUrl = result.url;
+        } catch (e) {
+          const err = e as Error;
+          job.logs.push(`[飞书] 写入失败：${err.message}`);
+        }
       }
     });
 
@@ -119,6 +153,7 @@ router.get('/status/:jobId', (req: Request, res: Response) => {
     logs: job.logs,
     progress: job.progress,
     error: job.error,
+    feishuUrl: job.feishuUrl,
   });
 });
 
