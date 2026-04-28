@@ -9,6 +9,9 @@ vi.mock('../src/db/connection', () => ({
 
 const mockQuery = pool.query as ReturnType<typeof vi.fn>;
 
+// Sprint B 多租户：所有 works 端点要求 X-Feishu-User-Id；fixture 需 owner_id 匹配
+const TEST_USER = 'ou_test_user_001';
+
 const WORK = {
   id: 'work-uuid-1',
   title: 'Test Work 1',
@@ -17,6 +20,7 @@ const WORK = {
   body: '# Test content',
   custom_fields: { tags: ['test'] },
   archived_at: null,   // DB 实际列名，非 archived
+  owner_id: TEST_USER,
   created_at: '2026-01-01T00:00:00Z',
   updated_at: '2026-01-01T00:00:00Z',
 };
@@ -32,6 +36,7 @@ describe('Works API', () => {
 
       const response = await request(app)
         .post('/api/works')
+        .set('X-Feishu-User-Id', TEST_USER)
         .send({
           title: 'Test Work 1',
           content_type: 'article',
@@ -49,6 +54,7 @@ describe('Works API', () => {
     it('should return 400 for missing required fields', async () => {
       const response = await request(app)
         .post('/api/works')
+        .set('X-Feishu-User-Id', TEST_USER)
         .send({ body: 'Missing title' });
 
       expect(response.status).toBe(400);
@@ -58,6 +64,7 @@ describe('Works API', () => {
     it('should return 400 for invalid content_type', async () => {
       const response = await request(app)
         .post('/api/works')
+        .set('X-Feishu-User-Id', TEST_USER)
         .send({ title: 'Test Work', content_type: 'invalid_type' });
 
       expect(response.status).toBe(400);
@@ -71,7 +78,9 @@ describe('Works API', () => {
         .mockResolvedValueOnce({ rows: [{ total: '1' }] })
         .mockResolvedValueOnce({ rows: [WORK] });
 
-      const response = await request(app).get('/api/works');
+      const response = await request(app)
+        .get('/api/works')
+        .set('X-Feishu-User-Id', TEST_USER);
 
       expect(response.status).toBe(200);
       expect(response.body).toHaveProperty('data');
@@ -86,7 +95,9 @@ describe('Works API', () => {
         .mockResolvedValueOnce({ rows: [{ total: '0' }] })
         .mockResolvedValueOnce({ rows: [] });
 
-      await request(app).get('/api/works');
+      await request(app)
+        .get('/api/works')
+        .set('X-Feishu-User-Id', TEST_USER);
 
       // 取第一次 pool.query 调用的 SQL（COUNT 查询）
       const countSql: string = mockQuery.mock.calls[0][0];
@@ -99,7 +110,9 @@ describe('Works API', () => {
         .mockResolvedValueOnce({ rows: [{ total: '1' }] })
         .mockResolvedValueOnce({ rows: [WORK] });
 
-      const response = await request(app).get('/api/works?type=article');
+      const response = await request(app)
+        .get('/api/works?type=article')
+        .set('X-Feishu-User-Id', TEST_USER);
 
       expect(response.status).toBe(200);
       response.body.data.forEach((work: any) => {
@@ -112,7 +125,9 @@ describe('Works API', () => {
         .mockResolvedValueOnce({ rows: [{ total: '0' }] })
         .mockResolvedValueOnce({ rows: [] });
 
-      const response = await request(app).get('/api/works?limit=5&offset=0');
+      const response = await request(app)
+        .get('/api/works?limit=5&offset=0')
+        .set('X-Feishu-User-Id', TEST_USER);
 
       expect(response.status).toBe(200);
       expect(response.body.limit).toBe(5);
@@ -124,7 +139,9 @@ describe('Works API', () => {
     it('should get a single work by id', async () => {
       mockQuery.mockResolvedValueOnce({ rows: [WORK] });
 
-      const response = await request(app).get(`/api/works/${WORK.id}`);
+      const response = await request(app)
+        .get(`/api/works/${WORK.id}`)
+        .set('X-Feishu-User-Id', TEST_USER);
 
       expect(response.status).toBe(200);
       expect(response.body.id).toBe(WORK.id);
@@ -135,7 +152,9 @@ describe('Works API', () => {
       mockQuery.mockResolvedValueOnce({ rows: [] });
 
       const fakeId = '00000000-0000-0000-0000-000000000000';
-      const response = await request(app).get(`/api/works/${fakeId}`);
+      const response = await request(app)
+        .get(`/api/works/${fakeId}`)
+        .set('X-Feishu-User-Id', TEST_USER);
 
       expect(response.status).toBe(404);
       expect(response.body.error.code).toBe('NOT_FOUND');
@@ -151,6 +170,7 @@ describe('Works API', () => {
 
       const response = await request(app)
         .put(`/api/works/${WORK.id}`)
+        .set('X-Feishu-User-Id', TEST_USER)
         .send({ title: 'Updated Test Work 1', status: 'published' });
 
       expect(response.status).toBe(200);
@@ -164,6 +184,7 @@ describe('Works API', () => {
       const fakeId = '00000000-0000-0000-0000-000000000000';
       const response = await request(app)
         .put(`/api/works/${fakeId}`)
+        .set('X-Feishu-User-Id', TEST_USER)
         .send({ title: 'Updated' });
 
       expect(response.status).toBe(404);
@@ -176,7 +197,9 @@ describe('Works API', () => {
         .mockResolvedValueOnce({ rows: [WORK] })  // getWorkById
         .mockResolvedValueOnce({ rows: [] });     // DELETE
 
-      const response = await request(app).delete(`/api/works/${WORK.id}`);
+      const response = await request(app)
+        .delete(`/api/works/${WORK.id}`)
+        .set('X-Feishu-User-Id', TEST_USER);
 
       expect(response.status).toBe(200);
       expect(response.body.success).toBe(true);
@@ -186,7 +209,9 @@ describe('Works API', () => {
       mockQuery.mockResolvedValueOnce({ rows: [] }); // getWorkById returns empty
 
       const fakeId = '00000000-0000-0000-0000-000000000000';
-      const response = await request(app).delete(`/api/works/${fakeId}`);
+      const response = await request(app)
+        .delete(`/api/works/${fakeId}`)
+        .set('X-Feishu-User-Id', TEST_USER);
 
       expect(response.status).toBe(404);
     });

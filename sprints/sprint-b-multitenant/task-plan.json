@@ -1,0 +1,65 @@
+{
+  "initiative_id": "pending",
+  "tasks": [
+    {
+      "task_id": "ws1",
+      "title": "DB migration：works.owner_id TEXT + 索引 + works.service.ts ownerId 参数化",
+      "scope": "新增 migration 加 owner_id TEXT nullable + idx_works_owner；works.service.ts 5 个方法加 ownerId 参数（getWorks 加过滤、createWork 设值、getWorkById/updateWork/deleteWork 校验）；保留 owner_id IS NULL 默认不返回。",
+      "dod": [
+        "[ARTIFACT] apps/api/db/migrations/20260428_120500_add_works_owner_id.sql 存在含 ALTER TABLE 与 CREATE INDEX",
+        "[ARTIFACT] works.service.ts 5 个方法签名含 ownerId 参数",
+        "[BEHAVIOR] getWorks ownerId='alice' 时只返回 owner_id='alice' 的行（mock DB 验证 SQL 含 owner_id = $）",
+        "[BEHAVIOR] createWork 自动 SET owner_id = ownerId 参数",
+        "[BEHAVIOR] getWorkById 当 owner_id 不匹配时抛 NOT_FOUND（404）"
+      ],
+      "files": [
+        "apps/api/db/migrations/20260428_120500_add_works_owner_id.sql",
+        "apps/api/src/services/works.service.ts"
+      ],
+      "depends_on": [],
+      "complexity": "M",
+      "estimated_minutes": 50
+    },
+    {
+      "task_id": "ws2",
+      "title": "中间件 tenant-bypass + works 路由 / 控制器接 feishuUser",
+      "scope": "新增 apps/api/src/middleware/tenant-bypass.ts（识别 super-admin + X-Bypass-Tenant: true → 设 req.bypassTenant = true）；works.ts router 添加 feishuUser + tenantBypass 中间件；works.controller.ts 从 req 取 feishuUserId 与 bypassTenant 传给 service。",
+      "dod": [
+        "[ARTIFACT] apps/api/src/middleware/tenant-bypass.ts 存在并 export tenantBypass",
+        "[ARTIFACT] works.ts router 引用 feishuUser",
+        "[ARTIFACT] works.controller.ts 引用 req.feishuUserId",
+        "[BEHAVIOR] 未登录 GET /api/works 返回 401",
+        "[BEHAVIOR] 客户 A 登录 GET /api/works 只返回 A 的作品",
+        "[BEHAVIOR] 客户 A POST /api/works 创建的作品 owner_id = A 的飞书 ID",
+        "[BEHAVIOR] 客户 A GET /api/works/:id 拿别人的 work 返回 404",
+        "[BEHAVIOR] super-admin GET /api/works X-Bypass-Tenant: true 返回全部作品"
+      ],
+      "files": [
+        "apps/api/src/middleware/tenant-bypass.ts",
+        "apps/api/src/routes/works.ts",
+        "apps/api/src/controllers/works.controller.ts"
+      ],
+      "depends_on": ["ws1"],
+      "complexity": "M",
+      "estimated_minutes": 45
+    },
+    {
+      "task_id": "ws3",
+      "title": "Dashboard works.api.ts 注入 X-Feishu-User-Id + multi-tenant smoke",
+      "scope": "在 apps/dashboard/src/api/works.api.ts 自动注入 X-Feishu-User-Id 头（cookie/localStorage 取，参考 Sprint A license.api.ts 模式）；新建 .github/workflows/scripts/smoke/multi-tenant-smoke.sh：A POST works / B POST works / A GET 1 条 / B GET 0 条 A / bypass GET ≥ 2。",
+      "dod": [
+        "[ARTIFACT] apps/dashboard/src/api/works.api.ts 含 X-Feishu-User-Id 注入逻辑（cookie 或 localStorage 提取 user.feishu_user_id || user.id）",
+        "[ARTIFACT] .github/workflows/scripts/smoke/multi-tenant-smoke.sh 存在 + shebang + set -euo pipefail",
+        "[ARTIFACT] multi-tenant-smoke.sh 含至少 6 个 curl 调用（A POST / A GET / B POST / B GET / cross-tenant GET / bypass GET）",
+        "[ARTIFACT] multi-tenant-smoke.sh 验证 A 的 GET 不返回 B 的作品（grep response 不含 B 的 title）"
+      ],
+      "files": [
+        "apps/dashboard/src/api/works.api.ts",
+        ".github/workflows/scripts/smoke/multi-tenant-smoke.sh"
+      ],
+      "depends_on": ["ws1", "ws2"],
+      "complexity": "S",
+      "estimated_minutes": 35
+    }
+  ]
+}

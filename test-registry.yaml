@@ -357,6 +357,56 @@ tests:
     product: 中台认证
     note: "Sprint A WS2/WS3 — navigation.config /license 与 /admin/license 入口存在性"
 
+  # ── Sprint B 多租户隔离 ───────────────────────────────────────────────────────
+
+  - id: api-works-multitenant
+    path: apps/api/tests/works-multitenant.test.ts
+    type: integration
+    ci: L3
+    status: active
+    product: 中台认证
+    note: "Sprint B WS1+WS2 — works owner_id 隔离集成测试（401/A 看 A 的/POST 自动 owner_id/防伪造/跨租户 404/super-admin bypass）"
+
+  - id: api-tenant-bypass-middleware
+    path: apps/api/tests/middleware/tenant-bypass.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 中台认证
+    note: "Sprint B WS2 — tenant-bypass 中间件单元测试（admin+bypass / admin 缺 bypass / 非 admin 防滥用）"
+
+  - id: api-works-service-tenant
+    path: apps/api/tests/services/works.service.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 中台认证
+    note: "Sprint B WS1 — WorksService TenantContext 契约（5 方法签名 + 类型）"
+
+  - id: api-works-controller-tenant
+    path: apps/api/tests/controllers/works.controller.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 中台认证
+    note: "Sprint B WS2 — WorksController 5 个 handler 契约"
+
+  - id: api-works-route-tenant
+    path: apps/api/tests/routes/works.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 中台认证
+    note: "Sprint B WS2 — works router 中间件挂载契约（feishuUser + tenantBypass + 5 routes）"
+
+  - id: dashboard-api-client-tenant
+    path: apps/dashboard/src/api/__tests__/client.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 中台认证
+    note: "Sprint B WS3 — apiClient getFeishuUserIdFromStorage（cookie/localStorage 多租户上下文提取）"
+
   - id: api-agent-route
     path: apps/api/tests/routes/agent.test.ts
     type: unit

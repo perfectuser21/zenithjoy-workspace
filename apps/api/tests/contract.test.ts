@@ -15,6 +15,8 @@ import { vi, describe, it, expect, beforeEach } from 'vitest';
 import app from '../src/app';
 import pool from '../src/db/connection';
 
+const TEST_USER = 'ou_test_works_001';
+
 vi.mock('../src/db/connection', () => ({
   default: { query: vi.fn(), end: vi.fn() },
 }));
@@ -43,6 +45,7 @@ const WORK_ROW = {
   is_viral: false,
   custom_fields: null,
   archived_at: null,   // DB 实际列名（非 archived），防止字段名回退
+  owner_id: TEST_USER, // Sprint B 多租户：必须与请求 X-Feishu-User-Id 匹配
   created_at: '2026-01-01T00:00:00Z',
   updated_at: '2026-01-01T00:00:00Z',
 };
@@ -82,7 +85,7 @@ describe('API Contract — Works', () => {
       .mockResolvedValueOnce({ rows: [{ total: '1' }] })
       .mockResolvedValueOnce({ rows: [WORK_ROW] });
 
-    const { status, body } = await request(app).get('/api/works');
+    const { status, body } = await request(app).get('/api/works').set('X-Feishu-User-Id', TEST_USER);
 
     expect(status).toBe(200);
     expect(body).toHaveProperty('data');
@@ -105,7 +108,7 @@ describe('API Contract — Works', () => {
   it('GET /api/works/:id — single work shape', async () => {
     mockQuery.mockResolvedValueOnce({ rows: [WORK_ROW] });
 
-    const { status, body } = await request(app).get(`/api/works/${WORK_UUID}`);
+    const { status, body } = await request(app).get(`/api/works/${WORK_UUID}`).set('X-Feishu-User-Id', TEST_USER);
 
     expect(status).toBe(200);
     expect(body.id).toBe(WORK_UUID);
@@ -123,6 +126,7 @@ describe('API Contract — Works', () => {
 
     const { status, body } = await request(app)
       .post('/api/works')
+      .set('X-Feishu-User-Id', TEST_USER)
       .send({ title: 'Contract Work', content_type: 'article' });
 
     expect(status).toBe(201);
@@ -140,6 +144,7 @@ describe('API Contract — Works', () => {
 
     const { status, body } = await request(app)
       .put(`/api/works/${WORK_UUID}`)
+      .set('X-Feishu-User-Id', TEST_USER)
       .send({ title: 'Updated' });
 
     expect(status).toBe(200);
@@ -152,7 +157,7 @@ describe('API Contract — Works', () => {
       .mockResolvedValueOnce({ rows: [WORK_ROW] })
       .mockResolvedValueOnce({ rows: [] });
 
-    const { status, body } = await request(app).delete(`/api/works/${WORK_UUID}`);
+    const { status, body } = await request(app).delete(`/api/works/${WORK_UUID}`).set('X-Feishu-User-Id', TEST_USER);
 
     expect(status).toBe(200);
     expect(body).toMatchObject({ success: true });
@@ -221,8 +226,7 @@ describe('API Contract — Publish Logs', () => {
   it('GET /api/works/:workId/publish-logs — array shape', async () => {
     mockQuery.mockResolvedValueOnce({ rows: [LOG_ROW] });
 
-    const { status, body } = await request(app)
-      .get(`/api/works/${WORK_UUID}/publish-logs`);
+    const { status, body } = await request(app).get(`/api/works/${WORK_UUID}/publish-logs`).set('X-Feishu-User-Id', TEST_USER);
 
     expect(status).toBe(200);
     expect(Array.isArray(body)).toBe(true);
@@ -242,6 +246,7 @@ describe('API Contract — Publish Logs', () => {
 
     const { status, body } = await request(app)
       .post(`/api/works/${WORK_UUID}/publish-logs`)
+      .set('X-Feishu-User-Id', TEST_USER)
       .send({ work_id: WORK_UUID, platform: 'douyin' });
 
     expect(status).toBe(201);
@@ -275,6 +280,7 @@ describe('API Contract — Error Format Consistency', () => {
   it('400 VALIDATION_ERROR — error.code 始终存在', async () => {
     const { status, body } = await request(app)
       .post('/api/works')
+      .set('X-Feishu-User-Id', TEST_USER)
       .send({ body: 'no title' });
 
     expect(status).toBe(400);
@@ -287,7 +293,7 @@ describe('API Contract — Error Format Consistency', () => {
     mockQuery.mockResolvedValueOnce({ rows: [] });
 
     const fakeId = '00000000-0000-0000-0000-000000000000';
-    const { status, body } = await request(app).get(`/api/works/${fakeId}`);
+    const { status, body } = await request(app).get(`/api/works/${fakeId}`).set('X-Feishu-User-Id', TEST_USER);
 
     expect(status).toBe(404);
     expect(body).toHaveProperty('error');

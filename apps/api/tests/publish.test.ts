@@ -3,6 +3,8 @@ import { vi, describe, it, expect, beforeEach } from 'vitest';
 import app from '../src/app';
 import pool from '../src/db/connection';
 
+const TEST_USER = 'ou_test_works_001';
+
 vi.mock('../src/db/connection', () => ({
   default: { query: vi.fn(), end: vi.fn() },
 }));
@@ -34,8 +36,9 @@ describe('Publish Logs API', () => {
       mockQuery.mockResolvedValueOnce({ rows: [LOG] });
 
       const response = await request(app)
-        .post(`/api/works/${TEST_WORK_ID}/publish-logs`)
-        .send({ work_id: TEST_WORK_ID, platform: 'douyin', status: 'pending' });
+      .post(`/api/works/${TEST_WORK_ID}/publish-logs`)
+      .set('X-Feishu-User-Id', TEST_USER)
+      .send({ work_id: TEST_WORK_ID, platform: 'douyin', status: 'pending' });
 
       expect(response.status).toBe(201);
       expect(response.body).toHaveProperty('id');
@@ -46,8 +49,9 @@ describe('Publish Logs API', () => {
 
     it('should return 400 for missing work_id', async () => {
       const response = await request(app)
-        .post(`/api/works/${TEST_WORK_ID}/publish-logs`)
-        .send({ platform: 'xiaohongshu' });
+      .post(`/api/works/${TEST_WORK_ID}/publish-logs`)
+      .set('X-Feishu-User-Id', TEST_USER)
+      .send({ platform: 'xiaohongshu' });
 
       expect(response.status).toBe(400);
       expect(response.body.error.code).toBe('VALIDATION_ERROR');
@@ -55,8 +59,9 @@ describe('Publish Logs API', () => {
 
     it('should return 400 for invalid platform', async () => {
       const response = await request(app)
-        .post(`/api/works/${TEST_WORK_ID}/publish-logs`)
-        .send({ work_id: TEST_WORK_ID, platform: 'invalid_platform' });
+      .post(`/api/works/${TEST_WORK_ID}/publish-logs`)
+      .set('X-Feishu-User-Id', TEST_USER)
+      .send({ work_id: TEST_WORK_ID, platform: 'invalid_platform' });
 
       expect(response.status).toBe(400);
       expect(response.body.error.code).toBe('VALIDATION_ERROR');
@@ -68,8 +73,9 @@ describe('Publish Logs API', () => {
       );
 
       const response = await request(app)
-        .post(`/api/works/${TEST_WORK_ID}/publish-logs`)
-        .send({ work_id: TEST_WORK_ID, platform: 'douyin' });
+      .post(`/api/works/${TEST_WORK_ID}/publish-logs`)
+      .set('X-Feishu-User-Id', TEST_USER)
+      .send({ work_id: TEST_WORK_ID, platform: 'douyin' });
 
       expect(response.status).toBe(409);
       expect(response.body.error.code).toBe('CONFLICT');
@@ -80,7 +86,7 @@ describe('Publish Logs API', () => {
     it('should get publish logs for a work', async () => {
       mockQuery.mockResolvedValueOnce({ rows: [LOG] });
 
-      const response = await request(app).get(`/api/works/${TEST_WORK_ID}/publish-logs`);
+      const response = await request(app).get(`/api/works/${TEST_WORK_ID}/publish-logs`).set('X-Feishu-User-Id', TEST_USER);
 
       expect(response.status).toBe(200);
       expect(Array.isArray(response.body)).toBe(true);
@@ -92,7 +98,7 @@ describe('Publish Logs API', () => {
       mockQuery.mockResolvedValueOnce({ rows: [] });
 
       const fakeId = '00000000-0000-0000-0000-000000000000';
-      const response = await request(app).get(`/api/works/${fakeId}/publish-logs`);
+      const response = await request(app).get(`/api/works/${fakeId}/publish-logs`).set('X-Feishu-User-Id', TEST_USER);
 
       expect(response.status).toBe(200);
       expect(response.body).toEqual([]);
