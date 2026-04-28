@@ -71,6 +71,8 @@ jobs:
       DATABASE_NAME: cecelia
       PORT: 5200
       NODE_ENV: test
+      # Sprint B 多租户 smoke 用：API 识别 super-admin
+      ADMIN_FEISHU_OPENIDS: ou_admin_smoke_999
 
     steps:
       - uses: actions/checkout@v4
@@ -91,13 +93,15 @@ jobs:
           psql -h localhost -U cecelia -d cecelia -c "CREATE SCHEMA IF NOT EXISTS zenithjoy;"
           psql -h localhost -U cecelia -d cecelia -c "CREATE EXTENSION IF NOT EXISTS \"pgcrypto\";"
 
-      - name: Run migrations
+      - name: Run apps/api/db migrations
         env:
           PGPASSWORD: cecelia
         run: |
+          # 含 20260210_000000_create_works_tables.sql（works/publish_logs/field_definitions 自治建表）
+          # ON_ERROR_STOP=1 防止 psql 静默吞错（之前 Sprint B owner_id ALTER 因 works 缺失被吞）
           for f in apps/api/db/migrations/*.sql; do
             echo "→ $f"
-            psql -h localhost -U cecelia -d cecelia -f "$f"
+            psql -h localhost -U cecelia -d cecelia -v ON_ERROR_STOP=1 -f "$f"
           done
 
       - name: Build apps/api
@@ -160,6 +164,25 @@ jobs:
           cat /tmp/resp.json
           [ "$STATUS" = "400" ] || (echo "expected 400 got $STATUS"; exit 1)
           grep -q 'CONTENT_TYPE_REQUIRED' /tmp/resp.json || (echo "missing error code"; exit 1)
+
+      - name: Smoke — Dashboard License (Sprint A)
+        env:
+          API_BASE: http://localhost:5200
+          ADMIN_FEISHU_ID: ou_admin_smoke_999
+          USER_FEISHU_ID: ou_customer_smoke_001
+        run: |
+          chmod +x .github/workflows/scripts/smoke/dashboard-license-smoke.sh
+          bash .github/workflows/scripts/smoke/dashboard-license-smoke.sh
+
+      - name: Smoke — Multi-tenant Isolation (Sprint B)
+        env:
+          API_BASE: http://localhost:5200
+          ADMIN_FEISHU_ID: ou_admin_smoke_999
+          ALICE_FEISHU_ID: ou_alice_smoke_001
+          BOB_FEISHU_ID: ou_bob_smoke_002
+        run: |
+          chmod +x .github/workflows/scripts/smoke/multi-tenant-smoke.sh
+          bash .github/workflows/scripts/smoke/multi-tenant-smoke.sh
 
       - name: Verify pipeline_runs.topic_id is UUID + FK
         env:

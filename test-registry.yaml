@@ -448,3 +448,45 @@ tests:
   #   status: pending-ci
   #   product: 中台认证
   #   note: "飞书登录完整流程（Playwright）"
+
+  # ── Agent Fleet（PR #228 引入，drive-by 登记） ─────────────────────────────
+
+  - id: api-agent-db-service
+    path: apps/api/src/services/__tests__/agent-db.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: AI员工
+    note: "Agent fleet — agent-db service 持久化注册/心跳/下线"
+
+  - id: api-task-db-service
+    path: apps/api/src/services/__tests__/task-db.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: AI员工
+    note: "Agent fleet — task-db service CRUD + 状态机"
+
+  - id: api-tenant-db-service
+    path: apps/api/src/services/__tests__/tenant-db.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: AI员工
+    note: "Agent fleet — tenant-db service + AgentMeta.tenantId"
+
+  - id: api-tasks-routes
+    path: apps/api/tests/tasks.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: AI员工
+    note: "Agent fleet — tasks API (POST/GET/PATCH 状态转换)"
+
+  - id: api-tenants-routes
+    path: apps/api/tests/tenants.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: AI员工
+    note: "Agent fleet — tenants API"

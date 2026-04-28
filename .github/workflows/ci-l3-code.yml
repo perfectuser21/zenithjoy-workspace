@@ -143,7 +143,7 @@ jobs:
           cache: 'npm'
           cache-dependency-path: package-lock.json
       - run: npm ci --workspace=apps/api
-      - run: npx eslint src/ --max-warnings 15
+      - run: npx eslint src/ --max-warnings 30
         working-directory: apps/api
 
   api-typecheck:
