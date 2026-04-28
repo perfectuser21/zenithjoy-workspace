@@ -4,6 +4,7 @@ import { EventEmitter } from 'events';
 export interface AgentMeta {
   capabilities: string[];
   version: string;
+  tenantId: string;   // populated from WS upgrade license validation
 }
 
 export interface AgentEntry {
@@ -61,8 +62,17 @@ export class AgentRegistry extends EventEmitter {
     return this.agents.get(agentId);
   }
 
-  pickFor(capability: string): AgentEntry | undefined {
-    return this.list().find(e => e.meta.capabilities.includes(capability) && !e.busy);
+  /**
+   * Pick an available agent for a capability.
+   * When tenantId is provided, only agents belonging to that tenant are eligible
+   * (prevents cross-tenant task dispatch). Debug/test routes may omit tenantId.
+   */
+  pickFor(capability: string, tenantId?: string): AgentEntry | undefined {
+    return this.list().find(
+      e => (!tenantId || e.meta.tenantId === tenantId) &&
+           e.meta.capabilities.includes(capability) &&
+           !e.busy
+    );
   }
 }
 
