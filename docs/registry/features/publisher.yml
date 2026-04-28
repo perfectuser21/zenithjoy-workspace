@@ -23,6 +23,7 @@ features:
         - publish-douyin-image.js
         - publish-douyin-video.js
         - publish-douyin-article.js
+        - publish-douyin-image-dryrun.cjs
       language: JavaScript
       runtime: node + playwright
     docs:
@@ -52,6 +53,7 @@ features:
         image: douyin-publisher/publish-douyin-image.js
         video: douyin-publisher/publish-douyin-video.js
         article: douyin-publisher/publish-douyin-article.js
+        image_dryrun: douyin-publisher/publish-douyin-image-dryrun.cjs
     capabilities:
       - id: pub_douyin_image
         name: 抖音图文发布
@@ -75,6 +77,15 @@ features:
         name: 抖音文章发布
         entry_file: publish-douyin-article.js
         content_type: article
+        maturity: 0
+        tests:
+          unit: []
+          integration: []
+        status: active
+      - id: pub_douyin_image_dryrun
+        name: 抖音图文 dry-run（agent 端验证用，不真实发布）
+        entry_file: publish-douyin-image-dryrun.cjs
+        content_type: image
         maturity: 0
         tests:
           unit: []
