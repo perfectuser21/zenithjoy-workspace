@@ -13,6 +13,7 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import AdminUsersPage from '../AdminUsersPage';
 import * as adminUsersApi from '../../api/admin-users.api';
+import type { ListUsersResponse } from '../../api/admin-users.api';
 
 vi.mock('../../api/admin-users.api', () => ({
   listUsers: vi.fn(),
@@ -37,7 +38,7 @@ vi.mock('../../contexts/AuthContext', () => ({
 
 const TENANT_ID = '11111111-1111-1111-1111-111111111111';
 
-const USERS_FIXTURE = {
+const USERS_FIXTURE: ListUsersResponse = {
   users: [
     {
       id: 'usr_001',

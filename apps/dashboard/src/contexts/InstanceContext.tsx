@@ -41,6 +41,9 @@ const autopilotConfig: InstanceConfig = {
     'ai-video-generation': true, // AI 视频生成
     'content-factory': true,    // 内容工厂（solo company pipeline）
     'competitor_research': true, // 智能对标
+    'license': true,             // 客户 License 自查面板（PR-A 需要 super-admin 看到旁边的会员管理入口）
+    'license-admin': true,       // super-admin License 后台
+    'users-admin': true,         // super-admin 会员管理后台（PR-A）
     // 旧 features（保留用于兼容，实际已合并到 media-scenario）
     'execution-status': true,
     'tasks': true,
