@@ -209,6 +209,14 @@ export const additionalRoutes: RouteConfig[] = [
   // 登录相关
   { path: '/login/:platform/:accountId', component: 'LoginPage', requireAuth: true },
 
+  // === Better-auth 邮箱+密码登录系列（公开访问，PR-3）===
+  // 实际路由组件在 App.tsx 静态注册（SignIn/SignUp/ForgotPassword/FeishuLogin），
+  // 这里仅声明 requireAuth=false 让 currentRouteAllowsUnauthenticated 检测能通过
+  { path: '/login', requireAuth: false },
+  { path: '/signup', requireAuth: false },
+  { path: '/forgot-password', requireAuth: false },
+  { path: '/login/feishu', requireAuth: false },
+
   // === Features Dashboard (Core 实例) ===
   { path: '/features', component: 'FeatureDashboard', requireAuth: true },
   { path: '/command', component: 'CommandCenter', requireAuth: true },

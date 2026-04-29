@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import { createContext, useContext, useState, useEffect } from 'react';
+import { getSession, signOut as betterAuthSignOut } from '../api/better-auth.api';
 
 // Cookie 工具函数 - 跨子域名共享
 const COOKIE_DOMAIN = '.zenjoymedia.media';
@@ -60,7 +61,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [token, setToken] = useState<string | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
 
-  // 初始化时从 cookie 读取用户信息（跨子域名共享）
+  // 初始化时按优先级解析用户身份：
+  //   1. 开发模式 mock
+  //   2. better-auth session（PR-3）— GET /api/auth/get-session 携带 cookie
+  //   3. 飞书 cookie（保留双轨）
+  //   4. localStorage 迁移
   useEffect(() => {
     // 开发模式：跳过登录，直接使用 mock 用户
     if (SKIP_AUTH && MOCK_USER) {
@@ -71,43 +76,76 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    console.log('🔍 AuthProvider init, checking cookies...');
-    console.log('🍪 All cookies:', document.cookie);
-    const savedUser = getCookie('user');
-    const savedToken = getCookie('token');
-    console.log('🔍 Found user cookie:', !!savedUser, 'token cookie:', !!savedToken);
+    let cancelled = false;
 
-    if (savedUser && savedToken) {
+    (async () => {
+      // 步骤 1：尝试 better-auth session（cookie HttpOnly，前端用 fetch credentials:'include' 验证）
       try {
-        setUser(JSON.parse(savedUser));
-        setToken(savedToken);
-        console.log('✅ Restored user from cookie');
-      } catch (error) {
-        console.error('Failed to parse user data:', error);
-        deleteCookie('user');
-        deleteCookie('token');
+        const sess = await getSession();
+        if (!cancelled && sess && sess.user) {
+          const ba: User = {
+            id: sess.user.id,
+            name: sess.user.name,
+            email: sess.user.email,
+            // better-auth 不写 feishu_user_id；isSuperAdmin 仍走 ADMIN_FEISHU_OPENIDS env
+          };
+          setUser(ba);
+          setToken('better-auth-session');
+          // 同步写一份到 cookie 让现有 X-Feishu-User-Id 注入器能继续工作（PR-2 后会用 tenant_members 桥接）
+          setCookie('user', JSON.stringify(ba));
+          setCookie('token', 'better-auth-session');
+          console.log('✅ 已通过 better-auth session 恢复用户');
+          setAuthLoading(false);
+          return;
+        }
+      } catch (err) {
+        // session 解析失败不致命，继续 fallback
+        console.warn('[auth] better-auth session 检查失败，回退到飞书 cookie：', err);
       }
-    }
 
-    // 迁移：如果 localStorage 有数据但 cookie 没有，迁移到 cookie
-    if (!savedUser && !savedToken) {
-      const lsUser = localStorage.getItem('user');
-      const lsToken = localStorage.getItem('token');
-      if (lsUser && lsToken) {
+      if (cancelled) return;
+
+      // 步骤 2：飞书 cookie 兜底（保留现有内部主理人通道）
+      console.log('🔍 AuthProvider init, checking cookies...');
+      const savedUser = getCookie('user');
+      const savedToken = getCookie('token');
+      console.log('🔍 Found user cookie:', !!savedUser, 'token cookie:', !!savedToken);
+
+      if (savedUser && savedToken) {
         try {
-          setUser(JSON.parse(lsUser));
-          setToken(lsToken);
-          setCookie('user', lsUser);
-          setCookie('token', lsToken);
-          // 清理 localStorage
-          localStorage.removeItem('user');
-          localStorage.removeItem('token');
+          setUser(JSON.parse(savedUser));
+          setToken(savedToken);
+          console.log('✅ Restored user from cookie');
         } catch (error) {
-          console.error('Failed to migrate auth data:', error);
+          console.error('Failed to parse user data:', error);
+          deleteCookie('user');
+          deleteCookie('token');
         }
       }
-    }
-    setAuthLoading(false);
+
+      // 步骤 3：localStorage 迁移（迁移期）
+      if (!savedUser && !savedToken) {
+        const lsUser = localStorage.getItem('user');
+        const lsToken = localStorage.getItem('token');
+        if (lsUser && lsToken) {
+          try {
+            setUser(JSON.parse(lsUser));
+            setToken(lsToken);
+            setCookie('user', lsUser);
+            setCookie('token', lsToken);
+            localStorage.removeItem('user');
+            localStorage.removeItem('token');
+          } catch (error) {
+            console.error('Failed to migrate auth data:', error);
+          }
+        }
+      }
+      setAuthLoading(false);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const login = (newUser: User, newToken: string) => {
@@ -127,6 +165,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // 清理可能残留的 localStorage
     localStorage.removeItem('user');
     localStorage.removeItem('token');
+    // 通知 better-auth 销毁 server session（fire-and-forget）
+    void betterAuthSignOut();
   };
 
   // 超级管理员飞书 ID 列表（环境变量配置）
