@@ -107,3 +107,4 @@ export const auth = new Proxy({} as AuthInstance, {
     return Reflect.getOwnPropertyDescriptor(getAuth(), prop);
   },
 });
+
