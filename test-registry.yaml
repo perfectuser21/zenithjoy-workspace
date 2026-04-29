@@ -616,6 +616,8 @@ tests:
     ci: L3
     status: active
     product: 中台认证
+    note: "Better-auth → tenant_members 桥接（PR-2 + PR-B free fallback）— paid 路径 + free 自动 onboarding 事务 + 容错"
+: TDD Red — smoke + auth-bridge + license.service tests)
     note: "PR-3 Dashboard better-auth API client 契约（5 个端点函数 + AuthError）"
 
   # ── PR-C 积分基建（Credits Foundation） ─────────────────────────────────────
