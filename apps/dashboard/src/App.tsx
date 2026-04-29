@@ -17,7 +17,17 @@ import { ThemeProvider, useTheme } from './contexts/ThemeContext';
 import { InstanceProvider, useInstance } from './contexts/InstanceContext';
 // 只有登录页需要静态导入
 import FeishuLogin from './pages/FeishuLogin';
+import SignIn from './pages/SignIn';
+import SignUp from './pages/SignUp';
+import ForgotPassword from './pages/ForgotPassword';
 import './App.css';
+
+// 公开访问的认证路径（未登录可见）— 邮箱+密码登录系列 + 飞书登录回退路由
+const PUBLIC_AUTH_PATHS = ['/login', '/signup', '/forgot-password'];
+
+function isAuthPath(pathname: string): boolean {
+  return PUBLIC_AUTH_PATHS.some((p) => pathname === p || pathname.startsWith(`${p}/`));
+}
 
 function AppContent() {
   const location = useLocation();
@@ -73,9 +83,14 @@ function AppContent() {
     );
   }
 
-  // 如果未登录且不在登录页，且当前路由需要认证，显示登录页
-  if (!isAuthenticated && !location.pathname.startsWith('/login') && !location.pathname.startsWith('/content-factory') && !currentRouteAllowsUnauthenticated) {
-    return <FeishuLogin />;
+  // 如果未登录且不在登录页，且当前路由需要认证，显示邮箱密码登录页（默认主入口）
+  if (
+    !isAuthenticated &&
+    !isAuthPath(location.pathname) &&
+    !location.pathname.startsWith('/content-factory') &&
+    !currentRouteAllowsUnauthenticated
+  ) {
+    return <SignIn />;
   }
 
   return (
@@ -296,8 +311,12 @@ function AppContent() {
       <main className={isAuthenticated && !isFullBleed ? `flex-1 overflow-auto ${collapsed ? 'ml-16' : 'ml-64'} pt-16 transition-all duration-300` : "flex-1 overflow-auto"}>
         <div key={location.pathname} className={isAuthenticated && !isFullBleed ? "p-8 page-fade-in" : ""}>
           <DynamicRouter>
-            {/* 登录页面（静态路由） */}
-            <Route path="/login" element={<FeishuLogin />} />
+            {/* 邮箱+密码登录系列（静态路由 — 公开访问） */}
+            <Route path="/login" element={<SignIn />} />
+            <Route path="/signup" element={<SignUp />} />
+            <Route path="/forgot-password" element={<ForgotPassword />} />
+            {/* 飞书登录保留作为内部主理人通道（双轨） */}
+            <Route path="/login/feishu" element={<FeishuLogin />} />
           </DynamicRouter>
         </div>
       </main>

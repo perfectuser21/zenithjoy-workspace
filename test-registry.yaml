@@ -373,6 +373,32 @@ tests:
     product: 中台认证
     note: "Sprint A WS2/WS3 — navigation.config /license 与 /admin/license 入口存在性"
 
+  # ── PR-3 better-auth 邮箱+密码 UI ────────────────────────────────────────────
+
+  - id: dashboard-signup-page
+    path: apps/dashboard/src/pages/__tests__/SignUp.test.tsx
+    type: unit
+    ci: L3
+    status: active
+    product: 中台认证
+    note: "PR-3 — SignUp 注册页面（表单渲染/提交成功跳转/失败显错/输入校验）"
+
+  - id: dashboard-signin-page
+    path: apps/dashboard/src/pages/__tests__/SignIn.test.tsx
+    type: unit
+    ci: L3
+    status: active
+    product: 中台认证
+    note: "PR-3 — SignIn 登录页面（表单+三链接/提交成功 login+跳转/失败显错/输入校验）"
+
+  - id: dashboard-forgot-password-page
+    path: apps/dashboard/src/pages/__tests__/ForgotPassword.test.tsx
+    type: unit
+    ci: L3
+    status: active
+    product: 中台认证
+    note: "PR-3 — ForgotPassword 忘记密码页面（表单/模糊提示防枚举/失败显错/输入校验）"
+
   # ── Sprint B 多租户隔离 ───────────────────────────────────────────────────────
 
   - id: api-works-multitenant
@@ -578,8 +604,13 @@ tests:
 
   - id: api-auth-tenant-bridge
     path: apps/api/tests/auth-bridge.test.ts
+  - id: dashboard-better-auth-api
+    path: apps/dashboard/src/api/__tests__/better-auth.api.test.ts
+: 补 better-auth.api 配对测试 + 登记 test-registry)
     type: unit
     ci: L3
     status: active
     product: 中台认证
     note: "Better-auth → tenant_members 桥接（PR-2）— license_key 校验 + tenant 关联 + 容错"
+    note: "PR-3 Dashboard better-auth API client 契约（5 个端点函数 + AuthError）"
+: 补 better-auth.api 配对测试 + 登记 test-registry)
