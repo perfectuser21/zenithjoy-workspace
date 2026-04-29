@@ -13,7 +13,9 @@
  *  - 不改 Dashboard（PR-3 做）
  */
 import { betterAuth } from 'better-auth';
+import { createAuthMiddleware } from 'better-auth/api';
 import pool from './db/connection';
+import { bridgeNewUserToTenant } from './auth-bridge';
 
 
 const TRUSTED_ORIGINS = (process.env.BETTER_AUTH_TRUSTED_ORIGINS ?? 'http://localhost:5173,https://autopilot.zenjoymedia.media')
@@ -65,6 +67,44 @@ function buildAuth() {
         console.log('[auth] 验证邮件 →', user.email);
         console.log('[auth]   验证链接：', url);
       },
+    },
+
+    /**
+     * PR-2：注册成功后桥接到 tenant_members
+     *
+     * 在 sign-up/email 完成后从 ctx.body 取可选 license_key、
+     * 从 ctx.context.newSession 取新创建的 user，调 bridgeNewUserToTenant
+     * 写入 tenant_members。任何错误不阻塞注册（容错由 bridgeNewUserToTenant 兜）。
+     */
+    hooks: {
+      after: createAuthMiddleware(async (ctx) => {
+        if (ctx.path !== '/sign-up/email') return;
+
+        const newSession = ctx.context?.newSession;
+        const userId = newSession?.user?.id;
+        if (!userId) {
+          // requireEmailVerification=true 时 autoSignIn 不发生 → newSession=null
+          // 此时跳过桥接（用户验证邮箱后再走另外的入口关联，PR-4 处理）
+          return;
+        }
+
+        const body = (ctx.body ?? {}) as { license_key?: unknown };
+        const licenseKey =
+          typeof body.license_key === 'string' ? body.license_key : undefined;
+
+        const result = await bridgeNewUserToTenant({ userId, licenseKey });
+        if (result.linked) {
+          console.log(
+            '[auth-bridge] 用户已关联 tenant',
+            { userId, tenantId: result.tenantId }
+          );
+        } else {
+          console.log(
+            '[auth-bridge] 用户未关联 tenant',
+            { userId, reason: result.reason }
+          );
+        }
+      }),
     },
   });
 }
