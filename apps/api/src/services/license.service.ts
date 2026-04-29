@@ -14,10 +14,16 @@
 import crypto from 'node:crypto';
 import pool from '../db/connection';
 
-export type Tier = 'basic' | 'matrix' | 'studio' | 'enterprise';
+export type Tier = 'free' | 'basic' | 'matrix' | 'studio' | 'enterprise';
 export type LicenseStatus = 'active' | 'expired' | 'revoked' | 'suspended';
 
+/**
+ * 装机配额（max_machines）
+ *  - free：0（不允许本地 Agent；仅云端轻功能。注册即得，PR-B）
+ *  - basic：1 / matrix：3 / studio：10 / enterprise：30（付费）
+ */
 export const TIER_QUOTA: Record<Tier, number> = {
+  free: 0,
   basic: 1,
   matrix: 3,
   studio: 10,
@@ -25,11 +31,15 @@ export const TIER_QUOTA: Record<Tier, number> = {
 };
 
 export const TIER_PREFIX: Record<Tier, string> = {
+  free: 'F',
   basic: 'B',
   matrix: 'M',
   studio: 'S',
   enterprise: 'E',
 };
+
+/** Free tier license 默认有效期（10 年），注册时不让用户感受到过期 */
+export const FREE_TIER_DURATION_DAYS = 365 * 10;
 
 export interface LicenseRow {
   id: string;
@@ -79,7 +89,7 @@ export function generateLicenseKey(tier: Tier): string {
   return `ZJ-${prefix}-${suffix}`;
 }
 
-const LICENSE_KEY_PATTERN = /^ZJ-[BMSE]-[A-Z2-9]{8}$/;
+const LICENSE_KEY_PATTERN = /^ZJ-[FBMSE]-[A-Z2-9]{8}$/;
 
 export function isValidLicenseKeyFormat(key: string): boolean {
   return typeof key === 'string' && LICENSE_KEY_PATTERN.test(key);
@@ -139,11 +149,13 @@ export async function createLicense(
   input: CreateLicenseInput
 ): Promise<LicenseRow> {
   const tier = input.tier;
-  if (!TIER_QUOTA[tier]) {
+  if (!(tier in TIER_QUOTA)) {
     throw new Error(`INVALID_TIER: ${tier}`);
   }
   const maxMachines = TIER_QUOTA[tier];
-  const durationDays = input.duration_days ?? 365;
+  // free tier 默认 10 年，付费默认 1 年；外部 input 优先
+  const defaultDays = tier === 'free' ? FREE_TIER_DURATION_DAYS : 365;
+  const durationDays = input.duration_days ?? defaultDays;
   const expiresAt = new Date(Date.now() + durationDays * 86400_000);
 
   // 防极小概率冲突：最多重试 5 次
