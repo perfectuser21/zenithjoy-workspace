@@ -251,6 +251,22 @@ tests:
     product: 新媒体运营
     note: "每日快照 API 路由测试（mock DB）"
 
+  - id: api-snapshots-saves
+    path: apps/api/tests/routes/snapshots.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 新媒体运营
+    note: "daily_snapshots ingest saves 字段提取测试"
+
+  - id: api-work-performance
+    path: apps/api/tests/routes/work-performance.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 新媒体运营
+    note: "GET /api/works/:id/performance 端点测试（mock DB）"
+
   - id: api-contract
     path: apps/api/tests/contract.test.ts
     type: unit
