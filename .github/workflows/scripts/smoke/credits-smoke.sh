@@ -22,7 +22,7 @@ set -euo pipefail
 API_BASE="${API_BASE:-http://localhost:5200}"
 ADMIN_FEISHU_ID="${ADMIN_FEISHU_ID:-ou_admin_smoke_999}"
 TENANT_USER_FEISHU_ID="ou_credits_smoke_user_001"
-TENANT_C_ID="cccccccc-1111-2222-3333-555555555555"
+TENANT_C_ID="dddddddd-9999-8888-7777-666666666666"
 
 PSQL_USER="${PGUSER:-cecelia}"
 PSQL_DB="${PGDATABASE:-cecelia}"
