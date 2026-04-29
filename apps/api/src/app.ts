@@ -1,6 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import worksRouter from './routes/works';
+import workPerformanceRouter from './routes/work-performance';
 import fieldsRouter from './routes/fields';
 import publishRouter from './routes/publish';
 import aiVideoRouter from './routes/ai-video';
@@ -32,6 +33,7 @@ app.get('/health', (req, res) => {
 
 // API routes
 app.use('/api/works', worksRouter);
+app.use('/api/works/:id/performance', workPerformanceRouter);
 app.use('/api/fields', fieldsRouter);
 app.use('/api', publishRouter);
 app.use('/api/ai-video', aiVideoRouter);

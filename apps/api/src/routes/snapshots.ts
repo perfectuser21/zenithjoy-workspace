@@ -1,6 +1,19 @@
 import { Router, Request, Response } from 'express';
 import pool from '../db/connection';
 
+interface SnapshotItem {
+  content_id?: string;
+  scraped_date?: string;
+  scraped_at?: string;
+  title?: string;
+  views?: number;
+  likes?: number;
+  comments?: number;
+  shares?: number;
+  saves?: number;
+  extra_data?: Record<string, number>;
+}
+
 const router = Router();
 
 // POST /api/snapshots/ingest
@@ -28,14 +41,16 @@ router.post('/ingest', async (req: Request, res: Response) => {
     let skipped = 0;
 
     for (const item of items) {
-      const { content_id, scraped_date, scraped_at, title, views, likes, comments, shares, extra_data } = item;
+      const typedItem = item as SnapshotItem;
+      const { content_id, scraped_date, scraped_at, title, views, likes, comments, shares, extra_data } = typedItem;
+      const saves = typedItem.saves || extra_data?.favorites || extra_data?.saves || 0;
 
       if (!content_id || !scraped_date) continue;
 
       const result = await pool.query(
         `INSERT INTO zenithjoy.daily_snapshots
-          (platform, content_id, scraped_date, scraped_at, title, views, likes, comments, shares, extra_data)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+          (platform, content_id, scraped_date, scraped_at, title, views, likes, comments, shares, saves, extra_data)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
          ON CONFLICT (platform, content_id, scraped_date) DO UPDATE SET
            scraped_at  = EXCLUDED.scraped_at,
            title       = COALESCE(EXCLUDED.title, zenithjoy.daily_snapshots.title),
@@ -43,6 +58,7 @@ router.post('/ingest', async (req: Request, res: Response) => {
            likes       = EXCLUDED.likes,
            comments    = EXCLUDED.comments,
            shares      = EXCLUDED.shares,
+           saves       = EXCLUDED.saves,
            extra_data  = COALESCE(EXCLUDED.extra_data, zenithjoy.daily_snapshots.extra_data)
          RETURNING id`,
         [
@@ -55,6 +71,7 @@ router.post('/ingest', async (req: Request, res: Response) => {
           likes || 0,
           comments || 0,
           shares || 0,
+          saves,
           extra_data ? JSON.stringify(extra_data) : null,
         ]
       );
