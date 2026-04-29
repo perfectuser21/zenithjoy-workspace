@@ -604,8 +604,13 @@ tests:
 
   - id: api-auth-tenant-bridge
     path: apps/api/tests/auth-bridge.test.ts
+  - id: dashboard-better-auth-api
+    path: apps/dashboard/src/api/__tests__/better-auth.api.test.ts
+: 补 better-auth.api 配对测试 + 登记 test-registry)
     type: unit
     ci: L3
     status: active
     product: 中台认证
     note: "Better-auth → tenant_members 桥接（PR-2）— license_key 校验 + tenant 关联 + 容错"
+    note: "PR-3 Dashboard better-auth API client 契约（5 个端点函数 + AuthError）"
+: 补 better-auth.api 配对测试 + 登记 test-registry)
