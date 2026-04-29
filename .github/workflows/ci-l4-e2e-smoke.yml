@@ -205,6 +205,18 @@ jobs:
           chmod +x .github/workflows/scripts/smoke/auth-tenant-bridge-smoke.sh
           bash .github/workflows/scripts/smoke/auth-tenant-bridge-smoke.sh
 
+      - name: Smoke — Credits Foundation (PR-C)
+        env:
+          API_BASE: http://localhost:5200
+          ADMIN_FEISHU_ID: ou_admin_smoke_999
+          PGHOST: localhost
+          PGUSER: cecelia
+          PGPASSWORD: cecelia
+          PGDATABASE: cecelia
+        run: |
+          chmod +x .github/workflows/scripts/smoke/credits-smoke.sh
+          bash .github/workflows/scripts/smoke/credits-smoke.sh
+
       - name: Verify pipeline_runs.topic_id is UUID + FK
         env:
           PGPASSWORD: cecelia
