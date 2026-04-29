@@ -61,3 +61,4 @@ echo "$RESP_5" | grep -q '"status":true' || { echo "  FAIL: 忘记密码响应 s
 echo "  OK: 忘记密码 200（实际邮件 PR-4 接 SMTP 后真发）"
 
 echo "✅ auth-smoke (better-auth email+password) PASSED"
+
