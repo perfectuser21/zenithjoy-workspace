@@ -18,6 +18,7 @@ import {
 
 describe('license.service: key 格式和生成', () => {
   it('generateLicenseKey 各 tier 前缀正确', () => {
+    expect(generateLicenseKey('free')).toMatch(/^ZJ-F-[A-Z2-9]{8}$/);
     expect(generateLicenseKey('basic')).toMatch(/^ZJ-B-[A-Z2-9]{8}$/);
     expect(generateLicenseKey('matrix')).toMatch(/^ZJ-M-[A-Z2-9]{8}$/);
     expect(generateLicenseKey('studio')).toMatch(/^ZJ-S-[A-Z2-9]{8}$/);
@@ -33,6 +34,7 @@ describe('license.service: key 格式和生成', () => {
   });
 
   it('isValidLicenseKeyFormat 正例', () => {
+    expect(isValidLicenseKeyFormat('ZJ-F-ABCDEFGH')).toBe(true);
     expect(isValidLicenseKeyFormat('ZJ-B-ABCDEFGH')).toBe(true);
     expect(isValidLicenseKeyFormat('ZJ-M-23456789')).toBe(true);
     expect(isValidLicenseKeyFormat('ZJ-S-PQRSTVWX')).toBe(true);
@@ -48,7 +50,8 @@ describe('license.service: key 格式和生成', () => {
     expect(isValidLicenseKeyFormat('ZJ-B-ABCDEFG0')).toBe(false); // alphabet 排除 0
   });
 
-  it('TIER_QUOTA 套餐配额定义正确', () => {
+  it('TIER_QUOTA 套餐配额定义正确（free=0 不允许 Agent）', () => {
+    expect(TIER_QUOTA.free).toBe(0);
     expect(TIER_QUOTA.basic).toBe(1);
     expect(TIER_QUOTA.matrix).toBe(3);
     expect(TIER_QUOTA.studio).toBe(10);

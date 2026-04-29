@@ -20,7 +20,6 @@ import {
   listLicenses,
   revokeLicense,
   getLicenseByCustomerId,
-  TIER_QUOTA,
   Tier,
 } from '../services/license.service';
 
@@ -67,13 +66,15 @@ adminLicenseRouter.post('/', async (req: Request, res: Response) => {
     duration_days,
   } = req.body ?? {};
 
-  if (!tier || !(tier in TIER_QUOTA)) {
+  // free tier 由注册流程自动产生（auth-bridge fallback），admin 不允许通过此 API 创建
+  const PAID_TIERS = ['basic', 'matrix', 'studio', 'enterprise'];
+  if (!tier || !PAID_TIERS.includes(tier)) {
     return res.status(400).json({
       success: false,
       data: null,
       error: {
         code: 'INVALID_TIER',
-        message: `tier 必须是 basic/matrix/studio/enterprise 之一`,
+        message: `tier 必须是 basic/matrix/studio/enterprise 之一（free 由注册自动创建）`,
       },
       timestamp: new Date().toISOString(),
     });

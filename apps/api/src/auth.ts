@@ -70,11 +70,12 @@ function buildAuth() {
     },
 
     /**
-     * PR-2：注册成功后桥接到 tenant_members
+     * PR-2 + PR-B：注册成功后桥接到 tenant_members
      *
-     * 在 sign-up/email 完成后从 ctx.body 取可选 license_key、
-     * 从 ctx.context.newSession 取新创建的 user，调 bridgeNewUserToTenant
-     * 写入 tenant_members。任何错误不阻塞注册（容错由 bridgeNewUserToTenant 兜）。
+     * 流程：
+     *  - 有有效 license_key → 加入对应 tenant（PR-2 paid 路径，role='member'）
+     *  - 缺/无效 license_key → 自动建 free license + free tenant + owner（PR-B）
+     *  - 任何错误不阻塞注册（容错由 bridgeNewUserToTenant 兜）
      */
     hooks: {
       after: createAuthMiddleware(async (ctx) => {
@@ -87,16 +88,17 @@ function buildAuth() {
           // 此时跳过桥接（用户验证邮箱后再走另外的入口关联，PR-4 处理）
           return;
         }
+        const email = newSession?.user?.email ?? null;
 
         const body = (ctx.body ?? {}) as { license_key?: unknown };
         const licenseKey =
           typeof body.license_key === 'string' ? body.license_key : undefined;
 
-        const result = await bridgeNewUserToTenant({ userId, licenseKey });
+        const result = await bridgeNewUserToTenant({ userId, email, licenseKey });
         if (result.linked) {
           console.log(
             '[auth-bridge] 用户已关联 tenant',
-            { userId, tenantId: result.tenantId }
+            { userId, tenantId: result.tenantId, reason: result.reason }
           );
         } else {
           console.log(
