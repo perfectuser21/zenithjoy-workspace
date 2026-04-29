@@ -76,6 +76,8 @@ jobs:
       # PR-1 better-auth 邮箱+密码登录
       BETTER_AUTH_SECRET: ci-only-secret-32-chars-min-not-prod-123
       BETTER_AUTH_URL: http://localhost:5200
+      # PR-A super-admin 守卫的 dev fallback 关闭（设了 token 后无 header 真返 401）
+      ZENITHJOY_INTERNAL_TOKEN: ci-only-internal-token-abc-not-prod
 
     steps:
       - uses: actions/checkout@v4
