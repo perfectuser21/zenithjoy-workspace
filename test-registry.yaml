@@ -575,3 +575,11 @@ tests:
     status: active
     product: 中台认证
     note: "Better-auth 配置契约（PR-1）— 验证 auth 实例 + signUp/signIn/getSession/forgetPassword 方法导出"
+
+  - id: api-auth-tenant-bridge
+    path: apps/api/tests/auth-bridge.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 中台认证
+    note: "Better-auth → tenant_members 桥接（PR-2）— license_key 校验 + tenant 关联 + 容错"

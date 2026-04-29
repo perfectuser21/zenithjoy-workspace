@@ -194,6 +194,17 @@ jobs:
           chmod +x .github/workflows/scripts/smoke/auth-smoke.sh
           bash .github/workflows/scripts/smoke/auth-smoke.sh
 
+      - name: Smoke — Better-auth → tenant_members bridge (PR-2)
+        env:
+          API_BASE: http://localhost:5200
+          PGHOST: localhost
+          PGUSER: cecelia
+          PGPASSWORD: cecelia
+          PGDATABASE: cecelia
+        run: |
+          chmod +x .github/workflows/scripts/smoke/auth-tenant-bridge-smoke.sh
+          bash .github/workflows/scripts/smoke/auth-tenant-bridge-smoke.sh
+
       - name: Verify pipeline_runs.topic_id is UUID + FK
         env:
           PGPASSWORD: cecelia
