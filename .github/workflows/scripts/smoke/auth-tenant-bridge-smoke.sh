@@ -64,30 +64,31 @@ HTTP_3=$(curl -s -o /tmp/works-valid.json -w "%{http_code}" -b "$COOKIE_VALID" "
 [ "$HTTP_3" = "200" ] || { echo "  FAIL: 期望 200 实际 ${HTTP_3} body=$(cat /tmp/works-valid.json)"; exit 1; }
 echo "  OK: GET /api/works 返回 200"
 
-echo "==> [4/6] 注册不带 license_key → 用户成功创建，但 tenant_members 无新行"
+echo "==> [4/6] 注册不带 license_key → PR-B 自动建 free tenant，用户为 owner"
 RESP_4=$(curl -fsS -c "$COOKIE_NOLIC" -X POST -H "Content-Type: application/json" \
   -d "{\"email\":\"${EMAIL_NOLIC}\",\"password\":\"${PASSWORD}\",\"name\":\"PR2 Bridge NoLic\"}" \
   "${API_BASE}/api/auth/sign-up/email")
 USER_ID_NOLIC=$(echo "$RESP_4" | sed -E 's/.*"id":"([^"]+)".*/\1/' | head -c 64)
 [ -n "$USER_ID_NOLIC" ] || { echo "  FAIL: 无 license 注册响应无 user.id"; exit 1; }
+# PR-B 改了行为：无 license 自动建 free tenant + owner role
 COUNT_NOLIC=$(PGPASSWORD="$PSQL_PASS" psql -h "$PSQL_HOST" -U "$PSQL_USER" -d "$PSQL_DB" -t -A -c \
-  "SELECT count(*) FROM zenithjoy.tenant_members WHERE feishu_user_id = '${USER_ID_NOLIC}';")
-[ "$COUNT_NOLIC" = "0" ] || { echo "  FAIL: 无 license 时不应插入 tenant_members，实际 ${COUNT_NOLIC} 行"; exit 1; }
+  "SELECT count(*) FROM zenithjoy.tenant_members WHERE feishu_user_id = '${USER_ID_NOLIC}' AND role = 'owner';")
+[ "$COUNT_NOLIC" = "1" ] || { echo "  FAIL: 期望 free tenant owner 1 行，实际 ${COUNT_NOLIC} 行"; exit 1; }
 HTTP_4B=$(curl -s -o /tmp/works-nolic.json -w "%{http_code}" -b "$COOKIE_NOLIC" "${API_BASE}/api/works")
-[ "$HTTP_4B" = "403" ] || { echo "  FAIL: 期望 403 NO_TENANT 实际 ${HTTP_4B}"; exit 1; }
-grep -q "NO_TENANT" /tmp/works-nolic.json || { echo "  FAIL: 期望 error.code=NO_TENANT"; exit 1; }
-echo "  OK: 无 license 用户存在但无 tenant 关联（403 NO_TENANT）"
+[ "$HTTP_4B" = "200" ] || { echo "  FAIL: 期望 200 (free tenant) 实际 ${HTTP_4B}"; exit 1; }
+echo "  OK: 无 license 自动 free tenant + owner，GET /api/works 200"
 
-echo "==> [5/6] 注册带无效 license_key → 用户成功创建（不阻塞），tenant_members 无新行"
+echo "==> [5/6] 注册带无效 license_key → 走 free fallback（不阻塞）"
 RESP_5=$(curl -fsS -c "$COOKIE_INVALID" -X POST -H "Content-Type: application/json" \
   -d "{\"email\":\"${EMAIL_INVALID}\",\"password\":\"${PASSWORD}\",\"name\":\"PR2 Bridge Invalid\",\"license_key\":\"${INVALID_LICENSE}\"}" \
   "${API_BASE}/api/auth/sign-up/email")
 USER_ID_INVALID=$(echo "$RESP_5" | sed -E 's/.*"id":"([^"]+)".*/\1/' | head -c 64)
 [ -n "$USER_ID_INVALID" ] || { echo "  FAIL: 无效 license 应不阻塞注册"; exit 1; }
+# PR-B 改了行为：无效 license 也走 free fallback
 COUNT_INVALID=$(PGPASSWORD="$PSQL_PASS" psql -h "$PSQL_HOST" -U "$PSQL_USER" -d "$PSQL_DB" -t -A -c \
-  "SELECT count(*) FROM zenithjoy.tenant_members WHERE feishu_user_id = '${USER_ID_INVALID}';")
-[ "$COUNT_INVALID" = "0" ] || { echo "  FAIL: 无效 license 不应插入 tenant_members，实际 ${COUNT_INVALID} 行"; exit 1; }
-echo "  OK: 无效 license 时不阻塞注册，但不关联 tenant"
+  "SELECT count(*) FROM zenithjoy.tenant_members WHERE feishu_user_id = '${USER_ID_INVALID}' AND role = 'owner';")
+[ "$COUNT_INVALID" = "1" ] || { echo "  FAIL: 期望 free tenant owner 1 行，实际 ${COUNT_INVALID} 行"; exit 1; }
+echo "  OK: 无效 license 走 free fallback（owner of free tenant）"
 
 echo "==> [6/6] 向后兼容：用 X-Feishu-User-Id 头（无 cookie session）仍能访问"
 # 注：这里用 multi-tenant-smoke 已建好的 Alice
