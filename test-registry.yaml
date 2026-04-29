@@ -661,3 +661,11 @@ tests:
     status: active
     product: 中台认证
     note: "PR-C 积分基建 — /api/credits 路由测试（GET balance / GET transactions / POST recharge with super-admin）"
+
+  - id: dashboard-admin-users-api
+    path: apps/dashboard/src/api/__tests__/admin-users.api.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 中台认证
+    note: "PR-A admin-users API client 契约（4 个端点函数导出）"
