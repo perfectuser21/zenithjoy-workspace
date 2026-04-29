@@ -357,6 +357,22 @@ tests:
     product: 中台认证
     note: "Sprint A WS3 — AdminLicensePage super-admin 后台（创建/列表/吊销 + 非 admin 拒绝）"
 
+  - id: api-admin-users-route
+    path: apps/api/tests/routes/admin-users.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 中台认证
+    note: "PR-A — 超管会员管理路由 GET/POST/DELETE + superAdminGuard 鉴权（mock DB）"
+
+  - id: dashboard-admin-users-page
+    path: apps/dashboard/src/pages/__tests__/AdminUsersPage.test.tsx
+    type: unit
+    ci: L3
+    status: active
+    product: 中台认证
+    note: "PR-A — AdminUsersPage 超管后台（搜索/拉人/踢人/删用户 + 非 admin 拒绝）"
+
   - id: dashboard-license-api
     path: apps/dashboard/src/api/__tests__/license.api.test.ts
     type: unit

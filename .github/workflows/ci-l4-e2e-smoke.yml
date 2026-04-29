@@ -209,6 +209,12 @@ jobs:
         env:
           API_BASE: http://localhost:5200
           ADMIN_FEISHU_ID: ou_admin_smoke_999
+      - name: Smoke — Admin Users 超管会员管理 (PR-A)
+        env:
+          API_BASE: http://localhost:5200
+          ADMIN_FEISHU_ID: ou_admin_smoke_999
+          USER_FEISHU_ID: ou_customer_smoke_001
+: failing tests + E2E smoke for super-admin user mgmt (PR-A))
           PGHOST: localhost
           PGUSER: cecelia
           PGPASSWORD: cecelia
@@ -216,6 +222,9 @@ jobs:
         run: |
           chmod +x .github/workflows/scripts/smoke/credits-smoke.sh
           bash .github/workflows/scripts/smoke/credits-smoke.sh
+          chmod +x .github/workflows/scripts/smoke/admin-users-smoke.sh
+          bash .github/workflows/scripts/smoke/admin-users-smoke.sh
+: failing tests + E2E smoke for super-admin user mgmt (PR-A))
 
       - name: Verify pipeline_runs.topic_id is UUID + FK
         env:
