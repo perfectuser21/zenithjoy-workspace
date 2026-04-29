@@ -34,3 +34,4 @@ describe('api/better-auth 契约', () => {
     expect(typeof requestPasswordReset).toBe('function');
   });
 });
+
