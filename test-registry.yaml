@@ -604,13 +604,42 @@ tests:
 
   - id: api-auth-tenant-bridge
     path: apps/api/tests/auth-bridge.test.ts
-  - id: dashboard-better-auth-api
-    path: apps/dashboard/src/api/__tests__/better-auth.api.test.ts
-: 补 better-auth.api 配对测试 + 登记 test-registry)
     type: unit
     ci: L3
     status: active
     product: 中台认证
     note: "Better-auth → tenant_members 桥接（PR-2）— license_key 校验 + tenant 关联 + 容错"
+
+  - id: dashboard-better-auth-api
+    path: apps/dashboard/src/api/__tests__/better-auth.api.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 中台认证
     note: "PR-3 Dashboard better-auth API client 契约（5 个端点函数 + AuthError）"
-: 补 better-auth.api 配对测试 + 登记 test-registry)
+
+  # ── PR-C 积分基建（Credits Foundation） ─────────────────────────────────────
+
+  - id: api-credits-service
+    path: apps/api/tests/services/credits.service.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 中台认证
+    note: "PR-C 积分基建 — credits.service 单元测试（getBalance / recharge / consume / listTransactions / CREDIT_COSTS）"
+
+  - id: api-credit-charge-middleware
+    path: apps/api/tests/middleware/credit-charge.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 中台认证
+    note: "PR-C 积分基建 — credit-charge 中间件单元测试（createCreditCharger 工厂 + 402 INSUFFICIENT_CREDITS）"
+
+  - id: api-credits-routes
+    path: apps/api/tests/routes/credits.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 中台认证
+    note: "PR-C 积分基建 — /api/credits 路由测试（GET balance / GET transactions / POST recharge with super-admin）"
