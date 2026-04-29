@@ -18,6 +18,7 @@ import {
   Target,
   KeyRound,
   ShieldCheck,
+  UserCog,
 } from 'lucide-react';
 
 // ============ 类型定义 ============
@@ -78,6 +79,7 @@ export const autopilotPageComponents: Record<string, () => Promise<{ default: Co
   'AgentDebugPage': () => import('../pages/AgentDebugPage'),
   'LicensePage': () => import('../pages/LicensePage'),
   'AdminLicensePage': () => import('../pages/AdminLicensePage'),
+  'AdminUsersPage': () => import('../pages/AdminUsersPage'),
   // FeatureDashboard and CommandCenter moved to Core features/business
 };
 
@@ -169,6 +171,14 @@ export const autopilotNavGroups: NavGroup[] = [
         featureKey: 'license-admin',
         requireSuperAdmin: true,
         component: 'AdminLicensePage',
+      },
+      {
+        path: '/admin/users',
+        icon: UserCog,
+        label: '会员管理',
+        featureKey: 'users-admin',
+        requireSuperAdmin: true,
+        component: 'AdminUsersPage',
       },
     ]
   }
