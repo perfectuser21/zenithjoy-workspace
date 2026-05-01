@@ -56,7 +56,7 @@ describe('Agent API', () => {
         tier: 'pro',
         max_machines: 5,
         registered_machine_id: 'machine-001',
-        ws_token: 'ws-tok-abc123',
+        ws_token: 'ws-tok-abc123', // gitleaks:allow
       });
       const res = await request(app)
         .post('/api/agent/register')

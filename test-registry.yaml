@@ -669,3 +669,53 @@ tests:
     status: active
     product: 中台认证
     note: "PR-A admin-users API client 契约（4 个端点函数导出）"
+
+  # ── Phase 1 技术债补齐 ─────────────────────────────────────────────────────
+
+  - id: api-ai-video-routes
+    path: apps/api/tests/ai-video.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: AI视频
+    note: "Phase 1 技术债 — AI 视频生成路由（history/active/task/:id/generate/PUT/DELETE，vi.hoisted mock）"
+
+  - id: api-admin-users-routes
+    path: apps/api/tests/admin-users.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 中台认证
+    note: "Phase 1 技术债 — 管理员用户路由（GET list / POST tenant-member / DELETE tenant-member / DELETE user）"
+
+  - id: api-credits-routes-v2
+    path: apps/api/tests/credits.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 中台认证
+    note: "Phase 1 技术债 — 积分路由（balance/transactions/recharge superAdminGuard 403）"
+
+  - id: api-douyin-auth-routes
+    path: apps/api/tests/douyin-auth.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 内容发布
+    note: "Phase 1 技术债 — 抖音 OAuth 回调路由（success/fail/missing-code/axios-error）"
+
+  - id: api-work-performance-routes
+    path: apps/api/tests/work-performance.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 内容发布
+    note: "Phase 1 技术债 — 作品表现数据路由（platforms 分组/多平台/空数据/DB error）"
+
+  - id: api-agent-routes
+    path: apps/api/tests/agent.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: AI员工
+    note: "Phase 1 技术债 — Agent 路由（register 格式校验/有效注册/401/403/status/test-publish）"
