@@ -228,6 +228,72 @@ jobs:
           bash .github/workflows/scripts/smoke/admin-users-smoke.sh
 : failing tests + E2E smoke for super-admin user mgmt (PR-A))
 
+      - name: Smoke — AI Video history/active/generate
+        env:
+          API_BASE: http://localhost:5200
+        run: |
+          chmod +x .github/workflows/scripts/smoke/ai-video-smoke.sh
+          bash .github/workflows/scripts/smoke/ai-video-smoke.sh
+
+      - name: Smoke — Pipeline dashboard-stats/trigger
+        env:
+          API_BASE: http://localhost:5200
+          ZENITHJOY_INTERNAL_TOKEN: ci-only-internal-token-abc-not-prod
+        run: |
+          chmod +x .github/workflows/scripts/smoke/pipeline-smoke.sh
+          bash .github/workflows/scripts/smoke/pipeline-smoke.sh
+
+      - name: Smoke — Fields CRUD
+        env:
+          API_BASE: http://localhost:5200
+          ZENITHJOY_INTERNAL_TOKEN: ci-only-internal-token-abc-not-prod
+        run: |
+          chmod +x .github/workflows/scripts/smoke/fields-smoke.sh
+          bash .github/workflows/scripts/smoke/fields-smoke.sh
+
+      - name: Smoke — Competitor Research start/status
+        env:
+          API_BASE: http://localhost:5200
+        run: |
+          chmod +x .github/workflows/scripts/smoke/competitor-research-smoke.sh
+          bash .github/workflows/scripts/smoke/competitor-research-smoke.sh
+
+      - name: Smoke — Snapshots ingest/query
+        env:
+          API_BASE: http://localhost:5200
+          ZENITHJOY_INTERNAL_TOKEN: ci-only-internal-token-abc-not-prod
+        run: |
+          chmod +x .github/workflows/scripts/smoke/snapshots-smoke.sh
+          bash .github/workflows/scripts/smoke/snapshots-smoke.sh
+
+      - name: Smoke — Pacing Config get/patch
+        env:
+          API_BASE: http://localhost:5200
+          ZENITHJOY_INTERNAL_TOKEN: ci-only-internal-token-abc-not-prod
+        run: |
+          chmod +x .github/workflows/scripts/smoke/pacing-config-smoke.sh
+          bash .github/workflows/scripts/smoke/pacing-config-smoke.sh
+
+      - name: Smoke — Topics CRUD
+        env:
+          API_BASE: http://localhost:5200
+          ZENITHJOY_INTERNAL_TOKEN: ci-only-internal-token-abc-not-prod
+        run: |
+          chmod +x .github/workflows/scripts/smoke/topics-smoke.sh
+          bash .github/workflows/scripts/smoke/topics-smoke.sh
+
+      - name: Smoke — Publish Logs CRUD
+        env:
+          API_BASE: http://localhost:5200
+          ZENITHJOY_INTERNAL_TOKEN: ci-only-internal-token-abc-not-prod
+          PGHOST: localhost
+          PGUSER: cecelia
+          PGPASSWORD: cecelia
+          PGDATABASE: cecelia
+        run: |
+          chmod +x .github/workflows/scripts/smoke/publish-logs-smoke.sh
+          bash .github/workflows/scripts/smoke/publish-logs-smoke.sh
+
       - name: Verify pipeline_runs.topic_id is UUID + FK
         env:
           PGPASSWORD: cecelia
