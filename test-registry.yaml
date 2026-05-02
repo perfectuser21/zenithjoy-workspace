@@ -719,3 +719,37 @@ tests:
     status: active
     product: AI员工
     note: "Phase 1 技术债 — Agent 路由（register 格式校验/有效注册/401/403/status/test-publish）"
+
+  # ── Phase 2 Integration Tests ──────────────────────────────────────────
+
+  - id: api-integration-tenant-onboarding
+    path: apps/api/tests/integration/tenant-onboarding.integration.test.ts
+    type: integration
+    ci: L4-INT
+    status: active
+    product: 中台认证
+    note: "Phase 2 技术债 — Tenant 入驻链路（创建 tenant/添加成员/tenant context/403 无 tenant）"
+
+  - id: api-integration-works-crud
+    path: apps/api/tests/integration/works-crud.integration.test.ts
+    type: integration
+    ci: L4-INT
+    status: active
+    product: 内容发布
+    note: "Phase 2 技术债 — 作品 CRUD + 多租户隔离（真实 DB zenithjoy_test）"
+
+  - id: api-integration-publish-logs
+    path: apps/api/tests/integration/publish-logs.integration.test.ts
+    type: integration
+    ci: L4-INT
+    status: active
+    product: 内容发布
+    note: "Phase 2 技术债 — 发布日志链路（创建/查询/状态流转/多平台）"
+
+  - id: api-integration-snapshots-ingest
+    path: apps/api/tests/integration/snapshots-ingest.integration.test.ts
+    type: integration
+    ci: L4-INT
+    status: active
+    product: 数据分析
+    note: "Phase 2 技术债 — 快照 ingest（批量写入/幂等 upsert/无效 platform 校验）"
