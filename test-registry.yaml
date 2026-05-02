@@ -753,3 +753,44 @@ tests:
     status: active
     product: 数据分析
     note: "Phase 2 技术债 — 快照 ingest（批量写入/幂等 upsert/无效 platform 校验）"
+
+# ── Phase 3 E2E (Playwright) ──
+  - id: dashboard-e2e-navigation
+    path: apps/dashboard/e2e/navigation.e2e.ts
+    type: e2e
+    ci: L4-E2E
+    status: active
+    product: Dashboard
+    note: "Phase 3 E2E — 侧边栏导航（渲染/跳转/折叠/高亮）"
+
+  - id: dashboard-e2e-works
+    path: apps/dashboard/e2e/works.e2e.ts
+    type: e2e
+    ci: L4-E2E
+    status: active
+    product: 内容发布
+    note: "Phase 3 E2E — 作品列表页（mock API / 状态 badge）"
+
+  - id: dashboard-e2e-ai-video
+    path: apps/dashboard/e2e/ai-video.e2e.ts
+    type: e2e
+    ci: L4-E2E
+    status: active
+    product: AI 视频
+    note: "Phase 3 E2E — AI 视频生成页（mock API / 历史记录）"
+
+  - id: dashboard-e2e-auth
+    path: apps/dashboard/e2e/auth.e2e.ts
+    type: e2e
+    ci: L4-E2E
+    status: active
+    product: 认证
+    note: "Phase 3 E2E — 登录/注册/忘记密码页表单渲染"
+
+  - id: dashboard-e2e-admin
+    path: apps/dashboard/e2e/admin.e2e.ts
+    type: e2e
+    ci: L4-E2E
+    status: active
+    product: 管理后台
+    note: "Phase 3 E2E — Admin 页面路由保护 + 侧边栏 admin 菜单"

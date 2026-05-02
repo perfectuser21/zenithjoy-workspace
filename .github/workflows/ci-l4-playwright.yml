@@ -1,0 +1,61 @@
+name: L4 Playwright E2E
+
+# Dashboard E2E — Playwright (Chromium)
+# 不依赖真实后端：VITE_SKIP_AUTH=true + page.route() mock API
+#
+# 触发：PR 到 main + push 到 main + 手动
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'apps/dashboard/**'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'apps/dashboard/**'
+      - '.github/workflows/ci-l4-playwright.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: l4-playwright-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  playwright:
+    name: Dashboard Playwright E2E
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: package-lock.json
+
+      - name: Install dashboard deps
+        run: npm ci --workspace=apps/dashboard
+
+      - name: Install Playwright browsers
+        working-directory: apps/dashboard
+        run: npx playwright install chromium --with-deps
+
+      - name: Run Playwright E2E tests
+        working-directory: apps/dashboard
+        env:
+          CI: true
+          VITE_SKIP_AUTH: 'true'
+          VITE_MOCK_USER_ID: 'e2e-test-user'
+          VITE_MOCK_USER_NAME: 'E2E测试用户'
+        run: npm run test:e2e
+
+      - name: Upload Playwright report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: apps/dashboard/playwright-report/
+          retention-days: 3
