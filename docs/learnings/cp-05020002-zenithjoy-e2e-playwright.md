@@ -14,7 +14,8 @@ Dashboard 完全没有 E2E 测试覆盖，5 条核心用户旅程（导航/作�
 
 ### 下次预防
 
-- [ ] **`VITE_SKIP_AUTH` 在 CI 里永远无效**（`.env.development` gitignored）。Playwright auth mock 唯一可靠方式：`page.addInitScript()` 注入 localStorage
+- [ ] **`VITE_SKIP_AUTH` via process.env 在 Vite 7 中不可靠**。正确方式：提交 `.env.e2e` 文件，webServer 用 `--mode e2e` 加载，从根本上保证 env 生效
+- [ ] **Vite cold start 编译需要 15-20s**，`expect.timeout` 至少设为 30s（默认 10s 远不够）；webServer `timeout` 至少 120s
 - [ ] `page.addInitScript(fn, arg)` 的 arg 必须是序列化值（字符串），不能传 object 引用（跨进程序列化）
 - [ ] 新增 Dashboard 功能页时，同时在 `e2e/` 下新建对应 `*.e2e.ts`，并注册进 `test-registry.yaml`
 - [ ] `setupMockApi()` fixture 是统一入口，新接口的 mock 只加这一处

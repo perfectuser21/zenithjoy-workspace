@@ -13,6 +13,8 @@ build/
 .env.*.local
 .env.production
 .env.development
+# E2E test env — safe to commit (no secrets, just VITE_SKIP_AUTH=true)
+!.env.e2e
 
 # IDE
 .idea/

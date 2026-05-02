@@ -20,8 +20,8 @@ export default defineConfig({
   retries: IS_CI ? 1 : 0,
   workers: 1,
   reporter: IS_CI ? 'github' : 'list',
-  timeout: 30000,
-  expect: { timeout: 10000 },
+  timeout: 60000,
+  expect: { timeout: 30000 },
 
   use: {
     baseURL: BASE_URL,
@@ -38,15 +38,10 @@ export default defineConfig({
 
   webServer: IS_CI
     ? {
-        command: 'VITE_SKIP_AUTH=true npm run dev -- --port 3001',
+        command: 'npm run dev -- --port 3001 --mode e2e',
         url: BASE_URL,
         reuseExistingServer: false,
-        timeout: 60000,
-        env: {
-          VITE_SKIP_AUTH: 'true',
-          VITE_MOCK_USER_ID: 'e2e-test-user',
-          VITE_MOCK_USER_NAME: 'E2E测试用户',
-        },
+        timeout: 120000,
       }
     : undefined,
 });

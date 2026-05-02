@@ -25,7 +25,7 @@ jobs:
   playwright:
     name: Dashboard Playwright E2E
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
 
     steps:
       - uses: actions/checkout@v4
@@ -52,9 +52,6 @@ jobs:
         working-directory: apps/dashboard
         env:
           CI: true
-          VITE_SKIP_AUTH: 'true'
-          VITE_MOCK_USER_ID: 'e2e-test-user'
-          VITE_MOCK_USER_NAME: 'E2E测试用户'
         run: npm run test:e2e
 
       - name: Upload Playwright report
