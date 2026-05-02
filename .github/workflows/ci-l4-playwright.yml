@@ -37,7 +37,12 @@ jobs:
           cache-dependency-path: package-lock.json
 
       - name: Install dashboard deps
-        run: npm ci --workspace=apps/dashboard
+        working-directory: apps/dashboard
+        run: npm ci
+
+      - name: Fix rollup optional deps (npm ci bug workaround)
+        working-directory: apps/dashboard
+        run: node -e "try{require('@rollup/rollup-linux-x64-gnu')}catch(e){require('child_process').execSync('npm install --no-save @rollup/rollup-linux-x64-gnu',{stdio:'inherit'})}" || true
 
       - name: Install Playwright browsers
         working-directory: apps/dashboard
