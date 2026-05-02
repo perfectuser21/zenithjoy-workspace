@@ -56,16 +56,47 @@ export async function setupMockApi(page: Page) {
     localStorage.setItem('token', 'e2e-test-token');
   }, MOCK_USER_JSON);
 
-  // ── 2. API 拦截器（顺序敏感：精确 pattern 在 catch-all 之前）─────────────
+  // ── 2. API 拦截器（注册顺序敏感：Playwright 后注册的 handler 优先级更高）
+  //    正确顺序：catch-all 先注册，精确 pattern 后注册（覆盖 catch-all）
 
-  await page.route('**/api/auth/**', async (route) => {
+  // catch-all 兜底（最先注册 = 最低优先级）
+  await page.route('**/api/**', async (route) => {
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
-      body: JSON.stringify({
-        user: MOCK_USER,
-        session: { token: 'mock-session-token' },
-      }),
+      body: JSON.stringify({ success: true, data: null }),
+    });
+  });
+
+  await page.route('**/api/admin/**', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify([]),
+    });
+  });
+
+  await page.route('**/api/brain/**', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ success: true }),
+    });
+  });
+
+  await page.route('**/api/credits/**', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ balance: 500, used: 100 }),
+    });
+  });
+
+  await page.route('**/api/ai-video**', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ data: MOCK_AI_GENERATIONS, total: MOCK_AI_GENERATIONS.length }),
     });
   });
 
@@ -86,43 +117,15 @@ export async function setupMockApi(page: Page) {
     }
   });
 
-  await page.route('**/api/ai-video**', async (route) => {
+  // auth 最后注册 = 最高优先级
+  await page.route('**/api/auth/**', async (route) => {
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
-      body: JSON.stringify({ data: MOCK_AI_GENERATIONS, total: MOCK_AI_GENERATIONS.length }),
-    });
-  });
-
-  await page.route('**/api/credits/**', async (route) => {
-    await route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify({ balance: 500, used: 100 }),
-    });
-  });
-
-  await page.route('**/api/brain/**', async (route) => {
-    await route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify({ success: true }),
-    });
-  });
-
-  await page.route('**/api/admin/**', async (route) => {
-    await route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify([]),
-    });
-  });
-
-  await page.route('**/api/**', async (route) => {
-    await route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify({ success: true, data: null }),
+      body: JSON.stringify({
+        user: MOCK_USER,
+        session: { token: 'mock-session-token' },
+      }),
     });
   });
 }

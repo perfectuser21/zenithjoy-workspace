@@ -13,11 +13,13 @@ test.describe('Works List Page', () => {
   });
 
   test('shows published status badge in Chinese', async ({ page }) => {
-    await expect(page.getByText('已发布').first()).toBeVisible();
+    // Target badge span inside the table, not <option> elements in the filter dropdown
+    await expect(page.locator('tbody span').filter({ hasText: '已发布' }).first()).toBeVisible();
   });
 
   test('shows draft status badge in Chinese', async ({ page }) => {
-    await expect(page.getByText('草稿').first()).toBeVisible();
+    // Target badge span inside the table, not <option> elements in the filter dropdown
+    await expect(page.locator('tbody span').filter({ hasText: '草稿' }).first()).toBeVisible();
   });
 
   test('page title shows 作品管理', async ({ page }) => {
