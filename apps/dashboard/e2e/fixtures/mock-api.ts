@@ -1,5 +1,11 @@
 import type { Page } from '@playwright/test';
 
+export const MOCK_USER = {
+  id: 'e2e-test-user',
+  name: 'E2E测试用户',
+  email: 'e2e@zenjoymedia.media',
+};
+
 export const MOCK_WORKS = [
   {
     id: 'work-e2e-001',
@@ -30,13 +36,37 @@ export const MOCK_AI_GENERATIONS = [
   },
 ];
 
+/**
+ * 设置 mock API 拦截器 + 注入 auth cookie。
+ *
+ * .env.development 在 CI 里不提交（.gitignore 屏蔽了 .env.*），所以
+ * VITE_SKIP_AUTH 不一定生效。双保险：
+ *   1. page.route 拦截 /api/auth/get-session → 返回 mock session
+ *   2. addCookies 注入 user/token cookie → AuthContext cookie fallback 路径
+ */
 export async function setupMockApi(page: Page) {
+  // ── Auth cookie 注入（AuthContext cookie fallback 路径）──────────────────
+  await page.context().addCookies([
+    {
+      name: 'user',
+      value: encodeURIComponent(JSON.stringify(MOCK_USER)),
+      url: 'http://localhost:3001',
+    },
+    {
+      name: 'token',
+      value: 'e2e-test-token',
+      url: 'http://localhost:3001',
+    },
+  ]);
+
+  // ── API 拦截器（顺序敏感：精确 pattern 在 catch-all 之前）─────────────────
+
   await page.route('**/api/auth/**', async (route) => {
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify({
-        user: { id: 'e2e-test-user', name: 'E2E测试用户', email: 'e2e@zenjoymedia.media' },
+        user: MOCK_USER,
         session: { token: 'mock-session-token' },
       }),
     });

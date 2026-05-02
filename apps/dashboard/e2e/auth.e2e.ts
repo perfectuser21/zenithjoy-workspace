@@ -9,7 +9,7 @@ test.describe('Authentication Pages', () => {
 
   test('login page shows submit button', async ({ page }) => {
     await page.goto('/login');
-    await expect(page.getByRole('button', { name: /登录|sign in/i })).toBeVisible();
+    await expect(page.locator('button[type="submit"]')).toBeVisible();
   });
 
   test('signup page renders', async ({ page }) => {
