@@ -20,8 +20,8 @@ export default defineConfig({
   retries: IS_CI ? 1 : 0,
   workers: 1,
   reporter: IS_CI ? 'github' : 'list',
-  timeout: 60000,
-  expect: { timeout: 30000 },
+  timeout: 30000,
+  expect: { timeout: 10000 },
 
   use: {
     baseURL: BASE_URL,
@@ -38,10 +38,10 @@ export default defineConfig({
 
   webServer: IS_CI
     ? {
-        command: 'npm run dev -- --port 3001 --mode e2e',
+        command: 'npm run preview -- --port 3001 --host',
         url: BASE_URL,
         reuseExistingServer: false,
-        timeout: 120000,
+        timeout: 30000,
       }
     : undefined,
 });
