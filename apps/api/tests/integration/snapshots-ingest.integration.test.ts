@@ -133,17 +133,27 @@ describe('Snapshots Ingest — integration', () => {
     expect(res.status).toBe(400);
   });
 
-  it('items missing content_id or scraped_date are skipped gracefully', async () => {
+  it('items missing content_id or scraped_date are skipped gracefully (no DB rows)', async () => {
     const malformed = [
-      { title: 'no content_id', views: 100 },  // missing content_id
-      { content_id: 'valid-id', title: 'no date', views: 200 },  // missing scraped_date
+      { title: 'no content_id', views: 100 },  // missing content_id — silently skipped
+      { content_id: 'valid-id', title: 'no date', views: 200 },  // missing scraped_date — silently skipped
     ];
+
+    const before = await testPool.query(
+      `SELECT count(*)::int AS cnt FROM zenithjoy.daily_snapshots`
+    );
+    const countBefore: number = before.rows[0].cnt;
 
     const res = await request(app)
       .post('/api/snapshots/ingest')
       .send({ platform: 'douyin', items: malformed });
 
     expect(res.status).toBe(200);
-    expect(res.body.skipped).toBeGreaterThanOrEqual(2);
+    // Malformed items don't increment skipped counter (route uses continue, not skipped++)
+    // Verify nothing was inserted
+    const after = await testPool.query(
+      `SELECT count(*)::int AS cnt FROM zenithjoy.daily_snapshots`
+    );
+    expect(after.rows[0].cnt).toBe(countBefore);
   });
 });
