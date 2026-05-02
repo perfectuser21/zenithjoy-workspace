@@ -6,10 +6,10 @@ test.describe('Admin Pages — Route Protection', () => {
     await setupMockApi(page);
   });
 
-  test('admin/users shows 403 for non-super-admin', async ({ page }) => {
+  test('admin/users redirects non-super-admin to home', async ({ page }) => {
     await page.goto('/admin/users');
-    // Mock user is not a super admin → page renders 403 内容
-    await expect(page.getByText('403')).toBeVisible();
+    // DynamicRouter redirects non-super-admin to "/" (access control via Navigate)
+    await expect(page).toHaveURL('/');
   });
 
   test('admin/license page loads without crash', async ({ page }) => {
