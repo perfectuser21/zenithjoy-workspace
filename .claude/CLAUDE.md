@@ -4,6 +4,50 @@
 
 你正在开发 ZenithJoy 工作空间，这是 ZenithJoy 公司的核心业务平台。
 
+---
+
+## ⚡ 第零纪律：Walking Skeleton 优先（CRITICAL）
+
+**产品的颗粒度是"用户路径（Journey）"，不是 feature 列表**。本 repo 已建立 walking skeleton 作战图，所有开发对照它推进。
+
+### Path 作战图（Notion）
+
+| Path | 类型 | Maturity | Notion |
+|---|---|---|---|
+| Path 1 客户首次成功 | user_facing | not_started | [Notion](https://www.notion.so/358c40c2ba6381b2a6eacd288cf82f29) |
+
+**Path 1 的 6 步**（在 `.github/workflows/scripts/smoke/golden-path-1-smoke.sh`）：
+1. 注册自动登录（含 free license）
+2. 装客户端 + Agent 自动连中台
+3. 画像诊断（行业/受众/风格 3 字段）
+4. 扫码绑定快手（Agent 弹登录窗）
+5. AI 生成 1 条内容（接 Claude API）
+6. 中台派任务 + dryrun 发布 + 回执
+
+### 4 条铁律（违反 = PR 被拒）
+
+1. **每个 PR 必须推进 `golden-path-1-smoke.sh` 至少多过一关**。PR 描述强制声明：「本 PR 把 Path X 的 Step Y 从 ❌/🔴 推到 ✅」。
+2. **Path 1 没真正通之前，Path 2/3 一行代码不写**。新加 feature 的想法对照 6 步检查 — 不在路径上 → backlog。
+3. **新 Feature 默认 thin**。要建 medium/thick 必须用 walking-skeleton skill `thicken.js` 走升级流程（含 `replaces_old_thin` 删旧文件证据）。
+4. **加厚是"先减肥再增肌"**：升级 thickness 必须两段式 commit：`commit 1 删旧 mock/hardcode` → `commit 2 写新实现`。改名 `_legacy` / TODO 注释不算删除。
+
+### 调用 sprint-planner / harness-planner 前必填 4 问
+
+```
+□ 1. 本 sprint 推进哪条 Journey？（名 + Notion URL + 当前 Maturity）
+□ 2. 涉及几个角色？多角色必须拆多个 sprint，CI/部署 = 独立 dev_pipeline Journey
+□ 3. 推进哪些 Feature？(每个 Feature 标 Journey Step N + thickness from→to)
+□ 4. Feature 0 端到端 smoke = golden-path-1-smoke.sh 跑到 Step <K>，FAIL = 整 sprint FAIL
+```
+
+不填齐 4 问，**禁止启动 sprint-planner**。
+
+### 触发 walking-skeleton skill 的场景
+
+任何"我想做 X 功能"、"加个 feature"、"feature 该多厚"、"开 sprint" 等问题 — 自动触发 `/walking-skeleton`，它会强制 anchor 到 4 条 Journey 上。
+
+---
+
 ## 开发原则
 
 ### 1. 代码质量
