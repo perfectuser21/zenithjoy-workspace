@@ -16,6 +16,7 @@ import pacingConfigRouter from './routes/pacing-config';
 import pipelinesWorkerRouter from './routes/pipelines-worker';
 import competitorResearchRouter from './routes/competitor-research';
 import { agentRouter } from './routes/agent';
+import { heartbeatRouter, publishWsRouter } from './routes/walking-skeleton';
 import { adminLicenseRouter } from './routes/admin-license';
 import { adminUsersRouter } from './routes/admin-users';
 import { tasksRouter } from './routes/tasks';
@@ -67,7 +68,11 @@ app.use('/api/pipelines', pipelinesWorkerRouter);
 app.use('/api/competitor-research', competitorResearchRouter);
 // /api/agent/tasks must be registered before /api/agent to avoid route conflict
 app.use('/api/agent/tasks', tasksRouter);
+// Walking Skeleton #1：先挂 heartbeat / folder/bind，再挂旧 agentRouter（按顺序匹配）
+app.use('/api/agent', heartbeatRouter);
 app.use('/api/agent', agentRouter);
+// Walking Skeleton #1：publish task 队列（/api/publish/task /receipt /tasks/:id）
+app.use('/api/publish', publishWsRouter);
 app.use('/api/admin/license', adminLicenseRouter);
 app.use('/api/admin/users', adminUsersRouter);
 app.use('/api/tenants', tenantsRouter);
