@@ -1,0 +1,267 @@
+/**
+ * Walking Skeleton #1 业务服务
+ *
+ * 暴露给 routes 的几个函数：
+ *  - validateLicense：心跳/folder/publish 端点共用的 license 校验
+ *  - upsertAgentByHeartbeat：心跳进来时找/建 agent 记录
+ *  - getQueuedTasks：拉一个 agent 的 pending publish_tasks
+ *  - bindFolder：写 agent.bound_folder_path + 入队 folder_bind task
+ *  - createPublishTask：入队 publish task
+ *  - submitPublishReceipt：写 publish task 回执
+ *  - getPublishTask：单条 task 查询
+ *
+ * 契约来源：/tmp/walking-skeleton-1-contract.md 第 2 节
+ */
+
+import crypto from 'node:crypto';
+import pool from '../db/connection';
+
+export interface LicenseRowMin {
+  id: string;
+  license_key: string;
+  tenant_id: string | null;
+  status: 'active' | 'expired' | 'revoked' | 'suspended';
+  expires_at: string;
+}
+
+export interface AgentRow {
+  id: string;
+  tenant_id: string;
+  agent_id: string;
+  hostname: string | null;
+  version: string | null;
+  license_id: string | null;
+  bound_folder_path: string | null;
+  last_heartbeat_at: string | null;
+  status: string;
+  last_seen: string | null;
+}
+
+export interface PublishTaskRow {
+  id: string;
+  agent_id: string;
+  platform: string;
+  status: 'pending' | 'running' | 'success' | 'failed';
+  folder_path: string | null;
+  result: unknown | null;
+  receipt_at: string | null;
+  created_at: string;
+}
+
+export type LicenseFailureCode =
+  | 'INVALID_LICENSE'
+  | 'EXPIRED'
+  | 'REVOKED'
+  | 'SUSPENDED'
+  | 'NO_TENANT';
+
+export interface LicenseFailure {
+  ok: false;
+  code: LicenseFailureCode;
+  message: string;
+}
+
+export interface LicenseSuccess {
+  ok: true;
+  license: LicenseRowMin;
+}
+
+/**
+ * 用 license_key（ZJ-X-XXXXXXXX）查询并校验：active + 未过期 + 已绑 tenant。
+ * 失败时返回结构化错误，调用方按需映射 HTTP 状态码。
+ */
+export async function validateLicense(
+  licenseKey: string
+): Promise<LicenseSuccess | LicenseFailure> {
+  if (typeof licenseKey !== 'string' || !licenseKey.trim()) {
+    return { ok: false, code: 'INVALID_LICENSE', message: 'license 缺失' };
+  }
+  const { rows } = await pool.query<LicenseRowMin>(
+    `SELECT id, license_key, tenant_id, status, expires_at
+       FROM zenithjoy.licenses
+      WHERE license_key = $1
+      LIMIT 1`,
+    [licenseKey.trim()]
+  );
+  const license = rows[0];
+  if (!license) {
+    return { ok: false, code: 'INVALID_LICENSE', message: 'license 不存在' };
+  }
+  if (license.status === 'revoked') {
+    return { ok: false, code: 'REVOKED', message: 'license 已吊销' };
+  }
+  if (license.status === 'suspended') {
+    return { ok: false, code: 'SUSPENDED', message: 'license 已暂停' };
+  }
+  if (license.status === 'expired') {
+    return { ok: false, code: 'EXPIRED', message: 'license 已过期' };
+  }
+  if (new Date(license.expires_at).getTime() < Date.now()) {
+    return { ok: false, code: 'EXPIRED', message: 'license 已过期' };
+  }
+  if (!license.tenant_id) {
+    return { ok: false, code: 'NO_TENANT', message: 'license 未关联 tenant' };
+  }
+  return { ok: true, license };
+}
+
+/**
+ * 心跳进来时找/建 agent 记录。
+ * 主键约定：在 (license_id, hostname) 唯一定位一台机器；hostname 缺失时退化成 license_id 维度。
+ */
+export async function upsertAgentByHeartbeat(args: {
+  licenseId: string;
+  tenantId: string;
+  hostname: string | null;
+  version: string | null;
+}): Promise<AgentRow> {
+  const { licenseId, tenantId, hostname, version } = args;
+
+  const existing = await pool.query<AgentRow>(
+    `SELECT id, tenant_id, agent_id, hostname, version, license_id,
+            bound_folder_path, last_heartbeat_at, status, last_seen
+       FROM zenithjoy.agents
+      WHERE license_id = $1
+        AND ((hostname IS NULL AND $2::text IS NULL) OR hostname = $2)
+      ORDER BY created_at ASC
+      LIMIT 1`,
+    [licenseId, hostname]
+  );
+
+  if (existing.rows[0]) {
+    const row = existing.rows[0];
+    const updated = await pool.query<AgentRow>(
+      `UPDATE zenithjoy.agents
+          SET version = COALESCE($1, version),
+              last_heartbeat_at = now(),
+              last_seen = now(),
+              status = 'online',
+              updated_at = now()
+        WHERE id = $2
+        RETURNING id, tenant_id, agent_id, hostname, version, license_id,
+                  bound_folder_path, last_heartbeat_at, status, last_seen`,
+      [version, row.id]
+    );
+    return updated.rows[0];
+  }
+
+  // 新建：agent_id 用 'ws1-' 前缀 + 随机十六进制，避免与既有 v1.1 注册流的 agent_id 冲突
+  const agentText = `ws1-${crypto.randomBytes(8).toString('hex')}`;
+  const inserted = await pool.query<AgentRow>(
+    `INSERT INTO zenithjoy.agents
+       (tenant_id, license_id, agent_id, hostname, version, capabilities, status,
+        last_heartbeat_at, last_seen)
+     VALUES ($1, $2, $3, $4, $5, ARRAY['douyin']::text[], 'online', now(), now())
+     RETURNING id, tenant_id, agent_id, hostname, version, license_id,
+               bound_folder_path, last_heartbeat_at, status, last_seen`,
+    [tenantId, licenseId, agentText, hostname, version]
+  );
+  return inserted.rows[0];
+}
+
+/** 拉指定 agent 的待派发任务（pending） */
+export async function getQueuedTasks(agentId: string): Promise<PublishTaskRow[]> {
+  const { rows } = await pool.query<PublishTaskRow>(
+    `SELECT id, agent_id, platform, status, folder_path, result, receipt_at, created_at
+       FROM zenithjoy.publish_tasks
+      WHERE agent_id = $1 AND status = 'pending'
+      ORDER BY created_at ASC`,
+    [agentId]
+  );
+  return rows;
+}
+
+/** 找 agent；返回 null 表示不存在（给 folder_bind / publish/task 用） */
+export async function findAgentById(agentId: string): Promise<AgentRow | null> {
+  const { rows } = await pool.query<AgentRow>(
+    `SELECT id, tenant_id, agent_id, hostname, version, license_id,
+            bound_folder_path, last_heartbeat_at, status, last_seen
+       FROM zenithjoy.agents
+      WHERE id = $1
+      LIMIT 1`,
+    [agentId]
+  );
+  return rows[0] ?? null;
+}
+
+/**
+ * 文件夹绑定：
+ *   1) UPDATE agents.bound_folder_path
+ *   2) INSERT publish_tasks(platform='folder_bind', folder_path) — Agent 下次 heartbeat 拉到
+ */
+export async function bindFolder(args: {
+  agentId: string;
+  localPath: string;
+}): Promise<{ taskId: string }> {
+  const { agentId, localPath } = args;
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    await client.query(
+      `UPDATE zenithjoy.agents
+          SET bound_folder_path = $1, updated_at = now()
+        WHERE id = $2`,
+      [localPath, agentId]
+    );
+    const ins = await client.query<{ id: string }>(
+      `INSERT INTO zenithjoy.publish_tasks (agent_id, platform, folder_path, status)
+       VALUES ($1, 'folder_bind', $2, 'pending')
+       RETURNING id`,
+      [agentId, localPath]
+    );
+    await client.query('COMMIT');
+    return { taskId: ins.rows[0].id };
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => undefined);
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+/** 创建发布任务 */
+export async function createPublishTask(args: {
+  agentId: string;
+  platform: string;
+  folderPath: string | null;
+}): Promise<PublishTaskRow> {
+  const { agentId, platform, folderPath } = args;
+  const { rows } = await pool.query<PublishTaskRow>(
+    `INSERT INTO zenithjoy.publish_tasks (agent_id, platform, folder_path, status)
+     VALUES ($1, $2, $3, 'pending')
+     RETURNING id, agent_id, platform, status, folder_path, result, receipt_at, created_at`,
+    [agentId, platform, folderPath]
+  );
+  return rows[0];
+}
+
+/** Agent 上报回执：更新任务状态 + result + receipt_at */
+export async function submitPublishReceipt(args: {
+  taskId: string;
+  status: 'success' | 'failed';
+  result: unknown;
+}): Promise<PublishTaskRow | null> {
+  const { taskId, status, result } = args;
+  const { rows } = await pool.query<PublishTaskRow>(
+    `UPDATE zenithjoy.publish_tasks
+        SET status = $1,
+            result = $2::jsonb,
+            receipt_at = now()
+      WHERE id = $3
+      RETURNING id, agent_id, platform, status, folder_path, result, receipt_at, created_at`,
+    [status, result == null ? null : JSON.stringify(result), taskId]
+  );
+  return rows[0] ?? null;
+}
+
+/** 单条任务查询 */
+export async function getPublishTask(taskId: string): Promise<PublishTaskRow | null> {
+  const { rows } = await pool.query<PublishTaskRow>(
+    `SELECT id, agent_id, platform, status, folder_path, result, receipt_at, created_at
+       FROM zenithjoy.publish_tasks
+      WHERE id = $1
+      LIMIT 1`,
+    [taskId]
+  );
+  return rows[0] ?? null;
+}
