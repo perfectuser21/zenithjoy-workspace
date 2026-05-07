@@ -61,8 +61,13 @@ describe('DouyinBindPage [BEHAVIOR]', () => {
     vi.mocked(ws1Api.getPlatformSessions).mockResolvedValue({ sessions: [] });
     render(<DouyinBindPage />, { wrapper: createWrapper() });
 
-    const btn = await screen.findByRole('button', { name: /扫码绑抖音/ });
-    fireEvent.click(btn);
+    // 等 agent-status query 加载完，按钮才会启用
+    await waitFor(() => {
+      expect(
+        screen.getByRole('button', { name: /扫码绑抖音/ })
+      ).not.toBeDisabled();
+    });
+    fireEvent.click(screen.getByRole('button', { name: /扫码绑抖音/ }));
 
     await waitFor(() => {
       expect(ws1Api.postQrBind).toHaveBeenCalledTimes(1);

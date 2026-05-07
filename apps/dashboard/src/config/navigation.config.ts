@@ -19,6 +19,10 @@ import {
   KeyRound,
   ShieldCheck,
   UserCog,
+  Download,
+  Music2,
+  Folder,
+  Send,
 } from 'lucide-react';
 
 // ============ 类型定义 ============
@@ -80,6 +84,11 @@ export const autopilotPageComponents: Record<string, () => Promise<{ default: Co
   'LicensePage': () => import('../pages/LicensePage'),
   'AdminLicensePage': () => import('../pages/AdminLicensePage'),
   'AdminUsersPage': () => import('../pages/AdminUsersPage'),
+  // Walking Skeleton #1 — 客户首次成功路径（抖音版）
+  'AgentDownloadPage': () => import('../pages/AgentDownloadPage'),
+  'DouyinBindPage': () => import('../pages/DouyinBindPage'),
+  'FolderBindPage': () => import('../pages/FolderBindPage'),
+  'PublishPage': () => import('../pages/PublishPage'),
   // FeatureDashboard and CommandCenter moved to Core features/business
 };
 
@@ -179,6 +188,35 @@ export const autopilotNavGroups: NavGroup[] = [
         featureKey: 'users-admin',
         requireSuperAdmin: true,
         component: 'AdminUsersPage',
+      },
+      // ============ Walking Skeleton #1 ============
+      {
+        path: '/dashboard/agent',
+        icon: Download,
+        label: '下载 Agent',
+        featureKey: 'ws1-agent-download',
+        component: 'AgentDownloadPage',
+      },
+      {
+        path: '/dashboard/platforms/douyin',
+        icon: Music2,
+        label: '抖音绑定',
+        featureKey: 'ws1-douyin-bind',
+        component: 'DouyinBindPage',
+      },
+      {
+        path: '/dashboard/folder',
+        icon: Folder,
+        label: '文件夹绑定',
+        featureKey: 'ws1-folder-bind',
+        component: 'FolderBindPage',
+      },
+      {
+        path: '/dashboard/publish',
+        icon: Send,
+        label: '一键发布',
+        featureKey: 'ws1-publish',
+        component: 'PublishPage',
       },
     ]
   }

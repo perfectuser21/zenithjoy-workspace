@@ -42,8 +42,10 @@ describe('AgentDownloadPage [BEHAVIOR]', () => {
     render(<AgentDownloadPage />, { wrapper: createWrapper() });
 
     expect(screen.getByText(/下载.*Agent|Agent.*下载/i)).toBeInTheDocument();
+    // placeholder release link 或"敬请期待"——其中之一应该出现
     await waitFor(() => {
-      expect(screen.getByText(/敬请期待|github\.com.*releases/i)).toBeInTheDocument();
+      const matches = screen.queryAllByText(/敬请期待|github\.com.*releases/i);
+      expect(matches.length).toBeGreaterThan(0);
     });
   });
 

@@ -44,6 +44,11 @@ const autopilotConfig: InstanceConfig = {
     'license': true,             // 客户 License 自查面板（PR-A 需要 super-admin 看到旁边的会员管理入口）
     'license-admin': true,       // super-admin License 后台
     'users-admin': true,         // super-admin 会员管理后台（PR-A）
+    // Walking Skeleton #1 — 客户首次成功路径（抖音版）
+    'ws1-agent-download': true,  // /dashboard/agent
+    'ws1-douyin-bind': true,     // /dashboard/platforms/douyin
+    'ws1-folder-bind': true,     // /dashboard/folder
+    'ws1-publish': true,         // /dashboard/publish
     // 旧 features（保留用于兼容，实际已合并到 media-scenario）
     'execution-status': true,
     'tasks': true,

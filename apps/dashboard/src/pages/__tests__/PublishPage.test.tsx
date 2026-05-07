@@ -61,8 +61,13 @@ describe('PublishPage [BEHAVIOR]', () => {
     });
     render(<PublishPage />, { wrapper: createWrapper() });
 
-    const btn = await screen.findByRole('button', { name: /发布到抖音/ });
-    fireEvent.click(btn);
+    // 等 agent-status query 加载完，canPublish=true 后按钮才启用
+    await waitFor(() => {
+      expect(
+        screen.getByRole('button', { name: /发布到抖音/ })
+      ).not.toBeDisabled();
+    });
+    fireEvent.click(screen.getByRole('button', { name: /发布到抖音/ }));
 
     await waitFor(() => {
       expect(ws1Api.postPublishTask).toHaveBeenCalledTimes(1);
