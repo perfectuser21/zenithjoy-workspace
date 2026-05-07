@@ -7,13 +7,15 @@
 //   - spawn 调到 publisher dryrun 脚本
 //   - 完成后 POST /api/publish/receipt 上报，body 含 task_id / status / result
 //   - spawn 失败时 receipt status='failed'
+//   - resolveDouyinScriptPath 按 ZENITHJOY_AGENT_REAL_PUBLISH 切换脚本
+//   - 真发模式下 receipt 中 dryRun=false 且 url 取自脚本 stdout
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { EventEmitter } from 'node:events';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { handleDouyinPublishTask } from '../douyin-publish';
+import { handleDouyinPublishTask, resolveDouyinScriptPath } from '../douyin-publish';
 
 function fakeChild(opts: {
   exitCode: number;
@@ -142,5 +144,85 @@ describe('handleDouyinPublishTask', () => {
     } finally {
       fs.rmSync(emptyDir, { recursive: true, force: true });
     }
+  });
+});
+
+describe('resolveDouyinScriptPath (real-publish env switch)', () => {
+  it('selects dryrun script path when ZENITHJOY_AGENT_REAL_PUBLISH unset', () => {
+    const p = resolveDouyinScriptPath({});
+    expect(p.endsWith('publish-douyin-image-dryrun.cjs')).toBe(true);
+    expect(p.includes('publishers/douyin-publisher')).toBe(true);
+  });
+
+  it('selects dryrun script path when ZENITHJOY_AGENT_REAL_PUBLISH=0', () => {
+    const p = resolveDouyinScriptPath({ ZENITHJOY_AGENT_REAL_PUBLISH: '0' });
+    expect(p.endsWith('publish-douyin-image-dryrun.cjs')).toBe(true);
+  });
+
+  it('selects dryrun script path when ZENITHJOY_AGENT_REAL_PUBLISH=false', () => {
+    const p = resolveDouyinScriptPath({ ZENITHJOY_AGENT_REAL_PUBLISH: 'false' });
+    expect(p.endsWith('publish-douyin-image-dryrun.cjs')).toBe(true);
+  });
+
+  it('selects real publish script path when ZENITHJOY_AGENT_REAL_PUBLISH=1', () => {
+    const p = resolveDouyinScriptPath({ ZENITHJOY_AGENT_REAL_PUBLISH: '1' });
+    expect(p.endsWith('publish-douyin-image.cjs')).toBe(true);
+    expect(p.includes('dryrun')).toBe(false);
+    expect(p.includes('publishers/douyin-publisher')).toBe(true);
+  });
+
+  it('selects real publish script path when ZENITHJOY_AGENT_REAL_PUBLISH=true', () => {
+    const p = resolveDouyinScriptPath({ ZENITHJOY_AGENT_REAL_PUBLISH: 'true' });
+    expect(p.endsWith('publish-douyin-image.cjs')).toBe(true);
+    expect(p.includes('dryrun')).toBe(false);
+  });
+});
+
+describe('handleDouyinPublishTask real-publish receipt', () => {
+  let tmpDir: string;
+  beforeEach(() => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'zj-agent-dy-real-'));
+    fs.writeFileSync(path.join(tmpDir, 'video1.mp4'), 'fake');
+  });
+  afterEach(() => {
+    try {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    } catch {
+      // ignore
+    }
+  });
+
+  it('reports dryRun=false in receipt evidence when real publish mode succeeds', async () => {
+    const fetchImpl = vi.fn<typeof fetch>(async () =>
+      new Response(JSON.stringify({ ok: true }), { status: 200 }),
+    );
+    const spawnImpl = vi.fn(() =>
+      fakeChild({
+        exitCode: 0,
+        stdout:
+          '[DY-REAL] navigated\n' +
+          '{"ok":true,"dryRun":false,"url":"https://www.douyin.com/video/abc123","title":"t","imagesCount":1}\n',
+      }),
+    );
+
+    const res = await handleDouyinPublishTask(
+      { task_id: 'task-real-1', folder_path: tmpDir },
+      {
+        apiBase: 'https://api.example.com',
+        fetchImpl: fetchImpl as any,
+        spawnImpl: spawnImpl as any,
+        scriptPath: '/fake/publish-douyin-image.cjs',
+      },
+    );
+
+    expect(res.ok).toBe(true);
+    expect(res.status).toBe('success');
+    expect(res.result.url).toBe('https://www.douyin.com/video/abc123');
+
+    const body = JSON.parse(String(fetchImpl.mock.calls[0][1]?.body));
+    expect(body.task_id).toBe('task-real-1');
+    expect(body.status).toBe('success');
+    expect(body.result?.url).toBe('https://www.douyin.com/video/abc123');
+    expect(body.result?.dryrun_evidence?.dryRun).toBe(false);
   });
 });
