@@ -10,11 +10,12 @@
  * 第一刀允许丑：内联样式，能跑能看就行。
  */
 import { useQuery } from '@tanstack/react-query';
+import { useEffect } from 'react';
 import { getAgentStatus } from '../api/walking-skeleton-1.api';
 import { fetchAccountMe } from '../api/account.api';
 
 // autopilot nginx 直分发的 agent tarball（hk-vps:/opt/zenithjoy/autopilot-dashboard/dist/download/）
-const AGENT_VERSION = '0.1.0';
+const AGENT_VERSION = '0.1.8';
 const RELEASE_URL = `/download/zenithjoy-agent-v${AGENT_VERSION}.tar.gz`;
 const LICENSE_PLACEHOLDER = 'ZJ-F-XXXXXX';
 
@@ -34,6 +35,20 @@ export default function AgentDownloadPage() {
   const connected = !!data?.connected;
   // 优先用真 license（注册即建 free license），未拿到回退占位
   const realLicense = accountQuery.data?.license?.license_key;
+
+  // 把真 license 同步写入 localStorage，供 walking-skeleton-1.api 的 license-bearer 鉴权使用。
+  // 这是 better-auth 邮箱登录与 license-Bearer 鉴权之间的桥（不然 /api/agent/status 永远 401）。
+  useEffect(() => {
+    if (realLicense && typeof window !== 'undefined') {
+      try {
+        if (window.localStorage.getItem('zj_license') !== realLicense) {
+          window.localStorage.setItem('zj_license', realLicense);
+        }
+      } catch {
+        // localStorage 被禁用 / 隐私模式 — 静默失败，cookie 路径仍可用
+      }
+    }
+  }, [realLicense]);
   const license = realLicense ?? LICENSE_PLACEHOLDER;
 
   return (

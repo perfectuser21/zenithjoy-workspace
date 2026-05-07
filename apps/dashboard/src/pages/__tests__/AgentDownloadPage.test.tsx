@@ -3,7 +3,7 @@
  * 路由：/dashboard/agent
  *
  * 覆盖：
- *  - 渲染真实下载链接（指向 /download/zenithjoy-agent-v0.1.0.tar.gz）
+ *  - 渲染真实下载链接（指向 /download/zenithjoy-agent-v0.1.8.tar.gz）
  *  - 渲染解压后启动指引（含 customer-start.sh）
  *  - 渲染"已连接 Agent" 状态徽标（依赖 GET /api/agent/status）
  *  - last_heartbeat_at < 60s → 显示"已连接"绿色
@@ -60,7 +60,7 @@ describe('AgentDownloadPage [BEHAVIOR]', () => {
     vi.mocked(accountApi.fetchAccountMe).mockResolvedValue(ACCOUNT_WITHOUT_LICENSE);
   });
 
-  it('渲染真实下载链接（指向 /download/zenithjoy-agent-v0.1.0.tar.gz）', async () => {
+  it('渲染真实下载链接（指向 /download/zenithjoy-agent-v0.1.8.tar.gz）', async () => {
     vi.mocked(ws1Api.getAgentStatus).mockResolvedValue({
       connected: false,
       agent_id: null,
@@ -76,7 +76,7 @@ describe('AgentDownloadPage [BEHAVIOR]', () => {
     const downloadLink = await screen.findByRole('link', { name: /下载.*Agent/i });
     expect(downloadLink).toHaveAttribute(
       'href',
-      '/download/zenithjoy-agent-v0.1.0.tar.gz',
+      '/download/zenithjoy-agent-v0.1.8.tar.gz',
     );
     expect(downloadLink).toHaveAttribute('download');
 
