@@ -14,8 +14,8 @@
 ### Step 1: clone 仓库 + 装依赖
 
 ```bash
-git clone https://github.com/perfect21/zenithjoy.git
-cd zenithjoy/services/agent && npm install
+git clone https://github.com/perfectuser21/zenithjoy-workspace.git
+cd zenithjoy-workspace/services/agent && npm install
 ```
 
 ### Step 2: 拿 license
