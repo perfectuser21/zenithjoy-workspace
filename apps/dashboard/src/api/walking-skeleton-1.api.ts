@@ -10,7 +10,7 @@
  *  - GET  /api/publish/tasks/:id
  *
  * 假定的额外 endpoint（dashboard 用，已 SendMessage team-lead 确认协调）：
- *  - GET  /api/agent/status            → 当前 license 下 agent 在线状态
+ *  - GET  /api/agent/me/status         → 当前 license 下 agent 在线状态（客户视角）
  *  - POST /api/agent/qr-bind           → 推 qr_bind/<platform> task 给 agent
  *  - GET  /api/agent/platforms         → 列 agent_platform_sessions
  *  - GET  /api/publish/tasks?agent_id  → 列出 publish_tasks
@@ -120,7 +120,7 @@ export async function postAgentHeartbeat(
 }
 
 export async function getAgentStatus(): Promise<AgentStatus> {
-  return request<AgentStatus>('/agent/status');
+  return request<AgentStatus>('/agent/me/status');
 }
 
 export async function postFolderBind(body: FolderBindBody): Promise<OkResponse> {

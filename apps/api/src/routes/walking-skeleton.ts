@@ -86,11 +86,12 @@ heartbeatRouter.post(
   }
 );
 
-// ============ GET /api/agent/status ============
-// Dashboard 用：查当前 license 关联的最新 agent + 心跳新鲜度
+// ============ GET /api/agent/me/status ============
+// Dashboard 用：查当前 license 关联的最新 agent + 心跳新鲜度（客户视角，单 agent）
+// 不冲突 v1.1 的 GET /api/agent/status（admin 视角，返所有 agent 列表）
 // 60s 内 = connected:true
 heartbeatRouter.get(
-  '/status',
+  '/me/status',
   licenseAuth,
   async (req: Request, res: Response) => {
     const lic = req.license!;
