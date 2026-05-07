@@ -22,6 +22,11 @@ import { handleWeiboPublish } from './handlers/weibo-publish';
 import { handleShipinhaoPublish } from './handlers/shipinhao-publish';
 import { handleZhihuPublish } from './handlers/zhihu-publish';
 import { startTray, updateTrayStatus, destroyTray } from './tray';
+// Walking Skeleton #1 — HTTP heartbeat 链路（与上面 WS 链路并存）
+import { HeartbeatLoop, type HeartbeatTask } from './handlers/heartbeat-loop';
+import { handleQrBindDouyin } from './handlers/qr-bind-douyin';
+import { createFolderWatchManager } from './handlers/folder-watch';
+import { handleDouyinPublishTask } from './handlers/douyin-publish';
 
 // ---------- License & 配置 ----------
 
@@ -417,6 +422,87 @@ async function main(): Promise<void> {
   }
 
   connect(cfg);
+
+  // Walking Skeleton #1 — 启动 HTTP heartbeat-loop（opt-in，由 ZENITHJOY_API_BASE 触发）
+  //   - apiBase 例：https://api.zenithjoy.com
+  //   - 不影响上面 WS 链路；两条链路共存（WS 是旧 v0.3 协议，heartbeat 是 ws1 协议）
+  //   - folder-watch / qr-bind 状态在 heartbeat-loop 进程内维护
+  startWs1HeartbeatLoop(cfg);
+}
+
+function deriveHttpApiBase(cfg: AgentConfig): string | null {
+  const explicit = process.env.ZENITHJOY_API_BASE;
+  if (explicit) return explicit.replace(/\/+$/, '');
+  // 从 wsApiUrl 推导：wss://api.../agent-ws → https://api...
+  if (!cfg.apiUrl) return null;
+  return cfg.apiUrl
+    .replace(/^wss:\/\//, 'https://')
+    .replace(/^ws:\/\//, 'http://')
+    .replace(/\/agent-ws\/?$/, '');
+}
+
+function startWs1HeartbeatLoop(cfg: AgentConfig): void {
+  const apiBase = deriveHttpApiBase(cfg);
+  if (!apiBase) {
+    console.log('[ws1] 无法推导 HTTP apiBase，跳过 heartbeat-loop');
+    return;
+  }
+  if (process.env.ZENITHJOY_DISABLE_WS1 === '1') {
+    console.log('[ws1] 已通过 ZENITHJOY_DISABLE_WS1=1 关闭');
+    return;
+  }
+
+  const folderWatch = createFolderWatchManager({
+    onChange: (file) => console.log('[ws1:folder-watch] change:', file),
+  });
+
+  const onTask = async (task: HeartbeatTask): Promise<void> => {
+    console.log('[ws1] task:', task.type, task.task_id);
+    try {
+      if (task.type === 'qr_bind/douyin') {
+        const res = await handleQrBindDouyin(
+          task.payload as { account_label?: string },
+        );
+        console.log('[ws1:qr_bind/douyin] result:', res);
+      } else if (task.type === 'folder/bind') {
+        const localPath = (task.payload as { local_path?: string }).local_path;
+        if (localPath) {
+          folderWatch.bind(localPath);
+          console.log('[ws1:folder/bind] bound:', folderWatch.getBoundPath());
+        } else {
+          console.warn('[ws1:folder/bind] missing local_path');
+        }
+      } else if (task.type === 'publish/douyin') {
+        const payload = task.payload as { folder_path?: string };
+        const folderPath = payload.folder_path || folderWatch.getBoundPath();
+        if (!folderPath) {
+          console.warn('[ws1:publish/douyin] no folder_path; agent not bound yet');
+          return;
+        }
+        const res = await handleDouyinPublishTask(
+          { task_id: task.task_id, folder_path: folderPath },
+          { apiBase },
+        );
+        console.log('[ws1:publish/douyin] result:', res.status);
+      } else {
+        console.warn('[ws1] unknown task type:', task.type);
+      }
+    } catch (err) {
+      console.warn('[ws1] task handler threw:', err);
+    }
+  };
+
+  const loop = new HeartbeatLoop({
+    apiBase,
+    license: cfg.licenseKey,
+    version: VERSION,
+    hostname: os.hostname() || safeHostnameSlug(),
+    intervalMs: 30_000,
+    onTask,
+    onError: (err) => console.warn('[ws1:heartbeat] error:', err),
+  });
+  loop.start();
+  console.log(`[ws1] heartbeat-loop started → ${apiBase}/api/agent/heartbeat`);
 }
 
 main().catch((err) => {
