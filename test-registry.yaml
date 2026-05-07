@@ -425,6 +425,39 @@ tests:
     product: 中台认证
     note: "Sprint B WS1+WS2 — works owner_id 隔离集成测试（401/A 看 A 的/POST 自动 owner_id/防伪造/跨租户 404/super-admin bypass）"
 
+  # ── Walking Skeleton #1 — Agent handlers ────────────────────────────────────
+  - id: agent-ws1-heartbeat-loop
+    path: services/agent/src/handlers/__tests__/heartbeat-loop.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: AI员工
+    note: "Walking Skeleton #1 — Agent heartbeat 循环 + queued_tasks 派发"
+
+  - id: agent-ws1-qr-bind-douyin
+    path: services/agent/src/handlers/__tests__/qr-bind-douyin.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: AI员工
+    note: "Walking Skeleton #1 — 抖音首次扫码绑 + storageState 存盘"
+
+  - id: agent-ws1-folder-watch
+    path: services/agent/src/handlers/__tests__/folder-watch.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: AI员工
+    note: "Walking Skeleton #1 — 本地视频文件夹绑定 + fs.watch"
+
+  - id: agent-ws1-douyin-publish
+    path: services/agent/src/handlers/__tests__/douyin-publish.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: AI员工
+    note: "Walking Skeleton #1 — Agent 调 douyin-publisher dryrun + 上报回执"
+
   - id: api-tenant-bypass-middleware
     path: apps/api/tests/middleware/tenant-bypass.test.ts
     type: unit
