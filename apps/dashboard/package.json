@@ -15,7 +15,9 @@
     "format:check": "prettier --check \"src/**/*.{ts,tsx,js,jsx,json,css,md}\"",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:ui": "vitest --ui"
+    "test:ui": "vitest --ui",
+    "e2e": "playwright test",
+    "e2e:install": "playwright install chromium"
   },
   "dependencies": {
     "@hello-pangea/dnd": "^18.0.1",
@@ -34,6 +36,7 @@
     "recharts": "^2.15.4"
   },
   "devDependencies": {
+    "@playwright/test": "^1.40.0",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
     "@types/react": "^18.2.43",

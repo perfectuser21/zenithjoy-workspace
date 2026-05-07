@@ -491,6 +491,55 @@ tests:
     product: 中台认证
     note: "walking-skeleton service export sanity"
 
+  # ── Walking Skeleton #1 — Dashboard ──────────────────────────────────────────
+  - id: dashboard-ws1-api-client
+    path: apps/dashboard/src/api/walking-skeleton-1.api.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: AI员工
+    note: "Walking Skeleton #1 — dashboard API client export sanity"
+
+  - id: dashboard-ws1-agent-download-page
+    path: apps/dashboard/src/pages/__tests__/AgentDownloadPage.test.tsx
+    type: unit
+    ci: L3
+    status: active
+    product: AI员工
+    note: "Walking Skeleton #1 — Agent 下载页 component test"
+
+  - id: dashboard-ws1-douyin-bind-page
+    path: apps/dashboard/src/pages/__tests__/DouyinBindPage.test.tsx
+    type: unit
+    ci: L3
+    status: active
+    product: AI员工
+    note: "Walking Skeleton #1 — 抖音扫码绑页 component test"
+
+  - id: dashboard-ws1-folder-bind-page
+    path: apps/dashboard/src/pages/__tests__/FolderBindPage.test.tsx
+    type: unit
+    ci: L3
+    status: active
+    product: AI员工
+    note: "Walking Skeleton #1 — 本地文件夹绑定页 component test"
+
+  - id: dashboard-ws1-publish-page
+    path: apps/dashboard/src/pages/__tests__/PublishPage.test.tsx
+    type: unit
+    ci: L3
+    status: active
+    product: AI员工
+    note: "Walking Skeleton #1 — 一键发布 + 回执页 component test"
+
+  - id: dashboard-ws1-e2e
+    path: apps/dashboard/e2e/walking-skeleton-1.spec.ts
+    type: e2e
+    ci: L4
+    status: active
+    product: AI员工
+    note: "Walking Skeleton #1 — Playwright E2E 走 4 个页面（mock API）"
+
   - id: api-tenant-bypass-middleware
     path: apps/api/tests/middleware/tenant-bypass.test.ts
     type: unit
