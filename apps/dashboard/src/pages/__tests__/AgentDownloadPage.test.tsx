@@ -55,7 +55,7 @@ describe('AgentDownloadPage [BEHAVIOR]', () => {
     expect(screen.queryByText(/敬请期待/)).not.toBeInTheDocument();
   });
 
-  it('渲染解压后启动指引（含 customer-start.sh）', async () => {
+  it('渲染 Windows 启动指引（主流程，含 customer-start.bat + set ZENITHJOY_LICENSE）', async () => {
     vi.mocked(ws1Api.getAgentStatus).mockResolvedValue({
       connected: false,
       agent_id: null,
@@ -65,11 +65,37 @@ describe('AgentDownloadPage [BEHAVIOR]', () => {
     });
     render(<AgentDownloadPage />, { wrapper: createWrapper() });
 
-    // 关键提示词：解压后 npm install / customer-start.sh
+    // Windows 主标题
     await waitFor(() => {
-      expect(screen.getByText(/customer-start\.sh/)).toBeInTheDocument();
+      expect(
+        screen.getByRole('heading', { name: /Windows.*主流程|Windows.*启动/i }),
+      ).toBeInTheDocument();
     });
+    // Windows 关键命令：customer-start.bat 与 cmd 风格 set 命令
+    expect(screen.getByText(/customer-start\.bat/)).toBeInTheDocument();
+    expect(screen.getByText(/set ZENITHJOY_LICENSE/)).toBeInTheDocument();
     expect(screen.getByText(/npm install/)).toBeInTheDocument();
+  });
+
+  it('渲染 macOS 启动指引（开发者备用，含 customer-start.sh）', async () => {
+    vi.mocked(ws1Api.getAgentStatus).mockResolvedValue({
+      connected: false,
+      agent_id: null,
+      hostname: null,
+      version: null,
+      last_heartbeat_at: null,
+    });
+    render(<AgentDownloadPage />, { wrapper: createWrapper() });
+
+    // macOS 标题（带"开发者"或"备用"字样以区别于 Windows 主流程）
+    await waitFor(() => {
+      expect(
+        screen.getByRole('heading', { name: /macOS.*开发者|macOS.*备用/i }),
+      ).toBeInTheDocument();
+    });
+    // macOS 关键命令：bash + customer-start.sh
+    expect(screen.getByText(/customer-start\.sh/)).toBeInTheDocument();
+    expect(screen.getByText(/export ZENITHJOY_LICENSE/)).toBeInTheDocument();
   });
 
   it('agent 已连接 → 状态显示"已连接"', async () => {
