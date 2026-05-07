@@ -11,10 +11,12 @@
  */
 import { useQuery } from '@tanstack/react-query';
 import { getAgentStatus } from '../api/walking-skeleton-1.api';
+import { fetchAccountMe } from '../api/account.api';
 
 // autopilot nginx 直分发的 agent tarball（hk-vps:/opt/zenithjoy/autopilot-dashboard/dist/download/）
 const AGENT_VERSION = '0.1.0';
 const RELEASE_URL = `/download/zenithjoy-agent-v${AGENT_VERSION}.tar.gz`;
+const LICENSE_PLACEHOLDER = 'ZJ-F-XXXXXX';
 
 export default function AgentDownloadPage() {
   const { data, isLoading } = useQuery({
@@ -22,16 +24,61 @@ export default function AgentDownloadPage() {
     queryFn: getAgentStatus,
     refetchInterval: 10_000,
   });
+  const accountQuery = useQuery({
+    queryKey: ['ws1', 'account-me'],
+    queryFn: fetchAccountMe,
+    retry: false,
+    staleTime: 30_000,
+  });
 
   const connected = !!data?.connected;
-  // 客户从注册流程拿到的 license（v0.1 thin：用户自己在终端 export，前端不回灌）
-  const licensePlaceholder = 'ZJ-F-XXXXXX';
+  // 优先用真 license（注册即建 free license），未拿到回退占位
+  const realLicense = accountQuery.data?.license?.license_key;
+  const license = realLicense ?? LICENSE_PLACEHOLDER;
 
   return (
     <div style={{ padding: 24, maxWidth: 720 }}>
       <h1 style={{ fontSize: 22, fontWeight: 600, marginBottom: 16 }}>
         ZenithJoy Agent · 客户端
       </h1>
+
+      {/* ===== 我的 License（注册即建 free 1 装机配额）===== */}
+      <section
+        style={{
+          padding: 16,
+          border: '1px solid #fde68a',
+          borderRadius: 8,
+          marginBottom: 16,
+          background: '#fffbeb',
+        }}
+      >
+        <div style={{ fontSize: 13, color: '#92400e', marginBottom: 6 }}>
+          你的 License（启动 Agent 时需要）
+        </div>
+        <code
+          style={{
+            display: 'inline-block',
+            fontSize: 16,
+            fontWeight: 600,
+            color: '#78350f',
+            background: '#fff',
+            padding: '4px 10px',
+            borderRadius: 4,
+            border: '1px solid #fde68a',
+          }}
+        >
+          {license}
+        </code>
+        {!realLicense && (
+          <div style={{ fontSize: 12, color: '#b45309', marginTop: 6 }}>
+            未检测到你的 license。请先{' '}
+            <a href="/signup" style={{ color: '#2563eb' }}>
+              注册账号
+            </a>
+            ；注册成功后会自动建一个 free license（1 台 Agent 试用）。
+          </div>
+        )}
+      </section>
 
       {/* ===== 下载卡片 ===== */}
       <section
@@ -80,6 +127,26 @@ export default function AgentDownloadPage() {
         <h2 style={{ fontSize: 16, fontWeight: 600, marginBottom: 12 }}>
           Windows 启动（主流程）
         </h2>
+
+        {/* ★ thin 极限的 1-click：双击 install-and-start.bat ★ */}
+        <div
+          style={{
+            padding: 12,
+            background: '#eff6ff',
+            border: '1px solid #bfdbfe',
+            borderRadius: 6,
+            marginBottom: 14,
+            fontSize: 14,
+            lineHeight: 1.6,
+            color: '#1e40af',
+          }}
+        >
+          <strong>★ 推荐路径（一键启动）</strong>：解压 tarball 后，
+          直接 <strong>双击</strong> <code>install-and-start.bat</code>。
+          脚本会自动装依赖、提示输入 license、启动 Chrome + Agent。
+          下方 cmd 命令仅在双击不工作时使用。
+        </div>
+
         <ol style={{ paddingLeft: 20, lineHeight: 1.8, color: '#374151', fontSize: 14 }}>
           <li>
             解压 <code>zenithjoy-agent-v{AGENT_VERSION}.tar.gz</code> 到 <code>%USERPROFILE%</code>
@@ -126,7 +193,7 @@ cd zenithjoy-agent`}
                 overflowX: 'auto',
               }}
             >
-{`set ZENITHJOY_LICENSE=${licensePlaceholder}
+{`set ZENITHJOY_LICENSE=${license}
 scripts\\customer-start.bat`}
             </pre>
             脚本会自动启动 Chrome 调试模式（19222 端口）+ Agent。
@@ -169,7 +236,7 @@ scripts\\customer-start.bat`}
                 color: '#374151',
               }}
             >
-{`export ZENITHJOY_LICENSE=${licensePlaceholder}
+{`export ZENITHJOY_LICENSE=${license}
 bash scripts/customer-start.sh`}
             </pre>
           </li>

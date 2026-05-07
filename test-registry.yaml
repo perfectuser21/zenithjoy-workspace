@@ -540,6 +540,14 @@ tests:
     product: AI员工
     note: "Walking Skeleton #1 — Agent 下载页 component test"
 
+  - id: dashboard-ws1-account-api
+    path: apps/dashboard/src/api/__tests__/account.api.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: AI员工
+    note: "Walking Skeleton #1 — account API client (license 自查 fetch)"
+
   - id: dashboard-ws1-douyin-bind-page
     path: apps/dashboard/src/pages/__tests__/DouyinBindPage.test.tsx
     type: unit
