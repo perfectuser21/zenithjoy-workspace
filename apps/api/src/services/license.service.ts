@@ -19,11 +19,14 @@ export type LicenseStatus = 'active' | 'expired' | 'revoked' | 'suspended';
 
 /**
  * 装机配额（max_machines）
- *  - free：0（不允许本地 Agent；仅云端轻功能。注册即得，PR-B）
+ *  - free：1（注册即试用 walking skeleton；medium 阶段再 review 商业模式）
  *  - basic：1 / matrix：3 / studio：10 / enterprise：30（付费）
+ *
+ * 2026-05-07 主理人决策：把 free 从 0 改为 1。之前 0 → Agent heartbeat
+ * 必撞 QUOTA_EXCEEDED → walking skeleton 客户视角第一刀就断在装机这步。
  */
 export const TIER_QUOTA: Record<Tier, number> = {
-  free: 0,
+  free: 1,
   basic: 1,
   matrix: 3,
   studio: 10,

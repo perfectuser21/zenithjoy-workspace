@@ -136,10 +136,11 @@ describe('auth-bridge / bridgeNewUserToTenant — PR-B free fallback', () => {
     const calls = mockClientQuery.mock.calls.map((c) => c[0]);
     expect(calls[0]).toMatch(/BEGIN/i);
     expect(calls[5]).toMatch(/COMMIT/i);
-    // INSERT licenses 必须传 tier='free' max_machines=0 customer_id=userId
+    // INSERT licenses 必须传 tier='free' max_machines=1 customer_id=userId
+    // 2026-05-07 walking-skeleton-1：free 从 0 → 1（注册即试用 1 台 Agent）
     const licInsertParams = mockClientQuery.mock.calls[1][1] as unknown[];
     expect(licInsertParams).toContain('free'); // tier
-    expect(licInsertParams).toContain(0); // max_machines
+    expect(licInsertParams).toContain(1); // max_machines
     expect(licInsertParams).toContain('auth-user-free-1'); // customer_id
     // UPDATE licenses 把 tenant_id 写回到 license_id
     const updateParams = mockClientQuery.mock.calls[3][1] as unknown[];

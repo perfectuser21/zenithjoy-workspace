@@ -483,6 +483,22 @@ tests:
     product: 中台认证
     note: "walking-skeleton routes export sanity"
 
+  - id: api-ws1-account-route
+    path: apps/api/src/routes/__tests__/account.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: AI员工
+    note: "Walking Skeleton #1 — /api/account/me license 自查路由（better-auth session）"
+
+  - id: api-ws1-license-service-quota
+    path: apps/api/src/services/__tests__/license.service.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: AI员工
+    note: "Walking Skeleton #1 — license tier quota 常量（free=1 注册即试用）"
+
   - id: api-walking-skeleton-service
     path: apps/api/src/services/walking-skeleton.service.test.ts
     type: unit
@@ -490,6 +506,22 @@ tests:
     status: active
     product: 中台认证
     note: "walking-skeleton service export sanity"
+
+  - id: api-ws1-account-route
+    path: apps/api/src/routes/__tests__/account.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: AI员工
+    note: "Walking Skeleton #1 — /api/account/me license 自查路由"
+
+  - id: api-ws1-license-service-quota
+    path: apps/api/src/services/__tests__/license.service.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: AI员工
+    note: "Walking Skeleton #1 — license tier quota 常量（free=1）"
 
   # ── Walking Skeleton #1 — Dashboard ──────────────────────────────────────────
   - id: dashboard-ws1-api-client

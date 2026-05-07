@@ -50,8 +50,9 @@ describe('license.service: key 格式和生成', () => {
     expect(isValidLicenseKeyFormat('ZJ-B-ABCDEFG0')).toBe(false); // alphabet 排除 0
   });
 
-  it('TIER_QUOTA 套餐配额定义正确（free=0 不允许 Agent）', () => {
-    expect(TIER_QUOTA.free).toBe(0);
+  it('TIER_QUOTA 套餐配额定义正确（free=1 注册即试用 1 台 Agent）', () => {
+    // 2026-05-07 walking-skeleton-1：free 从 0 → 1，让"注册即试用"贯通
+    expect(TIER_QUOTA.free).toBe(1);
     expect(TIER_QUOTA.basic).toBe(1);
     expect(TIER_QUOTA.matrix).toBe(3);
     expect(TIER_QUOTA.studio).toBe(10);
