@@ -74,7 +74,7 @@ describe('AgentDownloadPage [BEHAVIOR]', () => {
     // Windows 关键命令：customer-start.bat 与 cmd 风格 set 命令
     expect(screen.getByText(/customer-start\.bat/)).toBeInTheDocument();
     expect(screen.getByText(/set ZENITHJOY_LICENSE/)).toBeInTheDocument();
-    expect(screen.getByText(/npm install/)).toBeInTheDocument();
+    expect(screen.getAllByText(/npm install/).length).toBeGreaterThanOrEqual(1);
   });
 
   it('渲染 macOS 启动指引（开发者备用，含 customer-start.sh）', async () => {
