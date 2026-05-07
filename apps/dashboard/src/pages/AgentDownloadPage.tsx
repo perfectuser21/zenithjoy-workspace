@@ -4,7 +4,7 @@
  *
  * 内容：
  *  - 下载入口（autopilot 静态分发 tarball）
- *  - 解压后启动指引（npm install + customer-start.sh）
+ *  - 双平台启动指引：Windows（主流程）+ macOS（开发者备用）
  *  - "已连接 Agent" 状态徽标，10s 轮询 GET /api/agent/status
  *
  * 第一刀允许丑：内联样式，能跑能看就行。
@@ -47,7 +47,7 @@ export default function AgentDownloadPage() {
           ZenithJoy Agent v{AGENT_VERSION}
         </h2>
         <p style={{ color: '#6b7280', marginBottom: 16, lineHeight: 1.6 }}>
-          ZenithJoy Agent 是部署在你本地 Mac 的小程序，
+          ZenithJoy Agent 是部署在你本地电脑（Windows 主、macOS 备用）的小程序，
           负责扫码登录抖音、监听文件夹、执行发布任务。
         </p>
         <a
@@ -67,25 +67,97 @@ export default function AgentDownloadPage() {
         </a>
       </section>
 
-      {/* ===== 解压后启动指引 ===== */}
+      {/* ===== Windows 启动（主流程）===== */}
+      <section
+        style={{
+          padding: 20,
+          border: '1px solid #2563eb',
+          borderRadius: 8,
+          marginBottom: 16,
+          background: '#fff',
+        }}
+      >
+        <h2 style={{ fontSize: 16, fontWeight: 600, marginBottom: 12 }}>
+          Windows 启动（主流程）
+        </h2>
+        <ol style={{ paddingLeft: 20, lineHeight: 1.8, color: '#374151', fontSize: 14 }}>
+          <li>
+            解压 <code>zenithjoy-agent-v{AGENT_VERSION}.tar.gz</code> 到 <code>%USERPROFILE%</code>
+            （Windows 10/11 自带 <code>tar</code> 命令）：
+            <pre
+              style={{
+                background: '#f3f4f6',
+                padding: 10,
+                borderRadius: 4,
+                marginTop: 6,
+                fontSize: 13,
+                overflowX: 'auto',
+              }}
+            >
+{`cd "%USERPROFILE%"
+tar -xzf "Downloads\\zenithjoy-agent-v${AGENT_VERSION}.tar.gz"
+cd zenithjoy-agent`}
+            </pre>
+          </li>
+          <li>
+            装依赖：
+            <pre
+              style={{
+                background: '#f3f4f6',
+                padding: 10,
+                borderRadius: 4,
+                marginTop: 6,
+                fontSize: 13,
+                overflowX: 'auto',
+              }}
+            >
+{`npm install`}
+            </pre>
+          </li>
+          <li>
+            一键启动（推荐，cmd）：
+            <pre
+              style={{
+                background: '#f3f4f6',
+                padding: 10,
+                borderRadius: 4,
+                marginTop: 6,
+                fontSize: 13,
+                overflowX: 'auto',
+              }}
+            >
+{`set ZENITHJOY_LICENSE=${licensePlaceholder}
+scripts\\customer-start.bat`}
+            </pre>
+            脚本会自动启动 Chrome 调试模式（19222 端口）+ Agent。
+            请在弹出的 Chrome 里登录 <code>https://creator.douyin.com</code>（测试号）。
+          </li>
+          <li>
+            下方状态卡片变绿 = 握手成功。
+          </li>
+        </ol>
+      </section>
+
+      {/* ===== macOS 启动（开发者备用）===== */}
       <section
         style={{
           padding: 20,
           border: '1px solid #e5e7eb',
           borderRadius: 8,
           marginBottom: 24,
-          background: '#fff',
+          background: '#fafafa',
         }}
       >
-        <h2 style={{ fontSize: 16, fontWeight: 600, marginBottom: 12 }}>
-          解压后启动（macOS）
+        <h2 style={{ fontSize: 15, fontWeight: 500, marginBottom: 12, color: '#6b7280' }}>
+          macOS 启动（开发者备用）
         </h2>
-        <ol style={{ paddingLeft: 20, lineHeight: 1.8, color: '#374151', fontSize: 14 }}>
+        <ol style={{ paddingLeft: 20, lineHeight: 1.8, color: '#6b7280', fontSize: 13 }}>
           <li>
-            解压 <code>zenithjoy-agent-v{AGENT_VERSION}.tar.gz</code> 到任意目录。
+            解压 <code>zenithjoy-agent-v{AGENT_VERSION}.tar.gz</code> 到任意目录，
+            <code>cd zenithjoy-agent && npm install</code>。
           </li>
           <li>
-            进入目录装依赖：
+            一键启动：
             <pre
               style={{
                 background: '#f3f4f6',
@@ -94,31 +166,12 @@ export default function AgentDownloadPage() {
                 marginTop: 6,
                 fontSize: 13,
                 overflowX: 'auto',
+                color: '#374151',
               }}
             >
-{`cd zenithjoy-agent && npm install`}
-            </pre>
-          </li>
-          <li>
-            一键启动（推荐）：
-            <pre
-              style={{
-                background: '#f3f4f6',
-                padding: 10,
-                borderRadius: 4,
-                marginTop: 6,
-                fontSize: 13,
-                overflowX: 'auto',
-              }}
-            >
-{`export ZENITHJOY_LICENSE=${licensePlaceholder}  # 替换成你注册后拿到的 license
+{`export ZENITHJOY_LICENSE=${licensePlaceholder}
 bash scripts/customer-start.sh`}
             </pre>
-            脚本会自动启动 Chrome 调试模式 + 启动 Agent。请在打开的 Chrome 窗口里
-            登录 <code>https://creator.douyin.com</code>（用测试号）。
-          </li>
-          <li>
-            回到本页面，下方状态卡片会变成绿色徽标 = 成功握手。
           </li>
         </ol>
       </section>
