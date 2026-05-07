@@ -10,7 +10,13 @@
 // 输入 payload.content：
 //   { title: string; content: string; images?: string[] }
 //   images 为 Windows 本地路径数组；不传则用本机自带 sample image。
-import { spawn } from 'child_process';
+//
+// Walking Skeleton #1 扩展：
+//   除了原有 WS-driven 的 `handleDouyinPublish`（接 payload.content），
+//   新增 `handleDouyinPublishTask` —— 从 heartbeat-loop 派发的 task 里读
+//   folder_path，自己拉首个 mp4 → spawn dryrun → POST /api/publish/receipt 回执。
+import { spawn as nodeSpawn } from 'child_process';
+import type { ChildProcess } from 'child_process';
 import path from 'path';
 import os from 'os';
 import fs from 'fs';
@@ -84,7 +90,7 @@ export async function handleDouyinPublish(
   console.log(`[handler:douyin] spawning ${SCRIPT_PATH} taskId=${taskId}`);
 
   return new Promise((resolve) => {
-    const child = spawn('node', [SCRIPT_PATH, queueFile], {
+    const child = nodeSpawn('node', [SCRIPT_PATH, queueFile], {
       stdio: ['ignore', 'pipe', 'pipe'],
     });
 
@@ -151,4 +157,177 @@ export async function handleDouyinPublish(
       resolve();
     });
   });
+}
+
+// ============================================================================
+// Walking Skeleton #1 — Task-driven 入口
+// ============================================================================
+//
+// 与上面 `handleDouyinPublish` 的差异：
+//   - 上面那个是 WS 链路，emit() 回 ws_server，payload.content 自带图片
+//   - 这个是 HTTP heartbeat 链路，从 task.payload.folder_path 拉视频，结束后
+//     POST /api/publish/receipt 上报，不依赖 WS
+
+const MP4_RE = /\.mp4$/i;
+
+export interface DouyinPublishTaskPayload {
+  task_id: string;
+  folder_path: string;
+}
+
+export interface DouyinPublishTaskOptions {
+  apiBase: string;
+  fetchImpl?: typeof fetch;
+  spawnImpl?: typeof nodeSpawn;
+  scriptPath?: string;
+  pickFirstMp4?: (folder: string) => string | null;
+}
+
+export interface DouyinPublishTaskResult {
+  ok: boolean;
+  status: 'success' | 'failed';
+  result: { url?: string; error?: string; dryrun_evidence?: unknown };
+}
+
+function defaultPickFirstMp4(folder: string): string | null {
+  let entries: string[] = [];
+  try {
+    entries = fs.readdirSync(folder);
+  } catch {
+    return null;
+  }
+  const mp4s = entries.filter((n) => MP4_RE.test(n)).sort();
+  return mp4s.length > 0 ? path.join(folder, mp4s[0]) : null;
+}
+
+async function postReceipt(
+  apiBase: string,
+  fetchImpl: typeof fetch,
+  taskId: string,
+  status: 'success' | 'failed',
+  result: { url?: string; error?: string; dryrun_evidence?: unknown },
+): Promise<void> {
+  const url = `${apiBase.replace(/\/+$/, '')}/api/publish/receipt`;
+  try {
+    await fetchImpl(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ task_id: taskId, status, result }),
+    });
+  } catch (err) {
+    console.warn('[handler:douyin-task] POST receipt failed:', err);
+  }
+}
+
+function spawnAndCollect(
+  spawnImpl: typeof nodeSpawn,
+  scriptPath: string,
+  queueFile: string,
+): Promise<{ exitCode: number; stdout: string; stderr: string; spawnError?: Error }> {
+  return new Promise((resolve) => {
+    let child: ChildProcess;
+    try {
+      child = spawnImpl('node', [scriptPath, queueFile], {
+        stdio: ['ignore', 'pipe', 'pipe'],
+      });
+    } catch (err) {
+      resolve({ exitCode: -1, stdout: '', stderr: '', spawnError: err as Error });
+      return;
+    }
+
+    let stdout = '';
+    let stderr = '';
+    child.stdout?.on('data', (d) => (stdout += d.toString()));
+    child.stderr?.on('data', (d) => (stderr += d.toString()));
+    child.on('error', (err) => {
+      resolve({ exitCode: -1, stdout, stderr, spawnError: err });
+    });
+    child.on('close', (code) => {
+      resolve({ exitCode: code ?? -1, stdout, stderr });
+    });
+  });
+}
+
+export async function handleDouyinPublishTask(
+  payload: DouyinPublishTaskPayload,
+  options: DouyinPublishTaskOptions,
+): Promise<DouyinPublishTaskResult> {
+  const fetchImpl = options.fetchImpl ?? (globalThis.fetch as typeof fetch);
+  const spawnImpl = options.spawnImpl ?? nodeSpawn;
+  const scriptPath = options.scriptPath ?? SCRIPT_PATH;
+  const pickFirstMp4 = options.pickFirstMp4 ?? defaultPickFirstMp4;
+
+  const fail = async (error: string): Promise<DouyinPublishTaskResult> => {
+    const result = { error };
+    await postReceipt(options.apiBase, fetchImpl, payload.task_id, 'failed', result);
+    return { ok: false, status: 'failed', result };
+  };
+
+  const mp4 = pickFirstMp4(payload.folder_path);
+  if (!mp4) {
+    return fail(
+      `no mp4 found in folder ${payload.folder_path} (folder empty or missing)`,
+    );
+  }
+
+  // queue 文件用 task_id 命名，避免并发碰撞
+  const queueDir = path.join(os.tmpdir(), 'zenithjoy-agent-douyin');
+  if (!fs.existsSync(queueDir)) fs.mkdirSync(queueDir, { recursive: true });
+  const queueFile = path.join(queueDir, `task-${payload.task_id}.json`);
+  fs.writeFileSync(
+    queueFile,
+    JSON.stringify(
+      {
+        title: `[WS1] ${path.basename(mp4)}`,
+        content: 'walking-skeleton-1 dryrun',
+        images: [mp4],
+      },
+      null,
+      2,
+    ),
+  );
+
+  console.log(
+    `[handler:douyin-task] task=${payload.task_id} mp4=${mp4} script=${scriptPath}`,
+  );
+
+  const { exitCode, stdout, stderr, spawnError } = await spawnAndCollect(
+    spawnImpl,
+    scriptPath,
+    queueFile,
+  );
+
+  // 清理 queue 文件（错误也要清，避免堆积）
+  try {
+    fs.unlinkSync(queueFile);
+  } catch {
+    // ignore
+  }
+
+  if (spawnError) {
+    return fail(`spawn failed: ${spawnError.message}`);
+  }
+
+  if (exitCode !== 0) {
+    const tail = (stderr || stdout).slice(-500) || `exit ${exitCode}`;
+    return fail(tail);
+  }
+
+  // 解析 stdout 最后一行 JSON
+  let dryrun: { ok?: boolean; dryRun?: boolean; url?: string } = {};
+  try {
+    const lines = stdout.trim().split('\n');
+    const lastJson = lines.reverse().find((l) => l.startsWith('{'));
+    if (lastJson) dryrun = JSON.parse(lastJson);
+  } catch {
+    // 解析失败也算成功（脚本 exit 0），但 evidence 留空
+  }
+
+  const result = {
+    url: dryrun.url,
+    dryrun_evidence: dryrun,
+  };
+  await postReceipt(options.apiBase, fetchImpl, payload.task_id, 'success', result);
+
+  return { ok: true, status: 'success', result };
 }
