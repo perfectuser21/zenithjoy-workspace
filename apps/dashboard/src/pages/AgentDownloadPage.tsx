@@ -94,8 +94,8 @@ export default function AgentDownloadPage() {
                 overflowX: 'auto',
               }}
             >
-{`cd %USERPROFILE%
-tar -xzf Downloads\\zenithjoy-agent-v${AGENT_VERSION}.tar.gz
+{`cd "%USERPROFILE%"
+tar -xzf "Downloads\\zenithjoy-agent-v${AGENT_VERSION}.tar.gz"
 cd zenithjoy-agent`}
             </pre>
           </li>

@@ -31,11 +31,13 @@
 Windows 10 1709 / Windows 11 自带 `tar.exe` 命令：
 
 ```cmd
-cd %USERPROFILE%
-tar -xzf Downloads\zenithjoy-agent-v0.1.0.tar.gz
+cd "%USERPROFILE%"
+tar -xzf "Downloads\zenithjoy-agent-v0.1.0.tar.gz"
 cd zenithjoy-agent
 npm install
 ```
+
+> ⚠️ 路径含空格请保留双引号，避免解压失败。
 
 如果 `tar` 找不到 → 用 7-Zip / 资源管理器自带的"全部解压"，把 tar.gz 解压到任意目录后 `cd` 进去。
 

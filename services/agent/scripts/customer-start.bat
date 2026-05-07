@@ -36,14 +36,33 @@ if "%CHROME_EXE%"=="" (
 
 REM ===== 检查 Chrome 19222 端口是否已占用 =====
 echo [1/2] 启动 Chrome 调试模式 (port %CHROME_PORT%)
-netstat -ano -p tcp | findstr ":%CHROME_PORT% " | findstr LISTENING > nul
-if %errorlevel%==0 (
+set PORT_BUSY=0
+REM netstat 不存在或失败时静默忽略，最坏情况另开新 Chrome（user-data-dir 隔离）
+where netstat >nul 2>&1 && (
+  netstat -ano -p tcp 2>nul | findstr ":%CHROME_PORT% " 2>nul | findstr LISTENING >nul 2>&1
+  if not errorlevel 1 set PORT_BUSY=1
+)
+if "%PORT_BUSY%"=="1" (
   echo   Chrome 端口已占，复用现有窗口
 ) else (
   echo   启动新 Chrome,请在弹窗里登录 https://creator.douyin.com（用测试号）
   start "" "%CHROME_EXE%" --remote-debugging-port=%CHROME_PORT% --user-data-dir="%CHROME_PROFILE%"
-  REM 等 Chrome 起来
-  ping -n 4 127.0.0.1 > nul
+  REM 端口轮询等 Chrome 起来（最多 15s），优于固定 ping 延迟
+  set CHROME_READY=0
+  for /l %%i in (1,1,15) do (
+    if "!CHROME_READY!"=="0" (
+      timeout /t 1 /nobreak >nul 2>&1 || ping -n 2 127.0.0.1 >nul
+      where netstat >nul 2>&1 && (
+        netstat -ano -p tcp 2>nul | findstr ":%CHROME_PORT% " 2>nul | findstr LISTENING >nul 2>&1
+        if not errorlevel 1 set CHROME_READY=1
+      )
+    )
+  )
+  if "!CHROME_READY!"=="1" (
+    echo   Chrome 已就绪 (port %CHROME_PORT%)
+  ) else (
+    echo   [WARN] Chrome 端口探测超时，继续启动 agent 但握手可能失败
+  )
 )
 
 REM ===== 启动 ZenithJoy Agent =====
