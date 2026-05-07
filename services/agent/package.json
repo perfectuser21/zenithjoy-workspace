@@ -16,6 +16,7 @@
     "lint": "tsc --noEmit"
   },
   "dependencies": {
+    "playwright": "^1.49.0",
     "systray2": "^2.1.4",
     "ws": "^8.18.0"
   },

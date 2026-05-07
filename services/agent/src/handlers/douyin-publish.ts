@@ -24,11 +24,24 @@ import os from 'os';
 import fs from 'fs';
 
 // CommonJS bundle：__dirname 直接可用。
-// 同 wechat-publish 的方案：优先 .exe 同目录（生产），次之 repo 开发期路径。
+// v0.1.7 修复：路径解析按优先级 fallback，每一层都 fs.existsSync 真实存在才返回。
+// 老 `beside || dev` 是 bug：beside 永远 truthy（path string 非空），永远不回退 dev。
 function resolveScriptPath(...segs: string[]): string {
+  // 1) 显式 env 覆盖（运行 .bat 时可设 ZENITHJOY_AGENT_ROOT=安装目录）
+  const explicit = process.env.ZENITHJOY_AGENT_ROOT;
+  if (explicit) {
+    const p = path.join(explicit, ...segs);
+    if (fs.existsSync(p)) return p;
+  }
+  // 2) .exe 同目录的 publishers/...（pkg 打包场景）
   const beside = path.join(path.dirname(process.execPath), ...segs);
+  if (fs.existsSync(beside)) return beside;
+  // 3) __dirname 推导（npm start 客户机/开发场景）
+  // __dirname = .../services/agent/src/handlers → ../../publishers/...
   const dev = path.resolve(__dirname, '..', '..', ...segs);
-  return beside || dev;
+  if (fs.existsSync(dev)) return dev;
+  // 4) 实在找不到，返 dev 让 spawn fail 时 error msg 含路径方便排查
+  return dev;
 }
 
 /**
@@ -193,7 +206,10 @@ export async function handleDouyinPublish(
 //   - 这个是 HTTP heartbeat 链路，从 task.payload.folder_path 拉视频，结束后
 //     POST /api/publish/receipt 上报，不依赖 WS
 
-const MP4_RE = /\.mp4$/i;
+// v0.1.8: thin walking skeleton 走抖音「图文」发布（publish-douyin-image.cjs）
+// 接受 jpg/png/jpeg/webp 图片 + .mp4 (向后兼容 / 给 medium 阶段 video publisher 占位)。
+// publisher 收到不支持的文件类型时自己 reject，handler 不在 file picker 阶段就 reject。
+const MP4_RE = /\.(jpg|jpeg|png|webp|mp4)$/i;
 
 export interface DouyinPublishTaskPayload {
   task_id: string;

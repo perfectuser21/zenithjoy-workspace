@@ -178,6 +178,61 @@ describe('resolveDouyinScriptPath (real-publish env switch)', () => {
   });
 });
 
+describe('handleDouyinPublishTask file picker (v0.1.8)', () => {
+  // v0.1.8 IMAGE_RE 接受 jpg/png/webp/jpeg + mp4（向后兼容 + medium video publisher 占位）
+  it('picks first .jpg image from folder (thin 图文 publisher 输入)', async () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'zj-agent-jpg-'));
+    try {
+      fs.writeFileSync(path.join(tmpDir, 'photo1.jpg'), 'fakeimg');
+      const fetchImpl = vi.fn<typeof fetch>(async () =>
+        new Response(JSON.stringify({ ok: true }), { status: 200 }),
+      );
+      const spawnImpl = vi.fn(() =>
+        fakeChild({ exitCode: 0, stdout: '{"ok":true,"dryRun":false,"url":"https://x"}\n' }),
+      );
+      const res = await handleDouyinPublishTask(
+        { task_id: 'task-jpg', folder_path: tmpDir },
+        {
+          apiBase: 'https://api.example.com',
+          fetchImpl: fetchImpl as any,
+          spawnImpl: spawnImpl as any,
+          scriptPath: '/fake/publish-douyin-image.cjs',
+        },
+      );
+      expect(res.ok).toBe(true);
+      expect(spawnImpl).toHaveBeenCalledTimes(1);
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
+  it('picks .mp4 (backward compat) when only mp4 in folder', async () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'zj-agent-mp4-'));
+    try {
+      fs.writeFileSync(path.join(tmpDir, 'video.mp4'), 'fakevid');
+      const fetchImpl = vi.fn<typeof fetch>(async () =>
+        new Response(JSON.stringify({ ok: true }), { status: 200 }),
+      );
+      const spawnImpl = vi.fn(() =>
+        fakeChild({ exitCode: 0, stdout: '{"ok":true}\n' }),
+      );
+      const res = await handleDouyinPublishTask(
+        { task_id: 'task-mp4', folder_path: tmpDir },
+        {
+          apiBase: 'https://api.example.com',
+          fetchImpl: fetchImpl as any,
+          spawnImpl: spawnImpl as any,
+          scriptPath: '/fake/publish-douyin-image.cjs',
+        },
+      );
+      expect(res.ok).toBe(true);
+      expect(spawnImpl).toHaveBeenCalledTimes(1);
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+});
+
 describe('handleDouyinPublishTask real-publish receipt', () => {
   let tmpDir: string;
   beforeEach(() => {

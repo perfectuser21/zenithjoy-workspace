@@ -59,9 +59,19 @@ heartbeatRouter.post(
       return res.status(200).json({
         ok: true,
         agent_id: agent.id,
+        // map to agent's HeartbeatTask shape: { task_id, platform, payload }
+        // payload composed from folder_path column (works for both folder_bind.local_path
+        // and douyin.folder_path) + account_label default for qr_bind_douyin
         queued_tasks: queued.map((t) => ({
-          id: t.id,
+          task_id: t.id,
           platform: t.platform,
+          payload: {
+            local_path: t.folder_path,
+            folder_path: t.folder_path,
+            account_label: 'default',
+          },
+          // legacy fields kept for any older agent client
+          id: t.id,
           status: t.status,
           folder_path: t.folder_path,
           created_at: t.created_at,
@@ -72,6 +82,149 @@ heartbeatRouter.post(
       return res
         .status(500)
         .json({ ok: false, code: 'HEARTBEAT_FAILED', message: msg });
+    }
+  }
+);
+
+// ============ GET /api/agent/status ============
+// Dashboard 用：查当前 license 关联的最新 agent + 心跳新鲜度
+// 60s 内 = connected:true
+heartbeatRouter.get(
+  '/status',
+  licenseAuth,
+  async (req: Request, res: Response) => {
+    const lic = req.license!;
+    try {
+      const pool = (await import('../db/connection')).default;
+      const { rows } = await pool.query<{
+        id: string;
+        hostname: string | null;
+        version: string | null;
+        bound_folder_path: string | null;
+        last_heartbeat_at: string | null;
+      }>(
+        `SELECT id, hostname, version, bound_folder_path, last_heartbeat_at
+           FROM zenithjoy.agents
+          WHERE license_id = $1
+          ORDER BY last_heartbeat_at DESC NULLS LAST
+          LIMIT 1`,
+        [lic.id]
+      );
+      const a = rows[0];
+      if (!a) {
+        return res.status(200).json({
+          connected: false,
+          agent_id: null,
+          hostname: null,
+          version: null,
+          last_heartbeat_at: null,
+          bound_folder_path: null,
+        });
+      }
+      const last = a.last_heartbeat_at ? new Date(a.last_heartbeat_at).getTime() : 0;
+      const fresh = Date.now() - last < 60_000;
+      return res.status(200).json({
+        connected: fresh,
+        agent_id: a.id,
+        hostname: a.hostname,
+        version: a.version,
+        last_heartbeat_at: a.last_heartbeat_at,
+        bound_folder_path: a.bound_folder_path,
+      });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'unknown';
+      return res
+        .status(500)
+        .json({ ok: false, code: 'STATUS_FAILED', message: msg });
+    }
+  }
+);
+
+// ============ POST /api/agent/qr-bind ============
+// Dashboard 用：派发 qr_bind_<platform> task 给 agent
+heartbeatRouter.post(
+  '/qr-bind',
+  licenseAuth,
+  async (req: Request, res: Response) => {
+    const { agent_id, platform } = (req.body ?? {}) as {
+      agent_id?: unknown;
+      platform?: unknown;
+    };
+    if (typeof agent_id !== 'string' || !UUID_RE.test(agent_id)) {
+      return res
+        .status(400)
+        .json({ ok: false, code: 'BAD_REQUEST', message: 'agent_id 缺失或不合法' });
+    }
+    const plat = typeof platform === 'string' && platform.length > 0 ? platform : 'douyin';
+    try {
+      const pool = (await import('../db/connection')).default;
+      // verify agent ownership
+      const own = await pool.query<{ license_id: string }>(
+        `SELECT license_id FROM zenithjoy.agents WHERE id = $1 LIMIT 1`,
+        [agent_id]
+      );
+      if (own.rows.length === 0) {
+        return res.status(404).json({
+          ok: false, code: 'AGENT_NOT_FOUND', message: 'agent 不存在',
+        });
+      }
+      if (own.rows[0].license_id !== req.license!.id) {
+        return res.status(403).json({
+          ok: false, code: 'FORBIDDEN', message: 'agent 不属于该 license',
+        });
+      }
+      // Insert qr_bind_<platform> task. Agent's onTask routes by platform string.
+      await pool.query(
+        `INSERT INTO zenithjoy.publish_tasks (agent_id, platform, status)
+         VALUES ($1, $2, 'pending')`,
+        [agent_id, `qr_bind_${plat}`]
+      );
+      return res.status(200).json({ ok: true });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'unknown';
+      return res
+        .status(500)
+        .json({ ok: false, code: 'QR_BIND_FAILED', message: msg });
+    }
+  }
+);
+
+// ============ GET /api/agent/platforms?agent_id= ============
+// Dashboard 用：列 agent_platform_sessions
+heartbeatRouter.get(
+  '/platforms',
+  licenseAuth,
+  async (req: Request, res: Response) => {
+    const agent_id = String(req.query.agent_id ?? '');
+    if (!UUID_RE.test(agent_id)) {
+      return res
+        .status(400)
+        .json({ ok: false, code: 'BAD_REQUEST', message: 'agent_id 不合法' });
+    }
+    try {
+      const pool = (await import('../db/connection')).default;
+      const own = await pool.query<{ license_id: string }>(
+        `SELECT license_id FROM zenithjoy.agents WHERE id = $1 LIMIT 1`,
+        [agent_id]
+      );
+      if (own.rows.length === 0 || own.rows[0].license_id !== req.license!.id) {
+        return res.status(403).json({
+          ok: false, code: 'FORBIDDEN', message: 'agent 不属于该 license',
+        });
+      }
+      const { rows } = await pool.query(
+        `SELECT id, platform, account_label, status, bound_at, created_at
+           FROM zenithjoy.agent_platform_sessions
+          WHERE agent_id = $1
+          ORDER BY created_at DESC`,
+        [agent_id]
+      );
+      return res.status(200).json({ sessions: rows });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'unknown';
+      return res
+        .status(500)
+        .json({ ok: false, code: 'PLATFORMS_FAILED', message: msg });
     }
   }
 );
@@ -227,6 +380,47 @@ publishWsRouter.post(
       return res
         .status(500)
         .json({ ok: false, code: 'RECEIPT_FAILED', message: msg });
+    }
+  }
+);
+
+// ============ GET /api/publish/tasks?agent_id= ============
+// Dashboard 用：列出 agent 下的 publish_tasks（最新优先）
+publishWsRouter.get(
+  '/tasks',
+  licenseAuth,
+  async (req: Request, res: Response) => {
+    const agent_id = String(req.query.agent_id ?? '');
+    if (!UUID_RE.test(agent_id)) {
+      return res
+        .status(400)
+        .json({ ok: false, code: 'BAD_REQUEST', message: 'agent_id 不合法' });
+    }
+    try {
+      const pool = (await import('../db/connection')).default;
+      const own = await pool.query<{ license_id: string }>(
+        `SELECT license_id FROM zenithjoy.agents WHERE id = $1 LIMIT 1`,
+        [agent_id]
+      );
+      if (own.rows.length === 0 || own.rows[0].license_id !== req.license!.id) {
+        return res.status(403).json({
+          ok: false, code: 'FORBIDDEN', message: 'agent 不属于该 license',
+        });
+      }
+      const { rows } = await pool.query(
+        `SELECT id, agent_id, platform, status, folder_path, result, receipt_at, created_at
+           FROM zenithjoy.publish_tasks
+          WHERE agent_id = $1
+          ORDER BY created_at DESC
+          LIMIT 100`,
+        [agent_id]
+      );
+      return res.status(200).json({ tasks: rows });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'unknown';
+      return res
+        .status(500)
+        .json({ ok: false, code: 'LIST_TASKS_FAILED', message: msg });
     }
   }
 );
