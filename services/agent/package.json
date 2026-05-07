@@ -9,11 +9,15 @@
     "build": "esbuild src/index.ts --bundle --platform=node --target=node18 --format=cjs --outfile=dist/index.js --external:systray2",
     "package:win": "npm run build && pkg . --targets node18-win-x64 --output zenithjoy-agent.exe",
     "package:mac": "npm run build && pkg . --targets node18-macos-x64 --output zenithjoy-agent-mac",
-    "package:linux": "npm run build && pkg . --targets node18-linux-x64 --output zenithjoy-agent-linux"
+    "package:linux": "npm run build && pkg . --targets node18-linux-x64 --output zenithjoy-agent-linux",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "lint": "tsc --noEmit"
   },
   "dependencies": {
-    "ws": "^8.18.0",
-    "systray2": "^2.1.4"
+    "systray2": "^2.1.4",
+    "ws": "^8.18.0"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",
@@ -21,7 +25,8 @@
     "esbuild": "^0.21.0",
     "pkg": "^5.8.1",
     "tsx": "^4.20.0",
-    "typescript": "^5.0.0"
+    "typescript": "^5.0.0",
+    "vitest": "^3.2.4"
   },
   "pkg": {
     "//": "publishers/ 不嵌入 .exe — 它们靠 spawn(node, script) 在客户机外部 runtime 执行。客户机需自装 Node + Playwright。",
