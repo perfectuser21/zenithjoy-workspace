@@ -77,8 +77,8 @@ describe('HeartbeatLoop', () => {
 
   it('dispatches each queued_task to onTask handler', async () => {
     const tasks: HeartbeatTask[] = [
-      { task_id: 't1', type: 'qr_bind/douyin', payload: { account_label: 'default' } },
-      { task_id: 't2', type: 'folder/bind', payload: { local_path: '/tmp/v' } },
+      { task_id: 't1', platform: 'qr_bind_douyin', payload: { account_label: 'default' } },
+      { task_id: 't2', platform: 'folder_bind', payload: { local_path: '/tmp/v' } },
     ];
     const fetchImpl = vi.fn<typeof fetch>(async () =>
       new Response(

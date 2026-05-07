@@ -14,7 +14,7 @@
 
 export interface HeartbeatTask {
   task_id: string;
-  type: string;
+  platform: string;
   payload: Record<string, unknown>;
 }
 

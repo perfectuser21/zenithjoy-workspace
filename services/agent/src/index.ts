@@ -457,35 +457,35 @@ function startWs1HeartbeatLoop(cfg: AgentConfig): void {
   });
 
   const onTask = async (task: HeartbeatTask): Promise<void> => {
-    console.log('[ws1] task:', task.type, task.task_id);
+    console.log('[ws1] task:', task.platform, task.task_id);
     try {
-      if (task.type === 'qr_bind/douyin') {
+      if (task.platform === 'qr_bind_douyin') {
         const res = await handleQrBindDouyin(
           task.payload as { account_label?: string },
         );
-        console.log('[ws1:qr_bind/douyin] result:', res);
-      } else if (task.type === 'folder/bind') {
+        console.log('[ws1:qr_bind_douyin] result:', res);
+      } else if (task.platform === 'folder_bind') {
         const localPath = (task.payload as { local_path?: string }).local_path;
         if (localPath) {
           folderWatch.bind(localPath);
-          console.log('[ws1:folder/bind] bound:', folderWatch.getBoundPath());
+          console.log('[ws1:folder_bind] bound:', folderWatch.getBoundPath());
         } else {
-          console.warn('[ws1:folder/bind] missing local_path');
+          console.warn('[ws1:folder_bind] missing local_path');
         }
-      } else if (task.type === 'publish/douyin') {
+      } else if (task.platform === 'douyin') {
         const payload = task.payload as { folder_path?: string };
         const folderPath = payload.folder_path || folderWatch.getBoundPath();
         if (!folderPath) {
-          console.warn('[ws1:publish/douyin] no folder_path; agent not bound yet');
+          console.warn('[ws1:douyin] no folder_path; agent not bound yet');
           return;
         }
         const res = await handleDouyinPublishTask(
           { task_id: task.task_id, folder_path: folderPath },
           { apiBase },
         );
-        console.log('[ws1:publish/douyin] result:', res.status);
+        console.log('[ws1:douyin] result:', res.status);
       } else {
-        console.warn('[ws1] unknown task type:', task.type);
+        console.warn('[ws1] unknown task platform:', task.platform);
       }
     } catch (err) {
       console.warn('[ws1] task handler threw:', err);
