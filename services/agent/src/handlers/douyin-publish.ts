@@ -1,11 +1,13 @@
 // services/agent/src/handlers/douyin-publish.ts
 //
-// 真调 douyin-publisher 走完抖音创作者后台发布流程，但 *不点击发布按钮*。
+// 真调 douyin-publisher 走完抖音创作者后台发布流程。
 //
-// 安全约束（v0.1）：
-//   只 spawn `publish-douyin-image-dryrun.js`（结构上仅断言发布按钮存在，
-//   不调 /web/api/media/aweme/create_v2/，绝不污染抖音公域）。
-//   不要切回真发脚本 publish-douyin-image.js，那个会真发首页。
+// 模式开关 ZENITHJOY_AGENT_REAL_PUBLISH（默认 dryrun，安全优先）：
+//   - 未设 / '0' / 'false'：spawn `publish-douyin-image-dryrun.cjs`
+//       结构上走完发布流程但不点击发布按钮、绝不调 /web/api/media/aweme/create_v2/
+//       不污染抖音公域，开发与 CI smoke 用此模式
+//   - '1' / 'true'：spawn `publish-douyin-image.cjs`（真发版）
+//       会真点发布按钮、真调 create_v2、产生真实抖音视频；只在客户机上启用
 //
 // 输入 payload.content：
 //   { title: string; content: string; images?: string[] }
@@ -14,7 +16,7 @@
 // Walking Skeleton #1 扩展：
 //   除了原有 WS-driven 的 `handleDouyinPublish`（接 payload.content），
 //   新增 `handleDouyinPublishTask` —— 从 heartbeat-loop 派发的 task 里读
-//   folder_path，自己拉首个 mp4 → spawn dryrun → POST /api/publish/receipt 回执。
+//   folder_path，自己拉首个 mp4 → spawn publisher → POST /api/publish/receipt 回执。
 import { spawn as nodeSpawn } from 'child_process';
 import type { ChildProcess } from 'child_process';
 import path from 'path';
@@ -29,11 +31,27 @@ function resolveScriptPath(...segs: string[]): string {
   return beside || dev;
 }
 
-const SCRIPT_PATH = resolveScriptPath(
-  'publishers',
-  'douyin-publisher',
-  'publish-douyin-image-dryrun.cjs',
-);
+/**
+ * 根据环境变量 `ZENITHJOY_AGENT_REAL_PUBLISH` 选择 douyin publisher 脚本路径。
+ *
+ * 安全默认 = dryrun：未设 / '0' / 'false'（不区分大小写）都走 dryrun 脚本。
+ * 仅当 '1' 或 'true' 时启用真发脚本。
+ *
+ * 参数 env 可注入（便于单测），缺省读 process.env。
+ */
+export function resolveDouyinScriptPath(
+  env: NodeJS.ProcessEnv = process.env,
+): string {
+  const flag = (env.ZENITHJOY_AGENT_REAL_PUBLISH ?? '').trim().toLowerCase();
+  const isReal = flag === '1' || flag === 'true';
+  const file = isReal ? 'publish-douyin-image.cjs' : 'publish-douyin-image-dryrun.cjs';
+  return resolveScriptPath('publishers', 'douyin-publisher', file);
+}
+
+function isRealPublishMode(env: NodeJS.ProcessEnv = process.env): boolean {
+  const flag = (env.ZENITHJOY_AGENT_REAL_PUBLISH ?? '').trim().toLowerCase();
+  return flag === '1' || flag === 'true';
+}
 
 // 自带的 1x1 PNG sample（base64）— 抖音不接受 1x1，但能验证脚本路径走通
 // 真验证留给后续传入真实图片路径
@@ -87,10 +105,14 @@ export async function handleDouyinPublish(
 
   emit(makeMsg('task_progress', { stage: 'spawning', pct: 10 }, taskId));
 
-  console.log(`[handler:douyin] spawning ${SCRIPT_PATH} taskId=${taskId}`);
+  const scriptPath = resolveDouyinScriptPath();
+  const realMode = isRealPublishMode();
+  console.log(
+    `[handler:douyin] spawning ${scriptPath} taskId=${taskId} realPublish=${realMode}`,
+  );
 
   return new Promise((resolve) => {
-    const child = nodeSpawn('node', [SCRIPT_PATH, queueFile], {
+    const child = nodeSpawn('node', [scriptPath, queueFile], {
       stdio: ['ignore', 'pipe', 'pipe'],
     });
 
@@ -126,24 +148,27 @@ export async function handleDouyinPublish(
       }
 
       if (code === 0) {
-        // dry-run 脚本最后一行 stdout = JSON
+        // publisher 脚本最后一行 stdout = JSON
         try {
           const lines = stdout.trim().split('\n');
           const lastJson = lines.reverse().find((l) => l.startsWith('{'));
           const result = lastJson ? JSON.parse(lastJson) : { ok: true };
+          // dryRun 字段如实回传：脚本输出有就用脚本的，否则按当前模式兜底
+          const dryRunFromScript =
+            typeof result.dryRun === 'boolean' ? result.dryRun : !realMode;
           emit(
             makeMsg(
               'task_result',
               {
                 ok: true,
-                dryRun: result.dryRun ?? true,
+                dryRun: dryRunFromScript,
                 url: result.url,
               },
               taskId,
             ),
           );
         } catch {
-          emit(makeMsg('task_result', { ok: true, dryRun: true }, taskId));
+          emit(makeMsg('task_result', { ok: true, dryRun: !realMode }, taskId));
         }
       } else {
         emit(
@@ -254,7 +279,7 @@ export async function handleDouyinPublishTask(
 ): Promise<DouyinPublishTaskResult> {
   const fetchImpl = options.fetchImpl ?? (globalThis.fetch as typeof fetch);
   const spawnImpl = options.spawnImpl ?? nodeSpawn;
-  const scriptPath = options.scriptPath ?? SCRIPT_PATH;
+  const scriptPath = options.scriptPath ?? resolveDouyinScriptPath();
   const pickFirstMp4 = options.pickFirstMp4 ?? defaultPickFirstMp4;
 
   const fail = async (error: string): Promise<DouyinPublishTaskResult> => {
