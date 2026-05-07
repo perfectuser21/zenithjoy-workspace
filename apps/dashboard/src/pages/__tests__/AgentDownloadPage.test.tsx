@@ -14,10 +14,37 @@ import { render, screen, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import AgentDownloadPage from '../AgentDownloadPage';
 import * as ws1Api from '../../api/walking-skeleton-1.api';
+import * as accountApi from '../../api/account.api';
 
 vi.mock('../../api/walking-skeleton-1.api', () => ({
   getAgentStatus: vi.fn(),
 }));
+vi.mock('../../api/account.api', () => ({
+  fetchAccountMe: vi.fn(),
+}));
+
+const STATUS_OFFLINE = {
+  connected: false,
+  agent_id: null,
+  hostname: null,
+  version: null,
+  last_heartbeat_at: null,
+} as const;
+
+const ACCOUNT_WITH_LICENSE = {
+  user: { id: 'u1', email: 'chalex@example.com', name: 'chalex' },
+  license: {
+    license_key: 'ZJ-F-ABC123',
+    tier: 'free' as const,
+    max_machines: 1,
+    expires_at: '2036-01-01T00:00:00Z',
+  },
+};
+
+const ACCOUNT_WITHOUT_LICENSE = {
+  user: { id: 'u1', email: 'chalex@example.com', name: 'chalex' },
+  license: null,
+};
 
 function createWrapper() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -29,6 +56,8 @@ function createWrapper() {
 describe('AgentDownloadPage [BEHAVIOR]', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // 默认：未登录 / 未拿到 license（避免 useQuery hang），具体 case 各自覆盖
+    vi.mocked(accountApi.fetchAccountMe).mockResolvedValue(ACCOUNT_WITHOUT_LICENSE);
   });
 
   it('渲染真实下载链接（指向 /download/zenithjoy-agent-v0.1.0.tar.gz）', async () => {
@@ -96,6 +125,43 @@ describe('AgentDownloadPage [BEHAVIOR]', () => {
     // macOS 关键命令：bash + customer-start.sh
     expect(screen.getByText(/customer-start\.sh/)).toBeInTheDocument();
     expect(screen.getByText(/export ZENITHJOY_LICENSE/)).toBeInTheDocument();
+  });
+
+  it('已登录 + 有 license → 命令片段嵌入真 license_key（不再是占位）', async () => {
+    vi.mocked(ws1Api.getAgentStatus).mockResolvedValue(STATUS_OFFLINE);
+    vi.mocked(accountApi.fetchAccountMe).mockResolvedValue(ACCOUNT_WITH_LICENSE);
+    render(<AgentDownloadPage />, { wrapper: createWrapper() });
+
+    // 显示真 license（在 my-license 区域 + 嵌入命令）
+    await waitFor(() => {
+      expect(screen.getAllByText(/ZJ-F-ABC123/).length).toBeGreaterThanOrEqual(1);
+    });
+    // 占位字符串不应再单独出现
+    expect(screen.queryByText(/ZJ-F-XXXXXX/)).not.toBeInTheDocument();
+  });
+
+  it('已登录 + 无 license → 显示占位 + 提示注册', async () => {
+    vi.mocked(ws1Api.getAgentStatus).mockResolvedValue(STATUS_OFFLINE);
+    vi.mocked(accountApi.fetchAccountMe).mockResolvedValue(ACCOUNT_WITHOUT_LICENSE);
+    render(<AgentDownloadPage />, { wrapper: createWrapper() });
+
+    // 命令片段中出现占位 ZJ-F-XXXXXX（让客户清晰知道要去哪拿）
+    await waitFor(() => {
+      expect(screen.getAllByText(/ZJ-F-XXXXXX/).length).toBeGreaterThanOrEqual(1);
+    });
+  });
+
+  it('渲染 install-and-start.bat 双击启动指引（thin 极限的 1-click）', async () => {
+    vi.mocked(ws1Api.getAgentStatus).mockResolvedValue(STATUS_OFFLINE);
+    render(<AgentDownloadPage />, { wrapper: createWrapper() });
+
+    await waitFor(() => {
+      expect(screen.getByText(/install-and-start\.bat/)).toBeInTheDocument();
+    });
+    // 双击 / 一键 / 双击启动 等关键提示词其一应出现
+    expect(
+      screen.queryAllByText(/双击|一键|双击启动/).length,
+    ).toBeGreaterThanOrEqual(1);
   });
 
   it('agent 已连接 → 状态显示"已连接"', async () => {
