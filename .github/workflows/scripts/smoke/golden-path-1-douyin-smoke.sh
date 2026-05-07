@@ -54,30 +54,44 @@ echo "  API_BASE=${API_BASE}"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
 # ───────────────────────────────────────────────────────────────────
-# Step 1：注册 → 拿 license token（contract §2 + §8）
+# Step 1：注册 → 拿 license（contract §2 §8 + api-impl 确认）
+# better-auth 路径 /api/auth/sign-up/email 不直接返回 license；
+# PR #244 的 auth-bridge 会自动建一行 free license（tier='free'，customer_id=user.id）。
+# 所以注册后从 zenithjoy.licenses 反查 license_key（ZJ-F-XXXX 格式）。
 # ───────────────────────────────────────────────────────────────────
-echo "▶ [1/6] POST /api/auth/register → 拿 license"
+echo "▶ [1/6] POST /api/auth/sign-up/email → 注册"
 RESP_1=$(curl -fsS -c "$COOKIE_JAR" -X POST -H "Content-Type: application/json" \
-  -d "{\"email\":\"${EMAIL}\",\"password\":\"${PASSWORD}\"}" \
-  "${API_BASE}/api/auth/register" 2>/tmp/ws1-step1.err) || {
-  echo "  FAIL: register HTTP failed"
+  -d "{\"email\":\"${EMAIL}\",\"password\":\"${PASSWORD}\",\"name\":\"WS1 Smoke\"}" \
+  "${API_BASE}/api/auth/sign-up/email" 2>/tmp/ws1-step1.err) || {
+  echo "  FAIL: sign-up HTTP failed"
   cat /tmp/ws1-step1.err
   exit 1
 }
-LICENSE=$(echo "$RESP_1" | python3 -c "import sys,json;d=json.load(sys.stdin);print(d.get('license') or d.get('license_key') or '')" 2>/dev/null || true)
-if [ -z "$LICENSE" ]; then
-  echo "  FAIL: register 响应无 license 字段"
+USER_ID=$(echo "$RESP_1" | python3 -c "import sys,json;d=json.load(sys.stdin);u=d.get('user') or d;print(u.get('id') or '')" 2>/dev/null || true)
+if [ -z "$USER_ID" ]; then
+  echo "  FAIL: sign-up 响应无 user.id"
   echo "  body=$RESP_1"
   exit 1
 fi
-echo "  OK: license=${LICENSE:0:16}…"
+# 给 better-auth hooks.after 一秒完成 free-license 桥接
+sleep 1
+LICENSE=$(run_psql -c "SELECT license_key FROM zenithjoy.licenses WHERE customer_id='${USER_ID}' AND tier='free' ORDER BY created_at DESC LIMIT 1;")
+if [ -z "$LICENSE" ]; then
+  echo "  FAIL: zenithjoy.licenses 没找到 free license（auth-bridge 没跑？）"
+  echo "  user_id=$USER_ID"
+  exit 1
+fi
+echo "  OK: user_id=${USER_ID:0:8}… license=${LICENSE}"
 
 # ───────────────────────────────────────────────────────────────────
 # Step 2：Agent heartbeat → 拿 agent_id（contract §2 §4）
+# api-impl 确认：鉴权首选 Authorization: Bearer <license>，body.license 为兜底。
 # ───────────────────────────────────────────────────────────────────
 echo "▶ [2/6] POST /api/agent/heartbeat → 拿 agent_id"
-RESP_2=$(curl -fsS -X POST -H "Content-Type: application/json" \
-  -d "{\"license\":\"${LICENSE}\",\"version\":\"0.1.0\",\"hostname\":\"${HOSTNAME_FAKE}\"}" \
+RESP_2=$(curl -fsS -X POST \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer ${LICENSE}" \
+  -d "{\"version\":\"0.1.0\",\"hostname\":\"${HOSTNAME_FAKE}\"}" \
   "${API_BASE}/api/agent/heartbeat" 2>/tmp/ws1-step2.err) || {
   echo "  FAIL: heartbeat HTTP failed"
   cat /tmp/ws1-step2.err
@@ -124,7 +138,9 @@ echo "  OK: agent_platform_sessions(douyin/default)=active"
 # ───────────────────────────────────────────────────────────────────
 echo "▶ [4/6] POST /api/agent/folder/bind"
 mkdir -p "$LOCAL_PATH"
-RESP_4=$(curl -fsS -X POST -H "Content-Type: application/json" \
+RESP_4=$(curl -fsS -X POST \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer ${LICENSE}" \
   -d "{\"agent_id\":\"${AGENT_ID}\",\"local_path\":\"${LOCAL_PATH}\"}" \
   "${API_BASE}/api/agent/folder/bind" 2>/tmp/ws1-step4.err) || {
   echo "  FAIL: folder/bind HTTP failed"
@@ -142,7 +158,9 @@ echo "  OK: folder bound to ${LOCAL_PATH}"
 # Step 5：创建 publish task（contract §2）
 # ───────────────────────────────────────────────────────────────────
 echo "▶ [5/6] POST /api/publish/task → 拿 task_id"
-RESP_5=$(curl -fsS -X POST -H "Content-Type: application/json" \
+RESP_5=$(curl -fsS -X POST \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer ${LICENSE}" \
   -d "{\"agent_id\":\"${AGENT_ID}\",\"platform\":\"douyin\",\"folder_path\":\"${LOCAL_PATH}\"}" \
   "${API_BASE}/api/publish/task" 2>/tmp/ws1-step5.err) || {
   echo "  FAIL: publish/task HTTP failed"
@@ -165,7 +183,9 @@ echo "  OK: task_id=${TASK_ID}"
 # CI mock 路径：直接 curl POST 上报 mocked-by-smoke evidence
 # ───────────────────────────────────────────────────────────────────
 echo "▶ [5.5/6] (mock) POST /api/publish/receipt 模拟 Agent 上报成功"
-RESP_55=$(curl -fsS -X POST -H "Content-Type: application/json" \
+RESP_55=$(curl -fsS -X POST \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer ${LICENSE}" \
   -d "{
     \"task_id\":\"${TASK_ID}\",
     \"status\":\"success\",
@@ -190,7 +210,9 @@ echo "  OK: receipt accepted"
 # Step 6：验证回执（contract §2 §6）
 # ───────────────────────────────────────────────────────────────────
 echo "▶ [6/6] GET /api/publish/tasks/${TASK_ID} → status=success"
-RESP_6=$(curl -fsS "${API_BASE}/api/publish/tasks/${TASK_ID}" 2>/tmp/ws1-step6.err) || {
+RESP_6=$(curl -fsS \
+  -H "Authorization: Bearer ${LICENSE}" \
+  "${API_BASE}/api/publish/tasks/${TASK_ID}" 2>/tmp/ws1-step6.err) || {
   echo "  FAIL: GET task HTTP failed"
   cat /tmp/ws1-step6.err
   exit 7
