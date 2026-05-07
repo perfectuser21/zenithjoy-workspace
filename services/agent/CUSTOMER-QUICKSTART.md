@@ -11,16 +11,18 @@
 
 ## 5 步操作
 
-### Step 1: clone 仓库 + 装依赖
+### Step 1: 注册 + 拿 license + 下载 Agent
+
+1. 浏览器打开 <https://autopilot.zenjoymedia.media> → 注册账号 → 登录
+2. 进 Dashboard → "Agent 客户端" 页面 → 复制 license（格式 `ZJ-F-XXXXXX`）
+3. 在同一页面点 **「下载 Agent v0.1.0 (.tar.gz)」** 拿到 `zenithjoy-agent-v0.1.0.tar.gz`
+
+### Step 2: 解压 + 装依赖
 
 ```bash
-git clone https://github.com/perfectuser21/zenithjoy-workspace.git
-cd zenithjoy-workspace/services/agent && npm install
+tar -xzf ~/Downloads/zenithjoy-agent-v0.1.0.tar.gz -C ~ && cd ~/zenithjoy-agent
+npm install
 ```
-
-### Step 2: 拿 license
-
-浏览器打开 <https://autopilot.zenjoymedia.media> → 注册账号 → 登录后 Dashboard 显示 license（格式 `ZJ-F-XXXXXX`）→ 复制留用。
 
 ### Step 3: 启动 Chrome 调试模式
 

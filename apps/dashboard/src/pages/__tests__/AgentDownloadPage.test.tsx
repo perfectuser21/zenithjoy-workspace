@@ -41,7 +41,7 @@ describe('AgentDownloadPage [BEHAVIOR]', () => {
     });
     render(<AgentDownloadPage />, { wrapper: createWrapper() });
 
-    expect(screen.getByText(/下载.*Agent|Agent.*下载/i)).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /Agent.*客户端/i })).toBeInTheDocument();
 
     // 必须有真实下载链接，不是 placeholder / 敬请期待
     const downloadLink = await screen.findByRole('link', { name: /下载.*Agent/i });
