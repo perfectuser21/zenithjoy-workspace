@@ -19,6 +19,7 @@ import { agentRouter } from './routes/agent';
 import { heartbeatRouter, publishWsRouter } from './routes/walking-skeleton';
 import { adminLicenseRouter } from './routes/admin-license';
 import { adminUsersRouter } from './routes/admin-users';
+import { accountRouter } from './routes/account';
 import { tasksRouter } from './routes/tasks';
 import { tenantsRouter } from './routes/tenants';
 import { skillsRouter } from './routes/skills';
@@ -75,6 +76,8 @@ app.use('/api/agent', agentRouter);
 app.use('/api/publish', publishWsRouter);
 app.use('/api/admin/license', adminLicenseRouter);
 app.use('/api/admin/users', adminUsersRouter);
+// Walking Skeleton #1：客户自查 license（better-auth session 鉴权）
+app.use('/api/account', accountRouter);
 app.use('/api/tenants', tenantsRouter);
 app.use('/api/skills', skillsRouter);
 app.use('/api/credits', creditsRouter);
