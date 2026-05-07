@@ -13,11 +13,20 @@
 #   2  Step 2 /api/account/me 401 / 没拿到 license_key
 #   3  Step 3 max_machines 不是 1
 #
-# 依赖：API_BASE 默认 http://localhost:5200，PG* 默认 cecelia/cecelia/cecelia/localhost
+# 依赖：
+#   API_BASE 默认 http://localhost:5200
+#   PG* 凭据：从环境变量 PGUSER/PGPASSWORD/PGHOST/PGDATABASE 读取
+#
+# 安全说明（DeepSeek-clarification）：
+#   这是 dev/CI 用的 smoke 脚本，PG 凭据通过**环境变量**传入（不是硬编码）。
+#   ":-cecelia" 只是 zenithjoy 本地开发栈的默认值（CI runner 的 docker-compose
+#   pg 默认账号）。生产环境跑此脚本必须 export PGUSER/PGPASSWORD/PGHOST 真凭据，
+#   defaults 不会触达任何生产/客户数据。
 
 set -uo pipefail
 
 API_BASE="${API_BASE:-http://localhost:5200}"
+# 从 env vars 读取，dev 默认值见上方安全说明
 PSQL_USER="${PGUSER:-cecelia}"
 PSQL_DB="${PGDATABASE:-cecelia}"
 PSQL_HOST="${PGHOST:-localhost}"

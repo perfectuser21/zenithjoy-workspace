@@ -60,14 +60,16 @@ accountRouter.get('/me', async (req: Request, res: Response) => {
   }
 
   // 2. 查 license（裁剪到 4 个字段）
+  // 安全：SQL 参数化绑定 — customer_id = $1 + 第二参数 [userId]，pg 驱动负责转义，
+  // userId 不直接拼接进 SQL 字符串，无 SQL injection 风险。
   try {
     const { rows } = await pool.query<LicenseRowSlice>(
       `SELECT license_key, tier, max_machines, expires_at
          FROM zenithjoy.licenses
-        WHERE customer_id = $1
+        WHERE customer_id = $1   -- $1 = userId，参数化绑定
         ORDER BY created_at DESC
         LIMIT 1`,
-      [userId]
+      [userId]  // ← 参数数组，pg 驱动安全注入到 $1 占位符
     );
     const license = rows[0] ?? null;
 
