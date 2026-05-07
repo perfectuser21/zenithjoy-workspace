@@ -458,6 +458,38 @@ tests:
     product: AI员工
     note: "Walking Skeleton #1 — Agent 调 douyin-publisher dryrun + 上报回执"
 
+  - id: agent-ws1-wechat-image-dryrun
+    path: services/agent/publishers/wechat-publisher/__tests__/wechat-image-dryrun.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: AI员工
+    note: "Walking Skeleton #1 — wechat-publisher 图文 dryrun（成功/CDP断/风控）"
+
+  - id: agent-ws1-wechat-image
+    path: services/agent/publishers/wechat-publisher/__tests__/wechat-image.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: AI员工
+    note: "Walking Skeleton #1 — wechat-publisher 图文真发（成功/CDP断/风控）"
+
+  - id: agent-ws1-wechat-video
+    path: services/agent/publishers/wechat-publisher/__tests__/wechat-video.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: AI员工
+    note: "Walking Skeleton #1 — wechat-publisher 视频消息（成功/CDP断/风控）"
+
+  - id: agent-ws1-wechat-article
+    path: services/agent/publishers/wechat-publisher/__tests__/wechat-article.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: AI员工
+    note: "Walking Skeleton #1 — wechat-publisher 长文 markdown→HTML（成功/CDP断/风控）"
+
   # ── Walking Skeleton #1 — API endpoints (from PR #252) ───────────────────────
   - id: api-walking-skeleton-1
     path: apps/api/tests/integration/walking-skeleton-1.integration.test.ts
