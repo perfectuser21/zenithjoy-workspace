@@ -3,8 +3,8 @@
  * 路由：/dashboard/agent
  *
  * 覆盖：
- *  - 渲染下载链接（GitHub Release URL placeholder）
- *  - 渲染"敬请期待"提示（first cut 还没有 release）
+ *  - 渲染真实下载链接（指向 /download/zenithjoy-agent-v0.1.0.tar.gz）
+ *  - 渲染解压后启动指引（含 customer-start.sh）
  *  - 渲染"已连接 Agent" 状态徽标（依赖 GET /api/agent/status）
  *  - last_heartbeat_at < 60s → 显示"已连接"绿色
  *  - last_heartbeat_at > 60s 或 null → 显示"未连接"灰色
@@ -31,7 +31,7 @@ describe('AgentDownloadPage [BEHAVIOR]', () => {
     vi.clearAllMocks();
   });
 
-  it('渲染下载入口（GitHub Release placeholder + 敬请期待）', async () => {
+  it('渲染真实下载链接（指向 /download/zenithjoy-agent-v0.1.0.tar.gz）', async () => {
     vi.mocked(ws1Api.getAgentStatus).mockResolvedValue({
       connected: false,
       agent_id: null,
@@ -41,12 +41,35 @@ describe('AgentDownloadPage [BEHAVIOR]', () => {
     });
     render(<AgentDownloadPage />, { wrapper: createWrapper() });
 
-    expect(screen.getByText(/下载.*Agent|Agent.*下载/i)).toBeInTheDocument();
-    // placeholder release link 或"敬请期待"——其中之一应该出现
-    await waitFor(() => {
-      const matches = screen.queryAllByText(/敬请期待|github\.com.*releases/i);
-      expect(matches.length).toBeGreaterThan(0);
+    expect(screen.getByRole('heading', { name: /Agent.*客户端/i })).toBeInTheDocument();
+
+    // 必须有真实下载链接，不是 placeholder / 敬请期待
+    const downloadLink = await screen.findByRole('link', { name: /下载.*Agent/i });
+    expect(downloadLink).toHaveAttribute(
+      'href',
+      '/download/zenithjoy-agent-v0.1.0.tar.gz',
+    );
+    expect(downloadLink).toHaveAttribute('download');
+
+    // "敬请期待" 不应再出现（已有真 release）
+    expect(screen.queryByText(/敬请期待/)).not.toBeInTheDocument();
+  });
+
+  it('渲染解压后启动指引（含 customer-start.sh）', async () => {
+    vi.mocked(ws1Api.getAgentStatus).mockResolvedValue({
+      connected: false,
+      agent_id: null,
+      hostname: null,
+      version: null,
+      last_heartbeat_at: null,
     });
+    render(<AgentDownloadPage />, { wrapper: createWrapper() });
+
+    // 关键提示词：解压后 npm install / customer-start.sh
+    await waitFor(() => {
+      expect(screen.getByText(/customer-start\.sh/)).toBeInTheDocument();
+    });
+    expect(screen.getByText(/npm install/)).toBeInTheDocument();
   });
 
   it('agent 已连接 → 状态显示"已连接"', async () => {
