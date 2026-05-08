@@ -84,8 +84,68 @@ todo "Step 5 smoke 待写：curl POST /api/generate + 验证返回内容含画�
 #       → 回写 work.publish_status=success + Dashboard 显示回执
 # 现状：🟡 表单/api/works 在，但缺中台→Agent 任务派发链路
 # ───────────────────────────────────────────────────────────────────
-echo "▶ Step 6: 一键发布看回执"
-todo "Step 6 smoke 待写：curl POST /api/works/:id/publish + 等待 Agent 回执 + 验证 publish_status=success" 6
+echo "▶ Step 6: 中台派任务 + Agent 路由 + dryrun 发布抖音 video（WS2 Sprint 2.1a 加固）"
+
+# 6.1 注册 + 拿 license_key
+SK_EMAIL="${TEST_EMAIL}"
+SIGNUP=$(curl -fsS -c /tmp/sk-step6.cookies -X POST "$API_BASE/api/auth/sign-up/email" \
+  -H 'content-type: application/json' \
+  -d "{\"email\":\"$SK_EMAIL\",\"password\":\"$TEST_PASSWORD\",\"name\":\"smoke\"}" 2>/dev/null) \
+  || fail "Step 6.1 sign-up failed" 6
+ME=$(curl -fsS -b /tmp/sk-step6.cookies "$API_BASE/api/account/me" 2>/dev/null) \
+  || fail "Step 6.1 /api/account/me failed" 6
+LICENSE_KEY=$(echo "$ME" | python3 -c "import json,sys;print(json.load(sys.stdin)['license']['license_key'])" 2>/dev/null) \
+  || fail "Step 6.1 license_key extract failed" 6
+
+# 6.2 起 Agent + 上报 heartbeat 拿 agent_id
+HB=$(curl -fsS -X POST "$API_BASE/api/agent/heartbeat" \
+  -H 'content-type: application/json' \
+  -H "x-license-key: $LICENSE_KEY" \
+  -d '{"machine_id":"smoke-step6","agent_version":"0.1.8"}' 2>/dev/null) \
+  || fail "Step 6.2 heartbeat failed" 6
+AGENT_ID=$(echo "$HB" | python3 -c "import json,sys;print(json.load(sys.stdin)['agent_id'])" 2>/dev/null) \
+  || fail "Step 6.2 agent_id extract failed" 6
+
+# 6.3 中台创建 type=video publish_task（WS1 + WS2 修复后必须接 type）
+VIDEO_TASK=$(curl -fsS -b /tmp/sk-step6.cookies -X POST "$API_BASE/api/publish/task" \
+  -H 'content-type: application/json' \
+  -d "{\"agent_id\":\"$AGENT_ID\",\"platform\":\"douyin\",\"type\":\"video\",\"payload\":{\"video_path\":\"/tmp/smoke.mp4\",\"title\":\"smoke-$(date +%s)\"}}" 2>/dev/null) \
+  || fail "Step 6.3 create video task failed" 6
+VIDEO_TYPE=$(echo "$VIDEO_TASK" | python3 -c "import json,sys;print(json.load(sys.stdin).get('type','?'))" 2>/dev/null)
+if [ "$VIDEO_TYPE" != "video" ]; then
+  fail "Step 6.3 response.type='$VIDEO_TYPE' expected 'video' (WS1 publish_tasks.type 字段未生效?)" 6
+fi
+
+# 6.4 Agent 路由必须按 type 真选 video 脚本（WS2 修硬编码 image bug 验证）
+# 期望 agent.log 含 [type-route] type=video → publish-douyin-video（不是 image）
+# CI 跑 dryrun mock 模式：ZENITHJOY_AGENT_DRYRUN_BROWSER=mock
+ZENITHJOY_AGENT_REAL_PUBLISH=0 ZENITHJOY_AGENT_DRYRUN_BROWSER=mock \
+  node -e "
+    const { resolveDouyinScriptPath } = require('./services/agent/dist/handlers/douyin-publish.js');
+    const p = resolveDouyinScriptPath({type:'video'}, {ZENITHJOY_AGENT_REAL_PUBLISH:'0'});
+    if (!p.match(/publish-douyin-video-dryrun\\.cjs\$/)) { console.error('FAIL: route resolved to', p); process.exit(1); }
+    console.log('[type-route] type=video → publish-douyin-video-dryrun.cjs OK');
+  " 2>/dev/null \
+  || fail "Step 6.4 type=video 路由验证失败 (P0 bug 防回归 — WS2)" 6
+
+# 6.5 反向用例：type=article (无脚本) 必须显式失败，严禁 fallback image
+ARTICLE_FAIL=$(node -e "
+  const { resolveDouyinScriptPath } = require('./services/agent/dist/handlers/douyin-publish.js');
+  try {
+    resolveDouyinScriptPath({type:'article'}, {});
+    console.error('FAIL: article 应抛错但 silent pass');
+    process.exit(1);
+  } catch (e) {
+    if (!/no script for type article|unsupported type article/i.test(e.message)) {
+      console.error('FAIL: 错误信息不规范:', e.message);
+      process.exit(1);
+    }
+    console.log('OK: type=article 显式抛错（不 fallback image） →', e.message);
+  }
+" 2>/dev/null) \
+  || fail "Step 6.5 type=article 反向用例失败 (P0 bug 防回归)" 6
+
+ok "Step 6 ✅ video 路由通 + article 反向不 fallback (WS2 Sprint 2.1a)"
 
 # ───────────────────────────────────────────────────────────────────
 echo ""

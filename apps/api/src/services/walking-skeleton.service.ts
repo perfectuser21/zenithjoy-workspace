@@ -42,6 +42,7 @@ export interface PublishTaskRow {
   agent_id: string;
   platform: string;
   status: 'pending' | 'running' | 'success' | 'failed';
+  type: 'video' | 'image' | 'article';
   folder_path: string | null;
   result: unknown | null;
   receipt_at: string | null;
@@ -162,7 +163,7 @@ export async function upsertAgentByHeartbeat(args: {
 /** 拉指定 agent 的待派发任务（pending） */
 export async function getQueuedTasks(agentId: string): Promise<PublishTaskRow[]> {
   const { rows } = await pool.query<PublishTaskRow>(
-    `SELECT id, agent_id, platform, status, folder_path, result, receipt_at, created_at
+    `SELECT id, agent_id, platform, status, type, folder_path, result, receipt_at, created_at
        FROM zenithjoy.publish_tasks
       WHERE agent_id = $1 AND status = 'pending'
       ORDER BY created_at ASC`,
@@ -219,18 +220,34 @@ export async function bindFolder(args: {
   }
 }
 
+export type PublishTaskType = 'video' | 'image' | 'article';
+
+const VALID_PUBLISH_TYPES: ReadonlySet<string> = new Set(['video', 'image', 'article']);
+
+export function isValidPublishType(t: unknown): t is PublishTaskType {
+  return typeof t === 'string' && VALID_PUBLISH_TYPES.has(t);
+}
+
 /** 创建发布任务 */
 export async function createPublishTask(args: {
   agentId: string;
   platform: string;
-  folderPath: string | null;
+  type?: PublishTaskType;
+  folderPath?: string | null;
+  payload?: unknown;
 }): Promise<PublishTaskRow> {
-  const { agentId, platform, folderPath } = args;
+  const { agentId, platform, folderPath = null, payload } = args;
+  const type: PublishTaskType = isValidPublishType(args.type) ? args.type : 'image';
+
+  // [type-route] 第 1 环节日志：中台写入 publish_task 时的 type
+  console.log(`[type-route] createPublishTask agent=${agentId} platform=${platform} type=${type}`);
+
+  const resultJson = payload == null ? null : JSON.stringify({ payload });
   const { rows } = await pool.query<PublishTaskRow>(
-    `INSERT INTO zenithjoy.publish_tasks (agent_id, platform, folder_path, status)
-     VALUES ($1, $2, $3, 'pending')
+    `INSERT INTO zenithjoy.publish_tasks (agent_id, platform, type, folder_path, status, result)
+     VALUES ($1, $2, $3, $4, 'pending', $5::jsonb)
      RETURNING id, agent_id, platform, status, folder_path, result, receipt_at, created_at`,
-    [agentId, platform, folderPath]
+    [agentId, platform, type, folderPath, resultJson]
   );
   return rows[0];
 }

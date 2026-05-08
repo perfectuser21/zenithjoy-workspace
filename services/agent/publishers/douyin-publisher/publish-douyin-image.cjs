@@ -28,6 +28,8 @@
 const _log = console.log.bind(console);
 const { chromium } = require('playwright');
 const fs = require('fs');
+// WS3: 统一扫码登录模块，替代旧"假设已登录"硬检查（铁律 6 减肥）
+const { requireLogin } = require('./lib/qr-login.cjs');
 
 // 风控关键词（页面内文出现任一即视作被拦截）
 const RISK_KEYWORDS = ['风险', '拦截', '频繁', '异常', '验证码', '风控'];
@@ -65,16 +67,15 @@ async function publishDouyinImageReal(queueFilePath) {
   _log('[DY-REAL] 已连接到浏览器\n');
 
   try {
+    // WS3: 强制扫码登录（lead 自验路径），替代旧"假设已登录"硬检查（铁律 6 减肥）
+    // requireLogin 检查未登录 → 截屏 QR 并 throw NEED_QR；已登录直接 return
+    await requireLogin({ injectedPage: page });
+
     _log('[DY-REAL] Step 1: 导航到发布图文页面');
     await page.goto('https://creator.douyin.com/creator-micro/content/upload?default-tab=3', {
       waitUntil: 'domcontentloaded',
     });
     await page.waitForTimeout(3000);
-
-    const url1 = page.url();
-    if (url1.includes('login') || url1.includes('passport')) {
-      throw new Error(`抖音未登录，当前 URL: ${url1}`);
-    }
 
     _log('[DY-REAL] Step 2: 上传图片 (DOM.setFileInputFiles)');
     const cdpSession = await context.newCDPSession(page);

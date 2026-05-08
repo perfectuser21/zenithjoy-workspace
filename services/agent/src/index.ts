@@ -14,7 +14,7 @@ import path from 'node:path';
 import fs from 'node:fs';
 import os from 'node:os';
 import { handleWechatPublish } from './handlers/wechat-publish';
-import { handleDouyinPublish } from './handlers/douyin-publish';
+import { handleDouyinPublish, handleDouyinPublishTask, type DouyinPublishType } from './handlers/douyin-publish';
 import { handleKuaishouPublish } from './handlers/kuaishou-publish';
 import { handleXiaohongshuPublish } from './handlers/xiaohongshu-publish';
 import { handleToutiaoPublish } from './handlers/toutiao-publish';
@@ -26,7 +26,6 @@ import { startTray, updateTrayStatus, destroyTray } from './tray';
 import { HeartbeatLoop, type HeartbeatTask } from './handlers/heartbeat-loop';
 import { handleQrBindDouyin } from './handlers/qr-bind-douyin';
 import { createFolderWatchManager } from './handlers/folder-watch';
-import { handleDouyinPublishTask } from './handlers/douyin-publish';
 
 // ---------- License & 配置 ----------
 
@@ -480,7 +479,11 @@ function startWs1HeartbeatLoop(cfg: AgentConfig): void {
           return;
         }
         const res = await handleDouyinPublishTask(
-          { task_id: task.task_id, folder_path: folderPath },
+          {
+            task_id: task.task_id,
+            folder_path: folderPath,
+            type: task.type as DouyinPublishType | undefined,
+          },
           { apiBase },
         );
         console.log('[ws1:douyin] result:', res.status);

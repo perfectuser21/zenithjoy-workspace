@@ -1,0 +1,26 @@
+name: lead-acceptance-check
+
+on:
+  pull_request:
+    paths:
+      - '.agent-knowledge/golden-path-1/lead-acceptance-sprint-*.md'
+      - 'scripts/check-lead-acceptance.sh'
+      - '.github/workflows/lead-acceptance-check.yml'
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate lead acceptance evidence files
+        run: |
+          for f in .agent-knowledge/golden-path-1/lead-acceptance-sprint-*.md; do
+            [ -f "$f" ] || continue
+            echo ">>> Checking $f"
+            # 跳过纯占位（含 PLACEHOLDER 字眼）
+            if grep -q '^> \*\*PLACEHOLDER\*\*' "$f"; then
+              echo "  (PLACEHOLDER — skip)"
+              continue
+            fi
+            bash scripts/check-lead-acceptance.sh "$f" || exit 1
+          done

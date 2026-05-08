@@ -1,0 +1,110 @@
+{
+  "initiative_id": "pending",
+  "sprint_name": "WS2 Sprint 2.1a — 修架构 + 抖音 video 真发 + Lead 自验",
+  "journey_type": "user_facing",
+  "journey_type_reason": "涉及 Dashboard 客户操作 + 客户端安装 + 抖音真账号真发，端到端从客户视角贯穿，是 ZenithJoy 终端客户用的 path",
+  "journey_id": "358c40c2-ba63-81b2-a6ea-cd288cf82f29",
+  "journey_name": "客户首次成功路径",
+  "tasks": [
+    {
+      "task_id": "ws1",
+      "title": "DB migration + 中台 createPublishTask 加 type 字段",
+      "scope": "publish_tasks 表新增 type 字段（NOT NULL + CHECK IN video/image/article），中台 createPublishTask 接 type 参数并写入 DB，POST /api/publish/task zod schema 加 type enum 校验",
+      "dod": [
+        "[BEHAVIOR] DB migration 跑后 publish_tasks 有 type 字段 NOT NULL + CHECK 约束",
+        "[BEHAVIOR] createPublishTask({type:'video'}) 持久化 type='video'",
+        "[BEHAVIOR] POST /api/publish/task type='banana' → 422 invalid",
+        "[ARTIFACT] migration 文件存在 + zod schema 含 enum"
+      ],
+      "files": [
+        "apps/api/db/migrations/2026MMDDHHMMSS_publish_tasks_add_type.sql",
+        "apps/api/src/services/walking-skeleton.service.ts",
+        "apps/api/src/routes/publish.ts"
+      ],
+      "depends_on": [],
+      "complexity": "M",
+      "estimated_minutes": 45
+    },
+    {
+      "task_id": "ws2",
+      "title": "Agent 路由按 type 重写 + 错误回写",
+      "scope": "重写 services/agent/src/handlers/douyin-publish.ts:55 resolveDouyinScriptPath() 按 type 拼接路径，找不到脚本显式抛 Error，handleDouyinPublishTask 失败回写 status=failed+reason，4 环节加 [type-route] 日志",
+      "dod": [
+        "[BEHAVIOR] resolveDouyinScriptPath({type:'video'}) → 路径含 publish-douyin-video.cjs",
+        "[BEHAVIOR] resolveDouyinScriptPath({type:'article'}) 抛 Error 含 'no script for type article'",
+        "[BEHAVIOR] type=article 任务不能 spawn image 脚本（严禁 fallback）",
+        "[BEHAVIOR] handleDouyinPublishTask 失败 onTaskComplete({status:'failed',reason})",
+        "[ARTIFACT] 旧硬编码 image 行已删（铁律 6 减肥）"
+      ],
+      "files": [
+        "services/agent/src/handlers/douyin-publish.ts",
+        "services/agent/src/handlers/heartbeat-loop.ts"
+      ],
+      "depends_on": ["ws1"],
+      "complexity": "M",
+      "estimated_minutes": 60
+    },
+    {
+      "task_id": "ws3",
+      "title": "抖音 video dryrun + 真发脚本 + image 加扫码模块",
+      "scope": "新建 lib/qr-login.cjs 扫码共享模块；新建 publish-douyin-video.cjs 真发版 + dryrun 版；修改 publish-douyin-image.cjs 接入 qr-login（删除假设已登录代码段）",
+      "dod": [
+        "[BEHAVIOR] qr-login 未登录 throw 'NEED_QR' + qrScreenshotPath",
+        "[BEHAVIOR] qr-login 已登录 return 不抛错",
+        "[BEHAVIOR] video-dryrun spawn 后 stdout 含 '等待发布按钮' + exit 0",
+        "[BEHAVIOR] video-dryrun 不点最后发布按钮（stdout 不含 'click publish'）",
+        "[ARTIFACT] image.cjs 已替换为 qr-login 调用（删旧'假设已登录'段）"
+      ],
+      "files": [
+        "services/agent/publishers/douyin-publisher/lib/qr-login.cjs",
+        "services/agent/publishers/douyin-publisher/publish-douyin-video.cjs",
+        "services/agent/publishers/douyin-publisher/publish-douyin-video-dryrun.cjs",
+        "services/agent/publishers/douyin-publisher/publish-douyin-image.cjs"
+      ],
+      "depends_on": ["ws2"],
+      "complexity": "L",
+      "estimated_minutes": 60
+    },
+    {
+      "task_id": "ws4",
+      "title": "抖音首次扫码绑定 UI + 任务路由",
+      "scope": "Dashboard 加'绑定抖音'按钮 + 状态展示；中台识别 platform=qr_bind:douyin；Agent 复用 qr-login.cjs 截屏 QR 通过 result.qr_screenshot 推回 Dashboard；扫码成功 cookie 落 Agent 本地 + 回写 cookie_local_path",
+      "dod": [
+        "[BEHAVIOR] POST /api/publish/task {platform:'qr_bind:douyin'} → status=queued",
+        "[BEHAVIOR] Agent complete result.cookie_local_path 持久化 DB JSONB",
+        "[BEHAVIOR] GET /api/publish/task/:id 返回 result.qr_screenshot",
+        "[ARTIFACT] Dashboard 含'绑定抖音'按钮组件"
+      ],
+      "files": [
+        "apps/dashboard/src/...",
+        "apps/api/src/routes/publish.ts",
+        "services/agent/src/handlers/qr-bind-douyin.ts"
+      ],
+      "depends_on": ["ws3"],
+      "complexity": "M",
+      "estimated_minutes": 60
+    },
+    {
+      "task_id": "ws5",
+      "title": "smoke 升级 + Lead 自验 template + CI evidence 校验",
+      "scope": "升级 golden-path-1-smoke.sh 加 type=video 路由验证 + type=article 反向测试；新建 lead-acceptance-template.md + sprint-2.1a evidence 占位；新建 scripts/check-lead-acceptance.sh validator 脚本；CI workflow 跑 validator",
+      "dod": [
+        "[BEHAVIOR] validator 文件不存在 → exit 1",
+        "[BEHAVIOR] validator 含抖音 URL + 扫码字眼 → exit 0",
+        "[BEHAVIOR] validator 含 'preset cookie' → exit 1（防作弊）",
+        "[ARTIFACT] smoke step 6 用 type=video + 含 article 反向",
+        "[ARTIFACT] template + sprint-2.1a evidence 占位 + validator 脚本 + CI workflow"
+      ],
+      "files": [
+        ".github/workflows/scripts/smoke/golden-path-1-smoke.sh",
+        ".agent-knowledge/golden-path-1/lead-acceptance-template.md",
+        ".agent-knowledge/golden-path-1/lead-acceptance-sprint-2.1a.md",
+        "scripts/check-lead-acceptance.sh",
+        ".github/workflows/lead-acceptance-check.yml"
+      ],
+      "depends_on": ["ws4"],
+      "complexity": "S",
+      "estimated_minutes": 45
+    }
+  ]
+}

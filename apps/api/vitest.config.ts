@@ -8,7 +8,7 @@ export default defineConfig({
       'src/**/*.test.{ts,js}',
       'src/**/__tests__/**/*.test.{ts,js}',
     ],
-    exclude: ['node_modules/**', 'tests/integration/**'],
+    exclude: ['node_modules/**', 'tests/integration/**', 'tests/ws1/**', 'tests/ws2/**', 'tests/ws3/**', 'tests/ws4/**', 'tests/ws5/**'],
     coverage: {
       provider: 'v8',
       include: ['src/**/*.ts'],

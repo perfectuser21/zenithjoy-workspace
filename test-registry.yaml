@@ -940,3 +940,51 @@ tests:
     status: active
     product: 数据分析
     note: "Phase 2 技术债 — 快照 ingest（批量写入/幂等 upsert/无效 platform 校验）"
+
+  - id: ws1-publish-task-type-red
+    path: apps/api/tests/ws1/publish-task-type.test.ts
+    type: integration
+    ci: L4-INT
+    status: pending-ci
+    product: 内容发布
+    note: "Sprint 2.1a WS1 RED — publish_tasks.type 字段写入 + zod 校验。需要 postgres CI service。"
+
+  - id: ws2-douyin-type-route
+    path: services/agent/src/handlers/__tests__/ws2-douyin-route.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 内容发布
+    note: "Sprint 2.1a WS2 — Agent handler 按 type 选脚本（修硬编码 image P0 bug）"
+
+  - id: sprint-2-1a-ws1-publish-task-type
+    path: sprints/sprint-c-ws2-douyin-real-publish/tests/ws1/publish-task-type.test.ts
+    type: integration
+    ci: L4-INT
+    status: pending-ci
+    product: 内容发布
+    note: "Sprint 2.1a contract test (临时位置)，TDD RED 来源 — 副本于 apps/api/tests/ws1/"
+
+  - id: sprint-2-1a-ws2-douyin-route
+    path: sprints/sprint-c-ws2-douyin-real-publish/tests/ws2/douyin-route.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 内容发布
+    note: "Sprint 2.1a contract test — Agent type 路由 RED 来源"
+
+  - id: sprint-2-1a-ws4-qr-bind-flow
+    path: sprints/sprint-c-ws2-douyin-real-publish/tests/ws4/qr-bind-douyin-flow.test.ts
+    type: integration
+    ci: L4-INT
+    status: active
+    product: 中台认证
+    note: "Sprint 2.1a WS4 — qr-bind handler cookie_local_path + qr_login 状态回写"
+
+  - id: sprint-2-1a-ws5-lead-acceptance-validator
+    path: sprints/sprint-c-ws2-douyin-real-publish/tests/ws5/lead-acceptance-validator.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 中台认证
+    note: "Sprint 2.1a WS5 — check-lead-acceptance.sh validator 防作弊检查 unit test"
