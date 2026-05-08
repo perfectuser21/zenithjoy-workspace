@@ -100,3 +100,41 @@ $ node publishers/douyin-publisher/publish-douyin-video.cjs queue.json
 1. 测试用 mp4 是 5s 纯蓝色，真业务用真视频时可能拿到 douyin.com/video URL（urlFallback=false）
 2. Agent 进程在第一个 task 处理后死循环 — sprint 2.1a out-of-scope，sprint 2.1c+ 修
 3. requireLogin 严格策略与 home url 不 match 的设计 bug — 已通过 commit 4 在 video.cjs 层智能跳过缓解；根本修是改 qr-login.cjs（sprint 2.1c+）
+
+---
+
+## 真发自验补充（2026-05-08 18:35，commit 7th）
+
+发现 sprint 2.1b spec 漏 selector bug：抖音上传页有 6 个含"发布"文字的按钮（nav bar dropdown trigger + dropdown 4 项 + fixed bottom 真按钮），sprint 2.1b 原 selector `getByRole + .first()` 取错（取了 nav bar dropdown 触发器），导致点击后弹下拉菜单而不是真发布。
+
+修复 commit (clickPublishButton selector 改用 `name:'发布', exact:true`) 后，真机 e2e 跑通完整真发链路：
+
+```
+[click] before url: https://creator.douyin.com/creator-micro/content/post/video?enter_from=publish_page
+[click] candidates count: 1
+[click] 点真发布按钮...
+[click] click dispatched
+[click] after 30s, url: https://creator.douyin.com/creator-micro/content/manage?enter_from=publish
+                                                                                ↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑
+                                                                                跳转作品管理页
+```
+
+抖音作品管理页 (`/creator-micro/content/manage?enter_from=publish`) 列表第一条：
+
+```
+00:05
+sprint-2.1b 真发                ← 标题完全匹配
+2026年05月08日 18:35           ← 时间戳是刚发的
+审核中                          ← 抖音审核流程（纯蓝色 5s 测试 mp4 触发审核）
+```
+
+抖音接受发布请求 + 视频进审核。`douyin.com/video/<id>` 公网 URL 等审核通过后生成（这是抖音 production 行为）。
+
+### 链路完整证据
+
+✅ video.cjs 5 个 selector 函数全部按顺序调用
+✅ commit 4 (8a60d29) 智能跳过 requireLogin
+✅ 视频真上传到抖音
+✅ 真点 fixed bottom 发布按钮（不是 nav bar dropdown 触发器）
+✅ 抖音接受 + 进入审核 + 跳转 manage 页
+✅ manage 页列表第一条是刚发的视频（标题 + 时长 + 审核中）
