@@ -44,20 +44,54 @@ function resolveScriptPath(...segs: string[]): string {
   return dev;
 }
 
+export type DouyinPublishType = 'video' | 'image' | 'article';
+
+const SUPPORTED_DOUYIN_TYPES: ReadonlySet<DouyinPublishType> = new Set([
+  'video',
+  'image',
+  // article 暂未实现 — 路由必须显式抛错（不允许 fallback image）
+]);
+
 /**
- * 根据环境变量 `ZENITHJOY_AGENT_REAL_PUBLISH` 选择 douyin publisher 脚本路径。
+ * 根据 type + ZENITHJOY_AGENT_REAL_PUBLISH 选择 douyin publisher 脚本路径。
  *
- * 安全默认 = dryrun：未设 / '0' / 'false'（不区分大小写）都走 dryrun 脚本。
- * 仅当 '1' 或 'true' 时启用真发脚本。
+ * 旧实现（WS1 thin）硬编码 image，无视 type — 那是 P0 bug 根因。WS2 修复后必须按 type 路由。
  *
- * 参数 env 可注入（便于单测），缺省读 process.env。
+ * 安全默认 = dryrun：未设 / '0' / 'false' 都走 dryrun。仅 '1' / 'true' 启用真发。
+ *
+ * 找不到脚本时**显式抛 Error**，严禁 fallback 到其他 type（防止"视频发成图文"P0 bug 回归）。
+ *
+ * 兼容旧调用：仅传 env（无 args）→ 等价于 type=image（向后兼容 walking-skeleton-1 现有调用）
  */
 export function resolveDouyinScriptPath(
-  env: NodeJS.ProcessEnv = process.env,
+  argsOrEnv?: { type?: DouyinPublishType } | NodeJS.ProcessEnv,
+  envArg?: NodeJS.ProcessEnv,
 ): string {
+  // 旧调用形态: resolveDouyinScriptPath() 或 resolveDouyinScriptPath(process.env)
+  // 新调用形态: resolveDouyinScriptPath({type:'video'}, process.env)
+  let type: DouyinPublishType = 'image';
+  let env: NodeJS.ProcessEnv = process.env;
+  if (argsOrEnv && typeof argsOrEnv === 'object' && 'type' in argsOrEnv) {
+    type = (argsOrEnv as { type?: DouyinPublishType }).type ?? 'image';
+    env = envArg ?? process.env;
+  } else if (argsOrEnv) {
+    env = argsOrEnv as NodeJS.ProcessEnv;
+  }
+
+  if (!SUPPORTED_DOUYIN_TYPES.has(type)) {
+    throw new Error(
+      `[type-route] no script for type ${type} on platform douyin (supported: video/image; article 暂未实现)`,
+    );
+  }
+
   const flag = (env.ZENITHJOY_AGENT_REAL_PUBLISH ?? '').trim().toLowerCase();
   const isReal = flag === '1' || flag === 'true';
-  const file = isReal ? 'publish-douyin-image.cjs' : 'publish-douyin-image-dryrun.cjs';
+  const suffix = isReal ? '' : '-dryrun';
+  const file = `publish-douyin-${type}${suffix}.cjs`;
+
+  // [type-route] 第 3 环节日志：Agent 选脚本时的 type
+  console.log(`[type-route] resolveDouyinScriptPath type=${type} real=${isReal} script=${file}`);
+
   return resolveScriptPath('publishers', 'douyin-publisher', file);
 }
 
@@ -214,6 +248,8 @@ const MP4_RE = /\.(jpg|jpeg|png|webp|mp4)$/i;
 export interface DouyinPublishTaskPayload {
   task_id: string;
   folder_path: string;
+  /** WS2 新增：publish 类型，决定 Agent spawn 哪个脚本。缺省 image（向后兼容 WS1 thin） */
+  type?: DouyinPublishType;
 }
 
 export interface DouyinPublishTaskOptions {
@@ -295,7 +331,6 @@ export async function handleDouyinPublishTask(
 ): Promise<DouyinPublishTaskResult> {
   const fetchImpl = options.fetchImpl ?? (globalThis.fetch as typeof fetch);
   const spawnImpl = options.spawnImpl ?? nodeSpawn;
-  const scriptPath = options.scriptPath ?? resolveDouyinScriptPath();
   const pickFirstMp4 = options.pickFirstMp4 ?? defaultPickFirstMp4;
 
   const fail = async (error: string): Promise<DouyinPublishTaskResult> => {
@@ -303,6 +338,25 @@ export async function handleDouyinPublishTask(
     await postReceipt(options.apiBase, fetchImpl, payload.task_id, 'failed', result);
     return { ok: false, status: 'failed', result };
   };
+
+  // WS2: Agent 拉到任务时打 [type-route] 第 2 环节日志
+  const taskType: DouyinPublishType = payload.type ?? 'image';
+  console.log(
+    `[type-route] handleDouyinPublishTask task=${payload.task_id} type=${taskType}`,
+  );
+
+  // 按 type 选脚本，找不到立即 fail，严禁 silent fallback
+  let scriptPath: string;
+  if (options.scriptPath) {
+    scriptPath = options.scriptPath;
+  } else {
+    try {
+      scriptPath = resolveDouyinScriptPath({ type: taskType });
+    } catch (err) {
+      const reason = err instanceof Error ? err.message : String(err);
+      return fail(reason);
+    }
+  }
 
   const mp4 = pickFirstMp4(payload.folder_path);
   if (!mp4) {
