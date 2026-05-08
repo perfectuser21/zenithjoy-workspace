@@ -66,6 +66,7 @@ heartbeatRouter.post(
         queued_tasks: queued.map((t) => ({
           task_id: t.id,
           platform: t.platform,
+          type: t.type,
           payload: {
             local_path: t.folder_path,
             folder_path: t.folder_path,

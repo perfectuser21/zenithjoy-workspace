@@ -42,6 +42,7 @@ export interface PublishTaskRow {
   agent_id: string;
   platform: string;
   status: 'pending' | 'running' | 'success' | 'failed';
+  type: 'video' | 'image' | 'article';
   folder_path: string | null;
   result: unknown | null;
   receipt_at: string | null;
@@ -162,7 +163,7 @@ export async function upsertAgentByHeartbeat(args: {
 /** 拉指定 agent 的待派发任务（pending） */
 export async function getQueuedTasks(agentId: string): Promise<PublishTaskRow[]> {
   const { rows } = await pool.query<PublishTaskRow>(
-    `SELECT id, agent_id, platform, status, folder_path, result, receipt_at, created_at
+    `SELECT id, agent_id, platform, status, type, folder_path, result, receipt_at, created_at
        FROM zenithjoy.publish_tasks
       WHERE agent_id = $1 AND status = 'pending'
       ORDER BY created_at ASC`,
