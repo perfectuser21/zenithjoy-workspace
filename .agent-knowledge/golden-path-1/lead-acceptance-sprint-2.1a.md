@@ -93,3 +93,66 @@ $ ssh rog-xian Get-Content agent.log
 - **qr_bind_douyin handler 跳过扫码**：当前 Chrome :19222 已有登录的抖音页时，handler 直接读 cookie 跳过弹扫码窗，违反 PRD 防作弊条款。需 WS3/WS4 follow-up。
 - **真发链路 (REAL_PUBLISH=1)**：本验证用 dryrun 模式，video.cjs 实际 selectors 还是 TODO 占位，真发需 lead 现场补 selector。
 
+
+---
+
+## Lead 真扫码 + type=video 全链路自验（2026-05-08 15:12，post-transport-patch merged）
+
+执行人：用户 RDP 到 rog 真扫码 + Claude Code 自动化中台/agent 编排
+机器：rog-xian (Tailscale 100.98.253.95, hostname XX-ROG)
+
+### 真扫码 evidence
+
+```
+$ ssh rog-xian Get-Item .zenithjoy-agent/sessions/douyin/default.json
+Length        LastWriteTime
+------        -------------
+ 13844 bytes  2026/5/8 15:11:53
+
+$ cookies count
+45    ← 真实抖音登录态 cookie 数量（空登录是 0）
+```
+
+QR 截图工作流：用户 RDP 到 rog 双击 launch-chrome.bat，chrome :19333 打开 https://creator.douyin.com/，
+用户用手机抖音 App 扫描 chrome 窗口里的二维码登录抖音创作者后台。
+chrome page 跳转到 https://creator.douyin.com/creator-micro/home（已登录主页）。
+agent qr_bind handler 通过 Playwright connectOverCDP :19333 dump storageState → 落地 13844 bytes / 45 个 cookie。
+
+### type=video 路由全链路（核心 P0 验收）
+
+```
+$ curl POST /api/publish/task -d '{"type":"video","folder_path":"C:\\Temp\\smoke-2.1a"}'
+{"task_id":"be5a75f4-3820-44e8-891f-cb6390875c8e","status":"pending","type":"image"}
+↑ API response 字段是 cosmetic fallback bug 显示 image，DB 真值是 video（见下）
+
+$ psql -c "SELECT type FROM publish_tasks WHERE id='be5a75f4-...'"
+video    ← DB 写入正确
+
+$ ssh rog-xian Get-Content agent.log
+[ws1] task: douyin be5a75f4-3820-44e8-891f-cb6390875c8e
+[type-route] handleDouyinPublishTask task=be5a75f4-3820-44e8-891f-cb6390875c8e type=video
+[type-route] resolveDouyinScriptPath type=video real=false script=publish-douyin-video-dryrun.cjs
+[handler:douyin-task] task=be5a75f4 mp4=C:\Temp\smoke-2.1a\test.mp4 script=...\publish-douyin-video-dryrun.cjs
+                                                                     ↑↑↑ video 脚本，不是 image！
+```
+
+### 判定：APPROVED（thin walking-skeleton acceptance）
+
+✅ Lead 真手机扫码登录抖音（45 cookies dump，非空 cookie 跳过）
+✅ Transport 层 type 字段全程贯通（DB→service→route→agent→handler→spawn script）
+✅ Agent 路由 type=video 到 publish-douyin-video-dryrun.cjs（修补前永远走 image）
+✅ Walking Skeleton Path 1 Step 6 真正可工作
+
+### 真发链路（REAL_PUBLISH=1 + 抖音公网 video URL）
+
+未在本会话完成。原因：`publish-douyin-video.cjs` 真发版还有 TODO selectors 占位（抖音上传页 input/title/publish 按钮的真实 DOM selector 需 lead 现场 F12 看后填）。
+
+按 walking-skeleton 方法论，dryrun 跑通 + 真扫码 = thin acceptance；真发是 medium thickness 升级，独立 sprint 处理。
+
+### 已知 Out-of-Scope 问题（next sprint）
+
+1. Agent 进程在第一个 task 处理后死循环 — 每跑一轮需要 ssh 重启（独立 bug，与 type 路由无关）
+2. qr_bind handler isLoggedIn 太宽松 — chrome 在 douyin.com/ 首页（未跳 /login）也认为已登录，需要 chrome user-data-dir 全新启动 + 强制 navigate /login 才能进真扫码 flow
+3. publish-douyin-video.cjs selectors 真发占位
+4. check-lead-acceptance.sh validator 全文 grep 缺陷（命中禁令文字本身）
+
