@@ -15,19 +15,43 @@
 | Path | 类型 | Maturity | Notion |
 |---|---|---|---|
 | Path 1 客户首次成功 | user_facing | not_started | [Notion](https://www.notion.so/358c40c2ba6381b2a6eacd288cf82f29) |
+| Path 2 客户智能获客 | user_facing | not_started | [Notion](https://www.notion.so/35ac40c2ba6381ed8df4f3fa0b64f5bf) |
+| Path 4 客户私域 AI 接管 | user_facing | not_started | [Notion](https://www.notion.so/AI-35ac40c2ba6381afaf97e3bc8e3b0fb4) |
+
+**Path 2 的 6 步**（smoke 文件待建：`.github/workflows/scripts/smoke/golden-path-2-smoke.sh`）：
+1. 注册自动登录（复用 Path 1）✅ done
+2. 装客户端 + Agent 自动连中台（复用 Path 1）✅ done
+3. 绑客户飞书企业（多租户 OAuth）+ 系统自动建 Bitable 3 张表（获客画像 / 对标视频 / Lead）
+4. 客户在飞书 Bitable 填获客画像（行业/关键词/钩子文案）+ 手填对标视频 URL 清单（thin 手填，加厚后接「对标账号→自动拉视频」复用 `competitor-research.ts`）
+5. 绑 1 个抖音**小号**（与 Path 1 主号 session 物理隔离 — 不同 Chrome user-data-dir + cookie 容器 + `agent_platform_sessions` 加 `role` 字段 `main`/`burner`）
+6. 评论区挖客闭环：读飞书对标视频 → 抓 5 条评论 → 抖音号公开回评+私信带**企微号** → 企微 webhook 收加好友事件 → AI 首答 → 写飞书 Lead 表
+
+> **微信通道分工**：Path 2 走**企微**（官方 API，处理陌生流量首答 + Lead 写飞书）；Path 4 走**个人微信**（PoC `wechat_bot.py`/`wechat_rpa.py` 已在 xian-pc 桌面验证 wxauto4+pyautogui 跑通，Lead 自验扫码绑普通号）。两条通道互不冲突，不要混用。
+> **第一刀只 1 个抖音小号 + 1 个对标视频 URL + 1 条评论触达**。加厚到 3-5 小号 + 多视频矩阵 + 自动选词必须有真实封号/限流证据驱动。
 
 **Path 1 的 6 步**（在 `.github/workflows/scripts/smoke/golden-path-1-smoke.sh`）：
 1. 注册自动登录（含 free license）
 2. 装客户端 + Agent 自动连中台
 3. 画像诊断（行业/受众/风格 3 字段）
-4. 扫码绑定快手（Agent 弹登录窗）
+4. 扫码绑定抖音主号（Agent 弹登录窗，session 存本地）
 5. AI 生成 1 条内容（接 Claude API）
 6. 中台派任务 + dryrun 发布 + 回执
+
+**Path 4 的 6 步**（smoke 文件待建：`.github/workflows/scripts/smoke/golden-path-4-smoke.sh`；机器分工：**xian-rog = Lead 自检机**（所有 sprint 验证装这里），**xian-pc = 产品形态客户机样本**（将来真客户的 worker，PoC 也在这台上）：
+1. 中台扫码绑**个微干净测试号**（客户 PC 上的 NodeJS Agent 启动 PC 微信客户端弹码，复用 Path 1 zenithjoy-agent 协议，扩展 `wechat-rpa` handler spawn Python 子进程）
+2. 飞书 Bitable 自动建 3 张表：**客户档案**（手填客户名单 SSOT，AI 只对名单内动手）/ **营销画像**（行业/受众/钩子）/ **内容排期**（草稿审核台）
+3. 名单内客户**私聊进来** → DeepSeek (via OpenRouter) 拼对话历史写回复草稿 → 写飞书"互动记录"表（待审，AI 不直接发）
+4. 中台定时触发"今日朋友圈" → DeepSeek 拼营销画像写文案草稿 → 写飞书"内容排期"表（待审）
+5. 用户在飞书审批 → 批准后系统 spawn `wechat_rpa.py` 真发（私聊指定客户 / 朋友圈**分组可见**），强制频控（≤1 圈/24h、≤2 私聊/分钟、≤50 私聊/天/号、单次操作间隔 ≥1s）
+6. 发布回执（成功/失败 + 原因）回写飞书"内容排期"+"互动记录"表
+
+> **个微 + LLM agent 通道纪律**：thin 阶段 = PoC 当底（xian-pc 桌面 `wechat_bot.py`/`wechat_rpa.py` 已验证 wxauto4+pyautogui） + A 路线护栏（飞书审核台，AI 草稿不自动发）。MiniMax PoC key 不入 git，sprint 1 第一刀切 OpenRouter DeepSeek（已就绪 `~/.credentials/openrouter.env`）。
+> **第一刀只 1 个干净测试号 + 1 个客户名单 + 1 种主动动作（朋友圈每日 1 条）**。私聊只**被动回**，不主动发起新会话。多号矩阵 + 主动 outreach + 完全自主 AI agent 加厚阶段才上，必须有真实业务证据驱动。
 
 ### 4 条铁律（违反 = PR 被拒）
 
 1. **每个 PR 必须推进 `golden-path-1-smoke.sh` 至少多过一关**。PR 描述强制声明：「本 PR 把 Path X 的 Step Y 从 ❌/🔴 推到 ✅」。
-2. **Path 1 没真正通之前，Path 2/3 一行代码不写**。新加 feature 的想法对照 6 步检查 — 不在路径上 → backlog。
+2. **多 Path 可并行启 sprint，但每个 sprint 必须显式声明推进哪条 Path 的哪些 Step**。Path 1 必须保持推进态势（不允许停滞 ≥2 周），Path 2/4 启 sprint 不阻塞 Path 1。新加 feature 的想法对照各 Path 步骤检查 — 不在任何 Path 上 → backlog。
 3. **新 Feature 默认 thin**。要建 medium/thick 必须用 walking-skeleton skill `thicken.js` 走升级流程（含 `replaces_old_thin` 删旧文件证据）。
 4. **加厚是"先减肥再增肌"**：升级 thickness 必须两段式 commit：`commit 1 删旧 mock/hardcode` → `commit 2 写新实现`。改名 `_legacy` / TODO 注释不算删除。
 
