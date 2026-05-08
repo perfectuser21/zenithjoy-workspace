@@ -26,6 +26,7 @@ import { startTray, updateTrayStatus, destroyTray } from './tray';
 import { HeartbeatLoop, type HeartbeatTask } from './handlers/heartbeat-loop';
 import { handleQrBindDouyin } from './handlers/qr-bind-douyin';
 import { createFolderWatchManager } from './handlers/folder-watch';
+import { startHealthServer, setWsState } from './handlers/health-server';
 
 // ---------- License & 配置 ----------
 
@@ -280,10 +281,12 @@ function connect(cfg: AgentConfig): void {
   console.log(`[agent] connecting to ${cfg.apiUrl}...`);
   updateTrayStatus('connecting');
   const ws = new WebSocket(url);
+  setWsState('connecting');
 
   let heartbeatTimer: NodeJS.Timeout | null = null;
 
   ws.on('open', () => {
+    setWsState('open');
     console.log(`[agent] connected as ${cfg.agentId}`);
     backoff = 1000;
     updateTrayStatus('online');
@@ -344,6 +347,7 @@ function connect(cfg: AgentConfig): void {
   });
 
   ws.on('close', (code) => {
+    setWsState('closed');
     console.log(`[agent] closed: ${code}, reconnecting in ${backoff}ms`);
     updateTrayStatus('offline');
     if (heartbeatTimer) clearInterval(heartbeatTimer);
@@ -427,6 +431,10 @@ async function main(): Promise<void> {
   //   - 不影响上面 WS 链路；两条链路共存（WS 是旧 v0.3 协议，heartbeat 是 ws1 协议）
   //   - folder-watch / qr-bind 状态在 heartbeat-loop 进程内维护
   startWs1HeartbeatLoop(cfg);
+
+  // Sprint 2.1d: health-server :5201 让 supervisor 检测业务死循环
+  startHealthServer(5201);
+  console.log('[health] server listening :5201 /healthz');
 }
 
 function deriveHttpApiBase(cfg: AgentConfig): string | null {

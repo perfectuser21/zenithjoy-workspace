@@ -24,3 +24,8 @@ c5a288fabdaebaa386feecf5dbad2edb69bf4bdc:.github/workflows/scripts/smoke/auth-sm
 
 # Sprint 2.1b plan/spec doc — Authorization Bearer 是测试 license（free tier ZJ-F-）非真 secret
 acda72b6176ddf69bc7a664c00061e36e0cb7103:docs/superpowers/plans/2026-05-08-sprint-2-1b-douyin-video-port.md:curl-auth-header:608
+
+# Sprint 2.1d plan doc — Authorization Bearer ZJ-F-* 是测试 license 用法示例（非真 secret）
+c90ac9a9eb8cad589c41713584247e3d25e5eeba:docs/superpowers/plans/2026-05-08-sprint-2-1d-agent-supervisor.md:curl-auth-header:541
+c90ac9a9eb8cad589c41713584247e3d25e5eeba:docs/superpowers/plans/2026-05-08-sprint-2-1d-agent-supervisor.md:curl-auth-header:565
+cbca7c4909fbbb5390a6f13867ebf92493757b1c:.agent-knowledge/golden-path-1/lead-acceptance-sprint-2.1d.md:curl-auth-header:28
