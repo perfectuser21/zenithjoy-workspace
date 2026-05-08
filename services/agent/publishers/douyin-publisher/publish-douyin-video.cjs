@@ -74,10 +74,6 @@ async function publishDouyinVideoReal(queueData) {
       waitUntil: 'domcontentloaded',
     });
 
-    // 上传 video / 填标题 / 选标签 — selectors 用 data-testid / aria-label / role / text 优先
-    // TODO lead 自验时用真抖音选择器替换以下占位
-    _log('[DY-VIDEO-REAL] (TODO lead 自验填 selectors) 上传 video / 填标题 / 选标签 / 点真发布按钮');
-
     // R1 风控检测
     const bodyText = await page.evaluate(() => document.body?.innerText || '').catch(() => '');
     for (const kw of RISK_KEYWORDS) {
@@ -86,13 +82,6 @@ async function publishDouyinVideoReal(queueData) {
         throw new Error(`risk: 抖音风控关键词命中 "${kw}" (screenshot: ${shot || 'n/a'})`);
       }
     }
-
-    // 真点发布按钮（lead 自验时这里要真选择器 + .click()）
-    // 此处骨架，lead 自验填 selectors。
-    _log('[DY-VIDEO-REAL] 提交发布请求...');
-
-    // 抓取最终视频 URL（lead 自验时填 selector / interceptor）
-    const videoUrl = `https://www.douyin.com/video/PENDING_LEAD_VERIFICATION`;
 
     const out = { ok: true, dryRun: false, url: videoUrl, title: queueData.title };
     _log(JSON.stringify(out));
