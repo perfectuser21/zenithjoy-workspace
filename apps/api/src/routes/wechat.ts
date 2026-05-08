@@ -16,7 +16,7 @@ import { Router, Request, Response } from 'express';
 import { z } from 'zod';
 import crypto from 'node:crypto';
 import pool from '../db/connection';
-import { generateChatDraft } from '../services/wechat-draft';
+import { generateChatDraft, generateMomentDraft } from '../services/wechat-draft';
 
 export const wechatRouter = Router();
 
@@ -130,11 +130,52 @@ wechatRouter.post('/scheduler-tick', async (req: Request, res: Response) => {
       issues: parsed.error.issues,
     });
   }
-  // ws1 thin：返回空 generated/skipped；ws4 真实拉客户画像生成朋友圈草稿
-  return res.status(200).json({
-    generated: 0,
-    skipped: [],
-  });
+
+  // ws4 真逻辑：
+  //   1) 若指定 customer → 仅对该客户跑 generateMomentDraft
+  //   2) 否则 → 拉 DB agent_platform_sessions 中已绑微信（platform='wechat_personal' status='bound'）的所有客户
+  //      逐个调 generateMomentDraft，汇总 generated/skipped 返回
+  const { customer } = parsed.data;
+  let customers: string[] = [];
+
+  if (customer) {
+    customers = [customer];
+  } else {
+    try {
+      const { rows } = await pool.query<{ customer: string }>(
+        `SELECT DISTINCT customer
+           FROM agent_platform_sessions
+          WHERE platform = $1
+            AND status = $2`,
+        ['wechat_personal', 'bound'],
+      );
+      customers = (rows ?? [])
+        .map((r) => String(r.customer ?? '').trim())
+        .filter((c) => c.length > 0);
+    } catch (err) {
+      console.warn('[wechat/scheduler-tick] 拉已绑微信客户失败:', err);
+      customers = [];
+    }
+  }
+
+  let generated = 0;
+  const skipped: Array<{ customer: string; reason: string }> = [];
+
+  for (const c of customers) {
+    try {
+      const result = await generateMomentDraft({ customer: c });
+      if (result.ok) {
+        generated += 1;
+      } else {
+        skipped.push({ customer: c, reason: result.reason });
+      }
+    } catch (err) {
+      console.warn(`[wechat/scheduler-tick] generateMomentDraft for ${c} 异常:`, err);
+      skipped.push({ customer: c, reason: 'internal_error' });
+    }
+  }
+
+  return res.status(200).json({ generated, skipped });
 });
 
 // ─── POST /api/wechat/draft-generate（ws3）──────────────────────────────────

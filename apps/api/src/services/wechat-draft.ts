@@ -46,6 +46,9 @@ function getInteractionTableId(): string {
 function getProfileTableId(): string {
   return process.env.FEISHU_PROFILE_TABLE_ID || '';
 }
+function getScheduleTableId(): string {
+  return process.env.FEISHU_SCHEDULE_TABLE_ID || '';
+}
 
 // ─── 飞书 Token 缓存（5 分钟内复用，单调用链内只取一次）────────────────────────
 
@@ -315,6 +318,167 @@ export async function generateChatDraft(
 
   if (aiError) {
     console.warn('[wechat-draft] AI 草稿生成失败 fallback 占位:', aiError);
+  }
+
+  return {
+    ok: true,
+    status: 'pending_review',
+    task_id: taskId,
+    draft_id: draftId,
+  };
+}
+
+// ─── ws4: generateMomentDraft（朋友圈文案草稿）────────────────────────────────
+
+export interface GenerateMomentDraftParams {
+  customer: string;
+}
+
+export interface GenerateMomentDraftSuccess {
+  ok: true;
+  status: 'pending_review';
+  task_id: string;
+  draft_id: string;
+}
+
+export interface GenerateMomentDraftSkipped {
+  ok: false;
+  reason: 'profile_missing' | 'already_generated_today';
+}
+
+export type GenerateMomentDraftResult =
+  | GenerateMomentDraftSuccess
+  | GenerateMomentDraftSkipped;
+
+function buildMomentPrompt(profile: {
+  industry: string;
+  audience: string;
+  hook: string;
+}): string {
+  return [
+    '你是一名熟悉私域营销的朋友圈文案写手，请根据以下营销画像写一段简短自然的朋友圈文案（≤120 字），不要过度推销。',
+    '营销画像',
+    `行业: ${profile.industry}`,
+    `受众: ${profile.audience}`,
+    `钩子文案: ${profile.hook}`,
+    '',
+    '朋友圈文案:',
+  ].join('\n');
+}
+
+/**
+ * 朋友圈文案草稿生成（thin 阶段 A 路线护栏起点）：
+ *   1) 校验飞书"营销画像"对应客户 3 字段（行业 / 受众 / 钩子文案）齐全；任一缺失 → profile_missing
+ *   2) 校验 DB wechat_publish_task type='moment' 当日（CURRENT_DATE）该客户是否已生成过 → already_generated_today
+ *   3) 拼营销画像 3 字段 + 硬编码 prompt → 调 OpenRouter DeepSeek
+ *   4) 写飞书"内容排期"表（status='pending_review'，approval_source 不写）
+ *   5) 写 DB wechat_publish_task（type='moment', approval_status='pending_review',
+ *      approval_source NULL — 不允许 system 自批）
+ *
+ * 失败处理：OpenRouter 5xx → 飞书排期写"AI 生成失败"占位，状态仍 pending_review（人审决定重试）。
+ */
+export async function generateMomentDraft(
+  params: GenerateMomentDraftParams,
+): Promise<GenerateMomentDraftResult> {
+  const { customer } = params;
+
+  // 1) 飞书"营销画像"表查 3 字段
+  let profileRows: FeishuRecord[] = [];
+  try {
+    profileRows = await searchTable(getProfileTableId(), customer);
+  } catch (err) {
+    console.warn('[wechat-draft] 营销画像 search 失败，按 profile_missing 处理:', err);
+    return { ok: false, reason: 'profile_missing' };
+  }
+
+  if (!profileRows || profileRows.length === 0) {
+    return { ok: false, reason: 'profile_missing' };
+  }
+
+  const profileFields = profileRows[0].fields ?? {};
+  const industry = String(profileFields['行业'] ?? '').trim();
+  const audience = String(profileFields['受众'] ?? '').trim();
+  const hook = String(profileFields['钩子文案'] ?? '').trim();
+  if (!industry || !audience || !hook) {
+    return { ok: false, reason: 'profile_missing' };
+  }
+
+  // 2) 当日去重（CURRENT_DATE 比对 created_at::date）
+  try {
+    const dupResult = await pool.query(
+      `SELECT task_id FROM wechat_publish_task
+        WHERE type = $1
+          AND target_user = $2
+          AND created_at::date = CURRENT_DATE
+        LIMIT 1`,
+      ['moment', customer],
+    );
+    if (dupResult.rows && dupResult.rows.length > 0) {
+      return { ok: false, reason: 'already_generated_today' };
+    }
+  } catch (err) {
+    // 当日去重 SELECT 失败时按"未生成过"放行（fail-open，避免飞书读完了卡住）
+    console.warn('[wechat-draft] 当日去重 SELECT 失败，放行生成:', err);
+  }
+
+  // 3) 拼 prompt → 调 OpenRouter DeepSeek
+  const prompt = buildMomentPrompt({ industry, audience, hook });
+  let aiContent = '';
+  let aiError: string | null = null;
+  try {
+    const result = await callOpenRouter({
+      prompt,
+      model: 'deepseek/deepseek-chat',
+      request_purpose: 'wechat_moment_draft',
+    });
+    aiContent = (result.content || '').trim();
+    if (!aiContent) {
+      aiError = 'OpenRouter 返回空文本';
+      aiContent = FAIL_PLACEHOLDER;
+    }
+  } catch (err) {
+    aiError = err instanceof Error ? err.message : String(err);
+    aiContent = FAIL_PLACEHOLDER;
+  }
+
+  // 4) 写飞书"内容排期"表（pending_review，不写 approval_source — A 路线护栏起点）
+  const generatedAt = Date.now();
+  let draftId = '';
+  try {
+    draftId = await createRecord(getScheduleTableId(), {
+      客户名: customer,
+      文案: aiContent,
+      生成时间: generatedAt,
+      状态: 'pending_review',
+    });
+  } catch (err) {
+    console.warn('[wechat-draft] 写飞书"内容排期"失败:', err);
+  }
+
+  // 5) 写 DB wechat_publish_task：type='moment'，approval_status='pending_review'，approval_source NULL
+  const taskId = crypto.randomUUID();
+  try {
+    await pool.query(
+      `INSERT INTO wechat_publish_task
+        (task_id, platform, type, target_user, content_draft, approval_status, approval_source, feishu_record_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+      [
+        taskId,
+        'wechat_personal',
+        'moment',
+        customer,
+        aiContent,
+        'pending_review',
+        null, // ws4 阶段 approval_source 必须 NULL
+        draftId || null,
+      ],
+    );
+  } catch (err) {
+    console.warn('[wechat-draft] DB INSERT wechat_publish_task (moment) 失败:', err);
+  }
+
+  if (aiError) {
+    console.warn('[wechat-draft] AI 朋友圈草稿生成失败 fallback 占位:', aiError);
   }
 
   return {
