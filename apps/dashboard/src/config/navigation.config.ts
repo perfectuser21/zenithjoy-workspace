@@ -89,6 +89,8 @@ export const autopilotPageComponents: Record<string, () => Promise<{ default: Co
   'DouyinBindPage': () => import('../pages/DouyinBindPage'),
   'FolderBindPage': () => import('../pages/FolderBindPage'),
   'PublishPage': () => import('../pages/PublishPage'),
+  // Path 4 Sprint 1 ws2 — 私域 Agent 机器列表 + 绑微信入口
+  'AgentMachines': () => import('../pages/AgentMachines'),
   // FeatureDashboard and CommandCenter moved to Core features/business
 };
 
@@ -217,6 +219,14 @@ export const autopilotNavGroups: NavGroup[] = [
         label: '一键发布',
         featureKey: 'ws1-publish',
         component: 'PublishPage',
+      },
+      // ============ Path 4 Sprint 1 ws2 ============
+      {
+        path: '/dashboard/agent-machines',
+        icon: Users,
+        label: 'Agent 机器',
+        featureKey: 'path4-agent-machines',
+        component: 'AgentMachines',
       },
     ]
   }
