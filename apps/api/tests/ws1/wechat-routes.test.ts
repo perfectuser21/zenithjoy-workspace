@@ -14,8 +14,13 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import request from 'supertest';
 
+// vi.mock 的 factory 在 hoist 后执行，不能引用模块顶层 const，
+// 用 vi.hoisted() 确保 mockQuery 在 mock factory 调用前已就绪
+const { mockQuery } = vi.hoisted(() => ({
+  mockQuery: vi.fn(),
+}));
+
 // Mock pg connection — 各端点查询全部走 mock
-const mockQuery = vi.fn();
 vi.mock('../../src/db/connection', () => ({
   default: {
     query: mockQuery,

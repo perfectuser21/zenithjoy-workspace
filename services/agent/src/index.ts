@@ -21,6 +21,7 @@ import { handleToutiaoPublish } from './handlers/toutiao-publish';
 import { handleWeiboPublish } from './handlers/weibo-publish';
 import { handleShipinhaoPublish } from './handlers/shipinhao-publish';
 import { handleZhihuPublish } from './handlers/zhihu-publish';
+import { handleWechatRpa } from './handlers/wechat-rpa';
 import { startTray, updateTrayStatus, destroyTray } from './tray';
 // Walking Skeleton #1 — HTTP heartbeat 链路（与上面 WS 链路并存）
 import { HeartbeatLoop, type HeartbeatTask } from './handlers/heartbeat-loop';
@@ -340,6 +341,10 @@ function connect(cfg: AgentConfig): void {
         } else {
           console.warn('[agent] unsupported platform:', platform);
         }
+      } else if (msg.type === 'wechat_rpa_request') {
+        // Path 4 ws1 — 微信 RPA 协议（spawn Python 子进程：qr_bind/listen_chat/send_chat/send_moment）
+        // payload: {type: 'wechat_qr_bind' | ..., dryrun?, ...}
+        await handleWechatRpa(msg.taskId, msg.payload, emit, makeMsg);
       }
     } catch (err) {
       console.warn('[agent] invalid message:', err);

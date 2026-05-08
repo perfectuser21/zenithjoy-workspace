@@ -24,6 +24,7 @@ import { tasksRouter } from './routes/tasks';
 import { tenantsRouter } from './routes/tenants';
 import { skillsRouter } from './routes/skills';
 import { creditsRouter } from './routes/credits';
+import { wechatRouter } from './routes/wechat';
 import { errorHandler, notFoundHandler } from './middleware/error';
 
 const app = express();
@@ -81,6 +82,8 @@ app.use('/api/account', accountRouter);
 app.use('/api/tenants', tenantsRouter);
 app.use('/api/skills', skillsRouter);
 app.use('/api/credits', creditsRouter);
+// Path 4 微信个人号端点（ws1）
+app.use('/api/wechat', wechatRouter);
 
 // Error handling
 app.use(notFoundHandler);
