@@ -1163,3 +1163,29 @@ tests:
     status: pending-ci
     product: 私域运营
     note: "Path 4 Sprint 1 ws5 — feishu-poll.ts 静态契约：pollOnce/startFeishuPoll/stopFeishuPoll + 30s 周期 + UPDATE approval_source='feishu_user' + 调用 dispatchTask（合同 RED）"
+
+  # ── Path 4 Sprint 1 ws6 — golden-path-4-smoke + evidence + CI 防作弊 ────────────
+
+  - id: path4-sprint-1-ws6-smoke-shape
+    path: apps/api/tests/ws6/smoke-shape.test.ts
+    type: integration
+    ci: L4
+    status: pending-ci
+    product: 私域运营
+    note: "Path 4 Sprint 1 ws6 — golden-path-4-smoke.sh 文件形态契约：6 step 标记 + 真调 binary ≥ 6 次 + echo 占位 ≤ 12 行（合同 RED）"
+
+  - id: path4-sprint-1-ws6-evidence-strict
+    path: apps/api/tests/ws6/evidence-strict.test.ts
+    type: integration
+    ci: L4
+    status: pending-ci
+    product: 私域运营
+    note: "Path 4 Sprint 1 ws6 — Lead 自验 evidence 模板 LEAD_ACCEPTANCE_VALIDATION=skip/strict 切换 + 4 类真实证据校验（合同 RED）"
+
+  - id: path4-sprint-1-ws6-ci-workflow
+    path: apps/api/tests/ws6/ci-workflow.test.ts
+    type: integration
+    ci: L4
+    status: pending-ci
+    product: 私域运营
+    note: "Path 4 Sprint 1 ws6 — golden-path-4-smoke.yml needs:[ws1..ws5] + test-registry ws1-ws6 注册 + lint-feature-has-smoke.yml Path 4 关键字（合同 RED）"
