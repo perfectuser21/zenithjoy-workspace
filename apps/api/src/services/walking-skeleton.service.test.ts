@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any -- vitest mock types require any cast */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // pool 是模块顶层 import，必须在导入 service 之前 mock
