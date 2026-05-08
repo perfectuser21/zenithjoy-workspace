@@ -102,7 +102,7 @@ async function handlePoll(req: Request, res: Response): Promise<Response> {
         });
       }
       return res.status(200).json({ task: rows[0] });
-    } catch (err) {
+    } catch {
       // DB 不可用时 thin 返回 404
       return res.status(404).json({
         error: 'TASK_NOT_FOUND',
