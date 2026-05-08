@@ -148,4 +148,42 @@ describe('HeartbeatLoop', () => {
     const resp = await loop.sendOnce();
     expect(resp).toBeNull();
   });
+
+  it('forwards task.type from heartbeat response to onTask callback', async () => {
+    const queuedTask: HeartbeatTask = {
+      task_id: 'task-video-1',
+      platform: 'douyin',
+      type: 'video',
+      payload: { folder_path: '/tmp/x' },
+    };
+    const fetchImpl = vi.fn<typeof fetch>(async () =>
+      new Response(
+        JSON.stringify({
+          ok: true,
+          agent_id: 'agent-1',
+          queued_tasks: [queuedTask],
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      ),
+    );
+
+    const received: HeartbeatTask[] = [];
+    const loop = new HeartbeatLoop({
+      apiBase: 'https://api.example.com',
+      license: 'zj-test',
+      version: '0.1.0',
+      hostname: 'host-x',
+      fetchImpl: fetchImpl as any,
+      onTask: (t) => {
+        received.push(t);
+      },
+    });
+
+    await loop.sendOnce();
+
+    expect(received).toHaveLength(1);
+    expect(received[0].type).toBe('video');
+    expect(received[0].platform).toBe('douyin');
+    expect(received[0].task_id).toBe('task-video-1');
+  });
 });
