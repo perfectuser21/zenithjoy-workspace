@@ -87,6 +87,8 @@ export interface PublishTaskBody {
   agent_id: string;
   platform: string;
   folder_path: string;
+  /** Sprint 2.1c: image (默认) / video / article 决定 agent spawn 哪个 publisher 脚本 */
+  type?: 'image' | 'video' | 'article';
 }
 export interface PublishTaskResponse {
   task_id: string;
