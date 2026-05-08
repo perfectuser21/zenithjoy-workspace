@@ -1004,3 +1004,36 @@ tests:
     status: active
     product: 中台认证
     note: "Sprint 2.1d — health-server :5201 /healthz endpoint UT (ws_connected/uptime/pid)"
+
+  # ── Path 4 Sprint 1 ws1 — DB schema + 中台路由 + Agent 协议 + LLM audit ──────────
+  - id: path4-sprint-1-ws1-db-schema
+    path: apps/api/tests/ws1/db-schema.test.ts
+    type: integration
+    ci: L4
+    status: active
+    product: 私域运营
+    note: "Path 4 Sprint 1 ws1 — wechat_publish_task + llm_audit migration schema + approval_source CHECK 约束（A 路线护栏）"
+
+  - id: path4-sprint-1-ws1-openrouter-llm
+    path: apps/api/tests/llm/openrouter.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 私域运营
+    note: "Path 4 Sprint 1 ws1 — OpenRouter DeepSeek 封装 + OPENROUTER_FORCE_5XX 注入 + CI max_tokens=20 cap"
+
+  - id: path4-sprint-1-ws1-wechat-routes
+    path: apps/api/tests/routes/wechat.test.ts
+    type: integration
+    ci: L4
+    status: active
+    product: 私域运营
+    note: "Path 4 Sprint 1 ws1 — /api/wechat 3 端点 zod schema 校验（qr-bind/draft-review-poll/scheduler-tick）"
+
+  - id: path4-sprint-1-ws1-wechat-rpa-handler
+    path: apps/api/tests/ws1/wechat-rpa-handler.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 私域运营
+    note: "Path 4 Sprint 1 ws1 — wechat-rpa.ts handler spawn Python 子进程 + dryrun receipt"
