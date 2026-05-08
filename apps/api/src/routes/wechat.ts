@@ -1,23 +1,22 @@
 /**
- * /api/wechat/* — Path 4 微信个人号端点（ws1 thin）
+ * /api/wechat/* — Path 4 微信个人号端点（ws1 thin → ws3 加厚私聊草稿）
  *
- * 3 个端点：
+ * 4 个端点：
  *   - POST /api/wechat/qr-bind         {platform, agent_id} → {task_id, status}
  *   - POST /api/wechat/draft-review-poll  → {polled, dispatched}
  *   - GET  /api/wechat/draft-review-poll?task_id=X  → 单 task 状态 / 404
  *   - POST /api/wechat/scheduler-tick  {force?, customer?} → {generated, skipped}
+ *   - POST /api/wechat/draft-generate  {sender, wechat_id, content} → {task_id, draft_id, status}（ws3）
  *
- * ws1 阶段端点行为是 thin：
- *   - qr-bind: INSERT wechat_publish_task 占位（type=chat 这里 dummy）+ dispatchTask 派 task
- *   - draft-review-poll: SELECT 飞书 approved 草稿（thin 返回 0/0）
- *   - scheduler-tick: 占位返回 generated:0, skipped:[]
- *   ws3-5 加厚后接入飞书轮询 + 真草稿生成。
+ * ws1 阶段端点行为是 thin（qr-bind / poll / tick）。
+ * ws3 加厚 /draft-generate：DeepSeek 私聊草稿 + 写飞书互动记录 + DB pending_review。
  */
 
 import { Router, Request, Response } from 'express';
 import { z } from 'zod';
 import crypto from 'node:crypto';
 import pool from '../db/connection';
+import { generateChatDraft } from '../services/wechat-draft';
 
 export const wechatRouter = Router();
 
@@ -34,6 +33,12 @@ const SchedulerTickSchema = z
     customer: z.string().optional(),
   })
   .strict();
+
+const DraftGenerateSchema = z.object({
+  sender: z.string().min(1),
+  wechat_id: z.string().min(1),
+  content: z.string().min(1),
+});
 
 // ─── POST /api/wechat/qr-bind ───────────────────────────────────────────────
 
@@ -130,4 +135,37 @@ wechatRouter.post('/scheduler-tick', async (req: Request, res: Response) => {
     generated: 0,
     skipped: [],
   });
+});
+
+// ─── POST /api/wechat/draft-generate（ws3）──────────────────────────────────
+// 私聊草稿生成：listen_chat.py 拉到名单内客户消息 → POST 这里 → DeepSeek 生草稿 →
+// 写飞书"互动记录" + DB wechat_publish_task（pending_review，approval_source NULL）
+
+wechatRouter.post('/draft-generate', async (req: Request, res: Response) => {
+  const parsed = DraftGenerateSchema.safeParse(req.body ?? {});
+  if (!parsed.success) {
+    const issues = parsed.error.issues.map((i) => ({
+      path: i.path.join('.'),
+      message: i.message,
+    }));
+    const fields = issues.map((i) => i.path).join(',');
+    return res.status(400).json({
+      error: 'INVALID_BODY',
+      message: `字段校验失败: ${fields || 'sender, wechat_id, content'}`,
+      issues,
+      required: ['sender', 'wechat_id', 'content'],
+    });
+  }
+
+  try {
+    const result = await generateChatDraft(parsed.data);
+    return res.status(200).json(result);
+  } catch (err) {
+    const errMsg = err instanceof Error ? err.message : String(err);
+    console.error('[wechat/draft-generate] generateChatDraft 抛异常:', errMsg);
+    return res.status(500).json({
+      error: 'DRAFT_GENERATE_FAILED',
+      message: errMsg,
+    });
+  }
 });
