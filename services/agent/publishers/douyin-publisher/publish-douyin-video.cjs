@@ -74,6 +74,13 @@ async function publishDouyinVideoReal(queueData) {
       waitUntil: 'domcontentloaded',
     });
 
+    _log('[DY-VIDEO-REAL] 上传视频...');
+    await uploadVideoFile(page, queueData.video_path);
+    _log('[DY-VIDEO-REAL] 等抖音处理...');
+    await waitForUploadProcessed(page);
+    _log('[DY-VIDEO-REAL] 填标题...');
+    await fillTitle(page, queueData.title);
+
     // R1 风控检测
     const bodyText = await page.evaluate(() => document.body?.innerText || '').catch(() => '');
     for (const kw of RISK_KEYWORDS) {
@@ -83,7 +90,13 @@ async function publishDouyinVideoReal(queueData) {
       }
     }
 
-    const out = { ok: true, dryRun: false, url: videoUrl, title: queueData.title };
+    _log('[DY-VIDEO-REAL] 点击发布按钮...');
+    await clickPublishButton(page);
+
+    _log('[DY-VIDEO-REAL] 抓最终视频 URL...');
+    const { url, urlFallback } = await extractPublishedUrl(page);
+
+    const out = { ok: true, dryRun: false, url, urlFallback, title: queueData.title };
     _log(JSON.stringify(out));
   } catch (e) {
     const shot = await captureFailScreenshot(page, 'fail');
@@ -106,4 +119,65 @@ async function main() {
   }
 }
 
-main();
+// ============================================================================
+// 5 个抽出的 DOM selector 函数（playwright 等价封装 user-skill raw CDP 实现）
+// ============================================================================
+
+async function uploadVideoFile(page, videoPath) {
+  await page.setInputFiles('input[type="file"]', videoPath);
+}
+
+async function waitForUploadProcessed(page, timeoutMs = 60_000) {
+  // 抖音上传完成后会跳到 /creator-micro/content/post/video，标题输入框 hydrate 出来
+  await page.waitForSelector('input[placeholder*="标题"]', { timeout: timeoutMs });
+}
+
+async function fillTitle(page, title) {
+  const titleInput = page.locator('input[placeholder*="标题"]').first();
+  await titleInput.waitFor({ state: 'visible', timeout: 10_000 });
+  await titleInput.fill(title);
+}
+
+async function clickPublishButton(page) {
+  // 优先 getByRole + name 正则；匹配 4 种发布按钮文字应对抖音 UI 改版
+  const publishBtn = page.getByRole('button', {
+    name: /^(高清发布|发布|提交发布|确认发布)$/,
+  }).first();
+  await publishBtn.waitFor({ state: 'visible', timeout: 10_000 });
+  await publishBtn.click();
+}
+
+async function extractPublishedUrl(page) {
+  // 等跳到 manage 或 home（最多 60s）
+  try {
+    await page.waitForURL(/\/creator-micro\/(content\/manage|home)/, { timeout: 60_000 });
+  } catch {
+    // 没跳转也不算 fail，继续看能不能从当前 page 提 URL
+  }
+  // 从作品列表抓最近一条的公开 URL
+  const videoHref = await page.evaluate(() => {
+    const links = Array.from(document.querySelectorAll('a[href*="douyin.com/video/"]'));
+    if (!links.length) return null;
+    let href = links[0].getAttribute('href') || '';
+    if (href.startsWith('//')) href = 'https:' + href;
+    return href;
+  });
+  if (!videoHref) {
+    // fallback: 列表 hydrate 滞后时返回管理页 URL，lead 肉眼能看到刚发的视频在列表第一条
+    return { url: page.url(), urlFallback: true };
+  }
+  return { url: videoHref, urlFallback: false };
+}
+
+// 暴露给单测
+module.exports = {
+  uploadVideoFile,
+  waitForUploadProcessed,
+  fillTitle,
+  clickPublishButton,
+  extractPublishedUrl,
+};
+
+if (require.main === module) {
+  main();
+}

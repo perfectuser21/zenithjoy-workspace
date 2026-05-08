@@ -17,7 +17,7 @@ echo "[smoke] step 3: selector 字符串不含 xian-pc 特化"
 grep -E "xian-pc|xuxia|100\.97\.|WINDOWS_BASE_DIR|xian-mac|jinnuoshengyuan|windows_ed" "$SCRIPT" && { echo "FAIL: $SCRIPT 含 xian-pc 特化字符串"; exit 1; } || true
 
 echo "[smoke] step 4: vitest unit 跑通"
-npx vitest run "$TEST_FILE" || exit 1
+(cd services/agent && npx vitest run "publishers/douyin-publisher/__tests__/publish-douyin-video.test.cjs") || exit 1
 
 echo "[smoke] step 5: 占位段已删（thin 减肥）"
 grep -E "PENDING_LEAD_VERIFICATION|TODO lead 自验填 selectors" "$SCRIPT" && { echo "FAIL: thin 占位段未删干净"; exit 1; } || true
