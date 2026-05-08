@@ -76,6 +76,39 @@ describe('PublishPage [BEHAVIOR]', () => {
       agent_id: 'agent-1',
       platform: 'douyin',
       folder_path: '/Users/foo/videos',
+      type: 'image',
+    });
+  });
+
+  it('选 video radio 后点发布 → postPublishTask 收 type=video（sprint 2.1c 新）', async () => {
+    vi.mocked(ws1Api.getAgentStatus).mockResolvedValue(ONLINE_AGENT);
+    vi.mocked(ws1Api.listPublishTasks).mockResolvedValue({ tasks: [] });
+    vi.mocked(ws1Api.postPublishTask).mockResolvedValue({
+      task_id: 'task-uuid-video',
+      status: 'pending',
+    });
+    render(<PublishPage />, { wrapper: createWrapper() });
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole('button', { name: /发布到抖音/ })
+      ).not.toBeDisabled();
+    });
+
+    // 选 video radio (sprint 2.1c 新加 UI)
+    const videoRadio = screen.getByLabelText(/视频/);
+    fireEvent.click(videoRadio);
+
+    fireEvent.click(screen.getByRole('button', { name: /发布到抖音/ }));
+
+    await waitFor(() => {
+      expect(ws1Api.postPublishTask).toHaveBeenCalledTimes(1);
+    });
+    expect(ws1Api.postPublishTask).toHaveBeenCalledWith({
+      agent_id: 'agent-1',
+      platform: 'douyin',
+      folder_path: '/Users/foo/videos',
+      type: 'video',
     });
   });
 
