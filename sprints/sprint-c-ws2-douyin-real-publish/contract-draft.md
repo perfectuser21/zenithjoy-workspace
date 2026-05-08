@@ -1,4 +1,4 @@
-# Sprint Contract Draft (Round 1) — WS2 Sprint 2.1a
+# Sprint Contract Draft (Round 2) — WS2 Sprint 2.1a
 
 **Sprint**：客户首次成功路径 thin 加固第一段（修架构 + 抖音 video 真发 + Lead 自验）
 **journey_type**：user_facing
@@ -291,3 +291,17 @@ workstream_count: 5
 | WS3 | `tests/ws3/qr-login.test.cjs` + `tests/ws3/publish-douyin-video-dryrun.test.cjs` | (a) qr-login 未登录时 throw 'NEED_QR' + 截屏 QR (b) 已登录直接 return (c) video-dryrun spawn 后 stdout 含"等待发布按钮"+ exit 0 (d) video-dryrun 不真点发布按钮 | 4 个 it block fail（脚本不存在） |
 | WS4 | `tests/ws4/qr-bind-douyin-flow.test.ts` | (a) POST /api/publish/task {platform:'qr_bind:douyin'} 写入任务 status=queued (b) Agent complete 时 result 含 cookie_local_path → DB 更新 (c) Dashboard 轮询能拿到 result.qr_screenshot 字段 | 3 个 it block fail（路由 / 字段未实现） |
 | WS5 | `tests/ws5/lead-acceptance-validator.test.ts` | (a) evidence 文件不存在 → exit 1 (b) 文件含抖音 URL + 扫码字眼 → exit 0 (c) 文件含 'preset cookie' 字眼 → exit 1 (d) smoke step 6 跑 type=video 不跑 image | 4 个 it block fail（validator 不存在 / smoke 仍 image） |
+
+---
+
+## Risks（Round 2 新增 — Reviewer feedback r1 要求）
+
+| # | Risk | 触发概率 | 影响 | Mitigation |
+|---|---|---|---|---|
+| R1 | **抖音风控**：自动化发布触发账号封禁 / 登录频控 | 中 | sprint 验收 evidence 拿不到真公网 URL | (a) lead 自验只发 1 条视频，不重复跑 (b) lead 用自己的小号不用主号 (c) PRD ASSUMPTION 5 已规定 evidence 标准降级条款：风控时接受"真发布请求 + 抖音返回处理中状态"代替"真视频公网可见" |
+| R2 | **xian-pc 临时离线**：lead 自验时 Tailscale 不通 | 低-中 | lead 自验跑不动，sprint 卡 | (a) Lead 自验 checklist Step 1 强制 `ssh xian-pc 'echo ok'` 健康检查，不通即停（不允许 fake pass）(b) 如果连续 24h 不通，evidence 文件标记 BLOCKED + 告知用户排查 |
+| R3 | **抖音 UI 改版**：Playwright 选择器失效（class 名 hash 变 / DOM 结构调整） | 中-高（半年内必发生） | video / image 脚本静默失败或执行错位 | (a) ws3 video/image 脚本必须用 robust 选择器优先级：`data-testid > aria-label > role > text content > class`；class 选择器禁用（已知会变） (b) 选择器失败时调用 page.screenshot() 截屏存 `~/.zenithjoy/agent-fail-screenshots/<task-id>.png`，让 lead 看 (c) 失败回写 reason 含 "selector failed at <step>"，不允许吞错 |
+| R4 | **lead 扫码超时**：lead 手机不在身边 / 抖音 App 没装 | 中 | qr-login 永久卡住 | (a) qr-login waitForSelector timeout = 90s（不是默认 30s 也不是无限） (b) timeout 错误信息含 "请在 90 秒内用手机抖音 App 扫码" (c) 超时后 cookie 不写盘，下次重试不会用残留 |
+| R5 | **video 文件路径 Windows 兼容性**：xian-pc 是 Windows，路径含反斜杠 / 中文名 / 空格 | 中 | publish_task.payload.video_path 在 Agent 端解析失败 | (a) ws1 中台 zod schema 接受 video_path 时 normalize 到 forward slash (b) ws3 video 脚本启动前 `fs.statSync(video_path)` 检查存在 + 可读，不存在显式 failed 不静默 (c) lead 自验时用 ASCII 路径如 `C:/zenithjoy-test/sample.mp4`，不用中文目录 |
+
+**Cascade 失败处理**：以上 5 条 risk 任一触发 → Agent 回写 publish_task.status=failed + result.reason + result.risk_id (R1-R5)，**严禁** Agent 内部 fallback 或 silent retry。Lead 自验 evidence 应明确记录哪条 risk 触发 + 截图 + 处理决定。
