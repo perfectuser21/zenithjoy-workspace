@@ -29,9 +29,13 @@ const STATUS_TEXT: Record<string, string> = {
   failed: 'failed（失败）',
 };
 
+type PublishType = 'image' | 'video' | 'article';
+
 export default function PublishPage() {
   const qc = useQueryClient();
   const [submitErr, setSubmitErr] = useState<string | null>(null);
+  // Sprint 2.1c: type radio 让客户选 image (默认) / video / article
+  const [publishType, setPublishType] = useState<PublishType>('image');
 
   const { data: agentData } = useQuery({
     queryKey: ['ws1', 'agent-status'],
@@ -57,6 +61,7 @@ export default function PublishPage() {
         agent_id: agentId!,
         platform: 'douyin',
         folder_path: folderPath!,
+        type: publishType,
       }),
     onSuccess: () => {
       setSubmitErr(null);
@@ -92,6 +97,43 @@ export default function PublishPage() {
       )}
 
       <section style={{ marginBottom: 24 }}>
+        {/* Sprint 2.1c: 内容类型 radio (image / video / article) — 决定 agent spawn 哪个 publisher 脚本 */}
+        <fieldset
+          style={{
+            border: '1px solid #e5e7eb',
+            borderRadius: 6,
+            padding: 12,
+            marginBottom: 16,
+            display: 'flex',
+            gap: 16,
+          }}
+        >
+          <legend style={{ padding: '0 6px', fontSize: 13, color: '#6b7280' }}>
+            内容类型
+          </legend>
+          {(['image', 'video', 'article'] as const).map((t) => (
+            <label
+              key={t}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 4,
+                fontSize: 14,
+                cursor: 'pointer',
+              }}
+            >
+              <input
+                type="radio"
+                name="publish-type"
+                value={t}
+                checked={publishType === t}
+                onChange={() => setPublishType(t)}
+              />
+              {t === 'image' ? '图文' : t === 'video' ? '视频' : '文章'}
+            </label>
+          ))}
+        </fieldset>
+
         <button
           type="button"
           disabled={!canPublish || mutation.isPending}
