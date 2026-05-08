@@ -17,6 +17,7 @@ import { z } from 'zod';
 import crypto from 'node:crypto';
 import pool from '../db/connection';
 import { generateChatDraft, generateMomentDraft } from '../services/wechat-draft';
+import { pollOnce } from '../services/feishu-poll';
 
 export const wechatRouter = Router();
 
@@ -110,11 +111,21 @@ async function handlePoll(req: Request, res: Response): Promise<Response> {
     }
   }
 
-  // 批量轮询：ws1 thin 返回 0/0；ws5 接入飞书 approved 真轮询
-  return res.status(200).json({
-    polled: 0,
-    dispatched: 0,
-  });
+  // ws5 真轮询：调 feishu-poll.pollOnce 拉飞书 approved 草稿，写 DB approval_source='feishu_user'
+  // + 频控校验 + dispatchTask
+  try {
+    const result = await pollOnce();
+    return res.status(200).json({
+      polled: result.polled ?? 0,
+      dispatched: result.dispatched ?? 0,
+    });
+  } catch (err) {
+    console.warn('[wechat/draft-review-poll] pollOnce 异常:', err);
+    return res.status(200).json({
+      polled: 0,
+      dispatched: 0,
+    });
+  }
 }
 
 wechatRouter.post('/draft-review-poll', handlePoll);

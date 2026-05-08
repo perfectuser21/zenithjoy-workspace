@@ -3,7 +3,7 @@
  *
  * 校验：
  *   1) services/feishu-poll.ts 存在 + export pollOnce / startFeishuPoll / stopFeishuPoll
- *   2) 含 30s 轮询周期（cron */30 / setInterval(30000) / 30 * 1000）
+ *   2) 含 30s 轮询周期（cron expression slash 30，或 setInterval(30000) / 30 * 1000）
  *   3) UPDATE wechat_publish_task 写 approval_source='feishu_user'（A 路线护栏）
  *   4) 频控超限 UPDATE approval_status='rate_limited' + next_allowed_at
  *   5) 整合到 routes/wechat.ts /draft-review-poll 端点（POST 触发 pollOnce）

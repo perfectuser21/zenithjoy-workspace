@@ -43,9 +43,21 @@ describe('ws5 send_moment.py — 文件存在 + REAL_PUBLISH 字面量 + MagicMo
 
 describe('ws5 send_moment.py REAL_PUBLISH=0 dryrun（spawn python3）', () => {
   it('REAL_PUBLISH=0 + stdin {content,visible_group} → exit 0 + JSON {ok:true, dryRun:true}', () => {
+    // 先 reset 频控（每次测试用唯一 group 名以避免跨测试污染）
+    const group = `AI test ${Date.now()}`;
+    spawnSync(
+      'python3',
+      [
+        path.join(RPA_DIR, 'rate_limiter.py'),
+        'reset',
+        `--wechat_id=${group}`,
+      ],
+      { encoding: 'utf-8' },
+    );
+
     const stdin = JSON.stringify({
       content: '测试朋友圈',
-      visible_group: 'AI 测试',
+      visible_group: group,
     });
     const r = spawnSync('python3', [SEND_MOMENT], {
       encoding: 'utf-8',
@@ -68,10 +80,21 @@ describe('ws5 send_moment.py REAL_PUBLISH=0 dryrun（spawn python3）', () => {
   });
 
   it('REAL_PUBLISH=0 时 pyautogui.click/write/press/hotkey 调用次数 = 0（trace 验证）', () => {
+    const group = `AI trace ${Date.now()}`;
+    spawnSync(
+      'python3',
+      [
+        path.join(RPA_DIR, 'rate_limiter.py'),
+        'reset',
+        `--wechat_id=${group}`,
+      ],
+      { encoding: 'utf-8' },
+    );
+
     const traceFile = `/tmp/ws5-send-moment-trace-${Date.now()}.txt`;
     const stdin = JSON.stringify({
       content: '测试 trace',
-      visible_group: 'AI 测试',
+      visible_group: group,
     });
     const r = spawnSync(
       'python3',
@@ -107,9 +130,20 @@ describe('ws5 send_chat.py — 文件存在 + REAL_PUBLISH 字面量', () => {
   });
 
   it('REAL_PUBLISH=0 + stdin {target,wechat_id,message} → exit 0 + dryRun:true', () => {
+    const wid = `test_chat_${Date.now()}`;
+    spawnSync(
+      'python3',
+      [
+        path.join(RPA_DIR, 'rate_limiter.py'),
+        'reset',
+        `--wechat_id=${wid}`,
+      ],
+      { encoding: 'utf-8' },
+    );
+
     const stdin = JSON.stringify({
       target: '客户A',
-      wechat_id: 'test_a',
+      wechat_id: wid,
       message: '嗨',
     });
     const r = spawnSync('python3', [SEND_CHAT], {

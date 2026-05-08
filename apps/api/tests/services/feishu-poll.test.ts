@@ -50,6 +50,7 @@ import {
   pollOnce,
   startFeishuPoll,
   stopFeishuPoll,
+  _resetFeishuPollTokenCache,
 } from '../../src/services/feishu-poll';
 
 describe('ws5 feishu-poll.ts — pollOnce 飞书 approved 触发派发 + A 路线护栏', () => {
@@ -58,6 +59,13 @@ describe('ws5 feishu-poll.ts — pollOnce 飞书 approved 触发派发 + A 路�
     mockDispatchTask.mockReset();
     mockSpawnSync.mockReset();
     (axios.post as ReturnType<typeof vi.fn>).mockReset();
+    _resetFeishuPollTokenCache();
+    // 设环境变量让 searchApprovedRecords 真发起 axios 调用
+    process.env.FEISHU_APP_ID = 'mock_app_id';
+    process.env.FEISHU_APP_SECRET = 'mock_app_secret';
+    process.env.FEISHU_TEST_APP_TOKEN = 'mock_app_token';
+    process.env.FEISHU_SCHEDULE_TABLE_ID = 'tbl_schedule';
+    process.env.FEISHU_INTERACTION_TABLE_ID = 'tbl_interaction';
   });
 
   it('飞书 approved 草稿 → DB UPDATE approval_source=\'feishu_user\'（A 路线护栏）', async () => {

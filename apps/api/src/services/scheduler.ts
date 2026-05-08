@@ -19,6 +19,8 @@
  * 内部 fetch self-call：用 PORT env 或默认 5200。
  */
 
+import { startFeishuPoll, stopFeishuPoll, FeishuPollHandle } from './feishu-poll';
+
 const CRON_EXPRESSION = '0 9 * * *'; // cron: '0 9 * * *' — 每日 09:00（server 时区）
 const POLL_INTERVAL_MS = 60_000; // 每分钟检查一次
 const SCHEDULER_TICK_PATH = '/api/wechat/scheduler-tick';
@@ -26,6 +28,7 @@ const SCHEDULER_TICK_PATH = '/api/wechat/scheduler-tick';
 export interface SchedulerHandle {
   timer: NodeJS.Timeout;
   lastFiredYmd: string | null;
+  feishuPoll: FeishuPollHandle | null;
 }
 
 /**
@@ -66,6 +69,8 @@ export function startScheduler(): SchedulerHandle {
   console.log(
     `[scheduler] start with cron='${CRON_EXPRESSION}' (thin: server 时区，加厚后改客户机时区)`,
   );
+  // ws5: 同时启动飞书审批轮询（30s 一次）
+  const feishuPoll = startFeishuPoll();
   const handle: SchedulerHandle = {
     timer: setInterval(() => {
       const now = new Date();
@@ -79,6 +84,7 @@ export function startScheduler(): SchedulerHandle {
       });
     }, POLL_INTERVAL_MS),
     lastFiredYmd: null,
+    feishuPoll,
   };
   return handle;
 }
@@ -90,5 +96,9 @@ export function stopScheduler(handle: SchedulerHandle | null | undefined): void 
   if (!handle) return;
   if (handle.timer) {
     clearInterval(handle.timer);
+  }
+  if (handle.feishuPoll) {
+    stopFeishuPoll(handle.feishuPoll);
+    handle.feishuPoll = null;
   }
 }
