@@ -988,3 +988,11 @@ tests:
     status: active
     product: 中台认证
     note: "Sprint 2.1a WS5 — check-lead-acceptance.sh validator 防作弊检查 unit test"
+
+  - id: agent-douyin-publisher-video-selectors
+    path: services/agent/publishers/douyin-publisher/__tests__/publish-douyin-video.test.cjs
+    type: unit
+    ci: L3
+    status: active
+    product: 内容发布
+    note: "Sprint 2.1b — 抖音视频真发 5 个 selector 函数（uploadVideoFile/waitForUploadProcessed/fillTitle/clickPublishButton/extractPublishedUrl）通用化契约 unit test"

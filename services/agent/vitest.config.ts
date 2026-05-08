@@ -7,6 +7,7 @@ export default defineConfig({
       'src/**/__tests__/**/*.test.ts',
       'src/**/*.test.ts',
       'publishers/**/__tests__/**/*.test.ts',
+      'publishers/**/__tests__/**/*.test.cjs',
     ],
     exclude: ['node_modules/**', 'dist/**', 'dist-pkg/**'],
   },
