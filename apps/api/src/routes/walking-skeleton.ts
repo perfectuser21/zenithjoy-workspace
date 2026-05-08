@@ -22,6 +22,7 @@ import {
   createPublishTask,
   submitPublishReceipt,
   getPublishTask,
+  isValidPublishType,
 } from '../services/walking-skeleton.service';
 
 export const heartbeatRouter = Router();   // 挂在 /api/agent
@@ -279,10 +280,12 @@ publishWsRouter.post(
   '/task',
   licenseAuth,
   async (req: Request, res: Response) => {
-    const { agent_id, platform, folder_path } = (req.body ?? {}) as {
+    const { agent_id, platform, folder_path, type, payload } = (req.body ?? {}) as {
       agent_id?: unknown;
       platform?: unknown;
       folder_path?: unknown;
+      type?: unknown;
+      payload?: unknown;
     };
 
     if (typeof agent_id !== 'string' || !UUID_RE.test(agent_id)) {
@@ -294,6 +297,17 @@ publishWsRouter.post(
       return res
         .status(400)
         .json({ ok: false, code: 'BAD_REQUEST', message: 'platform 不能为空' });
+    }
+
+    // type 字段校验：可缺省（默认 image），但显式给值必须是 video/image/article
+    if (type !== undefined && !isValidPublishType(type)) {
+      return res
+        .status(422)
+        .json({
+          ok: false,
+          code: 'INVALID_TYPE',
+          message: `type 必须是 video/image/article 之一，收到: ${String(type)}`,
+        });
     }
 
     try {
@@ -312,12 +326,16 @@ publishWsRouter.post(
       const task = await createPublishTask({
         agentId: agent.id,
         platform: platform.trim().slice(0, 64),
+        type: type as 'video' | 'image' | 'article' | undefined,
         folderPath:
           typeof folder_path === 'string' && folder_path.trim()
             ? folder_path.trim()
             : null,
+        payload,
       });
-      return res.status(201).json({ task_id: task.id, status: task.status });
+      return res
+        .status(201)
+        .json({ task_id: task.id, status: task.status, type: (task as { type?: string }).type ?? 'image' });
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'unknown';
       return res
