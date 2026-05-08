@@ -24,6 +24,12 @@ export interface QrBindDouyinPayload {
 export interface QrBindDouyinResult {
   ok: boolean;
   sessionPath: string;
+  /** WS4: cookie 落地的本地路径（合同 DoD 要求中台回写） */
+  cookie_local_path?: string;
+  /** WS4: 扫码截屏路径（lead 自验证据 + Dashboard 显示用） */
+  qr_screenshot?: string;
+  /** WS4: qr_login 阶段标识 */
+  qr_login?: 'success' | 'timeout' | 'failed';
   error?: string;
 }
 
@@ -154,6 +160,7 @@ export async function handleQrBindDouyin(
       return {
         ok: false,
         sessionPath,
+        qr_login: 'timeout',
         error: `qr-bind timeout after ${timeoutMs}ms — 用户未完成扫码登录`,
       };
     }
@@ -163,7 +170,13 @@ export async function handleQrBindDouyin(
     fs.mkdirSync(path.dirname(sessionPath), { recursive: true });
     fs.writeFileSync(sessionPath, JSON.stringify(storageState, null, 2));
 
-    return { ok: true, sessionPath };
+    // WS4: 中台 result 含 cookie_local_path + qr_login 状态（合同 DoD）
+    return {
+      ok: true,
+      sessionPath,
+      cookie_local_path: sessionPath,
+      qr_login: 'success',
+    };
   } catch (err) {
     return {
       ok: false,
