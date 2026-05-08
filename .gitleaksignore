@@ -21,3 +21,6 @@ c5a288fabdaebaa386feecf5dbad2edb69bf4bdc:.github/workflows/scripts/smoke/auth-sm
 
 # Phase 1 unit test — agent.test.ts ws_token mock fixture（非真凭据）
 0d0c2a12db2232f0078a8889bb6dc6553ff342db:apps/api/tests/agent.test.ts:generic-api-key:59
+
+# Sprint 2.1b plan/spec doc — Authorization Bearer 是测试 license（free tier ZJ-F-）非真 secret
+acda72b6176ddf69bc7a664c00061e36e0cb7103:docs/superpowers/plans/2026-05-08-sprint-2-1b-douyin-video-port.md:curl-auth-header:608
