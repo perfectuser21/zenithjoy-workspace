@@ -147,10 +147,9 @@ async function fillTitle(page, title) {
 }
 
 async function clickPublishButton(page) {
-  // 优先 getByRole + name 正则；匹配 4 种发布按钮文字应对抖音 UI 改版
-  const publishBtn = page.getByRole('button', {
-    name: /^(高清发布|发布|提交发布|确认发布)$/,
-  }).first();
+  // exact: true 严格 match button text="发布"，排除 nav bar "高清发布" + dropdown "发布视频/图文/全景/文章"
+  // 抖音真发布按钮是视频处理完后 fixed bottom 那个 text="发布"，不是 nav bar 40x40 图标
+  const publishBtn = page.getByRole('button', { name: '发布', exact: true }).first();
   await publishBtn.waitFor({ state: 'visible', timeout: 10_000 });
   await publishBtn.click();
 }

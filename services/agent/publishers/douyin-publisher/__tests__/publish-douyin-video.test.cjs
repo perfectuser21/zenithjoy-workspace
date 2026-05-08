@@ -44,7 +44,7 @@ describe('publish-douyin-video selector 通用化契约', () => {
   });
 
   describe('clickPublishButton', () => {
-    it('用 getByRole button + name 正则匹配 发布/高清发布/提交发布/确认发布', async () => {
+    it('用 getByRole button name=发布 exact=true 严格匹配（避开 nav bar 高清发布 + dropdown 子项）', async () => {
       const click = vi.fn().mockResolvedValue(undefined);
       const waitFor = vi.fn().mockResolvedValue(undefined);
       const locatorChain = { first: () => ({ click, waitFor }) };
@@ -54,11 +54,9 @@ describe('publish-douyin-video selector 通用化契约', () => {
       expect(getByRole).toHaveBeenCalledTimes(1);
       const [role, opts] = getByRole.mock.calls[0];
       expect(role).toBe('button');
-      expect(opts.name).toBeInstanceOf(RegExp);
-      expect(opts.name.test('发布')).toBe(true);
-      expect(opts.name.test('高清发布')).toBe(true);
-      expect(opts.name.test('提交发布')).toBe(true);
-      expect(opts.name.test('确认发布')).toBe(true);
+      // exact:true 让 name 严格 match "发布"，避免误中 "高清发布" / "发布视频" / "发布图文" 等
+      expect(opts.name).toBe('发布');
+      expect(opts.exact).toBe(true);
       expect(click).toHaveBeenCalledTimes(1);
     });
   });
