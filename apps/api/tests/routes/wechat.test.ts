@@ -124,3 +124,60 @@ describe('ws1 POST /api/wechat/scheduler-tick', () => {
     expect(Array.isArray(res.body.skipped)).toBe(true);
   });
 });
+
+// ─── ws3 /api/wechat/draft-generate ─────────────────────────────────────────
+
+vi.mock('../../src/services/wechat-draft', () => ({
+  generateChatDraft: vi.fn(),
+}));
+
+import { generateChatDraft } from '../../src/services/wechat-draft';
+
+describe('ws3 POST /api/wechat/draft-generate — zod 校验 + 转 service', () => {
+  beforeEach(() => {
+    mockQuery.mockReset();
+    mockQuery.mockResolvedValue({ rows: [], rowCount: 1 });
+    (generateChatDraft as unknown as ReturnType<typeof vi.fn>).mockReset();
+  });
+
+  it('空 body → 400 + 错误含 sender / wechat_id / content', async () => {
+    const res = await request(app).post('/api/wechat/draft-generate').send({});
+    expect(res.status).toBe(400);
+    const body = JSON.stringify(res.body);
+    expect(body).toMatch(/sender/);
+    expect(body).toMatch(/wechat_id/);
+    expect(body).toMatch(/content/);
+  });
+
+  it('完整字段 + 名单内 sender → 200 + {task_id, status:"pending_review"}', async () => {
+    (generateChatDraft as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
+      ok: true,
+      status: 'pending_review',
+      task_id: '11111111-1111-4111-8111-111111111111',
+      draft_id: 'rec_x_1',
+    });
+    const res = await request(app)
+      .post('/api/wechat/draft-generate')
+      .send({ sender: '客户A', wechat_id: 'test_a', content: '在吗' });
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({
+      status: 'pending_review',
+    });
+    expect(typeof res.body.task_id).toBe('string');
+    expect(generateChatDraft).toHaveBeenCalledWith(
+      expect.objectContaining({ sender: '客户A', wechat_id: 'test_a', content: '在吗' }),
+    );
+  });
+
+  it('名单外 sender → 200 + {ok:false, reason:"not_in_whitelist"}（service 决定，路由透传）', async () => {
+    (generateChatDraft as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
+      ok: false,
+      reason: 'not_in_whitelist',
+    });
+    const res = await request(app)
+      .post('/api/wechat/draft-generate')
+      .send({ sender: '陌生人', wechat_id: 'unknown_x', content: '嗨' });
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({ ok: false, reason: 'not_in_whitelist' });
+  });
+});

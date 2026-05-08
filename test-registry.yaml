@@ -1079,3 +1079,37 @@ tests:
     status: pending-ci
     product: 私域运营
     note: "Path 4 Sprint 1 ws2 — Dashboard 绑微信按钮 Playwright e2e（visible/happy/disabled 3 case）"
+
+  # ── Path 4 Sprint 1 ws3 — DeepSeek 私聊草稿 + listen_chat + A 路线护栏 ──────────
+
+  - id: path4-sprint-1-ws3-wechat-draft-service
+    path: apps/api/tests/services/wechat-draft.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 私域运营
+    note: "Path 4 Sprint 1 ws3 — generateChatDraft service：名单内+1 / 名单外拒 / 5xx fallback 占位 + DB pending_review approval_source NULL"
+
+  - id: path4-sprint-1-ws3-listen-chat
+    path: apps/api/tests/ws3/listen-chat.test.ts
+    type: integration
+    ci: L4
+    status: pending-ci
+    product: 私域运营
+    note: "Path 4 Sprint 1 ws3 — listen_chat.py 真 import wxauto4 + --dryrun-print-version + --inject-message dryrun（合同 RED，vitest 不跑）"
+
+  - id: path4-sprint-1-ws3-draft-generate
+    path: apps/api/tests/ws3/draft-generate.test.ts
+    type: integration
+    ci: L4
+    status: pending-ci
+    product: 私域运营
+    note: "Path 4 Sprint 1 ws3 — /api/wechat/draft-generate 端点 + wechat-draft.ts 静态契约（合同 RED）"
+
+  - id: path4-sprint-1-ws3-a-route-guardrail
+    path: apps/api/tests/ws3/a-route-guardrail.test.ts
+    type: integration
+    ci: L4
+    status: pending-ci
+    product: 私域运营
+    note: "Path 4 Sprint 1 ws3 — A 路线护栏：approval_status pending_review + approval_source NULL + def 黑名单 0 命中（合同 RED）"
