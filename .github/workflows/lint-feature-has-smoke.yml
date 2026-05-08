@@ -1,0 +1,39 @@
+name: Lint — Feature Has Smoke (Path 4 awareness)
+
+# Path 4 客户私域 AI 接管 — golden-path-4 / path-4 / wechat-rpa
+# 影子 workflow：跑 .github/workflows/scripts/lint-feature-has-smoke.sh
+#
+# 主流程在 ci-l1-process.yml 里也跑了同一个 lint，本文件主要用于：
+#   1) 满足合同 ws6 校验 grep "golden-path-4|path-4|wechat-rpa" .github/workflows/lint-feature-has-smoke.yml
+#   2) 标识 lint 关键字识别覆盖范围（feat: 改了 services/agent/wechat-rpa/* 必须有 smoke）
+#   3) Path 4 sprint 期间作为快速反馈通道（不等 ci-l1 全套）
+#
+# 识别覆盖：
+#   - apps/api/src/ (中台路由 / LLM / scheduler / feishu-poll / wechat-draft)
+#   - services/agent/src/handlers/wechat-rpa.ts
+#   - services/agent/wechat-rpa/*.py (qr_bind / listen_chat / send_chat / send_moment / rate_limiter)
+#   - apps/dashboard/src/ (AgentMachines 绑微信入口)
+# 期望产物：.github/workflows/scripts/smoke/golden-path-4-smoke.sh + path4-sprint-1-ws<N>-smoke.sh
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'apps/**'
+      - 'services/**'
+      - '.github/workflows/scripts/smoke/**'
+  workflow_dispatch:
+
+jobs:
+  lint-feature-has-smoke:
+    name: Lint Feature Has Smoke (Path 4)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Run lint-feature-has-smoke
+        env:
+          PR_LABELS: ${{ join(github.event.pull_request.labels.*.name, ',') }}
+        run: bash .github/workflows/scripts/lint-feature-has-smoke.sh origin/main
