@@ -286,3 +286,53 @@ describe('ws4 POST /api/wechat/scheduler-tick — 真逻辑分发到 generateMom
     expect((generateMomentDraft as ReturnType<typeof vi.fn>).mock.calls.length).toBe(2);
   });
 });
+
+// ─── ws5 /api/wechat/draft-review-poll 触发 pollOnce ─────────────────────────
+
+vi.mock('../../src/services/feishu-poll', () => ({
+  pollOnce: vi.fn(),
+  startFeishuPoll: vi.fn(),
+  stopFeishuPoll: vi.fn(),
+}));
+
+import { pollOnce } from '../../src/services/feishu-poll';
+
+describe('ws5 POST /api/wechat/draft-review-poll — 触发 feishu-poll pollOnce', () => {
+  beforeEach(() => {
+    mockQuery.mockReset();
+    mockQuery.mockResolvedValue({ rows: [], rowCount: 0 });
+    (pollOnce as unknown as ReturnType<typeof vi.fn>).mockReset();
+    (pollOnce as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
+      polled: 1,
+      dispatched: 1,
+    });
+  });
+
+  it('POST 空 body 触发 pollOnce 一次（不带 task_id 走批量轮询）', async () => {
+    const res = await request(app).post('/api/wechat/draft-review-poll').send({});
+    expect(res.status).toBe(200);
+    expect(pollOnce).toHaveBeenCalledTimes(1);
+    expect(typeof res.body.polled).toBe('number');
+    expect(typeof res.body.dispatched).toBe('number');
+  });
+
+  it('GET ?task_id=<exists> 单查模式 → 不触发 pollOnce', async () => {
+    mockQuery.mockResolvedValue({
+      rows: [
+        {
+          task_id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+          approval_status: 'pending_review',
+          approval_source: null,
+          content_draft: 'x',
+          feishu_record_id: 'rec_x',
+        },
+      ],
+      rowCount: 1,
+    });
+    const res = await request(app).get(
+      '/api/wechat/draft-review-poll?task_id=aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+    );
+    expect(res.status).toBe(200);
+    expect(pollOnce).not.toHaveBeenCalled();
+  });
+});

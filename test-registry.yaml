@@ -1129,3 +1129,37 @@ tests:
     status: pending-ci
     product: 私域运营
     note: "Path 4 Sprint 1 ws4 — A 路线护栏：generateMomentDraft 存在 + type='moment' + 当日去重 + scheduler cron 静态契约（合同 RED）"
+
+  # ── Path 4 Sprint 1 ws5 — 飞书审批轮询 + Python wechat_rpa 真发 + 频控 ──────────
+
+  - id: path4-sprint-1-ws5-feishu-poll-service
+    path: apps/api/tests/services/feishu-poll.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 私域运营
+    note: "Path 4 Sprint 1 ws5 — feishu-poll.ts pollOnce 飞书 approved → DB approval_source='feishu_user' / rejected 不派 / 频控超限写 rate_limited（mock CI 跑）"
+
+  - id: path4-sprint-1-ws5-send-moment-dryrun
+    path: apps/api/tests/ws5/send-moment-dryrun.test.ts
+    type: integration
+    ci: L4
+    status: pending-ci
+    product: 私域运营
+    note: "Path 4 Sprint 1 ws5 — send_moment.py / send_chat.py REAL_PUBLISH=0 dryrun + python -m trace 验证 pyautogui 0 调用（合同 RED）"
+
+  - id: path4-sprint-1-ws5-rate-limiter
+    path: apps/api/tests/ws5/rate-limiter.test.ts
+    type: integration
+    ci: L4
+    status: pending-ci
+    product: 私域运营
+    note: "Path 4 Sprint 1 ws5 — rate_limiter.py BEGIN IMMEDIATE + ~/.zenithjoy-agent/rate_limit.db + 朋友圈 24h / 私聊分钟级 频控 + 10 并发（合同 RED）"
+
+  - id: path4-sprint-1-ws5-feishu-poll-static
+    path: apps/api/tests/ws5/feishu-poll.test.ts
+    type: integration
+    ci: L4
+    status: pending-ci
+    product: 私域运营
+    note: "Path 4 Sprint 1 ws5 — feishu-poll.ts 静态契约：pollOnce/startFeishuPoll/stopFeishuPoll + 30s 周期 + UPDATE approval_source='feishu_user' + 调用 dispatchTask（合同 RED）"
