@@ -1037,3 +1037,45 @@ tests:
     status: active
     product: 私域运营
     note: "Path 4 Sprint 1 ws1 — wechat-rpa.ts handler spawn Python 子进程 + dryrun receipt"
+
+  # ── Path 4 Sprint 1 ws2 — qr_bind 完整版 + 飞书 4 表 + Dashboard 入口 + 8 fixture ──
+
+  - id: path4-sprint-1-ws2-qr-bind
+    path: apps/api/tests/ws2/qr-bind.test.ts
+    type: integration
+    ci: L4
+    status: pending-ci
+    product: 私域运营
+    note: "Path 4 Sprint 1 ws2 — qr_bind.py 完整版 + __init__.py __all__ + 占位 stub + requirements.txt（合同 RED，vitest 不跑由 sprint-evaluator 直接 spawn）"
+
+  - id: path4-sprint-1-ws2-feishu-fixtures
+    path: apps/api/tests/scripts/feishu-fixtures.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 私域运营
+    note: "Path 4 Sprint 1 ws2 — 8 个飞书 fixture script `--help` 契约（spawn node）"
+
+  - id: path4-sprint-1-ws2-agent-machines-page
+    path: apps/dashboard/src/pages/__tests__/AgentMachines.test.tsx
+    type: unit
+    ci: L3
+    status: active
+    product: 私域运营
+    note: "Path 4 Sprint 1 ws2 — Dashboard AgentMachines 绑定微信按钮 + 通道下拉（个微/企微 disabled）BEHAVIOR"
+
+  - id: path4-sprint-1-ws2-wechat-api
+    path: apps/dashboard/src/api/__tests__/wechat.api.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 私域运营
+    note: "Path 4 Sprint 1 ws2 — Dashboard 微信 API client postWechatQrBind 契约"
+
+  - id: path4-sprint-1-ws2-wechat-bind-e2e
+    path: apps/dashboard/e2e/wechat-bind-button.spec.ts
+    type: e2e
+    ci: L4
+    status: pending-ci
+    product: 私域运营
+    note: "Path 4 Sprint 1 ws2 — Dashboard 绑微信按钮 Playwright e2e（visible/happy/disabled 3 case）"
