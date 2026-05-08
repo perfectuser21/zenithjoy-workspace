@@ -6,7 +6,8 @@
   "bin": "dist/index.js",
   "scripts": {
     "start": "tsx src/index.ts",
-    "build": "esbuild src/index.ts --bundle --platform=node --target=node18 --format=cjs --outfile=dist/index.js --external:systray2",
+    "build": "tsc -p tsconfig.build.json",
+    "build:bundle": "esbuild src/index.ts --bundle --platform=node --target=node18 --format=cjs --outfile=dist/index.js --external:systray2",
     "package:win": "npm run build && pkg . --targets node18-win-x64 --output zenithjoy-agent.exe",
     "package:mac": "npm run build && pkg . --targets node18-macos-x64 --output zenithjoy-agent-mac",
     "package:linux": "npm run build && pkg . --targets node18-linux-x64 --output zenithjoy-agent-linux",
