@@ -181,3 +181,108 @@ describe('ws3 POST /api/wechat/draft-generate — zod 校验 + 转 service', () 
     expect(res.body).toMatchObject({ ok: false, reason: 'not_in_whitelist' });
   });
 });
+
+// ─── ws4 /api/wechat/scheduler-tick 真逻辑（generateMomentDraft 串联）─────────
+
+vi.mock('../../src/services/wechat-draft', async (importOriginal) => {
+  const actual = (await importOriginal()) as Record<string, unknown>;
+  return {
+    ...actual,
+    generateChatDraft: vi.fn(),
+    generateMomentDraft: vi.fn(),
+  };
+});
+
+import { generateMomentDraft } from '../../src/services/wechat-draft';
+
+describe('ws4 POST /api/wechat/scheduler-tick — 真逻辑分发到 generateMomentDraft', () => {
+  beforeEach(() => {
+    mockQuery.mockReset();
+    mockQuery.mockResolvedValue({ rows: [], rowCount: 0 });
+    (generateMomentDraft as unknown as ReturnType<typeof vi.fn>).mockReset();
+  });
+
+  it('{force:true, customer:"客户A"} 画像齐全 → {generated:1, skipped:[]}', async () => {
+    (generateMomentDraft as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
+      ok: true,
+      status: 'pending_review',
+      task_id: '22222222-2222-4222-8222-222222222222',
+      draft_id: 'rec_schedule_x',
+    });
+    const res = await request(app)
+      .post('/api/wechat/scheduler-tick')
+      .send({ force: true, customer: '客户A' });
+    expect(res.status).toBe(200);
+    expect(res.body.generated).toBe(1);
+    expect(Array.isArray(res.body.skipped)).toBe(true);
+    expect(res.body.skipped).toEqual([]);
+    expect(generateMomentDraft).toHaveBeenCalledWith(
+      expect.objectContaining({ customer: '客户A' }),
+    );
+  });
+
+  it('画像缺失 customer → {generated:0, skipped:[{customer, reason:"profile_missing"}]}', async () => {
+    (generateMomentDraft as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
+      ok: false,
+      reason: 'profile_missing',
+    });
+    const res = await request(app)
+      .post('/api/wechat/scheduler-tick')
+      .send({ force: true, customer: '客户B' });
+    expect(res.status).toBe(200);
+    expect(res.body.generated).toBe(0);
+    expect(res.body.skipped).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ customer: '客户B', reason: 'profile_missing' }),
+      ]),
+    );
+  });
+
+  it('同日重复触发 → {generated:0, skipped:[{reason:"already_generated_today"}]}', async () => {
+    (generateMomentDraft as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
+      ok: false,
+      reason: 'already_generated_today',
+    });
+    const res = await request(app)
+      .post('/api/wechat/scheduler-tick')
+      .send({ force: true, customer: '客户A' });
+    expect(res.status).toBe(200);
+    expect(res.body.generated).toBe(0);
+    expect(res.body.skipped).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          customer: '客户A',
+          reason: 'already_generated_today',
+        }),
+      ]),
+    );
+  });
+
+  it('未指定 customer → 拉 DB 已绑微信 sessions 名单，逐个调 generateMomentDraft', async () => {
+    // mock SELECT agent_platform_sessions WHERE platform='wechat_personal' AND status='bound'
+    // 返回 2 个客户
+    mockQuery.mockResolvedValueOnce({
+      rows: [{ customer: '客户A' }, { customer: '客户B' }],
+      rowCount: 2,
+    });
+    (generateMomentDraft as unknown as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 'pending_review',
+        task_id: '33333333-3333-4333-8333-333333333333',
+        draft_id: 'rec_a',
+      })
+      .mockResolvedValueOnce({
+        ok: false,
+        reason: 'profile_missing',
+      });
+    const res = await request(app)
+      .post('/api/wechat/scheduler-tick')
+      .send({ force: false });
+    expect(res.status).toBe(200);
+    expect(res.body.generated).toBe(1);
+    expect(res.body.skipped.length).toBe(1);
+    expect(res.body.skipped[0]).toMatchObject({ reason: 'profile_missing' });
+    expect((generateMomentDraft as ReturnType<typeof vi.fn>).mock.calls.length).toBe(2);
+  });
+});

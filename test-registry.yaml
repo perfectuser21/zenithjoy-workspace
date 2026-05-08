@@ -1113,3 +1113,19 @@ tests:
     status: pending-ci
     product: 私域运营
     note: "Path 4 Sprint 1 ws3 — A 路线护栏：approval_status pending_review + approval_source NULL + def 黑名单 0 命中（合同 RED）"
+
+  - id: path4-sprint-1-ws4-scheduler-service
+    path: apps/api/tests/services/scheduler.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 私域运营
+    note: "Path 4 Sprint 1 ws4 — scheduler.ts cron '0 9 * * *' + thin server 时区 + triggerSchedulerTick → fetch /api/wechat/scheduler-tick"
+
+  - id: path4-sprint-1-ws4-a-route-guardrail
+    path: apps/api/tests/ws4/a-route-guardrail.test.ts
+    type: integration
+    ci: L4
+    status: pending-ci
+    product: 私域运营
+    note: "Path 4 Sprint 1 ws4 — A 路线护栏：generateMomentDraft 存在 + type='moment' + 当日去重 + scheduler cron 静态契约（合同 RED）"
