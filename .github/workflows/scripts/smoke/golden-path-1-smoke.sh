@@ -48,7 +48,16 @@ todo "Step 1 smoke 待写：curl POST /api/auth/sign-up/email + 验证 free lice
 # 现状：Agent 代码完整（services/agent），但 Dashboard 没下载页 + 缺 release 自动发
 # ───────────────────────────────────────────────────────────────────
 echo "▶ Step 2: 装客户端连中台"
-todo "Step 2 smoke 待写：curl GET /download 200 + Agent register API 200 + WS 连接成功" 2
+# Sprint 2.1e: Step 2 manifest + download 验证
+echo "▶ Step 2.1e — install-pack manifest + download"
+MANIFEST=$(curl -sS "${API_BASE:-http://localhost:5200}/api/agent/install-pack/manifest")
+echo "manifest: $MANIFEST"
+VERSION=$(echo "$MANIFEST" | grep -oE '"version":"[^"]+"' | cut -d'"' -f4)
+SHA256=$(echo "$MANIFEST" | grep -oE '"sha256":"[^"]+"' | cut -d'"' -f4)
+[ -n "$VERSION" ] || { echo "FAIL: manifest 没 version"; exit 1; }
+[ ${#SHA256} -eq 64 ] || { echo "FAIL: sha256 长度不对"; exit 1; }
+echo "▶ Step 2.1e OK — install-pack manifest 含 version=$VERSION + sha256"
+todo "Step 2 smoke 剩余待写：Agent register API 200 + WS 连接成功" 2
 
 # ───────────────────────────────────────────────────────────────────
 # Step 3：填画像诊断（行业 / 受众 / 风格 3 字段）

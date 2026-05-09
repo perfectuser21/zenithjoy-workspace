@@ -1004,3 +1004,19 @@ tests:
     status: active
     product: 中台认证
     note: "Sprint 2.1d — health-server :5201 /healthz endpoint UT (ws_connected/uptime/pid)"
+
+  - id: api-agent-install-pack
+    path: apps/api/src/routes/__tests__/agent-install-pack.test.ts
+    type: integration
+    ci: L4-INT
+    status: active
+    product: 内容发布
+    note: "Sprint 2.1e — /api/agent/install-pack manifest + download endpoints"
+
+  - id: agent-build-install-pack-script
+    path: services/agent/scripts/__tests__/build-install-pack.test.sh
+    type: unit
+    ci: L3
+    status: active
+    product: 内容发布
+    note: "Sprint 2.1e — build-install-pack.sh 产物结构 + reproducible build"
