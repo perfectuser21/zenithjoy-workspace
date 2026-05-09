@@ -46,8 +46,14 @@ describe('license.service: key 格式和生成', () => {
     expect(isValidLicenseKeyFormat('ZJ-X-ABCDEFGH')).toBe(false); // 错前缀
     expect(isValidLicenseKeyFormat('ZJ-B-ABC')).toBe(false); // 长度不对
     expect(isValidLicenseKeyFormat('xj-b-abcdefgh')).toBe(false); // 小写
-    expect(isValidLicenseKeyFormat('ZJ-B-ABCDEFG1')).toBe(false); // alphabet 排除 1
-    expect(isValidLicenseKeyFormat('ZJ-B-ABCDEFG0')).toBe(false); // alphabet 排除 0
+    expect(isValidLicenseKeyFormat('ZJ-B-ABCDEFG@')).toBe(false); // 非字母数字
+  });
+
+  it('isValidLicenseKeyFormat 接受 hex 历史 license (sprint 2.1f Fix 3)', () => {
+    // 2026-05-09 sprint 2.1f：放宽 [A-Z2-9]→[A-Z0-9] 兼容早期 hot-fix migration 用 md5() hex 生成的 license
+    expect(isValidLicenseKeyFormat('ZJ-B-ABCDEFG1')).toBe(true);
+    expect(isValidLicenseKeyFormat('ZJ-B-ABCDEFG0')).toBe(true);
+    expect(isValidLicenseKeyFormat('ZJ-F-44D00A51')).toBe(true);
   });
 
   it('TIER_QUOTA 套餐配额定义正确（free=1 注册即试用 1 台 Agent）', () => {

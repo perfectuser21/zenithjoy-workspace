@@ -25,6 +25,7 @@ fi
 echo "[build] copying assets to ${PACK_DIR}/"
 cp zenithjoy-agent.exe "$PACK_DIR/"
 cp install-pack/start.bat "$PACK_DIR/"
+cp install-pack/uninstall.bat "$PACK_DIR/"
 cp install-pack/.env.template "$PACK_DIR/"
 cp "install-pack/README-1分钟跑通.txt" "$PACK_DIR/"
 

@@ -1,55 +1,87 @@
 @echo off
-REM Sprint 2.1e — Agent install pack 启动器
-REM 双击运行：验 .env → spawn chrome :19222 → spawn agent.exe
-setlocal
+chcp 65001 >nul
+setlocal enabledelayedexpansion
 
-set "AGENT_DIR=%~dp0"
-cd /d "%AGENT_DIR%"
+cd /d "%~dp0"
 
-REM ===== 验 .env =====
+REM Step 1: Verify .env exists
 if not exist .env (
-    echo [start.bat] ERROR: .env file missing
-    echo Please copy .env.template to .env, fill in ZENITHJOY_LICENSE, then retry.
+    echo [ERROR] .env not found. Please re-download install pack from dashboard.
     pause
     exit /b 1
 )
 
-findstr /b /c:"ZENITHJOY_LICENSE=ZJ-" .env >nul 2>&1
-if errorlevel 1 (
-    echo [start.bat] ERROR: ZENITHJOY_LICENSE in .env is invalid
-    echo Should be ZENITHJOY_LICENSE=ZJ-X-XXXXXXXX format (copy from dashboard License page)
+REM Step 2: Load .env into env vars (skip comment lines)
+for /f "usebackq tokens=1,* delims==" %%a in (".env") do (
+    set "LINE=%%a"
+    if not "!LINE!"=="" (
+        if not "!LINE:~0,1!"=="#" (
+            set "%%a=%%b"
+        )
+    )
+)
+
+REM Step 3: Validate ZENITHJOY_LICENSE
+if not defined ZENITHJOY_LICENSE (
+    echo [ERROR] ZENITHJOY_LICENSE not set in .env. Re-download install pack.
     pause
     exit /b 1
 )
+if "%ZENITHJOY_LICENSE%"=="__PLACEHOLDER__" (
+    echo [ERROR] ZENITHJOY_LICENSE is placeholder. Re-download install pack from dashboard.
+    pause
+    exit /b 1
+)
+if not defined ZENITHJOY_API_BASE set "ZENITHJOY_API_BASE=https://autopilot.zenjoymedia.media"
 
-REM ===== Find chrome.exe =====
+REM Step 4: Fix 8 - License precheck before spawning agent
+echo [precheck] verifying license at %ZENITHJOY_API_BASE%/api/agent/heartbeat ...
+for /f "delims=" %%c in ('curl -s -o nul -w "%%{http_code}" -m 10 -X POST "%ZENITHJOY_API_BASE%/api/agent/heartbeat" -H "Content-Type: application/json" -d "{\"license_key\":\"%ZENITHJOY_LICENSE%\",\"machine_id\":\"precheck\",\"agent_version\":\"1.0.1\"}"') do set "PRECHECK_STATUS=%%c"
+
+if "%PRECHECK_STATUS%"=="200" (
+    echo [precheck] license OK
+    goto :START_AGENT
+)
+if "%PRECHECK_STATUS%"=="401" (
+    echo [ERROR] license invalid 401. Please re-download install pack from dashboard.
+    pause
+    exit /b 1
+)
+if "%PRECHECK_STATUS%"=="403" (
+    echo [ERROR] license rejected 403. Please re-download install pack from dashboard.
+    pause
+    exit /b 1
+)
+if "%PRECHECK_STATUS%"=="503" (
+    echo [WARN] backend 503 unavailable. Try again in 5 minutes.
+    pause
+    exit /b 1
+)
+echo [WARN] precheck got status %PRECHECK_STATUS% - proceeding anyway
+
+:START_AGENT
+REM Step 5: Find chrome.exe
 set "CHROME_EXE=%ProgramFiles%\Google\Chrome\Application\chrome.exe"
 if not exist "%CHROME_EXE%" set "CHROME_EXE=%ProgramFiles(x86)%\Google\Chrome\Application\chrome.exe"
 if not exist "%CHROME_EXE%" (
-    echo [start.bat] ERROR: chrome.exe not found
-    echo Please install Chrome browser first.
+    echo [ERROR] chrome.exe not found. Please install Chrome browser first.
     pause
     exit /b 1
 )
 
-REM ===== Spawn chrome :19222 if not running =====
+REM Step 6: Spawn chrome :19222 if not already listening
 netstat -ano | findstr ":19222 " | findstr LISTENING >nul 2>&1
 if errorlevel 1 (
-    echo [start.bat] starting chrome :19222...
+    echo [chrome] starting chrome on :19222 ...
     start "" "%CHROME_EXE%" --remote-debugging-port=19222 --user-data-dir="%USERPROFILE%\.zj-chrome" --no-first-run
     timeout /t 5 /nobreak >nul
 )
 
-REM ===== Load .env to env vars =====
-for /f "tokens=1,2 delims==" %%a in ('type .env ^| findstr /v "^#"') do (
-    set "%%a=%%b"
-)
-
-REM ===== Spawn agent.exe (foreground + log to %USERPROFILE%\.zj) =====
+REM Step 7: Spawn agent.exe (foreground)
 mkdir "%USERPROFILE%\.zj" 2>nul
-echo [start.bat] launching agent.exe ...
+echo [agent] starting zenithjoy-agent.exe ...
 zenithjoy-agent.exe
 if errorlevel 1 (
-    echo [start.bat] agent.exe exited with error %errorlevel%
+    echo [agent] agent.exe exited with error %errorlevel%
     pause
 )

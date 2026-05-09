@@ -1169,3 +1169,27 @@ tests:
     status: pending-ci
     product: 中台认证
     note: "Path 2 Sprint A 合同 SSOT — TDD RED 来源（不实跑，副本在 apps/api/tests/integration/ws5/）"
+
+  - id: sprint-2-1f-license-service
+    path: apps/api/src/services/license.service.test.ts
+    type: unit
+    ci: L3
+    status: pending-ci
+    product: 中台认证
+    note: "Sprint 2.1f Fix 3 — LICENSE_KEY_PATTERN 兼容 hex license 单测"
+
+  - id: sprint-2-1f-load-config
+    path: services/agent/src/__tests__/load-config.test.ts
+    type: unit
+    ci: L3
+    status: pending-ci
+    product: Agent
+    note: "Sprint 2.1f Fix 6 — agent loadOrInitConfig env 优先 config.json fallback"
+
+  - id: sprint-2-1f-normalize-hex-licenses
+    path: apps/api/db/migrations/__tests__/normalize-hex-licenses.test.ts
+    type: integration
+    ci: L4-INT
+    status: pending-ci
+    product: 中台认证
+    note: "Sprint 2.1f Fix 2/4 — migration normalize hex licenses + gen_base32_chars PG function"
