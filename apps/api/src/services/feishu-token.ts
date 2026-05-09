@@ -65,9 +65,16 @@ function verifyState(state: string): { tenantId: string; ts: number } {
 
 export async function getAuthorizeUrl(tenantId: string, appId: string): Promise<string> {
   const state = signState(tenantId);
+  // 三层 fallback：
+  //   1. FEISHU_REDIRECT_URI — 完整 URL，直接用（生产显式配公网）
+  //   2. ${DASHBOARD_BASE_URL}/api/feishu/oauth/callback — 生产 dashboard 与 api 同域 nginx 反代场景
+  //   3. http://localhost:5200/api/feishu/oauth/callback — dev 默认
+  // 历史上还有 PUBLIC_API_BASE 路径，但已被 DASHBOARD_BASE_URL 取代（callback 跳回 dashboard，同域）
   const redirectUri =
     process.env.FEISHU_REDIRECT_URI ||
-    `${process.env.PUBLIC_API_BASE || 'http://localhost:5200'}/api/feishu/oauth/callback`;
+    (process.env.DASHBOARD_BASE_URL
+      ? `${process.env.DASHBOARD_BASE_URL}/api/feishu/oauth/callback`
+      : 'http://localhost:5200/api/feishu/oauth/callback');
   const u = new URL(FEISHU_AUTHORIZE_BASE);
   u.searchParams.set('app_id', appId);
   u.searchParams.set('redirect_uri', redirectUri);

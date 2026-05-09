@@ -1,9 +1,48 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { getAuthorizeUrl } from './feishu-token';
 
-// Path 2 Sprint A — lint-test-pairing 占位
-// 真行为测试在 sprints/path-2-sprint-a-feishu/tests/ws*/；扩展 unit 加厚阶段补
-describe('feishu-token placeholder', () => {
-  it('exists — full coverage lives in sprints/path-2-sprint-a-feishu/tests/ws*/', () => {
-    expect(true).toBe(true);
+// Path 2 Sprint A follow-up — OAuth redirect_uri env-driven
+// Bug: 生产 .env 没设 FEISHU_REDIRECT_URI，fallback 到 localhost:5200 → 真扫码 callback 必失败
+// 修复：fallback chain = FEISHU_REDIRECT_URI > ${DASHBOARD_BASE_URL}/api/feishu/oauth/callback > localhost dev
+
+describe('feishu-token getAuthorizeUrl — env-driven redirect_uri', () => {
+  const originalEnv = { ...process.env };
+
+  beforeEach(() => {
+    delete process.env.FEISHU_REDIRECT_URI;
+    delete process.env.DASHBOARD_BASE_URL;
+    delete process.env.PUBLIC_API_BASE;
+  });
+
+  afterEach(() => {
+    process.env = { ...originalEnv };
+  });
+
+  it('[BEHAVIOR] FEISHU_REDIRECT_URI set → 用作 redirect_uri', async () => {
+    process.env.FEISHU_REDIRECT_URI = 'https://autopilot.zenjoymedia.media/api/feishu/oauth/callback';
+    const url = await getAuthorizeUrl('tenant-test', 'cli_test_app');
+    const u = new URL(url);
+    expect(u.searchParams.get('redirect_uri')).toBe(
+      'https://autopilot.zenjoymedia.media/api/feishu/oauth/callback'
+    );
+    expect(u.searchParams.get('app_id')).toBe('cli_test_app');
+    expect(u.searchParams.get('state')).toBeTruthy();
+  });
+
+  it('[BEHAVIOR] FEISHU_REDIRECT_URI 不设、DASHBOARD_BASE_URL 设 → fallback 到 ${DASHBOARD_BASE_URL}/api/feishu/oauth/callback', async () => {
+    process.env.DASHBOARD_BASE_URL = 'https://dash.example.com';
+    const url = await getAuthorizeUrl('tenant-test', 'cli_test_app');
+    const u = new URL(url);
+    expect(u.searchParams.get('redirect_uri')).toBe(
+      'https://dash.example.com/api/feishu/oauth/callback'
+    );
+  });
+
+  it('[BEHAVIOR] FEISHU_REDIRECT_URI + DASHBOARD_BASE_URL 都不设 → fallback 到 localhost dev', async () => {
+    const url = await getAuthorizeUrl('tenant-test', 'cli_test_app');
+    const u = new URL(url);
+    expect(u.searchParams.get('redirect_uri')).toBe(
+      'http://localhost:5200/api/feishu/oauth/callback'
+    );
   });
 });
