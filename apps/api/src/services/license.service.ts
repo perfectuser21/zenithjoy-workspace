@@ -92,7 +92,8 @@ export function generateLicenseKey(tier: Tier): string {
   return `ZJ-${prefix}-${suffix}`;
 }
 
-const LICENSE_KEY_PATTERN = /^ZJ-[FBMSE]-[A-Z2-9]{8}$/;
+// Sprint 2.1f Fix 3 — 兼容历史 hex license（含 0/1）
+const LICENSE_KEY_PATTERN = /^ZJ-[FBMSE]-[A-Z0-9]{8}$/;
 
 export function isValidLicenseKeyFormat(key: string): boolean {
   return typeof key === 'string' && LICENSE_KEY_PATTERN.test(key);

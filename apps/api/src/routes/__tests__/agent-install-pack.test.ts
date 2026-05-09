@@ -47,35 +47,9 @@ describe('GET /api/agent/install-pack/manifest', () => {
   });
 });
 
-describe('GET /api/agent/install-pack/download', () => {
-  let app: any;
-
-  beforeEach(async () => {
-    vi.clearAllMocks();
-    app = (await import('../../app')).default;
-  });
-
-  it('manifest 存在 → 302 重定向到 nginx 静态 URL', async () => {
-    (manifestSvc.readInstallPackManifest as any).mockReturnValue({
-      version: '0.2.0',
-      sha256: 'b'.repeat(64),
-      download_url: '/download/zenithjoy-agent-v0.2.0.tar.gz',
-      size: 60000000,
-      build_time: '2026-05-09T10:00:00Z',
-    });
-
-    const res = await request(app).get('/api/agent/install-pack/download').redirects(0);
-    expect(res.status).toBe(302);
-    expect(res.headers.location).toMatch(/^\/download\/zenithjoy-agent-v/);
-  });
-
-  it('manifest 不存在 → 503', async () => {
-    (manifestSvc.readInstallPackManifest as any).mockReturnValue(null);
-
-    const res = await request(app).get('/api/agent/install-pack/download').redirects(0);
-    expect(res.status).toBe(503);
-  });
-});
+// 注：Sprint 2.1e 旧 GET /download 302 redirect describe 块已删
+// （被 Sprint 2.1f Fix 7 server-side license burn-in 取代，见下方 describe 块）
+// 补 Task 2 step 2.2 遗漏的 test 减肥
 
 // ↓↓↓ Sprint 2.1f Fix 7 — server-side license burn-in ↓↓↓
 vi.mock('../../db/connection', () => ({
