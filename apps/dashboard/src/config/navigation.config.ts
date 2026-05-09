@@ -87,6 +87,8 @@ export const autopilotPageComponents: Record<string, () => Promise<{ default: Co
   // Walking Skeleton #1 — 客户首次成功路径（抖音版）
   'AgentDownloadPage': () => import('../pages/AgentDownloadPage'),
   'DouyinBindPage': () => import('../pages/DouyinBindPage'),
+  // Path 2 Sprint A — 飞书集成
+  'FeishuBindTenant': () => import('../pages/FeishuBindTenant'),
   'FolderBindPage': () => import('../pages/FolderBindPage'),
   'PublishPage': () => import('../pages/PublishPage'),
   // FeatureDashboard and CommandCenter moved to Core features/business
@@ -217,6 +219,14 @@ export const autopilotNavGroups: NavGroup[] = [
         label: '一键发布',
         featureKey: 'ws1-publish',
         component: 'PublishPage',
+      },
+      // ============ Path 2 Sprint A — 飞书集成 ============
+      {
+        path: '/dashboard/feishu-bind',
+        icon: KeyRound,
+        label: '绑飞书',
+        featureKey: 'feishuBind',
+        component: 'FeishuBindTenant',
       },
     ]
   }
