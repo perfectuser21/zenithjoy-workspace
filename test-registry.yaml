@@ -999,6 +999,50 @@ tests:
 
   - id: agent-health-server
     path: services/agent/src/handlers/__tests__/health-server.test.ts
+  # ─── Path 2 Sprint A — 飞书集成 ───────────────────────────────────────────────
+
+  - id: p2-sprint-a-route-smoke-feishu-seed
+    path: apps/api/src/routes/_smoke-feishu-seed.test.ts
+    type: unit
+    ci: L3
+    status: pending-ci
+    product: 私域运营
+    note: "Path 2 Sprint A — lint-test-pairing 占位，扩展 unit 加厚阶段补"
+
+  - id: p2-sprint-a-route-feishu-oauth
+    path: apps/api/src/routes/feishu-oauth.test.ts
+    type: unit
+    ci: L3
+    status: pending-ci
+    product: 中台认证
+    note: "Path 2 Sprint A — lint-test-pairing 占位"
+
+  - id: p2-sprint-a-route-lead-config
+    path: apps/api/src/routes/lead-config.test.ts
+    type: unit
+    ci: L3
+    status: pending-ci
+    product: 私域运营
+    note: "Path 2 Sprint A — lint-test-pairing 占位"
+
+  - id: p2-sprint-a-svc-bitable-multitenant
+    path: apps/api/src/services/feishu-bitable-multitenant.test.ts
+    type: unit
+    ci: L3
+    status: pending-ci
+    product: 私域运营
+    note: "Path 2 Sprint A — lint-test-pairing 占位"
+
+  - id: p2-sprint-a-svc-feishu-token
+    path: apps/api/src/services/feishu-token.test.ts
+    type: unit
+    ci: L3
+    status: pending-ci
+    product: 中台认证
+    note: "Path 2 Sprint A — lint-test-pairing 占位"
+
+  - id: p2-sprint-a-ws2-feishu-token-unit
+    path: apps/api/tests/ws2/feishu-token.test.ts
     type: unit
     ci: L3
     status: active
@@ -1028,3 +1072,100 @@ tests:
     status: active
     product: 内容发布
     note: "Sprint 2.1e — install-pack-manifest service 读 manifest.json (4 case: missing/valid/corrupt/incomplete)"
+    note: "Path 2 Sprint A WS2 — feishu-token getValidToken + 2h 过期刷新 + cascade 失败 BEHAVIOR 测试"
+
+  - id: p2-sprint-a-ws3-bitable-mt-unit
+    path: apps/api/tests/ws3/feishu-bitable-mt.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 私域运营
+    note: "Path 2 Sprint A WS3 — provisionBitable 多租户自动建 3 张表 BEHAVIOR 测试"
+
+  - id: p2-sprint-a-ws3-lead-config-unit
+    path: apps/api/tests/ws3/lead-config.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 私域运营
+    note: "Path 2 Sprint A WS3 — fetchLeadConfig 拉飞书 Bitable 数据 BEHAVIOR 测试"
+
+  - id: p2-sprint-a-ws1-migration-int
+    path: apps/api/tests/integration/ws1/migration.test.ts
+    type: integration
+    ci: L4
+    status: active
+    product: 中台认证
+    note: "Path 2 Sprint A WS1 — tenant_feishu_bindings migration 集成测试"
+
+  - id: p2-sprint-a-ws5-path1-isolation-int
+    path: apps/api/tests/integration/ws5/path1-isolation.test.ts
+    type: integration
+    ci: L4
+    status: active
+    product: 中台认证
+    note: "Path 2 Sprint A WS5 — Path 1 隔离断言（agent_platform_sessions / qr-bind-douyin / 账号绑定 UI 不动）"
+
+  - id: p2-sprint-a-ws4-feishu-bind-page-unit
+    path: apps/dashboard/tests/ws4/feishu-bind-page.test.tsx
+    type: unit
+    ci: L3
+    status: active
+    product: 私域运营
+    note: "Path 2 Sprint A WS4 — FeishuBindTenant 组件单测（含 R1/R3/R4/R5 错误路径渲染）"
+
+  - id: p2-sprint-a-e2e
+    path: apps/dashboard/e2e/path-2-sprint-a.spec.ts
+    type: e2e
+    ci: L4
+    status: active
+    product: 私域运营
+    note: "Path 2 Sprint A — Playwright E2E 走绑飞书 + 自动建表 + 填画像/对标视频全链"
+
+  - id: p2-sprint-a-contract-ws1-migration
+    path: sprints/path-2-sprint-a-feishu/tests/ws1/migration.test.ts
+    type: integration
+    ci: L4-INT
+    status: pending-ci
+    product: 中台认证
+    note: "Path 2 Sprint A 合同 SSOT — TDD RED 来源（不实跑，副本在 apps/api/tests/integration/ws1/）"
+
+  - id: p2-sprint-a-contract-ws2-feishu-token
+    path: sprints/path-2-sprint-a-feishu/tests/ws2/feishu-token.test.ts
+    type: unit
+    ci: L3
+    status: pending-ci
+    product: 中台认证
+    note: "Path 2 Sprint A 合同 SSOT — TDD RED 来源（不实跑，副本在 apps/api/tests/ws2/）"
+
+  - id: p2-sprint-a-contract-ws3-bitable-mt
+    path: sprints/path-2-sprint-a-feishu/tests/ws3/feishu-bitable-mt.test.ts
+    type: unit
+    ci: L3
+    status: pending-ci
+    product: 私域运营
+    note: "Path 2 Sprint A 合同 SSOT — TDD RED 来源（不实跑，副本在 apps/api/tests/ws3/）"
+
+  - id: p2-sprint-a-contract-ws3-lead-config
+    path: sprints/path-2-sprint-a-feishu/tests/ws3/lead-config.test.ts
+    type: unit
+    ci: L3
+    status: pending-ci
+    product: 私域运营
+    note: "Path 2 Sprint A 合同 SSOT — TDD RED 来源（不实跑，副本在 apps/api/tests/ws3/）"
+
+  - id: p2-sprint-a-contract-ws4-feishu-bind-page
+    path: sprints/path-2-sprint-a-feishu/tests/ws4/feishu-bind-page.test.ts
+    type: unit
+    ci: L3
+    status: pending-ci
+    product: 私域运营
+    note: "Path 2 Sprint A 合同 SSOT — TDD RED 来源（不实跑，副本在 apps/dashboard/tests/ws4/.tsx）"
+
+  - id: p2-sprint-a-contract-ws5-path1-isolation
+    path: sprints/path-2-sprint-a-feishu/tests/ws5/path1-isolation.test.ts
+    type: integration
+    ci: L4-INT
+    status: pending-ci
+    product: 中台认证
+    note: "Path 2 Sprint A 合同 SSOT — TDD RED 来源（不实跑，副本在 apps/api/tests/integration/ws5/）"

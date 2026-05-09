@@ -80,4 +80,10 @@ export default [
   {
     ignores: ['dist/**', 'dist-dev/**', 'node_modules/**'],
   },
+  {
+    files: ['tests/**/*.{ts,tsx}', '**/__tests__/**/*.{ts,tsx}', 'e2e/**/*.{ts,tsx}'],
+    rules: {
+      '@typescript-eslint/no-explicit-any': 'off',
+    },
+  },
 ];

@@ -1,0 +1,128 @@
+{
+  "initiative_id": "pending",
+  "journey_type": "user_facing",
+  "journey_type_reason": "涉及 apps/dashboard/ 客户自助绑定页 + 客户在飞书 workspace 操作，是终端客户面 walking skeleton 路径",
+  "tasks": [
+    {
+      "task_id": "ws1",
+      "title": "DB migration: tenant_feishu_bindings 表",
+      "scope": "新增 apps/api/db/migrations/<timestamp>_tenant_feishu_bindings.sql 建表（10 列：8 业务列 + R2 needs_retry/provision_error）+ FK ON DELETE CASCADE + 索引 idx_tfb_tenant",
+      "dod": [
+        "[BEHAVIOR] 跑 migration 后 zenithjoy.tenant_feishu_bindings 表存在 + 10 列齐全（含 needs_retry BOOL / provision_error TEXT）",
+        "[BEHAVIOR] FK tenant_id → tenants(id) 存在且 ON DELETE CASCADE",
+        "[BEHAVIOR] 索引 idx_tfb_tenant 存在",
+        "[ARTIFACT] migration SQL 文件存在 + 含 CREATE TABLE + 10 个列名 + FK + 索引"
+      ],
+      "files": [
+        "apps/api/db/migrations/20260508_xxxxxx_tenant_feishu_bindings.sql"
+      ],
+      "depends_on": [],
+      "complexity": "S",
+      "estimated_minutes": 25
+    },
+    {
+      "task_id": "ws2",
+      "title": "feishu-token.ts 服务（OAuth + token 自动刷新 + R5 错误抛出）",
+      "scope": "新增 apps/api/src/services/feishu-token.ts，导出 getAuthorizeUrl / handleCallback / getValidToken。多租户从 tenants 表取 app_id + app_secret，不读 process.env.FEISHU_APP_ID。state 用 HMAC 签名防伪。token 过期自动续期。飞书续期非 200 抛 TokenRefreshError（错码 TOKEN_REFRESH_FAILED）。HTTP 调用使用 process.env.FEISHU_API_BASE 注入点",
+      "dod": [
+        "[BEHAVIOR] getAuthorizeUrl 返回飞书 URL + 签名 state",
+        "[BEHAVIOR] handleCallback 正常路径写 tenant_feishu_bindings + 飞书 API 错误抛对应 Error",
+        "[BEHAVIOR] getValidToken token 过期自动续 + 仍有效不刷",
+        "[BEHAVIOR] R5: getValidToken 飞书续期接口非 200 时抛 TokenRefreshError",
+        "[ARTIFACT] 文件不引用 process.env.FEISHU_APP_ID",
+        "[ARTIFACT] 文件用 process.env.FEISHU_API_BASE 注入飞书 base URL"
+      ],
+      "files": [
+        "apps/api/src/services/feishu-token.ts"
+      ],
+      "depends_on": ["ws1"],
+      "complexity": "M",
+      "estimated_minutes": 55
+    },
+    {
+      "task_id": "ws3",
+      "title": "feishu-bitable-multitenant + feishu-oauth + lead-config 路由 + fake-feishu-server",
+      "scope": "新增 apps/api/src/services/feishu-bitable-multitenant.ts (provisionBitable + fetchLeadConfig + writeRecord) + apps/api/src/routes/feishu-oauth.ts (start/callback，含 R1/R4 错误处理) + apps/api/src/routes/lead-config.ts (含 R3/R5 错误处理)。在 app.ts 挂载新路由。新增 apps/api/test-utils/fake-feishu-server.ts 模拟飞书 5 个核心端点（按真 ID 正则生成 mock，支持 ?inject_error= 触发 R2/R3）。更新 apps/api/.env.example 加 FEISHU_API_BASE。不修改单租户原版 feishu-bitable.ts",
+      "dod": [
+        "[BEHAVIOR] provisionBitable 调 1 次 createBitable + 3 次 createTable + 写回 4 个 ID + 幂等",
+        "[BEHAVIOR] R2: provisionBitable 在飞书 createTable 失败时抛 ProvisionFailedError + 写回 needs_retry=true + provision_error",
+        "[BEHAVIOR] 创建获客画像表含 行业/关键词/钩子文案 字段",
+        "[BEHAVIOR] fetchLeadConfig 返回 {profile, target_videos[]} 结构",
+        "[BEHAVIOR] R3: fetchLeadConfig 飞书返 NotFound 时抛 BitableNotFoundError",
+        "[BEHAVIOR] writeRecord(tenantId, tableId, fields) 调飞书 records API（_smoke-feishu-seed 复用）",
+        "[BEHAVIOR] GET /api/lead-config/:tenantId 200 + 未绑 400 FEISHU_NOT_BOUND + R3 路径 400 BITABLE_NOT_FOUND + R5 路径 401 TOKEN_REFRESH_FAILED",
+        "[BEHAVIOR] POST /api/feishu/oauth/start 缺 app_id 400 + 已绑过返 400 ALREADY_BOUND + 正常 200 含 authorize_url",
+        "[BEHAVIOR] GET /api/feishu/oauth/callback 缺 code 400 + 飞书带 error 时 302 跳回 dashboard?error=<code> + R2 失败返 502 PROVISION_FAILED",
+        "[ARTIFACT] 多租户文件不引用 COMPETITOR_BITABLE / FEISHU_COMPETITOR_APP_TOKEN",
+        "[ARTIFACT] 用 process.env.FEISHU_API_BASE 替代硬编码 https://open.feishu.cn",
+        "[ARTIFACT] fake-feishu-server.ts 监听 3099 + 5 端点 + ?inject_error= + 按 bascn/tbl 正则生成 ID",
+        "[ARTIFACT] apps/api/.env.example 含 FEISHU_API_BASE 条目",
+        "[ARTIFACT] git diff 单租户 feishu-bitable.ts 字节级未变"
+      ],
+      "files": [
+        "apps/api/src/services/feishu-bitable-multitenant.ts",
+        "apps/api/src/routes/feishu-oauth.ts",
+        "apps/api/src/routes/lead-config.ts",
+        "apps/api/src/app.ts",
+        "apps/api/test-utils/fake-feishu-server.ts",
+        "apps/api/.env.example"
+      ],
+      "depends_on": ["ws2"],
+      "complexity": "L",
+      "estimated_minutes": 75
+    },
+    {
+      "task_id": "ws4",
+      "title": "Dashboard FeishuBindTenant 页 + Playwright E2E + R1/R3/R4 错误 UI",
+      "scope": "新增 apps/dashboard/src/pages/FeishuBindTenant.tsx（表单 + 状态展示 + Bitable 链接 + 刷新按钮 + R1 ?error= 错码渲染 + R3 文档不存在重建按钮 + R4 ALREADY_BOUND 提示禁用提交 + R5 重新授权提示）。在 App.tsx/router 挂 /dashboard/feishu-bind。新增 apps/dashboard/e2e/path-2-sprint-a.spec.ts 8 步全链 E2E（API stub）",
+      "dod": [
+        "[BEHAVIOR] 组件未绑定状态渲染表单",
+        "[BEHAVIOR] 提交表单触发 fetch /api/feishu/oauth/start + 跳转 authorize_url",
+        "[BEHAVIOR] 已绑定状态显示「飞书已绑定 ✓」+ Bitable 链接 + 刷新按钮",
+        "[BEHAVIOR] 点刷新按钮拉 /api/lead-config 渲染画像 + 视频",
+        "[BEHAVIOR] R1: URL 含 ?error=<code> 时渲染错码 + 中文文案",
+        "[BEHAVIOR] R4: error=ALREADY_BOUND 时禁用提交按钮 + 显示换绑提示",
+        "[BEHAVIOR] R3: lead-config 返 BITABLE_NOT_FOUND 时显示重建按钮",
+        "[BEHAVIOR] R5: lead-config 返 TOKEN_REFRESH_FAILED 时显示重新授权按钮",
+        "[ARTIFACT] FeishuBindTenant.tsx 存在 + 含必需文案/链接",
+        "[ARTIFACT] App.tsx 路由表挂 FeishuBindTenant",
+        "[ARTIFACT] Playwright spec 含 5+ toBeVisible 断言 + step8 标记"
+      ],
+      "files": [
+        "apps/dashboard/src/pages/FeishuBindTenant.tsx",
+        "apps/dashboard/src/App.tsx",
+        "apps/dashboard/e2e/path-2-sprint-a.spec.ts"
+      ],
+      "depends_on": ["ws3"],
+      "complexity": "M",
+      "estimated_minutes": 60
+    },
+    {
+      "task_id": "ws5",
+      "title": "golden-path-2-smoke.sh + DEV helper + Lead 自验证据 + Path 1 隔离 + CI workflow stub 启动",
+      "scope": "新增 .github/workflows/scripts/smoke/golden-path-2-smoke.sh（合同 E2E 段全文落地，开头自检 FEISHU_API_BASE + Step 4 后追加 R4 ALREADY_BOUND 断言）+ apps/api/src/routes/_smoke-feishu-seed.ts（NODE_ENV + X-Smoke-Token 双门禁 helper，调业务层 writeRecord 不绕过飞书层，路由内 router.post('/feishu-seed')）+ apps/api/src/app.ts 加挂载 app.use('/api/_smoke', smokeFeishuSeedRouter) + .agent-knowledge/path-2/lead-acceptance-sprint-a.md（Lead 真飞书 5+ 步自验证据，1KB+，含 PASS YAML）+ CI workflow 修改（smoke 步骤前拉起 fake-feishu-server 后 export FEISHU_API_BASE=http://localhost:3099，结束 kill）。Path 1 隔离断言（git diff 拒禁文件）",
+      "dod": [
+        "[BEHAVIOR] git diff --name-only 不含 qr-bind-douyin.ts / feishu-bitable.ts / DouyinBindPage.tsx",
+        "[BEHAVIOR] migrations 不含 agent_platform_sessions",
+        "[BEHAVIOR] DEV helper 端点 NODE_ENV=production 返回 404",
+        "[BEHAVIOR] DEV helper 端点缺/错 X-Smoke-Token 返回 403",
+        "[BEHAVIOR] DEV helper 调 feishu-bitable-multitenant.writeRecord 不直接 INSERT DB",
+        "[ARTIFACT] golden-path-2-smoke.sh 存在 + 可执行 + 4 步主链 + R4 自验段 + 所有 SELECT count 含时间窗口 + curl 用 -fsS + 开头检查 FEISHU_API_BASE",
+        "[ARTIFACT] _smoke-feishu-seed.ts 含 NODE_ENV + X-Smoke-Token 双门禁 + router.post('/feishu-seed')",
+        "[ARTIFACT] app.ts 含 app.use('/api/_smoke', ...) 挂载",
+        "[ARTIFACT] CI workflow yaml 含 fake-feishu-server 启动 + FEISHU_API_BASE export",
+        "[ARTIFACT] lead-acceptance-sprint-a.md 存在 + size > 1KB + lead_acceptance_status: PASS + 5+ Step"
+      ],
+      "files": [
+        ".github/workflows/scripts/smoke/golden-path-2-smoke.sh",
+        "apps/api/src/routes/_smoke-feishu-seed.ts",
+        "apps/api/src/app.ts",
+        ".github/workflows/path-2-smoke.yml",
+        ".agent-knowledge/path-2/lead-acceptance-sprint-a.md"
+      ],
+      "depends_on": ["ws3", "ws4"],
+      "complexity": "M",
+      "estimated_minutes": 60
+    }
+  ]
+}

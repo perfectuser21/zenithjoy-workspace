@@ -15,6 +15,11 @@ import DynamicRouter from './components/DynamicRouter';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { ThemeProvider, useTheme } from './contexts/ThemeContext';
 import { InstanceProvider, useInstance } from './contexts/InstanceContext';
+// Path 2 Sprint A: FeishuBindTenant 通过 navigation.config 'feishu-bind' 路径懒加载（DynamicRouter 注册）
+// 静态引用避免 tree-shake 误删懒加载入口
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+import type { default as _FeishuBindTenant } from './pages/FeishuBindTenant';
+
 // 只有登录页需要静态导入
 import FeishuLogin from './pages/FeishuLogin';
 import SignIn from './pages/SignIn';

@@ -1,0 +1,13 @@
+title = "ZenithJoy gitleaks config"
+
+# Inherit gitleaks default rules
+[extend]
+useDefault = true
+
+# ─── Allowlists (false positives) ─────────────────────────────────────────────
+
+[[allowlists]]
+description = "Path 2 — feature key strings 'p2-*' are dashboard navigation keys, not secrets"
+regexes = [
+  '''p2-[a-z][a-z0-9-]*'''
+]

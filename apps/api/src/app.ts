@@ -25,6 +25,9 @@ import { tasksRouter } from './routes/tasks';
 import { tenantsRouter } from './routes/tenants';
 import { skillsRouter } from './routes/skills';
 import { creditsRouter } from './routes/credits';
+import feishuOauthRouter from './routes/feishu-oauth';
+import leadConfigRouter from './routes/lead-config';
+import smokeFeishuSeedRouter from './routes/_smoke-feishu-seed';
 import { errorHandler, notFoundHandler } from './middleware/error';
 
 const app = express();
@@ -84,6 +87,11 @@ app.use('/api/account', accountRouter);
 app.use('/api/tenants', tenantsRouter);
 app.use('/api/skills', skillsRouter);
 app.use('/api/credits', creditsRouter);
+// Path 2 Sprint A — 多租户飞书集成
+app.use('/api/feishu/oauth', feishuOauthRouter);
+app.use('/api/lead-config', leadConfigRouter);
+// Path 2 Sprint A WS5 — DEV-only 飞书 seed helper（生产 NODE_ENV=production 必返 404）
+app.use('/api/_smoke', smokeFeishuSeedRouter);
 
 // Error handling
 app.use(notFoundHandler);
