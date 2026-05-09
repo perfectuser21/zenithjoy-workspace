@@ -79,12 +79,9 @@ describe('AgentDownloadPage [BEHAVIOR]', () => {
 
     expect(screen.getByRole('heading', { name: /Agent.*客户端/i })).toBeInTheDocument();
 
-    // 必须有真实下载链接，不是 placeholder / 敬请期待
+    // Sprint 2.1e: 真实下载链接走 endpoint redirect (302 → nginx 静态)
     const downloadLink = await screen.findByRole('link', { name: /下载.*Agent/i });
-    expect(downloadLink).toHaveAttribute(
-      'href',
-      '/download/zenithjoy-agent-v0.1.8.tar.gz',
-    );
+    expect(downloadLink).toHaveAttribute('href', '/api/agent/install-pack/download');
     expect(downloadLink).toHaveAttribute('download');
 
     // "敬请期待" 不应再出现（已有真 release）
