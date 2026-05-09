@@ -126,7 +126,7 @@ export default function AgentDownloadPage() {
               download
               style={{ display: 'inline-block', padding: '8px 16px', background: '#2563eb', color: '#fff', borderRadius: 6, textDecoration: 'none' }}
             >
-              ⬇ 下载完整安装包
+              ⬇ 下载 Agent 完整安装包
             </a>
           </div>
         )}

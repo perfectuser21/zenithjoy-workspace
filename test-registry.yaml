@@ -1020,3 +1020,11 @@ tests:
     status: active
     product: 内容发布
     note: "Sprint 2.1e — build-install-pack.sh 产物结构 + reproducible build"
+
+  - id: api-install-pack-manifest
+    path: apps/api/src/services/__tests__/install-pack-manifest.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 内容发布
+    note: "Sprint 2.1e — install-pack-manifest service 读 manifest.json (4 case: missing/valid/corrupt/incomplete)"
