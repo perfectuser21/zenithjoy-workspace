@@ -11,3 +11,10 @@ description = "Path 2 — feature key strings 'p2-*' are dashboard navigation ke
 regexes = [
   '''p2-[a-z][a-z0-9-]*'''
 ]
+
+[[allowlists]]
+description = "Feishu Bitable test fixtures — bascn* (app_token) / tbl1* (table_id) clearly-fake patterns used in unit tests + plan docs"
+regexes = [
+  '''bascn[A-Za-z0-9]{6,}''',
+  '''tbl1[a-z]{4,}'''
+]

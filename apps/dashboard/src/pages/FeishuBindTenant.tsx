@@ -38,6 +38,10 @@ const ERROR_CN: Record<string, string> = {
   TOKEN_REFRESH_FAILED: '飞书授权已失效，请重新授权。',
   INVALID_STATE: '回调验签失败，请重新发起绑定。',
   TENANT_NOT_FOUND: '当前租户不存在。',
+  START_FAILED: '飞书 OAuth 启动失败，请刷新重试。',
+  TENANT_ID_REQUIRED: '当前用户未关联租户，请重新登录或联系管理员。',
+  MISSING_FIELDS: '请填写完整的 App ID 和 App Secret。',
+  NO_TENANT_CONTEXT: '当前用户未关联租户，请重新登录或联系管理员。',
 };
 
 function getQueryError(): string | null {
@@ -175,6 +179,20 @@ export default function FeishuBindTenant() {
       )}
 
       {loading && <p>加载中...</p>}
+
+      {/* Bug 2 fix: oauth/start / refreshLeadConfig 失败时显示错误（之前 setLeadConfigError 但没渲染 → 用户感觉无反应） */}
+      {leadConfigError && (
+        <div style={{
+          padding: 12,
+          background: '#fee',
+          color: '#c00',
+          borderRadius: 6,
+          marginBottom: 12,
+          border: '1px solid #fcc',
+        }}>
+          <strong>绑定失败：</strong> {ERROR_CN[leadConfigError as keyof typeof ERROR_CN] || leadConfigError}
+        </div>
+      )}
 
       {!loading && !status?.bound && (
         <form onSubmit={onSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
