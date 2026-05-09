@@ -18,6 +18,13 @@ import * as accountApi from '../../api/account.api';
 
 vi.mock('../../api/walking-skeleton-1.api', () => ({
   getAgentStatus: vi.fn(),
+  getInstallPackManifest: vi.fn().mockResolvedValue({
+    version: '1.0.0',
+    sha256: 'a'.repeat(64),
+    download_url: '/download/zenithjoy-agent-v1.0.0.tar.gz',
+    size: 22637557,
+    build_time: '2026-05-09T03:01:22Z',
+  }),
 }));
 vi.mock('../../api/account.api', () => ({
   fetchAccountMe: vi.fn(),
@@ -72,12 +79,9 @@ describe('AgentDownloadPage [BEHAVIOR]', () => {
 
     expect(screen.getByRole('heading', { name: /Agent.*客户端/i })).toBeInTheDocument();
 
-    // 必须有真实下载链接，不是 placeholder / 敬请期待
+    // Sprint 2.1e: 真实下载链接走 endpoint redirect (302 → nginx 静态)
     const downloadLink = await screen.findByRole('link', { name: /下载.*Agent/i });
-    expect(downloadLink).toHaveAttribute(
-      'href',
-      '/download/zenithjoy-agent-v0.1.8.tar.gz',
-    );
+    expect(downloadLink).toHaveAttribute('href', '/api/agent/install-pack/download');
     expect(downloadLink).toHaveAttribute('download');
 
     // "敬请期待" 不应再出现（已有真 release）
