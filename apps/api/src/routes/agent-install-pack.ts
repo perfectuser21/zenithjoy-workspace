@@ -122,8 +122,8 @@ agentInstallPackRouter.get('/download', async (req: Request, res: Response) => {
       fs.writeFileSync(targetEnv.replace(/\.template$/, ''), burned, 'utf-8');
     }
 
-    // 5. 重打包
-    const outTar = path.join(tmp, 'pack.tar.gz');
+    // 5. 重打包 — outTar 放 tmp 外，避免 tar 同时读写自己 ("file changed as we read it")
+    const outTar = path.join(os.tmpdir(), `install-pack-out-${process.pid}-${Date.now()}.tar.gz`);
     // 找子目录名（zenithjoy-agent-vX.Y.Z）
     const entries = fs.readdirSync(tmp, { withFileTypes: true });
     const subdir = entries.find((e) => e.isDirectory());
@@ -144,10 +144,12 @@ agentInstallPackRouter.get('/download', async (req: Request, res: Response) => {
     const stream = fs.createReadStream(outTar);
     stream.on('end', () => {
       fs.rmSync(tmp, { recursive: true, force: true });
+      fs.rmSync(outTar, { force: true });
     });
     stream.on('error', (err) => {
       console.error('[install-pack/download] stream error:', err);
       fs.rmSync(tmp, { recursive: true, force: true });
+      fs.rmSync(outTar, { force: true });
     });
     stream.pipe(res);
   } catch (err) {
