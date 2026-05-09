@@ -7,6 +7,9 @@ const TEST_DB_URL =
   process.env.TEST_DATABASE_URL ||
   'postgres://cecelia@localhost:5432/cecelia_test';
 
+// CI 不一定起 postgres — vitest API Test 跑不带 db; API Integration Test 才带
+const HAS_DB = !!process.env.TEST_DATABASE_URL || !!process.env.DATABASE_URL || !!process.env.RUN_DB_TESTS;
+
 const SCHEMA = 'zenithjoy_2_1f_test';
 let pool: Pool;
 
@@ -15,7 +18,7 @@ async function runSqlFile(rel: string) {
   await pool.query(sql.replace(/zenithjoy\./g, `${SCHEMA}.`));
 }
 
-describe('Sprint 2.1f Fix 2 — normalize hex licenses to base32 migration', () => {
+describe.skipIf(!HAS_DB)('Sprint 2.1f Fix 2 — normalize hex licenses to base32 migration', () => {
   beforeAll(async () => {
     pool = new Pool({ connectionString: TEST_DB_URL });
     await pool.query(`DROP SCHEMA IF EXISTS ${SCHEMA} CASCADE`);
@@ -62,7 +65,7 @@ describe('Sprint 2.1f Fix 2 — normalize hex licenses to base32 migration', () 
   });
 });
 
-describe('Sprint 2.1f Fix 4 — gen_base32_chars(n) PG function', () => {
+describe.skipIf(!HAS_DB)('Sprint 2.1f Fix 4 — gen_base32_chars(n) PG function', () => {
   const SCHEMA_FN = `${SCHEMA}_fn`;
   let pool2: Pool;
 
