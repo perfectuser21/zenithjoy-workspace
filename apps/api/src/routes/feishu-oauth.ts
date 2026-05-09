@@ -9,12 +9,85 @@
  *  R2 (provisionBitable 失败)      → 502 PROVISION_FAILED + needs_retry=true
  *  R4 (binding 已存在)             → 400 ALREADY_BOUND
  */
-import { Router, Request, Response } from 'express';
+import { Router, Request, Response, NextFunction } from 'express';
 import pool from '../db/connection';
+import { tenantContext } from '../middleware/tenant-context';
 import { getAuthorizeUrl, handleCallback } from '../services/feishu-token';
 import { provisionBitable } from '../services/feishu-bitable-multitenant';
 
 const router = Router();
+
+/**
+ * tenantContextOptional — 兼容包装：如果调用方已显式传 X-Tenant-Id 或 body.tenant_id
+ * （非浏览器 caller / WS3 contract test），跳过 tenantContext 解析；否则跑 tenantContext
+ * 让 dashboard 用户走 better-auth session 自动取 tenantId。
+ *
+ * Bug 1 fix: dashboard 不传 X-Tenant-Id，需 session 解析；保留旧 caller 行为。
+ */
+function tenantContextOptional(req: Request, res: Response, next: NextFunction): void {
+  const explicitTenant = (req.header('X-Tenant-Id') || req.body?.tenant_id || '').trim();
+  if (explicitTenant) {
+    next();
+    return;
+  }
+  void tenantContext(req, res, next);
+}
+
+// GET /api/feishu/oauth/status
+// 前端 FeishuBindTenant mount 时调用，看当前 tenant 是否已绑定飞书
+router.get('/status', tenantContext, async (req: Request, res: Response) => {
+  const tenantId = req.tenantId;
+  if (!tenantId) {
+    return res.status(401).json({
+      success: false,
+      error: { code: 'NO_TENANT_CONTEXT', message: '当前用户未关联 tenant，请重新登录' },
+      timestamp: new Date().toISOString(),
+    });
+  }
+  try {
+    const r = await pool.query(
+      `SELECT
+         (b.app_token IS NOT NULL) AS bound,
+         b.app_token, b.bound_at, b.needs_retry,
+         b.table_id_lead_profile, b.table_id_target_videos, b.table_id_leads
+       FROM zenithjoy.tenants t
+       LEFT JOIN zenithjoy.tenant_feishu_bindings b ON b.tenant_id = t.id
+      WHERE t.id = $1`,
+      [tenantId]
+    );
+    if (!r.rows || r.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: { code: 'TENANT_NOT_FOUND', message: `tenant ${tenantId} 不存在` },
+        timestamp: new Date().toISOString(),
+      });
+    }
+    const row = r.rows[0];
+    return res.json({
+      success: true,
+      data: {
+        bound: !!row.bound,
+        app_token: row.app_token || null,
+        bound_at: row.bound_at || null,
+        needs_retry: !!row.needs_retry,
+        bitable_doc_url: row.app_token ? `https://feishu.cn/base/${row.app_token}` : null,
+        table_ids: {
+          lead_profile: row.table_id_lead_profile || null,
+          target_videos: row.table_id_target_videos || null,
+          leads: row.table_id_leads || null,
+        },
+      },
+      timestamp: new Date().toISOString(),
+    });
+  } catch (err) {
+    console.error('[feishu-oauth] /status query failed', err);
+    return res.status(500).json({
+      success: false,
+      error: { code: 'STATUS_QUERY_FAILED', message: '查询绑定状态失败' },
+      timestamp: new Date().toISOString(),
+    });
+  }
+});
 
 const DASHBOARD_REDIRECT =
   process.env.DASHBOARD_BASE_URL || 'http://localhost:5173';
@@ -22,8 +95,8 @@ const DASHBOARD_REDIRECT =
 // POST /api/feishu/oauth/start
 // body: { app_id, app_secret }
 // header: X-Tenant-Id
-router.post('/start', async (req: Request, res: Response) => {
-  const tenantId = (req.header('X-Tenant-Id') || req.body?.tenant_id || '').trim();
+router.post('/start', tenantContextOptional, async (req: Request, res: Response) => {
+  const tenantId = (req.tenantId || req.header('X-Tenant-Id') || req.body?.tenant_id || '').trim();
   const appId = (req.body?.app_id || '').trim();
   const appSecret = (req.body?.app_secret || '').trim();
 
