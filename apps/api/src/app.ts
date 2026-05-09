@@ -17,6 +17,7 @@ import pipelinesWorkerRouter from './routes/pipelines-worker';
 import competitorResearchRouter from './routes/competitor-research';
 import { agentRouter } from './routes/agent';
 import { heartbeatRouter, publishWsRouter } from './routes/walking-skeleton';
+import { agentInstallPackRouter } from './routes/agent-install-pack';
 import { adminLicenseRouter } from './routes/admin-license';
 import { adminUsersRouter } from './routes/admin-users';
 import { accountRouter } from './routes/account';
@@ -72,6 +73,8 @@ app.use('/api/agent/tasks', tasksRouter);
 // Walking Skeleton #1：先挂 heartbeat / folder/bind，再挂旧 agentRouter（按顺序匹配）
 app.use('/api/agent', heartbeatRouter);
 app.use('/api/agent', agentRouter);
+// Sprint 2.1e：install pack manifest + download
+app.use('/api/agent/install-pack', agentInstallPackRouter);
 // Walking Skeleton #1：publish task 队列（/api/publish/task /receipt /tasks/:id）
 app.use('/api/publish', publishWsRouter);
 app.use('/api/admin/license', adminLicenseRouter);

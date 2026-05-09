@@ -11,12 +11,10 @@
  */
 import { useQuery } from '@tanstack/react-query';
 import { useEffect } from 'react';
-import { getAgentStatus } from '../api/walking-skeleton-1.api';
+import { getAgentStatus, getInstallPackManifest } from '../api/walking-skeleton-1.api';
 import { fetchAccountMe } from '../api/account.api';
 
 // autopilot nginx 直分发的 agent tarball（hk-vps:/opt/zenithjoy/autopilot-dashboard/dist/download/）
-const AGENT_VERSION = '0.1.8';
-const RELEASE_URL = `/download/zenithjoy-agent-v${AGENT_VERSION}.tar.gz`;
 const LICENSE_PLACEHOLDER = 'ZJ-F-XXXXXX';
 
 export default function AgentDownloadPage() {
@@ -24,6 +22,11 @@ export default function AgentDownloadPage() {
     queryKey: ['ws1', 'agent-status'],
     queryFn: getAgentStatus,
     refetchInterval: 10_000,
+  });
+  const { data: manifest } = useQuery({
+    queryKey: ['install-pack-manifest'],
+    queryFn: getInstallPackManifest,
+    retry: false,
   });
   const accountQuery = useQuery({
     queryKey: ['ws1', 'account-me'],
@@ -106,27 +109,27 @@ export default function AgentDownloadPage() {
         }}
       >
         <h2 style={{ fontSize: 16, fontWeight: 600, marginBottom: 8 }}>
-          ZenithJoy Agent v{AGENT_VERSION}
+          ZenithJoy Agent v{manifest?.version || 'loading...'}
         </h2>
         <p style={{ color: '#6b7280', marginBottom: 16, lineHeight: 1.6 }}>
           ZenithJoy Agent 是部署在你本地电脑（Windows 主、macOS 备用）的小程序，
           负责扫码登录抖音、监听文件夹、执行发布任务。
         </p>
-        <a
-          href={RELEASE_URL}
-          download
-          style={{
-            display: 'inline-block',
-            padding: '10px 20px',
-            background: '#2563eb',
-            color: '#fff',
-            borderRadius: 6,
-            textDecoration: 'none',
-            fontWeight: 500,
-          }}
-        >
-          下载 Agent v{AGENT_VERSION} (.tar.gz)
-        </a>
+        {manifest && (
+          <div style={{ marginBottom: 16, padding: 12, background: '#f3f4f6', borderRadius: 6 }}>
+            <p style={{ margin: '0 0 4px', fontSize: 13, color: '#374151' }}>最新版本: <strong>{manifest.version}</strong></p>
+            <p style={{ margin: '0 0 12px', fontSize: 13, color: '#374151' }}>
+              sha256: <code style={{ fontSize: 12 }}>{manifest.sha256.slice(0, 16)}...</code>
+            </p>
+            <a
+              href="/api/agent/install-pack/download"
+              download
+              style={{ display: 'inline-block', padding: '8px 16px', background: '#2563eb', color: '#fff', borderRadius: 6, textDecoration: 'none' }}
+            >
+              ⬇ 下载完整安装包
+            </a>
+          </div>
+        )}
       </section>
 
       {/* ===== Windows 启动（主流程）===== */}
@@ -164,7 +167,7 @@ export default function AgentDownloadPage() {
 
         <ol style={{ paddingLeft: 20, lineHeight: 1.8, color: '#374151', fontSize: 14 }}>
           <li>
-            解压 <code>zenithjoy-agent-v{AGENT_VERSION}.tar.gz</code> 到 <code>%USERPROFILE%</code>
+            解压 <code>zenithjoy-agent-v{manifest?.version || '...'}.tar.gz</code> 到 <code>%USERPROFILE%</code>
             （Windows 10/11 自带 <code>tar</code> 命令）：
             <pre
               style={{
@@ -177,7 +180,7 @@ export default function AgentDownloadPage() {
               }}
             >
 {`cd "%USERPROFILE%"
-tar -xzf "Downloads\\zenithjoy-agent-v${AGENT_VERSION}.tar.gz"
+tar -xzf "Downloads\\zenithjoy-agent-v${manifest?.version || '...'}.tar.gz"
 cd zenithjoy-agent`}
             </pre>
           </li>
@@ -220,7 +223,7 @@ scripts\\customer-start.bat`}
         </h2>
         <ol style={{ paddingLeft: 20, lineHeight: 1.8, color: '#6b7280', fontSize: 13 }}>
           <li>
-            解压 <code>zenithjoy-agent-v{AGENT_VERSION}.tar.gz</code> 到任意目录，
+            解压 <code>zenithjoy-agent-v{manifest?.version || '...'}.tar.gz</code> 到任意目录，
             <code>cd zenithjoy-agent && npm install</code>。
           </li>
           <li>

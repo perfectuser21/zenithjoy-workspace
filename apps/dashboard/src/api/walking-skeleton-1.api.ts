@@ -170,3 +170,17 @@ export async function getPlatformSessions(
     `/agent/platforms?agent_id=${encodeURIComponent(agentId)}`
   );
 }
+
+// ============ Sprint 2.1e: Install Pack ============
+
+export interface InstallPackManifest {
+  version: string;
+  sha256: string;
+  download_url: string;
+  size: number;
+  build_time: string;
+}
+
+export async function getInstallPackManifest(): Promise<InstallPackManifest> {
+  return request<InstallPackManifest>('/agent/install-pack/manifest');
+}
