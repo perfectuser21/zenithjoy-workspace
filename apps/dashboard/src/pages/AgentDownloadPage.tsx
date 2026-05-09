@@ -182,21 +182,6 @@ cd zenithjoy-agent`}
             </pre>
           </li>
           <li>
-            装依赖：
-            <pre
-              style={{
-                background: '#f3f4f6',
-                padding: 10,
-                borderRadius: 4,
-                marginTop: 6,
-                fontSize: 13,
-                overflowX: 'auto',
-              }}
-            >
-{`npm install`}
-            </pre>
-          </li>
-          <li>
             一键启动（推荐，cmd）：
             <pre
               style={{
