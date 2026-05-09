@@ -18,7 +18,13 @@ import * as accountApi from '../../api/account.api';
 
 vi.mock('../../api/walking-skeleton-1.api', () => ({
   getAgentStatus: vi.fn(),
-  getInstallPackManifest: vi.fn().mockRejectedValue(new Error('not built in test')),
+  getInstallPackManifest: vi.fn().mockResolvedValue({
+    version: '1.0.0',
+    sha256: 'a'.repeat(64),
+    download_url: '/download/zenithjoy-agent-v1.0.0.tar.gz',
+    size: 22637557,
+    build_time: '2026-05-09T03:01:22Z',
+  }),
 }));
 vi.mock('../../api/account.api', () => ({
   fetchAccountMe: vi.fn(),
