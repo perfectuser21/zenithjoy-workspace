@@ -35,7 +35,10 @@ process.stdin.on('end', () => {
     || /严重问题\s*[（(]🔴[)）][\s\S]{0,200}无严重问题/.test(input)
     || /严重问题\s*[（(]🔴[)）][\s\S]{0,100}\*\*无\*\*/.test(input)
     || /严重问题\s*[（(]🔴[)）][\s\S]{0,100}-\s*\*\*无\*\*/.test(input)
-    || /🔴\s*\*\*严重问题\*\*[\s\S]{0,200}未发现/.test(input);
+    || /🔴\s*\*\*严重问题\*\*[\s\S]{0,200}未发现/.test(input)
+    // DeepSeek V3 实际输出格式：「🔴 严重问题：\n未发现」（无括号、无 bold）
+    || /🔴\s*严重问题\s*[:：][\s\S]{0,100}未发现/.test(input)
+    || /🔴\s*严重问题\s*[:：][\s\S]{0,100}无$/m.test(input);
 
   const textWithoutHeadings = input
     .replace(/#+\s*[^🔴\n]*[（(]🔴[)）][^\n]*/g, '')
