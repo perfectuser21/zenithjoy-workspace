@@ -18,6 +18,7 @@ import * as accountApi from '../../api/account.api';
 
 vi.mock('../../api/walking-skeleton-1.api', () => ({
   getAgentStatus: vi.fn(),
+  getInstallPackManifest: vi.fn().mockRejectedValue(new Error('not built in test')),
 }));
 vi.mock('../../api/account.api', () => ({
   fetchAccountMe: vi.fn(),
