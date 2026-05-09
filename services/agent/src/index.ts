@@ -13,6 +13,7 @@ import crypto from 'node:crypto';
 import path from 'node:path';
 import fs from 'node:fs';
 import os from 'node:os';
+import { loadOrInitConfig as loadOrInitConfigFromLoader, type AgentConfig as LoaderAgentConfig } from './config-loader';
 import { handleWechatPublish } from './handlers/wechat-publish';
 import { handleDouyinPublish, handleDouyinPublishTask, type DouyinPublishType } from './handlers/douyin-publish';
 import { handleKuaishouPublish } from './handlers/kuaishou-publish';
@@ -88,11 +89,13 @@ function parseLicenseFromArgs(): string | null {
 }
 
 function loadOrInitConfig(): AgentConfig {
-  // 优先用命令行参数（首次启动场景）
+  // Sprint 2.1f Fix 6: 优先命令行参数（--license=ZJ-XXXX，首次启动），
+  // 其次 env var ZENITHJOY_LICENSE（start.bat 注入），
+  // 再其次 %APPDATA%/zenithjoy-agent/config.json（旧 v1.0.0 兼容）
   const cliLicense = parseLicenseFromArgs();
-  const existing = readConfig();
-
   if (cliLicense) {
+    // 命令行参数路径 — 写入 config.json 持久化，让后续启动不需再传 --license
+    const existing = readConfig();
     const cfg: AgentConfig = {
       licenseKey: cliLicense,
       agentId:
@@ -109,14 +112,19 @@ function loadOrInitConfig(): AgentConfig {
     return cfg;
   }
 
-  if (existing) {
-    return existing;
+  // 没有命令行参数 → 走 envOrConfig loader (Fix 6)
+  try {
+    const cfg = loadOrInitConfigFromLoader() as AgentConfig;
+    // 若 env 路径拿到的是轻量 config（无 agentId），补全字段
+    if (!cfg.agentId) {
+      cfg.agentId = `agent-${safeHostnameSlug()}-${Date.now().toString(36)}`;
+    }
+    return cfg;
+  } catch (err) {
+    console.error('[agent] 未找到 license。', (err as Error).message);
+    console.error(`[agent] 配置文件位置：${CONFIG_FILE}`);
+    process.exit(2);
   }
-
-  // 没 license，无法启动
-  console.error('[agent] 未找到 license。请用 --license=ZJ-XXXX 启动一次以注入。');
-  console.error(`[agent] 配置文件位置：${CONFIG_FILE}`);
-  process.exit(2);
 }
 
 // ---------- WebSocket 业务核心 ----------
