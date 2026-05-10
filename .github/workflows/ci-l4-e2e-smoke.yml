@@ -335,6 +335,20 @@ jobs:
           chmod +x .github/workflows/scripts/smoke/golden-path-2-smoke.sh
           bash .github/workflows/scripts/smoke/golden-path-2-smoke.sh
 
+      # ─── Path 2 Sprint B-1 抖音小号绑定 + 评论抓取 smoke ─────────────────────
+      - name: Smoke — Path 2 Sprint B-1 Golden Path (10 Step E2E)
+        env:
+          API_BASE: http://localhost:5200
+          DB: postgresql://cecelia:cecelia@localhost:5432/cecelia
+          FEISHU_API_BASE: http://localhost:3099
+          SMOKE_TOKEN: smoke-secret-2026
+        run: |
+          # Sprint B-1 用 fake-feishu seen-records helper 验证 5 records 写入
+          # 先 reset 状态防与 Sprint A 写入串扰
+          curl -fsS -X POST "$FEISHU_API_BASE/__test/reset" || true
+          chmod +x .github/workflows/scripts/smoke/golden-path-2-b1-smoke.sh
+          bash .github/workflows/scripts/smoke/golden-path-2-b1-smoke.sh
+
       - name: Stop fake-feishu-server
         if: always()
         run: |

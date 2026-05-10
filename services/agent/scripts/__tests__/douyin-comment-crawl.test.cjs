@@ -5,12 +5,16 @@
  * 脚本是 .cjs（Agent 客户机 Node 直接跑），用静态结构验证。
  * Path: services/agent/scripts/__tests__/douyin-comment-crawl.test.cjs
  *   __dirname → services/agent/scripts/__tests__ → ../douyin-comment-crawl.cjs
+ *
+ * 注：vitest 不支持 require('vitest')；用 globalThis.describe / it / expect
+ * （services/agent/vitest.config.ts 设了 globals: true）
  */
-const { describe, it, expect } = require('vitest');
 const fs = require('fs');
 const path = require('path');
 
 const SCRIPT_PATH = path.resolve(__dirname, '../douyin-comment-crawl.cjs');
+
+const { describe, it, expect } = globalThis;
 
 describe('Workstream 2b — douyin-comment-crawl.cjs [BEHAVIOR]', () => {
   it('脚本存在且用 launchPersistentContext + msedge channel', () => {

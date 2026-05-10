@@ -26,6 +26,8 @@ import { startTray, updateTrayStatus, destroyTray } from './tray';
 // Walking Skeleton #1 — HTTP heartbeat 链路（与上面 WS 链路并存）
 import { HeartbeatLoop, type HeartbeatTask } from './handlers/heartbeat-loop';
 import { handleQrBindDouyin } from './handlers/qr-bind-douyin';
+// Path 2 Sprint B-1 — burner 小号绑定 handler（独立文件，与 Path 1 主号物理隔离）
+import { handleQrBindDouyinBurner } from './handlers/qr-bind-douyin-burner';
 import { createFolderWatchManager } from './handlers/folder-watch';
 import { startHealthServer, setWsState } from './handlers/health-server';
 
@@ -479,6 +481,15 @@ function startWs1HeartbeatLoop(cfg: AgentConfig): void {
           task.payload as { account_label?: string },
         );
         console.log('[ws1:qr_bind_douyin] result:', res);
+      } else if (
+        task.platform === 'qr_bind_douyin_burner' ||
+        task.platform === 'qr_bind/douyin_burner'
+      ) {
+        // Path 2 Sprint B-1 — 抖音小号扫码绑定（与主号 qr_bind_douyin 物理隔离）
+        const res = await handleQrBindDouyinBurner(
+          task.payload as { account_label: string },
+        );
+        console.log('[p2-b1:qr_bind_douyin_burner] result:', res);
       } else if (task.platform === 'folder_bind') {
         const localPath = (task.payload as { local_path?: string }).local_path;
         if (localPath) {

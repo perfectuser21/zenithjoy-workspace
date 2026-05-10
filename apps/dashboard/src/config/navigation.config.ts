@@ -89,6 +89,8 @@ export const autopilotPageComponents: Record<string, () => Promise<{ default: Co
   'DouyinBindPage': () => import('../pages/DouyinBindPage'),
   // Path 2 Sprint A — 飞书集成
   'FeishuBindTenant': () => import('../pages/FeishuBindTenant'),
+  // Path 2 Sprint B-1 — 抖音小号绑定 + 评论抓取
+  'DouyinBurnerBindPage': () => import('../pages/DouyinBurnerBindPage'),
   'FolderBindPage': () => import('../pages/FolderBindPage'),
   'PublishPage': () => import('../pages/PublishPage'),
   // FeatureDashboard and CommandCenter moved to Core features/business
@@ -227,6 +229,14 @@ export const autopilotNavGroups: NavGroup[] = [
         label: '绑飞书',
         featureKey: 'feishuBind',
         component: 'FeishuBindTenant',
+      },
+      // ============ Path 2 Sprint B-1 — 抖音小号绑定 + 评论抓取 ============
+      {
+        path: '/dashboard/douyin-burner-bind',
+        icon: KeyRound,
+        label: '绑抖音小号',
+        featureKey: 'douyinBurnerBind',
+        component: 'DouyinBurnerBindPage',
       },
     ]
   }
