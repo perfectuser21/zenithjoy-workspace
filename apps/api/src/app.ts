@@ -31,6 +31,8 @@ import smokeFeishuSeedRouter from './routes/_smoke-feishu-seed';
 // Path 2 Sprint B-1 — 抖音小号绑定 + 评论抓取
 import agentBurnerRouter from './routes/agent-burner';
 import smokeFakeAgentBurnerRouter from './routes/_smoke-fake-agent-burner';
+// Path 2 Sprint B-1 architecture hotfix — DEV-only mock-agent helper
+import smokeMockAgentRouter from './routes/_smoke-mock-agent';
 import { errorHandler, notFoundHandler } from './middleware/error';
 
 const app = express();
@@ -98,6 +100,8 @@ app.use('/api/_smoke', smokeFeishuSeedRouter);
 // Path 2 Sprint B-1 — 抖音小号绑定 6 路由 + smoke fake-agent helper
 app.use('/api/agent/burner', agentBurnerRouter);
 app.use('/api/_smoke', smokeFakeAgentBurnerRouter);
+// Path 2 Sprint B-1 architecture hotfix — DEV-only mock-agent helper（lead 自验用）
+app.use('/api/_smoke', smokeMockAgentRouter);
 
 // Error handling
 app.use(notFoundHandler);
