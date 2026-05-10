@@ -1,0 +1,147 @@
+{
+  "initiative_id": "pending",
+  "journey_type": "user_facing",
+  "journey_type_reason": "涉及 apps/dashboard/ 客户操作（绑抖音小号 + 触发评论抓取 + 看进度）+ Agent 客户机扫码 + 客户在飞书 Bitable 看 Lead 表，是终端客户面 walking skeleton 路径",
+  "tasks": [
+    {
+      "task_id": "ws1",
+      "title": "DB migration: agent_platform_sessions add role 字段",
+      "scope": "新增 apps/api/db/migrations/<timestamp>_agent_platform_sessions_add_role.sql：ALTER TABLE ADD COLUMN role TEXT NOT NULL DEFAULT 'main' + CHECK 约束 role IN ('main','burner') + 幂等保护",
+      "dod": [
+        "[BEHAVIOR] migration 跑成功后 zenithjoy.agent_platform_sessions 含 role 列 + 默认 'main' + NOT NULL",
+        "[BEHAVIOR] CHECK 约束拒绝 role NOT IN ('main','burner')",
+        "[BEHAVIOR] 已有 main 行 migration 后 role='main'（幂等）",
+        "[ARTIFACT] migration SQL 含 ALTER TABLE + ADD COLUMN role + DEFAULT 'main' + CHECK 约束"
+      ],
+      "files": [
+        "apps/api/db/migrations/20260510_xxxxxx_agent_platform_sessions_add_role.sql"
+      ],
+      "depends_on": [],
+      "complexity": "S",
+      "estimated_minutes": 25
+    },
+    {
+      "task_id": "ws2",
+      "title": "Agent burner handler + 抓评论脚本（独立文件，不动 Path 1 主号）",
+      "scope": "新建 services/agent/src/handlers/qr-bind-douyin-burner.ts（launchPersistentContext + burner sessionPath /burner/<account_label>.json + waitForURL 10min）+ services/agent/scripts/douyin-comment-crawl.cjs（评论 5 条 + R4 BURNER_SESSION_EXPIRED 检测）+ 修改 services/agent/src/index.ts 追加 dispatcher 注册（不改既有）。Path 1 qr-bind-douyin.ts 字节级未变",
+      "dod": [
+        "[BEHAVIOR] burner handler 不引用 Path 1 主号 handler",
+        "[BEHAVIOR] burner sessionPath 含 /burner/ 子目录",
+        "[BEHAVIOR] burner handler waitForURL timeout >= 600000",
+        "[BEHAVIOR] burner handler 上报 cookie_local_path + qr_login + account_nickname",
+        "[BEHAVIOR] crawl 脚本 launchPersistentContext + msedge channel + comment-item selector",
+        "[BEHAVIOR] crawl 脚本评论 0 早 return + url 跳 login 上报 BURNER_SESSION_EXPIRED",
+        "[ARTIFACT] git diff origin/main 不含 qr-bind-douyin.ts"
+      ],
+      "files": [
+        "services/agent/src/handlers/qr-bind-douyin-burner.ts",
+        "services/agent/scripts/douyin-comment-crawl.cjs",
+        "services/agent/src/index.ts"
+      ],
+      "depends_on": ["ws1"],
+      "complexity": "L",
+      "estimated_minutes": 60
+    },
+    {
+      "task_id": "ws3",
+      "title": "中台 burner 6 路由 + smoke fake-agent helper",
+      "scope": "新建 apps/api/src/routes/agent-burner.ts（6 endpoints：qr-bind / qr-bind-result / sessions / crawl-comments / crawl-comments-result / crawl-tasks/:id + 6 错码：MISSING_ACCOUNT_LABEL / BURNER_ALREADY_BOUND / MISSING_VIDEO_URL / NO_BURNER_SESSION / FEISHU_NOT_BOUND / RESERVED_ACCOUNT_LABEL）+ apps/api/src/routes/_smoke-fake-agent-burner.ts（NODE_ENV+SMOKE_TOKEN 双门禁）+ apps/api/src/app.ts 挂载（追加，不改既有）",
+      "dod": [
+        "[BEHAVIOR] 6 路由全 happy path + 错码全覆盖",
+        "[BEHAVIOR] qr-bind-result 写 agent_platform_sessions role='burner' status='active'",
+        "[BEHAVIOR] crawl-comments-result 触发 lead-writer + 更新 task 状态",
+        "[BEHAVIOR] _smoke-fake-agent-burner NODE_ENV=production → 404",
+        "[BEHAVIOR] _smoke-fake-agent-burner 缺 SMOKE_TOKEN → 403",
+        "[ARTIFACT] git diff origin/main 不含 feishu-bitable-multitenant.ts / feishu-token.ts / feishu-oauth.ts"
+      ],
+      "files": [
+        "apps/api/src/routes/agent-burner.ts",
+        "apps/api/src/routes/_smoke-fake-agent-burner.ts",
+        "apps/api/src/app.ts"
+      ],
+      "depends_on": ["ws1"],
+      "complexity": "L",
+      "estimated_minutes": 60
+    },
+    {
+      "task_id": "ws4",
+      "title": "lead-writer service（复用 Sprint A multitenant Bitable）",
+      "scope": "新建 apps/api/src/services/lead-writer.ts 导出 writeLeadsFromComments(tenantId, table_id_leads, video_url, comments[]) → 5 次调 writeRecord（import 自 feishu-bitable-multitenant）+ 字段映射 5 列 + 重试 2 次 + 评论 0 早 return + lead_write_status 标记。**禁止** 直接 axios 飞书域名",
+      "dod": [
+        "[BEHAVIOR] 5 评论 → 5 次 writeRecord",
+        "[BEHAVIOR] 字段映射含 评论者抖音 ID/评论内容/来源视频 URL/抓取时间/状态",
+        "[BEHAVIOR] 状态默认 '已抓取'",
+        "[BEHAVIOR] 评论 0 → 早 return + 不调 writeRecord + 返 success",
+        "[BEHAVIOR] writeRecord 第一次抛错第二次成功 → 返 success",
+        "[BEHAVIOR] 重试 2 次仍失败 → lead_write_status='failed'",
+        "[ARTIFACT] import writeRecord from feishu-bitable-multitenant",
+        "[ARTIFACT] 不直接 axios open.feishu.cn / open-apis"
+      ],
+      "files": [
+        "apps/api/src/services/lead-writer.ts"
+      ],
+      "depends_on": [],
+      "complexity": "M",
+      "estimated_minutes": 45
+    },
+    {
+      "task_id": "ws5",
+      "title": "Dashboard DouyinBurnerBindPage + 路由",
+      "scope": "新建 apps/dashboard/src/pages/DouyinBurnerBindPage.tsx（飞书未绑 disabled / account_label 校验 != 'default' / sessions 列表 / video 下拉 fetchLeadConfig.target_videos / 抓取按钮 / 完成展示 Bitable URL）+ apps/dashboard/src/App.tsx 加 /dashboard/douyin-burner-bind route（追加）",
+      "dod": [
+        "[BEHAVIOR] 飞书未绑 → 表单 disabled + 提示「请先完成飞书绑定」",
+        "[BEHAVIOR] account_label='default' → 校验报错",
+        "[BEHAVIOR] sessions 列表渲染 burner 行（label/昵称/状态/时间）",
+        "[BEHAVIOR] 抓取完成 status=done → 显示「抓取完成 N 条」+ Bitable URL",
+        "[BEHAVIOR] comment_count=0 → 显示「该视频暂无评论」",
+        "[ARTIFACT] git diff origin/main 不含 FeishuBindTenant.tsx / DouyinBindPage.tsx"
+      ],
+      "files": [
+        "apps/dashboard/src/pages/DouyinBurnerBindPage.tsx",
+        "apps/dashboard/src/App.tsx"
+      ],
+      "depends_on": ["ws3"],
+      "complexity": "L",
+      "estimated_minutes": 60
+    },
+    {
+      "task_id": "ws6",
+      "title": "smoke 脚本 + CI workflow + fake-feishu-server seen-records 增量 + test-registry",
+      "scope": "新建 .github/workflows/scripts/smoke/golden-path-2-b1-smoke.sh（落地合同 E2E 段 10 步 + 4 ENV 自检 + 全 SELECT count 含时间窗口 + curl -fsS）+ .github/workflows/path-2-b1-smoke.yml（启停 fake-feishu-server + export FEISHU_API_BASE/SMOKE_TOKEN/NODE_ENV=test）+ apps/api/test-utils/fake-feishu-server.ts 增量加内存 store records + /__test/seen-records 端点 + 注册 7 个合同测试入 test-registry.yaml",
+      "dod": [
+        "[BEHAVIOR] smoke 脚本含 4 ENV 自检 + 10 Step 标识 + 全 SELECT count 含 interval",
+        "[BEHAVIOR] fake-feishu-server /__test/seen-records 收到 records 后 GET 返 count + records",
+        "[ARTIFACT] CI workflow 启停 fake-feishu-server + ENV 注入",
+        "[ARTIFACT] test-registry.yaml 含 7 个 p2-sprint-b1-contract-* 条目",
+        "[ARTIFACT] 6 禁止文件 git diff 字节级未变（Path 1 + Sprint A）"
+      ],
+      "files": [
+        ".github/workflows/scripts/smoke/golden-path-2-b1-smoke.sh",
+        ".github/workflows/path-2-b1-smoke.yml",
+        "apps/api/test-utils/fake-feishu-server.ts",
+        "test-registry.yaml"
+      ],
+      "depends_on": ["ws3", "ws4", "ws5"],
+      "complexity": "M",
+      "estimated_minutes": 50
+    },
+    {
+      "task_id": "ws7",
+      "title": "Lead 客户机自验脚本 + 真证据归档",
+      "scope": "新建 scripts/lead-acceptance/path2-sprint-b1-self-test.cjs（mac → scp 到 xian-rog → launchPersistentContext channel msedge headless true + 6 步 self-test 流程 + waitForURL 10min + 二维码截图 scp 回 mac + 真飞书 GET 验 5 行）+ .agent-knowledge/path-2/lead-acceptance-sprint-b1.md（PASS YAML + 1 次扫码 + xian-rog 真截图 + 飞书 5 行截图 + size > 1KB）",
+      "dod": [
+        "[BEHAVIOR] self-test 含 channel msedge + headless true + waitForURL 10min",
+        "[BEHAVIOR] self-test 含真飞书 GET 5 行验证 + commenter_id/comment 非空断言",
+        "[BEHAVIOR] self-test 截图 burner-qr + console 提示 user 现在扫",
+        "[ARTIFACT] lead-acceptance 文档 size > 1KB + lead_acceptance_status: PASS + user_intervention_count: 1"
+      ],
+      "files": [
+        "scripts/lead-acceptance/path2-sprint-b1-self-test.cjs",
+        ".agent-knowledge/path-2/lead-acceptance-sprint-b1.md"
+      ],
+      "depends_on": ["ws6"],
+      "complexity": "M",
+      "estimated_minutes": 55
+    }
+  ]
+}
