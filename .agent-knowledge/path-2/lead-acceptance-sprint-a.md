@@ -49,7 +49,7 @@ PR #278 实现 backend `POST /bind` + frontend 去 OAuth 跳转。Lead 自验暴
 
 ### Step 1: API signup → dashboard 自动登录
 
-- POST `https://autopilot.zenjoymedia.media/api/auth/sign-up/email` → `200 user.id=dlY0QwjW5mqvjtASoPxKdof6JHmmpveN`
+- POST `https://autopilot.zenjoymedia.media/api/auth/sign-up/email` → `200 user.id=dlY0Q…userid…`
 - 浏览器后续 GET `/api/auth/get-session` → 200
 
 通过 ✅
@@ -116,14 +116,14 @@ PR #278 实现 backend `POST /bind` + frontend 去 OAuth 跳转。Lead 自验暴
   "success": true,
   "data": {
     "bound": true,
-    "app_token": "MBIzbQNEWahaxLsYzhRcH53infh",
+    "app_token": "MBIzb…SHA-truncated…",
     "bound_at": "2026-05-10T00:52:19.692Z",
     "needs_retry": false,
-    "bitable_doc_url": "https://feishu.cn/base/MBIzbQNEWahaxLsYzhRcH53infh",
+    "bitable_doc_url": "https://feishu.cn/base/MBIzb…SHA-truncated…",
     "table_ids": {
-      "lead_profile": "tblXlfjD4nQy2kF6",
-      "target_videos": "tbl1APW98jcbCY5N",
-      "leads": "tblrTvyXTeD0nS6Y"
+      "lead_profile": "tblXlf…tblA…",
+      "target_videos": "tbl1AP…tblB…",
+      "leads": "tblrTv…tblC…"
     }
   }
 }
@@ -147,17 +147,17 @@ PR #278 实现 backend `POST /bind` + frontend 去 OAuth 跳转。Lead 自验暴
   "user_intervention_count": 0,
   "elapsed_seconds": "16.0",
   "user": {
-    "id": "dlY0QwjW5mqvjtASoPxKdof6JHmmpveN",
+    "id": "dlY0Q…userid…",
     "email": "path2-arch+1778374331284@test.zenithjoy.local"
   },
   "binding": {
-    "app_token": "MBIzbQNEWahaxLsYzhRcH53infh",
+    "app_token": "MBIzb…SHA-truncated…",
     "table_ids": {
-      "lead_profile": "tblXlfjD4nQy2kF6",
-      "target_videos": "tbl1APW98jcbCY5N",
-      "leads": "tblrTvyXTeD0nS6Y"
+      "lead_profile": "tblXlf…tblA…",
+      "target_videos": "tbl1AP…tblB…",
+      "leads": "tblrTv…tblC…"
     },
-    "bitable_doc_url": "https://feishu.cn/base/MBIzbQNEWahaxLsYzhRcH53infh"
+    "bitable_doc_url": "https://feishu.cn/base/MBIzb…SHA-truncated…"
   },
   "api_calls": [
     { "status": 200, "method": "GET",  "url": "/api/auth/get-session" },
@@ -193,12 +193,12 @@ PR #278 实现 backend `POST /bind` + frontend 去 OAuth 跳转。Lead 自验暴
 
 ## 真飞书 Bitable 验证（绑定后真 doc）
 
-- App token: `MBIzbQNEWahaxLsYzhRcH53infh`
-- URL: https://feishu.cn/base/MBIzbQNEWahaxLsYzhRcH53infh
+- App token: `MBIzb…SHA-truncated…`
+- URL: https://feishu.cn/base/MBIzb…SHA-truncated…
 - 3 张表：
-  - 获客画像 = `tblXlfjD4nQy2kF6`
-  - 对标视频 = `tbl1APW98jcbCY5N`
-  - Lead 名单 = `tblrTvyXTeD0nS6Y`
+  - 获客画像 = `tblXlf…tblA…`
+  - 对标视频 = `tbl1AP…tblB…`
+  - Lead 名单 = `tblrTv…tblC…`
 
 ---
 

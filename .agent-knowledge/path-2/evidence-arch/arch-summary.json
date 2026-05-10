@@ -3,17 +3,17 @@
   "user_intervention_count": 0,
   "elapsed_seconds": "16.0",
   "user": {
-    "id": "dlY0QwjW5mqvjtASoPxKdof6JHmmpveN",
+    "id": "dlY0Q…userid…",
     "email": "path2-arch+1778374331284@test.zenithjoy.local"
   },
   "binding": {
-    "app_token": "MBIzbQNEWahaxLsYzhRcH53infh",
+    "app_token": "MBIzb…SHA-truncated…",
     "table_ids": {
-      "lead_profile": "tblXlfjD4nQy2kF6",
-      "target_videos": "tbl1APW98jcbCY5N",
-      "leads": "tblrTvyXTeD0nS6Y"
+      "lead_profile": "tblXlf…tblA…",
+      "target_videos": "tbl1AP…tblB…",
+      "leads": "tblrTv…tblC…"
     },
-    "bitable_doc_url": "https://feishu.cn/base/MBIzbQNEWahaxLsYzhRcH53infh"
+    "bitable_doc_url": "https://feishu.cn/base/MBIzb…SHA-truncated…"
   },
   "api_calls": [
     {
