@@ -30,6 +30,10 @@ interface RecordItem {
 // 内存存储：{ [app_token]: { [table_id]: RecordItem[] } }
 const store: Record<string, Record<string, RecordItem[]>> = {};
 
+// Path 2 Sprint B-1 WS6：seen-records helper — 按 table_id 索引所有写入记录
+// 让 smoke 在 step 9 验证 fake-server 收到 ≥5 次 records POST
+const seenRecords: Record<string, RecordItem[]> = {};
+
 function randomId(prefix: string, len = 16): string {
   const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
   let s = prefix;
@@ -115,7 +119,11 @@ const server = http.createServer(async (req, res) => {
         if (!store[appToken]) store[appToken] = {};
         if (!store[appToken][tableId]) store[appToken][tableId] = [];
         const recordId = randomId('rec', 8);
-        store[appToken][tableId].push({ record_id: recordId, fields });
+        const recordItem = { record_id: recordId, fields };
+        store[appToken][tableId].push(recordItem);
+        // Path 2 Sprint B-1 WS6: 同步追加到 seenRecords by table_id（跨 app_token 索引）
+        if (!seenRecords[tableId]) seenRecords[tableId] = [];
+        seenRecords[tableId].push(recordItem);
         return send(res, 200, {
           code: 0,
           msg: 'success',
@@ -145,6 +153,23 @@ const server = http.createServer(async (req, res) => {
     // ── health ──
     if (req.method === 'GET' && path === '/healthz') {
       return send(res, 200, { ok: true, port: PORT });
+    }
+
+    // ── Path 2 Sprint B-1 WS6: __test/seen-records helper ──
+    // GET /__test/seen-records?table_id=tbl_xxx — 返 { count, records[] }
+    if (req.method === 'GET' && path === '/__test/seen-records') {
+      const tableId = u.searchParams.get('table_id') || '';
+      const items = seenRecords[tableId] || [];
+      return send(res, 200, {
+        count: items.length,
+        records: items.map((r) => r.fields),
+      });
+    }
+
+    // ── Path 2 Sprint B-1 WS6: __test/reset helper（CI 同进程多次跑时清状态）──
+    if (req.method === 'POST' && path === '/__test/reset') {
+      for (const k of Object.keys(seenRecords)) delete seenRecords[k];
+      return send(res, 200, { ok: true, reset: true });
     }
 
     return send(res, 404, { code: 404, msg: `unknown path ${path}` });

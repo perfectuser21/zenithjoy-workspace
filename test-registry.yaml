@@ -1192,4 +1192,176 @@ tests:
     ci: L4-INT
     status: pending-ci
     product: 中台认证
+
+  # ── Path 2 Sprint B-1 抖音小号绑定 + 评论抓取 ─────────────────────────────
+  # 9 contract SSOT entries (pending-ci, 不实跑) + 9 CI 实跑落点 (active)
+
+  - id: p2-sprint-b1-contract-ws1-migration-add-role
+    path: sprints/path-2-sprint-b1-douyin-burner-crawl/tests/ws1/migration-add-role.test.ts
+    type: integration
+    ci: L4-INT
+    status: pending-ci
+    product: 私域运营
+    note: "Path 2 Sprint B-1 合同 SSOT — TDD RED 来源（不实跑，CI 落点在 apps/api/tests/integration/p2-sprint-b1-ws1/）"
+
+  - id: p2-sprint-b1-contract-ws2a-qr-bind-burner
+    path: sprints/path-2-sprint-b1-douyin-burner-crawl/tests/ws2/qr-bind-douyin-burner.test.ts
+    type: unit
+    ci: L3
+    status: pending-ci
+    product: 私域运营
+    note: "Path 2 Sprint B-1 合同 SSOT — TDD RED 来源（不实跑，CI 落点在 services/agent/src/handlers/__tests__/）"
+
+  - id: p2-sprint-b1-contract-ws2b-douyin-comment-crawl
+    path: sprints/path-2-sprint-b1-douyin-burner-crawl/tests/ws2/douyin-comment-crawl.test.ts
+    type: unit
+    ci: L3
+    status: pending-ci
+    product: 私域运营
+    note: "Path 2 Sprint B-1 合同 SSOT — TDD RED 来源（不实跑，CI 落点在 services/agent/scripts/__tests__/.cjs）"
+
+  - id: p2-sprint-b1-contract-ws3a-agent-burner-routes
+    path: sprints/path-2-sprint-b1-douyin-burner-crawl/tests/ws3/agent-burner-routes.test.ts
+    type: integration
+    ci: L4-INT
+    status: pending-ci
+    product: 私域运营
+    note: "Path 2 Sprint B-1 合同 SSOT — TDD RED 来源（不实跑，CI 落点在 apps/api/tests/integration/p2-sprint-b1-ws3/）"
+
+  - id: p2-sprint-b1-contract-ws3b-smoke-fake-agent-burner
+    path: sprints/path-2-sprint-b1-douyin-burner-crawl/tests/ws3/smoke-fake-agent-burner.test.ts
+    type: integration
+    ci: L4-INT
+    status: pending-ci
+    product: 私域运营
+    note: "Path 2 Sprint B-1 合同 SSOT — TDD RED 来源（不实跑，CI 落点在 apps/api/tests/integration/p2-sprint-b1-ws3/）"
+
+  - id: p2-sprint-b1-contract-ws4-lead-writer
+    path: sprints/path-2-sprint-b1-douyin-burner-crawl/tests/ws4/lead-writer.test.ts
+    type: unit
+    ci: L3
+    status: pending-ci
+    product: 私域运营
+    note: "Path 2 Sprint B-1 合同 SSOT — TDD RED 来源（不实跑，CI 落点在 apps/api/tests/p2-sprint-b1-ws4/）"
+
+  - id: p2-sprint-b1-contract-ws5-douyin-burner-bind-page
+    path: sprints/path-2-sprint-b1-douyin-burner-crawl/tests/ws5/douyin-burner-bind-page.test.tsx
+    type: unit
+    ci: L3
+    status: pending-ci
+    product: 私域运营
+    note: "Path 2 Sprint B-1 合同 SSOT — TDD RED 来源（不实跑，CI 落点在 apps/dashboard/tests/p2-sprint-b1-ws5/）"
+
+  - id: p2-sprint-b1-contract-ws6-smoke-script-structure
+    path: sprints/path-2-sprint-b1-douyin-burner-crawl/tests/ws6/smoke-script-structure.test.ts
+    type: unit
+    ci: L3
+    status: pending-ci
+    product: 私域运营
+    note: "Path 2 Sprint B-1 合同 SSOT — TDD RED 来源（不实跑，CI 落点在 apps/api/tests/p2-sprint-b1-ws6/）"
+
+  - id: p2-sprint-b1-contract-ws7-lead-self-test-script-structure
+    path: sprints/path-2-sprint-b1-douyin-burner-crawl/tests/ws7/lead-self-test-script-structure.test.ts
+    type: unit
+    ci: L3
+    status: pending-ci
+    product: 私域运营
+    note: "Path 2 Sprint B-1 合同 SSOT — TDD RED 来源（不实跑，CI 落点在 apps/api/tests/p2-sprint-b1-ws7/）"
+
+  - id: p2-sprint-b1-ws1-migration-add-role
+    path: apps/api/tests/integration/p2-sprint-b1-ws1/migration-add-role.test.ts
+    type: integration
+    ci: L4-INT
+    status: active
+    product: 私域运营
+    note: "Path 2 Sprint B-1 WS1 落点 — agent_platform_sessions add role 字段验证"
+
+  - id: p2-sprint-b1-ws2a-qr-bind-burner
+    path: services/agent/src/handlers/__tests__/qr-bind-douyin-burner.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 私域运营
+    note: "Path 2 Sprint B-1 WS2a 落点 — burner handler 物理隔离 Path 1"
+
+  - id: p2-sprint-b1-ws2b-douyin-comment-crawl
+    path: services/agent/scripts/__tests__/douyin-comment-crawl.test.cjs
+    type: unit
+    ci: L3
+    status: active
+    product: 私域运营
+    note: "Path 2 Sprint B-1 WS2b 落点 — crawl 脚本静态结构（msedge / comment-item / 0 评论 / BURNER_SESSION_EXPIRED）"
+
+  - id: p2-sprint-b1-ws3a-agent-burner-routes
+    path: apps/api/tests/integration/p2-sprint-b1-ws3/agent-burner-routes.test.ts
+    type: integration
+    ci: L4-INT
+    status: active
+    product: 私域运营
+    note: "Path 2 Sprint B-1 WS3a 落点 — 6 路由 + 6 错码"
+
+  - id: p2-sprint-b1-ws3b-smoke-fake-agent-burner
+    path: apps/api/tests/integration/p2-sprint-b1-ws3/smoke-fake-agent-burner.test.ts
+    type: integration
+    ci: L4-INT
+    status: active
+    product: 私域运营
+    note: "Path 2 Sprint B-1 WS3b 落点 — fake-agent helper NODE_ENV+SMOKE_TOKEN 双门禁"
+
+  - id: p2-sprint-b1-ws4-lead-writer
+    path: apps/api/tests/p2-sprint-b1-ws4/lead-writer.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 私域运营
+    note: "Path 2 Sprint B-1 WS4 落点 — lead-writer 5 次 writeRecord + 重试 + 评论 0 早 return"
+
+  - id: p2-sprint-b1-ws5-douyin-burner-bind-page
+    path: apps/dashboard/tests/p2-sprint-b1-ws5/douyin-burner-bind-page.test.tsx
+    type: unit
+    ci: L3
+    status: active
+    product: 私域运营
+    note: "Path 2 Sprint B-1 WS5 落点 — DouyinBurnerBindPage 5 态渲染"
+
+  - id: p2-sprint-b1-ws6-smoke-script-structure
+    path: apps/api/tests/p2-sprint-b1-ws6/smoke-script-structure.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 私域运营
+    note: "Path 2 Sprint B-1 WS6 落点 — smoke 脚本结构 + fake-feishu-server seen-records helper"
+
+  - id: p2-sprint-b1-ws7-lead-self-test-script-structure
+    path: apps/api/tests/p2-sprint-b1-ws7/lead-self-test-script-structure.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 私域运营
+    note: "Path 2 Sprint B-1 WS7 落点 — Lead 自验脚本结构 + 真证据文档"
+
+  # Path 2 Sprint B-1 — 3 placeholder pairing tests (lint-test-pairing 强校验需要 src 旁同名 .test.ts)
+  - id: p2-sprint-b1-pairing-agent-burner
+    path: apps/api/src/routes/agent-burner.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 私域运营
+    note: "Path 2 Sprint B-1 lint-test-pairing 占位 — 真行为测试在 apps/api/tests/integration/p2-sprint-b1-ws3/agent-burner-routes.test.ts"
+
+  - id: p2-sprint-b1-pairing-smoke-fake-agent-burner
+    path: apps/api/src/routes/_smoke-fake-agent-burner.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 私域运营
+    note: "Path 2 Sprint B-1 lint-test-pairing 占位 — 真行为测试在 apps/api/tests/integration/p2-sprint-b1-ws3/smoke-fake-agent-burner.test.ts"
+
+  - id: p2-sprint-b1-pairing-lead-writer
+    path: apps/api/src/services/lead-writer.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 私域运营
+    note: "Path 2 Sprint B-1 lint-test-pairing 占位 — 真行为测试在 apps/api/tests/p2-sprint-b1-ws4/lead-writer.test.ts"
     note: "Sprint 2.1f Fix 2/4 — migration normalize hex licenses + gen_base32_chars PG function"

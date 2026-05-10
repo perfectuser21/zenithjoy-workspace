@@ -28,6 +28,9 @@ import { creditsRouter } from './routes/credits';
 import feishuOauthRouter from './routes/feishu-oauth';
 import leadConfigRouter from './routes/lead-config';
 import smokeFeishuSeedRouter from './routes/_smoke-feishu-seed';
+// Path 2 Sprint B-1 — 抖音小号绑定 + 评论抓取
+import agentBurnerRouter from './routes/agent-burner';
+import smokeFakeAgentBurnerRouter from './routes/_smoke-fake-agent-burner';
 import { errorHandler, notFoundHandler } from './middleware/error';
 
 const app = express();
@@ -92,6 +95,9 @@ app.use('/api/feishu/oauth', feishuOauthRouter);
 app.use('/api/lead-config', leadConfigRouter);
 // Path 2 Sprint A WS5 — DEV-only 飞书 seed helper（生产 NODE_ENV=production 必返 404）
 app.use('/api/_smoke', smokeFeishuSeedRouter);
+// Path 2 Sprint B-1 — 抖音小号绑定 6 路由 + smoke fake-agent helper
+app.use('/api/agent/burner', agentBurnerRouter);
+app.use('/api/_smoke', smokeFakeAgentBurnerRouter);
 
 // Error handling
 app.use(notFoundHandler);
