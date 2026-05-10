@@ -1365,3 +1365,28 @@ tests:
     product: 私域运营
     note: "Path 2 Sprint B-1 lint-test-pairing 占位 — 真行为测试在 apps/api/tests/p2-sprint-b1-ws4/lead-writer.test.ts"
     note: "Sprint 2.1f Fix 2/4 — migration normalize hex licenses + gen_base32_chars PG function"
+
+  # Path 2 Sprint B-1 architecture hotfix (2026-05-10) — agentContext middleware + mock-agent + self-test 真化
+  - id: p2-b1-arch-agent-context-middleware
+    path: apps/api/src/middleware/agent-context.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 私域运营
+    note: "Path 2 Sprint B-1 architecture hotfix — agentContext middleware (4 边界 happy / NO_AGENT_CONTEXT / 多 agent 取最新 / DB 错 / 显式 body 兼容)"
+
+  - id: p2-b1-arch-smoke-mock-agent
+    path: apps/api/src/routes/_smoke-mock-agent.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 私域运营
+    note: "Path 2 Sprint B-1 architecture hotfix — _smoke/mock-agent dev-only endpoint 双门禁 + UPSERT agents online"
+
+  - id: p2-b1-arch-self-test-step123-real
+    path: apps/api/tests/p2-b1-arch/self-test-step123-real.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 私域运营
+    note: "Path 2 Sprint B-1 architecture hotfix — self-test Step 1-3 真 fetch 结构合同 (修 ws7 generator 偷懒 stub)"
