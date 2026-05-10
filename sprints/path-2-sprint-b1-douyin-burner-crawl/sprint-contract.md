@@ -1,4 +1,11 @@
-# Sprint Contract Draft (Round 1) — Path 2 客户智能获客 · Sprint B-1 抖音小号绑定 + 评论区抓取
+# Sprint Contract Draft (Round 2) — Path 2 客户智能获客 · Sprint B-1 抖音小号绑定 + 评论区抓取
+
+> Round 2 修订摘要（Reviewer Round 1 REVISION → 4 块修复）：
+> 1. WS1 migration 文件名删 `xxxxxx` 占位符，统一用正则 `*_agent_platform_sessions_add_role.sql`
+> 2. WS3 DoD ARTIFACT 1 改用 `router.METHOD('/path',` 含开括号的精确字符串，避免 substring 子串歧义
+> 3. WS6 SSOT 表加 `test-registry.yaml` 增量行 + DoD ARTIFACT 校验 9 entries + 范围段明示
+> 4. 合同 Test Contract 表前加「测试运行约定」段，明示 9 测试文件 SSOT（合同稿在 `sprints/.../tests/wsN/`）+ commit-2 GREEN 必须复制到 CI 实跑落点（依 Sprint A 既定模式：`apps/api/tests/wsN/` unit / `apps/api/tests/integration/wsN/` integration / `services/agent/src/handlers/__tests__/` / `apps/dashboard/tests/wsN/`）+ test-registry 注册两份（contract pending-ci + 落点 active）
+
 
 **Sprint**: Path 2 Sprint B-1 抖音小号 + 评论抓取
 **Branch**: cp-05101622-path2-sprint-b1-prd
@@ -516,7 +523,7 @@ echo "✅ Path 2 Sprint B-1 Golden Path E2E 全 10 步通过"
 
 | 用途 | 路径 (SSOT) |
 |---|---|
-| WS1 migration | `apps/api/db/migrations/20260510_xxxxxx_agent_platform_sessions_add_role.sql`（xxxxxx generator 决定，必须落到此目录 + 含 `agent_platform_sessions_add_role` 字样） |
+| WS1 migration | `apps/api/db/migrations/*_agent_platform_sessions_add_role.sql`（文件名匹配正则 `2026[0-9]{4}_[0-9a-f]{6}_agent_platform_sessions_add_role\.sql`；时间戳 + 6 位 hex hash 由 generator 决定） |
 | WS2 Agent burner 绑定 handler | `services/agent/src/handlers/qr-bind-douyin-burner.ts` |
 | WS2 Agent crawl 脚本 | `services/agent/scripts/douyin-comment-crawl.cjs` |
 | WS2 Agent dispatcher 注册 | `services/agent/src/index.ts`（仅追加 import + register，不改既有） |
@@ -529,6 +536,8 @@ echo "✅ Path 2 Sprint B-1 Golden Path E2E 全 10 步通过"
 | WS6 fake-agent helper | `apps/api/src/routes/_smoke-fake-agent-burner.ts` |
 | WS6 fake-feishu-server seen-records helper | `apps/api/test-utils/fake-feishu-server.ts`（增量改 — 加内存 store + `/__test/seen-records` 端点） |
 | WS6 CI workflow | `.github/workflows/path-2-b1-smoke.yml` 或合并到 `path-2-smoke.yml` |
+| WS6 test-registry 增量 | `test-registry.yaml`（追加 18 条目：9 contract entries `p2-sprint-b1-contract-ws*` status=pending-ci 指 `sprints/.../tests/wsN/`；9 落点 entries `p2-sprint-b1-ws*` status=active 指 CI 实跑路径 — 见下文「测试运行约定」段） |
+| WS_all 测试落点（commit-2 GREEN 复制 SSOT） | 详见下文「测试运行约定」段；9 测试文件 SSOT 指向 `apps/api/tests/p2-sprint-b1-wsN/` / `apps/api/tests/integration/p2-sprint-b1-wsN/` / `services/agent/src/handlers/__tests__/` / `services/agent/scripts/__tests__/` / `apps/dashboard/tests/p2-sprint-b1-ws5/` |
 | WS7 Lead 自验证据 | `.agent-knowledge/path-2/lead-acceptance-sprint-b1.md` |
 | WS7 Lead 自验脚本（mac → rog scp） | `scripts/lead-acceptance/path2-sprint-b1-self-test.cjs` |
 
@@ -574,7 +583,7 @@ workstream_count: 7
 
 ### Workstream 1: DB migration `agent_platform_sessions` add `role` 字段
 
-**范围**: 新增 `apps/api/db/migrations/20260510_xxxxxx_agent_platform_sessions_add_role.sql`，`ALTER TABLE ADD COLUMN role TEXT NOT NULL DEFAULT 'main'` + CHECK 约束 `role IN ('main','burner')`。
+**范围**: 新增 migration 文件，路径匹配正则 `apps/api/db/migrations/2026[0-9]{4}_[0-9a-f]{6}_agent_platform_sessions_add_role\.sql`，`ALTER TABLE ADD COLUMN role TEXT NOT NULL DEFAULT 'main'` + CHECK 约束 `role IN ('main','burner')`。
 **大小**: S（< 50 行）
 **依赖**: 无
 
@@ -653,12 +662,13 @@ workstream_count: 7
 
 ---
 
-### Workstream 6: smoke 脚本 + CI workflow + fake-feishu-server seen-records 增量
+### Workstream 6: smoke 脚本 + CI workflow + fake-feishu-server seen-records 增量 + test-registry 双注册
 
 **范围**:
 - 新建 `.github/workflows/scripts/smoke/golden-path-2-b1-smoke.sh` — 落地合同 E2E 段全文 + 自检 4 ENV
 - 新建/合并 `.github/workflows/path-2-b1-smoke.yml`（或加到 path-2-smoke.yml） — 启 fake-feishu-server + export ENV + 跑 smoke + cleanup
 - **增量** 修改 `apps/api/test-utils/fake-feishu-server.ts` — 加内存 store records + `/__test/seen-records?table_id=xxx` 暴露
+- **增量** 修改 `test-registry.yaml`：追加 18 entries（9 `p2-sprint-b1-contract-ws*` 指合同稿 `sprints/.../tests/wsN/` status=pending-ci；9 `p2-sprint-b1-ws*` 指 CI 实跑落点 status=active）— 防 Sprint A 趟过的 lint-test-pairing/orphan-test-check 失败
 - ARTIFACT 断言 Path 1 + Sprint A 文件未改（git diff grep）
 - ARTIFACT 断言 lead-writer 复用 multitenant service
 
@@ -688,6 +698,47 @@ workstream_count: 7
 **依赖**: 全部完成 + 已部署到生产 / lead 自验机
 
 **BEHAVIOR 覆盖测试文件**: `tests/ws7/lead-self-test-script-structure.test.ts`
+
+---
+
+## 测试运行约定（CRITICAL — 防 commit-1 RED 跑成"找不到文件"）
+
+**SSOT 规则**：所有 9 个合同测试文件以 **`sprints/path-2-sprint-b1-douyin-burner-crawl/tests/wsN/*.test.ts`** 为合同 SSOT（commit-1 RED 阶段就在此目录跑）。
+
+**commit-1 RED 跑法**（不依赖现有 vitest config include glob，直接给 vitest 指文件路径）：
+```bash
+# Generator commit-1 后必跑这条，必须显示 ≥41 failed（不是 "No test files found"）：
+npx vitest run sprints/path-2-sprint-b1-douyin-burner-crawl/tests/ws1/ \
+              sprints/path-2-sprint-b1-douyin-burner-crawl/tests/ws2/ \
+              sprints/path-2-sprint-b1-douyin-burner-crawl/tests/ws3/ \
+              sprints/path-2-sprint-b1-douyin-burner-crawl/tests/ws4/ \
+              sprints/path-2-sprint-b1-douyin-burner-crawl/tests/ws6/ \
+              sprints/path-2-sprint-b1-douyin-burner-crawl/tests/ws7/ \
+  --root . --reporter=verbose 2>&1 | tee /tmp/p2-b1-red.log
+grep -c "FAIL\\|✗" /tmp/p2-b1-red.log  # 必须 ≥41
+
+# 注：ws1/ws3a/ws3b/ws4 部分需 DB / supertest，跑时按下文「commit-2 落点」直接跑落点版本更稳
+```
+
+**commit-2 GREEN 落点 SSOT**（依 Sprint A 既定 zenithjoy 目录约定 — 按 vitest config include glob 自动被 CI 跑到）：
+
+| WS | 合同 SSOT (sprints/.../tests/) | CI 实跑落点（commit-2 复制目标） | 跑法（vitest config 自动 pick） |
+|---|---|---|---|
+| WS1 | `tests/ws1/migration-add-role.test.ts` | `apps/api/tests/integration/p2-sprint-b1-ws1/migration-add-role.test.ts` | `apps/api` `vitest.integration.config.ts`（已 include `tests/integration/**`） |
+| WS2a handler | `tests/ws2/qr-bind-douyin-burner.test.ts` | `services/agent/src/handlers/__tests__/qr-bind-douyin-burner.test.ts` | `services/agent` `vitest.config.ts`（已 include `src/**/__tests__/**`） |
+| WS2b crawl | `tests/ws2/douyin-comment-crawl.test.ts` | `services/agent/scripts/__tests__/douyin-comment-crawl.test.cjs`（注意：源是 `.cjs` 脚本 → 测试也用 `.cjs` 后缀走 publishers/__tests__ 同模式） | `services/agent` `vitest.config.ts`（include `publishers/**/__tests__/**/*.test.cjs` 已支持，但 scripts 不在 glob → WS6 范围内增量加 `'scripts/**/__tests__/**/*.test.cjs'` 到 services/agent vitest.config.ts include） |
+| WS3a routes | `tests/ws3/agent-burner-routes.test.ts` | `apps/api/tests/integration/p2-sprint-b1-ws3/agent-burner-routes.test.ts` | `apps/api` integration config |
+| WS3b fake-agent | `tests/ws3/smoke-fake-agent-burner.test.ts` | `apps/api/tests/integration/p2-sprint-b1-ws3/smoke-fake-agent-burner.test.ts` | `apps/api` integration config |
+| WS4 lead-writer | `tests/ws4/lead-writer.test.ts` | `apps/api/tests/p2-sprint-b1-ws4/lead-writer.test.ts` | `apps/api` `vitest.config.ts`（已 include `tests/**/*.test.ts`），同时**从 vitest.config.ts exclude 列表里删 `'tests/ws4/**'` 不需要 — 落点在 `tests/p2-sprint-b1-ws4/` 不撞旧 ws4） |
+| WS5 page | `tests/ws5/douyin-burner-bind-page.test.tsx` | `apps/dashboard/tests/p2-sprint-b1-ws5/douyin-burner-bind-page.test.tsx` | `apps/dashboard` `vitest.config.ts`（默认 include `**/*.test.{ts,tsx}` 不在 exclude 即跑） |
+| WS6 smoke-structure | `tests/ws6/smoke-script-structure.test.ts` | `apps/api/tests/p2-sprint-b1-ws6/smoke-script-structure.test.ts` | `apps/api` `vitest.config.ts` |
+| WS7 self-test-structure | `tests/ws7/lead-self-test-script-structure.test.ts` | `apps/api/tests/p2-sprint-b1-ws7/lead-self-test-script-structure.test.ts` | `apps/api` `vitest.config.ts` |
+
+**约束**：
+- commit-1 提交合同 SSOT（`sprints/.../tests/wsN/`）+ test-registry.yaml 9 contract entries（`status: pending-ci`）
+- commit-2 实现代码 + 复制测试到落点 + test-registry.yaml 再加 9 落点 entries（`status: active`）+ services/agent/vitest.config.ts 增量加 `scripts/**/__tests__/**/*.test.cjs` glob（如 ws2b 用 cjs）
+- **CI 实际跑的是落点 entries**；contract entries 只 satisfy orphan-test-check（防"测试文件存在但 registry 没注册"）
+- WS6 ARTIFACT 校验两份 entries 都注册（见 contract-dod-ws6.md 倒数第二条）
 
 ---
 

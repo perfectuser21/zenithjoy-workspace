@@ -10,8 +10,8 @@ journey_type: user_facing
 
 ## ARTIFACT 条目
 
-- [ ] [ARTIFACT] agent-burner.ts 路由文件存在 + 含 6 端点
-  Test: `node -e "const c=require('fs').readFileSync('apps/api/src/routes/agent-burner.ts','utf8');['/qr-bind','/qr-bind-result','/sessions','/crawl-comments','/crawl-comments-result','/crawl-tasks/'].forEach(k=>{if(!c.includes(k))process.exit(1)})"`
+- [ ] [ARTIFACT] agent-burner.ts 路由文件存在 + 注册 6 端点（含 router.METHOD('/path', 开括号 + 单引号闭合，避免 substring 子串歧义如 '/qr-bind-result' 包含 '/qr-bind'）
+  Test: `node -e "const c=require('fs').readFileSync('apps/api/src/routes/agent-burner.ts','utf8');[\"router.post('/qr-bind',\",\"router.post('/qr-bind-result'\",\"router.get('/sessions'\",\"router.post('/crawl-comments',\",\"router.post('/crawl-comments-result'\",\"router.get('/crawl-tasks/\"].forEach(k=>{if(!c.includes(k))process.exit(1)})"`
 
 - [ ] [ARTIFACT] agent-burner 路由含 6 错码
   Test: `node -e "const c=require('fs').readFileSync('apps/api/src/routes/agent-burner.ts','utf8');['MISSING_ACCOUNT_LABEL','BURNER_ALREADY_BOUND','MISSING_VIDEO_URL','NO_BURNER_SESSION','FEISHU_NOT_BOUND','RESERVED_ACCOUNT_LABEL'].forEach(k=>{if(!c.includes(k))process.exit(1)})"`

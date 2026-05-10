@@ -34,8 +34,11 @@ journey_type: user_facing
 - [ ] [ARTIFACT] 禁止文件未修改（git diff 断言 6 个文件）
   Test: `bash -c "git diff origin/main...HEAD --name-only | grep -E '^(services/agent/src/handlers/qr-bind-douyin\\.ts|apps/api/src/services/feishu-bitable-multitenant\\.ts|apps/api/src/services/feishu-token\\.ts|apps/api/src/routes/feishu-oauth\\.ts|apps/dashboard/src/pages/FeishuBindTenant\\.tsx|apps/dashboard/src/pages/DouyinBindPage\\.tsx)$' && exit 1 || exit 0"`
 
-- [ ] [ARTIFACT] lint-test-pairing + orphan-test-check 通过（test-registry.yaml 注册新合同测试）
-  Test: `node -e "const y=require('fs').readFileSync('test-registry.yaml','utf8');['p2-sprint-b1-contract-ws1','p2-sprint-b1-contract-ws2','p2-sprint-b1-contract-ws3','p2-sprint-b1-contract-ws4','p2-sprint-b1-contract-ws5','p2-sprint-b1-contract-ws6','p2-sprint-b1-contract-ws7'].forEach(k=>{if(!y.includes(k))process.exit(1)})"`
+- [ ] [ARTIFACT] test-registry.yaml 注册 9 contract entries（指 sprints/.../tests/wsN/，status=pending-ci，satisfy orphan-test-check）
+  Test: `node -e "const y=require('fs').readFileSync('test-registry.yaml','utf8');['p2-sprint-b1-contract-ws1-migration','p2-sprint-b1-contract-ws2-burner-handler','p2-sprint-b1-contract-ws2-comment-crawl','p2-sprint-b1-contract-ws3-routes','p2-sprint-b1-contract-ws3-fake-agent','p2-sprint-b1-contract-ws4-lead-writer','p2-sprint-b1-contract-ws5-burner-bind-page','p2-sprint-b1-contract-ws6-smoke-structure','p2-sprint-b1-contract-ws7-self-test-structure'].forEach(k=>{if(!y.includes(k))process.exit(1)})"`
+
+- [ ] [ARTIFACT] test-registry.yaml 注册 9 落点 entries（指 CI 实跑路径 apps/api/tests/p2-sprint-b1-wsN/ 等，status=active，satisfy lint-test-pairing 让 src 文件有配对 test）
+  Test: `node -e "const y=require('fs').readFileSync('test-registry.yaml','utf8');['p2-sprint-b1-ws1-migration','p2-sprint-b1-ws2-burner-handler','p2-sprint-b1-ws2-comment-crawl','p2-sprint-b1-ws3-routes','p2-sprint-b1-ws3-fake-agent','p2-sprint-b1-ws4-lead-writer','p2-sprint-b1-ws5-burner-bind-page','p2-sprint-b1-ws6-smoke-structure','p2-sprint-b1-ws7-self-test-structure'].forEach(k=>{if(!y.includes(k))process.exit(1)})"`
 
 ## BEHAVIOR 索引（实际测试在 tests/ws6/）
 

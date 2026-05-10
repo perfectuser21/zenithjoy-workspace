@@ -6,7 +6,7 @@
     {
       "task_id": "ws1",
       "title": "DB migration: agent_platform_sessions add role 字段",
-      "scope": "新增 apps/api/db/migrations/<timestamp>_agent_platform_sessions_add_role.sql：ALTER TABLE ADD COLUMN role TEXT NOT NULL DEFAULT 'main' + CHECK 约束 role IN ('main','burner') + 幂等保护",
+      "scope": "新增 migration 文件路径匹配正则 apps/api/db/migrations/2026[0-9]{4}_[0-9a-f]{6}_agent_platform_sessions_add_role.sql：ALTER TABLE ADD COLUMN role TEXT NOT NULL DEFAULT 'main' + CHECK 约束 role IN ('main','burner') + 幂等保护",
       "dod": [
         "[BEHAVIOR] migration 跑成功后 zenithjoy.agent_platform_sessions 含 role 列 + 默认 'main' + NOT NULL",
         "[BEHAVIOR] CHECK 约束拒绝 role NOT IN ('main','burner')",
@@ -14,7 +14,9 @@
         "[ARTIFACT] migration SQL 含 ALTER TABLE + ADD COLUMN role + DEFAULT 'main' + CHECK 约束"
       ],
       "files": [
-        "apps/api/db/migrations/20260510_xxxxxx_agent_platform_sessions_add_role.sql"
+        "apps/api/db/migrations/*_agent_platform_sessions_add_role.sql",
+        "sprints/path-2-sprint-b1-douyin-burner-crawl/tests/ws1/migration-add-role.test.ts",
+        "apps/api/tests/integration/p2-sprint-b1-ws1/migration-add-role.test.ts"
       ],
       "depends_on": [],
       "complexity": "S",
@@ -23,7 +25,7 @@
     {
       "task_id": "ws2",
       "title": "Agent burner handler + 抓评论脚本（独立文件，不动 Path 1 主号）",
-      "scope": "新建 services/agent/src/handlers/qr-bind-douyin-burner.ts（launchPersistentContext + burner sessionPath /burner/<account_label>.json + waitForURL 10min）+ services/agent/scripts/douyin-comment-crawl.cjs（评论 5 条 + R4 BURNER_SESSION_EXPIRED 检测）+ 修改 services/agent/src/index.ts 追加 dispatcher 注册（不改既有）。Path 1 qr-bind-douyin.ts 字节级未变",
+      "scope": "新建 services/agent/src/handlers/qr-bind-douyin-burner.ts（launchPersistentContext + burner sessionPath /burner/<account_label>.json + waitForURL 10min）+ services/agent/scripts/douyin-comment-crawl.cjs（评论 5 条 + R4 BURNER_SESSION_EXPIRED 检测）+ 修改 services/agent/src/index.ts 追加 dispatcher 注册（不改既有）+ services/agent/vitest.config.ts 增量加 'scripts/**/__tests__/**/*.test.cjs' include glob 让 ws2b 测试被跑。Path 1 qr-bind-douyin.ts 字节级未变",
       "dod": [
         "[BEHAVIOR] burner handler 不引用 Path 1 主号 handler",
         "[BEHAVIOR] burner sessionPath 含 /burner/ 子目录",
@@ -36,7 +38,12 @@
       "files": [
         "services/agent/src/handlers/qr-bind-douyin-burner.ts",
         "services/agent/scripts/douyin-comment-crawl.cjs",
-        "services/agent/src/index.ts"
+        "services/agent/src/index.ts",
+        "services/agent/vitest.config.ts",
+        "sprints/path-2-sprint-b1-douyin-burner-crawl/tests/ws2/qr-bind-douyin-burner.test.ts",
+        "sprints/path-2-sprint-b1-douyin-burner-crawl/tests/ws2/douyin-comment-crawl.test.ts",
+        "services/agent/src/handlers/__tests__/qr-bind-douyin-burner.test.ts",
+        "services/agent/scripts/__tests__/douyin-comment-crawl.test.cjs"
       ],
       "depends_on": ["ws1"],
       "complexity": "L",
@@ -57,7 +64,11 @@
       "files": [
         "apps/api/src/routes/agent-burner.ts",
         "apps/api/src/routes/_smoke-fake-agent-burner.ts",
-        "apps/api/src/app.ts"
+        "apps/api/src/app.ts",
+        "sprints/path-2-sprint-b1-douyin-burner-crawl/tests/ws3/agent-burner-routes.test.ts",
+        "sprints/path-2-sprint-b1-douyin-burner-crawl/tests/ws3/smoke-fake-agent-burner.test.ts",
+        "apps/api/tests/integration/p2-sprint-b1-ws3/agent-burner-routes.test.ts",
+        "apps/api/tests/integration/p2-sprint-b1-ws3/smoke-fake-agent-burner.test.ts"
       ],
       "depends_on": ["ws1"],
       "complexity": "L",
@@ -78,7 +89,9 @@
         "[ARTIFACT] 不直接 axios open.feishu.cn / open-apis"
       ],
       "files": [
-        "apps/api/src/services/lead-writer.ts"
+        "apps/api/src/services/lead-writer.ts",
+        "sprints/path-2-sprint-b1-douyin-burner-crawl/tests/ws4/lead-writer.test.ts",
+        "apps/api/tests/p2-sprint-b1-ws4/lead-writer.test.ts"
       ],
       "depends_on": [],
       "complexity": "M",
@@ -98,7 +111,9 @@
       ],
       "files": [
         "apps/dashboard/src/pages/DouyinBurnerBindPage.tsx",
-        "apps/dashboard/src/App.tsx"
+        "apps/dashboard/src/App.tsx",
+        "sprints/path-2-sprint-b1-douyin-burner-crawl/tests/ws5/douyin-burner-bind-page.test.tsx",
+        "apps/dashboard/tests/p2-sprint-b1-ws5/douyin-burner-bind-page.test.tsx"
       ],
       "depends_on": ["ws3"],
       "complexity": "L",
@@ -106,24 +121,27 @@
     },
     {
       "task_id": "ws6",
-      "title": "smoke 脚本 + CI workflow + fake-feishu-server seen-records 增量 + test-registry",
-      "scope": "新建 .github/workflows/scripts/smoke/golden-path-2-b1-smoke.sh（落地合同 E2E 段 10 步 + 4 ENV 自检 + 全 SELECT count 含时间窗口 + curl -fsS）+ .github/workflows/path-2-b1-smoke.yml（启停 fake-feishu-server + export FEISHU_API_BASE/SMOKE_TOKEN/NODE_ENV=test）+ apps/api/test-utils/fake-feishu-server.ts 增量加内存 store records + /__test/seen-records 端点 + 注册 7 个合同测试入 test-registry.yaml",
+      "title": "smoke 脚本 + CI workflow + fake-feishu-server seen-records 增量 + test-registry 双注册",
+      "scope": "新建 .github/workflows/scripts/smoke/golden-path-2-b1-smoke.sh（落地合同 E2E 段 10 步 + 4 ENV 自检 + 全 SELECT count 含时间窗口 + curl -fsS）+ .github/workflows/path-2-b1-smoke.yml（启停 fake-feishu-server + export FEISHU_API_BASE/SMOKE_TOKEN/NODE_ENV=test）+ apps/api/test-utils/fake-feishu-server.ts 增量加内存 store records + /__test/seen-records 端点 + 注册 18 entries 入 test-registry.yaml（9 contract status=pending-ci + 9 落点 status=active，防 lint-test-pairing/orphan-test-check 失败）",
       "dod": [
         "[BEHAVIOR] smoke 脚本含 4 ENV 自检 + 10 Step 标识 + 全 SELECT count 含 interval",
         "[BEHAVIOR] fake-feishu-server /__test/seen-records 收到 records 后 GET 返 count + records",
         "[ARTIFACT] CI workflow 启停 fake-feishu-server + ENV 注入",
-        "[ARTIFACT] test-registry.yaml 含 7 个 p2-sprint-b1-contract-* 条目",
+        "[ARTIFACT] test-registry.yaml 含 9 个 p2-sprint-b1-contract-* 条目（status=pending-ci）",
+        "[ARTIFACT] test-registry.yaml 含 9 个 p2-sprint-b1-ws* 条目（status=active）",
         "[ARTIFACT] 6 禁止文件 git diff 字节级未变（Path 1 + Sprint A）"
       ],
       "files": [
         ".github/workflows/scripts/smoke/golden-path-2-b1-smoke.sh",
         ".github/workflows/path-2-b1-smoke.yml",
         "apps/api/test-utils/fake-feishu-server.ts",
-        "test-registry.yaml"
+        "test-registry.yaml",
+        "sprints/path-2-sprint-b1-douyin-burner-crawl/tests/ws6/smoke-script-structure.test.ts",
+        "apps/api/tests/p2-sprint-b1-ws6/smoke-script-structure.test.ts"
       ],
       "depends_on": ["ws3", "ws4", "ws5"],
       "complexity": "M",
-      "estimated_minutes": 50
+      "estimated_minutes": 55
     },
     {
       "task_id": "ws7",
@@ -137,7 +155,9 @@
       ],
       "files": [
         "scripts/lead-acceptance/path2-sprint-b1-self-test.cjs",
-        ".agent-knowledge/path-2/lead-acceptance-sprint-b1.md"
+        ".agent-knowledge/path-2/lead-acceptance-sprint-b1.md",
+        "sprints/path-2-sprint-b1-douyin-burner-crawl/tests/ws7/lead-self-test-script-structure.test.ts",
+        "apps/api/tests/p2-sprint-b1-ws7/lead-self-test-script-structure.test.ts"
       ],
       "depends_on": ["ws6"],
       "complexity": "M",
