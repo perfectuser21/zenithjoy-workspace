@@ -17,10 +17,11 @@ const EVIDENCE = path.resolve(
 );
 
 describe('Workstream 7 — self-test 脚本结构 [BEHAVIOR]', () => {
-  it('self-test 脚本含 channel msedge + headless: true + launchPersistentContext', () => {
+  it('self-test 脚本含 channel msedge + launchPersistentContext (B-1 arch hotfix: headless 改 false 让 chrome 弹 rog 桌面给 user 物理扫码)', () => {
     const c = fs.readFileSync(SELFTEST, 'utf8');
     expect(c).toMatch(/channel:\s*['"]msedge['"]/);
-    expect(c).toMatch(/headless:\s*true/);
+    // headless: false — chrome 真弹桌面（user 物理扫码）；--start-maximized 撑满屏
+    expect(c).toMatch(/headless:\s*false/);
     expect(c).toContain('launchPersistentContext');
   });
 
