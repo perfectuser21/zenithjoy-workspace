@@ -31,7 +31,7 @@ describe('Workstream 4 — FeishuBindTenant 页 [BEHAVIOR]', () => {
     });
   });
 
-  it('提交表单触发 fetch /api/feishu/oauth/start + 跳转 authorize_url', async () => {
+  it('[ARCH] 提交表单触发 fetch /api/feishu/oauth/bind 同步建 Bitable + 渲染绑定状态', async () => {
     const fetchMock = global.fetch as any;
     fetchMock
       .mockResolvedValueOnce({
@@ -42,12 +42,17 @@ describe('Workstream 4 — FeishuBindTenant 页 [BEHAVIOR]', () => {
         ok: true,
         json: async () => ({
           success: true,
-          data: { authorize_url: 'https://passport.feishu.cn/suite/passport/oauth/authorize?state=xxx' },
+          data: {
+            app_token: 'bascnARCH9999',
+            table_ids: {
+              lead_profile: 'tbl_a',
+              target_videos: 'tbl_b',
+              leads: 'tbl_c',
+            },
+            bitable_doc_url: 'https://feishu.cn/base/bascnARCH9999',
+          },
         }),
       });
-
-    delete (window as any).location;
-    (window as any).location = { href: '' };
 
     const Page = (await importPage()).default;
     render(<Page />);
@@ -58,11 +63,17 @@ describe('Workstream 4 — FeishuBindTenant 页 [BEHAVIOR]', () => {
     fireEvent.change(screen.getByLabelText(/app_secret|App Secret/i), { target: { value: 'sec_xxx' } });
     fireEvent.click(screen.getByRole('button', { name: /开始绑定|绑定/i }));
 
+    // 验证调用新 endpoint
     await waitFor(() => {
       expect(fetchMock).toHaveBeenCalledWith(
-        expect.stringContaining('/api/feishu/oauth/start'),
+        expect.stringContaining('/api/feishu/oauth/bind'),
         expect.objectContaining({ method: 'POST' })
       );
+    });
+
+    // 验证成功后渲染绑定状态（0 跳转）
+    await waitFor(() => {
+      expect(screen.getByText(/飞书已绑定/)).toBeInTheDocument();
     });
   });
 

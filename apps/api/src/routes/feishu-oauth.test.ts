@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * Path 2 Sprint A hotfix — feishu-oauth router unit tests
  *
