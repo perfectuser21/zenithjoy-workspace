@@ -166,9 +166,38 @@ export async function getValidToken(tenantId: string): Promise<string> {
       WHERE tenant_id = $1`,
     [tenantId]
   );
+
+  // [ARCH hotfix] 0 行时 fallback：用 tenants.feishu_app_id/secret 直接拿 token + UPSERT 初始 binding 行。
+  // 旧 OAuth flow 由 handleCallback 提前 INSERT；新 /bind flow 跳过 OAuth 直接调 provisionBitable，
+  // 所以 binding 行可能不存在 — 这里自动初始化。
   if (!r.rows || r.rows.length === 0) {
-    throw new Error(`FEISHU_NOT_BOUND: tenant ${tenantId}`);
+    const tenantsRow = await loadTenantApp(tenantId).catch((e) => {
+      throw new Error(`FEISHU_NOT_BOUND: tenant ${tenantId} (load tenant fail: ${(e as Error).message})`);
+    });
+    const appId = tenantsRow.feishu_app_id;
+    const appSecret = tenantsRow.feishu_app_secret;
+    if (!appId || !appSecret) {
+      throw new Error(`FEISHU_NOT_BOUND: tenant ${tenantId} 且 tenants 表未填 app_id/secret`);
+    }
+    let fresh: { token: string; expiresAt: Date };
+    try {
+      fresh = await fetchTenantAccessToken(appId, appSecret);
+    } catch (e) {
+      throw new TokenRefreshError((e as Error).message);
+    }
+    await pool.query(
+      `INSERT INTO zenithjoy.tenant_feishu_bindings
+         (tenant_id, tenant_access_token, expires_at, bound_at, last_refreshed_at)
+       VALUES ($1, $2, $3, NOW(), NOW())
+       ON CONFLICT (tenant_id) DO UPDATE
+         SET tenant_access_token = EXCLUDED.tenant_access_token,
+             expires_at          = EXCLUDED.expires_at,
+             last_refreshed_at   = NOW()`,
+      [tenantId, fresh.token, fresh.expiresAt]
+    );
+    return fresh.token;
   }
+
   const row = r.rows[0];
   const expiresAt = row.expires_at ? new Date(row.expires_at) : null;
   const stillValid =
