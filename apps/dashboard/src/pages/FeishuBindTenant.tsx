@@ -33,12 +33,14 @@ interface LeadConfigData {
 
 const ERROR_CN: Record<string, string> = {
   ALREADY_BOUND: '该 tenant 已绑定飞书，请先解绑后再换绑。',
-  PROVISION_FAILED: '飞书 Bitable 建表失败，请重试。',
+  PROVISION_FAILED: '飞书 Bitable 建表失败，请检查 app 权限（bitable:app + drive:drive）后重试。',
   BITABLE_NOT_FOUND: '飞书文档已不存在，请点"一键重建"。',
-  TOKEN_REFRESH_FAILED: '飞书授权已失效，请重新授权。',
+  TOKEN_REFRESH_FAILED: '飞书授权已失效，请重新绑定。',
   INVALID_STATE: '回调验签失败，请重新发起绑定。',
   TENANT_NOT_FOUND: '当前租户不存在。',
-  START_FAILED: '飞书 OAuth 启动失败，请刷新重试。',
+  START_FAILED: '飞书绑定启动失败，请刷新重试。',
+  BIND_FAILED: '飞书绑定失败，请检查 App ID/Secret 是否正确。',
+  REBUILD_FAILED: '重建 Bitable 失败，请稍后重试或联系支持。',
   TENANT_ID_REQUIRED: '当前用户未关联租户，请重新登录或联系管理员。',
   MISSING_FIELDS: '请填写完整的 App ID 和 App Secret。',
   NO_TENANT_CONTEXT: '当前用户未关联租户，请重新登录或联系管理员。',
@@ -96,17 +98,28 @@ export default function FeishuBindTenant() {
     if (isAlreadyBound) return;
     if (!appId || !appSecret) return;
     setSubmitting(true);
+    setLeadConfigError(null);
     try {
-      const res = await fetch('/api/feishu/oauth/start', {
+      // [ARCH] 0-touch app credentials provision — 同步建 Bitable + 3 表
+      // 不再走 OAuth 跳转（旧: /start + window.location.href = authorize_url）
+      // 后端可能耗时 5-15s（实际调飞书建文档/表）— UI 显示「建表中...」
+      const res = await fetch('/api/feishu/oauth/bind', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ app_id: appId, app_secret: appSecret }),
       });
       const j = await res.json();
-      if (j?.success && j.data?.authorize_url) {
-        window.location.href = j.data.authorize_url;
+      if (j?.success && j.data?.app_token) {
+        // 直接渲染绑定状态 — 不依赖 callback 跳回
+        setStatus({
+          bound: true,
+          app_token: j.data.app_token,
+          bitable_url: j.data.bitable_doc_url,
+        });
+        // 清表单避免回看时残留 secret
+        setAppSecret('');
       } else {
-        setLeadConfigError(j?.error?.code || 'START_FAILED');
+        setLeadConfigError(j?.error?.code || 'BIND_FAILED');
       }
     } catch (err) {
       setLeadConfigError((err as Error).message);
@@ -138,10 +151,20 @@ export default function FeishuBindTenant() {
   async function rebuildBitable() {
     setRefreshing(true);
     try {
-      const res = await fetch('/api/feishu/oauth/rebuild', { method: 'POST' });
+      // [ARCH] /rebuild 同步重建 — 后端 DELETE binding + 重 provisionBitable
+      const res = await fetch('/api/feishu/oauth/rebuild', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      });
       const j = await res.json();
-      if (j?.success) {
+      if (j?.success && j.data?.app_token) {
         setLeadConfigError(null);
+        setStatus({
+          bound: true,
+          app_token: j.data.app_token,
+          bitable_url: j.data.bitable_doc_url,
+        });
         await refreshLeadConfig();
       } else {
         setLeadConfigError(j?.error?.code || 'REBUILD_FAILED');
@@ -232,7 +255,7 @@ export default function FeishuBindTenant() {
               cursor: isAlreadyBound ? 'not-allowed' : 'pointer',
             }}
           >
-            {submitting ? '正在跳转...' : '开始绑定'}
+            {submitting ? '建表中...（约 10 秒）' : '开始绑定'}
           </button>
 
           {isAlreadyBound && (
