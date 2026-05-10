@@ -1339,4 +1339,29 @@ tests:
     status: active
     product: 私域运营
     note: "Path 2 Sprint B-1 WS7 落点 — Lead 自验脚本结构 + 真证据文档"
+
+  # Path 2 Sprint B-1 — 3 placeholder pairing tests (lint-test-pairing 强校验需要 src 旁同名 .test.ts)
+  - id: p2-sprint-b1-pairing-agent-burner
+    path: apps/api/src/routes/agent-burner.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 私域运营
+    note: "Path 2 Sprint B-1 lint-test-pairing 占位 — 真行为测试在 apps/api/tests/integration/p2-sprint-b1-ws3/agent-burner-routes.test.ts"
+
+  - id: p2-sprint-b1-pairing-smoke-fake-agent-burner
+    path: apps/api/src/routes/_smoke-fake-agent-burner.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 私域运营
+    note: "Path 2 Sprint B-1 lint-test-pairing 占位 — 真行为测试在 apps/api/tests/integration/p2-sprint-b1-ws3/smoke-fake-agent-burner.test.ts"
+
+  - id: p2-sprint-b1-pairing-lead-writer
+    path: apps/api/src/services/lead-writer.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 私域运营
+    note: "Path 2 Sprint B-1 lint-test-pairing 占位 — 真行为测试在 apps/api/tests/p2-sprint-b1-ws4/lead-writer.test.ts"
     note: "Sprint 2.1f Fix 2/4 — migration normalize hex licenses + gen_base32_chars PG function"
