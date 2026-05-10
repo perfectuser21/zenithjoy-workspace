@@ -1,0 +1,36 @@
+{
+  "status": "PASS",
+  "user_intervention_count": 0,
+  "elapsed_seconds": "16.0",
+  "user": {
+    "id": "dlY0QwjW5mqvjtASoPxKdof6JHmmpveN",
+    "email": "path2-arch+1778374331284@test.zenithjoy.local"
+  },
+  "binding": {
+    "app_token": "MBIzbQNEWahaxLsYzhRcH53infh",
+    "table_ids": {
+      "lead_profile": "tblXlfjD4nQy2kF6",
+      "target_videos": "tbl1APW98jcbCY5N",
+      "leads": "tblrTvyXTeD0nS6Y"
+    },
+    "bitable_doc_url": "https://feishu.cn/base/MBIzbQNEWahaxLsYzhRcH53infh"
+  },
+  "api_calls": [
+    {
+      "status": 200,
+      "method": "GET",
+      "url": "/api/auth/get-session"
+    },
+    {
+      "status": 200,
+      "method": "GET",
+      "url": "/api/feishu/oauth/status"
+    },
+    {
+      "status": 200,
+      "method": "POST",
+      "url": "/api/feishu/oauth/bind"
+    }
+  ],
+  "architecture": "0-touch app credentials (no OAuth scan)"
+}
