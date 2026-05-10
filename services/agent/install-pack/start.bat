@@ -33,10 +33,12 @@ if "%ZENITHJOY_LICENSE%"=="__PLACEHOLDER__" (
     exit /b 1
 )
 if not defined ZENITHJOY_API_BASE set "ZENITHJOY_API_BASE=https://autopilot.zenjoymedia.media"
+REM Fix 10 - ws 链路用独立变量 ZENITHJOY_API_URL（不读 ZENITHJOY_API_BASE），默认 wss
+if not defined ZENITHJOY_API_URL set "ZENITHJOY_API_URL=wss://autopilot.zenjoymedia.media/agent-ws"
 
-REM Step 4: Fix 8 - License precheck before spawning agent
+REM Step 4: Fix 8 - License precheck before spawning agent (Bearer header, not body)
 echo [precheck] verifying license at %ZENITHJOY_API_BASE%/api/agent/heartbeat ...
-for /f "delims=" %%c in ('curl -s -o nul -w "%%{http_code}" -m 10 -X POST "%ZENITHJOY_API_BASE%/api/agent/heartbeat" -H "Content-Type: application/json" -d "{\"license_key\":\"%ZENITHJOY_LICENSE%\",\"machine_id\":\"precheck\",\"agent_version\":\"1.0.1\"}"') do set "PRECHECK_STATUS=%%c"
+for /f "delims=" %%c in ('curl -s -o nul -w "%%{http_code}" -m 10 -X POST "%ZENITHJOY_API_BASE%/api/agent/heartbeat" -H "Authorization: Bearer %ZENITHJOY_LICENSE%" -H "Content-Type: application/json" -d "{\"machine_id\":\"precheck\",\"agent_version\":\"1.0.1\"}"') do set "PRECHECK_STATUS=%%c"
 
 if "%PRECHECK_STATUS%"=="200" (
     echo [precheck] license OK

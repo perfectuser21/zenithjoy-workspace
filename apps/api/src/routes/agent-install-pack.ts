@@ -106,14 +106,14 @@ agentInstallPackRouter.get('/download', async (req: Request, res: Response) => {
     if (!envPath) {
       throw new Error('.env not found in install pack');
     }
-    // 烧入：替换 ZENITHJOY_LICENSE=__PLACEHOLDER__ 或 ZENITHJOY_LICENSE=ZJ-F-XXXXXXXX 行
+    // 烧入：替换 ZENITHJOY_LICENSE=... 行；sprint 2.1f Task 2 减肥后 .env.template 没占位行 — fallback append
     const orig = fs.readFileSync(envPath, 'utf-8');
-    const burned = orig.replace(
+    let burned = orig.replace(
       /^ZENITHJOY_LICENSE=.*$/m,
       `ZENITHJOY_LICENSE=${licenseKey}`
     );
     if (burned === orig) {
-      throw new Error('failed to burn license into .env (no ZENITHJOY_LICENSE line)');
+      burned = (orig.endsWith('\n') ? orig : orig + '\n') + `ZENITHJOY_LICENSE=${licenseKey}\n`;
     }
     const targetEnv: string = envPath;
     fs.writeFileSync(targetEnv, burned, 'utf-8');

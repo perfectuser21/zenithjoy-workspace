@@ -159,3 +159,53 @@ describe('Sprint 2.1f Fix 7 — GET /api/agent/install-pack/download server-side
     expect(res.body.code).toBe('NO_ACTIVE_LICENSE');
   });
 });
+
+// Sprint 2.1g — sprint 2.1f 减肥后 .env.template 无 ZENITHJOY_LICENSE 占位行场景
+describe('Sprint 2.1g Fix — burn fallback append (.env 无占位行也能 work)', () => {
+  let app: any;
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    const fixDir = path.join(os.tmpdir(), `install-pack-fixture-noplaceholder-${Date.now()}`);
+    fs.mkdirSync(fixDir, { recursive: true });
+    // 关键：.env 不含 ZENITHJOY_LICENSE 占位行（模拟 sprint 2.1f Task 2 减肥后的状态）
+    fs.writeFileSync(
+      path.join(fixDir, '.env'),
+      'ZENITHJOY_API_BASE=https://autopilot.zenjoymedia.media\nZENITHJOY_CHROME_DEBUG_PORT=19222\n'
+    );
+    const fixturePath = path.join(os.tmpdir(), `install-pack-fixture-np-${Date.now()}.tar.gz`);
+    spawnSync('tar', ['-czf', fixturePath, '-C', fixDir, '.'], { stdio: 'pipe' });
+    process.env.INSTALL_PACK_FIXTURE_PATH = fixturePath;
+    (manifestSvc.readInstallPackManifest as any).mockReturnValue({
+      version: '1.0.1',
+      sha256: 'a'.repeat(64),
+      download_url: '/download/zenithjoy-agent-v1.0.1.tar.gz',
+      size: 60000000,
+      build_time: '2026-05-09T10:00:00Z',
+    });
+    app = (await import('../../app')).default;
+  });
+
+  it('.env 无 ZENITHJOY_LICENSE 占位行 → 仍 200 + .env append ZENITHJOY_LICENSE=<key>', async () => {
+    const { auth } = await import('../../auth');
+    const pool = (await import('../../db/connection')).default;
+    vi.spyOn(auth.api, 'getSession').mockResolvedValue({
+      user: { id: 'user-noenv-id', email: 'noenv@test', name: 'NoEnv' },
+    } as any);
+    vi.spyOn(pool, 'query').mockResolvedValue({
+      rows: [{ license_key: 'ZJ-F-CCCC3333' }],
+    } as any);
+
+    const res = await request(app).get('/api/agent/install-pack/download');
+    expect(res.status).toBe(200);
+
+    const tmpOut = path.join(os.tmpdir(), `download-noenv-${Date.now()}`);
+    fs.mkdirSync(tmpOut, { recursive: true });
+    const tarPath = path.join(tmpOut, 'pack.tar.gz');
+    fs.writeFileSync(tarPath, res.body);
+    spawnSync('tar', ['-xzf', tarPath, '-C', tmpOut], { stdio: 'pipe' });
+    const envContent = fs.readFileSync(path.join(tmpOut, '.env'), 'utf-8');
+    expect(envContent).toContain('ZENITHJOY_LICENSE=ZJ-F-CCCC3333');
+    expect(envContent).toContain('ZENITHJOY_API_BASE=https://autopilot.zenjoymedia.media');
+    expect(envContent).toContain('ZENITHJOY_CHROME_DEBUG_PORT=19222');
+  });
+});
