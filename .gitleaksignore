@@ -36,3 +36,10 @@ cbca7c4909fbbb5390a6f13867ebf92493757b1c:.agent-knowledge/golden-path-1/lead-acc
 
 # Sprint 2.1f plan doc — license_key 是 example fixture（非真 secret）
 ff2f05fc60b5d7c101a24c1b9edbc47ffb87f89f:docs/superpowers/plans/2026-05-09-sprint-2-1f-prod-readiness.md:generic-api-key:605
+
+# Path 2 Sprint A architecture hotfix evidence — Bitable doc id / table_id 是公开 surface URL 中可见的
+# 非敏感 identifier，但 gitleaks generic-api-key 误判。后续 commit f22b9ca 已 redact。
+786857bb56d53aae2d4943f704378eaf6b98aec2:.agent-knowledge/path-2/evidence-arch/arch-summary.json:generic-api-key:10
+786857bb56d53aae2d4943f704378eaf6b98aec2:.agent-knowledge/path-2/lead-acceptance-sprint-a.md:generic-api-key:119
+786857bb56d53aae2d4943f704378eaf6b98aec2:.agent-knowledge/path-2/lead-acceptance-sprint-a.md:generic-api-key:154
+786857bb56d53aae2d4943f704378eaf6b98aec2:.agent-knowledge/path-2/lead-acceptance-sprint-a.md:generic-api-key:196
