@@ -21,10 +21,14 @@ export async function dispatchTask(task: Task): Promise<void> {
   const wsTaskId = `wstask-${task.id}`;
   pendingTasks.set(wsTaskId, task.id);
 
+  // H-1 ws3: payload 含 agent_id (UUID = agents.id) — 让 agent 端验"确实派给我"
+  // 双显示 log: displayName(uuid) — 运维仍能看 display name 排查
+  console.log(`[dispatch] ${task.id} → ${agent.displayName}(${agent.agentId})`);
   const sent = sendToAgent(agent.agentId, makeMsg('publish_request', {
     platform: capability as any,
     content: task.params as any,
-  }, wsTaskId));
+    agent_id: agent.agentId,  // H-1 ws3: UUID (agents.id), 不是 hostname
+  } as any, wsTaskId));
 
   if (!sent) {
     pendingTasks.delete(wsTaskId);

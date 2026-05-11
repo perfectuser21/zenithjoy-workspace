@@ -263,19 +263,44 @@ export type RegisterErrorCode =
   | 'SUSPENDED'
   | 'QUOTA_EXCEEDED';
 
+/**
+ * RegisterSuccess — 双 schema (H-1):
+ * - 老字段 (rog v1.0 Agent 仍依赖): ok / license_id / tier / max_machines / registered_machine_id / ws_token
+ * - 新字段 (H-1 加, 自验脚本验): success / agent_id (UUID) / license_tier / device_count / device_limit
+ *
+ * 改写 PRD line 77 "顶层 keys 完全等于" 为 "包含" 子集校验，向后兼容 rog v1.0 Agent
+ */
 export interface RegisterSuccess {
+  // 老字段 (backwards compat)
   ok: true;
   license_id: string;
   tier: Tier;
   max_machines: number;
   registered_machine_id: string;
   ws_token: string;
+  // 新字段 (H-1)
+  success: true;
+  agent_id: string;          // UUID = agents.id
+  license_tier: Tier;
+  device_count: number;      // INSERT 后的 active count (含本次)
+  device_limit: number;
 }
 
+/**
+ * RegisterFailure — 双 schema (H-1):
+ * - 老字段: ok / code / message
+ * - 新字段: success / error / current_count / limit
+ */
 export interface RegisterFailure {
+  // 老字段
   ok: false;
   code: RegisterErrorCode;
   message: string;
+  // 新字段 (H-1, 仅 QUOTA_EXCEEDED 返完整 current_count/limit)
+  success: false;
+  error: 'INVALID_LICENSE' | 'EXPIRED' | 'SUSPENDED' | 'LICENSE_DEVICE_LIMIT_EXCEEDED';
+  current_count?: number;    // 仅 LICENSE_DEVICE_LIMIT_EXCEEDED 时填
+  limit?: number;
 }
 
 export type RegisterResult = RegisterSuccess | RegisterFailure;
@@ -288,6 +313,39 @@ export interface RegisterInput {
   version?: string;
 }
 
+/**
+ * H-1 helper：upsert agents 行返 UUID（agents.id）
+ *
+ * 用 ON CONFLICT (agent_id) DO UPDATE 一句搞定避免竞态。
+ * agent_id 列是 hostname-derived display name，本 register 用 input.machine_id 作 fallback。
+ */
+async function upsertAgentRowGetUuid(input: RegisterInput, licenseId: string): Promise<string> {
+  // tenant_id 通过 license 反查（agents.tenant_id 不允许 NULL — schema 要求）
+  const tenantRes = await pool.query<{ id: string }>(
+    `SELECT id FROM zenithjoy.tenants WHERE license_key = (
+       SELECT license_key FROM zenithjoy.licenses WHERE id = $1
+     ) LIMIT 1`,
+    [licenseId]
+  );
+  const tenantId = tenantRes.rows[0]?.id;
+  // 如 tenant 不存在（旧数据），用 fallback NULL — 实际 schema agents.tenant_id 允许 NULL（兼容历史）
+  const displayName = input.agent_id || input.hostname || `m-${input.machine_id.slice(0, 16)}`;
+  const r = await pool.query<{ id: string }>(
+    `INSERT INTO zenithjoy.agents (tenant_id, agent_id, capabilities, version, status, last_seen)
+     VALUES ($1, $2, $3, $4, 'online', now())
+     ON CONFLICT (agent_id) DO UPDATE
+       SET tenant_id = COALESCE(EXCLUDED.tenant_id, zenithjoy.agents.tenant_id),
+           capabilities = EXCLUDED.capabilities,
+           version = EXCLUDED.version,
+           status = 'online',
+           last_seen = now(),
+           updated_at = now()
+     RETURNING id`,
+    [tenantId ?? null, displayName, [], input.version ?? '0.1.0']
+  );
+  return r.rows[0]?.id ?? '00000000-0000-0000-0000-000000000000';
+}
+
 export async function registerAgent(
   input: RegisterInput
 ): Promise<RegisterResult> {
@@ -297,6 +355,8 @@ export async function registerAgent(
       ok: false,
       code: 'INVALID_LICENSE',
       message: 'License key 不存在',
+      success: false,
+      error: 'INVALID_LICENSE',
     };
   }
 
@@ -305,6 +365,8 @@ export async function registerAgent(
       ok: false,
       code: 'EXPIRED',
       message: `License 已 ${license.status}`,
+      success: false,
+      error: 'EXPIRED',
     };
   }
   if (license.status === 'suspended') {
@@ -312,6 +374,8 @@ export async function registerAgent(
       ok: false,
       code: 'SUSPENDED',
       message: 'License 已暂停',
+      success: false,
+      error: 'SUSPENDED',
     };
   }
 
@@ -320,6 +384,8 @@ export async function registerAgent(
       ok: false,
       code: 'EXPIRED',
       message: 'License 已过期',
+      success: false,
+      error: 'EXPIRED',
     };
   }
 
@@ -339,6 +405,15 @@ export async function registerAgent(
          WHERE id = $3`,
       [input.agent_id ?? null, input.hostname ?? null, existing.rows[0].id]
     );
+    // reconnect 时 device_count 不变（仍是 active count）
+    const countRes = await pool.query<{ count: string }>(
+      `SELECT COUNT(*)::int AS count
+         FROM zenithjoy.license_machines
+         WHERE license_id = $1 AND status = 'active'`,
+      [license.id]
+    );
+    const deviceCount = parseInt(countRes.rows[0]?.count ?? '1', 10);
+    const agentUuid = await upsertAgentRowGetUuid(input, license.id);
     return {
       ok: true,
       license_id: license.id,
@@ -346,6 +421,11 @@ export async function registerAgent(
       max_machines: license.max_machines,
       registered_machine_id: input.machine_id,
       ws_token: signWsToken(license.id, input.machine_id),
+      success: true,
+      agent_id: agentUuid,
+      license_tier: license.tier,
+      device_count: deviceCount,
+      device_limit: license.max_machines,
     };
   }
 
@@ -359,10 +439,15 @@ export async function registerAgent(
   const currentCount = parseInt(countResult.rows[0]?.count ?? '0', 10);
 
   if (currentCount >= license.max_machines) {
+    // current_count = 不含本次（拒绝时未实际 INSERT）
     return {
       ok: false,
       code: 'QUOTA_EXCEEDED',
       message: `装机数已达上限 ${license.max_machines}（${license.tier}）`,
+      success: false,
+      error: 'LICENSE_DEVICE_LIMIT_EXCEEDED',
+      current_count: currentCount,
+      limit: license.max_machines,
     };
   }
 
@@ -379,6 +464,9 @@ export async function registerAgent(
     ]
   );
 
+  // 新装机后 device_count = INSERT 前 + 1（含本次）
+  const newDeviceCount = currentCount + 1;
+  const agentUuid = await upsertAgentRowGetUuid(input, license.id);
   return {
     ok: true,
     license_id: license.id,
@@ -386,5 +474,10 @@ export async function registerAgent(
     max_machines: license.max_machines,
     registered_machine_id: input.machine_id,
     ws_token: signWsToken(license.id, input.machine_id),
+    success: true,
+    agent_id: agentUuid,
+    license_tier: license.tier,
+    device_count: newDeviceCount,
+    device_limit: license.max_machines,
   };
 }
