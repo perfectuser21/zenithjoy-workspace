@@ -1449,3 +1449,37 @@ tests:
     status: pending-ci
     product: 中台认证
     note: "Agent hardening H-1 合同 SSOT — TDD RED 来源（不实跑，副本在 apps/api/tests/ws3/）"
+
+  # ─── H-2 Bug 3 + Bug 9 hotfix tests ───────────────────────────────────────────
+
+  - id: h2-bug3-mock-agent-prod-gate
+    path: apps/api/src/routes/_smoke-mock-agent.test.ts
+    type: unit
+    ci: L3
+    status: passed
+    product: 中台认证
+    note: "H-2 Bug 3 — mock-agent 生产可调 (X-Smoke-Token 单门禁 + production 必须设 SMOKE_TOKEN env)"
+
+  - id: h2-bug9-agent-ws-hello-handler
+    path: apps/api/src/services/__tests__/agent-ws-hello.test.ts
+    type: unit
+    ci: L3
+    status: passed
+    product: 中台认证
+    note: "H-2 Bug 9 — backend hello handler agentUuid 优先 unit test (避免 dual register race)"
+
+  - id: h2-bug9-agent-dual-register-integration
+    path: apps/api/tests/integration/agent-dual-register.integration.test.ts
+    type: integration
+    ci: L4
+    status: passed
+    product: 中台认证
+    note: "H-2 Bug 9 integration — 真 license register + WS hello → agents only 1 行"
+
+  - id: h2-bug9-agent-uuid-hello
+    path: services/agent/src/__tests__/agent-uuid-hello.test.ts
+    type: unit
+    ci: L3
+    status: passed
+    product: Agent 客户端
+    note: "H-2 Bug 9 — Agent client buildHelloPayload 含 agentUuid (向后兼容老 agent)"
