@@ -1501,3 +1501,11 @@ tests:
     status: passed
     product: 中台认证
     note: "H-2 Bug 9 layer 4 — heartbeat polling 接 pending/queued/dispatched"
+
+  - id: b1-burner-heartbeat-payload-passthrough
+    path: apps/api/src/routes/__tests__/heartbeat-payload-passthrough.test.ts
+    type: unit
+    ci: L3
+    status: passed
+    product: 中台认证
+    note: "B-1 burner real-qr — heartbeat queued_tasks 透传真 account_label (避免 default 覆盖导致复用 cookie)"
