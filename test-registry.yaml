@@ -1423,3 +1423,29 @@ tests:
     status: active
     product: AI员工
     note: "H-1 ws3 placeholder — lint-test-pairing 配套 test，验 task-dispatch.ts 含 agent_id + displayName 字面量"
+
+  # ─── Agent 系统 hardening Sprint H-1 contract SSOT (TDD RED 来源，不实跑) ───────
+
+  - id: h1-contract-ws1-license-register-dual-schema
+    path: sprints/agent-hardening-h1-backend-system/tests/ws1/license-register-dual-schema.test.ts
+    type: unit
+    ci: L3
+    status: pending-ci
+    product: 中台认证
+    note: "Agent hardening H-1 合同 SSOT — TDD RED 来源（不实跑，副本在 apps/api/tests/ws1/）"
+
+  - id: h1-contract-ws2-publish-tasks-status-enum
+    path: sprints/agent-hardening-h1-backend-system/tests/ws2/publish-tasks-status-enum.test.ts
+    type: unit
+    ci: L3
+    status: pending-ci
+    product: 中台认证
+    note: "Agent hardening H-1 合同 SSOT — TDD RED 来源（不实跑，副本在 apps/api/tests/ws2/）"
+
+  - id: h1-contract-ws3-ws-routing-uuid
+    path: sprints/agent-hardening-h1-backend-system/tests/ws3/ws-routing-uuid.test.ts
+    type: unit
+    ci: L3
+    status: pending-ci
+    product: 中台认证
+    note: "Agent hardening H-1 合同 SSOT — TDD RED 来源（不实跑，副本在 apps/api/tests/ws3/）"
