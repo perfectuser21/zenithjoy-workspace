@@ -162,14 +162,35 @@ export async function handleQrBindDouyinBurner(
       await page.goto(loginUrl);
     }
 
-    // 等扫码完成：url 跳出 /login。timeout 10 分钟（600000ms）— 给客户找小号手机时间
-    // 注：urlMatcher 用 RegExp 替代 lambda 让 grep [^)]*timeout 能匹配整段（contract regex 友好）
-    const urlMatcher = /^(?!.*\/login(\b|\/|$)).*$/;
-    if (context.waitForURL) {
-      await context.waitForURL(urlMatcher, { timeout: 600000 });
+    // 等扫码完成：轮询 storageState cookie 直到出现抖音 session cookie (sessionid_ss / sessionid / sid_tt)。
+    // timeout 10 分钟（600000ms）— 给客户找小号手机时间。
+    //
+    // 替代旧 waitForURL(/^(?!.*\/login).*$/, {timeout: 600000}) 逻辑 —
+    // 旧 urlMatcher 是 "URL 不含 /login" 立即匹配，初始页 creator.douyin.com/ 就不含 /login →
+    // waitForURL 立即返回 → handler 没真等扫码就标 success。
+    // 新 cookie polling 直接看抖音真登录 cookie 写入，是真扫码完成的唯一可靠信号。
+    const COOKIE_POLL_INTERVAL_MS = 2000;
+    const COOKIE_POLL_TIMEOUT_MS = 600000;
+    const SESSION_COOKIE_NAMES = ['sessionid_ss', 'sessionid', 'sid_tt'];
+    const isSessionCookie = (c: { name: string; domain: string; value: string }) =>
+      typeof c?.value === 'string' &&
+      c.value.length > 0 &&
+      typeof c?.domain === 'string' &&
+      (c.domain.endsWith('.douyin.com') || c.domain === 'douyin.com') &&
+      SESSION_COOKIE_NAMES.includes(c.name);
+    const start = Date.now();
+    let storageState: { cookies?: Array<{ name: string; domain: string; value: string }> } | null = null;
+    while (Date.now() - start < COOKIE_POLL_TIMEOUT_MS) {
+      storageState = (await context.storageState()) as typeof storageState;
+      const cookies = storageState?.cookies ?? [];
+      if (cookies.some(isSessionCookie)) break;
+      await new Promise((r) => setTimeout(r, COOKIE_POLL_INTERVAL_MS));
+    }
+    const finalCookies = storageState?.cookies ?? [];
+    if (!finalCookies.some(isSessionCookie)) {
+      throw new Error('timeout waiting for douyin login (sessionid cookie missing after 600s)');
     }
 
-    const storageState = await context.storageState();
     fs.writeFileSync(sessionPath, JSON.stringify(storageState, null, 2));
 
     // 尝试拿账号昵称（从 page.title 或固定占位）
