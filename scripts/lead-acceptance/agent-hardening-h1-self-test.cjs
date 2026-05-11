@@ -64,8 +64,9 @@ function log(msg) {
 }
 
 function psql(sql) {
-  const cmd = `PGPASSWORD='${DB.pass}' psql -h ${DB.host} -p ${DB.port} -U ${DB.user} -d ${DB.name} -tA -c "${sql.replace(/"/g, '\\"')}"`;
-  return execSync(cmd, { encoding: 'utf8' }).trim();
+  const cmd = `PGPASSWORD='${DB.pass}' psql -h ${DB.host} -p ${DB.port} -U ${DB.user} -d ${DB.name} -tAq -c "${sql.replace(/"/g, '\\"')}"`;
+  // -tA 模式 RETURNING 仍会输出 'INSERT 0 1' 状态行，取 stdout 第一行
+  return execSync(cmd, { encoding: 'utf8' }).trim().split('\n')[0].trim();
 }
 
 async function fetchJSON(url, opts = {}) {
@@ -85,7 +86,7 @@ async function step1_signup() {
   const email = `h1-lead-${TS}@example.com`;
   const r = await fetchJSON(`${API_BASE}/api/auth/sign-up/email`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', 'Origin': API_BASE },
     body: JSON.stringify({ email, password: 'H1lead!2026', name: 'H1 Lead' }),
   });
   if (!r.body.user || !r.body.user.id) {
@@ -167,7 +168,9 @@ function step5_agents_table_1_row(licenseKey) {
 function step6_publish_tasks_queued_constraint() {
   // 直 INSERT agents 行 + INSERT publish_tasks status='queued' — 验 constraint
   try {
-    const aid = psql(`INSERT INTO zenithjoy.agents (agent_id, capabilities, version, status) VALUES ('h1-lead-${TS}', ARRAY['douyin'], '0.1.0', 'online') RETURNING id`);
+    // 借 step 1 注册 user 的默认 tenant 满足 agents.tenant_id NOT NULL
+    const tid = psql(`SELECT id FROM zenithjoy.tenants ORDER BY created_at DESC LIMIT 1`);
+    const aid = psql(`INSERT INTO zenithjoy.agents (tenant_id, agent_id, capabilities, version, status) VALUES ('${tid}', 'h1-lead-${TS}', ARRAY['douyin'], '0.1.0', 'online') RETURNING id`);
     const pid = psql(`INSERT INTO zenithjoy.publish_tasks (agent_id, platform, status) VALUES ('${aid}', 'douyin', 'queued') RETURNING id`);
     const ok = /^[0-9a-f-]{36}$/.test(pid);
     summary.steps.step6_publish_tasks_queued_constraint = {

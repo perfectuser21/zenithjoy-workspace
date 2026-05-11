@@ -1,0 +1,73 @@
+{
+  "sprint": "agent-hardening-h1",
+  "api_base": "http://localhost:5200",
+  "start_at": "2026-05-11T02:44:11.603Z",
+  "ts": 1778467451603,
+  "steps": {
+    "step1_signup": {
+      "status": "PASS",
+      "user_id": "eukyjOYWwc2mj4O34Y1zx28GckuV1B52",
+      "email": "h1-lead-1778467451603@example.com"
+    },
+    "step2_license_key": {
+      "status": "PASS",
+      "license_key_masked": "ZJ-F-63Cxxxxxx",
+      "tier": "free"
+    },
+    "step3_first_agent_register": {
+      "status": "PASS",
+      "http_status": 200,
+      "body": {
+        "ok": true,
+        "license_id": "04fc3250-d314-4ddb-bbfa-cc1a5912b835",
+        "tier": "free",
+        "max_machines": 1,
+        "registered_machine_id": "lead-h1-1778467451603-a",
+        "ws_token": "REDACTED-ephemeral-session-token-64hex",
+        "success": true,
+        "agent_id": "146f2210-ee49-4c2c-8975-c543477e6c53",
+        "license_tier": "free",
+        "device_count": 1,
+        "device_limit": 1
+      }
+    },
+    "step4_second_agent_403_LIMIT_EXCEEDED": {
+      "status": "PASS",
+      "http_status": 403,
+      "body": {
+        "ok": false,
+        "code": "QUOTA_EXCEEDED",
+        "message": "装机数已达上限 1（free）",
+        "success": false,
+        "error": "LICENSE_DEVICE_LIMIT_EXCEEDED",
+        "current_count": 1,
+        "limit": 1
+      },
+      "critical": true
+    },
+    "step5_agents_table_1_row": {
+      "status": "PASS",
+      "count": "1"
+    },
+    "step6_publish_tasks_queued_constraint": {
+      "status": "PASS",
+      "agent_id": "2e0e27d2-657e-4ea1-a192-3158f21ed19d",
+      "task_id": "e710a774-3804-4889-8cdb-c21c5d2a748d",
+      "critical": true
+    },
+    "step7_constraint_full_enum": {
+      "status": "PASS",
+      "constraint_def": "CHECK ((status = ANY (ARRAY['pending'::text, 'queued'::text, 'dispatched'::text, 'in_progress'::text, 'completed'::text, 'failed'::text, 'running'::text, 'success'::text, 'done'::text])))",
+      "missing": []
+    },
+    "step8_ws_routing_uuid": {
+      "status": "PASS",
+      "received_lines_count": 1,
+      "first_msg_agent_id": "2e0e27d2-657e-4ea1-a192-3158f21ed19d",
+      "critical": true
+    }
+  },
+  "user_intervention_count": 0,
+  "status": "PASS",
+  "end_at": "2026-05-11T02:44:18.340Z"
+}
