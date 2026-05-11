@@ -23,7 +23,7 @@
         "tier": "free",
         "max_machines": 1,
         "registered_machine_id": "lead-h1-1778467451603-a",
-        "ws_token": "3184d8f2f1d14cb43232f8b75f83a4af4489aef5be17c5e1242b19fdce651170",
+        "ws_token": "REDACTED-ephemeral-session-token-64hex",
         "success": true,
         "agent_id": "146f2210-ee49-4c2c-8975-c543477e6c53",
         "license_tier": "free",
