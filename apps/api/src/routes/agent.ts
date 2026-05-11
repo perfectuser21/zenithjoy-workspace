@@ -14,11 +14,15 @@ export const agentRouter = Router();
 //
 // POST /api/agent/register
 //   请求体：{ license_key, machine_id, hostname?, agent_id?, version? }
-//   响应：
-//     200 OK: { ok:true, license_id, tier, max_machines, registered_machine_id, ws_token }
-//     401   : { ok:false, code:'INVALID_LICENSE' }
-//     403   : { ok:false, code:'EXPIRED' | 'SUSPENDED' | 'QUOTA_EXCEEDED' }
+//   响应（H-1 双 schema：老 + 新字段并存）：
+//     200 OK: { ok:true, license_id, tier, max_machines, registered_machine_id, ws_token,
+//               success:true, agent_id (UUID), license_tier, device_count, device_limit }
+//     401   : { ok:false, code:'INVALID_LICENSE', success:false, error:'INVALID_LICENSE' }
+//     403   : { ok:false, code:'EXPIRED' | 'SUSPENDED' | 'QUOTA_EXCEEDED',
+//               success:false, error:'EXPIRED' | 'SUSPENDED' | 'LICENSE_DEVICE_LIMIT_EXCEEDED',
+//               current_count?, limit? }
 //     400   : { ok:false, code:'BAD_REQUEST' }
+// 注意：QUOTA_EXCEEDED 老 code 映射 LICENSE_DEVICE_LIMIT_EXCEEDED 新 error 名。
 agentRouter.post('/register', async (req: Request, res: Response) => {
   const { license_key, machine_id, hostname, agent_id, version } =
     req.body ?? {};
@@ -95,7 +99,8 @@ agentRouter.post('/test-publish', (req, res) => {
 
   const sent = sendToAgent(agent.agentId, makeMsg('publish_request', {
     platform: 'wechat', content,
-  }, taskId));
+    agent_id: agent.agentId, // H-1 ws3: UUID
+  } as any, taskId));
 
   if (!sent) return res.status(503).json({ error: 'agent not reachable' });
 
@@ -118,7 +123,8 @@ agentRouter.post('/test-publish-douyin', (req, res) => {
 
   const sent = sendToAgent(agent.agentId, makeMsg('publish_request', {
     platform: 'douyin', content,
-  }, taskId));
+    agent_id: agent.agentId, // H-1 ws3: UUID
+  } as any, taskId));
 
   if (!sent) return res.status(503).json({ error: 'agent not reachable' });
 
@@ -151,7 +157,8 @@ for (const { slug, label } of DRY_RUN_PLATFORMS) {
 
     const sent = sendToAgent(agent.agentId, makeMsg('publish_request', {
       platform: slug, content,
-    }, taskId));
+      agent_id: agent.agentId, // H-1 ws3: UUID
+    } as any, taskId));
 
     if (!sent) return res.status(503).json({ error: 'agent not reachable' });
 

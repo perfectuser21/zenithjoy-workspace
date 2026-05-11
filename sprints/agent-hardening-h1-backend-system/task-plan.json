@@ -1,0 +1,80 @@
+{
+  "initiative_id": "agent-hardening-h1",
+  "journey_type": "dev_pipeline",
+  "journey_type_reason": "本 sprint 修 backend 系统层（license enforce response、status enum、WS UUID routing），让所有未来 sprint 在干净基建上跑。不直接面客户，是 dev_pipeline。",
+  "tasks": [
+    {
+      "task_id": "ws1",
+      "title": "License register endpoint 双 schema + LICENSE_DEVICE_LIMIT_EXCEEDED 新错误码",
+      "scope": "改造 apps/api/src/services/license.service.ts registerAgent 函数，返新 RegisterSuccess (含 success/agent_id (UUID)/license_tier/device_count/device_limit) + 老字段保留；RegisterFailure 加 error/current_count/limit。改 apps/api/src/routes/agent.ts register endpoint 路由层。既有 quota enforce 逻辑保留不动。",
+      "dod": [
+        "[BEHAVIOR] register 第 1 个 agent 返 200 含双字段（老 ok+license_id+tier+max_machines / 新 success+agent_id(UUID)+license_tier+device_count=1+device_limit=1）",
+        "[BEHAVIOR] register 第 2 个 agent 同 license 返 HTTP 403，body 含 error=LICENSE_DEVICE_LIMIT_EXCEEDED + current_count + limit + 老 code=QUOTA_EXCEEDED",
+        "[BEHAVIOR] register 同 machine_id reconnect 不增 device_count（仍返 1）",
+        "[BEHAVIOR] success response 不含禁用字段 device_quota/installed_count/max_devices/data/payload",
+        "[ARTIFACT] license.service.ts RegisterSuccess interface 含 5 个新字段",
+        "[ARTIFACT] license.service.ts RegisterFailure interface 含 4 个新字段",
+        "[ARTIFACT] routes/agent.ts 含 LICENSE_DEVICE_LIMIT_EXCEEDED 字面量"
+      ],
+      "files": [
+        "apps/api/src/services/license.service.ts",
+        "apps/api/src/routes/agent.ts",
+        "apps/api/src/routes/__tests__/agent-register-dual-schema.test.ts",
+        "apps/api/scripts/h1-ws1-helper.sh"
+      ],
+      "depends_on": [],
+      "complexity": "M",
+      "estimated_minutes": 50
+    },
+    {
+      "task_id": "ws2",
+      "title": "publish_tasks status enum migration superset (5 老 + 4 新 = 9)",
+      "scope": "新增 apps/api/db/migrations/<TS>_publish_tasks_status_enum_full.sql — DROP CONSTRAINT IF EXISTS chk_publish_tasks_status + ADD CONSTRAINT 含 9 status (pending/running/success/failed/done/queued/dispatched/in_progress/completed)。不改任何 INSERT 处代码。文件名严按 sprint convention。",
+      "dod": [
+        "[BEHAVIOR] migration 应用后 INSERT publish_tasks status='queued'/'dispatched'/'in_progress'/'completed' 全过 constraint",
+        "[BEHAVIOR] migration 应用后 INSERT publish_tasks status='banana' 仍被 constraint 拒",
+        "[BEHAVIOR] pg_constraint 元数据中 chk_publish_tasks_status 的 condef 同时含 9 个 status 字面量",
+        "[BEHAVIOR] 老 status (success/failed/pending/running/done) 仍可 INSERT（向后兼容）",
+        "[ARTIFACT] migration 文件存在且文件名 YYYYMMDD_HHMMSS_publish_tasks_status_enum*.sql",
+        "[ARTIFACT] migration SQL 含 9 status 字面量 + DROP/ADD 双语句"
+      ],
+      "files": [
+        "apps/api/db/migrations/20260511_HHMMSS_publish_tasks_status_enum_full.sql",
+        "apps/api/tests/migrations/publish-tasks-status-enum.test.ts",
+        "apps/api/scripts/h1-ws2-helper.sh"
+      ],
+      "depends_on": [],
+      "complexity": "S",
+      "estimated_minutes": 30
+    },
+    {
+      "task_id": "ws3",
+      "title": "WS routing UUID 化 + dispatcher 改读 agents.id（含 backwards compat）",
+      "scope": "agent-db.ts 加 findOrCreateAgentUuid(displayName, tenantId, capabilities, version) 函数；agent-registry.ts AgentEntry 加 displayName 字段，agentId 改 UUID；agent-ws.ts hello message handler 收 string agentId 时调 findOrCreateAgentUuid 转 UUID 后再 register；task-dispatch.ts 发 publish_request message 时 payload 含 agent_id (UUID)；agent-protocol.ts publish_request payload schema 加 optional agent_id。backwards compat：旧 v1.0 Agent 发 string agentId 仍能工作。",
+      "dod": [
+        "[BEHAVIOR] mock WS client hello payload.agentId 为 string display 时 server 自动转 UUID 注册到 registry，GET /api/agent/status 返该 entry agentId 字段是 UUID",
+        "[BEHAVIOR] backend 派 douyin task 时 WS message 含 agent_id 字段是 UUID（不是 hostname/display）",
+        "[BEHAVIOR] dispatch 后 publish_tasks.agent_id 字段填 UUID 等于 agents.id",
+        "[BEHAVIOR] 2 mock client 不同 capability — backend 派 douyin task 时只 douyin client 收，feishu client 不收（capability filter 真生效）",
+        "[ARTIFACT] agent-db.ts 含 findOrCreateAgentUuid",
+        "[ARTIFACT] agent-registry.ts AgentEntry 含 displayName",
+        "[ARTIFACT] agent-ws.ts 调用 findOrCreateAgentUuid",
+        "[ARTIFACT] task-dispatch.ts payload 含 agent_id 字段",
+        "[ARTIFACT] agent-protocol.ts publish_request payload schema 含 agent_id"
+      ],
+      "files": [
+        "apps/api/src/services/agent-db.ts",
+        "apps/api/src/services/agent-registry.ts",
+        "apps/api/src/services/agent-ws.ts",
+        "apps/api/src/services/task-dispatch.ts",
+        "apps/api/src/schemas/agent-protocol.ts",
+        "apps/api/src/services/__tests__/agent-db-find-or-create-uuid.test.ts",
+        "apps/api/src/services/__tests__/agent-registry-display-name.test.ts",
+        "apps/api/scripts/h1-ws3-helper.sh"
+      ],
+      "depends_on": ["ws1"],
+      "complexity": "L",
+      "estimated_minutes": 60
+    }
+  ]
+}

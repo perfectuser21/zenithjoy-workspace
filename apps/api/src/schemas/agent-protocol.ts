@@ -58,6 +58,9 @@ export const PublishRequestPayload = z.object({
     digest: z.string().optional(),
     author: z.string().optional(),
   }),
+  // H-1 ws3: server 派 task 时填 agent_id (UUID = agents.id) — agent 端验"派给我"
+  // optional 兼容老 v1.0 server 不发此字段
+  agent_id: z.string().uuid().optional(),
 });
 
 export const TaskCancelPayload = z.object({

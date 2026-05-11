@@ -1390,3 +1390,62 @@ tests:
     status: active
     product: 私域运营
     note: "Path 2 Sprint B-1 architecture hotfix — self-test Step 1-3 真 fetch 结构合同 (修 ws7 generator 偷懒 stub)"
+
+  # H-1 Agent Hardening (2026-05-11) — license dual schema + status enum + WS UUID routing
+  - id: h1-ws1-license-register-dual-schema
+    path: apps/api/tests/h1/ws1/license-register-dual-schema.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: AI员工
+    note: "H-1 ws1 — license.service registerAgent 返双 schema (老 ok+ws_token / 新 success+device_count+UUID)"
+
+  - id: h1-ws2-publish-tasks-status-enum
+    path: apps/api/tests/h1/ws2/publish-tasks-status-enum.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: AI员工
+    note: "H-1 ws2 — publish_tasks chk_publish_tasks_status migration superset (9 status), filename + DROP/ADD 校验"
+
+  - id: h1-ws3-ws-routing-uuid
+    path: apps/api/tests/h1/ws3/ws-routing-uuid.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: AI员工
+    note: "H-1 ws3 — agent-db.findOrCreateAgentUuid + agent-registry.displayName + agent-ws hello + task-dispatch agent_id (UUID routing)"
+
+  - id: h1-task-dispatch-placeholder
+    path: apps/api/src/services/__tests__/task-dispatch.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: AI员工
+    note: "H-1 ws3 placeholder — lint-test-pairing 配套 test，验 task-dispatch.ts 含 agent_id + displayName 字面量"
+
+  # ─── Agent 系统 hardening Sprint H-1 contract SSOT (TDD RED 来源，不实跑) ───────
+
+  - id: h1-contract-ws1-license-register-dual-schema
+    path: sprints/agent-hardening-h1-backend-system/tests/ws1/license-register-dual-schema.test.ts
+    type: unit
+    ci: L3
+    status: pending-ci
+    product: 中台认证
+    note: "Agent hardening H-1 合同 SSOT — TDD RED 来源（不实跑，副本在 apps/api/tests/ws1/）"
+
+  - id: h1-contract-ws2-publish-tasks-status-enum
+    path: sprints/agent-hardening-h1-backend-system/tests/ws2/publish-tasks-status-enum.test.ts
+    type: unit
+    ci: L3
+    status: pending-ci
+    product: 中台认证
+    note: "Agent hardening H-1 合同 SSOT — TDD RED 来源（不实跑，副本在 apps/api/tests/ws2/）"
+
+  - id: h1-contract-ws3-ws-routing-uuid
+    path: sprints/agent-hardening-h1-backend-system/tests/ws3/ws-routing-uuid.test.ts
+    type: unit
+    ci: L3
+    status: pending-ci
+    product: 中台认证
+    note: "Agent hardening H-1 合同 SSOT — TDD RED 来源（不实跑，副本在 apps/api/tests/ws3/）"

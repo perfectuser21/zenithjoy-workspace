@@ -61,8 +61,11 @@ describe('POST /api/agent/register — 4 大场景', () => {
     mockQuery
       .mockResolvedValueOnce({ rows: [makeLicenseRow()] }) // findLicenseByKey
       .mockResolvedValueOnce({ rows: [] }) // existing machine：空
-      .mockResolvedValueOnce({ rows: [{ count: 0 }] }) // count
-      .mockResolvedValueOnce({ rows: [] }); // INSERT machine
+      .mockResolvedValueOnce({ rows: [{ count: 0 }] }) // count active machines
+      .mockResolvedValueOnce({ rows: [] }) // INSERT license_machines
+      // H-1 ws3 新增：upsertAgentRowGetUuid 内 2 query
+      .mockResolvedValueOnce({ rows: [{ id: 'tenant-1' }] }) // tenant lookup
+      .mockResolvedValueOnce({ rows: [{ id: 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee' }] }); // UPSERT agents
 
     const res = await request(app).post('/api/agent/register').send(validBody);
     expect(res.status).toBe(200);
@@ -71,6 +74,12 @@ describe('POST /api/agent/register — 4 大场景', () => {
     expect(res.body.max_machines).toBe(1);
     expect(res.body.registered_machine_id).toBe('machine-fingerprint-xyz');
     expect(res.body.ws_token).toMatch(/^[0-9a-f]{64}$/);
+    // H-1 ws1 新字段
+    expect(res.body.success).toBe(true);
+    expect(res.body.agent_id).toMatch(/^[0-9a-f]{8}-/);
+    expect(res.body.license_tier).toBe('basic');
+    expect(res.body.device_count).toBe(1);
+    expect(res.body.device_limit).toBe(1);
   });
 
   it('success：已绑定 machine 续签（不占新名额）', async () => {
@@ -90,12 +99,18 @@ describe('POST /api/agent/register — 4 大场景', () => {
           },
         ],
       })
-      .mockResolvedValueOnce({ rows: [] }); // UPDATE last_seen
+      .mockResolvedValueOnce({ rows: [] }) // UPDATE last_seen
+      // H-1 reconnect 也走 SELECT COUNT + upsert agents
+      .mockResolvedValueOnce({ rows: [{ count: 1 }] }) // count active
+      .mockResolvedValueOnce({ rows: [{ id: 'tenant-1' }] }) // tenant lookup
+      .mockResolvedValueOnce({ rows: [{ id: 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee' }] }); // UPSERT agents
 
     const res = await request(app).post('/api/agent/register').send(validBody);
     expect(res.status).toBe(200);
     expect(res.body.ok).toBe(true);
     expect(res.body.ws_token).toMatch(/^[0-9a-f]{64}$/);
+    // H-1 reconnect device_count 仍 1
+    expect(res.body.device_count).toBe(1);
   });
 
   it('invalid：license key 不存在 → 401', async () => {

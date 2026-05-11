@@ -5,10 +5,12 @@ export interface AgentMeta {
   capabilities: string[];
   version: string;
   tenantId: string;   // populated from WS upgrade license validation
+  displayName?: string; // H-1 ws3: 老 v1.0 Agent 发的 string agentId, 仅作 log + UI display
 }
 
 export interface AgentEntry {
-  agentId: string;
+  agentId: string;       // H-1 ws3: 真 routing key = agents.id (UUID), 不再是 string display name
+  displayName: string;   // H-1 ws3: 原 hello.agentId (string), 用于 log + UI 显示, 不作 routing
   meta: AgentMeta;
   ws: WebSocket;
   connectedAt: number;
@@ -19,7 +21,9 @@ export interface AgentEntry {
 export class AgentRegistry extends EventEmitter {
   private agents = new Map<string, AgentEntry>();
 
-  register(agentId: string, meta: AgentMeta, ws: WebSocket): void {
+  // H-1 ws3: agentId 是 UUID (agents.id), displayName 是原 hello string (log only)
+  // 老调用方仍可不传 displayName，自动 fallback 到 agentId（向后兼容）
+  register(agentId: string, meta: AgentMeta, ws: WebSocket, displayName?: string): void {
     const existing = this.agents.get(agentId);
     if (existing && existing.ws !== ws) {
       try {
@@ -29,7 +33,10 @@ export class AgentRegistry extends EventEmitter {
       }
     }
     const entry: AgentEntry = {
-      agentId, meta, ws,
+      agentId,
+      displayName: displayName || meta.displayName || agentId,
+      meta,
+      ws,
       connectedAt: Date.now(),
       lastHeartbeat: Date.now(),
       busy: false,
