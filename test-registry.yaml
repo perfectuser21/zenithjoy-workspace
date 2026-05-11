@@ -1493,3 +1493,11 @@ tests:
     status: passed
     product: 中台认证
     note: "H-2 Bug 9 layer 3 — license register 必须填 agents.license_id + hostname (heartbeat path 找现有 row)"
+
+  - id: h2-bug9-l4-heartbeat-getQueuedTasks
+    path: apps/api/src/services/__tests__/walking-skeleton-getQueuedTasks.test.ts
+    type: unit
+    ci: L3
+    status: passed
+    product: 中台认证
+    note: "H-2 Bug 9 layer 4 — heartbeat polling 接 pending/queued/dispatched"
