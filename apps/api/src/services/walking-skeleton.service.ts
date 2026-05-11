@@ -47,6 +47,8 @@ export interface PublishTaskRow {
   result: unknown | null;
   receipt_at: string | null;
   created_at: string;
+  // B-1 Sprint burner / 后续 task type 通用 payload (account_label 等)
+  payload: Record<string, unknown> | null;
 }
 
 export type LicenseFailureCode =
@@ -170,7 +172,7 @@ export async function upsertAgentByHeartbeat(args: {
  */
 export async function getQueuedTasks(agentId: string): Promise<PublishTaskRow[]> {
   const { rows } = await pool.query<PublishTaskRow>(
-    `SELECT id, agent_id, platform, status, type, folder_path, result, receipt_at, created_at
+    `SELECT id, agent_id, platform, status, type, folder_path, result, receipt_at, created_at, payload
        FROM zenithjoy.publish_tasks
       WHERE agent_id = $1 AND status IN ('pending', 'queued', 'dispatched')
       ORDER BY created_at ASC`,
