@@ -44,6 +44,7 @@ interface AgentConfig {
   registerApiUrl?: string;
   tier?: string;
   maxMachines?: number;
+  agentUuid?: string; // H-2 Bug 9: register 返的 agents.id (UUID), WS hello 携带复用 row
 }
 
 function getConfigDir(): string {
@@ -212,6 +213,7 @@ async function registerWithLicense(cfg: AgentConfig): Promise<{
   machineId: string;
   tier?: string;
   maxMachines?: number;
+  agentUuid?: string; // H-2 Bug 9
 } | null> {
   const machineId = cfg.machineId || computeMachineId();
   // wsApiUrl 是 wss://api.../agent-ws，注册端点是 https://api.../api/agent/register
@@ -270,6 +272,7 @@ async function registerWithLicense(cfg: AgentConfig): Promise<{
     registered_machine_id?: string;
     tier?: string;
     max_machines?: number;
+    agent_id?: string; // H-2 Bug 9: backend 返的 agents.id (UUID), Agent 存 cfg.agentUuid
   };
   if (!data.ok || !data.ws_token) {
     console.error('[agent] register 响应异常:', data);
@@ -283,7 +286,28 @@ async function registerWithLicense(cfg: AgentConfig): Promise<{
     machineId: data.registered_machine_id || machineId,
     tier: data.tier,
     maxMachines: data.max_machines,
+    agentUuid: data.agent_id, // H-2 Bug 9
   };
+}
+
+// H-2 Bug 9: WS hello payload 构造器 — agentUuid optional 字段向后兼容
+//   - cfg.agentUuid set (新 Agent v1.0.1+ register 后)：hello 带 agentUuid → backend UPDATE 复用 row
+//   - cfg.agentUuid undefined (老 cfg / register 失败)：hello 不含 agentUuid → backend 走 findOrCreateAgentUuid 老 path
+export function buildHelloPayload(cfg: AgentConfig): {
+  agentId: string;
+  agentUuid?: string;
+  version: string;
+  capabilities: string[];
+} {
+  const payload: { agentId: string; agentUuid?: string; version: string; capabilities: string[] } = {
+    agentId: cfg.agentId,
+    version: VERSION,
+    capabilities: getCapabilities(),
+  };
+  if (cfg.agentUuid) {
+    payload.agentUuid = cfg.agentUuid;
+  }
+  return payload;
 }
 
 function connect(cfg: AgentConfig): void {
@@ -300,15 +324,7 @@ function connect(cfg: AgentConfig): void {
     console.log(`[agent] connected as ${cfg.agentId}`);
     backoff = 1000;
     updateTrayStatus('online');
-    ws.send(
-      JSON.stringify(
-        makeMsg('hello', {
-          agentId: cfg.agentId,
-          version: VERSION,
-          capabilities: getCapabilities(),
-        }),
-      ),
-    );
+    ws.send(JSON.stringify(makeMsg('hello', buildHelloPayload(cfg))));
     heartbeatTimer = setInterval(() => {
       if (ws.readyState === ws.OPEN) {
         ws.send(
@@ -398,6 +414,7 @@ async function main(): Promise<void> {
       cfg.machineId = result.machineId;
       cfg.tier = result.tier;
       cfg.maxMachines = result.maxMachines;
+      cfg.agentUuid = result.agentUuid; // H-2 Bug 9
       writeConfig(cfg);
     } else if (requireRegister) {
       console.error(
@@ -535,7 +552,10 @@ function startWs1HeartbeatLoop(cfg: AgentConfig): void {
   console.log(`[ws1] heartbeat-loop started → ${apiBase}/api/agent/heartbeat`);
 }
 
-main().catch((err) => {
-  console.error('[agent] main() 异常退出:', err);
-  process.exit(1);
-});
+// H-2 Bug 9: 仅作为入口脚本时运行 main()。test import 不触发 main()，让 buildHelloPayload 等纯函数可单测。
+if (require.main === module) {
+  main().catch((err) => {
+    console.error('[agent] main() 异常退出:', err);
+    process.exit(1);
+  });
+}

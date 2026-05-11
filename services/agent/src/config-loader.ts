@@ -21,6 +21,7 @@ export interface AgentConfig {
   registerApiUrl?: string;
   tier?: string;
   maxMachines?: number;
+  agentUuid?: string; // H-2 Bug 9: register 返的 agents.id (UUID), WS hello 携带复用 row
 }
 
 function getConfigDir(): string {
