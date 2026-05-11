@@ -1483,3 +1483,13 @@ tests:
     status: passed
     product: Agent 客户端
     note: "H-2 Bug 9 — Agent client buildHelloPayload 含 agentUuid (向后兼容老 agent)"
+
+  # ─── H-2 Bug 9 layer 3 — license register license_id+hostname fix ─────────────
+
+  - id: h2-bug9-l3-license-register-l3-fields
+    path: apps/api/src/services/__tests__/license-register-l3-fields.test.ts
+    type: unit
+    ci: L3
+    status: passed
+    product: 中台认证
+    note: "H-2 Bug 9 layer 3 — license register 必须填 agents.license_id + hostname (heartbeat path 找现有 row)"

@@ -318,6 +318,11 @@ export interface RegisterInput {
  *
  * 用 ON CONFLICT (agent_id) DO UPDATE 一句搞定避免竞态。
  * agent_id 列是 hostname-derived display name，本 register 用 input.machine_id 作 fallback。
+ *
+ * H-2 Bug 9 layer 3: 必须填 license_id + hostname 列 — heartbeat path
+ * (walking-skeleton.service heartbeatUpsert) 用 `WHERE license_id=$1 AND hostname=$2`
+ * 找现有 row。若 license register 留空 → heartbeat 找不到 → 走"创新 ws1-XXX row"path
+ * → 第二个 agent row 出现 → agentContext middleware 派 task 到错的 row → chrome 没弹。
  */
 async function upsertAgentRowGetUuid(input: RegisterInput, licenseId: string): Promise<string> {
   // tenant_id 通过 license 反查（agents.tenant_id 不允许 NULL — schema 要求）
@@ -331,17 +336,19 @@ async function upsertAgentRowGetUuid(input: RegisterInput, licenseId: string): P
   // 如 tenant 不存在（旧数据），用 fallback NULL — 实际 schema agents.tenant_id 允许 NULL（兼容历史）
   const displayName = input.agent_id || input.hostname || `m-${input.machine_id.slice(0, 16)}`;
   const r = await pool.query<{ id: string }>(
-    `INSERT INTO zenithjoy.agents (tenant_id, agent_id, capabilities, version, status, last_seen)
-     VALUES ($1, $2, $3, $4, 'online', now())
+    `INSERT INTO zenithjoy.agents (tenant_id, agent_id, license_id, hostname, capabilities, version, status, last_seen)
+     VALUES ($1, $2, $3, $4, $5, $6, 'online', now())
      ON CONFLICT (agent_id) DO UPDATE
        SET tenant_id = COALESCE(EXCLUDED.tenant_id, zenithjoy.agents.tenant_id),
+           license_id = COALESCE(EXCLUDED.license_id, zenithjoy.agents.license_id),
+           hostname = COALESCE(EXCLUDED.hostname, zenithjoy.agents.hostname),
            capabilities = EXCLUDED.capabilities,
            version = EXCLUDED.version,
            status = 'online',
            last_seen = now(),
            updated_at = now()
      RETURNING id`,
-    [tenantId ?? null, displayName, [], input.version ?? '0.1.0']
+    [tenantId ?? null, displayName, licenseId, input.hostname ?? null, [], input.version ?? '0.1.0']
   );
   return r.rows[0]?.id ?? '00000000-0000-0000-0000-000000000000';
 }
