@@ -475,6 +475,103 @@ function deriveHttpApiBase(cfg: AgentConfig): string | null {
     .replace(/\/agent-ws\/?$/, '');
 }
 
+// ────── B-1 burner POST result helpers ──────
+// 没这俩 → task 永远 pending → heartbeat 重派 → chrome 重启撞 lock 一直闪。
+
+async function postBurnerQrBindResult(
+  cfg: AgentConfig,
+  taskId: string,
+  body: { agent_id?: string; qr_login?: string; cookie_local_path?: string; account_nickname?: string },
+): Promise<void> {
+  const apiBase = deriveHttpApiBase(cfg);
+  if (!apiBase) {
+    console.warn('[p2-b1:qr_bind_post] 无 apiBase，跳过 POST');
+    return;
+  }
+  try {
+    const resp = await fetch(`${apiBase}/api/agent/burner/qr-bind-result`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ task_id: taskId, ...body }),
+    });
+    console.log(`[p2-b1:qr_bind_post] HTTP ${resp.status} ${resp.ok ? 'OK' : 'FAIL'}`);
+  } catch (err) {
+    console.warn('[p2-b1:qr_bind_post] error:', (err as Error).message);
+  }
+}
+
+async function postBurnerCrawlResult(
+  cfg: AgentConfig,
+  taskId: string,
+  body: { ok?: boolean; comments?: unknown[]; video_url?: string; error_code?: string; error?: string },
+): Promise<void> {
+  const apiBase = deriveHttpApiBase(cfg);
+  if (!apiBase) {
+    console.warn('[p2-b1:crawl_post] 无 apiBase，跳过 POST');
+    return;
+  }
+  try {
+    const resp = await fetch(`${apiBase}/api/agent/burner/crawl-comments-result`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ task_id: taskId, ...body }),
+    });
+    console.log(`[p2-b1:crawl_post] HTTP ${resp.status} ${resp.ok ? 'OK' : 'FAIL'}`);
+  } catch (err) {
+    console.warn('[p2-b1:crawl_post] error:', (err as Error).message);
+  }
+}
+
+async function handleCrawlCommentsBurner(payload: {
+  account_label: string;
+  video_url: string;
+  max_comments?: number;
+}): Promise<{ ok: boolean; comments?: unknown[]; video_url?: string; error_code?: string; error?: string }> {
+  const { spawn } = await import('node:child_process');
+  const path = await import('node:path');
+  const os = await import('node:os');
+  const accountLabel = payload.account_label;
+  const videoUrl = payload.video_url;
+  const maxComments = payload.max_comments ?? 5;
+  if (!accountLabel || !videoUrl) {
+    return { ok: false, error: 'missing account_label or video_url' };
+  }
+  // burner profile path 跟 qr-bind handler 一致
+  const userDataDir =
+    process.platform === 'win32'
+      ? path.join('C:\\Temp', 'zj-douyin-burner-v1', accountLabel)
+      : path.join(os.homedir(), '.zenithjoy-agent', 'chrome-profile', 'douyin-burner', accountLabel);
+  // crawl 脚本 (Sprint B-1 写的)
+  const scriptPath = path.resolve(__dirname, '..', 'scripts', 'douyin-comment-crawl.cjs');
+  return new Promise((resolve) => {
+    const proc = spawn('node', [
+      scriptPath,
+      `--user-data-dir=${userDataDir}`,
+      `--video-url=${videoUrl}`,
+      `--max-comments=${maxComments}`,
+    ]);
+    let stdout = '';
+    let stderr = '';
+    proc.stdout.on('data', (d) => (stdout += d.toString()));
+    proc.stderr.on('data', (d) => (stderr += d.toString()));
+    proc.on('close', (code) => {
+      if (stderr) console.log('[crawl stderr]', stderr);
+      try {
+        // 取最后一行 JSON (crawl 脚本可能有 stderr log + stdout 是最后 JSON)
+        const lines = stdout.trim().split('\n').filter(Boolean);
+        const last = lines[lines.length - 1] || '{}';
+        const parsed = JSON.parse(last);
+        resolve(parsed);
+      } catch (err) {
+        resolve({
+          ok: false,
+          error: `parse fail: ${(err as Error).message}; stdout=${stdout.slice(-200)}; code=${code}`,
+        });
+      }
+    });
+  });
+}
+
 function startWs1HeartbeatLoop(cfg: AgentConfig): void {
   const apiBase = deriveHttpApiBase(cfg);
   if (!apiBase) {
@@ -507,6 +604,25 @@ function startWs1HeartbeatLoop(cfg: AgentConfig): void {
           task.payload as { account_label: string },
         );
         console.log('[p2-b1:qr_bind_douyin_burner] result:', res);
+        // ✨ 真回报 backend (修 burner 'chrome 一直闪' loop bug):
+        // 没这一步 task 永远 'pending' → 每 30s heartbeat 重派 → 重启 chrome 撞 lock。
+        await postBurnerQrBindResult(cfg, task.task_id, {
+          agent_id: cfg.agentUuid,
+          qr_login: res.qr_login || (res.ok ? 'success' : 'failed'),
+          cookie_local_path: res.cookie_local_path,
+          account_nickname: res.account_nickname,
+        });
+      } else if (
+        task.platform === 'crawl_comments_douyin_burner' ||
+        task.platform === 'crawl_comments/douyin_burner'
+      ) {
+        // Path 2 Sprint B-1 — 评论抓取（用 burner cookies 真去抖音抓评论）
+        const res = await handleCrawlCommentsBurner(
+          task.payload as { account_label: string; video_url: string; max_comments?: number },
+        );
+        console.log('[p2-b1:crawl_comments_douyin_burner] result:', res);
+        // 真回报 backend → 写飞书 Lead 表
+        await postBurnerCrawlResult(cfg, task.task_id, res);
       } else if (task.platform === 'folder_bind') {
         const localPath = (task.payload as { local_path?: string }).local_path;
         if (localPath) {
