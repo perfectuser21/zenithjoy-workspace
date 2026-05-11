@@ -179,14 +179,17 @@ export async function handleQrBindDouyinBurner(
       (c.domain.endsWith('.douyin.com') || c.domain === 'douyin.com') &&
       SESSION_COOKIE_NAMES.includes(c.name);
     const start = Date.now();
-    let storageState: { cookies?: Array<{ name: string; domain: string; value: string }> } | null = null;
+    type CookieEntry = { name: string; domain: string; value: string };
+    type StorageStateShape = { cookies?: CookieEntry[] };
+    let storageState: StorageStateShape = {};
     while (Date.now() - start < COOKIE_POLL_TIMEOUT_MS) {
-      storageState = (await context.storageState()) as typeof storageState;
-      const cookies = storageState?.cookies ?? [];
+      const raw = await context.storageState();
+      storageState = (raw ?? {}) as StorageStateShape;
+      const cookies: CookieEntry[] = storageState.cookies ?? [];
       if (cookies.some(isSessionCookie)) break;
       await new Promise((r) => setTimeout(r, COOKIE_POLL_INTERVAL_MS));
     }
-    const finalCookies = storageState?.cookies ?? [];
+    const finalCookies: CookieEntry[] = storageState.cookies ?? [];
     if (!finalCookies.some(isSessionCookie)) {
       throw new Error('timeout waiting for douyin login (sessionid cookie missing after 600s)');
     }
