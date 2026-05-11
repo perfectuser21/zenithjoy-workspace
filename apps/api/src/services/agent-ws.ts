@@ -6,6 +6,7 @@ import { findTenantByLicense } from './tenant-db';
 import { upsertAgent, touchAgentHeartbeat, setAgentOffline, findOrCreateAgentUuid } from './agent-db';
 import { upsertAgentSkillStatuses } from './skill-db';
 import { handleTaskResult } from './task-dispatch';
+import pool from '../db/connection'; // H-2 Bug 9: resolveAgentUuidFromHello 直接 UPDATE 复用 row
 
 const WS_PATH = '/agent-ws';
 
@@ -60,18 +61,20 @@ export function attachAgentWS(server: HttpServer): WebSocketServer {
         const msg = AgentMessageSchema.parse(obj);
 
         if (msg.type === 'hello') {
-          // H-1 ws3: string display → UUID 转换（findOrCreateAgentUuid 用 ON CONFLICT 防竞态）
+          // H-1 ws3: string display → UUID 转换。
+          // H-2 Bug 9: 优先用 hello 携带的 agentUuid (新 Agent v1.0.1+) 直接 UPDATE 复用 row,
+          // 避免与 license HTTP register 创的 row 双 INSERT race。
           displayName = msg.payload.agentId;
           try {
-            const result = await findOrCreateAgentUuid({
-              displayName,
-              tenantId: tenantId || null,
+            agentId = await resolveAgentUuidFromHello({
+              agentId: msg.payload.agentId,
+              agentUuid: msg.payload.agentUuid, // H-2 Bug 9
               capabilities: msg.payload.capabilities,
               version: msg.payload.version,
+              tenantId: tenantId || null,
             });
-            agentId = result.uuid;
           } catch (e) {
-            console.warn('[agent-ws] findOrCreateAgentUuid failed, fallback to display name:', e);
+            console.warn('[agent-ws] resolveAgentUuidFromHello failed, fallback to display name:', e);
             agentId = displayName;
           }
 
@@ -140,4 +143,41 @@ export function sendToAgent(agentId: string, msg: ReturnType<typeof makeMsg>): b
   if (!entry || entry.ws.readyState !== entry.ws.OPEN) return false;
   entry.ws.send(JSON.stringify(msg));
   return true;
+}
+
+// H-2 Bug 9: 封装 hello payload → agent UUID 解析。
+// 优先用 hello 携带的 agentUuid (新 Agent v1.0.1+) 直接 UPDATE 复用 row,
+// 避免与 license HTTP register 创的 row 双 INSERT race。
+// 老 Agent 无 agentUuid → 走 findOrCreateAgentUuid (向后兼容)。
+// agentUuid 在 DB 无 row → fallback findOrCreateAgentUuid (安全 fallback)。
+export async function resolveAgentUuidFromHello(params: {
+  agentId: string;
+  agentUuid?: string;
+  capabilities: string[];
+  version: string;
+  tenantId?: string | null;
+}): Promise<string> {
+  if (params.agentUuid) {
+    const r = await pool.query<{ id: string }>(
+      `UPDATE zenithjoy.agents
+          SET status='online',
+              last_seen=now(),
+              agent_id=$2,
+              capabilities=$3,
+              version=$4,
+              updated_at=now()
+        WHERE id=$1
+        RETURNING id`,
+      [params.agentUuid, params.agentId, params.capabilities, params.version]
+    );
+    if (r.rows[0]) return r.rows[0].id;
+    // agentUuid 在 DB 无 row → fallback safe path
+  }
+  const result = await findOrCreateAgentUuid({
+    displayName: params.agentId,
+    tenantId: params.tenantId ?? null,
+    capabilities: params.capabilities,
+    version: params.version,
+  });
+  return result.uuid;
 }

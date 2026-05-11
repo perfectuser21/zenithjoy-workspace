@@ -18,6 +18,7 @@ export type SkillStatusItem = z.infer<typeof SkillStatusItem>;
 
 export const HelloPayload = z.object({
   agentId: z.string(),
+  agentUuid: z.string().uuid().optional(), // H-2 Bug 9: 新 Agent 复用 register 时已创的 row UUID
   version: z.string(),
   capabilities: z.array(z.string()),
   skills: z.array(SkillStatusItem).optional(),
