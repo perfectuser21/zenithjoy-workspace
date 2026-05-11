@@ -160,12 +160,19 @@ export async function upsertAgentByHeartbeat(args: {
   return inserted.rows[0];
 }
 
-/** 拉指定 agent 的待派发任务（pending） */
+/**
+ * 拉指定 agent 的待派发任务（pending / queued / dispatched — H-1 canonical pre-execution states）
+ *
+ * H-2 Bug 9 layer 4: Sprint B-1 burner / Sprint A 等新 endpoint INSERT 用 'queued'
+ * (canonical per H-1 status enum migration)。本方法旧版仅 status='pending' →
+ * 漏 'queued' task → Agent 永远拉不到 → chrome 没弹。今日 ssh rog 真验暴露。
+ * 修：扩到 H-1 canonical pre-execution 三态 (pending / queued / dispatched)。
+ */
 export async function getQueuedTasks(agentId: string): Promise<PublishTaskRow[]> {
   const { rows } = await pool.query<PublishTaskRow>(
     `SELECT id, agent_id, platform, status, type, folder_path, result, receipt_at, created_at
        FROM zenithjoy.publish_tasks
-      WHERE agent_id = $1 AND status = 'pending'
+      WHERE agent_id = $1 AND status IN ('pending', 'queued', 'dispatched')
       ORDER BY created_at ASC`,
     [agentId]
   );
