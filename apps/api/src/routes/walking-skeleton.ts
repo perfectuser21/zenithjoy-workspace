@@ -63,21 +63,28 @@ heartbeatRouter.post(
         // map to agent's HeartbeatTask shape: { task_id, platform, payload }
         // payload composed from folder_path column (works for both folder_bind.local_path
         // and douyin.folder_path) + account_label default for qr_bind_douyin
-        queued_tasks: queued.map((t) => ({
-          task_id: t.id,
-          platform: t.platform,
-          type: t.type,
-          payload: {
-            local_path: t.folder_path,
+        queued_tasks: queued.map((t) => {
+          // B-1 burner fix: 优先合并真 task.payload (含 account_label / agent_id / tenant_id)
+          // 否则 burner handler 拿 'default' 复用既有 cookie，不真扫码弹码
+          const realPayload = (t.payload as Record<string, unknown> | null) ?? {};
+          return {
+            task_id: t.id,
+            platform: t.platform,
+            type: t.type,
+            payload: {
+              local_path: t.folder_path,
+              folder_path: t.folder_path,
+              ...realPayload,
+              account_label:
+                (realPayload.account_label as string | undefined) ?? 'default',
+            },
+            // legacy fields kept for any older agent client
+            id: t.id,
+            status: t.status,
             folder_path: t.folder_path,
-            account_label: 'default',
-          },
-          // legacy fields kept for any older agent client
-          id: t.id,
-          status: t.status,
-          folder_path: t.folder_path,
-          created_at: t.created_at,
-        })),
+            created_at: t.created_at,
+          };
+        }),
       });
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'unknown';
