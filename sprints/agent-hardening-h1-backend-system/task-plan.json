@@ -19,7 +19,8 @@
       "files": [
         "apps/api/src/services/license.service.ts",
         "apps/api/src/routes/agent.ts",
-        "apps/api/src/routes/__tests__/agent-register-dual-schema.test.ts"
+        "apps/api/src/routes/__tests__/agent-register-dual-schema.test.ts",
+        "apps/api/scripts/h1-ws1-helper.sh"
       ],
       "depends_on": [],
       "complexity": "M",
@@ -39,11 +40,12 @@
       ],
       "files": [
         "apps/api/db/migrations/20260511_HHMMSS_publish_tasks_status_enum_full.sql",
-        "apps/api/tests/migrations/publish-tasks-status-enum.test.ts"
+        "apps/api/tests/migrations/publish-tasks-status-enum.test.ts",
+        "apps/api/scripts/h1-ws2-helper.sh"
       ],
       "depends_on": [],
       "complexity": "S",
-      "estimated_minutes": 25
+      "estimated_minutes": 30
     },
     {
       "task_id": "ws3",
@@ -67,7 +69,8 @@
         "apps/api/src/services/task-dispatch.ts",
         "apps/api/src/schemas/agent-protocol.ts",
         "apps/api/src/services/__tests__/agent-db-find-or-create-uuid.test.ts",
-        "apps/api/src/services/__tests__/agent-registry-display-name.test.ts"
+        "apps/api/src/services/__tests__/agent-registry-display-name.test.ts",
+        "apps/api/scripts/h1-ws3-helper.sh"
       ],
       "depends_on": ["ws1"],
       "complexity": "L",

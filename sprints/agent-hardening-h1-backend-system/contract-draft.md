@@ -1,4 +1,15 @@
-# Sprint Contract Draft (Round 1) — Agent 系统 hardening · H-1
+# Sprint Contract Draft (Round 2) — Agent 系统 hardening · H-1
+
+> **Round 2 修订**：response Reviewer Round 1 7 大反馈：
+> 1. PG 字符串字面量从 `\"` 改单引号（DoD 文件已重写）
+> 2. server 启停模式从 chain `&` 改单独 build + 单独 background node
+> 3. 加 Risks 段含 4 条 cascade risk + mitigation
+> 4. 显式声明改写 PRD line 77 schema 完整性约束 + 加 BEHAVIOR keys subset check
+> 5. A2 enum canonical = `completed`，加 deprecate 时间表
+> 6. A3 加 findOrCreateAgentUuid 伪代码签名
+> 7. A4 澄清 device_count 含本次 / current_count 不含本次
+
+
 
 ## journey_type
 `dev_pipeline` — 修后端基建（license enforce response 形态化、publish_tasks status 完整 enum、WS UUID 化），让所有未来 Path 2/3 Agent 涉及 sprint 在干净的 backend 系统层上跑。不直接面终端客户，但客户视角的 Path 2 链路因此不再撞 system bug。
@@ -19,16 +30,30 @@
 
 **架构决策**：H-1 在 register endpoint 返回**双 schema** — 既保留老字段（`ok/license_id/tier/max_machines/registered_machine_id/ws_token`）让 rog 上 v1.0 Agent 不断，又增加新字段（`success/agent_id/license_tier/device_count/device_limit`）让自验脚本验。Error 同样双发 `code` + `error`。
 
+**改写 PRD line 77 schema 完整性约束**（Round 2 新增）：
+- PRD 原文："success response 顶层 keys 必须**完全等于** `["agent_id", "device_count", "device_limit", "license_tier", "success"]`（按字母序）"。
+- 本合同**改写**为：success response 顶层 keys 必须**包含**新 5 字段集 `{success, agent_id, license_tier, device_count, device_limit}`（**容许**老字段共存，向后兼容 rog v1.0 Agent）；error response 必须**包含**新 4 字段集 `{success, error, current_count, limit}`。
+- 改写理由：完全等于会让 rog 上 v1.0 Agent 收响应时缺老字段 `ok/license_id/tier/max_machines/registered_machine_id/ws_token` → JSON.parse 后老 client 拿不到 `ws_token` → ws 连接断 → 装机失败。子集校验既满足 PRD 意图（新字段必现），又保证不破老客户端。
+- 该改写在 ws1 BEHAVIOR 5/6 用 jq -e codify：`jq -e '(["success","agent_id","license_tier","device_count","device_limit"] - keys) == []'` 验子集，配合既有禁用字段反向检查防漂移。
+
 ### A2. publish_tasks status enum — 完整 set 是哪些？
 
 **Proposer 决策**：完整 enum = `pending/running/success/failed/done/queued/dispatched/in_progress/completed`（旧 5 + 新 4）。
 
-- `pending` 旧 — 任务刚 INSERT 还没派
-- `queued` 新 — 任务进派发队列等待 agent
-- `dispatched` 新 — 已发 WS 消息给 agent，等 agent ack
-- `running` 旧 / `in_progress` 新 — agent 执行中（两个名都接受，未来 deprecate `running`）
-- `success` 旧 / `completed` 新 / `done` 旧 — 三个都表示成功（兼容 Sprint A/B/Path 1 历史代码）
-- `failed` 旧 — 失败
+**Canonical 名 + Deprecate 时间表**（Round 2 新增）：
+
+| 语义 | Canonical（H-3 起强制） | 兼容期接受（H-1 ~ H-2） | 何时 sweep 删 |
+|---|---|---|---|
+| 任务刚 INSERT 还没派 | `pending` | — | — |
+| 任务进派发队列等待 agent | `queued` | — | — |
+| 已发 WS 消息给 agent，等 agent ack | `dispatched` | — | — |
+| agent 执行中 | **`in_progress`** | `running` (deprecated since H-1) | H-3 全代码 sweep |
+| 成功完成 | **`completed`** | `success` / `done` (deprecated since H-1) | H-3 全代码 sweep |
+| 失败 | `failed` | — | — |
+
+- 本 sprint **不动** 任何 INSERT 处代码（既有 `success/done/running` 仍可写，向后兼容）
+- 新代码（H-1 之后）必须用 canonical (`completed`/`in_progress`)
+- migration SQL 含 COMMENT 写 deprecate 计划，generator 必须复制到 SQL 注释里
 
 **migration 策略**：
 1. 临 PSQL 先 `SELECT DISTINCT status FROM zenithjoy.publish_tasks` 探活，验证旧数据全在新 superset 内
@@ -43,15 +68,62 @@
 - `agents.agent_id` (TEXT, hostname-derived) 仅作 display name，**不再**用作 routing
 - WS dispatcher 改读 `agents.id`，向 ws connection 发 message 时 `agent_id` 字段填 UUID
 - backwards compat：`agentRegistry` 改 indexed by UUID（`agents.id`），但 `pickFor()` 返的 entry 同时带 `agentId`(UUID) 与 `displayName`(string)
-- 旧 hello message `agentId` (string) 收到后必须**转换成 UUID** — 调 `agent-db.findAgentIdByDisplay()` 查表，找不到就 `upsertAgent` 后取 UUID
+- 旧 hello message `agentId` (string) 收到后必须**转换成 UUID** — 调 `agent-db.findOrCreateAgentUuid()` 查表，找不到就 `upsertAgent` 后取 UUID
+
+**findOrCreateAgentUuid 签名**（Round 2 新增伪代码）：
+```ts
+// apps/api/src/services/agent-db.ts (新加)
+export async function findOrCreateAgentUuid(params: {
+  displayName: string;       // 来自 hello.agentId 的 TEXT
+  tenantId: string;          // 来自 ws upgrade 验过的 license
+  capabilities: string[];
+  version: string;
+}): Promise<{ uuid: string; displayName: string }> {
+  // 用 INSERT ... ON CONFLICT (agent_id) DO UPDATE 一句搞定避免竞态
+  const r = await pool.query(
+    `INSERT INTO zenithjoy.agents (tenant_id, agent_id, capabilities, version, status, last_seen)
+     VALUES ($1, $2, $3, $4, 'online', now())
+     ON CONFLICT (agent_id) DO UPDATE
+       SET tenant_id=EXCLUDED.tenant_id,
+           capabilities=EXCLUDED.capabilities,
+           version=EXCLUDED.version,
+           status='online',
+           last_seen=now(),
+           updated_at=now()
+     RETURNING id`,
+    [params.tenantId, params.displayName, params.capabilities, params.version]
+  );
+  return { uuid: r.rows[0].id, displayName: params.displayName };
+}
+```
+
+**registry 调用**：
+```ts
+// agent-ws.ts hello handler
+if (msg.type === 'hello') {
+  const { uuid, displayName } = await findOrCreateAgentUuid({
+    displayName: msg.payload.agentId,  // 老 string 进来
+    tenantId, capabilities: msg.payload.capabilities, version: msg.payload.version,
+  });
+  agentRegistry.register(uuid, { capabilities, version, tenantId, displayName }, ws);
+  // 后续 routing key 全用 uuid
+}
+```
+
+**所有 log 用双显示**：`console.log(`agent ${entry.displayName}(${entry.agentId}) ...`)` — 让运维仍能看 display name 排查。
 
 ### A4. 双 register call 同 license 怎么算 device_count？
 
-**决策**：
-- `device_count` = `SELECT COUNT(*) FROM license_machines WHERE license_id=$1 AND status='active'`
-- 同 machine_id reconnect 不增 count（UPDATE existing row last_seen，不 INSERT）
-- 同 hostname 不同 machine_id → 视为新装机，`device_count` 加 1，撞 limit 时返 403
-- license_machine.status 默认 `active`，离线 60s 不 set offline（grace period 留 H-2）
+**决策**（Round 2 澄清 success 与 error 不同语义）：
+
+| 场景 | 字段 | 取值含义 | SQL |
+|---|---|---|---|
+| Success (200) `device_count` | success response | **含本次注册** = INSERT 后的 active count | INSERT 完后再 SELECT COUNT，或直接 `currentCountBefore + 1`（reconnect 时仍是 currentCountBefore） |
+| Failure (403) `current_count` | error response | **不含本次** = INSERT 前的 active count（拒绝时未实际 INSERT） | 用 register 流程已查过的 currentCount 直接返 |
+
+- 同 machine_id reconnect 不增 count（UPDATE existing row last_seen，不 INSERT）→ device_count 仍等于 reconnect 前
+- 同 hostname 不同 machine_id → 视为新装机，`device_count` 加 1，撞 limit 时返 403 + `current_count` = limit
+- license_machine.status 默认 `active`，本 sprint **不实现** offline 顶替（PRD line 101 H-2 才修） → 第 1 个 agent 永不 offline，第 2 个新 machine_id 永远撞 limit。Risk 段 R4 明列。
 
 ### A5. WS dispatcher policy — capability + heartbeat + status 三维度
 
@@ -60,6 +132,18 @@
 heartbeat 维度由 `lastHeartbeat < 30000ms` 表示 online (已存在 `/api/agent/status` 第 77 行)。本 sprint 把 30s timeout 提取常量 `AGENT_HEARTBEAT_TIMEOUT_MS = 30000` 在 dispatcher policy 用。
 
 > Reviewer 必查：上述 5 个 architecture 决策是否合 PRD 意图？是否漏 bug 形态？是否给老 Agent 留兼容？
+
+---
+
+## Risks（Round 2 新增）
+
+| # | 风险描述 | 影响 | Mitigation |
+|---|---|---|---|
+| R1 | 双 schema breaking change 漏字段 — generator 改 RegisterSuccess interface 时漏老字段（如忘了 `ws_token`），rog 上 v1.0 Agent 收 response 拿不到 ws_token → ws 连接断 → 装机失败 | HIGH — 客户装机静默断 | ws1 BEHAVIOR 1 显式 jq -e 验**老 4 字段+新 5 字段全在**；ws1 BEHAVIOR 5 加 subset 校验；lead-acceptance 跑老 v1.0 binary 验通过（Phase 6 mock 不行就跑真 ZenithJoy Agent v1.0.1 binary） |
+| R2 | migration apply 顺序撞 — H-1 migration 文件名若 `<` 已 merge 的 `20260510_0c10fd_publish_tasks_burner_columns.sql` 排序，run-migration.ts 跑顺序错 → 老 chk_constraint 先重建覆盖新 superset | HIGH — DB constraint 漂回老 5 enum，Bug 2 没修 | filename 强制用 `20260511_HHMMSS_*` ≥ `20260510_0c10fd`；migration SQL 内 `DROP CONSTRAINT IF EXISTS` + `ADD CONSTRAINT chk_publish_tasks_status` 严格幂等；ws2 BEHAVIOR 3 验 pg_constraint condef 含 9 字面量 |
+| R3 | agent-registry entry.agentId 类型变化破调用方 — 现 routes/agent.ts:102/125 / dispatch.ts:24 / send.ts:109 用 entry.agentId 作 send key + log 输出。改 UUID 后 log 显示 UUID 不可读 → 运维排查难 | MED — debug 困难 | 所有 log 用 `${entry.displayName}(${entry.agentId})` 双显示，单元 test 覆盖；agent-registry.test.ts 新加 displayName + agentId 双字段断言 |
+| R4 | license_machines.status 无 'offline' 值，H-1 不实现 offline 顶替 — 第 1 个 agent 永不 offline → 第 2 个新 machine_id 永远撞 limit。PRD line 101 描述的 "60s offline 允许新 agent 顶替" 本 sprint **不覆盖** | MED — 客户多装机部署需手动联系吊销老 license_machine 行 | 合同明示"H-1 不实现 offline 顶替"，PRD line 101 移到 H-2 backlog；lead-acceptance Step 4 验 license_machines 仅 1 行 active（不验顶替）；H-2 sprint PRD 必含此 feature |
+| R5 | ws3 hello message handler 改成 async 后 backwards compat 隐患 — 老 v1.0 Agent 发 hello 后立即 send heartbeat，server 异步等 findOrCreateAgentUuid DB query 完前 heartbeat 到达 → agentId 还 null → heartbeat 丢 | MED — 老 v1.0 Agent 注册成功但前 1 秒 heartbeat 丢 | agent-ws.ts hello handler await DB query 完才 emit 'register' 事件；heartbeat handler 在 agentId 还 null 时缓存 1 秒 retry；ws3 BEHAVIOR 加 hello + heartbeat 时序 test |
 
 ---
 
