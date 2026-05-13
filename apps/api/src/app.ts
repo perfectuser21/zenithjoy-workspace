@@ -33,6 +33,8 @@ import agentBurnerRouter from './routes/agent-burner';
 import smokeFakeAgentBurnerRouter from './routes/_smoke-fake-agent-burner';
 // Path 2 Sprint B-1 architecture hotfix — DEV-only mock-agent helper
 import smokeMockAgentRouter from './routes/_smoke-mock-agent';
+// Path 4 Sprint 1 WS1 — wechat 3 endpoints (thin stub)
+import { wechatRouter } from './routes/wechat';
 import { errorHandler, notFoundHandler } from './middleware/error';
 
 const app = express();
@@ -102,6 +104,8 @@ app.use('/api/agent/burner', agentBurnerRouter);
 app.use('/api/_smoke', smokeFakeAgentBurnerRouter);
 // Path 2 Sprint B-1 architecture hotfix — DEV-only mock-agent helper（lead 自验用）
 app.use('/api/_smoke', smokeMockAgentRouter);
+// Path 4 Sprint 1 WS1 — wechat 3 endpoints (qr-bind / draft-review-poll / scheduler-tick)
+app.use('/api/wechat', wechatRouter);
 
 // Error handling
 app.use(notFoundHandler);
