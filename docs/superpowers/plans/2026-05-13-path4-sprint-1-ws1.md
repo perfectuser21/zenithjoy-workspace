@@ -8,6 +8,15 @@
 
 **Tech Stack:** PostgreSQL migration, Express + zod, Node 20 `child_process.spawn`, OpenRouter REST API (deepseek-chat), vitest, bash smoke.
 
+> ⚠️ **Plan v1 → v2 修订点 (开干前必看)**:
+> 1. **Schema 必须 `zenithjoy.`**: 现有所有表 (`zenithjoy.works`, `zenithjoy.publish_logs`, `zenithjoy.tenants`, `zenithjoy.agents`, `zenithjoy.pipeline_runs`) 都在此 schema。本 plan 的 `wechat_publish_task` 和 `llm_audit` 实际是 `zenithjoy.wechat_publish_task` 和 `zenithjoy.llm_audit`。Task 2 migration / Task 3 audit INSERT / Task 4 SELECT 全部要加 `zenithjoy.` 前缀。
+> 2. **测试路径已修**: 改成 `apps/api/tests/integration/p4-sprint-1-ws1/` (走 `vitest.integration.config.ts`, 含 `global-setup.ts` 自动跑 migration + `setup-env.ts` 设 env)。
+> 3. **Handler 测试路径**: `services/agent/src/handlers/__tests__/wechat-rpa.test.ts` (复用现有 handler 测试约定)。
+> 4. **DB user 默认 `postgres`** (setup-env.ts 设的, 不是 `cecelia`)。
+> 5. **migration 命名**: `YYYYMMDD_HHMMSS_<name>.sql` (如 `20260513_220500_create_wechat_publish_task.sql`)。Plan 里 `<HHMMSS>` 是当前时刻填占位。
+>
+> 这些修订是 Read 现有 codebase 时发现的, plan v1 写得偏离了实际约定。Task 1 dispatch 前必须先把 plan v3 完整改完。
+
 **Branch:** `cp-0513220500-path4-sprint-1-ws1`
 **Worktree:** `/Users/administrator/worktrees/zenithjoy/path4-sprint-1-ws1-2`
 **Brain task:** `140c8d7b-fbbd-4a5c-9ac7-dd18e6514a80`
@@ -29,11 +38,16 @@
 | `services/agent/src/index.ts` (modify) | 注册 wechat-rpa handler | +3 |
 | `scripts/deploy-agent-to-rog.sh` | rsync agent → rog | ~30 |
 | `scripts/wechat_rpa_dryrun.py` | dryrun Python stub (echo receipt JSON) | ~20 |
-| `tests/ws1/db-schema.test.ts` | migration 真跑 + CHECK enforce + llm_audit RW | ~80 |
-| `tests/ws1/openrouter-llm.test.ts` | unit (FORCE_5XX/clamp/ignore) + integration (真 HTTP CI=true) | ~100 |
-| `tests/ws1/wechat-routes.test.ts` | 3 endpoint zod 400/404 | ~80 |
-| `tests/ws1/wechat-rpa-handler.test.ts` | spawn dryrun + receipt | ~70 |
+| `apps/api/tests/integration/p4-sprint-1-ws1/db-schema.test.ts` | migration 真跑 + CHECK enforce + llm_audit RW | ~80 |
+| `apps/api/tests/integration/p4-sprint-1-ws1/openrouter-llm.test.ts` | unit (FORCE_5XX/clamp/ignore) + integration (真 HTTP CI=true) | ~100 |
+| `apps/api/tests/integration/p4-sprint-1-ws1/wechat-routes.test.ts` | 3 endpoint zod 400/404 | ~80 |
+| `services/agent/src/handlers/__tests__/wechat-rpa.test.ts` | spawn dryrun + receipt | ~70 |
 | `.github/workflows/scripts/smoke/golden-path-4-smoke.sh` | E2E step 1 smoke | ~50 |
+
+**重要约定** (与现有 repo 对齐):
+- 所有表在 `zenithjoy.` schema (现有 `zenithjoy.works`, `zenithjoy.publish_logs`, `zenithjoy.pipeline_runs` 等)
+- 集成测试用 `apps/api/vitest.integration.config.ts` 跑 (`setupFiles: tests/integration/setup-env.ts`)
+- 默认 DB user `postgres` (setup-env.ts), 不是 `cecelia`
 
 ---
 
@@ -42,7 +56,7 @@
 **核心**: 一次性把所有 test 写够覆盖 8 BEHAVIOR + smoke, 同时 src skeleton 全部空, 让所有 test fail。这是 TDD commit-1 RED。
 
 **Files:**
-- Create (test): `tests/ws1/db-schema.test.ts`, `tests/ws1/openrouter-llm.test.ts`, `tests/ws1/wechat-routes.test.ts`, `tests/ws1/wechat-rpa-handler.test.ts`
+- Create (test): `apps/api/tests/integration/p4-sprint-1-ws1/db-schema.test.ts`, `apps/api/tests/integration/p4-sprint-1-ws1/openrouter-llm.test.ts`, `apps/api/tests/integration/p4-sprint-1-ws1/wechat-routes.test.ts`, `services/agent/src/handlers/__tests__/wechat-rpa.test.ts`
 - Create (smoke): `.github/workflows/scripts/smoke/golden-path-4-smoke.sh`
 - Create (empty skeleton src):
   - `apps/api/src/llm/openrouter.ts` — `export async function callOpenRouter(): Promise<never> { throw new Error('not impl'); }`
