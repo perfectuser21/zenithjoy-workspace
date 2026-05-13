@@ -1509,3 +1509,53 @@ tests:
     status: passed
     product: 中台认证
     note: "B-1 burner real-qr — heartbeat queued_tasks 透传真 account_label (避免 default 覆盖导致复用 cookie)"
+
+  # ─── P4 Sprint 1 WS1 — DB schema + 中台路由 + Agent wechat-rpa + OpenRouter ──
+
+  - id: p4-ws1-db-schema
+    path: apps/api/tests/integration/p4-sprint-1-ws1/db-schema.integration.test.ts
+    type: integration
+    ci: L4
+    status: active
+    product: 私域运营
+    note: "P4 WS1 — zenithjoy.wechat_publish_task (approval_source CHECK enforce A 护栏) + zenithjoy.llm_audit migration"
+
+  - id: p4-ws1-openrouter-llm
+    path: apps/api/tests/integration/p4-sprint-1-ws1/openrouter-llm.integration.test.ts
+    type: integration
+    ci: L4
+    status: active
+    product: 私域运营
+    note: "P4 WS1 — OpenRouter wrapper FORCE_5XX env lock + CI=true clamp max_tokens=20"
+
+  - id: p4-ws1-wechat-routes
+    path: apps/api/tests/integration/p4-sprint-1-ws1/wechat-routes.integration.test.ts
+    type: integration
+    ci: L4
+    status: active
+    product: 私域运营
+    note: "P4 WS1 — POST /api/wechat/qr-bind + GET draft-review-poll + POST scheduler-tick zod 校验"
+
+  - id: p4-ws1-wechat-rpa-handler
+    path: services/agent/src/handlers/__tests__/wechat-rpa.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 私域运营
+    note: "P4 WS1 — Agent wechat-rpa handler spawn python3 + JSON stdio receipt"
+
+  - id: p4-ws1-openrouter-pairing
+    path: apps/api/src/llm/__tests__/openrouter.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 私域运营
+    note: "P4 WS1 — openrouter.ts pairing unit (module surface + types). 真业务测试在 integration"
+
+  - id: p4-ws1-wechat-routes-pairing
+    path: apps/api/src/routes/__tests__/wechat.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 私域运营
+    note: "P4 WS1 — wechat.ts pairing unit (router export + 3 endpoint registration). 真业务测试在 integration"
