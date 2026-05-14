@@ -23,4 +23,10 @@ describe('wechat.ts — router export', () => {
     expect(paths).toContain('/draft-review-poll');
     expect(paths).toContain('/scheduler-tick');
   });
+
+  it('registers 4 endpoints (含 draft-submit)', () => {
+    const stack = (wechatRouter as any).stack;
+    const paths = stack.filter((l: any) => l.route).map((l: any) => l.route.path);
+    expect(paths).toContain('/draft-submit');
+  });
 });
