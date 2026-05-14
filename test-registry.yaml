@@ -1559,3 +1559,23 @@ tests:
     status: active
     product: 私域运营
     note: "P4 WS1 — wechat.ts pairing unit (router export + 3 endpoint registration). 真业务测试在 integration"
+
+  # ─── P4 Sprint 1 WS2 — 飞书 Bitable 审批表 + draft-submit 路由 ──
+
+  - id: p4-ws2-feishu-bitable-integration
+    path: apps/api/tests/integration/p4-sprint-1-ws2/feishu-bitable.integration.test.ts
+    product: 私域运营
+    type: integration
+    description: 飞书 Bitable 审批表 — DB 列存在 + pushWechatTaskToFeishu 静默
+
+  - id: p4-ws2-feishu-bitable-multitenant-unit
+    path: apps/api/src/services/feishu-bitable-multitenant.test.ts
+    product: 私域运营
+    type: unit
+    description: pushWechatTaskToFeishu 单元测试（吞异常 / fields 格式）
+
+  - id: p4-ws2-wechat-routes-draft-submit
+    path: apps/api/src/routes/__tests__/wechat.test.ts
+    product: 私域运营
+    type: unit
+    description: draft-submit 路由注册到 wechatRouter.stack
