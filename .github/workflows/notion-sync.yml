@@ -1,0 +1,40 @@
+name: Notion Sync on PR Merge
+
+# 触发: PR 合到 main 之后, 把 PR body 里的 Notion-Sprint / Notion-Components
+# trailer 同步到 Notion DB。永远不阻塞 (脚本 exit 0)。
+#
+# Required secret: NOTION_API_KEY (Lead 用 gh secret set 一次性配)
+
+on:
+  pull_request:
+    types: [closed]
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: notion-sync-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    name: Notion Sync
+    if: github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Run notion sync
+        env:
+          NOTION_API_KEY: ${{ secrets.NOTION_API_KEY }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+        run: node .github/scripts/notion-sync-on-merge.js
