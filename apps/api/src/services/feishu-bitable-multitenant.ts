@@ -40,6 +40,7 @@ interface BindingRow {
   table_id_lead_profile: string | null;
   table_id_target_videos: string | null;
   table_id_leads: string | null;
+  table_id_wechat_approval: string | null;
 }
 
 interface ProvisionResult {
@@ -47,6 +48,7 @@ interface ProvisionResult {
   table_id_lead_profile: string;
   table_id_target_videos: string;
   table_id_leads: string;
+  table_id_wechat_approval: string;
 }
 
 // 三张表的 schema — PRD 锁定
@@ -80,11 +82,24 @@ const TABLE_SCHEMAS = [
       { field_name: '跟进状态', type: 1 },
     ],
   },
+  {
+    key: 'wechat_approval' as const,
+    name: '微信发布审批',
+    fields: [
+      { field_name: '任务ID',   type: 1 },
+      { field_name: '内容预览', type: 1 },
+      { field_name: '任务类型', type: 1 },
+      { field_name: '目标好友', type: 1 },
+      { field_name: '审批状态', type: 1 },
+      { field_name: '创建时间', type: 1 },
+    ],
+  },
 ];
 
 async function loadBinding(tenantId: string): Promise<BindingRow | null> {
   const r = await pool.query(
-    `SELECT app_token, table_id_lead_profile, table_id_target_videos, table_id_leads
+    `SELECT app_token, table_id_lead_profile, table_id_target_videos, table_id_leads,
+            table_id_wechat_approval
        FROM zenithjoy.tenant_feishu_bindings
       WHERE tenant_id = $1`,
     [tenantId]
@@ -144,13 +159,15 @@ export async function provisionBitable(tenantId: string): Promise<ProvisionResul
     cached.app_token &&
     cached.table_id_lead_profile &&
     cached.table_id_target_videos &&
-    cached.table_id_leads
+    cached.table_id_leads &&
+    cached.table_id_wechat_approval
   ) {
     return {
       app_token: cached.app_token,
       table_id_lead_profile: cached.table_id_lead_profile,
       table_id_target_videos: cached.table_id_target_videos,
       table_id_leads: cached.table_id_leads,
+      table_id_wechat_approval: cached.table_id_wechat_approval,
     };
   }
 
@@ -170,47 +187,45 @@ export async function provisionBitable(tenantId: string): Promise<ProvisionResul
     await pool.query(
       `INSERT INTO zenithjoy.tenant_feishu_bindings
          (tenant_id, app_token, table_id_lead_profile, table_id_target_videos, table_id_leads,
-          needs_retry, provision_error, bound_at)
-       VALUES ($1, $2, $3, $4, $5, true, $6, NOW())
+          table_id_wechat_approval, needs_retry, provision_error, bound_at)
+       VALUES ($1, $2, $3, $4, $5, $6, true, $7, NOW())
        ON CONFLICT (tenant_id) DO UPDATE
-         SET app_token              = COALESCE(EXCLUDED.app_token, zenithjoy.tenant_feishu_bindings.app_token),
-             table_id_lead_profile  = COALESCE(EXCLUDED.table_id_lead_profile,  zenithjoy.tenant_feishu_bindings.table_id_lead_profile),
-             table_id_target_videos = COALESCE(EXCLUDED.table_id_target_videos, zenithjoy.tenant_feishu_bindings.table_id_target_videos),
-             table_id_leads         = COALESCE(EXCLUDED.table_id_leads,         zenithjoy.tenant_feishu_bindings.table_id_leads),
-             needs_retry            = true,
-             provision_error        = EXCLUDED.provision_error`,
+         SET app_token                = COALESCE(EXCLUDED.app_token, zenithjoy.tenant_feishu_bindings.app_token),
+             table_id_lead_profile    = COALESCE(EXCLUDED.table_id_lead_profile,    zenithjoy.tenant_feishu_bindings.table_id_lead_profile),
+             table_id_target_videos   = COALESCE(EXCLUDED.table_id_target_videos,   zenithjoy.tenant_feishu_bindings.table_id_target_videos),
+             table_id_leads           = COALESCE(EXCLUDED.table_id_leads,           zenithjoy.tenant_feishu_bindings.table_id_leads),
+             table_id_wechat_approval = COALESCE(EXCLUDED.table_id_wechat_approval, zenithjoy.tenant_feishu_bindings.table_id_wechat_approval),
+             needs_retry              = true,
+             provision_error          = EXCLUDED.provision_error`,
       [
         tenantId,
         appToken || null,
         tableIds.lead_profile || null,
         tableIds.target_videos || null,
         tableIds.leads || null,
+        tableIds.wechat_approval || null,
         msg.slice(0, 500),
       ]
     );
     throw e instanceof ProvisionFailedError ? e : new ProvisionFailedError(msg);
   }
 
-  // 全部成功：写回 4 个 ID + needs_retry=false
+  // 全部成功：写回 5 个 ID + needs_retry=false
   await pool.query(
     `INSERT INTO zenithjoy.tenant_feishu_bindings
        (tenant_id, app_token, table_id_lead_profile, table_id_target_videos, table_id_leads,
-        needs_retry, provision_error, bound_at)
-     VALUES ($1, $2, $3, $4, $5, false, NULL, NOW())
+        table_id_wechat_approval, needs_retry, provision_error, bound_at)
+     VALUES ($1, $2, $3, $4, $5, $6, false, NULL, NOW())
      ON CONFLICT (tenant_id) DO UPDATE
-       SET app_token              = EXCLUDED.app_token,
-           table_id_lead_profile  = EXCLUDED.table_id_lead_profile,
-           table_id_target_videos = EXCLUDED.table_id_target_videos,
-           table_id_leads         = EXCLUDED.table_id_leads,
-           needs_retry            = false,
-           provision_error        = NULL`,
-    [
-      tenantId,
-      appToken,
-      tableIds.lead_profile,
-      tableIds.target_videos,
-      tableIds.leads,
-    ]
+       SET app_token                = EXCLUDED.app_token,
+           table_id_lead_profile    = EXCLUDED.table_id_lead_profile,
+           table_id_target_videos   = EXCLUDED.table_id_target_videos,
+           table_id_leads           = EXCLUDED.table_id_leads,
+           table_id_wechat_approval = EXCLUDED.table_id_wechat_approval,
+           needs_retry              = false,
+           provision_error          = NULL`,
+    [tenantId, appToken, tableIds.lead_profile, tableIds.target_videos,
+     tableIds.leads, tableIds.wechat_approval]
   );
 
   return {
@@ -218,6 +233,7 @@ export async function provisionBitable(tenantId: string): Promise<ProvisionResul
     table_id_lead_profile: tableIds.lead_profile,
     table_id_target_videos: tableIds.target_videos,
     table_id_leads: tableIds.leads,
+    table_id_wechat_approval: tableIds.wechat_approval,
   };
 }
 
@@ -307,4 +323,63 @@ export async function writeRecord(
     throw new Error(`FEISHU_WRITE_RECORD_ERROR: code=${data.code} msg=${data.msg || ''}`);
   }
   return { record_id: data.data.record.record_id };
+}
+
+/**
+ * Path 4 WS2 — 微信发布任务推送到飞书审批表
+ * 失败时 log + 不 throw（不阻塞主流程）
+ */
+export async function pushWechatTaskToFeishu(
+  taskId: string,
+  tenantId: string
+): Promise<void> {
+  try {
+    const taskResult = await pool.query(
+      `SELECT id, content, task_type, target_friend_alias, created_at
+         FROM zenithjoy.wechat_publish_task WHERE id = $1`,
+      [taskId]
+    );
+    if (taskResult.rows.length === 0) return;
+    const task = taskResult.rows[0];
+
+    const bindResult = await pool.query(
+      `SELECT app_token, table_id_wechat_approval
+         FROM zenithjoy.tenant_feishu_bindings WHERE tenant_id = $1`,
+      [tenantId]
+    );
+    if (bindResult.rows.length === 0) return;
+    const binding = bindResult.rows[0];
+    if (!binding.app_token || !binding.table_id_wechat_approval) return;
+
+    const token = await getValidToken(tenantId);
+    const url = `${FEISHU_BASE}/open-apis/bitable/v1/apps/${binding.app_token}/tables/${binding.table_id_wechat_approval}/records`;
+    const resp = await axios.post(
+      url,
+      {
+        fields: {
+          任务ID:   String(task.id),
+          内容预览: String(task.content || '').slice(0, 100),
+          任务类型: String(task.task_type),
+          目标好友: task.target_friend_alias ?? '',
+          审批状态: '待审批',
+          创建时间: new Date(task.created_at).toISOString(),
+        },
+      },
+      { headers: authHeader(token), timeout: 10000 }
+    );
+    const data = resp.data || {};
+    if (data.code !== 0) {
+      console.error(`[pushWechatTaskToFeishu] feishu error code=${data.code} msg=${data.msg}`);
+      return;
+    }
+    const recordId: string = data.data?.record?.record_id ?? '';
+    if (recordId) {
+      await pool.query(
+        `UPDATE zenithjoy.wechat_publish_task SET feishu_record_id = $1 WHERE id = $2`,
+        [recordId, taskId]
+      );
+    }
+  } catch (e) {
+    console.error('[pushWechatTaskToFeishu] error (swallowed):', (e as Error).message);
+  }
 }

@@ -12,6 +12,7 @@
 import { Router, Request, Response } from 'express';
 import { z } from 'zod';
 import pool from '../db/connection';
+import { pushWechatTaskToFeishu } from '../services/feishu-bitable-multitenant';
 
 export const wechatRouter = Router();
 
@@ -83,4 +84,53 @@ wechatRouter.post('/scheduler-tick', async (req: Request, res: Response) => {
     dryrun: parse.data.dryrun ?? false,
     note: 'thin stub — real scheduler in WS5',
   });
+});
+
+// ============ POST /api/wechat/draft-submit ============
+const draftSubmitSchema = z.object({
+  agent_id:            z.string().regex(UUID_RE, 'agent_id must be uuid'),
+  task_type:           z.enum(['moments', 'private_chat']),
+  content:             z.string().min(1).max(2000),
+  target_friend_alias: z.string().optional(),
+  scheduled_at:        z.string().datetime().optional(),
+});
+
+wechatRouter.post('/draft-submit', async (req: Request, res: Response) => {
+  const parse = draftSubmitSchema.safeParse(req.body);
+  if (!parse.success) {
+    return res.status(400).json({ ok: false, code: 'INVALID_BODY', errors: parse.error.format() });
+  }
+  const { agent_id, task_type, content, target_friend_alias, scheduled_at } = parse.data;
+
+  // 查 agent → tenant_id
+  const agentRow = await pool.query(
+    `SELECT tenant_id FROM zenithjoy.agents WHERE id = $1`,
+    [agent_id]
+  ).catch(() => ({ rows: [] as { tenant_id: string }[] }));
+  const tenantId: string | null = agentRow.rows[0]?.tenant_id ?? null;
+
+  // INSERT wechat_publish_task
+  let taskId: string;
+  try {
+    const insertResult = await pool.query(
+      `INSERT INTO zenithjoy.wechat_publish_task
+         (agent_id, task_type, content, target_friend_alias, scheduled_at, status, approval_source)
+       VALUES ($1, $2, $3, $4, $5, 'draft', 'feishu_user')
+       RETURNING id`,
+      [agent_id, task_type, content, target_friend_alias ?? null,
+       scheduled_at ?? new Date().toISOString()]
+    );
+    taskId = insertResult.rows[0].id;
+  } catch (e) {
+    return res.status(500).json({ ok: false, code: 'DB_ERROR', message: (e as Error).message });
+  }
+
+  // 异步推飞书（不 await，不阻塞响应）
+  if (tenantId) {
+    void pushWechatTaskToFeishu(taskId, tenantId).catch((e: Error) =>
+      console.error('[draft-submit] pushWechatTaskToFeishu failed:', e.message)
+    );
+  }
+
+  return res.status(201).json({ ok: true, task_id: taskId, status: 'pending_approval' });
 });

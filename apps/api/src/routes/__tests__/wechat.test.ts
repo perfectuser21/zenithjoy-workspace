@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * P4 WS1 — wechat.ts pairing unit test
  *
@@ -22,5 +23,12 @@ describe('wechat.ts — router export', () => {
     expect(paths).toContain('/qr-bind');
     expect(paths).toContain('/draft-review-poll');
     expect(paths).toContain('/scheduler-tick');
+  });
+
+  it('registers exactly 4 endpoints including /draft-submit', () => {
+    const stack = (wechatRouter as any).stack;
+    const paths = stack.filter((l: any) => l.route).map((l: any) => l.route.path);
+    expect(paths.length).toBe(4);
+    expect(paths).toContain('/draft-submit');
   });
 });

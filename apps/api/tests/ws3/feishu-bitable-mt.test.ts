@@ -30,17 +30,18 @@ describe('Workstream 3 — feishu-bitable-multitenant [BEHAVIOR]', () => {
     mockGet.mockReset();
   });
 
-  it('provisionBitable 调 1 次 createBitable + 3 次 createTable + 写回 4 个 ID', async () => {
+  it('provisionBitable 调 1 次 createBitable + 4 次 createTable + 写回 5 个 ID', async () => {
     const mod: any = await importMt();
 
-    // 顺序：createBitable → 3 次 createTable
+    // 顺序：createBitable → 4 次 createTable（含 WS2 新增的微信发布审批表）
     mockPost
       .mockResolvedValueOnce({
         data: { code: 0, data: { app: { app_token: 'bascn_app_xxx' } } },
       })
       .mockResolvedValueOnce({ data: { code: 0, data: { table_id: 'tbl_lead_profile' } } })
       .mockResolvedValueOnce({ data: { code: 0, data: { table_id: 'tbl_target_videos' } } })
-      .mockResolvedValueOnce({ data: { code: 0, data: { table_id: 'tbl_leads' } } });
+      .mockResolvedValueOnce({ data: { code: 0, data: { table_id: 'tbl_leads' } } })
+      .mockResolvedValueOnce({ data: { code: 0, data: { table_id: 'tbl_wechat_approval' } } });
 
     mockQuery.mockResolvedValue({ rows: [] });
 
@@ -50,9 +51,10 @@ describe('Workstream 3 — feishu-bitable-multitenant [BEHAVIOR]', () => {
     expect(result.table_id_lead_profile).toBe('tbl_lead_profile');
     expect(result.table_id_target_videos).toBe('tbl_target_videos');
     expect(result.table_id_leads).toBe('tbl_leads');
+    expect(result.table_id_wechat_approval).toBe('tbl_wechat_approval');
 
-    // 飞书 API 调用次数
-    expect(mockPost).toHaveBeenCalledTimes(4);
+    // 飞书 API 调用次数：1 createBitable + 4 createTable = 5
+    expect(mockPost).toHaveBeenCalledTimes(5);
 
     // 应有 UPDATE/INSERT 进 tenant_feishu_bindings
     const upsertCalls = mockQuery.mock.calls.filter((c) =>
@@ -70,6 +72,7 @@ describe('Workstream 3 — feishu-bitable-multitenant [BEHAVIOR]', () => {
           table_id_lead_profile: 'cached_t1',
           table_id_target_videos: 'cached_t2',
           table_id_leads: 'cached_t3',
+          table_id_wechat_approval: 'cached_t4',
         },
       ],
     });
@@ -85,7 +88,8 @@ describe('Workstream 3 — feishu-bitable-multitenant [BEHAVIOR]', () => {
       .mockResolvedValueOnce({ data: { code: 0, data: { app: { app_token: 'a' } } } })
       .mockResolvedValueOnce({ data: { code: 0, data: { table_id: 't1' } } })
       .mockResolvedValueOnce({ data: { code: 0, data: { table_id: 't2' } } })
-      .mockResolvedValueOnce({ data: { code: 0, data: { table_id: 't3' } } });
+      .mockResolvedValueOnce({ data: { code: 0, data: { table_id: 't3' } } })
+      .mockResolvedValueOnce({ data: { code: 0, data: { table_id: 't4' } } });
     mockQuery.mockResolvedValue({ rows: [] });
 
     await mod.provisionBitable('t1');

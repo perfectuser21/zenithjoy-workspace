@@ -50,5 +50,27 @@ else
 fi
 
 echo ""
+echo "=== Step 2: draft-submit → feishu_record_id 非空 ==="
+if [ "$API_REACHABLE" -eq 0 ]; then
+  echo "  SKIP: API not reachable"
+else
+  AGENT_ID="00000000-0000-0000-0000-000000000001"
+  HTTP2=$(curl -s -o /tmp/zj-draft.json -w '%{http_code}' -X POST \
+    -H 'Content-Type: application/json' \
+    -d "{\"agent_id\":\"$AGENT_ID\",\"task_type\":\"moments\",\"content\":\"smoke test content\"}" \
+    "$API/api/wechat/draft-submit" 2>/dev/null)
+  assert "$HTTP2" "201" "draft-submit → 201"
+  TASK_ID=$(python3 -c "import json,sys; print(json.load(sys.stdin).get('task_id',''))" < /tmp/zj-draft.json 2>/dev/null || echo "")
+  if [ -n "$TASK_ID" ]; then
+    FBR=$(psql -U "$DBUSER" -d "$DB" -tA \
+      -c "SELECT feishu_record_id FROM zenithjoy.wechat_publish_task WHERE id='$TASK_ID'" 2>/dev/null | tr -d '[:space:]')
+    if [ -n "$FBR" ]; then echo "  PASS: feishu_record_id=$FBR"; PASS=$((PASS+1));
+    else echo "  FAIL: feishu_record_id NULL"; FAIL=$((FAIL+1)); fi
+  else
+    echo "  FAIL: draft-submit 未返回 task_id"; FAIL=$((FAIL+1))
+  fi
+fi
+
+echo ""
 echo "Smoke: PASS=$PASS FAIL=$FAIL"
 [ "$FAIL" -eq 0 ]
