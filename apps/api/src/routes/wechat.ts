@@ -110,15 +110,20 @@ wechatRouter.post('/draft-submit', async (req: Request, res: Response) => {
   const tenantId: string | null = agentRow.rows[0]?.tenant_id ?? null;
 
   // INSERT wechat_publish_task
-  const insertResult = await pool.query(
-    `INSERT INTO zenithjoy.wechat_publish_task
-       (agent_id, task_type, content, target_friend_alias, scheduled_at, status, approval_source)
-     VALUES ($1, $2, $3, $4, $5, 'draft', 'feishu_user')
-     RETURNING id`,
-    [agent_id, task_type, content, target_friend_alias ?? null,
-     scheduled_at ?? new Date().toISOString()]
-  );
-  const taskId: string = insertResult.rows[0].id;
+  let taskId: string;
+  try {
+    const insertResult = await pool.query(
+      `INSERT INTO zenithjoy.wechat_publish_task
+         (agent_id, task_type, content, target_friend_alias, scheduled_at, status, approval_source)
+       VALUES ($1, $2, $3, $4, $5, 'draft', 'feishu_user')
+       RETURNING id`,
+      [agent_id, task_type, content, target_friend_alias ?? null,
+       scheduled_at ?? new Date().toISOString()]
+    );
+    taskId = insertResult.rows[0].id;
+  } catch (e) {
+    return res.status(500).json({ ok: false, code: 'DB_ERROR', message: (e as Error).message });
+  }
 
   // 异步推飞书（不 await，不阻塞响应）
   if (tenantId) {

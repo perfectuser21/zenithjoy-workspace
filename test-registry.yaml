@@ -1566,16 +1566,22 @@ tests:
     path: apps/api/tests/integration/p4-sprint-1-ws2/feishu-bitable.integration.test.ts
     product: 私域运营
     type: integration
+    ci: L4
+    status: active
     description: 飞书 Bitable 审批表 — DB 列存在 + pushWechatTaskToFeishu 静默
 
   - id: p4-ws2-feishu-bitable-multitenant-unit
     path: apps/api/src/services/feishu-bitable-multitenant.test.ts
     product: 私域运营
     type: unit
+    ci: L4
+    status: active
     description: pushWechatTaskToFeishu 单元测试（吞异常 / fields 格式）
 
   - id: p4-ws2-wechat-routes-draft-submit
     path: apps/api/src/routes/__tests__/wechat.test.ts
     product: 私域运营
     type: unit
+    ci: L4
+    status: active
     description: draft-submit 路由注册到 wechatRouter.stack
