@@ -28,6 +28,8 @@ import { HeartbeatLoop, type HeartbeatTask } from './handlers/heartbeat-loop';
 import { handleQrBindDouyin } from './handlers/qr-bind-douyin';
 // Path 2 Sprint B-1 — burner 小号绑定 handler（独立文件，与 Path 1 主号物理隔离）
 import { handleQrBindDouyinBurner } from './handlers/qr-bind-douyin-burner';
+// Path 4 Sprint 1 WS1 — wechat-rpa handler (Python dryrun stub, 真 wechat_bot.py 在 WS3/4 接)
+import { handleWechatRpa, type WechatRpaTask } from './handlers/wechat-rpa';
 import { createFolderWatchManager } from './handlers/folder-watch';
 import { startHealthServer, setWsState } from './handlers/health-server';
 
@@ -647,6 +649,18 @@ function startWs1HeartbeatLoop(cfg: AgentConfig): void {
           { apiBase },
         );
         console.log('[ws1:douyin] result:', res.status);
+      } else if (
+        task.platform === 'wechat_qr_bind' ||
+        task.platform === 'wechat_moments_send' ||
+        task.platform === 'wechat_private_chat_send'
+      ) {
+        // Path 4 Sprint 1 WS1 — wechat-rpa dispatch (Python dryrun stub)
+        // 真 dispatch + 回报中台在 WS3/4 接入 (真 wechat_bot.py / wechat_rpa.py)
+        const res = await handleWechatRpa({
+          type: task.platform as WechatRpaTask['type'],
+          payload: (task.payload as Record<string, unknown>) || {},
+        });
+        console.log('[p4-ws1:wechat-rpa]', task.platform, 'result:', res);
       } else {
         console.warn('[ws1] unknown task platform:', task.platform);
       }
