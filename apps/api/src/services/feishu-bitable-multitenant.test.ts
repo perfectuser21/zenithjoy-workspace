@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterAll } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 vi.mock('../db/connection', () => ({
   default: { query: vi.fn() },
@@ -12,31 +12,21 @@ vi.mock('./feishu-token', () => ({
 
 import pool from '../db/connection';
 import axios from 'axios';
-
-describe('feishu-bitable-multitenant placeholder', () => {
-  it('exists — full coverage lives in sprints/path-2-sprint-a-feishu/tests/ws*/', () => {
-    expect(true).toBe(true);
-  });
-});
+import { pushWechatTaskToFeishu } from './feishu-bitable-multitenant';
 
 describe('pushWechatTaskToFeishu', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.resetModules();
   });
 
-  it('pushWechatTaskToFeishu 是异步函数', async () => {
-    const mod = await import('./feishu-bitable-multitenant');
-    expect(mod.pushWechatTaskToFeishu).toBeInstanceOf(Function);
-    const result = mod.pushWechatTaskToFeishu('task-id', 'tenant-id');
-    expect(result).toBeInstanceOf(Promise);
-    await result.catch(() => {});
+  it('tenant 不存在时静默返回 undefined（不抛出）', async () => {
+    (pool.query as ReturnType<typeof vi.fn>).mockResolvedValue({ rows: [] });
+    await expect(pushWechatTaskToFeishu('no-task', 'no-tenant')).resolves.toBeUndefined();
   });
 
-  it('失败时不抛出（吞异常保护主流程）', async () => {
+  it('DB 报错时静默返回 undefined（吞异常保护主流程）', async () => {
     (pool.query as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('DB_DOWN'));
-    const mod = await import('./feishu-bitable-multitenant');
-    await expect(mod.pushWechatTaskToFeishu('t1', 'tenant1')).resolves.toBeUndefined();
+    await expect(pushWechatTaskToFeishu('t1', 'tenant1')).resolves.toBeUndefined();
   });
 
   it('调飞书 create_record 时 fields 含 任务ID 和 审批状态', async () => {
@@ -56,8 +46,7 @@ describe('pushWechatTaskToFeishu', () => {
       data: { code: 0, data: { record: { record_id: 'rec123' } } },
     });
 
-    const mod = await import('./feishu-bitable-multitenant');
-    await mod.pushWechatTaskToFeishu('task-uuid', 'tenant-uuid');
+    await pushWechatTaskToFeishu('task-uuid', 'tenant-uuid');
 
     const postCall = (axios.post as ReturnType<typeof vi.fn>).mock.calls[0];
     const fields = postCall[1].fields as Record<string, string>;
