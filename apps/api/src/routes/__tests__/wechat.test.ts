@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * P4 WS1 — wechat.ts pairing unit test
  *
