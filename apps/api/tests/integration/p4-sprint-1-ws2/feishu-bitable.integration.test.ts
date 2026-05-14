@@ -6,7 +6,11 @@ import { describe, it, expect, afterAll } from 'vitest';
 import { Pool } from 'pg';
 
 const pool = new Pool({
-  connectionString: process.env.DATABASE_URL || 'postgresql://postgres@localhost/cecelia',
+  host: process.env.DATABASE_HOST ?? 'localhost',
+  port: parseInt(process.env.DATABASE_PORT ?? '5432'),
+  user: process.env.DATABASE_USER ?? 'postgres',
+  password: process.env.DATABASE_PASSWORD ?? 'postgres',
+  database: process.env.DATABASE_NAME ?? 'cecelia',
 });
 
 describe('P4 WS2 — DB 列存在', () => {
