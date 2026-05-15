@@ -39,6 +39,7 @@ const autopilotConfig: InstanceConfig = {
     'works-gallery': true,   // 作品库 (Gallery View)
     'platform-data': true,   // 平台数据展示
     'ai-video-generation': true, // AI 视频生成
+    'local-video-pipeline': true, // 本地视频处理
     'content-factory': true,    // 内容工厂（solo company pipeline）
     'competitor_research': true, // 智能对标
     'license': true,             // 客户 License 自查面板（PR-A 需要 super-admin 看到旁边的会员管理入口）
