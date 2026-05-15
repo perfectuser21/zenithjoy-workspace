@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI 视频剪辑 — ZenithJoy</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600&display=swap');
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+  :root{
+    --bg:#09090f;--surface:#13131c;--border:#1e1e2e;--accent:#6366f1;
+    --accent2:#a78bfa;--text:#e2e8f0;--muted:#64748b;--success:#10b981;--error:#ef4444;
+  }
+  body{font-family:'Space Grotesk',system-ui,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px}
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:40px;width:100%;max-width:560px;box-shadow:0 0 60px rgba(99,102,241,.08)}
+  .logo{display:flex;align-items:center;gap:10px;margin-bottom:32px}
+  .logo-dot{width:28px;height:28px;border-radius:8px;background:linear-gradient(135deg,var(--accent),var(--accent2))}
+  .logo-text{font-size:18px;font-weight:600;letter-spacing:-.5px}
+  h1{font-size:24px;font-weight:600;margin-bottom:8px}
+  .subtitle{color:var(--muted);font-size:14px;margin-bottom:32px}
+  label{display:block;font-size:13px;font-weight:500;color:var(--muted);margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px}
+  .field{margin-bottom:20px}
+  .drop-zone{border:2px dashed var(--border);border-radius:10px;padding:32px;text-align:center;cursor:pointer;transition:all .2s;position:relative}
+  .drop-zone:hover,.drop-zone.drag{border-color:var(--accent);background:rgba(99,102,241,.04)}
+  .drop-zone input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
+  .drop-icon{font-size:32px;margin-bottom:8px}
+  .drop-text{color:var(--muted);font-size:14px}
+  .drop-name{color:var(--accent2);font-size:13px;font-weight:500;margin-top:6px}
+  textarea{width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:inherit;font-size:14px;padding:12px;resize:vertical;min-height:80px;transition:border-color .2s}
+  textarea:focus{outline:none;border-color:var(--accent)}
+  .row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .btn{width:100%;padding:14px;border:none;border-radius:10px;font-family:inherit;font-size:15px;font-weight:600;cursor:pointer;transition:all .2s;background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;margin-top:8px}
+  .btn:hover{opacity:.9;transform:translateY(-1px)}
+  .btn:disabled{opacity:.5;cursor:not-allowed;transform:none}
+  .progress-wrap{margin-top:24px;display:none}
+  .progress-bar-bg{background:var(--border);border-radius:999px;height:6px;overflow:hidden;margin-bottom:10px}
+  .progress-bar{height:100%;background:linear-gradient(90deg,var(--accent),var(--accent2));border-radius:999px;transition:width .5s;width:0%}
+  .status-text{font-size:13px;color:var(--muted);text-align:center}
+  .downloads{margin-top:24px;display:none;gap:12px;flex-direction:column}
+  .dl-btn{display:flex;align-items:center;gap:12px;padding:14px 18px;border:1px solid var(--border);border-radius:10px;text-decoration:none;color:var(--text);background:var(--bg);transition:all .2s;font-size:14px;font-weight:500}
+  .dl-btn:hover{border-color:var(--accent);background:rgba(99,102,241,.05)}
+  .dl-badge{font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px;background:rgba(99,102,241,.2);color:var(--accent2)}
+  .error-msg{margin-top:16px;padding:12px;background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.2);border-radius:8px;color:var(--error);font-size:13px;display:none}
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="logo"><div class="logo-dot"></div><span class="logo-text">ZenithJoy AI Editor</span></div>
+  <h1>AI 视频剪辑</h1>
+  <p class="subtitle">上传视频 + 脚本，自动生成 9:16 竖屏和 16:9 横屏</p>
+
+  <form id="form">
+    <div class="field">
+      <label>视频文件 *</label>
+      <div class="drop-zone" id="videoDrop">
+        <input type="file" name="video" accept="video/*" required id="videoInput">
+        <div class="drop-icon">🎬</div>
+        <div class="drop-text">点击或拖入视频文件 (MP4, MOV, AVI)</div>
+        <div class="drop-name" id="videoName"></div>
+      </div>
+    </div>
+
+    <div class="field">
+      <label>脚本 / 标题 *</label>
+      <textarea name="script" placeholder="输入视频脚本或标题，用于 AI 分析和剪辑参考..." required></textarea>
+    </div>
+
+    <div class="row">
+      <div class="field">
+        <label>Logo（可选）</label>
+        <div class="drop-zone" id="logoDrop" style="padding:18px">
+          <input type="file" name="logo" accept="image/*" id="logoInput">
+          <div class="drop-text" style="font-size:12px">PNG/JPG，水印叠加</div>
+          <div class="drop-name" id="logoName" style="font-size:12px"></div>
+        </div>
+      </div>
+    </div>
+
+    <button type="submit" class="btn" id="submitBtn">开始 AI 剪辑</button>
+  </form>
+
+  <div class="progress-wrap" id="progressWrap">
+    <div class="progress-bar-bg"><div class="progress-bar" id="progressBar"></div></div>
+    <div class="status-text" id="statusText">正在处理中…</div>
+  </div>
+
+  <div class="downloads" id="downloads">
+    <a href="#" class="dl-btn" id="dl916">
+      <span>📱</span><span>下载 9:16 竖屏</span><span class="dl-badge">1080×1920</span>
+    </a>
+    <a href="#" class="dl-btn" id="dl169">
+      <span>🖥️</span><span>下载 16:9 横屏</span><span class="dl-badge">1920×1080</span>
+    </a>
+  </div>
+
+  <div class="error-msg" id="errorMsg"></div>
+</div>
+
+<script>
+const BASE = '';
+let pollTimer = null;
+
+// File input labels
+document.getElementById('videoInput').addEventListener('change', (e) => {
+  document.getElementById('videoName').textContent = e.target.files[0]?.name || '';
+});
+document.getElementById('logoInput').addEventListener('change', (e) => {
+  document.getElementById('logoName').textContent = e.target.files[0]?.name || '';
+});
+
+// Drag and drop
+['videoDrop', 'logoDrop'].forEach(id => {
+  const el = document.getElementById(id);
+  el.addEventListener('dragover', e => { e.preventDefault(); el.classList.add('drag'); });
+  el.addEventListener('dragleave', () => el.classList.remove('drag'));
+  el.addEventListener('drop', e => { e.preventDefault(); el.classList.remove('drag'); });
+});
+
+document.getElementById('form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const btn = document.getElementById('submitBtn');
+  const progressWrap = document.getElementById('progressWrap');
+  const downloads = document.getElementById('downloads');
+  const errorMsg = document.getElementById('errorMsg');
+
+  errorMsg.style.display = 'none';
+  downloads.style.display = 'none';
+  btn.disabled = true;
+  btn.textContent = '上传中…';
+  progressWrap.style.display = 'block';
+  setProgress(5, '正在上传视频…');
+
+  try {
+    const fd = new FormData(e.target);
+    const resp = await fetch(`${BASE}/api/ai-video/upload`, { method: 'POST', body: fd });
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({}));
+      throw new Error(err.error || `HTTP ${resp.status}`);
+    }
+    const job = await resp.json();
+    btn.textContent = '处理中…';
+    setProgress(10, '视频已上传，AI 正在处理…');
+    pollStatus(job.id);
+  } catch (err) {
+    showError(err.message);
+    btn.disabled = false;
+    btn.textContent = '开始 AI 剪辑';
+    progressWrap.style.display = 'none';
+  }
+});
+
+function pollStatus(jobId) {
+  pollTimer = setInterval(async () => {
+    try {
+      const resp = await fetch(`/api/ai-video/task/${jobId}`);
+      const job = await resp.json();
+      const p = job.progress || 0;
+      const labels = {queued:'排队等待…',in_progress:'AI 处理中…',completed:'处理完成！',failed:'处理失败'};
+      setProgress(p, labels[job.status] || job.status);
+
+      if (job.status === 'completed') {
+        clearInterval(pollTimer);
+        showDownloads(job);
+        document.getElementById('submitBtn').textContent = '重新上传';
+        document.getElementById('submitBtn').disabled = false;
+      } else if (job.status === 'failed') {
+        clearInterval(pollTimer);
+        showError(job.error_message || '处理失败，请重试');
+        document.getElementById('submitBtn').textContent = '开始 AI 剪辑';
+        document.getElementById('submitBtn').disabled = false;
+        document.getElementById('progressWrap').style.display = 'none';
+      }
+    } catch {}
+  }, 5000);
+}
+
+function setProgress(pct, text) {
+  document.getElementById('progressBar').style.width = pct + '%';
+  document.getElementById('statusText').textContent = text;
+}
+
+function showDownloads(job) {
+  const dl = document.getElementById('downloads');
+  dl.style.display = 'flex';
+  if (job.output_9_16_url) document.getElementById('dl916').href = job.output_9_16_url;
+  if (job.output_16_9_url) document.getElementById('dl169').href = job.output_16_9_url;
+}
+
+function showError(msg) {
+  const el = document.getElementById('errorMsg');
+  el.textContent = '错误：' + msg;
+  el.style.display = 'block';
+}
+</script>
+</body>
+</html>

@@ -1,4 +1,5 @@
 import express from 'express';
+import * as path from 'path';
 import cors from 'cors';
 import { toNodeHandler } from 'better-auth/node';
 import { auth } from './auth';
@@ -57,6 +58,9 @@ if (!process.env.VITEST) {
 
 // 之后才挂 body parser
 app.use(express.json());
+
+// Serve static UI pages
+app.use(express.static(path.join(__dirname, '../public')));
 
 // Health check
 app.get('/health', (req, res) => {

@@ -1,7 +1,12 @@
 import { Request, Response, NextFunction } from 'express';
+import * as path from 'path';
+import * as fs from 'fs';
 import { AiVideoService } from '../services/ai-video.service';
+import { AiVideoUploadService } from '../services/ai-video-upload.service';
 
 const aiVideoService = new AiVideoService();
+const uploadService = new AiVideoUploadService();
+const LOCAL_BASE = '/opt/video-pipeline/jobs';
 
 export class AiVideoController {
   async getAllGenerations(req: Request, res: Response, next: NextFunction) {
@@ -68,6 +73,63 @@ export class AiVideoController {
       const { id } = req.params;
       await aiVideoService.deleteGeneration(id);
       res.status(204).send();
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async uploadAndProcess(req: Request, res: Response, next: NextFunction) {
+    try {
+      const files = req.files as Record<string, Express.Multer.File[]>;
+      const videoFile = files?.['video']?.[0];
+      const logoFile  = files?.['logo']?.[0];
+
+      if (!videoFile) {
+        return res.status(400).json({ error: 'video file is required' });
+      }
+      const scriptText = (req.body.script || req.body.title || '').trim();
+      if (!scriptText) {
+        return res.status(400).json({ error: 'script or title is required' });
+      }
+
+      const jobId = (req as any).jobId as string;
+
+      await uploadService.createJob({
+        jobId,
+        videoPath: videoFile.path,
+        scriptText,
+        logoPath: logoFile?.path,
+      });
+
+      // Fire and forget dispatch (async)
+      uploadService.dispatch({
+        jobId,
+        videoPath: videoFile.path,
+        scriptText,
+        logoPath: logoFile?.path,
+      }).catch((err) => {
+        console.error(`[upload] dispatch error for ${jobId}:`, err);
+      });
+
+      const row = await aiVideoService.getGenerationById(jobId);
+      res.status(201).json(row);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async downloadFile(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { jobId, file } = req.params;
+      // Sanitize path components
+      if (!/^[\w-]+$/.test(jobId) || !/^[\w.-]+$/.test(file)) {
+        return res.status(400).json({ error: 'invalid path' });
+      }
+      const filePath = path.join(LOCAL_BASE, jobId, 'out', file);
+      if (!fs.existsSync(filePath)) {
+        return res.status(404).json({ error: 'file not found' });
+      }
+      res.download(filePath);
     } catch (error) {
       next(error);
     }
