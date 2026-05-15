@@ -39,10 +39,14 @@ if command -v ffmpeg &>/dev/null; then
   ffmpeg -f lavfi -i "sine=frequency=440:duration=1" \
     -f lavfi -i "color=black:size=320x180:duration=1" \
     -map 0:a -map 1:v -y "$TMP_VIDEO" 2>/dev/null
-  http_code=$(curl -s -m 15 -o /tmp/upload_resp.json -w "%{http_code}" \
+  # dispatch() 内 execSync(ssh) 最长阻塞 120s，给 curl 足够时间等待
+  curl_out=$(curl -s -m 60 -o /tmp/upload_resp.json -w "%{http_code}" \
     -X POST "$API/api/ai-video/upload" \
     -F "video=@$TMP_VIDEO;type=video/mp4" \
-    -F "script=smoke 测试上传" || echo "000")
+    -F "script=smoke 测试上传" 2>/dev/null)
+  curl_exit=$?
+  http_code="${curl_out:-000}"
+  [[ $curl_exit -ne 0 ]] && http_code="000"
   body=$(cat /tmp/upload_resp.json 2>/dev/null || echo "{}")
   if [[ "$http_code" == "201" ]]; then
     job_id=$(echo "$body" | jq -r '.id // empty' 2>/dev/null)
