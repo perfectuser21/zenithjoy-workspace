@@ -23,6 +23,7 @@ import {
   Music2,
   Folder,
   Send,
+  Scissors,
 } from 'lucide-react';
 
 // ============ 类型定义 ============
@@ -93,6 +94,7 @@ export const autopilotPageComponents: Record<string, () => Promise<{ default: Co
   'DouyinBurnerBindPage': () => import('../pages/DouyinBurnerBindPage'),
   'FolderBindPage': () => import('../pages/FolderBindPage'),
   'PublishPage': () => import('../pages/PublishPage'),
+  'LocalVideoPipelinePage': () => import('../pages/LocalVideoPipelinePage'),
   // FeatureDashboard and CommandCenter moved to Core features/business
 };
 
@@ -155,6 +157,13 @@ export const autopilotNavGroups: NavGroup[] = [
         label: 'AI 视频',
         featureKey: 'ai-video-generation',
         component: 'AiVideoGenerationPage'
+      },
+      {
+        path: '/local-video',
+        icon: Scissors,
+        label: '本地视频处理',
+        featureKey: 'local-video-pipeline',
+        component: 'LocalVideoPipelinePage'
       },
       {
         path: '/content-factory',

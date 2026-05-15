@@ -1585,3 +1585,11 @@ tests:
     ci: L4
     status: active
     description: draft-submit 路由注册到 wechatRouter.stack
+
+  - id: local-video-pipeline-unit
+    path: apps/dashboard/src/pages/__tests__/LocalVideoPipelinePage.test.ts
+    product: 视频处理
+    type: unit
+    ci: L3
+    status: active
+    description: LocalVideoPipelinePage URL 构建 + JobStatus 状态转换
