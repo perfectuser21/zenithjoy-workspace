@@ -11,6 +11,9 @@ function findFfmpeg(): string {
   const exeDir = path.dirname(process.execPath);
   const bundled = path.join(exeDir, 'ffmpeg.exe');
   if (fs.existsSync(bundled)) return bundled;
+  // dev mode (node dist/index.js): cwd lets us place ffmpeg.exe in working dir
+  const cwdBundled = path.join(process.cwd(), 'ffmpeg.exe');
+  if (fs.existsSync(cwdBundled)) return cwdBundled;
   const candidates = [
     'C:\\ffmpeg\\bin\\ffmpeg.exe',
     'C:\\Program Files\\ffmpeg\\bin\\ffmpeg.exe',
