@@ -1593,3 +1593,53 @@ tests:
     ci: L3
     status: active
     description: LocalVideoPipelinePage URL 构建 + JobStatus 状态转换
+
+  # ── AI 视频本地流水线（Path 1 Step 5）─────────────────────────────────────────
+
+  - id: ai-video-pipeline-integration
+    path: apps/api/tests/ai-video-pipeline.test.ts
+    type: integration
+    ci: L3
+    status: active
+    product: AI视频本地流水线
+    note: "全链路路由集成测试：createJob/listJobs/getJob/updateProgress/downloadSource/uploadOutput/downloadOutput/transcribe/design/compose-html/bgm/completeJob"
+
+  - id: ai-video-pipeline-controller-exports
+    path: apps/api/tests/controllers/ai-video-pipeline.controller.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: AI视频本地流水线
+    note: "ai-video-pipeline.controller 8 个 handler 导出存在性验证"
+
+  - id: ai-video-pipeline-ai-controller-exports
+    path: apps/api/tests/controllers/ai-video-pipeline-ai.controller.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: AI视频本地流水线
+    note: "ai-video-pipeline-ai.controller 4 个 AI handler 导出存在性验证"
+
+  - id: ai-video-pipeline-router-exports
+    path: apps/api/tests/routes/ai-video-pipeline.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: AI视频本地流水线
+    note: "ai-video-pipeline 路由模块导出 Express Router 并注册了路由"
+
+  - id: ai-video-pipeline-worker-script
+    path: apps/api/tests/scripts/video-pipeline-worker.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: AI视频本地流水线
+    note: "video-pipeline-worker 脚本启动后注册 setInterval 轮询（10s 间隔）"
+
+  - id: ai-video-pipeline-service-unit
+    path: apps/api/src/services/__tests__/ai-video-pipeline.service.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: AI视频本地流水线
+    note: "AiVideoPipelineService createJob/getJob/listPending/updateStatus 单测"

@@ -7,6 +7,7 @@ import workPerformanceRouter from './routes/work-performance';
 import fieldsRouter from './routes/fields';
 import publishRouter from './routes/publish';
 import aiVideoRouter from './routes/ai-video';
+import aiVideoPipelineRouter from './routes/ai-video-pipeline';
 import snapshotsRouter from './routes/snapshots';
 import douyinAuthRouter from './routes/douyin-auth';
 import pipelineRouter from './routes/pipeline';
@@ -69,6 +70,8 @@ app.use('/api/works/:id/performance', workPerformanceRouter);
 app.use('/api/fields', fieldsRouter);
 app.use('/api', publishRouter);
 app.use('/api/ai-video', aiVideoRouter);
+// Path 1 Step 5 — AI 视频本地流水线（jobs CRUD + AI API 代理）
+app.use('/api/ai-video/jobs', aiVideoPipelineRouter);
 app.use('/api/snapshots', snapshotsRouter);
 app.use('/api', douyinAuthRouter);
 app.use('/api/pipeline', pipelineRouter);

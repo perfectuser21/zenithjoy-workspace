@@ -4,7 +4,7 @@ import axios from 'axios';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || '/api';
 
-type JobStatus = 'idle' | 'queued' | 'in_progress' | 'completed' | 'failed';
+type JobStatus = 'idle' | 'queued' | 'pending' | 'in_progress' | 'completed' | 'failed';
 
 interface JobState {
   id: string;
@@ -17,8 +17,8 @@ async function uploadVideo(video: File, logo: File | null, script: string): Prom
   const form = new FormData();
   form.append('video', video);
   if (logo) form.append('logo', logo);
-  form.append('script', script);
-  const res = await axios.post(`${API_BASE}/ai-video/upload`, form, {
+  if (script.trim()) form.append('topic', script);
+  const res = await axios.post(`${API_BASE}/ai-video/jobs`, form, {
     headers: { 'Content-Type': 'multipart/form-data' },
     timeout: 30000,
   });
@@ -26,12 +26,12 @@ async function uploadVideo(video: File, logo: File | null, script: string): Prom
 }
 
 async function pollStatus(id: string): Promise<JobState> {
-  const res = await axios.get(`${API_BASE}/ai-video/task/${id}`);
+  const res = await axios.get(`${API_BASE}/ai-video/jobs/${id}`);
   return { id, ...res.data };
 }
 
 function downloadUrl(jobId: string, file: '9_16.mp4' | '16_9.mp4'): string {
-  return `${API_BASE}/ai-video/download/${jobId}/${file}`;
+  return `${API_BASE}/ai-video/jobs/${jobId}/output/${file}`;
 }
 
 function DropZone({
@@ -151,7 +151,7 @@ export default function LocalVideoPipelinePage() {
   }, [stopPoll]);
 
   const handleSubmit = async () => {
-    if (!videoFile || !script.trim()) return;
+    if (!videoFile) return;
     setSubmitting(true);
     try {
       const { id } = await uploadVideo(videoFile, logoFile, script);
@@ -174,14 +174,15 @@ export default function LocalVideoPipelinePage() {
     setScript('');
   };
 
-  const isProcessing = job && (job.status === 'queued' || job.status === 'in_progress');
+  const isProcessing = job && (job.status === 'queued' || job.status === 'pending' || job.status === 'in_progress');
   const isDone = job?.status === 'completed';
   const isFailed = job?.status === 'failed';
-  const canSubmit = !!videoFile && !!script.trim() && !submitting && !isProcessing;
+  const canSubmit = !!videoFile && !submitting && !isProcessing;
 
   const statusLabel: Record<JobStatus, string> = {
     idle: '',
     queued: '排队中…',
+    pending: '排队中…',
     in_progress: `处理中 ${job?.progress ?? 0}%`,
     completed: '处理完成',
     failed: '处理失败',
@@ -195,7 +196,7 @@ export default function LocalVideoPipelinePage() {
           本地视频处理
         </h1>
         <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-          上传视频，AI 自动剪掉静音段，输出 9:16 和 16:9 两种格式
+          上传视频（可选 logo），AI 全自动精剪 + 字幕叠加，Agent 本地生成成品
         </p>
       </div>
 
