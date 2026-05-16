@@ -60,4 +60,20 @@ describe('AiVideoPipelineService', () => {
     const result = await svc.updateStatus('1', { status: 'completed', progress: 100 });
     expect(result.status).toBe('completed');
   });
+
+  it('updateStatus can set output_dir', async () => {
+    const fakeUpdated = {
+      id: 'job-1', status: 'completed' as const, progress: 100,
+      src_video: 'C:\\test.mp4', src_logo: null, topic: null,
+      result_url: null, output_dir: 'C:\\out\\job-1', error_msg: null,
+      created_at: new Date(), updated_at: new Date(),
+    };
+    mockQuery.mockResolvedValueOnce({ rows: [fakeUpdated] });
+    const result = await svc.updateStatus('job-1', { outputDir: 'C:\\out\\job-1', status: 'completed', progress: 100 });
+    expect(result.output_dir).toBe('C:\\out\\job-1');
+    expect(mockQuery).toHaveBeenCalledWith(
+      expect.stringContaining('output_dir'),
+      expect.arrayContaining(['C:\\out\\job-1']),
+    );
+  });
 });
