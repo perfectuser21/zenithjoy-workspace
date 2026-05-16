@@ -31,6 +31,7 @@ export async function listJobs(req: Request, res: Response, next: NextFunction) 
       const jobs = await svc.listPending();
       return res.json({ data: jobs });
     }
+    // thin: only supports status=pending filter; other filters return empty as not-yet-implemented
     res.json({ data: [] });
   } catch (err) { next(err); }
 }
