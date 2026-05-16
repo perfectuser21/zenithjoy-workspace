@@ -29,6 +29,7 @@ const FFMPEG = findFfmpeg();
 // ── HTTP helpers ─────────────────────────────────────────────────────────────
 async function apiGet<T>(apiBase: string, p: string): Promise<T> {
   const r = await fetch(`${apiBase}${p}`);
+  if (!r.ok) throw new Error(`GET ${apiBase}${p} → ${r.status}`);
   return r.json() as Promise<T>;
 }
 
@@ -38,6 +39,7 @@ async function apiPost<T>(apiBase: string, p: string, body: unknown): Promise<T>
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   });
+  if (!r.ok) throw new Error(`POST ${apiBase}${p} → ${r.status}`);
   return r.json() as Promise<T>;
 }
 
