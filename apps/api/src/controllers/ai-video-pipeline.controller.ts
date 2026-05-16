@@ -118,7 +118,11 @@ export async function uploadOutput(req: Request, res: Response, next: NextFuncti
 
     if (saved.length === 0) return res.status(400).json({ error: 'no files received' });
 
-    if (saved.length === 2) {
+    // Mark completed once both output files exist on disk (handles sequential uploads)
+    const bothExist =
+      fs.existsSync(path.join(outDir, '9_16.mp4')) &&
+      fs.existsSync(path.join(outDir, '16_9.mp4'));
+    if (bothExist) {
       await svc.updateStatus(req.params.id, {
         status: 'completed',
         progress: 100,
