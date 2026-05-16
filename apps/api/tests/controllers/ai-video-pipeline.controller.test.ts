@@ -17,13 +17,13 @@ describe('ai-video-pipeline.controller exports', () => {
   it('exports completeJob handler', () => {
     expect(typeof controller.completeJob).toBe('function');
   });
-  it('exports downloadSource handler', () => {
-    expect(typeof controller.downloadSource).toBe('function');
+  it('does NOT export downloadSource', () => {
+    expect((controller as Record<string, unknown>).downloadSource).toBeUndefined();
   });
-  it('exports uploadOutput handler', () => {
-    expect(typeof controller.uploadOutput).toBe('function');
+  it('does NOT export uploadOutput', () => {
+    expect((controller as Record<string, unknown>).uploadOutput).toBeUndefined();
   });
-  it('exports downloadOutput handler', () => {
-    expect(typeof controller.downloadOutput).toBe('function');
+  it('does NOT export downloadOutput', () => {
+    expect((controller as Record<string, unknown>).downloadOutput).toBeUndefined();
   });
 });
