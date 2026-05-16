@@ -255,7 +255,7 @@ export async function createPublishTask(args: {
   const { rows } = await pool.query<PublishTaskRow>(
     `INSERT INTO zenithjoy.publish_tasks (agent_id, platform, type, folder_path, status, result)
      VALUES ($1, $2, $3, $4, 'pending', $5::jsonb)
-     RETURNING id, agent_id, platform, status, folder_path, result, receipt_at, created_at`,
+     RETURNING id, agent_id, platform, type, status, folder_path, result, receipt_at, created_at`,
     [agentId, platform, type, folderPath, resultJson]
   );
   return rows[0];
