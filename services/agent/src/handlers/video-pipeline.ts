@@ -1,119 +1,65 @@
-/**
- * services/agent/src/handlers/video-pipeline.ts
- *
- * Windows Agent — 视频本地流水线处理器
- *
- * 流程：
- *   轮询 GET /api/ai-video/jobs?status=pending
- *   → 下载源视频到本地 temp
- *   → FFmpeg 提取音频
- *   → POST /:id/transcribe (Gemini via 中台)
- *   → POST /:id/design (Claude via 中台)
- *   → POST /:id/compose-html
- *   → POST /:id/bgm (PiAPI via 中台)
- *   → FFmpeg 生成 9:16 + 16:9 MP4
- *   → POST /:id/upload-output 把 MP4 上传回 Mac 中台
- */
-
-import { execFile, execSync } from 'child_process';
+import { execSync, execFile } from 'child_process';
 import { promisify } from 'util';
 import fs from 'fs';
-import https from 'https';
-import http from 'http';
 import path from 'path';
 import os from 'os';
 
 const execFileAsync = promisify(execFile);
 
 // ── FFmpeg 路径查找 ─────────────────────────────────────────────────────────
-
 function findFfmpeg(): string {
-  // 1. 同目录 ffmpeg.exe (install pack 捆绑)
   const exeDir = path.dirname(process.execPath);
   const bundled = path.join(exeDir, 'ffmpeg.exe');
   if (fs.existsSync(bundled)) return bundled;
-
-  // 2. 常见 Windows 手动安装路径
   const candidates = [
     'C:\\ffmpeg\\bin\\ffmpeg.exe',
     'C:\\Program Files\\ffmpeg\\bin\\ffmpeg.exe',
     path.join(os.homedir(), 'ffmpeg\\bin\\ffmpeg.exe'),
   ];
-  for (const c of candidates) {
-    if (fs.existsSync(c)) return c;
-  }
-
-  // 3. PATH 中的 ffmpeg (开发环境 fallback)
+  for (const c of candidates) { if (fs.existsSync(c)) return c; }
   try {
     const which = execSync('where ffmpeg', { stdio: 'pipe' }).toString().split('\n')[0].trim();
     if (which) return which;
-  } catch { /* not in PATH */ }
-
-  // 4. 非 Windows (开发/测试环境)
+  } catch { }
   return 'ffmpeg';
 }
 
 const FFMPEG = findFfmpeg();
 
 // ── HTTP helpers ─────────────────────────────────────────────────────────────
-
-async function apiGet<T>(apiBase: string, path: string): Promise<T> {
-  const res = await fetch(`${apiBase}${path}`);
-  return res.json() as Promise<T>;
+async function apiGet<T>(apiBase: string, p: string): Promise<T> {
+  const r = await fetch(`${apiBase}${p}`);
+  if (!r.ok) throw new Error(`GET ${apiBase}${p} → ${r.status}`);
+  return r.json() as Promise<T>;
 }
 
-async function apiPost<T>(apiBase: string, path: string, body: unknown): Promise<T> {
-  const res = await fetch(`${apiBase}${path}`, {
+async function apiPost<T>(apiBase: string, p: string, body: unknown): Promise<T> {
+  const r = await fetch(`${apiBase}${p}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   });
-  return res.json() as Promise<T>;
+  if (!r.ok) throw new Error(`POST ${apiBase}${p} → ${r.status}`);
+  return r.json() as Promise<T>;
 }
 
-async function apiPatch(apiBase: string, path: string, body: unknown): Promise<void> {
-  await fetch(`${apiBase}${path}`, {
+async function apiPatch(apiBase: string, p: string, body: unknown): Promise<void> {
+  await fetch(`${apiBase}${p}`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
-  }).catch(() => { /* non-fatal */ });
+  });
 }
 
 async function downloadToFile(url: string, dest: string): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const proto = url.startsWith('https') ? https : http;
-    const file = fs.createWriteStream(dest);
-    proto.get(url, (res) => {
-      if (res.statusCode !== 200) {
-        file.close();
-        reject(new Error(`download ${url} → ${res.statusCode}`));
-        return;
-      }
-      res.pipe(file);
-      file.on('finish', () => { file.close(); resolve(); });
-    }).on('error', (err) => { fs.unlink(dest, () => {}); reject(err); });
-  });
+  const r = await fetch(url);
+  if (!r.ok) throw new Error(`download ${url} → ${r.status}`);
+  const buf = await r.arrayBuffer();
+  fs.writeFileSync(dest, Buffer.from(buf));
 }
-
-// ── progress helper ──────────────────────────────────────────────────────────
 
 async function progress(apiBase: string, jobId: string, pct: number): Promise<void> {
-  await apiPatch(apiBase, `/api/ai-video/jobs/${jobId}/progress`, {
-    progress: pct,
-    status: 'processing',
-  });
-}
-
-// ── upload output MP4 back to 中台 ───────────────────────────────────────────
-
-async function uploadMp4(apiBase: string, jobId: string, field: '9_16' | '16_9', filePath: string): Promise<void> {
-  const formData = new FormData();
-  const buf = fs.readFileSync(filePath);
-  formData.append(field, new Blob([buf], { type: 'video/mp4' }), `${field}.mp4`);
-  await fetch(`${apiBase}/api/ai-video/jobs/${jobId}/upload-output`, {
-    method: 'POST',
-    body: formData,
-  });
+  await apiPatch(apiBase, `/api/ai-video/jobs/${jobId}/progress`, { progress: pct, status: 'processing' });
 }
 
 // ── main job processor ───────────────────────────────────────────────────────
@@ -130,20 +76,27 @@ export async function processVideoPipelineJob(
   job: VideoPipelineJob,
 ): Promise<void> {
   const { id, topic } = job;
+
+  // videoPath = Windows 本地路径，直接来自 job.src_video
+  const videoPath = job.src_video;
+  if (!videoPath || !fs.existsSync(videoPath)) {
+    throw new Error(`[video-pipeline] src_video not found on local disk: ${videoPath}`);
+  }
+
+  // 输出目录：视频同级 zenithjoy-output/<id>/
+  const outputDir = path.join(path.dirname(videoPath), 'zenithjoy-output', id);
+  fs.mkdirSync(outputDir, { recursive: true });
+
   const tmpDir = path.join(os.tmpdir(), `zj-video-${id}`);
   fs.mkdirSync(tmpDir, { recursive: true });
 
-  console.log(`[video-pipeline] processing job ${id}`);
+  console.log(`[video-pipeline] processing job ${id} — source: ${videoPath}`);
 
   try {
     // ── Step 1: claim job ──────────────────────────────────────────────────
     await apiPatch(apiBase, `/api/ai-video/jobs/${id}/progress`, { progress: 2, status: 'processing' });
 
-    // ── Step 2: download source video from 中台 ────────────────────────────
-    const videoPath = path.join(tmpDir, 'source.mp4');
-    await downloadToFile(`${apiBase}/api/ai-video/jobs/${id}/source`, videoPath);
-    console.log(`[video-pipeline] downloaded source → ${videoPath}`);
-    await progress(apiBase, id, 15);
+    // Step 2 已删除：视频直接来自本地路径，不需要下载
 
     // ── Step 3: probe duration ─────────────────────────────────────────────
     let duration = 30;
@@ -165,7 +118,6 @@ export async function processVideoPipelineJob(
         audioPath,
       ]);
     } catch {
-      // fallback: silent audio
       await execFileAsync(FFMPEG, [
         '-y', '-f', 'lavfi', '-i', 'anullsrc=r=16000:cl=mono',
         '-t', String(duration), '-acodec', 'pcm_s16le', audioPath,
@@ -185,9 +137,7 @@ export async function processVideoPipelineJob(
         body: transcribeForm,
       });
       const data = await r.json() as typeof transcribeResult;
-      if (data.transcript || data.segments?.length) {
-        transcribeResult = data;
-      }
+      if (data.transcript || data.segments?.length) transcribeResult = data;
       if (!transcribeResult.transcript && topic) transcribeResult.transcript = topic;
     } catch (err) {
       console.warn('[video-pipeline] transcribe error:', err);
@@ -207,9 +157,7 @@ export async function processVideoPipelineJob(
         duration,
         topic,
       }) as typeof designResult;
-    } catch (err) {
-      console.warn('[video-pipeline] design error:', err);
-    }
+    } catch (err) { console.warn('[video-pipeline] design error:', err); }
     await progress(apiBase, id, 55);
 
     // ── Step 7: compose HTML ───────────────────────────────────────────────
@@ -221,12 +169,10 @@ export async function processVideoPipelineJob(
       const htmlRes = await apiPost<{ html?: string }>(apiBase, `/api/ai-video/jobs/${id}/compose-html`, {
         scenes,
         duration,
-        video_filename: 'source.mp4',
+        video_filename: path.basename(videoPath),
       });
       if (htmlRes.html) fs.writeFileSync(htmlPath, htmlRes.html, 'utf-8');
-    } catch (err) {
-      console.warn('[video-pipeline] compose-html error:', err);
-    }
+    } catch (err) { console.warn('[video-pipeline] compose-html error:', err); }
     await progress(apiBase, id, 65);
 
     // ── Step 8: BGM ────────────────────────────────────────────────────────
@@ -241,14 +187,12 @@ export async function processVideoPipelineJob(
         hasBgm = true;
         console.log('[video-pipeline] BGM downloaded');
       }
-    } catch (err) {
-      console.warn('[video-pipeline] BGM error (non-fatal):', err);
-    }
+    } catch (err) { console.warn('[video-pipeline] BGM error (non-fatal):', err); }
     await progress(apiBase, id, 75);
 
-    // ── Step 9: FFmpeg outputs ─────────────────────────────────────────────
-    const output916 = path.join(tmpDir, '9_16.mp4');
-    const output169 = path.join(tmpDir, '16_9.mp4');
+    // ── Step 9: FFmpeg outputs → 写到本地 outputDir ────────────────────────
+    const output916 = path.join(outputDir, '9_16.mp4');
+    const output169 = path.join(outputDir, '16_9.mp4');
     const bgmArgs: string[] = hasBgm
       ? ['-map', '0:v:0', '-map', '1:a:0', '-shortest']
       : ['-map', '0'];
@@ -277,10 +221,13 @@ export async function processVideoPipelineJob(
     await mkOutput(output169, 1920, 1080);
     await progress(apiBase, id, 93);
 
-    // ── Step 10: upload outputs to 中台 ────────────────────────────────────
-    await uploadMp4(apiBase, id, '9_16', output916);
-    await uploadMp4(apiBase, id, '16_9', output169);
-    console.log(`[video-pipeline] job ${id} complete — outputs uploaded to 中台`);
+    // ── Step 10: 通知中台完成，带本地 output_dir ───────────────────────────
+    console.log(`[video-pipeline] job ${id} complete — outputs at ${outputDir}`);
+    await fetch(`${apiBase}/api/ai-video/jobs/${id}/complete`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ output_dir: outputDir }),
+    });
     await progress(apiBase, id, 100);
 
   } catch (err) {
@@ -291,40 +238,30 @@ export async function processVideoPipelineJob(
       body: JSON.stringify({ error_msg: String(err) }),
     }).catch(() => {});
   } finally {
-    // cleanup temp files
     fs.rmSync(tmpDir, { recursive: true, force: true });
   }
 }
 
 // ── polling loop ─────────────────────────────────────────────────────────────
-
 let _running = false;
 
-export async function pollVideoPipeline(apiBase: string): Promise<void> {
-  if (_running) return;
-  try {
-    const { data } = await apiGet<{ data: VideoPipelineJob[] }>(
-      apiBase,
-      '/api/ai-video/jobs?status=pending',
-    );
-    if (!data?.length) return;
-
-    // Claim first job immediately before processing
-    const job = data[0];
+export function startVideoPipelineLoop(apiBase: string, intervalMs = 15_000): NodeJS.Timeout {
+  const tick = async () => {
+    if (_running) return;
     _running = true;
     try {
-      await processVideoPipelineJob(apiBase, job);
+      const data = await apiGet<{ data?: VideoPipelineJob[] }>(apiBase, '/api/ai-video/jobs?status=pending');
+      if (data?.data?.length) {
+        const job = data.data[0];
+        await apiPatch(apiBase, `/api/ai-video/jobs/${job.id}/progress`, { status: 'processing', progress: 1 });
+        await processVideoPipelineJob(apiBase, job);
+      }
+    } catch (err) {
+      console.warn('[video-pipeline] poll error:', err instanceof Error ? err.message : err);
     } finally {
       _running = false;
     }
-  } catch (err) {
-    _running = false;
-    console.warn('[video-pipeline] poll error:', (err as Error).message);
-  }
-}
-
-export function startVideoPipelineLoop(apiBase: string, intervalMs = 15_000): NodeJS.Timeout {
-  console.log(`[video-pipeline] polling loop started (${intervalMs / 1000}s interval)`);
-  pollVideoPipeline(apiBase);
-  return setInterval(() => pollVideoPipeline(apiBase), intervalMs);
+  };
+  tick();
+  return setInterval(tick, intervalMs);
 }
