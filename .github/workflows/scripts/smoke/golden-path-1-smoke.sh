@@ -35,11 +35,47 @@ echo ""
 # ───────────────────────────────────────────────────────────────────
 # Step 1：注册自动登录（含 free license 自动创建）
 # Notion Feature: 358c40c2-ba63-8102-a531-f49111b8832e
-# DoD：POST /api/auth/sign-up/email 200 + 自动建 free license + 自动建 free tenant
-# 现状：代码已 ~medium（PR #239-244），smoke 待写
+# DoD：POST /api/auth/sign-up/email 200 + 自动建 free license + cookie 可访问 /me
+# 现状：✅ PR #239-244 已合并
 # ───────────────────────────────────────────────────────────────────
 echo "▶ Step 1: 注册自动登录"
-todo "Step 1 smoke 待写：curl POST /api/auth/sign-up/email + 验证 free license/tenant 已建" 1
+
+S1_COOKIES=$(mktemp)
+S1_TMP=$(mktemp)
+S1_EMAIL="smoke-$(date +%s)@zenithjoy.test"
+
+# 1.1 POST sign-up/email → 200 + user.id
+S1_HTTP=$(curl -s -o "$S1_TMP" -w "%{http_code}" --max-time 30 \
+  -c "$S1_COOKIES" \
+  -X POST "$API_BASE/api/auth/sign-up/email" \
+  -H "Content-Type: application/json" \
+  -d "{\"email\":\"$S1_EMAIL\",\"password\":\"$TEST_PASSWORD\",\"name\":\"smoke\"}")
+[ "$S1_HTTP" = "200" ] || { rm -f "$S1_TMP" "$S1_COOKIES"; fail "Step 1.1 sign-up expected 200, got $S1_HTTP" 1; }
+S1_USER_ID=$(python3 -c "import json,sys; print(json.load(open(sys.argv[1]))['user']['id'])" "$S1_TMP" 2>/dev/null)
+[ -n "$S1_USER_ID" ] || { rm -f "$S1_TMP" "$S1_COOKIES"; fail "Step 1.1 no user.id in response" 1; }
+ok "Step 1.1 sign-up → user.id=$S1_USER_ID"
+
+# 1.2 cookie session → /api/account/me 返回 user + free license
+S1_HTTP=$(curl -s -o "$S1_TMP" -w "%{http_code}" --max-time 15 \
+  -b "$S1_COOKIES" "$API_BASE/api/account/me")
+[ "$S1_HTTP" = "200" ] || { rm -f "$S1_TMP" "$S1_COOKIES"; fail "Step 1.2 /me expected 200, got $S1_HTTP" 1; }
+S1_TIER=$(python3 -c "import json,sys; print(json.load(open(sys.argv[1]))['license']['tier'])" "$S1_TMP" 2>/dev/null)
+[ "$S1_TIER" = "free" ] || { rm -f "$S1_TMP" "$S1_COOKIES"; fail "Step 1.2 license.tier='$S1_TIER' expected 'free'" 1; }
+ok "Step 1.2 /me → license.tier=free ✓"
+
+# 1.3 license_key 格式 ZJ-F-XXXXXXXX（free tier 前缀）
+S1_LK=$(python3 -c "import json,sys; print(json.load(open(sys.argv[1]))['license']['license_key'])" "$S1_TMP" 2>/dev/null)
+[[ "$S1_LK" == ZJ-F-* ]] || { rm -f "$S1_TMP" "$S1_COOKIES"; fail "Step 1.3 license_key='$S1_LK' expected ZJ-F-* prefix" 1; }
+ok "Step 1.3 license_key=$S1_LK ✓"
+
+# 1.4 license 未过期（expires_at > now）
+S1_EXP=$(python3 -c "import json,sys,datetime; d=json.load(open(sys.argv[1])); exp=d['license']['expires_at']; now=datetime.datetime.now(datetime.timezone.utc).isoformat(); print('ok' if exp > now else 'expired')" "$S1_TMP" 2>/dev/null)
+[ "$S1_EXP" = "ok" ] || { rm -f "$S1_TMP" "$S1_COOKIES"; fail "Step 1.4 license expired or parse error" 1; }
+ok "Step 1.4 license not expired ✓"
+
+rm -f "$S1_TMP"
+# 保留 $S1_COOKIES 供后续 step 复用（Step 6 有自己的注册，不依赖这个）
+ok "Step 1 ✅ 注册自动登录 + free license 全通"
 
 # ───────────────────────────────────────────────────────────────────
 # Step 2：装客户端 + Agent 自动连中台
