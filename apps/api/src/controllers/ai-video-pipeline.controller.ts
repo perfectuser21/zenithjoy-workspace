@@ -41,9 +41,10 @@ export async function updateProgress(req: Request, res: Response, next: NextFunc
     if (!job) return res.status(404).json({ error: 'job not found' });
     const { progress, status } = req.body as { progress?: number; status?: string };
     const allowedStatuses = ['pending', 'processing', 'completed', 'failed'] as const;
-    const safeStatus = allowedStatuses.includes(status as typeof allowedStatuses[number])
-      ? (status as typeof allowedStatuses[number])
-      : 'processing';
+    if (status !== undefined && !allowedStatuses.includes(status as typeof allowedStatuses[number])) {
+      return res.status(400).json({ error: `invalid status: ${status}` });
+    }
+    const safeStatus = (status as typeof allowedStatuses[number]) ?? 'processing';
     const updated = await svc.updateStatus(req.params.id, {
       status: safeStatus,
       progress: typeof progress === 'number' ? progress : job.progress,
