@@ -97,6 +97,14 @@ describe('AI Video Pipeline API', () => {
       expect(res.status).toBe(200);
       expect(res.body.progress).toBe(50);
     });
+
+    it('returns 400 for invalid status value', async () => {
+      mockSvc.getJob.mockResolvedValueOnce(JOB);
+      const res = await request(app)
+        .patch('/api/ai-video/jobs/job-uuid-1/progress')
+        .send({ progress: 50, status: 'invalid_status' });
+      expect(res.status).toBe(400);
+    });
   });
 
   describe('PUT /api/ai-video/jobs/:id/complete', () => {
