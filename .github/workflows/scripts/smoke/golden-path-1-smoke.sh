@@ -114,11 +114,36 @@ ok "Step 2 ✅ install-pack manifest + Agent 注册中台（含 AI 视频流水�
 # ───────────────────────────────────────────────────────────────────
 # Step 3：填画像诊断（行业 / 受众 / 风格 3 字段）
 # Notion Feature: 358c40c2-ba63-812c-88e8-c1db0d5e31db
-# DoD：Dashboard /onboarding/profile 表单提交 → 写 user_profiles 表
-# 现状：❌ 完全没做，全新模块
+# DoD：POST /api/profile → UPSERT user_profiles → GET /api/profile 读回一致
+# 现状：✅ 本 PR 新增
 # ───────────────────────────────────────────────────────────────────
 echo "▶ Step 3: 填画像诊断"
-todo "Step 3 smoke 待写：curl POST /api/profile + 验证 DB 落表" 3
+
+S3_TMP=$(mktemp)
+
+# 3.1 POST /api/profile — 写 3 字段（用 Step 1 的 cookie session）
+S3_HTTP=$(curl -s -o "$S3_TMP" -w "%{http_code}" --max-time 15 \
+  -b "$S1_COOKIES" \
+  -X POST "$API_BASE/api/profile" \
+  -H "Content-Type: application/json" \
+  -d '{"industry":"短视频电商","audience":"25-35岁女性","style":"活泼励志"}')
+[ "$S3_HTTP" = "201" ] || { rm -f "$S3_TMP"; fail "Step 3.1 POST /api/profile expected 201, got $S3_HTTP" 3; }
+S3_IND=$(python3 -c "import json,sys; print(json.load(open(sys.argv[1]))['industry'])" "$S3_TMP" 2>/dev/null)
+[ "$S3_IND" = "短视频电商" ] || { rm -f "$S3_TMP"; fail "Step 3.1 industry='$S3_IND' mismatch" 3; }
+ok "Step 3.1 POST /api/profile → industry 已写入 ✓"
+
+# 3.2 GET /api/profile — 读回，三字段一致
+S3_HTTP=$(curl -s -o "$S3_TMP" -w "%{http_code}" --max-time 15 \
+  -b "$S1_COOKIES" "$API_BASE/api/profile")
+[ "$S3_HTTP" = "200" ] || { rm -f "$S3_TMP"; fail "Step 3.2 GET /api/profile expected 200, got $S3_HTTP" 3; }
+S3_AUD=$(python3 -c "import json,sys; print(json.load(open(sys.argv[1]))['audience'])" "$S3_TMP" 2>/dev/null)
+S3_STY=$(python3 -c "import json,sys; print(json.load(open(sys.argv[1]))['style'])" "$S3_TMP" 2>/dev/null)
+rm -f "$S3_TMP"
+[ "$S3_AUD" = "25-35岁女性" ] || fail "Step 3.2 audience='$S3_AUD' mismatch" 3
+[ "$S3_STY" = "活泼励志" ] || fail "Step 3.2 style='$S3_STY' mismatch" 3
+ok "Step 3.2 GET /api/profile → 三字段读回一致 ✓"
+
+ok "Step 3 ✅ 画像诊断 UPSERT + 读回全通"
 
 # ───────────────────────────────────────────────────────────────────
 # Step 4：扫码绑定快手（Agent 弹登录窗）
