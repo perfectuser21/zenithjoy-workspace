@@ -11,6 +11,9 @@ function findFfmpeg(): string {
   const exeDir = path.dirname(process.execPath);
   const bundled = path.join(exeDir, 'ffmpeg.exe');
   if (fs.existsSync(bundled)) return bundled;
+  // dev mode (node dist/index.js): cwd lets us place ffmpeg.exe in working dir
+  const cwdBundled = path.join(process.cwd(), 'ffmpeg.exe');
+  if (fs.existsSync(cwdBundled)) return cwdBundled;
   const candidates = [
     'C:\\ffmpeg\\bin\\ffmpeg.exe',
     'C:\\Program Files\\ffmpeg\\bin\\ffmpeg.exe',
@@ -222,13 +225,14 @@ export async function processVideoPipelineJob(
     await progress(apiBase, id, 93);
 
     // ── Step 10: 通知中台完成，带本地 output_dir ───────────────────────────
+    // completeJob sets status=completed + progress=100 in one call; don't call
+    // progress(100) after this — it would overwrite status back to 'processing'
     console.log(`[video-pipeline] job ${id} complete — outputs at ${outputDir}`);
     await fetch(`${apiBase}/api/ai-video/jobs/${id}/complete`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ output_dir: outputDir }),
     });
-    await progress(apiBase, id, 100);
 
   } catch (err) {
     console.error('[video-pipeline] job failed:', err);

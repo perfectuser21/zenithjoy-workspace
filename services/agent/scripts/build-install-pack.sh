@@ -22,12 +22,31 @@ if [ ! -f "zenithjoy-agent.exe" ]; then
     exit 1
 fi
 
+echo "[build] ensuring ffmpeg Windows binaries..."
+# ffmpeg.exe / ffprobe.exe are large binaries — not in git (.gitignore).
+# Download from BtbN's GPL build if not already cached in install-pack/.
+FFMPEG_ZIP_URL="https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl.zip"
+FFMPEG_TMP="/tmp/ffmpeg-win64-latest.zip"
+if [ ! -f "install-pack/ffmpeg.exe" ] || [ ! -f "install-pack/ffprobe.exe" ]; then
+    echo "[build] downloading ffmpeg Windows binaries (~90MB)..."
+    curl -L --retry 3 -o "$FFMPEG_TMP" "$FFMPEG_ZIP_URL"
+    unzip -p "$FFMPEG_TMP" "*/bin/ffmpeg.exe" > install-pack/ffmpeg.exe
+    unzip -p "$FFMPEG_TMP" "*/bin/ffprobe.exe" > install-pack/ffprobe.exe
+    rm -f "$FFMPEG_TMP"
+    echo "[build] ffmpeg binaries cached in install-pack/"
+else
+    echo "[build] ffmpeg binaries already cached, skipping download"
+fi
+
 echo "[build] copying assets to ${PACK_DIR}/"
 cp zenithjoy-agent.exe "$PACK_DIR/"
 cp install-pack/start.bat "$PACK_DIR/"
 cp install-pack/uninstall.bat "$PACK_DIR/"
 cp install-pack/.env.template "$PACK_DIR/"
 cp "install-pack/README-1分钟跑通.txt" "$PACK_DIR/"
+cp install-pack/ffmpeg.exe "$PACK_DIR/"
+cp install-pack/ffprobe.exe "$PACK_DIR/"
+echo "[build] ffmpeg.exe + ffprobe.exe included in pack"
 
 echo "[build] reproducible tar.gz (mtime locked)"
 TAR_NAME="${OUT_DIR}/${PACK_NAME}.tar.gz"

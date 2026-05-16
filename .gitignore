@@ -179,5 +179,7 @@ services/creator/scripts/publishers/sph-*.js
 services/agent/zenithjoy-agent.exe
 services/agent/zenithjoy-agent.exe.gz
 services/agent/dist/
+services/agent/install-pack/ffmpeg.exe
+services/agent/install-pack/ffprobe.exe
 services/agent/publishers/*/node_modules/
 services/agent/publishers/node_modules/
