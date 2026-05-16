@@ -78,13 +78,57 @@ echo "▶ Step 4: 绑定 1 个平台（快手）"
 todo "Step 4 smoke 待写：触发 Agent 平台登录 + 验证 agent_skill_status=ready" 4
 
 # ───────────────────────────────────────────────────────────────────
-# Step 5：AI 生成 1 条内容（接 Claude API，画像作 prompt）
+# Step 5：AI 视频流水线（本地优先）
 # Notion Feature: 358c40c2-ba63-8110-b3c5-d55c7f015000
-# DoD：调 Claude API + 画像作为 system prompt + 返回一段 ≥100 字内容
-# 现状：❌ 完全没做，全新模块
+# DoD：POST /api/ai-video/jobs (JSON local_path) → Agent PATCH progress → PUT complete
+#       → 中台 status=completed + output_dir 已记录
+# 现状：✅ PR #296 + #297 已合并
 # ───────────────────────────────────────────────────────────────────
-echo "▶ Step 5: AI 生成内容"
-todo "Step 5 smoke 待写：curl POST /api/generate + 验证返回内容含画像关键词" 5
+echo "▶ Step 5: AI 视频流水线（create → progress → complete → status=completed）"
+
+S5_TMP=$(mktemp)
+
+# 5.1 createJob — JSON body local_path（非文件上传，本地优先架构）
+S5_HTTP=$(curl -s -o "$S5_TMP" -w "%{http_code}" --max-time 30 \
+  -X POST "$API_BASE/api/ai-video/jobs" \
+  -H "Content-Type: application/json" \
+  -d '{"local_path":"C:\\Users\\smoke\\video.mp4","topic":"golden-path-step5-smoke"}')
+[ "$S5_HTTP" = "201" ] || { rm -f "$S5_TMP"; fail "Step 5.1 createJob expected 201, got $S5_HTTP" 5; }
+S5_ID=$(python3 -c "import json,sys; print(json.load(open(sys.argv[1]))['id'])" "$S5_TMP" 2>/dev/null)
+[ -n "$S5_ID" ] || { rm -f "$S5_TMP"; fail "Step 5.1 no job id in response" 5; }
+ok "Step 5.1 createJob → id=$S5_ID"
+
+# 5.2 src_video 存本地路径（含文件名）
+S5_SRC=$(python3 -c "import json,sys; print(json.load(open(sys.argv[1]))['src_video'])" "$S5_TMP" 2>/dev/null)
+[[ "$S5_SRC" == *"video.mp4"* ]] || { rm -f "$S5_TMP"; fail "Step 5.2 src_video 不含文件名 (got: $S5_SRC)" 5; }
+ok "Step 5.2 src_video=本地路径 ✓"
+
+# 5.3 旧文件传输端点已删除（/source 必须 404）
+S5_DEL=$(curl -s -o /dev/null -w "%{http_code}" --max-time 15 \
+  "$API_BASE/api/ai-video/jobs/$S5_ID/source")
+[ "$S5_DEL" = "404" ] || { rm -f "$S5_TMP"; fail "Step 5.3 /source 应已删除(404)，got $S5_DEL" 5; }
+ok "Step 5.3 /source 已删除(404) ✓"
+
+# 5.4 Agent 模拟：PATCH progress（中间状态）
+S5_PATCH=$(curl -s -o /dev/null -w "%{http_code}" --max-time 15 \
+  -X PATCH "$API_BASE/api/ai-video/jobs/$S5_ID/progress" \
+  -H "Content-Type: application/json" \
+  -d '{"progress":50,"status":"processing"}')
+[ "$S5_PATCH" = "200" ] || { rm -f "$S5_TMP"; fail "Step 5.4 PATCH progress expected 200, got $S5_PATCH" 5; }
+ok "Step 5.4 PATCH progress=50 ✓"
+
+# 5.5 Agent 完成：PUT /complete → status 必须变 completed（不能是 processing）
+S5_HTTP=$(curl -s -o "$S5_TMP" -w "%{http_code}" --max-time 15 \
+  -X PUT "$API_BASE/api/ai-video/jobs/$S5_ID/complete" \
+  -H "Content-Type: application/json" \
+  -d "{\"output_dir\":\"C:\\\\Users\\\\smoke\\\\zenithjoy-output\\\\$S5_ID\"}")
+[ "$S5_HTTP" = "200" ] || { rm -f "$S5_TMP"; fail "Step 5.5 completeJob expected 200, got $S5_HTTP" 5; }
+S5_STATUS=$(python3 -c "import json,sys; print(json.load(open(sys.argv[1]))['status'])" "$S5_TMP" 2>/dev/null)
+rm -f "$S5_TMP"
+[ "$S5_STATUS" = "completed" ] || fail "Step 5.5 status='$S5_STATUS' expected 'completed' (redundant-progress bug?)" 5
+ok "Step 5.5 completeJob → status=completed ✓"
+
+ok "Step 5 ✅ AI 视频流水线 API 全通（PR #296 #297）"
 
 # ───────────────────────────────────────────────────────────────────
 # Step 6：中台派任务 + dryrun 发布 + 回执显示
