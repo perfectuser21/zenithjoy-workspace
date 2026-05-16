@@ -4,7 +4,7 @@ import axios from 'axios';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || '/api';
 
-type JobStatus = 'idle' | 'queued' | 'in_progress' | 'completed' | 'failed';
+type JobStatus = 'idle' | 'queued' | 'pending' | 'in_progress' | 'completed' | 'failed';
 
 interface JobState {
   id: string;
@@ -31,7 +31,7 @@ async function pollStatus(id: string): Promise<JobState> {
 }
 
 function downloadUrl(jobId: string, file: '9_16.mp4' | '16_9.mp4'): string {
-  return `${API_BASE}/ai-video/download/${jobId}/${file}`;
+  return `${API_BASE}/ai-video/jobs/${jobId}/output/${file}`;
 }
 
 function DropZone({
@@ -174,7 +174,7 @@ export default function LocalVideoPipelinePage() {
     setScript('');
   };
 
-  const isProcessing = job && (job.status === 'queued' || job.status === 'in_progress');
+  const isProcessing = job && (job.status === 'queued' || job.status === 'pending' || job.status === 'in_progress');
   const isDone = job?.status === 'completed';
   const isFailed = job?.status === 'failed';
   const canSubmit = !!videoFile && !submitting && !isProcessing;
@@ -182,6 +182,7 @@ export default function LocalVideoPipelinePage() {
   const statusLabel: Record<JobStatus, string> = {
     idle: '',
     queued: '排队中…',
+    pending: '排队中…',
     in_progress: `处理中 ${job?.progress ?? 0}%`,
     completed: '处理完成',
     failed: '处理失败',

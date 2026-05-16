@@ -164,16 +164,17 @@ Layout 类型规则：
 5. 只输出 JSON，不要其他内容`;
 
     const result = await postJson(
-      'https://api.anthropic.com/v1/messages',
-      { 'x-api-key': ANTHROPIC_KEY, 'anthropic-version': '2023-06-01' },
+      'https://openrouter.ai/api/v1/chat/completions',
+      { Authorization: `Bearer ${OPENROUTER_KEY}` },
       {
-        model: 'claude-sonnet-4-6',
+        model: 'anthropic/claude-sonnet-4-5',
         max_tokens: 2048,
         messages: [{ role: 'user', content: prompt }],
       },
-    ) as { content?: { text?: string }[] };
+    ) as { choices?: { message?: { content?: string } }[]; error?: { message?: string } };
 
-    const raw = result?.content?.[0]?.text ?? '{}';
+    if (result?.error) return res.status(502).json({ error: result.error.message || 'OpenRouter error' });
+    const raw = result?.choices?.[0]?.message?.content ?? '{}';
     const jsonMatch = raw.match(/\{[\s\S]*\}/);
     if (!jsonMatch) return res.status(500).json({ error: 'Claude returned invalid JSON' });
 
