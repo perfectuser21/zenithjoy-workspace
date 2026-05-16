@@ -8,6 +8,7 @@ export interface PipelineJob {
   src_logo: string | null;
   topic: string | null;
   result_url: string | null;
+  output_dir: string | null;
   error_msg: string | null;
   created_at: Date;
   updated_at: Date;
@@ -52,6 +53,7 @@ export class AiVideoPipelineService {
       status?: PipelineJob['status'];
       progress?: number;
       resultUrl?: string;
+      outputDir?: string;
       errorMsg?: string;
     },
   ): Promise<PipelineJob> {
@@ -62,6 +64,7 @@ export class AiVideoPipelineService {
     if (params.status !== undefined) { fields.push(`status = $${i++}`); values.push(params.status); }
     if (params.progress !== undefined) { fields.push(`progress = $${i++}`); values.push(params.progress); }
     if (params.resultUrl !== undefined) { fields.push(`result_url = $${i++}`); values.push(params.resultUrl); }
+    if (params.outputDir !== undefined) { fields.push(`output_dir = $${i++}`); values.push(params.outputDir); }
     if (params.errorMsg !== undefined) { fields.push(`error_msg = $${i++}`); values.push(params.errorMsg); }
 
     values.push(id);
