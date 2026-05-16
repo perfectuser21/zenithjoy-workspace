@@ -523,6 +523,14 @@ tests:
     product: AI员工
     note: "Walking Skeleton #1 — /api/account/me license 自查路由（better-auth session）"
 
+  - id: api-step3-profile-route
+    path: apps/api/src/routes/__tests__/profile.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: AI员工
+    note: "Path 1 Step 3 — /api/profile 画像诊断 UPSERT + 读回（better-auth session）"
+
   - id: api-ws1-license-service-quota
     path: apps/api/src/services/__tests__/license.service.test.ts
     type: unit
