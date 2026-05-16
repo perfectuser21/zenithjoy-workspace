@@ -1643,3 +1643,11 @@ tests:
     status: active
     product: AI视频本地流水线
     note: "AiVideoPipelineService createJob/getJob/listPending/updateStatus 单测"
+
+  - id: ai-video-pipeline-agent-handler
+    path: services/agent/src/handlers/video-pipeline.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: AI视频本地流水线
+    note: "Agent handler 导出验证 + src_video 本地路径校验（本地优先架构）"
