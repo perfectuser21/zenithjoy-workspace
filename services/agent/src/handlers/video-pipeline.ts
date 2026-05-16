@@ -225,13 +225,14 @@ export async function processVideoPipelineJob(
     await progress(apiBase, id, 93);
 
     // ── Step 10: 通知中台完成，带本地 output_dir ───────────────────────────
+    // completeJob sets status=completed + progress=100 in one call; don't call
+    // progress(100) after this — it would overwrite status back to 'processing'
     console.log(`[video-pipeline] job ${id} complete — outputs at ${outputDir}`);
     await fetch(`${apiBase}/api/ai-video/jobs/${id}/complete`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ output_dir: outputDir }),
     });
-    await progress(apiBase, id, 100);
 
   } catch (err) {
     console.error('[video-pipeline] job failed:', err);
