@@ -62,7 +62,27 @@ if "%PRECHECK_STATUS%"=="503" (
 echo [WARN] precheck got status %PRECHECK_STATUS% - proceeding anyway
 
 :START_AGENT
-REM Step 5: Find chrome.exe
+REM Step 5: Ensure ffmpeg.exe is available (required for video pipeline)
+if exist "%~dp0ffmpeg.exe" (
+    echo [ffmpeg] found bundled ffmpeg.exe
+) else (
+    where ffmpeg >nul 2>&1
+    if errorlevel 1 (
+        echo [ffmpeg] not found. Attempting install via winget...
+        winget install --id Gyan.FFmpeg --source winget --accept-package-agreements --accept-source-agreements
+        if errorlevel 1 (
+            echo [WARN] ffmpeg install failed. Video pipeline will not work. Install ffmpeg manually and add to PATH.
+        ) else (
+            echo [ffmpeg] installed via winget. Restart start.bat to reload PATH.
+            pause
+            exit /b 0
+        )
+    ) else (
+        echo [ffmpeg] found in PATH
+    )
+)
+
+REM Step 6: Find chrome.exe
 set "CHROME_EXE=%ProgramFiles%\Google\Chrome\Application\chrome.exe"
 if not exist "%CHROME_EXE%" set "CHROME_EXE=%ProgramFiles(x86)%\Google\Chrome\Application\chrome.exe"
 if not exist "%CHROME_EXE%" (
@@ -71,7 +91,7 @@ if not exist "%CHROME_EXE%" (
     exit /b 1
 )
 
-REM Step 6: Spawn chrome :19222 if not already listening
+REM Step 7: Spawn chrome :19222 if not already listening
 netstat -ano | findstr ":19222 " | findstr LISTENING >nul 2>&1
 if errorlevel 1 (
     echo [chrome] starting chrome on :19222 ...
@@ -79,7 +99,7 @@ if errorlevel 1 (
     timeout /t 5 /nobreak >nul
 )
 
-REM Step 7: Spawn agent.exe (foreground)
+REM Step 8: Spawn agent.exe (foreground)
 mkdir "%USERPROFILE%\.zj" 2>nul
 echo [agent] starting zenithjoy-agent.exe ...
 zenithjoy-agent.exe

@@ -83,3 +83,49 @@ export async function completeJob(req: Request, res: Response, next: NextFunctio
     res.json(updated);
   } catch (err) { next(err); }
 }
+
+// GET /:id/source — 下载原始视频文件给 Agent
+export async function downloadSource(req: Request, res: Response, next: NextFunction) {
+  try {
+    const job = await svc.getJob(req.params.id);
+    if (!job) return res.status(404).json({ error: 'job not found' });
+    if (!job.src_video) return res.status(404).json({ error: 'no source video' });
+    if (!fs.existsSync(job.src_video)) return res.status(404).json({ error: 'source file missing' });
+    res.download(job.src_video, 'source_video.mp4');
+  } catch (err) { next(err); }
+}
+
+// POST /:id/upload-output — Agent 上传处理后的 MP4 存到 Mac 本机
+export async function uploadOutput(req: Request, res: Response, next: NextFunction) {
+  try {
+    const job = await svc.getJob(req.params.id);
+    if (!job) return res.status(404).json({ error: 'job not found' });
+    if (!job.src_video) return res.status(400).json({ error: 'job has no src_video' });
+
+    const outDir = path.join(path.dirname(job.src_video), 'out');
+    fs.mkdirSync(outDir, { recursive: true });
+
+    const files = req.files as Record<string, Express.Multer.File[]>;
+    const saved: string[] = [];
+    for (const field of ['9_16', '16_9'] as const) {
+      const f = files?.[field]?.[0];
+      if (f) {
+        const dest = path.join(outDir, `${field}.mp4`);
+        fs.renameSync(f.path, dest);
+        saved.push(`${field}.mp4`);
+      }
+    }
+
+    if (saved.length === 0) return res.status(400).json({ error: 'no files received' });
+
+    if (saved.length === 2) {
+      await svc.updateStatus(req.params.id, {
+        status: 'completed',
+        progress: 100,
+        resultUrl: outDir,
+      });
+    }
+
+    res.json({ saved });
+  } catch (err) { next(err); }
+}

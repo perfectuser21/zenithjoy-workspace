@@ -2,7 +2,7 @@ import { Router } from 'express';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
-import { createJob, getJob, listJobs, completeJob, updateProgress, downloadOutput } from '../controllers/ai-video-pipeline.controller';
+import { createJob, getJob, listJobs, completeJob, updateProgress, downloadOutput, downloadSource, uploadOutput } from '../controllers/ai-video-pipeline.controller';
 import { transcribeAudio, designScenes, composeHtml, generateBgm } from '../controllers/ai-video-pipeline-ai.controller';
 
 const UPLOAD_DIR = `${process.env.HOME}/video-pipeline/jobs`;
@@ -34,5 +34,8 @@ router.post('/:id/compose-html', composeHtml);
 router.post('/:id/bgm', generateBgm);
 
 router.get('/:id/output/:file', downloadOutput);
+
+router.get('/:id/source', downloadSource);
+router.post('/:id/upload-output', upload.fields([{ name: '9_16', maxCount: 1 }, { name: '16_9', maxCount: 1 }]), uploadOutput);
 
 export default router;

@@ -32,6 +32,7 @@ import { handleQrBindDouyinBurner } from './handlers/qr-bind-douyin-burner';
 import { handleWechatRpa, type WechatRpaTask } from './handlers/wechat-rpa';
 import { createFolderWatchManager } from './handlers/folder-watch';
 import { startHealthServer, setWsState } from './handlers/health-server';
+import { startVideoPipelineLoop } from './handlers/video-pipeline';
 
 // ---------- License & 配置 ----------
 
@@ -680,6 +681,9 @@ function startWs1HeartbeatLoop(cfg: AgentConfig): void {
   });
   loop.start();
   console.log(`[ws1] heartbeat-loop started → ${apiBase}/api/agent/heartbeat`);
+
+  startVideoPipelineLoop(apiBase);
+  console.log(`[ws1] video-pipeline-loop started → ${apiBase}/api/ai-video/jobs`);
 }
 
 // H-2 Bug 9: 仅作为入口脚本时运行 main()。test import 不触发 main()，让 buildHelloPayload 等纯函数可单测。

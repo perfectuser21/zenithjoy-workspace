@@ -20,5 +20,11 @@ ZenithJoy Agent — 1 分钟跑通
 碰到 chrome 找不到:
 - 先装 Chrome 浏览器（必须）
 
+视频流水线（AI 视频处理）:
+- 需要 ffmpeg.exe — start.bat 会自动用 winget 安装
+- 如果 winget 安装失败，手动装：https://www.gyan.dev/ffmpeg/builds/
+  下载 "ffmpeg-release-essentials.zip"，解压后把 ffmpeg.exe 放在 start.bat 同目录
+- 或者在命令行运行：winget install --id Gyan.FFmpeg
+
 agent 日志:
 - %USERPROFILE%\.zj\agent.log
