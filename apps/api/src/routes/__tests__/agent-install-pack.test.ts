@@ -160,6 +160,42 @@ describe('Sprint 2.1f Fix 7 — GET /api/agent/install-pack/download server-side
   });
 });
 
+// Sprint 2.1h — INSTALL_PACK_REMOTE_URL fallback（本地 tar.gz 不存在时远端拉取缓存）
+describe('Sprint 2.1h — INSTALL_PACK_REMOTE_URL fallback', () => {
+  let app: any;
+
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    // 清掉 fixture path，让 handler 走 srcTar 路径（不存在）
+    delete process.env.INSTALL_PACK_FIXTURE_PATH;
+    (manifestSvc.readInstallPackManifest as any).mockReturnValue({
+      version: '1.0.1',
+      sha256: 'a'.repeat(64),
+      download_url: '/download/zenithjoy-agent-v1.0.1.tar.gz',
+      size: 60000000,
+      build_time: '2026-05-09T10:00:00Z',
+    });
+    app = (await import('../../app')).default;
+  });
+
+  it('本地 tar.gz 不存在 + INSTALL_PACK_REMOTE_URL 未设 → 503 INSTALL_PACK_NOT_BUILT', async () => {
+    const { auth } = await import('../../auth');
+    const pool = (await import('../../db/connection')).default;
+    delete process.env.INSTALL_PACK_REMOTE_URL;
+    process.env.INSTALL_PACK_STATIC_ROOT = '/tmp/nonexistent-static-root';
+    vi.spyOn(auth.api, 'getSession').mockResolvedValue({
+      user: { id: 'user-fallback-test', email: 'f@test', name: 'F' },
+    } as any);
+    vi.spyOn(pool, 'query').mockResolvedValue({
+      rows: [{ license_key: 'ZJ-F-DDDD4444' }],
+    } as any);
+
+    const res = await request(app).get('/api/agent/install-pack/download');
+    expect(res.status).toBe(503);
+    expect(res.body.code).toBe('INSTALL_PACK_NOT_BUILT');
+  });
+});
+
 // Sprint 2.1g — sprint 2.1f 减肥后 .env.template 无 ZENITHJOY_LICENSE 占位行场景
 describe('Sprint 2.1g Fix — burn fallback append (.env 无占位行也能 work)', () => {
   let app: any;
