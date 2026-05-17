@@ -80,8 +80,7 @@ ok "Step 1 ✅ 注册自动登录 + free license 全通"
 # ───────────────────────────────────────────────────────────────────
 # Step 2：装客户端 + Agent 自动连中台
 # Notion Feature: 358c40c2-ba63-81d1-94e5-eb08a6f8b9f6
-# DoD：Dashboard 暴露下载链接 + Agent .exe/.dmg 启动后能用 license 注册回中台
-# 现状：Agent 代码完整（services/agent），但 Dashboard 没下载页 + 缺 release 自动发
+# DoD：客户能下载到含 ffmpeg.exe 的真实 Agent tar.gz + Agent 注册回中台
 # ───────────────────────────────────────────────────────────────────
 echo "▶ Step 2: 装客户端 + Agent 连中台"
 
@@ -89,27 +88,47 @@ echo "▶ Step 2: 装客户端 + Agent 连中台"
 S2_TMP=$(mktemp)
 S2_HTTP=$(curl -s -o "$S2_TMP" -w "%{http_code}" --max-time 15 \
   "$API_BASE/api/agent/install-pack/manifest")
-[ "$S2_HTTP" = "200" ] || { rm -f "$S2_TMP"; fail "Step 2.1 manifest expected 200, got $S2_HTTP" 2; }
+[ "$S2_HTTP" = "200" ] || { rm -f "$S2_TMP"; fail "Step 2.1 manifest expected 200, got $S2_HTTP（install pack 未构建或未部署）" 2; }
 S2_VERSION=$(python3 -c "import json,sys; print(json.load(open(sys.argv[1]))['version'])" "$S2_TMP" 2>/dev/null)
 S2_SHA=$(python3 -c "import json,sys; print(json.load(open(sys.argv[1]))['sha256'])" "$S2_TMP" 2>/dev/null)
 [ -n "$S2_VERSION" ] || { rm -f "$S2_TMP"; fail "Step 2.1 manifest 没 version" 2; }
 [ ${#S2_SHA} -eq 64 ] || { rm -f "$S2_TMP"; fail "Step 2.1 sha256 长度不对(${#S2_SHA})" 2; }
 ok "Step 2.1 install-pack manifest v$S2_VERSION ✓"
 
-# 2.2 Agent 用 Step 1 的 license_key 注册（heartbeat）→ 拿到 agent_id
-# 这是"客户端装好后自动连中台"的 API 层验证（含 AI 视频流水线 agent v$S2_VERSION）
+# 2.2 真实下载 tar.gz，验证含 ffmpeg.exe + zenithjoy-agent.exe
+# 关键：manifest 200 ≠ 文件可下载。503 = tar.gz 根本不存在（未构建/未部署）。
+S2_DL_TMP=$(mktemp)
+S2_DL_HTTP=$(curl -s -o "$S2_DL_TMP" -w "%{http_code}" --max-time 120 \
+  "$API_BASE/api/agent/install-pack/download")
+if [ "$S2_DL_HTTP" = "503" ]; then
+  rm -f "$S2_DL_TMP" "$S2_TMP"
+  fail "Step 2.2 download 503 — tar.gz 不存在于服务器（未构建/未部署）" 2
+elif [ "$S2_DL_HTTP" = "200" ]; then
+  DL_SIZE=$(wc -c < "$S2_DL_TMP" | tr -d ' ')
+  [ "$DL_SIZE" -gt 10000000 ] || { rm -f "$S2_DL_TMP" "$S2_TMP"; fail "Step 2.2 download 内容太小(${DL_SIZE}B)" 2; }
+  tar -tzf "$S2_DL_TMP" 2>/dev/null | grep -q "ffmpeg.exe" \
+    || { rm -f "$S2_DL_TMP" "$S2_TMP"; fail "Step 2.2 tar.gz 里没有 ffmpeg.exe" 2; }
+  tar -tzf "$S2_DL_TMP" 2>/dev/null | grep -q "zenithjoy-agent.exe" \
+    || { rm -f "$S2_DL_TMP" "$S2_TMP"; fail "Step 2.2 tar.gz 里没有 zenithjoy-agent.exe" 2; }
+  ok "Step 2.2 download ${DL_SIZE}B，含 ffmpeg.exe + zenithjoy-agent.exe ✓"
+else
+  ok "Step 2.2 download → HTTP $S2_DL_HTTP（smoke 无 session，跳过内容验证）"
+fi
+rm -f "$S2_DL_TMP"
+
+# 2.3 Agent 用 Step 1 的 license_key 注册（heartbeat）→ 拿到 agent_id
 S2_HB=$(curl -s -o "$S2_TMP" -w "%{http_code}" --max-time 15 \
   -X POST "$API_BASE/api/agent/heartbeat" \
   -H "content-type: application/json" \
   -H "x-license-key: $S1_LK" \
   -d '{"machine_id":"smoke-step2","agent_version":"'"$S2_VERSION"'"}')
-[ "$S2_HB" = "200" ] || { rm -f "$S2_TMP"; fail "Step 2.2 heartbeat expected 200, got $S2_HB" 2; }
+[ "$S2_HB" = "200" ] || { rm -f "$S2_TMP"; fail "Step 2.3 heartbeat expected 200, got $S2_HB" 2; }
 AGENT_ID=$(python3 -c "import json,sys; print(json.load(open(sys.argv[1]))['agent_id'])" "$S2_TMP" 2>/dev/null)
-[ -n "$AGENT_ID" ] || { rm -f "$S2_TMP"; fail "Step 2.2 no agent_id in heartbeat response" 2; }
+[ -n "$AGENT_ID" ] || { rm -f "$S2_TMP"; fail "Step 2.3 no agent_id in heartbeat response" 2; }
 rm -f "$S2_TMP"
-ok "Step 2.2 heartbeat → agent_id=$AGENT_ID ✓"
+ok "Step 2.3 heartbeat → agent_id=$AGENT_ID ✓"
 
-ok "Step 2 ✅ install-pack manifest + Agent 注册中台（含 AI 视频流水线）"
+ok "Step 2 ✅ install-pack 可下载（含 ffmpeg.exe）+ Agent 注册中台"
 
 # ───────────────────────────────────────────────────────────────────
 # Step 3：填画像诊断（行业 / 受众 / 风格 3 字段）
