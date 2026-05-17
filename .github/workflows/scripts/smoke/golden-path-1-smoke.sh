@@ -95,7 +95,7 @@ S2_SHA=$(python3 -c "import json,sys; print(json.load(open(sys.argv[1]))['sha256
 [ ${#S2_SHA} -eq 64 ] || { rm -f "$S2_TMP"; fail "Step 2.1 sha256 长度不对(${#S2_SHA})" 2; }
 ok "Step 2.1 install-pack manifest v$S2_VERSION ✓"
 
-# 2.2 真实下载 tar.gz，验证含 ffmpeg.exe + zenithjoy-agent.exe
+# 2.2 真实下载 tar.gz，验证含 zenithjoy-agent.exe（lite pack 不含 ffmpeg.exe）
 # 关键：manifest 200 ≠ 文件可下载。503 = tar.gz 根本不存在（未构建/未部署）。
 S2_DL_TMP=$(mktemp)
 S2_DL_HTTP=$(curl -s -o "$S2_DL_TMP" -w "%{http_code}" --max-time 120 \
@@ -105,14 +105,12 @@ if [ "$S2_DL_HTTP" = "503" ]; then
   fail "Step 2.2 download 503 — tar.gz 不存在于服务器（未构建/未部署）" 2
 elif [ "$S2_DL_HTTP" = "200" ]; then
   DL_SIZE=$(wc -c < "$S2_DL_TMP" | tr -d ' ')
-  [ "$DL_SIZE" -gt 10000000 ] || { rm -f "$S2_DL_TMP" "$S2_TMP"; fail "Step 2.2 download 内容太小(${DL_SIZE}B)" 2; }
-  tar -tzf "$S2_DL_TMP" 2>/dev/null | grep -q "ffmpeg.exe" \
-    || { rm -f "$S2_DL_TMP" "$S2_TMP"; fail "Step 2.2 tar.gz 里没有 ffmpeg.exe" 2; }
+  [ "$DL_SIZE" -gt 5000000 ] || { rm -f "$S2_DL_TMP" "$S2_TMP"; fail "Step 2.2 download 内容太小(${DL_SIZE}B)" 2; }
   tar -tzf "$S2_DL_TMP" 2>/dev/null | grep -q "zenithjoy-agent.exe" \
     || { rm -f "$S2_DL_TMP" "$S2_TMP"; fail "Step 2.2 tar.gz 里没有 zenithjoy-agent.exe" 2; }
-  ok "Step 2.2 download ${DL_SIZE}B，含 ffmpeg.exe + zenithjoy-agent.exe ✓"
+  ok "Step 2.2 download ${DL_SIZE}B，含 zenithjoy-agent.exe ✓"
 else
-  ok "Step 2.2 download → HTTP $S2_DL_HTTP（smoke 无 session，跳过内容验证）"
+  ok "Step 2.2 download → HTTP ${S2_DL_HTTP}（smoke 无 session，跳过内容验证）"
 fi
 rm -f "$S2_DL_TMP"
 
@@ -128,7 +126,7 @@ AGENT_ID=$(python3 -c "import json,sys; print(json.load(open(sys.argv[1]))['agen
 rm -f "$S2_TMP"
 ok "Step 2.3 heartbeat → agent_id=$AGENT_ID ✓"
 
-ok "Step 2 ✅ install-pack 可下载（含 ffmpeg.exe）+ Agent 注册中台"
+ok "Step 2 ✅ install-pack 可下载 + Agent 注册中台"
 
 # ───────────────────────────────────────────────────────────────────
 # Step 3：填画像诊断（行业 / 受众 / 风格 3 字段）
