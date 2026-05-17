@@ -95,24 +95,37 @@ S2_SHA=$(python3 -c "import json,sys; print(json.load(open(sys.argv[1]))['sha256
 [ ${#S2_SHA} -eq 64 ] || { rm -f "$S2_TMP"; fail "Step 2.1 sha256 长度不对(${#S2_SHA})" 2; }
 ok "Step 2.1 install-pack manifest v$S2_VERSION ✓"
 
-# 2.2 真实下载 tar.gz，验证含 zenithjoy-agent.exe（lite pack 不含 ffmpeg.exe）
-# 关键：manifest 200 ≠ 文件可下载。503 = tar.gz 根本不存在（未构建/未部署）。
+# 2.2 用 Step 1 的 session cookie 真实下载 tar.gz，验证：
+#   - HTTP 200
+#   - 含 zenithjoy-agent.exe
+#   - .env 内 ZENITHJOY_LICENSE 已写入 Step 1 的 license_key（server-side burn-in）
 S2_DL_TMP=$(mktemp)
+S2_EXTRACT_DIR=$(mktemp -d)
 S2_DL_HTTP=$(curl -s -o "$S2_DL_TMP" -w "%{http_code}" --max-time 120 \
+  -b "$S1_COOKIES" \
   "$API_BASE/api/agent/install-pack/download")
 if [ "$S2_DL_HTTP" = "503" ]; then
-  rm -f "$S2_DL_TMP" "$S2_TMP"
+  rm -f "$S2_DL_TMP" "$S2_TMP"; rm -rf "$S2_EXTRACT_DIR"
   fail "Step 2.2 download 503 — tar.gz 不存在于服务器（未构建/未部署）" 2
+elif [ "$S2_DL_HTTP" = "401" ]; then
+  rm -f "$S2_DL_TMP" "$S2_TMP"; rm -rf "$S2_EXTRACT_DIR"
+  fail "Step 2.2 download 401 — session cookie 未生效（Step 1 登录未建立 cookie？）" 2
 elif [ "$S2_DL_HTTP" = "200" ]; then
   DL_SIZE=$(wc -c < "$S2_DL_TMP" | tr -d ' ')
-  [ "$DL_SIZE" -gt 5000000 ] || { rm -f "$S2_DL_TMP" "$S2_TMP"; fail "Step 2.2 download 内容太小(${DL_SIZE}B)" 2; }
+  [ "$DL_SIZE" -gt 5000000 ] || { rm -f "$S2_DL_TMP" "$S2_TMP"; rm -rf "$S2_EXTRACT_DIR"; fail "Step 2.2 download 内容太小(${DL_SIZE}B)" 2; }
   tar -tzf "$S2_DL_TMP" 2>/dev/null | grep -q "zenithjoy-agent.exe" \
-    || { rm -f "$S2_DL_TMP" "$S2_TMP"; fail "Step 2.2 tar.gz 里没有 zenithjoy-agent.exe" 2; }
-  ok "Step 2.2 download ${DL_SIZE}B，含 zenithjoy-agent.exe ✓"
+    || { rm -f "$S2_DL_TMP" "$S2_TMP"; rm -rf "$S2_EXTRACT_DIR"; fail "Step 2.2 tar.gz 里没有 zenithjoy-agent.exe" 2; }
+  # 解压验证 .env 内 license burn-in
+  tar -xzf "$S2_DL_TMP" -C "$S2_EXTRACT_DIR" 2>/dev/null
+  S2_ENV_LICENSE=$(grep "^ZENITHJOY_LICENSE=" "$S2_EXTRACT_DIR/.env" 2>/dev/null | cut -d= -f2 | tr -d '\r')
+  [ "$S2_ENV_LICENSE" = "$S1_LK" ] \
+    || { rm -f "$S2_DL_TMP" "$S2_TMP"; rm -rf "$S2_EXTRACT_DIR"; fail "Step 2.2 .env license='${S2_ENV_LICENSE}' != Step1 license='${S1_LK}'（burn-in 失败）" 2; }
+  ok "Step 2.2 download ${DL_SIZE}B，含 zenithjoy-agent.exe，.env ZENITHJOY_LICENSE=${S2_ENV_LICENSE} ✓"
 else
-  ok "Step 2.2 download → HTTP ${S2_DL_HTTP}（smoke 无 session，跳过内容验证）"
+  rm -f "$S2_DL_TMP" "$S2_TMP"; rm -rf "$S2_EXTRACT_DIR"
+  fail "Step 2.2 download 意外状态 HTTP ${S2_DL_HTTP}" 2
 fi
-rm -f "$S2_DL_TMP"
+rm -f "$S2_DL_TMP"; rm -rf "$S2_EXTRACT_DIR"
 
 # 2.3 Agent 用 Step 1 的 license_key 注册（heartbeat）→ 拿到 agent_id
 S2_HB=$(curl -s -o "$S2_TMP" -w "%{http_code}" --max-time 15 \
