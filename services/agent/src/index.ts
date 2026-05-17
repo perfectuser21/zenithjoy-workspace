@@ -33,6 +33,10 @@ import { handleWechatRpa, type WechatRpaTask } from './handlers/wechat-rpa';
 import { createFolderWatchManager } from './handlers/folder-watch';
 import { startHealthServer, setWsState } from './handlers/health-server';
 import { startVideoPipelineLoop } from './handlers/video-pipeline';
+import dns from 'node:dns';
+
+// Windows 防火墙封锁 IPv6（EACCES on 2606:4700::）→ 强制 Node.js 优先解析 IPv4
+dns.setDefaultResultOrder('ipv4first');
 
 // ---------- License & 配置 ----------
 
