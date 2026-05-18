@@ -41,6 +41,8 @@ export type SceneData = {
 
 export function buildOverlayFilters(scenes: SceneData[], w: number, h: number, font: string): string[] {
   if (!scenes.length || !font) return [];
+  // Windows 驱动器盘符冒号在 FFmpeg filter 里必须转义为 \:
+  const fontPath = font.replace(/\\/g, '/').replace(/^([A-Za-z]):/, '$1\\:');
   const filters: string[] = [];
   const yBase = Math.floor(h * 0.70);
 
@@ -57,13 +59,13 @@ export function buildOverlayFilters(scenes: SceneData[], w: number, h: number, f
     filters.push(`drawbox=x=0:y=${yBase - 50}:w=${w}:h=${boxH}:color=black@0.55:t=fill:enable='${en}'`);
 
     if (eyebrow) {
-      filters.push(`drawtext=fontfile='${font}':text='${eyebrow}':x=(w-text_w)/2:y=${yBase - 28}:fontsize=26:fontcolor=0x818cf8FF:enable='${en}'`);
+      filters.push(`drawtext=fontfile='${fontPath}':text='${eyebrow}':x=(w-text_w)/2:y=${yBase - 28}:fontsize=26:fontcolor=0x818cf8FF:enable='${en}'`);
     }
     if (title) {
-      filters.push(`drawtext=fontfile='${font}':text='${title}':x=(w-text_w)/2:y=${yBase + 20}:fontsize=56:fontcolor=white:enable='${en}'`);
+      filters.push(`drawtext=fontfile='${fontPath}':text='${title}':x=(w-text_w)/2:y=${yBase + 20}:fontsize=56:fontcolor=white:enable='${en}'`);
     }
     if (body) {
-      filters.push(`drawtext=fontfile='${font}':text='${body}':x=(w-text_w)/2:y=${yBase + 100}:fontsize=28:fontcolor=0xFFFFFF99:enable='${en}'`);
+      filters.push(`drawtext=fontfile='${fontPath}':text='${body}':x=(w-text_w)/2:y=${yBase + 100}:fontsize=28:fontcolor=0xFFFFFF99:enable='${en}'`);
     }
   }
   return filters;
