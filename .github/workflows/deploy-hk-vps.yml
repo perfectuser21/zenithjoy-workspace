@@ -22,7 +22,7 @@ jobs:
         with:
           host: ${{ secrets.HK_VPS_HOST }}
           username: ${{ secrets.HK_VPS_USER }}
-          key: ${{ secrets.HK_VPS_KEY }}
+          key: ${{ secrets.HK_VPS_SSH_KEY }}
           port: ${{ secrets.HK_VPS_PORT }}
           script_stop: true
           script: |
