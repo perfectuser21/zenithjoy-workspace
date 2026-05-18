@@ -1,22 +1,28 @@
+# Build stage — compiles TypeScript (build context = monorepo root)
+FROM node:20-alpine AS builder
+WORKDIR /repo
+
+# Monorepo root tsconfig (extended by apps/api/tsconfig.json)
+COPY tsconfig.base.json ./
+
+COPY apps/api/package*.json ./apps/api/
+COPY apps/api/tsconfig.json ./apps/api/
+COPY apps/api/src/ ./apps/api/src/
+
+WORKDIR /repo/apps/api
+RUN npm install
+RUN npm run build
+
+# Production stage
 FROM node:20-alpine
-
 WORKDIR /app
-
-# Copy package files
-COPY package*.json ./
-
-# Install dependencies
+COPY --from=builder /repo/apps/api/package*.json ./
 RUN npm install --production
+COPY --from=builder /repo/apps/api/dist/ ./dist/
 
-# Copy source code
-COPY src/ ./src/
+EXPOSE 5200
 
-# Expose port
-EXPOSE 5220
-
-# Health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=40s \
-  CMD node -e "require('http').get('http://localhost:5220/health', (r) => { process.exit(r.statusCode === 200 ? 0 : 1); })"
+  CMD node -e "require('http').get('http://localhost:5200/health', (r) => { process.exit(r.statusCode === 200 ? 0 : 1); })"
 
-# Start server
-CMD ["npm", "start"]
+CMD ["node", "dist/index.js"]
