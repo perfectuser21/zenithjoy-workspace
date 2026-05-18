@@ -6,6 +6,69 @@ import os from 'os';
 
 const execFileAsync = promisify(execFile);
 
+// ── 中文字体检测 ─────────────────────────────────────────────────────────────
+export function findChineseFont(): string {
+  const candidates = [
+    'C:/Windows/Fonts/msyh.ttc',
+    'C:/Windows/Fonts/msyh.ttf',
+    'C:/Windows/Fonts/simhei.ttf',
+    'C:/Windows/Fonts/simsun.ttc',
+  ];
+  for (const f of candidates) {
+    if (fs.existsSync(f.replace(/\//g, path.sep))) return f;
+  }
+  return '';
+}
+
+// ── FFmpeg drawtext 文字转义 ──────────────────────────────────────────────────
+export function escapeDT(text: string): string {
+  return text
+    .replace(/\\/g, '\\\\')
+    .replace(/'/g, "\\'")
+    .replace(/:/g, '\\:')
+    .replace(/\[/g, '\\[')
+    .replace(/\]/g, '\\]')
+    .replace(/,/g, '\\,')
+    .replace(/;/g, '\\;')
+    .trim();
+}
+
+// ── 场景叠字滤镜 ──────────────────────────────────────────────────────────────
+type SceneData = {
+  start: number; duration: number; layout: string;
+  eyebrow: string; title: string; body: string; tags?: string[];
+};
+
+export function buildOverlayFilters(scenes: SceneData[], w: number, h: number, font: string): string[] {
+  if (!scenes.length || !font) return [];
+  const filters: string[] = [];
+  const yBase = Math.floor(h * 0.70);
+
+  for (const s of scenes) {
+    const t0 = Math.max(0, s.start).toFixed(2);
+    const t1 = (Math.max(0, s.start) + Math.max(0.5, s.duration)).toFixed(2);
+    const en = `between(t,${t0},${t1})`;
+
+    const eyebrow = escapeDT(s.eyebrow || '');
+    const title = escapeDT((s.title || '').replace(/\\n/g, ' '));
+    const body = escapeDT(s.body || '');
+
+    const boxH = body ? 210 : 150;
+    filters.push(`drawbox=x=0:y=${yBase - 50}:w=${w}:h=${boxH}:color=black@0.55:t=fill:enable='${en}'`);
+
+    if (eyebrow) {
+      filters.push(`drawtext=fontfile='${font}':text='${eyebrow}':x=(w-text_w)/2:y=${yBase - 28}:fontsize=26:fontcolor=0x818cf8FF:enable='${en}'`);
+    }
+    if (title) {
+      filters.push(`drawtext=fontfile='${font}':text='${title}':x=(w-text_w)/2:y=${yBase + 20}:fontsize=56:fontcolor=white:enable='${en}'`);
+    }
+    if (body) {
+      filters.push(`drawtext=fontfile='${font}':text='${body}':x=(w-text_w)/2:y=${yBase + 100}:fontsize=28:fontcolor=0xFFFFFF99:enable='${en}'`);
+    }
+  }
+  return filters;
+}
+
 // ── FFmpeg 路径查找 ─────────────────────────────────────────────────────────
 function findFfmpeg(): string {
   const exeDir = path.dirname(process.execPath);
@@ -193,6 +256,14 @@ export async function processVideoPipelineJob(
     } catch (err) { console.warn('[video-pipeline] BGM error (non-fatal):', err); }
     await progress(apiBase, id, 75);
 
+    // ── Step 8.5: 检测中文字体（用于叠字滤镜）────────────────────────────────
+    const chineseFont = findChineseFont();
+    if (!chineseFont) {
+      console.warn('[video-pipeline] 未找到中文字体，跳过叠字滤镜');
+    } else {
+      console.log(`[video-pipeline] 使用字体: ${chineseFont}`);
+    }
+
     // ── Step 9: FFmpeg outputs → 写到本地 outputDir ────────────────────────
     const output916 = path.join(outputDir, '9_16.mp4');
     const output169 = path.join(outputDir, '16_9.mp4');
@@ -202,11 +273,13 @@ export async function processVideoPipelineJob(
 
     const mkOutput = async (outPath: string, w: number, h: number) => {
       const scale = `scale=${w}:${h}:force_original_aspect_ratio=decrease,pad=${w}:${h}:(ow-iw)/2:(oh-ih)/2:black`;
+      const overlayFilters = buildOverlayFilters(designResult.scenes, w, h, chineseFont);
+      const vfChain = overlayFilters.length ? [scale, ...overlayFilters].join(',') : scale;
       try {
         await execFileAsync(FFMPEG, [
           '-y', '-i', videoPath,
           ...(hasBgm ? ['-i', bgmPath] : []),
-          '-vf', scale,
+          '-vf', vfChain,
           '-c:v', 'libx264', '-preset', 'fast', '-crf', '23',
           '-c:a', 'aac', '-b:a', '128k',
           ...bgmArgs,
