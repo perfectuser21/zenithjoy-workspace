@@ -1,0 +1,51 @@
+name: Deploy API to HK VPS
+
+# TDD commit-1：骨架 workflow — 缺少 HK_VPS_* secrets 时 CI 失败
+# 这是故意的，先定义"什么叫完成"，再填 secrets + 实现
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'apps/api/**'
+      - 'deploy/docker-compose.hk.yml'
+      - 'deploy/deploy.sh'
+
+jobs:
+  deploy-api:
+    name: '[TDD-skeleton] Deploy API to HK VPS'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Verify required secrets exist
+        run: |
+          missing=0
+          for var in HK_VPS_HOST HK_VPS_USER HK_VPS_KEY HK_VPS_PORT; do
+            eval val="\$$var"
+            if [ -z "$val" ]; then
+              echo "MISSING SECRET: $var"
+              missing=1
+            fi
+          done
+          if [ "$missing" -eq 1 ]; then
+            echo "Set secrets via: gh secret set HK_VPS_HOST / HK_VPS_USER / HK_VPS_KEY / HK_VPS_PORT"
+            exit 1
+          fi
+          echo "All secrets present"
+        env:
+          HK_VPS_HOST: ${{ secrets.HK_VPS_HOST }}
+          HK_VPS_USER: ${{ secrets.HK_VPS_USER }}
+          HK_VPS_KEY: ${{ secrets.HK_VPS_KEY }}
+          HK_VPS_PORT: ${{ secrets.HK_VPS_PORT }}
+
+      - name: Deploy via SSH (placeholder)
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.HK_VPS_HOST }}
+          username: ${{ secrets.HK_VPS_USER }}
+          key: ${{ secrets.HK_VPS_KEY }}
+          port: ${{ secrets.HK_VPS_PORT }}
+          script: echo "TDD placeholder — real deploy in commit-2"
