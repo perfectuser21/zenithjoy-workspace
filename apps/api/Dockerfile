@@ -1,22 +1,26 @@
+FROM node:20-alpine AS builder
+
+WORKDIR /app
+
+COPY package*.json ./
+RUN npm install
+
+COPY tsconfig.json ./
+COPY src/ ./src/
+RUN npm run build
+
 FROM node:20-alpine
 
 WORKDIR /app
 
-# Copy package files
 COPY package*.json ./
-
-# Install dependencies
 RUN npm install --production
 
-# Copy source code
-COPY src/ ./src/
+COPY --from=builder /app/dist ./dist
 
-# Expose port
 EXPOSE 5220
 
-# Health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=40s \
   CMD node -e "require('http').get('http://localhost:5220/health', (r) => { process.exit(r.statusCode === 200 ? 0 : 1); })"
 
-# Start server
 CMD ["npm", "start"]
