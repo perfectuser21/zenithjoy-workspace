@@ -93,7 +93,8 @@ jobs:
           echo ""
 
           CHANGED=$(git diff --name-only "origin/${BASE_REF}...HEAD" 2>/dev/null || git diff --name-only HEAD~1 HEAD)
-          CI_CHANGED=$(echo "$CHANGED" | grep "^\.github/workflows/" || true)
+          # smoke scripts (.sh under scripts/) are not CI workflow definitions — exempt from audit
+          CI_CHANGED=$(echo "$CHANGED" | grep "^\.github/workflows/" | grep -v "^\.github/workflows/scripts/" || true)
 
           if [ -z "$CI_CHANGED" ]; then
             echo "No CI workflow files changed — audit not required"
