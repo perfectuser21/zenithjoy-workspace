@@ -52,11 +52,11 @@ export function fireProgress(apiBase: string, jobId: string, pct: number): void 
 }
 
 // ── reportComplete — retry 3x with 2s backoff, never throws ─────────────────
-export async function reportComplete(
+async function _reportCompleteWithRetry(
   apiBase: string,
   jobId: string,
   payload: { output_dir?: string; error_msg?: string },
-  attempt = 0,
+  attempt: number,
 ): Promise<void> {
   try {
     const r = await fetchWithTimeout(
@@ -72,10 +72,18 @@ export async function reportComplete(
   } catch (err) {
     if (attempt < 3) {
       await new Promise((r) => setTimeout(r, 2_000));
-      return reportComplete(apiBase, jobId, payload, attempt + 1);
+      return _reportCompleteWithRetry(apiBase, jobId, payload, attempt + 1);
     }
     console.error(`[video-pipeline] reportComplete failed after 3 retries, job=${jobId}:`, err);
   }
+}
+
+export async function reportComplete(
+  apiBase: string,
+  jobId: string,
+  payload: { output_dir?: string; error_msg?: string },
+): Promise<void> {
+  return _reportCompleteWithRetry(apiBase, jobId, payload, 0);
 }
 
 // ── JSON helpers (with timeout) ──────────────────────────────────────────────
