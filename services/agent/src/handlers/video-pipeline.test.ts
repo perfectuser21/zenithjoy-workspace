@@ -26,16 +26,28 @@ describe('processVideoPipelineJob — src_video validation', () => {
     vi.restoreAllMocks();
   });
 
-  it('throws when src_video is null', async () => {
+  it('src_video 为 null 时，调用 reportComplete 并返回（不 throw）', async () => {
+    const mockFetch = vi.fn().mockResolvedValue(new Response('{}', { status: 200 }));
+    vi.stubGlobal('fetch', mockFetch);
     await expect(
       handler.processVideoPipelineJob('http://localhost', { id: 'x', src_video: null, topic: null, status: 'pending' })
-    ).rejects.toThrow('src_video not found on local disk');
+    ).resolves.toBeUndefined();
+    // reportComplete 应被调用（PUT complete 端点）
+    expect(mockFetch).toHaveBeenCalledWith(
+      expect.stringContaining('/complete'),
+      expect.objectContaining({ method: 'PUT' }),
+    );
   });
 
-  it('throws when src_video path does not exist on disk', async () => {
-    // ESM 中 fs 不可 spy，用真实不存在的路径触发 existsSync 返回 false
+  it('src_video 路径不存在时，调用 reportComplete 并返回（不 throw）', async () => {
+    const mockFetch = vi.fn().mockResolvedValue(new Response('{}', { status: 200 }));
+    vi.stubGlobal('fetch', mockFetch);
     await expect(
       handler.processVideoPipelineJob('http://localhost', { id: 'y', src_video: '/tmp/zj-nonexistent-video-path-xyz.mp4', topic: null, status: 'pending' })
-    ).rejects.toThrow('src_video not found on local disk');
+    ).resolves.toBeUndefined();
+    expect(mockFetch).toHaveBeenCalledWith(
+      expect.stringContaining('/complete'),
+      expect.objectContaining({ method: 'PUT' }),
+    );
   });
 });
