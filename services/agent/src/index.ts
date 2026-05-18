@@ -139,7 +139,8 @@ function loadOrInitConfig(): AgentConfig {
 
 // ---------- WebSocket 业务核心 ----------
 
-const VERSION = '1.0.0';
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const VERSION: string = (require('../package.json') as { version: string }).version;
 
 const startTime = Date.now();
 let backoff = 1000;
