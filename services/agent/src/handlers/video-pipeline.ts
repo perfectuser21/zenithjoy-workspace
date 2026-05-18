@@ -34,7 +34,7 @@ export function escapeDT(text: string): string {
 }
 
 // ── 场景叠字滤镜 ──────────────────────────────────────────────────────────────
-type SceneData = {
+export type SceneData = {
   start: number; duration: number; layout: string;
   eyebrow: string; title: string; body: string; tags?: string[];
 };

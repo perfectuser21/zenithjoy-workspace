@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 
 // 从 video-pipeline.ts 中导出这两个函数（需要 export）
 // commit-1: 函数尚未 export，以下 import 会导致运行时错误或测试失败
-import { escapeDT, buildOverlayFilters } from '../handlers/video-pipeline';
+import { escapeDT, buildOverlayFilters, type SceneData } from '../handlers/video-pipeline';
 
 describe('escapeDT', () => {
   it('转义单引号', () => {
@@ -87,5 +87,18 @@ describe('buildOverlayFilters', () => {
     const filters = buildOverlayFilters(scenes, 1080, 1920, '/fonts/test.ttf');
     // 每个场景：1 drawbox + 2 drawtext = 3，2 场景 = 6
     expect(filters.length).toBe(6);
+  });
+
+  it('Windows 字体路径的冒号在 filter 中被转义', () => {
+    const scenes: SceneData[] = [{
+      start: 0, duration: 5, layout: 'burst',
+      eyebrow: 'TAG', title: '标题', body: '正文', tags: [],
+    }];
+    const filters = buildOverlayFilters(scenes, 1080, 1920, 'C:/Windows/Fonts/msyh.ttc');
+    const fontlineWithColon = filters.find(f => f.includes('fontfile='));
+    expect(fontlineWithColon).toBeDefined();
+    // 冒号必须转义，不能出现 C: 未转义格式
+    expect(fontlineWithColon).toContain("fontfile='C\\:");
+    expect(fontlineWithColon).not.toContain("fontfile='C:/");
   });
 });
