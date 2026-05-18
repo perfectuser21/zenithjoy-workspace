@@ -286,10 +286,11 @@ describe('AgentDownloadPage [BEHAVIOR]', () => {
       last_heartbeat_at: null,
     });
     render(<AgentDownloadPage />, { wrapper: createWrapper() });
+    // 等待 manifest query settle（失败后 badge 应消失）
     await waitFor(() => {
-      expect(screen.getByRole('heading', { name: /Agent.*客户端/i })).toBeInTheDocument();
+      expect(screen.queryByTestId('agent-version-badge')).not.toBeInTheDocument();
     });
-    // 失败时版本徽章不应出现（静默隐藏）
-    expect(screen.queryByTestId('agent-version-badge')).not.toBeInTheDocument();
+    // 页面其他内容仍正常渲染
+    expect(screen.getByRole('heading', { name: /Agent.*客户端/i })).toBeInTheDocument();
   });
 });
