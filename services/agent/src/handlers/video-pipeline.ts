@@ -1,10 +1,19 @@
-import { execSync, execFile } from 'child_process';
+import { execSync, exec } from 'child_process';
 import { promisify } from 'util';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
 
-const execFileAsync = promisify(execFile);
+const execAsync = promisify(exec);
+
+// PKG's execFile wrapper fails with spawn UNKNOWN on Windows; shell-based exec works
+function quoteArg(a: string): string {
+  return `"${a.replace(/"/g, '\\"')}"`;
+}
+async function runFfmpeg(args: string[]): Promise<void> {
+  const cmd = [FFMPEG, ...args].map(quoteArg).join(' ');
+  await execAsync(cmd, { windowsHide: true, maxBuffer: 64 * 1024 * 1024 });
+}
 
 // ── FFmpeg 路径查找 ─────────────────────────────────────────────────────────
 function findFfmpeg(): string {
@@ -115,13 +124,13 @@ export async function processVideoPipelineJob(
     // ── Step 4: extract audio ──────────────────────────────────────────────
     const audioPath = path.join(tmpDir, 'audio.wav');
     try {
-      await execFileAsync(FFMPEG, [
+      await runFfmpeg([
         '-y', '-i', videoPath,
         '-vn', '-acodec', 'pcm_s16le', '-ar', '16000', '-ac', '1',
         audioPath,
       ]);
     } catch {
-      await execFileAsync(FFMPEG, [
+      await runFfmpeg([
         '-y', '-f', 'lavfi', '-i', 'anullsrc=r=16000:cl=mono',
         '-t', String(duration), '-acodec', 'pcm_s16le', audioPath,
       ]);
@@ -203,7 +212,7 @@ export async function processVideoPipelineJob(
     const mkOutput = async (outPath: string, w: number, h: number) => {
       const scale = `scale=${w}:${h}:force_original_aspect_ratio=decrease,pad=${w}:${h}:(ow-iw)/2:(oh-ih)/2:black`;
       try {
-        await execFileAsync(FFMPEG, [
+        await runFfmpeg([
           '-y', '-i', videoPath,
           ...(hasBgm ? ['-i', bgmPath] : []),
           '-vf', scale,
