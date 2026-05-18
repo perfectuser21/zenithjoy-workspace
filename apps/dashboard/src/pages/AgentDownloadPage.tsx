@@ -10,19 +10,23 @@
  * 第一刀允许丑：内联样式，能跑能看就行。
  */
 import { useQuery } from '@tanstack/react-query';
-import { useEffect } from 'react';
-import { getAgentStatus, getInstallPackManifest } from '../api/walking-skeleton-1.api';
+import { useEffect, useState } from 'react';
+import { getInstallPackManifest } from '../api/walking-skeleton-1.api';
+import type { AgentStatus } from '../api/walking-skeleton-1.api';
 import { fetchAccountMe } from '../api/account.api';
 
 // autopilot nginx 直分发的 agent tarball（hk-vps:/opt/zenithjoy/autopilot-dashboard/dist/download/）
 const LICENSE_PLACEHOLDER = 'ZJ-F-XXXXXX';
 
 export default function AgentDownloadPage() {
-  const { data, isLoading } = useQuery({
-    queryKey: ['ws1', 'agent-status'],
-    queryFn: getAgentStatus,
-    refetchInterval: 10_000,
+  // Read cached license from localStorage synchronously on mount (for returning users).
+  // This avoids a 401 on first render while fetchAccountMe is still in-flight.
+  const [cachedLicense] = useState<string>(() => {
+    try {
+      return typeof window !== 'undefined' ? (window.localStorage.getItem('zj_license') || '') : '';
+    } catch { return ''; }
   });
+
   const { data: manifest } = useQuery({
     queryKey: ['install-pack-manifest'],
     queryFn: getInstallPackManifest,
@@ -35,23 +39,37 @@ export default function AgentDownloadPage() {
     staleTime: 30_000,
   });
 
-  const connected = !!data?.connected;
-  // 优先用真 license（注册即建 free license），未拿到回退占位
+  // 优先用真 license（注册即建 free license），未拿到回退 localStorage 缓存值
   const realLicense = accountQuery.data?.license?.license_key;
+  const effectiveLicense = realLicense || cachedLicense;
 
-  // 把真 license 同步写入 localStorage，供 walking-skeleton-1.api 的 license-bearer 鉴权使用。
-  // 这是 better-auth 邮箱登录与 license-Bearer 鉴权之间的桥（不然 /api/agent/status 永远 401）。
+  // Persist license to localStorage for future page loads.
   useEffect(() => {
-    if (realLicense && typeof window !== 'undefined') {
-      try {
-        if (window.localStorage.getItem('zj_license') !== realLicense) {
-          window.localStorage.setItem('zj_license', realLicense);
-        }
-      } catch {
-        // localStorage 被禁用 / 隐私模式 — 静默失败，cookie 路径仍可用
-      }
+    if (realLicense) {
+      try { window.localStorage.setItem('zj_license', realLicense); } catch { /* ignore */ }
     }
   }, [realLicense]);
+
+  // Agent status: use effectiveLicense directly in queryFn (avoids localStorage timing race).
+  // Query key includes effectiveLicense so a fresh fetch fires when license becomes available.
+  const { data, isLoading } = useQuery({
+    queryKey: ['ws1', 'agent-status', effectiveLicense],
+    queryFn: async (): Promise<AgentStatus> => {
+      const res = await fetch('/api/agent/me/status', {
+        headers: { Authorization: `Bearer ${effectiveLicense}` },
+      });
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({})) as { error?: { message?: string } };
+        throw new Error(`HTTP_${res.status}: ${json.error?.message ?? res.statusText}`);
+      }
+      return res.json() as Promise<AgentStatus>;
+    },
+    refetchInterval: 10_000,
+    enabled: !!effectiveLicense,
+    retry: false,
+  });
+
+  const connected = !!data?.connected;
   const license = realLicense ?? LICENSE_PLACEHOLDER;
 
   return (
