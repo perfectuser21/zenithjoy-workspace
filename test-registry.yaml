@@ -1653,9 +1653,17 @@ tests:
     note: "AiVideoPipelineService createJob/getJob/listPending/updateStatus 单测"
 
   - id: ai-video-pipeline-agent-handler
-    path: services/agent/src/handlers/video-pipeline.test.ts
+    path: services/agent/src/handlers/__tests__/video-pipeline.test.ts
     type: unit
     ci: L3
     status: active
     product: AI视频本地流水线
-    note: "Agent handler 导出验证 + src_video 本地路径校验（本地优先架构）"
+    note: "fetchWithTimeout/fireProgress/reportComplete 离线执行单测（v1.1.0）"
+
+  - id: ai-video-pipeline-stale-recovery
+    path: apps/api/src/controllers/__tests__/ai-video-pipeline-stale.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: AI视频本地流水线
+    note: "stale processing job 查询（status=processing&stale_minutes 参数）单测"

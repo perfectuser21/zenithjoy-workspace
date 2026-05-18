@@ -31,6 +31,14 @@ export async function listJobs(req: Request, res: Response, next: NextFunction) 
       const jobs = await svc.listPending();
       return res.json({ data: jobs });
     }
+    if (status === 'processing') {
+      const staleMinutes = parseInt(req.query.stale_minutes as string, 10);
+      if (!isNaN(staleMinutes) && staleMinutes > 0) {
+        const jobs = await svc.listStale(staleMinutes);
+        return res.json({ data: jobs });
+      }
+      return res.json({ data: [] });
+    }
     // thin: only supports status=pending filter; other filters return empty as not-yet-implemented
     res.json({ data: [] });
   } catch (err) { next(err); }
