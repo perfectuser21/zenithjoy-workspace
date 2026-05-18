@@ -1,4 +1,4 @@
-import { execSync, exec } from 'child_process';
+﻿import { execSync, exec } from 'child_process';
 import { promisify } from 'util';
 import fs from 'fs';
 import path from 'path';
@@ -15,7 +15,7 @@ async function runFfmpeg(args: string[], opts: { timeout?: number } = {}): Promi
   await execAsync(cmd, { windowsHide: true, maxBuffer: 64 * 1024 * 1024, timeout: opts.timeout });
 }
 
-// ── 中文字体检测 ─────────────────────────────────────────────────────────────
+// ── 中文字体检�?─────────────────────────────────────────────────────────────
 export function findChineseFont(): string {
   const candidates = [
     'C:/Windows/Fonts/msyh.ttc',
@@ -112,7 +112,7 @@ export async function fetchWithTimeout(
   }
 }
 
-// ── fireProgress — fire-and-forget, never throws ─────────────────────────────
+// ── fireProgress �?fire-and-forget, never throws ─────────────────────────────
 export function fireProgress(apiBase: string, jobId: string, pct: number): void {
   fetchWithTimeout(
     `${apiBase}/api/ai-video/jobs/${jobId}/progress`,
@@ -125,7 +125,7 @@ export function fireProgress(apiBase: string, jobId: string, pct: number): void 
   ).catch(() => {});
 }
 
-// ── reportComplete — retry 3x with 2s backoff, never throws ─────────────────
+// ── reportComplete �?retry 3x with 2s backoff, never throws ─────────────────
 async function _reportCompleteWithRetry(
   apiBase: string,
   jobId: string,
@@ -142,7 +142,7 @@ async function _reportCompleteWithRetry(
       },
       15_000,
     );
-    if (!r.ok) throw new Error(`complete → HTTP ${r.status}`);
+    if (!r.ok) throw new Error(`complete �?HTTP ${r.status}`);
   } catch (err) {
     if (attempt < 3) {
       await new Promise((r) => setTimeout(r, 2_000));
@@ -228,7 +228,7 @@ export async function processVideoPipelineJob(
   }
   if (!fs.statSync(videoPath).isFile()) {
     await reportComplete(apiBase, id, {
-      error_msg: `[video-pipeline] src_video 是文件夹而非视频文件，请选择具体的 .mp4/.mov 文件: ${videoPath}`,
+      error_msg: `[video-pipeline] src_video 是文件夹而非视频文件，请选择具体�?.mp4/.mov 文件: ${videoPath}`,
     });
     return;
   }
@@ -237,7 +237,7 @@ export async function processVideoPipelineJob(
   fs.mkdirSync(outputDir, { recursive: true });
   const tmpDir = path.join(os.tmpdir(), `zj-video-${id}`);
   fs.mkdirSync(tmpDir, { recursive: true });
-  console.log(`[video-pipeline] processing job ${id} — source: ${videoPath}`);
+  console.log(`[video-pipeline] processing job ${id} �?source: ${videoPath}`);
 
   try {
     fireProgress(apiBase, id, 2);
@@ -325,45 +325,52 @@ export async function processVideoPipelineJob(
     if (htmlResult?.html) fs.writeFileSync(htmlPath, htmlResult.html, 'utf-8');
     fireProgress(apiBase, id, 65);
 
-    // Step 6: BGM 已从 Agent 移除（PiAPI 在服务端生成，非 Agent 职责）
-    fireProgress(apiBase, id, 75);
+    // Step 6: BGM 已从 Agent 移除（PiAPI 在服务端生成，非 Agent 职责�?    fireProgress(apiBase, id, 75);
 
-    // Step 7: FFmpeg encode（含叠字滤镜）
-    const chineseFont = findChineseFont();
-    if (!chineseFont) {
-      console.warn('[video-pipeline] 未找到中文字体，跳过叠字滤镜');
-    } else {
-      console.log(`[video-pipeline] 使用字体: ${chineseFont}`);
-    }
-
+    // Step 7: HyperFrames render (+ FFmpeg fallback)
     const output916 = path.join(outputDir, '9_16.mp4');
     const output169 = path.join(outputDir, '16_9.mp4');
+    const htmlContent = htmlResult?.html ?? '';
 
-    const mkOutput = async (outPath: string, w: number, h: number) => {
-      const scale = `scale=${w}:${h}:force_original_aspect_ratio=decrease,pad=${w}:${h}:(ow-iw)/2:(oh-ih)/2:black`;
-      const overlayFilters = buildOverlayFilters(designResult?.scenes ?? [], w, h, chineseFont);
-      const vfChain = overlayFilters.length ? [scale, ...overlayFilters].join(',') : scale;
+    const ffmpegFallback = async (outPath: string, w: number, h: number) => {
+      const vf = `scale=${w}:${h}:force_original_aspect_ratio=decrease,pad=${w}:${h}:(ow-iw)/2:(oh-ih)/2:black`;
       try {
-        await runFfmpeg([
-          '-y', '-i', videoPath,
-          '-vf', vfChain, '-map', '0',
+        await runFfmpeg(['-y', '-i', videoPath, '-vf', vf, '-map', '0',
           '-c:v', 'libx264', '-preset', 'fast', '-crf', '23',
-          '-c:a', 'aac', '-b:a', '128k',
-          '-t', String(Math.min(duration, 60)),
-          outPath,
+          '-c:a', 'aac', '-b:a', '128k', '-t', String(Math.min(duration, 60)), outPath,
         ], { timeout: 600_000 });
-      } catch (err) {
-        console.error(`[video-pipeline] FFmpeg ${w}x${h} failed, copying source:`, (err as Error).message?.slice(0, 120));
-        fs.copyFileSync(videoPath, outPath);
-      }
+      } catch { fs.copyFileSync(videoPath, outPath); }
     };
 
-    await mkOutput(output916, 1080, 1920);
-    fireProgress(apiBase, id, 87);
-    await mkOutput(output169, 1920, 1080);
-    fireProgress(apiBase, id, 95);
+    if (htmlContent) {
+      const hfDir = path.join(tmpDir, 'hf');
+      fs.mkdirSync(hfDir, { recursive: true });
+      fs.copyFileSync(videoPath, path.join(hfDir, path.basename(videoPath)));
+      fs.writeFileSync(path.join(hfDir, 'index.html'), htmlContent, 'utf-8');
+      const rendered = path.join(hfDir, 'rendered.mp4');
+      try {
+        console.log('[video-pipeline] starting HyperFrames render...');
+        await execAsync('npx hyperframes render --output ' + JSON.stringify(rendered), {
+          cwd: hfDir, timeout: 600_000, maxBuffer: 10 * 1024 * 1024, windowsHide: true,
+        });
+        fs.copyFileSync(rendered, output169);
+        await runFfmpeg(['-y', '-i', rendered,
+          '-vf', 'crop=ih*9/16:ih:(iw-ih*9/16)/2:0',
+          '-c:v', 'libx264', '-crf', '23', '-c:a', 'aac', '-b:a', '128k', output916,
+        ], { timeout: 300_000 });
+        console.log('[video-pipeline] HyperFrames render done');
+      } catch (err) {
+        console.error('[video-pipeline] HyperFrames failed, FFmpeg fallback:', (err as Error).message?.slice(0, 200));
+        await ffmpegFallback(output916, 1080, 1920);
+        await ffmpegFallback(output169, 1920, 1080);
+      }
+    } else {
+      console.warn('[video-pipeline] no HTML, using FFmpeg fallback');
+      await ffmpegFallback(output916, 1080, 1920);
+      await ffmpegFallback(output169, 1920, 1080);
+    }
 
-    console.log(`[video-pipeline] job ${id} done — outputs at ${outputDir}`);
+    console.log(`[video-pipeline] job ${id} done 鈥?outputs at ${outputDir}`);
     await reportComplete(apiBase, id, { output_dir: outputDir });
 
   } catch (err) {
