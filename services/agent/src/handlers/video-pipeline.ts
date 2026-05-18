@@ -161,6 +161,12 @@ export async function processVideoPipelineJob(
     });
     return;
   }
+  if (!fs.statSync(videoPath).isFile()) {
+    await reportComplete(apiBase, id, {
+      error_msg: `[video-pipeline] src_video 是文件夹而非视频文件，请选择具体的 .mp4/.mov 文件: ${videoPath}`,
+    });
+    return;
+  }
 
   const outputDir = path.join(path.dirname(videoPath), 'zenithjoy-output', id);
   fs.mkdirSync(outputDir, { recursive: true });

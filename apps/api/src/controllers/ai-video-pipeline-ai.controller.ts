@@ -66,7 +66,7 @@ export async function transcribeAudio(req: Request, res: Response, next: NextFun
     const audioFile = req.file;
     if (!audioFile) return res.status(400).json({ error: 'audio file required' });
 
-    const audioB64 = fs.readFileSync(audioFile.path).toString('base64');
+    const audioB64 = (audioFile.buffer ?? fs.readFileSync(audioFile.path)).toString('base64');
     const mime = audioFile.mimetype || 'audio/wav';
 
     const result = await postJson(
