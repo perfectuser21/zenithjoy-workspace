@@ -196,4 +196,41 @@ describe('AgentDownloadPage [BEHAVIOR]', () => {
       expect(screen.getByText(/未连接/)).toBeInTheDocument();
     });
   });
+
+  // ===== manifest 版本信息展示（TDD commit-1：以下测试应 FAIL 直到实现加上 build_time + size）=====
+
+  it('manifest 加载后展示构建日期（build_time 格式化为 YYYY-MM-DD）', async () => {
+    // mock 返回 build_time: '2026-05-09T03:01:22Z' → 期望显示 "2026-05-09"
+    vi.mocked(ws1Api.getAgentStatus).mockResolvedValue({
+      connected: false, agent_id: null, hostname: null, version: null, last_heartbeat_at: null,
+    });
+    render(<AgentDownloadPage />, { wrapper: createWrapper() });
+    // 构建日期必须以 "2026-05-09" 格式出现在页面上
+    await waitFor(() => {
+      expect(screen.getByText(/2026-05-09/)).toBeInTheDocument();
+    });
+  });
+
+  it('manifest 加载后展示文件大小（size bytes 格式化为 XX MB）', async () => {
+    // mock 返回 size: 22637557 → 期望显示 "21 MB" 或 "21.6 MB" (≈ 22637557/1024/1024)
+    vi.mocked(ws1Api.getAgentStatus).mockResolvedValue({
+      connected: false, agent_id: null, hostname: null, version: null, last_heartbeat_at: null,
+    });
+    render(<AgentDownloadPage />, { wrapper: createWrapper() });
+    // 文件大小以 MB 单位展示
+    await waitFor(() => {
+      expect(screen.getByText(/\d+(\.\d+)?\s*MB/)).toBeInTheDocument();
+    });
+  });
+
+  it('manifest 加载后标题展示带前缀 v 的版本号（如 v1.0.0）', async () => {
+    vi.mocked(ws1Api.getAgentStatus).mockResolvedValue({
+      connected: false, agent_id: null, hostname: null, version: null, last_heartbeat_at: null,
+    });
+    render(<AgentDownloadPage />, { wrapper: createWrapper() });
+    // 版本号带 v 前缀，在 h2 标题中展示
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: /v1\.0\.0/i })).toBeInTheDocument();
+    });
+  });
 });
