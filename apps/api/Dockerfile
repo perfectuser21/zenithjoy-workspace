@@ -21,6 +21,6 @@ COPY --from=builder /app/dist ./dist
 EXPOSE 5220
 
 HEALTHCHECK --interval=30s --timeout=3s --start-period=40s \
-  CMD node -e "require('http').get('http://localhost:5220/health', (r) => { process.exit(r.statusCode === 200 ? 0 : 1); })"
+  CMD node -e "require('http').get('http://localhost:5200/health', (r) => { process.exit(r.statusCode === 200 ? 0 : 1); })"
 
 CMD ["npm", "start"]
