@@ -118,6 +118,12 @@ export default function AgentDownloadPage() {
         {manifest && (
           <div style={{ marginBottom: 16, padding: 12, background: '#f3f4f6', borderRadius: 6 }}>
             <p style={{ margin: '0 0 4px', fontSize: 13, color: '#374151' }}>最新版本: <strong>{manifest.version}</strong></p>
+            <p style={{ margin: '0 0 4px', fontSize: 13, color: '#374151' }}>
+              构建日期: <strong>{manifest.build_time.slice(0, 10)}</strong>
+            </p>
+            <p style={{ margin: '0 0 4px', fontSize: 13, color: '#374151' }}>
+              文件大小: <strong>{(manifest.size / 1024 / 1024).toFixed(1)} MB</strong>
+            </p>
             <p style={{ margin: '0 0 12px', fontSize: 13, color: '#374151' }}>
               sha256: <code style={{ fontSize: 12 }}>{manifest.sha256.slice(0, 16)}...</code>
             </p>
