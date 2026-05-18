@@ -1,10 +1,19 @@
-import { execFile } from 'child_process';
+import { execSync, exec } from 'child_process';
 import { promisify } from 'util';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
 
-const execFileAsync = promisify(execFile);
+const execAsync = promisify(exec);
+
+// PKG's execFile wrapper fails with spawn UNKNOWN on Windows; shell-based exec works
+function quoteArg(a: string): string {
+  return `"${a.replace(/"/g, '\\"')}"`;
+}
+async function runFfmpeg(args: string[], opts: { timeout?: number } = {}): Promise<void> {
+  const cmd = [FFMPEG, ...args].map(quoteArg).join(' ');
+  await execAsync(cmd, { windowsHide: true, maxBuffer: 64 * 1024 * 1024, timeout: opts.timeout });
+}
 
 // ── FFmpeg 路径查找 ─────────────────────────────────────────────────────────
 function findFfmpeg(): string {
@@ -162,17 +171,13 @@ export async function processVideoPipelineJob(
   try {
     fireProgress(apiBase, id, 2);
 
-    // Step 1: probe duration (async, 30s timeout)
+    // Step 1: probe duration (shell-based, 30s timeout)
     let duration = 30;
     try {
       const ffprobePath = FFMPEG.replace(/ffmpeg(\.exe)?$/i, (m) =>
         m.replace(/ffmpeg/i, 'ffprobe'));
-      const { stdout } = await execFileAsync(ffprobePath, [
-        '-v', 'error',
-        '-show_entries', 'format=duration',
-        '-of', 'default=noprint_wrappers=1:nokey=1',
-        videoPath,
-      ], { timeout: 30_000 });
+      const cmd = `${quoteArg(ffprobePath)} -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 ${quoteArg(videoPath)}`;
+      const { stdout } = await execAsync(cmd, { windowsHide: true, timeout: 30_000, maxBuffer: 1024 * 1024 });
       const d = parseFloat(stdout.trim());
       if (d > 0) duration = d;
     } catch { /* use default 30s */ }
@@ -181,13 +186,13 @@ export async function processVideoPipelineJob(
     // Step 2: extract audio
     const audioPath = path.join(tmpDir, 'audio.wav');
     try {
-      await execFileAsync(FFMPEG, [
+      await runFfmpeg([
         '-y', '-i', videoPath,
         '-vn', '-acodec', 'pcm_s16le', '-ar', '16000', '-ac', '1',
         audioPath,
       ], { timeout: 120_000 });
     } catch {
-      await execFileAsync(FFMPEG, [
+      await runFfmpeg([
         '-y', '-f', 'lavfi', '-i', 'anullsrc=r=16000:cl=mono',
         '-t', String(duration), '-acodec', 'pcm_s16le', audioPath,
       ], { timeout: 30_000 });
@@ -259,7 +264,7 @@ export async function processVideoPipelineJob(
     const mkOutput = async (outPath: string, w: number, h: number) => {
       const scale = `scale=${w}:${h}:force_original_aspect_ratio=decrease,pad=${w}:${h}:(ow-iw)/2:(oh-ih)/2:black`;
       try {
-        await execFileAsync(FFMPEG, [
+        await runFfmpeg([
           '-y', '-i', videoPath,
           '-vf', scale, '-map', '0',
           '-c:v', 'libx264', '-preset', 'fast', '-crf', '23',

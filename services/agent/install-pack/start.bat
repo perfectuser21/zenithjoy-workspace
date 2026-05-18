@@ -4,6 +4,10 @@ setlocal enabledelayedexpansion
 
 cd /d "%~dp0"
 
+REM Unblock all .exe files (removes Zone Identifier / Mark of the Web from downloaded files)
+REM Without this, execFile() on bundled ffmpeg.exe fails with "spawn UNKNOWN" on Windows
+powershell -NoProfile -Command "Get-ChildItem -Path '%~dp0' -Filter '*.exe' | Unblock-File" >nul 2>&1
+
 REM Step 1: Verify .env exists
 if not exist .env (
     echo [ERROR] .env not found. Please re-download install pack from dashboard.
