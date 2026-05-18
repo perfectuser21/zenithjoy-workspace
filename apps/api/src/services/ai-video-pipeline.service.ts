@@ -47,6 +47,17 @@ export class AiVideoPipelineService {
     return result.rows;
   }
 
+  async listStale(staleMinutes: number): Promise<PipelineJob[]> {
+    const result = await pool.query(
+      `SELECT * FROM zenithjoy.ai_video_pipeline_jobs
+       WHERE status = 'processing'
+         AND updated_at < NOW() - ($1 || ' minutes')::interval
+       ORDER BY updated_at ASC`,
+      [staleMinutes],
+    );
+    return result.rows;
+  }
+
   async updateStatus(
     id: string,
     params: {
