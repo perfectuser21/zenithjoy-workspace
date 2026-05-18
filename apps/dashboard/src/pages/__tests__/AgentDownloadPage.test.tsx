@@ -196,4 +196,100 @@ describe('AgentDownloadPage [BEHAVIOR]', () => {
       expect(screen.getByText(/未连接/)).toBeInTheDocument();
     });
   });
+
+  // ===== 版本信息增强展示（commit-1 失败测试） =====
+
+  it('manifest 加载中 → 版本徽章显示 loading 占位，不报错', async () => {
+    vi.mocked(ws1Api.getInstallPackManifest).mockReturnValue(new Promise(() => {}));
+    vi.mocked(ws1Api.getAgentStatus).mockResolvedValue({
+      connected: false,
+      agent_id: null,
+      hostname: null,
+      version: null,
+      last_heartbeat_at: null,
+    });
+    render(<AgentDownloadPage />, { wrapper: createWrapper() });
+    expect(screen.getByTestId('agent-version-badge')).toBeInTheDocument();
+    expect(screen.getByTestId('agent-version-badge')).toHaveTextContent(/加载中|loading|\.\.\./i);
+  });
+
+  it('manifest 加载成功 → 版本号显示 v1.0.0', async () => {
+    vi.mocked(ws1Api.getInstallPackManifest).mockResolvedValue({
+      version: '1.0.0',
+      sha256: 'a'.repeat(64),
+      download_url: '/download/zenithjoy-agent-v1.0.0.tar.gz',
+      size: 22637557,
+      build_time: '2026-05-09T03:01:22Z',
+    });
+    vi.mocked(ws1Api.getAgentStatus).mockResolvedValue({
+      connected: false,
+      agent_id: null,
+      hostname: null,
+      version: null,
+      last_heartbeat_at: null,
+    });
+    render(<AgentDownloadPage />, { wrapper: createWrapper() });
+    await waitFor(() => {
+      expect(screen.getByTestId('agent-version-badge')).toHaveTextContent('v1.0.0');
+    });
+  });
+
+  it('manifest 加载成功 → 发布时间显示格式为"YYYY-MM-DD 发布"', async () => {
+    vi.mocked(ws1Api.getInstallPackManifest).mockResolvedValue({
+      version: '1.0.1',
+      sha256: 'b'.repeat(64),
+      download_url: '/download/zenithjoy-agent-v1.0.1.tar.gz',
+      size: 169171709,
+      build_time: '2026-05-17T16:05:19Z',
+    });
+    vi.mocked(ws1Api.getAgentStatus).mockResolvedValue({
+      connected: false,
+      agent_id: null,
+      hostname: null,
+      version: null,
+      last_heartbeat_at: null,
+    });
+    render(<AgentDownloadPage />, { wrapper: createWrapper() });
+    await waitFor(() => {
+      expect(screen.getByTestId('agent-build-time')).toHaveTextContent('2026-05-17 发布');
+    });
+  });
+
+  it('manifest 加载成功 → 文件大小以 MB 显示（169171709 字节 ≈ 161 MB）', async () => {
+    vi.mocked(ws1Api.getInstallPackManifest).mockResolvedValue({
+      version: '1.0.1',
+      sha256: 'b'.repeat(64),
+      download_url: '/download/zenithjoy-agent-v1.0.1.tar.gz',
+      size: 169171709,
+      build_time: '2026-05-17T16:05:19Z',
+    });
+    vi.mocked(ws1Api.getAgentStatus).mockResolvedValue({
+      connected: false,
+      agent_id: null,
+      hostname: null,
+      version: null,
+      last_heartbeat_at: null,
+    });
+    render(<AgentDownloadPage />, { wrapper: createWrapper() });
+    await waitFor(() => {
+      expect(screen.getByTestId('agent-file-size')).toHaveTextContent('161 MB');
+    });
+  });
+
+  it('manifest 请求失败 → 版本区域静默隐藏，页面不崩溃', async () => {
+    vi.mocked(ws1Api.getInstallPackManifest).mockRejectedValue(new Error('network error'));
+    vi.mocked(ws1Api.getAgentStatus).mockResolvedValue({
+      connected: false,
+      agent_id: null,
+      hostname: null,
+      version: null,
+      last_heartbeat_at: null,
+    });
+    render(<AgentDownloadPage />, { wrapper: createWrapper() });
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: /Agent.*客户端/i })).toBeInTheDocument();
+    });
+    // 失败时版本徽章不应出现（静默隐藏）
+    expect(screen.queryByTestId('agent-version-badge')).not.toBeInTheDocument();
+  });
 });
