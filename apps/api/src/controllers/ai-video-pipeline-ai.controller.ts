@@ -1,7 +1,9 @@
 import { Request, Response, NextFunction } from 'express';
 import fs from 'fs';
 import https from 'https';
+import path from 'path';
 import { AiVideoPipelineService } from '../services/ai-video-pipeline.service';
+import { getTemplate, readTemplateJsx } from '../templates/registry';
 
 const svc = new AiVideoPipelineService();
 const OPENROUTER_KEY = process.env.OPENROUTER_API_KEY || '';
@@ -339,4 +341,158 @@ export async function generateBgm(req: Request, res: Response, next: NextFunctio
 
     res.status(504).json({ error: 'BGM generation timeout' });
   } catch (err) { next(err); }
+}
+
+// ── PHONE_PREVIEW_SRC — loaded once at startup ────────────────────────────
+let _phoneSrc: string | null = null;
+function getPhoneSrc(): string {
+  if (!_phoneSrc) {
+    const p = path.join(__dirname, '../templates/phone-preview.jsx');
+    _phoneSrc = fs.existsSync(p) ? fs.readFileSync(p, 'utf-8') : '';
+  }
+  return _phoneSrc;
+}
+
+// ── composeTemplate ────────────────────────────────────────────────────────
+export async function composeTemplate(req: Request, res: Response, next: NextFunction) {
+  try {
+    const job = await svc.getJob(req.params.id);
+    if (!job) return res.status(404).json({ error: 'job not found' });
+
+    const { transcript = '', duration = 10, video_filename = 'video.mp4' } = req.body as {
+      transcript?: string;
+      duration?: number;
+      video_filename?: string;
+    };
+
+    const templateId = job.template_id;
+    if (!templateId) return res.status(400).json({ error: 'job has no template_id' });
+
+    const spec = getTemplate(templateId);
+    if (!spec) return res.status(400).json({ error: `unknown template: ${templateId}` });
+
+    // Step 1: Claude 从 transcript 提取 slots
+    const slotPrompt = `你是短视频文案分析师。从以下口播文案中提取模板内容，只输出 JSON，不要其他文字。
+
+文案：
+${transcript || '精彩视频内容'}
+
+输出格式：
+{
+  "eyebrow": "场景标签（6字以内，英文+中文混排，如 SCENE 01 · 精准共鸣点）",
+  "title": ["标题第一行（8字以内）", "标题第二行（8字以内）"],
+  "titleAccent": "标题里需要突出的1个关键词",
+  "subtitle": "副标题（20字以内，概括核心观点）",
+  "metrics": [
+    {"label": "指标名", "value": "数字", "unit": "单位"},
+    {"label": "指标名", "value": "数字", "unit": "单位"},
+    {"label": "指标名", "value": "数字", "unit": "单位"}
+  ],
+  "hook": {
+    "handle": "@账号名（6字以内）",
+    "caption": "开场白文案（20字以内）",
+    "hashtags": ["话题1", "话题2"],
+    "videoSrc": "${video_filename}"
+  },
+  "pageNum": "01 / 01"
+}`;
+
+    let slots: Record<string, unknown>;
+    try {
+      const slotResult = await postJson(
+        'https://openrouter.ai/api/v1/chat/completions',
+        { Authorization: `Bearer ${OPENROUTER_KEY}` },
+        {
+          model: 'anthropic/claude-haiku-4-5',
+          max_tokens: 1024,
+          messages: [{ role: 'user', content: slotPrompt }],
+        },
+      ) as { choices?: { message?: { content?: string } }[] };
+
+      const raw = slotResult?.choices?.[0]?.message?.content ?? '{}';
+      const m = raw.match(/\{[\s\S]*\}/);
+      slots = m ? JSON.parse(m[0]) : {};
+    } catch {
+      slots = {
+        eyebrow: 'SCENE 01 · 内容精华',
+        title: [transcript.slice(0, 8) || '精彩内容', transcript.slice(8, 16) || ''],
+        titleAccent: '',
+        subtitle: transcript.slice(0, 30) || '精彩视频内容',
+        metrics: [
+          { label: '互动率', value: '2.5', unit: '×' },
+          { label: '完播率', value: '+50', unit: '%' },
+          { label: '精准曝光', value: '85', unit: '%' },
+        ],
+        hook: { handle: '@内容账号', caption: transcript.slice(0, 20) || '精彩内容', hashtags: [], videoSrc: video_filename },
+        pageNum: '01 / 01',
+      };
+    }
+
+    // Step 2: 生成 composition HTML
+    const templateJsx = readTemplateJsx(spec);
+    const phoneSrc = getPhoneSrc();
+    const html = _buildCompositionHtml({
+      templateJsx, phoneSrc, slots,
+      component: spec.component,
+      width: spec.width, height: spec.height, duration,
+    });
+
+    res.json({ html });
+  } catch (err) { next(err); }
+}
+
+interface _BuildHtmlParams {
+  templateJsx: string;
+  phoneSrc: string;
+  slots: Record<string, unknown>;
+  component: string;
+  width: number;
+  height: number;
+  duration: number;
+}
+
+function _buildCompositionHtml(p: _BuildHtmlParams): string {
+  return `<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;500;700;900&family=Noto+Sans+SC:wght@300;400;500;700;900&family=JetBrains+Mono:wght@300;400;500;700&display=swap" rel="stylesheet">
+<style>* { margin: 0; padding: 0; box-sizing: border-box; }</style>
+</head>
+<body style="width:${p.width}px;height:${p.height}px;overflow:hidden">
+<div id="root" data-composition-id="template-comp" data-start="0" data-duration="${p.duration}"></div>
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" crossorigin></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" crossorigin></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" crossorigin></script>
+<script>window.__SLOTS__ = ${JSON.stringify(p.slots)};</script>
+<script type="text/babel">
+${p.phoneSrc}
+${p.templateJsx}
+const root = document.getElementById('root');
+const tl = gsap.timeline({ paused: true });
+window.__timelines = window.__timelines || {};
+window.__timelines['template-comp'] = tl;
+const Comp = window.${p.component};
+if (Comp) {
+  ReactDOM.render(React.createElement(Comp, { slots: window.__SLOTS__ }), root);
+  const A = {
+    TITLE:   { duration: 0.20, ease: 'expo.out',    from: { x: -18, opacity: 0 } },
+    NUMBER:  { duration: 0.30, ease: 'back.out(2)', from: { scale: 0.4, opacity: 0 } },
+    EYEBROW: { duration: 0.15, ease: 'power4.out',  from: { opacity: 0, letterSpacing: '0.8em' } },
+    BODY:    { duration: 0.22, ease: 'power2.out',  from: { y: 6, opacity: 0 } },
+  };
+  tl.from('[data-gsap="eyebrow"]',    { ...A.EYEBROW.from, duration: A.EYEBROW.duration, ease: A.EYEBROW.ease }, 0.05);
+  tl.from('[data-gsap="phone"]',      { opacity: 0, y: 30, duration: 0.35, ease: 'power2.out' }, 0.10);
+  tl.from('[data-gsap="title"]',      { ...A.TITLE.from, duration: A.TITLE.duration, ease: A.TITLE.ease }, 0.15);
+  tl.from('[data-gsap="subtitle"]',   { ...A.BODY.from, duration: A.BODY.duration, ease: A.BODY.ease }, 0.30);
+  tl.from('[data-gsap="metrics"] > *',{ ...A.NUMBER.from, duration: A.NUMBER.duration, ease: A.NUMBER.ease, stagger: 0.08 }, 0.35);
+  tl.from('[data-gsap="metric-big"]', { ...A.NUMBER.from, duration: A.NUMBER.duration, ease: A.NUMBER.ease }, 0.35);
+  tl.from('[data-gsap="progress"] > *',{ opacity: 0, scaleX: 0, duration: 0.15, stagger: 0.04, ease: 'power2.out' }, 0.45);
+  window.__hf = { duration: ${p.duration}, seek: function(t) { tl.seek(t, false); } };
+}
+</script>
+</body>
+</html>`;
 }
