@@ -42,3 +42,15 @@ journey_type: autonomous
 - [ ] [BEHAVIOR] e2e-verify.ps1 含 ZENITHJOY_API_BASE 环境变量读取（不硬编码生产域名）
   Test: manual:bash -c 'grep -q "ZENITHJOY_API_BASE" sprints/step6-dispatch-chain/e2e-verify.ps1 && echo OK || exit 1'
   期望: OK
+
+---
+
+## Risks
+
+### Risk 1: smoke.sh Step 6 扩展引入回归
+
+扩展 `golden-path-1-smoke.sh` 若改动现有 Step 1-5 逻辑，会破坏已通过的 golden path。**缓解**: 仅在 Step 6 区块追加新 curl 调用，不修改 Step 1-5 内容；WS4 BEHAVIOR 2 验证新路由路径正确。
+
+### Risk 2: e2e-verify.ps1 硬编码 API 端点
+
+若 `$ApiBase` 未设置且无默认，GitHub Actions 执行时 $ApiBase 为空字符串导致 curl 调用本地 `undefined/api/...`。**缓解**: 脚本开头含 `if (-not $ApiBase)` 检查 + `exit 1`；WS4 BEHAVIOR 4 验证 ZENITHJOY_API_BASE 引用存在。

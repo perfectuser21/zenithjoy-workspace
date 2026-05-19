@@ -1,4 +1,4 @@
-# Sprint Contract Draft (Round 1)
+# Sprint Contract Draft (Round 2)
 
 ## Golden Path
 [用户点发布] → [中台排队 publish_task + works.publish_status=queued] → [Agent 心跳领取] → [Agent task-ack 确认] → [works.publish_status=success]
@@ -113,13 +113,53 @@ HTTP404=$(curl -s -o /dev/null -w "%{http_code}" -b /tmp/s6r1.cookies \
 [ "$HTTP404" = "404" ] || { echo "FAIL: 不存在 work 应返 404, got $HTTP404"; exit 1; }
 ```
 
-**403 task-ack forbidden（task 不属于当前 license）**:
+**403 task-ack cross-tenant forbidden（task 属于其他 tenant 的 agent）**:
 ```bash
+# userA 注册 + 心跳 + 创建 work + publish → 得到 TASK_ID
+EMAIL_A="s6-a-$(date +%s)@test.dev"
+curl -fsS -c /tmp/s6a.cookies -X POST "$API/api/auth/sign-up/email" \
+  -H 'content-type: application/json' \
+  -d "{\"email\":\"$EMAIL_A\",\"password\":\"Pass1234!\",\"name\":\"userA\"}" > /dev/null
+LK_A=$(curl -fsS -b /tmp/s6a.cookies "$API/api/account/me" | jq -r '.license.license_key')
+curl -fsS -X POST "$API/api/agent/heartbeat" \
+  -H "x-license-key: $LK_A" -H 'content-type: application/json' \
+  -d '{"hostname":"agent-a"}' > /dev/null
+WORK_A=$(curl -fsS -b /tmp/s6a.cookies -X POST "$API/api/works" \
+  -H 'content-type: application/json' \
+  -d '{"title":"cross-tenant work","content_type":"video","body":"b"}' | jq -r '.id')
+TASK_A=$(curl -f -b /tmp/s6a.cookies -X POST "$API/api/works/$WORK_A/publish" \
+  -H 'content-type: application/json' | jq -r '.task_id')
+
+# userB 注册 + 心跳（不同 tenant）
+EMAIL_B="s6-b-$(date +%s)@test.dev"
+curl -fsS -c /tmp/s6b.cookies -X POST "$API/api/auth/sign-up/email" \
+  -H 'content-type: application/json' \
+  -d "{\"email\":\"$EMAIL_B\",\"password\":\"Pass1234!\",\"name\":\"userB\"}" > /dev/null
+LK_B=$(curl -fsS -b /tmp/s6b.cookies "$API/api/account/me" | jq -r '.license.license_key')
+curl -fsS -X POST "$API/api/agent/heartbeat" \
+  -H "x-license-key: $LK_B" -H 'content-type: application/json' \
+  -d '{"hostname":"agent-b"}' > /dev/null
+
+# userB 尝试 ack userA 的 task → 必须返 403
 HTTP403=$(curl -s -o /dev/null -w "%{http_code}" \
   -X POST "$API/api/agent/task-ack" \
-  -H "x-license-key: $LK" -H 'content-type: application/json' \
-  -d '{"task_id":"00000000-0000-0000-0000-000000000001","result":"x"}')
-[ "$HTTP403" = "404" ] || [ "$HTTP403" = "403" ] || { echo "FAIL: 非法 task_id 应返 403/404"; exit 1; }
+  -H "x-license-key: $LK_B" -H 'content-type: application/json' \
+  -d "{\"task_id\":\"$TASK_A\",\"result\":\"x\"}")
+[ "$HTTP403" = "403" ] || { echo "FAIL: 跨 tenant ack 应返 403, got $HTTP403"; exit 1; }
+```
+
+**publish_status=null（未发布 work GET 验证）**:
+```bash
+EMAIL_NULL="s6-null-$(date +%s)@test.dev"
+curl -fsS -c /tmp/s6null.cookies -X POST "$API/api/auth/sign-up/email" \
+  -H 'content-type: application/json' \
+  -d "{\"email\":\"$EMAIL_NULL\",\"password\":\"Pass1234!\",\"name\":\"nulltest\"}" > /dev/null
+WORK_NEW=$(curl -fsS -b /tmp/s6null.cookies -X POST "$API/api/works" \
+  -H 'content-type: application/json' \
+  -d '{"title":"unpublished","content_type":"video","body":"b"}' | jq -r '.id')
+WORK_RESP=$(curl -f -b /tmp/s6null.cookies "$API/api/works/$WORK_NEW")
+echo "$WORK_RESP" | jq -e '.publish_status == null' \
+  || { echo "FAIL: 未发布 work publish_status 应为 null"; exit 1; }
 ```
 
 ---
@@ -280,6 +320,34 @@ workstream_count: 4
 **范围**: 扩展 `golden-path-1-smoke.sh` Step 6 覆盖完整 dispatch chain；新增 `e2e-verify.ps1`
 **大小**: S(<100行), 2文件
 **依赖**: Workstream 3
+
+---
+
+## Risks
+
+### Risk 1: findActiveAgentByTenantId 活跃窗口定义模糊
+
+**描述**: "最近活跃 agent" 未定义 heartbeat 有效期，若查询不加时间窗口，离线 agent 也会被选中，导致 dispatch 成功但 agent 永远不来 ack。
+
+**缓解**:
+- `findActiveAgentByTenantId` SQL 必须含 `last_heartbeat_at > NOW() - INTERVAL '10 minutes'`
+- WS2 DoD 的 [BEHAVIOR] `test_no_agent_422` 验证超时 agent 不被选中（注册后不心跳则 422）
+
+**验证命令**:
+```bash
+node -e "const c=require('fs').readFileSync('apps/api/src/services/walking-skeleton.service.ts','utf8');if(!c.match(/last_heartbeat_at.*INTERVAL/))process.exit(1);console.log('OK')"
+```
+
+---
+
+### Risk 2: dispatch DB 事务 cascade 失败补偿
+
+**描述**: `dispatchPublishTask` 需同时 `INSERT publish_tasks` + `UPDATE works.publish_status`。若前者成功后者失败（DB 故障、约束违反），状态不一致：publish_tasks 有记录但 works 仍 null，heartbeat 返任务但 GET /works/:id 不反映 queued。
+
+**缓解**:
+- `dispatchPublishTask` 必须在单一 DB 事务内执行两步操作
+- WS2 DoD 的 [BEHAVIOR] `test_dispatch_sets_queued` 已验证 works.publish_status = queued（间接验证事务完整性）
+- 若实现不含 `BEGIN`/`COMMIT` 或 Prisma transaction，WS2 ARTIFACT `test_dispatch_inserts_task` 仍可能造假通过；需补 [BEHAVIOR] 验证 `publish_tasks` 和 `works` 状态同时一致
 
 ---
 

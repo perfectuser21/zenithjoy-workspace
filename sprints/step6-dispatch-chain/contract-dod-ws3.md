@@ -52,16 +52,38 @@ journey_type: autonomous
   期望: exit 0（helper 内验 `has("success")|not` + `has("status")|not` + `has("done")|not`）
 
 - [ ] [BEHAVIOR] `POST /api/works/:id/publish` 对不存在 work 返回 HTTP 404 + error 字段
-  Test: manual:bash -c 'CODE=$(curl -s -o /dev/null -w "%{http_code}" -b /tmp/s6r1.cookies http://localhost:5200/api/works/00000000-0000-0000-0000-000000000000/publish -X POST); [ "$CODE" = "404" ] || exit 1; echo OK'
-  期望: OK
+  Test: manual:bash -c 'apps/api/scripts/step6-dispatch-helper.sh test_publish_404_not_found'
+  期望: exit 0（helper 内用有效 session cookie 访问不存在 work UUID，验 HTTP 404）
 
-- [ ] [BEHAVIOR] `POST /api/agent/task-ack` 传不存在 task_id 返回 404（error 字段存在）
-  Test: manual:bash -c 'LK=dummy; RESP=$(curl -s -X POST http://localhost:5200/api/agent/task-ack -H "x-license-key: $LK" -H "content-type: application/json" -d "{\"task_id\":\"00000000-0000-0000-0000-000000000099\",\"result\":\"x\"}"); echo "$RESP" | jq -e ".error | type == \"string\"" || exit 1; echo OK'
-  期望: OK（error 字段为 string）
+- [ ] [BEHAVIOR] `POST /api/agent/task-ack` 传不存在 task_id 返回 404（用真实 license_key，验 error 字段）
+  Test: manual:bash -c 'apps/api/scripts/step6-dispatch-helper.sh test_ack_not_found'
+  期望: exit 0（helper 内用真实 license_key + 不存在 UUID，验 HTTP 404）
+
+- [ ] [BEHAVIOR] `GET /api/works/:id` 对未发布 work 返回 `publish_status: null`（PRD Migration 要求）
+  Test: manual:bash -c 'apps/api/scripts/step6-dispatch-helper.sh test_get_work_publish_status_null'
+  期望: exit 0（helper 内新建 work 后立即 GET，验 .publish_status == null）
+
+- [ ] [BEHAVIOR] `POST /api/agent/task-ack` 跨 tenant 访问返回精确 403（cross-tenant 隔离）
+  Test: manual:bash -c 'apps/api/scripts/step6-dispatch-helper.sh test_ack_cross_tenant_forbidden'
+  期望: exit 0（helper 内 userA publish → userB ack → HTTP 403，见 WS2 SSOT）
+
+---
+
+## Risks
+
+### Risk 1: 活跃 Agent 时间窗口定义模糊
+
+见 WS2 DoD Risks 章节（SSOT）。路由层依赖 service 层正确过滤，WS3 BEHAVIOR 不再重复验证。
+
+### Risk 2: 事务 cascade 失败状态不一致
+
+见 WS2 DoD Risks 章节（SSOT）。WS3 BEHAVIOR `test_dispatch_sets_queued` 间接验证。
 
 ---
 
 ## WS3 helper script 补充 test cases（generator commit-2 追加到 step6-dispatch-helper.sh）
+
+> **注意**: `test_ack_not_found` + `test_ack_cross_tenant_forbidden` 已在 WS2 helper script SSOT 中定义，WS3 DoD 仅引用，不重复维护代码。
 
 ```bash
   test_publish_schema_fields)
@@ -146,5 +168,23 @@ journey_type: autonomous
     for f in success status done; do
       echo "$ACK" | jq -e "has(\"$f\") | not" || { echo "FAIL: 禁用字段 $f 漏网"; exit 1; }
     done
+    echo "OK";;
+  test_publish_404_not_found)
+    # 使用真实 session cookie（独立执行安全，不依赖 /tmp/s6r1.cookies）
+    setup_user "p404"
+    CODE=$(curl -s -o /dev/null -w "%{http_code}" -b "$COOKIES" \
+      -X POST "$API/api/works/00000000-0000-0000-0000-000000000000/publish" \
+      -H 'content-type: application/json')
+    [ "$CODE" = "404" ] || { echo "FAIL: 不存在 work 应返 404, got $CODE"; exit 1; }
+    echo "OK";;
+  test_get_work_publish_status_null)
+    # GET /api/works/:id 对未发布 work 验 publish_status == null（PRD Migration oracle）
+    setup_user "gnull"
+    WORK_ID=$(curl -fsS -b "$COOKIES" -X POST "$API/api/works" \
+      -H 'content-type: application/json' \
+      -d '{"title":"null publish test","content_type":"video","body":"b"}' | jq -r '.id')
+    RESP=$(curl -f -b "$COOKIES" "$API/api/works/$WORK_ID")
+    echo "$RESP" | jq -e '.publish_status == null' \
+      || { echo "FAIL: 未发布 work publish_status 应为 null"; exit 1; }
     echo "OK";;
 ```

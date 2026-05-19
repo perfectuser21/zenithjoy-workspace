@@ -29,7 +29,9 @@
         "[ARTIFACT] export async function findActiveAgentByTenantId 存在",
         "[BEHAVIOR] dispatchPublishTask 插 publish_tasks 记录 + 设 works.publish_status=queued（时间窗口 5 分钟）",
         "[BEHAVIOR] ackPublishTask 设 publish_tasks.status=done + works.publish_status=success",
-        "[BEHAVIOR] 无活跃 agent → 返回 NO_AGENT 错误"
+        "[BEHAVIOR] 无活跃 agent → 返回 NO_AGENT 错误",
+        "[BEHAVIOR] cross-tenant task-ack 精确返回 403（不是 404）",
+        "[BEHAVIOR] 不存在 task_id task-ack 返回 404（用真实 license_key，区分 auth 拒绝）"
       ],
       "files": [
         "apps/api/src/services/walking-skeleton.service.ts",
@@ -49,7 +51,9 @@
         "[BEHAVIOR] POST /api/works/:id/publish 返回 {task_id, status:'queued'}，keys 精确=[\"status\",\"task_id\"]",
         "[BEHAVIOR] POST /api/agent/task-ack 返回 {ok:true}，keys 精确=[\"ok\"]",
         "[BEHAVIOR] response 不含禁用字段（id/data/result/message/payload / success/status/done）",
-        "[BEHAVIOR] 422 NO_AGENT / 404 work not found / 403 task forbidden"
+        "[BEHAVIOR] 422 NO_AGENT / 404 work not found",
+        "[BEHAVIOR] 403 cross-tenant task-ack forbidden（userA publish → userB ack → 403）",
+        "[BEHAVIOR] GET /api/works/:id 对未发布 work 返回 publish_status: null"
       ],
       "files": [
         "apps/api/src/routes/works.ts",

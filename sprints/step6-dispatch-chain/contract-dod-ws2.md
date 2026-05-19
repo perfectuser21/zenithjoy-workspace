@@ -42,9 +42,13 @@ journey_type: autonomous
   Test: manual:bash -c 'apps/api/scripts/step6-dispatch-helper.sh test_ack_sets_success'
   期望: exit 0（helper 内验 publish_tasks.status=done + works.publish_status=success，时间窗口 5 分钟）
 
-- [ ] [BEHAVIOR] `ackPublishTask` 传入不属于当前 license 的 task_id 返回 forbidden error（403/404）
-  Test: manual:bash -c 'apps/api/scripts/step6-dispatch-helper.sh test_ack_forbidden'
-  期望: exit 0（helper 内验 HTTP 403 或 404）
+- [ ] [BEHAVIOR] `ackPublishTask` 传入不存在的 task_id 返回 404（task not found）
+  Test: manual:bash -c 'apps/api/scripts/step6-dispatch-helper.sh test_ack_not_found'
+  期望: exit 0（helper 内用真实 license_key + 不存在 UUID 验 HTTP 404）
+
+- [ ] [BEHAVIOR] `ackPublishTask` 传入属于其他 tenant 的真实 task_id 返回 403 forbidden（cross-tenant 隔离验证）
+  Test: manual:bash -c 'apps/api/scripts/step6-dispatch-helper.sh test_ack_cross_tenant_forbidden'
+  期望: exit 0（helper 内 userA publish → userB ack → HTTP 403 精确验证）
 
 - [ ] [BEHAVIOR] 无活跃 agent 时 `findActiveAgentByTenantId` 返回 null（→ dispatchPublishTask 返 NO_AGENT 422）
   Test: manual:bash -c 'apps/api/scripts/step6-dispatch-helper.sh test_no_agent_422'
@@ -52,7 +56,21 @@ journey_type: autonomous
 
 ---
 
-## helper script 期望内容（generator commit-2 创建）
+## Risks
+
+### Risk 1: 活跃 Agent 时间窗口定义模糊
+
+`findActiveAgentByTenantId` 若不限制 `last_heartbeat_at > NOW() - INTERVAL '10 minutes'`，离线 agent 也被选中导致任务永久挂起。**缓解**: SQL 必须含 `INTERVAL '10 minutes'` 过滤；WS2 ARTIFACT 通过 grep 验证。
+
+### Risk 2: 事务 cascade 失败状态不一致
+
+`INSERT publish_tasks` 与 `UPDATE works.publish_status` 若非原子操作，可能出现 publish_tasks 有记录但 works 仍 null 的不一致状态。**缓解**: 必须在单一 DB 事务或 Prisma `$transaction` 内执行。
+
+---
+
+## helper script SSOT（步骤 commit-2 创建，WS3 追加 case）
+
+> **SSOT**: `apps/api/scripts/step6-dispatch-helper.sh` 是唯一实现源。WS2 创建文件结构 + 基础 case，WS3 追加 schema/forbidden case，**内容不在两个 DoD 中重复维护**。
 
 ```bash
 #!/bin/bash
@@ -129,12 +147,43 @@ case "$CASE" in
     [ "$TASK_STATUS" = "done" ] || { echo "FAIL: publish_tasks.status=$TASK_STATUS, 期望 done"; exit 1; }
     [ "$WORK_STATUS" = "success" ] || { echo "FAIL: works.publish_status=$WORK_STATUS, 期望 success"; exit 1; }
     echo "OK";;
+  test_ack_not_found)
+    # 真实 license_key + 不存在的 task UUID → 404（task not found，路由逻辑，不是 auth 拒绝）
+    setup_user "anf404"
+    CODE=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$API/api/agent/task-ack" \
+      -H "x-license-key: $LK" -H 'content-type: application/json' \
+      -d '{"task_id":"00000000-0000-0000-0000-000000000000","result":"x"}')
+    [ "$CODE" = "404" ] || { echo "FAIL: 不存在 task_id 应返 404, got $CODE"; exit 1; }
+    echo "OK";;
+  test_ack_cross_tenant_forbidden)
+    # userA publish → 得到 task_id；userB（不同 license）ack → 必须精确返 403
+    setup_user "ctA"
+    LK_A="$LK"; COOKIES_A="$COOKIES"
+    curl -fsS -X POST "$API/api/agent/heartbeat" \
+      -H "x-license-key: $LK_A" -H 'content-type: application/json' \
+      -d '{"hostname":"ct-agent-a"}' > /dev/null
+    WORK_A=$(curl -fsS -b "$COOKIES_A" -X POST "$API/api/works" \
+      -H 'content-type: application/json' \
+      -d '{"title":"ct work","content_type":"video","body":"b"}' | jq -r '.id')
+    TASK_A=$(curl -f -b "$COOKIES_A" -X POST "$API/api/works/$WORK_A/publish" \
+      -H 'content-type: application/json' | jq -r '.task_id')
+    setup_user "ctB"
+    LK_B="$LK"
+    curl -fsS -X POST "$API/api/agent/heartbeat" \
+      -H "x-license-key: $LK_B" -H 'content-type: application/json' \
+      -d '{"hostname":"ct-agent-b"}' > /dev/null
+    CODE=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$API/api/agent/task-ack" \
+      -H "x-license-key: $LK_B" -H 'content-type: application/json' \
+      -d "{\"task_id\":\"$TASK_A\",\"result\":\"x\"}")
+    [ "$CODE" = "403" ] || { echo "FAIL: cross-tenant ack 应精确返 403, got $CODE"; exit 1; }
+    echo "OK";;
   test_ack_forbidden)
+    # 保留别名（向后兼容）— 实际调用 test_ack_not_found
     setup_user "afb"
     CODE=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$API/api/agent/task-ack" \
       -H "x-license-key: $LK" -H 'content-type: application/json' \
       -d '{"task_id":"00000000-0000-0000-0000-000000000000","result":"x"}')
-    [ "$CODE" = "403" ] || [ "$CODE" = "404" ] || { echo "FAIL: 非法 task_id 应返 403/404, got $CODE"; exit 1; }
+    [ "$CODE" = "404" ] || { echo "FAIL: 不存在 task_id 应返 404, got $CODE"; exit 1; }
     echo "OK";;
   test_no_agent_422)
     setup_user "na422"
