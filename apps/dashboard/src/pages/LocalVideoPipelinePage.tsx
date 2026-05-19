@@ -1,6 +1,7 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { FolderOpen, FileText, Play, Download, Loader2, CheckCircle, XCircle, Film } from 'lucide-react';
 import axios from 'axios';
+import TemplateSelector from '../components/video-pipeline/TemplateSelector';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || '/api';
 
@@ -13,10 +14,11 @@ interface JobState {
   error?: string;
 }
 
-async function createJob(localPath: string, topic: string): Promise<{ id: string }> {
+async function createJob(localPath: string, topic: string, templateId: string | null): Promise<{ id: string }> {
   const res = await axios.post(`${API_BASE}/ai-video/jobs`, {
     local_path: localPath,
     topic: topic || undefined,
+    template_id: templateId || undefined,
   });
   return res.data;
 }
@@ -45,6 +47,7 @@ function ProgressBar({ progress, status }: { progress: number; status: JobStatus
 export default function LocalVideoPipelinePage() {
   const [localPath, setLocalPath] = useState('');
   const [topic, setTopic] = useState('');
+  const [templateId, setTemplateId] = useState<string | null>(null);
   const [job, setJob] = useState<JobState | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -77,7 +80,7 @@ export default function LocalVideoPipelinePage() {
     if (!localPath.trim()) return;
     setSubmitting(true);
     try {
-      const { id } = await createJob(localPath.trim(), topic);
+      const { id } = await createJob(localPath.trim(), topic, templateId);
       const initial: JobState = { id, status: 'queued', progress: 0 };
       setJob(initial);
       startPoll(id);
@@ -94,6 +97,7 @@ export default function LocalVideoPipelinePage() {
     setJob(null);
     setLocalPath('');
     setTopic('');
+    setTemplateId(null);
   };
 
   const isProcessing = job && (job.status === 'queued' || job.status === 'pending' || job.status === 'processing');
@@ -157,6 +161,9 @@ export default function LocalVideoPipelinePage() {
             className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-900/50 text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none disabled:opacity-50"
           />
         </div>
+
+        {/* 模板选择 */}
+        <TemplateSelector value={templateId} onChange={setTemplateId} />
 
         {/* 进度区 */}
         {job && job.status !== 'idle' && (
