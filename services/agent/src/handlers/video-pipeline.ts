@@ -340,8 +340,21 @@ export async function processVideoPipelineJob(
           await execAsync('npx hyperframes render --output ' + JSON.stringify(rendered), {
             cwd: hfDir, timeout: 600_000, maxBuffer: 10 * 1024 * 1024, windowsHide: true,
           });
-          fs.copyFileSync(rendered, output169);
-          await runFfmpeg(['-y', '-i', rendered,
+          // Merge original audio into HyperFrames output (HF renders silent video)
+          const mergedPath = path.join(tmpDir, 'rendered_with_audio.mp4');
+          try {
+            await runFfmpeg([
+              '-y', '-i', rendered, '-i', videoPath,
+              '-map', '0:v', '-map', '1:a',
+              '-c:v', 'copy', '-c:a', 'aac', '-b:a', '128k',
+              '-shortest', mergedPath,
+            ], { timeout: 120_000 });
+          } catch {
+            // no audio in source — use rendered as-is
+            fs.copyFileSync(rendered, mergedPath);
+          }
+          fs.copyFileSync(mergedPath, output169);
+          await runFfmpeg(['-y', '-i', mergedPath,
             '-vf', 'crop=ih*9/16:ih:(iw-ih*9/16)/2:0',
             '-c:v', 'libx264', '-crf', '23', '-c:a', 'aac', '-b:a', '128k', output916,
           ], { timeout: 300_000 });
