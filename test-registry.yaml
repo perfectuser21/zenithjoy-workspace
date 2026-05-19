@@ -1667,3 +1667,11 @@ tests:
     status: active
     product: AI视频本地流水线
     note: "stale processing job 查询（status=processing&stale_minutes 参数）单测"
+
+  - id: video-pipeline-overlay
+    path: services/agent/src/__tests__/video-pipeline-overlay.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: AI视频本地流水线
+    note: "HyperFrames render pipeline overlay — compose-html + Chrome headless shell 渲染链路单测"
