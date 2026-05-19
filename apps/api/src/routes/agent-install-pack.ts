@@ -13,32 +13,42 @@ import { auth } from '../auth';
 import { readInstallPackManifest } from '../services/install-pack-manifest';
 
 // 从远端 URL 下载 tar.gz 到本地路径，原子写（先 .downloading 再 rename）
-// 用于 INSTALL_PACK_REMOTE_URL fallback：本地文件不存在时自动拉取并缓存
+// dest 必须在可写目录（如 /tmp），不能是只读挂载路径
 function downloadFileToPath(url: string, dest: string): Promise<void> {
   return new Promise((resolve, reject) => {
     const tmp = dest + '.downloading';
-    // 若上次下载中断留下 .downloading，先删掉
     fs.rmSync(tmp, { force: true });
+    let settled = false;
+    const done = (err?: Error) => {
+      if (settled) return;
+      settled = true;
+      if (err) reject(err);
+      else resolve();
+    };
     const file = fs.createWriteStream(tmp);
+    file.on('error', (err) => {
+      fs.rmSync(tmp, { force: true });
+      done(err);
+    });
     const protocol = url.startsWith('https://') ? https : http;
     protocol.get(url, (res) => {
       if (res.statusCode !== 200) {
         file.destroy();
         fs.rmSync(tmp, { force: true });
-        reject(new Error(`remote fetch ${url} → HTTP ${res.statusCode}`));
+        done(new Error(`remote fetch ${url} → HTTP ${res.statusCode}`));
         return;
       }
       res.pipe(file);
       file.on('finish', () => {
         file.close(() => {
-          fs.renameSync(tmp, dest);
-          resolve();
+          try { fs.renameSync(tmp, dest); } catch (e) { done(e as Error); return; }
+          done();
         });
       });
     }).on('error', (err) => {
       file.destroy();
       fs.rmSync(tmp, { force: true });
-      reject(err);
+      done(err);
     });
   });
 }
@@ -112,16 +122,18 @@ agentInstallPackRouter.get('/download', async (req: Request, res: Response) => {
     '/opt/zenithjoy/autopilot-dashboard/dist';
   const srcTar = process.env.INSTALL_PACK_FIXTURE_PATH || // test override
     path.join(STATIC_ROOT, m.download_url.replace(/^\/+/, ''));
+  let effectiveSrcTar = srcTar;
   if (!fs.existsSync(srcTar)) {
-    // Fallback：本地文件不存在时，尝试从 INSTALL_PACK_REMOTE_URL 拉取并缓存
-    // 适用场景：Mac Mini 本地没有 tar.gz，但 HK VPS nginx 上有完整文件
-    const remoteUrl = process.env.INSTALL_PACK_REMOTE_URL;
+    // Fallback：本地文件不存在时，从 cos_url 或 INSTALL_PACK_REMOTE_URL 拉取
+    // 写到 /tmp 而非静态根目录，避免 EROFS（静态根可能是只读挂载）
+    const remoteUrl = m.cos_url || process.env.INSTALL_PACK_REMOTE_URL;
     if (remoteUrl) {
-      console.log(`[install-pack/download] 本地 tar.gz 不存在，从远端拉取: ${remoteUrl}`);
+      const tmpTar = path.join(os.tmpdir(), path.basename(srcTar));
+      console.log(`[install-pack/download] 本地 tar.gz 不存在，从远端拉取到 /tmp: ${remoteUrl}`);
       try {
-        fs.mkdirSync(path.dirname(srcTar), { recursive: true });
-        await downloadFileToPath(remoteUrl, srcTar);
-        console.log(`[install-pack/download] 远端拉取成功，已缓存到 ${srcTar}`);
+        await downloadFileToPath(remoteUrl, tmpTar);
+        effectiveSrcTar = tmpTar;
+        console.log(`[install-pack/download] 远端拉取成功: ${tmpTar}`);
       } catch (dlErr) {
         console.error('[install-pack/download] 远端拉取失败:', dlErr);
         return res.status(503).json({
@@ -142,7 +154,7 @@ agentInstallPackRouter.get('/download', async (req: Request, res: Response) => {
   // 4. 解压到 tmp → 替换 .env → 重打包
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), `install-pack-${userId}-`));
   try {
-    spawnSync('tar', ['-xzf', srcTar, '-C', tmp], { stdio: 'pipe' });
+    spawnSync('tar', ['-xzf', effectiveSrcTar, '-C', tmp], { stdio: 'pipe' });
     // 找 .env（可能在子目录 zenithjoy-agent-vX.Y.Z/ 里）
     let envPath: string | null = null;
     function walk(dir: string): void {

@@ -5,6 +5,7 @@ export interface InstallPackManifest {
   version: string;
   sha256: string;
   download_url: string;
+  cos_url?: string;
   size: number;
   build_time: string;
 }
