@@ -218,6 +218,7 @@ export interface VideoPipelineJob {
   src_video: string | null;
   topic: string | null;
   status: string;
+  template_id: string | null;
 }
 
 export async function processVideoPipelineJob(
@@ -260,6 +261,16 @@ export async function processVideoPipelineJob(
     } catch { /* use default 30s */ }
     fireProgress(apiBase, id, 20);
 
+    const ffmpegFallback = async (outPath: string, w: number, h: number) => {
+      const vf = `scale=${w}:${h}:force_original_aspect_ratio=decrease,pad=${w}:${h}:(ow-iw)/2:(oh-ih)/2:black`;
+      try {
+        await runFfmpeg(['-y', '-i', videoPath, '-vf', vf, '-map', '0',
+          '-c:v', 'libx264', '-preset', 'fast', '-crf', '23',
+          '-c:a', 'aac', '-b:a', '128k', '-t', String(Math.min(duration, 60)), outPath,
+        ], { timeout: 600_000 });
+      } catch { fs.copyFileSync(videoPath, outPath); }
+    };
+
     // Step 2: extract audio
     const audioPath = path.join(tmpDir, 'audio.wav');
     try {
@@ -301,6 +312,55 @@ export async function processVideoPipelineJob(
     if (!transcript && topic) transcript = topic;
     fireProgress(apiBase, id, 40);
 
+    // ── Template shortcut: skip AI design/compose-html, use server-rendered template ──
+    if (job.template_id) {
+      const composeResult = await postJson<{ html?: string }>(
+        apiBase, `/api/ai-video/jobs/${id}/compose-template`,
+        {
+          transcript: transcript || topic || '精彩视频',
+          duration,
+          video_filename: path.basename(videoPath),
+        },
+        20_000,
+      );
+      fireProgress(apiBase, id, 65);
+
+      const output916 = path.join(outputDir, '9_16.mp4');
+      const output169 = path.join(outputDir, '16_9.mp4');
+      const htmlContent = composeResult?.html ?? '';
+
+      if (htmlContent) {
+        const hfDir = path.join(tmpDir, 'hf');
+        fs.mkdirSync(hfDir, { recursive: true });
+        fs.copyFileSync(videoPath, path.join(hfDir, path.basename(videoPath)));
+        fs.writeFileSync(path.join(hfDir, 'index.html'), htmlContent, 'utf-8');
+        const rendered = path.join(hfDir, 'rendered.mp4');
+        try {
+          console.log('[video-pipeline] HyperFrames template render...');
+          await execAsync('npx hyperframes render --output ' + JSON.stringify(rendered), {
+            cwd: hfDir, timeout: 600_000, maxBuffer: 10 * 1024 * 1024, windowsHide: true,
+          });
+          fs.copyFileSync(rendered, output169);
+          await runFfmpeg(['-y', '-i', rendered,
+            '-vf', 'crop=ih*9/16:ih:(iw-ih*9/16)/2:0',
+            '-c:v', 'libx264', '-crf', '23', '-c:a', 'aac', '-b:a', '128k', output916,
+          ], { timeout: 300_000 });
+          console.log('[video-pipeline] template render done');
+        } catch (err) {
+          console.error('[video-pipeline] template HyperFrames failed:', (err as Error).message?.slice(0, 200));
+          await ffmpegFallback(output916, 1080, 1920);
+          await ffmpegFallback(output169, 1920, 1080);
+        }
+      } else {
+        await ffmpegFallback(output916, 1080, 1920);
+        await ffmpegFallback(output169, 1920, 1080);
+      }
+
+      console.log(`[video-pipeline] template job ${id} done — outputs at ${outputDir}`);
+      await reportComplete(apiBase, id, { output_dir: outputDir });
+      return;
+    }
+
     // Step 4: design scenes (15s timeout, fallback single scene)
     let scenes: Array<{
       start: number; duration: number; layout: string;
@@ -337,16 +397,6 @@ export async function processVideoPipelineJob(
     const output916 = path.join(outputDir, '9_16.mp4');
     const output169 = path.join(outputDir, '16_9.mp4');
     const htmlContent = htmlResult?.html ?? '';
-
-    const ffmpegFallback = async (outPath: string, w: number, h: number) => {
-      const vf = `scale=${w}:${h}:force_original_aspect_ratio=decrease,pad=${w}:${h}:(ow-iw)/2:(oh-ih)/2:black`;
-      try {
-        await runFfmpeg(['-y', '-i', videoPath, '-vf', vf, '-map', '0',
-          '-c:v', 'libx264', '-preset', 'fast', '-crf', '23',
-          '-c:a', 'aac', '-b:a', '128k', '-t', String(Math.min(duration, 60)), outPath,
-        ], { timeout: 600_000 });
-      } catch { fs.copyFileSync(videoPath, outPath); }
-    };
 
     if (htmlContent) {
       const hfDir = path.join(tmpDir, 'hf');
