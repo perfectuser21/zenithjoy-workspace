@@ -26,6 +26,8 @@ jobs:
 
       - name: Run E2E verification
         shell: pwsh
+        env:
+          ZENITHJOY_API_BASE: ${{ vars.ZENITHJOY_API_BASE || 'https://autopilot.zenjoymedia.media' }}
         run: |
           $sprintDir = "${{ inputs.sprint_dir }}"
           $taskId = "${{ inputs.task_id }}"
