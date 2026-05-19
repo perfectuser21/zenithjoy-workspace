@@ -1746,3 +1746,11 @@ tests:
     status: active
     product: AI视频本地流水线
     note: "template 路径三 bug 修复验证：-map 1:a 音频合并 / tl.to hold 时长 / console.warn 日志"
+
+  - id: lint-agent-version-bump
+    path: .github/workflows/scripts/__tests__/lint-agent-version-bump.test.sh
+    type: unit
+    ci: L1
+    status: active
+    product: CI治理
+    note: "lint-agent-version-bump.sh 4 case：src 变动+bump通过/src 变动无bump失败/无变动跳过/版本不变失败"
