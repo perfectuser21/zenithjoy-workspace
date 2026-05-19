@@ -12,7 +12,7 @@ const fs = require('fs');
 const path = require('path');
 const { execFileSync } = require('child_process');
 
-const FFMPEG_PATH = 'C:/automation/node_modules/@ffmpeg-installer/win32-x64/ffmpeg.exe';
+const FFMPEG_PATH = cfg.FFMPEG_PATH;
 
 function extractAudio(inputPath) {
   const outputPath = inputPath.replace(/\.[^.]+$/, '.mp3');
@@ -23,22 +23,23 @@ function extractAudio(inputPath) {
   return outputPath;
 }
 
-const PORT = 7788;
-const LOG_FILE = 'C:/automation/v5-live.log';
+const cfg = require('./config');
+const PORT = cfg.PORT;
+const LOG_FILE = cfg.LOG_FILE;
+const RELAY_HOST = cfg.RELAY_HOST;
+const RELAY_PORT = cfg.RELAY_PORT;
+const COOKIES_FILE = cfg.COOKIES_FILE;
+const TEMP_DIR = cfg.TEMP_DIR;
+const CDP_HOST = cfg.CDP_HOST;
+const CDP_PORT = cfg.CDP_PORT;
+const CDP_XHS_HOST = cfg.CDP_XHS_HOST;
+const CDP_XHS_PORT = cfg.CDP_XHS_PORT;
 
 function flog(msg) {
   const ts = new Date().toISOString().slice(11,23);
   try { require('fs').appendFileSync(LOG_FILE, ts + ' ' + msg + '\n'); } catch(_) {}
   console.log(ts, msg);
 }
-const RELAY_HOST = '38.23.47.81';
-const RELAY_PORT = 7789;
-const COOKIES_FILE = 'C:/automation/douyin_cookies.txt';
-const TEMP_DIR = 'C:/automation/temp';
-const CDP_HOST = '127.0.0.1';
-const CDP_PORT = 19222;
-const CDP_XHS_HOST = '::1';
-const CDP_XHS_PORT = 19223;
 
 // ─── CDP primitives ────────────────────────────────────────────────────────
 
