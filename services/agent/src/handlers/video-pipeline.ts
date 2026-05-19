@@ -82,11 +82,17 @@ export function buildOverlayFilters(scenes: SceneData[], w: number, h: number, f
 
 // ── FFmpeg 路径查找 ─────────────────────────────────────────────────────────
 function findFfmpeg(): string {
+  // 1. AppData 自动安装位置（ensure-ffmpeg.ts 下载到此处）
+  const appData = process.env.APPDATA || path.join(os.homedir(), 'AppData', 'Roaming');
+  const appDataExe = path.join(appData, 'ZenithJoy', 'runtime', 'ffmpeg', 'ffmpeg.exe');
+  if (fs.existsSync(appDataExe)) return appDataExe;
+  // 2. 旧版 bundled（pkg 打包目录 / cwd）
   const exeDir = path.dirname(process.execPath);
   const bundled = path.join(exeDir, 'ffmpeg.exe');
   if (fs.existsSync(bundled)) return bundled;
   const cwdBundled = path.join(process.cwd(), 'ffmpeg.exe');
   if (fs.existsSync(cwdBundled)) return cwdBundled;
+  // 3. 系统安装位置兜底
   for (const c of [
     'C:\\ffmpeg\\bin\\ffmpeg.exe',
     'C:\\Program Files\\ffmpeg\\bin\\ffmpeg.exe',
