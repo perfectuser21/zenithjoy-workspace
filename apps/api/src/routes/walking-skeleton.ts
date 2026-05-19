@@ -23,6 +23,9 @@ import {
   submitPublishReceipt,
   getPublishTask,
   isValidPublishType,
+  ackPublishTask,
+  TaskNotFoundError,
+  TaskForbiddenError,
 } from '../services/walking-skeleton.service';
 
 export const heartbeatRouter = Router();   // 挂在 /api/agent
@@ -488,6 +491,45 @@ publishWsRouter.get(
       return res
         .status(500)
         .json({ ok: false, code: 'GET_TASK_FAILED', message: msg });
+    }
+  }
+);
+
+// ============ POST /api/agent/task-ack ============
+// Agent 确认任务完成（step 6 ack chain）
+// Body: { task_id: string, result: string }
+// Auth: x-license-key header
+heartbeatRouter.post(
+  '/task-ack',
+  licenseAuth,
+  async (req: Request, res: Response) => {
+    const { task_id, result } = (req.body ?? {}) as {
+      task_id?: unknown;
+      result?: unknown;
+    };
+
+    if (typeof task_id !== 'string' || !UUID_RE.test(task_id)) {
+      return res
+        .status(400)
+        .json({ ok: false, code: 'BAD_REQUEST', message: 'task_id 缺失或不合法' });
+    }
+
+    try {
+      const ackResult = await ackPublishTask({
+        taskId: task_id,
+        licenseId: req.license!.id,
+        result: typeof result === 'string' ? result : String(result ?? ''),
+      });
+      return res.status(200).json(ackResult);
+    } catch (err) {
+      if (err instanceof TaskNotFoundError) {
+        return res.status(404).json({ ok: false, code: 'TASK_NOT_FOUND', message: err.message });
+      }
+      if (err instanceof TaskForbiddenError) {
+        return res.status(403).json({ ok: false, code: 'FORBIDDEN', message: err.message });
+      }
+      const msg = err instanceof Error ? err.message : 'unknown';
+      return res.status(500).json({ ok: false, code: 'ACK_FAILED', message: msg });
     }
   }
 );

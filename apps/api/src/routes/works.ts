@@ -1,9 +1,13 @@
-import { Router } from 'express';
+import { Router, Request, Response } from 'express';
 import { WorksController } from '../controllers/works.controller';
 import { validate } from '../middleware/validate';
 import { tenantContext } from '../middleware/tenant-context';
 import { tenantBypass } from '../middleware/tenant-bypass';
 import { createWorkSchema, updateWorkSchema } from '../models/schemas';
+import {
+  dispatchPublishTask,
+  NoAgentError,
+} from '../services/walking-skeleton.service';
 
 const router = Router();
 const controller = new WorksController();
@@ -29,5 +33,24 @@ router.put('/:id', tenantMiddleware, validate(updateWorkSchema), controller.upda
 
 // DELETE /api/works/:id - Delete work
 router.delete('/:id', tenantMiddleware, controller.deleteWork);
+
+// POST /api/works/:id/publish — 派发发布任务（step 6 dispatch chain）
+router.post('/:id/publish', tenantMiddleware, async (req: Request, res: Response) => {
+  const workId = req.params.id;
+  const tenantId = req.tenantId;
+  if (!tenantId) {
+    return res.status(403).json({ ok: false, code: 'NO_TENANT', message: '用户未关联 tenant' });
+  }
+  try {
+    const result = await dispatchPublishTask({ workId, tenantId });
+    return res.status(201).json(result);
+  } catch (err) {
+    if (err instanceof NoAgentError) {
+      return res.status(422).json({ ok: false, code: 'NO_AGENT', message: err.message });
+    }
+    const msg = err instanceof Error ? err.message : 'unknown';
+    return res.status(500).json({ ok: false, code: 'DISPATCH_FAILED', message: msg });
+  }
+});
 
 export default router;
