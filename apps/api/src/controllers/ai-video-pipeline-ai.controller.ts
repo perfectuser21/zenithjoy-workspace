@@ -7,7 +7,6 @@ import { getTemplate, readTemplateJsx } from '../templates/registry';
 
 const svc = new AiVideoPipelineService();
 const OPENROUTER_KEY = process.env.OPENROUTER_API_KEY || '';
-const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY || '';
 const PIAPI_KEY = process.env.PIAPI_API_KEY || '';
 
 // ── helpers ────────────────────────────────────────────────────────────────
@@ -36,6 +35,7 @@ function postJson(url: string, headers: Record<string, string>, body: unknown): 
       },
     );
     req.on('error', reject);
+    req.setTimeout(30_000, () => { req.destroy(new Error('postJson timeout')); });
     req.write(payload);
     req.end();
   });
@@ -429,7 +429,16 @@ ${transcript || '精彩视频内容'}
     }
 
     // Step 2: 生成 composition HTML
-    const templateJsx = readTemplateJsx(spec);
+    let templateJsx: string;
+    try {
+      templateJsx = readTemplateJsx(spec);
+    } catch (err) {
+      const e = err as NodeJS.ErrnoException;
+      if (e.code === 'TEMPLATE_NOT_FOUND') {
+        return res.status(400).json({ error: `template file not available: ${templateId}` });
+      }
+      throw err;
+    }
     const phoneSrc = getPhoneSrc();
     const html = _buildCompositionHtml({
       templateJsx, phoneSrc, slots,

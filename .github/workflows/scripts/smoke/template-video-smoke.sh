@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # template-video-smoke.sh — 模板驱动视频生成 E2E smoke
-set -uo pipefail
+set -euo pipefail
 API_BASE="${API_BASE:-http://localhost:3001}"
 ok()   { echo "✅ $1"; }
 fail() { echo "❌ $1"; exit "${2:-1}"; }

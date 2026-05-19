@@ -52,5 +52,10 @@ export function getTemplate(id: string): TemplateSpec | null {
 }
 
 export function readTemplateJsx(spec: TemplateSpec): string {
+  if (!fs.existsSync(spec.jsxFile)) {
+    const err = new Error(`template file not found: ${spec.id}`) as NodeJS.ErrnoException;
+    err.code = 'TEMPLATE_NOT_FOUND';
+    throw err;
+  }
   return fs.readFileSync(spec.jsxFile, 'utf-8');
 }
