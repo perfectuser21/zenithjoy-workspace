@@ -1,4 +1,4 @@
-# Sprint Contract Draft (Round 2)
+# Sprint Contract Draft (Round 3)
 
 ## Golden Path
 [用户点发布] → [中台排队 publish_task + works.publish_status=queued] → [Agent 心跳领取] → [Agent task-ack 确认] → [works.publish_status=success]
@@ -309,9 +309,9 @@ workstream_count: 4
 **大小**: M(100-200行), 1文件
 **依赖**: Workstream 1（需 publish_status 列存在）
 
-### Workstream 3: 路由层 — POST works/:id/publish + POST agent/task-ack
+### Workstream 3: 路由层 — POST works/:id/publish + POST agent/task-ack + heartbeat queued_tasks
 
-**范围**: `works.ts` 加 publish endpoint；`walking-skeleton.ts` 加 task-ack endpoint
+**范围**: `works.ts` 加 publish endpoint；`walking-skeleton.ts` 加 task-ack endpoint **+ 修改 heartbeat 路由使 `queued_tasks` 数组包含 pending publish_tasks**
 **大小**: M(100-200行), 2文件
 **依赖**: Workstream 2
 

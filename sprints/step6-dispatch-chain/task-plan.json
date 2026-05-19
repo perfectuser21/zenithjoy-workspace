@@ -27,7 +27,9 @@
         "[ARTIFACT] export async function dispatchPublishTask 存在",
         "[ARTIFACT] export async function ackPublishTask 存在",
         "[ARTIFACT] export async function findActiveAgentByTenantId 存在",
-        "[BEHAVIOR] dispatchPublishTask 插 publish_tasks 记录 + 设 works.publish_status=queued（时间窗口 5 分钟）",
+        "[ARTIFACT] findActiveAgentByTenantId 含 last_heartbeat_at INTERVAL '10 minutes' 时间窗口过滤",
+        "[BEHAVIOR] dispatchPublishTask 插 publish_tasks 记录（时间窗口 5 分钟）",
+        "[BEHAVIOR] dispatchPublishTask 插入的 publish_tasks.result.payload.work_id 等于触发 publish 的 work_id",
         "[BEHAVIOR] ackPublishTask 设 publish_tasks.status=done + works.publish_status=success",
         "[BEHAVIOR] 无活跃 agent → 返回 NO_AGENT 错误",
         "[BEHAVIOR] cross-tenant task-ack 精确返回 403（不是 404）",
@@ -43,17 +45,19 @@
     },
     {
       "task_id": "ws3",
-      "title": "路由层 POST works/:id/publish + POST agent/task-ack",
-      "scope": "works.ts 加 POST /:id/publish（tenantContext+tenantBypass）；walking-skeleton.ts 加 POST /task-ack（licenseAuth）",
+      "title": "路由层 POST works/:id/publish + POST agent/task-ack + heartbeat queued_tasks",
+      "scope": "works.ts 加 POST /:id/publish（tenantContext+tenantBypass）；walking-skeleton.ts 加 POST /task-ack（licenseAuth）+ 修改 POST /api/agent/heartbeat 返回当前 agent pending 的 queued_tasks",
       "dod": [
         "[ARTIFACT] works.ts 含 router.post('/:id/publish') 调用 dispatchPublishTask",
         "[ARTIFACT] walking-skeleton.ts 含 task-ack 路由调用 ackPublishTask",
+        "[ARTIFACT] walking-skeleton.ts heartbeat 路由含 queued_tasks 字段",
         "[BEHAVIOR] POST /api/works/:id/publish 返回 {task_id, status:'queued'}，keys 精确=[\"status\",\"task_id\"]",
         "[BEHAVIOR] POST /api/agent/task-ack 返回 {ok:true}，keys 精确=[\"ok\"]",
         "[BEHAVIOR] response 不含禁用字段（id/data/result/message/payload / success/status/done）",
         "[BEHAVIOR] 422 NO_AGENT / 404 work not found",
         "[BEHAVIOR] 403 cross-tenant task-ack forbidden（userA publish → userB ack → 403）",
-        "[BEHAVIOR] GET /api/works/:id 对未发布 work 返回 publish_status: null"
+        "[BEHAVIOR] GET /api/works/:id 对未发布 work 返回 publish_status: null",
+        "[BEHAVIOR] POST /api/agent/heartbeat publish 后 queued_tasks 含 task_id（test_heartbeat_returns_queued_task）"
       ],
       "files": [
         "apps/api/src/routes/works.ts",

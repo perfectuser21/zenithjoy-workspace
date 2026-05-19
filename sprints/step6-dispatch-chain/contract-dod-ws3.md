@@ -6,7 +6,7 @@ journey_type: autonomous
 
 **范围**:
 - `apps/api/src/routes/works.ts`: 加 `POST /:id/publish`（tenantContext + tenantBypass 鉴权）
-- `apps/api/src/routes/walking-skeleton.ts`: 加 `POST /task-ack`（licenseAuth 鉴权）
+- `apps/api/src/routes/walking-skeleton.ts`: 加 `POST /task-ack`（licenseAuth 鉴权）**+ 修改 `POST /api/agent/heartbeat` 使 response 的 `queued_tasks` 数组包含当前 agent 有 pending 的 publish_tasks**
 
 **大小**: M
 **依赖**: Workstream 2（dispatchPublishTask + ackPublishTask 已导出）
@@ -24,6 +24,9 @@ journey_type: autonomous
 
 - [ ] [ARTIFACT] `walking-skeleton.ts` 导入 `ackPublishTask` 并使用
   Test: node -e "const c=require('fs').readFileSync('apps/api/src/routes/walking-skeleton.ts','utf8');if(!c.includes('ackPublishTask'))process.exit(1)"
+
+- [ ] [ARTIFACT] `walking-skeleton.ts` heartbeat 路由含 `queued_tasks` 字段（响应中返回 pending 任务队列）
+  Test: node -e "const c=require('fs').readFileSync('apps/api/src/routes/walking-skeleton.ts','utf8');if(!c.includes('queued_tasks'))process.exit(1)"
 
 ## BEHAVIOR 条目（通过 helper + 直接 curl 验证 response schema）
 
@@ -66,6 +69,10 @@ journey_type: autonomous
 - [ ] [BEHAVIOR] `POST /api/agent/task-ack` 跨 tenant 访问返回精确 403（cross-tenant 隔离）
   Test: manual:bash -c 'apps/api/scripts/step6-dispatch-helper.sh test_ack_cross_tenant_forbidden'
   期望: exit 0（helper 内 userA publish → userB ack → HTTP 403，见 WS2 SSOT）
+
+- [ ] [BEHAVIOR] `POST /api/agent/heartbeat` 在 publish 后返回的 `queued_tasks` 数组含该 task_id（heartbeat 修改验证）
+  Test: manual:bash -c 'apps/api/scripts/step6-dispatch-helper.sh test_heartbeat_returns_queued_task'
+  期望: exit 0（helper 内：注册+心跳+创建 work+publish 得 task_id → 再次心跳 → jq 验 queued_tasks[].task_id 含该值）
 
 ---
 
@@ -186,5 +193,26 @@ journey_type: autonomous
     RESP=$(curl -f -b "$COOKIES" "$API/api/works/$WORK_ID")
     echo "$RESP" | jq -e '.publish_status == null' \
       || { echo "FAIL: 未发布 work publish_status 应为 null"; exit 1; }
+    echo "OK";;
+  test_heartbeat_returns_queued_task)
+    # POST /api/agent/heartbeat 在 publish 后返回 queued_tasks 含 task_id（heartbeat 修改核心验证）
+    setup_user "hbqt"
+    # 先心跳注册 agent
+    curl -fsS -X POST "$API/api/agent/heartbeat" \
+      -H "x-license-key: $LK" -H 'content-type: application/json' \
+      -d '{"hostname":"hb-queued-agent"}' > /dev/null
+    # 创建 work + publish
+    WORK_ID=$(curl -fsS -b "$COOKIES" -X POST "$API/api/works" \
+      -H 'content-type: application/json' \
+      -d '{"title":"hb queued test","content_type":"video","body":"b"}' | jq -r '.id')
+    TASK_ID=$(curl -f -b "$COOKIES" -X POST "$API/api/works/$WORK_ID/publish" \
+      -H 'content-type: application/json' | jq -r '.task_id')
+    [ -n "$TASK_ID" ] || { echo "FAIL: publish 未返回 task_id"; exit 1; }
+    # 再次心跳，验 queued_tasks 含 task_id
+    HB_RESP=$(curl -f -X POST "$API/api/agent/heartbeat" \
+      -H "x-license-key: $LK" -H 'content-type: application/json' \
+      -d '{"hostname":"hb-queued-agent"}')
+    echo "$HB_RESP" | jq -e --arg t "$TASK_ID" '[.queued_tasks[].task_id] | contains([$t])' \
+      || { echo "FAIL: heartbeat queued_tasks 未含 task_id=$TASK_ID, resp=$(echo $HB_RESP | jq -c .)"; exit 1; }
     echo "OK";;
 ```

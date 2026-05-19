@@ -32,4 +32,9 @@ describe('WS3 — routes dispatch-chain endpoints [BEHAVIOR]', () => {
     const src = readFileSync(WS_ROUTE, 'utf8');
     expect(src).toContain('ackPublishTask');
   });
+
+  it('walking-skeleton.ts heartbeat 路由应返回 queued_tasks 数组（dispatch chain 核心修改）', () => {
+    const src = readFileSync(WS_ROUTE, 'utf8');
+    expect(src).toContain('queued_tasks');
+  });
 });

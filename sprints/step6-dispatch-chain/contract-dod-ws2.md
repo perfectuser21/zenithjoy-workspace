@@ -28,11 +28,18 @@ journey_type: autonomous
 - [ ] [ARTIFACT] helper script `apps/api/scripts/step6-dispatch-helper.sh` 存在且可执行
   Test: bash -c 'test -x apps/api/scripts/step6-dispatch-helper.sh'
 
+- [ ] [ARTIFACT] `walking-skeleton.service.ts` 的 `findActiveAgentByTenantId` 含 `last_heartbeat_at` + `INTERVAL` 时间窗口过滤（防止离线 agent 被选中）
+  Test: node -e "const c=require('fs').readFileSync('apps/api/src/services/walking-skeleton.service.ts','utf8');if(!c.match(/last_heartbeat_at.*INTERVAL/))process.exit(1);console.log('OK')"
+
 ## BEHAVIOR 条目（通过 helper script 验证，需 API 在 localhost:5200 运行）
 
-- [ ] [BEHAVIOR] `dispatchPublishTask` 成功后 publish_tasks 插入记录，result.payload.work_id 含正确值
+- [ ] [BEHAVIOR] `dispatchPublishTask` 成功后 publish_tasks 插入记录（带时间窗口防造假）
   Test: manual:bash -c 'apps/api/scripts/step6-dispatch-helper.sh test_dispatch_inserts_task'
-  期望: exit 0（helper 内验 publish_tasks 记录存在 + work_id 匹配，时间窗口 5 分钟）
+  期望: exit 0（helper 内验 publish_tasks 记录存在，时间窗口 5 分钟）
+
+- [ ] [BEHAVIOR] `dispatchPublishTask` 插入的 publish_tasks.result 含 `payload.work_id` 且值等于 work 实际 id（字段存储值精确验证）
+  Test: manual:bash -c 'apps/api/scripts/step6-dispatch-helper.sh test_dispatch_inserts_task_with_work_id'
+  期望: exit 0（helper 内从 publish_tasks.result 提取 payload.work_id，用 psql 验其等于触发 publish 的 work_id）
 
 - [ ] [BEHAVIOR] `dispatchPublishTask` 成功后 works.publish_status 变为 queued（带时间窗口防造假）
   Test: manual:bash -c 'apps/api/scripts/step6-dispatch-helper.sh test_dispatch_sets_queued'
@@ -116,6 +123,21 @@ case "$CASE" in
       -H 'content-type: application/json' | jq -r '.task_id')
     COUNT=$(psql "$DB" -t -c "SELECT count(*) FROM zenithjoy.publish_tasks WHERE id='$TASK_ID' AND created_at > NOW() - INTERVAL '5 minutes'" | tr -d ' ')
     [ "$COUNT" -ge 1 ] || { echo "FAIL: publish_tasks 无记录 task_id=$TASK_ID"; exit 1; }
+    echo "OK";;
+  test_dispatch_inserts_task_with_work_id)
+    # 验 publish_tasks.result->'payload'->>'work_id' 等于触发 publish 的 work_id
+    setup_user "diwid"
+    curl -fsS -X POST "$API/api/agent/heartbeat" \
+      -H "x-license-key: $LK" -H 'content-type: application/json' \
+      -d '{"hostname":"helper-agent"}' > /dev/null
+    WORK_ID=$(curl -fsS -b "$COOKIES" -X POST "$API/api/works" \
+      -H 'content-type: application/json' \
+      -d '{"title":"work_id verify","content_type":"video","body":"b"}' | jq -r '.id')
+    TASK_ID=$(curl -f -b "$COOKIES" -X POST "$API/api/works/$WORK_ID/publish" \
+      -H 'content-type: application/json' | jq -r '.task_id')
+    STORED_WORK_ID=$(psql "$DB" -t -c \
+      "SELECT result->'payload'->>'work_id' FROM zenithjoy.publish_tasks WHERE id='$TASK_ID' AND created_at > NOW() - INTERVAL '5 minutes'" | tr -d ' ')
+    [ "$STORED_WORK_ID" = "$WORK_ID" ] || { echo "FAIL: publish_tasks.result.payload.work_id=$STORED_WORK_ID 不等于 WORK_ID=$WORK_ID"; exit 1; }
     echo "OK";;
   test_dispatch_sets_queued)
     setup_user "dsq"

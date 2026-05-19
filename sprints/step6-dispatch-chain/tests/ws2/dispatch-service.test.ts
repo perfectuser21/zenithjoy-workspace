@@ -34,4 +34,15 @@ describe('WS2 — dispatchPublishTask + ackPublishTask service [BEHAVIOR]', () =
     expect(src).toContain('publish_status');
     expect(src).toContain('queued');
   });
+
+  it('findActiveAgentByTenantId 应含 last_heartbeat_at INTERVAL 时间窗口过滤（防离线 agent 被选中）', () => {
+    const src = readFileSync(SVC_PATH, 'utf8');
+    expect(src).toMatch(/last_heartbeat_at.*INTERVAL/);
+  });
+
+  it('dispatchPublishTask 应将 work_id 存入 publish_tasks.result.payload（SQL 证据）', () => {
+    const src = readFileSync(SVC_PATH, 'utf8');
+    expect(src).toContain('work_id');
+    expect(src).toContain('payload');
+  });
 });
