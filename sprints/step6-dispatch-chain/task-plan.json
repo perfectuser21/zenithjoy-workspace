@@ -1,0 +1,81 @@
+{
+  "initiative_id": "pending",
+  "journey_type": "autonomous",
+  "journey_type_reason": "纯后端 dispatch 链路（apps/api），无 Dashboard UI 变更；target_environment=windows_cloud 仅用于 final-e2e 模拟 Windows Agent",
+  "tasks": [
+    {
+      "task_id": "ws1",
+      "title": "新建 works.publish_status migration SQL",
+      "scope": "创建 apps/api/db/migrations/20260519_000000_step6_dispatch_chain.sql，为 zenithjoy.works 加 publish_status TEXT CHECK(IN('queued','success','failed')) 可空列 + 索引",
+      "dod": [
+        "[ARTIFACT] migration 文件 20260519_000000_step6_dispatch_chain.sql 存在",
+        "[BEHAVIOR] publish_status CHECK 约束含 queued/success/failed，不含 pending/dispatched/created",
+        "[BEHAVIOR] ADD COLUMN IF NOT EXISTS（幂等），列可空"
+      ],
+      "files": [
+        "apps/api/db/migrations/20260519_000000_step6_dispatch_chain.sql"
+      ],
+      "depends_on": [],
+      "complexity": "S",
+      "estimated_minutes": 20
+    },
+    {
+      "task_id": "ws2",
+      "title": "Service 层 dispatchPublishTask + ackPublishTask",
+      "scope": "walking-skeleton.service.ts 新增三个导出函数：findActiveAgentByTenantId / dispatchPublishTask / ackPublishTask；同时创建 apps/api/scripts/step6-dispatch-helper.sh",
+      "dod": [
+        "[ARTIFACT] export async function dispatchPublishTask 存在",
+        "[ARTIFACT] export async function ackPublishTask 存在",
+        "[ARTIFACT] export async function findActiveAgentByTenantId 存在",
+        "[BEHAVIOR] dispatchPublishTask 插 publish_tasks 记录 + 设 works.publish_status=queued（时间窗口 5 分钟）",
+        "[BEHAVIOR] ackPublishTask 设 publish_tasks.status=done + works.publish_status=success",
+        "[BEHAVIOR] 无活跃 agent → 返回 NO_AGENT 错误"
+      ],
+      "files": [
+        "apps/api/src/services/walking-skeleton.service.ts",
+        "apps/api/scripts/step6-dispatch-helper.sh"
+      ],
+      "depends_on": ["ws1"],
+      "complexity": "M",
+      "estimated_minutes": 45
+    },
+    {
+      "task_id": "ws3",
+      "title": "路由层 POST works/:id/publish + POST agent/task-ack",
+      "scope": "works.ts 加 POST /:id/publish（tenantContext+tenantBypass）；walking-skeleton.ts 加 POST /task-ack（licenseAuth）",
+      "dod": [
+        "[ARTIFACT] works.ts 含 router.post('/:id/publish') 调用 dispatchPublishTask",
+        "[ARTIFACT] walking-skeleton.ts 含 task-ack 路由调用 ackPublishTask",
+        "[BEHAVIOR] POST /api/works/:id/publish 返回 {task_id, status:'queued'}，keys 精确=[\"status\",\"task_id\"]",
+        "[BEHAVIOR] POST /api/agent/task-ack 返回 {ok:true}，keys 精确=[\"ok\"]",
+        "[BEHAVIOR] response 不含禁用字段（id/data/result/message/payload / success/status/done）",
+        "[BEHAVIOR] 422 NO_AGENT / 404 work not found / 403 task forbidden"
+      ],
+      "files": [
+        "apps/api/src/routes/works.ts",
+        "apps/api/src/routes/walking-skeleton.ts"
+      ],
+      "depends_on": ["ws2"],
+      "complexity": "M",
+      "estimated_minutes": 45
+    },
+    {
+      "task_id": "ws4",
+      "title": "Smoke 扩展 + e2e-verify.ps1",
+      "scope": "golden-path-1-smoke.sh Step 6 扩展覆盖完整 dispatch chain；新建 sprints/step6-dispatch-chain/e2e-verify.ps1 供 e2e-windows.yml 执行",
+      "dod": [
+        "[ARTIFACT] smoke.sh Step 6 含非注释行 curl /api/works/:id/publish + task-ack",
+        "[ARTIFACT] e2e-verify.ps1 存在，含 ZENITHJOY_API_BASE + task-ack",
+        "[BEHAVIOR] smoke.sh 非注释行含 publish_status 断言",
+        "[BEHAVIOR] e2e-verify.ps1 含 ZENITHJOY_API_BASE 环境变量读取"
+      ],
+      "files": [
+        ".github/workflows/scripts/smoke/golden-path-1-smoke.sh",
+        "sprints/step6-dispatch-chain/e2e-verify.ps1"
+      ],
+      "depends_on": ["ws3"],
+      "complexity": "S",
+      "estimated_minutes": 30
+    }
+  ]
+}

@@ -1,0 +1,44 @@
+---
+skeleton: false
+journey_type: autonomous
+---
+# Contract DoD — Workstream 4: Smoke 扩展 + e2e-verify.ps1
+
+**范围**:
+- `.github/workflows/scripts/smoke/golden-path-1-smoke.sh`: Step 6 扩展，覆盖完整 dispatch chain（publish → heartbeat → task-ack → verify success）
+- `sprints/step6-dispatch-chain/e2e-verify.ps1`: Windows final-E2E 脚本，由 e2e-windows.yml 执行
+
+**大小**: S
+**依赖**: Workstream 3（API 端点已存在）
+
+## ARTIFACT 条目
+
+- [ ] [ARTIFACT] `golden-path-1-smoke.sh` 含 `/api/works/` + `publish` 调用
+  Test: node -e "const c=require('fs').readFileSync('.github/workflows/scripts/smoke/golden-path-1-smoke.sh','utf8');if(!c.includes('/api/works/'))process.exit(1)"
+
+- [ ] [ARTIFACT] `golden-path-1-smoke.sh` 含 `task-ack` 调用
+  Test: node -e "const c=require('fs').readFileSync('.github/workflows/scripts/smoke/golden-path-1-smoke.sh','utf8');if(!c.includes('task-ack'))process.exit(1)"
+
+- [ ] [ARTIFACT] `sprints/step6-dispatch-chain/e2e-verify.ps1` 存在
+  Test: node -e "require('fs').accessSync('sprints/step6-dispatch-chain/e2e-verify.ps1')"
+
+- [ ] [ARTIFACT] `e2e-verify.ps1` 含 `publish_status` 断言
+  Test: node -e "const c=require('fs').readFileSync('sprints/step6-dispatch-chain/e2e-verify.ps1','utf8');if(!c.includes('publish_status'))process.exit(1)"
+
+## BEHAVIOR 条目
+
+- [ ] [BEHAVIOR] smoke.sh Step 6 部分含 `publish_status` 关键字（验最终状态字段名与 PRD 一致）
+  Test: manual:bash -c 'grep -q "publish_status" .github/workflows/scripts/smoke/golden-path-1-smoke.sh && echo OK || exit 1'
+  期望: OK
+
+- [ ] [BEHAVIOR] smoke.sh Step 6 不含已废弃的旧 `/api/publish/task` 作为 dispatch 入口（新逻辑必须走 `/api/works/:id/publish`）
+  Test: manual:bash -c 'SECTION=$(awk "/Step 6/,/Step 7|^exit/" .github/workflows/scripts/smoke/golden-path-1-smoke.sh); if echo "$SECTION" | grep -q "api/works.*publish"; then echo OK; else echo "FAIL: Step 6 未含 /api/works/:id/publish"; exit 1; fi'
+  期望: OK
+
+- [ ] [BEHAVIOR] e2e-verify.ps1 含 task-ack 调用（模拟 Windows Agent 确认执行）
+  Test: manual:bash -c 'grep -q "task-ack" sprints/step6-dispatch-chain/e2e-verify.ps1 && echo OK || exit 1'
+  期望: OK
+
+- [ ] [BEHAVIOR] e2e-verify.ps1 含 ZENITHJOY_API_BASE 环境变量读取（不硬编码生产域名）
+  Test: manual:bash -c 'grep -q "ZENITHJOY_API_BASE" sprints/step6-dispatch-chain/e2e-verify.ps1 && echo OK || exit 1'
+  期望: OK
