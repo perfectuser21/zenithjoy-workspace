@@ -356,6 +356,16 @@ jobs:
           chmod +x .github/workflows/scripts/smoke/golden-path-2-b1-smoke.sh
           bash .github/workflows/scripts/smoke/golden-path-2-b1-smoke.sh
 
+      - name: Smoke — Step 6 Dispatch Chain WS2 (dispatchPublishTask + ackPublishTask)
+        env:
+          API_BASE: http://localhost:5200
+          DB: postgresql://cecelia:cecelia@localhost:5432/cecelia
+          PGPASSWORD: cecelia
+        run: |
+          chmod +x apps/api/scripts/step6-dispatch-helper.sh
+          chmod +x .github/workflows/scripts/smoke/step6-dispatch-ws2-smoke.sh
+          bash .github/workflows/scripts/smoke/step6-dispatch-ws2-smoke.sh
+
       - name: Stop fake-feishu-server
         if: always()
         run: |
