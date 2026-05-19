@@ -1722,3 +1722,19 @@ tests:
     status: active
     product: AI视频本地流水线
     note: "Agent video-pipeline template_id 分支 — compose-template + HyperFrames 渲染路径单测"
+
+  - id: api-template-c-r
+    path: apps/api/src/templates/__tests__/template-c-r.test.ts
+    type: unit
+    ci: L4
+    status: active
+    product: AI视频本地流水线
+    note: "template-c.jsx + template-r.jsx 文件存在性及 JSX 内容单测"
+
+  - id: smoke-template-c-r
+    path: .github/workflows/scripts/smoke/template-c-r-smoke.sh
+    type: e2e
+    ci: L4
+    status: active
+    product: AI视频本地流水线
+    note: "C + R 模板 compose-template E2E smoke（5-step loop）"
