@@ -1,0 +1,44 @@
+{
+  "initiative_id": "pending",
+  "journey_type": "user_facing",
+  "journey_type_reason": "涉及 apps/dashboard/ 前端侧边栏与路由，用户直接可见，无 Brain API",
+  "tasks": [
+    {
+      "task_id": "ws1",
+      "title": "navigation.config.ts 拆3组 + InstanceContext 注册 settings feature",
+      "scope": "将 autopilotNavGroups 从单组重构为3个命名分组（核心功能/账号绑定/系统）；把 /license /admin/license /admin/users 移出主导航 items；在"系统"组添加 /settings NavItem；在 pageComponents 注册 SettingsPage；在 autopilotConfig.features 添加 'settings': true",
+      "dod": [
+        "[BEHAVIOR] autopilotNavGroups.length === 3，标题为 ['核心功能','账号绑定','系统']",
+        "[BEHAVIOR] /settings 存在于系统分组 items 中",
+        "[BEHAVIOR] /license /admin/license /admin/users 不在任何分组 items 中",
+        "[ARTIFACT] InstanceContext.tsx 含 'settings': true",
+        "[ARTIFACT] pageComponents 含 'SettingsPage' 条目"
+      ],
+      "files": [
+        "apps/dashboard/src/config/navigation.config.ts",
+        "apps/dashboard/src/contexts/InstanceContext.tsx"
+      ],
+      "depends_on": [],
+      "complexity": "S",
+      "estimated_minutes": 30
+    },
+    {
+      "task_id": "ws2",
+      "title": "SettingsPage.tsx 新建 — 卡片式统一设置入口",
+      "scope": "新建 SettingsPage.tsx，展示 License 卡片（Link to='/license'）和管理员专区卡片（isSuperAdmin 条件渲染）；卡片风格复用 AdminSettingsPage 的 className 模式",
+      "dod": [
+        "[BEHAVIOR] SettingsPage default export 为函数组件",
+        "[BEHAVIOR] 页面含 Link to='/license'",
+        "[BEHAVIOR] 含 isSuperAdmin 条件块控制管理员专区卡片",
+        "[BEHAVIOR] Playwright E2E 4 个 test 全部通过（exit 0）",
+        "[ARTIFACT] apps/dashboard/src/pages/SettingsPage.tsx 存在"
+      ],
+      "files": [
+        "apps/dashboard/src/pages/SettingsPage.tsx"
+      ],
+      "depends_on": ["ws1"],
+      "complexity": "S",
+      "estimated_minutes": 25
+    }
+  ]
+}
