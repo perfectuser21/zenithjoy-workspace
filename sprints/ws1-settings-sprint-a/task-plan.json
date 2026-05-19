@@ -8,9 +8,11 @@
       "title": "navigation.config.ts 拆3组 + InstanceContext 注册 settings feature",
       "scope": "将 autopilotNavGroups 从单组重构为3个命名分组（核心功能/账号绑定/系统）；把 /license /admin/license /admin/users 移出主导航 items；在「系统」组添加 /settings NavItem；在 pageComponents 注册 SettingsPage；在 autopilotConfig.features 添加 'settings': true",
       "dod": [
-        "[BEHAVIOR] autopilotNavGroups.length === 3，标题为 ['核心功能','账号绑定','系统']",
+        "[BEHAVIOR] autopilotNavGroups 字面量 title 计数 = 3（match(/title: '\\S+'/g) 结果长度，不含 TS 接口 title:string）",
         "[BEHAVIOR] /settings 存在于系统分组 items 中",
         "[BEHAVIOR] /license /admin/license /admin/users 不在任何分组 items 中",
+        "[BEHAVIOR] 核心功能分组含 PRD 规定7条路径（/、/media、/ai-employees、/works、/content-factory、/ai-video、/competitor-research）",
+        "[BEHAVIOR] 账号绑定分组含 PRD 规定4条路径（/dashboard/agent、/dashboard/platforms/douyin、/dashboard/folder、/dashboard/publish）",
         "[ARTIFACT] InstanceContext.tsx 含 'settings': true",
         "[ARTIFACT] pageComponents 含 'SettingsPage' 条目"
       ],
@@ -29,8 +31,8 @@
       "dod": [
         "[BEHAVIOR] SettingsPage default export 为函数组件",
         "[BEHAVIOR] 页面含 Link to='/license'",
-        "[BEHAVIOR] 含 isSuperAdmin 条件块控制管理员专区卡片",
-        "[BEHAVIOR] Playwright E2E 4 个 test 全部通过（exit 0）",
+        "[BEHAVIOR] 含 isSuperAdmin 条件块控制管理员专区卡片，admin 链接不出现在条件块外",
+        "[BEHAVIOR] Playwright E2E 4 个 test 全部通过（exit 0），使用 poll 等待启动，R1 已缓解",
         "[ARTIFACT] apps/dashboard/src/pages/SettingsPage.tsx 存在"
       ],
       "files": [

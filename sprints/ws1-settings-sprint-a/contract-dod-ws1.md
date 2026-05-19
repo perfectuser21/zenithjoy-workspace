@@ -27,9 +27,9 @@ journey_type: user_facing
 
 ## BEHAVIOR 条目（内嵌 manual:bash 命令 — 模式A API-level，user_facing pure frontend）
 
-- [ ] [BEHAVIOR] autopilotNavGroups 导出恰好 3 个分组（3 个 { title, items } 对象）
-  Test: manual:bash -c 'node -e "const s=require(\"fs\").readFileSync(\"apps/dashboard/src/config/navigation.config.ts\",\"utf8\");const m=s.match(/title:/g);if(!m||m.length<3){console.error(\"FAIL: 分组数量\",m?.length);process.exit(1);}console.log(\"OK 分组数\",m.length)"'
-  期望: OK
+- [ ] [BEHAVIOR] autopilotNavGroups 导出恰好 3 个分组（3 个字面量 title 赋值，不含 TS 接口定义中的 title: string）
+  Test: manual:bash -c 'node -e "const s=require(\"fs\").readFileSync(\"apps/dashboard/src/config/navigation.config.ts\",\"utf8\");const m=s.match(/title: '"'"'\S+'"'"'/g);if(!m||m.length<3){console.error(\"FAIL: 分组数量\",m?.length);process.exit(1);}console.log(\"OK 分组数\",m.length)"'
+  期望: OK 分组数 3
 
 - [ ] [BEHAVIOR] 3 个分组标题完整（核心功能 / 账号绑定 / 系统 全部出现在 navGroups 块）
   Test: manual:bash -c 'node -e "const s=require(\"fs\").readFileSync(\"apps/dashboard/src/config/navigation.config.ts\",\"utf8\");const navBlock=s.split(\"export const additionalRoutes\")[0];[\"核心功能\",\"账号绑定\",\"系统\"].forEach(t=>{if(!navBlock.includes(t)){console.error(\"FAIL: 缺\",t);process.exit(1);}});console.log(\"OK\")"'
@@ -39,10 +39,18 @@ journey_type: user_facing
   Test: manual:bash -c 'node -e "const s=require(\"fs\").readFileSync(\"apps/dashboard/src/config/navigation.config.ts\",\"utf8\");const navBlock=s.split(\"export const additionalRoutes\")[0];if(!navBlock.includes(\"/settings\")){console.error(\"FAIL: /settings 未在主导航\");process.exit(1);}console.log(\"OK\")"'
   期望: OK
 
-- [ ] [BEHAVIOR] /license 不在主导航分组 items 中（已移至 additionalRoutes 或完全移除）
-  Test: manual:bash -c 'node -e "const s=require(\"fs\").readFileSync(\"apps/dashboard/src/config/navigation.config.ts\",\"utf8\");const navBlock=s.split(\"export const additionalRoutes\")[0];if(navBlock.includes(\"path: '"'"'/license'"'"'\")&&!navBlock.includes(\"redirect\")){console.error(\"FAIL: /license 仍在主导航\");process.exit(1);}console.log(\"OK\")"'
+- [ ] [BEHAVIOR] /license 不在主导航分组 items 中（已移至 additionalRoutes 或路由注册，主导航块内不得出现 path: '/license'）
+  Test: manual:bash -c 'node -e "const s=require(\"fs\").readFileSync(\"apps/dashboard/src/config/navigation.config.ts\",\"utf8\");const navBlock=s.split(\"export const additionalRoutes\")[0];if(navBlock.includes(\"path: '"'"'/license'"'"'\")){console.error(\"FAIL: /license 仍在主导航\");process.exit(1);}console.log(\"OK\")"'
   期望: OK
 
 - [ ] [BEHAVIOR] /admin/license 和 /admin/users 不在 autopilotNavGroups items 中
   Test: manual:bash -c 'node -e "const s=require(\"fs\").readFileSync(\"apps/dashboard/src/config/navigation.config.ts\",\"utf8\");const navBlock=s.split(\"export const additionalRoutes\")[0];if(navBlock.includes(\"/admin/license\")||navBlock.includes(\"/admin/users\")){console.error(\"FAIL: admin 路由仍在主导航\");process.exit(1);}console.log(\"OK\")"'
+  期望: OK
+
+- [ ] [BEHAVIOR] 核心功能分组包含 PRD 规定的7条路径（工作台/新媒体运营/AI员工/作品管理/内容工厂/AI视频/智能对标）
+  Test: manual:bash -c 'node -e "const s=require(\"fs\").readFileSync(\"apps/dashboard/src/config/navigation.config.ts\",\"utf8\");const coreBlock=s.split(\"title: '"'"'核心功能'"'"'\")[1].split(\"title: '"'"'账号绑定'"'"'\")[0];const paths=[\"/\",\"/media\",\"/ai-employees\",\"/works\",\"/content-factory\",\"/ai-video\",\"/competitor-research\"];paths.forEach(p=>{if(!coreBlock.includes(\"path: '"'"'\"+p+\"'"'"'\")){console.error(\"FAIL: 核心功能缺路径\",p);process.exit(1);}});console.log(\"OK\")"'
+  期望: OK
+
+- [ ] [BEHAVIOR] 账号绑定分组包含 PRD 规定的4条路径（下载Agent/抖音绑定/文件夹绑定/一键发布）
+  Test: manual:bash -c 'node -e "const s=require(\"fs\").readFileSync(\"apps/dashboard/src/config/navigation.config.ts\",\"utf8\");const bindBlock=s.split(\"title: '"'"'账号绑定'"'"'\")[1].split(\"title: '"'"'系统'"'"'\")[0];const paths=[\"/dashboard/agent\",\"/dashboard/platforms/douyin\",\"/dashboard/folder\",\"/dashboard/publish\"];paths.forEach(p=>{if(!bindBlock.includes(\"path: '"'"'\"+p+\"'"'"'\")){console.error(\"FAIL: 账号绑定缺路径\",p);process.exit(1);}});console.log(\"OK\")"'
   期望: OK

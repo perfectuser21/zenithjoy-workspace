@@ -1,4 +1,4 @@
-# Sprint Contract Draft (Round 1)
+# Sprint Contract Draft (Round 2)
 
 ## Golden Path
 
@@ -14,14 +14,16 @@
 ```bash
 node -e "
   const s = require('fs').readFileSync('apps/dashboard/src/config/navigation.config.ts','utf8');
+  const m = s.match(/title: '\\S+'/g);
+  if (!m || m.length < 3) { console.error('FAIL: 分组数量', m?.length); process.exit(1); }
   ['核心功能','账号绑定','系统'].forEach(t => {
-    if (!s.includes(t)) { console.error('FAIL: 缺分组',t); process.exit(1); }
+    if (!s.includes(t)) { console.error('FAIL: 缺分组', t); process.exit(1); }
   });
-  console.log('OK');
+  console.log('OK 分组数', m.length);
 "
 ```
 
-**硬阈值**: 3个分组标题全部出现在 autopilotNavGroups 导出值中
+**硬阈值**: 3个分组标题全部出现在 autopilotNavGroups 导出值中，且字面量 title 计数 ≥ 3
 
 ---
 
@@ -33,7 +35,6 @@ node -e "
 ```bash
 node -e "
   const s = require('fs').readFileSync('apps/dashboard/src/config/navigation.config.ts','utf8');
-  // 取 additionalRoutes 声明前的部分（即 autopilotNavGroups）
   const navBlock = s.split('export const additionalRoutes')[0];
   if (!navBlock.includes(\"path: '/settings'\")) { console.error('FAIL: /settings 未加入导航'); process.exit(1); }
   if (navBlock.includes(\"path: '/license'\")) { console.error('FAIL: /license 仍在主导航'); process.exit(1); }
@@ -68,11 +69,12 @@ node -e "
 
 **可观测行为**: 侧边栏"设置"链接点击后，URL 变为 /settings，页面展示卡片式布局而非 404
 
-**验证命令** (Playwright — 需 dev server 运行在 localhost:5173):
+**验证命令** (Playwright — 使用 poll 等待替代 sleep，避免启动超时风险):
 ```bash
 cd apps/dashboard && \
 VITE_SKIP_AUTH=true npx vite --port 5173 &
-DEV_PID=$! && sleep 10 && \
+DEV_PID=$! && \
+for i in $(seq 1 30); do curl -sf http://localhost:5173/ >/dev/null 2>&1 && break; sleep 1; done && \
 npx playwright test e2e/settings-sidebar.spec.ts --reporter=line; \
 RESULT=$?; kill $DEV_PID 2>/dev/null; exit $RESULT
 ```
@@ -173,6 +175,15 @@ workstream_count: 2
 
 **预期受影响文件**:
 - `apps/dashboard/src/pages/SettingsPage.tsx`（新建）
+
+---
+
+## 风险登记
+
+| # | 风险描述 | 影响 | 缓解措施 |
+|---|---|---|---|
+| R1 | dev server (`npx vite`) 冷启动时间不稳定，固定 `sleep N` 可能不够（CI 慢机器上 15–20s 才 ready） | Step 4 / WS2 BEHAVIOR 4 Playwright 以"Connection Refused"失败，表现为 E2E 假红 | 改用 poll 循环：`for i in $(seq 1 30); do curl -sf http://localhost:5173/ >/dev/null 2>&1 && break; sleep 1; done`（已在 Step 4 验证命令 + WS2 DoD BEHAVIOR 4 中应用） |
+| R2 | WS2 硬依赖 WS1 的 `pageComponents['SettingsPage']` 注册；若 WS1 CI FAIL，WS2 的 `import('../pages/SettingsPage')` 会抛 ENOENT → WS2 vitest 全红，cascade FAIL | WS2 无法独立验收，耗时 ×2 | 确保 CI job 顺序：ws2 job `needs: [ws1]`（已在 task-plan.json depends_on 中声明）；若 WS1 FAIL 直接停止 sprint，不执行 WS2 |
 
 ---
 

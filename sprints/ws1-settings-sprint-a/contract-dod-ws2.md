@@ -36,6 +36,6 @@ journey_type: user_facing
   Test: manual:bash -c 'node -e "const s=require(\"fs\").readFileSync(\"apps/dashboard/src/pages/SettingsPage.tsx\",\"utf8\");const lines=s.split(\"\\n\");let inAdmin=false;for(const l of lines){if(l.includes(\"isSuperAdmin\"))inAdmin=true;if(!inAdmin&&(l.includes(\"/admin/license\")||l.includes(\"/admin/users\"))){console.error(\"FAIL: admin 链接出现在条件块外\");process.exit(1);}}console.log(\"OK\")"'
   期望: OK
 
-- [ ] [BEHAVIOR] Playwright E2E — /settings 页面 License 卡片可见，非 super admin 不见管理员专区卡片（error path 权限边界）
-  Test: manual:bash -c 'cd apps/dashboard && VITE_SKIP_AUTH=true npx vite --port 5173 & DEV_PID=$! && sleep 12 && npx playwright test e2e/settings-sidebar.spec.ts --reporter=line; RESULT=$?; kill $DEV_PID 2>/dev/null; exit $RESULT'
+- [ ] [BEHAVIOR] Playwright E2E — /settings 页面 License 卡片可见，非 super admin 不见管理员专区卡片（error path 权限边界）；使用 poll 等待取代固定 sleep 防启动超时（R1 缓解）
+  Test: manual:bash -c 'cd apps/dashboard && VITE_SKIP_AUTH=true npx vite --port 5173 & DEV_PID=$! && for i in $(seq 1 30); do curl -sf http://localhost:5173/ >/dev/null 2>&1 && break; sleep 1; done && npx playwright test e2e/settings-sidebar.spec.ts --reporter=line; RESULT=$?; kill $DEV_PID 2>/dev/null; exit $RESULT'
   期望: exit 0，4 test 全通过
