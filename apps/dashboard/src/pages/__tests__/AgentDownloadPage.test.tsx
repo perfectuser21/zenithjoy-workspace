@@ -169,18 +169,25 @@ describe('AgentDownloadPage [BEHAVIOR]', () => {
   });
 
   it('agent 已连接 → 状态显示"已连接"', async () => {
-    vi.mocked(ws1Api.getAgentStatus).mockResolvedValue({
-      connected: true,
-      agent_id: 'agent-uuid-1',
-      hostname: 'mac-mini-01',
-      version: '0.1.0',
-      last_heartbeat_at: new Date().toISOString(),
-    });
+    // 需要有 license 才能启用 agent status query（enabled: !!effectiveLicense）
+    vi.mocked(accountApi.fetchAccountMe).mockResolvedValue(ACCOUNT_WITH_LICENSE);
+    // 组件直接 fetch，不经过 ws1Api.getAgentStatus
+    const mockFetch = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        connected: true,
+        agent_id: 'agent-uuid-1',
+        hostname: 'mac-mini-01',
+        version: '0.1.0',
+        last_heartbeat_at: new Date().toISOString(),
+      }),
+    } as Response);
     render(<AgentDownloadPage />, { wrapper: createWrapper() });
     await waitFor(() => {
       expect(screen.getByText(/已连接/)).toBeInTheDocument();
     });
     expect(screen.getByText(/mac-mini-01/)).toBeInTheDocument();
+    mockFetch.mockRestore();
   });
 
   it('agent 离线 → 状态显示"未连接"', async () => {
