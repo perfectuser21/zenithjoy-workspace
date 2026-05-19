@@ -5,12 +5,13 @@ const svc = new AiVideoPipelineService();
 
 export async function createJob(req: Request, res: Response, next: NextFunction) {
   try {
-    const { local_path, topic } = req.body as { local_path?: string; topic?: string };
+    const { local_path, topic, template_id } = req.body as { local_path?: string; topic?: string; template_id?: string };
     if (!local_path) return res.status(400).json({ error: 'local_path required' });
     const job = await svc.createJob({
       srcVideo: local_path,
       srcLogo: null,
       topic: topic ?? null,
+      templateId: template_id ?? null,
     });
     res.status(201).json(job);
   } catch (err) { next(err); }

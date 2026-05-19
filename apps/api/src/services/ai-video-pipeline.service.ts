@@ -4,6 +4,7 @@ export interface PipelineJob {
   id: string;
   status: 'pending' | 'processing' | 'completed' | 'failed';
   progress: number;
+  template_id: string | null;
   src_video: string | null;
   src_logo: string | null;
   topic: string | null;
@@ -19,13 +20,14 @@ export class AiVideoPipelineService {
     srcVideo: string;
     srcLogo: string | null;
     topic: string | null;
+    templateId?: string | null;
   }): Promise<PipelineJob> {
     const result = await pool.query(
       `INSERT INTO zenithjoy.ai_video_pipeline_jobs
-         (src_video, src_logo, topic)
-       VALUES ($1, $2, $3)
+         (src_video, src_logo, topic, template_id)
+       VALUES ($1, $2, $3, $4)
        RETURNING *`,
-      [params.srcVideo, params.srcLogo, params.topic],
+      [params.srcVideo, params.srcLogo, params.topic, params.templateId ?? null],
     );
     return result.rows[0];
   }

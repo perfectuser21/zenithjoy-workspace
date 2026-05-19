@@ -1682,3 +1682,43 @@ tests:
     status: active
     product: AI视频本地流水线
     note: "HyperFrames render pipeline overlay — compose-html + Chrome headless shell 渲染链路单测"
+
+  - id: api-ai-video-pipeline-template-create
+    path: apps/api/src/controllers/__tests__/ai-video-pipeline-template.test.ts
+    type: unit
+    ci: L4
+    status: active
+    product: AI视频本地流水线
+    note: "createJob 接受并持久化 template_id 单测"
+
+  - id: api-compose-template
+    path: apps/api/src/controllers/__tests__/compose-template.test.ts
+    type: unit
+    ci: L4
+    status: active
+    product: AI视频本地流水线
+    note: "composeTemplate 端点 — Claude slot 提取 + HTML 生成单测"
+
+  - id: api-template-registry
+    path: apps/api/src/templates/__tests__/registry.test.ts
+    type: unit
+    ci: L4
+    status: active
+    product: AI视频本地流水线
+    note: "template registry getTemplate/readTemplateJsx 单测（含 TEMPLATE_NOT_FOUND 守卫）"
+
+  - id: dashboard-template-selector
+    path: apps/dashboard/src/components/video-pipeline/__tests__/TemplateSelector.test.tsx
+    type: unit
+    ci: L4
+    status: active
+    product: AI视频本地流水线
+    note: "TemplateSelector 组件 — 渲染/选择/取消模板单测"
+
+  - id: agent-video-pipeline-template-branch
+    path: services/agent/src/handlers/__tests__/video-pipeline-template.test.ts
+    type: unit
+    ci: L4
+    status: active
+    product: AI视频本地流水线
+    note: "Agent video-pipeline template_id 分支 — compose-template + HyperFrames 渲染路径单测"

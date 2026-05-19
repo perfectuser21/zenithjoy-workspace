@@ -7,6 +7,7 @@ RUN npm install
 
 COPY tsconfig.json ./
 COPY src/ ./src/
+RUN node -e "require('fs').writeFileSync('/tsconfig.base.json', JSON.stringify({compilerOptions:{strict:true,esModuleInterop:true,skipLibCheck:true,forceConsistentCasingInFileNames:true,resolveJsonModule:true,isolatedModules:true}}))"
 RUN npm run build
 
 FROM node:20-alpine
