@@ -6,7 +6,7 @@
     {
       "task_id": "ws1",
       "title": "navigation.config.ts 拆3组 + InstanceContext 注册 settings feature",
-      "scope": "将 autopilotNavGroups 从单组重构为3个命名分组（核心功能/账号绑定/系统）；把 /license /admin/license /admin/users 移出主导航 items；在"系统"组添加 /settings NavItem；在 pageComponents 注册 SettingsPage；在 autopilotConfig.features 添加 'settings': true",
+      "scope": "将 autopilotNavGroups 从单组重构为3个命名分组（核心功能/账号绑定/系统）；把 /license /admin/license /admin/users 移出主导航 items；在「系统」组添加 /settings NavItem；在 pageComponents 注册 SettingsPage；在 autopilotConfig.features 添加 'settings': true",
       "dod": [
         "[BEHAVIOR] autopilotNavGroups.length === 3，标题为 ['核心功能','账号绑定','系统']",
         "[BEHAVIOR] /settings 存在于系统分组 items 中",
