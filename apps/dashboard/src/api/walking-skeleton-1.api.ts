@@ -180,6 +180,7 @@ export interface InstallPackManifest {
   cos_url?: string;
   size: number;
   build_time: string;
+  cos_url?: string;
 }
 
 export async function getInstallPackManifest(): Promise<InstallPackManifest> {

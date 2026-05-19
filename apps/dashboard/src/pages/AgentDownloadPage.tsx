@@ -139,13 +139,24 @@ export default function AgentDownloadPage() {
             <p style={{ margin: '0 0 12px', fontSize: 13, color: '#374151' }}>
               sha256: <code style={{ fontSize: 12 }}>{manifest.sha256.slice(0, 16)}...</code>
             </p>
-            <a
-              href="/api/agent/install-pack/download"
-              download
-              style={{ display: 'inline-block', padding: '8px 16px', background: '#2563eb', color: '#fff', borderRadius: 6, textDecoration: 'none' }}
-            >
-              ⬇ 下载 Agent 完整安装包
-            </a>
+            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+              <a
+                href="/api/agent/install-pack/download"
+                download
+                style={{ display: 'inline-block', padding: '8px 16px', background: '#2563eb', color: '#fff', borderRadius: 6, textDecoration: 'none' }}
+              >
+                ⬇ 下载 Agent 完整安装包
+              </a>
+              {manifest.cos_url && (
+                <a
+                  href={manifest.cos_url}
+                  download
+                  style={{ display: 'inline-block', padding: '8px 16px', background: '#059669', color: '#fff', borderRadius: 6, textDecoration: 'none' }}
+                >
+                  ⚡ 国内加速下载（无 License 烧录，需手动配置 .env）
+                </a>
+              )}
+            </div>
           </div>
         )}
       </section>
