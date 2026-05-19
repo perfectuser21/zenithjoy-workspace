@@ -1754,3 +1754,43 @@ tests:
     status: active
     product: CI治理
     note: "lint-agent-version-bump.sh 4 case：src 变动+bump通过/src 变动无bump失败/无变动跳过/版本不变失败"
+
+  - id: step6-dispatch-chain-ws1-migration
+    path: sprints/step6-dispatch-chain/tests/ws1/dispatch-migration.test.ts
+    type: unit
+    ci: L4
+    status: active
+    product: Step 6 Dispatch Chain
+    note: "WS1 合同 TDD — works.publish_status migration 文件存在性 + SQL schema 验证"
+
+  - id: step6-dispatch-chain-ws2-service
+    path: sprints/step6-dispatch-chain/tests/ws2/dispatch-service.test.ts
+    type: unit
+    ci: L4
+    status: active
+    product: Step 6 Dispatch Chain
+    note: "WS2 合同 TDD — dispatchPublishTask + ackPublishTask + findActiveAgentByTenantId 导出验证"
+
+  - id: step6-dispatch-chain-ws3-routes
+    path: sprints/step6-dispatch-chain/tests/ws3/dispatch-routes.test.ts
+    type: unit
+    ci: L4
+    status: active
+    product: Step 6 Dispatch Chain
+    note: "WS3 合同 TDD — works.ts publish 路由 + walking-skeleton.ts task-ack 路由注册验证"
+
+  - id: step6-dispatch-chain-ws4-smoke
+    path: sprints/step6-dispatch-chain/tests/ws4/smoke-step6.test.ts
+    type: unit
+    ci: L4
+    status: active
+    product: Step 6 Dispatch Chain
+    note: "WS4 合同 TDD — golden-path-1-smoke.sh Step 6 扩展 + e2e-verify.ps1 存在性验证"
+
+  - id: smoke-step6-dispatch-ws2
+    path: .github/workflows/scripts/smoke/step6-dispatch-ws2-smoke.sh
+    type: e2e
+    ci: L4
+    status: active
+    product: Step 6 Dispatch Chain
+    note: "Step 6 dispatch chain WS2 E2E smoke — dispatchPublishTask + ackPublishTask 全链路验证"

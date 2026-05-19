@@ -291,3 +291,160 @@ export async function getPublishTask(taskId: string): Promise<PublishTaskRow | n
   );
   return rows[0] ?? null;
 }
+
+/** 查找 tenant 下最近活跃（10 分钟内有心跳）的 agent */
+export async function findActiveAgentByTenantId(tenantId: string): Promise<AgentRow | null> {
+  const { rows } = await pool.query<AgentRow>(
+    `SELECT id, tenant_id, agent_id, hostname, version, license_id,
+            bound_folder_path, last_heartbeat_at, status, last_seen
+       FROM zenithjoy.agents
+      WHERE tenant_id = $1
+        AND last_heartbeat_at > NOW() - INTERVAL '10 minutes'
+      ORDER BY last_heartbeat_at DESC
+      LIMIT 1`,
+    [tenantId]
+  );
+  return rows[0] ?? null;
+}
+
+export class NoAgentError extends Error {
+  readonly code = 'NO_AGENT';
+  constructor() {
+    super('请先安装并启动 Agent');
+    this.name = 'NoAgentError';
+  }
+}
+
+export class TaskNotFoundError extends Error {
+  readonly code = 'TASK_NOT_FOUND';
+  constructor(taskId: string) {
+    super(`task not found: ${taskId}`);
+    this.name = 'TaskNotFoundError';
+  }
+}
+
+export class TaskForbiddenError extends Error {
+  readonly code = 'FORBIDDEN';
+  constructor() {
+    super('forbidden');
+    this.name = 'TaskForbiddenError';
+  }
+}
+
+/**
+ * 派发发布任务：
+ *   1) 找当前 tenant 活跃 agent（10 分钟内心跳）
+ *   2) 事务内：INSERT publish_tasks（result.payload.work_id）+ UPDATE works.publish_status='queued'
+ *   3) 返回 {task_id, status: 'queued'}
+ */
+export async function dispatchPublishTask(args: {
+  workId: string;
+  tenantId: string;
+}): Promise<{ task_id: string; status: 'queued' }> {
+  const { workId, tenantId } = args;
+
+  const agent = await findActiveAgentByTenantId(tenantId);
+  if (!agent) {
+    throw new NoAgentError();
+  }
+
+  const resultJson = JSON.stringify({ payload: { work_id: workId } });
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    const ins = await client.query<{ id: string }>(
+      `INSERT INTO zenithjoy.publish_tasks (agent_id, platform, type, status, result)
+       VALUES ($1, 'douyin', 'video', 'queued', $2::jsonb)
+       RETURNING id`,
+      [agent.id, resultJson]
+    );
+    const taskId = ins.rows[0].id;
+
+    await client.query(
+      `UPDATE zenithjoy.works
+          SET publish_status = 'queued', updated_at = now()
+        WHERE id = $1`,
+      [workId]
+    );
+
+    await client.query('COMMIT');
+    return { task_id: taskId, status: 'queued' };
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => undefined);
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+/**
+ * Agent 确认任务完成：
+ *   1) 查 publish_tasks 记录（404 if not found）
+ *   2) 验 agent.license_id = licenseId（403 if cross-tenant）
+ *   3) 事务内：UPDATE publish_tasks.status='done' + UPDATE works.publish_status='success'
+ *   4) 返回 {ok: true}
+ */
+export async function ackPublishTask(args: {
+  taskId: string;
+  licenseId: string;
+  result: string;
+}): Promise<{ ok: true }> {
+  const { taskId, licenseId, result } = args;
+
+  const taskRes = await pool.query<{ id: string; agent_id: string; result: unknown }>(
+    `SELECT id, agent_id, result
+       FROM zenithjoy.publish_tasks
+      WHERE id = $1
+      LIMIT 1`,
+    [taskId]
+  );
+  const task = taskRes.rows[0];
+  if (!task) {
+    throw new TaskNotFoundError(taskId);
+  }
+
+  const agentRes = await pool.query<{ id: string; license_id: string | null }>(
+    `SELECT id, license_id FROM zenithjoy.agents WHERE id = $1 LIMIT 1`,
+    [task.agent_id]
+  );
+  const agent = agentRes.rows[0];
+  if (!agent || agent.license_id !== licenseId) {
+    throw new TaskForbiddenError();
+  }
+
+  const workId =
+    (task.result as { payload?: { work_id?: string } } | null)?.payload?.work_id ?? null;
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    await client.query(
+      `UPDATE zenithjoy.publish_tasks
+          SET status = 'done',
+              result = $1::jsonb,
+              receipt_at = now()
+        WHERE id = $2`,
+      [JSON.stringify({ result, payload: { work_id: workId } }), taskId]
+    );
+
+    if (workId) {
+      await client.query(
+        `UPDATE zenithjoy.works
+            SET publish_status = 'success', updated_at = now()
+          WHERE id = $1`,
+        [workId]
+      );
+    }
+
+    await client.query('COMMIT');
+    return { ok: true };
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => undefined);
+    throw err;
+  } finally {
+    client.release();
+  }
+}
