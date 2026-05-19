@@ -427,6 +427,14 @@ function sendToRelay(audioB64, mimeType) {
   });
 }
 
+function barkNotify(title, body) {
+  try {
+    const key = 'QU7ktbzPJxZbNx9pEHcstW';
+    const url = 'https://api.day.app/' + key + '/' + encodeURIComponent(title) + '/' + encodeURIComponent(body);
+    https.get(url, res => res.resume()).on('error', ()=>{});
+  } catch(_) {}
+}
+
 function postCallback(callbackUrl, data) {
   return new Promise((resolve, reject) => {
     const payload = JSON.stringify(data);
@@ -455,10 +463,13 @@ function expandUrl(shortUrl) {
   return new Promise((resolve, reject) => {
     const parsed = new URL(shortUrl);
     const lib = shortUrl.startsWith('https') ? https : http;
-    const req = lib.request({ hostname: parsed.hostname, path: parsed.pathname+parsed.search, method: 'HEAD', headers: { 'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X)' } }, res => {
+    // Try GET first (HEAD gets ECONNRESET from Douyin), follow one redirect
+    const req = lib.request({ hostname: parsed.hostname, path: parsed.pathname+parsed.search, method: 'GET', headers: { 'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X)', 'Accept': 'text/html' } }, res => {
+      res.resume(); // drain body
       if (res.headers.location) resolve(res.headers.location); else resolve(shortUrl);
     });
-    req.on('error', reject); req.setTimeout(10000,()=>{req.destroy();reject(new Error('expand t/o'));}); req.end();
+    req.on('error', () => resolve(shortUrl)); // on error just return original
+    req.setTimeout(10000,()=>{req.destroy();resolve(shortUrl);}); req.end();
   });
 }
 
@@ -488,6 +499,7 @@ async function processDouyinVideo(url, videoId, callbackUrl) {
     return;
   }
   flog('[DY-VIDEO ' + videoId + '] transcribed ' + relayResult.transcript.length + ' chars');
+  barkNotify('✅ 抖音视频', detail.title.slice(0,30) + '\n已转录' + relayResult.transcript.length + '字');
   await postCallback(callbackUrl, { success: true, platform: '抖音', content_type: '短视频', video_id: videoId, url, title: detail.title, duration_ms: detail.duration, transcript: relayResult.transcript });
 }
 
@@ -496,6 +508,7 @@ async function processDouyinNote(url, noteId, callbackUrl) {
   const noteUrl = url.includes('/note/') ? url : 'https://www.douyin.com/note/' + noteId;
   const note = await getDouyinNoteContent(noteUrl);
   console.log('[DY-NOTE ' + noteId + '] title=' + note.title.slice(0, 40) + ' text=' + note.text.length + 'chars');
+  barkNotify('✅ 抖音图文', note.title.slice(0,30));
   await postCallback(callbackUrl, { success: true, platform: '抖音', content_type: '图文', note_id: noteId, url, title: note.title, text: note.text, images: note.images });
 }
 
@@ -519,6 +532,7 @@ async function processXhsVideo(url, videoUrl, title, callbackUrl) {
   fs.unlink(tempAudio, ()=>{});
   const relayResult = await sendToRelay(audioB64, 'audio/mpeg');
   flog('[XHS-VIDEO] transcribed ' + relayResult.transcript.length + ' chars');
+  barkNotify('✅ 小红书视频', title.slice(0,30) + '\n已转录' + relayResult.transcript.length + '字');
   await postCallback(callbackUrl, { success: true, platform: '小红书', content_type: '短视频', url, title, transcript: relayResult.transcript });
 }
 
@@ -528,6 +542,7 @@ async function processXhsNote(url, title, text, callbackUrl) {
   const finalText = text || '';
   const finalTitle = title || '';
   flog('[XHS-NOTE] title=' + finalTitle.slice(0, 40) + ' text=' + finalText.length + 'chars');
+  barkNotify('✅ 小红书图文', finalTitle.slice(0,30));
   await postCallback(callbackUrl, { success: true, platform: '小红书', content_type: '图文', url, title: finalTitle, text: finalText });
 }
 
@@ -571,6 +586,7 @@ async function processInBackground(url, callbackUrl) {
     flog('[BG] Done.');
   } catch(e) {
     flog('[BG] FAILED: ' + e.message);
+    barkNotify('❌ 剪藏失败', platform + ' ' + e.message.slice(0,50));
     if (callbackUrl) try { await postCallback(callbackUrl, { success: false, url, platform, error: e.message }); } catch(_) {}
   }
 }
