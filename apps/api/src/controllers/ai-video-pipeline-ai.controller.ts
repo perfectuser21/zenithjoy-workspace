@@ -283,6 +283,7 @@ const tl = gsap.timeline({paused:true});
 window.__timelines = window.__timelines || {};
 window.__timelines['pipeline-job'] = tl;
 ${tlEntries}
+window.__hf = { duration: ${duration}, seek: function(t){ tl.seek(t, false); } };
 </script>
 </body>
 </html>`;
