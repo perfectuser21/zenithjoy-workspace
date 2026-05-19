@@ -1,0 +1,27 @@
+{
+  "initiative_id": "pending",
+  "journey_type": "user_facing",
+  "journey_type_reason": "改动在 apps/dashboard/src/ 影响用户可见的侧边栏 UI，需要 Playwright 验证真实浏览器渲染",
+  "tasks": [
+    {
+      "task_id": "ws1",
+      "title": "navigation.config.ts 分组重构 + AdminSettingsPage 接入 + 系统设置入口",
+      "scope": "将 autopilotNavGroups 从单空标题组拆为 3 个有标题组（运营核心/账号与渠道/系统管理），将 AdminSettingsPage 加入 autopilotPageComponents，在系统管理组添加系统设置 NavItem（path=/settings, featureKey=admin-settings）",
+      "dod": [
+        "[BEHAVIOR] navigation.config.ts 有 3 个非空 title 分组（grep -E \"title: '[^']+' \" ≥ 3）",
+        "[BEHAVIOR] 旧空 title 扁平分组不再存在（title: '' 出现次数 = 0）",
+        "[BEHAVIOR] 系统设置 NavItem 存在（featureKey=admin-settings, path=/settings）",
+        "[BEHAVIOR] requireSuperAdmin 条目 ≥ 2 保留",
+        "[BEHAVIOR] AdminSettingsPage 在 pageComponents 映射中（出现次数 ≥ 2）",
+        "[ARTIFACT] Settings icon 从 lucide-react 导入",
+        "[ARTIFACT] autopilotPageComponents['AdminSettingsPage'] 懒加载函数存在"
+      ],
+      "files": [
+        "apps/dashboard/src/config/navigation.config.ts"
+      ],
+      "depends_on": [],
+      "complexity": "S",
+      "estimated_minutes": 20
+    }
+  ]
+}
