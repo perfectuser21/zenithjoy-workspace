@@ -1738,3 +1738,11 @@ tests:
     status: active
     product: AI视频本地流水线
     note: "C + R 模板 compose-template E2E smoke（5-step loop）"
+
+  - id: template-audio-fix
+    path: services/agent/src/handlers/__tests__/template-audio-fix.test.ts
+    type: unit
+    ci: L4
+    status: active
+    product: AI视频本地流水线
+    note: "template 路径三 bug 修复验证：-map 1:a 音频合并 / tl.to hold 时长 / console.warn 日志"
