@@ -58,7 +58,10 @@ function cdpNewTab() {
       let d = ''; res.on('data', c => d += c);
       res.on('end', () => { try { resolve(JSON.parse(d)); } catch(e) { reject(e); } });
     });
-    req.on('error', reject); req.setTimeout(5000, () => { req.destroy(); reject(new Error('new tab timeout')); }); req.end();
+    req.on('error', e => {
+      if (attempt < 3) { setTimeout(() => postCallback(callbackUrl, data, attempt+1).then(resolve, reject), 5000); }
+      else reject(e);
+    }); req.setTimeout(5000, () => { req.destroy(); reject(new Error('new tab timeout')); }); req.end();
   });
 }
 
@@ -203,7 +206,7 @@ async function getDouyinVideoDetail(videoId) {
   try {
     await ensureDouyinTabActive(send);
     const result = await send('Runtime.evaluate', {
-      expression: 'new Promise((resolve,reject)=>{fetch(\'https://www.douyin.com/aweme/v1/web/aweme/detail/?aweme_id=' + videoId + '&aid=6383&channel=channel_pc_web&device_platform=webapp&cookie_enabled=true\',{credentials:\'include\'}).then(r=>r.json()).then(data=>{if(!data.aweme_detail){reject(new Error(\'no aweme_detail\'));return;}const v=data.aweme_detail.video;const rates=(v.bit_rate||[]).sort((a,b)=>a.bit_rate-b.bit_rate);const target=rates[0]||{};const audioUrl=(target.play_addr&&target.play_addr.url_list&&target.play_addr.url_list[0])||(v.play_addr&&v.play_addr.url_list&&v.play_addr.url_list[0]);resolve(JSON.stringify({audioUrl,title:data.aweme_detail.desc||\'\',duration:data.aweme_detail.duration||0}));}).catch(e=>reject(e));});',
+      expression: 'new Promise((resolve,reject)=>{fetch(\'https://www.douyin.com/aweme/v1/web/aweme/detail/?aweme_id=' + videoId + '&aid=6383&channel=channel_pc_web&device_platform=webapp&cookie_enabled=true\',{credentials:\'include\'}).then(r=>r.json()).then(data=>{if(!data.aweme_detail){reject(new Error(\'no aweme_detail\'));return;}const v=data.aweme_detail.video;const audioUrl=(v.play_addr&&v.play_addr.url_list&&v.play_addr.url_list[0]);resolve(JSON.stringify({audioUrl,title:data.aweme_detail.desc||\'\',duration:data.aweme_detail.duration||0}));}).catch(e=>reject(e));});',
       returnByValue: true, awaitPromise: true, timeout: 15000
     }, 20000);
     send._close();
@@ -416,14 +419,16 @@ function downloadToFile(url, destPath, extraHeaders) {
   });
 }
 
-function sendToRelay(audioB64, mimeType) {
+function sendToRelay(audioB64, mimeType, attempt) {
+  attempt = attempt || 1;
   return new Promise((resolve, reject) => {
     const payload = JSON.stringify({ audio_b64: audioB64, mime_type: mimeType || 'video/mp4' });
     const req = http.request({ hostname: RELAY_HOST, port: RELAY_PORT, path: '/transcribe', method: 'POST', headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(payload) } }, res => {
       let d=''; res.on('data',c=>d+=c);
       res.on('end',()=>{ try { const r=JSON.parse(d); if(r.transcript) resolve(r); else reject(new Error('relay:'+JSON.stringify(r).slice(0,200))); } catch(e){reject(e);} });
     });
-    req.on('error',reject); req.setTimeout(240000,()=>{req.destroy();reject(new Error('relay t/o'));}); req.write(payload); req.end();
+    req.on('error', e => { if(attempt<3){setTimeout(()=>sendToRelay(audioB64,mimeType,attempt+1).then(resolve,reject),8000);}else reject(e); });
+    req.setTimeout(240000,()=>{ req.destroy(); if(attempt<3){setTimeout(()=>sendToRelay(audioB64,mimeType,attempt+1).then(resolve,reject),8000);}else reject(new Error('relay t/o')); }); req.write(payload); req.end();
   });
 }
 
@@ -435,7 +440,8 @@ function barkNotify(title, body) {
   } catch(_) {}
 }
 
-function postCallback(callbackUrl, data) {
+function postCallback(callbackUrl, data, attempt) {
+  attempt = attempt || 1;
   return new Promise((resolve, reject) => {
     const payload = JSON.stringify(data);
     const parsed = new URL(callbackUrl);
