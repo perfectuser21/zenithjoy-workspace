@@ -1722,3 +1722,11 @@ tests:
     status: active
     product: AI视频本地流水线
     note: "Agent video-pipeline template_id 分支 — compose-template + HyperFrames 渲染路径单测"
+
+  - id: api-template-c-r
+    path: apps/api/src/templates/__tests__/template-c-r.test.ts
+    type: unit
+    ci: L4
+    status: active
+    product: AI视频本地流水线
+    note: "template-c.jsx + template-r.jsx 文件存在性及 JSX 内容单测"
