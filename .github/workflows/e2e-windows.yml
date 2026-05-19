@@ -1,0 +1,48 @@
+name: E2E Windows
+
+on:
+  workflow_dispatch:
+    inputs:
+      task_id:
+        description: 'Harness task ID'
+        required: true
+      sprint_dir:
+        description: 'Sprint directory (e.g. sprints/run-20260519-1234)'
+        required: true
+      pr_branch:
+        description: 'PR branch to checkout (optional, defaults to default branch)'
+        required: false
+        default: ''
+
+jobs:
+  e2e:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.pr_branch != '' && inputs.pr_branch || github.event.repository.default_branch }}
+          fetch-depth: 0
+
+      - name: Run E2E verification
+        shell: pwsh
+        run: |
+          $sprintDir = "${{ inputs.sprint_dir }}"
+          $taskId = "${{ inputs.task_id }}"
+          $ps1Path = "$sprintDir/e2e-verify.ps1"
+
+          Write-Host "task_id=$taskId sprint_dir=$sprintDir"
+
+          if (Test-Path $ps1Path) {
+            Write-Host "Running E2E from $ps1Path"
+            & $ps1Path
+            $exitCode = $LASTEXITCODE
+            if ($exitCode -ne 0) {
+              Write-Error "E2E verification failed with exit code $exitCode"
+              exit $exitCode
+            }
+            Write-Host "E2E verification passed"
+          } else {
+            Write-Error "e2e-verify.ps1 not found at $ps1Path (sprint_dir=$sprintDir)"
+            exit 1
+          }
