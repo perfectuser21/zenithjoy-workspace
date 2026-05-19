@@ -412,7 +412,8 @@ ${transcript || '精彩视频内容'}
       const raw = slotResult?.choices?.[0]?.message?.content ?? '{}';
       const m = raw.match(/\{[\s\S]*\}/);
       slots = m ? JSON.parse(m[0]) : {};
-    } catch {
+    } catch (slotErr) {
+      console.warn('[composeTemplate] slot extraction failed, using fallback:', slotErr instanceof Error ? slotErr.message : slotErr);
       slots = {
         eyebrow: 'SCENE 01 · 内容精华',
         title: [transcript.slice(0, 8) || '精彩内容', transcript.slice(8, 16) || ''],
@@ -499,6 +500,7 @@ if (Comp) {
   tl.from('[data-gsap="metrics"] > *',{ ...A.NUMBER.from, duration: A.NUMBER.duration, ease: A.NUMBER.ease, stagger: 0.08 }, 0.35);
   tl.from('[data-gsap="metric-big"]', { ...A.NUMBER.from, duration: A.NUMBER.duration, ease: A.NUMBER.ease }, 0.35);
   tl.from('[data-gsap="progress"] > *',{ opacity: 0, scaleX: 0, duration: 0.15, stagger: 0.04, ease: 'power2.out' }, 0.45);
+  tl.to({}, { duration: 0.001 }, ${p.duration} - 0.001);
   window.__hf = { duration: ${p.duration}, seek: function(t) { tl.seek(t, false); } };
 }
 </script>
