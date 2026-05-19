@@ -329,7 +329,7 @@ async function getXhsContent(url) {
         'var titleEl=document.querySelector("#detail-title")||document.querySelector("h1");' +
         'var title=(titleEl?titleEl.innerText.trim():"")||document.title;' +
         'var noteText="";' +
-        'var descEls=[document.querySelector("#detail-desc .desc"),document.querySelector("#detail-desc"),document.querySelector("[class*=\"noteDetailDescripe\"]"),document.querySelector("[class*=\"desc\"]")];' +
+        'var descEls=[document.querySelector("#detail-desc .desc"),document.querySelector("#detail-desc"),document.querySelector("[class*=noteDetailDescripe]"),document.querySelector("[class*=desc]")];' +
         'for(var i=0;i<descEls.length;i++){if(descEls[i]){noteText=descEls[i].textContent.trim();if(noteText.length>10)break;}}' +
         'var rawText=document.body?document.body.innerText.slice(0,15000):"";' +
         'return JSON.stringify({type:videoEl?"video":"image_text",videoUrl:videoUrl||null,title:title.slice(0,200),noteText:noteText.slice(0,3000),rawText:rawText,url:location.href});' +
