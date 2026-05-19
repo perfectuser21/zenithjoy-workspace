@@ -52,6 +52,8 @@ const autopilotConfig: InstanceConfig = {
     'ws1-publish': true,         // /dashboard/publish
     // Path 2 Sprint A — 客户智能获客路径（飞书集成）
     'feishuBind': true,          // /dashboard/feishu-bind
+    // WS1 Settings Sprint A — 统一设置入口
+    'settings': true,            // /settings
     // 旧 features（保留用于兼容，实际已合并到 media-scenario）
     'execution-status': true,
     'tasks': true,

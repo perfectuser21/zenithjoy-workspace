@@ -24,6 +24,7 @@ import {
   Folder,
   Send,
   Scissors,
+  Settings,
 } from 'lucide-react';
 
 // ============ 类型定义 ============
@@ -86,6 +87,7 @@ export const autopilotPageComponents: Record<string, () => Promise<{ default: Co
   'AdminLicensePage': () => import('../pages/AdminLicensePage'),
   'AdminUsersPage': () => import('../pages/AdminUsersPage'),
   // Walking Skeleton #1 — 客户首次成功路径（抖音版）
+  'SettingsPage': () => import('../pages/SettingsPage'),
   'AgentDownloadPage': () => import('../pages/AgentDownloadPage'),
   'DouyinBindPage': () => import('../pages/DouyinBindPage'),
   // Path 2 Sprint A — 飞书集成
@@ -114,7 +116,7 @@ export function getPageComponent(name: string) {
 
 export const autopilotNavGroups: NavGroup[] = [
   {
-    title: '',  // 无分组标题，扁平展示
+    title: '核心功能',
     items: [
       {
         path: '/',
@@ -145,11 +147,11 @@ export const autopilotNavGroups: NavGroup[] = [
         component: 'WorksListPage'
       },
       {
-        path: '/platform-data',
-        icon: Database,
-        label: '平台数据',
-        featureKey: 'platform-data',
-        component: 'PlatformDataPage'
+        path: '/content-factory',
+        icon: Factory,
+        label: '内容工厂',
+        featureKey: 'content-factory',
+        component: 'ContentFactoryPage'
       },
       {
         path: '/ai-video',
@@ -159,49 +161,32 @@ export const autopilotNavGroups: NavGroup[] = [
         component: 'AiVideoGenerationPage'
       },
       {
-        path: '/local-video',
-        icon: Scissors,
-        label: '本地视频处理',
-        featureKey: 'local-video-pipeline',
-        component: 'LocalVideoPipelinePage'
-      },
-      {
-        path: '/content-factory',
-        icon: Factory,
-        label: '内容工厂',
-        featureKey: 'content-factory',
-        component: 'ContentFactoryPage'
-      },
-      {
         path: '/competitor-research',
         icon: Target,
         label: '智能对标',
         featureKey: 'competitor_research',
         component: 'CompetitorResearchPage',
       },
+      // 其余核心工具（不在 PRD 7 条之列但保留入口）
       {
-        path: '/license',
-        icon: KeyRound,
-        label: 'License',
-        featureKey: 'license',
-        component: 'LicensePage',
+        path: '/platform-data',
+        icon: Database,
+        label: '平台数据',
+        featureKey: 'platform-data',
+        component: 'PlatformDataPage'
       },
       {
-        path: '/admin/license',
-        icon: ShieldCheck,
-        label: 'License 管理',
-        featureKey: 'license-admin',
-        requireSuperAdmin: true,
-        component: 'AdminLicensePage',
+        path: '/local-video',
+        icon: Scissors,
+        label: '本地视频处理',
+        featureKey: 'local-video-pipeline',
+        component: 'LocalVideoPipelinePage'
       },
-      {
-        path: '/admin/users',
-        icon: UserCog,
-        label: '会员管理',
-        featureKey: 'users-admin',
-        requireSuperAdmin: true,
-        component: 'AdminUsersPage',
-      },
+    ]
+  },
+  {
+    title: '账号绑定',
+    items: [
       // ============ Walking Skeleton #1 ============
       {
         path: '/dashboard/agent',
@@ -248,12 +233,29 @@ export const autopilotNavGroups: NavGroup[] = [
         component: 'DouyinBurnerBindPage',
       },
     ]
-  }
+  },
+  {
+    title: '系统',
+    items: [
+      {
+        path: '/settings',
+        icon: Settings,
+        label: '设置',
+        featureKey: 'settings',
+        component: 'SettingsPage',
+      },
+    ]
+  },
 ];
 
 // ============ 额外路由配置（不在菜单显示） ============
 
 export const additionalRoutes: RouteConfig[] = [
+  // === License 与管理员路由（从导航移出，通过 SettingsPage 卡片访问）===
+  { path: '/license', component: 'LicensePage', requireAuth: true },
+  { path: '/admin/license', component: 'AdminLicensePage', requireAuth: true, requireSuperAdmin: true },
+  { path: '/admin/users', component: 'AdminUsersPage', requireAuth: true, requireSuperAdmin: true },
+
   // === AI 员工详情页路由 ===
   { path: '/ai-employees/:employeeId', component: 'AiEmployeeDetailPage', requireAuth: true },
   { path: '/ai-employees/:employeeId/abilities/:abilityId', component: 'AiAbilityDetailPage', requireAuth: true },
