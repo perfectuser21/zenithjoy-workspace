@@ -104,6 +104,24 @@ jobs:
         working-directory: apps/api
         run: npx vitest run --coverage
 
+  # ─── Agent Tests ─────────────────────────────────────────────────────
+  agent-test:
+    name: Agent Test
+    needs: changes
+    if: needs.changes.outputs.agent == 'true' || needs.changes.outputs.ci == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - run: npm ci
+        working-directory: services/agent
+      - name: Run tests (src/ only — publishers require Chrome CDP not available in CI)
+        working-directory: services/agent
+        run: npx vitest run src/
+
   # ─── L4 Gate ──────────────────────────────────────────────────────────
   l4-passed:
     name: L4 Runtime Gate Passed

@@ -1668,6 +1668,14 @@ tests:
     product: AI视频本地流水线
     note: "fetchWithTimeout/fireProgress/reportComplete 离线执行单测（v1.1.0）"
 
+  - id: agent-ensure-hyperframes
+    path: services/agent/src/handlers/__tests__/ensure-hyperframes.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: Agent安装包
+    note: "ensureHyperframes/getHyperframesCmd 本地 Node.js + CLI 路径解析单测（v1.1.6）"
+
   - id: ai-video-pipeline-stale-recovery
     path: apps/api/src/controllers/__tests__/ai-video-pipeline-stale.test.ts
     type: unit
