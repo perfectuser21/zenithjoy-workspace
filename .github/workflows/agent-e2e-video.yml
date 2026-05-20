@@ -6,6 +6,14 @@ on:
         description: Agent install pack version
         required: false
         default: "1.1.7"
+      e2e_email:
+        description: E2E test account email
+        required: false
+        default: "zj-e2e-test@zenjoymedia.media"
+      e2e_pass:
+        description: E2E test account password
+        required: false
+        default: "E2eTest2026!"
 
 jobs:
   e2e-video-pipeline:
@@ -103,8 +111,8 @@ jobs:
       - name: Wait for Agent online
         shell: powershell
         env:
-          E2E_EMAIL: ${{ secrets.E2E_EMAIL }}
-          E2E_PASS: ${{ secrets.E2E_PASS }}
+          E2E_EMAIL: ${{ github.event.inputs.e2e_email }}
+          E2E_PASS: ${{ github.event.inputs.e2e_pass }}
         run: |
           $resp = Invoke-RestMethod -Uri "https://autopilot.zenjoymedia.media/api/auth/sign-in/email" `
             -Method POST -ContentType "application/json" `
@@ -138,8 +146,8 @@ jobs:
         shell: powershell
         env:
           VIDEO_PATH: ${{ env.VIDEO_PATH }}
-          E2E_EMAIL: ${{ secrets.E2E_EMAIL }}
-          E2E_PASS: ${{ secrets.E2E_PASS }}
+          E2E_EMAIL: ${{ github.event.inputs.e2e_email }}
+          E2E_PASS: ${{ github.event.inputs.e2e_pass }}
         run: |
           New-Item -ItemType Directory -Force -Path screenshots | Out-Null
           npx playwright test e2e/agent-video-pipeline.spec.js --reporter=list
