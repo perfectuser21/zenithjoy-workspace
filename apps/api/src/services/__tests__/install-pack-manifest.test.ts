@@ -52,4 +52,26 @@ describe('readInstallPackManifest', () => {
       fs.unlinkSync(tmpFile);
     }
   });
+
+  it('cos_url 可选字段 — 有无均合法', () => {
+    const tmpFile = path.join(os.tmpdir(), `manifest-cos-${Date.now()}.json`);
+    fs.writeFileSync(
+      tmpFile,
+      JSON.stringify({
+        version: '1.1.3',
+        sha256: 'a'.repeat(64),
+        download_url: '/download/zenithjoy-agent-v1.1.3.tar.gz',
+        cos_url: 'https://zenithjoy-static-1333590468.cos.accelerate.myqcloud.com/install-pack/zenithjoy-agent-v1.1.3.tar.gz',
+        size: 169402553,
+        build_time: '2026-05-20T02:34:30Z',
+      })
+    );
+    try {
+      const result = readInstallPackManifest(tmpFile);
+      expect(result).not.toBeNull();
+      expect(result?.cos_url).toContain('cos.accelerate.myqcloud.com');
+    } finally {
+      fs.unlinkSync(tmpFile);
+    }
+  });
 });
