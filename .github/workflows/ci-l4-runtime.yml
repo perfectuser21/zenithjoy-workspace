@@ -104,6 +104,26 @@ jobs:
         working-directory: apps/api
         run: npx vitest run --coverage
 
+  # ─── Agent Tests ─────────────────────────────────────────────────────
+  agent-test:
+    name: Agent Test
+    needs: changes
+    if: needs.changes.outputs.agent == 'true' || needs.changes.outputs.ci == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: services/agent/package-lock.json
+      - run: npm ci
+        working-directory: services/agent
+      - name: Run tests
+        working-directory: services/agent
+        run: npm test
+
   # ─── L4 Gate ──────────────────────────────────────────────────────────
   l4-passed:
     name: L4 Runtime Gate Passed
