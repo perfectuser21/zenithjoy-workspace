@@ -28,14 +28,14 @@
 2. 浏览器已登录抖音（脚本会自动检测，未登录会等待手动登录）
 3. 已安装依赖：
    ```bash
-   cd services/creator/scripts/publishers
+   cd services/content-pipeline/scripts/publishers
    npm install
    ```
 
 ## 用法示例
 
 ```bash
-cd services/creator/scripts/publishers
+cd services/content-pipeline/scripts/publishers
 
 # 默认 topic（一人公司）
 node douyin-publisher/sop-video-search.js
@@ -132,6 +132,6 @@ DOUYIN_CDP_HOST=http://localhost:9222 node douyin-publisher/sop-video-search.js 
 
 ## 相关文件
 
-- 脚本：`services/creator/scripts/publishers/douyin-publisher/sop-video-search.js`
-- 关键词配置：`services/creator/scripts/publishers/douyin-publisher/sop-keywords.js`
+- 脚本：`services/content-pipeline/scripts/publishers/douyin-publisher/sop-video-search.js`
+- 关键词配置：`services/content-pipeline/scripts/publishers/douyin-publisher/sop-keywords.js`
 - 账号筛选 Skill：`.claude/skills/douyin-account-search/SKILL.md`

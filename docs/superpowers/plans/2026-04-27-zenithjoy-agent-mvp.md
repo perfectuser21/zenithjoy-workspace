@@ -717,11 +717,11 @@ git commit -m "feat(agent): POST /api/agent/test-publish + GET /api/agent/status
 
 **Files:**
 - Modify: `services/agent/src/handlers/wechat-publish.ts`
-- Modify: `services/creator/scripts/publishers/wechat-publisher/publish-wechat-article.cjs`（加 --draft-only）
+- Modify: `services/content-pipeline/scripts/publishers/wechat-publisher/publish-wechat-article.cjs`（加 --draft-only）
 
 - [ ] **Step 1: 检查 wechat-publisher 现有参数**
 
-Run: `head -100 services/creator/scripts/publishers/wechat-publisher/publish-wechat-article.cjs`
+Run: `head -100 services/content-pipeline/scripts/publishers/wechat-publisher/publish-wechat-article.cjs`
 找到主入口，看是否有 publish/submit 步骤可以跳过。
 
 - [ ] **Step 2: 加 --draft-only 模式**
@@ -753,7 +753,7 @@ import path from 'path';
 
 const SCRIPT_PATH = path.resolve(
   process.cwd(),
-  '../../services/creator/scripts/publishers/wechat-publisher/publish-wechat-article.cjs'
+  '../../services/content-pipeline/scripts/publishers/wechat-publisher/publish-wechat-article.cjs'
 );
 
 export async function handleWechatPublish(
@@ -817,7 +817,7 @@ curl -X POST http://localhost:5200/api/agent/test-publish
 
 ```bash
 git add services/agent/src/handlers/wechat-publish.ts
-git add services/creator/scripts/publishers/wechat-publisher/publish-wechat-article.cjs
+git add services/content-pipeline/scripts/publishers/wechat-publisher/publish-wechat-article.cjs
 git commit -m "feat(agent): real wechat draft publish via spawn (draft-only mode)"
 ```
 

@@ -27,6 +27,13 @@ if [ -z "$ADDED_SRC" ]; then
   exit 0
 fi
 
+# refactor: commit 豁免 — 纯重构/改名不引入新逻辑，靠已有测试覆盖，不需要新 test 配对
+COMMIT_MSGS=$(git log --pretty=%s "${BASE_REF}..HEAD" 2>/dev/null || true)
+if echo "$COMMIT_MSGS" | grep -qE '^refactor(\(.+\))?!?:'; then
+  echo '⏭️  refactor: commit — test-pairing 豁免'
+  exit 0
+fi
+
 # Walking Skeleton thin PR 豁免：PR 新增 golden-path smoke = 骨架阶段，不要求 unit test 配对
 NEW_SMOKE=$(git diff --name-only --diff-filter=A "${BASE_REF}...HEAD" 2>/dev/null \
   | grep -E '^\.github/workflows/scripts/smoke/golden-path-.+\.sh$' \

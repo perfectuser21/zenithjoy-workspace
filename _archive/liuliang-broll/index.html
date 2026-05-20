@@ -1,0 +1,677 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>流量密码 · Data Deck V3</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;700&family=JetBrains+Mono:ital,wght@0,400;0,500;0,700;1,400&family=Noto+Sans+SC:wght@300;400;700;900&display=swap');
+
+@property --gx1{syntax:'<percentage>';initial-value:8%;inherits:false;}
+@property --gy1{syntax:'<percentage>';initial-value:85%;inherits:false;}
+@property --gx2{syntax:'<percentage>';initial-value:88%;inherits:false;}
+@property --gy2{syntax:'<percentage>';initial-value:12%;inherits:false;}
+@property --gx3{syntax:'<percentage>';initial-value:50%;inherits:false;}
+@property --gy3{syntax:'<percentage>';initial-value:48%;inherits:false;}
+
+:root{
+  --bg:#08091a;--bg1:#0e1030;--bg2:#0a0c22;
+  --tc:#818cf8;--g1:#6366f1;--g2:#8b5cf6;
+  --white:#fff;--w60:rgba(255,255,255,.60);--w30:rgba(255,255,255,.30);
+  --dim:rgba(129,140,248,.15);--mid:rgba(129,140,248,.45);
+  --orange:#f87171;--green:#34d399;--cyan:var(--tc);
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+html,body{width:100%;height:100%;overflow:hidden;background:#000;}
+
+#app{
+  width:1920px;height:1080px;overflow:hidden;
+  position:absolute;top:0;left:0;transform-origin:top left;
+  background:linear-gradient(135deg,var(--bg2) 0%,var(--bg) 55%,var(--bg1) 100%);
+  display:flex;font-family:'Noto Sans SC','Space Grotesk',sans-serif;color:var(--white);
+}
+
+/* ══ LEFT ══════════════════════════════ */
+#left{
+  width:320px;height:1080px;flex-shrink:0;
+  display:flex;flex-direction:column;align-items:center;padding:36px 0;
+  position:relative;z-index:10;
+  border-right:1px solid rgba(129,140,248,.18);overflow:hidden;
+}
+#left::before{content:'';position:absolute;width:320px;height:600px;top:240px;
+  background:radial-gradient(ellipse,rgba(99,102,241,.10) 0%,transparent 70%);pointer-events:none;}
+
+.l-top{width:100%;padding:0 28px;display:flex;flex-direction:column;flex:1;min-height:0;overflow:hidden;}
+.l-brand{font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;letter-spacing:.4em;color:var(--cyan);text-transform:uppercase;margin-bottom:28px;}
+.l-stat{display:flex;flex-direction:column;padding:14px 0;border-bottom:1px solid var(--dim);}
+.l-stat-num{font-family:'JetBrains Mono',monospace;font-size:36px;font-weight:700;line-height:1;color:var(--white);}
+.l-stat-unit{font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.25em;color:var(--mid);margin-top:4px;}
+.l-stat.accent .l-stat-num{color:var(--cyan);}
+.l-stat.orange .l-stat-num{color:var(--orange);}
+.l-stat.green  .l-stat-num{color:var(--green);}
+.l-live{display:flex;align-items:center;gap:8px;margin-top:20px;font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.2em;color:var(--mid);}
+.l-dot{width:6px;height:6px;border-radius:50%;background:var(--cyan);animation:pulse 1.4s ease infinite;}
+@keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.3;transform:scale(.7)}}
+
+/* phone */
+.l-phone-wrap{width:100%;display:flex;justify-content:center;padding:28px 0;border-top:1px solid var(--dim);border-bottom:1px solid var(--dim);}
+#phone{
+  width:252px;height:448px;border-radius:38px;
+  background:rgba(129,140,248,.06);border:1px solid rgba(129,140,248,.28);
+  box-shadow:0 0 0 1px rgba(255,255,255,.04) inset,0 28px 64px rgba(0,0,0,.8),0 0 50px rgba(99,102,241,.10);
+  position:relative;overflow:hidden;animation:phonePulse 5s ease infinite;
+}
+@keyframes phonePulse{
+  0%,100%{box-shadow:0 0 0 1px rgba(255,255,255,.04) inset,0 28px 64px rgba(0,0,0,.8),0 0 50px rgba(99,102,241,.10);}
+  50%{box-shadow:0 0 0 1px rgba(255,255,255,.06) inset,0 28px 64px rgba(0,0,0,.8),0 0 80px rgba(99,102,241,.22);}
+}
+#phone-notch{position:absolute;top:10px;left:50%;transform:translateX(-50%);width:60px;height:16px;background:rgba(0,0,0,.8);border-radius:8px;z-index:10;}
+#phone-screen{position:absolute;inset:2px;border-radius:30px;overflow:hidden;background:#000;}
+.pslide{position:absolute;inset:0;opacity:0;transition:opacity .5s;display:flex;flex-direction:column;justify-content:flex-end;padding:8px 7px 12px;}
+.pslide.on{opacity:1;}
+.pg1{background:linear-gradient(160deg,#0D1B2A,#1A0A2E);}
+.pg2{background:linear-gradient(160deg,#001A14,#080E28);}
+.pg3{background:linear-gradient(160deg,#150A00,#0A1420);}
+.p-user{font-family:'JetBrains Mono',monospace;font-size:7px;font-weight:700;color:#fff;margin-bottom:3px;}
+.p-cap{font-size:7px;color:rgba(255,255,255,.7);line-height:1.5;margin-bottom:4px;}
+.p-tag{font-size:6px;color:var(--cyan);}
+.p-bar{position:absolute;bottom:0;left:0;right:0;height:1.5px;background:rgba(255,255,255,.08);}
+.p-fill{height:100%;background:var(--orange);animation:pf 2.5s linear infinite;}
+@keyframes pf{from{width:0}to{width:100%}}
+.p-side{position:absolute;right:6px;bottom:60px;display:flex;flex-direction:column;gap:9px;align-items:center;}
+.p-ic{font-size:14px;}.p-cnt{font-family:'JetBrains Mono',monospace;font-size:5px;color:rgba(255,255,255,.65);}
+
+.l-bottom{width:100%;padding:20px 28px 0;display:flex;flex-direction:column;gap:12px;}
+.l-quote{font-size:11px;color:var(--mid);line-height:1.6;font-family:'JetBrains Mono',monospace;border-left:2px solid var(--dim);padding-left:10px;}
+.l-version{font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.3em;color:var(--dim);margin-top:auto;}
+
+/* ══ BOARD ══════════════════════════════ */
+#board{flex:1;height:1080px;position:relative;overflow:hidden;}
+
+/* animated gradient mesh via @property */
+#board::before{
+  content:'';position:absolute;inset:0;z-index:0;pointer-events:none;
+  --gx1:8%;--gy1:85%;--gx2:88%;--gy2:12%;--gx3:50%;--gy3:48%;
+  background:
+    radial-gradient(ellipse 900px 700px at var(--gx1) var(--gy1),rgba(99,102,241,.14) 0%,transparent 60%),
+    radial-gradient(ellipse 600px 800px at var(--gx2) var(--gy2),rgba(139,92,246,.10) 0%,transparent 60%),
+    radial-gradient(ellipse 500px 500px at var(--gx3) var(--gy3),rgba(79,70,229,.07) 0%,transparent 55%);
+  animation:meshDrift 20s ease infinite;
+}
+@keyframes meshDrift{
+  0%,100%{--gx1:8%;--gy1:85%;--gx2:88%;--gy2:12%;--gx3:50%;--gy3:48%;}
+  20%{--gx1:22%;--gy1:68%;--gx2:72%;--gy2:28%;--gx3:35%;--gy3:40%;}
+  40%{--gx1:12%;--gy1:44%;--gx2:82%;--gy2:55%;--gx3:62%;--gy3:65%;}
+  60%{--gx1:32%;--gy1:74%;--gx2:64%;--gy2:22%;--gx3:44%;--gy3:35%;}
+  80%{--gx1:6%;--gy1:54%;--gx2:90%;--gy2:40%;--gx3:56%;--gy3:56%;}
+}
+#board::after{
+  content:'';position:absolute;inset:0;z-index:0;pointer-events:none;
+  background-image:linear-gradient(rgba(129,140,248,.022) 1px,transparent 1px),linear-gradient(90deg,rgba(129,140,248,.022) 1px,transparent 1px);
+  background-size:64px 64px;
+}
+
+/* progress bar — animated shimmer */
+#gbar{position:absolute;top:0;left:0;height:3px;width:0;z-index:100;
+  background:linear-gradient(90deg,var(--g1),var(--g2),#a78bfa,var(--g1));
+  background-size:200%;animation:gbarShim 2s linear infinite;}
+@keyframes gbarShim{0%{background-position:0%}100%{background-position:200%}}
+
+#sc{position:absolute;top:34px;right:52px;font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--dim);letter-spacing:.2em;z-index:50;}
+#dots{position:absolute;bottom:34px;right:52px;display:flex;gap:6px;z-index:50;}
+.dot{width:5px;height:5px;border:1px solid var(--dim);border-radius:1px;cursor:pointer;transition:all .3s cubic-bezier(.34,1.56,.64,1);}
+.dot.on{background:var(--cyan);border-color:var(--cyan);width:22px;}
+
+/* ══ SLIDE BASE ══════════════════════════ */
+.slide{
+  position:absolute;inset:0;padding:72px 96px;
+  display:flex;flex-direction:column;justify-content:center;
+  opacity:0;transform:scale(.97) translateY(12px);filter:blur(5px);
+  transition:opacity .38s ease,transform .38s cubic-bezier(.22,1,.36,1),filter .38s ease;
+  z-index:1;
+}
+.slide.on{opacity:1;transform:scale(1) translateY(0);filter:blur(0);}
+.slide.out{opacity:0;transform:scale(1.03) translateY(-10px);filter:blur(5px);}
+
+/* glass cards — animated border glow */
+.glass{
+  background:rgba(129,140,248,.10);border:1px solid rgba(129,140,248,.28);
+  box-shadow:0 1px 0 rgba(129,140,248,.14) inset,0 8px 32px rgba(0,0,0,.35);
+  animation:glassGlow 5s ease infinite;
+}
+.glass2{
+  background:rgba(129,140,248,.07);border:1px solid rgba(129,140,248,.20);
+  box-shadow:0 1px 0 rgba(129,140,248,.10) inset,0 8px 32px rgba(0,0,0,.25);
+  animation:glassGlow 5s ease infinite 1.2s;
+}
+@keyframes glassGlow{
+  0%,100%{border-color:rgba(129,140,248,.20);}
+  50%{border-color:rgba(129,140,248,.48);}
+}
+
+.eyebrow{font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.45em;color:var(--cyan);text-transform:uppercase;margin-bottom:20px;}
+
+/* ══ S1 ══════════════════════════════════ */
+#s1{align-items:flex-start;}
+.s1-eye{opacity:0;}
+.s1-title{font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:200px;line-height:.78;letter-spacing:-.02em;margin-bottom:44px;}
+.ch{display:inline-block;opacity:0;transform:translateY(70px) rotate(var(--rot,0deg));}
+.ch.in{animation:charSpring .6s cubic-bezier(.34,1.56,.64,1) forwards;}
+@keyframes charSpring{to{opacity:1;transform:translateY(0) rotate(0deg);}}
+.cy{color:var(--cyan);}.og{color:var(--orange);}
+
+.s1-myths{display:flex;flex-wrap:wrap;gap:8px;opacity:0;}
+.s1-myth{font-family:'JetBrains Mono',monospace;font-size:14px;color:rgba(235,244,255,.45);background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.07);padding:6px 16px;position:relative;overflow:hidden;}
+.s1-myth .sr{position:absolute;top:50%;left:0;width:0;height:1px;background:rgba(232,90,60,.8);transition:width .35s cubic-bezier(.22,1,.36,1);}
+.s1-myth.x{color:rgba(235,244,255,.15);}.s1-myth.x .sr{width:100%;}
+
+/* ══ S2 ══════════════════════════════════ */
+#s2{flex-direction:column;align-items:center;}
+.s2-top{align-self:flex-start;margin-bottom:44px;opacity:0;transition:opacity .3s;}
+.arc-row{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;width:100%;flex:1;}
+.arc-card{border-radius:16px;padding:36px 24px;display:flex;flex-direction:column;align-items:center;opacity:0;transform:perspective(600px) rotateY(45deg) scale(.92);transition:opacity .55s,transform .55s cubic-bezier(.22,1,.36,1);}
+.arc-card.in{opacity:1;transform:perspective(600px) rotateY(0) scale(1);}
+.arc-wrap{position:relative;width:140px;height:140px;margin-bottom:20px;}
+.arc-wrap svg{width:140px;height:140px;transform:rotate(-90deg);}
+.arc-bg{fill:none;stroke:rgba(255,255,255,.05);stroke-width:6;}
+.arc-fg{fill:none;stroke-width:6;stroke-linecap:round;}
+.arc-center{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;}
+.arc-n{font-family:'JetBrains Mono',monospace;font-size:48px;font-weight:700;line-height:1;}
+.arc-u{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--mid);margin-top:3px;letter-spacing:.2em;}
+.arc-lbl{font-family:'Noto Sans SC',sans-serif;font-size:16px;color:var(--white);font-weight:300;text-align:center;}
+.arc-sub{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--mid);margin-top:4px;letter-spacing:.15em;}
+
+/* ══ S3/5/7 big numbers — stampIn ══════ */
+.bignum{font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:280px;line-height:.72;opacity:0;}
+.bignum.in{animation:stampIn .65s cubic-bezier(.34,1.56,.64,1) forwards;}
+@keyframes stampIn{
+  0%{opacity:0;transform:scale(1.45) translateX(-25px);filter:blur(14px);}
+  55%{opacity:1;transform:scale(.96) translateX(2px);filter:blur(0);}
+  75%{transform:scale(1.02) translateX(-1px);}
+  100%{opacity:1;transform:scale(1) translateX(0);}
+}
+.secname{font-family:'Noto Sans SC',sans-serif;font-size:40px;font-weight:900;color:var(--white);line-height:1.15;margin-top:12px;opacity:0;transition:opacity .35s .2s;}
+.secname.in{opacity:1;}
+
+#s3{flex-direction:row;gap:80px;align-items:center;}
+.s3-l{flex:0 0 380px;display:flex;flex-direction:column;}
+.s3-badge{font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.5em;color:var(--bg);background:var(--orange);padding:4px 14px;width:fit-content;margin-bottom:32px;}
+.s3-r{flex:1;display:flex;flex-direction:column;gap:14px;}
+.meter-box{border-radius:12px;padding:22px 26px;opacity:0;transform:translateX(28px);transition:opacity .45s,transform .45s cubic-bezier(.22,1,.36,1);}
+.meter-box.in{opacity:1;transform:translateX(0);}
+.m-head{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--mid);letter-spacing:.3em;margin-bottom:16px;}
+.mrow{display:flex;align-items:center;gap:12px;margin-bottom:11px;}.mrow:last-child{margin-bottom:0;}
+.mname{width:90px;font-family:'Noto Sans SC',sans-serif;font-size:14px;color:var(--white);font-weight:300;}
+.mtrack{flex:1;height:14px;background:rgba(255,255,255,.05);border-radius:2px;overflow:hidden;}
+.mfill{height:100%;width:0;border-radius:2px;transition:width 1s cubic-bezier(.34,1.2,.64,1);}
+.mval{font-family:'JetBrains Mono',monospace;font-size:12px;width:44px;text-align:right;}
+.s3-quote{border-radius:12px;padding:18px 22px;border-left:3px solid var(--cyan);font-family:'Noto Sans SC',sans-serif;font-size:19px;font-weight:300;color:var(--white);line-height:1.65;opacity:0;transition:opacity .35s .4s;}
+.s3-quote.in{opacity:1;}
+.s3-quote em{font-style:normal;color:var(--cyan);font-weight:700;}
+
+/* ══ S4 ══════════════════════════════════ */
+#s4{flex-direction:column;}
+.hdr{margin-bottom:40px;}
+.hdr .kw{font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.4em;margin-bottom:8px;}
+.hdr .h{font-family:'Space Grotesk','Noto Sans SC',sans-serif;font-size:52px;font-weight:700;color:var(--white);line-height:1.1;}
+.bchart{display:flex;flex-direction:column;gap:20px;flex:1;}
+.brow{display:flex;align-items:center;gap:20px;opacity:0;transform:translateX(-28px);transition:opacity .45s,transform .45s cubic-bezier(.22,1,.36,1);}
+.brow.in{opacity:1;transform:translateX(0);}
+.blbl{width:170px;font-size:17px;color:rgba(235,244,255,.7);font-weight:300;text-align:right;line-height:1.35;flex-shrink:0;}
+.btrk{flex:1;height:52px;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.05);border-radius:4px;overflow:hidden;position:relative;}
+.bfil{height:100%;width:0;border-radius:4px;display:flex;align-items:center;padding-left:14px;transition:width 1s cubic-bezier(.34,1.15,.64,1);}
+.bfil.peak{animation:barPeak 2.8s ease infinite 1.4s;}
+@keyframes barPeak{0%,100%{filter:brightness(1);}50%{filter:brightness(1.3) saturate(1.4);}}
+.btxt{font-family:'JetBrains Mono',monospace;font-size:11px;white-space:nowrap;}
+.bval{font-family:'JetBrains Mono',monospace;font-size:36px;font-weight:700;width:200px;flex-shrink:0;}
+
+/* ══ S5 ══════════════════════════════════ */
+#s5{flex-direction:row;gap:80px;align-items:center;}
+.s5-l{flex:0 0 380px;display:flex;flex-direction:column;}
+.s5-badge{font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.5em;color:var(--bg);background:var(--cyan);padding:4px 14px;width:fit-content;margin-bottom:32px;}
+.s5-r{flex:1;display:flex;flex-direction:column;gap:12px;}
+.s5-desc{font-size:22px;font-weight:300;color:rgba(235,244,255,.6);line-height:1.6;margin-bottom:20px;}
+
+/* ══ S6 ══════════════════════════════════ */
+#s6{flex-direction:column;}
+.cases{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;flex:1;}
+.ccard{border-radius:16px;padding:28px 22px;display:flex;flex-direction:column;border-top:2px solid transparent;opacity:0;transform:translateY(28px) scale(.94);transition:opacity .5s,transform .5s cubic-bezier(.34,1.4,.64,1);}
+.ccard.in{opacity:1;transform:translateY(0) scale(1);}
+.ccard.c1{border-top-color:var(--dim);}.ccard.c2{border-top-color:var(--cyan);}.ccard.c3{border-top-color:var(--orange);}
+.cc-t{font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.3em;margin-bottom:12px;}
+.cc-n{font-size:17px;font-weight:700;color:var(--white);margin-bottom:8px;}
+.cc-d{font-size:13px;color:var(--mid);font-weight:300;line-height:1.6;flex:1;}
+.cc-m{font-family:'JetBrains Mono',monospace;font-size:64px;font-weight:700;line-height:.9;margin-top:16px;}
+.cc-ml{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--mid);letter-spacing:.2em;margin-top:4px;}
+
+/* ══ S7 ══════════════════════════════════ */
+#s7{flex-direction:row;gap:80px;align-items:center;}
+.s7-l{flex:0 0 380px;}
+.s7-badge{font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.5em;color:var(--bg);background:var(--green);padding:4px 14px;width:fit-content;margin-bottom:32px;}
+.s7-r{flex:1;display:flex;flex-direction:column;gap:16px;}
+.s7-big{font-family:'JetBrains Mono',monospace;font-size:96px;font-weight:700;color:var(--green);line-height:1;}
+.s7-unit{font-size:20px;color:var(--mid);margin-top:6px;}
+.s7-rows{display:flex;flex-direction:column;}
+.s7-row{display:flex;align-items:center;gap:16px;padding:18px 0;border-bottom:1px solid rgba(255,255,255,.05);opacity:0;transform:translateX(22px);transition:opacity .35s,transform .35s cubic-bezier(.22,1,.36,1);}
+.s7-row.in{opacity:1;transform:translateX(0);}
+.s7-ic{width:44px;height:44px;border-radius:8px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;}
+.s7-tx{font-size:24px;font-weight:300;}.s7-tx strong{color:var(--green);font-weight:900;}
+.dotgrid{border-radius:12px;padding:16px;margin-top:16px;opacity:0;transition:opacity .3s .5s;}
+.dotgrid.in{opacity:1;}
+#dots6{display:flex;flex-wrap:wrap;gap:2px;}
+.sd{width:8px;height:8px;border-radius:1px;background:rgba(255,255,255,.04);transition:background .1s,transform .1s;}
+.sd.on{background:var(--green);}.sd.flash{background:#fff;transform:scale(1.6);}
+
+/* ══ S8 ══════════════════════════════════ */
+#s8{flex-direction:column;}
+.s8-hdr{margin-bottom:28px;}
+.mgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;flex:1;}
+.mc{border-radius:10px;padding:16px 14px;border:1px solid rgba(255,255,255,.05);background:rgba(255,255,255,.02);display:flex;flex-direction:column;gap:5px;opacity:0;transform:scale(.84) translateY(14px);transition:opacity .28s,transform .28s cubic-bezier(.34,1.5,.64,1);}
+.mc.in{opacity:1;transform:scale(1) translateY(0);}
+.mc.hi{border-color:rgba(129,140,248,.35);background:rgba(129,140,248,.12);animation:glassGlow 4s ease infinite;}
+.mc-n{font-family:'JetBrains Mono',monospace;font-size:28px;font-weight:700;color:var(--cyan);opacity:.3;line-height:1;}
+.mc.hi .mc-n{opacity:1;}
+.mc-nm{font-family:'Noto Sans SC',sans-serif;font-size:18px;font-weight:700;color:var(--white);line-height:1.25;}
+.mc-sb{font-size:12px;color:var(--mid);line-height:1.4;}
+
+/* ══ S9 ══════════════════════════════════ */
+#s9{align-items:center;justify-content:center;text-align:center;}
+.s9-eye{margin-bottom:28px;}
+.s9-big{font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:200px;line-height:.8;margin-bottom:36px;}
+.s9-big .cy{display:block;}
+.s9-sub{font-size:28px;color:rgba(235,244,255,.5);font-weight:300;max-width:620px;line-height:1.7;margin-bottom:48px;}
+.s9-sub em{font-style:normal;color:var(--cyan);font-weight:700;}
+.s9-btns{display:flex;gap:14px;}
+.s9-btn{font-family:'JetBrains Mono',monospace;font-size:13px;letter-spacing:.18em;padding:16px 36px;border-radius:6px;border:1px solid;cursor:pointer;transition:all .3s cubic-bezier(.22,1,.36,1);}
+.s9-btn.p{border-color:var(--orange);background:var(--orange);color:#000;animation:btnPulse 3s ease infinite;}
+.s9-btn.s{border-color:var(--dim);color:var(--white);background:transparent;}
+@keyframes btnPulse{0%,100%{box-shadow:0 0 0 0 rgba(248,113,113,0);}50%{box-shadow:0 0 0 10px rgba(248,113,113,.12);}}
+
+/* grain */
+#grain{position:absolute;inset:0;z-index:999;pointer-events:none;opacity:.030;
+  background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-size:200px 200px;}
+</style>
+</head>
+<body>
+<div id="app">
+
+<!-- LEFT -->
+<div id="left">
+  <div class="l-top">
+    <div class="l-brand">流量研究院</div>
+    <div class="l-stat accent"><div class="l-stat-num">842</div><div class="l-stat-unit">VIDEOS ANALYZED</div></div>
+    <div class="l-stat orange"><div class="l-stat-num">205</div><div class="l-stat-unit">TOP CREATORS</div></div>
+    <div class="l-stat green"><div class="l-stat-num">15×</div><div class="l-stat-unit">MAX GROWTH DIFF</div></div>
+    <div class="l-stat"><div class="l-stat-num">2mo</div><div class="l-stat-unit">RESEARCH PERIOD</div></div>
+    <div class="l-live"><div class="l-dot"></div>LIVE ANALYSIS</div>
+  </div>
+  <div class="l-phone-wrap">
+    <div id="phone">
+      <div id="phone-notch"></div>
+      <div id="phone-screen">
+        <div class="pslide pg1 on" id="p1">
+          <div class="p-side">
+            <div style="display:flex;flex-direction:column;align-items:center;gap:2px"><div class="p-ic">❤️</div><div class="p-cnt">8.2W</div></div>
+            <div style="display:flex;flex-direction:column;align-items:center;gap:2px"><div class="p-ic">💬</div><div class="p-cnt">4.1K</div></div>
+            <div style="display:flex;flex-direction:column;align-items:center;gap:2px"><div class="p-ic">★</div><div class="p-cnt">2.8W</div></div>
+          </div>
+          <div class="p-user">@流量研究院</div>
+          <div class="p-cap">2个月拆解842条热门视频…</div>
+          <div class="p-tag">#流量密码 #涨粉</div>
+          <div class="p-bar"><div class="p-fill"></div></div>
+        </div>
+        <div class="pslide pg2" id="p2">
+          <div class="p-side">
+            <div style="display:flex;flex-direction:column;align-items:center;gap:2px"><div class="p-ic">❤️</div><div class="p-cnt">12W</div></div>
+            <div style="display:flex;flex-direction:column;align-items:center;gap:2px"><div class="p-ic">💬</div><div class="p-cnt">6K</div></div>
+          </div>
+          <div class="p-user">@精准案例</div>
+          <div class="p-cap">"给所有宝妈说…"精准共鸣开头拆解</div>
+          <div class="p-tag">#精准共鸣</div>
+          <div class="p-bar"><div class="p-fill"></div></div>
+        </div>
+        <div class="pslide pg3" id="p3">
+          <div class="p-side">
+            <div style="display:flex;flex-direction:column;align-items:center;gap:2px"><div class="p-ic">❤️</div><div class="p-cnt">100W</div></div>
+            <div style="display:flex;flex-direction:column;align-items:center;gap:2px"><div class="p-ic">💬</div><div class="p-cnt">8K</div></div>
+          </div>
+          <div class="p-user">@康仔农人</div>
+          <div class="p-cap">300秒·426个镜头·百万播放</div>
+          <div class="p-tag">#细节叙事 #多元渗透</div>
+          <div class="p-bar"><div class="p-fill"></div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="l-bottom">
+    <div class="l-quote">"头部博主都爱用<br>但不说的底层逻辑"</div>
+    <div class="l-version">V3 · 精华版 · 9 SLIDES</div>
+  </div>
+</div>
+
+<!-- BOARD -->
+<div id="board">
+  <canvas id="cnv" width="1600" height="1080" style="position:absolute;inset:0;z-index:0;pointer-events:none;"></canvas>
+  <div id="gbar"></div>
+  <div id="sc">01 / 09</div>
+  <div id="dots"></div>
+
+  <!-- S1 -->
+  <div class="slide on" id="s1">
+    <div class="eyebrow s1-eye" id="s1e">TRAFFIC CODE DECODED · 流量研究院出品</div>
+    <div class="s1-title" id="s1t">
+      <div><span class="ch cy" id="c0" style="--rot:-4deg">流</span><span class="ch cy" id="c1" style="--rot:3deg">量</span></div>
+      <div><span class="ch og" id="c2" style="--rot:-2deg">密</span><span class="ch og" id="c3" style="--rot:4deg">码</span></div>
+    </div>
+    <div class="s1-myths" id="s1m">
+      <div class="s1-myth">钩子开头<div class="sr"></div></div>
+      <div class="s1-myth">放大焦虑<div class="sr"></div></div>
+      <div class="s1-myth">极限数字<div class="sr"></div></div>
+      <div class="s1-myth">内幕揭秘<div class="sr"></div></div>
+      <div class="s1-myth">打#上热门<div class="sr"></div></div>
+    </div>
+  </div>
+
+  <!-- S2 -->
+  <div class="slide" id="s2">
+    <div class="eyebrow s2-top" id="s2t">RESEARCH EVIDENCE · 两个月深度研究成果</div>
+    <div class="arc-row">
+      <div class="arc-card glass" id="ac1">
+        <div class="arc-wrap"><svg viewBox="0 0 140 140"><circle class="arc-bg" cx="70" cy="70" r="58"/><circle class="arc-fg" id="a1" cx="70" cy="70" r="58" stroke="#818cf8" stroke-dasharray="364.42" stroke-dashoffset="364.42"/></svg>
+          <div class="arc-center"><div class="arc-n" id="n1" style="color:var(--orange)">0</div><div class="arc-u">MONTHS</div></div></div>
+        <div class="arc-lbl">深度研究周期</div><div class="arc-sub">RESEARCH PERIOD</div>
+      </div>
+      <div class="arc-card glass" id="ac2">
+        <div class="arc-wrap"><svg viewBox="0 0 140 140"><circle class="arc-bg" cx="70" cy="70" r="58"/><circle class="arc-fg" id="a2" cx="70" cy="70" r="58" stroke="#818cf8" stroke-dasharray="364.42" stroke-dashoffset="364.42"/></svg>
+          <div class="arc-center"><div class="arc-n" id="n2" style="color:var(--cyan)">0</div><div class="arc-u">VIDEOS</div></div></div>
+        <div class="arc-lbl">热门视频文案</div><div class="arc-sub">ANALYZED</div>
+      </div>
+      <div class="arc-card glass" id="ac3">
+        <div class="arc-wrap"><svg viewBox="0 0 140 140"><circle class="arc-bg" cx="70" cy="70" r="58"/><circle class="arc-fg" id="a3" cx="70" cy="70" r="58" stroke="#818cf8" stroke-dasharray="364.42" stroke-dashoffset="364.42"/></svg>
+          <div class="arc-center"><div class="arc-n" id="n3" style="color:var(--green)">0</div><div class="arc-u">CREATORS</div></div></div>
+        <div class="arc-lbl">头部达人研究</div><div class="arc-sub">TOP CREATORS</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- S3 -->
+  <div class="slide" id="s3">
+    <div class="s3-l">
+      <div class="s3-badge">SECRET 01</div>
+      <div class="bignum" id="s3n" style="color:var(--orange)">01</div>
+      <div class="secname" id="s3nm">精准<br>共鸣点</div>
+    </div>
+    <div class="s3-r">
+      <div class="meter-box glass" id="mb">
+        <div class="m-head">PRECISION METRICS · 精准度量</div>
+        <div class="mrow"><div class="mname">互动率</div><div class="mtrack"><div class="mfill" id="mf1" style="background:var(--orange)"></div></div><div class="mval" style="color:var(--orange)">3.2×</div></div>
+        <div class="mrow"><div class="mname">完播率</div><div class="mtrack"><div class="mfill" id="mf2" style="background:var(--cyan)"></div></div><div class="mval" style="color:var(--cyan)">+68%</div></div>
+        <div class="mrow"><div class="mname">精准曝光</div><div class="mtrack"><div class="mfill" id="mf3" style="background:var(--green)"></div></div><div class="mval" style="color:var(--green)">91%</div></div>
+      </div>
+      <div class="s3-quote glass2" id="sq">"给所有<em>女生</em>分享一个很绝的心态"<br>"我想给所有<em>宝妈</em>说……"</div>
+    </div>
+  </div>
+
+  <!-- S4 -->
+  <div class="slide" id="s4">
+    <div class="hdr">
+      <div class="kw" style="color:var(--orange)">ENGAGEMENT GAP · 精准 vs 泛流量对比</div>
+      <div class="h">精准人群锁定，数据差异一眼看清</div>
+    </div>
+    <div class="bchart">
+      <div class="brow" id="br1"><div class="blbl">非精准<br>泛泛而谈</div><div class="btrk"><div class="bfil" id="bf1" style="background:rgba(42,53,80,.9)"><span class="btxt" style="color:var(--mid)">基础流量层</span></div></div><div class="bval" id="bv1" style="color:var(--mid)">—</div></div>
+      <div class="brow" id="br2"><div class="blbl">半精准<br>方向模糊</div><div class="btrk"><div class="bfil" id="bf2" style="background:rgba(129,140,248,.45)"><span class="btxt" style="color:rgba(255,255,255,.7)">中级流量层</span></div></div><div class="bval" id="bv2" style="color:var(--cyan)">—</div></div>
+      <div class="brow" id="br3"><div class="blbl">精准共鸣<br>人群锁定</div><div class="btrk"><div class="bfil peak" id="bf3" style="background:var(--orange)"><span class="btxt" style="color:#000">爆发流量层</span></div></div><div class="bval" id="bv3" style="color:var(--orange)">—</div></div>
+    </div>
+  </div>
+
+  <!-- S5 -->
+  <div class="slide" id="s5">
+    <div class="s5-l">
+      <div class="s5-badge">SECRET 02</div>
+      <div class="bignum" id="s5n" style="color:var(--cyan)">02</div>
+      <div class="secname" id="s5nm">多元<br>渗透</div>
+    </div>
+    <div class="s5-r">
+      <div class="s5-desc">打破单一圈层，让内容<br>同时覆盖精准 + 广泛人群</div>
+      <div class="glass2" style="padding:22px 26px;border-radius:12px;font-family:'JetBrains Mono',monospace;font-size:80px;font-weight:700;color:var(--cyan);line-height:1">
+        15×<div style="font-size:18px;color:var(--mid);margin-top:6px;font-weight:400;letter-spacing:.1em">SAME NICHE · MAX GROWTH DIFFERENCE</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- S6 -->
+  <div class="slide" id="s6">
+    <div class="hdr"><div class="kw" style="color:var(--cyan)">CASE STUDY · 同一咖啡赛道，三种结果</div><div class="h">内容策略不同，流量相差 15 倍</div></div>
+    <div class="cases">
+      <div class="ccard glass2 c1" id="cc1"><div class="cc-t" style="color:var(--dim)">TYPE 01 · 垂类精准</div><div class="cc-n">咖啡专业内容</div><div class="cc-d">豆子产地、拉花技术…垂直封闭，仅圈内传播</div><div class="cc-m" style="color:var(--dim)">3K</div><div class="cc-ml">平均点赞量</div></div>
+      <div class="ccard glass2 c2" id="cc2"><div class="cc-t" style="color:var(--cyan)">TYPE 02 · 垂类延伸</div><div class="cc-n">咖啡 × 生活美学</div><div class="cc-d">打破单一圈层，连接更广泛的生活方式人群</div><div class="cc-m" style="color:var(--cyan)">4.5W</div><div class="cc-ml">平均点赞量</div></div>
+      <div class="ccard glass c3" id="cc3"><div class="cc-t" style="color:var(--orange)">TYPE 03 · 多元渗透</div><div class="cc-n">康仔农人 · 细节叙事</div><div class="cc-d">300秒 · 426个镜头 · 一粒咖啡豆的完整旅程</div><div class="cc-m" style="color:var(--orange)">100W+</div><div class="cc-ml">播放量</div></div>
+    </div>
+  </div>
+
+  <!-- S7 -->
+  <div class="slide" id="s7">
+    <div class="s7-l">
+      <div class="s7-badge">SECRET 03</div>
+      <div class="bignum" id="s7n" style="color:var(--green)">03</div>
+      <div class="secname" id="s7nm">细节<br>的力量</div>
+    </div>
+    <div class="s7-r">
+      <div><div class="s7-big">426</div><div class="s7-unit">个镜头 · 300秒视频 · 百万播放</div></div>
+      <div class="s7-rows">
+        <div class="s7-row" id="r1"><div class="s7-ic">👁</div><div class="s7-tx">一个<strong>眼神</strong>，定格情绪</div></div>
+        <div class="s7-row" id="r2"><div class="s7-ic">✦</div><div class="s7-tx">野花、风铃、摇曳的<strong>水稻</strong></div></div>
+        <div class="s7-row" id="r3"><div class="s7-ic">▶</div><div class="s7-tx"><strong>微观叙事</strong>，让人不划走</div></div>
+      </div>
+      <div class="dotgrid glass2" id="dg"><div id="dots6"></div></div>
+    </div>
+  </div>
+
+  <!-- S8 -->
+  <div class="slide" id="s8">
+    <div class="s8-hdr">
+      <div class="eyebrow" style="color:var(--orange)">COMPLETE SYSTEM · 完整方法体系</div>
+      <div class="h" style="font-family:'Space Grotesk',sans-serif;font-size:52px;font-weight:700">精准 + 广泛 × 11 种组合</div>
+    </div>
+    <div class="mgrid">
+      <div class="mc hi" id="m1"><div class="mc-n">01</div><div class="mc-nm">精准共鸣点</div><div class="mc-sb">人群锁定，情感接入</div></div>
+      <div class="mc hi" id="m2"><div class="mc-n">02</div><div class="mc-nm">多元渗透</div><div class="mc-sb">打破圈层，扩大覆盖</div></div>
+      <div class="mc hi" id="m3"><div class="mc-n">03</div><div class="mc-nm">细节描述</div><div class="mc-sb">微观叙事，留住注意</div></div>
+      <div class="mc" id="m4"><div class="mc-n">04</div><div class="mc-nm">矛盾对立</div><div class="mc-sb">制造认知冲突</div></div>
+      <div class="mc" id="m5"><div class="mc-n">05</div><div class="mc-nm">悬念刺激</div><div class="mc-sb">拉动好奇心曲线</div></div>
+      <div class="mc" id="m6"><div class="mc-n">06</div><div class="mc-nm">暗喻描写</div><div class="mc-sb">隐喻激活联想</div></div>
+      <div class="mc" id="m7"><div class="mc-n">07</div><div class="mc-nm">数据背书</div><div class="mc-sb">可信度即流量</div></div>
+      <div class="mc" id="m8"><div class="mc-n">08</div><div class="mc-nm">情绪峰值</div><div class="mc-sb">推送时刻设计</div></div>
+      <div class="mc" id="m9"><div class="mc-n">09</div><div class="mc-nm">身份代入</div><div class="mc-sb">我就是那个人</div></div>
+      <div class="mc" id="m10"><div class="mc-n">10</div><div class="mc-nm">节奏控制</div><div class="mc-sb">快慢决定完播</div></div>
+      <div class="mc" id="m11"><div class="mc-n">11</div><div class="mc-nm">结尾钩子</div><div class="mc-sb">让人想看下一条</div></div>
+      <div class="mc" id="m0" style="border:1px dashed rgba(129,140,248,.30);background:transparent;align-items:center;justify-content:center">
+        <div style="font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--cyan);letter-spacing:.15em;text-align:center;line-height:2">评论你的行业<br>→ 帮你组合</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- S9 -->
+  <div class="slide" id="s9">
+    <div class="eyebrow s9-eye" style="color:var(--cyan)">TAKE ACTION · 立刻行动</div>
+    <div class="s9-big">突破<span class="cy">流量<br>层级</span></div>
+    <div class="s9-sub">在评论告诉我你的<em>行业</em>，<br>我帮你搭配最适合的<em>流量密码组合</em></div>
+    <div class="s9-btns"><div class="s9-btn p">👍 点赞收藏</div><div class="s9-btn s">💬 评论行业</div></div>
+  </div>
+
+  <div id="grain"></div>
+</div>
+</div>
+
+<script>
+// ── PARTICLES ──────────────────────────────────────
+const cnv=document.getElementById('cnv'),ctx=cnv.getContext('2d');
+const CW=1600,CH=1080;
+const PAL=['129,140,248','99,102,241','139,92,246','167,139,250','200,200,255'];
+let pts=[];
+
+function mkPt(b=false){
+  return{x:b?CW/2+(Math.random()-.5)*180:Math.random()*CW,
+    y:b?CH/2+(Math.random()-.5)*180:Math.random()*CH+CH,
+    vx:(Math.random()-.5)*(b?4:.2),vy:b?-(Math.random()*5+2):-(Math.random()*.5+.1),
+    r:b?Math.random()*2.5+1:Math.random()*1.8+.4,
+    a:b?Math.random()*.6+.3:Math.random()*.22+.04,
+    da:b?.018:.0008,c:PAL[Math.floor(Math.random()*PAL.length)],life:b?1:null};
+}
+for(let i=0;i<120;i++)pts.push(mkPt());
+
+function tick(){
+  ctx.clearRect(0,0,CW,CH);
+  pts=pts.filter(p=>{
+    if(p.life!==null){p.life-=p.da;if(p.life<=0)return false;p.a=p.life*.55;}
+    p.x+=p.vx;p.y+=p.vy;
+    if(p.y<-8){p.y=CH+8;p.x=Math.random()*CW;}
+    ctx.beginPath();ctx.arc(p.x,p.y,p.r,0,Math.PI*2);
+    ctx.fillStyle=`rgba(${p.c},${p.a})`;ctx.fill();return true;
+  });
+  while(pts.filter(p=>!p.life).length<120)pts.push(mkPt());
+  requestAnimationFrame(tick);
+}
+tick();
+function burst(n=22){for(let i=0;i<n;i++)pts.push(mkPt(true));}
+
+// ── SLIDE ENGINE ──────────────────────────────────
+const SL=['s1','s2','s3','s4','s5','s6','s7','s8','s9'];
+const DR=[2800,2800,2600,2600,2600,3000,2600,2600,3500];
+const PH=['p1','p2','p1','p2','p3','p3','p3','p1','p2'];
+const N=SL.length;
+let cur=0,tmr=null,raf=null,t0=null;
+
+const dEl=document.getElementById('dots');
+SL.forEach((_,i)=>{const d=document.createElement('div');d.className='dot'+(i===0?' on':'');d.onclick=()=>go(i);dEl.appendChild(d);});
+
+const sw=document.getElementById('dots6');
+for(let i=0;i<426;i++){const d=document.createElement('div');d.className='sd';sw.appendChild(d);}
+
+function go(idx){
+  clearTimeout(tmr);cancelAnimationFrame(raf);
+  document.getElementById(SL[cur]).classList.replace('on','out');
+  setTimeout(()=>document.getElementById(SL[cur]).classList.remove('out'),420);
+  document.querySelectorAll('.pslide').forEach(p=>p.classList.remove('on'));
+  (document.getElementById(PH[idx])||document.getElementById('p1')).classList.add('on');
+  cur=idx;
+  document.getElementById(SL[cur]).classList.add('on');
+  document.getElementById('sc').textContent=String(cur+1).padStart(2,'0')+' / '+String(N).padStart(2,'0');
+  document.querySelectorAll('.dot').forEach((d,i)=>d.classList.toggle('on',i===cur));
+  burst(20);enter(SL[cur]);
+  t0=performance.now();
+  const bar=document.getElementById('gbar');
+  (function step(ts){bar.style.width=Math.min((ts-t0)/DR[cur]*100,100)+'%';if((ts-t0)<DR[cur])raf=requestAnimationFrame(step);})(t0);
+  if(cur<N-1)tmr=setTimeout(()=>go(cur+1),DR[cur]);
+}
+
+function enter(id){
+  if(id==='s1'){
+    const e=document.getElementById('s1e'),m=document.getElementById('s1m');
+    e.style.opacity='0';m.style.opacity='0';
+    [0,1,2,3].forEach(i=>{const el=document.getElementById('c'+i);el.classList.remove('in');el.style.animation='none';});
+    requestAnimationFrame(()=>{
+      e.style.cssText+='transition:opacity .4s;opacity:1';
+      [0,1,2,3].forEach(i=>setTimeout(()=>{const el=document.getElementById('c'+i);el.style.animation='';el.classList.add('in');},120+i*130));
+      setTimeout(()=>{m.style.cssText+='transition:opacity .4s;opacity:1';},600);
+    });
+    document.querySelectorAll('.s1-myth').forEach((el,i)=>{el.classList.remove('x');setTimeout(()=>el.classList.add('x'),780+i*150);});
+  }
+  if(id==='s2'){
+    document.getElementById('s2t').style.opacity='1';
+    ['ac1','ac2','ac3'].forEach((cid,i)=>{const c=document.getElementById(cid);c.classList.remove('in');setTimeout(()=>c.classList.add('in'),80+i*200);});
+    setTimeout(()=>{arcSpring('a1',.9);cntSpring('n1',2,700);},280);
+    setTimeout(()=>{arcSpring('a2',.85);cntSpring('n2',842,950);},460);
+    setTimeout(()=>{arcSpring('a3',.78);cntSpring('n3',205,850);},630);
+  }
+  if(id==='s3'){
+    const n=document.getElementById('s3n'),nm=document.getElementById('s3nm');
+    n.classList.remove('in');nm.classList.remove('in');
+    document.getElementById('mb').classList.remove('in');document.getElementById('sq').classList.remove('in');
+    ['mf1','mf2','mf3'].forEach(mid=>document.getElementById(mid).style.width='0');
+    void n.offsetWidth;n.classList.add('in');
+    setTimeout(()=>nm.classList.add('in'),200);
+    setTimeout(()=>document.getElementById('mb').classList.add('in'),340);
+    setTimeout(()=>{document.getElementById('mf1').style.width='72%';document.getElementById('mf2').style.width='68%';document.getElementById('mf3').style.width='91%';},540);
+    setTimeout(()=>document.getElementById('sq').classList.add('in'),720);
+  }
+  if(id==='s4'){
+    ['br1','br2','br3'].forEach((rid,i)=>{const r=document.getElementById(rid);r.classList.remove('in');setTimeout(()=>r.classList.add('in'),140+i*170);});
+    ['bf1','bf2','bf3'].forEach(fid=>document.getElementById(fid).style.width='0');
+    setTimeout(()=>{document.getElementById('bf1').style.width='11%';document.getElementById('bv1').textContent='1,200';},420);
+    setTimeout(()=>{document.getElementById('bf2').style.width='34%';document.getElementById('bv2').textContent='8,400';},580);
+    setTimeout(()=>{document.getElementById('bf3').style.width='100%';document.getElementById('bv3').textContent='32,000+';},760);
+  }
+  if(id==='s5'){
+    const n=document.getElementById('s5n'),nm=document.getElementById('s5nm');
+    n.classList.remove('in');nm.classList.remove('in');void n.offsetWidth;n.classList.add('in');setTimeout(()=>nm.classList.add('in'),200);
+  }
+  if(id==='s6'){
+    ['cc1','cc2','cc3'].forEach((cid,i)=>{const c=document.getElementById(cid);c.classList.remove('in');setTimeout(()=>c.classList.add('in'),160+i*230);});
+  }
+  if(id==='s7'){
+    const n=document.getElementById('s7n'),nm=document.getElementById('s7nm');
+    n.classList.remove('in');nm.classList.remove('in');
+    document.getElementById('dg').classList.remove('in');
+    ['r1','r2','r3'].forEach(rid=>document.getElementById(rid).classList.remove('in'));
+    const dotEls=[...document.querySelectorAll('.sd')];dotEls.forEach(d=>{d.classList.remove('on','flash');});
+    void n.offsetWidth;n.classList.add('in');setTimeout(()=>nm.classList.add('in'),200);
+    ['r1','r2','r3'].forEach((rid,i)=>setTimeout(()=>document.getElementById(rid).classList.add('in'),360+i*250));
+    setTimeout(()=>document.getElementById('dg').classList.add('in'),640);
+    const COLS=26;
+    setTimeout(()=>{
+      dotEls.forEach((d,i)=>{
+        const col=i%COLS,row=Math.floor(i/COLS);
+        const dist=Math.sqrt((col-13)*(col-13)+(row-8)*(row-8));
+        setTimeout(()=>{d.classList.add('flash');setTimeout(()=>{d.classList.remove('flash');d.classList.add('on');},90);},dist*38);
+      });
+    },750);
+  }
+  if(id==='s8'){
+    for(let i=1;i<=11;i++){const m=document.getElementById('m'+i);if(m){m.classList.remove('in');setTimeout(()=>m.classList.add('in'),50+i*85);}}
+    const m0=document.getElementById('m0');m0.classList.remove('in');setTimeout(()=>m0.classList.add('in'),1050);
+  }
+}
+
+function arcSpring(id,pct){
+  const el=document.getElementById(id);if(!el)return;const len=364.42;
+  el.style.transition='stroke-dashoffset .72s cubic-bezier(.22,1,.36,1)';
+  el.style.strokeDashoffset=len*(1-pct*1.09);
+  setTimeout(()=>{el.style.transition='stroke-dashoffset .38s cubic-bezier(.34,1.56,.64,1)';el.style.strokeDashoffset=len*(1-pct);},780);
+}
+
+function cntSpring(id,target,dur){
+  const el=document.getElementById(id);if(!el)return;
+  const s=performance.now(),over=target*1.09;
+  (function step(ts){
+    const t=Math.min((ts-s)/dur,1),e=t<.5?2*t*t:-1+(4-2*t)*t;
+    el.textContent=Math.round(e*over);
+    if(t<1){requestAnimationFrame(step);}else{
+      const s2=performance.now();
+      (function back(ts2){const t2=Math.min((ts2-s2)/320,1);el.textContent=Math.round(over+(target-over)*(1-(1-t2)*(1-t2)));if(t2<1)requestAnimationFrame(back);else el.textContent=target;})(s2);
+    }
+  })(s);
+}
+
+document.addEventListener('keydown',e=>{
+  if(e.key==='ArrowRight'||e.key===' '){if(cur<N-1)go(cur+1);}
+  if(e.key==='ArrowLeft'){if(cur>0)go(cur-1);}
+});
+
+function scaleApp(){
+  const app=document.getElementById('app');
+  const s=Math.min(window.innerWidth/1920,window.innerHeight/1080);
+  const ox=(window.innerWidth-1920*s)/2,oy=(window.innerHeight-1080*s)/2;
+  app.style.transform=`translate(${ox}px,${oy}px) scale(${s})`;
+}
+window.addEventListener('resize',scaleApp);scaleApp();
+
+enter('s1');
+t0=performance.now();
+const bar=document.getElementById('gbar');
+(function step(ts){bar.style.width=Math.min((ts-t0)/DR[0]*100,100)+'%';if((ts-t0)<DR[0])raf=requestAnimationFrame(step);})(t0);
+tmr=setTimeout(()=>go(1),DR[0]);
+</script>
+</body>
+</html>

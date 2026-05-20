@@ -18,7 +18,7 @@ features:
     purpose: 通过 CDP 自动化发布图文/视频/文章到抖音创作者平台
     maturity: 1
     code:
-      root: services/creator/scripts/publishers/douyin-publisher/
+      root: services/content-pipeline/scripts/publishers/douyin-publisher/
       entry_files:
         - publish-douyin-image.js
         - publish-douyin-video.js
@@ -31,15 +31,15 @@ features:
       dod: null
       adr: null
       api_doc: null
-      runbook: services/creator/scripts/publishers/douyin-publisher/STATUS.md
+      runbook: services/content-pipeline/scripts/publishers/douyin-publisher/STATUS.md
     skills:
       - name: douyin-publisher
         trigger: "发布抖音、douyin、抖音发布"
-        skill_file: services/creator/scripts/publishers/douyin-publisher/SKILL.md
+        skill_file: services/content-pipeline/scripts/publishers/douyin-publisher/SKILL.md
     apis: []
     tests:
       unit:
-        - services/creator/scripts/publishers/douyin-publisher/__tests__/sop-account-search.test.cjs
+        - services/content-pipeline/scripts/publishers/douyin-publisher/__tests__/sop-account-search.test.cjs
       integration: []
       e2e: []
       regression: []
@@ -98,7 +98,7 @@ features:
     purpose: 通过 CDP 自动化发布图文/视频到快手创作者平台
     maturity: 2
     code:
-      root: services/creator/scripts/publishers/kuaishou-publisher/
+      root: services/content-pipeline/scripts/publishers/kuaishou-publisher/
       entry_files:
         - publish-kuaishou-video.cjs
         - publish-kuaishou-image.cjs
@@ -117,8 +117,8 @@ features:
     apis: []
     tests:
       unit:
-        - services/creator/scripts/publishers/kuaishou-publisher/__tests__/utils.test.cjs
-        - services/creator/scripts/publishers/kuaishou-publisher/__tests__/publish-kuaishou-api.test.cjs
+        - services/content-pipeline/scripts/publishers/kuaishou-publisher/__tests__/utils.test.cjs
+        - services/content-pipeline/scripts/publishers/kuaishou-publisher/__tests__/publish-kuaishou-api.test.cjs
       integration: []
       e2e: []
       regression: []
@@ -140,8 +140,8 @@ features:
         maturity: 2
         tests:
           unit:
-            - services/creator/scripts/publishers/kuaishou-publisher/__tests__/utils.test.cjs
-            - services/creator/scripts/publishers/kuaishou-publisher/__tests__/publish-kuaishou-api.test.cjs
+            - services/content-pipeline/scripts/publishers/kuaishou-publisher/__tests__/utils.test.cjs
+            - services/content-pipeline/scripts/publishers/kuaishou-publisher/__tests__/publish-kuaishou-api.test.cjs
           integration: []
         status: active
       - id: pub_kuaishou_image
@@ -151,8 +151,8 @@ features:
         maturity: 2
         tests:
           unit:
-            - services/creator/scripts/publishers/kuaishou-publisher/__tests__/utils.test.cjs
-            - services/creator/scripts/publishers/kuaishou-publisher/__tests__/publish-kuaishou-api.test.cjs
+            - services/content-pipeline/scripts/publishers/kuaishou-publisher/__tests__/utils.test.cjs
+            - services/content-pipeline/scripts/publishers/kuaishou-publisher/__tests__/publish-kuaishou-api.test.cjs
           integration: []
         status: active
 
@@ -161,7 +161,7 @@ features:
     purpose: 通过 CDP 自动化发布图文/视频/文章到小红书创作者中心
     maturity: 2
     code:
-      root: services/creator/scripts/publishers/xiaohongshu-publisher/
+      root: services/content-pipeline/scripts/publishers/xiaohongshu-publisher/
       entry_files:
         - publish-xiaohongshu-video.cjs
         - publish-xiaohongshu-image.cjs
@@ -180,8 +180,8 @@ features:
     apis: []
     tests:
       unit:
-        - services/creator/scripts/publishers/xiaohongshu-publisher/__tests__/utils.test.cjs
-        - services/creator/scripts/publishers/xiaohongshu-publisher/__tests__/publish-xiaohongshu-image.test.cjs
+        - services/content-pipeline/scripts/publishers/xiaohongshu-publisher/__tests__/utils.test.cjs
+        - services/content-pipeline/scripts/publishers/xiaohongshu-publisher/__tests__/publish-xiaohongshu-image.test.cjs
       integration: []
       e2e: []
       regression: []
@@ -204,7 +204,7 @@ features:
         maturity: 2
         tests:
           unit:
-            - services/creator/scripts/publishers/xiaohongshu-publisher/__tests__/utils.test.cjs
+            - services/content-pipeline/scripts/publishers/xiaohongshu-publisher/__tests__/utils.test.cjs
           integration: []
         status: active
       - id: pub_xiaohongshu_image
@@ -214,8 +214,8 @@ features:
         maturity: 2
         tests:
           unit:
-            - services/creator/scripts/publishers/xiaohongshu-publisher/__tests__/utils.test.cjs
-            - services/creator/scripts/publishers/xiaohongshu-publisher/__tests__/publish-xiaohongshu-image.test.cjs
+            - services/content-pipeline/scripts/publishers/xiaohongshu-publisher/__tests__/utils.test.cjs
+            - services/content-pipeline/scripts/publishers/xiaohongshu-publisher/__tests__/publish-xiaohongshu-image.test.cjs
           integration: []
         status: active
       - id: pub_xiaohongshu_article
@@ -225,7 +225,7 @@ features:
         maturity: 2
         tests:
           unit:
-            - services/creator/scripts/publishers/xiaohongshu-publisher/__tests__/utils.test.cjs
+            - services/content-pipeline/scripts/publishers/xiaohongshu-publisher/__tests__/utils.test.cjs
           integration: []
         status: active
 
@@ -234,7 +234,7 @@ features:
     purpose: 通过 CDP 自动化发布图文/视频/文章/微头条到今日头条
     maturity: 0
     code:
-      root: services/creator/scripts/publishers/toutiao-publisher/
+      root: services/content-pipeline/scripts/publishers/toutiao-publisher/
       entry_files:
         - publish-toutiao-video.cjs
         - publish-toutiao-image.cjs
@@ -251,7 +251,7 @@ features:
     skills:
       - name: toutiao-publisher
         trigger: "发布今日头条、toutiao、头条发布"
-        skill_file: services/creator/scripts/publishers/toutiao-publisher/SKILL.md
+        skill_file: services/content-pipeline/scripts/publishers/toutiao-publisher/SKILL.md
     apis: []
     tests:
       unit: []
@@ -313,7 +313,7 @@ features:
     purpose: 通过 CDP 自动化发布图文/视频/文章到微博
     maturity: 2
     code:
-      root: services/creator/scripts/publishers/weibo-publisher/
+      root: services/content-pipeline/scripts/publishers/weibo-publisher/
       entry_files:
         - publish-weibo-video.cjs
         - publish-weibo-image.cjs
@@ -332,11 +332,11 @@ features:
     apis: []
     tests:
       unit:
-        - services/creator/scripts/publishers/weibo-publisher/__tests__/utils.test.cjs
-        - services/creator/scripts/publishers/weibo-publisher/__tests__/cdp-client.test.cjs
-        - services/creator/scripts/publishers/weibo-publisher/__tests__/publish-weibo-api.test.cjs
-        - services/creator/scripts/publishers/weibo-publisher/__tests__/publish-weibo-image.test.cjs
-        - services/creator/scripts/publishers/weibo-publisher/__tests__/publish-weibo-article.test.cjs
+        - services/content-pipeline/scripts/publishers/weibo-publisher/__tests__/utils.test.cjs
+        - services/content-pipeline/scripts/publishers/weibo-publisher/__tests__/cdp-client.test.cjs
+        - services/content-pipeline/scripts/publishers/weibo-publisher/__tests__/publish-weibo-api.test.cjs
+        - services/content-pipeline/scripts/publishers/weibo-publisher/__tests__/publish-weibo-image.test.cjs
+        - services/content-pipeline/scripts/publishers/weibo-publisher/__tests__/publish-weibo-article.test.cjs
       integration: []
       e2e: []
       regression: []
@@ -359,9 +359,9 @@ features:
         maturity: 2
         tests:
           unit:
-            - services/creator/scripts/publishers/weibo-publisher/__tests__/utils.test.cjs
-            - services/creator/scripts/publishers/weibo-publisher/__tests__/cdp-client.test.cjs
-            - services/creator/scripts/publishers/weibo-publisher/__tests__/publish-weibo-api.test.cjs
+            - services/content-pipeline/scripts/publishers/weibo-publisher/__tests__/utils.test.cjs
+            - services/content-pipeline/scripts/publishers/weibo-publisher/__tests__/cdp-client.test.cjs
+            - services/content-pipeline/scripts/publishers/weibo-publisher/__tests__/publish-weibo-api.test.cjs
           integration: []
         status: active
       - id: pub_weibo_image
@@ -371,10 +371,10 @@ features:
         maturity: 2
         tests:
           unit:
-            - services/creator/scripts/publishers/weibo-publisher/__tests__/utils.test.cjs
-            - services/creator/scripts/publishers/weibo-publisher/__tests__/cdp-client.test.cjs
-            - services/creator/scripts/publishers/weibo-publisher/__tests__/publish-weibo-api.test.cjs
-            - services/creator/scripts/publishers/weibo-publisher/__tests__/publish-weibo-image.test.cjs
+            - services/content-pipeline/scripts/publishers/weibo-publisher/__tests__/utils.test.cjs
+            - services/content-pipeline/scripts/publishers/weibo-publisher/__tests__/cdp-client.test.cjs
+            - services/content-pipeline/scripts/publishers/weibo-publisher/__tests__/publish-weibo-api.test.cjs
+            - services/content-pipeline/scripts/publishers/weibo-publisher/__tests__/publish-weibo-image.test.cjs
           integration: []
         status: active
       - id: pub_weibo_article
@@ -384,10 +384,10 @@ features:
         maturity: 2
         tests:
           unit:
-            - services/creator/scripts/publishers/weibo-publisher/__tests__/utils.test.cjs
-            - services/creator/scripts/publishers/weibo-publisher/__tests__/cdp-client.test.cjs
-            - services/creator/scripts/publishers/weibo-publisher/__tests__/publish-weibo-api.test.cjs
-            - services/creator/scripts/publishers/weibo-publisher/__tests__/publish-weibo-article.test.cjs
+            - services/content-pipeline/scripts/publishers/weibo-publisher/__tests__/utils.test.cjs
+            - services/content-pipeline/scripts/publishers/weibo-publisher/__tests__/cdp-client.test.cjs
+            - services/content-pipeline/scripts/publishers/weibo-publisher/__tests__/publish-weibo-api.test.cjs
+            - services/content-pipeline/scripts/publishers/weibo-publisher/__tests__/publish-weibo-article.test.cjs
           integration: []
         status: active
 
@@ -396,7 +396,7 @@ features:
     purpose: 通过 CDP 自动化发布图文/视频到微信视频号（session 需定期扫码）
     maturity: 0
     code:
-      root: services/creator/scripts/publishers/shipinhao-publisher/
+      root: services/content-pipeline/scripts/publishers/shipinhao-publisher/
       entry_files:
         - publish-shipinhao-video.cjs
         - publish-shipinhao-image.cjs
@@ -453,7 +453,7 @@ features:
     purpose: 通过 CDP 自动化发布视频/文章/想法到知乎
     maturity: 2
     code:
-      root: services/creator/scripts/publishers/zhihu-publisher/
+      root: services/content-pipeline/scripts/publishers/zhihu-publisher/
       entry_files:
         - publish-zhihu-video.cjs
         - publish-zhihu-article.cjs
@@ -472,8 +472,8 @@ features:
     apis: []
     tests:
       unit:
-        - services/creator/scripts/publishers/zhihu-publisher/__tests__/publish-zhihu-api.test.cjs
-        - services/creator/scripts/publishers/zhihu-publisher/__tests__/publish-zhihu-article.test.cjs
+        - services/content-pipeline/scripts/publishers/zhihu-publisher/__tests__/publish-zhihu-api.test.cjs
+        - services/content-pipeline/scripts/publishers/zhihu-publisher/__tests__/publish-zhihu-article.test.cjs
       integration: []
       e2e: []
       regression: []
@@ -496,7 +496,7 @@ features:
         maturity: 2
         tests:
           unit:
-            - services/creator/scripts/publishers/zhihu-publisher/__tests__/publish-zhihu-api.test.cjs
+            - services/content-pipeline/scripts/publishers/zhihu-publisher/__tests__/publish-zhihu-api.test.cjs
           integration: []
         status: active
       - id: pub_zhihu_article
@@ -506,8 +506,8 @@ features:
         maturity: 2
         tests:
           unit:
-            - services/creator/scripts/publishers/zhihu-publisher/__tests__/publish-zhihu-api.test.cjs
-            - services/creator/scripts/publishers/zhihu-publisher/__tests__/publish-zhihu-article.test.cjs
+            - services/content-pipeline/scripts/publishers/zhihu-publisher/__tests__/publish-zhihu-api.test.cjs
+            - services/content-pipeline/scripts/publishers/zhihu-publisher/__tests__/publish-zhihu-article.test.cjs
           integration: []
         status: active
       - id: pub_zhihu_idea
@@ -517,7 +517,7 @@ features:
         maturity: 2
         tests:
           unit:
-            - services/creator/scripts/publishers/zhihu-publisher/__tests__/publish-zhihu-api.test.cjs
+            - services/content-pipeline/scripts/publishers/zhihu-publisher/__tests__/publish-zhihu-api.test.cjs
           integration: []
         status: active
 
@@ -526,7 +526,7 @@ features:
     purpose: 通过微信官方 API 发布文章到公众号（不走 CDP）
     maturity: 2
     code:
-      root: services/creator/scripts/publishers/wechat-publisher/
+      root: services/content-pipeline/scripts/publishers/wechat-publisher/
       entry_files:
         - publish-wechat-article.cjs
         - publish-wechat-article-draft.cjs
@@ -545,7 +545,7 @@ features:
     apis: []
     tests:
       unit:
-        - services/creator/scripts/publishers/wechat-publisher/__tests__/publish-wechat-article.test.cjs
+        - services/content-pipeline/scripts/publishers/wechat-publisher/__tests__/publish-wechat-article.test.cjs
       integration: []
       e2e: []
       regression: []
@@ -566,7 +566,7 @@ features:
         maturity: 2
         tests:
           unit:
-            - services/creator/scripts/publishers/wechat-publisher/__tests__/publish-wechat-article.test.cjs
+            - services/content-pipeline/scripts/publishers/wechat-publisher/__tests__/publish-wechat-article.test.cjs
           integration: []
         status: active
       - id: pub_wechat_article_draft
@@ -588,7 +588,7 @@ features:
     purpose: 一条命令探测 8 个 CDP 连接的连通性和登录状态
     maturity: 1
     code:
-      root: services/creator/scripts/publishers/
+      root: services/content-pipeline/scripts/publishers/
       entry_files: [probe-all-platforms.cjs]
       language: JavaScript (CommonJS)
       runtime: node
@@ -615,7 +615,7 @@ features:
     purpose: 每 15 分钟巡检，掉线自动发飞书 webhook 告警
     maturity: 1
     code:
-      root: services/creator/scripts/publishers/
+      root: services/content-pipeline/scripts/publishers/
       entry_files: [alert-offline.cjs]
       language: JavaScript (CommonJS)
       runtime: node + cron
@@ -644,7 +644,7 @@ features:
     purpose: 视频号 30 分钟、其他 12 小时定期模拟活跃延长 session
     maturity: 1
     code:
-      root: services/creator/scripts/publishers/
+      root: services/content-pipeline/scripts/publishers/
       entry_files: [keepalive-all.cjs]
       language: JavaScript (CommonJS)
       runtime: node + cron
@@ -673,7 +673,7 @@ features:
     purpose: 8 平台 21 脚本的功能映射 + 验证（npm run validate）
     maturity: 2
     code:
-      root: services/creator/scripts/publishers/
+      root: services/content-pipeline/scripts/publishers/
       entry_files: [registry.json]
       language: JSON
       runtime: node
@@ -687,7 +687,7 @@ features:
     apis: []
     tests:
       unit:
-        - services/creator/scripts/publishers/validate-registry.cjs
+        - services/content-pipeline/scripts/publishers/validate-registry.cjs
       integration: []
       e2e: []
       regression: []

@@ -82,7 +82,7 @@ curl -s -H "Authorization: Bearer ${CECELIA_INTERNAL_TOKEN}" \
 ## 相关文件路径
 - LaunchAgent: `~/Library/LaunchAgents/com.zenithjoy.pipeline-worker.plist`
 - Pipeline log: `/tmp/pipeline-worker.log`
-- Executors 目录: `/Users/administrator/perfect21/zenithjoy/services/creator/pipeline_worker/executors/`
+- Executors 目录: `/Users/administrator/perfect21/zenithjoy/services/content-pipeline/pipeline_worker/executors/`
 - content-output: `~/content-output/`
 - images 中转: `~/claude-output/images/`
 - NAS 挂载: `ssh nas` → `/volume1/workspace/vault/zenithjoy-creator/content/`

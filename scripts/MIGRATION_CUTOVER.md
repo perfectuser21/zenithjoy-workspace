@@ -6,12 +6,12 @@
 
 - PR-a/b/c 已合并并运行稳定：apps/api 新端点、creator-api 转发、workers HTTP 化。
 - Postgres `zenithjoy.topics` 已有 ≥1 行（PR-b 冒烟测试）。
-- SQLite `services/creator/data/creator.db` 仍有 1 条龙虾（id=`f108b4d8-244e-4663-bcf6-2e7816ab00fe`, status=研究中），以及 `pacing_config.daily_limit=1`（已与 Postgres seed 等值，暂不迁移）。
+- SQLite `services/content-pipeline/data/creator.db` 仍有 1 条龙虾（id=`f108b4d8-244e-4663-bcf6-2e7816ab00fe`, status=研究中），以及 `pacing_config.daily_limit=1`（已与 Postgres seed 等值，暂不迁移）。
 - 业务代码已不再读 SQLite（workers 走 HTTP，creator-api 走 Postgres），但 SQLite 文件仍在原位作为兜底。
 
 本次 cutover 做两件事：
 1. 运行 `scripts/migrate-sqlite-to-pg.py --apply --backup-first` 把 SQLite topics 搬到 Postgres。
-2. 运行 `services/creator/migrations/999_freeze_sqlite.sql` 冻结 SQLite（表改名 + 建空 view），防止任何遗漏的读路径误用老数据。
+2. 运行 `services/content-pipeline/migrations/999_freeze_sqlite.sql` 冻结 SQLite（表改名 + 建空 view），防止任何遗漏的读路径误用老数据。
 
 ## 时间窗口
 
@@ -51,7 +51,7 @@ python3 scripts/migrate-sqlite-to-pg.py --apply --backup-first
 ```
 
 脚本会：
-- 先把 `services/creator/data/creator.db` 复制到 `services/creator/data/backups/creator.db.bak-<UTC 时间戳>`（含 -wal / -shm 附属文件）。
+- 先把 `services/content-pipeline/data/creator.db` 复制到 `services/content-pipeline/data/backups/creator.db.bak-<UTC 时间戳>`（含 -wal / -shm 附属文件）。
 - 用 `psql` 执行 `INSERT ... ON CONFLICT (id) DO NOTHING` 逐行插入。
 - 结尾打印迁移前后 count + 龙虾校验（id=f108b4d8…00fe 在 Postgres 应为 1 行）。
 
@@ -69,7 +69,7 @@ psql -U cecelia -d cecelia -h localhost -p 5432 -c \
 ### 5. 冻结 SQLite
 
 ```bash
-sqlite3 services/creator/data/creator.db < services/creator/migrations/999_freeze_sqlite.sql
+sqlite3 services/content-pipeline/data/creator.db < services/content-pipeline/migrations/999_freeze_sqlite.sql
 ```
 
 执行后：
@@ -78,10 +78,10 @@ sqlite3 services/creator/data/creator.db < services/creator/migrations/999_freez
 
 验证：
 ```bash
-sqlite3 services/creator/data/creator.db "SELECT COUNT(*) FROM topics;"
+sqlite3 services/content-pipeline/data/creator.db "SELECT COUNT(*) FROM topics;"
 # 预期输出：0
 
-sqlite3 services/creator/data/creator.db "SELECT COUNT(*) FROM topics_frozen_20260416;"
+sqlite3 services/content-pipeline/data/creator.db "SELECT COUNT(*) FROM topics_frozen_20260416;"
 # 预期输出：1（原业务数据保留）
 ```
 
@@ -102,7 +102,7 @@ psql -U cecelia -d cecelia -h localhost -tAc \
   "SELECT COUNT(*) FROM zenithjoy.topics WHERE title='PR-d cutover 冒烟';"
 # 预期：1
 
-sqlite3 services/creator/data/creator.db \
+sqlite3 services/content-pipeline/data/creator.db \
   "SELECT COUNT(*) FROM topics WHERE title='PR-d cutover 冒烟';"
 # 预期：0（view 永远返回空）
 ```
@@ -131,7 +131,7 @@ pg_dump -U cecelia -d cecelia -h localhost -p 5432 -n zenithjoy \
   -f /tmp/zenithjoy-rollback-$(date +%Y%m%d-%H%M%S).sql
 
 # 2. 回退 SQLite freeze（若已执行）
-sqlite3 services/creator/data/creator.db <<'SQL'
+sqlite3 services/content-pipeline/data/creator.db <<'SQL'
 BEGIN;
 DROP VIEW IF EXISTS topics;
 ALTER TABLE topics_frozen_20260416 RENAME TO topics;
@@ -147,15 +147,15 @@ psql -U cecelia -d cecelia -h localhost -p 5432 -c \
 
 ```bash
 # 找最近的备份
-ls -lt services/creator/data/backups/creator.db.bak-*
+ls -lt services/content-pipeline/data/backups/creator.db.bak-*
 
 # 停 workers（防半途写）
 launchctl unload ~/Library/LaunchAgents/com.zenithjoy.pipeline-worker.plist
 launchctl unload ~/Library/LaunchAgents/com.zenithjoy.topic-worker.plist
 
 # 还原（注意：此时 creator-api/workers 已不读 SQLite，此步骤主要用于恢复备份文件）
-cp services/creator/data/backups/creator.db.bak-<ts> \
-   services/creator/data/creator.db
+cp services/content-pipeline/data/backups/creator.db.bak-<ts> \
+   services/content-pipeline/data/creator.db
 
 # 启 workers
 launchctl load ~/Library/LaunchAgents/com.zenithjoy.pipeline-worker.plist
@@ -180,16 +180,16 @@ git push origin main
 |------|------|
 | T+0 | 本 SOP 步骤 1–7 完成，保留备份文件 |
 | T+2d | PR-e 合并，彻底删除 SQLite 相关代码 |
-| T+7d | 把 `services/creator/data/backups/creator.db.bak-*` 移到 `~/backups/` 冷存储 |
+| T+7d | 把 `services/content-pipeline/data/backups/creator.db.bak-*` 移到 `~/backups/` 冷存储 |
 | T+30d | 物理删除备份文件 |
 
 ## 附：脚本常用参数
 
 ```
---sqlite <path>          SQLite creator.db 路径（默认 services/creator/data/creator.db）
+--sqlite <path>          SQLite creator.db 路径（默认 services/content-pipeline/data/creator.db）
 --pg-host / --pg-port    Postgres 连接（默认从 apps/api/.env 读）
 --pg-user / --pg-db      同上
---backup-dir <path>      备份存放目录（默认 services/creator/data/backups）
+--backup-dir <path>      备份存放目录（默认 services/content-pipeline/data/backups）
 --env-file <path>        自定义 .env 文件（默认 apps/api/.env）
 
 --dry-run                只打印，不写（默认）
@@ -202,4 +202,4 @@ git push origin main
 - `/tmp/pipeline-migration-plan/04-migration-steps.md` § T+2.5d PR-d cutover
 - `/tmp/pipeline-migration-plan/06-pr-breakdown.md` § PR-d
 - `apps/api/db/migrations/20260416_163600_create_zenithjoy_topics.sql`（Postgres schema）
-- `services/creator/migrations/001_create_topics.sql`（SQLite 源 schema）
+- `services/content-pipeline/migrations/001_create_topics.sql`（SQLite 源 schema）

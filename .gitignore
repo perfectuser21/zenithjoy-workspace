@@ -183,3 +183,6 @@ services/agent/install-pack/ffmpeg.exe
 services/agent/install-pack/ffprobe.exe
 services/agent/publishers/*/node_modules/
 services/agent/publishers/node_modules/
+services/agent/dist-installpack/
+.cookie-backups/
+services/content-pipeline/scripts/publishers/.cookie-backups/
