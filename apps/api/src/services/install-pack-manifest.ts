@@ -8,7 +8,6 @@ export interface InstallPackManifest {
   cos_url?: string;
   size: number;
   build_time: string;
-  cos_url?: string;
 }
 
 const DEFAULT_MANIFEST_PATH =
