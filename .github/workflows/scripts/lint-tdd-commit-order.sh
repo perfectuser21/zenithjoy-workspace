@@ -44,6 +44,12 @@ while IFS= read -r sha; do
     SEEN_TEST=1
   fi
 
+  # fix: commit 豁免 — 修复 bug 靠已有测试覆盖，不需要先写新失败测试
+  COMMIT_MSG=$(git log -1 --pretty=%s "$sha" 2>/dev/null || true)
+  if echo "$COMMIT_MSG" | grep -qE '^fix(\(.+\))?!?:'; then
+    SEEN_TEST=1
+  fi
+
   if [ -n "$HAS_TEST" ]; then
     REAL_TEST_FOUND=0
     while IFS= read -r tf; do
