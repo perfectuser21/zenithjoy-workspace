@@ -54,15 +54,19 @@ jobs:
           "
 
       - name: Deploy manifest.json to HK VPS
-        uses: appleboy/scp-action@v0.1.7
-        with:
-          host: ${{ secrets.HK_VPS_HOST }}
-          username: ${{ secrets.HK_VPS_USER }}
-          key: ${{ secrets.HK_VPS_SSH_KEY }}
-          port: ${{ secrets.HK_VPS_PORT }}
-          source: services/agent/dist-installpack/manifest.json
-          target: /opt/zenithjoy/autopilot-dashboard/dist/download/
-          strip_components: 3
+        env:
+          SSH_KEY: ${{ secrets.HK_VPS_SSH_KEY }}
+          VPS_HOST: ${{ secrets.HK_VPS_HOST }}
+          VPS_USER: ${{ secrets.HK_VPS_USER }}
+          VPS_PORT: ${{ secrets.HK_VPS_PORT }}
+        run: |
+          echo "$SSH_KEY" > /tmp/deploy_key
+          chmod 600 /tmp/deploy_key
+          MANIFEST_JSON=$(cat services/agent/dist-installpack/manifest.json)
+          ssh -i /tmp/deploy_key -p "$VPS_PORT" -o StrictHostKeyChecking=no \
+            "${VPS_USER}@${VPS_HOST}" \
+            "printf '%s' '${MANIFEST_JSON}' > /opt/zenithjoy/install-pack/manifest.json"
+          rm -f /tmp/deploy_key
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
