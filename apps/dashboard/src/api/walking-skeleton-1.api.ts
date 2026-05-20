@@ -177,10 +177,26 @@ export interface InstallPackManifest {
   version: string;
   sha256: string;
   download_url: string;
+  cos_url?: string;
   size: number;
   build_time: string;
 }
 
 export async function getInstallPackManifest(): Promise<InstallPackManifest> {
   return request<InstallPackManifest>('/agent/install-pack/manifest');
+}
+
+// COS CDN 路由 v2 — 返回个人 .env（< 1KB），供用户拖入解压目录替换
+export async function getInstallPackDotenv(): Promise<string> {
+  const lic = getLicenseToken();
+  const res = await fetch(`${API_BASE}/agent/install-pack/dotenv`, {
+    headers: lic ? { Authorization: `Bearer ${lic}` } : {},
+  });
+  if (!res.ok) {
+    const json = await res.json().catch(() => ({} as Record<string, unknown>));
+    const errBody = (json as { error?: { message?: string } | string }).error;
+    const msg = typeof errBody === 'string' ? errBody : errBody?.message || res.statusText;
+    throw new Error(`HTTP_${res.status}: ${msg}`);
+  }
+  return res.text();
 }

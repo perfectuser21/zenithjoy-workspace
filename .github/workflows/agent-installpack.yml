@@ -23,6 +23,47 @@ jobs:
       - name: Build install pack
         run: bash scripts/build-install-pack.sh
         working-directory: services/agent
+
+      - name: Upload to COS + update manifest cos_url
+        env:
+          COS_SECRET_ID: ${{ secrets.COS_SECRET_ID }}
+          COS_SECRET_KEY: ${{ secrets.COS_SECRET_KEY }}
+        run: |
+          pip install coscmd -q
+          VERSION=$(node -e "console.log(require('./services/agent/package.json').version)")
+          PACK="zenithjoy-agent-v${VERSION}.tar.gz"
+          BUCKET="zenithjoy-static-1333590468"
+          ENDPOINT="cos.accelerate.myqcloud.com"
+          COS_PATH="/install-pack/${PACK}"
+          COS_URL="https://${BUCKET}.${ENDPOINT}${COS_PATH}"
+
+          coscmd config -a "$COS_SECRET_ID" -s "$COS_SECRET_KEY" \
+            -b "$BUCKET" -e "$ENDPOINT"
+          coscmd upload "services/agent/dist-installpack/${PACK}" "$COS_PATH" --force
+
+          # 更新 manifest.json 加入 cos_url
+          python3 -c "
+          import json
+          path = 'services/agent/dist-installpack/manifest.json'
+          with open(path) as f:
+              m = json.load(f)
+          m['cos_url'] = '${COS_URL}'
+          with open(path, 'w') as f:
+              json.dump(m, f, indent=2)
+          print('manifest.json updated with cos_url:', m['cos_url'])
+          "
+
+      - name: Deploy manifest.json to HK VPS
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.HK_VPS_HOST }}
+          username: ${{ secrets.HK_VPS_USER }}
+          key: ${{ secrets.HK_VPS_SSH_KEY }}
+          port: ${{ secrets.HK_VPS_PORT }}
+          source: services/agent/dist-installpack/manifest.json
+          target: /opt/zenithjoy/autopilot-dashboard/dist/download/
+          strip_components: 3
+
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:

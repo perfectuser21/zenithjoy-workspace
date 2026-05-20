@@ -39,7 +39,36 @@ else
   fail "download HTTP $DL_HTTP (expected 401 or 503, got unexpected status)"
 fi
 
-# 3. 静态 tar.gz nginx 路径可访问（HK VPS nginx /download/ 路由存在）
+# 3. dotenv endpoint without session → 401（验证端点存在 + auth gate）
+DOTENV_HTTP=$(curl -s -o /tmp/ip-dotenv-noauth.json -w "%{http_code}" --max-time 15 \
+  "$API_BASE/api/agent/install-pack/dotenv")
+if [ "$DOTENV_HTTP" = "401" ]; then
+  ok "dotenv 401 UNAUTHORIZED (auth gate 正常)"
+elif [ "$DOTENV_HTTP" = "503" ]; then
+  CODE=$(node -e "const m=require('/tmp/ip-dotenv-noauth.json'); process.stdout.write(m.code||'')" 2>/dev/null || echo "")
+  ok "dotenv 503 code=$CODE (no session parsed — acceptable)"
+else
+  fail "dotenv HTTP $DOTENV_HTTP (expected 401 or 503)"
+fi
+
+# 4. manifest.cos_url 字段存在（COS CDN 路由需要）
+if [ "$HTTP" = "200" ]; then
+  COS_URL=$(node -e "const m=require('/tmp/ip-manifest.json'); process.stdout.write(m.cos_url||'')" 2>/dev/null || echo "")
+  if [ -n "$COS_URL" ]; then
+    ok "manifest.cos_url = $COS_URL"
+    # HEAD 检查 COS URL 可访问性（可能因 CF/CDN 返回 403 range 不可用，接受）
+    COS_HTTP=$(curl -s -o /dev/null -w "%{http_code}" --max-time 15 --head "$COS_URL" 2>/dev/null || echo "000")
+    if [ "$COS_HTTP" = "200" ] || [ "$COS_HTTP" = "206" ] || [ "$COS_HTTP" = "403" ]; then
+      ok "COS URL HEAD HTTP $COS_HTTP (CDN 可达)"
+    else
+      fail "COS URL HEAD HTTP $COS_HTTP — COS 文件可能未上传"
+    fi
+  else
+    fail "manifest.cos_url 为空 — 需要 CI publish-install-pack 步骤上传 COS 并写入 manifest"
+  fi
+fi
+
+# 5. 静态 tar.gz nginx 路径可访问（HK VPS nginx /download/ 路由存在）
 STATIC_HTTP=$(curl -s -o /dev/null -w "%{http_code}" --max-time 15 \
   --range 0-1023 \
   "$API_BASE/download/zenithjoy-agent-v1.0.1.tar.gz")

@@ -223,3 +223,53 @@ agentInstallPackRouter.get('/download', async (req: Request, res: Response) => {
     return res.status(500).json({ ok: false, code: 'BURN_IN_FAILED', message: msg });
   }
 });
+
+// COS CDN 路由 v2 — 大包走 COS CDN 直连，API 只出个人 .env（< 1KB）
+// 客户端流程：① 大包从 manifest.cos_url 直接下载（快），② 从此端点下载个人 .env 拖入目录
+agentInstallPackRouter.get('/dotenv', async (req: Request, res: Response) => {
+  // 1. 鉴权
+  let userId: string | null = null;
+  try {
+    const session = await auth.api.getSession({
+      headers: fromNodeHeaders(req.headers),
+    });
+    const u = session?.user;
+    if (u && typeof u.id === 'string' && u.id.length > 0) userId = u.id;
+  } catch (err) {
+    console.warn('[install-pack/dotenv] session 解析失败:', err);
+  }
+  if (!userId) {
+    return res.status(401).json({ ok: false, code: 'UNAUTHORIZED' });
+  }
+
+  // 2. 查 user 的 active license
+  let licenseKey: string;
+  try {
+    const { rows } = await pool.query<{ license_key: string }>(
+      `SELECT license_key
+         FROM zenithjoy.licenses
+        WHERE customer_id = $1 AND status = 'active'
+        ORDER BY created_at DESC
+        LIMIT 1`,
+      [userId]
+    );
+    if (rows.length === 0) {
+      return res.status(503).json({
+        ok: false,
+        code: 'NO_ACTIVE_LICENSE',
+        message: 'no active license bound to your account; 请回 Account 页确认',
+      });
+    }
+    licenseKey = rows[0].license_key;
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'unknown';
+    return res.status(500).json({ ok: false, code: 'DB_ERROR', message: msg });
+  }
+
+  // 3. 返回个人 .env（license 已烧入）
+  const content = `ZENITHJOY_LICENSE=${licenseKey}\n`;
+  res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+  res.setHeader('Content-Disposition', 'attachment; filename=".env"');
+  res.setHeader('Content-Length', String(Buffer.byteLength(content)));
+  return res.status(200).send(content);
+});
