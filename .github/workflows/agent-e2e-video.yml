@@ -131,7 +131,7 @@ jobs:
       - name: Install Playwright
         shell: powershell
         run: |
-          npm install -g @playwright/test 2>&1 | Select-Object -Last 3
+          npm install @playwright/test --no-save 2>&1 | Select-Object -Last 5
           npx playwright install chromium 2>&1 | Select-Object -Last 3
 
       - name: Run Playwright E2E test
