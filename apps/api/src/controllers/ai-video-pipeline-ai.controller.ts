@@ -466,16 +466,15 @@ function _buildCompositionHtml(p: _BuildHtmlParams): string {
 <html>
 <head>
 <meta charset="utf-8">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;500;700;900&family=Noto+Sans+SC:wght@300;400;500;700;900&family=JetBrains+Mono:wght@300;400;500;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.cn/css2?family=Noto+Serif+SC:wght@400;500;700;900&family=Noto+Sans+SC:wght@300;400;500;700;900&family=JetBrains+Mono:wght@300;400;500;700&display=swap" rel="stylesheet">
 <style>* { margin: 0; padding: 0; box-sizing: border-box; }</style>
 </head>
 <body style="width:${p.width}px;height:${p.height}px;overflow:hidden">
 <div id="root" data-composition-id="template-comp" data-start="0" data-duration="${p.duration}"></div>
-<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" crossorigin></script>
-<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" crossorigin></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
-<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" crossorigin></script>
+<script src="https://cdn.bootcdn.net/ajax/libs/react/18.3.1/umd/react.development.js" crossorigin></script>
+<script src="https://cdn.bootcdn.net/ajax/libs/react-dom/18.3.1/umd/react-dom.development.js" crossorigin></script>
+<script src="https://cdn.bootcdn.net/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+<script src="https://cdn.bootcdn.net/ajax/libs/babel-standalone/7.24.7/babel.min.js" crossorigin></script>
 <script>window.__SLOTS__ = ${JSON.stringify(p.slots)};</script>
 <script type="text/babel">
 ${p.phoneSrc}
