@@ -105,6 +105,26 @@ if exist "%~dp0ffmpeg.exe" (
     )
 )
 
+REM Step 5.5: Install hyperframes npm package (needed for video template rendering)
+where hyperframes >nul 2>&1
+if not errorlevel 1 (
+    echo [hyperframes] already installed
+    goto :HYPERFRAMES_DONE
+)
+where npm >nul 2>&1
+if errorlevel 1 (
+    echo [WARN] npm not found - install Node.js from https://nodejs.org to enable video template rendering
+    goto :HYPERFRAMES_DONE
+)
+echo [hyperframes] installing npm package...
+npm install -g hyperframes --registry https://registry.npmmirror.com
+if errorlevel 1 (
+    echo [WARN] hyperframes install failed. Video template rendering will not be available.
+) else (
+    echo [hyperframes] installed OK
+)
+:HYPERFRAMES_DONE
+
 REM Step 6: Find chrome.exe
 set "CHROME_EXE=%ProgramFiles%\Google\Chrome\Application\chrome.exe"
 if not exist "%CHROME_EXE%" set "CHROME_EXE=%ProgramFiles(x86)%\Google\Chrome\Application\chrome.exe"
