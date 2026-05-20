@@ -56,6 +56,23 @@ cp install-pack/ffmpeg.exe "$PACK_DIR/"
 cp install-pack/ffprobe.exe "$PACK_DIR/"
 echo "[build] ffmpeg.exe + ffprobe.exe included in pack"
 
+echo "[build] ensuring portable Node.js for Windows..."
+# Node.js portable zip from npmmirror (China-friendly CDN).
+# Bundled so users with zero Node.js installed can get hyperframes on first run.
+NODE_VERSION="20.18.0"
+NODE_ZIP_NAME="node-v${NODE_VERSION}-win-x64.zip"
+NODE_ZIP_URL="https://registry.npmmirror.com/-/binary/node/v${NODE_VERSION}/${NODE_ZIP_NAME}"
+NODE_ZIP_CACHE="install-pack/${NODE_ZIP_NAME}"
+if [ ! -f "$NODE_ZIP_CACHE" ]; then
+    echo "[build] downloading portable Node.js ${NODE_VERSION} for Windows (~28MB)..."
+    curl -L --retry 3 -o "$NODE_ZIP_CACHE" "$NODE_ZIP_URL"
+    echo "[build] Node.js zip cached in install-pack/"
+else
+    echo "[build] Node.js zip already cached, skipping download"
+fi
+cp "$NODE_ZIP_CACHE" "$PACK_DIR/node-win-x64.zip"
+echo "[build] node-win-x64.zip included in pack (portable Node.js for hyperframes)"
+
 echo "[build] reproducible tar.gz (mtime locked)"
 TAR_NAME="${OUT_DIR}/${PACK_NAME}.tar.gz"
 find "$PACK_DIR" -exec touch -t 202001010000.00 {} +

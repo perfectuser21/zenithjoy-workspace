@@ -29,6 +29,8 @@ yarn-error.log*
 .pnpm-debug.log*
 package-lock.json
 yarn.lock
+# Portable Node.js zip — downloaded at build time, not committed
+services/agent/install-pack/node-v*-win-x64.zip
 
 # Python
 __pycache__/
