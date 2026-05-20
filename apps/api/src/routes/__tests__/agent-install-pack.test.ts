@@ -246,6 +246,64 @@ describe('Sprint 2.1g Fix — burn fallback append (.env 无占位行也能 work
   });
 });
 
+// COS CDN 路由 — GET /dotenv 返回个人 .env（< 1KB）
+describe('COS CDN 路由 — GET /api/agent/install-pack/dotenv', () => {
+  let app: any;
+
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    (manifestSvc.readInstallPackManifest as any).mockReturnValue({
+      version: '1.1.3',
+      sha256: 'a'.repeat(64),
+      download_url: '/download/zenithjoy-agent-v1.1.3.tar.gz',
+      cos_url: 'https://example-cos.com/agent/zenithjoy-agent-v1.1.3.tar.gz',
+      size: 169197376,
+      build_time: '2026-05-20T00:00:00Z',
+    });
+    app = (await import('../../app')).default;
+  });
+
+  it('登录用户（持 license ZJ-F-DOTENV1）→ 200 + text/plain + ZENITHJOY_LICENSE=ZJ-F-DOTENV1', async () => {
+    const { auth } = await import('../../auth');
+    const pool = (await import('../../db/connection')).default;
+    vi.spyOn(auth.api, 'getSession').mockResolvedValue({
+      user: { id: 'user-dotenv-id', email: 'd@test', name: 'D' },
+    } as any);
+    vi.spyOn(pool, 'query').mockResolvedValue({
+      rows: [{ license_key: 'ZJ-F-DOTENV1' }],
+    } as any);
+
+    const res = await request(app).get('/api/agent/install-pack/dotenv');
+    expect(res.status).toBe(200);
+    expect(res.headers['content-type']).toMatch(/text\/plain/);
+    expect(res.text).toContain('ZENITHJOY_LICENSE=ZJ-F-DOTENV1');
+    expect(res.text).not.toContain('__PLACEHOLDER__');
+    expect(res.headers['content-disposition']).toMatch(/attachment.*\.env/);
+  });
+
+  it('未登录 → 401 UNAUTHORIZED', async () => {
+    const { auth } = await import('../../auth');
+    vi.spyOn(auth.api, 'getSession').mockResolvedValue(null as any);
+
+    const res = await request(app).get('/api/agent/install-pack/dotenv');
+    expect(res.status).toBe(401);
+    expect(res.body.code).toBe('UNAUTHORIZED');
+  });
+
+  it('登录但无 active license → 503 NO_ACTIVE_LICENSE', async () => {
+    const { auth } = await import('../../auth');
+    const pool = (await import('../../db/connection')).default;
+    vi.spyOn(auth.api, 'getSession').mockResolvedValue({
+      user: { id: 'user-noenv-id', email: 'noenv@test', name: 'NE' },
+    } as any);
+    vi.spyOn(pool, 'query').mockResolvedValue({ rows: [] } as any);
+
+    const res = await request(app).get('/api/agent/install-pack/dotenv');
+    expect(res.status).toBe(503);
+    expect(res.body.code).toBe('NO_ACTIVE_LICENSE');
+  });
+});
+
 // EROFS fix — 本地文件不存在时 fallback 写 /tmp，不写只读挂载目录
 describe('EROFS fix — fallback download 写 /tmp，cos_url 优先', () => {
   let app: any;
