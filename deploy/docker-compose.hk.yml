@@ -1,8 +1,34 @@
+networks:
+  zenithjoy-net:
+    external: true
+
 services:
+  zenithjoy-api:
+    image: zenithjoy-api:latest
+    container_name: zenithjoy-api
+    restart: unless-stopped
+    networks:
+      - zenithjoy-net
+    ports:
+      - "5200:5200"
+    env_file:
+      - /opt/zenithjoy/api/.env
+    volumes:
+      - /opt/zenithjoy/content-output:/opt/zenithjoy/content-output
+      - /opt/zenithjoy/install-pack:/opt/zenithjoy/install-pack:ro
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:5200/health',(r)=>{process.exit(r.statusCode===200?0:1)})"]
+      interval: 30s
+      timeout: 5s
+      start_period: 40s
+      retries: 3
+
   autopilot-dashboard:
     image: nginx:alpine
     container_name: autopilot-dashboard
     restart: unless-stopped
+    networks:
+      - zenithjoy-net
     ports:
       - "5211:80"
     extra_hosts:
