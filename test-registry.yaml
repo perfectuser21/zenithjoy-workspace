@@ -1063,7 +1063,7 @@ tests:
     ci: L4-INT
     status: active
     product: 内容发布
-    note: "Sprint 2.1e — /api/agent/install-pack manifest + download endpoints"
+    note: "Sprint 2.1e — /api/agent/install-pack manifest + download endpoints; PUT /manifest CI deploy endpoint added in fix #356"
 
   - id: agent-build-install-pack-script
     path: services/agent/scripts/__tests__/build-install-pack.test.sh

@@ -341,3 +341,68 @@ describe('EROFS fix — fallback download 写 /tmp，cos_url 优先', () => {
     expect(res.body.message).toContain('remote fetch also failed');
   });
 });
+
+// PUT /manifest — CI deploy endpoint（HTTP 替换 SSH）
+describe('PUT /api/agent/install-pack/manifest', () => {
+  let app: any;
+  const tmpManifestPath = `/tmp/test-manifest-put-${process.pid}.json`;
+
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    process.env.INSTALL_PACK_MANIFEST_PATH = tmpManifestPath;
+    process.env.ZENITHJOY_INTERNAL_TOKEN = 'test-internal-token-put';
+    app = (await import('../../app')).default;
+  });
+
+  afterEach(() => {
+    import('fs').then(fs => { try { fs.default.unlinkSync(tmpManifestPath); } catch { /* ok */ } });
+    delete process.env.INSTALL_PACK_MANIFEST_PATH;
+    delete process.env.ZENITHJOY_INTERNAL_TOKEN;
+  });
+
+  const validManifest = {
+    version: '1.2.0',
+    sha256: 'a'.repeat(64),
+    download_url: '/download/zenithjoy-agent-v1.2.0.tar.gz',
+    cos_url: 'https://example.cos.com/install-pack/zenithjoy-agent-v1.2.0.tar.gz',
+    size: 169414238,
+    build_time: '2026-05-20T04:17:25Z',
+  };
+
+  it('有效 token + 有效 manifest → 200 + 文件写入', async () => {
+    const res = await request(app)
+      .put('/api/agent/install-pack/manifest')
+      .set('X-Internal-Token', 'test-internal-token-put')
+      .send(validManifest);
+    expect(res.status).toBe(200);
+    expect(res.body.ok).toBe(true);
+    expect(res.body.version).toBe('1.2.0');
+    const written = JSON.parse(require('fs').readFileSync(tmpManifestPath, 'utf-8'));
+    expect(written.version).toBe('1.2.0');
+    expect(written.sha256).toBe('a'.repeat(64));
+  });
+
+  it('缺 token → 401 UNAUTHORIZED', async () => {
+    const res = await request(app)
+      .put('/api/agent/install-pack/manifest')
+      .send(validManifest);
+    expect(res.status).toBe(401);
+  });
+
+  it('错 token → 401 UNAUTHORIZED', async () => {
+    const res = await request(app)
+      .put('/api/agent/install-pack/manifest')
+      .set('X-Internal-Token', 'wrong-token')
+      .send(validManifest);
+    expect(res.status).toBe(401);
+  });
+
+  it('缺必填字段 → 400 INVALID_MANIFEST', async () => {
+    const res = await request(app)
+      .put('/api/agent/install-pack/manifest')
+      .set('X-Internal-Token', 'test-internal-token-put')
+      .send({ version: '1.2.0' });
+    expect(res.status).toBe(400);
+    expect(res.body.code).toBe('INVALID_MANIFEST');
+  });
+});
