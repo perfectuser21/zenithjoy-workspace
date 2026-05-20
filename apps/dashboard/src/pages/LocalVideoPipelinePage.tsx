@@ -1,10 +1,11 @@
-import { useState, useRef, useCallback, useEffect, type ComponentType } from 'react';
-import { Upload, Image, FileText, Play, Download, Loader2, CheckCircle, XCircle, Film } from 'lucide-react';
+import { useState, useRef, useCallback, useEffect } from 'react';
+import { FolderOpen, FileText, Play, Download, Loader2, CheckCircle, XCircle, Film } from 'lucide-react';
 import axios from 'axios';
+import TemplateSelector from '../components/video-pipeline/TemplateSelector';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || '/api';
 
-type JobStatus = 'idle' | 'queued' | 'pending' | 'in_progress' | 'completed' | 'failed';
+type JobStatus = 'idle' | 'queued' | 'pending' | 'processing' | 'completed' | 'failed';
 
 interface JobState {
   id: string;
@@ -13,14 +14,11 @@ interface JobState {
   error?: string;
 }
 
-async function uploadVideo(video: File, logo: File | null, script: string): Promise<{ id: string }> {
-  const form = new FormData();
-  form.append('video', video);
-  if (logo) form.append('logo', logo);
-  if (script.trim()) form.append('topic', script);
-  const res = await axios.post(`${API_BASE}/ai-video/jobs`, form, {
-    headers: { 'Content-Type': 'multipart/form-data' },
-    timeout: 30000,
+async function createJob(localPath: string, topic: string, templateId: string | null): Promise<{ id: string }> {
+  const res = await axios.post(`${API_BASE}/ai-video/jobs`, {
+    local_path: localPath,
+    topic: topic || undefined,
+    template_id: templateId || undefined,
   });
   return res.data;
 }
@@ -32,78 +30,6 @@ async function pollStatus(id: string): Promise<JobState> {
 
 function downloadUrl(jobId: string, file: '9_16.mp4' | '16_9.mp4'): string {
   return `${API_BASE}/ai-video/jobs/${jobId}/output/${file}`;
-}
-
-function DropZone({
-  label,
-  accept,
-  file,
-  onChange,
-  icon: Icon,
-}: {
-  label: string;
-  accept: string;
-  file: File | null;
-  onChange: (f: File | null) => void;
-  icon: ComponentType<{ className?: string }>;
-}) {
-  const inputRef = useRef<HTMLInputElement>(null);
-  const [dragging, setDragging] = useState(false);
-
-  const handleDrop = useCallback(
-    (e: { preventDefault: () => void; dataTransfer: DataTransfer }) => {
-      e.preventDefault();
-      setDragging(false);
-      const f = e.dataTransfer.files[0];
-      if (f) onChange(f);
-    },
-    [onChange],
-  );
-
-  return (
-    <div
-      className={`relative flex flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed transition-all cursor-pointer p-6 min-h-[140px] ${
-        dragging
-          ? 'border-blue-400 bg-blue-50 dark:bg-blue-900/20'
-          : file
-          ? 'border-emerald-400 bg-emerald-50 dark:bg-emerald-900/20'
-          : 'border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800/50 hover:border-blue-300 hover:bg-blue-50/30 dark:hover:bg-blue-900/10'
-      }`}
-      onClick={() => inputRef.current?.click()}
-      onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
-      onDragLeave={() => setDragging(false)}
-      onDrop={handleDrop}
-    >
-      <input
-        ref={inputRef}
-        type="file"
-        accept={accept}
-        className="hidden"
-        onChange={(e) => onChange(e.target.files?.[0] ?? null)}
-      />
-      {file ? (
-        <>
-          <CheckCircle className="w-8 h-8 text-emerald-500" />
-          <p className="text-sm font-medium text-emerald-700 dark:text-emerald-400 text-center break-all px-2">
-            {file.name}
-          </p>
-          <p className="text-xs text-slate-400">{(file.size / 1024 / 1024).toFixed(1)} MB</p>
-          <button
-            className="text-xs text-slate-400 hover:text-red-500 underline mt-1"
-            onClick={(e) => { e.stopPropagation(); onChange(null); }}
-          >
-            移除
-          </button>
-        </>
-      ) : (
-        <>
-          <Icon className="w-8 h-8 text-slate-400" />
-          <p className="text-sm font-medium text-slate-600 dark:text-slate-300">{label}</p>
-          <p className="text-xs text-slate-400">点击或拖拽上传</p>
-        </>
-      )}
-    </div>
-  );
 }
 
 function ProgressBar({ progress, status }: { progress: number; status: JobStatus }) {
@@ -119,9 +45,9 @@ function ProgressBar({ progress, status }: { progress: number; status: JobStatus
 }
 
 export default function LocalVideoPipelinePage() {
-  const [videoFile, setVideoFile] = useState<File | null>(null);
-  const [logoFile, setLogoFile] = useState<File | null>(null);
-  const [script, setScript] = useState('');
+  const [localPath, setLocalPath] = useState('');
+  const [topic, setTopic] = useState('');
+  const [templateId, setTemplateId] = useState<string | null>(null);
   const [job, setJob] = useState<JobState | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -151,10 +77,10 @@ export default function LocalVideoPipelinePage() {
   }, [stopPoll]);
 
   const handleSubmit = async () => {
-    if (!videoFile) return;
+    if (!localPath.trim()) return;
     setSubmitting(true);
     try {
-      const { id } = await uploadVideo(videoFile, logoFile, script);
+      const { id } = await createJob(localPath.trim(), topic, templateId);
       const initial: JobState = { id, status: 'queued', progress: 0 };
       setJob(initial);
       startPoll(id);
@@ -169,21 +95,21 @@ export default function LocalVideoPipelinePage() {
   const handleReset = () => {
     stopPoll();
     setJob(null);
-    setVideoFile(null);
-    setLogoFile(null);
-    setScript('');
+    setLocalPath('');
+    setTopic('');
+    setTemplateId(null);
   };
 
-  const isProcessing = job && (job.status === 'queued' || job.status === 'pending' || job.status === 'in_progress');
+  const isProcessing = job && (job.status === 'queued' || job.status === 'pending' || job.status === 'processing');
   const isDone = job?.status === 'completed';
   const isFailed = job?.status === 'failed';
-  const canSubmit = !!videoFile && !submitting && !isProcessing;
+  const canSubmit = !!localPath.trim() && !submitting && !isProcessing;
 
   const statusLabel: Record<JobStatus, string> = {
     idle: '',
     queued: '排队中…',
-    pending: '排队中…',
-    in_progress: `处理中 ${job?.progress ?? 0}%`,
+    pending: '等待 Agent 处理…',
+    processing: `Agent 处理中 ${job?.progress ?? 0}%`,
     completed: '处理完成',
     failed: '处理失败',
   };
@@ -196,44 +122,48 @@ export default function LocalVideoPipelinePage() {
           本地视频处理
         </h1>
         <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-          上传视频（可选 logo），AI 全自动精剪 + 字幕叠加，Agent 本地生成成品
+          填入你 Windows 电脑上的视频路径，Agent 自动在本地精剪 + 字幕叠加，无需上传文件。
         </p>
       </div>
 
       <div className="bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-700 p-6 space-y-6">
-        {/* 上传区 */}
-        <div className="grid grid-cols-2 gap-4">
-          <DropZone
-            label="主视频"
-            accept="video/*"
-            file={videoFile}
-            onChange={setVideoFile}
-            icon={Upload}
+        {/* 本地路径输入 */}
+        <div>
+          <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5 flex items-center gap-1.5">
+            <FolderOpen className="w-4 h-4" />
+            视频本地路径
+          </label>
+          <input
+            type="text"
+            placeholder="例：C:\Users\asus\Videos\my-video.mp4"
+            value={localPath}
+            onChange={(e) => setLocalPath(e.target.value)}
+            disabled={!!isProcessing || isDone}
+            className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-900/50 text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono text-sm disabled:opacity-50"
           />
-          <DropZone
-            label="Logo / 水印图片（可选）"
-            accept="image/*"
-            file={logoFile}
-            onChange={setLogoFile}
-            icon={Image}
-          />
+          <p className="mt-1.5 text-xs text-slate-400">
+            填入你 Windows PC 上的视频文件完整路径，Agent 将直接读取该文件进行本地处理。
+          </p>
         </div>
 
         {/* 标题/文案 */}
         <div>
           <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5 flex items-center gap-1.5">
             <FileText className="w-4 h-4" />
-            视频标题 / 文案
+            视频标题 / 文案（可选）
           </label>
           <textarea
             rows={3}
-            placeholder="输入视频标题或文案…"
-            value={script}
-            onChange={(e) => setScript(e.target.value)}
+            placeholder="输入视频主题或文案，AI 将据此生成字幕和镜头设计…"
+            value={topic}
+            onChange={(e) => setTopic(e.target.value)}
             disabled={!!isProcessing || isDone}
             className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-900/50 text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none disabled:opacity-50"
           />
         </div>
+
+        {/* 模板选择 */}
+        <TemplateSelector value={templateId} onChange={setTemplateId} />
 
         {/* 进度区 */}
         {job && job.status !== 'idle' && (

@@ -12,35 +12,46 @@ const execFileAsync = promisify(execFile);
 import { fromNodeHeaders } from 'better-auth/node';
 import pool from '../db/connection';
 import { auth } from '../auth';
-import { readInstallPackManifest } from '../services/install-pack-manifest';
+import { readInstallPackManifest, type InstallPackManifest } from '../services/install-pack-manifest';
+import { internalAuth } from '../middleware/internal-auth';
 
 // 从远端 URL 下载 tar.gz 到本地路径，原子写（先 .downloading 再 rename）
-// 用于 INSTALL_PACK_REMOTE_URL fallback：本地文件不存在时自动拉取并缓存
+// dest 必须在可写目录（如 /tmp），不能是只读挂载路径
 function downloadFileToPath(url: string, dest: string): Promise<void> {
   return new Promise((resolve, reject) => {
     const tmp = dest + '.downloading';
-    // 若上次下载中断留下 .downloading，先删掉
     fs.rmSync(tmp, { force: true });
+    let settled = false;
+    const done = (err?: Error) => {
+      if (settled) return;
+      settled = true;
+      if (err) reject(err);
+      else resolve();
+    };
     const file = fs.createWriteStream(tmp);
+    file.on('error', (err) => {
+      fs.rmSync(tmp, { force: true });
+      done(err);
+    });
     const protocol = url.startsWith('https://') ? https : http;
     protocol.get(url, (res) => {
       if (res.statusCode !== 200) {
         file.destroy();
         fs.rmSync(tmp, { force: true });
-        reject(new Error(`remote fetch ${url} → HTTP ${res.statusCode}`));
+        done(new Error(`remote fetch ${url} → HTTP ${res.statusCode}`));
         return;
       }
       res.pipe(file);
       file.on('finish', () => {
         file.close(() => {
-          fs.renameSync(tmp, dest);
-          resolve();
+          try { fs.renameSync(tmp, dest); } catch (e) { done(e as Error); return; }
+          done();
         });
       });
     }).on('error', (err) => {
       file.destroy();
       fs.rmSync(tmp, { force: true });
-      reject(err);
+      done(err);
     });
   });
 }
@@ -57,6 +68,32 @@ agentInstallPackRouter.get('/manifest', (_req: Request, res: Response) => {
     });
   }
   return res.status(200).json(m);
+});
+
+// CI deploy endpoint — update manifest.json without SSH
+// Protected by ZENITHJOY_INTERNAL_TOKEN (same as other internal endpoints)
+agentInstallPackRouter.put('/manifest', internalAuth, (req: Request, res: Response) => {
+  const body = req.body as Partial<InstallPackManifest>;
+  if (
+    typeof body?.version !== 'string' ||
+    typeof body?.sha256 !== 'string' ||
+    typeof body?.download_url !== 'string'
+  ) {
+    return res.status(400).json({ ok: false, code: 'INVALID_MANIFEST', message: 'version/sha256/download_url required' });
+  }
+  const manifestPath =
+    process.env.INSTALL_PACK_MANIFEST_PATH ||
+    '/opt/zenithjoy/install-pack/manifest.json';
+  try {
+    fs.mkdirSync(path.dirname(manifestPath), { recursive: true });
+    fs.writeFileSync(manifestPath, JSON.stringify(body, null, 2) + '\n', 'utf-8');
+    console.log(`[install-pack/manifest] updated to v${body.version} via HTTP deploy`);
+    return res.status(200).json({ ok: true, version: body.version });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'unknown';
+    console.error('[install-pack/manifest] write failed:', msg);
+    return res.status(500).json({ ok: false, code: 'WRITE_FAILED', message: msg });
+  }
 });
 
 // Sprint 2.1f Fix 7 — server-side license burn-in
@@ -114,16 +151,18 @@ agentInstallPackRouter.get('/download', async (req: Request, res: Response) => {
     '/opt/zenithjoy/autopilot-dashboard/dist';
   const srcTar = process.env.INSTALL_PACK_FIXTURE_PATH || // test override
     path.join(STATIC_ROOT, m.download_url.replace(/^\/+/, ''));
+  let effectiveSrcTar = srcTar;
   if (!fs.existsSync(srcTar)) {
-    // Fallback：本地文件不存在时，尝试从 INSTALL_PACK_REMOTE_URL 拉取并缓存
-    // 适用场景：Mac Mini 本地没有 tar.gz，但 HK VPS nginx 上有完整文件
-    const remoteUrl = process.env.INSTALL_PACK_REMOTE_URL;
+    // Fallback：本地文件不存在时，从 cos_url 或 INSTALL_PACK_REMOTE_URL 拉取
+    // 写到 /tmp 而非静态根目录，避免 EROFS（静态根可能是只读挂载）
+    const remoteUrl = m.cos_url || process.env.INSTALL_PACK_REMOTE_URL;
     if (remoteUrl) {
-      console.log(`[install-pack/download] 本地 tar.gz 不存在，从远端拉取: ${remoteUrl}`);
+      const tmpTar = path.join(os.tmpdir(), path.basename(srcTar));
+      console.log(`[install-pack/download] 本地 tar.gz 不存在，从远端拉取到 /tmp: ${remoteUrl}`);
       try {
-        fs.mkdirSync(path.dirname(srcTar), { recursive: true });
-        await downloadFileToPath(remoteUrl, srcTar);
-        console.log(`[install-pack/download] 远端拉取成功，已缓存到 ${srcTar}`);
+        await downloadFileToPath(remoteUrl, tmpTar);
+        effectiveSrcTar = tmpTar;
+        console.log(`[install-pack/download] 远端拉取成功: ${tmpTar}`);
       } catch (dlErr) {
         console.error('[install-pack/download] 远端拉取失败:', dlErr);
         return res.status(503).json({
@@ -144,7 +183,7 @@ agentInstallPackRouter.get('/download', async (req: Request, res: Response) => {
   // 4. 解压到 tmp → 替换 .env → 重打包
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), `install-pack-${userId}-`));
   try {
-    await execFileAsync('tar', ['-xzf', srcTar, '-C', tmp]);
+    await execFileAsync('tar', ['-xzf', effectiveSrcTar, '-C', tmp]);
     // 找 .env（可能在子目录 zenithjoy-agent-vX.Y.Z/ 里）
     let envPath: string | null = null;
     function walk(dir: string): void {
@@ -209,4 +248,54 @@ agentInstallPackRouter.get('/download', async (req: Request, res: Response) => {
     console.error('[install-pack/download] burn-in failed:', err);
     return res.status(500).json({ ok: false, code: 'BURN_IN_FAILED', message: msg });
   }
+});
+
+// COS CDN 路由 v2 — 大包走 COS CDN 直连，API 只出个人 .env（< 1KB）
+// 客户端流程：① 大包从 manifest.cos_url 直接下载（快），② 从此端点下载个人 .env 拖入目录
+agentInstallPackRouter.get('/dotenv', async (req: Request, res: Response) => {
+  // 1. 鉴权
+  let userId: string | null = null;
+  try {
+    const session = await auth.api.getSession({
+      headers: fromNodeHeaders(req.headers),
+    });
+    const u = session?.user;
+    if (u && typeof u.id === 'string' && u.id.length > 0) userId = u.id;
+  } catch (err) {
+    console.warn('[install-pack/dotenv] session 解析失败:', err);
+  }
+  if (!userId) {
+    return res.status(401).json({ ok: false, code: 'UNAUTHORIZED' });
+  }
+
+  // 2. 查 user 的 active license
+  let licenseKey: string;
+  try {
+    const { rows } = await pool.query<{ license_key: string }>(
+      `SELECT license_key
+         FROM zenithjoy.licenses
+        WHERE customer_id = $1 AND status = 'active'
+        ORDER BY created_at DESC
+        LIMIT 1`,
+      [userId]
+    );
+    if (rows.length === 0) {
+      return res.status(503).json({
+        ok: false,
+        code: 'NO_ACTIVE_LICENSE',
+        message: 'no active license bound to your account; 请回 Account 页确认',
+      });
+    }
+    licenseKey = rows[0].license_key;
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'unknown';
+    return res.status(500).json({ ok: false, code: 'DB_ERROR', message: msg });
+  }
+
+  // 3. 返回个人 .env（license 已烧入）
+  const content = `ZENITHJOY_LICENSE=${licenseKey}\n`;
+  res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+  res.setHeader('Content-Disposition', 'attachment; filename=".env"');
+  res.setHeader('Content-Length', String(Buffer.byteLength(content)));
+  return res.status(200).send(content);
 });

@@ -27,6 +27,39 @@ if [ -z "$ADDED_SRC" ]; then
   exit 0
 fi
 
+# refactor: commit 豁免 — 纯重构/改名不引入新逻辑，靠已有测试覆盖，不需要新 test 配对
+COMMIT_MSGS=$(git log --pretty=%s "${BASE_REF}..HEAD" 2>/dev/null || true)
+if echo "$COMMIT_MSGS" | grep -qE '^refactor(\(.+\))?!?:'; then
+  echo '⏭️  refactor: commit — test-pairing 豁免'
+  exit 0
+fi
+
+# Walking Skeleton thin PR 豁免：PR 新增 golden-path smoke = 骨架阶段，不要求 unit test 配对
+NEW_SMOKE=$(git diff --name-only --diff-filter=A "${BASE_REF}...HEAD" 2>/dev/null \
+  | grep -E '^\.github/workflows/scripts/smoke/golden-path-.+\.sh$' \
+  || true)
+if [ -n "$NEW_SMOKE" ]; then
+  echo "⏭️  Walking Skeleton thin PR（新增 smoke: ${NEW_SMOKE}）— test-pairing 豁免"
+  exit 0
+fi
+
+# 盲区：检测"删除 test 文件"绕过 pairing
+DELETED_TESTS=$(git diff --name-only --diff-filter=D "${BASE_REF}...HEAD" 2>/dev/null \
+  | grep -E '^apps/[^/]+/src/.*\.(test|spec)\.ts$' \
+  || true)
+if [ -n "$DELETED_TESTS" ]; then
+  while IFS= read -r tf; do
+    [ -z "$tf" ] && continue
+    src="${tf//.test.ts/.ts}"
+    src="${src//.spec.ts/.ts}"
+    src=$(echo "$src" | sed 's|/__tests__/|/|')
+    if [ -f "$src" ]; then
+      echo "::error::lint-test-pairing 失败 — 删除了 test 但对应 src 仍存在: $tf"
+      exit 1
+    fi
+  done <<< "$DELETED_TESTS"
+fi
+
 PR_TESTS=$(git diff --name-only --diff-filter=AM "${BASE_REF}...HEAD" 2>/dev/null \
   | grep -E "\.(test|spec)\.ts$|/__tests__/|/tests/" \
   || true)

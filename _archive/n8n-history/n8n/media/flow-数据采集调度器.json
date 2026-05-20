@@ -1,0 +1,437 @@
+{
+  "name": "[Flow] 数据采集调度器",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 21 * * *"
+            }
+          ]
+        }
+      },
+      "id": "schedule",
+      "name": "\\u5b9a\\u65f6\\u89e6\\u53d1",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        300
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "manual",
+      "name": "\\u624b\\u52a8\\u89e6\\u53d1",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        500
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "r",
+              "name": "results",
+              "value": "=[]",
+              "type": "array"
+            },
+            {
+              "id": "f",
+              "name": "failed",
+              "value": "=[]",
+              "type": "array"
+            }
+          ]
+        }
+      },
+      "id": "init",
+      "name": "\\u521d\\u59cb\\u5316",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        200,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "wxYIxt8paRz82lbW",
+          "mode": "id"
+        }
+      },
+      "id": "p1",
+      "name": "1-\\u6296\\u97f3",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.1,
+      "position": [
+        400,
+        400
+      ],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "8YC1JuIKo0aytgQz",
+          "mode": "id"
+        }
+      },
+      "id": "p2",
+      "name": "2-\\u5feb\\u624b",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.1,
+      "position": [
+        600,
+        400
+      ],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "I5It7tSAT7HadXYJ",
+          "mode": "id"
+        }
+      },
+      "id": "p3",
+      "name": "3-\\u5c0f\\u7ea2\\u4e66",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.1,
+      "position": [
+        800,
+        400
+      ],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "SmJ3WIeVmR69l2dF",
+          "mode": "id"
+        }
+      },
+      "id": "p4",
+      "name": "4-\\u5934\\u6761",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.1,
+      "position": [
+        1000,
+        400
+      ],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "BLVEVjzdtjAPEblg",
+          "mode": "id"
+        }
+      },
+      "id": "p5",
+      "name": "5-\\u5934\\u67612",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.1,
+      "position": [
+        1200,
+        400
+      ],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "VMS9m7rubG5zvyla",
+          "mode": "id"
+        }
+      },
+      "id": "p6",
+      "name": "6-\\u5fae\\u535a",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.1,
+      "position": [
+        1400,
+        400
+      ],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "MnrpR0zzCaQvJ9yJ",
+          "mode": "id"
+        }
+      },
+      "id": "p7",
+      "name": "7-\\u89c6\\u9891\\u53f7",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.1,
+      "position": [
+        1600,
+        400
+      ],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "HegJi0788KPG1Bqh",
+          "mode": "id"
+        }
+      },
+      "id": "p8",
+      "name": "8-\\u516c\\u4f17\\u53f7",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.1,
+      "position": [
+        1800,
+        400
+      ],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "RDlBd8MRjDSICfRf",
+          "mode": "id"
+        }
+      },
+      "id": "p9",
+      "name": "9-\\u77e5\\u4e4e",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.1,
+      "position": [
+        2000,
+        400
+      ],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const platforms = ['\\u6296\\u97f3','\\u5feb\\u624b','\\u5c0f\\u7ea2\\u4e66','\\u5934\\u6761','\\u5934\\u67612','\\u5fae\\u535a','\\u89c6\\u9891\\u53f7','\\u516c\\u4f17\\u53f7','\\u77e5\\u4e4e'];\\nconst results = [];\\nconst failed = [];\\n\\nfor (let i = 0; i < 9; i++) {\\n  const name = platforms[i];\\n  const data = $(`${i+1}-${name}`).item.json || {};\\n  const success = data.success && (data.count || 0) >= 3;\\n  results.push({ platform: name, success, count: data.count || 0 });\\n  if (!success) failed.push(name);\\n}\\n\\nreturn { results, failed, total: 9, successCount: results.filter(r=>r.success).length };"
+      },
+      "id": "summary",
+      "name": "\\u6c47\\u603b",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2200,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const r = $json;\\nlet msg = '\\ud83d\\udcca \\u6570\\u636e\\u91c7\\u96c6\\u62a5\\u544a\\\\n\\\\n';\\nmsg += '\\u65f6\\u95f4: ' + new Date().toLocaleString('zh-CN', {timeZone:'Asia/Shanghai'}) + '\\\\n';\\nmsg += '\\u72b6\\u6001: ' + (r.failed.length===0 ? '\\u2705 \\u5168\\u90e8\\u6210\\u529f' : '\\u26a0\\ufe0f \\u90e8\\u5206\\u5931\\u8d25') + '\\\\n\\\\n';\\nfor (const p of r.results) {\\n  msg += (p.success ? '\\u2705 ' : '\\u274c ') + p.platform + ': ' + p.count + ' \\u6761\\\\n';\\n}\\nif (r.failed.length > 0) msg += '\\\\n\\u9700\\u767b\\u5f55: ' + r.failed.join(', ');\\nreturn { msg_type: 'text', content: { text: msg } };"
+      },
+      "id": "format",
+      "name": "\\u683c\\u5f0f\\u5316",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2400,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://open.feishu.cn/open-apis/bot/v2/hook/5bde68e0-9879-4a45-88ed-461a88229136",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json }}"
+      },
+      "id": "notify",
+      "name": "\\u53d1\\u98de\\u4e66",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2600,
+        400
+      ]
+    }
+  ],
+  "connections": {
+    "\\u5b9a\\u65f6\\u89e6\\u53d1": {
+      "main": [
+        [
+          {
+            "node": "\\u521d\\u59cb\\u5316",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "\\u624b\\u52a8\\u89e6\\u53d1": {
+      "main": [
+        [
+          {
+            "node": "\\u521d\\u59cb\\u5316",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "\\u521d\\u59cb\\u5316": {
+      "main": [
+        [
+          {
+            "node": "1-\\u6296\\u97f3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "1-\\u6296\\u97f3": {
+      "main": [
+        [
+          {
+            "node": "2-\\u5feb\\u624b",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "2-\\u5feb\\u624b": {
+      "main": [
+        [
+          {
+            "node": "3-\\u5c0f\\u7ea2\\u4e66",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "3-\\u5c0f\\u7ea2\\u4e66": {
+      "main": [
+        [
+          {
+            "node": "4-\\u5934\\u6761",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "4-\\u5934\\u6761": {
+      "main": [
+        [
+          {
+            "node": "5-\\u5934\\u67612",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "5-\\u5934\\u67612": {
+      "main": [
+        [
+          {
+            "node": "6-\\u5fae\\u535a",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "6-\\u5fae\\u535a": {
+      "main": [
+        [
+          {
+            "node": "7-\\u89c6\\u9891\\u53f7",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "7-\\u89c6\\u9891\\u53f7": {
+      "main": [
+        [
+          {
+            "node": "8-\\u516c\\u4f17\\u53f7",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "8-\\u516c\\u4f17\\u53f7": {
+      "main": [
+        [
+          {
+            "node": "9-\\u77e5\\u4e4e",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "9-\\u77e5\\u4e4e": {
+      "main": [
+        [
+          {
+            "node": "\\u6c47\\u603b",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "\\u6c47\\u603b": {
+      "main": [
+        [
+          {
+            "node": "\\u683c\\u5f0f\\u5316",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "\\u683c\\u5f0f\\u5316": {
+      "main": [
+        [
+          {
+            "node": "\\u53d1\\u98de\\u4e66",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": true
+  },
+  "staticData": {
+    "node:\\u5b9a\\u65f6\\u89e6\\u53d1": {
+      "recurrenceRules": []
+    }
+  },
+  "active": true
+}

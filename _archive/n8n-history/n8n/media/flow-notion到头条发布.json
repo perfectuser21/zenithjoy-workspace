@@ -1,0 +1,473 @@
+{
+  "name": "[Flow] Notion到头条发布",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "trigger",
+      "name": "手动触发",
+      "type": "n8n-nodes-base.manualTrigger",
+      "position": [
+        220,
+        300
+      ],
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "30 23 * * *"
+            },
+            {
+              "field": "cronExpression",
+              "expression": "0 1 * * *"
+            },
+            {
+              "field": "cronExpression",
+              "expression": "30 2 * * *"
+            },
+            {
+              "field": "cronExpression",
+              "expression": "0 4 * * *"
+            },
+            {
+              "field": "cronExpression",
+              "expression": "30 5 * * *"
+            },
+            {
+              "field": "cronExpression",
+              "expression": "0 7 * * *"
+            },
+            {
+              "field": "cronExpression",
+              "expression": "30 8 * * *"
+            },
+            {
+              "field": "cronExpression",
+              "expression": "0 10 * * *"
+            },
+            {
+              "field": "cronExpression",
+              "expression": "30 11 * * *"
+            },
+            {
+              "field": "cronExpression",
+              "expression": "0 13 * * *"
+            }
+          ]
+        }
+      },
+      "id": "schedule",
+      "name": "定时触发",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "position": [
+        220,
+        500
+      ],
+      "typeVersion": 1.2
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.notion.com/v1/databases/45172ba870d64036aff8eb2f79225fc2/query",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer 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"
+            },
+            {
+              "name": "Notion-Version",
+              "value": "2022-06-28"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\n  \"filter\": {\n    \"and\": [\n      {\n        \"property\": \"发布状态\",\n        \"checkbox\": { \"equals\": false }\n      },\n      {\n        \"property\": \"发布日期\",\n        \"date\": { \"on_or_before\": \"{{ $now.toISO() }}\" }\n      }\n    ]\n  },\n  \"sorts\": [\n    {\n      \"property\": \"发布日期\",\n      \"direction\": \"ascending\"\n    }\n  ],\n  \"page_size\": 1\n}",
+        "options": {}
+      },
+      "id": "query-notion",
+      "name": "查询待发布",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [
+        440,
+        400
+      ],
+      "typeVersion": 4.2
+    },
+    {
+      "parameters": {
+        "jsCode": "const results = $input.first().json.results || [];\n\nif (results.length === 0) {\n  return [{ json: { empty: true, message: '没有待发布内容' } }];\n}\n\nreturn results.map(page => ({\n  json: {\n    pageId: page.id,\n    title: page.properties['标题']?.title?.[0]?.plain_text || '无标题',\n    url: page.url\n  }\n}));"
+      },
+      "id": "parse-pages",
+      "name": "解析页面列表",
+      "type": "n8n-nodes-base.code",
+      "position": [
+        660,
+        400
+      ],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "check-empty",
+              "leftValue": "={{ $json.empty }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "notTrue"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "check-empty",
+      "name": "有内容?",
+      "type": "n8n-nodes-base.if",
+      "position": [
+        880,
+        400
+      ],
+      "typeVersion": 2.2
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=https://api.notion.com/v1/blocks/{{ $json.pageId }}/children?page_size=100",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer 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"
+            },
+            {
+              "name": "Notion-Version",
+              "value": "2022-06-28"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "get-blocks",
+      "name": "获取页面内容",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [
+        1100,
+        300
+      ],
+      "typeVersion": 4.2
+    },
+    {
+      "parameters": {
+        "jsCode": "const pageId = $('解析页面列表').first().json.pageId;\nconst title = $('解析页面列表').first().json.title;\nconst blocks = $input.first().json.results || [];\n\nlet content = '';\nconst images = [];\n\nfor (const block of blocks) {\n  const type = block.type;\n  \n  if (type === 'paragraph') {\n    const texts = block.paragraph?.rich_text || [];\n    content += texts.map(t => t.plain_text).join('') + '\\n';\n  }\n  else if (type === 'heading_1' || type === 'heading_2' || type === 'heading_3') {\n    const texts = block[type]?.rich_text || [];\n    content += texts.map(t => t.plain_text).join('') + '\\n';\n  }\n  else if (type === 'bulleted_list_item' || type === 'numbered_list_item') {\n    const texts = block[type]?.rich_text || [];\n    content += '• ' + texts.map(t => t.plain_text).join('') + '\\n';\n  }\n  else if (type === 'image') {\n    const img = block.image;\n    const url = img?.file?.url || img?.external?.url;\n    if (url) images.push(url);\n  }\n}\n\nreturn [{\n  json: {\n    pageId,\n    title,\n    content: content.trim(),\n    images,\n    publishData: JSON.stringify({ title, content: content.trim(), images })\n  }\n}];"
+      },
+      "id": "extract-content",
+      "name": "提取内容",
+      "type": "n8n-nodes-base.code",
+      "position": [
+        1320,
+        300
+      ],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "command": "=echo '{{ $json.publishData }}' | node /home/xx/notion_toutiao_publisher.js"
+      },
+      "id": "publish-ssh",
+      "name": "发布到头条",
+      "type": "n8n-nodes-base.ssh",
+      "position": [
+        1540,
+        300
+      ],
+      "typeVersion": 1,
+      "credentials": {
+        "sshPassword": {
+          "id": "vvJsQOZ95sqzemla",
+          "name": "VPS SSH"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const stdout = $input.first().json.stdout || '';\nconst pageId = $('提取内容').first().json.pageId;\nconst title = $('提取内容').first().json.title;\n\nlet result;\ntry {\n  result = JSON.parse(stdout.trim().split('\\n').pop());\n} catch {\n  result = { success: false, error: 'JSON 解析失败' };\n}\n\nreturn [{\n  json: {\n    pageId,\n    title,\n    success: result.success,\n    error: result.error || null\n  }\n}];"
+      },
+      "id": "parse-result",
+      "name": "解析结果",
+      "type": "n8n-nodes-base.code",
+      "position": [
+        1760,
+        300
+      ],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "check-success",
+              "leftValue": "={{ $json.success }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "check-success",
+      "name": "发布成功?",
+      "type": "n8n-nodes-base.if",
+      "position": [
+        1980,
+        300
+      ],
+      "typeVersion": 2.2
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "=https://api.notion.com/v1/pages/{{ $json.pageId }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer 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"
+            },
+            {
+              "name": "Notion-Version",
+              "value": "2022-06-28"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\n  \"properties\": {\n    \"发布状态\": {\n      \"checkbox\": true\n    }\n  }\n}",
+        "options": {}
+      },
+      "id": "update-notion",
+      "name": "更新Notion状态",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [
+        2200,
+        200
+      ],
+      "typeVersion": 4.2
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://open.feishu.cn/open-apis/bot/v2/hook/5bde68e0-9879-4a45-88ed-461a88229136",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"msg_type\": \"text\",\n  \"content\": {\n    \"text\": \"✅ 头条小号发布成功\\n标题: {{ $('解析结果').first().json.title }}\"\n  }\n}",
+        "options": {}
+      },
+      "id": "notify-success",
+      "name": "飞书通知-成功",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [
+        2420,
+        200
+      ],
+      "typeVersion": 4.2
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://open.feishu.cn/open-apis/bot/v2/hook/5bde68e0-9879-4a45-88ed-461a88229136",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"msg_type\": \"text\",\n  \"content\": {\n    \"text\": \"❌ 头条小号发布失败\\n标题: {{ $json.title }}\\n错误: {{ $json.error }}\"\n  }\n}",
+        "options": {}
+      },
+      "id": "notify-fail",
+      "name": "飞书通知-失败",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [
+        2200,
+        400
+      ],
+      "typeVersion": 4.2
+    },
+    {
+      "parameters": {},
+      "id": "no-content",
+      "name": "无待发布内容",
+      "type": "n8n-nodes-base.noOp",
+      "position": [
+        1100,
+        500
+      ],
+      "typeVersion": 1
+    }
+  ],
+  "connections": {
+    "手动触发": {
+      "main": [
+        [
+          {
+            "node": "查询待发布",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "定时触发": {
+      "main": [
+        [
+          {
+            "node": "查询待发布",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "查询待发布": {
+      "main": [
+        [
+          {
+            "node": "解析页面列表",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "解析页面列表": {
+      "main": [
+        [
+          {
+            "node": "有内容?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "有内容?": {
+      "main": [
+        [
+          {
+            "node": "获取页面内容",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "无待发布内容",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "获取页面内容": {
+      "main": [
+        [
+          {
+            "node": "提取内容",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "提取内容": {
+      "main": [
+        [
+          {
+            "node": "发布到头条",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "发布到头条": {
+      "main": [
+        [
+          {
+            "node": "解析结果",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "解析结果": {
+      "main": [
+        [
+          {
+            "node": "发布成功?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "发布成功?": {
+      "main": [
+        [
+          {
+            "node": "更新Notion状态",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "飞书通知-失败",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "更新Notion状态": {
+      "main": [
+        [
+          {
+            "node": "飞书通知-成功",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false
+  },
+  "staticData": {
+    "node:定时触发": {
+      "recurrenceRules": []
+    }
+  },
+  "active": true
+}

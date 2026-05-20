@@ -20,7 +20,7 @@
 1. **agent.js**（Node.js 后台进程）
    - WebSocket 连接到中台（wss://）
    - 接收 `publish_request` 指令
-   - spawn `services/creator/scripts/publishers/wechat-publisher/publish-wechat-article.cjs`
+   - spawn `services/content-pipeline/scripts/publishers/wechat-publisher/publish-wechat-article.cjs`
    - 上报 stdout/stderr/exit code 到中台
 2. **apps/api 加 WebSocket server**
    - 维护 Agent 连接池（单例 AgentRegistry）

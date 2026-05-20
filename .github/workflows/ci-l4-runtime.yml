@@ -25,6 +25,7 @@ jobs:
     outputs:
       dashboard: ${{ steps.filter.outputs.dashboard }}
       api: ${{ steps.filter.outputs.api }}
+      agent: ${{ steps.filter.outputs.agent }}
       ci: ${{ steps.filter.outputs.ci }}
     steps:
       - uses: actions/checkout@v4
@@ -54,6 +55,8 @@ jobs:
             && echo "dashboard=true" >> $GITHUB_OUTPUT || echo "dashboard=false" >> $GITHUB_OUTPUT
           echo "$CHANGED" | grep -q "^apps/api/" \
             && echo "api=true" >> $GITHUB_OUTPUT || echo "api=false" >> $GITHUB_OUTPUT
+          echo "$CHANGED" | grep -q "^services/agent/" \
+            && echo "agent=true" >> $GITHUB_OUTPUT || echo "agent=false" >> $GITHUB_OUTPUT
           echo "$CHANGED" | grep -qE "^\.github/|^tsconfig\.base\.json$|^package\.json$" \
             && echo "ci=true" >> $GITHUB_OUTPUT || echo "ci=false" >> $GITHUB_OUTPUT
 
@@ -101,10 +104,28 @@ jobs:
         working-directory: apps/api
         run: npx vitest run --coverage
 
+  # ─── Agent Tests ─────────────────────────────────────────────────────
+  agent-test:
+    name: Agent Test
+    needs: changes
+    if: needs.changes.outputs.agent == 'true' || needs.changes.outputs.ci == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - run: npm ci
+        working-directory: services/agent
+      - name: Run tests (src/ only — publishers require Chrome CDP not available in CI)
+        working-directory: services/agent
+        run: npx vitest run src/
+
   # ─── L4 Gate ──────────────────────────────────────────────────────────
   l4-passed:
     name: L4 Runtime Gate Passed
-    needs: [changes, dashboard-test, api-test]
+    needs: [changes, dashboard-test, api-test, agent-test]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -138,6 +159,14 @@ jobs:
             fi
           fi
 
+          # Agent tests (conditional)
+          if [ "${{ needs.changes.outputs.agent }}" = "true" ] || [ "${{ needs.changes.outputs.ci }}" = "true" ]; then
+            if [ "${{ needs.agent-test.result }}" != "success" ]; then
+              echo "FAIL: Agent Test (${{ needs.agent-test.result }})"
+              FAILED=true
+            fi
+          fi
+
           if [ "$FAILED" = "true" ]; then
             echo ""
             echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -150,6 +179,7 @@ jobs:
           echo "Module check results:"
           [ "${{ needs.changes.outputs.dashboard }}" = "true" ] && echo "  Dashboard: tested" || echo "  Dashboard: skipped"
           [ "${{ needs.changes.outputs.api }}" = "true" ] && echo "  API: tested" || echo "  API: skipped"
+          [ "${{ needs.changes.outputs.agent }}" = "true" ] && echo "  Agent: tested" || echo "  Agent: skipped"
 
           echo ""
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"

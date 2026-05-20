@@ -33,6 +33,9 @@ import { handleWechatRpa, type WechatRpaTask } from './handlers/wechat-rpa';
 import { createFolderWatchManager } from './handlers/folder-watch';
 import { startHealthServer, setWsState } from './handlers/health-server';
 import { startVideoPipelineLoop } from './handlers/video-pipeline';
+import { ensureChromeHeadlessShell } from './handlers/ensure-chrome';
+import { ensureFfmpeg } from './handlers/ensure-ffmpeg';
+import { ensureHyperframes } from './handlers/ensure-hyperframes';
 import dns from 'node:dns';
 
 // Windows 防火墙封锁 IPv6（EACCES on 2606:4700::）→ 强制 Node.js 优先解析 IPv4
@@ -139,7 +142,8 @@ function loadOrInitConfig(): AgentConfig {
 
 // ---------- WebSocket 业务核心 ----------
 
-const VERSION = '1.0.0';
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const VERSION: string = (require('../package.json') as { version: string }).version;
 
 const startTime = Date.now();
 let backoff = 1000;
@@ -686,7 +690,12 @@ function startWs1HeartbeatLoop(cfg: AgentConfig): void {
   loop.start();
   console.log(`[ws1] heartbeat-loop started → ${apiBase}/api/agent/heartbeat`);
 
-  startVideoPipelineLoop(apiBase);
+  // Auto-install Chrome headless shell and hyperframes npm package (non-blocking)
+  ensureChromeHeadlessShell().catch((e) => console.warn('[chrome] ensure failed:', e));
+  ensureFfmpeg().catch((e) => console.warn('[ffmpeg] ensure failed:', e));
+  ensureHyperframes().catch((e) => console.warn('[hyperframes] ensure failed:', e));
+
+  startVideoPipelineLoop(apiBase, cfg.licenseKey);
   console.log(`[ws1] video-pipeline-loop started → ${apiBase}/api/ai-video/jobs`);
 }
 

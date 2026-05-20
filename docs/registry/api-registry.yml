@@ -3,7 +3,7 @@
 #
 # services:
 #   api      — Node.js/Express (apps/api)，端口 3001
-#   creator  — Python/FastAPI (services/creator)，端口 8000
+#   creator  — Python/FastAPI (services/content-pipeline)，端口 8000
 #
 # auth: bearer | none | feishu-oauth
 
@@ -193,7 +193,7 @@ endpoints:
     auth: bearer
 
 # ============================================================
-# services/creator (Python/FastAPI)
+# services/content-pipeline (Python/FastAPI)
 # ============================================================
 
   # ── creator works ─────────────────────────────────────────────
@@ -202,7 +202,7 @@ endpoints:
     path: /api/works
     service: creator
     purpose: 获取 Creator 服务的作品列表（含 Notion 同步状态）
-    code_file: services/creator/api/server.py
+    code_file: services/content-pipeline/api/server.py
     covers_feature: media_works_management
     auth: none
 
@@ -210,7 +210,7 @@ endpoints:
     path: /api/works/{work_id}
     service: creator
     purpose: 获取单个作品及其 Notion 内容
-    code_file: services/creator/api/server.py
+    code_file: services/content-pipeline/api/server.py
     covers_feature: media_works_management
     auth: none
 
@@ -218,7 +218,7 @@ endpoints:
     path: /api/works/{work_id}
     service: creator
     purpose: 更新作品元数据
-    code_file: services/creator/api/server.py
+    code_file: services/content-pipeline/api/server.py
     covers_feature: media_works_management
     auth: none
 
@@ -226,7 +226,7 @@ endpoints:
     path: /api/works/{work_id}/publications/{platform_id}
     service: creator
     purpose: 发布作品到指定平台（触发自动化发布脚本）
-    code_file: services/creator/api/server.py
+    code_file: services/content-pipeline/api/server.py
     covers_feature: media_platform_publish
     auth: none
 
@@ -236,7 +236,7 @@ endpoints:
     path: /api/notion/page/{notion_id}/blocks
     service: creator
     purpose: 获取 Notion 页面 blocks（文章内容解析）
-    code_file: services/creator/api/server.py
+    code_file: services/content-pipeline/api/server.py
     covers_feature: media_notion_sync
     auth: none
 
@@ -244,7 +244,7 @@ endpoints:
     path: /api/works/{work_id}/notion-content
     service: creator
     purpose: 获取作品关联的 Notion 全文内容
-    code_file: services/creator/api/server.py
+    code_file: services/content-pipeline/api/server.py
     covers_feature: media_notion_sync
     auth: none
 
@@ -252,7 +252,7 @@ endpoints:
     path: /api/notion/database/pages
     service: creator
     purpose: 列出 Notion 数据库所有页面（内容来源选择）
-    code_file: services/creator/api/server.py
+    code_file: services/content-pipeline/api/server.py
     covers_feature: media_notion_sync
     auth: none
 
@@ -262,7 +262,7 @@ endpoints:
     path: /api/platforms
     service: creator
     purpose: 获取支持的发布平台列表（抖音/小红书/微信等）
-    code_file: services/creator/api/server.py
+    code_file: services/content-pipeline/api/server.py
     covers_feature: media_platform_publish
     auth: none
 
@@ -270,7 +270,7 @@ endpoints:
     path: /api/properties
     service: creator
     purpose: 获取内容属性字段列表
-    code_file: services/creator/api/server.py
+    code_file: services/content-pipeline/api/server.py
     covers_feature: crm_field_management
     auth: none
 
@@ -278,7 +278,7 @@ endpoints:
     path: /api/properties
     service: creator
     purpose: 创建内容属性字段
-    code_file: services/creator/api/server.py
+    code_file: services/content-pipeline/api/server.py
     covers_feature: crm_field_management
     auth: none
 
@@ -286,7 +286,7 @@ endpoints:
     path: /api/properties/{prop_id}
     service: creator
     purpose: 更新属性字段定义
-    code_file: services/creator/api/server.py
+    code_file: services/content-pipeline/api/server.py
     covers_feature: crm_field_management
     auth: none
 
@@ -296,7 +296,7 @@ endpoints:
     path: /api/stats
     service: creator
     purpose: 发布统计数据（各平台发布量/成功率）
-    code_file: services/creator/api/server.py
+    code_file: services/content-pipeline/api/server.py
     covers_feature: media_platform_data
     auth: none
 
@@ -304,7 +304,7 @@ endpoints:
     path: /api/settings
     service: creator
     purpose: 获取 Creator 服务配置（平台凭据状态等）
-    code_file: services/creator/api/server.py
+    code_file: services/content-pipeline/api/server.py
     covers_feature: media_platform_publish
     auth: none
 
@@ -312,6 +312,6 @@ endpoints:
     path: /api/settings
     service: creator
     purpose: 更新 Creator 服务配置
-    code_file: services/creator/api/server.py
+    code_file: services/content-pipeline/api/server.py
     covers_feature: media_platform_publish
     auth: none

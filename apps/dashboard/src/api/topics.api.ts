@@ -1,7 +1,7 @@
 /**
  * 选题池（topics）API 客户端 — 选题池 v1
  *
- * 对接 services/creator 的 `/api/topics` 路由。
+ * 对接 services/content-pipeline 的 `/api/topics` 路由。
  * 响应统一 `{ success, data, error }` 格式。
  */
 

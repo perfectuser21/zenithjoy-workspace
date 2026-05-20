@@ -83,7 +83,7 @@ GET https://www.douyin.com/aweme/v1/web/discover/search/
 ## 4. 文件结构
 
 ```
-services/creator/scripts/publishers/douyin-publisher/
+services/content-pipeline/scripts/publishers/douyin-publisher/
 ├── search-douyin-accounts.js      ← 新增（主脚本）
 ├── __tests__/
 │   └── search-douyin-accounts.test.cjs  ← 新增（单元测试）
@@ -129,7 +129,7 @@ services/creator/scripts/publishers/douyin-publisher/
 open -a "Google Chrome" --args --remote-debugging-port=19222 --no-first-run --no-default-browser-check
 
 # 运行搜索
-cd services/creator/scripts/publishers
+cd services/content-pipeline/scripts/publishers
 node douyin-publisher/search-douyin-accounts.js "AI副业" --limit 30
 
 # 输出示例

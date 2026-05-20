@@ -271,7 +271,6 @@ describe('download handler 不阻塞事件循环 — execFileAsync async path', 
 
     app = (await import('../../app')).default;
   });
-
   it('download 使用 execFileAsync 异步完成，返回 200 + .env 含 license', async () => {
     const { auth } = await import('../../auth');
     const pool = (await import('../../db/connection')).default;
@@ -294,5 +293,166 @@ describe('download handler 不阻塞事件循环 — execFileAsync async path', 
     const envContent = fs.readFileSync(path.join(tmpOut, '.env'), 'utf-8');
     expect(envContent).toContain('ZENITHJOY_LICENSE=ZJ-F-ASYNC001');
     expect(envContent).not.toContain('__PLACEHOLDER__');
+  });
+});
+
+// COS CDN 路由 — GET /dotenv 返回个人 .env（< 1KB）
+describe('COS CDN 路由 — GET /api/agent/install-pack/dotenv', () => {
+  let app: any;
+
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    (manifestSvc.readInstallPackManifest as any).mockReturnValue({
+      version: '1.1.3',
+      sha256: 'a'.repeat(64),
+      download_url: '/download/zenithjoy-agent-v1.1.3.tar.gz',
+      cos_url: 'https://example-cos.com/agent/zenithjoy-agent-v1.1.3.tar.gz',
+      size: 169197376,
+      build_time: '2026-05-20T00:00:00Z',
+    });
+    app = (await import('../../app')).default;
+  });
+
+  it('登录用户（持 license ZJ-F-DOTENV1）→ 200 + text/plain + ZENITHJOY_LICENSE=ZJ-F-DOTENV1', async () => {
+    const { auth } = await import('../../auth');
+    const pool = (await import('../../db/connection')).default;
+    vi.spyOn(auth.api, 'getSession').mockResolvedValue({
+      user: { id: 'user-dotenv-id', email: 'd@test', name: 'D' },
+    } as any);
+    vi.spyOn(pool, 'query').mockResolvedValue({
+      rows: [{ license_key: 'ZJ-F-DOTENV1' }],
+    } as any);
+
+    const res = await request(app).get('/api/agent/install-pack/dotenv');
+    expect(res.status).toBe(200);
+    expect(res.headers['content-type']).toMatch(/text\/plain/);
+    expect(res.text).toContain('ZENITHJOY_LICENSE=ZJ-F-DOTENV1');
+    expect(res.text).not.toContain('__PLACEHOLDER__');
+    expect(res.headers['content-disposition']).toMatch(/attachment.*\.env/);
+  });
+
+  it('未登录 → 401 UNAUTHORIZED', async () => {
+    const { auth } = await import('../../auth');
+    vi.spyOn(auth.api, 'getSession').mockResolvedValue(null as any);
+
+    const res = await request(app).get('/api/agent/install-pack/dotenv');
+    expect(res.status).toBe(401);
+    expect(res.body.code).toBe('UNAUTHORIZED');
+  });
+
+  it('登录但无 active license → 503 NO_ACTIVE_LICENSE', async () => {
+    const { auth } = await import('../../auth');
+    const pool = (await import('../../db/connection')).default;
+    vi.spyOn(auth.api, 'getSession').mockResolvedValue({
+      user: { id: 'user-noenv-id', email: 'noenv@test', name: 'NE' },
+    } as any);
+    vi.spyOn(pool, 'query').mockResolvedValue({ rows: [] } as any);
+
+    const res = await request(app).get('/api/agent/install-pack/dotenv');
+    expect(res.status).toBe(503);
+    expect(res.body.code).toBe('NO_ACTIVE_LICENSE');
+  });
+});
+
+// EROFS fix — 本地文件不存在时 fallback 写 /tmp，不写只读挂载目录
+describe('EROFS fix — fallback download 写 /tmp，cos_url 优先', () => {
+  let app: any;
+
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    delete process.env.INSTALL_PACK_FIXTURE_PATH;
+    delete process.env.INSTALL_PACK_REMOTE_URL;
+    process.env.INSTALL_PACK_STATIC_ROOT = '/nonexistent-readonly-root';
+    (manifestSvc.readInstallPackManifest as any).mockReturnValue({
+      version: '1.1.3',
+      sha256: 'b'.repeat(64),
+      download_url: '/download/zenithjoy-agent-v1.1.3.tar.gz',
+      cos_url: 'https://example-cos.com/agent/zenithjoy-agent-v1.1.3.tar.gz',
+      size: 169197376,
+      build_time: '2026-05-19T09:20:00Z',
+    });
+    app = (await import('../../app')).default;
+  });
+
+  it('本地文件不存在 + cos_url 设 + 无 INSTALL_PACK_REMOTE_URL → 从 cos_url 拉，503 但不 crash', async () => {
+    const { auth } = await import('../../auth');
+    const pool = (await import('../../db/connection')).default;
+    vi.spyOn(auth.api, 'getSession').mockResolvedValue({
+      user: { id: 'user-erofs-test', email: 'e@test', name: 'E' },
+    } as any);
+    vi.spyOn(pool, 'query').mockResolvedValue({
+      rows: [{ license_key: 'ZJ-F-EEEE5555' }],
+    } as any);
+
+    // cos_url 指向一个不存在的地址 → remote fetch 失败 → 503，不 crash
+    const res = await request(app).get('/api/agent/install-pack/download');
+    expect(res.status).toBe(503);
+    expect(res.body.code).toBe('INSTALL_PACK_NOT_BUILT');
+    expect(res.body.message).toContain('remote fetch also failed');
+  });
+});
+
+// PUT /manifest — CI deploy endpoint（HTTP 替换 SSH）
+describe('PUT /api/agent/install-pack/manifest', () => {
+  let app: any;
+  const tmpManifestPath = `/tmp/test-manifest-put-${process.pid}.json`;
+
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    process.env.INSTALL_PACK_MANIFEST_PATH = tmpManifestPath;
+    process.env.ZENITHJOY_INTERNAL_TOKEN = 'test-internal-token-put';
+    app = (await import('../../app')).default;
+  });
+
+  afterEach(() => {
+    import('fs').then(fs => { try { fs.default.unlinkSync(tmpManifestPath); } catch { /* ok */ } });
+    delete process.env.INSTALL_PACK_MANIFEST_PATH;
+    delete process.env.ZENITHJOY_INTERNAL_TOKEN;
+  });
+
+  const validManifest = {
+    version: '1.2.0',
+    sha256: 'a'.repeat(64),
+    download_url: '/download/zenithjoy-agent-v1.2.0.tar.gz',
+    cos_url: 'https://example.cos.com/install-pack/zenithjoy-agent-v1.2.0.tar.gz',
+    size: 169414238,
+    build_time: '2026-05-20T04:17:25Z',
+  };
+
+  it('有效 token + 有效 manifest → 200 + 文件写入', async () => {
+    const res = await request(app)
+      .put('/api/agent/install-pack/manifest')
+      .set('X-Internal-Token', 'test-internal-token-put')
+      .send(validManifest);
+    expect(res.status).toBe(200);
+    expect(res.body.ok).toBe(true);
+    expect(res.body.version).toBe('1.2.0');
+    const written = JSON.parse(fs.readFileSync(tmpManifestPath, 'utf-8'));
+    expect(written.version).toBe('1.2.0');
+    expect(written.sha256).toBe('a'.repeat(64));
+  });
+
+  it('缺 token → 401 UNAUTHORIZED', async () => {
+    const res = await request(app)
+      .put('/api/agent/install-pack/manifest')
+      .send(validManifest);
+    expect(res.status).toBe(401);
+  });
+
+  it('错 token → 401 UNAUTHORIZED', async () => {
+    const res = await request(app)
+      .put('/api/agent/install-pack/manifest')
+      .set('X-Internal-Token', 'wrong-token')
+      .send(validManifest);
+    expect(res.status).toBe(401);
+  });
+
+  it('缺必填字段 → 400 INVALID_MANIFEST', async () => {
+    const res = await request(app)
+      .put('/api/agent/install-pack/manifest')
+      .set('X-Internal-Token', 'test-internal-token-put')
+      .send({ version: '1.2.0' });
+    expect(res.status).toBe(400);
+    expect(res.body.code).toBe('INVALID_MANIFEST');
   });
 });

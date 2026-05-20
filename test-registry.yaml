@@ -662,6 +662,22 @@ tests:
     product: AI员工
     note: "Skill Registry — agent-ws sendToAgent 函数：agent 不存在/WS 非 OPEN/发送成功三个分支"
 
+  - id: api-agent-ws-auth
+    path: apps/api/src/services/__tests__/agent-ws-auth.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: AI员工
+    note: "WS auth 修复 — authenticateWsToken 通过 licenses 表验证（v1.1.7），修复新账号 401"
+
+  - id: agent-e2e-video-pipeline
+    path: e2e/agent-video-pipeline.spec.js
+    type: e2e
+    ci: manual
+    status: active
+    product: AI员工
+    note: "Agent 全链路 E2E — windows-latest runner：下载安装包→Agent 上线→提交口播视频→等待处理完成"
+
   - id: api-skills-route
     path: apps/api/src/routes/__tests__/skills.test.ts
     type: unit
@@ -1063,7 +1079,7 @@ tests:
     ci: L4-INT
     status: active
     product: 内容发布
-    note: "Sprint 2.1e — /api/agent/install-pack manifest + download endpoints"
+    note: "Sprint 2.1e — /api/agent/install-pack manifest + download endpoints; PUT /manifest CI deploy endpoint added in fix #356"
 
   - id: agent-build-install-pack-script
     path: services/agent/scripts/__tests__/build-install-pack.test.sh
@@ -1080,6 +1096,14 @@ tests:
     status: active
     product: 内容发布
     note: "Sprint 2.1e — install-pack-manifest service 读 manifest.json (4 case: missing/valid/corrupt/incomplete)"
+
+  - id: dashboard-api-install-pack-manifest
+    path: apps/dashboard/src/api/__tests__/install-pack-manifest.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 新媒体运营
+    note: "Walking Skeleton 1 — install-pack manifest API 单元测试"
     note: "Path 2 Sprint A WS2 — feishu-token getValidToken + 2h 过期刷新 + cascade 失败 BEHAVIOR 测试"
 
   - id: p2-sprint-a-ws3-bitable-mt-unit
@@ -1653,9 +1677,175 @@ tests:
     note: "AiVideoPipelineService createJob/getJob/listPending/updateStatus 单测"
 
   - id: ai-video-pipeline-agent-handler
-    path: services/agent/src/handlers/video-pipeline.test.ts
+    path: services/agent/src/handlers/__tests__/video-pipeline.test.ts
     type: unit
     ci: L3
     status: active
     product: AI视频本地流水线
-    note: "Agent handler 导出验证 + src_video 本地路径校验（本地优先架构）"
+    note: "fetchWithTimeout/fireProgress/reportComplete 离线执行单测（v1.1.0）"
+
+  - id: agent-ensure-hyperframes
+    path: services/agent/src/handlers/__tests__/ensure-hyperframes.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: Agent安装包
+    note: "ensureHyperframes/getHyperframesCmd 本地 Node.js + CLI 路径解析单测（v1.1.6）"
+
+  - id: ai-video-pipeline-stale-recovery
+    path: apps/api/src/controllers/__tests__/ai-video-pipeline-stale.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: AI视频本地流水线
+    note: "stale processing job 查询（status=processing&stale_minutes 参数）单测"
+
+  - id: video-pipeline-overlay
+    path: services/agent/src/__tests__/video-pipeline-overlay.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: AI视频本地流水线
+
+  - id: ensure-ffmpeg
+    path: services/agent/src/__tests__/ensure-ffmpeg.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: AI视频本地流水线
+    note: "HyperFrames render pipeline overlay — compose-html + Chrome headless shell 渲染链路单测"
+
+  - id: ensure-hyperframes
+    path: services/agent/src/__tests__/ensure-hyperframes.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: AI视频本地流水线
+    note: "ensure-hyperframes auto-install 单测 — 已安装/未安装/npm失败 3 场景"
+
+  - id: api-ai-video-pipeline-template-create
+    path: apps/api/src/controllers/__tests__/ai-video-pipeline-template.test.ts
+    type: unit
+    ci: L4
+    status: active
+    product: AI视频本地流水线
+    note: "createJob 接受并持久化 template_id 单测"
+
+  - id: api-compose-template
+    path: apps/api/src/controllers/__tests__/compose-template.test.ts
+    type: unit
+    ci: L4
+    status: active
+    product: AI视频本地流水线
+    note: "composeTemplate 端点 — Claude slot 提取 + HTML 生成单测"
+
+  - id: api-template-registry
+    path: apps/api/src/templates/__tests__/registry.test.ts
+    type: unit
+    ci: L4
+    status: active
+    product: AI视频本地流水线
+    note: "template registry getTemplate/readTemplateJsx 单测（含 TEMPLATE_NOT_FOUND 守卫）"
+
+  - id: dashboard-template-selector
+    path: apps/dashboard/src/components/video-pipeline/__tests__/TemplateSelector.test.tsx
+    type: unit
+    ci: L4
+    status: active
+    product: AI视频本地流水线
+    note: "TemplateSelector 组件 — 渲染/选择/取消模板单测"
+
+  - id: agent-video-pipeline-template-branch
+    path: services/agent/src/handlers/__tests__/video-pipeline-template.test.ts
+    type: unit
+    ci: L4
+    status: active
+    product: AI视频本地流水线
+    note: "Agent video-pipeline template_id 分支 — compose-template + HyperFrames 渲染路径单测"
+
+  - id: api-template-c-r
+    path: apps/api/src/templates/__tests__/template-c-r.test.ts
+    type: unit
+    ci: L4
+    status: active
+    product: AI视频本地流水线
+    note: "template-c.jsx + template-r.jsx 文件存在性及 JSX 内容单测"
+
+  - id: smoke-template-c-r
+    path: .github/workflows/scripts/smoke/template-c-r-smoke.sh
+    type: e2e
+    ci: L4
+    status: active
+    product: AI视频本地流水线
+    note: "C + R 模板 compose-template E2E smoke（5-step loop）"
+
+  - id: template-audio-fix
+    path: services/agent/src/handlers/__tests__/template-audio-fix.test.ts
+    type: unit
+    ci: L4
+    status: active
+    product: AI视频本地流水线
+    note: "template 路径三 bug 修复验证：-map 1:a 音频合并 / tl.to hold 时长 / console.warn 日志"
+
+  - id: lint-agent-version-bump
+    path: .github/workflows/scripts/__tests__/lint-agent-version-bump.test.sh
+    type: unit
+    ci: L1
+    status: active
+    product: CI治理
+    note: "lint-agent-version-bump.sh 4 case：src 变动+bump通过/src 变动无bump失败/无变动跳过/版本不变失败"
+
+  - id: step6-dispatch-chain-ws1-migration
+    path: sprints/step6-dispatch-chain/tests/ws1/dispatch-migration.test.ts
+    type: unit
+    ci: L4
+    status: active
+    product: Step 6 Dispatch Chain
+    note: "WS1 合同 TDD — works.publish_status migration 文件存在性 + SQL schema 验证"
+
+  - id: step6-dispatch-chain-ws2-service
+    path: sprints/step6-dispatch-chain/tests/ws2/dispatch-service.test.ts
+    type: unit
+    ci: L4
+    status: active
+    product: Step 6 Dispatch Chain
+    note: "WS2 合同 TDD — dispatchPublishTask + ackPublishTask + findActiveAgentByTenantId 导出验证"
+
+  - id: step6-dispatch-chain-ws3-routes
+    path: sprints/step6-dispatch-chain/tests/ws3/dispatch-routes.test.ts
+    type: unit
+    ci: L4
+    status: active
+    product: Step 6 Dispatch Chain
+    note: "WS3 合同 TDD — works.ts publish 路由 + walking-skeleton.ts task-ack 路由注册验证"
+
+  - id: step6-dispatch-chain-ws4-smoke
+    path: sprints/step6-dispatch-chain/tests/ws4/smoke-step6.test.ts
+    type: unit
+    ci: L4
+    status: active
+    product: Step 6 Dispatch Chain
+    note: "WS4 合同 TDD — golden-path-1-smoke.sh Step 6 扩展 + e2e-verify.ps1 存在性验证"
+
+  - id: smoke-step6-dispatch-ws2
+    path: .github/workflows/scripts/smoke/step6-dispatch-ws2-smoke.sh
+    type: e2e
+    ci: L4
+    status: active
+    product: Step 6 Dispatch Chain
+    note: "Step 6 dispatch chain WS2 E2E smoke — dispatchPublishTask + ackPublishTask 全链路验证"
+
+  - id: dashboard-api-install-pack-manifest
+    path: apps/dashboard/src/api/__tests__/install-pack-manifest.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 新媒体运营
+    note: "Walking Skeleton 1 — install-pack manifest API 单元测试"
+
+agent_suite:
+  managed_by: services/agent/src/__tests__ + services/agent/publishers
+  ci: L4
+  type: unit
+  count: 19
+  note: "Agent 服务单元测试（handlers/publishers/load-config），services/agent npm test"

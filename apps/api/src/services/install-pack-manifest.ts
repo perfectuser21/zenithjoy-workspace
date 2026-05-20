@@ -5,13 +5,14 @@ export interface InstallPackManifest {
   version: string;
   sha256: string;
   download_url: string;
+  cos_url?: string;
   size: number;
   build_time: string;
 }
 
 const DEFAULT_MANIFEST_PATH =
   process.env.INSTALL_PACK_MANIFEST_PATH ||
-  '/opt/zenithjoy/autopilot-dashboard/dist/download/manifest.json';
+  '/opt/zenithjoy/install-pack/manifest.json';
 
 export function readInstallPackManifest(
   filePath: string = DEFAULT_MANIFEST_PATH

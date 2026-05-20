@@ -28,7 +28,7 @@ systems:
   - id: media
     name: 新媒体运营
     purpose: AI 内容生产 + 多平台发布 + 数据看板 + Notion 同步
-    package: apps/dashboard + apps/api + services/creator
+    package: apps/dashboard + apps/api + services/content-pipeline
     features_file: features/media.yml
     feature_count: 5
     owner: zenithjoy
@@ -38,7 +38,7 @@ systems:
   - id: publisher
     name: 多平台发布器
     purpose: 通过 CDP/API 自动化发布内容到 8 个平台，含探测/告警/保活基础设施
-    package: services/creator/scripts/publishers
+    package: services/content-pipeline/scripts/publishers
     features_file: features/publisher.yml
     feature_count: 12
     owner: zenithjoy

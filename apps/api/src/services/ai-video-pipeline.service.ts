@@ -4,12 +4,14 @@ export interface PipelineJob {
   id: string;
   status: 'pending' | 'processing' | 'completed' | 'failed';
   progress: number;
+  template_id: string | null;
   src_video: string | null;
   src_logo: string | null;
   topic: string | null;
   result_url: string | null;
   output_dir: string | null;
   error_msg: string | null;
+  license_id: string | null;
   created_at: Date;
   updated_at: Date;
 }
@@ -19,13 +21,15 @@ export class AiVideoPipelineService {
     srcVideo: string;
     srcLogo: string | null;
     topic: string | null;
+    templateId?: string | null;
+    licenseId?: string | null;
   }): Promise<PipelineJob> {
     const result = await pool.query(
       `INSERT INTO zenithjoy.ai_video_pipeline_jobs
-         (src_video, src_logo, topic)
-       VALUES ($1, $2, $3)
+         (src_video, src_logo, topic, template_id, license_id)
+       VALUES ($1, $2, $3, $4, $5)
        RETURNING *`,
-      [params.srcVideo, params.srcLogo, params.topic],
+      [params.srcVideo, params.srcLogo, params.topic, params.templateId ?? null, params.licenseId ?? null],
     );
     return result.rows[0];
   }
@@ -38,11 +42,33 @@ export class AiVideoPipelineService {
     return result.rows[0] ?? null;
   }
 
-  async listPending(): Promise<PipelineJob[]> {
+  async listPending(licenseId?: string | null): Promise<PipelineJob[]> {
+    if (licenseId) {
+      const result = await pool.query(
+        `SELECT * FROM zenithjoy.ai_video_pipeline_jobs
+         WHERE status = 'pending' AND license_id = $1
+         ORDER BY created_at ASC LIMIT 10`,
+        [licenseId],
+      );
+      return result.rows;
+    }
+    // Unauthenticated callers only get unlicensed jobs — prevents foreign agents from
+    // stealing jobs that belong to a specific license/tenant.
     const result = await pool.query(
       `SELECT * FROM zenithjoy.ai_video_pipeline_jobs
-       WHERE status = 'pending'
+       WHERE status = 'pending' AND license_id IS NULL
        ORDER BY created_at ASC`,
+    );
+    return result.rows;
+  }
+
+  async listStale(staleMinutes: number): Promise<PipelineJob[]> {
+    const result = await pool.query(
+      `SELECT * FROM zenithjoy.ai_video_pipeline_jobs
+       WHERE status = 'processing'
+         AND updated_at < NOW() - ($1 || ' minutes')::interval
+       ORDER BY updated_at ASC`,
+      [staleMinutes],
     );
     return result.rows;
   }

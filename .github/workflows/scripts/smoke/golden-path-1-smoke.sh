@@ -288,18 +288,52 @@ HB=$(curl -fsS -X POST "$API_BASE/api/agent/heartbeat" \
 AGENT_ID=$(echo "$HB" | python3 -c "import json,sys;print(json.load(sys.stdin)['agent_id'])" 2>/dev/null) \
   || fail "Step 6.2 agent_id extract failed" 6
 
-# 6.3 中台创建 type=video publish_task — licenseAuth 需 Bearer token
-VIDEO_TASK=$(curl -fsS -X POST "$API_BASE/api/publish/task" \
+# 6.3 创建 work（供发布用）
+S6_TMP=$(mktemp)
+S6_WORK_HTTP=$(curl -s -o "$S6_TMP" -w "%{http_code}" --max-time 15 \
+  -b /tmp/sk-step6.cookies \
+  -X POST "$API_BASE/api/works" \
   -H 'content-type: application/json' \
-  -H "Authorization: Bearer $LICENSE_KEY" \
-  -d "{\"agent_id\":\"$AGENT_ID\",\"platform\":\"douyin\",\"type\":\"video\",\"payload\":{\"video_path\":\"/tmp/smoke.mp4\",\"title\":\"smoke-$(date +%s)\"}}" 2>/dev/null) \
-  || fail "Step 6.3 create video task failed" 6
-VIDEO_TYPE=$(echo "$VIDEO_TASK" | python3 -c "import json,sys;print(json.load(sys.stdin).get('type','?'))" 2>/dev/null)
-if [ "$VIDEO_TYPE" != "video" ]; then
-  fail "Step 6.3 response.type='$VIDEO_TYPE' expected 'video' (publish_tasks.type RETURNING 字段缺失?)" 6
-fi
+  -d '{"title":"smoke-step6-dispatch","content_type":"video","body":"smoke body"}')
+[ "$S6_WORK_HTTP" = "201" ] || { rm -f "$S6_TMP"; fail "Step 6.3 POST /api/works expected 201, got $S6_WORK_HTTP" 6; }
+WORK_ID=$(python3 -c "import json,sys; print(json.load(open(sys.argv[1]))['id'])" "$S6_TMP" 2>/dev/null)
+[ -n "$WORK_ID" ] || { rm -f "$S6_TMP"; fail "Step 6.3 no work id in response" 6; }
+ok "Step 6.3 POST /api/works → work_id=$WORK_ID ✓"
 
-# 6.4/6.5 Agent 路由验证（需要 services/agent/dist/ — 仅在已编译的部署机跑）
+# 6.4 派发 publish 任务（dispatch chain 入口 — /api/works/:id/publish）
+S6_PUBLISH_HTTP=$(curl -s -o "$S6_TMP" -w "%{http_code}" --max-time 15 \
+  -b /tmp/sk-step6.cookies \
+  -X POST "$API_BASE/api/works/$WORK_ID/publish" \
+  -H 'content-type: application/json')
+[ "$S6_PUBLISH_HTTP" = "201" ] || { rm -f "$S6_TMP"; fail "Step 6.4 POST /api/works/:id/publish expected 201, got $S6_PUBLISH_HTTP" 6; }
+TASK_ID=$(python3 -c "import json,sys; print(json.load(open(sys.argv[1]))['task_id'])" "$S6_TMP" 2>/dev/null)
+S6_QSTATUS=$(python3 -c "import json,sys; print(json.load(open(sys.argv[1]))['status'])" "$S6_TMP" 2>/dev/null)
+[ -n "$TASK_ID" ] || { rm -f "$S6_TMP"; fail "Step 6.4 no task_id in publish response" 6; }
+[ "$S6_QSTATUS" = "queued" ] || { rm -f "$S6_TMP"; fail "Step 6.4 status='$S6_QSTATUS' expected 'queued'" 6; }
+ok "Step 6.4 POST /api/works/:id/publish → task_id=$TASK_ID status=queued ✓"
+
+# 6.5 Agent task-ack（模拟 Windows Agent 确认执行，dryrun）
+S6_ACK_HTTP=$(curl -s -o "$S6_TMP" -w "%{http_code}" --max-time 15 \
+  -X POST "$API_BASE/api/agent/task-ack" \
+  -H 'content-type: application/json' \
+  -H "x-license-key: $LICENSE_KEY" \
+  -d "{\"task_id\":\"$TASK_ID\",\"result\":\"dryrun ok\"}")
+[ "$S6_ACK_HTTP" = "200" ] || { rm -f "$S6_TMP"; fail "Step 6.5 POST /api/agent/task-ack expected 200, got $S6_ACK_HTTP" 6; }
+S6_ACK_OK=$(python3 -c "import json,sys; print(json.load(open(sys.argv[1]))['ok'])" "$S6_TMP" 2>/dev/null)
+[ "$S6_ACK_OK" = "True" ] || { rm -f "$S6_TMP"; fail "Step 6.5 task-ack ok='$S6_ACK_OK' expected True" 6; }
+ok "Step 6.5 POST /api/agent/task-ack → ok=true ✓"
+
+# 6.6 验证 work.publish_status=success（dispatch chain 终态）
+S6_GET_HTTP=$(curl -s -o "$S6_TMP" -w "%{http_code}" --max-time 15 \
+  -b /tmp/sk-step6.cookies \
+  "$API_BASE/api/works/$WORK_ID")
+[ "$S6_GET_HTTP" = "200" ] || { rm -f "$S6_TMP"; fail "Step 6.6 GET /api/works/:id expected 200, got $S6_GET_HTTP" 6; }
+PUBLISH_STATUS=$(python3 -c "import json,sys; print(json.load(open(sys.argv[1]))['publish_status'])" "$S6_TMP" 2>/dev/null)
+rm -f "$S6_TMP"
+[ "$PUBLISH_STATUS" = "success" ] || fail "Step 6.6 publish_status='$PUBLISH_STATUS' expected 'success'" 6
+ok "Step 6.6 GET /api/works/:id → publish_status=success ✓"
+
+# 6.7/6.8 Agent 路由验证（需要 services/agent/dist/ — 仅在已编译的部署机跑）
 AGENT_DIST="./services/agent/dist/handlers/douyin-publish.js"
 if [ -f "$AGENT_DIST" ]; then
   ZENITHJOY_AGENT_REAL_PUBLISH=0 ZENITHJOY_AGENT_DRYRUN_BROWSER=mock \
@@ -309,7 +343,7 @@ if [ -f "$AGENT_DIST" ]; then
       if (!p.match(/publish-douyin-video-dryrun\\.cjs\$/)) { console.error('FAIL: route resolved to', p); process.exit(1); }
       console.log('[type-route] type=video → publish-douyin-video-dryrun.cjs OK');
     " 2>/dev/null \
-    || fail "Step 6.4 type=video 路由验证失败 (P0 bug 防回归 — WS2)" 6
+    || fail "Step 6.7 type=video 路由验证失败 (P0 bug 防回归 — WS2)" 6
 
   node -e "
     const { resolveDouyinScriptPath } = require('./services/agent/dist/handlers/douyin-publish.js');
@@ -325,10 +359,10 @@ if [ -f "$AGENT_DIST" ]; then
       console.log('OK: type=article 显式抛错（不 fallback image） →', e.message);
     }
   " 2>/dev/null \
-    || fail "Step 6.5 type=article 反向用例失败 (P0 bug 防回归)" 6
-  ok "Step 6 ✅ video 路由通 + article 反向不 fallback (WS2 Sprint 2.1a)"
+    || fail "Step 6.8 type=article 反向用例失败 (P0 bug 防回归)" 6
+  ok "Step 6 ✅ dispatch chain 全通 + video 路由通 + article 反向不 fallback"
 else
-  ok "Step 6 ✅ API type=video 字段通（agent dist 路由检查跳过：未编译，见 services/agent unit tests）"
+  ok "Step 6 ✅ dispatch chain 全通（POST /api/works/:id/publish + task-ack + publish_status=success）"
 fi
 
 # ───────────────────────────────────────────────────────────────────

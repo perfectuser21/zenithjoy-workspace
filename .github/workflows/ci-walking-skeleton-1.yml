@@ -8,7 +8,9 @@ name: Walking Skeleton #1 — Golden Path 1 Douyin
 # 其他 ws1 teammate (agent/api/dashboard) PR 合并后，本 workflow 必须全绿才算
 # Maturity not_started → skeleton 升级达成。
 #
-# CI 仅跑 mock 版（golden-path-1-douyin-smoke.sh）。
+# CI 跑两条 smoke：
+#   1. golden-path-1-douyin-smoke.sh — 抖音路径 mock（含 session SQL mock）
+#   2. golden-path-1-smoke.sh       — Step 6 dispatch chain（POST /publish + task-ack + publish_status）
 # 真 Agent + Playwright + Chrome 验证由人工每周跑 manual-verify-douyin.sh，
 # 该脚本带 MANUAL_VERIFY=1 gate，CI 跑到也会 exit 0 跳过。
 
@@ -110,6 +112,13 @@ jobs:
         run: |
           chmod +x .github/workflows/scripts/smoke/golden-path-1-douyin-smoke.sh
           bash .github/workflows/scripts/smoke/golden-path-1-douyin-smoke.sh
+
+      - name: Run Step 6 Dispatch Chain Smoke
+        # POST /api/works/:id/publish → publish_tasks queued → heartbeat → task-ack → publish_status=success
+        # 独立脚本（不依赖 Steps 1-5 的 install-pack），可在 CI ubuntu runner 直接跑
+        run: |
+          chmod +x .github/workflows/scripts/smoke/step6-dispatch-chain-smoke.sh
+          bash .github/workflows/scripts/smoke/step6-dispatch-chain-smoke.sh
 
       - name: Run manual-verify-douyin.sh (skip-only check)
         # 该脚本必须在 CI 里 exit 0 跳过（MANUAL_VERIFY 未设置）。
