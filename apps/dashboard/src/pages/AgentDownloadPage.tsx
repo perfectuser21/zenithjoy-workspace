@@ -139,13 +139,27 @@ export default function AgentDownloadPage() {
             <p style={{ margin: '0 0 12px', fontSize: 13, color: '#374151' }}>
               sha256: <code style={{ fontSize: 12 }}>{manifest.sha256.slice(0, 16)}...</code>
             </p>
-            <a
-              href="/api/agent/install-pack/download"
-              download
-              style={{ display: 'inline-block', padding: '8px 16px', background: '#2563eb', color: '#fff', borderRadius: 6, textDecoration: 'none' }}
-            >
-              ⬇ 下载 Agent 完整安装包
-            </a>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 8 }}>
+              <a
+                href={manifest.cos_url || '/api/agent/install-pack/download'}
+                download
+                style={{ display: 'inline-block', padding: '8px 16px', background: '#2563eb', color: '#fff', borderRadius: 6, textDecoration: 'none' }}
+              >
+                ⬇ 下载 Agent 完整安装包
+              </a>
+              <a
+                href="/api/agent/install-pack/dotenv"
+                download=".env"
+                style={{ display: 'inline-block', padding: '8px 16px', background: '#059669', color: '#fff', borderRadius: 6, textDecoration: 'none', fontSize: 13 }}
+              >
+                ⬇ 下载个人 .env（含 License）
+              </a>
+            </div>
+            {manifest.cos_url && (
+              <p style={{ margin: 0, fontSize: 12, color: '#6b7280' }}>
+                大包走 COS CDN 直连（全球加速），下载后将个人 .env 拖入解压目录覆盖，再双击 install-and-start.bat。
+              </p>
+            )}
           </div>
         )}
       </section>
