@@ -695,7 +695,7 @@ function startWs1HeartbeatLoop(cfg: AgentConfig): void {
   ensureFfmpeg().catch((e) => console.warn('[ffmpeg] ensure failed:', e));
   ensureHyperframes().catch((e) => console.warn('[hyperframes] ensure failed:', e));
 
-  startVideoPipelineLoop(apiBase);
+  startVideoPipelineLoop(apiBase, cfg.licenseKey);
   console.log(`[ws1] video-pipeline-loop started → ${apiBase}/api/ai-video/jobs`);
 }
 
