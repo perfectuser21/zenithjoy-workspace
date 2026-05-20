@@ -20,7 +20,7 @@ export function getAppDataFfprobeExe(): string {
 }
 
 const ZIP_URL =
-  'https://zenithjoy-static-1333590468.cos.ap-guangzhou.myqcloud.com/agent-deps/ffmpeg-win64.zip';
+  'https://zenithjoy-static-1333590468.cos.accelerate.myqcloud.com/agent-deps/ffmpeg-win64.zip';
 
 export async function ensureFfmpeg(): Promise<void> {
   const ffmpegExe = getAppDataFfmpegExe();

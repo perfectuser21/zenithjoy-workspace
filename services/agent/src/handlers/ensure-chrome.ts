@@ -14,7 +14,7 @@ const CHROME_EXE = path.join(
 );
 
 const ZIP_URL =
-  'https://zenithjoy-static-1333590468.cos.ap-guangzhou.myqcloud.com/agent-deps/chrome-headless-shell-win64.zip';
+  'https://zenithjoy-static-1333590468.cos.accelerate.myqcloud.com/agent-deps/chrome-headless-shell-win64.zip';
 
 export async function ensureChromeHeadlessShell(): Promise<void> {
   if (fs.existsSync(CHROME_EXE)) {

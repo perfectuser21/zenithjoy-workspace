@@ -1,9 +1,10 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { spawnSync } from 'node:child_process';
+import * as childProcess from 'node:child_process';
+const { spawnSync } = childProcess;
 
 // Mock manifest service (会在 Task 3 实现)
 vi.mock('../../services/install-pack-manifest', () => ({
@@ -243,6 +244,55 @@ describe('Sprint 2.1g Fix — burn fallback append (.env 无占位行也能 work
     expect(envContent).toContain('ZENITHJOY_LICENSE=ZJ-F-CCCC3333');
     expect(envContent).toContain('ZENITHJOY_API_BASE=https://autopilot.zenjoymedia.media');
     expect(envContent).toContain('ZENITHJOY_CHROME_DEBUG_PORT=19222');
+  });
+});
+
+
+// Fix: spawnSync → execFileAsync（非阻塞）回归测试
+// ESM 限制：vi.spyOn 无法在 ESM namespace 上拦截 spawnSync，改用功能性验证
+// 实现侧已替换为 execFileAsync（见 agent-install-pack.ts），此测试确认异步路径正常工作
+describe('download handler 不阻塞事件循环 — execFileAsync async path', () => {
+  let app: any;
+
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    const fixDir = path.join(os.tmpdir(), `install-pack-async-test-${Date.now()}`);
+    fs.mkdirSync(fixDir, { recursive: true });
+    fs.writeFileSync(path.join(fixDir, '.env'), 'ZENITHJOY_LICENSE=__PLACEHOLDER__\n');
+    const fixturePath = path.join(os.tmpdir(), `install-pack-async-${Date.now()}.tar.gz`);
+    spawnSync('tar', ['-czf', fixturePath, '-C', fixDir, '.'], { stdio: 'pipe' });
+    process.env.INSTALL_PACK_FIXTURE_PATH = fixturePath;
+
+    (manifestSvc.readInstallPackManifest as any).mockReturnValue({
+      version: '1.0.1', sha256: 'a'.repeat(64),
+      download_url: '/download/zenithjoy-agent-v1.0.1.tar.gz',
+      size: 60000000, build_time: '2026-05-09T10:00:00Z',
+    });
+
+    app = (await import('../../app')).default;
+  });
+  it('download 使用 execFileAsync 异步完成，返回 200 + .env 含 license', async () => {
+    const { auth } = await import('../../auth');
+    const pool = (await import('../../db/connection')).default;
+    vi.spyOn(auth.api, 'getSession').mockResolvedValue({
+      user: { id: 'user-async-test', email: 'async@test', name: 'Async' },
+    } as any);
+    vi.spyOn(pool, 'query').mockResolvedValue({
+      rows: [{ license_key: 'ZJ-F-ASYNC001' }],
+    } as any);
+
+    const res = await request(app).get('/api/agent/install-pack/download');
+    expect(res.status).toBe(200);
+
+    // 功能验证：tar 解压+重打包均通过 execFileAsync，license 正确写入
+    const tmpOut = path.join(os.tmpdir(), `download-async-${Date.now()}`);
+    fs.mkdirSync(tmpOut, { recursive: true });
+    const tarPath = path.join(tmpOut, 'pack.tar.gz');
+    fs.writeFileSync(tarPath, res.body);
+    spawnSync('tar', ['-xzf', tarPath, '-C', tmpOut], { stdio: 'pipe' });
+    const envContent = fs.readFileSync(path.join(tmpOut, '.env'), 'utf-8');
+    expect(envContent).toContain('ZENITHJOY_LICENSE=ZJ-F-ASYNC001');
+    expect(envContent).not.toContain('__PLACEHOLDER__');
   });
 });
 

@@ -1,0 +1,72 @@
+name: Deploy API to HK VPS
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'apps/api/**'
+      - 'deploy/docker-compose.hk.yml'
+      - 'deploy/deploy.sh'
+
+jobs:
+  deploy-api:
+    name: Deploy API to HK VPS
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.HK_VPS_HOST }}
+          username: ${{ secrets.HK_VPS_USER }}
+          key: ${{ secrets.HK_VPS_SSH_KEY }}
+          port: ${{ secrets.HK_VPS_PORT }}
+          script_stop: true
+          script: |
+            set -euo pipefail
+            echo "=== [1/4] git pull ==="
+            git -C /opt/zenithjoy/repo pull origin main
+
+            echo "=== [2/4] docker build ==="
+            docker build \
+              -f /opt/zenithjoy/repo/apps/api/Dockerfile \
+              -t zenithjoy-api:latest \
+              /opt/zenithjoy/repo
+
+            echo "=== [3/4] docker compose up ==="
+            docker compose \
+              -f /opt/zenithjoy/repo/deploy/docker-compose.hk.yml \
+              up -d zenithjoy-api
+
+            echo "=== [4/4] health check ==="
+            for i in $(seq 1 12); do
+              if curl -sf http://localhost:5200/health > /dev/null 2>&1; then
+                echo "Health check passed (attempt $i)"
+                exit 0
+              fi
+              echo "Attempt $i/12 failed, waiting 5s..."
+              sleep 5
+            done
+            echo "Health check FAILED after 60s"
+            docker logs zenithjoy-api --tail 50
+            exit 1
+
+  notify-failure:
+    name: Notify Brain on failure
+    runs-on: ubuntu-latest
+    needs: [deploy-api]
+    if: failure()
+    steps:
+      - name: Post P0 alert to Brain
+        run: |
+          curl -sf -X POST http://38.23.47.81:5221/api/brain/tasks \
+            -H "Content-Type: application/json" \
+            -d '{
+              "title": "ZenithJoy API 部署失败",
+              "priority": "P0",
+              "task_type": "dev",
+              "description": "deploy-hk-vps.yml 失败，请人工介入"
+            }' || echo "Brain API 不可达，跳过告警"

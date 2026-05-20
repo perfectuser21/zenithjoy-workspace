@@ -8,6 +8,7 @@ vi.mock('child_process', () => ({
     stderr: { on: vi.fn() },
     on: vi.fn(),
   })),
+  execFile: vi.fn(),
 }));
 
 vi.mock('../src/db/connection', () => ({

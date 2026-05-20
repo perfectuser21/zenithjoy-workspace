@@ -90,7 +90,7 @@ jobs:
           curl -sf -X POST http://38.23.47.81:5221/api/brain/tasks \
             -H "Content-Type: application/json" \
             -d '{
-              "title": "ZenithJoy 部署失败",
+              "title": "ZenithJoy Dashboard 部署失败",
               "priority": "P0",
               "task_type": "dev",
               "description": "deploy.yml 失败，请人工介入"

@@ -18,6 +18,18 @@ import { fetchAccountMe } from '../api/account.api';
 // autopilot nginx 直分发的 agent tarball（hk-vps:/opt/zenithjoy/autopilot-dashboard/dist/download/）
 const LICENSE_PLACEHOLDER = 'ZJ-F-XXXXXX';
 
+/** 将 ISO 时间字符串格式化为 "YYYY-MM-DD"（仅日期部分） */
+function formatBuildDate(isoString: string): string {
+  // 直接截取日期部分，避免时区转换影响
+  return isoString.slice(0, 10);
+}
+
+/** 将字节数格式化为 "X MB"（四舍五入到整数 MB） */
+function formatFileSize(bytes: number): string {
+  const mb = Math.round(bytes / (1024 * 1024));
+  return `${mb} MB`;
+}
+
 export default function AgentDownloadPage() {
   // Read cached license from localStorage synchronously on mount (for returning users).
   // This avoids a 401 on first render while fetchAccountMe is still in-flight.
@@ -27,11 +39,12 @@ export default function AgentDownloadPage() {
     } catch { return ''; }
   });
 
-  const { data: manifest } = useQuery({
+  const manifestQuery = useQuery({
     queryKey: ['install-pack-manifest'],
     queryFn: getInstallPackManifest,
     retry: false,
   });
+  const manifest = manifestQuery.data;
   const accountQuery = useQuery({
     queryKey: ['ws1', 'account-me'],
     queryFn: fetchAccountMe,
@@ -127,7 +140,32 @@ export default function AgentDownloadPage() {
         }}
       >
         <h2 style={{ fontSize: 16, fontWeight: 600, marginBottom: 8 }}>
-          ZenithJoy Agent v{manifest?.version || 'loading...'}
+          ZenithJoy Agent
+          {' '}
+          {/* 版本徽章：加载中 / 版本号 / 失败或无数据时静默隐藏 */}
+          {manifestQuery.isLoading && !manifestQuery.isError ? (
+            <span
+              data-testid="agent-version-badge"
+              style={{ fontSize: 14, fontWeight: 400, color: '#9ca3af' }}
+            >
+              加载中...
+            </span>
+          ) : manifest && !manifestQuery.isError ? (
+            <span
+              data-testid="agent-version-badge"
+              style={{
+                fontSize: 13,
+                fontWeight: 500,
+                color: '#2563eb',
+                background: '#eff6ff',
+                padding: '2px 8px',
+                borderRadius: 4,
+                border: '1px solid #bfdbfe',
+              }}
+            >
+              v{manifest.version}
+            </span>
+          ) : null}
         </h2>
         <p style={{ color: '#6b7280', marginBottom: 16, lineHeight: 1.6 }}>
           ZenithJoy Agent 是部署在你本地电脑（Windows 主、macOS 备用）的小程序，
@@ -135,9 +173,26 @@ export default function AgentDownloadPage() {
         </p>
         {manifest && (
           <div style={{ marginBottom: 16, padding: 12, background: '#f3f4f6', borderRadius: 6 }}>
-            <p style={{ margin: '0 0 4px', fontSize: 13, color: '#374151' }}>最新版本: <strong>{manifest.version}</strong></p>
-            <p style={{ margin: '0 0 12px', fontSize: 13, color: '#374151' }}>
-              sha256: <code style={{ fontSize: 12 }}>{manifest.sha256.slice(0, 16)}...</code>
+            {/* 版本元信息行 */}
+            <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginBottom: 8 }}>
+              <span style={{ fontSize: 13, color: '#374151' }}>
+                最新版本: <strong>{manifest.version}</strong>
+              </span>
+              <span
+                data-testid="agent-build-time"
+                style={{ fontSize: 13, color: '#6b7280' }}
+              >
+                {formatBuildDate(manifest.build_time)} 发布
+              </span>
+              <span
+                data-testid="agent-file-size"
+                style={{ fontSize: 13, color: '#6b7280' }}
+              >
+                {formatFileSize(manifest.size)}
+              </span>
+            </div>
+            <p style={{ margin: '0 0 12px', fontSize: 12, color: '#9ca3af' }}>
+              sha256: <code style={{ fontSize: 11 }}>{manifest.sha256.slice(0, 16)}...</code>
             </p>
             <a
               href={manifest.cos_url || '/api/agent/install-pack/download'}

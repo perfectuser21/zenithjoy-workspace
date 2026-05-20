@@ -6,7 +6,9 @@ import http from 'node:http';
 import https from 'node:https';
 import os from 'node:os';
 import path from 'node:path';
-import { spawnSync } from 'node:child_process';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
+const execFileAsync = promisify(execFile);
 import { fromNodeHeaders } from 'better-auth/node';
 import pool from '../db/connection';
 import { auth } from '../auth';
@@ -181,7 +183,7 @@ agentInstallPackRouter.get('/download', async (req: Request, res: Response) => {
   // 4. 解压到 tmp → 替换 .env → 重打包
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), `install-pack-${userId}-`));
   try {
-    spawnSync('tar', ['-xzf', effectiveSrcTar, '-C', tmp], { stdio: 'pipe' });
+    await execFileAsync('tar', ['-xzf', effectiveSrcTar, '-C', tmp]);
     // 找 .env（可能在子目录 zenithjoy-agent-vX.Y.Z/ 里）
     let envPath: string | null = null;
     function walk(dir: string): void {
@@ -221,10 +223,7 @@ agentInstallPackRouter.get('/download', async (req: Request, res: Response) => {
     const tarArgs = subdir
       ? ['-czf', outTar, '-C', tmp, subdir.name]
       : ['-czf', outTar, '-C', tmp, '.'];
-    const r = spawnSync('tar', tarArgs, { stdio: 'pipe' });
-    if (r.status !== 0) {
-      throw new Error(`tar repack failed: ${r.stderr.toString()}`);
-    }
+    await execFileAsync('tar', tarArgs);
 
     // 6. stream 回客户端 + cleanup
     res.setHeader('Content-Type', 'application/gzip');

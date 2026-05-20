@@ -5,7 +5,7 @@ on:
       agent_version:
         description: Agent install pack version
         required: false
-        default: "1.1.8"
+        default: "1.1.10"
       session_token:
         description: Session token from pre-login (run get-e2e-token.sh locally before triggering)
         required: true
@@ -99,9 +99,9 @@ jobs:
           $env:ZENITHJOY_API_URL = "wss://autopilot.zenjoymedia.media/agent-ws"
           New-Item -ItemType Directory -Force -Path "$env:USERPROFILE\.zj" | Out-Null
           Start-Process -FilePath "$agentDir\zenithjoy-agent.exe" -WorkingDirectory $agentDir -NoNewWindow `
-            -RedirectStandardOutput "$env:TEMP\agent-out.log" -RedirectStandardError "$env:TEMP\agent-err.log"
+            -RedirectStandardOutput "$env:RUNNER_TEMP\agent-out.log" -RedirectStandardError "$env:RUNNER_TEMP\agent-err.log"
           Start-Sleep -Seconds 10
-          Get-Content "$env:TEMP\agent-out.log" -EA SilentlyContinue | Select-Object -Last 10
+          Get-Content "$env:RUNNER_TEMP\agent-out.log" -EA SilentlyContinue | Select-Object -Last 10
 
       - name: Wait for Agent online
         shell: powershell
@@ -124,8 +124,8 @@ jobs:
             Start-Sleep -Seconds 5; $elapsed += 5
           }
           Write-Host "[e2e] TIMEOUT - agent did not come online in ${maxWait}s"
-          Get-Content "$env:TEMP\agent-out.log" -EA SilentlyContinue | Select-Object -Last 40
-          Get-Content "$env:TEMP\agent-err.log" -EA SilentlyContinue | Select-Object -Last 20
+          Get-Content "$env:RUNNER_TEMP\agent-out.log" -EA SilentlyContinue | Select-Object -Last 40
+          Get-Content "$env:RUNNER_TEMP\agent-err.log" -EA SilentlyContinue | Select-Object -Last 20
           exit 1
 
       - name: Install Playwright
