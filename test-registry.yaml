@@ -1683,6 +1683,14 @@ tests:
     product: AI视频本地流水线
     note: "HyperFrames render pipeline overlay — compose-html + Chrome headless shell 渲染链路单测"
 
+  - id: ensure-hyperframes
+    path: services/agent/src/__tests__/ensure-hyperframes.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: AI视频本地流水线
+    note: "ensure-hyperframes auto-install 单测 — 已安装/未安装/npm失败 3 场景"
+
   - id: api-ai-video-pipeline-template-create
     path: apps/api/src/controllers/__tests__/ai-video-pipeline-template.test.ts
     type: unit

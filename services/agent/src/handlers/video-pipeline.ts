@@ -3,6 +3,7 @@ import { promisify } from 'util';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
+import { ensureHyperframes } from './ensure-hyperframes';
 
 const execAsync = promisify(exec);
 
@@ -337,7 +338,8 @@ export async function processVideoPipelineJob(
         const rendered = path.join(hfDir, 'rendered.mp4');
         try {
           console.log('[video-pipeline] HyperFrames template render...');
-          await execAsync('npx hyperframes render --output ' + JSON.stringify(rendered), {
+          const hfCmd1 = await ensureHyperframes();
+          await execAsync(hfCmd1 + ' render --output ' + JSON.stringify(rendered), {
             cwd: hfDir, timeout: 600_000, maxBuffer: 10 * 1024 * 1024, windowsHide: true,
           });
           // Merge original audio into HyperFrames output (HF renders silent video)
@@ -419,7 +421,8 @@ export async function processVideoPipelineJob(
       const rendered = path.join(hfDir, 'rendered.mp4');
       try {
         console.log('[video-pipeline] starting HyperFrames render...');
-        await execAsync('npx hyperframes render --output ' + JSON.stringify(rendered), {
+        const hfCmd2 = await ensureHyperframes();
+        await execAsync(hfCmd2 + ' render --output ' + JSON.stringify(rendered), {
           cwd: hfDir, timeout: 600_000, maxBuffer: 10 * 1024 * 1024, windowsHide: true,
         });
         fs.copyFileSync(rendered, output169);
