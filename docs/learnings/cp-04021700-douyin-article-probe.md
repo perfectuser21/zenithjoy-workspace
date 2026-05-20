@@ -41,9 +41,9 @@ Required checks 只有 L1-L4，都通过即可合并。
 
 ```bash
 # 探测所有平台状态
-node services/creator/scripts/publishers/probe-all-platforms.cjs
+node services/content-pipeline/scripts/publishers/probe-all-platforms.cjs
 
 # 发布抖音文章
-node services/creator/scripts/publishers/douyin-publisher/publish-douyin-article.js queue.json
+node services/content-pipeline/scripts/publishers/douyin-publisher/publish-douyin-article.js queue.json
 # queue.json: { "title": "...", "content": "...", "cover": "/path/cover.jpg" }
 ```

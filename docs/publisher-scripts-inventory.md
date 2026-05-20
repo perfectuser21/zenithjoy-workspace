@@ -10,7 +10,7 @@
 
 ```
 zenithjoy/
-├── services/creator/scripts/publishers/    ← 主发布脚本（按平台分目录）
+├── services/content-pipeline/scripts/publishers/    ← 主发布脚本（按平台分目录）
 │   ├── douyin-publisher/
 │   ├── kuaishou-publisher/
 │   ├── xiaohongshu-publisher/
@@ -25,7 +25,7 @@ zenithjoy/
     └── platform-data/workflows/publisher/ ← 批量发布编排脚本
 ```
 
-**共享依赖（`services/creator/scripts/publishers/package.json`）**：
+**共享依赖（`services/content-pipeline/scripts/publishers/package.json`）**：
 
 | 依赖 | 版本 | 用途 |
 |------|------|------|
@@ -38,7 +38,7 @@ zenithjoy/
 
 ### 1. 抖音
 
-**目录**：`services/creator/scripts/publishers/douyin-publisher/`
+**目录**：`services/content-pipeline/scripts/publishers/douyin-publisher/`
 
 | 脚本路径 | 功能 | 技术方案 | 依赖 | 测试状态 |
 |---------|------|---------|------|---------|
@@ -58,7 +58,7 @@ zenithjoy/
 
 ### 2. 快手
 
-**目录**：`services/creator/scripts/publishers/kuaishou-publisher/`
+**目录**：`services/content-pipeline/scripts/publishers/kuaishou-publisher/`
 
 | 脚本路径 | 功能 | 技术方案 | 依赖 | 测试状态 |
 |---------|------|---------|------|---------|
@@ -79,7 +79,7 @@ zenithjoy/
 
 ### 3. 小红书
 
-**目录**：`services/creator/scripts/publishers/xiaohongshu-publisher/`
+**目录**：`services/content-pipeline/scripts/publishers/xiaohongshu-publisher/`
 
 | 脚本路径 | 功能 | 技术方案 | 依赖 | 测试状态 |
 |---------|------|---------|------|---------|
@@ -97,7 +97,7 @@ zenithjoy/
 
 ### 4. 头条
 
-**目录**：`services/creator/scripts/publishers/toutiao-publisher/`
+**目录**：`services/content-pipeline/scripts/publishers/toutiao-publisher/`
 
 | 脚本路径 | 功能 | 技术方案 | 依赖 | 测试状态 |
 |---------|------|---------|------|---------|
@@ -114,7 +114,7 @@ zenithjoy/
 
 ### 5. 微博
 
-**目录**：`services/creator/scripts/publishers/weibo-publisher/`
+**目录**：`services/content-pipeline/scripts/publishers/weibo-publisher/`
 
 | 脚本路径 | 功能 | 技术方案 | 依赖 | 测试状态 |
 |---------|------|---------|------|---------|
@@ -137,7 +137,7 @@ zenithjoy/
 
 ### 6. 视频号
 
-**目录**：`services/creator/scripts/publishers/shipinhao-publisher/`
+**目录**：`services/content-pipeline/scripts/publishers/shipinhao-publisher/`
 
 | 脚本路径 | 功能 | 技术方案 | 依赖 | 测试状态 |
 |---------|------|---------|------|---------|
@@ -152,7 +152,7 @@ zenithjoy/
 
 ### 7. 知乎
 
-**目录**：`services/creator/scripts/publishers/zhihu-publisher/`
+**目录**：`services/content-pipeline/scripts/publishers/zhihu-publisher/`
 
 | 脚本路径 | 功能 | 技术方案 | 依赖 | 测试状态 |
 |---------|------|---------|------|---------|
@@ -173,7 +173,7 @@ zenithjoy/
 
 ### 8. 公众号（微信公众号）
 
-**目录**：`services/creator/scripts/publishers/wechat-publisher/`
+**目录**：`services/content-pipeline/scripts/publishers/wechat-publisher/`
 
 | 脚本路径 | 功能 | 技术方案 | 依赖 | 测试状态 |
 |---------|------|---------|------|---------|

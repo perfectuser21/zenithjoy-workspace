@@ -108,7 +108,7 @@ done
 | cards/ 下只有 person-data.json 没 PNG | 没执行 cp | 步骤 3 必须跑 |
 
 ## 相关文件路径
-- Executor: `/Users/administrator/perfect21/zenithjoy/services/creator/pipeline_worker/executors/generate.py`
+- Executor: `/Users/administrator/perfect21/zenithjoy/services/content-pipeline/pipeline_worker/executors/generate.py`
 - V6 脚本: `/Users/administrator/claude-output/scripts/gen-v6-person.mjs`
 - V6 产物中转: `~/claude-output/images/`
 - pipeline cards 目标: `<output_dir>/cards/`

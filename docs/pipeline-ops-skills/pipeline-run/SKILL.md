@@ -188,7 +188,7 @@ keyword: <原词>（扩展为: <扩展词>）
 
 ## 相关文件
 
-- pipeline-worker: `/Users/administrator/perfect21/zenithjoy/services/creator/pipeline_worker/worker.py`
+- pipeline-worker: `/Users/administrator/perfect21/zenithjoy/services/content-pipeline/pipeline_worker/worker.py`
 - apps/api 接口: `/Users/administrator/perfect21/zenithjoy/apps/api/src/controllers/pipeline.controller.ts`
 - 触发接口: `POST http://localhost:5200/api/pipeline/trigger`
 - 运维 skill: `~/.claude/skills/pipeline-*/SKILL.md`（7 个）

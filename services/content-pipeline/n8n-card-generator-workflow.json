@@ -1,0 +1,119 @@
+{
+  "name": "[Flow] 金句卡片生成器 v1.0",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "generate-card",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "name": "1. Webhook 触发",
+      "type": "n8n-nodes-base.webhook",
+      "position": [250, 300],
+      "webhookId": "generate-card"
+    },
+    {
+      "parameters": {
+        "command": "=ssh mac-mini 'python3 ~/scripts/generate-card.py \"{{ $json.body.prompt }}\" {{ $json.body.source || \"gemini\" }}'"
+      },
+      "name": "2. SSH 生成图片",
+      "type": "n8n-nodes-base.executeCommand",
+      "position": [500, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const output = $input.first().json.stdout;\ntry {\n  const result = JSON.parse(output);\n  return [{ json: result }];\n} catch(e) {\n  return [{ json: { error: 'Parse failed', raw: output } }];\n}"
+      },
+      "name": "3. 解析结果",
+      "type": "n8n-nodes-base.code",
+      "position": [750, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "leftValue": "",
+            "caseSensitive": true,
+            "typeValidation": "strict"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "1",
+              "leftValue": "={{ $json.images[0].success }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ]
+        }
+      },
+      "name": "4. 检查是否成功",
+      "type": "n8n-nodes-base.if",
+      "position": [1000, 300]
+    },
+    {
+      "parameters": {
+        "command": "=scp mac-mini:{{ $json.images[0].image_path }} /tmp/card-{{ Date.now() }}.png && ls -la /tmp/card-*.png | tail -1"
+      },
+      "name": "5. 下载图片到 VPS",
+      "type": "n8n-nodes-base.executeCommand",
+      "position": [1250, 200]
+    },
+    {
+      "parameters": {
+        "command": "=echo '图片已保存，请 Claude Code 评分：/tmp/card-*.png'"
+      },
+      "name": "6. 通知评分",
+      "type": "n8n-nodes-base.executeCommand",
+      "position": [1500, 200]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ status: 'success', message: '图片已生成并保存', images: $('3. 解析结果').item.json.images }) }}"
+      },
+      "name": "7. 返回成功",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "position": [1750, 200]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ status: 'failed', error: $json.error || 'Generation failed' }) }}"
+      },
+      "name": "返回失败",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "position": [1250, 450]
+    }
+  ],
+  "connections": {
+    "1. Webhook 触发": {
+      "main": [[{"node": "2. SSH 生成图片", "type": "main", "index": 0}]]
+    },
+    "2. SSH 生成图片": {
+      "main": [[{"node": "3. 解析结果", "type": "main", "index": 0}]]
+    },
+    "3. 解析结果": {
+      "main": [[{"node": "4. 检查是否成功", "type": "main", "index": 0}]]
+    },
+    "4. 检查是否成功": {
+      "main": [
+        [{"node": "5. 下载图片到 VPS", "type": "main", "index": 0}],
+        [{"node": "返回失败", "type": "main", "index": 0}]
+      ]
+    },
+    "5. 下载图片到 VPS": {
+      "main": [[{"node": "6. 通知评分", "type": "main", "index": 0}]]
+    },
+    "6. 通知评分": {
+      "main": [[{"node": "7. 返回成功", "type": "main", "index": 0}]]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

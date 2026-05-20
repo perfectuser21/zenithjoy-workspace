@@ -46,7 +46,7 @@ rm -f ~/claude-output/images/*.png   # V6 输出默认位置
 ### 步骤 2: 限制 findings ≤ 5 条 + 调 build_person_data
 
 ```bash
-cd /Users/administrator/perfect21/zenithjoy/services/creator
+cd /Users/administrator/perfect21/zenithjoy/services/content-pipeline
 KEYWORD="${KEYWORD}"
 OUT_DIR="${OUT_DIR}"
 
@@ -146,8 +146,8 @@ ssh nas "ls '${NAS_PATH}/cards/' | wc -l"
 | tar over ssh 报 `Permission denied` | NAS 账号是中文用户名，rsync mangle | 本命令用 tar+ssh alias 绕开，rsync 不行 |
 
 ## 相关文件路径
-- Executor: `/Users/administrator/perfect21/zenithjoy/services/creator/pipeline_worker/executors/generate.py`
-- Builder: `/Users/administrator/perfect21/zenithjoy/services/creator/pipeline_worker/person_data_builder.py`
+- Executor: `/Users/administrator/perfect21/zenithjoy/services/content-pipeline/pipeline_worker/executors/generate.py`
+- Builder: `/Users/administrator/perfect21/zenithjoy/services/content-pipeline/pipeline_worker/person_data_builder.py`
 - V6 脚本: `/Users/administrator/claude-output/scripts/gen-v6-person.mjs`
 - V6 字段预算: 见 `person_data_builder.py` 顶部 `BUDGET` dict
-- NAS uploader: `/Users/administrator/perfect21/zenithjoy/services/creator/pipeline_worker/nas_uploader.py`
+- NAS uploader: `/Users/administrator/perfect21/zenithjoy/services/content-pipeline/pipeline_worker/nas_uploader.py`

@@ -263,7 +263,7 @@ features:
     purpose: 从 Notion 数据库拉取文章 blocks，作为内容 pipeline 输入源
     maturity: 0
     code:
-      root: services/creator/api/
+      root: services/content-pipeline/api/
       entry_files: [server.py]
       language: Python
       runtime: fastapi

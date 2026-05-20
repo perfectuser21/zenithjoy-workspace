@@ -20,11 +20,11 @@
 
 ### gitignore 排除了 publisher 目录
 
-`.gitignore` 中有 `services/creator/scripts/publishers/` 规则，导致新建脚本无法进入 git 追踪，`git status` 看不到新文件。
+`.gitignore` 中有 `services/content-pipeline/scripts/publishers/` 规则，导致新建脚本无法进入 git 追踪，`git status` 看不到新文件。
 
 **解决**：将规则改为只排除 node_modules：
-- `services/creator/scripts/publishers/node_modules/`
-- `services/creator/scripts/publishers/**/node_modules/`
+- `services/content-pipeline/scripts/publishers/node_modules/`
+- `services/content-pipeline/scripts/publishers/**/node_modules/`
 
 ### Hook 在主仓库 git context 运行
 
