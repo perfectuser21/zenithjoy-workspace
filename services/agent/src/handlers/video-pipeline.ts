@@ -475,7 +475,7 @@ export async function processVideoPipelineJob(
 let _running = false;
 let _staleRecovered = false;
 
-export function startVideoPipelineLoop(apiBase: string, intervalMs = 15_000): NodeJS.Timeout {
+export function startVideoPipelineLoop(apiBase: string, licenseKey?: string, intervalMs = 15_000): NodeJS.Timeout {
   const tick = async () => {
     if (!_staleRecovered) {
       _staleRecovered = true;
@@ -484,7 +484,9 @@ export function startVideoPipelineLoop(apiBase: string, intervalMs = 15_000): No
     if (_running) return;
     _running = true;
     try {
-      const r = await fetchWithTimeout(`${apiBase}/api/ai-video/jobs?status=pending`, {}, 10_000);
+      const headers: Record<string, string> = {};
+      if (licenseKey) headers['Authorization'] = `Bearer ${licenseKey}`;
+      const r = await fetchWithTimeout(`${apiBase}/api/ai-video/jobs?status=pending`, { headers }, 10_000);
       if (!r.ok) return;
       const data = await r.json() as { data?: VideoPipelineJob[] };
       if (data?.data?.length) {
@@ -493,7 +495,7 @@ export function startVideoPipelineLoop(apiBase: string, intervalMs = 15_000): No
           `${apiBase}/api/ai-video/jobs/${job.id}/progress`,
           {
             method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', ...headers },
             body: JSON.stringify({ status: 'processing', progress: 1 }),
           },
           5_000,
