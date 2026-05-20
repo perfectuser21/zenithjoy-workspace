@@ -177,9 +177,13 @@ async function postJson<T>(
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     }, timeoutMs);
-    if (!r.ok) return null;
+    if (!r.ok) {
+      console.warn(`[video-pipeline] postJson ${p} → HTTP ${r.status}`);
+      return null;
+    }
     return r.json() as Promise<T>;
-  } catch {
+  } catch (err) {
+    console.warn(`[video-pipeline] postJson ${p} failed:`, (err as Error).message?.slice(0, 120));
     return null;
   }
 }
@@ -229,14 +233,16 @@ export async function processVideoPipelineJob(
   const { id, topic } = job;
   const videoPath = job.src_video;
   if (!videoPath || !fs.existsSync(videoPath)) {
+    console.error(`[video-pipeline] ❌ 视频文件找不到 — 请检查文件路径是否正确: ${videoPath}`);
     await reportComplete(apiBase, id, {
       error_msg: `[video-pipeline] src_video not found: ${videoPath}`,
     });
     return;
   }
   if (!fs.statSync(videoPath).isFile()) {
+    console.error(`[video-pipeline] ❌ src_video 是文件夹而非视频文件，请选择具体 .mp4/.mov 文件: ${videoPath}`);
     await reportComplete(apiBase, id, {
-      error_msg: `[video-pipeline] src_video 是文件夹而非视频文件，请选择具体�?.mp4/.mov 文件: ${videoPath}`,
+      error_msg: `[video-pipeline] src_video 是文件夹而非视频文件，请选择具体 .mp4/.mov 文件: ${videoPath}`,
     });
     return;
   }
