@@ -52,9 +52,11 @@ export class AiVideoPipelineService {
       );
       return result.rows;
     }
+    // Unauthenticated callers only get unlicensed jobs — prevents foreign agents from
+    // stealing jobs that belong to a specific license/tenant.
     const result = await pool.query(
       `SELECT * FROM zenithjoy.ai_video_pipeline_jobs
-       WHERE status = 'pending'
+       WHERE status = 'pending' AND license_id IS NULL
        ORDER BY created_at ASC`,
     );
     return result.rows;
