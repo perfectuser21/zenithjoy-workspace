@@ -47,7 +47,7 @@ test('Agent E2E — 口播视频本地生成全链路', async ({ page, context }
   while (Date.now() < deadline) {
     const elapsed = Math.round((Date.now() - startTs) / 1000);
     const body = await page.textContent('body').catch(() => '');
-    const hasDone = body.includes('处理完成') || body.includes('下载');
+    const hasDone = body.includes('处理完成') || body.includes('下载 9:16');
     const hasFail = body.includes('处理失败') || body.includes('failed');
     await page.screenshot({ path: `screenshots/progress-${elapsed}s.png` });
     console.log(`[e2e] ${elapsed}s done:${hasDone} fail:${hasFail}`);
