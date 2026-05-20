@@ -35,6 +35,8 @@ services:
     restart: unless-stopped
     networks:
       - zenithjoy-net
+    ports:
+      - "127.0.0.1:5200:5200"
     depends_on:
       zenithjoy-postgres:
         condition: service_healthy
