@@ -140,7 +140,7 @@ export default function AgentDownloadPage() {
               sha256: <code style={{ fontSize: 12 }}>{manifest.sha256.slice(0, 16)}...</code>
             </p>
             <a
-              href="/api/agent/install-pack/download"
+              href={manifest.cos_url || '/api/agent/install-pack/download'}
               download
               style={{ display: 'inline-block', padding: '8px 16px', background: '#2563eb', color: '#fff', borderRadius: 6, textDecoration: 'none' }}
             >
