@@ -233,10 +233,18 @@ export async function processVideoPipelineJob(
   const { id, topic } = job;
   const videoPath = job.src_video;
   if (!videoPath || !fs.existsSync(videoPath)) {
-    console.error(`[video-pipeline] ❌ 视频文件找不到 — 请检查文件路径是否正确: ${videoPath}`);
-    await reportComplete(apiBase, id, {
-      error_msg: `[video-pipeline] src_video not found: ${videoPath}`,
-    });
+    // File not accessible on this machine (e.g. xian-rog picking up a CI runner's job).
+    // Release back to pending so the agent that owns the file can pick it up instead of permanently failing.
+    console.warn(`[video-pipeline] src_video not accessible locally (${videoPath}) — releasing job back to pending`);
+    await fetchWithTimeout(
+      `${apiBase}/api/ai-video/jobs/${id}/progress`,
+      {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'pending', progress: 0 }),
+      },
+      5_000,
+    ).catch(() => {});
     return;
   }
   if (!fs.statSync(videoPath).isFile()) {
