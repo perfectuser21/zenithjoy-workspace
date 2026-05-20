@@ -123,7 +123,7 @@ jobs:
             } catch { Write-Host "[e2e] poll: $($_.Exception.Message)" }
             Start-Sleep -Seconds 5; $elapsed += 5
           }
-          Write-Host "[e2e] TIMEOUT — agent did not come online in ${maxWait}s"
+          Write-Host "[e2e] TIMEOUT - agent did not come online in ${maxWait}s"
           Get-Content "$env:TEMP\agent-out.log" -EA SilentlyContinue | Select-Object -Last 40
           Get-Content "$env:TEMP\agent-err.log" -EA SilentlyContinue | Select-Object -Last 20
           exit 1
