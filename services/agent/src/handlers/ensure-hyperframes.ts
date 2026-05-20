@@ -8,7 +8,8 @@ const execAsync = promisify(exec);
 
 type Executor = (cmd: string, opts: { timeout: number; windowsHide: boolean }) => Promise<unknown>;
 
-const ZJ_RUNTIME = path.join(os.homedir(), 'AppData', 'Roaming', 'ZenithJoy', 'runtime');
+const APP_DATA = process.env.APPDATA || path.join(os.homedir(), 'AppData', 'Roaming');
+const ZJ_RUNTIME = path.join(APP_DATA, 'ZenithJoy', 'runtime');
 const ZJ_NODE_EXE = path.join(ZJ_RUNTIME, 'nodejs', 'node.exe');
 const ZJ_NPM_CLI = path.join(ZJ_RUNTIME, 'nodejs', 'node_modules', 'npm', 'bin', 'npm-cli.js');
 const ZJ_HF_DIR = path.join(ZJ_RUNTIME, 'hyperframes');
