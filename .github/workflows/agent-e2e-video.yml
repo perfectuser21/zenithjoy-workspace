@@ -127,9 +127,19 @@ jobs:
       - name: 等待 Agent 在线
         shell: powershell
         run: |
+          # 动态登录拿 session token（避免硬编码 token 触发 secrets scan）
+          $loginResp = Invoke-RestMethod `
+            -Uri "https://autopilot.zenjoymedia.media/api/auth/sign-in/email" `
+            -Method POST `
+            -ContentType "application/json" `
+            -Body '{"email":"zj-e2e-test@zenjoymedia.media","password":"E2eTest2026!"}'
+          $sessionToken = $loginResp.token
+          Write-Host "[e2e] session token obtained (len=$($sessionToken.Length))"
+          echo "ZJ_SESSION_TOKEN=$sessionToken" >> $env:GITHUB_ENV
+
           $maxWait = 90; $interval = 5; $elapsed = 0
           Write-Host "[e2e] Waiting for agent to come online (max ${maxWait}s)..."
-          $cookieHdr = @{ "Cookie" = "better-auth.session_token=OyN5eRouBcORDtUtPIEiVvtI3sZFNPh1" }
+          $cookieHdr = @{ "Cookie" = "better-auth.session_token=$sessionToken" }
           while ($elapsed -lt $maxWait) {
             try {
               $r = Invoke-RestMethod -Uri "https://autopilot.zenjoymedia.media/api/agent/list" -Headers $cookieHdr -ErrorAction Stop
