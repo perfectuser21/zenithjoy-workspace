@@ -377,7 +377,7 @@ describe('PUT /api/agent/install-pack/manifest', () => {
     expect(res.status).toBe(200);
     expect(res.body.ok).toBe(true);
     expect(res.body.version).toBe('1.2.0');
-    const written = JSON.parse(require('fs').readFileSync(tmpManifestPath, 'utf-8'));
+    const written = JSON.parse(fs.readFileSync(tmpManifestPath, 'utf-8'));
     expect(written.version).toBe('1.2.0');
     expect(written.sha256).toBe('a'.repeat(64));
   });
