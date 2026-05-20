@@ -670,6 +670,14 @@ tests:
     product: AI员工
     note: "WS auth 修复 — authenticateWsToken 通过 licenses 表验证（v1.1.7），修复新账号 401"
 
+  - id: agent-e2e-video-pipeline
+    path: e2e/agent-video-pipeline.spec.js
+    type: e2e
+    ci: manual
+    status: active
+    product: AI员工
+    note: "Agent 全链路 E2E — windows-latest runner：下载安装包→Agent 上线→提交口播视频→等待处理完成"
+
   - id: api-skills-route
     path: apps/api/src/routes/__tests__/skills.test.ts
     type: unit
