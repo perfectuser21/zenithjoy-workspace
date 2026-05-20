@@ -1080,6 +1080,14 @@ tests:
     status: active
     product: 内容发布
     note: "Sprint 2.1e — install-pack-manifest service 读 manifest.json (4 case: missing/valid/corrupt/incomplete)"
+
+  - id: dashboard-api-install-pack-manifest
+    path: apps/dashboard/src/api/__tests__/install-pack-manifest.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 新媒体运营
+    note: "Walking Skeleton 1 — install-pack manifest API 单元测试"
     note: "Path 2 Sprint A WS2 — feishu-token getValidToken + 2h 过期刷新 + cascade 失败 BEHAVIOR 测试"
 
   - id: p2-sprint-a-ws3-bitable-mt-unit

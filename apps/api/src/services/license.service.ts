@@ -325,15 +325,15 @@ export interface RegisterInput {
  * → 第二个 agent row 出现 → agentContext middleware 派 task 到错的 row → chrome 没弹。
  */
 async function upsertAgentRowGetUuid(input: RegisterInput, licenseId: string): Promise<string> {
-  // tenant_id 通过 license 反查（agents.tenant_id 不允许 NULL — schema 要求）
-  const tenantRes = await pool.query<{ id: string }>(
-    `SELECT id FROM zenithjoy.tenants WHERE license_key = (
-       SELECT license_key FROM zenithjoy.licenses WHERE id = $1
-     ) LIMIT 1`,
+  // 直接从 licenses.tenant_id 取（比 tenants.license_key 反查更可靠）
+  const tenantRes = await pool.query<{ tenant_id: string }>(
+    `SELECT tenant_id FROM zenithjoy.licenses WHERE id = $1`,
     [licenseId]
   );
-  const tenantId = tenantRes.rows[0]?.id;
-  // 如 tenant 不存在（旧数据），用 fallback NULL — 实际 schema agents.tenant_id 允许 NULL（兼容历史）
+  const tenantId = tenantRes.rows[0]?.tenant_id;
+  if (!tenantId) {
+    throw new Error('LICENSE_NO_TENANT: license 没有关联的 tenant，无法注册 agent');
+  }
   const displayName = input.agent_id || input.hostname || `m-${input.machine_id.slice(0, 16)}`;
   const r = await pool.query<{ id: string }>(
     `INSERT INTO zenithjoy.agents (tenant_id, agent_id, license_id, hostname, capabilities, version, status, last_seen)
