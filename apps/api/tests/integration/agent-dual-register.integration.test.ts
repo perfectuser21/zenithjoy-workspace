@@ -45,9 +45,9 @@ describe('Agent dual register integration [Bug 9]', () => {
     const expiresAt = new Date(Date.now() + 365 * 86400_000).toISOString();
     await testPool.query(
       `INSERT INTO zenithjoy.licenses
-         (license_key, tier, max_machines, expires_at, status)
-       VALUES ($1, 'free', 1, $2, 'active')`,
-      [licenseKey, expiresAt]
+         (license_key, tenant_id, tier, max_machines, expires_at, status)
+       VALUES ($1, $2, 'free', 1, $3, 'active')`,
+      [licenseKey, tenantId, expiresAt]
     );
   });
 
