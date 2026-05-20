@@ -1,0 +1,107 @@
+name: Agent Windows Sandbox Test
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Agent version to test (e.g. 1.1.7)'
+        required: false
+        default: '1.1.7'
+
+jobs:
+  windows-sandbox:
+    name: Windows Sandbox — Node 22 + hyperframes smoke
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - name: Download install pack from COS
+        shell: powershell
+        run: |
+          $version = "${{ github.event.inputs.version }}"
+          $url = "https://zenithjoy-static-1333590468.cos.accelerate.myqcloud.com/install-pack/zenithjoy-agent-v${version}.tar.gz"
+          Write-Host "[sandbox] downloading zenithjoy-agent-v${version}.tar.gz ..."
+          Invoke-WebRequest -Uri $url -OutFile "agent.tar.gz" -UseBasicParsing
+          Write-Host "[sandbox] download OK, size: $((Get-Item agent.tar.gz).Length) bytes"
+
+      - name: Extract install pack
+        shell: powershell
+        run: |
+          mkdir pack | Out-Null
+          tar -xzf agent.tar.gz -C pack --strip-components=1
+          Write-Host "[sandbox] pack contents:"
+          Get-ChildItem pack | ForEach-Object { Write-Host "  $_" }
+          if (-not (Test-Path "pack\node-win-x64.zip")) {
+            Write-Host "ERROR: node-win-x64.zip not found in pack"
+            exit 1
+          }
+          Write-Host "[sandbox] node-win-x64.zip found OK"
+
+      - name: Extract portable Node.js
+        shell: powershell
+        run: |
+          $nodeDir = "$env:APPDATA\ZenithJoy\runtime\nodejs"
+          New-Item -ItemType Directory -Force -Path $nodeDir | Out-Null
+          Write-Host "[sandbox] extracting node-win-x64.zip to temp..."
+          Expand-Archive -Path "pack\node-win-x64.zip" -DestinationPath "$env:TEMP\zj-node-tmp" -Force
+          $extracted = Get-ChildItem "$env:TEMP\zj-node-tmp" | Select-Object -First 1
+          Write-Host "[sandbox] extracted folder: $($extracted.Name)"
+          Move-Item "$env:TEMP\zj-node-tmp\$($extracted.Name)\*" $nodeDir -Force
+          Remove-Item "$env:TEMP\zj-node-tmp" -Recurse -Force
+          $nodeExe = "$nodeDir\node.exe"
+          if (-not (Test-Path $nodeExe)) {
+            Write-Host "ERROR: node.exe not found at $nodeExe"
+            exit 1
+          }
+          $ver = & $nodeExe --version
+          Write-Host "[sandbox] node.exe version: $ver"
+          if ($ver -notmatch "^v22\.") {
+            Write-Host "ERROR: expected Node v22.x, got $ver"
+            exit 1
+          }
+          Write-Host "[sandbox] Node 22 OK"
+
+      - name: Install hyperframes via npmmirror
+        shell: powershell
+        run: |
+          $nodeDir = "$env:APPDATA\ZenithJoy\runtime\nodejs"
+          $nodeExe = "$nodeDir\node.exe"
+          $npmCli = "$nodeDir\node_modules\npm\bin\npm-cli.js"
+          $hfDir = "$env:APPDATA\ZenithJoy\runtime\hyperframes"
+          New-Item -ItemType Directory -Force -Path $hfDir | Out-Null
+          Write-Host "[sandbox] installing hyperframes via npmmirror..."
+          $proc = Start-Process -FilePath $nodeExe -ArgumentList @(
+            $npmCli, "install", "hyperframes",
+            "--prefix", $hfDir,
+            "--registry", "https://registry.npmmirror.com"
+          ) -Wait -PassThru -NoNewWindow
+          if ($proc.ExitCode -ne 0) {
+            Write-Host "ERROR: hyperframes install failed with exit code $($proc.ExitCode)"
+            exit 1
+          }
+          $hfMain = "$hfDir\node_modules\hyperframes\dist\cli.js"
+          if (-not (Test-Path $hfMain)) {
+            Write-Host "ERROR: hyperframes cli.js not found at $hfMain"
+            exit 1
+          }
+          Write-Host "[sandbox] hyperframes installed OK: $hfMain"
+
+      - name: Verify hyperframes runs without EBADENGINE
+        shell: powershell
+        run: |
+          $nodeDir = "$env:APPDATA\ZenithJoy\runtime\nodejs"
+          $nodeExe = "$nodeDir\node.exe"
+          $hfDir = "$env:APPDATA\ZenithJoy\runtime\hyperframes"
+          $hfMain = "$hfDir\node_modules\hyperframes\dist\cli.js"
+          Write-Host "[sandbox] running hyperframes --version..."
+          $output = & $nodeExe $hfMain --version 2>&1
+          Write-Host "[sandbox] output: $output"
+          $outputStr = $output -join " "
+          if ($outputStr -match "EBADENGINE") {
+            Write-Host "FAIL: EBADENGINE still present in output"
+            exit 1
+          }
+          Write-Host "[sandbox] No EBADENGINE — Node 22 + hyperframes compatibility CONFIRMED"
+          Write-Host ""
+          Write-Host "============================================"
+          Write-Host "  SANDBOX PASS: v${{ github.event.inputs.version }}"
+          Write-Host "  Node 22 + hyperframes — zero EBADENGINE"
+          Write-Host "============================================"
