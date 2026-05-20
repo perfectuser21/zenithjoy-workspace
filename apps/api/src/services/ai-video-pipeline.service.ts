@@ -11,6 +11,7 @@ export interface PipelineJob {
   result_url: string | null;
   output_dir: string | null;
   error_msg: string | null;
+  license_id: string | null;
   created_at: Date;
   updated_at: Date;
 }
@@ -21,13 +22,14 @@ export class AiVideoPipelineService {
     srcLogo: string | null;
     topic: string | null;
     templateId?: string | null;
+    licenseId?: string | null;
   }): Promise<PipelineJob> {
     const result = await pool.query(
       `INSERT INTO zenithjoy.ai_video_pipeline_jobs
-         (src_video, src_logo, topic, template_id)
-       VALUES ($1, $2, $3, $4)
+         (src_video, src_logo, topic, template_id, license_id)
+       VALUES ($1, $2, $3, $4, $5)
        RETURNING *`,
-      [params.srcVideo, params.srcLogo, params.topic, params.templateId ?? null],
+      [params.srcVideo, params.srcLogo, params.topic, params.templateId ?? null, params.licenseId ?? null],
     );
     return result.rows[0];
   }
@@ -40,7 +42,16 @@ export class AiVideoPipelineService {
     return result.rows[0] ?? null;
   }
 
-  async listPending(): Promise<PipelineJob[]> {
+  async listPending(licenseId?: string | null): Promise<PipelineJob[]> {
+    if (licenseId) {
+      const result = await pool.query(
+        `SELECT * FROM zenithjoy.ai_video_pipeline_jobs
+         WHERE status = 'pending' AND license_id = $1
+         ORDER BY created_at ASC LIMIT 10`,
+        [licenseId],
+      );
+      return result.rows;
+    }
     const result = await pool.query(
       `SELECT * FROM zenithjoy.ai_video_pipeline_jobs
        WHERE status = 'pending'
