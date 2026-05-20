@@ -9,12 +9,13 @@ test('Agent E2E — 口播视频本地生成全链路', async ({ page, context }
   test.setTimeout(600000);
 
   console.log('[e2e] step 1: 注入 session cookie');
+  // better-auth on HTTPS uses __Secure- prefixed cookie name
   await context.addCookies([{
-    name: 'better-auth.session_token',
+    name: '__Secure-better-auth.session_token',
     value: TOKEN,
     domain: 'autopilot.zenjoymedia.media',
     path: '/',
-    httpOnly: false,
+    httpOnly: true,
     secure: true,
     sameSite: 'Lax'
   }]);
