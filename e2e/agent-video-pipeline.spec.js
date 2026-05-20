@@ -1,5 +1,5 @@
 // @ts-check
-const { test, expect } = require('@playwright/test');
+import { test, expect } from '@playwright/test';
 
 const BASE  = 'https://autopilot.zenjoymedia.media';
 const TOKEN = process.env.ZJ_SESSION_TOKEN;
