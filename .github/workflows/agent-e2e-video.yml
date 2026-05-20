@@ -1,110 +1,93 @@
-name: Agent E2E — 真机视频生成全链路
+name: Agent E2E -- Real Windows Video Pipeline
 on:
   workflow_dispatch:
     inputs:
       agent_version:
-        description: 'Agent install pack version'
+        description: Agent install pack version
         required: false
-        default: '1.1.7'
+        default: "1.1.7"
 
 jobs:
   e2e-video-pipeline:
-    name: Windows 真机 — 下载安装包 → Agent 上线 → 派视频任务 → 生成验收
+    name: Windows -- install pack + Agent online + video task + result
     runs-on: windows-latest
     timeout-minutes: 30
 
     steps:
-      # ── 1. 下载 v1.1.7 安装包 ──────────────────────────────────────────────
-      - name: 下载 install pack
+      - uses: actions/checkout@v4
+
+      - name: Download install pack
         shell: powershell
         run: |
           $v = "${{ github.event.inputs.agent_version }}"
           $url = "https://zenithjoy-static-1333590468.cos.accelerate.myqcloud.com/install-pack/zenithjoy-agent-v${v}.tar.gz"
-          Write-Host "[e2e] downloading zenithjoy-agent-v${v}.tar.gz ..."
+          Write-Host "[e2e] downloading zenithjoy-agent-v${v}.tar.gz"
           Invoke-WebRequest -Uri $url -OutFile "agent.tar.gz" -UseBasicParsing
           Write-Host "[e2e] downloaded: $((Get-Item agent.tar.gz).Length) bytes"
 
-      # ── 2. 解压安装包 ───────────────────────────────────────────────────────
-      - name: 解压安装包
+      - name: Extract install pack
         shell: powershell
         run: |
           New-Item -ItemType Directory -Force -Path "pack" | Out-Null
           tar -xzf agent.tar.gz -C pack --strip-components=1
-          Write-Host "[e2e] pack contents:"
           Get-ChildItem pack | ForEach-Object { Write-Host "  $($_.Name)" }
 
-      # ── 3. 下载口播测试视频（45s 中文口播音频）─────────────────────────────
-      - name: 下载测试视频
+      - name: Download test video (45s Chinese voiceover)
         shell: powershell
         run: |
-          $videoDir = "C:\Users\runneradmin\Videos"
-          $videoPath = "$videoDir\zj-e2e-koubo-45s.mp4"
-          New-Item -ItemType Directory -Force -Path $videoDir | Out-Null
+          $dir = "C:\Users\runneradmin\Videos"
+          $path = "$dir\zj-e2e-koubo-45s.mp4"
+          New-Item -ItemType Directory -Force -Path $dir | Out-Null
           $url = "https://zenithjoy-static-1333590468.cos.accelerate.myqcloud.com/e2e-test-assets/zj-e2e-koubo-45s.mp4"
-          Write-Host "[e2e] downloading test video..."
-          Invoke-WebRequest -Uri $url -OutFile $videoPath -UseBasicParsing
-          Write-Host "[e2e] test video: $((Get-Item $videoPath).Length) bytes at $videoPath"
-          echo "VIDEO_PATH=$videoPath" >> $env:GITHUB_ENV
+          Invoke-WebRequest -Uri $url -OutFile $path -UseBasicParsing
+          Write-Host "[e2e] video: $((Get-Item $path).Length) bytes at $path"
+          echo "VIDEO_PATH=$path" >> $env:GITHUB_ENV
 
-      # ── 4. 写入 .env（E2E 测试账号 license）──────────────────────────────
-      - name: 写入 .env
+      - name: Write .env
         shell: powershell
         run: |
-          $content = "ZENITHJOY_LICENSE=ZJ-F-FBFYTLFR`r`nZENITHJOY_API_BASE=https://autopilot.zenjoymedia.media`r`nZENITHJOY_API_URL=wss://autopilot.zenjoymedia.media/agent-ws"
-          $content | Set-Content "pack\.env" -Encoding ascii
-          Write-Host "[e2e] .env written:"
+          $c = "ZENITHJOY_LICENSE=ZJ-F-FBFYTLFR`r`nZENITHJOY_API_BASE=https://autopilot.zenjoymedia.media`r`nZENITHJOY_API_URL=wss://autopilot.zenjoymedia.media/agent-ws"
+          $c | Set-Content "pack\.env" -Encoding ascii
           Get-Content "pack\.env"
 
-      # ── 5. 解压 Node.js v22（hyperframes 需要）─────────────────────────────
-      - name: 解压 Node.js v22
+      - name: Extract Node.js v22
         shell: powershell
         run: |
           $nodeDir = "$env:APPDATA\ZenithJoy\runtime\nodejs"
           New-Item -ItemType Directory -Force -Path $nodeDir | Out-Null
           Expand-Archive -Path "pack\node-win-x64.zip" -DestinationPath "$env:TEMP\zj-node-tmp" -Force
-          $extracted = (Get-ChildItem "$env:TEMP\zj-node-tmp" | Select-Object -First 1).Name
-          Move-Item "$env:TEMP\zj-node-tmp\$extracted\*" $nodeDir -Force
+          $folder = (Get-ChildItem "$env:TEMP\zj-node-tmp" | Select-Object -First 1).Name
+          Move-Item "$env:TEMP\zj-node-tmp\$folder\*" $nodeDir -Force
           Remove-Item "$env:TEMP\zj-node-tmp" -Recurse -Force
-          $ver = & "$nodeDir\node.exe" --version
-          Write-Host "[e2e] Node.js: $ver"
+          Write-Host "[e2e] node: $(& "$nodeDir\node.exe" --version)"
 
-      # ── 6. 安装 hyperframes ──────────────────────────────────────────────
-      - name: 安装 hyperframes
+      - name: Install hyperframes
         shell: powershell
         run: |
           $nodeExe = "$env:APPDATA\ZenithJoy\runtime\nodejs\node.exe"
           $npmCli  = "$env:APPDATA\ZenithJoy\runtime\nodejs\node_modules\npm\bin\npm-cli.js"
           $hfDir   = "$env:APPDATA\ZenithJoy\runtime\hyperframes"
           New-Item -ItemType Directory -Force -Path $hfDir | Out-Null
-          Write-Host "[e2e] installing hyperframes via npmmirror..."
           & $nodeExe $npmCli install hyperframes --prefix $hfDir --registry https://registry.npmmirror.com
-          $hfMain = "$hfDir\node_modules\hyperframes\dist\cli.js"
-          if (-not (Test-Path $hfMain)) { Write-Error "hyperframes not found"; exit 1 }
+          if (-not (Test-Path "$hfDir\node_modules\hyperframes\dist\cli.js")) { exit 1 }
           Write-Host "[e2e] hyperframes OK"
 
-      # ── 7. 启动 Chrome CDP :19222 ─────────────────────────────────────
-      - name: 启动 Chrome :19222
+      - name: Start Chrome CDP 19222
         shell: powershell
         run: |
           $chrome = "${env:ProgramFiles}\Google\Chrome\Application\chrome.exe"
-          if (-not (Test-Path $chrome)) {
-            $chrome = "${env:ProgramFiles(x86)}\Google\Chrome\Application\chrome.exe"
-          }
-          Write-Host "[e2e] Chrome: $chrome"
+          if (-not (Test-Path $chrome)) { $chrome = "${env:ProgramFiles(x86)}\Google\Chrome\Application\chrome.exe" }
           Start-Process -FilePath $chrome -ArgumentList @(
             "--remote-debugging-port=19222",
             "--user-data-dir=$env:USERPROFILE\.zj-chrome",
-            "--no-first-run",
-            "--no-default-browser-check",
-            "--disable-extensions"
+            "--no-first-run", "--no-default-browser-check", "--disable-extensions"
           )
           Start-Sleep -Seconds 4
-          Write-Host "[e2e] Chrome started on :19222"
+          Write-Host "[e2e] Chrome started :19222"
           echo "PUPPETEER_EXECUTABLE_PATH=$chrome" >> $env:GITHUB_ENV
           echo "PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=1" >> $env:GITHUB_ENV
 
-      # ── 8. 启动 zenithjoy-agent.exe（后台）───────────────────────────────
-      - name: 启动 Agent（后台）
+      - name: Start Agent (background)
         shell: powershell
         run: |
           $agentDir = (Resolve-Path "pack").Path
@@ -112,126 +95,56 @@ jobs:
           $env:ZENITHJOY_API_BASE = "https://autopilot.zenjoymedia.media"
           $env:ZENITHJOY_API_URL = "wss://autopilot.zenjoymedia.media/agent-ws"
           New-Item -ItemType Directory -Force -Path "$env:USERPROFILE\.zj" | Out-Null
-          Write-Host "[e2e] Starting zenithjoy-agent.exe..."
-          Start-Process `
-            -FilePath "$agentDir\zenithjoy-agent.exe" `
-            -WorkingDirectory $agentDir `
-            -NoNewWindow `
-            -RedirectStandardOutput "$env:TEMP\agent-stdout.log" `
-            -RedirectStandardError  "$env:TEMP\agent-stderr.log"
+          Start-Process -FilePath "$agentDir\zenithjoy-agent.exe" -WorkingDirectory $agentDir -NoNewWindow `
+            -RedirectStandardOutput "$env:TEMP\agent-out.log" -RedirectStandardError "$env:TEMP\agent-err.log"
           Start-Sleep -Seconds 10
-          Write-Host "[e2e] Agent started. Recent logs:"
-          Get-Content "$env:TEMP\agent-stdout.log" -ErrorAction SilentlyContinue | Select-Object -Last 15
+          Get-Content "$env:TEMP\agent-out.log" -EA SilentlyContinue | Select-Object -Last 10
 
-      # ── 9. 等待 Agent 在线（轮询 /api/agent/list，最多 90s）────────────
-      - name: 等待 Agent 在线
+      - name: Wait for Agent online
         shell: powershell
+        env:
+          E2E_EMAIL: ${{ secrets.E2E_EMAIL }}
+          E2E_PASS: ${{ secrets.E2E_PASS }}
         run: |
-          # 动态登录拿 session token（避免硬编码 token 触发 secrets scan）
-          $loginResp = Invoke-RestMethod `
-            -Uri "https://autopilot.zenjoymedia.media/api/auth/sign-in/email" `
-            -Method POST `
-            -ContentType "application/json" `
-            -Body '{"email":"zj-e2e-test@zenjoymedia.media","password":"E2eTest2026!"}'
-          $sessionToken = $loginResp.token
-          Write-Host "[e2e] session token obtained (len=$($sessionToken.Length))"
-          echo "ZJ_SESSION_TOKEN=$sessionToken" >> $env:GITHUB_ENV
+          $resp = Invoke-RestMethod -Uri "https://autopilot.zenjoymedia.media/api/auth/sign-in/email" `
+            -Method POST -ContentType "application/json" `
+            -Body "{`"email`":`"$env:E2E_EMAIL`",`"password`":`"$env:E2E_PASS`"}"
+          $tok = $resp.token
+          Write-Host "[e2e] session token obtained"
+          echo "ZJ_SESSION_TOKEN=$tok" >> $env:GITHUB_ENV
 
-          $maxWait = 90; $interval = 5; $elapsed = 0
-          Write-Host "[e2e] Waiting for agent to come online (max ${maxWait}s)..."
-          $cookieHdr = @{ "Cookie" = "better-auth.session_token=$sessionToken" }
+          $hdr = @{ Cookie = "better-auth.session_token=$tok" }
+          $maxWait = 90; $elapsed = 0
           while ($elapsed -lt $maxWait) {
             try {
-              $r = Invoke-RestMethod -Uri "https://autopilot.zenjoymedia.media/api/agent/list" -Headers $cookieHdr -ErrorAction Stop
-              $online = @($r.agents | Where-Object { $_.status -eq 'online' }).Count
-              Write-Host "[e2e] ${elapsed}s — agents online: $online"
-              if ($online -gt 0) { Write-Host "[e2e] Agent ONLINE!"; exit 0 }
-            } catch { Write-Host "[e2e] poll error: $($_.Exception.Message)" }
-            Start-Sleep -Seconds $interval; $elapsed += $interval
+              $r = Invoke-RestMethod -Uri "https://autopilot.zenjoymedia.media/api/agent/list" -Headers $hdr -EA Stop
+              $n = @($r.agents | Where-Object { $_.status -eq "online" }).Count
+              Write-Host "[e2e] ${elapsed}s agents online: $n"
+              if ($n -gt 0) { Write-Host "[e2e] Agent ONLINE"; exit 0 }
+            } catch { Write-Host "[e2e] poll: $($_.Exception.Message)" }
+            Start-Sleep -Seconds 5; $elapsed += 5
           }
-          Write-Host "=== agent-stdout ===" ; Get-Content "$env:TEMP\agent-stdout.log" -EA SilentlyContinue | Select-Object -Last 40
-          Write-Host "=== agent-stderr ===" ; Get-Content "$env:TEMP\agent-stderr.log" -EA SilentlyContinue | Select-Object -Last 20
+          Get-Content "$env:TEMP\agent-out.log" -EA SilentlyContinue | Select-Object -Last 40
+          Get-Content "$env:TEMP\agent-err.log" -EA SilentlyContinue | Select-Object -Last 20
           exit 1
 
-      # ── 10. 安装 Playwright ─────────────────────────────────────────────
-      - name: 安装 Playwright
+      - name: Install Playwright
         shell: powershell
         run: |
           npm install -g @playwright/test 2>&1 | Select-Object -Last 3
-          npx playwright install chromium 2>&1 | Select-Object -Last 5
+          npx playwright install chromium 2>&1 | Select-Object -Last 3
 
-      # ── 11. 运行 Playwright E2E ──────────────────────────────────────────
-      - name: 运行 Playwright E2E 测试
+      - name: Run Playwright E2E test
         shell: powershell
         env:
           VIDEO_PATH: ${{ env.VIDEO_PATH }}
+          E2E_EMAIL: ${{ secrets.E2E_EMAIL }}
+          E2E_PASS: ${{ secrets.E2E_PASS }}
         run: |
           New-Item -ItemType Directory -Force -Path screenshots | Out-Null
+          npx playwright test e2e/agent-video-pipeline.spec.js --reporter=list
 
-          $spec = @'
-const { test, expect } = require('@playwright/test');
-const BASE  = 'https://autopilot.zenjoymedia.media';
-const EMAIL = 'zj-e2e-test@zenjoymedia.media';
-const PASS  = 'E2eTest2026!';
-const VIDEO = process.env.VIDEO_PATH || 'C:\\Users\\runneradmin\\Videos\\zj-e2e-koubo-45s.mp4';
-
-test('Agent E2E — 口播视频本地生成全链路', async ({ page }) => {
-  test.setTimeout(600000);
-
-  // 1. 登录
-  console.log('[e2e] step 1: 登录');
-  await page.goto(BASE + '/login');
-  await page.fill('#si-email', EMAIL);
-  await page.fill('#si-password', PASS);
-  await page.screenshot({ path: 'screenshots/01-login.png', fullPage: true });
-  await page.click('button[type="submit"]');
-  await page.waitForURL(url => !url.includes('/login'), { timeout: 20000 });
-  console.log('[e2e] 登录成功, URL:', page.url());
-  await page.screenshot({ path: 'screenshots/02-dashboard.png', fullPage: true });
-
-  // 2. 打开本地视频页
-  console.log('[e2e] step 2: /local-video');
-  await page.goto(BASE + '/local-video');
-  await page.waitForSelector('text=视频本地路径', { timeout: 20000 });
-  await page.screenshot({ path: 'screenshots/03-local-video.png', fullPage: true });
-
-  // 3. 填表
-  console.log('[e2e] step 3: 填写路径', VIDEO);
-  await page.fill('input[placeholder*="mp4"]', VIDEO);
-  await page.fill('textarea', 'ZenithJoy E2E 测试 — AI 口播视频本地处理，验证字幕叠加与 hyperframes 渲染流水线。内容关键词：效率、创作、AI。');
-  await page.screenshot({ path: 'screenshots/04-form-filled.png', fullPage: true });
-
-  // 4. 提交
-  console.log('[e2e] step 4: 开始处理');
-  await page.click('button:has-text("开始处理")');
-  await page.waitForTimeout(3000);
-  await page.screenshot({ path: 'screenshots/05-submitted.png', fullPage: true });
-
-  // 5. 等待完成（最多 8 分钟）
-  console.log('[e2e] step 5: 等待完成 (max 8min)');
-  const deadline = Date.now() + 480000;
-  let done = false;
-  while (Date.now() < deadline) {
-    const elapsed = Math.round((Date.now() - (deadline - 480000)) / 1000);
-    const body = await page.textContent('body').catch(() => '');
-    const hasDone = body.includes('处理完成') || body.includes('下载');
-    const hasFail = body.includes('处理失败') || body.includes('失败');
-    console.log(`[e2e] ${elapsed}s — done:${hasDone} fail:${hasFail}`);
-    await page.screenshot({ path: `screenshots/progress-${elapsed}s.png` });
-    if (hasDone) { done = true; console.log('[e2e] 完成！'); break; }
-    if (hasFail) { console.error('[e2e] 任务失败'); break; }
-    await page.waitForTimeout(5000);
-  }
-
-  await page.screenshot({ path: 'screenshots/06-final.png', fullPage: true });
-  expect(done, '视频应在 8 分钟内处理完成').toBe(true);
-});
-'@
-          $spec | Out-File -FilePath "e2e-agent-video.spec.js" -Encoding utf8
-          npx playwright test e2e-agent-video.spec.js --reporter=list
-
-      # ── 12. 上传截图 ─────────────────────────────────────────────────
-      - name: 上传截图证据
+      - name: Upload screenshots
         if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -239,12 +152,12 @@ test('Agent E2E — 口播视频本地生成全链路', async ({ page }) => {
           path: screenshots/
           if-no-files-found: warn
 
-      - name: 上传 Agent 日志
+      - name: Upload agent logs
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: agent-logs-${{ github.run_id }}
           path: |
-            ${{ runner.temp }}/agent-stdout.log
-            ${{ runner.temp }}/agent-stderr.log
+            ${{ runner.temp }}/agent-out.log
+            ${{ runner.temp }}/agent-err.log
           if-no-files-found: warn
