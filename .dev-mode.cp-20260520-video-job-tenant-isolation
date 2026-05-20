@@ -1,0 +1,8 @@
+branch: cp-20260520-video-job-tenant-isolation
+harness_mode: true
+step_1_spec: done
+step_2_plan: done
+step_3_implement: done
+step_4_ship: done
+owner_session: claude-session-tenant-isolation
+created_at: 2026-05-20T14:20:00Z
