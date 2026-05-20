@@ -2,8 +2,13 @@
 import { test, expect } from '@playwright/test';
 
 const BASE  = 'https://autopilot.zenjoymedia.media';
-const TOKEN = process.env.ZJ_SESSION_TOKEN;
+// URL-decode in case token was copied from Set-Cookie header (contains %2B, %3D for +, =)
+const rawToken = process.env.ZJ_SESSION_TOKEN || '';
+let TOKEN = rawToken;
+try { TOKEN = decodeURIComponent(rawToken); } catch { /* already decoded */ }
 const VIDEO = process.env.VIDEO_PATH || 'C:\\Users\\runneradmin\\Videos\\zj-e2e-koubo-45s.mp4';
+// E2E test license key — stamps license_id on job creation so tenant isolation works correctly
+const E2E_LICENSE = process.env.ZJ_E2E_LICENSE_KEY || 'ZJ-F-FBFYTLFR'; // gitleaks:allow — E2E test license
 
 test('Agent E2E — 口播视频本地生成全链路', async ({ page, context }) => {
   test.setTimeout(600000);
@@ -19,6 +24,19 @@ test('Agent E2E — 口播视频本地生成全链路', async ({ page, context }
     secure: true,
     sameSite: 'Lax'
   }]);
+
+  // Intercept job-creation POST to inject license key so the API stamps license_id correctly.
+  // Session-based resolution fails for non-Feishu users (tenant_members uses feishu_user_id);
+  // Bearer token is the reliable fallback already used by the agent's poll requests.
+  await page.route('**/api/ai-video/jobs', async (route) => {
+    if (route.request().method() === 'POST') {
+      const headers = await route.request().allHeaders();
+      await route.continue({ headers: { ...headers, authorization: `Bearer ${E2E_LICENSE}` } });
+    } else {
+      await route.continue();
+    }
+  });
+
   await page.goto(BASE + '/');
   await page.waitForTimeout(2000);
   console.log('[e2e] 已注入 cookie，当前 URL:', page.url());

@@ -12,20 +12,37 @@ export async function createJob(req: Request, res: Response, next: NextFunction)
     if (!local_path) return res.status(400).json({ error: 'local_path required' });
 
     let licenseId: string | null = null;
-    try {
-      const session = await auth.api.getSession({ headers: fromNodeHeaders(req.headers) });
-      if (session?.user?.id) {
+
+    // 1. License key from Authorization: Bearer (agent-style auth; also used by E2E browser interceptor)
+    const authHeader = req.headers.authorization;
+    if (authHeader?.startsWith('Bearer ')) {
+      const licenseKey = authHeader.slice(7).trim();
+      if (licenseKey) {
         const licRow = await pool.query<{ id: string }>(
-          `SELECT l.id FROM zenithjoy.licenses l
-           JOIN zenithjoy.tenants t ON t.id = l.tenant_id
-           JOIN zenithjoy.tenant_members tm ON tm.tenant_id = t.id
-           WHERE tm.feishu_user_id = $1 AND l.status = 'active'
-           ORDER BY l.created_at DESC LIMIT 1`,
-          [session.user.id],
+          `SELECT id FROM zenithjoy.licenses WHERE license_key = $1 AND status = 'active' LIMIT 1`,
+          [licenseKey],
         );
         if (licRow.rows.length > 0) licenseId = licRow.rows[0].id;
       }
-    } catch (e) { console.warn('[createJob] failed to resolve license_id, creating job without tenant stamp:', e); }
+    }
+
+    // 2. Fall back to session-based lookup (Feishu SSO users via tenant_members)
+    if (!licenseId) {
+      try {
+        const session = await auth.api.getSession({ headers: fromNodeHeaders(req.headers) });
+        if (session?.user?.id) {
+          const licRow = await pool.query<{ id: string }>(
+            `SELECT l.id FROM zenithjoy.licenses l
+             JOIN zenithjoy.tenants t ON t.id = l.tenant_id
+             JOIN zenithjoy.tenant_members tm ON tm.tenant_id = t.id
+             WHERE tm.feishu_user_id = $1 AND l.status = 'active'
+             ORDER BY l.created_at DESC LIMIT 1`,
+            [session.user.id],
+          );
+          if (licRow.rows.length > 0) licenseId = licRow.rows[0].id;
+        }
+      } catch (e) { console.warn('[createJob] failed to resolve license_id, creating job without tenant stamp:', e); }
+    }
 
     const job = await svc.createJob({
       srcVideo: local_path,
