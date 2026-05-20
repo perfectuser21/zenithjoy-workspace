@@ -115,9 +115,10 @@ jobs:
 
       - name: Run Step 6 Dispatch Chain Smoke
         # POST /api/works/:id/publish → publish_tasks queued → heartbeat → task-ack → publish_status=success
+        # 独立脚本（不依赖 Steps 1-5 的 install-pack），可在 CI ubuntu runner 直接跑
         run: |
-          chmod +x .github/workflows/scripts/smoke/golden-path-1-smoke.sh
-          bash .github/workflows/scripts/smoke/golden-path-1-smoke.sh
+          chmod +x .github/workflows/scripts/smoke/step6-dispatch-chain-smoke.sh
+          bash .github/workflows/scripts/smoke/step6-dispatch-chain-smoke.sh
 
       - name: Run manual-verify-douyin.sh (skip-only check)
         # 该脚本必须在 CI 里 exit 0 跳过（MANUAL_VERIFY 未设置）。
