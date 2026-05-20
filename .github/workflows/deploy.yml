@@ -25,6 +25,16 @@ jobs:
           }
           npm install @rollup/rollup-linux-x64-gnu --workspace=apps/dashboard --no-save --no-package-lock || true
 
+      - name: Create .env.production
+        run: |
+          cat > apps/dashboard/.env.production << 'ENVEOF'
+          VITE_FEISHU_APP_ID=cli_a937a808ca395bd6
+          VITE_SKIP_AUTH=false
+          ENVEOF
+          echo "VITE_API_URL=${{ secrets.VPS_API_URL }}" >> apps/dashboard/.env.production
+          echo "✅ .env.production created"
+          cat apps/dashboard/.env.production
+
       - name: Build dashboard
         run: npm run build --workspace=apps/dashboard
 
