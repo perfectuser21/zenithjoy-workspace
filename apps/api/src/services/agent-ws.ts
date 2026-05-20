@@ -2,13 +2,24 @@ import type { Server as HttpServer } from 'http';
 import { WebSocketServer, WebSocket } from 'ws';
 import { agentRegistry } from './agent-registry';
 import { AgentMessageSchema, makeMsg } from '../schemas/agent-protocol';
-import { findTenantByLicense } from './tenant-db';
 import { upsertAgent, touchAgentHeartbeat, setAgentOffline, findOrCreateAgentUuid } from './agent-db';
 import { upsertAgentSkillStatuses } from './skill-db';
 import { handleTaskResult } from './task-dispatch';
+import { validateLicense } from './walking-skeleton.service';
 import pool from '../db/connection'; // H-2 Bug 9: resolveAgentUuidFromHello 直接 UPDATE 复用 row
 
 const WS_PATH = '/agent-ws';
+
+/**
+ * 用 license key（ZJ-X-XXXXXXXX）校验并返回 tenant_id。
+ * 查 licenses 表（新账号走这里），不再查 tenants.license_key（该字段新账号为空）。
+ */
+export async function authenticateWsToken(token: string): Promise<string | null> {
+  if (!token) return null;
+  const result = await validateLicense(token);
+  if (!result.ok) return null;
+  return result.license.tenant_id;
+}
 
 export function attachAgentWS(server: HttpServer): WebSocketServer {
   const wss = new WebSocketServer({ noServer: true });
@@ -25,9 +36,9 @@ export function attachAgentWS(server: HttpServer): WebSocketServer {
       return;
     }
 
-    let tenant: Awaited<ReturnType<typeof findTenantByLicense>>;
+    let tenantId: string | null;
     try {
-      tenant = await findTenantByLicense(token);
+      tenantId = await authenticateWsToken(token);
     } catch (err) {
       console.warn('[agent-ws] DB error during license check:', err);
       socket.write('HTTP/1.1 503 Service Unavailable\r\n\r\n');
@@ -35,14 +46,14 @@ export function attachAgentWS(server: HttpServer): WebSocketServer {
       return;
     }
 
-    if (!tenant) {
+    if (!tenantId) {
       socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n');
       socket.destroy();
       return;
     }
 
     wss.handleUpgrade(req, socket, head, (ws) => {
-      (ws as any).__tenantId = tenant!.id;
+      (ws as any).__tenantId = tenantId;
       wss.emit('connection', ws, req);
     });
   });
