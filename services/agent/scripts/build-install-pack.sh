@@ -59,7 +59,7 @@ echo "[build] ffmpeg.exe + ffprobe.exe included in pack"
 echo "[build] ensuring portable Node.js for Windows..."
 # Node.js portable zip from npmmirror (China-friendly CDN).
 # Bundled so users with zero Node.js installed can get hyperframes on first run.
-NODE_VERSION="20.18.0"
+NODE_VERSION="22.16.0"
 NODE_ZIP_NAME="node-v${NODE_VERSION}-win-x64.zip"
 NODE_ZIP_URL="https://registry.npmmirror.com/-/binary/node/v${NODE_VERSION}/${NODE_ZIP_NAME}"
 NODE_ZIP_CACHE="install-pack/${NODE_ZIP_NAME}"

@@ -662,6 +662,14 @@ tests:
     product: AI员工
     note: "Skill Registry — agent-ws sendToAgent 函数：agent 不存在/WS 非 OPEN/发送成功三个分支"
 
+  - id: api-agent-ws-auth
+    path: apps/api/src/services/__tests__/agent-ws-auth.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: AI员工
+    note: "WS auth 修复 — authenticateWsToken 通过 licenses 表验证（v1.1.7），修复新账号 401"
+
   - id: api-skills-route
     path: apps/api/src/routes/__tests__/skills.test.ts
     type: unit

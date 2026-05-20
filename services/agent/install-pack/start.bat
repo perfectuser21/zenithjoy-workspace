@@ -116,7 +116,7 @@ set "ZJ_HF_MAIN=%ZJ_HF_DIR%\node_modules\hyperframes\dist\cli.js"
 if not exist "%ZJ_NODE_EXE%" (
     echo [nodejs] 首次设置：解压内置 Node.js 运行时...
     mkdir "%ZJ_NODE_DIR%" 2>nul
-    powershell -NoProfile -Command "$dest='%ZJ_NODE_DIR%'; Expand-Archive -Path '%~dp0node-win-x64.zip' -DestinationPath '%TEMP%\zj-node-tmp' -Force; Move-Item '%TEMP%\zj-node-tmp\node-v20.18.0-win-x64\*' $dest -Force; Remove-Item '%TEMP%\zj-node-tmp' -Recurse -Force"
+    powershell -NoProfile -Command "$dest='%ZJ_NODE_DIR%'; Expand-Archive -Path '%~dp0node-win-x64.zip' -DestinationPath '%TEMP%\zj-node-tmp' -Force; Move-Item '%TEMP%\zj-node-tmp\node-v22.16.0-win-x64\*' $dest -Force; Remove-Item '%TEMP%\zj-node-tmp' -Recurse -Force"
     if exist "%ZJ_NODE_EXE%" (
         powershell -NoProfile -Command "Unblock-File '%ZJ_NODE_EXE%'" >nul 2>&1
         echo [nodejs] Node.js 运行时就绪
