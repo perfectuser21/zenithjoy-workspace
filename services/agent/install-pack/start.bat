@@ -105,23 +105,38 @@ if exist "%~dp0ffmpeg.exe" (
     )
 )
 
-REM Step 5.5: Install hyperframes npm package (needed for video template rendering)
-where hyperframes >nul 2>&1
-if not errorlevel 1 (
-    echo [hyperframes] already installed
-    goto :HYPERFRAMES_DONE
+REM Step 5.5: 内置 Node.js + hyperframes（零依赖，国内加速）
+set "ZJ_RUNTIME=%APPDATA%\ZenithJoy\runtime"
+set "ZJ_NODE_DIR=%ZJ_RUNTIME%\nodejs"
+set "ZJ_NODE_EXE=%ZJ_NODE_DIR%\node.exe"
+set "ZJ_NPM_CLI=%ZJ_NODE_DIR%\node_modules\npm\bin\npm-cli.js"
+set "ZJ_HF_DIR=%ZJ_RUNTIME%\hyperframes"
+set "ZJ_HF_MAIN=%ZJ_HF_DIR%\node_modules\hyperframes\dist\cli.js"
+
+if not exist "%ZJ_NODE_EXE%" (
+    echo [nodejs] 首次设置：解压内置 Node.js 运行时...
+    mkdir "%ZJ_NODE_DIR%" 2>nul
+    powershell -NoProfile -Command "Expand-Archive -Path '%~dp0node-win-x64.zip' -DestinationPath '%TEMP%\zj-node-tmp' -Force; Move-Item '%TEMP%\zj-node-tmp\node-v20.18.0-win-x64\*' '%ZJ_NODE_DIR%\' -Force; Remove-Item '%TEMP%\zj-node-tmp' -Recurse -Force"
+    if exist "%ZJ_NODE_EXE%" (
+        powershell -NoProfile -Command "Unblock-File '%ZJ_NODE_EXE%'" >nul 2>&1
+        echo [nodejs] Node.js 运行时就绪
+    ) else (
+        echo [WARN] Node.js 解压失败，视频模板渲染将使用基础 FFmpeg 模式
+        goto :HYPERFRAMES_DONE
+    )
 )
-where npm >nul 2>&1
-if errorlevel 1 (
-    echo [WARN] npm not found - install Node.js from https://nodejs.org to enable video template rendering
-    goto :HYPERFRAMES_DONE
-)
-echo [hyperframes] installing npm package...
-npm install -g hyperframes --registry https://registry.npmmirror.com
-if errorlevel 1 (
-    echo [WARN] hyperframes install failed. Video template rendering will not be available.
+
+if not exist "%ZJ_HF_MAIN%" (
+    echo [hyperframes] 首次安装（约 1-2 分钟，通过 npmmirror 加速）...
+    mkdir "%ZJ_HF_DIR%" 2>nul
+    "%ZJ_NODE_EXE%" "%ZJ_NPM_CLI%" install hyperframes --prefix "%ZJ_HF_DIR%" --registry https://registry.npmmirror.com
+    if errorlevel 1 (
+        echo [WARN] hyperframes 安装失败，视频模板渲染将使用基础 FFmpeg 模式
+    ) else (
+        echo [hyperframes] 安装完成 OK
+    )
 ) else (
-    echo [hyperframes] installed OK
+    echo [hyperframes] 已安装，跳过
 )
 :HYPERFRAMES_DONE
 
@@ -133,6 +148,10 @@ if not exist "%CHROME_EXE%" (
     pause
     exit /b 1
 )
+
+REM 让 hyperframes 的 puppeteer-core 使用系统 Chrome，避免重新下载 ~100MB Chromium
+set "PUPPETEER_EXECUTABLE_PATH=%CHROME_EXE%"
+set "PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=1"
 
 REM Step 7: Spawn chrome :19222 if not already listening
 netstat -ano | findstr ":19222 " | findstr LISTENING >nul 2>&1
