@@ -102,10 +102,13 @@ jobs:
 
       - name: Wait for Agent online
         shell: powershell
+        env:
+          E2E_EMAIL: ${{ secrets.E2E_EMAIL }}
+          E2E_PASS: ${{ secrets.E2E_PASS }}
         run: |
           $resp = Invoke-RestMethod -Uri "https://autopilot.zenjoymedia.media/api/auth/sign-in/email" `
             -Method POST -ContentType "application/json" `
-            -Body '{"email":"zj-e2e-test@zenjoymedia.media","password":"E2eTest2026!"}'
+            -Body "{`"email`":`"$env:E2E_EMAIL`",`"password`":`"$env:E2E_PASS`"}"
           $tok = $resp.token
           Write-Host "[e2e] session token obtained"
           echo "ZJ_SESSION_TOKEN=$tok" >> $env:GITHUB_ENV
@@ -135,6 +138,8 @@ jobs:
         shell: powershell
         env:
           VIDEO_PATH: ${{ env.VIDEO_PATH }}
+          E2E_EMAIL: ${{ secrets.E2E_EMAIL }}
+          E2E_PASS: ${{ secrets.E2E_PASS }}
         run: |
           New-Item -ItemType Directory -Force -Path screenshots | Out-Null
           npx playwright test e2e/agent-video-pipeline.spec.js --reporter=list

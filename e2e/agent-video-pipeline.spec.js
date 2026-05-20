@@ -2,8 +2,8 @@
 const { test, expect } = require('@playwright/test');
 
 const BASE  = 'https://autopilot.zenjoymedia.media';
-const EMAIL = 'zj-e2e-test@zenjoymedia.media';
-const PASS  = 'E2eTest2026!';
+const EMAIL = process.env.E2E_EMAIL;
+const PASS  = process.env.E2E_PASS;
 const VIDEO = process.env.VIDEO_PATH || 'C:\\Users\\runneradmin\\Videos\\zj-e2e-koubo-45s.mp4';
 
 test('Agent E2E — 口播视频本地生成全链路', async ({ page }) => {
