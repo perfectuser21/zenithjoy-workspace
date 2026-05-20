@@ -60,3 +60,6 @@ bf409b4686abe86d36d5c47b0d2283d1b9637784:workflows/n8n/content-clipper/content-s
 
 # agent-ws-auth test — ZJ-F-ABCD1234 是测试用假 license key，非真实凭据
 a1995d0c89126235b0f1c28d0c58049f443ac4e3:apps/api/src/services/__tests__/agent-ws-auth.test.ts:generic-api-key:46
+
+# agent-e2e-video workflow — better-auth session token 是测试账号的动态 token，非生产凭据
+cad1f5fd00b24c45726a4d5797fc9df548689830:.github/workflows/agent-e2e-video.yml:generic-api-key:132
