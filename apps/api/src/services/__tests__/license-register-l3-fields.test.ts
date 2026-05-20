@@ -44,7 +44,7 @@ describe('license register agents row [Bug 9 layer 3]', () => {
       .mockResolvedValueOnce({ rows: [{ count: '0' }] } as any) // count active machines
       .mockResolvedValueOnce({ rows: [{ id: 'machine-uuid-1' }] } as any) // upsert license_machines
       .mockResolvedValueOnce({ rows: [{ ws_token: 'tok' }] } as any) // create ws_token
-      .mockResolvedValueOnce({ rows: [{ id: 'tenant-uuid-1' }] } as any) // tenant lookup
+      .mockResolvedValueOnce({ rows: [{ tenant_id: 'tenant-uuid-1' }] } as any) // tenant lookup
       .mockResolvedValueOnce({ rows: [{ id: 'agent-uuid-1' }] } as any); // upsert agent INSERT
 
     await registerAgent({
@@ -92,7 +92,7 @@ describe('license register agents row [Bug 9 layer 3]', () => {
       .mockResolvedValueOnce({ rows: [{ count: '0' }] } as any)
       .mockResolvedValueOnce({ rows: [{ id: 'machine-uuid-2' }] } as any)
       .mockResolvedValueOnce({ rows: [{ ws_token: 'tok2' }] } as any)
-      .mockResolvedValueOnce({ rows: [{ id: 'tenant-uuid-2' }] } as any)
+      .mockResolvedValueOnce({ rows: [{ tenant_id: 'tenant-uuid-2' }] } as any)
       .mockResolvedValueOnce({ rows: [{ id: 'agent-uuid-2' }] } as any);
 
     await registerAgent({

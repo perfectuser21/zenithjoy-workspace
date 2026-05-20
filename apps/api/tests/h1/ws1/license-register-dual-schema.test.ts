@@ -71,6 +71,7 @@ describe('WS1 — license register dual schema [BEHAVIOR]', () => {
                   max_machines: 1,
                   status: 'active',
                   expires_at: new Date(Date.now() + 86400000).toISOString(),
+                  tenant_id: 'tenant-uuid-1',
                 },
               ],
             };
