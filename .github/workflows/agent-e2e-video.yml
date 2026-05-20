@@ -90,6 +90,25 @@ jobs:
           echo "PUPPETEER_EXECUTABLE_PATH=$chrome" >> $env:GITHUB_ENV
           echo "PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=1" >> $env:GITHUB_ENV
 
+      - name: Cancel stale E2E jobs (pre-agent cleanup)
+        shell: powershell
+        run: |
+          $hdr = @{ Authorization = "Bearer ZJ-F-FBFYTLFR"; "Content-Type" = "application/json" }
+          $base = "https://autopilot.zenjoymedia.media"
+          foreach ($s in @("pending", "processing")) {
+            try {
+              $params = if ($s -eq "processing") { "status=processing&stale_minutes=0" } else { "status=pending" }
+              $r = Invoke-RestMethod -Uri "$base/api/ai-video/jobs?$params" -Headers $hdr -EA Stop
+              foreach ($job in ($r.data ?? @())) {
+                Write-Host "[pre-cleanup] cancelling $s job $($job.id)"
+                Invoke-RestMethod -Uri "$base/api/ai-video/jobs/$($job.id)/progress" `
+                  -Method PATCH -Headers $hdr `
+                  -Body (ConvertTo-Json @{ status = "failed"; progress = 0 }) | Out-Null
+              }
+            } catch { Write-Host "[pre-cleanup] $s cleanup (non-fatal): $($_.Exception.Message)" }
+          }
+          Write-Host "[pre-cleanup] done"
+
       - name: Start Agent (background)
         shell: powershell
         run: |
