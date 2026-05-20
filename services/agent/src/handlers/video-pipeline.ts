@@ -199,14 +199,14 @@ export async function recoverStaleJobs(apiBase: string): Promise<void> {
     const data = await r.json() as { data?: Array<{ id: string }> };
     const stale = data?.data ?? [];
     if (stale.length === 0) return;
-    console.log(`[video-pipeline] recovering ${stale.length} stale job(s)`);
+    console.log(`[video-pipeline] marking ${stale.length} stale job(s) as failed (previous agent crash)`);
     await Promise.allSettled(stale.map((j) =>
       fetchWithTimeout(
         `${apiBase}/api/ai-video/jobs/${j.id}/progress`,
         {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ status: 'pending', progress: 0 }),
+          body: JSON.stringify({ status: 'failed', progress: 0 }),
         },
         5_000,
       ).catch(() => {}),
