@@ -99,7 +99,8 @@ jobs:
             try {
               $params = if ($s -eq "processing") { "status=processing&stale_minutes=0" } else { "status=pending" }
               $r = Invoke-RestMethod -Uri "$base/api/ai-video/jobs?$params" -Headers $hdr -EA Stop
-              foreach ($job in ($r.data ?? @())) {
+              $jobList = if ($r.data) { $r.data } else { @() }
+              foreach ($job in $jobList) {
                 Write-Host "[pre-cleanup] cancelling $s job $($job.id)"
                 Invoke-RestMethod -Uri "$base/api/ai-video/jobs/$($job.id)/progress" `
                   -Method PATCH -Headers $hdr `
