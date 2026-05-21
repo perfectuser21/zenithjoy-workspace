@@ -183,7 +183,7 @@ Layout 类型规则：
       'https://openrouter.ai/api/v1/chat/completions',
       { Authorization: `Bearer ${OPENROUTER_KEY}` },
       {
-        model: 'deepseek/deepseek-chat-v3-0324',
+        model: 'anthropic/claude-sonnet-4-5',
         max_tokens: 2048,
         messages: [{ role: 'user', content: prompt }],
       },
@@ -358,7 +358,7 @@ ${segmentList}
       'https://openrouter.ai/api/v1/chat/completions',
       { Authorization: `Bearer ${OPENROUTER_KEY}` },
       {
-        model: 'deepseek/deepseek-chat-v3-0324',
+        model: 'google/gemini-2.0-flash-001',
         max_tokens: 2048,
         messages: [{ role: 'user', content: prompt }],
       },
@@ -489,7 +489,7 @@ ${transcript || '精彩视频内容'}
         'https://openrouter.ai/api/v1/chat/completions',
         { Authorization: `Bearer ${OPENROUTER_KEY}` },
         {
-          model: 'deepseek/deepseek-chat-v3-0324',
+          model: 'anthropic/claude-haiku-4-5',
           max_tokens: 1024,
           messages: [{ role: 'user', content: slotPrompt }],
         },
