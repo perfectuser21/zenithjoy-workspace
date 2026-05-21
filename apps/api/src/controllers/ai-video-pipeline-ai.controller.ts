@@ -358,7 +358,7 @@ ${segmentList}
       'https://openrouter.ai/api/v1/chat/completions',
       { Authorization: `Bearer ${OPENROUTER_KEY}` },
       {
-        model: 'anthropic/claude-haiku-4-5',
+        model: 'google/gemini-2.0-flash-001',
         max_tokens: 2048,
         messages: [{ role: 'user', content: prompt }],
       },
@@ -367,7 +367,7 @@ ${segmentList}
     if (result?.error) return res.status(502).json({ error: result.error.message || 'OpenRouter error' });
     const raw = result?.choices?.[0]?.message?.content ?? '{}';
     const jsonMatch = raw.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) return res.status(500).json({ error: 'Claude returned invalid JSON' });
+    if (!jsonMatch) return res.status(500).json({ error: 'model returned invalid JSON' });
 
     const parsed = JSON.parse(jsonMatch[0]) as { segments: Array<{ index: number; keep: boolean; reason: string }> };
 
