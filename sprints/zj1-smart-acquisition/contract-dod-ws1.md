@@ -8,17 +8,21 @@ journey_type: autonomous
 **大小**: S（净增 ~35 行，2 文件）
 **依赖**: 无
 
+---
+
 ## ARTIFACT 条目
 
 - [ ] [ARTIFACT] `apps/api/src/routes/acquisition.ts` 存在，含 GET /overview handler
   Test: node -e "const c=require('fs').readFileSync('apps/api/src/routes/acquisition.ts','utf8');if(!c.includes('/overview'))process.exit(1);console.log('OK')"
 
 - [ ] [ARTIFACT] `apps/api/src/app.ts` 含 acquisitionRouter import 与 `/api/acquisition` 路由注册
-  Test: node -e "const c=require('fs').readFileSync('apps/api/src/app.ts','utf8');if(!c.includes('acquisition'))process.exit(1);console.log('OK')"
+  Test: node -e "const c=require('fs').readFileSync('apps/api/src/app.ts','utf8');if(!c.includes('acquisitionRouter'))process.exit(1);console.log('OK')"
+
+---
 
 ## BEHAVIOR 条目（内嵌可执行 manual:bash 命令，journey_type=autonomous）
 
-- [ ] [BEHAVIOR] GET /api/acquisition/overview 返回 enabled=true（boolean）且 feature="smart-acquisition"（字面量）
+- [ ] [BEHAVIOR] GET /api/acquisition/overview 返回 enabled=true（boolean）且 feature="smart-acquisition"（字面量精确匹配）
   Test: manual:bash -c 'API_PORT=${API_PORT:-3001}; RESP=$(curl -sf "http://localhost:$API_PORT/api/acquisition/overview"); echo "$RESP" | jq -e ".enabled == true" || { echo FAIL_enabled; exit 1; }; echo "$RESP" | jq -e ".feature == \"smart-acquisition\"" || { echo FAIL_feature; exit 1; }; echo OK'
   期望: OK
 

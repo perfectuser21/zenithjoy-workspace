@@ -1,4 +1,4 @@
-# Sprint Contract Draft (Round 1)
+# Sprint Contract Draft (Round 2)
 
 ## Golden Path
 
@@ -10,37 +10,15 @@
 
 **可观测行为**: API 返回 HTTP 200，body 含且仅含 4 个字段 `enabled`/`feature`/`capabilities`/`version`，无鉴权要求，硬编码静态返回
 
-**验证命令**:
+**验证命令**（仅可达性检查 — **schema 完整验证由下方 E2E 验收脚本统一执行，禁止在此重复 jq 断言**）:
+
 ```bash
 API_PORT=${API_PORT:-3001}
-RESP=$(curl -sf "http://localhost:$API_PORT/api/acquisition/overview")
-
-# 1. enabled 字段值 = true
-echo "$RESP" | jq -e '.enabled == true' || { echo "FAIL: enabled 不是 true"; exit 1; }
-
-# 2. feature 字面量精确匹配
-echo "$RESP" | jq -e '.feature == "smart-acquisition"' || { echo "FAIL: feature 字面量错误"; exit 1; }
-
-# 3. capabilities 类型 + 值
-echo "$RESP" | jq -e '.capabilities | type == "array"' || { echo "FAIL: capabilities 非 array"; exit 1; }
-echo "$RESP" | jq -e '.capabilities == ["overview"]' || { echo "FAIL: capabilities 初始值错误"; exit 1; }
-
-# 4. version 值
-echo "$RESP" | jq -e '.version == "1.0.0"' || { echo "FAIL: version 错误"; exit 1; }
-
-# 5. Schema 完整性 — 顶层 keys 完全等于（jq 按字母排序）
-echo "$RESP" | jq -e 'keys == ["capabilities","enabled","feature","version"]' || { echo "FAIL: schema 完整性失败（多余或缺少字段）"; exit 1; }
-
-# 6. 禁用字段反向检查
-echo "$RESP" | jq -e 'has("status") | not'  || { echo "FAIL: 禁用字段 status 出现"; exit 1; }
-echo "$RESP" | jq -e 'has("data") | not'    || { echo "FAIL: 禁用字段 data 出现"; exit 1; }
-echo "$RESP" | jq -e 'has("result") | not'  || { echo "FAIL: 禁用字段 result 出现"; exit 1; }
-echo "$RESP" | jq -e 'has("payload") | not' || { echo "FAIL: 禁用字段 payload 出现"; exit 1; }
-echo "$RESP" | jq -e 'has("info") | not'    || { echo "FAIL: 禁用字段 info 出现"; exit 1; }
-echo "$RESP" | jq -e 'has("meta") | not'    || { echo "FAIL: 禁用字段 meta 出现"; exit 1; }
+curl -sf "http://localhost:$API_PORT/api/acquisition/overview" > /dev/null
+echo "OK: 端点可达，HTTP 2xx"
 ```
 
-**硬阈值**: HTTP 200，keys 完全等于 `["capabilities","enabled","feature","version"]`，耗时 < 3s
+**硬阈值**: HTTP 200，耗时 < 3s
 
 ---
 
@@ -49,6 +27,7 @@ echo "$RESP" | jq -e 'has("meta") | not'    || { echo "FAIL: 禁用字段 meta �
 **可观测行为**: `GET /api/acquisition/nonexistent` 返回 HTTP 404（由 notFoundHandler 处理）
 
 **验证命令**:
+
 ```bash
 API_PORT=${API_PORT:-3001}
 CODE=$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:$API_PORT/api/acquisition/nonexistent")
@@ -60,10 +39,12 @@ echo "OK: 404 for nonexistent sub-route"
 
 ---
 
-## E2E 验收（final-e2e 跑）
+## E2E 验收（final-e2e 跑 — 唯一完整验证执行源）
 
 **journey_type**: autonomous
 **target_environment**: local_api
+
+> **SSOT 声明**：下方脚本是所有 schema 验证的**唯一执行源**。Step 1 不重复 jq 命令。
 
 ```bash
 #!/bin/bash
@@ -71,6 +52,10 @@ set -e
 
 API_PORT=${API_PORT:-3001}
 BASE_URL="http://localhost:$API_PORT"
+
+# 0. 前置检查：API 已启动（防止因服务未就绪导致假阳性）
+curl -sf "$BASE_URL/api/health" > /dev/null \
+  || { echo "FATAL: API 服务未就绪 ($BASE_URL)，先启动再跑 E2E"; exit 2; }
 
 # 1. 主链路：GET /api/acquisition/overview 完整 schema 验证
 RESP=$(curl -sf "$BASE_URL/api/acquisition/overview")
@@ -111,6 +96,15 @@ echo "✅ Golden Path 验证通过"
 
 ---
 
+## Risks
+
+| ID | Risk | Impact | Mitigation |
+|---|---|---|---|
+| R1 | API 服务未就绪（localhost:$API_PORT 无响应，curl -sf 挂起或返回 ConnectionRefused） | E2E 脚本所有 curl 断言失败，exit 2 | E2E 脚本开头加 `curl -sf .../health` 前置检查；若未就绪 exit 2 而非 1，评估器可区分"服务未启动"与"功能错误" |
+| R2 | app.ts import 路径写错（如 `./routes/acquisitions` 多一个 s），导致 Express 启动报 MODULE_NOT_FOUND | GET /api/acquisition/overview → 500，不是 200，BEHAVIOR 全部 FAIL | ARTIFACT 条目验 app.ts 含字面量 `acquisitionRouter`；BEHAVIOR Step 1 curl -sf 返回非 2xx 立即 exit 1 |
+
+---
+
 ## Workstreams
 
 workstream_count: 1
@@ -121,12 +115,12 @@ workstream_count: 1
 **大小**: S（净增 ~35 行，2 文件）
 **依赖**: 无
 
-**BEHAVIOR 覆盖测试文件**: `tests/ws1/acquisition.test.ts`
+**DoD 文件**: `contract-dod-ws1.md`（含 [ARTIFACT] + [BEHAVIOR] 内嵌 manual:bash 命令）
 
 ---
 
 ## Test Contract
 
-| Workstream | Test File | BEHAVIOR 覆盖 | 预期红证据 |
+| Workstream | Test File | BEHAVIOR 覆盖 | 红证据（TDD Red 实际失败输出） |
 |---|---|---|---|
-| WS1 | `tests/ws1/acquisition.test.ts` | enabled值/feature字面量/schema完整性/禁用字段/capabilities值/error-path | WS1 → 导入失败 → N failures |
+| WS1 | `tests/ws1/acquisition.test.ts` | enabled值/feature字面量/capabilities值/version值/schema完整性/禁用字段/error-path | **6 FAIL 2 pass**：①L9 `expected 404 to be 200`（路由未注册→notFoundHandler返404）②L15 `expected undefined to be true`（body无enabled字段）③L20 `expected undefined to be 'smart-acquisition'`④L25 `expected undefined to deeply equal ['overview']`⑤L30 `expected undefined to be '1.0.0'`⑥L36 `expected ['error'] to deeply equal ['capabilities','enabled','feature','version']`（body={error:{code:'NOT_FOUND'}}，keys=['error']）；L43禁用字段PASS（body无禁用字段）；L49 error-path PASS（nonexistent→404符合期望） |
