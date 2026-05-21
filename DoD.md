@@ -1,59 +1,51 @@
-contract_branch: cp-05192357-ws-52b9609e-ws2
-workstream_index: 2
-sprint_dir: sprints/step6-dispatch-chain
+contract_branch: cp-05211644-ws-fc0dcc8d-ws1
+workstream_index: 1
+sprint_dir: sprints/zj1-smart-acquisition
 
 ---
 skeleton: false
 journey_type: autonomous
 ---
-# Contract DoD — Workstream 2: Service 层 dispatchPublishTask + ackPublishTask
+# Contract DoD — Workstream 1: acquisition.ts 路由实现 + app.ts 注册
 
-**范围**: `apps/api/src/services/walking-skeleton.service.ts` 新增三个函数：
-- `findActiveAgentByTenantId(tenantId: string): Promise<AgentRow | null>`
-- `dispatchPublishTask(args: {workId: string, tenantId: string}): Promise<{task_id: string, status: 'queued'}>`
-- `ackPublishTask(args: {taskId: string, licenseId: string, result: string}): Promise<{ok: true}>`
+**范围**: 新增 `apps/api/src/routes/acquisition.ts` + 修改 `apps/api/src/app.ts` 注册 `/api/acquisition`
+**大小**: S（净增 ~35 行，2 文件）
+**依赖**: 无
 
-**大小**: M
-**依赖**: Workstream 1（publish_status 列已存在）
-
-> Generator 在 commit-2 还需创建 `apps/api/scripts/step6-dispatch-helper.sh`（BEHAVIOR 测试用）
+---
 
 ## ARTIFACT 条目
 
-- [ ] [ARTIFACT] `walking-skeleton.service.ts` 导出 `dispatchPublishTask` 函数
-  Test: node -e "const c=require('fs').readFileSync('apps/api/src/services/walking-skeleton.service.ts','utf8');if(!c.includes('export async function dispatchPublishTask'))process.exit(1)"
+- [ ] [ARTIFACT] `apps/api/src/routes/acquisition.ts` 存在，含 GET /overview handler
+  Test: node -e "const c=require('fs').readFileSync('apps/api/src/routes/acquisition.ts','utf8');if(!c.includes('/overview'))process.exit(1);console.log('OK')"
 
-- [ ] [ARTIFACT] `walking-skeleton.service.ts` 导出 `ackPublishTask` 函数
-  Test: node -e "const c=require('fs').readFileSync('apps/api/src/services/walking-skeleton.service.ts','utf8');if(!c.includes('export async function ackPublishTask'))process.exit(1)"
+- [ ] [ARTIFACT] `apps/api/src/app.ts` 含 acquisitionRouter import 与 `/api/acquisition` 路由注册
+  Test: node -e "const c=require('fs').readFileSync('apps/api/src/app.ts','utf8');if(!c.includes('acquisitionRouter'))process.exit(1);console.log('OK')"
 
-- [ ] [ARTIFACT] `walking-skeleton.service.ts` 导出 `findActiveAgentByTenantId` 函数
-  Test: node -e "const c=require('fs').readFileSync('apps/api/src/services/walking-skeleton.service.ts','utf8');if(!c.includes('export async function findActiveAgentByTenantId'))process.exit(1)"
+---
 
-- [ ] [ARTIFACT] helper script `apps/api/scripts/step6-dispatch-helper.sh` 存在且可执行
-  Test: bash -c 'test -x apps/api/scripts/step6-dispatch-helper.sh'
+## BEHAVIOR 条目（内嵌可执行 manual:bash 命令，journey_type=autonomous）
 
-- [ ] [ARTIFACT] `walking-skeleton.service.ts` 的 `findActiveAgentByTenantId` 含 `last_heartbeat_at` + `INTERVAL` 时间窗口过滤（防止离线 agent 被选中）
-  Test: node -e "const c=require('fs').readFileSync('apps/api/src/services/walking-skeleton.service.ts','utf8');if(!c.match(/last_heartbeat_at.*INTERVAL/))process.exit(1);console.log('OK')"
+- [ ] [BEHAVIOR] GET /api/acquisition/overview 返回 enabled=true（boolean）且 feature="smart-acquisition"（字面量精确匹配）
+  Test: manual:bash -c 'API_PORT=${API_PORT:-3001}; RESP=$(curl -sf "http://localhost:$API_PORT/api/acquisition/overview"); echo "$RESP" | jq -e ".enabled == true" || { echo FAIL_enabled; exit 1; }; echo "$RESP" | jq -e ".feature == \"smart-acquisition\"" || { echo FAIL_feature; exit 1; }; echo OK'
+  期望: OK
 
-## BEHAVIOR 条目（通过 helper script 验证，需 API 在 localhost:5200 运行）
+- [ ] [BEHAVIOR] GET /api/acquisition/overview 返回 capabilities=["overview"] 且 version="1.0.0"
+  Test: manual:bash -c 'API_PORT=${API_PORT:-3001}; RESP=$(curl -sf "http://localhost:$API_PORT/api/acquisition/overview"); echo "$RESP" | jq -e ".capabilities == [\"overview\"]" || { echo FAIL_capabilities; exit 1; }; echo "$RESP" | jq -e ".version == \"1.0.0\"" || { echo FAIL_version; exit 1; }; echo OK'
+  期望: OK
 
-- [ ] [BEHAVIOR] `dispatchPublishTask` 成功后 publish_tasks 插入记录（带时间窗口防造假）
-  Test: manual:bash -c 'apps/api/scripts/step6-dispatch-helper.sh test_dispatch_inserts_task'
+- [ ] [BEHAVIOR] Schema 完整性 — 顶层 keys 完全等于 ["capabilities","enabled","feature","version"]，不多不少
+  Test: manual:bash -c 'API_PORT=${API_PORT:-3001}; RESP=$(curl -sf "http://localhost:$API_PORT/api/acquisition/overview"); echo "$RESP" | jq -e "keys == [\"capabilities\",\"enabled\",\"feature\",\"version\"]" || { echo FAIL_schema_completeness; exit 1; }; echo OK'
+  期望: OK
 
-- [ ] [BEHAVIOR] `dispatchPublishTask` 插入的 publish_tasks.result 含 `payload.work_id` 且值等于 work 实际 id
-  Test: manual:bash -c 'apps/api/scripts/step6-dispatch-helper.sh test_dispatch_inserts_task_with_work_id'
+- [ ] [BEHAVIOR] 禁用字段 status/data/result/payload/info/meta 不存在于 response（反向检查）
+  Test: manual:bash -c 'API_PORT=${API_PORT:-3001}; RESP=$(curl -sf "http://localhost:$API_PORT/api/acquisition/overview"); for f in status data result payload info meta; do echo "$RESP" | jq -e "has(\"$f\") | not" || { echo "FAIL: 禁用字段 $f 出现"; exit 1; }; done; echo OK'
+  期望: OK
 
-- [ ] [BEHAVIOR] `dispatchPublishTask` 成功后 works.publish_status 变为 queued
-  Test: manual:bash -c 'apps/api/scripts/step6-dispatch-helper.sh test_dispatch_sets_queued'
+- [ ] [BEHAVIOR] error path — GET /api/acquisition/nonexistent 返回 HTTP 404
+  Test: manual:bash -c 'API_PORT=${API_PORT:-3001}; CODE=$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:$API_PORT/api/acquisition/nonexistent"); [ "$CODE" = "404" ] || { echo "FAIL: expected 404 got $CODE"; exit 1; }; echo OK'
+  期望: OK
 
-- [ ] [BEHAVIOR] `ackPublishTask` 后 publish_tasks.status 变为 done，works.publish_status 变为 success
-  Test: manual:bash -c 'apps/api/scripts/step6-dispatch-helper.sh test_ack_sets_success'
-
-- [ ] [BEHAVIOR] `ackPublishTask` 传入不存在的 task_id 返回 404
-  Test: manual:bash -c 'apps/api/scripts/step6-dispatch-helper.sh test_ack_not_found'
-
-- [ ] [BEHAVIOR] `ackPublishTask` 传入属于其他 tenant 的真实 task_id 返回 403 forbidden
-  Test: manual:bash -c 'apps/api/scripts/step6-dispatch-helper.sh test_ack_cross_tenant_forbidden'
-
-- [ ] [BEHAVIOR] 无活跃 agent 时 `findActiveAgentByTenantId` 返回 null（→ dispatchPublishTask 返 NO_AGENT 422）
-  Test: manual:bash -c 'apps/api/scripts/step6-dispatch-helper.sh test_no_agent_422'
+- [ ] [BEHAVIOR] HTTP 200 无鉴权 — GET /api/acquisition/overview 不带 Authorization header 也能成功（无 401/403）
+  Test: manual:bash -c 'API_PORT=${API_PORT:-3001}; CODE=$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:$API_PORT/api/acquisition/overview"); [ "$CODE" = "200" ] || { echo "FAIL: expected 200 got $CODE"; exit 1; }; echo OK'
+  期望: OK
