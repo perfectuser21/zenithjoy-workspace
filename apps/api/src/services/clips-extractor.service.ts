@@ -1,7 +1,11 @@
-const PROXY_URL = process.env.CONTENT_SERVICE_PROXY_URL || 'http://38.23.47.81:7786';
-const API_PUBLIC_URL = process.env.API_PUBLIC_URL || 'http://38.23.47.81:5200';
+const PROXY_URL = process.env.CONTENT_SERVICE_PROXY_URL;
+const API_PUBLIC_URL = process.env.API_PUBLIC_URL;
 
 export async function extractClip(clipId: string, url: string): Promise<void> {
+  if (!PROXY_URL || !API_PUBLIC_URL) {
+    console.warn('[clips-extractor] CONTENT_SERVICE_PROXY_URL / API_PUBLIC_URL 未配置，跳过内容提取');
+    return;
+  }
   const callbackUrl = `${API_PUBLIC_URL}/api/clips/${clipId}/callback`;
   try {
     await fetch(`${PROXY_URL}/transcribe`, {
