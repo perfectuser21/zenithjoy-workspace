@@ -88,7 +88,8 @@ test('列表展示条目 → 点击跳转详情', async ({ page }) => {
   await page.goto('/clips');
 
   // 列表里有 pending 条目（URL 文本可见）
-  await expect(page.getByText('待处理')).toBeVisible();
+  // locator('span') 避免匹配 filter <select> 里的 <option> 元素
+  await expect(page.locator('span', { hasText: '待处理' }).first()).toBeVisible();
   await expect(page.getByText(DOUYIN_URL)).toBeVisible();
 
   // 点击跳转详情
