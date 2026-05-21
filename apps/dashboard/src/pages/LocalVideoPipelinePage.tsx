@@ -1,7 +1,9 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { FolderOpen, FileText, Play, Download, Loader2, CheckCircle, XCircle, Film } from 'lucide-react';
 import axios from 'axios';
 import TemplateSelector from '../components/video-pipeline/TemplateSelector';
+import { fetchAccountMe } from '../api/account.api';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || '/api';
 
@@ -14,11 +16,13 @@ interface JobState {
   error?: string;
 }
 
-async function createJob(localPath: string, topic: string, templateId: string | null): Promise<{ id: string }> {
+async function createJob(localPath: string, topic: string, templateId: string | null, licenseKey: string): Promise<{ id: string }> {
   const res = await axios.post(`${API_BASE}/ai-video/jobs`, {
     local_path: localPath,
     topic: topic || undefined,
     template_id: templateId || undefined,
+  }, {
+    headers: { Authorization: `Bearer ${licenseKey}` },
   });
   return res.data;
 }
@@ -52,6 +56,14 @@ export default function LocalVideoPipelinePage() {
   const [submitting, setSubmitting] = useState(false);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  const accountQuery = useQuery({
+    queryKey: ['ws1', 'account-me'],
+    queryFn: fetchAccountMe,
+    retry: false,
+    staleTime: 60_000,
+  });
+  const licenseKey = accountQuery.data?.license?.license_key ?? '';
+
   const stopPoll = useCallback(() => {
     if (pollRef.current) {
       clearInterval(pollRef.current);
@@ -77,10 +89,10 @@ export default function LocalVideoPipelinePage() {
   }, [stopPoll]);
 
   const handleSubmit = async () => {
-    if (!localPath.trim()) return;
+    if (!localPath.trim() || !licenseKey) return;
     setSubmitting(true);
     try {
-      const { id } = await createJob(localPath.trim(), topic, templateId);
+      const { id } = await createJob(localPath.trim(), topic, templateId, licenseKey);
       const initial: JobState = { id, status: 'queued', progress: 0 };
       setJob(initial);
       startPoll(id);
@@ -103,7 +115,7 @@ export default function LocalVideoPipelinePage() {
   const isProcessing = job && (job.status === 'queued' || job.status === 'pending' || job.status === 'processing');
   const isDone = job?.status === 'completed';
   const isFailed = job?.status === 'failed';
-  const canSubmit = !!localPath.trim() && !submitting && !isProcessing;
+  const canSubmit = !!localPath.trim() && !!licenseKey && !submitting && !isProcessing;
 
   const statusLabel: Record<JobStatus, string> = {
     idle: '',
