@@ -276,16 +276,6 @@ export async function processVideoPipelineJob(
     } catch { /* use default 30s */ }
     fireProgress(apiBase, id, 20);
 
-    const ffmpegFallback = async (outPath: string, w: number, h: number) => {
-      const vf = `scale=${w}:${h}:force_original_aspect_ratio=decrease,pad=${w}:${h}:(ow-iw)/2:(oh-ih)/2:black`;
-      try {
-        await runFfmpeg(['-y', '-i', videoPath, '-vf', vf, '-map', '0',
-          '-c:v', 'libx264', '-preset', 'fast', '-crf', '23',
-          '-c:a', 'aac', '-b:a', '128k', '-t', String(Math.min(duration, 60)), outPath,
-        ], { timeout: 600_000 });
-      } catch { fs.copyFileSync(videoPath, outPath); }
-    };
-
     // Step 2: extract audio
     const audioPath = path.join(tmpDir, 'audio.wav');
     try {
@@ -342,131 +332,111 @@ export async function processVideoPipelineJob(
 
       const output916 = path.join(outputDir, '9_16.mp4');
       const output169 = path.join(outputDir, '16_9.mp4');
-      const htmlContent = composeResult?.html ?? '';
-
-      if (htmlContent) {
-        const hfDir = path.join(tmpDir, 'hf');
-        fs.mkdirSync(hfDir, { recursive: true });
-        fs.copyFileSync(videoPath, path.join(hfDir, path.basename(videoPath)));
-        fs.writeFileSync(path.join(hfDir, 'index.html'), htmlContent, 'utf-8');
-        const rendered = path.join(hfDir, 'rendered.mp4');
-        try {
-          console.log('[video-pipeline] HyperFrames template render...');
-          const hfCmd1 = await ensureHyperframes();
-          await execAsync(hfCmd1 + ' render --output ' + JSON.stringify(rendered), {
-            cwd: hfDir, timeout: 600_000, maxBuffer: 10 * 1024 * 1024, windowsHide: true,
-          });
-          // Merge original audio into HyperFrames output (HF renders silent video)
-          const mergedPath = path.join(tmpDir, 'rendered_with_audio.mp4');
-          try {
-            await runFfmpeg([
-              '-y', '-i', rendered, '-i', videoPath,
-              '-map', '0:v', '-map', '1:a',
-              '-c:v', 'copy', '-c:a', 'aac', '-b:a', '128k',
-              '-shortest', mergedPath,
-            ], { timeout: 120_000 });
-          } catch {
-            // no audio in source — use rendered as-is
-            fs.copyFileSync(rendered, mergedPath);
-          }
-          fs.copyFileSync(mergedPath, output169);
-          await runFfmpeg(['-y', '-i', mergedPath,
-            '-vf', 'crop=ih*9/16:ih:(iw-ih*9/16)/2:0',
-            '-c:v', 'libx264', '-crf', '23', '-c:a', 'aac', '-b:a', '128k', output916,
-          ], { timeout: 300_000 });
-          console.log('[video-pipeline] template render done');
-        } catch (err) {
-          console.error('[video-pipeline] template HyperFrames failed:', (err as Error).message?.slice(0, 200));
-          await ffmpegFallback(output916, 1080, 1920);
-          await ffmpegFallback(output169, 1920, 1080);
-        }
-      } else {
-        await ffmpegFallback(output916, 1080, 1920);
-        await ffmpegFallback(output169, 1920, 1080);
+      if (!composeResult?.html) {
+        throw new Error('[video-pipeline] compose-template 步骤失败，未返回 HTML');
       }
+      const htmlContent = composeResult.html;
+
+      const hfDir = path.join(tmpDir, 'hf');
+      fs.mkdirSync(hfDir, { recursive: true });
+      fs.copyFileSync(videoPath, path.join(hfDir, path.basename(videoPath)));
+      fs.writeFileSync(path.join(hfDir, 'index.html'), htmlContent, 'utf-8');
+      const rendered = path.join(hfDir, 'rendered.mp4');
+      console.log('[video-pipeline] HyperFrames template render...');
+      const hfCmd1 = await ensureHyperframes();
+      await execAsync(hfCmd1 + ' render --output ' + JSON.stringify(rendered), {
+        cwd: hfDir, timeout: 600_000, maxBuffer: 10 * 1024 * 1024, windowsHide: true,
+      });
+      // Merge original audio into HyperFrames output (HF renders silent video)
+      const mergedPath = path.join(tmpDir, 'rendered_with_audio.mp4');
+      try {
+        await runFfmpeg([
+          '-y', '-i', rendered, '-i', videoPath,
+          '-map', '0:v', '-map', '1:a',
+          '-c:v', 'copy', '-c:a', 'aac', '-b:a', '128k',
+          '-shortest', mergedPath,
+        ], { timeout: 120_000 });
+      } catch {
+        // no audio in source — use rendered as-is
+        fs.copyFileSync(rendered, mergedPath);
+      }
+      fs.copyFileSync(mergedPath, output169);
+      await runFfmpeg(['-y', '-i', mergedPath,
+        '-vf', 'crop=ih*9/16:ih:(iw-ih*9/16)/2:0',
+        '-c:v', 'libx264', '-crf', '23', '-c:a', 'aac', '-b:a', '128k', output916,
+      ], { timeout: 300_000 });
+      console.log('[video-pipeline] template render done');
 
       console.log(`[video-pipeline] template job ${id} done — outputs at ${outputDir}`);
       await reportComplete(apiBase, id, { output_dir: outputDir });
       return;
     }
 
-    // Step 4: design scenes (15s timeout, fallback single scene)
-    let scenes: Array<{
-      start: number; duration: number; layout: string;
-      eyebrow: string; title: string; body: string; tags?: string[];
-    }> = [];
-    const designResult = await postJson<{ scenes: typeof scenes }>(
+    // Step 4: design scenes — wait for LLM, fail task if no scenes returned
+    type SceneItem = { start: number; duration: number; layout: string; eyebrow: string; title: string; body: string; tags?: string[] };
+    const designResult = await postJson<{ scenes: SceneItem[] }>(
       apiBase, `/api/ai-video/jobs/${id}/design`,
       {
         transcript: transcript || '精彩内容',
         segments: segments.length ? segments : [{ start: 0, end: duration, text: transcript || '精彩内容' }],
         duration, topic,
       },
-      15_000,
+      120_000,
     );
-    if (designResult?.scenes?.length) scenes = designResult.scenes;
-    if (!scenes.length) {
-      scenes = [{ start: 0, duration, layout: 'burst', eyebrow: '精彩内容', title: topic || '视频', body: '', tags: [] }];
+    if (!designResult?.scenes?.length) {
+      throw new Error('[video-pipeline] design 步骤失败，未返回场景数据');
     }
+    const scenes = designResult.scenes;
     fireProgress(apiBase, id, 55);
 
-    // Step 5: compose HTML (10s timeout, skip on fail)
+    // Step 5: compose HTML — fail task if no HTML returned
     const htmlPath = path.join(tmpDir, 'hyperframe.html');
     const htmlResult = await postJson<{ html?: string }>(
       apiBase, `/api/ai-video/jobs/${id}/compose-html`,
       { scenes, duration, video_filename: path.basename(videoPath) },
-      10_000,
+      20_000,
     );
-    if (htmlResult?.html) fs.writeFileSync(htmlPath, htmlResult.html, 'utf-8');
+    if (!htmlResult?.html) {
+      throw new Error('[video-pipeline] compose-html 步骤失败，未返回 HTML');
+    }
+    fs.writeFileSync(htmlPath, htmlResult.html, 'utf-8');
     fireProgress(apiBase, id, 65);
 
     // Step 6: BGM 已从 Agent 移除（PiAPI 在服务端生成，非 Agent 职责�?    fireProgress(apiBase, id, 75);
 
-    // Step 7: HyperFrames render (+ FFmpeg fallback)
+    // Step 7: HyperFrames render — fail task on render error, no fallback
     const output916 = path.join(outputDir, '9_16.mp4');
     const output169 = path.join(outputDir, '16_9.mp4');
-    const htmlContent = htmlResult?.html ?? '';
+    const htmlContent = htmlResult.html!;
 
-    if (htmlContent) {
-      const hfDir = path.join(tmpDir, 'hf');
-      fs.mkdirSync(hfDir, { recursive: true });
-      fs.copyFileSync(videoPath, path.join(hfDir, path.basename(videoPath)));
-      fs.writeFileSync(path.join(hfDir, 'index.html'), htmlContent, 'utf-8');
-      const rendered = path.join(hfDir, 'rendered.mp4');
-      try {
-        console.log('[video-pipeline] starting HyperFrames render...');
-        const hfCmd2 = await ensureHyperframes();
-        await execAsync(hfCmd2 + ' render --output ' + JSON.stringify(rendered), {
-          cwd: hfDir, timeout: 600_000, maxBuffer: 10 * 1024 * 1024, windowsHide: true,
-        });
-        // Merge original audio into HyperFrames output (HF renders silent video)
-        const mergedPath2 = path.join(tmpDir, 'rendered2_with_audio.mp4');
-        try {
-          await runFfmpeg([
-            '-y', '-i', rendered, '-i', videoPath,
-            '-map', '0:v', '-map', '1:a',
-            '-c:v', 'copy', '-c:a', 'aac', '-b:a', '128k',
-            '-shortest', mergedPath2,
-          ], { timeout: 120_000 });
-        } catch {
-          fs.copyFileSync(rendered, mergedPath2);
-        }
-        fs.copyFileSync(mergedPath2, output169);
-        await runFfmpeg(['-y', '-i', mergedPath2,
-          '-vf', 'crop=ih*9/16:ih:(iw-ih*9/16)/2:0',
-          '-c:v', 'libx264', '-crf', '23', '-c:a', 'aac', '-b:a', '128k', output916,
-        ], { timeout: 300_000 });
-        console.log('[video-pipeline] HyperFrames render done');
-      } catch (err) {
-        console.error('[video-pipeline] HyperFrames failed, FFmpeg fallback:', (err as Error).message?.slice(0, 200));
-        await ffmpegFallback(output916, 1080, 1920);
-        await ffmpegFallback(output169, 1920, 1080);
-      }
-    } else {
-      console.warn('[video-pipeline] no HTML, using FFmpeg fallback');
-      await ffmpegFallback(output916, 1080, 1920);
-      await ffmpegFallback(output169, 1920, 1080);
+    const hfDir = path.join(tmpDir, 'hf');
+    fs.mkdirSync(hfDir, { recursive: true });
+    fs.copyFileSync(videoPath, path.join(hfDir, path.basename(videoPath)));
+    fs.writeFileSync(path.join(hfDir, 'index.html'), htmlContent, 'utf-8');
+    const rendered = path.join(hfDir, 'rendered.mp4');
+    console.log('[video-pipeline] starting HyperFrames render...');
+    const hfCmd2 = await ensureHyperframes();
+    await execAsync(hfCmd2 + ' render --output ' + JSON.stringify(rendered), {
+      cwd: hfDir, timeout: 600_000, maxBuffer: 10 * 1024 * 1024, windowsHide: true,
+    });
+    // Merge original audio into HyperFrames output (HF renders silent video)
+    const mergedPath2 = path.join(tmpDir, 'rendered2_with_audio.mp4');
+    try {
+      await runFfmpeg([
+        '-y', '-i', rendered, '-i', videoPath,
+        '-map', '0:v', '-map', '1:a',
+        '-c:v', 'copy', '-c:a', 'aac', '-b:a', '128k',
+        '-shortest', mergedPath2,
+      ], { timeout: 120_000 });
+    } catch {
+      fs.copyFileSync(rendered, mergedPath2);
     }
+    fs.copyFileSync(mergedPath2, output169);
+    await runFfmpeg(['-y', '-i', mergedPath2,
+      '-vf', 'crop=ih*9/16:ih:(iw-ih*9/16)/2:0',
+      '-c:v', 'libx264', '-crf', '23', '-c:a', 'aac', '-b:a', '128k', output916,
+    ], { timeout: 300_000 });
+    console.log('[video-pipeline] HyperFrames render done');
 
     console.log(`[video-pipeline] job ${id} done 鈥?outputs at ${outputDir}`);
     await reportComplete(apiBase, id, { output_dir: outputDir });
