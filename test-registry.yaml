@@ -1908,6 +1908,30 @@ tests:
     product: 新媒体运营
     note: "Walking Skeleton 1 — install-pack manifest API 单元测试"
 
+  - id: zj1-smart-acquisition-ws1
+    path: sprints/zj1-smart-acquisition/tests/ws1/acquisition.test.ts
+    type: unit
+    ci: L4
+    status: active
+    product: 新媒体运营
+    note: "ZJ1 Smart Acquisition WS1 — GET /api/acquisition/overview TDD 合同测试"
+
+  - id: zj1-smart-acquisition-route-unit
+    path: apps/api/src/routes/acquisition.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 新媒体运营
+    note: "ZJ1 Smart Acquisition — acquisition 路由单元测试（test-pairing 配对）"
+
+  - id: zj1-smart-acquisition-smoke
+    path: .github/workflows/scripts/smoke/acquisition-smoke.sh
+    type: e2e
+    ci: L4
+    status: active
+    product: 新媒体运营
+    note: "ZJ1 Smart Acquisition — GET /api/acquisition/overview E2E smoke 全链路验证"
+
 agent_suite:
   managed_by: services/agent/src/__tests__ + services/agent/publishers
   ci: L4
