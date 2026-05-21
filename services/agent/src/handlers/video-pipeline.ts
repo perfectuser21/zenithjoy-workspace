@@ -103,6 +103,11 @@ function findFfmpeg(): string {
 }
 
 const FFMPEG = findFfmpeg();
+// PATH for HyperFrames subprocess — includes the directory containing ffmpeg.exe
+const _hfEnv = () => ({
+  ...process.env,
+  PATH: [path.dirname(FFMPEG), process.env.PATH].filter(Boolean).join(path.delimiter),
+});
 
 // ── fetchWithTimeout ─────────────────────────────────────────────────────────
 export async function fetchWithTimeout(
@@ -346,6 +351,7 @@ export async function processVideoPipelineJob(
       const hfCmd1 = await ensureHyperframes();
       await execAsync(hfCmd1 + ' render --output ' + JSON.stringify(rendered), {
         cwd: hfDir, timeout: 600_000, maxBuffer: 10 * 1024 * 1024, windowsHide: true,
+        env: _hfEnv(),
       });
       // Merge original audio into HyperFrames output (HF renders silent video)
       const mergedPath = path.join(tmpDir, 'rendered_with_audio.mp4');
@@ -418,6 +424,7 @@ export async function processVideoPipelineJob(
     const hfCmd2 = await ensureHyperframes();
     await execAsync(hfCmd2 + ' render --output ' + JSON.stringify(rendered), {
       cwd: hfDir, timeout: 600_000, maxBuffer: 10 * 1024 * 1024, windowsHide: true,
+      env: _hfEnv(),
     });
     // Merge original audio into HyperFrames output (HF renders silent video)
     const mergedPath2 = path.join(tmpDir, 'rendered2_with_audio.mp4');
