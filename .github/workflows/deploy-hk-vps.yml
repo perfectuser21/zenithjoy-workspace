@@ -42,15 +42,18 @@ jobs:
               up -d zenithjoy-api
 
             echo "=== [4/4] health check ==="
-            for i in $(seq 1 12); do
+            # Grace period: container process starts before HTTP server is ready
+            sleep 10
+            # Poll up to 120s (24 x 5s); cold-start (no cache) observed at ~70s in practice
+            for i in $(seq 1 24); do
               if curl -sf http://localhost:5200/health > /dev/null 2>&1; then
                 echo "Health check passed (attempt $i)"
                 exit 0
               fi
-              echo "Attempt $i/12 failed, waiting 5s..."
+              echo "Attempt $i/24 failed, waiting 5s..."
               sleep 5
             done
-            echo "Health check FAILED after 60s"
+            echo "Health check FAILED after 130s (10s grace + 24x5s poll)"
             docker logs zenithjoy-api --tail 50
             exit 1
 
