@@ -95,6 +95,9 @@ export const autopilotPageComponents: Record<string, () => Promise<{ default: Co
   'FolderBindPage': () => import('../pages/FolderBindPage'),
   'PublishPage': () => import('../pages/PublishPage'),
   'LocalVideoPipelinePage': () => import('../pages/LocalVideoPipelinePage'),
+  // Content Clipper
+  'ContentClipperPage': () => import('../pages/ContentClipperPage'),
+  'ContentClipDetailPage': () => import('../pages/ContentClipDetailPage'),
   // FeatureDashboard and CommandCenter moved to Core features/business
 };
 
@@ -239,6 +242,14 @@ export const autopilotNavGroups: NavGroup[] = [
         featureKey: 'feishuBind',
         component: 'FeishuBindTenant',
       },
+      // ============ Content Clipper — 内容采集 ============
+      {
+        path: '/clips',
+        icon: Scissors,
+        label: '内容采集',
+        featureKey: 'content-clipper',
+        component: 'ContentClipperPage',
+      },
       // ============ Path 2 Sprint B-1 — 抖音小号绑定 + 评论抓取 ============
       {
         path: '/dashboard/douyin-burner-bind',
@@ -301,6 +312,9 @@ export const additionalRoutes: RouteConfig[] = [
 
   // === Agent 调试页面 ===
   { path: '/agent-debug', component: 'AgentDebugPage', requireAuth: true },
+
+  // === Content Clipper 详情页 ===
+  { path: '/clips/:id', component: 'ContentClipDetailPage', requireAuth: true },
 
 ];
 
