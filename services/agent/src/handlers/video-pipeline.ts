@@ -322,14 +322,87 @@ export async function processVideoPipelineJob(
     if (!transcript && topic) transcript = topic;
     fireProgress(apiBase, id, 40);
 
+    // Step 3.5: analyze transcript — AI marks keep/remove per segment
+    type AnalyzedSegment = { start: number; end: number; text: string; keep: boolean; reason?: string };
+    let analyzedSegments: AnalyzedSegment[] = segments.map((s) => ({ ...s, keep: true }));
+
+    if (segments.length > 0) {
+      const analyzeResult = await postJson<{ segments: AnalyzedSegment[] }>(
+        apiBase, `/api/ai-video/jobs/${id}/analyze-transcript`,
+        { segments, duration, topic },
+        90_000,
+      );
+      if (analyzeResult?.segments?.length === segments.length) {
+        analyzedSegments = analyzeResult.segments;
+        const removedCount = analyzedSegments.filter((s) => !s.keep).length;
+        console.log(`[video-pipeline] analyze: ${segments.length} segs, removing ${removedCount} (废话/气口)`);
+      } else {
+        console.warn('[video-pipeline] analyze-transcript unexpected shape, keeping all segments');
+      }
+    }
+    fireProgress(apiBase, id, 44);
+
+    // Step 3.6: FFmpeg rough cut — concat only "keep" segments
+    const keptIntervals = analyzedSegments
+      .filter((s) => s.keep)
+      .map((s) => ({
+        start: Math.max(0, s.start),
+        end: Math.min(duration, Math.max(s.start + 0.1, s.end)),
+        text: s.text,
+      }));
+
+    let roughCutPath = videoPath;
+    let refinedSegments = segments;
+    let refinedDuration = duration;
+
+    if (keptIntervals.length > 0 && keptIntervals.length < analyzedSegments.length) {
+      const rc = path.join(tmpDir, 'rough-cut.mp4');
+      const filterParts: string[] = [];
+      const concatInputs: string[] = [];
+      keptIntervals.forEach((seg, i) => {
+        filterParts.push(`[0:v]trim=start=${seg.start}:end=${seg.end},setpts=PTS-STARTPTS[v${i}]`);
+        filterParts.push(`[0:a]atrim=start=${seg.start}:end=${seg.end},asetpts=PTS-STARTPTS[a${i}]`);
+        concatInputs.push(`[v${i}][a${i}]`);
+      });
+      filterParts.push(`${concatInputs.join('')}concat=n=${keptIntervals.length}:v=1:a=1[outv][outa]`);
+
+      try {
+        await runFfmpeg([
+          '-y', '-i', videoPath,
+          '-filter_complex', filterParts.join(';'),
+          '-map', '[outv]', '-map', '[outa]',
+          '-c:v', 'libx264', '-crf', '23', '-c:a', 'aac', '-b:a', '128k',
+          rc,
+        ], { timeout: 300_000 });
+        roughCutPath = rc;
+        console.log(`[video-pipeline] rough cut done: ${keptIntervals.length}/${analyzedSegments.length} segs kept`);
+      } catch (rcErr) {
+        console.warn('[video-pipeline] rough cut failed, using original video:', (rcErr as Error).message?.slice(0, 120));
+      }
+
+      // Step 3.7: re-calculate timestamps relative to rough-cut timeline
+      if (roughCutPath === rc) {
+        let offset = 0;
+        refinedSegments = keptIntervals.map((seg) => {
+          const newStart = offset;
+          const dur = seg.end - seg.start;
+          offset += dur;
+          return { start: newStart, end: newStart + dur, text: seg.text };
+        });
+        refinedDuration = offset;
+        transcript = refinedSegments.map((s) => s.text).join('。');
+      }
+    }
+    fireProgress(apiBase, id, 48);
+
     // ── Template shortcut: skip AI design/compose-html, use server-rendered template ──
     if (job.template_id) {
       const composeResult = await postJson<{ html?: string }>(
         apiBase, `/api/ai-video/jobs/${id}/compose-template`,
         {
           transcript: transcript || topic || '精彩视频',
-          duration,
-          video_filename: path.basename(videoPath),
+          duration: refinedDuration,
+          video_filename: path.basename(roughCutPath),
         },
         20_000,
       );
@@ -344,7 +417,7 @@ export async function processVideoPipelineJob(
 
       const hfDir = path.join(tmpDir, 'hf');
       fs.mkdirSync(hfDir, { recursive: true });
-      fs.copyFileSync(videoPath, path.join(hfDir, path.basename(videoPath)));
+      fs.copyFileSync(roughCutPath, path.join(hfDir, path.basename(roughCutPath)));
       fs.writeFileSync(path.join(hfDir, 'index.html'), htmlContent, 'utf-8');
       const rendered = path.join(hfDir, 'rendered.mp4');
       console.log('[video-pipeline] HyperFrames template render...');
@@ -353,17 +426,16 @@ export async function processVideoPipelineJob(
         cwd: hfDir, timeout: 600_000, maxBuffer: 10 * 1024 * 1024, windowsHide: true,
         env: _hfEnv(),
       });
-      // Merge original audio into HyperFrames output (HF renders silent video)
+      // Merge rough-cut audio into HyperFrames output (HF renders silent video)
       const mergedPath = path.join(tmpDir, 'rendered_with_audio.mp4');
       try {
         await runFfmpeg([
-          '-y', '-i', rendered, '-i', videoPath,
+          '-y', '-i', rendered, '-i', roughCutPath,
           '-map', '0:v', '-map', '1:a',
           '-c:v', 'copy', '-c:a', 'aac', '-b:a', '128k',
           '-shortest', mergedPath,
         ], { timeout: 120_000 });
       } catch {
-        // no audio in source — use rendered as-is
         fs.copyFileSync(rendered, mergedPath);
       }
       fs.copyFileSync(mergedPath, output169);
@@ -378,14 +450,16 @@ export async function processVideoPipelineJob(
       return;
     }
 
-    // Step 4: design scenes — wait for LLM, fail task if no scenes returned
+    // Step 4: design scenes using refined transcript + re-timed segments
     type SceneItem = { start: number; duration: number; layout: string; eyebrow: string; title: string; body: string; tags?: string[] };
     const designResult = await postJson<{ scenes: SceneItem[] }>(
       apiBase, `/api/ai-video/jobs/${id}/design`,
       {
         transcript: transcript || '精彩内容',
-        segments: segments.length ? segments : [{ start: 0, end: duration, text: transcript || '精彩内容' }],
-        duration, topic,
+        segments: refinedSegments.length
+          ? refinedSegments
+          : [{ start: 0, end: refinedDuration, text: transcript || '精彩内容' }],
+        duration: refinedDuration, topic,
       },
       120_000,
     );
@@ -395,11 +469,11 @@ export async function processVideoPipelineJob(
     const scenes = designResult.scenes;
     fireProgress(apiBase, id, 55);
 
-    // Step 5: compose HTML — fail task if no HTML returned
+    // Step 5: compose HTML using rough-cut video filename
     const htmlPath = path.join(tmpDir, 'hyperframe.html');
     const htmlResult = await postJson<{ html?: string }>(
       apiBase, `/api/ai-video/jobs/${id}/compose-html`,
-      { scenes, duration, video_filename: path.basename(videoPath) },
+      { scenes, duration: refinedDuration, video_filename: path.basename(roughCutPath) },
       20_000,
     );
     if (!htmlResult?.html) {
@@ -408,16 +482,16 @@ export async function processVideoPipelineJob(
     fs.writeFileSync(htmlPath, htmlResult.html, 'utf-8');
     fireProgress(apiBase, id, 65);
 
-    // Step 6: BGM 已从 Agent 移除（PiAPI 在服务端生成，非 Agent 职责�?    fireProgress(apiBase, id, 75);
+    fireProgress(apiBase, id, 75);
 
-    // Step 7: HyperFrames render — fail task on render error, no fallback
+    // Step 7: HyperFrames render with rough-cut video
     const output916 = path.join(outputDir, '9_16.mp4');
     const output169 = path.join(outputDir, '16_9.mp4');
     const htmlContent = htmlResult.html!;
 
     const hfDir = path.join(tmpDir, 'hf');
     fs.mkdirSync(hfDir, { recursive: true });
-    fs.copyFileSync(videoPath, path.join(hfDir, path.basename(videoPath)));
+    fs.copyFileSync(roughCutPath, path.join(hfDir, path.basename(roughCutPath)));
     fs.writeFileSync(path.join(hfDir, 'index.html'), htmlContent, 'utf-8');
     const rendered = path.join(hfDir, 'rendered.mp4');
     console.log('[video-pipeline] starting HyperFrames render...');
@@ -426,11 +500,11 @@ export async function processVideoPipelineJob(
       cwd: hfDir, timeout: 600_000, maxBuffer: 10 * 1024 * 1024, windowsHide: true,
       env: _hfEnv(),
     });
-    // Merge original audio into HyperFrames output (HF renders silent video)
+    // Merge rough-cut audio into HyperFrames output (HF renders silent video)
     const mergedPath2 = path.join(tmpDir, 'rendered2_with_audio.mp4');
     try {
       await runFfmpeg([
-        '-y', '-i', rendered, '-i', videoPath,
+        '-y', '-i', rendered, '-i', roughCutPath,
         '-map', '0:v', '-map', '1:a',
         '-c:v', 'copy', '-c:a', 'aac', '-b:a', '128k',
         '-shortest', mergedPath2,
@@ -445,7 +519,7 @@ export async function processVideoPipelineJob(
     ], { timeout: 300_000 });
     console.log('[video-pipeline] HyperFrames render done');
 
-    console.log(`[video-pipeline] job ${id} done 鈥?outputs at ${outputDir}`);
+    console.log(`[video-pipeline] job ${id} done — outputs at ${outputDir}`);
     await reportComplete(apiBase, id, { output_dir: outputDir });
 
   } catch (err) {

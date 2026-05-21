@@ -309,6 +309,77 @@ window.__hf = { duration: ${duration}, seek: function(t){ tl.seek(t, false); } }
   } catch (err) { next(err); }
 }
 
+// ── analyzeTranscript ──────────────────────────────────────────────────────
+
+export async function analyzeTranscript(req: Request, res: Response, next: NextFunction) {
+  try {
+    const job = await svc.getJob(req.params.id);
+    if (!job) return res.status(404).json({ error: 'job not found' });
+
+    const { segments, duration, topic } = req.body as {
+      segments: Array<{ start: number; end: number; text: string }>;
+      duration: number;
+      topic?: string;
+    };
+
+    if (!segments?.length) return res.status(400).json({ error: 'segments required' });
+
+    const segmentList = segments.map((s, i) =>
+      `[${i}] [${s.start.toFixed(1)}s-${s.end.toFixed(1)}s] "${s.text}"`,
+    ).join('\n');
+
+    const prompt = `你是专业短视频剪辑师。分析以下口播视频逐字稿，判断每个片段是否保留。
+
+视频主题：${topic || '未知'}
+视频时长：${duration}秒
+
+片段列表（格式：[序号] [开始-结束] "内容"）：
+${segmentList}
+
+判断标准：
+- 保留（keep: true）：与主题相关的有效内容，观点陈述，数据，案例，结论
+- 删除（keep: false）：
+  * 废话/跑题：和主题无关，与他人闲聊，口头禅堆砌
+  * 重复内容：同样意思已经说过
+  * 口误+自我纠正中的错误部分（纠正后内容保留）
+  * 纯呼吸声/嗯啊等无意义音节单独成段
+
+只输出 JSON，不要其他内容：
+{
+  "segments": [
+    {"index": 0, "keep": true, "reason": "核心观点"},
+    {"index": 1, "keep": false, "reason": "废话"}
+  ]
+}
+
+共 ${segments.length} 个片段，每个都必须判断。`;
+
+    const result = await postJson(
+      'https://openrouter.ai/api/v1/chat/completions',
+      { Authorization: `Bearer ${OPENROUTER_KEY}` },
+      {
+        model: 'anthropic/claude-haiku-4-5',
+        max_tokens: 2048,
+        messages: [{ role: 'user', content: prompt }],
+      },
+    ) as { choices?: { message?: { content?: string } }[]; error?: { message?: string } };
+
+    if (result?.error) return res.status(502).json({ error: result.error.message || 'OpenRouter error' });
+    const raw = result?.choices?.[0]?.message?.content ?? '{}';
+    const jsonMatch = raw.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) return res.status(500).json({ error: 'Claude returned invalid JSON' });
+
+    const parsed = JSON.parse(jsonMatch[0]) as { segments: Array<{ index: number; keep: boolean; reason: string }> };
+
+    const analyzedSegments = segments.map((s, i) => {
+      const a = parsed.segments?.find((x) => x.index === i);
+      return { ...s, keep: a?.keep ?? true, reason: a?.reason ?? '' };
+    });
+
+    res.json({ segments: analyzedSegments });
+  } catch (err) { next(err); }
+}
+
 // ── generateBgm ────────────────────────────────────────────────────────────
 
 export async function generateBgm(req: Request, res: Response, next: NextFunction) {
