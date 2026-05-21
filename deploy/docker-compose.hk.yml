@@ -43,7 +43,7 @@ services:
     env_file:
       - /opt/zenithjoy/api/.env
     volumes:
-      - /opt/zenithjoy/install-pack:/opt/zenithjoy/install-pack:ro
+      - /opt/zenithjoy/install-pack:/opt/zenithjoy/install-pack
       - /opt/zenithjoy/content-output:/opt/zenithjoy/content-output
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:5200/health || exit 1"]
