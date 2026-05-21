@@ -1,7 +1,3 @@
-contract_branch: cp-05211644-ws-fc0dcc8d-ws1
-workstream_index: 1
-sprint_dir: sprints/zj1-smart-acquisition
-
 ---
 skeleton: false
 journey_type: autonomous

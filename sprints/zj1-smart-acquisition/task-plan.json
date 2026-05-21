@@ -1,0 +1,28 @@
+{
+  "initiative_id": "pending",
+  "journey_type": "autonomous",
+  "journey_type_reason": "纯后端 API 端点，无 Dashboard UI，无 Windows App，为后端服务能力描述接口，curl+jq 可完整验证",
+  "tasks": [
+    {
+      "task_id": "ws1",
+      "title": "acquisition.ts 路由实现 + app.ts 注册 GET /api/acquisition/overview",
+      "scope": "新增 apps/api/src/routes/acquisition.ts 实现 GET /overview 硬编码返回 {enabled,feature,capabilities,version}；修改 apps/api/src/app.ts import + use /api/acquisition",
+      "dod": [
+        "[BEHAVIOR] GET /api/acquisition/overview 返回 enabled=true, feature='smart-acquisition', capabilities=['overview'], version='1.0.0'",
+        "[BEHAVIOR] Schema 顶层 keys 完全等于 ['capabilities','enabled','feature','version']，不多不少",
+        "[BEHAVIOR] 禁用字段 status/data/result/payload/info/meta 不存在于 response",
+        "[BEHAVIOR] error path — GET /api/acquisition/nonexistent 返回 HTTP 404",
+        "[BEHAVIOR] 无需 Authorization header 即可访问（HTTP 200）",
+        "[ARTIFACT] apps/api/src/routes/acquisition.ts 存在且含 GET /overview handler",
+        "[ARTIFACT] apps/api/src/app.ts 含 /api/acquisition 路由注册"
+      ],
+      "files": [
+        "apps/api/src/routes/acquisition.ts",
+        "apps/api/src/app.ts"
+      ],
+      "depends_on": [],
+      "complexity": "S",
+      "estimated_minutes": 20
+    }
+  ]
+}
