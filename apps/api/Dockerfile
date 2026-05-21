@@ -12,6 +12,7 @@ COPY apps/api/src/ ./apps/api/src/
 WORKDIR /repo/apps/api
 RUN npm install
 RUN npm run build
+RUN mkdir -p dist/templates && cp src/templates/*.jsx dist/templates/
 
 # Production stage
 FROM node:20-alpine
