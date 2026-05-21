@@ -148,7 +148,12 @@ jobs:
           # opens the files directly — the handles survive after this step ends.
           $bat = "$env:RUNNER_TEMP\start-agent.bat"
           $agentExe = "$agentDir\zenithjoy-agent.exe"
-          $batLines = "@echo off", "`"$agentExe`" >> `"$logOut`" 2>> `"$logErr`""
+          # Inject env vars into batch so agent.exe sees ZENITHJOY_LICENSE regardless of PS env inheritance
+          $batLines = "@echo off",
+            "set ZENITHJOY_LICENSE=ZJ-F-FBFYTLFR",
+            "set ZENITHJOY_API_BASE=https://autopilot.zenjoymedia.media",
+            "set ZENITHJOY_API_URL=wss://autopilot.zenjoymedia.media/agent-ws",
+            "`"$agentExe`" >> `"$logOut`" 2>> `"$logErr`""
           $batLines -join "`r`n" | Set-Content -Path $bat -Encoding ascii
 
           Start-Process -FilePath "cmd.exe" -ArgumentList "/c `"$bat`"" `
