@@ -12,7 +12,7 @@ function quoteArg(a: string): string {
   return `"${a.replace(/"/g, '\\"')}"`;
 }
 async function runFfmpeg(args: string[], opts: { timeout?: number } = {}): Promise<void> {
-  const cmd = [FFMPEG, ...args].map(quoteArg).join(' ');
+  const cmd = [findFfmpeg(), ...args].map(quoteArg).join(' ');
   await execAsync(cmd, { windowsHide: true, maxBuffer: 64 * 1024 * 1024, timeout: opts.timeout });
 }
 
@@ -102,12 +102,15 @@ function findFfmpeg(): string {
   return 'ffmpeg';
 }
 
-const FFMPEG = findFfmpeg();
-// PATH for HyperFrames subprocess — includes the directory containing ffmpeg.exe
-const _hfEnv = () => ({
-  ...process.env,
-  PATH: [path.dirname(FFMPEG), process.env.PATH].filter(Boolean).join(path.delimiter),
-});
+// PATH for HyperFrames subprocess — re-evaluated each call so it picks up the FFmpeg
+// path after ensure-ffmpeg.ts finishes downloading (avoids stale module-load-time value).
+const _hfEnv = () => {
+  const ffmpegExe = findFfmpeg();
+  return {
+    ...process.env,
+    PATH: [path.dirname(ffmpegExe), process.env.PATH].filter(Boolean).join(path.delimiter),
+  };
+};
 
 // ── fetchWithTimeout ─────────────────────────────────────────────────────────
 export async function fetchWithTimeout(
@@ -272,7 +275,7 @@ export async function processVideoPipelineJob(
     // Step 1: probe duration (shell-based, 30s timeout)
     let duration = 30;
     try {
-      const ffprobePath = FFMPEG.replace(/ffmpeg(\.exe)?$/i, (m) =>
+      const ffprobePath = findFfmpeg().replace(/ffmpeg(\.exe)?$/i, (m) =>
         m.replace(/ffmpeg/i, 'ffprobe'));
       const cmd = `${quoteArg(ffprobePath)} -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 ${quoteArg(videoPath)}`;
       const { stdout } = await execAsync(cmd, { windowsHide: true, timeout: 30_000, maxBuffer: 1024 * 1024 });
