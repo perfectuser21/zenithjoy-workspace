@@ -27,8 +27,9 @@ jobs:
           script_stop: true
           script: |
             set -euo pipefail
-            echo "=== [1/4] git pull ==="
-            git -C /opt/zenithjoy/repo pull origin main
+            echo "=== [1/4] git sync (fetch + reset) ==="
+            git -C /opt/zenithjoy/repo fetch origin main
+            git -C /opt/zenithjoy/repo reset --hard origin/main
 
             echo "=== [2/4] docker build ==="
             docker build \
