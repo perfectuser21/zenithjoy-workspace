@@ -9,6 +9,20 @@ const svc = new AiVideoPipelineService();
 const OPENROUTER_KEY = process.env.OPENROUTER_API_KEY || '';
 const PIAPI_KEY = process.env.PIAPI_API_KEY || '';
 
+// Fetch GSAP once from CDN and cache server-side — embedded inline so rendered HTML needs no CDN access
+let _gsapCache: string | null = null;
+async function gsapInline(): Promise<string> {
+  if (_gsapCache) return _gsapCache;
+  try {
+    const r = await fetch('https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js');
+    _gsapCache = await r.text();
+  } catch {
+    // Minimal stub so page doesn't crash if CDN is unreachable at server startup
+    _gsapCache = 'window.gsap={timeline:function(){var o={from:function(){return o;},to:function(){return o;},seek:function(){}};return o;}};';
+  }
+  return _gsapCache;
+}
+
 // ── helpers ────────────────────────────────────────────────────────────────
 
 function postJson(url: string, headers: Record<string, string>, body: unknown): Promise<unknown> {
@@ -248,6 +262,7 @@ export async function composeHtml(req: Request, res: Response, next: NextFunctio
 
     const videoEl = `<video id="main-video" data-start="0" data-duration="${duration}" src="${video_filename}" muted playsinline style="width:252px;height:448px;object-fit:cover;border-radius:32px"></video>`;
     const logoEl = logo_filename ? `<img src="${logo_filename}" style="width:80px;height:80px;object-fit:contain;margin-top:16px">` : '';
+    const gsapJs = await gsapInline();
 
     const html = `<!DOCTYPE html>
 <html>
@@ -279,7 +294,7 @@ body{width:1920px;height:1080px;overflow:hidden;background:var(--bg);font-family
   ${sceneHtml}
   <audio id="bgm" data-start="0" data-duration="${duration}" data-volume="0.3" src="bgm/bgm.mp3" loop></audio>
 </div>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+<script>${gsapJs}</script>
 <script>
 const tl = gsap.timeline({paused:true});
 window.__timelines = window.__timelines || {};
@@ -441,8 +456,9 @@ ${transcript || '精彩视频内容'}
       throw err;
     }
     const phoneSrc = getPhoneSrc();
+    const gsapJs = await gsapInline();
     const html = _buildCompositionHtml({
-      templateJsx, phoneSrc, slots,
+      templateJsx, phoneSrc, slots, gsapJs,
       component: spec.component,
       width: spec.width, height: spec.height, duration,
     });
@@ -459,6 +475,7 @@ interface _BuildHtmlParams {
   width: number;
   height: number;
   duration: number;
+  gsapJs: string;
 }
 
 function _buildCompositionHtml(p: _BuildHtmlParams): string {
@@ -473,7 +490,7 @@ function _buildCompositionHtml(p: _BuildHtmlParams): string {
 <div id="root" data-composition-id="template-comp" data-start="0" data-duration="${p.duration}"></div>
 <script src="https://cdn.bootcdn.net/ajax/libs/react/18.3.1/umd/react.development.js" crossorigin></script>
 <script src="https://cdn.bootcdn.net/ajax/libs/react-dom/18.3.1/umd/react-dom.development.js" crossorigin></script>
-<script src="https://cdn.bootcdn.net/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+<script>${p.gsapJs}</script>
 <script src="https://cdn.bootcdn.net/ajax/libs/babel-standalone/7.24.7/babel.min.js" crossorigin></script>
 <script>window.__SLOTS__ = ${JSON.stringify(p.slots)};</script>
 <script type="text/babel">
