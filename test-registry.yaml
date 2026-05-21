@@ -1171,6 +1171,14 @@ tests:
     product: 内容采集
     note: "Content Clipper — ContentClipDetailPage OUTPUT_STATUS_LABEL + transcript 截断测试"
 
+  - id: content-clipper-e2e-windows
+    path: apps/dashboard/e2e/content-clipper.spec.ts
+    type: e2e
+    ci: e2e-content-clipper-windows
+    status: active
+    product: 内容采集
+    note: "Content Clipper — Playwright Windows E2E，3条路径：空列表→提交→pending / 点详情 / 设置保存"
+
   - id: p2-sprint-a-ws3-bitable-mt-unit
     path: apps/api/tests/ws3/feishu-bitable-mt.test.ts
     type: unit
