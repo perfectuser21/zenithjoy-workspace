@@ -7,6 +7,8 @@ services:
   zenithjoy-postgres:
     image: postgres:17-alpine
     container_name: zenithjoy-postgres
+    ports:
+      - "100.86.118.99:5432:5432"
     restart: unless-stopped
     networks:
       - zenithjoy-net
