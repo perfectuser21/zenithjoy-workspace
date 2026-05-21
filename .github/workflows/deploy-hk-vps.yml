@@ -42,15 +42,17 @@ jobs:
               up -d zenithjoy-api
 
             echo "=== [4/4] health check ==="
-            for i in $(seq 1 12); do
+            # 首次冷启动（无 Docker 缓存层）需要 60-80s；24×5s=120s 覆盖此场景
+            sleep 10
+            for i in $(seq 1 24); do
               if curl -sf http://localhost:5200/health > /dev/null 2>&1; then
                 echo "Health check passed (attempt $i)"
                 exit 0
               fi
-              echo "Attempt $i/12 failed, waiting 5s..."
+              echo "Attempt $i/24 failed, waiting 5s..."
               sleep 5
             done
-            echo "Health check FAILED after 60s"
+            echo "Health check FAILED after 130s"
             docker logs zenithjoy-api --tail 50
             exit 1
 
