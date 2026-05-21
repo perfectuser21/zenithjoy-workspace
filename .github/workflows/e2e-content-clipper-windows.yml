@@ -1,0 +1,89 @@
+name: E2E Content Clipper (Windows)
+
+# Content Clipper 内容采集功能 Playwright E2E
+# 在 windows-latest 上起真实 Chrome 浏览器走完 /clips 页面全路径。
+# API 全部 stub（page.route），不依赖外部服务。
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'apps/dashboard/src/pages/ContentClipperPage.tsx'
+      - 'apps/dashboard/src/pages/ContentClipDetailPage.tsx'
+      - 'apps/dashboard/src/api/content-clipper.api.ts'
+      - 'apps/dashboard/e2e/content-clipper.spec.ts'
+      - '.github/workflows/e2e-content-clipper-windows.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'apps/dashboard/src/pages/ContentClipperPage.tsx'
+      - 'apps/dashboard/src/pages/ContentClipDetailPage.tsx'
+      - 'apps/dashboard/src/api/content-clipper.api.ts'
+      - 'apps/dashboard/e2e/content-clipper.spec.ts'
+      - '.github/workflows/e2e-content-clipper-windows.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: e2e-clips-windows-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  playwright-windows:
+    name: Playwright — Content Clipper (Windows Chrome)
+    runs-on: windows-latest
+    timeout-minutes: 20
+
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: package-lock.json
+
+      - name: Install dashboard deps
+        run: npm ci --workspace=apps/dashboard
+
+      - name: Install Playwright Chromium
+        working-directory: apps/dashboard
+        run: npx playwright install chromium --with-deps
+
+      - name: Start Vite dev server (VITE_SKIP_AUTH=true)
+        working-directory: apps/dashboard
+        env:
+          VITE_SKIP_AUTH: 'true'
+          VITE_MOCK_USER_ID: 'dev-user-001'
+          VITE_MOCK_USER_NAME: '测试用户'
+        run: |
+          npx vite --port 5173 &
+          echo $! > /tmp/vite.pid
+          # 等待 dev server 就绪
+          for i in $(seq 1 30); do
+            if curl -fs http://localhost:5173 >/dev/null 2>&1; then
+              echo "Vite ready after ${i}s"
+              break
+            fi
+            sleep 1
+          done
+          curl -fs http://localhost:5173 || (echo "Vite failed to start"; exit 1)
+
+      - name: Run Playwright E2E — Content Clipper
+        working-directory: apps/dashboard
+        env:
+          E2E_BASE_URL: 'http://localhost:5173'
+        run: npx playwright test e2e/content-clipper.spec.ts --reporter=list
+
+      - name: Upload Playwright artifacts on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-clips-artifacts
+          path: |
+            apps/dashboard/test-results/
+            apps/dashboard/playwright-report/
+          retention-days: 7
