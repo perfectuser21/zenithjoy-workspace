@@ -183,7 +183,7 @@ Layout 类型规则：
       'https://openrouter.ai/api/v1/chat/completions',
       { Authorization: `Bearer ${OPENROUTER_KEY}` },
       {
-        model: 'anthropic/claude-sonnet-4-5',
+        model: 'deepseek/deepseek-chat-v3-0324',
         max_tokens: 2048,
         messages: [{ role: 'user', content: prompt }],
       },
@@ -192,7 +192,7 @@ Layout 类型规则：
     if (result?.error) return res.status(502).json({ error: result.error.message || 'OpenRouter error' });
     const raw = result?.choices?.[0]?.message?.content ?? '{}';
     const jsonMatch = raw.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) return res.status(500).json({ error: 'Claude returned invalid JSON' });
+    if (!jsonMatch) return res.status(500).json({ error: 'model returned invalid JSON' });
 
     const parsed = JSON.parse(jsonMatch[0]) as { scenes: unknown[] };
     res.json(parsed);
@@ -358,7 +358,7 @@ ${segmentList}
       'https://openrouter.ai/api/v1/chat/completions',
       { Authorization: `Bearer ${OPENROUTER_KEY}` },
       {
-        model: 'google/gemini-2.0-flash-001',
+        model: 'deepseek/deepseek-chat-v3-0324',
         max_tokens: 2048,
         messages: [{ role: 'user', content: prompt }],
       },
@@ -489,7 +489,7 @@ ${transcript || '精彩视频内容'}
         'https://openrouter.ai/api/v1/chat/completions',
         { Authorization: `Bearer ${OPENROUTER_KEY}` },
         {
-          model: 'anthropic/claude-haiku-4-5',
+          model: 'deepseek/deepseek-chat-v3-0324',
           max_tokens: 1024,
           messages: [{ role: 'user', content: slotPrompt }],
         },
