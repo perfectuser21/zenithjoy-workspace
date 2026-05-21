@@ -1,0 +1,49 @@
+{
+  "initiative_id": "pending",
+  "journey_type": "autonomous",
+  "journey_type_reason": "纯后端 API 端点，无 Dashboard UI 交互，curl + licenseAuth 测试，local_api 环境",
+  "tasks": [
+    {
+      "task_id": "ws1",
+      "title": "写 acquisition E2E smoke 脚本（E2E-First 先提交，定义验收条件）",
+      "scope": "新增 .github/workflows/scripts/smoke/acquisition-overview-smoke.sh，完整验证 GET /api/acquisition/overview 端点的 401 / 200 / schema 完整性 / 禁用字段反向检查 / feature 禁用变体检查",
+      "dod": [
+        "[ARTIFACT] .github/workflows/scripts/smoke/acquisition-overview-smoke.sh 文件存在且非占位符",
+        "[BEHAVIOR] bash -n 语法检查通过",
+        "[BEHAVIOR] 脚本包含 401 路径检测",
+        "[BEHAVIOR] 脚本包含 jq -e '.enabled' 断言",
+        "[BEHAVIOR] 脚本包含 'smart_acquisition' 字面量匹配",
+        "[BEHAVIOR] 脚本包含 keys == [...] 完整性检查"
+      ],
+      "files": [
+        ".github/workflows/scripts/smoke/acquisition-overview-smoke.sh"
+      ],
+      "depends_on": [],
+      "complexity": "S",
+      "estimated_minutes": 20
+    },
+    {
+      "task_id": "ws2",
+      "title": "实现 GET /api/acquisition/overview 路由 + app.ts 挂载",
+      "scope": "新增 apps/api/src/routes/acquisition.ts（licenseAuth 保护的 GET /overview 端点，返回 {enabled,feature,capabilities,version}）；修改 apps/api/src/app.ts 挂载 acquisitionRouter 到 /api/acquisition",
+      "dod": [
+        "[ARTIFACT] apps/api/src/routes/acquisition.ts 存在，含 GET /overview 路由定义",
+        "[ARTIFACT] apps/api/src/app.ts 挂载 /api/acquisition",
+        "[ARTIFACT] 路由文件含 'smart_acquisition' 字面量，不含禁用变体",
+        "[BEHAVIOR] 无 license → HTTP 401 + has('error')",
+        "[BEHAVIOR] 有效 license → enabled == true",
+        "[BEHAVIOR] feature == 'smart_acquisition'",
+        "[BEHAVIOR] keys == ['capabilities','enabled','feature','version']",
+        "[BEHAVIOR] 禁用字段 data/payload/result 不存在",
+        "[BEHAVIOR] capabilities 含默认三项能力 platform_binding/content_generation/auto_publish"
+      ],
+      "files": [
+        "apps/api/src/routes/acquisition.ts",
+        "apps/api/src/app.ts"
+      ],
+      "depends_on": ["ws1"],
+      "complexity": "S",
+      "estimated_minutes": 30
+    }
+  ]
+}
