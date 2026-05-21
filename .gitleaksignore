@@ -65,4 +65,4 @@ a1995d0c89126235b0f1c28d0c58049f443ac4e3:apps/api/src/services/__tests__/agent-w
 cad1f5fd00b24c45726a4d5797fc9df548689830:.github/workflows/agent-e2e-video.yml:generic-api-key:132
 
 # Content Clipper — 飞书 Bitable demo appToken（feishu-bitable.ts 默认值，公开 URL 中可见，非真凭据）
-c466776:apps/api/src/services/clip-output.service.test.ts:generic-api-key:23
+c4667768779ce4b5c1cf319e70d4bb51c9d2dd18:apps/api/src/services/clip-output.service.test.ts:generic-api-key:23
