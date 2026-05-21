@@ -3,7 +3,7 @@ import { describe, it, expect } from 'vitest';
 describe('ContentClipperPage helpers', () => {
   it('extractUrl extracts URL from mixed Chinese text', () => {
     const extractUrl = (text: string): string => {
-      const m = text.match(/https?:\/\/[^\s一-鿿　-〿【】，。、！？]+/);
+      const m = text.match(/https?:\/\/[^\s\u4e00-\u9fff\u3000-\u303f\u3010\u3011\uff0c\u3002\u3001\uff01\uff1f]+/);
       return m ? m[0].replace(/[.,;:!?）)]+$/, '') : text.trim();
     };
     expect(extractUrl('http://xhslink.com/o/abc先复制再打开【小红书】...')).toBe('http://xhslink.com/o/abc');

@@ -1106,6 +1106,71 @@ tests:
     note: "Walking Skeleton 1 — install-pack manifest API 单元测试"
     note: "Path 2 Sprint A WS2 — feishu-token getValidToken + 2h 过期刷新 + cascade 失败 BEHAVIOR 测试"
 
+  # ============ Content Clipper ============
+  - id: content-clipper-routes
+    path: apps/api/src/routes/clips.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 内容采集
+    note: "Content Clipper — Express routes 单元测试（路由挂载 + 7 端点）"
+
+  - id: content-clipper-extractor-service
+    path: apps/api/src/services/clips-extractor.service.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 内容采集
+    note: "Content Clipper — clips-extractor service 单元测试（非阻塞触发 content-service）"
+
+  - id: content-clipper-output-service
+    path: apps/api/src/services/clip-output.service.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 内容采集
+    note: "Content Clipper — clip-output service 单元测试（Notion/飞书 URL 解析）"
+
+  - id: content-clipper-service
+    path: apps/api/src/services/clips.service.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 内容采集
+    note: "Content Clipper — clips DB CRUD service 单元测试（detectPlatform + CRUD）"
+
+  - id: content-clipper-controller
+    path: apps/api/src/controllers/clips.controller.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 内容采集
+    note: "Content Clipper — controller export sanity test"
+
+  - id: content-clipper-api-client
+    path: apps/dashboard/src/api/content-clipper.api.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 内容采集
+    note: "Content Clipper — frontend API client 类型 + 函数导出测试"
+
+  - id: content-clipper-page
+    path: apps/dashboard/src/pages/ContentClipperPage.test.tsx
+    type: unit
+    ci: L3
+    status: active
+    product: 内容采集
+    note: "Content Clipper — ContentClipperPage extractUrl + detectOutputType helper 测试"
+
+  - id: content-clipper-detail-page
+    path: apps/dashboard/src/pages/ContentClipDetailPage.test.tsx
+    type: unit
+    ci: L3
+    status: active
+    product: 内容采集
+    note: "Content Clipper — ContentClipDetailPage OUTPUT_STATUS_LABEL + transcript 截断测试"
+
   - id: p2-sprint-a-ws3-bitable-mt-unit
     path: apps/api/tests/ws3/feishu-bitable-mt.test.ts
     type: unit
