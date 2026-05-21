@@ -5,7 +5,7 @@ on:
       agent_version:
         description: Agent install pack version
         required: false
-        default: "1.1.14"
+        default: "1.1.15"
       session_token:
         description: Session token from pre-login (run get-e2e-token.sh locally before triggering)
         required: true
@@ -14,7 +14,7 @@ jobs:
   e2e-video-pipeline:
     name: Windows -- install pack + Agent online + video task + result
     runs-on: windows-latest
-    timeout-minutes: 30
+    timeout-minutes: 40
 
     steps:
       - uses: actions/checkout@v4
@@ -109,18 +109,52 @@ jobs:
           }
           Write-Host "[pre-cleanup] done"
 
+      - name: Pre-install Chrome headless shell
+        shell: powershell
+        run: |
+          # Install at the exact path ensureChromeHeadlessShell() expects so agent skips the download
+          $destParent = "$env:USERPROFILE\.cache\hyperframes\chrome\chrome-headless-shell\win64-131.0.6778.85"
+          $destDir    = "$destParent\chrome-headless-shell-win64"
+          $chromeExe  = "$destDir\chrome-headless-shell.exe"
+          if ((Test-Path $chromeExe) -and ((Get-Item $chromeExe).Length -gt 100MB)) {
+            Write-Host "[pre-install] Chrome already present"; exit 0
+          }
+          New-Item -ItemType Directory -Force -Path $destParent | Out-Null
+          $zip = "$env:TEMP\zj-chrome.zip"
+          $url = "https://zenithjoy-static-1333590468.cos.accelerate.myqcloud.com/agent-deps/chrome-headless-shell-win64.zip"
+          Write-Host "[pre-install] Downloading Chrome headless shell (~101 MB)..."
+          Invoke-WebRequest -Uri $url -OutFile $zip -UseBasicParsing
+          Expand-Archive -Force -Path $zip -DestinationPath $destParent
+          Remove-Item -Force $zip -EA SilentlyContinue
+          if (Test-Path $chromeExe) {
+            Write-Host "[pre-install] Chrome OK: $((Get-Item $chromeExe).Length) bytes"
+          } else {
+            Write-Host "[pre-install] WARNING: chrome-headless-shell.exe not at expected path"
+            Get-ChildItem $destParent -Recurse | Select-Object -First 10 | % { Write-Host "  $_" }
+          }
+
       - name: Start Agent (background)
         shell: powershell
         run: |
           $agentDir = (Resolve-Path "pack").Path
-          $env:ZENITHJOY_LICENSE = "ZJ-F-FBFYTLFR"
-          $env:ZENITHJOY_API_BASE = "https://autopilot.zenjoymedia.media"
-          $env:ZENITHJOY_API_URL = "wss://autopilot.zenjoymedia.media/agent-ws"
+          $logOut = "$env:RUNNER_TEMP\agent-out.log"
+          $logErr = "$env:RUNNER_TEMP\agent-err.log"
           New-Item -ItemType Directory -Force -Path "$env:USERPROFILE\.zj" | Out-Null
-          Start-Process -FilePath "$agentDir\zenithjoy-agent.exe" -WorkingDirectory $agentDir -NoNewWindow `
-            -RedirectStandardOutput "$env:RUNNER_TEMP\agent-out.log" -RedirectStandardError "$env:RUNNER_TEMP\agent-err.log"
-          Start-Sleep -Seconds 10
-          Get-Content "$env:RUNNER_TEMP\agent-out.log" -EA SilentlyContinue | Select-Object -Last 10
+
+          # Use a batch file wrapper so agent.exe gets real FILE HANDLES (not broken pipes).
+          # -RedirectStandardOutput creates a pipe that breaks when this PS step exits,
+          # silently stopping all console.log output.  cmd.exe /c with >> redirection
+          # opens the files directly — the handles survive after this step ends.
+          $bat = "$env:RUNNER_TEMP\start-agent.bat"
+          $agentExe = "$agentDir\zenithjoy-agent.exe"
+          $batLines = "@echo off", "`"$agentExe`" >> `"$logOut`" 2>> `"$logErr`""
+          $batLines -join "`r`n" | Set-Content -Path $bat -Encoding ascii
+
+          Start-Process -FilePath "cmd.exe" -ArgumentList "/c `"$bat`"" `
+            -WorkingDirectory $agentDir -WindowStyle Hidden
+
+          Start-Sleep -Seconds 12
+          Get-Content $logOut -EA SilentlyContinue | Select-Object -Last 15
 
       - name: Wait for Agent online
         shell: powershell

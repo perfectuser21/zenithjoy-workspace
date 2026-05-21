@@ -546,10 +546,17 @@ export function startVideoPipelineLoop(apiBase: string, licenseKey?: string, int
       const headers: Record<string, string> = {};
       if (licenseKey) headers['Authorization'] = `Bearer ${licenseKey}`;
       const r = await fetchWithTimeout(`${apiBase}/api/ai-video/jobs?status=pending`, { headers }, 10_000);
-      if (!r.ok) return;
+      if (!r.ok) {
+        console.warn(`[video-pipeline] poll HTTP ${r.status}`);
+        return;
+      }
       const data = await r.json() as { data?: VideoPipelineJob[] };
-      if (data?.data?.length) {
-        const job = data.data[0];
+      const jobCount = data?.data?.length ?? 0;
+      if (jobCount === 0) {
+        console.log('[video-pipeline] poll: 0 pending jobs');
+      } else {
+        const job = data.data![0];
+        console.log(`[video-pipeline] picking up job ${job.id} src=${job.src_video}`);
         await fetchWithTimeout(
           `${apiBase}/api/ai-video/jobs/${job.id}/progress`,
           {
@@ -558,7 +565,7 @@ export function startVideoPipelineLoop(apiBase: string, licenseKey?: string, int
             body: JSON.stringify({ status: 'processing', progress: 1 }),
           },
           5_000,
-        ).catch(() => {});
+        ).catch((e) => console.warn('[video-pipeline] mark-processing failed:', e.message));
         await processVideoPipelineJob(apiBase, job);
       }
     } catch (err) {
