@@ -45,12 +45,14 @@ jobs:
           node-version: '20'
           # 不缓存：npm cache 是 macOS 生成的，缺 Windows optional deps（@rollup/rollup-win32-x64-msvc）
 
-      - name: Install all deps (Windows platform-native optional deps)
-        # package-lock.json 由 macOS 生成，缺 @rollup/rollup-win32-x64-msvc。
-        # 删 node_modules 后全量 npm install 让 npm 按 Windows 平台重解析 optional deps。
-        run: |
-          rm -rf node_modules
-          npm install
+      - name: Install deps
+        run: npm ci
+
+      - name: Install Windows rollup native binding
+        # package-lock.json 由 macOS 生成，不含 @rollup/rollup-win32-x64-msvc。
+        # Vite dev server 启动时无条件加载 rollup native，不装就 crash。
+        # --no-save 避免修改 package.json / lock。
+        run: npm install @rollup/rollup-win32-x64-msvc --no-save
 
       - name: Install Playwright Chromium
         working-directory: apps/dashboard
