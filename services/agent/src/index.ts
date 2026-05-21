@@ -468,7 +468,22 @@ async function main(): Promise<void> {
   //   - apiBase 例：https://api.zenithjoy.com
   //   - 不影响上面 WS 链路；两条链路共存（WS 是旧 v0.3 协议，heartbeat 是 ws1 协议）
   //   - folder-watch / qr-bind 状态在 heartbeat-loop 进程内维护
+  // FFmpeg and hyperframes are required for template rendering — await before accepting jobs.
+  // Keeps non-blocking on failure so the agent can still handle other tasks.
+  console.log('[agent] waiting for ffmpeg + hyperframes...');
+  await Promise.all([
+    ensureFfmpeg().catch((e) => console.warn('[ffmpeg] ensure failed:', e)),
+    ensureHyperframes().catch((e) => console.warn('[hyperframes] ensure failed:', e)),
+  ]);
+  console.log('[agent] ffmpeg + hyperframes ready — starting loops');
+
   startWs1HeartbeatLoop(cfg);
+
+  const _hbApiBase = (process.env.ZENITHJOY_API_BASE || '').replace(/\/+$/, '');
+  if (_hbApiBase) {
+    startVideoPipelineLoop(_hbApiBase, cfg.licenseKey);
+    console.log(`[agent] video-pipeline-loop started → ${_hbApiBase}/api/ai-video/jobs`);
+  }
 
   // Sprint 2.1d: health-server :5201 让 supervisor 检测业务死循环
   startHealthServer(5201);
@@ -690,13 +705,8 @@ function startWs1HeartbeatLoop(cfg: AgentConfig): void {
   loop.start();
   console.log(`[ws1] heartbeat-loop started → ${apiBase}/api/agent/heartbeat`);
 
-  // Auto-install Chrome headless shell and hyperframes npm package (non-blocking)
+  // Chrome is non-critical for video pipeline startup — non-blocking
   ensureChromeHeadlessShell().catch((e) => console.warn('[chrome] ensure failed:', e));
-  ensureFfmpeg().catch((e) => console.warn('[ffmpeg] ensure failed:', e));
-  ensureHyperframes().catch((e) => console.warn('[hyperframes] ensure failed:', e));
-
-  startVideoPipelineLoop(apiBase, cfg.licenseKey);
-  console.log(`[ws1] video-pipeline-loop started → ${apiBase}/api/ai-video/jobs`);
 }
 
 // H-2 Bug 9: 仅作为入口脚本时运行 main()。test import 不触发 main()，让 buildHelloPayload 等纯函数可单测。
