@@ -548,11 +548,11 @@ interface _BuildHtmlParams {
   duration: number;
 }
 
-function _esc(s: string): string {
+export function _esc(s: string): string {
   return (s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
-function _buildCompositionHtml(p: _BuildHtmlParams): string {
+export function _buildCompositionHtml(p: _BuildHtmlParams): string {
   const { scenes, gsapJs, spec, duration } = p;
   const { width, height, phoneRect } = spec;
   const ACCENT = '#818cf8';
