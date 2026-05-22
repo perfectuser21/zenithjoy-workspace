@@ -1,41 +1,85 @@
-import { describe, it, expect } from 'vitest';
-import { parseOutputUrl } from './clip-output.service';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-describe('parseOutputUrl', () => {
-  it('detects Notion database URL', () => {
-    const result = parseOutputUrl(
-      'https://www.notion.so/myworkspace/My-DB-770c40c2ba6383ea86d001eba832c218?v=abc'
-    );
-    expect(result).toEqual({ type: 'notion', databaseId: '770c40c2-ba63-83ea-86d0-01eba832c218' });
-  });
+vi.mock('./clips.service', () => ({
+  getSettings: vi.fn(),
+  upsertFeishuBinding: vi.fn(),
+}));
+vi.mock('./clips-auth.service', () => ({
+  refreshFeishuToken: vi.fn(),
+}));
 
-  it('detects Notion URL without dashes', () => {
-    const result = parseOutputUrl('https://notion.so/770c40c2ba6383ea86d001eba832c218');
-    expect(result).toEqual({ type: 'notion', databaseId: '770c40c2-ba63-83ea-86d0-01eba832c218' });
-  });
+describe('pushClipOutput', () => {
+  beforeEach(() => { vi.clearAllMocks(); });
 
-  it('detects Feishu bitable URL with table param', () => {
-    const result = parseOutputUrl(
-      'https://p1bce1datcr.feishu.cn/base/EK75bB3aca7YXqsXiQBch48Fnzd?table=tblUzPt9cWEi4EZH'
-    );
-    expect(result).toEqual({
-      type: 'feishu',
-      appToken: 'EK75bB3aca7YXqsXiQBch48Fnzd',
-      tableId: 'tblUzPt9cWEi4EZH',
+  it('无绑定时返回 no_binding（skipped 模式）', async () => {
+    const { getSettings } = await import('./clips.service');
+    vi.mocked(getSettings).mockResolvedValue({
+      defaultOutputUrl: null,
+      defaultOutputType: null,
+      notionBound: false,
+      feishuBound: false,
     });
-  });
 
-  it('detects Feishu bitable URL without table param', () => {
-    const result = parseOutputUrl('https://example.feishu.cn/base/MyAppToken123');
-    expect(result).toEqual({
-      type: 'feishu',
-      appToken: 'MyAppToken123',
-      tableId: undefined,
+    const { pushClipOutput } = await import('./clip-output.service');
+    const result = await pushClipOutput({
+      id: 'clip1',
+      user_id: 'user1',
+      url: 'https://v.douyin.com/test',
+      platform: 'douyin',
+      output_url: 'https://www.notion.so/mydb/abcd1234567890abcdef1234567890ab',
+      output_type: 'notion',
+      title: '测试',
+      transcript: null,
+      images: [],
+      author: null,
+      author_id: null,
+      like_count: null,
+      comment_count: null,
+      share_count: null,
+      cover_url: null,
+      video_url: null,
+      output_status: null,
+      error_msg: null,
+      retry_count: 0,
+      raw_response: null,
+      status: 'done',
+      created_at: new Date(),
+      processed_at: new Date(),
+      updated_at: new Date(),
     });
+
+    expect(result.success).toBe(false);
+    expect(result.error).toBe('no_binding');
   });
 
-  it('returns null for unknown URL', () => {
-    expect(parseOutputUrl('https://google.com')).toBeNull();
-    expect(parseOutputUrl('')).toBeNull();
+  it('无 output_url 时返回 no_output_configured', async () => {
+    const { pushClipOutput } = await import('./clip-output.service');
+    const result = await pushClipOutput({
+      id: 'clip2',
+      user_id: 'user1',
+      url: 'https://v.douyin.com/test',
+      platform: 'douyin',
+      output_url: null,
+      output_type: null,
+      title: null,
+      transcript: null,
+      images: [],
+      author: null,
+      author_id: null,
+      like_count: null,
+      comment_count: null,
+      share_count: null,
+      cover_url: null,
+      video_url: null,
+      output_status: null,
+      error_msg: null,
+      retry_count: 0,
+      raw_response: null,
+      status: 'done',
+      created_at: new Date(),
+      processed_at: new Date(),
+      updated_at: new Date(),
+    });
+    expect(result.error).toBe('no_output_configured');
   });
 });
