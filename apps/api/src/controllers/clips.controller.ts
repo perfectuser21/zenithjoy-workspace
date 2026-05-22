@@ -28,7 +28,9 @@ function normalizeDouyinUrl(url: string): string {
       const modalId = u.searchParams.get('modal_id');
       if (modalId) return `https://www.douyin.com/video/${modalId}`;
     }
-  } catch {}
+  } catch {
+    // invalid URL syntax — return as-is
+  }
   return url;
 }
 

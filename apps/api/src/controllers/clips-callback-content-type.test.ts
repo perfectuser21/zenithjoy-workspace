@@ -17,6 +17,7 @@ vi.mock('../services/clips.service', () => ({
 
 vi.mock('../services/clips-extractor.service', () => ({
   extractClip: vi.fn().mockResolvedValue(undefined),
+  ocrImages: vi.fn().mockResolvedValue(null),
 }));
 
 vi.mock('../services/clip-output.service', () => ({

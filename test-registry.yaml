@@ -1203,6 +1203,14 @@ tests:
     product: 内容采集
     note: "Content Clipper — Playwright Windows E2E，3条路径：空列表→提交→pending / 点详情 / 设置保存"
 
+  - id: content-clipper-integration
+    path: apps/api/tests/clips.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 内容采集
+    note: "Content Clipper — Unit（detectPlatform 5例）+ Integration（POST/GET/callback 9例）全套测试"
+
   - id: p2-sprint-a-ws3-bitable-mt-unit
     path: apps/api/tests/ws3/feishu-bitable-mt.test.ts
     type: unit
