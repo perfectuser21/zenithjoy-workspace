@@ -57,39 +57,26 @@ function PhonePreview({
           </div>
         )}
 
-        {/* Video / poster area */}
-        {videoSrc ? (
-          <video
-            id="hf-phone-video"
-            src={videoSrc}
-            preload="auto"
-            muted
-            playsInline
-            style={{
-              position: 'absolute', inset: 0, width: '100%', height: '100%',
-              objectFit: 'cover', zIndex: 1,
-            }}
-          />
-        ) : (
-          <div style={{
-            position: 'absolute', inset: 0,
-            background: posterFill || `repeating-linear-gradient(
-                135deg,
-                ${isLight ? '#e8e4dc' : '#1a1a18'} 0px,
-                ${isLight ? '#e8e4dc' : '#1a1a18'} 8px,
-                ${isLight ? '#dfd9cc' : '#13130f'} 8px,
-                ${isLight ? '#dfd9cc' : '#13130f'} 16px
-              )`,
-            backgroundSize: 'cover', backgroundPosition: 'center',
-          }}>
-            {!posterFill && <div style={{
-              position: 'absolute', top: '38%', left: '50%', transform: 'translate(-50%, -50%)',
-              fontFamily: 'JetBrains Mono, monospace', fontSize: 10, letterSpacing: '0.15em',
-              color: isLight ? 'rgba(0,0,0,0.35)' : 'rgba(255,255,255,0.35)',
-              textTransform: 'uppercase',
-            }}>{posterLabel}</div>}
-          </div>
-        )}
+        {/* Video / poster area — video is overlaid by FFmpeg post-processing, not rendered in browser */}
+        <div style={{
+          position: 'absolute', inset: 0,
+          background: videoSrc ? '#000000' : (posterFill || `repeating-linear-gradient(
+              135deg,
+              ${isLight ? '#e8e4dc' : '#1a1a18'} 0px,
+              ${isLight ? '#e8e4dc' : '#1a1a18'} 8px,
+              ${isLight ? '#dfd9cc' : '#13130f'} 8px,
+              ${isLight ? '#dfd9cc' : '#13130f'} 16px
+            )`),
+          backgroundSize: 'cover', backgroundPosition: 'center',
+          zIndex: 1,
+        }}>
+          {!videoSrc && !posterFill && <div style={{
+            position: 'absolute', top: '38%', left: '50%', transform: 'translate(-50%, -50%)',
+            fontFamily: 'JetBrains Mono, monospace', fontSize: 10, letterSpacing: '0.15em',
+            color: isLight ? 'rgba(0,0,0,0.35)' : 'rgba(255,255,255,0.35)',
+            textTransform: 'uppercase',
+          }}>{posterLabel}</div>}
+        </div>
 
         {/* Right rail icons */}
         <div style={{

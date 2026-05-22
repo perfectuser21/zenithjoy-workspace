@@ -400,7 +400,8 @@ export async function processVideoPipelineJob(
 
     // ── Template shortcut: skip AI design/compose-html, use server-rendered template ──
     if (job.template_id) {
-      const composeResult = await postJson<{ html?: string; aspect?: string }>(
+      type PhoneRect = { x: number; y: number; w: number; h: number };
+      const composeResult = await postJson<{ html?: string; aspect?: string; phoneRect?: PhoneRect | null }>(
         apiBase, `/api/ai-video/jobs/${id}/compose-template`,
         {
           transcript: transcript || topic || '精彩视频',
@@ -416,10 +417,11 @@ export async function processVideoPipelineJob(
       }
       const htmlContent = composeResult.html;
       const templateAspect = composeResult.aspect ?? '16:9';
+      const phoneRect = composeResult.phoneRect ?? null;
 
       const hfDir = path.join(tmpDir, 'hf');
       fs.mkdirSync(hfDir, { recursive: true });
-      fs.copyFileSync(roughCutPath, path.join(hfDir, path.basename(roughCutPath)));
+      // No need to copy roughCutPath to hfDir — video is composited by FFmpeg after HF render
       fs.writeFileSync(path.join(hfDir, 'index.html'), htmlContent, 'utf-8');
       const rendered = path.join(hfDir, 'rendered.mp4');
       console.log('[video-pipeline] HyperFrames template render...');
@@ -428,17 +430,50 @@ export async function processVideoPipelineJob(
         cwd: hfDir, timeout: 600_000, maxBuffer: 10 * 1024 * 1024, windowsHide: true,
         env: _hfEnv(),
       });
-      // Merge rough-cut audio into HyperFrames output (HF renders silent video)
+
+      // Composite rough-cut video into phone screen area + merge audio in one FFmpeg pass
       const mergedPath = path.join(tmpDir, 'rendered_with_audio.mp4');
-      try {
-        await runFfmpeg([
-          '-y', '-i', rendered, '-i', roughCutPath,
-          '-map', '0:v', '-map', '1:a',
-          '-c:v', 'copy', '-c:a', 'aac', '-b:a', '128k',
-          '-shortest', mergedPath,
-        ], { timeout: 120_000 });
-      } catch {
-        fs.copyFileSync(rendered, mergedPath);
+      if (phoneRect) {
+        const { x, y, w, h } = phoneRect;
+        // Scale rough-cut to phone screen (fill/crop), overlay at exact coordinates, merge audio
+        const filterComplex =
+          `[1:v]scale=${w}:${h}:force_original_aspect_ratio=increase,crop=${w}:${h}[ph];` +
+          `[0:v][ph]overlay=${x}:${y}:shortest=1[out]`;
+        try {
+          await runFfmpeg([
+            '-y', '-i', rendered, '-i', roughCutPath,
+            '-filter_complex', filterComplex,
+            '-map', '[out]', '-map', '1:a?',
+            '-c:v', 'libx264', '-crf', '23', '-c:a', 'aac', '-b:a', '128k',
+            '-t', String(refinedDuration),
+            mergedPath,
+          ], { timeout: 300_000 });
+          console.log(`[video-pipeline] phone overlay done (x=${x} y=${y} w=${w} h=${h})`);
+        } catch (overlayErr) {
+          console.warn('[video-pipeline] phone overlay failed, falling back to audio-only merge:', (overlayErr as Error).message?.slice(0, 120));
+          try {
+            await runFfmpeg([
+              '-y', '-i', rendered, '-i', roughCutPath,
+              '-map', '0:v', '-map', '1:a',
+              '-c:v', 'copy', '-c:a', 'aac', '-b:a', '128k',
+              '-shortest', mergedPath,
+            ], { timeout: 120_000 });
+          } catch {
+            fs.copyFileSync(rendered, mergedPath);
+          }
+        }
+      } else {
+        // No phoneRect — just merge audio (legacy / preview-only templates)
+        try {
+          await runFfmpeg([
+            '-y', '-i', rendered, '-i', roughCutPath,
+            '-map', '0:v', '-map', '1:a',
+            '-c:v', 'copy', '-c:a', 'aac', '-b:a', '128k',
+            '-shortest', mergedPath,
+          ], { timeout: 120_000 });
+        } catch {
+          fs.copyFileSync(rendered, mergedPath);
+        }
       }
 
       // Output only the video matching the template's aspect ratio
