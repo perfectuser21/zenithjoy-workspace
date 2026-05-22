@@ -1,7 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import fs from 'fs';
 import https from 'https';
-import path from 'path';
 import { AiVideoPipelineService } from '../services/ai-video-pipeline.service';
 import { getTemplate, TemplateSpec } from '../templates/registry';
 
