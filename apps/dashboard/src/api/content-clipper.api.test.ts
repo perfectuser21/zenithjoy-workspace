@@ -14,8 +14,15 @@ describe('content-clipper.api types', () => {
     expect(clip.status).toBe('pending');
   });
 
-  it('ClipSettings type has required fields', () => {
-    const s: ClipSettings = { defaultOutputUrl: null, defaultOutputType: null };
+  it('ClipSettings type has required fields including binding status', () => {
+    const s: ClipSettings = {
+      defaultOutputUrl: null,
+      defaultOutputType: null,
+      notionBound: false,
+      feishuBound: false,
+    };
     expect(s.defaultOutputUrl).toBeNull();
+    expect(s.notionBound).toBe(false);
+    expect(s.feishuBound).toBe(false);
   });
 });
