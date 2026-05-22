@@ -272,16 +272,27 @@ export async function processVideoPipelineJob(
   try {
     fireProgress(apiBase, id, 2);
 
-    // Step 1: probe duration (shell-based, 30s timeout)
+    // Step 1: probe duration + rotation metadata
     let duration = 30;
+    let videoRotation = 0; // degrees: 0, 90, 180, 270
+    let _ffprobePath = '';
     try {
-      const ffprobePath = findFfmpeg().replace(/ffmpeg(\.exe)?$/i, (m) =>
+      _ffprobePath = findFfmpeg().replace(/ffmpeg(\.exe)?$/i, (m) =>
         m.replace(/ffmpeg/i, 'ffprobe'));
-      const cmd = `${quoteArg(ffprobePath)} -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 ${quoteArg(videoPath)}`;
+      const cmd = `${quoteArg(_ffprobePath)} -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 ${quoteArg(videoPath)}`;
       const { stdout } = await execAsync(cmd, { windowsHide: true, timeout: 30_000, maxBuffer: 1024 * 1024 });
       const d = parseFloat(stdout.trim());
       if (d > 0) duration = d;
     } catch { /* use default 30s */ }
+    // Detect rotation metadata (phone videos are often encode as 1920×1080 with rotate=90)
+    if (_ffprobePath) {
+      try {
+        const rotCmd = `${quoteArg(_ffprobePath)} -v error -select_streams v:0 -show_entries stream_tags=rotate -of default=noprint_wrappers=1:nokey=1 ${quoteArg(videoPath)}`;
+        const { stdout: rotOut } = await execAsync(rotCmd, { windowsHide: true, timeout: 10_000, maxBuffer: 64 * 1024 });
+        videoRotation = parseInt(rotOut.trim(), 10) || 0;
+        if (videoRotation) console.log(`[video-pipeline] rotation detected: ${videoRotation}°`);
+      } catch { /* non-fatal */ }
+    }
     fireProgress(apiBase, id, 20);
 
     // Step 2: extract audio
@@ -436,9 +447,14 @@ export async function processVideoPipelineJob(
       const mergedPath = path.join(tmpDir, 'rendered_with_audio.mp4');
       if (phoneRect) {
         const { x, y, w, h } = phoneRect;
+        // Rotation correction: phone videos often have rotate=90/270 metadata.
+        // transpose=1 = 90°CW, transpose=2 = 90°CCW
+        const rotPrefix = videoRotation === 90 ? 'transpose=1,' :
+                          videoRotation === 270 ? 'transpose=2,' :
+                          videoRotation === 180 ? 'hflip,vflip,' : '';
         // Scale rough-cut to phone screen (fill/crop), overlay at exact coordinates, merge audio
         const filterComplex =
-          `[1:v]scale=${w}:${h}:force_original_aspect_ratio=increase,crop=${w}:${h}[ph];` +
+          `[1:v]${rotPrefix}scale=${w}:${h}:force_original_aspect_ratio=increase,crop=${w}:${h}[ph];` +
           `[0:v][ph]overlay=${x}:${y}:shortest=1[out]`;
         try {
           await runFfmpeg([
