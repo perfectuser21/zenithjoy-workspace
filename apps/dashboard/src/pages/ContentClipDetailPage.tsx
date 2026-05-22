@@ -26,8 +26,12 @@ export default function ContentClipDetailPage() {
     queryFn: () => getClip(id!),
     enabled: !!id,
     refetchInterval: (q) => {
-      const s = q.state.data?.status;
-      return (s === 'pending' || s === 'processing') ? 5_000 : false;
+      const d = q.state.data;
+      if (!d) return false;
+      if (d.status === 'pending' || d.status === 'processing') return 5_000;
+      // 图文：status=done 但 OCR 还没写入时继续轮询
+      if (d.status === 'done' && d.content_type === '图文' && !d.ocr_text) return 3_000;
+      return false;
     },
   });
 
