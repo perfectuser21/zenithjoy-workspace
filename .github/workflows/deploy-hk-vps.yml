@@ -28,8 +28,8 @@ jobs:
           script: |
             set -euo pipefail
             echo "=== [1/4] git sync (fetch + reset) ==="
-            git -C /opt/zenithjoy/repo fetch origin main
-            git -C /opt/zenithjoy/repo reset --hard origin/main
+            git -C /opt/zenithjoy/repo fetch --force --prune origin main
+            git -C /opt/zenithjoy/repo reset --hard FETCH_HEAD
 
             echo "=== [2/4] docker build ==="
             docker build \
@@ -43,9 +43,7 @@ jobs:
               up -d zenithjoy-api
 
             echo "=== [4/4] health check ==="
-            # Grace period: container process starts before HTTP server is ready
             sleep 10
-            # Poll up to 120s (24 x 5s); cold-start (no cache) observed at ~70s in practice
             for i in $(seq 1 24); do
               if curl -sf http://localhost:5200/health > /dev/null 2>&1; then
                 echo "Health check passed (attempt $i)"
@@ -74,3 +72,4 @@ jobs:
               "task_type": "dev",
               "description": "deploy-hk-vps.yml 失败，请人工介入"
             }' || echo "Brain API 不可达，跳过告警"
+
