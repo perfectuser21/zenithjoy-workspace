@@ -1147,6 +1147,14 @@ tests:
     product: 内容采集
     note: "Content Clipper — clips-auth 路由单元测试（飞书 OAuth redirect + callback 处理）"
 
+  - id: content-clipper-callback-content-type
+    path: apps/api/src/controllers/clips-callback-content-type.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 内容采集
+    note: "Content Clipper — handleCallback content_type 路由测试（图文用text/短视频用transcript）"
+
   - id: content-clipper-service
     path: apps/api/src/services/clips.service.test.ts
     type: unit
