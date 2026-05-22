@@ -1,0 +1,7 @@
+branch: cp-20260522-clips-ocr-display
+task_name: clips-ocr-display-fix
+harness_mode: false
+step_1_explore: done
+step_2_build: done
+step_3_test: done
+step_4_ship: done
