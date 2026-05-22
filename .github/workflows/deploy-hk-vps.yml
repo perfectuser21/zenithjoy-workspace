@@ -32,13 +32,15 @@ jobs:
             git -C /opt/zenithjoy/repo reset --hard FETCH_HEAD
 
             echo "=== [2/3] reload nginx ==="
-            if docker inspect autopilot-dashboard > /dev/null 2>&1; then
-              docker exec autopilot-dashboard nginx -s reload
-            else
+            docker compose \
+              -f /opt/zenithjoy/repo/deploy/docker-compose.hk.yml \
+              up -d autopilot-dashboard || {
+              docker rm -f autopilot-dashboard 2>/dev/null || true
               docker compose \
                 -f /opt/zenithjoy/repo/deploy/docker-compose.hk.yml \
                 up -d autopilot-dashboard
-            fi
+            }
+            docker exec autopilot-dashboard nginx -s reload 2>/dev/null || true
 
             echo "=== [3/3] health check ==="
             sleep 3
