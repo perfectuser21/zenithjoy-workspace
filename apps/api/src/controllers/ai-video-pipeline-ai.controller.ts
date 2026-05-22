@@ -178,23 +178,50 @@ Layout 类型规则：
 4. 相邻帧 layout 不重复
 5. 只输出 JSON，不要其他内容`;
 
-    const result = await postJson(
-      'https://openrouter.ai/api/v1/chat/completions',
-      { Authorization: `Bearer ${OPENROUTER_KEY}` },
-      {
-        model: 'anthropic/claude-sonnet-4-5',
-        max_tokens: 2048,
-        messages: [{ role: 'user', content: prompt }],
-      },
-    ) as { choices?: { message?: { content?: string } }[]; error?: { message?: string } };
+    let scenes: unknown[] = [];
+    try {
+      const result = await postJson(
+        'https://openrouter.ai/api/v1/chat/completions',
+        { Authorization: `Bearer ${OPENROUTER_KEY}` },
+        {
+          model: 'qwen/qwen3.7-max',
+          max_tokens: 2048,
+          messages: [{ role: 'user', content: prompt }],
+        },
+      ) as { choices?: { message?: { content?: string } }[] };
+      const raw = result?.choices?.[0]?.message?.content ?? '{}';
+      const jsonMatch = raw.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        const parsed = JSON.parse(jsonMatch[0]) as { scenes?: unknown[] };
+        if (parsed?.scenes?.length) scenes = parsed.scenes;
+      }
+    } catch { /* fall through to segment fallback */ }
 
-    if (result?.error) return res.status(502).json({ error: result.error.message || 'OpenRouter error' });
-    const raw = result?.choices?.[0]?.message?.content ?? '{}';
-    const jsonMatch = raw.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) return res.status(500).json({ error: 'model returned invalid JSON' });
+    // Fallback: derive scenes from segments when model is unavailable
+    if (!scenes.length && segments?.length) {
+      const sceneCount = Math.min(Math.max(Math.ceil(duration / 7), 3), 6);
+      const chunkSize = Math.max(1, Math.ceil(segments.length / sceneCount));
+      const layouts = ['burst', 'tags', 'stats'] as const;
+      for (let i = 0; i < segments.length; i += chunkSize) {
+        const sl = segments.slice(i, i + chunkSize);
+        const isLast = i + chunkSize >= segments.length;
+        const text = sl.map((s) => s.text).join(' ');
+        scenes.push({
+          start: sl[0].start,
+          duration: Math.max(sl[sl.length - 1].end - sl[0].start, 3),
+          layout: isLast ? 'finale' : layouts[Math.min(scenes.length, layouts.length - 1)],
+          eyebrow: `SCENE ${String(scenes.length + 1).padStart(2, '0')}`,
+          title: text.slice(0, 10),
+          body: text.slice(0, 20),
+          tags: text.split(/[，,。！？\s]+/).filter((w) => w.length >= 2 && w.length <= 5).slice(0, 4),
+        });
+      }
+    }
+    if (!scenes.length) {
+      scenes = [{ start: 0, duration, layout: 'burst', eyebrow: 'SCENE 01', title: transcript.slice(0, 10) || '精彩内容', body: transcript.slice(0, 20) || '', tags: [] }];
+    }
 
-    const parsed = JSON.parse(jsonMatch[0]) as { scenes: unknown[] };
-    res.json(parsed);
+    res.json({ scenes });
   } catch (err) { next(err); }
 }
 
