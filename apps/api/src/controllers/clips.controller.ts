@@ -131,7 +131,7 @@ export async function handleCallback(req: Request, res: Response, next: NextFunc
     });
 
     pushClipOutput(clip as Parameters<typeof pushClipOutput>[0]).then(async (result) => {
-      const outStatus = result.success ? 'pushed' : (result.error === 'no_output_configured' ? 'skipped' : 'failed');
+      const outStatus = result.success ? 'pushed' : (['no_output_configured', 'no_binding'].includes(result.error ?? '') ? 'skipped' : 'failed');
       await updateClipStatus(id, 'done', { output_status: outStatus }).catch(() => {});
     }).catch(() => {});
 

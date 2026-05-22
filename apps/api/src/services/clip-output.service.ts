@@ -1,4 +1,8 @@
 import axios from 'axios';
+import pool from '../db/connection';
+import { upsertFeishuBinding } from './clips.service';
+import { refreshFeishuToken } from './clips-auth.service';
+import type { Clip } from './clips.service';
 
 export type ParsedOutput =
   | { type: 'notion'; databaseId: string }
@@ -8,7 +12,6 @@ export type ParsedOutput =
 export function parseOutputUrl(url: string): ParsedOutput {
   if (!url) return null;
 
-  // Notion: 提取路径中 32 位 hex（含或不含连字符）
   if (url.includes('notion.so') || url.includes('notion.site')) {
     const stripped = url.replace(/-/g, '');
     const hex32 = stripped.match(/([a-f0-9]{32})(?:[^a-f0-9]|$)/i);
@@ -18,7 +21,6 @@ export function parseOutputUrl(url: string): ParsedOutput {
     return { type: 'notion', databaseId };
   }
 
-  // Feishu: 路径 /base/{appToken}?table={tableId}
   if (url.includes('feishu.cn') || url.includes('larksuite.com')) {
     const match = url.match(/\/base\/([^/?#]+)/);
     if (!match) return null;
@@ -31,25 +33,32 @@ export function parseOutputUrl(url: string): ParsedOutput {
   return null;
 }
 
-interface ClipData {
-  id: string;
-  url: string;
-  platform: string;
-  title?: string | null;
-  transcript?: string | null;
-  images?: unknown[];
-  author?: string | null;
-  like_count?: number | null;
-  output_url?: string | null;
-  output_type?: string | null;
+async function getUserTokens(userId: string): Promise<{
+  notionToken: string | null;
+  feishuToken: string | null;
+  feishuRefreshToken: string | null;
+  feishuExpiresAt: Date | null;
+}> {
+  const r = await pool.query<{
+    notion_token: string | null;
+    feishu_user_token: string | null;
+    feishu_refresh_token: string | null;
+    feishu_token_expires_at: Date | null;
+  }>(
+    `SELECT notion_token, feishu_user_token, feishu_refresh_token, feishu_token_expires_at
+     FROM zenithjoy.user_clip_settings WHERE user_id = $1`,
+    [userId]
+  );
+  const row = r.rows[0];
+  return {
+    notionToken: row?.notion_token ?? null,
+    feishuToken: row?.feishu_user_token ?? null,
+    feishuRefreshToken: row?.feishu_refresh_token ?? null,
+    feishuExpiresAt: row?.feishu_token_expires_at ?? null,
+  };
 }
 
-async function pushToNotion(clip: ClipData): Promise<void> {
-  const token = process.env.NOTION_API_KEY;
-  if (!token) {
-    console.warn('[clip-output] NOTION_API_KEY 未配置，跳过 Notion 推送');
-    return;
-  }
+async function pushToNotion(clip: Clip, token: string): Promise<void> {
   const parsed = parseOutputUrl(clip.output_url || '');
   if (!parsed || parsed.type !== 'notion') throw new Error('invalid notion output_url');
 
@@ -99,27 +108,12 @@ async function pushToNotion(clip: ClipData): Promise<void> {
   }
 }
 
-async function getFeishuToken(): Promise<string> {
-  const appId = process.env.FEISHU_APP_ID || '';
-  const appSecret = process.env.FEISHU_APP_SECRET || '';
-  if (!appId || !appSecret) throw new Error('FEISHU_APP_ID / FEISHU_APP_SECRET 未配置');
-
-  const resp = await axios.post<{ code: number; tenant_access_token: string }>(
-    'https://open.feishu.cn/open-apis/auth/v3/tenant_access_token/internal',
-    { app_id: appId, app_secret: appSecret }
-  );
-  if (resp.data.code !== 0) throw new Error(`飞书获取 Token 失败: code=${resp.data.code}`);
-  return resp.data.tenant_access_token;
-}
-
-async function pushToFeishu(clip: ClipData): Promise<void> {
+async function pushToFeishu(clip: Clip, userToken: string): Promise<void> {
   const parsed = parseOutputUrl(clip.output_url || '');
   if (!parsed || parsed.type !== 'feishu') throw new Error('invalid feishu output_url');
   if (!parsed.tableId) throw new Error('飞书 Bitable URL 缺少 table 参数');
 
-  const token = await getFeishuToken();
   const today = new Date().toISOString().split('T')[0];
-
   const fields: Record<string, unknown> = {
     '标题': clip.title || '未命名',
     '链接': { link: clip.url, text: clip.url },
@@ -133,23 +127,45 @@ async function pushToFeishu(clip: ClipData): Promise<void> {
   const resp = await axios.post(
     `https://open.feishu.cn/open-apis/bitable/v1/apps/${parsed.appToken}/tables/${parsed.tableId}/records`,
     { fields },
-    { headers: { Authorization: `Bearer ${token}` } }
+    { headers: { Authorization: `Bearer ${userToken}` } }
   );
   if (resp.data.code !== 0) {
     throw new Error(`飞书写入失败: code=${resp.data.code} msg=${resp.data.msg}`);
   }
 }
 
-export async function pushClipOutput(clip: ClipData): Promise<{ success: boolean; error?: string }> {
+export async function pushClipOutput(clip: Clip): Promise<{ success: boolean; error?: string }> {
   if (!clip.output_url || !clip.output_type) {
     return { success: false, error: 'no_output_configured' };
   }
+
+  const tokens = await getUserTokens(clip.user_id);
+
   try {
     if (clip.output_type === 'notion') {
-      await pushToNotion(clip);
+      if (!tokens.notionToken) return { success: false, error: 'no_binding' };
+      await pushToNotion(clip, tokens.notionToken);
+
     } else if (clip.output_type === 'feishu') {
-      await pushToFeishu(clip);
+      let feishuToken = tokens.feishuToken;
+      if (!feishuToken) return { success: false, error: 'no_binding' };
+
+      // Auto-refresh if expiring within 5 minutes
+      if (tokens.feishuExpiresAt && tokens.feishuExpiresAt < new Date(Date.now() + 5 * 60 * 1000)) {
+        if (tokens.feishuRefreshToken) {
+          try {
+            const refreshed = await refreshFeishuToken(tokens.feishuRefreshToken);
+            await upsertFeishuBinding(clip.user_id, refreshed);
+            feishuToken = refreshed.userToken;
+          } catch (e) {
+            console.warn('[clip-output] feishu refresh failed, using existing token');
+          }
+        }
+      }
+
+      await pushToFeishu(clip, feishuToken);
     }
+
     return { success: true };
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
