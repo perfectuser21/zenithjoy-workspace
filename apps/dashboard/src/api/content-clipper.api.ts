@@ -43,23 +43,12 @@ async function apiFetch<T>(url: string, init?: RequestInit): Promise<T> {
   return json as T;
 }
 
-export async function submitClip(
-  url: string,
-  outputUrl?: string
-): Promise<Clip & { alreadyExists?: boolean }> {
-  try {
-    return await apiFetch<Clip>(BASE, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ url, output_url: outputUrl || undefined }),
-    });
-  } catch (err: unknown) {
-    const e = err as { status?: number; body?: { id?: string } };
-    if (e.status === 409 && e.body?.id) {
-      return { id: e.body.id } as Clip & { alreadyExists: true };
-    }
-    throw err;
-  }
+export async function submitClip(url: string, outputUrl?: string): Promise<Clip> {
+  return apiFetch<Clip>(BASE, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ url, output_url: outputUrl || undefined }),
+  });
 }
 
 export async function listClips(params: {

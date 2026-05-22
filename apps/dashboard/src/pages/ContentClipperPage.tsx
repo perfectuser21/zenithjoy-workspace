@@ -89,16 +89,11 @@ export default function ContentClipperPage() {
       const cleanUrl = extractUrl(pasteText);
       return submitClip(cleanUrl, outputUrl.trim() || undefined);
     },
-    onSuccess: (result) => {
-      if ((result as { alreadyExists?: boolean }).alreadyExists) {
-        setSubmitMsg({ type: 'info', text: '已存在，跳转详情...' });
-        setTimeout(() => navigate(`/clips/${result.id}`), 800);
-      } else {
-        setSubmitMsg({ type: 'success', text: '已提交，正在采集...' });
-        setPasteText('');
-        setOutputUrl('');
-        qc.invalidateQueries({ queryKey: ['clips', 'list'] });
-      }
+    onSuccess: () => {
+      setSubmitMsg({ type: 'success', text: '已提交，正在采集...' });
+      setPasteText('');
+      setOutputUrl('');
+      qc.invalidateQueries({ queryKey: ['clips', 'list'] });
     },
     onError: (err: Error) => setSubmitMsg({ type: 'error', text: err.message }),
   });

@@ -3,6 +3,22 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getClip, retryClip } from '../api/content-clipper.api';
 
+function CopyButton({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+  const copy = () => {
+    navigator.clipboard.writeText(text).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  };
+  return (
+    <button onClick={copy}
+      className="text-xs px-2 py-1 rounded bg-gray-100 hover:bg-gray-200 text-gray-600 transition-colors">
+      {copied ? '已复制' : '复制'}
+    </button>
+  );
+}
+
 const PLATFORM_LABEL: Record<string, string> = { douyin: '抖音', xiaohongshu: '小红书' };
 const OUTPUT_STATUS_LABEL: Record<string, string> = {
   pending: '待推送', pushed: '已推送', failed: '推送失败', skipped: '无输出配置',
@@ -124,7 +140,10 @@ export default function ContentClipDetailPage() {
 
       {clip.ocr_text && (
         <div className="bg-blue-50 border border-blue-100 rounded-lg p-4 mb-6">
-          <h2 className="text-sm font-semibold text-gray-700 mb-2">图文文字（OCR）</h2>
+          <div className="flex items-center justify-between mb-2">
+            <h2 className="text-sm font-semibold text-gray-700">图文文字（OCR）</h2>
+            <CopyButton text={clip.ocr_text} />
+          </div>
           <p className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">
             {ocrExpanded ? clip.ocr_text : (ocrPreview || '')}
             {ocrLong && !ocrExpanded && '...'}
@@ -140,7 +159,10 @@ export default function ContentClipDetailPage() {
 
       {clip.transcript && (
         <div className="bg-gray-50 border rounded-lg p-4 mb-6">
-          <h2 className="text-sm font-semibold text-gray-700 mb-2">转写文案</h2>
+          <div className="flex items-center justify-between mb-2">
+            <h2 className="text-sm font-semibold text-gray-700">转写文案</h2>
+            <CopyButton text={clip.transcript} />
+          </div>
           <p className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">
             {transcriptExpanded ? clip.transcript : (transcriptPreview || '')}
             {transcriptLong && !transcriptExpanded && '...'}

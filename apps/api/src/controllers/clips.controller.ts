@@ -62,7 +62,9 @@ export async function submitClip(req: Request, res: Response, next: NextFunction
 
     const existing = await getExistingClip(userId, normalizedUrl);
     if (existing) {
-      return res.status(409).json({ error: 'already_exists', id: existing.id });
+      const clip = await updateClipStatus(existing.id, 'pending', { output_status: 'pending' });
+      extractClip(clip.id, clip.url).catch(() => {});
+      return res.status(200).json(clip);
     }
 
     const clip = await createClip({ userId, url: normalizedUrl, platform, outputUrl, outputType });
