@@ -4,7 +4,7 @@
  * 覆盖：
  *   1. 打开 /clips → 表单可见 → 提交 → 看到成功提示
  *   2. 列表展示 pending 条目 → 点击 → 跳转详情页
- *   3. 设置 tab → 保存默认输出链接
+ *   3. 设置 tab → 显示飞书和 Notion 绑定区块
  *
  * API 全部 stub（page.route），不依赖真实后端或 content-service。
  */
@@ -13,6 +13,14 @@ import { test, expect } from '@playwright/test';
 const CLIP_ID = 'aaaa1111-0000-0000-0000-000000000001';
 const DOUYIN_URL = 'https://v.douyin.com/test-abc123/';
 const NOTION_URL = 'https://www.notion.so/mydb/abcd1234567890abcdef1234567890ab';
+
+const FAKE_SETTINGS_UNBOUND = {
+  defaultOutputUrl: null,
+  defaultOutputType: null,
+  notionBound: false,
+  feishuBound: false,
+  feishuUserName: null,
+};
 
 const FAKE_CLIP_PENDING = {
   id: CLIP_ID,
@@ -51,7 +59,9 @@ const FAKE_CLIP_DONE = {
 };
 
 test('表单可见 → 提交链接 → 显示成功提示', async ({ page }) => {
-  await page.route('**/api/clips/settings', (route) => route.fulfill({ json: null }));
+  await page.route('**/api/clips/settings', (route) =>
+    route.fulfill({ json: FAKE_SETTINGS_UNBOUND })
+  );
   await page.route('**/api/clips?**', (route) =>
     route.fulfill({ json: { data: [], total: 0 } })
   );
@@ -65,7 +75,6 @@ test('表单可见 → 提交链接 → 显示成功提示', async ({ page }) =>
 
   await page.goto('/clips');
 
-  // 用 h1 避免匹配到侧边栏的导航菜单文字
   await expect(page.locator('h1')).toContainText('内容采集');
   await expect(page.getByText('暂无记录，粘贴链接开始采集')).toBeVisible();
 
@@ -77,7 +86,9 @@ test('表单可见 → 提交链接 → 显示成功提示', async ({ page }) =>
 });
 
 test('列表展示条目 → 点击跳转详情', async ({ page }) => {
-  await page.route('**/api/clips/settings', (route) => route.fulfill({ json: null }));
+  await page.route('**/api/clips/settings', (route) =>
+    route.fulfill({ json: FAKE_SETTINGS_UNBOUND })
+  );
   await page.route('**/api/clips?**', (route) =>
     route.fulfill({ json: { data: [FAKE_CLIP_PENDING], total: 1 } })
   );
@@ -87,26 +98,19 @@ test('列表展示条目 → 点击跳转详情', async ({ page }) => {
 
   await page.goto('/clips');
 
-  // 列表里有 pending 条目（URL 文本可见）
-  // locator('span') 避免匹配 filter <select> 里的 <option> 元素
   await expect(page.locator('span', { hasText: '待处理' }).first()).toBeVisible();
   await expect(page.getByText(DOUYIN_URL)).toBeVisible();
 
-  // 点击跳转详情
   await page.getByText(DOUYIN_URL).click();
   await expect(page).toHaveURL(new RegExp(`/clips/${CLIP_ID}`));
   await expect(page.getByText('测试视频标题')).toBeVisible();
   await expect(page.getByText('这是一段转写文案')).toBeVisible();
 });
 
-test('设置 tab → 保存默认输出链接', async ({ page }) => {
-  await page.route('**/api/clips/settings', async (route) => {
-    if (route.request().method() === 'GET') {
-      await route.fulfill({ json: null });
-    } else {
-      await route.fulfill({ status: 200, json: {} });
-    }
-  });
+test('设置 tab → 显示飞书和 Notion 绑定区块', async ({ page }) => {
+  await page.route('**/api/clips/settings', (route) =>
+    route.fulfill({ json: FAKE_SETTINGS_UNBOUND })
+  );
   await page.route('**/api/clips?**', (route) =>
     route.fulfill({ json: { data: [], total: 0 } })
   );
@@ -114,8 +118,13 @@ test('设置 tab → 保存默认输出链接', async ({ page }) => {
   await page.goto('/clips');
 
   await page.getByRole('button', { name: '设置' }).click();
-  await page.getByPlaceholder(/Notion 数据库链接/).fill(NOTION_URL);
-  await page.getByRole('button', { name: /保存设置/ }).click();
 
-  await expect(page.getByText(/已保存/)).toBeVisible({ timeout: 5000 });
+  // 飞书绑定区块
+  await expect(page.locator('h3', { hasText: '飞书 Bitable' })).toBeVisible();
+  await expect(page.locator('span', { hasText: '未绑定' }).first()).toBeVisible();
+  await expect(page.getByRole('button', { name: '绑定飞书' })).toBeVisible();
+
+  // Notion 绑定区块
+  await expect(page.locator('h3', { hasText: 'Notion' })).toBeVisible();
+  await expect(page.locator('input[placeholder*="ntn_"]')).toBeVisible();
 });
