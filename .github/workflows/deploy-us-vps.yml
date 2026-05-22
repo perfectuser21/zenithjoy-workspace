@@ -1,61 +1,55 @@
-name: Deploy API to US VPS
+name: Deploy API to US Mac
 
 on:
   push:
     branches: [main]
     paths:
       - 'apps/api/**'
-      - 'deploy/docker-compose.us.yml'
 
 jobs:
   deploy-api:
-    name: Deploy API to US VPS
+    name: Deploy API to US Mac (pm2)
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
       - name: Deploy via SSH
         uses: appleboy/ssh-action@v1.0.3
         with:
-          host: ${{ secrets.US_VPS_HOST }}
-          username: ${{ secrets.US_VPS_USER }}
-          key: ${{ secrets.US_VPS_SSH_KEY }}
-          port: ${{ secrets.US_VPS_PORT }}
+          host: ${{ secrets.US_MAC_HOST }}
+          username: ${{ secrets.US_MAC_USER }}
+          key: ${{ secrets.US_MAC_SSH_KEY }}
+          port: ${{ secrets.US_MAC_PORT }}
           script_stop: true
           script: |
             set -euo pipefail
+            REPO=/Users/administrator/perfect21/zenithjoy
+
             echo "=== [1/4] git sync ==="
-            git -C /opt/zenithjoy/repo fetch --force --prune origin main
-            git -C /opt/zenithjoy/repo reset --hard FETCH_HEAD
+            git -C "$REPO" fetch --force --prune origin main
+            git -C "$REPO" reset --hard FETCH_HEAD
 
-            echo "=== [1.5/4] prune stale build cache ==="
-            docker builder prune -f --filter "until=48h" || true
+            echo "=== [2/4] install & build ==="
+            cd "$REPO"
+            npm ci --workspace=apps/api --ignore-scripts 2>/dev/null || \
+              (cd apps/api && npm ci --ignore-scripts)
+            npm run build --workspace=apps/api 2>/dev/null || \
+              (cd apps/api && npm run build)
 
-            echo "=== [2/4] docker build ==="
-            docker build \
-              -f /opt/zenithjoy/repo/apps/api/Dockerfile \
-              -t zenithjoy-api:latest \
-              /opt/zenithjoy/repo
-
-            echo "=== [3/4] docker compose up ==="
-            docker compose \
-              -f /opt/zenithjoy/repo/deploy/docker-compose.us.yml \
-              up -d zenithjoy-api
+            echo "=== [3/4] pm2 restart ==="
+            pm2 restart zenithjoy-api --update-env
 
             echo "=== [4/4] health check ==="
-            sleep 10
-            for i in $(seq 1 24); do
+            sleep 5
+            for i in $(seq 1 12); do
               if curl -sf http://localhost:5200/health > /dev/null 2>&1; then
                 echo "Health check passed (attempt $i)"
                 exit 0
               fi
-              echo "Attempt $i/24 failed, waiting 5s..."
+              echo "Attempt $i/12 failed, waiting 5s..."
               sleep 5
             done
-            echo "Health check FAILED after 130s"
-            docker logs zenithjoy-api --tail 50
+            echo "Health check FAILED after 65s"
+            pm2 logs zenithjoy-api --lines 30 --nostream
             exit 1
 
   notify-failure:
