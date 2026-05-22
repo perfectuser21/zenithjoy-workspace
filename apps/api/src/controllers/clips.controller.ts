@@ -20,6 +20,18 @@ async function getSession(req: Request) {
   return auth.api.getSession({ headers: fromNodeHeaders(req.headers) });
 }
 
+// 把 jingxuan?modal_id=VIDEOID 转换成 /video/VIDEOID 让 content-service 能识别
+function normalizeDouyinUrl(url: string): string {
+  try {
+    const u = new URL(url);
+    if (u.hostname === 'www.douyin.com' && u.pathname.includes('jingxuan')) {
+      const modalId = u.searchParams.get('modal_id');
+      if (modalId) return `https://www.douyin.com/video/${modalId}`;
+    }
+  } catch {}
+  return url;
+}
+
 export async function submitClip(req: Request, res: Response, next: NextFunction) {
   try {
     const session = await getSession(req);
@@ -32,7 +44,8 @@ export async function submitClip(req: Request, res: Response, next: NextFunction
     };
     if (!rawUrl?.trim()) return res.status(400).json({ error: 'url_required' });
 
-    const platform = detectPlatform(rawUrl.trim());
+    const normalizedUrl = normalizeDouyinUrl(rawUrl.trim());
+    const platform = detectPlatform(normalizedUrl);
     if (!platform) return res.status(400).json({ error: 'unsupported_platform' });
 
     let outputUrl = rawOutputUrl?.trim() || null;
@@ -47,12 +60,12 @@ export async function submitClip(req: Request, res: Response, next: NextFunction
       outputType = parsed?.type ?? null;
     }
 
-    const existing = await getExistingClip(userId, rawUrl.trim());
+    const existing = await getExistingClip(userId, normalizedUrl);
     if (existing) {
       return res.status(409).json({ error: 'already_exists', id: existing.id });
     }
 
-    const clip = await createClip({ userId, url: rawUrl.trim(), platform, outputUrl, outputType });
+    const clip = await createClip({ userId, url: normalizedUrl, platform, outputUrl, outputType });
     extractClip(clip.id, clip.url).catch(() => {});
     return res.status(201).json(clip);
   } catch (err) {
