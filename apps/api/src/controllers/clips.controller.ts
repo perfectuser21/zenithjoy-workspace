@@ -13,6 +13,8 @@ import {
 } from '../services/clips.service';
 import { extractClip } from '../services/clips-extractor.service';
 import { parseOutputUrl, pushClipOutput } from '../services/clip-output.service';
+import { validateNotionToken } from '../services/clips-auth.service';
+import { upsertNotionToken, clearFeishuBinding, clearNotionToken } from '../services/clips.service';
 
 async function getSession(req: Request) {
   return auth.api.getSession({ headers: fromNodeHeaders(req.headers) });
@@ -163,4 +165,34 @@ export async function saveUserSettings(req: Request, res: Response, next: NextFu
   } catch (err) {
     next(err);
   }
+}
+
+export async function saveNotionToken(req: Request, res: Response) {
+  const session = await getSession(req);
+  if (!session?.user) return res.status(401).json({ error: 'unauthorized' });
+
+  const { token } = req.body as { token: string };
+  if (!token || (!token.startsWith('ntn_') && !token.startsWith('secret_'))) {
+    return res.status(400).json({ error: 'invalid_token_format' });
+  }
+
+  const valid = await validateNotionToken(token);
+  if (!valid) return res.status(400).json({ error: 'notion_token_invalid' });
+
+  await upsertNotionToken(session.user.id, token);
+  return res.json({ success: true });
+}
+
+export async function deleteFeishuBinding(req: Request, res: Response) {
+  const session = await getSession(req);
+  if (!session?.user) return res.status(401).json({ error: 'unauthorized' });
+  await clearFeishuBinding(session.user.id);
+  return res.json({ success: true });
+}
+
+export async function deleteNotionBinding(req: Request, res: Response) {
+  const session = await getSession(req);
+  if (!session?.user) return res.status(401).json({ error: 'unauthorized' });
+  await clearNotionToken(session.user.id);
+  return res.json({ success: true });
 }
