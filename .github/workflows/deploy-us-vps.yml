@@ -8,7 +8,7 @@ on:
 
 jobs:
   deploy-api:
-    name: Deploy API to US Mac (pm2)
+    name: Deploy API to US Mac (launchd)
     runs-on: ubuntu-latest
 
     steps:
@@ -23,6 +23,7 @@ jobs:
           script: |
             set -euo pipefail
             REPO=/Users/administrator/perfect21/zenithjoy
+            PLIST=~/Library/LaunchAgents/com.zenithjoy.api.plist
 
             echo "=== [1/4] git sync ==="
             git -C "$REPO" fetch --force --prune origin main
@@ -35,8 +36,10 @@ jobs:
             npm run build --workspace=apps/api 2>/dev/null || \
               (cd apps/api && npm run build)
 
-            echo "=== [3/4] pm2 restart ==="
-            pm2 restart zenithjoy-api --update-env
+            echo "=== [3/4] launchctl restart ==="
+            launchctl unload "$PLIST" 2>/dev/null || true
+            sleep 1
+            launchctl load "$PLIST"
 
             echo "=== [4/4] health check ==="
             sleep 5
@@ -49,7 +52,7 @@ jobs:
               sleep 5
             done
             echo "Health check FAILED after 65s"
-            pm2 logs zenithjoy-api --lines 30 --nostream
+            tail -50 ~/Library/Logs/zenithjoy-api.error.log 2>/dev/null || true
             exit 1
 
   notify-failure:
