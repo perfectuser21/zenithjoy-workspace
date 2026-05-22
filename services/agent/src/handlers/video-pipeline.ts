@@ -283,14 +283,32 @@ export async function processVideoPipelineJob(
       throw new Error(`[Step 1 FAILED] ffprobe duration: ${(err as Error).message}`);
     }
 
-    // Rotation detection — non-fatal (rotation=0 is safe default)
+    // Rotation detection — non-fatal (rotation=0 is safe default).
+    // JSON mode captures both legacy stream_tags.rotate AND modern Display Matrix side data.
+    // Modern iPhones and Android phones store rotation in Display Matrix, not the rotate tag.
     try {
-      const rotCmd = `${quoteArg(ffprobePath)} -v error -select_streams v:0 -show_entries stream_tags=rotate -of default=noprint_wrappers=1:nokey=1 ${quoteArg(videoPath)}`;
-      const { stdout: rotOut } = await execAsync(rotCmd, { windowsHide: true, timeout: 10_000, maxBuffer: 64 * 1024 });
-      videoRotation = parseInt(rotOut.trim(), 10) || 0;
+      const rotCmd = `${quoteArg(ffprobePath)} -v error -select_streams v:0 -print_format json -show_streams ${quoteArg(videoPath)}`;
+      const { stdout: rotOut } = await execAsync(rotCmd, { windowsHide: true, timeout: 10_000, maxBuffer: 512 * 1024 });
+      interface FfprobeStream {
+        tags?: { rotate?: string };
+        side_data_list?: Array<{ side_data_type?: string; rotation?: number }>;
+      }
+      const probe = JSON.parse(rotOut) as { streams?: FfprobeStream[] };
+      const vStream = probe.streams?.[0];
+      // 1. Display Matrix (modern phones): rotation is negative-CCW, -90 = needs 90° CW correction
+      const displayMatrix = vStream?.side_data_list?.find(
+        (sd) => sd.side_data_type === 'Display Matrix',
+      );
+      if (displayMatrix?.rotation !== undefined) {
+        videoRotation = Math.abs(Math.round(displayMatrix.rotation));
+      }
+      // 2. Legacy stream tag fallback
+      if (!videoRotation && vStream?.tags?.rotate) {
+        videoRotation = parseInt(vStream.tags.rotate, 10) || 0;
+      }
     } catch { /* non-fatal */ }
 
-    console.log(`[Step 1/7] ✓ duration=${duration.toFixed(1)}s rotation=${videoRotation}°`);
+    console.log(`[Step 1/7] ✓ duration=${duration.toFixed(1)}s rotation=${videoRotation}° (0=no rotation or not detected)`);
     fireProgress(apiBase, id, 20, 'step1_probe');
 
     // ── Step 2: audio extraction (REQUIRED) ─────────────────────────────────
@@ -489,8 +507,10 @@ export async function processVideoPipelineJob(
           `[0:v][ph]overlay=${x}:${y}:shortest=1[out]`;
         console.log(`[Step 6/7] phoneRect x=${x} y=${y} w=${w} h=${h} rotation=${videoRotation}°`);
         try {
+          // -noautorotate on roughCutPath prevents FFmpeg from auto-applying rotate metadata
+          // before our filter sees the raw frame. We apply rotation manually via transpose.
           await runFfmpeg([
-            '-y', '-i', rendered, '-i', roughCutPath,
+            '-y', '-i', rendered, '-noautorotate', '-i', roughCutPath,
             '-filter_complex', filterComplex,
             '-map', '[out]', '-map', '1:a?',
             '-c:v', 'libx264', '-crf', '23', '-c:a', 'aac', '-b:a', '128k',
