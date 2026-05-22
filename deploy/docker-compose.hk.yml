@@ -14,15 +14,8 @@ services:
       POSTGRES_USER: cecelia
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: cecelia
-    command: >
-      postgres
-      -c wal_level=replica
-      -c archive_mode=on
-      -c archive_command='cp %p /var/lib/postgresql/wal_archive/%f'
-      -c archive_timeout=300
     volumes:
       - zenithjoy-pg-data:/var/lib/postgresql/data
-      - /opt/zenithjoy-wal-archive:/var/lib/postgresql/wal_archive
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U cecelia"]
       interval: 10s
