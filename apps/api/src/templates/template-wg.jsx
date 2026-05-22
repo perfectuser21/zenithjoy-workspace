@@ -164,7 +164,7 @@ function SlideWG({ slots: rawSlots }) {
           handle={hook.handle}
           caption={hook.caption}
           hashtags={hook.hashtags}
-          posterFill={hook.videoSrc ? `url(${hook.videoSrc})` : null}
+          videoSrc={hook.videoSrc || null}
         />
       </div>
 
