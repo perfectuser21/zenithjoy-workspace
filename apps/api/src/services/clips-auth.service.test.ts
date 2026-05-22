@@ -60,3 +60,30 @@ describe('validateNotionToken', () => {
     expect(result).toBe(false);
   });
 });
+
+describe('parseFeishuState', () => {
+  it('有效 state 返回 userId 和 timestamp', async () => {
+    const { parseFeishuState, buildFeishuOAuthUrl } = await import('./clips-auth.service');
+    // Build a real state then parse it
+    process.env.FEISHU_APP_ID = 'app1';
+    process.env.API_PUBLIC_URL = 'https://example.com';
+    const url = buildFeishuOAuthUrl('user42');
+    const state = new URL(url).searchParams.get('state') || '';
+    const result = parseFeishuState(state);
+    expect(result?.userId).toBe('user42');
+    expect(result?.timestamp).toBeGreaterThan(0);
+  });
+
+  it('过期 state 返回 null', async () => {
+    const { parseFeishuState } = await import('./clips-auth.service');
+    // timestamp 11 minutes ago = expired
+    const oldTs = Date.now() - 11 * 60 * 1000;
+    const fakeState = `abc123def456abcd:${oldTs}:user99`;
+    expect(parseFeishuState(fakeState)).toBeNull();
+  });
+
+  it('格式错误 state 返回 null', async () => {
+    const { parseFeishuState } = await import('./clips-auth.service');
+    expect(parseFeishuState('notvalid')).toBeNull();
+  });
+});
