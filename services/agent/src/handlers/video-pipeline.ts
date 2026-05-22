@@ -400,7 +400,7 @@ export async function processVideoPipelineJob(
 
     // ── Template shortcut: skip AI design/compose-html, use server-rendered template ──
     if (job.template_id) {
-      const composeResult = await postJson<{ html?: string }>(
+      const composeResult = await postJson<{ html?: string; aspect?: string }>(
         apiBase, `/api/ai-video/jobs/${id}/compose-template`,
         {
           transcript: transcript || topic || '精彩视频',
@@ -411,12 +411,11 @@ export async function processVideoPipelineJob(
       );
       fireProgress(apiBase, id, 65);
 
-      const output916 = path.join(outputDir, '9_16.mp4');
-      const output169 = path.join(outputDir, '16_9.mp4');
       if (!composeResult?.html) {
         throw new Error('[video-pipeline] compose-template 步骤失败，未返回 HTML');
       }
       const htmlContent = composeResult.html;
+      const templateAspect = composeResult.aspect ?? '16:9';
 
       const hfDir = path.join(tmpDir, 'hf');
       fs.mkdirSync(hfDir, { recursive: true });
@@ -441,11 +440,15 @@ export async function processVideoPipelineJob(
       } catch {
         fs.copyFileSync(rendered, mergedPath);
       }
-      fs.copyFileSync(mergedPath, output169);
-      await runFfmpeg(['-y', '-i', mergedPath,
-        '-vf', 'crop=ih*9/16:ih:(iw-ih*9/16)/2:0',
-        '-c:v', 'libx264', '-crf', '23', '-c:a', 'aac', '-b:a', '128k', output916,
-      ], { timeout: 300_000 });
+
+      // Output only the video matching the template's aspect ratio
+      if (templateAspect === '9:16') {
+        const output916 = path.join(outputDir, '9_16.mp4');
+        fs.copyFileSync(mergedPath, output916);
+      } else {
+        const output169 = path.join(outputDir, '16_9.mp4');
+        fs.copyFileSync(mergedPath, output169);
+      }
       console.log('[video-pipeline] template render done');
 
       console.log(`[video-pipeline] template job ${id} done — outputs at ${outputDir}`);
