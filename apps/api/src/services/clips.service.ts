@@ -11,6 +11,7 @@ export interface Clip {
   transcript: string | null;
   content_type: string | null;
   text: string | null;
+  ocr_text: string | null;
   images: unknown[];
   author: string | null;
   author_id: string | null;
@@ -124,6 +125,7 @@ export async function updateClipStatus(
     error_msg: string | undefined;
     content_type: string;
     text: string;
+    ocr_text: string;
     output_status: string;
     processed_at: Date;
   }>

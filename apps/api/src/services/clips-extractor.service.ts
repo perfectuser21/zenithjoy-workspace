@@ -17,3 +17,21 @@ export async function extractClip(clipId: string, url: string): Promise<void> {
     console.error('[clips-extractor] content-service 请求失败:', err);
   }
 }
+
+export async function ocrImages(imageUrls: string[]): Promise<string | null> {
+  if (!imageUrls || imageUrls.length === 0) return null;
+  const OCR_RELAY_URL = process.env.OCR_RELAY_URL || 'http://38.23.47.81:7789';
+  try {
+    const resp = await fetch(`${OCR_RELAY_URL}/ocr`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ image_urls: imageUrls.slice(0, 9) }),
+      signal: AbortSignal.timeout(90000),
+    });
+    if (!resp.ok) return null;
+    const data = await resp.json() as { ocr_text?: string };
+    return data.ocr_text?.trim() || null;
+  } catch {
+    return null;
+  }
+}

@@ -11,7 +11,7 @@ import {
   upsertSettings,
   detectPlatform,
 } from '../services/clips.service';
-import { extractClip } from '../services/clips-extractor.service';
+import { extractClip, ocrImages } from '../services/clips-extractor.service';
 import { parseOutputUrl, pushClipOutput } from '../services/clip-output.service';
 import { validateNotionToken } from '../services/clips-auth.service';
 import { upsertNotionToken, clearFeishuBinding, clearNotionToken } from '../services/clips.service';
@@ -144,6 +144,16 @@ export async function handleCallback(req: Request, res: Response, next: NextFunc
       const outStatus = result.success ? 'pushed' : (['no_output_configured', 'no_binding'].includes(result.error ?? '') ? 'skipped' : 'failed');
       await updateClipStatus(id, 'done', { output_status: outStatus }).catch(() => {});
     }).catch(() => {});
+
+    // 图文帖子：异步 OCR 图片文字
+    if (isGraphicPost && Array.isArray(body.images) && body.images.length > 0) {
+      const imageUrls = (body.images as string[]).filter(u => typeof u === 'string');
+      if (imageUrls.length > 0) {
+        ocrImages(imageUrls).then(async (ocrText) => {
+          if (ocrText) await updateClipStatus(id, 'done', { ocr_text: ocrText }).catch(() => {});
+        }).catch(() => {});
+      }
+    }
 
     return res.json({ ok: true });
   } catch (err) {
