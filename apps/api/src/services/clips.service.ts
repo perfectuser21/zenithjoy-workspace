@@ -9,6 +9,8 @@ export interface Clip {
   status: 'pending' | 'processing' | 'done' | 'failed';
   title: string | null;
   transcript: string | null;
+  content_type: string | null;
+  text: string | null;
   images: unknown[];
   author: string | null;
   author_id: string | null;
@@ -120,6 +122,8 @@ export async function updateClipStatus(
     video_url: string;
     raw_response: unknown;
     error_msg: string | undefined;
+    content_type: string;
+    text: string;
     output_status: string;
     processed_at: Date;
   }>

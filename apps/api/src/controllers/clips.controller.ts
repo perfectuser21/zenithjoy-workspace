@@ -110,7 +110,8 @@ export async function handleCallback(req: Request, res: Response, next: NextFunc
     const { id } = req.params;
     const body = req.body as {
       success: boolean;
-      title?: string; transcript?: string; images?: unknown[];
+      content_type?: '图文' | '短视频';
+      title?: string; transcript?: string; text?: string; images?: unknown[];
       author?: string; author_id?: string;
       like_count?: number; comment_count?: number; share_count?: number;
       cover_url?: string; video_url?: string; raw_response?: unknown;
@@ -122,8 +123,15 @@ export async function handleCallback(req: Request, res: Response, next: NextFunc
       return res.json({ ok: true });
     }
 
+    // Route content: 图文 posts use `text` (caption), 短视频 posts use `transcript` (speech)
+    const effectiveTranscript = body.content_type === '图文'
+      ? (body.text ?? null)
+      : (body.transcript ?? null);
+
     const clip = await updateClipStatus(id, 'done', {
-      title: body.title, transcript: body.transcript, images: body.images,
+      content_type: body.content_type ?? undefined,
+      title: body.title, transcript: effectiveTranscript ?? undefined, text: body.text ?? undefined,
+      images: body.images,
       author: body.author, author_id: body.author_id,
       like_count: body.like_count, comment_count: body.comment_count, share_count: body.share_count,
       cover_url: body.cover_url, video_url: body.video_url,

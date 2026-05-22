@@ -72,6 +72,9 @@ async function pushToNotion(clip: Clip, token: string): Promise<void> {
   if (clip.platform) {
     properties['平台'] = { select: { name: clip.platform } };
   }
+  if (clip.content_type) {
+    properties['内容类型'] = { select: { name: clip.content_type } };
+  }
 
   const children: unknown[] = [];
   const transcript = clip.transcript?.trim();
@@ -120,6 +123,9 @@ async function pushToFeishu(clip: Clip, userToken: string): Promise<void> {
     '日期': today,
     '平台': clip.platform || '',
   };
+  if (clip.content_type) {
+    fields['内容类型'] = clip.content_type;
+  }
   if (clip.transcript?.trim()) {
     fields['转写文案'] = clip.transcript.substring(0, 50000);
   }
