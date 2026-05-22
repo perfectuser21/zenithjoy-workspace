@@ -1131,6 +1131,22 @@ tests:
     product: 内容采集
     note: "Content Clipper — clip-output service 单元测试（Notion/飞书 URL 解析）"
 
+  - id: content-clipper-auth-service
+    path: apps/api/src/services/clips-auth.service.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 内容采集
+    note: "Content Clipper — clips-auth service 单元测试（飞书 OAuth URL 构建 + state 解析 + Notion token 验证）"
+
+  - id: content-clipper-auth-routes
+    path: apps/api/src/routes/clips-auth.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 内容采集
+    note: "Content Clipper — clips-auth 路由单元测试（飞书 OAuth redirect + callback 处理）"
+
   - id: content-clipper-service
     path: apps/api/src/services/clips.service.test.ts
     type: unit

@@ -157,7 +157,7 @@ export async function pushClipOutput(clip: Clip): Promise<{ success: boolean; er
             const refreshed = await refreshFeishuToken(tokens.feishuRefreshToken);
             await upsertFeishuBinding(clip.user_id, refreshed);
             feishuToken = refreshed.userToken;
-          } catch (e) {
+          } catch {
             console.warn('[clip-output] feishu refresh failed, using existing token');
           }
         }

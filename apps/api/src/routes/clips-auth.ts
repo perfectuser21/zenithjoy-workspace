@@ -14,8 +14,8 @@ router.get('/feishu', async (req: Request, res: Response) => {
   try {
     const oauthUrl = buildFeishuOAuthUrl(session.user.id);
     return res.redirect(oauthUrl);
-  } catch (e: any) {
-    return res.status(500).json({ error: e.message });
+  } catch (e: unknown) {
+    return res.status(500).json({ error: e instanceof Error ? e.message : String(e) });
   }
 });
 
@@ -35,8 +35,8 @@ router.get('/feishu/callback', async (req: Request, res: Response) => {
     const tokenResult = await exchangeFeishuCode(code);
     await upsertFeishuBinding(parsed.userId, tokenResult);
     return res.redirect(`${DASHBOARD_URL}/clips?tab=settings&feishu=bound`);
-  } catch (e: any) {
-    console.error('[clips-auth] feishu callback error:', e.message);
+  } catch (e: unknown) {
+    console.error('[clips-auth] feishu callback error:', e instanceof Error ? e.message : String(e));
     return res.redirect(`${DASHBOARD_URL}/clips?tab=settings&error=feishu_failed`);
   }
 });

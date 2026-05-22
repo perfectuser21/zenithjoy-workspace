@@ -48,13 +48,13 @@ export function parseFeishuState(state: string): { userId: string; timestamp: nu
   }
 }
 
-export function parseFeishuTokenResponse(raw: any): FeishuTokenResult {
+export function parseFeishuTokenResponse(raw: Record<string, unknown>): FeishuTokenResult {
   return {
-    userToken: raw.access_token,
-    refreshToken: raw.refresh_token,
-    userId: raw.open_id,
-    userName: raw.name || raw.en_name || '',
-    expiresAt: new Date(Date.now() + (raw.expires_in - 300) * 1000),
+    userToken: raw.access_token as string,
+    refreshToken: raw.refresh_token as string,
+    userId: raw.open_id as string,
+    userName: (raw.name || raw.en_name || '') as string,
+    expiresAt: new Date(Date.now() + ((raw.expires_in as number) - 300) * 1000),
   };
 }
 
@@ -66,7 +66,7 @@ export async function exchangeFeishuCode(code: string): Promise<FeishuTokenResul
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ grant_type: 'authorization_code', code, app_id: appId, app_secret: appSecret }),
   });
-  const json = (await res.json()) as any;
+  const json = (await res.json()) as { code: number; msg?: string; data: Record<string, unknown> };
   if (json.code !== 0) throw new Error(`Feishu token exchange failed: ${json.msg}`);
   return parseFeishuTokenResponse(json.data);
 }
@@ -79,7 +79,7 @@ export async function refreshFeishuToken(refreshToken: string): Promise<FeishuTo
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ grant_type: 'refresh_token', refresh_token: refreshToken, app_id: appId, app_secret: appSecret }),
   });
-  const json = (await res.json()) as any;
+  const json = (await res.json()) as { code: number; msg?: string; data: Record<string, unknown> };
   if (json.code !== 0) throw new Error(`Feishu token refresh failed: ${json.msg}`);
   return parseFeishuTokenResponse(json.data);
 }

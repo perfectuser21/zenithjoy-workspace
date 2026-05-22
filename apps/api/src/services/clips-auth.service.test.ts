@@ -47,14 +47,14 @@ describe('parseFeishuTokenResponse', () => {
 
 describe('validateNotionToken', () => {
   it('token 有效时返回 true', async () => {
-    global.fetch = vi.fn().mockResolvedValue({ ok: true } as any);
+    global.fetch = vi.fn().mockResolvedValue({ ok: true } as Partial<Response> as Response);
     const { validateNotionToken } = await import('./clips-auth.service');
     const result = await validateNotionToken('ntn_validtoken');
     expect(result).toBe(true);
   });
 
   it('token 无效时返回 false', async () => {
-    global.fetch = vi.fn().mockResolvedValue({ ok: false } as any);
+    global.fetch = vi.fn().mockResolvedValue({ ok: false } as Partial<Response> as Response);
     const { validateNotionToken } = await import('./clips-auth.service');
     const result = await validateNotionToken('ntn_badtoken');
     expect(result).toBe(false);
