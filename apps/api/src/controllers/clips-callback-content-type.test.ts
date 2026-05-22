@@ -60,8 +60,8 @@ describe('handleCallback — content_type routing', () => {
     raw_response: null, created_at: new Date(), processed_at: null, updated_at: new Date(),
   };
 
-  it('图文: stores text as transcript, sets content_type=图文', async () => {
-    mockUpdate.mockResolvedValue({ ...BASE_CLIP, content_type: '图文', transcript: '图文正文内容' });
+  it('小红书图文: text 存 text 列，transcript 不填，content_type=图文', async () => {
+    mockUpdate.mockResolvedValue({ ...BASE_CLIP, content_type: '图文', text: '图文正文内容', transcript: null });
 
     const app = buildApp();
     const res = await request(app)
@@ -77,10 +77,10 @@ describe('handleCallback — content_type routing', () => {
     expect(res.status).toBe(200);
     expect(res.body.ok).toBe(true);
 
-    // Should pass effectiveTranscript = text value when content_type is 图文
     const callArgs = mockUpdate.mock.calls[0];
     expect(callArgs[1]).toBe('done');
-    expect(callArgs[2].transcript).toBe('图文正文内容');
+    // 图文只存 text 字段，transcript 为 undefined（updateClipStatus 会跳过）
+    expect(callArgs[2].transcript == null).toBe(true);
     expect(callArgs[2].content_type).toBe('图文');
   });
 
@@ -101,6 +101,26 @@ describe('handleCallback — content_type routing', () => {
     const callArgs = mockUpdate.mock.calls[0];
     expect(callArgs[2].transcript).toBe('真实语音文案');
     expect(callArgs[2].content_type).toBe('短视频');
+  });
+
+  it('抖音图文: duration_ms=0 的短视频 → 不存 transcript，content_type 改为图文', async () => {
+    mockUpdate.mockResolvedValue({ ...BASE_CLIP, content_type: '图文', transcript: null });
+
+    const app = buildApp();
+    const res = await request(app)
+      .post('/api/clips/clip-1/callback')
+      .send({
+        success: true,
+        content_type: '短视频',
+        duration_ms: 0,
+        title: '图文教程标题 #自媒体',
+        transcript: '我也不知道你到底是为了什么...',  // 背景音乐，应丢弃
+      });
+
+    expect(res.status).toBe(200);
+    const callArgs = mockUpdate.mock.calls[0];
+    expect(callArgs[2].transcript == null).toBe(true);  // null or undefined — 背景音乐被丢弃
+    expect(callArgs[2].content_type).toBe('图文');
   });
 
   it('失败回调: 更新 status=failed，不调 pushClipOutput', async () => {
