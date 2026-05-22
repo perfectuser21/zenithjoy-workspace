@@ -184,7 +184,7 @@ Layout 类型规则：
         'https://openrouter.ai/api/v1/chat/completions',
         { Authorization: `Bearer ${OPENROUTER_KEY}` },
         {
-          model: 'qwen/qwen3.7-max',
+          model: 'anthropic/claude-sonnet-4-5',
           max_tokens: 2048,
           messages: [{ role: 'user', content: prompt }],
         },
