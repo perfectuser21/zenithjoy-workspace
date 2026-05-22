@@ -19,6 +19,7 @@ export default function ContentClipDetailPage() {
   const navigate = useNavigate();
   const qc = useQueryClient();
   const [transcriptExpanded, setTranscriptExpanded] = useState(false);
+  const [ocrExpanded, setOcrExpanded] = useState(false);
 
   const { data: clip, isLoading, isError } = useQuery({
     queryKey: ['clips', 'detail', id],
@@ -60,6 +61,8 @@ export default function ContentClipDetailPage() {
   const PREVIEW_LEN = 500;
   const transcriptPreview = clip.transcript ? clip.transcript.slice(0, PREVIEW_LEN) : null;
   const transcriptLong = clip.transcript ? clip.transcript.length > PREVIEW_LEN : false;
+  const ocrPreview = clip.ocr_text ? clip.ocr_text.slice(0, PREVIEW_LEN) : null;
+  const ocrLong = clip.ocr_text ? clip.ocr_text.length > PREVIEW_LEN : false;
 
   return (
     <div className="max-w-3xl mx-auto p-6">
@@ -112,6 +115,22 @@ export default function ContentClipDetailPage() {
       {clip.status === 'failed' && clip.error_msg && (
         <div className="bg-red-50 border border-red-200 rounded-lg p-3 mb-6 text-sm text-red-700">
           {clip.error_msg}
+        </div>
+      )}
+
+      {clip.ocr_text && (
+        <div className="bg-blue-50 border border-blue-100 rounded-lg p-4 mb-6">
+          <h2 className="text-sm font-semibold text-gray-700 mb-2">图文文字（OCR）</h2>
+          <p className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">
+            {ocrExpanded ? clip.ocr_text : (ocrPreview || '')}
+            {ocrLong && !ocrExpanded && '...'}
+          </p>
+          {ocrLong && (
+            <button onClick={() => setOcrExpanded(!ocrExpanded)}
+              className="text-xs text-blue-600 hover:underline mt-2">
+              {ocrExpanded ? '收起' : `展开全文（${clip.ocr_text.length} 字）`}
+            </button>
+          )}
         </div>
       )}
 

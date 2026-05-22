@@ -5,7 +5,9 @@ export interface Clip {
   platform: 'douyin' | 'xiaohongshu';
   status: 'pending' | 'processing' | 'done' | 'failed';
   title: string | null;
+  content_type: string | null;
   transcript: string | null;
+  ocr_text: string | null;
   images: string[];
   author: string | null;
   like_count: number | null;
