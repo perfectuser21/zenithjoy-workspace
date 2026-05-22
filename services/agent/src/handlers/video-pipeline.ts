@@ -443,11 +443,11 @@ export async function processVideoPipelineJob(
 
       // Output only the video matching the template's aspect ratio
       if (templateAspect === '9:16') {
-        const output916 = path.join(outputDir, '9_16.mp4');
-        fs.copyFileSync(mergedPath, output916);
+        fs.copyFileSync(mergedPath, path.join(outputDir, '9_16.mp4'));
+      } else if (templateAspect === '16:9') {
+        fs.copyFileSync(mergedPath, path.join(outputDir, '16_9.mp4'));
       } else {
-        const output169 = path.join(outputDir, '16_9.mp4');
-        fs.copyFileSync(mergedPath, output169);
+        throw new Error(`[video-pipeline] unsupported template aspect: ${templateAspect}`);
       }
       console.log('[video-pipeline] template render done');
 

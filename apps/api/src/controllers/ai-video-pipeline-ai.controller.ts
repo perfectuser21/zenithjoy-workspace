@@ -591,7 +591,7 @@ if (Comp) {
   window.__hf = { duration: ${p.duration}, seek: function(t) {
     tl.seek(t, false);
     var v = document.getElementById('hf-phone-video');
-    if (v) v.currentTime = t;
+    if (v && v.readyState >= 1) v.currentTime = t;
   } };
 }
 </script>
