@@ -31,6 +31,9 @@ export interface Clip {
 export interface ClipSettings {
   defaultOutputUrl: string | null;
   defaultOutputType: string | null;
+  notionBound: boolean;
+  feishuBound: boolean;
+  feishuUserName?: string;
 }
 
 export function detectPlatform(url: string): 'douyin' | 'xiaohongshu' | null {
@@ -153,14 +156,20 @@ export async function getSettings(userId: string): Promise<ClipSettings | null> 
   const result = await pool.query<{
     default_output_url: string | null;
     default_output_type: string | null;
+    notion_token: string | null;
+    feishu_user_token: string | null;
+    feishu_user_name: string | null;
   }>(
-    `SELECT default_output_url, default_output_type FROM zenithjoy.user_clip_settings WHERE user_id = $1`,
+    `SELECT default_output_url, default_output_type, notion_token, feishu_user_token, feishu_user_name FROM zenithjoy.user_clip_settings WHERE user_id = $1`,
     [userId]
   );
   if (!result.rows[0]) return null;
   return {
     defaultOutputUrl: result.rows[0].default_output_url,
     defaultOutputType: result.rows[0].default_output_type,
+    notionBound: !!result.rows[0].notion_token,
+    feishuBound: !!result.rows[0].feishu_user_token,
+    feishuUserName: result.rows[0].feishu_user_name ?? undefined,
   };
 }
 
@@ -176,6 +185,50 @@ export async function upsertSettings(
        default_output_type = EXCLUDED.default_output_type,
        updated_at = NOW()`,
     [userId, params.defaultOutputUrl, params.defaultOutputType]
+  );
+}
+
+
+import { FeishuTokenResult } from './clips-auth.service';
+
+export async function upsertFeishuBinding(userId: string, tokenResult: FeishuTokenResult): Promise<void> {
+  await pool.query(
+    `INSERT INTO zenithjoy.user_clip_settings (user_id, feishu_user_token, feishu_refresh_token, feishu_user_id, feishu_user_name, feishu_token_expires_at, updated_at)
+     VALUES ($1, $2, $3, $4, $5, $6, NOW())
+     ON CONFLICT (user_id) DO UPDATE SET
+       feishu_user_token = EXCLUDED.feishu_user_token,
+       feishu_refresh_token = EXCLUDED.feishu_refresh_token,
+       feishu_user_id = EXCLUDED.feishu_user_id,
+       feishu_user_name = EXCLUDED.feishu_user_name,
+       feishu_token_expires_at = EXCLUDED.feishu_token_expires_at,
+       updated_at = NOW()`,
+    [userId, tokenResult.userToken, tokenResult.refreshToken, tokenResult.userId, tokenResult.userName, tokenResult.expiresAt]
+  );
+}
+
+export async function upsertNotionToken(userId: string, token: string): Promise<void> {
+  await pool.query(
+    `INSERT INTO zenithjoy.user_clip_settings (user_id, notion_token, updated_at)
+     VALUES ($1, $2, NOW())
+     ON CONFLICT (user_id) DO UPDATE SET notion_token = EXCLUDED.notion_token, updated_at = NOW()`,
+    [userId, token]
+  );
+}
+
+export async function clearFeishuBinding(userId: string): Promise<void> {
+  await pool.query(
+    `UPDATE zenithjoy.user_clip_settings
+     SET feishu_user_token=NULL, feishu_refresh_token=NULL, feishu_user_id=NULL,
+         feishu_user_name=NULL, feishu_token_expires_at=NULL, updated_at=NOW()
+     WHERE user_id=$1`,
+    [userId]
+  );
+}
+
+export async function clearNotionToken(userId: string): Promise<void> {
+  await pool.query(
+    `UPDATE zenithjoy.user_clip_settings SET notion_token=NULL, updated_at=NOW() WHERE user_id=$1`,
+    [userId]
   );
 }
 

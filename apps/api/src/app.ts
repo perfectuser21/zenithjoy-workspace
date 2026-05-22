@@ -38,6 +38,7 @@ import smokeMockAgentRouter from './routes/_smoke-mock-agent';
 // Path 4 Sprint 1 WS1 — wechat 3 endpoints (thin stub)
 import { wechatRouter } from './routes/wechat';
 import clipsRouter from './routes/clips';
+import clipsAuthRouter from './routes/clips-auth';
 import { acquisitionRouter } from './routes/acquisition';
 import { errorHandler, notFoundHandler } from './middleware/error';
 
@@ -115,6 +116,7 @@ app.use('/api/_smoke', smokeMockAgentRouter);
 // Path 4 Sprint 1 WS1 — wechat 3 endpoints (qr-bind / draft-review-poll / scheduler-tick)
 app.use('/api/wechat', wechatRouter);
 app.use('/api/clips', clipsRouter);
+app.use('/api/clips/auth', clipsAuthRouter);
 app.use('/api/acquisition', acquisitionRouter);
 
 // Error handling

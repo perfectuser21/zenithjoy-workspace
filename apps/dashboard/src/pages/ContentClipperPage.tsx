@@ -7,6 +7,10 @@ import {
   retryClip,
   getClipSettings,
   saveClipSettings,
+  initiateFeishuOAuth,
+  saveNotionToken,
+  deleteFeishuBinding,
+  deleteNotionBinding,
   type Clip,
 } from '../api/content-clipper.api';
 
@@ -51,6 +55,12 @@ export default function ContentClipperPage() {
 
   const [settingUrl, setSettingUrl] = useState('');
   const [settingSaved, setSettingSaved] = useState(false);
+  const [notionInput, setNotionInput] = useState('');
+  const [notionSaving, setNotionSaving] = useState(false);
+  const [notionError, setNotionError] = useState('');
+  const searchParams = new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '');
+  const feishuOAuthResult = searchParams.get('feishu');
+  const oauthError = searchParams.get('error');
 
   const settingsQuery = useQuery({
     queryKey: ['clips', 'settings'],
@@ -100,6 +110,26 @@ export default function ContentClipperPage() {
       qc.invalidateQueries({ queryKey: ['clips', 'settings'] });
       setTimeout(() => setSettingSaved(false), 2000);
     },
+  });
+
+  const saveNotionMutation = useMutation({
+    mutationFn: () => saveNotionToken(notionInput),
+    onSuccess: () => {
+      setNotionInput('');
+      setNotionError('');
+      qc.invalidateQueries({ queryKey: ['clips', 'settings'] });
+    },
+    onError: (err: Error) => setNotionError(err.message === 'notion_token_invalid' ? 'Token 无效，请检查' : '保存失败'),
+  });
+
+  const deleteFeishuMutation = useMutation({
+    mutationFn: deleteFeishuBinding,
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['clips', 'settings'] }),
+  });
+
+  const deleteNotionMutation = useMutation({
+    mutationFn: deleteNotionBinding,
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['clips', 'settings'] }),
   });
 
   const clips = clipsQuery.data?.data ?? [];
@@ -229,30 +259,110 @@ export default function ContentClipperPage() {
       )}
 
       {tab === 'settings' && (
-        <div className="bg-white border rounded-lg p-6 space-y-4 max-w-lg">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">默认输出链接</label>
-            <input type="text"
-              className="w-full border rounded-md p-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              placeholder="粘贴 Notion 数据库链接或飞书多维表格链接"
-              defaultValue={settingsQuery.data?.defaultOutputUrl ?? ''}
-              onChange={(e) => setSettingUrl(e.target.value)}
-            />
-            {detectOutputType(settingUrl || settingsQuery.data?.defaultOutputUrl || '') && (
-              <p className="text-xs text-gray-500 mt-1">
-                已识别：{detectOutputType(settingUrl || settingsQuery.data?.defaultOutputUrl || '') === 'notion' ? 'Notion 数据库' : '飞书多维表格'}
-              </p>
+        <div className="space-y-4 max-w-lg">
+          {/* 飞书 Bitable */}
+          <div className="bg-white border rounded-lg p-5">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="font-medium text-gray-900">飞书 Bitable</h3>
+              {settingsQuery.data?.feishuBound ? (
+                <span className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded-full">
+                  已绑定：{settingsQuery.data.feishuUserName || '飞书用户'}
+                </span>
+              ) : (
+                <span className="text-xs bg-gray-100 text-gray-500 px-2 py-1 rounded-full">未绑定</span>
+              )}
+            </div>
+            {feishuOAuthResult === 'bound' && (
+              <p className="text-sm text-green-600 mb-2">飞书账号绑定成功 ✓</p>
             )}
-            <p className="text-xs text-gray-400 mt-1">每次提交时若不填输出链接，将自动推送到此地址</p>
+            {oauthError === 'feishu_failed' && (
+              <p className="text-sm text-red-500 mb-2">飞书绑定失败，请重试</p>
+            )}
+            <div className="flex gap-2">
+              <button
+                onClick={initiateFeishuOAuth}
+                className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded hover:bg-blue-700">
+                {settingsQuery.data?.feishuBound ? '重新绑定' : '绑定飞书'}
+              </button>
+              {settingsQuery.data?.feishuBound && (
+                <button
+                  onClick={() => deleteFeishuMutation.mutate()}
+                  disabled={deleteFeishuMutation.isPending}
+                  className="px-3 py-1.5 text-sm border rounded hover:bg-gray-50 disabled:opacity-50">
+                  解除绑定
+                </button>
+              )}
+            </div>
           </div>
-          <button
-            onClick={() => saveSettingsMutation.mutate()}
-            disabled={saveSettingsMutation.isPending}
-            className="bg-blue-600 text-white rounded-md px-4 py-2 text-sm font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors">
-            {settingSaved ? '已保存 ✓' : saveSettingsMutation.isPending ? '保存中...' : '保存设置'}
-          </button>
-          {saveSettingsMutation.isError && (
-            <p className="text-sm text-red-600">{(saveSettingsMutation.error as Error).message}</p>
+
+          {/* Notion */}
+          <div className="bg-white border rounded-lg p-5">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="font-medium text-gray-900">Notion</h3>
+              {settingsQuery.data?.notionBound ? (
+                <span className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded-full">已绑定</span>
+              ) : (
+                <span className="text-xs bg-gray-100 text-gray-500 px-2 py-1 rounded-full">未绑定</span>
+              )}
+            </div>
+            <p className="text-xs text-gray-500 mb-2">
+              在{' '}
+              <a href="https://www.notion.so/profile/integrations" target="_blank" rel="noreferrer"
+                className="underline text-blue-600">Notion 集成设置</a>{' '}
+              创建 Integration 并复制 Token（以 ntn_ 或 secret_ 开头）
+            </p>
+            <div className="flex gap-2">
+              <input
+                type="password"
+                placeholder="ntn_xxxx 或 secret_xxxx..."
+                value={notionInput}
+                onChange={(e) => { setNotionInput(e.target.value); setNotionError(''); }}
+                className="flex-1 text-sm border rounded px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+              <button
+                disabled={!notionInput || notionSaving || saveNotionMutation.isPending}
+                onClick={() => { setNotionSaving(true); saveNotionMutation.mutate(); setNotionSaving(false); }}
+                className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50">
+                {saveNotionMutation.isPending ? '验证中...' : '保存'}
+              </button>
+              {settingsQuery.data?.notionBound && (
+                <button
+                  onClick={() => deleteNotionMutation.mutate()}
+                  disabled={deleteNotionMutation.isPending}
+                  className="px-3 py-1.5 text-sm border rounded hover:bg-gray-50 disabled:opacity-50">
+                  删除
+                </button>
+              )}
+            </div>
+            {notionError && <p className="text-sm text-red-500 mt-1">{notionError}</p>}
+          </div>
+
+          {/* 默认输出链接（已绑定才展示） */}
+          {(settingsQuery.data?.feishuBound || settingsQuery.data?.notionBound) && (
+            <div className="bg-white border rounded-lg p-5">
+              <h3 className="font-medium text-gray-900 mb-3">默认输出链接（可选）</h3>
+              <input type="text"
+                className="w-full border rounded-md p-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="粘贴 Notion 数据库链接或飞书多维表格链接"
+                defaultValue={settingsQuery.data?.defaultOutputUrl ?? ''}
+                onChange={(e) => setSettingUrl(e.target.value)}
+              />
+              {detectOutputType(settingUrl || settingsQuery.data?.defaultOutputUrl || '') && (
+                <p className="text-xs text-gray-500 mt-1">
+                  已识别：{detectOutputType(settingUrl || settingsQuery.data?.defaultOutputUrl || '') === 'notion' ? 'Notion 数据库' : '飞书多维表格'}
+                </p>
+              )}
+              <p className="text-xs text-gray-400 mt-1">每次提交时若不填输出链接，将自动推送到此地址</p>
+              <button
+                onClick={() => saveSettingsMutation.mutate()}
+                disabled={saveSettingsMutation.isPending}
+                className="mt-3 bg-blue-600 text-white rounded-md px-4 py-2 text-sm font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors">
+                {settingSaved ? '已保存 ✓' : saveSettingsMutation.isPending ? '保存中...' : '保存设置'}
+              </button>
+              {saveSettingsMutation.isError && (
+                <p className="text-sm text-red-600">{(saveSettingsMutation.error as Error).message}</p>
+              )}
+            </div>
           )}
         </div>
       )}

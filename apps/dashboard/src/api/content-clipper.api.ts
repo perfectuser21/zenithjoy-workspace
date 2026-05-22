@@ -23,6 +23,9 @@ export interface Clip {
 export interface ClipSettings {
   defaultOutputUrl: string | null;
   defaultOutputType: string | null;
+  notionBound: boolean;
+  feishuBound: boolean;
+  feishuUserName?: string;
 }
 
 const BASE = '/api/clips';
@@ -92,4 +95,24 @@ export async function saveClipSettings(settings: {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(settings),
   });
+}
+
+export function initiateFeishuOAuth(): void {
+  window.location.href = '/api/clips/auth/feishu';
+}
+
+export async function saveNotionToken(token: string): Promise<void> {
+  await apiFetch<{ success: true }>(`${BASE}/settings/notion-token`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ token }),
+  });
+}
+
+export async function deleteFeishuBinding(): Promise<void> {
+  await apiFetch<{ success: true }>(`${BASE}/settings/feishu`, { method: 'DELETE' });
+}
+
+export async function deleteNotionBinding(): Promise<void> {
+  await apiFetch<{ success: true }>(`${BASE}/settings/notion`, { method: 'DELETE' });
 }
