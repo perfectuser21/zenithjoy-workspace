@@ -90,6 +90,19 @@ async function pushToNotion(clip: Clip, token: string): Promise<void> {
       });
     }
   }
+  const ocrText = (clip as unknown as { ocr_text?: string }).ocr_text?.trim();
+  if (ocrText && children.length < 90) {
+    children.push({
+      object: 'block', type: 'heading_2',
+      heading_2: { rich_text: [{ type: 'text', text: { content: '图片文字（OCR）' } }] },
+    });
+    for (let i = 0; i < ocrText.length && children.length < 95; i += 1900) {
+      children.push({
+        object: 'block', type: 'paragraph',
+        paragraph: { rich_text: [{ type: 'text', text: { content: ocrText.slice(i, i + 1900) } }] },
+      });
+    }
+  }
 
   const resp = await fetch('https://api.notion.com/v1/pages', {
     method: 'POST',
@@ -128,6 +141,10 @@ async function pushToFeishu(clip: Clip, userToken: string): Promise<void> {
   }
   if (clip.transcript?.trim()) {
     fields['转写文案'] = clip.transcript.substring(0, 50000);
+  }
+  const ocrText = (clip as unknown as { ocr_text?: string }).ocr_text?.trim();
+  if (ocrText) {
+    fields['图片文字'] = ocrText.substring(0, 50000);
   }
 
   const resp = await axios.post(

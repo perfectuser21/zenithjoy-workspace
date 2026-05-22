@@ -3,6 +3,22 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getClip, retryClip } from '../api/content-clipper.api';
 
+function CopyButton({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+  const copy = () => {
+    navigator.clipboard.writeText(text).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  };
+  return (
+    <button onClick={copy}
+      className="text-xs px-2 py-1 rounded bg-gray-100 hover:bg-gray-200 text-gray-600 transition-colors">
+      {copied ? '已复制' : '复制'}
+    </button>
+  );
+}
+
 const PLATFORM_LABEL: Record<string, string> = { douyin: '抖音', xiaohongshu: '小红书' };
 const OUTPUT_STATUS_LABEL: Record<string, string> = {
   pending: '待推送', pushed: '已推送', failed: '推送失败', skipped: '无输出配置',
@@ -19,14 +35,19 @@ export default function ContentClipDetailPage() {
   const navigate = useNavigate();
   const qc = useQueryClient();
   const [transcriptExpanded, setTranscriptExpanded] = useState(false);
+  const [ocrExpanded, setOcrExpanded] = useState(false);
 
   const { data: clip, isLoading, isError } = useQuery({
     queryKey: ['clips', 'detail', id],
     queryFn: () => getClip(id!),
     enabled: !!id,
     refetchInterval: (q) => {
-      const s = q.state.data?.status;
-      return (s === 'pending' || s === 'processing') ? 5_000 : false;
+      const d = q.state.data;
+      if (!d) return false;
+      if (d.status === 'pending' || d.status === 'processing') return 5_000;
+      // 图文：status=done 但 OCR 还没写入时继续轮询
+      if (d.status === 'done' && d.content_type === '图文' && !d.ocr_text) return 3_000;
+      return false;
     },
   });
 
@@ -60,6 +81,8 @@ export default function ContentClipDetailPage() {
   const PREVIEW_LEN = 500;
   const transcriptPreview = clip.transcript ? clip.transcript.slice(0, PREVIEW_LEN) : null;
   const transcriptLong = clip.transcript ? clip.transcript.length > PREVIEW_LEN : false;
+  const ocrPreview = clip.ocr_text ? clip.ocr_text.slice(0, PREVIEW_LEN) : null;
+  const ocrLong = clip.ocr_text ? clip.ocr_text.length > PREVIEW_LEN : false;
 
   return (
     <div className="max-w-3xl mx-auto p-6">
@@ -115,9 +138,31 @@ export default function ContentClipDetailPage() {
         </div>
       )}
 
+      {clip.ocr_text && (
+        <div className="bg-blue-50 border border-blue-100 rounded-lg p-4 mb-6">
+          <div className="flex items-center justify-between mb-2">
+            <h2 className="text-sm font-semibold text-gray-700">图文文字（OCR）</h2>
+            <CopyButton text={clip.ocr_text} />
+          </div>
+          <p className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">
+            {ocrExpanded ? clip.ocr_text : (ocrPreview || '')}
+            {ocrLong && !ocrExpanded && '...'}
+          </p>
+          {ocrLong && (
+            <button onClick={() => setOcrExpanded(!ocrExpanded)}
+              className="text-xs text-blue-600 hover:underline mt-2">
+              {ocrExpanded ? '收起' : `展开全文（${clip.ocr_text.length} 字）`}
+            </button>
+          )}
+        </div>
+      )}
+
       {clip.transcript && (
         <div className="bg-gray-50 border rounded-lg p-4 mb-6">
-          <h2 className="text-sm font-semibold text-gray-700 mb-2">转写文案</h2>
+          <div className="flex items-center justify-between mb-2">
+            <h2 className="text-sm font-semibold text-gray-700">转写文案</h2>
+            <CopyButton text={clip.transcript} />
+          </div>
           <p className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">
             {transcriptExpanded ? clip.transcript : (transcriptPreview || '')}
             {transcriptLong && !transcriptExpanded && '...'}

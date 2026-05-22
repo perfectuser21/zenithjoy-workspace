@@ -89,16 +89,11 @@ export default function ContentClipperPage() {
       const cleanUrl = extractUrl(pasteText);
       return submitClip(cleanUrl, outputUrl.trim() || undefined);
     },
-    onSuccess: (result) => {
-      if ((result as { alreadyExists?: boolean }).alreadyExists) {
-        setSubmitMsg({ type: 'info', text: '已存在，跳转详情...' });
-        setTimeout(() => navigate(`/clips/${result.id}`), 800);
-      } else {
-        setSubmitMsg({ type: 'success', text: '已提交，正在采集...' });
-        setPasteText('');
-        setOutputUrl('');
-        qc.invalidateQueries({ queryKey: ['clips', 'list'] });
-      }
+    onSuccess: () => {
+      setSubmitMsg({ type: 'success', text: '已提交，正在采集...' });
+      setPasteText('');
+      setOutputUrl('');
+      qc.invalidateQueries({ queryKey: ['clips', 'list'] });
     },
     onError: (err: Error) => setSubmitMsg({ type: 'error', text: err.message }),
   });
@@ -241,6 +236,11 @@ export default function ContentClipperPage() {
                     </div>
                     <p className="text-sm font-medium truncate">{clip.title || clip.url}</p>
                     {clip.author && <p className="text-xs text-gray-500 mt-0.5">@{clip.author}</p>}
+                    {clip.ocr_text && (
+                      <p className="text-xs text-gray-600 mt-1 line-clamp-2 leading-relaxed">
+                        {clip.ocr_text.slice(0, 120)}
+                      </p>
+                    )}
                     {clip.status === 'failed' && (
                       <p className="text-xs text-red-500 mt-1 truncate">{clip.error_msg}</p>
                     )}

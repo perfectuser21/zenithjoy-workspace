@@ -5,10 +5,11 @@ describe('content-clipper.api types', () => {
   it('Clip type has required fields', () => {
     const clip: Clip = {
       id: 'abc', user_id: 'u1', url: 'https://x.com', platform: 'douyin',
-      status: 'pending', title: null, transcript: null, images: [],
-      author: null, like_count: null, cover_url: null, video_url: null,
-      output_url: null, output_type: null, output_status: null,
-      error_msg: null, retry_count: 0, created_at: '2026-01-01', processed_at: null,
+      status: 'pending', title: null, content_type: null, transcript: null,
+      ocr_text: null, images: [], author: null, like_count: null,
+      cover_url: null, video_url: null, output_url: null, output_type: null,
+      output_status: null, error_msg: null, retry_count: 0,
+      created_at: '2026-01-01', processed_at: null,
     };
     expect(clip.id).toBe('abc');
     expect(clip.status).toBe('pending');
