@@ -15,7 +15,7 @@
 | Path | 类型 | Maturity | Smoke | Notion |
 |---|---|---|---|---|
 | Path 1 客户首次成功 | user_facing | in_progress | `golden-path-1-smoke.sh` | [Notion](https://www.notion.so/358c40c2ba6381b2a6eacd288cf82f29) |
-| Path 6 内容采集与分发 | user_facing | thin | `golden-path-6-smoke.sh` | — |
+| Path 6 内容采集与分发 | user_facing | thin | `golden-path-6-smoke.sh` | [Notion](https://www.notion.so/368c40c2ba63814d92d0f6cc2fde323a) |
 
 **Path 1 的 6 步**（在 `.github/workflows/scripts/smoke/golden-path-1-smoke.sh`）：
 1. 注册自动登录（含 free license）
