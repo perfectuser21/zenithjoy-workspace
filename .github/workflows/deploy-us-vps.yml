@@ -8,7 +8,7 @@ on:
 
 jobs:
   deploy-api:
-    name: Deploy API to US Mac (pm2)
+    name: Deploy API to US Mac (launchd)
     runs-on: ubuntu-latest
 
     steps:
@@ -35,8 +35,10 @@ jobs:
             npm run build --workspace=apps/api 2>/dev/null || \
               (cd apps/api && npm run build)
 
-            echo "=== [3/4] pm2 restart ==="
-            pm2 restart zenithjoy-api --update-env
+            echo "=== [3/4] launchd reload ==="
+            launchctl stop com.zenithjoy.api || true
+            sleep 3
+            launchctl start com.zenithjoy.api
 
             echo "=== [4/4] health check ==="
             sleep 5
@@ -49,7 +51,7 @@ jobs:
               sleep 5
             done
             echo "Health check FAILED after 65s"
-            pm2 logs zenithjoy-api --lines 30 --nostream
+            cat ~/Library/Logs/zenithjoy-api.error.log | tail -30 || true
             exit 1
 
   notify-failure:
