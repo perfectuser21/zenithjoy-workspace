@@ -16,6 +16,7 @@ function PhonePreview({
   posterLabel = '短视频画面',
   showStatusBar = true,
   rounded = 38,
+  videoSrc = null,
 }) {
   const h = Math.round(width * (812 / 375));
   const isLight = tone === 'light';
@@ -56,24 +57,37 @@ function PhonePreview({
           </div>
         )}
 
-        {/* Video poster placeholder */}
-        <div style={{
-          position: 'absolute', inset: 0,
-          background: posterFill || `repeating-linear-gradient(
-              135deg,
-              ${isLight ? '#e8e4dc' : '#1a1a18'} 0px,
-              ${isLight ? '#e8e4dc' : '#1a1a18'} 8px,
-              ${isLight ? '#dfd9cc' : '#13130f'} 8px,
-              ${isLight ? '#dfd9cc' : '#13130f'} 16px
-            )`,
-        }}>
+        {/* Video area — plays rough-cut footage throughout template duration */}
+        {videoSrc ? (
+          <video
+            src={videoSrc}
+            autoPlay
+            muted
+            playsInline
+            style={{
+              position: 'absolute', inset: 0, width: '100%', height: '100%',
+              objectFit: 'cover', display: 'block', zIndex: 1,
+            }}
+          />
+        ) : (
           <div style={{
-            position: 'absolute', top: '38%', left: '50%', transform: 'translate(-50%, -50%)',
-            fontFamily: 'JetBrains Mono, monospace', fontSize: 10, letterSpacing: '0.15em',
-            color: isLight ? 'rgba(0,0,0,0.35)' : 'rgba(255,255,255,0.35)',
-            textTransform: 'uppercase',
-          }}>{posterLabel}</div>
-        </div>
+            position: 'absolute', inset: 0,
+            background: posterFill || `repeating-linear-gradient(
+                135deg,
+                ${isLight ? '#e8e4dc' : '#1a1a18'} 0px,
+                ${isLight ? '#e8e4dc' : '#1a1a18'} 8px,
+                ${isLight ? '#dfd9cc' : '#13130f'} 8px,
+                ${isLight ? '#dfd9cc' : '#13130f'} 16px
+              )`,
+          }}>
+            <div style={{
+              position: 'absolute', top: '38%', left: '50%', transform: 'translate(-50%, -50%)',
+              fontFamily: 'JetBrains Mono, monospace', fontSize: 10, letterSpacing: '0.15em',
+              color: isLight ? 'rgba(0,0,0,0.35)' : 'rgba(255,255,255,0.35)',
+              textTransform: 'uppercase',
+            }}>{posterLabel}</div>
+          </div>
+        )}
 
         {/* Right rail icons */}
         <div style={{
