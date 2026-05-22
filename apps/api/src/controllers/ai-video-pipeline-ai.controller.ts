@@ -455,30 +455,22 @@ export async function generateBgm(req: Request, res: Response, next: NextFunctio
   } catch (err) { next(err); }
 }
 
-// ── Template slot types ────────────────────────────────────────────────────
+// ── composeTemplate — dynamic GSAP HTML, per-segment scenes, Claude Sonnet ──
 
-interface TemplateMetric { label: string; value: string; unit: string; }
-interface TemplateSlots {
+interface TemplateScene {
+  start: number;
+  duration: number;
   eyebrow: string;
-  title: string[];       // array of lines
-  titleAccent: string;   // word inside title to highlight with accent color
+  title: string;
   subtitle: string;
-  metrics: TemplateMetric[];
-  hook: { handle: string; caption: string; hashtags: string[] };
-  pageNum?: string;
 }
 
-// ── composeTemplate ────────────────────────────────────────────────────────
 export async function composeTemplate(req: Request, res: Response, next: NextFunction) {
   try {
     const job = await svc.getJob(req.params.id);
     if (!job) return res.status(404).json({ error: 'job not found' });
 
-    const {
-      transcript = '',
-      segments = [],
-      duration = 10,
-    } = req.body as {
+    const { transcript = '', segments = [], duration = 10 } = req.body as {
       transcript?: string;
       segments?: Array<{ start: number; end: number; text: string }>;
       duration?: number;
@@ -487,84 +479,96 @@ export async function composeTemplate(req: Request, res: Response, next: NextFun
 
     const templateId = job.template_id;
     if (!templateId) return res.status(400).json({ error: 'job has no template_id' });
-
     const spec = getTemplate(templateId);
     if (!spec) return res.status(400).json({ error: `unknown template: ${templateId}` });
 
-    const transcriptText = segments.length > 0
-      ? segments.map((s) => `[${s.start.toFixed(1)}s] ${s.text}`).join('\n')
-      : (transcript || '精彩视频内容');
+    // ── Group rough-cut segments into 3-5 scenes ──
+    const rawSegs = segments.length > 0
+      ? segments
+      : [{ start: 0, end: duration, text: transcript || '精彩内容' }];
 
-    // ── AI: extract template-specific slot data ──
-    const slotsPrompt = `你是短视频模板内容专家。根据以下口播逐字稿，提取模板卡片所需数据。
+    const targetCount = Math.min(Math.max(Math.ceil(duration / 6), 3), 5);
+    const chunkSize = Math.max(1, Math.ceil(rawSegs.length / targetCount));
+    const groups: Array<{ start: number; end: number; text: string }[]> = [];
+    for (let i = 0; i < rawSegs.length; i += chunkSize) {
+      groups.push(rawSegs.slice(i, i + chunkSize));
+    }
 
-逐字稿：
-${transcriptText}
+    // ── Claude Sonnet: per-scene text ──
+    const segList = groups.map((g, i) => {
+      const s = g[0].start.toFixed(1);
+      const e = g[g.length - 1].end.toFixed(1);
+      const txt = g.map((x) => x.text).join(' ');
+      return `[场景${i + 1}] [${s}s→${e}s] "${txt}"`;
+    }).join('\n');
 
-视频时长：${duration.toFixed(1)}秒
-主题：${(job as { topic?: string }).topic || '未指定'}
+    const prompt = `你是短视频模板内容专家。根据以下已粗剪的口播片段，为每个场景提炼模板文案。
 
-请提取并输出 JSON（只输出JSON，不要其他文字）：
+模板风格：${spec.aspect === '9:16' ? '竖版，大字冲击感' : '横版纪录片感，简洁有力'}
+视频总时长：${duration.toFixed(1)}秒
+
+粗剪后的场景片段（已去除废话）：
+${segList}
+
+严格输出JSON，不要其他内容：
 {
-  "eyebrow": "CASE STUDY / 简短行业标签（英文+中文，25字以内）",
-  "title": ["核心主张第一行（8字以内）", "有力量的第二行（有反转或强化，8字以内）"],
-  "titleAccent": "title中最有冲击力的2-4个字（用高亮色显示）",
-  "subtitle": "一句总结（30字以内，口语化，直击痛点）",
-  "metrics": [
-    {"label": "指标名称（4字以内）", "value": "数字或比值", "unit": "×"},
-    {"label": "指标名称（4字以内）", "value": "数字", "unit": "%"},
-    {"label": "指标名称（4字以内）", "value": "数字", "unit": "倍"}
-  ],
-  "hook": {
-    "handle": "@博主账号（风格匹配内容）",
-    "caption": "开场钩子句（吸引眼球，带引号）",
-    "hashtags": ["#标签1", "#标签2"]
-  }
+  "scenes": [
+    {
+      "i": 0,
+      "eyebrow": "INSIGHT 01 / 标签（英文序号+中文，20字以内）",
+      "title": "该片段最有力的核心句（8字以内，直击要害，禁止超字）",
+      "subtitle": "补充说明（25字以内，口语化）"
+    }
+  ]
 }
-规则：metrics优先从逐字稿提取真实数字；无数字则用行业基准数据（如互动率3.2×、完播率+68%）。`;
+共 ${groups.length} 个场景，每个都要有对应条目。title必须从该片段原文提炼，字数严格8字以内。`;
 
-    let slots: TemplateSlots = {
-      eyebrow: 'CASE STUDY / 精准共鸣',
-      title: ['前三秒，', '决定算法'],
-      titleAccent: '决定',
-      subtitle: transcript.slice(0, 30) || '短视频运营的核心逻辑',
-      metrics: [
-        { label: '互动率', value: '3.2', unit: '×' },
-        { label: '完播率', value: '+68', unit: '%' },
-        { label: '精准曝光', value: '91', unit: '%' },
-      ],
-      hook: { handle: '@精准案例', caption: '"给所有人说一句话……"', hashtags: ['#短视频运营', '#精准流量'] },
-    };
-
+    interface SceneText { i: number; eyebrow: string; title: string; subtitle: string; }
+    let sceneTexts: SceneText[] = [];
     try {
-      const slotsResult = await postJson(
+      const result = await postJson(
         'https://openrouter.ai/api/v1/chat/completions',
         { Authorization: `Bearer ${OPENROUTER_KEY}` },
         {
-          model: 'anthropic/claude-haiku-4-5',
-          max_tokens: 1024,
-          messages: [{ role: 'user', content: slotsPrompt }],
+          model: 'anthropic/claude-sonnet-4-5',
+          max_tokens: 2048,
+          messages: [{ role: 'user', content: prompt }],
         },
       ) as { choices?: { message?: { content?: string } }[] };
-      const raw = slotsResult?.choices?.[0]?.message?.content ?? '{}';
+      const raw = result?.choices?.[0]?.message?.content ?? '{}';
       const m = raw.match(/\{[\s\S]*\}/);
       if (m) {
-        const parsed = JSON.parse(m[0]) as Partial<TemplateSlots>;
-        slots = {
-          eyebrow: parsed.eyebrow || slots.eyebrow,
-          title: Array.isArray(parsed.title) && parsed.title.length ? parsed.title : slots.title,
-          titleAccent: parsed.titleAccent || slots.titleAccent,
-          subtitle: parsed.subtitle || slots.subtitle,
-          metrics: Array.isArray(parsed.metrics) && parsed.metrics.length ? parsed.metrics : slots.metrics,
-          hook: parsed.hook || slots.hook,
-        };
+        const parsed = JSON.parse(m[0]) as { scenes?: SceneText[] };
+        if (parsed?.scenes?.length) sceneTexts = parsed.scenes;
       }
     } catch (e) {
-      console.warn('[composeTemplate] slot generation error (using defaults):', e instanceof Error ? e.message : e);
+      console.warn('[composeTemplate] Sonnet scene gen error:', e instanceof Error ? e.message : e);
     }
 
+    // Fallback: derive from segment text
+    if (!sceneTexts.length) {
+      sceneTexts = groups.map((g, idx) => ({
+        i: idx,
+        eyebrow: `INSIGHT ${String(idx + 1).padStart(2, '0')} / 精彩片段`,
+        title: g.map((x) => x.text).join(' ').slice(0, 8),
+        subtitle: g.map((x) => x.text).join(' ').slice(0, 25),
+      }));
+    }
+
+    // ── Build scene list with timestamps ──
+    const scenes: TemplateScene[] = groups.map((g, idx) => {
+      const t = sceneTexts.find((x) => x.i === idx) ?? sceneTexts[idx];
+      return {
+        start: g[0].start,
+        duration: g[g.length - 1].end - g[0].start,
+        eyebrow: t?.eyebrow ?? `INSIGHT ${String(idx + 1).padStart(2, '0')}`,
+        title: t?.title ?? g[0].text.slice(0, 8),
+        subtitle: t?.subtitle ?? '',
+      };
+    });
+
     const gsapJs = await gsapInline();
-    const html = _buildTemplateHtml(templateId, slots, gsapJs, spec, duration);
+    const html = _buildDynamicTemplateHtml(templateId, scenes, gsapJs, spec, duration);
     res.json({ html, aspect: spec.aspect, width: spec.width, height: spec.height, phoneRect: spec.phoneRect ?? null });
   } catch (err) { next(err); }
 }
@@ -573,282 +577,138 @@ export function _esc(s: string): string {
   return (s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
-// ── _highlightAccent: wrap titleAccent in colored span ─────────────────────
-function _highlightAccent(line: string, accent: string, color: string): string {
-  if (!accent || !line.includes(accent)) return _esc(line);
-  const parts = _esc(line).split(_esc(accent));
-  return parts.join(`<span style="color:${color}">${_esc(accent)}</span>`);
-}
-
-// ── _buildTemplateHtml: route to template-specific builder ─────────────────
-function _buildTemplateHtml(
+// ── Dynamic template HTML builder (all templates) ─────────────────────────
+export function _buildDynamicTemplateHtml(
   templateId: string,
-  slots: TemplateSlots,
+  scenes: TemplateScene[],
   gsapJs: string,
   spec: TemplateSpec,
   duration: number,
 ): string {
-  if (templateId === 'C') return _buildHtmlC(slots, gsapJs, spec, duration);
-  if (templateId === 'R') return _buildHtmlR(slots, gsapJs, spec, duration);
-  if (templateId === 'W-G') return _buildHtmlWG(slots, gsapJs, spec, duration);
-  return _buildHtmlGeneric(slots, gsapJs, spec, duration);
-}
+  const { width, height, phoneRect, aspect } = spec;
+  const isPortrait = aspect === '9:16';
 
-// ── Template C — 克制纪录片 · 黑底暖黄 · 16:9 (1920×1080) ─────────────────
-function _buildHtmlC(slots: TemplateSlots, gsapJs: string, spec: TemplateSpec, duration: number): string {
-  const t = { bg: '#0a0a0a', ink: '#f0ede5', dim: 'rgba(240,237,229,0.5)', rule: 'rgba(240,237,229,0.12)', amber: '#c9a23d' };
-  const { phoneRect } = spec; // {x:206, y:173, w:328, h:724}
-  const titleHtml = (slots.title || []).map((line) =>
-    `<div>${_highlightAccent(line, slots.titleAccent, t.amber)}</div>`).join('');
-  const metricsHtml = (slots.metrics || []).slice(0, 3).map((m, i) => `
-<div style="padding-right:30px;${i > 0 ? 'padding-left:30px;' : ''}${i < 2 ? `border-right:1px solid ${t.rule};` : ''}">
-  <div id="m-label-${i}" style="font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.3em;color:${t.dim};text-transform:uppercase;">0${i + 1} · ${_esc(m.label)}</div>
-  <div id="m-value-${i}" style="margin-top:8px;font-family:'Noto Serif SC',serif;font-weight:500;font-size:60px;line-height:1;color:${t.ink};">${_esc(m.value)}<span style="color:${t.amber};font-size:28px;margin-left:4px;">${_esc(m.unit)}</span></div>
-</div>`).join('');
-  const progressHtml = Array.from({ length: 8 }).map((_, i) =>
-    `<div style="width:${i === 2 ? 32 : 22}px;height:2px;background:${i === 2 ? t.ink : t.rule};"></div>`).join('');
+  // ── Colour palette per template ──
+  type Palette = { bg: string; ink: string; dim: string; accent: string; rule: string; font: string };
+  const palettes: Record<string, Palette> = {
+    'C':   { bg: '#0a0a0a', ink: '#f0ede5', dim: 'rgba(240,237,229,0.55)', accent: '#c9a23d', rule: 'rgba(240,237,229,0.12)', font: "'Noto Serif SC',serif" },
+    'R':   { bg: '#1d1410', ink: '#f1e9d8', dim: 'rgba(241,233,216,0.55)', accent: '#c08e6a', rule: 'rgba(241,233,216,0.14)', font: "'Noto Serif SC',serif" },
+    'W-G': { bg: '#ede4d2', ink: '#1a1410', dim: 'rgba(26,20,16,0.55)',    accent: '#d39c4a', rule: 'rgba(26,20,16,0.18)',     font: "'Noto Serif SC',serif" },
+  };
+  const p: Palette = palettes[templateId] ?? { bg: '#08091a', ink: '#fff', dim: 'rgba(255,255,255,0.6)', accent: '#818cf8', rule: 'rgba(255,255,255,0.15)', font: "'Noto Sans SC',sans-serif" };
+
+  // ── Phone bezel (decorative chrome around phoneRect) ──
+  const bezelHtml = phoneRect ? (() => {
+    const pad = 22;
+    const bx = phoneRect.x - pad, by = phoneRect.y - pad;
+    const bw = phoneRect.w + pad * 2, bh = phoneRect.h + pad * 2;
+    const br = Math.min(bw, bh) * 0.12 + pad;
+    const bezelBg = templateId === 'W-G'
+      ? 'linear-gradient(160deg,#2a2a2a 0%,#0e0e0e 100%)'
+      : `linear-gradient(160deg,#222 0%,#000 100%)`;
+    return `<div id="phone-bezel" style="position:absolute;left:${bx}px;top:${by}px;width:${bw}px;height:${bh}px;border-radius:${br}px;background:${bezelBg};box-shadow:0 28px 80px rgba(0,0,0,.85),0 0 0 1px rgba(255,255,255,.04) inset;z-index:1;">
+  <div style="position:absolute;inset:${pad}px;border-radius:${br - pad}px;background:${p.bg};overflow:hidden;">
+    <div style="position:absolute;top:10px;left:50%;transform:translateX(-50%);width:72px;height:22px;border-radius:11px;background:#000;z-index:2;"></div>
+  </div>
+</div>`;
+  })() : '';
+
+  // ── Content area position (right of phone for landscape, below for portrait) ──
+  const contentLeft = phoneRect && !isPortrait ? phoneRect.x + phoneRect.w + 60 : (isPortrait ? 134 : 60);
+  const contentTop  = phoneRect && isPortrait ? phoneRect.y + phoneRect.h + 48 : 140;
+  const contentRight = 60;
+
+  // ── Per-scene HTML ──
+  const scenesHtml = scenes.map((sc, i) => `
+  <div id="sc${i}" class="sc" style="position:absolute;left:${contentLeft}px;top:${contentTop}px;right:${contentRight}px;bottom:80px;opacity:0;pointer-events:none;display:flex;flex-direction:column;justify-content:center;gap:0;">
+    <div id="sc${i}e" style="font-family:'JetBrains Mono',monospace;font-size:${isPortrait ? 13 : 15}px;letter-spacing:.32em;color:${p.accent};text-transform:uppercase;margin-bottom:28px;">${_esc(sc.eyebrow)}</div>
+    <div id="sc${i}t" style="font-family:${p.font};font-weight:900;font-size:${isPortrait ? 72 : 108}px;line-height:1.08;letter-spacing:-.01em;color:${p.ink};">${_esc(sc.title)}</div>
+    ${sc.subtitle ? `<div id="sc${i}s" style="margin-top:28px;font-size:${isPortrait ? 17 : 20}px;line-height:1.65;color:${p.dim};max-width:${isPortrait ? 800 : 900}px;">${_esc(sc.subtitle)}</div>` : ''}
+    <div id="sc${i}n" style="margin-top:40px;font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.3em;color:${p.accent};opacity:0.6;">0${i + 1} / 0${scenes.length}</div>
+  </div>`).join('');
+
+  // ── GSAP timeline entries ──
+  const tlEntries = scenes.map((sc, i) => {
+    const S = sc.start;
+    const E = Math.max(S + sc.duration - 0.15, S + 0.5);
+    const hasSubtitle = !!sc.subtitle;
+    return `
+(function(){
+  var S=${S.toFixed(3)},E=${E.toFixed(3)};
+  tl.to('#sc${i}',{opacity:1,duration:.25,ease:'power2.out'},S);
+  tl.from('#sc${i}e',{opacity:0,letterSpacing:'1.2em',duration:.28,ease:'power4.out'},S+.08);
+  tl.from('#sc${i}t',{y:22,opacity:0,duration:.32,ease:'expo.out'},S+.16);
+  ${hasSubtitle ? `tl.from('#sc${i}s',{y:10,opacity:0,duration:.28,ease:'power2.out'},S+.30);` : ''}
+  tl.from('#sc${i}n',{opacity:0,duration:.2},S+.40);
+  tl.to('#sc${i}',{opacity:0,duration:.18,ease:'power2.in'},E);
+})();`;
+  }).join('');
+
+  // ── Progress dots ──
+  const totalScenes = scenes.length;
+  const dotsHtml = Array.from({ length: totalScenes }, (_, i) =>
+    `<div id="dot${i}" style="width:${i === 0 ? 28 : 18}px;height:2px;border-radius:1px;background:${i === 0 ? p.accent : p.rule};transition:all .3s;"></div>`
+  ).join('');
+
+  // Dot update script: sync to current scene
+  const dotUpdates = scenes.map((sc, i) => {
+    const S = sc.start;
+    const E = sc.start + sc.duration;
+    const prev = i > 0 ? `tl.to('#dot${i - 1}',{width:18,background:'${p.rule}',duration:.2},${S.toFixed(3)});` : '';
+    return `${prev}
+  tl.to('#dot${i}',{width:28,background:'${p.accent}',duration:.2},${S.toFixed(3)});
+  tl.to('#dot${i}',{width:18,background:'${p.rule}',duration:.2},${E.toFixed(3)});`;
+  }).join('\n');
+
+  const compId = `template-${templateId.toLowerCase().replace(/[^a-z0-9]/g, '')}`;
 
   return `<!DOCTYPE html>
-<html><head><meta charset="utf-8">
+<html>
+<head>
+<meta charset="utf-8">
 <link href="https://fonts.googleapis.cn/css2?family=Noto+Sans+SC:wght@300;400;500;700;900&family=Noto+Serif+SC:wght@400;500;700;900&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
-html,body{width:1920px;height:1080px;overflow:hidden;background:${t.bg}}
-#root{position:relative;width:1920px;height:1080px;overflow:hidden;background:${t.bg};color:${t.ink};font-family:'Noto Sans SC',system-ui,sans-serif;}
-</style></head>
+html,body{width:${width}px;height:${height}px;overflow:hidden;background:${p.bg}}
+#root{position:relative;width:${width}px;height:${height}px;overflow:hidden;background:${p.bg};color:${p.ink};font-family:'Noto Sans SC',sans-serif;}
+.sc{will-change:opacity,transform;}
+</style>
+</head>
 <body>
-<div id="root" data-composition-id="template-c" data-start="0" data-duration="${duration}" data-width="1920" data-height="1080">
-  <!-- Top meta strip -->
-  <div id="eyebrow-strip" style="position:absolute;top:0;left:0;right:0;height:60px;display:flex;align-items:center;justify-content:space-between;padding:0 60px;font-family:'JetBrains Mono',monospace;font-size:13px;letter-spacing:.32em;color:${t.amber};">
-    <span>${_esc(slots.eyebrow)}</span>
-    <span>${_esc(slots.pageNum || '01 / 01')}</span>
+<div id="root" data-composition-id="${compId}" data-start="0" data-duration="${duration}" data-width="${width}" data-height="${height}">
+  <!-- Top strip -->
+  <div id="top-strip" style="position:absolute;top:0;left:0;right:0;height:56px;display:flex;align-items:center;justify-content:space-between;padding:0 56px;font-family:'JetBrains Mono',monospace;font-size:12px;letter-spacing:.32em;color:${p.accent};border-bottom:1px solid ${p.rule};opacity:0;">
+    <span>ZENITHJOY · ${templateId}</span>
+    <span>${duration.toFixed(0)}S</span>
   </div>
-  <!-- Horizontal rule under top strip -->
-  <div style="position:absolute;top:60px;left:60px;right:60px;height:1px;background:${t.rule};"></div>
-  <!-- Phone bezel area (video overlaid here by FFmpeg) -->
-  ${phoneRect ? `
-  <div id="phone-wrap" style="position:absolute;left:60px;top:100px;width:620px;bottom:110px;display:flex;align-items:center;justify-content:center;">
-    <div style="width:352px;height:736px;border-radius:48px;padding:6px;background:linear-gradient(160deg,#222 0%,#000 100%);box-shadow:0 30px 80px rgba(0,0,0,.8),0 0 0 1px rgba(255,255,255,.04) inset;">
-      <div style="width:100%;height:100%;border-radius:42px;background:#0a0a0a;overflow:hidden;position:relative;">
-        <div style="position:absolute;top:10px;left:50%;transform:translateX(-50%);width:90px;height:26px;border-radius:14px;background:#000;z-index:2;"></div>
-        <div style="position:absolute;left:12px;right:12px;bottom:16px;z-index:2;font-size:11px;color:rgba(255,255,255,.5);font-family:'JetBrains Mono',monospace;letter-spacing:.1em;text-align:center;">VIDEO PREVIEW</div>
-      </div>
-    </div>
-  </div>` : ''}
-  <!-- Right content panel -->
-  <div id="content-panel" style="position:absolute;left:760px;top:240px;right:80px;">
-    <div id="scene-eyebrow" style="font-family:'JetBrains Mono',monospace;font-size:16px;letter-spacing:.32em;color:${t.amber};text-transform:uppercase;margin-bottom:28px;">SCENE 01 / 精准共鸣点</div>
-    <div id="scene-title" style="font-family:'Noto Serif SC',serif;font-weight:900;font-size:116px;line-height:1.1;letter-spacing:-.01em;">${titleHtml}</div>
-    ${slots.subtitle ? `<div id="scene-subtitle" style="margin-top:30px;font-size:19px;line-height:1.65;color:rgba(240,237,229,0.65);max-width:880px;">${_esc(slots.subtitle)}</div>` : ''}
-    <div id="scene-metrics" style="margin-top:70px;padding-top:26px;border-top:1px solid ${t.rule};display:grid;grid-template-columns:1fr 1fr 1fr;">
-      ${metricsHtml}
-    </div>
+  <!-- Phone bezel -->
+  ${bezelHtml}
+  <!-- Scene panels -->
+  ${scenesHtml}
+  <!-- Progress dots -->
+  <div id="progress" style="position:absolute;bottom:28px;${phoneRect && !isPortrait ? `left:${phoneRect.x + phoneRect.w + 60}px` : 'left:134px'};right:60px;display:flex;gap:10px;align-items:center;opacity:0;">
+    ${dotsHtml}
   </div>
-  <!-- Progress bar -->
-  <div id="progress" style="position:absolute;bottom:50px;right:60px;display:flex;gap:10px;align-items:center;">
-    ${progressHtml}
-  </div>
-  <!-- Horizontal rule above progress -->
-  <div style="position:absolute;bottom:80px;left:60px;right:60px;height:1px;background:${t.rule};"></div>
+  <!-- Bottom rule -->
+  <div style="position:absolute;bottom:56px;left:56px;right:56px;height:1px;background:${p.rule};"></div>
 </div>
 <script>${gsapJs}</script>
 <script>
 (function(){
 var D=${duration};
 var tl=gsap.timeline({paused:true});
-gsap.set(['#eyebrow-strip','#phone-wrap','#content-panel','#progress'],{opacity:0});
-tl.to('#eyebrow-strip',{opacity:1,duration:.3,ease:'power2.out'},.1);
-tl.from('#eyebrow-strip',{y:-20,duration:.3,ease:'expo.out'},.1);
-tl.to('#phone-wrap',{opacity:1,duration:.5,ease:'power2.out'},.2);
-tl.from('#phone-wrap',{scale:.92,duration:.5,ease:'back.out(1.4)'},.2);
-tl.to('#scene-eyebrow',{opacity:1,duration:.2,ease:'power2.out'},.4);
-tl.from('#scene-eyebrow',{letterSpacing:'1.4em',duration:.3,ease:'power4.out'},.4);
-tl.to('#scene-title',{opacity:1,duration:.4,ease:'power2.out'},.55);
-tl.from('#scene-title',{y:30,duration:.4,ease:'expo.out'},.55);
-if(document.getElementById('scene-subtitle')){
-  tl.to('#scene-subtitle',{opacity:1,duration:.35,ease:'power2.out'},.75);
-  tl.from('#scene-subtitle',{y:12,duration:.35,ease:'expo.out'},.75);
-}
-tl.to('#scene-metrics',{opacity:1,duration:.4,ease:'power2.out'},.9);
-tl.from('#scene-metrics',{y:16,duration:.4,ease:'expo.out'},.9);
-tl.to('#progress',{opacity:1,duration:.3,ease:'power2.out'},1.1);
+tl.to('#top-strip',{opacity:1,duration:.3,ease:'power2.out'},.05);
+tl.to('#phone-bezel',{opacity:1,duration:.45,ease:'back.out(1.3)'},.1);
+tl.from('#phone-bezel',{scale:.94,duration:.45,ease:'back.out(1.3)'},.1);
+tl.to('#progress',{opacity:1,duration:.3},.3);
+${tlEntries}
+${dotUpdates}
 tl.to({},{duration:.001},D-.001);
 window.__timelines=window.__timelines||{};
-window.__timelines['template-c']=tl;
+window.__timelines['${compId}']=tl;
 window.__hf={duration:D,seek:function(t){tl.seek(t,false);}};
 })();
 </script>
-</body></html>`;
-}
-
-// ── Template R — 深酒红棕 · 玫瑰金 · 16:9 (1920×1080) ────────────────────
-function _buildHtmlR(slots: TemplateSlots, gsapJs: string, spec: TemplateSpec, duration: number): string {
-  const t = { bg: '#1d1410', ink: '#f1e9d8', dim: 'rgba(241,233,216,0.55)', rule: 'rgba(241,233,216,0.14)', accent: '#c08e6a' };
-  const { phoneRect } = spec;
-  const titleHtml = (slots.title || []).map((line) =>
-    `<div>${_highlightAccent(line, slots.titleAccent, t.accent)}</div>`).join('');
-  const metricsHtml = (slots.metrics || []).slice(0, 3).map((m, i) => `
-<div style="text-align:center;padding:0 24px;${i > 0 ? `border-left:1px solid ${t.rule};` : ''}">
-  <div style="font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.28em;color:${t.dim};text-transform:uppercase;margin-bottom:10px;">0${i + 1} · ${_esc(m.label)}</div>
-  <div style="font-family:'Noto Serif SC',serif;font-size:52px;font-weight:500;line-height:1;color:${t.ink};">${_esc(m.value)}<span style="color:${t.accent};font-size:24px;margin-left:3px;">${_esc(m.unit)}</span></div>
-</div>`).join('');
-
-  return `<!DOCTYPE html>
-<html><head><meta charset="utf-8">
-<link href="https://fonts.googleapis.cn/css2?family=Noto+Sans+SC:wght@300;400;500;700;900&family=Noto+Serif+SC:wght@400;500;700;900&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-<style>*{margin:0;padding:0;box-sizing:border-box}html,body{width:1920px;height:1080px;overflow:hidden;background:${t.bg}}
-#root{position:relative;width:1920px;height:1080px;overflow:hidden;background:radial-gradient(ellipse at 50% 40%,${t.bg.replace('#', '#')} 0%,#0e0907 100%);color:${t.ink};}</style></head>
-<body>
-<div id="root" data-composition-id="template-r" data-start="0" data-duration="${duration}" data-width="1920" data-height="1080">
-  <!-- Top strip -->
-  <div id="eyebrow-strip" style="position:absolute;top:0;left:0;right:0;height:56px;display:flex;align-items:center;justify-content:space-between;padding:0 60px;font-family:'JetBrains Mono',monospace;font-size:12px;letter-spacing:.3em;color:${t.accent};border-bottom:1px solid ${t.rule};">
-    <span>${_esc(slots.eyebrow)}</span><span>${_esc(slots.pageNum || '01 / 01')}</span>
-  </div>
-  <!-- Left: phone bezel -->
-  ${phoneRect ? `
-  <div id="phone-wrap" style="position:absolute;left:${phoneRect.x - 28}px;top:${phoneRect.y - 28}px;width:${phoneRect.w + 56}px;height:${phoneRect.h + 56}px;display:flex;align-items:center;justify-content:center;">
-    <div style="width:${phoneRect.w + 12}px;height:${phoneRect.h + 12}px;border-radius:42px;padding:6px;background:linear-gradient(160deg,#3a2a1e 0%,#1a1008 100%);box-shadow:0 24px 80px rgba(0,0,0,.9),0 0 0 1px rgba(192,142,106,.15) inset;">
-      <div style="width:100%;height:100%;border-radius:36px;background:#0d0905;overflow:hidden;position:relative;">
-        <div style="position:absolute;top:10px;left:50%;transform:translateX(-50%);width:80px;height:24px;border-radius:12px;background:#000;z-index:2;"></div>
-      </div>
-    </div>
-  </div>` : ''}
-  <!-- Center: title block -->
-  <div id="content-panel" style="position:absolute;left:760px;top:180px;right:60px;text-align:left;">
-    <div id="scene-eyebrow" style="font-family:'JetBrains Mono',monospace;font-size:14px;letter-spacing:.3em;color:${t.accent};text-transform:uppercase;margin-bottom:36px;">${_esc(slots.eyebrow.split('/')[1]?.trim() || 'KEY INSIGHT')}</div>
-    <div id="scene-title" style="font-family:'Noto Serif SC',serif;font-weight:900;font-size:96px;line-height:1.12;letter-spacing:-.01em;">${titleHtml}</div>
-    ${slots.subtitle ? `<div id="scene-subtitle" style="margin-top:28px;font-size:18px;line-height:1.7;color:${t.dim};max-width:840px;">${_esc(slots.subtitle)}</div>` : ''}
-  </div>
-  <!-- Metrics bar -->
-  <div id="scene-metrics" style="position:absolute;bottom:120px;left:760px;right:60px;padding-top:24px;border-top:1px solid ${t.rule};display:grid;grid-template-columns:1fr 1fr 1fr;">
-    ${metricsHtml}
-  </div>
-  <!-- Progress -->
-  <div id="progress" style="position:absolute;bottom:60px;right:60px;display:flex;gap:8px;align-items:center;">
-    ${Array.from({ length: 8 }).map((_, i) => `<div style="width:${i === 2 ? 28 : 18}px;height:2px;background:${i === 2 ? t.ink : t.rule};"></div>`).join('')}
-  </div>
-</div>
-<script>${gsapJs}</script>
-<script>
-(function(){
-var D=${duration};var tl=gsap.timeline({paused:true});
-gsap.set(['#eyebrow-strip','#phone-wrap','#content-panel','#scene-metrics','#progress'],{opacity:0});
-tl.to('#eyebrow-strip',{opacity:1,duration:.3},.1);
-tl.to('#phone-wrap',{opacity:1,duration:.5,ease:'power2.out'},.15);
-tl.from('#phone-wrap',{x:-30,duration:.5,ease:'expo.out'},.15);
-tl.to('#scene-eyebrow',{opacity:1,duration:.2},.4);
-tl.to('#content-panel',{opacity:1,duration:.0},.38);
-tl.from('#scene-title',{y:40,opacity:0,duration:.45,ease:'expo.out'},.5);
-if(document.getElementById('scene-subtitle'))tl.from('#scene-subtitle',{y:16,opacity:0,duration:.35,ease:'power2.out'},.72);
-tl.to('#scene-metrics',{opacity:1,duration:.4,ease:'power2.out'},.88);
-tl.from('#scene-metrics',{y:20,duration:.4,ease:'expo.out'},.88);
-tl.to('#progress',{opacity:1,duration:.3},1.05);
-tl.to({},{duration:.001},D-.001);
-window.__timelines=window.__timelines||{};window.__timelines['template-r']=tl;
-window.__hf={duration:D,seek:function(t){tl.seek(t,false);}};
-})();
-</script></body></html>`;
-}
-
-// ── Template W-G — Bauhaus 撞色 · 9:16 (1080×1920) ───────────────────────
-function _buildHtmlWG(slots: TemplateSlots, gsapJs: string, spec: TemplateSpec, duration: number): string {
-  const t = { bg: '#ede4d2', stripe: '#1f3a3d', ink: '#1a1410', light: '#ede4d2', mustard: '#d39c4a', dim: 'rgba(26,20,16,0.55)', rule: 'rgba(26,20,16,0.18)' };
-  const { phoneRect } = spec;
-  const titleHtml = (slots.title || []).map((line) =>
-    `<div>${_highlightAccent(line, slots.titleAccent, t.mustard)}</div>`).join('');
-  const metricsHtml = (slots.metrics || []).slice(0, 3).map((m, i) => `
-<div style="${i > 0 ? `border-left:1px solid ${t.rule};padding-left:20px;` : ''}padding-right:20px;">
-  <div style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.28em;color:${t.dim};text-transform:uppercase;margin-bottom:6px;">${_esc(m.label)}</div>
-  <div style="font-family:'Noto Serif SC',serif;font-size:40px;font-weight:700;line-height:1;color:${t.ink};">${_esc(m.value)}<span style="color:${t.mustard};font-size:20px;margin-left:3px;">${_esc(m.unit)}</span></div>
-</div>`).join('');
-
-  return `<!DOCTYPE html>
-<html><head><meta charset="utf-8">
-<link href="https://fonts.googleapis.cn/css2?family=Noto+Sans+SC:wght@300;400;500;700;900&family=Noto+Serif+SC:wght@400;500;700;900&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-<style>*{margin:0;padding:0;box-sizing:border-box}html,body{width:1080px;height:1920px;overflow:hidden;background:${t.bg}}
-#root{position:relative;width:1080px;height:1920px;overflow:hidden;background:${t.bg};color:${t.ink};}</style></head>
-<body>
-<div id="root" data-composition-id="template-wg" data-start="0" data-duration="${duration}" data-width="1080" data-height="1920">
-  <!-- Dark stripe left panel -->
-  <div style="position:absolute;left:0;top:0;width:108px;height:100%;background:${t.stripe};"></div>
-  <!-- Vertical eyebrow on stripe -->
-  <div id="stripe-eyebrow" style="position:absolute;left:0;top:192px;width:108px;display:flex;align-items:center;justify-content:center;">
-    <div style="transform:rotate(-90deg);white-space:nowrap;font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.3em;color:${t.mustard};text-transform:uppercase;">${_esc(slots.eyebrow)}</div>
-  </div>
-  <!-- Phone preview area -->
-  ${phoneRect ? `
-  <div id="phone-wrap" style="position:absolute;left:${phoneRect.x - 20}px;top:${phoneRect.y - 20}px;width:${phoneRect.w + 40}px;height:${phoneRect.h + 40}px;display:flex;align-items:center;justify-content:center;">
-    <div style="width:${phoneRect.w + 12}px;height:${phoneRect.h + 12}px;border-radius:42px;padding:6px;background:linear-gradient(160deg,#2a2a2a 0%,#0e0e0e 100%);box-shadow:0 20px 60px rgba(0,0,0,.4);">
-      <div style="width:100%;height:100%;border-radius:36px;background:#0a0a0a;overflow:hidden;position:relative;">
-        <div style="position:absolute;top:8px;left:50%;transform:translateX(-50%);width:70px;height:22px;border-radius:11px;background:#000;z-index:2;"></div>
-      </div>
-    </div>
-  </div>` : ''}
-  <!-- Title block -->
-  <div id="content-panel" style="position:absolute;left:134px;top:${(phoneRect ? phoneRect.y + phoneRect.h + 40 : 1200)}px;right:40px;">
-    <div id="scene-title" style="font-family:'Noto Serif SC',serif;font-weight:900;font-size:80px;line-height:1.12;color:${t.ink};">${titleHtml}</div>
-    ${slots.subtitle ? `<div id="scene-subtitle" style="margin-top:20px;font-size:17px;line-height:1.7;color:${t.dim};max-width:800px;">${_esc(slots.subtitle)}</div>` : ''}
-    <div id="scene-metrics" style="margin-top:36px;padding-top:20px;border-top:1px solid ${t.rule};display:flex;gap:0;">
-      ${metricsHtml}
-    </div>
-  </div>
-  <!-- Bottom progress -->
-  <div id="progress" style="position:absolute;bottom:64px;left:134px;right:40px;display:flex;gap:8px;align-items:center;">
-    ${Array.from({ length: 8 }).map((_, i) => `<div style="height:3px;flex:${i === 0 ? 2 : 1};background:${i === 0 ? t.mustard : t.rule};border-radius:2px;"></div>`).join('')}
-  </div>
-</div>
-<script>${gsapJs}</script>
-<script>
-(function(){
-var D=${duration};var tl=gsap.timeline({paused:true});
-gsap.set(['#stripe-eyebrow','#phone-wrap','#content-panel','#progress'],{opacity:0});
-tl.to('#stripe-eyebrow',{opacity:1,duration:.3},.1);
-tl.to('#phone-wrap',{opacity:1,duration:.5,ease:'power2.out'},.2);
-tl.from('#phone-wrap',{y:-20,scale:.95,duration:.5,ease:'back.out(1.3)'},.2);
-tl.to('#content-panel',{opacity:1,duration:.0},.5);
-tl.from('#scene-title',{y:30,opacity:0,duration:.4,ease:'expo.out'},.5);
-if(document.getElementById('scene-subtitle'))tl.from('#scene-subtitle',{y:12,opacity:0,duration:.3,ease:'power2.out'},.7);
-tl.from('#scene-metrics',{y:14,opacity:0,duration:.35,ease:'power2.out'},.85);
-tl.to('#progress',{opacity:1,duration:.3},1.0);
-tl.to({},{duration:.001},D-.001);
-window.__timelines=window.__timelines||{};window.__timelines['template-wg']=tl;
-window.__hf={duration:D,seek:function(t){tl.seek(t,false);}};
-})();
-</script></body></html>`;
-}
-
-// ── Generic fallback builder (unknown template) ────────────────────────────
-function _buildHtmlGeneric(slots: TemplateSlots, gsapJs: string, spec: TemplateSpec, duration: number): string {
-  const { width, height, phoneRect } = spec;
-  const titleHtml = (slots.title || []).map((line) => `<div>${_esc(line)}</div>`).join('');
-  const BP = 18;
-  return `<!DOCTYPE html>
-<html><head><meta charset="utf-8">
-<link href="https://fonts.googleapis.cn/css2?family=Noto+Sans+SC:wght@400;700;900&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-<style>*{margin:0;padding:0;box-sizing:border-box}html,body{width:${width}px;height:${height}px;overflow:hidden;background:#08091a}
-#root{position:relative;width:${width}px;height:${height}px;overflow:hidden;background:#08091a;color:#fff;font-family:'Noto Sans SC',sans-serif;}
-${phoneRect ? `.ph-screen{position:absolute;left:${phoneRect.x}px;top:${phoneRect.y}px;width:${phoneRect.w}px;height:${phoneRect.h}px;background:#000;border-radius:8px;}
-.ph-bezel{position:absolute;left:${phoneRect.x - BP}px;top:${phoneRect.y - BP}px;width:${phoneRect.w + BP * 2}px;height:${phoneRect.h + BP * 2}px;border-radius:${30 + BP}px;background:linear-gradient(160deg,#1c1c28,#0e0e18);box-shadow:0 24px 80px rgba(0,0,0,.7);}` : ''}
-</style></head>
-<body>
-<div id="root" data-composition-id="template-generic" data-start="0" data-duration="${duration}" data-width="${width}" data-height="${height}">
-  ${phoneRect ? '<div class="ph-bezel"></div><div class="ph-screen"></div>' : ''}
-  <div id="content" style="position:absolute;left:${phoneRect ? phoneRect.x + phoneRect.w + 40 : 60}px;top:60px;right:60px;bottom:60px;display:flex;flex-direction:column;justify-content:center;gap:20px;">
-    <div id="scene-eyebrow" style="font-family:'JetBrains Mono',monospace;font-size:14px;letter-spacing:.3em;color:#818cf8;text-transform:uppercase;">${_esc(slots.eyebrow)}</div>
-    <div id="scene-title" style="font-size:${width > 1080 ? 60 : 40}px;font-weight:900;line-height:1.2;">${titleHtml}</div>
-    ${slots.subtitle ? `<div id="scene-subtitle" style="font-size:18px;line-height:1.6;color:rgba(255,255,255,.7);">${_esc(slots.subtitle)}</div>` : ''}
-  </div>
-</div>
-<script>${gsapJs}</script>
-<script>
-(function(){
-var D=${duration};var tl=gsap.timeline({paused:true});
-gsap.set('#content',{opacity:0});
-tl.to('#content',{opacity:1,duration:.3},.1);
-tl.from('#scene-title',{y:20,opacity:0,duration:.4,ease:'expo.out'},.2);
-tl.to({},{duration:.001},D-.001);
-window.__timelines=window.__timelines||{};window.__timelines['template-generic']=tl;
-window.__hf={duration:D,seek:function(t){tl.seek(t,false);}};
-})();
-</script></body></html>`;
+</body>
+</html>`;
 }

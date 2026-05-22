@@ -4,7 +4,7 @@ import type { TemplateSpec } from '../../templates/registry';
 const { mockQuery } = vi.hoisted(() => ({ mockQuery: vi.fn() }));
 vi.mock('../../db/connection', () => ({ default: { query: mockQuery } }));
 
-import { _esc, _buildCompositionHtml } from '../ai-video-pipeline-ai.controller';
+import { _esc, _buildDynamicTemplateHtml } from '../ai-video-pipeline-ai.controller';
 
 const SPEC_C: TemplateSpec = {
   id: 'C', name: 'Test C', aspect: '16:9', width: 1920, height: 1080, duration: 10,
@@ -17,8 +17,8 @@ const SPEC_WG: TemplateSpec = {
   phoneRect: { x: 166, y: 236, w: 388, h: 854 },
 };
 const SCENES = [
-  { start: 0, duration: 5, layout: 'question', eyebrow: 'INTRO', title: '测试标题', body: '测试内容', tags: ['标签1'] },
-  { start: 5, duration: 5, layout: 'finale', eyebrow: 'END', title: '结尾', body: '', tags: [] },
+  { start: 0, duration: 5, eyebrow: 'INTRO', title: '测试标题', subtitle: '副标题内容' },
+  { start: 5, duration: 5, eyebrow: 'END', title: '结尾', subtitle: '' },
 ];
 
 describe('composeTemplate', () => {
@@ -49,8 +49,8 @@ describe('_esc', () => {
   it('leaves plain text unchanged', () => { expect(_esc('hello world')).toBe('hello world'); });
 });
 
-describe('_buildCompositionHtml — Template C (16:9)', () => {
-  const html = () => _buildCompositionHtml({ scenes: SCENES, gsapJs: '/* gsap */', spec: SPEC_C, duration: 10 });
+describe('_buildDynamicTemplateHtml — Template C (16:9)', () => {
+  const html = () => _buildDynamicTemplateHtml('C', SCENES, '/* gsap */', SPEC_C, 10);
 
   it('has data-width and data-height on root div', () => {
     const h = html();
@@ -64,22 +64,24 @@ describe('_buildCompositionHtml — Template C (16:9)', () => {
 
   it('includes scene divs for each scene', () => {
     const h = html();
-    expect(h).toContain('id="scene-0"');
-    expect(h).toContain('id="scene-1"');
+    expect(h).toContain('id="sc0"');
+    expect(h).toContain('id="sc1"');
   });
 
-  it('renders question layout with qtext class', () => {
-    expect(html()).toContain('class="qtext"');
+  it('renders eyebrow and title for each scene', () => {
+    const h = html();
+    expect(h).toContain('INTRO');
+    expect(h).toContain('测试标题');
+    expect(h).toContain('END');
+    expect(h).toContain('结尾');
   });
 
   it('inlines provided GSAP JS', () => {
     expect(html()).toContain('/* gsap */');
   });
 
-  it('includes phone bezel and screen divs', () => {
-    const h = html();
-    expect(h).toContain('ph-bezel');
-    expect(h).toContain('ph-screen');
+  it('includes phone bezel div', () => {
+    expect(html()).toContain('id="phone-bezel"');
   });
 
   it('does NOT include React or Babel CDN scripts', () => {
@@ -89,21 +91,21 @@ describe('_buildCompositionHtml — Template C (16:9)', () => {
   });
 
   it('escapes HTML in scene content', () => {
-    const sceneWithXss = [{ start: 0, duration: 5, layout: 'tags', eyebrow: '<b>X</b>', title: '&amp;', body: '"q"', tags: ['<xss>'] }];
-    const h = _buildCompositionHtml({ scenes: sceneWithXss, gsapJs: '', spec: SPEC_C, duration: 5 });
+    const sceneWithXss = [{ start: 0, duration: 5, eyebrow: '<b>X</b>', title: '&amp;', subtitle: '"q"' }];
+    const h = _buildDynamicTemplateHtml('C', sceneWithXss, '', SPEC_C, 5);
     expect(h).toContain('&lt;b&gt;X&lt;/b&gt;');
-    expect(h).toContain('&lt;xss&gt;');
+    expect(h).toContain('&amp;amp;');
   });
 
-  it('content panel is right of phone when phone center-x < canvas-width/2', () => {
+  it('content panel is right of phone for landscape', () => {
     const h = html();
-    // phoneCenterX=370 < 960, so content starts right of phone
-    expect(h).toContain(`left:${206 + 328 + 56}px`);
+    // left = phoneRect.x + phoneRect.w + 60 = 206 + 328 + 60 = 594
+    expect(h).toContain('left:594px');
   });
 });
 
-describe('_buildCompositionHtml — Template W-G (9:16 portrait)', () => {
-  const html = () => _buildCompositionHtml({ scenes: SCENES, gsapJs: '', spec: SPEC_WG, duration: 10 });
+describe('_buildDynamicTemplateHtml — Template W-G (9:16 portrait)', () => {
+  const html = () => _buildDynamicTemplateHtml('W-G', SCENES, '', SPEC_WG, 10);
 
   it('has correct portrait dimensions', () => {
     const h = html();
@@ -112,8 +114,8 @@ describe('_buildCompositionHtml — Template W-G (9:16 portrait)', () => {
   });
 
   it('content panel is below phone for portrait', () => {
-    // yStart = 236+854+18+24=1132
-    expect(html()).toContain('top:1132px');
+    // top = phoneRect.y + phoneRect.h + 48 = 236 + 854 + 48 = 1138
+    expect(html()).toContain('top:1138px');
   });
 
   it('uses portrait (smaller) font size for eyebrow', () => {
@@ -121,41 +123,29 @@ describe('_buildCompositionHtml — Template W-G (9:16 portrait)', () => {
   });
 });
 
-describe('_buildCompositionHtml — burst layout', () => {
-  it('uses burst-num class for big number', () => {
-    const scenes = [{ start: 0, duration: 5, layout: 'burst', eyebrow: 'STAT', title: '3.2万', body: '点赞量', tags: [] }];
-    const h = _buildCompositionHtml({ scenes, gsapJs: '', spec: SPEC_C, duration: 5 });
-    expect(h).toContain('class="burst-num"');
-    expect(h).toContain('3.2万');
-  });
-});
-
-describe('_buildCompositionHtml — no phoneRect', () => {
-  it('omits phone elements when phoneRect is absent', () => {
+describe('_buildDynamicTemplateHtml — no phoneRect', () => {
+  it('omits phone-bezel when phoneRect is absent', () => {
     const specNoPhone: TemplateSpec = { ...SPEC_C, phoneRect: undefined };
-    const h = _buildCompositionHtml({ scenes: SCENES, gsapJs: '', spec: specNoPhone, duration: 5 });
-    expect(h).not.toContain('ph-bezel');
-    expect(h).not.toContain('ph-screen');
+    const h = _buildDynamicTemplateHtml('C', SCENES, '', specNoPhone, 5);
+    expect(h).not.toContain('id="phone-bezel"');
   });
 });
 
-describe('_buildCompositionHtml — GSAP timeline', () => {
+describe('_buildDynamicTemplateHtml — GSAP timeline', () => {
   it('includes tl.to({}) hold at full duration', () => {
-    const h = _buildCompositionHtml({ scenes: SCENES, gsapJs: '', spec: SPEC_C, duration: 10 });
+    const h = _buildDynamicTemplateHtml('C', SCENES, '', SPEC_C, 10);
     expect(h).toMatch(/tl\.to\(\{\}.*D-\.001/s);
   });
 
   it('includes window.__hf with seek function', () => {
-    const h = _buildCompositionHtml({ scenes: SCENES, gsapJs: '', spec: SPEC_C, duration: 10 });
+    const h = _buildDynamicTemplateHtml('C', SCENES, '', SPEC_C, 10);
     expect(h).toContain('window.__hf');
     expect(h).toContain('seek:function');
   });
 
-  it('scene with tags gets tag elements', () => {
-    const scenes = [{ start: 0, duration: 5, layout: 'tags', eyebrow: 'KW', title: '关键词', body: '', tags: ['短视频', '精准'] }];
-    const h = _buildCompositionHtml({ scenes, gsapJs: '', spec: SPEC_C, duration: 5 });
-    expect(h).toContain('class="tag"');
-    expect(h).toContain('短视频');
-    expect(h).toContain('精准');
+  it('scene with subtitle renders subtitle element', () => {
+    const scenes = [{ start: 0, duration: 5, eyebrow: 'KW', title: '主标题', subtitle: '副标题' }];
+    const h = _buildDynamicTemplateHtml('C', scenes, '', SPEC_C, 5);
+    expect(h).toContain('副标题');
   });
 });
