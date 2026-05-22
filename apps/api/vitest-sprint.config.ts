@@ -4,7 +4,7 @@ import { resolve } from 'path';
 export default defineConfig({
   resolve: {
     alias: {
-      'supertest': resolve('./node_modules/supertest'),
+      'supertest': resolve('../../node_modules/supertest'),
     },
   },
   test: {
