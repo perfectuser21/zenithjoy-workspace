@@ -470,6 +470,35 @@ export async function processVideoPipelineJob(
     }
     fireProgress(apiBase, id, 48, 'step36_roughcut');
 
+    // ── Step 3.7: normalize rotation (non-template path only) ────────────────
+    // rough-cut re-encodes strip rotation metadata; bake it into pixels so
+    // HyperFrames renders the video in the correct orientation.
+    // Template path handles rotation in Step 6 via -noautorotate + transpose filter — skip here.
+    if (!job.template_id && videoRotation && videoRotation !== 0) {
+      const rotMap: Record<number, string[]> = {
+        90:  ['transpose=1'],
+        270: ['transpose=2'],
+        180: ['hflip,vflip'],
+      };
+      const vfArg = rotMap[videoRotation];
+      if (vfArg) {
+        const rotated = path.join(tmpDir, 'rotated.mp4');
+        console.log(`[Step 3.7/7] normalizing rotation ${videoRotation}° via ${vfArg[0]}`);
+        await withRetry('Step 3.7/7 normalize-rotation', async () => {
+          await runFfmpeg([
+            '-y', '-i', roughCutPath,
+            '-vf', vfArg[0],
+            '-c:v', 'libx264', '-crf', '22', '-c:a', 'copy',
+            '-metadata:s:v:0', 'rotate=0',
+            rotated,
+          ], { timeout: 300_000 });
+          if (!fs.existsSync(rotated)) throw new Error('rotation normalize produced no output');
+        }, 2, 2_000);
+        roughCutPath = rotated;
+        console.log(`[Step 3.7/7] ✓ rotation normalized`);
+      }
+    }
+
     // ── Template path ────────────────────────────────────────────────────────
     if (job.template_id) {
       type PhoneRect = { x: number; y: number; w: number; h: number };
