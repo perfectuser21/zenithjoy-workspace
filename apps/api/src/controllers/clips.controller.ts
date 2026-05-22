@@ -111,6 +111,7 @@ export async function handleCallback(req: Request, res: Response, next: NextFunc
     const body = req.body as {
       success: boolean;
       content_type?: '图文' | '短视频';
+      duration_ms?: number;
       title?: string; transcript?: string; text?: string; images?: unknown[];
       author?: string; author_id?: string;
       like_count?: number; comment_count?: number; share_count?: number;
@@ -123,13 +124,14 @@ export async function handleCallback(req: Request, res: Response, next: NextFunc
       return res.json({ ok: true });
     }
 
-    // Route content: 图文 posts use `text` (caption), 短视频 posts use `transcript` (speech)
-    const effectiveTranscript = body.content_type === '图文'
-      ? (body.text ?? null)
-      : (body.transcript ?? null);
+    // 图文判断：XHS 直接看 content_type；抖音图文被 content-service 误判为短视频，用 duration_ms===0 识别
+    const isGraphicPost = body.content_type === '图文' || (body.content_type === '短视频' && body.duration_ms === 0);
+    const effectiveContentType = isGraphicPost ? '图文' : '短视频';
+    // 图文只要 title（帖子文字描述），transcript 是背景音乐不要；短视频用语音转写
+    const effectiveTranscript = isGraphicPost ? null : (body.transcript ?? null);
 
     const clip = await updateClipStatus(id, 'done', {
-      content_type: body.content_type ?? undefined,
+      content_type: effectiveContentType,
       title: body.title, transcript: effectiveTranscript ?? undefined, text: body.text ?? undefined,
       images: body.images,
       author: body.author, author_id: body.author_id,
