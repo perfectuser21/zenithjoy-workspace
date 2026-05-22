@@ -12,9 +12,10 @@
 
 ### Path 作战图（Notion）
 
-| Path | 类型 | Maturity | Notion |
-|---|---|---|---|
-| Path 1 客户首次成功 | user_facing | not_started | [Notion](https://www.notion.so/358c40c2ba6381b2a6eacd288cf82f29) |
+| Path | 类型 | Maturity | Smoke | Notion |
+|---|---|---|---|---|
+| Path 1 客户首次成功 | user_facing | in_progress | `golden-path-1-smoke.sh` | [Notion](https://www.notion.so/358c40c2ba6381b2a6eacd288cf82f29) |
+| Path 6 内容采集与分发 | user_facing | thin | `golden-path-6-smoke.sh` | — |
 
 **Path 1 的 6 步**（在 `.github/workflows/scripts/smoke/golden-path-1-smoke.sh`）：
 1. 注册自动登录（含 free license）
@@ -24,10 +25,17 @@
 5. AI 生成 1 条内容（接 Claude API）
 6. 中台派任务 + dryrun 发布 + 回执
 
+**Path 6 的 5 步**（在 `.github/workflows/scripts/smoke/golden-path-6-smoke.sh`）：
+1. 粘贴抖音/小红书链接 → POST /api/clips → status=pending
+2. content-service 回调 → status=done + transcript 写入
+3. 图文帖子 → OCR 提取 → ocr_text 写入
+4. 推送到 Notion DB → output_status=pushed
+5. 推送到飞书多维表格 → output_status=pushed
+
 ### 4 条铁律（违反 = PR 被拒）
 
-1. **每个 PR 必须推进 `golden-path-1-smoke.sh` 至少多过一关**。PR 描述强制声明：「本 PR 把 Path X 的 Step Y 从 ❌/🔴 推到 ✅」。
-2. **Path 1 没真正通之前，Path 2/3 一行代码不写**。新加 feature 的想法对照 6 步检查 — 不在路径上 → backlog。
+1. **每个 PR 必须推进对应 Path 的 smoke.sh 至少多过一关**。PR 描述强制声明：「本 PR 把 Path X 的 Step Y 从 ❌/🔴 推到 ✅」。
+2. **Path 1 没真正通之前，Path 2-5 一行代码不写**。Path 6 作为独立采集 Journey 可并行推进，不受此限制。新加 feature 的想法对照各 Path 步骤检查 — 不在任何路径上 → backlog。
 3. **新 Feature 默认 thin**。要建 medium/thick 必须用 walking-skeleton skill `thicken.js` 走升级流程（含 `replaces_old_thin` 删旧文件证据）。
 4. **加厚是"先减肥再增肌"**：升级 thickness 必须两段式 commit：`commit 1 删旧 mock/hardcode` → `commit 2 写新实现`。改名 `_legacy` / TODO 注释不算删除。
 
