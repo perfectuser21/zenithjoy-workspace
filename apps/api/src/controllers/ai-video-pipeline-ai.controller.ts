@@ -588,7 +588,7 @@ if (Comp) {
   tl.from('[data-gsap="metric-big"]', { ...A.NUMBER.from, duration: A.NUMBER.duration, ease: A.NUMBER.ease }, 0.35);
   tl.from('[data-gsap="progress"] > *',{ opacity: 0, scaleX: 0, duration: 0.15, stagger: 0.04, ease: 'power2.out' }, 0.45);
   tl.to({}, { duration: 0.001 }, ${p.duration} - 0.001);
-  window.__hf = { duration: ${p.duration}, seek: function(t) { tl.seek(t, false); document.querySelectorAll('video').forEach(function(v){v.pause();v.currentTime=t;}); } };
+  window.__hf = { duration: ${p.duration}, seek: function(t) { tl.seek(t, false); } };
 }
 </script>
 </body>
