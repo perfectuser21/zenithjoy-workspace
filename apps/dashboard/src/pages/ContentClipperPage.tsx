@@ -241,6 +241,11 @@ export default function ContentClipperPage() {
                     </div>
                     <p className="text-sm font-medium truncate">{clip.title || clip.url}</p>
                     {clip.author && <p className="text-xs text-gray-500 mt-0.5">@{clip.author}</p>}
+                    {clip.ocr_text && (
+                      <p className="text-xs text-gray-600 mt-1 line-clamp-2 leading-relaxed">
+                        {clip.ocr_text.slice(0, 120)}
+                      </p>
+                    )}
                     {clip.status === 'failed' && (
                       <p className="text-xs text-red-500 mt-1 truncate">{clip.error_msg}</p>
                     )}
