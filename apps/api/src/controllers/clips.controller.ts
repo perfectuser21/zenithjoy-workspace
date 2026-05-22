@@ -133,13 +133,26 @@ export async function handleCallback(req: Request, res: Response, next: NextFunc
     };
 
     if (!body.success) {
-      await updateClipStatus(id, 'failed', { error_msg: body.error ?? 'content-service 返回失败' });
+      let errorMsg = body.error ?? 'content-service 返回失败';
+      // 短链解析到平台首页时给出更友好的提示
+      if (/Cannot determine.*type|douyin\.com["']?\s*$/.test(errorMsg)) {
+        errorMsg = '链接无法解析，可能已失效，请重新复制分享链接';
+      }
+      await updateClipStatus(id, 'failed', { error_msg: errorMsg });
       return res.json({ ok: true });
     }
 
     // 图文判断：XHS 直接看 content_type；抖音图文被 content-service 误判为短视频，用 duration_ms===0 识别
     const isGraphicPost = body.content_type === '图文' || (body.content_type === '短视频' && body.duration_ms === 0);
     const effectiveContentType = isGraphicPost ? '图文' : '短视频';
+
+    // 检测短链解析到平台首页（标题是平台首页标题，无封面无图片）
+    const HOMEPAGE_TITLES = ['小红书 - 你的生活兴趣社区', '你的生活兴趣社区', '抖音-记录美好生活'];
+    const isHomepageContent = HOMEPAGE_TITLES.some(t => body.title?.includes(t));
+    if (isHomepageContent) {
+      await updateClipStatus(id, 'failed', { error_msg: '链接无法访问或已失效，请重新复制分享链接后提交' });
+      return res.json({ ok: true });
+    }
     // 图文只要 title（帖子文字描述），transcript 是背景音乐不要；短视频用语音转写
     const effectiveTranscript = isGraphicPost ? null : (body.transcript ?? null);
 
