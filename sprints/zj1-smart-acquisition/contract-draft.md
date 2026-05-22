@@ -79,7 +79,7 @@ API_PORT=${API_PORT:-3001}
 BASE_URL="http://localhost:$API_PORT"
 
 # 0. 前置检查：API 已启动
-curl -sf "$BASE_URL/api/health" > /dev/null \
+curl -sf "$BASE_URL/health" > /dev/null \
   || { echo "FATAL: API 服务未就绪 ($BASE_URL)，先启动再跑 E2E"; exit 2; }
 
 # 1. 主链路：GET /api/acquisition/overview 完整 schema 验证
