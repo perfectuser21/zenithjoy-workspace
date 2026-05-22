@@ -15,8 +15,18 @@ import {
 } from '../api/content-clipper.api';
 
 const extractUrl = (text: string): string => {
-  const m = text.match(/https?:\/\/[^\s\u4e00-\u9fff\u3000-\u303f\u3010\u3011\uff0c\u3002\u3001\uff01\uff1f]+/);
-  return m ? m[0].replace(/[.,;:!?）)]+$/, '') : text.trim();
+  // 标准 https:// URL
+  const httpMatch = text.match(/https?:\/\/[^\s\u4e00-\u9fff\u3000-\u303f\u3010\u3011\uff0c\u3002\u3001\uff01\uff1f]+/);
+  if (httpMatch) return httpMatch[0].replace(/[.,;:!?）)]+$/, '');
+  // 小红书：😆 CODE 😆 格式
+  const xhsMatch = text.match(/😆\s*([A-Za-z0-9]{8,20})\s*😆/);
+  if (xhsMatch) return `https://xhslink.com/a/${xhsMatch[1]}`;
+  // 抖音：混淆分享文案 CODE:/ 格式
+  const douyinMatch = text.match(/([A-Za-z0-9]{3,12}):\//);
+  if (douyinMatch && (text.includes('抖音') || text.includes('Dou音'))) {
+    return `https://v.douyin.com/${douyinMatch[1]}/`;
+  }
+  return text.trim();
 };
 
 function detectOutputType(url: string): string | null {
