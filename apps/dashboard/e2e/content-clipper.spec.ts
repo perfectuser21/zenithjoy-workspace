@@ -104,8 +104,9 @@ test('[Golden Path] 提交链接 → 采集完成 → 详情页看到文案和�
   await page.getByRole('button', { name: /提交采集/ }).click();
   await expect(page.getByText('已提交，正在采集...')).toBeVisible();
 
-  // 点进详情
-  await page.getByText(DOUYIN_URL).click();
+  // 点进详情（列表显示 title，不显示 URL）
+  await expect(page.getByText('测试视频标题')).toBeVisible();
+  await page.getByText('测试视频标题').click();
   await expect(page).toHaveURL(new RegExp(`/clips/${CLIP_ID}`));
 
   // 看到文案
