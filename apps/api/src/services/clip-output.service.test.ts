@@ -1,7 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
+vi.mock('../db/connection', () => ({
+  default: {
+    query: vi.fn(),
+  },
+}));
 vi.mock('./clips.service', () => ({
-  getSettings: vi.fn(),
   upsertFeishuBinding: vi.fn(),
 }));
 vi.mock('./clips-auth.service', () => ({
@@ -12,13 +16,8 @@ describe('pushClipOutput', () => {
   beforeEach(() => { vi.clearAllMocks(); });
 
   it('无绑定时返回 no_binding（skipped 模式）', async () => {
-    const { getSettings } = await import('./clips.service');
-    vi.mocked(getSettings).mockResolvedValue({
-      defaultOutputUrl: null,
-      defaultOutputType: null,
-      notionBound: false,
-      feishuBound: false,
-    });
+    const { default: pool } = await import('../db/connection');
+    vi.mocked(pool.query).mockResolvedValue({ rows: [{ notion_token: null, feishu_user_token: null, feishu_refresh_token: null, feishu_token_expires_at: null }], rowCount: 1 } as never);
 
     const { pushClipOutput } = await import('./clip-output.service');
     const result = await pushClipOutput({
