@@ -1,0 +1,70 @@
+name: Deploy API to US Mac
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'apps/api/**'
+
+jobs:
+  deploy-api:
+    name: Deploy API to US Mac (pm2)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.US_MAC_HOST }}
+          username: ${{ secrets.US_MAC_USER }}
+          key: ${{ secrets.US_MAC_SSH_KEY }}
+          port: ${{ secrets.US_MAC_PORT }}
+          script_stop: true
+          script: |
+            set -euo pipefail
+            REPO=/Users/administrator/perfect21/zenithjoy
+
+            echo "=== [1/4] git sync ==="
+            git -C "$REPO" fetch --force --prune origin main
+            git -C "$REPO" reset --hard FETCH_HEAD
+
+            echo "=== [2/4] install & build ==="
+            cd "$REPO"
+            npm ci --workspace=apps/api --ignore-scripts 2>/dev/null || \
+              (cd apps/api && npm ci --ignore-scripts)
+            npm run build --workspace=apps/api 2>/dev/null || \
+              (cd apps/api && npm run build)
+
+            echo "=== [3/4] pm2 restart ==="
+            pm2 restart zenithjoy-api --update-env
+
+            echo "=== [4/4] health check ==="
+            sleep 5
+            for i in $(seq 1 12); do
+              if curl -sf http://localhost:5200/health > /dev/null 2>&1; then
+                echo "Health check passed (attempt $i)"
+                exit 0
+              fi
+              echo "Attempt $i/12 failed, waiting 5s..."
+              sleep 5
+            done
+            echo "Health check FAILED after 65s"
+            pm2 logs zenithjoy-api --lines 30 --nostream
+            exit 1
+
+  notify-failure:
+    name: Notify Brain on failure
+    runs-on: ubuntu-latest
+    needs: [deploy-api]
+    if: failure()
+    steps:
+      - name: Post P0 alert to Brain
+        run: |
+          curl -sf -X POST http://38.23.47.81:5221/api/brain/tasks \
+            -H "Content-Type: application/json" \
+            -d '{
+              "title": "ZenithJoy US API 部署失败",
+              "priority": "P0",
+              "task_type": "dev",
+              "description": "deploy-us-vps.yml 失败，请人工介入"
+            }' || echo "Brain API 不可达，跳过告警"
