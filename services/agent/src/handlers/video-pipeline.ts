@@ -1,4 +1,4 @@
-﻿import { execSync, exec } from 'child_process';
+import { execSync, exec } from 'child_process';
 import { promisify } from 'util';
 import fs from 'fs';
 import path from 'path';
@@ -16,7 +16,7 @@ async function runFfmpeg(args: string[], opts: { timeout?: number } = {}): Promi
   await execAsync(cmd, { windowsHide: true, maxBuffer: 64 * 1024 * 1024, timeout: opts.timeout });
 }
 
-// ── 中文字体检�?─────────────────────────────────────────────────────────────
+// ── 中文字体检测 ─────────────────────────────────────────────────────────────
 export function findChineseFont(): string {
   const candidates = [
     'C:/Windows/Fonts/msyh.ttc',
@@ -51,7 +51,6 @@ export type SceneData = {
 
 export function buildOverlayFilters(scenes: SceneData[], w: number, h: number, font: string): string[] {
   if (!scenes.length || !font) return [];
-  // Windows 驱动器盘符冒号在 FFmpeg filter 里必须转义为 \:
   const fontPath = font.replace(/\\/g, '/').replace(/^([A-Za-z]):/, '$1\\:');
   const filters: string[] = [];
   const yBase = Math.floor(h * 0.70);
@@ -102,8 +101,7 @@ function findFfmpeg(): string {
   return 'ffmpeg';
 }
 
-// PATH for HyperFrames subprocess — re-evaluated each call so it picks up the FFmpeg
-// path after ensure-ffmpeg.ts finishes downloading (avoids stale module-load-time value).
+// PATH for HyperFrames subprocess
 const _hfEnv = () => {
   const ffmpegExe = findFfmpeg();
   return {
@@ -127,20 +125,20 @@ export async function fetchWithTimeout(
   }
 }
 
-// ── fireProgress �?fire-and-forget, never throws ─────────────────────────────
-export function fireProgress(apiBase: string, jobId: string, pct: number): void {
+// ── fireProgress: fire-and-forget, includes step name for diagnostics ────────
+export function fireProgress(apiBase: string, jobId: string, pct: number, step?: string): void {
   fetchWithTimeout(
     `${apiBase}/api/ai-video/jobs/${jobId}/progress`,
     {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ progress: pct, status: 'processing' }),
+      body: JSON.stringify({ progress: pct, status: 'processing', ...(step ? { step } : {}) }),
     },
     5_000,
   ).catch(() => {});
 }
 
-// ── reportComplete �?retry 3x with 2s backoff, never throws ─────────────────
+// ── reportComplete: retry 3x with 2s backoff, never throws ──────────────────
 async function _reportCompleteWithRetry(
   apiBase: string,
   jobId: string,
@@ -157,7 +155,7 @@ async function _reportCompleteWithRetry(
       },
       15_000,
     );
-    if (!r.ok) throw new Error(`complete �?HTTP ${r.status}`);
+    if (!r.ok) throw new Error(`complete → HTTP ${r.status}`);
   } catch (err) {
     if (attempt < 3) {
       await new Promise((r) => setTimeout(r, 2_000));
@@ -175,7 +173,7 @@ export async function reportComplete(
   return _reportCompleteWithRetry(apiBase, jobId, payload, 0);
 }
 
-// ── JSON helpers (with timeout) ──────────────────────────────────────────────
+// ── postJson: returns null on HTTP error or network failure ──────────────────
 async function postJson<T>(
   apiBase: string, p: string, body: unknown, timeoutMs: number,
 ): Promise<T | null> {
@@ -241,8 +239,6 @@ export async function processVideoPipelineJob(
   const { id, topic } = job;
   const videoPath = job.src_video;
   if (!videoPath || !fs.existsSync(videoPath)) {
-    // File not accessible on this machine (e.g. xian-rog picking up a CI runner's job).
-    // Release back to pending so the agent that owns the file can pick it up instead of permanently failing.
     console.warn(`[video-pipeline] src_video not accessible locally (${videoPath}) — releasing job back to pending`);
     await fetchWithTimeout(
       `${apiBase}/api/ai-video/jobs/${id}/progress`,
@@ -256,10 +252,9 @@ export async function processVideoPipelineJob(
     return;
   }
   if (!fs.statSync(videoPath).isFile()) {
-    console.error(`[video-pipeline] ❌ src_video 是文件夹而非视频文件，请选择具体 .mp4/.mov 文件: ${videoPath}`);
-    await reportComplete(apiBase, id, {
-      error_msg: `[video-pipeline] src_video 是文件夹而非视频文件，请选择具体 .mp4/.mov 文件: ${videoPath}`,
-    });
+    const msg = `src_video is a directory, not a video file: ${videoPath}`;
+    console.error('[video-pipeline] ❌ [Step 0 FAILED]', msg);
+    await reportComplete(apiBase, id, { error_msg: `[Step 0 FAILED] ${msg}` });
     return;
   }
 
@@ -267,24 +262,39 @@ export async function processVideoPipelineJob(
   fs.mkdirSync(outputDir, { recursive: true });
   const tmpDir = path.join(os.tmpdir(), `zj-video-${id}`);
   fs.mkdirSync(tmpDir, { recursive: true });
-  console.log(`[video-pipeline] processing job ${id} �?source: ${videoPath}`);
+  console.log(`[video-pipeline] ▶ job ${id} template=${job.template_id ?? 'none'} src=${videoPath}`);
 
   try {
-    fireProgress(apiBase, id, 2);
+    fireProgress(apiBase, id, 2, 'start');
 
-    // Step 1: probe duration (shell-based, 30s timeout)
-    let duration = 30;
+    // ── Step 1: ffprobe — duration + rotation (REQUIRED, throw on failure) ──
+    console.log(`[Step 1/7] ffprobe: measuring duration + rotation`);
+    let duration = 0;
+    let videoRotation = 0;
+
+    const ffprobePath = findFfmpeg().replace(/ffmpeg(\.exe)?$/i, (m) =>
+      m.replace(/ffmpeg/i, 'ffprobe'));
     try {
-      const ffprobePath = findFfmpeg().replace(/ffmpeg(\.exe)?$/i, (m) =>
-        m.replace(/ffmpeg/i, 'ffprobe'));
-      const cmd = `${quoteArg(ffprobePath)} -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 ${quoteArg(videoPath)}`;
-      const { stdout } = await execAsync(cmd, { windowsHide: true, timeout: 30_000, maxBuffer: 1024 * 1024 });
-      const d = parseFloat(stdout.trim());
-      if (d > 0) duration = d;
-    } catch { /* use default 30s */ }
-    fireProgress(apiBase, id, 20);
+      const durationCmd = `${quoteArg(ffprobePath)} -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 ${quoteArg(videoPath)}`;
+      const { stdout } = await execAsync(durationCmd, { windowsHide: true, timeout: 30_000, maxBuffer: 1024 * 1024 });
+      duration = parseFloat(stdout.trim());
+      if (!(duration > 0)) throw new Error(`invalid duration output: "${stdout.trim()}"`);
+    } catch (err) {
+      throw new Error(`[Step 1 FAILED] ffprobe duration: ${(err as Error).message}`);
+    }
 
-    // Step 2: extract audio
+    // Rotation detection — non-fatal (rotation=0 is safe default)
+    try {
+      const rotCmd = `${quoteArg(ffprobePath)} -v error -select_streams v:0 -show_entries stream_tags=rotate -of default=noprint_wrappers=1:nokey=1 ${quoteArg(videoPath)}`;
+      const { stdout: rotOut } = await execAsync(rotCmd, { windowsHide: true, timeout: 10_000, maxBuffer: 64 * 1024 });
+      videoRotation = parseInt(rotOut.trim(), 10) || 0;
+    } catch { /* non-fatal */ }
+
+    console.log(`[Step 1/7] ✓ duration=${duration.toFixed(1)}s rotation=${videoRotation}°`);
+    fireProgress(apiBase, id, 20, 'step1_probe');
+
+    // ── Step 2: audio extraction (REQUIRED) ─────────────────────────────────
+    console.log(`[Step 2/7] audio: extracting WAV`);
     const audioPath = path.join(tmpDir, 'audio.wav');
     try {
       await runFfmpeg([
@@ -292,40 +302,59 @@ export async function processVideoPipelineJob(
         '-vn', '-acodec', 'pcm_s16le', '-ar', '16000', '-ac', '1',
         audioPath,
       ], { timeout: 120_000 });
-    } catch {
-      await runFfmpeg([
-        '-y', '-f', 'lavfi', '-i', 'anullsrc=r=16000:cl=mono',
-        '-t', String(duration), '-acodec', 'pcm_s16le', audioPath,
-      ], { timeout: 30_000 });
+      console.log(`[Step 2/7] ✓ real audio extracted`);
+    } catch (primaryErr) {
+      console.warn(`[Step 2/7] no audio stream (${(primaryErr as Error).message?.slice(0, 60)}), generating silent WAV`);
+      try {
+        await runFfmpeg([
+          '-y', '-f', 'lavfi', '-i', 'anullsrc=r=16000:cl=mono',
+          '-t', String(duration), '-acodec', 'pcm_s16le', audioPath,
+        ], { timeout: 30_000 });
+        console.log(`[Step 2/7] ✓ silent WAV generated`);
+      } catch (silentErr) {
+        throw new Error(`[Step 2 FAILED] cannot create audio: ${(silentErr as Error).message}`);
+      }
     }
-    fireProgress(apiBase, id, 28);
+    fireProgress(apiBase, id, 28, 'step2_audio');
 
-    // Step 3: transcribe (20s timeout, fallback to topic)
-    let transcript = topic || '';
+    // ── Step 3: transcription ────────────────────────────────────────────────
+    console.log(`[Step 3/7] transcribe: uploading ${Math.round(fs.statSync(audioPath).size / 1024)}KB audio`);
+    let transcript = '';
     let segments: Array<{ start: number; end: number; text: string }> = [];
     try {
       const audioBuffer = fs.readFileSync(audioPath);
       const form = new FormData();
       form.append('audio', new Blob([audioBuffer], { type: 'audio/wav' }), 'audio.wav');
       const ctrl = new AbortController();
-      const timer = setTimeout(() => ctrl.abort(), 20_000);
+      const timer = setTimeout(() => ctrl.abort(), 60_000);
       try {
         const r = await fetch(`${apiBase}/api/ai-video/jobs/${id}/transcribe`, {
           method: 'POST', body: form, signal: ctrl.signal,
         });
         if (r.ok) {
           const data = await r.json() as { transcript?: string; segments?: typeof segments };
-          if (data.transcript) transcript = data.transcript;
-          if (data.segments?.length) segments = data.segments;
+          transcript = data.transcript ?? '';
+          segments = data.segments ?? [];
+          console.log(`[Step 3/7] ✓ transcript ${transcript.length} chars, ${segments.length} segments`);
+        } else {
+          console.warn(`[Step 3/7] transcribe API HTTP ${r.status}`);
         }
       } finally { clearTimeout(timer); }
     } catch (err) {
-      console.warn('[video-pipeline] transcribe timeout/error (fallback):', (err as Error).message);
+      console.warn(`[Step 3/7] transcribe error: ${(err as Error).message}`);
     }
-    if (!transcript && topic) transcript = topic;
-    fireProgress(apiBase, id, 40);
 
-    // Step 3.5: analyze transcript — AI marks keep/remove per segment
+    if (!transcript && topic) {
+      console.warn(`[Step 3/7] ⚠ empty transcript — using topic as fallback: "${topic.slice(0, 50)}"`);
+      transcript = topic;
+    }
+    if (!transcript) {
+      throw new Error('[Step 3 FAILED] no transcript returned AND no topic provided');
+    }
+    fireProgress(apiBase, id, 40, 'step3_transcribe');
+
+    // ── Step 3.5: analyze (non-critical, soft warn) ──────────────────────────
+    console.log(`[Step 3.5/7] analyze: AI keep/remove on ${segments.length} segments`);
     type AnalyzedSegment = { start: number; end: number; text: string; keep: boolean; reason?: string };
     let analyzedSegments: AnalyzedSegment[] = segments.map((s) => ({ ...s, keep: true }));
 
@@ -338,14 +367,16 @@ export async function processVideoPipelineJob(
       if (analyzeResult?.segments?.length === segments.length) {
         analyzedSegments = analyzeResult.segments;
         const removedCount = analyzedSegments.filter((s) => !s.keep).length;
-        console.log(`[video-pipeline] analyze: ${segments.length} segs, removing ${removedCount} (废话/气口)`);
+        console.log(`[Step 3.5/7] ✓ removing ${removedCount}/${segments.length} segments`);
       } else {
-        console.warn('[video-pipeline] analyze-transcript unexpected shape, keeping all segments');
+        console.warn(`[Step 3.5/7] ⚠ unexpected analyze shape — keeping all ${segments.length} segments`);
       }
+    } else {
+      console.log(`[Step 3.5/7] ✓ no segments (no Whisper output), skipping`);
     }
-    fireProgress(apiBase, id, 44);
+    fireProgress(apiBase, id, 44, 'step35_analyze');
 
-    // Step 3.6: FFmpeg rough cut — concat only "keep" segments
+    // ── Step 3.6: rough cut (REQUIRED if any cuts needed) ───────────────────
     const keptIntervals = analyzedSegments
       .filter((s) => s.keep)
       .map((s) => ({
@@ -359,6 +390,7 @@ export async function processVideoPipelineJob(
     let refinedDuration = duration;
 
     if (keptIntervals.length > 0 && keptIntervals.length < analyzedSegments.length) {
+      console.log(`[Step 3.6/7] rough-cut: keeping ${keptIntervals.length}/${analyzedSegments.length} segments`);
       const rc = path.join(tmpDir, 'rough-cut.mp4');
       const filterParts: string[] = [];
       const concatInputs: string[] = [];
@@ -378,29 +410,34 @@ export async function processVideoPipelineJob(
           rc,
         ], { timeout: 300_000 });
         roughCutPath = rc;
-        console.log(`[video-pipeline] rough cut done: ${keptIntervals.length}/${analyzedSegments.length} segs kept`);
+        console.log(`[Step 3.6/7] ✓ rough cut done`);
       } catch (rcErr) {
-        console.warn('[video-pipeline] rough cut failed, using original video:', (rcErr as Error).message?.slice(0, 120));
+        throw new Error(`[Step 3.6 FAILED] FFmpeg rough cut: ${(rcErr as Error).message?.slice(0, 200)}`);
       }
 
-      // Step 3.7: re-calculate timestamps relative to rough-cut timeline
-      if (roughCutPath === rc) {
-        let offset = 0;
-        refinedSegments = keptIntervals.map((seg) => {
-          const newStart = offset;
-          const dur = seg.end - seg.start;
-          offset += dur;
-          return { start: newStart, end: newStart + dur, text: seg.text };
-        });
-        refinedDuration = offset;
-        transcript = refinedSegments.map((s) => s.text).join('。');
-      }
+      // Re-calculate timestamps relative to rough-cut timeline
+      let offset = 0;
+      refinedSegments = keptIntervals.map((seg) => {
+        const newStart = offset;
+        const dur = seg.end - seg.start;
+        offset += dur;
+        return { start: newStart, end: newStart + dur, text: seg.text };
+      });
+      refinedDuration = offset;
+      transcript = refinedSegments.map((s) => s.text).join('。');
+    } else if (keptIntervals.length === 0 && analyzedSegments.length > 0) {
+      console.warn('[Step 3.6/7] ⚠ all segments marked remove — keeping original video');
+    } else {
+      console.log('[Step 3.6/7] ✓ no cuts needed, using original video');
     }
-    fireProgress(apiBase, id, 48);
+    fireProgress(apiBase, id, 48, 'step36_roughcut');
 
-    // ── Template shortcut: skip AI design/compose-html, use server-rendered template ──
+    // ── Template path ────────────────────────────────────────────────────────
     if (job.template_id) {
       type PhoneRect = { x: number; y: number; w: number; h: number };
+
+      // Step 4: compose-template (REQUIRED)
+      console.log(`[Step 4/7] compose-template: generating HTML for template "${job.template_id}"`);
       const composeResult = await postJson<{ html?: string; aspect?: string; phoneRect?: PhoneRect | null }>(
         apiBase, `/api/ai-video/jobs/${id}/compose-template`,
         {
@@ -411,35 +448,46 @@ export async function processVideoPipelineJob(
         },
         60_000,
       );
-      fireProgress(apiBase, id, 65);
-
       if (!composeResult?.html) {
-        throw new Error('[video-pipeline] compose-template 步骤失败，未返回 HTML');
+        throw new Error('[Step 4 FAILED] compose-template did not return HTML');
       }
       const htmlContent = composeResult.html;
       const templateAspect = composeResult.aspect ?? '16:9';
       const phoneRect = composeResult.phoneRect ?? null;
+      console.log(`[Step 4/7] ✓ HTML ${htmlContent.length} chars, aspect=${templateAspect}, phoneRect=${JSON.stringify(phoneRect)}`);
+      fireProgress(apiBase, id, 60, 'step4_compose');
 
+      // Step 5: HyperFrames render (REQUIRED)
+      console.log(`[Step 5/7] HyperFrames: rendering template to video`);
       const hfDir = path.join(tmpDir, 'hf');
       fs.mkdirSync(hfDir, { recursive: true });
-      // No need to copy roughCutPath to hfDir — video is composited by FFmpeg after HF render
       fs.writeFileSync(path.join(hfDir, 'index.html'), htmlContent, 'utf-8');
       const rendered = path.join(hfDir, 'rendered.mp4');
-      console.log('[video-pipeline] HyperFrames template render...');
-      const hfCmd1 = await ensureHyperframes();
-      await execAsync(hfCmd1 + ' render --output ' + JSON.stringify(rendered), {
+      const hfCmd = await ensureHyperframes();
+      await execAsync(hfCmd + ' render --output ' + JSON.stringify(rendered), {
         cwd: hfDir, timeout: 600_000, maxBuffer: 10 * 1024 * 1024, windowsHide: true,
         env: _hfEnv(),
       });
+      if (!fs.existsSync(rendered)) {
+        throw new Error('[Step 5 FAILED] HyperFrames produced no output file');
+      }
+      console.log(`[Step 5/7] ✓ HyperFrames rendered`);
+      fireProgress(apiBase, id, 75, 'step5_hf');
 
-      // Composite rough-cut video into phone screen area + merge audio in one FFmpeg pass
-      const mergedPath = path.join(tmpDir, 'rendered_with_audio.mp4');
+      // Step 6: phone overlay (REQUIRED if phoneRect exists, throw on failure)
+      console.log(`[Step 6/7] overlay: compositing rough-cut into template phone screen`);
+      const mergedPath = path.join(tmpDir, 'final.mp4');
+
       if (phoneRect) {
         const { x, y, w, h } = phoneRect;
-        // Scale rough-cut to phone screen (fill/crop), overlay at exact coordinates, merge audio
+        // Rotation: phone videos encoded landscape with rotate=90 metadata need transpose
+        const rotPrefix = videoRotation === 90 ? 'transpose=1,' :
+                          videoRotation === 270 ? 'transpose=2,' :
+                          videoRotation === 180 ? 'hflip,vflip,' : '';
         const filterComplex =
-          `[1:v]scale=${w}:${h}:force_original_aspect_ratio=increase,crop=${w}:${h}[ph];` +
+          `[1:v]${rotPrefix}scale=${w}:${h}:force_original_aspect_ratio=increase,crop=${w}:${h}[ph];` +
           `[0:v][ph]overlay=${x}:${y}:shortest=1[out]`;
+        console.log(`[Step 6/7] phoneRect x=${x} y=${y} w=${w} h=${h} rotation=${videoRotation}°`);
         try {
           await runFfmpeg([
             '-y', '-i', rendered, '-i', roughCutPath,
@@ -449,22 +497,13 @@ export async function processVideoPipelineJob(
             '-t', String(refinedDuration),
             mergedPath,
           ], { timeout: 300_000 });
-          console.log(`[video-pipeline] phone overlay done (x=${x} y=${y} w=${w} h=${h})`);
         } catch (overlayErr) {
-          console.warn('[video-pipeline] phone overlay failed, falling back to audio-only merge:', (overlayErr as Error).message?.slice(0, 120));
-          try {
-            await runFfmpeg([
-              '-y', '-i', rendered, '-i', roughCutPath,
-              '-map', '0:v', '-map', '1:a',
-              '-c:v', 'copy', '-c:a', 'aac', '-b:a', '128k',
-              '-shortest', mergedPath,
-            ], { timeout: 120_000 });
-          } catch {
-            fs.copyFileSync(rendered, mergedPath);
-          }
+          throw new Error(`[Step 6 FAILED] phone overlay: ${(overlayErr as Error).message?.slice(0, 300)}`);
         }
+        console.log(`[Step 6/7] ✓ phone overlay done (rotation=${videoRotation}°)`);
       } else {
-        // No phoneRect — just merge audio (legacy / preview-only templates)
+        // No phoneRect — full-frame template, merge audio only
+        console.log(`[Step 6/7] no phoneRect — full-frame template, merging audio only`);
         try {
           await runFfmpeg([
             '-y', '-i', rendered, '-i', roughCutPath,
@@ -473,26 +512,31 @@ export async function processVideoPipelineJob(
             '-shortest', mergedPath,
           ], { timeout: 120_000 });
         } catch {
+          console.warn(`[Step 6/7] ⚠ audio merge failed, using silent template`);
           fs.copyFileSync(rendered, mergedPath);
         }
+        console.log(`[Step 6/7] ✓ audio merged`);
       }
+      fireProgress(apiBase, id, 92, 'step6_overlay');
 
-      // Output only the video matching the template's aspect ratio
+      // Step 7: copy to output
+      console.log(`[Step 7/7] output: writing to ${outputDir}`);
       if (templateAspect === '9:16') {
         fs.copyFileSync(mergedPath, path.join(outputDir, '9_16.mp4'));
       } else if (templateAspect === '16:9') {
         fs.copyFileSync(mergedPath, path.join(outputDir, '16_9.mp4'));
       } else {
-        throw new Error(`[video-pipeline] unsupported template aspect: ${templateAspect}`);
+        throw new Error(`[Step 7 FAILED] unsupported aspect: ${templateAspect}`);
       }
-      console.log('[video-pipeline] template render done');
-
-      console.log(`[video-pipeline] template job ${id} done — outputs at ${outputDir}`);
+      console.log(`[Step 7/7] ✓ template job ${id} done → ${outputDir}`);
       await reportComplete(apiBase, id, { output_dir: outputDir });
       return;
     }
 
-    // Step 4: design scenes using refined transcript + re-timed segments
+    // ── Non-template path ────────────────────────────────────────────────────
+
+    // Step 4B: design scenes
+    console.log(`[Step 4/7] design: generating scene layout`);
     type SceneItem = { start: number; duration: number; layout: string; eyebrow: string; title: string; body: string; tags?: string[] };
     const designResult = await postJson<{ scenes: SceneItem[] }>(
       apiBase, `/api/ai-video/jobs/${id}/design`,
@@ -506,67 +550,72 @@ export async function processVideoPipelineJob(
       120_000,
     );
     if (!designResult?.scenes?.length) {
-      throw new Error('[video-pipeline] design 步骤失败，未返回场景数据');
+      throw new Error('[Step 4 FAILED] design returned no scenes');
     }
     const scenes = designResult.scenes;
-    fireProgress(apiBase, id, 55);
+    console.log(`[Step 4/7] ✓ design: ${scenes.length} scenes`);
+    fireProgress(apiBase, id, 55, 'step4_design');
 
-    // Step 5: compose HTML using rough-cut video filename
-    const htmlPath = path.join(tmpDir, 'hyperframe.html');
+    // Step 5B: compose HTML
+    console.log(`[Step 5/7] compose-html: building HyperFrames HTML`);
     const htmlResult = await postJson<{ html?: string }>(
       apiBase, `/api/ai-video/jobs/${id}/compose-html`,
       { scenes, duration: refinedDuration, video_filename: path.basename(roughCutPath) },
       20_000,
     );
     if (!htmlResult?.html) {
-      throw new Error('[video-pipeline] compose-html 步骤失败，未返回 HTML');
+      throw new Error('[Step 5 FAILED] compose-html returned no HTML');
     }
-    fs.writeFileSync(htmlPath, htmlResult.html, 'utf-8');
-    fireProgress(apiBase, id, 65);
+    console.log(`[Step 5/7] ✓ compose-html: ${htmlResult.html.length} chars`);
+    fireProgress(apiBase, id, 65, 'step5_html');
 
-    fireProgress(apiBase, id, 75);
-
-    // Step 7: HyperFrames render with rough-cut video
+    // Step 6B: HyperFrames render
+    console.log(`[Step 6/7] HyperFrames: rendering HTML animation`);
     const output916 = path.join(outputDir, '9_16.mp4');
     const output169 = path.join(outputDir, '16_9.mp4');
-    const htmlContent = htmlResult.html!;
 
-    const hfDir = path.join(tmpDir, 'hf');
-    fs.mkdirSync(hfDir, { recursive: true });
-    fs.copyFileSync(roughCutPath, path.join(hfDir, path.basename(roughCutPath)));
-    fs.writeFileSync(path.join(hfDir, 'index.html'), htmlContent, 'utf-8');
-    const rendered = path.join(hfDir, 'rendered.mp4');
-    console.log('[video-pipeline] starting HyperFrames render...');
+    const hfDir2 = path.join(tmpDir, 'hf');
+    fs.mkdirSync(hfDir2, { recursive: true });
+    fs.copyFileSync(roughCutPath, path.join(hfDir2, path.basename(roughCutPath)));
+    fs.writeFileSync(path.join(hfDir2, 'index.html'), htmlResult.html, 'utf-8');
+    const rendered2 = path.join(hfDir2, 'rendered.mp4');
     const hfCmd2 = await ensureHyperframes();
-    await execAsync(hfCmd2 + ' render --output ' + JSON.stringify(rendered), {
-      cwd: hfDir, timeout: 600_000, maxBuffer: 10 * 1024 * 1024, windowsHide: true,
+    await execAsync(hfCmd2 + ' render --output ' + JSON.stringify(rendered2), {
+      cwd: hfDir2, timeout: 600_000, maxBuffer: 10 * 1024 * 1024, windowsHide: true,
       env: _hfEnv(),
     });
-    // Merge rough-cut audio into HyperFrames output (HF renders silent video)
-    const mergedPath2 = path.join(tmpDir, 'rendered2_with_audio.mp4');
+    if (!fs.existsSync(rendered2)) {
+      throw new Error('[Step 6 FAILED] HyperFrames produced no output file');
+    }
+    console.log(`[Step 6/7] ✓ HyperFrames rendered`);
+    fireProgress(apiBase, id, 85, 'step6_hf');
+
+    // Step 7B: merge audio + crop outputs
+    console.log(`[Step 7/7] output: merging audio, writing 9:16 + 16:9`);
+    const mergedPath2 = path.join(tmpDir, 'rendered_with_audio.mp4');
     try {
       await runFfmpeg([
-        '-y', '-i', rendered, '-i', roughCutPath,
+        '-y', '-i', rendered2, '-i', roughCutPath,
         '-map', '0:v', '-map', '1:a',
         '-c:v', 'copy', '-c:a', 'aac', '-b:a', '128k',
         '-shortest', mergedPath2,
       ], { timeout: 120_000 });
     } catch {
-      fs.copyFileSync(rendered, mergedPath2);
+      console.warn('[Step 7/7] ⚠ audio merge failed, using silent rendered video');
+      fs.copyFileSync(rendered2, mergedPath2);
     }
     fs.copyFileSync(mergedPath2, output169);
     await runFfmpeg(['-y', '-i', mergedPath2,
       '-vf', 'crop=ih*9/16:ih:(iw-ih*9/16)/2:0',
       '-c:v', 'libx264', '-crf', '23', '-c:a', 'aac', '-b:a', '128k', output916,
     ], { timeout: 300_000 });
-    console.log('[video-pipeline] HyperFrames render done');
-
-    console.log(`[video-pipeline] job ${id} done — outputs at ${outputDir}`);
+    console.log(`[Step 7/7] ✓ job ${id} done → ${outputDir}`);
     await reportComplete(apiBase, id, { output_dir: outputDir });
 
   } catch (err) {
-    console.error('[video-pipeline] unexpected error:', err);
-    await reportComplete(apiBase, id, { error_msg: String(err) });
+    const errMsg = String(err);
+    console.error('[video-pipeline] ❌ FAILED:', errMsg);
+    await reportComplete(apiBase, id, { error_msg: errMsg });
   } finally {
     fs.rmSync(tmpDir, { recursive: true, force: true });
   }
@@ -598,7 +647,7 @@ export function startVideoPipelineLoop(apiBase: string, licenseKey?: string, int
         console.log('[video-pipeline] poll: 0 pending jobs');
       } else {
         const job = data.data![0];
-        console.log(`[video-pipeline] picking up job ${job.id} src=${job.src_video}`);
+        console.log(`[video-pipeline] picking up job ${job.id} template=${job.template_id ?? 'none'} src=${job.src_video}`);
         await fetchWithTimeout(
           `${apiBase}/api/ai-video/jobs/${job.id}/progress`,
           {
