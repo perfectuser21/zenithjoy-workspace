@@ -31,7 +31,8 @@ jobs:
             git -C /opt/zenithjoy/repo fetch --force --prune origin main
             git -C /opt/zenithjoy/repo reset --hard FETCH_HEAD
 
-            echo "=== [2/3] reload nginx ==="
+            echo "=== [2/3] sync nginx + reload ==="
+            cp /opt/zenithjoy/repo/deploy/nginx.conf /opt/zenithjoy/autopilot-dashboard/nginx.conf
             if docker inspect autopilot-dashboard > /dev/null 2>&1; then
               docker exec autopilot-dashboard nginx -s reload
             else
