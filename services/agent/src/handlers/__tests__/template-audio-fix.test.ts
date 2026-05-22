@@ -17,10 +17,12 @@ describe('template path: audio merge after HyperFrames render', () => {
 });
 
 describe('_buildCompositionHtml: GSAP timeline hold to full duration', () => {
-  it('controller adds tl.to({}) hold at p.duration to prevent short render', () => {
+  it('controller adds tl.to({}) hold at full duration to prevent short render', () => {
     const src = readFileSync(COMPOSE_CTRL, 'utf-8');
-    // 修复后必须含有 tl.to({} hold，且目标时间用 p.duration
-    expect(src).toMatch(/tl\.to\(\{\}.*p\.duration/s);
+    // Dynamic HTML has tl.to({}) hold at the total duration (prevents HyperFrames short render)
+    // New impl uses variable D = total duration; old used p.duration — both patterns are valid
+    const hasDurationHold = /tl\.to\(\{\}.*(?:p\.duration|D-\.[0-9]+)/s.test(src);
+    expect(hasDurationHold).toBe(true);
   });
 });
 

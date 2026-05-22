@@ -1,9 +1,8 @@
 import { Request, Response, NextFunction } from 'express';
 import fs from 'fs';
 import https from 'https';
-import path from 'path';
 import { AiVideoPipelineService } from '../services/ai-video-pipeline.service';
-import { getTemplate, readTemplateJsx } from '../templates/registry';
+import { getTemplate, TemplateSpec } from '../templates/registry';
 
 const svc = new AiVideoPipelineService();
 const OPENROUTER_KEY = process.env.OPENROUTER_API_KEY || '';
@@ -429,24 +428,19 @@ export async function generateBgm(req: Request, res: Response, next: NextFunctio
   } catch (err) { next(err); }
 }
 
-// ── PHONE_PREVIEW_SRC — loaded once at startup ────────────────────────────
-let _phoneSrc: string | null = null;
-function getPhoneSrc(): string {
-  if (!_phoneSrc) {
-    const p = path.join(__dirname, '../templates/phone-preview.jsx');
-    _phoneSrc = fs.existsSync(p) ? fs.readFileSync(p, 'utf-8') : '';
-  }
-  return _phoneSrc;
-}
-
 // ── composeTemplate ────────────────────────────────────────────────────────
 export async function composeTemplate(req: Request, res: Response, next: NextFunction) {
   try {
     const job = await svc.getJob(req.params.id);
     if (!job) return res.status(404).json({ error: 'job not found' });
 
-    const { transcript = '', duration = 10, video_filename = 'video.mp4' } = req.body as {
+    const {
+      transcript = '',
+      segments = [],
+      duration = 10,
+    } = req.body as {
       transcript?: string;
+      segments?: Array<{ start: number; end: number; text: string }>;
       duration?: number;
       video_filename?: string;
     };
@@ -457,139 +451,274 @@ export async function composeTemplate(req: Request, res: Response, next: NextFun
     const spec = getTemplate(templateId);
     if (!spec) return res.status(400).json({ error: `unknown template: ${templateId}` });
 
-    // Step 1: Claude 从 transcript 提取 slots
-    const slotPrompt = `你是短视频文案分析师。从以下口播文案中提取模板内容，只输出 JSON，不要其他文字。
+    // Build timestamped transcript for Claude
+    const transcriptText = segments.length > 0
+      ? segments.map((s) => `[${s.start.toFixed(1)}s-${s.end.toFixed(1)}s] ${s.text}`).join('\n')
+      : (transcript || '精彩视频内容');
 
-文案：
-${transcript || '精彩视频内容'}
+    const sceneCount = Math.min(Math.max(Math.ceil(duration / 7), 3), 10);
 
-输出格式：
-{
-  "eyebrow": "场景标签（6字以内，英文+中文混排，如 SCENE 01 · 精准共鸣点）",
-  "title": ["标题第一行（8字以内）", "标题第二行（8字以内）"],
-  "titleAccent": "标题里需要突出的1个关键词",
-  "subtitle": "副标题（20字以内，概括核心观点）",
-  "metrics": [
-    {"label": "指标名", "value": "数字", "unit": "单位"},
-    {"label": "指标名", "value": "数字", "unit": "单位"},
-    {"label": "指标名", "value": "数字", "unit": "单位"}
-  ],
-  "hook": {
-    "handle": "@账号名（6字以内）",
-    "caption": "开场白文案（20字以内）",
-    "hashtags": ["话题1", "话题2"],
-    "videoSrc": "${video_filename}"
-  },
-  "pageNum": "01 / 01"
-}`;
+    const scenePrompt = `你是短视频字幕导演。根据以下逐字稿（含时间戳）设计 ${sceneCount} 个信息卡场景。
+每个场景配合口播节奏，在画面信息区展示视觉化卡片。
 
-    let slots: Record<string, unknown>;
+逐字稿：
+${transcriptText}
+
+视频总时长：${duration.toFixed(1)}秒
+
+场景类型：
+- burst: 震撼数字/事实（大数字配描述）
+- tags: 关键词列表（4-6个标签）
+- question: 反问句（大字体问句）
+- stats: 多指标对比（2-3行）
+- finale: 结尾CTA
+
+只输出 JSON 数组，不要其他文字：
+[
+  {
+    "start": <起始秒>,
+    "duration": <持续秒，至少3秒>,
+    "layout": "burst|tags|question|stats|finale",
+    "eyebrow": "场景标签（8字以内）",
+    "title": "主标题（10字以内）",
+    "body": "补充说明（25字以内，可空）",
+    "tags": ["关键词1", "关键词2"]
+  }
+]
+规则：第一个start=0，最后一个用finale，不重叠，总覆盖${duration.toFixed(1)}秒`;
+
+    type SceneItem = { start: number; duration: number; layout: string; eyebrow: string; title: string; body: string; tags?: string[] };
+    let scenes: SceneItem[] = [];
+
     try {
-      const slotResult = await postJson(
+      const sceneResult = await postJson(
         'https://openrouter.ai/api/v1/chat/completions',
         { Authorization: `Bearer ${OPENROUTER_KEY}` },
         {
           model: 'anthropic/claude-haiku-4-5',
-          max_tokens: 1024,
-          messages: [{ role: 'user', content: slotPrompt }],
+          max_tokens: 2048,
+          messages: [{ role: 'user', content: scenePrompt }],
         },
       ) as { choices?: { message?: { content?: string } }[] };
-
-      const raw = slotResult?.choices?.[0]?.message?.content ?? '{}';
-      const m = raw.match(/\{[\s\S]*\}/);
-      slots = m ? JSON.parse(m[0]) : {};
-    } catch (slotErr) {
-      console.warn('[composeTemplate] slot extraction failed, using fallback:', slotErr instanceof Error ? slotErr.message : slotErr);
-      slots = {
-        eyebrow: 'SCENE 01 · 内容精华',
-        title: [transcript.slice(0, 8) || '精彩内容', transcript.slice(8, 16) || ''],
-        titleAccent: '',
-        subtitle: transcript.slice(0, 30) || '精彩视频内容',
-        metrics: [
-          { label: '互动率', value: '2.5', unit: '×' },
-          { label: '完播率', value: '+50', unit: '%' },
-          { label: '精准曝光', value: '85', unit: '%' },
-        ],
-        hook: { handle: '@内容账号', caption: transcript.slice(0, 20) || '精彩内容', hashtags: [], videoSrc: video_filename },
-        pageNum: '01 / 01',
-      };
+      const raw = sceneResult?.choices?.[0]?.message?.content ?? '[]';
+      const m = raw.match(/\[[\s\S]*\]/);
+      scenes = m ? JSON.parse(m[0]) : [];
+    } catch (e) {
+      console.warn('[composeTemplate] scene design error:', e instanceof Error ? e.message : e);
     }
 
-    // Step 2: 生成 composition HTML
-    let templateJsx: string;
-    try {
-      templateJsx = readTemplateJsx(spec);
-    } catch (err) {
-      const e = err as NodeJS.ErrnoException;
-      if (e.code === 'TEMPLATE_NOT_FOUND') {
-        return res.status(400).json({ error: `template file not available: ${templateId}` });
+    // Fallback: derive scenes from segments
+    if (!scenes.length) {
+      const segs = segments.length > 0
+        ? segments
+        : [{ start: 0, end: duration, text: transcript || '精彩内容' }];
+      const chunkSize = Math.max(1, Math.ceil(segs.length / sceneCount));
+      const layouts = ['question', 'burst', 'tags', 'stats'] as const;
+      for (let i = 0; i < segs.length; i += chunkSize) {
+        const sl = segs.slice(i, i + chunkSize);
+        const isLast = i + chunkSize >= segs.length;
+        const text = sl.map((s) => s.text).join(' ');
+        scenes.push({
+          start: sl[0].start,
+          duration: Math.max(sl[sl.length - 1].end - sl[0].start, 3),
+          layout: isLast ? 'finale' : layouts[scenes.length % layouts.length],
+          eyebrow: `SCENE ${String(scenes.length + 1).padStart(2, '0')}`,
+          title: text.slice(0, 10),
+          body: text.slice(0, 25),
+          tags: text.split(/[，,。！？\s]+/).filter((w) => w.length >= 2 && w.length <= 5).slice(0, 4),
+        });
       }
-      throw err;
+      if (!scenes.length) {
+        scenes = [{ start: 0, duration, layout: 'question', eyebrow: 'SCENE 01', title: '精彩内容', body: transcript.slice(0, 25) || '精彩视频内容', tags: [] }];
+      }
     }
-    const phoneSrc = getPhoneSrc();
-    const gsapJs = await gsapInline();
-    const html = _buildCompositionHtml({
-      templateJsx, phoneSrc, slots, gsapJs,
-      component: spec.component,
-      width: spec.width, height: spec.height, duration,
-    });
 
+    const gsapJs = await gsapInline();
+    const html = _buildCompositionHtml({ scenes, gsapJs, spec, duration });
     res.json({ html, aspect: spec.aspect, width: spec.width, height: spec.height, phoneRect: spec.phoneRect ?? null });
   } catch (err) { next(err); }
 }
 
+type SceneItem = { start: number; duration: number; layout: string; eyebrow: string; title: string; body: string; tags?: string[] };
+
 interface _BuildHtmlParams {
-  templateJsx: string;
-  phoneSrc: string;
-  slots: Record<string, unknown>;
-  component: string;
-  width: number;
-  height: number;
-  duration: number;
+  scenes: SceneItem[];
   gsapJs: string;
+  spec: TemplateSpec;
+  duration: number;
 }
 
-function _buildCompositionHtml(p: _BuildHtmlParams): string {
+export function _esc(s: string): string {
+  return (s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+export function _buildCompositionHtml(p: _BuildHtmlParams): string {
+  const { scenes, gsapJs, spec, duration } = p;
+  const { width, height, phoneRect } = spec;
+  const ACCENT = '#818cf8';
+  const BG = '#08091a';
+  const BP = 18; // bezel padding
+
+  // Content panel: space opposite the phone
+  const panel = (() => {
+    if (!phoneRect) return { x: 60, y: 60, w: width - 120, h: height - 120 };
+    if (spec.aspect === '9:16') {
+      // Below phone for portrait
+      const yStart = phoneRect.y + phoneRect.h + BP + 24;
+      return { x: 40, y: yStart, w: width - 80, h: height - yStart - 40 };
+    }
+    const phoneCenterX = phoneRect.x + phoneRect.w / 2;
+    if (phoneCenterX < width / 2) {
+      // Phone left → content right
+      const xStart = phoneRect.x + phoneRect.w + 56;
+      return { x: xStart, y: 40, w: width - xStart - 40, h: height - 80 };
+    }
+    // Phone right → content left
+    return { x: 40, y: 40, w: phoneRect.x - 80, h: height - 80 };
+  })();
+
+  const port = spec.aspect === '9:16';
+  const fs = (s: number, l: number) => port ? s : l;
+
+  const sceneDivs = scenes.map((s, i) => {
+    const tags = (s.tags || []).map((t) => `<span class="tag">${_esc(t)}</span>`).join('');
+    let inner: string;
+    if (s.layout === 'burst') {
+      inner = `<div class="eyebrow">${_esc(s.eyebrow)}</div>
+<div class="burst-num">${_esc(s.title)}</div>
+${s.body ? `<div class="body">${_esc(s.body)}</div>` : ''}
+${tags ? `<div class="tags">${tags}</div>` : ''}`;
+    } else if (s.layout === 'question') {
+      inner = `<div class="eyebrow">${_esc(s.eyebrow)}</div>
+<div class="qtext">${_esc(s.title)}</div>
+${s.body ? `<div class="body">${_esc(s.body)}</div>` : ''}`;
+    } else {
+      inner = `<div class="eyebrow">${_esc(s.eyebrow)}</div>
+<div class="title">${_esc(s.title)}</div>
+${s.body ? `<div class="body">${_esc(s.body)}</div>` : ''}
+${tags ? `<div class="tags">${tags}</div>` : ''}`;
+    }
+    return `<div class="scene" id="scene-${i}">${inner}</div>`;
+  }).join('\n');
+
+  const sceneData = JSON.stringify(scenes.map((s) => ({
+    t: s.start, d: s.duration, lay: s.layout,
+    hasBody: !!s.body, hasTags: !!(s.tags && s.tags.length),
+  })));
+
   return `<!DOCTYPE html>
 <html>
 <head>
 <meta charset="utf-8">
-<link href="https://fonts.googleapis.cn/css2?family=Noto+Serif+SC:wght@400;500;700;900&family=Noto+Sans+SC:wght@300;400;500;700;900&family=JetBrains+Mono:wght@300;400;500;700&display=swap" rel="stylesheet">
-<style>* { margin: 0; padding: 0; box-sizing: border-box; }</style>
-</head>
-<body style="width:${p.width}px;height:${p.height}px;overflow:hidden">
-<div id="root" data-composition-id="template-comp" data-start="0" data-duration="${p.duration}"></div>
-<script src="https://cdn.bootcdn.net/ajax/libs/react/18.3.1/umd/react.development.js" crossorigin></script>
-<script src="https://cdn.bootcdn.net/ajax/libs/react-dom/18.3.1/umd/react-dom.development.js" crossorigin></script>
-<script>${p.gsapJs}</script>
-<script src="https://cdn.bootcdn.net/ajax/libs/babel-standalone/7.24.7/babel.min.js" crossorigin></script>
-<script>window.__SLOTS__ = ${JSON.stringify(p.slots)};</script>
-<script type="text/babel">
-${p.phoneSrc}
-${p.templateJsx}
-const root = document.getElementById('root');
-const tl = gsap.timeline({ paused: true });
-window.__timelines = window.__timelines || {};
-window.__timelines['template-comp'] = tl;
-const Comp = window.${p.component};
-if (Comp) {
-  ReactDOM.render(React.createElement(Comp, { slots: window.__SLOTS__ }), root);
-  const A = {
-    TITLE:   { duration: 0.20, ease: 'expo.out',    from: { x: -18, opacity: 0 } },
-    NUMBER:  { duration: 0.30, ease: 'back.out(2)', from: { scale: 0.4, opacity: 0 } },
-    EYEBROW: { duration: 0.15, ease: 'power4.out',  from: { opacity: 0, letterSpacing: '0.8em' } },
-    BODY:    { duration: 0.22, ease: 'power2.out',  from: { y: 6, opacity: 0 } },
-  };
-  tl.from('[data-gsap="eyebrow"]',    { ...A.EYEBROW.from, duration: A.EYEBROW.duration, ease: A.EYEBROW.ease }, 0.05);
-  tl.from('[data-gsap="phone"]',      { opacity: 0, y: 30, duration: 0.35, ease: 'power2.out' }, 0.10);
-  tl.from('[data-gsap="title"]',      { ...A.TITLE.from, duration: A.TITLE.duration, ease: A.TITLE.ease }, 0.15);
-  tl.from('[data-gsap="subtitle"]',   { ...A.BODY.from, duration: A.BODY.duration, ease: A.BODY.ease }, 0.30);
-  tl.from('[data-gsap="metrics"] > *',{ ...A.NUMBER.from, duration: A.NUMBER.duration, ease: A.NUMBER.ease, stagger: 0.08 }, 0.35);
-  tl.from('[data-gsap="metric-big"]', { ...A.NUMBER.from, duration: A.NUMBER.duration, ease: A.NUMBER.ease }, 0.35);
-  tl.from('[data-gsap="progress"] > *',{ opacity: 0, scaleX: 0, duration: 0.15, stagger: 0.04, ease: 'power2.out' }, 0.45);
-  tl.to({}, { duration: 0.001 }, ${p.duration} - 0.001);
-  window.__hf = { duration: ${p.duration}, seek: function(t) { tl.seek(t, false); } };
+<link href="https://fonts.googleapis.cn/css2?family=Noto+Sans+SC:wght@300;400;500;700;900&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:${width}px;height:${height}px;overflow:hidden;background:${BG}}
+#root{
+  position:relative;width:${width}px;height:${height}px;overflow:hidden;
+  background:radial-gradient(ellipse at 20% 50%,#0d0f2a 0%,${BG} 60%);
+  font-family:'Noto Sans SC',system-ui,sans-serif;
 }
+#root::before{
+  content:'';position:absolute;inset:0;z-index:0;
+  background-image:linear-gradient(rgba(129,140,248,.04) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(129,140,248,.04) 1px,transparent 1px);
+  background-size:80px 80px;
+}
+${phoneRect ? `.ph-bezel{
+  position:absolute;z-index:1;
+  left:${phoneRect.x - BP}px;top:${phoneRect.y - BP}px;
+  width:${phoneRect.w + BP * 2}px;height:${phoneRect.h + BP * 2}px;
+  border-radius:${30 + BP}px;
+  background:linear-gradient(160deg,#1c1c28 0%,#0e0e18 100%);
+  box-shadow:0 24px 80px rgba(0,0,0,.7),0 0 0 1px rgba(255,255,255,.05) inset,0 2px 0 rgba(255,255,255,.08) inset;
+}
+.ph-island{
+  position:absolute;z-index:3;
+  left:${phoneRect.x + Math.round(phoneRect.w / 2) - 45}px;top:${phoneRect.y + 10}px;
+  width:90px;height:26px;border-radius:14px;background:#000;
+}
+.ph-screen{
+  position:absolute;z-index:2;
+  left:${phoneRect.x}px;top:${phoneRect.y}px;
+  width:${phoneRect.w}px;height:${phoneRect.h}px;
+  background:#000;border-radius:8px;
+}` : ''}
+.content{
+  position:absolute;z-index:4;
+  left:${panel.x}px;top:${panel.y}px;
+  width:${panel.w}px;height:${panel.h}px;
+  overflow:hidden;
+}
+.scene{
+  position:absolute;inset:0;opacity:0;pointer-events:none;
+  display:flex;flex-direction:column;justify-content:center;
+  padding:${port ? '20px 24px' : '44px 40px'};gap:${port ? '10px' : '18px'};
+}
+.eyebrow{
+  font-family:'JetBrains Mono',monospace;
+  font-size:${fs(13, 15)}px;font-weight:500;letter-spacing:.12em;
+  color:${ACCENT};text-transform:uppercase;
+}
+.eyebrow::before{content:'— '}
+.title{font-size:${fs(26, 40)}px;font-weight:700;line-height:1.28;color:#fff}
+.burst-num{
+  font-size:${fs(52, 80)}px;font-weight:900;line-height:1;
+  background:linear-gradient(135deg,#fff 0%,${ACCENT} 100%);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+}
+.qtext{font-size:${fs(30, 50)}px;font-weight:700;line-height:1.32;color:#fff}
+.body{font-size:${fs(13, 19)}px;line-height:1.65;color:rgba(255,255,255,.75)}
+.tags{display:flex;flex-wrap:wrap;gap:7px;margin-top:3px}
+.tag{
+  padding:${port ? '4px 10px' : '5px 13px'};border-radius:20px;
+  background:rgba(129,140,248,.15);border:1px solid rgba(129,140,248,.35);
+  color:${ACCENT};font-size:${fs(11, 14)}px;font-weight:500;
+}
+</style>
+</head>
+<body>
+<div id="root"
+  data-composition-id="template-comp"
+  data-start="0"
+  data-duration="${duration}"
+  data-width="${width}"
+  data-height="${height}">
+  ${phoneRect ? `<div class="ph-bezel"></div>
+  <div class="ph-island"></div>
+  <div class="ph-screen"></div>` : ''}
+  <div class="content">
+    ${sceneDivs}
+  </div>
+</div>
+<script>${gsapJs}</script>
+<script>
+(function(){
+var S=${sceneData};
+var D=${duration};
+var tl=gsap.timeline({paused:true});
+for(var i=0;i<S.length;i++) gsap.set('#scene-'+i,{opacity:0});
+S.forEach(function(s,i){
+  var sel='#scene-'+i;
+  var t=s.t,d=s.d;
+  tl.to(sel,{opacity:1,duration:0},t);
+  tl.from(sel+' .eyebrow',{opacity:0,letterSpacing:'1.4em',duration:.18,ease:'power4.out'},t+.04);
+  if(s.lay==='burst'){
+    tl.from(sel+' .burst-num',{scale:.3,opacity:0,duration:.40,ease:'back.out(2.5)'},t+.12);
+  } else if(s.lay==='question'){
+    tl.from(sel+' .qtext',{y:24,opacity:0,duration:.32,ease:'expo.out'},t+.12);
+  } else {
+    tl.from(sel+' .title',{x:-20,opacity:0,duration:.22,ease:'expo.out'},t+.14);
+  }
+  if(s.hasBody) tl.from(sel+' .body',{y:8,opacity:0,duration:.24,ease:'power2.out'},t+.30);
+  if(s.hasTags) tl.from(sel+' .tag',{opacity:0,scale:.75,duration:.16,stagger:.05,ease:'back.out(1.5)'},t+.38);
+  if(i<S.length-1&&t+d-.25>t) tl.to(sel,{opacity:0,duration:.20,ease:'power2.in'},t+d-.25);
+});
+tl.to({},{duration:.001},D-.001);
+window.__timelines=window.__timelines||{};
+window.__timelines['template-comp']=tl;
+window.__hf={duration:D,seek:function(t){tl.seek(t,false);}};
+})();
 </script>
 </body>
 </html>`;

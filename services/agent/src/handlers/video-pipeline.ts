@@ -405,10 +405,11 @@ export async function processVideoPipelineJob(
         apiBase, `/api/ai-video/jobs/${id}/compose-template`,
         {
           transcript: transcript || topic || '精彩视频',
+          segments: refinedSegments,
           duration: refinedDuration,
           video_filename: path.basename(roughCutPath),
         },
-        20_000,
+        60_000,
       );
       fireProgress(apiBase, id, 65);
 
