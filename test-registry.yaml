@@ -1972,6 +1972,22 @@ tests:
     product: 新媒体运营
     note: "ZJ1 Smart Acquisition — GET /api/acquisition/overview E2E smoke 全链路验证"
 
+  - id: brain-sprint-state-unit
+    path: apps/api/src/routes/__tests__/brain-sprint-state.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 新媒体运营
+    note: "Brain Sprint State API — POST sprint-state / journey-steps / GET journey-steps 单元测试（10 cases）"
+
+  - id: brain-sprint-state-smoke
+    path: .github/workflows/scripts/smoke/brain-sprint-state-smoke.sh
+    type: e2e
+    ci: L4
+    status: active
+    product: 新媒体运营
+    note: "Brain Sprint State API — 6 curl assertions 覆盖 3 端点、upsert、400 验证"
+
 agent_suite:
   managed_by: services/agent/src/__tests__ + services/agent/publishers
   ci: L4

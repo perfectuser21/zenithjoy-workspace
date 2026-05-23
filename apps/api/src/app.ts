@@ -40,6 +40,7 @@ import { wechatRouter } from './routes/wechat';
 import clipsRouter from './routes/clips';
 import clipsAuthRouter from './routes/clips-auth';
 import { acquisitionRouter } from './routes/acquisition';
+import { brainSprintStateRouter } from './routes/brain-sprint-state';
 import { errorHandler, notFoundHandler } from './middleware/error';
 
 const app = express();
@@ -118,6 +119,8 @@ app.use('/api/wechat', wechatRouter);
 app.use('/api/clips', clipsRouter);
 app.use('/api/clips/auth', clipsAuthRouter);
 app.use('/api/acquisition', acquisitionRouter);
+// Harness Sprint State — Walking Skeleton 本地持久化（Brain DB source of truth）
+app.use('/api/brain', brainSprintStateRouter);
 
 // Error handling
 app.use(notFoundHandler);
