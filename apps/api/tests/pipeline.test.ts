@@ -118,11 +118,11 @@ describe('Pipeline API', () => {
       expect(response.status).toBe(201);
     });
 
-    it('should return 502 when cecelia Brain is unreachable', async () => {
+    it('should return 201 pending when cecelia Brain returns non-2xx (graceful fallback)', async () => {
+      // Brain 返回非 2xx → run 保持 pending，不阻断 API（不再返回 502）
       mockQuery
         .mockResolvedValueOnce({ rows: [{ notebook_id: null }] }) // SELECT topic.notebook_id
-        .mockResolvedValueOnce({ rows: [PIPELINE_RUN] })           // INSERT
-        .mockResolvedValueOnce({ rows: [] });                       // UPDATE failed status
+        .mockResolvedValueOnce({ rows: [PIPELINE_RUN] });          // INSERT (no UPDATE since Brain failed)
 
       mockFetch.mockResolvedValueOnce({
         ok: false,
@@ -133,10 +133,9 @@ describe('Pipeline API', () => {
         .post('/api/pipeline/trigger')
         .send({ content_type: 'tech_insight', topic_id: 'topic-002' });
 
-      expect(response.status).toBe(502);
-      expect(response.body.success).toBe(false);
-      expect(response.body.error.code).toBe('CECELIA_CALL_FAILED');
-      expect(response.body.error.message).toContain('cecelia Brain');
+      expect(response.status).toBe(201);
+      expect(response.body.data.status).toBe('pending');
+      expect(response.body.data.cecelia_task_id).toBeNull();
     });
 
     it('should return 500 on DB error', async () => {
