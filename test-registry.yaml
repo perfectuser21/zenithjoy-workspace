@@ -1988,6 +1988,38 @@ tests:
     product: 新媒体运营
     note: "Brain Sprint State API — 6 curl assertions 覆盖 3 端点、upsert、400 验证"
 
+  - id: zj2-smart-acquisition-run1-ws1
+    path: sprints/zj2-smart-acquisition-run1/tests/ws1/migration.test.ts
+    type: unit
+    ci: L4
+    status: active
+    product: 新媒体运营
+    note: "ZJ2 Smart Acquisition Run1 WS1 — acquisition_keyword_tasks + acquisition_videos DB 迁移合同测试"
+
+  - id: zj2-smart-acquisition-run1-ws2
+    path: sprints/zj2-smart-acquisition-run1/tests/ws2/keyword-search.test.ts
+    type: unit
+    ci: L4
+    status: active
+    product: 新媒体运营
+    note: "ZJ2 Smart Acquisition Run1 WS2 — keyword search API 合同测试"
+
+  - id: zj2-smart-acquisition-run1-ws3
+    path: sprints/zj2-smart-acquisition-run1/tests/ws3/video-comment-result.test.ts
+    type: unit
+    ci: L4
+    status: active
+    product: 新媒体运营
+    note: "ZJ2 Smart Acquisition Run1 WS3 — video comment result API 合同测试"
+
+  - id: zj2-smart-acquisition-run1-ws4
+    path: sprints/zj2-smart-acquisition-run1/tests/ws4/leads.test.ts
+    type: unit
+    ci: L4
+    status: active
+    product: 新媒体运营
+    note: "ZJ2 Smart Acquisition Run1 WS4 — leads API 合同测试"
+
 agent_suite:
   managed_by: services/agent/src/__tests__ + services/agent/publishers
   ci: L4
