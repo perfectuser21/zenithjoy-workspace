@@ -14,16 +14,21 @@
  */
 import { writeRecord } from './feishu-bitable-multitenant';
 
+export type LeadGrade = '感兴趣' | '精准' | '高意向';
+
 export interface CommentInput {
   commenter_id: string;
   text: string;
   publish_time: string;
+  grade?: LeadGrade;
+  keyword?: string;
 }
 
 export interface WriteLeadsParams {
   tenant_id: string;
   table_id_leads: string;
   video_url: string;
+  keyword?: string;
   comments: CommentInput[];
 }
 
@@ -57,7 +62,7 @@ async function writeOneWithRetry(
 export async function writeLeadsFromComments(
   params: WriteLeadsParams,
 ): Promise<WriteLeadsResult> {
-  const { tenant_id, table_id_leads, video_url, comments } = params;
+  const { tenant_id, table_id_leads, video_url, keyword, comments } = params;
 
   // 评论 0 早 return — 不调 writeRecord，仍算成功
   if (!Array.isArray(comments) || comments.length === 0) {
@@ -78,6 +83,8 @@ export async function writeLeadsFromComments(
       '来源视频 URL': video_url,
       抓取时间: c.publish_time || now,
       状态: '已抓取',
+      等级: c.grade ?? '',
+      关键词: c.keyword ?? keyword ?? '',
     };
 
     try {
