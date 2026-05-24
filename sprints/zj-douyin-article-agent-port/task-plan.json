@@ -1,0 +1,85 @@
+{
+  "initiative_id": "pending",
+  "journey_type": "autonomous",
+  "journey_type_reason": "Agent 内部行为，无 Dashboard UI，纯后端 task dispatch + publisher 脚本执行，无用户面向页面",
+  "tasks": [
+    {
+      "task_id": "ws1",
+      "title": "新建 publish-douyin-article.cjs + publish-douyin-article-dryrun.cjs（CDP 直连实现）",
+      "scope": "新建两个 CJS 脚本：article 脚本用 CDP DOM.setFileInputFiles 上传封面，发布按钮走 XPath；dryrun 脚本填完字段后停止，输出 {ok:true,dryRun:true}；两个脚本均含 cover 存在性 fail fast + summary substring(0,30) 缺省逻辑",
+      "dod": [
+        "[ARTIFACT] publish-douyin-article.cjs 文件存在",
+        "[ARTIFACT] publish-douyin-article-dryrun.cjs 文件存在",
+        "[BEHAVIOR] 脚本含 DOM.setFileInputFiles + backendNodeId，exit 0",
+        "[BEHAVIOR] 两脚本均无 button:has-text，exit 0",
+        "[BEHAVIOR] cover 不存在时含 existsSync/ENOENT 检查，exit 0",
+        "[BEHAVIOR] dryrun 含 dryRun:true 且无 create_v2 API 调用，exit 0",
+        "[BEHAVIOR] summary 含 content.substring(0, 30)，exit 0",
+        "[BEHAVIOR] error path：article 脚本含 ok:false 输出路径，exit 0"
+      ],
+      "files": [
+        "services/agent/publishers/douyin-publisher/publish-douyin-article.cjs",
+        "services/agent/publishers/douyin-publisher/publish-douyin-article-dryrun.cjs"
+      ],
+      "depends_on": [],
+      "complexity": "M",
+      "estimated_minutes": 45
+    },
+    {
+      "task_id": "ws2",
+      "title": "douyin-publish.ts — 加 article 路由，移除暂未实现阻断",
+      "scope": "将 'article' 加入 SUPPORTED_DOUYIN_TYPES；resolveDouyinScriptPath({type:'article'}) 按 ZENITHJOY_AGENT_REAL_PUBLISH 路由到 publish-douyin-article.cjs 或 publish-douyin-article-dryrun.cjs；未知 type 仍 throw",
+      "dod": [
+        "[ARTIFACT] SUPPORTED_DOUYIN_TYPES 源码含字面字符串 'article'",
+        "[BEHAVIOR] article 不在 throw 错误消息中，exit 0",
+        "[BEHAVIOR] publish-douyin-article 路径字符串出现在 handler 中，exit 0",
+        "[BEHAVIOR] publish-douyin-article-dryrun 路径字符串出现在 handler 中，exit 0",
+        "[BEHAVIOR] 未知 type 保护（no script for type）依然存在，exit 0"
+      ],
+      "files": [
+        "services/agent/src/handlers/douyin-publish.ts"
+      ],
+      "depends_on": ["ws1"],
+      "complexity": "S",
+      "estimated_minutes": 20
+    },
+    {
+      "task_id": "ws3",
+      "title": "build-install-pack.sh 加 publishers/ 复制 + package.json version 1.1.25→1.1.26",
+      "scope": "在 build-install-pack.sh 的 assets 复制段加入 cp -r publishers/ $PACK_DIR/publishers/；package.json version 字段改为 1.1.26",
+      "dod": [
+        "[ARTIFACT] package.json version = \"1.1.26\"",
+        "[ARTIFACT] build-install-pack.sh 含 publishers 字符串",
+        "[BEHAVIOR] version=1.1.26（不是 1.1.25），exit 0",
+        "[BEHAVIOR] build-install-pack.sh publishers 复制含 douyin-publisher 覆盖，exit 0",
+        "[BEHAVIOR] 版本冲突检查（已存在警告）依然保留，exit 0"
+      ],
+      "files": [
+        "services/agent/scripts/build-install-pack.sh",
+        "services/agent/package.json"
+      ],
+      "depends_on": ["ws2"],
+      "complexity": "S",
+      "estimated_minutes": 20
+    },
+    {
+      "task_id": "ws4",
+      "title": "新建 publish-douyin-article.test.cjs（vitest 单元测试套件）",
+      "scope": "在 publishers/douyin-publisher/__tests__/ 下新建 CJS 测试文件，vitest 可自动收录；覆盖：dryRun:true 输出、cover fail fast、summary 截取 3 个 BEHAVIOR 场景",
+      "dod": [
+        "[ARTIFACT] __tests__/publish-douyin-article.test.cjs 文件存在",
+        "[BEHAVIOR] 含 ≥3 个 it() 块，exit 0",
+        "[BEHAVIOR] require publish-douyin-article.cjs（非 image/video），exit 0",
+        "[BEHAVIOR] 含 dryRun 测试场景，exit 0",
+        "[BEHAVIOR] 含 cover fail fast 测试场景，exit 0",
+        "[BEHAVIOR] 含 summary substring 测试场景，exit 0"
+      ],
+      "files": [
+        "services/agent/publishers/douyin-publisher/__tests__/publish-douyin-article.test.cjs"
+      ],
+      "depends_on": ["ws3"],
+      "complexity": "S",
+      "estimated_minutes": 25
+    }
+  ]
+}
