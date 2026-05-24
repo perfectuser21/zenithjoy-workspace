@@ -41,6 +41,6 @@ journey_type: user_facing
   Test: manual:bash -c 'DTYPE=$(psql $DB -t -c "SELECT data_type FROM information_schema.columns WHERE table_schema='"'"'zenithjoy'"'"' AND table_name='"'"'acquisition_videos'"'"' AND column_name='"'"'comment_task_status'"'"'" | tr -d " "); [ "$DTYPE" = "text" ] || { echo "FAIL: 类型非 text，实际=$DTYPE"; exit 1; }; echo OK'
   期望: OK
 
-- [ ] [BEHAVIOR] 向 `acquisition_keyword_tasks` 插入并查询一条记录（端到端可写可读）
-  Test: manual:bash -c 'TEST_ID=$(psql $DB -t -c "INSERT INTO zenithjoy.acquisition_keyword_tasks (keyword, expanded_keywords, status) VALUES ('"'"'test_kw'"'"', '"'"'[\"a\",\"b\"]'"'"'::jsonb, '"'"'pending'"'"') RETURNING id" | tr -d " "); COUNT=$(psql $DB -t -c "SELECT count(*) FROM zenithjoy.acquisition_keyword_tasks WHERE id='"'"'$TEST_ID'"'"'" | tr -d " "); [ "$COUNT" -ge 1 ] || { echo "FAIL: 插入读回失败"; exit 1; }; psql $DB -c "DELETE FROM zenithjoy.acquisition_keyword_tasks WHERE id='"'"'$TEST_ID'"'"'" > /dev/null; echo OK'
+- [ ] [BEHAVIOR] 向 `acquisition_keyword_tasks` 插入并查询一条记录（端到端可写可读，status 用业务无关占位值 'test_roundtrip'，仅验证 DB 读写通路，不代表业务合法状态）
+  Test: manual:bash -c 'TEST_ID=$(psql $DB -t -c "INSERT INTO zenithjoy.acquisition_keyword_tasks (keyword, expanded_keywords, status) VALUES ('"'"'test_kw'"'"', '"'"'[\"a\",\"b\"]'"'"'::jsonb, '"'"'test_roundtrip'"'"') RETURNING id" | tr -d " "); COUNT=$(psql $DB -t -c "SELECT count(*) FROM zenithjoy.acquisition_keyword_tasks WHERE id='"'"'$TEST_ID'"'"'" | tr -d " "); [ "$COUNT" -ge 1 ] || { echo "FAIL: 插入读回失败"; exit 1; }; psql $DB -c "DELETE FROM zenithjoy.acquisition_keyword_tasks WHERE id='"'"'$TEST_ID'"'"'" > /dev/null; echo OK'
   期望: OK

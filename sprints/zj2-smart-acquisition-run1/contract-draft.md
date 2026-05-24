@@ -1,4 +1,4 @@
-# Sprint Contract Draft (Round 2)
+# Sprint Contract Draft (Round 3)
 
 ## Golden Path
 
@@ -502,6 +502,15 @@ workstream_count: 4
 5. **鉴权一致性**: 所有用户侧 curl 命令含 `Authorization: Bearer $TEST_TOKEN` ✅
 6. **Step 3 唯一状态**: `dispatched` only（无 pending 双态歧义）✅
 7. **Playwright 路径**: 统一为 `tests/ws4/leads.test.ts` ✅
+
+---
+
+## Round 3 修订说明（Reviewer 反馈处理）
+
+| # | 问题 | 严重程度 | 修复 |
+|---|---|---|---|
+| 1 | WS3 DoD BEHAVIOR #1-#4 中 keyword-search 前置 curl 缺 `Authorization: Bearer $TEST_TOKEN`，导致 401 → TASK_ID 为空 → 后续所有 DB 断言 undefined，正确实现被误判 FAIL | 阻塞 | WS3 DoD BEHAVIOR #1-#4 所有 keyword-search 前置调用补加 `-H "Authorization: Bearer $TEST_TOKEN"` |
+| 2 | WS1 DoD BEHAVIOR #5 INSERT 使用 `status='pending'`，但合同声明唯一合法终态为 `dispatched`，产生语义矛盾（generator 可能误以为 pending 是合法状态） | 次要 | 改为业务无关占位值 `'test_roundtrip'`，并注明"仅验证 DB 读写通路，不代表业务合法状态" |
 
 ---
 
