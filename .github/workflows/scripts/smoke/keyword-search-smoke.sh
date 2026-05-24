@@ -23,20 +23,32 @@ echo "━━━━━━━━━━━━━━━━━━━━━━━━�
 
 TMP=$(mktemp)
 SEEDED_SESSION_ID=""
+SEEDED_AGENT_ID=""
+SEEDED_TENANT_ID=""
 
-# Seed: insert test agent session so endpoint does not return 503 AGENT_OFFLINE
+# Seed: agent_platform_sessions.agent_id is UUID FK → zenithjoy.agents(id),
+# so we need: tenant → agent → session
 if [ -n "$DB" ]; then
-  SEEDED_SESSION_ID=$(psql "$DB" -tA -c \
-    "INSERT INTO zenithjoy.agent_platform_sessions (agent_id, platform, status, role)
-     VALUES ('smoke-kw-agent', 'douyin', 'active', 'main')
-     ON CONFLICT DO NOTHING RETURNING id" 2>/dev/null | tr -d ' ' || echo "")
+  SEEDED_TENANT_ID=$(psql "$DB" -At -c \
+    "INSERT INTO zenithjoy.tenants (name, license_key, plan) VALUES ('smoke-kw-tenant', 'smoke-kw-key-$$', 'free') ON CONFLICT DO NOTHING RETURNING id" \
+    2>/dev/null | grep -oE '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}' | head -1 || echo "")
+  if [ -n "$SEEDED_TENANT_ID" ]; then
+    SEEDED_AGENT_ID=$(psql "$DB" -At -c \
+      "INSERT INTO zenithjoy.agents (tenant_id, agent_id, hostname, status) VALUES ('$SEEDED_TENANT_ID', 'smoke-kw-agent-$$', 'smoke-kw-host', 'online') ON CONFLICT DO NOTHING RETURNING id" \
+      2>/dev/null | grep -oE '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}' | head -1 || echo "")
+    if [ -n "$SEEDED_AGENT_ID" ]; then
+      SEEDED_SESSION_ID=$(psql "$DB" -At -c \
+        "INSERT INTO zenithjoy.agent_platform_sessions (agent_id, platform, status, role) VALUES ('$SEEDED_AGENT_ID', 'douyin', 'active', 'main') ON CONFLICT DO NOTHING RETURNING id" \
+        2>/dev/null | grep -oE '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}' | head -1 || echo "")
+    fi
+  fi
 fi
 
 cleanup() {
   rm -f "$TMP"
-  if [ -n "$SEEDED_SESSION_ID" ] && [ -n "$DB" ]; then
-    psql "$DB" -c \
-      "DELETE FROM zenithjoy.agent_platform_sessions WHERE id='${SEEDED_SESSION_ID}'" \
+  if [ -n "$SEEDED_TENANT_ID" ] && [ -n "$DB" ]; then
+    # CASCADE: deleting tenant removes agent → agent_platform_sessions
+    psql "$DB" -c "DELETE FROM zenithjoy.tenants WHERE id='${SEEDED_TENANT_ID}'" \
       2>/dev/null || true
   fi
 }

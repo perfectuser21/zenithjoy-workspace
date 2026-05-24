@@ -22,7 +22,7 @@ fail() { echo "❌ $1"; exit "$2"; }
 
 # ── 前置：建测试 tenant + 灌 app_id/app_secret ──
 # license_key UNIQUE，加 RANDOM 防重
-TENANT_ID=$(psql "$DB" -t -A -c "INSERT INTO zenithjoy.tenants (name, license_key, plan, feishu_app_id, feishu_app_secret) VALUES ('p2-smoke-${RANDOM}-$$', 'p2-key-${RANDOM}-$$', 'free', 'cli_smoke_app', 'smoke_secret_xxx') RETURNING id" | tr -d ' ')
+TENANT_ID=$(psql "$DB" -At -c "INSERT INTO zenithjoy.tenants (name, license_key, plan, feishu_app_id, feishu_app_secret) VALUES ('p2-smoke-${RANDOM}-$$', 'p2-key-${RANDOM}-$$', 'free', 'cli_smoke_app', 'smoke_secret_xxx') RETURNING id" | grep -oE '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}' | head -1)
 [ -n "$TENANT_ID" ] || fail "前置：建 tenant 失败" 99
 echo "    [TENANT_ID=$TENANT_ID]"
 

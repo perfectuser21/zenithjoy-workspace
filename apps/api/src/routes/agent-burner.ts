@@ -16,7 +16,7 @@
 import { Router, Request, Response } from 'express';
 import pool from '../db/connection';
 import { writeLeadsFromComments } from '../services/lead-writer';
-import { tenantContext } from '../middleware/tenant-context';
+import { tenantContextOptional } from '../middleware/tenant-context';
 import { agentContext } from '../middleware/agent-context';
 
 const router = Router();
@@ -49,7 +49,7 @@ async function getFeishuBinding(tenantId: string) {
 // ── 1. POST /qr-bind — 派 burner 绑定 task ──
 // architecture（2026-05-10 hotfix）：tenantContext + agentContext 自动 resolve
 // frontend / lead 自验仅传 { account_label } 即可；body explicit tenant_id/agent_id 仍兼容
-router.post('/qr-bind', tenantContext, agentContext, async (req: Request, res: Response) => {
+router.post('/qr-bind', tenantContextOptional, agentContext, async (req: Request, res: Response) => {
   const { account_label } = req.body || {};
   // middleware 注入或 body 显式（agentContext 内部已处理 body 优先）
   const tenant_id = req.body?.tenant_id || req.tenantId;
@@ -174,7 +174,7 @@ router.get('/sessions', async (req: Request, res: Response) => {
 
 // ── 4. POST /crawl-comments — 派抓评论 task ──
 // architecture（2026-05-10 hotfix）：同 qr-bind，tenantContext + agentContext 自动 resolve
-router.post('/crawl-comments', tenantContext, agentContext, async (req: Request, res: Response) => {
+router.post('/crawl-comments', tenantContextOptional, agentContext, async (req: Request, res: Response) => {
   const { account_label, video_url } = req.body || {};
   const tenant_id = req.body?.tenant_id || req.tenantId;
   const agent_id = req.body?.agent_id || req.agentId;
