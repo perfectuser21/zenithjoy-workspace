@@ -313,6 +313,11 @@ function spawnAndCollect(
       return;
     }
 
+    if (!child) {
+      resolve({ exitCode: -1, stdout: '', stderr: '', spawnError: new Error('spawn returned falsy child') });
+      return;
+    }
+
     let stdout = '';
     let stderr = '';
     child.stdout?.on('data', (d) => (stdout += d.toString()));
