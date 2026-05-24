@@ -1797,6 +1797,14 @@ tests:
     product: Agent安装包
     note: "ensureHyperframes/getHyperframesCmd 本地 Node.js + CLI 路径解析单测（v1.1.6）"
 
+  - id: pipeline-controller-brain-fallback
+    path: apps/api/src/controllers/__tests__/pipeline.controller.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 内容流水线
+    note: "pipeline trigger: Brain API 不可用优雅降级（status=pending）、input validation 400 路径"
+
   - id: ai-video-pipeline-stale-recovery
     path: apps/api/src/controllers/__tests__/ai-video-pipeline-stale.test.ts
     type: unit
