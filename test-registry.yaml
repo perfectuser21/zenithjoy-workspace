@@ -1805,6 +1805,22 @@ tests:
     product: 内容流水线
     note: "pipeline trigger: Brain API 不可用优雅降级（status=pending）、input validation 400 路径"
 
+  - id: api-schemas-publish-log-optional-work-id
+    path: apps/api/src/models/__tests__/schemas.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 内容发布
+    note: "createPublishLogSchema — work_id optional, platform enum, UUID 格式校验"
+
+  - id: api-publish-routes-feishu-auth
+    path: apps/api/src/routes/__tests__/publish.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 内容发布
+    note: "publish-logs 路由 feishuUser 中间件守卫 — 无 X-Feishu-User-Id header 返回 401"
+
   - id: ai-video-pipeline-stale-recovery
     path: apps/api/src/controllers/__tests__/ai-video-pipeline-stale.test.ts
     type: unit
