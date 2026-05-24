@@ -27,7 +27,7 @@ acquisitionRouter.post('/keyword-search', async (req: Request, res: Response) =>
     try {
       const pool = (await import('../db/connection')).default;
       const { rows } = await pool.query<{ id: string }>(
-        `SELECT id FROM zenithjoy.agent_platform_sessions WHERE role='main' AND status='active' LIMIT 1`
+        `SELECT id FROM zenithjoy.agent_platform_sessions WHERE role='main' AND status IN ('active','connected') LIMIT 1`
       );
       if (rows.length === 0) {
         return res.status(503).json({ error: 'AGENT_OFFLINE' });
