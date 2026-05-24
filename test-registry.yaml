@@ -2004,6 +2004,22 @@ tests:
     product: 新媒体运营
     note: "ZJ2 Smart Acquisition Run1 WS2 — keyword search API 合同测试"
 
+  - id: zj2-smart-acquisition-run1-keyword-expander-unit
+    path: apps/api/src/services/keyword-expander.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 新媒体运营
+    note: "ZJ2 Smart Acquisition Run1 WS2 — keyword-expander service 单元测试（test-pairing 配对）"
+
+  - id: zj2-smart-acquisition-run1-keyword-search-smoke
+    path: .github/workflows/scripts/smoke/keyword-search-smoke.sh
+    type: e2e
+    ci: L4
+    status: active
+    product: 新媒体运营
+    note: "ZJ2 Smart Acquisition Run1 WS2 — POST /api/acquisition/keyword-search E2E smoke 全链路验证"
+
   - id: zj2-smart-acquisition-run1-ws3
     path: sprints/zj2-smart-acquisition-run1/tests/ws3/video-comment-result.test.ts
     type: unit
