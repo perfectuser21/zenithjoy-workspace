@@ -2092,6 +2092,14 @@ tests:
     product: 新媒体运营
     note: "ZJ2 Smart Acquisition Run1 WS3 — video comment result API 合同测试"
 
+  - id: api-ws3-video-comment-result
+    path: apps/api/tests/ws3/video-comment-result.test.ts
+    type: unit
+    ci: L4
+    status: active
+    product: 新媒体运营
+    note: "WS3 — POST /api/acquisition/video-search-result + comment-score-result + lead-writer grade 字段 vitest 合同测试"
+
   - id: zj2-smart-acquisition-run1-ws4
     path: sprints/zj2-smart-acquisition-run1/tests/ws4/leads.test.ts
     type: unit
