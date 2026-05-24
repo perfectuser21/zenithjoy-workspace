@@ -2020,6 +2020,30 @@ tests:
     product: 新媒体运营
     note: "ZJ2 Smart Acquisition Run1 WS4 — leads API 合同测试"
 
+  - id: zj-douyin-article-agent-port-ws1
+    path: sprints/zj-douyin-article-agent-port/tests/ws1/article-publisher.test.ts
+    type: unit
+    ci: L4
+    status: active
+    product: 新媒体运营
+    note: "ZJ Douyin Article Agent Port WS1 — CDP article 发布脚本合同测试（DOM.setFileInputFiles/dryrun/fail-fast）"
+
+  - id: zj-douyin-article-agent-port-ws2
+    path: sprints/zj-douyin-article-agent-port/tests/ws2/routing.test.ts
+    type: unit
+    ci: L4
+    status: active
+    product: 新媒体运营
+    note: "ZJ Douyin Article Agent Port WS2 — douyin-publish.ts handler article 路由 + SUPPORTED_DOUYIN_TYPES 合同测试"
+
+  - id: zj-douyin-article-agent-port-ws3
+    path: sprints/zj-douyin-article-agent-port/tests/ws3/install-pack.test.ts
+    type: unit
+    ci: L4
+    status: active
+    product: 新媒体运营
+    note: "ZJ Douyin Article Agent Port WS3 — version 1.1.26 bump + build-install-pack.sh publishers 复制合同测试"
+
 agent_suite:
   managed_by: services/agent/src/__tests__ + services/agent/publishers
   ci: L4
