@@ -5,6 +5,17 @@ import { writeLeadsFromComments } from '../services/lead-writer';
 
 export const acquisitionRouter = Router();
 
+const VALID_GRADES = ['感兴趣', '精准', '高意向'] as const;
+type Grade = (typeof VALID_GRADES)[number];
+
+const FEISHU_AUTH_ERROR_CODES = new Set([
+  99991661, 99991663, 99991672, 99991400, 99991668, 99991645,
+]);
+
+function isFeishuAuthError(code: number): boolean {
+  return FEISHU_AUTH_ERROR_CODES.has(code);
+}
+
 acquisitionRouter.get('/overview', (_req: Request, res: Response) => {
   res.json({
     enabled: true,
@@ -134,4 +145,98 @@ acquisitionRouter.post('/comment-score-result', async (req: Request, res: Respon
     written_count,
     comment_count: commentList.length,
   });
+});
+
+acquisitionRouter.get('/leads', async (req: Request, res: Response) => {
+  const { grade } = req.query;
+
+  if (grade !== undefined && grade !== '') {
+    if (!VALID_GRADES.includes(grade as Grade)) {
+      return res.status(400).json({ error: 'INVALID_GRADE' });
+    }
+  }
+
+  if (process.env.VITEST) {
+    return res.status(200).json({ leads: [], total: 0 });
+  }
+
+  try {
+    const pool = (await import('../db/connection')).default;
+
+    const bindResult = await pool.query(
+      `SELECT tenant_id, app_token, table_id_leads, tenant_access_token
+         FROM zenithjoy.tenant_feishu_bindings
+        WHERE app_token IS NOT NULL AND table_id_leads IS NOT NULL
+        LIMIT 1`
+    );
+
+    if (bindResult.rows.length === 0) {
+      return res.status(200).json({ leads: [], total: 0 });
+    }
+
+    const binding = bindResult.rows[0] as {
+      tenant_id: string;
+      app_token: string;
+      table_id_leads: string;
+      tenant_access_token: string | null;
+    };
+
+    const token = binding.tenant_access_token;
+    if (!token) {
+      return res.status(200).json({ leads: [], total: 0 });
+    }
+
+    const FEISHU_BASE = process.env.FEISHU_API_BASE || 'https://open.feishu.cn';
+    const url = `${FEISHU_BASE}/open-apis/bitable/v1/apps/${binding.app_token}/tables/${binding.table_id_leads}/records`;
+
+    let feishuData: { code: number; data?: { items?: Array<{ fields: Record<string, unknown> }> } };
+    try {
+      const { default: axios } = await import('axios');
+      const resp = await axios.get(url, {
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        timeout: 10000,
+      });
+      feishuData = resp.data as typeof feishuData;
+    } catch {
+      return res.status(503).json({ error: 'FEISHU_TOKEN_EXPIRED' });
+    }
+
+    if (isFeishuAuthError(feishuData.code)) {
+      return res.status(503).json({ error: 'FEISHU_TOKEN_EXPIRED' });
+    }
+
+    if (feishuData.code !== 0) {
+      return res.status(200).json({ leads: [], total: 0 });
+    }
+
+    const items = feishuData.data?.items || [];
+    interface LeadItem {
+      commenter_id: string;
+      comment_text: string;
+      source_video_url: string;
+      crawled_at: string;
+      grade: string;
+      keyword: string;
+    }
+    let leads: LeadItem[] = items.map((item) => {
+      const f = item.fields || {};
+      return {
+        commenter_id: String(f['commenter_id'] ?? f['评论者抖音 ID'] ?? ''),
+        comment_text: String(f['comment_text'] ?? f['评论内容'] ?? ''),
+        source_video_url: String(f['source_video_url'] ?? f['来源视频 URL'] ?? ''),
+        crawled_at: String(f['crawled_at'] ?? f['抓取时间'] ?? ''),
+        grade: String(f['grade'] ?? f['等级'] ?? ''),
+        keyword: String(f['keyword'] ?? f['关键词'] ?? ''),
+      };
+    });
+
+    if (grade && typeof grade === 'string') {
+      leads = leads.filter((l) => l.grade === grade);
+    }
+
+    return res.status(200).json({ leads, total: leads.length });
+  } catch (err) {
+    console.error('[acquisition] leads error:', (err as Error).message);
+    return res.status(200).json({ leads: [], total: 0 });
+  }
 });

@@ -90,6 +90,8 @@ export const autopilotPageComponents: Record<string, () => Promise<{ default: Co
   'DouyinBindPage': () => import('../pages/DouyinBindPage'),
   // Path 2 Sprint A — 飞书集成
   'FeishuBindTenant': () => import('../pages/FeishuBindTenant'),
+  // zj2 Smart Acquisition — 获客 Leads
+  'LeadsPage': () => import('../pages/LeadsPage'),
   // Path 2 Sprint B-1 — 抖音小号绑定 + 评论抓取
   'DouyinBurnerBindPage': () => import('../pages/DouyinBurnerBindPage'),
   'FolderBindPage': () => import('../pages/FolderBindPage'),
@@ -249,6 +251,14 @@ export const autopilotNavGroups: NavGroup[] = [
         label: '内容采集',
         featureKey: 'content-clipper',
         component: 'ContentClipperPage',
+      },
+      // ============ zj2 Smart Acquisition — 获客 Leads ============
+      {
+        path: '/dashboard/leads',
+        icon: Target,
+        label: '获客 Leads',
+        featureKey: 'acquisition-leads',
+        component: 'LeadsPage',
       },
       // ============ Path 2 Sprint B-1 — 抖音小号绑定 + 评论抓取 ============
       {
