@@ -49,7 +49,7 @@ export type DouyinPublishType = 'video' | 'image' | 'article';
 const SUPPORTED_DOUYIN_TYPES: ReadonlySet<DouyinPublishType> = new Set([
   'video',
   'image',
-  // article 暂未实现 — 路由必须显式抛错（不允许 fallback image）
+  'article',
 ]);
 
 /**
@@ -80,13 +80,14 @@ export function resolveDouyinScriptPath(
 
   if (!SUPPORTED_DOUYIN_TYPES.has(type)) {
     throw new Error(
-      `[type-route] no script for type ${type} on platform douyin (supported: video/image; article 暂未实现)`,
+      `[type-route] no script for type ${type} on platform douyin (supported: ${[...SUPPORTED_DOUYIN_TYPES].join('/')})`,
     );
   }
 
   const flag = (env.ZENITHJOY_AGENT_REAL_PUBLISH ?? '').trim().toLowerCase();
   const isReal = flag === '1' || flag === 'true';
   const suffix = isReal ? '' : '-dryrun';
+  // article: publish-douyin-article.cjs (real) / publish-douyin-article-dryrun.cjs (dryrun)
   const file = `publish-douyin-${type}${suffix}.cjs`;
 
   // [type-route] 第 3 环节日志：Agent 选脚本时的 type
