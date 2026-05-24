@@ -24,14 +24,16 @@
     {
       "task_id": "ws2",
       "title": "POST /api/acquisition/keyword-search + keyword-expander 服务",
-      "scope": "在 acquisition.ts 新增 POST /keyword-search endpoint；新建 keyword-expander.ts 调 OpenRouter DeepSeek 返回5个变体词（含原词）；写入 acquisition_keyword_tasks 表；返回 {task_id, keywords}",
+      "scope": "在 acquisition.ts 新增 POST /keyword-search endpoint（含 Authorization 鉴权）；新建 keyword-expander.ts 调 OpenRouter DeepSeek 返回5个变体词（含原词）；写入 acquisition_keyword_tasks 表，status=dispatched；Agent 离线（无 active main session）返回 503 AGENT_OFFLINE；返回 {task_id, keywords}",
       "dod": [
         "[ARTIFACT] apps/api/src/services/keyword-expander.ts 存在且导出 expandKeywords 函数",
         "[ARTIFACT] acquisition.ts 含 keyword-search 路由",
         "[BEHAVIOR] POST /api/acquisition/keyword-search 返回 200，keys == ['keywords','task_id']",
         "[BEHAVIOR] task_id 为 UUID，keywords 长度为 5",
         "[BEHAVIOR] 禁用字段 result/data/expanded/variants/id/job_id 不在 response",
-        "[BEHAVIOR] keyword 缺失 → 400 + error='MISSING_KEYWORD'"
+        "[BEHAVIOR] keyword 缺失 → 400 + error='MISSING_KEYWORD'",
+        "[BEHAVIOR] DB 写入 acquisition_keyword_tasks，status=dispatched，带时间窗口",
+        "[BEHAVIOR] Agent 离线（main session offline）→ 503 + error='AGENT_OFFLINE'"
       ],
       "files": [
         "apps/api/src/routes/acquisition.ts",
@@ -44,13 +46,13 @@
     {
       "task_id": "ws3",
       "title": "POST video-search-result + comment-score-result + lead-writer 扩展 grade/keyword",
-      "scope": "在 acquisition.ts 新增 POST /video-search-result（存视频到 acquisition_videos，派评论任务）和 POST /comment-score-result（调 DeepSeek 打分，调 writeLeadsFromComments 写飞书）；在 lead-writer.ts 扩展 grade 和 keyword 两字段写飞书",
+      "scope": "在 acquisition.ts 新增 POST /video-search-result（存视频到 acquisition_videos，派评论任务，comment_task_status=dispatched）和 POST /comment-score-result（调 DeepSeek 打分，调 writeLeadsFromComments 写飞书）；在 lead-writer.ts 扩展 grade 和 keyword 两字段写飞书",
       "dod": [
         "[ARTIFACT] acquisition.ts 含 video-search-result 路由",
         "[ARTIFACT] acquisition.ts 含 comment-score-result 路由",
         "[ARTIFACT] lead-writer.ts 含 grade 字段写飞书逻辑",
         "[BEHAVIOR] POST /api/acquisition/video-search-result 返回 200 + received=true",
-        "[BEHAVIOR] video-search-result 写入 acquisition_videos 表",
+        "[BEHAVIOR] video-search-result 写入 acquisition_videos 表，带时间窗口",
         "[BEHAVIOR] POST /api/acquisition/comment-score-result 返回 200 + received=true + written_count>=0",
         "[BEHAVIOR] 空评论时 written_count=0（早返回不调飞书）",
         "[BEHAVIOR] keyword_task_id 缺失 → 400"
@@ -66,15 +68,17 @@
     {
       "task_id": "ws4",
       "title": "GET /api/acquisition/leads + LeadsPage.tsx + navigation 注册",
-      "scope": "在 acquisition.ts 新增 GET /leads（读飞书 Leads 表，支持 grade 中文枚举筛选，非法值 → 400 INVALID_GRADE）；新建 apps/dashboard/src/pages/LeadsPage.tsx（等级标签表格，列：抖音号/评论内容/等级/来源视频/时间）；navigation.config.ts 注册 /dashboard/leads 入口",
+      "scope": "在 acquisition.ts 新增 GET /leads（含 Authorization 鉴权，读飞书 Leads 表，支持 grade 中文枚举筛选，非法值 → 400 INVALID_GRADE，飞书 token 过期 → 503 FEISHU_TOKEN_EXPIRED）；新建 apps/dashboard/src/pages/LeadsPage.tsx（等级标签表格，列：抖音号/评论内容/等级/来源视频/时间）；navigation.config.ts 注册 /dashboard/leads 入口",
       "dod": [
         "[ARTIFACT] apps/dashboard/src/pages/LeadsPage.tsx 存在，含 leads-table 和 grade-badge data-testid",
         "[ARTIFACT] navigation.config.ts 含 /dashboard/leads",
         "[BEHAVIOR] GET /api/acquisition/leads 返回 200，keys == ['leads','total']",
         "[BEHAVIOR] leads 为数组，total 为数字",
+        "[BEHAVIOR] lead item 6 字段完整性：commenter_id/comment_text/source_video_url/crawled_at/grade/keyword 全部存在",
         "[BEHAVIOR] 禁用字段 data/items/records/rows/result 不在顶层",
         "[BEHAVIOR] grade 筛选：grade=高意向 → 所有结果 grade='高意向'",
         "[BEHAVIOR] grade 非法值 → 400 + error='INVALID_GRADE'",
+        "[BEHAVIOR] 飞书 token 过期 → 503 + error='FEISHU_TOKEN_EXPIRED'",
         "[BEHAVIOR:E2E] /dashboard/leads 页面可见，Playwright 截图显示 leads-table 和 grade-badge"
       ],
       "files": [

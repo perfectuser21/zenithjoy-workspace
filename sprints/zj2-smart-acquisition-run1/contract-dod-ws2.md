@@ -23,28 +23,42 @@ journey_type: user_facing
 
 ---
 
-## BEHAVIOR 条目（内嵌 manual:bash 命令）
+## BEHAVIOR 条目（内嵌 manual:bash 命令，evaluator 直接执行）
+
+> **鉴权说明**: POST keyword-search 为用户侧调用，所有 BEHAVIOR curl 命令携带 `Authorization: Bearer $TEST_TOKEN`
 
 - [ ] [BEHAVIOR] POST /api/acquisition/keyword-search 返回 HTTP 200 且 schema keys 精确等于 `["keywords","task_id"]`
-  Test: manual:bash -c 'RESP=$(curl -sf -X POST http://localhost:3001/api/acquisition/keyword-search -H "Content-Type: application/json" -d '"'"'{"keyword":"装修"}'"'"'); echo "$RESP" | jq -e '"'"'keys == ["keywords","task_id"]'"'"' || { echo "FAIL: schema keys 不匹配"; exit 1; }; echo OK'
+  Test: manual:bash -c 'RESP=$(curl -sf -X POST http://localhost:3001/api/acquisition/keyword-search -H "Content-Type: application/json" -H "Authorization: Bearer $TEST_TOKEN" -d '"'"'{"keyword":"装修"}'"'"'); echo "$RESP" | jq -e '"'"'keys == ["keywords","task_id"]'"'"' || { echo "FAIL: schema keys 不匹配"; exit 1; }; echo OK'
   期望: OK
 
 - [ ] [BEHAVIOR] `task_id` 为 UUID 格式字符串，`keywords` 数组长度为 5（含原词）
-  Test: manual:bash -c 'RESP=$(curl -sf -X POST http://localhost:3001/api/acquisition/keyword-search -H "Content-Type: application/json" -d '"'"'{"keyword":"装修"}'"'"'); echo "$RESP" | jq -e '"'"'.task_id | test("^[0-9a-f-]{36}$")'"'"' || { echo "FAIL: task_id 非 UUID"; exit 1; }; echo "$RESP" | jq -e '"'"'.keywords | length == 5'"'"' || { echo "FAIL: keywords 长度非5"; exit 1; }; echo OK'
+  Test: manual:bash -c 'RESP=$(curl -sf -X POST http://localhost:3001/api/acquisition/keyword-search -H "Content-Type: application/json" -H "Authorization: Bearer $TEST_TOKEN" -d '"'"'{"keyword":"装修"}'"'"'); echo "$RESP" | jq -e '"'"'.task_id | test("^[0-9a-f-]{36}$")'"'"' || { echo "FAIL: task_id 非 UUID"; exit 1; }; echo "$RESP" | jq -e '"'"'.keywords | length == 5'"'"' || { echo "FAIL: keywords 长度非5"; exit 1; }; echo OK'
   期望: OK
 
 - [ ] [BEHAVIOR] 禁用字段（`result`/`data`/`expanded`/`variants`/`id`/`job_id`）不存在于 response 中
-  Test: manual:bash -c 'RESP=$(curl -sf -X POST http://localhost:3001/api/acquisition/keyword-search -H "Content-Type: application/json" -d '"'"'{"keyword":"装修"}'"'"'); for F in result data expanded variants id job_id; do echo "$RESP" | jq -e "has(\"$F\") | not" || { echo "FAIL: 禁用字段 $F 存在"; exit 1; }; done; echo OK'
+  Test: manual:bash -c 'RESP=$(curl -sf -X POST http://localhost:3001/api/acquisition/keyword-search -H "Content-Type: application/json" -H "Authorization: Bearer $TEST_TOKEN" -d '"'"'{"keyword":"装修"}'"'"'); for F in result data expanded variants id job_id; do echo "$RESP" | jq -e "has(\"$F\") | not" || { echo "FAIL: 禁用字段 $F 存在"; exit 1; }; done; echo OK'
   期望: OK
 
 - [ ] [BEHAVIOR] keyword 缺失时返回 HTTP 400 + `{"error": "MISSING_KEYWORD"}`（error path）
-  Test: manual:bash -c 'CODE=$(curl -s -o /tmp/kw_err.json -w "%{http_code}" -X POST http://localhost:3001/api/acquisition/keyword-search -H "Content-Type: application/json" -d '"'"'{}'"'"'); [ "$CODE" = "400" ] || { echo "FAIL: 期望 400，实际=$CODE"; exit 1; }; cat /tmp/kw_err.json | jq -e '"'"'.error == "MISSING_KEYWORD"'"'"' || { echo "FAIL: error 字段不是 MISSING_KEYWORD"; exit 1; }; echo OK'
+  Test: manual:bash -c 'CODE=$(curl -s -o /tmp/kw_err.json -w "%{http_code}" -X POST http://localhost:3001/api/acquisition/keyword-search -H "Content-Type: application/json" -H "Authorization: Bearer $TEST_TOKEN" -d '"'"'{}'"'"'); [ "$CODE" = "400" ] || { echo "FAIL: 期望 400，实际=$CODE"; exit 1; }; cat /tmp/kw_err.json | jq -e '"'"'.error == "MISSING_KEYWORD"'"'"' || { echo "FAIL: error 字段不是 MISSING_KEYWORD"; exit 1; }; echo OK'
   期望: OK
 
 - [ ] [BEHAVIOR] 成功请求后 `acquisition_keyword_tasks` 写入一条记录（带时间窗口防造假）
-  Test: manual:bash -c 'TASK_ID=$(curl -sf -X POST http://localhost:3001/api/acquisition/keyword-search -H "Content-Type: application/json" -d '"'"'{"keyword":"test_行为验证"}'"'"' | jq -r '"'"'.task_id'"'"'); COUNT=$(psql $DB -t -c "SELECT count(*) FROM zenithjoy.acquisition_keyword_tasks WHERE id='"'"'$TASK_ID'"'"' AND created_at > NOW() - interval '"'"'5 minutes'"'"'" | tr -d " "); [ "$COUNT" -ge 1 ] || { echo "FAIL: DB 无记录 task_id=$TASK_ID"; exit 1; }; echo OK'
+  Test: manual:bash -c 'TASK_ID=$(curl -sf -X POST http://localhost:3001/api/acquisition/keyword-search -H "Content-Type: application/json" -H "Authorization: Bearer $TEST_TOKEN" -d '"'"'{"keyword":"test_行为验证"}'"'"' | jq -r '"'"'.task_id'"'"'); COUNT=$(psql $DB -t -c "SELECT count(*) FROM zenithjoy.acquisition_keyword_tasks WHERE id='"'"'$TASK_ID'"'"' AND created_at > NOW() - interval '"'"'5 minutes'"'"'" | tr -d " "); [ "$COUNT" -ge 1 ] || { echo "FAIL: DB 无记录 task_id=$TASK_ID"; exit 1; }; echo OK'
   期望: OK
 
 - [ ] [BEHAVIOR] `expanded_keywords` JSONB 列包含 5 个词（含原词）
-  Test: manual:bash -c 'TASK_ID=$(curl -sf -X POST http://localhost:3001/api/acquisition/keyword-search -H "Content-Type: application/json" -d '"'"'{"keyword":"test_扩词验证"}'"'"' | jq -r '"'"'.task_id'"'"'); KCOUNT=$(psql $DB -t -c "SELECT jsonb_array_length(expanded_keywords) FROM zenithjoy.acquisition_keyword_tasks WHERE id='"'"'$TASK_ID'"'"'" | tr -d " "); [ "$KCOUNT" -eq 5 ] || { echo "FAIL: expanded_keywords 长度非5，实际=$KCOUNT"; exit 1; }; echo OK'
+  Test: manual:bash -c 'TASK_ID=$(curl -sf -X POST http://localhost:3001/api/acquisition/keyword-search -H "Content-Type: application/json" -H "Authorization: Bearer $TEST_TOKEN" -d '"'"'{"keyword":"test_扩词验证"}'"'"' | jq -r '"'"'.task_id'"'"'); KCOUNT=$(psql $DB -t -c "SELECT jsonb_array_length(expanded_keywords) FROM zenithjoy.acquisition_keyword_tasks WHERE id='"'"'$TASK_ID'"'"'" | tr -d " "); [ "$KCOUNT" -eq 5 ] || { echo "FAIL: expanded_keywords 长度非5，实际=$KCOUNT"; exit 1; }; echo OK'
   期望: OK
+
+- [ ] [BEHAVIOR] Agent 离线时（无 active main session）keyword-search 返回 HTTP 503 + `{"error":"AGENT_OFFLINE"}`（PRD 边界情况）
+  Test: manual:bash -c '
+    # 暂时标记所有 main session 为 offline
+    psql $DB -c "UPDATE zenithjoy.agent_platform_sessions SET status='"'"'offline'"'"' WHERE role='"'"'main'"'"'" 2>/dev/null || true;
+    CODE=$(curl -s -o /tmp/agent_offline.json -w "%{http_code}" -X POST http://localhost:3001/api/acquisition/keyword-search -H "Content-Type: application/json" -H "Authorization: Bearer $TEST_TOKEN" -d '"'"'{"keyword":"装修"}'"'"');
+    # 恢复 session
+    psql $DB -c "UPDATE zenithjoy.agent_platform_sessions SET status='"'"'connected'"'"' WHERE role='"'"'main'"'"'" 2>/dev/null || true;
+    [ "$CODE" = "503" ] || { echo "FAIL: 期望 503 AGENT_OFFLINE，实际=$CODE（无 main session 应返 503）"; exit 1; };
+    cat /tmp/agent_offline.json | jq -e '"'"'.error == "AGENT_OFFLINE"'"'"' || { echo "FAIL: error 字段非 AGENT_OFFLINE"; exit 1; };
+    echo OK'
+  期望: OK（Agent 离线时返 503，error="AGENT_OFFLINE"）
