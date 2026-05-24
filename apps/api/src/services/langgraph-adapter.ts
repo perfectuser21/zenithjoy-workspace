@@ -106,35 +106,49 @@ export interface LangGraphListRow {
 
 // 列出"只走 LangGraph、没写 zenithjoy.pipeline_runs"的任务
 export async function listLangGraphOnlyRuns(limit = 50): Promise<LangGraphListRow[]> {
-  const { rows } = await pool.query<{
+  // tasks/cecelia_events tables live in the Brain DB schema and may not exist in all environments
+  let rows: {
     id: string;
     title: string | null;
     created_at: string;
     updated_at: string;
     last_node: string | null;
     last_error: string | null;
-  }>(
-    `SELECT t.id::text AS id,
-            t.title,
-            t.created_at,
-            COALESCE(t.updated_at, t.created_at) AS updated_at,
-            last_e.payload->>'node' AS last_node,
-            last_e.payload->>'error' AS last_error
-     FROM tasks t
-     JOIN LATERAL (
-       SELECT payload FROM cecelia_events
-       WHERE task_id = t.id AND event_type = 'content_pipeline_step'
-       ORDER BY id DESC LIMIT 1
-     ) last_e ON TRUE
-     WHERE t.task_type = 'content-pipeline'
-       AND NOT EXISTS (
-         SELECT 1 FROM zenithjoy.pipeline_runs pr
-         WHERE pr.cecelia_task_id::uuid = t.id
-       )
-     ORDER BY t.created_at DESC
-     LIMIT $1`,
-    [limit]
-  );
+  }[];
+  try {
+    const result = await pool.query<{
+      id: string;
+      title: string | null;
+      created_at: string;
+      updated_at: string;
+      last_node: string | null;
+      last_error: string | null;
+    }>(
+      `SELECT t.id::text AS id,
+              t.title,
+              t.created_at,
+              COALESCE(t.updated_at, t.created_at) AS updated_at,
+              last_e.payload->>'node' AS last_node,
+              last_e.payload->>'error' AS last_error
+       FROM tasks t
+       JOIN LATERAL (
+         SELECT payload FROM cecelia_events
+         WHERE task_id = t.id AND event_type = 'content_pipeline_step'
+         ORDER BY id DESC LIMIT 1
+       ) last_e ON TRUE
+       WHERE t.task_type = 'content-pipeline'
+         AND NOT EXISTS (
+           SELECT 1 FROM zenithjoy.pipeline_runs pr
+           WHERE pr.cecelia_task_id::uuid = t.id
+         )
+       ORDER BY t.created_at DESC
+       LIMIT $1`,
+      [limit]
+    );
+    rows = result.rows;
+  } catch {
+    return [];
+  }
 
   return rows.map((r) => ({
     id: r.id,
