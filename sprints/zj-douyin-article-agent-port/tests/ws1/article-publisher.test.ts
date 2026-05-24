@@ -1,5 +1,6 @@
 // vitest globals: describe, it, expect, vi are injected by vitest (globals: true in config)
-// Red state: publish-douyin-article.cjs 尚未创建 — require 抛 MODULE_NOT_FOUND → 4 failures
+// Red state: publish-douyin-article.cjs 尚未创建 — require 抛 MODULE_NOT_FOUND → 6+ failures
+// Round 2: ws4 测试职责并入 ws1（test_is_red 修复）
 
 const ARTICLE_CJS = '/workspace/services/agent/publishers/douyin-publisher/publish-douyin-article.cjs';
 const DRYRUN_CJS = '/workspace/services/agent/publishers/douyin-publisher/publish-douyin-article-dryrun.cjs';
@@ -66,5 +67,23 @@ describe('publish-douyin-article-dryrun.cjs [BEHAVIOR]', () => {
     const b: string = fs.readFileSync(DRYRUN_CJS, 'utf8');
     expect(a).not.toMatch(/button:has-text/);
     expect(b).not.toMatch(/button:has-text/);
+  });
+});
+
+// ws4 并入 ws1 — TDD commit-1 产出：测试文件须在 commit-1 写好，commit-2 写 cjs 实现后变绿
+// Red: 文件不存在 → 2 failures
+const TEST_CJS = '/workspace/services/agent/publishers/douyin-publisher/__tests__/publish-douyin-article.test.cjs';
+
+describe('publish-douyin-article.test.cjs 存在性 [BEHAVIOR]（ws4 内化）', () => {
+  it('TDD commit-1 产出 — 测试文件存在于 vitest include 路径下', () => {
+    const fs = require('fs');
+    expect(fs.existsSync(TEST_CJS)).toBe(true);
+  });
+
+  it('测试文件含 ≥3 个 it() 块（覆盖 dryrun/fail-fast/summary）', () => {
+    const fs = require('fs');
+    const src: string = fs.readFileSync(TEST_CJS, 'utf8');
+    const count = (src.match(/\bit\(/g) ?? []).length;
+    expect(count).toBeGreaterThanOrEqual(3);
   });
 });

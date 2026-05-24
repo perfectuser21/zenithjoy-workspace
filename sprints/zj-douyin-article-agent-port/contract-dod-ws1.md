@@ -2,11 +2,14 @@
 skeleton: false
 journey_type: autonomous
 ---
-# Contract DoD — Workstream 1: CDP article 发布脚本
+# Contract DoD — Workstream 1: CDP article 发布脚本（TDD — commit-1: 测试 RED，commit-2: 实现 GREEN）
 
-**范围**: 新建 `publish-douyin-article.cjs` + `publish-douyin-article-dryrun.cjs`，CDP 直连 Chrome :19222，封面用 `DOM.setFileInputFiles(backendNodeId)` 上传，发布按钮走 XPath，dryrun 停在发布前
-**大小**: M（两文件合计约 180 行净增）
-**依赖**: 无
+**范围**:
+- commit-1（RED）: 新建 `__tests__/publish-douyin-article.test.cjs`（cjs 脚本尚不存在 → 4 failures）
+- commit-2（GREEN）: 新建 `publish-douyin-article.cjs` + `publish-douyin-article-dryrun.cjs`（CDP 直连 Chrome :19222，封面用 `DOM.setFileInputFiles(backendNodeId)` 上传，发布按钮走 XPath，dryrun 停在发布前）
+
+**大小**: M（三文件合计约 260 行净增）
+**依赖**: 无（串行链起点）
 
 ## ARTIFACT 条目
 
@@ -43,4 +46,25 @@ journey_type: autonomous
 
 - [ ] [BEHAVIOR] error path — article 脚本传入不存在 cover 路径时输出含 `ok:false` 的 JSON
   Test: manual:bash -c 'grep -qE "ok.*false|\"ok\":.*false" /workspace/services/agent/publishers/douyin-publisher/publish-douyin-article.cjs || { echo "FAIL: 无 ok:false 错误输出路径"; exit 1; }; echo OK'
+  期望: OK，exit 0
+
+## TDD 测试文件条目（commit-1 产出 — ws4 并入 ws1，v7.11 修复）
+
+- [ ] [ARTIFACT] `services/agent/publishers/douyin-publisher/__tests__/publish-douyin-article.test.cjs` 文件存在（ws1 commit-1 产出）
+  Test: node -e "require('fs').accessSync('/workspace/services/agent/publishers/douyin-publisher/__tests__/publish-douyin-article.test.cjs')"
+
+- [ ] [BEHAVIOR] 测试文件含 ≥3 个 it() 块，覆盖 dryrun/fail-fast/summary 三个核心场景
+  Test: manual:bash -c 'COUNT=$(grep -c "it(" /workspace/services/agent/publishers/douyin-publisher/__tests__/publish-douyin-article.test.cjs 2>/dev/null || echo 0); [ "$COUNT" -ge 3 ] || { echo "FAIL: 测试块数量 $COUNT < 3"; exit 1; }; echo "OK: $COUNT it() blocks"'
+  期望: OK: N it() blocks（N ≥ 3）
+
+- [ ] [BEHAVIOR] 测试文件 require `publish-douyin-article.cjs`，不 require image/video 脚本
+  Test: manual:bash -c 'grep -q "publish-douyin-article" /workspace/services/agent/publishers/douyin-publisher/__tests__/publish-douyin-article.test.cjs || { echo "FAIL: 测试未 require publish-douyin-article.cjs"; exit 1; }; ! grep -q "publish-douyin-image\|publish-douyin-video" /workspace/services/agent/publishers/douyin-publisher/__tests__/publish-douyin-article.test.cjs || { echo "FAIL: 错误 require 了 image/video 脚本"; exit 1; }; echo OK'
+  期望: OK，exit 0
+
+- [ ] [BEHAVIOR] 测试文件覆盖 dryRun:true 场景（含 dryRun 断言）
+  Test: manual:bash -c 'grep -q "dryRun" /workspace/services/agent/publishers/douyin-publisher/__tests__/publish-douyin-article.test.cjs || { echo "FAIL: 无 dryRun 测试场景"; exit 1; }; echo OK'
+  期望: OK，exit 0
+
+- [ ] [BEHAVIOR] 测试文件覆盖 cover fail fast 场景（含 cover/existsSync/ENOENT/fail fast 相关内容）
+  Test: manual:bash -c 'grep -qE "cover|existsSync|fail fast|ENOENT" /workspace/services/agent/publishers/douyin-publisher/__tests__/publish-douyin-article.test.cjs || { echo "FAIL: 无 cover fail fast 测试"; exit 1; }; echo OK'
   期望: OK，exit 0

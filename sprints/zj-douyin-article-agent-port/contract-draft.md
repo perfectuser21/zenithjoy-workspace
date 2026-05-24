@@ -1,9 +1,15 @@
-# Sprint Contract Draft (Round 1) — zj-douyin-article-agent-port
+# Sprint Contract Draft (Round 2) — zj-douyin-article-agent-port
 
 **Sprint**：publish-douyin-article CDP 移植 + install pack 打包
 **journey_type**：autonomous
 **target_environment**：windows_cloud
 **PRD**：`sprints/zj-douyin-article-agent-port/sprint-prd.md`
+
+> **Round 2 变更说明**
+> - 修复问题1：删除独立 ws4 测试 workstream，将 TDD 测试职责内化到 ws1（commit-1 写测试 RED，commit-2 写实现 GREEN）
+> - 修复问题2a：统一 contract-draft.md 与 task-plan.json 中 ws 依赖关系（均为 ws1→ws2→ws3 串行）
+> - 修复问题2b：删除 ws3 无来源锚点的 `already exists` BEHAVIOR
+> - 修复问题3：加入 Risks 段，覆盖 PRD 三条 ASSUMPTION 的 mitigation
 
 ---
 
@@ -22,10 +28,8 @@
 **验证命令**:
 ```bash
 cd /workspace/services/agent
-# 用 ts-node 或 vitest 跑路由检查
 node -e "
   process.env.ZENITHJOY_AGENT_REAL_PUBLISH='0';
-  // 确认 article 在 SUPPORTED 集合中
   const src = require('fs').readFileSync('src/handlers/douyin-publish.ts','utf8');
   if(!src.includes(\"'article'\")) { console.error('FAIL: article not in SUPPORTED_DOUYIN_TYPES'); process.exit(1); }
   console.log('OK: article 路由存在');
@@ -85,7 +89,6 @@ echo "OK"
 DRYRUN=/workspace/services/agent/publishers/douyin-publisher/publish-douyin-article-dryrun.cjs
 [ -f "$DRYRUN" ] || { echo "FAIL: dryrun 脚本不存在"; exit 1; }
 grep -q '"dryRun":.*true\|dryRun: true' "$DRYRUN" || { echo "FAIL: dryrun 输出中无 dryRun:true"; exit 1; }
-# dryrun 不含 create_v2 API 调用（真发专用路径）
 ! grep -q "create_v2\|aweme/create" "$DRYRUN" || { echo "FAIL: dryrun 不允许调用发布 API"; exit 1; }
 echo "OK"
 ```
@@ -175,6 +178,16 @@ echo "OK"
 
 ---
 
+## Risks
+
+| # | 风险 | 影响 | Mitigation |
+|---|---|---|---|
+| R1 | CDP 端口 19222 不可达（Chrome 未启动或端口被占用）— [ASSUMPTION: CDP 端口 19222，Chrome 已登录抖音创作者后台] | ws1 脚本 CDP 连接挂起，整条 Golden Path 超时，客户机无明确报错 | ws1 脚本在 `new CDP({port:19222})` 调用前设 connect timeout（5s），超时立即输出 `{ok:false,error:"CDP not reachable: port 19222"}` 并 exit 1；DoD BEHAVIOR 含 grep 检查此 error 字符串 |
+| R2 | ws1 语法/runtime 错误导致 cascade：ws2 的 `resolveDouyinScriptPath` 调用 `fs.existsSync` 时文件不存在 → ws2 BEHAVIOR 全 FAIL | ws2 evaluator 因 ws1 未完成而 FAIL，链路中断但错误归因于 ws2 | ws1 DoD 含 `node --check` 静态语法检查作为 ARTIFACT；串行依赖 `ws2 depends_on ws1` 保证 ws1 通过后 ws2 才派发 |
+| R3 | cover 路径格式错误：Windows 传入 `C:\path\cover.jpg`，Node.js `fs.existsSync` 路径解析在 Linux CI 环境失效（反斜杠问题）— [ASSUMPTION: cover 为 Windows 本地绝对路径] | CI smoke 中 cover 检查假 FAIL；客户机 Windows 运行时路径 ok 但 CI 认为 cover 不存在 | ws1 脚本在 existsSync 前执行路径规范化（Windows CI 下转正斜杠），DoD BEHAVIOR 用 grep 检查 `replace` 或 `path.normalize` 出现在脚本中 |
+
+---
+
 ## E2E 验收（final-e2e — target_environment = windows_cloud）
 
 **journey_type**: autonomous
@@ -249,26 +262,37 @@ if (-not ($Content -match "content\.substring\(0,\s*30\)|content\.slice\(0,\s*30
 }
 Write-Host "✅ Step 8: summary.substring(0,30) 确认"
 
+# 9. 验证 TDD 测试文件存在（ws1 commit-1 产出）
+$TestCjs = Join-Path $AgentDir "publishers\douyin-publisher\__tests__\publish-douyin-article.test.cjs"
+if (-not (Test-Path $TestCjs)) {
+  throw "FAIL: publish-douyin-article.test.cjs 不存在（ws1 TDD commit-1 产出缺失）"
+}
+Write-Host "✅ Step 9: TDD 测试文件存在"
+
 Write-Host ""
-Write-Host "✅ Golden Path 全部 8 步验证通过 — publish-douyin-article CDP 移植完成"
+Write-Host "✅ Golden Path 全部 9 步验证通过 — publish-douyin-article CDP 移植完成"
 ```
 
-**通过标准**: PowerShell 脚本 exit 0，全部 8 个 ✅ 输出可见
+**通过标准**: PowerShell 脚本 exit 0，全部 9 个 ✅ 输出可见
 
 ---
 
 ## Workstreams
 
-**workstream_count**: 4
+**workstream_count**: 3
 
-### Workstream 1: CDP article 发布脚本（publish-douyin-article.cjs + dryrun）
+### Workstream 1: CDP article 发布脚本（TDD — commit-1: 测试 RED，commit-2: 实现 GREEN）
 
-**范围**: 新建两个 CJS 脚本，实现 CDP 直连 Chrome :19222，填标题/正文/封面（`DOM.setFileInputFiles`），发布按钮走 XPath，dryrun 停在发布前
-**大小**: M（两文件合计约 180 行净增）
-**依赖**: 无
+**范围**:
+- **commit-1（RED）**: 新建 `publishers/douyin-publisher/__tests__/publish-douyin-article.test.cjs`（article CJS 脚本尚不存在 → 4 failures）
+- **commit-2（GREEN）**: 新建 `publish-douyin-article.cjs` + `publish-douyin-article-dryrun.cjs`（CDP 直连 Chrome :19222，填标题/正文/封面，发布按钮走 XPath，dryrun 停在发布前，测试变绿）
+
+**大小**: M（三文件合计约 260 行净增）
+**依赖**: 无（串行链起点）
 **文件**:
-- `services/agent/publishers/douyin-publisher/publish-douyin-article.cjs`（新建 ~100 行）
-- `services/agent/publishers/douyin-publisher/publish-douyin-article-dryrun.cjs`（新建 ~80 行）
+- `services/agent/publishers/douyin-publisher/__tests__/publish-douyin-article.test.cjs`（新建 ~80 行，commit-1）
+- `services/agent/publishers/douyin-publisher/publish-douyin-article.cjs`（新建 ~100 行，commit-2）
+- `services/agent/publishers/douyin-publisher/publish-douyin-article-dryrun.cjs`（新建 ~80 行，commit-2）
 
 ### Workstream 2: article 路由（douyin-publish.ts）
 
@@ -287,24 +311,37 @@ Write-Host "✅ Golden Path 全部 8 步验证通过 — publish-douyin-article 
 - `services/agent/scripts/build-install-pack.sh`
 - `services/agent/package.json`
 
-### Workstream 4: 测试套件（publish-douyin-article.test.cjs）
-
-**范围**: 为 ws1 的 CJS 脚本写 vitest 单元测试，覆盖 fail fast / dryRun:true / summary 截取 3 个 BEHAVIOR
-**大小**: S（约 80 行净增，1 文件）
-**依赖**: Workstream 1 完成后
-**文件**:
-- `services/agent/publishers/douyin-publisher/__tests__/publish-douyin-article.test.cjs`
-
 ---
 
 ## Workstreams 切分自查（v7.7 B14）
 
 | WS | 文件数 | 预计净增行数 | 是否合规 |
 |---|---|---|---|
-| ws1 | 2 | ~180 | ✅ ≤200 行，≤3 文件 |
+| ws1 | 3 | ~260 | ⚠️ 260 行略超 200，但三文件均 < 100 行/文件，功能不可分割（TDD commit-1/2 为原子操作），保持单 ws |
 | ws2 | 1 | ~15  | ✅ S |
 | ws3 | 2 | ~10  | ✅ S |
-| ws4 | 1 | ~80  | ✅ S |
+
+> ws1 净增 260 行超 200 软限制说明：article 脚本 + dryrun 脚本 + 测试文件必须在同一 ws 完成 TDD commit-1/commit-2 原子操作，强制拆分会导致测试文件在代码之前的 ws（无法验 RED）或之后的 ws（永远 GREEN 起步，无 RED 状态，违反 TDD 铁律）。
+
+---
+
+## depends_on 自查（v7.10）
+
+```python
+# python3 断言（ws1 依赖为空，ws2/ws3 各引用前置）
+tasks = [
+  {"task_id": "ws1", "depends_on": []},
+  {"task_id": "ws2", "depends_on": ["ws1"]},
+  {"task_id": "ws3", "depends_on": ["ws2"]},
+]
+for i, t in enumerate(tasks):
+    if i == 0:
+        assert t["depends_on"] == [], f"FAIL ws1.depends_on 应为 []"
+    else:
+        prev = tasks[i-1]["task_id"]
+        assert prev in t["depends_on"], f"FAIL {t['task_id']}.depends_on 缺少 {prev}"
+# ✅ 串行链：ws1 → ws2 → ws3
+```
 
 ---
 
@@ -312,10 +349,9 @@ Write-Host "✅ Golden Path 全部 8 步验证通过 — publish-douyin-article 
 
 | Workstream | Test File | BEHAVIOR 覆盖 | 预期红证据 |
 |---|---|---|---|
-| WS1 | `publishers/douyin-publisher/__tests__/publish-douyin-article.test.cjs` | 脚本可 require / dryRun:true 输出 / cover fail fast / summary 截取 | 文件不存在 → 4 failures |
-| WS2 | `tests/ws2/routing.test.ts` | article 路由不抛 / 未实现类型仍抛 | article 不在 SUPPORTED → 1 failure |
-| WS3 | `tests/ws3/install-pack.test.ts` | version=1.1.26 / publishers 复制命令存在 | version 仍 1.1.25 → 1 failure |
-| WS4 | `publishers/douyin-publisher/__tests__/publish-douyin-article.test.cjs` | 同 WS1（ws4 产出即 ws1 测试文件） | — |
+| WS1 | `tests/ws1/article-publisher.test.ts` | 脚本可 require / DOM.setFileInputFiles / cover fail fast / summary 截取 / dryRun:true / **测试文件存在且含 ≥3 it()** | 文件不存在 → 6+ failures |
+| WS2 | `tests/ws2/routing.test.ts` | article 路由不抛 / 未实现类型仍抛 | article 不在 SUPPORTED → 2 failures |
+| WS3 | `tests/ws3/install-pack.test.ts` | version=1.1.26 / publishers 复制命令存在 | version 仍 1.1.25 → 2 failures |
 
 ---
 

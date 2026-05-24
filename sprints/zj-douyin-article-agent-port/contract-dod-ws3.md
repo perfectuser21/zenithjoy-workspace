@@ -34,6 +34,6 @@ journey_type: autonomous
   Test: manual:bash -c 'grep -qE "publishers.*douyin|douyin.*publishers|publishers/" /workspace/services/agent/scripts/build-install-pack.sh || { echo "FAIL: publishers 复制未覆盖 douyin-publisher 子目录"; exit 1; }; echo OK'
   期望: OK，exit 0
 
-- [ ] [BEHAVIOR] error path — version 冲突检查保留（1.1.26 包已存在时 build 拒绝重复打包）
-  Test: manual:bash -c 'grep -q "已存在\|already exists\|ERROR.*已存在" /workspace/services/agent/scripts/build-install-pack.sh || { echo "FAIL: 版本冲突检查已删除"; exit 1; }; echo OK'
-  期望: OK，exit 0（原有冲突检查逻辑未被删除）
+- [ ] [BEHAVIOR] error path — 执行脚本后 package.json 版本字段仍为 "1.1.26"（防止 build 步骤意外覆盖版本）
+  Test: manual:bash -c 'VER=$(node -e "console.log(require(\"/workspace/services/agent/package.json\").version)"); [ "$VER" = "1.1.26" ] || { echo "FAIL: build 后 version=$VER 不是 1.1.26"; exit 1; }; echo OK'
+  期望: OK，exit 0
