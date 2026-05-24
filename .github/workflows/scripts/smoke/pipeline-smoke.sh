@@ -18,7 +18,7 @@ echo "$r" | jq -e '.total != null and .running != null' >/dev/null 2>&1 \
 
 echo "── pipeline-list ──"
 r=$(curl -s "$API/api/pipeline" -H "X-Internal-Token: $INT_TOKEN")
-echo "$r" | jq -e '.data != null or type == "array"' >/dev/null 2>&1 \
+echo "$r" | jq -e 'if type == "array" then true else .data != null end' >/dev/null 2>&1 \
   && ok "GET /pipeline 端点可达" \
   || fail "GET /pipeline 响应异常 ($r)"
 
