@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { randomUUID } from 'crypto';
 import { expandKeywords } from '../services/keyword-expander';
+import { writeLeadsFromComments } from '../services/lead-writer';
 
 export const acquisitionRouter = Router();
 
@@ -57,4 +58,80 @@ acquisitionRouter.post('/keyword-search', async (req: Request, res: Response) =>
   }
 
   return res.status(200).json({ task_id, keywords });
+});
+
+acquisitionRouter.post('/video-search-result', async (req: Request, res: Response) => {
+  const { keyword_task_id, keyword, videos } = req.body ?? {};
+
+  if (!keyword_task_id) {
+    return res.status(400).json({ error: 'MISSING_KEYWORD_TASK_ID' });
+  }
+
+  const videoList = Array.isArray(videos) ? videos : [];
+
+  if (!process.env.VITEST) {
+    try {
+      const pool = (await import('../db/connection')).default;
+      for (const v of videoList) {
+        await pool.query(
+          `INSERT INTO zenithjoy.acquisition_videos
+             (id, keyword_task_id, keyword, video_url, comment_task_status, created_at, updated_at)
+           VALUES ($1, $2, $3, $4, 'dispatched', NOW(), NOW())
+           ON CONFLICT DO NOTHING`,
+          [randomUUID(), keyword_task_id, keyword ?? '', v.video_url ?? '']
+        );
+      }
+    } catch (err) {
+      console.error('[acquisition] video-search-result DB insert failed:', (err as Error).message);
+    }
+  }
+
+  return res.status(200).json({
+    received: true,
+    video_count: videoList.length,
+  });
+});
+
+acquisitionRouter.post('/comment-score-result', async (req: Request, res: Response) => {
+  const { keyword_task_id, video_url, comments } = req.body ?? {};
+
+  if (!keyword_task_id) {
+    return res.status(400).json({ error: 'MISSING_KEYWORD_TASK_ID' });
+  }
+
+  const commentList = Array.isArray(comments) ? comments : [];
+
+  if (commentList.length === 0) {
+    return res.status(200).json({
+      received: true,
+      written_count: 0,
+      comment_count: 0,
+    });
+  }
+
+  const tenant_id = process.env.FEISHU_TENANT_ID ?? 'default';
+  const table_id_leads = process.env.FEISHU_TABLE_ID_LEADS ?? 'leads';
+
+  let written_count = 0;
+  if (!process.env.VITEST) {
+    try {
+      const result = await writeLeadsFromComments({
+        tenant_id,
+        table_id_leads,
+        video_url: video_url ?? '',
+        comments: commentList,
+      });
+      written_count = result.written_count;
+    } catch (err) {
+      console.error('[acquisition] comment-score-result writeLeads failed:', (err as Error).message);
+    }
+  } else {
+    written_count = commentList.length;
+  }
+
+  return res.status(200).json({
+    received: true,
+    written_count,
+    comment_count: commentList.length,
+  });
 });
