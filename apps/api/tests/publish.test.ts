@@ -47,14 +47,15 @@ describe('Publish Logs API', () => {
       expect(response.body.status).toBe('pending');
     });
 
-    it('should return 400 for missing work_id', async () => {
+    it('should create log without work_id (work_id is optional)', async () => {
+      mockQuery.mockResolvedValueOnce({ rows: [{ ...LOG, work_id: null }] });
+
       const response = await request(app)
       .post(`/api/works/${TEST_WORK_ID}/publish-logs`)
       .set('X-Feishu-User-Id', TEST_USER)
       .send({ platform: 'xiaohongshu' });
 
-      expect(response.status).toBe(400);
-      expect(response.body.error.code).toBe('VALIDATION_ERROR');
+      expect(response.status).toBe(201);
     });
 
     it('should return 400 for invalid platform', async () => {
@@ -115,6 +116,7 @@ describe('Publish Logs API', () => {
 
       const response = await request(app)
         .put(`/api/publish-logs/${TEST_LOG_ID}`)
+        .set('X-Feishu-User-Id', TEST_USER)
         .send({ status: 'published', platform_post_id: '123456', published_at: publishedAt });
 
       expect(response.status).toBe(200);
@@ -129,6 +131,7 @@ describe('Publish Logs API', () => {
       const fakeId = '00000000-0000-0000-0000-000000000000';
       const response = await request(app)
         .put(`/api/publish-logs/${fakeId}`)
+        .set('X-Feishu-User-Id', TEST_USER)
         .send({ status: 'published' });
 
       expect(response.status).toBe(404);
@@ -137,6 +140,7 @@ describe('Publish Logs API', () => {
     it('should return 400 for invalid status', async () => {
       const response = await request(app)
         .put(`/api/publish-logs/${TEST_LOG_ID}`)
+        .set('X-Feishu-User-Id', TEST_USER)
         .send({ status: 'invalid_status' });
 
       expect(response.status).toBe(400);

@@ -276,6 +276,7 @@ describe('API Contract — Publish Logs', () => {
 
     const { status, body } = await request(app)
       .put(`/api/publish-logs/${LOG_UUID}`)
+      .set('X-Feishu-User-Id', TEST_USER)
       .send({ status: 'published' });
 
     expect(status).toBe(200);
