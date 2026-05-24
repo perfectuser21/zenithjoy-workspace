@@ -2100,6 +2100,14 @@ tests:
     product: 新媒体运营
     note: "WS3 — POST /api/acquisition/video-search-result + comment-score-result + lead-writer grade 字段 vitest 合同测试"
 
+  - id: zj2-smart-acquisition-run1-ws3-smoke
+    path: .github/workflows/scripts/smoke/zj2-ws3-video-comment-smoke.sh
+    type: e2e
+    ci: L4
+    status: active
+    product: 新媒体运营
+    note: "ZJ2 Smart Acquisition Run1 WS3 — video-search-result + comment-score-result E2E smoke（含 acquisition_videos DB 验证）"
+
   - id: zj2-smart-acquisition-run1-ws4
     path: sprints/zj2-smart-acquisition-run1/tests/ws4/leads.test.ts
     type: unit
