@@ -1,59 +1,38 @@
-contract_branch: cp-05242133-ws-46fef18e-ws3
-workstream_index: 3
+contract_branch: main
+workstream_index: 4
 sprint_dir: sprints/zj2-smart-acquisition-run1
 
 ---
 skeleton: false
 journey_type: user_facing
 ---
-# Contract DoD — Workstream 3: POST video-search-result + comment-score-result + lead-writer 扩展
+# Contract DoD — Workstream 4: GET /api/acquisition/leads + LeadsPage.tsx + navigation
 
 **范围**:
-- `apps/api/src/routes/acquisition.ts`：新增 `POST /video-search-result` 和 `POST /comment-score-result` endpoints
-- `apps/api/src/services/lead-writer.ts`：扩展 `grade` 和 `keyword` 两字段写入飞书
+- `apps/api/src/routes/acquisition.ts`：新增 `GET /leads` endpoint（读飞书 Leads 表，支持 grade 筛选）
+- `apps/dashboard/src/pages/LeadsPage.tsx`：新建 Leads 列表页（等级标签表格）
+- `apps/dashboard/src/config/navigation.config.ts`：注册 `/dashboard/leads` 路由入口
 
-**大小**: M（100-200 行，2 文件）
-**依赖**: Workstream 2（`acquisition_keyword_tasks` 表 + keyword-search endpoint 必须先完成）
+**大小**: M（100-200 行，3 文件）
+**依赖**: Workstream 3（GET leads 读取飞书写入的带 grade/keyword 字段数据）
 
 ---
 
 ## ARTIFACT 条目
 
-- [ ] [ARTIFACT] `acquisition.ts` 包含 `video-search-result` 路由定义
-  Test: node -e "const c=require('fs').readFileSync('apps/api/src/routes/acquisition.ts','utf8');if(!c.includes('video-search-result'))process.exit(1);console.log('OK')"
-
-- [ ] [ARTIFACT] `acquisition.ts` 包含 `comment-score-result` 路由定义
-  Test: node -e "const c=require('fs').readFileSync('apps/api/src/routes/acquisition.ts','utf8');if(!c.includes('comment-score-result'))process.exit(1);console.log('OK')"
-
-- [ ] [ARTIFACT] `lead-writer.ts` 包含 `grade` 字段写飞书逻辑
-  Test: node -e "const c=require('fs').readFileSync('apps/api/src/services/lead-writer.ts','utf8');if(!c.includes('grade'))process.exit(1);if(!c.includes('keyword'))process.exit(1);console.log('OK')"
+- [ ] [ARTIFACT] `apps/dashboard/src/pages/LeadsPage.tsx` 文件存在且包含 `leads-table` data-testid
+- [ ] [ARTIFACT] `navigation.config.ts` 包含 `/dashboard/leads` 路由入口
+- [ ] [ARTIFACT] `acquisition.ts` 包含 `GET` + `leads` 路由定义
 
 ---
 
-## BEHAVIOR 条目（内嵌 manual:bash 命令）
+## BEHAVIOR 条目
 
-> **鉴权说明**: keyword-search 为用户侧 endpoint（鉴权策略表 ✅），所有前置 keyword-search curl 调用必须携带 `Authorization: Bearer $TEST_TOKEN`；video-search-result / comment-score-result 为 Agent 服务间调用，不需要用户 token。
-
-- [ ] [BEHAVIOR] POST /api/acquisition/video-search-result 返回 HTTP 200 且 `received=true`
-  Test: manual:bash -c 'TASK_ID=$(curl -sf -X POST http://localhost:3001/api/acquisition/keyword-search -H "Content-Type: application/json" -H "Authorization: Bearer $TEST_TOKEN" -d '"'"'{"keyword":"ws3_test"}'"'"' | jq -r '"'"'.task_id'"'"'); RESP=$(curl -sf -X POST http://localhost:3001/api/acquisition/video-search-result -H "Content-Type: application/json" -d "{\"keyword_task_id\":\"$TASK_ID\",\"keyword\":\"ws3_test\",\"videos\":[{\"video_url\":\"https://www.douyin.com/video/ws3test\"}]}"); echo "$RESP" | jq -e '"'"'.received == true'"'"' || { echo "FAIL: received 非 true"; exit 1; }; echo OK'
-  期望: OK
-
-- [ ] [BEHAVIOR] video-search-result 写入 `acquisition_videos` 表（带时间窗口）
-  Test: manual:bash -c 'TASK_ID=$(curl -sf -X POST http://localhost:3001/api/acquisition/keyword-search -H "Content-Type: application/json" -H "Authorization: Bearer $TEST_TOKEN" -d '"'"'{"keyword":"ws3_video_db"}'"'"' | jq -r '"'"'.task_id'"'"'); curl -sf -X POST http://localhost:3001/api/acquisition/video-search-result -H "Content-Type: application/json" -d "{\"keyword_task_id\":\"$TASK_ID\",\"keyword\":\"ws3_video_db\",\"videos\":[{\"video_url\":\"https://www.douyin.com/video/dbtest\"}]}" > /dev/null; COUNT=$(psql $DB -t -c "SELECT count(*) FROM zenithjoy.acquisition_videos WHERE keyword_task_id='"'"'$TASK_ID'"'"' AND created_at > NOW() - interval '"'"'5 minutes'"'"'" | tr -d " "); [ "$COUNT" -ge 1 ] || { echo "FAIL: acquisition_videos 无记录"; exit 1; }; echo OK'
-  期望: OK
-
-- [ ] [BEHAVIOR] POST /api/acquisition/comment-score-result 返回 HTTP 200 且 `received=true`, `written_count >= 0`
-  Test: manual:bash -c 'TASK_ID=$(curl -sf -X POST http://localhost:3001/api/acquisition/keyword-search -H "Content-Type: application/json" -H "Authorization: Bearer $TEST_TOKEN" -d '"'"'{"keyword":"ws3_cmt"}'"'"' | jq -r '"'"'.task_id'"'"'); RESP=$(curl -sf -X POST http://localhost:3001/api/acquisition/comment-score-result -H "Content-Type: application/json" -d "{\"keyword_task_id\":\"$TASK_ID\",\"video_url\":\"https://www.douyin.com/video/ws3cmt\",\"comments\":[{\"commenter_id\":\"@ws3_u\",\"text\":\"怎么联系\",\"publish_time\":\"2026-05-24T10:00:00Z\"}]}"); echo "$RESP" | jq -e '"'"'.received == true'"'"' || { echo "FAIL: received 非 true"; exit 1; }; echo "$RESP" | jq -e '"'"'.written_count >= 0'"'"' || { echo "FAIL: written_count 字段缺失"; exit 1; }; echo OK'
-  期望: OK
-
-- [ ] [BEHAVIOR] 评论为空时 comment-score-result 返回 200 且 `written_count=0`（早返回）
-  Test: manual:bash -c 'TASK_ID=$(curl -sf -X POST http://localhost:3001/api/acquisition/keyword-search -H "Content-Type: application/json" -H "Authorization: Bearer $TEST_TOKEN" -d '"'"'{"keyword":"ws3_empty"}'"'"' | jq -r '"'"'.task_id'"'"'); RESP=$(curl -sf -X POST http://localhost:3001/api/acquisition/comment-score-result -H "Content-Type: application/json" -d "{\"keyword_task_id\":\"$TASK_ID\",\"video_url\":\"https://www.douyin.com/video/empty\",\"comments\":[]}"); echo "$RESP" | jq -e '"'"'.written_count == 0'"'"' || { echo "FAIL: 空评论时 written_count 非0"; exit 1; }; echo OK'
-  期望: OK
-
-- [ ] [BEHAVIOR] lead-writer 写入飞书时 `grade` 字段为中文三级枚举之一
-  Test: manual:bash -c 'node -e "const {writeLeadsFromComments}=require('"'"'./apps/api/src/services/lead-writer.ts'"'"');console.log('"'"'lead-writer grade 字段存在'"'"')" 2>/dev/null || node -e "const c=require('"'"'fs'"'"').readFileSync('"'"'apps/api/src/services/lead-writer.ts'"'"','"'"'utf8'"'"');if(!['"'"'感兴趣'"'"','"'"'精准'"'"','"'"'高意向'"'"'].some(g=>c.includes(g))){process.exit(1)}console.log('"'"'OK'"'"')"'
-  期望: OK
-
-- [ ] [BEHAVIOR] video-search-result body 缺 keyword_task_id 时返回 HTTP 400（error path）
-  Test: manual:bash -c 'CODE=$(curl -s -o /dev/null -w "%{http_code}" -X POST http://localhost:3001/api/acquisition/video-search-result -H "Content-Type: application/json" -d '"'"'{"videos":[]}'"'"'); [ "$CODE" = "400" ] || { echo "FAIL: 期望 400，实际=$CODE"; exit 1; }; echo OK'
-  期望: OK
+- [ ] [BEHAVIOR] GET /api/acquisition/leads 返回 HTTP 200，顶层 keys 精确等于 `["leads","total"]`
+- [ ] [BEHAVIOR] `leads` 为数组，`total` 为数字
+- [ ] [BEHAVIOR] lead item 6 字段完整性：commenter_id/comment_text/source_video_url/crawled_at/grade/keyword
+- [ ] [BEHAVIOR] 禁用字段 data/items/records/rows/result 不在顶层
+- [ ] [BEHAVIOR] grade 筛选生效（grade=高意向 → 所有结果 grade='高意向'）
+- [ ] [BEHAVIOR] grade 非法值 → 400 + error='INVALID_GRADE'
+- [ ] [BEHAVIOR] 飞书 token 过期 → 503 + error='FEISHU_TOKEN_EXPIRED'
+- [ ] [BEHAVIOR:E2E] /dashboard/leads 页面可见，Playwright 截图显示 leads-table 和 grade-badge
