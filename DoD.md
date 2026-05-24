@@ -1,6 +1,6 @@
-contract_branch: cp-05211644-ws-fc0dcc8d-ws1
-workstream_index: 1
-sprint_dir: sprints/zj1-smart-acquisition
+contract_branch: cp-05242003-ws-46fef18e-ws2
+workstream_index: 2
+sprint_dir: sprints/zj2-smart-acquisition-run1
 
 ---
 skeleton: false
