@@ -11,6 +11,7 @@ export default defineConfig({
     globals: true,
     include: [
       '../../sprints/zj1-smart-acquisition/tests/**/*.test.ts',
+      '../../sprints/zj2-smart-acquisition-run1/tests/ws2/**/*.test.ts',
     ],
   },
 });
