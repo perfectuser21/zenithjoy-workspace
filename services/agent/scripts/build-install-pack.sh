@@ -56,6 +56,10 @@ cp install-pack/ffmpeg.exe "$PACK_DIR/"
 cp install-pack/ffprobe.exe "$PACK_DIR/"
 echo "[build] ffmpeg.exe + ffprobe.exe included in pack"
 
+echo "[build] copying publishers/ (douyin-publisher et al)"
+cp -r publishers/ "$PACK_DIR/publishers/"
+echo "[build] publishers/ included in pack"
+
 echo "[build] ensuring portable Node.js for Windows..."
 # Node.js portable zip from npmmirror (China-friendly CDN).
 # Bundled so users with zero Node.js installed can get hyperframes on first run.
