@@ -1,0 +1,72 @@
+name: Douyin Article Publisher E2E (Cookie Injection)
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 2 * * *'
+
+jobs:
+  e2e-douyin-article:
+    runs-on: windows-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: services/agent/package-lock.json
+
+      - name: Install dependencies
+        working-directory: services/agent
+        run: npm ci
+
+      - name: Install Playwright browsers
+        working-directory: services/agent
+        run: npx playwright install chromium --with-deps
+
+      - name: Create test cover image
+        shell: pwsh
+        run: |
+          Add-Type -AssemblyName System.Drawing
+          $img = [System.Drawing.Bitmap]::new(300, 200)
+          $g = [System.Drawing.Graphics]::FromImage($img)
+          $g.Clear([System.Drawing.Color]::FromArgb(255, 100, 0))
+          $g.DrawString("ZenithJoy E2E Test", [System.Drawing.SystemFonts]::DefaultFont, [System.Drawing.Brushes]::White, 50, 80)
+          $g.Dispose()
+          $img.Save("$env:GITHUB_WORKSPACE\test-cover.png")
+          $img.Dispose()
+          Write-Host "test-cover.png created"
+
+      - name: Create queue file
+        shell: pwsh
+        run: |
+          $cover = "$env:GITHUB_WORKSPACE\test-cover.png"
+          $q = @{
+            title = "[DRY-RUN] E2E 自检 $(Get-Date -Format 'yyyy-MM-dd HH:mm')"
+            content = "GitHub Actions E2E 自动验证。"
+            cover = $cover
+            summary = "E2E 自检"
+          } | ConvertTo-Json
+          $q | Out-File -FilePath "$env:GITHUB_WORKSPACE\queue.json" -Encoding utf8
+          Write-Host "queue.json:"
+          Get-Content "$env:GITHUB_WORKSPACE\queue.json"
+
+      - name: Run dryrun publisher
+        working-directory: services/agent
+        shell: pwsh
+        env:
+          DOUYIN_COOKIES: ${{ secrets.DOUYIN_COOKIES }}
+          SCREENSHOT_DIR: ${{ github.workspace }}\screenshots
+        run: |
+          node publishers/douyin-publisher/publish-douyin-article-dryrun.cjs "$env:GITHUB_WORKSPACE\queue.json"
+
+      - name: Upload screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: douyin-e2e-screenshots-${{ github.run_number }}
+          path: screenshots/
+          retention-days: 14
