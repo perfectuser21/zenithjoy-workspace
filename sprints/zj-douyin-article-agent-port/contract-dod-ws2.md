@@ -13,6 +13,9 @@ journey_type: autonomous
 - [ ] [ARTIFACT] `services/agent/src/handlers/douyin-publish.ts` 中 `SUPPORTED_DOUYIN_TYPES` 包含字面字符串 `'article'`
   Test: node -e "const src=require('fs').readFileSync('/workspace/services/agent/src/handlers/douyin-publish.ts','utf8');if(!src.includes(\"'article'\"))process.exit(1)"
 
+- [ ] [ARTIFACT] `sprints/zj-douyin-article-agent-port/tests/ws2/routing.test.ts` 文件存在（vitest 路由覆盖测试，Round 3 新增，对齐 Test Contract 表格）
+  Test: node -e "require('fs').accessSync('/workspace/sprints/zj-douyin-article-agent-port/tests/ws2/routing.test.ts')"
+
 ## BEHAVIOR 条目
 
 - [ ] [BEHAVIOR] `douyin-publish.ts` 源码的 `SUPPORTED_DOUYIN_TYPES` Set 字面包含 `'article'`（不再是注释状态）

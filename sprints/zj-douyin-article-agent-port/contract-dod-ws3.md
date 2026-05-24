@@ -16,6 +16,9 @@ journey_type: autonomous
 - [ ] [ARTIFACT] `services/agent/scripts/build-install-pack.sh` 含 `publishers` 字符串（复制逻辑）
   Test: node -e "const s=require('fs').readFileSync('/workspace/services/agent/scripts/build-install-pack.sh','utf8');if(!s.includes('publishers'))process.exit(1)"
 
+- [ ] [ARTIFACT] `sprints/zj-douyin-article-agent-port/tests/ws3/install-pack.test.ts` 文件存在（vitest install-pack 覆盖测试，Round 3 新增，对齐 Test Contract 表格）
+  Test: node -e "require('fs').accessSync('/workspace/sprints/zj-douyin-article-agent-port/tests/ws3/install-pack.test.ts')"
+
 ## BEHAVIOR 条目
 
 - [ ] [BEHAVIOR] `package.json` version 字面值为 "1.1.26"（不是 1.1.25 或其他版本）

@@ -34,13 +34,15 @@
       "scope": "将 'article' 加入 SUPPORTED_DOUYIN_TYPES；resolveDouyinScriptPath({type:'article'}) 按 ZENITHJOY_AGENT_REAL_PUBLISH 路由到 publish-douyin-article.cjs 或 publish-douyin-article-dryrun.cjs；未知 type 仍 throw",
       "dod": [
         "[ARTIFACT] SUPPORTED_DOUYIN_TYPES 源码含字面字符串 'article'",
+        "[ARTIFACT] sprints/zj-douyin-article-agent-port/tests/ws2/routing.test.ts 文件存在",
         "[BEHAVIOR] article 不在 throw 错误消息中，exit 0",
         "[BEHAVIOR] publish-douyin-article 路径字符串出现在 handler 中，exit 0",
         "[BEHAVIOR] publish-douyin-article-dryrun 路径字符串出现在 handler 中，exit 0",
         "[BEHAVIOR] 未知 type 保护（no script for type）依然存在，exit 0"
       ],
       "files": [
-        "services/agent/src/handlers/douyin-publish.ts"
+        "services/agent/src/handlers/douyin-publish.ts",
+        "sprints/zj-douyin-article-agent-port/tests/ws2/routing.test.ts"
       ],
       "depends_on": ["ws1"],
       "complexity": "S",
@@ -53,13 +55,15 @@
       "dod": [
         "[ARTIFACT] package.json version = \"1.1.26\"",
         "[ARTIFACT] build-install-pack.sh 含 publishers 字符串",
+        "[ARTIFACT] sprints/zj-douyin-article-agent-port/tests/ws3/install-pack.test.ts 文件存在",
         "[BEHAVIOR] version=1.1.26（不是 1.1.25），exit 0",
         "[BEHAVIOR] build-install-pack.sh publishers 复制含 douyin-publisher 覆盖，exit 0",
         "[BEHAVIOR] error path — build 后 package.json version 仍为 1.1.26（不被覆盖），exit 0"
       ],
       "files": [
         "services/agent/scripts/build-install-pack.sh",
-        "services/agent/package.json"
+        "services/agent/package.json",
+        "sprints/zj-douyin-article-agent-port/tests/ws3/install-pack.test.ts"
       ],
       "depends_on": ["ws2"],
       "complexity": "S",

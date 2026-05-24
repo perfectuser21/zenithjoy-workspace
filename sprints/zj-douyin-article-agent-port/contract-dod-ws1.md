@@ -68,3 +68,7 @@ journey_type: autonomous
 - [ ] [BEHAVIOR] 测试文件覆盖 cover fail fast 场景（含 cover/existsSync/ENOENT/fail fast 相关内容）
   Test: manual:bash -c 'grep -qE "cover|existsSync|fail fast|ENOENT" /workspace/services/agent/publishers/douyin-publisher/__tests__/publish-douyin-article.test.cjs || { echo "FAIL: 无 cover fail fast 测试"; exit 1; }; echo OK'
   期望: OK，exit 0
+
+- [ ] [BEHAVIOR] TDD RED 状态验证 — 备份移走实现 CJS 后运行 test.cjs 必须输出 Cannot find module（v7.11 Round 3 新增）
+  Test: manual:bash -c 'IMPL=/workspace/services/agent/publishers/douyin-publisher/publish-douyin-article.cjs; DRYRUN=/workspace/services/agent/publishers/douyin-publisher/publish-douyin-article-dryrun.cjs; TEST=/workspace/services/agent/publishers/douyin-publisher/__tests__/publish-douyin-article.test.cjs; cp "$IMPL" /tmp/article-cjs.bak && cp "$DRYRUN" /tmp/dryrun-cjs.bak && rm "$IMPL" "$DRYRUN"; OUTPUT=$(node "$TEST" 2>&1 || true); cp /tmp/article-cjs.bak "$IMPL"; cp /tmp/dryrun-cjs.bak "$DRYRUN"; echo "$OUTPUT" | grep -q "Cannot find module\|MODULE_NOT_FOUND" && echo "OK: RED confirmed" || { echo "FAIL: 期望 Cannot find module/MODULE_NOT_FOUND，实际输出: $OUTPUT"; exit 1; }'
+  期望: OK: RED confirmed（说明 commit-1 时 test.cjs 在无实现文件时必然报 MODULE_NOT_FOUND，TDD RED 状态成立）

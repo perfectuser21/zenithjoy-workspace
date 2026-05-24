@@ -1,15 +1,13 @@
-# Sprint Contract Draft (Round 2) — zj-douyin-article-agent-port
+# Sprint Contract Draft (Round 3) — zj-douyin-article-agent-port
 
 **Sprint**：publish-douyin-article CDP 移植 + install pack 打包
 **journey_type**：autonomous
 **target_environment**：windows_cloud
 **PRD**：`sprints/zj-douyin-article-agent-port/sprint-prd.md`
 
-> **Round 2 变更说明**
-> - 修复问题1：删除独立 ws4 测试 workstream，将 TDD 测试职责内化到 ws1（commit-1 写测试 RED，commit-2 写实现 GREEN）
-> - 修复问题2a：统一 contract-draft.md 与 task-plan.json 中 ws 依赖关系（均为 ws1→ws2→ws3 串行）
-> - 修复问题2b：删除 ws3 无来源锚点的 `already exists` BEHAVIOR
-> - 修复问题3：加入 Risks 段，覆盖 PRD 三条 ASSUMPTION 的 mitigation
+> **Round 3 变更说明**
+> - 修复 block-1：Test Contract 表格对齐 — WS1 路径从 `tests/ws1/article-publisher.test.ts`（.ts）改为 `publishers/douyin-publisher/__tests__/publish-douyin-article.test.cjs`（.cjs，匹配 DoD ARTIFACT 条目）；WS2/WS3 在各自 DoD 中新增对应测试文件 ARTIFACT 条目，Test Contract 与 DoD 现在完全一致
+> - 修复 block-2：ws1 DoD 新增显式 RED 状态验证 BEHAVIOR（`manual:bash` 命令：备份移走实现文件后运行 test.cjs，断言输出 `Cannot find module`）
 
 ---
 
@@ -347,11 +345,13 @@ for i, t in enumerate(tasks):
 
 ## Test Contract
 
+> Round 3 修订：WS1 路径已从 `.test.ts` 改为 `.test.cjs`（与 ws1 DoD ARTIFACT 一致）；WS2/WS3 各自 DoD 已新增对应测试文件 ARTIFACT 条目，三行均与 DoD 对齐。
+
 | Workstream | Test File | BEHAVIOR 覆盖 | 预期红证据 |
 |---|---|---|---|
-| WS1 | `tests/ws1/article-publisher.test.ts` | 脚本可 require / DOM.setFileInputFiles / cover fail fast / summary 截取 / dryRun:true / **测试文件存在且含 ≥3 it()** | 文件不存在 → 6+ failures |
-| WS2 | `tests/ws2/routing.test.ts` | article 路由不抛 / 未实现类型仍抛 | article 不在 SUPPORTED → 2 failures |
-| WS3 | `tests/ws3/install-pack.test.ts` | version=1.1.26 / publishers 复制命令存在 | version 仍 1.1.25 → 2 failures |
+| WS1 | `publishers/douyin-publisher/__tests__/publish-douyin-article.test.cjs` | 脚本可 require（RED 时 MODULE_NOT_FOUND） / DOM.setFileInputFiles / cover fail fast / summary 截取 / dryRun:true / 含 ≥3 it() | CJS 不存在 → Cannot find module 6+ failures |
+| WS2 | `sprints/zj-douyin-article-agent-port/tests/ws2/routing.test.ts` | article 路由不抛 / 未实现类型仍抛 | article 不在 SUPPORTED → 2 failures |
+| WS3 | `sprints/zj-douyin-article-agent-port/tests/ws3/install-pack.test.ts` | version=1.1.26 / publishers 复制命令存在 | version 仍 1.1.25 → 2 failures |
 
 ---
 
