@@ -132,6 +132,12 @@ const server = http.createServer(async (req, res) => {
       }
 
       if (req.method === 'GET') {
+        // Token validation: reject tokens that don't start with 'fake_t_' (simulates expired token)
+        const authHeader = req.headers['authorization'] || '';
+        const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : '';
+        if (token && !token.startsWith('fake_t_')) {
+          return send(res, 200, { code: 99991661, msg: 'fake: invalid or expired token' });
+        }
         if (inject === 'R3_NOT_FOUND') {
           return send(res, 200, { code: 91402, msg: 'fake R3 inject Bitable not found' });
         }
