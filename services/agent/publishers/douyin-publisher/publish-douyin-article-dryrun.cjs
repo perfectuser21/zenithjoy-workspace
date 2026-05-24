@@ -59,15 +59,40 @@ async function publishDouyinArticleDryRun(queueFilePath) {
     return;
   }
 
-  // 两种模式：cookie 注入（CI/GitHub Actions）vs CDP 连接（rog-xian）
+  // 三种模式：
+  //   1. DOUYIN_COOKIES env → cookie 注入（CI/GitHub Actions）
+  //   2. DOUYIN_PROFILE_DIR env → launchPersistentContext 加载现有 profile（本地有登录 session）
+  //   3. 默认 → CDP 连接 localhost:19222（rog-xian 已跑 Chrome CDP）
   const cookiesJson = process.env.DOUYIN_COOKIES;
+  const profileDir = process.env.DOUYIN_PROFILE_DIR;
   let browser, context, page;
+
+  const fs_ = require('fs');
+  // Find best available Playwright Chromium binary
+  const getPwChromium = () => {
+    const localAppData = process.env.LOCALAPPDATA || process.env.APPDATA?.replace('Roaming', 'Local') || '';
+    const playwrightDir = require('path').join(localAppData, 'ms-playwright');
+    if (!fs_.existsSync(playwrightDir)) return undefined;
+    const candidates = fs_.readdirSync(playwrightDir).filter(d => d.startsWith('chromium')).sort().reverse();
+    for (const d of candidates) {
+      const exes = [
+        require('path').join(playwrightDir, d, 'chrome-headless-shell-win64', 'chrome-headless-shell.exe'),
+        require('path').join(playwrightDir, d, 'chrome-win64', 'chrome.exe'),
+      ];
+      const found = exes.find(e => fs_.existsSync(e));
+      if (found) return found;
+    }
+    return undefined;
+  };
 
   if (cookiesJson) {
     _log('\n[DY-ARTICLE-DRY] 🍪 Cookie 注入模式（CI/GitHub Actions）');
     const cookies = JSON.parse(cookiesJson);
+    const executablePath = getPwChromium();
+    if (executablePath) _log('[DY-ARTICLE-DRY] 使用 Chromium:', executablePath);
     browser = await chromium.launch({
-      headless: false,
+      headless: true,
+      executablePath,
       args: ['--no-sandbox', '--disable-setuid-sandbox'],
     });
     context = await browser.newContext({
@@ -77,6 +102,19 @@ async function publishDouyinArticleDryRun(queueFilePath) {
     await context.addCookies(cookies);
     page = await context.newPage();
     _log('[DY-ARTICLE-DRY] 已注入', cookies.length, '个 cookies\n');
+  } else if (profileDir) {
+    _log('\n[DY-ARTICLE-DRY] 🗂 Profile 模式（加载现有登录 session）:', profileDir);
+    const executablePath = getPwChromium();
+    if (executablePath) _log('[DY-ARTICLE-DRY] 使用 Chromium:', executablePath);
+    context = await chromium.launchPersistentContext(profileDir, {
+      headless: true,
+      executablePath,
+      args: ['--no-sandbox', '--disable-setuid-sandbox'],
+      viewport: { width: 1280, height: 900 },
+    });
+    page = context.pages()[0] || await context.newPage();
+    browser = null;
+    _log('[DY-ARTICLE-DRY] Profile 已加载\n');
   } else {
     _log('\n[DY-ARTICLE-DRY] 连接到现有浏览器 (localhost:19222)...');
     browser = await chromium.connectOverCDP('http://localhost:19222');
@@ -112,6 +150,38 @@ async function publishDouyinArticleDryRun(queueFilePath) {
       return;
     }
     _log('[DY-ARTICLE-DRY] ✅ 已登录，当前 URL:', currentUrl);
+
+    // 检测登录页面内容（SPA 可能不改 URL）
+    const isLoginPage = await page.evaluate(() => {
+      const text = document.body?.innerText || '';
+      return text.includes('扫码登录') || text.includes('验证码登录') || document.querySelector('[class*="login"]') !== null;
+    }).catch(() => false);
+    if (isLoginPage) {
+      await takeScreenshot(page, '01b-login-page-detected');
+      emitFailure('抖音未登录（检测到登录页面内容）');
+      return;
+    }
+
+    _log('[DY-ARTICLE-DRY] Step 1.5: 进入文章创作编辑器');
+    // 先看有没有 file input（如果直接就在编辑器里）
+    const hasFileInput = await page.locator('input[type="file"]').count().then(n => n > 0).catch(() => false);
+    if (!hasFileInput) {
+      // 在文章列表页，需要点"写文章"进入编辑器
+      const writeBtn = page.locator('button, a').filter({ hasText: /写文章|发文章|创建文章|写图文/ }).first();
+      const hasBtnVisible = await writeBtn.isVisible({ timeout: 3000 }).catch(() => false);
+      if (hasBtnVisible) {
+        _log('[DY-ARTICLE-DRY] 点击"写文章"按钮');
+        await writeBtn.click();
+        await page.waitForTimeout(3000);
+      } else {
+        // 尝试直接导航到创建 URL
+        const createUrl = 'https://creator.douyin.com/creator-micro/content/article/create';
+        _log('[DY-ARTICLE-DRY] 直接导航到创建 URL:', createUrl);
+        await page.goto(createUrl, { waitUntil: 'domcontentloaded' });
+        await page.waitForTimeout(3000);
+      }
+      await takeScreenshot(page, '01c-editor-loaded');
+    }
 
     _log('[DY-ARTICLE-DRY] Step 2: 上传封面');
     if (cookiesJson) {
