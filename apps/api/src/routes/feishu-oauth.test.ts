@@ -32,6 +32,10 @@ vi.mock('../middleware/tenant-context', () => ({
     req.tenantId = req.headers['x-test-tenant-id'] || '';
     next();
   },
+  tenantContextOptional: (req: any, _res: any, next: any) => {
+    req.tenantId = req.headers['x-test-tenant-id'] || req.body?.tenant_id || '';
+    next();
+  },
 }));
 
 // Mock feishu-token / feishu-bitable services（POST /start 用）
