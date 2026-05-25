@@ -1836,6 +1836,14 @@ tests:
     product: AI视频本地流水线
     note: "createJob 接受并持久化 template_id 单测"
 
+  - id: api-analyze-transcript-prompt
+    path: apps/api/src/controllers/__tests__/analyze-transcript-prompt.test.ts
+    type: unit
+    ci: L4
+    status: active
+    product: AI视频本地流水线
+    note: "analyzeTranscript prompt 保守剪辑规则回归测试 — 气口保留/禁止过度删除"
+
   - id: api-compose-template
     path: apps/api/src/controllers/__tests__/compose-template.test.ts
     type: unit
