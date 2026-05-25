@@ -2,8 +2,11 @@ name: Session Health Check — 平台登录状态巡检
 
 on:
   schedule:
-    # 每天 北京时间 08:00（UTC 00:00）跑一次
-    - cron: '0 0 * * *'
+    # 每天 4 次：北京时间 00:00 / 06:00 / 12:00 / 18:00
+    - cron: '0 16 * * *'
+    - cron: '0 22 * * *'
+    - cron: '0 4 * * *'
+    - cron: '0 10 * * *'
   workflow_dispatch:
     inputs:
       force_notify:
