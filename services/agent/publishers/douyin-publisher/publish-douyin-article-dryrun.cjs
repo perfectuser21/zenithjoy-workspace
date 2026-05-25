@@ -184,12 +184,12 @@ async function publishDouyinArticleDryRun(queueFilePath) {
     }
 
     _log('[DY-ARTICLE-DRY] Step 2: 上传封面');
-    if (cookiesJson) {
-      // cookie 注入模式：用 Playwright 原生 setInputFiles
+    if (cookiesJson || profileDir) {
+      // cookie 注入 / profile 模式：用 Playwright 原生 setInputFiles（支持 headless）
       const fileInput = page.locator('input[type="file"]').first();
       await fileInput.setInputFiles(cover);
     } else {
-      // CDP 模式：用 DOM.setFileInputFiles + backendNodeId
+      // CDP 直连模式：用 DOM.setFileInputFiles + backendNodeId
       const cdpSession = await context.newCDPSession(page);
       const { result } = await Promise.race([
         cdpSession.send('Runtime.evaluate', { expression: `document.querySelector('input[type="file"]')` }),
@@ -198,7 +198,10 @@ async function publishDouyinArticleDryRun(queueFilePath) {
       if (!result.objectId) { emitFailure('未找到封面 file input'); return; }
       const { node } = await cdpSession.send('DOM.describeNode', { objectId: result.objectId });
       if (!node.backendNodeId) { emitFailure('未获取到 file input backendNodeId'); return; }
-      await cdpSession.send('DOM.setFileInputFiles', { backendNodeId: node.backendNodeId, files: [cover] });
+      await Promise.race([
+        cdpSession.send('DOM.setFileInputFiles', { backendNodeId: node.backendNodeId, files: [cover] }),
+        new Promise((_, rej) => setTimeout(() => rej(new Error('DOM.setFileInputFiles 超时 10s')), 10000)),
+      ]);
       await cdpSession.detach();
     }
     await page.waitForTimeout(2000);
