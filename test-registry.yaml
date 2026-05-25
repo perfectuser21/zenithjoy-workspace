@@ -2036,6 +2036,22 @@ tests:
     product: 新媒体运营
     note: "ZJ2 Smart Acquisition Run1 WS4 — leads API 合同测试"
 
+  - id: zj2-smart-acquisition-run1-comment-grader
+    path: apps/api/src/services/comment-grader.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 新媒体运营
+    note: "ZJ2 Smart Acquisition — DeepSeek评论3级打分 comment-grader 单元测试（test-pairing 配对）"
+
+  - id: zj2-smart-acquisition-run1-acquisition-grade-smoke
+    path: .github/workflows/scripts/smoke/acquisition-grade-smoke.sh
+    type: e2e
+    ci: L4
+    status: active
+    product: 新媒体运营
+    note: "ZJ2 Smart Acquisition — DeepSeek打分+Agent视频搜索 E2E smoke 全链路验证"
+
   - id: zj-douyin-article-agent-port-ws1
     path: sprints/zj-douyin-article-agent-port/tests/ws1/article-publisher.test.ts
     type: unit
