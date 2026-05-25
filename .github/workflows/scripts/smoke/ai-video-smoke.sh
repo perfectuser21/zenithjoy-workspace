@@ -31,6 +31,14 @@ http_code=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$API/api/ai-video/ge
   && ok "POST /ai-video/generate 路由可达 (HTTP $http_code)" \
   || fail "POST /ai-video/generate 404 或不可达"
 
+echo "── ai-video-upload (路由可达性 + 400 无文件) ──"
+# POST /api/ai-video/upload 不带 video 文件必须返回 400（不是 404/500）
+http_code=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$API/api/ai-video/upload" \
+    -H "X-Feishu-User-Id: $FEISHU_USER")
+[[ "$http_code" == "400" ]] \
+  && ok "POST /api/ai-video/upload 无文件 → 400" \
+  || fail "POST /api/ai-video/upload 无文件 → 期望 400，得 $http_code"
+
 echo ""
 echo "────────────────────────────────────"
 echo "PASS: $PASS  FAIL: $FAIL"

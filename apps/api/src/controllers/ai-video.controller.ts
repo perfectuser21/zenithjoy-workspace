@@ -1,7 +1,12 @@
 import { Request, Response, NextFunction } from 'express';
+import * as fs from 'fs';
+import * as path from 'path';
 import { AiVideoService } from '../services/ai-video.service';
+import { AiVideoUploadService } from '../services/ai-video-upload.service';
 
 const aiVideoService = new AiVideoService();
+const uploadService = new AiVideoUploadService();
+const LOCAL_BASE = `${process.env.HOME}/video-pipeline/jobs`;
 
 export class AiVideoController {
   async getAllGenerations(req: Request, res: Response, next: NextFunction) {
@@ -68,6 +73,63 @@ export class AiVideoController {
       const { id } = req.params;
       await aiVideoService.deleteGeneration(id);
       res.status(204).send();
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async uploadAndProcess(req: Request, res: Response, next: NextFunction) {
+    try {
+      const files = req.files as Record<string, Express.Multer.File[]>;
+      const videoFile = files?.['video']?.[0];
+      const logoFile  = files?.['logo']?.[0];
+
+      if (!videoFile) {
+        return res.status(400).json({ error: 'video file is required' });
+      }
+      const scriptText = (req.body.script || req.body.title || '').trim();
+      if (!scriptText) {
+        return res.status(400).json({ error: 'script or title is required' });
+      }
+
+      const jobId = (req as unknown as { jobId: string }).jobId;
+
+      await uploadService.createJob({
+        jobId,
+        videoPath: videoFile.path,
+        scriptText,
+        logoPath: logoFile?.path,
+      });
+
+      // dispatch() uses execSync(ssh/scp) which blocks the event loop.
+      // Calling getGenerationById() after this point risks pg-pool connectionTimeout.
+      // Return known data instead.
+      uploadService.dispatch({
+        jobId,
+        videoPath: videoFile.path,
+        scriptText,
+        logoPath: logoFile?.path,
+      }).catch((err) => {
+        console.error(`[upload] dispatch error for ${jobId}:`, err);
+      });
+
+      res.status(201).json({ id: jobId, status: 'queued', progress: 0, script_text: scriptText });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async downloadFile(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { jobId, file } = req.params;
+      if (!jobId || !file || file.includes('..') || file.includes('/')) {
+        return res.status(400).json({ error: 'invalid params' });
+      }
+      const filePath = path.join(LOCAL_BASE, jobId, 'out', file);
+      if (!fs.existsSync(filePath)) {
+        return res.status(404).json({ error: 'file not found' });
+      }
+      res.sendFile(filePath);
     } catch (error) {
       next(error);
     }
