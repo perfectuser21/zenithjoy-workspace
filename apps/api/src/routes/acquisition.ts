@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import { randomUUID } from 'crypto';
 import { expandKeywords } from '../services/keyword-expander';
 import { writeLeadsFromComments } from '../services/lead-writer';
+import { gradeComment } from '../services/comment-grader';
 
 export const acquisitionRouter = Router();
 
@@ -34,7 +35,6 @@ acquisitionRouter.post('/keyword-search', async (req: Request, res: Response) =>
 
   const kw = keyword.trim();
 
-  // Check main agent session online status (skip in VITEST unit test mode)
   if (!process.env.VITEST) {
     try {
       const pool = (await import('../db/connection')).default;
@@ -45,7 +45,6 @@ acquisitionRouter.post('/keyword-search', async (req: Request, res: Response) =>
         return res.status(503).json({ error: 'AGENT_OFFLINE' });
       }
     } catch {
-      // DB unavailable in non-test mode — fail safe: return offline
       return res.status(503).json({ error: 'AGENT_OFFLINE' });
     }
   }
@@ -53,7 +52,6 @@ acquisitionRouter.post('/keyword-search', async (req: Request, res: Response) =>
   const keywords = await expandKeywords(kw);
   const task_id = randomUUID();
 
-  // DB insert (skip in VITEST unit test mode)
   if (!process.env.VITEST) {
     try {
       const pool = (await import('../db/connection')).default;
@@ -69,6 +67,50 @@ acquisitionRouter.post('/keyword-search', async (req: Request, res: Response) =>
   }
 
   return res.status(200).json({ task_id, keywords });
+});
+
+// Agent 轮询端点 — 返回待处理的关键词任务
+acquisitionRouter.get('/pending-keyword-tasks', async (_req: Request, res: Response) => {
+  if (process.env.VITEST) {
+    return res.status(200).json({ tasks: [], total: 0 });
+  }
+
+  try {
+    const pool = (await import('../db/connection')).default;
+    const { rows } = await pool.query<{
+      id: string;
+      keyword: string;
+      expanded_keywords: string[];
+    }>(
+      `SELECT id, keyword, expanded_keywords
+         FROM zenithjoy.acquisition_keyword_tasks
+        WHERE status = 'dispatched'
+        ORDER BY created_at ASC
+        LIMIT 10`
+    );
+
+    // Mark picked-up tasks as processing
+    if (rows.length > 0) {
+      const ids = rows.map((r) => r.id);
+      await pool.query(
+        `UPDATE zenithjoy.acquisition_keyword_tasks
+            SET status = 'processing', updated_at = NOW()
+          WHERE id = ANY($1::uuid[])`,
+        [ids]
+      );
+    }
+
+    const tasks = rows.map((r) => ({
+      task_id: r.id,
+      keyword: r.keyword,
+      keywords: Array.isArray(r.expanded_keywords) ? r.expanded_keywords : [],
+    }));
+
+    return res.status(200).json({ tasks, total: tasks.length });
+  } catch (err) {
+    console.error('[acquisition] pending-keyword-tasks error:', (err as Error).message);
+    return res.status(200).json({ tasks: [], total: 0 });
+  }
 });
 
 acquisitionRouter.post('/video-search-result', async (req: Request, res: Response) => {
@@ -126,15 +168,35 @@ acquisitionRouter.post('/comment-score-result', async (req: Request, res: Respon
   let written_count = 0;
   if (!process.env.VITEST) {
     try {
-      const result = await writeLeadsFromComments({
-        tenant_id,
-        table_id_leads,
-        video_url: video_url ?? '',
-        comments: commentList,
-      });
-      written_count = result.written_count;
+      // Grade each comment via DeepSeek, filter out null (irrelevant)
+      const gradedComments = await Promise.all(
+        commentList.map(async (c: { commenter_id?: string; text?: string; publish_time?: string; keyword?: string; grade?: string }) => {
+          const grade = c.grade || await gradeComment(c.text ?? '');
+          if (!grade) return null;
+          return { ...c, grade };
+        })
+      );
+      const qualified = gradedComments
+        .filter((c): c is NonNullable<typeof c> => c !== null)
+        .map((c) => ({
+          commenter_id: c.commenter_id ?? '',
+          text: c.text ?? '',
+          publish_time: c.publish_time ?? '',
+          grade: c.grade as import('../services/lead-writer').LeadGrade,
+          keyword: c.keyword,
+        }));
+
+      if (qualified.length > 0) {
+        const result = await writeLeadsFromComments({
+          tenant_id,
+          table_id_leads,
+          video_url: video_url ?? '',
+          comments: qualified,
+        });
+        written_count = result.written_count;
+      }
     } catch (err) {
-      console.error('[acquisition] comment-score-result writeLeads failed:', (err as Error).message);
+      console.error('[acquisition] comment-score-result failed:', (err as Error).message);
     }
   } else {
     written_count = commentList.length;
