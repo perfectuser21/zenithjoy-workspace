@@ -1852,6 +1852,30 @@ tests:
     product: AI视频本地流水线
     note: "composeTemplate 端点 — Claude slot 提取 + HTML 生成单测"
 
+  - id: api-ai-video-upload-controller
+    path: apps/api/src/controllers/__tests__/ai-video.controller.test.ts
+    type: unit
+    ci: L4
+    status: active
+    product: AI视频本地流水线
+    note: "uploadAndProcess — 无 video→400、无 script→400、有效→201 queued"
+
+  - id: api-ai-video-upload-service
+    path: apps/api/src/services/__tests__/ai-video-upload.service.test.ts
+    type: unit
+    ci: L4
+    status: active
+    product: AI视频本地流水线
+    note: "AiVideoUploadService.createJob DB INSERT status=queued 验证"
+
+  - id: api-ai-video-upload-route
+    path: apps/api/src/routes/__tests__/ai-video.test.ts
+    type: unit
+    ci: L4
+    status: active
+    product: AI视频本地流水线
+    note: "POST /api/ai-video/upload 路由 — 非 multipart 请求返回 400"
+
   - id: api-template-registry
     path: apps/api/src/templates/__tests__/registry.test.ts
     type: unit
