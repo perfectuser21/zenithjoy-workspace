@@ -1,0 +1,174 @@
+<?xml version="1.0" encoding="UTF-16"?>
+<!--
+  ZenithJoy Windows Task Scheduler 配置
+  ========================================
+  包含 3 种计划任务，用 schtasks 分别导入：
+
+    schtasks /create /xml "windows-task-scheduler.xml#SessionSync" /tn "ZenithJoy\SessionSync"
+    schtasks /create /xml "windows-task-scheduler.xml#ShipinhaoHeartbeat" /tn "ZenithJoy\ShipinhaoHeartbeat"
+    schtasks /create /xml "windows-task-scheduler.xml#OtherSync" /tn "ZenithJoy\OtherSync"
+
+  实际导入时请将对应 <Task> 块单独存为独立 .xml 文件再执行 schtasks。
+-->
+<Tasks>
+
+  <!-- ============================================================
+       Task 1: SessionSync — 每 2 小时同步 8 平台 × 4 账号 Session
+       ============================================================ -->
+  <Task id="SessionSync" version="1.4" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
+    <RegistrationInfo>
+      <Description>每 2 小时从 xian-rog 同步 8 平台 × 4 账号 session 到 GitHub Secrets</Description>
+      <URI>\ZenithJoy\SessionSync</URI>
+    </RegistrationInfo>
+    <Triggers>
+      <CalendarTrigger>
+        <StartBoundary>2026-01-01T00:00:00</StartBoundary>
+        <Enabled>true</Enabled>
+        <ScheduleByDay>
+          <DaysInterval>1</DaysInterval>
+        </ScheduleByDay>
+        <Repetition>
+          <Interval>PT2H</Interval>
+          <StopAtDurationEnd>false</StopAtDurationEnd>
+        </Repetition>
+      </CalendarTrigger>
+    </Triggers>
+    <Actions Context="Author">
+      <Exec>
+        <Command>bash</Command>
+        <Arguments>scripts/sessions/sync-from-xian-rog.sh xian-rog</Arguments>
+        <WorkingDirectory>C:\zenithjoy</WorkingDirectory>
+      </Exec>
+    </Actions>
+    <Settings>
+      <MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy>
+      <DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries>
+      <StopIfGoingOnBatteries>false</StopIfGoingOnBatteries>
+      <Enabled>true</Enabled>
+      <RunOnlyIfNetworkAvailable>true</RunOnlyIfNetworkAvailable>
+      <ExecutionTimeLimit>PT30M</ExecutionTimeLimit>
+      <RestartOnFailure>
+        <Interval>PT5M</Interval>
+        <Count>2</Count>
+      </RestartOnFailure>
+    </Settings>
+    <Principals>
+      <Principal id="Author">
+        <LogonType>InteractiveToken</LogonType>
+        <RunLevel>LeastPrivilege</RunLevel>
+      </Principal>
+    </Principals>
+  </Task>
+
+  <!-- ============================================================
+       Task 2: ShipinhaoHeartbeat — 视频号每 45 分钟心跳 + OnFailed 重触
+       ============================================================ -->
+  <Task id="ShipinhaoHeartbeat" version="1.4" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
+    <RegistrationInfo>
+      <Description>视频号（shipinhao）每 45 分钟保活心跳；失败后自动重触（OnFailed）</Description>
+      <URI>\ZenithJoy\ShipinhaoHeartbeat</URI>
+    </RegistrationInfo>
+    <Triggers>
+      <!-- 主触发器：每 45 分钟执行一次 -->
+      <CalendarTrigger>
+        <StartBoundary>2026-01-01T00:00:00</StartBoundary>
+        <Enabled>true</Enabled>
+        <ScheduleByDay>
+          <DaysInterval>1</DaysInterval>
+        </ScheduleByDay>
+        <Repetition>
+          <Interval>PT45M</Interval>
+          <StopAtDurationEnd>false</StopAtDurationEnd>
+        </Repetition>
+      </CalendarTrigger>
+      <!-- OnFailed trigger：任务失败后 5 分钟内重试 -->
+      <EventTrigger>
+        <Enabled>true</Enabled>
+        <Subscription>
+          &lt;QueryList&gt;
+            &lt;Query Id="0" Path="Microsoft-Windows-TaskScheduler/Operational"&gt;
+              &lt;Select Path="Microsoft-Windows-TaskScheduler/Operational"&gt;
+                *[System[Provider[@Name='Microsoft-Windows-TaskScheduler']
+                  and EventID=201]]
+                and
+                *[EventData[Data[@Name='TaskName']='\ZenithJoy\ShipinhaoHeartbeat'
+                  and Data[@Name='ResultCode']!='0']]
+              &lt;/Select&gt;
+            &lt;/Query&gt;
+          &lt;/QueryList&gt;
+        </Subscription>
+        <Delay>PT1M</Delay>
+      </EventTrigger>
+    </Triggers>
+    <Actions Context="Author">
+      <Exec>
+        <Command>bash</Command>
+        <Arguments>scripts/sessions/sync-from-xian-rog.sh xian-rog shipinhao</Arguments>
+        <WorkingDirectory>C:\zenithjoy</WorkingDirectory>
+      </Exec>
+    </Actions>
+    <Settings>
+      <MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy>
+      <DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries>
+      <StopIfGoingOnBatteries>false</StopIfGoingOnBatteries>
+      <Enabled>true</Enabled>
+      <RunOnlyIfNetworkAvailable>true</RunOnlyIfNetworkAvailable>
+      <ExecutionTimeLimit>PT10M</ExecutionTimeLimit>
+      <RestartOnFailure>
+        <Interval>PT5M</Interval>
+        <Count>3</Count>
+      </RestartOnFailure>
+    </Settings>
+    <Principals>
+      <Principal id="Author">
+        <LogonType>InteractiveToken</LogonType>
+        <RunLevel>LeastPrivilege</RunLevel>
+      </Principal>
+    </Principals>
+  </Task>
+
+  <!-- ============================================================
+       Task 3: OtherSync — 其他平台每 4 小时补充同步
+       ============================================================ -->
+  <Task id="OtherSync" version="1.4" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
+    <RegistrationInfo>
+      <Description>其他辅助同步（低优先级）每 4 小时执行一次</Description>
+      <URI>\ZenithJoy\OtherSync</URI>
+    </RegistrationInfo>
+    <Triggers>
+      <CalendarTrigger>
+        <StartBoundary>2026-01-01T02:00:00</StartBoundary>
+        <Enabled>true</Enabled>
+        <ScheduleByDay>
+          <DaysInterval>1</DaysInterval>
+        </ScheduleByDay>
+        <Repetition>
+          <Interval>PT4H</Interval>
+          <StopAtDurationEnd>false</StopAtDurationEnd>
+        </Repetition>
+      </CalendarTrigger>
+    </Triggers>
+    <Actions Context="Author">
+      <Exec>
+        <Command>bash</Command>
+        <Arguments>scripts/sessions/sync-from-xian-rog.sh xian-pc</Arguments>
+        <WorkingDirectory>C:\zenithjoy</WorkingDirectory>
+      </Exec>
+    </Actions>
+    <Settings>
+      <MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy>
+      <DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries>
+      <StopIfGoingOnBatteries>false</StopIfGoingOnBatteries>
+      <Enabled>true</Enabled>
+      <RunOnlyIfNetworkAvailable>true</RunOnlyIfNetworkAvailable>
+      <ExecutionTimeLimit>PT30M</ExecutionTimeLimit>
+    </Settings>
+    <Principals>
+      <Principal id="Author">
+        <LogonType>InteractiveToken</LogonType>
+        <RunLevel>LeastPrivilege</RunLevel>
+      </Principal>
+    </Principals>
+  </Task>
+
+</Tasks>
