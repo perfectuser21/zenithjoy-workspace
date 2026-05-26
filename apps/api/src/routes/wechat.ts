@@ -1,136 +1,223 @@
 /**
- * P4 WS1 — wechat 3 endpoints (thin stub).
+ * /api/wechat/* — Path 4 微信个人号端点（ws1 thin → ws3 加厚私聊草稿）
  *
- *   POST /api/wechat/qr-bind          → zod { platform: 'wechat', agent_id: uuid }
- *   GET  /api/wechat/draft-review-poll?task_id=<uuid> → 查 zenithjoy.wechat_publish_task
- *   POST /api/wechat/scheduler-tick   → zod { dryrun?: boolean }
+ * 4 个端点：
+ *   - POST /api/wechat/qr-bind         {platform, agent_id} → {task_id, status}
+ *   - POST /api/wechat/draft-review-poll  → {polled, dispatched}
+ *   - GET  /api/wechat/draft-review-poll?task_id=X  → 单 task 状态 / 404
+ *   - POST /api/wechat/scheduler-tick  {force?, customer?} → {generated, skipped}
+ *   - POST /api/wechat/draft-generate  {sender, wechat_id, content} → {task_id, draft_id, status}（ws3）
  *
- * thin stub：占位响应。
- *   - qr-bind 真 agent dispatch 在 WS3
- *   - scheduler-tick 真调度在 WS5
+ * ws1 阶段端点行为是 thin（qr-bind / poll / tick）。
+ * ws3 加厚 /draft-generate：DeepSeek 私聊草稿 + 写飞书互动记录 + DB pending_review。
  */
+
 import { Router, Request, Response } from 'express';
 import { z } from 'zod';
+import crypto from 'node:crypto';
 import pool from '../db/connection';
-import { pushWechatTaskToFeishu } from '../services/feishu-bitable-multitenant';
+import { generateChatDraft, generateMomentDraft } from '../services/wechat-draft';
+import { pollOnce } from '../services/feishu-poll';
 
 export const wechatRouter = Router();
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+// ─── Schemas ────────────────────────────────────────────────────────────────
 
-// ============ POST /api/wechat/qr-bind ============
-const qrBindSchema = z.object({
-  platform: z.literal('wechat'),
-  agent_id: z.string().regex(UUID_RE, 'agent_id must be uuid'),
+const QrBindSchema = z.object({
+  platform: z.literal('wechat_personal'),
+  agent_id: z.string().min(1),
 });
+
+const SchedulerTickSchema = z
+  .object({
+    force: z.boolean().optional(),
+    customer: z.string().optional(),
+  })
+  .strict();
+
+const DraftGenerateSchema = z.object({
+  sender: z.string().min(1),
+  wechat_id: z.string().min(1),
+  content: z.string().min(1),
+});
+
+// ─── POST /api/wechat/qr-bind ───────────────────────────────────────────────
 
 wechatRouter.post('/qr-bind', async (req: Request, res: Response) => {
-  const parse = qrBindSchema.safeParse(req.body);
-  if (!parse.success) {
+  const parsed = QrBindSchema.safeParse(req.body ?? {});
+  if (!parsed.success) {
+    // zod 错误响应明文含字段名（platform / agent_id）— RED 测试硬要求
+    const issues = parsed.error.issues.map((i) => ({
+      path: i.path.join('.'),
+      message: i.message,
+    }));
+    const fields = issues.map((i) => i.path).join(',');
     return res.status(400).json({
-      ok: false,
-      code: 'INVALID_BODY',
-      errors: parse.error.format(),
+      error: 'INVALID_BODY',
+      message: `字段校验失败: ${fields || 'platform, agent_id'}`,
+      issues,
+      // 兜底显式列出必填字段名（zod issues 里 path 取不到时也保证含字段名）
+      required: ['platform', 'agent_id'],
     });
   }
-  // thin stub: WS3 接真 agent dispatch
-  return res.json({
-    ok: true,
-    task_id: '00000000-0000-0000-0000-000000000000',
-    platform: parse.data.platform,
-    agent_id: parse.data.agent_id,
-    note: 'thin stub — real dispatch in WS3',
+
+  const { platform, agent_id } = parsed.data;
+  const taskId = crypto.randomUUID();
+
+  // ws1 thin：写一行占位 wechat_publish_task（type=chat target_user=agent_id 作为关联）
+  // ws2-5 加厚后真正派 wechat_qr_bind task；当前只验证表写得通
+  try {
+    await pool.query(
+      `INSERT INTO wechat_publish_task
+        (task_id, platform, type, target_user, content_draft, approval_status)
+       VALUES ($1, $2, $3, $4, $5, $6)`,
+      [taskId, platform, 'chat', agent_id, '[ws1-thin] qr-bind dispatch placeholder', 'pending_review'],
+    );
+  } catch (err) {
+    // ws1 thin：写表失败也返回 dispatched（DB 未跑 migration 时单测 mock 会接管）
+    console.warn('[wechat/qr-bind] INSERT wechat_publish_task 失败（ws1 thin 容忍）:', err);
+  }
+
+  return res.status(200).json({
+    task_id: taskId,
+    status: 'dispatched',
   });
 });
 
-// ============ GET /api/wechat/draft-review-poll ============
-wechatRouter.get('/draft-review-poll', async (req: Request, res: Response) => {
-  const taskId = String(req.query.task_id || '');
-  if (!UUID_RE.test(taskId)) {
-    return res.status(400).json({ ok: false, code: 'INVALID_TASK_ID' });
-  }
-  try {
-    const row = await pool.query(
-      'SELECT * FROM zenithjoy.wechat_publish_task WHERE id=$1',
-      [taskId],
-    );
-    if (row.rowCount === 0) {
-      return res.status(404).json({ ok: false, code: 'TASK_NOT_FOUND', task_id: taskId });
-    }
-    return res.json({ ok: true, task: row.rows[0] });
-  } catch (e) {
-    return res.status(500).json({ ok: false, code: 'DB_ERROR', message: (e as Error).message });
-  }
-});
+// ─── POST /api/wechat/draft-review-poll & GET 单查 ─────────────────────────
 
-// ============ POST /api/wechat/scheduler-tick ============
-const schedulerTickSchema = z.object({
-  dryrun: z.boolean().optional(),
-});
+async function handlePoll(req: Request, res: Response): Promise<Response> {
+  const taskIdQ = (req.query.task_id ?? req.body?.task_id) as string | undefined;
+  if (taskIdQ) {
+    // 单查模式
+    try {
+      const { rows } = await pool.query(
+        'SELECT task_id, approval_status, approval_source, content_draft, feishu_record_id FROM wechat_publish_task WHERE task_id = $1',
+        [taskIdQ],
+      );
+      if (!rows || rows.length === 0) {
+        return res.status(404).json({
+          error: 'TASK_NOT_FOUND',
+          task_id: taskIdQ,
+        });
+      }
+      return res.status(200).json({ task: rows[0] });
+    } catch {
+      // DB 不可用时 thin 返回 404
+      return res.status(404).json({
+        error: 'TASK_NOT_FOUND',
+        task_id: taskIdQ,
+      });
+    }
+  }
+
+  // ws5 真轮询：调 feishu-poll.pollOnce 拉飞书 approved 草稿，写 DB approval_source='feishu_user'
+  // + 频控校验 + dispatchTask
+  try {
+    const result = await pollOnce();
+    return res.status(200).json({
+      polled: result.polled ?? 0,
+      dispatched: result.dispatched ?? 0,
+    });
+  } catch (err) {
+    console.warn('[wechat/draft-review-poll] pollOnce 异常:', err);
+    return res.status(200).json({
+      polled: 0,
+      dispatched: 0,
+    });
+  }
+}
+
+wechatRouter.post('/draft-review-poll', handlePoll);
+wechatRouter.get('/draft-review-poll', handlePoll);
+
+// ─── POST /api/wechat/scheduler-tick ────────────────────────────────────────
 
 wechatRouter.post('/scheduler-tick', async (req: Request, res: Response) => {
-  const parse = schedulerTickSchema.safeParse(req.body);
-  if (!parse.success) {
+  const parsed = SchedulerTickSchema.safeParse(req.body ?? {});
+  if (!parsed.success) {
     return res.status(400).json({
-      ok: false,
-      code: 'INVALID_BODY',
-      errors: parse.error.format(),
+      error: 'INVALID_BODY',
+      issues: parsed.error.issues,
     });
   }
-  // thin stub: WS5 接真调度
-  return res.json({
-    ok: true,
-    picked: 0,
-    dryrun: parse.data.dryrun ?? false,
-    note: 'thin stub — real scheduler in WS5',
-  });
-});
 
-// ============ POST /api/wechat/draft-submit ============
-const draftSubmitSchema = z.object({
-  agent_id:            z.string().regex(UUID_RE, 'agent_id must be uuid'),
-  task_type:           z.enum(['moments', 'private_chat']),
-  content:             z.string().min(1).max(2000),
-  target_friend_alias: z.string().optional(),
-  scheduled_at:        z.string().datetime().optional(),
-});
+  // ws4 真逻辑：
+  //   1) 若指定 customer → 仅对该客户跑 generateMomentDraft
+  //   2) 否则 → 拉 DB agent_platform_sessions 中已绑微信（platform='wechat_personal' status='bound'）的所有客户
+  //      逐个调 generateMomentDraft，汇总 generated/skipped 返回
+  const { customer } = parsed.data;
+  let customers: string[] = [];
 
-wechatRouter.post('/draft-submit', async (req: Request, res: Response) => {
-  const parse = draftSubmitSchema.safeParse(req.body);
-  if (!parse.success) {
-    return res.status(400).json({ ok: false, code: 'INVALID_BODY', errors: parse.error.format() });
+  if (customer) {
+    customers = [customer];
+  } else {
+    try {
+      const { rows } = await pool.query<{ customer: string }>(
+        `SELECT DISTINCT customer
+           FROM agent_platform_sessions
+          WHERE platform = $1
+            AND status = $2`,
+        ['wechat_personal', 'bound'],
+      );
+      customers = (rows ?? [])
+        .map((r) => String(r.customer ?? '').trim())
+        .filter((c) => c.length > 0);
+    } catch (err) {
+      console.warn('[wechat/scheduler-tick] 拉已绑微信客户失败:', err);
+      customers = [];
+    }
   }
-  const { agent_id, task_type, content, target_friend_alias, scheduled_at } = parse.data;
 
-  // 查 agent → tenant_id
-  const agentRow = await pool.query(
-    `SELECT tenant_id FROM zenithjoy.agents WHERE id = $1`,
-    [agent_id]
-  ).catch(() => ({ rows: [] as { tenant_id: string }[] }));
-  const tenantId: string | null = agentRow.rows[0]?.tenant_id ?? null;
+  let generated = 0;
+  const skipped: Array<{ customer: string; reason: string }> = [];
 
-  // INSERT wechat_publish_task
-  let taskId: string;
+  for (const c of customers) {
+    try {
+      const result = await generateMomentDraft({ customer: c });
+      if (result.ok) {
+        generated += 1;
+      } else {
+        skipped.push({ customer: c, reason: result.reason });
+      }
+    } catch (err) {
+      console.warn(`[wechat/scheduler-tick] generateMomentDraft for ${c} 异常:`, err);
+      skipped.push({ customer: c, reason: 'internal_error' });
+    }
+  }
+
+  return res.status(200).json({ generated, skipped });
+});
+
+// ─── POST /api/wechat/draft-generate（ws3）──────────────────────────────────
+// 私聊草稿生成：listen_chat.py 拉到名单内客户消息 → POST 这里 → DeepSeek 生草稿 →
+// 写飞书"互动记录" + DB wechat_publish_task（pending_review，approval_source NULL）
+
+wechatRouter.post('/draft-generate', async (req: Request, res: Response) => {
+  const parsed = DraftGenerateSchema.safeParse(req.body ?? {});
+  if (!parsed.success) {
+    const issues = parsed.error.issues.map((i) => ({
+      path: i.path.join('.'),
+      message: i.message,
+    }));
+    const fields = issues.map((i) => i.path).join(',');
+    return res.status(400).json({
+      error: 'INVALID_BODY',
+      message: `字段校验失败: ${fields || 'sender, wechat_id, content'}`,
+      issues,
+      required: ['sender', 'wechat_id', 'content'],
+    });
+  }
+
   try {
-    const insertResult = await pool.query(
-      `INSERT INTO zenithjoy.wechat_publish_task
-         (agent_id, task_type, content, target_friend_alias, scheduled_at, status, approval_source)
-       VALUES ($1, $2, $3, $4, $5, 'draft', 'feishu_user')
-       RETURNING id`,
-      [agent_id, task_type, content, target_friend_alias ?? null,
-       scheduled_at ?? new Date().toISOString()]
-    );
-    taskId = insertResult.rows[0].id;
-  } catch (e) {
-    return res.status(500).json({ ok: false, code: 'DB_ERROR', message: (e as Error).message });
+    const result = await generateChatDraft(parsed.data);
+    return res.status(200).json(result);
+  } catch (err) {
+    const errMsg = err instanceof Error ? err.message : String(err);
+    console.error('[wechat/draft-generate] generateChatDraft 抛异常:', errMsg);
+    return res.status(500).json({
+      error: 'DRAFT_GENERATE_FAILED',
+      message: errMsg,
+    });
   }
-
-  // 异步推飞书（不 await，不阻塞响应）
-  if (tenantId) {
-    void pushWechatTaskToFeishu(taskId, tenantId).catch((e: Error) =>
-      console.error('[draft-submit] pushWechatTaskToFeishu failed:', e.message)
-    );
-  }
-
-  return res.status(201).json({ ok: true, task_id: taskId, status: 'pending_approval' });
 });

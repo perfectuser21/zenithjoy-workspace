@@ -1,0 +1,101 @@
+name: Golden Path 4 — Private AI Wechat Smoke
+
+# Path 4 客户私域 AI 接管 端到端 smoke
+# Notion Journey: https://www.notion.so/35ac40c2ba6381af-af97-e3bc8e3b0fb4
+# Sprint:         sprints/sprint-d-path4-private-ai-thin/sprint-contract.md
+#
+# 6 个 ws-level job (ws1..ws6) 独立跑各自短 smoke；
+# 最终 job golden-path-4-smoke 用 needs:[ws1..ws5] enforce 依赖（合同 r1 #14），
+# 跑完整 6-step golden-path-4-smoke.sh（CI 默认 REAL_PUBLISH=0 dryrun）。
+# Lead 自验在 rog-xian REAL_PUBLISH=1 真扫码 + 真发，由 lead-acceptance-check workflow 跑。
+
+on:
+  push:
+    branches:
+      - main
+      - 'cp-*'
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: golden-path-4-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ws1:
+    name: ws1 — DB schema + 路由 + Agent 协议 + LLM audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '20' }
+      - name: Run ws1 smoke
+        run: bash .github/workflows/scripts/smoke/path4-sprint-1-ws1-smoke.sh
+
+  ws2:
+    name: ws2 — qr_bind + 飞书 4 表 + Dashboard + 8 fixture
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '20' }
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.11' }
+      - name: Run ws2 smoke
+        run: bash .github/workflows/scripts/smoke/path4-sprint-1-ws2-smoke.sh
+
+  ws3:
+    name: ws3 — DeepSeek 私聊草稿 + listen_chat + A 路线护栏
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '20' }
+      - name: Run ws3 smoke
+        run: bash .github/workflows/scripts/smoke/path4-sprint-1-ws3-smoke.sh
+
+  ws4:
+    name: ws4 — 朋友圈草稿 + scheduler-tick
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '20' }
+      - name: Run ws4 smoke
+        run: bash .github/workflows/scripts/smoke/path4-sprint-1-ws4-smoke.sh
+
+  ws5:
+    name: ws5 — 飞书审批 + Python wechat_rpa 真发 + 频控
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '20' }
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.11' }
+      - name: Run ws5 smoke
+        run: bash .github/workflows/scripts/smoke/path4-sprint-1-ws5-smoke.sh
+
+  golden-path-4-smoke:
+    name: Golden Path 4 — Full 6-step E2E Smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # 合同 r1 #14：ws1..ws5 全绿才跑完整端到端
+    needs: [ws1, ws2, ws3, ws4, ws5]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '20' }
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.11' }
+      - name: Run full golden-path-4-smoke (REAL_PUBLISH=0 dryrun)
+        env:
+          REAL_PUBLISH: '0'
+          CI: 'true'
+        run: bash .github/workflows/scripts/smoke/golden-path-4-smoke.sh
