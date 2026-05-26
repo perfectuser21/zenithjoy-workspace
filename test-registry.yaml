@@ -847,6 +847,14 @@ tests:
 : TDD Red — smoke + auth-bridge + license.service tests)
     note: "PR-3 Dashboard better-auth API client 契约（5 个端点函数 + AuthError）"
 
+  - id: dashboard-authcontext-superadmin
+    path: apps/dashboard/src/contexts/__tests__/AuthContext.superadmin.test.tsx
+    type: unit
+    ci: L3
+    status: active
+    product: 中台认证
+    note: "regression: isSuperAdmin 只走 VITE_SUPER_ADMIN_EMAILS 邮箱白名单，飞书分支已移除（PR #484）"
+
   # ── PR-C 积分基建（Credits Foundation） ─────────────────────────────────────
 
   - id: api-credits-service
