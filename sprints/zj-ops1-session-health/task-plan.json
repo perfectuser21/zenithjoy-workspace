@@ -1,0 +1,81 @@
+{
+  "initiative_id": "pending",
+  "journey_type": "user_facing",
+  "journey_type_reason": "涉及 apps/dashboard/src/pages/OperatorPage.tsx，核心路径从运营员打开 /operator 页面开始",
+  "tasks": [
+    {
+      "task_id": "ws1",
+      "title": "check-health.js 扩展：8×4 PLATFORMS + sendFeishuAlert + SKIP_HTTP_CHECK + PRD schema",
+      "scope": "扩展 PLATFORMS 数组至 35 条目（8平台×4账号+3 API key）；重构 checkPlatform 输出 schema 为 PRD 规范（platform/secretEnv/status/checkedAt/expiresAt JSON array）；status 枚举改为 ok/expired/invalid/missing；新增 sendFeishuAlert() 含 Promise.race 3s timeout；新增 SKIP_HTTP_CHECK 支持",
+      "dod": [
+        "[BEHAVIOR] SKIP_HTTP_CHECK=true 运行生成 JSON array，length=35",
+        "[BEHAVIOR] 每项 keys 完全等于 [\"checkedAt\",\"expiresAt\",\"platform\",\"secretEnv\",\"status\"]",
+        "[BEHAVIOR] status 仅含 ok/expired/invalid/missing（禁用 error/warning/skip）",
+        "[BEHAVIOR] sendFeishuAlert 含 Promise.race + 3000ms timeout",
+        "[ARTIFACT] scripts/sessions/check-health.js 含 35 个 secretEnv 定义"
+      ],
+      "files": ["scripts/sessions/check-health.js"],
+      "depends_on": [],
+      "complexity": "M",
+      "estimated_minutes": 45
+    },
+    {
+      "task_id": "ws2",
+      "title": "sync-from-xian-rog.sh 8×4 矩阵重构 + windows-task-scheduler.xml 新建",
+      "scope": "重构 sync-from-xian-rog.sh：sync_matrix 循环覆盖 8 平台 × MAIN/SUB_1/SUB_2/SUB_3 共 32 账号，SSH 失败 early return 不覆盖旧 Secret；新建 windows-task-scheduler.xml 含 3 种计划任务（2hr sync + 45min 视频号心跳 + 4hr 其他）+ 视频号 OnFailed trigger",
+      "dod": [
+        "[BEHAVIOR] 脚本含 KUAISHOU_MAIN/XIAOHONGSHU_MAIN 等 7 个非抖音平台 Secret 名",
+        "[BEHAVIOR] 脚本含 SUB_1/SUB_2/SUB_3 账号类型",
+        "[BEHAVIOR] XML 含 PT2H + PT45M + PT4H 三种触发器",
+        "[BEHAVIOR] XML 含 OnFailed/OnFailure trigger",
+        "[ARTIFACT] scripts/sessions/windows-task-scheduler.xml 文件存在"
+      ],
+      "files": [
+        "scripts/sessions/sync-from-xian-rog.sh",
+        "scripts/sessions/windows-task-scheduler.xml"
+      ],
+      "depends_on": ["ws1"],
+      "complexity": "M",
+      "estimated_minutes": 40
+    },
+    {
+      "task_id": "ws3",
+      "title": "Operator Dashboard Tab 1：OperatorPage.tsx 新建 + 路由注册",
+      "scope": "新建 apps/dashboard/src/pages/OperatorPage.tsx：8 平台行 × 4 账号列状态矩阵，每格显示 在线/离线/未配置 + 上次同步时间，is_operator 权限守卫（email 匹配 xuxiao21xx@icloud.com），\"立即同步\"按钮；navigation.config.ts 注册 /operator 路由",
+      "dod": [
+        "[BEHAVIOR] OperatorPage.tsx 含 8 个平台中文名",
+        "[BEHAVIOR] OperatorPage.tsx 含 MAIN/SUB_1/SUB_2/SUB_3 账号类型",
+        "[BEHAVIOR] OperatorPage.tsx 含 is_operator 守卫 + redirect/403 处理",
+        "[BEHAVIOR] OperatorPage.tsx 含 export default 可被路由加载",
+        "[ARTIFACT] apps/dashboard/src/pages/OperatorPage.tsx 文件存在"
+      ],
+      "files": [
+        "apps/dashboard/src/pages/OperatorPage.tsx",
+        "apps/dashboard/src/config/navigation.config.ts"
+      ],
+      "depends_on": ["ws2"],
+      "complexity": "M",
+      "estimated_minutes": 50
+    },
+    {
+      "task_id": "ws4",
+      "title": "CI session-health-check.yml 注入 35 Secrets + smoke 脚本 + e2e-verify.ps1",
+      "scope": "更新 .github/workflows/session-health-check.yml：env 段注入全部 35 个平台 Secret（DOUYIN_MAIN ~ WECOM_API_KEY）+ FEISHU_BOT_WEBHOOK；新建 .github/workflows/scripts/smoke/session-health-smoke.sh；新建 sprints/zj-ops1-session-health/e2e-verify.ps1",
+      "dod": [
+        "[BEHAVIOR] yml 含 ≥35 个 ${{ secrets.XXX }} 引用",
+        "[BEHAVIOR] yml 含 DOUYIN_MAIN 和 FEISHU_BOT_WEBHOOK",
+        "[BEHAVIOR] session-health-smoke.sh 含 SKIP_HTTP_CHECK 离线验证逻辑",
+        "[BEHAVIOR] e2e-verify.ps1 含 Playwright 调用指向 /operator",
+        "[ARTIFACT] .github/workflows/scripts/smoke/session-health-smoke.sh 存在且 ≥5 行"
+      ],
+      "files": [
+        ".github/workflows/session-health-check.yml",
+        ".github/workflows/scripts/smoke/session-health-smoke.sh",
+        "sprints/zj-ops1-session-health/e2e-verify.ps1"
+      ],
+      "depends_on": ["ws3"],
+      "complexity": "S",
+      "estimated_minutes": 30
+    }
+  ]
+}
