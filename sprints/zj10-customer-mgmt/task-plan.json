@@ -1,0 +1,81 @@
+{
+  "initiative_id": "pending",
+  "journey_type": "user_facing",
+  "journey_type_reason": "涉及 apps/dashboard/ 新页面（AdminCustomersPage + 两个子页面）+ 超管 UI 交互，E2E 走 windows_cloud Playwright",
+  "tasks": [
+    {
+      "task_id": "ws1",
+      "title": "后端 API — 新建 admin-customers 路由（3 个 GET 端点）",
+      "scope": "新建 apps/api/src/routes/admin-customers.ts 实现 /api/admin/customers、/api/admin/customers/platform-sessions、/api/admin/customers/publish-logs；在 app.ts 注册路由；使用 superAdminGuard 中间件",
+      "dod": [
+        "[BEHAVIOR] apps/api/src/routes/admin-customers.ts 存在，导出 adminCustomersRouter",
+        "[BEHAVIOR] 响应 schema 含 PRD 必填字段（tenant_id/email/license_status/platform_count/last_publish_at/session_id/expires_at/log_id/work_id/created_at），不含禁用字段名",
+        "[BEHAVIOR] superAdminGuard 中间件已使用，非超管返回 403",
+        "[BEHAVIOR] app.ts 注册了 /api/admin/customers 路由",
+        "[ARTIFACT] 路由文件存在且通过 TypeScript 编译"
+      ],
+      "files": [
+        "apps/api/src/routes/admin-customers.ts",
+        "apps/api/src/app.ts"
+      ],
+      "depends_on": [],
+      "complexity": "M",
+      "estimated_minutes": 45
+    },
+    {
+      "task_id": "ws2",
+      "title": "导航配置 + AdminCustomersPage 概览页",
+      "scope": "在 navigation.config.ts 新增「客户管理」NavGroup（requireSuperAdmin: true）+ pageComponents 映射；新建 AdminCustomersPage.tsx（表格展示 tenant_id/email/license_status/platform_count/last_publish_at，含 data-testid，处理 last_publish_at: null）",
+      "dod": [
+        "[BEHAVIOR] navigation.config.ts 含 /admin/customers NavItem + requireSuperAdmin + 「客户管理」label",
+        "[BEHAVIOR] AdminCustomersPage.tsx 存在，含 customers-table-row data-testid，调用 /api/admin/customers",
+        "[BEHAVIOR] 处理 last_publish_at: null 边界情况，不崩溃",
+        "[ARTIFACT] pageComponents 映射含 AdminCustomersPage 懒加载条目"
+      ],
+      "files": [
+        "apps/dashboard/src/config/navigation.config.ts",
+        "apps/dashboard/src/pages/AdminCustomersPage.tsx"
+      ],
+      "depends_on": ["ws1"],
+      "complexity": "M",
+      "estimated_minutes": 45
+    },
+    {
+      "task_id": "ws3",
+      "title": "AdminPlatformSessionsPage + AdminPublishLogsPage",
+      "scope": "新建 AdminPlatformSessionsPage.tsx（展示 session_id/platform/status/expires_at，data-testid=session-status，status 只含 active|expired）+ AdminPublishLogsPage.tsx（展示 log_id/work_id/platform/status/created_at，通过 useSearchParams 读 tenant_id 筛选）；pageComponents 加两个懒加载映射",
+      "dod": [
+        "[BEHAVIOR] AdminPlatformSessionsPage.tsx 存在，含 platform-sessions-table-row 和 session-status testid",
+        "[BEHAVIOR] status 值只渲染 active 或 expired，不含禁用值",
+        "[BEHAVIOR] AdminPublishLogsPage.tsx 存在，通过 tenant_id query param 筛选（不用禁用名）",
+        "[ARTIFACT] pageComponents 含 AdminPlatformSessionsPage 和 AdminPublishLogsPage 懒加载映射"
+      ],
+      "files": [
+        "apps/dashboard/src/pages/AdminPlatformSessionsPage.tsx",
+        "apps/dashboard/src/pages/AdminPublishLogsPage.tsx",
+        "apps/dashboard/src/config/navigation.config.ts"
+      ],
+      "depends_on": ["ws2"],
+      "complexity": "M",
+      "estimated_minutes": 45
+    },
+    {
+      "task_id": "ws4",
+      "title": "E2E Playwright 测试（windows_cloud）",
+      "scope": "新建 apps/dashboard/e2e/customer-management.spec.ts，4 个 test（概览/platform-sessions/publish-logs/403），使用 page.route() stub，包含 ≥ 4 次 page.screenshot()，验证所有 data-testid 和 PRD 字段名",
+      "dod": [
+        "[BEHAVIOR] spec 文件存在，含 ≥ 4 个 test",
+        "[BEHAVIOR] 使用 page.route() stub，适合 windows_cloud 干净 VM",
+        "[BEHAVIOR] 验证 tenant_id query param 正确传递（不用禁用名）",
+        "[BEHAVIOR] 包含 403 error path test 和 ≥ 4 次截图调用",
+        "[ARTIFACT] apps/dashboard/e2e/customer-management.spec.ts 文件存在"
+      ],
+      "files": [
+        "apps/dashboard/e2e/customer-management.spec.ts"
+      ],
+      "depends_on": ["ws3"],
+      "complexity": "S",
+      "estimated_minutes": 30
+    }
+  ]
+}
