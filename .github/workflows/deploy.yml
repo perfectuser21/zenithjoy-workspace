@@ -33,6 +33,7 @@ jobs:
           VITE_SKIP_AUTH=false
           ENVEOF
           echo "VITE_API_URL=${{ secrets.VPS_API_URL }}" >> apps/dashboard/.env.production
+          echo "VITE_SUPER_ADMIN_EMAILS=xuxiao21xx@icloud.com" >> apps/dashboard/.env.production
           echo "✅ .env.production created"
           cat apps/dashboard/.env.production
 
