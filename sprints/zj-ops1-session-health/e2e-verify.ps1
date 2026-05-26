@@ -1,5 +1,5 @@
 # e2e-verify.ps1 — Operator /operator 页面 E2E 验证
-# 策略：build + npx serve（轻量静态服务器，秒级就绪，避免 vite preview 端口绑定问题）
+# 策略：build + 内联 Node.js SPA server（无需额外 npm 包，直接 node 启动）
 
 param([string]$Port = "4173")
 
@@ -21,31 +21,47 @@ npm run build
 if ($LASTEXITCODE -ne 0) { Write-Error "build failed"; exit 1 }
 Write-Host "Build OK"
 
-# serve dist/ — SPA 模式（--single 把 404 路由到 index.html）
-Write-Host "-- starting serve"
-$server = Start-Process -FilePath "node" `
-  -ArgumentList (Get-ChildItem "node_modules\serve\build\main.js").FullName,"dist","--listen",$Port,"--single","--no-clipboard" `
-  -WorkingDirectory (Get-Location).Path -PassThru
-Write-Host "serve PID: $($server.Id)"
+# 内联 SPA HTTP server（纯 Node.js 内置，不依赖任何 npm 包）
+$distPath = (Join-Path (Get-Location).Path "dist") -replace '\\', '\\\\'
+$serverFile = Join-Path $env:TEMP "spa-server-$Port.js"
+Set-Content -Path $serverFile -Encoding UTF8 -Value @"
+const http = require('http'), fs = require('fs'), path = require('path');
+const dist = '$distPath';
+http.createServer((req, res) => {
+  let f = path.join(dist, req.url.split('?')[0]);
+  if (!fs.existsSync(f) || fs.statSync(f).isDirectory()) f = path.join(dist, 'index.html');
+  const mime = {'.html':'text/html','.js':'application/javascript','.css':'text/css',
+    '.json':'application/json','.png':'image/png','.ico':'image/x-icon',
+    '.woff2':'font/woff2','.svg':'image/svg+xml'};
+  const ct = mime[path.extname(f)] || 'application/octet-stream';
+  res.writeHead(200, {'Content-Type': ct});
+  fs.createReadStream(f).pipe(res);
+}).listen($Port, '127.0.0.1', () => console.log('SPA ready on $Port'));
+"@
 
-# 等端口就绪（最多 30 秒）
+$server = Start-Process -FilePath "node" -ArgumentList $serverFile -PassThru
+Write-Host "Server PID: $($server.Id)"
+
+# 等端口就绪（最多 20 秒）
 $ready = $false
-for ($i = 0; $i -lt 15; $i++) {
+for ($i = 0; $i -lt 10; $i++) {
   Start-Sleep 2
   try {
     $c = New-Object System.Net.Sockets.TcpClient
-    $c.Connect("127.0.0.1", [int]$Port)
-    $c.Close()
-    Write-Host "serve ready after $($i*2)s"
-    $ready = $true; break
+    $c.Connect("127.0.0.1", [int]$Port); $c.Close()
+    Write-Host "Server ready after $($i*2)s"; $ready = $true; break
   } catch {}
 }
-if (-not $ready) { Stop-Process -Id $server.Id -Force -EA SilentlyContinue; Write-Error "serve 未就绪"; exit 1 }
+if (-not $ready) {
+  Stop-Process -Id $server.Id -Force -EA SilentlyContinue
+  Remove-Item $serverFile -Force -EA SilentlyContinue
+  Write-Error "SPA server 未就绪"; exit 1
+}
 
-# Playwright 测试
+# Playwright 测试（写到 apps/dashboard 保证 require 路径正确）
 $base = "http://localhost:$Port"
 $testFile = Join-Path (Get-Location).Path "tmp-e2e-operator.js"
-@"
+Set-Content -Path $testFile -Encoding UTF8 -Value @"
 const { chromium } = require('@playwright/test');
 (async () => {
   const browser = await chromium.launch();
@@ -55,29 +71,28 @@ const { chromium } = require('@playwright/test');
   if (!resp || resp.status() >= 400) {
     console.error('FAIL: /operator status', resp ? resp.status() : 'null'); process.exit(1);
   }
-  console.log('✓ /operator 可达 status:', resp.status());
+  console.log('ok /operator status:', resp.status());
 
   const content = await page.content();
-  if (!content.includes('未授权') && !content.includes('Operator') && !content.includes('operator')) {
-    console.error('FAIL: OperatorPage 未渲染'); process.exit(1);
+  if (!content.includes('未授权') && !content.includes('operator') && !content.includes('Operator')) {
+    console.error('FAIL: OperatorPage not rendered'); process.exit(1);
   }
-  console.log('✓ OperatorPage 组件已渲染');
+  console.log('ok OperatorPage rendered');
   await browser.close();
 
-  // 源码验证 8 平台
   const fs = require('fs'), path = require('path');
   const src = fs.readFileSync(path.join('src','pages','OperatorPage.tsx'), 'utf8');
   const platforms = ['抖音','快手','小红书','视频号','头条','微博','知乎','公众号'];
   const missing = platforms.filter(p => !src.includes(p));
-  if (missing.length > 0) { console.error('FAIL: 源码缺平台:', missing.join(',')); process.exit(1); }
-  console.log('✓ 源码含 8 平台定义');
+  if (missing.length > 0) { console.error('FAIL: missing platforms:', missing.join(',')); process.exit(1); }
+  console.log('ok 8 platforms in source');
   console.log('E2E PASS');
 })().catch(e => { console.error('FAIL:', e.message); process.exit(1); });
-"@ | Set-Content -Path $testFile -Encoding UTF8
+"@
 
 node $testFile
 $exitCode = $LASTEXITCODE
-Remove-Item -Path $testFile -Force -EA SilentlyContinue
+Remove-Item $testFile,$serverFile -Force -EA SilentlyContinue
 Stop-Process -Id $server.Id -Force -EA SilentlyContinue
 Pop-Location
 
