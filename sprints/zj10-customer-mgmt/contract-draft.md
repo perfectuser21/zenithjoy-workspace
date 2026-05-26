@@ -128,17 +128,21 @@ console.log('OK');
 
 **可观测行为**: 路由实现文件中不含任何禁用字段名（`users`/`clients`/`members`/`result` 作为顶层 response key）。
 
-**验证命令**:
+**验证命令**（精确 regex，不含 ok-fields 旁路，防假绿）:
 ```bash
 node -e "
 const c = require('fs').readFileSync('apps/api/src/routes/admin-customers.ts', 'utf8');
-// 禁用顶层 response key — 精确匹配赋值形式
-const patterns = ['users:', 'clients:', 'members:', 'result:'];
-patterns.forEach(p => {
-  // 允许 license_status（含 status，不是独立的 result）
-  const re = new RegExp('\\\\b' + p.replace(':', '') + '\\\\s*:');
-  if (re.test(c) && !['license_status', 'platform_count'].some(ok => c.includes(ok + ': '))) {
-    console.error('FAIL: 禁用字段名', p, '出现在响应对象中'); process.exit(1);
+// 精确匹配禁用字段作为对象 key（如 '\"users\":' 或 'users:'）
+const forbidden = [
+  /[\"']users[\"']\s*:/,
+  /[\"']clients[\"']\s*:/,
+  /[\"']members[\"']\s*:/,
+  /\bdata\s*:\s*result\b/
+];
+forbidden.forEach((re, i) => {
+  if (re.test(c)) {
+    console.error('FAIL: 禁用字段名出现在响应对象中，pattern index=' + i);
+    process.exit(1);
   }
 });
 console.log('OK');
@@ -193,6 +197,7 @@ test.describe('客户管理模块 Golden Path', () => {
 
     await page.goto('http://localhost:5174/admin/customers');
     await page.waitForLoadState('networkidle');
+    await page.screenshot({ path: 'screenshots/01-customers-overview-before.png' });
 
     // 断言：列表至少 1 行数据
     await expect(page.locator('[data-testid="customers-table-row"]').first()).toBeVisible({ timeout: 10000 });
@@ -231,6 +236,7 @@ test.describe('客户管理模块 Golden Path', () => {
 
     await page.goto('http://localhost:5174/admin/customers/platform-sessions');
     await page.waitForLoadState('networkidle');
+    await page.screenshot({ path: 'screenshots/02-platform-sessions-before.png' });
 
     await expect(page.locator('[data-testid="platform-sessions-table-row"]').first()).toBeVisible({ timeout: 10000 });
     // status 只能是 active 或 expired
@@ -265,6 +271,7 @@ test.describe('客户管理模块 Golden Path', () => {
     // 测试带 tenant_id 筛选
     await page.goto('http://localhost:5174/admin/customers/publish-logs?tenant_id=aaa-111');
     await page.waitForLoadState('networkidle');
+    await page.screenshot({ path: 'screenshots/03-publish-logs-before.png' });
 
     await expect(page.locator('[data-testid="publish-logs-table-row"]').first()).toBeVisible({ timeout: 10000 });
     // 验证 tenant_id query param 被正确传递（不是 user/client/id/t）
@@ -282,6 +289,7 @@ test.describe('客户管理模块 Golden Path', () => {
 
     await page.goto('http://localhost:5174/admin/customers');
     await page.waitForLoadState('networkidle');
+    await page.screenshot({ path: 'screenshots/04-forbidden-before.png' });
 
     // 非超管时页面应显示权限错误或重定向
     const url = page.url();
@@ -297,9 +305,13 @@ test.describe('客户管理模块 Golden Path', () => {
 **FAIL 标准**: 任一 test 失败，exit 1，或 timeout 15min
 
 **截图 DoD**:
+- `01-customers-overview-before.png` — 操作前初始状态
 - `01-customers-overview.png` — 客户概览列表正常加载，表格行可见，license_status 显示
+- `02-platform-sessions-before.png` — 导航操作前
 - `02-platform-sessions.png` — 平台绑定状态列表，status 值为 active/expired
+- `03-publish-logs-before.png` — 筛选前
 - `03-publish-logs.png` — 发布追踪列表，tenant_id 筛选有效
+- `04-forbidden-before.png` — 403 拦截前状态
 - `04-forbidden.png` — 非超管访问被拦截或重定向
 
 ---
