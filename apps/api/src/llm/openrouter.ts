@@ -31,7 +31,7 @@ function shouldForce5xx(): boolean {
 
 function clampMaxTokens(requested: number | undefined): number {
   const base = requested ?? 1000;
-  if (process.env.CI === 'true') return Math.min(base, 20);
+  if (process.env.CI === 'true') return Math.min(base, 20); // CI cap: max_tokens=20
   return base;
 }
 

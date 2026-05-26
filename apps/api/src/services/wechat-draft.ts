@@ -266,7 +266,7 @@ export async function generateChatDraft(
     const result = await callOpenRouter({
       prompt,
       model: 'deepseek/deepseek-chat',
-      request_purpose: 'wechat_chat_draft',
+      purpose: 'wechat_chat_draft',
     });
     aiContent = (result.content || '').trim();
     if (!aiContent) {
@@ -429,7 +429,7 @@ export async function generateMomentDraft(
     const result = await callOpenRouter({
       prompt,
       model: 'deepseek/deepseek-chat',
-      request_purpose: 'wechat_moment_draft',
+      purpose: 'wechat_moment_draft',
     });
     aiContent = (result.content || '').trim();
     if (!aiContent) {
