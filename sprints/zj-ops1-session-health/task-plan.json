@@ -1,0 +1,80 @@
+{
+  "initiative_id": "pending",
+  "journey_type": "user_facing",
+  "journey_type_reason": "PRD Golden Path 第5步包含 /operator 路由 + Dashboard UI（OperatorPage.tsx），涉及前端页面，属于 user_facing",
+  "tasks": [
+    {
+      "task_id": "ws1",
+      "title": "check-health.js 扩展 — 8 平台 + 3 API key + 飞书双推",
+      "scope": "在 PLATFORMS 数组添加 7 个新平台（快手/小红书/视频号/头条/微博/知乎/公众号）各 MAIN/SUB_1/2/3 条目；3 API key 检查（飞书/Notion/企微）；sendFeishuAlert 函数；SKIP_HTTP_CHECK 支持；Secret 命名统一为 _MAIN/_SUB_N 规范",
+      "dod": [
+        "[BEHAVIOR] PLATFORMS 数组含 7 个新平台（KUAISHOU/XIAOHONGSHU/SHIPINHAO/TOUTIAO/WEIBO/ZHIHU/WECHAT）Secret env var 引用",
+        "[BEHAVIOR] 含 sendFeishuAlert 函数 + FEISHU_BOT_WEBHOOK env var 引用",
+        "[BEHAVIOR] 含 SKIP_HTTP_CHECK=true 支持",
+        "[BEHAVIOR] SKIP_HTTP_CHECK=true 模式下运行 → session-health-report.json 含 ≥8 条平台记录",
+        "[ARTIFACT] check-health.js 修改完成，含飞书 webhook v2 API 调用"
+      ],
+      "files": ["scripts/sessions/check-health.js"],
+      "depends_on": [],
+      "complexity": "M",
+      "estimated_minutes": 45
+    },
+    {
+      "task_id": "ws2",
+      "title": "sync-from-xian-rog.sh 扩展 + windows-task-scheduler.xml 新建",
+      "scope": "重构 sync 脚本为 sync_matrix 循环（8 平台 × MAIN/SUB_1/2/3）；新建 Windows 计划任务 XML（2hr sync + 45min 视频号心跳 + 4hr 其他平台心跳）",
+      "dod": [
+        "[BEHAVIOR] sync 脚本含 KUAISHOU_MAIN 等 7 个新平台 MAIN Secret 引用",
+        "[BEHAVIOR] windows-task-scheduler.xml 存在且含 2 小时 sync 触发器",
+        "[BEHAVIOR] XML 含 45min 视频号心跳 + 4hr 其他平台心跳触发器",
+        "[ARTIFACT] windows-task-scheduler.xml 新建"
+      ],
+      "files": [
+        "scripts/sessions/sync-from-xian-rog.sh",
+        "scripts/sessions/windows-task-scheduler.xml"
+      ],
+      "depends_on": ["ws1"],
+      "complexity": "M",
+      "estimated_minutes": 35
+    },
+    {
+      "task_id": "ws3",
+      "title": "OperatorPage.tsx 新建 + navigation.config.ts 路由注册",
+      "scope": "新建 OperatorPage.tsx（is_operator 权限守卫 + 8平台×4账号状态矩阵 🟢🔴⚫ + 上次同步时间 + 手动触发同步按钮）；navigation.config.ts 添加 OperatorPage 懒加载映射和 /operator 路由",
+      "dod": [
+        "[BEHAVIOR] OperatorPage.tsx 存在且含 is_operator 权限判断",
+        "[BEHAVIOR] 含 8 平台状态矩阵 UI（遍历结构 + 状态灯显示）",
+        "[BEHAVIOR] navigation.config.ts 含 /operator 路由 + OperatorPage 映射",
+        "[BEHAVIOR] 含手动触发同步按钮",
+        "[ARTIFACT] OperatorPage.tsx 新建"
+      ],
+      "files": [
+        "apps/dashboard/src/pages/OperatorPage.tsx",
+        "apps/dashboard/src/config/navigation.config.ts"
+      ],
+      "depends_on": ["ws2"],
+      "complexity": "M",
+      "estimated_minutes": 50
+    },
+    {
+      "task_id": "ws4",
+      "title": "CI workflow 更新 + session-health-smoke.sh + e2e-windows.yml",
+      "scope": "session-health-check.yml env 段添加 36 个 Secret 引用 + FEISHU_BOT_WEBHOOK；新建 session-health-smoke.sh；新建 e2e-windows.yml（workflow_dispatch + windows-latest）",
+      "dod": [
+        "[BEHAVIOR] session-health-check.yml 含 KUAISHOU_MAIN 等新平台 Secret 引用 + FEISHU_BOT_WEBHOOK",
+        "[BEHAVIOR] session-health-smoke.sh 存在且含 ≥5 行实质内容 + exit 1 失败路径",
+        "[BEHAVIOR] e2e-windows.yml 存在且含 windows-latest + workflow_dispatch",
+        "[ARTIFACT] session-health-smoke.sh 新建",
+        "[ARTIFACT] e2e-windows.yml 新建"
+      ],
+      "files": [
+        ".github/workflows/session-health-check.yml",
+        ".github/workflows/scripts/smoke/session-health-smoke.sh",
+        ".github/workflows/e2e-windows.yml"
+      ],
+      "depends_on": ["ws3"],
+      "complexity": "S",
+      "estimated_minutes": 25
+    }
+  ]
+}
