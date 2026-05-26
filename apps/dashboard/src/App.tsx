@@ -21,13 +21,11 @@ import { InstanceProvider, useInstance } from './contexts/InstanceContext';
 import type { default as _FeishuBindTenant } from './pages/FeishuBindTenant';
 
 // 只有登录页需要静态导入
-import FeishuLogin from './pages/FeishuLogin';
 import SignIn from './pages/SignIn';
 import SignUp from './pages/SignUp';
 import ForgotPassword from './pages/ForgotPassword';
 import './App.css';
 
-// 公开访问的认证路径（未登录可见）— 邮箱+密码登录系列 + 飞书登录回退路由
 const PUBLIC_AUTH_PATHS = ['/login', '/signup', '/forgot-password'];
 
 function isAuthPath(pathname: string): boolean {
@@ -320,8 +318,6 @@ function AppContent() {
             <Route path="/login" element={<SignIn />} />
             <Route path="/signup" element={<SignUp />} />
             <Route path="/forgot-password" element={<ForgotPassword />} />
-            {/* 飞书登录保留作为内部主理人通道（双轨） */}
-            <Route path="/login/feishu" element={<FeishuLogin />} />
           </DynamicRouter>
         </div>
       </main>
