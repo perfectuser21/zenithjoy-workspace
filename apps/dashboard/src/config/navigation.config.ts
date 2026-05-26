@@ -24,6 +24,7 @@ import {
   Folder,
   Send,
   Scissors,
+  Building2,
   MonitorCheck,
 } from 'lucide-react';
 
@@ -86,6 +87,7 @@ export const autopilotPageComponents: Record<string, () => Promise<{ default: Co
   'LicensePage': () => import('../pages/LicensePage'),
   'AdminLicensePage': () => import('../pages/AdminLicensePage'),
   'AdminUsersPage': () => import('../pages/AdminUsersPage'),
+  'AdminCustomersPage': () => import('../pages/AdminCustomersPage'),
   // Walking Skeleton #1 — 客户首次成功路径（抖音版）
   'AgentDownloadPage': () => import('../pages/AgentDownloadPage'),
   'DouyinBindPage': () => import('../pages/DouyinBindPage'),
@@ -209,6 +211,14 @@ export const autopilotNavGroups: NavGroup[] = [
         featureKey: 'users-admin',
         requireSuperAdmin: true,
         component: 'AdminUsersPage',
+      },
+      {
+        path: '/admin/customers',
+        icon: Building2,
+        label: '客户管理',
+        featureKey: 'customers-admin',
+        requireSuperAdmin: true,
+        component: 'AdminCustomersPage',
       },
       // ============ Walking Skeleton #1 ============
       {
