@@ -1,0 +1,241 @@
+{
+  "initiative_id": "pending",
+  "sprint_name": "Path 4 客户私域 AI 接管 — Sprint 1（thin 第一刀）",
+  "journey_type": "user_facing",
+  "journey_type_reason": "起点客户在 Dashboard 点'绑定微信'按钮（apps/dashboard/），UI 起点最靠前；端到端从客户视角贯穿到飞书审批 + 真发朋友圈 + 真回私聊",
+  "journey_id": "35ac40c2-ba63-81af-af97-e3bc8e3b0fb4",
+  "journey_name": "客户私域 AI 接管",
+  "feature_ids": [
+    "35ac40c2-ba63-81eb-80c7-ca18ef2b1cc4",
+    "35ac40c2-ba63-8133-b428-d19746f0a0a5",
+    "35ac40c2-ba63-815f-8a09-cead86d72c81",
+    "35ac40c2-ba63-813c-b687-f6eebeca9aa6",
+    "35ac40c2-ba63-81a6-be2e-cae277e16ab8",
+    "35ac40c2-ba63-81f0-9503-db0d04a17adf"
+  ],
+  "lead_self_acceptance": {
+    "worker_machine": "rog-xian",
+    "tailscale_ip": "100.98.253.95",
+    "hostname": "XX-ROG",
+    "user": "asus",
+    "user_profile": "C:\\Users\\asus",
+    "agent_install_path": "C:\\Users\\asus\\zenithjoy-agent",
+    "evidence_path": ".agent-knowledge/path-4/lead-acceptance-path4-sprint-1.md",
+    "validation_mode": "LEAD_ACCEPTANCE_VALIDATION=strict on final merge"
+  },
+  "global_facts": {
+    "db_name": "cecelia",
+    "api_port": 5200,
+    "migration_dir": "apps/api/db/migrations/",
+    "migration_naming": "YYYYMMDD_HHMMSS_<name>.sql",
+    "openrouter_creds": "~/.credentials/openrouter.env",
+    "openrouter_model": "deepseek/deepseek-chat",
+    "wechat_pc_class": "Qt51514QWindowIcon"
+  },
+  "tasks": [
+    {
+      "task_id": "ws1",
+      "title": "DB schema + 中台路由 + Agent 协议扩展 + LLM audit + rog 部署脚本",
+      "scope": "新建 wechat_publish_task + llm_audit migration（含 approval_source CHECK 约束 enforce A 路线护栏）；中台 3 端点（qr-bind/draft-review-poll/scheduler-tick）zod 校验；zenithjoy-agent 扩展 wechat-rpa handler（NodeJS spawn Python 子进程）；OpenRouter DeepSeek 封装（含 OPENROUTER_FORCE_5XX 注入 + CI max_tokens=20）；rog 部署脚本（rsync agent 到 ~/zenithjoy-agent）",
+      "dod": [
+        "[ARTIFACT] migration 文件 20260508_<HHMMSS>_create_wechat_publish_task.sql 存在含 approval_source CHECK 约束",
+        "[ARTIFACT] migration 文件 20260508_<HHMMSS>_create_llm_audit.sql 存在",
+        "[ARTIFACT] apps/api/src/llm/openrouter.ts 存在含 OPENROUTER_FORCE_5XX + CI max_tokens 逻辑",
+        "[ARTIFACT] apps/api/src/routes/wechat.ts 存在含 3 端点 + zod schema",
+        "[ARTIFACT] services/agent/src/handlers/wechat-rpa.ts 存在含 spawn 调用",
+        "[ARTIFACT] scripts/deploy-agent-to-rog.sh 存在可执行",
+        "[BEHAVIOR] migration 跑后 wechat_publish_task 有 approval_source 字段 + CHECK 约束（INSERT system 被拒）",
+        "[BEHAVIOR] llm_audit 表 insert 后 SELECT 能取出 cost / model / tokens",
+        "[BEHAVIOR] POST /api/wechat/qr-bind {} → 400 + zod 错误含 'platform' 'agent_id' 字段名",
+        "[BEHAVIOR] POST /api/wechat/draft-review-poll?task_id=不存在 UUID → 404",
+        "[BEHAVIOR] OPENROUTER_FORCE_5XX=1 注入 → callOpenRouter 抛 5xx 错误",
+        "[BEHAVIOR] CI=true 环境下 callOpenRouter max_tokens ≤ 20",
+        "[BEHAVIOR] handler 端到端测试派 wechat_qr_bind dryrun task → 子进程退出 0 + receipt JSON 含 wechat_id"
+      ],
+      "files": [
+        "apps/api/db/migrations/20260508_<HHMMSS>_create_wechat_publish_task.sql",
+        "apps/api/db/migrations/20260508_<HHMMSS>_create_llm_audit.sql",
+        "apps/api/src/llm/openrouter.ts",
+        "apps/api/src/routes/wechat.ts",
+        "apps/api/src/index.ts",
+        "services/agent/src/handlers/wechat-rpa.ts",
+        "services/agent/src/index.ts",
+        "scripts/deploy-agent-to-rog.sh",
+        "tests/ws1/db-schema.test.ts",
+        "tests/ws1/openrouter-llm.test.ts",
+        "tests/ws1/wechat-rpa-handler.test.ts"
+      ],
+      "depends_on": [],
+      "complexity": "L",
+      "estimated_minutes": 90
+    },
+    {
+      "task_id": "ws2",
+      "title": "扫码绑个微 + 飞书 Bitable 4 表 + Dashboard 入口 + 8 fixture script",
+      "scope": "Python qr_bind.py 启动 PC 微信弹码（支持 --dryrun + --simulate-no-wechat）；feishu-bitable.ts 扩展 createPath4Bitables() 创建 4 张表（客户档案/营销画像/内容排期/互动记录）；Dashboard AgentMachines 加'绑定微信'按钮 + 通道下拉；8 个 fixture script (seed/count/get/update Bitable，全 --help)",
+      "dod": [
+        "[ARTIFACT] services/agent/wechat-rpa/qr_bind.py 存在",
+        "[ARTIFACT] apps/api/src/services/feishu-bitable.ts 含 createPath4Bitables + getPath4BitableSchema",
+        "[ARTIFACT] apps/dashboard/src/pages/AgentMachines.tsx 含'绑定微信'按钮 + 通道下拉",
+        "[ARTIFACT] apps/dashboard/e2e/wechat-bind-button.spec.ts 含 visible/happy/disabled 3 case",
+        "[ARTIFACT] 8 个 fixture script (seed-feishu-customer/seed-feishu-profile/seed-feishu-schedule/update-feishu-schedule/count-feishu-interaction/count-feishu-schedule/get-feishu-interaction/get-feishu-schedule)",
+        "[BEHAVIOR] qr_bind.py --dryrun 在 Mac mini 跑通 → JSON {ok:true, dryRun:true, wechat_id, nickname}",
+        "[BEHAVIOR] qr_bind.py --simulate-no-wechat → JSON {ok:false, reason:'wechat_not_running'}",
+        "[BEHAVIOR] createPath4Bitables() 真调飞书 API 创建 4 张表",
+        "[BEHAVIOR] getPath4BitableSchema() 4 表字段全（客户档案 5/营销画像 3/内容排期 5/互动记录 6）",
+        "[BEHAVIOR] Dashboard playwright 3 case 全过（绑微信按钮真渲染可见可点 + 触发 API + 企微 disabled）",
+        "[BEHAVIOR] 8 fixture script 全部支持 --help 显示 usage"
+      ],
+      "files": [
+        "services/agent/wechat-rpa/qr_bind.py",
+        "services/agent/wechat-rpa/__init__.py",
+        "services/agent/wechat-rpa/requirements.txt",
+        "apps/api/src/services/feishu-bitable.ts",
+        "apps/dashboard/src/pages/AgentMachines.tsx",
+        "apps/dashboard/src/api/wechat.api.ts",
+        "apps/dashboard/e2e/wechat-bind-button.spec.ts",
+        "apps/api/scripts/seed-feishu-customer.js",
+        "apps/api/scripts/seed-feishu-profile.js",
+        "apps/api/scripts/seed-feishu-schedule.js",
+        "apps/api/scripts/update-feishu-schedule.js",
+        "apps/api/scripts/count-feishu-interaction.js",
+        "apps/api/scripts/count-feishu-schedule.js",
+        "apps/api/scripts/get-feishu-interaction.js",
+        "apps/api/scripts/get-feishu-schedule.js",
+        "tests/ws2/qr-bind.test.ts",
+        "tests/ws2/feishu-4-tables.test.ts",
+        "tests/ws2/dashboard-bind-button.spec.ts"
+      ],
+      "depends_on": ["ws1"],
+      "complexity": "L",
+      "estimated_minutes": 120
+    },
+    {
+      "task_id": "ws3",
+      "title": "DeepSeek 私聊回复草稿 + wxauto4 监听 + 写飞书互动记录",
+      "scope": "Python listen_chat.py 真 import wxauto4（启动打印版本号到 stderr）+ 名单内过滤 + dryrun 注入；中台 /api/wechat/draft-generate 拼对话历史+营销画像调 OpenRouter → 写飞书互动记录（pending_review，approval_source NULL）；def 黑名单 enforce 不允许主动发起",
+      "dod": [
+        "[ARTIFACT] services/agent/wechat-rpa/listen_chat.py 存在含 wxauto4 真 import",
+        "[ARTIFACT] services/agent/wechat-rpa/__init__.py __all__ 严格 6 模块白名单",
+        "[ARTIFACT] apps/api/src/routes/wechat.ts 含 /api/wechat/draft-generate 端点",
+        "[BEHAVIOR] listen_chat.py --dryrun-print-version → stderr 含 'wxauto4 version: X.Y'",
+        "[BEHAVIOR] 名单内客户消息触发草稿生成 → 飞书互动记录 pending_review +1",
+        "[BEHAVIOR] 名单外好友消息丢弃 → 飞书互动记录行数不变",
+        "[BEHAVIOR] OPENROUTER_FORCE_5XX=1 → 飞书表写'AI 生成失败'占位 + pending_review",
+        "[BEHAVIOR] llm_audit 表含 DeepSeek 真调用记录（model=deepseek/deepseek-chat, cost > 0）",
+        "[BEHAVIOR] DB SELECT COUNT WHERE type='chat' AND approval_status NOT IN (pending_review,rate_limited,rejected) = 0",
+        "[BEHAVIOR] DB SELECT COUNT WHERE type='chat' AND approval_status='approved' AND approval_source IS NULL = 0",
+        "[BEHAVIOR] grep def (send_to|proactive_|outbound_|initiate_|start_chat_with_|cold_outreach_|first_message_) services/agent/wechat-rpa/ → 0 命中"
+      ],
+      "files": [
+        "services/agent/wechat-rpa/listen_chat.py",
+        "services/agent/wechat-rpa/__init__.py",
+        "apps/api/src/routes/wechat.ts",
+        "apps/api/src/services/wechat-draft.ts",
+        "tests/ws3/listen-chat.test.ts",
+        "tests/ws3/draft-generate.test.ts",
+        "tests/ws3/a-route-guardrail.test.ts"
+      ],
+      "depends_on": ["ws1", "ws2"],
+      "complexity": "M",
+      "estimated_minutes": 75
+    },
+    {
+      "task_id": "ws4",
+      "title": "DeepSeek 朋友圈文案草稿 + 写飞书内容排期 + 中台定时（server 时区）",
+      "scope": "中台 scheduler.ts cron '0 9 * * *'（server 时区，thin 注释）→ /api/wechat/scheduler-tick 对所有已绑微信且画像齐全客户生成朋友圈草稿；画像缺失 skipped(profile_missing)；当日重复 skipped(already_generated_today)；草稿 approval_source NULL（A 路线护栏起点）",
+      "dod": [
+        "[ARTIFACT] apps/api/src/services/scheduler.ts 含 cron '0 9 * * *' 注册 + 'thin: server 时区' 注释",
+        "[ARTIFACT] apps/api/src/routes/wechat.ts 含 /api/wechat/scheduler-tick",
+        "[BEHAVIOR] POST /api/wechat/scheduler-tick {force:true} 画像齐全客户 → generated:N (N≥1)",
+        "[BEHAVIOR] 飞书内容排期 pending_review 当日草稿 ≥ 1 行",
+        "[BEHAVIOR] LLM-as-judge 验证草稿对应画像（YES）",
+        "[BEHAVIOR] 画像未配置客户触发 → skipped:[{customer, reason:'profile_missing'}]",
+        "[BEHAVIOR] 同日重复触发 → skipped:[{customer, reason:'already_generated_today'}]",
+        "[BEHAVIOR] DB SELECT COUNT WHERE type='moment' AND approval_status='approved' AND approval_source IS NULL = 0"
+      ],
+      "files": [
+        "apps/api/src/services/scheduler.ts",
+        "apps/api/src/routes/wechat.ts",
+        "apps/api/src/services/wechat-draft.ts",
+        "tests/ws4/scheduler-tick.test.ts",
+        "tests/ws4/moment-draft.test.ts"
+      ],
+      "depends_on": ["ws1", "ws2"],
+      "complexity": "M",
+      "estimated_minutes": 60
+    },
+    {
+      "task_id": "ws5",
+      "title": "飞书审批轮询 + Python wechat_rpa 真发 + 频控保护（含并发安全）",
+      "scope": "中台 30s 一次轮询飞书 approved 草稿 → 写 DB approval_source='feishu_user' → 校验频控 → spawn task_dispatch；Python send_chat.py + send_moment.py（REAL_PUBLISH=0 走 unittest.mock.MagicMock，不真调 pyautogui）；rate_limiter.py SQLite + BEGIN IMMEDIATE 并发安全 + 硬编码上限",
+      "dod": [
+        "[ARTIFACT] services/agent/wechat-rpa/send_chat.py 存在",
+        "[ARTIFACT] services/agent/wechat-rpa/send_moment.py 存在",
+        "[ARTIFACT] services/agent/wechat-rpa/rate_limiter.py 存在含 BEGIN IMMEDIATE",
+        "[ARTIFACT] apps/api/src/services/feishu-poll.ts 存在含 30s 轮询",
+        "[BEHAVIOR] 飞书 approved → 5s 内 DB approval_source='feishu_user' 写入",
+        "[BEHAVIOR] REAL_PUBLISH=0 send_moment.py 输出 ok:true dryRun:true",
+        "[BEHAVIOR] python -m trace 验证 REAL_PUBLISH=0 时 pyautogui.click/write/press/hotkey 调用次数 = 0",
+        "[BEHAVIOR] 朋友圈 24h 频控生效（第 2 条 rate_limited + next_allowed_at）",
+        "[BEHAVIOR] 私聊分钟级频控（≤2/分钟）+ 天级频控（≤50/天）",
+        "[BEHAVIOR] rejected 草稿不派 task_dispatch（dispatch.log 无 record_id）",
+        "[BEHAVIOR] ~/.zenithjoy-agent/rate_limit.db 真持久化文件存在",
+        "[BEHAVIOR] 10 并发 ThreadPoolExecutor can_send 测试 → True 数 ≤ 上限（chat ≤ 2）",
+        "[BEHAVIOR] 主动发起新会话 def 黑名单 = 0"
+      ],
+      "files": [
+        "services/agent/wechat-rpa/send_chat.py",
+        "services/agent/wechat-rpa/send_moment.py",
+        "services/agent/wechat-rpa/rate_limiter.py",
+        "apps/api/src/services/feishu-poll.ts",
+        "apps/api/src/routes/wechat.ts",
+        "tests/ws5/send-moment-dryrun.test.ts",
+        "tests/ws5/rate-limiter.test.ts",
+        "tests/ws5/feishu-poll.test.ts"
+      ],
+      "depends_on": ["ws1", "ws2", "ws3", "ws4"],
+      "complexity": "L",
+      "estimated_minutes": 120
+    },
+    {
+      "task_id": "ws6",
+      "title": "golden-path-4-smoke.sh + Lead 自验 evidence 模板 + CI 防作弊校验",
+      "scope": "smoke 脚本端到端跑 6 step（每 step 真调 binary，REAL_PUBLISH=0 默认）；evidence 模板对齐 sprint-2.1a 风格 + 4 类真实证据强校验（cookie/wechat_id/sent_at/feishu_record_id）；CI workflow needs:[ws1..ws5] enforce 依赖；test-registry 注册 + lint-feature-has-smoke + lint-tdd-commit-order",
+      "dod": [
+        "[ARTIFACT] .github/workflows/scripts/smoke/golden-path-4-smoke.sh 存在",
+        "[ARTIFACT] .agent-knowledge/path-4/lead-acceptance-path4-sprint-1.md 存在含 4 类真实证据章节",
+        "[ARTIFACT] .github/workflows/golden-path-4-smoke.yml 含 needs:[ws1..ws5]",
+        "[ARTIFACT] test-registry.yaml 含 tests/ws1/ ... tests/ws6/",
+        "[BEHAVIOR] REAL_PUBLISH=0 bash golden-path-4-smoke.sh 全绿（exit 0）",
+        "[BEHAVIOR] smoke 输出 6 step 全 ✅",
+        "[BEHAVIOR] smoke binary 调用 (curl|psql|node|python|ssh|playwright) 出现 ≥ 6 次",
+        "[BEHAVIOR] smoke echo/printf 占位 ≤ 12 行",
+        "[BEHAVIOR] OPENROUTER_API_KEY=invalid → smoke 中途失败 exit ≠ 0",
+        "[BEHAVIOR] LEAD_ACCEPTANCE_VALIDATION=strict 时 evidence 4 类真实证据全部校验",
+        "[BEHAVIOR] lint-feature-has-smoke 含 'golden-path-4|path-4|wechat-rpa'",
+        "[BEHAVIOR] tdd-commit-order ws1-ws6 第 1 commit 是 test commit"
+      ],
+      "files": [
+        ".github/workflows/scripts/smoke/golden-path-4-smoke.sh",
+        ".github/workflows/golden-path-4-smoke.yml",
+        ".github/workflows/lint-feature-has-smoke.yml",
+        ".github/workflows/lint-tdd-commit-order.yml",
+        ".agent-knowledge/path-4/lead-acceptance-path4-sprint-1.md",
+        "test-registry.yaml",
+        "tests/ws6/smoke-shape.test.ts",
+        "tests/ws6/evidence-strict.test.ts"
+      ],
+      "depends_on": ["ws1", "ws2", "ws3", "ws4", "ws5"],
+      "complexity": "M",
+      "estimated_minutes": 60
+    }
+  ],
+  "summary": {
+    "total_tasks": 6,
+    "total_estimated_minutes": 525,
+    "estimated_dev_hours": 8.75,
+    "estimated_calendar_days": "4-5 days (含 GAN/CI/Lead 自验 buffer)",
+    "parallel_opportunity": "ws3 与 ws4 可并行实现（都依赖 ws1+ws2）"
+  }
+}
