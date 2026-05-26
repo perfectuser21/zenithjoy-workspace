@@ -106,6 +106,9 @@ export const autopilotPageComponents: Record<string, () => Promise<{ default: Co
   // FeatureDashboard and CommandCenter moved to Core features/business
   // Operator Dashboard — Session 状态矩阵（is_operator 权限守卫）
   'OperatorPage': () => import('../pages/OperatorPage'),
+  // zj10 Customer Mgmt — 平台绑定状态 + 发布日志
+  'AdminPlatformSessionsPage': () => import('../pages/AdminPlatformSessionsPage'),
+  'AdminPublishLogsPage': () => import('../pages/AdminPublishLogsPage'),
 };
 
 export const pageComponents = autopilotPageComponents;
