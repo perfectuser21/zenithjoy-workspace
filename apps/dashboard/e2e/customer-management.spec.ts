@@ -93,8 +93,8 @@ test('/admin/customers 概览页加载并展示客户列表', async ({ page }) =
   const rowCount = await rows.count();
   expect(rowCount).toBeGreaterThanOrEqual(1);
 
-  // 验证 license_status 字段展示
-  await expect(page.getByText('active').first()).toBeVisible();
+  // 验证 license_status 字段展示（UI 用中文标签：有效/已过期）
+  await expect(page.getByText('有效').first()).toBeVisible();
 
   // ws4-03: 断言通过后截图
   await page.screenshot({ path: `${SCREENSHOT_DIR}/ws4-03-overview-asserted.png` });

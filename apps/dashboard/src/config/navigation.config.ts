@@ -350,6 +350,10 @@ export const additionalRoutes: RouteConfig[] = [
   // === Content Clipper 详情页 ===
   { path: '/clips/:id', component: 'ContentClipDetailPage', requireAuth: true },
 
+  // === 客户管理子页面（super-admin only）===
+  { path: '/admin/customers/platform-sessions', component: 'AdminPlatformSessionsPage', requireAuth: true, requireSuperAdmin: true },
+  { path: '/admin/customers/publish-logs', component: 'AdminPublishLogsPage', requireAuth: true, requireSuperAdmin: true },
+
 ];
 
 // ============ 辅助函数 ============
