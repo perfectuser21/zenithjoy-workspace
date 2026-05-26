@@ -34,6 +34,14 @@ echo "$RESP" | jq -e 'keys | sort | . == ["data","success","total"]' > /dev/null
 for F in users clients members result; do
   echo "$RESP" | jq -e "has(\"$F\") | not" > /dev/null || { echo "FAIL: 禁用字段 $F 出现"; exit 1; }
 done
+# 有数据时校验 data item 5 个字段及 license_status 合法值
+if echo "$RESP" | jq -e '.data | length > 0' > /dev/null 2>&1; then
+  for FIELD in tenant_id email license_status platform_count last_publish_at; do
+    echo "$RESP" | jq -e ".data[0] | has(\"$FIELD\")" > /dev/null || { echo "FAIL: data[0] 缺字段 $FIELD"; exit 1; }
+  done
+  echo "$RESP" | jq -e '.data[0].license_status | . == "active" or . == "expired" or . == "none"' > /dev/null \
+    || { echo "FAIL: license_status 值非法（须为 active|expired|none）"; exit 1; }
+fi
 echo "  ✅ PASS"
 
 # 3. GET /api/admin/customers/platform-sessions

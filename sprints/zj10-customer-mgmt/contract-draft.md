@@ -174,9 +174,8 @@ RESP_FILTERED=$(curl -sf "http://localhost:5200/api/admin/customers/publish-logs
 echo "$RESP_FILTERED" | jq -e '.success == true' || { echo "FAIL: 筛选响应 success 不为 true"; exit 1; }
 
 # 禁用 query 名返回 404 或 400（不被接受）
-BAD_CODE=$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:5200/api/admin/customers/publish-logs?user=abc")
-# 注：服务器应忽略未知 query 参数（返回 200），但不应有 req.query.user 逻辑分支
-# 至少验证 tenant_id 是功能性的 query param（实现使用 req.query.tenant_id 不是 req.query.user）
+# 禁用 query 名（user/client/id/t）由源码检查覆盖（BEHAVIOR 3 静态验证），运行时只验证 tenant_id 功能性
+# 服务器忽略未知 query 参数返回 200，源码不含 req.query.user 等禁用分支
 echo "✅ GET /api/admin/customers/publish-logs 验证通过"
 ```
 
