@@ -106,21 +106,20 @@ $devProcess = Start-Process -FilePath "cmd.exe" `
     -PassThru -WorkingDirectory $dashboardPath `
     -RedirectStandardOutput $viteOut -RedirectStandardError $viteErr
 
-# Poll TCP until vite is listening (max 60s)
+# Poll until vite is listening — Test-NetConnection handles localhost→::1 (IPv6) on Windows
 Write-Host "Waiting for vite on :5173 ..."
 $ready = $false
 for ($i = 1; $i -le 60; $i++) {
     Start-Sleep -Seconds 1
-    $tcp = New-Object System.Net.Sockets.TcpClient
-    try { $tcp.Connect("127.0.0.1", 5173); $ready = $true; $tcp.Close(); break }
-    catch { try { $tcp.Close() } catch {} }
+    $conn = Test-NetConnection -ComputerName "localhost" -Port 5173 -WarningAction SilentlyContinue -ErrorAction SilentlyContinue
+    if ($conn -and $conn.TcpTestSucceeded) { $ready = $true; Write-Host "Vite ready after ${i}s"; break }
 }
 if (-not $ready) {
     Write-Host "=== vite stdout ===" ; if (Test-Path $viteOut) { Get-Content $viteOut | Select-Object -Last 50 }
     Write-Host "=== vite stderr ===" ; if (Test-Path $viteErr) { Get-Content $viteErr | Select-Object -Last 50 }
     Write-Error "Vite did not start within 60s"; exit 1
 }
-Write-Host "Dev server PID: $($devProcess.Id) ready after ${i}s"
+Write-Host "Dev server PID: $($devProcess.Id)"
 
 Pop-Location
 
