@@ -1,0 +1,8 @@
+# Path 4 Sprint 1 ws2 — wechat-rpa Python 依赖（Windows 客户机执行）
+# Mac mini 开发期不安装也能跑 --dryrun（qr_bind.py import 守卫降级）
+
+wxauto4>=39.0.0
+pyautogui>=0.9.54
+pyperclip>=1.8.2
+pywin32>=306; sys_platform == "win32"
+requests>=2.31.0

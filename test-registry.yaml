@@ -2242,3 +2242,108 @@ agent_suite:
   type: unit
   count: 19
   note: "Agent 服务单元测试（handlers/publishers/load-config），services/agent npm test"
+
+  # ── Path 4 Sprint 1 ws1 — DB schema + 中台路由 + Agent 协议 + LLM audit ──────────
+  - id: path4-sprint-1-ws1-db-schema
+    path: apps/api/tests/ws1/db-schema.test.ts
+    ci: L4
+    note: "Path 4 Sprint 1 ws1 — wechat_publish_task + llm_audit migration schema + approval_source CHECK 约束（A 路线护栏）"
+  - id: path4-sprint-1-ws1-openrouter-llm
+    path: apps/api/tests/llm/openrouter.test.ts
+    note: "Path 4 Sprint 1 ws1 — OpenRouter DeepSeek 封装 + OPENROUTER_FORCE_5XX 注入 + CI max_tokens=20 cap"
+  - id: path4-sprint-1-ws1-wechat-routes
+    path: apps/api/tests/routes/wechat.test.ts
+    product: 私域运营
+    note: "Path 4 Sprint 1 ws1 — /api/wechat 3 端点 zod schema 校验（qr-bind/draft-review-poll/scheduler-tick）"
+  - id: path4-sprint-1-ws1-wechat-rpa-handler
+    path: apps/api/tests/ws1/wechat-rpa-handler.test.ts
+    note: "Path 4 Sprint 1 ws1 — wechat-rpa.ts handler spawn Python 子进程 + dryrun receipt"
+  # ── Path 4 Sprint 1 ws2 — qr_bind 完整版 + 飞书 4 表 + Dashboard 入口 + 8 fixture ──
+  - id: path4-sprint-1-ws2-qr-bind
+    path: apps/api/tests/ws2/qr-bind.test.ts
+    ci: L4
+    note: "Path 4 Sprint 1 ws2 — qr_bind.py 完整版 + __init__.py __all__ + 占位 stub + requirements.txt（合同 RED，vitest 不跑由 sprint-evaluator 直接 spawn）"
+  - id: path4-sprint-1-ws2-feishu-fixtures
+    path: apps/api/tests/scripts/feishu-fixtures.test.ts
+    status: active
+    note: "Path 4 Sprint 1 ws2 — 8 个飞书 fixture script --help 契约（spawn node）"
+  - id: path4-sprint-1-ws2-agent-machines-page
+    path: apps/dashboard/src/pages/__tests__/AgentMachines.test.tsx
+    status: active
+    note: "Path 4 Sprint 1 ws2 — Dashboard AgentMachines 绑定微信按钮 + 通道下拉（个微/企微 disabled）BEHAVIOR"
+  - id: path4-sprint-1-ws2-wechat-api
+    path: apps/dashboard/src/api/__tests__/wechat.api.test.ts
+    status: active
+    note: "Path 4 Sprint 1 ws2 — Dashboard 微信 API client postWechatQrBind 契约"
+  - id: path4-sprint-1-ws2-wechat-bind-e2e
+    path: apps/dashboard/e2e/wechat-bind-button.spec.ts
+    type: e2e
+    ci: L4
+    note: "Path 4 Sprint 1 ws2 — Dashboard 绑微信按钮 Playwright e2e（visible/happy/disabled 3 case）"
+
+  # ── Path 4 Sprint 1 ws3 — DeepSeek 私聊草稿 + listen_chat + A 路线护栏 ──────────
+  - id: path4-sprint-1-ws3-wechat-draft-service
+    path: apps/api/tests/services/wechat-draft.test.ts
+    status: active
+    note: "Path 4 Sprint 1 ws3 — generateChatDraft service：名单内+1 / 名单外拒 / 5xx fallback 占位 + DB pending_review approval_source NULL"
+  - id: path4-sprint-1-ws3-listen-chat
+    path: apps/api/tests/ws3/listen-chat.test.ts
+    ci: L4
+    note: "Path 4 Sprint 1 ws3 — listen_chat.py 真 import wxauto4 + --dryrun-print-version + --inject-message dryrun（合同 RED，vitest 不跑）"
+  - id: path4-sprint-1-ws3-draft-generate
+    path: apps/api/tests/ws3/draft-generate.test.ts
+    ci: L4
+    note: "Path 4 Sprint 1 ws3 — /api/wechat/draft-generate 端点 + wechat-draft.ts 静态契约（合同 RED）"
+  - id: path4-sprint-1-ws3-a-route-guardrail
+    path: apps/api/tests/ws3/a-route-guardrail.test.ts
+    type: integration
+    ci: L4
+    note: "Path 4 Sprint 1 ws3 — A 路线护栏：approval_status pending_review + approval_source NULL + def 黑名单 0 命中（合同 RED）"
+  - id: path4-sprint-1-ws4-scheduler-service
+    path: apps/api/tests/services/scheduler.test.ts
+    status: active
+    note: "Path 4 Sprint 1 ws4 — scheduler.ts cron '0 9 * * *' + thin server 时区 + triggerSchedulerTick → fetch /api/wechat/scheduler-tick"
+  - id: path4-sprint-1-ws4-a-route-guardrail
+    path: apps/api/tests/ws4/a-route-guardrail.test.ts
+    ci: L4
+    status: pending-ci
+    note: "Path 4 Sprint 1 ws4 — A 路线护栏：generateMomentDraft 存在 + type='moment' + 当日去重 + scheduler cron 静态契约（合同 RED）"
+  # ── Path 4 Sprint 1 ws5 — 飞书审批轮询 + Python wechat_rpa 真发 + 频控 ──────────
+  - id: path4-sprint-1-ws5-feishu-poll-service
+    path: apps/api/tests/services/feishu-poll.test.ts
+    note: "Path 4 Sprint 1 ws5 — feishu-poll.ts pollOnce 飞书 approved → DB approval_source='feishu_user' / rejected 不派 / 频控超限写 rate_limited（mock CI 跑）"
+  - id: path4-sprint-1-ws5-send-moment-dryrun
+    path: apps/api/tests/ws5/send-moment-dryrun.test.ts
+    ci: L4
+    status: pending-ci
+    note: "Path 4 Sprint 1 ws5 — send_moment.py / send_chat.py REAL_PUBLISH=0 dryrun + python -m trace 验证 pyautogui 0 调用（合同 RED）"
+  - id: path4-sprint-1-ws5-rate-limiter
+    path: apps/api/tests/ws5/rate-limiter.test.ts
+    ci: L4
+    status: pending-ci
+    note: "Path 4 Sprint 1 ws5 — rate_limiter.py BEGIN IMMEDIATE + ~/.zenithjoy-agent/rate_limit.db + 朋友圈 24h / 私聊分钟级 频控 + 10 并发（合同 RED）"
+  - id: path4-sprint-1-ws5-feishu-poll-static
+    path: apps/api/tests/ws5/feishu-poll.test.ts
+    type: integration
+    ci: L4
+    status: pending-ci
+    note: "Path 4 Sprint 1 ws5 — feishu-poll.ts 静态契约：pollOnce/startFeishuPoll/stopFeishuPoll + 30s 周期 + UPDATE approval_source='feishu_user' + 调用 dispatchTask（合同 RED）"
+  # ── Path 4 Sprint 1 ws6 — golden-path-4-smoke + evidence + CI 防作弊 ────────────
+  - id: path4-sprint-1-ws6-smoke-shape
+    path: apps/api/tests/ws6/smoke-shape.test.ts
+    type: integration
+    ci: L4
+    status: pending-ci
+    note: "Path 4 Sprint 1 ws6 — golden-path-4-smoke.sh 文件形态契约：6 step 标记 + 真调 binary ≥ 6 次 + echo 占位 ≤ 12 行（合同 RED）"
+  - id: path4-sprint-1-ws6-evidence-strict
+    path: apps/api/tests/ws6/evidence-strict.test.ts
+    type: integration
+    ci: L4
+    status: pending-ci
+    note: "Path 4 Sprint 1 ws6 — Lead 自验 evidence 模板 LEAD_ACCEPTANCE_VALIDATION=skip/strict 切换 + 4 类真实证据校验（合同 RED）"
+  - id: path4-sprint-1-ws6-ci-workflow
+    path: apps/api/tests/ws6/ci-workflow.test.ts
+    type: integration
+    ci: L4
+    status: pending-ci
+    note: "Path 4 Sprint 1 ws6 — golden-path-4-smoke.yml needs:[ws1..ws5] + test-registry ws1-ws6 注册 + lint-feature-has-smoke.yml Path 4 关键字（合同 RED）"

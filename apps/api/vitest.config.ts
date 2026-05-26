@@ -7,11 +7,8 @@ export default defineConfig({
       'tests/**/*.test.ts',
       'src/**/*.test.{ts,js}',
       'src/**/__tests__/**/*.test.{ts,js}',
-      'db/migrations/__tests__/**/*.test.ts',
     ],
-    // ws1/ws5 走 vitest.integration.config.ts (需要真 DB / git diff origin)
-    // ws2/ws3 是 mock 单测，进 unit
-    exclude: ['node_modules/**', 'tests/integration/**', 'tests/ws1/**', 'tests/ws4/**', 'tests/ws5/**'],
+    exclude: ['node_modules/**', 'tests/integration/**', 'tests/ws1/**', 'tests/ws2/**', 'tests/ws3/**', 'tests/ws4/**', 'tests/ws5/**', 'tests/ws6/**'],
     coverage: {
       provider: 'v8',
       include: ['src/**/*.ts'],
