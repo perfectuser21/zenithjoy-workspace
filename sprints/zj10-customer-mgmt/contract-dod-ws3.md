@@ -48,6 +48,17 @@ target_environment: windows_cloud
 
 ---
 
+## Red Evidence（TDD 红色证明 — 实现前必须失败）
+
+```bash
+npx vitest run sprints/zj10-customer-mgmt/tests/ws3/ --reporter=verbose 2>&1 | grep -E "Tests|failed"
+# 实际输出（已验证 2026-05-26）：
+# Test Files  1 failed (1)
+# Tests  12 failed (12)
+```
+
+---
+
 ## 假绿自查
 
 - BEHAVIOR 1：`AdminPlatformSessionsPage.tsx` 不存在 → `readFileSync` 抛异常 → FAIL ✅

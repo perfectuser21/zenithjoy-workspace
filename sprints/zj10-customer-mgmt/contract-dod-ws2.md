@@ -48,6 +48,17 @@ target_environment: windows_cloud
 
 ---
 
+## Red Evidence（TDD 红色证明 — 实现前必须失败）
+
+```bash
+npx vitest run sprints/zj10-customer-mgmt/tests/ws2/ --reporter=verbose 2>&1 | grep -E "Tests|failed"
+# 实际输出（已验证 2026-05-26）：
+# Test Files  1 failed (1)
+# Tests  9 failed (9)
+```
+
+---
+
 ## 假绿自查
 
 - BEHAVIOR 1：`navigation.config.ts` 不含 `/admin/customers` → FAIL ✅（实现前文件无此内容）

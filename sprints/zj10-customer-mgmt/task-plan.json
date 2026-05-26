@@ -6,13 +6,15 @@
     {
       "task_id": "ws1",
       "title": "后端 API — 新建 admin-customers 路由（3 个 GET 端点）",
-      "scope": "新建 apps/api/src/routes/admin-customers.ts 实现 /api/admin/customers、/api/admin/customers/platform-sessions、/api/admin/customers/publish-logs；在 app.ts 注册路由；使用 superAdminGuard 中间件",
+      "scope": "新建 apps/api/src/routes/admin-customers.ts 实现 /api/admin/customers、/api/admin/customers/platform-sessions、/api/admin/customers/publish-logs；在 app.ts 注册路由；使用 superAdminGuard 中间件（curl oracle：GET /api/admin/customers 返回 {success:true, data:[], total:0}，schema keys=[data,success,total]，禁用字段 users/clients/members/result 不出现）",
       "dod": [
-        "[BEHAVIOR] apps/api/src/routes/admin-customers.ts 存在，导出 adminCustomersRouter",
-        "[BEHAVIOR] 响应 schema 含 PRD 必填字段（tenant_id/email/license_status/platform_count/last_publish_at/session_id/expires_at/log_id/work_id/created_at），不含禁用字段名",
-        "[BEHAVIOR] superAdminGuard 中间件已使用，非超管返回 403",
-        "[BEHAVIOR] app.ts 注册了 /api/admin/customers 路由",
-        "[ARTIFACT] 路由文件存在且通过 TypeScript 编译"
+        "[BEHAVIOR] curl -sf localhost:5200/api/admin/customers 返回 HTTP 200 + success:true + data:array + total:number",
+        "[BEHAVIOR] jq -e 'keys | sort | . == [\"data\",\"success\",\"total\"]' 通过（schema 完整性）",
+        "[BEHAVIOR] 禁用字段 users/clients/members/result 不在响应顶层 keys（jq -e 'has(\"users\") | not' 等 4 条）",
+        "[BEHAVIOR] 非超管（X-Feishu-User-Id: not-an-admin）访问返回 HTTP 403",
+        "[BEHAVIOR] curl -sf localhost:5200/api/admin/customers/platform-sessions 返回 HTTP 200",
+        "[BEHAVIOR] curl -sf localhost:5200/api/admin/customers/publish-logs?tenant_id=... 返回 HTTP 200",
+        "[ARTIFACT] apps/api/src/routes/admin-customers.ts 存在，export const adminCustomersRouter"
       ],
       "files": [
         "apps/api/src/routes/admin-customers.ts",
@@ -29,8 +31,9 @@
       "dod": [
         "[BEHAVIOR] navigation.config.ts 含 /admin/customers NavItem + requireSuperAdmin + 「客户管理」label",
         "[BEHAVIOR] AdminCustomersPage.tsx 存在，含 customers-table-row data-testid，调用 /api/admin/customers",
-        "[BEHAVIOR] 处理 last_publish_at: null 边界情况，不崩溃",
-        "[ARTIFACT] pageComponents 映射含 AdminCustomersPage 懒加载条目"
+        "[BEHAVIOR] 处理 last_publish_at: null 边界情况，不崩溃（含 null 处理逻辑）",
+        "[BEHAVIOR] pageComponents 含 AdminCustomersPage 懒加载映射 + filterNavGroups 仍正常",
+        "[ARTIFACT] AdminCustomersPage.tsx 文件存在，不含禁用字段名 users/clients/members"
       ],
       "files": [
         "apps/dashboard/src/config/navigation.config.ts",
@@ -46,8 +49,9 @@
       "scope": "新建 AdminPlatformSessionsPage.tsx（展示 session_id/platform/status/expires_at，data-testid=session-status，status 只含 active|expired）+ AdminPublishLogsPage.tsx（展示 log_id/work_id/platform/status/created_at，通过 useSearchParams 读 tenant_id 筛选）；pageComponents 加两个懒加载映射",
       "dod": [
         "[BEHAVIOR] AdminPlatformSessionsPage.tsx 存在，含 platform-sessions-table-row 和 session-status testid",
-        "[BEHAVIOR] status 值只渲染 active 或 expired，不含禁用值",
-        "[BEHAVIOR] AdminPublishLogsPage.tsx 存在，通过 tenant_id query param 筛选（不用禁用名）",
+        "[BEHAVIOR] status 渲染逻辑只含 active 或 expired，不含禁用值（valid/ok/inactive）",
+        "[BEHAVIOR] AdminPublishLogsPage.tsx 存在，通过 tenant_id query param 筛选（req.query.tenant_id，不用禁用名）",
+        "[BEHAVIOR] useSearchParams（或等价 API）读取 URL tenant_id 参数并传递给 API",
         "[ARTIFACT] pageComponents 含 AdminPlatformSessionsPage 和 AdminPublishLogsPage 懒加载映射"
       ],
       "files": [
@@ -62,12 +66,13 @@
     {
       "task_id": "ws4",
       "title": "E2E Playwright 测试（windows_cloud）",
-      "scope": "新建 apps/dashboard/e2e/customer-management.spec.ts，4 个 test（概览/platform-sessions/publish-logs/403），使用 page.route() stub，包含 ≥ 4 次 page.screenshot()，验证所有 data-testid 和 PRD 字段名",
+      "scope": "新建 apps/dashboard/e2e/customer-management.spec.ts，4 个 test（概览/platform-sessions/publish-logs/403），使用 page.route() stub，包含 ≥ 8 次 page.screenshot()，验证所有 data-testid 和 PRD 字段名",
       "dod": [
-        "[BEHAVIOR] spec 文件存在，含 ≥ 4 个 test",
-        "[BEHAVIOR] 使用 page.route() stub，适合 windows_cloud 干净 VM",
-        "[BEHAVIOR] 验证 tenant_id query param 正确传递（不用禁用名）",
-        "[BEHAVIOR] 包含 403 error path test 和 ≥ 4 次截图调用",
+        "[BEHAVIOR] spec 文件存在，含 ≥ 4 个 test 覆盖 Golden Path 全程",
+        "[BEHAVIOR] 使用 page.route() stub（适合 windows_cloud 干净 VM，不依赖真实后端）",
+        "[BEHAVIOR] publish-logs test 验证 tenant_id query param 正确传递（不用禁用名 user/client/id/t）",
+        "[BEHAVIOR] 403 error path test 存在，验证非超管访问被拦截",
+        "[BEHAVIOR] ≥ 8 次 page.screenshot() 调用（关键操作前后各一）",
         "[ARTIFACT] apps/dashboard/e2e/customer-management.spec.ts 文件存在"
       ],
       "files": [
