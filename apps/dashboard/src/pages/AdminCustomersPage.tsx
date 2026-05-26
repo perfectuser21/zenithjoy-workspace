@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '../contexts/AuthContext';
+import { adminFetch } from '../lib/admin-fetch';
 
 interface CustomerRow {
   tenant_id: string;
@@ -15,8 +16,8 @@ interface CustomersResponse {
   total: number;
 }
 
-async function fetchCustomers(): Promise<CustomersResponse> {
-  const res = await fetch('/api/admin/customers', { credentials: 'include' });
+async function fetchCustomers(email?: string): Promise<CustomersResponse> {
+  const res = await adminFetch('/api/admin/customers', email);
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   return res.json();
 }
@@ -37,11 +38,11 @@ const LICENSE_LABEL: Record<string, string> = {
 };
 
 export default function AdminCustomersPage() {
-  const { isSuperAdmin } = useAuth();
+  const { isSuperAdmin, user } = useAuth();
 
   const { data, isLoading } = useQuery<CustomersResponse>({
     queryKey: ['admin-customers'],
-    queryFn: fetchCustomers,
+    queryFn: () => fetchCustomers(user?.email),
     enabled: isSuperAdmin,
   });
 

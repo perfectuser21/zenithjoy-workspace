@@ -19,6 +19,11 @@ function parseAdminIds(): string[] {
   return raw.split(',').map((s) => s.trim()).filter(Boolean);
 }
 
+function parseAdminEmails(): string[] {
+  const raw = process.env.ADMIN_EMAILS ?? '';
+  return raw.split(',').map((s) => s.trim().toLowerCase()).filter(Boolean);
+}
+
 function extractInternalToken(req: Request): string {
   const auth = req.headers.authorization || '';
   if (auth.startsWith('Bearer ')) {
@@ -35,7 +40,7 @@ export function superAdminGuard(req: Request, res: Response, next: NextFunction)
   const headerVal = req.headers['x-feishu-user-id'];
   const feishuId = typeof headerVal === 'string' ? headerVal.trim() : '';
 
-  // 路径 1：用户身份
+  // 路径 1a：飞书用户身份
   if (feishuId) {
     const adminIds = parseAdminIds();
     if (adminIds.includes(feishuId)) {
@@ -46,10 +51,25 @@ export function superAdminGuard(req: Request, res: Response, next: NextFunction)
     res.status(403).json({
       success: false,
       data: null,
-      error: {
-        code: 'FORBIDDEN',
-        message: '需要 super-admin 权限',
-      },
+      error: { code: 'FORBIDDEN', message: '需要 super-admin 权限' },
+      timestamp: new Date().toISOString(),
+    });
+    return;
+  }
+
+  // 路径 1b：better-auth 邮箱用户身份（X-User-Email header）
+  const emailHeader = req.headers['x-user-email'];
+  const userEmail = typeof emailHeader === 'string' ? emailHeader.trim().toLowerCase() : '';
+  if (userEmail) {
+    const adminEmails = parseAdminEmails();
+    if (adminEmails.includes(userEmail)) {
+      next();
+      return;
+    }
+    res.status(403).json({
+      success: false,
+      data: null,
+      error: { code: 'FORBIDDEN', message: '需要 super-admin 权限' },
       timestamp: new Date().toISOString(),
     });
     return;
