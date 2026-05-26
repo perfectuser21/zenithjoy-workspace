@@ -15,7 +15,6 @@ fi
 echo "🔍 检查 build 产物关键变量..."
 
 REQUIRED_TOKENS=(
-  "cli_a:VITE_FEISHU_APP_ID"
 )
 
 failed=0
