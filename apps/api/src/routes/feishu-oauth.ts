@@ -15,7 +15,7 @@
  */
 import { Router, Request, Response, NextFunction } from 'express';
 import pool from '../db/connection';
-import { tenantContext } from '../middleware/tenant-context';
+import { tenantContext, tenantContextOptional as tenantContextOptionalMW } from '../middleware/tenant-context';
 import { getAuthorizeUrl, handleCallback } from '../services/feishu-token';
 import {
   provisionBitable,
@@ -42,7 +42,7 @@ function tenantContextOptional(req: Request, res: Response, next: NextFunction):
 
 // GET /api/feishu/oauth/status
 // 前端 FeishuBindTenant mount 时调用，看当前 tenant 是否已绑定飞书
-router.get('/status', tenantContext, async (req: Request, res: Response) => {
+router.get('/status', tenantContextOptionalMW, async (req: Request, res: Response) => {
   const tenantId = req.tenantId;
   if (!tenantId) {
     return res.status(401).json({

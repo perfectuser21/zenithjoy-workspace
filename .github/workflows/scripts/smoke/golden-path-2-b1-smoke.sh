@@ -12,7 +12,7 @@ set -euo pipefail
 [ -z "${SMOKE_TOKEN:-}" ] && { echo "FAIL: SMOKE_TOKEN 未设置（_smoke helper 必需）"; exit 99; }
 
 echo "=== Step 1: 建 tenant + 飞书 binding seed ==="
-TENANT_ID=$(psql "$DB" -t -A -c "INSERT INTO zenithjoy.tenants (name, license_key, plan) VALUES ('smoke-b1-${RANDOM}', 'smoke-b1-key-${RANDOM}', 'free') RETURNING id" | tr -d ' ')
+TENANT_ID=$(psql "$DB" -At -c "INSERT INTO zenithjoy.tenants (name, license_key, plan) VALUES ('smoke-b1-${RANDOM}', 'smoke-b1-key-${RANDOM}', 'free') RETURNING id" | grep -oE '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}' | head -1)
 psql "$DB" -c "INSERT INTO zenithjoy.tenant_feishu_bindings (tenant_id, tenant_access_token, expires_at, app_token, table_id_lead_profile, table_id_target_videos, table_id_leads, bound_at) VALUES ('$TENANT_ID', 'fake_t_b1', NOW()+interval'1 hour', 'bascn_b1_app', 'tbl_b1_profile', 'tbl_b1_videos', 'tbl_b1_leads', NOW())" >/dev/null
 
 # 飞书绑定状态查询
@@ -21,7 +21,7 @@ curl -fsS -X GET "$API_BASE/api/feishu/oauth/status" -H "X-Tenant-Id: $TENANT_ID
   || { echo "FAIL Step 1: 飞书 binding 状态非 bound"; exit 1; }
 
 echo "=== Step 2: 派 burner 绑定 task ==="
-AGENT_ID=$(psql "$DB" -t -A -c "INSERT INTO zenithjoy.agents (tenant_id, machine_id, hostname, status) VALUES ('$TENANT_ID', 'mac-b1-${RANDOM}', 'rog-test', 'online') RETURNING id" | tr -d ' ')
+AGENT_ID=$(psql "$DB" -At -c "INSERT INTO zenithjoy.agents (tenant_id, agent_id, hostname, status) VALUES ('$TENANT_ID', 'mac-b1-${RANDOM}', 'rog-test', 'online') RETURNING id" | grep -oE '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}' | head -1)
 RESP=$(curl -fsS -X POST "$API_BASE/api/agent/burner/qr-bind" \
   -H "Content-Type: application/json" \
   -d "{\"tenant_id\":\"$TENANT_ID\",\"agent_id\":\"$AGENT_ID\",\"account_label\":\"装修小号1\"}")

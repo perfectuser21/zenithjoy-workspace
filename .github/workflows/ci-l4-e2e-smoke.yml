@@ -153,7 +153,8 @@ jobs:
 
       - name: Smoke — GET /api/topics (empty OK)
         run: |
-          RESP=$(curl -s http://localhost:5200/api/topics)
+          RESP=$(curl -s http://localhost:5200/api/topics \
+            -H "X-Internal-Token: $ZENITHJOY_INTERNAL_TOKEN")
           echo "$RESP"
           echo "$RESP" | grep -q '"success":true' || (echo "FAIL: /api/topics missing success:true"; exit 1)
 
@@ -162,6 +163,7 @@ jobs:
         run: |
           RESP=$(curl -s -X POST http://localhost:5200/api/topics \
             -H 'Content-Type: application/json' \
+            -H "X-Internal-Token: $ZENITHJOY_INTERNAL_TOKEN" \
             -d '{"title":"CI 冒烟选题","priority":1,"status":"已通过"}')
           echo "$RESP"
           TOPIC_ID=$(echo "$RESP" | python3 -c "import sys,json;d=json.load(sys.stdin);print(d['data']['id'])")
@@ -173,13 +175,15 @@ jobs:
 
       - name: Smoke — GET /api/pacing-config
         run: |
-          RESP=$(curl -s http://localhost:5200/api/pacing-config)
+          RESP=$(curl -s http://localhost:5200/api/pacing-config \
+            -H "X-Internal-Token: $ZENITHJOY_INTERNAL_TOKEN")
           echo "$RESP"
           echo "$RESP" | grep -q '"daily_limit"' || (echo "FAIL: pacing-config missing daily_limit"; exit 1)
 
       - name: Smoke — GET /api/pipelines/running (should be empty)
         run: |
-          RESP=$(curl -s http://localhost:5200/api/pipelines/running)
+          RESP=$(curl -s http://localhost:5200/api/pipelines/running \
+            -H "X-Internal-Token: $ZENITHJOY_INTERNAL_TOKEN")
           echo "$RESP"
           echo "$RESP" | grep -q '"success":true' || (echo "FAIL: /api/pipelines/running missing success:true"; exit 1)
           echo "$RESP" | grep -q '"items":\[\]' || (echo "FAIL: items should be empty array"; exit 1)
@@ -235,6 +239,10 @@ jobs:
         env:
           API_BASE: http://localhost:5200
           ADMIN_FEISHU_ID: ou_admin_smoke_999
+        run: |
+          chmod +x .github/workflows/scripts/smoke/credits-smoke.sh
+          bash .github/workflows/scripts/smoke/credits-smoke.sh
+
       - name: Smoke — Admin Users 超管会员管理 (PR-A)
         env:
           API_BASE: http://localhost:5200
@@ -245,8 +253,6 @@ jobs:
           PGPASSWORD: cecelia
           PGDATABASE: cecelia
         run: |
-          chmod +x .github/workflows/scripts/smoke/credits-smoke.sh
-          bash .github/workflows/scripts/smoke/credits-smoke.sh
           chmod +x .github/workflows/scripts/smoke/admin-users-smoke.sh
           bash .github/workflows/scripts/smoke/admin-users-smoke.sh
 
@@ -365,6 +371,16 @@ jobs:
           chmod +x apps/api/scripts/step6-dispatch-helper.sh
           chmod +x .github/workflows/scripts/smoke/step6-dispatch-ws2-smoke.sh
           bash .github/workflows/scripts/smoke/step6-dispatch-ws2-smoke.sh
+
+      - name: Smoke — ZJ2 keyword-search (POST /api/acquisition/keyword-search)
+        env:
+          API_PORT: "5200"
+          DB: postgresql://cecelia:cecelia@localhost:5432/cecelia
+          PGPASSWORD: cecelia
+          TEST_TOKEN: smoke-test-token
+        run: |
+          chmod +x .github/workflows/scripts/smoke/keyword-search-smoke.sh
+          bash .github/workflows/scripts/smoke/keyword-search-smoke.sh
 
       - name: Stop fake-feishu-server
         if: always()

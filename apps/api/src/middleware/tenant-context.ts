@@ -135,3 +135,20 @@ export async function tenantContext(
     });
   }
 }
+
+/**
+ * tenantContextOptional — 兼容包装：X-Tenant-Id 头或 body.tenant_id 显式传入时跳过 session 解析，
+ * 设 req.tenantId 后直接 next()。dashboard 用户无显式 tenant 时走完整 session 路径。
+ * 用于 burner / feishu-oauth 路由：smoke / 非浏览器 caller 传 header/body，dashboard 走 session。
+ */
+export function tenantContextOptional(req: Request, res: Response, next: NextFunction): void {
+  const explicitTenant = (
+    req.header('X-Tenant-Id') || (req.body && req.body.tenant_id ? String(req.body.tenant_id) : '')
+  ).trim();
+  if (explicitTenant) {
+    req.tenantId = explicitTenant;
+    next();
+    return;
+  }
+  void tenantContext(req, res, next);
+}

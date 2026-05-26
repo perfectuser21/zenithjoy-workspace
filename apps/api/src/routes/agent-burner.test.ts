@@ -28,6 +28,11 @@ vi.mock('../middleware/tenant-context', () => ({
     if (typeof t === 'string' && t.length > 0) req.tenantId = t;
     next();
   },
+  tenantContextOptional: (req: any, _res: any, next: any) => {
+    const t = req.headers['x-test-tenant-id'] || req.body?.tenant_id || '';
+    if (typeof t === 'string' && t.length > 0) req.tenantId = t;
+    next();
+  },
 }));
 vi.mock('../middleware/agent-context', () => ({
   agentContext: (req: any, res: any, next: any) => {

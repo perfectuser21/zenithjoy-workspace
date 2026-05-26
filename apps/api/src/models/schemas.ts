@@ -39,7 +39,7 @@ export const updateFieldSchema = createFieldSchema.partial();
 
 // PublishLog schemas
 export const createPublishLogSchema = z.object({
-  work_id: z.string().uuid(),
+  work_id: z.string().uuid().optional(),
   platform: z.enum(['douyin', 'xiaohongshu', 'toutiao', 'kuaishou', 'weibo', 'zhihu', 'channels']),
   platform_post_id: z.string().optional(),
   status: z.enum(['pending', 'publishing', 'published', 'failed']).optional(),
