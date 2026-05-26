@@ -126,8 +126,9 @@ export function getPageComponent(name: string) {
 // ============ 导航配置 ============
 
 export const autopilotNavGroups: NavGroup[] = [
+  // ─── 主功能 ───────────────────────────────────────────────────
   {
-    title: '',  // 无分组标题，扁平展示
+    title: '',
     items: [
       {
         path: '/',
@@ -193,11 +194,89 @@ export const autopilotNavGroups: NavGroup[] = [
         component: 'CompetitorResearchPage',
       },
       {
+        path: '/clips',
+        icon: Scissors,
+        label: '内容采集',
+        featureKey: 'content-clipper',
+        component: 'ContentClipperPage',
+      },
+      {
+        path: '/dashboard/leads',
+        icon: Target,
+        label: '获客 Leads',
+        featureKey: 'acquisition-leads',
+        component: 'LeadsPage',
+      },
+    ]
+  },
+
+  // ─── 设置 ─────────────────────────────────────────────────────
+  {
+    title: '设置',
+    items: [
+      {
+        path: '/dashboard/agent',
+        icon: Download,
+        label: '下载 Agent',
+        featureKey: 'ws1-agent-download',
+        component: 'AgentDownloadPage',
+      },
+      {
+        path: '/dashboard/platforms/douyin',
+        icon: Music2,
+        label: '抖音绑定',
+        featureKey: 'ws1-douyin-bind',
+        component: 'DouyinBindPage',
+      },
+      {
+        path: '/dashboard/douyin-burner-bind',
+        icon: KeyRound,
+        label: '绑抖音小号',
+        featureKey: 'douyinBurnerBind',
+        component: 'DouyinBurnerBindPage',
+      },
+      {
+        path: '/dashboard/folder',
+        icon: Folder,
+        label: '文件夹绑定',
+        featureKey: 'ws1-folder-bind',
+        component: 'FolderBindPage',
+      },
+      {
+        path: '/dashboard/feishu-bind',
+        icon: KeyRound,
+        label: '飞书绑定',
+        featureKey: 'feishuBind',
+        component: 'FeishuBindTenant',
+      },
+      {
+        path: '/dashboard/publish',
+        icon: Send,
+        label: '一键发布',
+        featureKey: 'ws1-publish',
+        component: 'PublishPage',
+      },
+      {
         path: '/license',
         icon: KeyRound,
         label: 'License',
         featureKey: 'license',
         component: 'LicensePage',
+      },
+    ]
+  },
+
+  // ─── 管理员（仅 superadmin 可见）────────────────────────────────
+  {
+    title: '管理员',
+    items: [
+      {
+        path: '/operator',
+        icon: MonitorCheck,
+        label: 'Session 健康监控',
+        featureKey: 'operator-dashboard',
+        requireSuperAdmin: true,
+        component: 'OperatorPage',
       },
       {
         path: '/admin/license',
@@ -223,77 +302,8 @@ export const autopilotNavGroups: NavGroup[] = [
         requireSuperAdmin: true,
         component: 'AdminCustomersPage',
       },
-      // ============ Walking Skeleton #1 ============
-      {
-        path: '/dashboard/agent',
-        icon: Download,
-        label: '下载 Agent',
-        featureKey: 'ws1-agent-download',
-        component: 'AgentDownloadPage',
-      },
-      {
-        path: '/dashboard/platforms/douyin',
-        icon: Music2,
-        label: '抖音绑定',
-        featureKey: 'ws1-douyin-bind',
-        component: 'DouyinBindPage',
-      },
-      {
-        path: '/dashboard/folder',
-        icon: Folder,
-        label: '文件夹绑定',
-        featureKey: 'ws1-folder-bind',
-        component: 'FolderBindPage',
-      },
-      {
-        path: '/dashboard/publish',
-        icon: Send,
-        label: '一键发布',
-        featureKey: 'ws1-publish',
-        component: 'PublishPage',
-      },
-      // ============ Path 2 Sprint A — 飞书集成 ============
-      {
-        path: '/dashboard/feishu-bind',
-        icon: KeyRound,
-        label: '绑飞书',
-        featureKey: 'feishuBind',
-        component: 'FeishuBindTenant',
-      },
-      // ============ Content Clipper — 内容采集 ============
-      {
-        path: '/clips',
-        icon: Scissors,
-        label: '内容采集',
-        featureKey: 'content-clipper',
-        component: 'ContentClipperPage',
-      },
-      // ============ zj2 Smart Acquisition — 获客 Leads ============
-      {
-        path: '/dashboard/leads',
-        icon: Target,
-        label: '获客 Leads',
-        featureKey: 'acquisition-leads',
-        component: 'LeadsPage',
-      },
-      // ============ Path 2 Sprint B-1 — 抖音小号绑定 + 评论抓取 ============
-      {
-        path: '/dashboard/douyin-burner-bind',
-        icon: KeyRound,
-        label: '绑抖音小号',
-        featureKey: 'douyinBurnerBind',
-        component: 'DouyinBurnerBindPage',
-      },
-      // ============ Operator Dashboard — Session 状态矩阵（仅 operator） ============
-      {
-        path: '/operator',
-        icon: MonitorCheck,
-        label: '运营员控制台',
-        featureKey: 'operator-dashboard',
-        component: 'OperatorPage',
-      },
     ]
-  }
+  },
 ];
 
 // ============ 额外路由配置（不在菜单显示） ============
