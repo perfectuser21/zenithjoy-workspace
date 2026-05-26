@@ -60,7 +60,7 @@ if (-not $ready) {
 
 # Playwright 测试（写到 apps/dashboard 保证 require 路径正确）
 $base = "http://localhost:$Port"
-$testFile = Join-Path (Get-Location).Path "tmp-e2e-operator.js"
+$testFile = Join-Path (Get-Location).Path "tmp-e2e-operator.cjs"
 Set-Content -Path $testFile -Encoding UTF8 -Value @"
 const { chromium } = require('@playwright/test');
 (async () => {
