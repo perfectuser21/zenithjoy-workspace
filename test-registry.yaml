@@ -2108,6 +2108,38 @@ tests:
     product: 新媒体运营
     note: "ZJ Douyin Article Agent Port WS3 — version 1.1.26 bump + build-install-pack.sh publishers 复制合同测试"
 
+  - id: zj-ops1-session-health-ws1
+    path: sprints/zj-ops1-session-health/tests/ws1/check-health.test.ts
+    type: unit
+    ci: L4
+    status: active
+    product: 新媒体运营
+    note: "ZJ Ops1 Session Health WS1 — check-health.js 全平台扩展（35条目 + PRD schema + sendFeishuAlert）合同测试"
+
+  - id: zj-ops1-session-health-ws2
+    path: sprints/zj-ops1-session-health/tests/ws2/sync-script.test.ts
+    type: unit
+    ci: L4
+    status: active
+    product: 新媒体运营
+    note: "ZJ Ops1 Session Health WS2 — sync-from-xian-rog.sh 同步脚本合同测试"
+
+  - id: zj-ops1-session-health-ws3
+    path: sprints/zj-ops1-session-health/tests/ws3/operator-page.test.ts
+    type: unit
+    ci: L4
+    status: active
+    product: 新媒体运营
+    note: "ZJ Ops1 Session Health WS3 — operator 页面 session 状态展示合同测试"
+
+  - id: zj-ops1-session-health-ws4
+    path: sprints/zj-ops1-session-health/tests/ws4/ci-session.test.ts
+    type: unit
+    ci: L4
+    status: active
+    product: 新媒体运营
+    note: "ZJ Ops1 Session Health WS4 — CI session 健康检查 workflow 合同测试"
+
 agent_suite:
   managed_by: services/agent/src/__tests__ + services/agent/publishers
   ci: L4
