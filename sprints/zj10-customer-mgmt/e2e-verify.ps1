@@ -95,8 +95,9 @@ if ($LASTEXITCODE -ne 0) {
 New-Item -ItemType Directory -Force -Path "screenshots" | Out-Null
 
 # Step 5: Start vite dev server in background
-Write-Host "Starting dashboard dev server (VITE_SKIP_AUTH=true)..."
+Write-Host "Starting dashboard dev server (VITE_SKIP_AUTH=true, mock super admin)..."
 $env:VITE_SKIP_AUTH = "true"
+$env:VITE_SUPER_ADMIN_FEISHU_IDS = "dev-user-001"
 $dashboardPath = (Get-Location).Path
 $viteOut = Join-Path $dashboardPath "vite-out.log"
 $viteErr = Join-Path $dashboardPath "vite-err.log"
