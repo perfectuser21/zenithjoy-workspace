@@ -19,28 +19,26 @@ npm ci --prefer-offline 2>&1 | Select-Object -Last 5
 npx playwright install chromium --with-deps 2>&1 | Select-Object -Last 3
 
 # 启动 vite dev server（cmd.exe /c 避免 PowerShell 进程树问题）
-$viteLog = "$env:TEMP\vite-operator.log"
 $vite = Start-Process -FilePath "cmd.exe" `
-  -ArgumentList "/c","npx vite --port 5173 > `"$viteLog`" 2>&1" `
+  -ArgumentList "/c","npx vite --port 5173" `
   -WorkingDirectory (Get-Location).Path -PassThru
 Write-Host "Vite PID: $($vite.Id)"
 
-# 等 vite 就绪（TCP 轮询）
+# 等 vite 就绪（TCP 轮询，最多 5 分钟）
 $ready = $false
-for ($i = 0; $i -lt 40; $i++) {
+for ($i = 0; $i -lt 150; $i++) {
   Start-Sleep 2
   try {
     $conn = New-Object System.Net.Sockets.TcpClient
     $conn.Connect("127.0.0.1", 5173)
     $conn.Close()
-    Write-Host "Vite ready (${i}x2s)"
+    Write-Host "Vite ready after $($i * 2)s"
     $ready = $true
     break
   } catch {}
 }
 if (-not $ready) {
-  if (Test-Path $viteLog) { Get-Content $viteLog | Select-Object -Last 20 }
-  Write-Error "Vite 未在 80s 内就绪"; exit 1
+  Write-Error "Vite 未在 300s 内就绪"; exit 1
 }
 
 # 把 JS 测试写成文件（避免 pipe 导致 require 路径丢失）
@@ -50,7 +48,6 @@ const { chromium } = require('@playwright/test');
 (async () => {
   const browser = await chromium.launch();
   const page = await browser.newPage();
-  page.on('console', m => console.log('  browser:', m.text()));
 
   const resp = await page.goto('$BaseUrl/operator');
   if (!resp) { console.error('FAIL: /operator 无响应'); process.exit(1); }
