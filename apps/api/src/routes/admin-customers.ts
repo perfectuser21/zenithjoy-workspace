@@ -15,7 +15,7 @@ function nowIso(): string {
 router.get('/', async (req: Request, res: Response) => {
   try {
     const countRes = await pool.query<{ total: number | string }>(
-      `SELECT count(*)::int AS total FROM tenants t`
+      `SELECT count(*)::int AS total FROM zenithjoy.tenants t`
     );
     const total = Number(countRes.rows[0]?.total ?? 0);
 
@@ -28,22 +28,24 @@ router.get('/', async (req: Request, res: Response) => {
     }>(`
       SELECT
         t.id AS tenant_id,
-        COALESCE(u.email, '') AS email,
+        COALESCE(l.customer_email, '') AS email,
         COALESCE(l.tier, 'none') AS license_status,
         COALESCE(ps.platform_count, 0) AS platform_count,
         pl.last_publish_at
-      FROM tenants t
-      LEFT JOIN "user" u ON u.id = t.owner_id
-      LEFT JOIN licenses l ON l.customer_id = t.owner_id AND l.revoked_at IS NULL
+      FROM zenithjoy.tenants t
+      LEFT JOIN zenithjoy.licenses l
+        ON l.tenant_id = t.id AND l.revoked_at IS NULL
       LEFT JOIN (
-        SELECT tenant_id, COUNT(*)::int AS platform_count
-        FROM agent_platform_sessions
-        GROUP BY tenant_id
+        SELECT a.tenant_id, COUNT(aps.id)::int AS platform_count
+        FROM zenithjoy.agents a
+        JOIN zenithjoy.agent_platform_sessions aps ON aps.agent_id = a.id
+        GROUP BY a.tenant_id
       ) ps ON ps.tenant_id = t.id
       LEFT JOIN (
-        SELECT tenant_id, MAX(created_at) AS last_publish_at
-        FROM publish_logs
-        GROUP BY tenant_id
+        SELECT w.tenant_id, MAX(pl2.created_at) AS last_publish_at
+        FROM zenithjoy.publish_logs pl2
+        JOIN zenithjoy.works w ON w.id = pl2.work_id
+        GROUP BY w.tenant_id
       ) pl ON pl.tenant_id = t.id
       ORDER BY t.created_at DESC
     `);
@@ -78,11 +80,14 @@ router.get('/platform-sessions', async (req: Request, res: Response) => {
     let where = '';
     if (tenant_id) {
       params.push(tenant_id);
-      where = `WHERE aps.tenant_id = $1`;
+      where = `WHERE a.tenant_id = $1`;
     }
 
     const countRes = await pool.query<{ total: number | string }>(
-      `SELECT count(*)::int AS total FROM agent_platform_sessions aps ${where}`,
+      `SELECT count(aps.id)::int AS total
+       FROM zenithjoy.agent_platform_sessions aps
+       JOIN zenithjoy.agents a ON a.id = aps.agent_id
+       ${where}`,
       params
     );
     const total = Number(countRes.rows[0]?.total ?? 0);
@@ -92,18 +97,14 @@ router.get('/platform-sessions', async (req: Request, res: Response) => {
       tenant_id: string;
       platform: string;
       status: string;
-      expires_at: string | null;
     }>(
       `SELECT
         aps.id AS session_id,
-        aps.tenant_id,
+        a.tenant_id,
         aps.platform,
-        CASE
-          WHEN aps.expires_at IS NULL OR aps.expires_at > NOW() THEN 'active'
-          ELSE 'expired'
-        END AS status,
-        aps.expires_at
-       FROM agent_platform_sessions aps
+        aps.status
+       FROM zenithjoy.agent_platform_sessions aps
+       JOIN zenithjoy.agents a ON a.id = aps.agent_id
        ${where}
        ORDER BY aps.created_at DESC`,
       params
@@ -113,8 +114,8 @@ router.get('/platform-sessions', async (req: Request, res: Response) => {
       session_id: r.session_id,
       tenant_id: r.tenant_id,
       platform: r.platform,
-      status: r.status,
-      expires_at: r.expires_at ?? null,
+      status: r.status === 'expired' ? 'expired' : 'active',
+      expires_at: null as string | null,
     }));
 
     return res.json({ success: true, data, total });
@@ -139,31 +140,35 @@ router.get('/publish-logs', async (req: Request, res: Response) => {
     let where = '';
     if (tenant_id) {
       params.push(tenant_id);
-      where = `WHERE pl.tenant_id = $1`;
+      where = `WHERE w.tenant_id = $1`;
     }
 
     const countRes = await pool.query<{ total: number | string }>(
-      `SELECT count(*)::int AS total FROM publish_logs pl ${where}`,
+      `SELECT count(pl.id)::int AS total
+       FROM zenithjoy.publish_logs pl
+       JOIN zenithjoy.works w ON w.id = pl.work_id
+       ${where}`,
       params
     );
     const total = Number(countRes.rows[0]?.total ?? 0);
 
     const rows = await pool.query<{
       log_id: string;
-      tenant_id: string;
-      work_id: string | null;
+      tenant_id: string | null;
+      work_id: string;
       platform: string | null;
       status: string | null;
       created_at: string;
     }>(
       `SELECT
         pl.id AS log_id,
-        pl.tenant_id,
+        w.tenant_id,
         pl.work_id,
         pl.platform,
         pl.status,
         pl.created_at
-       FROM publish_logs pl
+       FROM zenithjoy.publish_logs pl
+       JOIN zenithjoy.works w ON w.id = pl.work_id
        ${where}
        ORDER BY pl.created_at DESC`,
       params
@@ -171,8 +176,8 @@ router.get('/publish-logs', async (req: Request, res: Response) => {
 
     const data = rows.rows.map((r) => ({
       log_id: r.log_id,
-      tenant_id: r.tenant_id,
-      work_id: r.work_id ?? null,
+      tenant_id: r.tenant_id ?? null,
+      work_id: r.work_id,
       platform: r.platform ?? null,
       status: r.status ?? null,
       created_at: r.created_at,
