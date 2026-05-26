@@ -97,7 +97,7 @@ New-Item -ItemType Directory -Force -Path "screenshots" | Out-Null
 # Step 5: Start vite dev server in background
 Write-Host "Starting dashboard dev server (VITE_SKIP_AUTH=true)..."
 $env:VITE_SKIP_AUTH = "true"
-$devProcess = Start-Process -FilePath "npx" -ArgumentList "vite", "--port", "5174" -PassThru -WindowStyle Hidden
+$devProcess = Start-Process -FilePath "npx" -ArgumentList "vite", "--port", "5173" -PassThru -WindowStyle Hidden
 Start-Sleep -Seconds 15
 Write-Host "Dev server PID: $($devProcess.Id)"
 
