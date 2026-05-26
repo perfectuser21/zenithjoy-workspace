@@ -1,4 +1,4 @@
-# e2e-verify.ps1 — ZenithJoy Operator Dashboard E2E 验证脚本
+# e2e-verify.ps1 — ZenithJoy Operator Dashboard E2E 验证脚本 (ws4)
 # 目标：验证 /operator 页面（Session 健康状态矩阵）在 Windows runner 上正常渲染
 # 执行环境：GitHub Actions windows-latest runner（通过 e2e-windows.yml 触发）
 
