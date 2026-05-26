@@ -17,6 +17,8 @@ grep -qE "export[[:space:]]+(async[[:space:]]+)?function[[:space:]]+generateChat
   || { echo "FAIL: 缺 generateChatDraft export"; exit 1; }
 grep -qE "openrouter|callDeepSeek|chatCompletion" "$DRAFT" \
   || { echo "FAIL: wechat-draft.ts 未调 openrouter/DeepSeek"; exit 1; }
+node -e "const s=require('fs').readFileSync('$DRAFT','utf8'); if(!s.includes('generateChatDraft')) process.exit(1);" \
+  || { echo "FAIL: node 读取 wechat-draft.ts 校验失败"; exit 1; }
 echo "  PASS generateChatDraft + openrouter 调用"
 
 echo "=== ws3 Step 2: listen_chat.py 真 import wxauto4 ==="

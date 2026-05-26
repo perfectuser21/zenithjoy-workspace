@@ -46,6 +46,8 @@ grep -q "OPENROUTER_FORCE_5XX" "$LLM" \
   || { echo "FAIL: openrouter.ts 缺 OPENROUTER_FORCE_5XX 故障注入"; exit 1; }
 grep -qE "max_tokens.*20|20.*max_tokens" "$LLM" \
   || { echo "FAIL: openrouter.ts 缺 CI max_tokens=20 cap"; exit 1; }
+node -e "const s=require('fs').readFileSync('$LLM','utf8'); if(!s.includes('OPENROUTER_FORCE_5XX')||!s.includes('max_tokens')) process.exit(1);" \
+  || { echo "FAIL: node 读取 openrouter.ts 校验失败"; exit 1; }
 echo "  PASS LLM 封装 + 故障注入 + CI cap"
 
 echo "=== ws1 Step 5: deploy-agent-to-rog.sh ==="

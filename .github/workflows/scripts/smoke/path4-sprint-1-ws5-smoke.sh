@@ -40,6 +40,8 @@ echo "  PASS feishu-poll.ts UPDATE approval_source='feishu_user'"
 
 grep -q "dispatchTask" "$POLL_FILE" \
   || { echo "FAIL: feishu-poll.ts 未调 dispatchTask"; exit 1; }
+node -e "const s=require('fs').readFileSync('$POLL_FILE','utf8'); if(!s.includes('dispatchTask')||!s.includes('startFeishuPoll')) process.exit(1);" \
+  || { echo "FAIL: node 读取 feishu-poll.ts 校验失败"; exit 1; }
 echo "  PASS feishu-poll.ts 调 dispatchTask"
 
 # 禁 system / auto
