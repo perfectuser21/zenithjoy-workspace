@@ -26,8 +26,53 @@ jobs:
       - name: Run health check
         shell: bash
         env:
-          DOUYIN_COOKIES: ${{ secrets.DOUYIN_COOKIES }}
-          DOUYIN_COOKIES_BURNER: ${{ secrets.DOUYIN_COOKIES_BURNER }}
+          # 抖音 4 账号
+          DOUYIN_MAIN: ${{ secrets.DOUYIN_MAIN }}
+          DOUYIN_SUB_1: ${{ secrets.DOUYIN_SUB_1 }}
+          DOUYIN_SUB_2: ${{ secrets.DOUYIN_SUB_2 }}
+          DOUYIN_SUB_3: ${{ secrets.DOUYIN_SUB_3 }}
+          # 快手 4 账号
+          KUAISHOU_MAIN: ${{ secrets.KUAISHOU_MAIN }}
+          KUAISHOU_SUB_1: ${{ secrets.KUAISHOU_SUB_1 }}
+          KUAISHOU_SUB_2: ${{ secrets.KUAISHOU_SUB_2 }}
+          KUAISHOU_SUB_3: ${{ secrets.KUAISHOU_SUB_3 }}
+          # 小红书 4 账号
+          XIAOHONGSHU_MAIN: ${{ secrets.XIAOHONGSHU_MAIN }}
+          XIAOHONGSHU_SUB_1: ${{ secrets.XIAOHONGSHU_SUB_1 }}
+          XIAOHONGSHU_SUB_2: ${{ secrets.XIAOHONGSHU_SUB_2 }}
+          XIAOHONGSHU_SUB_3: ${{ secrets.XIAOHONGSHU_SUB_3 }}
+          # 视频号 4 账号
+          SHIPINHAO_MAIN: ${{ secrets.SHIPINHAO_MAIN }}
+          SHIPINHAO_SUB_1: ${{ secrets.SHIPINHAO_SUB_1 }}
+          SHIPINHAO_SUB_2: ${{ secrets.SHIPINHAO_SUB_2 }}
+          SHIPINHAO_SUB_3: ${{ secrets.SHIPINHAO_SUB_3 }}
+          # 头条 4 账号
+          TOUTIAO_MAIN: ${{ secrets.TOUTIAO_MAIN }}
+          TOUTIAO_SUB_1: ${{ secrets.TOUTIAO_SUB_1 }}
+          TOUTIAO_SUB_2: ${{ secrets.TOUTIAO_SUB_2 }}
+          TOUTIAO_SUB_3: ${{ secrets.TOUTIAO_SUB_3 }}
+          # 微博 4 账号
+          WEIBO_MAIN: ${{ secrets.WEIBO_MAIN }}
+          WEIBO_SUB_1: ${{ secrets.WEIBO_SUB_1 }}
+          WEIBO_SUB_2: ${{ secrets.WEIBO_SUB_2 }}
+          WEIBO_SUB_3: ${{ secrets.WEIBO_SUB_3 }}
+          # 知乎 4 账号
+          ZHIHU_MAIN: ${{ secrets.ZHIHU_MAIN }}
+          ZHIHU_SUB_1: ${{ secrets.ZHIHU_SUB_1 }}
+          ZHIHU_SUB_2: ${{ secrets.ZHIHU_SUB_2 }}
+          ZHIHU_SUB_3: ${{ secrets.ZHIHU_SUB_3 }}
+          # 公众号 4 账号
+          GONGZHONGHAO_MAIN: ${{ secrets.GONGZHONGHAO_MAIN }}
+          GONGZHONGHAO_SUB_1: ${{ secrets.GONGZHONGHAO_SUB_1 }}
+          GONGZHONGHAO_SUB_2: ${{ secrets.GONGZHONGHAO_SUB_2 }}
+          GONGZHONGHAO_SUB_3: ${{ secrets.GONGZHONGHAO_SUB_3 }}
+          # 3 个 API Key
+          FEISHU_API_KEY: ${{ secrets.FEISHU_API_KEY }}
+          NOTION_API_KEY: ${{ secrets.NOTION_API_KEY }}
+          WECOM_API_KEY: ${{ secrets.WECOM_API_KEY }}
+          # 飞书机器人双渠道告警
+          FEISHU_BOT_WEBHOOK: ${{ secrets.FEISHU_BOT_WEBHOOK }}
+          # 其他配置
           BARK_URL: https://api.day.app/QU7ktbzPJxZbNx9pEHcstW
           FORCE_NOTIFY: ${{ github.event.inputs.force_notify || 'false' }}
         run: |
