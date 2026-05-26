@@ -1,10 +1,7 @@
-contract_branch: cp-harness-propose-r3-9b8199e0
-workstream_index: 1
-sprint_dir: sprints/zj10-customer-mgmt
-
 ---
 skeleton: false
 journey_type: user_facing
+target_environment: windows_cloud
 ---
 # Contract DoD — Workstream 1: 后端 API 路由（3 个端点）
 
@@ -34,6 +31,8 @@ journey_type: user_facing
 > cd /workspace/apps/api && PORT=5200 npx tsx src/index.ts &
 > sleep 4  # 等待 server 就绪
 > ```
+> 实现前（路由未注册）：`curl -sf` 返回非 200 → exit 1 → **FAIL ✅（TDD Red）**
+> 实现后（路由已注册）：curl 返回 200 + jq 断言通过 → exit 0 → **PASS ✅**
 
 - [ ] [BEHAVIOR] GET /api/admin/customers 返回 HTTP 200 + success:true + data:array + total:number（核心schema）
   Test: manual:bash -c 'RESP=$(curl -sf http://localhost:5200/api/admin/customers) || { echo "FAIL: 端点未返回 200（路由未注册）"; exit 1; }; echo "$RESP" | jq -e ".success == true" || { echo "FAIL: success"; exit 1; }; echo "$RESP" | jq -e ".data | type == \"array\"" || { echo "FAIL: data"; exit 1; }; echo "$RESP" | jq -e ".total | type == \"number\"" || { echo "FAIL: total"; exit 1; }; echo OK'
@@ -58,3 +57,35 @@ journey_type: user_facing
 - [ ] [BEHAVIOR] vitest 单元测试套件全部通过（12 项 — schema/路由/鉴权/禁用字段/app.ts注册）
   Test: manual:bash -c 'cd /workspace && npx vitest run sprints/zj10-customer-mgmt/tests/ws1/admin-customers-routes.test.ts --reporter=verbose 2>&1 | tee /tmp/ws1-result.log; grep -q "12 passed" /tmp/ws1-result.log && echo OK || { echo "FAIL: vitest 有失败 tests"; grep -E "FAIL|failed" /tmp/ws1-result.log; exit 1; }'
   期望: OK (12 passed)
+
+---
+
+## Red Evidence（TDD 红色证明 — 实现前必须失败）
+
+```bash
+# 在 apps/api/src/routes/admin-customers.ts 不存在时运行：
+npx vitest run sprints/zj10-customer-mgmt/tests/ws1/ --reporter=verbose 2>&1 | grep -E "Tests|failed"
+# 实际输出（已验证 2026-05-26）：
+# Test Files  1 failed (1)
+# Tests  12 failed (12)
+```
+
+**curl 红证据**（route 未注册时）：
+```bash
+# 实现前 curl 返回 404（Brain 通用 404 handler），exit code 22 → BEHAVIOR 命令 FAIL
+curl -sf http://localhost:5200/api/admin/customers
+# exit code: 22（HTTP 404）← TDD Red ✅
+```
+
+---
+
+## 假绿自查（v7.12 — Bug 10 check）
+
+每条 BEHAVIOR 的"如果 ws1 一行代码都没写，这条命令会 FAIL 吗？"：
+
+1. BEHAVIOR 1：`curl -sf localhost:5200/api/admin/customers` → 路由未注册 → HTTP 404 → curl -sf exit 22 → **FAIL ✅**
+2. BEHAVIOR 2：同上，curl 先 exit 1 → **FAIL ✅**
+3. BEHAVIOR 3：`curl -sf .../platform-sessions` → 404 → **FAIL ✅**
+4. BEHAVIOR 4：`curl -sf .../publish-logs` → 404 → **FAIL ✅**
+5. BEHAVIOR 5：superAdminGuard 存在时，非超管 403；但若路由未注册，返回 404 不是 403 → code != "403" → **FAIL ✅**
+6. BEHAVIOR 6：`admin-customers.ts` 不存在 → import 失败 → vitest 12 failed → **FAIL ✅**
