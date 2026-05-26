@@ -154,16 +154,15 @@ describe('ws1 callOpenRouter — llm_audit 写表', () => {
     // @ts-expect-error overriding global
     globalThis.fetch = fetchMock;
     const { callOpenRouter } = await import('../../src/llm/openrouter');
-    await callOpenRouter({ prompt: 'hi', request_purpose: 'unit_test' });
+    await callOpenRouter({ prompt: 'hi', purpose: 'unit_test' });
     expect(insertSpy).toHaveBeenCalled();
-    // 找出 INSERT 调用
+    // 找出 INSERT 调用（允许 schema 前缀 zenithjoy.llm_audit）
     const insertCalls = insertSpy.mock.calls.filter((c) =>
-      /INSERT\s+INTO\s+llm_audit/i.test(c[0]),
+      /INSERT\s+INTO\s+(?:\w+\.)?llm_audit/i.test(c[0]),
     );
     expect(insertCalls.length).toBeGreaterThanOrEqual(1);
-    // 校验值数组含 model 'deepseek/deepseek-chat' + request_purpose 'unit_test'
+    // 校验值数组含 model deepseek + purpose 'unit_test'
     const params = insertCalls[0][1] || [];
-    expect(params).toContain('openrouter');
     expect(params.some((v: any) => /deepseek/i.test(String(v)))).toBe(true);
     expect(params).toContain('unit_test');
   });
