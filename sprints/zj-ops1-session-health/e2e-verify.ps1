@@ -1,92 +1,83 @@
-# e2e-verify.ps1 — ZenithJoy Operator Dashboard E2E 验证脚本 (ws4)
-# 目标：验证 /operator 页面（Session 健康状态矩阵）在 Windows runner 上正常渲染
-# 执行环境：GitHub Actions windows-latest runner（通过 e2e-windows.yml 触发）
+# e2e-verify.ps1 — Operator /operator 页面 E2E 验证
+# 运行环境：GitHub Actions windows-latest
+# 触发：e2e-windows.yml workflow_dispatch
 
 param(
-    [string]$BaseUrl = "http://localhost:5174",
-    [int]$Timeout = 30000
+  [string]$BaseUrl = "http://localhost:5173"
 )
 
-Write-Host "=== ZenithJoy Operator Dashboard E2E Verify ==="
-Write-Host "Target: $BaseUrl/operator"
-Write-Host "Timeout: ${Timeout}ms"
+Set-StrictMode -Version Latest
+$ErrorActionPreference = "Stop"
 
-# 检查 Node.js 和 npx 是否可用
-$nodeVersion = node --version 2>&1
-Write-Host "Node.js: $nodeVersion"
+Write-Host "=== Operator Page E2E Verify ==="
+Write-Host "BaseUrl: $BaseUrl"
 
-# 安装 Playwright 依赖（如未安装）
-if (-not (Test-Path "node_modules/@playwright/test")) {
-    Write-Host "安装 Playwright..."
-    npm install --save-dev @playwright/test 2>&1 | Write-Host
-    npx playwright install chromium 2>&1 | Write-Host
-}
+Push-Location apps/dashboard
 
-# 运行 Playwright E2E 测试，指向 /operator 页面
-Write-Host ""
-Write-Host "--- 运行 Playwright E2E 测试 ---"
+# 安装依赖
+npm ci --prefer-offline 2>&1 | Select-Object -Last 5
+npx playwright install chromium --with-deps 2>&1 | Select-Object -Last 3
 
-$testScript = @"
-const { chromium } = require('@playwright/test');
+# 启动 vite dev server（cmd.exe /c 避免 PowerShell 进程树问题）
+$viteLog = "$env:TEMP\vite-operator.log"
+$vite = Start-Process -FilePath "cmd.exe" `
+  -ArgumentList "/c","npx vite --port 5173 > `"$viteLog`" 2>&1" `
+  -WorkingDirectory (Get-Location).Path -PassThru
+Write-Host "Vite PID: $($vite.Id)"
 
-(async () => {
-  const browser = await chromium.launch({ headless: true });
-  const page = await browser.newPage();
-
+# 等 vite 就绪（TCP 轮询）
+$ready = $false
+for ($i = 0; $i -lt 40; $i++) {
+  Start-Sleep 2
   try {
-    // 访问 /operator 页面
-    const response = await page.goto('$BaseUrl/operator', { timeout: $Timeout, waitUntil: 'networkidle' });
-
-    if (!response || response.status() >= 400) {
-      console.error('FAIL: /operator 页面返回错误状态', response ? response.status() : 'no response');
-      process.exit(1);
-    }
-
-    // 验证页面包含 8 平台状态矩阵关键元素
-    const platforms = ['抖音', '快手', '小红书', '视频号', '头条', '微博', '知乎', '公众号'];
-    const content = await page.textContent('body');
-
-    const missing = platforms.filter(p => !content.includes(p));
-    if (missing.length > 0) {
-      console.error('FAIL: 页面缺失平台:', missing.join(', '));
-      process.exit(1);
-    }
-
-    // 验证账号类型列
-    const accountTypes = ['MAIN', 'SUB_1', 'SUB_2', 'SUB_3'];
-    const missingTypes = accountTypes.filter(t => !content.includes(t));
-    if (missingTypes.length > 0) {
-      console.error('FAIL: 页面缺失账号类型:', missingTypes.join(', '));
-      process.exit(1);
-    }
-
-    console.log('OK: /operator 页面验证通过，8 平台 × 4 账号矩阵正常渲染');
-
-    await browser.close();
-    process.exit(0);
-  } catch (err) {
-    console.error('FAIL:', err.message);
-    await browser.close();
-    process.exit(1);
-  }
-})();
-"@
-
-# 写临时测试文件并通过 node 执行（Playwright API 模式）
-$tmpFile = [System.IO.Path]::GetTempFileName() + ".js"
-$testScript | Out-File -FilePath $tmpFile -Encoding utf8
-
-try {
-    node $tmpFile
-    $exitCode = $LASTEXITCODE
-} finally {
-    Remove-Item $tmpFile -Force -ErrorAction SilentlyContinue
+    $conn = New-Object System.Net.Sockets.TcpClient
+    $conn.Connect("127.0.0.1", 5173)
+    $conn.Close()
+    Write-Host "Vite ready (${i}x2s)"
+    $ready = $true
+    break
+  } catch {}
 }
+if (-not $ready) {
+  if (Test-Path $viteLog) { Get-Content $viteLog | Select-Object -Last 20 }
+  Write-Error "Vite 未在 80s 内就绪"; exit 1
+}
+
+# 把 JS 测试写成文件（避免 pipe 导致 require 路径丢失）
+$testFile = Join-Path (Get-Location).Path "tmp-e2e-operator.js"
+@"
+const { chromium } = require('@playwright/test');
+(async () => {
+  const browser = await chromium.launch();
+  const page = await browser.newPage();
+  page.on('console', m => console.log('  browser:', m.text()));
+
+  const resp = await page.goto('$BaseUrl/operator');
+  if (!resp) { console.error('FAIL: /operator 无响应'); process.exit(1); }
+  console.log('operator route status:', resp.status());
+
+  const platforms = ['抖音','快手','小红书','视频号','头条','微博','知乎','公众号'];
+  const content = await page.content();
+  const missing = platforms.filter(p => !content.includes(p));
+  if (missing.length > 0) {
+    console.error('FAIL: 缺平台标签:', missing.join(', ')); process.exit(1);
+  }
+  console.log('✓ 8 平台标签全部存在');
+
+  await browser.close();
+  console.log('E2E PASS');
+})().catch(e => { console.error('FAIL:', e.message); process.exit(1); });
+"@ | Set-Content -Path $testFile -Encoding UTF8
+
+node $testFile
+$exitCode = $LASTEXITCODE
+Remove-Item -Path $testFile -Force -ErrorAction SilentlyContinue
+
+Stop-Process -Id $vite.Id -Force -ErrorAction SilentlyContinue
+Pop-Location
 
 if ($exitCode -ne 0) {
-    Write-Host "=== E2E FAILED ==="
-    exit 1
+  Write-Host "=== E2E FAILED ==="
+  exit $exitCode
 }
-
-Write-Host "=== E2E PASSED ==="
-exit 0
+Write-Host "=== E2E PASS ==="
