@@ -1,7 +1,11 @@
-# Sprint Contract Draft (Round 2)
+# Sprint Contract Draft (Round 3)
 # /admin/customers 统一客户管理模块
 
-> **Round 2 修订说明**：修复 5 个 Reviewer 阻断项——
+> **Round 3 修订说明**：修复 1 个 Reviewer BLOCK 项（internal_consistency=6）——
+> (1) 截图数 SSOT 统一为 ≥ 8，同步修改 contract-draft.md / task-plan.json / contract-dod-ws4.md BEHAVIOR 5 / tests/ws4/ 共 4 处；
+> (2) 删除悬空引用「参见 Round 1 E2E 段」，改为在本文件内嵌完整 E2E spec 骨架，Generator 可直接复制。
+>
+> **Round 2 修订说明（历史）**：修复 5 个 Reviewer 阻断项——
 > (1) 新增 Risks 段（≥3 条）；
 > (2) Golden Path Steps 验证命令从源码字符串扫描升级为真实 curl+jq -e API oracle；
 > (3) 确认每 WS DoD ≥4 条 [BEHAVIOR]+manual:bash；
@@ -309,8 +313,104 @@ echo "✅ 全部 API smoke 测试通过"
 **E2E spec 位置**: `apps/dashboard/e2e/customer-management.spec.ts`
 **GHA workflow**: `.github/workflows/e2e-windows.yml`（`workflow_dispatch` + `windows-latest`）
 
-**spec 内容**（由 WS4 实现，含 page.route() stub + 4 个 test + ≥8 次 screenshot）：
-参见 `contract-draft.md` Round 1 E2E 段（spec 代码保持不变）。
+**spec 内容**（由 WS4 实现，Generator 直接复制到 `apps/dashboard/e2e/customer-management.spec.ts`）：
+
+```typescript
+// apps/dashboard/e2e/customer-management.spec.ts
+import { test, expect } from '@playwright/test';
+
+const STUB_CUSTOMERS = {
+  success: true,
+  data: [
+    { tenant_id: 'aaa-bbb-ccc-111', email: 'admin@test.com', license_status: 'active',  platform_count: 2, last_publish_at: '2026-05-01T10:00:00Z' },
+    { tenant_id: 'bbb-ccc-ddd-222', email: 'user@test.com',  license_status: 'expired', platform_count: 0, last_publish_at: null }
+  ],
+  total: 2
+};
+
+const STUB_SESSIONS = {
+  success: true,
+  data: [
+    { session_id: 's1', tenant_id: 'aaa-bbb-ccc-111', platform: 'kuaishou', status: 'active',  expires_at: '2026-12-01T00:00:00Z' },
+    { session_id: 's2', tenant_id: 'bbb-ccc-ddd-222', platform: 'douyin',   status: 'expired', expires_at: '2026-01-01T00:00:00Z' }
+  ],
+  total: 2
+};
+
+const STUB_LOGS = {
+  success: true,
+  data: [
+    { log_id: 'l1', tenant_id: 'aaa-bbb-ccc-111', work_id: 'w1', platform: 'kuaishou', status: 'success', created_at: '2026-05-01T10:00:00Z' }
+  ],
+  total: 1
+};
+
+const BASE = 'http://localhost:5174';
+
+test.describe('/admin/customers 统一客户管理 E2E', () => {
+  test('概览页加载，显示客户列表行', async ({ page }) => {
+    await page.route('**/api/admin/customers', route =>
+      route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(STUB_CUSTOMERS) })
+    );
+    await page.screenshot({ path: 'screenshots/ws4-01-before-overview.png' });
+    await page.goto(`${BASE}/admin/customers`);
+    await page.waitForLoadState('networkidle');
+    await page.screenshot({ path: 'screenshots/ws4-02-overview-loaded.png' });
+    await expect(page.locator('[data-testid="customers-table-row"]').first()).toBeVisible({ timeout: 10000 });
+    await page.screenshot({ path: 'screenshots/ws4-03-overview-asserted.png' });
+  });
+
+  test('platform-sessions 页加载，session-status 为 active 或 expired', async ({ page }) => {
+    await page.route('**/api/admin/customers/platform-sessions**', route =>
+      route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(STUB_SESSIONS) })
+    );
+    await page.goto(`${BASE}/admin/customers/platform-sessions`);
+    await page.waitForLoadState('networkidle');
+    await page.screenshot({ path: 'screenshots/ws4-04-platform-sessions-loaded.png' });
+    await expect(page.locator('[data-testid="session-status"]').first()).toBeVisible({ timeout: 10000 });
+    const statusText = await page.locator('[data-testid="session-status"]').first().textContent();
+    expect(['active', 'expired']).toContain(statusText?.trim());
+    await page.screenshot({ path: 'screenshots/ws4-05-sessions-asserted.png' });
+  });
+
+  test('publish-logs 页通过 tenant_id query param 筛选', async ({ page }) => {
+    await page.route('**/api/admin/customers/publish-logs**', route => {
+      const url = new URL(route.request().url());
+      const tenantId = url.searchParams.get('tenant_id');
+      const body = tenantId
+        ? { success: true, data: STUB_LOGS.data.filter(l => l.tenant_id === tenantId), total: 1 }
+        : STUB_LOGS;
+      return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
+    });
+    await page.goto(`${BASE}/admin/customers/publish-logs`);
+    await page.waitForLoadState('networkidle');
+    await page.screenshot({ path: 'screenshots/ws4-06-publish-logs-loaded.png' });
+    await page.goto(`${BASE}/admin/customers/publish-logs?tenant_id=aaa-bbb-ccc-111`);
+    await page.waitForLoadState('networkidle');
+    await page.screenshot({ path: 'screenshots/ws4-07-logs-filtered.png' });
+    await expect(page.locator('[data-testid="publish-logs-table-row"]').first()).toBeVisible({ timeout: 10000 });
+    await page.screenshot({ path: 'screenshots/ws4-08-logs-asserted.png' });
+  });
+
+  test('非超管访问 /admin/customers 返回 403 错误页', async ({ page }) => {
+    await page.route('**/api/admin/customers', route =>
+      route.fulfill({
+        status: 403,
+        contentType: 'application/json',
+        body: JSON.stringify({ success: false, error: { code: 'FORBIDDEN', message: '权限不足' } })
+      })
+    );
+    await page.goto(`${BASE}/admin/customers`);
+    await page.waitForLoadState('networkidle');
+    const pageContent = await page.content();
+    expect(
+      pageContent.includes('403') || pageContent.includes('权限') || pageContent.toLowerCase().includes('forbidden')
+    ).toBeTruthy();
+  });
+});
+```
+
+> **截图 SSOT**：spec 骨架含 8 次 `page.screenshot()`（ws4-01 ～ ws4-08），与 task-plan.json ws4 dod、contract-dod-ws4.md BEHAVIOR 5 阈值 `≥ 8`、tests/ws4/ `toBeGreaterThanOrEqual(8)` 四处完全对齐。
 
 **PASS 标准**: 所有 4 个 Playwright test 通过，exit 0，截图存入 `screenshots/`
 **FAIL 标准**: 任一 test 失败，exit 1，或 timeout 15min

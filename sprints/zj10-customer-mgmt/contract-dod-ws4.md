@@ -42,29 +42,34 @@ target_environment: windows_cloud
   Test: manual:bash -c 'node -e "const c=require(\"fs\").readFileSync(\"apps/dashboard/e2e/customer-management.spec.ts\",\"utf8\"); if(!c.includes(\"403\")){console.error(\"FAIL:缺403 error path test\");process.exit(1)} console.log(\"OK\")"'
   期望: OK
 
-- [ ] [BEHAVIOR] spec 文件包含 `page.screenshot()` 在关键操作前后，截图存入 `screenshots/` 目录
-  Test: manual:bash -c 'node -e "const c=require(\"fs\").readFileSync(\"apps/dashboard/e2e/customer-management.spec.ts\",\"utf8\"); const count=(c.match(/page\.screenshot\(/g)||[]).length; if(count<4){console.error(\"FAIL:截图调用不足\",count,\"期望>=4\");process.exit(1)} console.log(\"OK count=\"+count)"'
+- [ ] [BEHAVIOR] spec 文件包含 `page.screenshot()` 在关键操作前后（≥ 8 次），截图存入 `screenshots/` 目录
+  Test: manual:bash -c 'node -e "const c=require(\"fs\").readFileSync(\"apps/dashboard/e2e/customer-management.spec.ts\",\"utf8\"); const count=(c.match(/page\.screenshot\(/g)||[]).length; if(count<8){console.error(\"FAIL:截图调用不足\",count,\"期望>=8\");process.exit(1)} console.log(\"OK count=\"+count)"'
   期望: OK
 
 ---
 
 ## BEHAVIOR:E2E 条目（Mode B final-e2e — windows_cloud Playwright 全程）
 
-- [ ] [BEHAVIOR:E2E] 在 windows_cloud runner 上运行 `npx playwright test apps/dashboard/e2e/customer-management.spec.ts`，所有 4 个 test PASS，截图存入 `~/claude-output/harness-screenshots/`
+- [ ] [BEHAVIOR:E2E] 在 windows_cloud runner 上运行 `npx playwright test apps/dashboard/e2e/customer-management.spec.ts`，所有 4 个 test PASS，8 张截图存入 `~/claude-output/harness-screenshots/`
   Screenshots:
-    - ws4-01-customers-overview.png    期望：/admin/customers 页面加载，客户列表表格可见，至少 1 行数据，license_status 字段显示
-    - ws4-02-platform-sessions.png     期望：/admin/customers/platform-sessions 页面加载，session-status 列显示 active/expired
-    - ws4-03-publish-logs.png          期望：/admin/customers/publish-logs 页面加载，发布记录列表可见，tenant_id 筛选有效
-    - ws4-04-forbidden.png             期望：非超管访问被拦截，页面显示错误提示或发生重定向
+    - ws4-01-before-overview.png       期望：导航到概览页之前的初始状态
+    - ws4-02-overview-loaded.png       期望：/admin/customers 页面加载，客户列表表格可见
+    - ws4-03-overview-asserted.png     期望：customers-table-row 断言通过，至少 1 行数据，license_status 字段显示
+    - ws4-04-platform-sessions-loaded.png  期望：/admin/customers/platform-sessions 页面加载，session-status 列可见
+    - ws4-05-sessions-asserted.png     期望：session-status 显示 active 或 expired，断言通过
+    - ws4-06-publish-logs-loaded.png   期望：/admin/customers/publish-logs 页面加载，发布记录列表可见
+    - ws4-07-logs-filtered.png         期望：tenant_id 筛选后页面状态，URL 含 tenant_id query param
+    - ws4-08-logs-asserted.png         期望：publish-logs-table-row 断言通过，筛选结果可见
   期望：所有截图与期望描述一致，evaluator Claude Read 图自验通过
 
 evaluator 完成验收后必须执行：
 ```bash
 mkdir -p ~/claude-output/harness-screenshots/
-cp screenshots/01-customers-overview.png ~/claude-output/harness-screenshots/ws4-01-customers-overview.png 2>/dev/null || true
-cp screenshots/02-platform-sessions.png ~/claude-output/harness-screenshots/ws4-02-platform-sessions.png 2>/dev/null || true
-cp screenshots/03-publish-logs.png ~/claude-output/harness-screenshots/ws4-03-publish-logs.png 2>/dev/null || true
-cp screenshots/04-forbidden.png ~/claude-output/harness-screenshots/ws4-04-forbidden.png 2>/dev/null || true
+for f in ws4-01-before-overview ws4-02-overview-loaded ws4-03-overview-asserted \
+          ws4-04-platform-sessions-loaded ws4-05-sessions-asserted \
+          ws4-06-publish-logs-loaded ws4-07-logs-filtered ws4-08-logs-asserted; do
+  cp "screenshots/${f}.png" "~/claude-output/harness-screenshots/${f}.png" 2>/dev/null || true
+done
 ```
 
 ---

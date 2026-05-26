@@ -50,10 +50,10 @@ describe('WS4 — customer-management E2E spec 文件完整性 [BEHAVIOR]', () =
     expect(content).toContain('403');
   });
 
-  it('spec 文件在关键步骤前后调用 page.screenshot()（≥ 4 次）', () => {
+  it('spec 文件在关键步骤前后调用 page.screenshot()（≥ 8 次）', () => {
     const content = fs.readFileSync(E2E_FILE, 'utf8');
     const screenshotCount = (content.match(/page\.screenshot\(/g) || []).length;
-    expect(screenshotCount).toBeGreaterThanOrEqual(4);
+    expect(screenshotCount).toBeGreaterThanOrEqual(8);
   });
 
   it('spec 文件 stub 中使用 PRD 字段名（success/data/total，非禁用名）', () => {
