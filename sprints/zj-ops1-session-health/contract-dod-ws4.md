@@ -32,9 +32,9 @@ journey_type: user_facing
   Test: manual:bash -c 'node -e "const s=require(\"fs\").readFileSync(\".github/workflows/session-health-check.yml\",\"utf8\"); const n=(s.match(/\\\$\{\{\s*secrets\./g)||[]).length; if(n<35){console.error(\"FAIL: Secret 引用数=\"+n+\" 期望≥35\");process.exit(1)}; console.log(\"OK: secrets count=\"+n)"'
   期望: OK: secrets count=36（或更多）
 
-- [ ] [BEHAVIOR] CI yml 不含旧命名 `DOUYIN_COOKIES`（已完全迁移到 DOUYIN_MAIN 命名方案）
-  Test: manual:bash -c 'node -e "const s=require(\"fs\").readFileSync(\".github/workflows/session-health-check.yml\",\"utf8\"); if(s.includes(\"DOUYIN_COOKIES\")&&!s.includes(\"DOUYIN_MAIN\")){console.error(\"FAIL: 仍使用旧命名 DOUYIN_COOKIES\");process.exit(1)}; console.log(\"OK: 迁移完成\")"'
-  期望: OK: 迁移完成
+- [ ] [BEHAVIOR] CI yml 不含旧命名 `DOUYIN_COOKIES`（旧新命名不可共存，必须完全迁移到 DOUYIN_MAIN）
+  Test: manual:bash -c 'node -e "const s=require(\"fs\").readFileSync(\".github/workflows/session-health-check.yml\",\"utf8\"); if(s.includes(\"DOUYIN_COOKIES\")){console.error(\"FAIL: 旧命名 DOUYIN_COOKIES 仍存在于 yml，旧新不可共存，必须完全迁移到 DOUYIN_MAIN\");process.exit(1)}; if(!s.includes(\"DOUYIN_MAIN\")){console.error(\"FAIL: 新命名 DOUYIN_MAIN 不存在\");process.exit(1)}; console.log(\"OK: 已完全迁移到 DOUYIN_MAIN\")"'
+  期望: OK: 已完全迁移到 DOUYIN_MAIN
 
 - [ ] [BEHAVIOR] `session-health-smoke.sh` 包含真实 node 调用验证脚本输出（非 `exit 0` 占位）
   Test: manual:bash -c 'node -e "const s=require(\"fs\").readFileSync(\".github/workflows/scripts/smoke/session-health-smoke.sh\",\"utf8\"); if(s.trim()===\" \" || s.match(/^\\s*exit\\s+0\\s*$/)){console.error(\"FAIL: 是 exit 0 占位\");process.exit(1)}; if(!s.includes(\"SKIP_HTTP_CHECK\")){console.error(\"FAIL: smoke 未使用 SKIP_HTTP_CHECK 离线模式\");process.exit(1)}; console.log(\"OK\")"'

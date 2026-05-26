@@ -1,4 +1,4 @@
-# Sprint Contract Draft (Round 1)
+# Sprint Contract Draft (Round 2)
 # ZenithJoy 运营中枢：Session 全平台健康管理（Tab 1）
 
 ## Golden Path
@@ -300,6 +300,16 @@ echo "✅ Step 7 验证通过"
 
 ---
 
+## Risks
+
+| ID | 风险 | 触发条件 | Mitigation |
+|---|---|---|---|
+| R1 | 飞书 webhook 超时 | 飞书服务不可达或响应 >3s | `sendFeishuAlert()` 使用 `Promise.race` + 3000ms timeout 包裹；catch 内 `console.warn` + `return`，不抛出异常，不阻塞 Bark 告警链路 |
+| R2 | SSH 不通时 sync 失败 | xian-pc 关机或网络不可达 | `sync_one` 失败时 early return，不调用 `gh secret set`（保留 GitHub 上次有效 Secret）；推送 Bark "同步失败"告警；记入 `failed` 数组后继续同步其他账号，不静默退出 |
+| R3 | 单平台检查 cascade 失败 | check-health.js 某平台检查抛出未捕获异常，剩余平台检查全部跳过，session-health-report.json 不落盘 | 每个平台检查用 `try/catch` 隔离，单项失败写 `status: "invalid"` 继续循环；确保 session-health-report.json 在全部检查完成后统一写入（非逐条写），Bark/飞书告警在报告落盘后再发送 |
+
+---
+
 ## E2E 验收（final-e2e — windows_cloud PowerShell）
 
 **journey_type**: user_facing
@@ -428,6 +438,6 @@ exit 0
 2. **contract jq 字段名**: 所有 jq -e 命令使用上述字面字段名 ✓
 3. **keys 集合等价**: contract keys = PRD keys = `["checkedAt","expiresAt","platform","secretEnv","status"]` ✓
 4. **禁用字段反向检查**: contract 中存在 `has("name") | not`，status 禁用字段通过 allowed Set 检查 ✓
-5. **BEHAVIOR 数量**: 每个 DoD 文件 ≥4 条 [BEHAVIOR]（见 contract-dod-ws*.md）✓
+5. **BEHAVIOR 数量**: ws1=8条, ws2=6条, ws3=6条, ws4=6条，每个 DoD 文件 ≥4 条 ✓（ws1 新增 API key expiresAt=null 检查后 +1）
 6. **depends_on 串行链**: ws1=[], ws2=["ws1"], ws3=["ws2"], ws4=["ws3"] ✓
 7. **假绿自查**: 每条 BEHAVIOR 在 WS 未实现时必然 FAIL（文件不存在→FAIL，PLATFORMS<35→FAIL，DOUYIN_MAIN不存在→FAIL）✓

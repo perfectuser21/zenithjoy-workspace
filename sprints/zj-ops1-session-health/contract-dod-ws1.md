@@ -55,3 +55,7 @@ journey_type: user_facing
 - [ ] [BEHAVIOR] missing path — Secret 未配置时 status 为 `missing`（非 PRD 禁用的 `error` 或 `skip`）
   Test: manual:bash -c 'node -e "const s=require(\"fs\").readFileSync(\"scripts/sessions/check-health.js\",\"utf8\"); if(s.match(/status:\\s*[\"'"'"']skip[\"'"'"']/)){console.error(\"FAIL: 仍使用禁用 status skip\");process.exit(1)}; if(!s.match(/status:\\s*[\"'"'"']missing[\"'"'"']/)){console.error(\"FAIL: 缺 status missing\");process.exit(1)}; console.log(\"OK\")"'
   期望: OK
+
+- [ ] [BEHAVIOR] API key 条目（secretEnv 含 `_API_KEY`）的 expiresAt 值为 null（飞书/Notion/企微 API key 无过期时间概念）
+  Test: manual:bash -c 'SKIP_HTTP_CHECK=true node scripts/sessions/check-health.js 2>/dev/null; node -e "const d=JSON.parse(require(\"fs\").readFileSync(\"session-health-report.json\",\"utf8\")); const apiKeys=d.filter(x=>x.secretEnv.includes(\"_API_KEY\")); if(apiKeys.length<3){console.error(\"FAIL: API_KEY 条目 <3，实际=\"+apiKeys.length);process.exit(1)}; const bad=apiKeys.filter(x=>x.expiresAt!==null); if(bad.length>0){console.error(\"FAIL: expiresAt 非 null:\",bad.map(x=>x.secretEnv).join(\",\"));process.exit(1)}; console.log(\"OK: \"+apiKeys.length+\" 个 API_KEY 条目 expiresAt 均为 null\")"'
+  期望: OK: 3 个 API_KEY 条目 expiresAt 均为 null

@@ -48,6 +48,6 @@ journey_type: user_facing
   Test: manual:bash -c 'node -e "const s=require(\"fs\").readFileSync(\"scripts/sessions/sync-from-xian-rog.sh\",\"utf8\"); if(!s.match(/failed.*bark|bark.*failed|failed.*\\.length/is)){console.error(\"FAIL: 无 failed+bark 告警逻辑\");process.exit(1)}; console.log(\"OK: failed+bark 逻辑存在\")"'
   期望: OK: failed+bark 逻辑存在
 
-- [ ] [BEHAVIOR] error path — 脚本不使用 `set -e` 在 sync_one 失败时直接退出（应继续同步其他账号）
-  Test: manual:bash -c 'node -e "const s=require(\"fs\").readFileSync(\"scripts/sessions/sync-from-xian-rog.sh\",\"utf8\"); if(s.match(/sync_one[\s\S]{0,1000}set\s+-e/m)&&!s.match(/\(\s*\)/)){console.error(\"WARN: set -e 可能导致单账号失败退出整个脚本\");process.exit(1)}; console.log(\"OK\")"'
-  期望: OK
+- [ ] [BEHAVIOR] error path — 全局作用域无 `set -e`（避免 sync_one 单账号失败时整个脚本退出，不继续同步其他账号）
+  Test: manual:bash -c 'node -e "const s=require(\"fs\").readFileSync(\"scripts/sessions/sync-from-xian-rog.sh\",\"utf8\"); const globalScope=s.split(/\bsync_one\s*\(\)\s*\{/)[0]; if(globalScope.match(/^\s*set\s+-[a-zA-Z]*e/m)){console.error(\"FAIL: 全局 set -e 会导致 sync_one 失败时退出整个脚本\");process.exit(1)}; console.log(\"OK: 无全局 set -e\")"'
+  期望: OK: 无全局 set -e
