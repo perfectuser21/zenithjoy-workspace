@@ -10,12 +10,30 @@
 #   2. Mac 上 gh CLI 已认证
 #   3. SSH 别名 xian-rog 可连通
 #
-# 更新的 GitHub Secrets：
-#   DOUYIN_COOKIES         — 抖音主号
-#   DOUYIN_COOKIES_BURNER  — 抖音小号（burner 目录最新文件）
+# 覆盖的 GitHub Secrets（8 平台 × 4 账号 = 32 个）：
+#   {PLATFORM}_{ACCOUNT_TYPE}
+#   PLATFORM: DOUYIN / KUAISHOU / XIAOHONGSHU / WEIBO / GONGZHONGHAO / TOUTIAO / ZHIHU / SHIPINHAO
+#   ACCOUNT_TYPE: MAIN / SUB_1 / SUB_2 / SUB_3
+#
+#   例：KUAISHOU_MAIN  XIAOHONGSHU_SUB_1  DOUYIN_SUB_3
+#
+# Secrets: KUAISHOU_MAIN KUAISHOU_SUB_1 KUAISHOU_SUB_2 KUAISHOU_SUB_3
+#          XIAOHONGSHU_MAIN XIAOHONGSHU_SUB_1 XIAOHONGSHU_SUB_2 XIAOHONGSHU_SUB_3
+#          SHIPINHAO_MAIN SHIPINHAO_SUB_1 SHIPINHAO_SUB_2 SHIPINHAO_SUB_3
+#          TOUTIAO_MAIN TOUTIAO_SUB_1 TOUTIAO_SUB_2 TOUTIAO_SUB_3
+#          WEIBO_MAIN WEIBO_SUB_1 WEIBO_SUB_2 WEIBO_SUB_3
+#          ZHIHU_MAIN ZHIHU_SUB_1 ZHIHU_SUB_2 ZHIHU_SUB_3
+#          GONGZHONGHAO_MAIN GONGZHONGHAO_SUB_1 GONGZHONGHAO_SUB_2 GONGZHONGHAO_SUB_3
+#          DOUYIN_MAIN DOUYIN_SUB_1 DOUYIN_SUB_2 DOUYIN_SUB_3
+#
+# Windows session 文件路径约定：
+#   %WIN_SESSIONS%\{platform}\main.json
+#   %WIN_SESSIONS%\{platform}\sub_1.json
+#   %WIN_SESSIONS%\{platform}\sub_2.json
+#   %WIN_SESSIONS%\{platform}\sub_3.json
 # ================================================================
 
-set -euo pipefail
+set -uo pipefail
 
 MACHINE="${1:-xian-rog}"
 REPO="perfectuser21/zenithjoy-workspace"
@@ -29,6 +47,14 @@ echo "=== Session Sync from ${MACHINE} @ $(date '+%Y-%m-%d %H:%M') ==="
 bark() {
   curl -s --max-time 5 "${BARK_URL}/${1}/${2}?group=ZenithJoy" >/dev/null 2>&1 || true
 }
+
+# SSH 连通性检测 — 失败则 early return，不覆盖旧 Secret
+if ! ssh -o ConnectTimeout=10 -o BatchMode=yes "$MACHINE" "exit 0" 2>/dev/null; then
+  echo "❌ SSH 连接 ${MACHINE} 失败 — early return，旧 Secret 保持不变"
+  bark "Session同步失败❌" "SSH无法连接${MACHINE}"
+  exit 1
+fi
+echo "✅ SSH 连通"
 
 # 读 Windows 文件，剥离 BOM
 read_win() {
@@ -56,18 +82,41 @@ sync_one() {
   fi
 }
 
-# ── 抖音主号 ──────────────────────────────────────────────────────
-sync_one "抖音主号" "${WIN_SESSIONS}\\douyin\\default.json" "DOUYIN_COOKIES"
+# sync_matrix — 按 (平台, 账号类型) 同步一条 Secret
+sync_matrix() {
+  local platform_lower="$1"
+  local platform_upper="$2"
+  local account_type="$3"  # MAIN / SUB_1 / SUB_2 / SUB_3
 
-# ── 抖音小号 ──────────────────────────────────────────────────────
-BURNER=$(ssh "$MACHINE" \
-  "for /f \"delims=\" %f in ('dir /b /o-d \"${WIN_SESSIONS}\\douyin\\burner\" 2^>nul') do (echo %f & goto :eof)" \
-  2>/dev/null | head -1 | tr -d '\r\n')
-if [ -n "$BURNER" ]; then
-  sync_one "抖音小号" "${WIN_SESSIONS}\\douyin\\burner\\${BURNER}" "DOUYIN_COOKIES_BURNER"
-else
-  echo ""; echo "── 抖音小号: burner 目录无文件，跳过"
-fi
+  local account_lower; account_lower=$(echo "$account_type" | tr '[:upper:]' '[:lower:]')
+  local win_path="${WIN_SESSIONS}\\${platform_lower}\\${account_lower}.json"
+  local secret="${platform_upper}_${account_type}"
+  local label="${platform_upper} ${account_type}"
+
+  sync_one "$label" "$win_path" "$secret"
+}
+
+# ── 8 平台 × 4 账号矩阵 ────────────────────────────────────────────
+PLATFORMS=(
+  "douyin:DOUYIN"
+  "kuaishou:KUAISHOU"
+  "xiaohongshu:XIAOHONGSHU"
+  "weibo:WEIBO"
+  "gongzhonghao:GONGZHONGHAO"
+  "toutiao:TOUTIAO"
+  "zhihu:ZHIHU"
+  "shipinhao:SHIPINHAO"
+)
+
+ACCOUNT_TYPES=(MAIN SUB_1 SUB_2 SUB_3)
+
+for platform_entry in "${PLATFORMS[@]}"; do
+  platform_lower="${platform_entry%%:*}"
+  platform_upper="${platform_entry##*:}"
+  for account_type in "${ACCOUNT_TYPES[@]}"; do
+    sync_matrix "$platform_lower" "$platform_upper" "$account_type"
+  done
+done
 
 # ── 汇总 ─────────────────────────────────────────────────────────
 echo ""
