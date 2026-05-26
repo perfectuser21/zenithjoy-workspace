@@ -1,5 +1,5 @@
 contract_branch: cp-harness-propose-r3-9b8199e0
-workstream_index: 3
+workstream_index: 4
 sprint_dir: sprints/zj10-customer-mgmt
 
 ---
@@ -7,45 +7,45 @@ skeleton: false
 journey_type: user_facing
 target_environment: windows_cloud
 ---
-# Contract DoD — Workstream 3: AdminPlatformSessionsPage + AdminPublishLogsPage
+# Contract DoD — Workstream 4: E2E Playwright 测试（windows_cloud）
 
-**范围**: 新建 `apps/dashboard/src/pages/AdminPlatformSessionsPage.tsx`（平台绑定状态表格）+ `apps/dashboard/src/pages/AdminPublishLogsPage.tsx`（发布追踪表格，含 tenant_id 筛选）；在 `navigation.config.ts` additionalRoutes 添加对应路由
-**大小**: M（~150 行净增，2+调整文件）
-**依赖**: Workstream 2（路由配置和页面骨架先就位）
+**范围**: 新建 `apps/dashboard/e2e/customer-management.spec.ts`（4 个 test，API stub 模式，对应 Golden Path 全程）
+**大小**: S（~120 行净增，1 文件）
+**依赖**: Workstream 3（页面组件全部存在，test 引用的 data-testid 可以实际找到）
 
 ---
 
 ## ARTIFACT 条目
 
-- [ ] [ARTIFACT] `apps/dashboard/src/pages/AdminPlatformSessionsPage.tsx` 文件已创建，含 `data-testid="platform-sessions-table-row"` 和 `data-testid="session-status"` 属性
-  Test: node -e "require('fs').accessSync('apps/dashboard/src/pages/AdminPlatformSessionsPage.tsx'); const c=require('fs').readFileSync('apps/dashboard/src/pages/AdminPlatformSessionsPage.tsx','utf8'); ['platform-sessions-table-row','session-status'].forEach(t=>{if(!c.includes(t)){console.error('FAIL:缺testid',t);process.exit(1)}}); console.log('OK')"
+- [ ] [ARTIFACT] `apps/dashboard/e2e/customer-management.spec.ts` 文件已创建
+  Test: node -e "require('fs').accessSync('apps/dashboard/e2e/customer-management.spec.ts'); console.log('OK')"
 
-- [ ] [ARTIFACT] `apps/dashboard/src/pages/AdminPublishLogsPage.tsx` 文件已创建，含 `data-testid="publish-logs-table-row"` 属性和 `tenant_id` URL 参数读取逻辑
-  Test: node -e "require('fs').accessSync('apps/dashboard/src/pages/AdminPublishLogsPage.tsx'); const c=require('fs').readFileSync('apps/dashboard/src/pages/AdminPublishLogsPage.tsx','utf8'); if(!c.includes('publish-logs-table-row')||!c.includes('tenant_id'))process.exit(1); console.log('OK')"
+- [ ] [ARTIFACT] spec 文件包含 4 个 test，覆盖 Golden Path 全程（customers 概览/platform-sessions/publish-logs/403 拦截）
+  Test: node -e "const c=require('fs').readFileSync('apps/dashboard/e2e/customer-management.spec.ts','utf8'); const count=(c.match(/\btest\(/g)||[]).length; if(count<4){console.error('FAIL:test数量不足',count);process.exit(1)} console.log('OK count='+count)"
 
-- [ ] [ARTIFACT] `pageComponents` 中包含 `AdminPlatformSessionsPage` 和 `AdminPublishLogsPage` 两个懒加载映射
-  Test: node -e "const c=require('fs').readFileSync('apps/dashboard/src/config/navigation.config.ts','utf8'); ['AdminPlatformSessionsPage','AdminPublishLogsPage'].forEach(p=>{if(!c.includes(p)){console.error('FAIL:缺映射',p);process.exit(1)}}); console.log('OK')"
+- [ ] [ARTIFACT] spec 文件使用 `page.route()` stub API 调用（不依赖真实后端，适合 windows_cloud 干净 VM）
+  Test: node -e "const c=require('fs').readFileSync('apps/dashboard/e2e/customer-management.spec.ts','utf8'); if(!c.includes('page.route'))process.exit(1); console.log('OK')"
 
 ---
 
 ## BEHAVIOR 条目
 
-- [ ] [BEHAVIOR] `AdminPlatformSessionsPage.tsx` 调用 `/api/admin/customers/platform-sessions` 端点，响应字段包含 `session_id`/`platform`/`status`/`expires_at`，且不含禁用 status 值（`valid`/`ok`/`inactive`）
-  Test: manual:bash -c 'node -e "const c=require(\"fs\").readFileSync(\"apps/dashboard/src/pages/AdminPlatformSessionsPage.tsx\",\"utf8\"); [\"platform-sessions\",\"session_id\",\"expires_at\",\"platform\"].forEach(f=>{if(!c.includes(f)){console.error(\"FAIL:缺字段\",f);process.exit(1)}}); [\"valid\",\"inactive\"].forEach(v=>{if(c.includes(v)){console.error(\"FAIL:含禁用status值\",v);process.exit(1)}}); console.log(\"OK\")"'
+- [ ] [BEHAVIOR] spec 文件中存在针对 `/admin/customers` 的 test，且包含 `customers-table-row` data-testid 断言
+  Test: manual:bash -c 'node -e "const c=require(\"fs\").readFileSync(\"apps/dashboard/e2e/customer-management.spec.ts\",\"utf8\"); if(!c.includes(\"/admin/customers\")||!c.includes(\"customers-table-row\")){console.error(\"FAIL:缺概览页test或testid断言\");process.exit(1)} console.log(\"OK\")"'
   期望: OK
 
-- [ ] [BEHAVIOR] `AdminPlatformSessionsPage.tsx` 的 `data-testid="session-status"` 渲染的值只会是 `active` 或 `expired`（通过代码逻辑约束）
-  Test: manual:bash -c 'node -e "const c=require(\"fs\").readFileSync(\"apps/dashboard/src/pages/AdminPlatformSessionsPage.tsx\",\"utf8\"); if(!c.includes(\"session-status\")){console.error(\"FAIL:缺session-status testid\");process.exit(1)} console.log(\"OK\")"'
+- [ ] [BEHAVIOR] spec 文件中存在针对 `/admin/customers/platform-sessions` 的 test，包含 `session-status` data-testid 断言，且验证 status 值为 `active` 或 `expired`
+  Test: manual:bash -c 'node -e "const c=require(\"fs\").readFileSync(\"apps/dashboard/e2e/customer-management.spec.ts\",\"utf8\"); if(!c.includes(\"platform-sessions\")||!c.includes(\"session-status\")){console.error(\"FAIL:缺platform-sessions test或testid\");process.exit(1)} if(!c.includes(\"active\")||!c.includes(\"expired\")){console.error(\"FAIL:缺status值验证\");process.exit(1)} console.log(\"OK\")"'
   期望: OK
 
-- [ ] [BEHAVIOR] `AdminPublishLogsPage.tsx` 调用 `/api/admin/customers/publish-logs`，响应字段包含 `log_id`/`work_id`/`created_at`，且通过 `tenant_id` query param 筛选（不使用禁用 query 名 `user`/`client`/`id`/`t`）
-  Test: manual:bash -c 'node -e "const c=require(\"fs\").readFileSync(\"apps/dashboard/src/pages/AdminPublishLogsPage.tsx\",\"utf8\"); [\"publish-logs\",\"log_id\",\"work_id\",\"created_at\",\"tenant_id\"].forEach(f=>{if(!c.includes(f)){console.error(\"FAIL:缺字段\",f);process.exit(1)}}); [\"?user=\",\"?client=\",\"?id=\",\"?t=\"].forEach(f=>{if(c.includes(f)){console.error(\"FAIL:禁用query参数\",f);process.exit(1)}}); console.log(\"OK\")"'
+- [ ] [BEHAVIOR] spec 文件中存在针对 `/admin/customers/publish-logs` 的 test，包含 `tenant_id` query param 验证（且不使用禁用 query 名 `user`/`client`/`id`/`t`）
+  Test: manual:bash -c 'node -e "const c=require(\"fs\").readFileSync(\"apps/dashboard/e2e/customer-management.spec.ts\",\"utf8\"); if(!c.includes(\"publish-logs\")||!c.includes(\"tenant_id\")){console.error(\"FAIL:缺publish-logs test或tenant_id验证\");process.exit(1)} const forbidden=[\"searchParams.get(\\\"user\\\")\",\"searchParams.get(\\\"client\\\")\",\"searchParams.get(\\\"id\\\")\",\"searchParams.get(\\\"t\\\")\"]; forbidden.forEach(f=>{if(c.includes(f)){console.error(\"FAIL:使用禁用query参数名\",f);process.exit(1)}}); console.log(\"OK\")"'
   期望: OK
 
-- [ ] [BEHAVIOR] `AdminPublishLogsPage.tsx` 使用 `useSearchParams`（或等价 API）读取 URL 中的 `tenant_id` 参数，并将其传递给 API 请求
-  Test: manual:bash -c 'node -e "const c=require(\"fs\").readFileSync(\"apps/dashboard/src/pages/AdminPublishLogsPage.tsx\",\"utf8\"); const hasSearchParams=c.includes(\"useSearchParams\")||c.includes(\"URLSearchParams\")||c.includes(\"searchParams\")||c.includes(\"location.search\"); if(!hasSearchParams){console.error(\"FAIL:未读取URL searchParams\");process.exit(1)} console.log(\"OK\")"'
+- [ ] [BEHAVIOR] spec 文件包含 403 error path test，验证非超管访问被拦截或重定向
+  Test: manual:bash -c 'node -e "const c=require(\"fs\").readFileSync(\"apps/dashboard/e2e/customer-management.spec.ts\",\"utf8\"); if(!c.includes(\"403\")){console.error(\"FAIL:缺403 error path test\");process.exit(1)} console.log(\"OK\")"'
   期望: OK
 
-- [ ] [BEHAVIOR] `pageComponents` 已新增 `AdminPlatformSessionsPage` 和 `AdminPublishLogsPage` 两个懒加载映射
-  Test: manual:bash -c 'node -e "const c=require(\"fs\").readFileSync(\"apps/dashboard/src/config/navigation.config.ts\",\"utf8\"); [\"AdminPlatformSessionsPage\",\"AdminPublishLogsPage\"].forEach(p=>{if(!c.includes(p)){console.error(\"FAIL:缺懒加载映射\",p);process.exit(1)}}); console.log(\"OK\")"'
+- [ ] [BEHAVIOR] spec 文件包含 `page.screenshot()` 在关键操作前后（≥ 8 次），截图存入 `screenshots/` 目录
+  Test: manual:bash -c 'node -e "const c=require(\"fs\").readFileSync(\"apps/dashboard/e2e/customer-management.spec.ts\",\"utf8\"); const count=(c.match(/page\.screenshot\(/g)||[]).length; if(count<8){console.error(\"FAIL:截图调用不足\",count,\"期望>=8\");process.exit(1)} console.log(\"OK count=\"+count)"'
   期望: OK
