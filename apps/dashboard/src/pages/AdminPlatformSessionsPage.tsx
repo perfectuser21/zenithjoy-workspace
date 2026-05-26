@@ -53,7 +53,7 @@ export default function AdminPlatformSessionsPage() {
   const total = query.data?.total ?? 0;
 
   return (
-    <div style={{ padding: 24, maxWidth: 1280 }}>
+    <div data-testid="platform-sessions" style={{ padding: 24, maxWidth: 1280 }}>
       <h1 style={{ fontSize: 24, fontWeight: 600, marginBottom: 16 }}>
         平台绑定状态（platform-sessions）
       </h1>
