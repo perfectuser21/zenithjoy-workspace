@@ -29,3 +29,33 @@ describe('config/navigation', () => {
     expect(typeof autopilotPageComponents['AdminLicensePage']).toBe('function');
   });
 });
+
+describe('config/navigation — 三组结构', () => {
+  it('共有 3 个导航分组：主功能 / 设置 / 管理员', () => {
+    expect(autopilotNavGroups).toHaveLength(3);
+    expect(autopilotNavGroups[0].title).toBe('');
+    expect(autopilotNavGroups[1].title).toBe('设置');
+    expect(autopilotNavGroups[2].title).toBe('管理员');
+  });
+
+  it('设置分组含 下载 Agent 和 飞书绑定', () => {
+    const settings = autopilotNavGroups[1];
+    const paths = settings.items.map((i) => i.path);
+    expect(paths).toContain('/dashboard/agent');
+    expect(paths).toContain('/dashboard/feishu-bind');
+  });
+
+  it('/operator 在管理员分组且 requireSuperAdmin: true', () => {
+    const admin = autopilotNavGroups[2];
+    const operator = admin.items.find((i) => i.path === '/operator');
+    expect(operator).toBeDefined();
+    expect(operator?.requireSuperAdmin).toBe(true);
+  });
+
+  it('主功能分组不含设置类页面（文件夹绑定等）', () => {
+    const main = autopilotNavGroups[0];
+    const paths = main.items.map((i) => i.path);
+    expect(paths).not.toContain('/dashboard/folder');
+    expect(paths).not.toContain('/dashboard/feishu-bind');
+  });
+});
