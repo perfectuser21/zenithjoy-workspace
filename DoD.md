@@ -1,38 +1,61 @@
-contract_branch: main
-workstream_index: 4
-sprint_dir: sprints/zj2-smart-acquisition-run1
+contract_branch: cp-harness-propose-r2-85dcd538
+workstream_index: 1
+sprint_dir: sprints/zj-ops1-session-health
 
 ---
 skeleton: false
 journey_type: user_facing
 ---
-# Contract DoD — Workstream 4: GET /api/acquisition/leads + LeadsPage.tsx + navigation
+# Contract DoD — Workstream 1: check-health.js 全平台扩展
 
-**范围**:
-- `apps/api/src/routes/acquisition.ts`：新增 `GET /leads` endpoint（读飞书 Leads 表，支持 grade 筛选）
-- `apps/dashboard/src/pages/LeadsPage.tsx`：新建 Leads 列表页（等级标签表格）
-- `apps/dashboard/src/config/navigation.config.ts`：注册 `/dashboard/leads` 路由入口
-
-**大小**: M（100-200 行，3 文件）
-**依赖**: Workstream 3（GET leads 读取飞书写入的带 grade/keyword 字段数据）
+**范围**: 扩展 PLATFORMS 至 35 条目（8×4=32 平台账号 + 3 API key）；重构 checkPlatform 输出 schema 为 PRD 规范；新增 sendFeishuAlert() + Promise.race 3s timeout；新增 SKIP_HTTP_CHECK 支持；session-health-report.json 改为 JSON array 格式
+**大小**: M（~150 行净增）
+**依赖**: 无
 
 ---
 
 ## ARTIFACT 条目
 
-- [ ] [ARTIFACT] `apps/dashboard/src/pages/LeadsPage.tsx` 文件存在且包含 `leads-table` data-testid
-- [ ] [ARTIFACT] `navigation.config.ts` 包含 `/dashboard/leads` 路由入口
-- [ ] [ARTIFACT] `acquisition.ts` 包含 `GET` + `leads` 路由定义
+- [ ] [ARTIFACT] `scripts/sessions/check-health.js` 文件存在且含 35 条 secretEnv 定义
+  Test: node -e "const s=require('fs').readFileSync('scripts/sessions/check-health.js','utf8'); const n=(s.match(/secretEnv:/g)||[]).length; if(n<35){console.error('FAIL: secretEnv count='+n+' <35');process.exit(1)}; console.log('OK: count='+n)"
+
+- [ ] [ARTIFACT] PLATFORMS 数组覆盖全部 8 个平台（抖音/快手/小红书/视频号/头条/微博/知乎/公众号）及 3 个 API key
+  Test: node -e "const s=require('fs').readFileSync('scripts/sessions/check-health.js','utf8'); const p=['KUAISHOU','XIAOHONGSHU','SHIPINHAO','TOUTIAO','WEIBO','ZHIHU','GONGZHONGHAO','FEISHU_API_KEY','NOTION_API_KEY','WECOM_API_KEY']; const miss=p.filter(x=>!s.includes(x)); if(miss.length>0){console.error('FAIL:',miss);process.exit(1)}; console.log('OK')"
+
+- [ ] [ARTIFACT] `sendFeishuAlert` 函数存在（新增飞书双渠道告警）
+  Test: node -e "const s=require('fs').readFileSync('scripts/sessions/check-health.js','utf8'); if(!s.includes('sendFeishuAlert')){console.error('FAIL: 无 sendFeishuAlert');process.exit(1)}; console.log('OK')"
+
+- [ ] [ARTIFACT] `SKIP_HTTP_CHECK` 环境变量支持存在（CI 离线环境保护）
+  Test: node -e "const s=require('fs').readFileSync('scripts/sessions/check-health.js','utf8'); if(!s.includes('SKIP_HTTP_CHECK')){console.error('FAIL: 无 SKIP_HTTP_CHECK');process.exit(1)}; console.log('OK')"
 
 ---
 
 ## BEHAVIOR 条目
 
-- [ ] [BEHAVIOR] GET /api/acquisition/leads 返回 HTTP 200，顶层 keys 精确等于 `["leads","total"]`
-- [ ] [BEHAVIOR] `leads` 为数组，`total` 为数字
-- [ ] [BEHAVIOR] lead item 6 字段完整性：commenter_id/comment_text/source_video_url/crawled_at/grade/keyword
-- [ ] [BEHAVIOR] 禁用字段 data/items/records/rows/result 不在顶层
-- [ ] [BEHAVIOR] grade 筛选生效（grade=高意向 → 所有结果 grade='高意向'）
-- [ ] [BEHAVIOR] grade 非法值 → 400 + error='INVALID_GRADE'
-- [ ] [BEHAVIOR] 飞书 token 过期 → 503 + error='FEISHU_TOKEN_EXPIRED'
-- [ ] [BEHAVIOR:E2E] /dashboard/leads 页面可见，Playwright 截图显示 leads-table 和 grade-badge
+- [ ] [BEHAVIOR] check-health.js 输出 JSON array（非对象），包含 35 条目
+  Test: manual:bash -c 'SKIP_HTTP_CHECK=true node scripts/sessions/check-health.js 2>/dev/null; node -e "const d=JSON.parse(require(\"fs\").readFileSync(\"session-health-report.json\",\"utf8\")); if(!Array.isArray(d)){console.error(\"FAIL: 不是 array\");process.exit(1)}; if(d.length!==35){console.error(\"FAIL: length=\"+d.length+\" 期望35\");process.exit(1)}; console.log(\"OK: array length=35\")"'
+  期望: OK: array length=35
+
+- [ ] [BEHAVIOR] 每个条目 keys 完全等于 PRD 规范（checkedAt/expiresAt/platform/secretEnv/status）
+  Test: manual:bash -c 'SKIP_HTTP_CHECK=true node scripts/sessions/check-health.js 2>/dev/null; node -e "const d=JSON.parse(require(\"fs\").readFileSync(\"session-health-report.json\",\"utf8\")); const exp=JSON.stringify([\"checkedAt\",\"expiresAt\",\"platform\",\"secretEnv\",\"status\"]); const fail=d.find((item,i)=>{const act=JSON.stringify(Object.keys(item).sort()); if(act!==exp){console.error(\"FAIL item[\"+i+\"]: keys=\"+act);return true}}); if(fail)process.exit(1); console.log(\"OK: all keys match PRD\")"'
+  期望: OK: all keys match PRD
+
+- [ ] [BEHAVIOR] status 枚举值严格限于 ok/expired/invalid/missing
+  Test: manual:bash -c 'SKIP_HTTP_CHECK=true node scripts/sessions/check-health.js 2>/dev/null; node -e "const d=JSON.parse(require(\"fs\").readFileSync(\"session-health-report.json\",\"utf8\")); const allowed=new Set([\"ok\",\"expired\",\"invalid\",\"missing\"]); const bad=d.filter(item=>!allowed.has(item.status)); if(bad.length>0){console.error(\"FAIL: illegal status\",bad.map(x=>x.status));process.exit(1)}; console.log(\"OK: all status valid\")"'
+  期望: OK: all status valid
+
+- [ ] [BEHAVIOR] sendFeishuAlert 使用 Promise.race + 3000ms 超时
+  Test: manual:bash -c 'node -e "const s=require(\"fs\").readFileSync(\"scripts/sessions/check-health.js\",\"utf8\"); if(!s.includes(\"Promise.race\")){console.error(\"FAIL: 无 Promise.race\");process.exit(1)}; if(!s.match(/3[_\s]*(?:000|\*\s*1000)/)){console.error(\"FAIL: 无 3000ms\");process.exit(1)}; console.log(\"OK\")"'
+  期望: OK
+
+- [ ] [BEHAVIOR] JSON 解析失败时 status 为 invalid
+  Test: manual:bash -c 'node -e "const s=require(\"fs\").readFileSync(\"scripts/sessions/check-health.js\",\"utf8\"); if(s.match(/status:\s*[\"'"'"']error[\"'"'"']/)){console.error(\"FAIL: 仍使用禁用 error\");process.exit(1)}; if(!s.match(/status:\s*[\"'"'"']invalid[\"'"'"']/)){console.error(\"FAIL: 缺 invalid\");process.exit(1)}; console.log(\"OK\")"'
+  期望: OK
+
+- [ ] [BEHAVIOR] Secret 未配置时 status 为 missing
+  Test: manual:bash -c 'node -e "const s=require(\"fs\").readFileSync(\"scripts/sessions/check-health.js\",\"utf8\"); if(s.match(/status:\s*[\"'"'"']skip[\"'"'"']/)){console.error(\"FAIL: 仍使用禁用 skip\");process.exit(1)}; if(!s.match(/status:\s*[\"'"'"']missing[\"'"'"']/)){console.error(\"FAIL: 缺 missing\");process.exit(1)}; console.log(\"OK\")"'
+  期望: OK
+
+- [ ] [BEHAVIOR] API key 条目 expiresAt 为 null
+  Test: manual:bash -c 'SKIP_HTTP_CHECK=true node scripts/sessions/check-health.js 2>/dev/null; node -e "const d=JSON.parse(require(\"fs\").readFileSync(\"session-health-report.json\",\"utf8\")); const apiKeys=d.filter(x=>x.secretEnv.includes(\"_API_KEY\")); if(apiKeys.length<3){console.error(\"FAIL: API_KEY 条目 <3\");process.exit(1)}; const bad=apiKeys.filter(x=>x.expiresAt!==null); if(bad.length>0){console.error(\"FAIL: expiresAt 非 null\",bad.map(x=>x.secretEnv));process.exit(1)}; console.log(\"OK: \"+apiKeys.length+\" 个 API_KEY expiresAt 均为 null\")"'
+  期望: OK: 3 个 API_KEY 条目 expiresAt 均为 null
