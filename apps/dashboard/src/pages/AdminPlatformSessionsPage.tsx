@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '../contexts/AuthContext';
+import { adminFetch } from '../lib/admin-fetch';
 
 interface PlatformSession {
   session_id: string;
@@ -14,10 +15,8 @@ interface PlatformSessionsResponse {
   total: number;
 }
 
-async function fetchPlatformSessions(): Promise<PlatformSessionsResponse> {
-  const res = await fetch('/api/admin/customers/platform-sessions', {
-    credentials: 'include',
-  });
+async function fetchPlatformSessions(email?: string): Promise<PlatformSessionsResponse> {
+  const res = await adminFetch('/api/admin/customers/platform-sessions', email);
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   return res.json();
 }
@@ -32,11 +31,11 @@ function formatDate(iso: string | null | undefined): string {
 }
 
 export default function AdminPlatformSessionsPage() {
-  const { isSuperAdmin } = useAuth();
+  const { isSuperAdmin, user } = useAuth();
 
   const query = useQuery<PlatformSessionsResponse>({
     queryKey: ['admin-platform-sessions'],
-    queryFn: fetchPlatformSessions,
+    queryFn: () => fetchPlatformSessions(user?.email),
     enabled: isSuperAdmin,
   });
 

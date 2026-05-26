@@ -1,6 +1,7 @@
 import { useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '../contexts/AuthContext';
+import { adminFetch } from '../lib/admin-fetch';
 
 interface PublishLog {
   log_id: string;
@@ -16,11 +17,11 @@ interface PublishLogsResponse {
   total: number;
 }
 
-async function fetchPublishLogs(tenant_id: string | null): Promise<PublishLogsResponse> {
+async function fetchPublishLogs(tenant_id: string | null, email?: string): Promise<PublishLogsResponse> {
   const url = tenant_id
     ? `/api/admin/customers/publish-logs?tenant_id=${encodeURIComponent(tenant_id)}`
     : '/api/admin/customers/publish-logs';
-  const res = await fetch(url, { credentials: 'include' });
+  const res = await adminFetch(url, email);
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   return res.json();
 }
@@ -35,13 +36,13 @@ function formatDate(iso: string | null | undefined): string {
 }
 
 export default function AdminPublishLogsPage() {
-  const { isSuperAdmin } = useAuth();
+  const { isSuperAdmin, user } = useAuth();
   const [searchParams] = useSearchParams();
   const tenant_id = searchParams.get('tenant_id');
 
   const query = useQuery<PublishLogsResponse>({
     queryKey: ['admin-publish-logs', tenant_id],
-    queryFn: () => fetchPublishLogs(tenant_id),
+    queryFn: () => fetchPublishLogs(tenant_id, user?.email),
     enabled: isSuperAdmin,
   });
 

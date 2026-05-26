@@ -169,11 +169,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     void betterAuthSignOut();
   };
 
-  // 超级管理员飞书 ID 列表（环境变量配置）
-  // 注意：user.id 就是飞书的 open_id，user.feishu_user_id 是可选的兼容字段
+  // 超级管理员判断：飞书 ID 白名单 或 邮箱白名单（支持 better-auth 邮箱登录用户）
   const superAdminIds = (import.meta.env.VITE_SUPER_ADMIN_FEISHU_IDS || '').split(',').filter(Boolean);
+  const superAdminEmails = (import.meta.env.VITE_SUPER_ADMIN_EMAILS || '').split(',').filter(Boolean);
   const userFeishuId = user?.feishu_user_id || user?.id;
-  const isSuperAdmin = !!userFeishuId && superAdminIds.includes(userFeishuId);
+  const isSuperAdmin =
+    (!!userFeishuId && superAdminIds.includes(userFeishuId)) ||
+    (!!user?.email && superAdminEmails.includes(user.email));
 
   // 调试日志
   console.log('🔑 权限检查:', { userFeishuId, superAdminIds, isSuperAdmin });
