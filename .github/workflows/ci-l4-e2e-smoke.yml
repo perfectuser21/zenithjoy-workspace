@@ -382,6 +382,15 @@ jobs:
           chmod +x .github/workflows/scripts/smoke/keyword-search-smoke.sh
           bash .github/workflows/scripts/smoke/keyword-search-smoke.sh
 
+      - name: Smoke — ZJ2 ws3 video-search-result + comment-score-result
+        env:
+          API_PORT: "5200"
+          DB: postgresql://cecelia:cecelia@localhost:5432/cecelia
+          PGPASSWORD: cecelia
+        run: |
+          chmod +x .github/workflows/scripts/smoke/zj2-ws3-video-comment-smoke.sh
+          bash .github/workflows/scripts/smoke/zj2-ws3-video-comment-smoke.sh
+
       - name: Stop fake-feishu-server
         if: always()
         run: |
