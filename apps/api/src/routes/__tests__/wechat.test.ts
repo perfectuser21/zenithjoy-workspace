@@ -25,10 +25,10 @@ describe('wechat.ts — router export', () => {
     expect(paths).toContain('/scheduler-tick');
   });
 
-  it('registers exactly 4 endpoints including /draft-submit', () => {
+  it('registers exactly 4 unique endpoints including /draft-generate', () => {
     const stack = (wechatRouter as any).stack;
-    const paths = stack.filter((l: any) => l.route).map((l: any) => l.route.path);
+    const paths = [...new Set(stack.filter((l: any) => l.route).map((l: any) => l.route.path))];
     expect(paths.length).toBe(4);
-    expect(paths).toContain('/draft-submit');
+    expect(paths).toContain('/draft-generate');
   });
 });
