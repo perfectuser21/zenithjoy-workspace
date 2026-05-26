@@ -25,6 +25,7 @@ import {
   Send,
   Scissors,
   Building2,
+  MonitorCheck,
 } from 'lucide-react';
 
 // ============ 类型定义 ============
@@ -103,6 +104,8 @@ export const autopilotPageComponents: Record<string, () => Promise<{ default: Co
   'ContentClipperPage': () => import('../pages/ContentClipperPage'),
   'ContentClipDetailPage': () => import('../pages/ContentClipDetailPage'),
   // FeatureDashboard and CommandCenter moved to Core features/business
+  // Operator Dashboard — Session 状态矩阵（is_operator 权限守卫）
+  'OperatorPage': () => import('../pages/OperatorPage'),
 };
 
 export const pageComponents = autopilotPageComponents;
@@ -277,6 +280,14 @@ export const autopilotNavGroups: NavGroup[] = [
         label: '绑抖音小号',
         featureKey: 'douyinBurnerBind',
         component: 'DouyinBurnerBindPage',
+      },
+      // ============ Operator Dashboard — Session 状态矩阵（仅 operator） ============
+      {
+        path: '/operator',
+        icon: MonitorCheck,
+        label: '运营员控制台',
+        featureKey: 'operator-dashboard',
+        component: 'OperatorPage',
       },
     ]
   }

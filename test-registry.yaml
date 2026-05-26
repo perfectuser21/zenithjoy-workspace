@@ -2140,6 +2140,46 @@ tests:
     product: 新媒体运营
     note: "ZJ Ops1 Session Health WS4 — CI session 健康检查 workflow 合同测试"
 
+  - id: zj10-customer-mgmt-ws1-contract
+    path: sprints/zj10-customer-mgmt/tests/ws1/admin-customers-routes.test.ts
+    type: unit
+    ci: L4
+    status: active
+    product: 新媒体运营
+    note: "ZJ10 Customer Mgmt WS1 — admin-customers 路由合同测试（12 项）"
+
+  - id: zj10-customer-mgmt-ws1-route
+    path: apps/api/src/routes/admin-customers.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 新媒体运营
+    note: "ZJ10 Customer Mgmt WS1 — admin-customers 路由单元测试（supertest + mock pool）"
+
+  - id: zj10-customer-mgmt-ws2
+    path: sprints/zj10-customer-mgmt/tests/ws2/admin-customers-nav.test.ts
+    type: unit
+    ci: L4
+    status: active
+    product: 新媒体运营
+    note: "ZJ10 Customer Mgmt WS2 — admin-customers 导航合同测试"
+
+  - id: zj10-customer-mgmt-ws3
+    path: sprints/zj10-customer-mgmt/tests/ws3/admin-platform-sessions-pages.test.ts
+    type: unit
+    ci: L4
+    status: active
+    product: 新媒体运营
+    note: "ZJ10 Customer Mgmt WS3 — platform-sessions 页面合同测试"
+
+  - id: zj10-customer-mgmt-ws4
+    path: sprints/zj10-customer-mgmt/tests/ws4/customer-management-e2e.test.ts
+    type: e2e
+    ci: L4
+    status: active
+    product: 新媒体运营
+    note: "ZJ10 Customer Mgmt WS4 — 客户管理 E2E 合同测试"
+
 agent_suite:
   managed_by: services/agent/src/__tests__ + services/agent/publishers
   ci: L4

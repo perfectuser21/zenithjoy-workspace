@@ -1,61 +1,60 @@
-contract_branch: cp-harness-propose-r2-85dcd538
+contract_branch: cp-harness-propose-r3-9b8199e0
 workstream_index: 1
-sprint_dir: sprints/zj-ops1-session-health
+sprint_dir: sprints/zj10-customer-mgmt
 
 ---
 skeleton: false
 journey_type: user_facing
 ---
-# Contract DoD — Workstream 1: check-health.js 全平台扩展
+# Contract DoD — Workstream 1: 后端 API 路由（3 个端点）
 
-**范围**: 扩展 PLATFORMS 至 35 条目（8×4=32 平台账号 + 3 API key）；重构 checkPlatform 输出 schema 为 PRD 规范；新增 sendFeishuAlert() + Promise.race 3s timeout；新增 SKIP_HTTP_CHECK 支持；session-health-report.json 改为 JSON array 格式
-**大小**: M（~150 行净增）
-**依赖**: 无
+**范围**: 新建 `apps/api/src/routes/admin-customers.ts`（3 个 GET 端点 + `superAdminGuard`）；在 `apps/api/src/app.ts` 注册 `/api/admin/customers`
+**大小**: M（~150 行净增，2 文件）
+**依赖**: 无（`depends_on: []`）
 
 ---
 
 ## ARTIFACT 条目
 
-- [ ] [ARTIFACT] `scripts/sessions/check-health.js` 文件存在且含 35 条 secretEnv 定义
-  Test: node -e "const s=require('fs').readFileSync('scripts/sessions/check-health.js','utf8'); const n=(s.match(/secretEnv:/g)||[]).length; if(n<35){console.error('FAIL: secretEnv count='+n+' <35');process.exit(1)}; console.log('OK: count='+n)"
+- [ ] [ARTIFACT] `apps/api/src/routes/admin-customers.ts` 文件已创建，导出 `adminCustomersRouter`
+  Test: node -e "require('fs').accessSync('apps/api/src/routes/admin-customers.ts'); const c=require('fs').readFileSync('apps/api/src/routes/admin-customers.ts','utf8'); if(!c.includes('adminCustomersRouter'))process.exit(1); console.log('OK')"
 
-- [ ] [ARTIFACT] PLATFORMS 数组覆盖全部 8 个平台（抖音/快手/小红书/视频号/头条/微博/知乎/公众号）及 3 个 API key
-  Test: node -e "const s=require('fs').readFileSync('scripts/sessions/check-health.js','utf8'); const p=['KUAISHOU','XIAOHONGSHU','SHIPINHAO','TOUTIAO','WEIBO','ZHIHU','GONGZHONGHAO','FEISHU_API_KEY','NOTION_API_KEY','WECOM_API_KEY']; const miss=p.filter(x=>!s.includes(x)); if(miss.length>0){console.error('FAIL:',miss);process.exit(1)}; console.log('OK')"
+- [ ] [ARTIFACT] `apps/api/src/app.ts` 已引入并注册 adminCustomersRouter 到 `/api/admin/customers`
+  Test: node -e "const c=require('fs').readFileSync('apps/api/src/app.ts','utf8'); if(!c.includes('admin/customers')||!c.includes('adminCustomersRouter')){process.exit(1)}; console.log('OK')"
 
-- [ ] [ARTIFACT] `sendFeishuAlert` 函数存在（新增飞书双渠道告警）
-  Test: node -e "const s=require('fs').readFileSync('scripts/sessions/check-health.js','utf8'); if(!s.includes('sendFeishuAlert')){console.error('FAIL: 无 sendFeishuAlert');process.exit(1)}; console.log('OK')"
-
-- [ ] [ARTIFACT] `SKIP_HTTP_CHECK` 环境变量支持存在（CI 离线环境保护）
-  Test: node -e "const s=require('fs').readFileSync('scripts/sessions/check-health.js','utf8'); if(!s.includes('SKIP_HTTP_CHECK')){console.error('FAIL: 无 SKIP_HTTP_CHECK');process.exit(1)}; console.log('OK')"
+- [ ] [ARTIFACT] 路由文件包含 3 个子路径（platform-sessions + publish-logs）
+  Test: node -e "const c=require('fs').readFileSync('apps/api/src/routes/admin-customers.ts','utf8'); ['platform-sessions','publish-logs'].forEach(e=>{if(!c.includes(e)){console.error('FAIL:缺端点',e);process.exit(1)}}); console.log('OK')"
 
 ---
 
-## BEHAVIOR 条目
+## BEHAVIOR 条目（真实 curl+jq API oracle — evaluator 启动 server 后运行）
 
-- [ ] [BEHAVIOR] check-health.js 输出 JSON array（非对象），包含 35 条目
-  Test: manual:bash -c 'SKIP_HTTP_CHECK=true node scripts/sessions/check-health.js 2>/dev/null; node -e "const d=JSON.parse(require(\"fs\").readFileSync(\"session-health-report.json\",\"utf8\")); if(!Array.isArray(d)){console.error(\"FAIL: 不是 array\");process.exit(1)}; if(d.length!==35){console.error(\"FAIL: length=\"+d.length+\" 期望35\");process.exit(1)}; console.log(\"OK: array length=35\")"'
-  期望: OK: array length=35
+> **evaluator 使用前置步骤**（每条 BEHAVIOR 命令假设 server 已在 localhost:5200 运行）:
+> ```bash
+> cd /workspace/apps/api && PORT=5200 npx tsx src/index.ts &
+> sleep 4  # 等待 server 就绪
+> ```
 
-- [ ] [BEHAVIOR] 每个条目 keys 完全等于 PRD 规范（checkedAt/expiresAt/platform/secretEnv/status）
-  Test: manual:bash -c 'SKIP_HTTP_CHECK=true node scripts/sessions/check-health.js 2>/dev/null; node -e "const d=JSON.parse(require(\"fs\").readFileSync(\"session-health-report.json\",\"utf8\")); const exp=JSON.stringify([\"checkedAt\",\"expiresAt\",\"platform\",\"secretEnv\",\"status\"]); const fail=d.find((item,i)=>{const act=JSON.stringify(Object.keys(item).sort()); if(act!==exp){console.error(\"FAIL item[\"+i+\"]: keys=\"+act);return true}}); if(fail)process.exit(1); console.log(\"OK: all keys match PRD\")"'
-  期望: OK: all keys match PRD
-
-- [ ] [BEHAVIOR] status 枚举值严格限于 ok/expired/invalid/missing
-  Test: manual:bash -c 'SKIP_HTTP_CHECK=true node scripts/sessions/check-health.js 2>/dev/null; node -e "const d=JSON.parse(require(\"fs\").readFileSync(\"session-health-report.json\",\"utf8\")); const allowed=new Set([\"ok\",\"expired\",\"invalid\",\"missing\"]); const bad=d.filter(item=>!allowed.has(item.status)); if(bad.length>0){console.error(\"FAIL: illegal status\",bad.map(x=>x.status));process.exit(1)}; console.log(\"OK: all status valid\")"'
-  期望: OK: all status valid
-
-- [ ] [BEHAVIOR] sendFeishuAlert 使用 Promise.race + 3000ms 超时
-  Test: manual:bash -c 'node -e "const s=require(\"fs\").readFileSync(\"scripts/sessions/check-health.js\",\"utf8\"); if(!s.includes(\"Promise.race\")){console.error(\"FAIL: 无 Promise.race\");process.exit(1)}; if(!s.match(/3[_\s]*(?:000|\*\s*1000)/)){console.error(\"FAIL: 无 3000ms\");process.exit(1)}; console.log(\"OK\")"'
+- [ ] [BEHAVIOR] GET /api/admin/customers 返回 HTTP 200 + success:true + data:array + total:number（核心schema）
+  Test: manual:bash -c 'RESP=$(curl -sf http://localhost:5200/api/admin/customers) || { echo "FAIL: 端点未返回 200（路由未注册）"; exit 1; }; echo "$RESP" | jq -e ".success == true" || { echo "FAIL: success"; exit 1; }; echo "$RESP" | jq -e ".data | type == \"array\"" || { echo "FAIL: data"; exit 1; }; echo "$RESP" | jq -e ".total | type == \"number\"" || { echo "FAIL: total"; exit 1; }; echo OK'
   期望: OK
 
-- [ ] [BEHAVIOR] JSON 解析失败时 status 为 invalid
-  Test: manual:bash -c 'node -e "const s=require(\"fs\").readFileSync(\"scripts/sessions/check-health.js\",\"utf8\"); if(s.match(/status:\s*[\"'"'"']error[\"'"'"']/)){console.error(\"FAIL: 仍使用禁用 error\");process.exit(1)}; if(!s.match(/status:\s*[\"'"'"']invalid[\"'"'"']/)){console.error(\"FAIL: 缺 invalid\");process.exit(1)}; console.log(\"OK\")"'
+- [ ] [BEHAVIOR] GET /api/admin/customers schema 完整性：顶层 keys 精确等于 [data, success, total]，禁用字段（users/clients/members/result）不出现
+  Test: manual:bash -c 'RESP=$(curl -sf http://localhost:5200/api/admin/customers) || exit 1; echo "$RESP" | jq -e "keys | sort | . == [\"data\",\"success\",\"total\"]" || { echo "FAIL: schema completeness"; exit 1; }; for F in users clients members result; do echo "$RESP" | jq -e "has(\"$F\") | not" || { echo "FAIL: 禁用字段 $F 出现"; exit 1; }; done; echo OK'
   期望: OK
 
-- [ ] [BEHAVIOR] Secret 未配置时 status 为 missing
-  Test: manual:bash -c 'node -e "const s=require(\"fs\").readFileSync(\"scripts/sessions/check-health.js\",\"utf8\"); if(s.match(/status:\s*[\"'"'"']skip[\"'"'"']/)){console.error(\"FAIL: 仍使用禁用 skip\");process.exit(1)}; if(!s.match(/status:\s*[\"'"'"']missing[\"'"'"']/)){console.error(\"FAIL: 缺 missing\");process.exit(1)}; console.log(\"OK\")"'
+- [ ] [BEHAVIOR] GET /api/admin/customers/platform-sessions 返回 HTTP 200 + correct schema + status 值只为 active|expired
+  Test: manual:bash -c 'RESP=$(curl -sf http://localhost:5200/api/admin/customers/platform-sessions) || { echo "FAIL: platform-sessions 端点未返回 200"; exit 1; }; echo "$RESP" | jq -e ".success == true" || { echo "FAIL: success"; exit 1; }; echo "$RESP" | jq -e ".data | type == \"array\"" || { echo "FAIL: data type"; exit 1; }; echo "$RESP" | jq -e "keys | sort | . == [\"data\",\"success\",\"total\"]" || { echo "FAIL: schema completeness"; exit 1; }; echo OK'
   期望: OK
 
-- [ ] [BEHAVIOR] API key 条目 expiresAt 为 null
-  Test: manual:bash -c 'SKIP_HTTP_CHECK=true node scripts/sessions/check-health.js 2>/dev/null; node -e "const d=JSON.parse(require(\"fs\").readFileSync(\"session-health-report.json\",\"utf8\")); const apiKeys=d.filter(x=>x.secretEnv.includes(\"_API_KEY\")); if(apiKeys.length<3){console.error(\"FAIL: API_KEY 条目 <3\");process.exit(1)}; const bad=apiKeys.filter(x=>x.expiresAt!==null); if(bad.length>0){console.error(\"FAIL: expiresAt 非 null\",bad.map(x=>x.secretEnv));process.exit(1)}; console.log(\"OK: \"+apiKeys.length+\" 个 API_KEY expiresAt 均为 null\")"'
-  期望: OK: 3 个 API_KEY 条目 expiresAt 均为 null
+- [ ] [BEHAVIOR] GET /api/admin/customers/publish-logs 返回 HTTP 200 + correct schema + tenant_id query 筛选有效
+  Test: manual:bash -c 'RESP=$(curl -sf http://localhost:5200/api/admin/customers/publish-logs) || { echo "FAIL: publish-logs 端点未返回 200"; exit 1; }; echo "$RESP" | jq -e ".success == true" || { echo "FAIL: success"; exit 1; }; echo "$RESP" | jq -e "keys | sort | . == [\"data\",\"success\",\"total\"]" || { echo "FAIL: schema completeness"; exit 1; }; FILT=$(curl -sf "http://localhost:5200/api/admin/customers/publish-logs?tenant_id=00000000-0000-0000-0000-000000000000") || { echo "FAIL: tenant_id 筛选失败"; exit 1; }; echo "$FILT" | jq -e ".success == true" || { echo "FAIL: 筛选 success"; exit 1; }; echo OK'
+  期望: OK
+
+- [ ] [BEHAVIOR] 非超管（X-Feishu-User-Id 不在白名单）访问 /api/admin/customers 返回 HTTP 403
+  Test: manual:bash -c 'CODE=$(curl -s -o /dev/null -w "%{http_code}" -H "X-Feishu-User-Id: not-an-admin" http://localhost:5200/api/admin/customers); [ "$CODE" = "403" ] || { echo "FAIL: 非超管应返回 403 实际 HTTP=$CODE"; exit 1; }; echo OK'
+  期望: OK
+
+- [ ] [BEHAVIOR] vitest 单元测试套件全部通过（12 项 — schema/路由/鉴权/禁用字段/app.ts注册）
+  Test: manual:bash -c 'cd /workspace && npx vitest run sprints/zj10-customer-mgmt/tests/ws1/admin-customers-routes.test.ts --reporter=verbose 2>&1 | tee /tmp/ws1-result.log; grep -q "12 passed" /tmp/ws1-result.log && echo OK || { echo "FAIL: vitest 有失败 tests"; grep -E "FAIL|failed" /tmp/ws1-result.log; exit 1; }'
+  期望: OK (12 passed)
