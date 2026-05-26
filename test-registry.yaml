@@ -2180,6 +2180,14 @@ tests:
     product: 新媒体运营
     note: "ZJ10 Customer Mgmt WS4 — 客户管理 E2E 合同测试"
 
+  - id: zj10-customer-mgmt-e2e-spec
+    path: apps/dashboard/e2e/customer-management.spec.ts
+    type: e2e
+    ci: windows_cloud
+    status: active
+    product: 新媒体运营
+    note: "ZJ10 Customer Mgmt WS4 — Playwright E2E 走客户概览/platform-sessions/publish-logs/403 全链（page.route stub，windows_cloud）"
+
 agent_suite:
   managed_by: services/agent/src/__tests__ + services/agent/publishers
   ci: L4
