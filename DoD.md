@@ -1,51 +1,61 @@
-contract_branch: cp-harness-propose-r3-9b8199e0
+contract_branch: main
 workstream_index: 4
-sprint_dir: sprints/zj10-customer-mgmt
+sprint_dir: sprints/zj-ops1-session-health
 
 ---
 skeleton: false
 journey_type: user_facing
-target_environment: windows_cloud
 ---
-# Contract DoD — Workstream 4: E2E Playwright 测试（windows_cloud）
+# Contract DoD — Workstream 4: CI session-health-check.yml 扩展 + smoke 脚本
 
-**范围**: 新建 `apps/dashboard/e2e/customer-management.spec.ts`（4 个 test，API stub 模式，对应 Golden Path 全程）
-**大小**: S（~120 行净增，1 文件）
-**依赖**: Workstream 3（页面组件全部存在，test 引用的 data-testid 可以实际找到）
+**范围**: `.github/workflows/session-health-check.yml` env 段注入全部 35 个平台 Secrets（DOUYIN_MAIN ~ WECOM_API_KEY）+ FEISHU_BOT_WEBHOOK；新建 `.github/workflows/scripts/smoke/session-health-smoke.sh`；新建 `sprints/zj-ops1-session-health/e2e-verify.ps1`
+**大小**: S（~100 行净增）
+**依赖**: Workstream 3 完成后
 
 ---
 
 ## ARTIFACT 条目
 
-- [ ] [ARTIFACT] `apps/dashboard/e2e/customer-management.spec.ts` 文件已创建
-  Test: node -e "require('fs').accessSync('apps/dashboard/e2e/customer-management.spec.ts'); console.log('OK')"
+- [ ] [ARTIFACT] `scripts/sessions/check-health.js` 文件存在且含 35 条 secretEnv 定义
+  Test: node -e "const s=require('fs').readFileSync('scripts/sessions/check-health.js','utf8'); const n=(s.match(/secretEnv:/g)||[]).length; if(n<35){console.error('FAIL: secretEnv count='+n+' <35');process.exit(1)}; console.log('OK: count='+n)"
 
-- [ ] [ARTIFACT] spec 文件包含 4 个 test，覆盖 Golden Path 全程（customers 概览/platform-sessions/publish-logs/403 拦截）
-  Test: node -e "const c=require('fs').readFileSync('apps/dashboard/e2e/customer-management.spec.ts','utf8'); const count=(c.match(/\btest\(/g)||[]).length; if(count<4){console.error('FAIL:test数量不足',count);process.exit(1)} console.log('OK count='+count)"
+- [ ] [ARTIFACT] PLATFORMS 数组覆盖全部 8 个平台（抖音/快手/小红书/视频号/头条/微博/知乎/公众号）及 3 个 API key
+  Test: node -e "const s=require('fs').readFileSync('scripts/sessions/check-health.js','utf8'); const p=['KUAISHOU','XIAOHONGSHU','SHIPINHAO','TOUTIAO','WEIBO','ZHIHU','GONGZHONGHAO','FEISHU_API_KEY','NOTION_API_KEY','WECOM_API_KEY']; const miss=p.filter(x=>!s.includes(x)); if(miss.length>0){console.error('FAIL:',miss);process.exit(1)}; console.log('OK')"
 
-- [ ] [ARTIFACT] spec 文件使用 `page.route()` stub API 调用（不依赖真实后端，适合 windows_cloud 干净 VM）
-  Test: node -e "const c=require('fs').readFileSync('apps/dashboard/e2e/customer-management.spec.ts','utf8'); if(!c.includes('page.route'))process.exit(1); console.log('OK')"
+- [ ] [ARTIFACT] `sendFeishuAlert` 函数存在（新增飞书双渠道告警）
+  Test: node -e "const s=require('fs').readFileSync('scripts/sessions/check-health.js','utf8'); if(!s.includes('sendFeishuAlert')){console.error('FAIL: 无 sendFeishuAlert');process.exit(1)}; console.log('OK')"
+
+- [ ] [ARTIFACT] `SKIP_HTTP_CHECK` 环境变量支持存在（CI 离线环境保护）
+  Test: node -e "const s=require('fs').readFileSync('scripts/sessions/check-health.js','utf8'); if(!s.includes('SKIP_HTTP_CHECK')){console.error('FAIL: 无 SKIP_HTTP_CHECK');process.exit(1)}; console.log('OK')"
 
 ---
 
 ## BEHAVIOR 条目
 
-- [ ] [BEHAVIOR] spec 文件中存在针对 `/admin/customers` 的 test，且包含 `customers-table-row` data-testid 断言
-  Test: manual:bash -c 'node -e "const c=require(\"fs\").readFileSync(\"apps/dashboard/e2e/customer-management.spec.ts\",\"utf8\"); if(!c.includes(\"/admin/customers\")||!c.includes(\"customers-table-row\")){console.error(\"FAIL:缺概览页test或testid断言\");process.exit(1)} console.log(\"OK\")"'
+- [ ] [BEHAVIOR] check-health.js 输出 JSON array（非对象），包含 35 条目
+  Test: manual:bash -c 'SKIP_HTTP_CHECK=true node scripts/sessions/check-health.js 2>/dev/null; node -e "const d=JSON.parse(require(\"fs\").readFileSync(\"session-health-report.json\",\"utf8\")); if(!Array.isArray(d)){console.error(\"FAIL: 不是 array\");process.exit(1)}; if(d.length!==35){console.error(\"FAIL: length=\"+d.length+\" 期望35\");process.exit(1)}; console.log(\"OK: array length=35\")"'
+  期望: OK: array length=35
+
+- [ ] [BEHAVIOR] 每个条目 keys 完全等于 PRD 规范（checkedAt/expiresAt/platform/secretEnv/status）
+  Test: manual:bash -c 'SKIP_HTTP_CHECK=true node scripts/sessions/check-health.js 2>/dev/null; node -e "const d=JSON.parse(require(\"fs\").readFileSync(\"session-health-report.json\",\"utf8\")); const exp=JSON.stringify([\"checkedAt\",\"expiresAt\",\"platform\",\"secretEnv\",\"status\"]); const fail=d.find((item,i)=>{const act=JSON.stringify(Object.keys(item).sort()); if(act!==exp){console.error(\"FAIL item[\"+i+\"]: keys=\"+act);return true}}); if(fail)process.exit(1); console.log(\"OK: all keys match PRD\")"'
+  期望: OK: all keys match PRD
+
+- [ ] [BEHAVIOR] status 枚举值严格限于 ok/expired/invalid/missing
+  Test: manual:bash -c 'SKIP_HTTP_CHECK=true node scripts/sessions/check-health.js 2>/dev/null; node -e "const d=JSON.parse(require(\"fs\").readFileSync(\"session-health-report.json\",\"utf8\")); const allowed=new Set([\"ok\",\"expired\",\"invalid\",\"missing\"]); const bad=d.filter(item=>!allowed.has(item.status)); if(bad.length>0){console.error(\"FAIL: illegal status\",bad.map(x=>x.status));process.exit(1)}; console.log(\"OK: all status valid\")"'
+  期望: OK: all status valid
+
+- [ ] [BEHAVIOR] sendFeishuAlert 使用 Promise.race + 3000ms 超时
+  Test: manual:bash -c 'node -e "const s=require(\"fs\").readFileSync(\"scripts/sessions/check-health.js\",\"utf8\"); if(!s.includes(\"Promise.race\")){console.error(\"FAIL: 无 Promise.race\");process.exit(1)}; if(!s.match(/3[_\s]*(?:000|\*\s*1000)/)){console.error(\"FAIL: 无 3000ms\");process.exit(1)}; console.log(\"OK\")"'
   期望: OK
 
-- [ ] [BEHAVIOR] spec 文件中存在针对 `/admin/customers/platform-sessions` 的 test，包含 `session-status` data-testid 断言，且验证 status 值为 `active` 或 `expired`
-  Test: manual:bash -c 'node -e "const c=require(\"fs\").readFileSync(\"apps/dashboard/e2e/customer-management.spec.ts\",\"utf8\"); if(!c.includes(\"platform-sessions\")||!c.includes(\"session-status\")){console.error(\"FAIL:缺platform-sessions test或testid\");process.exit(1)} if(!c.includes(\"active\")||!c.includes(\"expired\")){console.error(\"FAIL:缺status值验证\");process.exit(1)} console.log(\"OK\")"'
+- [ ] [BEHAVIOR] JSON 解析失败时 status 为 invalid
+  Test: manual:bash -c 'node -e "const s=require(\"fs\").readFileSync(\"scripts/sessions/check-health.js\",\"utf8\"); if(s.match(/status:\s*[\"'"'"']error[\"'"'"']/)){console.error(\"FAIL: 仍使用禁用 error\");process.exit(1)}; if(!s.match(/status:\s*[\"'"'"']invalid[\"'"'"']/)){console.error(\"FAIL: 缺 invalid\");process.exit(1)}; console.log(\"OK\")"'
   期望: OK
 
-- [ ] [BEHAVIOR] spec 文件中存在针对 `/admin/customers/publish-logs` 的 test，包含 `tenant_id` query param 验证（且不使用禁用 query 名 `user`/`client`/`id`/`t`）
-  Test: manual:bash -c 'node -e "const c=require(\"fs\").readFileSync(\"apps/dashboard/e2e/customer-management.spec.ts\",\"utf8\"); if(!c.includes(\"publish-logs\")||!c.includes(\"tenant_id\")){console.error(\"FAIL:缺publish-logs test或tenant_id验证\");process.exit(1)} const forbidden=[\"searchParams.get(\\\"user\\\")\",\"searchParams.get(\\\"client\\\")\",\"searchParams.get(\\\"id\\\")\",\"searchParams.get(\\\"t\\\")\"]; forbidden.forEach(f=>{if(c.includes(f)){console.error(\"FAIL:使用禁用query参数名\",f);process.exit(1)}}); console.log(\"OK\")"'
+- [ ] [BEHAVIOR] Secret 未配置时 status 为 missing
+  Test: manual:bash -c 'node -e "const s=require(\"fs\").readFileSync(\"scripts/sessions/check-health.js\",\"utf8\"); if(s.match(/status:\s*[\"'"'"']skip[\"'"'"']/)){console.error(\"FAIL: 仍使用禁用 skip\");process.exit(1)}; if(!s.match(/status:\s*[\"'"'"']missing[\"'"'"']/)){console.error(\"FAIL: 缺 missing\");process.exit(1)}; console.log(\"OK\")"'
   期望: OK
 
-- [ ] [BEHAVIOR] spec 文件包含 403 error path test，验证非超管访问被拦截或重定向
-  Test: manual:bash -c 'node -e "const c=require(\"fs\").readFileSync(\"apps/dashboard/e2e/customer-management.spec.ts\",\"utf8\"); if(!c.includes(\"403\")){console.error(\"FAIL:缺403 error path test\");process.exit(1)} console.log(\"OK\")"'
-  期望: OK
-
-- [ ] [BEHAVIOR] spec 文件包含 `page.screenshot()` 在关键操作前后（≥ 8 次），截图存入 `screenshots/` 目录
-  Test: manual:bash -c 'node -e "const c=require(\"fs\").readFileSync(\"apps/dashboard/e2e/customer-management.spec.ts\",\"utf8\"); const count=(c.match(/page\.screenshot\(/g)||[]).length; if(count<8){console.error(\"FAIL:截图调用不足\",count,\"期望>=8\");process.exit(1)} console.log(\"OK count=\"+count)"'
-  期望: OK
+- [ ] [BEHAVIOR] API key 条目 expiresAt 为 null
+  Test: manual:bash -c 'SKIP_HTTP_CHECK=true node scripts/sessions/check-health.js 2>/dev/null; node -e "const d=JSON.parse(require(\"fs\").readFileSync(\"session-health-report.json\",\"utf8\")); const apiKeys=d.filter(x=>x.secretEnv.includes(\"_API_KEY\")); if(apiKeys.length<3){console.error(\"FAIL: API_KEY 条目 <3\");process.exit(1)}; const bad=apiKeys.filter(x=>x.expiresAt!==null); if(bad.length>0){console.error(\"FAIL: expiresAt 非 null\",bad.map(x=>x.secretEnv));process.exit(1)}; console.log(\"OK: \"+apiKeys.length+\" 个 API_KEY expiresAt 均为 null\")"'
+  期望: OK: 3 个 API_KEY 条目 expiresAt 均为 null
