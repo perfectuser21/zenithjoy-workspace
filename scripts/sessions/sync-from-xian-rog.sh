@@ -12,10 +12,19 @@
 #
 # 覆盖的 GitHub Secrets（8 平台 × 4 账号 = 32 个）：
 #   {PLATFORM}_{ACCOUNT_TYPE}
-#   PLATFORM: DOUYIN / KUAISHOU / XIAOHONGSHU / WEIBO / WECHAT / TOUTIAO / ZHIHU / SHIPINHAO
+#   PLATFORM: DOUYIN / KUAISHOU / XIAOHONGSHU / WEIBO / GONGZHONGHAO / TOUTIAO / ZHIHU / SHIPINHAO
 #   ACCOUNT_TYPE: MAIN / SUB_1 / SUB_2 / SUB_3
 #
 #   例：KUAISHOU_MAIN  XIAOHONGSHU_SUB_1  DOUYIN_SUB_3
+#
+# Secrets: KUAISHOU_MAIN KUAISHOU_SUB_1 KUAISHOU_SUB_2 KUAISHOU_SUB_3
+#          XIAOHONGSHU_MAIN XIAOHONGSHU_SUB_1 XIAOHONGSHU_SUB_2 XIAOHONGSHU_SUB_3
+#          SHIPINHAO_MAIN SHIPINHAO_SUB_1 SHIPINHAO_SUB_2 SHIPINHAO_SUB_3
+#          TOUTIAO_MAIN TOUTIAO_SUB_1 TOUTIAO_SUB_2 TOUTIAO_SUB_3
+#          WEIBO_MAIN WEIBO_SUB_1 WEIBO_SUB_2 WEIBO_SUB_3
+#          ZHIHU_MAIN ZHIHU_SUB_1 ZHIHU_SUB_2 ZHIHU_SUB_3
+#          GONGZHONGHAO_MAIN GONGZHONGHAO_SUB_1 GONGZHONGHAO_SUB_2 GONGZHONGHAO_SUB_3
+#          DOUYIN_MAIN DOUYIN_SUB_1 DOUYIN_SUB_2 DOUYIN_SUB_3
 #
 # Windows session 文件路径约定：
 #   %WIN_SESSIONS%\{platform}\main.json
@@ -24,7 +33,7 @@
 #   %WIN_SESSIONS%\{platform}\sub_3.json
 # ================================================================
 
-set -euo pipefail
+set -uo pipefail
 
 MACHINE="${1:-xian-rog}"
 REPO="perfectuser21/zenithjoy-workspace"
@@ -93,7 +102,7 @@ PLATFORMS=(
   "kuaishou:KUAISHOU"
   "xiaohongshu:XIAOHONGSHU"
   "weibo:WEIBO"
-  "wechat:WECHAT"
+  "gongzhonghao:GONGZHONGHAO"
   "toutiao:TOUTIAO"
   "zhihu:ZHIHU"
   "shipinhao:SHIPINHAO"
