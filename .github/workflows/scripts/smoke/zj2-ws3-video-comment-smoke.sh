@@ -28,7 +28,7 @@ if [ -n "$DB" ]; then
   SEEDED_KW_TASK_ID=$(psql "$DB" -tA -c \
     "INSERT INTO zenithjoy.acquisition_keyword_tasks (keyword, expanded_keywords, status)
      VALUES ('ws3-smoke', '[]', 'dispatched')
-     RETURNING id" 2>/dev/null | tr -d ' ' || echo "")
+     RETURNING id" 2>/dev/null | head -1 | tr -d ' \n' || echo "")
 fi
 
 TASK_ID="${SEEDED_KW_TASK_ID:-00000000-0000-0000-0000-000000000001}"
