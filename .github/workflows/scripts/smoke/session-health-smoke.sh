@@ -50,3 +50,4 @@ console.log('OK: all status values valid');
 "
 
 echo "=== Smoke PASSED ==="
+exit 0
