@@ -98,9 +98,29 @@ New-Item -ItemType Directory -Force -Path "screenshots" | Out-Null
 Write-Host "Starting dashboard dev server (VITE_SKIP_AUTH=true)..."
 $env:VITE_SKIP_AUTH = "true"
 $dashboardPath = (Get-Location).Path
-$devProcess = Start-Process -FilePath "npx" -ArgumentList "vite", "--port", "5173" -PassThru -WindowStyle Hidden -WorkingDirectory $dashboardPath
-Start-Sleep -Seconds 20
-Write-Host "Dev server PID: $($devProcess.Id)"
+$viteOut = Join-Path $dashboardPath "vite-out.log"
+$viteErr = Join-Path $dashboardPath "vite-err.log"
+# cmd.exe /c is required on Windows to run .cmd shims like npx.cmd
+$devProcess = Start-Process -FilePath "cmd.exe" `
+    -ArgumentList "/c", "npx vite --port 5173" `
+    -PassThru -WorkingDirectory $dashboardPath `
+    -RedirectStandardOutput $viteOut -RedirectStandardError $viteErr
+
+# Poll TCP until vite is listening (max 60s)
+Write-Host "Waiting for vite on :5173 ..."
+$ready = $false
+for ($i = 1; $i -le 60; $i++) {
+    Start-Sleep -Seconds 1
+    $tcp = New-Object System.Net.Sockets.TcpClient
+    try { $tcp.Connect("127.0.0.1", 5173); $ready = $true; $tcp.Close(); break }
+    catch { try { $tcp.Close() } catch {} }
+}
+if (-not $ready) {
+    Write-Host "=== vite stdout ===" ; if (Test-Path $viteOut) { Get-Content $viteOut | Select-Object -Last 50 }
+    Write-Host "=== vite stderr ===" ; if (Test-Path $viteErr) { Get-Content $viteErr | Select-Object -Last 50 }
+    Write-Error "Vite did not start within 60s"; exit 1
+}
+Write-Host "Dev server PID: $($devProcess.Id) ready after ${i}s"
 
 Pop-Location
 
