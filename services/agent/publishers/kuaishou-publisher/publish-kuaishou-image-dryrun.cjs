@@ -2,12 +2,14 @@
 /**
  * 快手图文「dry-run」自检脚本（draft-only wrapper）
  *
- * 与 publish-kuaishou-image.cjs（真发版）严格隔离：
- *   - 只 CDP 连接到 Windows Chrome (端口 19223)
- *   - 验证已登录快手创作者中心
- *   - 截图当前发布页状态作为证据
+ * 三模式（优先级：KUAISHOU_COOKIES > KUAISHOU_PROFILE_DIR > CDP 兜底）：
+ *   1. KUAISHOU_COOKIES → chromium.launch headless + context.addCookies
+ *   2. KUAISHOU_PROFILE_DIR → chromium.launchPersistentContext
+ *   3. 默认 → connectOverCDP 端口 19223
+ *
+ * 安全约束：
  *   - **绝不上传图片、绝不填表单、绝不点击发布按钮**
- *   - 拦截疑似发布 API（/rest/cp/works/v1/photo/publish 等），命中即 dry-run 失守
+ *   - page.route 拦截疑似发布 API，命中即 dry-run 失守 → exit 1
  *
  * 用法：
  *   node publish-kuaishou-image-dryrun.cjs <queue-file-path>
@@ -26,11 +28,36 @@ const fs = require('fs');
 
 const CDP_URL = 'http://localhost:19223';
 const PUBLISH_URL = 'https://cp.kuaishou.com/article/publish/photo';
-// 命中即说明 dry-run 失守的 API 关键字
 const FORBIDDEN_API_PATTERNS = [
   '/rest/cp/works/',
   '/rest/cp/photo/publish',
 ];
+
+async function buildContext() {
+  const cookiesEnv = process.env.KUAISHOU_COOKIES;
+  const profileDir = process.env.KUAISHOU_PROFILE_DIR;
+
+  if (cookiesEnv) {
+    _log('[KS-DRY] 模式: KUAISHOU_COOKIES（chromium.launch + addCookies）');
+    const browser = await chromium.launch({ headless: true });
+    const context = await browser.newContext();
+    const cookies = JSON.parse(cookiesEnv);
+    await context.addCookies(cookies);
+    return { browser, context };
+  }
+
+  if (profileDir) {
+    _log('[KS-DRY] 模式: KUAISHOU_PROFILE_DIR（launchPersistentContext）');
+    const context = await chromium.launchPersistentContext(profileDir, { headless: false });
+    return { browser: null, context };
+  }
+
+  _log('[KS-DRY] 模式: CDP connectOverCDP', CDP_URL);
+  const browser = await chromium.connectOverCDP(CDP_URL);
+  const contexts = browser.contexts();
+  if (!contexts.length) throw new Error('CDP 没有上下文，确认 Chrome 19223 是否登录快手');
+  return { browser, context: contexts[0] };
+}
 
 async function main(queueFilePath) {
   _log('[KS-DRY] 读取队列文件:', queueFilePath);
@@ -43,26 +70,24 @@ async function main(queueFilePath) {
   _log('[KS-DRY] 文案:', content.substring(0, 50));
   _log('[KS-DRY] 图片(本地):', localImages.length, '张');
 
-  _log('[KS-DRY] 连接到现有浏览器:', CDP_URL);
-  const browser = await chromium.connectOverCDP(CDP_URL);
-  const contexts = browser.contexts();
-  if (!contexts.length) throw new Error('CDP 没有上下文，确认 Chrome 19223 是否登录快手');
-  const context = contexts[0];
-  const pages = context.pages();
-  if (!pages.length) throw new Error('CDP 没有 page');
-  const page = pages[0];
-  _log('[KS-DRY] 已连接到浏览器');
+  const { browser, context } = await buildContext();
 
-  // 安全栅栏
+  const pages = context.pages();
+  const page = pages.length ? pages[0] : await context.newPage();
+  _log('[KS-DRY] 已获取 page');
+
+  // page.route 安全栅栏 — 拦截发布 API，命中即 dry-run 失守
   let forbiddenApiHit = null;
-  page.on('request', (req) => {
-    const u = req.url();
-    for (const pat of FORBIDDEN_API_PATTERNS) {
-      if (u.includes(pat) && (req.method() === 'POST' || req.method() === 'PUT')) {
-        forbiddenApiHit = `${req.method()} ${u}`;
-        _log('[KS-DRY] !! 检测到疑似发布 API !!', forbiddenApiHit);
-      }
+  await page.route(/\/(rest\/cp\/works\/|rest\/cp\/photo\/publish)/, async (route) => {
+    const method = route.request().method();
+    const url = route.request().url();
+    if (method === 'POST' || method === 'PUT') {
+      forbiddenApiHit = `${method} ${url}`;
+      _log('[KS-DRY] !! 检测到疑似发布 API !!', forbiddenApiHit);
+      await route.abort();
+      return;
     }
+    await route.continue();
   });
 
   try {
@@ -88,13 +113,19 @@ async function main(queueFilePath) {
       ok: true,
       dryRun: true,
       url: finalUrl,
-      title,
+      title: title,
       imagesCount: localImages.length,
     };
     _log(JSON.stringify(result));
+
+    if (browser) await browser.close();
+    else await context.close();
+
     return result;
   } catch (err) {
     console.error('[KS-DRY] 失败:', err.message);
+    if (browser) await browser.close().catch(() => {});
+    else await context.close().catch(() => {});
     throw err;
   }
 }

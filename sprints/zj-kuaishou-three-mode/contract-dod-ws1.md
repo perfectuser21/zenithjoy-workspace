@@ -1,7 +1,3 @@
-contract_branch: cp-05272156-ws-169bb516-ws1
-workstream_index: 1
-sprint_dir: sprints/zj-kuaishou-three-mode
-
 ---
 skeleton: false
 journey_type: autonomous

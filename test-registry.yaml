@@ -2383,6 +2383,27 @@ agent_suite:
     status: active
     product: 新媒体运营
     note: "Line 01 Sprint WS4 TDD Red/Green — .github/workflows/kuaishou-e2e.yml GHA windows-latest + 截图 artifact + KUAISHOU_COOKIES secret"
+  - id: line01-kuaishou-three-mode-ws1
+    path: sprints/zj-kuaishou-three-mode/tests/ws1/kuaishou-image-dryrun.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 新媒体运营
+    note: "Line 01 Sprint zj-kuaishou-three-mode WS1 — publish-kuaishou-image-dryrun.cjs 三模式：KUAISHOU_COOKIES + KUAISHOU_PROFILE_DIR + CDP 兜底"
+  - id: line01-kuaishou-three-mode-ws2
+    path: sprints/zj-kuaishou-three-mode/tests/ws2/kuaishou-video-dryrun.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 新媒体运营
+    note: "Line 01 Sprint zj-kuaishou-three-mode WS2 — publish-kuaishou-video-dryrun.cjs 新建三模式"
+  - id: line01-kuaishou-three-mode-ws3
+    path: sprints/zj-kuaishou-three-mode/tests/ws3/kuaishou-gha-workflow.test.ts
+    type: e2e
+    ci: L4
+    status: active
+    product: 新媒体运营
+    note: "Line 01 Sprint zj-kuaishou-three-mode WS3 — .github/workflows/kuaishou-e2e.yml GHA windows-latest E2E"
   - id: line05-ai-video-pipeline-ws1
     path: sprints/run-20260527-1934/tests/ws1/original-script-fields.test.ts
     type: unit
