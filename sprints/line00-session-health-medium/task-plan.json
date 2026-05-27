@@ -1,0 +1,91 @@
+{
+  "initiative_id": "70ac50db-3c3e-4c28-898e-faa7a9bd5721",
+  "journey_type": "user_facing",
+  "journey_type_reason": "核心路径从 Dashboard /operator 页面登录按钮触发，含用户可见 UI 交互",
+  "target_environment": "windows_cloud",
+  "target_environment_reason": "ZenithJoy Dashboard E2E → GitHub Actions windows-latest runner",
+  "tasks": [
+    {
+      "task_id": "ws1",
+      "title": "check-health.js 修复：missing=ok bug + *_MAIN→*_COOKIES 命名 + GHA YAML 同步",
+      "scope": "check-health.js：将所有 secretEnv 从 DOUYIN_MAIN/KUAISHOU_MAIN 等改为 DOUYIN_COOKIES/KUAISHOU_COOKIES 等 8 个平台；修复 missing=ok 漏判（Secret 值为空时 status 必须为 missing，不得为 ok）；session-health-check.yml：env 段 Secret 引用名同步改为 *_COOKIES",
+      "dod": [
+        "[BEHAVIOR] check-health.js PLATFORMS 数组中不含任何 *_MAIN 形式 secretEnv",
+        "[BEHAVIOR] check-health.js PLATFORMS 数组含 DOUYIN_COOKIES / KUAISHOU_COOKIES / XIAOHONGSHU_COOKIES 等 8 个 *_COOKIES 条目",
+        "[BEHAVIOR] SKIP_HTTP_CHECK=true 时，空 Secret 环境变量对应条目 status === 'missing'（不是 'ok'）",
+        "[BEHAVIOR] session-health-check.yml env 段含 DOUYIN_COOKIES: ${{ secrets.DOUYIN_COOKIES }} 形式引用",
+        "[ARTIFACT] scripts/sessions/check-health.js 文件不含 DOUYIN_MAIN 字符串"
+      ],
+      "files": [
+        "scripts/sessions/check-health.js",
+        ".github/workflows/session-health-check.yml"
+      ],
+      "depends_on": [],
+      "complexity": "S",
+      "estimated_minutes": 30
+    },
+    {
+      "task_id": "ws2",
+      "title": "Agent qr-bind 多平台扩展：快手/小红书/视频号/头条/微博/知乎/公众号 7 个 handler",
+      "scope": "仿照 services/agent/src/handlers/qr-bind-douyin.ts 模式，新建 7 个平台的 qr-bind handler（qr-bind-kuaishou.ts / qr-bind-xiaohongshu.ts / qr-bind-shipinhao.ts / qr-bind-toutiao.ts / qr-bind-weibo.ts / qr-bind-zhihu.ts / qr-bind-gongzhonghao.ts）；每个 handler：CDP port 19222，导航对应 creator URL，URL 离开 /login 即登录成功，抓 storageState，POST /api/operator/sessions/upload-cookies",
+      "dod": [
+        "[BEHAVIOR] 每个新 handler 文件 export default 含 execute(payload) 方法",
+        "[BEHAVIOR] 每个 handler 的 loginUrl 指向对应平台 creator 域名（快手 cp.kuaishou.com，小红书 creator.xiaohongshu.com 等）",
+        "[BEHAVIOR] 每个 handler 内含 POST upload-cookies 的调用（含 platform 字段为该平台代号）",
+        "[ARTIFACT] services/agent/src/handlers/qr-bind-kuaishou.ts 存在",
+        "[ARTIFACT] services/agent/src/handlers/qr-bind-weibo.ts 存在",
+        "[ARTIFACT] services/agent/src/handlers/qr-bind-zhihu.ts 存在"
+      ],
+      "files": [
+        "services/agent/src/handlers/qr-bind-kuaishou.ts",
+        "services/agent/src/handlers/qr-bind-xiaohongshu.ts",
+        "services/agent/src/handlers/qr-bind-shipinhao.ts",
+        "services/agent/src/handlers/qr-bind-toutiao.ts",
+        "services/agent/src/handlers/qr-bind-weibo.ts",
+        "services/agent/src/handlers/qr-bind-zhihu.ts",
+        "services/agent/src/handlers/qr-bind-gongzhonghao.ts"
+      ],
+      "depends_on": [],
+      "complexity": "M",
+      "estimated_minutes": 45
+    },
+    {
+      "task_id": "ws3",
+      "title": "后端 API：upload-cookies（Octokit）+ bind-start（Agent dispatch）+ status",
+      "scope": "新建 apps/api/src/routes/operator-sessions.ts，含三个端点：（1）POST /api/operator/sessions/upload-cookies：接收 platform + cookies，用 Octokit 写 GitHub Secret DOUYIN_COOKIES 等；（2）POST /api/operator/sessions/bind-start：接收 platform，下发 qr_bind/{platform} task 给 xian-pc Agent；（3）GET /api/operator/sessions/status：返回各平台 status 数组（从最近 check-health report 或 DB 读取）。GH_SECRETS_WRITE_PAT 未配置时 upload-cookies 返回 HTTP 500",
+      "dod": [
+        "[BEHAVIOR] POST /api/operator/sessions/upload-cookies 成功返回 {ok: true, secretName: 'DOUYIN_COOKIES', updatedAt: '<ISO>'}，顶层 keys 完全等于 ['ok', 'secretName', 'updatedAt']",
+        "[BEHAVIOR] POST /api/operator/sessions/upload-cookies 缺少 GH_SECRETS_WRITE_PAT 时返回 HTTP 500 + {error: 'GH_SECRETS_WRITE_PAT 未配置'}",
+        "[BEHAVIOR] POST /api/operator/sessions/bind-start 传入无效 platform 返回 HTTP 400 + {error: '<string>'}",
+        "[BEHAVIOR] GET /api/operator/sessions/status 返回数组，每项 keys 含 platform/secretName/status/checkedAt",
+        "[ARTIFACT] apps/api/src/routes/operator-sessions.ts 文件存在"
+      ],
+      "files": [
+        "apps/api/src/routes/operator-sessions.ts"
+      ],
+      "depends_on": ["ws1"],
+      "complexity": "M",
+      "estimated_minutes": 50
+    },
+    {
+      "task_id": "ws4",
+      "title": "Dashboard OperatorPage 升级：8 主号"登录"按钮 + 状态轮询 + smoke test",
+      "scope": "OperatorPage.tsx：8 个平台各 MAIN 行添加"登录"/"重新登录"按钮，点击调 POST /api/operator/sessions/bind-start，按钮状态为 pending 时禁用并显示"登录中"；页面 mount 时调 GET /api/operator/sessions/status 加载状态，每 30s 自动刷新；新建 .github/workflows/scripts/smoke/session-health-medium-smoke.sh：用 SKIP_HTTP_CHECK=true 验证 check-health.js 输出 missing 正确、Secret 名含 *_COOKIES",
+      "dod": [
+        "[BEHAVIOR] OperatorPage.tsx 每个平台行含 data-testid='login-btn-{platform}' 按钮",
+        "[BEHAVIOR] 点击登录按钮后按钮变 disabled 且文字为'登录中'",
+        "[BEHAVIOR] GET /api/operator/sessions/status 结果中 status=ok 显示绿色 '✅ 在线'，expired 显示红色 '❌ 过期'",
+        "[BEHAVIOR] session-health-medium-smoke.sh 含 SKIP_HTTP_CHECK=true 调用 check-health.js 验证逻辑",
+        "[BEHAVIOR] session-health-medium-smoke.sh 验证 check-health.js 输出 JSON 不含任何 *_MAIN 字符串",
+        "[ARTIFACT] .github/workflows/scripts/smoke/session-health-medium-smoke.sh 存在且 ≥5 行"
+      ],
+      "files": [
+        "apps/dashboard/src/pages/OperatorPage.tsx",
+        ".github/workflows/scripts/smoke/session-health-medium-smoke.sh"
+      ],
+      "depends_on": ["ws2", "ws3"],
+      "complexity": "M",
+      "estimated_minutes": 45
+    }
+  ]
+}
