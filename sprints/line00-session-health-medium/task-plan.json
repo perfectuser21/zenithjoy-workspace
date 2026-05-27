@@ -1,0 +1,123 @@
+{
+  "initiative_id": "70ac50db-3c3e-4c28-898e-faa7a9bd5721",
+  "journey_type": "user_facing",
+  "journey_type_reason": "核心入口是 apps/dashboard/ 运营中枢页，运营员通过 UI 触发一键登录和查看状态矩阵",
+  "target_environment": "windows_cloud",
+  "target_environment_reason": "ZenithJoy Dashboard E2E 规则 — GitHub Actions windows-latest runner 干净 VM",
+  "tasks": [
+    {
+      "task_id": "ws1",
+      "title": "DB Migration — operator_sessions 表",
+      "scope": "新建 db/migrations/20260527_operator_sessions.sql：operator_sessions 表（platform/secret_name/status/last_checked_at/last_valid_at/created_at/updated_at），status CHECK 约束仅允许 active/expired/missing",
+      "dod": [
+        "[BEHAVIOR] operator_sessions 表在 DB 中存在（psql 验证 count=1）",
+        "[BEHAVIOR] 表含 5 核心字段（platform/secret_name/status/last_checked_at/last_valid_at）",
+        "[BEHAVIOR] status CHECK 约束拒绝 ok/healthy/valid（违法值 INSERT 报错）",
+        "[BEHAVIOR] status=active 可正常写入（CHECK 允许合法值）",
+        "[ARTIFACT] db/migrations/20260527_operator_sessions.sql 文件存在含 operator_sessions"
+      ],
+      "files": [
+        "db/migrations/20260527_operator_sessions.sql"
+      ],
+      "depends_on": [],
+      "complexity": "S",
+      "estimated_minutes": 25
+    },
+    {
+      "task_id": "ws2",
+      "title": "API 4 端点 + app.ts 注册",
+      "scope": "新建 apps/api/src/routes/operator-sessions.ts 实现 4 端点：POST trigger-bind（202+{ok,taskId,platform}）/ POST upload-cookies（Octokit 写 {PLATFORM_UPPER}_COOKIES）/ GET sessions（8 条数组，keys=[lastCheckedAt,lastValidAt,platform,secretName,status]）/ POST status（{ok,updated}，internal-auth 守卫）；注册路由到 apps/api/src/app.ts",
+      "dod": [
+        "[BEHAVIOR] POST trigger-bind 返 202 + {ok,taskId,platform}，keys 完全等于 [ok,platform,taskId]",
+        "[BEHAVIOR] trigger-bind 禁用字段不在 response（id/task/jobId/requestId）",
+        "[BEHAVIOR] GET sessions 返 8 条，每项 keys 完全等于 [lastCheckedAt,lastValidAt,platform,secretName,status]",
+        "[BEHAVIOR] GET sessions secretName 以 _COOKIES 结尾，status 仅含 active/expired/missing",
+        "[BEHAVIOR] POST status 返 {ok:true,updated:N}，keys=[ok,updated]",
+        "[BEHAVIOR] upload-cookies 源码含 _COOKIES 格式化逻辑，不含 _MAIN/_SESSION/_TOKEN",
+        "[ARTIFACT] apps/api/src/routes/operator-sessions.ts 含 trigger-bind + upload-cookies 路由"
+      ],
+      "files": [
+        "apps/api/src/routes/operator-sessions.ts",
+        "apps/api/src/app.ts"
+      ],
+      "depends_on": ["ws1"],
+      "complexity": "M",
+      "estimated_minutes": 55
+    },
+    {
+      "task_id": "ws3",
+      "title": "Dashboard OperatorPage 重构（thin → medium）",
+      "scope": "重写 apps/dashboard/src/pages/OperatorPage.tsx：8 平台主号单列（非 4×4 矩阵）；status 枚举 ok→active；每行「登录」按钮触发 POST trigger-bind；GET sessions 30s 轮询；lastCheckedAt/lastValidAt 显示；is_operator 守卫保留",
+      "dod": [
+        "[BEHAVIOR] OperatorPage.tsx 含 8 平台名 + active 枚举 + 轮询逻辑",
+        "[BEHAVIOR] 调用 GET /api/operator/sessions（非旧 /sync），含 trigger-bind POST 调用",
+        "[BEHAVIOR] status 枚举不含 ok（修正 thin 版的 ok 枚举为 active）",
+        "[BEHAVIOR] 含 lastCheckedAt/lastValidAt 字段引用 + is_operator 守卫保留",
+        "[ARTIFACT] apps/dashboard/src/pages/OperatorPage.tsx 存在且 export default"
+      ],
+      "files": [
+        "apps/dashboard/src/pages/OperatorPage.tsx"
+      ],
+      "depends_on": ["ws2"],
+      "complexity": "M",
+      "estimated_minutes": 50
+    },
+    {
+      "task_id": "ws4",
+      "title": "Dashboard E2E Playwright spec",
+      "scope": "新建 apps/dashboard/e2e/operator-sessions.spec.ts：8 平台行断言 + status badge + 登录按钮；API 全部 page.route stub；非运营员 redirect 验证；mock 使用 active 枚举（非 ok）",
+      "dod": [
+        "[BEHAVIOR] spec 存在，含 page.route stub，含 8 平台名断言",
+        "[BEHAVIOR] spec ≥3 个 test 块，mock response 含 active 枚举",
+        "[BEHAVIOR] mock status 不含禁用值 ok/healthy/valid",
+        "[BEHAVIOR] 含非运营员 redirect 断言",
+        "[ARTIFACT] apps/dashboard/e2e/operator-sessions.spec.ts 文件存在"
+      ],
+      "files": [
+        "apps/dashboard/e2e/operator-sessions.spec.ts"
+      ],
+      "depends_on": ["ws3"],
+      "complexity": "S",
+      "estimated_minutes": 35
+    },
+    {
+      "task_id": "ws5",
+      "title": "Agent qr-bind-operator handler",
+      "scope": "新建 services/agent/src/handlers/qr-bind-operator.ts（8 平台统一 handler，CDP 19222，storageState，5min 超时，POST upload-cookies）；注册 qr_bind/{platform} × 8 到 services/agent/src/index.ts",
+      "dod": [
+        "[BEHAVIOR] handler 存在，导出 handleQrBindOperator，含 8 平台 creator URL 映射",
+        "[BEHAVIOR] 含 CDP 19222 + 5min(300000ms)超时 + 超时返回 ok:false",
+        "[BEHAVIOR] 调用 POST upload-cookies 含 platform + cookies 字段",
+        "[BEHAVIOR] dispatcher 已注册 ≥2 个 qr_bind/ 路由",
+        "[ARTIFACT] services/agent/src/handlers/qr-bind-operator.ts 存在且导出函数"
+      ],
+      "files": [
+        "services/agent/src/handlers/qr-bind-operator.ts",
+        "services/agent/src/index.ts"
+      ],
+      "depends_on": ["ws4"],
+      "complexity": "M",
+      "estimated_minutes": 50
+    },
+    {
+      "task_id": "ws6",
+      "title": "GHA workflow + check-health.js 修复 + smoke.sh",
+      "scope": "修正 .github/workflows/session-health-check.yml（*_MAIN→*_COOKIES）；修正 scripts/sessions/check-health.js（missing≠ok，expired→飞书告警 Promise.race 3s，POST status 回写）；新建 .github/workflows/scripts/smoke/session-health-medium-smoke.sh（含 SKIP_HTTP_CHECK 离线模式，≥15 行）",
+      "dod": [
+        "[BEHAVIOR] check-health.js missing bug 修复（missing≠ok），含 expired→飞书告警 Promise.race 3s",
+        "[BEHAVIOR] check-health.js 含 POST /api/operator/sessions/status 回写调用",
+        "[BEHAVIOR] GHA workflow 无 *_MAIN，含 DOUYIN_COOKIES Secret 引用",
+        "[BEHAVIOR] smoke.sh 存在 ≥15 行，含 SKIP_HTTP_CHECK 离线模式",
+        "[ARTIFACT] .github/workflows/session-health-check.yml 无 _MAIN，有 _COOKIES"
+      ],
+      "files": [
+        ".github/workflows/session-health-check.yml",
+        "scripts/sessions/check-health.js",
+        ".github/workflows/scripts/smoke/session-health-medium-smoke.sh"
+      ],
+      "depends_on": ["ws5"],
+      "complexity": "M",
+      "estimated_minutes": 45
+    }
+  ]
+}
