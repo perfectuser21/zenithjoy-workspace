@@ -1,58 +1,58 @@
-contract_branch: cp-05272156-ws-169bb516-ws1
+contract_branch: cp-05272229-ws-96db2647-ws1
 workstream_index: 1
-sprint_dir: sprints/zj-kuaishou-three-mode
+sprint_dir: sprints/run-20260527-2037
 
 ---
 skeleton: false
-journey_type: autonomous
-target_environment: windows_cloud
+journey_type: user_facing
 ---
-# Contract DoD — Workstream 1: publish-kuaishou-image-dryrun.cjs 三模式改造
+# Contract DoD — Workstream 1: DB Migration + API 层新字段
 
-**范围**: `services/agent/publishers/kuaishou-publisher/publish-kuaishou-image-dryrun.cjs` 加 KUAISHOU_COOKIES（chromium.launch + addCookies）+ KUAISHOU_PROFILE_DIR（launchPersistentContext）两种新模式，保留 CDP connectOverCDP 兜底
-**大小**: S（~90 行净增）
-**依赖**: 无
+**范围**: 新增 migration SQL 加三列（original_script/target_aspect/detected_aspect），更新 PipelineJob interface，createJob 接受新字段，updateProgress 接受 detected_aspect
+**大小**: M（~140 行净增，3 文件）
+**依赖**: 无（串行链起点）
+
+---
 
 ## ARTIFACT 条目
 
-- [ ] [ARTIFACT] `publish-kuaishou-image-dryrun.cjs` 文件存在
-  Test: node -e "require('fs').accessSync('services/agent/publishers/kuaishou-publisher/publish-kuaishou-image-dryrun.cjs'); console.log('OK')"
+- [ ] [ARTIFACT] migration 文件存在于 `apps/api/db/migrations/`，含 `original_script` 关键字
+  Test: bash -c 'F=$(ls apps/api/db/migrations/ | grep -E "original_script|video_pipeline_new_fields" | grep "\.sql$" | sort | tail -1); [ -n "$F" ] || { echo "FAIL: migration 文件未找到"; exit 1; }; grep -q "original_script" "apps/api/db/migrations/$F" || { echo "FAIL: 缺 original_script"; exit 1; }; echo OK'
 
-- [ ] [ARTIFACT] 脚本含 KUAISHOU_COOKIES 环境变量读取
-  Test: node -e "const c=require('fs').readFileSync('services/agent/publishers/kuaishou-publisher/publish-kuaishou-image-dryrun.cjs','utf8');if(!c.includes('process.env.KUAISHOU_COOKIES'))process.exit(1);console.log('OK')"
+- [ ] [ARTIFACT] migration SQL 含 `target_aspect` 列定义
+  Test: bash -c 'F=$(ls apps/api/db/migrations/ | grep -E "original_script|video_pipeline_new_fields" | grep "\.sql$" | sort | tail -1); grep -q "target_aspect" "apps/api/db/migrations/$F" || { echo "FAIL: 缺 target_aspect"; exit 1; }; echo OK'
 
-- [ ] [ARTIFACT] 脚本含 KUAISHOU_PROFILE_DIR 环境变量读取
-  Test: node -e "const c=require('fs').readFileSync('services/agent/publishers/kuaishou-publisher/publish-kuaishou-image-dryrun.cjs','utf8');if(!c.includes('process.env.KUAISHOU_PROFILE_DIR'))process.exit(1);console.log('OK')"
+- [ ] [ARTIFACT] migration SQL 含 `detected_aspect` 列定义
+  Test: bash -c 'F=$(ls apps/api/db/migrations/ | grep -E "original_script|video_pipeline_new_fields" | grep "\.sql$" | sort | tail -1); grep -q "detected_aspect" "apps/api/db/migrations/$F" || { echo "FAIL: 缺 detected_aspect"; exit 1; }; echo OK'
 
-- [ ] [ARTIFACT] 脚本含 `chromium.launch` 调用（cookie/profile 模式需要，区别于 connectOverCDP）
-  Test: node -e "const c=require('fs').readFileSync('services/agent/publishers/kuaishou-publisher/publish-kuaishou-image-dryrun.cjs','utf8');if(!c.includes('chromium.launch'))process.exit(1);console.log('OK')"
+---
 
-## BEHAVIOR 条目
+## BEHAVIOR 条目（runtime oracle 优先 — v7.8 两层验证架构）
 
-- [ ] [BEHAVIOR] KUAISHOU_COOKIES 模式分支存在于脚本（三模式选择逻辑）
-  Test: manual:bash -c 'node -e "const c=require(\"fs\").readFileSync(\"services/agent/publishers/kuaishou-publisher/publish-kuaishou-image-dryrun.cjs\",\"utf8\");if(!c.includes(\"KUAISHOU_COOKIES\")){console.error(\"FAIL: 无 KUAISHOU_COOKIES 分支\");process.exit(1);}console.log(\"OK\")"'
+- [ ] [BEHAVIOR] DB 中 ai_video_pipeline_jobs 表三列均已存在（psql runtime oracle）
+  Test: manual:bash -c 'COUNT=$(psql "${DB_URL:-postgresql://postgres:postgres@localhost/cecelia}" -t -c "SELECT count(*) FROM information_schema.columns WHERE table_name='"'"'ai_video_pipeline_jobs'"'"' AND column_name IN ('"'"'original_script'"'"','"'"'target_aspect'"'"','"'"'detected_aspect'"'"')" 2>/dev/null | tr -d " \n"); [ "$COUNT" = "3" ] || { echo "FAIL: DB columns count=$COUNT 期望 3"; exit 1; }; echo OK'
   期望: OK
 
-- [ ] [BEHAVIOR] KUAISHOU_PROFILE_DIR 模式分支存在于脚本（launchPersistentContext 或等效调用）
-  Test: manual:bash -c 'node -e "const c=require(\"fs\").readFileSync(\"services/agent/publishers/kuaishou-publisher/publish-kuaishou-image-dryrun.cjs\",\"utf8\");if(!c.includes(\"KUAISHOU_PROFILE_DIR\")||!c.includes(\"launchPersistentContext\")){console.error(\"FAIL: 无 KUAISHOU_PROFILE_DIR/launchPersistentContext\");process.exit(1);}console.log(\"OK\")"'
+- [ ] [BEHAVIOR] target_aspect CHECK 约束限制 9:16 和 16:9 两值（migration SQL 字面量检查）
+  Test: manual:bash -c 'F=$(ls apps/api/db/migrations/ | grep -E "original_script|video_pipeline_new_fields" | grep "\.sql$" | sort | tail -1); [ -n "$F" ] || { echo "FAIL: migration 文件未找到"; exit 1; }; grep -q '"'"'9:16'"'"' "apps/api/db/migrations/$F" && grep -q '"'"'16:9'"'"' "apps/api/db/migrations/$F" || { echo "FAIL: target_aspect CHECK 值缺失"; exit 1; }; echo OK'
   期望: OK
 
-- [ ] [BEHAVIOR] 脚本输出 JSON 含 `imagesCount` 字段（image-dryrun response schema 完整性）
-  Test: manual:bash -c 'node -e "const c=require(\"fs\").readFileSync(\"services/agent/publishers/kuaishou-publisher/publish-kuaishou-image-dryrun.cjs\",\"utf8\");if(!c.includes(\"imagesCount\")){console.error(\"FAIL: 输出无 imagesCount 字段\");process.exit(1);}console.log(\"OK\")"'
+- [ ] [BEHAVIOR] POST /api/ai-video/jobs 接受 original_script + target_aspect，response 原样返回（curl+jq runtime oracle）
+  Test: manual:bash -c 'TS=$(date +%s); RESP=$(curl -sf -X POST "http://localhost:5200/api/ai-video/jobs" -H "Content-Type: application/json" -d "{\"topic\":\"dod-test-${TS}\",\"local_path\":\"/tmp/test.mp4\",\"original_script\":\"script-${TS}\",\"target_aspect\":\"9:16\"}" 2>/dev/null) || { echo "FAIL: POST 请求失败（API 未运行？）"; exit 1; }; echo "$RESP" | jq -e ".original_script == \"script-${TS}\"" || { echo "FAIL: original_script 未原样返回"; exit 1; }; echo "$RESP" | jq -e ".target_aspect == \"9:16\"" || { echo "FAIL: target_aspect 未原样返回"; exit 1; }; echo "$RESP" | jq -e ".detected_aspect == null" || { echo "FAIL: detected_aspect 初始应为 null"; exit 1; }; echo OK'
   期望: OK
 
-- [ ] [BEHAVIOR] 输出 JSON 不含禁用字段 `result`/`status`/`data`/`payload`（schema 禁用字段反向检查）
-  Test: manual:bash -c 'node -e "const c=require(\"fs\").readFileSync(\"services/agent/publishers/kuaishou-publisher/publish-kuaishou-image-dryrun.cjs\",\"utf8\");[\"result\",\"status\",\"data\",\"payload\"].forEach(f=>{const re=new RegExp(\"[\\x27\\x22]\"+f+\"[\\x27\\x22]\\\\s*:\");if(re.test(c)){console.error(\"FAIL: 禁用字段\",f,\"在输出 key 中\");process.exit(1);}});console.log(\"OK\")"'
+- [ ] [BEHAVIOR] GET /api/ai-video/jobs/:id response 顶层包含 original_script + target_aspect + detected_aspect 三字段（keys 完整性 oracle）
+  Test: manual:bash -c 'TS=$(date +%s); JID=$(curl -sf -X POST "http://localhost:5200/api/ai-video/jobs" -H "Content-Type: application/json" -d "{\"topic\":\"keys-test-${TS}\",\"local_path\":\"/tmp/t.mp4\",\"original_script\":\"s\",\"target_aspect\":\"16:9\"}" 2>/dev/null | jq -r ".id") || { echo "FAIL: POST 失败"; exit 1; }; RESP=$(curl -sf "http://localhost:5200/api/ai-video/jobs/${JID}" 2>/dev/null) || { echo "FAIL: GET 失败"; exit 1; }; echo "$RESP" | jq -e '"'"'has("original_script") and has("target_aspect") and has("detected_aspect")'"'"' || { echo "FAIL: 三字段未全返回"; exit 1; }; echo OK'
   期望: OK
 
-- [ ] [BEHAVIOR] error path — KUAISHOU_COOKIES 无效时脚本逻辑检测登录失败（含 login/passport URL 检查）
-  Test: manual:bash -c 'node -e "const c=require(\"fs\").readFileSync(\"services/agent/publishers/kuaishou-publisher/publish-kuaishou-image-dryrun.cjs\",\"utf8\");if(!c.includes(\"login\")||!c.includes(\"passport\")){console.error(\"FAIL: 脚本缺少登录失败检测逻辑\");process.exit(1);}console.log(\"OK\")"'
+- [ ] [BEHAVIOR] POST /api/ai-video/jobs response 不含禁用字段（aspectRatio / aspect_ratio / script / raw_script / source_script）
+  Test: manual:bash -c 'TS=$(date +%s); RESP=$(curl -sf -X POST "http://localhost:5200/api/ai-video/jobs" -H "Content-Type: application/json" -d "{\"topic\":\"banned-test-${TS}\",\"local_path\":\"/tmp/t.mp4\"}" 2>/dev/null) || { echo "FAIL: POST 失败"; exit 1; }; for b in aspectRatio aspect_ratio script raw_script source_script; do echo "$RESP" | jq -e "has(\"$b\") | not" || { echo "FAIL: 禁用字段 $b 存在"; exit 1; }; done; echo OK'
   期望: OK
 
-- [ ] [BEHAVIOR] 输出 JSON 含 `url` 字段 + `title` 字段（PRD image schema 必填字段 oracle，v7.3 codify 规则）
-  Test: manual:bash -c 'node -e "const c=require(\"fs\").readFileSync(\"services/agent/publishers/kuaishou-publisher/publish-kuaishou-image-dryrun.cjs\",\"utf8\");if(!c.match(/\\burl\\s*:/)){console.error(\"FAIL: 输出 JSON 无 url 字段\");process.exit(1);}if(!c.match(/\\btitle\\s*:/)){console.error(\"FAIL: 输出 JSON 无 title 字段\");process.exit(1);}console.log(\"OK\")"'
+- [ ] [BEHAVIOR] PipelineJob TypeScript interface 含 original_script / target_aspect / detected_aspect 三字段（interface 定义检查）
+  Test: manual:bash -c 'SVC="apps/api/src/services/ai-video-pipeline.service.ts"; for f in original_script target_aspect detected_aspect; do grep -q "$f" "$SVC" || { echo "FAIL: PipelineJob interface 缺 $f"; exit 1; }; done; echo OK'
   期望: OK
 
-- [ ] [BEHAVIOR] 脚本含 `page.route` 拦截快手图文发布 API（防止 `/rest/cp/photo/publish` 或 `/rest/cp/works/` 意外触发，R2 Risks 登记）
-  Test: manual:bash -c 'node -e "const c=require(\"fs\").readFileSync(\"services/agent/publishers/kuaishou-publisher/publish-kuaishou-image-dryrun.cjs\",\"utf8\");if(!c.includes(\"page.route\")){console.error(\"FAIL: 脚本缺 page.route（无法拦截发布 API）\");process.exit(1);}if(!c.includes(\"/rest/cp/photo/publish\")&&!c.includes(\"/rest/cp/works/\")){console.error(\"FAIL: 脚本缺发布 API URL 拦截模式\");process.exit(1);}console.log(\"OK\")"'
+- [ ] [BEHAVIOR] updateProgress controller 接受 detected_aspect 字段并转发给 service（controller 代码检查）
+  Test: manual:bash -c 'C="apps/api/src/controllers/ai-video-pipeline.controller.ts"; grep -q "detected_aspect" "$C" || { echo "FAIL: updateProgress 缺 detected_aspect"; exit 1; }; echo OK'
   期望: OK
