@@ -94,6 +94,7 @@ export class AiVideoPipelineService {
       resultUrl?: string;
       outputDir?: string;
       errorMsg?: string;
+      detectedAspect?: string | null;
     },
   ): Promise<PipelineJob> {
     const fields: string[] = ['updated_at = NOW()'];
@@ -105,6 +106,7 @@ export class AiVideoPipelineService {
     if (params.resultUrl !== undefined) { fields.push(`result_url = $${i++}`); values.push(params.resultUrl); }
     if (params.outputDir !== undefined) { fields.push(`output_dir = $${i++}`); values.push(params.outputDir); }
     if (params.errorMsg !== undefined) { fields.push(`error_msg = $${i++}`); values.push(params.errorMsg); }
+    if (params.detectedAspect !== undefined) { fields.push(`detected_aspect = $${i++}`); values.push(params.detectedAspect); }
 
     values.push(id);
     const result = await pool.query(
