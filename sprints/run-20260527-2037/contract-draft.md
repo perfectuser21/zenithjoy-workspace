@@ -5,7 +5,7 @@
 **journey_type**: user_facing
 **target_environment**: windows_cloud
 **propose_round**: 1
-**propose_branch**: cp-harness-propose-r1-96db2647
+**propose_branch**: cp-harness-propose-r1-79710a5d
 
 ---
 

@@ -50,6 +50,6 @@ journey_type: user_facing
   Test: manual:bash -c 'F="services/agent/src/handlers/video-pipeline.ts"; grep -q "detected_aspect" "$F" || { echo "FAIL: 缺 detected_aspect"; exit 1; }; grep -qE "fetch|PATCH|progress" "$F" || { echo "FAIL: 缺 HTTP 写回调用"; exit 1; }; echo OK'
   期望: OK
 
-- [ ] [BEHAVIOR] 非模板路径只生成单个文件（按 effectiveTarget 决定，不再双文件同时输出）
-  Test: manual:bash -c 'F="services/agent/src/handlers/video-pipeline.ts"; NON_TPL_START=$(grep -n "template_id" "$F" | grep -i "if\|!" | head -1 | cut -d: -f1); [ -n "$NON_TPL_START" ] || { echo "OK: 无法精确定位非模板分支，跳过"; exit 0; }; CHUNK=$(tail -n +"$NON_TPL_START" "$F" | head -50); COPIES=$(echo "$CHUNK" | grep -c "copyFileSync" || echo 0); [ "$COPIES" -le 1 ] || { echo "FAIL: 非模板路径仍有 $COPIES 次 copyFileSync（期望 ≤ 1）"; exit 1; }; echo "OK: copyFileSync 次数=$COPIES"'
-  期望: OK: copyFileSync 次数=0 或 1
+- [ ] [BEHAVIOR] 非模板路径只生成单个文件 + effectiveTarget 变量存在（双重验证防假绿）
+  Test: manual:bash -c 'F="services/agent/src/handlers/video-pipeline.ts"; grep -q "effectiveTarget" "$F" || { echo "FAIL: 缺 effectiveTarget（WS3 未实现）"; exit 1; }; TOTAL=$(grep -c "copyFileSync" "$F" 2>/dev/null || echo 0); [ "$TOTAL" -le 1 ] || { echo "FAIL: 全文 copyFileSync 次数=$TOTAL（期望 ≤ 1，双文件输出仍存在）"; exit 1; }; echo "OK: effectiveTarget 存在，copyFileSync 次数=$TOTAL"'
+  期望: OK: effectiveTarget 存在，copyFileSync 次数=0 或 1

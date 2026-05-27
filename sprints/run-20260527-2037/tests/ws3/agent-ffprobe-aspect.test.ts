@@ -34,17 +34,11 @@ describe('WS3 — Agent ffprobe width/height + detectedAspect + 单文件输出 
     expect(surroundingCode).toMatch(/fetch|progress|PATCH|fireProgress/i);
   });
 
-  it('非模板路径 copyFileSync 调用次数不超过 1（单文件输出）', () => {
-    const nonTplStart = SRC.lastIndexOf('// ── Non-template path') !== -1
-      ? SRC.lastIndexOf('// ── Non-template path')
-      : SRC.lastIndexOf('if (!job.template_id)');
-    if (nonTplStart === -1) {
-      expect(true).toBe(true);
-      return;
-    }
-    const nonTplEnd = SRC.indexOf('job.template_id', nonTplStart + 50);
-    const nonTplBlock = nonTplEnd > 0 ? SRC.slice(nonTplStart, nonTplEnd) : SRC.slice(nonTplStart, nonTplStart + 2000);
-    const copies = (nonTplBlock.match(/copyFileSync/g) ?? []).length;
+  it('非模板路径 copyFileSync 调用次数不超过 1（单文件输出）+ effectiveTarget 变量存在', () => {
+    // effectiveTarget 必须存在（WS3 核心实现标志），无条件断言
+    expect(SRC).toContain('effectiveTarget');
+    // 全文 copyFileSync 总次数 ≤ 1（双文件输出路径已被单文件替代）
+    const copies = (SRC.match(/copyFileSync/g) ?? []).length;
     expect(copies).toBeLessThanOrEqual(1);
   });
 });
