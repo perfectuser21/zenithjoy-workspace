@@ -4,16 +4,17 @@
   "journey_type_reason": "ZenithJoy Agent 驱动的平台发布自动化，无 dashboard UI 介入，属 agent 侧脚本 + CI，不涉及前端用户交互",
   "tasks": [
     {
-      "task_id": "ws2",
+      "task_id": "ws1",
       "title": "新建 publish-kuaishou-video-dryrun.cjs（三模式 + 视频发布页导航）",
-      "scope": "新建脚本，复用 image-dryrun 三模式框架，导航目标改为 https://cp.kuaishou.com/article/publish/video，输出 JSON 4 字段（ok/dryRun/url/title，无 imagesCount），拦截快手视频发布 API（/rest/cp/works/ 等）",
+      "scope": "新建脚本，复用 image-dryrun 三模式框架，导航目标改为 https://cp.kuaishou.com/article/publish/video，输出 JSON 4 字段（ok/dryRun/url/title，无 imagesCount），拦截快手视频发布 API（/rest/cp/works/ 等），含登录失败检测",
       "dod": [
         "[BEHAVIOR] 文件 publish-kuaishou-video-dryrun.cjs 存在",
         "[BEHAVIOR] 脚本含三模式（KUAISHOU_COOKIES + KUAISHOU_PROFILE_DIR + CDP 兜底）",
         "[BEHAVIOR] 输出 JSON ok:true + dryRun:true，无 imagesCount",
         "[BEHAVIOR] 输出 JSON 含 url 字段 + title 字段（PRD video schema 必填字段 oracle）",
         "[BEHAVIOR] 脚本含 page.route 拦截 /rest/cp/works/（干跑失守防护）",
-        "[BEHAVIOR] 禁用字段 result/status/data/payload 不在输出 keys 中"
+        "[BEHAVIOR] 禁用字段 result/status/data/payload 不在输出 keys 中",
+        "[BEHAVIOR] error path：含 login/passport URL 检测逻辑"
       ],
       "files": [
         "services/agent/publishers/kuaishou-publisher/publish-kuaishou-video-dryrun.cjs"
@@ -23,18 +24,19 @@
       "estimated_minutes": 45
     },
     {
-      "task_id": "ws3",
+      "task_id": "ws2",
       "title": "新建 .github/workflows/kuaishou-e2e.yml（GHA windows-latest 自动验证）",
       "scope": "新建 workflow_dispatch（可选 daily schedule）GHA workflow，windows-latest runner，注入 KUAISHOU_COOKIES secret，分步运行 image-dryrun + video-dryrun，传递 SCREENSHOT_DIR，upload screenshots artifact（if: always）",
       "dod": [
         "[ARTIFACT] .github/workflows/kuaishou-e2e.yml 文件存在",
-        "[BEHAVIOR] workflow 含 KUAISHOU_COOKIES 引用 + windows-latest + image-dryrun + video-dryrun",
+        "[BEHAVIOR] workflow 含 KUAISHOU_COOKIES 引用 + windows-latest",
+        "[BEHAVIOR] 含 image-dryrun + video-dryrun 两个调用步骤",
         "[BEHAVIOR] 含 upload-artifact + if:always() + SCREENSHOT_DIR 传递"
       ],
       "files": [
         ".github/workflows/kuaishou-e2e.yml"
       ],
-      "depends_on": ["ws2"],
+      "depends_on": ["ws1"],
       "complexity": "S",
       "estimated_minutes": 25
     }

@@ -3,52 +3,49 @@ skeleton: false
 journey_type: autonomous
 target_environment: windows_cloud
 ---
-# Contract DoD — Workstream 1: publish-kuaishou-image-dryrun.cjs 三模式改造
+# Contract DoD — Workstream 1: publish-kuaishou-video-dryrun.cjs 新建（三模式）
 
-**范围**: `services/agent/publishers/kuaishou-publisher/publish-kuaishou-image-dryrun.cjs` 加 KUAISHOU_COOKIES（chromium.launch + addCookies）+ KUAISHOU_PROFILE_DIR（launchPersistentContext）两种新模式，保留 CDP connectOverCDP 兜底
-**大小**: S（~90 行净增）
+**范围**: 新建 `services/agent/publishers/kuaishou-publisher/publish-kuaishou-video-dryrun.cjs`，复用 image-dryrun 三模式框架（KUAISHOU_COOKIES + KUAISHOU_PROFILE_DIR + CDP 兜底），导航目标改为 `https://cp.kuaishou.com/article/publish/video`，输出 JSON 只含 4 字段（ok/dryRun/url/title，无 imagesCount），拦截快手视频发布 API（/rest/cp/works/ 等）
+**大小**: M（~150 行新建）
 **依赖**: 无
 
 ## ARTIFACT 条目
 
-- [ ] [ARTIFACT] `publish-kuaishou-image-dryrun.cjs` 文件存在
-  Test: node -e "require('fs').accessSync('services/agent/publishers/kuaishou-publisher/publish-kuaishou-image-dryrun.cjs'); console.log('OK')"
+- [ ] [ARTIFACT] `publish-kuaishou-video-dryrun.cjs` 文件已创建
+  Test: node -e "require('fs').accessSync('services/agent/publishers/kuaishou-publisher/publish-kuaishou-video-dryrun.cjs'); console.log('OK')"
 
-- [ ] [ARTIFACT] 脚本含 KUAISHOU_COOKIES 环境变量读取
-  Test: node -e "const c=require('fs').readFileSync('services/agent/publishers/kuaishou-publisher/publish-kuaishou-image-dryrun.cjs','utf8');if(!c.includes('process.env.KUAISHOU_COOKIES'))process.exit(1);console.log('OK')"
+- [ ] [ARTIFACT] 脚本含视频发布页 URL `https://cp.kuaishou.com/article/publish/video`
+  Test: node -e "const c=require('fs').readFileSync('services/agent/publishers/kuaishou-publisher/publish-kuaishou-video-dryrun.cjs','utf8');if(!c.includes('cp.kuaishou.com/article/publish/video'))process.exit(1);console.log('OK')"
 
-- [ ] [ARTIFACT] 脚本含 KUAISHOU_PROFILE_DIR 环境变量读取
-  Test: node -e "const c=require('fs').readFileSync('services/agent/publishers/kuaishou-publisher/publish-kuaishou-image-dryrun.cjs','utf8');if(!c.includes('process.env.KUAISHOU_PROFILE_DIR'))process.exit(1);console.log('OK')"
-
-- [ ] [ARTIFACT] 脚本含 `chromium.launch` 调用（cookie/profile 模式需要，区别于 connectOverCDP）
-  Test: node -e "const c=require('fs').readFileSync('services/agent/publishers/kuaishou-publisher/publish-kuaishou-image-dryrun.cjs','utf8');if(!c.includes('chromium.launch'))process.exit(1);console.log('OK')"
+- [ ] [ARTIFACT] 脚本含三模式选择逻辑（KUAISHOU_COOKIES + KUAISHOU_PROFILE_DIR + CDP）
+  Test: node -e "const c=require('fs').readFileSync('services/agent/publishers/kuaishou-publisher/publish-kuaishou-video-dryrun.cjs','utf8');if(!c.includes('KUAISHOU_COOKIES')||!c.includes('KUAISHOU_PROFILE_DIR'))process.exit(1);console.log('OK')"
 
 ## BEHAVIOR 条目
 
-- [ ] [BEHAVIOR] KUAISHOU_COOKIES 模式分支存在于脚本（三模式选择逻辑）
-  Test: manual:bash -c 'node -e "const c=require(\"fs\").readFileSync(\"services/agent/publishers/kuaishou-publisher/publish-kuaishou-image-dryrun.cjs\",\"utf8\");if(!c.includes(\"KUAISHOU_COOKIES\")){console.error(\"FAIL: 无 KUAISHOU_COOKIES 分支\");process.exit(1);}console.log(\"OK\")"'
+- [ ] [BEHAVIOR] 脚本输出 JSON `ok` 字段值 true（video-dryrun success schema 字段验证）
+  Test: manual:bash -c 'node -e "const c=require(\"fs\").readFileSync(\"services/agent/publishers/kuaishou-publisher/publish-kuaishou-video-dryrun.cjs\",\"utf8\");if(!c.includes(\"ok: true\")){console.error(\"FAIL: 输出无 ok:true\");process.exit(1);}console.log(\"OK\")"'
   期望: OK
 
-- [ ] [BEHAVIOR] KUAISHOU_PROFILE_DIR 模式分支存在于脚本（launchPersistentContext 或等效调用）
-  Test: manual:bash -c 'node -e "const c=require(\"fs\").readFileSync(\"services/agent/publishers/kuaishou-publisher/publish-kuaishou-image-dryrun.cjs\",\"utf8\");if(!c.includes(\"KUAISHOU_PROFILE_DIR\")||!c.includes(\"launchPersistentContext\")){console.error(\"FAIL: 无 KUAISHOU_PROFILE_DIR/launchPersistentContext\");process.exit(1);}console.log(\"OK\")"'
+- [ ] [BEHAVIOR] 脚本输出 JSON `dryRun` 字段值 true（schema 完整性）
+  Test: manual:bash -c 'node -e "const c=require(\"fs\").readFileSync(\"services/agent/publishers/kuaishou-publisher/publish-kuaishou-video-dryrun.cjs\",\"utf8\");if(!c.includes(\"dryRun: true\")){console.error(\"FAIL: 输出无 dryRun:true\");process.exit(1);}console.log(\"OK\")"'
   期望: OK
 
-- [ ] [BEHAVIOR] 脚本输出 JSON 含 `imagesCount` 字段（image-dryrun response schema 完整性）
-  Test: manual:bash -c 'node -e "const c=require(\"fs\").readFileSync(\"services/agent/publishers/kuaishou-publisher/publish-kuaishou-image-dryrun.cjs\",\"utf8\");if(!c.includes(\"imagesCount\")){console.error(\"FAIL: 输出无 imagesCount 字段\");process.exit(1);}console.log(\"OK\")"'
+- [ ] [BEHAVIOR] 脚本输出 JSON 不含 `imagesCount` 字段（video schema keys 完整性 — video 只有 4 字段 `{ok,dryRun,url,title}`，区别于 image 的 5 字段）
+  Test: manual:bash -c 'node -e "const c=require(\"fs\").readFileSync(\"services/agent/publishers/kuaishou-publisher/publish-kuaishou-video-dryrun.cjs\",\"utf8\");const lines=c.split(\"\\n\").filter(l=>l.includes(\"imagesCount\"));if(lines.length>0){console.error(\"FAIL: video-dryrun 输出含 imagesCount（应无此字段）\");process.exit(1);}console.log(\"OK\")"'
   期望: OK
 
-- [ ] [BEHAVIOR] 输出 JSON 不含禁用字段 `result`/`status`/`data`/`payload`（schema 禁用字段反向检查）
-  Test: manual:bash -c 'node -e "const c=require(\"fs\").readFileSync(\"services/agent/publishers/kuaishou-publisher/publish-kuaishou-image-dryrun.cjs\",\"utf8\");[\"result\",\"status\",\"data\",\"payload\"].forEach(f=>{const re=new RegExp(\"[\\x27\\x22]\"+f+\"[\\x27\\x22]\\\\s*:\");if(re.test(c)){console.error(\"FAIL: 禁用字段\",f,\"在输出 key 中\");process.exit(1);}});console.log(\"OK\")"'
+- [ ] [BEHAVIOR] 禁用字段 `result`/`status`/`data`/`payload` 不出现在输出 JSON keys（schema 禁用字段反向检查）
+  Test: manual:bash -c 'node -e "const c=require(\"fs\").readFileSync(\"services/agent/publishers/kuaishou-publisher/publish-kuaishou-video-dryrun.cjs\",\"utf8\");[\"result\",\"status\",\"data\",\"payload\"].forEach(f=>{const re=new RegExp(\"[\\x27\\x22]\"+f+\"[\\x27\\x22]\\\\s*:\");if(re.test(c)){console.error(\"FAIL: 禁用字段\",f,\"在输出 key 中\");process.exit(1);}});console.log(\"OK\")"'
   期望: OK
 
-- [ ] [BEHAVIOR] error path — KUAISHOU_COOKIES 无效时脚本逻辑检测登录失败（含 login/passport URL 检查）
-  Test: manual:bash -c 'node -e "const c=require(\"fs\").readFileSync(\"services/agent/publishers/kuaishou-publisher/publish-kuaishou-image-dryrun.cjs\",\"utf8\");if(!c.includes(\"login\")||!c.includes(\"passport\")){console.error(\"FAIL: 脚本缺少登录失败检测逻辑\");process.exit(1);}console.log(\"OK\")"'
+- [ ] [BEHAVIOR] error path — 脚本含登录失败检测（导航后 URL 含 login/passport 时 exit 1）
+  Test: manual:bash -c 'node -e "const c=require(\"fs\").readFileSync(\"services/agent/publishers/kuaishou-publisher/publish-kuaishou-video-dryrun.cjs\",\"utf8\");if(!c.includes(\"login\")||!c.includes(\"passport\")){console.error(\"FAIL: 脚本缺少登录失败 URL 检测\");process.exit(1);}console.log(\"OK\")"'
   期望: OK
 
-- [ ] [BEHAVIOR] 输出 JSON 含 `url` 字段 + `title` 字段（PRD image schema 必填字段 oracle，v7.3 codify 规则）
-  Test: manual:bash -c 'node -e "const c=require(\"fs\").readFileSync(\"services/agent/publishers/kuaishou-publisher/publish-kuaishou-image-dryrun.cjs\",\"utf8\");if(!c.match(/\\burl\\s*:/)){console.error(\"FAIL: 输出 JSON 无 url 字段\");process.exit(1);}if(!c.match(/\\btitle\\s*:/)){console.error(\"FAIL: 输出 JSON 无 title 字段\");process.exit(1);}console.log(\"OK\")"'
+- [ ] [BEHAVIOR] 输出 JSON 含 `url` 字段 + `title` 字段（PRD video schema 必填字段 oracle，v7.3 codify 规则）
+  Test: manual:bash -c 'node -e "const c=require(\"fs\").readFileSync(\"services/agent/publishers/kuaishou-publisher/publish-kuaishou-video-dryrun.cjs\",\"utf8\");if(!c.match(/\\burl\\s*:/)){console.error(\"FAIL: 输出 JSON 无 url 字段\");process.exit(1);}if(!c.match(/\\btitle\\s*:/)){console.error(\"FAIL: 输出 JSON 无 title 字段\");process.exit(1);}console.log(\"OK\")"'
   期望: OK
 
-- [ ] [BEHAVIOR] 脚本含 `page.route` 拦截快手图文发布 API（防止 `/rest/cp/photo/publish` 或 `/rest/cp/works/` 意外触发，R2 Risks 登记）
-  Test: manual:bash -c 'node -e "const c=require(\"fs\").readFileSync(\"services/agent/publishers/kuaishou-publisher/publish-kuaishou-image-dryrun.cjs\",\"utf8\");if(!c.includes(\"page.route\")){console.error(\"FAIL: 脚本缺 page.route（无法拦截发布 API）\");process.exit(1);}if(!c.includes(\"/rest/cp/photo/publish\")&&!c.includes(\"/rest/cp/works/\")){console.error(\"FAIL: 脚本缺发布 API URL 拦截模式\");process.exit(1);}console.log(\"OK\")"'
+- [ ] [BEHAVIOR] 脚本含 `page.route` 拦截快手视频发布 API（防止 `/rest/cp/works/` 意外触发，R2 Risks 登记）
+  Test: manual:bash -c 'node -e "const c=require(\"fs\").readFileSync(\"services/agent/publishers/kuaishou-publisher/publish-kuaishou-video-dryrun.cjs\",\"utf8\");if(!c.includes(\"page.route\")){console.error(\"FAIL: 脚本缺 page.route（无法拦截视频发布 API）\");process.exit(1);}if(!c.includes(\"/rest/cp/works/\")){console.error(\"FAIL: 脚本缺 /rest/cp/works/ 拦截模式\");process.exit(1);}console.log(\"OK\")"'
   期望: OK
