@@ -1,0 +1,107 @@
+{
+  "initiative_id": "96db2647-c7f8-413e-b0f7-3f6f9d3526de",
+  "sprint_dir": "sprints/run-20260527-2037",
+  "journey_type": "user_facing",
+  "journey_type_reason": "涉及 LocalVideoPipelinePage 前端交互 + Agent Windows 视频输出，起点为用户 Dashboard UI 操作，Final E2E 在 GHA windows-latest Playwright",
+  "target_environment": "windows_cloud",
+  "target_environment_reason": "ZenithJoy Agent 是 Windows 产品，Final E2E 在 GitHub Actions windows-latest runner 跑 Playwright（GHA 干净 VM）",
+  "tasks": [
+    {
+      "task_id": "ws1",
+      "title": "DB Migration + API 层新字段（original_script / target_aspect / detected_aspect）",
+      "scope": "新增 migration SQL 三列 ADD COLUMN IF NOT EXISTS（original_script TEXT，target_aspect TEXT CHECK IN('9:16','16:9')，detected_aspect TEXT CHECK IN('9:16','16:9')）；PipelineJob interface 加三字段；createJob service/controller 接受 original_script + target_aspect；updateProgress/updateStatus 接受 detected_aspect 写回",
+      "dod": [
+        "[ARTIFACT] apps/api/db/migrations/20260527_100000_video_pipeline_new_fields.sql 文件存在，含三列 ADD COLUMN IF NOT EXISTS",
+        "[BEHAVIOR] migration 含 original_script + target_aspect + detected_aspect 三列定义，针对 zenithjoy.ai_video_pipeline_jobs",
+        "[BEHAVIOR] migration target_aspect CHECK 约束含 9:16 和 16:9 两值",
+        "[BEHAVIOR] PipelineJob TypeScript interface 含 original_script / target_aspect / detected_aspect 三字段",
+        "[BEHAVIOR] createJob controller 从 req.body 读取并传递 original_script + target_aspect",
+        "[BEHAVIOR] updateProgress controller 支持 detected_aspect 写回 service",
+        "[BEHAVIOR] 禁用字段名 aspect_ratio/raw_script/source_script 不出现在 controller 响应处理"
+      ],
+      "files": [
+        "apps/api/db/migrations/20260527_100000_video_pipeline_new_fields.sql",
+        "apps/api/src/services/ai-video-pipeline.service.ts",
+        "apps/api/src/controllers/ai-video-pipeline.controller.ts"
+      ],
+      "depends_on": [],
+      "complexity": "M",
+      "estimated_minutes": 35
+    },
+    {
+      "task_id": "ws2",
+      "title": "三模板专属 HTML Builder（_buildWGHtml/_buildCHtml/_buildRHtml）+ composeTemplate dispatch",
+      "scope": "在 ai-video-pipeline-ai.controller.ts 新增三个 export function：_buildWGHtml（9:16，#ede4d2 底 + #d39c4a mustard）、_buildCHtml（16:9，#0a0a0a 底 + #c9a23d amber）、_buildRHtml（16:9，#1d1410 底 + #c08e6a 玫瑰金）；每个函数有与 JSX 模板视觉一致的独立 HTML 结构和调色板；composeTemplate 按 templateId dispatch 到三函数；response { html, aspect } + 禁用字段 content/result/ratio 不出现",
+      "dod": [
+        "[BEHAVIOR] _buildWGHtml / _buildCHtml / _buildRHtml 三函数 export，各含模板专属色值",
+        "[BEHAVIOR] composeTemplate 函数体内按 W-G/C/R 分发到三个专属 builder",
+        "[BEHAVIOR] compose-template res.json() 不含禁用字段 content/result/ratio/output",
+        "[BEHAVIOR] 未知 templateId 返回 400 + error: 'unknown template...' 字段",
+        "[ARTIFACT] apps/api/src/controllers/ai-video-pipeline-ai.controller.ts 含三个专属 export 函数"
+      ],
+      "files": [
+        "apps/api/src/controllers/ai-video-pipeline-ai.controller.ts"
+      ],
+      "depends_on": ["ws1"],
+      "complexity": "L",
+      "estimated_minutes": 55
+    },
+    {
+      "task_id": "ws3",
+      "title": "Agent ffprobe 补 width/height + detectedAspect PATCH + effectiveTarget 单文件输出",
+      "scope": "video-pipeline.ts Step 1 读取 vStream.width/height；rotation=90°/270° swap effectiveWidth/Height；effectiveWidth < effectiveHeight → detectedAspect='9:16'；PATCH progress endpoint 带 detected_aspect 写回；effectiveTarget = job.target_aspect ?? detectedAspect ?? '9:16'；非模板路径只生成单个文件（按 effectiveTarget）",
+      "dod": [
+        "[BEHAVIOR] Step 1 读取 vStream.width + vStream.height",
+        "[BEHAVIOR] effectiveWidth/effectiveHeight swap 逻辑（rotation=90°/270°）",
+        "[BEHAVIOR] detectedAspect 计算与 9:16/16:9 关联",
+        "[BEHAVIOR] effectiveTarget 优先级：job.target_aspect 优先",
+        "[BEHAVIOR] detected_aspect 通过 PATCH/fetch 写回 API",
+        "[BEHAVIOR] 非模板路径 copyFileSync ≤ 1 次（单文件输出）"
+      ],
+      "files": [
+        "services/agent/src/handlers/video-pipeline.ts"
+      ],
+      "depends_on": ["ws2"],
+      "complexity": "M",
+      "estimated_minutes": 40
+    },
+    {
+      "task_id": "ws4",
+      "title": "Dashboard UI original_script textarea + 画幅选择器 + E2E spec 更新",
+      "scope": "LocalVideoPipelinePage.tsx 加 original_script textarea + target_aspect 选择器（9:16/16:9/自动检测）；createJob axios.post 携带两个新字段；e2e/agent-video-pipeline.spec.js 补 original_script 填写 + API schema 断言（original_script/detected_aspect 字段存在）",
+      "dod": [
+        "[BEHAVIOR] Dashboard createJob axios.post 携带 original_script 字段",
+        "[BEHAVIOR] Dashboard createJob axios.post 携带 target_aspect 字段",
+        "[BEHAVIOR] UI 含画幅选择器选项 9:16 和 16:9",
+        "[BEHAVIOR] E2E spec 验证 job response 含 original_script 字段",
+        "[BEHAVIOR] E2E spec 验证 job response 含 detected_aspect 字段",
+        "[BEHAVIOR] 禁用字段 aspect_ratio/raw_script/source_script 不出现在 Dashboard 代码"
+      ],
+      "files": [
+        "apps/dashboard/src/pages/LocalVideoPipelinePage.tsx",
+        "e2e/agent-video-pipeline.spec.js"
+      ],
+      "depends_on": ["ws3"],
+      "complexity": "M",
+      "estimated_minutes": 40
+    },
+    {
+      "task_id": "ws5",
+      "title": "Agent v1.1.30 + GHA workflow 版本更新（修正 PRD 笔误：1.1.29 已存在）",
+      "scope": "services/agent/package.json version = '1.1.30'（当前已是 1.1.29，PRD 写 1.1.29 为笔误，目标 1.1.30）；.github/workflows/agent-e2e-video.yml default agent_version = '1.1.30'；agent-installpack.yml 版本引用同步",
+      "dod": [
+        "[BEHAVIOR] services/agent/package.json version = '1.1.30'",
+        "[BEHAVIOR] agent-e2e-video.yml default agent_version = '1.1.30'",
+        "[BEHAVIOR] GHA workflow 中不含硬编码旧版本 '1.1.29' 作为 default"
+      ],
+      "files": [
+        "services/agent/package.json",
+        ".github/workflows/agent-e2e-video.yml",
+        ".github/workflows/agent-installpack.yml"
+      ],
+      "depends_on": ["ws4"],
+      "complexity": "S",
+      "estimated_minutes": 20
+    }
+  ]
+}
