@@ -41,8 +41,8 @@ journey_type: user_facing
   Test: manual:bash -c 'node -e "const c=require(\"fs\").readFileSync(\"apps/api/src/controllers/ai-video-pipeline-ai.controller.ts\",\"utf8\");const composeStart=c.indexOf(\"async function composeTemplate\");const composeEnd=c.indexOf(\"\nexport \",composeStart+10);const fn=c.slice(composeStart,composeEnd>0?composeEnd:composeStart+5000);if(!fn.includes(\"_buildWGHtml\")||!fn.includes(\"_buildCHtml\")||!fn.includes(\"_buildRHtml\")){console.error(\"FAIL: composeTemplate 未 dispatch 到三个 builder\");process.exit(1)}console.log(\"OK\")"'
   期望: OK
 
-- [ ] [BEHAVIOR] compose-template response 禁用字段 content/result/ratio/output 不出现在 res.json() 参数中
-  Test: manual:bash -c 'node -e "const c=require(\"fs\").readFileSync(\"apps/api/src/controllers/ai-video-pipeline-ai.controller.ts\",\"utf8\");const resJson=c.match(/res\.json\(\{[^}]+\}/g)||[];const joined=resJson.join(\"\");[\"content:\",\"result:\",\"\\\"ratio\\\"\",\"output:\"].forEach(f=>{if(joined.includes(f)){console.error(\"FAIL: 禁用字段 \"+f+\" 在 res.json 中\");process.exit(1)}});console.log(\"OK\")"'
+- [ ] [BEHAVIOR] compose-template res.json 含 html 字段 + 禁用字段 content/template/result/output/ratio 不出现（combined 正反向，防假绿）
+  Test: manual:bash -c 'node -e "const c=require(\"fs\").readFileSync(\"apps/api/src/controllers/ai-video-pipeline-ai.controller.ts\",\"utf8\");if(!c.includes(\"_buildWGHtml\")){console.error(\"FAIL: WS2 前置检查 _buildWGHtml 未实现\");process.exit(1)}const resJson=c.match(/res\.json\(\{[^}]{0,300}\}/g)||[];const joined=resJson.join(\"\");if(!joined.includes(\"html\")){console.error(\"FAIL: res.json 缺 html 字段\");process.exit(1)}[\"content:\",\"template:\",\"result:\",\"\\\"ratio\\\"\",\"output:\"].forEach(f=>{if(joined.includes(f)){console.error(\"FAIL: 禁用字段 \"+f+\" 在 res.json 中\");process.exit(1)}});console.log(\"OK\")"'
   期望: OK
 
 - [ ] [BEHAVIOR] templateId = 未知值时 composeTemplate 返回 400（error path）

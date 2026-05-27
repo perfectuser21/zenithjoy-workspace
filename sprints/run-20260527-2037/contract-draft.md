@@ -85,32 +85,54 @@ console.log('OK')
 
 ---
 
-### Step 4: compose-template 按 templateId 分发到专属函数，生成视觉正确 HTML
+### Step 4: compose-template 按 templateId 分发到专属函数，返回 {html, aspect}（jq-e oracle）
 
-**来源**: `[FROM_PRD]` — PRD "系统处理 — 模板 HTML 生成"："`compose-template` API 按 templateId 分发到 `_buildWGHtml` / `_buildCHtml` / `_buildRHtml` 三个专属函数，生成与 JSX 视觉一致的 HTML"
+**来源**: `[FROM_PRD]` — PRD "系统处理 — 模板 HTML 生成"："`compose-template` API 按 `templateId` 分发到 `_buildWGHtml` / `_buildCHtml` / `_buildRHtml`，生成与 JSX 视觉一致的 HTML"；PRD Response Schema `{html: string, aspect: string}`，禁用 `content`/`template`/`result`/`output`/`ratio`
 
-**可观测行为**: `composeTemplate` handler 根据 `job.template_id` 分发：`"W-G"→_buildWGHtml`、`"C"→_buildCHtml`、`"R"→_buildRHtml`，每个函数输出与对应 JSX 模板（颜色/布局/字体）视觉一致的 HTML；response = `{ html, aspect }`
+**可观测行为**: `composeTemplate` handler 根据 `job.template_id` dispatch；response `{html, aspect}` 合规；非法 templateId 返 400
 
-**验证命令**:
+**验证命令（两层）**:
 ```bash
-# 验证三个专属函数存在
+# 层 1：source oracle — 三个专属函数 + dispatch + W-G 专属色值存在
 node -e "
 const c=require('fs').readFileSync('apps/api/src/controllers/ai-video-pipeline-ai.controller.ts','utf8');
 ['_buildWGHtml','_buildCHtml','_buildRHtml'].forEach(fn=>{
   if(!c.includes(fn)){console.error('FAIL: missing '+fn);process.exit(1)}
 });
+// dispatch 含 'W-G' 映射
+if(!c.includes('W-G')){console.error('FAIL: dispatch 缺 W-G');process.exit(1)}
+// WG 专属色值（JSX 一致性）
+if(!c.includes('#ede4d2')&&!c.includes('d39c4a')){console.error('FAIL: _buildWGHtml 缺 WG 专属色值');process.exit(1)}
 console.log('OK')
 "
-# 验证 dispatch 逻辑存在（switch 或 if/else 映射 W-G/C/R）
+
+# 层 2：error path oracle — 非法 templateId → 400 + error 字段（前提：API 在 localhost:5200）
+: "\${JOB_ID:?需要先运行 Step 2 获取 JOB_ID}"
+CODE=\$(curl -s -o /dev/null -w "%{http_code}" \
+  -X POST "http://localhost:5200/api/ai-video/jobs/\${JOB_ID}/compose-template" \
+  -H "Content-Type: application/json" \
+  -d '{"templateId":"INVALID_XYZ"}')
+[ "\$CODE" = "400" ] || { echo "FAIL: 期望 400，实际=\$CODE"; exit 1; }
+ERR=\$(curl -s -X POST "http://localhost:5200/api/ai-video/jobs/\${JOB_ID}/compose-template" \
+  -H "Content-Type: application/json" -d '{"templateId":"INVALID_XYZ"}')
+echo "\$ERR" | jq -e '.error | type == "string"' || { echo "FAIL: error path 缺 error 字段"; exit 1; }
+
+# PRD Response Schema jq-e codify（v7.3 强制规则 — 完整 success path 需 Claude API，此处用 source 检查代替）
+# html 字段：composeTemplate res.json 包含 html 键
 node -e "
 const c=require('fs').readFileSync('apps/api/src/controllers/ai-video-pipeline-ai.controller.ts','utf8');
-if(!c.includes('W-G')&&!c.includes(\"'W-G'\"))process.exit(1);
-if(!c.includes('_buildWGHtml'))process.exit(1);
+const resJson=(c.match(/res\.json\(\{[^}]{0,500}\}/g)||[]).join('');
+if(!resJson.includes('html')){console.error('FAIL: res.json 缺 html 字段');process.exit(1)}
+if(!resJson.includes('aspect')){console.error('FAIL: res.json 缺 aspect 字段');process.exit(1)}
+// 禁用字段反向检查
+['content:','template:','result:','output:'].forEach(f=>{
+  if(resJson.includes(f)){console.error('FAIL: 禁用字段 '+f+' 在 res.json');process.exit(1)}
+});
 console.log('OK')
 "
 ```
 
-**硬阈值**: 三个函数均存在；dispatch 逻辑正确映射；`content`/`result`/`ratio` 不作为 response key
+**硬阈值**: 三个函数存在 + WG 专属色值存在；invalid templateId → 400 + error 字段；res.json 含 html+aspect，禁用字段不存在
 
 ---
 

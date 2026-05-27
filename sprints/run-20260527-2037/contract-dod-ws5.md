@@ -30,8 +30,8 @@ journey_type: user_facing
   Test: manual:bash -c 'node -e "const c=require(\"fs\").readFileSync(\".github/workflows/agent-e2e-video.yml\",\"utf8\");const m=c.match(/default:\\s*[\"'"'"']?([\\d.]+)[\"'"'"']?/);if(!m){console.error(\"FAIL: 未找到 default version\");process.exit(1)}if(m[1]!==\"1.1.30\"){console.error(\"FAIL: GHA default version=\"+m[1]+\" 期望 1.1.30\");process.exit(1)}console.log(\"OK default=\"+m[1])"'
   期望: OK default=1.1.30
 
-- [ ] [BEHAVIOR] E2E spec 或 GHA workflow 中不含硬编码旧版本 "1.1.29" 作为目标版本
-  Test: manual:bash -c 'node -e "const e=require(\"fs\").readFileSync(\".github/workflows/agent-e2e-video.yml\",\"utf8\");if(e.includes(\"default: \\\"1.1.29\\\"\")||e.includes(\"default: 1.1.29\")){console.error(\"FAIL: GHA 仍有旧版本 1.1.29\");process.exit(1)}console.log(\"OK\")"'
+- [ ] [BEHAVIOR] GHA workflow 含 "1.1.30" + 不含旧默认版本 "1.1.29"（combined 正反向检查，防假绿）
+  Test: manual:bash -c 'node -e "const e=require(\"fs\").readFileSync(\".github/workflows/agent-e2e-video.yml\",\"utf8\");if(!e.includes(\"1.1.30\")){console.error(\"FAIL: GHA 未更新到 1.1.30\");process.exit(1)}if(e.includes(\"default: \\\"1.1.29\\\"\")||e.includes(\"default: 1.1.29\")){console.error(\"FAIL: GHA 仍有旧默认版本 1.1.29\");process.exit(1)}console.log(\"OK\")"'
   期望: OK
 
 - [ ] [BEHAVIOR] services/agent/package.json version 字段是 string 类型，不是 number

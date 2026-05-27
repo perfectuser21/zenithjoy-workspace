@@ -45,8 +45,8 @@ journey_type: user_facing
   Test: manual:bash -c 'node -e "const c=require(\"fs\").readFileSync(\"apps/api/src/controllers/ai-video-pipeline.controller.ts\",\"utf8\");if(!c.includes(\"detected_aspect\")){console.error(\"FAIL: updateProgress missing detected_aspect\");process.exit(1)}console.log(\"OK\")"'
   期望: OK
 
-- [ ] [BEHAVIOR] 禁用字段名不出现在 createJob 响应处理代码（aspect_ratio / script / raw_script / source_script）
-  Test: manual:bash -c 'node -e "const c=require(\"fs\").readFileSync(\"apps/api/src/controllers/ai-video-pipeline.controller.ts\",\"utf8\");[\"aspect_ratio\",\"raw_script\",\"source_script\"].forEach(f=>{if(c.includes(f)){console.error(\"FAIL: 禁用字段 \"+f+\" 存在\");process.exit(1)}});console.log(\"OK\")"'
+- [ ] [BEHAVIOR] original_script 已在 controller 实现 + 禁用字段名不出现（combined 正反向检查，防假绿）
+  Test: manual:bash -c 'node -e "const c=require(\"fs\").readFileSync(\"apps/api/src/controllers/ai-video-pipeline.controller.ts\",\"utf8\");if(!c.includes(\"original_script\")){console.error(\"FAIL: WS1 前置检查 original_script 未实现\");process.exit(1)}[\"aspect_ratio:\",\"raw_script:\",\"source_script:\"].forEach(f=>{if(c.includes(f)){console.error(\"FAIL: 禁用字段 \"+f+\" 存在\");process.exit(1)}});console.log(\"OK\")"'
   期望: OK
 
 - [ ] [BEHAVIOR] service updateStatus 方法支持写入 detected_aspect（updateStatus 参数类型含此字段）

@@ -45,6 +45,6 @@ journey_type: user_facing
   Test: manual:bash -c 'node -e "const c=require(\"fs\").readFileSync(\"e2e/agent-video-pipeline.spec.js\",\"utf8\");if(!c.includes(\"detected_aspect\")){console.error(\"FAIL: E2E spec 未验证 detected_aspect\");process.exit(1)}console.log(\"OK\")"'
   期望: OK
 
-- [ ] [BEHAVIOR] 禁用字段名不出现在 Dashboard createJob 调用（aspect_ratio / script / raw_script）
-  Test: manual:bash -c 'node -e "const c=require(\"fs\").readFileSync(\"apps/dashboard/src/pages/LocalVideoPipelinePage.tsx\",\"utf8\");[\"aspect_ratio:\",\"raw_script:\",\"source_script:\"].forEach(f=>{if(c.includes(f)){console.error(\"FAIL: 禁用字段 \"+f);process.exit(1)}});console.log(\"OK\")"'
+- [ ] [BEHAVIOR] original_script 状态已实现 + 禁用字段不出现（combined 正反向检查，防假绿）
+  Test: manual:bash -c 'node -e "const c=require(\"fs\").readFileSync(\"apps/dashboard/src/pages/LocalVideoPipelinePage.tsx\",\"utf8\");if(!c.includes(\"original_script\")){console.error(\"FAIL: WS4 前置检查 original_script 状态未实现\");process.exit(1)}[\"aspect_ratio:\",\"raw_script:\",\"source_script:\"].forEach(f=>{if(c.includes(f)){console.error(\"FAIL: 禁用字段 \"+f);process.exit(1)}});console.log(\"OK\")"'
   期望: OK
