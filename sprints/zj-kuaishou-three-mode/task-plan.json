@@ -1,27 +1,8 @@
 {
-  "initiative_id": "pending",
+  "initiative_id": "46bc46d9-9ace-4678-bd0d-e7b00c076f2f",
   "journey_type": "autonomous",
   "journey_type_reason": "ZenithJoy Agent 驱动的平台发布自动化，无 dashboard UI 介入，属 agent 侧脚本 + CI，不涉及前端用户交互",
   "tasks": [
-    {
-      "task_id": "ws1",
-      "title": "publish-kuaishou-image-dryrun.cjs 加 KUAISHOU_COOKIES + KUAISHOU_PROFILE_DIR 两种模式",
-      "scope": "在现有 CDP-only dryrun 脚本中加入三模式选择逻辑：(1) KUAISHOU_COOKIES → chromium.launch headless + addCookies; (2) KUAISHOU_PROFILE_DIR → launchPersistentContext; (3) 默认 CDP connectOverCDP 兜底。保持现有输出 schema 不变（ok/dryRun/url/title/imagesCount）",
-      "dod": [
-        "[BEHAVIOR] 脚本含 KUAISHOU_COOKIES 模式分支，读取 process.env.KUAISHOU_COOKIES 并注入 cookie",
-        "[BEHAVIOR] 脚本含 KUAISHOU_PROFILE_DIR 模式分支，调用 launchPersistentContext",
-        "[BEHAVIOR] 脚本含 chromium.launch 调用（cookie/profile 模式需要）",
-        "[BEHAVIOR] 输出 JSON 含 url 字段 + title 字段（PRD image schema 必填字段 oracle）",
-        "[BEHAVIOR] 脚本含 page.route 拦截 /rest/cp/photo/publish 或 /rest/cp/works/（干跑失守防护）",
-        "[ARTIFACT] 输出 JSON 禁用字段 result/status/data/payload 不出现"
-      ],
-      "files": [
-        "services/agent/publishers/kuaishou-publisher/publish-kuaishou-image-dryrun.cjs"
-      ],
-      "depends_on": [],
-      "complexity": "S",
-      "estimated_minutes": 30
-    },
     {
       "task_id": "ws2",
       "title": "新建 publish-kuaishou-video-dryrun.cjs（三模式 + 视频发布页导航）",
@@ -37,7 +18,7 @@
       "files": [
         "services/agent/publishers/kuaishou-publisher/publish-kuaishou-video-dryrun.cjs"
       ],
-      "depends_on": ["ws1"],
+      "depends_on": [],
       "complexity": "M",
       "estimated_minutes": 45
     },
