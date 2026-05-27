@@ -1,0 +1,108 @@
+{
+  "initiative_id": "70ac50db-3c3e-4c28-898e-faa7a9bd5721",
+  "journey_type": "user_facing",
+  "journey_type_reason": "核心入口是 apps/dashboard/ 运营中枢页，运营员通过 UI 触发一键登录和状态矩阵查看",
+  "target_environment": "windows_cloud",
+  "target_environment_reason": "ZenithJoy Dashboard E2E 规则 — GitHub Actions windows-latest runner 干净 VM，PrepPRD 已显式指定",
+  "tasks": [
+    {
+      "task_id": "ws1",
+      "title": "E2E smoke + Playwright spec（失败先行，定义验收条件）",
+      "scope": "新建失败 E2E：Playwright spec 验证 /operator 页存在 8 平台状态矩阵 + 登录按钮；curl smoke 验证 trigger-bind/upload-cookies/GET sessions 端点 schema 符合 PRD；GHA session-health-check.yml cron 4x/日验证真实 HTTP 检查（missing≠ok）",
+      "dod": [
+        "[BEHAVIOR] apps/dashboard/e2e/operator-sessions.spec.ts 存在，内含 /operator 页 8 平台行 + status badge + 登录按钮断言",
+        "[BEHAVIOR] smoke.sh curl POST /api/operator/sessions/upload-cookies 期望响应 keys=[\"ok\",\"platform\",\"secretName\"] 且 secretName 含 _COOKIES",
+        "[BEHAVIOR] smoke.sh curl GET /api/operator/sessions 期望返回 array length=8，每项 status 仅含 active/expired/missing",
+        "[BEHAVIOR] smoke.sh 含 SKIP_HTTP_CHECK 模式离线验证（不依赖真实平台 cookie）",
+        "[ARTIFACT] .github/workflows/scripts/smoke/session-health-medium-smoke.sh 存在且 ≥15 行实质内容"
+      ],
+      "files": [
+        "apps/dashboard/e2e/operator-sessions.spec.ts",
+        ".github/workflows/scripts/smoke/session-health-medium-smoke.sh"
+      ],
+      "depends_on": [],
+      "complexity": "S",
+      "estimated_minutes": 35
+    },
+    {
+      "task_id": "ws2",
+      "title": "API：operator-sessions 4 端点 + DB migration + GitHub Octokit 写 Secret",
+      "scope": "新建 apps/api/src/routes/operator-sessions.ts 实现 4 端点：POST trigger-bind（推 qr_bind/\\{platform\\} task 给 Agent）/ POST upload-cookies（Octokit 写 GitHub Secret）/ GET sessions（读 DB 状态矩阵）/ POST status（GHA 回写专用，internal-auth 守卫）；DB migration 建 operator_sessions 表（platform/secret_name/status/last_checked_at/last_valid_at）；super-admin 守卫 trigger-bind 和 upload-cookies",
+      "dod": [
+        "[BEHAVIOR] POST /api/operator/sessions/trigger-bind 返 202 {\"ok\":true,\"taskId\":\"<string>\",\"platform\":\"douyin\"}，keys=[\"ok\",\"platform\",\"taskId\"]",
+        "[BEHAVIOR] POST /api/operator/sessions/upload-cookies 返 200 {\"ok\":true,\"secretName\":\"DOUYIN_COOKIES\",\"platform\":\"douyin\"}，secretName 格式为 {PLATFORM_UPPER}_COOKIES",
+        "[BEHAVIOR] GET /api/operator/sessions 返 JSON array length=8，每项 keys=[\"lastCheckedAt\",\"lastValidAt\",\"platform\",\"secretName\",\"status\"]",
+        "[BEHAVIOR] POST /api/operator/sessions/status 返 200 {\"ok\":true,\"updated\":<number>}，keys=[\"ok\",\"updated\"]",
+        "[BEHAVIOR] upload-cookies 调用 GitHub Octokit 写入 {PLATFORM_UPPER}_COOKIES Secret（禁用 *_MAIN/*_SESSION）",
+        "[ARTIFACT] db/migrations/ 下存在 operator_sessions migration 文件，含 platform/secret_name/status/last_checked_at/last_valid_at 字段"
+      ],
+      "files": [
+        "apps/api/src/routes/operator-sessions.ts",
+        "apps/api/src/app.ts",
+        "db/migrations/"
+      ],
+      "depends_on": ["ws1"],
+      "complexity": "M",
+      "estimated_minutes": 65
+    },
+    {
+      "task_id": "ws3",
+      "title": "Dashboard 运营中枢页：8 平台状态矩阵 + 登录按钮 + 轮询",
+      "scope": "新建 apps/dashboard/src/pages/OperatorPage.tsx：8 平台主号状态矩阵（active🟢/expired🔴/missing⚫ + lastValidAt）；每平台一个「登录」按钮 → POST trigger-bind → loading 态等待扫码；GET /api/operator/sessions 轮询（30s interval）；is_operator 守卫（email=xuxiao21xx@icloud.com）→ 非运营员重定向首页；注册 /operator 路由到 navigation.config.ts",
+      "dod": [
+        "[BEHAVIOR] OperatorPage.tsx 含 8 个平台中文名（抖音/快手/小红书/视频号/头条/微博/知乎/公众号）",
+        "[BEHAVIOR] 每平台行含「登录」按钮 + status badge（active/expired/missing 三态）+ lastValidAt 时间显示",
+        "[BEHAVIOR] 点「登录」按钮触发 POST /api/operator/sessions/trigger-bind 并展示 loading/等待扫码提示",
+        "[BEHAVIOR] is_operator 守卫：非 xuxiao21xx@icloud.com 访问 /operator → redirect 首页",
+        "[BEHAVIOR] GET /api/operator/sessions 轮询间隔 ≤30s，返回 active 时状态实时更新",
+        "[ARTIFACT] apps/dashboard/src/pages/OperatorPage.tsx 文件存在且 export default"
+      ],
+      "files": [
+        "apps/dashboard/src/pages/OperatorPage.tsx",
+        "apps/dashboard/src/config/navigation.config.ts"
+      ],
+      "depends_on": ["ws2"],
+      "complexity": "M",
+      "estimated_minutes": 55
+    },
+    {
+      "task_id": "ws4",
+      "title": "Agent qr-bind-operator.ts：8 平台统一 handler + storageState → upload-cookies 上传",
+      "scope": "新建 services/agent/src/handlers/qr-bind-operator.ts，基于 qr-bind-douyin.ts 模式支持 8 个平台（douyin/kuaishou/xiaohongshu/shipinhao/toutiao/weibo/zhihu/gongzhonghao）；统一逻辑：CDP 19222 → 导航平台 creator URL → URL 离开 /login → 抓 storageState → POST ZENITHJOY_API_BASE/api/operator/sessions/upload-cookies（含 platform + cookies）；5min 超时保护；task 协议 qr_bind/{platform} 注册到 dispatcher",
+      "dod": [
+        "[BEHAVIOR] services/agent/src/handlers/qr-bind-operator.ts 含 8 个平台名（douyin/kuaishou/xiaohongshu/shipinhao/toutiao/weibo/zhihu/gongzhonghao）对应的 creator URL 映射",
+        "[BEHAVIOR] handler 在 URL 离开 /login 后 POST {ZENITHJOY_API_BASE}/api/operator/sessions/upload-cookies 含 {platform, cookies}",
+        "[BEHAVIOR] handler 含 5min（300000ms）超时保护，超时后返回 {ok:false,error:\"timeout\"}",
+        "[BEHAVIOR] task 协议 qr_bind/{platform} 在 dispatcher/index.ts 注册（8 个平台均可分发）",
+        "[ARTIFACT] services/agent/src/handlers/qr-bind-operator.ts 文件存在且导出 handleQrBindOperator 函数"
+      ],
+      "files": [
+        "services/agent/src/handlers/qr-bind-operator.ts",
+        "services/agent/src/index.ts"
+      ],
+      "depends_on": ["ws2"],
+      "complexity": "M",
+      "estimated_minutes": 55
+    },
+    {
+      "task_id": "ws5",
+      "title": "GHA session-health-check.yml：*_MAIN→*_COOKIES 修正 + 真实 HTTP 验证 + 飞书告警回写",
+      "scope": "更新 .github/workflows/session-health-check.yml：env 段 Secret 引用全部改为 {PLATFORM}_COOKIES（8 平台）；更新 check-health.js：missing 状态不再当 ok，expired 条目触发飞书 Bot webhook（Promise.race 3s timeout）；每次巡检后 POST /api/operator/sessions/status 批量回写 DB；cron 保持 4x/日（北京时间 00/06/12/18 点）",
+      "dod": [
+        "[BEHAVIOR] session-health-check.yml env 段含 DOUYIN_COOKIES/KUAISHOU_COOKIES/XIAOHONGSHU_COOKIES 等 8 个 *_COOKIES Secret 引用（禁用 *_MAIN）",
+        "[BEHAVIOR] check-health.js missing 状态输出 {status:\"missing\"}，不被当 ok 处理，触发告警",
+        "[BEHAVIOR] check-health.js expired 条目触发飞书 webhook 调用（含 Promise.race 3s timeout，catch 后 log+continue）",
+        "[BEHAVIOR] check-health.js 巡检完成后 POST /api/operator/sessions/status 回写 DB",
+        "[BEHAVIOR] session-health-check.yml cron 含 4 个时段（0 16/22/4/10 * * * UTC = 北京 00/06/12/18 点）",
+        "[ARTIFACT] .github/workflows/session-health-check.yml 已更新，无 *_MAIN 字样"
+      ],
+      "files": [
+        ".github/workflows/session-health-check.yml",
+        "scripts/sessions/check-health.js"
+      ],
+      "depends_on": ["ws2"],
+      "complexity": "M",
+      "estimated_minutes": 45
+    }
+  ]
+}
