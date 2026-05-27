@@ -18,3 +18,9 @@ regexes = [
   '''bascn[A-Za-z0-9]{6,}''',
   '''tbl1[a-z]{4,}'''
 ]
+
+[[allowlists]]
+description = "ZenithJoy E2E test license key ZJ-F-FBFYTLFR — demo/CI license used in smoke tests, contract DoD, and E2E workflows, not a real production secret"
+regexes = [
+  '''ZJ-F-FBFYTLFR'''
+]

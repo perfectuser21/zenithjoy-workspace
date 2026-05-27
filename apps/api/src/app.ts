@@ -78,6 +78,7 @@ app.use('/api', publishRouter);
 app.use('/api/ai-video', aiVideoRouter);
 // Path 1 Step 5 — AI 视频本地流水线（jobs CRUD + AI API 代理）
 app.use('/api/ai-video/jobs', aiVideoPipelineRouter);
+app.use('/api/ai-video-pipeline', aiVideoPipelineRouter);
 app.use('/api/snapshots', snapshotsRouter);
 app.use('/api', douyinAuthRouter);
 app.use('/api/pipeline', pipelineRouter);

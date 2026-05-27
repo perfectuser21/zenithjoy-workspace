@@ -8,7 +8,13 @@ const svc = new AiVideoPipelineService();
 
 export async function createJob(req: Request, res: Response, next: NextFunction) {
   try {
-    const { local_path, topic, template_id } = req.body as { local_path?: string; topic?: string; template_id?: string };
+    const { local_path, topic, template_id, original_script, target_aspect } = req.body as {
+      local_path?: string;
+      topic?: string;
+      template_id?: string;
+      original_script?: string | null;
+      target_aspect?: string | null;
+    };
     if (!local_path) return res.status(400).json({ error: 'local_path required' });
 
     let licenseId: string | null = null;
@@ -50,8 +56,16 @@ export async function createJob(req: Request, res: Response, next: NextFunction)
       topic: topic ?? null,
       templateId: template_id ?? null,
       licenseId,
+      originalScript: original_script ?? null,
+      targetAspect: target_aspect ?? null,
     });
-    res.status(201).json(job);
+    res.status(201).json({
+      id: job.id,
+      status: job.status,
+      original_script: job.original_script ?? null,
+      target_aspect: job.target_aspect ?? null,
+      src_video: job.src_video,
+    });
   } catch (err) { next(err); }
 }
 
@@ -59,7 +73,10 @@ export async function getJob(req: Request, res: Response, next: NextFunction) {
   try {
     const job = await svc.getJob(req.params.id);
     if (!job) return res.status(404).json({ error: 'job not found' });
-    res.json(job);
+    res.json({
+      ...job,
+      detected_aspect: job.detected_aspect ?? null,
+    });
   } catch (err) { next(err); }
 }
 

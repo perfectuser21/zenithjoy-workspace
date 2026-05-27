@@ -16,11 +16,12 @@ interface JobState {
   error?: string;
 }
 
-async function createJob(localPath: string, topic: string, templateId: string | null, licenseKey: string): Promise<{ id: string }> {
+async function createJob(localPath: string, topic: string, templateId: string | null, licenseKey: string, originalScript: string): Promise<{ id: string }> {
   const res = await axios.post(`${API_BASE}/ai-video/jobs`, {
     local_path: localPath,
     topic: topic || undefined,
     template_id: templateId || undefined,
+    original_script: originalScript || null,
   }, {
     headers: { Authorization: `Bearer ${licenseKey}` },
   });
@@ -51,6 +52,7 @@ function ProgressBar({ progress, status }: { progress: number; status: JobStatus
 export default function LocalVideoPipelinePage() {
   const [localPath, setLocalPath] = useState('');
   const [topic, setTopic] = useState('');
+  const [originalScript, setOriginalScript] = useState('');
   const [templateId, setTemplateId] = useState<string | null>(null);
   const [job, setJob] = useState<JobState | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -92,7 +94,7 @@ export default function LocalVideoPipelinePage() {
     if (!localPath.trim() || !licenseKey) return;
     setSubmitting(true);
     try {
-      const { id } = await createJob(localPath.trim(), topic, templateId, licenseKey);
+      const { id } = await createJob(localPath.trim(), topic, templateId, licenseKey, originalScript);
       const initial: JobState = { id, status: 'queued', progress: 0 };
       setJob(initial);
       startPoll(id);
@@ -109,6 +111,7 @@ export default function LocalVideoPipelinePage() {
     setJob(null);
     setLocalPath('');
     setTopic('');
+    setOriginalScript('');
     setTemplateId(null);
   };
 
@@ -169,6 +172,23 @@ export default function LocalVideoPipelinePage() {
             placeholder="输入视频主题或文案，AI 将据此生成字幕和镜头设计…"
             value={topic}
             onChange={(e) => setTopic(e.target.value)}
+            disabled={!!isProcessing || isDone}
+            className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-900/50 text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none disabled:opacity-50"
+          />
+        </div>
+
+        {/* 原始文案 */}
+        <div>
+          <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5 flex items-center gap-1.5">
+            <FileText className="w-4 h-4" />
+            原始文案（可选，录制前参考文案）
+          </label>
+          <textarea
+            name="original_script"
+            rows={3}
+            placeholder="填写你录制视频前准备的参考文案，AI 生成场景文案时会参考这段内容…"
+            value={originalScript}
+            onChange={(e) => setOriginalScript(e.target.value)}
             disabled={!!isProcessing || isDone}
             className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-900/50 text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none disabled:opacity-50"
           />

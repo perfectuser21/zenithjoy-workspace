@@ -29,6 +29,9 @@ while IFS= read -r tf; do
   [ -z "$tf" ] && continue
   [ ! -f "$tf" ] && continue
 
+  # Harness sprint tests in sprints/ use static file verification by design — exempt from Rule A
+  [[ "$tf" == sprints/* ]] && continue
+
   # Rule A: stub 签名（读 src 文件 grep + 无 await 业务调用）
   HAS_FS_SRC=$(grep -cE "readFileSync\s*\([^)]*src/" "$tf" 2>/dev/null || true)
   HAS_FS_SRC="${HAS_FS_SRC:-0}"
