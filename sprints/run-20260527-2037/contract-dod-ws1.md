@@ -1,7 +1,3 @@
-contract_branch: cp-05272229-ws-96db2647-ws1
-workstream_index: 1
-sprint_dir: sprints/run-20260527-2037
-
 ---
 skeleton: false
 journey_type: user_facing
@@ -28,6 +24,11 @@ journey_type: user_facing
 ---
 
 ## BEHAVIOR 条目（runtime oracle 优先 — v7.8 两层验证架构）
+
+> **前提说明（WS1 evaluator Mode A）**:
+> - psql oracle: 需 migration 已执行，`$DB_URL` 或 `postgresql://postgres:postgres@localhost/cecelia` 可连接
+> - curl oracle: 需 API 在 localhost:5200 运行（`cd apps/api && npm run dev`）
+> - 时间戳 `${TS:-$(date +%s)}` 防止利用历史记录造假
 
 - [ ] [BEHAVIOR] DB 中 ai_video_pipeline_jobs 表三列均已存在（psql runtime oracle）
   Test: manual:bash -c 'COUNT=$(psql "${DB_URL:-postgresql://postgres:postgres@localhost/cecelia}" -t -c "SELECT count(*) FROM information_schema.columns WHERE table_name='"'"'ai_video_pipeline_jobs'"'"' AND column_name IN ('"'"'original_script'"'"','"'"'target_aspect'"'"','"'"'detected_aspect'"'"')" 2>/dev/null | tr -d " \n"); [ "$COUNT" = "3" ] || { echo "FAIL: DB columns count=$COUNT 期望 3"; exit 1; }; echo OK'

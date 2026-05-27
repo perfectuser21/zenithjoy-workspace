@@ -64,6 +64,7 @@ export async function createJob(req: Request, res: Response, next: NextFunction)
       status: job.status,
       original_script: job.original_script ?? null,
       target_aspect: job.target_aspect ?? null,
+      detected_aspect: job.detected_aspect ?? null,
       src_video: job.src_video,
     });
   } catch (err) { next(err); }
@@ -119,7 +120,7 @@ export async function updateProgress(req: Request, res: Response, next: NextFunc
   try {
     const job = await svc.getJob(req.params.id);
     if (!job) return res.status(404).json({ error: 'job not found' });
-    const { progress, status } = req.body as { progress?: number; status?: string };
+    const { progress, status, detected_aspect } = req.body as { progress?: number; status?: string; detected_aspect?: string | null };
     const allowedStatuses = ['pending', 'processing', 'completed', 'failed'] as const;
     if (status !== undefined && !allowedStatuses.includes(status as typeof allowedStatuses[number])) {
       return res.status(400).json({ error: `invalid status: ${status}` });
@@ -128,6 +129,7 @@ export async function updateProgress(req: Request, res: Response, next: NextFunc
     const updated = await svc.updateStatus(req.params.id, {
       status: safeStatus,
       progress: typeof progress === 'number' ? progress : job.progress,
+      detectedAspect: detected_aspect,
     });
     res.json(updated);
   } catch (err) { next(err); }

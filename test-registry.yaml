@@ -2432,3 +2432,45 @@ agent_suite:
     status: pending-ci
     product: 视频剪辑
     note: "Line 05 Sprint run-20260527-1934 WS4 — Agent v1.1.29 version bump + E2E spec 更新 + GHA Windows 真实视频验收"
+
+  # ── Line 05 AI 视频 Pipeline — run-20260527-2037 ─────────────────────────────
+
+  - id: line05-run2037-ws1-new-fields
+    path: sprints/run-20260527-2037/tests/ws1/video-pipeline-new-fields.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 视频剪辑
+    note: "Line 05 Sprint run-20260527-2037 WS1 — DB migration 三列 + PipelineJob interface + createJob/updateProgress controller 新字段"
+
+  - id: line05-run2037-ws2-template-builders
+    path: sprints/run-20260527-2037/tests/ws2/template-builders.test.ts
+    type: unit
+    ci: L3
+    status: pending-ci
+    product: 视频剪辑
+    note: "Line 05 Sprint run-20260527-2037 WS2 — _buildWGHtml/_buildCHtml/_buildRHtml 三模板专属 HTML 函数"
+
+  - id: line05-run2037-ws3-ffprobe-aspect
+    path: sprints/run-20260527-2037/tests/ws3/agent-ffprobe-aspect.test.ts
+    type: unit
+    ci: L3
+    status: pending-ci
+    product: 视频剪辑
+    note: "Line 05 Sprint run-20260527-2037 WS3 — Agent ffprobe width/height + detectedAspect + 单文件输出"
+
+  - id: line05-run2037-ws4-dashboard-ui
+    path: sprints/run-20260527-2037/tests/ws4/dashboard-ui-aspect.test.ts
+    type: unit
+    ci: L3
+    status: pending-ci
+    product: 视频剪辑
+    note: "Line 05 Sprint run-20260527-2037 WS4 — Dashboard LocalVideoPipelinePage original_script textarea + aspect selector"
+
+  - id: line05-run2037-ws5-agent-version
+    path: sprints/run-20260527-2037/tests/ws5/agent-version.test.ts
+    type: unit
+    ci: L3
+    status: pending-ci
+    product: 视频剪辑
+    note: "Line 05 Sprint run-20260527-2037 WS5 — Agent v1.1.30 + GHA workflow 更新"
