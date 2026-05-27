@@ -1,46 +1,29 @@
----
-contract_branch: cp-05272310-ws-46bc46d9-ws2
+contract_branch: cp-harness-propose-r1-96db2647
 workstream_index: 2
-sprint_dir: sprints/zj-kuaishou-three-mode
-skeleton: false
-journey_type: autonomous
-target_environment: windows_cloud
----
-# Contract DoD — Workstream 2: .github/workflows/kuaishou-e2e.yml 新建（GHA windows-latest）
+sprint_dir: sprints/run-20260527-2037
 
-**范围**: 新建 `.github/workflows/kuaishou-e2e.yml`，`workflow_dispatch`（可选 schedule），`windows-latest` runner，注入 `KUAISHOU_COOKIES` secret，分步运行 image-dryrun + video-dryrun，传递 SCREENSHOT_DIR，upload screenshots artifact（if: always）
-**大小**: S（~60 行新建）
-**依赖**: Workstream 1（publish-kuaishou-video-dryrun.cjs 必须存在）
+---
+skeleton: false
+journey_type: user_facing
+---
+# Contract DoD — Workstream 2: 三模板专属 HTML Builder + composeTemplate dispatch
+
+**范围**: `ai-video-pipeline-ai.controller.ts` 新增 `_buildWGHtml`（9:16 Bauhaus）、`_buildCHtml`（16:9 纪录片）、`_buildRHtml`（16:9 深酒红）三函数；composeTemplate 按 templateId dispatch；response 字段合规（html/aspect）；`_buildDynamicTemplateHtml` 改为仅作 fallback 或删除
+**大小**: L（~230 行净增，1 文件）
+**依赖**: Workstream 1 完成后
 
 ## ARTIFACT 条目
 
-- [ ] [ARTIFACT] `.github/workflows/kuaishou-e2e.yml` 文件已创建
-  Test: node -e "require('fs').accessSync('.github/workflows/kuaishou-e2e.yml'); console.log('OK')"
-
-- [ ] [ARTIFACT] workflow 使用 `windows-latest` runner
-  Test: node -e "const c=require('fs').readFileSync('.github/workflows/kuaishou-e2e.yml','utf8');if(!c.includes('windows-latest'))process.exit(1);console.log('OK')"
-
-- [ ] [ARTIFACT] workflow 含 `upload-artifact` 步骤（screenshots 上传为可审查证据）
-  Test: node -e "const c=require('fs').readFileSync('.github/workflows/kuaishou-e2e.yml','utf8');if(!c.includes('upload-artifact'))process.exit(1);console.log('OK')"
+- [ ] [ARTIFACT] `_buildWGHtml` 函数在 `ai-video-pipeline-ai.controller.ts` 中 export
+- [ ] [ARTIFACT] `_buildCHtml` 函数在 `ai-video-pipeline-ai.controller.ts` 中 export
+- [ ] [ARTIFACT] `_buildRHtml` 函数在 `ai-video-pipeline-ai.controller.ts` 中 export
 
 ## BEHAVIOR 条目
 
-- [ ] [BEHAVIOR] workflow 含 `KUAISHOU_COOKIES` secret 引用（schema 字段 — CI 注入 cookie 的核心机制）
-  Test: manual:bash -c 'node -e "const c=require(\"fs\").readFileSync(\".github/workflows/kuaishou-e2e.yml\",\"utf8\");if(!c.includes(\"KUAISHOU_COOKIES\")){console.error(\"FAIL: 无 KUAISHOU_COOKIES 引用\");process.exit(1);}console.log(\"OK\")"'
-  期望: OK
-
-- [ ] [BEHAVIOR] workflow 含 image-dryrun 脚本调用（keys 完整性 — image + video 两步均有）
-  Test: manual:bash -c 'node -e "const c=require(\"fs\").readFileSync(\".github/workflows/kuaishou-e2e.yml\",\"utf8\");if(!c.includes(\"image-dryrun\")){console.error(\"FAIL: 无 image-dryrun 调用\");process.exit(1);}console.log(\"OK\")"'
-  期望: OK
-
-- [ ] [BEHAVIOR] workflow 含 video-dryrun 脚本调用（keys 完整性 — 两步 E2E 完整覆盖）
-  Test: manual:bash -c 'node -e "const c=require(\"fs\").readFileSync(\".github/workflows/kuaishou-e2e.yml\",\"utf8\");if(!c.includes(\"video-dryrun\")){console.error(\"FAIL: 无 video-dryrun 调用\");process.exit(1);}console.log(\"OK\")"'
-  期望: OK
-
-- [ ] [BEHAVIOR] workflow 含 `SCREENSHOT_DIR` 环境变量传递（截图写入路径，WS1 脚本依赖此变量知道截图目标目录）
-  Test: manual:bash -c 'node -e "const c=require(\"fs\").readFileSync(\".github/workflows/kuaishou-e2e.yml\",\"utf8\");if(!c.includes(\"SCREENSHOT_DIR\")){console.error(\"FAIL: 无 SCREENSHOT_DIR 环境变量\");process.exit(1);}console.log(\"OK\")"'
-  期望: OK
-
-- [ ] [BEHAVIOR] error path — workflow upload-artifact 含 `if: always()` 保证失败时也能审查截图（防止失败时无证据）
-  Test: manual:bash -c 'node -e "const c=require(\"fs\").readFileSync(\".github/workflows/kuaishou-e2e.yml\",\"utf8\");if(!c.includes(\"always()\")){console.error(\"FAIL: upload-artifact 缺 if:always()\");process.exit(1);}console.log(\"OK\")"'
-  期望: OK
+- [ ] [BEHAVIOR] _buildWGHtml 函数体含 W-G 专属背景色 #ede4d2 或强调色 #d39c4a
+- [ ] [BEHAVIOR] _buildCHtml 函数体含 C 模板专属色（#0a0a0a 或 #c9a23d）
+- [ ] [BEHAVIOR] _buildRHtml 函数体含 R 模板专属色（#1d1410 或 #c08e6a 玫瑰金）
+- [ ] [BEHAVIOR] composeTemplate 函数体内按 W-G/C/R 分发调用三个专属 builder
+- [ ] [BEHAVIOR] compose-template error path — 无效 templateId 返回 400 + error 字段
+- [ ] [BEHAVIOR] compose-template res.json() 不含禁用字段 content/result/ratio/output
+- [ ] [BEHAVIOR] keys 完整性 — compose-template success response 包含 html 和 aspect 字段
