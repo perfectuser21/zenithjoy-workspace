@@ -1,0 +1,83 @@
+{
+  "initiative_id": "pending",
+  "journey_type": "agent_remote",
+  "journey_type_reason": "涉及 services/agent/ 下的 handler 和 Playwright publisher 脚本，属于 ZenithJoy Agent 远端 Windows 执行链路，GHA windows-latest 最终验收",
+  "tasks": [
+    {
+      "task_id": "ws1",
+      "title": "kuaishou-publish.ts handler 重写：resolveKuaishouScriptPath + ZENITHJOY_AGENT_REAL_PUBLISH + content.type 路由 + unit tests",
+      "scope": "提取 resolveKuaishouScriptPath(type, env) 函数，type=image → kuaishou-image-dryrun/real 脚本，type=video → kuaishou-video-dryrun/real 脚本，未知 type 显式抛 Error 含 'no script for type'；加 ZENITHJOY_AGENT_REAL_PUBLISH 环境变量开关控制 dryrun/real；新建 kuaishou-publish.test.ts 覆盖所有 type 路由路径",
+      "dod": [
+        "[BEHAVIOR] resolveKuaishouScriptPath('image') 返回含 kuaishou-image-dryrun 的路径",
+        "[BEHAVIOR] resolveKuaishouScriptPath('video') 返回含 kuaishou-video-dryrun 的路径",
+        "[BEHAVIOR] resolveKuaishouScriptPath('unknown') 抛出含 'no script for type' 的 Error",
+        "[BEHAVIOR] ZENITHJOY_AGENT_REAL_PUBLISH=true 时 resolveKuaishouScriptPath('image') 路径不含 -dryrun",
+        "[ARTIFACT] services/agent/src/handlers/kuaishou-publish.ts 含导出的 resolveKuaishouScriptPath 函数",
+        "[ARTIFACT] services/agent/src/handlers/__tests__/kuaishou-publish.test.ts 存在且覆盖三条路由路径"
+      ],
+      "files": [
+        "services/agent/src/handlers/kuaishou-publish.ts",
+        "services/agent/src/handlers/__tests__/kuaishou-publish.test.ts"
+      ],
+      "depends_on": [],
+      "complexity": "M",
+      "estimated_minutes": 40
+    },
+    {
+      "task_id": "ws2",
+      "title": "publish-kuaishou-image-dryrun.cjs 三模式升级：KUAISHOU_COOKIES 注入 → profile dir → CDP 19223",
+      "scope": "现有 CDP-only 脚本加 cookie injection 首选模式（Playwright addCookies API），profile dir 第二选（userDataDir），保留 CDP 19223 兜底；截图命名改为 kuaishou-image-{timestamp}.png；stdout 末行 JSON {ok:true,dryRun:true}",
+      "dod": [
+        "[BEHAVIOR] 文件含 KUAISHOU_COOKIES env 读取和 addCookies cookie 注入调用",
+        "[BEHAVIOR] 文件 CDP 端口为 19223，且不含抖音端口 19222",
+        "[BEHAVIOR] 文件含 profile dir 降级模式（userDataDir 或 profile 关键字）",
+        "[BEHAVIOR] 截图命名含 kuaishou-image- 前缀",
+        "[ARTIFACT] services/agent/publishers/kuaishou-publisher/publish-kuaishou-image-dryrun.cjs 三模式改造完成"
+      ],
+      "files": [
+        "services/agent/publishers/kuaishou-publisher/publish-kuaishou-image-dryrun.cjs"
+      ],
+      "depends_on": ["ws1"],
+      "complexity": "M",
+      "estimated_minutes": 45
+    },
+    {
+      "task_id": "ws3",
+      "title": "publish-kuaishou-video-dryrun.cjs 新建：三模式 + 视频 URL + /rest/cp/works/ API 拦截",
+      "scope": "新建视频 dryrun 脚本，三模式（KUAISHOU_COOKIES 注入 / profile dir / CDP 19223 兜底），导航 https://cp.kuaishou.com/article/publish/video，拦截 /rest/cp/works/ POST/PUT（命中即抛 dryrun-失守 Error），截图命名 kuaishou-video-{timestamp}.png，stdout 末行 JSON {ok:true,dryRun:true}",
+      "dod": [
+        "[BEHAVIOR] 文件含视频发布 URL article/publish/video",
+        "[BEHAVIOR] 文件含 /rest/cp/works/ API 拦截逻辑",
+        "[BEHAVIOR] 文件含 KUAISHOU_COOKIES env 读取和 addCookies 注入",
+        "[BEHAVIOR] 文件 CDP 端口为 19223，不含 19222",
+        "[BEHAVIOR] 截图命名含 kuaishou-video- 前缀",
+        "[ARTIFACT] services/agent/publishers/kuaishou-publisher/publish-kuaishou-video-dryrun.cjs 新建"
+      ],
+      "files": [
+        "services/agent/publishers/kuaishou-publisher/publish-kuaishou-video-dryrun.cjs"
+      ],
+      "depends_on": ["ws2"],
+      "complexity": "M",
+      "estimated_minutes": 40
+    },
+    {
+      "task_id": "ws4",
+      "title": ".github/workflows/kuaishou-e2e.yml 新建：windows-latest + image/video 两 job + KUAISHOU_COOKIES secret + screenshot artifact",
+      "scope": "新建 GHA workflow，workflow_dispatch 触发，windows-latest runner，注入 KUAISHOU_COOKIES env（来自 repo secret），分步骤跑 image-dryrun 和 video-dryrun，最终 upload-artifact 上传 screenshots/（if: always() 确保失败也保存截图）",
+      "dod": [
+        "[BEHAVIOR] 文件含 windows-latest runner 配置",
+        "[BEHAVIOR] 文件含 KUAISHOU_COOKIES secret 引用",
+        "[BEHAVIOR] 文件含 kuaishou-image-dryrun 执行步骤",
+        "[BEHAVIOR] 文件含 kuaishou-video-dryrun 执行步骤",
+        "[BEHAVIOR] 文件含 upload-artifact 步骤（if: always()）",
+        "[ARTIFACT] .github/workflows/kuaishou-e2e.yml 新建"
+      ],
+      "files": [
+        ".github/workflows/kuaishou-e2e.yml"
+      ],
+      "depends_on": ["ws3"],
+      "complexity": "S",
+      "estimated_minutes": 30
+    }
+  ]
+}
