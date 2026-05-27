@@ -38,16 +38,23 @@ async function buildContext() {
 
   if (cookiesEnv) {
     _log('[KS-VID-DRY] 模式: KUAISHOU_COOKIES（chromium.launch + addCookies）');
+    let cookies;
+    try {
+      cookies = JSON.parse(cookiesEnv);
+    } catch (e) {
+      throw new Error(`KUAISHOU_COOKIES 格式无效（非合法 JSON）: ${e.message}`);
+    }
+    if (!Array.isArray(cookies)) throw new Error('KUAISHOU_COOKIES 必须是 JSON 数组');
     const browser = await chromium.launch({ headless: true });
     const context = await browser.newContext();
-    const cookies = JSON.parse(cookiesEnv);
     await context.addCookies(cookies);
     return { browser, context };
   }
 
   if (profileDir) {
     _log('[KS-VID-DRY] 模式: KUAISHOU_PROFILE_DIR（launchPersistentContext）');
-    const context = await chromium.launchPersistentContext(profileDir, { headless: false });
+    // headless: true — CI 环境无需可见界面；本地调试可设 PWDEBUG=1
+    const context = await chromium.launchPersistentContext(profileDir, { headless: true });
     return { browser: null, context };
   }
 
@@ -58,9 +65,21 @@ async function buildContext() {
   return { browser, context: contexts[0] };
 }
 
+async function closeResources(browser, context) {
+  try {
+    if (browser) await browser.close();
+    else await context.close();
+  } catch (_) {}
+}
+
 async function main(queueFilePath) {
   _log('[KS-VID-DRY] 读取队列文件:', queueFilePath);
-  const queueData = JSON.parse(fs.readFileSync(queueFilePath, 'utf-8'));
+  let queueData;
+  try {
+    queueData = JSON.parse(fs.readFileSync(queueFilePath, 'utf-8'));
+  } catch (e) {
+    throw new Error(`队列文件读取/解析失败: ${e.message}`);
+  }
   const title = queueData.title || `[DRY] 自检 ${Date.now()}`;
 
   _log('[KS-VID-DRY] 标题:', title);
@@ -112,14 +131,11 @@ async function main(queueFilePath) {
     };
     _log(JSON.stringify(result));
 
-    if (browser) await browser.close();
-    else await context.close();
-
+    await closeResources(browser, context);
     return result;
   } catch (err) {
     console.error('[KS-VID-DRY] 失败:', err.message);
-    if (browser) await browser.close().catch(() => {});
-    else await context.close().catch(() => {});
+    await closeResources(browser, context);
     throw err;
   }
 }
