@@ -1,4 +1,4 @@
-# Sprint Contract Draft (Round 1)
+# Sprint Contract Draft (Round 2)
 
 ## Golden Path
 
@@ -120,21 +120,37 @@ console.log('OK');
 
 **验证命令**:
 ```bash
-# Mode A — 检查 upload-cookies 含正确 response schema
+# Mode A — 检查 upload-cookies 含正确 response schema（完整 codify + keys== 完整性 + 禁用字段全量）
 node -e "
 const c = require('fs').readFileSync('apps/api/src/routes/operator-sessions.ts','utf8');
+
+// 1. 必填字段存在
 if (!c.includes('secretName')) { console.error('FAIL: 缺少 secretName 字段'); process.exit(1); }
-if (!c.includes('updatedAt')) { console.error('FAIL: 缺少 updatedAt 字段'); process.exit(1); }
-if (!c.includes('COOKIES')) { console.error('FAIL: 缺少 *_COOKIES Secret 命名逻辑'); process.exit(1); }
-const forbidden = ['\"secret\"', '\"key\"', '\"name\"', '\"timestamp\"', '\"message\"'];
-for (const f of forbidden) {
-  if (c.includes('json({' + f) || c.includes('json({ ' + f)) { console.error('FAIL: 禁用字段 ' + f); process.exit(1); }
+if (!c.includes('updatedAt'))  { console.error('FAIL: 缺少 updatedAt 字段');  process.exit(1); }
+if (!c.includes('COOKIES'))    { console.error('FAIL: 缺少 *_COOKIES Secret 命名逻辑'); process.exit(1); }
+
+// 2. keys 完整性 — ok/secretName/updatedAt 三个字段全部出现，无多余
+if (!c.includes('ok') || !c.includes('secretName') || !c.includes('updatedAt')) {
+  console.error('FAIL: upload-cookies 三个 response key 不全'); process.exit(1);
 }
-console.log('OK');
+
+// 3. 禁用字段全量（PRD 明确列举 + 本次 Round 2 补齐）
+// 任意禁用词作为 JSON 对象 key（'x': 或 \"x\": 形式）不得出现
+const forbidden = [
+  'secret', 'key', 'name', 'result',
+  'timestamp', 'time', 'updated', 'at',
+  'message', 'msg'
+];
+for (const f of forbidden) {
+  const re = new RegExp('[\\x27\"]' + f + '[\\x27\"]\\s*:');
+  if (re.test(c)) { console.error('FAIL: 禁用字段 ' + f + ' 出现作为响应 key'); process.exit(1); }
+}
+
+console.log('OK: upload-cookies schema 验证通过（必填字段 + keys 完整性 + 10 个禁用字段均不存在）');
 "
 ```
 
-**硬阈值**: 含 `secretName`/`updatedAt`/`COOKIES`，不含禁用字段作为 response key，keys 完全集合 = `["ok","secretName","updatedAt"]`
+**硬阈值**: 含 `secretName`/`updatedAt`/`COOKIES`；keys 完整集合 = `["ok","secretName","updatedAt"]`；10 个禁用字段（含 msg/result/updated/at）均不作为响应 key 出现
 
 ---
 
@@ -190,21 +206,27 @@ console.log('OK');
 
 **验证命令**:
 ```bash
-# Mode A — 检查 status endpoint 含正确字段
+# Mode A — 检查 status endpoint 含 PRD 全部 4 个必填字段 + 禁用 status 值全量（含 good）
 node -e "
 const c = require('fs').readFileSync('apps/api/src/routes/operator-sessions.ts','utf8');
-if (!c.includes('checkedAt')) { console.error('FAIL: 缺少 checkedAt 字段'); process.exit(1); }
-const forbidden = ['healthy', 'active', 'inactive'];
+
+// 1. 4 个必填字段（PRD Response Schema 字面字段名）
+if (!c.includes('platform'))   { console.error('FAIL: status 端点缺少 platform 字段');   process.exit(1); }
+if (!c.includes('secretName')) { console.error('FAIL: status 端点缺少 secretName 字段'); process.exit(1); }
+if (!c.includes('checkedAt'))  { console.error('FAIL: status 端点缺少 checkedAt 字段');  process.exit(1); }
+
+// 2. 禁用 status 枚举值（PRD 明确列出：healthy/active/inactive/good 全部禁用）
+const forbidden = ['healthy', 'active', 'inactive', 'good'];
 for (const f of forbidden) {
   if (c.includes('\"' + f + '\"') || c.includes(\"'\" + f + \"'\")) {
-    console.error('FAIL: 禁用 status 值 ' + f); process.exit(1);
+    console.error('FAIL: 禁用 status 值 ' + f + ' 出现'); process.exit(1);
   }
 }
-console.log('OK');
+console.log('OK: status 端点 4 字段完整 + 4 个禁用 status 值均不存在');
 "
 ```
 
-**硬阈值**: 含 `checkedAt`，status 值不含禁用词
+**硬阈值**: 含 `platform`/`secretName`/`checkedAt`；status 枚举值不含 `healthy`/`active`/`inactive`/`good`
 
 ---
 
@@ -361,6 +383,41 @@ exit 0
 
 ---
 
+## Risks
+
+### Risk 1: GH_SECRETS_WRITE_PAT scope 不足或过期 → Cookie 绑定全程失败（**级联失败场景**）
+
+**描述**: `GH_SECRETS_WRITE_PAT` 缺少 `secrets:write` scope 或已过期 → `upload-cookies` Octokit 调用返回 401/403 → 任何平台 cookie 均无法写入 GitHub Secrets → Dashboard 8 个平台格子永远无法变绿。
+**级联路径**: ws5 API 代码正常 → xian-pc Agent 扫码成功 → 回调 `upload-cookies` 始终 500 → Golden Path Step 7 FAIL → ws6 E2E Playwright spec 所有 `status=ok` 断言失败。
+
+**Mitigation**:
+- PRD `[ASSUMPTION]` 明确 `GH_SECRETS_WRITE_PAT` 含 `secrets:write` scope 为前置工作（管理员 GitHub UI 完成）
+- Golden Path Step 6 BEHAVIOR 验证：PAT 未配置时返回 HTTP 500 + `{error: "GH_SECRETS_WRITE_PAT 未配置"}` 而非 unhandled crash
+- ws5 DoD BEHAVIOR 包含 `GH_SECRETS_WRITE_PAT` 检查逻辑存在的源码验证
+
+---
+
+### Risk 2: xian-pc Agent 离线或 CDP port 19222 未启动 → Dashboard 登录按钮永久等待
+
+**描述**: xian-pc Chrome 未以 `--remote-debugging-port=19222` 启动，或 Agent 进程已退出 → `bind-start` 无法连接 Agent → 前端显示"登录中"但永不完成 → 用户体验损坏。
+
+**Mitigation**:
+- Golden Path Step 7 BEHAVIOR 验证：Agent 离线时返回 HTTP 503 + `{error: "Agent 不在线"}`
+- ws5 DoD 含 503 状态码错误路径源码检查
+- PRD `[ASSUMPTION]` 明确：`bind-start` 返回值即在线状态的判断依据，不需要额外在线检测 UI
+
+---
+
+### Risk 3: ws5 路由未注册到 API server → ws6 E2E 全部端点 404 FAIL（**级联失败场景**）
+
+**描述**: `operator-sessions.ts` 文件写好但未在 `apps/api/src/index.ts`（或 API server 入口）中 import + 注册 → `bind-start`/`upload-cookies`/`status` 端点全部返回 404 → ws6 Dashboard E2E Playwright spec 所有断言失败。`depends_on: ["ws5"]` 串行链保证 ws6 evaluator 在 ws5 完成后才跑，但不保证路由已注册。
+
+**Mitigation**:
+- ws5 DoD ARTIFACT 条目包含路由注册检查：`apps/api/src/index.ts` 含 `operator-sessions` import
+- ws5 BEHAVIOR 追加：路由注册验证（`apps/api/src/index.ts` 含 operator-sessions 引用）
+
+---
+
 ## Workstreams
 
 workstream_count: 7
@@ -423,12 +480,12 @@ workstream_count: 7
 
 ## Test Contract
 
-| Workstream | Test File | BEHAVIOR 覆盖 | 预期红证据 |
+| Workstream | Test File | BEHAVIOR 覆盖 | 示例失败断言（**行号 + 预期错误**，不动代码必 FAIL） |
 |---|---|---|---|
-| WS1 | `tests/ws1/check-health.test.ts` | secretEnv 命名、missing=ok 修复、GHA YAML 同步 | ≥3 failures |
-| WS2 | `tests/ws2/qr-bind-batch-a.test.ts` | 3 handler 文件存在+loginUrl 正确 | ≥3 failures |
-| WS3 | `tests/ws3/qr-bind-batch-b.test.ts` | 3 handler 文件存在+loginUrl 正确 | ≥3 failures |
-| WS4 | `tests/ws4/qr-bind-batch-c.test.ts` | gongzhonghao handler + agent index 注册 | ≥2 failures |
-| WS5 | `tests/ws5/operator-sessions.test.ts` | API schema、禁用字段、error path | ≥4 failures |
-| WS6 | `tests/ws6/operator-page.test.ts` | login-btn testid、bind-start 调用、status 轮询 | ≥3 failures |
-| WS7 | `tests/ws7/e2e-verify.test.ts` | ps1 文件存在+含 operator-sessions spec 引用 | ≥1 failure |
+| WS1 | `tests/ws1/check-health.test.ts` | secretEnv 命名、missing bug、GHA 同步 | **L12**: `expect(mainRefs).toBeNull()` → 当前 check-health.js L41 含 `secretEnv: 'DOUYIN_MAIN'` → 错误: `expected Array[...] to be null`。**L17**: `expect(content).toContain('DOUYIN_COOKIES')` → 当前文件只有 DOUYIN_MAIN → `AssertionError: expected string to include 'DOUYIN_COOKIES'`。≥5 failures |
+| WS2 | `tests/ws2/qr-bind-batch-a.test.ts` | 3 handler 文件存在 + loginUrl + upload-cookies | **L13**: `expect(fs.existsSync(file)).toBe(true)` → qr-bind-kuaishou.ts 不存在 → `AssertionError: expected false to be true`（每个 handler 3 条 × 3 = 9 failures）|
+| WS3 | `tests/ws3/qr-bind-batch-b.test.ts` | 3 handler 文件存在 + loginUrl + platform 代号 | **L13**: `expect(fs.existsSync(file)).toBe(true)` → qr-bind-toutiao.ts 不存在 → `AssertionError: expected false to be true`（每个 handler 4 条 × 3 = 12 failures）|
+| WS4 | `tests/ws4/qr-bind-batch-c.test.ts` | gongzhonghao handler + agent index 注册 7 个 | **L6**: `expect(fs.existsSync('services/agent/src/handlers/qr-bind-gongzhonghao.ts')).toBe(true)` → 文件不存在 → `AssertionError: expected false to be true`。**L23**: `expect(content, ...).toContain(p)` → index.ts 无 kuaishou 等引用 → `AssertionError: expected string to include 'kuaishou'`。≥3 failures |
+| WS5 | `tests/ws5/operator-sessions.test.ts` | API schema 字段、禁用字段、error path | **L8**: `expect(fs.existsSync(routePath)).toBe(true)` → operator-sessions.ts 不存在 → `AssertionError: expected false to be true`。**L13**: `expect(content).toContain('taskId')` → readFileSync 抛 ENOENT → `Error: ENOENT: no such file or directory`。≥9 failures |
+| WS6 | `tests/ws6/operator-page.test.ts` | login-btn testid、bind-start 调用、status 轮询 | **L10**: `expect(content).toMatch(/login-btn-/)` → OperatorPage.tsx 存在但无 login-btn- → `AssertionError: expected string to match /login-btn-/`。**L42**: `expect(fs.existsSync(specPath)).toBe(true)` → operator-sessions.spec.ts 不存在 → `AssertionError: expected false to be true`。≥6 failures |
+| WS7 | `tests/ws7/e2e-verify.test.ts` | ps1 文件存在 + npm.cmd + Test-NetConnection + 5174 | **L8**: `expect(fs.existsSync(ps1Path)).toBe(true)` → e2e-verify.ps1 不存在 → `AssertionError: expected false to be true`。≥5 failures（L8+L12+L18+L22+L27 全 FAIL）|
