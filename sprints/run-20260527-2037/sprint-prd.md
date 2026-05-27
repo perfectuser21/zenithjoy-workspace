@@ -140,7 +140,7 @@
 - `apps/api/src/controllers/ai-video-pipeline-ai.controller.ts` — `_buildDynamicTemplateHtml` 拆三函数 + composeTemplate 注入 original_script
 - `apps/api/src/templates/template-wg.jsx` / `template-c.jsx` / `template-r.jsx` — 提供视觉规格参考（不直接改动）
 - `apps/dashboard/src/pages/LocalVideoPipelinePage.tsx` — original_script textarea + 画幅选择器
-- `services/agent/package.json` — version → v1.1.29
+- `services/agent/package.json` — version → v1.1.30
 - `services/agent/src/` — ffprobe 补充 width/height + 单文件输出逻辑
 - `e2e/agent-video-pipeline.spec.js` — 更新 E2E spec
 - `.github/workflows/agent-installpack.yml` — 触发 WS4 build

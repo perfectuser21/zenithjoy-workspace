@@ -1,5 +1,5 @@
 {
-  "initiative_id": "96db2647-c7f8-413e-b0f7-3f6f9d3526de",
+  "initiative_id": "79710a5d-f822-4eee-a285-26e48bd76c55",
   "sprint_dir": "sprints/run-20260527-2037",
   "journey_type": "user_facing",
   "journey_type_reason": "涉及 LocalVideoPipelinePage 前端交互 + Agent Windows 视频输出，起点为用户 Dashboard UI 操作，Final E2E 在 GHA windows-latest Playwright",
