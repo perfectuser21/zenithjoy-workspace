@@ -1,0 +1,94 @@
+{
+  "initiative_id": "pending",
+  "journey_type": "user_facing",
+  "journey_type_reason": "涉及 LocalVideoPipelinePage 前端 textarea + 比例选择交互，用户可见 UI 操作；后端 API + Agent Worker 作为支撑层",
+  "tasks": [
+    {
+      "task_id": "ws1",
+      "title": "DB migration(original_script) + createJob API + 前端 textarea + Claude prompt 注入",
+      "scope": "ADD COLUMN original_script TEXT NULL 到 zenithjoy.ai_video_pipeline_jobs；service.createJob 接受 originalScript；controller 读 original_script from req.body 返回；LocalVideoPipelinePage 加 original_script textarea；AI controller prompt 前缀注入（含空值保护）",
+      "dod": [
+        "[BEHAVIOR] POST /api/ai-video-pipeline/ 含 original_script → 201 响应原样返回 original_script，4 字段完整",
+        "[BEHAVIOR] GET /api/ai-video-pipeline/{id} 响应含 5 字段（id/status/detected_aspect/original_script/target_aspect），禁用字段不存在",
+        "[BEHAVIOR] POST 禁用字段 script/raw_script/source_script/input_script 均不存在",
+        "[BEHAVIOR] original_script=null → JSON null 正确透传（非字符串 undefined）",
+        "[BEHAVIOR] error path — 缺 local_path 返 400 + error 字段",
+        "[ARTIFACT] migration SQL 含 original_script 列 + LocalVideoPipelinePage 含 textarea + AI controller 含条件注入"
+      ],
+      "files": [
+        "apps/api/db/migrations/20260527_100000_add_original_script_to_video_jobs.sql",
+        "apps/api/src/services/ai-video-pipeline.service.ts",
+        "apps/api/src/controllers/ai-video-pipeline.controller.ts",
+        "apps/api/src/controllers/ai-video-pipeline-ai.controller.ts",
+        "apps/dashboard/src/pages/LocalVideoPipelinePage.tsx"
+      ],
+      "depends_on": [],
+      "complexity": "M",
+      "estimated_minutes": 45
+    },
+    {
+      "task_id": "ws2",
+      "title": "_buildWGHtml / _buildCHtml / _buildRHtml 专属函数 + _buildDynamicTemplateHtml switch 分发",
+      "scope": "在 ai-video-pipeline-ai.controller.ts 新增三个专属函数（W-G 1080×1920 #ede4d2 底 / C 1080×1920 / R 1920×1080）；_buildDynamicTemplateHtml 改为 switch 分发；端点对外签名不变",
+      "dod": [
+        "[BEHAVIOR] W-G compose-template → aspect='9:16' + html 含 ede4d2",
+        "[BEHAVIOR] C 模板 compose-template → aspect='9:16' + html 非空（_buildCHtml 实现）",
+        "[BEHAVIOR] R 模板 compose-template → aspect='16:9'（_buildRHtml 实现）",
+        "[BEHAVIOR] compose-template 必填字段完整，禁用字段 ratio/aspectRatio/format/orientation 不存在",
+        "[BEHAVIOR] W-G HTML 含 1080px 宽 + 1920px 高",
+        "[BEHAVIOR] error path — 无 template_id → 400 + error",
+        "[ARTIFACT] _buildWGHtml/_buildCHtml/_buildRHtml 函数存在 + _buildDynamicTemplateHtml 分发"
+      ],
+      "files": [
+        "apps/api/src/controllers/ai-video-pipeline-ai.controller.ts"
+      ],
+      "depends_on": ["ws1"],
+      "complexity": "M",
+      "estimated_minutes": 50
+    },
+    {
+      "task_id": "ws3",
+      "title": "ffprobe width/height + detectedAspect + target_aspect 列 + 单文件输出 + 前端比例选择器",
+      "scope": "migration ADD COLUMN target_aspect + detected_aspect；ffprobe step1 读 vStream.width/height + 导出函数 detectAspect（rotation swap）；updateStatus 写 detected_aspect；非模板路径 effectiveTarget 单文件；LocalVideoPipelinePage 9:16/16:9 选择按钮 + createJob 传 target_aspect",
+      "dod": [
+        "[BEHAVIOR] detectAspect(1920,1080,90) 返回 '9:16'（tsx 函数执行验证）",
+        "[BEHAVIOR] POST 含 target_aspect → 201 schema 完整（4 字段均存在）",
+        "[BEHAVIOR] GET 响应含 detected_aspect + target_aspect，禁用字段不存在",
+        "[BEHAVIOR] WS3 unit tests 全部通过（effectiveTarget 逻辑 + 单文件验证）",
+        "[BEHAVIOR] error path — 无效 id 返 404 + error",
+        "[ARTIFACT] migration + 导出 detectAspect + effectiveTarget + 比例选择器"
+      ],
+      "files": [
+        "apps/api/db/migrations/20260527_200000_add_target_detected_aspect_to_video_jobs.sql",
+        "apps/api/src/services/ai-video-pipeline.service.ts",
+        "apps/api/src/controllers/ai-video-pipeline.controller.ts",
+        "services/agent/src/handlers/video-pipeline.ts",
+        "apps/dashboard/src/pages/LocalVideoPipelinePage.tsx"
+      ],
+      "depends_on": ["ws2"],
+      "complexity": "M",
+      "estimated_minutes": 55
+    },
+    {
+      "task_id": "ws4",
+      "title": "Agent v1.1.29 version bump + E2E spec 更新 + GHA workflow 更新",
+      "scope": "services/agent/package.json version → 1.1.29；e2e/agent-video-pipeline.spec.js 加 original_script 填写 + W-G 点击 + 9:16 点击 + jobData 字段断言；.github/workflows/agent-e2e-video.yml agent_version → 1.1.29",
+      "dod": [
+        "[BEHAVIOR] Agent version 精确等于 1.1.29",
+        "[BEHAVIOR] E2E spec 含 W-G 模板选择代码",
+        "[BEHAVIOR] E2E spec 含 9:16 比例 + target_aspect 断言",
+        "[BEHAVIOR] E2E spec original_script 有断言逻辑（非仅字段名）",
+        "[BEHAVIOR] GHA workflow 含 windows-latest + 1.1.29",
+        "[ARTIFACT] package.json version + E2E spec + GHA workflow 文件均已更新"
+      ],
+      "files": [
+        "services/agent/package.json",
+        "e2e/agent-video-pipeline.spec.js",
+        ".github/workflows/agent-e2e-video.yml"
+      ],
+      "depends_on": ["ws3"],
+      "complexity": "S",
+      "estimated_minutes": 25
+    }
+  ]
+}
