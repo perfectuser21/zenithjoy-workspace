@@ -6,7 +6,7 @@ journey_type: user_facing
 
 **范围**: `LocalVideoPipelinePage.tsx` 加 `original_script` textarea + 画幅选择器（9:16/16:9/自动检测）+ createJob 传两个新字段；`e2e/agent-video-pipeline.spec.js` 补 original_script 填写 + API 字段断言
 **大小**: M（~130 行净增/改，2 文件）
-**依赖**: Workstream 2 和 Workstream 3 完成后
+**依赖**: Workstream 3 完成后（线性串行链；传递依赖 WS2→WS1）
 
 > **WS4 BEHAVIOR oracle 说明**:
 > Dashboard 前端（TSX 组件）无独立 HTTP 端点可测；UI 字段存在性验证通过源码检查。

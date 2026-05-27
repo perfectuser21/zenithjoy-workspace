@@ -6,7 +6,7 @@ journey_type: user_facing
 
 **范围**: `video-pipeline.ts` Step 1 补读 `width`/`height`；rotation=90°/270° 时 swap；计算 `detectedAspect`（"9:16"/"16:9"）；PATCH `detected_aspect` 写回 DB；计算 `effectiveTarget = target_aspect ?? detectedAspect ?? "9:16"`；非模板路径按 effectiveTarget 只生成单个文件
 **大小**: M（~110 行净增/改，1 文件）
-**依赖**: Workstream 1 完成后（**不依赖 WS2** — 见合同 Workstreams 切分说明）
+**依赖**: Workstream 2 完成后（线性串行链；WS3 的 Agent 逻辑与 WS2 的 composeTemplate 同属视频处理链路，串行确保 evaluator 不并发 dispatch）
 
 > **WS3 BEHAVIOR oracle 说明**:
 > Agent（Node.js Windows 进程）的 ffprobe 行为无法通过本地 HTTP API 直接测试（需要真实视频文件 + ffprobe 二进制 + Agent 运行）。

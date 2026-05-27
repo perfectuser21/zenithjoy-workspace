@@ -1,11 +1,11 @@
-# Sprint Contract Draft (Round 1)
+# Sprint Contract Draft (Round 2)
 
 **Sprint**: AI 视频 Pipeline：模板真实渲染 + original_script + 画幅检测
 **Journey**: Line 01 智能发布
 **journey_type**: user_facing
 **target_environment**: windows_cloud
-**propose_round**: 1
-**propose_branch**: cp-harness-propose-r1-79710a5d
+**propose_round**: 2
+**propose_branch**: cp-harness-propose-r2-79710a5d
 
 ---
 
@@ -52,41 +52,43 @@ console.log('OK')"
 
 **验证命令（前提：API 服务在 localhost:5200 运行，migration 已执行）**:
 ```bash
-# 1. 创建测试 job — 带时间戳防止用历史数据造假
+# 1. 创建测试 job — 带时间戳防止用历史数据造假，捕获完整 POST response
 TS=$(date +%s)
-JOB_ID=$(curl -sf -X POST "http://localhost:5200/api/ai-video/jobs" \
+POST_RESP=$(curl -sf -X POST "http://localhost:5200/api/ai-video/jobs" \
   -H "Content-Type: application/json" \
-  -d "{\"topic\":\"DoD-test-${TS}\",\"local_path\":\"/tmp/test.mp4\",\"original_script\":\"test script ${TS}\",\"target_aspect\":\"9:16\"}" \
-  | jq -r '.id') || { echo "FAIL: POST /api/ai-video/jobs 失败"; exit 1; }
+  -d "{\"topic\":\"DoD-test-${TS}\",\"local_path\":\"/tmp/test.mp4\",\"original_script\":\"test script ${TS}\",\"target_aspect\":\"9:16\"}") \
+  || { echo "FAIL: POST /api/ai-video/jobs 失败"; exit 1; }
+
+# 2. POST response schema oracle（PRD POST Response Schema 逐字段 jq -e 验证）
+echo "$POST_RESP" | jq -e '.status == "pending"' \
+  || { echo "FAIL: POST response status 不是 pending"; exit 1; }
+echo "$POST_RESP" | jq -e '.detected_aspect == null' \
+  || { echo "FAIL: POST response detected_aspect 初始应为 null"; exit 1; }
+echo "$POST_RESP" | jq -e '.original_script | type == "string"' \
+  || { echo "FAIL: POST response original_script 缺失或非 string"; exit 1; }
+echo "$POST_RESP" | jq -e ".original_script == \"test script ${TS}\"" \
+  || { echo "FAIL: POST response original_script 值未原样存储"; exit 1; }
+echo "$POST_RESP" | jq -e '.target_aspect == "9:16"' \
+  || { echo "FAIL: POST response target_aspect 不是 9:16"; exit 1; }
+
+# 3. POST response 五字段完整性强卡（PRD POST response 顶层必含 id/status/original_script/target_aspect/detected_aspect）
+echo "$POST_RESP" | jq -e 'has("id") and has("status") and has("original_script") and has("target_aspect") and has("detected_aspect")' \
+  || { echo "FAIL: POST response 五字段未全返回"; exit 1; }
+
+# 4. 提取 job ID
+JOB_ID=$(echo "$POST_RESP" | jq -r '.id') || { echo "FAIL: 无法提取 job ID"; exit 1; }
 echo "$JOB_ID" | grep -qE "^[0-9a-f-]{36}$" || { echo "FAIL: 无效 job ID=$JOB_ID"; exit 1; }
 
-# 2. GET 验证 response schema
-RESP=$(curl -sf "http://localhost:5200/api/ai-video/jobs/${JOB_ID}") || { echo "FAIL: GET job 失败"; exit 1; }
-
-# 3. Schema 字段 oracle（PRD 逐字段 jq -e 验证）
-echo "$RESP" | jq -e '.original_script | type == "string"' \
-  || { echo "FAIL: original_script 缺失或非 string"; exit 1; }
-echo "$RESP" | jq -e ".original_script == \"test script ${TS}\"" \
-  || { echo "FAIL: original_script 值未原样存储"; exit 1; }
-echo "$RESP" | jq -e '.target_aspect == "9:16"' \
-  || { echo "FAIL: target_aspect 不是 \"9:16\""; exit 1; }
-echo "$RESP" | jq -e '.detected_aspect == null' \
-  || { echo "FAIL: detected_aspect 初始应为 null"; exit 1; }
-
-# 4. keys 完整性
-echo "$RESP" | jq -e 'has("original_script") and has("target_aspect") and has("detected_aspect")' \
-  || { echo "FAIL: 三字段未全返回"; exit 1; }
-
-# 5. 禁用字段反向检查
+# 5. 禁用字段反向检查（POST response）
 for b in aspectRatio aspect_ratio script raw_script source_script; do
-  echo "$RESP" | jq -e "has(\"$b\") | not" \
-    || { echo "FAIL: 禁用字段 $b 存在"; exit 1; }
+  echo "$POST_RESP" | jq -e "has(\"$b\") | not" \
+    || { echo "FAIL: 禁用字段 $b 存在于 POST response"; exit 1; }
 done
 
-echo "✅ Step 2 oracle 全通过"
+echo "✅ Step 2 oracle 全通过（POST status + keys 完整性验证）"
 ```
 
-**硬阈值**: job 创建成功（201/200）+ 三字段存在且值正确 + 禁用字段不存在
+**硬阈值**: POST 成功（201/200）+ status=pending + 五字段全返回 + 禁用字段不存在
 
 ---
 
@@ -135,15 +137,15 @@ console.log('OK')
 "
 
 # 层 2：error path oracle — 非法 templateId → 400 + error 字段（前提：API 在 localhost:5200）
-: "\${JOB_ID:?需要先运行 Step 2 获取 JOB_ID}"
-CODE=\$(curl -s -o /dev/null -w "%{http_code}" \
-  -X POST "http://localhost:5200/api/ai-video/jobs/\${JOB_ID}/compose-template" \
+: "${JOB_ID:?需要先运行 Step 2 获取 JOB_ID}"
+CODE=$(curl -s -o /dev/null -w "%{http_code}" \
+  -X POST "http://localhost:5200/api/ai-video/jobs/${JOB_ID}/compose-template" \
   -H "Content-Type: application/json" \
   -d '{"templateId":"INVALID_XYZ"}')
-[ "\$CODE" = "400" ] || { echo "FAIL: 期望 400，实际=\$CODE"; exit 1; }
-ERR=\$(curl -s -X POST "http://localhost:5200/api/ai-video/jobs/\${JOB_ID}/compose-template" \
+[ "$CODE" = "400" ] || { echo "FAIL: 期望 400，实际=$CODE"; exit 1; }
+ERR=$(curl -s -X POST "http://localhost:5200/api/ai-video/jobs/${JOB_ID}/compose-template" \
   -H "Content-Type: application/json" -d '{"templateId":"INVALID_XYZ"}')
-echo "\$ERR" | jq -e '.error | type == "string"' || { echo "FAIL: error path 缺 error 字段"; exit 1; }
+echo "$ERR" | jq -e '.error | type == "string"' || { echo "FAIL: error path 缺 error 字段"; exit 1; }
 
 # PRD Response Schema jq-e codify（v7.3 强制规则 — 完整 success path 需 Claude API，此处用 source 检查代替）
 # html 字段：composeTemplate res.json 包含 html 键
@@ -161,6 +163,11 @@ console.log('OK')
 ```
 
 **硬阈值**: 三个函数存在 + WG 专属色值存在；invalid templateId → 400 + error 字段；res.json 含 html+aspect，禁用字段不存在
+
+> **W-G aspect="9:16" 运行时覆盖说明**（v7.3 verification_oracle_completeness）:
+> compose-template success path 的 `aspect` 字段值正确性（W-G → `"9:16"`）通过 **Final E2E Playwright** 验收，不在 evaluator Mode A 跑（原因：success path 调用真实 Claude API，evaluator Mode A 避免计费风险）。
+> Final E2E E2E spec 必须包含：`expect(ctData.aspect).toBe('9:16')` — 见下方 E2E 验收节 compose-template W-G 断言段。
+> DoD WS2 [BEHAVIOR] 最后两条（`_buildWGHtml aspect:9:16 source oracle` + `E2E spec 含 W-G aspect 断言`）共同覆盖此点。
 
 ---
 
@@ -196,25 +203,32 @@ console.log('OK')
 RESP=$(curl -sf "http://localhost:5200/api/ai-video/jobs/${JOB_ID}") \
   || { echo "FAIL: GET /api/ai-video/jobs/${JOB_ID} 失败"; exit 1; }
 
-# Schema 完整性：三字段必须存在（即使 null）
-echo "$RESP" | jq -e 'has("original_script")' || { echo "FAIL: GET response 缺 original_script"; exit 1; }
-echo "$RESP" | jq -e 'has("target_aspect")' || { echo "FAIL: GET response 缺 target_aspect"; exit 1; }
-echo "$RESP" | jq -e 'has("detected_aspect")' || { echo "FAIL: GET response 缺 detected_aspect"; exit 1; }
+# 1. id 字段存在且为 string（PRD GET response 必填）
+echo "$RESP" | jq -e '.id | type == "string"' \
+  || { echo "FAIL: GET response id 缺失或非 string"; exit 1; }
 
-# detected_aspect 类型校验：null 或 string
+# 2. status 字段存在且为 string（PRD GET response 必填）
+echo "$RESP" | jq -e '.status | type == "string"' \
+  || { echo "FAIL: GET response status 缺失或非 string"; exit 1; }
+
+# 3. 五字段完整性强卡（PRD GET response 顶层必含 id/status/original_script/target_aspect/detected_aspect）
+echo "$RESP" | jq -e 'has("id") and has("status") and has("original_script") and has("target_aspect") and has("detected_aspect")' \
+  || { echo "FAIL: GET response 五字段未全返回"; exit 1; }
+
+# 4. detected_aspect 类型校验：null 或 string
 echo "$RESP" | jq -e '.detected_aspect == null or (.detected_aspect | type == "string")' \
   || { echo "FAIL: detected_aspect 不是 null 或 string"; exit 1; }
 
-# 禁用字段反向检查
+# 5. 禁用字段反向检查
 for banned in aspectRatio aspect_ratio script raw_script source_script; do
   echo "$RESP" | jq -e "has(\"$banned\") | not" \
     || { echo "FAIL: 禁用字段 $banned 存在于 GET response"; exit 1; }
 done
 
-echo "✅ Step 6 oracle 全通过"
+echo "✅ Step 6 oracle 全通过（id + status + 五字段完整性验证）"
 ```
 
-**硬阈值**: 三字段全返回；detected_aspect 为 null 或有效 aspect 字符串；禁用字段不存在
+**硬阈值**: id/status 存在且为 string；五字段全返回；detected_aspect 为 null 或有效 aspect；禁用字段不存在
 
 ---
 
@@ -252,7 +266,7 @@ E2E spec 需在现有基础上补充：
 
 ```javascript
 // E2E 新增验证段（拼接在现有 step 3 之后）
-// 验证 create job 响应含 original_script
+// 验证 create job 响应含 original_script + detected_aspect
 if (jobId) {
   const apiResp = await page.request.get(`${BASE}/api/ai-video/jobs/${jobId}`);
   const jobData = await apiResp.json();
@@ -268,10 +282,33 @@ if (jobId) {
   console.log('[e2e] ✅ original_script present:', jobData.original_script !== undefined);
   console.log('[e2e] ✅ detected_aspect:', jobData.detected_aspect);
 }
+
+// compose-template W-G success path — aspect="9:16" 运行时 oracle
+// （对应 Step 4 Layer 3 声明的 Final E2E 覆盖点 + WS2 DoD 最后两条 BEHAVIOR 的验收）
+if (jobId) {
+  const ctResp = await page.request.post(`${BASE}/api/ai-video/jobs/${jobId}/compose-template`, {
+    data: { templateId: 'W-G' }
+  });
+  if (ctResp.status() !== 200) {
+    throw new Error(`FAIL: compose-template status=${ctResp.status()} expected 200`);
+  }
+  const ctData = await ctResp.json();
+  if (ctData.aspect !== '9:16') {
+    throw new Error(`FAIL: W-G compose-template aspect=${ctData.aspect} expected '9:16'`);
+  }
+  if (!ctData.html || typeof ctData.html !== 'string') {
+    throw new Error('FAIL: compose-template response missing html string');
+  }
+  // 禁用字段反向检查
+  ['content', 'result', 'ratio', 'output'].forEach(b => {
+    if (b in ctData) throw new Error(`FAIL: banned field '${b}' in compose-template response`);
+  });
+  console.log('[e2e] ✅ compose-template W-G aspect:', ctData.aspect);
+}
 ```
 
-**PASS 标准**: Playwright E2E 绿灯；`original_script` + `detected_aspect` 字段存在于 job API 响应
-**FAIL 标准**: 任何 step 抛异常 OR `original_script` 缺失 OR `detected_aspect` 缺失
+**PASS 标准**: Playwright E2E 绿灯；`original_script` + `detected_aspect` 字段存在；compose-template W-G `aspect === "9:16"`
+**FAIL 标准**: 任何 step 抛异常 OR `original_script` 缺失 OR `detected_aspect` 缺失 OR W-G aspect ≠ "9:16"
 **GHA workflow**: `.github/workflows/agent-e2e-video.yml`（`workflow_dispatch` + `windows-latest`）
 
 ---
@@ -287,7 +324,7 @@ if (jobId) {
 **范围**: 新增 migration SQL（3 列：original_script/target_aspect/detected_aspect），更新 PipelineJob interface，createJob 接受新字段，updateProgress 接受 detected_aspect（复用现有 progress 端点）
 **大小**: M（~140 行净增，3 文件）
 **依赖**: 无（串行链起点）
-**DoD**: `sprints/run-20260527-2037/contract-dod-ws1.md`（7 [BEHAVIOR] + manual:bash，含运行时 jq-e oracle）
+**DoD**: `sprints/run-20260527-2037/contract-dod-ws1.md`（12 [BEHAVIOR] + manual:bash，含 POST status/五字段完整性 + GET id/status/五字段完整性 oracle）
 
 ---
 
@@ -296,7 +333,7 @@ if (jobId) {
 **范围**: `ai-video-pipeline-ai.controller.ts` 新增 `_buildWGHtml`（9:16 Bauhaus 风）、`_buildCHtml`（16:9 纪录片风）、`_buildRHtml`（16:9 深酒红风）三函数；composeTemplate 按 templateId dispatch；response 字段合规
 **大小**: L（~230 行净增，1 文件；三 builder 函数高度内聚，最小合理切分）
 **依赖**: Workstream 1 完成后（composeTemplate 访问 `job.original_script` 注入 prompt，依赖 WS1 PipelineJob interface 扩展）
-**DoD**: `sprints/run-20260527-2037/contract-dod-ws2.md`（6 [BEHAVIOR] + manual:bash，含运行时 jq-e oracle）
+**DoD**: `sprints/run-20260527-2037/contract-dod-ws2.md`（9 [BEHAVIOR] + manual:bash，含 _buildWGHtml aspect:9:16 source oracle + E2E spec W-G aspect 断言覆盖点）
 
 ---
 

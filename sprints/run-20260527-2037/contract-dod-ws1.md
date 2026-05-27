@@ -57,3 +57,19 @@ journey_type: user_facing
 - [ ] [BEHAVIOR] updateProgress controller 接受 detected_aspect 字段并转发给 service（controller 代码检查）
   Test: manual:bash -c 'C="apps/api/src/controllers/ai-video-pipeline.controller.ts"; grep -q "detected_aspect" "$C" || { echo "FAIL: updateProgress 缺 detected_aspect"; exit 1; }; echo OK'
   期望: OK
+
+- [ ] [BEHAVIOR] POST /api/ai-video/jobs response 含 status="pending"（PRD POST response schema 必填字段）
+  Test: manual:bash -c 'TS=$(date +%s); RESP=$(curl -sf -X POST "http://localhost:5200/api/ai-video/jobs" -H "Content-Type: application/json" -d "{\"topic\":\"status-test-${TS}\",\"local_path\":\"/tmp/t.mp4\",\"original_script\":\"s\",\"target_aspect\":\"9:16\"}" 2>/dev/null) || { echo "FAIL: POST 失败（API 未运行？）"; exit 1; }; echo "$RESP" | jq -e '"'"'.status == "pending"'"'"' || { echo "FAIL: POST response status 不是 pending"; exit 1; }; echo OK'
+  期望: OK
+
+- [ ] [BEHAVIOR] POST /api/ai-video/jobs response 五字段完整性强卡（id/status/original_script/target_aspect/detected_aspect 全部存在）
+  Test: manual:bash -c 'TS=$(date +%s); RESP=$(curl -sf -X POST "http://localhost:5200/api/ai-video/jobs" -H "Content-Type: application/json" -d "{\"topic\":\"keys5-test-${TS}\",\"local_path\":\"/tmp/t.mp4\",\"original_script\":\"s\",\"target_aspect\":\"9:16\"}" 2>/dev/null) || { echo "FAIL: POST 失败"; exit 1; }; echo "$RESP" | jq -e '"'"'has("id") and has("status") and has("original_script") and has("target_aspect") and has("detected_aspect")'"'"' || { echo "FAIL: POST response 五字段未全返回"; exit 1; }; echo OK'
+  期望: OK
+
+- [ ] [BEHAVIOR] GET /api/ai-video/jobs/:id response 含 id（string 类型）和 status（string 类型）（PRD GET response schema 必填字段）
+  Test: manual:bash -c 'TS=$(date +%s); JID=$(curl -sf -X POST "http://localhost:5200/api/ai-video/jobs" -H "Content-Type: application/json" -d "{\"topic\":\"get-id-test-${TS}\",\"local_path\":\"/tmp/t.mp4\"}" 2>/dev/null | jq -r ".id") || { echo "FAIL: POST 失败"; exit 1; }; RESP=$(curl -sf "http://localhost:5200/api/ai-video/jobs/${JID}" 2>/dev/null) || { echo "FAIL: GET 失败"; exit 1; }; echo "$RESP" | jq -e '"'"'.id | type == "string"'"'"' || { echo "FAIL: GET response id 缺失或非 string"; exit 1; }; echo "$RESP" | jq -e '"'"'.status | type == "string"'"'"' || { echo "FAIL: GET response status 缺失或非 string"; exit 1; }; echo OK'
+  期望: OK
+
+- [ ] [BEHAVIOR] GET /api/ai-video/jobs/:id response 五字段完整性强卡（id/status/original_script/target_aspect/detected_aspect 全部存在）
+  Test: manual:bash -c 'TS=$(date +%s); JID=$(curl -sf -X POST "http://localhost:5200/api/ai-video/jobs" -H "Content-Type: application/json" -d "{\"topic\":\"get-5keys-${TS}\",\"local_path\":\"/tmp/t.mp4\",\"original_script\":\"s\",\"target_aspect\":\"9:16\"}" 2>/dev/null | jq -r ".id") || { echo "FAIL: POST 失败"; exit 1; }; RESP=$(curl -sf "http://localhost:5200/api/ai-video/jobs/${JID}" 2>/dev/null) || { echo "FAIL: GET 失败"; exit 1; }; echo "$RESP" | jq -e '"'"'has("id") and has("status") and has("original_script") and has("target_aspect") and has("detected_aspect")'"'"' || { echo "FAIL: GET response 五字段未全返回"; exit 1; }; echo OK'
+  期望: OK

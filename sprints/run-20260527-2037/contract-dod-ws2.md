@@ -59,3 +59,11 @@ journey_type: user_facing
 - [ ] [BEHAVIOR] keys 完整性 — compose-template success response 包含 html 和 aspect 字段（source dispatch 结构确认）
   Test: manual:bash -c 'F="apps/api/src/controllers/ai-video-pipeline-ai.controller.ts"; IDX=$(grep -n "async function composeTemplate" "$F" | head -1 | cut -d: -f1); [ -n "$IDX" ] || { echo "FAIL: composeTemplate 未找到"; exit 1; }; CHUNK=$(tail -n +"$IDX" "$F" | head -120); echo "$CHUNK" | grep -qE "html" || { echo "FAIL: response 缺 html 字段"; exit 1; }; echo "$CHUNK" | grep -qE "aspect" || { echo "FAIL: response 缺 aspect 字段"; exit 1; }; echo OK'
   期望: OK
+
+- [ ] [BEHAVIOR] _buildWGHtml 函数返回值含 aspect:"9:16"（W-G 固定画幅值 source oracle — 覆盖 compose-template success path 的 aspect 正确性）
+  Test: manual:bash -c 'F="apps/api/src/controllers/ai-video-pipeline-ai.controller.ts"; IDX=$(grep -n "_buildWGHtml" "$F" | head -1 | cut -d: -f1); [ -n "$IDX" ] || { echo "FAIL: _buildWGHtml 未找到"; exit 1; }; CHUNK=$(tail -n +"$IDX" "$F" | head -60); echo "$CHUNK" | grep -qE '"'"'aspect.*9:16|9:16.*aspect|"aspect"\s*:\s*"9:16'"'"' || { echo "FAIL: _buildWGHtml 返回值缺 aspect:9:16（W-G compose-template success path 将返回错误 aspect）"; exit 1; }; echo OK'
+  期望: OK
+
+- [ ] [BEHAVIOR] E2E spec 含 compose-template W-G → aspect="9:16" 的运行时 Playwright 断言（Final E2E 覆盖点）
+  Test: manual:bash -c 'F="e2e/agent-video-pipeline.spec.js"; grep -qE "compose.template|composeTemplate|W-G" "$F" || { echo "FAIL: E2E spec 缺 compose-template/W-G 相关断言"; exit 1; }; grep -q "9:16" "$F" || { echo "FAIL: E2E spec 缺 aspect 9:16 断言"; exit 1; }; echo OK'
+  期望: OK
