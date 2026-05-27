@@ -1,0 +1,74 @@
+name: Kuaishou Publisher E2E (Cookie Injection)
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 3 * * *'
+
+jobs:
+  e2e-kuaishou:
+    runs-on: windows-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: services/agent/package-lock.json
+
+      - name: Install dependencies
+        working-directory: services/agent
+        run: npm ci
+
+      - name: Install Playwright browsers
+        working-directory: services/agent
+        run: npx playwright install chromium --with-deps
+
+      - name: Create queue file (image-dryrun)
+        shell: pwsh
+        run: |
+          $q = @{
+            title = "[DRY-RUN] 快手图文 E2E 自检 $(Get-Date -Format 'yyyy-MM-dd HH:mm')"
+            content = "GitHub Actions E2E 自动验证。"
+            images = @()
+          } | ConvertTo-Json
+          $q | Out-File -FilePath "$env:GITHUB_WORKSPACE\queue-image.json" -Encoding utf8
+          Write-Host "queue-image.json created"
+
+      - name: Run image-dryrun publisher
+        working-directory: services/agent
+        shell: pwsh
+        env:
+          KUAISHOU_COOKIES: ${{ secrets.KUAISHOU_COOKIES }}
+          SCREENSHOT_DIR: ${{ github.workspace }}\screenshots
+        run: |
+          node publishers/kuaishou-publisher/publish-kuaishou-image-dryrun.cjs "$env:GITHUB_WORKSPACE\queue-image.json"
+
+      - name: Create queue file (video-dryrun)
+        shell: pwsh
+        run: |
+          $q = @{
+            title = "[DRY-RUN] 快手视频 E2E 自检 $(Get-Date -Format 'yyyy-MM-dd HH:mm')"
+          } | ConvertTo-Json
+          $q | Out-File -FilePath "$env:GITHUB_WORKSPACE\queue-video.json" -Encoding utf8
+          Write-Host "queue-video.json created"
+
+      - name: Run video-dryrun publisher
+        working-directory: services/agent
+        shell: pwsh
+        env:
+          KUAISHOU_COOKIES: ${{ secrets.KUAISHOU_COOKIES }}
+          SCREENSHOT_DIR: ${{ github.workspace }}\screenshots
+        run: |
+          node publishers/kuaishou-publisher/publish-kuaishou-video-dryrun.cjs "$env:GITHUB_WORKSPACE\queue-video.json"
+
+      - name: Upload screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: kuaishou-e2e-screenshots-${{ github.run_number }}
+          path: screenshots/
+          retention-days: 14
