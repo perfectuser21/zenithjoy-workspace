@@ -43,8 +43,9 @@ process.stdin.on('end', () => {
     || /🔴\s*严重问题\s*[:：][\s\S]{0,200}没有发现/.test(input);
 
   const textWithoutHeadings = input
-    .replace(/#+\s*[^🔴\n]*[（(]🔴[)）][^\n]*/g, '')
-    .replace(/🔴\s*\*\*[^*\n]+\*\*[^\n]*/g, '');
+    .replace(/#+\s*[^🔴\n]*[（(]🔴[)）][^\n]*/g, '')  // section headings: "### 严重问题 (🔴)"
+    .replace(/🔴\s*\*\*[^*\n]+\*\*[^\n]*/g, '')        // inline heading-style: "🔴 **issue**"
+    .replace(/[（(]🔴[)）]/g, '');                      // parenthesized backreferences: "修复X（🔴）"
   const hasActualRedFlag = /🔴/.test(textWithoutHeadings) && !noIssuesDeclared;
 
   if (hasActualRedFlag) {

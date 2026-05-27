@@ -70,3 +70,41 @@ c4667768779ce4b5c1cf319e70d4bb51c9d2dd18:apps/api/src/services/clip-output.servi
 # US Mac 迁移 — docker-compose.us.yml 在首次 commit 含明文 POSTGRES_PASSWORD
 # 该文件已在后续 commit 删除（US Mac 改用 pm2），密码仅在 Tailscale 私有网段使用
 8bef5b5b0268bc8b76f6ec7af5358797c19ee9e2:deploy/docker-compose.us.yml:generic-api-key:15
+
+# run-20260527-1934 Sprint 合同导入 commit — Authorization: Bearer ZJ-F-FBFYTLFR 是 E2E 测试专用
+# license fixture（free tier 测试账号），非生产凭据；contract DoD 文件中的 manual:bash 测试命令
+93875e3b6051873a0f1cd6048016b8ab9214db04:sprints/run-20260527-1934/contract-dod-ws1.md:curl-auth-header:29
+93875e3b6051873a0f1cd6048016b8ab9214db04:sprints/run-20260527-1934/contract-dod-ws1.md:curl-auth-header:40
+93875e3b6051873a0f1cd6048016b8ab9214db04:sprints/run-20260527-1934/contract-dod-ws1.md:curl-auth-header:50
+93875e3b6051873a0f1cd6048016b8ab9214db04:sprints/run-20260527-1934/contract-dod-ws1.md:curl-auth-header:63
+93875e3b6051873a0f1cd6048016b8ab9214db04:sprints/run-20260527-1934/contract-dod-ws1.md:curl-auth-header:66
+93875e3b6051873a0f1cd6048016b8ab9214db04:sprints/run-20260527-1934/contract-dod-ws1.md:curl-auth-header:79
+93875e3b6051873a0f1cd6048016b8ab9214db04:sprints/run-20260527-1934/contract-dod-ws1.md:curl-auth-header:85
+93875e3b6051873a0f1cd6048016b8ab9214db04:sprints/run-20260527-1934/contract-dod-ws2.md:curl-auth-header:26
+93875e3b6051873a0f1cd6048016b8ab9214db04:sprints/run-20260527-1934/contract-dod-ws2.md:curl-auth-header:29
+93875e3b6051873a0f1cd6048016b8ab9214db04:sprints/run-20260527-1934/contract-dod-ws2.md:curl-auth-header:39
+93875e3b6051873a0f1cd6048016b8ab9214db04:sprints/run-20260527-1934/contract-dod-ws2.md:curl-auth-header:42
+93875e3b6051873a0f1cd6048016b8ab9214db04:sprints/run-20260527-1934/contract-dod-ws2.md:curl-auth-header:52
+93875e3b6051873a0f1cd6048016b8ab9214db04:sprints/run-20260527-1934/contract-dod-ws2.md:curl-auth-header:55
+93875e3b6051873a0f1cd6048016b8ab9214db04:sprints/run-20260527-1934/contract-dod-ws2.md:curl-auth-header:65
+93875e3b6051873a0f1cd6048016b8ab9214db04:sprints/run-20260527-1934/contract-dod-ws2.md:curl-auth-header:68
+93875e3b6051873a0f1cd6048016b8ab9214db04:sprints/run-20260527-1934/contract-dod-ws2.md:curl-auth-header:81
+93875e3b6051873a0f1cd6048016b8ab9214db04:sprints/run-20260527-1934/contract-dod-ws2.md:curl-auth-header:84
+93875e3b6051873a0f1cd6048016b8ab9214db04:sprints/run-20260527-1934/contract-dod-ws2.md:curl-auth-header:94
+93875e3b6051873a0f1cd6048016b8ab9214db04:sprints/run-20260527-1934/contract-dod-ws2.md:curl-auth-header:97
+93875e3b6051873a0f1cd6048016b8ab9214db04:sprints/run-20260527-1934/contract-dod-ws3.md:curl-auth-header:41
+93875e3b6051873a0f1cd6048016b8ab9214db04:sprints/run-20260527-1934/contract-dod-ws3.md:curl-auth-header:52
+93875e3b6051873a0f1cd6048016b8ab9214db04:sprints/run-20260527-1934/contract-dod-ws3.md:curl-auth-header:55
+93875e3b6051873a0f1cd6048016b8ab9214db04:sprints/run-20260527-1934/contract-dod-ws3.md:curl-auth-header:78
+93875e3b6051873a0f1cd6048016b8ab9214db04:sprints/run-20260527-1934/contract-dod-ws3.md:curl-auth-header:82
+93875e3b6051873a0f1cd6048016b8ab9214db04:sprints/run-20260527-1934/contract-draft.md:curl-auth-header:51
+93875e3b6051873a0f1cd6048016b8ab9214db04:sprints/run-20260527-1934/contract-draft.md:curl-auth-header:90
+93875e3b6051873a0f1cd6048016b8ab9214db04:sprints/run-20260527-1934/contract-draft.md:curl-auth-header:97
+93875e3b6051873a0f1cd6048016b8ab9214db04:sprints/run-20260527-1934/contract-draft.md:curl-auth-header:157
+93875e3b6051873a0f1cd6048016b8ab9214db04:sprints/run-20260527-1934/contract-draft.md:curl-auth-header:163
+93875e3b6051873a0f1cd6048016b8ab9214db04:sprints/run-20260527-1934/contract-draft.md:curl-auth-header:201
+93875e3b6051873a0f1cd6048016b8ab9214db04:sprints/run-20260527-1934/contract-draft.md:curl-auth-header:204
+93875e3b6051873a0f1cd6048016b8ab9214db04:sprints/run-20260527-1934/contract-draft.md:curl-auth-header:211
+93875e3b6051873a0f1cd6048016b8ab9214db04:sprints/run-20260527-1934/contract-draft.md:curl-auth-header:214
+93875e3b6051873a0f1cd6048016b8ab9214db04:sprints/run-20260527-1934/contract-draft.md:curl-auth-header:325
+93875e3b6051873a0f1cd6048016b8ab9214db04:sprints/run-20260527-1934/contract-draft.md:curl-auth-header:338
