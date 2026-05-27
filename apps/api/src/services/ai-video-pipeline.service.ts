@@ -12,6 +12,9 @@ export interface PipelineJob {
   output_dir: string | null;
   error_msg: string | null;
   license_id: string | null;
+  original_script: string | null;
+  target_aspect: string | null;
+  detected_aspect: string | null;
   created_at: Date;
   updated_at: Date;
 }
@@ -23,13 +26,23 @@ export class AiVideoPipelineService {
     topic: string | null;
     templateId?: string | null;
     licenseId?: string | null;
+    originalScript?: string | null;
+    targetAspect?: string | null;
   }): Promise<PipelineJob> {
     const result = await pool.query(
       `INSERT INTO zenithjoy.ai_video_pipeline_jobs
-         (src_video, src_logo, topic, template_id, license_id)
-       VALUES ($1, $2, $3, $4, $5)
+         (src_video, src_logo, topic, template_id, license_id, original_script, target_aspect)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
        RETURNING *`,
-      [params.srcVideo, params.srcLogo, params.topic, params.templateId ?? null, params.licenseId ?? null],
+      [
+        params.srcVideo,
+        params.srcLogo,
+        params.topic,
+        params.templateId ?? null,
+        params.licenseId ?? null,
+        params.originalScript ?? null,
+        params.targetAspect ?? null,
+      ],
     );
     return result.rows[0];
   }

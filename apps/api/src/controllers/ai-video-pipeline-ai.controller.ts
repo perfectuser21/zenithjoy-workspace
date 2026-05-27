@@ -514,7 +514,13 @@ export async function composeTemplate(req: Request, res: Response, next: NextFun
       return `[场景${i + 1}] [${s}s→${e}s] "${txt}"`;
     }).join('\n');
 
-    const prompt = `你是短视频模板内容专家。根据以下已粗剪的口播片段，为每个场景提炼模板文案。
+    // 用户录制前参考文案注入（含空值保护）
+    const _originalScript = job.original_script ?? '';
+    const originalScriptPrefix = _originalScript
+      ? `用户录制前参考文案（非逐字稿，仅意图参考）：${_originalScript}\n\n`
+      : '';
+
+    const prompt = `${originalScriptPrefix}你是短视频模板内容专家。根据以下已粗剪的口播片段，为每个场景提炼模板文案。
 
 模板风格：${spec.aspect === '9:16' ? '竖版，大字冲击感' : '横版纪录片感，简洁有力'}
 视频总时长：${duration.toFixed(1)}秒
