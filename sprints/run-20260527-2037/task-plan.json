@@ -5,6 +5,7 @@
   "journey_type_reason": "涉及 LocalVideoPipelinePage 前端交互 + Agent Windows 视频输出，起点为用户 Dashboard UI 操作，Final E2E 在 GHA windows-latest Playwright",
   "target_environment": "windows_cloud",
   "target_environment_reason": "ZenithJoy Agent 是 Windows 产品，Final E2E 在 GitHub Actions windows-latest runner 跑 Playwright（GHA 干净 VM）",
+  "dag_note": "WS2 与 WS3 均依赖 WS1（DB migration），彼此独立可并行。Round 1 Reviewer 明确指出 WS3→WS2 依赖无逻辑依据（WS3 仅需 DB migration，与 WS2 template builders 无关）。WS4 depends_on [ws2, ws3] 以等待两条并行流均完成。",
   "tasks": [
     {
       "task_id": "ws1",
@@ -12,12 +13,11 @@
       "scope": "新增 migration SQL 三列 ADD COLUMN IF NOT EXISTS（original_script TEXT，target_aspect TEXT CHECK IN('9:16','16:9')，detected_aspect TEXT CHECK IN('9:16','16:9')）；PipelineJob interface 加三字段；createJob service/controller 接受 original_script + target_aspect；updateProgress/updateStatus 接受 detected_aspect 写回",
       "dod": [
         "[ARTIFACT] apps/api/db/migrations/20260527_100000_video_pipeline_new_fields.sql 文件存在，含三列 ADD COLUMN IF NOT EXISTS",
-        "[BEHAVIOR] migration 含 original_script + target_aspect + detected_aspect 三列定义，针对 zenithjoy.ai_video_pipeline_jobs",
-        "[BEHAVIOR] migration target_aspect CHECK 约束含 9:16 和 16:9 两值",
-        "[BEHAVIOR] PipelineJob TypeScript interface 含 original_script / target_aspect / detected_aspect 三字段",
-        "[BEHAVIOR] createJob controller 从 req.body 读取并传递 original_script + target_aspect",
-        "[BEHAVIOR] updateProgress controller 支持 detected_aspect 写回 service",
-        "[BEHAVIOR] 禁用字段名 aspect_ratio/raw_script/source_script 不出现在 controller 响应处理"
+        "[BEHAVIOR] psql: ai_video_pipeline_jobs 表三列均已存在于 DB（runtime oracle）",
+        "[BEHAVIOR] curl POST /api/ai-video/jobs: original_script + target_aspect 原样返回，detected_aspect=null",
+        "[BEHAVIOR] curl GET /api/ai-video/jobs/:id: has(original_script) and has(target_aspect) and has(detected_aspect)",
+        "[BEHAVIOR] 禁用字段 aspectRatio/aspect_ratio/script/raw_script/source_script 不出现于 response",
+        "[BEHAVIOR] updateProgress controller 支持 detected_aspect 写回 service"
       ],
       "files": [
         "apps/api/db/migrations/20260527_100000_video_pipeline_new_fields.sql",
@@ -33,10 +33,12 @@
       "title": "三模板专属 HTML Builder（_buildWGHtml/_buildCHtml/_buildRHtml）+ composeTemplate dispatch",
       "scope": "在 ai-video-pipeline-ai.controller.ts 新增三个 export function：_buildWGHtml（9:16，#ede4d2 底 + #d39c4a mustard）、_buildCHtml（16:9，#0a0a0a 底 + #c9a23d amber）、_buildRHtml（16:9，#1d1410 底 + #c08e6a 玫瑰金）；每个函数有与 JSX 模板视觉一致的独立 HTML 结构和调色板；composeTemplate 按 templateId dispatch 到三函数；response { html, aspect } + 禁用字段 content/result/ratio 不出现",
       "dod": [
-        "[BEHAVIOR] _buildWGHtml / _buildCHtml / _buildRHtml 三函数 export，各含模板专属色值",
+        "[BEHAVIOR] _buildWGHtml 函数体含 WG 专属色值 #ede4d2 或 #d39c4a",
+        "[BEHAVIOR] _buildCHtml 函数体含 C 专属色值 #0a0a0a 或 #c9a23d",
+        "[BEHAVIOR] _buildRHtml 函数体含 R 专属色值 #1d1410 或 #c08e6a",
         "[BEHAVIOR] composeTemplate 函数体内按 W-G/C/R 分发到三个专属 builder",
+        "[BEHAVIOR] curl POST /:id/compose-template with invalid templateId → 400 + error 字段",
         "[BEHAVIOR] compose-template res.json() 不含禁用字段 content/result/ratio/output",
-        "[BEHAVIOR] 未知 templateId 返回 400 + error: 'unknown template...' 字段",
         "[ARTIFACT] apps/api/src/controllers/ai-video-pipeline-ai.controller.ts 含三个专属 export 函数"
       ],
       "files": [
@@ -54,16 +56,17 @@
         "[BEHAVIOR] Step 1 读取 vStream.width + vStream.height",
         "[BEHAVIOR] effectiveWidth/effectiveHeight swap 逻辑（rotation=90°/270°）",
         "[BEHAVIOR] detectedAspect 计算与 9:16/16:9 关联",
-        "[BEHAVIOR] effectiveTarget 优先级：job.target_aspect 优先",
+        "[BEHAVIOR] effectiveTarget 优先级：job.target_aspect null-coalescing 优先",
         "[BEHAVIOR] detected_aspect 通过 PATCH/fetch 写回 API",
         "[BEHAVIOR] 非模板路径 copyFileSync ≤ 1 次（单文件输出）"
       ],
       "files": [
         "services/agent/src/handlers/video-pipeline.ts"
       ],
-      "depends_on": ["ws2"],
+      "depends_on": ["ws1"],
       "complexity": "M",
-      "estimated_minutes": 40
+      "estimated_minutes": 40,
+      "_depends_on_note": "仅依赖 WS1（DB migration 提供 detected_aspect 列）。不依赖 WS2（template builders 与 Agent ffprobe 逻辑完全独立）。Round 1 Reviewer 明确指出 WS3→WS2 无逻辑依据。"
     },
     {
       "task_id": "ws4",
@@ -81,18 +84,19 @@
         "apps/dashboard/src/pages/LocalVideoPipelinePage.tsx",
         "e2e/agent-video-pipeline.spec.js"
       ],
-      "depends_on": ["ws3"],
+      "depends_on": ["ws2", "ws3"],
       "complexity": "M",
-      "estimated_minutes": 40
+      "estimated_minutes": 40,
+      "_depends_on_note": "依赖 WS2（compose-template dispatch 功能，Dashboard 模板选择按钮逻辑）+ WS3（detected_aspect 写回 DB，E2E spec 验证此字段）。WS2/WS3 并行完成后 WS4 开始。"
     },
     {
       "task_id": "ws5",
       "title": "Agent v1.1.30 + GHA workflow 版本更新（修正 PRD 笔误：1.1.29 已存在）",
       "scope": "services/agent/package.json version = '1.1.30'（当前已是 1.1.29，PRD 写 1.1.29 为笔误，目标 1.1.30）；.github/workflows/agent-e2e-video.yml default agent_version = '1.1.30'；agent-installpack.yml 版本引用同步",
       "dod": [
-        "[BEHAVIOR] services/agent/package.json version = '1.1.30'",
+        "[BEHAVIOR] cat services/agent/package.json | jq -r .version = '1.1.30'",
         "[BEHAVIOR] agent-e2e-video.yml default agent_version = '1.1.30'",
-        "[BEHAVIOR] GHA workflow 中不含硬编码旧版本 '1.1.29' 作为 default"
+        "[BEHAVIOR] GHA workflow 中不含硬编码旧版本 '1.1.29' 作为唯一 default"
       ],
       "files": [
         "services/agent/package.json",
