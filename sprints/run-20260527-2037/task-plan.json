@@ -1,0 +1,99 @@
+{
+  "initiative_id": "96db2647-c7f8-413e-b0f7-3f6f9d3526de",
+  "sprint_dir": "sprints/run-20260527-2037",
+  "journey_type": "user_facing",
+  "journey_type_reason": "涉及 LocalVideoPipelinePage 前端交互 + Agent Windows 视频输出，起点为用户 Dashboard UI 操作，Final E2E 在 GHA windows-latest Playwright",
+  "target_environment": "windows_cloud",
+  "target_environment_reason": "ZenithJoy Agent 是 Windows 产品，Final E2E 在 GitHub Actions windows-latest runner 跑 Playwright（GHA 干净 VM）",
+  "tasks": [
+    {
+      "task_id": "ws1",
+      "title": "original_script 字段端到端：DB migration + API createJob + composeTemplate Claude 注入 + 前端 textarea",
+      "scope": "DB migration 在 ai_video_pipeline_jobs 加 original_script TEXT 列；AiVideoPipelineService.createJob() 接受 originalScript 并 INSERT；createJob 控制器从 req.body 读 original_script 传给 service；composeTemplate 控制器读 job.original_script，有值时注入 Claude prompt（前缀"用户录制前参考文案（非逐字稿，仅意图参考）："）；前端 LocalVideoPipelinePage topic textarea 下方加 original_script textarea，label='原始文案（可选）'，提交时带入 POST body",
+      "dod": [
+        "[BEHAVIOR] POST /api/ai-video-pipeline/ 传 original_script 返回 201，DB 记录含该值（unit test）",
+        "[BEHAVIOR] composeTemplate 调用时 original_script 有值 → Claude prompt 含该值字符串（unit test mock）",
+        "[BEHAVIOR] original_script 为 null/空 → composeTemplate prompt 不含该前缀（unit test mock）",
+        "[ARTIFACT] apps/api/db/migrations/ 含新 SQL migration 文件（original_script TEXT 列）",
+        "[ARTIFACT] apps/dashboard/src/pages/LocalVideoPipelinePage.tsx 含 original_script textarea（selector 可查到 label='原始文案（可选）'）"
+      ],
+      "files": [
+        "apps/api/db/migrations/<timestamp>_add_original_script.sql",
+        "apps/api/src/services/ai-video-pipeline.service.ts",
+        "apps/api/src/controllers/ai-video-pipeline.controller.ts",
+        "apps/api/src/controllers/ai-video-pipeline-ai.controller.ts",
+        "apps/dashboard/src/pages/LocalVideoPipelinePage.tsx"
+      ],
+      "depends_on": [],
+      "complexity": "M",
+      "estimated_minutes": 50
+    },
+    {
+      "task_id": "ws2",
+      "title": "模板 HTML 真实渲染：_buildDynamicTemplateHtml 拆为 _buildWGHtml / _buildCHtml / _buildRHtml 三专属函数",
+      "scope": "_buildWGHtml：竖版 9:16（1080×1920），#ede4d2 底色 + #1f3a3d stripe 顶部色块，INSIGHT 序号（monospace，mustard #d39c4a）+ 大字 title（Noto Serif SC 72px，titleAccent 词用 mustard span）+ subtitle + 底部 3 格 metrics 横排，GSAP 按时间戳切换；_buildCHtml：横版 16:9（1920×1080），#0a0a0a 底，顶部 monospace eyebrow 条（#c9a23d，letterSpacing .32em），左侧大标题（Noto Serif SC 108px，titleAccent 用 #c9a23d span），右侧 3 行 metrics（64px），底部分隔线 + 进度点，手机框居中，GSAP 同步时间戳；_buildRHtml：横版 16:9，#1d1410 底（深棕），三栏布局（左文字 / 中手机框 / 右留白），#c08e6a accent，GSAP；主入口 _buildDynamicTemplateHtml 改为 switch(templateId) 分发三函数",
+      "dod": [
+        "[BEHAVIOR] templateId='W-G' → HTML 含 #1f3a3d 且含 #d39c4a 且含 metrics 字样（snapshot test）",
+        "[BEHAVIOR] templateId='C' → HTML 含 #c9a23d 且含 #0a0a0a 且含 titleAccent span（snapshot test）",
+        "[BEHAVIOR] templateId='R' → HTML 含 #1d1410 且含 #c08e6a（snapshot test）",
+        "[BEHAVIOR] compose-template 接口选 W-G 返回 200，response.aspect='9:16'（integration test）",
+        "[BEHAVIOR] compose-template 接口选 C 返回 200，response.aspect='16:9'（integration test）",
+        "[BEHAVIOR] compose-template 接口选 R 返回 200，response.aspect='16:9'（integration test）",
+        "[ARTIFACT] apps/api/src/controllers/ai-video-pipeline-ai.controller.ts 含三个专属函数（_buildWGHtml/_buildCHtml/_buildRHtml）"
+      ],
+      "files": [
+        "apps/api/src/controllers/ai-video-pipeline-ai.controller.ts"
+      ],
+      "depends_on": [],
+      "complexity": "L",
+      "estimated_minutes": 90
+    },
+    {
+      "task_id": "ws3",
+      "title": "画幅检测 + 比例选择：ffprobe width/height + detectedAspect + DB 两列 + Agent 单文件输出 + 前端选择器",
+      "scope": "ffprobe Step 1 扩展：同一 -show_streams 命令补充读取 vStream.width/height，计算 effectiveWidth/Height（rotation=90°/270° 时 swap），effectiveWidth < effectiveHeight → detectedAspect='9:16' else '16:9'，PATCH 写回 DB detected_aspect；DB migration：ai_video_pipeline_jobs 加 target_aspect TEXT 列 + detected_aspect TEXT 列；createJob 控制器接受 target_aspect；Agent 非模板路径（Step 7B）：effectiveTarget = job.target_aspect ?? detectedAspect ?? '9:16'，只生成对应一个文件，删除强制生成两个文件的逻辑；compose-html（Step 5B）带上 target_aspect；前端 LocalVideoPipelinePage 加比例选择器（竖版 9:16 / 横版 16:9 / 自动检测(默认)），提交时带 target_aspect（'9:16'/'16:9'/null）",
+      "dod": [
+        "[BEHAVIOR] ffprobe 处理标准横屏视频（1920×1080，rotation=0）→ detectedAspect='16:9'（unit test）",
+        "[BEHAVIOR] ffprobe 处理 iPhone 视频（1920×1080 + rotation=90°）→ effectiveWidth=1080 < effectiveHeight=1920 → detectedAspect='9:16'（unit test）",
+        "[BEHAVIOR] target_aspect='9:16' → Agent 只生成 9_16.mp4，不生成 16_9.mp4（unit test mock）",
+        "[BEHAVIOR] target_aspect='16:9' → Agent 只生成 16_9.mp4，不生成 9_16.mp4（unit test mock）",
+        "[BEHAVIOR] POST /api/ai-video-pipeline/ 传 target_aspect='9:16' → GET /:id 返回 target_aspect='9:16'（integration test）",
+        "[ARTIFACT] apps/api/db/migrations/ 含新 SQL migration 文件（target_aspect + detected_aspect 列）",
+        "[ARTIFACT] apps/dashboard/src/pages/LocalVideoPipelinePage.tsx 含比例选择器（button:has-text('自动检测') 可查到）"
+      ],
+      "files": [
+        "apps/api/db/migrations/<timestamp>_add_aspect_fields.sql",
+        "apps/api/src/controllers/ai-video-pipeline.controller.ts",
+        "apps/api/src/services/ai-video-pipeline.service.ts",
+        "services/agent/src/",
+        "apps/dashboard/src/pages/LocalVideoPipelinePage.tsx"
+      ],
+      "depends_on": ["ws1"],
+      "complexity": "L",
+      "estimated_minutes": 80
+    },
+    {
+      "task_id": "ws4",
+      "title": "Agent v1.1.29 bump + E2E spec 更新（original_script + W-G + 9:16）+ GHA Final E2E 绿灯",
+      "scope": "services/agent/package.json version → v1.1.29；更新 e2e/agent-video-pipeline.spec.js：填 original_script textarea（'ZenithJoy E2E 原始文案测试，帮助 AI 理解口播意图'），点击模板 W-G 按钮（selector: button:has-text('W-G')），点击比例竖版 9:16 按钮，等待 job 完成（最长 15min），API 验证 job.detected_aspect 有值，API 验证 job.status='completed'，截图证明模板选中+比例选中+完成状态；触发 agent-installpack.yml（GHA build → COS 上传 → manifest 更新）；agent-e2e-video.yml 下载 zj-e2e-koubo-45s.mp4，Playwright 跑更新后 spec，Artifact 截图证明",
+      "dod": [
+        "[BEHAVIOR] services/agent/package.json version 字段值为 '1.1.29'（文件检查）",
+        "[BEHAVIOR] e2e/agent-video-pipeline.spec.js 含 original_script textarea 填写操作（grep 'original_script' 或 '原始文案'）",
+        "[BEHAVIOR] e2e/agent-video-pipeline.spec.js 含 button:has-text('W-G') selector",
+        "[BEHAVIOR] e2e/agent-video-pipeline.spec.js 含 button:has-text('9:16') 或比例选择操作",
+        "[BEHAVIOR] e2e/agent-video-pipeline.spec.js 含 job.detected_aspect 的 API 验证断言",
+        "[ARTIFACT] .github/workflows/agent-e2e-video.yml 含 zj-e2e-koubo-45s.mp4 下载步骤",
+        "[ARTIFACT] GHA agent-e2e-video.yml workflow 最终运行结果 green（Final E2E 唯一真实验收）"
+      ],
+      "files": [
+        "services/agent/package.json",
+        "e2e/agent-video-pipeline.spec.js",
+        ".github/workflows/agent-installpack.yml",
+        ".github/workflows/agent-e2e-video.yml"
+      ],
+      "depends_on": ["ws2", "ws3"],
+      "complexity": "M",
+      "estimated_minutes": 60
+    }
+  ]
+}
