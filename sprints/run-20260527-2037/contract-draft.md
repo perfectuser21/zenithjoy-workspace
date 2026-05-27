@@ -277,28 +277,28 @@ if (jobId) {
 
 ### Workstream 1: DB Migration + API 层（service interface + controller 读写新字段）
 
-**范围**: 新增 migration SQL（3列：original_script/target_aspect/detected_aspect），更新 PipelineJob interface，createJob 接受新字段，updateProgress 接受 detected_aspect
+**范围**: 新增 migration SQL（3 列：original_script/target_aspect/detected_aspect），更新 PipelineJob interface，createJob 接受新字段，updateProgress 接受 detected_aspect（复用现有 progress 端点 — PATCH 端点设计决策已在文档顶部声明）
 **大小**: M（~140 行净增，3 文件）
 **依赖**: 无（串行链起点）
-**BEHAVIOR 覆盖测试文件**: `tests/ws1/video-pipeline-new-fields.test.ts`
+**DoD**: `sprints/run-20260527-2037/contract-dod-ws1.md`（7 [BEHAVIOR] + manual:bash，含运行时 jq-e oracle）
 
 ---
 
 ### Workstream 2: 三个模板专属 HTML Builder 函数（WG/C/R）+ composeTemplate dispatch
 
 **范围**: `ai-video-pipeline-ai.controller.ts` 新增 `_buildWGHtml`（9:16 Bauhaus 风）、`_buildCHtml`（16:9 纪录片风）、`_buildRHtml`（16:9 深酒红风）三函数；composeTemplate 按 templateId dispatch；response 字段合规
-**大小**: L（~230 行净增，1 文件）
-**依赖**: Workstream 1 完成后
-**BEHAVIOR 覆盖测试文件**: `tests/ws2/template-builders.test.ts`
+**大小**: L（~230 行净增，1 文件；例外说明：三函数高度内聚，单独拆出任一 ws 无法独立编译）
+**依赖**: Workstream 1 完成后（代码依赖：composeTemplate 访问 `job.original_script` 注入 prompt，该字段由 WS1 加入 PipelineJob interface）
+**DoD**: `sprints/run-20260527-2037/contract-dod-ws2.md`（6 [BEHAVIOR] + manual:bash，含运行时 jq-e oracle）
 
 ---
 
 ### Workstream 3: Agent ffprobe 补 width/height + detectedAspect PATCH + 单文件输出
 
-**范围**: `video-pipeline.ts` Step 1 补读 `width/height`；计算 `detectedAspect`；PATCH `detected_aspect`；计算 `effectiveTarget`；非模板路径只生成单个输出文件
+**范围**: `video-pipeline.ts` 新增 export `computeDetectedAspect(width, height, rotation): string` 函数；Step 1 读 width/height + rotation swap；PATCH `detected_aspect`；计算 `effectiveTarget`；非模板路径只生成单个输出文件
 **大小**: M（~110 行净增/改，1 文件）
-**依赖**: Workstream 1 完成后（**不依赖 WS2**，理由：Agent ffprobe 仅需 DB detected_aspect 列（WS1 迁移）和 progress PATCH 端点（已存在），与模板 HTML Builder（WS2）无关联。WS2 与 WS3 逻辑独立，可并行执行）
-**BEHAVIOR 覆盖测试文件**: `tests/ws3/agent-ffprobe-aspect.test.ts`
+**依赖**: Workstream 2 完成后（线性串行链：ws3 虽与 ws2 无直接代码依赖，但线性链确保 evaluator 不并发 dispatch ws2+ws3 引发 DB 竞争；同时 ws3 的 PATCH progress endpoint 接受 detected_aspect 字段依赖 WS1 interface 扩展已合并）
+**DoD**: `sprints/run-20260527-2037/contract-dod-ws3.md`（6 [BEHAVIOR] + manual:bash）
 
 ---
 
@@ -306,8 +306,8 @@ if (jobId) {
 
 **范围**: `LocalVideoPipelinePage.tsx` 加 original_script textarea + 画幅选择器 + createJob 传新字段；`e2e/agent-video-pipeline.spec.js` 补新字段填写 + API schema 断言
 **大小**: M（~130 行净增/改，2 文件）
-**依赖**: Workstream 2 和 Workstream 3 完成后（需 WS2 compose-template dispatch 可用 + WS3 detected_aspect 写回可用）
-**BEHAVIOR 覆盖测试文件**: `tests/ws4/dashboard-ui-aspect.test.ts`
+**依赖**: Workstream 3 完成后（线性链；UI 依赖后端 API 全链路可用）
+**DoD**: `sprints/run-20260527-2037/contract-dod-ws4.md`（6 [BEHAVIOR] + manual:bash）
 
 ---
 
@@ -316,7 +316,7 @@ if (jobId) {
 **范围**: `services/agent/package.json` version = `"1.1.30"`；`agent-e2e-video.yml` 默认版本 = `"1.1.30"`；`agent-installpack.yml` 版本引用更新
 **大小**: S（~15 行净增/改，3 文件）
 **依赖**: Workstream 4 完成后
-**BEHAVIOR 覆盖测试文件**: `tests/ws5/agent-version.test.ts`
+**DoD**: `sprints/run-20260527-2037/contract-dod-ws5.md`（5 [BEHAVIOR] + manual:bash）
 
 ---
 
@@ -326,7 +326,7 @@ if (jobId) {
 |---|---|---|---|
 | WS1 | `tests/ws1/video-pipeline-new-fields.test.ts` | migration 三列/interface 字段/controller 读写/禁用字段反向 | import 报 type error：PipelineJob 无新字段 |
 | WS2 | `tests/ws2/template-builders.test.ts` | _buildWGHtml/_buildCHtml/_buildRHtml 存在/dispatch 正确/response schema/禁用字段 | import 找不到 _buildWGHtml 等函数 |
-| WS3 | `tests/ws3/agent-ffprobe-aspect.test.ts` | width/height 读取/detectedAspect 计算/PATCH 字段/effectiveTarget/单文件输出 | 测试文件 grep 源码中缺失的逻辑 |
+| WS3 | `tests/ws3/agent-ffprobe-aspect.test.ts` | computeDetectedAspect 精确行为（import 级红证据）| `import { computeDetectedAspect } from '...video-pipeline'` → "export not found" 模块错误，WS3 实现前 FAIL |
 | WS4 | `tests/ws4/dashboard-ui-aspect.test.ts` | original_script 状态/target_aspect 传参/aspect 选择器/E2E spec 更新 | Dashboard 无新字段 → 断言失败 |
 | WS5 | `tests/ws5/agent-version.test.ts` | package.json 版本/GHA 版本/无硬编码旧版本 | package.json 版本 = 1.1.29 ≠ 1.1.30 → 失败 |
 
@@ -353,3 +353,4 @@ if (jobId) {
 | R1 | ffprobe 失败（视频文件损坏、width/height 字段缺失、container 无 video stream） | Agent Step 1 无法计算 detectedAspect → PATCH 写回 null → 视频输出 fallback "9:16" | Agent Step 1 ffprobe 失败时 catch error，detectedAspect 为 null，effectiveTarget = target_aspect ?? null ?? "9:16"（已有 fallback 链）；E2E 使用已知正常视频 `zj-e2e-koubo-45s.mp4` |
 | R2 | migration 串行依赖（detected_aspect 列必须在 API 层写回之前存在于 DB） | WS1 migration 未执行时 Agent PATCH detected_aspect → DB INSERT 失败 / API 500 | WS1 是全链路 ws1（depends_on: []），所有下游 WS 通过 depends_on 显式等待 WS1 完成；migration 使用 ADD COLUMN IF NOT EXISTS（幂等安全） |
 | R3 | 视觉不一致（JSX 模板色值与 _buildWGHtml/_buildCHtml/_buildRHtml 硬编码色值不完全吻合） | Final E2E 通过（功能正确）但视觉效果对比 JSX 设计稍有差异 | 合同强制要求三函数各含 JSX 模板专属色值（#ede4d2 WG / #0a0a0a C / #1d1410 R）；通过 DoD BEHAVIOR 验证色值存在；Final E2E 截图留存，视觉审核由人工 review；视觉问题不阻塞 sprint merge |
+| R4 | PATCH 端点设计决策：复用 progress 端点可能造成字段类型冲突 | Agent 写回 `detected_aspect` 时，若 updateProgress handler TypeScript 参数类型未扩展，strict mode 编译报错 → PATCH 字段被丢弃 → DB 写入失败 | WS1 scope 明确扩展 `updateProgress` req.body 解构含 `detected_aspect?: string | null`；WS1 BEHAVIOR 覆盖 detected_aspect 写回路径（含 service.updateStatus 类型检查）|

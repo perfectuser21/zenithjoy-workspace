@@ -1,50 +1,39 @@
 import { describe, it, expect } from 'vitest';
-import * as fs from 'fs';
+// ⚠️ RED 证据：WS3 实现前 video-pipeline.ts 不导出 computeDetectedAspect
+// → import 报 "does not provide an export named 'computeDetectedAspect'"
+// → vitest 运行失败（模块错误），提供真实 TDD Red 证据
+// WS3 实现后，此 import 通过，测试变绿
+import { computeDetectedAspect } from '../../../../services/agent/src/handlers/video-pipeline';
 
-const SRC = fs.readFileSync('services/agent/src/handlers/video-pipeline.ts', 'utf8');
-
-describe('WS3 — Agent ffprobe width/height + detectedAspect + 单文件输出 [BEHAVIOR]', () => {
-  it('Step 1 读取 vStream.width 和 vStream.height', () => {
-    const step1Block = SRC.slice(SRC.indexOf('[Step 1/7]'), SRC.indexOf('[Step 1/7]') + 3000);
-    expect(step1Block).toMatch(/\.width|video_stream\.width|vStream\.width|stream\.width/);
-    expect(step1Block).toMatch(/\.height|video_stream\.height|vStream\.height|stream\.height/);
+describe('WS3 — computeDetectedAspect 精确行为 [BEHAVIOR]', () => {
+  it('portrait video (width < height, rotation=0) → "9:16"', () => {
+    expect(computeDetectedAspect(1080, 1920, 0)).toBe('9:16');
   });
 
-  it('effectiveWidth / effectiveHeight 变量存在（rotation swap 逻辑）', () => {
-    expect(SRC).toContain('effectiveWidth');
-    expect(SRC).toContain('effectiveHeight');
+  it('landscape video (width > height, rotation=0) → "16:9"', () => {
+    expect(computeDetectedAspect(1920, 1080, 0)).toBe('16:9');
   });
 
-  it('detectedAspect 变量存在并与 9:16 或 16:9 相关联', () => {
-    expect(SRC).toContain('detectedAspect');
-    const detectedBlock = SRC.slice(SRC.indexOf('detectedAspect'), SRC.indexOf('detectedAspect') + 500);
-    expect(detectedBlock).toMatch(/9:16|16:9/);
+  it('iPhone rotation=90° swaps dimensions → 9:16', () => {
+    // iPhone 录制：物理 width=1920, height=1080, rotation=90°
+    // effectiveWidth=height=1080 < effectiveHeight=width=1920 → "9:16"
+    expect(computeDetectedAspect(1920, 1080, 90)).toBe('9:16');
   });
 
-  it('effectiveTarget 变量使用 target_aspect 优先（?? 或 || 链）', () => {
-    expect(SRC).toContain('effectiveTarget');
-    const targetBlock = SRC.slice(SRC.indexOf('effectiveTarget'), SRC.indexOf('effectiveTarget') + 200);
-    expect(targetBlock).toMatch(/target_aspect|job\.target_aspect/);
+  it('iPhone rotation=270° swaps dimensions → 9:16', () => {
+    expect(computeDetectedAspect(1920, 1080, 270)).toBe('9:16');
   });
 
-  it('detected_aspect 被 PATCH 写回 API（progress endpoint 或专属 endpoint）', () => {
-    expect(SRC).toContain('detected_aspect');
-    const patchIdx = SRC.indexOf('detected_aspect');
-    const surroundingCode = SRC.slice(Math.max(0, patchIdx - 200), patchIdx + 200);
-    expect(surroundingCode).toMatch(/fetch|progress|PATCH|fireProgress/i);
+  it('rotation=0° landscape stays 16:9', () => {
+    expect(computeDetectedAspect(1920, 1080, 0)).toBe('16:9');
   });
 
-  it('非模板路径 copyFileSync 调用次数不超过 1（单文件输出）', () => {
-    const nonTplStart = SRC.lastIndexOf('// ── Non-template path') !== -1
-      ? SRC.lastIndexOf('// ── Non-template path')
-      : SRC.lastIndexOf('if (!job.template_id)');
-    if (nonTplStart === -1) {
-      expect(true).toBe(true);
-      return;
-    }
-    const nonTplEnd = SRC.indexOf('job.template_id', nonTplStart + 50);
-    const nonTplBlock = nonTplEnd > 0 ? SRC.slice(nonTplStart, nonTplEnd) : SRC.slice(nonTplStart, nonTplStart + 2000);
-    const copies = (nonTplBlock.match(/copyFileSync/g) ?? []).length;
-    expect(copies).toBeLessThanOrEqual(1);
+  it('rotation=180° does NOT swap → stays 16:9', () => {
+    // 180° 是上下翻转，不是横竖转换，effectiveWidth/Height 不 swap
+    expect(computeDetectedAspect(1920, 1080, 180)).toBe('16:9');
+  });
+
+  it('square video (width == height) → "16:9"（width 不小于 height）', () => {
+    expect(computeDetectedAspect(1080, 1080, 0)).toBe('16:9');
   });
 });

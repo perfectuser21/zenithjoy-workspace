@@ -5,7 +5,7 @@
   "journey_type_reason": "涉及 LocalVideoPipelinePage 前端交互 + Agent Windows 视频输出，起点为用户 Dashboard UI 操作，Final E2E 在 GHA windows-latest Playwright",
   "target_environment": "windows_cloud",
   "target_environment_reason": "ZenithJoy Agent 是 Windows 产品，Final E2E 在 GitHub Actions windows-latest runner 跑 Playwright（GHA 干净 VM）",
-  "dag_note": "WS2 与 WS3 均依赖 WS1（DB migration），彼此独立可并行。Round 1 Reviewer 明确指出 WS3→WS2 依赖无逻辑依据（WS3 仅需 DB migration，与 WS2 template builders 无关）。WS4 depends_on [ws2, ws3] 以等待两条并行流均完成。",
+  "dag_note": "线性串行链 ws1→ws2→ws3→ws4→ws5，符合 v7.10 depends_on 验证规则。ws3 虽与 ws2 无直接代码依赖，但线性链保守安全，避免评估器并发 dispatch 竞争。",
   "tasks": [
     {
       "task_id": "ws1",
@@ -63,10 +63,10 @@
       "files": [
         "services/agent/src/handlers/video-pipeline.ts"
       ],
-      "depends_on": ["ws1"],
+      "depends_on": ["ws2"],
       "complexity": "M",
       "estimated_minutes": 40,
-      "_depends_on_note": "仅依赖 WS1（DB migration 提供 detected_aspect 列）。不依赖 WS2（template builders 与 Agent ffprobe 逻辑完全独立）。Round 1 Reviewer 明确指出 WS3→WS2 无逻辑依据。"
+      "_depends_on_note": "线性串行链：ws3 虽与 ws2 无直接代码依赖，但线性链确保 evaluator 不并发 dispatch，避免 DB 竞争；且 ws3 PATCH detected_aspect 的 progress endpoint 类型扩展（WS1 完成）必须先就绪"
     },
     {
       "task_id": "ws4",
@@ -84,10 +84,9 @@
         "apps/dashboard/src/pages/LocalVideoPipelinePage.tsx",
         "e2e/agent-video-pipeline.spec.js"
       ],
-      "depends_on": ["ws2", "ws3"],
+      "depends_on": ["ws3"],
       "complexity": "M",
-      "estimated_minutes": 40,
-      "_depends_on_note": "依赖 WS2（compose-template dispatch 功能，Dashboard 模板选择按钮逻辑）+ WS3（detected_aspect 写回 DB，E2E spec 验证此字段）。WS2/WS3 并行完成后 WS4 开始。"
+      "estimated_minutes": 40
     },
     {
       "task_id": "ws5",
