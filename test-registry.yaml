@@ -2383,3 +2383,31 @@ agent_suite:
     status: active
     product: 新媒体运营
     note: "Line 01 Sprint WS4 TDD Red/Green — .github/workflows/kuaishou-e2e.yml GHA windows-latest + 截图 artifact + KUAISHOU_COOKIES secret"
+  - id: line05-ai-video-pipeline-ws1
+    path: sprints/run-20260527-1934/tests/ws1/original-script-fields.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 视频剪辑
+    note: "Line 05 Sprint run-20260527-1934 WS1 — original_script DB 列 + createJob API + 前端 textarea + Claude prompt 注入（静态验证）"
+  - id: line05-ai-video-pipeline-ws2
+    path: sprints/run-20260527-1934/tests/ws2/template-html-builders.test.ts
+    type: unit
+    ci: L3
+    status: pending-ci
+    product: 视频剪辑
+    note: "Line 05 Sprint run-20260527-1934 WS2 — _buildWGHtml/_buildCHtml/_buildRHtml 专属 HTML 函数 + switch 分发（静态验证）"
+  - id: line05-ai-video-pipeline-ws3
+    path: sprints/run-20260527-1934/tests/ws3/ffprobe-aspect-detection.test.ts
+    type: unit
+    ci: L3
+    status: pending-ci
+    product: 视频剪辑
+    note: "Line 05 Sprint run-20260527-1934 WS3 — ffprobe width/height + detectedAspect 写库 + target_aspect + 非模板路径单文件输出（静态验证）"
+  - id: line05-ai-video-pipeline-ws4
+    path: sprints/run-20260527-1934/tests/ws4/agent-version-e2e-spec.test.ts
+    type: e2e
+    ci: L4
+    status: pending-ci
+    product: 视频剪辑
+    note: "Line 05 Sprint run-20260527-1934 WS4 — Agent v1.1.29 version bump + E2E spec 更新 + GHA Windows 真实视频验收"

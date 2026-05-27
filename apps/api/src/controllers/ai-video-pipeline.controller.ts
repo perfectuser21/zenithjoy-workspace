@@ -64,6 +64,7 @@ export async function createJob(req: Request, res: Response, next: NextFunction)
       status: job.status,
       original_script: job.original_script ?? null,
       target_aspect: job.target_aspect ?? null,
+      src_video: job.src_video,
     });
   } catch (err) { next(err); }
 }
