@@ -1,4 +1,4 @@
-# Sprint Contract Draft (Round 1)
+# Sprint Contract Draft (Round 2)
 # Sprint: 快手 publisher 三模式对齐 + GHA 自动验证
 
 ## Golden Path
@@ -54,15 +54,22 @@ node -e "
 ```bash
 node -e "
   const c = require('fs').readFileSync('services/agent/publishers/kuaishou-publisher/publish-kuaishou-image-dryrun.cjs','utf8');
-  if (!c.includes('imagesCount'))     { console.error('FAIL: 无 imagesCount 字段'); process.exit(1); }
-  if (!c.includes('dryRun: true'))    { console.error('FAIL: 无 dryRun:true'); process.exit(1); }
-  if (c.match(/[\"']result[\"']\s*:/)) { console.error('FAIL: 禁用字段 result 出现在输出中'); process.exit(1); }
-  if (c.match(/[\"']status[\"']\s*:/)) { console.error('FAIL: 禁用字段 status 出现在输出中'); process.exit(1); }
+  if (!c.includes('imagesCount'))   { console.error('FAIL: 无 imagesCount 字段'); process.exit(1); }
+  if (!c.includes('dryRun: true'))  { console.error('FAIL: 无 dryRun:true'); process.exit(1); }
+  if (!c.match(/\burl\s*:/))        { console.error('FAIL: 输出无 url 字段'); process.exit(1); }
+  if (!c.match(/\btitle\s*:/))      { console.error('FAIL: 输出无 title 字段'); process.exit(1); }
+  if (!c.includes('page.route'))    { console.error('FAIL: 缺 page.route（发布 API 拦截）'); process.exit(1); }
+  if (!c.includes('/rest/cp/photo/publish') && !c.includes('/rest/cp/works/'))
+                                    { console.error('FAIL: 缺发布 API URL 拦截模式'); process.exit(1); }
+  ['result','status','data','payload'].forEach(f => {
+    if (new RegExp('[\"\\x27]' + f + '[\"\\x27]\\s*:').test(c))
+      { console.error('FAIL: 禁用字段 ' + f + ' 在输出中'); process.exit(1); }
+  });
   console.log('OK');
 "
 ```
 
-**硬阈值**: imagesCount + dryRun 字段存在，result/status 禁用字段不在输出 keys 中
+**硬阈值**: imagesCount + dryRun + url + title 字段存在；page.route + 发布 API URL 拦截存在；result/status/data/payload 禁用字段不在输出 keys 中
 
 ---
 
@@ -95,16 +102,22 @@ node -e "
 ```bash
 node -e "
   const c = require('fs').readFileSync('services/agent/publishers/kuaishou-publisher/publish-kuaishou-video-dryrun.cjs','utf8');
-  if (!c.includes('dryRun: true'))      { console.error('FAIL: 无 dryRun:true'); process.exit(1); }
-  if (!c.includes('ok: true'))          { console.error('FAIL: 无 ok:true'); process.exit(1); }
-  if (c.match(/[\"']result[\"']\s*:/))  { console.error('FAIL: 禁用字段 result 在输出中'); process.exit(1); }
-  if (c.match(/[\"']status[\"']\s*:/))  { console.error('FAIL: 禁用字段 status 在输出中'); process.exit(1); }
-  if (c.match(/[\"']data[\"']\s*:/))    { console.error('FAIL: 禁用字段 data 在输出中'); process.exit(1); }
+  if (!c.includes('dryRun: true'))  { console.error('FAIL: 无 dryRun:true'); process.exit(1); }
+  if (!c.includes('ok: true'))      { console.error('FAIL: 无 ok:true'); process.exit(1); }
+  if (!c.match(/\burl\s*:/))        { console.error('FAIL: 输出无 url 字段'); process.exit(1); }
+  if (!c.match(/\btitle\s*:/))      { console.error('FAIL: 输出无 title 字段'); process.exit(1); }
+  if (!c.includes('page.route'))    { console.error('FAIL: 缺 page.route（视频发布 API 拦截）'); process.exit(1); }
+  if (!c.includes('/rest/cp/works/'))
+                                    { console.error('FAIL: 缺 /rest/cp/works/ 拦截模式'); process.exit(1); }
+  ['result','status','data','payload'].forEach(f => {
+    if (new RegExp('[\"\\x27]' + f + '[\"\\x27]\\s*:').test(c))
+      { console.error('FAIL: 禁用字段 ' + f + ' 在输出中'); process.exit(1); }
+  });
   console.log('OK');
 "
 ```
 
-**硬阈值**: ok/dryRun 字段存在，result/status/data/payload 禁用字段不在输出中
+**硬阈值**: ok + dryRun + url + title 字段存在；page.route + /rest/cp/works/ 拦截存在；result/status/data/payload 不在输出 keys 中
 
 ---
 
@@ -238,8 +251,17 @@ exit 0
 
 **PASS 标准**: 脚本 exit 0 + image-dryrun stdout `ok:true, dryRun:true` + video-dryrun stdout `ok:true, dryRun:true`
 **FAIL 标准**: exit 1 OR 任一 `ok:false` OR timeout 15min
-**GHA workflow**: `.github/workflows/e2e-windows.yml`（`workflow_dispatch` + `windows-latest`）
+**GHA workflow**: `.github/workflows/kuaishou-e2e.yml`（`workflow_dispatch` + `windows-latest`）
 **必要 secret**: `KUAISHOU_COOKIES`（PRD ASSUMPTION 已确认上传至 repo）
+
+---
+
+## Risks
+
+| # | 风险 | 概率 | 影响 | Mitigation |
+|---|------|------|------|------------|
+| R1 | **KUAISHOU_COOKIES 过期/无效** — GHA 注入后 cookie 失效，导航后 URL 重定向到 `login` 或 `passport` | 高（cookie 有有效期） | 全部 E2E FAIL | 脚本必须检测导航后 URL：含 `login` 或 `passport` 时立即 `exit 1` 并打印明确错误（已在 WS1/WS2 BEHAVIOR error path 验证）；GHA secret 定期轮换 |
+| R2 | **发布 API 意外触发（干跑失守）** — `page.route` 配置错误或 URL 模式不匹配，导致 `/rest/cp/works/` 或 `/rest/cp/photo/publish` 被真实调用 | 低 | 极高（触发真实发布） | `page.route` 必须拦截所有快手发布 API URL 模式，捕获到时立即 `abort + exit 1` 报"dry-run 失守"；WS1/WS2 DoD [BEHAVIOR] 强制验证 `page.route` + 拦截 URL 代码存在 |
 
 ---
 

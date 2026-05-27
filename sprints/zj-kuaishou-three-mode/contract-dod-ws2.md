@@ -41,3 +41,11 @@ target_environment: windows_cloud
 - [ ] [BEHAVIOR] error path — 脚本含登录失败检测（URL 含 login/passport 时 exit 1）
   Test: manual:bash -c 'node -e "const c=require(\"fs\").readFileSync(\"services/agent/publishers/kuaishou-publisher/publish-kuaishou-video-dryrun.cjs\",\"utf8\");if(!c.includes(\"login\")||!c.includes(\"passport\")){console.error(\"FAIL: 脚本缺少登录失败 URL 检测\");process.exit(1);}console.log(\"OK\")"'
   期望: OK
+
+- [ ] [BEHAVIOR] 输出 JSON 含 `url` 字段 + `title` 字段（PRD video schema 必填字段 oracle，v7.3 codify 规则）
+  Test: manual:bash -c 'node -e "const c=require(\"fs\").readFileSync(\"services/agent/publishers/kuaishou-publisher/publish-kuaishou-video-dryrun.cjs\",\"utf8\");if(!c.match(/\\burl\\s*:/)){console.error(\"FAIL: 输出 JSON 无 url 字段\");process.exit(1);}if(!c.match(/\\btitle\\s*:/)){console.error(\"FAIL: 输出 JSON 无 title 字段\");process.exit(1);}console.log(\"OK\")"'
+  期望: OK
+
+- [ ] [BEHAVIOR] 脚本含 `page.route` 拦截快手视频发布 API（防止 `/rest/cp/works/` 意外触发，R2 Risks 登记）
+  Test: manual:bash -c 'node -e "const c=require(\"fs\").readFileSync(\"services/agent/publishers/kuaishou-publisher/publish-kuaishou-video-dryrun.cjs\",\"utf8\");if(!c.includes(\"page.route\")){console.error(\"FAIL: 脚本缺 page.route（无法拦截视频发布 API）\");process.exit(1);}if(!c.includes(\"/rest/cp/works/\")){console.error(\"FAIL: 脚本缺 /rest/cp/works/ 拦截模式\");process.exit(1);}console.log(\"OK\")"'
+  期望: OK

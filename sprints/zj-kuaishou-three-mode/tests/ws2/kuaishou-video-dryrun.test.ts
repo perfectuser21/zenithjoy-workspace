@@ -54,4 +54,16 @@ describe('WS2 — publish-kuaishou-video-dryrun.cjs 新建三模式 [BEHAVIOR]',
     expect(content).toContain('login');
     expect(content).toContain('passport');
   });
+
+  it('输出 JSON 含 url 字段和 title 字段（PRD video schema 必填字段 oracle）', () => {
+    const content = fs.readFileSync(SCRIPT_PATH, 'utf-8');
+    expect(content).toMatch(/\burl\s*:/);
+    expect(content).toMatch(/\btitle\s*:/);
+  });
+
+  it('含 page.route 拦截快手视频发布 API（/rest/cp/works/）', () => {
+    const content = fs.readFileSync(SCRIPT_PATH, 'utf-8');
+    expect(content).toContain('page.route');
+    expect(content).toContain('/rest/cp/works/');
+  });
 });

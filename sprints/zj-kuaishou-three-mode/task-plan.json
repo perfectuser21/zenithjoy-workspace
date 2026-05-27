@@ -11,6 +11,8 @@
         "[BEHAVIOR] 脚本含 KUAISHOU_COOKIES 模式分支，读取 process.env.KUAISHOU_COOKIES 并注入 cookie",
         "[BEHAVIOR] 脚本含 KUAISHOU_PROFILE_DIR 模式分支，调用 launchPersistentContext",
         "[BEHAVIOR] 脚本含 chromium.launch 调用（cookie/profile 模式需要）",
+        "[BEHAVIOR] 输出 JSON 含 url 字段 + title 字段（PRD image schema 必填字段 oracle）",
+        "[BEHAVIOR] 脚本含 page.route 拦截 /rest/cp/photo/publish 或 /rest/cp/works/（干跑失守防护）",
         "[ARTIFACT] 输出 JSON 禁用字段 result/status/data/payload 不出现"
       ],
       "files": [
@@ -28,6 +30,8 @@
         "[BEHAVIOR] 文件 publish-kuaishou-video-dryrun.cjs 存在",
         "[BEHAVIOR] 脚本含三模式（KUAISHOU_COOKIES + KUAISHOU_PROFILE_DIR + CDP 兜底）",
         "[BEHAVIOR] 输出 JSON ok:true + dryRun:true，无 imagesCount",
+        "[BEHAVIOR] 输出 JSON 含 url 字段 + title 字段（PRD video schema 必填字段 oracle）",
+        "[BEHAVIOR] 脚本含 page.route 拦截 /rest/cp/works/（干跑失守防护）",
         "[BEHAVIOR] 禁用字段 result/status/data/payload 不在输出 keys 中"
       ],
       "files": [

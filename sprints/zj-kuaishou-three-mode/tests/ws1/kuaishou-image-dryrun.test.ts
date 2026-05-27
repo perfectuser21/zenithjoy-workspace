@@ -35,9 +35,22 @@ describe('WS1 — publish-kuaishou-image-dryrun.cjs 三模式改造 [BEHAVIOR]',
 
   it('输出 JSON 不含禁用字段 result/status/data/payload 作为输出 key', () => {
     const content = fs.readFileSync(SCRIPT_PATH, 'utf-8');
-    // 检查 JSON 输出对象（含 ok:/dryRun: 的对象块）不应有禁用字段
     const forbiddenAsOutputKey = /["'](result|status|data|payload)["']\s*:/;
     const matches = content.match(forbiddenAsOutputKey);
     expect(matches).toBeNull();
+  });
+
+  it('输出 JSON 含 url 字段和 title 字段（PRD image schema 必填字段 oracle）', () => {
+    const content = fs.readFileSync(SCRIPT_PATH, 'utf-8');
+    expect(content).toMatch(/\burl\s*:/);
+    expect(content).toMatch(/\btitle\s*:/);
+  });
+
+  it('含 page.route 拦截快手图文发布 API（/rest/cp/photo/publish 或 /rest/cp/works/）', () => {
+    const content = fs.readFileSync(SCRIPT_PATH, 'utf-8');
+    expect(content).toContain('page.route');
+    const hasPublishApiPattern =
+      content.includes('/rest/cp/photo/publish') || content.includes('/rest/cp/works/');
+    expect(hasPublishApiPattern).toBe(true);
   });
 });

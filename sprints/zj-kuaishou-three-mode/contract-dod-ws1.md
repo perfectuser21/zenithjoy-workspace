@@ -37,10 +37,18 @@ target_environment: windows_cloud
   Test: manual:bash -c 'node -e "const c=require(\"fs\").readFileSync(\"services/agent/publishers/kuaishou-publisher/publish-kuaishou-image-dryrun.cjs\",\"utf8\");if(!c.includes(\"imagesCount\")){console.error(\"FAIL: 输出无 imagesCount 字段\");process.exit(1);}console.log(\"OK\")"'
   期望: OK
 
-- [ ] [BEHAVIOR] 输出 JSON 不含禁用字段 `result`（schema 禁用字段反向检查）
-  Test: manual:bash -c 'node -e "const c=require(\"fs\").readFileSync(\"services/agent/publishers/kuaishou-publisher/publish-kuaishou-image-dryrun.cjs\",\"utf8\");const m=c.match(/[\"'"'"'][result|status|data|payload][\"'"'"']\s*:/g)||[];const bad=m.filter(x=>x.match(/[\"'"'"'](result|status|data|payload)[\"'"'"']\s*:/));if(bad.length>0){console.error(\"FAIL: 禁用字段出现在输出中\",bad);process.exit(1);}console.log(\"OK\")"'
+- [ ] [BEHAVIOR] 输出 JSON 不含禁用字段 `result`/`status`/`data`/`payload`（schema 禁用字段反向检查）
+  Test: manual:bash -c 'node -e "const c=require(\"fs\").readFileSync(\"services/agent/publishers/kuaishou-publisher/publish-kuaishou-image-dryrun.cjs\",\"utf8\");[\"result\",\"status\",\"data\",\"payload\"].forEach(f=>{const re=new RegExp(\"[\\x27\\x22]\"+f+\"[\\x27\\x22]\\\\s*:\");if(re.test(c)){console.error(\"FAIL: 禁用字段\",f,\"在输出 key 中\");process.exit(1);}});console.log(\"OK\")"'
   期望: OK
 
 - [ ] [BEHAVIOR] error path — KUAISHOU_COOKIES 无效时脚本逻辑检测登录失败（含 login/passport URL 检查）
   Test: manual:bash -c 'node -e "const c=require(\"fs\").readFileSync(\"services/agent/publishers/kuaishou-publisher/publish-kuaishou-image-dryrun.cjs\",\"utf8\");if(!c.includes(\"login\")||!c.includes(\"passport\")){console.error(\"FAIL: 脚本缺少登录失败检测逻辑\");process.exit(1);}console.log(\"OK\")"'
+  期望: OK
+
+- [ ] [BEHAVIOR] 输出 JSON 含 `url` 字段 + `title` 字段（PRD image schema 必填字段 oracle，v7.3 codify 规则）
+  Test: manual:bash -c 'node -e "const c=require(\"fs\").readFileSync(\"services/agent/publishers/kuaishou-publisher/publish-kuaishou-image-dryrun.cjs\",\"utf8\");if(!c.match(/\\burl\\s*:/)){console.error(\"FAIL: 输出 JSON 无 url 字段\");process.exit(1);}if(!c.match(/\\btitle\\s*:/)){console.error(\"FAIL: 输出 JSON 无 title 字段\");process.exit(1);}console.log(\"OK\")"'
+  期望: OK
+
+- [ ] [BEHAVIOR] 脚本含 `page.route` 拦截快手图文发布 API（防止 `/rest/cp/photo/publish` 或 `/rest/cp/works/` 意外触发，R2 Risks 登记）
+  Test: manual:bash -c 'node -e "const c=require(\"fs\").readFileSync(\"services/agent/publishers/kuaishou-publisher/publish-kuaishou-image-dryrun.cjs\",\"utf8\");if(!c.includes(\"page.route\")){console.error(\"FAIL: 脚本缺 page.route（无法拦截发布 API）\");process.exit(1);}if(!c.includes(\"/rest/cp/photo/publish\")&&!c.includes(\"/rest/cp/works/\")){console.error(\"FAIL: 脚本缺发布 API URL 拦截模式\");process.exit(1);}console.log(\"OK\")"'
   期望: OK

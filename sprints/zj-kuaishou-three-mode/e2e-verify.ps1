@@ -1,5 +1,5 @@
 # final-e2e 验证脚本 — 快手 publisher dryrun（windows-latest）
-# 由 .github/workflows/e2e-windows.yml 触发（workflow_dispatch）
+# 由 .github/workflows/kuaishou-e2e.yml 触发（workflow_dispatch）
 param(
   [string]$QueueJson = "$PSScriptRoot\test-queue.json"
 )
@@ -53,18 +53,26 @@ if (-not $imgResult.ok -or -not $imgResult.dryRun) {
   Write-Error "FAIL: image-dryrun ok=$($imgResult.ok) dryRun=$($imgResult.dryRun)"
   exit 1
 }
-# 验证禁用字段不存在
-if ($imgResult.PSObject.Properties['result'] -or $imgResult.PSObject.Properties['status'] -or
-    $imgResult.PSObject.Properties['data']   -or $imgResult.PSObject.Properties['payload']) {
-  Write-Error "FAIL: image-dryrun 输出含禁用字段"
-  exit 1
-}
-# 验证 imagesCount 字段类型
+# 验证 url + title 字段存在（PRD oracle）
+if (-not $imgResult.url)   { Write-Error "FAIL: image-dryrun url 字段缺失或空"; exit 1 }
+if (-not $imgResult.title) { Write-Error "FAIL: image-dryrun title 字段缺失或空"; exit 1 }
+# 验证 imagesCount 字段存在
 if ($null -eq $imgResult.imagesCount) {
   Write-Error "FAIL: image-dryrun 输出缺 imagesCount 字段"
   exit 1
 }
-Write-Host "✅ image-dryrun PASS: ok=$($imgResult.ok) dryRun=$($imgResult.dryRun) url=$($imgResult.url) imagesCount=$($imgResult.imagesCount)"
+# 验证 keys 完整性（image: dryRun,imagesCount,ok,title,url）
+$imgKeys = ($imgResult.PSObject.Properties.Name | Sort-Object) -join ","
+$expectedImgKeys = "dryRun,imagesCount,ok,title,url"
+if ($imgKeys -ne $expectedImgKeys) {
+  Write-Error "FAIL: image-dryrun keys 不匹配 actual=$imgKeys expected=$expectedImgKeys"
+  exit 1
+}
+# 验证禁用字段不存在
+foreach ($f in @('result','status','data','payload')) {
+  if ($imgResult.PSObject.Properties[$f]) { Write-Error "FAIL: image-dryrun 输出含禁用字段 $f"; exit 1 }
+}
+Write-Host "✅ image-dryrun PASS: ok=$($imgResult.ok) dryRun=$($imgResult.dryRun) url=$($imgResult.url) title=$($imgResult.title) imagesCount=$($imgResult.imagesCount)"
 
 # 5. 创建视频测试队列文件
 $videoQueue = "$PSScriptRoot\test-queue-video.json"
@@ -93,17 +101,21 @@ if (-not $vidResult.ok -or -not $vidResult.dryRun) {
   Write-Error "FAIL: video-dryrun ok=$($vidResult.ok) dryRun=$($vidResult.dryRun)"
   exit 1
 }
-if ($vidResult.PSObject.Properties['result'] -or $vidResult.PSObject.Properties['status'] -or
-    $vidResult.PSObject.Properties['data']   -or $vidResult.PSObject.Properties['payload']) {
-  Write-Error "FAIL: video-dryrun 输出含禁用字段"
+# 验证 url + title 字段存在（PRD oracle）
+if (-not $vidResult.url)   { Write-Error "FAIL: video-dryrun url 字段缺失或空"; exit 1 }
+if (-not $vidResult.title) { Write-Error "FAIL: video-dryrun title 字段缺失或空"; exit 1 }
+# 验证 keys 完整性（video: dryRun,ok,title,url — 无 imagesCount）
+$vidKeys = ($vidResult.PSObject.Properties.Name | Sort-Object) -join ","
+$expectedVidKeys = "dryRun,ok,title,url"
+if ($vidKeys -ne $expectedVidKeys) {
+  Write-Error "FAIL: video-dryrun keys 不匹配 actual=$vidKeys expected=$expectedVidKeys"
   exit 1
 }
-# video 不应有 imagesCount
-if ($null -ne $vidResult.imagesCount) {
-  Write-Error "FAIL: video-dryrun 输出含 imagesCount（video schema 只有 4 字段）"
-  exit 1
+# 验证禁用字段不存在
+foreach ($f in @('result','status','data','payload')) {
+  if ($vidResult.PSObject.Properties[$f]) { Write-Error "FAIL: video-dryrun 输出含禁用字段 $f"; exit 1 }
 }
-Write-Host "✅ video-dryrun PASS: ok=$($vidResult.ok) dryRun=$($vidResult.dryRun) url=$($vidResult.url)"
+Write-Host "✅ video-dryrun PASS: ok=$($vidResult.ok) dryRun=$($vidResult.dryRun) url=$($vidResult.url) title=$($vidResult.title)"
 
 Write-Host "✅ 快手三模式 E2E 全部通过"
 exit 0
