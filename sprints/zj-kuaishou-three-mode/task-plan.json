@@ -1,59 +1,42 @@
 {
-  "initiative_id": "pending",
+  "initiative_id": "46bc46d9-9ace-4678-bd0d-e7b00c076f2f",
   "journey_type": "autonomous",
   "journey_type_reason": "ZenithJoy Agent 驱动的平台发布自动化，无 dashboard UI 介入，属 agent 侧脚本 + CI，不涉及前端用户交互",
   "tasks": [
     {
       "task_id": "ws1",
-      "title": "publish-kuaishou-image-dryrun.cjs 加 KUAISHOU_COOKIES + KUAISHOU_PROFILE_DIR 两种模式",
-      "scope": "在现有 CDP-only dryrun 脚本中加入三模式选择逻辑：(1) KUAISHOU_COOKIES → chromium.launch headless + addCookies; (2) KUAISHOU_PROFILE_DIR → launchPersistentContext; (3) 默认 CDP connectOverCDP 兜底。保持现有输出 schema 不变（ok/dryRun/url/title/imagesCount）",
-      "dod": [
-        "[BEHAVIOR] 脚本含 KUAISHOU_COOKIES 模式分支，读取 process.env.KUAISHOU_COOKIES 并注入 cookie",
-        "[BEHAVIOR] 脚本含 KUAISHOU_PROFILE_DIR 模式分支，调用 launchPersistentContext",
-        "[BEHAVIOR] 脚本含 chromium.launch 调用（cookie/profile 模式需要）",
-        "[BEHAVIOR] 输出 JSON 含 url 字段 + title 字段（PRD image schema 必填字段 oracle）",
-        "[BEHAVIOR] 脚本含 page.route 拦截 /rest/cp/photo/publish 或 /rest/cp/works/（干跑失守防护）",
-        "[ARTIFACT] 输出 JSON 禁用字段 result/status/data/payload 不出现"
-      ],
-      "files": [
-        "services/agent/publishers/kuaishou-publisher/publish-kuaishou-image-dryrun.cjs"
-      ],
-      "depends_on": [],
-      "complexity": "S",
-      "estimated_minutes": 30
-    },
-    {
-      "task_id": "ws2",
       "title": "新建 publish-kuaishou-video-dryrun.cjs（三模式 + 视频发布页导航）",
-      "scope": "新建脚本，复用 image-dryrun 三模式框架，导航目标改为 https://cp.kuaishou.com/article/publish/video，输出 JSON 4 字段（ok/dryRun/url/title，无 imagesCount），拦截快手视频发布 API（/rest/cp/works/ 等）",
+      "scope": "新建脚本，复用 image-dryrun 三模式框架，导航目标改为 https://cp.kuaishou.com/article/publish/video，输出 JSON 4 字段（ok/dryRun/url/title，无 imagesCount），拦截快手视频发布 API（/rest/cp/works/ 等），含登录失败检测",
       "dod": [
         "[BEHAVIOR] 文件 publish-kuaishou-video-dryrun.cjs 存在",
         "[BEHAVIOR] 脚本含三模式（KUAISHOU_COOKIES + KUAISHOU_PROFILE_DIR + CDP 兜底）",
         "[BEHAVIOR] 输出 JSON ok:true + dryRun:true，无 imagesCount",
         "[BEHAVIOR] 输出 JSON 含 url 字段 + title 字段（PRD video schema 必填字段 oracle）",
         "[BEHAVIOR] 脚本含 page.route 拦截 /rest/cp/works/（干跑失守防护）",
-        "[BEHAVIOR] 禁用字段 result/status/data/payload 不在输出 keys 中"
+        "[BEHAVIOR] 禁用字段 result/status/data/payload 不在输出 keys 中",
+        "[BEHAVIOR] error path：含 login/passport URL 检测逻辑"
       ],
       "files": [
         "services/agent/publishers/kuaishou-publisher/publish-kuaishou-video-dryrun.cjs"
       ],
-      "depends_on": ["ws1"],
+      "depends_on": [],
       "complexity": "M",
       "estimated_minutes": 45
     },
     {
-      "task_id": "ws3",
+      "task_id": "ws2",
       "title": "新建 .github/workflows/kuaishou-e2e.yml（GHA windows-latest 自动验证）",
       "scope": "新建 workflow_dispatch（可选 daily schedule）GHA workflow，windows-latest runner，注入 KUAISHOU_COOKIES secret，分步运行 image-dryrun + video-dryrun，传递 SCREENSHOT_DIR，upload screenshots artifact（if: always）",
       "dod": [
         "[ARTIFACT] .github/workflows/kuaishou-e2e.yml 文件存在",
-        "[BEHAVIOR] workflow 含 KUAISHOU_COOKIES 引用 + windows-latest + image-dryrun + video-dryrun",
+        "[BEHAVIOR] workflow 含 KUAISHOU_COOKIES 引用 + windows-latest",
+        "[BEHAVIOR] 含 image-dryrun + video-dryrun 两个调用步骤",
         "[BEHAVIOR] 含 upload-artifact + if:always() + SCREENSHOT_DIR 传递"
       ],
       "files": [
         ".github/workflows/kuaishou-e2e.yml"
       ],
-      "depends_on": ["ws2"],
+      "depends_on": ["ws1"],
       "complexity": "S",
       "estimated_minutes": 25
     }
