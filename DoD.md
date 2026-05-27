@@ -1,17 +1,46 @@
-contract_branch: cp-05272259-ws-46bc46d9-ws1
-workstream_index: 1
+---
+contract_branch: cp-05272310-ws-46bc46d9-ws2
+workstream_index: 2
 sprint_dir: sprints/zj-kuaishou-three-mode
+skeleton: false
+journey_type: autonomous
+target_environment: windows_cloud
+---
+# Contract DoD — Workstream 2: .github/workflows/kuaishou-e2e.yml 新建（GHA windows-latest）
 
-# Contract DoD — Workstream 1: publish-kuaishou-video-dryrun.cjs 新建（三模式）
+**范围**: 新建 `.github/workflows/kuaishou-e2e.yml`，`workflow_dispatch`（可选 schedule），`windows-latest` runner，注入 `KUAISHOU_COOKIES` secret，分步运行 image-dryrun + video-dryrun，传递 SCREENSHOT_DIR，upload screenshots artifact（if: always）
+**大小**: S（~60 行新建）
+**依赖**: Workstream 1（publish-kuaishou-video-dryrun.cjs 必须存在）
 
-**范围**: 新建 `services/agent/publishers/kuaishou-publisher/publish-kuaishou-video-dryrun.cjs`，复用 image-dryrun 三模式框架（KUAISHOU_COOKIES + KUAISHOU_PROFILE_DIR + CDP 兜底），导航目标改为 `https://cp.kuaishou.com/article/publish/video`，输出 JSON 只含 4 字段（ok/dryRun/url/title，无 imagesCount），拦截快手视频发布 API（/rest/cp/works/ 等）
+## ARTIFACT 条目
+
+- [ ] [ARTIFACT] `.github/workflows/kuaishou-e2e.yml` 文件已创建
+  Test: node -e "require('fs').accessSync('.github/workflows/kuaishou-e2e.yml'); console.log('OK')"
+
+- [ ] [ARTIFACT] workflow 使用 `windows-latest` runner
+  Test: node -e "const c=require('fs').readFileSync('.github/workflows/kuaishou-e2e.yml','utf8');if(!c.includes('windows-latest'))process.exit(1);console.log('OK')"
+
+- [ ] [ARTIFACT] workflow 含 `upload-artifact` 步骤（screenshots 上传为可审查证据）
+  Test: node -e "const c=require('fs').readFileSync('.github/workflows/kuaishou-e2e.yml','utf8');if(!c.includes('upload-artifact'))process.exit(1);console.log('OK')"
 
 ## BEHAVIOR 条目
 
-- [ ] [BEHAVIOR] 脚本输出 JSON `ok` 字段值 true
-- [ ] [BEHAVIOR] 脚本输出 JSON `dryRun` 字段值 true
-- [ ] [BEHAVIOR] 脚本输出 JSON 不含 `imagesCount` 字段（video schema 只有 4 字段）
-- [ ] [BEHAVIOR] 禁用字段 result/status/data/payload 不出现在输出 JSON keys
-- [ ] [BEHAVIOR] error path — 脚本含登录失败检测（导航后 URL 含 login/passport 时 exit 1）
-- [ ] [BEHAVIOR] 输出 JSON 含 url 字段 + title 字段
-- [ ] [BEHAVIOR] 脚本含 page.route 拦截快手视频发布 API（/rest/cp/works/）
+- [ ] [BEHAVIOR] workflow 含 `KUAISHOU_COOKIES` secret 引用（schema 字段 — CI 注入 cookie 的核心机制）
+  Test: manual:bash -c 'node -e "const c=require(\"fs\").readFileSync(\".github/workflows/kuaishou-e2e.yml\",\"utf8\");if(!c.includes(\"KUAISHOU_COOKIES\")){console.error(\"FAIL: 无 KUAISHOU_COOKIES 引用\");process.exit(1);}console.log(\"OK\")"'
+  期望: OK
+
+- [ ] [BEHAVIOR] workflow 含 image-dryrun 脚本调用（keys 完整性 — image + video 两步均有）
+  Test: manual:bash -c 'node -e "const c=require(\"fs\").readFileSync(\".github/workflows/kuaishou-e2e.yml\",\"utf8\");if(!c.includes(\"image-dryrun\")){console.error(\"FAIL: 无 image-dryrun 调用\");process.exit(1);}console.log(\"OK\")"'
+  期望: OK
+
+- [ ] [BEHAVIOR] workflow 含 video-dryrun 脚本调用（keys 完整性 — 两步 E2E 完整覆盖）
+  Test: manual:bash -c 'node -e "const c=require(\"fs\").readFileSync(\".github/workflows/kuaishou-e2e.yml\",\"utf8\");if(!c.includes(\"video-dryrun\")){console.error(\"FAIL: 无 video-dryrun 调用\");process.exit(1);}console.log(\"OK\")"'
+  期望: OK
+
+- [ ] [BEHAVIOR] workflow 含 `SCREENSHOT_DIR` 环境变量传递（截图写入路径，WS1 脚本依赖此变量知道截图目标目录）
+  Test: manual:bash -c 'node -e "const c=require(\"fs\").readFileSync(\".github/workflows/kuaishou-e2e.yml\",\"utf8\");if(!c.includes(\"SCREENSHOT_DIR\")){console.error(\"FAIL: 无 SCREENSHOT_DIR 环境变量\");process.exit(1);}console.log(\"OK\")"'
+  期望: OK
+
+- [ ] [BEHAVIOR] error path — workflow upload-artifact 含 `if: always()` 保证失败时也能审查截图（防止失败时无证据）
+  Test: manual:bash -c 'node -e "const c=require(\"fs\").readFileSync(\".github/workflows/kuaishou-e2e.yml\",\"utf8\");if(!c.includes(\"always()\")){console.error(\"FAIL: upload-artifact 缺 if:always()\");process.exit(1);}console.log(\"OK\")"'
+  期望: OK
