@@ -2347,3 +2347,39 @@ agent_suite:
     ci: L4
     status: pending-ci
     note: "Path 4 Sprint 1 ws6 — golden-path-4-smoke.yml needs:[ws1..ws5] + test-registry ws1-ws6 注册 + lint-feature-has-smoke.yml Path 4 关键字（合同 RED）"
+  # ── Line 01 智能发布 — 快手三模式 Publisher Sprint ──────────────────────────────
+  - id: line01-kuaishou-publish-handler
+    path: services/agent/src/handlers/__tests__/kuaishou-publish.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 新媒体运营
+    note: "Line 01 — resolveKuaishouScriptPath: image/video dryrun 路由 + unknown type 抛错 + ZENITHJOY_AGENT_REAL_PUBLISH 开关（unit，无浏览器）"
+  - id: line01-kuaishou-sprint-ws1
+    path: sprints/tests/ws1/kuaishou-publish.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 新媒体运营
+    note: "Line 01 Sprint WS1 TDD Red/Green — kuaishou-publish.ts handler 重写：resolveKuaishouScriptPath + type 路由 + REAL_PUBLISH 开关"
+  - id: line01-kuaishou-sprint-ws2
+    path: sprints/tests/ws2/kuaishou-image-dryrun.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 新媒体运营
+    note: "Line 01 Sprint WS2 TDD Red/Green — publish-kuaishou-image-dryrun.cjs 三模式升级（cookie注入 / profile dir / CDP兜底）"
+  - id: line01-kuaishou-sprint-ws3
+    path: sprints/tests/ws3/kuaishou-video-dryrun.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 新媒体运营
+    note: "Line 01 Sprint WS3 TDD Red/Green — publish-kuaishou-video-dryrun.cjs 新建，三模式架构"
+  - id: line01-kuaishou-sprint-ws4
+    path: sprints/tests/ws4/kuaishou-e2e-workflow.test.ts
+    type: e2e
+    ci: L4
+    status: active
+    product: 新媒体运营
+    note: "Line 01 Sprint WS4 TDD Red/Green — .github/workflows/kuaishou-e2e.yml GHA windows-latest + 截图 artifact + KUAISHOU_COOKIES secret"
