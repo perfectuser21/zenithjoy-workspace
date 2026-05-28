@@ -226,11 +226,10 @@ jobs:
           npx playwright test e2e/agent-video-pipeline.spec.js --reporter=list
 
       - name: Verify output video quality (ffprobe)
-        shell: powershell
+        shell: pwsh
         run: |
-          # Read jobId written by Playwright spec (plain ASCII, no PS5 parsing issues)
           if (-not (Test-Path "e2e-job-id.txt")) {
-            Write-Host "[verify] FAIL: e2e-job-id.txt not found — Playwright test failed before writing jobId"
+            Write-Host "[verify] FAIL: e2e-job-id.txt not found"
             exit 1
           }
           $jobId = [System.IO.File]::ReadAllText("e2e-job-id.txt").Trim()
@@ -238,7 +237,6 @@ jobs:
             Write-Host "[verify] FAIL: jobId is empty"
             exit 1
           }
-          # Agent always writes output to USERPROFILE\Videos\zenithjoy-output\<jobId>
           $outputDir = "$env:USERPROFILE\Videos\zenithjoy-output\$jobId"
           Write-Host "[verify] jobId=$jobId outputDir=$outputDir"
           if (-not (Test-Path $outputDir -PathType Container)) {
@@ -247,24 +245,21 @@ jobs:
           }
           $video = Get-ChildItem $outputDir -Filter "*.mp4" -ErrorAction SilentlyContinue | Select-Object -First 1
           if (-not $video) {
-            Write-Host "[verify] FAIL: no .mp4 found in $outputDir"
+            Write-Host "[verify] FAIL: no mp4 found in $outputDir"
             exit 1
           }
-          $sizeMB = [math]::Round($video.Length/1048576, 1)
-          Write-Host ("[verify] checking " + $video.FullName + " " + $sizeMB + " MB")
-          $probeOut = & ffprobe -v error -show_streams -of json $video.FullName 2>&1
-          Write-Host "[verify] ffprobe raw: $probeOut"
-          $hasVideo = $probeOut -match '"codec_type"\s*:\s*"video"'
-          $hasAudio = $probeOut -match '"codec_type"\s*:\s*"audio"'
-          if (-not $hasVideo) {
-            Write-Host "[verify] FAIL: output video has no video stream"
+          Write-Host ("[verify] checking " + $video.FullName)
+          $probeOut = ffprobe -v error -show_streams -of json $video.FullName 2>&1 | Out-String
+          Write-Host ("[verify] ffprobe: " + $probeOut)
+          if (-not ($probeOut -match 'codec_type.*video')) {
+            Write-Host "[verify] FAIL: no video stream"
             exit 1
           }
-          if (-not $hasAudio) {
-            Write-Host "[verify] FAIL: output video has no audio stream"
+          if (-not ($probeOut -match 'codec_type.*audio')) {
+            Write-Host "[verify] FAIL: no audio stream"
             exit 1
           }
-          Write-Host "[verify] PASS: video+audio streams confirmed"
+          Write-Host "[verify] PASS: video+audio confirmed"
 
       - name: Upload screenshots
         if: always()
