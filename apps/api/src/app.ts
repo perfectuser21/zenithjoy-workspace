@@ -22,6 +22,7 @@ import { agentInstallPackRouter } from './routes/agent-install-pack';
 import { adminLicenseRouter } from './routes/admin-license';
 import { adminUsersRouter } from './routes/admin-users';
 import { adminCustomersRouter } from './routes/admin-customers';
+import { operatorRouter } from './routes/operator';
 import { accountRouter } from './routes/account';
 import { profileRouter } from './routes/profile';
 import { tasksRouter } from './routes/tasks';
@@ -102,6 +103,7 @@ app.use('/api/publish', publishWsRouter);
 app.use('/api/admin/license', adminLicenseRouter);
 app.use('/api/admin/users', adminUsersRouter);
 app.use('/api/admin/customers', adminCustomersRouter);
+app.use('/api/operator', operatorRouter);
 // Walking Skeleton #1：客户自查 license（better-auth session 鉴权）
 app.use('/api/account', accountRouter);
 // Walking Skeleton #3：画像诊断（行业/受众/风格）
