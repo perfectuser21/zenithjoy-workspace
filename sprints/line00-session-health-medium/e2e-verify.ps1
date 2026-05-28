@@ -27,7 +27,7 @@ $proc = Start-Process cmd.exe -ArgumentList "/c npx.cmd playwright install chrom
 if ($proc.ExitCode -ne 0) { throw "FAIL: playwright install" }
 
 # Step 2: 写 Playwright 测试脚本（直接测生产 URL，不起本地 server）
-$testFile = Join-Path $dashRoot "tmp-e2e-goldenpath.spec.ts"
+$testFile = Join-Path $dashRoot "e2e\tmp-e2e-goldenpath.spec.ts"
 $testContent = @"
 import { test, expect } from '@playwright/test';
 
