@@ -2564,3 +2564,11 @@ agent_suite:
     status: pending-ci
     product: 新媒体运营
     note: "Line 00 Session Health WS6 — GHA session-health-check.yml + check-health.js 修正（missing≠ok + 飞书告警）"
+
+  - id: line00-session-health-ws4-playwright-spec
+    path: apps/dashboard/e2e/operator-sessions.spec.ts
+    type: e2e
+    ci: windows_cloud
+    status: active
+    product: 新媒体运营
+    note: "Line 00 Session Health WS4 — Dashboard 运营中枢 E2E Playwright spec：8 平台行断言 + status badge + 登录按钮 + 非运营员 redirect 守卫（page.route stub，active 枚举）"
