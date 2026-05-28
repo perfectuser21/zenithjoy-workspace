@@ -38,42 +38,42 @@ const validateTrue = () => true;
 
 const PLATFORMS = [
   // ── 抖音（4 账号）────────────────────────────────────────────────
-  { platform: '抖音主号',  secretEnv: 'DOUYIN_MAIN',  healthUrl: 'https://creator.douyin.com/web/api/base/creator/user/info', referer: 'https://creator.douyin.com/', keyCookies: ['sessionid', 'sid_tt', 'sid_guard'], validateResponse: validateDouyin },
+  { platform: '抖音主号',  secretEnv: 'DOUYIN_COOKIES',  healthUrl: 'https://creator.douyin.com/web/api/base/creator/user/info', referer: 'https://creator.douyin.com/', keyCookies: ['sessionid', 'sid_tt', 'sid_guard'], validateResponse: validateDouyin },
   { platform: '抖音小号1', secretEnv: 'DOUYIN_SUB_1', healthUrl: 'https://creator.douyin.com/web/api/base/creator/user/info', referer: 'https://creator.douyin.com/', keyCookies: ['sessionid', 'sid_tt', 'sid_guard'], validateResponse: validateDouyin },
   { platform: '抖音小号2', secretEnv: 'DOUYIN_SUB_2', healthUrl: 'https://creator.douyin.com/web/api/base/creator/user/info', referer: 'https://creator.douyin.com/', keyCookies: ['sessionid', 'sid_tt', 'sid_guard'], validateResponse: validateDouyin },
   { platform: '抖音小号3', secretEnv: 'DOUYIN_SUB_3', healthUrl: 'https://creator.douyin.com/web/api/base/creator/user/info', referer: 'https://creator.douyin.com/', keyCookies: ['sessionid', 'sid_tt', 'sid_guard'], validateResponse: validateDouyin },
   // ── 快手（4 账号）────────────────────────────────────────────────
-  { platform: '快手主号',  secretEnv: 'KUAISHOU_MAIN',  healthUrl: 'https://cp.kuaishou.com/account/api/user/info', referer: 'https://cp.kuaishou.com/', keyCookies: ['userId', 'kuaishou_st', 'passToken'], validateResponse: validateKuaishou },
+  { platform: '快手主号',  secretEnv: 'KUAISHOU_COOKIES',  healthUrl: 'https://cp.kuaishou.com/account/api/user/info', referer: 'https://cp.kuaishou.com/', keyCookies: ['userId', 'kuaishou_st', 'passToken'], validateResponse: validateKuaishou },
   { platform: '快手小号1', secretEnv: 'KUAISHOU_SUB_1', healthUrl: 'https://cp.kuaishou.com/account/api/user/info', referer: 'https://cp.kuaishou.com/', keyCookies: ['userId', 'kuaishou_st', 'passToken'], validateResponse: validateKuaishou },
   { platform: '快手小号2', secretEnv: 'KUAISHOU_SUB_2', healthUrl: 'https://cp.kuaishou.com/account/api/user/info', referer: 'https://cp.kuaishou.com/', keyCookies: ['userId', 'kuaishou_st', 'passToken'], validateResponse: validateKuaishou },
   { platform: '快手小号3', secretEnv: 'KUAISHOU_SUB_3', healthUrl: 'https://cp.kuaishou.com/account/api/user/info', referer: 'https://cp.kuaishou.com/', keyCookies: ['userId', 'kuaishou_st', 'passToken'], validateResponse: validateKuaishou },
   // ── 小红书（4 账号）──────────────────────────────────────────────
-  { platform: '小红书主号',  secretEnv: 'XIAOHONGSHU_MAIN',  healthUrl: 'https://creator.xiaohongshu.com/api/galaxy/creator/home/cre_info', referer: 'https://creator.xiaohongshu.com/', keyCookies: ['web_session', 'galaxy_creator_session_info'], validateResponse: validateXhs },
+  { platform: '小红书主号',  secretEnv: 'XIAOHONGSHU_COOKIES',  healthUrl: 'https://creator.xiaohongshu.com/api/galaxy/creator/home/cre_info', referer: 'https://creator.xiaohongshu.com/', keyCookies: ['web_session', 'galaxy_creator_session_info'], validateResponse: validateXhs },
   { platform: '小红书小号1', secretEnv: 'XIAOHONGSHU_SUB_1', healthUrl: 'https://creator.xiaohongshu.com/api/galaxy/creator/home/cre_info', referer: 'https://creator.xiaohongshu.com/', keyCookies: ['web_session', 'galaxy_creator_session_info'], validateResponse: validateXhs },
   { platform: '小红书小号2', secretEnv: 'XIAOHONGSHU_SUB_2', healthUrl: 'https://creator.xiaohongshu.com/api/galaxy/creator/home/cre_info', referer: 'https://creator.xiaohongshu.com/', keyCookies: ['web_session', 'galaxy_creator_session_info'], validateResponse: validateXhs },
   { platform: '小红书小号3', secretEnv: 'XIAOHONGSHU_SUB_3', healthUrl: 'https://creator.xiaohongshu.com/api/galaxy/creator/home/cre_info', referer: 'https://creator.xiaohongshu.com/', keyCookies: ['web_session', 'galaxy_creator_session_info'], validateResponse: validateXhs },
   // ── 视频号（4 账号）──────────────────────────────────────────────
-  { platform: '视频号主号',  secretEnv: 'SHIPINHAO_MAIN',  healthUrl: 'https://channels.weixin.qq.com/cgi-bin/mmfinderassistant-bin/auth/auth_info', referer: 'https://channels.weixin.qq.com/', keyCookies: ['slave_sid', 'slave_user'], validateResponse: validateTrue },
+  { platform: '视频号主号',  secretEnv: 'SHIPINHAO_COOKIES',  healthUrl: 'https://channels.weixin.qq.com/cgi-bin/mmfinderassistant-bin/auth/auth_info', referer: 'https://channels.weixin.qq.com/', keyCookies: ['slave_sid', 'slave_user'], validateResponse: validateTrue },
   { platform: '视频号小号1', secretEnv: 'SHIPINHAO_SUB_1', healthUrl: 'https://channels.weixin.qq.com/cgi-bin/mmfinderassistant-bin/auth/auth_info', referer: 'https://channels.weixin.qq.com/', keyCookies: ['slave_sid', 'slave_user'], validateResponse: validateTrue },
   { platform: '视频号小号2', secretEnv: 'SHIPINHAO_SUB_2', healthUrl: 'https://channels.weixin.qq.com/cgi-bin/mmfinderassistant-bin/auth/auth_info', referer: 'https://channels.weixin.qq.com/', keyCookies: ['slave_sid', 'slave_user'], validateResponse: validateTrue },
   { platform: '视频号小号3', secretEnv: 'SHIPINHAO_SUB_3', healthUrl: 'https://channels.weixin.qq.com/cgi-bin/mmfinderassistant-bin/auth/auth_info', referer: 'https://channels.weixin.qq.com/', keyCookies: ['slave_sid', 'slave_user'], validateResponse: validateTrue },
   // ── 头条（4 账号）────────────────────────────────────────────────
-  { platform: '头条主号',  secretEnv: 'TOUTIAO_MAIN',  healthUrl: 'https://mp.toutiao.com/mp/agw/creator_center/homepage/userinfo', referer: 'https://mp.toutiao.com/', keyCookies: ['sso_uid_tt', 'sessionid'], validateResponse: validateTrue },
+  { platform: '头条主号',  secretEnv: 'TOUTIAO_COOKIES',  healthUrl: 'https://mp.toutiao.com/mp/agw/creator_center/homepage/userinfo', referer: 'https://mp.toutiao.com/', keyCookies: ['sso_uid_tt', 'sessionid'], validateResponse: validateTrue },
   { platform: '头条小号1', secretEnv: 'TOUTIAO_SUB_1', healthUrl: 'https://mp.toutiao.com/mp/agw/creator_center/homepage/userinfo', referer: 'https://mp.toutiao.com/', keyCookies: ['sso_uid_tt', 'sessionid'], validateResponse: validateTrue },
   { platform: '头条小号2', secretEnv: 'TOUTIAO_SUB_2', healthUrl: 'https://mp.toutiao.com/mp/agw/creator_center/homepage/userinfo', referer: 'https://mp.toutiao.com/', keyCookies: ['sso_uid_tt', 'sessionid'], validateResponse: validateTrue },
   { platform: '头条小号3', secretEnv: 'TOUTIAO_SUB_3', healthUrl: 'https://mp.toutiao.com/mp/agw/creator_center/homepage/userinfo', referer: 'https://mp.toutiao.com/', keyCookies: ['sso_uid_tt', 'sessionid'], validateResponse: validateTrue },
   // ── 微博（4 账号）────────────────────────────────────────────────
-  { platform: '微博主号',  secretEnv: 'WEIBO_MAIN',  healthUrl: 'https://weibo.com/ajax/profile/me', referer: 'https://weibo.com/', keyCookies: ['SUB', 'SUBP'], validateResponse: validateTrue },
+  { platform: '微博主号',  secretEnv: 'WEIBO_COOKIES',  healthUrl: 'https://weibo.com/ajax/profile/me', referer: 'https://weibo.com/', keyCookies: ['SUB', 'SUBP'], validateResponse: validateTrue },
   { platform: '微博小号1', secretEnv: 'WEIBO_SUB_1', healthUrl: 'https://weibo.com/ajax/profile/me', referer: 'https://weibo.com/', keyCookies: ['SUB', 'SUBP'], validateResponse: validateTrue },
   { platform: '微博小号2', secretEnv: 'WEIBO_SUB_2', healthUrl: 'https://weibo.com/ajax/profile/me', referer: 'https://weibo.com/', keyCookies: ['SUB', 'SUBP'], validateResponse: validateTrue },
   { platform: '微博小号3', secretEnv: 'WEIBO_SUB_3', healthUrl: 'https://weibo.com/ajax/profile/me', referer: 'https://weibo.com/', keyCookies: ['SUB', 'SUBP'], validateResponse: validateTrue },
   // ── 知乎（4 账号）────────────────────────────────────────────────
-  { platform: '知乎主号',  secretEnv: 'ZHIHU_MAIN',  healthUrl: 'https://www.zhihu.com/api/v4/me', referer: 'https://www.zhihu.com/', keyCookies: ['z_c0'], validateResponse: validateTrue },
+  { platform: '知乎主号',  secretEnv: 'ZHIHU_COOKIES',  healthUrl: 'https://www.zhihu.com/api/v4/me', referer: 'https://www.zhihu.com/', keyCookies: ['z_c0'], validateResponse: validateTrue },
   { platform: '知乎小号1', secretEnv: 'ZHIHU_SUB_1', healthUrl: 'https://www.zhihu.com/api/v4/me', referer: 'https://www.zhihu.com/', keyCookies: ['z_c0'], validateResponse: validateTrue },
   { platform: '知乎小号2', secretEnv: 'ZHIHU_SUB_2', healthUrl: 'https://www.zhihu.com/api/v4/me', referer: 'https://www.zhihu.com/', keyCookies: ['z_c0'], validateResponse: validateTrue },
   { platform: '知乎小号3', secretEnv: 'ZHIHU_SUB_3', healthUrl: 'https://www.zhihu.com/api/v4/me', referer: 'https://www.zhihu.com/', keyCookies: ['z_c0'], validateResponse: validateTrue },
   // ── 公众号（4 账号）──────────────────────────────────────────────
-  { platform: '公众号主号',  secretEnv: 'GONGZHONGHAO_MAIN',  healthUrl: 'https://mp.weixin.qq.com/cgi-bin/homepage', referer: 'https://mp.weixin.qq.com/', keyCookies: ['token', 'ticket'], validateResponse: validateTrue },
+  { platform: '公众号主号',  secretEnv: 'GONGZHONGHAO_COOKIES',  healthUrl: 'https://mp.weixin.qq.com/cgi-bin/homepage', referer: 'https://mp.weixin.qq.com/', keyCookies: ['token', 'ticket'], validateResponse: validateTrue },
   { platform: '公众号小号1', secretEnv: 'GONGZHONGHAO_SUB_1', healthUrl: 'https://mp.weixin.qq.com/cgi-bin/homepage', referer: 'https://mp.weixin.qq.com/', keyCookies: ['token', 'ticket'], validateResponse: validateTrue },
   { platform: '公众号小号2', secretEnv: 'GONGZHONGHAO_SUB_2', healthUrl: 'https://mp.weixin.qq.com/cgi-bin/homepage', referer: 'https://mp.weixin.qq.com/', keyCookies: ['token', 'ticket'], validateResponse: validateTrue },
   { platform: '公众号小号3', secretEnv: 'GONGZHONGHAO_SUB_3', healthUrl: 'https://mp.weixin.qq.com/cgi-bin/homepage', referer: 'https://mp.weixin.qq.com/', keyCookies: ['token', 'ticket'], validateResponse: validateTrue },
@@ -165,7 +165,10 @@ async function checkPlatform(p) {
 
   if (p.type === 'api_key') {
     const raw = process.env[p.secretEnv];
-    const status = raw ? 'ok' : 'missing';
+    let status = 'ok';
+    if (!raw) {
+      status = 'missing';
+    }
     return { platform: p.platform, secretEnv: p.secretEnv, status, checkedAt, expiresAt: null };
   }
 
@@ -213,7 +216,7 @@ async function checkPlatform(p) {
   const resp = await httpGet(p.healthUrl, cookieStr, p.referer);
 
   if (resp.status === 0) {
-    return { platform: p.platform, secretEnv: p.secretEnv, status: 'ok', checkedAt, expiresAt };
+    return { platform: p.platform, secretEnv: p.secretEnv, status: 'unknown', checkedAt, expiresAt };
   }
 
   if (resp.status === 401 || resp.status === 403) {
@@ -234,6 +237,42 @@ async function checkPlatform(p) {
   return { platform: p.platform, secretEnv: p.secretEnv, status: 'ok', checkedAt, expiresAt };
 }
 
+// ── DB 回写 ──────────────────────────────────────────────────────
+
+async function postSessionStatus(results) {
+  const apiBase = process.env.OPERATOR_API_URL || 'http://localhost:3000';
+  const secret = process.env.INTERNAL_API_SECRET || '';
+  const updates = results
+    .filter(r => r.status === 'active' || r.status === 'expired')
+    .map(r => ({ platform: r.platform, status: r.status, checkedAt: r.checkedAt }));
+  if (updates.length === 0) return;
+  const payload = JSON.stringify({ updates });
+  const url = `${apiBase}/api/operator/sessions/status`;
+  return new Promise((resolve) => {
+    try {
+      const u = new URL(url);
+      const options = {
+        hostname: u.hostname,
+        port: u.port || (u.protocol === 'https:' ? 443 : 80),
+        path: u.pathname,
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Content-Length': Buffer.byteLength(payload),
+          'x-internal-secret': secret,
+        },
+      };
+      const mod = url.startsWith('https') ? https : http;
+      const req = mod.request(options, (res) => { res.resume(); resolve(res.statusCode); });
+      req.on('error', () => resolve(0));
+      req.write(payload);
+      req.end();
+    } catch (_e) {
+      resolve(0);
+    }
+  });
+}
+
 // ── 主逻辑 ───────────────────────────────────────────────────────
 
 async function main() {
@@ -243,7 +282,10 @@ async function main() {
   for (const p of PLATFORMS) {
     console.log(`[session-health] 检查 ${p.platform}...`);
     const r = await checkPlatform(p);
-    const icon = r.status === 'ok' ? '✅' : r.status === 'expired' ? '❌' : r.status === 'missing' ? '⏭️' : '⚠️';
+    let icon = '⚠️';
+    if (r.status === 'ok') icon = '✅';
+    else if (r.status === 'expired') icon = '❌';
+    else if (r.status === 'missing') icon = '⏭️';
     console.log(`  ${icon} ${r.platform}: ${r.status}`);
     results.push(r);
   }
@@ -254,10 +296,14 @@ async function main() {
   const missing = results.filter(r => r.status === 'missing');
   const ok = results.filter(r => r.status === 'ok');
 
-  const needNotify = FORCE_NOTIFY || expired.length > 0;
+  // missing 不等于 ok — 有 missing 的平台也需要告警
+  const needNotify = FORCE_NOTIFY || expired.length > 0 || missing.length > 0;
+
+  // 回写 DB（无论是否需要通知都执行）
+  await postSessionStatus(results);
 
   if (!needNotify) {
-    console.log(`[session-health] 全部正常（ok=${ok.length} missing=${missing.length}），无需通知`);
+    console.log(`[session-health] 全部正常（ok=${ok.length}），无需通知`);
     return;
   }
 
@@ -266,6 +312,10 @@ async function main() {
     title = `⚠️ Session过期 需扫码`;
     const expiredNames = expired.map(r => r.platform).join('、');
     body = `${expiredNames} session已过期\n请在xian-rog重新登录后运行:\nbash scripts/sessions/sync-from-xian-rog.sh`;
+  } else if (missing.length > 0) {
+    title = `⚠️ Session缺失`;
+    const missingNames = missing.map(r => r.platform).join('、');
+    body = `${missingNames} 尚未绑定，请完成初始登录`;
   } else {
     title = `✅ Session全部正常`;
     body = ok.map(r => r.platform).join('、');
