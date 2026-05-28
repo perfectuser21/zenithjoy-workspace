@@ -5,31 +5,34 @@
   "tasks": [
     {
       "task_id": "ws1",
-      "title": "PATCH /progress 响应改为 {ok: true}",
-      "scope": "apps/api/src/controllers/ai-video-pipeline.controller.ts — updateProgress 最后一行从 res.json(updated) 改为 res.json({ ok: true })",
+      "title": "updateProgress → {ok:true} + getJob → {job:{...}} 响应格式修正",
+      "scope": "apps/api/src/controllers/ai-video-pipeline.controller.ts — (1) updateProgress: res.json(updated) → res.json({ ok:true }); (2) getJob: res.json({...job}) → res.json({ job: { id: job.id, status: job.status, detected_aspect: job.detected_aspect ?? null } })",
       "dod": [
-        "[BEHAVIOR] updateProgress 源码含 res.json({ ok: true })（不含 res.json(updated)）",
+        "[BEHAVIOR] updateProgress 函数含 res.json({ ok: true })（不含 res.json(updated)）",
         "[BEHAVIOR] 响应 keys 集合等于 ['ok']（no id/status 字段）",
         "[BEHAVIOR] 禁用字段 aspectRatio/aspect/ratio/orientation 不出现在 PATCH 响应",
         "[BEHAVIOR] 404 error path 未被破坏",
-        "[ARTIFACT] updateProgress 函数体改动已保存"
+        "[BEHAVIOR] getJob 返回 {job:{...}} wrapper（不是 flat ...job spread）",
+        "[BEHAVIOR] getJob .job 块显式含 detected_aspect key（snake_case，禁 camelCase detectedAspect）",
+        "[ARTIFACT] ai-video-pipeline.controller.ts 两处修改已保存"
       ],
       "files": [
         "apps/api/src/controllers/ai-video-pipeline.controller.ts"
       ],
       "depends_on": [],
       "complexity": "S",
-      "estimated_minutes": 20
+      "estimated_minutes": 25
     },
     {
       "task_id": "ws2",
-      "title": "E2E spec — W-G 模板 + 9:16 画幅 + detected_aspect 非空强断言",
-      "scope": "e2e/agent-video-pipeline.spec.js — step 3 后加 W-G 模板点击 + 9:16 按钮点击；step 5 后 detected_aspect 断言从 toContain([...,null]) 改为 toMatch(/^(9:16|16:9)$/)",
+      "title": "E2E spec 适配 {job:{...}} + W-G 模板 + 9:16 画幅 + detected_aspect 非空强断言",
+      "scope": "e2e/agent-video-pipeline.spec.js — (1) step 3 后加 W-G 模板点击 + 9:16 按钮点击（在提交前）; (2) jobResp.detected_aspect → jobResp.job.detected_aspect（适配 WS1 新 getJob 形状）; (3) toContain([...,null]) → toMatch(/^(9:16|16:9)$/)",
       "dod": [
         "[BEHAVIOR] spec 含 W-G 模板选择点击代码",
         "[BEHAVIOR] spec 含 9:16 画幅按钮点击，出现在提交之前",
         "[BEHAVIOR] detected_aspect 断言使用 toMatch(/^(9:16|16:9)$/) 或 toBe('9:16')，不接受 null",
         "[BEHAVIOR] spec 不再含 ['9:16', '16:9', null].toContain 宽松断言",
+        "[BEHAVIOR] spec 用 jobResp.job.detected_aspect 访问（适配新 {job:{...}} 形状）",
         "[ARTIFACT] e2e/agent-video-pipeline.spec.js 含 W-G 和 9:16"
       ],
       "files": [
@@ -42,7 +45,7 @@
     {
       "task_id": "ws3",
       "title": "GHA agent-e2e-video.yml default version → 1.1.31",
-      "scope": ".github/workflows/agent-e2e-video.yml — agent_version input 的 default: \"1.1.30\" 改为 \"1.1.31\"（对齐 services/agent/package.json version）",
+      "scope": ".github/workflows/agent-e2e-video.yml — agent_version input 的 default: \"1.1.30\" 改为 \"1.1.31\"（对齐 services/agent/package.json version=1.1.31，修正 PRD 原写 1.1.29 降级问题）",
       "dod": [
         "[BEHAVIOR] GHA default 等于 agent package.json version（1.1.31）",
         "[BEHAVIOR] GHA default 具体值为 1.1.31",

@@ -2,10 +2,14 @@
 skeleton: false
 journey_type: user_facing
 ---
-# Contract DoD — Workstream 2: E2E spec — W-G 模板 + 9:16 + detected_aspect 非空强断言
+# Contract DoD — Workstream 2: E2E spec 适配 {job:{...}} + W-G + 9:16 + 非空强断言
 
-**范围**: `e2e/agent-video-pipeline.spec.js`：在 step 3 表单填写后加 W-G 模板选择 + 9:16 画幅按钮点击；step 5 后加严格 `detected_aspect` 非空断言（`expect(jobResp.detected_aspect).toMatch(/^(9:16|16:9)$/)` 替代允许 null 的松检查）
-**大小**: M（~60 行净增，1 文件）
+**范围**: `e2e/agent-video-pipeline.spec.js`：
+- step 3 后加 W-G 模板点击 + 9:16 画幅按钮点击（在提交前）
+- `jobResp.detected_aspect` → `jobResp.job.detected_aspect`（适配 WS1 新 getJob 形状）
+- `expect(['9:16', '16:9', null]).toContain(...)` → `expect(jobResp.job.detected_aspect).toMatch(/^(9:16|16:9)$/)`
+
+**大小**: M（~65 行净增，1 文件）
 **依赖**: Workstream 1 完成后
 
 ## ARTIFACT 条目
@@ -13,37 +17,43 @@ journey_type: user_facing
 - [ ] [ARTIFACT] `e2e/agent-video-pipeline.spec.js` 含 W-G 模板点击代码
   Test: node -e "const c=require('fs').readFileSync('e2e/agent-video-pipeline.spec.js','utf8');if(!c.includes('W-G')){console.error('FAIL: 缺 W-G');process.exit(1)}console.log('ARTIFACT OK')"
 
-- [ ] [ARTIFACT] `e2e/agent-video-pipeline.spec.js` 含 9:16 按钮点击代码
-  Test: node -e "const c=require('fs').readFileSync('e2e/agent-video-pipeline.spec.js','utf8');if(!c.includes('9:16')){console.error('FAIL: 缺 9:16');process.exit(1)}console.log('ARTIFACT OK')"
+- [ ] [ARTIFACT] `e2e/agent-video-pipeline.spec.js` 含 9:16 按钮点击代码（在提交前）
+  Test: node -e "const c=require('fs').readFileSync('e2e/agent-video-pipeline.spec.js','utf8');const ai=c.indexOf('9:16');const si=c.indexOf('开始处理');if(ai<0||ai>=si){process.exit(1)}console.log('ARTIFACT OK')"
 
 ## BEHAVIOR 条目
 
-### BEHAVIOR 1: spec 含 W-G 模板选择交互 — schema 字段值
+### BEHAVIOR 1: spec 含 W-G 模板选择点击交互
 
-- [ ] [BEHAVIOR] E2E spec 含点击 W-G 模板按钮的代码（click 或 locator + W-G）
-  Test: manual:bash -c 'node -e "const c=require(\"fs\").readFileSync(\"e2e/agent-video-pipeline.spec.js\",\"utf8\");if(!c.includes(\"W-G\")){console.error(\"FAIL: 缺 W-G 模板选择\");process.exit(1);}const hasClick=c.includes(\"click\")&&c.includes(\"W-G\");if(!hasClick){console.error(\"FAIL: 未找到 W-G 点击交互\");process.exit(1);}console.log(\"OK\");"'
+- [ ] [BEHAVIOR] E2E spec 含点击 W-G 模板按钮的代码（click/locator 包含 'W-G'）
+  Test: manual:bash -c 'node -e "const c=require(\"fs\").readFileSync(\"e2e/agent-video-pipeline.spec.js\",\"utf8\");if(!c.includes(\"W-G\")){console.error(\"FAIL: 缺 W-G 模板选择\");process.exit(1);}const wgIdx=c.indexOf(\"W-G\");const surrounding=c.slice(Math.max(0,wgIdx-200),wgIdx+200);if(!/click|locator|getByText/i.test(surrounding)){console.error(\"FAIL: W-G 附近无点击交互\");process.exit(1);}console.log(\"OK\");"'
   期望: OK
 
-### BEHAVIOR 2: spec 含 9:16 画幅选择交互 — schema 完整性
+### BEHAVIOR 2: spec 含 9:16 画幅按钮点击，且在提交前
 
-- [ ] [BEHAVIOR] E2E spec 含 9:16 按钮点击（locator 或 click 含 '9:16'），且出现在 createJob 提交之前
-  Test: manual:bash -c 'node -e "const c=require(\"fs\").readFileSync(\"e2e/agent-video-pipeline.spec.js\",\"utf8\");if(!c.includes(\"9:16\")){console.error(\"FAIL: 缺 9:16 画幅选择\");process.exit(1);}const aspectIdx=c.indexOf(\"9:16\");const submitIdx=c.indexOf(\"开始处理\");if(aspectIdx>submitIdx){console.error(\"FAIL: 9:16 选择出现在提交之后\");process.exit(1);}console.log(\"OK\");"'
+- [ ] [BEHAVIOR] E2E spec 含 9:16 按钮点击，出现在 '开始处理' 提交按钮之前
+  Test: manual:bash -c 'node -e "const c=require(\"fs\").readFileSync(\"e2e/agent-video-pipeline.spec.js\",\"utf8\");if(!c.includes(\"9:16\")){console.error(\"FAIL: 缺 9:16 画幅选择\");process.exit(1);}const aspectIdx=c.indexOf(\"9:16\");const submitIdx=c.indexOf(\"开始处理\");if(aspectIdx>=submitIdx){console.error(\"FAIL: 9:16 选择出现在提交之后\");process.exit(1);}console.log(\"OK\");"'
   期望: OK
 
-### BEHAVIOR 3: detected_aspect 强断言 — 禁用宽松 null 匹配
+### BEHAVIOR 3: detected_aspect 严格断言（不允许 null）
 
-- [ ] [BEHAVIOR] E2E spec 对 `detected_aspect` 的断言不接受 null（不含 `null` 在合法值集中）
-  Test: manual:bash -c 'node -e "const c=require(\"fs\").readFileSync(\"e2e/agent-video-pipeline.spec.js\",\"utf8\");const strictPattern=/toMatch\([^)]*9:16[^)]*16:9|toBe\([^)]*9:16|toBe\([^)]*16:9|toMatch.*\/(9:16|16:9)/;const hasStrict=strictPattern.test(c);if(!hasStrict){console.error(\"FAIL: detected_aspect 断言仍允许 null，需改为 toMatch(/^(9:16|16:9)$/)\");process.exit(1);}console.log(\"OK\");"'
+- [ ] [BEHAVIOR] E2E spec 对 `detected_aspect` 的断言使用 `toMatch(/^(9:16|16:9)$/)` 或 `toBe('9:16')`，不接受 null
+  Test: manual:bash -c 'node -e "const c=require(\"fs\").readFileSync(\"e2e/agent-video-pipeline.spec.js\",\"utf8\");const strictPattern=/toMatch\([^)]*9:16[^)]*16:9|toMatch.*\/(9:16\|16:9)|toBe\([^)]*9:16|toBe\([^)]*16:9/;if(!strictPattern.test(c)){console.error(\"FAIL: detected_aspect 断言仍允许 null，需改为 toMatch(/^(9:16|16:9)$/)\");process.exit(1);}console.log(\"OK\");"'
   期望: OK
 
-### BEHAVIOR 4: spec 不含宽松 null 接受断言 — 禁用字段反向检查
+### BEHAVIOR 4: 禁用 null-accepting 宽松断言（反向检查）
 
-- [ ] [BEHAVIOR] 新版 spec 不再含 `['9:16', '16:9', null].toContain(...)` 形式的允许 null 的断言
-  Test: manual:bash -c 'node -e "const c=require(\"fs\").readFileSync(\"e2e/agent-video-pipeline.spec.js\",\"utf8\");if(c.includes(\"16:9\\\", null\") || c.includes(\"null].toContain\") || (c.includes(\"null\") && c.includes(\"toContain\") && c.includes(\"detected_aspect\"))){console.error(\"FAIL: 仍含允许 null 的宽松断言\");process.exit(1);}console.log(\"OK\");"'
+- [ ] [BEHAVIOR] spec 不再含 `['9:16', '16:9', null].toContain` 形式的宽松断言
+  Test: manual:bash -c 'node -e "const c=require(\"fs\").readFileSync(\"e2e/agent-video-pipeline.spec.js\",\"utf8\");if(c.includes(\"16:9\x27, null\")||c.includes(\"16:9\\\", null\")||c.includes(\"null].toContain\")){console.error(\"FAIL: 仍含允许 null 的宽松断言\");process.exit(1);}console.log(\"OK\");"'
+  期望: OK
+
+### BEHAVIOR 5: spec 通过 `.job.detected_aspect` 访问（适配 WS1 新 getJob 形状）
+
+- [ ] [BEHAVIOR] E2E spec 使用 `jobResp.job.detected_aspect` 路径，而非 flat `jobResp.detected_aspect`
+  Test: manual:bash -c 'node -e "const c=require(\"fs\").readFileSync(\"e2e/agent-video-pipeline.spec.js\",\"utf8\");if(!/jobResp\.job\.detected_aspect/.test(c)){console.error(\"FAIL: spec 仍用 flat jobResp.detected_aspect，未适配新 getJob {job:{...}} 形状\");process.exit(1);}console.log(\"OK\");"'
   期望: OK
 
 ## BEHAVIOR:E2E 条目（windows_cloud Mode B — agent-e2e-video.yml Playwright）
 
-- [ ] [BEHAVIOR:E2E] Playwright 在 windows-latest 全链路通过，detected_aspect 非空
-  Test: 触发 `.github/workflows/agent-e2e-video.yml`（workflow_dispatch），Playwright 测试通过
-  期望: GHA job exit 0，detected_aspect == "9:16" 或 "16:9"（非 null）
+- [ ] [BEHAVIOR:E2E] Playwright 在 windows-latest 全链路通过，`jobResp.job.detected_aspect` 非空强断言通过
+  Test: 触发 `.github/workflows/agent-e2e-video.yml`（workflow_dispatch，version=1.1.31），Playwright 测试通过
+  期望: GHA job exit 0，detected_aspect toMatch(/^(9:16|16:9)$/)（非 null）
