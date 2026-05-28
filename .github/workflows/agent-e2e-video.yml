@@ -134,6 +134,29 @@ jobs:
             Get-ChildItem $destParent -Recurse | Select-Object -First 10 | % { Write-Host "  $_" }
           }
 
+      - name: Pre-install ffmpeg
+        shell: powershell
+        run: |
+          # Install at the exact path ensureFfmpeg() expects so agent skips the 138MB download
+          $ffmpegDir = "$env:APPDATA\ZenithJoy\runtime\ffmpeg"
+          $ffmpegExe = "$ffmpegDir\ffmpeg.exe"
+          if ((Test-Path $ffmpegExe) -and ((Get-Item $ffmpegExe).Length -gt 50MB)) {
+            Write-Host "[pre-install] ffmpeg already present"; exit 0
+          }
+          New-Item -ItemType Directory -Force -Path $ffmpegDir | Out-Null
+          $zip = "$env:TEMP\zj-ffmpeg-win64.zip"
+          $url = "https://zenithjoy-static-1333590468.cos.accelerate.myqcloud.com/agent-deps/ffmpeg-win64.zip"
+          Write-Host "[pre-install] Downloading ffmpeg (~138 MB)..."
+          Invoke-WebRequest -Uri $url -OutFile $zip -UseBasicParsing
+          Expand-Archive -Force -Path $zip -DestinationPath $ffmpegDir
+          Remove-Item -Force $zip -EA SilentlyContinue
+          if (Test-Path $ffmpegExe) {
+            Write-Host "[pre-install] ffmpeg OK: $((Get-Item $ffmpegExe).Length) bytes"
+          } else {
+            Write-Host "[pre-install] WARNING: ffmpeg.exe not found, agent will download on startup"
+            Get-ChildItem $ffmpegDir | Select-Object -First 10 | % { Write-Host "  $_" }
+          }
+
       - name: Start Agent (background)
         shell: powershell
         run: |
@@ -173,7 +196,7 @@ jobs:
 
           $licenseKey = "ZJ-F-FBFYTLFR"
           $hdr = @{ Authorization = "Bearer $licenseKey" }
-          $maxWait = 120; $elapsed = 0
+          $maxWait = 300; $elapsed = 0
           while ($elapsed -lt $maxWait) {
             try {
               $r = Invoke-RestMethod -Uri "https://autopilot.zenjoymedia.media/api/agent/me/status" -Headers $hdr -EA Stop

@@ -108,3 +108,22 @@ c4667768779ce4b5c1cf319e70d4bb51c9d2dd18:apps/api/src/services/clip-output.servi
 93875e3b6051873a0f1cd6048016b8ab9214db04:sprints/run-20260527-1934/contract-draft.md:curl-auth-header:214
 93875e3b6051873a0f1cd6048016b8ab9214db04:sprints/run-20260527-1934/contract-draft.md:curl-auth-header:325
 93875e3b6051873a0f1cd6048016b8ab9214db04:sprints/run-20260527-1934/contract-draft.md:curl-auth-header:338
+
+# zj-ai-video-ws1-ws3-ws4 合同导入 commit — Authorization: Bearer ZJ-F-FBFYTLFR 是 E2E 测试专用
+# license fixture（free tier 测试账号），非生产凭据；contract DoD 文件中的 manual:bash 测试命令
+320f5f05e037c17c68f090443c22263683f94283:sprints/zj-ai-video-ws1-ws3-ws4/contract-dod-ws1.md:curl-auth-header:33
+320f5f05e037c17c68f090443c22263683f94283:sprints/zj-ai-video-ws1-ws3-ws4/contract-dod-ws1.md:curl-auth-header:50
+320f5f05e037c17c68f090443c22263683f94283:sprints/zj-ai-video-ws1-ws3-ws4/contract-dod-ws1.md:curl-auth-header:63
+320f5f05e037c17c68f090443c22263683f94283:sprints/zj-ai-video-ws1-ws3-ws4/contract-dod-ws1.md:curl-auth-header:88
+320f5f05e037c17c68f090443c22263683f94283:sprints/zj-ai-video-ws1-ws3-ws4/contract-dod-ws1.md:curl-auth-header:93
+320f5f05e037c17c68f090443c22263683f94283:sprints/zj-ai-video-ws1-ws3-ws4/contract-draft.md:curl-auth-header:34
+bf08663c9c9712bb698808867d05d0158efc3ead:sprints/zj-ai-video-ws1-ws3-ws4/contract-dod-ws1.md:curl-auth-header:33
+bf08663c9c9712bb698808867d05d0158efc3ead:sprints/zj-ai-video-ws1-ws3-ws4/contract-dod-ws1.md:curl-auth-header:50
+bf08663c9c9712bb698808867d05d0158efc3ead:sprints/zj-ai-video-ws1-ws3-ws4/contract-dod-ws1.md:curl-auth-header:63
+bf08663c9c9712bb698808867d05d0158efc3ead:sprints/zj-ai-video-ws1-ws3-ws4/contract-dod-ws1.md:curl-auth-header:88
+bf08663c9c9712bb698808867d05d0158efc3ead:sprints/zj-ai-video-ws1-ws3-ws4/contract-dod-ws1.md:curl-auth-header:93
+bf08663c9c9712bb698808867d05d0158efc3ead:sprints/zj-ai-video-ws1-ws3-ws4/contract-draft.md:curl-auth-header:34
+
+# WS1 squash rebase commit — contract-draft.md line 36 原有 ZJ-F-FBFYTLFR（测试用途），
+# 后续 commit 已替换为 $ZENITHJOY_LICENSE 变量引用
+269d3891f3044ab888149366f72c3f904a599574:sprints/zj-ai-video-ws1-ws3-ws4/contract-draft.md:curl-auth-header:34

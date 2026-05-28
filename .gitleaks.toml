@@ -24,3 +24,10 @@ description = "ZenithJoy E2E test license key ZJ-F-FBFYTLFR — demo/CI license 
 regexes = [
   '''ZJ-F-FBFYTLFR'''
 ]
+
+[[allowlists]]
+description = "Sprint contract planning docs — contain demo license keys in manual bash test curl examples, not source code"
+paths = [
+  '''sprints/.*\.md$''',
+  '''sprints/.*task-plan\.json$'''
+]

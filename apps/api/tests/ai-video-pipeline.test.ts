@@ -24,6 +24,9 @@ const JOB = {
   result_url: null,
   output_dir: null,
   error_msg: null,
+  original_script: null,
+  target_aspect: null,
+  detected_aspect: null,
   created_at: '2026-05-16T00:00:00Z',
   updated_at: '2026-05-16T00:00:00Z',
 };
@@ -39,13 +42,36 @@ describe('AI Video Pipeline API', () => {
       expect(res.status).toBe(400);
     });
 
-    it('creates job with local_path and returns 201', async () => {
+    it('creates job with local_path and returns 201 with .job wrapper', async () => {
       mockSvc.createJob.mockResolvedValueOnce({ ...JOB, id: 'new-id' });
       const res = await request(app)
         .post('/api/ai-video/jobs')
         .send({ local_path: 'C:\\Users\\xuxia\\Videos\\test.mp4', topic: '测试' });
       expect(res.status).toBe(201);
-      expect(res.body.id).toBe('new-id');
+      expect(res.body.job.id).toBe('new-id');
+    });
+
+    it('echoes original_script and target_aspect in .job response', async () => {
+      mockSvc.createJob.mockResolvedValueOnce({
+        ...JOB,
+        id: 'ws1-test-id',
+        original_script: 'test script',
+        target_aspect: '9:16',
+        detected_aspect: null,
+      });
+      const res = await request(app)
+        .post('/api/ai-video/jobs')
+        .send({
+          local_path: 'C:\\test.mp4',
+          topic: 'test',
+          original_script: 'test script',
+          target_aspect: '9:16',
+        });
+      expect(res.status).toBe(201);
+      expect(res.body.job.original_script).toBe('test script');
+      expect(res.body.job.target_aspect).toBe('9:16');
+      expect(res.body.job.detected_aspect).toBeNull();
+      expect(res.body.job).not.toHaveProperty('originalScript');
     });
   });
 
