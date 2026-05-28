@@ -657,7 +657,8 @@ function startWs1HeartbeatLoop(cfg: AgentConfig): void {
           task.payload as { account_label?: string },
         );
         console.log('[ws1:qr_bind_douyin] result:', res);
-        await postQrBindDouyinAck(cfg, task.task_id, res.qr_login ?? (res.ok ? 'success' : 'failed'));
+        const ackResult = res.qr_login ?? (res.ok ? 'success' : (res.error ? `failed:${res.error}` : 'failed'));
+        await postQrBindDouyinAck(cfg, task.task_id, ackResult);
       } else if (
         task.platform === 'qr_bind_douyin_burner' ||
         task.platform === 'qr_bind/douyin_burner'
