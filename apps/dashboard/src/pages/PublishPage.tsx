@@ -136,7 +136,7 @@ export default function PublishPage() {
                 checked={platform === p}
                 onChange={() => {
                   setPlatform(p);
-                  if (p === 'kuaishou' && publishType === 'article') setPublishType('image');
+                  setPublishType('image');
                 }}
               />
               {PLATFORM_LABEL[p]}
