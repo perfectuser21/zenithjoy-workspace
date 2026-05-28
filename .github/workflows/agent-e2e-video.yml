@@ -227,21 +227,22 @@ jobs:
 
       - name: Verify output video quality (ffprobe)
         shell: powershell
-        env:
-          ZJ_E2E_LICENSE_KEY: ${{ env.ZJ_E2E_LICENSE_KEY }}
         run: |
-          if (-not (Test-Path "e2e-output-dir.txt")) {
-            Write-Host "[verify] e2e-output-dir.txt not found — Playwright test may have failed before writing it"
+          # Read jobId written by Playwright spec (plain ASCII, no PS5 parsing issues)
+          if (-not (Test-Path "e2e-job-id.txt")) {
+            Write-Host "[verify] FAIL: e2e-job-id.txt not found — Playwright test failed before writing jobId"
             exit 1
           }
-          $outputDir = (Get-Content "e2e-output-dir.txt" -Raw).Trim()
-          Write-Host "[verify] output_dir=$outputDir"
-          if ([string]::IsNullOrWhiteSpace($outputDir)) {
-            Write-Host "[verify] FAIL: output_dir is empty — pipeline did not produce output"
+          $jobId = [System.IO.File]::ReadAllText("e2e-job-id.txt").Trim()
+          if ([string]::IsNullOrWhiteSpace($jobId)) {
+            Write-Host "[verify] FAIL: jobId is empty"
             exit 1
           }
+          # Agent always writes output to USERPROFILE\Videos\zenithjoy-output\<jobId>
+          $outputDir = "$env:USERPROFILE\Videos\zenithjoy-output\$jobId"
+          Write-Host "[verify] jobId=$jobId outputDir=$outputDir"
           if (-not (Test-Path $outputDir -PathType Container)) {
-            Write-Host "[verify] FAIL: output_dir does not exist on runner: $outputDir"
+            Write-Host "[verify] FAIL: output dir not found: $outputDir"
             exit 1
           }
           $video = Get-ChildItem $outputDir -Filter "*.mp4" -ErrorAction SilentlyContinue | Select-Object -First 1
@@ -250,12 +251,10 @@ jobs:
             exit 1
           }
           Write-Host "[verify] checking $($video.FullName) ($([math]::Round($video.Length/1MB, 1)) MB)"
-          # ffprobe runs on a local path produced by the agent on this same runner — not user input
-          $probeArgs = @('-v','error','-show_streams','-of','json',$video.FullName)
-          $probeJson = & ffprobe @probeArgs 2>&1 | Out-String
-          $probe = $probeJson | ConvertFrom-Json
-          $hasVideo = $probe.streams | Where-Object { $_.codec_type -eq "video" }
-          $hasAudio = $probe.streams | Where-Object { $_.codec_type -eq "audio" }
+          $probeOut = & ffprobe -v error -show_streams -of json $video.FullName 2>&1
+          Write-Host "[verify] ffprobe raw: $probeOut"
+          $hasVideo = $probeOut -match '"codec_type"\s*:\s*"video"'
+          $hasAudio = $probeOut -match '"codec_type"\s*:\s*"audio"'
           if (-not $hasVideo) {
             Write-Host "[verify] FAIL: output video has no video stream"
             exit 1
@@ -264,7 +263,7 @@ jobs:
             Write-Host "[verify] FAIL: output video has no audio stream"
             exit 1
           }
-          Write-Host "[verify] PASS: video=$($hasVideo.codec_name) audio=$($hasAudio.codec_name) duration=$($hasVideo.duration)s"
+          Write-Host "[verify] PASS: video+audio streams confirmed"
 
       - name: Upload screenshots
         if: always()
