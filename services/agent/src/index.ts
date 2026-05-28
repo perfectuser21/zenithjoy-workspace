@@ -756,10 +756,61 @@ function startWs1HeartbeatLoop(cfg: AgentConfig): void {
   loop.start();
   console.log(`[ws1] heartbeat-loop started → ${apiBase}/api/agent/heartbeat`);
 
+  // v1.1.34: 本地发现服务器 — Dashboard 访问 localhost:58432/agent-id 拿本机 UUID，精准派 trigger-bind
+  startLocalDiscoveryServer(loop);
+
   // Chrome is non-critical for video pipeline startup — non-blocking
   ensureChromeHeadlessShell().catch((e) => console.warn('[chrome] ensure failed:', e));
 }
 
+
+// ────── v1.1.34: 本地发现服务器 ──────
+// Dashboard 调 GET localhost:58432/agent-id 拿本机 agent UUID，
+// 再把 agent_id 带给 trigger-bind，避免多机环境派到错误机器。
+function startLocalDiscoveryServer(loop: HeartbeatLoop): void {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const http = require('node:http') as typeof import('node:http');
+  const port = parseInt(process.env.ZENITHJOY_LOCAL_PORT || '58432', 10);
+
+  const server = http.createServer((req, res) => {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+
+    if (req.method === 'OPTIONS') {
+      res.writeHead(204);
+      res.end();
+      return;
+    }
+
+    if (req.method === 'GET' && req.url === '/agent-id') {
+      const agentId = loop.getAgentId();
+      if (agentId) {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ ok: true, agent_id: agentId }));
+      } else {
+        res.writeHead(503, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ ok: false, error: 'heartbeat not received yet' }));
+      }
+      return;
+    }
+
+    res.writeHead(404);
+    res.end();
+  });
+
+  server.on('error', (err: NodeJS.ErrnoException) => {
+    if (err.code === 'EADDRINUSE') {
+      console.warn(`[local-discovery] port ${port} already in use — skipping`);
+    } else {
+      console.warn('[local-discovery] server error:', err.message);
+    }
+  });
+
+  server.listen(port, '127.0.0.1', () => {
+    console.log(`[local-discovery] listening on http://127.0.0.1:${port}/agent-id`);
+  });
+}
 
 // ────── 智能获客：关键词任务轮询 ──────
 function startAcquisitionKeywordLoop(cfg: AgentConfig): void {
