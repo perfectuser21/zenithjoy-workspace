@@ -249,7 +249,7 @@ jobs:
             exit 1
           }
           Write-Host ("[verify] checking " + $video.FullName)
-          $ffprobe = "$env:APPDATA\ZenithJoyuntimefmpegfprobe.exe"
+          $ffprobe = "$env:APPDATA\ZenithJoy\runtime\ffmpeg\ffprobe.exe"
           if (-not (Test-Path $ffprobe)) {
             Write-Host "[verify] FAIL: ffprobe.exe not found at $ffprobe"
             exit 1
