@@ -103,6 +103,11 @@ app.use('/api/publish', publishWsRouter);
 app.use('/api/admin/license', adminLicenseRouter);
 app.use('/api/admin/users', adminUsersRouter);
 app.use('/api/admin/customers', adminCustomersRouter);
+// operatorSessionsRouter 必须在 operatorRouter 之前注册：
+// operator.ts 有 router.use(superAdminGuard) 全局拦截所有 /api/operator/* 请求，
+// 若先注册 operatorRouter，sessions 的 GET/POST 会被 superAdminGuard 401 终止，
+// 永远到不了 operatorSessionsRouter。
+app.use('/api/operator/sessions', operatorSessionsRouter);
 app.use('/api/operator', operatorRouter);
 // Walking Skeleton #1：客户自查 license（better-auth session 鉴权）
 app.use('/api/account', accountRouter);
@@ -128,8 +133,7 @@ app.use('/api/clips/auth', clipsAuthRouter);
 app.use('/api/acquisition', acquisitionRouter);
 // Harness Sprint State — Walking Skeleton 本地持久化（Brain DB source of truth）
 app.use('/api/brain', brainSprintStateRouter);
-// Line 00 Session Health Medium — 运营中枢 8 平台主号 session 管理
-app.use('/api/operator/sessions', operatorSessionsRouter);
+// (operatorSessionsRouter 已在 operatorRouter 之前注册，见上方)
 
 // Error handling
 app.use(notFoundHandler);
