@@ -1,50 +1,62 @@
-contract_branch: cp-05280756-ws-70ac50db-ws1
-workstream_index: 1
+contract_branch: cp-05280815-ws-70ac50db-ws2
+workstream_index: 2
 sprint_dir: sprints/line00-session-health-medium
 
 ---
 skeleton: false
 journey_type: user_facing
 ---
-# Contract DoD — Workstream 1: DB Migration — operator_sessions 表
+# Contract DoD — Workstream 2: API 4 端点 + app.ts 注册
 
-**范围**: 新建 `db/migrations/20260527_operator_sessions.sql`，创建 `operator_sessions` 表，含 platform/secret_name/status/last_checked_at/last_valid_at 字段，status CHECK 约束 (active/expired/missing)
-**大小**: S（~55 行净增，1 文件）
-**依赖**: 无（串行链起点）
+**范围**: 新建 `apps/api/src/routes/operator-sessions.ts`（4 端点）；`apps/api/src/app.ts` 注册路由；superAdminGuard 守卫 trigger-bind/upload-cookies；POST status 用 internal-auth；upload-cookies 调 Octokit 写 {PLATFORM_UPPER}_COOKIES
+**大小**: M（~175 行净增，2 文件）
+**依赖**: Workstream 1 完成后
 
 ---
 
 ## ARTIFACT 条目
 
-- [ ] [ARTIFACT] migration 文件存在于 `db/migrations/`，含 `operator_sessions` 关键字
-  Test: bash -c 'F=$(ls db/migrations/ 2>/dev/null | grep -E "operator_sessions" | grep "\.sql$" | sort | tail -1); [ -n "$F" ] || { echo "FAIL: migration 文件未找到"; exit 1; }; grep -q "operator_sessions" "db/migrations/$F" || { echo "FAIL: 文件缺 operator_sessions"; exit 1; }; echo OK'
+- [ ] [ARTIFACT] `apps/api/src/routes/operator-sessions.ts` 文件存在且含 trigger-bind 路由
+  Test: bash -c 'grep -q "trigger-bind" apps/api/src/routes/operator-sessions.ts && echo OK || { echo "FAIL: trigger-bind 端点未定义"; exit 1; }'
 
-- [ ] [ARTIFACT] migration SQL 含 `secret_name` 字段定义（非 secret_key/token_name）
-  Test: bash -c 'F=$(ls db/migrations/ 2>/dev/null | grep "operator_sessions" | grep "\.sql$" | sort | tail -1); grep -q "secret_name" "db/migrations/$F" || { echo "FAIL: 缺 secret_name 字段"; exit 1; }; echo OK'
+- [ ] [ARTIFACT] `apps/api/src/routes/operator-sessions.ts` 含 upload-cookies 路由
+  Test: bash -c 'grep -q "upload-cookies" apps/api/src/routes/operator-sessions.ts && echo OK || { echo "FAIL: upload-cookies 端点未定义"; exit 1; }'
 
-- [ ] [ARTIFACT] migration SQL 含 `last_checked_at` 和 `last_valid_at` 字段（驱动 GET sessions response）
-  Test: bash -c 'F=$(ls db/migrations/ 2>/dev/null | grep "operator_sessions" | grep "\.sql$" | sort | tail -1); grep -q "last_checked_at" "db/migrations/$F" && grep -q "last_valid_at" "db/migrations/$F" || { echo "FAIL: 缺时间戳字段"; exit 1; }; echo OK'
+- [ ] [ARTIFACT] `apps/api/src/app.ts` 已注册 operator-sessions 路由（含 /api/operator 前缀）
+  Test: bash -c 'grep -qE "operator.sessions|operator-sessions" apps/api/src/app.ts && echo OK || { echo "FAIL: app.ts 未注册 operator-sessions 路由"; exit 1; }'
 
 ---
 
 ## BEHAVIOR 条目
 
-- [ ] [BEHAVIOR] operator_sessions 表在 DB 中已存在（psql runtime oracle）
-  Test: manual:bash -c 'COUNT=$(psql "${DB_URL:-postgresql://postgres:postgres@localhost/cecelia}" -t -c "SELECT count(*) FROM information_schema.tables WHERE table_name='"'"'operator_sessions'"'"'" 2>/dev/null | tr -d " \n"); [ "$COUNT" = "1" ] || { echo "FAIL: operator_sessions 表不存在 count=$COUNT"; exit 1; }; echo OK'
+- [ ] [BEHAVIOR] POST trigger-bind 返回 202 + {ok,platform,taskId}，keys 完全等于 ["ok","platform","taskId"]
+  Test: manual:bash -c 'ZJ_API=${ZJ_API_URL:-http://localhost:5200}; RESP=$(curl -sf -w "\n%{http_code}" -X POST "$ZJ_API/api/operator/sessions/trigger-bind" -H "Content-Type: application/json" -d '"'"'{"platform":"douyin"}'"'"'); HTTP_CODE=$(echo "$RESP" | tail -1); BODY=$(echo "$RESP" | head -1); [ "$HTTP_CODE" = "202" ] || { echo "FAIL: 期望 202 got $HTTP_CODE body=$BODY"; exit 1; }; echo "$BODY" | jq -e '"'"'.ok == true'"'"' || { echo "FAIL: ok≠true"; exit 1; }; echo "$BODY" | jq -e '"'"'.taskId | type == "string"'"'"' || { echo "FAIL: taskId 非 string"; exit 1; }; echo "$BODY" | jq -e '"'"'keys == ["ok","platform","taskId"]'"'"' || { echo "FAIL: keys 不完全等于 [ok,platform,taskId]"; exit 1; }; echo OK'
   期望: OK
 
-- [ ] [BEHAVIOR] operator_sessions 表含 5 核心字段（platform/secret_name/status/last_checked_at/last_valid_at）
-  Test: manual:bash -c 'COUNT=$(psql "${DB_URL:-postgresql://postgres:postgres@localhost/cecelia}" -t -c "SELECT count(*) FROM information_schema.columns WHERE table_name='"'"'operator_sessions'"'"' AND column_name IN ('"'"'platform'"'"','"'"'secret_name'"'"','"'"'status'"'"','"'"'last_checked_at'"'"','"'"'last_valid_at'"'"')" 2>/dev/null | tr -d " \n"); [ "$COUNT" = "5" ] || { echo "FAIL: 字段数=$COUNT 期望 5"; exit 1; }; echo OK'
+- [ ] [BEHAVIOR] trigger-bind 禁用字段反向 — response 不含 id/task/jobId/requestId
+  Test: manual:bash -c 'ZJ_API=${ZJ_API_URL:-http://localhost:5200}; RESP=$(curl -sf -X POST "$ZJ_API/api/operator/sessions/trigger-bind" -H "Content-Type: application/json" -d '"'"'{"platform":"kuaishou"}'"'"') || { echo "FAIL: 端点无响应"; exit 1; }; for k in id task jobId requestId; do echo "$RESP" | jq -e "has(\"$k\") | not" || { echo "FAIL: 禁用字段 $k 出现在 response"; exit 1; }; done; echo OK'
   期望: OK
 
-- [ ] [BEHAVIOR] status CHECK 约束仅允许 active/expired/missing（禁止 ok/healthy/valid 写入）
-  Test: manual:bash -c 'psql "${DB_URL:-postgresql://postgres:postgres@localhost/cecelia}" -c "INSERT INTO operator_sessions (platform, secret_name, status) VALUES ('"'"'test-platform-check'"'"', '"'"'TEST_COOKIES'"'"', '"'"'ok'"'"')" 2>&1 | grep -q "violates check constraint\|CHECK\|check_oper\|check" || { echo "FAIL: ok 值被接受，CHECK 约束未生效"; exit 1; }; psql "${DB_URL:-postgresql://postgres:postgres@localhost/cecelia}" -c "DELETE FROM operator_sessions WHERE platform='"'"'test-platform-check'"'"'" 2>/dev/null; echo OK'
+- [ ] [BEHAVIOR] trigger-bind 非法 platform 返 400 + error 字段（非 message/msg/reason）
+  Test: manual:bash -c 'ZJ_API=${ZJ_API_URL:-http://localhost:5200}; CODE=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$ZJ_API/api/operator/sessions/trigger-bind" -H "Content-Type: application/json" -d '"'"'{"platform":"invalid_platform_xyz"}'"'"'); [ "$CODE" = "400" ] || { echo "FAIL: 非法 platform 期望 400 got $CODE"; exit 1; }; BODY=$(curl -s -X POST "$ZJ_API/api/operator/sessions/trigger-bind" -H "Content-Type: application/json" -d '"'"'{"platform":"invalid_platform_xyz"}'"'"'); echo "$BODY" | jq -e '"'"'.error | type == "string"'"'"' || { echo "FAIL: 缺 error 字段"; exit 1; }; echo "$BODY" | jq -e '"'"'has("message") | not'"'"' || { echo "FAIL: 禁用字段 message 出现"; exit 1; }; echo OK'
   期望: OK
 
-- [ ] [BEHAVIOR] status = active 可正常写入（CHECK 约束允许合法值）
-  Test: manual:bash -c 'TS=$(date +%s); psql "${DB_URL:-postgresql://postgres:postgres@localhost/cecelia}" -c "INSERT INTO operator_sessions (platform, secret_name, status) VALUES ('"'"'test-active-'"'"'$TS'"'"', '"'"'TEST_COOKIES'"'"', '"'"'active'"'"') ON CONFLICT (platform) DO UPDATE SET status='"'"'active'"'"'" 2>&1 | grep -qv "ERROR" || { echo "FAIL: active 写入报错"; exit 1; }; COUNT=$(psql "${DB_URL:-postgresql://postgres:postgres@localhost/cecelia}" -t -c "SELECT count(*) FROM operator_sessions WHERE platform='"'"'test-active-$TS'"'"' AND status='"'"'active'"'"' AND created_at > NOW() - interval '"'"'5 minutes'"'"'" | tr -d " \n"); [ "$COUNT" = "1" ] || { echo "FAIL: active 写入后查不到"; exit 1; }; psql "${DB_URL:-postgresql://postgres:postgres@localhost/cecelia}" -c "DELETE FROM operator_sessions WHERE platform='"'"'test-active-$TS'"'"'" 2>/dev/null; echo OK'
+- [ ] [BEHAVIOR] GET /api/operator/sessions 返回 8 条，每项 keys 完全等于 ["lastCheckedAt","lastValidAt","platform","secretName","status"]
+  Test: manual:bash -c 'ZJ_API=${ZJ_API_URL:-http://localhost:5200}; RESP=$(curl -sf "$ZJ_API/api/operator/sessions") || { echo "FAIL: GET sessions 失败"; exit 1; }; echo "$RESP" | jq -e '"'"'type == "array"'"'"' || { echo "FAIL: 非 array"; exit 1; }; echo "$RESP" | jq -e '"'"'length == 8'"'"' || { echo "FAIL: 不是 8 条，实际=$(echo "$RESP" | jq length)"; exit 1; }; echo "$RESP" | jq -e '"'"'.[0] | keys == ["lastCheckedAt","lastValidAt","platform","secretName","status"]'"'"' || { echo "FAIL: 每项 keys 不匹配期望集合"; exit 1; }; echo OK'
   期望: OK
 
-- [ ] [BEHAVIOR] migration SQL 禁用字段反向 — 不含 status 值 ok/healthy/valid（CHECK 约束不允许这些值）
-  Test: manual:bash -c 'F=$(ls db/migrations/ 2>/dev/null | grep "operator_sessions" | grep "\.sql$" | sort | tail -1); grep -qE "CHECK.*ok[^a-z]|CHECK.*healthy|CHECK.*valid\b" "db/migrations/$F" && { echo "FAIL: migration status CHECK 约束含禁用值 ok/healthy/valid"; exit 1; } || echo OK'
+- [ ] [BEHAVIOR] GET sessions status 禁用字段反向 — 不含 ok/healthy/valid/inactive/error 状态值
+  Test: manual:bash -c 'ZJ_API=${ZJ_API_URL:-http://localhost:5200}; RESP=$(curl -sf "$ZJ_API/api/operator/sessions") || { echo "FAIL"; exit 1; }; echo "$RESP" | jq -e '"'"'[.[].status | IN("ok","healthy","valid","inactive","error")] | any | not'"'"' || { echo "FAIL: status 含禁用值"; exit 1; }; echo OK'
+  期望: OK
+
+- [ ] [BEHAVIOR] GET sessions secretName 格式合规 — 以 _COOKIES 结尾，不含 _MAIN/_SESSION/_TOKEN
+  Test: manual:bash -c 'ZJ_API=${ZJ_API_URL:-http://localhost:5200}; RESP=$(curl -sf "$ZJ_API/api/operator/sessions") || { echo "FAIL"; exit 1; }; echo "$RESP" | jq -e '"'"'.[0].secretName | endswith("_COOKIES")'"'"' || { echo "FAIL: secretName 不以 _COOKIES 结尾"; exit 1; }; echo "$RESP" | jq -e '"'"'[.[].secretName | test("_MAIN|_SESSION|_TOKEN")] | any | not'"'"' || { echo "FAIL: secretName 含禁用格式"; exit 1; }; echo OK'
+  期望: OK
+
+- [ ] [BEHAVIOR] POST /api/operator/sessions/status 返回 {ok:true, updated:N}，keys 完全等于 ["ok","updated"]
+  Test: manual:bash -c 'ZJ_API=${ZJ_API_URL:-http://localhost:5200}; RESP=$(curl -sf -X POST "$ZJ_API/api/operator/sessions/status" -H "Content-Type: application/json" -d '"'"'{"updates":[{"platform":"douyin","status":"active","checkedAt":"2026-05-27T10:00:00Z"}]}'"'"') || { echo "FAIL: POST status 失败"; exit 1; }; echo "$RESP" | jq -e '"'"'.ok == true'"'"' || { echo "FAIL: ok≠true"; exit 1; }; echo "$RESP" | jq -e '"'"'.updated | type == "number"'"'"' || { echo "FAIL: updated 非 number"; exit 1; }; echo "$RESP" | jq -e '"'"'keys == ["ok","updated"]'"'"' || { echo "FAIL: keys 不完全等于 [ok,updated]"; exit 1; }; echo OK'
+  期望: OK
+
+- [ ] [BEHAVIOR] upload-cookies 源码含 Octokit secretName 格式化为 {PLATFORM_UPPER}_COOKIES（不含 _MAIN）
+  Test: manual:bash -c 'F="apps/api/src/routes/operator-sessions.ts"; grep -q "COOKIES" "$F" || { echo "FAIL: 源码缺 _COOKIES 命名逻辑"; exit 1; }; grep -qE "_MAIN|_SESSION|_TOKEN" "$F" && { echo "FAIL: 源码含禁用命名格式 _MAIN/_SESSION/_TOKEN"; exit 1; } || true; grep -qE "toUpperCase|UPPER" "$F" || { echo "FAIL: 缺 toUpperCase 平台名大写逻辑"; exit 1; }; echo OK'
   期望: OK
