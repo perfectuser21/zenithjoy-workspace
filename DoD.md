@@ -1,46 +1,57 @@
 contract_branch: main
-workstream_index: 4
+workstream_index: 6
 sprint_dir: sprints/line00-session-health-medium
 
 ---
 skeleton: false
 journey_type: user_facing
 ---
-# Contract DoD — Workstream 4: Dashboard E2E Playwright spec
+# Contract DoD — Workstream 6: GHA workflow + check-health.js 修复 + smoke.sh
 
-**范围**: 新建 `apps/dashboard/e2e/operator-sessions.spec.ts`：8 平台行存在断言 + status badge + 登录按钮；API 全部 stub（page.route）；非运营员 redirect 验证；GET sessions response mock 含 active/expired/missing 三态
-**大小**: S（~130 行净增，1 文件）
-**依赖**: Workstream 3 完成后
+**范围**: 修正 `.github/workflows/session-health-check.yml`（*_MAIN → *_COOKIES，8 平台主号）；修正 `scripts/sessions/check-health.js`（missing≠ok bug，expired → 飞书告警 Promise.race 3s，POST status 回写 DB）；新建 `.github/workflows/scripts/smoke/session-health-medium-smoke.sh`
+**大小**: M（~180 行净变化，3 文件）
+**依赖**: Workstream 5 完成后
+
+---
 
 ## ARTIFACT 条目
 
-- [ ] [ARTIFACT] `apps/dashboard/e2e/operator-sessions.spec.ts` 存在
-  Test: bash -c '[ -f "apps/dashboard/e2e/operator-sessions.spec.ts" ] && echo OK || { echo "FAIL: spec 文件不存在"; exit 1; }'
+- [ ] [ARTIFACT] `.github/workflows/session-health-check.yml` 无 *_MAIN Secret 引用
+  Test: bash -c 'COUNT=$(grep -c "_MAIN:" .github/workflows/session-health-check.yml 2>/dev/null || echo 0); [ "$COUNT" = "0" ] && echo OK || { echo "FAIL: workflow 仍含 $COUNT 处 _MAIN Secret 引用"; exit 1; }'
 
-- [ ] [ARTIFACT] spec 文件含 `page.route` stub（不依赖真实后端）
-  Test: bash -c 'grep -q "page.route\|page\.route" apps/dashboard/e2e/operator-sessions.spec.ts && echo OK || { echo "FAIL: spec 缺 page.route stub"; exit 1; }'
+- [ ] [ARTIFACT] `.github/workflows/session-health-check.yml` 含 DOUYIN_COOKIES Secret 引用
+  Test: bash -c 'grep -q "DOUYIN_COOKIES" .github/workflows/session-health-check.yml && echo OK || { echo "FAIL: workflow 缺 DOUYIN_COOKIES"; exit 1; }'
 
-- [ ] [ARTIFACT] spec 文件含 8 个平台名断言（至少断言抖音/快手/小红书/视频号/头条/微博/知乎/公众号）
-  Test: bash -c 'for p in 抖音 快手 小红书 视频号 头条 微博 知乎 公众号; do grep -q "$p" apps/dashboard/e2e/operator-sessions.spec.ts || { echo "FAIL: spec 缺平台 $p 断言"; exit 1; }; done; echo OK'
+- [ ] [ARTIFACT] `scripts/sessions/check-health.js` 含飞书告警逻辑（FEISHU_BOT_WEBHOOK 引用）
+  Test: bash -c 'grep -q "FEISHU_BOT_WEBHOOK\|feishu\|飞书" scripts/sessions/check-health.js && echo OK || { echo "FAIL: check-health.js 缺飞书告警逻辑"; exit 1; }'
+
+- [ ] [ARTIFACT] smoke.sh 存在于 `.github/workflows/scripts/smoke/` 且 ≥15 行实质内容
+  Test: bash -c '[ -f ".github/workflows/scripts/smoke/session-health-medium-smoke.sh" ] || { echo "FAIL: smoke.sh 不存在"; exit 1; }; LINES=$(grep -v "^#\|^$" .github/workflows/scripts/smoke/session-health-medium-smoke.sh | wc -l | tr -d " "); [ "$LINES" -ge 15 ] || { echo "FAIL: smoke.sh 实质行数=$LINES 期望≥15"; exit 1; }; echo OK'
+
+---
 
 ## BEHAVIOR 条目
 
-- [ ] [BEHAVIOR] spec 含至少 3 个 test/it 块（8 平台行 + status badge + 登录按钮 + redirect 各一块）
-  Test: manual:bash -c 'COUNT=$(grep -cE "^\s*test\(|^\s*it\(" apps/dashboard/e2e/operator-sessions.spec.ts 2>/dev/null || echo 0); [ "$COUNT" -ge 3 ] || { echo "FAIL: spec 只有 $COUNT 个测试块，期望 ≥3"; exit 1; }; echo OK'
+- [ ] [BEHAVIOR] check-health.js missing 状态不被当 ok 处理（missing bug 修复验证）
+  Test: manual:bash -c 'node -e "const src=require('"'"'fs'"'"').readFileSync('"'"'scripts/sessions/check-health.js'"'"','"'"'utf8'"'"'); const bugPattern=/missing.*[=:!<>].*ok\b|ok\b.*[=:!<>].*missing/i; const hasBug=bugPattern.test(src); if(hasBug){console.error('"'"'FAIL: missing=ok bug 仍存在'"'"');process.exit(1);} if(!src.includes('"'"'missing'"'"')){console.error('"'"'FAIL: check-health.js 缺 missing 处理逻辑'"'"');process.exit(1);} console.log('"'"'OK: missing bug 已修复'"'"')" || { echo "FAIL"; exit 1; }'
   期望: OK
 
-- [ ] [BEHAVIOR] spec 使用 active（非 ok）作为 stub mock 中的成功 status 值（对齐 PRD status 枚举）
-  Test: manual:bash -c 'F="apps/dashboard/e2e/operator-sessions.spec.ts"; grep -qE '"'"'"active"|'"'"'active'"'"'" "$F" || { echo "FAIL: spec mock 缺 active 状态值"; exit 1; }; grep -qE '"'"'"status"[[:space:]]*:[[:space:]]*"ok"'"'"' "$F" && { echo "FAIL: spec 仍用 ok 作为 status mock 值"; exit 1; } || true; echo OK'
+- [ ] [BEHAVIOR] check-health.js 含 Promise.race 3s 飞书告警超时保护
+  Test: manual:bash -c 'grep -q "Promise.race" scripts/sessions/check-health.js || { echo "FAIL: 缺 Promise.race"; exit 1; }; grep -qE "3000|3 \* 1000|3000ms" scripts/sessions/check-health.js || { echo "FAIL: 缺 3000ms timeout 常量"; exit 1; }; echo OK'
   期望: OK
 
-- [ ] [BEHAVIOR] spec stub 的 GET /api/operator/sessions mock response 含 8 条且每项含 platform/status/secretName 字段
-  Test: manual:bash -c 'F="apps/dashboard/e2e/operator-sessions.spec.ts"; node -e "const src=require('"'"'fs'"'"').readFileSync('"'"'$F'"'"','"'"'utf8'"'"'); if(!src.includes('"'"'platform'"'"')||!src.includes('"'"'status'"'"')||!src.includes('"'"'secretName'"'"')){console.error('"'"'FAIL: stub mock 缺 platform/status/secretName 字段'"'"');process.exit(1);}console.log('"'"'OK'"'"')" || { echo "FAIL"; exit 1; }'
+- [ ] [BEHAVIOR] check-health.js expired 条目触发飞书告警调用（非全量触发）
+  Test: manual:bash -c 'node -e "const src=require('"'"'fs'"'"').readFileSync('"'"'scripts/sessions/check-health.js'"'"','"'"'utf8'"'"'); const hasExpiredGuard=src.includes('"'"'expired'"'"') && (src.includes('"'"'FEISHU_BOT_WEBHOOK'"'"') || src.includes('"'"'feishu'"'"')); if(!hasExpiredGuard){console.error('"'"'FAIL: 飞书告警未关联 expired 判断'"'"');process.exit(1);} const hasPromise=src.includes('"'"'Promise.race'"'"'); if(!hasPromise){console.error('"'"'FAIL: 缺 Promise.race'"'"');process.exit(1);} console.log('"'"'OK'"'"')" || { echo "FAIL"; exit 1; }'
   期望: OK
 
-- [ ] [BEHAVIOR] spec 含非运营员 redirect 断言（非 xuxiao21xx@icloud.com 访问 /operator 被 redirect）
-  Test: manual:bash -c 'F="apps/dashboard/e2e/operator-sessions.spec.ts"; grep -qE "redirect|navigate|location|operator" "$F" && grep -qE "非运营员|non-operator|guard|redirect" "$F" || { echo "FAIL: spec 缺 is_operator redirect 断言"; exit 1; }; echo OK'
+- [ ] [BEHAVIOR] check-health.js 含 POST /api/operator/sessions/status 回写调用
+  Test: manual:bash -c 'grep -qE "sessions/status|operator/sessions/status" scripts/sessions/check-health.js || { echo "FAIL: 缺 /api/operator/sessions/status 回写"; exit 1; }; echo OK'
   期望: OK
 
-- [ ] [BEHAVIOR] spec 中 mock response 的 status 枚举不含禁用值（ok/healthy/valid）
-  Test: manual:bash -c 'F="apps/dashboard/e2e/operator-sessions.spec.ts"; for banned in '"'"'"status":"ok"'"'"' '"'"'"status":"healthy"'"'"' '"'"'"status":"valid"'"'"'; do grep -q "$banned" "$F" && { echo "FAIL: spec mock 含禁用 status 值 $banned"; exit 1; } || true; done; echo OK'
+- [ ] [BEHAVIOR] GHA workflow _COOKIES Secret 命名禁用字段反向 — 不含 *_SESSION/*_TOKEN/*_KEY 变量名
+  Test: manual:bash -c 'for banned in _SESSION _TOKEN _KEY; do grep -q "secrets\.$banned\|_${banned#_}:" .github/workflows/session-health-check.yml 2>/dev/null && { echo "FAIL: workflow 含禁用命名 $banned"; exit 1; } || true; done; echo OK'
+  期望: OK
+
+- [ ] [BEHAVIOR] smoke.sh 含 SKIP_HTTP_CHECK 离线模式（不依赖真实平台 cookie 的验证路径）
+  Test: manual:bash -c 'grep -q "SKIP_HTTP_CHECK" .github/workflows/scripts/smoke/session-health-medium-smoke.sh || { echo "FAIL: smoke.sh 缺 SKIP_HTTP_CHECK 离线模式"; exit 1; }; echo OK'
   期望: OK
