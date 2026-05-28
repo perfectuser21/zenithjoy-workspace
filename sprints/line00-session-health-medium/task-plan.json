@@ -1,5 +1,5 @@
 {
-  "initiative_id": "70ac50db-3c3e-4c28-898e-faa7a9bd5721",
+  "initiative_id": "e8036ab0-6020-4a14-8243-60463328a50e",
   "journey_type": "user_facing",
   "journey_type_reason": "核心入口是 apps/dashboard/ 运营中枢页，运营员通过 UI 触发一键登录和查看状态矩阵",
   "target_environment": "windows_cloud",
