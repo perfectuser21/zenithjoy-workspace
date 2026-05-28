@@ -14,13 +14,13 @@ import path from 'node:path';
 import os from 'node:os';
 import fs from 'node:fs';
 
-// 8 平台 creator URL 映射
+// 8 平台 creator URL — 用会触发 /login 重定向的子路径，避免 SPA 根域名在 JS 重定向前误判已登录
 export const PLATFORM_CREATOR_URLS: Record<string, string> = {
-  douyin: 'https://creator.douyin.com',
-  kuaishou: 'https://cp.kuaishou.com',
-  xiaohongshu: 'https://creator.xiaohongshu.com',
+  douyin: 'https://creator.douyin.com/creator-micro/home',
+  kuaishou: 'https://cp.kuaishou.com/article/publish/video',
+  xiaohongshu: 'https://creator.xiaohongshu.com/publish/publish',
   shipinhao: 'https://channels.weixin.qq.com/platform/login',
-  toutiao: 'https://mp.toutiao.com',
+  toutiao: 'https://mp.toutiao.com/profile_v4/graphic/publish',
   weibo: 'https://weibo.com/login.php',
   zhihu: 'https://www.zhihu.com/creator',
   gongzhonghao: 'https://mp.weixin.qq.com',
@@ -136,6 +136,9 @@ export async function handleQrBindOperator(
     if (page?.goto) {
       await page.goto(creatorUrl, { waitUntil: 'domcontentloaded' } as Record<string, unknown>);
     }
+
+    // SPA 框架（抖音等）在 domcontentloaded 后还需 JS 执行才跳到 /login，等 3s 避免误判已登录
+    await new Promise((r) => setTimeout(r, 3000));
 
     // 轮询等待扫码登录（最长 5min）
     const start = Date.now();
