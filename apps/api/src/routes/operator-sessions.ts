@@ -1,5 +1,4 @@
 import { Router, Request, Response } from 'express';
-import { randomUUID } from 'crypto';
 import pool from '../db/connection';
 import { internalAuth } from '../middleware/internal-auth';
 import { superAdminGuard } from '../middleware/super-admin';

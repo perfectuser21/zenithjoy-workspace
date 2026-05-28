@@ -156,4 +156,47 @@ describe('PublishPage [BEHAVIOR]', () => {
       expect(screen.getByRole('button', { name: /发布到抖音/ })).toBeDisabled();
     });
   });
+
+  it('切换平台到快手 → 按钮文字变为"发布到快手"，文章选项消失', async () => {
+    vi.mocked(ws1Api.getAgentStatus).mockResolvedValue({
+      connected: true,
+      agent_id: 'agent-1',
+      hostname: 'test-host',
+      version: '1.1.32',
+      last_heartbeat_at: new Date().toISOString(),
+      bound_folder_path: '/videos',
+    });
+    vi.mocked(ws1Api.listPublishTasks).mockResolvedValue({ tasks: [] });
+    render(<PublishPage />, { wrapper: createWrapper() });
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /发布到抖音/ })).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByRole('radio', { name: /快手/ }));
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /发布到快手/ })).toBeInTheDocument();
+      expect(screen.queryByRole('radio', { name: /文章/ })).not.toBeInTheDocument();
+    });
+  });
+
+  it('快手平台点击发布 → platform=kuaishou', async () => {
+    vi.mocked(ws1Api.getAgentStatus).mockResolvedValue({
+      connected: true,
+      agent_id: 'agent-1',
+      hostname: 'test-host',
+      version: '1.1.32',
+      last_heartbeat_at: new Date().toISOString(),
+      bound_folder_path: '/videos',
+    });
+    vi.mocked(ws1Api.listPublishTasks).mockResolvedValue({ tasks: [] });
+    vi.mocked(ws1Api.postPublishTask).mockResolvedValue({ task_id: 'task-ks-1', status: 'pending' });
+    render(<PublishPage />, { wrapper: createWrapper() });
+    await waitFor(() => screen.getByRole('radio', { name: /快手/ }));
+    fireEvent.click(screen.getByRole('radio', { name: /快手/ }));
+    fireEvent.click(screen.getByRole('button', { name: /发布到快手/ }));
+    await waitFor(() => {
+      expect(ws1Api.postPublishTask).toHaveBeenCalledWith(
+        expect.objectContaining({ platform: 'kuaishou' })
+      );
+    });
+  });
 });
