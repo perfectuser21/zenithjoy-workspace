@@ -35,6 +35,8 @@ export interface QrBindDouyinResult {
 export interface ChromiumPage {
   url(): string;
   goto?(url: string): Promise<unknown>;
+  // evaluate() lets us check DOM state — essential for SPAs that don't change URL on login
+  evaluate?<T>(fn: () => T): Promise<T>;
 }
 
 export interface ChromiumContext {
@@ -73,14 +75,53 @@ export function getSessionPath(
   return path.join(dir, platform, `${accountLabel}.json`);
 }
 
-function defaultIsLoggedIn(ctx: ChromiumContext): boolean {
+/**
+ * 判断用户是否已完成抖音创作者后台登录。
+ *
+ * 抖音创作者中心是 SPA——未登录时 URL 仍是 creator.douyin.com/creator-micro/home，
+ * 页面内渲染二维码登录表单，不会跳转到含 /login 的 URL。
+ * 不能仅靠 URL 判断登录态，必须用 evaluate() 读取 DOM。
+ *
+ * 判断逻辑：
+ *  1. 若页面内存在"扫码登录"/"二维码"等文字 → 仍在登录界面，返回 false
+ *  2. 若在 creator.douyin.com 且上述文字不存在 → 视为登录成功，返回 true
+ *  3. evaluate() 不可用（测试注入的 mock page）时，降级为后登录 URL 模式匹配
+ */
+async function defaultIsLoggedIn(ctx: ChromiumContext): Promise<boolean> {
   const pages = ctx.pages();
   if (pages.length === 0) return false;
-  // 抖音创作者后台登录后 url 中不再含 '/login'（首页是 /creator-micro/home 等）
-  const inLogin = pages.some((p) => /\/login(\b|\/|$)/.test(p.url()));
-  if (inLogin) return false;
-  // 至少一个页面落在 douyin.com 域名 → 视为登录成功
-  return pages.some((p) => /douyin\.com/.test(p.url()));
+
+  for (const p of pages) {
+    const url = p.url();
+    if (!url || !/creator\.douyin\.com/.test(url)) continue;
+    if (/\/login(\b|\/|$)/i.test(url)) continue;
+
+    const evaluatable = p as { evaluate?: (fn: () => boolean) => Promise<boolean> };
+    if (typeof evaluatable.evaluate === 'function') {
+      try {
+        const stillOnLoginPage = await evaluatable.evaluate(() => {
+          const text = (document.body?.textContent ?? '').toLowerCase();
+          return (
+            text.includes('扫码登录') || // 扫码登录
+            text.includes('请扫码') ||       // 请扫码
+            text.includes('二维码') ||       // 二维码
+            !!document.querySelector('[class*="qrcode"], [class*="QrCode"]')
+          );
+        });
+        console.log(`[qr-bind] poll url=${url} stillOnLoginPage=${stillOnLoginPage}`);
+        if (!stillOnLoginPage) return true;
+      } catch {
+        // Page is navigating; skip this cycle
+      }
+      continue;
+    }
+
+    // Fallback for test mocks without evaluate: only trust explicit post-login paths
+    if (/\/creator-micro\/(content|material|data|account|fans|revenue)/.test(url)) {
+      return true;
+    }
+  }
+  return false;
 }
 
 async function loadDefaultLauncher(): Promise<ChromiumLauncher> {
@@ -124,6 +165,9 @@ export async function handleQrBindDouyin(
     const ctx = await browser.newContext();
     const page = await ctx.newPage!();
     await page.goto!(loginUrl);
+
+    // Wait for SPA to fully render before polling (creator.douyin.com takes ~2-3s)
+    await new Promise((r) => setTimeout(r, 3000));
 
     // 等用户扫码登录（轮询）
     const start = Date.now();
