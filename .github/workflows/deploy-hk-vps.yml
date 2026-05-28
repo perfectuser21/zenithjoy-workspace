@@ -8,6 +8,10 @@ on:
       - 'deploy/nginx.conf'
       - 'deploy/docker-compose.hk.yml'
 
+concurrency:
+  group: deploy-hk-vps
+  cancel-in-progress: false
+
 jobs:
   deploy-dashboard:
     name: Deploy Dashboard + Nginx to HK VPS
@@ -31,7 +35,7 @@ jobs:
             git -C /opt/zenithjoy/repo remote prune origin 2>/dev/null || true
             git -C /opt/zenithjoy/repo pack-refs --all 2>/dev/null || true
             git -C /opt/zenithjoy/repo fetch --force --prune origin main
-            git -C /opt/zenithjoy/repo reset --hard FETCH_HEAD
+            git -C /opt/zenithjoy/repo reset --hard origin/main
 
             echo "=== [2/3] reload nginx ==="
             docker compose \
