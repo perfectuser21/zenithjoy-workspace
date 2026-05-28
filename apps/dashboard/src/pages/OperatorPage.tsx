@@ -120,9 +120,11 @@ export default function OperatorPage() {
     try {
       const body: Record<string, unknown> = { platform: platformKey };
       if (typeof localAgentId === 'string') body.agent_id = localAgentId;
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (user?.email) headers['X-User-Email'] = user.email;
       await fetch('/api/operator/sessions/trigger-bind', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify(body),
       });
     } finally {
