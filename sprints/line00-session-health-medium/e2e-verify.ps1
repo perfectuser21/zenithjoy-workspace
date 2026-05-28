@@ -46,7 +46,7 @@ do {
 if (-not $conn.TcpTestSucceeded) { throw "FAIL: Vite 未在 ${maxWait}s 内就绪" }
 
 $e2eProc = Start-Process -FilePath "cmd.exe" `
-  -ArgumentList "/c npx.cmd playwright test e2e\operator-sessions.spec.ts --reporter=list" `
+  -ArgumentList "/c npx.cmd playwright test e2e/operator-sessions.spec.ts --reporter=list" `
   -WorkingDirectory "$repoRoot\apps\dashboard" `
   -Wait -PassThru -NoNewWindow `
   -Environment @{
