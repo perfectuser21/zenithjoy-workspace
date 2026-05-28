@@ -55,18 +55,7 @@ test('Agent E2E — 口播视频本地生成全链路', async ({ page, context }
 
   console.log('[e2e] step 3: 填写路径', VIDEO);
   await page.fill('input[placeholder*="mp4"]', VIDEO);
-  // Select W-G template if present
-  const wgByValue = page.locator('[value="W-G"]');
-  const wgByText = page.getByText('W-G', { exact: true });
-  if (await wgByValue.count() > 0) {
-    await wgByValue.first().click();
-    console.log('[e2e] step 3: selected W-G template (by value)');
-  } else if (await wgByText.count() > 0) {
-    await wgByText.first().click();
-    console.log('[e2e] step 3: selected W-G template (by text)');
-  } else {
-    console.log('[e2e] step 3: W-G template selector not found, continuing');
-  }
+  // No template selected — tests non-template 9:16 vstack path (original footage top + text bottom)
   // Select 9:16 aspect ratio if present
   const aspect916 = page.locator('[value="9:16"]');
   if (await aspect916.count() > 0) {
