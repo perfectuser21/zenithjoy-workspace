@@ -5,7 +5,7 @@ on:
       agent_version:
         description: Agent install pack version
         required: false
-        default: "1.1.29"
+        default: "1.1.33"
       session_token:
         description: Session token from pre-login (run get-e2e-token.sh locally before triggering)
         required: true
@@ -234,13 +234,23 @@ jobs:
             Write-Host "[verify] e2e-job-result.json not found — Playwright test may have failed before writing it"
             exit 0
           }
-          $meta = Get-Content "e2e-job-result.json" -Raw | ConvertFrom-Json
-          [string]$outputDir = if ($meta.PSObject.Properties['outputDir']) { [string]$meta.outputDir } else { '' }
+          $metaRaw = Get-Content "e2e-job-result.json" -Raw
+          $meta = $metaRaw | ConvertFrom-Json
+          $outputDir = "$($meta.outputDir)"
           Write-Host "[verify] output_dir=$outputDir"
-          if ([string]::IsNullOrWhiteSpace($outputDir)) { Write-Error "output_dir is empty — pipeline did not produce output"; exit 1 }
-          if (-not (Test-Path $outputDir -PathType Container)) { Write-Error "output_dir does not exist: $outputDir"; exit 1 }
+          if ([string]::IsNullOrWhiteSpace($outputDir)) {
+            Write-Host "[verify] FAIL: output_dir is empty — pipeline did not produce output"
+            exit 1
+          }
+          if (-not (Test-Path $outputDir -PathType Container)) {
+            Write-Host "[verify] FAIL: output_dir does not exist on runner: $outputDir"
+            exit 1
+          }
           $video = Get-ChildItem $outputDir -Filter "*.mp4" -ErrorAction SilentlyContinue | Select-Object -First 1
-          if (-not $video) { Write-Error "No .mp4 found in $outputDir"; exit 1 }
+          if (-not $video) {
+            Write-Host "[verify] FAIL: no .mp4 found in $outputDir"
+            exit 1
+          }
           Write-Host "[verify] checking $($video.FullName) ($([math]::Round($video.Length/1MB, 1)) MB)"
           # ffprobe runs on a local path produced by the agent on this same runner — not user input
           $probeArgs = @('-v','error','-show_streams','-of','json',$video.FullName)
@@ -248,8 +258,14 @@ jobs:
           $probe = $probeJson | ConvertFrom-Json
           $hasVideo = $probe.streams | Where-Object { $_.codec_type -eq "video" }
           $hasAudio = $probe.streams | Where-Object { $_.codec_type -eq "audio" }
-          if (-not $hasVideo) { Write-Error "[verify] FAIL: output video has no video stream"; exit 1 }
-          if (-not $hasAudio) { Write-Error "[verify] FAIL: output video has no audio stream"; exit 1 }
+          if (-not $hasVideo) {
+            Write-Host "[verify] FAIL: output video has no video stream"
+            exit 1
+          }
+          if (-not $hasAudio) {
+            Write-Host "[verify] FAIL: output video has no audio stream"
+            exit 1
+          }
           Write-Host "[verify] PASS: video=$($hasVideo.codec_name) audio=$($hasAudio.codec_name) duration=$($hasVideo.duration)s"
 
       - name: Upload screenshots
