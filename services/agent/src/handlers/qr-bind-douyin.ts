@@ -84,24 +84,12 @@ function defaultIsLoggedIn(ctx: ChromiumContext): boolean {
 }
 
 async function loadDefaultLauncher(): Promise<ChromiumLauncher> {
-  // 动态 import 避免 pkg 打包尝试 bundle playwright（playwright 不在 .exe 里，
-  // 客户机需自装）。用变量名 + Function 包装跳过 TS 静态解析，避免开发环境
-  // 没装 playwright 时 typecheck 报错。
-  const moduleName = 'playwright';
-  let playwright: any = null;
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-implied-eval, no-new-func
-    const dynImport = new Function('m', 'return import(m)') as (
-      m: string,
-    ) => Promise<any>;
-    playwright = await dynImport(moduleName);
-  } catch {
-    playwright = null;
-  }
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const playwright = require('playwright') as { chromium: ChromiumLauncher };
   if (!playwright?.chromium) {
-    throw new Error('playwright 未安装；客户机需先装 playwright (npm i playwright)');
+    throw new Error('playwright chromium 未就绪');
   }
-  return playwright.chromium as ChromiumLauncher;
+  return playwright.chromium;
 }
 
 export async function handleQrBindDouyin(

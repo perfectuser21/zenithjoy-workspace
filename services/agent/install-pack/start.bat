@@ -4,9 +4,9 @@ setlocal enabledelayedexpansion
 
 cd /d "%~dp0"
 
-REM Unblock all .exe files (removes Zone Identifier / Mark of the Web from downloaded files)
-REM Without this, execFile() on bundled ffmpeg.exe fails with "spawn UNKNOWN" on Windows
-powershell -NoProfile -Command "Get-ChildItem -Path '%~dp0' -Filter '*.exe' | Unblock-File" >nul 2>&1
+REM Unblock all executables recursively (removes Zone Identifier / Mark of the Web)
+REM Without this, execFile() on bundled ffmpeg.exe / Playwright chrome.exe fails with "spawn UNKNOWN"
+powershell -NoProfile -Command "Get-ChildItem -Path '%~dp0' -Recurse -Include '*.exe','*.dll' | Unblock-File" >nul 2>&1
 
 REM Step 1: Verify .env exists — 首次运行自动从 .env.template 复制
 if not exist .env (
