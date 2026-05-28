@@ -1,4 +1,4 @@
-# Sprint Contract Draft (Round 1)
+# Sprint Contract Draft (Round 2)
 
 ## Golden Path
 入口 → Dashboard 运营中枢页 → 一键登录触发 → Agent 扫码 → Cookie 写入 Secret + DB → 状态矩阵绿色 → GHA 巡检真实验证 → 过期飞书告警 → 出口
@@ -397,3 +397,15 @@ workstream_count: 6
 | WS4 | `tests/ws4/operator-e2e.test.ts` | Playwright spec 结构 / page.route stub / 8 平台断言 | WS4 前 spec 不存在 → FAIL |
 | WS5 | `tests/ws5/qr-bind-operator.test.ts` | 8 平台 URL 映射 / 5min timeout / upload-cookies POST | WS5 前 handler 不存在 → FAIL |
 | WS6 | `tests/ws6/session-health-check.test.ts` | missing≠ok / 飞书告警 Promise.race / status 回写 / _COOKIES 命名 | WS6 前 missing bug 仍存在 → FAIL |
+
+---
+
+## Risks
+
+| ID | 风险描述 | 概率 | 影响 | Mitigation |
+|---|---|---|---|---|
+| R1 | `GH_SECRETS_WRITE_PAT` scope 不足 → `upload-cookies` 返 HTTP 403，Agent 上传 cookie 失败，绑定流程中断 | 中 | 高 | **前置验证**：`upload-cookies` 端点在调用 Octokit 前先用 `GET /repos/{owner}/{repo}` 验证 PAT 是否有 `secrets` write scope；scope 不足立即返 403 `{"error":"PAT scope insufficient"}`，运营员可在 GitHub Settings 手动补 scope 后重试 |
+| R2 | Octokit 写 Secret 成功，但 DB `upsert operator_sessions` 失败（cascade failure）→ GitHub Secret 更新但 Dashboard 状态仍显示 missing/expired，双写不一致 | 低 | 高 | **事务包裹**：`upload-cookies` 处理器内先调 Octokit 写 Secret，成功后在同一 async 块执行 DB upsert；DB 写失败则返 HTTP 500 `{"error":"DB write failed"}`（不掩盖错误），运营员重试触发幂等 upsert，Octokit 同 secret 覆盖写无副作用 |
+| R3 | xian-pc Agent 扫码超时 >5min（用户未及时扫码或网络阻断）→ task 标 failed，Dashboard 状态卡住不变，运营员无感知 | 中 | 中 | **超时硬限制**：`qr-bind-operator.ts` 设 `300000ms`（5min）超时，超时后 handler 返回 `{ok:false, reason:"timeout"}`；中台将 task 标 failed；Dashboard 轮询检测到 taskId 无 202 后续时保持原 status 不变（不清除已有 active）；日志写 `[QR_BIND_TIMEOUT]`，运营员点「重新登录」可重试 |
+| R4 | 飞书 Bot webhook 超时 >3s（飞书服务波动）→ 告警未送达，运营员不知 cookie 已过期 | 中 | 中 | **Promise.race 3s**：`check-health.js` 内飞书发送用 `Promise.race([fetch(webhookUrl,...), new Promise((_,rej)=>setTimeout(()=>rej(new Error('timeout')),3000))])`，catch 后 `console.error('[FEISHU_ALERT_FAIL]', err)` + continue，不阻塞 GHA 主流程；Dashboard 始终可见 expired badge（独立于飞书告警），运营员进入 /operator 页可直接发现 |
+| R5 | DB migration（ws1）未在 CI 里执行，ws2 API 启动时 `operator_sessions` 表不存在 → GET sessions 报 500，整条链路崩溃 | 低 | 高 | **ws1 是所有 ws 的串行先决**：`task-plan.json` `depends_on` 已强制 ws2→ws1；`db/migrations/` 在 API 启动脚本 `npm run dev` 前自动跑 `psql -f migrations/*.sql`（现有 CI 惯例）；ws1 DoD BEHAVIOR 含 psql 验证表存在，ws1 未通过则 ws2 不派发 |
