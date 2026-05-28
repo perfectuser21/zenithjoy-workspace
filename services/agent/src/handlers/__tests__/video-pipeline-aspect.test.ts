@@ -62,3 +62,28 @@ describe('WS3 — Agent ffprobe width/height + detectedAspect + 单文件输出 
     expect(ifaceBlock).toContain('target_aspect');
   });
 });
+
+describe('Step 7B — 9:16 必须用 phone overlay + portrait crop，禁止 vstack [REGRESSION]', () => {
+  // 获取 Step 7B 代码块（从"Step 7/7] output"注释到函数结束）
+  const step7Start = SRC.lastIndexOf('Step 7/7] output');
+  const step7Block = step7Start !== -1 ? SRC.slice(step7Start, step7Start + 3000) : '';
+
+  it('Step 7B 代码块存在', () => {
+    expect(step7Start).toBeGreaterThan(0);
+  });
+
+  it('Step 7B 使用 phone overlay（overlay= filter）把原始视频叠入手机框', () => {
+    // overlay= 是 ffmpeg 叠加滤镜，必须存在于 Step 7B
+    expect(step7Block).toMatch(/overlay=/);
+  });
+
+  it('Step 7B 对 9:16 目标做 portrait crop（607:1080:0:0）而非 vstack', () => {
+    // 9:16 输出必须包含从 phone overlay 结果裁剪左侧 607px 的操作
+    expect(step7Block).toMatch(/crop=607[^,]/);
+  });
+
+  it('Step 7B 不使用 vstack（vstack 无法显示手机框）', () => {
+    // vstack 是 bug：把原始视频裸堆在文字条上，不含手机框
+    expect(step7Block).not.toContain('vstack');
+  });
+});
