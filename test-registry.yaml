@@ -2474,3 +2474,53 @@ agent_suite:
     status: pending-ci
     product: 视频剪辑
     note: "Line 05 Sprint run-20260527-2037 WS5 — Agent v1.1.30 + GHA workflow 更新"
+
+  # ── Line 00 运营中枢 — line00-session-health-medium ──────────────────────────
+
+  - id: line00-session-health-ws1-migration
+    path: sprints/line00-session-health-medium/tests/ws1/operator-sessions-migration.test.ts
+    type: integration
+    ci: L4
+    status: active
+    product: 新媒体运营
+    note: "Line 00 Session Health WS1 — operator_sessions DB migration 验证（psql CHECK 约束）"
+
+  - id: line00-session-health-ws2-api
+    path: sprints/line00-session-health-medium/tests/ws2/operator-sessions-api.test.ts
+    type: integration
+    ci: L4
+    status: pending-ci
+    product: 新媒体运营
+    note: "Line 00 Session Health WS2 — operator-sessions API 4 端点（trigger-bind/upload-cookies/sessions/status）"
+
+  - id: line00-session-health-ws3-dashboard
+    path: sprints/line00-session-health-medium/tests/ws3/operator-page.test.tsx
+    type: unit
+    ci: L3
+    status: pending-ci
+    product: 新媒体运营
+    note: "Line 00 Session Health WS3 — OperatorPage Dashboard 状态矩阵页组件"
+
+  - id: line00-session-health-ws4-e2e
+    path: sprints/line00-session-health-medium/tests/ws4/operator-e2e.test.ts
+    type: e2e
+    ci: L4
+    status: pending-ci
+    product: 新媒体运营
+    note: "Line 00 Session Health WS4 — Playwright E2E operator-sessions.spec.ts 存在性验证"
+
+  - id: line00-session-health-ws5-qr-bind
+    path: sprints/line00-session-health-medium/tests/ws5/qr-bind-operator.test.ts
+    type: unit
+    ci: L3
+    status: pending-ci
+    product: 新媒体运营
+    note: "Line 00 Session Health WS5 — Agent qr-bind-operator handler + dispatcher 注册"
+
+  - id: line00-session-health-ws6-health-check
+    path: sprints/line00-session-health-medium/tests/ws6/session-health-check.test.ts
+    type: integration
+    ci: L4
+    status: pending-ci
+    product: 新媒体运营
+    note: "Line 00 Session Health WS6 — GHA session-health-check.yml + check-health.js 修正（missing≠ok + 飞书告警）"

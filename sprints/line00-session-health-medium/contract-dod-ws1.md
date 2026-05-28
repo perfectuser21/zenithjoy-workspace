@@ -1,7 +1,3 @@
-contract_branch: cp-05280756-ws-70ac50db-ws1
-workstream_index: 1
-sprint_dir: sprints/line00-session-health-medium
-
 ---
 skeleton: false
 journey_type: user_facing
