@@ -693,9 +693,9 @@ export async function processVideoPipelineJob(
     // Step 7B: overlay original video + merge audio → single-file output
     console.log(`[Step 7/7] output: overlay original video + audio, writing ${effectiveTarget}`);
     const mergedPath2 = path.join(tmpDir, 'composited.mp4');
-    const videoRect2 = htmlResult.videoRect;
+    const videoRect2 = htmlResult.videoRect ?? null;
 
-    if (videoRect2) {
+    if (videoRect2 !== null && videoRect2.w > 0 && videoRect2.h > 0) {
       // Overlay roughCutPath into the left-panel placeholder position, merge audio in one pass
       const { x, y, w, h } = videoRect2;
       const rotPrefix2 = videoRotation === 90 ? 'transpose=1,' :
