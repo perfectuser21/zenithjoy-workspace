@@ -1,5 +1,5 @@
 {
-  "initiative_id": "pending",
+  "initiative_id": "init-3",
   "journey_type": "user_facing",
   "journey_type_reason": "涉及 apps/dashboard/ 前端 UI（比例选择器 + pollStatus）+ Windows ZenithJoy Agent E2E，起点为用户 UI 操作",
   "tasks": [
