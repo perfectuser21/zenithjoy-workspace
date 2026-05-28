@@ -50,7 +50,7 @@ $e2eProc = Start-Process -FilePath "cmd.exe" `
   -WorkingDirectory "$repoRoot\apps\dashboard" `
   -Wait -PassThru -NoNewWindow `
   -Environment @{
-    BASE_URL = $BaseUrl
+    E2E_BASE_URL = $BaseUrl
     E2E_EMAIL = $SuperAdminEmail
     E2E_PASSWORD = $SuperAdminPassword
   }
