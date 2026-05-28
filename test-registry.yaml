@@ -2499,6 +2499,14 @@ agent_suite:
     product: AI视频本地流水线
     note: "WS3 smoke — API 接受 target_aspect，返回 detected_aspect 字段"
 
+  - id: zj-ops1-operator-session-sync
+    path: apps/api/src/routes/operator.test.ts
+    type: integration
+    ci: L4
+    status: active
+    product: 新媒体运营
+    note: "Line 00 运营中枢 — POST /api/operator/sessions/sync 矩阵转换（4 测试：正常/文件缺失/API key 过滤/无效 JSON）"
+
   # ── Line 00 运营中枢 — line00-session-health-medium ──────────────────────────
 
   - id: line00-session-health-ws1-migration
