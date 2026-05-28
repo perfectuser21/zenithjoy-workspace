@@ -1,123 +1,118 @@
-# final-e2e — 运营中枢 Session 状态矩阵（windows-latest, 无 Playwright）
-# 策略：build + 纯 Node.js SPA server + 文件内容验证
-# 不用 Playwright auth 模拟：auth guard + better-auth cookie 在干净 VM 时序难以 stub
+# Final E2E — 运营中枢 /operator Golden Path 真实验证
+# 模拟用户：xuxiao21xx@icloud.com 登录 → 打开 /operator → 验证 8 平台状态矩阵
+# 运行环境：GitHub Actions windows-latest（干净 VM）
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
-Write-Host "=== 运营中枢 Line-00 E2E Verify ==="
+Write-Host "=== 运营中枢 Line-00 Final E2E（真实 Golden Path）==="
 
+$BaseUrl    = "https://autopilot.zenjoymedia.media"
+$Email      = $env:E2E_SUPER_ADMIN_EMAIL
+$Password   = $env:E2E_SUPER_ADMIN_PASSWORD
 $scriptDir  = Split-Path -Parent $MyInvocation.MyCommand.Path
 $repoRoot   = Resolve-Path "$scriptDir\..\.."
 $dashRoot   = Join-Path $repoRoot "apps\dashboard"
-$Port       = 5174
 
+if (-not $Email) { throw "FAIL: E2E_SUPER_ADMIN_EMAIL 未设置" }
+if (-not $Password) { throw "FAIL: E2E_SUPER_ADMIN_PASSWORD 未设置" }
+
+# Step 1: npm ci + 安装 Playwright
 Write-Host "-- npm ci"
 $proc = Start-Process cmd.exe -ArgumentList "/c npm.cmd ci --prefer-offline" -WorkingDirectory $repoRoot -Wait -PassThru -NoNewWindow
 if ($proc.ExitCode -ne 0) { throw "FAIL: npm ci" }
 
-Write-Host "-- npm run build (dashboard)"
-$proc = Start-Process cmd.exe -ArgumentList "/c npm.cmd run build" -WorkingDirectory $dashRoot -Wait -PassThru -NoNewWindow
-if ($proc.ExitCode -ne 0) { throw "FAIL: vite build" }
-Write-Host "Build OK"
+Write-Host "-- 安装 Playwright browsers"
+$proc = Start-Process cmd.exe -ArgumentList "/c npx.cmd playwright install chromium --with-deps" -WorkingDirectory $dashRoot -Wait -PassThru -NoNewWindow
+if ($proc.ExitCode -ne 0) { throw "FAIL: playwright install" }
 
-# 内联 SPA HTTP server（无 npm 包依赖）
-$distPath = (Join-Path $dashRoot "dist") -replace "\\", "\\\\"
-$serverFile = Join-Path $env:TEMP "spa-server-$Port.js"
-Set-Content -Path $serverFile -Encoding UTF8 -Value @"
-const http = require('http'), fs = require('fs'), path = require('path');
-const dist = '$distPath';
-http.createServer((req, res) => {
-  let f = path.join(dist, req.url.split('?')[0]);
-  if (!fs.existsSync(f) || fs.statSync(f).isDirectory()) f = path.join(dist, 'index.html');
-  const mime = {'.html':'text/html','.js':'application/javascript','.css':'text/css',
-    '.json':'application/json','.png':'image/png','.ico':'image/x-icon',
-    '.woff2':'font/woff2','.svg':'image/svg+xml'};
-  const ct = mime[path.extname(f)] || 'application/octet-stream';
-  res.writeHead(200, {'Content-Type': ct});
-  fs.createReadStream(f).pipe(res);
-}).listen($Port, '127.0.0.1', () => console.log('SPA ready on $Port'));
-"@
+# Step 2: 写 Playwright 测试脚本（直接测生产 URL，不起本地 server）
+$testFile = Join-Path $dashRoot "tmp-e2e-goldenpath.spec.ts"
+$testContent = @"
+import { test, expect } from '@playwright/test';
 
-$server = Start-Process node -ArgumentList $serverFile -PassThru
-Write-Host "Server PID: $($server.Id)"
+const BASE_URL = process.env.E2E_BASE_URL || '$BaseUrl';
+const EMAIL    = process.env.E2E_EMAIL    || '$Email';
+const PASSWORD = process.env.E2E_PASSWORD || '$Password';
 
-# 等端口就绪（最多 30 秒）
-$ready = $false
-for ($i = 0; $i -lt 15; $i++) {
-  Start-Sleep 2
-  try {
-    $c = New-Object System.Net.Sockets.TcpClient
-    $c.Connect("127.0.0.1", [int]$Port); $c.Close()
-    Write-Host "Server ready after $($i*2)s"; $ready = $true; break
-  } catch {}
-}
-if (-not $ready) {
-  Stop-Process -Id $server.Id -Force -EA SilentlyContinue
-  Remove-Item $serverFile -Force -EA SilentlyContinue
-  throw "FAIL: SPA server 未在 30s 内就绪"
-}
+const PLATFORMS = ['抖音','快手','小红书','视频号','头条','微博','知乎','公众号'];
 
-# 纯 Node.js 验证（.cjs 避免 type=module 冲突）
-$testFile = Join-Path $dashRoot "tmp-e2e-line00.cjs"
-Set-Content -Path $testFile -Encoding UTF8 -Value @"
-const http = require('http');
-const fs   = require('fs');
-const path = require('path');
+test('Golden Path Step 1: 运营员登录', async ({ page }) => {
+  await page.goto(BASE_URL + '/login');
+  await page.getByPlaceholder(/邮箱|email/i).fill(EMAIL);
+  await page.getByPlaceholder(/密码|password/i).fill(PASSWORD);
+  await page.getByRole('button', { name: /登录|sign in/i }).click();
+  await page.waitForURL(u => !u.pathname.includes('/login'), { timeout: 15_000 });
+  console.log('✅ 登录成功，当前页面：' + page.url());
+});
 
-const dashRoot = $(($dashRoot -replace "\\", "/") | ConvertTo-Json);
-const dist     = path.join(dashRoot, 'dist');
-const assetsDir = path.join(dist, 'assets');
+test('Golden Path Step 2: 访问 /operator 看到 8 平台矩阵', async ({ page }) => {
+  // 登录
+  await page.goto(BASE_URL + '/login');
+  await page.getByPlaceholder(/邮箱|email/i).fill(EMAIL);
+  await page.getByPlaceholder(/密码|password/i).fill(PASSWORD);
+  await page.getByRole('button', { name: /登录|sign in/i }).click();
+  await page.waitForURL(u => !u.pathname.includes('/login'), { timeout: 15_000 });
 
-(async () => {
-  // Test 1: /operator 返回 200（SPA fallback）
-  const status = await new Promise((resolve, reject) => {
-    const req = http.get('http://localhost:$Port/operator', res => {
-      res.resume(); resolve(res.statusCode);
-    });
-    req.on('error', reject);
-    req.setTimeout(5000, () => { req.destroy(); reject(new Error('timeout')); });
+  // 访问 /operator
+  await page.goto(BASE_URL + '/operator');
+  await page.waitForLoadState('networkidle');
+
+  // 验证 8 平台全部可见
+  for (const platform of PLATFORMS) {
+    await expect(page.getByText(platform).first()).toBeVisible({ timeout: 10_000 });
+    console.log('✅ 平台可见：' + platform);
+  }
+});
+
+test('Golden Path Step 3: 每个平台有登录按钮，点击后触发绑定请求', async ({ page }) => {
+  // 登录
+  await page.goto(BASE_URL + '/login');
+  await page.getByPlaceholder(/邮箱|email/i).fill(EMAIL);
+  await page.getByPlaceholder(/密码|password/i).fill(PASSWORD);
+  await page.getByRole('button', { name: /登录|sign in/i }).click();
+  await page.waitForURL(u => !u.pathname.includes('/login'), { timeout: 15_000 });
+
+  await page.goto(BASE_URL + '/operator');
+  await page.waitForLoadState('networkidle');
+
+  // 验证至少 8 个登录按钮
+  const loginBtns = page.getByRole('button', { name: /登录/ });
+  const count = await loginBtns.count();
+  expect(count).toBeGreaterThanOrEqual(8);
+  console.log('✅ 登录按钮数量：' + count);
+
+  // 监听 trigger-bind 请求
+  let bindCalled = false;
+  page.on('request', req => {
+    if (req.url().includes('trigger-bind')) bindCalled = true;
   });
-  if (status !== 200) { console.error('FAIL: /operator status', status); process.exit(1); }
-  console.log('ok /operator status:', status);
 
-  // Test 2: dist bundle 含 8 平台中文标签（确认 OperatorPage 已构建）
-  const allJs = fs.readdirSync(assetsDir).filter(f => f.endsWith('.js'));
-  const allContent = allJs.map(f => fs.readFileSync(path.join(assetsDir, f), 'utf8')).join('');
-  const platforms = ['抖音','快手','小红书','视频号','头条','微博','知乎','公众号'];
-  const missing = platforms.filter(p => !allContent.includes(p));
-  if (missing.length > 0) { console.error('FAIL: bundle missing platforms:', missing.join(',')); process.exit(1); }
-  console.log('ok 8 platforms in bundle');
-
-  // Test 3: OperatorPage.tsx 源码含 authLoading guard（确认 auth race-condition 已修复）
-  const srcFile = path.join(dashRoot, 'src/pages/OperatorPage.tsx');
-  const src = fs.readFileSync(srcFile, 'utf8');
-  if (!src.includes('authLoading')) { console.error('FAIL: OperatorPage missing authLoading guard'); process.exit(1); }
-  console.log('ok OperatorPage authLoading guard present');
-
-  // Test 4: E2E spec 文件存在
-  const specFile = path.join(dashRoot, 'e2e/operator-sessions.spec.ts');
-  if (!fs.existsSync(specFile)) { console.error('FAIL: operator-sessions.spec.ts missing'); process.exit(1); }
-  console.log('ok operator-sessions.spec.ts exists');
-
-  // Test 5: session-health-check.yml 存在
-  const workflowFile = path.join(dashRoot, '../../.github/workflows/session-health-check.yml');
-  if (!fs.existsSync(workflowFile)) { console.error('FAIL: session-health-check.yml missing'); process.exit(1); }
-  console.log('ok session-health-check.yml exists');
-
-  // Test 6: check-health.js 存在
-  const checkHealthFile = path.join(dashRoot, '../../scripts/sessions/check-health.js');
-  if (!fs.existsSync(checkHealthFile)) { console.error('FAIL: check-health.js missing'); process.exit(1); }
-  console.log('ok check-health.js exists');
-
-  console.log('E2E PASS');
-})().catch(e => { console.error('FAIL:', e.message); process.exit(1); });
+  // 点第一个登录按钮
+  await loginBtns.first().click();
+  await page.waitForTimeout(3000);
+  expect(bindCalled).toBe(true);
+  console.log('✅ trigger-bind API 已被调用');
+});
 "@
+Set-Content -Path $testFile -Encoding UTF8 -Value $testContent
 
-node $testFile
-$exitCode = $LASTEXITCODE
-Remove-Item $testFile,$serverFile -Force -EA SilentlyContinue
-Stop-Process -Id $server.Id -Force -EA SilentlyContinue
+# Step 3: 跑 Playwright
+Write-Host "-- 跑 Playwright Golden Path E2E"
+$env:E2E_BASE_URL = $BaseUrl
+$env:E2E_EMAIL    = $Email
+$env:E2E_PASSWORD = $Password
 
-if ($exitCode -ne 0) { Write-Host "=== E2E FAILED ==="; exit $exitCode }
-Write-Host "=== E2E PASS ==="
+$proc = Start-Process cmd.exe `
+  -ArgumentList "/c npx.cmd playwright test tmp-e2e-goldenpath.spec.ts --reporter=list" `
+  -WorkingDirectory $dashRoot `
+  -Wait -PassThru -NoNewWindow
+$exitCode = $proc.ExitCode
+
+Remove-Item $testFile -Force -ErrorAction SilentlyContinue
+
+if ($exitCode -ne 0) {
+  Write-Host "=== E2E FAILED (exit=$exitCode) ==="
+  exit $exitCode
+}
+Write-Host "=== E2E PASS — Golden Path 全部验证通过 ==="
