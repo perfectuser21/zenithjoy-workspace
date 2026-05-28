@@ -16,12 +16,20 @@ interface JobState {
   error?: string;
 }
 
-async function createJob(localPath: string, topic: string, templateId: string | null, licenseKey: string, originalScript: string): Promise<{ id: string }> {
+async function createJob(
+  localPath: string,
+  topic: string,
+  templateId: string | null,
+  licenseKey: string,
+  originalScript: string,
+  targetAspect: '9:16' | '16:9' | null,
+): Promise<{ id: string }> {
   const res = await axios.post(`${API_BASE}/ai-video/jobs`, {
     local_path: localPath,
     topic: topic || undefined,
     template_id: templateId || undefined,
     original_script: originalScript || null,
+    target_aspect: targetAspect,
   }, {
     headers: { Authorization: `Bearer ${licenseKey}` },
   });
@@ -53,6 +61,7 @@ export default function LocalVideoPipelinePage() {
   const [localPath, setLocalPath] = useState('');
   const [topic, setTopic] = useState('');
   const [originalScript, setOriginalScript] = useState('');
+  const [targetAspect, setTargetAspect] = useState<'9:16' | '16:9' | null>(null);
   const [templateId, setTemplateId] = useState<string | null>(null);
   const [job, setJob] = useState<JobState | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -94,7 +103,7 @@ export default function LocalVideoPipelinePage() {
     if (!localPath.trim() || !licenseKey) return;
     setSubmitting(true);
     try {
-      const { id } = await createJob(localPath.trim(), topic, templateId, licenseKey, originalScript);
+      const { id } = await createJob(localPath.trim(), topic, templateId, licenseKey, originalScript, targetAspect);
       const initial: JobState = { id, status: 'queued', progress: 0 };
       setJob(initial);
       startPoll(id);
@@ -112,6 +121,7 @@ export default function LocalVideoPipelinePage() {
     setLocalPath('');
     setTopic('');
     setOriginalScript('');
+    setTargetAspect(null);
     setTemplateId(null);
   };
 
@@ -192,6 +202,33 @@ export default function LocalVideoPipelinePage() {
             disabled={!!isProcessing || isDone}
             className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-900/50 text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none disabled:opacity-50"
           />
+        </div>
+
+        {/* 输出画幅 */}
+        <div>
+          <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">
+            输出画幅（可选）
+          </label>
+          <div className="flex gap-2">
+            {([null, '9:16', '16:9'] as const).map((v) => (
+              <button
+                key={v ?? 'auto'}
+                type="button"
+                onClick={() => setTargetAspect(v)}
+                disabled={!!isProcessing || isDone}
+                className={`px-4 py-2 rounded-xl text-sm font-medium border transition-all disabled:opacity-50 ${
+                  targetAspect === v
+                    ? 'bg-blue-600 border-blue-600 text-white'
+                    : 'border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 hover:border-blue-400'
+                }`}
+              >
+                {v === null ? '自动检测' : v}
+              </button>
+            ))}
+          </div>
+          <p className="mt-1.5 text-xs text-slate-400">
+            自动检测：Agent 读取视频尺寸后决定输出比例；手选 9:16/16:9 强制指定。
+          </p>
         </div>
 
         {/* 模板选择 */}
