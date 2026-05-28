@@ -702,7 +702,7 @@ export async function processVideoPipelineJob(
       ], { timeout: 120_000 });
     } catch {
       console.warn('[Step 7/7] ⚠ audio merge failed, using silent rendered video');
-      fs.copyFileSync(rendered2, mergedPath2);
+      fs.renameSync(rendered2, mergedPath2);
     }
     if (effectiveTarget === '9:16') {
       await runFfmpeg(['-y', '-i', mergedPath2,
@@ -710,7 +710,7 @@ export async function processVideoPipelineJob(
         '-c:v', 'libx264', '-crf', '23', '-c:a', 'aac', '-b:a', '128k', output916,
       ], { timeout: 300_000 });
     } else {
-      fs.copyFileSync(mergedPath2, output169);
+      await runFfmpeg(['-y', '-i', mergedPath2, '-c', 'copy', output169], { timeout: 60_000 });
     }
     console.log(`[Step 7/7] ✓ job ${id} done → ${outputDir}`);
     await reportComplete(apiBase, id, { output_dir: outputDir });
