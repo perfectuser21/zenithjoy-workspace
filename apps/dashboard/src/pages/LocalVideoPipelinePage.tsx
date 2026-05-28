@@ -33,7 +33,7 @@ async function createJob(
   }, {
     headers: { Authorization: `Bearer ${licenseKey}` },
   });
-  return res.data;
+  return res.data.job;
 }
 
 async function pollStatus(id: string): Promise<JobState> {

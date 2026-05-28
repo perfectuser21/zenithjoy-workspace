@@ -5,7 +5,7 @@ import { attachAgentWS } from './services/agent-ws';
 
 dotenv.config();
 
-const PORT = process.env.PORT || 5200;
+const PORT = process.env.PORT || 3000;
 
 const server = http.createServer(app);
 attachAgentWS(server);

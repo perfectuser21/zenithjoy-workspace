@@ -24,11 +24,13 @@ export async function createJob(req: Request, res: Response, next: NextFunction)
     if (authHeader?.startsWith('Bearer ')) {
       const licenseKey = authHeader.slice(7).trim();
       if (licenseKey) {
-        const licRow = await pool.query<{ id: string }>(
-          `SELECT id FROM zenithjoy.licenses WHERE license_key = $1 AND status = 'active' LIMIT 1`,
-          [licenseKey],
-        );
-        if (licRow.rows.length > 0) licenseId = licRow.rows[0].id;
+        try {
+          const licRow = await pool.query<{ id: string }>(
+            `SELECT id FROM zenithjoy.licenses WHERE license_key = $1 AND status = 'active' LIMIT 1`,
+            [licenseKey],
+          );
+          if (licRow.rows.length > 0) licenseId = licRow.rows[0].id;
+        } catch (e) { console.warn('[createJob] failed to resolve license_id via Bearer, creating job without tenant stamp:', e); }
       }
     }
 
@@ -60,12 +62,13 @@ export async function createJob(req: Request, res: Response, next: NextFunction)
       targetAspect: target_aspect ?? null,
     });
     res.status(201).json({
-      id: job.id,
-      status: job.status,
-      original_script: job.original_script ?? null,
-      target_aspect: job.target_aspect ?? null,
-      detected_aspect: job.detected_aspect ?? null,
-      src_video: job.src_video,
+      job: {
+        id: job.id,
+        status: job.status,
+        original_script: job.original_script ?? null,
+        target_aspect: job.target_aspect ?? null,
+        detected_aspect: job.detected_aspect ?? null,
+      },
     });
   } catch (err) { next(err); }
 }
