@@ -56,8 +56,9 @@ function buildMatrix(records: HealthRecord[]): Matrix {
     }
     if (!platformName || !accountType) continue;
     if (!matrix[platformName]) matrix[platformName] = {};
+    const VALID: CellStatus[] = ['ok', 'expired', 'missing'];
     matrix[platformName][accountType] = {
-      status: (r.status as CellStatus) ?? 'missing',
+      status: VALID.includes(r.status as CellStatus) ? (r.status as CellStatus) : 'missing',
       lastSync: r.checkedAt ? formatDate(r.checkedAt) : null,
     };
   }
@@ -70,7 +71,7 @@ function loadReport(): HealthRecord[] {
     const raw = readFileSync(reportPath, 'utf-8');
     return JSON.parse(raw) as HealthRecord[];
   } catch (e: unknown) {
-    console.warn('[operator] session-health-report.json unavailable:', (e as Error).message);
+    console.warn('[operator] session-health-report.json unavailable:', e);
     return [];
   }
 }
