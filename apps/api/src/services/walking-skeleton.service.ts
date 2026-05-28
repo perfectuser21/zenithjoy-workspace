@@ -393,8 +393,8 @@ export async function ackPublishTask(args: {
 }): Promise<{ ok: true }> {
   const { taskId, licenseId, result } = args;
 
-  const taskRes = await pool.query<{ id: string; agent_id: string; result: unknown }>(
-    `SELECT id, agent_id, result
+  const taskRes = await pool.query<{ id: string; agent_id: string; platform: string; result: unknown }>(
+    `SELECT id, agent_id, platform, result
        FROM zenithjoy.publish_tasks
       WHERE id = $1
       LIMIT 1`,
@@ -417,6 +417,10 @@ export async function ackPublishTask(args: {
   const workId =
     (task.result as { payload?: { work_id?: string } } | null)?.payload?.work_id ?? null;
 
+  // qr_bind_* task 成功 → 同步写 agent_platform_sessions（Dashboard 读这张表显示绑定状态）
+  const qrBindMatch = task.platform.match(/^qr_bind_(.+)$/);
+  const isQrBindSuccess = !!qrBindMatch && result === 'success';
+
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
@@ -436,6 +440,18 @@ export async function ackPublishTask(args: {
             SET publish_status = 'success', updated_at = now()
           WHERE id = $1`,
         [workId]
+      );
+    }
+
+    if (isQrBindSuccess) {
+      const platformName = qrBindMatch![1]; // e.g. 'douyin'
+      await client.query(
+        `INSERT INTO zenithjoy.agent_platform_sessions
+           (agent_id, platform, account_label, status, bound_at)
+         VALUES ($1, $2, 'default', 'active', now())
+         ON CONFLICT (agent_id, platform, account_label)
+         DO UPDATE SET status = 'active', bound_at = now()`,
+        [task.agent_id, platformName]
       );
     }
 
