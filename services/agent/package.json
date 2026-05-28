@@ -1,6 +1,6 @@
 {
   "name": "@zenithjoy/agent",
-  "version": "1.1.38",
+  "version": "1.1.39",
   "description": "ZenithJoy Agent — 后台进程，把 Windows 主机变成 ZenithJoy 中台的发布端",
   "main": "dist/index.js",
   "bin": "dist/index.js",
@@ -31,12 +31,14 @@
     "vitest": "^3.2.4"
   },
   "pkg": {
-    "//": "publishers/ 不嵌入 .exe — 它们靠 spawn(node, script) 在客户机外部 runtime 执行。客户机需自装 Node + Playwright。",
     "scripts": [],
     "assets": [
       "build/tray-icon.png",
       "build/icon.png",
-      "node_modules/systray2/traybin/**/*"
+      "node_modules/systray2/traybin/**/*",
+      "node_modules/playwright-core/browsers.json",
+      "node_modules/playwright-core/**/*.json",
+      "node_modules/playwright-core/lib/**/*"
     ],
     "targets": [
       "node18-win-x64"
