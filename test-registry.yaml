@@ -2474,3 +2474,27 @@ agent_suite:
     status: pending-ci
     product: 视频剪辑
     note: "Line 05 Sprint run-20260527-2037 WS5 — Agent v1.1.30 + GHA workflow 更新"
+
+  - id: agent-video-pipeline-aspect
+    path: services/agent/src/handlers/__tests__/video-pipeline-aspect.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: AI视频本地流水线
+    note: "WS3 TDD — ffprobe width/height detectedAspect effectiveTarget 单文件输出行为验证"
+
+  - id: dashboard-local-video-pipeline-aspect
+    path: apps/dashboard/src/pages/__tests__/LocalVideoPipelineAspect.test.tsx
+    type: unit
+    ci: L3
+    status: active
+    product: AI视频本地流水线
+    note: "WS4 TDD — LocalVideoPipelinePage target_aspect 选择器 + original_script createJob 传参验证"
+
+  - id: smoke-video-aspect-detection
+    path: .github/workflows/scripts/smoke/video-aspect-smoke.sh
+    type: e2e
+    ci: L4
+    status: active
+    product: AI视频本地流水线
+    note: "WS3 smoke — API 接受 target_aspect，返回 detected_aspect 字段"
