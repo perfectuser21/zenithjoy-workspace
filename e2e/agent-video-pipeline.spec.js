@@ -52,7 +52,14 @@ test('Agent E2E — 口播视频本地生成全链路', async ({ page, context }
 
   console.log('[e2e] step 3: 填写路径', VIDEO);
   await page.fill('input[placeholder*="mp4"]', VIDEO);
-  await page.fill('textarea', 'ZenithJoy E2E 测试口播视频处理，验证 hyperframes 字幕渲染');
+  // topic textarea (first)
+  await page.locator('textarea').first().fill('ZenithJoy E2E 测试口播视频处理，验证 hyperframes 字幕渲染');
+  // original_script textarea (second, if present)
+  const scriptTextarea = page.locator('textarea[name="original_script"]');
+  if (await scriptTextarea.count() > 0) {
+    await scriptTextarea.fill('E2E original_script test content');
+    console.log('[e2e] step 3: filled original_script');
+  }
   await page.screenshot({ path: 'screenshots/03-form-filled.png', fullPage: true });
 
   console.log('[e2e] step 4: 开始处理');
@@ -114,4 +121,16 @@ test('Agent E2E — 口播视频本地生成全链路', async ({ page, context }
 
   await page.screenshot({ path: 'screenshots/05-final.png', fullPage: true });
   expect(done, `视频应在 15 分钟内处理完成 (last api status: ${lastApiStatus})`).toBe(true);
+
+  // Verify detected_aspect was set by Agent
+  if (jobId) {
+    const jobResp = await page.evaluate(async ({ id, lic }) => {
+      const r = await fetch(`/api/ai-video/jobs/${id}`, { headers: { Authorization: `Bearer ${lic}` } });
+      return r.ok ? r.json() : null;
+    }, { id: jobId, lic: E2E_LICENSE });
+    if (jobResp) {
+      console.log(`[e2e] detected_aspect=${jobResp.detected_aspect} target_aspect=${jobResp.target_aspect}`);
+      expect(['9:16', '16:9', null]).toContain(jobResp.detected_aspect);
+    }
+  }
 });

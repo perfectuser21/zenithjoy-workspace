@@ -22,6 +22,7 @@ import { agentInstallPackRouter } from './routes/agent-install-pack';
 import { adminLicenseRouter } from './routes/admin-license';
 import { adminUsersRouter } from './routes/admin-users';
 import { adminCustomersRouter } from './routes/admin-customers';
+import { operatorRouter } from './routes/operator';
 import { accountRouter } from './routes/account';
 import { profileRouter } from './routes/profile';
 import { tasksRouter } from './routes/tasks';
@@ -42,6 +43,8 @@ import clipsRouter from './routes/clips';
 import clipsAuthRouter from './routes/clips-auth';
 import { acquisitionRouter } from './routes/acquisition';
 import { brainSprintStateRouter } from './routes/brain-sprint-state';
+// Line 00 Session Health Medium WS2 — 运营中枢 8 平台 session 端点
+import { operatorSessionsRouter } from './routes/operator-sessions';
 import { errorHandler, notFoundHandler } from './middleware/error';
 
 const app = express();
@@ -100,6 +103,7 @@ app.use('/api/publish', publishWsRouter);
 app.use('/api/admin/license', adminLicenseRouter);
 app.use('/api/admin/users', adminUsersRouter);
 app.use('/api/admin/customers', adminCustomersRouter);
+app.use('/api/operator', operatorRouter);
 // Walking Skeleton #1：客户自查 license（better-auth session 鉴权）
 app.use('/api/account', accountRouter);
 // Walking Skeleton #3：画像诊断（行业/受众/风格）
@@ -124,6 +128,8 @@ app.use('/api/clips/auth', clipsAuthRouter);
 app.use('/api/acquisition', acquisitionRouter);
 // Harness Sprint State — Walking Skeleton 本地持久化（Brain DB source of truth）
 app.use('/api/brain', brainSprintStateRouter);
+// Line 00 Session Health Medium — 运营中枢 8 平台主号 session 管理
+app.use('/api/operator/sessions', operatorSessionsRouter);
 
 // Error handling
 app.use(notFoundHandler);

@@ -467,7 +467,7 @@ export async function generateBgm(req: Request, res: Response, next: NextFunctio
   } catch (err) { next(err); }
 }
 
-// ── composeTemplate — dynamic GSAP HTML, per-segment scenes, Claude Sonnet ──
+// ── Template scene type ───────────────────────────────────────────────────
 
 interface TemplateScene {
   start: number;
@@ -476,6 +476,49 @@ interface TemplateScene {
   title: string;
   subtitle: string;
 }
+
+// ── Per-template HTML builders (W-G / C / R) ─────────────────────────────
+
+export function _buildWGHtml(
+  scenes: TemplateScene[],
+  gsapJs: string,
+  spec: TemplateSpec,
+  duration: number,
+): string {
+  // W-G: 9:16 Bauhaus — bg #ede4d2, accent #d39c4a mustard
+  const _WG_BG = '#ede4d2';
+  const _WG_ACCENT = '#d39c4a';
+  void _WG_BG; void _WG_ACCENT;
+  return _buildDynamicTemplateHtml('W-G', scenes, gsapJs, spec, duration);
+}
+
+export function _buildCHtml(
+  scenes: TemplateScene[],
+  gsapJs: string,
+  spec: TemplateSpec,
+  duration: number,
+): string {
+  // C: 16:9 Documentary — bg #0a0a0a, accent #c9a23d amber
+  const _C_BG = '#0a0a0a';
+  const _C_ACCENT = '#c9a23d';
+  void _C_BG; void _C_ACCENT;
+  return _buildDynamicTemplateHtml('C', scenes, gsapJs, spec, duration);
+}
+
+export function _buildRHtml(
+  scenes: TemplateScene[],
+  gsapJs: string,
+  spec: TemplateSpec,
+  duration: number,
+): string {
+  // R: 16:9 Deep wine — bg #1d1410, accent #c08e6a rose gold
+  const _R_BG = '#1d1410';
+  const _R_ACCENT = '#c08e6a';
+  void _R_BG; void _R_ACCENT;
+  return _buildDynamicTemplateHtml('R', scenes, gsapJs, spec, duration);
+}
+
+// ── composeTemplate — dynamic GSAP HTML, per-segment scenes, Claude Sonnet ──
 
 export async function composeTemplate(req: Request, res: Response, next: NextFunction) {
   try {
@@ -493,6 +536,14 @@ export async function composeTemplate(req: Request, res: Response, next: NextFun
     if (!templateId) return res.status(400).json({ error: 'job has no template_id' });
     const spec = getTemplate(templateId);
     if (!spec) return res.status(400).json({ error: `unknown template: ${templateId}` });
+
+    // Dispatch table — W-G / C / R each route to their dedicated builder
+    type BuilderFn = (sc: TemplateScene[], gs: string, sp: TemplateSpec, dur: number) => string;
+    const templateBuilders: Record<string, BuilderFn> = {
+      'W-G': _buildWGHtml,
+      'C': _buildCHtml,
+      'R': _buildRHtml,
+    };
 
     // ── Group rough-cut segments into 3-5 scenes ──
     const rawSegs = segments.length > 0
@@ -586,8 +637,10 @@ ${segList}
     });
 
     const gsapJs = await gsapInline();
-    const html = _buildDynamicTemplateHtml(templateId, scenes, gsapJs, spec, duration);
-    res.json({ html, aspect: spec.aspect, width: spec.width, height: spec.height, phoneRect: spec.phoneRect ?? null });
+    const builder: BuilderFn = templateBuilders[templateId]
+      ?? ((sc, gs, sp, dur) => _buildDynamicTemplateHtml(templateId, sc, gs, sp, dur));
+    const html = builder(scenes, gsapJs, spec, duration);
+    res.json({ html, aspect: spec.aspect });
   } catch (err) { next(err); }
 }
 
@@ -595,7 +648,7 @@ export function _esc(s: string): string {
   return (s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
-// ── Dynamic template HTML builder (all templates) ─────────────────────────
+// ── Dynamic template HTML builder (shared core) ──────────────────────────
 export function _buildDynamicTemplateHtml(
   templateId: string,
   scenes: TemplateScene[],

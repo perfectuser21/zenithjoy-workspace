@@ -2176,9 +2176,9 @@ tests:
     path: sprints/zj-ops1-session-health/tests/ws3/operator-page.test.ts
     type: unit
     ci: L4
-    status: active
+    status: superseded
     product: 新媒体运营
-    note: "ZJ Ops1 Session Health WS3 — operator 页面 session 状态展示合同测试"
+    note: "ZJ Ops1 Session Health WS3 — operator 页面 session 状态展示合同测试（已被 line00-session-health-ws3-dashboard 替代，OperatorPage 已从 4×4 矩阵重写为单列 medium）"
 
   - id: zj-ops1-session-health-ws4
     path: sprints/zj-ops1-session-health/tests/ws4/ci-session.test.ts
@@ -2474,3 +2474,101 @@ agent_suite:
     status: pending-ci
     product: 视频剪辑
     note: "Line 05 Sprint run-20260527-2037 WS5 — Agent v1.1.30 + GHA workflow 更新"
+
+  - id: agent-video-pipeline-aspect
+    path: services/agent/src/handlers/__tests__/video-pipeline-aspect.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: AI视频本地流水线
+    note: "WS3 TDD — ffprobe width/height detectedAspect effectiveTarget 单文件输出行为验证"
+
+  - id: dashboard-local-video-pipeline-aspect
+    path: apps/dashboard/src/pages/__tests__/LocalVideoPipelineAspect.test.tsx
+    type: unit
+    ci: L3
+    status: active
+    product: AI视频本地流水线
+    note: "WS4 TDD — LocalVideoPipelinePage target_aspect 选择器 + original_script createJob 传参验证"
+
+  - id: smoke-video-aspect-detection
+    path: .github/workflows/scripts/smoke/video-aspect-smoke.sh
+    type: e2e
+    ci: L4
+    status: active
+    product: AI视频本地流水线
+    note: "WS3 smoke — API 接受 target_aspect，返回 detected_aspect 字段"
+
+  - id: zj-ops1-operator-session-sync
+    path: apps/api/src/routes/operator.test.ts
+    type: integration
+    ci: L4
+    status: active
+    product: 新媒体运营
+    note: "Line 00 运营中枢 — POST /api/operator/sessions/sync 矩阵转换（4 测试：正常/文件缺失/API key 过滤/无效 JSON）"
+
+  # ── Line 00 运营中枢 — line00-session-health-medium ──────────────────────────
+
+  - id: line00-session-health-ws1-migration
+    path: sprints/line00-session-health-medium/tests/ws1/operator-sessions-migration.test.ts
+    type: integration
+    ci: L4
+    status: active
+    product: 新媒体运营
+    note: "Line 00 Session Health WS1 — operator_sessions DB migration 验证（psql CHECK 约束）"
+
+  - id: line00-session-health-ws2-api
+    path: sprints/line00-session-health-medium/tests/ws2/operator-sessions-api.test.ts
+    type: integration
+    ci: L4
+    status: pending-ci
+    product: 新媒体运营
+    note: "Line 00 Session Health WS2 — operator-sessions API 4 端点（trigger-bind/upload-cookies/sessions/status）"
+
+  - id: line00-session-health-ws2-unit
+    path: apps/api/src/routes/operator-sessions.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 新媒体运营
+    note: "Line 00 Session Health WS2 — operator-sessions 路由 supertest 单元测试（19 条，含 PAT 生产路径 + DB 错误路径）"
+
+  - id: line00-session-health-ws3-dashboard
+    path: sprints/line00-session-health-medium/tests/ws3/operator-page.test.tsx
+    type: unit
+    ci: L3
+    status: active
+    product: 新媒体运营
+    note: "Line 00 Session Health WS3 — OperatorPage thin→medium 重构：8 平台单列 + active 枚举 + trigger-bind + 30s 轮询 + lastCheckedAt/lastValidAt"
+
+  - id: line00-session-health-ws4-e2e
+    path: sprints/line00-session-health-medium/tests/ws4/operator-e2e.test.ts
+    type: e2e
+    ci: L4
+    status: pending-ci
+    product: 新媒体运营
+    note: "Line 00 Session Health WS4 — Playwright E2E operator-sessions.spec.ts 存在性验证"
+
+  - id: line00-session-health-ws5-qr-bind
+    path: sprints/line00-session-health-medium/tests/ws5/qr-bind-operator.test.ts
+    type: unit
+    ci: L3
+    status: pending-ci
+    product: 新媒体运营
+    note: "Line 00 Session Health WS5 — Agent qr-bind-operator handler + dispatcher 注册"
+
+  - id: line00-session-health-ws6-health-check
+    path: sprints/line00-session-health-medium/tests/ws6/session-health-check.test.ts
+    type: integration
+    ci: L4
+    status: pending-ci
+    product: 新媒体运营
+    note: "Line 00 Session Health WS6 — GHA session-health-check.yml + check-health.js 修正（missing≠ok + 飞书告警）"
+
+  - id: line00-session-health-ws4-playwright-spec
+    path: apps/dashboard/e2e/operator-sessions.spec.ts
+    type: e2e
+    ci: windows_cloud
+    status: active
+    product: 新媒体运营
+    note: "Line 00 Session Health WS4 — Dashboard 运营中枢 E2E Playwright spec：8 平台行断言 + status badge + 登录按钮 + 非运营员 redirect 守卫（page.route stub，active 枚举）"

@@ -255,6 +255,7 @@ export interface VideoPipelineJob {
   topic: string | null;
   status: string;
   template_id: string | null;
+  target_aspect?: string | null;
 }
 
 export async function processVideoPipelineJob(
@@ -306,18 +307,24 @@ export async function processVideoPipelineJob(
       if (!(duration > 0)) throw new Error(`invalid duration output: "${stdout.trim()}"`);
     }, 3, 1_000);
 
-    // Rotation detection — non-fatal (rotation=0 is safe default).
+    // Rotation + dimension detection — non-fatal (defaults are safe).
     // JSON mode captures both legacy stream_tags.rotate AND modern Display Matrix side data.
     // Modern iPhones and Android phones store rotation in Display Matrix, not the rotate tag.
+    let rawWidth = 0;
+    let rawHeight = 0;
     try {
       const rotCmd = `${quoteArg(ffprobePath)} -v error -select_streams v:0 -print_format json -show_streams ${quoteArg(videoPath)}`;
       const { stdout: rotOut } = await execAsync(rotCmd, { windowsHide: true, timeout: 10_000, maxBuffer: 512 * 1024 });
       interface FfprobeStream {
+        width?: number;
+        height?: number;
         tags?: { rotate?: string };
         side_data_list?: Array<{ side_data_type?: string; rotation?: number }>;
       }
       const probe = JSON.parse(rotOut) as { streams?: FfprobeStream[] };
       const vStream = probe.streams?.[0];
+      rawWidth = vStream?.width ?? 0;
+      rawHeight = vStream?.height ?? 0;
       // 1. Display Matrix (modern phones): rotation is negative-CCW, -90 = needs 90° CW correction
       const displayMatrix = vStream?.side_data_list?.find(
         (sd) => sd.side_data_type === 'Display Matrix',
@@ -331,7 +338,25 @@ export async function processVideoPipelineJob(
       }
     } catch { /* non-fatal */ }
 
-    console.log(`[Step 1/7] ✓ duration=${duration.toFixed(1)}s rotation=${videoRotation}° (0=no rotation or not detected)`);
+    // Swap dimensions when video is rotated 90° or 270° (phone portrait video)
+    const effectiveWidth = (videoRotation === 90 || videoRotation === 270) ? rawHeight : rawWidth;
+    const effectiveHeight = (videoRotation === 90 || videoRotation === 270) ? rawWidth : rawHeight;
+    const detectedAspect: '9:16' | '16:9' = (effectiveWidth > 0 && effectiveWidth < effectiveHeight) ? '9:16' : '16:9';
+
+    // PATCH detected_aspect back to API (fire-and-forget, non-fatal)
+    fetch(`${apiBase}/api/ai-video/jobs/${id}/progress`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ detected_aspect: detectedAspect }),
+    }).catch((e: Error) => console.warn('[Step 1/7] detected_aspect PATCH failed (non-fatal):', e.message));
+
+    // Use explicit target if valid ('9:16' or '16:9'); fall back to detectedAspect for null/undefined/other
+    const effectiveTarget: '9:16' | '16:9' =
+      (job.target_aspect === '9:16' || job.target_aspect === '16:9')
+        ? job.target_aspect
+        : detectedAspect;
+
+    console.log(`[Step 1/7] ✓ duration=${duration.toFixed(1)}s rotation=${videoRotation}° dim=${effectiveWidth}×${effectiveHeight} detectedAspect=${detectedAspect} effectiveTarget=${effectiveTarget}`);
     fireProgress(apiBase, id, 20, 'step1_probe');
 
     // ── Step 2: audio extraction (REQUIRED, retry 3x) ──────────────────────
@@ -645,7 +670,7 @@ export async function processVideoPipelineJob(
     fireProgress(apiBase, id, 65, 'step5_html');
 
     // Step 6B: HyperFrames render
-    console.log(`[Step 6/7] HyperFrames: rendering HTML animation`);
+    console.log(`[Step 6/7] HyperFrames: rendering HTML animation (target=${effectiveTarget})`);
     const output916 = path.join(outputDir, '9_16.mp4');
     const output169 = path.join(outputDir, '16_9.mp4');
 
@@ -665,8 +690,8 @@ export async function processVideoPipelineJob(
     console.log(`[Step 6/7] ✓ HyperFrames rendered`);
     fireProgress(apiBase, id, 85, 'step6_hf');
 
-    // Step 7B: merge audio + crop outputs
-    console.log(`[Step 7/7] output: merging audio, writing 9:16 + 16:9`);
+    // Step 7B: merge audio + single-file output based on effectiveTarget
+    console.log(`[Step 7/7] output: merging audio, writing ${effectiveTarget}`);
     const mergedPath2 = path.join(tmpDir, 'rendered_with_audio.mp4');
     try {
       await runFfmpeg([
@@ -679,11 +704,14 @@ export async function processVideoPipelineJob(
       console.warn('[Step 7/7] ⚠ audio merge failed, using silent rendered video');
       fs.copyFileSync(rendered2, mergedPath2);
     }
-    fs.copyFileSync(mergedPath2, output169);
-    await runFfmpeg(['-y', '-i', mergedPath2,
-      '-vf', 'crop=ih*9/16:ih:(iw-ih*9/16)/2:0',
-      '-c:v', 'libx264', '-crf', '23', '-c:a', 'aac', '-b:a', '128k', output916,
-    ], { timeout: 300_000 });
+    if (effectiveTarget === '9:16') {
+      await runFfmpeg(['-y', '-i', mergedPath2,
+        '-vf', 'crop=ih*9/16:ih:(iw-ih*9/16)/2:0',
+        '-c:v', 'libx264', '-crf', '23', '-c:a', 'aac', '-b:a', '128k', output916,
+      ], { timeout: 300_000 });
+    } else {
+      fs.copyFileSync(mergedPath2, output169);
+    }
     console.log(`[Step 7/7] ✓ job ${id} done → ${outputDir}`);
     await reportComplete(apiBase, id, { output_dir: outputDir });
 

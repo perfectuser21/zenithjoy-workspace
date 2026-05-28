@@ -28,6 +28,8 @@ import { HeartbeatLoop, type HeartbeatTask } from './handlers/heartbeat-loop';
 import { handleQrBindDouyin } from './handlers/qr-bind-douyin';
 // Path 2 Sprint B-1 — burner 小号绑定 handler（独立文件，与 Path 1 主号物理隔离）
 import { handleQrBindDouyinBurner } from './handlers/qr-bind-douyin-burner';
+// 运营中枢 — 8 平台主号统一 qr-bind handler（Line 00 Session Health Medium）
+import { handleQrBindOperator } from './handlers/qr-bind-operator';
 // Path 4 Sprint 1 WS1 — wechat-rpa handler (Python dryrun stub, 真 wechat_bot.py 在 WS3/4 接)
 import { handleWechatRpa, type WechatRpaTask } from './handlers/wechat-rpa';
 import { createFolderWatchManager } from './handlers/folder-watch';
@@ -644,6 +646,20 @@ function startWs1HeartbeatLoop(cfg: AgentConfig): void {
           cookie_local_path: res.cookie_local_path,
           account_nickname: res.account_nickname,
         });
+      } else if (
+        task.platform === 'qr_bind/douyin' ||
+        task.platform === 'qr_bind/kuaishou' ||
+        task.platform === 'qr_bind/xiaohongshu' ||
+        task.platform === 'qr_bind/shipinhao' ||
+        task.platform === 'qr_bind/toutiao' ||
+        task.platform === 'qr_bind/weibo' ||
+        task.platform === 'qr_bind/zhihu' ||
+        task.platform === 'qr_bind/gongzhonghao'
+      ) {
+        // 运营中枢 8 平台主号扫码绑定（Line 00 Session Health Medium）
+        const platformName = task.platform.replace('qr_bind/', '');
+        const res = await handleQrBindOperator({ platform: platformName, ...task.payload as Record<string, unknown> });
+        console.log(`[ws1:${task.platform}] result: ok=${res.ok}`);
       } else if (
         task.platform === 'crawl_comments_douyin_burner' ||
         task.platform === 'crawl_comments/douyin_burner'
