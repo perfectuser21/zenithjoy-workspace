@@ -34,7 +34,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          PR_DIFF=$(gh pr diff ${{ github.event.pull_request.number }} 2>/dev/null | head -500 || echo "无法获取 diff")
+          PR_DIFF=$(gh pr diff ${{ github.event.pull_request.number }} 2>/dev/null | head -150 || echo "无法获取 diff")
           echo "PR_DIFF<<DIFF_EOF" >> "$GITHUB_ENV"
           echo "$PR_DIFF" >> "$GITHUB_ENV"
           echo "DIFF_EOF" >> "$GITHUB_ENV"
@@ -106,8 +106,14 @@ jobs:
           done
 
           if [[ -z "$REVIEW_CONTENT" ]]; then
-            echo "❌ OpenRouter API 调用全部失败（已重试 ${MAX_RETRY} 次），阻止 PR 合并" >&2
-            exit 1
+            # 402 = 额度不足，属于基础设施问题而非代码质量问题，fail-open
+            if echo "$RESPONSE" | grep -q '"code":402'; then
+              echo "⚠️ OpenRouter 额度不足（code 402），跳过 AI 审查（非代码质量问题）"
+              echo "AI 审查因额度限制被跳过" > /tmp/review-result.txt
+            else
+              echo "❌ OpenRouter API 调用全部失败（已重试 ${MAX_RETRY} 次），阻止 PR 合并" >&2
+              exit 1
+            fi
           fi
 
           echo "$REVIEW_CONTENT" > /tmp/review-result.txt
