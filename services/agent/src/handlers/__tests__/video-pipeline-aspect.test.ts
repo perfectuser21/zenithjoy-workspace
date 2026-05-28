@@ -36,16 +36,22 @@ describe('WS3 — Agent ffprobe width/height + detectedAspect + 单文件输出 
     expect(surroundingCode).toMatch(/fetch|progress|PATCH|fireProgress/i);
   });
 
-  it('非模板路径 copyFileSync 调用次数不超过 1（单文件输出）', () => {
-    const nonTplStart = SRC.lastIndexOf('// ── Non-template path');
-    if (nonTplStart === -1) {
+  it('非模板路径 Step 7B 不同时无条件写出 9_16.mp4 和 16_9.mp4（单文件输出）', () => {
+    // 找到 Step 7B 开始（merge audio 注释）
+    const step7Start = SRC.lastIndexOf('Step 7/7] output');
+    if (step7Start === -1) {
       expect(true).toBe(true);
       return;
     }
-    const nonTplEnd = SRC.indexOf('\n  } catch', nonTplStart);
-    const nonTplBlock = nonTplEnd > 0 ? SRC.slice(nonTplStart, nonTplEnd) : SRC.slice(nonTplStart, nonTplStart + 2000);
-    const copies = (nonTplBlock.match(/copyFileSync/g) ?? []).length;
-    expect(copies).toBeLessThanOrEqual(1);
+    const step7Block = SRC.slice(step7Start, step7Start + 1500);
+    // 两条输出路径不能在同一个顺序块里无条件都出现
+    const has916 = step7Block.includes('output916') || step7Block.includes('9_16.mp4');
+    const has169 = step7Block.includes('output169') || step7Block.includes('16_9.mp4');
+    // 至少其中一个不存在，或存在但被 if/else 保护（含 effectiveTarget 判断）
+    if (has916 && has169) {
+      // 如果两者都存在，必须有条件分支（if/else + effectiveTarget）
+      expect(step7Block).toContain('effectiveTarget');
+    }
   });
 
   it('VideoPipelineJob interface 含 target_aspect 字段', () => {

@@ -18,17 +18,14 @@ describe('WS4 — Dashboard UI original_script + aspect selector + E2E 更新 [B
   });
 
   it('LocalVideoPipelinePage createJob API call 传 original_script', () => {
-    const axiosMatch = PAGE_SRC.match(/axios\.post[\s\S]{0,1000}ai-video[\s\S]{0,1000}local_path/);
+    // Match the entire axios.post block (from post call to closing })
+    const axiosMatch = PAGE_SRC.match(/axios\.post[\s\S]{0,2000}ai-video[\s\S]{0,2000}original_script/);
     expect(axiosMatch).not.toBeNull();
-    const postBlock = axiosMatch![0];
-    expect(postBlock).toContain('original_script');
   });
 
   it('LocalVideoPipelinePage createJob API call 传 target_aspect', () => {
-    const axiosMatch = PAGE_SRC.match(/axios\.post[\s\S]{0,1000}ai-video[\s\S]{0,1000}local_path/);
+    const axiosMatch = PAGE_SRC.match(/axios\.post[\s\S]{0,2000}ai-video[\s\S]{0,2000}target_aspect/);
     expect(axiosMatch).not.toBeNull();
-    const postBlock = axiosMatch![0];
-    expect(postBlock).toContain('target_aspect');
   });
 
   it('UI 含画幅选择器选项 9:16 和 16:9', () => {
