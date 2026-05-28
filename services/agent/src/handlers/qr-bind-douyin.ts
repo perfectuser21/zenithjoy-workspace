@@ -49,7 +49,7 @@ export interface ChromiumBrowser {
 }
 
 export interface ChromiumLauncher {
-  launch(opts?: { headless?: boolean; args?: string[]; executablePath?: string }): Promise<ChromiumBrowser>;
+  launch(opts?: { headless?: boolean; args?: string[] }): Promise<ChromiumBrowser>;
 }
 
 export interface QrBindDouyinOptions {
@@ -63,22 +63,6 @@ export interface QrBindDouyinOptions {
 }
 
 const DEFAULT_SESSION_DIR_NAME = '.zenithjoy-agent';
-
-// Windows 10/11 Edge/Chrome 常见安装路径（Edge 总是存在）
-const WINDOWS_BROWSER_CANDIDATES = [
-  'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe',
-  'C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe',
-  'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
-  'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
-];
-
-function findSystemBrowser(): string | undefined {
-  if (process.platform !== 'win32') return undefined;
-  for (const p of WINDOWS_BROWSER_CANDIDATES) {
-    if (fs.existsSync(p)) return p;
-  }
-  return undefined;
-}
 
 export function getSessionPath(
   platform: string,
@@ -145,10 +129,8 @@ export async function handleQrBindDouyin(
 
   let browser: ChromiumBrowser | null = null;
   try {
-    const executablePath = findSystemBrowser();
     browser = await launcher.launch({
       headless,
-      executablePath,
       args: ['--no-sandbox', '--disable-setuid-sandbox'],
     });
     const ctx = await browser.newContext();

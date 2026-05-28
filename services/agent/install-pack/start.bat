@@ -140,28 +140,22 @@ if not exist "%ZJ_HF_MAIN%" (
 )
 :HYPERFRAMES_DONE
 
-REM Step 6: Find chrome.exe
-set "CHROME_EXE=%ProgramFiles%\Google\Chrome\Application\chrome.exe"
-if not exist "%CHROME_EXE%" set "CHROME_EXE=%ProgramFiles(x86)%\Google\Chrome\Application\chrome.exe"
-if not exist "%CHROME_EXE%" (
-    echo [ERROR] chrome.exe not found. Please install Chrome browser first.
-    pause
-    exit /b 1
+REM Step 6: 内置 Playwright Chromium 路径（打包在 playwright-browsers/ 目录里）
+REM Playwright 读 PLAYWRIGHT_BROWSERS_PATH 环境变量来定位 Chromium，无需依赖系统 Chrome
+set "PLAYWRIGHT_BROWSERS_PATH=%~dp0playwright-browsers"
+echo [playwright] PLAYWRIGHT_BROWSERS_PATH=%PLAYWRIGHT_BROWSERS_PATH%
+
+REM Step 6.5: 让 hyperframes 的 puppeteer-core 也用内置 Chromium（无需另装 Chrome）
+REM 找 chromium-*/chrome-win64/chrome.exe
+for /f "delims=" %%d in ('dir /b /ad "%PLAYWRIGHT_BROWSERS_PATH%\chromium-*" 2^>nul') do (
+    if exist "%PLAYWRIGHT_BROWSERS_PATH%\%%d\chrome-win64\chrome.exe" (
+        set "PUPPETEER_EXECUTABLE_PATH=%PLAYWRIGHT_BROWSERS_PATH%\%%d\chrome-win64\chrome.exe"
+        set "PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=1"
+        echo [puppeteer] using bundled Chromium: %%d\chrome-win64\chrome.exe
+    )
 )
 
-REM 让 hyperframes 的 puppeteer-core 使用系统 Chrome，避免重新下载 ~100MB Chromium
-set "PUPPETEER_EXECUTABLE_PATH=%CHROME_EXE%"
-set "PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=1"
-
-REM Step 7: Spawn chrome :19222 if not already listening
-netstat -ano | findstr ":19222 " | findstr LISTENING >nul 2>&1
-if errorlevel 1 (
-    echo [chrome] starting chrome on :19222 ...
-    start "" "%CHROME_EXE%" --remote-debugging-port=19222 --user-data-dir="%USERPROFILE%\.zj-chrome" --no-first-run
-    timeout /t 5 /nobreak >nul
-)
-
-REM Step 8: Spawn agent.exe (foreground)
+REM Step 7: Spawn agent.exe (foreground)
 mkdir "%USERPROFILE%\.zj" 2>nul
 echo [agent] starting zenithjoy-agent.exe ...
 zenithjoy-agent.exe
