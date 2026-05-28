@@ -41,6 +41,10 @@ export default function PublishPage() {
   // Sprint 2.1c: type radio 让客户选 image (默认) / video / article
   const [publishType, setPublishType] = useState<PublishType>('image');
 
+  // 快手不支持文章
+  const availableTypes: PublishType[] =
+    platform === 'kuaishou' ? ['image', 'video'] : ['image', 'video', 'article'];
+
   const { data: agentData } = useQuery({
     queryKey: ['ws1', 'agent-status'],
     queryFn: getAgentStatus,
@@ -63,7 +67,7 @@ export default function PublishPage() {
     mutationFn: () =>
       postPublishTask({
         agent_id: agentId!,
-        platform: platform === 'kuaishou' ? 'kuaishou' : 'douyin',
+        platform,
         folder_path: folderPath!,
         type: publishType,
       }),
@@ -127,14 +131,12 @@ export default function PublishPage() {
             >
               <input
                 type="radio"
-                name="publish-platform"
+                name="platform"
                 value={p}
                 checked={platform === p}
                 onChange={() => {
                   setPlatform(p);
-                  if (p === 'kuaishou' && publishType === 'article') {
-                    setPublishType('image');
-                  }
+                  if (p === 'kuaishou' && publishType === 'article') setPublishType('image');
                 }}
               />
               {PLATFORM_LABEL[p]}
@@ -155,7 +157,7 @@ export default function PublishPage() {
           <legend style={{ padding: '0 6px', fontSize: 13, color: '#6b7280' }}>
             内容类型
           </legend>
-          {(platform !== 'kuaishou' ? (['image', 'video', 'article'] as const) : (['image', 'video'] as const)).map((t) => (
+          {availableTypes.map((t) => (
             <label
               key={t}
               style={{
@@ -223,7 +225,7 @@ export default function PublishPage() {
             textAlign: 'center',
           }}
         >
-          暂无任务 — 点击上方"发布到抖音"创建第一个 dryrun。
+          暂无任务 — 选择平台和内容类型后点击发布按钮。
         </div>
       ) : (
         <table
