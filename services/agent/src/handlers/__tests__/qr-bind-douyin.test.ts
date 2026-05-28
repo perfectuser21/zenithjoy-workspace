@@ -4,7 +4,7 @@
 //
 // 验证：
 //   - getSessionPath 按约定 ~/.zenithjoy-agent/sessions/<platform>/<account_label>.json 计算
-//   - handleQrBindDouyin 调 chromiumLauncher.connectOverCDP('http://localhost:19222')
+//   - handleQrBindDouyin 调 chromiumLauncher.launch() 自启动 Chrome
 //   - 拿到 storageState 后写到 sessionPath
 //   - 写文件目录会自动 mkdir
 
@@ -35,28 +35,26 @@ describe('qr-bind-douyin', () => {
       tmpSessionDir = fs.mkdtempSync(path.join(os.tmpdir(), 'zj-agent-qr-'));
     });
 
-    it('connects to CDP 19222 and writes storageState to sessionPath', async () => {
+    it('launches browser and writes storageState to sessionPath', async () => {
       const fakeStorageState = {
         cookies: [{ name: 'sessionid', value: 'abc' }],
         origins: [],
       };
+      const mockPage = {
+        url: () => 'https://creator.douyin.com/creator-micro/home',
+        goto: vi.fn(),
+      };
       const context = {
-        pages: () => [{ url: () => 'https://creator.douyin.com/creator-micro/home' }],
+        pages: () => [mockPage],
         storageState: vi.fn(async () => fakeStorageState),
-        newPage: vi.fn(async () => ({
-          url: () => 'about:blank',
-          goto: vi.fn(),
-        })),
+        newPage: vi.fn(async () => mockPage),
       };
       const browser = {
-        contexts: () => [context],
+        newContext: vi.fn(async () => context),
         close: vi.fn(),
       };
       const chromiumLauncher = {
-        connectOverCDP: vi.fn(async (url: string) => {
-          expect(url).toBe('http://localhost:19222');
-          return browser;
-        }),
+        launch: vi.fn(async () => browser),
       };
 
       const res = await handleQrBindDouyin(
@@ -64,7 +62,6 @@ describe('qr-bind-douyin', () => {
         {
           sessionDir: tmpSessionDir,
           chromiumLauncher: chromiumLauncher as any,
-          // already 'logged in' — pretend ready instantly
           isLoggedIn: () => true,
           pollIntervalMs: 1,
           timeoutMs: 100,
@@ -75,17 +72,20 @@ describe('qr-bind-douyin', () => {
       expect(res.sessionPath).toBe(
         path.join(tmpSessionDir, 'douyin', 'default.json'),
       );
-      expect(chromiumLauncher.connectOverCDP).toHaveBeenCalledTimes(1);
+      expect(chromiumLauncher.launch).toHaveBeenCalledTimes(1);
+      expect(chromiumLauncher.launch).toHaveBeenCalledWith(
+        expect.objectContaining({ headless: false }),
+      );
       expect(context.storageState).toHaveBeenCalledTimes(1);
 
       const written = JSON.parse(fs.readFileSync(res.sessionPath, 'utf-8'));
       expect(written.cookies[0].value).toBe('abc');
     });
 
-    it('returns ok:false when CDP connect fails', async () => {
+    it('returns ok:false when launch fails', async () => {
       const chromiumLauncher = {
-        connectOverCDP: vi.fn(async () => {
-          throw new Error('ECONNREFUSED');
+        launch: vi.fn(async () => {
+          throw new Error('launch failed: cannot find Chrome executable');
         }),
       };
 
@@ -100,18 +100,25 @@ describe('qr-bind-douyin', () => {
       );
 
       expect(res.ok).toBe(false);
-      expect(res.error).toMatch(/ECONNREFUSED|connect/i);
+      expect(res.error).toMatch(/launch failed|chrome/i);
     });
 
     it('times out if user never logs in', async () => {
-      const context = {
-        pages: () => [{ url: () => 'https://creator.douyin.com/login' }],
-        storageState: vi.fn(async () => ({ cookies: [], origins: [] })),
-        newPage: vi.fn(),
+      const mockPage = {
+        url: () => 'https://creator.douyin.com/login',
+        goto: vi.fn(),
       };
-      const browser = { contexts: () => [context], close: vi.fn() };
+      const context = {
+        pages: () => [mockPage],
+        storageState: vi.fn(async () => ({ cookies: [], origins: [] })),
+        newPage: vi.fn(async () => mockPage),
+      };
+      const browser = {
+        newContext: vi.fn(async () => context),
+        close: vi.fn(),
+      };
       const chromiumLauncher = {
-        connectOverCDP: vi.fn(async () => browser),
+        launch: vi.fn(async () => browser),
       };
 
       const res = await handleQrBindDouyin(

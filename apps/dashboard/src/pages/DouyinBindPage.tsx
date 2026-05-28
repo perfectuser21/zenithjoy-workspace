@@ -134,7 +134,7 @@ export default function DouyinBindPage() {
       </section>
 
       <p style={{ color: '#6b7280', fontSize: 13, lineHeight: 1.6 }}>
-        点击按钮后，本地 Agent 会自动启动 Chrome（CDP 19222），
+        点击按钮后，本地 Agent 会自动启动 Chrome 浏览器窗口，
         请在浏览器中完成抖音扫码登录。session 文件保存在
         <code> ~/.zenithjoy-agent/sessions/douyin/default.json</code>。
       </p>

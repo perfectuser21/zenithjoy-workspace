@@ -509,6 +509,34 @@ function deriveHttpApiBase(cfg: AgentConfig): string | null {
     .replace(/\/agent-ws\/?$/, '');
 }
 
+// ────── qr_bind_douyin task-ack ──────
+// 没这个 → task 永远 pending → heartbeat 每 30s 重派 → Chrome 反复弹。
+
+async function postQrBindDouyinAck(
+  cfg: AgentConfig,
+  taskId: string,
+  result: string,
+): Promise<void> {
+  const apiBase = deriveHttpApiBase(cfg);
+  if (!apiBase) {
+    console.warn('[ws1:qr_bind_douyin] 无 apiBase，跳过 task-ack');
+    return;
+  }
+  try {
+    const resp = await fetch(`${apiBase}/api/agent/task-ack`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-license-key': cfg.licenseKey,
+      },
+      body: JSON.stringify({ task_id: taskId, result }),
+    });
+    console.log(`[ws1:qr_bind_douyin] task-ack HTTP ${resp.status} ${resp.ok ? 'OK' : 'FAIL'}`);
+  } catch (err) {
+    console.warn('[ws1:qr_bind_douyin] task-ack error:', (err as Error).message);
+  }
+}
+
 // ────── B-1 burner POST result helpers ──────
 // 没这俩 → task 永远 pending → heartbeat 重派 → chrome 重启撞 lock 一直闪。
 
@@ -629,6 +657,7 @@ function startWs1HeartbeatLoop(cfg: AgentConfig): void {
           task.payload as { account_label?: string },
         );
         console.log('[ws1:qr_bind_douyin] result:', res);
+        await postQrBindDouyinAck(cfg, task.task_id, res.qr_login ?? (res.ok ? 'success' : 'failed'));
       } else if (
         task.platform === 'qr_bind_douyin_burner' ||
         task.platform === 'qr_bind/douyin_burner'
