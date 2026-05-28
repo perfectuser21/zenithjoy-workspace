@@ -33,7 +33,7 @@ echo OK
 ```bash
 RESP=$(curl -sf -w "\n%{http_code}" -X POST "localhost:3000/api/ai-video-pipeline/" \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer ZJ-F-FBFYTLFR" \
+  -H "Authorization: Bearer $ZENITHJOY_LICENSE" \
   -d '{"local_path":"C:\\test.mp4","topic":"test","original_script":"录制前文案","target_aspect":"9:16"}')
 
 HTTP_CODE=$(echo "$RESP" | tail -1)

@@ -123,3 +123,7 @@ bf08663c9c9712bb698808867d05d0158efc3ead:sprints/zj-ai-video-ws1-ws3-ws4/contrac
 bf08663c9c9712bb698808867d05d0158efc3ead:sprints/zj-ai-video-ws1-ws3-ws4/contract-dod-ws1.md:curl-auth-header:88
 bf08663c9c9712bb698808867d05d0158efc3ead:sprints/zj-ai-video-ws1-ws3-ws4/contract-dod-ws1.md:curl-auth-header:93
 bf08663c9c9712bb698808867d05d0158efc3ead:sprints/zj-ai-video-ws1-ws3-ws4/contract-draft.md:curl-auth-header:34
+
+# WS1 squash rebase commit — contract-draft.md line 36 原有 ZJ-F-FBFYTLFR（测试用途），
+# 后续 commit 已替换为 $ZENITHJOY_LICENSE 变量引用
+269d3891f3044ab888149366f72c3f904a599574:sprints/zj-ai-video-ws1-ws3-ws4/contract-draft.md:curl-auth-header:34
