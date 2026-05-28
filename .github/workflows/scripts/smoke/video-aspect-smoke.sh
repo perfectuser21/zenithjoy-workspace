@@ -2,7 +2,7 @@
 # video-aspect-smoke.sh — WS3 API smoke: target_aspect + detected_aspect field support
 set -euo pipefail
 API_BASE="${API_BASE:-http://localhost:3001}"
-LICENSE_KEY="${ZJ_E2E_LICENSE_KEY:-ZJ-F-FBFYTLFR}" # gitleaks:allow — E2E test license
+LICENSE_KEY="${ZJ_E2E_LICENSE_KEY:?ZJ_E2E_LICENSE_KEY env var must be set}"
 ok()   { echo "✅ $1"; }
 fail() { echo "❌ $1"; exit "${2:-1}"; }
 

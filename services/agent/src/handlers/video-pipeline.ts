@@ -348,8 +348,9 @@ export async function processVideoPipelineJob(
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ detected_aspect: detectedAspect }),
-    }).catch(() => {});
+    }).catch((e: Error) => console.warn('[Step 1/7] detected_aspect PATCH failed (non-fatal):', e.message));
 
+    // Use explicit target if valid ('9:16' or '16:9'); fall back to detectedAspect for null/undefined/other
     const effectiveTarget: '9:16' | '16:9' =
       (job.target_aspect === '9:16' || job.target_aspect === '16:9')
         ? job.target_aspect
