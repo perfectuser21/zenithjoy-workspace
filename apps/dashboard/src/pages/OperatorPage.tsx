@@ -1,53 +1,75 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 
 const OPERATOR_EMAIL = 'xuxiao21xx@icloud.com';
 
-const PLATFORMS = ['抖音', '快手', '小红书', '视频号', '头条', '微博', '知乎', '公众号'] as const;
-const ACCOUNT_TYPES = ['MAIN', 'SUB_1', 'SUB_2', 'SUB_3'] as const;
+const PLATFORMS = [
+  { key: 'douyin', label: '抖音' },
+  { key: 'kuaishou', label: '快手' },
+  { key: 'xiaohongshu', label: '小红书' },
+  { key: 'shipinhao', label: '视频号' },
+  { key: 'toutiao', label: '头条' },
+  { key: 'weibo', label: '微博' },
+  { key: 'zhihu', label: '知乎' },
+  { key: 'gongzhonghao', label: '公众号' },
+] as const;
 
-type AccountType = typeof ACCOUNT_TYPES[number];
-type Platform = typeof PLATFORMS[number];
-type SessionStatus = 'ok' | 'expired' | 'missing';
+type PlatformKey = typeof PLATFORMS[number]['key'];
+type SessionStatus = 'active' | 'expired' | 'missing';
 
-interface SessionCell {
+interface SessionRow {
+  platform: PlatformKey;
+  secretName: string;
   status: SessionStatus;
-  lastSync: string | null;
-}
-
-type StatusMatrix = Record<Platform, Record<AccountType, SessionCell>>;
-
-function makeEmptyMatrix(): StatusMatrix {
-  const matrix = {} as StatusMatrix;
-  for (const p of PLATFORMS) {
-    matrix[p] = {} as Record<AccountType, SessionCell>;
-    for (const a of ACCOUNT_TYPES) {
-      matrix[p][a] = { status: 'missing', lastSync: null };
-    }
-  }
-  return matrix;
+  lastCheckedAt: string | null;
+  lastValidAt: string | null;
 }
 
 function StatusBadge({ status }: { status: SessionStatus }) {
-  if (status === 'ok') return <span className="inline-flex items-center gap-1 text-green-600 text-xs">🟢 在线</span>;
-  if (status === 'expired') return <span className="inline-flex items-center gap-1 text-red-500 text-xs">🔴 离线</span>;
-  return <span className="inline-flex items-center gap-1 text-gray-400 text-xs">⚫ 未配置</span>;
+  if (status === 'active') return <span className="inline-flex items-center gap-1 text-green-600 text-xs font-medium">🟢 在线</span>;
+  if (status === 'expired') return <span className="inline-flex items-center gap-1 text-red-500 text-xs font-medium">🔴 离线</span>;
+  return <span className="inline-flex items-center gap-1 text-gray-400 text-xs font-medium">⚫ 未配置</span>;
+}
+
+function formatTime(iso: string | null): string {
+  if (!iso) return '—';
+  try {
+    return new Date(iso).toLocaleString('zh-CN', { hour12: false });
+  } catch {
+    return iso;
+  }
 }
 
 export default function OperatorPage() {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const [matrix, setMatrix] = useState<StatusMatrix>(makeEmptyMatrix());
-  const [syncing, setSyncing] = useState(false);
+  const [sessions, setSessions] = useState<SessionRow[]>([]);
+  const [bindingPlatform, setBindingPlatform] = useState<string | null>(null);
 
   const isOperator = user?.email === OPERATOR_EMAIL;
+
+  const fetchSessions = useCallback(async () => {
+    try {
+      const res = await fetch('/api/operator/sessions');
+      if (res.ok) {
+        const data = await res.json();
+        setSessions(data);
+      }
+    } catch {
+      // fetch failed, keep current state
+    }
+  }, []);
 
   useEffect(() => {
     if (!isOperator) {
       navigate('/', { replace: true });
+      return;
     }
-  }, [isOperator, navigate]);
+    fetchSessions();
+    const interval = setInterval(fetchSessions, 30000);
+    return () => clearInterval(interval);
+  }, [isOperator, navigate, fetchSessions]);
 
   if (!isOperator) {
     return (
@@ -57,61 +79,72 @@ export default function OperatorPage() {
     );
   }
 
-  async function handleSync() {
-    setSyncing(true);
+  async function handleLogin(platformKey: string) {
+    setBindingPlatform(platformKey);
     try {
-      const res = await fetch('/api/operator/sessions/sync', { method: 'POST' });
-      if (res.ok) {
-        const data = await res.json();
-        if (data?.matrix) setMatrix(data.matrix);
-      }
+      await fetch('/api/operator/sessions/trigger-bind', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ platform: platformKey }),
+      });
     } finally {
-      setSyncing(false);
+      setBindingPlatform(null);
+      await fetchSessions();
     }
   }
+
+  const sessionMap = new Map(sessions.map((s) => [s.platform, s]));
 
   return (
     <div className="p-6">
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-xl font-bold">运营员控制台 — Session 状态矩阵</h1>
-        <button
-          onClick={handleSync}
-          disabled={syncing}
-          className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 text-sm"
-        >
-          {syncing ? '同步中…' : '立即同步'}
-        </button>
+        <h1 className="text-xl font-bold">运营员控制台 — Session 健康监控</h1>
+        <span className="text-xs text-gray-400">每 30 秒自动刷新</span>
       </div>
 
       <div className="overflow-auto">
         <table className="min-w-full border-collapse text-sm">
           <thead>
             <tr className="bg-gray-50">
-              <th className="border border-gray-200 px-3 py-2 text-left font-medium text-gray-600">平台</th>
-              {ACCOUNT_TYPES.map(a => (
-                <th key={a} className="border border-gray-200 px-3 py-2 text-center font-medium text-gray-600">
-                  {a}
-                </th>
-              ))}
+              <th className="border border-gray-200 px-4 py-2 text-left font-medium text-gray-600">平台</th>
+              <th className="border border-gray-200 px-4 py-2 text-center font-medium text-gray-600">状态</th>
+              <th className="border border-gray-200 px-4 py-2 text-center font-medium text-gray-600">最近检查</th>
+              <th className="border border-gray-200 px-4 py-2 text-center font-medium text-gray-600">最近有效</th>
+              <th className="border border-gray-200 px-4 py-2 text-center font-medium text-gray-600">操作</th>
             </tr>
           </thead>
           <tbody>
-            {PLATFORMS.map(platform => (
-              <tr key={platform} className="hover:bg-gray-50">
-                <td className="border border-gray-200 px-3 py-2 font-medium">{platform}</td>
-                {ACCOUNT_TYPES.map(acType => {
-                  const cell = matrix[platform][acType];
-                  return (
-                    <td key={acType} className="border border-gray-200 px-3 py-2 text-center">
-                      <StatusBadge status={cell.status} />
-                      {cell.lastSync && (
-                        <div className="text-gray-400 text-xs mt-1">{cell.lastSync}</div>
-                      )}
-                    </td>
-                  );
-                })}
-              </tr>
-            ))}
+            {PLATFORMS.map(({ key, label }) => {
+              const row = sessionMap.get(key);
+              const status: SessionStatus = row?.status ?? 'missing';
+              const lastCheckedAt = row?.lastCheckedAt ?? null;
+              const lastValidAt = row?.lastValidAt ?? null;
+              const isBinding = bindingPlatform === key;
+
+              return (
+                <tr key={key} className="hover:bg-gray-50">
+                  <td className="border border-gray-200 px-4 py-3 font-medium">{label}</td>
+                  <td className="border border-gray-200 px-4 py-3 text-center">
+                    <StatusBadge status={status} />
+                  </td>
+                  <td className="border border-gray-200 px-4 py-3 text-center text-xs text-gray-500">
+                    {formatTime(lastCheckedAt)}
+                  </td>
+                  <td className="border border-gray-200 px-4 py-3 text-center text-xs text-gray-500">
+                    {formatTime(lastValidAt)}
+                  </td>
+                  <td className="border border-gray-200 px-4 py-3 text-center">
+                    <button
+                      onClick={() => handleLogin(key)}
+                      disabled={isBinding}
+                      className="px-3 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
+                    >
+                      {isBinding ? '绑定中…' : '登录'}
+                    </button>
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
