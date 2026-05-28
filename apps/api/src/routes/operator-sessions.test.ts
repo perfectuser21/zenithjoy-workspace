@@ -30,7 +30,33 @@ describe('operator-sessions routes', () => {
   });
 
   describe('POST /api/operator/sessions/trigger-bind', () => {
+    it('regression: 必须写 publish_tasks（qr_bind/<platform>）— 否则 agent Chrome 永不弹', async () => {
+      // Bug: 之前 trigger-bind 只返回 202 + taskId 但从未写 DB，agent heartbeat 永远拿不到任务
+      const pool = (await import('../db/connection')).default as { query: ReturnType<typeof vi.fn> };
+      pool.query
+        .mockResolvedValueOnce({ rows: [{ id: 'agent-test-uuid' }], rowCount: 1 }) // agents SELECT
+        .mockResolvedValueOnce({ rows: [{ id: 'task-test-uuid' }], rowCount: 1 }); // publish_tasks INSERT
+      const res = await request(app)
+        .post('/api/operator/sessions/trigger-bind')
+        .send({ platform: 'douyin' });
+      expect(res.status).toBe(202);
+      // 必须真的写了 publish_tasks
+      const insertCall = pool.query.mock.calls.find(
+        (call: unknown[]) => typeof call[0] === 'string' && (call[0] as string).includes('publish_tasks')
+      );
+      expect(insertCall).toBeDefined();
+      const sql = insertCall![0] as string;
+      expect(sql).toContain("'queued'");
+      // 平台格式必须是 qr_bind/<platform>
+      const params = insertCall![1] as string[];
+      expect(params[1]).toBe('qr_bind/douyin');
+    });
+
     it('返回 202 + {ok,platform,taskId}，keys 完全等于期望集合', async () => {
+      const pool = (await import('../db/connection')).default as { query: ReturnType<typeof vi.fn> };
+      pool.query
+        .mockResolvedValueOnce({ rows: [{ id: 'agent-test-uuid' }], rowCount: 1 })
+        .mockResolvedValueOnce({ rows: [{ id: 'task-test-uuid' }], rowCount: 1 });
       const res = await request(app)
         .post('/api/operator/sessions/trigger-bind')
         .send({ platform: 'douyin' });
@@ -41,7 +67,20 @@ describe('operator-sessions routes', () => {
       expect(Object.keys(res.body).sort()).toEqual(['ok', 'platform', 'taskId']);
     });
 
+    it('无 agent 连接时返回 503', async () => {
+      // pool.query 默认 mock 返回 { rows: [] }，即 agent 未连接
+      const res = await request(app)
+        .post('/api/operator/sessions/trigger-bind')
+        .send({ platform: 'kuaishou' });
+      expect(res.status).toBe(503);
+      expect(typeof res.body.error).toBe('string');
+    });
+
     it('response 不含禁用字段 id/task/jobId/requestId', async () => {
+      const pool = (await import('../db/connection')).default as { query: ReturnType<typeof vi.fn> };
+      pool.query
+        .mockResolvedValueOnce({ rows: [{ id: 'agent-test-uuid' }], rowCount: 1 })
+        .mockResolvedValueOnce({ rows: [{ id: 'task-test-uuid' }], rowCount: 1 });
       const res = await request(app)
         .post('/api/operator/sessions/trigger-bind')
         .send({ platform: 'kuaishou' });

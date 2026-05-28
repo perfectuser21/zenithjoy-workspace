@@ -1,5 +1,4 @@
 import { Router, Request, Response } from 'express';
-import { randomUUID } from 'crypto';
 import pool from '../db/connection';
 import { internalAuth } from '../middleware/internal-auth';
 import { superAdminGuard } from '../middleware/super-admin';
@@ -23,7 +22,7 @@ function buildSecretName(platform: string): string {
   return `${platform.toUpperCase()}_COOKIES`;
 }
 
-// POST /trigger-bind — 派发平台绑定任务给 Agent
+// POST /trigger-bind — 派发平台绑定任务给 Agent（写 publish_tasks，agent 下次 heartbeat 拉到）
 router.post('/trigger-bind', superAdminGuard, async (req: Request, res: Response) => {
   const { platform } = req.body || {};
 
@@ -33,8 +32,29 @@ router.post('/trigger-bind', superAdminGuard, async (req: Request, res: Response
     });
   }
 
-  const taskId = randomUUID();
-  return res.status(202).json({ ok: true, platform, taskId });
+  // 找最近 5 分钟内有心跳的 agent（运营中枢只有 xian-pc 一台 operator agent）
+  const { rows: agents } = await pool.query<{ id: string }>(
+    `SELECT id FROM zenithjoy.agents
+     WHERE last_heartbeat_at > NOW() - INTERVAL '5 minutes'
+     ORDER BY last_heartbeat_at DESC
+     LIMIT 1`
+  );
+
+  if (agents.length === 0) {
+    return res.status(503).json({
+      error: 'Agent 未连接，请确认 xian-pc 上的 Agent 正在运行并联网',
+    });
+  }
+
+  const agentId = agents[0].id;
+  const { rows } = await pool.query<{ id: string }>(
+    `INSERT INTO zenithjoy.publish_tasks (agent_id, platform, status)
+     VALUES ($1, $2, 'queued')
+     RETURNING id`,
+    [agentId, `qr_bind/${platform}`]
+  );
+
+  return res.status(202).json({ ok: true, platform, taskId: rows[0].id });
 });
 
 // POST /upload-cookies — Agent 上传 storageState，写入 GitHub Secrets
