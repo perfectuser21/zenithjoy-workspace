@@ -315,19 +315,13 @@ curl -s -X PATCH localhost:5221/api/brain/journey_features/c85f9fac68a642efaefe9
 - [ ] **Step 2: 注册测试到 test_registry**
 
 ```bash
-node -e "
-const {Client}=require('pg');
-const c=new Client({connectionString:'postgresql://localhost/cecelia'});
-c.connect().then(async()=>{
-  await c.query(\`INSERT INTO test_registry(name,path,type,journey_id,feature_id,created_at,updated_at)
-    VALUES('operator session sync tests','apps/api/src/routes/operator.test.ts','integration',
-    '636a918c-...',  -- ZenithJoy 运营中枢 journey_id (full UUID)
-    'c85f9fac-...',  -- feature_id (full UUID)
-    NOW(),NOW())
-    ON CONFLICT DO NOTHING\`);
-  await c.end();
-});
-"
+curl -s -X POST localhost:5221/api/brain/registry \
+  -H "Content-Type: application/json" \
+  -d '{
+    "type": "test",
+    "name": "operator session sync tests",
+    "path": "apps/api/src/routes/operator.test.ts",
+    "journey_id": "636a918c-8b23-4df5-baec-b1eb3308fffb",
+    "feature_id": "c85f9fac-a231-4c9a-b637-20b7a12f486b"
+  }'
 ```
-
-> 注：UUID 需从 Brain API 拿完整值。如 Brain API 不可用可跳过此步，在 PR 描述里手动注明。
