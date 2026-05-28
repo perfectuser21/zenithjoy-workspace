@@ -1,5 +1,6 @@
 // @ts-check
 import { test, expect } from '@playwright/test';
+import fs from 'fs';
 
 const BASE  = 'https://autopilot.zenjoymedia.media';
 // URL-decode in case token was copied from Set-Cookie header (contains %2B, %3D for +, =)
@@ -142,15 +143,24 @@ test('Agent E2E — 口播视频本地生成全链路', async ({ page, context }
   await page.screenshot({ path: 'screenshots/ws3-05-final.png', fullPage: true });
   expect(done, `视频应在 15 分钟内处理完成 (last api status: ${lastApiStatus})`).toBe(true);
 
-  // Verify detected_aspect was set by Agent
+  // Verify output quality and write job metadata for GHA ffprobe verification
   if (jobId) {
     const jobResp = await page.evaluate(async ({ id, lic }) => {
       const r = await fetch(`/api/ai-video/jobs/${id}`, { headers: { Authorization: `Bearer ${lic}` } });
       return r.ok ? r.json() : null;
     }, { id: jobId, lic: E2E_LICENSE });
     if (jobResp) {
-      console.log(`[e2e] detected_aspect=${jobResp.detected_aspect} target_aspect=${jobResp.target_aspect}`);
+      console.log(`[e2e] detected_aspect=${jobResp.detected_aspect} target_aspect=${jobResp.target_aspect} output_dir=${jobResp.output_dir}`);
       expect(['9:16', '16:9', null]).toContain(jobResp.detected_aspect);
+      expect(jobResp.output_dir, 'output_dir must be set — pipeline must produce a file').toBeTruthy();
+      // Write job metadata for GHA post-test ffprobe verification
+      fs.writeFileSync('e2e-job-result.json', JSON.stringify({
+        jobId,
+        outputDir: jobResp.output_dir,
+        detectedAspect: jobResp.detected_aspect,
+        targetAspect: jobResp.target_aspect,
+      }));
+      console.log('[e2e] job metadata written to e2e-job-result.json');
     }
   }
 });

@@ -225,6 +225,30 @@ jobs:
           New-Item -ItemType Directory -Force -Path screenshots | Out-Null
           npx playwright test e2e/agent-video-pipeline.spec.js --reporter=list
 
+      - name: Verify output video quality (ffprobe)
+        shell: powershell
+        env:
+          ZJ_E2E_LICENSE_KEY: ${{ env.ZJ_E2E_LICENSE_KEY }}
+        run: |
+          if (-not (Test-Path "e2e-job-result.json")) {
+            Write-Host "[verify] e2e-job-result.json not found — Playwright test may have failed before writing it"
+            exit 0
+          }
+          $meta = Get-Content "e2e-job-result.json" | ConvertFrom-Json
+          $outputDir = $meta.outputDir
+          Write-Host "[verify] output_dir=$outputDir"
+          if (-not $outputDir) { Write-Error "output_dir is empty — pipeline did not produce output"; exit 1 }
+          $video = Get-ChildItem $outputDir -Filter "*.mp4" -ErrorAction SilentlyContinue | Select-Object -First 1
+          if (-not $video) { Write-Error "No .mp4 found in $outputDir"; exit 1 }
+          Write-Host "[verify] checking $($video.FullName) ($([math]::Round($video.Length/1MB, 1)) MB)"
+          $probeJson = & ffprobe -v error -show_streams -of json $video.FullName 2>&1 | Out-String
+          $probe = $probeJson | ConvertFrom-Json
+          $hasVideo = $probe.streams | Where-Object { $_.codec_type -eq "video" }
+          $hasAudio = $probe.streams | Where-Object { $_.codec_type -eq "audio" }
+          if (-not $hasVideo) { Write-Error "[verify] FAIL: output video has no video stream"; exit 1 }
+          if (-not $hasAudio) { Write-Error "[verify] FAIL: output video has no audio stream"; exit 1 }
+          Write-Host "[verify] PASS: video=$($hasVideo.codec_name) audio=$($hasAudio.codec_name) duration=$($hasVideo.duration)s"
+
       - name: Upload screenshots
         if: always()
         uses: actions/upload-artifact@v4

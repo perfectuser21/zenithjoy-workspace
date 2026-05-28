@@ -286,7 +286,15 @@ export async function composeHtml(req: Request, res: Response, next: NextFunctio
 })();`;
     }).join('');
 
-    const videoEl = `<video id="main-video" data-start="0" data-duration="${duration}" src="${video_filename}" muted playsinline style="width:252px;height:448px;object-fit:cover;border-radius:32px"></video>`;
+    // Placeholder div — HyperFrames is screenshot-based and cannot play <video> elements.
+    // The agent overlays the original video here via ffmpeg after HyperFrames renders.
+    const VIDEO_W = 252, VIDEO_H = 448;
+    const panelH = 1080;
+    const logoH = logo_filename ? (16 + 80) : 0; // gap + img height
+    const videoY = Math.round((panelH - VIDEO_H - logoH) / 2);
+    const videoX = Math.round((320 - VIDEO_W) / 2); // = 34
+    const videoRect = { x: videoX, y: videoY, w: VIDEO_W, h: VIDEO_H };
+    const videoEl = `<div id="video-placeholder" style="width:${VIDEO_W}px;height:${VIDEO_H}px;background:#111;border-radius:32px;overflow:hidden;flex-shrink:0;"></div>`;
     const logoEl = logo_filename ? `<img src="${logo_filename}" style="width:80px;height:80px;object-fit:contain;margin-top:16px">` : '';
     const gsapJs = await gsapInline();
 
@@ -331,7 +339,7 @@ window.__hf = { duration: ${duration}, seek: function(t){ tl.seek(t, false); } }
 </body>
 </html>`;
 
-    res.json({ html });
+    res.json({ html, videoRect });
   } catch (err) { next(err); }
 }
 
