@@ -1,44 +1,97 @@
-contract_branch: cp-harness-propose-r1-bbd3a1c0
+contract_branch: cp-05281336-ws-bbd3a1c0-ws4
 workstream_index: 3
-sprint_dir: sprints/zj-ai-video-ws3-ws4
+sprint_dir: sprints/zj-ai-video-ws1-ws3-ws4
 
 ---
 skeleton: false
 journey_type: user_facing
 ---
-# Contract DoD — Workstream 3: GHA workflow default version → 1.1.31
+# Contract DoD — Workstream 3 (ws4): E2E spec 更新 + Agent v1.1.29 + GHA 更新
 
-**范围**: `.github/workflows/agent-e2e-video.yml` 的 `agent_version` input `default:` 从 `"1.1.30"` 改为 `"1.1.31"`（对齐 `services/agent/package.json` version=1.1.31）
-**大小**: S（~3 行净增，1 文件）
-**依赖**: Workstream 2 完成后
+**范围**: e2e/agent-video-pipeline.spec.js 补充 original_script 填写 + W-G 模板 + 9:16 选择 + detected_aspect API 验证；services/agent/package.json version → 1.1.29；.github/workflows/agent-e2e-video.yml default version → 1.1.29；agent-installpack.yml 自动触发路径确认
+**大小**: S（~70 行净增/修改，4 文件）
+**依赖**: Workstream 2 完成后（E2E 验证 WS1+WS2 全链路功能）
+
+---
 
 ## ARTIFACT 条目
 
-- [ ] [ARTIFACT] `agent-e2e-video.yml` 的 `default:` 字段值更新为 "1.1.31"
-  Test: node -e "const c=require('fs').readFileSync('.github/workflows/agent-e2e-video.yml','utf8');const m=c.match(/agent_version:[\s\S]*?default:\s*\"([^\"]+)\"/);if(!m){process.exit(1)}if(m[1]!=='1.1.31'){console.error('FAIL: default='+m[1]+' 非 1.1.31');process.exit(1)}console.log('ARTIFACT OK')"
+- [x] [ARTIFACT] `e2e/agent-video-pipeline.spec.js` 含 original_script 填写步骤
+  Test: node -e "const c=require('fs').readFileSync('e2e/agent-video-pipeline.spec.js','utf8');if(!c.includes('original_script'))process.exit(1);console.log('OK')"
+
+- [x] [ARTIFACT] `e2e/agent-video-pipeline.spec.js` 含 detected_aspect API 验证
+  Test: node -e "const c=require('fs').readFileSync('e2e/agent-video-pipeline.spec.js','utf8');if(!c.includes('detected_aspect'))process.exit(1);console.log('OK')"
+
+- [x] [ARTIFACT] `.github/workflows/agent-e2e-video.yml` agent_version default 值为 "1.1.29"
+  Test: node -e "const c=require('fs').readFileSync('.github/workflows/agent-e2e-video.yml','utf8');if(!c.includes('1.1.29'))process.exit(1);console.log('OK')"
+
+- [x] [ARTIFACT] `services/agent/package.json` version 字段为 "1.1.29"
+  Test: node -e "const p=require('./services/agent/package.json');if(p.version!=='1.1.29')process.exit(1);console.log('OK')"
+
+---
 
 ## BEHAVIOR 条目
 
-### BEHAVIOR 1: GHA default == agent package.json version（两者对齐）
-
-- [ ] [BEHAVIOR] `.github/workflows/agent-e2e-video.yml` 的 `default:` 值等于 `services/agent/package.json` 的 `version`
-  Test: manual:bash -c 'AGENT_VER=$(node -e "console.log(require(\"./services/agent/package.json\").version)") && GHA_VER=$(grep -m1 "default:" .github/workflows/agent-e2e-video.yml | sed "s/.*default: *\"\([^\"]*\)\".*/\1/" | tr -d " ") && echo "agent=$AGENT_VER gha=$GHA_VER" && [ "$AGENT_VER" = "$GHA_VER" ] || { echo "FAIL: 版本不匹配"; exit 1; } && echo OK'
+- [x] [BEHAVIOR] E2E spec 含 W-G 模板选择步骤 + original_script 文案填写动作（fill/type/locator）
+  Test: manual:bash -c '
+    node -e "
+      const c = require(\"fs\").readFileSync(\"e2e/agent-video-pipeline.spec.js\",\"utf8\");
+      if (!c.includes(\"original_script\")) process.exit(1);
+      if (!c.includes(\"W-G\") && !c.includes(\"WG\") && !c.includes(\"W_G\")) process.exit(1);
+      const hasAction = c.includes(\"fill\") || c.includes(\"type\") || c.includes(\"locator\");
+      if (!hasAction) process.exit(1);
+      console.log(\"OK\");
+    " || { echo "FAIL: E2E spec 缺 W-G 模板选择或 original_script 填写动作"; exit 1; }
+  '
   期望: OK
 
-### BEHAVIOR 2: GHA default 具体值为 "1.1.31"（PRD 修正版本目标）
-
-- [ ] [BEHAVIOR] GHA workflow default 明确等于 "1.1.31"（不是 1.1.30 或更低版本）
-  Test: manual:bash -c 'node -e "const c=require(\"fs\").readFileSync(\".github/workflows/agent-e2e-video.yml\",\"utf8\");const m=c.match(/default:\\s*\\\"([^\\\"]+)\\\"/);if(!m){console.error(\"FAIL: 找不到 default 字段\");process.exit(1);}if(m[1]!==\"1.1.31\"){console.error(\"FAIL: default=\"+m[1]+\" 非 1.1.31，当前仍是旧版\");process.exit(1);}console.log(\"OK\");"'
+- [x] [BEHAVIOR] E2E spec 含 detected_aspect API 验证（含断言，非仅 log 输出）
+  Test: manual:bash -c '
+    node -e "
+      const c = require(\"fs\").readFileSync(\"e2e/agent-video-pipeline.spec.js\",\"utf8\");
+      if (!c.includes(\"detected_aspect\")) process.exit(1);
+      const hasAssert = c.includes(\"expect\") || c.includes(\"toBe\") || c.includes(\"!= null\") || c.includes(\"!== null\");
+      if (!hasAssert) process.exit(1);
+      console.log(\"OK\");
+    " || { echo "FAIL: E2E spec detected_aspect 无验证断言"; exit 1; }
+  '
   期望: OK
 
-### BEHAVIOR 3: GHA default 不含旧版 1.1.30（禁用旧版反向检查）
-
-- [ ] [BEHAVIOR] GHA workflow 中 agent_version input 的 `default:` 不再是 "1.1.30"
-  Test: manual:bash -c 'node -e "const c=require(\"fs\").readFileSync(\".github/workflows/agent-e2e-video.yml\",\"utf8\");const m=c.match(/agent_version:[\\s\\S]*?default:\\s*\\\"([^\\\"]+)\\\"/);if(m&&m[1]===\"1.1.30\"){console.error(\"FAIL: default 仍是旧版 1.1.30\");process.exit(1);}console.log(\"OK\");"'
+- [x] [BEHAVIOR] E2E spec 含截图步骤（page.screenshot 调用）
+  Test: manual:bash -c '
+    node -e "
+      const c = require(\"fs\").readFileSync(\"e2e/agent-video-pipeline.spec.js\",\"utf8\");
+      if (!c.includes(\"screenshot\")) process.exit(1);
+      console.log(\"OK\");
+    " || { echo "FAIL: E2E spec 缺截图步骤"; exit 1; }
+  '
   期望: OK
 
-### BEHAVIOR 4: error path — workflow 文件存在且含必要 key
+- [x] [BEHAVIOR] GHA agent-e2e-video.yml default version = 1.1.29，不含旧值 1.1.17
+  Test: manual:bash -c '
+    COUNT=$(grep "default:" .github/workflows/agent-e2e-video.yml | grep "1.1.29" | wc -l | tr -d " ")
+    [ "$COUNT" -ge 1 ] || { echo "FAIL: GHA default version 未更新 expected=1.1.29"; exit 1; }
+    OLD=$(grep "default:" .github/workflows/agent-e2e-video.yml | grep "1.1.17" | wc -l | tr -d " ")
+    [ "$OLD" -eq 0 ] || { echo "FAIL: 旧版本 1.1.17 仍存在"; exit 1; }
+    echo OK
+  '
+  期望: OK
 
-- [ ] [BEHAVIOR] `agent-e2e-video.yml` 存在且含 `workflow_dispatch`、`agent_version`、`default:` 三个关键词
-  Test: manual:bash -c 'node -e "const c=require(\"fs\").readFileSync(\".github/workflows/agent-e2e-video.yml\",\"utf8\");const keys=[\"workflow_dispatch\",\"agent_version\",\"default:\"];const missing=keys.filter(k=>!c.includes(k));if(missing.length){console.error(\"FAIL: 缺少 \"+missing.join(\", \"));process.exit(1);}console.log(\"OK\");"'
+- [x] [BEHAVIOR] services/agent/package.json version 字段精确为 "1.1.29"
+  Test: manual:bash -c '
+    VERSION=$(node -e "const p=require(\"./services/agent/package.json\");console.log(p.version)")
+    [ "$VERSION" = "1.1.29" ] || { echo "FAIL: version=$VERSION 期望 1.1.29"; exit 1; }
+    echo OK
+  '
+  期望: OK
+
+- [x] [BEHAVIOR] agent-installpack.yml 配置 services/agent/** push 自动触发（确保 version bump merge 后 build 触发）
+  Test: manual:bash -c '
+    node -e "
+      const c = require(\"fs\").readFileSync(\".github/workflows/agent-installpack.yml\",\"utf8\");
+      if (!c.includes(\"services/agent/**\")) process.exit(1);
+      if (!c.includes(\"push\") && !c.includes(\"workflow_dispatch\")) process.exit(1);
+      console.log(\"OK\");
+    " || { echo "FAIL: agent-installpack.yml 未配置 services/agent/** 自动触发路径"; exit 1; }
+  '
   期望: OK
