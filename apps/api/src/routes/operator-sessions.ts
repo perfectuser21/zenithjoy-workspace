@@ -23,8 +23,10 @@ function buildSecretName(platform: string): string {
 }
 
 // POST /trigger-bind — 派发平台绑定任务给 Agent（写 publish_tasks，agent 下次 heartbeat 拉到）
+// v1.1.34+: 支持 agent_id 精准派发 — Dashboard 从本地 localhost:58432/agent-id 拿到本机 UUID 后传来，
+//           避免多机环境（如同账号连了 xian-pc + xian-rog）派到错误的机器。
 router.post('/trigger-bind', superAdminGuard, async (req: Request, res: Response) => {
-  const { platform } = req.body || {};
+  const { platform, agent_id: explicitAgentId } = req.body || {};
 
   if (!platform || !VALID_PLATFORMS.includes(platform as ValidPlatform)) {
     return res.status(400).json({
@@ -32,21 +34,33 @@ router.post('/trigger-bind', superAdminGuard, async (req: Request, res: Response
     });
   }
 
-  // 找最近 5 分钟内有心跳的 agent（运营中枢只有 xian-pc 一台 operator agent）
-  const { rows: agents } = await pool.query<{ id: string }>(
-    `SELECT id FROM zenithjoy.agents
-     WHERE last_heartbeat_at > NOW() - INTERVAL '5 minutes'
-     ORDER BY last_heartbeat_at DESC
-     LIMIT 1`
-  );
+  let agentId: string;
 
-  if (agents.length === 0) {
-    return res.status(503).json({
-      error: 'Agent 未连接，请确认 xian-pc 上的 Agent 正在运行并联网',
-    });
+  const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  if (explicitAgentId && typeof explicitAgentId === 'string') {
+    if (!UUID_RE.test(explicitAgentId)) {
+      return res.status(400).json({ error: '无效 agent_id 格式（期望 UUID）' });
+    }
+    // 精准派发：客户端传来了本地 agent UUID（v1.1.35+ Agent 暴露 localhost:58432/agent-id）
+    agentId = explicitAgentId;
+  } else {
+    // 回退：按最近心跳选 agent（单机环境够用，多机时可能选错）
+    const { rows: agents } = await pool.query<{ id: string }>(
+      `SELECT id FROM zenithjoy.agents
+       WHERE last_heartbeat_at > NOW() - INTERVAL '5 minutes'
+       ORDER BY last_heartbeat_at DESC
+       LIMIT 1`
+    );
+
+    if (agents.length === 0) {
+      return res.status(503).json({
+        error: 'Agent 未连接，请确认本机 Agent 正在运行并联网（v1.1.34+ 支持精准派发）',
+      });
+    }
+
+    agentId = agents[0].id;
   }
 
-  const agentId = agents[0].id;
   const { rows } = await pool.query<{ id: string }>(
     `INSERT INTO zenithjoy.publish_tasks (agent_id, platform, status)
      VALUES ($1, $2, 'queued')
