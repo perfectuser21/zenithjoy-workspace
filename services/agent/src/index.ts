@@ -690,6 +690,8 @@ function startWs1HeartbeatLoop(cfg: AgentConfig): void {
         const platformName = task.platform.replace('qr_bind/', '');
         const res = await handleQrBindOperator({ platform: platformName, ...task.payload as Record<string, unknown> });
         console.log(`[ws1:${task.platform}] result: ok=${res.ok}`);
+        // task-ack 防重派：无此调用 task 永远 queued → 每次心跳重派 → Chrome 反复弹
+        await postQrBindDouyinAck(cfg, task.task_id, res.ok ? 'success' : `failed:${res.error ?? 'unknown'}`);
       } else if (
         task.platform === 'crawl_comments_douyin_burner' ||
         task.platform === 'crawl_comments/douyin_burner'
