@@ -649,7 +649,15 @@ function startWs1HeartbeatLoop(cfg: AgentConfig): void {
     onChange: (file) => console.log('[ws1:folder-watch] change:', file),
   });
 
+  // 去重锁：heartbeat 每 30s 重派 pending task，同一 task_id 并发派会开多个 Chrome 窗口
+  const processingTasks = new Set<string>();
+
   const onTask = async (task: HeartbeatTask): Promise<void> => {
+    if (processingTasks.has(task.task_id)) {
+      console.log(`[ws1] skip duplicate task_id=${task.task_id} (already processing)`);
+      return;
+    }
+    processingTasks.add(task.task_id);
     console.log('[ws1] task:', task.platform, task.task_id);
     try {
       if (task.platform === 'qr_bind_douyin') {
@@ -744,6 +752,8 @@ function startWs1HeartbeatLoop(cfg: AgentConfig): void {
       }
     } catch (err) {
       console.warn('[ws1] task handler threw:', err);
+    } finally {
+      processingTasks.delete(task.task_id);
     }
   };
 
