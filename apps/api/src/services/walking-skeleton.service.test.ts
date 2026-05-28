@@ -2,10 +2,18 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // pool 是模块顶层 import，必须在导入 service 之前 mock
+const mockClientQuery = vi.fn();
+const mockClientRelease = vi.fn();
+const mockClient = {
+  query: mockClientQuery,
+  release: mockClientRelease,
+};
+
 vi.mock('../db/connection', () => {
   const query = vi.fn();
+  const connect = vi.fn();
   return {
-    default: { query },
+    default: { query, connect },
   };
 });
 
@@ -18,6 +26,7 @@ import {
   getPublishTask,
   getQueuedTasks,
   findAgentById,
+  ackPublishTask,
 } from './walking-skeleton.service';
 import pool from '../db/connection';
 
@@ -71,5 +80,78 @@ describe('getQueuedTasks (WS2 Sprint 2.1a transport patch)', () => {
     const sql = (pool.query as any).mock.calls[0][0] as string;
     expect(sql).toMatch(/SELECT[\s\S]*\btype\b/);
     expect(sql).toMatch(/FROM zenithjoy\.publish_tasks/);
+  });
+});
+
+describe('ackPublishTask — qr_bind session upsert', () => {
+  const TASK_ID = '00000000-0000-0000-0000-000000000001';
+  const AGENT_ID = '00000000-0000-0000-0000-000000000002';
+  const LICENSE_ID = 'lic-test-001';
+
+  beforeEach(() => {
+    (pool.query as any).mockReset();
+    (pool.connect as any).mockReset();
+    mockClientQuery.mockReset();
+    mockClientRelease.mockReset();
+
+    // pool.connect() → mock client
+    (pool.connect as any).mockResolvedValue(mockClient);
+    // client queries default to success
+    mockClientQuery.mockResolvedValue({ rows: [] });
+  });
+
+  it('upserts agent_platform_sessions when qr_bind_douyin acked with success', async () => {
+    // SELECT publish_tasks → task with platform=qr_bind_douyin
+    (pool.query as any)
+      .mockResolvedValueOnce({
+        rows: [{ id: TASK_ID, agent_id: AGENT_ID, platform: 'qr_bind_douyin', result: null }],
+      })
+      // SELECT agents
+      .mockResolvedValueOnce({
+        rows: [{ id: AGENT_ID, license_id: LICENSE_ID }],
+      });
+
+    await ackPublishTask({ taskId: TASK_ID, licenseId: LICENSE_ID, result: 'success' });
+
+    // Find the INSERT into agent_platform_sessions call
+    const insertCall = mockClientQuery.mock.calls.find(
+      (c: unknown[]) => typeof c[0] === 'string' && (c[0] as string).includes('agent_platform_sessions')
+    );
+    expect(insertCall).toBeDefined();
+    const [sql, params] = insertCall as [string, unknown[]];
+    expect(sql).toMatch(/INSERT INTO zenithjoy\.agent_platform_sessions/);
+    expect(sql).toMatch(/ON CONFLICT.*DO UPDATE.*status\s*=\s*'active'/s);
+    expect(params).toContain(AGENT_ID);
+    expect(params).toContain('douyin');
+  });
+
+  it('does NOT upsert agent_platform_sessions when result is not success', async () => {
+    (pool.query as any)
+      .mockResolvedValueOnce({
+        rows: [{ id: TASK_ID, agent_id: AGENT_ID, platform: 'qr_bind_douyin', result: null }],
+      })
+      .mockResolvedValueOnce({ rows: [{ id: AGENT_ID, license_id: LICENSE_ID }] });
+
+    await ackPublishTask({ taskId: TASK_ID, licenseId: LICENSE_ID, result: 'timeout' });
+
+    const insertCall = mockClientQuery.mock.calls.find(
+      (c: unknown[]) => typeof c[0] === 'string' && (c[0] as string).includes('agent_platform_sessions')
+    );
+    expect(insertCall).toBeUndefined();
+  });
+
+  it('does NOT upsert agent_platform_sessions for non-qr_bind platforms', async () => {
+    (pool.query as any)
+      .mockResolvedValueOnce({
+        rows: [{ id: TASK_ID, agent_id: AGENT_ID, platform: 'douyin', result: null }],
+      })
+      .mockResolvedValueOnce({ rows: [{ id: AGENT_ID, license_id: LICENSE_ID }] });
+
+    await ackPublishTask({ taskId: TASK_ID, licenseId: LICENSE_ID, result: 'success' });
+
+    const insertCall = mockClientQuery.mock.calls.find(
+      (c: unknown[]) => typeof c[0] === 'string' && (c[0] as string).includes('agent_platform_sessions')
+    );
+    expect(insertCall).toBeUndefined();
   });
 });
