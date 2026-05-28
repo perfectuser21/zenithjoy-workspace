@@ -199,4 +199,29 @@ describe('PublishPage [BEHAVIOR]', () => {
       );
     });
   });
+
+  it('快手切回抖音 → publishType 统一重置为 image（article 选项恢复）', async () => {
+    vi.mocked(ws1Api.getAgentStatus).mockResolvedValue({
+      connected: true,
+      agent_id: 'agent-1',
+      hostname: 'test-host',
+      version: '1.1.32',
+      last_heartbeat_at: new Date().toISOString(),
+      bound_folder_path: '/videos',
+    });
+    vi.mocked(ws1Api.listPublishTasks).mockResolvedValue({ tasks: [] });
+    render(<PublishPage />, { wrapper: createWrapper() });
+    await waitFor(() => screen.getByRole('radio', { name: /快手/ }));
+    // 切到快手
+    fireEvent.click(screen.getByRole('radio', { name: /快手/ }));
+    // 切回抖音
+    fireEvent.click(screen.getByRole('radio', { name: /抖音/ }));
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /发布到抖音/ })).toBeInTheDocument();
+      // 文章选项恢复
+      expect(screen.getByRole('radio', { name: /文章/ })).toBeInTheDocument();
+      // publishType 重置为 image（image radio checked）
+      expect(screen.getByRole('radio', { name: /图文/ })).toBeChecked();
+    });
+  });
 });
