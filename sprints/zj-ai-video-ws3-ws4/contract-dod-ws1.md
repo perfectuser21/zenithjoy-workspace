@@ -2,13 +2,13 @@
 skeleton: false
 journey_type: user_facing
 ---
-# Contract DoD — Workstream 1: PATCH {ok:true} + GET {job:{...}} 响应格式修正
+# Contract DoD — Workstream 1: PATCH {ok:true} + GET {job:{...}} 响应格式修正 + pollStatus 适配
 
-**范围**: `apps/api/src/controllers/ai-video-pipeline.controller.ts`：
-- `updateProgress`：`res.json(updated)` → `res.json({ ok: true })`
-- `getJob`：`res.json({...job, detected_aspect:...})` → `res.json({ job: { id, status, detected_aspect } })`
+**范围**:
+- `apps/api/src/controllers/ai-video-pipeline.controller.ts`：updateProgress → `{ok:true}` + getJob → `{job:{id,status,progress,detected_aspect}}`
+- `apps/dashboard/src/pages/LocalVideoPipelinePage.tsx`：pollStatus 适配 → `res.data.job` 路径
 
-**大小**: S（≤25 行净增，1 文件）
+**大小**: S（≤35 行净增，2 文件）
 **依赖**: 无
 
 ## ARTIFACT 条目
@@ -18,6 +18,9 @@ journey_type: user_facing
 
 - [ ] [ARTIFACT] `getJob` 函数返回 `res.json({ job: { ... } })` 包装（非 flat spread）
   Test: node -e "const c=require('fs').readFileSync('apps/api/src/controllers/ai-video-pipeline.controller.ts','utf8');const s=c.indexOf('async function getJob');const e=c.indexOf('\nasync function ',s+1);const fn=c.slice(s,e>s?e:s+500);if(!fn.match(/res\.json\(\s*\{[\s\S]*?job\s*:/)){process.exit(1)}console.log('ARTIFACT OK')"
+
+- [ ] [ARTIFACT] `LocalVideoPipelinePage.tsx` 的 `pollStatus` 通过 `res.data.job` 访问（非 flat spread）
+  Test: node -e "const c=require('fs').readFileSync('apps/dashboard/src/pages/LocalVideoPipelinePage.tsx','utf8');const s=c.indexOf('async function pollStatus');const e=c.indexOf('\nasync function',s+1);const fn=c.slice(s,e>s?e:s+300);if(!fn.match(/res\.data\.job/)){process.exit(1)}console.log('ARTIFACT OK')"
 
 ## BEHAVIOR 条目
 
@@ -56,3 +59,15 @@ journey_type: user_facing
 - [ ] [BEHAVIOR] `getJob` 的 `.job` 块显式含 `detected_aspect:` key（snake_case，禁用 detectedAspect camelCase）
   Test: manual:bash -c 'node -e "const c=require(\"fs\").readFileSync(\"apps/api/src/controllers/ai-video-pipeline.controller.ts\",\"utf8\");const s=c.indexOf(\"async function getJob\");const e=c.indexOf(\"\nasync function \",s+1);const fn=c.slice(s,e>s?e:s+500);if(!fn.match(/job\\s*:\\s*\\{[\\s\\S]*?detected_aspect/)){console.error(\"FAIL: getJob .job 块未含 detected_aspect key\");process.exit(1);}if(fn.match(/detectedAspect\\s*:/)){console.error(\"FAIL: getJob 含禁用 camelCase key detectedAspect\");process.exit(1);}console.log(\"OK\");"'
   期望: OK
+
+### BEHAVIOR 7: pollStatus 适配 {job:{...}} 格式（Risk 1 Mitigation）
+
+- [ ] [BEHAVIOR] `LocalVideoPipelinePage.tsx` 的 `pollStatus` 函数通过 `res.data.job` 访问新格式（不用 flat `res.data` spread）
+  Test: manual:bash -c 'node -e "const c=require(\"fs\").readFileSync(\"apps/dashboard/src/pages/LocalVideoPipelinePage.tsx\",\"utf8\");const s=c.indexOf(\"async function pollStatus\");const e=c.indexOf(\"\nasync function\",s+1);const fn=c.slice(s,e>s?e:s+300);if(!fn.match(/res\\.data\\.job/)){console.error(\"FAIL: pollStatus 仍用 flat res.data spread，未适配 {job:{...}} 格式\");process.exit(1);}console.log(\"OK\");"'
+  期望: OK
+
+## BEHAVIOR:E2E 条目（windows_cloud Mode B — agent-e2e-video.yml Playwright）
+
+- [ ] [BEHAVIOR:E2E] Playwright 在 windows-latest 全链路通过，`jobResp.job.detected_aspect` 非空强断言通过，`pollStatus` 轮询正常终止
+  Test: 触发 `.github/workflows/agent-e2e-video.yml`（workflow_dispatch，version=1.1.31），Playwright 测试通过
+  期望: GHA job exit 0，detected_aspect toMatch(/^(9:16|16:9)$/)（非 null），进度轮询正常停止
