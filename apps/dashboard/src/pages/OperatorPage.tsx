@@ -43,7 +43,7 @@ function formatTime(iso: string | null): string {
 
 export default function OperatorPage() {
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, authLoading } = useAuth();
   const [sessions, setSessions] = useState<SessionRow[]>([]);
   const [bindingPlatform, setBindingPlatform] = useState<string | null>(null);
 
@@ -62,6 +62,7 @@ export default function OperatorPage() {
   }, []);
 
   useEffect(() => {
+    if (authLoading) return;
     if (!isOperator) {
       navigate('/', { replace: true });
       return;
@@ -69,7 +70,15 @@ export default function OperatorPage() {
     fetchSessions();
     const interval = setInterval(fetchSessions, 30000);
     return () => clearInterval(interval);
-  }, [isOperator, navigate, fetchSessions]);
+  }, [authLoading, isOperator, navigate, fetchSessions]);
+
+  if (authLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <p className="text-gray-400">加载中…</p>
+      </div>
+    );
+  }
 
   if (!isOperator) {
     return (
