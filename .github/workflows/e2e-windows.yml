@@ -26,6 +26,9 @@ jobs:
 
       - name: Run E2E verification
         shell: pwsh
+        env:
+          E2E_SUPER_ADMIN_EMAIL: ${{ secrets.E2E_SUPER_ADMIN_EMAIL }}
+          E2E_SUPER_ADMIN_PASSWORD: ${{ secrets.E2E_SUPER_ADMIN_PASSWORD }}
         run: |
           $sprintDir = "${{ inputs.sprint_dir }}"
           $taskId = "${{ inputs.task_id }}"
