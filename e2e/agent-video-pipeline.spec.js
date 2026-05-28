@@ -33,7 +33,9 @@ test('Agent E2E — 口播视频本地生成全链路', async ({ page, context }
       // Inject license key so API stamps license_id — session-based lookup fails for non-Feishu users.
       const resp = await route.fetch({ headers: { ...headers, authorization: `Bearer ${E2E_LICENSE}` } });
       const body = await resp.json().catch(() => ({}));
-      if (body?.id) { jobId = body.id; console.log('[e2e] job created:', jobId); }
+      // API returns { job: { id, status, ... } }
+      const jobData = body?.job ?? body;
+      if (jobData?.id) { jobId = jobData.id; console.log('[e2e] job created:', jobId); }
       await route.fulfill({ response: resp });
     } else {
       await route.continue();
