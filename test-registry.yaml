@@ -2474,3 +2474,11 @@ agent_suite:
     status: pending-ci
     product: 视频剪辑
     note: "Line 05 Sprint run-20260527-2037 WS5 — Agent v1.1.30 + GHA workflow 更新"
+
+  - id: zj-ops1-operator-session-sync
+    path: apps/api/src/routes/operator.test.ts
+    type: integration
+    ci: L4
+    status: active
+    product: 新媒体运营
+    note: "Line 00 运营中枢 — POST /api/operator/sessions/sync 矩阵转换（4 测试：正常/文件缺失/API key 过滤/无效 JSON）"
