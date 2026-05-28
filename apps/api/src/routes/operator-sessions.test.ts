@@ -136,6 +136,18 @@ describe('operator-sessions routes', () => {
     });
   });
 
+  describe('POST /api/operator/sessions/status — DB 错误处理', () => {
+    it('DB 写入抛错时 updated 只计成功条数', async () => {
+      const pool = (await import('../db/connection')).default as { query: ReturnType<typeof vi.fn> };
+      pool.query.mockRejectedValue(new Error('DB down'));
+      const res = await request(app)
+        .post('/api/operator/sessions/status')
+        .send({ updates: [{ platform: 'douyin', status: 'expired', checkedAt: '2026-05-27T10:00:00Z' }] });
+      expect(res.status).toBe(200);
+      expect(res.body.updated).toBe(0);
+    });
+  });
+
   describe('POST /api/operator/sessions/upload-cookies', () => {
     it('dev 模式（无 PAT）返 200 + {ok,platform,secretName}', async () => {
       const res = await request(app)
@@ -167,6 +179,70 @@ describe('operator-sessions routes', () => {
         .post('/api/operator/sessions/upload-cookies')
         .send({ platform: 'douyin' });
       expect(res.status).toBe(400);
+    });
+
+    it('有 PAT + GitHub API 返 200（keyRes ok + putRes ok）→ 200 + {ok,platform,secretName}', async () => {
+      process.env.GH_SECRETS_WRITE_PAT = 'test-pat-123';
+      const mockFetch = vi.fn()
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          json: async () => ({ key: 'base64key', key_id: 'key123' }),
+        } as unknown as Response)
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 204,
+          json: async () => ({}),
+        } as unknown as Response);
+      vi.stubGlobal('fetch', mockFetch);
+
+      const pool = (await import('../db/connection')).default as { query: ReturnType<typeof vi.fn> };
+      pool.query.mockResolvedValue({ rows: [], rowCount: 1 });
+
+      const res = await request(app)
+        .post('/api/operator/sessions/upload-cookies')
+        .send({ platform: 'toutiao', cookies: { session: 'xyz' } });
+
+      delete process.env.GH_SECRETS_WRITE_PAT;
+      vi.unstubAllGlobals();
+
+      expect(res.status).toBe(200);
+      expect(res.body.ok).toBe(true);
+      expect(res.body.secretName).toBe('TOUTIAO_COOKIES');
+    });
+
+    it('有 PAT + GitHub API keyRes 返 403 → 本端点返 403', async () => {
+      process.env.GH_SECRETS_WRITE_PAT = 'bad-pat';
+      const mockFetch = vi.fn().mockResolvedValueOnce({
+        ok: false,
+        status: 403,
+        json: async () => ({ message: 'forbidden' }),
+      } as unknown as Response);
+      vi.stubGlobal('fetch', mockFetch);
+
+      const res = await request(app)
+        .post('/api/operator/sessions/upload-cookies')
+        .send({ platform: 'weibo', cookies: {} });
+
+      delete process.env.GH_SECRETS_WRITE_PAT;
+      vi.unstubAllGlobals();
+
+      expect(res.status).toBe(403);
+      expect(res.body.error).toBe('PAT scope insufficient');
+    });
+
+    it('有 PAT + GitHub API 抛错 → 500', async () => {
+      process.env.GH_SECRETS_WRITE_PAT = 'test-pat';
+      vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('network error')));
+
+      const res = await request(app)
+        .post('/api/operator/sessions/upload-cookies')
+        .send({ platform: 'zhihu', cookies: {} });
+
+      delete process.env.GH_SECRETS_WRITE_PAT;
+      vi.unstubAllGlobals();
+
+      expect(res.status).toBe(500);
     });
   });
 });
