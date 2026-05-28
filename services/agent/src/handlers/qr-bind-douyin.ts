@@ -2,10 +2,9 @@
 //
 // Walking Skeleton #1 — 抖音首次扫码绑定
 //
-// 收到 task `qr_bind/douyin` 时：
-//   1. 通过 Playwright 接到 CDP 19222（用户已经在该端口跑着 Chrome 实例，由 Agent
-//      启动器或客户手动开起来）
-//   2. 把抖音创作者后台打开，提示用户扫码
+// 收到 task `qr_bind_douyin` 时：
+//   1. 通过 Playwright launch() 自启动 Chrome（headless:false，用户可见）
+//   2. 打开抖音创作者后台，提示用户扫码
 //   3. 轮询直到检测到登录成功（默认看 url 是否离开 /login）
 //   4. 调 storageState() 把 cookies + origins 序列化，写到
 //      ~/.zenithjoy-agent/sessions/douyin/<account_label>.json
@@ -45,20 +44,20 @@ export interface ChromiumContext {
 }
 
 export interface ChromiumBrowser {
-  contexts(): ChromiumContext[];
+  newContext(opts?: Record<string, unknown>): Promise<ChromiumContext>;
   close?(): Promise<void>;
 }
 
 export interface ChromiumLauncher {
-  connectOverCDP(url: string): Promise<ChromiumBrowser>;
+  launch(opts?: { headless?: boolean; args?: string[] }): Promise<ChromiumBrowser>;
 }
 
 export interface QrBindDouyinOptions {
-  cdpPort?: number;
   sessionDir?: string;
   loginUrl?: string;
   pollIntervalMs?: number;
   timeoutMs?: number;
+  headless?: boolean;
   chromiumLauncher?: ChromiumLauncher;
   isLoggedIn?: (ctx: ChromiumContext) => boolean | Promise<boolean>;
 }
@@ -111,10 +110,10 @@ export async function handleQrBindDouyin(
 ): Promise<QrBindDouyinResult> {
   const accountLabel = payload.account_label || 'default';
   const sessionPath = getSessionPath('douyin', accountLabel, options.sessionDir);
-  const cdpPort = options.cdpPort ?? 19222;
-  const cdpUrl = `http://localhost:${cdpPort}`;
+  const loginUrl = options.loginUrl ?? 'https://creator.douyin.com/creator-micro/home';
   const pollIntervalMs = options.pollIntervalMs ?? 1500;
   const timeoutMs = options.timeoutMs ?? 5 * 60_000;
+  const headless = options.headless ?? false;
   const isLoggedIn = options.isLoggedIn ?? defaultIsLoggedIn;
 
   let launcher: ChromiumLauncher;
@@ -130,16 +129,13 @@ export async function handleQrBindDouyin(
 
   let browser: ChromiumBrowser | null = null;
   try {
-    browser = await launcher.connectOverCDP(cdpUrl);
-    const contexts = browser.contexts();
-    if (contexts.length === 0) {
-      return {
-        ok: false,
-        sessionPath,
-        error: 'CDP 没有 context，确认 Chrome 19222 是否已启动并打开抖音页',
-      };
-    }
-    const ctx = contexts[0];
+    browser = await launcher.launch({
+      headless,
+      args: ['--no-sandbox', '--disable-setuid-sandbox'],
+    });
+    const ctx = await browser.newContext();
+    const page = await ctx.newPage!();
+    await page.goto!(loginUrl);
 
     // 等用户扫码登录（轮询）
     const start = Date.now();
@@ -184,7 +180,6 @@ export async function handleQrBindDouyin(
       error: err instanceof Error ? err.message : String(err),
     };
   } finally {
-    // CDP 连接关闭只断开本地 socket，不会关用户 Chrome
     try {
       await browser?.close?.();
     } catch {
