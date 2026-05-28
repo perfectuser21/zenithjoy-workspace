@@ -243,8 +243,8 @@ async function postSessionStatus(results) {
   const apiBase = process.env.OPERATOR_API_URL || 'http://localhost:3000';
   const secret = process.env.INTERNAL_API_SECRET || '';
   const updates = results
-    .filter(r => r.status === 'active' || r.status === 'expired')
-    .map(r => ({ platform: r.platform, status: r.status, checkedAt: r.checkedAt }));
+    .filter(r => r.status === 'ok' || r.status === 'expired')
+    .map(r => ({ platform: r.platform, status: r.status === 'ok' ? 'active' : r.status, checkedAt: r.checkedAt }));
   if (updates.length === 0) return;
   const payload = JSON.stringify({ updates });
   const url = `${apiBase}/api/operator/sessions/status`;
