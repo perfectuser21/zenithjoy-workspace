@@ -251,7 +251,7 @@ jobs:
             exit 1
           }
           $sizeMB = [math]::Round($video.Length/1048576, 1)
-          Write-Host "[verify] checking $($video.FullName) ($sizeMB MB)"
+          Write-Host ("[verify] checking " + $video.FullName + " " + $sizeMB + " MB")
           $probeOut = & ffprobe -v error -show_streams -of json $video.FullName 2>&1
           Write-Host "[verify] ffprobe raw: $probeOut"
           $hasVideo = $probeOut -match '"codec_type"\s*:\s*"video"'
