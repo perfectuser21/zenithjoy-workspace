@@ -249,8 +249,13 @@ jobs:
             exit 1
           }
           Write-Host ("[verify] checking " + $video.FullName)
-          $probeOut = ffprobe -v error -show_streams -of json $video.FullName 2>&1 | Out-String
-          Write-Host ("[verify] ffprobe: " + $probeOut)
+          $ffprobe = "$env:APPDATA\ZenithJoyuntimefmpegfprobe.exe"
+          if (-not (Test-Path $ffprobe)) {
+            Write-Host "[verify] FAIL: ffprobe.exe not found at $ffprobe"
+            exit 1
+          }
+          $probeOut = & $ffprobe -v error -show_streams -of json $video.FullName 2>&1 | Out-String
+          Write-Host ("[verify] ffprobe output: " + $probeOut)
           if (-not ($probeOut -match 'codec_type.*video')) {
             Write-Host "[verify] FAIL: no video stream"
             exit 1
