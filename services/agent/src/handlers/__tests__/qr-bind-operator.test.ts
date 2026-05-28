@@ -2,7 +2,7 @@
 //
 // 验证 qr-bind-operator 关键行为：
 //   - douyin URL 必须导航到 /creator-micro/home 而非根域名（SPA 误判防护）
-//   - 导航后等 3s SPA JS 完成重定向再开始轮询
+//   - 导航后等 3s SPA JS 完成重定向再开始轮询（v1.1.43）
 //   - defaultIsLoggedIn 在 /login URL 时返回 false（不误判为已登录）
 //   - 扫码成功后写 storageState
 
