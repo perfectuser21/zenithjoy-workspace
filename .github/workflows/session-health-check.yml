@@ -66,10 +66,6 @@ jobs:
           GONGZHONGHAO_SUB_1: ${{ secrets.GONGZHONGHAO_SUB_1 }}
           GONGZHONGHAO_SUB_2: ${{ secrets.GONGZHONGHAO_SUB_2 }}
           GONGZHONGHAO_SUB_3: ${{ secrets.GONGZHONGHAO_SUB_3 }}
-          # 3 个 API Key
-          FEISHU_API_KEY: ${{ secrets.FEISHU_API_KEY }}
-          NOTION_API_KEY: ${{ secrets.NOTION_API_KEY }}
-          WECOM_API_KEY: ${{ secrets.WECOM_API_KEY }}
           # 飞书机器人双渠道告警
           FEISHU_BOT_WEBHOOK: ${{ secrets.FEISHU_BOT_WEBHOOK }}
           # DB 回写
