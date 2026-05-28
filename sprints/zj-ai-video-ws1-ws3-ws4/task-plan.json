@@ -1,82 +1,69 @@
 {
   "initiative_id": "1e9b07eb-780e-4f02-aada-da0e8fff72a0",
   "sprint_dir": "sprints/zj-ai-video-ws1-ws3-ws4",
-  "title": "AI 视频 Pipeline 补跑（WS1 original_script + WS2 比例选择/画幅检测 + WS3 Agent v1.1.29 bump）",
   "journey_type": "user_facing",
-  "target_environment": "windows_cloud",
-  "base_repo": "https://github.com/perfectuser21/zenithjoy-workspace.git",
-  "workstreams": [
+  "journey_type_reason": "涉及 Dashboard 前端 UI 控件（textarea + 比例选择器）+ Windows Electron Agent E2E，起点为用户 UI 操作",
+  "tasks": [
     {
-      "id": "ws1",
-      "title": "original_script 字段（DB + API + 前端）",
-      "path": "Line 05 — AI 视频 Pipeline",
-      "scope": [
-        "DB migration: ai_video_pipeline_jobs 加 original_script TEXT 列",
-        "AiVideoPipelineService.createJob() 接受 originalScript 并写库",
-        "createJob 控制器从 req.body 读 original_script",
-        "composeTemplate 控制器：有值时注入 Claude prompt 前缀",
-        "前端 LocalVideoPipelinePage：topic 下方加 original_script textarea"
+      "task_id": "ws1",
+      "title": "original_script 字段完整链路（DB migration + API + AI prompt 注入 + 前端 textarea）",
+      "scope": "DB migration 加 original_script/target_aspect/detected_aspect 三列；AiVideoPipelineService.createJob() 接受 originalScript+targetAspect 写库；createJob 控制器读 req.body 新字段；composeTemplate 注入 original_script 前缀；前端 LocalVideoPipelinePage 含 original_script textarea",
+      "dod": [
+        "[BEHAVIOR] createJob API POST 201 响应含 original_script + target_aspect + detected_aspect（snake_case），不含 originalScript",
+        "[BEHAVIOR] createJob service 返回 job 含 original_script 字段值原样存储",
+        "[BEHAVIOR] composeTemplate 源码含前缀字符串'用户录制前参考文案（非逐字稿，仅意图参考）：'",
+        "[BEHAVIOR] API 响应不含禁用字段 originalScript",
+        "[ARTIFACT] DB migration SQL 存在含三列"
       ],
-      "acceptance": [
-        "POST /api/ai-video-pipeline/ 传 original_script 能写库（unit test）",
-        "composeTemplate prompt 含 original_script 片段（unit test mock）",
-        "前端有 original_script textarea（Playwright selector 可找到）"
+      "files": [
+        "apps/api/db/migrations/20260527_100000_add_original_script_to_video_jobs.sql",
+        "apps/api/src/services/ai-video-pipeline.service.ts",
+        "apps/api/src/controllers/ai-video-pipeline.controller.ts",
+        "apps/api/src/controllers/ai-video-pipeline-ai.controller.ts",
+        "apps/dashboard/src/pages/LocalVideoPipelinePage.tsx"
       ],
-      "pr_label": "feat(ws1): original_script 字段 DB+API+前端"
+      "depends_on": [],
+      "complexity": "S",
+      "estimated_minutes": 30
     },
     {
-      "id": "ws2",
-      "title": "比例选择 + 画幅检测（ffprobe + Agent + DB + 前端）",
-      "path": "Line 05 — AI 视频 Pipeline",
-      "scope": [
-        "DB migration: ai_video_pipeline_jobs 加 target_aspect TEXT + detected_aspect TEXT",
-        "ffprobe 读 width/height/rotation，rotation=90°/270° swap，得 detectedAspect",
-        "PATCH progress 端点写回 detected_aspect",
-        "createJob 控制器接受 target_aspect（9:16 / 16:9 / null）",
-        "Agent effectiveTarget 逻辑：只生成对应一个文件",
-        "前端 LocalVideoPipelinePage：加比例选择器（竖版/横版/自动检测默认）"
+      "task_id": "ws2",
+      "title": "比例选择 + 画幅检测（Agent ffprobe width/height + effectiveTarget + 前端比例选择器）",
+      "scope": "前端 LocalVideoPipelinePage 加比例选择器（9:16/16:9/自动检测）+ createJob 携带 target_aspect；Agent video-pipeline.ts Step 1 ffprobe -show_streams 读 vStream.width/height，rotation=90°/270° swap，计算 detectedAspect，PATCH /api/ai-video/jobs/:id/progress 写回 detected_aspect；Agent Step 7 effectiveTarget=job.target_aspect??detectedAspect??'9:16'，只生成单文件",
+      "dod": [
+        "[BEHAVIOR] Agent video-pipeline.ts 含 detectedAspect + effectiveWidth/effectiveHeight + rotation swap 逻辑",
+        "[BEHAVIOR] Agent video-pipeline.ts 含 effectiveTarget 逻辑（只生成单文件）",
+        "[BEHAVIOR] PATCH progress 接受 detected_aspect 并写库（DB 验证）",
+        "[BEHAVIOR] 前端 LocalVideoPipelinePage createJob 调用携带 target_aspect",
+        "[BEHAVIOR] PATCH 响应不含禁用字段 aspectRatio/aspect/orientation",
+        "[ARTIFACT] Agent video-pipeline.ts 含 detectedAspect + effectiveTarget 变量声明"
       ],
-      "acceptance": [
-        "ffprobe 返回 detected_aspect（unit test）",
-        "iPhone 视频 rotation=90° → detected_aspect = \"9:16\"（unit test）",
-        "选 9:16 → 只生成 9_16.mp4（unit test mock）",
-        "选 16:9 → 只生成 16_9.mp4（unit test mock）"
+      "files": [
+        "apps/dashboard/src/pages/LocalVideoPipelinePage.tsx",
+        "services/agent/src/handlers/video-pipeline.ts"
       ],
-      "pr_label": "feat(ws2): 比例选择+画幅检测 ffprobe+Agent+DB+前端"
+      "depends_on": ["ws1"],
+      "complexity": "M",
+      "estimated_minutes": 45
     },
     {
-      "id": "ws3",
-      "title": "Agent v1.1.29 bump + E2E spec 更新",
-      "path": "Line 05 — AI 视频 Pipeline",
-      "scope": [
-        "services/agent/package.json version → v1.1.29",
-        "e2e/agent-video-pipeline.spec.js 补充：填 original_script → 选 W-G → 选 9:16 → 等待完成",
-        "E2E API 验证：job.detected_aspect 有值 + status=completed + 截图",
-        "触发 agent-installpack.yml（GHA build → COS 上传 → manifest 更新）",
-        "Final E2E：agent-e2e-video.yml windows-latest runner 跑更新后 spec"
+      "task_id": "ws3",
+      "title": "E2E spec 更新（original_script + W-G + 9:16 + detected_aspect 验证）+ GHA version → 1.1.29",
+      "scope": "e2e/agent-video-pipeline.spec.js 补充：填 original_script → 点 W-G 模板按钮 → 选 9:16 → 等待完成 → API 验证 job.detected_aspect 有值；.github/workflows/agent-e2e-video.yml agent_version default 从 1.1.17 改为 1.1.29",
+      "dod": [
+        "[BEHAVIOR] E2E spec 含 original_script 填写 + W-G 模板 + detected_aspect API 验证",
+        "[BEHAVIOR] GHA agent-e2e-video.yml default version = 1.1.29（不含 1.1.17）",
+        "[BEHAVIOR] E2E spec 含截图调用（screenshot）",
+        "[BEHAVIOR] E2E spec detected_aspect 验证含断言（expect/toBe/!= null）",
+        "[ARTIFACT] e2e/agent-video-pipeline.spec.js 含 detected_aspect 关键词"
       ],
-      "acceptance": [
-        "agent-installpack.yml GHA 绿（COS 上传成功）",
-        "agent-e2e-video.yml windows-latest：W-G + 9:16 + original_script 流程通过",
-        "Artifact 截图：模板选中 + 9:16 完成状态"
+      "files": [
+        "e2e/agent-video-pipeline.spec.js",
+        ".github/workflows/agent-e2e-video.yml"
       ],
-      "pr_label": "feat(ws3): Agent v1.1.29 bump + E2E spec + Final E2E GHA"
+      "depends_on": ["ws2"],
+      "complexity": "S",
+      "estimated_minutes": 25
     }
-  ],
-  "final_e2e": {
-    "workflow": "agent-e2e-video.yml",
-    "runner": "windows-latest",
-    "inputs": {
-      "session_token": "manual via workflow_dispatch",
-      "test_video": "zj-e2e-koubo-45s.mp4"
-    },
-    "spec": "services/agent/e2e/agent-video-pipeline.spec.js"
-  },
-  "assumptions": [
-    "GHA Secret ZENITHJOY_LICENSE=ZJ-F-FBFYTLFR 已就绪",
-    "COS 测试视频 zj-e2e-koubo-45s.mp4 已存在",
-    "session_token 在 Final E2E 前通过 workflow_dispatch input 手动传入",
-    "composeTemplate 已有 Claude prompt 构造逻辑，WS1 只做注入扩展",
-    "WS2（HTML Builder，PR #496）已 merge，不在本次范围"
   ]
 }
