@@ -230,13 +230,11 @@ jobs:
         env:
           ZJ_E2E_LICENSE_KEY: ${{ env.ZJ_E2E_LICENSE_KEY }}
         run: |
-          if (-not (Test-Path "e2e-job-result.json")) {
-            Write-Host "[verify] e2e-job-result.json not found — Playwright test may have failed before writing it"
-            exit 0
+          if (-not (Test-Path "e2e-output-dir.txt")) {
+            Write-Host "[verify] e2e-output-dir.txt not found — Playwright test may have failed before writing it"
+            exit 1
           }
-          $metaRaw = Get-Content "e2e-job-result.json" -Raw
-          $meta = $metaRaw | ConvertFrom-Json
-          $outputDir = "$($meta.outputDir)"
+          $outputDir = (Get-Content "e2e-output-dir.txt" -Raw).Trim()
           Write-Host "[verify] output_dir=$outputDir"
           if ([string]::IsNullOrWhiteSpace($outputDir)) {
             Write-Host "[verify] FAIL: output_dir is empty — pipeline did not produce output"

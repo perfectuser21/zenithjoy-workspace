@@ -149,6 +149,8 @@ test('Agent E2E — 口播视频本地生成全链路', async ({ page, context }
         detectedAspect: jobResp.detected_aspect,
         targetAspect: jobResp.target_aspect,
       }));
+      // Also write outputDir as plain text — bypasses PS5 ConvertFrom-Json issues in ffprobe step
+      fs.writeFileSync('e2e-output-dir.txt', jobResp.output_dir || '');
       console.log('[e2e] job metadata written to e2e-job-result.json');
     }
   }
