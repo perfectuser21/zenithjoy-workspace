@@ -232,7 +232,7 @@ export async function composeHtml(req: Request, res: Response, next: NextFunctio
     const job = await svc.getJob(req.params.id);
     if (!job) return res.status(404).json({ error: 'job not found' });
 
-    const { scenes, duration, video_filename = 'video.mp4', logo_filename } = req.body as {
+    const { scenes, duration, logo_filename } = req.body as {
       scenes: Array<{
         start: number; duration: number; layout: string;
         eyebrow: string; title: string; body: string; tags?: string[];
