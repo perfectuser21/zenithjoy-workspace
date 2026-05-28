@@ -8,6 +8,10 @@ on:
       - 'apps/api/**'
   workflow_dispatch:
 
+concurrency:
+  group: deploy-hk-vps
+  cancel-in-progress: false
+
 jobs:
   deploy-dashboard:
     name: Build & Deploy Dashboard
