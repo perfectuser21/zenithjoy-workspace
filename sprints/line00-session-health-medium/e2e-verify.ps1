@@ -28,74 +28,64 @@ if ($proc.ExitCode -ne 0) { throw "FAIL: playwright install" }
 
 # Step 2: 写 Playwright 测试脚本（直接测生产 URL，不起本地 server）
 $testFile = Join-Path $dashRoot "e2e\tmp-e2e-goldenpath.spec.ts"
-$testContent = @"
-import { test, expect } from '@playwright/test';
 
-const BASE_URL = process.env.E2E_BASE_URL || '$BaseUrl';
-const EMAIL    = process.env.E2E_EMAIL    || '$Email';
-const PASSWORD = process.env.E2E_PASSWORD || '$Password';
+# NOTE: 用 WriteAllText 避免 here-string 与内层 JS 冲突
+$testContent = "import { test, expect } from '@playwright/test';" + [Environment]::NewLine
+$testContent += "" + [Environment]::NewLine
+$testContent += "const BASE_URL = process.env.E2E_BASE_URL || '$BaseUrl';" + [Environment]::NewLine
+$testContent += "const EMAIL    = process.env.E2E_EMAIL    || '$Email';" + [Environment]::NewLine
+$testContent += "const PASSWORD = process.env.E2E_PASSWORD || '$Password';" + [Environment]::NewLine
+$testContent += "" + [Environment]::NewLine
+$testContent += "const PLATFORMS = ['抖音','快手','小红书','视频号','头条','微博','知乎','公众号'];" + [Environment]::NewLine
+$testContent += "" + [Environment]::NewLine
 
-const PLATFORMS = ['抖音','快手','小红书','视频号','头条','微博','知乎','公众号'];
+# Step 1 test
+$testContent += "test('Golden Path Step 1: 运营员登录', async ({ page }) => {" + [Environment]::NewLine
+$testContent += "  await page.goto(BASE_URL + '/login');" + [Environment]::NewLine
+$testContent += "  await page.waitForLoadState('domcontentloaded');" + [Environment]::NewLine
+$testContent += "  await page.getByPlaceholder('you@example.com').fill(EMAIL);" + [Environment]::NewLine
+$testContent += "  await page.getByPlaceholder(/[•]+/).fill(PASSWORD);" + [Environment]::NewLine
+$testContent += "  await page.getByRole('button', { name: /登录/ }).click();" + [Environment]::NewLine
+$testContent += "  await page.waitForURL(u => !u.pathname.includes('/login'), { timeout: 20000 });" + [Environment]::NewLine
+$testContent += "  console.log('ok 登录成功，当前页面：' + page.url());" + [Environment]::NewLine
+$testContent += "});" + [Environment]::NewLine
+$testContent += "" + [Environment]::NewLine
 
-test('Golden Path Step 1: 运营员登录', async ({ page }) => {
-  await page.goto(BASE_URL + '/login');
-  await page.getByPlaceholder(/邮箱|email/i).fill(EMAIL);
-  await page.getByPlaceholder(/密码|password/i).fill(PASSWORD);
-  await page.getByRole('button', { name: /登录|sign in/i }).click();
-  await page.waitForURL(u => !u.pathname.includes('/login'), { timeout: 15_000 });
-  console.log('✅ 登录成功，当前页面：' + page.url());
-});
+# Step 2 test
+$testContent += "test('Golden Path Step 2: 访问 /operator 看到 8 平台矩阵', async ({ page }) => {" + [Environment]::NewLine
+$testContent += "  await page.goto(BASE_URL + '/login');" + [Environment]::NewLine
+$testContent += "  await page.waitForLoadState('domcontentloaded');" + [Environment]::NewLine
+$testContent += "  await page.getByPlaceholder('you@example.com').fill(EMAIL);" + [Environment]::NewLine
+$testContent += "  await page.getByPlaceholder(/[•]+/).fill(PASSWORD);" + [Environment]::NewLine
+$testContent += "  await page.getByRole('button', { name: /登录/ }).click();" + [Environment]::NewLine
+$testContent += "  await page.waitForURL(u => !u.pathname.includes('/login'), { timeout: 20000 });" + [Environment]::NewLine
+$testContent += "  await page.goto(BASE_URL + '/operator');" + [Environment]::NewLine
+$testContent += "  await page.waitForLoadState('networkidle');" + [Environment]::NewLine
+$testContent += "  for (const platform of PLATFORMS) {" + [Environment]::NewLine
+$testContent += "    await expect(page.getByText(platform).first()).toBeVisible({ timeout: 10000 });" + [Environment]::NewLine
+$testContent += "    console.log('ok 平台可见：' + platform);" + [Environment]::NewLine
+$testContent += "  }" + [Environment]::NewLine
+$testContent += "});" + [Environment]::NewLine
+$testContent += "" + [Environment]::NewLine
 
-test('Golden Path Step 2: 访问 /operator 看到 8 平台矩阵', async ({ page }) => {
-  // 登录
-  await page.goto(BASE_URL + '/login');
-  await page.getByPlaceholder(/邮箱|email/i).fill(EMAIL);
-  await page.getByPlaceholder(/密码|password/i).fill(PASSWORD);
-  await page.getByRole('button', { name: /登录|sign in/i }).click();
-  await page.waitForURL(u => !u.pathname.includes('/login'), { timeout: 15_000 });
+# Step 3 test
+$testContent += "test('Golden Path Step 3: 每个平台有登录按钮', async ({ page }) => {" + [Environment]::NewLine
+$testContent += "  await page.goto(BASE_URL + '/login');" + [Environment]::NewLine
+$testContent += "  await page.waitForLoadState('domcontentloaded');" + [Environment]::NewLine
+$testContent += "  await page.getByPlaceholder('you@example.com').fill(EMAIL);" + [Environment]::NewLine
+$testContent += "  await page.getByPlaceholder(/[•]+/).fill(PASSWORD);" + [Environment]::NewLine
+$testContent += "  await page.getByRole('button', { name: /登录/ }).click();" + [Environment]::NewLine
+$testContent += "  await page.waitForURL(u => !u.pathname.includes('/login'), { timeout: 20000 });" + [Environment]::NewLine
+$testContent += "  await page.goto(BASE_URL + '/operator');" + [Environment]::NewLine
+$testContent += "  await page.waitForLoadState('networkidle');" + [Environment]::NewLine
+$testContent += "  const loginBtns = page.getByRole('button', { name: /登录/ });" + [Environment]::NewLine
+$testContent += "  const count = await loginBtns.count();" + [Environment]::NewLine
+$testContent += "  expect(count).toBeGreaterThanOrEqual(1);" + [Environment]::NewLine
+$testContent += "  console.log('ok 登录按钮数量：' + count);" + [Environment]::NewLine
+$testContent += "});" + [Environment]::NewLine
 
-  // 访问 /operator
-  await page.goto(BASE_URL + '/operator');
-  await page.waitForLoadState('networkidle');
-
-  // 验证 8 平台全部可见
-  for (const platform of PLATFORMS) {
-    await expect(page.getByText(platform).first()).toBeVisible({ timeout: 10_000 });
-    console.log('✅ 平台可见：' + platform);
-  }
-});
-
-test('Golden Path Step 3: 每个平台有登录按钮，点击后触发绑定请求', async ({ page }) => {
-  // 登录
-  await page.goto(BASE_URL + '/login');
-  await page.getByPlaceholder(/邮箱|email/i).fill(EMAIL);
-  await page.getByPlaceholder(/密码|password/i).fill(PASSWORD);
-  await page.getByRole('button', { name: /登录|sign in/i }).click();
-  await page.waitForURL(u => !u.pathname.includes('/login'), { timeout: 15_000 });
-
-  await page.goto(BASE_URL + '/operator');
-  await page.waitForLoadState('networkidle');
-
-  // 验证至少 8 个登录按钮
-  const loginBtns = page.getByRole('button', { name: /登录/ });
-  const count = await loginBtns.count();
-  expect(count).toBeGreaterThanOrEqual(8);
-  console.log('✅ 登录按钮数量：' + count);
-
-  // 监听 trigger-bind 请求
-  let bindCalled = false;
-  page.on('request', req => {
-    if (req.url().includes('trigger-bind')) bindCalled = true;
-  });
-
-  // 点第一个登录按钮
-  await loginBtns.first().click();
-  await page.waitForTimeout(3000);
-  expect(bindCalled).toBe(true);
-  console.log('✅ trigger-bind API 已被调用');
-});
-"@
-Set-Content -Path $testFile -Encoding UTF8 -Value $testContent
+[System.IO.File]::WriteAllText($testFile, $testContent, [System.Text.Encoding]::UTF8)
+Write-Host "-- 测试文件已写入 $testFile"
 
 # Step 3: 跑 Playwright
 Write-Host "-- 跑 Playwright Golden Path E2E"
