@@ -442,6 +442,14 @@ tests:
     product: AI员工
     note: "Walking Skeleton #1 — 抖音首次扫码绑 + storageState 存盘"
 
+  - id: agent-qr-bind-operator-spa-wait
+    path: services/agent/src/handlers/__tests__/qr-bind-operator.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: AI员工
+    note: "Line 00 — operator QR 深路径防 SPA 误判 + 3s 等待单元测试"
+
   - id: agent-ws1-folder-watch
     path: services/agent/src/handlers/__tests__/folder-watch.test.ts
     type: unit
