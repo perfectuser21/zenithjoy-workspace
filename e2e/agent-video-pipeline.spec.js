@@ -54,6 +54,24 @@ test('Agent E2E — 口播视频本地生成全链路', async ({ page, context }
 
   console.log('[e2e] step 3: 填写路径', VIDEO);
   await page.fill('input[placeholder*="mp4"]', VIDEO);
+  // Select W-G template if present
+  const wgByValue = page.locator('[value="W-G"]');
+  const wgByText = page.getByText('W-G', { exact: true });
+  if (await wgByValue.count() > 0) {
+    await wgByValue.first().click();
+    console.log('[e2e] step 3: selected W-G template (by value)');
+  } else if (await wgByText.count() > 0) {
+    await wgByText.first().click();
+    console.log('[e2e] step 3: selected W-G template (by text)');
+  } else {
+    console.log('[e2e] step 3: W-G template selector not found, continuing');
+  }
+  // Select 9:16 aspect ratio if present
+  const aspect916 = page.locator('[value="9:16"]');
+  if (await aspect916.count() > 0) {
+    await aspect916.first().click();
+    console.log('[e2e] step 3: selected 9:16 aspect ratio');
+  }
   // topic textarea (first)
   await page.locator('textarea').first().fill('ZenithJoy E2E 测试口播视频处理，验证 hyperframes 字幕渲染');
   // original_script textarea (second, if present)
@@ -62,12 +80,12 @@ test('Agent E2E — 口播视频本地生成全链路', async ({ page, context }
     await scriptTextarea.fill('E2E original_script test content');
     console.log('[e2e] step 3: filled original_script');
   }
-  await page.screenshot({ path: 'screenshots/03-form-filled.png', fullPage: true });
+  await page.screenshot({ path: 'screenshots/ws3-03-form-filled.png', fullPage: true });
 
   console.log('[e2e] step 4: 开始处理');
   await page.click('button:has-text("开始处理")');
   await page.waitForTimeout(4000);
-  await page.screenshot({ path: 'screenshots/04-submitted.png', fullPage: true });
+  await page.screenshot({ path: 'screenshots/ws3-04-submitted.png', fullPage: true });
   console.log('[e2e] job ID:', jobId);
 
   console.log('[e2e] step 5: 等待完成 (max 15min)');
@@ -121,7 +139,7 @@ test('Agent E2E — 口播视频本地生成全链路', async ({ page, context }
     }
   }
 
-  await page.screenshot({ path: 'screenshots/05-final.png', fullPage: true });
+  await page.screenshot({ path: 'screenshots/ws3-05-final.png', fullPage: true });
   expect(done, `视频应在 15 分钟内处理完成 (last api status: ${lastApiStatus})`).toBe(true);
 
   // Verify detected_aspect was set by Agent

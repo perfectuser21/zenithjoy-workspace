@@ -1,7 +1,3 @@
-contract_branch: cp-harness-propose-r1-bbd3a1c0
-workstream_index: 3
-sprint_dir: sprints/zj-ai-video-ws3-ws4
-
 ---
 skeleton: false
 journey_type: user_facing

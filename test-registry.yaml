@@ -2598,3 +2598,27 @@ agent_suite:
     status: active
     product: AI视频本地流水线
     note: "AI视频Pipeline WS2/WS3 — aspect 检测 handler 单元测试"
+
+  - id: zj-ai-video-ws3-ws4-ws1-patch-ok
+    path: sprints/zj-ai-video-ws3-ws4/tests/ws1/patch-ok.test.ts
+    type: contract
+    ci: L2
+    status: active
+    product: AI视频本地流水线
+    note: "AI视频Pipeline WS1 合同测试 — PATCH /progress 返回 {ok:true} + 禁用字段检查"
+
+  - id: zj-ai-video-ws3-ws4-ws2-e2e-spec
+    path: sprints/zj-ai-video-ws3-ws4/tests/ws2/e2e-spec.test.ts
+    type: contract
+    ci: L2
+    status: active
+    product: AI视频本地流水线
+    note: "AI视频Pipeline WS2 合同测试 — E2E spec W-G + 9:16 + detected_aspect 非空强断言"
+
+  - id: zj-ai-video-ws3-ws4-ws3-gha-version
+    path: sprints/zj-ai-video-ws3-ws4/tests/ws3/gha-version.test.ts
+    type: contract
+    ci: L2
+    status: active
+    product: AI视频本地流水线
+    note: "AI视频Pipeline WS3 合同测试 — GHA agent-e2e-video.yml default version 1.1.31"
