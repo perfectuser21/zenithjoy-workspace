@@ -2493,6 +2493,14 @@ agent_suite:
     product: 新媒体运营
     note: "Line 00 Session Health WS2 — operator-sessions API 4 端点（trigger-bind/upload-cookies/sessions/status）"
 
+  - id: line00-session-health-ws2-unit
+    path: apps/api/src/routes/operator-sessions.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 新媒体运营
+    note: "Line 00 Session Health WS2 — operator-sessions 路由 supertest 单元测试（19 条，含 PAT 生产路径 + DB 错误路径）"
+
   - id: line00-session-health-ws3-dashboard
     path: sprints/line00-session-health-medium/tests/ws3/operator-page.test.tsx
     type: unit
