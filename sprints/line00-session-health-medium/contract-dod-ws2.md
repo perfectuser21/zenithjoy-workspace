@@ -1,7 +1,3 @@
-contract_branch: cp-05280815-ws-70ac50db-ws2
-workstream_index: 2
-sprint_dir: sprints/line00-session-health-medium
-
 ---
 skeleton: false
 journey_type: user_facing
@@ -11,6 +7,13 @@ journey_type: user_facing
 **范围**: 新建 `apps/api/src/routes/operator-sessions.ts`（4 端点）；`apps/api/src/app.ts` 注册路由；superAdminGuard 守卫 trigger-bind/upload-cookies；POST status 用 internal-auth；upload-cookies 调 Octokit 写 {PLATFORM_UPPER}_COOKIES
 **大小**: M（~175 行净增，2 文件）
 **依赖**: Workstream 1 完成后
+
+> **WS2 BEHAVIOR oracle 说明（双层验证策略）**:
+> upload-cookies 需真实 GitHub PAT（`GH_SECRETS_WRITE_PAT`），evaluator Mode A 无法提供真实 PAT。
+> 采用双层验证：
+> - **源码结构层**: 验证 Octokit 调用 + secretName 格式（_COOKIES）+ 禁用字段反向
+> - **运行时层**: curl 验证 4 个端点 schema（dev 模式 superAdminGuard bypass，无需真实 PAT 时验证 schema 格式正确性）
+> Final E2E（windows_cloud Playwright）验证完整 UI 交互路径。
 
 ---
 

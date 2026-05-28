@@ -42,6 +42,8 @@ import clipsRouter from './routes/clips';
 import clipsAuthRouter from './routes/clips-auth';
 import { acquisitionRouter } from './routes/acquisition';
 import { brainSprintStateRouter } from './routes/brain-sprint-state';
+// Line 00 Session Health Medium WS2 — 运营中枢 8 平台 session 端点
+import { operatorSessionsRouter } from './routes/operator-sessions';
 import { errorHandler, notFoundHandler } from './middleware/error';
 
 const app = express();
@@ -124,6 +126,8 @@ app.use('/api/clips/auth', clipsAuthRouter);
 app.use('/api/acquisition', acquisitionRouter);
 // Harness Sprint State — Walking Skeleton 本地持久化（Brain DB source of truth）
 app.use('/api/brain', brainSprintStateRouter);
+// Line 00 Session Health Medium — 运营中枢 8 平台主号 session 管理
+app.use('/api/operator/sessions', operatorSessionsRouter);
 
 // Error handling
 app.use(notFoundHandler);
