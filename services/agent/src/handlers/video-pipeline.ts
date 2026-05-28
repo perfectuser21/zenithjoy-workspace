@@ -690,53 +690,72 @@ export async function processVideoPipelineJob(
     console.log(`[Step 6/7] ✓ HyperFrames rendered`);
     fireProgress(apiBase, id, 85, 'step6_hf');
 
-    // Step 7B: overlay original video + merge audio → single-file output
-    console.log(`[Step 7/7] output: overlay original video + audio, writing ${effectiveTarget}`);
-    const mergedPath2 = path.join(tmpDir, 'composited.mp4');
-    const videoRect2 = htmlResult.videoRect ?? null;
-
-    if (videoRect2 !== null && videoRect2.w > 0 && videoRect2.h > 0) {
-      // Overlay roughCutPath into the left-panel placeholder position, merge audio in one pass
-      const { x, y, w, h } = videoRect2;
-      const rotPrefix2 = videoRotation === 90 ? 'transpose=1,' :
-                         videoRotation === 270 ? 'transpose=2,' :
-                         videoRotation === 180 ? 'hflip,vflip,' : '';
-      const filterComplex2 =
-        `[1:v]${rotPrefix2}scale=${w}:${h}:force_original_aspect_ratio=increase,crop=${w}:${h}[ph];` +
-        `[0:v][ph]overlay=${x}:${y}:shortest=1[out]`;
-      console.log(`[Step 7/7] videoRect x=${x} y=${y} w=${w} h=${h} rotation=${videoRotation}°`);
-      await runFfmpeg([
-        '-y', '-i', rendered2, '-noautorotate', '-i', roughCutPath,
-        '-filter_complex', filterComplex2,
-        '-map', '[out]', '-map', '1:a?',
-        '-c:v', 'libx264', '-crf', '23', '-c:a', 'aac', '-b:a', '128k',
-        '-t', String(refinedDuration),
-        mergedPath2,
-      ], { timeout: 300_000 });
-      console.log(`[Step 7/7] ✓ overlay + audio merged`);
-    } else {
-      // No videoRect returned — fall back to audio-only merge (legacy)
-      console.warn('[Step 7/7] no videoRect from compose-html, falling back to audio-only merge');
-      try {
-        await runFfmpeg([
-          '-y', '-i', rendered2, '-i', roughCutPath,
-          '-map', '0:v', '-map', '1:a?',
-          '-c:v', 'copy', '-c:a', 'aac', '-b:a', '128k',
-          '-shortest', mergedPath2,
-        ], { timeout: 120_000 });
-      } catch {
-        console.warn('[Step 7/7] ⚠ audio merge also failed, using silent rendered video');
-        fs.copyFileSync(rendered2, mergedPath2);
-      }
-    }
+    // Step 7B: compose output based on effectiveTarget
+    // 9:16 (portrait): vstack — roughCutPath top 55% + HyperFrames text strip bottom 45%
+    // 16:9 (landscape): ffmpeg overlay roughCutPath into left-panel placeholder, output 1920×1080
+    console.log(`[Step 7/7] output: composing ${effectiveTarget}`);
+    const rotPrefix7 = videoRotation === 90 ? 'transpose=1,' :
+                       videoRotation === 270 ? 'transpose=2,' :
+                       videoRotation === 180 ? 'hflip,vflip,' : '';
 
     if (effectiveTarget === '9:16') {
-      await runFfmpeg(['-y', '-i', mergedPath2,
-        '-vf', 'crop=ih*9/16:ih:(iw-ih*9/16)/2:0',
-        '-c:v', 'libx264', '-crf', '23', '-c:a', 'aac', '-b:a', '128k', output916,
+      // Portrait output: original video fills top, HyperFrames animated text fills bottom
+      // crop zone from HyperFrames board: x=656 (center of 1920), width=607 (9:16 at 1080h)
+      const outW = 607, outH = 1080;
+      const vidH = Math.round(outH * 0.55); // top 55% = original footage
+      const txtH = outH - vidH;             // bottom 45% = animated title/subtitle strip
+      const hfBoardX = 656;                 // x offset of HyperFrames board center crop
+      const hfBoardY = outH - txtH;         // take bottom txtH rows of the board
+
+      console.log(`[Step 7/7] 9:16 vstack: video top ${vidH}px + text bottom ${txtH}px (hf crop x=${hfBoardX} y=${hfBoardY})`);
+      await runFfmpeg([
+        '-y', '-noautorotate', '-i', roughCutPath, '-i', rendered2,
+        '-filter_complex',
+        `[0:v]${rotPrefix7}scale=${outW}:${vidH}:force_original_aspect_ratio=increase,crop=${outW}:${vidH},setsar=1[vtop];` +
+        `[1:v]crop=${outW}:${txtH}:${hfBoardX}:${hfBoardY},setsar=1[tbot];` +
+        `[vtop][tbot]vstack=inputs=2[out]`,
+        '-map', '[out]', '-map', '0:a?',
+        '-c:v', 'libx264', '-crf', '23', '-c:a', 'aac', '-b:a', '128k',
+        '-t', String(refinedDuration),
+        output916,
       ], { timeout: 300_000 });
+      console.log(`[Step 7/7] ✓ 9:16 done → ${output916}`);
+
     } else {
+      // Landscape 16:9: overlay roughCutPath into left-panel placeholder, then copy as 16:9
+      const mergedPath2 = path.join(tmpDir, 'composited.mp4');
+      const videoRect2 = htmlResult.videoRect ?? null;
+
+      if (videoRect2 !== null && videoRect2.w > 0 && videoRect2.h > 0) {
+        const { x, y, w, h } = videoRect2;
+        console.log(`[Step 7/7] 16:9 overlay: x=${x} y=${y} w=${w} h=${h} rotation=${videoRotation}°`);
+        const fc2 =
+          `[1:v]${rotPrefix7}scale=${w}:${h}:force_original_aspect_ratio=increase,crop=${w}:${h}[ph];` +
+          `[0:v][ph]overlay=${x}:${y}:shortest=1[out]`;
+        await runFfmpeg([
+          '-y', '-i', rendered2, '-noautorotate', '-i', roughCutPath,
+          '-filter_complex', fc2,
+          '-map', '[out]', '-map', '1:a?',
+          '-c:v', 'libx264', '-crf', '23', '-c:a', 'aac', '-b:a', '128k',
+          '-t', String(refinedDuration),
+          mergedPath2,
+        ], { timeout: 300_000 });
+        console.log(`[Step 7/7] ✓ 16:9 overlay done`);
+      } else {
+        console.warn('[Step 7/7] no videoRect, audio-only merge for 16:9');
+        try {
+          await runFfmpeg([
+            '-y', '-i', rendered2, '-i', roughCutPath,
+            '-map', '0:v', '-map', '1:a?',
+            '-c:v', 'copy', '-c:a', 'aac', '-b:a', '128k',
+            '-shortest', mergedPath2,
+          ], { timeout: 120_000 });
+        } catch {
+          fs.copyFileSync(rendered2, mergedPath2);
+        }
+      }
       fs.copyFileSync(mergedPath2, output169);
+      console.log(`[Step 7/7] ✓ 16:9 done → ${output169}`);
     }
     console.log(`[Step 7/7] ✓ job ${id} done → ${outputDir}`);
     await reportComplete(apiBase, id, { output_dir: outputDir });
