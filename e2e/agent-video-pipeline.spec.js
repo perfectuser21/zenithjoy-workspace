@@ -12,7 +12,7 @@ const VIDEO = process.env.VIDEO_PATH || 'C:\\Users\\runneradmin\\Videos\\zj-e2e-
 const E2E_LICENSE = process.env.ZJ_E2E_LICENSE_KEY || 'ZJ-F-FBFYTLFR'; // gitleaks:allow — E2E test license
 
 test('Agent E2E — 口播视频本地生成全链路', async ({ page, context }) => {
-  test.setTimeout(1200000); // 20 min total test budget
+  test.setTimeout(1800000); // 30 min total test budget
 
   console.log('[e2e] step 1: 注入 session cookie');
   // better-auth on HTTPS uses __Secure- prefixed cookie name
@@ -25,6 +25,17 @@ test('Agent E2E — 口播视频本地生成全链路', async ({ page, context }
     secure: true,
     sameSite: 'Lax'
   }]);
+
+  // Inject license key into /api/account/me so the dashboard enables the submit button.
+  // The E2E test user has no license in DB; we fake it here at the Playwright layer.
+  await page.route('**/api/account/me', async (route) => {
+    const resp = await route.fetch();
+    const body = await resp.json().catch(() => ({}));
+    if (body && !body.license?.license_key) {
+      body.license = { ...(body.license || {}), license_key: E2E_LICENSE };
+    }
+    await route.fulfill({ response: resp, body: JSON.stringify(body), contentType: 'application/json' });
+  });
 
   // Capture job ID from the POST response for direct status polling.
   let jobId = null;

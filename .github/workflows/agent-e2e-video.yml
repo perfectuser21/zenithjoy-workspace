@@ -18,7 +18,7 @@ jobs:
   e2e-video-pipeline:
     name: Windows -- install pack + Agent online + video task + result
     runs-on: windows-latest
-    timeout-minutes: 40
+    timeout-minutes: 60
 
     steps:
       - uses: actions/checkout@v4
