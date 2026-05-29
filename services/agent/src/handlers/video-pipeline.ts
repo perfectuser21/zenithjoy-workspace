@@ -468,7 +468,10 @@ export async function processVideoPipelineJob(
 
       await withRetry('Step 3.6/7 rough-cut', async () => {
         await runFfmpeg([
-          '-y', '-i', videoPath,
+          // -noautorotate prevents ffmpeg from baking rotation metadata into pixels.
+          // Step 6 (template overlay) and Step 3.7 (non-template) apply transpose
+          // explicitly — without this flag both steps double-rotate the video.
+          '-y', '-noautorotate', '-i', videoPath,
           '-filter_complex', filterParts.join(';'),
           '-map', '[outv]', '-map', '[outa]',
           '-c:v', 'libx264', '-crf', '23', '-c:a', 'aac', '-b:a', '128k',
