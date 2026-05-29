@@ -276,6 +276,11 @@ export default function LocalVideoPipelinePage() {
         )}
 
         {/* 操作按钮 */}
+        {!licenseKey && !accountQuery.isLoading && (
+          <p className="text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 rounded-xl px-3 py-2 mb-1">
+            未找到授权码 — 请确认已登录且账号已激活（注册后刷新页面）。
+          </p>
+        )}
         <div className="flex gap-3">
           {!isDone ? (
             <button
