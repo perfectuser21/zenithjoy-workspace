@@ -37,7 +37,7 @@ describe('qr-bind-douyin', () => {
 
     it('launches browser and writes storageState to sessionPath', async () => {
       const fakeStorageState = {
-        cookies: [{ name: 'sessionid', value: 'abc' }],
+        cookies: [{ name: 'sessionid', value: 'abc', domain: '.douyin.com' }],
         origins: [],
       };
       const mockPage = {
@@ -62,7 +62,6 @@ describe('qr-bind-douyin', () => {
         {
           sessionDir: tmpSessionDir,
           chromiumLauncher: chromiumLauncher as any,
-          isLoggedIn: () => true,
           pollIntervalMs: 1,
           timeoutMs: 100,
         },
@@ -126,7 +125,6 @@ describe('qr-bind-douyin', () => {
         {
           sessionDir: tmpSessionDir,
           chromiumLauncher: chromiumLauncher as any,
-          isLoggedIn: () => false,
           pollIntervalMs: 5,
           timeoutMs: 30,
         },
