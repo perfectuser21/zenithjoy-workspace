@@ -41,17 +41,36 @@ async function runMock(queueData) {
 }
 
 async function runReal(queueData) {
-  // 真 dryrun：连 CDP，上传页，填字段，等按钮，停
   const { chromium } = require('playwright');
   const { requireLogin } = require('./lib/qr-login.cjs');
+  const os = require('os');
 
-  _log('[DY-VIDEO-DRY] 连接 CDP...');
-  const browser = await chromium.connectOverCDP(process.env.ZENITHJOY_AGENT_CDP_URL || 'http://localhost:19222');
-  const ctx = browser.contexts()[0];
-  if (!ctx) throw new Error('CDP 没有上下文');
-  const page = ctx.pages()[0] || await ctx.newPage();
+  const sessionPath = require('path').join(
+    os.homedir(), '.zenithjoy-agent', 'sessions', 'douyin',
+    (process.env.ZENITHJOY_DOUYIN_ACCOUNT || 'default') + '.json'
+  );
 
-  await requireLogin({ injectedPage: page });
+  let browser, page, isLaunched = false;
+  if (require('fs').existsSync(sessionPath)) {
+    _log('[DY-VIDEO-DRY] 加载 QR-bind session:', sessionPath);
+    const storageState = JSON.parse(require('fs').readFileSync(sessionPath, 'utf-8'));
+    browser = await chromium.launch({ headless: false, args: ['--no-sandbox', '--disable-setuid-sandbox'] });
+    const ctx = await browser.newContext({ storageState });
+    page = await ctx.newPage();
+    await page.goto('https://creator.douyin.com/creator-micro/home', { waitUntil: 'domcontentloaded', timeout: 30000 });
+    if (/login|passport/i.test(page.url())) {
+      await browser.close();
+      throw new Error('session 已过期，请重新扫码绑定');
+    }
+    isLaunched = true;
+  } else {
+    _log('[DY-VIDEO-DRY] 回退 CDP (localhost:19222)');
+    browser = await chromium.connectOverCDP(process.env.ZENITHJOY_AGENT_CDP_URL || 'http://localhost:19222');
+    const ctx = browser.contexts()[0];
+    if (!ctx) throw new Error('CDP 没有上下文');
+    page = ctx.pages()[0] || await ctx.newPage();
+    await requireLogin({ injectedPage: page });
+  }
 
   _log('[DY-VIDEO-DRY] 进入上传页...');
   await page.goto('https://creator.douyin.com/creator-micro/content/upload?default-tab=1', {
@@ -66,6 +85,7 @@ async function runReal(queueData) {
   // 严禁 click publish button — dryrun 在此停
   const out = { ok: true, dryRun: true, reachedPublishButton: true, title: queueData.title };
   _log(JSON.stringify(out));
+  if (isLaunched) await browser.close().catch(() => {});
 }
 
 async function main() {

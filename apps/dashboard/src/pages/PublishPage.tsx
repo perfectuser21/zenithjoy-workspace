@@ -34,12 +34,73 @@ type Platform = 'douyin' | 'kuaishou';
 
 const PLATFORM_LABEL: Record<Platform, string> = { douyin: '抖音', kuaishou: '快手' };
 
+function TaskStepsPanel({ task }: { task: PublishTaskDetail }) {
+  const elapsed = task.receipt_at
+    ? null
+    : `${Math.round((Date.now() - new Date(task.created_at).getTime()) / 1000)}s`;
+  const result = task.result as {
+    error?: string; url?: string; urlFallback?: boolean;
+    dryrun_evidence?: { reachedPublishButton?: boolean; dryRun?: boolean };
+  } | null;
+  const isDryRun = result?.dryrun_evidence?.dryRun === true;
+  const steps = [
+    { label: '任务已创建', done: true, active: false },
+    { label: 'Agent 已接收',
+      done: task.status !== 'pending',
+      active: task.status === 'pending',
+      waiting: task.status === 'pending' },
+    { label: '账号校验 & 浏览器启动',
+      done: task.status === 'success' || task.status === 'failed',
+      active: task.status === 'pending' ? false : task.status !== 'success' && task.status !== 'failed' },
+    { label: '视频上传 & 填写标题',
+      done: task.status === 'success' || task.status === 'failed',
+      active: false },
+    { label: task.status === 'failed' ? '发布失败 ✗' : isDryRun ? '链路验证完成（dryrun）' : '发布完成 ✓',
+      done: task.status === 'success',
+      failed: task.status === 'failed' },
+  ];
+  return (
+    <div style={{ padding: 16, background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: 8, minWidth: 220 }}>
+      <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 12, color: '#374151' }}>发布步骤</div>
+      {steps.map((s, i) => (
+        <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+          <span style={{ fontSize: 16, flexShrink: 0 }}>
+            {s.failed ? '❌' : s.done ? '✅' : s.waiting ? '⏳' : '⬜'}
+          </span>
+          <span style={{ fontSize: 13, color: s.failed ? '#dc2626' : s.done ? '#374151' : '#9ca3af' }}>
+            {s.label}
+          </span>
+        </div>
+      ))}
+      {task.status === 'pending' && elapsed && (
+        <div style={{ marginTop: 8, fontSize: 12, color: '#6b7280' }}>等待中（{elapsed}s）</div>
+      )}
+      {result?.url && !result.urlFallback && (
+        <a href={result.url} target="_blank" rel="noopener noreferrer"
+           style={{ display: 'block', marginTop: 12, fontSize: 13, color: '#2563eb', wordBreak: 'break-all' }}>
+          查看已发内容 →
+        </a>
+      )}
+      {isDryRun && (
+        <div style={{ marginTop: 8, fontSize: 12, color: '#92400e', background: '#fef3c7', padding: '4px 8px', borderRadius: 4 }}>
+          dryrun 模式：未真实发布
+        </div>
+      )}
+      {result?.error && (
+        <div style={{ marginTop: 8, fontSize: 12, color: '#dc2626', wordBreak: 'break-all' }}>
+          {result.error}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function PublishPage() {
   const qc = useQueryClient();
   const [submitErr, setSubmitErr] = useState<string | null>(null);
   const [platform, setPlatform] = useState<Platform>('douyin');
-  // Sprint 2.1c: type radio 让客户选 image (默认) / video / article
-  const [publishType, setPublishType] = useState<PublishType>('image');
+  const [publishType, setPublishType] = useState<PublishType>('video');
+  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
 
   // 快手不支持文章
   const availableTypes: PublishType[] =
@@ -213,7 +274,10 @@ export default function PublishPage() {
 
       <h2 style={{ fontSize: 16, fontWeight: 600, marginBottom: 12 }}>
         发布任务（{tasks.length}）
+        <span style={{ fontSize: 12, fontWeight: 400, color: '#9ca3af', marginLeft: 8 }}>点击任务行查看步骤</span>
       </h2>
+      <div style={{ display: 'flex', gap: 20, alignItems: 'flex-start' }}>
+      <div style={{ flex: 1, minWidth: 0 }}>
       {tasks.length === 0 ? (
         <div
           style={{
@@ -247,9 +311,13 @@ export default function PublishPage() {
           </thead>
           <tbody>
             {tasks.map((t) => (
-              <tr key={t.id} style={{ borderTop: '1px solid #e5e7eb' }}>
+              <tr
+                key={t.id}
+                onClick={() => setSelectedTaskId(t.id === selectedTaskId ? null : t.id)}
+                style={{ borderTop: '1px solid #e5e7eb', cursor: 'pointer', background: t.id === selectedTaskId ? '#eff6ff' : undefined }}
+              >
                 <Td>
-                  <code style={{ fontSize: 12 }}>{t.id}</code>
+                  <code style={{ fontSize: 12 }}>{t.id.slice(0, 8)}…</code>
                 </Td>
                 <Td>
                   <span
@@ -292,6 +360,13 @@ export default function PublishPage() {
           </tbody>
         </table>
       )}
+    </div>
+      </div>
+      {selectedTaskId && (() => {
+        const sel = tasks.find(t => t.id === selectedTaskId);
+        return sel ? <TaskStepsPanel task={sel} /> : null;
+      })()}
+      </div>
     </div>
   );
 }
