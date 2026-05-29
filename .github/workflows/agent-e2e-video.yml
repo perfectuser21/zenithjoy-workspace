@@ -279,6 +279,28 @@ jobs:
           }
           Write-Host "[verify] PASS: video+audio confirmed"
 
+      - name: Upload output video to COS
+        if: success()
+        shell: pwsh
+        env:
+          COS_SECRET_ID: ${{ secrets.COS_SECRET_ID }}
+          COS_SECRET_KEY: ${{ secrets.COS_SECRET_KEY }}
+        run: |
+          if (-not (Test-Path "e2e-job-id.txt")) { Write-Host "[cos] no job id, skip"; exit 0 }
+          $jobId = [System.IO.File]::ReadAllText("e2e-job-id.txt").Trim()
+          $outputDir = "$env:USERPROFILE\Videos\zenithjoy-output\$jobId"
+          $video = Get-ChildItem $outputDir -Filter "*.mp4" -EA SilentlyContinue | Select-Object -First 1
+          if (-not $video) { Write-Host "[cos] no mp4 found, skip"; exit 0 }
+          $cosKey = "e2e-output/$jobId/$($video.Name)"
+          $cosUrl = "https://zenithjoy-static-1333590468.cos.accelerate.myqcloud.com/$cosKey"
+          Write-Host "[cos] uploading $($video.FullName) → $cosUrl"
+          pip install coscmd -q 2>&1 | Select-Object -Last 3
+          coscmd config -a "$env:COS_SECRET_ID" -s "$env:COS_SECRET_KEY" `
+            -b zenithjoy-static-1333590468 -e cos.accelerate.myqcloud.com
+          coscmd upload $video.FullName "/$cosKey" --force
+          Write-Host "[cos] DONE: $cosUrl"
+          echo "OUTPUT_VIDEO_URL=$cosUrl" >> $env:GITHUB_ENV
+
       - name: Upload screenshots
         if: always()
         uses: actions/upload-artifact@v4
