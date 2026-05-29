@@ -98,6 +98,41 @@ describe('Step 6B — HyperFrames 必须用 --resolution landscape 渲染 1920×
   });
 });
 
+// ── Regression: 画面检测 — actual dimension-based orientation fix ─────────
+// Root cause of persisting orientation bugs after #550:
+//   1. Math.abs() discards sign → CW vs CCW direction lost
+//   2. No frame detection: rotation was guessed from metadata, not verified
+//      against actual pixel dimensions of rough cut
+// Fix: preserve signed rotation, add Step 3.6.5 to probe rough-cut
+// dimensions, rotate if landscape pixels in portrait job.
+// After 3.6.5 normalizes orientation, Step 6 needs no rotPrefix/-noautorotate.
+describe('画面检测 — 实际帧维度检测纠正方向 [REGRESSION]', () => {
+  it('rotationToTranspose 函数存在（用于正确 CW/CCW 方向选择）', () => {
+    expect(SRC).toContain('rotationToTranspose');
+  });
+
+  it('Step 3.6.5 代码块存在（probe rough-cut 实际维度）', () => {
+    expect(SRC).toContain('Step 3.6.5');
+  });
+
+  it('Step 3.6.5 包含 ffprobe rough-cut 宽高检测', () => {
+    const idx = SRC.indexOf('Step 3.6.5');
+    const block = idx !== -1 ? SRC.slice(idx, idx + 1500) : '';
+    expect(block).toMatch(/rcW|rough.{0,20}width/i);
+    expect(block).toMatch(/rcH|rough.{0,20}height/i);
+  });
+
+  it('Step 6 overlay 不再包含 rotPrefix（方向已由 3.6.5 统一处理）', () => {
+    const idx = SRC.lastIndexOf('[Step 6/7]');
+    const block = idx !== -1 ? SRC.slice(idx, idx + 1000) : '';
+    expect(block).not.toContain('rotPrefix');
+  });
+
+  it('Step 1 保留有符号旋转角 signedVideoRotation（不用 Math.abs 丢失方向）', () => {
+    expect(SRC).toContain('signedVideoRotation');
+  });
+});
+
 // ── Regression: rough cut double-rotation ──────────────────────────────────
 // Step 3.6 creates the rough cut via ffmpeg.  Without -noautorotate on the
 // input, ffmpeg auto-bakes rotation metadata (e.g. rotate=90 from iPhone)
