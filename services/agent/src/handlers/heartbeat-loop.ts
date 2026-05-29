@@ -30,6 +30,7 @@ export interface HeartbeatLoopOptions {
   license: string;
   version: string;
   hostname: string;
+  osType?: string;
   intervalMs?: number;
   fetchImpl?: typeof fetch;
   onTask?: (task: HeartbeatTask) => Promise<void> | void;
@@ -43,6 +44,7 @@ export class HeartbeatLoop {
   private readonly opts: Required<
     Pick<HeartbeatLoopOptions, 'apiBase' | 'license' | 'version' | 'hostname'>
   > & {
+    osType?: string;
     intervalMs: number;
     fetchImpl: typeof fetch;
     onTask?: (task: HeartbeatTask) => Promise<void> | void;
@@ -56,6 +58,7 @@ export class HeartbeatLoop {
       license: options.license,
       version: options.version,
       hostname: options.hostname,
+      osType: options.osType,
       intervalMs: options.intervalMs ?? 30_000,
       fetchImpl: options.fetchImpl ?? (globalThis.fetch as typeof fetch),
       onTask: options.onTask,
@@ -74,6 +77,7 @@ export class HeartbeatLoop {
       license: this.opts.license,
       version: this.opts.version,
       hostname: this.opts.hostname,
+      os_type: this.opts.osType,
     };
     if (this.agentId) body.agent_id = this.agentId;
 

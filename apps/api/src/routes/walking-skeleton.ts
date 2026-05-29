@@ -38,9 +38,10 @@ heartbeatRouter.post(
   '/heartbeat',
   licenseAuth,
   async (req: Request, res: Response) => {
-    const { version, hostname } = (req.body ?? {}) as {
+    const { version, hostname, os_type } = (req.body ?? {}) as {
       version?: unknown;
       hostname?: unknown;
+      os_type?: unknown;
     };
     const lic = req.license!;
     if (!lic.tenant_id) {
@@ -58,6 +59,7 @@ heartbeatRouter.post(
         tenantId: lic.tenant_id,
         hostname: typeof hostname === 'string' ? hostname.slice(0, 200) : null,
         version: typeof version === 'string' ? version.slice(0, 50) : null,
+        osType: typeof os_type === 'string' ? os_type.slice(0, 20) : null,
       });
       const queued = await getQueuedTasks(agent.id);
       return res.status(200).json({
@@ -119,7 +121,9 @@ heartbeatRouter.get(
         `SELECT id, hostname, version, bound_folder_path, last_heartbeat_at
            FROM zenithjoy.agents
           WHERE license_id = $1
-          ORDER BY last_heartbeat_at DESC NULLS LAST
+          ORDER BY
+            CASE WHEN os_type = 'win32' THEN 0 ELSE 1 END ASC,
+            last_heartbeat_at DESC NULLS LAST
           LIMIT 1`,
         [lic.id]
       );
