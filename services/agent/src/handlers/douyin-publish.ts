@@ -375,18 +375,11 @@ export async function handleDouyinPublishTask(
   const queueDir = path.join(os.tmpdir(), 'zenithjoy-agent-douyin');
   if (!fs.existsSync(queueDir)) fs.mkdirSync(queueDir, { recursive: true });
   const queueFile = path.join(queueDir, `task-${payload.task_id}.json`);
-  fs.writeFileSync(
-    queueFile,
-    JSON.stringify(
-      {
-        title: `[WS1] ${path.basename(mp4)}`,
-        content: 'walking-skeleton-1 dryrun',
-        images: [mp4],
-      },
-      null,
-      2,
-    ),
-  );
+  const queuePayload =
+    taskType === 'video'
+      ? { title: `[WS1] ${path.basename(mp4)}`, content: 'walking-skeleton-1 dryrun', video_path: mp4 }
+      : { title: `[WS1] ${path.basename(mp4)}`, content: 'walking-skeleton-1 dryrun', images: [mp4] };
+  fs.writeFileSync(queueFile, JSON.stringify(queuePayload, null, 2));
 
   console.log(
     `[handler:douyin-task] task=${payload.task_id} mp4=${mp4} script=${scriptPath}`,
