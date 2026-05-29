@@ -61,7 +61,6 @@ export interface QrBindDouyinOptions {
   timeoutMs?: number;
   headless?: boolean;
   chromiumLauncher?: ChromiumLauncher;
-  isLoggedIn?: (ctx: ChromiumContext) => boolean | Promise<boolean>;
 }
 
 const DEFAULT_SESSION_DIR_NAME = '.zenithjoy-agent';
@@ -73,66 +72,6 @@ export function getSessionPath(
 ): string {
   const dir = sessionDir ?? path.join(os.homedir(), DEFAULT_SESSION_DIR_NAME, 'sessions');
   return path.join(dir, platform, `${accountLabel}.json`);
-}
-
-/**
- * 判断用户是否已完成抖音创作者后台登录。
- *
- * 抖音创作者中心是 SPA——未登录时 URL 仍是 creator.douyin.com/creator-micro/home，
- * 页面内渲染二维码登录表单，不会跳转到含 /login 的 URL。
- * 不能仅靠 URL 判断登录态，必须用 evaluate() 读取 DOM。
- *
- * 判断逻辑：
- *  1. 若页面内存在"扫码登录"/"二维码"等文字 → 仍在登录界面，返回 false
- *  2. 若在 creator.douyin.com 且上述文字不存在 → 视为登录成功，返回 true
- *  3. evaluate() 不可用（测试注入的 mock page）时，降级为后登录 URL 模式匹配
- */
-async function defaultIsLoggedIn(ctx: ChromiumContext): Promise<boolean> {
-  const pages = ctx.pages();
-  if (pages.length === 0) return false;
-
-  for (const p of pages) {
-    const url = p.url();
-    if (!url || !/creator\.douyin\.com/.test(url)) continue;
-    if (/\/login(\b|\/|$)/i.test(url)) continue;
-
-    const evaluatable = p as { evaluate?: (fn: () => boolean) => Promise<boolean> };
-    if (typeof evaluatable.evaluate === 'function') {
-      try {
-        const stillOnLoginPage = await evaluatable.evaluate(() => {
-          const text = (document.body?.textContent ?? '').toLowerCase();
-          // 只检测登录页专有文字——'二维码'不可用，已登录的主页也有"扫码下载App"等字样
-          const hasLoginText =
-            text.includes('扫码登录') ||
-            text.includes('请扫码') ||
-            text.includes('打开抖音') && text.includes('扫描');
-          // class 名含 login 且含 qr 的元素才是真正的登录 QR 框
-          const hasLoginQrElem = !!(
-            document.querySelector('[class*="loginQr"], [class*="login-qr"], [class*="LoginQr"]') ||
-            document.querySelector('[class*="scanLogin"], [class*="scan-login"]')
-          );
-          // 已登录后才有的元素（正向确认）
-          const hasLoggedInElem = !!(
-            document.querySelector('[class*="creator-tab"], [class*="sidebar-nav"]') ||
-            document.querySelector('[data-e2e="creator-header"]')
-          );
-          if (hasLoggedInElem) return false;
-          return hasLoginText || hasLoginQrElem;
-        });
-        console.log(`[qr-bind] poll url=${url} stillOnLoginPage=${stillOnLoginPage}`);
-        if (!stillOnLoginPage) return true;
-      } catch {
-        // Page is navigating; skip this cycle
-      }
-      continue;
-    }
-
-    // Fallback for test mocks without evaluate: only trust explicit post-login paths
-    if (/\/creator-micro\/(content|material|data|account|fans|revenue)/.test(url)) {
-      return true;
-    }
-  }
-  return false;
 }
 
 async function loadDefaultLauncher(): Promise<ChromiumLauncher> {
@@ -154,8 +93,6 @@ export async function handleQrBindDouyin(
   const pollIntervalMs = options.pollIntervalMs ?? 1500;
   const timeoutMs = options.timeoutMs ?? 5 * 60_000;
   const headless = options.headless ?? false;
-  const isLoggedIn = options.isLoggedIn ?? defaultIsLoggedIn;
-
   let launcher: ChromiumLauncher;
   try {
     launcher = options.chromiumLauncher ?? (await loadDefaultLauncher());
@@ -177,25 +114,26 @@ export async function handleQrBindDouyin(
     const page = await ctx.newPage!();
     await page.goto!(loginUrl);
 
-    // Wait for SPA to fully render before polling (creator.douyin.com takes ~2-3s)
-    await new Promise((r) => setTimeout(r, 3000));
+    const SESSION_COOKIE_NAMES = ['sessionid_ss', 'sessionid', 'sid_tt'];
+    const isSessionCookie = (c: { name: string; domain: string; value: string }) =>
+      typeof c?.value === 'string' &&
+      c.value.length > 0 &&
+      typeof c?.domain === 'string' &&
+      (c.domain.endsWith('.douyin.com') || c.domain === 'douyin.com') &&
+      SESSION_COOKIE_NAMES.includes(c.name);
 
-    // 等用户扫码登录（轮询）
+    type CookieEntry = { name: string; domain: string; value: string };
+    type StorageStateShape = { cookies?: CookieEntry[] };
+    let storageState: StorageStateShape = {};
     const start = Date.now();
-    let logged = false;
     while (Date.now() - start < timeoutMs) {
-      try {
-        const ok = await isLoggedIn(ctx);
-        if (ok) {
-          logged = true;
-          break;
-        }
-      } catch {
-        // ignore one-shot polling errors
-      }
+      const raw = await ctx.storageState();
+      storageState = (raw ?? {}) as StorageStateShape;
+      const cookies: CookieEntry[] = storageState.cookies ?? [];
+      if (cookies.some(isSessionCookie)) break;
       await new Promise((r) => setTimeout(r, pollIntervalMs));
     }
-    if (!logged) {
+    if (!(storageState.cookies ?? []).some(isSessionCookie)) {
       return {
         ok: false,
         sessionPath,
@@ -203,8 +141,6 @@ export async function handleQrBindDouyin(
         error: `qr-bind timeout after ${timeoutMs}ms — 用户未完成扫码登录`,
       };
     }
-
-    const storageState = await ctx.storageState();
 
     fs.mkdirSync(path.dirname(sessionPath), { recursive: true });
     fs.writeFileSync(sessionPath, JSON.stringify(storageState, null, 2));
