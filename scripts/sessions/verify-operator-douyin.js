@@ -21,6 +21,7 @@ const SPA_SETTLE_MS = 3000;
 const NAV_TIMEOUT_MS = 30000;
 const BARK_URL = process.env.BARK_URL || 'https://api.day.app/QU7ktbzPJxZbNx9pEHcstW';
 const FEISHU_BOT_WEBHOOK = process.env.FEISHU_BOT_WEBHOOK || '';
+class VerifyFailError extends Error {}
 
 async function barkNotify(title, body) {
   const encoded = `${encodeURIComponent(title)}/${encodeURIComponent(body)}`;
@@ -100,13 +101,15 @@ async function main() {
     let apiStatus = null;
     let apiOk = false;
     context.on('response', async (resp) => {
-      if (resp.url().includes('/web/api/base/creator/user/info')) {
-        apiStatus = resp.status();
-        try {
-          const body = await resp.json();
-          apiOk = body.status_code === 0 || !!body.user_info || !!body.creator_info;
-        } catch { apiOk = resp.status() === 200; }
-      }
+      try {
+        if (resp.url().includes('/web/api/base/creator/user/info')) {
+          apiStatus = resp.status();
+          try {
+            const body = await resp.json();
+            apiOk = body.status_code === 0 || !!body.user_info || !!body.creator_info;
+          } catch { apiOk = resp.status() === 200; }
+        }
+      } catch { /* 静默忽略 context 关闭等异常 */ }
     });
 
     const page = await context.newPage();
@@ -129,7 +132,7 @@ async function main() {
         barkNotify('抖音运营员 Session 失效', 'CI 验证失败 — 请重新扫码'),
         sendFeishuAlert('🔴 DOUYIN_OPERATOR_SESSION 验证失败', msg + '\n请重新扫码并更新 GHA secret'),
       ]);
-      process.exit(1);
+      throw new VerifyFailError(msg);
     }
 
     // 等待 API 响应
@@ -145,7 +148,7 @@ async function main() {
         barkNotify('抖音运营员 Session 失效', msg + ' — 请重新扫码'),
         sendFeishuAlert('🔴 DOUYIN_OPERATOR_SESSION 验证失败', msg + '\n请重新扫码并更新 GHA secret'),
       ]);
-      process.exit(1);
+      throw new VerifyFailError(msg);
     }
 
     console.log('');
@@ -162,10 +165,13 @@ async function main() {
 }
 
 main().catch(async (err) => {
-  console.error('[FAIL] 未预期异常:', err.message);
-  await Promise.allSettled([
-    barkNotify('抖音运营员 Session 验证异常', err.message.slice(0, 100)),
-    sendFeishuAlert('🔴 DOUYIN_OPERATOR_SESSION 验证异常', err.message.slice(0, 200)),
-  ]).catch(() => {});
+  if (!(err instanceof VerifyFailError)) {
+    // 预期 FAIL 已在内部打印并告警，这里只处理意外异常
+    console.error('[FAIL] 未预期异常:', err.message);
+    await Promise.allSettled([
+      barkNotify('抖音运营员 Session 验证异常', err.message.slice(0, 100)),
+      sendFeishuAlert('🔴 DOUYIN_OPERATOR_SESSION 验证异常', err.message.slice(0, 200)),
+    ]).catch(() => {});
+  }
   process.exit(1);
 });
