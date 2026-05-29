@@ -554,7 +554,7 @@ export async function processVideoPipelineJob(
             console.log(`[Step 3.6.5/7] rotating landscape→portrait via ${transposeFilter}`);
             await withRetry('Step 3.6.5/7 orient', async () => {
               await runFfmpeg([
-                '-y', '-i', roughCutPath,
+                '-y', '-noautorotate', '-i', roughCutPath,
                 '-vf', transposeFilter,
                 '-c:v', 'libx264', '-crf', '22', '-c:a', 'copy',
                 '-metadata:s:v:0', 'rotate=0',
@@ -584,7 +584,7 @@ export async function processVideoPipelineJob(
         console.log(`[Step 3.7/7] normalizing rotation ${signedVideoRotation}° via ${transposeFilter}`);
         await withRetry('Step 3.7/7 normalize-rotation', async () => {
           await runFfmpeg([
-            '-y', '-i', roughCutPath,
+            '-y', '-noautorotate', '-i', roughCutPath,
             '-vf', transposeFilter,
             '-c:v', 'libx264', '-crf', '22', '-c:a', 'copy',
             '-metadata:s:v:0', 'rotate=0',
