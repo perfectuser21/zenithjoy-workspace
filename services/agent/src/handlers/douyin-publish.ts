@@ -268,6 +268,12 @@ export interface DouyinPublishTaskResult {
 }
 
 function defaultPickFirstMp4(folder: string): string | null {
+  // If path is itself a media file (user bound a single file, not a folder), use it directly
+  if (MP4_RE.test(folder)) {
+    try {
+      if (fs.statSync(folder).isFile()) return folder;
+    } catch { /* fall through */ }
+  }
   let entries: string[] = [];
   try {
     entries = fs.readdirSync(folder);
