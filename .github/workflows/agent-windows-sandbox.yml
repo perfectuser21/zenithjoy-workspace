@@ -107,17 +107,23 @@ jobs:
           $packDir = (Resolve-Path "pack").Path
           Write-Host "[pw-core] Checking playwright-core in pack node_modules..."
 
-          # 1. File existence check
-          $idx = "$packDir\node_modules\playwright-core\index.js"
-          $pkg = "$packDir\node_modules\playwright-core\package.json"
-          $lib = "$packDir\node_modules\playwright-core\lib"
-          if (-not (Test-Path $idx)) { Write-Host "FAIL: playwright-core\index.js missing"; exit 1 }
-          if (-not (Test-Path $pkg)) { Write-Host "FAIL: playwright-core\package.json missing"; exit 1 }
-          if (-not (Test-Path $lib)) { Write-Host "FAIL: playwright-core\lib\ missing"; exit 1 }
+          # 1. File existence check — Join-Path for safe cross-platform path construction
+          $idxPath  = Join-Path $packDir "node_modules\playwright-core\index.js"
+          $pkgPath  = Join-Path $packDir "node_modules\playwright-core\package.json"
+          $libPath  = Join-Path $packDir "node_modules\playwright-core\lib"
+          $idxOk = Test-Path $idxPath
+          $pkgOk = Test-Path $pkgPath
+          $libOk = Test-Path $libPath
+          if (-not $idxOk) { Write-Host "[pw-core] FAIL: playwright-core/index.js missing"; exit 1 }
+          if (-not $pkgOk) { Write-Host "[pw-core] FAIL: playwright-core/package.json missing"; exit 1 }
+          if (-not $libOk) { Write-Host "[pw-core] FAIL: playwright-core/lib/ missing"; exit 1 }
           Write-Host "[pw-core] File structure OK"
 
           # 2. require() works from publisher script directory using system node
-          $testScript = "$packDir\publishers\douyin-publisher\__pw_require_test.cjs"
+          $testScript  = Join-Path $packDir "publishers\douyin-publisher\__pw_require_test.cjs"
+          $outFile     = Join-Path $env:TEMP "pw-test-out.txt"
+          $errFile     = Join-Path $env:TEMP "pw-test-err.txt"
+          $publisherDir = Join-Path $packDir "publishers\douyin-publisher"
           @'
 try {
   const { chromium } = require('playwright-core');
@@ -130,38 +136,46 @@ try {
 }
 '@ | Set-Content $testScript -Encoding UTF8
 
-          $env:NODE_PATH = "$packDir\node_modules"
-          $env:PLAYWRIGHT_BROWSERS_PATH = "$packDir\playwright-browsers"
+          $env:NODE_PATH = Join-Path $packDir "node_modules"
+          $env:PLAYWRIGHT_BROWSERS_PATH = Join-Path $packDir "playwright-browsers"
           Write-Host "[pw-core] NODE_PATH=$env:NODE_PATH"
           Write-Host "[pw-core] Running require test from publisher directory..."
           $proc = Start-Process -FilePath "node" -ArgumentList @($testScript) `
-            -WorkingDirectory "$packDir\publishers\douyin-publisher" `
+            -WorkingDirectory $publisherDir `
             -Wait -PassThru -NoNewWindow `
-            -RedirectStandardOutput "$env:TEMP\pw-test-out.txt" `
-            -RedirectStandardError "$env:TEMP\pw-test-err.txt"
-          $stdout = Get-Content "$env:TEMP\pw-test-out.txt" -Raw -ErrorAction SilentlyContinue
-          $stderr = Get-Content "$env:TEMP\pw-test-err.txt" -Raw -ErrorAction SilentlyContinue
+            -RedirectStandardOutput $outFile `
+            -RedirectStandardError $errFile
+          $stdout = Get-Content $outFile -Raw -ErrorAction SilentlyContinue
+          $stderr = Get-Content $errFile -Raw -ErrorAction SilentlyContinue
           Write-Host "[pw-core] stdout: $stdout"
           if ($stderr) { Write-Host "[pw-core] stderr: $stderr" }
-          Remove-Item $testScript -Force
+          # Clean up all temp files
+          Remove-Item $testScript -Force -ErrorAction SilentlyContinue
+          Remove-Item $outFile    -Force -ErrorAction SilentlyContinue
+          Remove-Item $errFile    -Force -ErrorAction SilentlyContinue
 
           if ($proc.ExitCode -ne 0) {
-            Write-Host "FAIL: playwright-core require() test failed (exit $($proc.ExitCode))"
+            Write-Host "[pw-core] FAIL: require() test exited $($proc.ExitCode)"
             exit 1
           }
+          Write-Host "[pw-core] require() test PASSED"
 
           # 3. Verify Playwright Chromium is bundled and findable
-          $chromiums = Get-ChildItem "$packDir\playwright-browsers" -Filter "chromium-*" -Directory -ErrorAction SilentlyContinue
-          if (-not $chromiums) {
-            Write-Host "FAIL: playwright-browsers\chromium-* directory not found"
+          $browsersDir   = Join-Path $packDir "playwright-browsers"
+          $chromiums     = Get-ChildItem $browsersDir -Filter "chromium-*" -Directory -ErrorAction SilentlyContinue
+          $hasChromiums  = $null -ne $chromiums -and $chromiums.Count -gt 0
+          if (-not $hasChromiums) {
+            Write-Host "[pw-core] FAIL: playwright-browsers/chromium-* directory not found"
             exit 1
           }
-          $chromeExe = "$packDir\playwright-browsers\$($chromiums[0].Name)\chrome-win64\chrome.exe"
-          if (-not (Test-Path $chromeExe)) {
-            Write-Host "FAIL: chrome.exe not found at $chromeExe"
+          $chromiumName = $chromiums[0].Name
+          $chromeExe    = Join-Path $browsersDir "$chromiumName\chrome-win64\chrome.exe"
+          $chromeOk     = Test-Path $chromeExe
+          if (-not $chromeOk) {
+            Write-Host "[pw-core] FAIL: chrome.exe not found at $chromeExe"
             exit 1
           }
-          Write-Host "[pw-core] Chromium found: $($chromiums[0].Name)\chrome-win64\chrome.exe"
+          Write-Host "[pw-core] Chromium found: $chromiumName\chrome-win64\chrome.exe"
 
           Write-Host ""
           Write-Host "============================================"
