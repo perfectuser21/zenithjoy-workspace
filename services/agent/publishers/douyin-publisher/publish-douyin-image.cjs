@@ -56,15 +56,33 @@ async function publishDouyinImageReal(queueFilePath) {
     throw new Error('queue 文件 images 为空或图片不存在');
   }
 
-  _log('\n[DY-REAL] 连接到现有浏览器 (localhost:19222)...');
-  const browser = await chromium.connectOverCDP('http://localhost:19222');
-  const contexts = browser.contexts();
-  if (!contexts.length) throw new Error('CDP 没有上下文，确认 Chrome 19222 是否登录抖音');
-  const context = contexts[0];
-  const pages = context.pages();
-  if (!pages.length) throw new Error('CDP 没有 page');
-  const page = pages[0];
-  _log('[DY-REAL] 已连接到浏览器\n');
+  let browser, context, page;
+  const cookiesJson = process.env.DOUYIN_COOKIES;
+  if (cookiesJson) {
+    _log('[DY-REAL] Cookie 注入模式（GitHub Actions）');
+    const cookies = JSON.parse(cookiesJson);
+    browser = await chromium.launch({
+      headless: true,
+      args: ['--no-sandbox', '--disable-setuid-sandbox'],
+    });
+    context = await browser.newContext({
+      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+      viewport: { width: 1280, height: 900 },
+    });
+    await context.addCookies(cookies);
+    page = await context.newPage();
+    _log('[DY-REAL] 已注入', cookies.length, '个 cookies\n');
+  } else {
+    _log('\n[DY-REAL] 连接到现有浏览器 (localhost:19222)...');
+    browser = await chromium.connectOverCDP('http://localhost:19222');
+    const ctxList = browser.contexts();
+    if (!ctxList.length) throw new Error('CDP 没有上下文，确认 Chrome 19222 是否登录抖音');
+    context = ctxList[0];
+    const pageList = context.pages();
+    if (!pageList.length) throw new Error('CDP 没有 page');
+    page = pageList[0];
+    _log('[DY-REAL] 已连接到浏览器\n');
+  }
 
   try {
     // WS3: 强制扫码登录（lead 自验路径），替代旧"假设已登录"硬检查（铁律 6 减肥）

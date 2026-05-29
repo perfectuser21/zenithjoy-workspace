@@ -1,0 +1,177 @@
+name: Agent Windows Sandbox -- Real Publish (v3 scripts)
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Agent version to test (e.g. 1.1.58)'
+        required: false
+        default: '1.1.58'
+
+jobs:
+  windows-real-publish:
+    name: Windows -- Douyin video + image + article real publish
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - name: Download install pack from COS
+        shell: powershell
+        run: |
+          $version = "${{ github.event.inputs.version }}"
+          $url = "https://zenithjoy-static-1333590468.cos.accelerate.myqcloud.com/install-pack/zenithjoy-agent-v${version}.tar.gz"
+          Write-Host "[sandbox] downloading zenithjoy-agent-v${version}.tar.gz ..."
+          Invoke-WebRequest -Uri $url -OutFile "agent.tar.gz" -UseBasicParsing
+          Write-Host "[sandbox] download OK, size: $((Get-Item agent.tar.gz).Length) bytes"
+
+      - name: Extract install pack + verify playwright-core
+        shell: powershell
+        run: |
+          mkdir pack | Out-Null
+          tar -xzf agent.tar.gz -C pack --strip-components=1
+          $pwIdx = Join-Path (Resolve-Path "pack").Path "node_modules\playwright-core\index.js"
+          if (-not (Test-Path $pwIdx)) {
+            Write-Host "ERROR: playwright-core not found in pack"
+            exit 1
+          }
+          Write-Host "[sandbox] playwright-core OK"
+
+      - name: Extract portable Node.js
+        shell: powershell
+        run: |
+          $nodeDir = "$env:APPDATA\ZenithJoy\runtime\nodejs"
+          New-Item -ItemType Directory -Force -Path $nodeDir | Out-Null
+          Expand-Archive -Path "pack\node-win-x64.zip" -DestinationPath "$env:TEMP\zj-node-tmp" -Force
+          $extracted = Get-ChildItem "$env:TEMP\zj-node-tmp" | Select-Object -First 1
+          Move-Item "$env:TEMP\zj-node-tmp\$($extracted.Name)\*" $nodeDir -Force
+          Remove-Item "$env:TEMP\zj-node-tmp" -Recurse -Force
+          $nodeExe = "$nodeDir\node.exe"
+          if (-not (Test-Path $nodeExe)) { Write-Host "ERROR: node.exe missing"; exit 1 }
+          $ver = & $nodeExe --version
+          if ($ver -notmatch "^v22\.") { Write-Host "ERROR: expected Node v22.x, got $ver"; exit 1 }
+          Write-Host "[sandbox] Node $ver OK"
+
+      - name: Download test media from COS
+        shell: powershell
+        run: |
+          $mediaDir = "$env:TEMP\zj-test-media"
+          New-Item -ItemType Directory -Force -Path $mediaDir | Out-Null
+          $base = "https://zenithjoy-static-1333590468.cos.accelerate.myqcloud.com/sandbox-media"
+          foreach ($f in @("test-video.mp4", "test-image-1.jpg", "test-image-2.jpg", "test-cover.jpg")) {
+            Invoke-WebRequest -Uri "$base/$f" -OutFile "$mediaDir\$f" -UseBasicParsing
+            Write-Host "[media] $f $((Get-Item "$mediaDir\$f").Length) bytes OK"
+          }
+
+      - name: Real publish -- video
+        shell: powershell
+        env:
+          DOUYIN_COOKIES: ${{ secrets.DOUYIN_COOKIES }}
+          PLAYWRIGHT_BROWSERS_PATH: ${{ github.workspace }}\pack\playwright-browsers
+          NODE_PATH: ${{ github.workspace }}\pack\node_modules
+        run: |
+          $packDir = (Resolve-Path "pack").Path
+          $nodeExe = "$env:APPDATA\ZenithJoy\runtime\nodejs\node.exe"
+          $script = Join-Path $packDir "publishers\douyin-publisher\publish-douyin-video.cjs"
+          $date = (Get-Date -Format "yyyy-MM-dd")
+
+          $videoPath = "$env:TEMP\zj-test-media\test-video.mp4".Replace('\', '/')
+          $nl = [char]10
+          $queueContent = "{${nl}" +
+            "  `"title`": `"[CI Sandbox] $date video`",${nl}" +
+            "  `"content`": `"ZenithJoy Windows sandbox real publish test`",${nl}" +
+            "  `"video_path`": `"$videoPath`"${nl}" +
+            "}"
+          $queueFile = "$env:TEMP\queue-video.json"
+          Set-Content $queueFile $queueContent -Encoding UTF8
+
+          Write-Host "[video] Running real publish..."
+          $output = & $nodeExe $script $queueFile 2>&1
+          $exitCode = $LASTEXITCODE
+          $output | ForEach-Object { Write-Host $_ }
+          if ($exitCode -ne 0) { Write-Host "FAIL: video exit $exitCode"; exit 1 }
+          $resultLine = ($output | Where-Object { "$_" -match '"ok"' } | Select-Object -Last 1)
+          Write-Host "[video] result: $resultLine"
+          if ("$resultLine" -notmatch '"ok"\s*:\s*true') {
+            Write-Host "FAIL: video result not ok:true"; exit 1
+          }
+          Write-Host "[video] PASS"
+
+      - name: Real publish -- image
+        shell: powershell
+        env:
+          DOUYIN_COOKIES: ${{ secrets.DOUYIN_COOKIES }}
+          PLAYWRIGHT_BROWSERS_PATH: ${{ github.workspace }}\pack\playwright-browsers
+          NODE_PATH: ${{ github.workspace }}\pack\node_modules
+        run: |
+          $packDir = (Resolve-Path "pack").Path
+          $nodeExe = "$env:APPDATA\ZenithJoy\runtime\nodejs\node.exe"
+          $script = Join-Path $packDir "publishers\douyin-publisher\publish-douyin-image.cjs"
+          $date = (Get-Date -Format "yyyy-MM-dd")
+
+          $img1 = "$env:TEMP\zj-test-media\test-image-1.jpg".Replace('\', '/')
+          $img2 = "$env:TEMP\zj-test-media\test-image-2.jpg".Replace('\', '/')
+          $nl = [char]10
+          $queueContent = "{${nl}" +
+            "  `"title`": `"[CI Sandbox] $date image`",${nl}" +
+            "  `"content`": `"ZenithJoy Windows sandbox image publish test`",${nl}" +
+            "  `"images`": [`"$img1`", `"$img2`"]${nl}" +
+            "}"
+          $queueFile = "$env:TEMP\queue-image.json"
+          Set-Content $queueFile $queueContent -Encoding UTF8
+
+          Write-Host "[image] Running real publish..."
+          $output = & $nodeExe $script $queueFile 2>&1
+          $exitCode = $LASTEXITCODE
+          $output | ForEach-Object { Write-Host $_ }
+          if ($exitCode -ne 0) { Write-Host "FAIL: image exit $exitCode"; exit 1 }
+          $resultLine = ($output | Where-Object { "$_" -match '"ok"' } | Select-Object -Last 1)
+          Write-Host "[image] result: $resultLine"
+          if ("$resultLine" -notmatch '"ok"\s*:\s*true') {
+            Write-Host "FAIL: image result not ok:true"; exit 1
+          }
+          Write-Host "[image] PASS"
+
+      - name: Real publish -- article
+        shell: powershell
+        env:
+          DOUYIN_COOKIES: ${{ secrets.DOUYIN_COOKIES }}
+          PLAYWRIGHT_BROWSERS_PATH: ${{ github.workspace }}\pack\playwright-browsers
+          NODE_PATH: ${{ github.workspace }}\pack\node_modules
+        run: |
+          $packDir = (Resolve-Path "pack").Path
+          $nodeExe = "$env:APPDATA\ZenithJoy\runtime\nodejs\node.exe"
+          $script = Join-Path $packDir "publishers\douyin-publisher\publish-douyin-article.cjs"
+          $date = (Get-Date -Format "yyyy-MM-dd")
+
+          $cover = "$env:TEMP\zj-test-media\test-cover.jpg".Replace('\', '/')
+          $nl = [char]10
+          $queueContent = "{${nl}" +
+            "  `"title`": `"[CI Sandbox] $date article`",${nl}" +
+            "  `"content`": `"ZenithJoy Windows sandbox article publish test. CI automated validation.`",${nl}" +
+            "  `"cover`": `"$cover`",${nl}" +
+            "  `"summary`": `"CI sandbox automated test`"${nl}" +
+            "}"
+          $queueFile = "$env:TEMP\queue-article.json"
+          Set-Content $queueFile $queueContent -Encoding UTF8
+
+          Write-Host "[article] Running real publish..."
+          $output = & $nodeExe $script $queueFile 2>&1
+          $exitCode = $LASTEXITCODE
+          $output | ForEach-Object { Write-Host $_ }
+          if ($exitCode -ne 0) { Write-Host "FAIL: article exit $exitCode"; exit 1 }
+          $resultLine = ($output | Where-Object { "$_" -match '"ok"' } | Select-Object -Last 1)
+          Write-Host "[article] result: $resultLine"
+          if ("$resultLine" -notmatch '"ok"\s*:\s*true') {
+            Write-Host "FAIL: article result not ok:true"; exit 1
+          }
+          Write-Host "[article] PASS"
+
+      - name: Summary
+        shell: powershell
+        run: |
+          Write-Host ""
+          Write-Host "============================================"
+          Write-Host "  ALL REAL PUBLISH PASSED: v${{ github.event.inputs.version }}"
+          Write-Host "  video real publish:   PASS"
+          Write-Host "  image real publish:   PASS"
+          Write-Host "  article real publish: PASS"
+          Write-Host "  Douyin 3 scripts CONFIRMED on Windows"
+          Write-Host "============================================"
