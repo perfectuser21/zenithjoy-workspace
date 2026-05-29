@@ -103,7 +103,7 @@ async function getBrowserAndPage() {
       throw new Error('session 已过期，请在 Dashboard 重新扫码绑定抖音账号');
     }
     _log('[DY-VIDEO-REAL] session 有效，已到:', url);
-    return { browser, page, isLaunched: true };
+    return { browser, page, context: ctx, isLaunched: true };
   }
   _log('[DY-VIDEO-REAL] 无保存 session，回退 CDP (localhost:19222)');
   const browser = await chromium.connectOverCDP(
@@ -116,7 +116,7 @@ async function getBrowserAndPage() {
   if (!/creator(-micro)?\.douyin\.com\/(creator-micro|content)/.test(currentUrl)) {
     await requireLogin({ injectedPage: page });
   }
-  return { browser, page, isLaunched: false };
+  return { browser, page, context: null, isLaunched: false };
 }
 
 async function publishDouyinVideoReal(queueData) {
@@ -127,7 +127,7 @@ async function publishDouyinVideoReal(queueData) {
     throw new Error(`video file not found: ${queueData.video_path}`);
   }
 
-  const { browser, page, isLaunched } = await getBrowserAndPage();
+  const { browser, page, context, isLaunched } = await getBrowserAndPage();
   try {
     _log('[DY-VIDEO-REAL] 进入视频上传页...');
     await page.goto('https://creator.douyin.com/creator-micro/content/upload?default-tab=1', {
@@ -142,7 +142,7 @@ async function publishDouyinVideoReal(queueData) {
     await page.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => {});
 
     _log('[DY-VIDEO-REAL] 上传视频...');
-    await uploadVideoFile(page, queueData.video_path);
+    await uploadVideoFile(page, context, queueData.video_path);
     _log('[DY-VIDEO-REAL] 等抖音处理...');
     await waitForUploadProcessed(page);
     _log('[DY-VIDEO-REAL] 填标题...');
@@ -191,8 +191,64 @@ async function main() {
 // 5 个抽出的 DOM selector 函数（playwright 等价封装 user-skill raw CDP 实现）
 // ============================================================================
 
-async function uploadVideoFile(page, videoPath) {
-  await page.setInputFiles('input[type="file"]', videoPath);
+async function uploadVideoFile(page, context, videoPath) {
+  // Diagnostic: count file inputs in regular DOM
+  const inputCount = await page.evaluate(() =>
+    document.querySelectorAll('input[type="file"]').length
+  ).catch(() => -1);
+  _log('[DY-VIDEO-REAL] DOM file inputs (no shadow):', inputCount);
+
+  // Strategy 1: FileChooser interception — works even if input is in shadow DOM
+  // Click the upload area to trigger the native file chooser event
+  try {
+    const fileChooserPromise = page.waitForEvent('filechooser', { timeout: 8000 });
+    const clickResult = await page.evaluate(() => {
+      // Try common Douyin creator upload trigger selectors
+      const triggers = [
+        '[class*="upload-btn"]',
+        '[class*="upload-area"]',
+        '[class*="Upload"]',
+        '.upload-area',
+        'input[type="file"]',
+        '[class*="btn"][class*="upload"]',
+        '[data-e2e="upload-btn"]',
+      ].map(sel => document.querySelector(sel)).filter(Boolean);
+      if (triggers.length) { triggers[0].click(); return triggers[0].className || 'clicked'; }
+      return null;
+    });
+    _log('[DY-VIDEO-REAL] click trigger result:', clickResult);
+    const fileChooser = await fileChooserPromise;
+    await fileChooser.setFiles(videoPath);
+    _log('[DY-VIDEO-REAL] ✓ 文件通过 FileChooser 设置成功');
+    return;
+  } catch (e1) {
+    _log('[DY-VIDEO-REAL] FileChooser 方式失败:', e1.message.substring(0, 120));
+  }
+
+  // Strategy 2: CDP with shadow DOM traversal
+  if (context) {
+    _log('[DY-VIDEO-REAL] 尝试 CDP shadow DOM 方式...');
+    try {
+      const cdpSession = await context.newCDPSession(page);
+      const { result } = await cdpSession.send('Runtime.evaluate', {
+        expression: `(function f(r){var i=r.querySelector('input[type="file"]');if(i)return i;for(var e of r.querySelectorAll('*'))if(e.shadowRoot){var x=f(e.shadowRoot);if(x)return x;}return null;})(document)`,
+      });
+      if (!result.objectId) throw new Error('未找到 file input (shadow DOM 搜索也无结果)');
+      const { node } = await cdpSession.send('DOM.describeNode', { objectId: result.objectId });
+      await cdpSession.send('DOM.setFileInputFiles', {
+        backendNodeId: node.backendNodeId,
+        files: [videoPath],
+      });
+      _log('[DY-VIDEO-REAL] ✓ 文件通过 CDP 设置成功');
+      return;
+    } catch (e2) {
+      _log('[DY-VIDEO-REAL] CDP 方式失败:', e2.message.substring(0, 120));
+    }
+  }
+
+  // Strategy 3: Direct setInputFiles fallback (original behavior)
+  _log('[DY-VIDEO-REAL] 回退到 setInputFiles (60s 超时)...');
+  await page.setInputFiles('input[type="file"]', videoPath, { timeout: 60000 });
 }
 
 async function waitForUploadProcessed(page, timeoutMs = 60_000) {
