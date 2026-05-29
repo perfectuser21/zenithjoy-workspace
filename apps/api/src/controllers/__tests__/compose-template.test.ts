@@ -1,5 +1,6 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, type MockedFunction } from 'vitest';
 import type { TemplateSpec } from '../../templates/registry';
+import type { Request, Response, NextFunction } from 'express';
 
 const { mockQuery } = vi.hoisted(() => ({ mockQuery: vi.fn() }));
 vi.mock('../../db/connection', () => ({ default: { query: mockQuery } }));
@@ -9,7 +10,7 @@ vi.mock('../../db/connection', () => ({ default: { query: mockQuery } }));
 // controller still runs to completion and we can assert on the JSON response shape.
 vi.mock('https', () => ({
   default: {
-    request: vi.fn((_opts: unknown, _cb: unknown) => {
+    request: vi.fn(() => {
       const req = {
         on(event: string, handler: (e: Error) => void) {
           if (event === 'error') process.nextTick(() => handler(new Error('https mocked')));
@@ -183,7 +184,7 @@ describe('composeTemplate — phoneRect in response (regression #916)', () => {
     });
 
     const { composeTemplate } = await import('../../controllers/ai-video-pipeline-ai.controller');
-    const jsonFn = vi.fn();
+    const jsonFn: MockedFunction<Response['json']> = vi.fn();
     const req = {
       params: { id: 'job-916' },
       body: {
@@ -191,9 +192,9 @@ describe('composeTemplate — phoneRect in response (regression #916)', () => {
         segments: [{ start: 0, end: 5, text: 'hello world' }],
         duration: 5,
       },
-    } as any;
-    const res = { status: vi.fn().mockReturnThis(), json: jsonFn } as any;
-    const next = vi.fn();
+    } as unknown as Request;
+    const res = { status: vi.fn().mockReturnThis(), json: jsonFn } as unknown as Response;
+    const next: NextFunction = vi.fn();
 
     await composeTemplate(req, res, next);
 
