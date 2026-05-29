@@ -51,6 +51,45 @@ async function captureFailScreenshot(page, taskHint) {
   }
 }
 
+async function getBrowserAndPage() {
+  const sessionPath = path.join(
+    os.homedir(), '.zenithjoy-agent', 'sessions', 'douyin',
+    (process.env.ZENITHJOY_DOUYIN_ACCOUNT || 'default') + '.json'
+  );
+  if (fs.existsSync(sessionPath)) {
+    _log('[DY-VIDEO-REAL] 加载 QR-bind session:', sessionPath);
+    const storageState = JSON.parse(fs.readFileSync(sessionPath, 'utf-8'));
+    const browser = await chromium.launch({
+      headless: false,
+      args: ['--no-sandbox', '--disable-setuid-sandbox'],
+    });
+    const ctx = await browser.newContext({ storageState });
+    const page = await ctx.newPage();
+    await page.goto('https://creator.douyin.com/creator-micro/home', {
+      waitUntil: 'domcontentloaded', timeout: 30000,
+    });
+    const url = page.url();
+    if (/login|passport/i.test(url)) {
+      await browser.close();
+      throw new Error('session 已过期，请在 Dashboard 重新扫码绑定抖音账号');
+    }
+    _log('[DY-VIDEO-REAL] session 有效，已到:', url);
+    return { browser, page, isLaunched: true };
+  }
+  _log('[DY-VIDEO-REAL] 无保存 session，回退 CDP (localhost:19222)');
+  const browser = await chromium.connectOverCDP(
+    process.env.ZENITHJOY_AGENT_CDP_URL || 'http://localhost:19222'
+  );
+  const ctx = browser.contexts()[0];
+  if (!ctx) throw new Error('CDP 没有上下文');
+  const page = ctx.pages()[0] || await ctx.newPage();
+  const currentUrl = page.url();
+  if (!/creator(-micro)?\.douyin\.com\/(creator-micro|content)/.test(currentUrl)) {
+    await requireLogin({ injectedPage: page });
+  }
+  return { browser, page, isLaunched: false };
+}
+
 async function publishDouyinVideoReal(queueData) {
   _log('[DY-VIDEO-REAL] 标题:', queueData.title);
   _log('[DY-VIDEO-REAL] video_path:', queueData.video_path);
@@ -59,25 +98,9 @@ async function publishDouyinVideoReal(queueData) {
     throw new Error(`video file not found: ${queueData.video_path}`);
   }
 
-  _log('[DY-VIDEO-REAL] 连 CDP...');
-  const browser = await chromium.connectOverCDP(process.env.ZENITHJOY_AGENT_CDP_URL || 'http://localhost:19222');
-  const ctx = browser.contexts()[0];
-  if (!ctx) throw new Error('CDP 没有上下文');
-  const page = ctx.pages()[0] || await ctx.newPage();
-
-  // 智能登录检测：chrome 已在创作者后台路径 → 信任已扫过码的 cookie，跳过强制扫码
-  // 否则走 requireLogin 严格策略（防作弊：sprint 2.1a 防预置 cookie 条款）
-  const currentUrl = page.url();
-  const alreadyInCreator = /creator(-micro)?\.douyin\.com\/(creator-micro|content)/.test(currentUrl);
-  if (alreadyInCreator) {
-    _log('[DY-VIDEO-REAL] chrome 已在创作者后台 (', currentUrl, ')，跳过强制扫码 — 信任 chrome user-data-dir 已有 cookie');
-  } else {
-    _log('[DY-VIDEO-REAL] chrome 不在创作者后台，走 requireLogin 强制扫码');
-    await requireLogin({ injectedPage: page });
-  }
-
-  _log('[DY-VIDEO-REAL] 进入视频上传页...');
+  const { browser, page, isLaunched } = await getBrowserAndPage();
   try {
+    _log('[DY-VIDEO-REAL] 进入视频上传页...');
     await page.goto('https://creator.douyin.com/creator-micro/content/upload?default-tab=1', {
       waitUntil: 'domcontentloaded',
     });
@@ -89,7 +112,6 @@ async function publishDouyinVideoReal(queueData) {
     _log('[DY-VIDEO-REAL] 填标题...');
     await fillTitle(page, queueData.title);
 
-    // R1 风控检测
     const bodyText = await page.evaluate(() => document.body?.innerText || '').catch(() => '');
     for (const kw of RISK_KEYWORDS) {
       if (bodyText.includes(kw)) {
@@ -109,6 +131,8 @@ async function publishDouyinVideoReal(queueData) {
   } catch (e) {
     const shot = await captureFailScreenshot(page, 'fail');
     throw new Error(`${e.message} (screenshot: ${shot || 'n/a'})`);
+  } finally {
+    if (isLaunched) await browser.close().catch(() => {});
   }
 }
 
