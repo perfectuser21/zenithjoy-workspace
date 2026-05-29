@@ -51,19 +51,37 @@ async function publishDouyinArticleReal(queueFilePath) {
     return emitFailure(`封面文件不存在或未指定: ${cover}`);
   }
 
-  _log('\n[DY-ARTICLE] 连接到现有浏览器 (localhost:19222)...');
-  const browser = await chromium.connectOverCDP('http://localhost:19222');
-  const contexts = browser.contexts();
-  if (!contexts.length) {
-    return emitFailure('CDP 没有上下文，确认 Chrome 19222 是否启动');
+  let browser, context, page;
+  const cookiesJson = process.env.DOUYIN_COOKIES;
+  if (cookiesJson) {
+    _log('[DY-ARTICLE] Cookie 注入模式（GitHub Actions）');
+    const cookies = JSON.parse(cookiesJson);
+    browser = await chromium.launch({
+      headless: true,
+      args: ['--no-sandbox', '--disable-setuid-sandbox'],
+    });
+    context = await browser.newContext({
+      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+      viewport: { width: 1280, height: 900 },
+    });
+    await context.addCookies(cookies);
+    page = await context.newPage();
+    _log('[DY-ARTICLE] 已注入', cookies.length, '个 cookies\n');
+  } else {
+    _log('\n[DY-ARTICLE] 连接到现有浏览器 (localhost:19222)...');
+    browser = await chromium.connectOverCDP('http://localhost:19222');
+    const ctxList = browser.contexts();
+    if (!ctxList.length) {
+      return emitFailure('CDP 没有上下文，确认 Chrome 19222 是否启动');
+    }
+    context = ctxList[0];
+    const pageList = context.pages();
+    if (!pageList.length) {
+      return emitFailure('CDP 没有 page');
+    }
+    page = pageList[0];
+    _log('[DY-ARTICLE] 已连接到浏览器\n');
   }
-  const context = contexts[0];
-  const pages = context.pages();
-  if (!pages.length) {
-    return emitFailure('CDP 没有 page');
-  }
-  const page = pages[0];
-  _log('[DY-ARTICLE] 已连接到浏览器\n');
 
   try {
     _log('[DY-ARTICLE] Step 1: 导航到文章发布页面');

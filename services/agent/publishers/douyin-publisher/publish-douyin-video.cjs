@@ -52,6 +52,24 @@ async function captureFailScreenshot(page, taskHint) {
 }
 
 async function getBrowserAndPage() {
+  // Cookie injection mode (GitHub Actions / CI sandbox)
+  const cookiesJson = process.env.DOUYIN_COOKIES;
+  if (cookiesJson) {
+    _log('[DY-VIDEO-REAL] Cookie 注入模式（GitHub Actions）');
+    const cookies = JSON.parse(cookiesJson);
+    const browser = await chromium.launch({
+      headless: true,
+      args: ['--no-sandbox', '--disable-setuid-sandbox'],
+    });
+    const ctx = await browser.newContext({
+      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+      viewport: { width: 1280, height: 900 },
+    });
+    await ctx.addCookies(cookies);
+    const page = await ctx.newPage();
+    _log('[DY-VIDEO-REAL] 已注入', cookies.length, '个 cookies');
+    return { browser, page, isLaunched: true };
+  }
   const sessionPath = path.join(
     os.homedir(), '.zenithjoy-agent', 'sessions', 'douyin',
     (process.env.ZENITHJOY_DOUYIN_ACCOUNT || 'default') + '.json'
