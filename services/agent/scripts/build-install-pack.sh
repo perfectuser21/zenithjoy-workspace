@@ -60,6 +60,17 @@ echo "[build] copying publishers/ (douyin-publisher et al)"
 cp -r publishers/ "$PACK_DIR/publishers/"
 echo "[build] publishers/ included in pack"
 
+echo "[build] copying playwright-core npm package (pure JS, required by publisher scripts)"
+# Publisher .cjs scripts run as external node processes — they cannot reach into the pkg
+# virtual FS. playwright-core must exist on the real filesystem at <agent-dir>/node_modules/.
+# Only copy JS files (lib/**/*.js + index.js) — browser binaries are in playwright-browsers/.
+mkdir -p "$PACK_DIR/node_modules/playwright-core"
+cp node_modules/playwright-core/package.json "$PACK_DIR/node_modules/playwright-core/"
+cp node_modules/playwright-core/index.js "$PACK_DIR/node_modules/playwright-core/" 2>/dev/null || true
+cp node_modules/playwright-core/browsers.json "$PACK_DIR/node_modules/playwright-core/" 2>/dev/null || true
+cp -r node_modules/playwright-core/lib "$PACK_DIR/node_modules/playwright-core/" 2>/dev/null || true
+echo "[build] playwright-core JS library included (browser binaries in playwright-browsers/)"
+
 echo "[build] ensuring portable Node.js for Windows..."
 # Node.js portable zip from npmmirror (China-friendly CDN).
 # Bundled so users with zero Node.js installed can get hyperframes on first run.
