@@ -48,11 +48,11 @@ function emitFailure(reason) {
 
 /**
  * 主流程（dependency-injection 友好，便于单测）。
- * deps.chromium 可注入；缺省走 require('playwright').chromium。
+ * deps.chromium 可注入；缺省走 require('playwright-core').chromium。
  */
 async function runWechatImageDryrun(queueFilePath, deps) {
   deps = deps || {};
-  const chromium = deps.chromium || require('playwright').chromium;
+  const chromium = deps.chromium || require('playwright-core').chromium;
 
   // 1. 读 queue 文件
   let queueData;

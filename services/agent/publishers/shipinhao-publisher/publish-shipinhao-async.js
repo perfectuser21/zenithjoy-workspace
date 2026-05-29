@@ -2,7 +2,7 @@
 const fs = require('fs');
 const path = require('path');
 const { spawn } = require('child_process');
-const { chromium } = require('playwright');
+const { chromium } = require('playwright-core');
 
 const CDP_URL = 'http://localhost:19228';
 const WINDOWS_IP = '100.97.242.124';

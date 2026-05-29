@@ -112,7 +112,7 @@ function inlineFormat(s) {
 
 async function runWechatArticle(queueFilePath, deps) {
   deps = deps || {};
-  const chromium = deps.chromium || require('playwright').chromium;
+  const chromium = deps.chromium || require('playwright-core').chromium;
 
   let queueData;
   try {
