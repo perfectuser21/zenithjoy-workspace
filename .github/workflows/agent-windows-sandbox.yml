@@ -100,8 +100,72 @@ jobs:
             exit 1
           }
           Write-Host "[sandbox] No EBADENGINE — Node 22 + hyperframes compatibility CONFIRMED"
+
+      - name: Verify playwright-core bundled in pack (root cause fix v1.1.57)
+        shell: powershell
+        run: |
+          $packDir = (Resolve-Path "pack").Path
+          Write-Host "[pw-core] Checking playwright-core in pack node_modules..."
+
+          # 1. File existence check
+          $idx = "$packDir\node_modules\playwright-core\index.js"
+          $pkg = "$packDir\node_modules\playwright-core\package.json"
+          $lib = "$packDir\node_modules\playwright-core\lib"
+          if (-not (Test-Path $idx)) { Write-Host "FAIL: playwright-core\index.js missing"; exit 1 }
+          if (-not (Test-Path $pkg)) { Write-Host "FAIL: playwright-core\package.json missing"; exit 1 }
+          if (-not (Test-Path $lib)) { Write-Host "FAIL: playwright-core\lib\ missing"; exit 1 }
+          Write-Host "[pw-core] File structure OK"
+
+          # 2. require() works from publisher script directory using system node
+          $testScript = "$packDir\publishers\douyin-publisher\__pw_require_test.cjs"
+          @'
+try {
+  const { chromium } = require('playwright-core');
+  if (!chromium) throw new Error('chromium object is falsy');
+  console.log('PASS: playwright-core loaded, chromium API available');
+  process.exit(0);
+} catch (e) {
+  console.error('FAIL:', e.message);
+  process.exit(1);
+}
+'@ | Set-Content $testScript -Encoding UTF8
+
+          $env:NODE_PATH = "$packDir\node_modules"
+          $env:PLAYWRIGHT_BROWSERS_PATH = "$packDir\playwright-browsers"
+          Write-Host "[pw-core] NODE_PATH=$env:NODE_PATH"
+          Write-Host "[pw-core] Running require test from publisher directory..."
+          $proc = Start-Process -FilePath "node" -ArgumentList @($testScript) `
+            -WorkingDirectory "$packDir\publishers\douyin-publisher" `
+            -Wait -PassThru -NoNewWindow `
+            -RedirectStandardOutput "$env:TEMP\pw-test-out.txt" `
+            -RedirectStandardError "$env:TEMP\pw-test-err.txt"
+          $stdout = Get-Content "$env:TEMP\pw-test-out.txt" -Raw -ErrorAction SilentlyContinue
+          $stderr = Get-Content "$env:TEMP\pw-test-err.txt" -Raw -ErrorAction SilentlyContinue
+          Write-Host "[pw-core] stdout: $stdout"
+          if ($stderr) { Write-Host "[pw-core] stderr: $stderr" }
+          Remove-Item $testScript -Force
+
+          if ($proc.ExitCode -ne 0) {
+            Write-Host "FAIL: playwright-core require() test failed (exit $($proc.ExitCode))"
+            exit 1
+          }
+
+          # 3. Verify Playwright Chromium is bundled and findable
+          $chromiums = Get-ChildItem "$packDir\playwright-browsers" -Filter "chromium-*" -Directory -ErrorAction SilentlyContinue
+          if (-not $chromiums) {
+            Write-Host "FAIL: playwright-browsers\chromium-* directory not found"
+            exit 1
+          }
+          $chromeExe = "$packDir\playwright-browsers\$($chromiums[0].Name)\chrome-win64\chrome.exe"
+          if (-not (Test-Path $chromeExe)) {
+            Write-Host "FAIL: chrome.exe not found at $chromeExe"
+            exit 1
+          }
+          Write-Host "[pw-core] Chromium found: $($chromiums[0].Name)\chrome-win64\chrome.exe"
+
           Write-Host ""
           Write-Host "============================================"
-          Write-Host "  SANDBOX PASS: v${{ github.event.inputs.version }}"
-          Write-Host "  Node 22 + hyperframes — zero EBADENGINE"
+          Write-Host "  ALL CHECKS PASSED: v${{ github.event.inputs.version }}"
+          Write-Host "  playwright-core bundled + require() OK"
+          Write-Host "  Node 22 + hyperframes + Chromium READY"
           Write-Host "============================================"
