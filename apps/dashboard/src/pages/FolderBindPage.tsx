@@ -128,7 +128,7 @@ export default function FolderBindPage() {
           {mutation.isPending ? '绑定中…' : '绑定'}
         </button>
 
-        {!mutation.isPending && savedPath && (
+        {(savedPath || currentBound) && !mutation.isPending && (
           <div
             style={{
               marginTop: 16,
@@ -140,22 +140,10 @@ export default function FolderBindPage() {
               fontSize: 14,
             }}
           >
-            绑定成功 — 已绑定 <code>{savedPath}</code>。Agent 将开始监听该文件夹的新文件。
-          </div>
-        )}
-        {!mutation.isPending && !savedPath && currentBound && (
-          <div
-            style={{
-              marginTop: 16,
-              padding: 12,
-              background: '#ecfdf5',
-              border: '1px solid #6ee7b7',
-              borderRadius: 6,
-              color: '#065f46',
-              fontSize: 14,
-            }}
-          >
-            当前已绑定 <code>{currentBound}</code>。
+            {savedPath
+              ? <>绑定成功 — 已绑定 <code>{savedPath}</code>。Agent 将开始监听该文件夹的新文件。</>
+              : <>当前已绑定 <code>{currentBound}</code>。</>
+            }
           </div>
         )}
         {error && (

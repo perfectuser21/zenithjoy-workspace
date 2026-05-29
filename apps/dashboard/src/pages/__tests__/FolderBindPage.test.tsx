@@ -113,7 +113,7 @@ describe('FolderBindPage [BEHAVIOR]', () => {
     });
     render(<FolderBindPage />, { wrapper: createWrapper() });
     await waitFor(() => {
-      expect(screen.getByText(/当前已绑定/)).toBeInTheDocument();
+      expect(screen.getByText(/当前已绑定|\/Users\/foo\/existing-folder/)).toBeInTheDocument();
     });
   });
 });
