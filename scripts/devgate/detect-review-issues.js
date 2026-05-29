@@ -40,7 +40,12 @@ process.stdin.on('end', () => {
     || /🔴\s*严重问题\s*[:：][\s\S]{0,100}未发现/.test(input)
     || /🔴\s*严重问题\s*[:：][\s\S]{0,100}无$/m.test(input)
     // DeepSeek V3 另一输出格式：「🔴 严重问题：\n1. 没有发现...」
-    || /🔴\s*严重问题\s*[:：][\s\S]{0,200}没有发现/.test(input);
+    || /🔴\s*严重问题\s*[:：][\s\S]{0,200}没有发现/.test(input)
+    // DeepSeek V3 inline "no-issue" formats: 🔴 comes BEFORE the negative declaration
+    || /🔴\s*未发现严重问题/.test(input)
+    || /🔴\s*无严重问题/.test(input)
+    || /🔴\s*没有严重问题/.test(input)
+    || /🔴\s*没有发现严重问题/.test(input);
 
   const textWithoutHeadings = input
     .replace(/#+\s*[^🔴\n]*[（(]🔴[)）][^\n]*/g, '')  // section headings: "### 严重问题 (🔴)"
