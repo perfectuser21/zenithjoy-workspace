@@ -324,7 +324,7 @@ body{width:1920px;height:1080px;overflow:hidden;background:var(--bg);font-family
   ${videoEl}
   ${logoEl}
 </div>
-<div id="board" data-composition-id="pipeline-job" data-start="0" data-duration="${duration}" data-width="1600" data-height="1080">
+<div id="board" data-composition-id="pipeline-job" data-start="0" data-duration="${duration}" data-width="1920" data-height="1080">
   ${sceneHtml}
   <audio id="bgm" data-start="0" data-duration="${duration}" data-volume="0.3" src="bgm/bgm.mp3" loop></audio>
 </div>

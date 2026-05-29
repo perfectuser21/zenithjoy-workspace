@@ -681,12 +681,21 @@ export async function processVideoPipelineJob(
     const rendered2 = path.join(hfDir2, 'rendered.mp4');
     const hfCmd2 = await ensureHyperframes();
     await withRetry('Step 6/7 hf-render', async () => {
-      await execAsync(hfCmd2 + ' render --output ' + JSON.stringify(rendered2), {
+      await execAsync(hfCmd2 + ' render --resolution landscape --output ' + JSON.stringify(rendered2), {
         cwd: hfDir2, timeout: 600_000, maxBuffer: 10 * 1024 * 1024, windowsHide: true,
         env: _hfEnv(),
       });
       if (!fs.existsSync(rendered2)) throw new Error('HyperFrames produced no output file');
     }, 2, 3_000);
+    // Probe rendered2 dimensions for diagnostics
+    try {
+      const ffprobeExe = findFfmpeg().replace(/ffmpeg(\.exe)?$/i, (m) => m.replace(/ffmpeg/i, 'ffprobe'));
+      const probeCmd = `${quoteArg(ffprobeExe)} -v error -select_streams v:0 -show_entries stream=width,height -of csv=p=0 ${quoteArg(rendered2)}`;
+      const { stdout: probeOut } = await execAsync(probeCmd, { timeout: 15_000 });
+      console.log(`[Step 6/7] rendered2 dimensions: ${probeOut.trim()} (expected 1920,1080)`);
+    } catch {
+      console.warn('[Step 6/7] could not probe rendered2 dimensions');
+    }
     console.log(`[Step 6/7] ✓ HyperFrames rendered`);
     fireProgress(apiBase, id, 85, 'step6_hf');
 
