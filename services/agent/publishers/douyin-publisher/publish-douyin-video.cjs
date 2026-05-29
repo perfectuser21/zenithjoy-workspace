@@ -68,6 +68,17 @@ async function getBrowserAndPage() {
     await ctx.addCookies(cookies);
     const page = await ctx.newPage();
     _log('[DY-VIDEO-REAL] 已注入', cookies.length, '个 cookies');
+    // Verify authentication before returning
+    await page.goto('https://creator.douyin.com/creator-micro/home', {
+      waitUntil: 'domcontentloaded', timeout: 30000,
+    });
+    const homeUrl = page.url();
+    _log('[DY-VIDEO-REAL] home URL:', homeUrl);
+    if (/login|passport|sign/i.test(homeUrl)) {
+      const shot = await captureFailScreenshot(page, 'cookie-auth-fail');
+      await browser.close();
+      throw new Error(`DOUYIN_COOKIES 无效或已过期，重定向到: ${homeUrl}，请更新 GitHub secret DOUYIN_COOKIES (screenshot: ${shot || 'n/a'})`);
+    }
     return { browser, page, isLaunched: true };
   }
   const sessionPath = path.join(
@@ -122,6 +133,13 @@ async function publishDouyinVideoReal(queueData) {
     await page.goto('https://creator.douyin.com/creator-micro/content/upload?default-tab=1', {
       waitUntil: 'domcontentloaded',
     });
+    const uploadUrl = page.url();
+    _log('[DY-VIDEO-REAL] 上传页 URL:', uploadUrl);
+    if (/login|passport|sign/i.test(uploadUrl)) {
+      const shot = await captureFailScreenshot(page, 'upload-login-redirect');
+      throw new Error(`上传页重定向到登录: ${uploadUrl} (screenshot: ${shot || 'n/a'})`);
+    }
+    await page.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => {});
 
     _log('[DY-VIDEO-REAL] 上传视频...');
     await uploadVideoFile(page, queueData.video_path);
