@@ -1,0 +1,69 @@
+name: Agent QR Operator Windows Verify
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Agent version to verify'
+        required: false
+        default: '1.1.43'
+
+jobs:
+  unit-tests-windows:
+    name: Agent Unit Tests (Windows) — qr-bind-operator
+    runs-on: windows-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: services/agent
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: services/agent/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run qr-bind-operator unit tests
+        run: npm test -- --reporter=verbose
+
+  sandbox-install:
+    name: Windows Sandbox — v${{ github.event.inputs.version }} install smoke
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - name: Download install pack from COS
+        shell: powershell
+        run: |
+          $version = "${{ github.event.inputs.version }}"
+          $url = "https://zenithjoy-static-1333590468.cos.accelerate.myqcloud.com/install-pack/zenithjoy-agent-v${version}.tar.gz"
+          Write-Host "[verify] Downloading zenithjoy-agent-v${version}.tar.gz ..."
+          Invoke-WebRequest -Uri $url -OutFile "agent.tar.gz" -UseBasicParsing
+          Write-Host "[verify] Size: $((Get-Item agent.tar.gz).Length) bytes"
+
+      - name: Extract and verify exe
+        shell: powershell
+        run: |
+          mkdir pack | Out-Null
+          tar -xzf agent.tar.gz -C pack --strip-components=1
+          Write-Host "[verify] Pack contents:"
+          Get-ChildItem pack | ForEach-Object { Write-Host "  $_" }
+          if (-not (Test-Path "pack\zenithjoy-agent.exe")) {
+            Write-Host "ERROR: zenithjoy-agent.exe not found"
+            exit 1
+          }
+          $size = (Get-Item "pack\zenithjoy-agent.exe").Length
+          Write-Host "[verify] zenithjoy-agent.exe found, size: $size bytes"
+          if ($size -lt 1000000) {
+            Write-Host "ERROR: exe too small ($size bytes), likely corrupted"
+            exit 1
+          }
+          Write-Host ""
+          Write-Host "============================================"
+          Write-Host "  PASS: v${{ github.event.inputs.version }} install pack valid"
+          Write-Host "  zenithjoy-agent.exe size: $size bytes"
+          Write-Host "============================================"
