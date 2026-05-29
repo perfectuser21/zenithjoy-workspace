@@ -79,7 +79,7 @@ async function getBrowserAndPage() {
       await browser.close();
       throw new Error(`DOUYIN_COOKIES 无效或已过期，重定向到: ${homeUrl}，请更新 GitHub secret DOUYIN_COOKIES (screenshot: ${shot || 'n/a'})`);
     }
-    return { browser, page, isLaunched: true };
+    return { browser, page, context: ctx, isLaunched: true };
   }
   const sessionPath = path.join(
     os.homedir(), '.zenithjoy-agent', 'sessions', 'douyin',
@@ -192,40 +192,49 @@ async function main() {
 // ============================================================================
 
 async function uploadVideoFile(page, context, videoPath) {
-  // Diagnostic: count file inputs in regular DOM
-  const inputCount = await page.evaluate(() =>
-    document.querySelectorAll('input[type="file"]').length
-  ).catch(() => -1);
-  _log('[DY-VIDEO-REAL] DOM file inputs (no shadow):', inputCount);
+  // Extra wait for React upload component to fully mount
+  await page.waitForTimeout(3000);
 
-  // Strategy 1: FileChooser interception — works even if input is in shadow DOM
-  // Click the upload area to trigger the native file chooser event
-  try {
-    const fileChooserPromise = page.waitForEvent('filechooser', { timeout: 8000 });
-    const clickResult = await page.evaluate(() => {
-      // Try common Douyin creator upload trigger selectors
-      const triggers = [
-        '[class*="upload-btn"]',
-        '[class*="upload-area"]',
-        '[class*="Upload"]',
-        '.upload-area',
-        'input[type="file"]',
-        '[class*="btn"][class*="upload"]',
-        '[data-e2e="upload-btn"]',
-      ].map(sel => document.querySelector(sel)).filter(Boolean);
-      if (triggers.length) { triggers[0].click(); return triggers[0].className || 'clicked'; }
-      return null;
-    });
-    _log('[DY-VIDEO-REAL] click trigger result:', clickResult);
-    const fileChooser = await fileChooserPromise;
-    await fileChooser.setFiles(videoPath);
-    _log('[DY-VIDEO-REAL] ✓ 文件通过 FileChooser 设置成功');
-    return;
-  } catch (e1) {
-    _log('[DY-VIDEO-REAL] FileChooser 方式失败:', e1.message.substring(0, 120));
+  // Enhanced diagnostic
+  const diag = await page.evaluate(() => {
+    const fileInputs = [...document.querySelectorAll('input[type="file"]')];
+    const uploadEls = [...document.querySelectorAll('[class*="upload"],[class*="Upload"],[class*="drag"],[data-e2e]')];
+    return {
+      fileInputCount: fileInputs.length,
+      uploadEls: uploadEls.slice(0, 8).map(e => `${e.tagName}[class="${(e.className||'').substring(0,50)}"][de2e="${e.getAttribute('data-e2e')||''}"]`),
+      bodyText: document.body.innerText.substring(0, 400),
+    };
+  }).catch(e => ({ error: e.message }));
+  _log('[DY-VIDEO-REAL] 页面诊断:', JSON.stringify(diag).substring(0, 1000));
+
+  // Strategy 1: Playwright-native click + FileChooser (works with hashed CSS & shadow DOM)
+  const clickSelectors = [
+    '[data-e2e="upload-btn"]',
+    '[data-e2e*="upload"]',
+    '[class*="upload-btn"]',
+    '[class*="uploadBtn"]',
+    '[class*="upload-area"]',
+    '[class*="uploadArea"]',
+    '[class*="Upload"]',
+    'input[type="file"]',
+    'text=点击上传',
+    'text=上传视频',
+    'text=选择文件',
+    'text=上传',
+  ];
+  for (const sel of clickSelectors) {
+    try {
+      const fcPromise = page.waitForEvent('filechooser', { timeout: 3000 });
+      await page.click(sel, { timeout: 800 });
+      const fc = await fcPromise;
+      await fc.setFiles(videoPath);
+      _log('[DY-VIDEO-REAL] ✓ FileChooser 成功 selector:', sel);
+      return;
+    } catch { /* try next */ }
   }
+  _log('[DY-VIDEO-REAL] 所有 FileChooser selectors 均无效，尝试 CDP...');
 
-  // Strategy 2: CDP with shadow DOM traversal
+  // Strategy 2: CDP with recursive shadow DOM traversal
   if (context) {
     _log('[DY-VIDEO-REAL] 尝试 CDP shadow DOM 方式...');
     try {
@@ -233,20 +242,22 @@ async function uploadVideoFile(page, context, videoPath) {
       const { result } = await cdpSession.send('Runtime.evaluate', {
         expression: `(function f(r){var i=r.querySelector('input[type="file"]');if(i)return i;for(var e of r.querySelectorAll('*'))if(e.shadowRoot){var x=f(e.shadowRoot);if(x)return x;}return null;})(document)`,
       });
-      if (!result.objectId) throw new Error('未找到 file input (shadow DOM 搜索也无结果)');
+      if (!result.objectId) throw new Error('shadow DOM 也没有 file input');
       const { node } = await cdpSession.send('DOM.describeNode', { objectId: result.objectId });
       await cdpSession.send('DOM.setFileInputFiles', {
         backendNodeId: node.backendNodeId,
         files: [videoPath],
       });
-      _log('[DY-VIDEO-REAL] ✓ 文件通过 CDP 设置成功');
+      _log('[DY-VIDEO-REAL] ✓ CDP shadow DOM 成功');
       return;
     } catch (e2) {
       _log('[DY-VIDEO-REAL] CDP 方式失败:', e2.message.substring(0, 120));
     }
+  } else {
+    _log('[DY-VIDEO-REAL] context 未定义，跳过 CDP');
   }
 
-  // Strategy 3: Direct setInputFiles fallback (original behavior)
+  // Strategy 3: Direct setInputFiles fallback
   _log('[DY-VIDEO-REAL] 回退到 setInputFiles (60s 超时)...');
   await page.setInputFiles('input[type="file"]', videoPath, { timeout: 60000 });
 }
