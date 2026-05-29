@@ -31,7 +31,7 @@
 
 const fs = require('fs');
 const path = require('path');
-const { chromium } = require('playwright');
+const { chromium } = require('playwright-core');
 
 // ============================================================
 // 配置

@@ -4,7 +4,7 @@ const _log = console.log.bind(console);
 
 const fs = require('fs');
 const path = require('path');
-const { chromium } = require('playwright');
+const { chromium } = require('playwright-core');
 
 const CDP_URL = 'http://localhost:19230';
 const UPLOAD_URL = 'https://www.zhihu.com/upload-video';

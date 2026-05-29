@@ -21,7 +21,7 @@
  */
 
 const _log = console.log.bind(console);
-const { chromium } = require('playwright');
+const { chromium } = require('playwright-core');
 const fs = require('fs');
 
 async function publishDouyinImageDryRun(queueFilePath) {

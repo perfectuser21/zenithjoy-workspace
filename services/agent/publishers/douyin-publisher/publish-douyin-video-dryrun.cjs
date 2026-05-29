@@ -41,7 +41,7 @@ async function runMock(queueData) {
 }
 
 async function runReal(queueData) {
-  const { chromium } = require('playwright');
+  const { chromium } = require('playwright-core');
   const { requireLogin } = require('./lib/qr-login.cjs');
   const os = require('os');
 

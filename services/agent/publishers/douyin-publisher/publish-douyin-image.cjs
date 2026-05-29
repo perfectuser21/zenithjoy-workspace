@@ -26,7 +26,7 @@
  */
 
 const _log = console.log.bind(console);
-const { chromium } = require('playwright');
+const { chromium } = require('playwright-core');
 const fs = require('fs');
 // WS3: 统一扫码登录模块，替代旧"假设已登录"硬检查（铁律 6 减肥）
 const { requireLogin } = require('./lib/qr-login.cjs');

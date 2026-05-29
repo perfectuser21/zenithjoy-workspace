@@ -1,7 +1,7 @@
 'use strict';
 const fs = require('fs');
 const path = require('path');
-const { chromium } = require('playwright');
+const { chromium } = require('playwright-core');
 
 const CDP_URL = 'http://localhost:19228';
 const SHOTS_DIR = '/tmp/shipinhao-screenshots';

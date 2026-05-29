@@ -20,7 +20,7 @@ const _log = console.log.bind(console);
 const fs = require('fs');
 const path = require('path');
 const { execFileSync } = require('child_process');
-const { chromium } = require('playwright');
+const { chromium } = require('playwright-core');
 
 const CDP_URL = 'http://localhost:19226';
 const WINDOWS_IP = '100.97.242.124';

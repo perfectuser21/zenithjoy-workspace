@@ -11,7 +11,7 @@
  *
  * 严禁预置 cookie 跳过扫码（contract Lead 自验防作弊条款）。
  */
-const { chromium } = require('playwright');
+const { chromium } = require('playwright-core');
 const path = require('path');
 const os = require('os');
 const fs = require('fs');

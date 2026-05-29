@@ -28,7 +28,7 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const _log = console.log.bind(console);
-const { chromium } = require('playwright');
+const { chromium } = require('playwright-core');
 const { requireLogin } = require('./lib/qr-login.cjs');
 
 const RISK_KEYWORDS = ['风险', '拦截', '频繁', '异常', '验证码', '风控'];

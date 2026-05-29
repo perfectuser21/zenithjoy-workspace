@@ -10,7 +10,7 @@ const _log = console.log.bind(console);
 
 'use strict';
 
-const { chromium } = require('playwright');
+const { chromium } = require('playwright-core');
 const fs = require('fs');
 const path = require('path');
 

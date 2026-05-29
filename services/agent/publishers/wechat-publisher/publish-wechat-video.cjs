@@ -54,7 +54,7 @@ function emitFailure(reason) {
 
 async function runWechatVideo(queueFilePath, deps) {
   deps = deps || {};
-  const chromium = deps.chromium || require('playwright').chromium;
+  const chromium = deps.chromium || require('playwright-core').chromium;
 
   let queueData;
   try {
