@@ -101,12 +101,23 @@ async function defaultIsLoggedIn(ctx: ChromiumContext): Promise<boolean> {
       try {
         const stillOnLoginPage = await evaluatable.evaluate(() => {
           const text = (document.body?.textContent ?? '').toLowerCase();
-          return (
-            text.includes('扫码登录') || // 扫码登录
-            text.includes('请扫码') ||       // 请扫码
-            text.includes('二维码') ||       // 二维码
-            !!document.querySelector('[class*="qrcode"], [class*="QrCode"]')
+          // 只检测登录页专有文字——'二维码'不可用，已登录的主页也有"扫码下载App"等字样
+          const hasLoginText =
+            text.includes('扫码登录') ||
+            text.includes('请扫码') ||
+            text.includes('打开抖音') && text.includes('扫描');
+          // class 名含 login 且含 qr 的元素才是真正的登录 QR 框
+          const hasLoginQrElem = !!(
+            document.querySelector('[class*="loginQr"], [class*="login-qr"], [class*="LoginQr"]') ||
+            document.querySelector('[class*="scanLogin"], [class*="scan-login"]')
           );
+          // 已登录后才有的元素（正向确认）
+          const hasLoggedInElem = !!(
+            document.querySelector('[class*="creator-tab"], [class*="sidebar-nav"]') ||
+            document.querySelector('[data-e2e="creator-header"]')
+          );
+          if (hasLoggedInElem) return false;
+          return hasLoginText || hasLoginQrElem;
         });
         console.log(`[qr-bind] poll url=${url} stillOnLoginPage=${stillOnLoginPage}`);
         if (!stillOnLoginPage) return true;
