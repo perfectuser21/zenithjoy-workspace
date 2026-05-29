@@ -732,7 +732,7 @@ function startWs1HeartbeatLoop(cfg: AgentConfig): void {
             folder_path: folderPath,
             type: task.type as DouyinPublishType | undefined,
           },
-          { apiBase },
+          { apiBase, licenseKey: cfg.licenseKey },
         );
         console.log('[ws1:douyin] result:', res.status);
       } else if (

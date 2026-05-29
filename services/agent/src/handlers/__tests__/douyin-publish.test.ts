@@ -281,3 +281,63 @@ describe('handleDouyinPublishTask real-publish receipt', () => {
     expect(body.result?.dryrun_evidence?.dryRun).toBe(false);
   });
 });
+
+
+describe('handleDouyinPublishTask receipt Authorization header', () => {
+  it('sends Authorization: Bearer <licenseKey> in receipt POST when licenseKey provided', async () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'zj-agent-auth-'));
+    fs.writeFileSync(path.join(tmpDir, 'video.mp4'), 'fake');
+    try {
+      const capturedHeaders: Record<string, string>[] = [];
+      const fetchImpl = vi.fn<typeof fetch>(async (_url, init) => {
+        capturedHeaders.push((init?.headers as Record<string, string>) || {});
+        return new Response(JSON.stringify({ ok: true }), { status: 200 });
+      });
+      const spawnImpl = vi.fn(() => fakeChild({ exitCode: 0, stdout: '{"ok":true,"dryRun":true}\n' }));
+
+      await handleDouyinPublishTask(
+        { task_id: 'task-auth-1', folder_path: tmpDir },
+        {
+          apiBase: 'https://api.example.com',
+          licenseKey: 'ZJ-F-TESTKEY',
+          fetchImpl: fetchImpl as any,
+          spawnImpl: spawnImpl as any,
+          scriptPath: '/fake/publish-douyin-image-dryrun.cjs',
+        },
+      );
+
+      expect(fetchImpl).toHaveBeenCalledTimes(1);
+      expect(capturedHeaders[0]['Authorization']).toBe('Bearer ZJ-F-TESTKEY');
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
+  it('omits Authorization header in receipt POST when licenseKey not provided', async () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'zj-agent-noauth-'));
+    fs.writeFileSync(path.join(tmpDir, 'video.mp4'), 'fake');
+    try {
+      const capturedHeaders: Record<string, string>[] = [];
+      const fetchImpl = vi.fn<typeof fetch>(async (_url, init) => {
+        capturedHeaders.push((init?.headers as Record<string, string>) || {});
+        return new Response(JSON.stringify({ ok: true }), { status: 200 });
+      });
+      const spawnImpl = vi.fn(() => fakeChild({ exitCode: 0, stdout: '{"ok":true,"dryRun":true}\n' }));
+
+      await handleDouyinPublishTask(
+        { task_id: 'task-noauth-1', folder_path: tmpDir },
+        {
+          apiBase: 'https://api.example.com',
+          fetchImpl: fetchImpl as any,
+          spawnImpl: spawnImpl as any,
+          scriptPath: '/fake/publish-douyin-image-dryrun.cjs',
+        },
+      );
+
+      expect(fetchImpl).toHaveBeenCalledTimes(1);
+      expect(capturedHeaders[0]['Authorization']).toBeUndefined();
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+});
