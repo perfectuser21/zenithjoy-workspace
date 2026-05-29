@@ -255,6 +255,7 @@ export interface DouyinPublishTaskPayload {
 
 export interface DouyinPublishTaskOptions {
   apiBase: string;
+  licenseKey?: string;
   fetchImpl?: typeof fetch;
   spawnImpl?: typeof nodeSpawn;
   scriptPath?: string;
@@ -290,12 +291,15 @@ async function postReceipt(
   taskId: string,
   status: 'success' | 'failed',
   result: { url?: string; error?: string; dryrun_evidence?: unknown },
+  licenseKey?: string,
 ): Promise<void> {
   const url = `${apiBase.replace(/\/+$/, '')}/api/publish/receipt`;
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  if (licenseKey) headers['Authorization'] = `Bearer ${licenseKey}`;
   try {
     await fetchImpl(url, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers,
       body: JSON.stringify({ task_id: taskId, status, result }),
     });
   } catch (err) {
@@ -347,7 +351,7 @@ export async function handleDouyinPublishTask(
 
   const fail = async (error: string): Promise<DouyinPublishTaskResult> => {
     const result = { error };
-    await postReceipt(options.apiBase, fetchImpl, payload.task_id, 'failed', result);
+    await postReceipt(options.apiBase, fetchImpl, payload.task_id, 'failed', result, options.licenseKey);
     return { ok: false, status: 'failed', result };
   };
 
@@ -427,7 +431,7 @@ export async function handleDouyinPublishTask(
     url: dryrun.url,
     dryrun_evidence: dryrun,
   };
-  await postReceipt(options.apiBase, fetchImpl, payload.task_id, 'success', result);
+  await postReceipt(options.apiBase, fetchImpl, payload.task_id, 'success', result, options.licenseKey);
 
   return { ok: true, status: 'success', result };
 }

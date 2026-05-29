@@ -20,6 +20,9 @@ if not exist .env (
     )
 )
 
+REM Step 1.5: 追加 .env 中缺失的新 key（升级兼容，不覆盖用户已设的值）
+powershell -NoProfile -Command "if (!(Select-String -Path '.env' -Pattern 'ZENITHJOY_AGENT_DRYRUN_BROWSER' -Quiet)) { Add-Content -Path '.env' -Value 'ZENITHJOY_AGENT_DRYRUN_BROWSER=mock'; Write-Host '[setup] ZENITHJOY_AGENT_DRYRUN_BROWSER=mock appended to .env' }"
+
 REM Step 2: Load .env into env vars (skip comment lines)
 for /f "usebackq tokens=1,* delims==" %%a in (".env") do (
     set "LINE=%%a"
