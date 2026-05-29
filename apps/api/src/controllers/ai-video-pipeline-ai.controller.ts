@@ -648,7 +648,7 @@ ${segList}
     const builder: BuilderFn = templateBuilders[templateId]
       ?? ((sc, gs, sp, dur) => _buildDynamicTemplateHtml(templateId, sc, gs, sp, dur));
     const html = builder(scenes, gsapJs, spec, duration);
-    res.json({ html, aspect: spec.aspect });
+    res.json({ html, aspect: spec.aspect, phoneRect: spec.phoneRect ?? null });
   } catch (err) { next(err); }
 }
 
