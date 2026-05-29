@@ -145,19 +145,28 @@ if not exist "%ZJ_HF_MAIN%" (
 :HYPERFRAMES_DONE
 
 REM Step 5.6: 确保 playwright-core npm 包就位（publisher 脚本 require('playwright-core') 使用）
-REM 新安装包已内置 node_modules/playwright-core/；旧包（v1.1.55/v1.1.56）自愈安装
+REM v1.1.57+ 安装包已内置 node_modules/playwright-core/，此步骤仅为旧包（≤v1.1.56）自愈兜底。
+REM 失败是非致命的：agent 仍会启动，只是抖音/快手发布会报 MODULE_NOT_FOUND（提示用户重新下载新包）。
 if not exist "%~dp0node_modules\playwright-core\index.js" (
     if exist "%ZJ_NODE_EXE%" (
-        echo [playwright-core] 安装 playwright-core npm 包（仅首次，约30秒）...
+        echo [playwright-core] 旧版安装包自愈：安装 playwright-core（仅首次，约30秒）...
         mkdir "%~dp0node_modules" 2>nul
-        "%ZJ_NODE_EXE%" "%ZJ_NPM_CLI%" install playwright-core --prefix "%~dp0" --no-save --no-package-lock --registry https://registry.npmmirror.com
+        REM --ignore-scripts 防止 npm install 执行 pre/postinstall 脚本（安全加固）
+        REM registry.npmmirror.com 是 Node.js 官方中国镜像（原 npm.taobao.org），已于2022年正式更名
+        "%ZJ_NODE_EXE%" "%ZJ_NPM_CLI%" install playwright-core --prefix "%~dp0" --no-save --no-package-lock --ignore-scripts --registry https://registry.npmmirror.com
         if errorlevel 1 (
-            echo [WARN] playwright-core 安装失败，抖音/快手发布可能失败
+            echo [WARN] playwright-core 安装失败 — 请从控制台重新下载最新安装包（v1.1.57+）以解决发布问题
         ) else (
-            echo [playwright-core] OK
+            REM 快速功能验证：确认模块可 require
+            "%ZJ_NODE_EXE%" -e "require('playwright-core'); process.exit(0)" 2>nul
+            if errorlevel 1 (
+                echo [WARN] playwright-core 安装完成但验证失败，发布功能可能异常
+            ) else (
+                echo [playwright-core] 安装并验证通过 OK
+            )
         )
     ) else (
-        echo [WARN] ZJ_NODE_EXE 未就绪，跳过 playwright-core 安装
+        echo [WARN] ZJ_NODE_EXE 未就绪，跳过 playwright-core 安装 — 请重新下载 v1.1.57+ 安装包
     )
 ) else (
     echo [playwright-core] 已就位，跳过
