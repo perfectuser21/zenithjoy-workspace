@@ -79,7 +79,7 @@ async function getBrowserAndPage() {
       await browser.close();
       throw new Error(`DOUYIN_COOKIES 无效或已过期，重定向到: ${homeUrl}，请更新 GitHub secret DOUYIN_COOKIES (screenshot: ${shot || 'n/a'})`);
     }
-    return { browser, page, isLaunched: true };
+    return { browser, page, context: ctx, isLaunched: true };
   }
   const sessionPath = path.join(
     os.homedir(), '.zenithjoy-agent', 'sessions', 'douyin',
@@ -191,64 +191,85 @@ async function main() {
 // 5 个抽出的 DOM selector 函数（playwright 等价封装 user-skill raw CDP 实现）
 // ============================================================================
 
+const REACT_HYDRATE_WAIT_MS = 3000;
+const FILE_CHOOSER_TIMEOUT_MS = 3000;
+const CLICK_TIMEOUT_MS = 800;
+const FILE_INPUT_FALLBACK_TIMEOUT_MS = 60000;
+
 async function uploadVideoFile(page, context, videoPath) {
-  // Diagnostic: count file inputs in regular DOM
-  const inputCount = await page.evaluate(() =>
-    document.querySelectorAll('input[type="file"]').length
-  ).catch(() => -1);
-  _log('[DY-VIDEO-REAL] DOM file inputs (no shadow):', inputCount);
+  // Wait for React upload component to mount — Douyin creator SPA needs time after domcontentloaded
+  await page.waitForTimeout(REACT_HYDRATE_WAIT_MS);
 
-  // Strategy 1: FileChooser interception — works even if input is in shadow DOM
-  // Click the upload area to trigger the native file chooser event
-  try {
-    const fileChooserPromise = page.waitForEvent('filechooser', { timeout: 8000 });
-    const clickResult = await page.evaluate(() => {
-      // Try common Douyin creator upload trigger selectors
-      const triggers = [
-        '[class*="upload-btn"]',
-        '[class*="upload-area"]',
-        '[class*="Upload"]',
-        '.upload-area',
-        'input[type="file"]',
-        '[class*="btn"][class*="upload"]',
-        '[data-e2e="upload-btn"]',
-      ].map(sel => document.querySelector(sel)).filter(Boolean);
-      if (triggers.length) { triggers[0].click(); return triggers[0].className || 'clicked'; }
-      return null;
-    });
-    _log('[DY-VIDEO-REAL] click trigger result:', clickResult);
-    const fileChooser = await fileChooserPromise;
-    await fileChooser.setFiles(videoPath);
-    _log('[DY-VIDEO-REAL] ✓ 文件通过 FileChooser 设置成功');
-    return;
-  } catch (e1) {
-    _log('[DY-VIDEO-REAL] FileChooser 方式失败:', e1.message.substring(0, 120));
+  // Diagnostic (page structure, not user data)
+  const diag = await page.evaluate(() => {
+    const fileInputCount = document.querySelectorAll('input[type="file"]').length;
+    const uploadEls = [...document.querySelectorAll('[class*="upload"],[class*="Upload"],[class*="drag"],[data-e2e]')];
+    return {
+      fileInputCount,
+      uploadEls: uploadEls.slice(0, 8).map(e => `${e.tagName}[de2e="${e.getAttribute('data-e2e')||''}"]`),
+      bodyTextLength: document.body.innerText.length,
+    };
+  }).catch(e => ({ error: e.message }));
+  _log('[DY-VIDEO-REAL] 页面诊断:', JSON.stringify(diag));
+
+  const failures = [];
+
+  // Strategy 1: Playwright-native click + FileChooser (survives hashed CSS & shadow DOM)
+  const clickSelectors = [
+    '[data-e2e="upload-btn"]', '[data-e2e*="upload"]',
+    '[class*="upload-btn"]', '[class*="uploadBtn"]',
+    '[class*="upload-area"]', '[class*="uploadArea"]',
+    '[class*="Upload"]', 'input[type="file"]',
+    'text=点击上传', 'text=上传视频', 'text=选择文件', 'text=上传',
+  ];
+  for (const sel of clickSelectors) {
+    try {
+      const fcPromise = page.waitForEvent('filechooser', { timeout: FILE_CHOOSER_TIMEOUT_MS });
+      await page.click(sel, { timeout: CLICK_TIMEOUT_MS });
+      const fc = await fcPromise;
+      await fc.setFiles(videoPath);
+      _log('[DY-VIDEO-REAL] ✓ FileChooser 成功 selector:', sel);
+      return;
+    } catch (e) { failures.push(`FC(${sel}): ${e.message.substring(0, 60)}`); }
   }
+  _log('[DY-VIDEO-REAL] Strategy 1 全失败，尝试 CDP...');
 
-  // Strategy 2: CDP with shadow DOM traversal
+  // Strategy 2: CDP with recursive shadow DOM traversal
   if (context) {
-    _log('[DY-VIDEO-REAL] 尝试 CDP shadow DOM 方式...');
     try {
       const cdpSession = await context.newCDPSession(page);
       const { result } = await cdpSession.send('Runtime.evaluate', {
         expression: `(function f(r){var i=r.querySelector('input[type="file"]');if(i)return i;for(var e of r.querySelectorAll('*'))if(e.shadowRoot){var x=f(e.shadowRoot);if(x)return x;}return null;})(document)`,
       });
-      if (!result.objectId) throw new Error('未找到 file input (shadow DOM 搜索也无结果)');
+      if (!result.objectId) throw new Error('file input 在完整 shadow DOM 树中也不存在');
       const { node } = await cdpSession.send('DOM.describeNode', { objectId: result.objectId });
       await cdpSession.send('DOM.setFileInputFiles', {
         backendNodeId: node.backendNodeId,
         files: [videoPath],
       });
-      _log('[DY-VIDEO-REAL] ✓ 文件通过 CDP 设置成功');
+      _log('[DY-VIDEO-REAL] ✓ CDP shadow DOM 成功');
       return;
     } catch (e2) {
-      _log('[DY-VIDEO-REAL] CDP 方式失败:', e2.message.substring(0, 120));
+      failures.push(`CDP: ${e2.message.substring(0, 80)}`);
+      _log('[DY-VIDEO-REAL] Strategy 2 失败:', e2.message.substring(0, 120));
     }
+  } else {
+    failures.push('CDP: context 未定义（getBrowserAndPage 未传递 context）');
+    _log('[DY-VIDEO-REAL] context 未定义，跳过 CDP');
   }
 
-  // Strategy 3: Direct setInputFiles fallback (original behavior)
-  _log('[DY-VIDEO-REAL] 回退到 setInputFiles (60s 超时)...');
-  await page.setInputFiles('input[type="file"]', videoPath, { timeout: 60000 });
+  // Strategy 3: setInputFiles fallback — last resort, fails fast with full error context
+  _log('[DY-VIDEO-REAL] Strategy 3: setInputFiles fallback...');
+  try {
+    await page.setInputFiles('input[type="file"]', videoPath, { timeout: FILE_INPUT_FALLBACK_TIMEOUT_MS });
+    _log('[DY-VIDEO-REAL] ✓ setInputFiles 成功');
+  } catch (e3) {
+    failures.push(`setInputFiles: ${e3.message.substring(0, 80)}`);
+    throw new Error(
+      `视频上传全部策略均失败（共 ${failures.length} 次），抖音页面可能已改版或未正常加载。` +
+      `诊断: fileInputCount=${diag.fileInputCount}。失败摘要: ${failures.slice(-3).join(' | ')}`
+    );
+  }
 }
 
 async function waitForUploadProcessed(page, timeoutMs = 60_000) {
