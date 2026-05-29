@@ -8,8 +8,8 @@ on:
         required: false
         default: 'false'
   schedule:
-    # 每周日北京午夜（UTC 16:00 = 北京 00:00+8）
-    - cron: '0 16 * * 0'
+    # 每天北京午夜（UTC 16:00 = 北京 00:00+8）
+    - cron: '0 16 * * *'
 
 jobs:
   verify-operator-session:
