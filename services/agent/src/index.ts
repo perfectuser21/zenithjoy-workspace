@@ -716,8 +716,10 @@ function startWs1HeartbeatLoop(cfg: AgentConfig): void {
         if (localPath) {
           folderWatch.bind(localPath);
           console.log('[ws1:folder_bind] bound:', folderWatch.getBoundPath());
+          await postQrBindDouyinAck(cfg, task.task_id, 'success');
         } else {
           console.warn('[ws1:folder_bind] missing local_path');
+          await postQrBindDouyinAck(cfg, task.task_id, 'failed:missing_local_path');
         }
       } else if (task.platform === 'douyin') {
         const payload = task.payload as { folder_path?: string };
