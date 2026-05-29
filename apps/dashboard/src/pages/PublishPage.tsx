@@ -361,7 +361,6 @@ export default function PublishPage() {
         </table>
       )}
     </div>
-      </div>
       {selectedTaskId && (() => {
         const sel = tasks.find(t => t.id === selectedTaskId);
         return sel ? <TaskStepsPanel task={sel} /> : null;
