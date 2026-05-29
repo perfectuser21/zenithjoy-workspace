@@ -144,6 +144,29 @@ if not exist "%ZJ_HF_MAIN%" (
 )
 :HYPERFRAMES_DONE
 
+REM Step 5.6: 确保 playwright-core npm 包就位（publisher 脚本 require('playwright-core') 使用）
+REM 新安装包已内置 node_modules/playwright-core/；旧包（v1.1.55/v1.1.56）自愈安装
+if not exist "%~dp0node_modules\playwright-core\index.js" (
+    if exist "%ZJ_NODE_EXE%" (
+        echo [playwright-core] 安装 playwright-core npm 包（仅首次，约30秒）...
+        mkdir "%~dp0node_modules" 2>nul
+        "%ZJ_NODE_EXE%" "%ZJ_NPM_CLI%" install playwright-core --prefix "%~dp0" --no-save --no-package-lock --registry https://registry.npmmirror.com
+        if errorlevel 1 (
+            echo [WARN] playwright-core 安装失败，抖音/快手发布可能失败
+        ) else (
+            echo [playwright-core] OK
+        )
+    ) else (
+        echo [WARN] ZJ_NODE_EXE 未就绪，跳过 playwright-core 安装
+    )
+) else (
+    echo [playwright-core] 已就位，跳过
+)
+
+REM Step 5.7: 设置 NODE_PATH 让 publisher 脚本能找到 node_modules（含 playwright-core）
+set "NODE_PATH=%~dp0node_modules"
+echo [node] NODE_PATH=%NODE_PATH%
+
 REM Step 6: 内置 Playwright Chromium 路径（打包在 playwright-browsers/ 目录里）
 REM Playwright 读 PLAYWRIGHT_BROWSERS_PATH 环境变量来定位 Chromium，无需依赖系统 Chrome
 set "PLAYWRIGHT_BROWSERS_PATH=%~dp0playwright-browsers"
