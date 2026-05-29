@@ -147,6 +147,12 @@ export async function upsertAgentByHeartbeat(args: {
                   bound_folder_path, last_heartbeat_at, status, last_seen`,
       [version, row.id, osType ?? null]
     );
+    // 如果 license 还没有 pinned_agent，把这台设为 pinned
+    await pool.query(
+      `UPDATE zenithjoy.licenses SET pinned_agent_id = $1
+        WHERE id = $2 AND pinned_agent_id IS NULL`,
+      [row.id, licenseId]
+    );
     return updated.rows[0];
   }
 
@@ -160,6 +166,12 @@ export async function upsertAgentByHeartbeat(args: {
      RETURNING id, tenant_id, agent_id, hostname, version, license_id,
                bound_folder_path, last_heartbeat_at, status, last_seen`,
     [tenantId, licenseId, agentText, hostname, version, osType ?? null]
+  );
+  // 新机器首次连接，如果 license 还没有 pinned_agent，自动 pin 这台
+  await pool.query(
+    `UPDATE zenithjoy.licenses SET pinned_agent_id = $1
+      WHERE id = $2 AND pinned_agent_id IS NULL`,
+    [inserted.rows[0].id, licenseId]
   );
   return inserted.rows[0];
 }

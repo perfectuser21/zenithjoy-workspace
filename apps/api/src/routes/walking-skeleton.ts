@@ -111,6 +111,8 @@ heartbeatRouter.get(
     const lic = req.license!;
     try {
       const pool = (await import('../db/connection')).default;
+      // 直接用 license.pinned_agent_id，不再按心跳排序
+      // 兜底（pinned 为空）→ win32 优先 + 心跳最新
       const { rows } = await pool.query<{
         id: string;
         hostname: string | null;
@@ -118,13 +120,17 @@ heartbeatRouter.get(
         bound_folder_path: string | null;
         last_heartbeat_at: string | null;
       }>(
-        `SELECT id, hostname, version, bound_folder_path, last_heartbeat_at
-           FROM zenithjoy.agents
-          WHERE license_id = $1
-          ORDER BY
-            CASE WHEN os_type = 'win32' THEN 0 ELSE 1 END ASC,
-            last_heartbeat_at DESC NULLS LAST
-          LIMIT 1`,
+        `SELECT a.id, a.hostname, a.version, a.bound_folder_path, a.last_heartbeat_at
+           FROM zenithjoy.agents a
+           JOIN zenithjoy.licenses l ON l.id = $1
+          WHERE a.id = COALESCE(
+            l.pinned_agent_id,
+            (SELECT a2.id FROM zenithjoy.agents a2
+              WHERE a2.license_id = $1
+              ORDER BY CASE WHEN a2.os_type = 'win32' THEN 0 ELSE 1 END ASC,
+                       a2.last_heartbeat_at DESC NULLS LAST
+              LIMIT 1)
+          )`,
         [lic.id]
       );
       const a = rows[0];
@@ -153,6 +159,36 @@ heartbeatRouter.get(
       return res
         .status(500)
         .json({ ok: false, code: 'STATUS_FAILED', message: msg });
+    }
+  }
+);
+
+// ============ POST /api/agent/repin ============
+// 换机器时调：把 license 绑定的 agent 切换到指定 agent_id
+heartbeatRouter.post(
+  '/repin',
+  licenseAuth,
+  async (req: Request, res: Response) => {
+    const lic = req.license!;
+    const { agent_id } = (req.body ?? {}) as { agent_id?: unknown };
+    if (typeof agent_id !== 'string' || !UUID_RE.test(agent_id)) {
+      return res.status(400).json({ ok: false, code: 'BAD_REQUEST', message: 'agent_id 缺失或不合法' });
+    }
+    try {
+      const pool = (await import('../db/connection')).default;
+      const { rowCount } = await pool.query(
+        `UPDATE zenithjoy.licenses SET pinned_agent_id = $1
+          WHERE id = $2
+            AND EXISTS (SELECT 1 FROM zenithjoy.agents WHERE id = $1 AND license_id = $2)`,
+        [agent_id, lic.id]
+      );
+      if (!rowCount) {
+        return res.status(404).json({ ok: false, code: 'NOT_FOUND', message: 'agent_id 不属于此 license' });
+      }
+      return res.status(200).json({ ok: true, pinned_agent_id: agent_id });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'unknown';
+      return res.status(500).json({ ok: false, code: 'REPIN_FAILED', message: msg });
     }
   }
 );
