@@ -10,13 +10,14 @@
  *  - 空 path 不提交
  */
 import { useState } from 'react';
-import { useQuery, useMutation } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   getAgentStatus,
   postFolderBind,
 } from '../api/walking-skeleton-1.api';
 
 export default function FolderBindPage() {
+  const qc = useQueryClient();
   const [path, setPath] = useState('');
   const [savedPath, setSavedPath] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -28,6 +29,7 @@ export default function FolderBindPage() {
   });
   const agentId = agentData?.agent_id;
   const isOnline = !!agentData?.connected && !!agentId;
+  const currentBound = agentData?.bound_folder_path ?? null;
 
   const mutation = useMutation({
     mutationFn: () =>
@@ -35,6 +37,7 @@ export default function FolderBindPage() {
     onSuccess: () => {
       setSavedPath(path.trim());
       setError(null);
+      qc.invalidateQueries({ queryKey: ['ws1', 'agent-status'] });
     },
     onError: (e) => {
       setError(e instanceof Error ? e.message : String(e));
@@ -125,7 +128,7 @@ export default function FolderBindPage() {
           {mutation.isPending ? '绑定中…' : '绑定'}
         </button>
 
-        {savedPath && (
+        {!mutation.isPending && savedPath && (
           <div
             style={{
               marginTop: 16,
@@ -137,8 +140,22 @@ export default function FolderBindPage() {
               fontSize: 14,
             }}
           >
-            绑定成功 — 已绑定 <code>{savedPath}</code>。
-            Agent 将开始监听该文件夹的新文件。
+            绑定成功 — 已绑定 <code>{savedPath}</code>。Agent 将开始监听该文件夹的新文件。
+          </div>
+        )}
+        {!mutation.isPending && !savedPath && currentBound && (
+          <div
+            style={{
+              marginTop: 16,
+              padding: 12,
+              background: '#ecfdf5',
+              border: '1px solid #6ee7b7',
+              borderRadius: 6,
+              color: '#065f46',
+              fontSize: 14,
+            }}
+          >
+            当前已绑定 <code>{currentBound}</code>。
           </div>
         )}
         {error && (

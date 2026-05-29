@@ -105,4 +105,15 @@ describe('FolderBindPage [BEHAVIOR]', () => {
       expect(screen.getByRole('button', { name: /绑定|提交/ })).toBeDisabled();
     });
   });
+
+  it('getAgentStatus 返回 bound_folder_path → 显示"当前已绑定"', async () => {
+    vi.mocked(ws1Api.getAgentStatus).mockResolvedValue({
+      ...ONLINE_AGENT,
+      bound_folder_path: '/Users/foo/existing-folder',
+    });
+    render(<FolderBindPage />, { wrapper: createWrapper() });
+    await waitFor(() => {
+      expect(screen.getByText(/当前已绑定/)).toBeInTheDocument();
+    });
+  });
 });
