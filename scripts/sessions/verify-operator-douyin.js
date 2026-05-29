@@ -10,11 +10,14 @@
  * FAIL → exit 1 + douyin-session-fail.png + Bark + 飞书告警
  */
 
-import { chromium } from 'playwright';
+import { createRequire } from 'module';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import https from 'https';
+
+// playwright 安装在 services/agent/node_modules，用 createRequire 从该路径解析
+const { chromium } = createRequire(new URL('../../services/agent/', import.meta.url))('playwright');
 
 const CREATOR_URL = 'https://creator.douyin.com/creator-micro/home';
 const SPA_SETTLE_MS = 3000;
