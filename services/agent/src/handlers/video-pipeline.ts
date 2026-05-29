@@ -41,6 +41,30 @@ async function runFfmpeg(args: string[], opts: { timeout?: number } = {}): Promi
   await execAsync(cmd, { windowsHide: true, maxBuffer: 64 * 1024 * 1024, timeout: opts.timeout });
 }
 
+// ── rotationToTranspose: map signed rotation angle → ffmpeg vf filter string ─
+// Display Matrix convention: negative = CCW degrees; -90 means "rotate 90° CW to correct"
+// Legacy tag convention: positive = CW degrees; 90 means "rotate 90° CW to correct"
+export function rotationToTranspose(signed: number, source: 'display_matrix' | 'legacy_tag' | 'none'): string {
+  if (source === 'none') return '';
+  // Normalize to 0-359 degrees CW
+  const deg = source === 'display_matrix'
+    ? ((Math.round(signed) % 360) + 360) % 360   // -90 → 270, +90 → 90
+    : ((Math.round(signed) % 360) + 360) % 360;  // 90 → 90, 270 → 270
+  if (source === 'display_matrix') {
+    // Display Matrix: rotation=-90 (normalized→270) needs 90° CW → transpose=1
+    // Display Matrix: rotation=+90 (normalized→90) needs 90° CCW → transpose=2
+    if (deg === 270) return 'transpose=1';
+    if (deg === 90)  return 'transpose=2';
+    if (deg === 180) return 'hflip,vflip';
+    return '';
+  }
+  // Legacy tag: rotate=90 → 90° CW → transpose=1; rotate=270 → 90° CCW → transpose=2
+  if (deg === 90)  return 'transpose=1';
+  if (deg === 270) return 'transpose=2';
+  if (deg === 180) return 'hflip,vflip';
+  return '';
+}
+
 // ── 中文字体检测 ─────────────────────────────────────────────────────────────
 export function findChineseFont(): string {
   const candidates = [
@@ -312,6 +336,10 @@ export async function processVideoPipelineJob(
     // Modern iPhones and Android phones store rotation in Display Matrix, not the rotate tag.
     let rawWidth = 0;
     let rawHeight = 0;
+    // signedVideoRotation preserves the original sign (+/-) so we can determine
+    // CW vs CCW direction; videoRotation (unsigned) is kept for effectiveWidth swap only.
+    let signedVideoRotation = 0;
+    let rotationSource: 'display_matrix' | 'legacy_tag' | 'none' = 'none';
     try {
       const rotCmd = `${quoteArg(ffprobePath)} -v error -select_streams v:0 -print_format json -show_streams ${quoteArg(videoPath)}`;
       const { stdout: rotOut } = await execAsync(rotCmd, { windowsHide: true, timeout: 10_000, maxBuffer: 512 * 1024 });
@@ -330,11 +358,15 @@ export async function processVideoPipelineJob(
         (sd) => sd.side_data_type === 'Display Matrix',
       );
       if (displayMatrix?.rotation !== undefined) {
-        videoRotation = Math.abs(Math.round(displayMatrix.rotation));
+        signedVideoRotation = Math.round(displayMatrix.rotation);
+        videoRotation = Math.abs(signedVideoRotation);
+        rotationSource = 'display_matrix';
       }
       // 2. Legacy stream tag fallback
       if (!videoRotation && vStream?.tags?.rotate) {
         videoRotation = parseInt(vStream.tags.rotate, 10) || 0;
+        signedVideoRotation = videoRotation;
+        rotationSource = 'legacy_tag';
       }
     } catch { /* non-fatal */ }
 
@@ -498,24 +530,62 @@ export async function processVideoPipelineJob(
     }
     fireProgress(apiBase, id, 48, 'step36_roughcut');
 
-    // ── Step 3.7: normalize rotation (non-template path only) ────────────────
-    // rough-cut re-encodes strip rotation metadata; bake it into pixels so
-    // HyperFrames renders the video in the correct orientation.
-    // Template path handles rotation in Step 6 via -noautorotate + transpose filter — skip here.
-    if (!job.template_id && videoRotation && videoRotation !== 0) {
-      const rotMap: Record<number, string[]> = {
-        90:  ['transpose=1'],
-        270: ['transpose=2'],
-        180: ['hflip,vflip'],
-      };
-      const vfArg = rotMap[videoRotation];
-      if (vfArg) {
+    // ── Step 3.6.5: 画面检测 — probe rough-cut actual frame dimensions ────────
+    // ffprobe the rough cut to get real pixel dimensions (rcW × rcH).
+    // If rough cut is landscape (rcW > rcH) but the job needs portrait output,
+    // re-encode with the correct transpose direction derived from signedVideoRotation.
+    // This replaces the metadata-guessing approach and handles both template and
+    // non-template paths uniformly.  Step 6 can then overlay without -noautorotate.
+    let orientationNormalized = false;
+    if (rotationSource !== 'none') {
+      try {
+        const rcProbeCmd = `${quoteArg(ffprobePath)} -v error -select_streams v:0 -show_entries stream=width,height -of default=noprint_wrappers=1 ${quoteArg(roughCutPath)}`;
+        const { stdout: rcOut } = await execAsync(rcProbeCmd, { windowsHide: true, timeout: 10_000, maxBuffer: 256 * 1024 });
+        const rcWMatch = rcOut.match(/width=(\d+)/);
+        const rcHMatch = rcOut.match(/height=(\d+)/);
+        const rcW = rcWMatch ? parseInt(rcWMatch[1], 10) : 0;
+        const rcH = rcHMatch ? parseInt(rcHMatch[1], 10) : 0;
+        console.log(`[Step 3.6.5/7] rough-cut probe: ${rcW}×${rcH} signedRotation=${signedVideoRotation}° source=${rotationSource}`);
+        if (rcW > 0 && rcH > 0 && rcW > rcH) {
+          // Landscape pixels — apply signed-aware rotation to portrait
+          const transposeFilter = rotationToTranspose(signedVideoRotation, rotationSource);
+          if (transposeFilter) {
+            const oriented = path.join(tmpDir, 'oriented.mp4');
+            console.log(`[Step 3.6.5/7] rotating landscape→portrait via ${transposeFilter}`);
+            await withRetry('Step 3.6.5/7 orient', async () => {
+              await runFfmpeg([
+                '-y', '-i', roughCutPath,
+                '-vf', transposeFilter,
+                '-c:v', 'libx264', '-crf', '22', '-c:a', 'copy',
+                '-metadata:s:v:0', 'rotate=0',
+                oriented,
+              ], { timeout: 300_000 });
+              if (!fs.existsSync(oriented)) throw new Error('orientation step produced no output');
+            }, 2, 2_000);
+            roughCutPath = oriented;
+            orientationNormalized = true;
+            console.log(`[Step 3.6.5/7] ✓ orientation normalized`);
+          } else {
+            console.log(`[Step 3.6.5/7] landscape but no transpose needed (rotation=${signedVideoRotation}°)`);
+          }
+        } else {
+          console.log(`[Step 3.6.5/7] ✓ no rotation needed (${rcW}×${rcH} already portrait or unknown dims)`);
+        }
+      } catch (e) {
+        console.warn('[Step 3.6.5/7] ⚠ orientation check failed (non-fatal):', (e as Error).message);
+      }
+    }
+
+    // ── Step 3.7: normalize rotation (non-template path only, skip if 3.6.5 handled) ──
+    if (!job.template_id && !orientationNormalized && rotationSource !== 'none') {
+      const transposeFilter = rotationToTranspose(signedVideoRotation, rotationSource);
+      if (transposeFilter) {
         const rotated = path.join(tmpDir, 'rotated.mp4');
-        console.log(`[Step 3.7/7] normalizing rotation ${videoRotation}° via ${vfArg[0]}`);
+        console.log(`[Step 3.7/7] normalizing rotation ${signedVideoRotation}° via ${transposeFilter}`);
         await withRetry('Step 3.7/7 normalize-rotation', async () => {
           await runFfmpeg([
             '-y', '-i', roughCutPath,
-            '-vf', vfArg[0],
+            '-vf', transposeFilter,
             '-c:v', 'libx264', '-crf', '22', '-c:a', 'copy',
             '-metadata:s:v:0', 'rotate=0',
             rotated,
@@ -577,19 +647,15 @@ export async function processVideoPipelineJob(
 
       if (phoneRect) {
         const { x, y, w, h } = phoneRect;
-        // Rotation: phone videos encoded landscape with rotate=90 metadata need transpose
-        const rotPrefix = videoRotation === 90 ? 'transpose=1,' :
-                          videoRotation === 270 ? 'transpose=2,' :
-                          videoRotation === 180 ? 'hflip,vflip,' : '';
+        // Step 3.6.5 already normalized rough-cut orientation via 画面检测 (frame detection).
+        // No transpose prefix or -noautorotate needed — pixels are in correct portrait orientation.
         const filterComplex =
-          `[1:v]${rotPrefix}scale=${w}:${h}:force_original_aspect_ratio=increase,crop=${w}:${h}[ph];` +
+          `[1:v]scale=${w}:${h}:force_original_aspect_ratio=increase,crop=${w}:${h}[ph];` +
           `[0:v][ph]overlay=${x}:${y}:shortest=1[out]`;
-        console.log(`[Step 6/7] phoneRect x=${x} y=${y} w=${w} h=${h} rotation=${videoRotation}°`);
+        console.log(`[Step 6/7] phoneRect x=${x} y=${y} w=${w} h=${h} orientationNormalized=${orientationNormalized}`);
         await withRetry('Step 6/7 overlay', async () => {
-          // -noautorotate on roughCutPath prevents FFmpeg from auto-applying rotate metadata
-          // before our filter sees the raw frame. We apply rotation manually via transpose.
           await runFfmpeg([
-            '-y', '-i', rendered, '-noautorotate', '-i', roughCutPath,
+            '-y', '-i', rendered, '-i', roughCutPath,
             '-filter_complex', filterComplex,
             '-map', '[out]', '-map', '1:a?',
             '-c:v', 'libx264', '-crf', '23', '-c:a', 'aac', '-b:a', '128k',
@@ -597,7 +663,7 @@ export async function processVideoPipelineJob(
             mergedPath,
           ], { timeout: 300_000 });
         }, 3, 2_000);
-        console.log(`[Step 6/7] ✓ phone overlay done (rotation=${videoRotation}°)`);
+        console.log(`[Step 6/7] ✓ phone overlay done`);
       } else {
         // No phoneRect — full-frame template, merge audio only
         console.log(`[Step 6/7] no phoneRect — full-frame template, merging audio only`);
@@ -706,9 +772,8 @@ export async function processVideoPipelineJob(
     // then for 9:16 target: crop the left 607px from the composited result to get portrait output
     // with the phone mockup frame visible and the original video playing inside it.
     console.log(`[Step 7/7] output: composing ${effectiveTarget}`);
-    const rotPrefix7 = videoRotation === 90 ? 'transpose=1,' :
-                       videoRotation === 270 ? 'transpose=2,' :
-                       videoRotation === 180 ? 'hflip,vflip,' : '';
+    // Step 3.6.5 (画面检测) already normalized rough-cut orientation.
+    // No transpose or -noautorotate needed here.
 
     {
       const mergedPath2 = path.join(tmpDir, 'composited.mp4');
@@ -716,12 +781,12 @@ export async function processVideoPipelineJob(
 
       if (videoRect2 !== null && videoRect2.w > 0 && videoRect2.h > 0) {
         const { x, y, w, h } = videoRect2;
-        console.log(`[Step 7/7] phone overlay: x=${x} y=${y} w=${w} h=${h} rotation=${videoRotation}° target=${effectiveTarget}`);
+        console.log(`[Step 7/7] phone overlay: x=${x} y=${y} w=${w} h=${h} target=${effectiveTarget}`);
         const fc2 =
-          `[1:v]${rotPrefix7}scale=${w}:${h}:force_original_aspect_ratio=increase,crop=${w}:${h}[ph];` +
+          `[1:v]scale=${w}:${h}:force_original_aspect_ratio=increase,crop=${w}:${h}[ph];` +
           `[0:v][ph]overlay=${x}:${y}:shortest=1[out]`;
         await runFfmpeg([
-          '-y', '-i', rendered2, '-noautorotate', '-i', roughCutPath,
+          '-y', '-i', rendered2, '-i', roughCutPath,
           '-filter_complex', fc2,
           '-map', '[out]', '-map', '1:a?',
           '-c:v', 'libx264', '-crf', '23', '-c:a', 'aac', '-b:a', '128k',
