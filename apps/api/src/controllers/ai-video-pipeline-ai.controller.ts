@@ -446,8 +446,8 @@ export async function detectFrameOrientation(req: Request, res: Response, next: 
       'https://openrouter.ai/api/v1/chat/completions',
       { Authorization: `Bearer ${OPENROUTER_KEY}` },
       {
-        model: 'anthropic/claude-haiku-4-5-20251001',
-        max_tokens: 256,
+        model: 'google/gemini-2.0-flash-lite-001',
+        max_tokens: 128,
         messages: [{
           role: 'user',
           content: [
@@ -477,12 +477,22 @@ If you cannot determine orientation (black frame, abstract content), return "non
     const raw = result?.choices?.[0]?.message?.content ?? '{}';
     const jsonMatch = raw.match(/\{[\s\S]*?\}/);
     if (!jsonMatch) {
+      await svc.updateStatus(req.params.id, { step15Orientation: 'none', step15Confidence: 0, step15Reasoning: 'model returned no JSON' });
       return res.json({ orientation: 'none', confidence: 0, reasoning: 'model returned no JSON' });
     }
     const parsed = JSON.parse(jsonMatch[0]) as { orientation?: string; confidence?: number; reasoning?: string };
     const validOrientations = ['none', 'cw90', 'ccw90', 'rotate180'];
-    const orientation = validOrientations.includes(parsed.orientation ?? '') ? parsed.orientation : 'none';
-    res.json({ orientation, confidence: parsed.confidence ?? 1, reasoning: parsed.reasoning ?? '' });
+    const orientation = (validOrientations.includes(parsed.orientation ?? '') ? parsed.orientation : 'none') as string;
+    const confidence = parsed.confidence ?? 1;
+    const reasoning = parsed.reasoning ?? '';
+
+    await svc.updateStatus(req.params.id, {
+      step15Orientation: orientation,
+      step15Confidence: confidence,
+      step15Reasoning: reasoning,
+    });
+
+    res.json({ orientation, confidence, reasoning });
   } catch (err) { next(err); }
 }
 

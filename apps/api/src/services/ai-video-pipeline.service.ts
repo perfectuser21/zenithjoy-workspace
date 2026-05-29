@@ -16,6 +16,9 @@ export interface PipelineJob {
   original_script: string | null;
   target_aspect: string | null;
   detected_aspect: string | null;
+  step15_orientation: string | null;
+  step15_confidence: number | null;
+  step15_reasoning: string | null;
   created_at: Date;
   updated_at: Date;
 }
@@ -68,6 +71,9 @@ export class AiVideoPipelineService {
           original_script: params.originalScript ?? null,
           target_aspect: params.targetAspect ?? null,
           detected_aspect: null,
+          step15_orientation: null,
+          step15_confidence: null,
+          step15_reasoning: null,
           created_at: now,
           updated_at: now,
         };
@@ -124,6 +130,9 @@ export class AiVideoPipelineService {
       outputDir?: string;
       errorMsg?: string;
       detectedAspect?: string | null;
+      step15Orientation?: string | null;
+      step15Confidence?: number | null;
+      step15Reasoning?: string | null;
     },
   ): Promise<PipelineJob> {
     const fields: string[] = ['updated_at = NOW()'];
@@ -136,6 +145,9 @@ export class AiVideoPipelineService {
     if (params.outputDir !== undefined) { fields.push(`output_dir = $${i++}`); values.push(params.outputDir); }
     if (params.errorMsg !== undefined) { fields.push(`error_msg = $${i++}`); values.push(params.errorMsg); }
     if (params.detectedAspect !== undefined) { fields.push(`detected_aspect = $${i++}`); values.push(params.detectedAspect); }
+    if (params.step15Orientation !== undefined) { fields.push(`step15_orientation = $${i++}`); values.push(params.step15Orientation); }
+    if (params.step15Confidence !== undefined) { fields.push(`step15_confidence = $${i++}`); values.push(params.step15Confidence); }
+    if (params.step15Reasoning !== undefined) { fields.push(`step15_reasoning = $${i++}`); values.push(params.step15Reasoning); }
 
     values.push(id);
     const result = await pool.query(
