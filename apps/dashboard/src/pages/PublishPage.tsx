@@ -14,6 +14,7 @@ import {
   getAgentStatus,
   listPublishTasks,
   postPublishTask,
+  type PublishTaskDetail,
 } from '../api/walking-skeleton-1.api';
 
 const STATUS_COLOR: Record<string, string> = {

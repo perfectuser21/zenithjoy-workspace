@@ -76,7 +76,7 @@ describe('PublishPage [BEHAVIOR]', () => {
       agent_id: 'agent-1',
       platform: 'douyin',
       folder_path: '/Users/foo/videos',
-      type: 'image',
+      type: 'video',
     });
   });
 
