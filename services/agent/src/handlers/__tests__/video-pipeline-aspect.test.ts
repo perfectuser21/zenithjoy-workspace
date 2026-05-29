@@ -131,6 +131,20 @@ describe('画面检测 — 实际帧维度检测纠正方向 [REGRESSION]', () =
   it('Step 1 保留有符号旋转角 signedVideoRotation（不用 Math.abs 丢失方向）', () => {
     expect(SRC).toContain('signedVideoRotation');
   });
+
+  it('Step 3.6.5 re-encode 包含 -noautorotate（防止原始视频 metadata 导致双重旋转）', () => {
+    const idx = SRC.indexOf('Step 3.6.5');
+    const block = idx !== -1 ? SRC.slice(idx, idx + 1500) : '';
+    // The oriented.mp4 re-encode MUST use -noautorotate so rotation metadata
+    // in the original file (when no rough-cut was made) doesn't cause double rotation.
+    expect(block).toContain('-noautorotate');
+  });
+
+  it('Step 3.7 re-encode 包含 -noautorotate（同上，防双重旋转）', () => {
+    const idx = SRC.indexOf('Step 3.7/7 normalize-rotation');
+    const block = idx !== -1 ? SRC.slice(idx, idx + 500) : '';
+    expect(block).toContain('-noautorotate');
+  });
 });
 
 // ── Regression: rough cut double-rotation ──────────────────────────────────
