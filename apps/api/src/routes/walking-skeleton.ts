@@ -437,14 +437,15 @@ publishWsRouter.get(
           ok: false, code: 'FORBIDDEN', message: 'agent 不属于该 license',
         });
       }
+      const PUBLISH_PLATFORMS = ['douyin','kuaishou','xiaohongshu','toutiao','weibo','shipinhao','zhihu','gongzhonghao'];
       const { rows } = await pool.query(
         `SELECT id, agent_id, platform, type, status, folder_path, result, receipt_at, created_at
            FROM zenithjoy.publish_tasks
           WHERE agent_id = $1
-            AND platform IN ('douyin','kuaishou','xiaohongshu','toutiao','weibo','shipinhao','zhihu','gongzhonghao')
+            AND platform = ANY($2::text[])
           ORDER BY created_at DESC
           LIMIT 50`,
-        [agent_id]
+        [agent_id, PUBLISH_PLATFORMS]
       );
       return res.status(200).json({ tasks: rows });
     } catch (err) {
