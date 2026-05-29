@@ -68,7 +68,9 @@ async function getBrowserAndPage() {
     await ctx.addCookies(cookies);
     const page = await ctx.newPage();
     _log('[DY-VIDEO-REAL] 已注入', cookies.length, '个 cookies');
-    // Verify authentication before returning
+    // Auth check: navigate to home and verify React renders logged-in UI (not login form).
+    // Douyin creator SPA does NOT redirect URL on auth failure — it renders the login form
+    // at whatever URL you navigate to. We must wait for React hydration and check body text.
     await page.goto('https://creator.douyin.com/creator-micro/home', {
       waitUntil: 'domcontentloaded', timeout: 30000,
     });
@@ -77,8 +79,24 @@ async function getBrowserAndPage() {
     if (/login|passport|sign/i.test(homeUrl)) {
       const shot = await captureFailScreenshot(page, 'cookie-auth-fail');
       await browser.close();
-      throw new Error(`DOUYIN_COOKIES 无效或已过期，重定向到: ${homeUrl}，请更新 GitHub secret DOUYIN_COOKIES (screenshot: ${shot || 'n/a'})`);
+      throw new Error(`DOUYIN_COOKIES 无效（URL 重定向到登录页）: ${homeUrl}，请更新 GitHub secret DOUYIN_COOKIES (screenshot: ${shot || 'n/a'})`);
     }
+    // Wait for React to hydrate — the SPA starts with landing/login page HTML,
+    // then after client-side auth check renders either the creator UI or the login form.
+    await page.waitForLoadState('networkidle', { timeout: 20000 }).catch(() => {});
+    const homeBodyText = await page.evaluate(() => document.body.innerText.substring(0, 300)).catch(() => '');
+    _log('[DY-VIDEO-REAL] home bodyText(300):', homeBodyText.replace(/\n/g, '|'));
+    const isLoginFormShowing = /扫码登录|密码登录|验证码登录|账号登录/.test(homeBodyText);
+    if (isLoginFormShowing) {
+      const shot = await captureFailScreenshot(page, 'cookie-auth-content-fail');
+      await browser.close();
+      throw new Error(
+        'DOUYIN_COOKIES 无效或已过期：首页 React 渲染后仍显示登录表单（扫码登录/密码登录），' +
+        '请重新导出抖音 creator center 的 cookies 并更新 GitHub secret DOUYIN_COOKIES ' +
+        `(screenshot: ${shot || 'n/a'})`
+      );
+    }
+    _log('[DY-VIDEO-REAL] ✓ 首页 auth 验证通过（未见登录表单）');
     return { browser, page, context: ctx, isLaunched: true };
   }
   const sessionPath = path.join(
@@ -141,22 +159,26 @@ async function publishDouyinVideoReal(queueData) {
     }
     await page.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => {});
 
-    // Wait for React app to hydrate and recognize auth cookies.
-    // Douyin SPA starts in pre-login state (landing page); after cookie recognition it renders
-    // the upload form which uses [data-e2e] attributes. Without this wait, uploadEls=[].
-    _log('[DY-VIDEO-REAL] 等待 React hydrate 识别 cookie (最多 25s)...');
-    await page.waitForFunction(
-      () => document.querySelectorAll('[data-e2e]').length > 0,
-      { timeout: 25000 }
-    ).catch(async () => {
-      const shot = await captureFailScreenshot(page, 'hydrate-timeout');
+    // Wait for upload UI to appear OR detect login-page state.
+    // Douyin SPA renders landing/login page initially, then hydrates to the actual UI.
+    // We can't rely on [data-e2e] since upload page may not use it — instead detect
+    // login form text as a failure signal, or upload-related elements as success.
+    _log('[DY-VIDEO-REAL] 等待上传界面出现 (最多 20s)...');
+    const uploadReady = await page.waitForFunction(() => {
+      const text = document.body.innerText;
+      if (/扫码登录|密码登录|验证码登录/.test(text)) return 'login';
+      if (document.querySelectorAll('[class*="upload"],[class*="Upload"],[data-e2e]').length > 0) return 'upload';
+      return false;
+    }, { timeout: 20000 }).catch(() => null);
+    const uploadReadyVal = uploadReady ? await uploadReady.jsonValue().catch(() => null) : null;
+    _log('[DY-VIDEO-REAL] uploadReady:', uploadReadyVal);
+    if (uploadReadyVal === 'login') {
+      const shot = await captureFailScreenshot(page, 'upload-page-login-form');
       throw new Error(
-        'React 未能在 25s 内完成 hydrate（未出现 [data-e2e] 元素），' +
-        '页面可能仍处于登录前状态，DOUYIN_COOKIES 可能已过期 ' +
-        `(screenshot: ${shot || 'n/a'})`
+        '上传页 React 仍显示登录表单，DOUYIN_COOKIES 已过期，' +
+        `请重新导出 creator center cookies 更新 GitHub secret (screenshot: ${shot || 'n/a'})`
       );
-    });
-    _log('[DY-VIDEO-REAL] React hydrate 完成，上传界面就绪');
+    }
 
     _log('[DY-VIDEO-REAL] 上传视频...');
     await uploadVideoFile(page, context, queueData.video_path);
