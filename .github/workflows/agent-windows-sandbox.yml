@@ -99,7 +99,7 @@ jobs:
             Write-Host "FAIL: EBADENGINE still present in output"
             exit 1
           }
-          Write-Host "[sandbox] No EBADENGINE — Node 22 + hyperframes compatibility CONFIRMED"
+          Write-Host "[sandbox] No EBADENGINE -- Node 22 + hyperframes compatibility CONFIRMED"
 
       - name: Verify playwright-core bundled in pack (root cause fix v1.1.57)
         shell: powershell
