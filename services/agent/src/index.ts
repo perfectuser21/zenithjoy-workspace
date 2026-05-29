@@ -764,6 +764,7 @@ function startWs1HeartbeatLoop(cfg: AgentConfig): void {
     license: cfg.licenseKey,
     version: VERSION,
     hostname: os.hostname() || safeHostnameSlug(),
+    osType: process.platform,
     intervalMs: 30_000,
     onTask,
     onError: (err) => console.warn('[ws1:heartbeat] error:', err),

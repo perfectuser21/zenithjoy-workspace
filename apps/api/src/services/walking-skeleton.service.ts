@@ -117,8 +117,9 @@ export async function upsertAgentByHeartbeat(args: {
   tenantId: string;
   hostname: string | null;
   version: string | null;
+  osType?: string | null;
 }): Promise<AgentRow> {
-  const { licenseId, tenantId, hostname, version } = args;
+  const { licenseId, tenantId, hostname, version, osType } = args;
 
   const existing = await pool.query<AgentRow>(
     `SELECT id, tenant_id, agent_id, hostname, version, license_id,
@@ -136,6 +137,7 @@ export async function upsertAgentByHeartbeat(args: {
     const updated = await pool.query<AgentRow>(
       `UPDATE zenithjoy.agents
           SET version = COALESCE($1, version),
+              os_type = COALESCE($3, os_type),
               last_heartbeat_at = now(),
               last_seen = now(),
               status = 'online',
@@ -143,7 +145,7 @@ export async function upsertAgentByHeartbeat(args: {
         WHERE id = $2
         RETURNING id, tenant_id, agent_id, hostname, version, license_id,
                   bound_folder_path, last_heartbeat_at, status, last_seen`,
-      [version, row.id]
+      [version, row.id, osType ?? null]
     );
     return updated.rows[0];
   }
@@ -152,12 +154,12 @@ export async function upsertAgentByHeartbeat(args: {
   const agentText = `ws1-${crypto.randomBytes(8).toString('hex')}`;
   const inserted = await pool.query<AgentRow>(
     `INSERT INTO zenithjoy.agents
-       (tenant_id, license_id, agent_id, hostname, version, capabilities, status,
+       (tenant_id, license_id, agent_id, hostname, version, os_type, capabilities, status,
         last_heartbeat_at, last_seen)
-     VALUES ($1, $2, $3, $4, $5, ARRAY['douyin']::text[], 'online', now(), now())
+     VALUES ($1, $2, $3, $4, $5, $6, ARRAY['douyin']::text[], 'online', now(), now())
      RETURNING id, tenant_id, agent_id, hostname, version, license_id,
                bound_folder_path, last_heartbeat_at, status, last_seen`,
-    [tenantId, licenseId, agentText, hostname, version]
+    [tenantId, licenseId, agentText, hostname, version, osType ?? null]
   );
   return inserted.rows[0];
 }
