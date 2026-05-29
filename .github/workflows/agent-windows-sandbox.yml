@@ -124,17 +124,18 @@ jobs:
           $outFile     = Join-Path $env:TEMP "pw-test-out.txt"
           $errFile     = Join-Path $env:TEMP "pw-test-err.txt"
           $publisherDir = Join-Path $packDir "publishers\douyin-publisher"
-          @'
-try {
-  const { chromium } = require('playwright-core');
-  if (!chromium) throw new Error('chromium object is falsy');
-  console.log('PASS: playwright-core loaded, chromium API available');
-  process.exit(0);
-} catch (e) {
-  console.error('FAIL:', e.message);
-  process.exit(1);
-}
-'@ | Set-Content $testScript -Encoding UTF8
+          # Build script content via string concat — heredoc @'...'@ breaks YAML block scalar indentation
+          $nl = [char]10
+          $scriptContent = "try {${nl}" +
+            "  const { chromium } = require('playwright-core');${nl}" +
+            "  if (!chromium) throw new Error('chromium object is falsy');${nl}" +
+            "  console.log('PASS: playwright-core loaded, chromium API available');${nl}" +
+            "  process.exit(0);${nl}" +
+            "} catch (e) {${nl}" +
+            "  console.error('FAIL:', e.message);${nl}" +
+            "  process.exit(1);${nl}" +
+            "}"
+          Set-Content $testScript $scriptContent -Encoding UTF8
 
           $env:NODE_PATH = Join-Path $packDir "node_modules"
           $env:PLAYWRIGHT_BROWSERS_PATH = Join-Path $packDir "playwright-browsers"
