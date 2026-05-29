@@ -200,17 +200,24 @@ async function uploadVideoFile(page, context, videoPath) {
   // Wait for React upload component to mount — Douyin creator SPA needs time after domcontentloaded
   await page.waitForTimeout(REACT_HYDRATE_WAIT_MS);
 
-  // Diagnostic (page structure, not user data)
+  // Diagnostic — body text + readyState to understand page state
   const diag = await page.evaluate(() => {
     const fileInputCount = document.querySelectorAll('input[type="file"]').length;
     const uploadEls = [...document.querySelectorAll('[class*="upload"],[class*="Upload"],[class*="drag"],[data-e2e]')];
+    const allEls = document.querySelectorAll('*').length;
+    const title = document.title || '';
+    const bodyText = document.body.innerText.substring(0, 500);
+    const readyState = document.readyState;
     return {
       fileInputCount,
-      uploadEls: uploadEls.slice(0, 8).map(e => `${e.tagName}[de2e="${e.getAttribute('data-e2e')||''}"]`),
-      bodyTextLength: document.body.innerText.length,
+      allEls,
+      title,
+      readyState,
+      uploadEls: uploadEls.slice(0, 8).map(e => `${e.tagName}[de2e="${e.getAttribute('data-e2e')||''}"][cls="${(e.className||'').substring(0,30)}"]`),
+      bodyText,
     };
   }).catch(e => ({ error: e.message }));
-  _log('[DY-VIDEO-REAL] 页面诊断:', JSON.stringify(diag));
+  _log('[DY-VIDEO-REAL] 页面诊断:', JSON.stringify(diag).substring(0, 1200));
 
   const failures = [];
 
