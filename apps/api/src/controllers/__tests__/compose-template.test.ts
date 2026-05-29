@@ -4,6 +4,25 @@ import type { TemplateSpec } from '../../templates/registry';
 const { mockQuery } = vi.hoisted(() => ({ mockQuery: vi.fn() }));
 vi.mock('../../db/connection', () => ({ default: { query: mockQuery } }));
 
+// Make https.request fail immediately so postJson (OpenRouter call) rejects fast.
+// composeTemplate has a try-catch that falls back to derived sceneTexts, so the
+// controller still runs to completion and we can assert on the JSON response shape.
+vi.mock('https', () => ({
+  default: {
+    request: vi.fn((_opts: unknown, _cb: unknown) => {
+      const req = {
+        on(event: string, handler: (e: Error) => void) {
+          if (event === 'error') process.nextTick(() => handler(new Error('https mocked')));
+          return req;
+        },
+        end: vi.fn(),
+        write: vi.fn(),
+      };
+      return req;
+    }),
+  },
+}));
+
 import { _esc, _buildDynamicTemplateHtml } from '../ai-video-pipeline-ai.controller';
 
 const SPEC_C: TemplateSpec = {
@@ -147,5 +166,43 @@ describe('_buildDynamicTemplateHtml — GSAP timeline', () => {
     const scenes = [{ start: 0, duration: 5, eyebrow: 'KW', title: '主标题', subtitle: '副标题' }];
     const h = _buildDynamicTemplateHtml('C', scenes, '', SPEC_C, 5);
     expect(h).toContain('副标题');
+  });
+});
+
+// ── Regression #916 ───────────────────────────────────────────────────────────
+// composeTemplate was returning { html, aspect } but omitting phoneRect.
+// The agent reads phoneRect to know where to overlay the original video on the
+// phone screen.  Without it, phoneRect === null and the overlay step is skipped,
+// so the output video shows an empty phone frame instead of the real footage.
+describe('composeTemplate — phoneRect in response (regression #916)', () => {
+  beforeEach(() => { mockQuery.mockReset(); });
+
+  it('includes phoneRect for template C so agent can overlay original video', async () => {
+    mockQuery.mockResolvedValueOnce({
+      rows: [{ id: 'job-916', template_id: 'C', status: 'pending', license_id: null }],
+    });
+
+    const { composeTemplate } = await import('../../controllers/ai-video-pipeline-ai.controller');
+    const jsonFn = vi.fn();
+    const req = {
+      params: { id: 'job-916' },
+      body: {
+        transcript: 'test',
+        segments: [{ start: 0, end: 5, text: 'hello world' }],
+        duration: 5,
+      },
+    } as any;
+    const res = { status: vi.fn().mockReturnThis(), json: jsonFn } as any;
+    const next = vi.fn();
+
+    await composeTemplate(req, res, next);
+
+    expect(jsonFn).toHaveBeenCalledOnce();
+    const body = jsonFn.mock.calls[0][0] as Record<string, unknown>;
+    expect(body).toHaveProperty('html');
+    expect(body).toHaveProperty('aspect', '16:9');
+    // phoneRect MUST be present — agent uses it to overlay the original video
+    expect(body).toHaveProperty('phoneRect');
+    expect(body.phoneRect).toEqual({ x: 206, y: 173, w: 328, h: 724 });
   });
 });
