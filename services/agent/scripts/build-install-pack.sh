@@ -88,33 +88,32 @@ fi
 cp "$NODE_ZIP_CACHE" "$PACK_DIR/node-win-x64.zip"
 echo "[build] node-win-x64.zip included in pack (portable Node.js for hyperframes)"
 
-echo "[build] bundling Playwright Chromium for Windows..."
-# Playwright Chromium (Chrome for Testing) — 打进安装包，客户机无需单独安装浏览器。
-# PLAYWRIGHT_BROWSERS_PATH 在 start.bat 里指向 playwright-browsers/，
-# Playwright 会在 chromium-<rev>/chrome-win64/chrome.exe 找到它。
-PW_CHROMIUM_REV=$(node -e "
+echo "[build] bundling Playwright Chromium Headless Shell for Windows..."
+# Playwright headless launches use chromium-headless-shell, not the full Chrome for Testing.
+# Expected path: playwright-browsers/chromium_headless_shell-<rev>/chrome-headless-shell-win64/chrome-headless-shell.exe
+PW_HS_REV=$(node -e "
 const b = require('./node_modules/playwright-core/browsers.json');
-const ch = b.browsers.find(x => x.name === 'chromium');
+const ch = b.browsers.find(x => x.name === 'chromium-headless-shell');
 console.log(ch.revision);
 ")
-PW_CHROMIUM_VER=$(node -e "
+PW_HS_VER=$(node -e "
 const b = require('./node_modules/playwright-core/browsers.json');
-const ch = b.browsers.find(x => x.name === 'chromium');
+const ch = b.browsers.find(x => x.name === 'chromium-headless-shell');
 console.log(ch.browserVersion || ch.revision);
 ")
-CHROMIUM_ZIP_URL="https://cdn.playwright.dev/builds/cft/${PW_CHROMIUM_VER}/win64/chrome-win64.zip"
-CHROMIUM_ZIP_CACHE="install-pack/chromium-win64-${PW_CHROMIUM_REV}.zip"
-CHROMIUM_DEST_DIR="$PACK_DIR/playwright-browsers/chromium-${PW_CHROMIUM_REV}"
-if [ ! -f "$CHROMIUM_ZIP_CACHE" ]; then
-    echo "[build] downloading Playwright Chromium ${PW_CHROMIUM_VER} (rev ${PW_CHROMIUM_REV}, ~190MB)..."
-    curl -L --retry 3 -o "$CHROMIUM_ZIP_CACHE" "$CHROMIUM_ZIP_URL"
-    echo "[build] Playwright Chromium cached in install-pack/"
+HS_ZIP_URL="https://cdn.playwright.dev/builds/cft/${PW_HS_VER}/win64/chrome-headless-shell-win64.zip"
+HS_ZIP_CACHE="install-pack/chromium-headless-shell-win64-${PW_HS_REV}.zip"
+HS_DEST_DIR="$PACK_DIR/playwright-browsers/chromium_headless_shell-${PW_HS_REV}"
+if [ ! -f "$HS_ZIP_CACHE" ]; then
+    echo "[build] downloading Playwright Chromium Headless Shell ${PW_HS_VER} (rev ${PW_HS_REV}, ~60MB)..."
+    curl -L --retry 3 -o "$HS_ZIP_CACHE" "$HS_ZIP_URL"
+    echo "[build] Playwright Chromium Headless Shell cached in install-pack/"
 else
-    echo "[build] Playwright Chromium already cached (rev ${PW_CHROMIUM_REV}), skipping download"
+    echo "[build] Playwright Chromium Headless Shell already cached (rev ${PW_HS_REV}), skipping download"
 fi
-mkdir -p "$CHROMIUM_DEST_DIR"
-unzip -q "$CHROMIUM_ZIP_CACHE" -d "$CHROMIUM_DEST_DIR/"
-echo "[build] playwright-browsers/chromium-${PW_CHROMIUM_REV}/ bundled"
+mkdir -p "$HS_DEST_DIR"
+unzip -q "$HS_ZIP_CACHE" -d "$HS_DEST_DIR/"
+echo "[build] playwright-browsers/chromium_headless_shell-${PW_HS_REV}/ bundled"
 
 echo "[build] reproducible tar.gz (mtime locked)"
 TAR_NAME="${OUT_DIR}/${PACK_NAME}.tar.gz"
