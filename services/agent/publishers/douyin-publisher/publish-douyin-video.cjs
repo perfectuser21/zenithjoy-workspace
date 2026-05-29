@@ -191,58 +191,57 @@ async function main() {
 // 5 个抽出的 DOM selector 函数（playwright 等价封装 user-skill raw CDP 实现）
 // ============================================================================
 
-async function uploadVideoFile(page, context, videoPath) {
-  // Extra wait for React upload component to fully mount
-  await page.waitForTimeout(3000);
+const REACT_HYDRATE_WAIT_MS = 3000;
+const FILE_CHOOSER_TIMEOUT_MS = 3000;
+const CLICK_TIMEOUT_MS = 800;
+const FILE_INPUT_FALLBACK_TIMEOUT_MS = 60000;
 
-  // Enhanced diagnostic
+async function uploadVideoFile(page, context, videoPath) {
+  // Wait for React upload component to mount — Douyin creator SPA needs time after domcontentloaded
+  await page.waitForTimeout(REACT_HYDRATE_WAIT_MS);
+
+  // Diagnostic (page structure, not user data)
   const diag = await page.evaluate(() => {
-    const fileInputs = [...document.querySelectorAll('input[type="file"]')];
+    const fileInputCount = document.querySelectorAll('input[type="file"]').length;
     const uploadEls = [...document.querySelectorAll('[class*="upload"],[class*="Upload"],[class*="drag"],[data-e2e]')];
     return {
-      fileInputCount: fileInputs.length,
-      uploadEls: uploadEls.slice(0, 8).map(e => `${e.tagName}[class="${(e.className||'').substring(0,50)}"][de2e="${e.getAttribute('data-e2e')||''}"]`),
-      bodyText: document.body.innerText.substring(0, 400),
+      fileInputCount,
+      uploadEls: uploadEls.slice(0, 8).map(e => `${e.tagName}[de2e="${e.getAttribute('data-e2e')||''}"]`),
+      bodyTextLength: document.body.innerText.length,
     };
   }).catch(e => ({ error: e.message }));
-  _log('[DY-VIDEO-REAL] 页面诊断:', JSON.stringify(diag).substring(0, 1000));
+  _log('[DY-VIDEO-REAL] 页面诊断:', JSON.stringify(diag));
 
-  // Strategy 1: Playwright-native click + FileChooser (works with hashed CSS & shadow DOM)
+  const failures = [];
+
+  // Strategy 1: Playwright-native click + FileChooser (survives hashed CSS & shadow DOM)
   const clickSelectors = [
-    '[data-e2e="upload-btn"]',
-    '[data-e2e*="upload"]',
-    '[class*="upload-btn"]',
-    '[class*="uploadBtn"]',
-    '[class*="upload-area"]',
-    '[class*="uploadArea"]',
-    '[class*="Upload"]',
-    'input[type="file"]',
-    'text=点击上传',
-    'text=上传视频',
-    'text=选择文件',
-    'text=上传',
+    '[data-e2e="upload-btn"]', '[data-e2e*="upload"]',
+    '[class*="upload-btn"]', '[class*="uploadBtn"]',
+    '[class*="upload-area"]', '[class*="uploadArea"]',
+    '[class*="Upload"]', 'input[type="file"]',
+    'text=点击上传', 'text=上传视频', 'text=选择文件', 'text=上传',
   ];
   for (const sel of clickSelectors) {
     try {
-      const fcPromise = page.waitForEvent('filechooser', { timeout: 3000 });
-      await page.click(sel, { timeout: 800 });
+      const fcPromise = page.waitForEvent('filechooser', { timeout: FILE_CHOOSER_TIMEOUT_MS });
+      await page.click(sel, { timeout: CLICK_TIMEOUT_MS });
       const fc = await fcPromise;
       await fc.setFiles(videoPath);
       _log('[DY-VIDEO-REAL] ✓ FileChooser 成功 selector:', sel);
       return;
-    } catch { /* try next */ }
+    } catch (e) { failures.push(`FC(${sel}): ${e.message.substring(0, 60)}`); }
   }
-  _log('[DY-VIDEO-REAL] 所有 FileChooser selectors 均无效，尝试 CDP...');
+  _log('[DY-VIDEO-REAL] Strategy 1 全失败，尝试 CDP...');
 
   // Strategy 2: CDP with recursive shadow DOM traversal
   if (context) {
-    _log('[DY-VIDEO-REAL] 尝试 CDP shadow DOM 方式...');
     try {
       const cdpSession = await context.newCDPSession(page);
       const { result } = await cdpSession.send('Runtime.evaluate', {
         expression: `(function f(r){var i=r.querySelector('input[type="file"]');if(i)return i;for(var e of r.querySelectorAll('*'))if(e.shadowRoot){var x=f(e.shadowRoot);if(x)return x;}return null;})(document)`,
       });
-      if (!result.objectId) throw new Error('shadow DOM 也没有 file input');
+      if (!result.objectId) throw new Error('file input 在完整 shadow DOM 树中也不存在');
       const { node } = await cdpSession.send('DOM.describeNode', { objectId: result.objectId });
       await cdpSession.send('DOM.setFileInputFiles', {
         backendNodeId: node.backendNodeId,
@@ -251,15 +250,26 @@ async function uploadVideoFile(page, context, videoPath) {
       _log('[DY-VIDEO-REAL] ✓ CDP shadow DOM 成功');
       return;
     } catch (e2) {
-      _log('[DY-VIDEO-REAL] CDP 方式失败:', e2.message.substring(0, 120));
+      failures.push(`CDP: ${e2.message.substring(0, 80)}`);
+      _log('[DY-VIDEO-REAL] Strategy 2 失败:', e2.message.substring(0, 120));
     }
   } else {
+    failures.push('CDP: context 未定义（getBrowserAndPage 未传递 context）');
     _log('[DY-VIDEO-REAL] context 未定义，跳过 CDP');
   }
 
-  // Strategy 3: Direct setInputFiles fallback
-  _log('[DY-VIDEO-REAL] 回退到 setInputFiles (60s 超时)...');
-  await page.setInputFiles('input[type="file"]', videoPath, { timeout: 60000 });
+  // Strategy 3: setInputFiles fallback — last resort, fails fast with full error context
+  _log('[DY-VIDEO-REAL] Strategy 3: setInputFiles fallback...');
+  try {
+    await page.setInputFiles('input[type="file"]', videoPath, { timeout: FILE_INPUT_FALLBACK_TIMEOUT_MS });
+    _log('[DY-VIDEO-REAL] ✓ setInputFiles 成功');
+  } catch (e3) {
+    failures.push(`setInputFiles: ${e3.message.substring(0, 80)}`);
+    throw new Error(
+      `视频上传全部策略均失败（共 ${failures.length} 次），抖音页面可能已改版或未正常加载。` +
+      `诊断: fileInputCount=${diag.fileInputCount}。失败摘要: ${failures.slice(-3).join(' | ')}`
+    );
+  }
 }
 
 async function waitForUploadProcessed(page, timeoutMs = 60_000) {
