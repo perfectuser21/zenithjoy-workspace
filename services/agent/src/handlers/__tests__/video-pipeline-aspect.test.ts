@@ -97,3 +97,37 @@ describe('Step 6B — HyperFrames 必须用 --resolution landscape 渲染 1920×
     expect(step6Block).toContain('--resolution landscape');
   });
 });
+
+// ── Regression: rough cut double-rotation ──────────────────────────────────
+// Step 3.6 creates the rough cut via ffmpeg.  Without -noautorotate on the
+// input, ffmpeg auto-bakes rotation metadata (e.g. rotate=90 from iPhone)
+// into pixels.  Step 6 (template overlay) then applies -noautorotate +
+// transpose again → pixels are rotated twice → output is 90° off.
+// Fix: add -noautorotate to Step 3.6 input so rough-cut pixels stay raw,
+// and Step 6's transpose is the sole correction.
+describe('Step 3.6 rough-cut — 禁止双重旋转 [REGRESSION]', () => {
+  const rc36Start = SRC.indexOf('Step 3.6/7 rough-cut');
+  const rc36Block = rc36Start !== -1 ? SRC.slice(rc36Start, rc36Start + 600) : '';
+
+  it('Step 3.6 代码块存在', () => {
+    expect(rc36Start).toBeGreaterThan(0);
+  });
+
+  it('Step 3.6 rough-cut ffmpeg 调用包含 -noautorotate（防止旋转 metadata 被 bake 进像素）', () => {
+    // Without this flag, ffmpeg auto-rotates frames before the filter graph.
+    // Step 6 then applies transpose on top → double rotation → video appears 90° off.
+    expect(rc36Block).toContain('-noautorotate');
+  });
+
+  it('-noautorotate 出现在 -i videoPath 之前（必须作为 input option）', () => {
+    const noauto = rc36Block.indexOf('-noautorotate');
+    const inputFlag = rc36Block.indexOf("'-i'") !== -1
+      ? rc36Block.indexOf("'-i'")
+      : rc36Block.indexOf('"-i"');
+    // -noautorotate index should be less than the -i index in the rough-cut block
+    expect(noauto).toBeGreaterThan(-1);
+    if (inputFlag !== -1) {
+      expect(noauto).toBeLessThan(inputFlag);
+    }
+  });
+});
