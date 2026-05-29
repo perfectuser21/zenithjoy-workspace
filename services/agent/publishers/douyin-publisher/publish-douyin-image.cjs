@@ -93,6 +93,12 @@ async function publishDouyinImageReal(queueFilePath) {
     await page.goto('https://creator.douyin.com/creator-micro/content/upload?default-tab=3', {
       waitUntil: 'domcontentloaded',
     });
+    const uploadUrl = page.url();
+    _log('[DY-REAL] 上传页 URL:', uploadUrl);
+    if (/login|passport|sign/i.test(uploadUrl)) {
+      throw new Error(`上传页重定向到登录: ${uploadUrl}，DOUYIN_COOKIES 无效或已过期，请更新 GitHub secret`);
+    }
+    await page.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => {});
     await page.waitForTimeout(3000);
 
     _log('[DY-REAL] Step 2: 上传图片 (DOM.setFileInputFiles)');

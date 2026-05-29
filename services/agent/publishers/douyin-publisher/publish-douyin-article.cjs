@@ -86,12 +86,13 @@ async function publishDouyinArticleReal(queueFilePath) {
   try {
     _log('[DY-ARTICLE] Step 1: 导航到文章发布页面');
     await page.goto(ARTICLE_URL, { waitUntil: 'domcontentloaded' });
-    await page.waitForTimeout(3000);
-
     const currentUrl = page.url();
-    if (currentUrl.includes('login') || currentUrl.includes('passport')) {
-      return emitFailure(`抖音未登录，当前 URL: ${currentUrl}`);
+    _log('[DY-ARTICLE] 文章页 URL:', currentUrl);
+    if (currentUrl.includes('login') || currentUrl.includes('passport') || currentUrl.includes('sign')) {
+      return emitFailure(`抖音未登录 (DOUYIN_COOKIES 无效/过期)，当前 URL: ${currentUrl}，请更新 GitHub secret`);
     }
+    await page.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => {});
+    await page.waitForTimeout(3000);
 
     _log('[DY-ARTICLE] Step 2: 上传封面 (DOM.setFileInputFiles + backendNodeId)');
     const cdpSession = await context.newCDPSession(page);
