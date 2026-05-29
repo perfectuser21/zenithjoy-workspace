@@ -426,6 +426,66 @@ ${segmentList}
   } catch (err) { next(err); }
 }
 
+// ── detectFrameOrientation ────────────────────────────────────────────────
+// Receives a raw video frame (extracted with -noautorotate, so pixels are as
+// stored on disk without any auto-correction) and asks Claude vision to
+// determine what rotation correction is needed for correct display.
+
+export async function detectFrameOrientation(req: Request, res: Response, next: NextFunction) {
+  try {
+    const job = await svc.getJob(req.params.id);
+    if (!job) return res.status(404).json({ error: 'job not found' });
+
+    const frameFile = req.file;
+    if (!frameFile) return res.status(400).json({ error: 'frame image required' });
+
+    const frameB64 = (frameFile.buffer ?? fs.readFileSync(frameFile.path)).toString('base64');
+    const mime = frameFile.mimetype || 'image/jpeg';
+
+    const result = await postJson(
+      'https://openrouter.ai/api/v1/chat/completions',
+      { Authorization: `Bearer ${OPENROUTER_KEY}` },
+      {
+        model: 'anthropic/claude-haiku-4-5-20251001',
+        max_tokens: 256,
+        messages: [{
+          role: 'user',
+          content: [
+            {
+              type: 'text',
+              text: `This is a raw video frame extracted WITHOUT automatic rotation correction. Pixels are exactly as stored on disk.
+
+Analyze the visual content and determine what rotation is needed for a human viewer to see it correctly.
+
+Return ONLY a JSON object, no other text:
+{"orientation": "<value>", "confidence": <0-1>, "reasoning": "<brief>"}
+
+Where orientation is one of:
+- "none" — content is correct as-is (faces/text appear right-side up)
+- "cw90" — need 90° clockwise rotation (content appears lying on its left side)
+- "ccw90" — need 90° counterclockwise rotation (content appears lying on its right side)
+- "rotate180" — need 180° rotation (content appears upside down)
+
+If you cannot determine orientation (black frame, abstract content), return "none".`,
+            },
+            { type: 'image_url', image_url: { url: `data:${mime};base64,${frameB64}` } },
+          ],
+        }],
+      },
+    ) as { choices?: { message?: { content?: string } }[] };
+
+    const raw = result?.choices?.[0]?.message?.content ?? '{}';
+    const jsonMatch = raw.match(/\{[\s\S]*?\}/);
+    if (!jsonMatch) {
+      return res.json({ orientation: 'none', confidence: 0, reasoning: 'model returned no JSON' });
+    }
+    const parsed = JSON.parse(jsonMatch[0]) as { orientation?: string; confidence?: number; reasoning?: string };
+    const validOrientations = ['none', 'cw90', 'ccw90', 'rotate180'];
+    const orientation = validOrientations.includes(parsed.orientation ?? '') ? parsed.orientation : 'none';
+    res.json({ orientation, confidence: parsed.confidence ?? 1, reasoning: parsed.reasoning ?? '' });
+  } catch (err) { next(err); }
+}
+
 // ── generateBgm ────────────────────────────────────────────────────────────
 
 export async function generateBgm(req: Request, res: Response, next: NextFunction) {

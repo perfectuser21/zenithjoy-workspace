@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import multer from 'multer';
 import { createJob, getJob, listJobs, completeJob, updateProgress } from '../controllers/ai-video-pipeline.controller';
-import { transcribeAudio, analyzeTranscript, designScenes, composeHtml, generateBgm, composeTemplate } from '../controllers/ai-video-pipeline-ai.controller';
+import { transcribeAudio, analyzeTranscript, designScenes, composeHtml, generateBgm, composeTemplate, detectFrameOrientation } from '../controllers/ai-video-pipeline-ai.controller';
 
 const upload = multer({ storage: multer.memoryStorage() });
 
@@ -18,5 +18,6 @@ router.post('/:id/design', designScenes);
 router.post('/:id/compose-html', composeHtml);
 router.post('/:id/bgm', generateBgm);
 router.post('/:id/compose-template', composeTemplate);
+router.post('/:id/detect-frame-orientation', upload.single('frame'), detectFrameOrientation);
 
 export default router;

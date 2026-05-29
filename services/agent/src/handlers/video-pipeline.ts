@@ -391,6 +391,46 @@ export async function processVideoPipelineJob(
     console.log(`[Step 1/7] ✓ duration=${duration.toFixed(1)}s rotation=${videoRotation}° dim=${effectiveWidth}×${effectiveHeight} detectedAspect=${detectedAspect} effectiveTarget=${effectiveTarget}`);
     fireProgress(apiBase, id, 20, 'step1_probe');
 
+    // ── Step 1.5: vision-based orientation check (non-fatal) ─────────────────
+    // Extract a raw frame with -noautorotate (pixels as stored on disk, no
+    // metadata auto-correction) and send to Claude vision for authoritative
+    // orientation detection.  Result is used as the primary transpose source.
+    let visionTransposeFilter = '';
+    try {
+      const framePath = path.join(tmpDir, 'orientation-check.jpg');
+      const seekSec = Math.min(1, duration * 0.1).toFixed(2);
+      await runFfmpeg([
+        '-y', '-noautorotate', '-ss', seekSec, '-i', videoPath,
+        '-vframes', '1', '-vf', 'scale=320:-1', '-q:v', '5',
+        framePath,
+      ], { timeout: 15_000 });
+      if (fs.existsSync(framePath)) {
+        const frameBuffer = fs.readFileSync(framePath);
+        const form = new FormData();
+        form.append('frame', new Blob([frameBuffer], { type: 'image/jpeg' }), 'frame.jpg');
+        const ctrl = new AbortController();
+        const timer = setTimeout(() => ctrl.abort(), 25_000);
+        try {
+          const r = await fetch(`${apiBase}/api/ai-video/jobs/${id}/detect-frame-orientation`, {
+            method: 'POST', body: form, signal: ctrl.signal,
+          });
+          if (r.ok) {
+            const data = await r.json() as { orientation?: string; confidence?: number; reasoning?: string };
+            console.log(`[Step 1.5/7] vision: orientation=${data.orientation} confidence=${data.confidence} reason="${data.reasoning}"`);
+            if (data.orientation === 'cw90')       visionTransposeFilter = 'transpose=1';
+            else if (data.orientation === 'ccw90') visionTransposeFilter = 'transpose=2';
+            else if (data.orientation === 'rotate180') visionTransposeFilter = 'hflip,vflip';
+          } else {
+            console.warn(`[Step 1.5/7] ⚠ detect-frame-orientation HTTP ${r.status} (non-fatal)`);
+          }
+        } finally { clearTimeout(timer); }
+        fs.rmSync(framePath, { force: true });
+      }
+    } catch (e) {
+      console.warn('[Step 1.5/7] ⚠ vision orientation check failed (non-fatal):', (e as Error).message?.slice(0, 120));
+    }
+    fireProgress(apiBase, id, 22, 'step15_vision_orient');
+
     // ── Step 2: audio extraction (REQUIRED, retry 3x) ──────────────────────
     console.log(`[Step 2/7] audio: extracting WAV`);
     const audioPath = path.join(tmpDir, 'audio.wav');
@@ -532,48 +572,38 @@ export async function processVideoPipelineJob(
 
     // ── Step 3.6.5: 画面检测 — probe rough-cut actual frame dimensions ────────
     // ffprobe the rough cut to get real pixel dimensions (rcW × rcH).
-    // If rough cut is landscape (rcW > rcH) but the job needs portrait output,
-    // re-encode with the correct transpose direction derived from signedVideoRotation.
-    // This replaces the metadata-guessing approach and handles both template and
-    // non-template paths uniformly.  Step 6 can then overlay without -noautorotate.
+    // Step 3.6.5: 画面检测 — determine and apply orientation correction.
+    // Priority: visionTransposeFilter (Step 1.5 Claude vision) > metadata-based rotationToTranspose.
+    // Vision is authoritative because it sees actual pixel content, not just metadata.
     let orientationNormalized = false;
-    if (rotationSource !== 'none') {
+    const metadataTransposeFilter = rotationSource !== 'none'
+      ? rotationToTranspose(signedVideoRotation, rotationSource)
+      : '';
+    const transposeToApply = visionTransposeFilter || metadataTransposeFilter;
+    const transposeSource = visionTransposeFilter ? 'vision' : (metadataTransposeFilter ? 'metadata' : 'none');
+
+    if (transposeToApply) {
       try {
-        const rcProbeCmd = `${quoteArg(ffprobePath)} -v error -select_streams v:0 -show_entries stream=width,height -of default=noprint_wrappers=1 ${quoteArg(roughCutPath)}`;
-        const { stdout: rcOut } = await execAsync(rcProbeCmd, { windowsHide: true, timeout: 10_000, maxBuffer: 256 * 1024 });
-        const rcWMatch = rcOut.match(/width=(\d+)/);
-        const rcHMatch = rcOut.match(/height=(\d+)/);
-        const rcW = rcWMatch ? parseInt(rcWMatch[1], 10) : 0;
-        const rcH = rcHMatch ? parseInt(rcHMatch[1], 10) : 0;
-        console.log(`[Step 3.6.5/7] rough-cut probe: ${rcW}×${rcH} signedRotation=${signedVideoRotation}° source=${rotationSource}`);
-        if (rcW > 0 && rcH > 0 && rcW > rcH) {
-          // Landscape pixels — apply signed-aware rotation to portrait
-          const transposeFilter = rotationToTranspose(signedVideoRotation, rotationSource);
-          if (transposeFilter) {
-            const oriented = path.join(tmpDir, 'oriented.mp4');
-            console.log(`[Step 3.6.5/7] rotating landscape→portrait via ${transposeFilter}`);
-            await withRetry('Step 3.6.5/7 orient', async () => {
-              await runFfmpeg([
-                '-y', '-noautorotate', '-i', roughCutPath,
-                '-vf', transposeFilter,
-                '-c:v', 'libx264', '-crf', '22', '-c:a', 'copy',
-                '-metadata:s:v:0', 'rotate=0',
-                oriented,
-              ], { timeout: 300_000 });
-              if (!fs.existsSync(oriented)) throw new Error('orientation step produced no output');
-            }, 2, 2_000);
-            roughCutPath = oriented;
-            orientationNormalized = true;
-            console.log(`[Step 3.6.5/7] ✓ orientation normalized`);
-          } else {
-            console.log(`[Step 3.6.5/7] landscape but no transpose needed (rotation=${signedVideoRotation}°)`);
-          }
-        } else {
-          console.log(`[Step 3.6.5/7] ✓ no rotation needed (${rcW}×${rcH} already portrait or unknown dims)`);
-        }
+        console.log(`[Step 3.6.5/7] applying ${transposeToApply} (source=${transposeSource})`);
+        const oriented = path.join(tmpDir, 'oriented.mp4');
+        await withRetry('Step 3.6.5/7 orient', async () => {
+          await runFfmpeg([
+            '-y', '-noautorotate', '-i', roughCutPath,
+            '-vf', transposeToApply,
+            '-c:v', 'libx264', '-crf', '22', '-c:a', 'copy',
+            '-metadata:s:v:0', 'rotate=0',
+            oriented,
+          ], { timeout: 300_000 });
+          if (!fs.existsSync(oriented)) throw new Error('orientation step produced no output');
+        }, 2, 2_000);
+        roughCutPath = oriented;
+        orientationNormalized = true;
+        console.log(`[Step 3.6.5/7] ✓ orientation normalized via ${transposeSource} (${transposeToApply})`);
       } catch (e) {
-        console.warn('[Step 3.6.5/7] ⚠ orientation check failed (non-fatal):', (e as Error).message);
+        console.warn('[Step 3.6.5/7] ⚠ orientation failed (non-fatal):', (e as Error).message);
       }
+    } else {
+      console.log('[Step 3.6.5/7] ✓ no orientation correction needed (vision=none, metadata=none)');
     }
 
     // ── Step 3.7: normalize rotation (non-template path only, skip if 3.6.5 handled) ──
