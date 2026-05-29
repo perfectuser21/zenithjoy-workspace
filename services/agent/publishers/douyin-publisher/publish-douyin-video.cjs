@@ -141,6 +141,23 @@ async function publishDouyinVideoReal(queueData) {
     }
     await page.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => {});
 
+    // Wait for React app to hydrate and recognize auth cookies.
+    // Douyin SPA starts in pre-login state (landing page); after cookie recognition it renders
+    // the upload form which uses [data-e2e] attributes. Without this wait, uploadEls=[].
+    _log('[DY-VIDEO-REAL] 等待 React hydrate 识别 cookie (最多 25s)...');
+    await page.waitForFunction(
+      () => document.querySelectorAll('[data-e2e]').length > 0,
+      { timeout: 25000 }
+    ).catch(async () => {
+      const shot = await captureFailScreenshot(page, 'hydrate-timeout');
+      throw new Error(
+        'React 未能在 25s 内完成 hydrate（未出现 [data-e2e] 元素），' +
+        '页面可能仍处于登录前状态，DOUYIN_COOKIES 可能已过期 ' +
+        `(screenshot: ${shot || 'n/a'})`
+      );
+    });
+    _log('[DY-VIDEO-REAL] React hydrate 完成，上传界面就绪');
+
     _log('[DY-VIDEO-REAL] 上传视频...');
     await uploadVideoFile(page, context, queueData.video_path);
     _log('[DY-VIDEO-REAL] 等抖音处理...');
