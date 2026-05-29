@@ -87,3 +87,13 @@ describe('Step 7B — 9:16 必须用 phone overlay + portrait crop，禁止 vsta
     expect(step7Block).not.toContain('vstack');
   });
 });
+
+describe('Step 6B — HyperFrames 必须用 --resolution landscape 渲染 1920×1080 [REGRESSION]', () => {
+  // 找到 Step 6/7 hf-render 的代码块
+  const step6Idx = SRC.lastIndexOf('Step 6/7 hf-render');
+  const step6Block = step6Idx !== -1 ? SRC.slice(step6Idx, step6Idx + 500) : '';
+
+  it('HyperFrames render 包含 --resolution landscape 标志', () => {
+    expect(step6Block).toContain('--resolution landscape');
+  });
+});
