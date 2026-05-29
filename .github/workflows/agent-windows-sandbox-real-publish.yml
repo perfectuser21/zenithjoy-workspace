@@ -49,6 +49,28 @@ jobs:
           if ($ver -notmatch "^v22\.") { Write-Host "ERROR: expected Node v22.x, got $ver"; exit 1 }
           Write-Host "[sandbox] Node $ver OK"
 
+      - name: Diagnostics -- verify Node + playwright-core
+        shell: powershell
+        env:
+          NODE_PATH: ${{ github.workspace }}\pack\node_modules
+          PLAYWRIGHT_BROWSERS_PATH: ${{ github.workspace }}\pack\playwright-browsers
+        run: |
+          $packDir = (Resolve-Path "pack").Path
+          $nodeExe = "$env:APPDATA\ZenithJoy\runtime\nodejs\node.exe"
+          $publisherDir = Join-Path $packDir "publishers\douyin-publisher"
+          $outFile = "$env:TEMP\diag-out.txt"
+          $errFile = "$env:TEMP\diag-err.txt"
+          $diagCode = "try { require('playwright-core'); console.log('pw-core: OK'); } catch(e) { console.error('pw-core: FAIL', e.message); process.exit(1); }"
+          $diagFile = "$env:TEMP\diag-pw.cjs"
+          [System.IO.File]::WriteAllText($diagFile, $diagCode)
+          $proc = Start-Process -FilePath $nodeExe -ArgumentList @($diagFile) `
+            -WorkingDirectory $publisherDir -Wait -PassThru -NoNewWindow `
+            -RedirectStandardOutput $outFile -RedirectStandardError $errFile
+          Get-Content $outFile -ErrorAction SilentlyContinue | ForEach-Object { Write-Host $_ }
+          Get-Content $errFile -ErrorAction SilentlyContinue | ForEach-Object { Write-Host "[stderr] $_" }
+          if ($proc.ExitCode -ne 0) { Write-Host "FAIL: diagnostics exit $($proc.ExitCode)"; exit 1 }
+          Write-Host "[diag] playwright-core require PASS"
+
       - name: Download test media from COS
         shell: powershell
         run: |
@@ -69,25 +91,26 @@ jobs:
         run: |
           $packDir = (Resolve-Path "pack").Path
           $nodeExe = "$env:APPDATA\ZenithJoy\runtime\nodejs\node.exe"
-          $script = Join-Path $packDir "publishers\douyin-publisher\publish-douyin-video.cjs"
+          $publisherDir = Join-Path $packDir "publishers\douyin-publisher"
+          $script = Join-Path $publisherDir "publish-douyin-video.cjs"
           $date = (Get-Date -Format "yyyy-MM-dd")
-
           $videoPath = "$env:TEMP\zj-test-media\test-video.mp4".Replace('\', '/')
           $nl = [char]10
-          $queueContent = "{${nl}" +
-            "  `"title`": `"[CI Sandbox] $date video`",${nl}" +
-            "  `"content`": `"ZenithJoy Windows sandbox real publish test`",${nl}" +
-            "  `"video_path`": `"$videoPath`"${nl}" +
-            "}"
+          $queueContent = "{${nl}  `"title`": `"[CI Sandbox] $date video`",${nl}  `"content`": `"ZenithJoy Windows sandbox real publish test`",${nl}  `"video_path`": `"$videoPath`"${nl}}"
           $queueFile = "$env:TEMP\queue-video.json"
-          Set-Content $queueFile $queueContent -Encoding UTF8
-
+          [System.IO.File]::WriteAllText($queueFile, $queueContent)
+          $outFile = "$env:TEMP\video-out.txt"
+          $errFile = "$env:TEMP\video-err.txt"
           Write-Host "[video] Running real publish..."
-          $output = & $nodeExe $script $queueFile 2>&1
-          $exitCode = $LASTEXITCODE
-          $output | ForEach-Object { Write-Host $_ }
-          if ($exitCode -ne 0) { Write-Host "FAIL: video exit $exitCode"; exit 1 }
-          $resultLine = ($output | Where-Object { "$_" -match '"ok"' } | Select-Object -Last 1)
+          $proc = Start-Process -FilePath $nodeExe -ArgumentList @($script, $queueFile) `
+            -WorkingDirectory $publisherDir -Wait -PassThru -NoNewWindow `
+            -RedirectStandardOutput $outFile -RedirectStandardError $errFile
+          $stdout = Get-Content $outFile -ErrorAction SilentlyContinue
+          $stderr = Get-Content $errFile -ErrorAction SilentlyContinue
+          $stdout | ForEach-Object { Write-Host $_ }
+          $stderr | ForEach-Object { Write-Host "[stderr] $_" }
+          if ($proc.ExitCode -ne 0) { Write-Host "FAIL: video exit $($proc.ExitCode)"; exit 1 }
+          $resultLine = ($stdout | Where-Object { "$_" -match '"ok"' } | Select-Object -Last 1)
           Write-Host "[video] result: $resultLine"
           if ("$resultLine" -notmatch '"ok"\s*:\s*true') {
             Write-Host "FAIL: video result not ok:true"; exit 1
@@ -103,26 +126,27 @@ jobs:
         run: |
           $packDir = (Resolve-Path "pack").Path
           $nodeExe = "$env:APPDATA\ZenithJoy\runtime\nodejs\node.exe"
-          $script = Join-Path $packDir "publishers\douyin-publisher\publish-douyin-image.cjs"
+          $publisherDir = Join-Path $packDir "publishers\douyin-publisher"
+          $script = Join-Path $publisherDir "publish-douyin-image.cjs"
           $date = (Get-Date -Format "yyyy-MM-dd")
-
           $img1 = "$env:TEMP\zj-test-media\test-image-1.jpg".Replace('\', '/')
           $img2 = "$env:TEMP\zj-test-media\test-image-2.jpg".Replace('\', '/')
           $nl = [char]10
-          $queueContent = "{${nl}" +
-            "  `"title`": `"[CI Sandbox] $date image`",${nl}" +
-            "  `"content`": `"ZenithJoy Windows sandbox image publish test`",${nl}" +
-            "  `"images`": [`"$img1`", `"$img2`"]${nl}" +
-            "}"
+          $queueContent = "{${nl}  `"title`": `"[CI Sandbox] $date image`",${nl}  `"content`": `"ZenithJoy Windows sandbox image publish test`",${nl}  `"images`": [`"$img1`", `"$img2`"]${nl}}"
           $queueFile = "$env:TEMP\queue-image.json"
-          Set-Content $queueFile $queueContent -Encoding UTF8
-
+          [System.IO.File]::WriteAllText($queueFile, $queueContent)
+          $outFile = "$env:TEMP\image-out.txt"
+          $errFile = "$env:TEMP\image-err.txt"
           Write-Host "[image] Running real publish..."
-          $output = & $nodeExe $script $queueFile 2>&1
-          $exitCode = $LASTEXITCODE
-          $output | ForEach-Object { Write-Host $_ }
-          if ($exitCode -ne 0) { Write-Host "FAIL: image exit $exitCode"; exit 1 }
-          $resultLine = ($output | Where-Object { "$_" -match '"ok"' } | Select-Object -Last 1)
+          $proc = Start-Process -FilePath $nodeExe -ArgumentList @($script, $queueFile) `
+            -WorkingDirectory $publisherDir -Wait -PassThru -NoNewWindow `
+            -RedirectStandardOutput $outFile -RedirectStandardError $errFile
+          $stdout = Get-Content $outFile -ErrorAction SilentlyContinue
+          $stderr = Get-Content $errFile -ErrorAction SilentlyContinue
+          $stdout | ForEach-Object { Write-Host $_ }
+          $stderr | ForEach-Object { Write-Host "[stderr] $_" }
+          if ($proc.ExitCode -ne 0) { Write-Host "FAIL: image exit $($proc.ExitCode)"; exit 1 }
+          $resultLine = ($stdout | Where-Object { "$_" -match '"ok"' } | Select-Object -Last 1)
           Write-Host "[image] result: $resultLine"
           if ("$resultLine" -notmatch '"ok"\s*:\s*true') {
             Write-Host "FAIL: image result not ok:true"; exit 1
@@ -138,26 +162,26 @@ jobs:
         run: |
           $packDir = (Resolve-Path "pack").Path
           $nodeExe = "$env:APPDATA\ZenithJoy\runtime\nodejs\node.exe"
-          $script = Join-Path $packDir "publishers\douyin-publisher\publish-douyin-article.cjs"
+          $publisherDir = Join-Path $packDir "publishers\douyin-publisher"
+          $script = Join-Path $publisherDir "publish-douyin-article.cjs"
           $date = (Get-Date -Format "yyyy-MM-dd")
-
           $cover = "$env:TEMP\zj-test-media\test-cover.jpg".Replace('\', '/')
           $nl = [char]10
-          $queueContent = "{${nl}" +
-            "  `"title`": `"[CI Sandbox] $date article`",${nl}" +
-            "  `"content`": `"ZenithJoy Windows sandbox article publish test. CI automated validation.`",${nl}" +
-            "  `"cover`": `"$cover`",${nl}" +
-            "  `"summary`": `"CI sandbox automated test`"${nl}" +
-            "}"
+          $queueContent = "{${nl}  `"title`": `"[CI Sandbox] $date article`",${nl}  `"content`": `"ZenithJoy Windows sandbox article publish test. CI automated validation.`",${nl}  `"cover`": `"$cover`",${nl}  `"summary`": `"CI sandbox automated test`"${nl}}"
           $queueFile = "$env:TEMP\queue-article.json"
-          Set-Content $queueFile $queueContent -Encoding UTF8
-
+          [System.IO.File]::WriteAllText($queueFile, $queueContent)
+          $outFile = "$env:TEMP\article-out.txt"
+          $errFile = "$env:TEMP\article-err.txt"
           Write-Host "[article] Running real publish..."
-          $output = & $nodeExe $script $queueFile 2>&1
-          $exitCode = $LASTEXITCODE
-          $output | ForEach-Object { Write-Host $_ }
-          if ($exitCode -ne 0) { Write-Host "FAIL: article exit $exitCode"; exit 1 }
-          $resultLine = ($output | Where-Object { "$_" -match '"ok"' } | Select-Object -Last 1)
+          $proc = Start-Process -FilePath $nodeExe -ArgumentList @($script, $queueFile) `
+            -WorkingDirectory $publisherDir -Wait -PassThru -NoNewWindow `
+            -RedirectStandardOutput $outFile -RedirectStandardError $errFile
+          $stdout = Get-Content $outFile -ErrorAction SilentlyContinue
+          $stderr = Get-Content $errFile -ErrorAction SilentlyContinue
+          $stdout | ForEach-Object { Write-Host $_ }
+          $stderr | ForEach-Object { Write-Host "[stderr] $_" }
+          if ($proc.ExitCode -ne 0) { Write-Host "FAIL: article exit $($proc.ExitCode)"; exit 1 }
+          $resultLine = ($stdout | Where-Object { "$_" -match '"ok"' } | Select-Object -Last 1)
           Write-Host "[article] result: $resultLine"
           if ("$resultLine" -notmatch '"ok"\s*:\s*true') {
             Write-Host "FAIL: article result not ok:true"; exit 1
