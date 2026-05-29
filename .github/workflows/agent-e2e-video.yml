@@ -5,10 +5,14 @@ on:
       agent_version:
         description: Agent install pack version
         required: false
-        default: "1.1.33"
+        default: "1.1.57"
       session_token:
         description: Session token from pre-login (run get-e2e-token.sh locally before triggering)
         required: true
+      video_url:
+        description: Custom video URL (COS or any HTTPS). Leave blank to use default 45s koubo test video.
+        required: false
+        default: ""
 
 jobs:
   e2e-video-pipeline:
@@ -39,10 +43,19 @@ jobs:
         shell: powershell
         run: |
           $dir = "C:\Users\runneradmin\Videos"
-          $path = "$dir\zj-e2e-koubo-45s.mp4"
           New-Item -ItemType Directory -Force -Path $dir | Out-Null
-          $url = "https://zenithjoy-static-1333590468.cos.accelerate.myqcloud.com/e2e-test-assets/zj-e2e-koubo-45s.mp4"
-          Invoke-WebRequest -Uri $url -OutFile $path -UseBasicParsing
+          $customUrl = "${{ github.event.inputs.video_url }}"
+          if ($customUrl -ne "") {
+            $filename = ($customUrl -split '/')[-1]
+            $path = "$dir\$filename"
+            Write-Host "[e2e] downloading custom video: $customUrl"
+            Invoke-WebRequest -Uri $customUrl -OutFile $path -UseBasicParsing
+          } else {
+            $path = "$dir\zj-e2e-koubo-45s.mp4"
+            $url = "https://zenithjoy-static-1333590468.cos.accelerate.myqcloud.com/e2e-test-assets/zj-e2e-koubo-45s.mp4"
+            Write-Host "[e2e] downloading default video: $url"
+            Invoke-WebRequest -Uri $url -OutFile $path -UseBasicParsing
+          }
           Write-Host "[e2e] video: $((Get-Item $path).Length) bytes at $path"
           echo "VIDEO_PATH=$path" >> $env:GITHUB_ENV
 
