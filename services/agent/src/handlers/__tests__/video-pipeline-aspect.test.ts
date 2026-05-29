@@ -147,6 +147,41 @@ describe('画面检测 — 实际帧维度检测纠正方向 [REGRESSION]', () =
   });
 });
 
+// ── Regression: vision-based orientation detection (Step 1.5) ────────────
+// Instead of relying solely on ffprobe metadata (which can be wrong/missing),
+// Step 1.5 extracts a raw frame with -noautorotate and sends it to
+// /detect-frame-orientation API which uses Claude vision to determine the
+// correct transpose needed.  This is the authoritative orientation source.
+describe('Step 1.5 — vision orientation detection [REGRESSION]', () => {
+  it('visionTransposeFilter 变量存在（Step 1.5 视觉检测结果存储）', () => {
+    expect(SRC).toContain('visionTransposeFilter');
+  });
+
+  it('Step 1.5 调用 detect-frame-orientation API 端点', () => {
+    expect(SRC).toContain('detect-frame-orientation');
+  });
+
+  it('Step 1.5 截帧时使用 -noautorotate（获取原始像素，不被 ffmpeg 自动纠正）', () => {
+    const detectIdx = SRC.indexOf('detect-frame-orientation');
+    expect(detectIdx).toBeGreaterThan(0);
+    const step15Block = SRC.slice(Math.max(0, detectIdx - 800), detectIdx + 200);
+    expect(step15Block).toContain('-noautorotate');
+  });
+
+  it('Step 3.6.5 优先使用 visionTransposeFilter（视觉检测覆盖元数据）', () => {
+    const step365Idx = SRC.indexOf('Step 3.6.5');
+    expect(step365Idx).toBeGreaterThan(0);
+    const step365Block = SRC.slice(step365Idx, step365Idx + 1500);
+    expect(step365Block).toContain('visionTransposeFilter');
+  });
+
+  it('Step 1.5 截帧后 POST FormData 到 API（含 frame 字段）', () => {
+    const detectIdx = SRC.indexOf('detect-frame-orientation');
+    const surrounding = SRC.slice(Math.max(0, detectIdx - 1200), detectIdx + 100);
+    expect(surrounding).toMatch(/FormData|form\.append|frame/);
+  });
+});
+
 // ── Regression: rough cut double-rotation ──────────────────────────────────
 // Step 3.6 creates the rough cut via ffmpeg.  Without -noautorotate on the
 // input, ffmpeg auto-bakes rotation metadata (e.g. rotate=90 from iPhone)
