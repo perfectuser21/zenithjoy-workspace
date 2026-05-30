@@ -84,7 +84,7 @@ const PLATFORM_SESSION_COOKIES = {
   douyin:       ['sessionid_ss', 'sessionid', 'sid_tt'],
   toutiao:      ['sessionid', 'sid_tt'],
   kuaishou:     ['userId', 'kuaishou.sid', 'passToken'],
-  xiaohongshu:  ['web_session', 'webId'],
+  xiaohongshu:  ['web_session', 'galaxy_creator_session_info'],
   weibo:        ['SUB', 'SUBP'],
   zhihu:        ['z_c0', 'SESSIONID'],
   shipinhao:    ['skey', 'uin'],

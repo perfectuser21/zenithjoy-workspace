@@ -20,20 +20,23 @@ import os from 'node:os';
 import fs from 'node:fs';
 import { spawn } from 'node:child_process';
 
-// xian-pc 常驻 Chrome 远程调试端口（chrome.exe --remote-debugging-port=19222）
-const CDP_PORT = 19222;
-
 // 各平台登录后必然出现的 Session Cookie 名（优先于 URL 检测，避免 SPA 误判）
 const PLATFORM_SESSION_COOKIES: Record<string, string[]> = {
   douyin:       ['sessionid_ss', 'sessionid', 'sid_tt'],
   toutiao:      ['sessionid', 'sid_tt'],
   kuaishou:     ['userId', 'kuaishou.sid', 'passToken'],
-  xiaohongshu:  ['web_session', 'webId'],
+  xiaohongshu:  ['web_session', 'galaxy_creator_session_info'],
   weibo:        ['SUB', 'SUBP'],
   zhihu:        ['z_c0', 'SESSIONID'],
   shipinhao:    ['skey', 'uin'],
   gongzhonghao: ['skey', 'uin'],
 };
+
+// 各平台专用 Chrome 远程调试端口（xian-pc 常驻实例，未列出的用 DEFAULT_CDP_PORT）
+const PLATFORM_CDP_PORTS: Record<string, number> = {
+  xiaohongshu: 19224,
+};
+const DEFAULT_CDP_PORT = 19222;
 
 // 8 平台 creator URL — 用会触发 /login 重定向的子路径
 export const PLATFORM_CREATOR_URLS: Record<string, string> = {
@@ -134,11 +137,12 @@ async function spawnQrBindOperator(
   const scriptPath = resolveQrBindOperatorScript();
   const apiBase = (payloadApiBase ?? process.env.ZENITHJOY_API_BASE ?? '').replace(/\/+$/, '');
   const nodeExe = resolveNodeExe();
+  const cdpPort = PLATFORM_CDP_PORTS[platform] ?? DEFAULT_CDP_PORT;
 
   return new Promise<QrBindOperatorResult>((resolve) => {
     let stdout = '';
     const proc = spawn(nodeExe, [scriptPath, platform, apiBase, accountLabel, String(timeoutMs)], {
-      env: { ...process.env },
+      env: { ...process.env, ZENITHJOY_CHROME_DEBUG_PORT: String(cdpPort) },
       timeout: timeoutMs + 15000,
     });
     proc.stdout.on('data', (d: Buffer) => { stdout += d.toString(); });
@@ -187,11 +191,12 @@ export async function handleQrBindOperator(
   let usingCdp = false;
 
   try {
-    // CDP 优先：接管 xian-pc 上已有的 Chrome（port 19222），失败时降级 launch
+    // CDP 优先：接管 xian-pc 上已有的 Chrome，端口按平台查 PLATFORM_CDP_PORTS
+    const testCdpPort = PLATFORM_CDP_PORTS[platform] ?? DEFAULT_CDP_PORT;
     try {
-      browser = await launcher.connectOverCDP(`http://localhost:${CDP_PORT}`);
+      browser = await launcher.connectOverCDP(`http://localhost:${testCdpPort}`);
       usingCdp = true;
-      console.log(`[qr-bind-operator:${platform}] CDP 连接成功 (port ${CDP_PORT})`);
+      console.log(`[qr-bind-operator:${platform}] CDP 连接成功 (port ${testCdpPort})`);
     } catch {
       browser = await launcher.launch({
         headless: false,
