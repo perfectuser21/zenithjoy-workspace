@@ -15,6 +15,67 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 
+async function sendFeishuQrCard(platform, screenshotBuffer) {
+  const appId = process.env.FEISHU_APP_ID || '';
+  const appSecret = process.env.FEISHU_APP_SECRET || '';
+  const webhook = process.env.ZENITHJOY_FEISHU_WEBHOOK || '';
+  if (!appId || !appSecret || !webhook) return;
+
+  try {
+    // 1. 拿 app_access_token
+    const tokenRes = await fetch('https://open.feishu.cn/open-apis/auth/v3/app_access_token/internal', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ app_id: appId, app_secret: appSecret }),
+    });
+    if (!tokenRes.ok) throw new Error(`token API HTTP ${tokenRes.status}`);
+    const tokenJson = await tokenRes.json();
+    const token = tokenJson.app_access_token;
+    if (!token) throw new Error(`token 获取失败: ${JSON.stringify(tokenJson)}`);
+
+    // 2. 上传图片（FormData/Blob 在 Node.js 18+ 是全局变量）
+    const form = new FormData();
+    form.append('image_type', 'message');
+    form.append('image', new Blob([screenshotBuffer], { type: 'image/png' }), 'qr.png');
+    const imgRes = await fetch('https://open.feishu.cn/open-apis/im/v1/images', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+      body: form,
+    });
+    if (!imgRes.ok) throw new Error(`图片上传 HTTP ${imgRes.status}`);
+    const imgJson = await imgRes.json();
+    const imageKey = imgJson.data?.image_key;
+    if (!imageKey) throw new Error(`图片上传失败: ${JSON.stringify(imgJson)}`);
+
+    // 3. 发飞书互动卡片
+    const PLATFORM_DISPLAY = {
+      douyin: '抖音', kuaishou: '快手', xiaohongshu: '小红书',
+      shipinhao: '视频号', toutiao: '头条', weibo: '微博',
+      zhihu: '知乎', gongzhonghao: '公众号',
+    };
+    const displayName = PLATFORM_DISPLAY[platform] || platform;
+    const card = {
+      msg_type: 'interactive',
+      card: {
+        header: { title: { tag: 'plain_text', content: `🔑 ${displayName} 扫码绑定请求` }, template: 'blue' },
+        elements: [
+          { tag: 'img', img_key: imageKey, alt: { tag: 'plain_text', content: '二维码' } },
+          { tag: 'div', text: { tag: 'plain_text', content: '请在 3 分钟内用手机扫描上方二维码' } },
+        ],
+      },
+    };
+    const cardRes = await fetch(webhook, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(card),
+    });
+    if (!cardRes.ok) throw new Error(`飞书卡片推送 HTTP ${cardRes.status}`);
+    process.stderr.write(`[qr-bind-operator:${platform}] 飞书 QR 卡片已发送\n`);
+  } catch (e) {
+    process.stderr.write(`[qr-bind-operator:${platform}] 飞书推送失败（不影响扫码）: ${e.message}\n`);
+  }
+}
+
 const [,, platform, apiBase = '', accountLabel = 'default', timeoutMsStr = '300000'] = process.argv;
 const timeoutMs = parseInt(timeoutMsStr, 10) || 300000;
 const CDP_PORT = parseInt(process.env.ZENITHJOY_CHROME_DEBUG_PORT || '19222', 10);
@@ -113,6 +174,16 @@ async function main() {
 
     // 等待 SPA 完成重定向再开始轮询（抖音等框架需 3s JS 执行）
     await new Promise(r => setTimeout(r, 3000));
+
+    // 截图发飞书（失败不影响主流程）
+    if (page && page.screenshot) {
+      try {
+        const qrBuf = await page.screenshot({ type: 'png' });
+        await sendFeishuQrCard(platform, qrBuf);
+      } catch (screenshotErr) {
+        process.stderr.write(`[qr-bind-operator:${platform}] 截图失败: ${screenshotErr.message}\n`);
+      }
+    }
 
     // 轮询 Session Cookie（最长 timeoutMs）
     const targetNames = PLATFORM_SESSION_COOKIES[platform] || [];

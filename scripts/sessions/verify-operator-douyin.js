@@ -7,7 +7,7 @@
  * 确认已登录（URL 不含 /login + creator user/info API 返回正常）。
  *
  * PASS → exit 0 + douyin-session-pass.png
- * FAIL → exit 1 + douyin-session-fail.png + Bark + 飞书告警
+ * FAIL → exit 1 + douyin-session-fail.png + 飞书告警
  */
 
 import { createRequire } from 'module';
@@ -22,24 +22,15 @@ const { chromium } = createRequire(new URL('../../services/agent/', import.meta.
 const CREATOR_URL = 'https://creator.douyin.com/creator-micro/home';
 const SPA_SETTLE_MS = 3000;
 const NAV_TIMEOUT_MS = 30000;
-const BARK_URL = process.env.BARK_URL || 'https://api.day.app/QU7ktbzPJxZbNx9pEHcstW';
-const FEISHU_BOT_WEBHOOK = process.env.FEISHU_BOT_WEBHOOK || '';
+const ZENITHJOY_FEISHU_WEBHOOK = process.env.ZENITHJOY_FEISHU_WEBHOOK || '';
 class VerifyFailError extends Error {}
 
-async function barkNotify(title, body) {
-  const encoded = `${encodeURIComponent(title)}/${encodeURIComponent(body)}`;
-  const url = `${BARK_URL}/${encoded}?group=ZenithJoy`;
-  return new Promise((resolve) => {
-    https.get(url, (res) => { res.resume(); resolve(res.statusCode); }).on('error', () => resolve(0));
-  });
-}
-
 async function sendFeishuAlert(title, content) {
-  if (!FEISHU_BOT_WEBHOOK) return;
+  if (!ZENITHJOY_FEISHU_WEBHOOK) return;
   const payload = JSON.stringify({ msg_type: 'text', content: { text: `${title}\n${content}` } });
   return new Promise((resolve) => {
     try {
-      const u = new URL(FEISHU_BOT_WEBHOOK);
+      const u = new URL(ZENITHJOY_FEISHU_WEBHOOK);
       const options = {
         hostname: u.hostname,
         path: u.pathname + u.search,
@@ -79,10 +70,7 @@ async function main() {
     if (exp < new Date()) {
       const msg = `sessionid 已过期（${exp.toISOString().slice(0,10)}）`;
       console.error(`[FAIL] ${msg}`);
-      await Promise.allSettled([
-        barkNotify('抖音运营员 Session 失效', msg + ' — 请重新扫码'),
-        sendFeishuAlert('🔴 DOUYIN_OPERATOR_SESSION 验证失败', msg + '\n请重新扫码并更新 GHA secret'),
-      ]);
+      await sendFeishuAlert('🔴 DOUYIN_OPERATOR_SESSION 验证失败', msg + '\n请重新扫码并更新 GHA secret');
       process.exit(1);
     }
     console.log(`[info] sessionid 有效期至 ${new Date(sessionid.expires * 1000).toISOString().slice(0,10)}`);
@@ -131,10 +119,7 @@ async function main() {
       await page.screenshot({ path: 'douyin-session-fail.png', fullPage: false }).catch(() => {});
       const msg = `导航后停在登录页（${finalUrl}）`;
       console.error(`[FAIL] ${msg}`);
-      await Promise.allSettled([
-        barkNotify('抖音运营员 Session 失效', 'CI 验证失败 — 请重新扫码'),
-        sendFeishuAlert('🔴 DOUYIN_OPERATOR_SESSION 验证失败', msg + '\n请重新扫码并更新 GHA secret'),
-      ]);
+      await sendFeishuAlert('🔴 DOUYIN_OPERATOR_SESSION 验证失败', msg + '\n请重新扫码并更新 GHA secret');
       throw new VerifyFailError(msg);
     }
 
@@ -147,10 +132,7 @@ async function main() {
     if (apiStatus !== null && !apiOk) {
       const msg = `user/info API 返回异常（HTTP ${apiStatus}）`;
       console.error(`[FAIL] ${msg}`);
-      await Promise.allSettled([
-        barkNotify('抖音运营员 Session 失效', msg + ' — 请重新扫码'),
-        sendFeishuAlert('🔴 DOUYIN_OPERATOR_SESSION 验证失败', msg + '\n请重新扫码并更新 GHA secret'),
-      ]);
+      await sendFeishuAlert('🔴 DOUYIN_OPERATOR_SESSION 验证失败', msg + '\n请重新扫码并更新 GHA secret');
       throw new VerifyFailError(msg);
     }
 
@@ -171,10 +153,7 @@ main().catch(async (err) => {
   if (!(err instanceof VerifyFailError)) {
     // 预期 FAIL 已在内部打印并告警，这里只处理意外异常
     console.error('[FAIL] 未预期异常:', err.message);
-    await Promise.allSettled([
-      barkNotify('抖音运营员 Session 验证异常', err.message.slice(0, 100)),
-      sendFeishuAlert('🔴 DOUYIN_OPERATOR_SESSION 验证异常', err.message.slice(0, 200)),
-    ]).catch(() => {});
+    await sendFeishuAlert('🔴 DOUYIN_OPERATOR_SESSION 验证异常', err.message.slice(0, 200)).catch(() => {});
   }
   process.exit(1);
 });
