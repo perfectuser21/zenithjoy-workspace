@@ -76,8 +76,25 @@ async function main() {
       usingCdp = true;
       process.stderr.write(`[qr-bind-operator:${platform}] CDP 连接成功 (port ${CDP_PORT})\n`);
     } catch {
-      browser = await chromium.launch({ headless: false });
-      process.stderr.write(`[qr-bind-operator:${platform}] CDP 不可用，已 launch 新 Chrome\n`);
+      // CDP 失败 → 依次尝试：bundled chromium → system Chrome → system Edge
+      // playwright-browsers 可能只含 headless shell（不支持 headless:false），所以要多级 fallback
+      let launched = false;
+      const launchArgs = ['--no-sandbox', '--disable-setuid-sandbox'];
+      for (const opts of [
+        { headless: false, args: launchArgs },                             // bundled Chromium
+        { headless: false, channel: 'chrome', args: launchArgs },          // system Google Chrome
+        { headless: false, channel: 'msedge', args: launchArgs },          // system Microsoft Edge
+      ]) {
+        try {
+          browser = await chromium.launch(opts);
+          launched = true;
+          process.stderr.write(`[qr-bind-operator:${platform}] 已 launch (${JSON.stringify(opts)})\n`);
+          break;
+        } catch { /* 继续下一个 */ }
+      }
+      if (!launched) {
+        throw new Error('无法启动浏览器：bundled chromium / system chrome / system edge 均不可用');
+      }
     }
 
     const ctx = browser.newContext ? await browser.newContext() : browser.contexts()[0];

@@ -42,10 +42,17 @@ function emit(result) {
 async function main() {
   let browser = null;
   try {
-    browser = await chromium.launch({
-      headless: false,
-      args: ['--no-sandbox', '--disable-setuid-sandbox'],
-    });
+    // 依次尝试：bundled chromium → system Chrome → system Edge
+    // playwright-browsers 可能只含 headless shell（不支持 headless:false），所以要多级 fallback
+    const launchArgs = ['--no-sandbox', '--disable-setuid-sandbox'];
+    for (const opts of [
+      { headless: false, args: launchArgs },
+      { headless: false, channel: 'chrome', args: launchArgs },
+      { headless: false, channel: 'msedge', args: launchArgs },
+    ]) {
+      try { browser = await chromium.launch(opts); break; } catch { /* 继续下一个 */ }
+    }
+    if (!browser) throw new Error('无法启动浏览器：bundled chromium / system chrome / system edge 均不可用');
     const ctx = await browser.newContext();
     const page = await ctx.newPage();
     await page.goto(loginUrl);
