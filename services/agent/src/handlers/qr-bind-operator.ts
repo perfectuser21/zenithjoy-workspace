@@ -10,10 +10,15 @@
 //   5. POST ZENITHJOY_API_BASE/api/operator/sessions/upload-cookies（{platform, cookies}）
 //   6. 返回 {ok: true} 或超时 {ok: false, error: 'timeout'}
 //   7. CDP 模式下仅断开连接，不关闭浏览器（xian-pc 窗口保持可见）
+//
+// 注：生产路径通过 spawn publishers/qr-bind-operator.cjs 实现，
+//     绕过 pkg 二进制内 require('playwright') 在 Node 18+ 的 "Invalid host defined options" 崩溃。
+//     测试路径（options.chromiumLauncher 注入）仍走内部逻辑，保持单元测试可控。
 
 import path from 'node:path';
 import os from 'node:os';
 import fs from 'node:fs';
+import { spawn } from 'node:child_process';
 
 // xian-pc 常驻 Chrome 远程调试端口（chrome.exe --remote-debugging-port=19222）
 const CDP_PORT = 19222;
@@ -104,12 +109,54 @@ function defaultIsSessionReady(storageState: Record<string, unknown>, platform: 
   );
 }
 
-async function loadDefaultLauncher(): Promise<ChromiumLauncher> {
-  const playwright = require('playwright') as { chromium: ChromiumLauncher };
-  if (!playwright?.chromium) {
-    throw new Error('playwright 未安装；客户机需先装 playwright (npm i playwright)');
-  }
-  return playwright.chromium;
+// 解析外部脚本路径（与 douyin-publish.ts 相同的查找逻辑）
+function resolveQrBindOperatorScript(): string {
+  // pkg 场景：脚本与 .exe 同目录的 publishers/
+  const beside = path.join(path.dirname(process.execPath), 'publishers', 'qr-bind-operator.cjs');
+  if (fs.existsSync(beside)) return beside;
+  // 开发场景：从 __dirname 推导
+  const dev = path.resolve(__dirname, '..', '..', 'publishers', 'qr-bind-operator.cjs');
+  return dev;
+}
+
+function resolveNodeExe(): string {
+  const env = process.env.ZJ_NODE_EXE;
+  if (env && fs.existsSync(env)) return env;
+  return 'node';
+}
+
+async function spawnQrBindOperator(
+  platform: string,
+  accountLabel: string,
+  payloadApiBase: string | undefined,
+  timeoutMs: number,
+): Promise<QrBindOperatorResult> {
+  const scriptPath = resolveQrBindOperatorScript();
+  const apiBase = (payloadApiBase ?? process.env.ZENITHJOY_API_BASE ?? '').replace(/\/+$/, '');
+  const nodeExe = resolveNodeExe();
+
+  return new Promise<QrBindOperatorResult>((resolve) => {
+    let stdout = '';
+    const proc = spawn(nodeExe, [scriptPath, platform, apiBase, accountLabel, String(timeoutMs)], {
+      env: { ...process.env },
+      timeout: timeoutMs + 15000,
+    });
+    proc.stdout.on('data', (d: Buffer) => { stdout += d.toString(); });
+    proc.stderr.on('data', (d: Buffer) => {
+      console.log(`[qr-bind-operator:${platform}]`, d.toString().trimEnd());
+    });
+    proc.on('close', (_code: number) => {
+      const lastLine = stdout.trim().split('\n').filter(Boolean).pop() ?? '';
+      try {
+        resolve(JSON.parse(lastLine) as QrBindOperatorResult);
+      } catch {
+        resolve({ ok: false, platform, error: `result parse failed: ${lastLine || '(no output)'}` });
+      }
+    });
+    proc.on('error', (err: Error) => {
+      resolve({ ok: false, platform, error: `spawn failed: ${err.message}` });
+    });
+  });
 }
 
 export async function handleQrBindOperator(
@@ -121,20 +168,21 @@ export async function handleQrBindOperator(
     return { ok: false, platform, error: `不支持的平台: ${platform}` };
   }
 
-  const pollIntervalMs = options.pollIntervalMs ?? 1500;
   const timeoutMs = options.timeoutMs ?? 300000; // 5 * 60 * 1000
-  const isSessionReady = options.isSessionReady ?? defaultIsSessionReady;
-  const sessionPath = getSessionPath(platform, accountLabel, options.sessionBaseDir);
 
-  const apiBase = (payloadApiBase ?? process.env.ZENITHJOY_API_BASE ?? '').replace(/\/+$/, '');
-
-  let launcher: ChromiumLauncher;
-  try {
-    launcher = options.chromiumLauncher ?? (await loadDefaultLauncher());
-  } catch (err) {
-    return { ok: false, platform, error: err instanceof Error ? err.message : String(err) };
+  // 生产路径：spawn 外部 Node.js 进程（绕过 pkg+playwright 崩溃）
+  // 测试路径：注入 chromiumLauncher 时走内部逻辑
+  if (!options.chromiumLauncher) {
+    return spawnQrBindOperator(platform, accountLabel, payloadApiBase, timeoutMs);
   }
 
+  // ── 以下为测试专用内部路径（options.chromiumLauncher 注入）──
+  const pollIntervalMs = options.pollIntervalMs ?? 1500;
+  const isSessionReady = options.isSessionReady ?? defaultIsSessionReady;
+  const sessionPath = getSessionPath(platform, accountLabel, options.sessionBaseDir);
+  const apiBase = (payloadApiBase ?? process.env.ZENITHJOY_API_BASE ?? '').replace(/\/+$/, '');
+
+  const launcher = options.chromiumLauncher;
   let browser: ChromiumBrowser | null = null;
   let usingCdp = false;
 
@@ -226,10 +274,8 @@ export async function handleQrBindOperator(
   } finally {
     try {
       if (!usingCdp) {
-        // launch 模式：关闭我们自己开的 Chrome
         await browser?.close?.();
       }
-      // CDP 模式：不关闭 Chrome（xian-pc 窗口保持可见，员工可继续使用）
     } catch {
       // 关闭失败忽略
     }

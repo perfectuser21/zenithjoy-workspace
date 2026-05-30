@@ -15,6 +15,7 @@
 import path from 'node:path';
 import os from 'node:os';
 import fs from 'node:fs';
+import { spawn } from 'node:child_process';
 
 export interface QrBindDouyinPayload {
   account_label?: string;
@@ -74,13 +75,50 @@ export function getSessionPath(
   return path.join(dir, platform, `${accountLabel}.json`);
 }
 
-async function loadDefaultLauncher(): Promise<ChromiumLauncher> {
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const playwright = require('playwright') as { chromium: ChromiumLauncher };
-  if (!playwright?.chromium) {
-    throw new Error('playwright chromium 未就绪');
-  }
-  return playwright.chromium;
+function resolveQrBindDouyinScript(): string {
+  const beside = path.join(path.dirname(process.execPath), 'publishers', 'qr-bind-douyin.cjs');
+  if (fs.existsSync(beside)) return beside;
+  const dev = path.resolve(__dirname, '..', '..', 'publishers', 'qr-bind-douyin.cjs');
+  return dev;
+}
+
+function resolveNodeExe(): string {
+  const env = process.env.ZJ_NODE_EXE;
+  if (env && fs.existsSync(env)) return env;
+  return 'node';
+}
+
+async function spawnQrBindDouyin(
+  accountLabel: string,
+  sessionDir: string | undefined,
+  timeoutMs: number,
+): Promise<QrBindDouyinResult> {
+  const sessionPath = getSessionPath('douyin', accountLabel, sessionDir);
+  const scriptPath = resolveQrBindDouyinScript();
+  const nodeExe = resolveNodeExe();
+
+  return new Promise<QrBindDouyinResult>((resolve) => {
+    let stdout = '';
+    const proc = spawn(nodeExe, [scriptPath, accountLabel, sessionDir ?? '', String(timeoutMs)], {
+      env: { ...process.env },
+      timeout: timeoutMs + 15000,
+    });
+    proc.stdout.on('data', (d: Buffer) => { stdout += d.toString(); });
+    proc.stderr.on('data', (d: Buffer) => {
+      console.log('[qr-bind-douyin]', d.toString().trimEnd());
+    });
+    proc.on('close', (_code: number) => {
+      const lastLine = stdout.trim().split('\n').filter(Boolean).pop() ?? '';
+      try {
+        resolve(JSON.parse(lastLine) as QrBindDouyinResult);
+      } catch {
+        resolve({ ok: false, sessionPath, error: `result parse failed: ${lastLine || '(no output)'}` });
+      }
+    });
+    proc.on('error', (err: Error) => {
+      resolve({ ok: false, sessionPath, error: `spawn failed: ${err.message}` });
+    });
+  });
 }
 
 export async function handleQrBindDouyin(
@@ -88,21 +126,20 @@ export async function handleQrBindDouyin(
   options: QrBindDouyinOptions = {},
 ): Promise<QrBindDouyinResult> {
   const accountLabel = payload.account_label || 'default';
+  const timeoutMs = options.timeoutMs ?? 5 * 60_000;
+
+  // 生产路径：spawn 外部进程（绕过 pkg+playwright 崩溃）
+  // 测试路径：注入 chromiumLauncher 时走内部逻辑
+  if (!options.chromiumLauncher) {
+    return spawnQrBindDouyin(accountLabel, options.sessionDir, timeoutMs);
+  }
+
+  // ── 以下为测试专用内部路径（options.chromiumLauncher 注入）──
   const sessionPath = getSessionPath('douyin', accountLabel, options.sessionDir);
   const loginUrl = options.loginUrl ?? 'https://creator.douyin.com/creator-micro/home';
   const pollIntervalMs = options.pollIntervalMs ?? 1500;
-  const timeoutMs = options.timeoutMs ?? 5 * 60_000;
   const headless = options.headless ?? false;
-  let launcher: ChromiumLauncher;
-  try {
-    launcher = options.chromiumLauncher ?? (await loadDefaultLauncher());
-  } catch (err) {
-    return {
-      ok: false,
-      sessionPath,
-      error: err instanceof Error ? err.message : String(err),
-    };
-  }
+  const launcher = options.chromiumLauncher;
 
   let browser: ChromiumBrowser | null = null;
   try {
@@ -145,7 +182,6 @@ export async function handleQrBindDouyin(
     fs.mkdirSync(path.dirname(sessionPath), { recursive: true });
     fs.writeFileSync(sessionPath, JSON.stringify(storageState, null, 2));
 
-    // WS4: 中台 result 含 cookie_local_path + qr_login 状态（合同 DoD）
     return {
       ok: true,
       sessionPath,
