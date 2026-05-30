@@ -1,4 +1,4 @@
-# Sprint Contract Draft (Round 1)
+# Sprint Contract Draft (Round 2)
 
 ## Golden Path
 [qr_bind/xiaohongshu 触发] → [spawnQrBindOperator 注入 port 19224] → [.cjs 连 Chrome 19224] → [等待 galaxy_creator_session_info cookie 出现] → [登录成功，上传 session]
@@ -95,3 +95,13 @@ npx vitest run \
 
 echo "✅ Golden Path 验证通过"
 ```
+
+---
+
+## Risks
+
+- **Risk 1**: `PLATFORM_CDP_PORTS` 键名拼写错误（如 `xiaohongshu` typo）→ spawn 回退默认 19222 端口，连到抖音 Chrome，登录检测必然 5min 超时后才失败
+  - **Mitigation**: Step 3 BEHAVIOR 验证命令精确匹配字符串 `19224`；vitest `[RED]` 测试以字面量 `19224` 断言，键名 typo 必触发测试失败
+
+- **Risk 2**: xian-pc 若存有历史 xiaohongshu session 文件（只含 `web_session`，不含 `galaxy_creator_session_info`），修复上线后巡检首次会判 expired，触发一次重绑告警
+  - **Mitigation**: 此为一次性影响，运营员按提示重新扫码即可；已在 PRD "不在范围内" 注明旧 session 清理不是本次 Sprint 范围
