@@ -67,7 +67,18 @@ async function publishDouyinArticleReal(queueFilePath) {
     });
     await context.addCookies(cookies);
     page = await context.newPage();
-    _log('[DY-ARTICLE] 已注入', cookies.length, '个 cookies\n');
+    _log('[DY-ARTICLE] 已注入', cookies.length, '个 cookies');
+    // Douyin SPA 不做 URL 重定向，通过 body text 验证 auth
+    await page.goto('https://creator.douyin.com/creator-micro/home', {
+      waitUntil: 'domcontentloaded', timeout: 30000,
+    });
+    await page.waitForLoadState('networkidle', { timeout: 20000 }).catch(() => {});
+    const homeBodyText = await page.evaluate(() => document.body.innerText.substring(0, 300)).catch(() => '');
+    if (/扫码登录|密码登录|验证码登录|账号登录/.test(homeBodyText)) {
+      await browser.close();
+      throw new Error('DOUYIN_COOKIES 无效或已过期：首页显示登录表单，请重新导出 cookies 并更新 GitHub secret DOUYIN_COOKIES');
+    }
+    _log('[DY-ARTICLE] ✓ 首页 auth 验证通过');
   } else {
     _log('\n[DY-ARTICLE] 连接到现有浏览器 (localhost:19222)...');
     browser = await chromium.connectOverCDP('http://localhost:19222');
