@@ -40,7 +40,7 @@ jobs:
         working-directory: services/agent
         run: npx playwright install chromium --with-deps
 
-      - name: Run qr-bind-operator (90s timeout, 飞书通知后超时退出)
+      - name: Run qr-bind-operator (150s timeout, 飞书通知后超时退出)
         working-directory: services/agent
         shell: pwsh
         env:
@@ -49,9 +49,9 @@ jobs:
           ZENITHJOY_FEISHU_WEBHOOK: ${{ secrets.ZENITHJOY_FEISHU_WEBHOOK }}
         run: |
           $platform = "${{ github.event.inputs.platform || 'douyin' }}"
-          Write-Host "[qr-verify] 平台: $platform，超时 90s（无人扫码属正常）"
+          Write-Host "[qr-verify] 平台: $platform，超时 150s（无人扫码属正常）"
           # 退出码 1 = 超时，属预期；只有进程崩溃/截图失败才算真正出错
-          node publishers\qr-bind-operator.cjs $platform "" "ci-verify" 90000
+          node publishers\qr-bind-operator.cjs $platform "" "ci-verify" 150000
           if ($LASTEXITCODE -ne 0) {
             Write-Host "[qr-verify] 脚本以退出码 $LASTEXITCODE 结束（超时退出属预期）"
           }

@@ -173,48 +173,40 @@ async function main() {
       await page.goto(creatorUrl, { waitUntil: 'domcontentloaded' }).catch(() => undefined);
     }
 
-    // 等登录页出现 → 等 QR 元素可见 → 只截 QR 元素（失败不影响主流程）
+    // 等 QR 元素出现后截图发飞书（不依赖 URL，找到才发，找不到静默跳过）
     if (page) {
       try {
-        // 等重定向到登录页（最多 12s）
-        const loginDeadline = Date.now() + 12000;
-        while (Date.now() < loginDeadline) {
-          if (/\/login(\b|\/|$)/i.test(page.url())) break;
+        const QR_SELECTORS = [
+          'canvas',
+          'img[src*="qrcode"]',
+          'img[src*="qr_"]',
+          '[class*="qr-code"] canvas',
+          '[class*="qrCode"] canvas',
+          '[class*="qrcode"] canvas',
+          '[class*="qr-code"] img',
+          '[class*="login"] canvas',
+        ];
+        let qrEl = null;
+        const elDeadline = Date.now() + 45000;
+        outer: while (Date.now() < elDeadline) {
+          for (const sel of QR_SELECTORS) {
+            try {
+              const el = await page.$(sel);
+              if (el) {
+                const box = await el.boundingBox();
+                if (box && box.width >= 80) { qrEl = el; break outer; }
+              }
+            } catch { /* 继续下一个 */ }
+          }
           await new Promise(r => setTimeout(r, 500));
         }
 
-        if (/\/login(\b|\/|$)/i.test(page.url())) {
-          // 逐个选择器寻找 QR 码元素（最多等 15s）
-          const QR_SELECTORS = [
-            'canvas',
-            'img[src*="qrcode"]',
-            'img[src*="qr_"]',
-            '[class*="qr-code"] canvas',
-            '[class*="qrCode"] canvas',
-            '[class*="qrcode"] canvas',
-            '[class*="qr-code"] img',
-            '[class*="login"] canvas',
-          ];
-          let qrEl = null;
-          const elDeadline = Date.now() + 15000;
-          outer: while (Date.now() < elDeadline) {
-            for (const sel of QR_SELECTORS) {
-              try {
-                const el = await page.$(sel);
-                if (el) {
-                  const box = await el.boundingBox();
-                  if (box && box.width >= 80) { qrEl = el; break outer; }
-                }
-              } catch { /* 继续下一个 */ }
-            }
-            await new Promise(r => setTimeout(r, 500));
-          }
-
-          process.stderr.write(`[qr-bind-operator:${platform}] QR 元素${qrEl ? '已找到' : '未找到，回退全屏'}\n`);
-          const qrBuf = qrEl
-            ? await qrEl.screenshot({ type: 'png' })
-            : await page.screenshot({ type: 'png', fullPage: false });
+        if (qrEl) {
+          process.stderr.write(`[qr-bind-operator:${platform}] QR 元素已找到，发送飞书通知\n`);
+          const qrBuf = await qrEl.screenshot({ type: 'png' });
           await sendFeishuQrCard(platform, qrBuf);
+        } else {
+          process.stderr.write(`[qr-bind-operator:${platform}] 45s 内未找到 QR 元素，跳过飞书通知\n`);
         }
       } catch (screenshotErr) {
         process.stderr.write(`[qr-bind-operator:${platform}] 截图失败: ${screenshotErr.message}\n`);
