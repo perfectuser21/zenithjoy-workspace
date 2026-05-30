@@ -1,0 +1,48 @@
+name: 小红书 Session — 每日 E2E 验证
+
+on:
+  workflow_dispatch:
+  schedule:
+    # 每天北京午夜（UTC 16:00）
+    - cron: '0 16 * * *'
+
+jobs:
+  verify-session:
+    name: 验证小红书运营员 Session
+    runs-on: windows-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: services/agent/package-lock.json
+
+      - name: Install agent dependencies
+        working-directory: services/agent
+        run: npm ci
+
+      - name: Install Playwright chromium
+        working-directory: services/agent
+        run: npx playwright install chromium --with-deps
+
+      - name: Run 小红书 session verify
+        shell: pwsh
+        env:
+          XIAOHONGSHU_COOKIES: ${{ secrets.XIAOHONGSHU_COOKIES }}
+          ZENITHJOY_FEISHU_WEBHOOK: ${{ secrets.ZENITHJOY_FEISHU_WEBHOOK }}
+        run: node scripts/sessions/verify-operator-xiaohongshu.js
+
+      - name: Upload screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: xiaohongshu-session-${{ github.run_number }}
+          path: |
+            xiaohongshu-session-pass.png
+            xiaohongshu-session-fail.png
+          if-no-files-found: ignore
+          retention-days: 14
