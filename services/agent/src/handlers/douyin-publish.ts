@@ -103,7 +103,8 @@ function isRealPublishMode(env: NodeJS.ProcessEnv = process.env): boolean {
 
 /**
  * 读取 QR 扫码绑定时存储的本地 session 文件。
- * qr-bind-douyin.ts 扫码成功后写入 ~/.zenithjoy-agent/sessions/douyin-{accountLabel}.json。
+ * qr-bind-douyin.ts 扫码成功后写入 ~/.zenithjoy-agent/sessions/douyin/{accountLabel}.json
+ * （注意：platform 是子目录，不是文件名前缀）。
  * publisher 子进程需要 DOUYIN_COOKIES env var，但主进程 spawn 时不自动继承该文件内容。
  * 本函数桥接这一 gap：若 DOUYIN_COOKIES 未设，则读文件注入。
  */
@@ -112,7 +113,8 @@ function readLocalDouyinSession(accountLabel = 'default'): string | undefined {
     os.homedir(),
     '.zenithjoy-agent',
     'sessions',
-    `douyin-${accountLabel}.json`,
+    'douyin',
+    `${accountLabel}.json`,
   );
   try {
     if (fs.existsSync(sessionPath)) {
