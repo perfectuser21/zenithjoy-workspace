@@ -272,7 +272,9 @@ async function uploadVideoFile(page, context, videoPath) {
   for (const sel of clickSelectors) {
     try {
       const fcPromise = page.waitForEvent('filechooser', { timeout: FILE_CHOOSER_TIMEOUT_MS });
-      await page.click(sel, { timeout: CLICK_TIMEOUT_MS });
+      // Silence fcPromise if click fails so it doesn't become an unhandled rejection
+      await page.click(sel, { timeout: CLICK_TIMEOUT_MS })
+        .catch(clickErr => { fcPromise.catch(() => {}); throw clickErr; });
       const fc = await fcPromise;
       await fc.setFiles(videoPath);
       _log('[DY-VIDEO-REAL] ✓ FileChooser 成功 selector:', sel);
