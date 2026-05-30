@@ -270,18 +270,16 @@ async function uploadVideoFile(page, context, videoPath) {
     'text=点击上传', 'text=上传视频', 'text=选择文件', 'text=上传',
   ];
   for (const sel of clickSelectors) {
-    let _fcPromise;
     try {
-      _fcPromise = page.waitForEvent('filechooser', { timeout: FILE_CHOOSER_TIMEOUT_MS });
-      await page.click(sel, { timeout: CLICK_TIMEOUT_MS });
-      const fc = await _fcPromise;
+      const fcPromise = page.waitForEvent('filechooser', { timeout: FILE_CHOOSER_TIMEOUT_MS });
+      // Silence fcPromise if click fails so it doesn't become an unhandled rejection
+      await page.click(sel, { timeout: CLICK_TIMEOUT_MS })
+        .catch(clickErr => { fcPromise.catch(() => {}); throw clickErr; });
+      const fc = await fcPromise;
       await fc.setFiles(videoPath);
       _log('[DY-VIDEO-REAL] ✓ FileChooser 成功 selector:', sel);
       return;
-    } catch (e) {
-      if (_fcPromise) _fcPromise.catch(() => {});
-      failures.push(`FC(${sel}): ${e.message.substring(0, 60)}`);
-    }
+    } catch (e) { failures.push(`FC(${sel}): ${e.message.substring(0, 60)}`); }
   }
   _log('[DY-VIDEO-REAL] Strategy 1 全失败，尝试 CDP...');
 
