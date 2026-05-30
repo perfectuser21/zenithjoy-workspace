@@ -72,7 +72,19 @@ async function publishDouyinImageReal(queueFilePath) {
     });
     await context.addCookies(cookies);
     page = await context.newPage();
-    _log('[DY-REAL] 已注入', cookies.length, '个 cookies\n');
+    _log('[DY-REAL] 已注入', cookies.length, '个 cookies');
+    // In cookie injection mode, skip requireLogin (which uses URL-redirect check that
+    // doesn't work for Douyin SPA). Instead verify auth via body text after React hydration.
+    await page.goto('https://creator.douyin.com/creator-micro/home', {
+      waitUntil: 'domcontentloaded', timeout: 30000,
+    });
+    await page.waitForLoadState('networkidle', { timeout: 20000 }).catch(() => {});
+    const homeBodyText = await page.evaluate(() => document.body.innerText.substring(0, 300)).catch(() => '');
+    if (/扫码登录|密码登录|验证码登录|账号登录/.test(homeBodyText)) {
+      await browser.close();
+      throw new Error('DOUYIN_COOKIES 无效或已过期：首页显示登录表单，请重新导出 cookies 并更新 GitHub secret DOUYIN_COOKIES');
+    }
+    _log('[DY-REAL] ✓ 首页 auth 验证通过');
   } else {
     _log('\n[DY-REAL] 连接到现有浏览器 (localhost:19222)...');
     browser = await chromium.connectOverCDP('http://localhost:19222');
@@ -86,9 +98,8 @@ async function publishDouyinImageReal(queueFilePath) {
   }
 
   try {
-    // WS3: 强制扫码登录（lead 自验路径），替代旧"假设已登录"硬检查（铁律 6 减肥）
-    // requireLogin 检查未登录 → 截屏 QR 并 throw NEED_QR；已登录直接 return
-    await requireLogin({ injectedPage: page });
+    // CDP 模式才用 requireLogin（扫码验证）；cookie 注入模式已在上方做了 body text 验证，跳过
+    if (!cookiesJson) await requireLogin({ injectedPage: page });
 
     _log('[DY-REAL] Step 1: 导航到发布图文页面');
     await page.goto('https://creator.douyin.com/creator-micro/content/upload?default-tab=3', {
