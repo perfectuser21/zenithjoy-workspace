@@ -196,6 +196,14 @@ async function main() {
         const isQrSize = (box) =>
           box.width >= 100 && box.width <= 400 &&
           box.height >= 100 && box.height <= 400;
+        // img 元素需确认图片数据已加载（naturalWidth>0），否则截到空白
+        const isImgLoaded = async (el) => {
+          try {
+            const tag = await el.evaluate(e => e.tagName.toLowerCase());
+            if (tag !== 'img') return true;
+            return await el.evaluate(e => e.complete && e.naturalWidth > 0);
+          } catch { return false; }
+        };
         let qrEl = null;
         const elDeadline = Date.now() + 45000;
         outer: while (Date.now() < elDeadline) {
@@ -204,7 +212,7 @@ async function main() {
               const el = await page.$(sel);
               if (el) {
                 const box = await el.boundingBox();
-                if (box && isQrSize(box)) {
+                if (box && isQrSize(box) && await isImgLoaded(el)) {
                   process.stderr.write(`[qr-bind-operator:${platform}] 匹配选择器 "${sel}" size=${Math.round(box.width)}x${Math.round(box.height)}\n`);
                   qrEl = el; break outer;
                 }
