@@ -250,9 +250,12 @@ export async function handleQrBindOperator(
     // POST upload-cookies 到中台
     if (apiBase) {
       try {
+        const licenseKey = process.env.ZENITHJOY_LICENSE || '';
+        const uploadHeaders: Record<string, string> = { 'Content-Type': 'application/json' };
+        if (licenseKey) uploadHeaders['Authorization'] = `Bearer ${licenseKey}`;
         const resp = await fetch(`${apiBase}/api/operator/sessions/upload-cookies`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: uploadHeaders,
           body: JSON.stringify({ platform, cookies: storageState }),
         });
         if (!resp.ok) {

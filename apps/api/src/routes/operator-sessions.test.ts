@@ -16,6 +16,10 @@ vi.mock('../middleware/internal-auth', () => ({
   internalAuth: (_req: unknown, _res: unknown, next: () => void) => next(),
 }));
 
+vi.mock('../middleware/license-auth', () => ({
+  licenseAuth: (_req: unknown, _res: unknown, next: () => void) => next(),
+}));
+
 const { operatorSessionsRouter } = await import('./operator-sessions');
 
 const app = express();
