@@ -56,7 +56,8 @@ async function getBrowserAndPage() {
   const cookiesJson = process.env.DOUYIN_COOKIES;
   if (cookiesJson) {
     _log('[DY-VIDEO-REAL] Cookie 注入模式（GitHub Actions）');
-    const cookies = JSON.parse(cookiesJson);
+    const _parsed = JSON.parse(cookiesJson);
+    const cookies = Array.isArray(_parsed) ? _parsed : (_parsed.cookies ?? []);
     const browser = await chromium.launch({
       headless: true,
       args: ['--no-sandbox', '--disable-setuid-sandbox'],
