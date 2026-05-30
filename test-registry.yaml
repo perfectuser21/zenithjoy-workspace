@@ -2630,3 +2630,7 @@ agent_suite:
     status: active
     product: AI视频本地流水线
     note: "AI视频Pipeline WS3 合同测试 — GHA agent-e2e-video.yml default version 1.1.31"
+  - path: sprints/line00-xiaohongshu-qr-bind/tests/ws1/xhs-qr-bind.test.ts
+    description: "xiaohongshu qr-bind cookie 名 + CDP 端口修复 TDD 测试"
+    sprint: line00-xiaohongshu-qr-bind
+    ws: ws1
