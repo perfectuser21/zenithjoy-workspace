@@ -3,7 +3,7 @@
  * 抖音运营员 Session E2E 验证
  *
  * 从 DOUYIN_OPERATOR_SESSION 环境变量读取 Playwright storageState，
- * 启动 headless Chrome，导航到 creator.douyin.com，
+ * 启动 headed Chrome（headless: false），导航到 creator.douyin.com，
  * 确认已登录（URL 不含 /login + creator user/info API 返回正常）。
  *
  * PASS → exit 0 + douyin-session-pass.png
@@ -94,7 +94,7 @@ async function main() {
 
   let browser;
   try {
-    browser = await chromium.launch({ headless: true });
+    browser = await chromium.launch({ headless: false });
     const context = await browser.newContext({
       storageState: tmpFile,
       userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
