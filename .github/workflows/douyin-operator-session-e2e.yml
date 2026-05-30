@@ -39,8 +39,7 @@ jobs:
         shell: pwsh
         env:
           DOUYIN_OPERATOR_SESSION: ${{ secrets.DOUYIN_OPERATOR_SESSION }}
-          FEISHU_BOT_WEBHOOK: ${{ secrets.FEISHU_BOT_WEBHOOK }}
-          BARK_URL: https://api.day.app/QU7ktbzPJxZbNx9pEHcstW
+          ZENITHJOY_FEISHU_WEBHOOK: ${{ secrets.ZENITHJOY_FEISHU_WEBHOOK }}
         run: node ..\..\scripts\sessions\verify-operator-douyin.js
 
       - name: Upload session screenshot
