@@ -341,3 +341,91 @@ describe('handleDouyinPublishTask receipt Authorization header', () => {
     }
   });
 });
+
+// ─── 本地 session 路径回归测试 ────────────────────────────────────────────────
+// 验证 readLocalDouyinSession 使用正确路径：sessions/douyin/{label}.json（platform 子目录）
+// 而非错误的 sessions/douyin-{label}.json（连字符前缀）
+describe('本地 QR session 注入 — 路径回归', () => {
+  it('DOUYIN_COOKIES 未设时从 sessions/douyin/default.json 读取并注入 spawnEnv', async () => {
+    const homeDir = fs.mkdtempSync(path.join(os.tmpdir(), 'zj-home-'));
+    const sessionDir = path.join(homeDir, '.zenithjoy-agent', 'sessions', 'douyin');
+    fs.mkdirSync(sessionDir, { recursive: true });
+    const sessionContent = JSON.stringify({ cookies: [{ name: 'sid_tt', value: 'test-sid' }] });
+    fs.writeFileSync(path.join(sessionDir, 'default.json'), sessionContent);
+
+    const mediaDir = fs.mkdtempSync(path.join(os.tmpdir(), 'zj-media-'));
+    fs.writeFileSync(path.join(mediaDir, 'video.mp4'), 'fake');
+
+    const homedirSpy = vi.spyOn(os, 'homedir').mockReturnValue(homeDir);
+    const prevCookies = process.env.DOUYIN_COOKIES;
+    delete process.env.DOUYIN_COOKIES;
+
+    try {
+      let capturedEnv: NodeJS.ProcessEnv | undefined;
+      const spawnImpl = vi.fn((_cmd: string, _args: string[], opts: any) => {
+        capturedEnv = opts?.env;
+        return fakeChild({ exitCode: 0, stdout: '{"ok":true,"dryRun":true}\n' });
+      });
+
+      await handleDouyinPublishTask(
+        { task_id: 'session-path-test', folder_path: mediaDir, type: 'image' },
+        {
+          apiBase: 'https://api.example.com',
+          fetchImpl: vi.fn(async () => new Response('{}', { status: 200 })) as any,
+          spawnImpl: spawnImpl as any,
+          scriptPath: '/fake/publish-douyin-image-dryrun.cjs',
+        },
+      );
+
+      expect(capturedEnv?.DOUYIN_COOKIES).toBe(sessionContent);
+    } finally {
+      homedirSpy.mockRestore();
+      if (prevCookies !== undefined) process.env.DOUYIN_COOKIES = prevCookies;
+      else delete process.env.DOUYIN_COOKIES;
+      fs.rmSync(homeDir, { recursive: true, force: true });
+      fs.rmSync(mediaDir, { recursive: true, force: true });
+    }
+  });
+
+  it('sessions/douyin-default.json（错误路径）存在时不应被读取', async () => {
+    const homeDir = fs.mkdtempSync(path.join(os.tmpdir(), 'zj-home-wrong-'));
+    const wrongDir = path.join(homeDir, '.zenithjoy-agent', 'sessions');
+    fs.mkdirSync(wrongDir, { recursive: true });
+    // 写入错误路径的文件（连字符格式）
+    fs.writeFileSync(path.join(wrongDir, 'douyin-default.json'), '{"cookies":[]}');
+
+    const mediaDir = fs.mkdtempSync(path.join(os.tmpdir(), 'zj-media-'));
+    fs.writeFileSync(path.join(mediaDir, 'video.mp4'), 'fake');
+
+    const homedirSpy = vi.spyOn(os, 'homedir').mockReturnValue(homeDir);
+    const prevCookies = process.env.DOUYIN_COOKIES;
+    delete process.env.DOUYIN_COOKIES;
+
+    try {
+      let capturedEnv: NodeJS.ProcessEnv | undefined;
+      const spawnImpl = vi.fn((_cmd: string, _args: string[], opts: any) => {
+        capturedEnv = opts?.env;
+        return fakeChild({ exitCode: 0, stdout: '{"ok":true,"dryRun":true}\n' });
+      });
+
+      await handleDouyinPublishTask(
+        { task_id: 'session-wrong-path-test', folder_path: mediaDir, type: 'image' },
+        {
+          apiBase: 'https://api.example.com',
+          fetchImpl: vi.fn(async () => new Response('{}', { status: 200 })) as any,
+          spawnImpl: spawnImpl as any,
+          scriptPath: '/fake/publish-douyin-image-dryrun.cjs',
+        },
+      );
+
+      // 错误路径的文件不应被读取，DOUYIN_COOKIES 应保持未设
+      expect(capturedEnv?.DOUYIN_COOKIES).toBeUndefined();
+    } finally {
+      homedirSpy.mockRestore();
+      if (prevCookies !== undefined) process.env.DOUYIN_COOKIES = prevCookies;
+      else delete process.env.DOUYIN_COOKIES;
+      fs.rmSync(homeDir, { recursive: true, force: true });
+      fs.rmSync(mediaDir, { recursive: true, force: true });
+    }
+  });
+});
