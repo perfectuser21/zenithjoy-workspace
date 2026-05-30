@@ -176,16 +176,26 @@ async function main() {
     // 等 QR 元素出现后截图发飞书（不依赖 URL，找到才发，找不到静默跳过）
     if (page) {
       try {
+        // 具体 QR 语义选择器优先；通用 canvas 放最后（避免匹配背景大 canvas）
         const QR_SELECTORS = [
-          'canvas',
-          'img[src*="qrcode"]',
-          'img[src*="qr_"]',
+          '[class*="qrcode"] canvas',
           '[class*="qr-code"] canvas',
           '[class*="qrCode"] canvas',
-          '[class*="qrcode"] canvas',
+          '[class*="scanCode"] canvas',
+          '[class*="scan-code"] canvas',
+          '[class*="qrcode"] img',
           '[class*="qr-code"] img',
+          '[class*="qrCode"] img',
+          'img[src*="qrcode"]',
+          'img[src*="qr_"]',
+          'img[src*="qr-"]',
           '[class*="login"] canvas',
+          'canvas',  // 最后才用，且必须满足正方形尺寸约束
         ];
+        // QR 码约 100-400px 正方形；背景 canvas 通常 800px+，滑块验证宽>高
+        const isQrSize = (box) =>
+          box.width >= 100 && box.width <= 400 &&
+          box.height >= 100 && box.height <= 400;
         let qrEl = null;
         const elDeadline = Date.now() + 45000;
         outer: while (Date.now() < elDeadline) {
@@ -194,7 +204,10 @@ async function main() {
               const el = await page.$(sel);
               if (el) {
                 const box = await el.boundingBox();
-                if (box && box.width >= 80) { qrEl = el; break outer; }
+                if (box && isQrSize(box)) {
+                  process.stderr.write(`[qr-bind-operator:${platform}] 匹配选择器 "${sel}" size=${Math.round(box.width)}x${Math.round(box.height)}\n`);
+                  qrEl = el; break outer;
+                }
               }
             } catch { /* 继续下一个 */ }
           }
