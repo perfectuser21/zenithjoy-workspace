@@ -28,6 +28,7 @@ async function sendFeishuQrCard(platform, screenshotBuffer) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ app_id: appId, app_secret: appSecret }),
     });
+    if (!tokenRes.ok) throw new Error(`token API HTTP ${tokenRes.status}`);
     const tokenJson = await tokenRes.json();
     const token = tokenJson.app_access_token;
     if (!token) throw new Error(`token 获取失败: ${JSON.stringify(tokenJson)}`);
@@ -41,6 +42,7 @@ async function sendFeishuQrCard(platform, screenshotBuffer) {
       headers: { Authorization: `Bearer ${token}` },
       body: form,
     });
+    if (!imgRes.ok) throw new Error(`图片上传 HTTP ${imgRes.status}`);
     const imgJson = await imgRes.json();
     const imageKey = imgJson.data?.image_key;
     if (!imageKey) throw new Error(`图片上传失败: ${JSON.stringify(imgJson)}`);
@@ -62,11 +64,12 @@ async function sendFeishuQrCard(platform, screenshotBuffer) {
         ],
       },
     };
-    await fetch(webhook, {
+    const cardRes = await fetch(webhook, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(card),
     });
+    if (!cardRes.ok) throw new Error(`飞书卡片推送 HTTP ${cardRes.status}`);
     process.stderr.write(`[qr-bind-operator:${platform}] 飞书 QR 卡片已发送\n`);
   } catch (e) {
     process.stderr.write(`[qr-bind-operator:${platform}] 飞书推送失败（不影响扫码）: ${e.message}\n`);
