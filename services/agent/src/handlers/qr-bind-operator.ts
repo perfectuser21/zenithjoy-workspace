@@ -1,28 +1,44 @@
 // services/agent/src/handlers/qr-bind-operator.ts
 //
-// 运营中枢 Session 绑定 — 8 平台统一 handler（launch Chrome + 5min 超时 + POST upload-cookies）
+// 运营中枢 Session 绑定 — 8 平台统一 handler（CDP优先 + launch 回退 + 5min 超时 + POST upload-cookies）
 //
 // 收到 task `qr_bind/{platform}` 时：
-//   1. Playwright launch() 启动 Chrome（headless:false，运营员可见）
+//   1. 优先 connectOverCDP(localhost:19222) 接管已有 Chrome（xian-pc 常驻），失败则 launch() 新开
 //   2. 导航至对应平台 creator URL，等待运营员手机扫码登录
-//   3. 检测 URL 离开登录页（视为登录成功）
+//   3. 检测 Session Cookie 出现（比 URL 检测可靠，避免 SPA 初始路由误判已登录）
 //   4. 调 storageState() 抓取 cookies
 //   5. POST ZENITHJOY_API_BASE/api/operator/sessions/upload-cookies（{platform, cookies}）
 //   6. 返回 {ok: true} 或超时 {ok: false, error: 'timeout'}
+//   7. CDP 模式下仅断开连接，不关闭浏览器（xian-pc 窗口保持可见）
 
 import path from 'node:path';
 import os from 'node:os';
 import fs from 'node:fs';
 
-// 8 平台 creator URL — 用会触发 /login 重定向的子路径，避免 SPA 根域名在 JS 重定向前误判已登录
+// xian-pc 常驻 Chrome 远程调试端口（chrome.exe --remote-debugging-port=19222）
+const CDP_PORT = 19222;
+
+// 各平台登录后必然出现的 Session Cookie 名（优先于 URL 检测，避免 SPA 误判）
+const PLATFORM_SESSION_COOKIES: Record<string, string[]> = {
+  douyin:       ['sessionid_ss', 'sessionid', 'sid_tt'],
+  toutiao:      ['sessionid', 'sid_tt'],
+  kuaishou:     ['userId', 'kuaishou.sid', 'passToken'],
+  xiaohongshu:  ['web_session', 'webId'],
+  weibo:        ['SUB', 'SUBP'],
+  zhihu:        ['z_c0', 'SESSIONID'],
+  shipinhao:    ['skey', 'uin'],
+  gongzhonghao: ['skey', 'uin'],
+};
+
+// 8 平台 creator URL — 用会触发 /login 重定向的子路径
 export const PLATFORM_CREATOR_URLS: Record<string, string> = {
-  douyin: 'https://creator.douyin.com/creator-micro/home',
-  kuaishou: 'https://cp.kuaishou.com/article/publish/video',
-  xiaohongshu: 'https://creator.xiaohongshu.com/publish/publish',
-  shipinhao: 'https://channels.weixin.qq.com/platform/login',
-  toutiao: 'https://mp.toutiao.com/profile_v4/graphic/publish',
-  weibo: 'https://weibo.com/login.php',
-  zhihu: 'https://www.zhihu.com/creator',
+  douyin:       'https://creator.douyin.com/creator-micro/home',
+  kuaishou:     'https://cp.kuaishou.com/article/publish/video',
+  xiaohongshu:  'https://creator.xiaohongshu.com/publish/publish',
+  shipinhao:    'https://channels.weixin.qq.com/platform/login',
+  toutiao:      'https://mp.toutiao.com/profile_v4/graphic/publish',
+  weibo:        'https://weibo.com/login.php',
+  zhihu:        'https://www.zhihu.com/creator',
   gongzhonghao: 'https://mp.weixin.qq.com',
 };
 
@@ -65,7 +81,7 @@ export interface QrBindOperatorOptions {
   pollIntervalMs?: number;
   timeoutMs?: number;
   chromiumLauncher?: ChromiumLauncher;
-  isLoggedIn?: (ctx: ChromiumContext, platform: string) => boolean | Promise<boolean>;
+  isSessionReady?: (storageState: Record<string, unknown>, platform: string) => boolean;
   sessionBaseDir?: string;
 }
 
@@ -76,17 +92,16 @@ function getSessionPath(platform: string, accountLabel: string, baseDir?: string
   return path.join(dir, 'operator', platform, `${accountLabel}.json`);
 }
 
-function defaultIsLoggedIn(ctx: ChromiumContext, platform: string): boolean {
-  const pages = ctx.pages();
-  if (pages.length === 0) return false;
-  const creatorUrl = PLATFORM_CREATOR_URLS[platform] || '';
-  const creatorHost = creatorUrl ? new URL(creatorUrl).hostname : '';
-  return pages.some((p) => {
-    const url = p.url();
-    if (/\/login(\b|\/|$)/.test(url)) return false;
-    if (creatorHost && !url.includes(creatorHost)) return false;
-    return true;
-  });
+type CookieEntry = { name: string; domain: string; value: string };
+type StorageStateShape = { cookies?: CookieEntry[] };
+
+function defaultIsSessionReady(storageState: Record<string, unknown>, platform: string): boolean {
+  const cookieNames = PLATFORM_SESSION_COOKIES[platform] ?? [];
+  if (cookieNames.length === 0) return false;
+  const cookies = ((storageState as StorageStateShape).cookies ?? []);
+  return cookies.some(
+    (c) => typeof c.value === 'string' && c.value.length > 0 && cookieNames.includes(c.name),
+  );
 }
 
 async function loadDefaultLauncher(): Promise<ChromiumLauncher> {
@@ -108,7 +123,7 @@ export async function handleQrBindOperator(
 
   const pollIntervalMs = options.pollIntervalMs ?? 1500;
   const timeoutMs = options.timeoutMs ?? 300000; // 5 * 60 * 1000
-  const isLoggedIn = options.isLoggedIn ?? defaultIsLoggedIn;
+  const isSessionReady = options.isSessionReady ?? defaultIsSessionReady;
   const sessionPath = getSessionPath(platform, accountLabel, options.sessionBaseDir);
 
   const apiBase = (payloadApiBase ?? process.env.ZENITHJOY_API_BASE ?? '').replace(/\/+$/, '');
@@ -121,8 +136,22 @@ export async function handleQrBindOperator(
   }
 
   let browser: ChromiumBrowser | null = null;
+  let usingCdp = false;
+
   try {
-    browser = await launcher.launch({ headless: false });
+    // CDP 优先：接管 xian-pc 上已有的 Chrome（port 19222），失败时降级 launch
+    try {
+      browser = await launcher.connectOverCDP(`http://localhost:${CDP_PORT}`);
+      usingCdp = true;
+      console.log(`[qr-bind-operator:${platform}] CDP 连接成功 (port ${CDP_PORT})`);
+    } catch {
+      browser = await launcher.launch({
+        headless: false,
+        args: ['--no-sandbox', '--disable-setuid-sandbox'],
+      });
+      console.log(`[qr-bind-operator:${platform}] CDP 不可用，已 launch 新 Chrome`);
+    }
+
     const ctx = browser.newContext
       ? await browser.newContext()
       : browser.contexts()[0];
@@ -137,16 +166,16 @@ export async function handleQrBindOperator(
       await page.goto(creatorUrl, { waitUntil: 'domcontentloaded' } as Record<string, unknown>);
     }
 
-    // SPA 框架（抖音等）在 domcontentloaded 后还需 JS 执行才跳到 /login，等 3s 避免误判已登录
+    // 等待页面稳定（SPA 需要 JS 执行后才完成路由，3s 与测试契约对齐）
     await new Promise((r) => setTimeout(r, 3000));
 
-    // 轮询等待扫码登录（最长 5min）
+    // 轮询 Session Cookie（最长 5min）— Cookie 检测比 URL 更可靠，不受 SPA 中间路由误判
     const start = Date.now();
     let logged = false;
     while (Date.now() - start < timeoutMs) {
       try {
-        const ok = await isLoggedIn(ctx, platform);
-        if (ok) {
+        const rawState = await ctx.storageState();
+        if (isSessionReady(rawState as Record<string, unknown>, platform)) {
           logged = true;
           break;
         }
@@ -196,7 +225,11 @@ export async function handleQrBindOperator(
     return { ok: false, platform, error: err instanceof Error ? err.message : String(err) };
   } finally {
     try {
-      await browser?.close?.();
+      if (!usingCdp) {
+        // launch 模式：关闭我们自己开的 Chrome
+        await browser?.close?.();
+      }
+      // CDP 模式：不关闭 Chrome（xian-pc 窗口保持可见，员工可继续使用）
     } catch {
       // 关闭失败忽略
     }
