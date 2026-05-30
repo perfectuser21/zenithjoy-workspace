@@ -101,6 +101,31 @@ function isRealPublishMode(env: NodeJS.ProcessEnv = process.env): boolean {
   return flag === '1' || flag === 'true';
 }
 
+/**
+ * 读取 QR 扫码绑定时存储的本地 session 文件。
+ * qr-bind-douyin.ts 扫码成功后写入 ~/.zenithjoy-agent/sessions/douyin-{accountLabel}.json。
+ * publisher 子进程需要 DOUYIN_COOKIES env var，但主进程 spawn 时不自动继承该文件内容。
+ * 本函数桥接这一 gap：若 DOUYIN_COOKIES 未设，则读文件注入。
+ */
+function readLocalDouyinSession(accountLabel = 'default'): string | undefined {
+  const sessionPath = path.join(
+    os.homedir(),
+    '.zenithjoy-agent',
+    'sessions',
+    `douyin-${accountLabel}.json`,
+  );
+  try {
+    if (fs.existsSync(sessionPath)) {
+      const raw = fs.readFileSync(sessionPath, 'utf-8');
+      console.log(`[handler:douyin] 本地 session 已读取: ${sessionPath}`);
+      return raw;
+    }
+  } catch {
+    // ignore
+  }
+  return undefined;
+}
+
 // 自带的 1x1 PNG sample（base64）— 抖音不接受 1x1，但能验证脚本路径走通
 // 真验证留给后续传入真实图片路径
 const SAMPLE_PNG_B64 =
@@ -159,9 +184,22 @@ export async function handleDouyinPublish(
     `[handler:douyin] spawning ${scriptPath} taskId=${taskId} realPublish=${realMode}`,
   );
 
+  // 本地 session 注入：DOUYIN_COOKIES 未设时，读 QR 扫码存储的本地 session 文件
+  const spawnEnv: NodeJS.ProcessEnv = { ...process.env };
+  if (!spawnEnv.DOUYIN_COOKIES) {
+    const localSession = readLocalDouyinSession();
+    if (localSession) {
+      spawnEnv.DOUYIN_COOKIES = localSession;
+      console.log('[handler:douyin] 使用本地 QR session 注入 DOUYIN_COOKIES');
+    } else {
+      console.warn('[handler:douyin] DOUYIN_COOKIES 未设且本地 session 不存在，将尝试 CDP 模式');
+    }
+  }
+
   return new Promise((resolve) => {
     const child = nodeSpawn('node', [scriptPath, queueFile], {
       stdio: ['ignore', 'pipe', 'pipe'],
+      env: spawnEnv,
     });
 
     let stdout = '';
@@ -311,12 +349,14 @@ function spawnAndCollect(
   spawnImpl: typeof nodeSpawn,
   scriptPath: string,
   queueFile: string,
+  env?: NodeJS.ProcessEnv,
 ): Promise<{ exitCode: number; stdout: string; stderr: string; spawnError?: Error }> {
   return new Promise((resolve) => {
     let child: ChildProcess;
     try {
       child = spawnImpl('node', [scriptPath, queueFile], {
         stdio: ['ignore', 'pipe', 'pipe'],
+        ...(env ? { env } : {}),
       });
     } catch (err) {
       resolve({ exitCode: -1, stdout: '', stderr: '', spawnError: err as Error });
@@ -357,6 +397,9 @@ export async function handleDouyinPublishTask(
 
   // WS2: Agent 拉到任务时打 [type-route] 第 2 环节日志
   const taskType: DouyinPublishType = payload.type ?? 'image';
+  if (!payload.type) {
+    console.warn('[type-route] payload.type 未指定，使用默认 image（向后兼容 WS1）');
+  }
   console.log(
     `[type-route] handleDouyinPublishTask task=${payload.task_id} type=${taskType}`,
   );
@@ -395,10 +438,23 @@ export async function handleDouyinPublishTask(
     `[handler:douyin-task] task=${payload.task_id} mp4=${mp4} script=${scriptPath}`,
   );
 
+  // 本地 session 注入：DOUYIN_COOKIES 未设时，读 QR 扫码存储的本地 session 文件
+  const spawnEnv: NodeJS.ProcessEnv = { ...process.env };
+  if (!spawnEnv.DOUYIN_COOKIES) {
+    const localSession = readLocalDouyinSession();
+    if (localSession) {
+      spawnEnv.DOUYIN_COOKIES = localSession;
+      console.log('[handler:douyin-task] 使用本地 QR session 注入 DOUYIN_COOKIES');
+    } else {
+      console.warn('[handler:douyin-task] DOUYIN_COOKIES 未设且本地 session 不存在，将尝试 CDP 模式');
+    }
+  }
+
   const { exitCode, stdout, stderr, spawnError } = await spawnAndCollect(
     spawnImpl,
     scriptPath,
     queueFile,
+    spawnEnv,
   );
 
   // 清理 queue 文件（错误也要清，避免堆积）
