@@ -158,7 +158,8 @@ async function main() {
       }
     }
 
-    const ctx = browser.newContext ? await browser.newContext() : browser.contexts()[0];
+    // CDP 模式复用已有 context（避免开隐身窗口）；launch 模式新建 context
+    const ctx = usingCdp ? browser.contexts()[0] : await browser.newContext();
     if (!ctx) {
       emit({ ok: false, platform, error: 'Chrome 启动后无法获取 context' });
       process.exit(1);
@@ -166,20 +167,55 @@ async function main() {
     }
 
     const creatorUrl = PLATFORM_CREATOR_URLS[platform];
-    const pages = ctx.pages ? ctx.pages() : [];
-    const page = pages[0] || (ctx.newPage ? await ctx.newPage() : null);
+    // CDP 模式在已有 context 开新标签页；launch 模式用第一个页面或新建
+    const page = ctx.newPage ? await ctx.newPage() : (ctx.pages ? ctx.pages()[0] : null);
     if (page && page.goto) {
       await page.goto(creatorUrl, { waitUntil: 'domcontentloaded' }).catch(() => undefined);
     }
 
-    // 等待 SPA 完成重定向再开始轮询（抖音等框架需 3s JS 执行）
-    await new Promise(r => setTimeout(r, 3000));
-
-    // 截图发飞书（失败不影响主流程）
-    if (page && page.screenshot) {
+    // 等登录页出现 → 等 QR 元素可见 → 只截 QR 元素（失败不影响主流程）
+    if (page) {
       try {
-        const qrBuf = await page.screenshot({ type: 'png' });
-        await sendFeishuQrCard(platform, qrBuf);
+        // 等重定向到登录页（最多 12s）
+        const loginDeadline = Date.now() + 12000;
+        while (Date.now() < loginDeadline) {
+          if (/\/login(\b|\/|$)/i.test(page.url())) break;
+          await new Promise(r => setTimeout(r, 500));
+        }
+
+        if (/\/login(\b|\/|$)/i.test(page.url())) {
+          // 逐个选择器寻找 QR 码元素（最多等 15s）
+          const QR_SELECTORS = [
+            'canvas',
+            'img[src*="qrcode"]',
+            'img[src*="qr_"]',
+            '[class*="qr-code"] canvas',
+            '[class*="qrCode"] canvas',
+            '[class*="qrcode"] canvas',
+            '[class*="qr-code"] img',
+            '[class*="login"] canvas',
+          ];
+          let qrEl = null;
+          const elDeadline = Date.now() + 15000;
+          outer: while (Date.now() < elDeadline) {
+            for (const sel of QR_SELECTORS) {
+              try {
+                const el = await page.$(sel);
+                if (el) {
+                  const box = await el.boundingBox();
+                  if (box && box.width >= 80) { qrEl = el; break outer; }
+                }
+              } catch { /* 继续下一个 */ }
+            }
+            await new Promise(r => setTimeout(r, 500));
+          }
+
+          process.stderr.write(`[qr-bind-operator:${platform}] QR 元素${qrEl ? '已找到' : '未找到，回退全屏'}\n`);
+          const qrBuf = qrEl
+            ? await qrEl.screenshot({ type: 'png' })
+            : await page.screenshot({ type: 'png', fullPage: false });
+          await sendFeishuQrCard(platform, qrBuf);
+        }
       } catch (screenshotErr) {
         process.stderr.write(`[qr-bind-operator:${platform}] 截图失败: ${screenshotErr.message}\n`);
       }
