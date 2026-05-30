@@ -115,20 +115,43 @@ async function main() {
     await new Promise(r => setTimeout(r, 3000));
 
     // 轮询 Session Cookie（最长 timeoutMs）
+    const targetNames = PLATFORM_SESSION_COOKIES[platform] || [];
     const start = Date.now();
     let logged = false;
+    let pollCount = 0;
     while (Date.now() - start < timeoutMs) {
+      pollCount++;
       try {
         const rawState = await ctx.storageState();
+        const cookies = (rawState && rawState.cookies) || [];
+        // 每 20 次（约 30s）打印一次诊断
+        if (pollCount % 20 === 1) {
+          const found = cookies.filter(c => targetNames.includes(c.name)).map(c => c.name);
+          process.stderr.write(
+            `[qr-bind-operator:${platform}] poll #${pollCount}: total ${cookies.length} cookies, target found: [${found.join(',')}]\n`
+          );
+        }
         if (isSessionReady(rawState, platform)) {
           logged = true;
           break;
         }
-      } catch { /* 忽略单次轮询错误 */ }
+      } catch (pollErr) {
+        process.stderr.write(`[qr-bind-operator:${platform}] poll #${pollCount} error: ${pollErr.message}\n`);
+      }
       await new Promise(r => setTimeout(r, 1500));
     }
 
     if (!logged) {
+      // 超时诊断：最后一次 storageState 快照
+      try {
+        const finalState = await ctx.storageState();
+        const allCookieNames = ((finalState && finalState.cookies) || []).map(c => c.name);
+        process.stderr.write(
+          `[qr-bind-operator:${platform}] timeout after ${pollCount} polls; final cookies: [${allCookieNames.join(',')}]\n`
+        );
+      } catch (diagErr) {
+        process.stderr.write(`[qr-bind-operator:${platform}] timeout; final storageState error: ${diagErr.message}\n`);
+      }
       emit({
         ok: false, platform, sessionPath,
         error: `扫码超时（${timeoutMs}ms）— 运营员未在规定时间完成扫码登录`,
@@ -146,9 +169,12 @@ async function main() {
     const cleanApiBase = (apiBase || '').replace(/\/+$/, '');
     if (cleanApiBase) {
       try {
+        const licenseKey = process.env.ZENITHJOY_LICENSE || '';
+        const uploadHeaders = { 'Content-Type': 'application/json' };
+        if (licenseKey) uploadHeaders['Authorization'] = `Bearer ${licenseKey}`;
         const resp = await fetch(`${cleanApiBase}/api/operator/sessions/upload-cookies`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: uploadHeaders,
           body: JSON.stringify({ platform, cookies: storageState }),
         });
         if (!resp.ok) {

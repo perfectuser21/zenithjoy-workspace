@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import pool from '../db/connection';
 import { internalAuth } from '../middleware/internal-auth';
 import { superAdminGuard } from '../middleware/super-admin';
+import { licenseAuth } from '../middleware/license-auth';
 
 const router = Router();
 
@@ -72,7 +73,8 @@ router.post('/trigger-bind', superAdminGuard, async (req: Request, res: Response
 });
 
 // POST /upload-cookies — Agent 上传 storageState，写入 GitHub Secrets
-router.post('/upload-cookies', superAdminGuard, async (req: Request, res: Response) => {
+// licenseAuth: agent 用 Authorization: Bearer <license_key> 调用
+router.post('/upload-cookies', licenseAuth, async (req: Request, res: Response) => {
   const { platform, cookies } = req.body || {};
 
   if (!platform || typeof platform !== 'string') {
