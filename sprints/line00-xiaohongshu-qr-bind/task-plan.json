@@ -1,0 +1,28 @@
+{
+  "initiative_id": "74b485f3-c5bc-4a2e-9228-4f098b71f4d7",
+  "journey_type": "dev_pipeline",
+  "journey_type_reason": "修复 Agent handler 代码，非用户可见 UI，无 Brain API 行为变更",
+  "tasks": [
+    {
+      "task_id": "ws1",
+      "title": "修复 xiaohongshu qr-bind cookie 名 + CDP 端口注入",
+      "scope": "services/agent/src/handlers/qr-bind-operator.ts：修 cookie 名 + 加 PLATFORM_CDP_PORTS + spawnQrBindOperator 注入 ZENITHJOY_CHROME_DEBUG_PORT；services/agent/publishers/qr-bind-operator.cjs：修 cookie 名；tests/ws1/xhs-qr-bind.test.ts：补充小红书专项断言",
+      "dod": [
+        "[BEHAVIOR] .ts xiaohongshu cookie 行含 galaxy_creator_session_info，不含 webId",
+        "[BEHAVIOR] .cjs xiaohongshu cookie 行含 galaxy_creator_session_info，不含 webId",
+        "[BEHAVIOR] .ts 含 ZENITHJOY_CHROME_DEBUG_PORT=19224 注入",
+        "[BEHAVIOR] xhs-qr-bind.test.ts 全部 4 个测试通过",
+        "[BEHAVIOR] 现有 qr-bind-operator 测试回归通过",
+        "[ARTIFACT] 测试文件 sprints/line00-xiaohongshu-qr-bind/tests/ws1/xhs-qr-bind.test.ts 存在"
+      ],
+      "files": [
+        "services/agent/src/handlers/qr-bind-operator.ts",
+        "services/agent/publishers/qr-bind-operator.cjs",
+        "sprints/line00-xiaohongshu-qr-bind/tests/ws1/xhs-qr-bind.test.ts"
+      ],
+      "depends_on": [],
+      "complexity": "S",
+      "estimated_minutes": 30
+    }
+  ]
+}
