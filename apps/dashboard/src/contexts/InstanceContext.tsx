@@ -65,6 +65,7 @@ const autopilotConfig: InstanceConfig = {
     'scraping': true,
     'tools': true,
     'canvas': true,
+    'operator-dashboard': true,  // /operator Session 健康监控（superAdmin only）
   },
 };
 
