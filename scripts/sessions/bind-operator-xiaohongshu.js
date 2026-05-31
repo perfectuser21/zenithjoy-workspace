@@ -1,202 +1,189 @@
 #!/usr/bin/env node
 /**
- * 小红书运营员 Session 绑定
- *
- * 1. 打开 creator.xiaohongshu.com → 点击 QR 登录入口
- * 2. 截图 QR → 发飞书卡片（运营员扫码）
- * 3. 轮询 galaxy_creator_session_info cookie（最长 5 分钟）
- * 4. 成功 → 写 xiaohongshu-session.json（由后续步骤上传 artifact，Claude 本地 gh secret set）
+ * 小红书运营员 Session 绑定 v3
+ * - 导航后 dump 登录区可点击元素（调试用）
+ * - 尝试多种方式触发 QR 登录
+ * - session 写 artifact 文件由 Claude 本地 gh secret set
  */
 
 import { createRequire } from 'module';
 import fs from 'fs';
 import os from 'os';
-import path from 'path';
 import https from 'https';
 
 const { chromium } = createRequire(new URL('../../services/agent/', import.meta.url))('playwright');
 
 const CREATOR_URL = 'https://creator.xiaohongshu.com/publish/publish';
-const SESSION_COOKIE_NAMES = ['web_session', 'galaxy_creator_session_info'];
+const SESSION_COOKIES = ['web_session', 'galaxy_creator_session_info'];
 const TIMEOUT_MS = 5 * 60 * 1000;
 const POLL_MS = 1500;
 
-async function sendFeishuQrCard(screenshotBuffer) {
+async function sendFeishuQrCard(buf) {
   const appId = process.env.FEISHU_APP_ID || '';
   const appSecret = process.env.FEISHU_APP_SECRET || '';
   const webhook = process.env.ZENITHJOY_FEISHU_WEBHOOK || '';
-  if (!appId || !appSecret || !webhook) {
-    console.log('[飞书] 未配置，仅保存截图 artifact');
-    return;
-  }
+  if (!appId || !appSecret || !webhook) { console.log('[飞书] 未配置'); return; }
   try {
-    const tokenRes = await fetch('https://open.feishu.cn/open-apis/auth/v3/app_access_token/internal', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+    const { app_access_token: token } = await (await fetch('https://open.feishu.cn/open-apis/auth/v3/app_access_token/internal', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ app_id: appId, app_secret: appSecret }),
-    });
-    const { app_access_token: token } = await tokenRes.json();
-    if (!token) throw new Error('飞书 token 获取失败');
-
+    })).json();
+    if (!token) throw new Error('token 为空');
     const form = new FormData();
     form.append('image_type', 'message');
-    form.append('image', new Blob([screenshotBuffer], { type: 'image/png' }), 'qr.png');
-    const imgRes = await fetch('https://open.feishu.cn/open-apis/im/v1/images', {
+    form.append('image', new Blob([buf], { type: 'image/png' }), 'qr.png');
+    const { data: { image_key } } = await (await fetch('https://open.feishu.cn/open-apis/im/v1/images', {
       method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: form,
-    });
-    const imgJson = await imgRes.json();
-    const imageKey = imgJson.data?.image_key;
-    if (!imageKey) throw new Error('飞书图片上传失败: ' + JSON.stringify(imgJson));
-
-    const card = {
-      msg_type: 'interactive',
-      card: {
+    })).json();
+    await fetch(webhook, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ msg_type: 'interactive', card: {
         header: { title: { tag: 'plain_text', content: '🔑 小红书扫码绑定请求' }, template: 'red' },
         elements: [
-          { tag: 'img', img_key: imageKey, alt: { tag: 'plain_text', content: '二维码' } },
-          { tag: 'div', text: { tag: 'plain_text', content: '请在 3 分钟内用手机扫描上方二维码登录小红书创作者中心' } },
+          { tag: 'img', img_key: image_key, alt: { tag: 'plain_text', content: '二维码' } },
+          { tag: 'div', text: { tag: 'plain_text', content: '请在 3 分钟内扫码登录小红书创作者中心' } },
         ],
-      },
-    };
-    await fetch(webhook, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(card) });
+      }}) });
     console.log('[飞书] ✅ QR 卡片已发送');
-  } catch (e) {
-    console.warn('[飞书] 推送失败（不影响流程）:', e.message);
-  }
+  } catch (e) { console.warn('[飞书] 失败:', e.message); }
 }
 
 async function sendFeishuText(text) {
   const webhook = process.env.ZENITHJOY_FEISHU_WEBHOOK || '';
   if (!webhook) return;
   const payload = JSON.stringify({ msg_type: 'text', content: { text } });
-  return new Promise((resolve) => {
+  return new Promise((r) => {
     try {
       const u = new URL(webhook);
       const req = https.request({ hostname: u.hostname, path: u.pathname + u.search, method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(payload) } },
-        (res) => { res.resume(); resolve(); });
-      req.on('error', () => resolve());
-      req.write(payload); req.end();
-    } catch { resolve(); }
+        (res) => { res.resume(); r(); });
+      req.on('error', () => r()); req.write(payload); req.end();
+    } catch { r(); }
   });
 }
 
 async function main() {
   let browser;
   try {
-    browser = await chromium.launch({
-      headless: false,
-      args: ['--no-sandbox', '--disable-setuid-sandbox'],
-    });
+    browser = await chromium.launch({ headless: false, args: ['--no-sandbox', '--disable-setuid-sandbox'] });
     const context = await browser.newContext({
-      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124.0.0.0 Safari/537.36',
     });
     const page = await context.newPage();
 
-    console.log(`[info] 导航至 ${CREATOR_URL}`);
+    console.log('[info] 导航...');
     await page.goto(CREATOR_URL, { waitUntil: 'domcontentloaded', timeout: 30000 }).catch(() => {});
     await page.waitForTimeout(3000);
 
-    // 点击 QR 登录入口（常见选择器）
-    const QR_TAB_SELECTORS = [
-      '[class*="qrcode"]',
-      '[class*="qr-login"]',
-      '[class*="scan"]',
-      'text=扫码登录',
-      'text=二维码登录',
-      'text=扫码',
-      '[data-logintype="qrcode"]',
-      'a:has-text("扫码")',
-      'button:has-text("扫码")',
-      'span:has-text("扫码登录")',
-    ];
+    // 截图 + dump 可点击元素
+    await page.screenshot({ path: 'xiaohongshu-stage1.png' });
+    const clickables = await page.evaluate(() => {
+      const els = document.querySelectorAll('a, button, [role="button"], [class*="tab"], [class*="switch"], [class*="qr"], [class*="scan"], [class*="code"], [class*="login"]');
+      return Array.from(els).slice(0, 30).map(el => ({
+        tag: el.tagName.toLowerCase(),
+        cls: el.className?.toString()?.slice(0, 80),
+        txt: el.textContent?.trim()?.slice(0, 40),
+        href: el.href || '',
+      }));
+    });
+    console.log('[DOM] 登录区可点击元素:');
+    clickables.forEach(e => console.log(`  ${e.tag} | "${e.txt}" | cls=${e.cls}`));
 
-    let clickedQrTab = false;
-    for (const sel of QR_TAB_SELECTORS) {
+    // 尝试点击 QR 入口（文本 + class 双路）
+    const QR_TEXT = ['扫码登录', '二维码登录', '扫码', '扫一扫', 'QR', '扫码登录'];
+    const QR_CLASS = ['qrcode', 'qr-login', 'qr_login', 'scan-login', 'code-login', 'login-qr', 'switch-qr'];
+    let clicked = false;
+
+    for (const txt of QR_TEXT) {
       try {
-        const el = await page.$(sel);
-        if (el) {
-          await el.click().catch(() => {});
-          console.log(`[info] 已点击 QR 入口: ${sel}`);
-          clickedQrTab = true;
-          await page.waitForTimeout(2000);
-          break;
+        const el = await page.locator(`text="${txt}"`).first();
+        if (await el.count() > 0) {
+          await el.click({ timeout: 2000 });
+          console.log(`[info] 点击文本: "${txt}"`);
+          clicked = true; await page.waitForTimeout(1500); break;
         }
-      } catch { /* continue */ }
+      } catch { /* */ }
     }
-    if (!clickedQrTab) console.log('[warn] 未找到 QR 入口按钮，继续尝试截图');
 
-    // 等 QR 元素出现
-    const QR_SELECTORS = [
-      '[class*="qrcode"] canvas',
-      '[class*="qr-code"] canvas',
-      '[class*="qrCode"] canvas',
-      '[class*="scanCode"] canvas',
-      '[class*="scan-code"] canvas',
-      'canvas[class*="qr"]',
-      '[class*="qrcode"] img',
-      '[class*="qr-code"] img',
-      '[class*="qrCode"] img',
-      'img[src*="qrcode"]',
-      'img[src*="qr_"]',
-      '[class*="login"] canvas',
-      'canvas',
-    ];
+    if (!clicked) {
+      for (const cls of QR_CLASS) {
+        try {
+          const el = await page.$(`[class*="${cls}"]`);
+          if (el) { await el.click(); console.log(`[info] 点击 class: *${cls}*`); clicked = true; await page.waitForTimeout(1500); break; }
+        } catch { /* */ }
+      }
+    }
 
-    const isQrSize = (box) => box.width >= 80 && box.width <= 400 && box.height >= 80 && box.height <= 400;
-    const isImgLoaded = async (el) => {
+    if (!clicked) {
+      // 尝试点击登录框右上角区域（QR 图标通常在此）
       try {
-        const tag = await el.evaluate(e => e.tagName.toLowerCase());
-        return tag !== 'img' || await el.evaluate(e => e.complete && e.naturalWidth > 0);
-      } catch { return false; }
-    };
+        const formBox = await page.$('.login-container, [class*="login-box"], [class*="login-wrap"], form');
+        if (formBox) {
+          const bb = await formBox.boundingBox();
+          if (bb) {
+            // 右上角偏移
+            await page.mouse.click(bb.x + bb.width - 20, bb.y + 20);
+            console.log(`[info] 坐标点击登录框右上角 (${Math.round(bb.x+bb.width-20)}, ${Math.round(bb.y+20)})`);
+            clicked = true; await page.waitForTimeout(1500);
+          }
+        }
+      } catch { /* */ }
+    }
+
+    await page.screenshot({ path: 'xiaohongshu-stage2.png' });
+    console.log('[info] stage2 截图已保存');
+
+    // 找 QR 元素
+    const QR_SELS = [
+      '[class*="qrcode"] canvas', '[class*="qr-code"] canvas', '[class*="qrCode"] canvas',
+      '[class*="scanCode"] canvas', '[class*="scan"] canvas',
+      '[class*="qrcode"] img', '[class*="qr-code"] img', '[class*="qrCode"] img',
+      'img[src*="qrcode"]', 'img[src*="qr_"]', 'img[src*="/qr"]',
+      '[class*="login"] canvas', 'canvas',
+    ];
 
     let qrEl = null;
-    const elDeadline = Date.now() + 45000;
-    outer: while (Date.now() < elDeadline) {
-      for (const sel of QR_SELECTORS) {
+    const deadline = Date.now() + 30000;
+    outer: while (Date.now() < deadline) {
+      for (const sel of QR_SELS) {
         try {
           const els = await page.$$(sel);
           for (const el of els) {
             const box = await el.boundingBox().catch(() => null);
-            if (box && isQrSize(box) && await isImgLoaded(el)) {
-              console.log(`[info] QR 匹配: "${sel}" ${Math.round(box.width)}×${Math.round(box.height)}`);
-              qrEl = el; break outer;
+            if (box && box.width >= 80 && box.width <= 400 && box.height >= 80 && box.height <= 400) {
+              const tag = await el.evaluate(e => e.tagName.toLowerCase());
+              const loaded = tag !== 'img' || await el.evaluate(e => e.complete && e.naturalWidth > 0);
+              if (loaded) { console.log(`[info] QR 匹配 "${sel}" ${Math.round(box.width)}x${Math.round(box.height)}`); qrEl = el; break outer; }
             }
           }
-        } catch { /* continue */ }
+        } catch { /* */ }
       }
       await page.waitForTimeout(500);
     }
 
     if (qrEl) {
-      const qrBuf = await qrEl.screenshot({ type: 'png' });
-      fs.writeFileSync('xiaohongshu-qr.png', qrBuf);
-      console.log('[info] QR 截图已保存，发飞书...');
-      await sendFeishuQrCard(qrBuf);
+      const buf = await qrEl.screenshot({ type: 'png' });
+      fs.writeFileSync('xiaohongshu-qr.png', buf);
+      await sendFeishuQrCard(buf);
     } else {
-      // 全页截图兜底
       await page.screenshot({ path: 'xiaohongshu-qr.png', fullPage: false });
-      console.log('[warn] 未找到 QR 元素，全页截图已保存，通过飞书提示');
-      await sendFeishuText('⚠️ 小红书 QR 绑定：未自动识别 QR 元素，请查看 GitHub Actions artifact "xiaohongshu-qr.png" 手动扫码（页面已打开等待扫码）');
+      console.log('[warn] 未找到 QR 元素，全页截图');
+      await sendFeishuText('⚠️ 小红书 QR 绑定：未识别到 QR 元素，请查看 artifact "xiaohongshu-stage2.png" 确认页面状态，然后告知 Claude 调整选择器');
     }
 
-    // 轮询 cookie
-    console.log(`[info] 等待扫码（最长 ${TIMEOUT_MS / 1000}s）...`);
+    // 轮询
+    console.log('[info] 开始等扫码...');
     const start = Date.now();
     let success = false;
     while (Date.now() - start < TIMEOUT_MS) {
-      const rawState = await context.storageState().catch(() => null);
-      if (rawState) {
-        const cookies = rawState.cookies || [];
-        if (cookies.some(c => SESSION_COOKIE_NAMES.includes(c.name) && c.value.length > 0)) {
-          success = true; break;
-        }
-        // 每 20 次打印诊断
-        const pollN = Math.floor((Date.now() - start) / POLL_MS);
-        if (pollN % 20 === 1) {
-          const found = cookies.filter(c => SESSION_COOKIE_NAMES.includes(c.name)).map(c => c.name);
-          console.log(`[poll] ${Math.round((Date.now()-start)/1000)}s | 共${cookies.length}个cookie | 目标found:[${found.join(',')}]`);
+      const st = await context.storageState().catch(() => null);
+      if (st) {
+        const cookies = st.cookies || [];
+        if (cookies.some(c => SESSION_COOKIES.includes(c.name) && c.value)) { success = true; break; }
+        const n = Math.floor((Date.now()-start)/POLL_MS);
+        if (n % 20 === 1) {
+          const f = cookies.filter(c => SESSION_COOKIES.includes(c.name)).map(c => c.name);
+          console.log(`[poll] ${Math.round((Date.now()-start)/1000)}s | ${cookies.length}个cookie | found:[${f.join(',')}]`);
         }
       }
       await page.waitForTimeout(POLL_MS);
@@ -204,36 +191,26 @@ async function main() {
 
     if (!success) {
       await page.screenshot({ path: 'xiaohongshu-bind-timeout.png' }).catch(() => {});
-      await sendFeishuText('🔴 小红书 Session 绑定超时（5 分钟内未扫码），请重新触发工作流');
-      console.error('[FAIL] 扫码超时');
+      await sendFeishuText('🔴 小红书 Session 绑定超时');
+      console.error('[FAIL] 超时');
       process.exit(1);
     }
 
     const storageState = await context.storageState();
-    const cookies = storageState.cookies || [];
-    const found = cookies.filter(c => SESSION_COOKIE_NAMES.includes(c.name)).map(c => c.name);
-    console.log(`[info] ✅ 登录成功 cookies: [${found.join(', ')}]，共 ${cookies.length} 个`);
-
-    // 写 session 文件（由 artifact upload 步骤保存，Claude 本地 gh secret set）
+    const found = (storageState.cookies || []).filter(c => SESSION_COOKIES.includes(c.name)).map(c => c.name);
+    console.log(`[info] ✅ 登录成功: [${found.join(', ')}]`);
     fs.writeFileSync('xiaohongshu-session.json', JSON.stringify(storageState, null, 2));
-    console.log('[info] session 已写入 xiaohongshu-session.json');
-
     await page.screenshot({ path: 'xiaohongshu-bind-success.png' }).catch(() => {});
-    await sendFeishuText(`✅ 小红书 Session 绑定成功！检测到 [${found.join(', ')}]，共 ${cookies.length} 个 cookie`);
-
-    console.log('');
-    console.log('============================================');
-    console.log('  PASS: 小红书运营员 session 绑定成功');
-    console.log(`  Cookies: [${found.join(', ')}]`);
-    console.log('============================================');
+    await sendFeishuText(`✅ 小红书 Session 绑定成功！[${found.join(', ')}]`);
+    console.log('PASS');
 
   } finally {
     await browser?.close().catch(() => {});
   }
 }
 
-main().catch(async (err) => {
-  console.error('[FAIL] 未预期异常:', err.message);
-  await sendFeishuText('🔴 小红书 Session 绑定异常: ' + err.message.slice(0, 200)).catch(() => {});
+main().catch(async e => {
+  console.error('[FAIL]', e.message);
+  await sendFeishuText('🔴 小红书异常: ' + e.message.slice(0, 200)).catch(() => {});
   process.exit(1);
 });
