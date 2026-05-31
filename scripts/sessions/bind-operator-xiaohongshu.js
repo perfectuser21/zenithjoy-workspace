@@ -1,14 +1,11 @@
 #!/usr/bin/env node
 /**
- * 小红书运营员 Session 绑定 v3
- * - 导航后 dump 登录区可点击元素（调试用）
- * - 尝试多种方式触发 QR 登录
- * - session 写 artifact 文件由 Claude 本地 gh secret set
+ * 小红书运营员 Session 绑定 v4
+ * - 精确点击 sso-login-wrapper 右上角小图标（QR 切换）
  */
 
 import { createRequire } from 'module';
 import fs from 'fs';
-import os from 'os';
 import https from 'https';
 
 const { chromium } = createRequire(new URL('../../services/agent/', import.meta.url))('playwright');
@@ -28,7 +25,6 @@ async function sendFeishuQrCard(buf) {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ app_id: appId, app_secret: appSecret }),
     })).json();
-    if (!token) throw new Error('token 为空');
     const form = new FormData();
     form.append('image_type', 'message');
     form.append('image', new Blob([buf], { type: 'image/png' }), 'qr.png');
@@ -37,7 +33,7 @@ async function sendFeishuQrCard(buf) {
     })).json();
     await fetch(webhook, { method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ msg_type: 'interactive', card: {
-        header: { title: { tag: 'plain_text', content: '🔑 小红书扫码绑定请求' }, template: 'red' },
+        header: { title: { tag: 'plain_text', content: '🔑 小红书扫码绑定' }, template: 'red' },
         elements: [
           { tag: 'img', img_key: image_key, alt: { tag: 'plain_text', content: '二维码' } },
           { tag: 'div', text: { tag: 'plain_text', content: '请在 3 分钟内扫码登录小红书创作者中心' } },
@@ -51,15 +47,40 @@ async function sendFeishuText(text) {
   const webhook = process.env.ZENITHJOY_FEISHU_WEBHOOK || '';
   if (!webhook) return;
   const payload = JSON.stringify({ msg_type: 'text', content: { text } });
-  return new Promise((r) => {
-    try {
-      const u = new URL(webhook);
-      const req = https.request({ hostname: u.hostname, path: u.pathname + u.search, method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(payload) } },
-        (res) => { res.resume(); r(); });
-      req.on('error', () => r()); req.write(payload); req.end();
-    } catch { r(); }
+  return new Promise(r => {
+    const u = new URL(webhook);
+    const req = https.request({ hostname: u.hostname, path: u.pathname + u.search, method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(payload) } },
+      res => { res.resume(); r(); });
+    req.on('error', () => r()); req.write(payload); req.end();
   });
+}
+
+async function findAndScreenshotQr(page, label) {
+  const QR_SELS = [
+    '[class*="qrcode"] canvas', '[class*="qr-code"] canvas', '[class*="qrCode"] canvas',
+    '[class*="scanCode"] canvas', '[class*="scan"] canvas',
+    '[class*="qrcode"] img', '[class*="qr-code"] img', '[class*="qrCode"] img',
+    'img[src*="qrcode"]', 'img[src*="qr_"]', 'img[src*="/qr"]',
+    '[class*="login"] canvas', 'canvas',
+  ];
+  for (const sel of QR_SELS) {
+    try {
+      const els = await page.$$(sel);
+      for (const el of els) {
+        const box = await el.boundingBox().catch(() => null);
+        if (!box) continue;
+        if (box.width < 80 || box.width > 400 || box.height < 80 || box.height > 400) continue;
+        const tag = await el.evaluate(e => e.tagName.toLowerCase()).catch(() => '');
+        const loaded = tag !== 'img' || await el.evaluate(e => e.complete && e.naturalWidth > 0).catch(() => true);
+        if (loaded) {
+          console.log(`[info] ${label} QR "${sel}" ${Math.round(box.width)}x${Math.round(box.height)}`);
+          return await el.screenshot({ type: 'png' });
+        }
+      }
+    } catch { /**/ }
+  }
+  return null;
 }
 
 async function main() {
@@ -68,111 +89,94 @@ async function main() {
     browser = await chromium.launch({ headless: false, args: ['--no-sandbox', '--disable-setuid-sandbox'] });
     const context = await browser.newContext({
       userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124.0.0.0 Safari/537.36',
+      viewport: { width: 1280, height: 900 },
     });
     const page = await context.newPage();
 
     console.log('[info] 导航...');
     await page.goto(CREATOR_URL, { waitUntil: 'domcontentloaded', timeout: 30000 }).catch(() => {});
     await page.waitForTimeout(3000);
-
-    // 截图 + dump 可点击元素
     await page.screenshot({ path: 'xiaohongshu-stage1.png' });
-    const clickables = await page.evaluate(() => {
-      const els = document.querySelectorAll('a, button, [role="button"], [class*="tab"], [class*="switch"], [class*="qr"], [class*="scan"], [class*="code"], [class*="login"]');
-      return Array.from(els).slice(0, 30).map(el => ({
-        tag: el.tagName.toLowerCase(),
-        cls: el.className?.toString()?.slice(0, 80),
-        txt: el.textContent?.trim()?.slice(0, 40),
-        href: el.href || '',
-      }));
-    });
-    console.log('[DOM] 登录区可点击元素:');
-    clickables.forEach(e => console.log(`  ${e.tag} | "${e.txt}" | cls=${e.cls}`));
 
-    // 尝试点击 QR 入口（文本 + class 双路）
-    const QR_TEXT = ['扫码登录', '二维码登录', '扫码', '扫一扫', 'QR', '扫码登录'];
-    const QR_CLASS = ['qrcode', 'qr-login', 'qr_login', 'scan-login', 'code-login', 'login-qr', 'switch-qr'];
+    // 找 sso-login-wrapper，点右上角 QR 图标
+    const loginSelectors = [
+      '.sso-login-wrapper',
+      '[class*="sso-login"]',
+      '[class*="login-box"]',
+      '[class*="login-container"]',
+      'form',
+    ];
+
     let clicked = false;
-
-    for (const txt of QR_TEXT) {
+    for (const sel of loginSelectors) {
       try {
-        const el = await page.locator(`text="${txt}"`).first();
-        if (await el.count() > 0) {
-          await el.click({ timeout: 2000 });
-          console.log(`[info] 点击文本: "${txt}"`);
-          clicked = true; await page.waitForTimeout(1500); break;
-        }
-      } catch { /* */ }
+        const el = await page.$(sel);
+        if (!el) continue;
+        const bb = await el.boundingBox();
+        if (!bb) continue;
+        // 右上角：距右边 20px，距顶 20px
+        const cx = bb.x + bb.width - 20;
+        const cy = bb.y + 20;
+        console.log(`[info] 找到 "${sel}" bb=(${Math.round(bb.x)},${Math.round(bb.y)},${Math.round(bb.width)}x${Math.round(bb.height)}) 点击 (${Math.round(cx)},${Math.round(cy)})`);
+
+        // 截图并标记点击位置
+        await page.screenshot({ path: 'xiaohongshu-before-click.png' });
+        await page.mouse.click(cx, cy);
+        await page.waitForTimeout(2000);
+        await page.screenshot({ path: 'xiaohongshu-after-click.png' });
+        clicked = true;
+        break;
+      } catch (e) { console.log(`[warn] ${sel}: ${e.message}`); }
     }
 
+    // 如果上面没点到，尝试 evaluate 找 QR 图标元素
     if (!clicked) {
-      for (const cls of QR_CLASS) {
-        try {
-          const el = await page.$(`[class*="${cls}"]`);
-          if (el) { await el.click(); console.log(`[info] 点击 class: *${cls}*`); clicked = true; await page.waitForTimeout(1500); break; }
-        } catch { /* */ }
+      console.log('[info] 尝试 evaluate 找 QR 图标...');
+      const qrIconInfo = await page.evaluate(() => {
+        // 小红书登录框右上角通常有 img 或 svg 作为 QR 切换
+        const allEls = document.querySelectorAll('[class*="login"] img, [class*="login"] svg, [class*="sso"] img, [class*="sso"] svg');
+        return Array.from(allEls).slice(0, 10).map(el => {
+          const r = el.getBoundingClientRect();
+          return { tag: el.tagName, cls: el.className?.toString()?.slice(0,60), x: Math.round(r.x), y: Math.round(r.y), w: Math.round(r.width), h: Math.round(r.height) };
+        });
+      });
+      console.log('[DOM] login 区域图片/图标:', JSON.stringify(qrIconInfo));
+
+      // 点击第一个疑似 QR 图标（宽高 20-60px）
+      for (const info of qrIconInfo) {
+        if (info.w >= 20 && info.w <= 60 && info.h >= 20 && info.h <= 60) {
+          await page.mouse.click(info.x + info.w/2, info.y + info.h/2);
+          console.log(`[info] 点击图标 (${info.x},${info.y}) ${info.w}x${info.h} cls=${info.cls}`);
+          await page.waitForTimeout(2000);
+          clicked = true;
+          break;
+        }
       }
-    }
-
-    if (!clicked) {
-      // 尝试点击登录框右上角区域（QR 图标通常在此）
-      try {
-        const formBox = await page.$('.login-container, [class*="login-box"], [class*="login-wrap"], form');
-        if (formBox) {
-          const bb = await formBox.boundingBox();
-          if (bb) {
-            // 右上角偏移
-            await page.mouse.click(bb.x + bb.width - 20, bb.y + 20);
-            console.log(`[info] 坐标点击登录框右上角 (${Math.round(bb.x+bb.width-20)}, ${Math.round(bb.y+20)})`);
-            clicked = true; await page.waitForTimeout(1500);
-          }
-        }
-      } catch { /* */ }
     }
 
     await page.screenshot({ path: 'xiaohongshu-stage2.png' });
-    console.log('[info] stage2 截图已保存');
 
-    // 找 QR 元素
-    const QR_SELS = [
-      '[class*="qrcode"] canvas', '[class*="qr-code"] canvas', '[class*="qrCode"] canvas',
-      '[class*="scanCode"] canvas', '[class*="scan"] canvas',
-      '[class*="qrcode"] img', '[class*="qr-code"] img', '[class*="qrCode"] img',
-      'img[src*="qrcode"]', 'img[src*="qr_"]', 'img[src*="/qr"]',
-      '[class*="login"] canvas', 'canvas',
-    ];
+    // 尝试找 QR
+    let qrBuf = await findAndScreenshotQr(page, 'stage2');
 
-    let qrEl = null;
-    const deadline = Date.now() + 30000;
-    outer: while (Date.now() < deadline) {
-      for (const sel of QR_SELS) {
-        try {
-          const els = await page.$$(sel);
-          for (const el of els) {
-            const box = await el.boundingBox().catch(() => null);
-            if (box && box.width >= 80 && box.width <= 400 && box.height >= 80 && box.height <= 400) {
-              const tag = await el.evaluate(e => e.tagName.toLowerCase());
-              const loaded = tag !== 'img' || await el.evaluate(e => e.complete && e.naturalWidth > 0);
-              if (loaded) { console.log(`[info] QR 匹配 "${sel}" ${Math.round(box.width)}x${Math.round(box.height)}`); qrEl = el; break outer; }
-            }
-          }
-        } catch { /* */ }
-      }
-      await page.waitForTimeout(500);
+    if (!qrBuf) {
+      // 再等 10s 看是否懒加载
+      await page.waitForTimeout(10000);
+      qrBuf = await findAndScreenshotQr(page, 'stage3');
+      await page.screenshot({ path: 'xiaohongshu-stage3.png' });
     }
 
-    if (qrEl) {
-      const buf = await qrEl.screenshot({ type: 'png' });
-      fs.writeFileSync('xiaohongshu-qr.png', buf);
-      await sendFeishuQrCard(buf);
+    if (qrBuf) {
+      fs.writeFileSync('xiaohongshu-qr.png', qrBuf);
+      await sendFeishuQrCard(qrBuf);
     } else {
       await page.screenshot({ path: 'xiaohongshu-qr.png', fullPage: false });
-      console.log('[warn] 未找到 QR 元素，全页截图');
-      await sendFeishuText('⚠️ 小红书 QR 绑定：未识别到 QR 元素，请查看 artifact "xiaohongshu-stage2.png" 确认页面状态，然后告知 Claude 调整选择器');
+      console.log('[warn] 未找到 QR，全页截图 + 飞书文字通知');
+      await sendFeishuText('⚠️ 小红书 QR 绑定：QR 元素未识别。请查看 artifact 截图（stage1/2/3）确认页面状态');
     }
 
-    // 轮询
-    console.log('[info] 开始等扫码...');
+    // 轮询 cookie
+    console.log('[info] 等待扫码...');
     const start = Date.now();
     let success = false;
     while (Date.now() - start < TIMEOUT_MS) {
@@ -191,13 +195,12 @@ async function main() {
 
     if (!success) {
       await page.screenshot({ path: 'xiaohongshu-bind-timeout.png' }).catch(() => {});
-      await sendFeishuText('🔴 小红书 Session 绑定超时');
-      console.error('[FAIL] 超时');
-      process.exit(1);
+      await sendFeishuText('🔴 小红书 Session 绑定超时（5 分钟）');
+      console.error('[FAIL] 超时'); process.exit(1);
     }
 
     const storageState = await context.storageState();
-    const found = (storageState.cookies || []).filter(c => SESSION_COOKIES.includes(c.name)).map(c => c.name);
+    const found = (storageState.cookies||[]).filter(c => SESSION_COOKIES.includes(c.name)).map(c => c.name);
     console.log(`[info] ✅ 登录成功: [${found.join(', ')}]`);
     fs.writeFileSync('xiaohongshu-session.json', JSON.stringify(storageState, null, 2));
     await page.screenshot({ path: 'xiaohongshu-bind-success.png' }).catch(() => {});
