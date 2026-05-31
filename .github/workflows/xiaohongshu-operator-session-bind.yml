@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       debug:
-        description: '打印 cookie 名列表（不打印值）'
+        description: '调试模式'
         required: false
         default: 'false'
 
@@ -31,7 +31,7 @@ jobs:
         working-directory: services/agent
         run: npx playwright install chromium --with-deps
 
-      - name: 启动小红书扫码绑定（飞书发 QR，等扫码）
+      - name: 启动小红书扫码绑定
         shell: pwsh
         env:
           FEISHU_APP_ID: ${{ secrets.FEISHU_APP_ID }}
@@ -40,12 +40,13 @@ jobs:
           GITHUB_REPOSITORY: ${{ github.repository }}
         run: node scripts/sessions/bind-operator-xiaohongshu.js
 
-      - name: Upload session + screenshots
+      - name: Upload all screenshots + session
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: xiaohongshu-bind-${{ github.run_number }}
           path: |
+            stage*.png
             xiaohongshu-qr.png
             xiaohongshu-bind-success.png
             xiaohongshu-bind-timeout.png
