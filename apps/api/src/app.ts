@@ -68,6 +68,10 @@ if (!process.env.VITEST) {
 // 之后才挂 body parser
 app.use(express.json());
 
+// 截图静态服务（Sprint E2E 截图托管）
+const screenshotsDir = process.env.SCREENSHOTS_DIR || '/opt/zenithjoy/screenshots';
+app.use('/screenshots', express.static(screenshotsDir));
+
 // Health check
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
