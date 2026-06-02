@@ -23,6 +23,7 @@ echo "[smoke] API_BASE=$API_BASE  ILINK mock=:$MOCK_PORT"
 
 # ── 1. 起 mock iLink server ───────────────────────────────────────────────
 cat > /tmp/ilink-mock.cjs <<'JS'
+// mock 腾讯真实 iLink 端点（ilink/bot/...）
 const http = require('http');
 const PORT = 7799;
 http.createServer((req, res) => {
@@ -30,15 +31,20 @@ http.createServer((req, res) => {
   req.on('data', (c) => (body += c));
   req.on('end', () => {
     res.setHeader('Content-Type', 'application/json');
-    if (req.url.includes('/auth/login-start')) {
-      const { session_id } = JSON.parse(body || '{}');
-      return res.end(JSON.stringify({ session_id, qr_url: `http://localhost:7799/qr/${session_id}` }));
-    }
-    if (req.url.includes('/auth/poll')) {
-      // 模拟扫码已完成 → 直接返 bound + token
+    if (req.url.includes('ilink/bot/get_bot_qrcode')) {
       return res.end(JSON.stringify({
-        status: 'bound', token: 'mock-bearer-token',
-        uin: 'mock-uin-123', wxid: 'wxid_mock', nickname: '测试小号',
+        qrcode: 'mock-qr-handle-123',
+        qrcode_img_content: 'https://weixin.qq.com/q/mock-qr-handle-123',
+      }));
+    }
+    if (req.url.includes('ilink/bot/get_qrcode_status')) {
+      // 模拟扫码已确认 → 返 confirmed + bot_token
+      return res.end(JSON.stringify({
+        status: 'confirmed',
+        bot_token: 'mock-bearer-token',
+        ilink_bot_id: 'mock-bot-1',
+        ilink_user_id: 'mock-user-1',
+        nickname: '测试小号',
       }));
     }
     res.statusCode = 404;
