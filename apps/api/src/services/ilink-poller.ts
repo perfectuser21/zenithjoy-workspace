@@ -17,14 +17,14 @@
 import {
   parseUpdates,
   isSessionTimeoutError,
-  type GetUpdatesResponse,
+  type GetUpdatesResp,
   type SendMessageInput,
 } from './ilink-client';
 
 export interface RunPollerOnceDeps {
   session: { id: string; token: string; uin: string; wxid: string };
   ilink: {
-    getupdates: (cursor?: string) => Promise<GetUpdatesResponse>;
+    getupdates: (cursor?: string) => Promise<GetUpdatesResp>;
     sendmessage: (input: SendMessageInput) => Promise<unknown>;
   };
   openrouter: (args: { purpose: string; prompt: string }) => Promise<{ content: string }>;

@@ -21,13 +21,13 @@ import { pollOnce } from '../services/feishu-poll';
 import {
   getupdates,
   sendmessage,
+  getBotQrcode,
+  pollQrStatus,
   type ILinkSession,
   type SendMessageInput,
 } from '../services/ilink-client';
 import { runPollerOnce } from '../services/ilink-poller';
 import { callOpenRouter } from '../llm/openrouter';
-
-const ILINK_AUTH_BASE = process.env.ILINK_BASE_URL || 'https://ilinkai.weixin.qq.com';
 
 export const wechatRouter = Router();
 
@@ -258,7 +258,8 @@ async function writeIlinkLead(
   console.info('[wechat/ilink] lead', JSON.stringify({ session_id: session.id, ...rec }));
 }
 
-// POST /api/wechat/ilink-login-start {agent_id} → {session_id, qr_url}
+// POST /api/wechat/ilink-login-start {agent_id} → {session_id, qr_url, qrcode}
+// 调真实 ilink/bot/get_bot_qrcode 拉二维码，建 pending burner session 存 qrcode 句柄。
 wechatRouter.post('/ilink-login-start', async (req: Request, res: Response) => {
   const parsed = ILinkLoginStartSchema.safeParse(req.body ?? {});
   if (!parsed.success) {
@@ -271,65 +272,69 @@ wechatRouter.post('/ilink-login-start', async (req: Request, res: Response) => {
 
   const { agent_id } = parsed.data;
   const sessionId = crypto.randomUUID();
-  let qrUrl = `${ILINK_AUTH_BASE}/auth/qr/${sessionId}`;
 
-  // 向 iLink 拉二维码（CI 用 mock iLink server）；失败给占位（thin 容忍）
+  let qr;
   try {
-    const r = await fetch(`${ILINK_AUTH_BASE}/auth/login-start`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ session_id: sessionId, agent_id }),
-    });
-    const j = (await r.json()) as { qr_url?: string };
-    if (j?.qr_url) qrUrl = j.qr_url;
+    qr = await getBotQrcode();
   } catch (err) {
-    console.warn('[wechat/ilink-login-start] iLink auth/login-start 失败（thin 容忍）:', err);
+    console.error('[wechat/ilink-login-start] get_bot_qrcode 失败:', err);
+    return res.status(502).json({ error: 'ILINK_QRCODE_FAILED', message: String(err) });
+  }
+  if (!qr?.qrcode) {
+    return res.status(502).json({ error: 'ILINK_QRCODE_EMPTY' });
   }
 
-  // 建 pending burner session（token 待扫码后 login-status 回填）
+  // 建 pending burner session，存 qrcode（轮询句柄），token 待 login-status 确认后回填
   try {
     await pool.query(
       `INSERT INTO zenithjoy.agent_platform_sessions
          (id, agent_id, platform, account_label, role, status, extra_json)
        VALUES ($1, $2, 'wechat_personal_ilink', $3, 'burner', 'pending', $4::jsonb)`,
-      [sessionId, agent_id, `ilink-${sessionId.slice(0, 8)}`, JSON.stringify({ login_session: sessionId })],
+      [sessionId, agent_id, `ilink-${sessionId.slice(0, 8)}`, JSON.stringify({ login_qrcode: qr.qrcode })],
     );
   } catch (err) {
     console.warn('[wechat/ilink-login-start] 建 pending session 失败（thin 容忍）:', err);
   }
 
-  return res.status(200).json({ session_id: sessionId, qr_url: qrUrl });
+  return res.status(200).json({
+    session_id: sessionId,
+    qr_url: qr.qrcode_img_content,
+    qrcode: qr.qrcode,
+  });
 });
 
-// GET /api/wechat/ilink-login-status?session_id=X → {status, uin?, wxid?, nickname?}
+// GET /api/wechat/ilink-login-status?session_id=X → {status, nickname?}
+// 用本 session 的 qrcode 句柄长轮询 ilink/bot/get_qrcode_status；confirmed → 存 bot_token + status=bound。
 wechatRouter.get('/ilink-login-status', async (req: Request, res: Response) => {
   const sessionId = (req.query.session_id ?? req.body?.session_id) as string | undefined;
   if (!sessionId) {
     return res.status(400).json({ error: 'INVALID_BODY', required: ['session_id'] });
   }
 
-  type IlinkAuthPoll = {
-    status?: string;
-    token?: string;
-    uin?: string;
-    wxid?: string;
-    nickname?: string;
-  };
-  let auth: IlinkAuthPoll = {};
+  let qrcode: string | undefined;
   try {
-    const r = await fetch(`${ILINK_AUTH_BASE}/auth/poll`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ session_id: sessionId }),
-    });
-    auth = (await r.json()) as IlinkAuthPoll;
+    const { rows } = await pool.query(
+      `SELECT extra_json FROM zenithjoy.agent_platform_sessions WHERE id = $1`,
+      [sessionId],
+    );
+    qrcode = rows?.[0]?.extra_json?.login_qrcode;
   } catch (err) {
-    console.warn('[wechat/ilink-login-status] iLink auth/poll 失败:', err);
-    return res.status(200).json({ status: 'pending' });
+    console.warn('[wechat/ilink-login-status] 读 session 失败:', err);
+  }
+  if (!qrcode) {
+    return res.status(404).json({ error: 'LOGIN_SESSION_NOT_FOUND', session_id: sessionId });
   }
 
-  if (auth?.status === 'bound' && auth.token) {
-    // 扫码成功：把 token/uin/wxid 存进 extra_json，status→bound
+  let st;
+  try {
+    st = await pollQrStatus(qrcode);
+  } catch (err) {
+    console.warn('[wechat/ilink-login-status] get_qrcode_status 失败:', err);
+    return res.status(200).json({ status: 'wait' });
+  }
+
+  if (st?.status === 'confirmed' && st.bot_token) {
+    // 扫码确认：存 bot_token，status→bound
     try {
       await pool.query(
         `UPDATE zenithjoy.agent_platform_sessions
@@ -338,18 +343,22 @@ wechatRouter.get('/ilink-login-status', async (req: Request, res: Response) => {
           WHERE id = $1`,
         [
           sessionId,
-          JSON.stringify({ token: auth.token, uin: auth.uin, wxid: auth.wxid, nickname: auth.nickname }),
+          JSON.stringify({
+            token: st.bot_token,
+            ilink_bot_id: st.ilink_bot_id,
+            ilink_user_id: st.ilink_user_id,
+            nickname: st.nickname,
+          }),
         ],
       );
     } catch (err) {
       console.warn('[wechat/ilink-login-status] 写 bound session 失败:', err);
     }
-    return res
-      .status(200)
-      .json({ status: 'bound', uin: auth.uin, wxid: auth.wxid, nickname: auth.nickname });
+    return res.status(200).json({ status: 'bound', nickname: st.nickname });
   }
 
-  return res.status(200).json({ status: auth?.status ?? 'pending' });
+  // wait / scaned / expired 原样透传
+  return res.status(200).json({ status: st?.status ?? 'wait' });
 });
 
 // POST /api/wechat/ilink-poller-start {session_id} → 跑一轮 B→C→D→E
