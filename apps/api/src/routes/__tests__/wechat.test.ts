@@ -25,10 +25,15 @@ describe('wechat.ts — router export', () => {
     expect(paths).toContain('/scheduler-tick');
   });
 
-  it('registers exactly 4 unique endpoints including /draft-generate', () => {
+  it('registers exactly 7 unique endpoints (4 原有 + 3 iLink)', () => {
     const stack = (wechatRouter as any).stack;
     const paths = [...new Set(stack.filter((l: any) => l.route).map((l: any) => l.route.path))];
-    expect(paths.length).toBe(4);
+    // 原有 4：qr-bind / draft-review-poll / scheduler-tick / draft-generate
     expect(paths).toContain('/draft-generate');
+    // P4 Step1 新增 3 个 iLink 端点
+    expect(paths).toContain('/ilink-login-start');
+    expect(paths).toContain('/ilink-login-status');
+    expect(paths).toContain('/ilink-poller-start');
+    expect(paths.length).toBe(7);
   });
 });
