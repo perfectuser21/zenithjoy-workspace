@@ -1,30 +1,33 @@
 #!/usr/bin/env python3
 """
-send_chat.py — 私聊真发（Path 4 Sprint 1 ws5 完整版）。
+send_chat.py — 私聊真发（Path 4 Step 5，pywinauto 版）。
 
 跨平台行为：
-  - **REAL_PUBLISH=0**（默认）：用 unittest.mock.MagicMock 替换 pyautogui，
-    不真控鼠键；输出 mock 成功 JSON：
+  - **REAL_PUBLISH=0**（默认）：不真控微信，输出 mock 成功 JSON
         {"ok": true, "sent_at": ISO8601, "dryRun": true}
-  - **REAL_PUBLISH=1 + Windows + 装了 pyautogui**：真启 PC 微信 → 找好友 → 发消息
-  - **REAL_PUBLISH=1 + macOS / 缺 pyautogui**：优雅降级成 dryrun + stderr 降级文案
+  - **REAL_PUBLISH=1 + Windows + 微信 4.0 登录 + 装了 pywinauto**：
+    复用 listen_chat 的真机验证配方 —— get_main_window() 找主窗口 →
+    在会话列表定位 target 的会话项 → reply_in_chat()（select → chat_input_field set_text →
+    点"发送"click_input）。脚本须以微信登录的 Windows 用户身份运行，否则点击"拒绝访问"。
+  - **REAL_PUBLISH=1 + macOS / 缺 pywinauto / 没找到会话**：优雅降级，返回 ok:false + 原因。
 
 约定：
   - stdin 喂 JSON: {"target": "客户A", "wechat_id": "test_a", "message": "..."}
   - 子进程内自带频控保护：rate_limiter.can_send('chat', wechat_id) 拒则不发
   - stdout 末行是 JSON receipt
-  - ws5 仍不主动发起会话（无 send_to/proactive_/initiate_/start_chat_with_ 等 def）—
-    本脚本只在 listen_chat.py 派进来"已存在的会话"时被触发
+  - 不主动发起会话（无 send_to / proactive_ / initiate_ / start_chat_with_ 等 def）—
+    本脚本只在 listen_chat.py 派进来"已存在的会话"时被触发。
+
+pywinauto 仅在真发路径函数体内 import，顶层零 import（macOS/Linux 可 import 本模块跑 mock 路径）。
 """
 from __future__ import annotations
 
 import json
 import os
 import sys
-import unittest.mock
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 try:
@@ -34,24 +37,20 @@ except Exception as exc:  # pragma: no cover
     print(f"[send_chat] rate_limiter import failed: {exc}", file=sys.stderr)
 
 
-def _load_pyautogui(real_publish: bool):
-    """REAL_PUBLISH=0 → MagicMock 替身；=1 时真 import，失败时降级 MagicMock。"""
-    if not real_publish:
-        return unittest.mock.MagicMock(name="pyautogui_mock")
-
-    try:
-        import pyautogui  # type: ignore
-        return pyautogui
-    except Exception as exc:  # pragma: no cover
-        print(
-            f"[send_chat] pyautogui not available, fallback to mock: {exc}",
-            file=sys.stderr,
-        )
-        return unittest.mock.MagicMock(name="pyautogui_mock_fallback")
-
-
 def _now_iso() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def _find_session_item(mw: Any, target: str) -> Optional[Any]:
+    """在会话列表里按首行名字定位 target 的会话项（含已读，不限未读）。"""
+    for it in mw.descendants(control_type="ListItem"):
+        try:
+            first_line = (it.element_info.name or "").split("\n")[0].strip()
+        except Exception:
+            continue
+        if first_line == target:
+            return it
+    return None
 
 
 def send_chat_message(
@@ -61,7 +60,7 @@ def send_chat_message(
     回复私聊：
       1) 频控校验（chat 维度，分钟级 + 24h 级）
       2) REAL_PUBLISH=0 → mock 路径
-      3) REAL_PUBLISH=1 → 真控 PC 微信，定位会话窗口（target 名 / wechat_id）→ 发文
+      3) REAL_PUBLISH=1 → pywinauto 真控微信 4.0：定位 target 会话 → reply_in_chat 发文
     """
     sent_at = _now_iso()
 
@@ -76,8 +75,6 @@ def send_chat_message(
                 "dryRun": not real_publish,
             }
 
-    pyautogui = _load_pyautogui(real_publish)
-
     if not real_publish:
         return {
             "ok": True,
@@ -88,26 +85,44 @@ def send_chat_message(
             "message_preview": message[:50],
         }
 
+    # ── REAL_PUBLISH=1：pywinauto 真发（复用 listen_chat 真机验证配方）──
     try:
-        # PoC 参考 xian-pc:C:\Users\xuxia\Desktop\wechat_rpa.py（不直接 import）
-        # thin: 占位 hotkey/click 序列 — 真实坐标由 Lead 在 xian-pc 校准
-        pyautogui.hotkey("ctrl", "alt", "w")  # 假定快捷键打开微信
-        pyautogui.sleep(0.5)
-        # 搜索栏定位会话（target 名）
-        pyautogui.hotkey("ctrl", "f")
-        pyautogui.sleep(0.3)
-        pyautogui.write(target, interval=0.02)
-        pyautogui.sleep(0.3)
-        pyautogui.press("enter")
-        pyautogui.sleep(0.5)
-        # 输入消息 + 发送
-        pyautogui.click(400, 600)  # 假定消息输入框
-        pyautogui.sleep(0.3)
-        pyautogui.write(message, interval=0.02)
-        pyautogui.sleep(0.3)
-        pyautogui.hotkey("ctrl", "enter")  # 发送
+        from find_weixin import get_main_window  # 函数体内 import，避免顶层触发 pywinauto
+        from listen_chat import reply_in_chat
+    except Exception as exc:
         return {
-            "ok": True,
+            "ok": False,
+            "reason": "pywinauto_not_available",
+            "error": f"{type(exc).__name__}: {exc}",
+            "sent_at": sent_at,
+            "dryRun": False,
+        }
+
+    try:
+        mw = get_main_window()
+        if mw is None:
+            return {
+                "ok": False,
+                "reason": "wechat_not_ready",
+                "detail": "未找到 mmui::MainWindow（微信未登录或讲述人解锁失效）",
+                "sent_at": sent_at,
+                "dryRun": False,
+            }
+
+        item = _find_session_item(mw, target)
+        if item is None:
+            return {
+                "ok": False,
+                "reason": "session_not_found",
+                "detail": f"会话列表未找到 target={target}",
+                "sent_at": sent_at,
+                "dryRun": False,
+            }
+
+        ok_sent = reply_in_chat(mw, item, message)
+        return {
+            "ok": bool(ok_sent),
+            "reason": None if ok_sent else "send_failed",
             "sent_at": sent_at,
             "dryRun": False,
             "target": target,

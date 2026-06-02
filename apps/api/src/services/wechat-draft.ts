@@ -198,6 +198,12 @@ export interface GenerateChatDraftParams {
   sender: string;
   wechat_id: string;
   content: string;
+  /**
+   * 'review'（默认）= A 路线审核台：只写飞书/DB pending_review，不回 reply。
+   * 'auto' = 隐形自动回模式：同样写审核台入库，额外把生成文案作为 reply 返回，
+   *          listener 拿 reply 直接用本人微信号发出去（AI 失败时 reply 为 undefined，listener 跳过不发占位）。
+   */
+  mode?: 'auto' | 'review';
 }
 
 export interface GenerateChatDraftSuccess {
@@ -205,6 +211,8 @@ export interface GenerateChatDraftSuccess {
   status: 'pending_review';
   task_id: string;
   draft_id: string;
+  /** mode:'auto' 且 AI 成功时为生成文案；mode:'review' 或 AI 失败时 undefined。 */
+  reply?: string;
 }
 
 export interface GenerateChatDraftRejected {
@@ -221,7 +229,7 @@ const FAIL_PLACEHOLDER = 'AI 生成失败（请人审决定是否重试）';
 export async function generateChatDraft(
   params: GenerateChatDraftParams,
 ): Promise<GenerateChatDraftResult> {
-  const { sender, wechat_id, content } = params;
+  const { sender, wechat_id, content, mode = 'review' } = params;
 
   // 1) 校验 sender 在飞书"客户档案"表名单内
   let customers: FeishuRecord[] = [];
@@ -320,11 +328,16 @@ export async function generateChatDraft(
     console.warn('[wechat-draft] AI 草稿生成失败 fallback 占位:', aiError);
   }
 
+  // mode:'auto' 隐形自动回 —— AI 成功才回 reply 文本；AI 失败（aiContent=FAIL_PLACEHOLDER）reply 留 undefined，
+  // listener 检测到 undefined 即跳过不发，绝不把占位文案发给客户。mode:'review'（默认）永不带 reply。
+  const reply = mode === 'auto' && !aiError ? aiContent : undefined;
+
   return {
     ok: true,
     status: 'pending_review',
     task_id: taskId,
     draft_id: draftId,
+    ...(reply !== undefined ? { reply } : {}),
   };
 }
 

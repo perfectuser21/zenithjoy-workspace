@@ -2663,3 +2663,11 @@ agent_suite:
     status: active
     product: 运营中枢小红书Session绑定
     note: "Lane0 小红书 qr-bind cookie 名 + CDP 端口 19224 修复 TDD 测试"
+
+  - id: wechat-draft-auto-reply
+    path: apps/api/src/services/__tests__/wechat-draft-auto-reply.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 私域运营
+    note: "Path 4 Step 5 generateChatDraft mode:auto 返回 reply 文本（隐形自动回 J1-J4）"
