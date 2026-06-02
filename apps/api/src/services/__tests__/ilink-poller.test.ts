@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any -- 动态 import + 注入 mock deps，测试容忍 any */
 import { describe, it, expect } from 'vitest';
 
 /**

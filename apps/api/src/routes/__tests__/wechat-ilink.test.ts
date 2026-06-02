@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any -- 动态 import 后读 router.stack 做断言，测试容忍 any */
 import { describe, it, expect } from 'vitest';
 
 /**

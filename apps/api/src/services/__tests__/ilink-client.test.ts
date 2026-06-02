@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any -- 动态 import 后鸭子类型断言，测试容忍 any */
 import { describe, it, expect } from 'vitest';
 
 /**
