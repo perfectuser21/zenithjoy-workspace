@@ -102,15 +102,16 @@ WECHAT_DRAFT_API_DRYRUN=1 python listen_chat.py \
 | 测试用例 | 输入（element_info.name 字符串） | 预期输出 |
 |---|---|---|
 | G1 正常私信 | `'于瑾\n[1条] \n您好\n15:26\n'` | `[{sender:'于瑾', content:'您好'}]` |
-| G2 系统公众号过滤 | `'公众号\n[1条] \n广告\n11:09\n'` | `[]`（被过滤） |
-| G3 无未读不返回 | `'李华\n\n昨天下午好\n11:09\n'`（无 [N条]） | `[]` |
-| G4 多条未读数字 | `'张三\n[5条] \n在吗\n09:00\n'` | `[{sender:'张三', content:'在吗'}]` |
+| G2 公众号过滤 | `'公众号\n[1条] \n广告\n11:09\n'` | `[]`（被过滤） |
+| G3 服务号过滤 | `'服务号\n[3条] \n活动推送\n09:00\n'` | `[]`（被过滤） |
+| G4 无未读不返回 | `'李华\n\n昨天下午好\n11:09\n'`（无 [N条]） | `[]` |
+| G5 多条未读数字 | `'张三\n[5条] \n在吗\n09:00\n'` | `[{sender:'张三', content:'在吗'}]` |
 
 ```bash
 cd services/agent/wechat-rpa
 python -m pytest tests/test_scan_unread.py -v
 ```
-**预期：4 tests PASSED，0 FAILED，无 import pywinauto**
+**预期：5 tests PASSED，0 FAILED，无 import pywinauto**
 
 ### H. 频控单元测试
 
@@ -121,7 +122,8 @@ cd services/agent/wechat-rpa
 python -m pytest tests/test_rate_limiter.py -v
 ```
 **断言：**
-- 同 wechat_id，同一分钟内前 2 次 `can_send('chat', id)` 返回 `(True, None)`
+- `reset(wechat_id)` 清零计数器后：前 2 次 `can_send('chat', id)` 返回 `(True, None)`
+- 每次调用之间必须 `time.sleep(1.1)` 隔离（`MIN_INTERVAL_SECONDS=1`，否则间隔限制会导致误判）
 - 第 3 次（超过 `CHAT_PER_MINUTE=2`）返回 `(False, <ISO next_allowed_at>)`
 
 ### I. TypeScript 接口扩展断言
@@ -401,7 +403,7 @@ CI `lint-tdd-commit-order` 检查：test 文件必须在 src 改动之前出现�
 | D（listen_chat 配方） | 高 | 否 |
 | E（send_chat 配方） | 高 | 否 |
 | F（dryrun CLI 绿） | 必须 | 是 |
-| G（scan_unread 单测 4 绿） | 必须 | 是 |
+| G（scan_unread 单测 5 绿，含服务号过滤） | 必须 | 是 |
 | H（频控单测绿） | 高 | 是 |
 | I（TS 接口扩展） | 高 | 否 |
 | J（integration test 4 绿） | 必须 | 是 |
