@@ -24,6 +24,8 @@
 | FAIL_PLACEHOLDER | `'AI 生成失败（请人审决定是否重试）'` | `wechat-draft.ts:219` |
 | API 端口 | 5200（`apps/api/src/index.ts` PORT 默认值） | 代码实证 |
 | DB 名 | `cecelia` | `apps/api/src/db/connection.ts` |
+| find_weixin.py 函数名 | 当前 stub 是 `find_main_window()`，合同要求改造成 `get_main_window()` | 代码实证（find_weixin.py:10） |
+| rate_limiter MIN_INTERVAL | 操作间隔 ≥ 1s（`MIN_INTERVAL_SECONDS=1`） | `rate_limiter.py:43` — 频控测试必须 `sleep(1.1)` 隔离，否则被间隔限制误拒 |
 
 ---
 
@@ -280,7 +282,7 @@ grep -E "PASSED|passed" /tmp/test_scan_unread.log \
 | `'公众号\n[1条] \n广告\n11:09\n'` | `[]`（系统账号过滤）|
 | `'服务号\n[3条] \n活动推送\n09:00\n'` | `[]`（系统账号过滤）|
 | `'张三\n张三\n14:00\n'`（无 `[N条]`） | `[]`（无未读不返回）|
-| `'李四\n[2条] \n好的\n10:30\n你好\n'` | `[{sender:'李四', content:'好的'}]` 或含 '你好'（具体实现定） |
+| `'张三\n[5条] \n在吗\n09:00\n'` | `{sender:'张三', content:'在吗'}` |
 
 **额外约束**：
 - 测试文件顶层无 `import pywinauto`，确保 Linux CI 可跑
@@ -300,14 +302,18 @@ grep -E "PASSED|passed" /tmp/test_rate_limiter.log \
 
 ```python
 # 同 wechat_id 第 3 次调用（1 分钟内）返回 (False, next_allowed_at)
+# 重要：rate_limiter 有 MIN_INTERVAL_SECONDS=1，每次调用之间必须 sleep(1.1) 避免被间隔限制误拒
+import time
 from rate_limiter import can_send, reset
 reset('test_freq_wid')
 ok1, _ = can_send('chat', 'test_freq_wid')
-assert ok1 is True
+assert ok1 is True, f'第1次应通过，实际 ok={ok1}'
+time.sleep(1.1)                              # 必须等过 MIN_INTERVAL_SECONDS=1
 ok2, _ = can_send('chat', 'test_freq_wid')
-assert ok2 is True
+assert ok2 is True, f'第2次应通过，实际 ok={ok2}'
+time.sleep(1.1)
 ok3, next_at = can_send('chat', 'test_freq_wid')
-assert ok3 is False, f'期望第3次拒，实际 ok={ok3}'
+assert ok3 is False, f'第3次应被拒（超 CHAT_PER_MINUTE=2），实际 ok={ok3}'
 assert next_at is not None, '缺 next_allowed_at'
 ```
 
@@ -327,7 +333,8 @@ import sys, json
 out = json.loads(sys.stdin.read())
 assert out.get('ok') is True, f'FAIL: ok 不为 true: {out}'
 assert out.get('dryRun') is True, f'FAIL: dryRun 不为 true: {out}'
-print('PASS: dryrun inject-message 退出码 0，stdout ok=true dryRun=true')
+assert out.get('draft_generated') is True, f'FAIL: draft_generated 不为 true: {out}'
+print('PASS: dryrun inject-message 退出码 0，stdout ok=true dryRun=true draft_generated=true')
 " \
   || (echo "FAIL: dryrun 退出码=$RC 或输出错误: $RESULT"; exit 1)
 ```
