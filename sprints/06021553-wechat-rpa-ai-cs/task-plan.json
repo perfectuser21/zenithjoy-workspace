@@ -1,0 +1,43 @@
+{
+  "initiative_id": "pending",
+  "journey_type": "user_facing",
+  "journey_type_reason": "最终用户可见结果为客户私聊窗口收到运营本人发出的 AI 回复，属 Path 4 端到端客户感知链路；CI 侧静态+单测+integration 评分，真机端到端由 Lead 在 xian-rog 完成 evidence 存档",
+  "tasks": [
+    {
+      "task_id": "ws1",
+      "title": "微信 4.0 RPA 换 pywinauto + generateChatDraft mode:auto 暴露 reply（Path 4 Step 5）",
+      "scope": "1) services/agent/wechat-rpa/ 删 wxauto4 + pyautogui 硬坐标，换 pywinauto 配方：find_weixin.get_main_window / listen_chat (scan_unread + _parse_item_name 顶层纯函数 + reply_in_chat + mode:auto POST + replied 去重 + can_send 频控 + FAIL_PLACEHOLDER 跳过) / send_chat (真发路径换 pywinauto，保留频控+stdin)；requirements.txt 切换 pywinauto。 2) apps/api/src/services/wechat-draft.ts 加 GenerateChatDraftParams.mode?:'auto'|'review' + GenerateChatDraftSuccess.reply?:string，mode==='auto' && aiContent!==FAIL_PLACEHOLDER 时填 reply；默认 review 行为不变（approval_status='pending_review', approval_source=NULL）。 3) 写 3 个测试文件 + Lead evidence 模板。 不动 rate_limiter.py / qr_bind.py / send_moment.py / wechat-rpa.ts handler / openrouter.ts / wechat-draft-router.ts。",
+      "dod": [
+        "[BEHAVIOR] grep -rn wxauto4 services/ apps/ 返回 0 行（PRD §不在范围 强制）",
+        "[BEHAVIOR] listen_chat.py --dryrun --inject-message 退出码 0，stdout JSON ok:true, dryRun:true, draft_generated:true（PRD §验收第 3 条）",
+        "[BEHAVIOR] tests/test_scan_unread.py 5/5 pytest passed（G1-G5：正常私信 / 公众号过滤 / 服务号过滤 / 无未读不返回 / 多条未读 — PRD §验收第 1 条）",
+        "[BEHAVIOR] tests/test_rate_limiter.py 分钟上限 case passed（前 2 次 True，第 3 次 False+next_at，含 time.sleep(1.1) 隔离 — PRD §验收第 2 条）",
+        "[BEHAVIOR] apps/api/src/services/__tests__/wechat-draft-auto-reply.test.ts 4/4 vitest passed（J1-J4：mode:auto 返 reply / review 不含 reply / AI 失败 reply 为 undefined / 名单外 not_in_whitelist — PRD §验收第 4 条）",
+        "[BEHAVIOR] wechat-draft.ts 内 approval_status: 'approved' 字面量不存在（A 路线护栏）",
+        "[BEHAVIOR] services/agent/wechat-rpa/ 无 send_to_/proactive_/outbound_/initiate_/start_chat_with_/cold_outreach_/first_message_ 函数 def（thin 护栏）",
+        "[BEHAVIOR] listen_chat.py / find_weixin.py 顶层 AST 无 pywinauto import；tests/*.py 顶层 grep 无 pywinauto（CI Linux 安全）",
+        "[ARTIFACT] services/agent/wechat-rpa/find_weixin.py 含 def get_main_window + mmui::MainWindow + mmui::LoginWindow + backend=uia，不含 NotImplementedError",
+        "[ARTIFACT] services/agent/wechat-rpa/listen_chat.py 含 def scan_unread / _parse_item_name / def reply_in_chat / chat_input_field / 发送 / click_input / replied / can_send，mode:auto 字符串，FAIL_PLACEHOLDER 跳过",
+        "[ARTIFACT] services/agent/wechat-rpa/send_chat.py 无 pyautogui.{click,write,hotkey,press,sleep}；含 chat_input_field 或 reply_in_chat；保留 can_send + stdin",
+        "[ARTIFACT] services/agent/wechat-rpa/requirements.txt 含 pywinauto，不含 wxauto4/pyautogui/pyperclip",
+        "[ARTIFACT] apps/api/src/services/wechat-draft.ts GenerateChatDraftParams.mode?:'auto'|'review' + GenerateChatDraftSuccess.reply?:string 字段扩展",
+        "[ARTIFACT] .agent-knowledge/path-4/lead-acceptance-wechat-rpa-pywinauto.md ≥20 行 + 6 章节（测试设备/前置条件/测试步骤/截图/飞书互动记录/结论），Lead 后填截图"
+      ],
+      "files": [
+        "services/agent/wechat-rpa/find_weixin.py",
+        "services/agent/wechat-rpa/listen_chat.py",
+        "services/agent/wechat-rpa/send_chat.py",
+        "services/agent/wechat-rpa/requirements.txt",
+        "services/agent/wechat-rpa/tests/__init__.py",
+        "services/agent/wechat-rpa/tests/test_scan_unread.py",
+        "services/agent/wechat-rpa/tests/test_rate_limiter.py",
+        "apps/api/src/services/wechat-draft.ts",
+        "apps/api/src/services/__tests__/wechat-draft-auto-reply.test.ts",
+        ".agent-knowledge/path-4/lead-acceptance-wechat-rpa-pywinauto.md"
+      ],
+      "depends_on": [],
+      "complexity": "M",
+      "estimated_minutes": 90
+    }
+  ]
+}
