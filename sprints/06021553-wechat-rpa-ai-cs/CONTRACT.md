@@ -168,11 +168,12 @@ cd apps/api
 # 事实基线：apps/api/package.json "test": "vitest run"，不是 Jest
 npx vitest run src/services/__tests__/wechat-draft-auto-reply.test.ts
 ```
-**断言：**
-- J1: mock 飞书返回 1 条互动记录 + mock openrouter 返回 `'你好，我是 AI 回复'`→ `generateChatDraft({sender, wechat_id, content, mode:'auto'})` 返回 `{ok:true, reply:'你好，我是 AI 回复'}`
-- J2: `reply` 不为空、不为 `'AI 生成失败（请人审决定是否重试）'`
-- J3: `mode:'review'`（或缺省）时，同样输入，返回值**不含** `reply` 字段（或 `reply === undefined`）
-- J4: mock openrouter 抛 Error 时，`mode:'auto'` 路径返回 `reply` 为 `undefined`（listener 检测为 falsy 自行跳过，不把 FAIL_PLACEHOLDER 发给客户）
+**断言**（对齐 `tests/wechat-draft-auto-reply.test.ts` 真实 J1-J4 编号 + contract-dod.md B5 + contract-draft.md 第 240-243 行）：
+
+- J1 `mode:'auto'` 成功：mock 飞书 customers 返回 1 条 `{客户名:'于瑾'}` + mock openrouter 返回 `{content:'好的，已收到'}` → `generateChatDraft({sender:'于瑾', wechat_id, content:'你好', mode:'auto'})` 返回 `{ok:true, reply:'好的，已收到'}`，`reply !== FAIL_PLACEHOLDER`
+- J2 `mode:'review'`（默认）：同 J1 输入但省略 `mode` → 返回 `{ok:true, status:'pending_review'}` 且 `reply === undefined`（默认审核台行为不变）
+- J3 `mode:'auto'` AI 失败：mock openrouter 抛 `Error('OpenRouter timeout')` → 返回 `{ok:true}` 且 `reply === undefined`（listener 端检测为 falsy 自行跳过，不把 FAIL_PLACEHOLDER 发给客户）
+- J4 sender 不在名单：mock 飞书 customers 返回空数组 → 返回 `{ok:false, reason:'not_in_whitelist', reply:undefined}`（对齐 PRD §边界情况"客户发信人不在飞书客户档案名单 → 跳过不发"）
 
 ### K. 飞书互动记录存档（真机验证后补）
 
