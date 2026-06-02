@@ -10,20 +10,27 @@ target_environment: local_api
 
 ## ARTIFACT 条目
 
-- [ ] [ARTIFACT] `apps/api/src/services/ilink-types.ts` 含 errcode -14 与 Update/Message/SendMessageRequest 三类类型定义
+- [ ] [ARTIFACT] `apps/api/src/services/ilink-types.ts` 含 errcode -14 与 Update/Message/SendMessageRequest 三类类型定义；导出 `ILINK_SESSION_TIMEOUT_CODE=-14` / `ILINK_BOT_AUTH_TYPE='ilink_bot_token'` / `isSingleChatTextUpdate` 三个命名导出
   Test: node -e "const c=require('fs').readFileSync('apps/api/src/services/ilink-types.ts','utf8');if(!c.includes('-14')||!/Update|SendMessage/.test(c))process.exit(1)"
+  Behavior Tests: `apps/api/src/services/__tests__/ilink-types.test.ts`（3 cases — ILINK_SESSION_TIMEOUT_CODE=-14；ILINK_BOT_AUTH_TYPE='ilink_bot_token'；isSingleChatTextUpdate 分类正确）
 
-- [ ] [ARTIFACT] `apps/api/src/services/ilink-client.ts` 暴露 getupdates / sendmessage / getconfig 三个调用入口
-  Test: node -e "const c=require('fs').readFileSync('apps/api/src/services/ilink-client.ts','utf8');for(const fn of ['getupdates','sendmessage','getconfig'])if(!c.includes(fn))process.exit(1)"
+- [ ] [ARTIFACT] `apps/api/src/services/ilink-client.ts` 暴露 getupdates / sendmessage / getconfig 三个调用入口；另导出 `buildAuthHeaders({ token, uin })` 产出 3-header 对象
+  Test: node -e "const c=require('fs').readFileSync('apps/api/src/services/ilink-client.ts','utf8');for(const fn of ['getupdates','sendmessage','getconfig','buildAuthHeaders'])if(!c.includes(fn))process.exit(1)"
+  Behavior Tests: `apps/api/src/services/__tests__/ilink-client.test.ts`（4 cases — getupdates 解析、buildSendMessageBody 构造、isSessionTimeoutError -14 识别、非私聊过滤）
+  Behavior Tests: `apps/api/src/services/__tests__/ilink-client-auth.test.ts`（4 cases — AuthorizationType='ilink_bot_token'；Authorization='Bearer <token>'；X-WECHAT-UIN='<uin>'；空 token 不生成空 Bearer）
 
 - [ ] [ARTIFACT] `apps/api/src/services/ilink-auth.ts` 含扫码登录流程（拉二维码 + 轮询登录态 + 拿 Bearer token）
   Test: node -e "const c=require('fs').readFileSync('apps/api/src/services/ilink-auth.ts','utf8');if(!/qr|QR|qrcode/.test(c)||!/token|Bearer/.test(c))process.exit(1)"
+  Behavior Tests: `apps/api/src/services/__tests__/ilink-auth.test.ts`（4 cases — startLogin 返回 session_id+qr_url；pollLoginStatus pending/bound/expired 三态；bound 态携带 token/uin/wxid/nickname）
 
 - [ ] [ARTIFACT] `apps/api/src/services/ilink-poller.ts` 含长轮询循环 + -14 改 needs_rebind + B→E 主流程
   Test: node -e "const c=require('fs').readFileSync('apps/api/src/services/ilink-poller.ts','utf8');if(!c.includes('needs_rebind')||!c.includes('callOpenRouter')||!c.includes('wechat_ilink_chat_reply'))process.exit(1)"
+  Behavior Tests: `apps/api/src/services/__tests__/ilink-poller.test.ts`（3 cases — B→E 全链路闭环；-14 触发 markSessionNeedsRebind；DeepSeek 失败 skip 不阻塞）
+  Behavior Tests: `apps/api/src/services/__tests__/ilink-poller-edge.test.ts`（2 cases — sendmessage 非-14 失败 → writeLead 不调用；getupdates 5xx → NOT 标 needs_rebind）
 
 - [ ] [ARTIFACT] `apps/api/src/routes/wechat.ts` 新增三个 iLink 端点（旧端点不动）
   Test: node -e "const c=require('fs').readFileSync('apps/api/src/routes/wechat.ts','utf8');for(const p of ['ilink-login-start','ilink-login-status','ilink-poller-start'])if(!c.includes(p))process.exit(1)"
+  Behavior Tests: `apps/api/src/routes/__tests__/wechat-ilink.test.ts`（2 cases — 三个新端点存在；旧端点保留）
 
 - [ ] [ARTIFACT] `apps/api/src/cli/wechat-ilink-login.ts` CLI 入口存在，package.json 暴露 `wechat:ilink-login` script
   Test: node -e "const fs=require('fs');const cli=fs.readFileSync('apps/api/src/cli/wechat-ilink-login.ts','utf8');const pkg=JSON.parse(fs.readFileSync('apps/api/package.json','utf8'));if(!cli.length||!(pkg.scripts&&pkg.scripts['wechat:ilink-login']))process.exit(1)"
@@ -73,3 +80,9 @@ target_environment: local_api
 - [ ] [BEHAVIOR] Error path — `GET /api/wechat/ilink-login-status?session_id=invalid-id` 必须返 4xx + error 字段（不可静默返 200 / 不可 500）
   Test: manual:bash -c 'RESP=$(curl -s -w "\n%{http_code}" "http://localhost:3000/api/wechat/ilink-login-status?session_id=does-not-exist-xyz"); CODE=$(echo "$RESP" | tail -1); BODY=$(echo "$RESP" | head -n -1); { [ "$CODE" = "404" ] || [ "$CODE" = "400" ]; } || exit 1; echo "$BODY" | jq -e ".error | type == \"string\"" || exit 1; echo OK'
   期望: OK
+
+- [ ] [BEHAVIOR] sendmessage 非-14 失败（风控/违规/参数错）→ writeLead 不调用，poller 继续（数据完整性约束）
+  Behavior Tests: `apps/api/src/services/__tests__/ilink-poller-edge.test.ts` case 1（skipped=1, stopped=false, writeLead=0）
+
+- [ ] [BEHAVIOR] getupdates 5xx 网络错误 → session NOT 标 needs_rebind（退避重试语义，区别于 -14 session timeout）
+  Behavior Tests: `apps/api/src/services/__tests__/ilink-poller-edge.test.ts` case 2（markedNeedsRebind=false, stopped=false, networkError=true）
