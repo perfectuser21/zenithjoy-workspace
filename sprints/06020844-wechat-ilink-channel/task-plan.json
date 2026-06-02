@@ -1,0 +1,46 @@
+{
+  "initiative_id": "pending",
+  "journey_type": "user_facing",
+  "journey_type_reason": "外部微信号给测试号发私聊后能看到 AI 自动回复 — 真实用户可见的产品体验；CI 自动化用 mock iLink + curl/psql，Lead 真扫码 evidence 走 .agent-knowledge/path-4/ilink-step1-acceptance.md",
+  "tasks": [
+    {
+      "task_id": "ws1",
+      "title": "Path 4 Step 1 第一刀 — 移植 iLink HTTP JSON 协议进 apps/api 跑通扫码绑号 → 长轮询 → DeepSeek → sendmessage → 写飞书 Lead 最小闭环",
+      "scope": "What：从 openclaw-weixin 移植 iLink HTTP 协议（auth + client + types + 长轮询循环）进 apps/api 自有代码；新增三个 Express 路由（ilink-login-start / ilink-login-status / ilink-poller-start）+ CLI 入口（npm run wechat:ilink-login）；poller 串接 callOpenRouter(purpose=wechat_ilink_chat_reply) 与 lead-writer 写飞书 Lead 表；errcode=-14 把 agent_platform_sessions.status 标 needs_rebind 并停该 burner 长轮询；新建 mock-ilink-server.js 三合一 fastify mock（iLink + OpenRouter + 飞书）+ golden-path-4-smoke.sh 跑通 Step A-F dryrun；新建 Lead 自验 evidence 模板。范围内：单聊文字、1 测试号、AI 直发（无审核台）、单轮回复。范围外：群聊/朋友圈/媒体/审核台/频控/多号/主动 outreach/Dashboard UI/migration（agent_platform_sessions.platform 无 CHECK 约束，无需新 migration）。",
+      "dod": [
+        "[ARTIFACT] apps/api/src/services/ilink-{types,client,auth,poller}.ts 全部存在且导出对应符号",
+        "[ARTIFACT] apps/api/src/routes/wechat.ts 含 ilink-login-start / ilink-login-status / ilink-poller-start 三个新端点（旧端点保留）",
+        "[ARTIFACT] apps/api/src/cli/wechat-ilink-login.ts 存在 + package.json 含 wechat:ilink-login script",
+        "[ARTIFACT] apps/api/scripts/mock-ilink-server.js 提供 iLink+OpenRouter+飞书三合一 fastify mock（含 __mock 调试端点）",
+        "[ARTIFACT] .github/workflows/scripts/smoke/golden-path-4-smoke.sh 含 Step A-F mock 链路 dryrun",
+        "[ARTIFACT] .agent-knowledge/path-4/ilink-step1-acceptance.md Lead 自验 evidence 模板",
+        "[BEHAVIOR] Step A：POST /api/wechat/ilink-login-start + mock 扫码完成 → DB 5 分钟内出现一行 role=burner / platform=wechat_personal_ilink / status=bound",
+        "[BEHAVIOR] Step B：POST /api/wechat/ilink-poller-start 后 10s 内 mock iLink 收到 ≥ 1 次 sendmessage；getupdates 请求带 Bearer + X-WECHAT-UIN",
+        "[BEHAVIOR] Step C：zenithjoy.llm_audit 5 分钟内新增一行 request_purpose='wechat_ilink_chat_reply' / success=true",
+        "[BEHAVIOR] Step D：sendmessage body schema 完整（to_user_id string + context_token string + item_list 1 元素 text 非空）",
+        "[BEHAVIOR] Step E：mock 飞书 writeRecord 调用 ≥ 1 次，字段含 from_user_id + context_token",
+        "[BEHAVIOR] Step F：触发 mock -14 后 15s 内 DB session.status='needs_rebind' 且 poller 已停（5s 内 sendmessage-log 数量不增）",
+        "[BEHAVIOR] Error path：GET ilink-login-status?session_id=invalid 返 4xx + error 字段（非 200 非 500）"
+      ],
+      "files": [
+        "apps/api/src/services/ilink-types.ts",
+        "apps/api/src/services/ilink-client.ts",
+        "apps/api/src/services/ilink-auth.ts",
+        "apps/api/src/services/ilink-poller.ts",
+        "apps/api/src/services/lead-writer.ts",
+        "apps/api/src/routes/wechat.ts",
+        "apps/api/src/cli/wechat-ilink-login.ts",
+        "apps/api/src/services/__tests__/ilink-client.test.ts",
+        "apps/api/src/services/__tests__/ilink-poller.test.ts",
+        "apps/api/src/routes/__tests__/wechat-ilink.test.ts",
+        "apps/api/scripts/mock-ilink-server.js",
+        "apps/api/package.json",
+        ".github/workflows/scripts/smoke/golden-path-4-smoke.sh",
+        ".agent-knowledge/path-4/ilink-step1-acceptance.md"
+      ],
+      "depends_on": [],
+      "complexity": "M",
+      "estimated_minutes": 110
+    }
+  ]
+}
