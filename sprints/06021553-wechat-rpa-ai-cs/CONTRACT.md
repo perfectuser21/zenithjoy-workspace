@@ -95,17 +95,19 @@ WECHAT_DRAFT_API_DRYRUN=1 python listen_chat.py \
 - stdout 含 `"dryRun":true`
 - stdout 含 `"draft_generated":true`
 
-### G. scan_unread 单元测试（不 import pywinauto）
+### G. _parse_item_name 单元测试（不 import pywinauto）
 
 文件：`services/agent/wechat-rpa/tests/test_scan_unread.py`
 
-| 测试用例 | 输入（element_info.name 字符串） | 预期输出 |
+> 直接测 `_parse_item_name` 顶层纯函数（返回 `dict` 或 `None`，零 pywinauto 依赖，Linux CI 可直接 `from listen_chat import _parse_item_name` import）。
+
+| 测试用例 | 输入（`_parse_item_name` 入参字符串） | 预期返回值 |
 |---|---|---|
-| G1 正常私信 | `'于瑾\n[1条] \n您好\n15:26\n'` | `[{sender:'于瑾', content:'您好'}]` |
-| G2 公众号过滤 | `'公众号\n[1条] \n广告\n11:09\n'` | `[]`（被过滤） |
-| G3 服务号过滤 | `'服务号\n[3条] \n活动推送\n09:00\n'` | `[]`（被过滤） |
-| G4 无未读不返回 | `'李华\n\n昨天下午好\n11:09\n'`（无 [N条]） | `[]` |
-| G5 多条未读数字 | `'张三\n[5条] \n在吗\n09:00\n'` | `[{sender:'张三', content:'在吗'}]` |
+| G1 正常私信 | `'于瑾\n[1条] \n您好\n15:26\n'` | `{"sender":"于瑾","content":"您好"}` |
+| G2 公众号过滤 | `'公众号\n[1条] \n广告\n11:09\n'` | `None` |
+| G3 服务号过滤 | `'服务号\n[3条] \n活动推送\n09:00\n'` | `None` |
+| G4 无未读不返回 | `'李华\n昨天下午好\n11:09\n'`（无 [N条]） | `None` |
+| G5 多条未读数字 | `'张三\n[5条] \n在吗\n09:00\n'` | `{"sender":"张三","content":"在吗"}` |
 
 ```bash
 cd services/agent/wechat-rpa
@@ -403,7 +405,7 @@ CI `lint-tdd-commit-order` 检查：test 文件必须在 src 改动之前出现�
 | D（listen_chat 配方） | 高 | 否 |
 | E（send_chat 配方） | 高 | 否 |
 | F（dryrun CLI 绿） | 必须 | 是 |
-| G（scan_unread 单测 5 绿，含服务号过滤） | 必须 | 是 |
+| G（_parse_item_name 单测 5 绿 G1-G5，含公众号/服务号/无未读过滤） | 必须 | 是 |
 | H（频控单测绿） | 高 | 是 |
 | I（TS 接口扩展） | 高 | 否 |
 | J（integration test 4 绿） | 必须 | 是 |
