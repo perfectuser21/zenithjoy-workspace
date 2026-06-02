@@ -186,7 +186,7 @@ npx jest wechat-draft-auto-reply --testPathPattern='__tests__'
 | 文件 | 内容 |
 |---|---|
 | `services/agent/wechat-rpa/tests/__init__.py` | 空（如目录不存在则新建） |
-| `services/agent/wechat-rpa/tests/test_scan_unread.py` | 4 个单测（G1-G4），纯函数，零 pywinauto import |
+| `services/agent/wechat-rpa/tests/test_scan_unread.py` | 5 个单测（G1-G5），纯函数，零 pywinauto import |
 | `services/agent/wechat-rpa/tests/test_rate_limiter.py` | 频控上限单测：chat 分钟级 ≤2 拒第 3 次 |
 | `apps/api/src/services/__tests__/wechat-draft-auto-reply.test.ts` | 4 个 Jest 测试（J1-J4），mock 飞书 + mock openrouter |
 
