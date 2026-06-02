@@ -35,6 +35,7 @@
         "apps/api/src/services/__tests__/ilink-client.test.ts",
         "apps/api/src/services/__tests__/ilink-client-auth.test.ts",
         "apps/api/src/services/__tests__/ilink-auth.test.ts",
+        "apps/api/src/services/__tests__/ilink-types.test.ts",
         "apps/api/src/services/__tests__/ilink-poller.test.ts",
         "apps/api/src/services/__tests__/ilink-poller-edge.test.ts",
         "apps/api/src/routes/__tests__/wechat-ilink.test.ts",

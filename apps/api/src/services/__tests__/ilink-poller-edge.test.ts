@@ -3,7 +3,7 @@ import { describe, it, expect } from 'vitest';
 /**
  * Path 4 Step 1 — ilink-poller 边界路径 TDD Red
  *
- * 补充两个 PRD 边界分支：
+ * 补充 round-2 未覆盖的两个 PRD 边界分支：
  *   1. sendmessage 非-14 失败 → skip writeLead（数据完整性：飞书不写虚假"AI已回"记录）
  *   2. getupdates 5xx 网络错误 → session NOT 标 needs_rebind（退避重试，区别于 -14 session timeout）
  * Generator 实现前必须 FAIL（函数不存在或分支逻辑未实现）。
