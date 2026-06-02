@@ -2,32 +2,37 @@
 import { describe, it, expect } from 'vitest';
 
 /**
- * Path 4 Step 1 — ilink-poller 端到端 TDD Red
+ * Path 4 Step 1 — ilink-poller 闭环（真实协议 msgs 结构）
  *
- * 验证 poller 拉到一条 mock 私聊后跑完 B→C→D→E 链路，并在收到 -14 后切 needs_rebind。
- * Generator 实现前必须 FAIL（模块/函数不存在）。
+ * 验证 poller 拉到一条 mock 私聊（WeixinMessage）后跑完 B→C→D→E，
+ * 并在收到 errcode=-14 后切 needs_rebind。Generator 实现前必须 FAIL。
  */
 
+function userTextMsg(from: string, text: string, ctx: string) {
+  return {
+    from_user_id: from,
+    to_user_id: 'wxid-1',
+    message_type: 1, // USER
+    item_list: [{ type: 1, text_item: { text } }],
+    context_token: ctx,
+  };
+}
+
 describe('ilink-poller 闭环 [BEHAVIOR]', () => {
-  it('一条 mock 私聊跑完 B→C→D→E：sendmessage + llm_audit + lead-writer 各被调用一次', async () => {
+  it('一条 mock 私聊跑完 B→C→D→E：sendmessage + openrouter + writeLead 各被调用一次', async () => {
     const mod = await import('../ilink-poller');
     expect(typeof (mod as any).runPollerOnce).toBe('function');
 
-    // runPollerOnce 接收注入的 deps（便于 unit 测试不依赖 HTTP）
     const calls: any = { sendmessage: 0, openrouter: 0, writeLead: 0 };
     const result = await (mod as any).runPollerOnce({
       session: { id: 'sess-1', token: 'tok', uin: 'uin-1', wxid: 'wxid-1' },
       ilink: {
         getupdates: async () => ({
-          updates: [{
-            type: 'text', scene: 'single',
-            from_user_id: 'wxA', to_user_id: 'wxid-1',
-            text: '你好', context_token: 'ctx-1',
-            received_at: '2026-06-02T08:30:00Z',
-          }],
+          ret: 0,
+          msgs: [userTextMsg('wxA', '你好', 'ctx-1')],
           get_updates_buf: 'c2',
         }),
-        sendmessage: async () => { calls.sendmessage++; return { message_id: 'm1' }; },
+        sendmessage: async () => { calls.sendmessage++; return { ret: 0 }; },
       },
       openrouter: async (args: any) => {
         calls.openrouter++;
@@ -38,6 +43,7 @@ describe('ilink-poller 闭环 [BEHAVIOR]', () => {
         calls.writeLead++;
         expect(rec.from_user_id).toBe('wxA');
         expect(rec.context_token).toBe('ctx-1');
+        expect(rec.reply).toBe('AI 回复一句');
       },
     });
 
@@ -76,12 +82,8 @@ describe('ilink-poller 闭环 [BEHAVIOR]', () => {
       session: { id: 'sess-1', token: 'tok', uin: 'uin-1', wxid: 'wxid-1' },
       ilink: {
         getupdates: async () => ({
-          updates: [{
-            type: 'text', scene: 'single',
-            from_user_id: 'wxA', to_user_id: 'wxid-1',
-            text: 'hi', context_token: 'ctx-x',
-            received_at: '2026-06-02T08:30:00Z',
-          }],
+          ret: 0,
+          msgs: [userTextMsg('wxA', 'hi', 'ctx-x')],
           get_updates_buf: 'cN',
         }),
         sendmessage: async () => { calls.sendmessage++; return {}; },
