@@ -14,13 +14,18 @@
  * 所有外部依赖通过 deps 注入，单测无需真实 HTTP / DB。
  */
 
-import { parseUpdates, isSessionTimeoutError } from './ilink-client';
+import {
+  parseUpdates,
+  isSessionTimeoutError,
+  type GetUpdatesResponse,
+  type SendMessageInput,
+} from './ilink-client';
 
 export interface RunPollerOnceDeps {
   session: { id: string; token: string; uin: string; wxid: string };
   ilink: {
-    getupdates: (...args: any[]) => Promise<any>;
-    sendmessage: (...args: any[]) => Promise<any>;
+    getupdates: (cursor?: string) => Promise<GetUpdatesResponse>;
+    sendmessage: (input: SendMessageInput) => Promise<unknown>;
   };
   openrouter: (args: { purpose: string; prompt: string }) => Promise<{ content: string }>;
   writeLead: (rec: {

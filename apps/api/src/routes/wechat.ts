@@ -280,7 +280,7 @@ wechatRouter.post('/ilink-login-start', async (req: Request, res: Response) => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ session_id: sessionId, agent_id }),
     });
-    const j: any = await r.json();
+    const j = (await r.json()) as { qr_url?: string };
     if (j?.qr_url) qrUrl = j.qr_url;
   } catch (err) {
     console.warn('[wechat/ilink-login-start] iLink auth/login-start 失败（thin 容忍）:', err);
@@ -308,14 +308,21 @@ wechatRouter.get('/ilink-login-status', async (req: Request, res: Response) => {
     return res.status(400).json({ error: 'INVALID_BODY', required: ['session_id'] });
   }
 
-  let auth: any = {};
+  type IlinkAuthPoll = {
+    status?: string;
+    token?: string;
+    uin?: string;
+    wxid?: string;
+    nickname?: string;
+  };
+  let auth: IlinkAuthPoll = {};
   try {
     const r = await fetch(`${ILINK_AUTH_BASE}/auth/poll`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ session_id: sessionId }),
     });
-    auth = await r.json();
+    auth = (await r.json()) as IlinkAuthPoll;
   } catch (err) {
     console.warn('[wechat/ilink-login-status] iLink auth/poll 失败:', err);
     return res.status(200).json({ status: 'pending' });

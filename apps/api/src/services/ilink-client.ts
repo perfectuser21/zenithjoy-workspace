@@ -31,9 +31,20 @@ export interface ParsedMessage {
   received_at?: string;
 }
 
+/** getupdates 返回的原始 update 条目。 */
+export interface RawUpdate {
+  type?: string;
+  scene?: string;
+  from_user_id?: string;
+  to_user_id?: string;
+  text?: string;
+  context_token?: string;
+  received_at?: string;
+}
+
 /** getupdates 返回结构。 */
 export interface GetUpdatesResponse {
-  updates?: any[];
+  updates?: RawUpdate[];
   get_updates_buf?: string;
   errcode?: number;
   errmsg?: string;
@@ -45,14 +56,14 @@ export interface GetUpdatesResponse {
  * —— 第一刀只处理 1 对 1 私聊文字（iLink 也不支持群聊）。
  */
 export function parseUpdates(resp: GetUpdatesResponse): ParsedMessage[] {
-  const updates = (resp && resp.updates) || [];
+  const updates = resp?.updates ?? [];
   return updates
-    .filter((u: any) => u && u.type === 'text' && u.scene === 'single')
-    .map((u: any) => ({
-      from_user_id: u.from_user_id,
+    .filter((u) => !!u && u.type === 'text' && u.scene === 'single')
+    .map((u) => ({
+      from_user_id: String(u.from_user_id),
       to_user_id: u.to_user_id,
-      text: u.text,
-      context_token: u.context_token,
+      text: String(u.text),
+      context_token: String(u.context_token),
       received_at: u.received_at,
     }));
 }
@@ -86,7 +97,7 @@ function ilinkHeaders(session: ILinkSession): Record<string, string> {
   };
 }
 
-async function ilinkPost(path: string, session: ILinkSession, body: unknown): Promise<any> {
+async function ilinkPost(path: string, session: ILinkSession, body: unknown): Promise<unknown> {
   const res = await fetch(`${ILINK_BASE_URL}/${path}`, {
     method: 'POST',
     headers: ilinkHeaders(session),
@@ -97,10 +108,10 @@ async function ilinkPost(path: string, session: ILinkSession, body: unknown): Pr
 
 /** 长轮询拉新消息；cursor 为上一轮返回的 get_updates_buf，首次传空串。 */
 export async function getupdates(session: ILinkSession, cursor = ''): Promise<GetUpdatesResponse> {
-  return ilinkPost('getupdates', session, { get_updates_buf: cursor });
+  return (await ilinkPost('getupdates', session, { get_updates_buf: cursor })) as GetUpdatesResponse;
 }
 
 /** 发送一条文字消息。 */
-export async function sendmessage(session: ILinkSession, input: SendMessageInput): Promise<any> {
+export async function sendmessage(session: ILinkSession, input: SendMessageInput): Promise<unknown> {
   return ilinkPost('sendmessage', session, { msg: buildSendMessageBody(input) });
 }
