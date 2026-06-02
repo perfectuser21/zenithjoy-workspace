@@ -3,7 +3,7 @@
 #
 # 静态校验：
 #   1) wechat-draft.ts generateChatDraft + 调 openrouter
-#   2) listen_chat.py 真 import wxauto4 + --dryrun-print-version
+#   2) listen_chat.py pywinauto 配方（_parse_item_name/chat_input_field，禁 wxauto4）
 #   3) routes/wechat.ts /draft-generate 端点
 #   4) A 路线护栏：approval_status='pending_review' + approval_source NULL（不允许 system/auto）
 #   5) listen_chat.py def 黑名单（不许主动发起）
@@ -21,12 +21,16 @@ node -e "const s=require('fs').readFileSync('$DRAFT','utf8'); if(!s.includes('ge
   || { echo "FAIL: node 读取 wechat-draft.ts 校验失败"; exit 1; }
 echo "  PASS generateChatDraft + openrouter 调用"
 
-echo "=== ws3 Step 2: listen_chat.py 真 import wxauto4 ==="
+echo "=== ws3 Step 2: listen_chat.py pywinauto 配方（微信4.0 迁移，禁 wxauto4）==="
 RPA_DIR=services/agent/wechat-rpa
 test -f "$RPA_DIR/listen_chat.py" || { echo "FAIL: listen_chat.py 缺"; exit 1; }
-grep -qE "import[[:space:]]+wxauto|from[[:space:]]+wxauto" "$RPA_DIR/listen_chat.py" \
-  || { echo "FAIL: listen_chat.py 未真 import wxauto"; exit 1; }
-echo "  PASS listen_chat.py 含 wxauto import"
+grep -qE "import[[:space:]]+pywinauto|from[[:space:]]+pywinauto" "$RPA_DIR/listen_chat.py" \
+  || { echo "FAIL: listen_chat.py 未 import pywinauto"; exit 1; }
+grep -qE "_parse_item_name|chat_input_field" "$RPA_DIR/listen_chat.py" \
+  || { echo "FAIL: listen_chat.py 缺 pywinauto 配方关键字"; exit 1; }
+! grep -qE "import[[:space:]]+wxauto|from[[:space:]]+wxauto" "$RPA_DIR/listen_chat.py" \
+  || { echo "FAIL: listen_chat.py 仍残留 wxauto import"; exit 1; }
+echo "  PASS listen_chat.py 含 pywinauto 配方，无 wxauto4"
 
 echo "=== ws3 Step 3: /api/wechat/draft-generate 端点 ==="
 ROUTE=apps/api/src/routes/wechat.ts
