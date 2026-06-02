@@ -86,7 +86,7 @@ grep "chat_input_field\|automation_id" services/agent/wechat-rpa/send_chat.py  #
 
 ```bash
 cd services/agent/wechat-rpa
-WECHAT_DRAFT_API_DRYRUN=1 python listen_chat.py \
+WECHAT_DRAFT_API_DRYRUN=1 python3 listen_chat.py \
   --dryrun \
   --inject-message='{"sender":"test","wechat_id":"wx123","content":"你好"}'
 ```

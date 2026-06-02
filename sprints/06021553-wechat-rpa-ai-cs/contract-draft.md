@@ -23,7 +23,7 @@
 | wxauto4 状态 | 2026-06-02 确认失效，禁止一切保留 | PRD §背景 |
 | FAIL_PLACEHOLDER | `'AI 生成失败（请人审决定是否重试）'` | `wechat-draft.ts:219` |
 | find_weixin.py 函数名 | 当前 stub 是 `find_main_window()`，合同要求改造成 `get_main_window()` | 代码实证（find_weixin.py:10） |
-| rate_limiter MIN_INTERVAL | 操作间隔 ≥ 1s（`MIN_INTERVAL_SECONDS=1`） | `rate_limiter.py:43` — 频控测试必须 sleep(1.1) 隔离 |
+| rate_limiter MIN_INTERVAL | 操作间隔 ≥ 1s（`MIN_INTERVAL_SECONDS=1`） | `rate_limiter.py:48` — 频控测试必须 sleep(1.1) 隔离 |
 | API 端口 | 5200（`apps/api/src/index.ts` PORT 默认值） | 代码实证 |
 
 ---
