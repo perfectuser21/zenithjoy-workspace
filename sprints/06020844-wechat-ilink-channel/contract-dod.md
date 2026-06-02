@@ -34,6 +34,9 @@ target_environment: local_api
 - [ ] [ARTIFACT] `apps/api/scripts/mock-ilink-server.js` mock iLink + OpenRouter + 飞书三合一 fastify mock，含 `__mock/sendmessage-log`、`__mock/feishu-write-log`、`__mock/trigger-session-timeout` 调试端点
   Test: node -e "const c=require('fs').readFileSync('apps/api/scripts/mock-ilink-server.js','utf8');for(const p of ['sendmessage-log','feishu-write-log','trigger-session-timeout','getupdates','sendmessage'])if(!c.includes(p))process.exit(1)"
 
+- [ ] [ARTIFACT] `apps/api/db/migrations/20260602_*_aps_ilink_extras.sql` migration 文件存在，含 `ADD COLUMN extra_json JSONB` + status CHECK 新值 `'bound'` 和 `'needs_rebind'`，并保留旧 5 个值（pending/active/connected/offline/expired）—— 否则 Step A/F 的 INSERT/UPDATE 被 CHECK 拒
+  Test: bash -c 'set -e; f=$(ls apps/api/db/migrations/20260602_*_aps*ilink*.sql 2>/dev/null | head -1); [ -n "$f" ] || exit 1; grep -qiE "ADD COLUMN.*extra_json.*JSONB" "$f" || exit 1; grep -qF "'"'"'bound'"'"'" "$f" || exit 1; grep -qF "'"'"'needs_rebind'"'"'" "$f" || exit 1; for old in pending active connected offline expired; do grep -qF "'"'"'$old'"'"'" "$f" || exit 1; done; echo OK'
+
 - [ ] [ARTIFACT] `.agent-knowledge/path-4/ilink-step1-acceptance.md` Lead 自验 evidence 模板存在（含扫码截图 / 外部号发消息 / AI 回复 / 飞书 Lead 行 / DB 查询 6 类证据位）
   Test: node -e "const c=require('fs').readFileSync('.agent-knowledge/path-4/ilink-step1-acceptance.md','utf8');for(const k of ['扫码','外部','AI 回复','飞书','agent_platform_sessions','llm_audit'])if(!c.includes(k))process.exit(1)"
 

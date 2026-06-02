@@ -6,12 +6,13 @@
     {
       "task_id": "ws1",
       "title": "Path 4 Step 1 第一刀 — 移植 iLink HTTP JSON 协议进 apps/api 跑通扫码绑号 → 长轮询 → DeepSeek → sendmessage → 写飞书 Lead 最小闭环",
-      "scope": "What：从 openclaw-weixin 移植 iLink HTTP 协议（auth + client + types + 长轮询循环）进 apps/api 自有代码；新增三个 Express 路由（ilink-login-start / ilink-login-status / ilink-poller-start）+ CLI 入口（npm run wechat:ilink-login）；poller 串接 callOpenRouter(purpose=wechat_ilink_chat_reply) 与 lead-writer 写飞书 Lead 表；errcode=-14 把 agent_platform_sessions.status 标 needs_rebind 并停该 burner 长轮询；新建 mock-ilink-server.js 三合一 fastify mock（iLink + OpenRouter + 飞书）+ golden-path-4-smoke.sh 跑通 Step A-F dryrun；新建 Lead 自验 evidence 模板。范围内：单聊文字、1 测试号、AI 直发（无审核台）、单轮回复。范围外：群聊/朋友圈/媒体/审核台/频控/多号/主动 outreach/Dashboard UI/migration（agent_platform_sessions.platform 无 CHECK 约束，无需新 migration）。",
+      "scope": "What：从 openclaw-weixin 移植 iLink HTTP 协议（auth + client + types + 长轮询循环）进 apps/api 自有代码；新增三个 Express 路由（ilink-login-start / ilink-login-status / ilink-poller-start）+ CLI 入口（npm run wechat:ilink-login）；poller 串接 callOpenRouter(purpose=wechat_ilink_chat_reply) 与 lead-writer 写飞书 Lead 表；errcode=-14 把 agent_platform_sessions.status 标 needs_rebind 并停该 burner 长轮询；新建 mock-ilink-server.js 三合一 fastify mock（iLink + OpenRouter + 飞书）+ golden-path-4-smoke.sh 跑通 Step A-F dryrun；新建 Lead 自验 evidence 模板。**Schema 改动（[AI_ADDED] — PRD 假设漏洞补救）**：新增 migration 20260602_*_aps_ilink_extras.sql 添加 extra_json JSONB 列 + 把 'bound' / 'needs_rebind' 加入 status CHECK（保留旧 5 个值），否则 Step A/F INSERT/UPDATE 被现有 chk_aps_status (20260524) 拒。范围内：单聊文字、1 测试号、AI 直发（无审核台）、单轮回复。范围外：群聊/朋友圈/媒体/审核台/频控/多号/主动 outreach/Dashboard UI。",
       "dod": [
         "[ARTIFACT] apps/api/src/services/ilink-{types,client,auth,poller}.ts 全部存在且导出对应符号",
         "[ARTIFACT] apps/api/src/routes/wechat.ts 含 ilink-login-start / ilink-login-status / ilink-poller-start 三个新端点（旧端点保留）",
         "[ARTIFACT] apps/api/src/cli/wechat-ilink-login.ts 存在 + package.json 含 wechat:ilink-login script",
         "[ARTIFACT] apps/api/scripts/mock-ilink-server.js 提供 iLink+OpenRouter+飞书三合一 fastify mock（含 __mock 调试端点）",
+        "[ARTIFACT] apps/api/db/migrations/20260602_*_aps_ilink_extras.sql 加 extra_json JSONB + status 加 'bound'/'needs_rebind'（保留旧 5 个值）",
         "[ARTIFACT] .github/workflows/scripts/smoke/golden-path-4-smoke.sh 含 Step A-F mock 链路 dryrun",
         "[ARTIFACT] .agent-knowledge/path-4/ilink-step1-acceptance.md Lead 自验 evidence 模板",
         "[BEHAVIOR] Step A：POST /api/wechat/ilink-login-start + mock 扫码完成 → DB 5 分钟内出现一行 role=burner / platform=wechat_personal_ilink / status=bound",
@@ -34,6 +35,7 @@
         "apps/api/src/services/__tests__/ilink-poller.test.ts",
         "apps/api/src/routes/__tests__/wechat-ilink.test.ts",
         "apps/api/scripts/mock-ilink-server.js",
+        "apps/api/db/migrations/20260602_aps_ilink_extras.sql",
         "apps/api/package.json",
         ".github/workflows/scripts/smoke/golden-path-4-smoke.sh",
         ".agent-knowledge/path-4/ilink-step1-acceptance.md"

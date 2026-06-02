@@ -160,6 +160,45 @@ echo "$LAST_WRITE" | jq -e 'keys | any(. == "from_user_id") and any(. == "contex
 
 ---
 
+### Step G: migration 加 extra_json JSONB + status CHECK 含 bound/needs_rebind（[AI_ADDED]）
+
+**来源**: `[AI_ADDED]` — **PRD 假设漏洞**：PRD 假设段第 4 条只提"若 platform CHECK 阻拦才加 migration"，但实际现状（已 grep 仓库当前 schema 确认）：
+1. `agent_platform_sessions.status` 已被 `20260524_110000_*` 的 CHECK 约束写死为 `('pending','active','connected','offline','expired')` —— `'bound'` 和 `'needs_rebind'` 都不在内，Step A / Step F 的 INSERT/UPDATE 会被 CHECK 静默 reject（或抛 23514）→ DB 没行 → 所有下游 BEHAVIOR 假绿/假红 都不到位。
+2. `agent_platform_sessions` 表无 `extra_json` JSONB 列（grep 全部 migrations 确认）；Step A 要存 `{token,uin,wxid,nickname,scanned_at}` 必须有这列。
+3. `platform` 字段无 CHECK 约束，`'wechat_personal_ilink'` 可直接写入，**无需**为 platform 加 migration（PRD 假设第 4 条已正确）。
+
+**可观测行为**:
+- `apps/api/db/migrations/20260602_*_aps_ilink_extras.sql` 存在（文件名前缀 `20260602_`，含 `aps`/`ilink` 关键字）
+- 内容含：`ADD COLUMN IF NOT EXISTS extra_json JSONB`
+- 内容含：DROP/ADD CONSTRAINT chk_aps_status，新值集合包含 `'bound'` 与 `'needs_rebind'`
+- 必须保留旧 5 个值（`pending`/`active`/`connected`/`offline`/`expired`）——不许把 status 改成完全替换，否则历史 Path 1 主号 INSERT 全炸
+
+**关键约束（[AI_ADDED]）**:
+- 幂等：复用 20260510 + 20260524 现有 `DO $$...IF NOT EXISTS...$$` 模式
+- 不许新建 `aps_ilink` 子表（PRD 范围限定明确"复用 agent_platform_sessions + role 字段"）
+
+**验证命令**:
+```bash
+node -e "
+const fs=require('fs');const path=require('path');
+const dir='apps/api/db/migrations';
+const files=fs.readdirSync(dir).filter(f=>/^20260602_.*aps.*ilink.*\.sql\$/i.test(f));
+if(files.length===0){console.error('FAIL: 未找到 20260602_*_aps*ilink*.sql migration');process.exit(1)}
+const sql=fs.readFileSync(path.join(dir,files[0]),'utf8');
+if(!/ADD COLUMN.*extra_json.*JSONB/i.test(sql)){console.error('FAIL: 缺 ADD COLUMN extra_json JSONB');process.exit(2)}
+if(!/'bound'/.test(sql)){console.error('FAIL: 缺 status bound');process.exit(3)}
+if(!/'needs_rebind'/.test(sql)){console.error('FAIL: 缺 status needs_rebind');process.exit(4)}
+for (const old of ['pending','active','connected','offline','expired']) {
+  if(!sql.includes(\"'\"+old+\"'\")){console.error('FAIL: 删了旧 status '+old);process.exit(5)}
+}
+console.log('OK');
+"
+```
+
+**硬阈值**: exit 0；文件存在 + extra_json JSONB + 新值 bound/needs_rebind + 保留旧 5 个值。
+
+---
+
 ### Step F: token 失效分支（errcode=-14）
 
 **来源**: `[FROM_PRD]` — PRD 「Step F — token 失效分支」段直接定义
