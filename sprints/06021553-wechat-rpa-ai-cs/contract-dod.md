@@ -44,10 +44,15 @@ journey_type: user_facing
 
 ## BEHAVIOR 条目
 
-### B1：全库 `wxauto4` 0 残留（PRD §不在范围 + §背景失效库强制）
+### B1：sprint 在范围内文件 `wxauto4` 0 残留（PRD §不在范围 + §背景失效库强制）
 
-- [ ] [BEHAVIOR] 全库（`services/` + `apps/`）无 wxauto4 引用
-  Test: manual:bash -c 'HITS=$(grep -rn "wxauto4" services/ apps/ --include="*.py" --include="*.ts" 2>/dev/null | wc -l); [ "$HITS" = "0" ] || { echo "FAIL: $HITS 行 wxauto4 残留"; grep -rn "wxauto4" services/ apps/ --include="*.py" --include="*.ts"; exit 1; }; echo OK'
+> **范围说明 + 事实基线**：
+> - PRD §不在范围内 显式将 `qr_bind.py`、`send_moment.py` 排除出本 sprint（这两个文件 wxauto4 引用允许保留）。
+> - `apps/api/tests/ws[1-6]/**` 是历史合同 RED 文件，已在 `apps/api/vitest.config.ts:11 exclude` 中屏蔽于 CI vitest 集外（事实基线），其 wxauto4 字符串引用属时间冻结的旧合同遗物，本 sprint 不要求清理。
+> - 本断言扫除以上豁免，保证 sprint 在范围内文件 0 残留 + 兜底捕获 generator 把 wxauto4 偷偷塞到别处。
+
+- [ ] [BEHAVIOR] 全库 `wxauto4` 引用仅出现在 PRD 豁免文件（`qr_bind.py` / `send_moment.py`）或 CI-excluded 历史合同目录（`tests/ws[1-6]/`）内
+  Test: manual:bash -c 'HITS=$(grep -rn "wxauto4" services/ apps/ --include="*.py" --include="*.ts" --exclude="qr_bind.py" --exclude="send_moment.py" --exclude-dir="ws1" --exclude-dir="ws2" --exclude-dir="ws3" --exclude-dir="ws4" --exclude-dir="ws5" --exclude-dir="ws6" 2>/dev/null | wc -l); [ "$HITS" = "0" ] || { echo "FAIL: $HITS 行 wxauto4 残留（豁免范围外）"; grep -rn "wxauto4" services/ apps/ --include="*.py" --include="*.ts" --exclude="qr_bind.py" --exclude="send_moment.py" --exclude-dir="ws1" --exclude-dir="ws2" --exclude-dir="ws3" --exclude-dir="ws4" --exclude-dir="ws5" --exclude-dir="ws6"; exit 1; }; echo OK'
   期望：OK
 
 ### B2：listen_chat dryrun 退出码 0 + JSON 字段正确（CI 关键路径，PRD §验收第 3 条）

@@ -18,7 +18,7 @@
 | 真机执行机 | xian-pc / xian-rog（Windows 10 + Python 3.12 + pywinauto） | PRD ASSUMPTION |
 | CI 执行机 | Linux（GitHub Actions） — pywinauto import 必然失败 | PRD ASSUMPTION |
 | dryrun 路径与 `_parse_item_name`/`scan_unread` 纯函数 | **零 pywinauto 依赖** — CI 直接 import 跑 | PRD ASSUMPTION |
-| wxauto4 状态 | 2026-06-02 在微信 4.0 上确认失效，全库 0 残留 | PRD §背景 |
+| wxauto4 状态 | 2026-06-02 在微信 4.0 上确认失效；sprint 在范围内文件 0 残留；`qr_bind.py`（18 行）/`send_moment.py` 豁免（PRD §不在范围内） | PRD §背景 + §不在范围 |
 | FAIL_PLACEHOLDER 字面值 | `'AI 生成失败（请人审决定是否重试）'` | `wechat-draft.ts:219` |
 | 现 `find_weixin.py` 函数 | stub 名为 `find_main_window()`（line 10-11，raise NotImplementedError） — 合同要求改造为 `get_main_window()` | 代码实证 |
 | rate_limiter 间隔限 | `MIN_INTERVAL_SECONDS = 1` — 频控单测必须 `time.sleep(1.1)` 隔离 | `rate_limiter.py:48` |
@@ -205,7 +205,7 @@ grep -E "^import pywinauto|^from pywinauto" services/agent/wechat-rpa/tests/test
 - 飞书写入、DB 写入、OpenRouter 调用逻辑**复用**现实现，`approval_status='pending_review'`、`approval_source=NULL` 不变
 - AI 失败（OpenRouter 抛错或返空）→ `aiContent = FAIL_PLACEHOLDER` → `reply` 不赋值（listener 端跳过发送）
 
-**验证命令**（CI Linux — Jest + 静态）：
+**验证命令**（CI Linux — vitest + 静态。事实基线：`apps/api/package.json "test": "vitest run"`）：
 
 ```bash
 # 4a. 接口扩展静态断言
@@ -233,7 +233,7 @@ grep -E "[1-9][0-9]* passed" /tmp/auto.log || { echo "FAIL"; cat /tmp/auto.log; 
 echo "PASS: wechat-draft-auto-reply 4/4 case 绿"
 ```
 
-**4 个 Jest case**（mock 飞书 + mock openrouter，不调真实网络）：
+**4 个 vitest case**（mock 飞书 + mock openrouter，不调真实网络）：
 
 | # | mock 设置 | 期望 |
 |---|---|---|
@@ -245,7 +245,7 @@ echo "PASS: wechat-draft-auto-reply 4/4 case 绿"
 **硬阈值**：
 - `GenerateChatDraftParams.mode?: 'auto' | 'review'` 存在
 - `GenerateChatDraftSuccess.reply?: string` 存在
-- 4 个 Jest case 全过
+- 4 个 vitest case 全过
 - `approval_status: 'approved'` 字面量在文件中不存在
 
 ---
@@ -361,13 +361,25 @@ echo "PASS: Lead evidence 模板 ≥20 行 + 6 章节齐全"
 
 **来源**：`[AI_ADDED]` — 防止 generator 通过保留 wxauto4 / 不删 pyautogui / 把 approval_status 自批 approved 等方式绕过 PRD 意图。
 
-**断言 X1：全库 wxauto4 0 残留**
+**断言 X1：sprint 在范围内文件 wxauto4 0 残留（豁免 PRD 不在范围内 + CI-excluded 历史合同目录）**
+
+> **范围说明 + 事实基线**：
+> - PRD §不在范围内 明确把 `qr_bind.py` / `send_moment.py` 排除出本 sprint。事实基线：当前 `qr_bind.py` 含 18 行 wxauto4 引用（PRD 视为单独子 sprint 处理）。
+> - `apps/api/tests/ws[1-6]/**` 是历史合同 RED 文件，已在 `apps/api/vitest.config.ts:11 exclude` 中屏蔽于 CI vitest 集外（事实基线已读：`exclude: ['node_modules/**', 'tests/integration/**', 'tests/ws1/**'...'tests/ws6/**']`），其 wxauto4 字符串引用属时间冻结的旧合同遗物，本 sprint 不要求清理。
+> - 本断言用 `--exclude` + `--exclude-dir` 形式排除以上豁免，保证 sprint 在范围内文件 0 残留 + 兜底捕获 generator 把 wxauto4 偷偷塞到别处的情况。
 
 ```bash
-HITS=$(grep -rn "wxauto4" services/ apps/ --include="*.py" --include="*.ts" 2>/dev/null | wc -l)
-[ "$HITS" = "0" ] && echo "PASS: wxauto4 全库 0 残留" \
-  || { echo "FAIL: $HITS 行 wxauto4 残留"; \
-       grep -rn "wxauto4" services/ apps/ --include="*.py" --include="*.ts"; exit 1; }
+HITS=$(grep -rn "wxauto4" services/ apps/ \
+  --include="*.py" --include="*.ts" \
+  --exclude="qr_bind.py" --exclude="send_moment.py" \
+  --exclude-dir="ws1" --exclude-dir="ws2" --exclude-dir="ws3" \
+  --exclude-dir="ws4" --exclude-dir="ws5" --exclude-dir="ws6" 2>/dev/null | wc -l)
+[ "$HITS" = "0" ] && echo "PASS: wxauto4 在 sprint 范围内文件 0 残留" \
+  || { echo "FAIL: $HITS 行 wxauto4 残留（豁免范围外）"; \
+       grep -rn "wxauto4" services/ apps/ --include="*.py" --include="*.ts" \
+         --exclude="qr_bind.py" --exclude="send_moment.py" \
+         --exclude-dir="ws1" --exclude-dir="ws2" --exclude-dir="ws3" \
+         --exclude-dir="ws4" --exclude-dir="ws5" --exclude-dir="ws6"; exit 1; }
 ```
 
 **断言 X2：requirements.txt 库切换到位**
@@ -399,9 +411,13 @@ print('PASS: requirements.txt 切换到位')
 #!/bin/bash
 set -e
 
-# 1. wxauto4 全库 0 残留
-HITS=$(grep -rn "wxauto4" services/ apps/ --include="*.py" --include="*.ts" 2>/dev/null | wc -l)
-[ "$HITS" = "0" ] || { echo "FAIL: wxauto4 残留 $HITS 行"; exit 1; }
+# 1. wxauto4 在 sprint 范围内文件 0 残留（豁免 qr_bind.py / send_moment.py — PRD §不在范围；
+#    豁免 tests/ws[1-6]/** — vitest.config.ts:11 已 exclude 出 CI 集，历史合同 RED 遗物）
+HITS=$(grep -rn "wxauto4" services/ apps/ --include="*.py" --include="*.ts" \
+  --exclude="qr_bind.py" --exclude="send_moment.py" \
+  --exclude-dir="ws1" --exclude-dir="ws2" --exclude-dir="ws3" \
+  --exclude-dir="ws4" --exclude-dir="ws5" --exclude-dir="ws6" 2>/dev/null | wc -l)
+[ "$HITS" = "0" ] || { echo "FAIL: wxauto4 残留 $HITS 行（豁免范围外）"; exit 1; }
 
 # 2. requirements.txt pywinauto 就位
 python3 -c "
@@ -482,7 +498,7 @@ echo "✅ CI 侧 final-e2e 全过（真机 E2E 由 Lead 在 xian-rog 完成存�
 | `services/agent/wechat-rpa/tests/__init__.py` | 空文件（目录不存在则建） |
 | `services/agent/wechat-rpa/tests/test_scan_unread.py` | 5 case（G1-G5）`_parse_item_name` 纯函数测，零 pywinauto import |
 | `services/agent/wechat-rpa/tests/test_rate_limiter.py` | 分钟上限 case，含 `time.sleep(1.1)` 隔离 |
-| `apps/api/src/services/__tests__/wechat-draft-auto-reply.test.ts` | 4 个 Jest case（J1-J4），mock 飞书 + mock openrouter |
+| `apps/api/src/services/__tests__/wechat-draft-auto-reply.test.ts` | 4 个 vitest case（J1-J4），mock 飞书 + mock openrouter |
 | `.agent-knowledge/path-4/lead-acceptance-wechat-rpa-pywinauto.md` | Lead 真机自验 evidence 模板（≥20 行 + 6 章节骨架） |
 
 ### 不动

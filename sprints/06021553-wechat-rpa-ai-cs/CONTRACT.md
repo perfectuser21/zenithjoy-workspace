@@ -21,12 +21,30 @@ date: 2026-06-02
 
 > 每条断言为可机器验证的"完成条件"，Evaluator 按此逐条打分。
 
-### A. 无 wxauto4 任何残留
+### A. 本 sprint 在范围内文件无 wxauto4 任何残留
 
-```
-grep -r "wxauto4" services/ apps/ --include="*.py" --include="*.ts" | wc -l
+> **范围说明**：PRD §不在范围内 显式声明 `qr_bind.py 改造（不在本 sprint）`、`send_moment.py 改造（不在本 sprint）`。这两个文件的 wxauto4 引用允许保留（独立子 sprint 处理），本断言只对 sprint 在范围内的文件断言 0 残留。
+
+```bash
+grep -rn "wxauto4" \
+  services/agent/wechat-rpa/listen_chat.py \
+  services/agent/wechat-rpa/send_chat.py \
+  services/agent/wechat-rpa/find_weixin.py \
+  services/agent/wechat-rpa/requirements.txt \
+  services/agent/wechat-rpa/tests/ \
+  apps/api/ \
+  --include="*.py" --include="*.ts" 2>/dev/null | wc -l
 ```
 **预期输出：`0`**
+
+> **补充**：可用排除式 grep 全库扫一遍以兜底——若 generator 偷偷把 wxauto4 引用塞到非豁免位置，也会被捕获。豁免：`qr_bind.py` / `send_moment.py`（PRD §不在范围内），以及 `apps/api/tests/ws[1-6]/**`（历史合同 RED 文件，已在 `apps/api/vitest.config.ts:11 exclude` 中屏蔽于 CI vitest 集外，事实基线）：
+> ```bash
+> grep -rn "wxauto4" services/ apps/ --include="*.py" --include="*.ts" \
+>   --exclude="qr_bind.py" --exclude="send_moment.py" \
+>   --exclude-dir="ws1" --exclude-dir="ws2" --exclude-dir="ws3" \
+>   --exclude-dir="ws4" --exclude-dir="ws5" --exclude-dir="ws6" 2>/dev/null | wc -l
+> ```
+> **预期输出：`0`**
 
 ### B. requirements.txt：pywinauto 在，wxauto4 不在
 
@@ -147,7 +165,8 @@ grep "reply\?:.*string" apps/api/src/services/wechat-draft.ts  # 命中
 
 ```bash
 cd apps/api
-npx jest wechat-draft-auto-reply --testPathPattern='__tests__'
+# 事实基线：apps/api/package.json "test": "vitest run"，不是 Jest
+npx vitest run src/services/__tests__/wechat-draft-auto-reply.test.ts
 ```
 **断言：**
 - J1: mock 飞书返回 1 条互动记录 + mock openrouter 返回 `'你好，我是 AI 回复'`→ `generateChatDraft({sender, wechat_id, content, mode:'auto'})` 返回 `{ok:true, reply:'你好，我是 AI 回复'}`
@@ -188,7 +207,7 @@ npx jest wechat-draft-auto-reply --testPathPattern='__tests__'
 | `services/agent/wechat-rpa/tests/__init__.py` | 空（如目录不存在则新建） |
 | `services/agent/wechat-rpa/tests/test_scan_unread.py` | 5 个单测（G1-G5），纯函数，零 pywinauto import |
 | `services/agent/wechat-rpa/tests/test_rate_limiter.py` | 频控上限单测：chat 分钟级 ≤2 拒第 3 次 |
-| `apps/api/src/services/__tests__/wechat-draft-auto-reply.test.ts` | 4 个 Jest 测试（J1-J4），mock 飞书 + mock openrouter |
+| `apps/api/src/services/__tests__/wechat-draft-auto-reply.test.ts` | 4 个 vitest 测试（J1-J4），mock 飞书 + mock openrouter |
 
 ### 不动
 
