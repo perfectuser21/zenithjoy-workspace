@@ -2719,3 +2719,11 @@ agent_suite:
     status: active
     product: 客户私域AI接管
     note: "Path 4 Step 2 Notion CRM 服务单元测试"
+
+  - id: path4-crm-config-e2e
+    path: apps/dashboard/e2e/crm-config.spec.ts
+    type: e2e
+    ci: windows_cloud
+    status: active
+    product: 客户私域AI接管
+    note: "Path 4 Step 2 CRM 配置页 Playwright E2E — 微信联系人匹配 + 5条精确卡"
