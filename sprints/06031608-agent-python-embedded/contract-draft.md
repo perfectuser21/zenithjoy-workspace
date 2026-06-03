@@ -1,4 +1,4 @@
-# Sprint Contract Draft (Round 1)
+# Sprint Contract Draft (Round 2)
 
 ## Response Schema（推导来源: N/A — 任务无 HTTP 响应）
 
@@ -228,4 +228,4 @@ exit 0
 
 | 功能 | Test File | BEHAVIOR 覆盖 | 预期红证据 |
 |---|---|---|---|
-| 整个 Sprint | `tests/agent-python-embedded.test.ts` | build脚本含python-embedded / start.bat含Narrator / handler含路径检测 / smoke.sh存在且有内容 | → 4 failures（实现前文件未改） |
+| 整个 Sprint | `sprints/06031608-agent-python-embedded/tests/agent-python-embedded.test.ts` | build脚本含python-embedded / start.bat含Narrator / handler含python-embedded路径+python3回退 / startWechatListener函数含python-embedded / smoke.sh存在且含内容 / package.json版本1.1.78 / e2e-verify.ps1存在 | → 6 failures（test-7 e2e-verify.ps1 proposer 已写入，预期 PASS） |
