@@ -18,10 +18,17 @@ describe('CRM routes — TDD Red Phase [BEHAVIOR]', () => {
     expect(c).toContain('table_id');
   });
 
-  it('crm.ts 含 GET /wechat-contacts 路由 + contacts 响应字段', () => {
+  it('crm.ts 含 GET /wechat-contacts 路由 + contacts 响应字段 + wechat_id/nickname 字段定义', () => {
     const c = fs.readFileSync(CRM_ROUTE, 'utf8');
     expect(c).toContain('wechat-contacts');
     expect(c).toContain('contacts');
+    expect(c).toContain('wechat_id');
+    expect(c).toContain('nickname');
+  });
+
+  it('crm.ts /init 路由含 mode=detect 分支逻辑', () => {
+    const c = fs.readFileSync(CRM_ROUTE, 'utf8');
+    expect(c).toContain('detect');
   });
 
   it('crm.ts 含 GET /match-preview 路由 + matched/pending/unmatched 三字段', () => {
@@ -46,11 +53,13 @@ describe('CRM routes — TDD Red Phase [BEHAVIOR]', () => {
     expect(c).not.toContain('tableId');
   });
 
-  it('daily-crm-analysis.ts 存在 + 含 FEISHU_NOTIFY_WEBHOOK + AI 调用', () => {
+  it('daily-crm-analysis.ts 存在 + 含 FEISHU_NOTIFY_WEBHOOK + AI 调用 + AI 建议列写回逻辑', () => {
     const c = fs.readFileSync(DAILY_ANALYSIS, 'utf8');
     expect(c).toContain('FEISHU_NOTIFY_WEBHOOK');
     const hasAI = c.includes('openrouter') || c.includes('deepseek') || c.includes('OpenRouter');
     expect(hasAI).toBe(true);
+    const hasWriteback = c.includes('ai_suggestion') || c.includes('AI 建议') || c.includes('suggestion');
+    expect(hasWriteback).toBe(true);
   });
 
   it('CrmConfigPage.tsx 存在 + 含飞书/Notion 平台选择器', () => {
@@ -66,5 +75,19 @@ describe('CRM routes — TDD Red Phase [BEHAVIOR]', () => {
   it('CustomerListPage.tsx 存在', () => {
     const p = path.join(DASHBOARD_ROOT, 'CustomerListPage.tsx');
     expect(fs.existsSync(p)).toBe(true);
+  });
+
+  it('crm-config.spec.ts 存在 + 含 wechat_id/nickname 断言 + page.route stub + contacts.length==5 精确卡', () => {
+    const specPath = path.resolve('apps/dashboard/e2e/crm-config.spec.ts');
+    expect(fs.existsSync(specPath)).toBe(true);
+    const c = fs.readFileSync(specPath, 'utf8');
+    const tests = (c.match(/\btest\(/g) || []).length;
+    expect(tests).toBeGreaterThanOrEqual(4);
+    const shots = (c.match(/page\.screenshot/g) || []).length;
+    expect(shots).toBeGreaterThanOrEqual(3);
+    expect(c).toContain('wechat_id');
+    expect(c).toContain('nickname');
+    expect(c).toContain('page.route');
+    expect(c.match(/toHaveCount\(5\)|length.*5|\.length,\s*5/)).not.toBeNull();
   });
 });
