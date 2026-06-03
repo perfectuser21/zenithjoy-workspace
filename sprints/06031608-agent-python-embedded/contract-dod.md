@@ -22,8 +22,8 @@ target_environment: windows_cloud
 - [ ] [ARTIFACT] `.github/workflows/scripts/smoke/agent-python-embedded-smoke.sh` 新建且有内容
   Test: node -e "const fs=require('fs');const p='.github/workflows/scripts/smoke/agent-python-embedded-smoke.sh';if(!fs.existsSync(p))process.exit(1);const c=fs.readFileSync(p,'utf8');if(!c.includes('python-embedded'))process.exit(2)"
 
-- [ ] [ARTIFACT] `services/agent/package.json` 版本号为 `1.1.78`
-  Test: node -e "const v=require('./services/agent/package.json').version;if(v!=='1.1.78')process.exit(1)"
+- [ ] [ARTIFACT] `services/agent/package.json` 版本号为 `1.1.79`（CI Lint Agent Version Bump 强制再次 bump，原 contract 1.1.78 已在 PR #620 合并）
+  Test: node -e "const v=require('./services/agent/package.json').version;if(v!=='1.1.79')process.exit(1)"
 
 - [ ] [ARTIFACT] `sprints/06031608-agent-python-embedded/e2e-verify.ps1` 存在（windows_cloud 验收脚本）
   Test: node -e "require('fs').accessSync('sprints/06031608-agent-python-embedded/e2e-verify.ps1')"
