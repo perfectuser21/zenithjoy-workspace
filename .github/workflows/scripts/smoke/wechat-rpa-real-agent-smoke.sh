@@ -55,10 +55,14 @@ echo "[6] dist/index.js 启动时调用 startWechatListener"
 grep -q "startWechatListener" "$DIST_INDEX" || { echo "FAIL: index.js 未调用 startWechatListener"; exit 1; }
 echo "  ✅ PASS"
 
-echo "[7] Agent 版本 == 1.1.77"
+echo "[7] Agent 版本 >= 1.1.77（wechat-rpa 真实接线起始版本）"
 VERSION=$(node -e "console.log(require('./$PKG').version)")
-[ "$VERSION" = "1.1.77" ] || { echo "FAIL: 版本 $VERSION != 1.1.77"; exit 1; }
-echo "  ✅ PASS"
+node -e "
+const [a,b,c] = process.argv[1].split('.').map(Number);
+const ok = a > 1 || (a === 1 && (b > 1 || (b === 1 && c >= 77)));
+process.exit(ok ? 0 : 1);
+" "$VERSION" || { echo "FAIL: 版本 $VERSION < 1.1.77"; exit 1; }
+echo "  ✅ PASS (当前 $VERSION)"
 
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
