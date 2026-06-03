@@ -26,7 +26,7 @@ export interface MatchResult {
 }
 
 // Mock 5 条微信联系人（xian-rog 无真微信客户端，E2E 全走 mock）
-export async function fetchWechatContacts(_tenantId: string): Promise<WechatContact[]> {
+export async function fetchWechatContacts(): Promise<WechatContact[]> {
   return [
     { wechat_id: 'wx_001', nickname: '张三' },
     { wechat_id: 'wx_002', nickname: '李四' },
