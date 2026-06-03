@@ -82,6 +82,19 @@ jobs:
       - name: Run ws5 smoke
         run: bash .github/workflows/scripts/smoke/path4-sprint-1-ws5-smoke.sh
 
+  agent-real-script:
+    name: Agent wechat-rpa 真实脚本接入（v1.1.77）
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '20' }
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.11' }
+      - name: Run wechat-rpa-real-agent smoke
+        run: bash .github/workflows/scripts/smoke/wechat-rpa-real-agent-smoke.sh
+
   golden-path-4-smoke:
     name: Golden Path 4 — Full 6-step E2E Smoke
     runs-on: ubuntu-latest

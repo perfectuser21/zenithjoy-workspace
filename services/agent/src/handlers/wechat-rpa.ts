@@ -13,18 +13,29 @@ export interface WechatRpaResult {
   error?: string;
 }
 
+// 测试专用导出：暴露路径解析逻辑（不依赖 task 对象）
+export function resolveScriptForTest(type: WechatRpaTask['type']): string {
+  const rpaDir = path.resolve(__dirname, '../../wechat-rpa');
+  switch (type) {
+    case 'wechat_private_chat_send': return path.join(rpaDir, 'send_chat.py');
+    case 'wechat_qr_bind':           return path.join(rpaDir, 'qr_bind.py');
+    case 'wechat_moments_send':      return path.join(rpaDir, 'send_moment.py');
+    default:                         return path.join(rpaDir, 'send_chat.py');
+  }
+}
+
 function resolveScript(task: WechatRpaTask): string {
   if (task.pythonStub) return task.pythonStub;
-  // 生产路径: WS3/4 接真 wechat_bot.py / wechat_rpa.py
-  // 本 WS1 阶段默认 dryrun stub:
-  const repoRoot = path.resolve(__dirname, '../../../..');
-  return path.join(repoRoot, 'scripts', 'wechat_rpa_dryrun.py');
+  return resolveScriptForTest(task.type);
 }
 
 export async function handleWechatRpa(task: WechatRpaTask): Promise<WechatRpaResult> {
   return new Promise((resolve) => {
     const script = resolveScript(task);
-    const py = spawn('python3', [script], { stdio: ['pipe', 'pipe', 'pipe'] });
+    const py = spawn('python3', [script], {
+      stdio: ['pipe', 'pipe', 'pipe'],
+      env: { ...process.env, REAL_PUBLISH: '1' },
+    });
 
     let stdout = '';
     let stderr = '';
@@ -41,7 +52,7 @@ export async function handleWechatRpa(task: WechatRpaTask): Promise<WechatRpaRes
       try {
         const receipt = JSON.parse(stdout);
         resolve({ ok: true, receipt });
-      } catch (e) {
+      } catch {
         resolve({ ok: false, error: `receipt parse fail: ${stdout.slice(0, 100)}` });
       }
     });
@@ -50,4 +61,18 @@ export async function handleWechatRpa(task: WechatRpaTask): Promise<WechatRpaRes
       resolve({ ok: false, error: `spawn fail: ${e.message}` });
     });
   });
+}
+
+// Windows only：Agent 启动时自动拉起 listen_chat.py 持续监听微信消息
+export function startWechatListener(apiBase: string): void {
+  if (process.platform !== 'win32') {
+    console.log('[wechat-rpa] 非 Windows，跳过 listen_chat 自启');
+    return;
+  }
+  const script = path.resolve(__dirname, '../../wechat-rpa/listen_chat.py');
+  spawn('python3', [script, '--middleware-url', apiBase], {
+    detached: true,
+    stdio: 'ignore',
+  }).unref();
+  console.log('[wechat-rpa] listen_chat.py 已自启（middleware-url:', apiBase, '）');
 }
