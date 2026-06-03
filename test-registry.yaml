@@ -2727,3 +2727,11 @@ agent_suite:
     status: active
     product: 客户私域AI接管
     note: "Path 4 Step 2 CRM 配置页 Playwright E2E — 微信联系人匹配 + 5条精确卡"
+
+  - id: agent-wechat-rpa-real-v1177
+    path: .github/workflows/scripts/smoke/wechat-rpa-real-agent-smoke.sh
+    type: smoke
+    ci: L3
+    status: active
+    product: 客户私域AI接管
+    note: "Agent v1.1.77 wechat-rpa 真实脚本接入验证（现场 build dist + 7 项静态检查，CI Linux 可跑）"
