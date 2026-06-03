@@ -8,6 +8,11 @@ REM Unblock all executables recursively (removes Zone Identifier / Mark of the W
 REM Without this, execFile() on bundled ffmpeg.exe / Playwright chrome.exe fails with "spawn UNKNOWN"
 powershell -NoProfile -Command "Get-ChildItem -Path '%~dp0' -Recurse -Include '*.exe','*.dll' | Unblock-File" >nul 2>&1
 
+REM Step 0: 讲述人开关 — 解锁微信 UIAutomation 访问（WeChat 4.0 窗口自动化前置条件）
+REM 约 2 秒：Start-Process Narrator → 等待 → Stop-Process 关闭，UIAutomation 权限已获取
+powershell -NoProfile -Command "Start-Process Narrator; Start-Sleep -Milliseconds 1500; Stop-Process -Name Narrator -ErrorAction SilentlyContinue" >nul 2>&1
+echo [narrator] WeChat UIAutomation unlocked (Narrator start+stop)
+
 REM Step 1: Verify .env exists — 首次运行自动从 .env.template 复制
 if not exist .env (
     if exist .env.template (

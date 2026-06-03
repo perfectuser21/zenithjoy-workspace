@@ -1,0 +1,31 @@
+{
+  "initiative_id": "pending",
+  "journey_type": "user_facing",
+  "journey_type_reason": "客户安装体验改善，直接影响 Path 4 Step 1 落地质量",
+  "tasks": [
+    {
+      "task_id": "ws1",
+      "title": "Agent 安装包内置 Python-embedded + wechat-rpa 零依赖安装 v1.1.78",
+      "scope": "build-install-pack.sh 加 Python 3.11 embeddable 下载/解压/pip install pywinauto+pywin32 + wechat-rpa/*.py 拷贝；start.bat 加讲述人解锁 PowerShell 命令；wechat-rpa.ts handler 改用 python-embedded/python.exe 优先逻辑（startWechatListener + handleWechatRpa）；新建 agent-python-embedded-smoke.sh；版本 bump 1.1.77→1.1.78",
+      "dod": [
+        "[BEHAVIOR] build-install-pack.sh 含 python-embedded 下载且含 embeddable 字样",
+        "[BEHAVIOR] start.bat 含 Start-Process Narrator 与 Stop-Process 命令",
+        "[BEHAVIOR] wechat-rpa.ts 含 python-embedded/python.exe 路径优先 + python3 回退，startWechatListener 函数体同样覆盖",
+        "[BEHAVIOR] agent-python-embedded-smoke.sh 存在且含 >5 行实质内容和 python-embedded 断言",
+        "[ARTIFACT] services/agent/package.json version = 1.1.78",
+        "[ARTIFACT] sprints/06031608-agent-python-embedded/e2e-verify.ps1 存在"
+      ],
+      "files": [
+        "services/agent/scripts/build-install-pack.sh",
+        "services/agent/install-pack/start.bat",
+        "services/agent/src/handlers/wechat-rpa.ts",
+        "services/agent/package.json",
+        ".github/workflows/scripts/smoke/agent-python-embedded-smoke.sh",
+        "sprints/06031608-agent-python-embedded/e2e-verify.ps1"
+      ],
+      "depends_on": [],
+      "complexity": "M",
+      "estimated_minutes": 75
+    }
+  ]
+}
