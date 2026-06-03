@@ -212,6 +212,18 @@ exit 0
 
 ---
 
+## Risks
+
+来源：PRD `[ASSUMPTION]` 段明确标注的已知技术陷阱，Generator 在实现时必须逐一处理。
+
+| # | 风险 | 触发条件 | Mitigation（Generator 必做） |
+|---|---|---|---|
+| R1 | **python311._pth 未启用 site-packages** → pip install 成功但 `import pywinauto` 失败 | Python 3.11 embeddable 默认 `python311._pth` 注释掉 `import site`，导致 pip 装的包对解释器不可见 | `build-install-pack.sh` 在 `python3 -m pip install` 之前，必须显式 patch `python311._pth`：追加一行 `import site` 或取消注释该行 |
+| R2 | **pywinauto/pywin32 路径 isolation 问题** → pip 把包装到全局 `site-packages` 而非 embeddable 内部 | pip install 未指定 `--target`，包落到系统目录而非 `python-embedded/Lib/site-packages` | `pip install --target ./python-embedded/Lib/site-packages pywinauto pywin32 requests`；安装后运行 `python-embedded/python.exe -c "import pywinauto; print('ok')"` 验证 import 成功，失败则 build exit 1 |
+| R3 | **Python embeddable 下载 URL 不稳定** → CI 失败或下载到错误文件 | `python.org` CDN 偶尔改路径；网络超时 | 在 `build-install-pack.sh` 中 hardcode SHA256 哈希值并在下载后 `shasum -a 256 --check` 校验；失败 exit 1（阻止构建含损坏 Python 的包） |
+
+---
+
 ## Test Contract
 
 | 功能 | Test File | BEHAVIOR 覆盖 | 预期红证据 |

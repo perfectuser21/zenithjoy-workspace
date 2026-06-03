@@ -59,3 +59,11 @@ target_environment: windows_cloud
 - [ ] [BEHAVIOR:E2E] windows_cloud PowerShell 静态验证 5 项全通
   Test: 通过 `.github/workflows/e2e-windows.yml` 触发，运行 `sprints/06031608-agent-python-embedded/e2e-verify.ps1`
   期望: exit 0，5 项检查均输出 ✅
+
+## Risks（PRD ASSUMPTION 已知陷阱，Generator 必须处理）
+
+| # | 风险 | Mitigation |
+|---|---|---|
+| R1 | python311._pth 未启用 site-packages → pip install 后 `import pywinauto` 失败 | build 脚本显式 patch _pth（追加 `import site`），再执行 pip install |
+| R2 | pywinauto/pywin32 装到系统目录而非 embedded 内部 | `pip install --target ./python-embedded/Lib/site-packages`；安装后验证 `python-embedded/python.exe -c "import pywinauto"` exit 0 |
+| R3 | Python embeddable 下载 URL 不稳定 | hardcode SHA256，下载后 `shasum -a 256 --check`，失败 build exit 1 |
