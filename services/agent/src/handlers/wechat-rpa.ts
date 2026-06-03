@@ -1,5 +1,16 @@
 import { spawn } from 'node:child_process';
 import path from 'node:path';
+import fs from 'node:fs';
+
+// 测试用导出：允许注入 baseDir
+export function getPythonExeForTest(baseDir: string): string {
+  const embedded = path.join(baseDir, 'python-embedded', 'python.exe');
+  return fs.existsSync(embedded) ? embedded : 'python3';
+}
+
+function getPythonExe(): string {
+  return getPythonExeForTest(path.dirname(process.execPath));
+}
 
 export interface WechatRpaTask {
   type: 'wechat_qr_bind' | 'wechat_moments_send' | 'wechat_private_chat_send';
@@ -32,7 +43,7 @@ function resolveScript(task: WechatRpaTask): string {
 export async function handleWechatRpa(task: WechatRpaTask): Promise<WechatRpaResult> {
   return new Promise((resolve) => {
     const script = resolveScript(task);
-    const py = spawn('python3', [script], {
+    const py = spawn(getPythonExe(), [script], {
       stdio: ['pipe', 'pipe', 'pipe'],
       env: { ...process.env, REAL_PUBLISH: '1' },
     });
@@ -70,7 +81,7 @@ export function startWechatListener(apiBase: string): void {
     return;
   }
   const script = path.resolve(__dirname, '../../wechat-rpa/listen_chat.py');
-  spawn('python3', [script, '--middleware-url', apiBase], {
+  spawn(getPythonExe(), [script, '--middleware-url', apiBase], {
     detached: true,
     stdio: 'ignore',
   }).unref();

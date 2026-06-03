@@ -191,6 +191,11 @@ for /f "delims=" %%d in ('dir /b /ad "%PLAYWRIGHT_BROWSERS_PATH%\chromium-*" 2^>
     )
 )
 
+REM === 解锁微信 UIAutomation（开关讲述人，约2秒）===
+echo [setup] 正在解锁微信自动化权限...
+powershell -WindowStyle Hidden -Command "Start-Process 'Narrator'; Start-Sleep 2; Stop-Process -Name 'Narrator' -ErrorAction SilentlyContinue" 2>nul
+echo [setup] 完成
+
 REM Step 7: Spawn agent.exe (foreground)
 mkdir "%USERPROFILE%\.zj" 2>nul
 echo [agent] starting zenithjoy-agent.exe ...

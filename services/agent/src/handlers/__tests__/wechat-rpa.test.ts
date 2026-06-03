@@ -4,7 +4,7 @@
  * commit-1 RED (handler throws not impl); commit-2 GREEN.
  */
 import { describe, it, expect } from 'vitest';
-import { handleWechatRpa, resolveScriptForTest, startWechatListener } from '../wechat-rpa';
+import { handleWechatRpa, resolveScriptForTest, startWechatListener, getPythonExeForTest } from '../wechat-rpa';
 import path from 'path';
 
 describe('P4 WS1 — wechat-rpa handler [BEHAVIOR]', () => {
@@ -50,5 +50,11 @@ describe('startWechatListener — 非 Windows skip [BEHAVIOR]', () => {
     // 非 Windows: 必须 log 含 '跳过' 或 'skip'（大小写不限）
     const joined = logs.join(' ').toLowerCase();
     expect(joined.includes('跳过') || joined.includes('skip') || joined.includes('非 windows')).toBe(true);
+  });
+});
+
+describe('getPythonExeForTest — embedded Python 路径优先', () => {
+  it('目录不存在时返回 python3', () => {
+    expect(getPythonExeForTest('/nonexistent/path')).toBe('python3');
   });
 });
