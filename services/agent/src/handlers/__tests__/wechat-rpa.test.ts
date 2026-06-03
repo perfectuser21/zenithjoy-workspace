@@ -58,3 +58,14 @@ describe('getPythonExeForTest — embedded Python 路径优先', () => {
     expect(getPythonExeForTest('/nonexistent/path')).toBe('python3');
   });
 });
+
+describe('resolveScriptForTest — 路径基于 process.execPath 目录（pkg 打包后 __dirname 失效）', () => {
+  it('返回路径位于 exe 同级目录（process.execPath dir）下，而非 __dirname', () => {
+    // 根因：pkg 打包后 __dirname 是 /snapshot 虚拟路径，真实 wechat-rpa 在 exe 同级。
+    const exeDir = path.dirname(process.execPath);
+    const p = resolveScriptForTest('wechat_qr_bind');
+    expect(p.startsWith(path.join(exeDir, 'wechat-rpa'))).toBe(true);
+    // 防回归：不能再用 __dirname（测试文件 __dirname 在 src/handlers/__tests__ 下）
+    expect(p.startsWith(__dirname)).toBe(false);
+  });
+});

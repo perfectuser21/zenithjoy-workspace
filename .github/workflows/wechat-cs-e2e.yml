@@ -1,0 +1,154 @@
+name: WeChat CS Hardening — E2E
+
+# Path 4 微信 AI 客服稳定性加固 E2E。
+# 设计如此（PrepPRD 已说明）：pywinauto 真机操作微信 GHA 跑不了（runner 无微信），
+# 由 xian-pc lead 自验。本 workflow 只验证：
+#   job1 (ubuntu)  — 中台链路模拟用户：curl 真打 /listener-heartbeat + /draft-generate(mode:auto)
+#                    + schema mode 透传单测（mock 飞书/DeepSeek）
+#   job2 (windows) — Agent 启动路径解析 + listen_chat.py dryrun 退出码 0（python-embedded getPythonExe 逻辑）
+
+on:
+  push:
+    branches: [main, 'cp-*']
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: wechat-cs-e2e-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  middleware-chain:
+    name: job1 — 中台链路模拟用户（curl + mode 透传）
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      PORT: 5210
+      NODE_ENV: test
+      BETTER_AUTH_SECRET: ci-only-secret-32-chars-min-not-prod-123
+      BETTER_AUTH_URL: http://localhost:5210
+      ZENITHJOY_INTERNAL_TOKEN: ci-only-internal-token-abc-not-prod
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: package-lock.json
+
+      - name: Install apps/api deps
+        run: npm ci --workspace=apps/api
+
+      - name: Schema 含 mode + 心跳端点单测（mock 飞书/DeepSeek，权威 mode 透传断言）
+        working-directory: apps/api
+        run: |
+          npx vitest run \
+            tests/routes/wechat.test.ts \
+            src/services/__tests__/wechat-heartbeat.test.ts \
+            src/routes/__tests__/wechat.test.ts \
+            --reporter=basic
+
+      - name: Build apps/api
+        working-directory: apps/api
+        run: npm run build
+
+      - name: Start apps/api
+        working-directory: apps/api
+        run: |
+          node dist/index.js > /tmp/apps-api.log 2>&1 &
+          echo $! > /tmp/apps-api.pid
+          for i in $(seq 1 30); do
+            if curl -fs http://localhost:5210/health >/dev/null 2>&1; then
+              echo "apps/api ready after ${i}s"; break
+            fi
+            sleep 1
+          done
+          curl -fs http://localhost:5210/health || (cat /tmp/apps-api.log && exit 1)
+
+      - name: E2E — 监听心跳上报（进程守护端点真链路）
+        run: |
+          BODY='{"agent_id":"ci-agent","wechat_id":"ci-wx-默忆"}'
+          RESP=$(curl -s -X POST http://localhost:5210/api/wechat/listener-heartbeat \
+            -H 'Content-Type: application/json' -d "$BODY")
+          echo "heartbeat resp: $RESP"
+          echo "$RESP" | node -e "const j=JSON.parse(require('fs').readFileSync(0,'utf8')); if(j.ok!==true) process.exit(1);" \
+            || { echo "FAIL: 心跳端点未返回 ok:true"; exit 1; }
+          echo "PASS: /listener-heartbeat ok:true"
+
+      - name: E2E — 模拟用户消息 mode:auto（schema 透传，无凭据时合理降级）
+        run: |
+          BODY='{"sender":"ci-客户","wechat_id":"ci_wx","content":"在吗","mode":"auto"}'
+          CODE=$(curl -s -o /tmp/dg.json -w '%{http_code}' -X POST \
+            http://localhost:5210/api/wechat/draft-generate \
+            -H 'Content-Type: application/json' -d "$BODY")
+          echo "draft-generate HTTP $CODE: $(cat /tmp/dg.json)"
+          test "$CODE" = "200" || { echo "FAIL: mode:auto 应 200（含 reply 或合理降级 not_in_whitelist）"; exit 1; }
+          node -e "const j=require('/tmp/dg.json'); if(!('reply' in j) && j.reason!=='not_in_whitelist' && j.ok!==true) process.exit(1);" \
+            || { echo "FAIL: 返回既无 reply 也非合理降级"; exit 1; }
+          echo "PASS: mode:auto 链路（200 + reply/合理降级）"
+
+      - name: E2E — 非法 mode 被 schema 拒（证明 mode enum 真生效）
+        run: |
+          BODY='{"sender":"ci-客户","wechat_id":"ci_wx","content":"在吗","mode":"bogus"}'
+          CODE=$(curl -s -o /dev/null -w '%{http_code}' -X POST \
+            http://localhost:5210/api/wechat/draft-generate \
+            -H 'Content-Type: application/json' -d "$BODY")
+          echo "非法 mode HTTP $CODE"
+          test "$CODE" = "400" || { echo "FAIL: 非法 mode 应被 zod enum 拒为 400"; exit 1; }
+          echo "PASS: 非法 mode → 400"
+
+      - name: Static smoke（5 处修复 + 守护落地）
+        run: bash .github/workflows/scripts/smoke/wechat-cs-hardening-smoke.sh
+
+      - name: Stop apps/api
+        if: always()
+        run: kill "$(cat /tmp/apps-api.pid)" 2>/dev/null || true
+
+  agent-windows:
+    name: job2 — Agent 启动路径 + listen_chat dryrun（windows-latest）
+    runs-on: windows-latest
+    timeout-minutes: 12
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install services/agent deps
+        working-directory: services/agent
+        run: npm ci
+
+      - name: Agent 路径解析单测（process.execPath / getPythonExe，Windows 验证）
+        working-directory: services/agent
+        # 仅跑路径解析相关用例：resolveScript / getPythonExe / process.execPath。
+        # "非 Windows skip" 用例按设计只在 Linux agent CI 跑（windows-latest 上 startWechatListener
+        # 真走 win32 分支不 skip，故在此 job 用 -t 过滤掉）。
+        run: npx vitest run src/handlers/__tests__/wechat-rpa.test.ts -t "resolveScript|getPythonExe|process.execPath"
+
+      - name: listen_chat.py --dryrun-print-version 退出码 0
+        working-directory: services/agent/wechat-rpa
+        run: |
+          python listen_chat.py --dryrun-print-version
+          echo "exit=$?"
+
+      - name: listen_chat.py --dryrun 注入消息退出码 0（中台 dryrun，不真发）
+        working-directory: services/agent/wechat-rpa
+        env:
+          WECHAT_DRAFT_API_DRYRUN: '1'
+        run: |
+          python listen_chat.py --dryrun \
+            --inject-message '{"sender":"ci","wechat_id":"ci_wx","content":"hi"}'
+          echo "exit=$?"
+
+      - name: 纯逻辑单测（_parse_item_name / reply_in_chat / post_heartbeat）
+        working-directory: services/agent/wechat-rpa
+        run: |
+          python -m pip install --quiet pytest
+          python -m pytest tests/ -q

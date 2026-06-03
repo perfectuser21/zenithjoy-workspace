@@ -2751,3 +2751,53 @@ agent_suite:
     status: active
     product: 客户私域AI接管
     note: "Agent v1.1.78 Python-embedded + wechat-rpa 零依赖安装包验证（build脚本/start.bat/handler 静态检查）"
+
+  # ── 微信 AI 客服稳定性加固（wechat-cs-hardening sprint）────────────────────────
+
+  - id: wechat-cs-heartbeat-service
+    path: apps/api/src/services/__tests__/wechat-heartbeat.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 客户私域AI接管
+    note: "监听心跳记录 + 超3min断线飞书告警服务（recordHeartbeat/findStaleListeners/checkStaleListenersAndAlert）"
+
+  - id: wechat-cs-reply-in-chat
+    path: services/agent/wechat-rpa/tests/test_reply_in_chat.py
+    type: unit
+    ci: L3
+    status: active
+    product: 客户私域AI接管
+    note: "reply_in_chat 必须 click_input 切换会话（微信4.0 select 不切换→发错对象）"
+
+  - id: wechat-cs-post-heartbeat
+    path: services/agent/wechat-rpa/tests/test_post_heartbeat.py
+    type: unit
+    ci: L3
+    status: active
+    product: 客户私域AI接管
+    note: "listen_chat 每60s 上报中台心跳，失败不抛（进程守护断线告警数据源）"
+
+  - id: wechat-cs-build-pywinauto
+    path: services/agent/scripts/__tests__/build-install-pack-pywinauto.test.sh
+    type: unit
+    ci: L3
+    status: active
+    product: 客户私域AI接管
+    note: "build-install-pack 跨平台预装 pywinauto 契约（get-pip + --platform win_amd64 + 去重）"
+
+  - id: wechat-cs-process-guardian
+    path: services/agent/install-pack/__tests__/process-guardian.test.sh
+    type: unit
+    ci: L3
+    status: active
+    product: 客户私域AI接管
+    note: "进程守护脚本契约：listener-watchdog.bat 30s 自愈 + install-autostart.ps1 ONLOGON 注册/注销"
+
+  - id: wechat-cs-hardening-smoke
+    path: .github/workflows/scripts/smoke/wechat-cs-hardening-smoke.sh
+    type: smoke
+    ci: L4
+    status: active
+    product: 客户私域AI接管
+    note: "微信客服加固静态校验（5处修复 + 心跳端点 + watchdog/autostart 落地，CI Linux 可跑）"

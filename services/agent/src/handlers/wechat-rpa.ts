@@ -26,7 +26,8 @@ export interface WechatRpaResult {
 
 // 测试专用导出：暴露路径解析逻辑（不依赖 task 对象）
 export function resolveScriptForTest(type: WechatRpaTask['type']): string {
-  const rpaDir = path.resolve(__dirname, '../../wechat-rpa');
+  // pkg 打包后 __dirname 是 /snapshot 虚拟路径，真实 wechat-rpa 在 exe 同级目录。
+  const rpaDir = path.join(path.dirname(process.execPath), 'wechat-rpa');
   switch (type) {
     case 'wechat_private_chat_send': return path.join(rpaDir, 'send_chat.py');
     case 'wechat_qr_bind':           return path.join(rpaDir, 'qr_bind.py');
@@ -81,7 +82,8 @@ export function startWechatListener(apiBase: string): void {
     return;
   }
   // python-embedded/python.exe 优先（由 getPythonExe() 检测），否则回退 python3
-  const script = path.resolve(__dirname, '../../wechat-rpa/listen_chat.py');
+  // pkg 打包后 __dirname 是 /snapshot 虚拟路径，listen_chat.py 在 exe 同级目录。
+  const script = path.join(path.dirname(process.execPath), 'wechat-rpa', 'listen_chat.py');
   spawn(getPythonExe(), [script, '--middleware-url', apiBase], {
     detached: true,
     stdio: 'ignore',

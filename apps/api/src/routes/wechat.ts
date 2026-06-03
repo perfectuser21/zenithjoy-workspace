@@ -28,6 +28,7 @@ import {
 } from '../services/ilink-client';
 import { runPollerOnce } from '../services/ilink-poller';
 import { callOpenRouter } from '../llm/openrouter';
+import { recordHeartbeat } from '../services/wechat-heartbeat';
 
 export const wechatRouter = Router();
 
@@ -45,10 +46,20 @@ const SchedulerTickSchema = z
   })
   .strict();
 
+const ListenerHeartbeatSchema = z
+  .object({
+    agent_id: z.string().optional(),
+    wechat_id: z.string().optional(),
+    ts: z.number().optional(),
+  })
+  .passthrough();
+
 const DraftGenerateSchema = z.object({
   sender: z.string().min(1),
   wechat_id: z.string().min(1),
   content: z.string().min(1),
+  // listen_chat.py 自动回模式传 mode='auto'；不声明会被 zod strip 掉 → auto 模式不返回 reply。
+  mode: z.enum(['auto', 'review']).optional(),
 });
 
 // ─── POST /api/wechat/qr-bind ───────────────────────────────────────────────
@@ -92,6 +103,21 @@ wechatRouter.post('/qr-bind', async (req: Request, res: Response) => {
     task_id: taskId,
     status: 'dispatched',
   });
+});
+
+// ─── POST /api/wechat/listener-heartbeat（进程守护：监听心跳上报）──────────────
+// listen_chat.py 每分钟上报；中台记最后心跳时间。断 3 分钟无心跳由 wechat-heartbeat
+// 的 startStaleListenerMonitor 飞书告警。lenient：任何 body 都返回 200，绝不阻塞监听。
+
+wechatRouter.post('/listener-heartbeat', (req: Request, res: Response) => {
+  const parsed = ListenerHeartbeatSchema.safeParse(req.body ?? {});
+  const data = parsed.success ? parsed.data : {};
+  const rec = recordHeartbeat({
+    agent_id: data.agent_id,
+    wechat_id: data.wechat_id,
+    ts: data.ts,
+  });
+  return res.status(200).json({ ok: true, recorded_at: rec.ts });
 });
 
 // ─── POST /api/wechat/draft-review-poll & GET 单查 ─────────────────────────

@@ -169,6 +169,32 @@ describe('ws3 POST /api/wechat/draft-generate — zod 校验 + 转 service', () 
     );
   });
 
+  it('body 带 mode:"auto" → 透传到 generateChatDraft（schema 必须保留 mode 字段）', async () => {
+    // 根因：DraftGenerateSchema 未声明 mode，zod strip 掉 → auto 模式丢失，不返回 reply。
+    (generateChatDraft as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
+      ok: true,
+      status: 'pending_review',
+      task_id: '22222222-2222-4222-8222-222222222222',
+      draft_id: 'rec_x_2',
+      reply: '您好，在的',
+    });
+    const res = await request(app)
+      .post('/api/wechat/draft-generate')
+      .send({ sender: '客户A', wechat_id: 'test_a', content: '在吗', mode: 'auto' });
+    expect(res.status).toBe(200);
+    expect(res.body.reply).toBe('您好，在的');
+    expect(generateChatDraft).toHaveBeenCalledWith(
+      expect.objectContaining({ sender: '客户A', wechat_id: 'test_a', content: '在吗', mode: 'auto' }),
+    );
+  });
+
+  it('body 带非法 mode → 400（schema enum 校验）', async () => {
+    const res = await request(app)
+      .post('/api/wechat/draft-generate')
+      .send({ sender: '客户A', wechat_id: 'test_a', content: '在吗', mode: 'bogus' });
+    expect(res.status).toBe(400);
+  });
+
   it('名单外 sender → 200 + {ok:false, reason:"not_in_whitelist"}（service 决定，路由透传）', async () => {
     (generateChatDraft as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
       ok: false,
@@ -179,6 +205,24 @@ describe('ws3 POST /api/wechat/draft-generate — zod 校验 + 转 service', () 
       .send({ sender: '陌生人', wechat_id: 'unknown_x', content: '嗨' });
     expect(res.status).toBe(200);
     expect(res.body).toMatchObject({ ok: false, reason: 'not_in_whitelist' });
+  });
+});
+
+// ─── 进程守护 /api/wechat/listener-heartbeat ────────────────────────────────
+
+describe('POST /api/wechat/listener-heartbeat — 监听心跳上报', () => {
+  it('上报心跳 → 200 + {ok:true}（容错：永不阻塞监听）', async () => {
+    const res = await request(app)
+      .post('/api/wechat/listener-heartbeat')
+      .send({ agent_id: 'agent-x', wechat_id: 'wx-默忆' });
+    expect(res.status).toBe(200);
+    expect(res.body.ok).toBe(true);
+  });
+
+  it('空 body 也 200 + {ok:true}（lenient，不让监听因校验失败而崩）', async () => {
+    const res = await request(app).post('/api/wechat/listener-heartbeat').send({});
+    expect(res.status).toBe(200);
+    expect(res.body.ok).toBe(true);
   });
 });
 
