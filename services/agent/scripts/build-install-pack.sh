@@ -137,13 +137,52 @@ if [ -f "$PTH_FILE" ]; then
     echo "import site" >> "$PTH_FILE"
   fi
 fi
-# R2 mitigation: pip install --target 到 embedded 内部，不影响系统 Python
+# R2 mitigation: 把 pywinauto/pywin32/requests 装进 embedded 内部 site-packages（不污染系统 Python）。
+# 跨平台关键：embeddable 不自带 pip；且 python.exe 是 Windows 二进制，macOS/Linux 打包机无法执行
+# （原来 `python.exe -m pip install || true` 在非 Windows 静默失败 → site-packages 空 → 客户端炸）。
+#   - Windows 打包机：embedded python.exe 先 get-pip bootstrap，再 pip install（真装）。
+#   - macOS/Linux 打包机（含 GHA ubuntu / 本地 mac）：用宿主 python3 -m pip --platform win_amd64
+#     --only-binary=:all: --target 把 Windows wheel 下载解压进 site-packages（纯下载解压，不执行 exe）。
 SITE_PKGS="${PYTHON_EMBED_DIR}/Lib/site-packages"
 mkdir -p "$SITE_PKGS"
-"${PYTHON_EMBED_DIR}/python.exe" -m pip install --target "$SITE_PKGS" pywinauto pywin32 requests || true
-"${PYTHON_EMBED_DIR}/python.exe" -c "import pywinauto; print('pywinauto ok')" 2>/dev/null \
-  || echo "[build] WARN: pywinauto import 验证失败（Windows-only 包，Linux 构建时正常）"
-echo "[build] python-embedded 已打包（含 pywinauto + pywin32 + requests）"
+WHEEL_PKGS="pywinauto pywin32 comtypes six requests"
+GETPIP_URL="https://bootstrap.pypa.io/get-pip.py"
+HOST_PY="${HOST_PYTHON:-python3}"
+
+install_embedded_pkgs() {
+  case "$(uname -s)" in
+    *NT*|*MINGW*|*MSYS*|*CYGWIN*)
+      # Windows 打包机：embeddable bootstrap pip 后真装
+      curl -L --retry 3 -o "${PYTHON_EMBED_DIR}/get-pip.py" "$GETPIP_URL" || return 1
+      "${PYTHON_EMBED_DIR}/python.exe" "${PYTHON_EMBED_DIR}/get-pip.py" --target "$SITE_PKGS" || return 1
+      "${PYTHON_EMBED_DIR}/python.exe" -m pip install --target "$SITE_PKGS" $WHEEL_PKGS || return 1
+      ;;
+    *)
+      # macOS/Linux 打包机：宿主 pip 跨平台下载 Windows wheel（cp311 / win_amd64）到 target
+      "$HOST_PY" -m pip install \
+        --target "$SITE_PKGS" \
+        --platform win_amd64 \
+        --python-version 3.11 \
+        --implementation cp \
+        --only-binary=:all: \
+        --upgrade \
+        $WHEEL_PKGS || return 1
+      ;;
+  esac
+}
+
+if install_embedded_pkgs; then
+  echo "[build] python-embedded site-packages 已装 pywinauto + pywin32 + requests"
+else
+  echo "[build] WARN: pywinauto 预装失败（检查打包机网络/pip）— Windows runner 重打包可补装"
+fi
+
+# 验证 wheel 真落地 site-packages（跨平台都能查目录，不执行 Windows exe）
+if [ -d "$SITE_PKGS/pywinauto" ]; then
+  echo "[build] verified: site-packages/pywinauto/ 存在"
+else
+  echo "[build] WARN: site-packages/pywinauto/ 缺失 — 客户端 listen_chat 真模式将降级"
+fi
 
 # ── wechat-rpa 脚本打包 ──────────────────────────────────────────────────────────
 echo "[build] copying wechat-rpa/*.py scripts..."
@@ -210,30 +249,7 @@ mkdir -p "$HS_DEST_DIR"
 unzip -q "$HS_ZIP_CACHE" -d "$HS_DEST_DIR/"
 echo "[build] playwright-browsers/chromium_headless_shell-${PW_HS_REV}/ bundled"
 
-echo "[build] Python 3.11 embeddable for Windows..."
-PY_VERSION="3.11.9"
-PY_ZIP_NAME="python-${PY_VERSION}-embed-amd64.zip"
-PY_CACHE="install-pack/${PY_ZIP_NAME}"
-PY_URL="https://www.python.org/ftp/python/${PY_VERSION}/${PY_ZIP_NAME}"
-
-if [ ! -f "$PY_CACHE" ]; then
-  echo "[build] 下载 Python embeddable (~8MB)..."
-  curl -L --retry 3 -o "$PY_CACHE" "$PY_URL"
-fi
-
-PY_DEST="${PACK_DIR}/python-embedded"
-mkdir -p "$PY_DEST"
-unzip -q "$PY_CACHE" -d "$PY_DEST"
-
-# 启用 site-packages（取消注释 import site）
-PTH_FILE="$PY_DEST/python311._pth"
-[ -f "$PTH_FILE" ] && sed -i '' 's/^#import site/import site/' "$PTH_FILE" || true
-
-echo "[build] python-embedded/ 已加入安装包（pywinauto 需在 Windows 上运行打包脚本时安装）"
-
-echo "[build] 拷贝 wechat-rpa/ Python 脚本..."
-cp -r wechat-rpa/ "${PACK_DIR}/wechat-rpa/"
-echo "[build] wechat-rpa/ 已加入安装包"
+# （python-embedded + pywinauto 预装 + wechat-rpa 脚本拷贝已在上方统一处理，去除重复块）
 
 echo "[build] reproducible tar.gz (mtime locked)"
 TAR_NAME="${OUT_DIR}/${PACK_NAME}.tar.gz"
