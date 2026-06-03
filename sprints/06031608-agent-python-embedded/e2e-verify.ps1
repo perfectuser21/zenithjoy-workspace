@@ -1,4 +1,4 @@
-# e2e-verify.ps1 — windows_cloud 静态验证（Agent Python embedded sprint v1.1.78）
+# e2e-verify.ps1 — windows_cloud 静态验证（Agent Python embedded sprint v1.1.79）
 # 在 GitHub Actions windows-latest runner 上执行，验证代码改动符合合同要求
 param()
 Set-StrictMode -Version Latest
@@ -64,13 +64,13 @@ if ($smokeContent -notmatch "python-embedded") {
 }
 Write-Host "OK agent-python-embedded-smoke.sh 存在（$realLines 行实质内容）"
 
-# 5. 版本号 1.1.78
-Write-Host "`u{25B6} [5/5] 验证 services/agent/package.json 版本号为 1.1.78..."
+# 5. 版本号 1.1.79（CI Lint Agent Version Bump 强制再次 bump，对齐 commit 3e39c4a）
+Write-Host "`u{25B6} [5/5] 验证 services/agent/package.json 版本号为 1.1.79..."
 $pkgJson = Get-Content "$repoRoot\services\agent\package.json" -Raw | ConvertFrom-Json
-if ($pkgJson.version -ne "1.1.78") {
-  throw "FAIL: 版本号 '$($pkgJson.version)' 非 1.1.78"
+if ($pkgJson.version -ne "1.1.79") {
+  throw "FAIL: 版本号 '$($pkgJson.version)' 非 1.1.79"
 }
-Write-Host "OK 版本号 1.1.78 确认"
+Write-Host "OK 版本号 1.1.79 确认"
 
 Write-Host ""
 Write-Host "OK windows_cloud 静态验证全通 — Python embedded 安装包 sprint 合格"

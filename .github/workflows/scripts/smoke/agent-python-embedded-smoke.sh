@@ -65,10 +65,12 @@ for f in send_chat.py qr_bind.py send_moment.py listen_chat.py; do
 done
 echo "  ✅ PASS"
 
-echo "[8] Agent 版本 == 1.1.78"
+echo "[8] Agent 版本 >= 1.1.78（python-embedded 起始版本）"
+MIN_VERSION="1.1.78"
 VERSION=$(node -e "console.log(require('./$PKG').version)")
-[ "$VERSION" = "1.1.78" ] || { echo "FAIL: 版本 $VERSION != 1.1.78"; exit 1; }
-echo "  ✅ PASS"
+LOWEST=$(printf '%s\n%s\n' "$MIN_VERSION" "$VERSION" | sort -V | head -n1)
+[ "$LOWEST" = "$MIN_VERSION" ] || { echo "FAIL: 版本 $VERSION < $MIN_VERSION"; exit 1; }
+echo "  ✅ PASS (当前 $VERSION)"
 
 echo "[9] 单测通过（含 getPythonExeForTest 回退 python3）"
 ( cd "$AGENT_DIR" && npx vitest run src/handlers/__tests__/wechat-rpa.test.ts >/dev/null 2>&1 ) || { echo "FAIL: 单测未通过"; exit 1; }

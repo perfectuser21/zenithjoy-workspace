@@ -57,11 +57,11 @@ describe('agent-python-embedded [BEHAVIOR] — TDD Red Phase', () => {
     expect(content).toMatch(/python-embedded/);
   });
 
-  it('services/agent/package.json 版本号为 1.1.78', () => {
+  it('services/agent/package.json 版本号为 1.1.79', () => {
     const pkg = JSON.parse(
       readFileSync(resolve(REPO_ROOT, 'services/agent/package.json'), 'utf8')
     );
-    expect(pkg.version).toBe('1.1.78');
+    expect(pkg.version).toBe('1.1.79');
   });
 
   it('e2e-verify.ps1 存在（windows_cloud 验收脚本）', () => {
