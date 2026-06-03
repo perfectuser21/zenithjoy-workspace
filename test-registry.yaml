@@ -2743,3 +2743,11 @@ agent_suite:
     status: active
     product: 客户私域AI接管
     note: "Agent v1.1.78 内置 Python embedded + wechat-rpa 零依赖安装验证（9 项静态检查，CI Linux 可跑，Path 4 Step 1 thin→medium）"
+
+  - id: agent-python-embedded-tests-v1178
+    path: sprints/06031608-agent-python-embedded/tests/agent-python-embedded.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 客户私域AI接管
+    note: "Agent v1.1.78 Python-embedded + wechat-rpa 零依赖安装包验证（build脚本/start.bat/handler 静态检查）"
