@@ -208,6 +208,24 @@ describe('ws3 POST /api/wechat/draft-generate — zod 校验 + 转 service', () 
   });
 });
 
+// ─── 进程守护 /api/wechat/listener-heartbeat ────────────────────────────────
+
+describe('POST /api/wechat/listener-heartbeat — 监听心跳上报', () => {
+  it('上报心跳 → 200 + {ok:true}（容错：永不阻塞监听）', async () => {
+    const res = await request(app)
+      .post('/api/wechat/listener-heartbeat')
+      .send({ agent_id: 'agent-x', wechat_id: 'wx-默忆' });
+    expect(res.status).toBe(200);
+    expect(res.body.ok).toBe(true);
+  });
+
+  it('空 body 也 200 + {ok:true}（lenient，不让监听因校验失败而崩）', async () => {
+    const res = await request(app).post('/api/wechat/listener-heartbeat').send({});
+    expect(res.status).toBe(200);
+    expect(res.body.ok).toBe(true);
+  });
+});
+
 // ─── ws4 /api/wechat/scheduler-tick 真逻辑（generateMomentDraft 串联）─────────
 
 vi.mock('../../src/services/wechat-draft', async (importOriginal) => {
