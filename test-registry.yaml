@@ -2671,3 +2671,59 @@ agent_suite:
     status: active
     product: 私域运营
     note: "Path 4 Step 5 generateChatDraft mode:auto 返回 reply 文本（隐形自动回 J1-J4）"
+
+  - id: path4-crm-routes
+    path: apps/api/tests/routes/crm.test.ts
+    type: unit
+    ci: L4
+    status: active
+    product: 客户私域AI接管
+    note: "Path 4 Step 2 CRM 路由覆盖率测试 — /api/crm/init, /wechat-contacts, /match-preview, /daily-analysis"
+
+  - id: path4-crm-migration
+    path: sprints/06030910-path4-crm-wechat-sync/tests/crm-migration.test.ts
+    type: contract
+    ci: L1
+    status: active
+    product: 客户私域AI接管
+    note: "Path 4 Step 2 CRM DB 迁移合同测试"
+
+  - id: path4-crm-routes-contract
+    path: sprints/06030910-path4-crm-wechat-sync/tests/crm-routes.test.ts
+    type: contract
+    ci: L1
+    status: active
+    product: 客户私域AI接管
+    note: "Path 4 Step 2 CRM 路由结构合同测试"
+
+  - id: path4-crm-wechat-sync-service
+    path: apps/api/src/services/__tests__/crm-wechat-sync.test.ts
+    type: unit
+    ci: L4
+    status: active
+    product: 客户私域AI接管
+    note: "Path 4 Step 2 微信联系人匹配服务单元测试"
+
+  - id: path4-daily-crm-analysis-service
+    path: apps/api/src/services/__tests__/daily-crm-analysis.test.ts
+    type: unit
+    ci: L4
+    status: active
+    product: 客户私域AI接管
+    note: "Path 4 Step 2 每日 CRM AI 分析服务单元测试"
+
+  - id: path4-notion-crm-service
+    path: apps/api/src/services/__tests__/notion-crm.test.ts
+    type: unit
+    ci: L4
+    status: active
+    product: 客户私域AI接管
+    note: "Path 4 Step 2 Notion CRM 服务单元测试"
+
+  - id: path4-crm-config-e2e
+    path: apps/dashboard/e2e/crm-config.spec.ts
+    type: e2e
+    ci: windows_cloud
+    status: active
+    product: 客户私域AI接管
+    note: "Path 4 Step 2 CRM 配置页 Playwright E2E — 微信联系人匹配 + 5条精确卡"
