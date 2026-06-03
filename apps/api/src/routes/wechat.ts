@@ -49,6 +49,8 @@ const DraftGenerateSchema = z.object({
   sender: z.string().min(1),
   wechat_id: z.string().min(1),
   content: z.string().min(1),
+  // listen_chat.py 自动回模式传 mode='auto'；不声明会被 zod strip 掉 → auto 模式不返回 reply。
+  mode: z.enum(['auto', 'review']).optional(),
 });
 
 // ─── POST /api/wechat/qr-bind ───────────────────────────────────────────────
