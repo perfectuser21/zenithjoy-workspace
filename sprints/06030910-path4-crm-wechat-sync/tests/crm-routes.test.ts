@@ -6,7 +6,7 @@ const CRM_ROUTE = path.resolve('apps/api/src/routes/crm.ts');
 const DAILY_ANALYSIS = path.resolve('apps/api/src/services/daily-crm-analysis.ts');
 const DASHBOARD_ROOT = path.resolve('apps/dashboard/src/pages');
 
-describe('CRM routes — TDD Red Phase [BEHAVIOR]', () => {
+describe('CRM routes — TDD Red Phase [BEHAVIOR] R2', () => {
   it('crm.ts 路由文件存在', () => {
     expect(fs.existsSync(CRM_ROUTE)).toBe(true);
   });
@@ -89,5 +89,50 @@ describe('CRM routes — TDD Red Phase [BEHAVIOR]', () => {
     expect(c).toContain('nickname');
     expect(c).toContain('page.route');
     expect(c.match(/toHaveCount\(5\)|length.*5|\.length,\s*5/)).not.toBeNull();
+  });
+
+  // R2 新增：Step 1.5 OAuth + Feedback #3 suggestion 字段
+  it('CrmConfigPage.tsx 含飞书 OAuth 绑定入口（FeishuBindTenant 或 feishu-bind 或 feishuOAuth）', () => {
+    const p = path.join(DASHBOARD_ROOT, 'CrmConfigPage.tsx');
+    const c = fs.readFileSync(p, 'utf8');
+    const hasOAuth =
+      c.includes('FeishuBindTenant') ||
+      c.includes('feishu-bind') ||
+      c.includes('feishuOAuth');
+    expect(hasOAuth).toBe(true);
+  });
+
+  it('notion-crm.ts 含 NOTION_INTEGRATION_TOKEN 读取 + token_expired 处理 + FEISHU_NOTIFY_WEBHOOK（Risk 3）', () => {
+    const notionCrm = path.resolve('apps/api/src/services/notion-crm.ts');
+    expect(fs.existsSync(notionCrm)).toBe(true);
+    const c = fs.readFileSync(notionCrm, 'utf8');
+    expect(c).toContain('NOTION_INTEGRATION_TOKEN');
+    expect(c).toContain('token_expired');
+    expect(c).toContain('FEISHU_NOTIFY_WEBHOOK');
+  });
+
+  it('crm-wechat-sync.ts 含 contact_lost 标记逻辑，不含硬删除（Risk 4）', () => {
+    const syncSvc = path.resolve('apps/api/src/services/crm-wechat-sync.ts');
+    expect(fs.existsSync(syncSvc)).toBe(true);
+    const c = fs.readFileSync(syncSvc, 'utf8');
+    expect(c).toContain('contact_lost');
+    expect(c).not.toContain('DELETE FROM crm_wechat_mapping');
+  });
+
+  it('daily-analysis API 响应含 customers[0].suggestion string 字段（Feedback #3）', () => {
+    const c = fs.readFileSync(DAILY_ANALYSIS, 'utf8');
+    const hasSuggestion = c.includes('suggestion');
+    expect(hasSuggestion).toBe(true);
+  });
+
+  it('crm-config.spec.ts 含 OAuth 入口断言 + suggestion 字段断言（R2 spec 更新）', () => {
+    const specPath = path.resolve('apps/dashboard/e2e/crm-config.spec.ts');
+    const c = fs.readFileSync(specPath, 'utf8');
+    const hasOAuth =
+      c.includes('FeishuBindTenant') ||
+      c.includes('feishu-bind') ||
+      c.includes('feishuOAuth');
+    expect(hasOAuth).toBe(true);
+    expect(c).toContain('suggestion');
   });
 });
