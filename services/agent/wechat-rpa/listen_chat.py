@@ -10,7 +10,7 @@ listen_chat.py — 微信 4.0 私聊监听 + 隐形自动回（Path 4 Step 5，p
   - **Windows + 微信 4.0 登录 + 讲述人解锁过 + 装了 pywinauto**：真启监听 →
     Desktop(uia) 读会话列表 ListItem 的 element_info.name 解析未读 →
     校验发送者在飞书"客户档案"名单内（中台 SSOT）→ POST /api/wechat/draft-generate?mode=auto
-    → 拿 reply 文本 → select 打开会话 → chat_input_field set_text → 点"发送" click_input。
+    → 拿 reply 文本 → click_input 打开会话（微信4.0 select 不切换）→ chat_input_field set_text → 点"发送" click_input。
   - **macOS / Linux / 缺 pywinauto**：仅 --dryrun（--inject-message 注入单条）可跑，
     真启时优雅降级"pywinauto not available"，不报错退出。
   - **--dryrun-print-version**：仅向 stderr 打印 pywinauto 可用性后立即退出。
@@ -118,12 +118,13 @@ def scan_unread(mw: Any) -> List[Dict[str, Any]]:
 def reply_in_chat(mw: Any, item: Any, reply_text: str) -> bool:
     """
     打开 item 对应会话并发出 reply_text（真机验证配方）：
-      1) item.select()（SelectionItem 模式，不动鼠标；click_input 在非会话主人身份会"拒绝访问"）
+      1) item.click_input()（微信4.0 select() 不切换会话 → 回复发错对象；
+         必须点列表项才真打开目标客户会话。以微信登录的 Windows 用户身份运行即可点）
       2) 找输入框 Edit 且 automation_id=='chat_input_field' → set_text(reply)（ValuePattern，中文 OK）
       3) 找按钮 Button 且 name=='发送' → click_input()（需以微信登录的 Windows 用户身份运行）
       4) edit.get_value()=='' 视为发送成功。
     """
-    item.select()
+    item.click_input()
     time.sleep(1.2)
 
     edit = None
