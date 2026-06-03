@@ -204,6 +204,12 @@ def parse_args() -> argparse.Namespace:
     )
     ap.add_argument("--timeout", type=int, default=300)
     ap.add_argument("--interval", type=int, default=3)
+    ap.add_argument(
+        "--agent-id",
+        type=str,
+        default=os.environ.get("ZENITHJOY_AGENT_ID"),
+        help="心跳上报用的 agent 标识（缺省取 env ZENITHJOY_AGENT_ID）",
+    )
     return ap.parse_args()
 
 
@@ -251,6 +257,34 @@ def post_draft_generate(
                 "error": f"middleware HTTP {resp.status_code}: {resp.text[:200]}",
             }
         return resp.json()
+    except Exception as exc:
+        return {"ok": False, "error": f"{type(exc).__name__}: {exc}"}
+
+
+# ─── 进程守护：监听心跳上报（每分钟一次，失败不影响监听）────────────────────────
+
+
+def post_heartbeat(
+    middleware_url: str,
+    agent_id: Optional[str] = None,
+    wechat_id: Optional[str] = None,
+) -> Dict[str, Any]:
+    """
+    向中台 POST 监听心跳。守护用途：中台断 3 分钟无心跳即飞书告警。
+    任何失败（网络/非200/requests 缺失）都吞掉返回 {ok:False}，绝不抛——心跳不能拖垮监听。
+    """
+    try:
+        import requests  # 仅运行时需要
+    except Exception as exc:
+        return {"ok": False, "error": f"requests not available: {exc}"}
+
+    url = middleware_url.rstrip("/") + "/api/wechat/listener-heartbeat"
+    body = {"agent_id": agent_id, "wechat_id": wechat_id, "ts": int(time.time() * 1000)}
+    try:
+        resp = requests.post(url, json=body, timeout=10)
+        if resp.status_code != 200:
+            return {"ok": False, "error": f"heartbeat HTTP {resp.status_code}"}
+        return {"ok": True}
     except Exception as exc:
         return {"ok": False, "error": f"{type(exc).__name__}: {exc}"}
 
@@ -321,8 +355,18 @@ def run_real_listen(args: argparse.Namespace) -> int:
 
     replied: set[tuple[str, str]] = set()
     deadline = time.time() + max(1, args.timeout)
+    # 进程守护：每 60 秒向中台上报一次心跳（断 3 分钟无心跳中台飞书告警）
+    heartbeat_interval = 60
+    last_heartbeat = 0.0
     try:
         while time.time() < deadline:
+            now = time.time()
+            if now - last_heartbeat >= heartbeat_interval:
+                hb = post_heartbeat(args.middleware_url, agent_id=getattr(args, "agent_id", None))
+                last_heartbeat = now
+                if not hb.get("ok"):
+                    print(f"[listen_chat] heartbeat failed: {hb.get('error')}", flush=True)
+
             mw = get_main_window()
             if mw is None:
                 # 没主窗口：可能未登录(只剩 LoginWindow)或讲述人解锁失效
