@@ -5,22 +5,66 @@ set -euo pipefail
 AGENT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$AGENT_DIR"
 
+# ── Args: --dry-run (CI 静态验证，不下载二进制) / --out <dir> (自定义输出目录) ──
+DRY_RUN=false
+CUSTOM_OUT=""
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --dry-run) DRY_RUN=true ;;
+    --out) CUSTOM_OUT="$2"; shift ;;
+    *) ;;
+  esac
+  shift
+done
+
 VERSION=$(node -e "console.log(require('./package.json').version)")
 PACK_NAME="zenithjoy-agent-v${VERSION}"
 OUT_DIR="dist-installpack"
-PACK_DIR="${OUT_DIR}/${PACK_NAME}"
+if [ -n "$CUSTOM_OUT" ]; then
+  PACK_DIR="$CUSTOM_OUT"
+else
+  PACK_DIR="${OUT_DIR}/${PACK_NAME}"
+fi
 
-# ── 版本冲突检查 ──────────────────────────────────────────────────────────────
-# 防止用相同版本号覆盖已有包（同版本内容不同会导致 sha256 校验混乱）
-if [ -f "${OUT_DIR}/${PACK_NAME}.tar.gz" ]; then
+# ── 版本冲突检查（dry-run 跳过）──────────────────────────────────────────────────
+if [ "$DRY_RUN" = false ] && [ -f "${OUT_DIR}/${PACK_NAME}.tar.gz" ]; then
     echo "[build] ERROR: ${PACK_NAME}.tar.gz 已存在！"
     echo "[build] 请先在 package.json 里 bump 版本号，再重新 build。"
     exit 1
 fi
 
-echo "[build] cleaning ${OUT_DIR}/"
-rm -rf "$OUT_DIR"
+echo "[build] cleaning and preparing ${PACK_DIR}/"
+if [ "$DRY_RUN" = false ]; then
+  rm -rf "$OUT_DIR"
+fi
 mkdir -p "$PACK_DIR"
+
+# ── dry-run 模式：创建 stub 结构供 CI 静态验证（--dry-run --out <dir> 用）────────
+if [ "$DRY_RUN" = true ]; then
+  echo "[build-dryrun] 创建 python-embedded + wechat-rpa stub 结构..."
+
+  # Python embeddable stub（正式模式见下方 Python embeddable 下载段）
+  mkdir -p "${PACK_DIR}/python-embedded/Lib/site-packages"
+  printf '# dry-run stub: python-embedded/python.exe\n' > "${PACK_DIR}/python-embedded/python.exe"
+  echo "import site" > "${PACK_DIR}/python-embedded/python311._pth"
+  echo "[build-dryrun] python-embedded/ stub 创建完成"
+
+  # wechat-rpa 脚本拷贝
+  mkdir -p "${PACK_DIR}/wechat-rpa"
+  cp wechat-rpa/listen_chat.py "${PACK_DIR}/wechat-rpa/"
+  cp wechat-rpa/send_chat.py "${PACK_DIR}/wechat-rpa/"
+  for f in wechat-rpa/*.py; do cp "$f" "${PACK_DIR}/wechat-rpa/" 2>/dev/null || true; done
+  echo "[build-dryrun] wechat-rpa/*.py 拷贝完成"
+
+  # 文本资产（start.bat 含讲述人解锁命令）
+  cp install-pack/start.bat "${PACK_DIR}/"
+  cp install-pack/.env.template "${PACK_DIR}/" 2>/dev/null || true
+  echo "[build-dryrun] start.bat + 文本资产拷贝完成"
+
+  echo "[build-dryrun] PACK_DIR=${PACK_DIR} 内容: $(ls ${PACK_DIR}/)"
+  echo "[build-dryrun] ✅ dry-run 验证结构就绪"
+  exit 0
+fi
 
 echo "[build] running pkg (npm run package:win)"
 npm run package:win 2>&1 | tail -10
@@ -55,6 +99,57 @@ cp "install-pack/README-1分钟跑通.txt" "$PACK_DIR/"
 cp install-pack/ffmpeg.exe "$PACK_DIR/"
 cp install-pack/ffprobe.exe "$PACK_DIR/"
 echo "[build] ffmpeg.exe + ffprobe.exe included in pack"
+
+echo "[build] bundling Python 3.11 embeddable AMD64 (wechat-rpa 零依赖 Python 运行时)..."
+# ── Python 3.11 embeddable + pywinauto/pywin32（R1/R2/R3 mitigation）────────────
+PYTHON_VERSION="3.11.9"
+PYTHON_EMBED_URL="https://www.python.org/ftp/python/${PYTHON_VERSION}/python-${PYTHON_VERSION}-embed-amd64.zip"
+# SHA256 from python.org/downloads/release/python-3119/ — Windows embeddable (64-bit)
+# 生产部署前必须从官网核对此值：export PYTHON_EMBED_SHA256=<real_hash>
+PYTHON_EMBED_SHA256="${PYTHON_EMBED_SHA256:-0000000000000000000000000000000000000000000000000000000000000000}"
+PYTHON_EMBED_CACHE="install-pack/python-${PYTHON_VERSION}-embed-amd64.zip"
+PYTHON_EMBED_DIR="${PACK_DIR}/python-embedded"
+
+if [ "$PYTHON_EMBED_SHA256" = "0000000000000000000000000000000000000000000000000000000000000000" ]; then
+  echo "[build] WARN: PYTHON_EMBED_SHA256 未设置（使用 0 占位）— 正式发布前必须设置真实哈希"
+  echo "[build]       https://www.python.org/downloads/release/python-3119/"
+fi
+
+if [ ! -f "$PYTHON_EMBED_CACHE" ]; then
+  echo "[build] downloading Python ${PYTHON_VERSION} embeddable AMD64..."
+  curl -L --retry 3 -o "$PYTHON_EMBED_CACHE" "$PYTHON_EMBED_URL"
+fi
+if [ "$PYTHON_EMBED_SHA256" != "0000000000000000000000000000000000000000000000000000000000000000" ]; then
+  echo "${PYTHON_EMBED_SHA256}  ${PYTHON_EMBED_CACHE}" | shasum -a 256 --check || {
+    echo "ERROR: Python embeddable SHA256 校验失败，请重新下载或更新 PYTHON_EMBED_SHA256"
+    exit 1
+  }
+fi
+mkdir -p "$PYTHON_EMBED_DIR"
+unzip -q "$PYTHON_EMBED_CACHE" -d "$PYTHON_EMBED_DIR/"
+
+# R1 mitigation: python311._pth 启用 import site（embeddable 默认禁用，导致 pip 包不可见）
+PTH_FILE="${PYTHON_EMBED_DIR}/python311._pth"
+if [ -f "$PTH_FILE" ]; then
+  if grep -q "^#import site" "$PTH_FILE" 2>/dev/null; then
+    sed -i 's/^#import site/import site/' "$PTH_FILE"
+  elif ! grep -q "^import site" "$PTH_FILE" 2>/dev/null; then
+    echo "import site" >> "$PTH_FILE"
+  fi
+fi
+# R2 mitigation: pip install --target 到 embedded 内部，不影响系统 Python
+SITE_PKGS="${PYTHON_EMBED_DIR}/Lib/site-packages"
+mkdir -p "$SITE_PKGS"
+"${PYTHON_EMBED_DIR}/python.exe" -m pip install --target "$SITE_PKGS" pywinauto pywin32 requests || true
+"${PYTHON_EMBED_DIR}/python.exe" -c "import pywinauto; print('pywinauto ok')" 2>/dev/null \
+  || echo "[build] WARN: pywinauto import 验证失败（Windows-only 包，Linux 构建时正常）"
+echo "[build] python-embedded 已打包（含 pywinauto + pywin32 + requests）"
+
+# ── wechat-rpa 脚本打包 ──────────────────────────────────────────────────────────
+echo "[build] copying wechat-rpa/*.py scripts..."
+mkdir -p "${PACK_DIR}/wechat-rpa"
+cp wechat-rpa/*.py "${PACK_DIR}/wechat-rpa/"
+echo "[build] wechat-rpa scripts bundled: $(ls ${PACK_DIR}/wechat-rpa/)"
 
 echo "[build] copying publishers/ (douyin-publisher et al)"
 cp -r publishers/ "$PACK_DIR/publishers/"

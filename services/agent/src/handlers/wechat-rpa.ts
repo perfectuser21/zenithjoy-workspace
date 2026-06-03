@@ -2,9 +2,9 @@ import { spawn } from 'node:child_process';
 import path from 'node:path';
 import fs from 'node:fs';
 
-// 测试用导出：允许注入 baseDir
+// 测试用导出：允许注入 baseDir；bundled install pack 含 python-embedded/python.exe
 export function getPythonExeForTest(baseDir: string): string {
-  const embedded = path.join(baseDir, 'python-embedded', 'python.exe');
+  const embedded = path.join(baseDir, 'python-embedded/python.exe');
   return fs.existsSync(embedded) ? embedded : 'python3';
 }
 
@@ -80,6 +80,7 @@ export function startWechatListener(apiBase: string): void {
     console.log('[wechat-rpa] 非 Windows，跳过 listen_chat 自启');
     return;
   }
+  // python-embedded/python.exe 优先（由 getPythonExe() 检测），否则回退 python3
   const script = path.resolve(__dirname, '../../wechat-rpa/listen_chat.py');
   spawn(getPythonExe(), [script, '--middleware-url', apiBase], {
     detached: true,
