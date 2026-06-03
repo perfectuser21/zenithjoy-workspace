@@ -31,7 +31,7 @@ import { handleQrBindDouyinBurner } from './handlers/qr-bind-douyin-burner';
 // 运营中枢 — 8 平台主号统一 qr-bind handler（Line 00 Session Health Medium）
 import { handleQrBindOperator } from './handlers/qr-bind-operator';
 // Path 4 Sprint 1 WS1 — wechat-rpa handler (Python dryrun stub, 真 wechat_bot.py 在 WS3/4 接)
-import { handleWechatRpa, type WechatRpaTask } from './handlers/wechat-rpa';
+import { handleWechatRpa, startWechatListener, type WechatRpaTask } from './handlers/wechat-rpa';
 import { createFolderWatchManager } from './handlers/folder-watch';
 import { startHealthServer, setWsState } from './handlers/health-server';
 import { startVideoPipelineLoop } from './handlers/video-pipeline';
@@ -481,6 +481,12 @@ async function main(): Promise<void> {
   console.log('[agent] ffmpeg + hyperframes ready — starting loops');
 
   startWs1HeartbeatLoop(cfg);
+
+  // Path 4 Step 1 — Windows 自启微信监听（pywinauto，非 Windows 自动 skip）
+  const _wechatApiBase = deriveHttpApiBase(cfg);
+  if (_wechatApiBase) {
+    startWechatListener(_wechatApiBase);
+  }
 
   // 智能获客：关键词任务轮询 + 抖音视频搜索
   if (process.env.ZENITHJOY_DISABLE_ACQUISITION !== '1') {
