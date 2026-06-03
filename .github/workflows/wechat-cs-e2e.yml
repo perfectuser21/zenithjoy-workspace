@@ -127,7 +127,10 @@ jobs:
 
       - name: Agent 路径解析单测（process.execPath / getPythonExe，Windows 验证）
         working-directory: services/agent
-        run: npx vitest run src/handlers/__tests__/wechat-rpa.test.ts --reporter=basic
+        # 仅跑路径解析相关用例：resolveScript / getPythonExe / process.execPath。
+        # "非 Windows skip" 用例按设计只在 Linux agent CI 跑（windows-latest 上 startWechatListener
+        # 真走 win32 分支不 skip，故在此 job 用 -t 过滤掉）。
+        run: npx vitest run src/handlers/__tests__/wechat-rpa.test.ts -t "resolveScript|getPythonExe|process.execPath"
 
       - name: listen_chat.py --dryrun-print-version 退出码 0
         working-directory: services/agent/wechat-rpa
