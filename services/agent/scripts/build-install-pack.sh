@@ -115,6 +115,31 @@ mkdir -p "$HS_DEST_DIR"
 unzip -q "$HS_ZIP_CACHE" -d "$HS_DEST_DIR/"
 echo "[build] playwright-browsers/chromium_headless_shell-${PW_HS_REV}/ bundled"
 
+echo "[build] Python 3.11 embeddable for Windows..."
+PY_VERSION="3.11.9"
+PY_ZIP_NAME="python-${PY_VERSION}-embed-amd64.zip"
+PY_CACHE="install-pack/${PY_ZIP_NAME}"
+PY_URL="https://www.python.org/ftp/python/${PY_VERSION}/${PY_ZIP_NAME}"
+
+if [ ! -f "$PY_CACHE" ]; then
+  echo "[build] 下载 Python embeddable (~8MB)..."
+  curl -L --retry 3 -o "$PY_CACHE" "$PY_URL"
+fi
+
+PY_DEST="${PACK_DIR}/python-embedded"
+mkdir -p "$PY_DEST"
+unzip -q "$PY_CACHE" -d "$PY_DEST"
+
+# 启用 site-packages（取消注释 import site）
+PTH_FILE="$PY_DEST/python311._pth"
+[ -f "$PTH_FILE" ] && sed -i '' 's/^#import site/import site/' "$PTH_FILE" || true
+
+echo "[build] python-embedded/ 已加入安装包（pywinauto 需在 Windows 上运行打包脚本时安装）"
+
+echo "[build] 拷贝 wechat-rpa/ Python 脚本..."
+cp -r wechat-rpa/ "${PACK_DIR}/wechat-rpa/"
+echo "[build] wechat-rpa/ 已加入安装包"
+
 echo "[build] reproducible tar.gz (mtime locked)"
 TAR_NAME="${OUT_DIR}/${PACK_NAME}.tar.gz"
 find "$PACK_DIR" -exec touch -t 202001010000.00 {} +
