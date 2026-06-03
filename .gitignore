@@ -68,6 +68,7 @@ log/
 !services/creator/migrations/*.sql
 !apps/api/db/migrations/*.sql
 !db/migrations/*.sql
+!packages/db/migrations/*.sql
 
 # Backup files
 *.bak
