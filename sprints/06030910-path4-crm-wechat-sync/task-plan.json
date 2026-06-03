@@ -1,0 +1,45 @@
+{
+  "initiative_id": "pending",
+  "journey_type": "user_facing",
+  "journey_type_reason": "首次接入路径从 Dashboard CrmConfigPage 出发（用户选平台/确认匹配），每日分析是 autonomous 但起点 UI 交互优先取 user_facing",
+  "tasks": [
+    {
+      "task_id": "ws1",
+      "title": "Path 4 CRM 打通全实现：路由 + 服务 + DB 迁移 + Dashboard 页 + Playwright E2E",
+      "scope": "新增 apps/api/src/routes/crm.ts（4 端点：POST /init、GET /wechat-contacts、GET /match-preview、POST /daily-analysis）；新增 apps/api/src/services/notion-crm.ts、crm-wechat-sync.ts、daily-crm-analysis.ts；扩展 apps/api/src/services/feishu-bitable.ts 建客户明细表；DB 迁移 crm_wechat_mapping 表（wechat_contact_id/crm_row_id/platform/tenant_id）；新增 apps/dashboard/src/pages/CrmConfigPage.tsx、CustomerListPage.tsx；新增 apps/dashboard/e2e/crm-config.spec.ts（4 test + page.route() stubs + ≥3 截图）；写 sprints/06030910-path4-crm-wechat-sync/e2e-verify.ps1",
+      "dod": [
+        "[BEHAVIOR] crm.ts 含 4 个端点：/init、/wechat-contacts、/match-preview、/daily-analysis",
+        "[BEHAVIOR] /init 响应 schema：{ success: true, table_id: string }（无 tableId 驼峰）",
+        "[BEHAVIOR] /wechat-contacts 响应 schema：{ contacts: array }（mock 5 条，无 list/items/data）",
+        "[BEHAVIOR] /match-preview 响应 schema：{ matched: array, pending: array, unmatched: array }",
+        "[BEHAVIOR] /daily-analysis dry_run=true 响应：{ customers: array, webhook_sent: false }（无 webhookSent）",
+        "[BEHAVIOR] error path：缺 tenant_id → HTTP 400 + { error: string }",
+        "[BEHAVIOR] daily-crm-analysis.ts 含 FEISHU_NOTIFY_WEBHOOK + AI 调用（openrouter/deepseek）",
+        "[BEHAVIOR] crm_wechat_mapping 迁移含 4 字段：wechat_contact_id/crm_row_id/platform/tenant_id",
+        "[BEHAVIOR] Playwright crm-config.spec.ts：≥4 test + page.route() stubs + ≥3 page.screenshot()",
+        "[ARTIFACT] apps/api/src/routes/crm.ts 存在",
+        "[ARTIFACT] apps/api/src/services/daily-crm-analysis.ts 存在",
+        "[ARTIFACT] packages/db/migrations/*crm_wechat_mapping* 迁移文件存在",
+        "[ARTIFACT] apps/dashboard/src/pages/CrmConfigPage.tsx 存在（含飞书/Notion 选择器）",
+        "[ARTIFACT] apps/dashboard/src/pages/CustomerListPage.tsx 存在",
+        "[ARTIFACT] apps/dashboard/e2e/crm-config.spec.ts 存在",
+        "[ARTIFACT] sprints/06030910-path4-crm-wechat-sync/e2e-verify.ps1 存在"
+      ],
+      "files": [
+        "apps/api/src/routes/crm.ts",
+        "apps/api/src/services/notion-crm.ts",
+        "apps/api/src/services/feishu-bitable.ts",
+        "apps/api/src/services/crm-wechat-sync.ts",
+        "apps/api/src/services/daily-crm-analysis.ts",
+        "apps/dashboard/src/pages/CrmConfigPage.tsx",
+        "apps/dashboard/src/pages/CustomerListPage.tsx",
+        "apps/dashboard/e2e/crm-config.spec.ts",
+        "packages/db/migrations/<timestamp>_crm_wechat_mapping.sql",
+        "sprints/06030910-path4-crm-wechat-sync/e2e-verify.ps1"
+      ],
+      "depends_on": [],
+      "complexity": "L",
+      "estimated_minutes": 90
+    }
+  ]
+}
