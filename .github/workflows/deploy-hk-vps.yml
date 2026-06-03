@@ -31,20 +31,28 @@ jobs:
           script_stop: true
           script: |
             set -euo pipefail
+            trap 'rm -f /tmp/compose_err.txt' EXIT
             echo "=== [1/3] git sync ==="
             git -C /opt/zenithjoy/repo remote prune origin 2>/dev/null || true
             git -C /opt/zenithjoy/repo fetch --force --prune origin main
             git -C /opt/zenithjoy/repo reset --hard origin/main
 
             echo "=== [2/3] reload nginx ==="
-            docker compose \
-              -f /opt/zenithjoy/repo/deploy/docker-compose.hk.yml \
-              up -d autopilot-dashboard || {
+            COMPOSE_FILE=/opt/zenithjoy/repo/deploy/docker-compose.hk.yml
+            set +e
+            docker compose -f "$COMPOSE_FILE" up -d autopilot-dashboard 2>/tmp/compose_err.txt
+            COMPOSE_RC=$?
+            set -e
+            if [ $COMPOSE_RC -ne 0 ]; then
+              echo "⚠️  compose up 失败 (exit=$COMPOSE_RC)，原始错误："
+              cat /tmp/compose_err.txt
+              echo "执行 overlayfs 恢复..."
               docker rm -f autopilot-dashboard 2>/dev/null || true
-              docker compose \
-                -f /opt/zenithjoy/repo/deploy/docker-compose.hk.yml \
-                up -d autopilot-dashboard
-            }
+              docker rmi nginx:alpine 2>/dev/null || true
+              sleep 2
+              docker pull nginx:alpine
+              docker compose -f "$COMPOSE_FILE" up -d autopilot-dashboard
+            fi
             docker exec autopilot-dashboard nginx -s reload 2>/dev/null || true
 
             echo "=== [3/3] health check ==="
