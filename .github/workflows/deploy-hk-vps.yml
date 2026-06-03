@@ -38,9 +38,10 @@ jobs:
 
             echo "=== [2/3] reload nginx ==="
             COMPOSE_FILE=/opt/zenithjoy/repo/deploy/docker-compose.hk.yml
-            if ! docker compose -f "$COMPOSE_FILE" up -d autopilot-dashboard 2>&1; then
-              echo "First compose up failed, attempting overlayfs recovery..."
+            if ! docker compose -f "$COMPOSE_FILE" up -d autopilot-dashboard; then
+              echo "⚠️  首次 compose up 失败（见上方 Docker 错误）。尝试 overlayfs 恢复..."
               docker rm -f autopilot-dashboard 2>/dev/null || true
+              # 仅当 overlayfs 层损坏时删除镜像（|| true 确保其他容器使用时不失败）
               docker rmi nginx:alpine 2>/dev/null || true
               docker pull nginx:alpine
               docker compose -f "$COMPOSE_FILE" up -d autopilot-dashboard
