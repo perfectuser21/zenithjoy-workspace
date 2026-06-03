@@ -12,6 +12,8 @@ export default defineConfig({
       'scripts/**/__tests__/**/*.test.cjs',
       // zj-douyin-article-agent-port sprint 路由覆盖测试
       '../../sprints/zj-douyin-article-agent-port/tests/**/*.test.ts',
+      // agent-python-embedded sprint 合约测试
+      '../../sprints/06031608-agent-python-embedded/tests/**/*.test.ts',
     ],
     exclude: ['node_modules/**', 'dist/**', 'dist-pkg/**'],
   },
