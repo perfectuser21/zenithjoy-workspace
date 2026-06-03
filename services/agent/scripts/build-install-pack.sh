@@ -135,7 +135,7 @@ unzip -q "$PYTHON_EMBED_CACHE" -d "$PYTHON_EMBED_DIR/"
 PTH_FILE="${PYTHON_EMBED_DIR}/python311._pth"
 if [ -f "$PTH_FILE" ]; then
   if grep -q "^#import site" "$PTH_FILE" 2>/dev/null; then
-    sed -i 's/^#import site/import site/' "$PTH_FILE"
+    perl -i -pe 's/^#import site/import site/' "$PTH_FILE"
   elif ! grep -q "^import site" "$PTH_FILE" 2>/dev/null; then
     echo "import site" >> "$PTH_FILE"
   fi
