@@ -55,10 +55,13 @@ echo "[6] dist/index.js 启动时调用 startWechatListener"
 grep -q "startWechatListener" "$DIST_INDEX" || { echo "FAIL: index.js 未调用 startWechatListener"; exit 1; }
 echo "  ✅ PASS"
 
-echo "[7] Agent 版本 == 1.1.77"
+echo "[7] Agent 版本 >= 1.1.77（wechat-rpa 真实接线起始版本）"
+MIN_VERSION="1.1.77"
 VERSION=$(node -e "console.log(require('./$PKG').version)")
-[ "$VERSION" = "1.1.77" ] || { echo "FAIL: 版本 $VERSION != 1.1.77"; exit 1; }
-echo "  ✅ PASS"
+# sort -V 做语义化版本排序：两者排序后最小值若不是 MIN_VERSION，说明当前版本更低
+LOWEST=$(printf '%s\n%s\n' "$MIN_VERSION" "$VERSION" | sort -V | head -n1)
+[ "$LOWEST" = "$MIN_VERSION" ] || { echo "FAIL: 版本 $VERSION < $MIN_VERSION"; exit 1; }
+echo "  ✅ PASS (当前 $VERSION)"
 
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
