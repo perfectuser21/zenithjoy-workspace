@@ -19,6 +19,16 @@ import crypto from 'node:crypto';
 import axios from 'axios';
 import pool from '../db/connection';
 import { callOpenRouter } from '../llm/openrouter';
+import type { ChatMessage, ContactFact, ContactMemory, Persona } from './wechat/types';
+import { loadPersona } from './wechat/persona';
+import { loadBusinessKB, retrieveRelevantKB } from './wechat/business-kb';
+import {
+  appendMessage,
+  consolidate,
+  getContactMemory,
+  getShortTerm,
+} from './wechat/contact-memory';
+import { assembleChatContext } from './wechat/context-assembler';
 
 // ─── 飞书 Bitable 配置（从 ENV 读，CI 用占位值 mock）────────────────────────────
 
@@ -149,47 +159,14 @@ async function createRecord(
   return resp.data.data?.record?.record_id ?? '';
 }
 
-// ─── 营销画像 + 对话历史拼 prompt ──────────────────────────────────────────────
+// ─── 回复清洗（人设禁用词兜底；剥思考块已在 openrouter 内做）────────────────────
 
-function buildChatPrompt(
-  content: string,
-  history: FeishuRecord[],
-  profile?: Record<string, unknown>,
-): string {
-  const profileLines: string[] = [];
-  if (profile) {
-    const industry = profile['行业'];
-    const audience = profile['受众'];
-    const hook = profile['钩子文案'];
-    if (industry) profileLines.push(`行业: ${industry}`);
-    if (audience) profileLines.push(`受众: ${audience}`);
-    if (hook) profileLines.push(`钩子文案: ${hook}`);
+function sanitizeReply(text: string, persona: Persona): string {
+  let out = text;
+  for (const phrase of persona.banned_phrases || []) {
+    if (phrase) out = out.split(phrase).join('');
   }
-
-  const historyLines: string[] = [];
-  for (const rec of history.slice(-10)) {
-    const said = rec.fields?.['客户原话'];
-    const replied = rec.fields?.['AI 草稿'];
-    if (said) historyLines.push(`客户: ${String(said).slice(0, 200)}`);
-    if (replied) historyLines.push(`我: ${String(replied).slice(0, 200)}`);
-  }
-
-  const profileBlock =
-    profileLines.length > 0 ? `营销画像\n${profileLines.join('\n')}\n\n` : '';
-  const historyBlock =
-    historyLines.length > 0
-      ? `最近对话历史（最旧→最新）\n${historyLines.join('\n')}\n\n`
-      : '';
-
-  return [
-    '你是一名亲切、专业的私域客服助理，请用简体中文为以下客户消息生成一段简短自然的回复草稿（≤120 字），不要寒暄过度，直奔主题。',
-    profileBlock,
-    historyBlock,
-    `客户最新消息: ${content}`,
-    '回复草稿:',
-  ]
-    .filter(Boolean)
-    .join('\n');
+  return out.replace(/[ \t]{2,}/g, ' ').trim();
 }
 
 // ─── 主入口 ───────────────────────────────────────────────────────────────────
@@ -244,39 +221,48 @@ export async function generateChatDraft(
     return { ok: false, reason: 'not_in_whitelist' };
   }
 
-  // 2) 拼对话历史（最近 10 轮）+ 营销画像
-  let history: FeishuRecord[] = [];
+  // 2) 三层记忆 + 人设 + 企业知识库 → 上下文装配（替代旧的"飞书取最近10轮+营销画像"）
+  const contactKey = wechat_id || sender;
   try {
-    history = await searchTable(getInteractionTableId(), sender);
+    await appendMessage(contactKey, sender, 'in', content);
   } catch (err) {
-    console.warn('[wechat-draft] 互动记录历史读取失败，跳过历史拼接:', err);
-    history = [];
+    console.warn('[wechat-draft] 写入站消息失败（不影响生成）:', err);
   }
 
-  let profile: Record<string, unknown> | undefined;
-  if (getProfileTableId()) {
-    try {
-      const profiles = await searchTable(getProfileTableId());
-      if (profiles && profiles.length > 0) {
-        profile = profiles[0].fields as Record<string, unknown>;
-      }
-    } catch (err) {
-      console.warn('[wechat-draft] 营销画像读取失败，跳过:', err);
-    }
+  const persona = loadPersona();
+  const kb = loadBusinessKB();
+  let shortTerm: ChatMessage[] = [];
+  let memory: ContactMemory = { summary: '', facts: [] as ContactFact[] };
+  try {
+    [shortTerm, memory] = await Promise.all([
+      getShortTerm(contactKey),
+      getContactMemory(contactKey),
+    ]);
+  } catch (err) {
+    console.warn('[wechat-draft] 读取客户记忆失败，降级为无记忆:', err);
   }
+  const kbHits = retrieveRelevantKB(content, kb);
+  const { system, user } = assembleChatContext({
+    message: content,
+    persona,
+    kb,
+    kbHits,
+    shortTerm,
+    memory,
+  });
 
-  const prompt = buildChatPrompt(content, history, profile);
-
-  // 3) 调 OpenRouter DeepSeek
+  // 3) 调 OpenRouter DeepSeek（带人设 system + temperature；回复已在 openrouter 内剥思考块）
   let aiContent = '';
   let aiError: string | null = null;
   try {
     const result = await callOpenRouter({
-      prompt,
+      system,
+      prompt: user,
+      temperature: 0.8,
       model: 'deepseek/deepseek-chat',
       purpose: 'wechat_chat_draft',
     });
-    aiContent = (result.content || '').trim();
+    aiContent = sanitizeReply((result.content || '').trim(), persona);
     if (!aiContent) {
       aiError = 'OpenRouter 返回空文本';
       aiContent = FAIL_PLACEHOLDER;
@@ -284,6 +270,16 @@ export async function generateChatDraft(
   } catch (err) {
     aiError = err instanceof Error ? err.message : String(err);
     aiContent = FAIL_PLACEHOLDER;
+  }
+
+  // 成功生成才记入"我方回复"短期记忆 + 触发固化（失败不污染记忆）
+  if (!aiError) {
+    try {
+      await appendMessage(contactKey, sender, 'out', aiContent);
+      await consolidate(contactKey);
+    } catch (err) {
+      console.warn('[wechat-draft] 写出站消息/固化失败（不影响回复）:', err);
+    }
   }
 
   // 4) 写飞书"互动记录"表（pending_review，approval_source NULL — A 路线护栏起点）
