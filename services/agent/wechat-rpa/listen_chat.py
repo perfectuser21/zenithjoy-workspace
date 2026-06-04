@@ -361,17 +361,22 @@ def _activate_uia() -> None:
     失效后监听就"找不到微信"。故监听需按需重做本激活（Windows-only；非 Windows 不会进到这里）。
     """
     try:
-        subprocess.Popen(["Narrator.exe"])
+        # 启动讲述人必须走 PowerShell Start-Process（ShellExecute），对齐 start.bat。
+        # 之前用 subprocess.Popen(["Narrator.exe"]) 直接拉 → 非管理员身份报 WinError 740
+        # (需要提升) → 讲述人根本起不来 → UIA 从未激活 → 永远 found_window=False（v1.1.84 真 bug）。
+        subprocess.run(
+            ["powershell", "-NoProfile", "-Command", "Start-Process Narrator"],
+            capture_output=True, timeout=15,
+        )
         time.sleep(2)
-        # 用 PowerShell Stop-Process 关讲述人（对齐 start.bat 的可靠方式）。
-        # 之前用 taskkill 关不掉 → 讲述人赖着 → UIA 巨慢 → 监听卡死，是 v1.1.83 的真 bug。
+        # 关讲述人也走 PowerShell Stop-Process（taskkill 关不掉，是 v1.1.83 的 bug）。
         subprocess.run(
             ["powershell", "-NoProfile", "-Command",
              "Stop-Process -Name Narrator -Force -ErrorAction SilentlyContinue"],
             capture_output=True, timeout=15,
         )
         time.sleep(1)
-        _log("UIA 激活（讲述人开关，Stop-Process 关闭）完成")
+        _log("UIA 激活（讲述人 Start-Process 开 + Stop-Process 关）完成")
     except Exception as exc:
         _log(f"UIA 激活失败: {exc}")
 
