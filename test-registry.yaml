@@ -2672,6 +2672,54 @@ agent_suite:
     product: 私域运营
     note: "Path 4 Step 5 generateChatDraft mode:auto 返回 reply 文本（隐形自动回 J1-J4）"
 
+  - id: path4-wechat-cs-persona
+    path: apps/api/src/services/wechat/__tests__/persona.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 客户私域AI接管
+    note: "Path 4 Step 3 微信客服引擎 — 人设 persona 加载/渲染（反客服腔 SOUL）"
+
+  - id: path4-wechat-cs-business-kb
+    path: apps/api/src/services/wechat/__tests__/business-kb.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 客户私域AI接管
+    note: "Path 4 Step 3 微信客服引擎 — 企业知识库加载/关键词检索/渲染"
+
+  - id: path4-wechat-cs-contact-memory
+    path: apps/api/src/services/wechat/__tests__/contact-memory.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 客户私域AI接管
+    note: "Path 4 Step 3 微信客服引擎 — 三层记忆读写 + consolidate 固化（mock pool）"
+
+  - id: path4-wechat-cs-context-assembler
+    path: apps/api/src/services/wechat/__tests__/context-assembler.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 客户私域AI接管
+    note: "Path 4 Step 3 微信客服引擎 — 上下文装配器（三口井 + token 预算裁剪）"
+
+  - id: path4-wechat-cs-types
+    path: apps/api/src/services/wechat/__tests__/types.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 客户私域AI接管
+    note: "Path 4 Step 3 微信客服引擎 — 共享类型契约"
+
+  - id: path4-wechat-cs-engine-e2e
+    path: apps/api/tests/integration/p4-wechat-cs-engine/wechat-cs-engine.integration.test.ts
+    type: integration
+    ci: L4
+    status: active
+    product: 客户私域AI接管
+    note: "Path 4 Step 3 微信客服引擎 — 端到端 mock（真DB+mock飞书/OpenRouter，跨轮记忆/净化/三口井）"
+
   - id: path4-crm-routes
     path: apps/api/tests/routes/crm.test.ts
     type: unit

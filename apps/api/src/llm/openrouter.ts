@@ -8,6 +8,24 @@ export interface CallOpenRouterArgs {
   purpose: string;
   maxTokens?: number;
   model?: string;
+  /** 可选 system 消息（人设 + 企业信息段）；不传则维持单 user 消息（向后兼容）。 */
+  system?: string;
+  /** 采样温度；不传则用 provider 默认。微信客服真人感建议 0.8。 */
+  temperature?: number;
+}
+
+/**
+ * 剥离模型输出里的"思考过程"，绝不让客户看到。
+ * 处理 DeepSeek-R1 风格的 <think>...</think>（含多行 / 未闭合到结尾），
+ * 以及开头的「思考：/分析：/让我想想」类前缀。任何场景都不该把推理漏给客户。
+ */
+export function stripThinking(text: string): string {
+  if (!text) return text;
+  let out = text;
+  out = out.replace(/<think>[\s\S]*?<\/think>/gi, ''); // 完整思考块
+  out = out.replace(/<think>[\s\S]*$/gi, ''); // 未闭合到结尾的思考块
+  out = out.replace(/^\s*(?:思考|分析|让我想想|让我先想想)\s*[:：][^\n]*\n+/i, ''); // 开头思考前缀行
+  return out.trim();
 }
 
 export interface CallOpenRouterResult {
@@ -81,16 +99,27 @@ export async function callOpenRouter(args: CallOpenRouterArgs): Promise<CallOpen
       },
       body: JSON.stringify({
         model,
-        messages: [{ role: 'user', content: args.prompt }],
+        messages: args.system
+          ? [
+              { role: 'system', content: args.system },
+              { role: 'user', content: args.prompt },
+            ]
+          : [{ role: 'user', content: args.prompt }],
         max_tokens: maxTokens,
+        ...(args.temperature !== undefined ? { temperature: args.temperature } : {}),
       }),
     });
     if (!res.ok) {
       const text = await res.text().catch(() => '');
       throw new Error(`OpenRouter ${res.status}: ${text.slice(0, 200)}`);
     }
-    const data = await res.json() as any;
-    content = data.choices?.[0]?.message?.content ?? '';
+    const data = (await res.json()) as {
+      choices?: Array<{ message?: { content?: string } }>;
+      usage?: { prompt_tokens: number; completion_tokens: number; total_tokens: number };
+      model?: string;
+    };
+    // 始终剥离思考过程，绝不把模型推理漏给客户
+    content = stripThinking(data.choices?.[0]?.message?.content ?? '');
     usage = data.usage ?? usage;
     actualModel = data.model || model;
     success = true;
