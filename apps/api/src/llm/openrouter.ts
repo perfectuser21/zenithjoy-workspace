@@ -113,7 +113,11 @@ export async function callOpenRouter(args: CallOpenRouterArgs): Promise<CallOpen
       const text = await res.text().catch(() => '');
       throw new Error(`OpenRouter ${res.status}: ${text.slice(0, 200)}`);
     }
-    const data = await res.json() as any;
+    const data = (await res.json()) as {
+      choices?: Array<{ message?: { content?: string } }>;
+      usage?: { prompt_tokens: number; completion_tokens: number; total_tokens: number };
+      model?: string;
+    };
     // 始终剥离思考过程，绝不把模型推理漏给客户
     content = stripThinking(data.choices?.[0]?.message?.content ?? '');
     usage = data.usage ?? usage;

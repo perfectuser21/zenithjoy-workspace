@@ -39,6 +39,16 @@ function consolidateThreshold(): number {
   return Number.isFinite(n) && n > 0 ? n : 8;
 }
 
+// ─── 内部：DB 行类型 ────────────────────────────────────────────────────────────
+
+interface MessageRow {
+  id: number | string;
+  sender_name: string;
+  direction: Direction;
+  content: string;
+  created_at: Date | string;
+}
+
 // ─── 1) appendMessage：写一条消息到短期表 ──────────────────────────────────────
 
 /**
@@ -83,11 +93,11 @@ export async function getShortTerm(
         LIMIT $2`,
       [contactKey, n],
     );
-    const rows = res.rows ?? [];
+    const rows = (res.rows ?? []) as MessageRow[];
     // DESC 取最近 N 条 → reverse 成 ASC（最旧→最新）
     return rows
-      .map((r: any): ChatMessage => ({
-        direction: r.direction as Direction,
+      .map((r): ChatMessage => ({
+        direction: r.direction,
         content: r.content,
         created_at:
           r.created_at instanceof Date
@@ -140,16 +150,15 @@ function parseFacts(raw: unknown): ContactFact[] {
     }
   }
   if (!Array.isArray(arr)) return [];
-  return arr
-    .filter(
-      (f): f is ContactFact =>
-        !!f &&
-        typeof (f as any).category === 'string' &&
-        typeof (f as any).content === 'string',
-    )
-    .map((f) => ({
-      category: (f as any).category as FactCategory,
-      content: (f as any).content,
+  return (arr as unknown[])
+    .filter((f): f is Record<string, unknown> => {
+      if (!f || typeof f !== 'object') return false;
+      const o = f as Record<string, unknown>;
+      return typeof o.category === 'string' && typeof o.content === 'string';
+    })
+    .map((o) => ({
+      category: o.category as FactCategory,
+      content: o.content as string,
     }));
 }
 
@@ -182,7 +191,7 @@ export async function consolidate(
         ORDER BY created_at ASC, id ASC`,
       [contactKey],
     );
-    const rows = pending.rows ?? [];
+    const rows = (pending.rows ?? []) as MessageRow[];
     const force = opts?.force === true;
 
     // 没有未固化消息：无可固化，直接返回（force 也无意义）
@@ -235,7 +244,7 @@ export async function consolidate(
       [contactKey, senderName, newSummary, JSON.stringify(mergedFacts)],
     );
 
-    const ids = rows.map((r: any) => r.id);
+    const ids = rows.map((r) => r.id);
     await pool.query(
       `UPDATE zenithjoy.wechat_messages
           SET consolidated = TRUE
@@ -251,13 +260,13 @@ export async function consolidate(
 }
 
 /** 从未固化消息里挑一个客户侧（in）的 sender_name，没有就取第一条。 */
-function pickSenderName(rows: any[]): string | null {
+function pickSenderName(rows: MessageRow[]): string | null {
   const inbound = rows.find((r) => r.direction === 'in');
   return (inbound ?? rows[0])?.sender_name ?? null;
 }
 
 /** 拼固化 prompt：要求模型**只输出 JSON**。 */
-function buildConsolidatePrompt(rows: any[], existing: ContactMemory): string {
+function buildConsolidatePrompt(rows: MessageRow[], existing: ContactMemory): string {
   const dialogue = rows
     .map((r) => `${r.direction === 'in' ? '客户' : '我'}: ${r.content}`)
     .join('\n');
@@ -297,16 +306,16 @@ function parseConsolidateOutput(raw: string): ConsolidatePayload | null {
   if (start === -1 || end === -1 || end <= start) return null;
   const slice = text.slice(start, end + 1);
 
-  let obj: any;
+  let obj: unknown;
   try {
     obj = JSON.parse(slice);
   } catch {
     return null;
   }
   if (!obj || typeof obj !== 'object') return null;
-
-  const summary = typeof obj.summary === 'string' ? obj.summary : '';
-  const facts = parseFacts(obj.facts);
+  const o = obj as Record<string, unknown>;
+  const summary = typeof o.summary === 'string' ? o.summary : '';
+  const facts = parseFacts(o.facts);
   return { summary, facts };
 }
 
