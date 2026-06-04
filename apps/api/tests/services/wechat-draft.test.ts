@@ -83,10 +83,11 @@ describe('ws3 generateChatDraft — 名单内客户消息生成草稿', () => {
           },
         },
       })
-      .mockResolvedValueOnce({ data: { code: 0, data: { items: [] } } })
       .mockResolvedValueOnce({
         data: { code: 0, data: { record: { record_id: 'rec_interaction_1' } } },
       });
+    // 注：新引擎不再读飞书"互动记录"历史（短期记忆改走 DB wechat_messages），
+    // 故 axios 顺序为：token → 客户档案 search → 互动记录 records.create（无历史 search）。
 
     // DB INSERT wechat_publish_task → 成功
     mockQuery.mockResolvedValue({ rows: [], rowCount: 1 });
@@ -194,7 +195,6 @@ describe('ws3 generateChatDraft — OpenRouter 5xx fallback 占位', () => {
           },
         },
       })
-      .mockResolvedValueOnce({ data: { code: 0, data: { items: [] } } })
       .mockResolvedValueOnce({
         data: { code: 0, data: { record: { record_id: 'rec_interaction_2' } } },
       });
