@@ -31,6 +31,7 @@ import argparse
 import json
 import os
 import platform
+import subprocess
 import sys
 import time
 from pathlib import Path
@@ -339,6 +340,23 @@ def run_dryrun_inject(args: argparse.Namespace) -> int:
 # ─── 真模式入口（仅 Windows + pywinauto + 微信 4.0 登录）────────────────────────
 
 
+def _activate_uia() -> None:
+    """开关讲述人激活微信 4.0 的 UIAutomation provider。
+
+    微信 4.0 把 UI 自绘在 MMUIRenderSubWindowHW 上，**只有 UIAutomation 被激活后**才暴露出
+    mmui::MainWindow 那棵可读控件树；且该激活会随时间失效。start.bat 仅在启动时解锁一次不够，
+    失效后监听就"找不到微信"。故监听需按需重做本激活（Windows-only；非 Windows 不会进到这里）。
+    """
+    try:
+        subprocess.Popen(["Narrator.exe"])
+        time.sleep(2)
+        subprocess.run(["taskkill", "/IM", "Narrator.exe", "/F"], capture_output=True, timeout=10)
+        time.sleep(1)
+        print("[listen_chat] UIA 激活（讲述人开关）完成", flush=True)
+    except Exception as exc:
+        print(f"[listen_chat] UIA 激活失败: {exc}", flush=True)
+
+
 def run_real_listen(args: argparse.Namespace) -> int:
     if not _pywinauto_available():
         emit_json(
@@ -366,6 +384,10 @@ def run_real_listen(args: argparse.Namespace) -> int:
     last_heartbeat = 0.0
     last_unread_senders: List[str] = []
     last_error: Optional[str] = None
+    # 微信4.0 mmui 控件树需讲述人激活 UIAutomation 后才暴露、且会失效：启动先激活一次，失效再按冷却补激活
+    uia_reactivate_interval = 45
+    _activate_uia()
+    last_uia_activate = time.time()
     try:
         while time.time() < deadline:
             now = time.time()
@@ -405,9 +427,20 @@ def run_real_listen(args: argparse.Namespace) -> int:
                     print(f"[listen_chat] heartbeat failed: {hb.get('error')}", flush=True)
 
             if mw is None:
-                # 没主窗口：可能未登录(只剩 LoginWindow)或讲述人解锁失效（已在 diag 上报）
-                time.sleep(args.interval)
-                continue
+                # 找不到 mmui 主窗口（多为微信4.0 UIAutomation 激活失效）→ 按冷却重做讲述人解锁补激活再重试
+                if now - last_uia_activate >= uia_reactivate_interval:
+                    print("[listen_chat] 未找到微信主窗口，重做 UIA 激活…", flush=True)
+                    _activate_uia()
+                    last_uia_activate = time.time()
+                    try:
+                        mw = get_main_window()
+                        if mw is None:
+                            login = login_window_present()
+                    except Exception as exc:
+                        last_error = f"{type(exc).__name__}: {exc}"
+                if mw is None:
+                    time.sleep(args.interval)
+                    continue
 
             try:
                 unread = scan_unread(mw)
