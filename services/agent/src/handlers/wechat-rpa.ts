@@ -75,7 +75,20 @@ export async function handleWechatRpa(task: WechatRpaTask): Promise<WechatRpaRes
   });
 }
 
-// Windows only：Agent 启动时自动拉起 listen_chat.py 持续监听微信消息
+// listen_chat.py 持久监听一整天（24h）。默认 300s 会让监听 5 分钟后自动退出，
+// 客户机无人值守就此停摆 —— 这是 v1.1.80 客户装完"发消息没反应"的根因。
+const LISTENER_TIMEOUT_SEC = 86400;
+// 监听进程退出/崩溃后重启间隔（崩溃自愈，无需外部 watchdog / 计划任务）
+const LISTENER_RESTART_DELAY_MS = 30_000;
+
+// 测试用导出：构造 listen_chat.py 的 spawn 参数（含持久 --timeout，防"5分钟死"回归）
+export function buildListenerSpawnArgs(script: string, apiBase: string): string[] {
+  return [script, '--middleware-url', apiBase, '--timeout', String(LISTENER_TIMEOUT_SEC)];
+}
+
+// Windows only：Agent 启动时自动拉起 listen_chat.py 持续监听微信消息。
+// 持久（timeout 86400）+ 崩溃自愈（退出后 30s 自动重启），随 Agent 生命周期常驻，
+// 客户只需双击 start.bat 一次，无需任何手动操作 / 计划任务。
 export function startWechatListener(apiBase: string): void {
   if (process.platform !== 'win32') {
     console.log('[wechat-rpa] 非 Windows，跳过 listen_chat 自启');
@@ -84,9 +97,27 @@ export function startWechatListener(apiBase: string): void {
   // python-embedded/python.exe 优先（由 getPythonExe() 检测），否则回退 python3
   // pkg 打包后 __dirname 是 /snapshot 虚拟路径，listen_chat.py 在 exe 同级目录。
   const script = path.join(path.dirname(process.execPath), 'wechat-rpa', 'listen_chat.py');
-  spawn(getPythonExe(), [script, '--middleware-url', apiBase], {
-    detached: true,
-    stdio: 'ignore',
-  }).unref();
-  console.log('[wechat-rpa] listen_chat.py 已自启（middleware-url:', apiBase, '）');
+
+  const spawnOnce = (): void => {
+    const child = spawn(getPythonExe(), buildListenerSpawnArgs(script, apiBase), {
+      detached: false,
+      stdio: 'ignore',
+    });
+    child.on('exit', (code) => {
+      console.warn(
+        `[wechat-rpa] listen_chat.py 退出(code=${code})，${LISTENER_RESTART_DELAY_MS / 1000}s 后自动重启（崩溃自愈）`,
+      );
+      setTimeout(spawnOnce, LISTENER_RESTART_DELAY_MS).unref?.();
+    });
+    child.on('error', (err) => {
+      console.warn('[wechat-rpa] listen_chat.py 启动失败:', err);
+    });
+  };
+
+  spawnOnce();
+  console.log(
+    '[wechat-rpa] listen_chat.py 持久监听已自启（middleware-url:',
+    apiBase,
+    '，timeout 86400 + 崩溃自愈）',
+  );
 }

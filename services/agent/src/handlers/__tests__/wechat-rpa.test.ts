@@ -4,7 +4,7 @@
  * commit-1 RED (handler throws not impl); commit-2 GREEN.
  */
 import { describe, it, expect } from 'vitest';
-import { handleWechatRpa, resolveScriptForTest, startWechatListener, getPythonExeForTest } from '../wechat-rpa';
+import { handleWechatRpa, resolveScriptForTest, startWechatListener, getPythonExeForTest, buildListenerSpawnArgs } from '../wechat-rpa';
 import path from 'path';
 
 describe('P4 WS1 — wechat-rpa handler [BEHAVIOR]', () => {
@@ -50,6 +50,20 @@ describe('startWechatListener — 非 Windows skip [BEHAVIOR]', () => {
     // 非 Windows: 必须 log 含 '跳过' 或 'skip'（大小写不限）
     const joined = logs.join(' ').toLowerCase();
     expect(joined.includes('跳过') || joined.includes('skip') || joined.includes('非 windows')).toBe(true);
+  });
+});
+
+describe('buildListenerSpawnArgs — 持久监听参数（防"5分钟死"回归）[BEHAVIOR]', () => {
+  it('spawn 参数必须带 --middleware-url + 持久 --timeout 86400（不是默认 300）', () => {
+    const args = buildListenerSpawnArgs('C:/x/listen_chat.py', 'https://autopilot.zenjoymedia.media');
+    expect(args[0]).toBe('C:/x/listen_chat.py');
+    const i = args.indexOf('--middleware-url');
+    expect(i).toBeGreaterThanOrEqual(0);
+    expect(args[i + 1]).toBe('https://autopilot.zenjoymedia.media');
+    const t = args.indexOf('--timeout');
+    expect(t).toBeGreaterThanOrEqual(0);
+    // 关键：必须是长持久 timeout（86400），否则监听 5 分钟后退出、客户机无人值守停摆
+    expect(args[t + 1]).toBe('86400');
   });
 });
 
