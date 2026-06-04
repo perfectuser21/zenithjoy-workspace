@@ -28,7 +28,7 @@ import {
 } from '../services/ilink-client';
 import { runPollerOnce } from '../services/ilink-poller';
 import { callOpenRouter } from '../llm/openrouter';
-import { recordHeartbeat } from '../services/wechat-heartbeat';
+import { recordHeartbeat, listHeartbeats } from '../services/wechat-heartbeat';
 
 export const wechatRouter = Router();
 
@@ -51,6 +51,19 @@ const ListenerHeartbeatSchema = z
     agent_id: z.string().optional(),
     wechat_id: z.string().optional(),
     ts: z.number().optional(),
+    // 扫描诊断（让运营在中台一眼看到监听卡在哪，无需远程进客户桌面）
+    diag: z
+      .object({
+        main_window_found: z.boolean().optional(),
+        login_present: z.boolean().optional(),
+        sessions_seen: z.number().optional(),
+        unread_count: z.number().optional(),
+        unread_senders: z.array(z.string()).optional(),
+        replied_count: z.number().optional(),
+        last_error: z.string().nullable().optional(),
+      })
+      .passthrough()
+      .optional(),
   })
   .passthrough();
 
@@ -116,8 +129,15 @@ wechatRouter.post('/listener-heartbeat', (req: Request, res: Response) => {
     agent_id: data.agent_id,
     wechat_id: data.wechat_id,
     ts: data.ts,
+    diag: data.diag,
   });
   return res.status(200).json({ ok: true, recorded_at: rec.ts });
+});
+
+// ─── GET /api/wechat/listener-heartbeat（运营在中台看监听健康 + 扫描诊断）──────────
+// Dashboard「微信客服监听健康」看板调用：返回每个监听最新一次上报的状态。
+wechatRouter.get('/listener-heartbeat', (_req: Request, res: Response) => {
+  return res.status(200).json({ listeners: listHeartbeats() });
 });
 
 // ─── POST /api/wechat/draft-review-poll & GET 单查 ─────────────────────────

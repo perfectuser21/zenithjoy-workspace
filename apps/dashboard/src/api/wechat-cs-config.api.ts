@@ -61,6 +61,26 @@ export interface SuggestAudienceInput {
   value_prop?: string;
 }
 
+// ─── 监听健康（Agent listen_chat.py 心跳）────────────────────────
+// 对齐后端 GET /api/wechat/listener-heartbeat。diag 可能整体缺失或字段缺失，全部可选。
+
+export interface ListenerDiag {
+  main_window_found?: boolean; // 找到微信主窗口
+  login_present?: boolean; // 检测到扫码登录界面
+  sessions_seen?: number; // 看到的会话数
+  unread_count?: number; // 未读会话数
+  unread_senders?: string[]; // 有未读的发件人
+  replied_count?: number; // 本轮已回复条数
+  last_error?: string | null; // 最后报的错
+}
+
+export interface ListenerStatus {
+  agent_id: string | null;
+  wechat_id: string | null;
+  ts: number; // 服务端最后收到心跳的 ms 时间戳
+  diag?: ListenerDiag; // 整体可能缺失
+}
+
 // ─── API 函数 ────────────────────────────────────────────────────
 
 export const wechatCsConfigApi = {
@@ -94,6 +114,14 @@ export const wechatCsConfigApi = {
     );
     return res.data;
   },
+
+  // 客户机 Agent 监听心跳（listen_chat.py 每分钟上报）
+  getListenerStatus: async (): Promise<ListenerStatus[]> => {
+    const res = await apiClient.get<{ listeners?: ListenerStatus[] }>(
+      '/wechat/listener-heartbeat'
+    );
+    return res.data?.listeners ?? [];
+  },
 };
 
 // 命名导出，便于页面直接解构
@@ -103,4 +131,5 @@ export const {
   getBusinessKB,
   saveBusinessKB,
   suggestAudience,
+  getListenerStatus,
 } = wechatCsConfigApi;

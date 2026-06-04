@@ -12,6 +12,7 @@ import {
   getHeartbeat,
   findStaleListeners,
   checkStaleListenersAndAlert,
+  listHeartbeats,
   STALE_THRESHOLD_MS,
   _resetHeartbeats,
 } from '../wechat-heartbeat';
@@ -76,5 +77,29 @@ describe('wechat-heartbeat 服务 [BEHAVIOR]', () => {
     const r = await checkStaleListenersAndAlert(t0);
     expect(r.stale.length).toBe(1);
     expect(r.alerted).toBe(false);
+  });
+
+  it('recordHeartbeat 带 diag → getHeartbeat / listHeartbeats 取回扫描诊断（中台看板数据源）', () => {
+    recordHeartbeat(
+      {
+        agent_id: 'a1',
+        wechat_id: 'wx',
+        diag: {
+          main_window_found: false,
+          login_present: true,
+          sessions_seen: 0,
+          unread_count: 2,
+          unread_senders: ['张三', '李四'],
+          replied_count: 1,
+          last_error: 'boom',
+        },
+      },
+      1000,
+    );
+    const rec = getHeartbeat({ agent_id: 'a1', wechat_id: 'wx' });
+    expect(rec?.diag?.login_present).toBe(true);
+    expect(rec?.diag?.unread_senders).toEqual(['张三', '李四']);
+    expect(rec?.diag?.replied_count).toBe(1);
+    expect(listHeartbeats().some((x) => x.diag?.last_error === 'boom')).toBe(true);
   });
 });
