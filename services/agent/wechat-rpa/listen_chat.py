@@ -268,9 +268,12 @@ def post_heartbeat(
     middleware_url: str,
     agent_id: Optional[str] = None,
     wechat_id: Optional[str] = None,
+    diag: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     """
     向中台 POST 监听心跳。守护用途：中台断 3 分钟无心跳即飞书告警。
+    diag：扫描诊断（窗口找到没/登录没/会话数/未读+发信人/回复数/错误），让运营在中台
+    看板一眼定位客户监听卡在哪，无需远程进客户桌面。
     任何失败（网络/非200/requests 缺失）都吞掉返回 {ok:False}，绝不抛——心跳不能拖垮监听。
     """
     try:
@@ -279,7 +282,9 @@ def post_heartbeat(
         return {"ok": False, "error": f"requests not available: {exc}"}
 
     url = middleware_url.rstrip("/") + "/api/wechat/listener-heartbeat"
-    body = {"agent_id": agent_id, "wechat_id": wechat_id, "ts": int(time.time() * 1000)}
+    body: Dict[str, Any] = {"agent_id": agent_id, "wechat_id": wechat_id, "ts": int(time.time() * 1000)}
+    if diag is not None:
+        body["diag"] = diag
     try:
         resp = requests.post(url, json=body, timeout=10)
         if resp.status_code != 200:
@@ -345,7 +350,8 @@ def run_real_listen(args: argparse.Namespace) -> int:
         )
         return 0
 
-    from find_weixin import get_main_window  # 函数体内 import，避免顶层触发 pywinauto
+    # 函数体内 import，避免顶层触发 pywinauto
+    from find_weixin import get_main_window, login_window_present
 
     print(
         f"[listen_chat] start polling (pywinauto), middleware={args.middleware_url}, "
@@ -355,25 +361,63 @@ def run_real_listen(args: argparse.Namespace) -> int:
 
     replied: set[tuple[str, str]] = set()
     deadline = time.time() + max(1, args.timeout)
-    # 进程守护：每 60 秒向中台上报一次心跳（断 3 分钟无心跳中台飞书告警）
+    # 进程守护：每 60 秒向中台上报一次心跳（断 3 分钟无心跳中台飞书告警）+ 扫描诊断
     heartbeat_interval = 60
     last_heartbeat = 0.0
+    last_unread_senders: List[str] = []
+    last_error: Optional[str] = None
     try:
         while time.time() < deadline:
             now = time.time()
+
+            # 取主窗口（顺带采集诊断：找到没 / 是否停在登录窗口）
+            mw = None
+            login = False
+            try:
+                mw = get_main_window()
+                if mw is None:
+                    login = login_window_present()
+            except Exception as exc:
+                last_error = f"{type(exc).__name__}: {exc}"
+
+            # 心跳 + 扫描诊断上报中台（运营在 Dashboard「监听健康」看板一眼定位卡在哪）
             if now - last_heartbeat >= heartbeat_interval:
-                hb = post_heartbeat(args.middleware_url, agent_id=getattr(args, "agent_id", None))
+                sessions_seen = 0
+                if mw is not None:
+                    try:
+                        sessions_seen = len(mw.descendants(control_type="ListItem"))
+                    except Exception as exc:
+                        last_error = f"{type(exc).__name__}: {exc}"
+                diag = {
+                    "main_window_found": mw is not None,
+                    "login_present": login,
+                    "sessions_seen": sessions_seen,
+                    "unread_count": len(last_unread_senders),
+                    "unread_senders": last_unread_senders[:10],
+                    "replied_count": len(replied),
+                    "last_error": last_error,
+                }
+                hb = post_heartbeat(
+                    args.middleware_url, agent_id=getattr(args, "agent_id", None), diag=diag
+                )
                 last_heartbeat = now
                 if not hb.get("ok"):
                     print(f"[listen_chat] heartbeat failed: {hb.get('error')}", flush=True)
 
-            mw = get_main_window()
             if mw is None:
-                # 没主窗口：可能未登录(只剩 LoginWindow)或讲述人解锁失效
+                # 没主窗口：可能未登录(只剩 LoginWindow)或讲述人解锁失效（已在 diag 上报）
                 time.sleep(args.interval)
                 continue
 
-            for m in scan_unread(mw):
+            try:
+                unread = scan_unread(mw)
+            except Exception as exc:
+                last_error = f"{type(exc).__name__}: {exc}"
+                time.sleep(args.interval)
+                continue
+            last_unread_senders = [u["sender"] for u in unread]
+
+            for m in unread:
                 key = (m["sender"], m["content"])
                 if key in replied:
                     continue
