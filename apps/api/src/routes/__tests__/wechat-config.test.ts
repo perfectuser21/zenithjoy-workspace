@@ -55,6 +55,17 @@ describe('wechat-config 路由（mock store）', () => {
     expect(mockGetPersona).toHaveBeenCalledTimes(1);
   });
 
+  it('回归：设了 ZENITHJOY_INTERNAL_TOKEN 且不带任何鉴权头，GET /persona 仍 200（不挂 superAdminGuard，dashboard better-auth 场景能加载）', async () => {
+    // 旧版挂了 superAdminGuard：token 已设 + 请求无 X-Feishu-User-Id/无 token → 会 401，
+    // 导致运营在中台"加载失败/存不进/AI帮填失败"。本断言确保不再被该 guard 拦。
+    process.env.ZENITHJOY_INTERNAL_TOKEN = 'set-but-not-sent-by-browser';
+    mockGetPersona.mockResolvedValue(VALID_PERSONA);
+    const res = await request(app).get('/api/wechat/persona');
+    expect(res.status).toBe(200);
+    expect(res.body.self_name).toBe('小齐');
+    delete process.env.ZENITHJOY_INTERNAL_TOKEN;
+  });
+
   it('PUT /persona 合法 → 调 savePersona', async () => {
     mockSavePersona.mockResolvedValue(undefined);
     const res = await request(app).put('/api/wechat/persona').send(VALID_PERSONA);
