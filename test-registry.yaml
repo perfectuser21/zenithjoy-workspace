@@ -2744,6 +2744,22 @@ agent_suite:
     product: 客户私域AI接管
     note: "Path 4 Step 3 Sprint B — 中台配置页 Playwright（加载/编辑/保存/AI帮填，windows_cloud runner）"
 
+  - id: path4-wechat-cs-config-route-unit
+    path: apps/api/src/routes/__tests__/wechat-config.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 客户私域AI接管
+    note: "Path 4 Step 3 Sprint B — 配置路由单测（mock store，zod校验+suggest-audience解析）"
+
+  - id: path4-wechat-cs-config-api-client
+    path: apps/dashboard/src/api/__tests__/wechat-cs-config.api.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 客户私域AI接管
+    note: "Path 4 Step 3 Sprint B — 前端配置 API 客户端单测（mock apiClient）"
+
   - id: path4-crm-routes
     path: apps/api/tests/routes/crm.test.ts
     type: unit
