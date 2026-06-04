@@ -55,6 +55,8 @@ const autopilotConfig: InstanceConfig = {
     'content-clipper': true,     // /clips
     // Path 2 Sprint A — 客户智能获客路径（飞书集成）
     'feishuBind': true,          // /dashboard/feishu-bind
+    // Path 4 — 微信客服中台配置（人设/企业/产品/人群/Q&A + AI帮填A1-A5）
+    'wechat-cs-config': true,    // /wechat/cs-config
     // 旧 features（保留用于兼容，实际已合并到 media-scenario）
     'execution-status': true,
     'tasks': true,
