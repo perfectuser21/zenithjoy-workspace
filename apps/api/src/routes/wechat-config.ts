@@ -4,7 +4,11 @@
  * 把 Sprint A 写死在 apps/api/config/*.json 的人设 + 企业知识库「搬上中台」：
  * 运营在页面填、保存即生效（落 zenithjoy.wechat_cs_config，经 cs-config-store 存取）。
  *
- * 5 个端点（全部走 superAdminGuard；env 未设时该 guard 自动放行，便于本地 / 测试）：
+ * 5 个端点（鉴权与同 router 其他 /api/wechat/* 端点一致：不挂 superAdminGuard。
+ *   原因：superAdminGuard 只认飞书白名单 / 内部 token，**不认 dashboard 的 better-auth
+ *   登录 session** → 运营在中台的请求全被 401 拦，加载失败/存不进/AI帮填失败。
+ *   中台已在 better-auth 登录 + nginx 后面，这些内部配置端点与 qr-bind/draft-generate
+ *   等同 router 端点保持一致即可。后续如需更强鉴权，应换用 better-auth session 感知的中间件）：
  *   - GET  /api/wechat/persona                     → getPersona()
  *   - PUT  /api/wechat/persona                      → 校验 Persona → savePersona() → {success:true}
  *   - GET  /api/wechat/business-kb                  → getBusinessKB()
@@ -17,7 +21,6 @@
 
 import { Router, Request, Response } from 'express';
 import { z } from 'zod';
-import { superAdminGuard } from '../middleware/super-admin';
 import { callOpenRouter } from '../llm/openrouter';
 import {
   getPersona,
@@ -28,9 +31,6 @@ import {
 import type { KBAudienceSegment } from '../services/wechat/types';
 
 export const wechatConfigRouter = Router();
-
-// 所有配置端点都要 super-admin（写配置需管理员；env 未设 → guard 自动放行）
-wechatConfigRouter.use(superAdminGuard);
 
 // ─── Zod Schemas ─────────────────────────────────────────────────────────────
 
