@@ -340,6 +340,19 @@ def run_dryrun_inject(args: argparse.Namespace) -> int:
 # ─── 真模式入口（仅 Windows + pywinauto + 微信 4.0 登录）────────────────────────
 
 
+_LOG_PATH = os.path.join(os.environ.get("PUBLIC", r"C:\Users\Public"), "zj-listener.log")
+
+
+def _log(msg: str) -> None:
+    """同时打印 + 追加到公共日志文件，便于运营/支持 SSH 直接读监听到底干了啥（监听本身 stdio 被忽略）。"""
+    print("[listen_chat] " + str(msg), flush=True)
+    try:
+        with open(_LOG_PATH, "a", encoding="utf-8") as f:
+            f.write(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] {msg}\n")
+    except Exception:
+        pass
+
+
 def _activate_uia() -> None:
     """开关讲述人激活微信 4.0 的 UIAutomation provider。
 
@@ -350,11 +363,17 @@ def _activate_uia() -> None:
     try:
         subprocess.Popen(["Narrator.exe"])
         time.sleep(2)
-        subprocess.run(["taskkill", "/IM", "Narrator.exe", "/F"], capture_output=True, timeout=10)
+        # 用 PowerShell Stop-Process 关讲述人（对齐 start.bat 的可靠方式）。
+        # 之前用 taskkill 关不掉 → 讲述人赖着 → UIA 巨慢 → 监听卡死，是 v1.1.83 的真 bug。
+        subprocess.run(
+            ["powershell", "-NoProfile", "-Command",
+             "Stop-Process -Name Narrator -Force -ErrorAction SilentlyContinue"],
+            capture_output=True, timeout=15,
+        )
         time.sleep(1)
-        print("[listen_chat] UIA 激活（讲述人开关）完成", flush=True)
+        _log("UIA 激活（讲述人开关，Stop-Process 关闭）完成")
     except Exception as exc:
-        print(f"[listen_chat] UIA 激活失败: {exc}", flush=True)
+        _log(f"UIA 激活失败: {exc}")
 
 
 def run_real_listen(args: argparse.Namespace) -> int:
@@ -419,12 +438,17 @@ def run_real_listen(args: argparse.Namespace) -> int:
                     "replied_count": len(replied),
                     "last_error": last_error,
                 }
+                _log(
+                    f"心跳 found_window={diag['main_window_found']} login={login} "
+                    f"sessions={sessions_seen} unread={diag['unread_count']}"
+                    f"{diag['unread_senders']} replied={diag['replied_count']} err={last_error}"
+                )
                 hb = post_heartbeat(
                     args.middleware_url, agent_id=getattr(args, "agent_id", None), diag=diag
                 )
                 last_heartbeat = now
                 if not hb.get("ok"):
-                    print(f"[listen_chat] heartbeat failed: {hb.get('error')}", flush=True)
+                    _log(f"心跳上报失败: {hb.get('error')}")
 
             if mw is None:
                 # 找不到 mmui 主窗口（多为微信4.0 UIAutomation 激活失效）→ 按冷却重做讲述人解锁补激活再重试
