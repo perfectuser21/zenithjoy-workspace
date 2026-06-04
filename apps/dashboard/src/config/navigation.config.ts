@@ -26,6 +26,7 @@ import {
   Scissors,
   Building2,
   MonitorCheck,
+  MessageCircle,
 } from 'lucide-react';
 
 // ============ 类型定义 ============
@@ -109,6 +110,8 @@ export const autopilotPageComponents: Record<string, () => Promise<{ default: Co
   // zj10 Customer Mgmt — 平台绑定状态 + 发布日志
   'AdminPlatformSessionsPage': () => import('../pages/AdminPlatformSessionsPage'),
   'AdminPublishLogsPage': () => import('../pages/AdminPublishLogsPage'),
+  // Path 4 Sprint B — 微信客服中台配置
+  'WechatCustomerServiceConfigPage': () => import('../pages/WechatCustomerServiceConfigPage'),
 };
 
 export const pageComponents = autopilotPageComponents;
@@ -255,6 +258,13 @@ export const autopilotNavGroups: NavGroup[] = [
         label: '一键发布',
         featureKey: 'ws1-publish',
         component: 'PublishPage',
+      },
+      {
+        path: '/wechat/cs-config',
+        icon: MessageCircle,
+        label: '微信客服配置',
+        featureKey: 'wechat-cs-config',
+        component: 'WechatCustomerServiceConfigPage',
       },
       {
         path: '/license',

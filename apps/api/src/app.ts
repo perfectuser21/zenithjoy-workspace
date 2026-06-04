@@ -39,6 +39,8 @@ import smokeFakeAgentBurnerRouter from './routes/_smoke-fake-agent-burner';
 import smokeMockAgentRouter from './routes/_smoke-mock-agent';
 // Path 4 Sprint 1 WS1 — wechat 3 endpoints (thin stub)
 import { wechatRouter } from './routes/wechat';
+// Path 4 Sprint B — 微信客服中台配置（人设/企业知识库 CRUD + AI 帮填 A1-A5）
+import { wechatConfigRouter } from './routes/wechat-config';
 import clipsRouter from './routes/clips';
 import clipsAuthRouter from './routes/clips-auth';
 import { acquisitionRouter } from './routes/acquisition';
@@ -132,6 +134,8 @@ app.use('/api/_smoke', smokeFakeAgentBurnerRouter);
 app.use('/api/_smoke', smokeMockAgentRouter);
 // Path 4 Sprint 1 WS1 — wechat 3 endpoints (qr-bind / draft-review-poll / scheduler-tick)
 app.use('/api/wechat', wechatRouter);
+// Path 4 Sprint B — 微信客服配置 CRUD（/persona, /business-kb, /business-kb/suggest-audience）
+app.use('/api/wechat', wechatConfigRouter);
 app.use('/api/clips', clipsRouter);
 app.use('/api/clips/auth', clipsAuthRouter);
 app.use('/api/acquisition', acquisitionRouter);

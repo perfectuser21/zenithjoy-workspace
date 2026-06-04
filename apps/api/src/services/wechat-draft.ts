@@ -20,8 +20,8 @@ import axios from 'axios';
 import pool from '../db/connection';
 import { callOpenRouter } from '../llm/openrouter';
 import type { ChatMessage, ContactFact, ContactMemory, Persona } from './wechat/types';
-import { loadPersona } from './wechat/persona';
-import { loadBusinessKB, retrieveRelevantKB } from './wechat/business-kb';
+import { retrieveRelevantKB } from './wechat/business-kb';
+import { getPersona, getBusinessKB } from './wechat/cs-config-store';
 import {
   appendMessage,
   consolidate,
@@ -229,8 +229,8 @@ export async function generateChatDraft(
     console.warn('[wechat-draft] 写入站消息失败（不影响生成）:', err);
   }
 
-  const persona = loadPersona();
-  const kb = loadBusinessKB();
+  const persona = await getPersona();
+  const kb = await getBusinessKB();
   let shortTerm: ChatMessage[] = [];
   let memory: ContactMemory = { summary: '', facts: [] as ContactFact[] };
   try {
