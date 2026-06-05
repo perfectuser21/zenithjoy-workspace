@@ -163,7 +163,7 @@ if not exist "%ZJ_NODE_EXE%" (
 )
 
 if not exist "%ZJ_HF_MAIN%" (
-    echo [hyperframes] first-time install (~1-2 min, via npmmirror)...
+    echo [hyperframes] first-time install, ~1-2 min via npmmirror...
     mkdir "%ZJ_HF_DIR%" 2>nul
     "%ZJ_NODE_EXE%" "%ZJ_NPM_CLI%" install hyperframes --prefix "%ZJ_HF_DIR%" --registry https://registry.npmmirror.com
     if errorlevel 1 (
@@ -280,7 +280,7 @@ REM continue regardless of exit code, only echo a clear hint for the user/dashbo
 if exist "%~dp0python-embedded\python.exe" if exist "%~dp0wechat-rpa\preflight.py" (
     echo.
     echo  ============================================================
-    echo   WeChat RPA environment self-check (preflight, best-effort, non-blocking)
+    echo   WeChat RPA environment self-check ^(preflight, best-effort, non-blocking^)
     echo  ============================================================
     "%~dp0python-embedded\python.exe" "%~dp0wechat-rpa\preflight.py" --middleware-url "%ZENITHJOY_API_BASE%"
     if errorlevel 1 (
