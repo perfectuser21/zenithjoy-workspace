@@ -268,6 +268,45 @@ def assert_supported_version(exe_path: Optional[str] = None) -> None:
     return _parse_and_check(ver)
 
 
+def is_weixin_running() -> bool:
+    """检测 Weixin.exe 是否已有进程在跑（跨平台：非 Windows 永远返回 False）。"""
+    try:
+        import subprocess  # noqa: PLC0415
+        result = subprocess.run(
+            ["tasklist", "/FI", "IMAGENAME eq Weixin.exe", "/NH"],
+            capture_output=True, text=True, timeout=5,
+        )
+        return "Weixin.exe" in result.stdout
+    except Exception:
+        return False
+
+
+def launch_weixin(exe_path: Optional[str] = None) -> bool:
+    """
+    启动 Weixin.exe（微信 4.x 客户端）。
+
+    - exe_path 未指定时用 WEIXIN_EXE_DEFAULT。
+    - 成功启动返回 True；文件不存在 / 非 Windows / spawn 异常返回 False。
+    - 已在运行时也返回 True（幂等）。
+    """
+    import subprocess  # noqa: PLC0415
+    path = exe_path or WEIXIN_EXE_DEFAULT
+    if not os.path.isfile(path):
+        logger.warning("找不到 Weixin.exe（path=%r），无法自动启动微信。", path)
+        return False
+    try:
+        CREATE_NO_WINDOW = 0x08000000
+        subprocess.Popen(
+            [path],
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", CREATE_NO_WINDOW),
+        )
+        logger.info("已 Popen 启动 Weixin.exe（path=%r）", path)
+        return True
+    except Exception as exc:
+        logger.warning("启动 Weixin.exe 失败（path=%r）：%s", path, exc)
+        return False
+
+
 def get_main_window() -> Optional[Any]:
     """
     返回微信 4.0 主窗口（class_name == 'mmui::MainWindow'）。
