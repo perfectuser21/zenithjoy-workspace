@@ -496,6 +496,9 @@ def run_real_listen(args: argparse.Namespace) -> int:
     uia_reactivate_interval = 45
     _activate_uia()
     last_uia_activate = time.time()
+    # 自动启动微信：检测到微信未运行时自动 Popen Weixin.exe，冷却 120s 防重复拉起
+    wechat_launch_cooldown = 120
+    last_wechat_launch = 0.0
     try:
         while time.time() < deadline:
             now = time.time()
@@ -540,6 +543,17 @@ def run_real_listen(args: argparse.Namespace) -> int:
                     _log(f"心跳上报失败: {hb.get('error')}")
 
             if mw is None:
+                # 微信既没有主窗口也没有登录窗口 → 进程未启动 → 自动拉起 Weixin.exe（冷却 120s）
+                if not login and now - last_wechat_launch >= wechat_launch_cooldown:
+                    from find_weixin import launch_weixin  # noqa: PLC0415
+                    launched = launch_weixin()
+                    last_wechat_launch = time.time()
+                    if launched:
+                        _log("微信未运行，已自动启动 Weixin.exe — 请扫码登录")
+                    else:
+                        _log("微信未运行，自动启动失败（Weixin.exe 不存在或 Popen 异常）")
+                    time.sleep(5)  # 等微信启动窗口
+
                 # 找不到 mmui 主窗口（多为微信4.0 UIAutomation 激活失效）→ 按冷却重做讲述人解锁补激活再重试
                 if now - last_uia_activate >= uia_reactivate_interval:
                     print("[listen_chat] 未找到微信主窗口，重做 UIA 激活…", flush=True)
