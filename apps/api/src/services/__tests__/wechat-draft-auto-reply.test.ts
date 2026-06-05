@@ -127,8 +127,10 @@ describe('generateChatDraft mode:auto [BEHAVIOR]', () => {
     expect(result.reply).toBeUndefined();
   });
 
-  it('J4: sender 不在飞书"客户档案"名单 → {ok:false, reason:"not_in_whitelist"}', async () => {
-    setupFeishuMock([], []); // 空 customers 数组
+  it('J4: mode:auto + sender 不在飞书名单 → 跳过白名单全员回复，返回 {ok:true, reply:...}', async () => {
+    // 全员自动回 — 白名单检查被绕过，陌生人也能得到 AI 回复
+    setupFeishuMock([], []); // 空 customers，mode:auto 不查飞书名单
+    vi.mocked(callOpenRouter).mockResolvedValue({ content: '你好，我是小齐' } as any);
 
     const mod = await import('../wechat-draft');
     const result: any = await mod.generateChatDraft({
@@ -136,6 +138,21 @@ describe('generateChatDraft mode:auto [BEHAVIOR]', () => {
       wechat_id: 'wxid_unknown',
       content: '你好',
       mode: 'auto',
+    } as any);
+
+    expect(result.ok).toBe(true);
+    expect(result.reply).toBe('你好，我是小齐');
+  });
+
+  it('J5: mode:review + sender 不在飞书名单 → 仍走白名单检查 {ok:false, reason:"not_in_whitelist"}', async () => {
+    setupFeishuMock([], []); // 空 customers 数组
+
+    const mod = await import('../wechat-draft');
+    const result: any = await mod.generateChatDraft({
+      sender: '陌生人',
+      wechat_id: 'wxid_unknown',
+      content: '你好',
+      // mode 默认 'review'
     } as any);
 
     expect(result.ok).toBe(false);

@@ -208,17 +208,18 @@ export async function generateChatDraft(
 ): Promise<GenerateChatDraftResult> {
   const { sender, wechat_id, content, mode = 'review' } = params;
 
-  // 1) 校验 sender 在飞书"客户档案"表名单内
-  let customers: FeishuRecord[] = [];
-  try {
-    customers = await searchTable(getCustomerTableId(), sender);
-  } catch (err) {
-    // 飞书 search 失败：thin 阶段当作"名单外"处理（fail-safe — 宁愿不生成也不误生成）
-    console.warn('[wechat-draft] 飞书"客户档案"search 失败，按名单外处理:', err);
-    return { ok: false, reason: 'not_in_whitelist' };
-  }
-  if (!customers || customers.length === 0) {
-    return { ok: false, reason: 'not_in_whitelist' };
+  // 1) 白名单校验 —— mode='auto'（listen_chat 全员自动回）时跳过，review 模式才查飞书名单。
+  if (mode !== 'auto') {
+    let customers: FeishuRecord[] = [];
+    try {
+      customers = await searchTable(getCustomerTableId(), sender);
+    } catch (err) {
+      console.warn('[wechat-draft] 飞书"客户档案"search 失败，按名单外处理:', err);
+      return { ok: false, reason: 'not_in_whitelist' };
+    }
+    if (!customers || customers.length === 0) {
+      return { ok: false, reason: 'not_in_whitelist' };
+    }
   }
 
   // 2) 三层记忆 + 人设 + 企业知识库 → 上下文装配（替代旧的"飞书取最近10轮+营销画像"）
