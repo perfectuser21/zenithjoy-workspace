@@ -2,7 +2,7 @@
 # wechat-cs-hardening smoke — 微信 AI 客服稳定性加固静态校验。
 #
 # 验证 Path 4 今天真机跑通后正规化进代码的 5 处临时修复 + 进程守护落地：
-#   1) listen_chat.py reply_in_chat 用 click_input（微信4.0 select 不切换会话）
+#   1) listen_chat.py reply_in_chat 纯 UIA（iface_invoke.Invoke 开会话 + iface_value.SetValue 填字，禁物理输入）
 #   2) wechat-rpa.ts 脚本路径基于 process.execPath（pkg 打包后 __dirname 失效）
 #   3) wechat.ts DraftGenerateSchema 含 mode 字段（auto 模式透传 reply）
 #   4) build-install-pack.sh 跨平台预装 pywinauto（--platform win_amd64）
@@ -19,10 +19,12 @@ BUILD=services/agent/scripts/build-install-pack.sh
 WATCHDOG=services/agent/install-pack/listener-watchdog.bat
 AUTOSTART=services/agent/install-pack/install-autostart.ps1
 
-echo "=== 1: listen_chat 用 click_input 切换会话（无 item.select 残留）==="
-grep -qE 'item\.click_input\(\)' "$LISTEN" || { echo "FAIL: reply_in_chat 未用 click_input"; exit 1; }
+echo "=== 1: listen_chat reply_in_chat 纯 UIA 后台形态（禁物理输入）==="
+grep -qE 'iface_invoke\.Invoke\(\)' "$LISTEN" || { echo "FAIL: reply_in_chat 未用 iface_invoke.Invoke（开会话/发送）"; exit 1; }
+grep -qE 'iface_value\.SetValue\(' "$LISTEN" || { echo "FAIL: reply_in_chat 未用 iface_value.SetValue（填输入框）"; exit 1; }
+! grep -qE 'item\.click_input\(\)|send_keys\(|type_keys\(' "$LISTEN" || { echo "FAIL: 仍残留物理输入（click_input/send_keys/type_keys 会抢前台）"; exit 1; }
 ! grep -qE 'item\.select\(\)' "$LISTEN" || { echo "FAIL: 仍残留 item.select()（微信4.0 不切换会话）"; exit 1; }
-echo "  PASS click_input 切换会话"
+echo "  PASS 纯 UIA（Invoke 开会话 + SetValue 填字，无物理输入）"
 
 echo "=== 2: wechat-rpa.ts 脚本路径基于 process.execPath ==="
 grep -qE 'path\.dirname\(process\.execPath\)' "$RPA_TS" || { echo "FAIL: 未用 process.execPath 目录"; exit 1; }
