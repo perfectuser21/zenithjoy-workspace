@@ -293,6 +293,12 @@ if exist "%~dp0python-embedded\python.exe" if exist "%~dp0wechat-rpa\preflight.p
     echo [preflight] skipped: python-embedded or wechat-rpa\preflight.py not found (old or slim pack)
 )
 
+REM Step 6.95: Single-instance guard — kill any existing zenithjoy-agent.exe before starting
+REM Two agents with the same license kick each other off the server WS connection,
+REM causing repeated disconnects ("又掉了" / "车没油" symptom when upgrading without closing old).
+powershell -NoProfile -Command "Get-Process -Name zenithjoy-agent -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue" >nul 2>&1
+echo [agent] previous agent processes stopped (if any)
+
 REM Step 7: Spawn agent.exe (foreground)
 mkdir "%USERPROFILE%\.zj" 2>nul
 echo [agent] starting zenithjoy-agent.exe ...

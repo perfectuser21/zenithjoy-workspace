@@ -433,6 +433,22 @@ tests:
     product: AI员工
     note: "CRLF regression — ZENITHJOY_API_BASE 带 \\r 时 sanitizeApiBase 必须剥除"
 
+  - id: agent-start-bat-single-instance
+    path: services/agent/src/__tests__/start-bat-single-instance.test.ts
+    type: unit
+    ci: L2
+    status: active
+    product: AI员工
+    note: "单实例守卫 regression — start.bat 必须在启动前杀掉旧 zenithjoy-agent.exe，防双实例 WS 踢腿（'又掉了'）"
+
+  - id: agent-listener-watchdog-crlf
+    path: services/agent/src/__tests__/listener-watchdog-crlf.test.ts
+    type: unit
+    ci: L2
+    status: active
+    product: AI员工
+    note: "watchdog CRLF regression — listener-watchdog.bat 读 .env 前必须剥 \\r，防 ZENITHJOY_API_BASE 污染"
+
   # ── Walking Skeleton #1 — Agent handlers ────────────────────────────────────
   - id: agent-ws1-heartbeat-loop
     path: services/agent/src/handlers/__tests__/heartbeat-loop.test.ts

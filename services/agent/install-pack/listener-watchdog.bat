@@ -17,6 +17,8 @@ set "SCRIPT=%~dp0wechat-rpa\listen_chat.py"
 
 REM 中台地址：优先 .env 注入的 ZENITHJOY_API_BASE，缺省走公网
 if exist .env (
+    REM Normalize .env line endings — strip \r so CRLF files don't pollute env vars (same fix as start.bat)
+    powershell -NoProfile -Command "$c=[IO.File]::ReadAllText('.env') -replace '\r',''; [IO.File]::WriteAllText('.env',$c)" >nul 2>&1
     for /f "usebackq tokens=1,* delims==" %%a in (".env") do (
         if /i "%%a"=="ZENITHJOY_API_BASE" set "ZENITHJOY_API_BASE=%%b"
         if /i "%%a"=="ZENITHJOY_AGENT_ID" set "ZENITHJOY_AGENT_ID=%%b"
