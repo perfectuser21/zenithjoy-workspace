@@ -10,7 +10,9 @@ listen_chat.py — 微信 4.0 私聊监听 + 隐形自动回（Path 4 Step 5，p
   - **Windows + 微信 4.0 登录 + 讲述人解锁过 + 装了 pywinauto**：真启监听 →
     Desktop(uia) 读会话列表 ListItem 的 element_info.name 解析未读 →
     校验发送者在飞书"客户档案"名单内（中台 SSOT）→ POST /api/wechat/draft-generate?mode=auto
-    → 拿 reply 文本 → click_input 打开会话（微信4.0 select 不切换）→ chat_input_field set_text → 点"发送" click_input。
+    → 拿 reply 文本 → 纯 UIA 控件操作发出：会话项 iface_invoke.Invoke() 打开会话 →
+    chat_input_field iface_value.SetValue(reply) 写值 → "发送"按钮 iface_invoke.Invoke()。
+    全程不碰鼠标/键盘/光标（不抢前台、不跟 Agent 其他自动化打架，微信最小化也能跑）。
   - **macOS / Linux / 缺 pywinauto**：仅 --dryrun（--inject-message 注入单条）可跑，
     真启时优雅降级"pywinauto not available"，不报错退出。
   - **--dryrun-print-version**：仅向 stderr 打印 pywinauto 可用性后立即退出。
@@ -116,49 +118,73 @@ def scan_unread(mw: Any) -> List[Dict[str, Any]]:
     return out
 
 
-def reply_in_chat(mw: Any, item: Any, reply_text: str) -> bool:
-    """
-    打开 item 对应会话并发出 reply_text（真机验证配方）：
-      1) item.click_input()（微信4.0 select() 不切换会话 → 回复发错对象；
-         必须点列表项才真打开目标客户会话。以微信登录的 Windows 用户身份运行即可点）
-      2) 找输入框 Edit 且 automation_id=='chat_input_field' → set_text(reply)（ValuePattern，中文 OK）
-      3) 找按钮 Button 且 name=='发送' → click_input()（需以微信登录的 Windows 用户身份运行）
-      4) edit.get_value()=='' 视为发送成功。
-    """
-    item.click_input()
-    time.sleep(1.2)
-
-    edit = None
+def _find_chat_input(mw: Any) -> Optional[Any]:
+    """定位回复输入框：Edit 且 automation_id=='chat_input_field'。找不到返回 None（不静默吞）。"""
     for c in mw.descendants(control_type="Edit"):
         try:
             if c.element_info.automation_id == "chat_input_field":
-                edit = c
-                break
+                return c
         except Exception:
             continue
+    return None
+
+
+def _find_send_button(mw: Any) -> Optional[Any]:
+    """定位发送按钮：Button 且 name=='发送'。找不到返回 None（不静默吞）。"""
+    for c in mw.descendants(control_type="Button"):
+        try:
+            if (c.element_info.name or "") == "发送":
+                return c
+        except Exception:
+            continue
+    return None
+
+
+def reply_in_chat(mw: Any, item: Any, reply_text: str) -> bool:
+    """
+    打开 item 对应会话并发出 reply_text —— **纯 UIA 控件操作**，全程不碰鼠标/键盘/光标
+    （2026-06-05 xian-pc 微信 4.1.8.107 真机验证：微信最小化也跑通，不抢前台、不跟 Agent
+    其他自动化抢光标；物理点击/模拟键盘/移动光标在 4.1.8 上不仅打不开会话还会被拒访问）：
+      1) item.iface_invoke.Invoke()（InvokePattern 打开目标会话；.select() 物理点击在 4.1.8 无效）
+      2) 找输入框 Edit 且 automation_id=='chat_input_field' → iface_value.SetValue(reply)
+         （ValuePattern 直接写值，中文 OK，不模拟键盘）
+      3) 找按钮 Button 且 name=='发送' → iface_invoke.Invoke()（InvokePattern 触发发送，不点鼠标）
+      4) 输入框 value 清空视为发送成功。
+    会话项无法 Invoke / 找不到输入框 / 找不到发送按钮 / SetValue 失败 → 返回 False 并打印明确错误。
+    """
+    try:
+        item.iface_invoke.Invoke()
+    except Exception as exc:
+        print(f"[listen_chat] 打开会话失败（iface_invoke.Invoke）: {exc}", file=sys.stderr)
+        return False
+    time.sleep(1.2)
+
+    edit = _find_chat_input(mw)
     if edit is None:
         print("[listen_chat] 找不到 chat_input_field（讲述人解锁可能失效）", file=sys.stderr)
         return False
 
-    edit.set_text(reply_text)
+    try:
+        edit.iface_value.SetValue(reply_text)
+    except Exception as exc:
+        print(f"[listen_chat] 写输入框失败（iface_value.SetValue）: {exc}", file=sys.stderr)
+        return False
     time.sleep(0.4)
 
-    btn = None
-    for c in mw.descendants(control_type="Button"):
-        try:
-            if (c.element_info.name or "") == "发送":
-                btn = c
-                break
-        except Exception:
-            continue
+    btn = _find_send_button(mw)
     if btn is None:
         print("[listen_chat] 找不到'发送'按钮", file=sys.stderr)
         return False
 
-    btn.click_input()
-    time.sleep(1.0)
     try:
-        return edit.get_value() == ""
+        btn.iface_invoke.Invoke()
+    except Exception as exc:
+        print(f"[listen_chat] 点击发送失败（iface_invoke.Invoke）: {exc}", file=sys.stderr)
+        return False
+    time.sleep(1.0)
+
+    try:
+        return (edit.iface_value.CurrentValue or "") == ""
     except Exception:
         return True
 

@@ -6,9 +6,10 @@ send_chat.py — 私聊真发（Path 4 Step 5，pywinauto 版）。
   - **REAL_PUBLISH=0**（默认）：不真控微信，输出 mock 成功 JSON
         {"ok": true, "sent_at": ISO8601, "dryRun": true}
   - **REAL_PUBLISH=1 + Windows + 微信 4.0 登录 + 装了 pywinauto**：
-    复用 listen_chat 的真机验证配方 —— get_main_window() 找主窗口 →
-    在会话列表定位 target 的会话项 → reply_in_chat()（select → chat_input_field set_text →
-    点"发送"click_input）。脚本须以微信登录的 Windows 用户身份运行，否则点击"拒绝访问"。
+    复用 listen_chat 的纯 UIA 配方 —— get_main_window() 找主窗口 →
+    在会话列表定位 target 的会话项 → reply_in_chat()（会话项 iface_invoke.Invoke() 打开会话 →
+    chat_input_field iface_value.SetValue() 写值 → "发送"按钮 iface_invoke.Invoke()）。
+    全程纯 UIA 控件操作，不碰鼠标/键盘/光标 → 不抢前台、跨会话不被拒、微信最小化也能发。
   - **REAL_PUBLISH=1 + macOS / 缺 pywinauto / 没找到会话**：优雅降级，返回 ok:false + 原因。
 
 约定：
