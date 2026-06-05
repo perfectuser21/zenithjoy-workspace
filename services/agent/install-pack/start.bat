@@ -8,10 +8,14 @@ REM Unblock all executables recursively (removes Zone Identifier / Mark of the W
 REM Without this, execFile() on bundled ffmpeg.exe / Playwright chrome.exe fails with "spawn UNKNOWN"
 powershell -NoProfile -Command "Get-ChildItem -Path '%~dp0' -Recurse -Include '*.exe','*.dll' | Unblock-File" >nul 2>&1
 
-REM Step 0: 讲述人开关 — 解锁微信 UIAutomation 访问（WeChat 4.0 窗口自动化前置条件）
+REM Step 0: 讲述人开关 — 解锁微信 UIAutomation 访问（WeChat 4.1.x 窗口自动化前置条件）
 REM 约 2 秒：Start-Process Narrator → 等待 → Stop-Process 关闭，UIAutomation 权限已获取
+REM 【静默】先把讲述人语音音量归零（best-effort），避免开机弹窗时出声/抢焦点
+reg add "HKCU\Software\Microsoft\Narrator" /v SpeechVolume /t REG_DWORD /d 0 /f >nul 2>&1
+reg add "HKCU\Software\Microsoft\Narrator" /v WinEnterLaunch /t REG_DWORD /d 0 /f >nul 2>&1
+reg add "HKCU\Software\Microsoft\Narrator\NoRoam" /v SpeechVolume /t REG_DWORD /d 0 /f >nul 2>&1
 powershell -NoProfile -Command "Start-Process Narrator; Start-Sleep -Milliseconds 1500; Stop-Process -Name Narrator -ErrorAction SilentlyContinue" >nul 2>&1
-echo [narrator] WeChat UIAutomation unlocked (Narrator start+stop)
+echo [narrator] WeChat UIAutomation unlocked (Narrator start+stop, silenced)
 
 REM Step 1: Verify .env exists — 首次运行自动从 .env.template 复制
 if not exist .env (
@@ -196,13 +200,52 @@ for /f "delims=" %%d in ('dir /b /ad "%PLAYWRIGHT_BROWSERS_PATH%\chromium-*" 2^>
     )
 )
 
-REM === 解锁微信 UIAutomation（开关讲述人，约2秒）===
-REM 微信 4.0 首次需有 UIAutomation 客户端激活后，pywinauto 才能读取窗口控件树。
-REM Narrator 是 Windows 自带的无障碍朗读器（系统组件，非外部程序），开/关一次即可激活
-REM UIAutomation provider，随后立刻关闭不留后台进程，无额外权限或安全风险。
-echo [setup] 正在解锁微信自动化权限...
+REM === 解锁微信 UIAutomation（静默开关讲述人，约2秒）===
+REM 微信 4.1.x 的 mmui 控件树要靠"有 AT 客户端(讲述人)"激活后，pywinauto 才能读取。
+REM Narrator 是 Windows 自带无障碍朗读器（系统组件，非外部程序），开/关一次即激活
+REM UIAutomation provider，随后立刻关闭不留后台进程。
+REM 【静默】讲述人默认会出声/抢焦点 —— 启动前把它静音：
+REM   - HKCU\Software\Microsoft\Narrator 下 SpeechVolume=0（语音音量归零）
+REM   - WinEnterLaunch=0 防止下次自启；IntonationPause/EchoChars 等不影响激活
+REM 这是最佳努力（best-effort）：注册表写失败也不阻断，UIA 仍能被激活。
+echo [setup] 正在解锁微信自动化权限（讲述人静默激活）...
+reg add "HKCU\Software\Microsoft\Narrator" /v SpeechVolume /t REG_DWORD /d 0 /f >nul 2>&1
+reg add "HKCU\Software\Microsoft\Narrator" /v WinEnterLaunch /t REG_DWORD /d 0 /f >nul 2>&1
+reg add "HKCU\Software\Microsoft\Narrator\NoRoam" /v SpeechVolume /t REG_DWORD /d 0 /f >nul 2>&1
 powershell -WindowStyle Hidden -Command "Start-Process 'Narrator'; Start-Sleep 2; Stop-Process -Name 'Narrator' -ErrorAction SilentlyContinue" 2>nul
 echo [setup] 完成
+
+REM === 锁更新：防微信自动升回 4.1.9+（无障碍控件树被砍 = RPA 报废）===
+REM 幂等：重复跑不报错。两手并用：
+REM   1) 把 Weixin 安装目录下各版本子目录里的 WeixinUpdate.exe 改名为 .disabled
+REM   2) 加防火墙出站封禁规则，挡住 WeixinUpdate.exe 联网拉新版
+REM 用 dir /s /b 找真实子目录路径（版本号目录名会变，不能写死）。
+echo [lock-update] 锁定微信版本，禁止自动升级...
+set "_WEIXIN_ROOT=C:\Program Files\Tencent\Weixin"
+if exist "%_WEIXIN_ROOT%" (
+    for /f "delims=" %%u in ('dir /s /b "%_WEIXIN_ROOT%\WeixinUpdate.exe" 2^>nul') do (
+        REM 1) 改名禁用（已是 .disabled 的不会再被命中，天然幂等）
+        ren "%%u" "WeixinUpdate.exe.disabled" >nul 2>&1
+        if exist "%%u" (
+            echo [lock-update] WARN 改名失败（可能被占用）：%%u
+        ) else (
+            echo [lock-update] 已禁用 %%u
+        )
+        REM 2) 防火墙出站封禁（幂等：先删同名规则再加，避免重复堆叠）
+        netsh advfirewall firewall delete rule name="Block WeixinUpdate" program="%%u" >nul 2>&1
+        netsh advfirewall firewall add rule name="Block WeixinUpdate" dir=out action=block program="%%u" enable=yes >nul 2>&1
+    )
+    REM 对已改名为 .disabled 的也补一条防火墙规则（兜底，防被还原后联网）
+    for /f "delims=" %%d in ('dir /s /b "%_WEIXIN_ROOT%\WeixinUpdate.exe.disabled" 2^>nul') do (
+        set "_ORIG=%%d"
+        set "_ORIG=!_ORIG:.disabled=!"
+        netsh advfirewall firewall delete rule name="Block WeixinUpdate" program="!_ORIG!" >nul 2>&1
+        netsh advfirewall firewall add rule name="Block WeixinUpdate" dir=out action=block program="!_ORIG!" enable=yes >nul 2>&1
+    )
+    echo [lock-update] 完成
+) else (
+    echo [lock-update] 未发现微信安装目录，跳过（%_WEIXIN_ROOT%）
+)
 
 REM Step 7: Spawn agent.exe (foreground)
 mkdir "%USERPROFILE%\.zj" 2>nul
