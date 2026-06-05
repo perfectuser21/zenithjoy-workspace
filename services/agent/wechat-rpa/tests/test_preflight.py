@@ -115,14 +115,17 @@ def test_build_report_structure():
     assert report["checks"] == checks
 
 
-# ---------- run_all_checks：dry-run 产出 8 项、结构正确、不抛 ----------
+# ---------- run_all_checks：dry-run 产出全部项、结构正确、不抛 ----------
 
 
 def test_run_all_checks_dry_run_structure():
     checks = run_all_checks("http://localhost:9", dry_run=True)
-    assert len(checks) == len(CHECK_NAMES) == 8
+    assert len(checks) == len(CHECK_NAMES) == 9
     names = [c["name"] for c in checks]
-    assert names == list(CHECK_NAMES)
+    # 执行序列与 CHECK_NAMES 元组顺序不同（elevation 执行序排第 2，元组里追加在末尾），
+    # 故按集合比对覆盖完整 + 显式确认 elevation 在列。
+    assert set(names) == set(CHECK_NAMES)
+    assert "elevation" in names
     for c in checks:
         assert set(c.keys()) == {"name", "status", "detail"}
         assert c["status"] in {"ok", "fixed", "warn", "failed"}
@@ -158,7 +161,7 @@ def test_main_dry_run_smoke(tmp_path, monkeypatch, capsys):
     assert out_json.exists()
     report = json.loads(out_json.read_text(encoding="utf-8"))
     assert "ts" in report and "all_ok" in report and "checks" in report
-    assert len(report["checks"]) == 8
+    assert len(report["checks"]) == 9
     assert isinstance(report["all_ok"], bool)
 
     captured = capsys.readouterr()

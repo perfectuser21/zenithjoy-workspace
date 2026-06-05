@@ -2890,6 +2890,22 @@ agent_suite:
     product: 客户私域AI接管
     note: "开机环境自检+自愈 env-doctor：8项检测(OS/微信装/版本/锁更新/登录/pywinauto/UIA/中台)的判定逻辑+报告汇总+dry-run不执行真实自愈"
 
+  - id: wechat-cs-middleware-retry
+    path: services/agent/wechat-rpa/tests/test_retry.py
+    type: unit
+    ci: L3
+    status: active
+    product: 客户私域AI接管
+    note: "监听调中台 HTTP 指数退避重试：网络异常/5xx/429 重试、4xx 不重试、max_total 封顶（扛国内跨境抖动，回复发稳）"
+
+  - id: wechat-cs-preflight-elevation
+    path: services/agent/wechat-rpa/tests/test_elevation.py
+    type: unit
+    ci: L3
+    status: active
+    product: 客户私域AI接管
+    note: "preflight 提权检测：管理员/提权身份运行→warn(讲述人/UIA激活被挡致登录识别不到，提示用普通用户跑)"
+
   - id: wechat-cs-build-pywinauto
     path: services/agent/scripts/__tests__/build-install-pack-pywinauto.test.sh
     type: unit
