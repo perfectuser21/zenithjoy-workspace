@@ -2914,6 +2914,14 @@ agent_suite:
     product: 客户私域AI接管
     note: "build-install-pack 跨平台预装 pywinauto 契约（get-pip + --platform win_amd64 + 去重）"
 
+  - id: wechat-cs-install-pack-ascii
+    path: services/agent/install-pack/__tests__/install-pack-ascii.test.sh
+    type: unit
+    ci: L3
+    status: active
+    product: 客户私域AI接管
+    note: "防打包坑：install-pack 无非ASCII文件名(中文名致Windows tar解压中断) + start.bat 纯ASCII无BOM(BOM破坏@echo off)"
+
   - id: wechat-cs-process-guardian
     path: services/agent/install-pack/__tests__/process-guardian.test.sh
     type: unit

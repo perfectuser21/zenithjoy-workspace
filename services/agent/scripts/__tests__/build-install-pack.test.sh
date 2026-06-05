@@ -29,7 +29,7 @@ INSTALL_DIR=$(ls "$TMPDIR" | head -1)
 test -f "$TMPDIR/$INSTALL_DIR/zenithjoy-agent.exe" || { echo "FAIL: .exe missing"; exit 1; }
 test -f "$TMPDIR/$INSTALL_DIR/start.bat" || { echo "FAIL: start.bat missing"; exit 1; }
 test -f "$TMPDIR/$INSTALL_DIR/.env.template" || { echo "FAIL: .env.template missing"; exit 1; }
-test -f "$TMPDIR/$INSTALL_DIR/README-1分钟跑通.txt" || { echo "FAIL: README missing"; exit 1; }
+test -f "$TMPDIR/$INSTALL_DIR/README.txt" || { echo "FAIL: README missing"; exit 1; }
 test -f "$TMPDIR/$INSTALL_DIR/node_modules/playwright-core/index.js" || { echo "FAIL: playwright-core/index.js missing — publisher scripts will fail MODULE_NOT_FOUND"; exit 1; }
 test -f "$TMPDIR/$INSTALL_DIR/node_modules/playwright-core/package.json" || { echo "FAIL: playwright-core/package.json missing"; exit 1; }
 test -d "$TMPDIR/$INSTALL_DIR/node_modules/playwright-core/lib" || { echo "FAIL: playwright-core/lib/ missing"; exit 1; }

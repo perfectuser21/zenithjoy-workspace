@@ -6,7 +6,7 @@
 
 下载 install pack（dashboard https://autopilot.zenjoymedia.media/dashboard/agent 的"下载完整安装包"按钮）→ 解压 → 编辑 .env 填 license → 双击 `start.bat`。
 
-详见 install pack 内的 `README-1分钟跑通.txt`。
+详见 install pack 内的 `README.txt`。
 
 ## 高级（开发者本地跑）
 
