@@ -52,6 +52,10 @@ REM Step 1.5: Append missing new keys to .env (upgrade-compatible, never overwri
 powershell -NoProfile -Command "if (!(Select-String -Path '.env' -Pattern 'ZENITHJOY_AGENT_DRYRUN_BROWSER' -Quiet)) { Add-Content -Path '.env' -Value 'ZENITHJOY_AGENT_DRYRUN_BROWSER=mock'; Write-Host '[setup] ZENITHJOY_AGENT_DRYRUN_BROWSER=mock appended to .env' }"
 powershell -NoProfile -Command "if (!(Select-String -Path '.env' -Pattern 'ZENITHJOY_AGENT_REAL_PUBLISH' -Quiet)) { Add-Content -Path '.env' -Value 'ZENITHJOY_AGENT_REAL_PUBLISH=1'; Write-Host '[setup] ZENITHJOY_AGENT_REAL_PUBLISH=1 appended to .env' }"
 
+REM Step 1.8: Normalize .env line endings — strip \r so CRLF files don't pollute env vars
+REM for/f keeps \r from Windows CRLF files, causing URL parse errors ("https://api.com\r/api/...")
+powershell -NoProfile -Command "$c=[IO.File]::ReadAllText('.env') -replace '\r',''; [IO.File]::WriteAllText('.env',$c)" >nul 2>&1
+
 REM Step 2: Load .env into env vars (skip comment lines)
 for /f "usebackq tokens=1,* delims==" %%a in (".env") do (
     set "LINE=%%a"

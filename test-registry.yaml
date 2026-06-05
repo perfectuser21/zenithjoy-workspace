@@ -425,6 +425,14 @@ tests:
     product: 中台认证
     note: "Sprint B WS1+WS2 — works owner_id 隔离集成测试（401/A 看 A 的/POST 自动 owner_id/防伪造/跨租户 404/super-admin bypass）"
 
+  - id: agent-sanitize-env
+    path: services/agent/src/utils/__tests__/sanitize-env.test.ts
+    type: unit
+    ci: L2
+    status: active
+    product: AI员工
+    note: "CRLF regression — ZENITHJOY_API_BASE 带 \\r 时 sanitizeApiBase 必须剥除"
+
   # ── Walking Skeleton #1 — Agent handlers ────────────────────────────────────
   - id: agent-ws1-heartbeat-loop
     path: services/agent/src/handlers/__tests__/heartbeat-loop.test.ts
