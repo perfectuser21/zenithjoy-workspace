@@ -1,12 +1,17 @@
 """
-TDD — `reply_in_chat` 必须用 `click_input()` 而非 `select()` 切换会话。
+TDD — `reply_in_chat` 必须用 **纯 UIA 控件操作** 打开会话/写值/发送，禁止任何物理输入。
 
-【根因】微信 4.0 上 ListItem.select()（SelectionItem 模式）不真正打开会话，
-导致后续 set_text/发送作用在「当前会话」而非目标客户会话上 → 回复发错对象。
-2026-06-03 xian-pc 微信 4.0 真机验证：必须 item.click_input() 点列表项才切换会话。
+【根因升级（2026-06-05 xian-pc 微信 4.1.8.107 真机验证）】
+旧配方用 item.click_input() + edit.set_text() + btn.click_input()：
+  - 微信 4.1.8 上 click_input 不仅打不开会话，还会 SetCursorPos 抢前台/抢光标，
+    跟 Agent 其他自动化打架，且跨会话被拒（access denied）。
+新配方全部走 UIAPattern，不碰鼠标/键盘/光标（微信最小化也能跑）：
+  - 会话项 item.iface_invoke.Invoke()  打开目标会话（InvokePattern）
+  - 输入框 edit.iface_value.SetValue(reply)  写值（ValuePattern）
+  - 发送按钮 btn.iface_invoke.Invoke()  触发发送（InvokePattern）
 
-【RED】实现仍调 item.select() 时本测试失败（click_input 未被调用）。
-【GREEN】改为 item.click_input() 后通过。
+【RED】实现仍调 click_input/set_text 时本测试失败（Fake 不再暴露这些方法）。
+【GREEN】改为 iface_invoke.Invoke() + iface_value.SetValue() 后通过。
 
 【CI 安全】顶层零 pywinauto import；用 Fake 对象注入 reply_in_chat，纯逻辑可跨平台跑。
 """
@@ -31,39 +36,43 @@ class _FakeElementInfo:
         self.name = name
 
 
+class _FakeInvokePattern:
+    """模拟 pywinauto UIAWrapper.iface_invoke（IUIAutomationInvokePattern）。"""
+
+    def __init__(self):
+        self.invoke_called = False
+
+    def Invoke(self):  # noqa: N802 — 对齐 COM 接口大写命名
+        self.invoke_called = True
+
+
+class _FakeValuePattern:
+    """模拟 pywinauto UIAWrapper.iface_value（IUIAutomationValuePattern）。"""
+
+    def __init__(self):
+        self.set_value_called_with = None
+        self.CurrentValue = ""  # noqa: N815 — 对齐 COM 属性命名
+
+    def SetValue(self, value):  # noqa: N802 — 对齐 COM 接口大写命名
+        self.set_value_called_with = value
+        self.CurrentValue = ""  # 微信发送后输入框清空（模拟发送成功）
+
+
 class _FakeEdit:
     def __init__(self):
         self.element_info = _FakeElementInfo(automation_id="chat_input_field")
-        self._value = ""
-        self.set_text_called_with = None
-
-    def set_text(self, txt):
-        self.set_text_called_with = txt
-        self._value = ""  # 微信发送后输入框清空（模拟发送成功）
-
-    def get_value(self):
-        return self._value
+        self.iface_value = _FakeValuePattern()
 
 
 class _FakeButton:
     def __init__(self):
         self.element_info = _FakeElementInfo(name="发送")
-        self.click_input_called = False
-
-    def click_input(self):
-        self.click_input_called = True
+        self.iface_invoke = _FakeInvokePattern()
 
 
 class _FakeItem:
     def __init__(self):
-        self.select_called = False
-        self.click_input_called = False
-
-    def select(self):
-        self.select_called = True
-
-    def click_input(self):
-        self.click_input_called = True
+        self.iface_invoke = _FakeInvokePattern()
 
 
 class _FakeMainWindow:
@@ -85,8 +94,8 @@ def _no_sleep(monkeypatch):
     monkeypatch.setattr(listen_chat.time, "sleep", lambda *a, **k: None)
 
 
-def test_reply_in_chat_uses_click_input_not_select():
-    """微信4.0：必须 click_input() 切换会话，不能用 select()（不切换 → 发错对象）。"""
+def test_reply_in_chat_uses_uia_pattern_not_physical_input():
+    """微信4.1.8：必须 iface_invoke.Invoke() 开会话 + iface_value.SetValue() 写值，不碰鼠标键盘。"""
     edit = _FakeEdit()
     button = _FakeButton()
     item = _FakeItem()
@@ -94,8 +103,32 @@ def test_reply_in_chat_uses_click_input_not_select():
 
     ok = listen_chat.reply_in_chat(mw, item, "您好，在的")
 
-    assert item.click_input_called is True, "必须 click_input() 打开会话（微信4.0 select 不切换）"
-    assert item.select_called is False, "不应再调用 select()"
-    assert edit.set_text_called_with == "您好，在的"
-    assert button.click_input_called is True
+    assert item.iface_invoke.invoke_called is True, "必须 iface_invoke.Invoke() 打开会话（UIA InvokePattern）"
+    assert edit.iface_value.set_value_called_with == "您好，在的", "必须 iface_value.SetValue() 写输入框"
+    assert button.iface_invoke.invoke_called is True, "必须 iface_invoke.Invoke() 点发送"
     assert ok is True
+
+
+def test_reply_in_chat_missing_input_returns_false():
+    """找不到 chat_input_field → 返回 False（不静默吞掉）。"""
+
+    class _EmptyMW:
+        def descendants(self, control_type=None):
+            return []
+
+    item = _FakeItem()
+    ok = listen_chat.reply_in_chat(_EmptyMW(), item, "你好")
+    assert ok is False
+
+
+def test_reply_in_chat_missing_send_button_returns_false():
+    """找到输入框但找不到'发送'按钮 → 返回 False。"""
+    edit = _FakeEdit()
+
+    class _EditOnlyMW:
+        def descendants(self, control_type=None):
+            return [edit] if control_type == "Edit" else []
+
+    item = _FakeItem()
+    ok = listen_chat.reply_in_chat(_EditOnlyMW(), item, "你好")
+    assert ok is False

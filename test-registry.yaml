@@ -2856,7 +2856,7 @@ agent_suite:
     ci: L3
     status: active
     product: 客户私域AI接管
-    note: "reply_in_chat 必须 click_input 切换会话（微信4.0 select 不切换→发错对象）"
+    note: "reply_in_chat 纯 UIA：iface_invoke.Invoke 开会话 + iface_value.SetValue 填字 + Invoke 发送（不碰鼠标键盘，微信最小化也能跑）"
 
   - id: wechat-cs-post-heartbeat
     path: services/agent/wechat-rpa/tests/test_post_heartbeat.py
@@ -2865,6 +2865,22 @@ agent_suite:
     status: active
     product: 客户私域AI接管
     note: "listen_chat 每60s 上报中台心跳，失败不抛（进程守护断线告警数据源）"
+
+  - id: wechat-cs-uia-interaction
+    path: services/agent/wechat-rpa/tests/test_uia_interaction.py
+    type: unit
+    ci: L3
+    status: active
+    product: 客户私域AI接管
+    note: "回归守卫：listen_chat/send_chat 必须纯 UIA（禁 click_input/send_keys/type_keys/SetCursorPos，须含 iface_invoke/iface_value）+ dryrun mock 不依赖真微信"
+
+  - id: wechat-cs-version-guard
+    path: services/agent/wechat-rpa/tests/test_version_guard.py
+    type: unit
+    ci: L3
+    status: active
+    product: 客户私域AI接管
+    note: "find_weixin 版本守卫：微信≥4.1.9 抛错（mmui控件树被移除需降级），≤4.1.8放行，读不到不阻断"
 
   - id: wechat-cs-build-pywinauto
     path: services/agent/scripts/__tests__/build-install-pack-pywinauto.test.sh
