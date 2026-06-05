@@ -17,6 +17,24 @@ reg add "HKCU\Software\Microsoft\Narrator\NoRoam" /v SpeechVolume /t REG_DWORD /
 powershell -NoProfile -Command "Start-Process Narrator; Start-Sleep -Milliseconds 1500; Stop-Process -Name Narrator -ErrorAction SilentlyContinue" >nul 2>&1
 echo [narrator] WeChat UIAutomation unlocked (Narrator start+stop, silenced)
 
+REM Step 0.5: WeChat version guard — must be 4.1.8.x or lower (4.1.9+ broke UIA tree)
+REM Blocking: wrong version = no agent start. Tells user to download 4.1.8 from COS.
+if exist "%~dp0python-embedded\python.exe" if exist "%~dp0wechat-rpa\find_weixin.py" (
+    "%~dp0python-embedded\python.exe" "%~dp0wechat-rpa\find_weixin.py" --check-version
+    if errorlevel 1 (
+        echo.
+        echo  ============================================================
+        echo   [ERROR] WeChat version not supported.
+        echo   See the message above for the correct download URL.
+        echo   Install WeChat 4.1.8, then re-run start.bat.
+        echo  ============================================================
+        echo.
+        pause
+        exit /b 1
+    )
+)
+
+
 REM Step 1: Verify .env exists - auto-copy from .env.template on first run
 if not exist .env (
     if exist .env.template (

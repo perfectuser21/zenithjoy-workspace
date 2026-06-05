@@ -97,3 +97,53 @@ def test_empty_does_not_raise():
 def test_garbage_does_not_raise():
     """非法版本串 → 不抛，返回 None。"""
     assert _parse_and_check("not-a-version") is None
+
+
+# ---------- assert_supported_version ----------
+
+
+def test_assert_supported_version_exists():
+    """assert_supported_version 函数必须存在。"""
+    from find_weixin import assert_supported_version
+    assert callable(assert_supported_version)
+
+
+def test_assert_supported_version_non_windows_skips():
+    """非 Windows → assert_supported_version 不抛异常（无 windll，直接 None）。"""
+    from unittest import mock
+    import importlib
+    import find_weixin as fw
+    importlib.reload(fw)
+
+    # get_weixin_version 在非 Windows 下返回 None（检测到 os.name != nt → return None）
+    # _parse_and_check(None) → None（不抛）
+    # 所以 assert_supported_version() 在 mac 下一定返回 None
+    result = fw.assert_supported_version()
+    assert result is None
+
+
+def test_assert_supported_version_blocks_419():
+    """用 mock 验证：get_weixin_version 返回 4.1.9.57 时 assert_supported_version 抛 RuntimeError。"""
+    from unittest import mock
+    import importlib
+    import find_weixin as fw
+    importlib.reload(fw)
+
+    with mock.patch("find_weixin.get_weixin_version", return_value="4.1.9.57"):
+        try:
+            fw.assert_supported_version()
+            raise AssertionError("Expected RuntimeError for 4.1.9.57")
+        except RuntimeError as e:
+            assert "4.1.9" in str(e)
+
+
+def test_assert_supported_version_passes_418():
+    """用 mock 验证：get_weixin_version 返回 4.1.8.107 时 assert_supported_version 不抛。"""
+    from unittest import mock
+    import importlib
+    import find_weixin as fw
+    importlib.reload(fw)
+
+    with mock.patch("find_weixin.get_weixin_version", return_value="4.1.8.107"):
+        result = fw.assert_supported_version()
+        assert result is None

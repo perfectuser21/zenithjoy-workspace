@@ -25,7 +25,10 @@ WEIXIN_EXE_DEFAULT = r"C:\Program Files\Tencent\Weixin\Weixin.exe"
 # 4.1.9 起聊天窗口的无障碍控件树(mmui)被移除（主窗口变成不透明 Qt 窗口），
 # UIA / MSAA 两层都读不到聊天控件 → RPA 不可用。4.1.8.107 = 已验证可用基线。
 MIN_BLOCKED_VERSION = (4, 1, 9)
-DOWNGRADE_URL = "https://dldir1v6.qq.com/weixin/Universal/Windows/WeChatWin_4.1.8.exe"
+DOWNGRADE_URL = (
+    "https://zenithjoy-static-1333590468.cos.accelerate.myqcloud.com"
+    "/install-pack/WeChatWin_4.1.8.exe"
+)
 
 
 def _parse_version(ver_str: Optional[str]) -> Optional[Tuple[int, ...]]:
@@ -294,3 +297,22 @@ def login_window_present() -> bool:
         except Exception:
             continue
     return False
+
+
+if __name__ == "__main__":
+    import argparse
+    import sys as _sys
+
+    parser = argparse.ArgumentParser(description="WeChat version guard CLI")
+    parser.add_argument("--check-version", action="store_true", help="检测微信版本是否受支持，不支持则 exit 1")
+    _args = parser.parse_args()
+
+    if _args.check_version:
+        try:
+            assert_supported_version()
+            _ver = get_weixin_version() or "unknown"
+            print(f"[version-guard] WeChat {_ver} OK")
+            _sys.exit(0)
+        except RuntimeError as _e:
+            print(f"[version-guard] ERROR: {_e}", file=_sys.stderr)
+            _sys.exit(1)
