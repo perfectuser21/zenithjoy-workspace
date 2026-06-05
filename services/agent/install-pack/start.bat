@@ -181,13 +181,13 @@ REM v1.1.57+ packs node_modules/playwright-core/; this step is self-heal fallbac
 REM Non-fatal: agent still starts, only Douyin/Kuaishou publish would hit MODULE_NOT_FOUND (prompt to re-download).
 if not exist "%~dp0node_modules\playwright-core\index.js" (
     if exist "%ZJ_NODE_EXE%" (
-        echo [playwright-core] old-pack self-heal: installing playwright-core (first time only, ~30s)...
+        echo [playwright-core] old-pack self-heal: installing playwright-core, first time only ~30s...
         mkdir "%~dp0node_modules" 2>nul
         REM --ignore-scripts prevents npm install pre/postinstall scripts (security hardening)
         REM registry.npmmirror.com is the official Node.js China mirror (formerly npm.taobao.org)
         "%ZJ_NODE_EXE%" "%ZJ_NPM_CLI%" install playwright-core --prefix "%~dp0" --no-save --no-package-lock --ignore-scripts --registry https://registry.npmmirror.com
         if errorlevel 1 (
-            echo [WARN] playwright-core install failed - please re-download latest pack (v1.1.57+) to fix publishing
+            echo [WARN] playwright-core install failed - please re-download latest pack v1.1.57+ to fix publishing
         ) else (
             REM quick smoke: confirm module can be required
             "%ZJ_NODE_EXE%" -e "require('playwright-core'); process.exit(0)" 2>nul
@@ -249,7 +249,7 @@ if exist "%_WEIXIN_ROOT%" (
         REM 1) rename to disable (already-.disabled ones won't match, naturally idempotent)
         ren "%%u" "WeixinUpdate.exe.disabled" >nul 2>&1
         if exist "%%u" (
-            echo [lock-update] WARN rename failed (in use?): %%u
+            echo [lock-update] WARN rename failed - file in use?: %%u
         ) else (
             echo [lock-update] disabled %%u
         )
@@ -284,7 +284,7 @@ if exist "%~dp0python-embedded\python.exe" if exist "%~dp0wechat-rpa\preflight.p
     echo  ============================================================
     "%~dp0python-embedded\python.exe" "%~dp0wechat-rpa\preflight.py" --middleware-url "%ZENITHJOY_API_BASE%"
     if errorlevel 1 (
-        echo [preflight] WARN self-check found issues (residual after self-heal), see report above / dashboard; continuing to start agent
+        echo [preflight] WARN self-check found issues - residual after self-heal, see report above / dashboard; continuing to start agent
     ) else (
         echo [preflight] environment self-check passed OK
     )
