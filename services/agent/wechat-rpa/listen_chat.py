@@ -245,6 +245,76 @@ def emit_json(payload: Dict[str, Any]) -> None:
     sys.stdout.flush()
 
 
+# ─── 中台 HTTP 调用：带指数退避重试（跨境访问抖动护栏）──────────────────────────
+
+
+def _post_with_retry(
+    url: str,
+    body: Dict[str, Any],
+    timeout: float,
+    retries: int = 3,
+    backoff_base: float = 1.0,
+    max_total: Optional[float] = None,
+) -> tuple[Any, Optional[str]]:
+    """
+    带指数退避重试的中台 POST。国内客户机跨境访问美国 VPS（+Cloudflare）断断续续，
+    draft-generate / heartbeat 时断时续 → 加重试就能扛住抖动。
+
+    返回 (resp, error)：
+      - 成功（HTTP 200）：(resp_obj, None)
+      - 最终失败：(None, "error string")，**绝不抛**（保持现有 {ok:False} 风格由调用方收尾）。
+
+    重试条件：网络异常 / 连接超时 / 5xx / 429（限流）。
+    不重试：4xx（非 429）客户端错误重试无意义，立即返回错误。
+    退避：第 N 次失败后 sleep backoff_base * 2**N 秒（默认 1s, 2s, 4s…），每次 attempt 独立 timeout。
+    max_total：所有 sleep 累计上限（秒）；超限则不再退避直接收尾（heartbeat 用，别拖垮监听主循环）。
+    requests 仅函数体内 import（顶层保持 mac 可 import）。
+    """
+    try:
+        import requests  # 仅运行时需要
+    except Exception as exc:
+        return None, f"requests not available: {exc}"
+
+    last_error = "unknown error"
+    slept_total = 0.0
+    for attempt in range(max(1, retries)):
+        try:
+            resp = requests.post(url, json=body, timeout=timeout)
+        except Exception as exc:
+            # 网络异常 / 连接超时 → 可重试
+            last_error = f"{type(exc).__name__}: {exc}"
+        else:
+            status = getattr(resp, "status_code", 0)
+            if status == 200:
+                return resp, None
+            # 4xx（非 429）客户端错误：重试无意义，立即返回
+            if 400 <= status < 500 and status != 429:
+                try:
+                    text = (resp.text or "")[:200]
+                except Exception:
+                    text = ""
+                return None, f"middleware HTTP {status}: {text}"
+            # 5xx / 429 → 可重试
+            try:
+                last_error = f"middleware HTTP {status}: {(resp.text or '')[:200]}"
+            except Exception:
+                last_error = f"middleware HTTP {status}"
+
+        # 仍有下一次尝试才退避
+        if attempt < max(1, retries) - 1:
+            delay = backoff_base * (2 ** attempt)
+            if max_total is not None and slept_total + delay > max_total:
+                break  # 退避总耗时超上限 → 不再等待，直接收尾
+            print(
+                f"[listen_chat] 中台调用失败（{last_error}），{delay:.1f}s 后重试…",
+                file=sys.stderr,
+            )
+            time.sleep(delay)
+            slept_total += delay
+
+    return None, last_error
+
+
 # ─── 中台 /api/wechat/draft-generate 触发（mode:'review' 审核台 / 'auto' 自动回）─────
 
 
@@ -269,23 +339,16 @@ def post_draft_generate(
             result["reply"] = "mock_reply"
         return result
 
-    try:
-        import requests  # 仅运行时需要
-    except Exception as exc:
-        return {"ok": False, "error": f"requests not available: {exc}"}
-
     url = middleware_url.rstrip("/") + "/api/wechat/draft-generate"
     body = {"sender": sender, "wechat_id": wechat_id, "content": content, "mode": mode}
+    # 回复关键路径 → 重试最重要：3 次（1s,2s,4s 退避），扛跨境抖动
+    resp, error = _post_with_retry(url, body, timeout=30, retries=3, backoff_base=1.0)
+    if error is not None:
+        return {"ok": False, "error": error}
     try:
-        resp = requests.post(url, json=body, timeout=30)
-        if resp.status_code != 200:
-            return {
-                "ok": False,
-                "error": f"middleware HTTP {resp.status_code}: {resp.text[:200]}",
-            }
         return resp.json()
     except Exception as exc:
-        return {"ok": False, "error": f"{type(exc).__name__}: {exc}"}
+        return {"ok": False, "error": f"bad json: {type(exc).__name__}: {exc}"}
 
 
 # ─── 进程守护：监听心跳上报（每分钟一次，失败不影响监听）────────────────────────
@@ -303,22 +366,17 @@ def post_heartbeat(
     看板一眼定位客户监听卡在哪，无需远程进客户桌面。
     任何失败（网络/非200/requests 缺失）都吞掉返回 {ok:False}，绝不抛——心跳不能拖垮监听。
     """
-    try:
-        import requests  # 仅运行时需要
-    except Exception as exc:
-        return {"ok": False, "error": f"requests not available: {exc}"}
-
     url = middleware_url.rstrip("/") + "/api/wechat/listener-heartbeat"
     body: Dict[str, Any] = {"agent_id": agent_id, "wechat_id": wechat_id, "ts": int(time.time() * 1000)}
     if diag is not None:
         body["diag"] = diag
-    try:
-        resp = requests.post(url, json=body, timeout=10)
-        if resp.status_code != 200:
-            return {"ok": False, "error": f"heartbeat HTTP {resp.status_code}"}
-        return {"ok": True}
-    except Exception as exc:
-        return {"ok": False, "error": f"{type(exc).__name__}: {exc}"}
+    # 心跳失败影响小 → 重试少一点（2 次）、退避短（0.5s）、总退避 <10s，绝不拖垮监听主循环
+    resp, error = _post_with_retry(
+        url, body, timeout=10, retries=2, backoff_base=0.5, max_total=10
+    )
+    if error is not None:
+        return {"ok": False, "error": error}
+    return {"ok": True}
 
 
 # ─── dryrun 入口（CI 单次模拟）────────────────────────────────────────────────

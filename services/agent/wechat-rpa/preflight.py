@@ -70,7 +70,9 @@ _INSTALLER_TMP = os.path.join(PUBLIC_DIR, "WeChatWin_4.1.8.exe")
 # 状态 → 人类可读图标。
 _STATUS_ICON = {"ok": "✅", "fixed": "🔧", "warn": "⚠️", "failed": "❌"}
 
-# 8 项检测的稳定名称（报告/看板按此对齐）。
+# 检测项的稳定名称（报告/看板按此对齐）。
+# 注意：elevation 追加在末尾（保证既有按下标引用的检测项不串位），
+# 但在 run_all_checks 的执行序列里排在 os_session 之后靠前（它影响后面 UIA/登录项成败）。
 CHECK_NAMES = (
     "os_session",
     "wechat_installed",
@@ -80,6 +82,7 @@ CHECK_NAMES = (
     "python_pywinauto",
     "uia_narrator",
     "middleware_health",
+    "elevation",
 )
 
 
@@ -101,6 +104,25 @@ def decide_wechat_action(version_tuple: Optional[Tuple[int, ...]]) -> str:
     if head >= MIN_BLOCKED_VERSION:
         return "downgrade"
     return "ok"
+
+
+def classify_elevation(is_admin: bool) -> Tuple[str, str]:
+    """
+    依据"当前进程是否提权/管理员"判定 elevation 检测的 (status, detail)（纯函数，mac 可单测）。
+
+    - is_admin=True  → ('warn', 提示改用普通用户身份)：提权进程起讲述人/激活 UIA 会被
+      系统 UIPI 权限隔离挡掉（Access denied）→ UIA 没真激活 → 微信登录后仍识别不到窗口。
+      用 warn 不用 failed：极少数配置仍可用，但必须醒目提示。
+    - is_admin=False → ('ok', 普通用户身份)：UIA 可正常激活。
+    """
+    if is_admin:
+        return (
+            "warn",
+            "检测到以管理员/提权身份运行 → 讲述人/UIA 激活会被系统挡(Access denied) → "
+            "微信登录后仍识别不到。请改用 **普通用户身份** 双击 start.bat 运行"
+            "（不要右键'以管理员身份运行'）。",
+        )
+    return ("ok", "普通用户身份运行，UIA 可正常激活。")
 
 
 def make_check(name: str, status: str, detail: str) -> Dict[str, str]:
@@ -255,6 +277,87 @@ def check_os_session(dry_run: bool = False) -> Dict[str, str]:
         )
     except Exception as exc:  # noqa: BLE001
         return make_check(CHECK_NAMES[0], "warn", f"无法判定桌面会话（{exc}），继续。")
+
+
+def check_elevation(dry_run: bool = False) -> Dict[str, str]:
+    """
+    提权检测：当前进程是否以管理员/提权身份运行。
+
+    真机踩坑：客户右键"以管理员身份运行"起 agent，start.bat 里讲述人激活那步报
+    `Access is denied`（UIPI 权限隔离），UIA 没真激活 → 监听读不到微信窗口 →
+    微信登录了也识别不到。普通用户身份跑就正常。故必须在此醒目提示。
+
+    判定优先用 OpenProcessToken + GetTokenInformation(TokenElevation)（更准，
+    能识别"以管理员身份运行"的提权态），失败回退 shell32.IsUserAnAdmin()。
+    非 Windows / 查不到 → warn 并跳过（mac dry-run 优雅降级，不崩）。
+    """
+    name = CHECK_NAMES[8]
+    if not _is_windows():
+        return make_check(
+            name,
+            "warn",
+            f"非 Windows（{platform.system()}），跳过提权检测（仅 Windows 客户机有效）。",
+        )
+
+    is_admin = _is_process_elevated()
+    if is_admin is None:
+        return make_check(
+            name,
+            "warn",
+            "无法判定进程提权状态（token 查询失败），跳过。"
+            "若讲述人激活报 Access denied，请改用普通用户身份运行。",
+        )
+
+    status, detail = classify_elevation(is_admin)
+    return make_check(name, status, detail)
+
+
+def _is_process_elevated() -> Optional[bool]:
+    """
+    查当前进程是否提权（管理员）。返回 True/False；查不到/非 Windows → None。
+    Windows-only 调用全在函数体内 + try/except，mac 顶层 import 安全。
+    """
+    try:
+        import ctypes
+        from ctypes import wintypes
+    except Exception:
+        return None
+
+    # 首选：OpenProcessToken + GetTokenInformation(TokenElevation)。
+    try:
+        TOKEN_QUERY = 0x0008
+        TokenElevation = 20  # TOKEN_INFORMATION_CLASS.TokenElevation
+
+        kernel32 = ctypes.windll.kernel32
+        advapi32 = ctypes.windll.advapi32
+
+        h_proc = kernel32.GetCurrentProcess()
+        h_token = wintypes.HANDLE()
+        if not advapi32.OpenProcessToken(h_proc, TOKEN_QUERY, ctypes.byref(h_token)):
+            raise OSError("OpenProcessToken 失败")
+        try:
+            elevation = wintypes.DWORD(0)
+            ret_len = wintypes.DWORD(0)
+            ok = advapi32.GetTokenInformation(
+                h_token,
+                TokenElevation,
+                ctypes.byref(elevation),
+                ctypes.sizeof(elevation),
+                ctypes.byref(ret_len),
+            )
+            if ok:
+                return bool(elevation.value)
+            raise OSError("GetTokenInformation 失败")
+        finally:
+            kernel32.CloseHandle(h_token)
+    except Exception:
+        pass
+
+    # 回退：IsUserAnAdmin（管理员组 + 提权时为真）。
+    try:
+        return bool(ctypes.windll.shell32.IsUserAnAdmin())
+    except Exception:
+        return None
 
 
 def check_wechat_installed(dry_run: bool = False) -> Dict[str, str]:
@@ -563,25 +666,29 @@ def check_middleware_health(middleware_url: str, dry_run: bool = False) -> Dict[
 
 
 def run_all_checks(middleware_url: str, dry_run: bool = False) -> List[Dict[str, str]]:
-    """按序跑 8 项检测，每项独立 try/except 兜底（单项崩不拖垮整体）。"""
-    runners = [
-        lambda: check_os_session(dry_run),
-        lambda: check_wechat_installed(dry_run),
-        lambda: check_wechat_version(dry_run),
-        lambda: check_lock_update(dry_run),
-        lambda: check_wechat_login(dry_run),
-        lambda: check_python_pywinauto(dry_run),
-        lambda: check_uia_narrator(dry_run),
-        lambda: check_middleware_health(middleware_url, dry_run),
+    """按序跑全部检测，每项独立 try/except 兜底（单项崩不拖垮整体）。
+
+    elevation 排在 os_session 之后靠前：它影响后面 UIA/讲述人/登录项的成败。
+    """
+    runners: List[Tuple[str, Any]] = [
+        ("os_session", lambda: check_os_session(dry_run)),
+        ("elevation", lambda: check_elevation(dry_run)),
+        ("wechat_installed", lambda: check_wechat_installed(dry_run)),
+        ("wechat_version", lambda: check_wechat_version(dry_run)),
+        ("lock_update", lambda: check_lock_update(dry_run)),
+        ("wechat_login", lambda: check_wechat_login(dry_run)),
+        ("python_pywinauto", lambda: check_python_pywinauto(dry_run)),
+        ("uia_narrator", lambda: check_uia_narrator(dry_run)),
+        ("middleware_health", lambda: check_middleware_health(middleware_url, dry_run)),
     ]
     checks: List[Dict[str, str]] = []
-    for idx, run in enumerate(runners):
+    for cname, run in runners:
         try:
             checks.append(run())
         except Exception as exc:  # noqa: BLE001 — 单项异常降级为 failed，不让体检整体崩
             checks.append(
                 make_check(
-                    CHECK_NAMES[idx],
+                    cname,
                     "failed",
                     f"检测项内部异常：{type(exc).__name__}: {exc}",
                 )
