@@ -1,0 +1,693 @@
+#!/usr/bin/env python3
+"""
+preflight.py — Agent 开机环境自检 + 自愈层（Path 4 微信 RPA 前置体检）。
+
+面对千万台杂乱客户机，agent 启动时先跑这套"体检"：逐项 **检测 → 能修的自动修 →
+修不了的给明确提示**，最后产出报告（打印 + 写本地 JSON + best-effort 上报中台，
+让运营在 Dashboard 远程看，不用 SSH 进客户机）。
+
+8 个检测项（每项 detect → fix → 修不了 prompt，产出 {name,status,detail}）：
+  1. OS/交互会话    —— 是 Windows + 有活动桌面会话（不可自愈）
+  2. 微信安装        —— Weixin.exe 在不在；不在 → 下载 4.1.8 静默装
+  3. 微信版本        —— >=4.1.9 → 卸载 + 装 4.1.8；=4.1.8 → ok
+  4. 锁更新          —— WeixinUpdate.exe 改名 .disabled + 防火墙出站封禁（幂等）
+  5. 微信登录态      —— 未登录 → 拉起微信 + 提示扫码
+  6. Python+pywinauto—— import 测试；失败 → 提示重装 agent
+  7. UIA/讲述人激活  —— 静默激活讲述人后能否读到主窗口
+  8. 中台连通        —— GET <middleware>/health；不通 → 提示查网络
+
+跨平台纪律：pywinauto / windll / subprocess 真实自愈动作全在 **函数体内** import +
+try/except 包裹；**顶层 import 在 mac/linux 也能成功**（供 CI 单测）。mac 上 windll
+不可用 → 优雅降级为 warn/failed，绝不崩。自愈动作全部幂等、可重复跑。
+
+CLI：
+  python preflight.py [--middleware-url URL] [--dry-run]
+  --dry-run：只检测不自愈、不下载、不卸载（给 CI / mac 跑）。
+  退出码：全 ok 或仅 warn → 0；有 failed → 非0（start.bat 可自行决定是否仍继续）。
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import platform
+import sys
+import time
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+# find_weixin 顶层零 pywinauto/windll import，安全复用其纯函数与寻址 API。
+from find_weixin import (  # noqa: E402
+    MIN_BLOCKED_VERSION,
+    WEIXIN_EXE_DEFAULT,
+    _parse_version,
+    get_weixin_version,
+)
+
+# ─── 常量 ────────────────────────────────────────────────────────────────────
+
+# 微信 4.1.8 安装包下载源（按序尝试：先我们 COS 加速，再官方回退）。
+WECHAT_DOWNLOAD_URLS = (
+    "https://zenithjoy-static-1333590468.cos.accelerate.myqcloud.com/install-pack/wechat/WeChatWin_4.1.8.exe",
+    "https://dldir1v6.qq.com/weixin/Universal/Windows/WeChatWin_4.1.8.exe",
+)
+
+# 微信 4.x 官方安装根目录（版本号子目录名会变，自愈时用递归搜文件）。
+WEIXIN_INSTALL_ROOT = r"C:\Program Files\Tencent\Weixin"
+
+# 下载体积下限：正常 4.1.8 安装包 >100MB，低于此视为下载残缺。
+MIN_DOWNLOAD_SIZE = 100 * 1024 * 1024
+
+# 本地报告落盘路径（运营 SSH 直接读；与 listen_chat 的 zj-*.log 同目录习惯）。
+PUBLIC_DIR = os.environ.get("PUBLIC", r"C:\Users\Public")
+PREFLIGHT_JSON_PATH = os.path.join(PUBLIC_DIR, "zj-preflight.json")
+
+# 下载到的安装包临时落点。
+_INSTALLER_TMP = os.path.join(PUBLIC_DIR, "WeChatWin_4.1.8.exe")
+
+# 状态 → 人类可读图标。
+_STATUS_ICON = {"ok": "✅", "fixed": "🔧", "warn": "⚠️", "failed": "❌"}
+
+# 8 项检测的稳定名称（报告/看板按此对齐）。
+CHECK_NAMES = (
+    "os_session",
+    "wechat_installed",
+    "wechat_version",
+    "lock_update",
+    "wechat_login",
+    "python_pywinauto",
+    "uia_narrator",
+    "middleware_health",
+)
+
+
+# ─── 纯逻辑函数（CI 单测锚点，顶层零 Windows 依赖）──────────────────────────────
+
+
+def decide_wechat_action(version_tuple: Optional[Tuple[int, ...]]) -> str:
+    """
+    依据微信版本元组决定该执行的动作（纯函数，mac 可单测）。
+
+    - None（读不到 / 未安装）→ 'install'（装 4.1.8）
+    - >= (4,1,9)            → 'downgrade'（无障碍控件树被砍，卸载后装 4.1.8）
+    - <= 4.1.8.x           → 'ok'（已验证可用基线）
+    """
+    if version_tuple is None:
+        return "install"
+    head = tuple(version_tuple[:3])
+    head = head + (0,) * (3 - len(head))
+    if head >= MIN_BLOCKED_VERSION:
+        return "downgrade"
+    return "ok"
+
+
+def make_check(name: str, status: str, detail: str) -> Dict[str, str]:
+    """构造单项检测结果。status ∈ {ok,fixed,warn,failed}。"""
+    if status not in _STATUS_ICON:
+        raise ValueError(f"非法 status: {status!r}")
+    return {"name": name, "status": status, "detail": detail}
+
+
+def compute_all_ok(checks: List[Dict[str, Any]]) -> bool:
+    """全部检测都是 ok 或 fixed（无 warn、无 failed）才算 all_ok。"""
+    return all(c.get("status") in ("ok", "fixed") for c in checks)
+
+
+def has_failed(checks: List[Dict[str, Any]]) -> bool:
+    """是否存在 failed 项（决定退出码：有 failed → 非0）。"""
+    return any(c.get("status") == "failed" for c in checks)
+
+
+def status_counts(checks: List[Dict[str, Any]]) -> Dict[str, int]:
+    """按 status 归类计数（ok/fixed/warn/failed）。"""
+    counts = {k: 0 for k in _STATUS_ICON}
+    for c in checks:
+        st = c.get("status")
+        if st in counts:
+            counts[st] += 1
+    return counts
+
+
+def build_report(checks: List[Dict[str, Any]], ts: Optional[int] = None) -> Dict[str, Any]:
+    """把多项检测汇总成最终报告 dict。"""
+    if ts is None:
+        ts = int(time.time() * 1000)
+    return {
+        "ts": ts,
+        "all_ok": compute_all_ok(checks),
+        "counts": status_counts(checks),
+        "checks": checks,
+    }
+
+
+def compute_exit_code(checks: List[Dict[str, Any]]) -> int:
+    """退出码：有 failed → 1，否则（全 ok 或仅含 warn/fixed）→ 0。"""
+    return 1 if has_failed(checks) else 0
+
+
+# ─── 通用工具（Windows-only 动作放函数体内，try/except 包裹）──────────────────
+
+
+def _is_windows() -> bool:
+    return platform.system() == "Windows"
+
+
+def _windll_available() -> bool:
+    try:
+        import ctypes
+
+        return hasattr(ctypes, "windll")
+    except Exception:
+        return False
+
+
+def _find_file(root: str, filename: str) -> Optional[str]:
+    """在 root 下递归找第一个名为 filename 的文件。找不到返回 None。"""
+    try:
+        for dirpath, _dirs, files in os.walk(root):
+            for f in files:
+                if f.lower() == filename.lower():
+                    return os.path.join(dirpath, f)
+    except Exception:
+        return None
+    return None
+
+
+def _find_files(root: str, filename: str) -> List[str]:
+    """在 root 下递归找所有名为 filename 的文件路径。"""
+    out: List[str] = []
+    try:
+        for dirpath, _dirs, files in os.walk(root):
+            for f in files:
+                if f.lower() == filename.lower():
+                    out.append(os.path.join(dirpath, f))
+    except Exception:
+        pass
+    return out
+
+
+def _weixin_installed() -> bool:
+    """Weixin.exe 是否存在（固定路径 + 安装根目录递归兜底）。"""
+    if os.path.isfile(WEIXIN_EXE_DEFAULT):
+        return True
+    return _find_file(WEIXIN_INSTALL_ROOT, "Weixin.exe") is not None
+
+
+def download_wechat_installer(
+    dest_path: str = _INSTALLER_TMP,
+    urls: Tuple[str, ...] = WECHAT_DOWNLOAD_URLS,
+    min_size: int = MIN_DOWNLOAD_SIZE,
+) -> Optional[str]:
+    """
+    按序从 urls 下载 4.1.8 安装包到 dest_path，校验体积 > min_size。
+    成功返回 dest_path，全部失败返回 None。仅在真实自愈时调用（dry-run 不调）。
+    """
+    import urllib.request
+
+    for url in urls:
+        try:
+            urllib.request.urlretrieve(url, dest_path)
+            if os.path.isfile(dest_path) and os.path.getsize(dest_path) >= min_size:
+                return dest_path
+        except Exception:
+            continue
+    return None
+
+
+def _run_silent(cmd: List[str], timeout: int = 600) -> Tuple[bool, str]:
+    """跑外部命令（installer /S、uninstall /S 等）。返回 (成功, 说明)。异常吞掉。"""
+    import subprocess
+
+    try:
+        proc = subprocess.run(cmd, capture_output=True, timeout=timeout)
+        ok = proc.returncode == 0
+        return ok, f"returncode={proc.returncode}"
+    except Exception as exc:  # noqa: BLE001
+        return False, f"{type(exc).__name__}: {exc}"
+
+
+# ─── 8 项检测（每项：detect → fix → 修不了 prompt）─────────────────────────────
+
+
+def check_os_session(dry_run: bool = False) -> Dict[str, str]:
+    """1. OS/交互会话：必须 Windows + 有活动桌面（不可自愈）。"""
+    if not _is_windows():
+        return make_check(
+            CHECK_NAMES[0],
+            "failed",
+            f"当前系统 {platform.system()} 非 Windows，微信 RPA 仅支持 Windows。"
+            "请在 Windows 客户机上运行 agent。",
+        )
+    # 有活动桌面：用 GetSystemMetrics(SM_CXSCREEN) > 0 粗判（服务/无会话时为 0）。
+    try:
+        import ctypes
+
+        cx = ctypes.windll.user32.GetSystemMetrics(0)
+        if cx and cx > 0:
+            return make_check(CHECK_NAMES[0], "ok", f"Windows 交互桌面会话正常（屏宽 {cx}px）。")
+        return make_check(
+            CHECK_NAMES[0],
+            "failed",
+            "未检测到交互桌面会话（屏宽=0，可能以服务/无人值守方式运行）。"
+            "微信 RPA 必须在登录的交互桌面里跑，请用普通用户会话启动 agent。",
+        )
+    except Exception as exc:  # noqa: BLE001
+        return make_check(CHECK_NAMES[0], "warn", f"无法判定桌面会话（{exc}），继续。")
+
+
+def check_wechat_installed(dry_run: bool = False) -> Dict[str, str]:
+    """2. 微信安装：Weixin.exe 在不在；不在 → 下载 4.1.8 静默装。"""
+    name = CHECK_NAMES[1]
+    if _weixin_installed():
+        return make_check(name, "ok", "已检测到 Weixin.exe。")
+
+    if dry_run or not _is_windows():
+        return make_check(
+            name,
+            "failed",
+            "未检测到 Weixin.exe（dry-run/非 Windows 跳过自动安装）。"
+            "真实运行将自动下载 4.1.8 静默安装。",
+        )
+
+    installer = download_wechat_installer()
+    if not installer:
+        return make_check(
+            name,
+            "failed",
+            "微信未安装且 4.1.8 安装包下载失败（COS/官方源均不可达）。"
+            "请手动安装微信 4.1.8 后重启 agent。",
+        )
+    ok, info = _run_silent([installer, "/S"])
+    if ok and _weixin_installed():
+        return make_check(name, "fixed", f"微信未安装 → 已静默安装 4.1.8（{info}）。")
+    return make_check(
+        name,
+        "failed",
+        f"微信 4.1.8 静默安装失败（{info}）。请手动安装微信 4.1.8 后重启 agent。",
+    )
+
+
+def check_wechat_version(dry_run: bool = False) -> Dict[str, str]:
+    """3. 微信版本：>=4.1.9 → 卸载+装4.1.8；=4.1.8 → ok；读不到 → warn。"""
+    name = CHECK_NAMES[2]
+    ver_str = get_weixin_version()
+    parsed = _parse_version(ver_str)
+
+    if parsed is None:
+        # 装着但读不到版本 → 不硬阻断，给 warn（避免误杀）。
+        if _weixin_installed():
+            return make_check(
+                name,
+                "warn",
+                f"读不到微信版本号（raw={ver_str!r}），跳过版本守卫。"
+                "若 RPA 异常请人工确认版本 <=4.1.8。",
+            )
+        return make_check(
+            name, "failed", "微信未安装，无法判定版本（应先过'微信安装'项）。"
+        )
+
+    action = decide_wechat_action(parsed)
+    ver_show = ".".join(str(x) for x in parsed)
+
+    if action == "ok":
+        return make_check(name, "ok", f"微信版本 {ver_show} <=4.1.8，RPA 可用。")
+
+    if action == "install":  # 理论上 parsed 非 None 不会走到这
+        return make_check(name, "failed", "微信未安装（应先过'微信安装'项）。")
+
+    # downgrade：>=4.1.9，无障碍控件树被砍，必须卸载后装 4.1.8。
+    if dry_run or not _is_windows():
+        return make_check(
+            name,
+            "failed",
+            f"微信版本 {ver_show} >=4.1.9（无障碍控件树被砍，RPA 不可用）。"
+            "dry-run/非 Windows 跳过自动降级；真实运行将卸载后装 4.1.8。",
+        )
+
+    uninstaller = _find_file(WEIXIN_INSTALL_ROOT, "Uninstall.exe")
+    if uninstaller:
+        _run_silent([uninstaller, "/S"], timeout=300)
+        time.sleep(3)
+    installer = download_wechat_installer()
+    if not installer:
+        return make_check(
+            name,
+            "failed",
+            f"需把 {ver_show} 降级到 4.1.8，但安装包下载失败。"
+            "请手动卸载并安装微信 4.1.8 后重启 agent。",
+        )
+    ok, info = _run_silent([installer, "/S"])
+    new_ver = get_weixin_version()
+    new_parsed = _parse_version(new_ver)
+    if ok and new_parsed is not None and decide_wechat_action(new_parsed) == "ok":
+        return make_check(
+            name,
+            "fixed",
+            f"微信 {ver_show} → 已降级安装 4.1.8（现 {'.'.join(str(x) for x in new_parsed)}）。",
+        )
+    return make_check(
+        name,
+        "failed",
+        f"微信降级到 4.1.8 失败（install {info}，现版本 {new_ver!r}）。"
+        "请手动卸载并安装微信 4.1.8 后重启 agent。",
+    )
+
+
+def check_lock_update(dry_run: bool = False) -> Dict[str, str]:
+    """4. 锁更新：WeixinUpdate.exe 改名 .disabled + 防火墙出站封禁（幂等）。"""
+    name = CHECK_NAMES[3]
+    if not _is_windows():
+        return make_check(name, "warn", "非 Windows，跳过锁更新（无 WeixinUpdate.exe）。")
+
+    if not os.path.isdir(WEIXIN_INSTALL_ROOT):
+        return make_check(name, "warn", f"未发现微信安装目录，跳过锁更新（{WEIXIN_INSTALL_ROOT}）。")
+
+    enabled = _find_files(WEIXIN_INSTALL_ROOT, "WeixinUpdate.exe")
+    if not enabled:
+        return make_check(name, "ok", "WeixinUpdate.exe 已禁用（未发现启用的自动更新器）。")
+
+    if dry_run:
+        return make_check(
+            name,
+            "failed",
+            f"发现 {len(enabled)} 个启用的 WeixinUpdate.exe（dry-run 不改）。"
+            "真实运行将改名 .disabled + 防火墙封禁。",
+        )
+
+    import subprocess
+
+    disabled_n = 0
+    for path in enabled:
+        try:
+            os.replace(path, path + ".disabled")
+            disabled_n += 1
+        except Exception:
+            pass
+        # 防火墙出站封禁（幂等：先删同名规则再加）。
+        try:
+            subprocess.run(
+                ["netsh", "advfirewall", "firewall", "delete", "rule",
+                 "name=Block WeixinUpdate", f"program={path}"],
+                capture_output=True, timeout=30,
+            )
+            subprocess.run(
+                ["netsh", "advfirewall", "firewall", "add", "rule",
+                 "name=Block WeixinUpdate", "dir=out", "action=block",
+                 f"program={path}", "enable=yes"],
+                capture_output=True, timeout=30,
+            )
+        except Exception:
+            pass
+
+    still = _find_files(WEIXIN_INSTALL_ROOT, "WeixinUpdate.exe")
+    if not still:
+        return make_check(name, "fixed", f"已禁用 {disabled_n} 个 WeixinUpdate.exe + 防火墙封禁。")
+    return make_check(
+        name,
+        "warn",
+        f"已禁用 {disabled_n} 个，仍有 {len(still)} 个改名失败（可能被占用）。"
+        "建议关闭微信后重跑 preflight。",
+    )
+
+
+def check_wechat_login(dry_run: bool = False) -> Dict[str, str]:
+    """5. 微信登录态：未登录 → 拉起微信 + 提示扫码。"""
+    name = CHECK_NAMES[4]
+    try:
+        from find_weixin import get_main_window, login_window_present
+    except Exception as exc:  # noqa: BLE001
+        return make_check(name, "warn", f"无法导入寻址 API（{exc}），跳过登录态检测。")
+
+    try:
+        mw = get_main_window()
+    except Exception as exc:  # noqa: BLE001
+        return make_check(
+            name, "warn", f"读取微信主窗口失败（{exc}，多为非 Windows/缺 pywinauto），跳过。"
+        )
+
+    if mw is not None:
+        return make_check(name, "ok", "微信已登录（检测到 mmui::MainWindow）。")
+
+    # 未见主窗口：可能停在登录窗口或微信没启动。
+    login = False
+    try:
+        login = login_window_present()
+    except Exception:
+        login = False
+
+    if not dry_run and _is_windows():
+        # 尝试拉起微信（best-effort）。
+        try:
+            import subprocess
+
+            if os.path.isfile(WEIXIN_EXE_DEFAULT):
+                subprocess.Popen([WEIXIN_EXE_DEFAULT])
+            else:
+                found = _find_file(WEIXIN_INSTALL_ROOT, "Weixin.exe")
+                if found:
+                    subprocess.Popen([found])
+        except Exception:
+            pass
+
+    detail = "微信未登录" + ("（停在登录窗口）" if login else "（未检测到主窗口）")
+    return make_check(
+        name,
+        "failed",
+        detail + "。已尝试拉起微信，请在客户机上 **扫码登录** 后重启 agent。",
+    )
+
+
+def check_python_pywinauto(dry_run: bool = False) -> Dict[str, str]:
+    """6. Python+pywinauto：import 测试；失败 → 提示重装 agent。"""
+    name = CHECK_NAMES[5]
+    try:
+        import pywinauto  # noqa: F401
+
+        ver = getattr(pywinauto, "__version__", "unknown")
+        return make_check(name, "ok", f"pywinauto 可用（version={ver}）。")
+    except Exception as exc:  # noqa: BLE001
+        # mac/linux 开发环境本就无 pywinauto → warn；Windows 上缺失才是 failed。
+        if not _is_windows():
+            return make_check(
+                name, "warn", f"pywinauto 在 {platform.system()} 不可用（开发环境正常）：{exc}"
+            )
+        return make_check(
+            name,
+            "failed",
+            f"pywinauto import 失败（{exc}）。Python 运行时损坏，请重新下载安装包重装 agent。",
+        )
+
+
+def check_uia_narrator(dry_run: bool = False) -> Dict[str, str]:
+    """7. UIA/讲述人激活：静默激活后能否读到主窗口。"""
+    name = CHECK_NAMES[6]
+    if dry_run or not _is_windows():
+        return make_check(
+            name, "warn", "dry-run/非 Windows 跳过讲述人激活（仅 Windows 真机有效）。"
+        )
+
+    # 静默激活：Start-Process Narrator → 等待 → Stop-Process（对齐 start.bat / listen_chat）。
+    try:
+        import subprocess
+
+        subprocess.run(
+            ["powershell", "-NoProfile", "-Command", "Start-Process Narrator"],
+            capture_output=True, timeout=15,
+        )
+        time.sleep(2)
+        subprocess.run(
+            ["powershell", "-NoProfile", "-Command",
+             "Stop-Process -Name Narrator -Force -ErrorAction SilentlyContinue"],
+            capture_output=True, timeout=15,
+        )
+        time.sleep(1)
+    except Exception as exc:  # noqa: BLE001
+        return make_check(
+            name,
+            "warn",
+            f"讲述人激活失败（{exc}）。若 RPA 读不到控件，请手动开关一次讲述人。",
+        )
+
+    # 激活后看能否读到主窗口（登录态下才有；未登录读不到属正常，不在此判失败）。
+    try:
+        from find_weixin import get_main_window
+
+        mw = get_main_window()
+        if mw is not None:
+            return make_check(name, "ok", "讲述人激活成功，UIAutomation 控件树可读。")
+        return make_check(
+            name,
+            "warn",
+            "讲述人已激活，但暂未读到微信主窗口（可能未登录/微信未启动），"
+            "登录后即可生效。",
+        )
+    except Exception as exc:  # noqa: BLE001
+        return make_check(
+            name, "warn", f"激活后读主窗口异常（{exc}）。请确认 pywinauto 与微信登录态。"
+        )
+
+
+def check_middleware_health(middleware_url: str, dry_run: bool = False) -> Dict[str, str]:
+    """8. 中台连通：GET <url>/health 或 /api/health（短超时）。"""
+    name = CHECK_NAMES[7]
+    if not middleware_url:
+        return make_check(name, "warn", "未提供 middleware-url，跳过中台连通检测。")
+
+    import urllib.request
+
+    base = middleware_url.rstrip("/")
+    last_err = ""
+    for path in ("/health", "/api/health"):
+        url = base + path
+        try:
+            req = urllib.request.Request(url, method="GET")
+            with urllib.request.urlopen(req, timeout=8) as resp:
+                code = getattr(resp, "status", resp.getcode())
+                if 200 <= int(code) < 500:
+                    return make_check(name, "ok", f"中台可达（GET {path} → {code}）。")
+                last_err = f"{path} → HTTP {code}"
+        except Exception as exc:  # noqa: BLE001
+            last_err = f"{path} → {type(exc).__name__}: {exc}"
+            continue
+
+    return make_check(
+        name,
+        "failed",
+        f"中台不可达（{base}，{last_err}）。请检查客户机网络与 .env 中 ZENITHJOY_API_BASE 配置。",
+    )
+
+
+# ─── 编排：跑全部检测 → 汇总 → 打印 → 落盘 → 上报 ──────────────────────────────
+
+
+def run_all_checks(middleware_url: str, dry_run: bool = False) -> List[Dict[str, str]]:
+    """按序跑 8 项检测，每项独立 try/except 兜底（单项崩不拖垮整体）。"""
+    runners = [
+        lambda: check_os_session(dry_run),
+        lambda: check_wechat_installed(dry_run),
+        lambda: check_wechat_version(dry_run),
+        lambda: check_lock_update(dry_run),
+        lambda: check_wechat_login(dry_run),
+        lambda: check_python_pywinauto(dry_run),
+        lambda: check_uia_narrator(dry_run),
+        lambda: check_middleware_health(middleware_url, dry_run),
+    ]
+    checks: List[Dict[str, str]] = []
+    for idx, run in enumerate(runners):
+        try:
+            checks.append(run())
+        except Exception as exc:  # noqa: BLE001 — 单项异常降级为 failed，不让体检整体崩
+            checks.append(
+                make_check(
+                    CHECK_NAMES[idx],
+                    "failed",
+                    f"检测项内部异常：{type(exc).__name__}: {exc}",
+                )
+            )
+    return checks
+
+
+def print_report(report: Dict[str, Any]) -> None:
+    """打印人类可读体检报告到 stdout。"""
+    print("=" * 60)
+    print("  ZenithJoy Agent 开机环境自检（preflight）")
+    print("=" * 60)
+    for c in report.get("checks", []):
+        icon = _STATUS_ICON.get(c.get("status"), "?")
+        print(f"  {icon} [{c.get('name')}] {c.get('detail')}")
+    counts = report.get("counts", {})
+    print("-" * 60)
+    print(
+        f"  汇总：ok={counts.get('ok', 0)} fixed={counts.get('fixed', 0)} "
+        f"warn={counts.get('warn', 0)} failed={counts.get('failed', 0)}  "
+        f"=> all_ok={report.get('all_ok')}"
+    )
+    print("=" * 60)
+    sys.stdout.flush()
+
+
+def write_report_json(report: Dict[str, Any], path: Optional[str] = None) -> bool:
+    """把报告写本地 JSON。失败吞掉返回 False（不阻断体检）。"""
+    if path is None:
+        path = PREFLIGHT_JSON_PATH
+    try:
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+    except Exception:
+        pass
+    try:
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(report, f, ensure_ascii=False, indent=2)
+        return True
+    except Exception:
+        return False
+
+
+def report_to_middleware(
+    middleware_url: str, report: Dict[str, Any], agent_id: Optional[str] = None
+) -> bool:
+    """
+    best-effort 上报报告到中台（复用 listen_chat.post_heartbeat，塞进 diag.preflight）。
+    失败全部吞掉返回 False，绝不抛——上报不能拖垮启动。
+    """
+    if not middleware_url:
+        return False
+    try:
+        from listen_chat import post_heartbeat
+
+        hb = post_heartbeat(
+            middleware_url,
+            agent_id=agent_id or os.environ.get("ZENITHJOY_AGENT_ID"),
+            diag={"preflight": report},
+        )
+        return bool(hb.get("ok"))
+    except Exception:
+        return False
+
+
+# ─── CLI ─────────────────────────────────────────────────────────────────────
+
+
+def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
+    ap = argparse.ArgumentParser(description="ZenithJoy Agent 开机环境自检 + 自愈")
+    ap.add_argument(
+        "--middleware-url",
+        type=str,
+        default=os.environ.get("ZENITHJOY_API_BASE", ""),
+        help="中台地址（缺省取 env ZENITHJOY_API_BASE）",
+    )
+    ap.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="只检测不自愈、不下载、不卸载（给 CI / mac 跑）",
+    )
+    ap.add_argument(
+        "--agent-id",
+        type=str,
+        default=os.environ.get("ZENITHJOY_AGENT_ID"),
+        help="上报中台用的 agent 标识",
+    )
+    return ap.parse_args(argv)
+
+
+def main(argv: Optional[List[str]] = None) -> int:
+    args = parse_args(argv)
+
+    checks = run_all_checks(args.middleware_url, dry_run=args.dry_run)
+    report = build_report(checks)
+
+    print_report(report)
+    wrote = write_report_json(report)
+    if not wrote:
+        print(f"[preflight] 写本地报告失败（{PREFLIGHT_JSON_PATH}），继续。", file=sys.stderr)
+
+    reported = report_to_middleware(args.middleware_url, report, agent_id=args.agent_id)
+    if not reported:
+        print("[preflight] 上报中台失败/跳过（best-effort，不阻断）。", file=sys.stderr)
+
+    return compute_exit_code(checks)
+
+
+if __name__ == "__main__":
+    sys.exit(main())

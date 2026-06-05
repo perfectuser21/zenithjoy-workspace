@@ -2882,6 +2882,14 @@ agent_suite:
     product: 客户私域AI接管
     note: "find_weixin 版本守卫：微信≥4.1.9 抛错（mmui控件树被移除需降级），≤4.1.8放行，读不到不阻断"
 
+  - id: wechat-cs-preflight-env-doctor
+    path: services/agent/wechat-rpa/tests/test_preflight.py
+    type: unit
+    ci: L3
+    status: active
+    product: 客户私域AI接管
+    note: "开机环境自检+自愈 env-doctor：8项检测(OS/微信装/版本/锁更新/登录/pywinauto/UIA/中台)的判定逻辑+报告汇总+dry-run不执行真实自愈"
+
   - id: wechat-cs-build-pywinauto
     path: services/agent/scripts/__tests__/build-install-pack-pywinauto.test.sh
     type: unit

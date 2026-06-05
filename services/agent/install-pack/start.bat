@@ -247,6 +247,30 @@ if exist "%_WEIXIN_ROOT%" (
     echo [lock-update] 未发现微信安装目录，跳过（%_WEIXIN_ROOT%）
 )
 
+REM === Step 6.9: 微信 RPA 开机环境自检 + 自愈（preflight）===
+REM 用包内 python-embedded\python.exe 跑 wechat-rpa\preflight.py，检查并自愈微信 RPA
+REM 运行所需环境（微信版本/讲述人 UIA/pywinauto/依赖等），跑完打印报告并写
+REM C:\Users\Public\zj-preflight.json，中台看板可读取。
+REM 中台地址复用 start.bat 既有变量 ZENITHJOY_API_BASE（preflight 自己也有默认/env 兜底）。
+REM 【不硬阻断】preflight 已尽力自愈，剩余问题需人工但不该让 agent 完全不启动 —
+REM 否则一个非致命的环境告警会拖垮整个发布端。所以无论返回码如何都继续拉起 agent，
+REM 仅 echo 明确提示，让用户/中台看板感知。
+if exist "%~dp0python-embedded\python.exe" if exist "%~dp0wechat-rpa\preflight.py" (
+    echo.
+    echo  ============================================================
+    echo   微信 RPA 环境自检（preflight，自愈尽力，不阻断启动）
+    echo  ============================================================
+    "%~dp0python-embedded\python.exe" "%~dp0wechat-rpa\preflight.py" --middleware-url "%ZENITHJOY_API_BASE%"
+    if errorlevel 1 (
+        echo [preflight] WARN 环境自检发现问题（自愈后仍有残留），详见上方报告/中台看板，继续启动 agent
+    ) else (
+        echo [preflight] 环境自检通过 OK
+    )
+    echo.
+) else (
+    echo [preflight] 跳过：未找到 python-embedded 或 wechat-rpa\preflight.py（旧包或精简包）
+)
+
 REM Step 7: Spawn agent.exe (foreground)
 mkdir "%USERPROFILE%\.zj" 2>nul
 echo [agent] starting zenithjoy-agent.exe ...
