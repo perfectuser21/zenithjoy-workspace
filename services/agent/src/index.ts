@@ -39,6 +39,7 @@ import { searchDouyinVideosByKeyword } from './handlers/keyword-search-douyin';
 import { ensureChromeHeadlessShell } from './handlers/ensure-chrome';
 import { ensureFfmpeg } from './handlers/ensure-ffmpeg';
 import { ensureHyperframes } from './handlers/ensure-hyperframes';
+import { sanitizeApiBase } from './utils/sanitize-env';
 import dns from 'node:dns';
 
 // Windows 防火墙封锁 IPv6（EACCES on 2606:4700::）→ 强制 Node.js 优先解析 IPv4
@@ -493,7 +494,7 @@ async function main(): Promise<void> {
     startAcquisitionKeywordLoop(cfg);
   }
 
-  const _hbApiBase = (process.env.ZENITHJOY_API_BASE || '').replace(/\/+$/, '');
+  const _hbApiBase = sanitizeApiBase(process.env.ZENITHJOY_API_BASE);
   if (_hbApiBase) {
     startVideoPipelineLoop(_hbApiBase, cfg.licenseKey);
     console.log(`[agent] video-pipeline-loop started → ${_hbApiBase}/api/ai-video/jobs`);
@@ -506,7 +507,7 @@ async function main(): Promise<void> {
 
 function deriveHttpApiBase(cfg: AgentConfig): string | null {
   const explicit = process.env.ZENITHJOY_API_BASE;
-  if (explicit) return explicit.replace(/\/+$/, '');
+  if (explicit) return sanitizeApiBase(explicit);
   // 从 wsApiUrl 推导：wss://api.../agent-ws → https://api...
   if (!cfg.apiUrl) return null;
   return cfg.apiUrl
