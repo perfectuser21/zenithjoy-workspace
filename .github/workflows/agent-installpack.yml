@@ -54,6 +54,41 @@ jobs:
           print('manifest.json updated with cos_url:', m['cos_url'])
           "
 
+      # 幂等镜像微信 4.1.8 安装器到 COS（env-doctor preflight 自愈时的内网回退源）
+      # 增强项，非 agent 包硬依赖：env-doctor 有官方 dldir1v6.qq.com 回退，故此步失败不红 job。
+      - name: Mirror WeChat 4.1.8 to COS (idempotent)
+        continue-on-error: true
+        env:
+          COS_SECRET_ID: ${{ secrets.COS_SECRET_ID }}
+          COS_SECRET_KEY: ${{ secrets.COS_SECRET_KEY }}
+        run: |
+          BUCKET="zenithjoy-static-1333590468"
+          ENDPOINT="cos.accelerate.myqcloud.com"
+          COS_PATH="/install-pack/wechat/WeChatWin_4.1.8.exe"
+          COS_URL="https://${BUCKET}.${ENDPOINT}${COS_PATH}"
+          OFFICIAL="https://dldir1v6.qq.com/weixin/Universal/Windows/WeChatWin_4.1.8.exe"
+
+          # 幂等：已镜像(200)直接跳过，不重复下载/上传
+          if curl -sf -I "$COS_URL" >/dev/null 2>&1; then
+            echo "[mirror-wechat] 已镜像，跳过：$COS_URL"
+            exit 0
+          fi
+
+          echo "[mirror-wechat] COS 无缓存，从官方下载 $OFFICIAL ..."
+          curl -L -o WeChatWin_4.1.8.exe "$OFFICIAL" || { echo "[mirror-wechat] 官方下载失败，跳过镜像（非致命）"; exit 0; }
+
+          # 校验大小 > 200MB，防止下到错误页/截断包
+          SIZE=$(stat -c%s WeChatWin_4.1.8.exe 2>/dev/null || stat -f%z WeChatWin_4.1.8.exe)
+          if [ "${SIZE:-0}" -lt 209715200 ]; then
+            echo "[mirror-wechat] 下载体积异常（${SIZE} bytes < 200MB），跳过上传（非致命）"
+            exit 0
+          fi
+
+          pip install coscmd -q
+          coscmd config -a "$COS_SECRET_ID" -s "$COS_SECRET_KEY" -b "$BUCKET" -e "$ENDPOINT"
+          coscmd upload WeChatWin_4.1.8.exe "$COS_PATH" --force || { echo "[mirror-wechat] 上传失败（非致命）"; exit 0; }
+          echo "[mirror-wechat] 已镜像到 $COS_URL"
+
       - name: Deploy manifest.json to HK VPS
         env:
           VPS_API_URL: ${{ secrets.VPS_API_URL }}
