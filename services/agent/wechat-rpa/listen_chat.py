@@ -234,33 +234,73 @@ def _force_foreground(hwnd: int) -> None:
 
 
 def _abs_click(abs_x: int, abs_y: int) -> None:
-    """绝对屏幕坐标鼠标左键点击（MOUSEEVENTF_ABSOLUTE，不依赖窗口焦点）。"""
-    import win32api as _wa, win32con as _wc
-    sw = _wa.GetSystemMetrics(0)
-    sh = _wa.GetSystemMetrics(1)
-    nx = int(abs_x * 65535 / sw)
-    ny = int(abs_y * 65535 / sh)
-    _wa.mouse_event(_wc.MOUSEEVENTF_MOVE | _wc.MOUSEEVENTF_ABSOLUTE, nx, ny, 0, 0)
+    """绝对屏幕坐标鼠标左键点击（SetCursorPos + mouse_event，多显示器安全）。"""
+    import ctypes as _ct
+    _u32 = _ct.windll.user32
+    _u32.SetCursorPos(abs_x, abs_y)
     time.sleep(0.15)
-    _wa.mouse_event(_wc.MOUSEEVENTF_LEFTDOWN | _wc.MOUSEEVENTF_ABSOLUTE, nx, ny, 0, 0)
+    _u32.mouse_event(0x0002, 0, 0, 0, 0)  # MOUSEEVENTF_LEFTDOWN
     time.sleep(0.05)
-    _wa.mouse_event(_wc.MOUSEEVENTF_LEFTUP | _wc.MOUSEEVENTF_ABSOLUTE, nx, ny, 0, 0)
+    _u32.mouse_event(0x0004, 0, 0, 0, 0)  # MOUSEEVENTF_LEFTUP
 
 
 def _uia_send(uia_edit: Any, mw: Any, reply_text: str) -> bool:
-    """纯 UIA 写值 + 点发送按钮，无需键盘焦点。成功返回 True。"""
+    """SetValue 写入 + AttachThreadInput+Enter 后台静默发送。成功返回 True。"""
+    import ctypes as _ct
+    _u32 = _ct.windll.user32
+    _k32 = _ct.windll.kernel32
+    SW_RESTORE = 9
+    SW_MINIMIZE = 6
+    VK_RETURN = 0x0D
+    main_hwnd = mw.element_info.handle
+    was_minimized = bool(_u32.IsIconic(main_hwnd))
     try:
         uia_edit.iface_value.SetValue(reply_text)
+        time.sleep(0.2)
+        if was_minimized:
+            _u32.ShowWindow(main_hwnd, 8)  # SW_SHOWNA: 还原不抢焦点
+            _log("_uia_send: 主窗口最小化→SW_SHOWNA 还原（不抢焦点）")
+            time.sleep(0.3)
+        my_tid = _k32.GetCurrentThreadId()
+        pid_buf = _ct.c_ulong(0)
+        wx_tid = _u32.GetWindowThreadProcessId(main_hwnd, _ct.byref(pid_buf))
+        _u32.AttachThreadInput(my_tid, wx_tid, True)
+        prev_focus = _u32.SetFocus(main_hwnd)
+        time.sleep(0.1)
+        _u32.PostMessageW(main_hwnd, 0x0100, VK_RETURN, 0x001C0001)
+        time.sleep(0.05)
+        _u32.PostMessageW(main_hwnd, 0x0101, VK_RETURN, 0xC01C0001)
+        if prev_focus:
+            _u32.SetFocus(prev_focus)
+        _u32.AttachThreadInput(my_tid, wx_tid, False)
+        time.sleep(0.4)
+        try:
+            remaining = uia_edit.get_value() or ""
+        except Exception:
+            remaining = ""
+        if not remaining:
+            if was_minimized:
+                _u32.ShowWindow(main_hwnd, SW_MINIMIZE)
+            _log("_uia_send: AttachInput+Enter 成功（后台静默）")
+            return True
+        _log(f"_uia_send: Enter未清空({len(remaining)}字)，回退SW_RESTORE+Invoke")
+        _u32.ShowWindow(main_hwnd, SW_RESTORE)
         time.sleep(0.3)
         btn = _find_send_button(mw)
         if btn is not None:
             btn.iface_invoke.Invoke()
             time.sleep(0.5)
-            _log("_uia_send: SetValue+Invoke 成功")
+            if was_minimized:
+                _u32.ShowWindow(main_hwnd, SW_MINIMIZE)
+            _log("_uia_send: SW_RESTORE+Invoke 成功（兜底）")
             return True
-        _log("_uia_send: 发送按钮未找到")
     except Exception as exc:
         _log(f"_uia_send: {exc}")
+    if was_minimized:
+        try:
+            _ct.windll.user32.ShowWindow(main_hwnd, SW_MINIMIZE)
+        except Exception:
+            pass
     return False
 
 
@@ -655,10 +695,30 @@ def run_real_listen(args: argparse.Namespace) -> int:
         flush=True,
     )
 
-    replied: set[tuple[str, str]] = set()
+    # replied 持久化：重启后仍记住已回复的消息，防止重复
+    _REPLIED_FILE = r"C:\Users\Public\zj-replied.json"
+    def _load_replied() -> set:
+        try:
+            import json as _j
+            with open(_REPLIED_FILE, "r", encoding="utf-8") as _f:
+                return set(tuple(x) for x in _j.load(_f))
+        except Exception:
+            return set()
+    def _save_replied(s: set) -> None:
+        try:
+            import json as _j
+            with open(_REPLIED_FILE, "w", encoding="utf-8") as _f:
+                _j.dump([list(x) for x in s], _f)
+        except Exception:
+            pass
+    replied: set[tuple[str, str]] = _load_replied()
+    _log(f"已加载 replied 历史: {len(replied)} 条")
     # reply 失败的 key → 最后失败时间；60 秒内不重试（避免群聊/系统消息无限循环）
     reply_failed_at: dict[tuple[str, str], float] = {}
     REPLY_FAIL_COOLDOWN = 60  # 60s（原 30min，改短避免相同内容卡死）
+    # per-sender 成功回复冷却：10s 内不回同一 sender，防 last_content 截断误触发
+    sender_reply_cooldown: dict[str, float] = {}
+    SENDER_COOLDOWN = 30.0
     _skip_logged: set[tuple[str, str]] = set()  # 只对每个 key 打一次 skip log，避免刷屏
     # 内容变化检测：{sender: last_seen_content}，捕捉聊天面板打开时的新消息（无未读角标）
     last_content: dict[str, str] = {}
@@ -755,6 +815,9 @@ def run_real_listen(args: argparse.Namespace) -> int:
 
             for m in unread:
                 key = (m["sender"], m["content"])
+                # per-sender 冷却：成功回复后 30s 内跳过同一 sender
+                if now - sender_reply_cooldown.get(m["sender"], 0) < SENDER_COOLDOWN:
+                    continue
                 if key in replied:
                     if key not in _skip_logged:
                         _log(f"skip(replied) sender={m['sender']} content={m['content'][:20]!r}")
@@ -798,8 +861,11 @@ def run_real_listen(args: argparse.Namespace) -> int:
                         time.sleep(2)
                 if ok:
                     replied.add(key)
+                    _save_replied(replied)  # 持久化，防重启重复回复
                     _skip_logged.discard(key)
                     reply_failed_at.pop(key, None)
+                    sender_reply_cooldown[m["sender"]] = now  # per-sender 30s 冷却
+                    last_content[m["sender"]] = reply  # 防 last_content Path2 误触发
                     _log(f"auto-replied OK sender={m['sender']}")
                 else:
                     reply_failed_at[key] = time.time()
