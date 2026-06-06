@@ -239,14 +239,21 @@ def _set_clipboard_text(text: str) -> bool:
         import ctypes as _ct
         _u32 = _ct.windll.user32
         _k32 = _ct.windll.kernel32
+        # 64-bit Windows：GlobalAlloc/GlobalLock 返回指针，ctypes 默认 c_int 会截断
+        _k32.GlobalAlloc.restype = _ct.c_void_p
+        _k32.GlobalLock.restype = _ct.c_void_p
         encoded = (text + "\x00").encode("utf-16-le")
         hMem = _k32.GlobalAlloc(0x0002, len(encoded))  # GMEM_MOVEABLE
         if not hMem:
             return False
         pMem = _k32.GlobalLock(hMem)
+        if not pMem:
+            _k32.GlobalFree(hMem)
+            return False
         _ct.memmove(pMem, encoded, len(encoded))
         _k32.GlobalUnlock(hMem)
         if not _u32.OpenClipboard(0):
+            _k32.GlobalFree(hMem)
             return False
         _u32.EmptyClipboard()
         _u32.SetClipboardData(13, hMem)  # CF_UNICODETEXT = 13
