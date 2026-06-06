@@ -58,8 +58,10 @@ class _FakeEdit:
         self.iface_value = _FakeValuePattern()
 
     def get_value(self) -> str:
-        # SetValue 后输入框被清空（= 发送成功）
         return ""
+
+    def set_focus(self) -> None:
+        pass
 
 
 class _FakeButton:
@@ -113,8 +115,8 @@ def _no_sleep(monkeypatch):
     monkeypatch.setattr(listen_chat.time, "sleep", lambda *a, **k: None)
 
 
-def test_path1_panel_already_open():
-    """路径1：面板已开，SetValue + AttachThreadInput+Enter 发送，不需要 item.Invoke()。"""
+def test_always_invokes_item_before_send():
+    """reply_in_chat 始终先 item.Invoke() 激活正确会话再发送（防发错聊天窗口）。"""
     edit = _FakeEdit()
     button = _FakeButton()
     item = _FakeItem()
@@ -122,8 +124,7 @@ def test_path1_panel_already_open():
 
     ok = listen_chat.reply_in_chat(mw, item, "您好，在的")
 
-    assert edit.iface_value.set_value_called_with == "您好，在的"
-    assert item.iface_invoke.invoke_called is False, "路径1 不应调 item.Invoke()"
+    assert item.iface_invoke.invoke_called is True, "必须调 item.Invoke() 激活正确会话"
     assert ok is True
 
 
