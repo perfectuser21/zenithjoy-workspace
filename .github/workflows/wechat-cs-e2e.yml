@@ -106,8 +106,8 @@ jobs:
         run: kill "$(cat /tmp/apps-api.pid)" 2>/dev/null || true
 
   agent-windows:
-    name: job2 — Agent 启动路径 + listen_chat dryrun（windows-latest）
-    runs-on: windows-latest
+    name: job2 — Agent 启动路径 + listen_chat dryrun（self-hosted xian-rog）
+    runs-on: [self-hosted, wechat-capable]
     timeout-minutes: 12
     defaults:
       run:
@@ -117,9 +117,6 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
 
       - name: Install services/agent deps
         working-directory: services/agent
