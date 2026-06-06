@@ -61,54 +61,29 @@ SKIP_SENDERS = (
     "折叠的群聊",
 )
 
-# 群聊/频道/讨论组名称特征词 → 跳过（只回复私聊）
+# 群聊/频道/讨论组名称特征词 → 跳过（只回私聊）
 SKIP_GROUP_KEYWORDS = ("群", "频道", "讨论组", "直播间")
 
 
 # ─── 纯逻辑：解析单个会话项的 element_info.name（CI 单测锚点，顶层零 pywinauto）──────
 
 
-def _parse_item_name(name: str) -> Optional[Dict[str, str]]:
+def _parse_item_name(name: str, require_unread: bool = True) -> Optional[Dict[str, str]]:
     """
     解析微信 4.0 会话列表 ListItem 的 element_info.name 字符串。
 
     格式（真机实测）：`名字\\n[N条] \\n最新消息内容\\n时间\\n`
-      - 含 `[N条]`（即子串 '条]'）= 有未读；无则返回 None（不打扰已读会话）。
-      - 首行 = 发送人；过滤系统/公众号账号。
-      - "条]"段之后第一段非纯时间的文本 = 客户最新消息。
+      - require_unread=True（默认）：含 `[N条]` 未读标记才返回，否则 None。
+      - require_unread=False：不管有无角标都解析（供内容变化检测用）。
+      - 首行 = 发送人；过滤系统/公众号/群聊账号。
+      - 首段非纯时间文本 = 客户最新消息。
 
-    返回 {"sender":..,"content":..}；非未读/系统账号/解析不出内容 → None。
+    返回 {"sender":..,"content":..}；不符合则返回 None。
     """
     name = name or ""
-    if "条]" not in name:  # 无 [N条] 未读标记
+    if require_unread and "条]" not in name:
         return None
 
-    parts = name.split("\n")
-    sender = parts[0].strip()
-    if not sender or any(s in sender for s in SKIP_SENDERS):
-        return None
-    if any(kw in sender for kw in SKIP_GROUP_KEYWORDS):
-        return None
-
-    content = ""
-    for seg in parts[1:]:
-        seg = seg.strip()
-        if not seg or "条]" in seg:
-            continue
-        # 跳过纯时间段（如 15:26 / 09:00 → 去掉 : / 后是纯数字）
-        if seg.replace(":", "").replace("/", "").isdigit():
-            continue
-        content = seg
-        break
-
-    if not content:
-        return None
-    return {"sender": sender, "content": content}
-
-
-def _extract_item_info(name: str) -> Optional[Dict[str, str]]:
-    """从 ListItem name 提取 sender + content（不管有无角标），供内容变化检测用。"""
-    name = name or ""
     parts = name.split("\n")
     if len(parts) < 2:
         return None
@@ -117,6 +92,7 @@ def _extract_item_info(name: str) -> Optional[Dict[str, str]]:
         return None
     if any(kw in sender for kw in SKIP_GROUP_KEYWORDS):
         return None
+
     content = ""
     for seg in parts[1:]:
         seg = seg.strip()
@@ -126,6 +102,7 @@ def _extract_item_info(name: str) -> Optional[Dict[str, str]]:
             continue
         content = seg
         break
+
     if not content:
         return None
     return {"sender": sender, "content": content}
@@ -157,7 +134,7 @@ def scan_unread(mw: Any, last_content: Optional[Dict[str, str]] = None) -> List[
             continue
         # 路径 2：无角标但内容变化（聊天窗口当前打开时走这里）
         if last_content is not None:
-            info = _extract_item_info(name)
+            info = _parse_item_name(name, require_unread=False)
             if info and info["sender"] not in seen_senders:
                 prev = last_content.get(info["sender"])
                 if prev is not None and prev != info["content"]:
@@ -174,17 +151,23 @@ def scan_unread(mw: Any, last_content: Optional[Dict[str, str]] = None) -> List[
 
 
 def _iter_all_controls(mw: Any, control_type: str):
-    """先扫主窗口，再扫 Desktop 全部窗口（应对聊天在子窗口的情况）。"""
+    """扫主窗口控件树，再扫同一进程的其他 mmui:: 子窗口（仅微信自身弹窗）。
+
+    安全范围：第二阶段严格过滤 cls.startswith("mmui::")，
+    只访问微信自身的 Qt 窗口，不读取其他应用窗口内容。
+    """
     # 1) 主窗口 descendants
     for c in mw.descendants(control_type=control_type):
         yield c
-    # 2) Desktop 其他 mmui 窗口
+    # 2) 微信自身其他 mmui:: 弹窗（独立聊天窗口等）
     try:
         from pywinauto import Desktop
+        main_handle = mw.element_info.handle
         for w in Desktop(backend="uia").windows():
             try:
                 cls = w.element_info.class_name or ""
-                if cls.startswith("mmui::") and w.element_info.handle != mw.element_info.handle:
+                # 严格只处理微信自身 Qt 窗口，过滤所有非 mmui:: 进程
+                if cls.startswith("mmui::") and w.element_info.handle != main_handle:
                     for c in w.descendants(control_type=control_type):
                         yield c
             except Exception:
