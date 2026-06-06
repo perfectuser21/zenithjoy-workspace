@@ -300,10 +300,17 @@ def _uia_send(uia_edit: Any, mw: Any, reply_text: str) -> bool:
         if btn is not None:
             btn.iface_invoke.Invoke()
             time.sleep(0.5)
-            if was_minimized:
-                _u32.ShowWindow(main_hwnd, SW_MINIMIZE)
-            _log("_uia_send: SW_RESTORE+Invoke 成功（兜底）")
-            return True
+            try:
+                remaining2 = uia_edit.get_value() or ""
+            except Exception:
+                remaining2 = ""
+            if not remaining2:
+                if was_minimized:
+                    _u32.ShowWindow(main_hwnd, SW_MINIMIZE)
+                _log("_uia_send: SW_RESTORE+Invoke 成功（兜底）")
+                return True
+            _log(f"_uia_send: SW_RESTORE+Invoke 失败（输入框仍有{len(remaining2)}字）")
+            return False
     except Exception as exc:
         _log(f"_uia_send: {exc}")
     if was_minimized:
@@ -332,10 +339,9 @@ def reply_in_chat(mw: Any, item: Any, reply_text: str) -> bool:
     """
     打开 item 对应会话并发出 reply_text。全程纯 UIA，禁止任何物理鼠标/键盘操作。
 
-    两路纯 UIA（无物理点击降级）：
-      路径 1 — 聊天面板已开：直接 SetValue + AttachInput+Enter，微信可最小化/后台
-      路径 2 — iface_invoke.Invoke() 后台打开会话（UIA 调用，不抢焦点）：等暴露再发
-    两路均失败 → 返回 False，下一轮询周期自动重试，绝不调 _force_foreground/_abs_click。
+    始终先 item.iface_invoke.Invoke() 激活正确会话（防止 _navigate_away 后面板停在
+    文件传输助手导致消息发错对象），再 SetValue + Enter/Invoke 发送。
+    失败 → 返回 False，下一轮询周期自动重试，绝不调 _force_foreground/_abs_click。
     """
     def _fresh_mw():
         try:
@@ -344,19 +350,9 @@ def reply_in_chat(mw: Any, item: Any, reply_text: str) -> bool:
         except Exception:
             return mw
 
-    # ── 路径 1：聊天面板已开（上次 navigate_away 后或面板本来就开着）────────────
-    fmw = _fresh_mw()
-    uia_edit = _find_chat_input(fmw)
-    if uia_edit is not None:
-        _log("reply_in_chat: 路径1 面板已开，直接 UIA 发送")
-        if _uia_send(uia_edit, fmw, reply_text):
-            _navigate_away(fmw)
-            return True
-
-    # ── 路径 2：iface_invoke.Invoke() 后台激活会话（UIA 调用，不抢焦点）─────────
     try:
         item.iface_invoke.Invoke()
-        _log("reply_in_chat: 路径2 Invoke 激活会话，等 UIA 暴露…")
+        _log("reply_in_chat: Invoke 激活会话，等 UIA 暴露…")
         for _ in range(6):  # 最多等 3s，每 0.5s 检查一次
             time.sleep(0.5)
             fmw = _fresh_mw()
@@ -367,9 +363,9 @@ def reply_in_chat(mw: Any, item: Any, reply_text: str) -> bool:
                     return True
                 break
     except Exception as exc:
-        _log(f"reply_in_chat: 路径2 Invoke 失败: {exc}")
+        _log(f"reply_in_chat: Invoke 失败: {exc}")
 
-    _log("reply_in_chat: 两路均失败，本轮跳过（下次轮询重试）")
+    _log("reply_in_chat: 发送失败，本轮跳过（下次轮询重试）")
     return False
 
 
