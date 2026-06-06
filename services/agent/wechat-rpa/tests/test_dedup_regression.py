@@ -20,6 +20,7 @@ from __future__ import annotations
 import json
 import os
 import sys
+import time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 WECHAT_RPA_DIR = os.path.abspath(os.path.join(HERE, ".."))
@@ -145,3 +146,97 @@ def test_last_content_updated_to_reply_after_successful_send():
     assert assign_idx > ok_idx, (
         "last_content 赋值必须在 if ok: 成功分支内（在 ok_idx 之后）"
     )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# D. replied TTL：过期条目自动清除（根因 D — replied.json 永不过期导致消息被永久跳过）
+#
+# 背景：2026-06-06 xian-pc 发现 default 忆 30+ 分钟没有收到 AI 回复。
+#   根因：replied.json 里的 (sender, content) 条目从未过期。
+#   一旦默忆的某条消息被回复过，同内容的后续消息被永久 skip(replied)。
+# 修法：
+#   - 文件格式改为 [sender, content, timestamp]（3 元素）
+#   - REPLIED_TTL 常量（默认 24h）控制过期时间
+#   - _load_replied 过滤超 TTL 的条目
+#   - _save_replied 写入时带时间戳（从 _replied_ts 取）
+#   - 主循环记录 _replied_ts[key] = now，并每小时清理内存中过期条目
+# ─────────────────────────────────────────────────────────────────────────────
+
+def test_replied_ttl_constant_exists():
+    """REPLIED_TTL 常量必须存在，单位秒，值 >= 3600（至少 1 小时）。"""
+    assert hasattr(listen_chat, "REPLIED_TTL"), (
+        "缺少 REPLIED_TTL 常量 — replied.json 过期清除功能未实现"
+    )
+    assert listen_chat.REPLIED_TTL >= 3600, (
+        f"REPLIED_TTL={listen_chat.REPLIED_TTL} 太短，至少应为 3600s（1h）"
+    )
+
+
+def test_load_replied_filters_expired_entries(tmp_path, monkeypatch):
+    """_load_replied 必须过滤掉超过 REPLIED_TTL 的条目（新格式 3 元素）。
+
+    永久不过期的根因：replied.json 只存 [sender, content]，没有时间戳，
+    _load_replied 全部加载，同内容消息永久被跳过。
+    """
+    test_file = str(tmp_path / "zj-replied.json")
+    monkeypatch.setattr(listen_chat, "_REPLIED_FILE", test_file)
+
+    now = time.time()
+    ttl = listen_chat.REPLIED_TTL
+
+    data = [
+        ["新鲜用户", "你好", now - 100],        # 新鲜，应保留
+        ["过期用户", "你好", now - ttl - 1],     # 过期，应清除
+        ["另一过期", "在吗", now - ttl * 2],     # 超长过期，应清除
+    ]
+    with open(test_file, "w", encoding="utf-8") as f:
+        json.dump(data, f)
+
+    loaded = listen_chat._load_replied()
+
+    assert ("新鲜用户", "你好") in loaded, "新鲜条目被错误清除"
+    assert ("过期用户", "你好") not in loaded, "过期条目未被清除 — TTL 未生效"
+    assert ("另一过期", "在吗") not in loaded, "超长过期条目未被清除 — TTL 未生效"
+
+
+def test_load_replied_supports_old_format(tmp_path, monkeypatch):
+    """旧格式（2 元素列表，无时间戳）必须向后兼容：_load_replied 仍能加载。"""
+    test_file = str(tmp_path / "zj-replied.json")
+    monkeypatch.setattr(listen_chat, "_REPLIED_FILE", test_file)
+
+    data = [["张三", "你好"], ["李四", "在吗"]]
+    with open(test_file, "w", encoding="utf-8") as f:
+        json.dump(data, f)
+
+    loaded = listen_chat._load_replied()
+    assert ("张三", "你好") in loaded, "旧格式条目未被加载（向后兼容破坏）"
+    assert ("李四", "在吗") in loaded, "旧格式条目未被加载（向后兼容破坏）"
+
+
+def test_save_replied_stores_timestamps(tmp_path, monkeypatch):
+    """_save_replied 保存后每个条目必须包含时间戳（3 元素 [sender, content, ts]）。"""
+    test_file = str(tmp_path / "zj-replied.json")
+    monkeypatch.setattr(listen_chat, "_REPLIED_FILE", test_file)
+
+    ts_now = time.time()
+    monkeypatch.setattr(listen_chat, "_replied_ts", {("王五", "你好"): ts_now})
+
+    listen_chat._save_replied({("王五", "你好")})
+
+    with open(test_file, "r", encoding="utf-8") as f:
+        data = json.load(f)
+
+    assert len(data) == 1, "保存的条目数量不对"
+    assert len(data[0]) == 3, f"新格式必须是 [sender, content, timestamp]，实际是 {data[0]}"
+    assert data[0][0] == "王五"
+    assert data[0][1] == "你好"
+    assert isinstance(data[0][2], float), "时间戳必须是 float"
+    assert abs(data[0][2] - ts_now) < 1.0, "时间戳值与预期不符"
+
+
+def test_replied_ts_module_level_dict_exists():
+    """_replied_ts 模块级 dict 必须存在（供 _save_replied 读取时间戳）。"""
+    assert hasattr(listen_chat, "_replied_ts"), (
+        "缺少 _replied_ts 模块级 dict — _save_replied 无法获取时间戳"
+    )
+    assert isinstance(listen_chat._replied_ts, dict), "_replied_ts 必须是 dict"

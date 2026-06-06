@@ -613,22 +613,43 @@ _LOG_PATH = os.path.join(os.environ.get("PUBLIC", r"C:\Users\Public"), "zj-liste
 # ─── replied 持久化（模块顶层，供单测 monkeypatch）────────────────────────────────
 _REPLIED_FILE: str = os.path.join(os.environ.get("PUBLIC", r"C:\Users\Public"), "zj-replied.json")
 SENDER_COOLDOWN: float = 30.0  # 成功回复后同一 sender 的冷却秒数
+REPLIED_TTL: float = 24 * 3600  # replied 条目 24h 后过期，允许相同内容的新消息再次被回复
+_replied_ts: dict = {}  # (sender, content) → 回复时间戳，供 _save_replied 持久化
 
 
 def _load_replied() -> set:
-    """从磁盘加载已回复集合，重启后不重发。读取失败返回空集合（首次启动正常）。"""
+    """从磁盘加载已回复集合，过滤超过 REPLIED_TTL 的过期条目。
+
+    格式：
+    - 新格式 [sender, content, timestamp]（3 元素）— 过期条目自动丢弃
+    - 旧格式 [sender, content]（2 元素，无时间戳）— 向后兼容，全部加载
+    """
     try:
         with open(_REPLIED_FILE, "r", encoding="utf-8") as _f:
-            return set(tuple(x) for x in json.load(_f))
+            data = json.load(_f)
+        now = time.time()
+        s: set = set()
+        for x in data:
+            if len(x) == 3:
+                sender, content, ts = x[0], x[1], float(x[2])
+                if now - ts < REPLIED_TTL:
+                    key = (sender, content)
+                    s.add(key)
+                    _replied_ts[key] = ts
+            elif len(x) == 2:
+                s.add((x[0], x[1]))
+        return s
     except Exception:
         return set()
 
 
 def _save_replied(s: set) -> None:
-    """把已回复集合持久化到磁盘。写失败静默忽略（不影响监听主循环）。"""
+    """把已回复集合持久化到磁盘（新格式含时间戳，防永久去重）。"""
     try:
+        now = time.time()
+        data = [[k[0], k[1], _replied_ts.get(k, now)] for k in s]
         with open(_REPLIED_FILE, "w", encoding="utf-8") as _f:
-            json.dump([list(x) for x in s], _f)
+            json.dump(data, _f)
     except Exception:
         pass
 
@@ -723,9 +744,23 @@ def run_real_listen(args: argparse.Namespace) -> int:
     # 自动启动微信：检测到微信未运行时自动 Popen Weixin.exe，冷却 120s 防重复拉起
     wechat_launch_cooldown = 120
     last_wechat_launch = 0.0
+    # replied 过期清理：每小时清一次内存里的过期条目，避免长期运行积累
+    last_replied_purge = time.time()
     try:
         while time.time() < deadline:
             now = time.time()
+
+            # 每小时清理内存里的过期 replied 条目，防长期运行内存堆积
+            if now - last_replied_purge >= 3600:
+                expired_keys = {k for k in replied if now - _replied_ts.get(k, 0) >= REPLIED_TTL}
+                if expired_keys:
+                    replied -= expired_keys
+                    for k in expired_keys:
+                        _replied_ts.pop(k, None)
+                        _skip_logged.discard(k)
+                    _save_replied(replied)
+                    _log(f"已清理 {len(expired_keys)} 条过期 replied（TTL {REPLIED_TTL/3600:.0f}h）")
+                last_replied_purge = now
 
             # 取主窗口（顺带采集诊断：找到没 / 是否停在登录窗口）
             mw = None
@@ -848,6 +883,7 @@ def run_real_listen(args: argparse.Namespace) -> int:
                         _log(f"reply_in_chat attempt 1 failed, retrying sender={m['sender']}")
                         time.sleep(2)
                 if ok:
+                    _replied_ts[key] = now  # 记录时间戳，_save_replied 持久化用
                     replied.add(key)
                     _save_replied(replied)  # 持久化，防重启重复回复
                     _skip_logged.discard(key)
