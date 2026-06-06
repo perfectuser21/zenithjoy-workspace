@@ -254,6 +254,11 @@ def _abs_click(abs_x: int, abs_y: int) -> None:
     _u32.mouse_event(_UP_ABS_VD, nx, ny, 0, 0)
 
 
+def _get_edit_hwnd(uia_edit: Any, main_hwnd: int) -> int:
+    """取输入框控件 HWND；UIA-only 控件无 native handle 时 fallback 主窗口。"""
+    return uia_edit.element_info.handle or main_hwnd
+
+
 def _uia_send(uia_edit: Any, mw: Any, reply_text: str) -> bool:
     """SetValue 写入 + AttachThreadInput+Enter 后台静默发送。成功返回 True。"""
     import ctypes as _ct
@@ -272,7 +277,7 @@ def _uia_send(uia_edit: Any, mw: Any, reply_text: str) -> bool:
             _log("_uia_send: 主窗口最小化→SW_SHOWNA 还原（不抢焦点）")
             time.sleep(0.3)
         # Enter 必须发给输入框控件的 HWND，发给主窗口时焦点不在输入框上 Enter 不生效
-        edit_hwnd = uia_edit.element_info.handle or main_hwnd
+        edit_hwnd = _get_edit_hwnd(uia_edit, main_hwnd)
         my_tid = _k32.GetCurrentThreadId()
         pid_buf = _ct.c_ulong(0)
         wx_tid = _u32.GetWindowThreadProcessId(edit_hwnd, _ct.byref(pid_buf))

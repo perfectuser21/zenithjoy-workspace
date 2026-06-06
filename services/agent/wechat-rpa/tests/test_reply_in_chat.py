@@ -167,6 +167,32 @@ def test_missing_input_returns_false():
     assert ok is False
 
 
+# ── _get_edit_hwnd HWND 路由单测 ─────────────────────────────────────────────
+
+class _FakeEditWithHandle:
+    """模拟有 native HWND 的输入框控件。"""
+    class element_info:
+        handle = 99999
+
+
+class _FakeEditNoHandle:
+    """模拟 UIA-only 控件（无 native HWND，handle=0）。"""
+    class element_info:
+        handle = 0
+
+
+def test_get_edit_hwnd_uses_edit_hwnd_when_available():
+    """输入框有有效 HWND 时，应返回输入框 HWND 而非主窗口 HWND。"""
+    result = listen_chat._get_edit_hwnd(_FakeEditWithHandle(), 12345)
+    assert result == 99999, "有 edit HWND 时不应 fallback 到主窗口"
+
+
+def test_get_edit_hwnd_falls_back_to_main_hwnd_when_zero():
+    """输入框 handle=0（UIA-only 控件）时，应 fallback 主窗口 HWND。"""
+    result = listen_chat._get_edit_hwnd(_FakeEditNoHandle(), 12345)
+    assert result == 12345, "handle=0 时应 fallback 主窗口 HWND"
+
+
 def test_enter_key_send_no_button_succeeds():
     """AttachThreadInput+Enter 机制不依赖 send_button：无发送按钮也能成功发送。"""
     edit = _FakeEdit()
