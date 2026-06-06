@@ -35,6 +35,8 @@ export interface HeartbeatRecord {
 
 /** 监听断线阈值：3 分钟无心跳即视为掉线。 */
 export const STALE_THRESHOLD_MS = 3 * 60 * 1000;
+/** 清除阈值：超过 30 分钟无心跳的条目从 Map 中移除，防止永久告警循环。 */
+export const REMOVE_THRESHOLD_MS = 30 * 60 * 1000;
 
 const heartbeats = new Map<string, HeartbeatRecord>();
 
@@ -80,6 +82,13 @@ export async function checkStaleListenersAndAlert(
   now: number = Date.now(),
   thresholdMs: number = STALE_THRESHOLD_MS,
 ): Promise<{ stale: HeartbeatRecord[]; alerted: boolean }> {
+  // 先清理超过 REMOVE_THRESHOLD_MS 的条目，防止过期记录永久触发告警
+  for (const [key, rec] of heartbeats.entries()) {
+    if (now - rec.ts > REMOVE_THRESHOLD_MS) {
+      heartbeats.delete(key);
+    }
+  }
+
   const stale = findStaleListeners(now, thresholdMs);
   if (stale.length === 0) return { stale, alerted: false };
 

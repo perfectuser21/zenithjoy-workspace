@@ -14,6 +14,7 @@ import {
   checkStaleListenersAndAlert,
   listHeartbeats,
   STALE_THRESHOLD_MS,
+  REMOVE_THRESHOLD_MS,
   _resetHeartbeats,
 } from '../wechat-heartbeat';
 
@@ -77,6 +78,21 @@ describe('wechat-heartbeat 服务 [BEHAVIOR]', () => {
     const r = await checkStaleListenersAndAlert(t0);
     expect(r.stale.length).toBe(1);
     expect(r.alerted).toBe(false);
+  });
+
+  it('checkStaleListenersAndAlert：超过 REMOVE_THRESHOLD_MS 的条目被自动清除（防永久告警循环）', async () => {
+    // 模拟 unknown:unknown 场景：有条目超过 30 分钟没有心跳
+    const t0 = 10_000_000;
+    recordHeartbeat({ agent_id: undefined, wechat_id: undefined }, t0 - REMOVE_THRESHOLD_MS - 1);
+    recordHeartbeat({ agent_id: 'alive', wechat_id: 'wx' }, t0);
+
+    delete process.env.FEISHU_ALERT_WEBHOOK;
+    await checkStaleListenersAndAlert(t0);
+
+    // 超过 30 分钟的 unknown:unknown 条目应被移除
+    expect(getHeartbeat({ agent_id: undefined, wechat_id: undefined })).toBeUndefined();
+    // 正常条目不受影响
+    expect(getHeartbeat({ agent_id: 'alive', wechat_id: 'wx' })).toBeDefined();
   });
 
   it('recordHeartbeat 带 diag → getHeartbeat / listHeartbeats 取回扫描诊断（中台看板数据源）', () => {

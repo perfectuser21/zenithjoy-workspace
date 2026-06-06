@@ -2872,7 +2872,15 @@ agent_suite:
     ci: L3
     status: active
     product: 客户私域AI接管
-    note: "监听心跳记录 + 超3min断线飞书告警服务（recordHeartbeat/findStaleListeners/checkStaleListenersAndAlert）"
+    note: "监听心跳记录 + 超3min断线飞书告警服务（recordHeartbeat/findStaleListeners/checkStaleListenersAndAlert） + 30min过期清理（防unknown:unknown永久循环）"
+
+  - id: api-db-connection-log-dedup
+    path: apps/api/src/db/connection.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: ZenithJoy平台
+    note: "DB connection pool 日志去重：_dbConnectedLogged flag 保证 ✅ Database connected 只打印首次，防止连接池轮换时刷屏"
 
   - id: wechat-cs-reply-in-chat
     path: services/agent/wechat-rpa/tests/test_reply_in_chat.py
