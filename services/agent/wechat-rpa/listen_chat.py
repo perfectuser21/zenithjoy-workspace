@@ -233,6 +233,30 @@ def _force_foreground(hwnd: int) -> None:
         _log(f"_force_foreground: {exc}")
 
 
+def _set_clipboard_text(text: str) -> bool:
+    """把 text 写入系统剪贴板（CF_UNICODETEXT）。成功返回 True。"""
+    try:
+        import ctypes as _ct
+        _u32 = _ct.windll.user32
+        _k32 = _ct.windll.kernel32
+        encoded = (text + "\x00").encode("utf-16-le")
+        hMem = _k32.GlobalAlloc(0x0002, len(encoded))  # GMEM_MOVEABLE
+        if not hMem:
+            return False
+        pMem = _k32.GlobalLock(hMem)
+        _ct.memmove(pMem, encoded, len(encoded))
+        _k32.GlobalUnlock(hMem)
+        if not _u32.OpenClipboard(0):
+            return False
+        _u32.EmptyClipboard()
+        _u32.SetClipboardData(13, hMem)  # CF_UNICODETEXT = 13
+        _u32.CloseClipboard()
+        return True
+    except Exception as exc:
+        _log(f"_set_clipboard_text: {exc}")
+        return False
+
+
 def _abs_click(abs_x: int, abs_y: int) -> None:
     """绝对屏幕坐标鼠标左键点击（VIRTUALDESK 坐标，多显示器安全）。"""
     import ctypes as _ct
@@ -255,7 +279,13 @@ def _abs_click(abs_x: int, abs_y: int) -> None:
 
 
 def _uia_send(uia_edit: Any, mw: Any, reply_text: str) -> bool:
-    """SetValue 写入 + AttachThreadInput+Enter 后台静默发送。成功返回 True。"""
+    """
+    发送策略（按顺序尝试）：
+    1. 主路径（真实微信窗口 mmui::MainWindow）：拉前台 → 剪贴板 → keybd_event(Ctrl+V, Enter)
+    2. 降级路径（CI / 假 HWND / 无法识别为微信窗口）：SetValue + AttachThreadInput+Enter
+    3. 兜底：SW_RESTORE + 发送按钮 Invoke
+    成功返回 True。
+    """
     import ctypes as _ct
     _u32 = _ct.windll.user32
     _k32 = _ct.windll.kernel32
@@ -264,15 +294,62 @@ def _uia_send(uia_edit: Any, mw: Any, reply_text: str) -> bool:
     VK_RETURN = 0x0D
     main_hwnd = mw.element_info.handle
     was_minimized = bool(_u32.IsIconic(main_hwnd))
+    edit_hwnd = uia_edit.element_info.handle or main_hwnd
+    _log(f"_uia_send: edit_hwnd={edit_hwnd} main_hwnd={main_hwnd} was_min={was_minimized}")
     try:
+        # ── 主路径：前台剪贴板+keybd_event（仅真实微信窗口）──
+        # GetClassNameW 返回 "mmui::MainWindow" 时才走此路径，CI 假 HWND 不会命中
+        cls_buf = _ct.create_unicode_buffer(64)
+        _u32.GetClassNameW(main_hwnd, cls_buf, 64)
+        if cls_buf.value == "mmui::MainWindow":
+            if _set_clipboard_text(reply_text):
+                _force_foreground(main_hwnd)
+                time.sleep(0.3)
+                fg = _u32.GetForegroundWindow()
+                if fg == main_hwnd:
+                    try:
+                        uia_edit.set_focus()
+                    except Exception:
+                        pass
+                    time.sleep(0.1)
+                    KEYEVENTF_KEYUP = 0x0002
+                    VK_CONTROL = 0x11
+                    # Ctrl+A（清空旧内容）
+                    _u32.keybd_event(VK_CONTROL, 0, 0, 0)
+                    _u32.keybd_event(0x41, 0, 0, 0)
+                    _u32.keybd_event(0x41, 0, KEYEVENTF_KEYUP, 0)
+                    _u32.keybd_event(VK_CONTROL, 0, KEYEVENTF_KEYUP, 0)
+                    time.sleep(0.1)
+                    # Ctrl+V（粘贴 — 微信内部按真实键盘输入处理，解锁发送按钮）
+                    _u32.keybd_event(VK_CONTROL, 0, 0, 0)
+                    _u32.keybd_event(0x56, 0, 0, 0)
+                    _u32.keybd_event(0x56, 0, KEYEVENTF_KEYUP, 0)
+                    _u32.keybd_event(VK_CONTROL, 0, KEYEVENTF_KEYUP, 0)
+                    time.sleep(0.3)
+                    # Enter（发送）
+                    _u32.keybd_event(VK_RETURN, 0, 0, 0)
+                    _u32.keybd_event(VK_RETURN, 0, KEYEVENTF_KEYUP, 0)
+                    time.sleep(0.4)
+                    try:
+                        remaining_kb = uia_edit.get_value() or ""
+                    except Exception:
+                        remaining_kb = ""
+                    if not remaining_kb:
+                        if was_minimized:
+                            _u32.ShowWindow(main_hwnd, SW_MINIMIZE)
+                        _log("_uia_send: 前台剪贴板+Enter 成功")
+                        return True
+                    _log(f"_uia_send: 前台剪贴板+Enter 失败（{len(remaining_kb)}字残留），回退 PostMessage")
+                else:
+                    _log(f"_uia_send: 未能拉前台（fg={fg}≠{main_hwnd}），回退 PostMessage")
+
+        # ── 降级路径：SetValue + AttachThreadInput+Enter ──
         uia_edit.iface_value.SetValue(reply_text)
         time.sleep(0.2)
         if was_minimized:
             _u32.ShowWindow(main_hwnd, 8)  # SW_SHOWNA: 还原不抢焦点
             _log("_uia_send: 主窗口最小化→SW_SHOWNA 还原（不抢焦点）")
             time.sleep(0.3)
-        # Enter 必须发给输入框控件的 HWND，发给主窗口时焦点不在输入框上 Enter 不生效
-        edit_hwnd = uia_edit.element_info.handle or main_hwnd
         my_tid = _k32.GetCurrentThreadId()
         pid_buf = _ct.c_ulong(0)
         wx_tid = _u32.GetWindowThreadProcessId(edit_hwnd, _ct.byref(pid_buf))
@@ -312,7 +389,7 @@ def _uia_send(uia_edit: Any, mw: Any, reply_text: str) -> bool:
                 _log("_uia_send: SW_RESTORE+Invoke 成功（兜底）")
                 return True
             _log(f"_uia_send: SW_RESTORE+Invoke 失败（输入框仍有{len(remaining2)}字）")
-            return False
+        return False
     except Exception as exc:
         _log(f"_uia_send: {exc}")
     if was_minimized:
