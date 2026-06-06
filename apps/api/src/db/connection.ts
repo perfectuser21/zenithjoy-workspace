@@ -14,9 +14,13 @@ const pool = new Pool({
   connectionTimeoutMillis: 2000,
 });
 
-// Test connection
+// 只在第一次物理连接时打印一次，避免连接池轮换时刷屏
+let _dbConnectedLogged = false;
 pool.on('connect', () => {
-  console.log('✅ Database connected');
+  if (!_dbConnectedLogged) {
+    console.log('✅ Database connected');
+    _dbConnectedLogged = true;
+  }
 });
 
 pool.on('error', (err) => {

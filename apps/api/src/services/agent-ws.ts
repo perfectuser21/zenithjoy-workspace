@@ -21,8 +21,28 @@ export async function authenticateWsToken(token: string): Promise<string | null>
   return result.license.tenant_id;
 }
 
+const WS_PING_INTERVAL_MS = 30_000;
+
 export function attachAgentWS(server: HttpServer): WebSocketServer {
   const wss = new WebSocketServer({ noServer: true });
+
+  // WS 协议级 ping/pong：每 30s 发 PING，无 PONG 回应的死连接直接 terminate。
+  // 应用层 heartbeat 消息（type:"heartbeat"）不会阻止 Nginx/Cloudflare 的代理超时断连，
+  // 只有 WS 协议 PING frame 才能防止代理超时。
+  const pingTimer = setInterval(() => {
+    wss.clients.forEach((ws) => {
+      const ext = ws as WebSocket & { _isAlive?: boolean };
+      if (ext._isAlive === false) {
+        ws.terminate();
+        return;
+      }
+      ext._isAlive = false;
+      ws.ping();
+    });
+  }, WS_PING_INTERVAL_MS);
+  pingTimer.unref?.();
+
+  wss.on('close', () => clearInterval(pingTimer));
 
   server.on('upgrade', async (req, socket, head) => {
     if (!req.url || !req.url.startsWith(WS_PATH)) return;
@@ -65,6 +85,12 @@ export function attachAgentWS(server: HttpServer): WebSocketServer {
     let displayName: string | null = null;   // 原 hello string
     let pendingHeartbeats: Array<{ uptime: number; busy: boolean }> = []; // R5: 缓存 hello 完成前的 heartbeat
     const tenantId: string = (ws as any).__tenantId || '';
+
+    // 初始化 _isAlive 标志，pong 回来时置 true
+    (ws as WebSocket & { _isAlive?: boolean })._isAlive = true;
+    ws.on('pong', () => {
+      (ws as WebSocket & { _isAlive?: boolean })._isAlive = true;
+    });
 
     ws.on('message', async (raw) => {
       try {
