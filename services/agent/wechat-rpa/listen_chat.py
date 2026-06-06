@@ -551,7 +551,11 @@ def post_heartbeat(
     任何失败（网络/非200/requests 缺失）都吞掉返回 {ok:False}，绝不抛——心跳不能拖垮监听。
     """
     url = middleware_url.rstrip("/") + "/api/wechat/listener-heartbeat"
-    body: Dict[str, Any] = {"agent_id": agent_id, "wechat_id": wechat_id, "ts": int(time.time() * 1000)}
+    body: Dict[str, Any] = {"ts": int(time.time() * 1000)}
+    if agent_id is not None:
+        body["agent_id"] = agent_id
+    if wechat_id is not None:
+        body["wechat_id"] = wechat_id
     if diag is not None:
         body["diag"] = diag
     # 心跳失败影响小 → 重试少一点（2 次）、退避短（0.5s）、总退避 <10s，绝不拖垮监听主循环
@@ -613,7 +617,7 @@ _LOG_PATH = os.path.join(os.environ.get("PUBLIC", r"C:\Users\Public"), "zj-liste
 # ─── replied 持久化（模块顶层，供单测 monkeypatch）────────────────────────────────
 _REPLIED_FILE: str = os.path.join(os.environ.get("PUBLIC", r"C:\Users\Public"), "zj-replied.json")
 SENDER_COOLDOWN: float = 30.0  # 成功回复后同一 sender 的冷却秒数
-REPLIED_TTL: float = 24 * 3600  # replied 条目 24h 后过期，允许相同内容的新消息再次被回复
+REPLIED_TTL: float = 120  # replied 条目 120s 后过期（2 个轮询周期，防双发但不永久封锁）
 _replied_ts: dict = {}  # (sender, content) → 回复时间戳，供 _save_replied 持久化
 
 
