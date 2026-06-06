@@ -61,28 +61,36 @@ SKIP_SENDERS = (
     "折叠的群聊",
 )
 
+# 群聊/频道/讨论组名称特征词 → 跳过（只回私聊）
+SKIP_GROUP_KEYWORDS = ("群", "频道", "讨论组", "直播间")
+
 
 # ─── 纯逻辑：解析单个会话项的 element_info.name（CI 单测锚点，顶层零 pywinauto）──────
 
 
-def _parse_item_name(name: str) -> Optional[Dict[str, str]]:
+def _parse_item_name(name: str, require_unread: bool = True) -> Optional[Dict[str, str]]:
     """
     解析微信 4.0 会话列表 ListItem 的 element_info.name 字符串。
 
     格式（真机实测）：`名字\\n[N条] \\n最新消息内容\\n时间\\n`
-      - 含 `[N条]`（即子串 '条]'）= 有未读；无则返回 None（不打扰已读会话）。
-      - 首行 = 发送人；过滤系统/公众号账号。
-      - "条]"段之后第一段非纯时间的文本 = 客户最新消息。
+      - require_unread=True（默认）：含 `[N条]` 未读标记才返回，否则 None。
+      - require_unread=False：不管有无角标都解析（供内容变化检测用）。
+      - 首行 = 发送人；过滤系统/公众号/群聊账号。
+      - 首段非纯时间文本 = 客户最新消息。
 
-    返回 {"sender":..,"content":..}；非未读/系统账号/解析不出内容 → None。
+    返回 {"sender":..,"content":..}；不符合则返回 None。
     """
     name = name or ""
-    if "条]" not in name:  # 无 [N条] 未读标记
+    if require_unread and "条]" not in name:
         return None
 
     parts = name.split("\n")
+    if len(parts) < 2:
+        return None
     sender = parts[0].strip()
     if not sender or any(s in sender for s in SKIP_SENDERS):
+        return None
+    if any(kw in sender for kw in SKIP_GROUP_KEYWORDS):
         return None
 
     content = ""
@@ -90,7 +98,6 @@ def _parse_item_name(name: str) -> Optional[Dict[str, str]]:
         seg = seg.strip()
         if not seg or "条]" in seg:
             continue
-        # 跳过纯时间段（如 15:26 / 09:00 → 去掉 : / 后是纯数字）
         if seg.replace(":", "").replace("/", "").isdigit():
             continue
         content = seg
@@ -104,34 +111,98 @@ def _parse_item_name(name: str) -> Optional[Dict[str, str]]:
 # ─── pywinauto 真模式：扫未读 + 自动回（函数体内 import）─────────────────────────
 
 
-def scan_unread(mw: Any) -> List[Dict[str, Any]]:
-    """遍历主窗口会话列表 ListItem，用 _parse_item_name 解析出未读客户消息。"""
+def scan_unread(mw: Any, last_content: Optional[Dict[str, str]] = None) -> List[Dict[str, Any]]:
+    """遍历主窗口会话列表 ListItem，检测未读消息。
+
+    双路检测：
+    1) 角标路径：ListItem name 含 '[N条]' → 正常未读
+    2) 内容变化路径：无角标（聊天面板当前打开时消息被立即已读）但内容与上次不同 → 也触发回复
+    last_content: {sender: last_seen_content}，由调用方维护，检测内容变化。
+    """
     out: List[Dict[str, Any]] = []
+    seen_senders: set[str] = set()
     for it in mw.descendants(control_type="ListItem"):
         try:
             name = it.element_info.name or ""
         except Exception:
             continue
+        # 路径 1：有未读角标
         parsed = _parse_item_name(name)
         if parsed:
+            seen_senders.add(parsed["sender"])
             out.append({**parsed, "_item": it})
+            continue
+        # 路径 2：无角标但内容变化（聊天窗口当前打开时走这里）
+        if last_content is not None:
+            info = _parse_item_name(name, require_unread=False)
+            if info and info["sender"] not in seen_senders:
+                prev = last_content.get(info["sender"])
+                if prev is not None and prev != info["content"]:
+                    seen_senders.add(info["sender"])
+                    out.append({**info, "_item": it})
+                elif prev is None:
+                    # 首次见到这个会话，记录内容但不触发回复
+                    last_content[info["sender"]] = info["content"]
+    # 更新 last_content（供下轮比较）
+    if last_content is not None:
+        for m in out:
+            last_content[m["sender"]] = m["content"]
     return out
 
 
+def _iter_all_controls(mw: Any, control_type: str):
+    """扫主窗口控件树，再扫同一进程的其他 mmui:: 子窗口（仅微信自身弹窗）。
+
+    安全范围：第二阶段严格过滤 cls.startswith("mmui::")，
+    只访问微信自身的 Qt 窗口，不读取其他应用窗口内容。
+    """
+    # 1) 主窗口 descendants
+    for c in mw.descendants(control_type=control_type):
+        yield c
+    # 2) 微信自身其他 mmui:: 弹窗（独立聊天窗口等）
+    try:
+        from pywinauto import Desktop
+        main_handle = mw.element_info.handle
+        for w in Desktop(backend="uia").windows():
+            try:
+                cls = w.element_info.class_name or ""
+                # 严格只处理微信自身 Qt 窗口，过滤所有非 mmui:: 进程
+                if cls.startswith("mmui::") and w.element_info.handle != main_handle:
+                    for c in w.descendants(control_type=control_type):
+                        yield c
+            except Exception:
+                continue
+    except Exception:
+        pass
+
+
 def _find_chat_input(mw: Any) -> Optional[Any]:
-    """定位回复输入框：Edit 且 automation_id=='chat_input_field'。找不到返回 None（不静默吞）。"""
-    for c in mw.descendants(control_type="Edit"):
+    """定位回复输入框：先按 automation_id='chat_input_field'，再按最大 Edit 回退。"""
+    candidates = []
+    for c in _iter_all_controls(mw, "Edit"):
         try:
-            if c.element_info.automation_id == "chat_input_field":
+            aid = c.element_info.automation_id or ""
+            if aid == "chat_input_field":
                 return c
+            try:
+                r = c.rectangle()
+                area = (r.right - r.left) * (r.bottom - r.top)
+            except Exception:
+                area = 0
+            candidates.append((area, aid, c))
         except Exception:
             continue
+    if candidates:
+        candidates.sort(key=lambda x: x[0], reverse=True)
+        best = candidates[0]
+        _log(f"_find_chat_input: 回退到最大 Edit area={best[0]} aid={repr(best[1])}")
+        return best[2]
     return None
 
 
 def _find_send_button(mw: Any) -> Optional[Any]:
-    """定位发送按钮：Button 且 name=='发送'。找不到返回 None（不静默吞）。"""
-    for c in mw.descendants(control_type="Button"):
+    """定位发送按钮：Button 且 name=='发送'，扫主窗口和所有 mmui 子窗口。"""
+    for c in _iter_all_controls(mw, "Button"):
         try:
             if (c.element_info.name or "") == "发送":
                 return c
@@ -140,53 +211,142 @@ def _find_send_button(mw: Any) -> Optional[Any]:
     return None
 
 
+def _force_foreground(hwnd: int) -> None:
+    """强制把指定窗口置顶并拉到前台（SetWindowPos TOPMOST + AttachThreadInput 双保险）。"""
+    try:
+        import ctypes, win32process, win32gui as _wg, win32con as _wc
+        # Step 1: TOPMOST 置顶 —— 保证坐标点击一定打到微信，不被其他窗口遮挡
+        _SWP_NM = 0x0002 | 0x0001  # SWP_NOMOVE | SWP_NOSIZE
+        _wg.SetWindowPos(hwnd, -1, 0, 0, 0, 0, _SWP_NM)  # HWND_TOPMOST = -1
+        _wg.ShowWindow(hwnd, _wc.SW_RESTORE)
+        time.sleep(0.2)
+        # Step 2: AttachThreadInput + SetForegroundWindow（让键盘事件也入坑）
+        try:
+            cur_tid = ctypes.windll.kernel32.GetCurrentThreadId()
+            tgt_tid, _ = win32process.GetWindowThreadProcessId(hwnd)
+            win32process.AttachThreadInput(cur_tid, tgt_tid, True)
+            _wg.SetForegroundWindow(hwnd)
+            win32process.AttachThreadInput(cur_tid, tgt_tid, False)
+        except Exception as e2:
+            _log(f"_force_foreground SetForegroundWindow: {e2}")
+    except Exception as exc:
+        _log(f"_force_foreground: {exc}")
+
+
+def _abs_click(abs_x: int, abs_y: int) -> None:
+    """绝对屏幕坐标鼠标左键点击（MOUSEEVENTF_ABSOLUTE，不依赖窗口焦点）。"""
+    import win32api as _wa, win32con as _wc
+    sw = _wa.GetSystemMetrics(0)
+    sh = _wa.GetSystemMetrics(1)
+    nx = int(abs_x * 65535 / sw)
+    ny = int(abs_y * 65535 / sh)
+    _wa.mouse_event(_wc.MOUSEEVENTF_MOVE | _wc.MOUSEEVENTF_ABSOLUTE, nx, ny, 0, 0)
+    time.sleep(0.15)
+    _wa.mouse_event(_wc.MOUSEEVENTF_LEFTDOWN | _wc.MOUSEEVENTF_ABSOLUTE, nx, ny, 0, 0)
+    time.sleep(0.05)
+    _wa.mouse_event(_wc.MOUSEEVENTF_LEFTUP | _wc.MOUSEEVENTF_ABSOLUTE, nx, ny, 0, 0)
+
+
+def _uia_send(uia_edit: Any, mw: Any, reply_text: str) -> bool:
+    """纯 UIA 写值 + 点发送按钮，无需键盘焦点。成功返回 True。"""
+    try:
+        uia_edit.iface_value.SetValue(reply_text)
+        time.sleep(0.3)
+        btn = _find_send_button(mw)
+        if btn is not None:
+            btn.iface_invoke.Invoke()
+            time.sleep(0.5)
+            _log("_uia_send: SetValue+Invoke 成功")
+            return True
+        _log("_uia_send: 发送按钮未找到")
+    except Exception as exc:
+        _log(f"_uia_send: {exc}")
+    return False
+
+
+def _navigate_away(mw: Any) -> None:
+    """发完后跳到文件传输助手，确保下条消息显示未读角标（被检测到）。"""
+    try:
+        for it in mw.descendants(control_type="ListItem"):
+            try:
+                if "文件传输助手" in (it.element_info.name or ""):
+                    it.iface_invoke.Invoke()
+                    return
+            except Exception:
+                continue
+    except Exception:
+        pass
+
+
 def reply_in_chat(mw: Any, item: Any, reply_text: str) -> bool:
     """
-    打开 item 对应会话并发出 reply_text —— **纯 UIA 控件操作**，全程不碰鼠标/键盘/光标
-    （2026-06-05 xian-pc 微信 4.1.8.107 真机验证：微信最小化也跑通，不抢前台、不跟 Agent
-    其他自动化抢光标；物理点击/模拟键盘/移动光标在 4.1.8 上不仅打不开会话还会被拒访问）：
-      1) item.iface_invoke.Invoke()（InvokePattern 打开目标会话；.select() 物理点击在 4.1.8 无效）
-      2) 找输入框 Edit 且 automation_id=='chat_input_field' → iface_value.SetValue(reply)
-         （ValuePattern 直接写值，中文 OK，不模拟键盘）
-      3) 找按钮 Button 且 name=='发送' → iface_invoke.Invoke()（InvokePattern 触发发送，不点鼠标）
-      4) 输入框 value 清空视为发送成功。
-    会话项无法 Invoke / 找不到输入框 / 找不到发送按钮 / SetValue 失败 → 返回 False 并打印明确错误。
+    打开 item 对应会话并发出 reply_text。全程纯 UIA，不依赖键盘焦点。
+
+    三路降级：
+      路径 1 — 聊天面板已开（前台/后台皆可）：直接 SetValue + Invoke 发送
+      路径 2 — iface_invoke.Invoke() 打开会话（后台有效的机器）：等 UIA 暴露再发
+      路径 3 — 物理点击打开（前台/置顶）：TOPMOST + abs_click + 等待 UIA 暴露再发
+    发完后调 _navigate_away 跳走，确保下条消息出现未读角标。
     """
+    main_hwnd = mw.element_info.handle
+
+    def _fresh_mw():
+        try:
+            from find_weixin import get_main_window as _gmw
+            return _gmw() or mw
+        except Exception:
+            return mw
+
+    # ── 路径 1：聊天面板已经是打开状态（用户正在看 / 上次发完未跳走）──────────
+    fmw = _fresh_mw()
+    uia_edit = _find_chat_input(fmw)
+    if uia_edit is not None:
+        _log("reply_in_chat: 路径1 面板已开，直接 UIA 发送")
+        if _uia_send(uia_edit, fmw, reply_text):
+            _navigate_away(fmw)
+            return True
+
+    # ── 路径 2：iface_invoke.Invoke() 激活会话（后台机器有效）─────────────────
     try:
         item.iface_invoke.Invoke()
+        _log("reply_in_chat: 路径2 Invoke 激活会话，等 UIA 暴露…")
+        for _ in range(6):  # 最多等 3s，每 0.5s 检查一次
+            time.sleep(0.5)
+            fmw = _fresh_mw()
+            uia_edit = _find_chat_input(fmw)
+            if uia_edit is not None:
+                if _uia_send(uia_edit, fmw, reply_text):
+                    _navigate_away(fmw)
+                    return True
+                break
     except Exception as exc:
-        print(f"[listen_chat] 打开会话失败（iface_invoke.Invoke）: {exc}", file=sys.stderr)
-        return False
-    time.sleep(1.2)
+        _log(f"reply_in_chat: 路径2 Invoke 失败: {exc}")
 
-    edit = _find_chat_input(mw)
-    if edit is None:
-        print("[listen_chat] 找不到 chat_input_field（讲述人解锁可能失效）", file=sys.stderr)
-        return False
-
+    # ── 路径 3：物理点击（需前台/置顶，xian-rog Invoke 不开面板时走这里）──────
+    _force_foreground(main_hwnd)
+    time.sleep(0.5)
     try:
-        edit.iface_value.SetValue(reply_text)
+        r = item.rectangle()
+        cx = (r.left + r.right) // 2
+        cy = (r.top + r.bottom) // 2
+        _log(f"reply_in_chat: 路径3 物理点击 ({cx},{cy})")
+        _abs_click(cx, cy)
     except Exception as exc:
-        print(f"[listen_chat] 写输入框失败（iface_value.SetValue）: {exc}", file=sys.stderr)
-        return False
-    time.sleep(0.4)
-
-    btn = _find_send_button(mw)
-    if btn is None:
-        print("[listen_chat] 找不到'发送'按钮", file=sys.stderr)
+        _log(f"reply_in_chat: 路径3 点击失败: {exc}")
         return False
 
-    try:
-        btn.iface_invoke.Invoke()
-    except Exception as exc:
-        print(f"[listen_chat] 点击发送失败（iface_invoke.Invoke）: {exc}", file=sys.stderr)
-        return False
-    time.sleep(1.0)
+    for _ in range(8):  # 最多等 4s
+        time.sleep(0.5)
+        fmw = _fresh_mw()
+        uia_edit = _find_chat_input(fmw)
+        if uia_edit is not None:
+            if _uia_send(uia_edit, fmw, reply_text):
+                _navigate_away(fmw)
+                return True
+            break
 
-    try:
-        return (edit.iface_value.CurrentValue or "") == ""
-    except Exception:
-        return True
+    _log("reply_in_chat: 三路均失败")
+    return False
 
 
 def _pywinauto_available() -> bool:
@@ -448,15 +608,25 @@ def _activate_uia() -> None:
         # 启动讲述人必须走 PowerShell Start-Process（ShellExecute），对齐 start.bat。
         # 之前用 subprocess.Popen(["Narrator.exe"]) 直接拉 → 非管理员身份报 WinError 740
         # (需要提升) → 讲述人根本起不来 → UIA 从未激活 → 永远 found_window=False（v1.1.84 真 bug）。
+        # 禁讲述人首页弹窗，防止欢迎窗盖住微信（v1.1.96 fix）
         subprocess.run(
-            ["powershell", "-NoProfile", "-Command", "Start-Process Narrator"],
+            ["powershell", "-NoProfile", "-Command",
+             "New-ItemProperty -Path 'HKCU:\\Software\\Microsoft\\Narrator' "
+             "-Name 'RunStartupPage' -Value 0 -PropertyType DWord -Force | Out-Null"],
+            capture_output=True, timeout=10,
+        )
+        subprocess.run(
+            ["powershell", "-NoProfile", "-Command",
+             "Start-Process Narrator -WindowStyle Minimized"],
             capture_output=True, timeout=15,
         )
         time.sleep(2)
         # 关讲述人也走 PowerShell Stop-Process（taskkill 关不掉，是 v1.1.83 的 bug）。
         subprocess.run(
             ["powershell", "-NoProfile", "-Command",
-             "Stop-Process -Name Narrator -Force -ErrorAction SilentlyContinue"],
+             "Stop-Process -Name Narrator -Force -ErrorAction SilentlyContinue; "
+             "Start-Sleep 1; "
+             "Get-Process -Name Narrator -ErrorAction SilentlyContinue | Stop-Process -Force"],
             capture_output=True, timeout=15,
         )
         time.sleep(1)
@@ -486,6 +656,12 @@ def run_real_listen(args: argparse.Namespace) -> int:
     )
 
     replied: set[tuple[str, str]] = set()
+    # reply 失败的 key → 最后失败时间；60 秒内不重试（避免群聊/系统消息无限循环）
+    reply_failed_at: dict[tuple[str, str], float] = {}
+    REPLY_FAIL_COOLDOWN = 60  # 60s（原 30min，改短避免相同内容卡死）
+    _skip_logged: set[tuple[str, str]] = set()  # 只对每个 key 打一次 skip log，避免刷屏
+    # 内容变化检测：{sender: last_seen_content}，捕捉聊天面板打开时的新消息（无未读角标）
+    last_content: dict[str, str] = {}
     deadline = time.time() + max(1, args.timeout)
     # 进程守护：每 60 秒向中台上报一次心跳（断 3 分钟无心跳中台飞书告警）+ 扫描诊断
     heartbeat_interval = 60
@@ -570,7 +746,7 @@ def run_real_listen(args: argparse.Namespace) -> int:
                     continue
 
             try:
-                unread = scan_unread(mw)
+                unread = scan_unread(mw, last_content)
             except Exception as exc:
                 last_error = f"{type(exc).__name__}: {exc}"
                 time.sleep(args.interval)
@@ -580,6 +756,15 @@ def run_real_listen(args: argparse.Namespace) -> int:
             for m in unread:
                 key = (m["sender"], m["content"])
                 if key in replied:
+                    if key not in _skip_logged:
+                        _log(f"skip(replied) sender={m['sender']} content={m['content'][:20]!r}")
+                        _skip_logged.add(key)
+                    continue
+                if key in reply_failed_at and now - reply_failed_at[key] < REPLY_FAIL_COOLDOWN:
+                    left = int(REPLY_FAIL_COOLDOWN - (now - reply_failed_at[key]))
+                    if key not in _skip_logged:
+                        _log(f"skip(cooldown {left}s) sender={m['sender']} content={m['content'][:20]!r}")
+                        _skip_logged.add(key)
                     continue
 
                 # 频控：≤2 私聊/分钟、≤50/天/号，操作间隔 ≥1s（rate_limiter 是 SSOT）
@@ -595,12 +780,30 @@ def run_real_listen(args: argparse.Namespace) -> int:
                 reply = (result or {}).get("reply")
                 # AI 失败时 reply 为空 / 占位文案 → 跳过不发，绝不把"AI 生成失败"发给客户
                 if not reply or reply == FAIL_PLACEHOLDER:
-                    print(f"[listen_chat] skip(no reply) sender={m['sender']}", flush=True)
+                    _log(f"skip(no reply) sender={m['sender']} result_ok={( result or {}).get('ok')} err={( result or {}).get('error')}")
                     continue
 
-                if reply_in_chat(mw, m["_item"], reply):
+                _log(f"尝试回复 sender={m['sender']} reply_len={len(reply)}")
+                ok = False
+                for _attempt in range(2):  # 失败立刻重试一次
+                    try:
+                        ok = reply_in_chat(mw, m["_item"], reply)
+                    except Exception as exc:
+                        _log(f"reply_in_chat exception attempt={_attempt} sender={m['sender']}: {exc}")
+                        ok = False
+                    if ok:
+                        break
+                    if _attempt == 0:
+                        _log(f"reply_in_chat attempt 1 failed, retrying sender={m['sender']}")
+                        time.sleep(2)
+                if ok:
                     replied.add(key)
-                    print(f"[listen_chat] auto-replied sender={m['sender']}", flush=True)
+                    _skip_logged.discard(key)
+                    reply_failed_at.pop(key, None)
+                    _log(f"auto-replied OK sender={m['sender']}")
+                else:
+                    reply_failed_at[key] = time.time()
+                    _log(f"reply_in_chat FAILED sender={m['sender']} (冷却 {REPLY_FAIL_COOLDOWN}s 再试)")
                 time.sleep(1)  # 操作间隔 ≥1s
 
             time.sleep(args.interval)
