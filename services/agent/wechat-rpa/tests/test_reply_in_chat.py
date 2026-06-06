@@ -1,14 +1,12 @@
 """
-TDD — reply_in_chat 两路纯 UIA 发送逻辑单测（纯逻辑，无 pywinauto/win32 依赖）。
+TDD — reply_in_chat 纯 UIA 发送逻辑单测（纯逻辑，无 pywinauto/win32 依赖）。
 
-设计：两路纯 UIA（无物理点击降级）
-  路径1 — 面板已开：直接 _find_chat_input → SetValue + AttachThreadInput+Enter 发送
-  路径2 — Invoke 激活会话：item.iface_invoke.Invoke() → 等 UIA 暴露 → SetValue + Enter
-  两路均失败 → 返回 False，下一轮询重试（不物理点击，不抢焦点）
+设计（v1.1.102+）：始终先 item.iface_invoke.Invoke() 打开正确会话，再发送。
+  移除旧路径1（"面板已开直接发"），防止 _navigate_away 后发到文件传输助手。
 
 发送机制（v1.1.97+）：SetValue 写入后用 AttachThreadInput+PostMessage(VK_RETURN) 静默发送，
 不再依赖 send_button.iface_invoke.Invoke()（Invoke 无键盘焦点时不触发发送）。
-发送按钮 Invoke 保留为 fallback（Enter 后 get_value() 非空时兜底）。
+发送按钮 Invoke 保留为 fallback（Enter 后 get_value() 非空时兜底，验证输入框已清空）。
 
 【CI 安全】顶层零 pywinauto/win32 import；用 Fake 对象注入，纯逻辑跨平台跑。
 """
@@ -113,8 +111,8 @@ def _no_sleep(monkeypatch):
     monkeypatch.setattr(listen_chat.time, "sleep", lambda *a, **k: None)
 
 
-def test_path1_panel_already_open():
-    """路径1：面板已开，SetValue + AttachThreadInput+Enter 发送，不需要 item.Invoke()。"""
+def test_always_invokes_item_before_send():
+    """始终先 item.iface_invoke.Invoke() 打开正确会话，再 SetValue + Enter 发送（防发错对象）。"""
     edit = _FakeEdit()
     button = _FakeButton()
     item = _FakeItem()
@@ -122,8 +120,8 @@ def test_path1_panel_already_open():
 
     ok = listen_chat.reply_in_chat(mw, item, "您好，在的")
 
+    assert item.iface_invoke.invoke_called is True, "必须先 Invoke 打开正确会话"
     assert edit.iface_value.set_value_called_with == "您好，在的"
-    assert item.iface_invoke.invoke_called is False, "路径1 不应调 item.Invoke()"
     assert ok is True
 
 
