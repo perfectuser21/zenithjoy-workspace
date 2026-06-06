@@ -163,12 +163,20 @@ def test_last_content_updated_to_reply_after_successful_send():
 # ─────────────────────────────────────────────────────────────────────────────
 
 def test_replied_ttl_constant_exists():
-    """REPLIED_TTL 常量必须存在，单位秒，值 >= 3600（至少 1 小时）。"""
+    """REPLIED_TTL 必须在合理范围：>= 60s（防双发）且 <= 300s（防同内容永久跳过）。
+
+    24h 太长：同一客户 24h 内发相同内容第二次，永远收不到回复（已复现 bug）。
+    轮询间隔 60s，2 个周期 = 120s 已足够防双发。上限 300s（5min）。
+    """
     assert hasattr(listen_chat, "REPLIED_TTL"), (
         "缺少 REPLIED_TTL 常量 — replied.json 过期清除功能未实现"
     )
-    assert listen_chat.REPLIED_TTL >= 3600, (
-        f"REPLIED_TTL={listen_chat.REPLIED_TTL} 太短，至少应为 3600s（1h）"
+    assert listen_chat.REPLIED_TTL >= 60, (
+        f"REPLIED_TTL={listen_chat.REPLIED_TTL} 太短，至少 60s 防止两个轮询周期内重复回复"
+    )
+    assert listen_chat.REPLIED_TTL <= 300, (
+        f"REPLIED_TTL={listen_chat.REPLIED_TTL} 太长（> 300s）"
+        f" — 同内容消息在窗口内永久被跳过（已复现：默忆 15:47→16:06 同内容无回复）"
     )
 
 
@@ -240,3 +248,71 @@ def test_replied_ts_module_level_dict_exists():
         "缺少 _replied_ts 模块级 dict — _save_replied 无法获取时间戳"
     )
     assert isinstance(listen_chat._replied_ts, dict), "_replied_ts 必须是 dict"
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# E. 心跳 null 字段：post_heartbeat() 不得发送 null agent_id / wechat_id
+#
+# 背景：2026-06-06 发现 Dashboard 显示"未找到微信"而非"已登录"。
+#   根因：post_heartbeat() 构造 body 时无条件写入 {"agent_id": None, ...}，
+#   Python None → JSON null；API 端 Zod z.string().optional() 不接受 null
+#   → safeParse 失败 → data={} → recordHeartbeat 无 diag → Dashboard 无法显示状态。
+# 修法：body 只在非 None 时加 agent_id / wechat_id 字段（omit-if-None 模式）。
+# ─────────────────────────────────────────────────────────────────────────────
+
+def test_heartbeat_body_omits_null_agent_id(monkeypatch):
+    """agent_id=None 时 POST body 不得包含 agent_id 键。
+
+    包含 null 会让 API 端 Zod z.string().optional() 校验失败，
+    导致 diag 不存入内存，Dashboard 永远显示"未找到微信"。
+    """
+    captured: list = []
+
+    def fake_post(url, body, **kwargs):
+        captured.append(dict(body))
+        return ({"ok": True}, None)
+
+    monkeypatch.setattr(listen_chat, "_post_with_retry", fake_post)
+
+    listen_chat.post_heartbeat(
+        "http://test-middleware",
+        agent_id=None,
+        wechat_id=None,
+        diag={"main_window_found": True},
+    )
+
+    assert len(captured) == 1, "post_heartbeat 应调用一次 _post_with_retry"
+    body = captured[0]
+    assert "agent_id" not in body, (
+        f"agent_id=None 时 body 不应含 agent_id 键（JSON null 让 Zod 失败），"
+        f"实际 body keys: {list(body.keys())}"
+    )
+    assert "wechat_id" not in body, (
+        f"wechat_id=None 时 body 不应含 wechat_id 键，"
+        f"实际 body keys: {list(body.keys())}"
+    )
+    assert body.get("diag", {}).get("main_window_found") is True, "diag 应原样传入"
+
+
+def test_heartbeat_body_includes_agent_id_when_set(monkeypatch):
+    """agent_id 非 None 时 body 必须包含 agent_id 键且值正确。"""
+    captured: list = []
+
+    def fake_post(url, body, **kwargs):
+        captured.append(dict(body))
+        return ({"ok": True}, None)
+
+    monkeypatch.setattr(listen_chat, "_post_with_retry", fake_post)
+
+    listen_chat.post_heartbeat(
+        "http://test-middleware",
+        agent_id="xian-pc",
+        diag={"main_window_found": True},
+    )
+
+    assert len(captured) == 1
+    body = captured[0]
+    assert body.get("agent_id") == "xian-pc", (
+        f"agent_id='xian-pc' 时 body 应含 agent_id='xian-pc'，"
+        f"实际: {body.get('agent_id')}"
+    )
