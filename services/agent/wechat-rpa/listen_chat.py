@@ -271,15 +271,17 @@ def _uia_send(uia_edit: Any, mw: Any, reply_text: str) -> bool:
             _u32.ShowWindow(main_hwnd, 8)  # SW_SHOWNA: 还原不抢焦点
             _log("_uia_send: 主窗口最小化→SW_SHOWNA 还原（不抢焦点）")
             time.sleep(0.3)
+        # Enter 必须发给输入框控件的 HWND，发给主窗口时焦点不在输入框上 Enter 不生效
+        edit_hwnd = uia_edit.element_info.handle or main_hwnd
         my_tid = _k32.GetCurrentThreadId()
         pid_buf = _ct.c_ulong(0)
-        wx_tid = _u32.GetWindowThreadProcessId(main_hwnd, _ct.byref(pid_buf))
+        wx_tid = _u32.GetWindowThreadProcessId(edit_hwnd, _ct.byref(pid_buf))
         _u32.AttachThreadInput(my_tid, wx_tid, True)
-        prev_focus = _u32.SetFocus(main_hwnd)
+        prev_focus = _u32.SetFocus(edit_hwnd)
         time.sleep(0.1)
-        _u32.PostMessageW(main_hwnd, 0x0100, VK_RETURN, 0x001C0001)
+        _u32.PostMessageW(edit_hwnd, 0x0100, VK_RETURN, 0x001C0001)
         time.sleep(0.05)
-        _u32.PostMessageW(main_hwnd, 0x0101, VK_RETURN, 0xC01C0001)
+        _u32.PostMessageW(edit_hwnd, 0x0101, VK_RETURN, 0xC01C0001)
         if prev_focus:
             _u32.SetFocus(prev_focus)
         _u32.AttachThreadInput(my_tid, wx_tid, False)
