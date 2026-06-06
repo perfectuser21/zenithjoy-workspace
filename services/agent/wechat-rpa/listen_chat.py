@@ -298,10 +298,13 @@ def _uia_send(uia_edit: Any, mw: Any, reply_text: str) -> bool:
     _log(f"_uia_send: edit_hwnd={edit_hwnd} main_hwnd={main_hwnd} was_min={was_minimized}")
     try:
         # ── 主路径：前台剪贴板+keybd_event（仅真实微信窗口）──
-        # GetClassNameW 返回 "mmui::MainWindow" 时才走此路径，CI 假 HWND 不会命中
-        cls_buf = _ct.create_unicode_buffer(64)
-        _u32.GetClassNameW(main_hwnd, cls_buf, 64)
-        if cls_buf.value == "mmui::MainWindow":
+        # 用 UIA element_info.class_name 判断（find_weixin.get_main_window 已筛选为此值）
+        # GetClassNameW 返回 Win32 注册类名，与 UIA ClassName 不同，不能用于此判断
+        try:
+            mw_class = mw.element_info.class_name or ""
+        except Exception:
+            mw_class = ""
+        if mw_class == "mmui::MainWindow":
             if _set_clipboard_text(reply_text):
                 _force_foreground(main_hwnd)
                 time.sleep(0.3)

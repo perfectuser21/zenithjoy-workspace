@@ -186,3 +186,39 @@ def test_enter_key_send_no_button_succeeds():
     ok = listen_chat.reply_in_chat(_EditOnlyMW(), item, "你好")
     # Enter 发送后 get_value()="" → 判定成功，不需要 button.Invoke()
     assert ok is True
+
+
+def test_uia_send_uses_element_info_class_name_for_wechat_detection(monkeypatch):
+    """regression: _uia_send 必须用 mw.element_info.class_name 检测微信窗口，不能用 Win32 GetClassNameW。
+
+    修复前（GetClassNameW）：GetClassNameW(fake_hwnd) 返回 Win32 类名（不是 "mmui::MainWindow"），
+                            剪贴板路径永远不触发，_set_clipboard_text 不会被调用。
+    修复后（element_info.class_name）：mw.element_info.class_name == "mmui::MainWindow" 直接匹配，
+                                       _set_clipboard_text 被调用。
+    """
+    clipboard_calls: list = []
+    monkeypatch.setattr(listen_chat, "_set_clipboard_text", lambda text: clipboard_calls.append(text) or True)
+
+    class _WeChatEI:
+        handle = 12345
+        class_name = "mmui::MainWindow"
+
+    class _WeChatMW:
+        element_info = _WeChatEI()
+
+        def descendants(self, control_type=None):
+            if control_type == "Edit":
+                return [_FakeEdit()]
+            if control_type == "Button":
+                return [_FakeButton()]
+            return []
+
+        def children(self):
+            return []
+
+    item = _FakeItem()
+    listen_chat.reply_in_chat(_WeChatMW(), item, "你好，在的")
+
+    assert len(clipboard_calls) > 0, (
+        "_uia_send 未调用 _set_clipboard_text —— 说明仍在用 GetClassNameW 判断微信窗口"
+    )
