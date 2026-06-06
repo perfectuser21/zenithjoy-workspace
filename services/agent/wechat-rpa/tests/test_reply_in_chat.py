@@ -1,10 +1,10 @@
 """
-TDD — reply_in_chat 三路 UIA 发送逻辑单测（纯逻辑，无 pywinauto/win32 依赖）。
+TDD — reply_in_chat 两路纯 UIA 发送逻辑单测（纯逻辑，无 pywinauto/win32 依赖）。
 
-设计：三路降级
+设计：两路纯 UIA（无物理点击降级）
   路径1 — 面板已开：直接 _find_chat_input → SetValue + AttachThreadInput+Enter 发送
   路径2 — Invoke 激活会话：item.iface_invoke.Invoke() → 等 UIA 暴露 → SetValue + Enter
-  路径3 — 物理点击（win32 环境）：非测试环境，CI 走到这里会因 ImportError 退出
+  两路均失败 → 返回 False，下一轮询重试（不物理点击，不抢焦点）
 
 发送机制（v1.1.97+）：SetValue 写入后用 AttachThreadInput+PostMessage(VK_RETURN) 静默发送，
 不再依赖 send_button.iface_invoke.Invoke()（Invoke 无键盘焦点时不触发发送）。

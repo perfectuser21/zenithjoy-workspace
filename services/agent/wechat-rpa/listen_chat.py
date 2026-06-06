@@ -330,16 +330,13 @@ def _navigate_away(mw: Any) -> None:
 
 def reply_in_chat(mw: Any, item: Any, reply_text: str) -> bool:
     """
-    打开 item 对应会话并发出 reply_text。全程纯 UIA，不依赖键盘焦点。
+    打开 item 对应会话并发出 reply_text。全程纯 UIA，禁止任何物理鼠标/键盘操作。
 
-    三路降级：
-      路径 1 — 聊天面板已开（前台/后台皆可）：直接 SetValue + Invoke 发送
-      路径 2 — iface_invoke.Invoke() 打开会话（后台有效的机器）：等 UIA 暴露再发
-      路径 3 — 物理点击打开（前台/置顶）：TOPMOST + abs_click + 等待 UIA 暴露再发
-    发完后调 _navigate_away 跳走，确保下条消息出现未读角标。
+    两路纯 UIA（无物理点击降级）：
+      路径 1 — 聊天面板已开：直接 SetValue + AttachInput+Enter，微信可最小化/后台
+      路径 2 — iface_invoke.Invoke() 后台打开会话（UIA 调用，不抢焦点）：等暴露再发
+    两路均失败 → 返回 False，下一轮询周期自动重试，绝不调 _force_foreground/_abs_click。
     """
-    main_hwnd = mw.element_info.handle
-
     def _fresh_mw():
         try:
             from find_weixin import get_main_window as _gmw
@@ -347,7 +344,7 @@ def reply_in_chat(mw: Any, item: Any, reply_text: str) -> bool:
         except Exception:
             return mw
 
-    # ── 路径 1：聊天面板已经是打开状态（用户正在看 / 上次发完未跳走）──────────
+    # ── 路径 1：聊天面板已开（上次 navigate_away 后或面板本来就开着）────────────
     fmw = _fresh_mw()
     uia_edit = _find_chat_input(fmw)
     if uia_edit is not None:
@@ -356,7 +353,7 @@ def reply_in_chat(mw: Any, item: Any, reply_text: str) -> bool:
             _navigate_away(fmw)
             return True
 
-    # ── 路径 2：iface_invoke.Invoke() 激活会话（后台机器有效）─────────────────
+    # ── 路径 2：iface_invoke.Invoke() 后台激活会话（UIA 调用，不抢焦点）─────────
     try:
         item.iface_invoke.Invoke()
         _log("reply_in_chat: 路径2 Invoke 激活会话，等 UIA 暴露…")
@@ -372,30 +369,7 @@ def reply_in_chat(mw: Any, item: Any, reply_text: str) -> bool:
     except Exception as exc:
         _log(f"reply_in_chat: 路径2 Invoke 失败: {exc}")
 
-    # ── 路径 3：物理点击（需前台/置顶，xian-rog Invoke 不开面板时走这里）──────
-    _force_foreground(main_hwnd)
-    time.sleep(0.5)
-    try:
-        r = item.rectangle()
-        cx = (r.left + r.right) // 2
-        cy = (r.top + r.bottom) // 2
-        _log(f"reply_in_chat: 路径3 物理点击 ({cx},{cy})")
-        _abs_click(cx, cy)
-    except Exception as exc:
-        _log(f"reply_in_chat: 路径3 点击失败: {exc}")
-        return False
-
-    for _ in range(8):  # 最多等 4s
-        time.sleep(0.5)
-        fmw = _fresh_mw()
-        uia_edit = _find_chat_input(fmw)
-        if uia_edit is not None:
-            if _uia_send(uia_edit, fmw, reply_text):
-                _navigate_away(fmw)
-                return True
-            break
-
-    _log("reply_in_chat: 三路均失败")
+    _log("reply_in_chat: 两路均失败，本轮跳过（下次轮询重试）")
     return False
 
 
