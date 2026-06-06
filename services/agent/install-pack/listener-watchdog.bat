@@ -33,6 +33,38 @@ if not exist "%SCRIPT%" (
     exit /b 1
 )
 
+REM ── 启动前预检：微信版本 / 登录态 / UIA / 中台（自愈 + 阻断不支持版本）──
+REM preflight.py 检测并自愈：
+REM   - 微信未装   → 自动下载 4.1.8 静默安装
+REM   - 微信>=4.1.9 → 自动降级到 4.1.8（4.1.9+ UIA 控件树被砍，RPA 不可用）
+REM   - 锁更新    → 禁 WeixinUpdate.exe + 防火墙出站封
+REM   - UIA 讲述人 → 静默激活一次
+REM 有 failed 退出码=1 → 阻断 watchdog 启动；仅 warn/ok → 继续。
+if exist "%~dp0python-embedded\python.exe" if exist "%~dp0wechat-rpa\preflight.py" (
+    echo.
+    echo  ============================================================
+    echo   WeChat 环境自检（版本/UIA/中台），自动修复中...
+    echo  ============================================================
+    "%~dp0python-embedded\python.exe" "%~dp0wechat-rpa\preflight.py" --middleware-url "%MW%"
+    if errorlevel 1 (
+        echo.
+        echo  ============================================================
+        echo   [BLOCKED] 环境自检失败，监听未启动。
+        echo   常见原因：微信版本 ^>=4.1.9（UIA 控件树被砍）
+        echo   解决方案：
+        echo     1. 卸载当前微信
+        echo     2. 下载 4.1.8：https://zenithjoy-static-1333590468.cos.accelerate.myqcloud.com/install-pack/wechat/WeChatWin_4.1.8.exe
+        echo     3. 安装后重新双击 listener-watchdog.bat
+        echo   详细原因见上方自检报告。
+        echo  ============================================================
+        echo.
+        pause
+        exit /b 1
+    )
+    echo [preflight] 自检通过，启动监听...
+    echo.
+)
+
 :loop
 echo [watchdog] starting listen_chat at %DATE% %TIME% (middleware=%MW%)
 "%PY%" "%SCRIPT%" --middleware-url "%MW%" --timeout 86400
