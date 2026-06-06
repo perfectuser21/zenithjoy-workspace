@@ -636,6 +636,28 @@ def run_dryrun_inject(args: argparse.Namespace) -> int:
 
 _LOG_PATH = os.path.join(os.environ.get("PUBLIC", r"C:\Users\Public"), "zj-listener.log")
 
+# ─── replied 持久化（模块顶层，供单测 monkeypatch）────────────────────────────────
+_REPLIED_FILE: str = os.path.join(os.environ.get("PUBLIC", r"C:\Users\Public"), "zj-replied.json")
+SENDER_COOLDOWN: float = 30.0  # 成功回复后同一 sender 的冷却秒数
+
+
+def _load_replied() -> set:
+    """从磁盘加载已回复集合，重启后不重发。读取失败返回空集合（首次启动正常）。"""
+    try:
+        with open(_REPLIED_FILE, "r", encoding="utf-8") as _f:
+            return set(tuple(x) for x in json.load(_f))
+    except Exception:
+        return set()
+
+
+def _save_replied(s: set) -> None:
+    """把已回复集合持久化到磁盘。写失败静默忽略（不影响监听主循环）。"""
+    try:
+        with open(_REPLIED_FILE, "w", encoding="utf-8") as _f:
+            json.dump([list(x) for x in s], _f)
+    except Exception:
+        pass
+
 
 def _log(msg: str) -> None:
     """同时打印 + 追加到公共日志文件，便于运营/支持 SSH 直接读监听到底干了啥（监听本身 stdio 被忽略）。"""
@@ -705,30 +727,12 @@ def run_real_listen(args: argparse.Namespace) -> int:
         flush=True,
     )
 
-    # replied 持久化：重启后仍记住已回复的消息，防止重复
-    _REPLIED_FILE = r"C:\Users\Public\zj-replied.json"
-    def _load_replied() -> set:
-        try:
-            import json as _j
-            with open(_REPLIED_FILE, "r", encoding="utf-8") as _f:
-                return set(tuple(x) for x in _j.load(_f))
-        except Exception:
-            return set()
-    def _save_replied(s: set) -> None:
-        try:
-            import json as _j
-            with open(_REPLIED_FILE, "w", encoding="utf-8") as _f:
-                _j.dump([list(x) for x in s], _f)
-        except Exception:
-            pass
+    # replied 持久化 + 冷却（_load_replied / _save_replied / _REPLIED_FILE / SENDER_COOLDOWN 在模块顶层）
     replied: set[tuple[str, str]] = _load_replied()
     _log(f"已加载 replied 历史: {len(replied)} 条")
-    # reply 失败的 key → 最后失败时间；60 秒内不重试（避免群聊/系统消息无限循环）
     reply_failed_at: dict[tuple[str, str], float] = {}
-    REPLY_FAIL_COOLDOWN = 60  # 60s（原 30min，改短避免相同内容卡死）
-    # per-sender 成功回复冷却：10s 内不回同一 sender，防 last_content 截断误触发
+    REPLY_FAIL_COOLDOWN = 60  # 60s，避免相同内容卡死
     sender_reply_cooldown: dict[str, float] = {}
-    SENDER_COOLDOWN = 30.0
     _skip_logged: set[tuple[str, str]] = set()  # 只对每个 key 打一次 skip log，避免刷屏
     # 内容变化检测：{sender: last_seen_content}，捕捉聊天面板打开时的新消息（无未读角标）
     last_content: dict[str, str] = {}
