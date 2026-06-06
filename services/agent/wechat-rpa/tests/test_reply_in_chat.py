@@ -2,9 +2,13 @@
 TDD — reply_in_chat 三路 UIA 发送逻辑单测（纯逻辑，无 pywinauto/win32 依赖）。
 
 设计：三路降级
-  路径1 — 面板已开：直接 _find_chat_input → SetValue + Invoke 发送
-  路径2 — Invoke 激活会话：item.iface_invoke.Invoke() → 等 UIA 暴露 → SetValue + Invoke
+  路径1 — 面板已开：直接 _find_chat_input → SetValue + AttachThreadInput+Enter 发送
+  路径2 — Invoke 激活会话：item.iface_invoke.Invoke() → 等 UIA 暴露 → SetValue + Enter
   路径3 — 物理点击（win32 环境）：非测试环境，CI 走到这里会因 ImportError 退出
+
+发送机制（v1.1.97+）：SetValue 写入后用 AttachThreadInput+PostMessage(VK_RETURN) 静默发送，
+不再依赖 send_button.iface_invoke.Invoke()（Invoke 无键盘焦点时不触发发送）。
+发送按钮 Invoke 保留为 fallback（Enter 后 get_value() 非空时兜底）。
 
 【CI 安全】顶层零 pywinauto/win32 import；用 Fake 对象注入，纯逻辑跨平台跑。
 """
@@ -52,6 +56,10 @@ class _FakeEdit:
     def __init__(self):
         self.element_info = _FakeElementInfo(automation_id="chat_input_field")
         self.iface_value = _FakeValuePattern()
+
+    def get_value(self) -> str:
+        # SetValue 后输入框被清空（= 发送成功）
+        return ""
 
 
 class _FakeButton:
@@ -106,7 +114,7 @@ def _no_sleep(monkeypatch):
 
 
 def test_path1_panel_already_open():
-    """路径1：面板已开，直接 SetValue + 发送按钮 Invoke，不需要 item.Invoke()。"""
+    """路径1：面板已开，SetValue + AttachThreadInput+Enter 发送，不需要 item.Invoke()。"""
     edit = _FakeEdit()
     button = _FakeButton()
     item = _FakeItem()
@@ -115,7 +123,7 @@ def test_path1_panel_already_open():
     ok = listen_chat.reply_in_chat(mw, item, "您好，在的")
 
     assert edit.iface_value.set_value_called_with == "您好，在的"
-    assert button.iface_invoke.invoke_called is True
+    assert item.iface_invoke.invoke_called is False, "路径1 不应调 item.Invoke()"
     assert ok is True
 
 
@@ -149,7 +157,6 @@ def test_path2_invoke_then_find_panel(monkeypatch):
 
     assert item.iface_invoke.invoke_called is True, "路径2 必须调 item.iface_invoke.Invoke()"
     assert edit.iface_value.set_value_called_with == "测试消息"
-    assert button.iface_invoke.invoke_called is True
     assert ok is True
 
 
@@ -160,8 +167,8 @@ def test_missing_input_returns_false():
     assert ok is False
 
 
-def test_missing_send_button_returns_false():
-    """找到输入框但找不到发送按钮 → 返回 False。"""
+def test_enter_key_send_no_button_succeeds():
+    """AttachThreadInput+Enter 机制不依赖 send_button：无发送按钮也能成功发送。"""
     edit = _FakeEdit()
 
     class _EditOnlyMW:
@@ -176,4 +183,5 @@ def test_missing_send_button_returns_false():
 
     item = _FakeItem()
     ok = listen_chat.reply_in_chat(_EditOnlyMW(), item, "你好")
-    assert ok is False
+    # Enter 发送后 get_value()="" → 判定成功，不需要 button.Invoke()
+    assert ok is True

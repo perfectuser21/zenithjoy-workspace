@@ -7,7 +7,7 @@
   正确做法全部走 UIAPattern：
     - 打开会话：listitem.iface_invoke.Invoke()
     - 填回复：  edit.iface_value.SetValue(text)
-    - 点发送：  button.iface_invoke.Invoke()
+    - 点发送：  AttachThreadInput+PostMessage(VK_RETURN)（button.iface_invoke.Invoke 为 fallback）
 
 本测试用「源码字符串断言 + dryrun mock」两条防线，CI 无微信环境也能跑过：
   1) 源码不得含任何物理输入 API（防回退）。

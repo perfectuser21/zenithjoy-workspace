@@ -234,14 +234,24 @@ def _force_foreground(hwnd: int) -> None:
 
 
 def _abs_click(abs_x: int, abs_y: int) -> None:
-    """绝对屏幕坐标鼠标左键点击（SetCursorPos + mouse_event，多显示器安全）。"""
+    """绝对屏幕坐标鼠标左键点击（VIRTUALDESK 坐标，多显示器安全）。"""
     import ctypes as _ct
     _u32 = _ct.windll.user32
-    _u32.SetCursorPos(abs_x, abs_y)
+    # 用虚拟桌面总尺寸做归一化（含所有显示器），解决多屏坐标偏移
+    vx = _u32.GetSystemMetrics(76)   # SM_XVIRTUALSCREEN
+    vy = _u32.GetSystemMetrics(77)   # SM_YVIRTUALSCREEN
+    vw = _u32.GetSystemMetrics(78)   # SM_CXVIRTUALSCREEN
+    vh = _u32.GetSystemMetrics(79)   # SM_CYVIRTUALSCREEN
+    nx = int((abs_x - vx) * 65535 // max(vw, 1))
+    ny = int((abs_y - vy) * 65535 // max(vh, 1))
+    _MOVE_ABS_VD = 0x8000 | 0x4000 | 0x0001   # ABSOLUTE | VIRTUALDESK | MOVE
+    _DOWN_ABS_VD = 0x8000 | 0x4000 | 0x0002   # ABSOLUTE | VIRTUALDESK | LEFTDOWN
+    _UP_ABS_VD   = 0x8000 | 0x4000 | 0x0004   # ABSOLUTE | VIRTUALDESK | LEFTUP
+    _u32.mouse_event(_MOVE_ABS_VD, nx, ny, 0, 0)
     time.sleep(0.15)
-    _u32.mouse_event(0x0002, 0, 0, 0, 0)  # MOUSEEVENTF_LEFTDOWN
+    _u32.mouse_event(_DOWN_ABS_VD, nx, ny, 0, 0)
     time.sleep(0.05)
-    _u32.mouse_event(0x0004, 0, 0, 0, 0)  # MOUSEEVENTF_LEFTUP
+    _u32.mouse_event(_UP_ABS_VD, nx, ny, 0, 0)
 
 
 def _uia_send(uia_edit: Any, mw: Any, reply_text: str) -> bool:
