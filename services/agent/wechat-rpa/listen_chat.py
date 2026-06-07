@@ -64,6 +64,10 @@ SKIP_SENDERS = (
 # 群聊/频道/讨论组名称特征词 → 跳过（只回私聊）
 SKIP_GROUP_KEYWORDS = ("群", "频道", "讨论组", "直播间")
 
+# WeChat 会话列表 UI 状态标记：置顶/草稿等，不是实际消息内容，提取 content 时跳过。
+# 若错误提取为 content → replied[(sender, '已置顶')] 永久封锁该会话（已复现 bug）。
+_UI_STATUS_KEYWORDS = ("置顶", "草稿")
+
 
 # ─── 纯逻辑：解析单个会话项的 element_info.name（CI 单测锚点，顶层零 pywinauto）──────
 
@@ -99,6 +103,8 @@ def _parse_item_name(name: str, require_unread: bool = True) -> Optional[Dict[st
         if not seg or "条]" in seg:
             continue
         if seg.replace(":", "").replace("/", "").isdigit():
+            continue
+        if any(kw in seg for kw in _UI_STATUS_KEYWORDS):
             continue
         content = seg
         break
@@ -179,7 +185,7 @@ def _iter_all_controls(mw: Any, control_type: str):
 def _find_chat_input(mw: Any) -> Optional[Any]:
     """定位回复输入框：先按 automation_id='chat_input_field'，再按最大 Edit 回退。"""
     candidates = []
-    for c in _iter_all_controls(mw, "Edit"):
+    for c in mw.descendants(control_type="Edit"):  # 只扫主窗口，防群聊弹窗干扰
         try:
             aid = c.element_info.automation_id or ""
             if aid == "chat_input_field":
@@ -201,8 +207,8 @@ def _find_chat_input(mw: Any) -> Optional[Any]:
 
 
 def _find_send_button(mw: Any) -> Optional[Any]:
-    """定位发送按钮：Button 且 name=='发送'，扫主窗口和所有 mmui 子窗口。"""
-    for c in _iter_all_controls(mw, "Button"):
+    """定位发送按钮：Button 且 name=='发送'，只扫主窗口防群聊弹窗干扰。"""
+    for c in mw.descendants(control_type="Button"):  # 只扫主窗口，防群聊弹窗干扰
         try:
             if (c.element_info.name or "") == "发送":
                 return c
@@ -315,7 +321,7 @@ def _uia_send(uia_edit: Any, mw: Any, reply_text: str) -> bool:
             mw_class = mw.element_info.class_name or ""
         except Exception:
             mw_class = ""
-        if mw_class == "mmui::MainWindow":
+        if False:  # 前台键盘路径已禁用：keybd_event 是全局事件，后台会话下会发到错误窗口
             if _set_clipboard_text(reply_text):
                 _force_foreground(main_hwnd)
                 time.sleep(0.3)
@@ -428,12 +434,14 @@ def _navigate_away(mw: Any) -> None:
         pass
 
 
-def reply_in_chat(mw: Any, item: Any, reply_text: str) -> bool:
+def reply_in_chat(mw: Any, item: Any, reply_text: str, sender: str = "") -> bool:
     """
     打开 item 对应会话并发出 reply_text。全程纯 UIA，禁止任何物理鼠标/键盘操作。
 
     始终先 item.iface_invoke.Invoke() 激活正确会话（防止 _navigate_away 后面板停在
     文件传输助手导致消息发错对象），再 SetValue + Enter/Invoke 发送。
+    sender：目标联系人名，用于验证面板是否切换到正确会话（防止 Invoke() 后 WeChat 面板
+    未及时切换就读到了旧会话的输入框，导致发到错误聊天窗口）。
     失败 → 返回 False，下一轮询周期自动重试，绝不调 _force_foreground/_abs_click。
     """
     def _fresh_mw():
@@ -443,12 +451,35 @@ def reply_in_chat(mw: Any, item: Any, reply_text: str) -> bool:
         except Exception:
             return mw
 
+    def _chat_panel_ready(fmw: Any) -> bool:
+        """验证 WeChat 右侧面板已切换到 sender 对应的会话。
+
+        原理：Invoke() 打开会话后该 ListItem 的未读角标应消失（WeChat 标记已读）。
+        角标消失 = 面板已切换 = 当前 Edit 控件属于目标会话，可以安全写入。
+        """
+        if not sender:
+            return True
+        try:
+            for it in fmw.descendants(control_type="ListItem"):
+                try:
+                    name = it.element_info.name or ""
+                    if not name.startswith(sender):
+                        continue
+                    return "条]" not in name
+                except Exception:
+                    continue
+        except Exception:
+            pass
+        return False
+
     try:
         item.iface_invoke.Invoke()
-        _log("reply_in_chat: Invoke 激活会话，等 UIA 暴露…")
-        for _ in range(6):  # 最多等 3s，每 0.5s 检查一次
+        _log("reply_in_chat: Invoke 激活会话，等面板切换…")
+        for attempt in range(8):  # 最多等 4s，每 0.5s 检查
             time.sleep(0.5)
             fmw = _fresh_mw()
+            if attempt < 6 and not _chat_panel_ready(fmw):
+                continue
             uia_edit = _find_chat_input(fmw)
             if uia_edit is not None:
                 if _uia_send(uia_edit, fmw, reply_text):
@@ -966,7 +997,7 @@ def run_real_listen(args: argparse.Namespace) -> int:
                 ok = False
                 for _attempt in range(2):  # 失败立刻重试一次
                     try:
-                        ok = reply_in_chat(mw, m["_item"], reply)
+                        ok = reply_in_chat(mw, m["_item"], reply, sender=m["sender"])
                     except Exception as exc:
                         _log(f"reply_in_chat exception attempt={_attempt} sender={m['sender']}: {exc}")
                         ok = False
