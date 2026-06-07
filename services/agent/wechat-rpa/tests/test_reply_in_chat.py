@@ -222,3 +222,48 @@ def test_uia_send_uses_element_info_class_name_for_wechat_detection(monkeypatch)
     assert len(clipboard_calls) > 0, (
         "_uia_send 未调用 _set_clipboard_text —— 说明仍在用 GetClassNameW 判断微信窗口"
     )
+
+
+def test_two_senders_each_invokes_own_session(monkeypatch):
+    """回归 Bug（回复发错人）：两条不同发送人的未读，逐条回复时——
+
+    1. 每一条都先调用 *自己* item 的 iface_invoke.Invoke()（切到该发送人会话），
+       而不是直接复用当前屏幕上打开的输入框。
+    2. 第二条绝不重用第一条的窗口/输入框，也不会再次 Invoke 第一条的 item。
+
+    用 monkeypatch 把 _uia_send 换成记录器，聚焦验证"发给了谁"而非 Windows 发送细节，
+    保证跨平台确定可跑（旧路径1 直接复用已打开输入框会让所有回复跑到同一个人）。
+    """
+    sent: list = []  # 记录每次 _uia_send 收到的 (edit, text)
+
+    def _fake_uia_send(uia_edit, mw, reply_text):
+        sent.append((uia_edit, reply_text))
+        return True
+
+    monkeypatch.setattr(listen_chat, "_uia_send", _fake_uia_send)
+    monkeypatch.setattr(listen_chat, "_navigate_away", lambda *a, **k: None)
+
+    # 发送人 A：item_a + 它专属会话的输入框 edit_a
+    item_a = _FakeItem()
+    edit_a = _FakeEdit()
+    mw_a = _FakeMainWindow(edit_a, _FakeButton())
+
+    # 发送人 B：item_b + 它专属会话的输入框 edit_b
+    item_b = _FakeItem()
+    edit_b = _FakeEdit()
+    mw_b = _FakeMainWindow(edit_b, _FakeButton())
+
+    # 第一条：回 A
+    ok_a = listen_chat.reply_in_chat(mw_a, item_a, "回给A")
+    assert ok_a is True
+    assert item_a.iface_invoke.invoke_called is True, "第一条必须先 Invoke item_a 自己的会话"
+    assert sent[-1] == (edit_a, "回给A"), "第一条必须发到 A 的输入框"
+
+    # 第二条：回 B —— 不得重用 A 的窗口，必须 Invoke item_b 自己
+    ok_b = listen_chat.reply_in_chat(mw_b, item_b, "回给B")
+    assert ok_b is True
+    assert item_b.iface_invoke.invoke_called is True, "第二条必须先 Invoke item_b 自己的会话"
+    assert sent[-1] == (edit_b, "回给B"), "第二条必须发到 B 的输入框，绝不重用 A 的窗口"
+
+    # 两条各发各的，顺序与内容正确
+    assert [s[1] for s in sent] == ["回给A", "回给B"]
