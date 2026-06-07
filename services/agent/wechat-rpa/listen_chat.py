@@ -239,6 +239,17 @@ def _set_clipboard_text(text: str) -> bool:
         import ctypes as _ct
         _u32 = _ct.windll.user32
         _k32 = _ct.windll.kernel32
+        # 补全 restype/argtypes：ctypes 默认按 32 位 c_int 处理返回值，
+        # amd64 上 64 位 HANDLE/指针会被高位截断 → GlobalLock(坏handle)=NULL
+        # → memmove(NULL) access violation。HANDLE/指针必须声明为 c_void_p。
+        _k32.GlobalAlloc.restype = _ct.c_void_p
+        _k32.GlobalAlloc.argtypes = [_ct.c_uint, _ct.c_size_t]
+        _k32.GlobalLock.restype = _ct.c_void_p
+        _k32.GlobalLock.argtypes = [_ct.c_void_p]
+        _k32.GlobalUnlock.restype = _ct.c_bool
+        _k32.GlobalUnlock.argtypes = [_ct.c_void_p]
+        _u32.SetClipboardData.restype = _ct.c_void_p
+        _u32.SetClipboardData.argtypes = [_ct.c_uint, _ct.c_void_p]
         encoded = (text + "\x00").encode("utf-16-le")
         hMem = _k32.GlobalAlloc(0x0002, len(encoded))  # GMEM_MOVEABLE
         if not hMem:
