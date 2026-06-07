@@ -56,3 +56,42 @@ def test_g5_multi_unread_count():
     """G5 多条未读数字（[5条]）：仍正常解析为 {sender, content}"""
     result = _parse_item_name("张三\n[5条] \n在吗\n09:00\n")
     assert result == {"sender": "张三", "content": "在吗"}
+
+
+# ─── 回归测试：WeChat UI 状态标记不得作为 content（根因：糊糊大老婆永久 skip） ───
+
+
+def test_g6_pinned_indicator_only_returns_none():
+    """G6 仅"已置顶"无真实消息 → 返回 None，不把置顶标记当 content。
+
+    WeChat 置顶会话 ListItem.name 格式：糊糊大老婆\\n[1条] \\n已置顶\\n14:30\\n
+    "已置顶"是 UI 状态标记，不是客户消息。若错误提取为 content，
+    replied[(sender, '已置顶')] 永久封锁该会话。
+    """
+    result = _parse_item_name("糊糊大老婆\n[1条] \n已置顶\n14:30\n")
+    assert result is None, f"置顶会话只有 UI 标记时应返回 None，实际: {result}"
+
+
+def test_g7_pinned_indicator_with_real_content_extracts_content():
+    """G7 已置顶 + 真实消息 → 跳过"已置顶"，提取真实消息。
+
+    格式：糊糊大老婆\\n[1条] \\n已置顶\\n你好啊\\n14:30\\n
+    """
+    result = _parse_item_name("糊糊大老婆\n[1条] \n已置顶\n你好啊\n14:30\n")
+    assert result == {"sender": "糊糊大老婆", "content": "你好啊"}, (
+        f"应跳过'已置顶'提取真实消息，实际: {result}"
+    )
+
+
+def test_g8_draft_indicator_returns_none():
+    """G8 [草稿]标记 → 返回 None，不把草稿标记当 content。
+
+    WeChat 有未发草稿时 ListItem.name 格式：
+      糊糊大老婆\\n[1条] \\n[草稿]\\n14:30\\n
+    """
+    assert _parse_item_name("糊糊大老婆\n[1条] \n[草稿]\n14:30\n") is None, (
+        "'[草稿]'作为独立段时应返回 None"
+    )
+    assert _parse_item_name("糊糊大老婆\n[1条] \n草稿\n14:30\n") is None, (
+        "'草稿'作为独立段时应返回 None"
+    )
