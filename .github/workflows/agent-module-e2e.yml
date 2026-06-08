@@ -161,9 +161,11 @@ jobs:
       - name: Step 6 — MOCK_WECHAT_VERSION=4.2.0.0 version-only warning on real machine
         run: |
           $env:MOCK_WECHAT_VERSION = '4.2.0.0'
-          node dist/modules/line04/preflight.js > pf-xrog.json 2>$null
+          $result = node dist/modules/line04/preflight.js 2>$null
           $PCODE = $LASTEXITCODE
           Remove-Item Env:\MOCK_WECHAT_VERSION -ErrorAction SilentlyContinue
+          if (-not $result) { Write-Host "FAIL: preflight.js returned empty output"; exit 1 }
+          $result | Set-Content pf-xrog.json -Encoding ascii
           Write-Host "exit=$PCODE"
           if ($PCODE -ne 0) { Write-Host "FAIL: exit $PCODE should be 0 (version-only warning on xian-rog)"; exit 1 }
           node -e "const j=JSON.parse(require('fs').readFileSync('pf-xrog.json','utf8')); if(j.ok!==true){console.error('FAIL: ok should be true');process.exit(1);} if(j.checks.wechat_version!==false){console.error('FAIL: checks.wechat_version should be false');process.exit(1);} console.log('Step 6 OK (xian-rog version-warning)');"
