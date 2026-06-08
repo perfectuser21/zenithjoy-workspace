@@ -11,10 +11,10 @@ jobs:
   build:
     runs-on: ubuntu-latest
     # PKG_CACHE_PATH 作为 job 级环境变量，对整个 build job 生效（pre-seed 和 build-install-pack 共享）。
-    # 用独立路径 /tmp/pkg-local-cache 而非 ~/.pkg-cache，是有意为之：
-    # 防止 actions/cache 恢复历史 corrupt 文件（fetched- hash 不符 → pkg 删 → 走 504 → compile 失败）。
+    # 用 $GITHUB_RUN_ID 后缀隔离各 run，避免并发 job 写同一 /tmp 路径造成竞态。
+    # 用独立路径而非 ~/.pkg-cache，防止旧 corrupt 文件被 actions/cache 复原后 pkg-fetch hash 检查失败。
     env:
-      PKG_CACHE_PATH: /tmp/pkg-local-cache
+      PKG_CACHE_PATH: /tmp/pkg-cache-${{ github.run_id }}
     outputs:
       cos_url: ${{ steps.cos_upload.outputs.cos_url }}
       pack_name: ${{ steps.cos_upload.outputs.pack_name }}
@@ -23,15 +23,15 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
-      # 缓存 /tmp/pkg-local-cache 跨 run 复用（key 绑定 binary 版本，稳定有效）。
-      # 与 ~/.pkg-cache（可能被历史 corrupt 文件污染）隔离，互不干扰。
+      # 缓存 pkg binary 跨 run 复用（key 绑定 binary 版本 + 平台，稳定有效）。
+      # run_id 后缀的工作目录路径每次不同，restore 时根据 key 匹配后拷贝到当前 run_id 路径。
       - name: Cache pkg binary
         uses: actions/cache@v4
         with:
-          path: /tmp/pkg-local-cache
-          key: pkg-local-cache-node18.5.0-win64-v1
+          path: /tmp/pkg-cache-${{ github.run_id }}
+          key: pkg-cache-node18.5.0-win64-v1
       # built- 前缀：pkg-fetch 对 built- 直接使用，不做 sha256 校验（fetched- 才做）。
-      # 每次 pre-seed 确保文件存在并可执行（cache hit 则跳过下载）。
+      # 下载后校验文件大小（≥ 35MB），防止下载截断或 CDN 返回错误页面导致假成功。
       - name: Pre-seed pkg binary into PKG_CACHE_PATH
         run: |
           PKG_CACHE="${PKG_CACHE_PATH}/v3.4"
@@ -41,14 +41,18 @@ jobs:
             echo "[pkg-seed] downloading node-v18.5.0-win-x64..."
             curl -fsSL --retry 3 --retry-delay 5 -o "$PKG_CACHE/$BINARY" \
               "https://github.com/vercel/pkg-fetch/releases/download/v3.4/node-v18.5.0-win-x64" || {
-              echo "[pkg-seed] download failed"; exit 1
+              echo "[pkg-seed] download failed (curl error)"; exit 1
             }
+            # 完整性校验：正常 Node.js win64 binary ≥ 35MB（35,000,000 bytes）
+            BYTES=$(stat -c%s "$PKG_CACHE/$BINARY" 2>/dev/null || stat -f%z "$PKG_CACHE/$BINARY")
+            if [ "${BYTES:-0}" -lt 35000000 ]; then
+              echo "[pkg-seed] integrity check failed: file too small (${BYTES} bytes < 35MB)"
+              rm -f "$PKG_CACHE/$BINARY"; exit 1
+            fi
             chmod +x "$PKG_CACHE/$BINARY"
-            SIZE=$(du -sh "$PKG_CACHE/$BINARY" | cut -f1)
-            echo "[pkg-seed] seeded built-v18.5.0-win-x64 ($SIZE)"
+            echo "[pkg-seed] seeded built-v18.5.0-win-x64 ($(du -sh "$PKG_CACHE/$BINARY" | cut -f1))"
           else
-            SIZE=$(du -sh "$PKG_CACHE/$BINARY" | cut -f1)
-            echo "[pkg-seed] cache hit built-v18.5.0-win-x64 ($SIZE)"
+            echo "[pkg-seed] cache hit built-v18.5.0-win-x64 ($(du -sh "$PKG_CACHE/$BINARY" | cut -f1))"
           fi
       - name: Install
         run: npm install --no-audit --no-fund
