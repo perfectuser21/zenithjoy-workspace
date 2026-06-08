@@ -10,6 +10,11 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    # PKG_CACHE_PATH 作为 job 级环境变量，对整个 build job 生效（pre-seed 和 build-install-pack 共享）。
+    # 用独立路径 /tmp/pkg-local-cache 而非 ~/.pkg-cache，是有意为之：
+    # 防止 actions/cache 恢复历史 corrupt 文件（fetched- hash 不符 → pkg 删 → 走 504 → compile 失败）。
+    env:
+      PKG_CACHE_PATH: /tmp/pkg-local-cache
     outputs:
       cos_url: ${{ steps.cos_upload.outputs.cos_url }}
       pack_name: ${{ steps.cos_upload.outputs.pack_name }}
@@ -18,20 +23,33 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
-      # PKG_CACHE_PATH=/tmp/pkg-local-cache：强制 pkg-fetch 只看这个目录，不再去 ~/.pkg-cache，
-      # 避免 actions/cache 恢复旧 corrupt 文件或 fetched- hash 检查链路。
-      # built- 前缀：pkg-fetch 对 built- 直接使用，不做 sha256 校验（只对 fetched- 做）。
+      # 缓存 /tmp/pkg-local-cache 跨 run 复用（key 绑定 binary 版本，稳定有效）。
+      # 与 ~/.pkg-cache（可能被历史 corrupt 文件污染）隔离，互不干扰。
+      - name: Cache pkg binary
+        uses: actions/cache@v4
+        with:
+          path: /tmp/pkg-local-cache
+          key: pkg-local-cache-node18.5.0-win64-v1
+      # built- 前缀：pkg-fetch 对 built- 直接使用，不做 sha256 校验（fetched- 才做）。
+      # 每次 pre-seed 确保文件存在并可执行（cache hit 则跳过下载）。
       - name: Pre-seed pkg binary into PKG_CACHE_PATH
         run: |
-          PKG_CACHE="/tmp/pkg-local-cache/v3.4"
+          PKG_CACHE="${PKG_CACHE_PATH}/v3.4"
           BINARY="built-v18.5.0-win-x64"
-          mkdir -p "$PKG_CACHE"
-          echo "[pkg-seed] downloading node-v18.5.0-win-x64..."
-          curl -fsSL --retry 3 --retry-delay 5 -o "$PKG_CACHE/$BINARY" \
-            "https://github.com/vercel/pkg-fetch/releases/download/v3.4/node-v18.5.0-win-x64"
-          chmod +x "$PKG_CACHE/$BINARY"
-          SIZE=$(du -sh "$PKG_CACHE/$BINARY" | cut -f1)
-          echo "[pkg-seed] built-v18.5.0-win-x64 ($SIZE) → $PKG_CACHE/$BINARY"
+          if [ ! -f "$PKG_CACHE/$BINARY" ]; then
+            mkdir -p "$PKG_CACHE"
+            echo "[pkg-seed] downloading node-v18.5.0-win-x64..."
+            curl -fsSL --retry 3 --retry-delay 5 -o "$PKG_CACHE/$BINARY" \
+              "https://github.com/vercel/pkg-fetch/releases/download/v3.4/node-v18.5.0-win-x64" || {
+              echo "[pkg-seed] download failed"; exit 1
+            }
+            chmod +x "$PKG_CACHE/$BINARY"
+            SIZE=$(du -sh "$PKG_CACHE/$BINARY" | cut -f1)
+            echo "[pkg-seed] seeded built-v18.5.0-win-x64 ($SIZE)"
+          else
+            SIZE=$(du -sh "$PKG_CACHE/$BINARY" | cut -f1)
+            echo "[pkg-seed] cache hit built-v18.5.0-win-x64 ($SIZE)"
+          fi
       - name: Install
         run: npm install --no-audit --no-fund
         working-directory: services/agent
@@ -39,8 +57,6 @@ jobs:
         run: npm run build
         working-directory: services/agent
       - name: Build install pack
-        env:
-          PKG_CACHE_PATH: /tmp/pkg-local-cache
         run: bash scripts/build-install-pack.sh
         working-directory: services/agent
 
