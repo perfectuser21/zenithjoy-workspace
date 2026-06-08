@@ -188,40 +188,43 @@ def test_enter_key_send_no_button_succeeds():
     assert ok is True
 
 
-def test_uia_send_uses_element_info_class_name_for_wechat_detection(monkeypatch):
-    """regression: _uia_send 必须用 mw.element_info.class_name 检测微信窗口，不能用 Win32 GetClassNameW。
+def test_uia_send_uses_set_value_path(monkeypatch):
+    """regression (v1.1.108): _uia_send 必须走 UIA SetValue 路径，不得调用前台剪贴板/键盘函数。
 
-    修复前（GetClassNameW）：GetClassNameW(fake_hwnd) 返回 Win32 类名（不是 "mmui::MainWindow"），
-                            剪贴板路径永远不触发，_set_clipboard_text 不会被调用。
-    修复后（element_info.class_name）：mw.element_info.class_name == "mmui::MainWindow" 直接匹配，
-                                       _set_clipboard_text 被调用。
+    v1.1.108 删除了 _force_foreground/_set_clipboard_text/_abs_click（全台键盘路径），
+    唯一合法路径：SetValue + AttachThreadInput + PostMessageW(Enter)。
     """
-    clipboard_calls: list = []
-    monkeypatch.setattr(listen_chat, "_set_clipboard_text", lambda text: clipboard_calls.append(text) or True)
+    set_value_calls: list = []
 
-    class _WeChatEI:
-        handle = 12345
-        class_name = "mmui::MainWindow"
+    class _FakeIface:
+        def SetValue(self, text):
+            set_value_calls.append(text)
 
-    class _WeChatMW:
-        element_info = _WeChatEI()
+    class _FakeEditSV:
+        element_info = type("EI", (), {"automation_id": "chat_input_field", "handle": 42})()
+        iface_value = _FakeIface()
+
+        def get_value(self):
+            return ""
+
+    class _EditOnlySV:
+        element_info = type("EI", (), {"handle": 99})()
 
         def descendants(self, control_type=None):
             if control_type == "Edit":
-                return [_FakeEdit()]
-            if control_type == "Button":
-                return [_FakeButton()]
+                return [_FakeEditSV()]
             return []
 
         def children(self):
             return []
 
     item = _FakeItem()
-    listen_chat.reply_in_chat(_WeChatMW(), item, "你好，在的")
+    listen_chat.reply_in_chat(_EditOnlySV(), item, "测试消息")
 
-    assert len(clipboard_calls) > 0, (
-        "_uia_send 未调用 _set_clipboard_text —— 说明仍在用 GetClassNameW 判断微信窗口"
+    assert len(set_value_calls) > 0, (
+        "_uia_send 未调用 iface_value.SetValue —— 说明 UIA 后台发送路径断了"
     )
+    assert "测试消息" in set_value_calls[0]
 
 
 def test_two_senders_each_invokes_own_session(monkeypatch):
