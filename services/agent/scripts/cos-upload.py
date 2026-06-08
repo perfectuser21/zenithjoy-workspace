@@ -1,5 +1,13 @@
-"""Upload a file to Tencent COS using cos-python-sdk-v5 (reliable multipart)."""
-import os, sys, io
+"""Upload a file to Tencent COS using cos-python-sdk-v5.
+
+Parameters: local_path bucket region cos_key
+Env:        COS_SECRET_ID  COS_SECRET_KEY
+
+Uses PartSize=5MB + MAXThread=1 (sequential) for reliability on
+slow/unstable cross-region links; retries the whole upload up to 3 times.
+"""
+import os, sys, io, time
+
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
 
 try:
@@ -18,16 +26,30 @@ config = CosConfig(
     Region=region,
     SecretId=os.environ["COS_SECRET_ID"],
     SecretKey=os.environ["COS_SECRET_KEY"],
+    Timeout=600,
 )
 client = CosS3Client(config)
 
-print("[cos-upload] " + local_path + " -> cos://" + bucket + "/" + cos_key)
-response = client.upload_file(
-    Bucket=bucket,
-    LocalFilePath=local_path,
-    Key=cos_key,
-    MAXThread=5,
-    EnableMD5=False,
-    PartSize=50,
-)
-print(f"[cos-upload] done ETag={response.get('ETag', '?')}")
+size_mb = os.path.getsize(local_path) // 1024 // 1024
+print(f"[cos-upload] {local_path} ({size_mb}MB) -> cos://{bucket}/{cos_key}")
+
+MAX_ATTEMPTS = 3
+for attempt in range(1, MAX_ATTEMPTS + 1):
+    try:
+        response = client.upload_file(
+            Bucket=bucket,
+            LocalFilePath=local_path,
+            Key=cos_key,
+            MAXThread=1,
+            EnableMD5=False,
+            PartSize=5,
+        )
+        print(f"[cos-upload] done ETag={response.get('ETag', '?')}")
+        break
+    except Exception as e:
+        if attempt == MAX_ATTEMPTS:
+            raise
+        wait = 30 * attempt
+        print(f"[cos-upload] attempt {attempt}/{MAX_ATTEMPTS} failed: {e}")
+        print(f"[cos-upload] retrying in {wait}s...")
+        time.sleep(wait)
