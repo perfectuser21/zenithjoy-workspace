@@ -175,12 +175,12 @@ jobs:
             exit 0
           fi
 
-          pip install coscmd -q
-          coscmd config -a "$COS_SECRET_ID" -s "$COS_SECRET_KEY" \
-            -b "zenithjoy-static-1333590468" -e "cos.accelerate.myqcloud.com"
-          coscmd upload WeChatWin_4.1.8.exe \
-            "/install-pack/wechat/WeChatWin_4.1.8.exe" --force \
-            || echo "[mirror-wechat] coscmd upload 失败（非致命，有官方回退源）"
+          pip install cos-python-sdk-v5 -q
+          python3 services/agent/scripts/cos-upload.py \
+            "WeChatWin_4.1.8.exe" \
+            "zenithjoy-static-1333590468" "ap-guangzhou" \
+            "install-pack/wechat/WeChatWin_4.1.8.exe" \
+            || echo "[mirror-wechat] 上传失败（非致命，有官方回退源）"
 
       - name: Deploy manifest.json to HK VPS
         env:
