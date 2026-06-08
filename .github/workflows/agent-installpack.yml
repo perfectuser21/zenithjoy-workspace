@@ -18,14 +18,17 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
-      # key v2：invalidate v1（v1 保存的是 fetched-* 前缀，会被 pkg hash check 拦截删除再走 504）
+      # cache key v2（原因：v1 保存的是 fetched-v18.5.0-win-x64，pkg-fetch 对该前缀做 sha256 校验，
+      # CI 下载的二进制 hash 与期望值 e0e9a647... 不符 → pkg 删掉文件 → 走 pkg-fetch.vercel.app CDN → 504。
+      # v2 使用 built- 前缀，pkg 对 built- 直接复用不做 hash 检查，彻底规避该问题。）
       - name: Cache pkg binaries
         uses: actions/cache@v4
         with:
           path: ~/.pkg-cache
           key: pkg-cache-node18-win64-v2
-      # pkg 对 built- 前缀文件跳过 hash 校验，直接使用。
-      # fetched- 前缀会做 sha256 校验（期望 e0e9a647...），CI 下载哈希不稳定，故改 built- 绕开。
+      # 预置 built-v18.5.0-win-x64：pkg-fetch 对 built- 前缀跳过 sha256 校验直接使用。
+      # fetched- 前缀要做 hash 校验，CI 下载 hash 不稳定导致 504 失败，故改用 built- 绕开。
+      # --retry-delay 5：GitHub releases redirect 签名 URL 偶发 TLS 握手延迟，加间隔提高重试成功率。
       - name: Pre-seed pkg binary (built- prefix bypasses hash check)
         run: |
           PKG_CACHE="$HOME/.pkg-cache/v3.4"
