@@ -183,9 +183,14 @@ def _iter_all_controls(mw: Any, control_type: str):
 
 
 def _find_chat_input(mw: Any) -> Optional[Any]:
-    """定位回复输入框：先按 automation_id='chat_input_field'，再按最大 Edit 回退。"""
+    """定位回复输入框：先按 automation_id='chat_input_field'，再按位置+面积回退。
+
+    回退逻辑排除窗口上 40% 区域的 Edit（搜索栏固定在顶部 5-8%，
+    聊天输入框在底部 85%+），防止搜索栏面积大时被误选。
+    获取窗口矩形失败时退化到旧逻辑（按面积最大选）。
+    """
     candidates = []
-    for c in mw.descendants(control_type="Edit"):  # 只扫主窗口，防群聊弹窗干扰
+    for c in mw.descendants(control_type="Edit"):
         try:
             aid = c.element_info.automation_id or ""
             if aid == "chat_input_field":
@@ -195,15 +200,31 @@ def _find_chat_input(mw: Any) -> Optional[Any]:
                 area = (r.right - r.left) * (r.bottom - r.top)
             except Exception:
                 area = 0
-            candidates.append((area, aid, c))
+                r = None
+            candidates.append((area, aid, c, r))
         except Exception:
             continue
-    if candidates:
-        candidates.sort(key=lambda x: x[0], reverse=True)
-        best = candidates[0]
-        _log(f"_find_chat_input: 回退到最大 Edit area={best[0]} aid={repr(best[1])}")
-        return best[2]
-    return None
+    if not candidates:
+        return None
+
+    # 过滤：排除窗口上 40% 的 Edit（搜索栏区域，聊天输入框在底部 85%+）
+    try:
+        wr = mw.rectangle()
+        threshold = wr.top + (wr.bottom - wr.top) * 0.4
+        filtered = [
+            (area, aid, c, r)
+            for area, aid, c, r in candidates
+            if r is not None and r.top >= threshold
+        ]
+        if filtered:
+            candidates = filtered
+    except Exception:
+        pass  # 退化到旧逻辑
+
+    candidates.sort(key=lambda x: x[0], reverse=True)
+    best = candidates[0]
+    _log(f"_find_chat_input: 回退到最大 Edit area={best[0]} aid={repr(best[1])}")
+    return best[2]
 
 
 def _find_send_button(mw: Any) -> Optional[Any]:
