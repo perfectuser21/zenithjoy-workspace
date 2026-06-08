@@ -53,7 +53,8 @@ jobs:
           $cosUrl = "https://$bucket.$endpoint/$cosKey"
 
           Write-Host "[upload] Installing coscmd..."
-          python -m pip install coscmd -q 2>&1 | Write-Host
+          python -m pip install coscmd -q
+          if ($LASTEXITCODE -ne 0) { throw "pip install coscmd failed exit=$LASTEXITCODE" }
 
           Write-Host "[upload] Configuring coscmd..."
           coscmd config -a $env:COS_SECRET_ID -s $env:COS_SECRET_KEY -b $bucket -e $endpoint
