@@ -6,14 +6,17 @@
     {
       "task_id": "ws1",
       "title": "Agent 模块化架构 E2E CI 验收：workflow + smoke + preflight MOCK 跨平台支持",
-      "scope": "新增 agent-module-e2e.yml（windows-latest CI job + xian-rog self-hosted job）；新增 agent-module-e2e-smoke.sh（curl heartbeat modules + ModuleManager node 验证 + module-health 链路）；修改 services/agent/modules/line04/preflight.ts 增加 MOCK_WECHAT_VERSION env 覆盖（跨平台）；更新 services/agent/vitest.config.ts 加入本 sprint test 路径",
+      "scope": "新增 agent-module-e2e.yml（windows-latest job：npx tsx 直跑源码，含 Steps 2/3/4/6；xian-rog job：npm run build + node 编译产物，含真机 Steps 3/6）；新增 agent-module-e2e-smoke.sh（API_UP guard + curl heartbeat modules + module-health 全字段 oracle）；修改 services/agent/modules/line04/preflight.ts 增加 MOCK_WECHAT_VERSION env 覆盖；更新 vitest.config.ts 加入 sprint test 路径",
       "dod": [
-        "[BEHAVIOR] MOCK_WECHAT_VERSION=4.2.0.0 → preflight exit 1，ok:false，fixGuide 含 WeChatWin_4.1.8.exe",
-        "[BEHAVIOR] preflight 非 Windows exit 0，ok:true，has(checks)，无 fixGuide",
-        "[BEHAVIOR] .github/workflows/agent-module-e2e.yml 含 windows-latest job + wechat-capable runner",
-        "[BEHAVIOR] agent-module-e2e-smoke.sh 存在，≥5 行实质内容，含 curl 命令",
-        "[ARTIFACT] preflight.ts checkWechatVersion() 含 MOCK_WECHAT_VERSION env 读取逻辑",
-        "[ARTIFACT] agent-module-e2e.yml 存在"
+        "[BEHAVIOR] preflight 非 Windows ok:true + has(checks) + no fixGuide + no skipped",
+        "[BEHAVIOR] MOCK_WECHAT_VERSION=4.2.0.0 → exit 1，ok:false，fixGuide 含 WeChatWin_4.1.8.exe",
+        "[BEHAVIOR] syncModules → downloadImpl 被调用恰好 1 次（PRD 场景A Step 2）",
+        "[BEHAVIOR] activateModule → forkImpl + config 消息 + getActiveModules() 含 lineId（PRD 场景A Step 4）",
+        "[BEHAVIOR] GET /api/agent/module-health data[0].module_status[line04-wechat-cs].ok == true（PRD 场景A Step 5）",
+        "[BEHAVIOR] workflow 含两个 runner + grep-q smoke 脚本调用 + grep-q npx tsx",
+        "[ARTIFACT] preflight.ts checkWechatVersion() 含 MOCK_WECHAT_VERSION env 读取",
+        "[ARTIFACT] agent-module-e2e.yml 存在",
+        "[ARTIFACT] agent-module-e2e-smoke.sh 存在，≥5 行，含 curl，含 module-health"
       ],
       "files": [
         ".github/workflows/agent-module-e2e.yml",
