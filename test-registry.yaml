@@ -3041,3 +3041,11 @@ agent_suite:
     status: active
     product: 客户私域AI接管
     note: "Sprint 06081603 — 模块健康看板 Playwright（stub 超管 + module-health API，三态渲染 + 错误态）"
+
+  - id: agent-module-e2e-verify-preflight
+    path: sprints/06081800-agent-module-e2e-verify/tests/agent-module-e2e.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 客户私域AI接管
+    note: "Sprint 06081800 — preflight MOCK_WECHAT_VERSION 跨平台覆盖 + version-only warning 路径"
