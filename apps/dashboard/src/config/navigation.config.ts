@@ -27,6 +27,7 @@ import {
   Building2,
   MonitorCheck,
   MessageCircle,
+  Activity,
 } from 'lucide-react';
 
 // ============ 类型定义 ============
@@ -112,6 +113,8 @@ export const autopilotPageComponents: Record<string, () => Promise<{ default: Co
   'AdminPublishLogsPage': () => import('../pages/AdminPublishLogsPage'),
   // Path 4 Sprint B — 微信客服中台配置
   'WechatCustomerServiceConfigPage': () => import('../pages/WechatCustomerServiceConfigPage'),
+  // Sprint 06081603 — 模块健康看板（客户机器 × Line 状态矩阵）
+  'ModuleHealthPage': () => import('../pages/ModuleHealthPage'),
 };
 
 export const pageComponents = autopilotPageComponents;
@@ -287,6 +290,14 @@ export const autopilotNavGroups: NavGroup[] = [
         featureKey: 'operator-dashboard',
         requireSuperAdmin: true,
         component: 'OperatorPage',
+      },
+      {
+        path: '/module-health',
+        icon: Activity,
+        label: '模块健康',
+        featureKey: 'module-health',
+        requireSuperAdmin: true,
+        component: 'ModuleHealthPage',
       },
       {
         path: '/admin/license',

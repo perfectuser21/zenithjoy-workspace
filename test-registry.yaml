@@ -2985,3 +2985,27 @@ agent_suite:
     status: active
     product: 客户私域AI接管
     note: "微信客服加固静态校验（5处修复 + 心跳端点 + watchdog/autostart 落地，CI Linux 可跑）"
+
+  - id: module-health-page
+    path: apps/dashboard/src/pages/__tests__/ModuleHealthPage.test.tsx
+    type: unit
+    ci: L3
+    status: active
+    product: 客户私域AI接管
+    note: "Sprint 06081603 — 模块健康看板组件：矩阵三态(🟢/🔴+reason/⚪) + formatRelativeTime"
+
+  - id: module-health-api-client
+    path: apps/dashboard/src/api/__tests__/moduleHealth.api.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 客户私域AI接管
+    note: "Sprint 06081603 — module-health API 客户端单测（fetch URL/解析/错误态）"
+
+  - id: module-health-page-e2e
+    path: apps/dashboard/e2e/module-health.spec.ts
+    type: e2e
+    ci: windows_cloud
+    status: active
+    product: 客户私域AI接管
+    note: "Sprint 06081603 — 模块健康看板 Playwright（stub 超管 + module-health API，三态渲染 + 错误态）"
