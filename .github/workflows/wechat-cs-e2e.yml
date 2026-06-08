@@ -12,6 +12,10 @@ on:
     branches: [main, 'cp-*']
   pull_request:
     branches: [main]
+    paths:
+      - 'services/agent/**'
+      - 'apps/api/**'
+      - '.github/workflows/wechat-cs-e2e.yml'
   workflow_dispatch:
 
 concurrency:
@@ -109,9 +113,6 @@ jobs:
     name: job2 — Agent 启动路径 + listen_chat dryrun（self-hosted xian-rog）
     runs-on: [self-hosted, wechat-capable]
     timeout-minutes: 12
-    defaults:
-      run:
-        shell: pwsh
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -119,10 +120,12 @@ jobs:
           node-version: '20'
 
       - name: Install services/agent deps
+        shell: bash
         working-directory: services/agent
         run: npm ci
 
       - name: Agent 路径解析单测（process.execPath / getPythonExe，Windows 验证）
+        shell: bash
         working-directory: services/agent
         # 仅跑路径解析相关用例：resolveScript / getPythonExe / process.execPath。
         # "非 Windows skip" 用例按设计只在 Linux agent CI 跑（windows-latest 上 startWechatListener
@@ -130,20 +133,19 @@ jobs:
         run: npx vitest run src/handlers/__tests__/wechat-rpa.test.ts -t "resolveScript|getPythonExe|process.execPath"
 
       - name: listen_chat.py --dryrun-print-version 退出码 0
+        shell: bash
         working-directory: services/agent/wechat-rpa
-        run: |
-          python listen_chat.py --dryrun-print-version
-          echo "exit=$LASTEXITCODE"
+        run: python listen_chat.py --dryrun-print-version
 
       - name: listen_chat.py --dryrun 注入消息退出码 0（中台 dryrun，不真发）
+        shell: bash
         working-directory: services/agent/wechat-rpa
         env:
           WECHAT_DRAFT_API_DRYRUN: '1'
-        run: |
-          python listen_chat.py --dryrun --inject-message '{"sender":"ci","wechat_id":"ci_wx","content":"hi"}'
-          echo "exit=$LASTEXITCODE"
+        run: python listen_chat.py --dryrun --inject-message '{"sender":"ci","wechat_id":"ci_wx","content":"hi"}'
 
       - name: 纯逻辑单测（_parse_item_name / reply_in_chat / post_heartbeat）
+        shell: bash
         working-directory: services/agent/wechat-rpa
         run: |
           python -m pip install --quiet pytest
