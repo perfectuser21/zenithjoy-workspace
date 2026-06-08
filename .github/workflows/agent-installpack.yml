@@ -40,7 +40,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: zenithjoy-agent-installpack
-          path: services/agent/dist-installpack/zenithjoy-agent-v*.tar.gz
+          path: |
+            services/agent/dist-installpack/zenithjoy-agent-v*.tar.gz
+            services/agent/dist-installpack/manifest.json
           retention-days: 1
 
   # 各 Line 模块独立打包（与 build 并行），上传到 COS modules/ 目录。
@@ -101,7 +103,9 @@ jobs:
       cos_url: ${{ steps.cos_upload.outputs.cos_url }}
       pack_name: ${{ steps.cos_upload.outputs.pack_name }}
     steps:
-      - uses: actions/checkout@v4
+      # 注意：xian-rog 在中国境内，无法访问 github.com（HTTPS 443 被墙）。
+      # 故意不用 actions/checkout@v4，改用 inline Python 脚本上传 COS。
+      # actions/download-artifact 和 upload-artifact 走 Actions 内部 API，不走 github.com，可用。
 
       - name: Download tar.gz artifact from GitHub
         uses: actions/download-artifact@v4
@@ -126,8 +130,40 @@ jobs:
           Write-Host "[upload] Installing cos-python-sdk-v5..."
           python -m pip install cos-python-sdk-v5 -q 2>&1 | Write-Host
 
+          # inline cos-upload（无需 checkout，xian-rog 访问不了 github.com）
+          $pyScript = @'
+import os, sys, time
+try:
+    from qcloud_cos import CosConfig, CosS3Client
+except ImportError:
+    import subprocess
+    subprocess.check_call([sys.executable, "-m", "pip", "install", "cos-python-sdk-v5", "-q"])
+    from qcloud_cos import CosConfig, CosS3Client
+
+local_path, bucket, region, cos_key = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4]
+config = CosConfig(Region=region, SecretId=os.environ["COS_SECRET_ID"],
+                   SecretKey=os.environ["COS_SECRET_KEY"], Timeout=600)
+client = CosS3Client(config)
+size_mb = os.path.getsize(local_path) // 1024 // 1024
+print(f"[cos-upload] {local_path} ({size_mb}MB) -> cos://{bucket}/{cos_key}")
+MAX_ATTEMPTS = 3
+for attempt in range(1, MAX_ATTEMPTS + 1):
+    try:
+        response = client.upload_file(Bucket=bucket, LocalFilePath=local_path,
+            Key=cos_key, MAXThread=1, EnableMD5=False, PartSize=5)
+        print(f"[cos-upload] done ETag={response.get('ETag', '?')}")
+        break
+    except Exception as e:
+        if attempt == MAX_ATTEMPTS: raise
+        wait = 30 * attempt
+        print(f"[cos-upload] attempt {attempt}/{MAX_ATTEMPTS} failed: {e}")
+        print(f"[cos-upload] retrying in {wait}s...")
+        time.sleep(wait)
+'@
+          $pyScript | Set-Content -Path "cos-upload-inline.py" -Encoding utf8NoBOM
+
           Write-Host "[upload] Uploading dist-installpack\$pack -> cos://$bucket/$cosKey"
-          python services/agent/scripts/cos-upload.py "dist-installpack\$pack" $bucket $region $cosKey
+          python cos-upload-inline.py "dist-installpack\$pack" $bucket $region $cosKey
 
           "cos_url=$cosUrl" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8NoBOM
           "pack_name=$pack" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8NoBOM
