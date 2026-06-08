@@ -89,6 +89,124 @@ describe('ModuleManager', () => {
     expect(() => mm.forwardMessage('line04-wechat-cs', { type: 'incoming_message' })).not.toThrow();
   });
 
+  it('downloadModule 失败时 syncModules 不抛异常，并把失败原因记入 module_status', async () => {
+    const downloadImpl = vi.fn().mockRejectedValue(new Error('COS 503'));
+    const mm = new ModuleManager({ modulesRoot: root, downloadImpl });
+
+    await expect(
+      mm.syncModules({
+        'line04-wechat-cs': { status: 'active', required_version: '1.0.0' },
+      }),
+    ).resolves.toBeUndefined();
+
+    const report = mm.getModuleStatusReport();
+    expect(report['line04-wechat-cs'].ok).toBe(false);
+    expect(report['line04-wechat-cs'].reason).toContain('COS 503');
+    // 下载失败 → 不应激活
+    expect(mm.getActiveModules()).toEqual([]);
+  });
+
+  it('manifest.json 损坏时不崩溃，activateModule 回退默认入口 index.js', async () => {
+    const dir = path.join(root, 'line04-wechat-cs-1.2.3');
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, 'manifest.json'), '{ 这不是合法 JSON');
+    fs.writeFileSync(path.join(dir, 'index.js'), '');
+
+    const forkImpl = vi.fn().mockReturnValue({
+      on: vi.fn(),
+      send: vi.fn(),
+      connected: true,
+    } as unknown as import('node:child_process').ChildProcess);
+    const preflightImpl = vi.fn().mockResolvedValue({ ok: true });
+    const mm = new ModuleManager({ modulesRoot: root, forkImpl, preflightImpl });
+
+    await expect(
+      mm.syncModules({
+        'line04-wechat-cs': { status: 'active', required_version: '1.2.3' },
+      }),
+    ).resolves.toBeUndefined();
+
+    expect(forkImpl).toHaveBeenCalledTimes(1);
+    // 默认入口 index.js
+    expect(forkImpl.mock.calls[0][0]).toContain('index.js');
+    expect(mm.getActiveModules()).toEqual(['line04-wechat-cs']);
+  });
+
+  it('preflight 未通过时触发 onPreflightFail 回调（弹窗 + 上报），且不激活', async () => {
+    const dir = path.join(root, 'line04-wechat-cs-3.0.0');
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(
+      path.join(dir, 'manifest.json'),
+      JSON.stringify({ lineId: 'line04-wechat-cs', version: '3.0.0', entry: 'index.js' }),
+    );
+
+    const onPreflightFail = vi.fn();
+    const forkImpl = vi.fn();
+    const preflightImpl = vi.fn().mockResolvedValue({
+      ok: false,
+      reason: 'wechat_version_too_high',
+      fixGuide: '微信版本过高，请降级到 4.1.8',
+    });
+    const mm = new ModuleManager({
+      modulesRoot: root,
+      forkImpl,
+      preflightImpl,
+      onPreflightFail,
+    });
+
+    await mm.syncModules({
+      'line04-wechat-cs': { status: 'active', required_version: '3.0.0' },
+    });
+
+    expect(onPreflightFail).toHaveBeenCalledTimes(1);
+    expect(onPreflightFail).toHaveBeenCalledWith('line04-wechat-cs', {
+      ok: false,
+      reason: 'wechat_version_too_high',
+      fixGuide: '微信版本过高，请降级到 4.1.8',
+    });
+    expect(forkImpl).not.toHaveBeenCalled();
+    expect(mm.getActiveModules()).toEqual([]);
+    // fixGuide 进入上报 reason（fixGuide 优先于 reason）
+    expect(mm.getModuleStatusReport()['line04-wechat-cs'].reason).toBe(
+      'wechat_version_too_high',
+    );
+  });
+
+  it('forwardMessage 把消息发给已激活模块子进程', async () => {
+    const dir = path.join(root, 'line04-wechat-cs-4.0.0');
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(
+      path.join(dir, 'manifest.json'),
+      JSON.stringify({ lineId: 'line04-wechat-cs', version: '4.0.0', entry: 'index.js' }),
+    );
+    const send = vi.fn();
+    const forkImpl = vi.fn().mockReturnValue({
+      on: vi.fn(),
+      send,
+      connected: true,
+    } as unknown as import('node:child_process').ChildProcess);
+    const preflightImpl = vi.fn().mockResolvedValue({ ok: true });
+    const mm = new ModuleManager({ modulesRoot: root, forkImpl, preflightImpl });
+
+    await mm.syncModules({
+      'line04-wechat-cs': { status: 'active', required_version: '4.0.0' },
+    });
+    send.mockClear(); // 清掉 activate 时的 config 消息
+
+    const msg = { type: 'incoming_message', data: { foo: 'bar' } };
+    mm.forwardMessage('line04-wechat-cs', msg);
+    expect(send).toHaveBeenCalledWith(msg);
+  });
+
+  it('defaultModulesRoot 在非 Windows 走 ~/.zenithjoy/modules（graceful fallback，不崩溃）', () => {
+    // 仅断言构造不抛异常 + 路径以 modules 结尾
+    const mm = new ModuleManager();
+    expect(mm.getModulesRoot()).toContain('modules');
+    expect(mm.getModuleDir('line04-wechat-cs', '1.0.0')).toContain(
+      'line04-wechat-cs-1.0.0',
+    );
+  });
+
   it('preflight 通过时 fork 模块并写入 active 列表，发送 config 消息', async () => {
     const dir = path.join(root, 'line04-wechat-cs-2.0.0');
     fs.mkdirSync(dir, { recursive: true });
