@@ -316,3 +316,73 @@ def test_heartbeat_body_includes_agent_id_when_set(monkeypatch):
         f"agent_id='xian-pc' 时 body 应含 agent_id='xian-pc'，"
         f"实际: {body.get('agent_id')}"
     )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# F. _find_chat_input 搜索栏误判
+#
+# 根因：回退逻辑按面积选最大 Edit，搜索栏（顶部 ~5%）宽度大、
+#   面积可超过聊天输入框，SetValue 打到搜索栏而非聊天输入框。
+# 修法：过滤掉窗口上 40% 区域内的 Edit（top < window.top + height*0.4）。
+# ─────────────────────────────────────────────────────────────────────────────
+
+class _Rect:
+    def __init__(self, left, top, right, bottom):
+        self.left, self.top, self.right, self.bottom = left, top, right, bottom
+
+
+class _FakeEdit:
+    def __init__(self, aid, rect):
+        class _EI:
+            def __init__(self, aid):
+                self.automation_id = aid
+                self.name = ""
+        self.element_info = _EI(aid)
+        self._rect = rect
+
+    def rectangle(self):
+        return self._rect
+
+
+class _FakeMW:
+    def __init__(self, win_rect, edits):
+        self._rect = win_rect
+        self._edits = edits
+
+    def rectangle(self):
+        return self._rect
+
+    def descendants(self, control_type=None):
+        return self._edits
+
+
+def test_find_chat_input_excludes_search_bar():
+    """搜索栏（窗口上方）面积比聊天输入框大时，_find_chat_input 应返回聊天输入框。
+
+    真实 bug 场景：搜索栏横跨整个联系人栏宽度（1200×40=48000），
+    聊天输入框在右侧底部较窄（300×30=9000），旧逻辑按面积返回搜索栏。
+    """
+    win = _Rect(0, 0, 1200, 900)
+    # 搜索栏：顶部横跨全宽，面积 = 1200×40 = 48000（大）
+    search_bar = _FakeEdit("", _Rect(0, 0, 1200, 40))
+    # 聊天输入框：底部右侧较窄，面积 = 300×30 = 9000（小）
+    chat_input = _FakeEdit("", _Rect(300, 750, 600, 780))
+    mw = _FakeMW(win, [search_bar, chat_input])
+
+    result = listen_chat._find_chat_input(mw)
+    assert result is chat_input, (
+        "_find_chat_input 应返回聊天输入框（底部），而非搜索栏（顶部）"
+    )
+
+
+def test_find_chat_input_fallback_when_filter_removes_all():
+    """若位置过滤后候选为空（所有 Edit 在上半区），应退化到旧逻辑返回面积最大者。"""
+    win = _Rect(0, 0, 1200, 900)
+    edit_a = _FakeEdit("", _Rect(0, 10, 500, 50))   # 面积 20000
+    edit_b = _FakeEdit("", _Rect(0, 60, 800, 100))  # 面积 32000（更大）
+    mw = _FakeMW(win, [edit_a, edit_b])
+
+    result = listen_chat._find_chat_input(mw)
+    assert result is edit_b, (
+        "所有 Edit 在上半区时，应退化到旧逻辑返回面积最大者"
+    )
