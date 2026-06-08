@@ -80,15 +80,15 @@ jobs:
     steps:
       # 从 COS 国内加速节点下载（xian-rog 在国内，比 GitHub Artifact 快 10x+）
       - name: Download from COS (国内加速)
-        shell: pwsh
+        shell: bash
         run: |
-          $cosUrl = "${{ needs.build.outputs.cos_url }}"
-          $packName = "${{ needs.build.outputs.pack_name }}"
-          New-Item -ItemType Directory -Force -Path dist-installpack | Out-Null
-          Write-Host "[verify] Downloading from COS: $cosUrl"
-          $ProgressPreference = 'SilentlyContinue'
-          Invoke-WebRequest -Uri $cosUrl -OutFile "dist-installpack\$packName" -UseBasicParsing
-          Write-Host "[verify] Download complete: $('{0:N1}' -f ((Get-Item "dist-installpack\$packName").Length / 1MB)) MB"
+          set -euo pipefail
+          cosUrl="${{ needs.build.outputs.cos_url }}"
+          packName="${{ needs.build.outputs.pack_name }}"
+          mkdir -p dist-installpack
+          echo "[verify] Downloading from COS: $cosUrl"
+          curl -L -o "dist-installpack/$packName" "$cosUrl"
+          echo "[verify] Download complete: $(du -sh "dist-installpack/$packName" | cut -f1)"
 
       - name: Dryrun verify (real embedded-python import check)
         shell: bash
@@ -104,8 +104,8 @@ jobs:
 
       - name: Cleanup
         if: always()
-        shell: pwsh
-        run: Remove-Item -Recurse -Force dist-installpack -ErrorAction SilentlyContinue
+        shell: bash
+        run: rm -rf dist-installpack
 
   publish:
     needs: [verify-on-rog]
