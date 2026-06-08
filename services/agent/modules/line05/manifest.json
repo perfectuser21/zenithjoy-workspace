@@ -1,0 +1,8 @@
+{
+  "lineId": "line05-video",
+  "version": "1.0.0",
+  "displayName": "视频剪辑",
+  "entry": "index.js",
+  "platform": ["win32", "darwin", "linux"],
+  "minMemoryGB": 4
+}

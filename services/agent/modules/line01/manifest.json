@@ -1,0 +1,8 @@
+{
+  "lineId": "line01-publish",
+  "version": "1.0.0",
+  "displayName": "智能发布",
+  "entry": "index.js",
+  "platform": ["win32", "darwin", "linux"],
+  "minMemoryGB": 2
+}
