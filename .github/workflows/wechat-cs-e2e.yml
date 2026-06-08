@@ -12,6 +12,10 @@ on:
     branches: [main, 'cp-*']
   pull_request:
     branches: [main]
+    paths:
+      - 'services/agent/**'
+      - 'apps/api/**'
+      - '.github/workflows/wechat-cs-e2e.yml'
   workflow_dispatch:
 
 concurrency:
