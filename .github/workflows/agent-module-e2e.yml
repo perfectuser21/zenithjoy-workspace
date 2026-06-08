@@ -137,7 +137,7 @@ jobs:
     timeout-minutes: 10
     defaults:
       run:
-        shell: pwsh
+        shell: powershell
         working-directory: services/agent
 
     steps:
