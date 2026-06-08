@@ -457,6 +457,14 @@ tests:
     product: AI员工
     note: "watchdog CRLF regression — listener-watchdog.bat 读 .env 前必须剥 \\r，防 ZENITHJOY_API_BASE 污染"
 
+  - id: agent-module-manager
+    path: services/agent/src/__tests__/module-manager.test.ts
+    type: unit
+    ci: L2
+    status: active
+    product: AI员工
+    note: "Sprint 06081700 — Core 模块管理器：syncModules 版本差异触发下载 / runModulePreflight 未安装返回 module_not_installed / getActiveModules / fork 激活 + IPC config / forwardMessage 不抛"
+
   # ── Walking Skeleton #1 — Agent handlers ────────────────────────────────────
   - id: agent-ws1-heartbeat-loop
     path: services/agent/src/handlers/__tests__/heartbeat-loop.test.ts

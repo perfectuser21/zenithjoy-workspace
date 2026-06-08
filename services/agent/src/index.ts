@@ -28,16 +28,15 @@ import {
   HeartbeatLoop,
   type HeartbeatTask,
   type HeartbeatResponse,
-  type ModuleStatusReport,
 } from './handlers/heartbeat-loop';
-import { runPreflight } from './preflight/preflight-runner';
+// Sprint 06081700 — Core 模块管理器（下载/解压/preflight/fork）。
+// Line 特有逻辑（wechat-rpa / preflight）下沉到按需下载的 Line 模块包，core 不再直接引用。
+import { ModuleManager } from './module-manager';
 import { handleQrBindDouyin } from './handlers/qr-bind-douyin';
 // Path 2 Sprint B-1 — burner 小号绑定 handler（独立文件，与 Path 1 主号物理隔离）
 import { handleQrBindDouyinBurner } from './handlers/qr-bind-douyin-burner';
 // 运营中枢 — 8 平台主号统一 qr-bind handler（Line 00 Session Health Medium）
 import { handleQrBindOperator } from './handlers/qr-bind-operator';
-// Path 4 Sprint 1 WS1 — wechat-rpa handler (Python dryrun stub, 真 wechat_bot.py 在 WS3/4 接)
-import { handleWechatRpa, startWechatListener, type WechatRpaTask } from './handlers/wechat-rpa';
 import { createFolderWatchManager } from './handlers/folder-watch';
 import { startHealthServer, setWsState } from './handlers/health-server';
 import { startVideoPipelineLoop } from './handlers/video-pipeline';
@@ -158,6 +157,21 @@ const VERSION: string = (require('../package.json') as { version: string }).vers
 const startTime = Date.now();
 let backoff = 1000;
 const MAX_BACKOFF = 30000;
+
+// Sprint 06081700 — Core 模块管理器单例。
+// 收到心跳 modules 响应后按需下载/解压/preflight/fork Line 模块；
+// preflight 失败本地弹窗，模块子进程消息回流由 onModuleMessage 接住。
+const moduleManager = new ModuleManager({
+  onPreflightFail: (lineId, result) => {
+    showModuleError(
+      MODULE_LABELS[lineId] ?? lineId,
+      result.fixGuide ?? result.reason ?? '环境预检未通过',
+    );
+  },
+  onModuleMessage: (lineId, msg) => {
+    console.log(`[module:${lineId}] →core`, msg);
+  },
+});
 
 function makeMsg(type: string, payload: unknown, taskId?: string) {
   return {
@@ -487,13 +501,15 @@ async function main(): Promise<void> {
   ]);
   console.log('[agent] ffmpeg + hyperframes ready — starting loops');
 
+  // Sprint 06081700 — 把 agentId / apiBase 交给模块管理器，激活模块时随 config 消息下发
+  moduleManager.setIdentity(
+    cfg.agentUuid ?? cfg.agentId,
+    deriveHttpApiBase(cfg) ?? undefined,
+  );
+
   startWs1HeartbeatLoop(cfg);
 
-  // Path 4 Step 1 — Windows 自启微信监听（pywinauto，非 Windows 自动 skip）
-  const _wechatApiBase = deriveHttpApiBase(cfg);
-  if (_wechatApiBase) {
-    startWechatListener(_wechatApiBase);
-  }
+  // Path 4 微信监听已下沉到 line04 模块（按需下载 + fork），core 不再直接启动。
 
   // 智能获客：关键词任务轮询 + 抖音视频搜索
   if (process.env.ZENITHJOY_DISABLE_ACQUISITION !== '1') {
@@ -655,44 +671,38 @@ const MODULE_LABELS: Record<string, string> = {
   'line05-video': '视频剪辑',
 };
 
-// 把心跳响应里的 modules（可能是字符串或 {status,...} 描述对象）规整成 tray 需要的 status map
-function normalizeModules(
-  modules: NonNullable<HeartbeatResponse['modules']>,
-): Record<string, string> {
-  const out: Record<string, string> = {};
-  for (const [name, v] of Object.entries(modules)) {
-    out[name] = typeof v === 'string' ? v : v?.status ?? 'unknown';
-  }
-  return out;
-}
-
-// 对每个 active 模块跑 preflight，结果写回 loop（随下次心跳上报）+ 失败本地弹窗
-async function runModulePreflights(
+// Sprint 06081700 — 心跳收到 modules 响应：交给 ModuleManager 同步
+//   （对比本地版本 → 按需下载/解压 → preflight → 通过则 fork 激活，失败本地弹窗），
+//   再把各模块 preflight 结果回写 loop（随下次心跳 module_status 上报）+ 刷新托盘激活态。
+async function syncModulesFromHeartbeat(
   resp: HeartbeatResponse,
   loop: HeartbeatLoop,
 ): Promise<void> {
   const modules = resp.modules;
   if (!modules) return;
-  const report: Record<string, ModuleStatusReport> = {};
-  for (const [lineId, v] of Object.entries(modules)) {
-    const status = typeof v === 'string' ? v : v?.status;
-    if (status !== 'active') continue;
-    try {
-      const r = await runPreflight(lineId);
-      report[lineId] = { ok: r.ok, reason: r.reason };
-      if (!r.ok && r.reason) {
-        showModuleError(MODULE_LABELS[lineId] ?? lineId, r.reason);
-      }
-    } catch (err) {
-      report[lineId] = {
-        ok: false,
-        reason: `环境预检异常：${(err as Error).message}`,
-      };
-    }
-  }
+  await moduleManager.syncModules(modules);
+  const report = moduleManager.getModuleStatusReport();
   if (Object.keys(report).length > 0) {
     loop.setModuleStatus(report);
   }
+  updateTrayModules(buildTrayModules(modules));
+}
+
+// 把心跳 modules + ModuleManager 激活态合成托盘渲染数据（仅展示已购买/激活的 Line）
+function buildTrayModules(
+  modules: NonNullable<HeartbeatResponse['modules']>,
+): Record<string, { label: string; running: boolean }> {
+  const active = new Set(moduleManager.getActiveModules());
+  const out: Record<string, { label: string; running: boolean }> = {};
+  for (const [lineId, v] of Object.entries(modules)) {
+    const status = typeof v === 'string' ? v : v?.status;
+    if (status !== 'active') continue;
+    out[lineId] = {
+      label: MODULE_LABELS[lineId] ?? lineId,
+      running: active.has(lineId),
+    };
+  }
+  return out;
 }
 
 function startWs1HeartbeatLoop(cfg: AgentConfig): void {
@@ -803,13 +813,13 @@ function startWs1HeartbeatLoop(cfg: AgentConfig): void {
         task.platform === 'wechat_moments_send' ||
         task.platform === 'wechat_private_chat_send'
       ) {
-        // Path 4 Sprint 1 WS1 — wechat-rpa dispatch (Python dryrun stub)
-        // 真 dispatch + 回报中台在 WS3/4 接入 (真 wechat_bot.py / wechat_rpa.py)
-        const res = await handleWechatRpa({
-          type: task.platform as WechatRpaTask['type'],
-          payload: (task.payload as Record<string, unknown>) || {},
+        // Sprint 06081700 — Path 4 微信任务转发给已激活的 line04 模块子进程处理。
+        // 模块未激活（未购买/preflight 未过）时 forwardMessage 仅记录日志，不报错。
+        moduleManager.forwardMessage('line04-wechat-cs', {
+          type: 'incoming_message',
+          data: { taskType: task.platform, task_id: task.task_id, payload: task.payload },
         });
-        console.log('[p4-ws1:wechat-rpa]', task.platform, 'result:', res);
+        console.log('[p4:wechat] forwarded to line04 module:', task.platform);
       } else {
         console.warn('[ws1] unknown task platform:', task.platform);
       }
@@ -830,8 +840,7 @@ function startWs1HeartbeatLoop(cfg: AgentConfig): void {
     onTask,
     onHeartbeat: (resp) => {
       if (resp.modules) {
-        updateTrayModules(normalizeModules(resp.modules));
-        void runModulePreflights(resp, loop);
+        void syncModulesFromHeartbeat(resp, loop);
       }
     },
     onError: (err) => console.warn('[ws1:heartbeat] error:', err),

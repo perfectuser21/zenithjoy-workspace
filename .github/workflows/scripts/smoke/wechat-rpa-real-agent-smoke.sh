@@ -9,8 +9,8 @@
 #   2. dist/handlers/wechat-rpa.js 含 send_chat.py / qr_bind.py / send_moment.py 路径映射
 #   3. dist/handlers/wechat-rpa.js 含 REAL_PUBLISH 环境变量注入
 #   4. dist/handlers/wechat-rpa.js 含 startWechatListener 导出 + win32 平台判断
-#   5. dist/index.js 启动时调用 startWechatListener
-#   6. Agent 版本号 == 1.1.77
+#   5. dist/index.js 把微信任务转发给 line04 模块（Core v2.0.0 模块化：监听下沉模块，core 只转发）
+#   6. Agent 版本号 >= 1.1.77
 
 set -euo pipefail
 
@@ -51,9 +51,12 @@ grep -q "startWechatListener" "$DIST" || { echo "FAIL: startWechatListener 未�
 grep -q "win32" "$DIST" || { echo "FAIL: win32 判断未找到"; exit 1; }
 echo "  ✅ PASS"
 
-echo "[6] dist/index.js 启动时调用 startWechatListener"
-grep -q "startWechatListener" "$DIST_INDEX" || { echo "FAIL: index.js 未调用 startWechatListener"; exit 1; }
-echo "  ✅ PASS"
+echo "[6] dist/index.js 把微信任务转发给 line04 模块（Core v2.0.0 模块化）"
+# Core v2.0.0：wechat 监听/RPA 下沉到按需下载的 line04 模块，core 启动不再直连 startWechatListener，
+# 而是通过 ModuleManager.forwardMessage 把 wechat 任务转发给已激活的 line04 模块子进程。
+grep -q "forwardMessage" "$DIST_INDEX" || { echo "FAIL: index.js 未通过 forwardMessage 转发微信任务"; exit 1; }
+grep -q "line04-wechat-cs" "$DIST_INDEX" || { echo "FAIL: index.js 未引用 line04-wechat-cs 模块"; exit 1; }
+echo "  ✅ PASS (core 转发微信任务给 line04 模块)"
 
 echo "[7] Agent 版本 >= 1.1.77（wechat-rpa 真实接线起始版本）"
 MIN_VERSION="1.1.77"
