@@ -27,8 +27,13 @@ let systray: any = null;
 let trayReady = false;
 let currentStatus: TrayStatus = 'connecting';
 let handlers: TrayHandlers | null = null;
-// 动态模块状态：模块名 → active | locked | not_purchased，由 heartbeat 推送
-let currentModules: Record<string, string> = {};
+// Sprint 06081700 — 动态模块态：lineId → { 中文名, 是否运行中 }，由 ModuleManager 经 heartbeat 推送。
+// running=true → 「● 运行中」；running=false → 「○ 待安装」。
+export interface TrayModuleInfo {
+  label: string;
+  running: boolean;
+}
+let currentModules: Record<string, TrayModuleInfo> = {};
 
 function statusLabel(): string {
   switch (currentStatus) {
@@ -84,15 +89,14 @@ export function startTray(h: TrayHandlers): void {
 
   const iconBase64 = loadIconBase64();
 
-  // 动态模块区：过滤未购买，active=运行中(禁用)，locked=未购买(禁用，提示购买)
-  const moduleItems = Object.entries(currentModules)
-    .filter(([, status]) => status !== 'not_purchased')
-    .map(([name, status]) => ({
-      title: status === 'active' ? `${name} ● 运行中` : `${name} 🔒 未购买`,
-      tooltip: name,
-      enabled: false,
-      checked: false,
-    }));
+  // Sprint 06081700 — 动态渲染激活中的 Line 模块：
+  //   running → 「{中文名} ● 运行中」 / 待安装 → 「{中文名} ○ 待安装」
+  const moduleItems = Object.entries(currentModules).map(([lineId, info]) => ({
+    title: info.running ? `${info.label} ● 运行中` : `${info.label} ○ 待安装`,
+    tooltip: lineId,
+    enabled: false,
+    checked: false,
+  }));
 
   try {
     systray = new SysTray({
@@ -194,7 +198,7 @@ export function updateTrayStatus(status: TrayStatus): void {
   pushStatusToTray();
 }
 
-export function updateTrayModules(modules: Record<string, string>): void {
+export function updateTrayModules(modules: Record<string, TrayModuleInfo>): void {
   currentModules = modules;
   // systray2 不支持运行时增删菜单项，仅缓存状态；下次 startTray（如重启 Agent）
   // 菜单初始化时生效。已 ready 的托盘无法热重建 items。
