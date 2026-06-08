@@ -1721,6 +1721,14 @@ tests:
     product: 私域运营
     note: "P4 WS1 — Agent wechat-rpa handler spawn python3 + JSON stdio receipt"
 
+  - id: agent-module-preflight
+    path: services/agent/src/preflight/__tests__/preflight.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 私域运营
+    note: "Sprint 06081603 — per-Line preflight 路由 + line04 微信版本/pywinauto/内存检测 + 注册表解析纯函数"
+
   - id: p4-ws1-openrouter-pairing
     path: apps/api/src/llm/__tests__/openrouter.test.ts
     type: unit
