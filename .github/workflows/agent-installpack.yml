@@ -13,8 +13,7 @@ jobs:
     # ubuntu-latest 需从 pkg-fetch.vercel.app 拉 win64 binary，该 CDN 不稳定 504
     runs-on: windows-latest
     outputs:
-      cos_url: ${{ steps.cos_upload.outputs.cos_url }}
-      pack_name: ${{ steps.cos_upload.outputs.pack_name }}
+      pack_name: ${{ steps.get_pack.outputs.pack_name }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -30,18 +29,42 @@ jobs:
         shell: bash
         run: bash scripts/build-install-pack.sh
         working-directory: services/agent
-
-      # 先上传 COS，让 verify-on-rog 可以从国内加速节点下载（避免从 GitHub Artifact 跨国拉 700MB）
-      - name: Upload to COS
-        id: cos_upload
+      - name: Get pack name
+        id: get_pack
         shell: bash
+        run: |
+          PACK=$(basename "$(ls services/agent/dist-installpack/zenithjoy-agent-v*.tar.gz | head -1)")
+          echo "pack_name=${PACK}" >> "$GITHUB_OUTPUT"
+          echo "[build] pack_name=${PACK}"
+      - name: Upload tar.gz artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: zenithjoy-agent-installpack
+          path: services/agent/dist-installpack/zenithjoy-agent-v*.tar.gz
+          retention-days: 1
+
+  # COS 上传必须在 ubuntu-latest：windows runner → COS China 的 multipart TCP 连接不稳定
+  upload-cos:
+    needs: [build]
+    runs-on: ubuntu-latest
+    outputs:
+      cos_url: ${{ steps.cos_upload.outputs.cos_url }}
+      pack_name: ${{ steps.cos_upload.outputs.pack_name }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download tar.gz artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: zenithjoy-agent-installpack
+          path: services/agent/dist-installpack/
+      - name: Upload to COS (ubuntu)
+        id: cos_upload
         env:
           COS_SECRET_ID: ${{ secrets.COS_SECRET_ID }}
           COS_SECRET_KEY: ${{ secrets.COS_SECRET_KEY }}
         run: |
-          # cos-python-sdk-v5 替代 coscmd：后者 multipart upload 在 Windows runner 静默失败 exit 0
           pip install cos-python-sdk-v5 -q
-          PACK=$(basename "$(ls services/agent/dist-installpack/zenithjoy-agent-v*.tar.gz | head -1)")
+          PACK="${{ needs.build.outputs.pack_name }}"
           BUCKET="zenithjoy-static-1333590468"
           REGION="ap-guangzhou"
           COS_KEY="install-pack/${PACK}"
@@ -54,10 +77,8 @@ jobs:
           echo "cos_url=${COS_URL}" >> "$GITHUB_OUTPUT"
           echo "pack_name=${PACK}" >> "$GITHUB_OUTPUT"
           echo "COS_URL=${COS_URL}" >> "$GITHUB_ENV"
-          echo "[build] uploaded to $COS_URL""
-
+          echo "[upload-cos] uploaded to $COS_URL"
       - name: Update manifest with cos_url
-        shell: bash
         run: |
           python3 -c "
           import json, os
@@ -67,10 +88,10 @@ jobs:
           m['cos_url'] = os.environ['COS_URL']
           with open(path, 'w') as f:
               json.dump(m, f, indent=2)
-          print('manifest.json updated with cos_url:', m['cos_url'])
+          print('manifest.json updated:', m['cos_url'])
           "
-
-      # 只把小体积的 manifest.json 存 artifact，publish job 读取后部署
+        env:
+          COS_URL: ${{ steps.cos_upload.outputs.cos_url }}
       - name: Upload manifest artifact
         uses: actions/upload-artifact@v4
         with:
@@ -81,7 +102,7 @@ jobs:
   # 用 embedded python 真 import pywinauto/win32api/comtypes，
   # 失败则 publish 不运行 — 防止把环境坏掉的包发到 COS/HK VPS。
   verify-on-rog:
-    needs: [build]
+    needs: [upload-cos]
     runs-on: [self-hosted, wechat-capable]
     steps:
       # 从 COS 国内加速节点下载（xian-rog 在国内，比 GitHub Artifact 快 10x+）
@@ -89,8 +110,8 @@ jobs:
         shell: powershell
         run: |
           $ProgressPreference = 'SilentlyContinue'
-          $cosUrl = "${{ needs.build.outputs.cos_url }}"
-          $packName = "${{ needs.build.outputs.pack_name }}"
+          $cosUrl = "${{ needs.upload-cos.outputs.cos_url }}"
+          $packName = "${{ needs.upload-cos.outputs.pack_name }}"
           New-Item -ItemType Directory -Force -Path dist-installpack | Out-Null
           Write-Host "[verify] Downloading from COS: $cosUrl"
           Invoke-WebRequest -Uri $cosUrl -OutFile "dist-installpack\$packName" -UseBasicParsing
@@ -119,7 +140,7 @@ jobs:
     needs: [verify-on-rog]
     runs-on: ubuntu-latest
     steps:
-      # COS 上传已在 build job 完成，此处只下载 manifest.json 用于部署
+      # COS 上传已在 upload-cos job 完成，此处只下载 manifest.json 用于部署
       - name: Download manifest artifact
         uses: actions/download-artifact@v4
         with:
@@ -154,10 +175,18 @@ jobs:
             exit 0
           fi
 
-          pip install coscmd -q
-          coscmd config -a "$COS_SECRET_ID" -s "$COS_SECRET_KEY" -b "$BUCKET" -e "$ENDPOINT"
-          coscmd upload WeChatWin_4.1.8.exe "$COS_PATH" --force || { echo "[mirror-wechat] 上传失败（非致命）"; exit 0; }
-          echo "[mirror-wechat] 已镜像到 $COS_URL"
+          pip install cos-python-sdk-v5 -q
+          python3 -c "
+import os
+from qcloud_cos import CosConfig, CosS3Client
+config = CosConfig(Region='ap-guangzhou', SecretId=os.environ['COS_SECRET_ID'], SecretKey=os.environ['COS_SECRET_KEY'])
+client = CosS3Client(config)
+try:
+    client.upload_file(Bucket='zenithjoy-static-1333590468', LocalFilePath='WeChatWin_4.1.8.exe', Key='install-pack/wechat/WeChatWin_4.1.8.exe', MAXThread=5)
+    print('[mirror-wechat] 已镜像到 COS')
+except Exception as e:
+    print('[mirror-wechat] 上传失败（非致命）:', e)
+"
 
       - name: Deploy manifest.json to HK VPS
         env:
