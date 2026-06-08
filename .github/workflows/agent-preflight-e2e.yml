@@ -1,0 +1,70 @@
+name: Agent Preflight E2E (xian-rog real machine)
+
+on:
+  push:
+    branches: [main, 'cp-*']
+    paths:
+      - 'services/agent/src/preflight/**'
+      - 'services/agent/package.json'
+      - '.github/workflows/agent-preflight-e2e.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'services/agent/src/preflight/**'
+      - 'services/agent/package.json'
+      - '.github/workflows/agent-preflight-e2e.yml'
+  workflow_dispatch:
+
+# 最小权限：self-hosted runner 上只读 repo 内容，不授予写权限（安全硬化）
+permissions:
+  contents: read
+
+# 同一分支新 push 取消旧运行，避免 self-hosted runner 排队堆积
+concurrency:
+  group: agent-preflight-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  preflight-xian-rog:
+    runs-on: [self-hosted, wechat-capable]
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install
+        shell: bash
+        working-directory: services/agent
+        run: npm ci
+
+      - name: Build
+        shell: bash
+        working-directory: services/agent
+        run: npm run build
+
+      - name: Run preflight line04 (real machine)
+        shell: bash
+        working-directory: services/agent
+        run: |
+          node -e "
+          const { runPreflight } = require('./dist/preflight/preflight-runner');
+          runPreflight('line04-wechat-cs').then(r => {
+            console.log(JSON.stringify(r, null, 2));
+            // xian-rog 已锁微信 4.1.8 + 装 pywinauto + 内存充足 → 应全通过。
+            // 若失败但原因仅微信版本（version/版本）则放行（机器临时升级场景），
+            // 其它原因（pywinauto/内存）失败即判 CI 红。
+            if (!r.ok && !/version|版本/.test(r.reason || '')) {
+              console.error('[preflight] line04 真机检测未通过（非版本原因）：' + (r.reason || '未知'));
+              console.error('[preflight] checks=' + JSON.stringify(r.checks));
+              process.exit(1);
+            }
+            console.log('[preflight] line04 真机检测通过');
+          }).catch(e => {
+            // 打印完整堆栈 + 平台/Python 上下文，便于真机排查
+            console.error('[preflight] runPreflight 抛出异常：', e && e.stack ? e.stack : e);
+            console.error('[preflight] platform=' + process.platform + ' arch=' + process.arch);
+            process.exit(1);
+          });
+          "
