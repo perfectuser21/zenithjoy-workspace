@@ -330,6 +330,9 @@ class _Rect:
     def __init__(self, left, top, right, bottom):
         self.left, self.top, self.right, self.bottom = left, top, right, bottom
 
+    def __repr__(self):
+        return f"Rect({self.left}, {self.top}, {self.right}, {self.bottom})"
+
 
 class _FakeEdit:
     def __init__(self, aid, rect):
@@ -385,4 +388,45 @@ def test_find_chat_input_fallback_when_filter_removes_all():
     result = listen_chat._find_chat_input(mw)
     assert result is edit_b, (
         "所有 Edit 在上半区时，应退化到旧逻辑返回面积最大者"
+    )
+
+
+def test_find_chat_input_automation_id_priority():
+    """chat_input_field automation_id 应优先于任何位置/面积逻辑直接返回。"""
+    win = _Rect(0, 0, 1200, 900)
+    # 正确的输入框在底部，但面积小
+    chat_input = _FakeEdit("chat_input_field", _Rect(300, 750, 600, 780))
+    # 底部另一个更大的 Edit（应被 automation_id 优先逻辑跳过）
+    big_edit = _FakeEdit("", _Rect(300, 600, 1200, 900))
+    mw = _FakeMW(win, [big_edit, chat_input])
+
+    result = listen_chat._find_chat_input(mw)
+    assert result is chat_input, (
+        "automation_id='chat_input_field' 的控件应直接返回，不走面积/位置回退"
+    )
+
+
+class _FakeMWRectFails:
+    """模拟 mw.rectangle() 抛异常的主窗口（测试退化路径）。"""
+    def __init__(self, edits):
+        self._edits = edits
+
+    def rectangle(self):
+        raise RuntimeError("UIA tree unavailable")
+
+    def descendants(self, control_type=None):
+        return self._edits
+
+
+def test_find_chat_input_degrades_when_mw_rect_fails():
+    """mw.rectangle() 抛异常时，_find_chat_input 应退化到旧逻辑（按面积最大选）。"""
+    # 搜索栏面积更大（48000），但无法获取窗口矩形时无法过滤，退化到旧逻辑
+    search_bar = _FakeEdit("", _Rect(0, 0, 1200, 40))   # 面积 48000
+    chat_input = _FakeEdit("", _Rect(300, 750, 600, 780))  # 面积 9000
+    mw = _FakeMWRectFails([search_bar, chat_input])
+
+    result = listen_chat._find_chat_input(mw)
+    # 退化到旧逻辑：返回面积最大者（搜索栏）——这是退化行为，不是 bug
+    assert result is search_bar, (
+        "mw.rectangle() 失败时应退化到旧逻辑返回面积最大者"
     )

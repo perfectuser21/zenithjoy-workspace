@@ -200,7 +200,7 @@ def _find_chat_input(mw: Any) -> Optional[Any]:
                 area = (r.right - r.left) * (r.bottom - r.top)
             except Exception:
                 area = 0
-                r = None
+                r = None  # r 在 except 分支赋值，确保 append 前始终有效
             candidates.append((area, aid, c, r))
         except Exception:
             continue
