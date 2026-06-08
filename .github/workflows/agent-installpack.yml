@@ -9,11 +9,13 @@ on:
 
 jobs:
   build:
-    # windows-latest: pkg 在 Windows 上原生编译 win-x64 exe，无需下载交叉编译 binary
-    # ubuntu-latest 需从 pkg-fetch.vercel.app 拉 win64 binary，该 CDN 不稳定 504
+    # windows-latest: pkg 在 Windows 上原生编译 win-x64 exe。
+    # COS 上传用 cos.accelerate.myqcloud.com（全球 CDN 加速，跨境 TCP 稳定）。
+    # Dryrun verify 也在此处跑（windows-latest 是 Windows，可直接执行 embedded python.exe）。
     runs-on: windows-latest
     outputs:
       pack_name: ${{ steps.get_pack.outputs.pack_name }}
+      cos_url: ${{ steps.cos_upload.outputs.cos_url }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -36,13 +38,64 @@ jobs:
           PACK=$(basename "$(ls services/agent/dist-installpack/zenithjoy-agent-v*.tar.gz | head -1)")
           echo "pack_name=${PACK}" >> "$GITHUB_OUTPUT"
           echo "[build] pack_name=${PACK}"
-      - name: Upload tar.gz artifact
+      - name: Upload to COS (cos.accelerate CDN bypass)
+        id: cos_upload
+        shell: powershell
+        env:
+          COS_SECRET_ID: ${{ secrets.COS_SECRET_ID }}
+          COS_SECRET_KEY: ${{ secrets.COS_SECRET_KEY }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $pack = (Get-ChildItem services\agent\dist-installpack\*.tar.gz | Select-Object -First 1).Name
+          $bucket = "zenithjoy-static-1333590468"
+          $endpoint = "cos.accelerate.myqcloud.com"
+          $cosKey = "install-pack/$pack"
+          $cosUrl = "https://$bucket.$endpoint/$cosKey"
+
+          Write-Host "[upload] Installing coscmd..."
+          python -m pip install coscmd -q 2>&1 | Write-Host
+
+          Write-Host "[upload] Configuring coscmd..."
+          coscmd config -a $env:COS_SECRET_ID -s $env:COS_SECRET_KEY -b $bucket -e $endpoint
+
+          Write-Host "[upload] Uploading services\agent\dist-installpack\$pack -> cos://$bucket/$cosKey"
+          coscmd upload "services\agent\dist-installpack\$pack" "/install-pack/$pack" --force
+
+          "cos_url=$cosUrl" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8NoBOM
+          "pack_name=$pack" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8NoBOM
+          Write-Host "[upload] done: $cosUrl"
+
+      - name: Dryrun verify (embedded-python import check)
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $pack = (Get-ChildItem services\agent\dist-installpack\*.tar.gz | Select-Object -First 1).FullName
+          $verifyDir = "dist-verify-tmp"
+          New-Item -ItemType Directory -Force -Path $verifyDir | Out-Null
+          Write-Host "[verify] extracting $pack"
+          tar xzf $pack -C $verifyDir
+          $agentDir = (Get-ChildItem -Directory "$verifyDir\zenithjoy-agent-v*" | Select-Object -First 1).FullName
+          Write-Host "[verify] agent dir: $agentDir"
+          & "$agentDir\python-embedded\python.exe" "$agentDir\wechat-rpa\listen_chat.py" --dryrun-print-version
+          if ($LASTEXITCODE -ne 0) { throw "dryrun-print-version failed with exit code $LASTEXITCODE" }
+          Write-Host "[verify] dryrun-print-version OK"
+          Remove-Item -Recurse -Force $verifyDir -ErrorAction SilentlyContinue
+
+      - name: Update manifest with cos_url
+        shell: powershell
+        env:
+          COS_URL: ${{ steps.cos_upload.outputs.cos_url }}
+        run: |
+          $m = Get-Content "services\agent\dist-installpack\manifest.json" | ConvertFrom-Json
+          $m | Add-Member -MemberType NoteProperty -Name "cos_url" -Value $env:COS_URL -Force
+          $m | ConvertTo-Json -Depth 5 | Set-Content "services\agent\dist-installpack\manifest.json" -Encoding utf8NoBOM
+          Write-Host "manifest.json updated: $env:COS_URL"
+
+      - name: Upload manifest artifact
         uses: actions/upload-artifact@v4
         with:
-          name: zenithjoy-agent-installpack
-          path: |
-            services/agent/dist-installpack/zenithjoy-agent-v*.tar.gz
-            services/agent/dist-installpack/manifest.json
+          name: zenithjoy-agent-manifest
+          path: services/agent/dist-installpack/manifest.json
           retention-days: 1
 
   # 各 Line 模块独立打包（与 build 并行），上传到 COS modules/ 目录。
@@ -93,90 +146,8 @@ jobs:
           coscmd upload "$PACK" "$COS_PATH" --force
           echo "Uploaded: https://${BUCKET}.${ENDPOINT}${COS_PATH}"
 
-  # COS 上传 + dryrun 合并在 xian-rog（中国节点）：
-  # xian-rog → COS ap-guangzhou 是国内链路，无跨境 TCP 连接被防火墙丢弃的问题。
-  # GitHub Actions ubuntu-latest（美国）→ COS China 的 multipart TCP 连接不稳定（已验证失败）。
-  upload-and-verify:
-    needs: [build]
-    runs-on: [self-hosted, wechat-capable]
-    outputs:
-      cos_url: ${{ steps.cos_upload.outputs.cos_url }}
-      pack_name: ${{ steps.cos_upload.outputs.pack_name }}
-    steps:
-      # 注意：xian-rog 在中国境内，无法访问 github.com（HTTPS 443 被墙）。
-      # 故意不用 actions/checkout@v4，改用 inline Python 脚本上传 COS。
-      # actions/download-artifact 和 upload-artifact 走 Actions 内部 API，不走 github.com，可用。
-
-      - name: Download tar.gz artifact from GitHub
-        uses: actions/download-artifact@v4
-        with:
-          name: zenithjoy-agent-installpack
-          path: dist-installpack/
-
-      - name: Upload to COS (xian-rog China → COS China，国内链路稳定)
-        id: cos_upload
-        shell: powershell
-        env:
-          COS_SECRET_ID: ${{ secrets.COS_SECRET_ID }}
-          COS_SECRET_KEY: ${{ secrets.COS_SECRET_KEY }}
-        run: |
-          $ErrorActionPreference = 'Stop'
-          $pack = (Get-ChildItem dist-installpack\*.tar.gz | Select-Object -First 1).Name
-          $bucket = "zenithjoy-static-1333590468"
-          $region = "ap-guangzhou"
-          $cosKey = "install-pack/$pack"
-          $cosUrl = "https://$bucket.cos.$region.myqcloud.com/$cosKey"
-
-          Write-Host "[upload] Installing cos-python-sdk-v5..."
-          python -m pip install cos-python-sdk-v5 -q 2>&1 | Write-Host
-
-          # inline cos-upload via base64（避免 PowerShell here-string 与 YAML 缩进冲突）
-          $b64 = "aW1wb3J0IG9zLCBzeXMsIHRpbWUKdHJ5OgogICAgZnJvbSBxY2xvdWRfY29zIGltcG9ydCBDb3NDb25maWcsIENvc1MzQ2xpZW50CmV4Y2VwdCBJbXBvcnRFcnJvcjoKICAgIGltcG9ydCBzdWJwcm9jZXNzCiAgICBzdWJwcm9jZXNzLmNoZWNrX2NhbGwoW3N5cy5leGVjdXRhYmxlLCAiLW0iLCAicGlwIiwgImluc3RhbGwiLCAiY29zLXB5dGhvbi1zZGstdjUiLCAiLXEiXSkKICAgIGZyb20gcWNsb3VkX2NvcyBpbXBvcnQgQ29zQ29uZmlnLCBDb3NTM0NsaWVudAoKbG9jYWxfcGF0aCwgYnVja2V0LCByZWdpb24sIGNvc19rZXkgPSBzeXMuYXJndlsxXSwgc3lzLmFyZ3ZbMl0sIHN5cy5hcmd2WzNdLCBzeXMuYXJndls0XQpjb25maWcgPSBDb3NDb25maWcoUmVnaW9uPXJlZ2lvbiwgU2VjcmV0SWQ9b3MuZW52aXJvblsiQ09TX1NFQ1JFVF9JRCJdLAogICAgICAgICAgICAgICAgICAgU2VjcmV0S2V5PW9zLmVudmlyb25bIkNPU19TRUNSRVRfS0VZIl0sIFRpbWVvdXQ9NjAwKQpjbGllbnQgPSBDb3NTM0NsaWVudChjb25maWcpCnNpemVfbWIgPSBvcy5wYXRoLmdldHNpemUobG9jYWxfcGF0aCkgLy8gMTAyNCAvLyAxMDI0CnByaW50KCJbY29zLXVwbG9hZF0ge30gKHt9IE1CKSAtPiBjb3M6Ly97fS97fSIuZm9ybWF0KGxvY2FsX3BhdGgsIHNpemVfbWIsIGJ1Y2tldCwgY29zX2tleSkpCk1BWF9BVFRFTVBUUyA9IDMKZm9yIGF0dGVtcHQgaW4gcmFuZ2UoMSwgTUFYX0FUVEVNUFRTICsgMSk6CiAgICB0cnk6CiAgICAgICAgcmVzcG9uc2UgPSBjbGllbnQudXBsb2FkX2ZpbGUoQnVja2V0PWJ1Y2tldCwgTG9jYWxGaWxlUGF0aD1sb2NhbF9wYXRoLAogICAgICAgICAgICBLZXk9Y29zX2tleSwgTUFYVGhyZWFkPTEsIEVuYWJsZU1ENT1GYWxzZSwgUGFydFNpemU9NSkKICAgICAgICBwcmludCgiW2Nvcy11cGxvYWRdIGRvbmUgRVRhZz17fSIuZm9ybWF0KHJlc3BvbnNlLmdldCgiRVRhZyIsICI/IikpKQogICAgICAgIGJyZWFrCiAgICBleGNlcHQgRXhjZXB0aW9uIGFzIGU6CiAgICAgICAgaWYgYXR0ZW1wdCA9PSBNQVhfQVRURU1QVFM6IHJhaXNlCiAgICAgICAgd2FpdCA9IDMwICogYXR0ZW1wdAogICAgICAgIHByaW50KCJbY29zLXVwbG9hZF0gYXR0ZW1wdCB7fS97fSBmYWlsZWQ6IHt9Ii5mb3JtYXQoYXR0ZW1wdCwgTUFYX0FUVEVNUFRTLCBlKSkKICAgICAgICBwcmludCgiW2Nvcy11cGxvYWRdIHJldHJ5aW5nIGluIHt9cy4uLiIuZm9ybWF0KHdhaXQpKQogICAgICAgIHRpbWUuc2xlZXAod2FpdCkK"
-          [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String($b64)) | Set-Content "cos-upload-inline.py" -Encoding utf8NoBOM
-
-          Write-Host "[upload] Uploading dist-installpack\$pack -> cos://$bucket/$cosKey"
-          python cos-upload-inline.py "dist-installpack\$pack" $bucket $region $cosKey
-
-          "cos_url=$cosUrl" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8NoBOM
-          "pack_name=$pack" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8NoBOM
-          Write-Host "[upload] done: $cosUrl"
-
-      - name: Update manifest with cos_url
-        shell: powershell
-        env:
-          COS_URL: ${{ steps.cos_upload.outputs.cos_url }}
-        run: |
-          $m = Get-Content "dist-installpack\manifest.json" | ConvertFrom-Json
-          $m | Add-Member -MemberType NoteProperty -Name "cos_url" -Value $env:COS_URL -Force
-          $m | ConvertTo-Json -Depth 5 | Set-Content "dist-installpack\manifest.json" -Encoding utf8NoBOM
-          Write-Host "manifest.json updated: $env:COS_URL"
-
-      - name: Dryrun verify (real embedded-python import check)
-        shell: powershell
-        run: |
-          $ErrorActionPreference = 'Stop'
-          $pack = (Get-ChildItem dist-installpack\*.tar.gz | Select-Object -First 1).FullName
-          Write-Host "[verify] extracting $pack"
-          tar xzf $pack -C dist-installpack
-          $agentDir = (Get-ChildItem -Directory dist-installpack\zenithjoy-agent-v* | Select-Object -First 1).FullName
-          Write-Host "[verify] agent dir: $agentDir"
-          & "$agentDir\python-embedded\python.exe" "$agentDir\wechat-rpa\listen_chat.py" --dryrun-print-version
-          if ($LASTEXITCODE -ne 0) { throw "dryrun-print-version failed with exit code $LASTEXITCODE" }
-          Write-Host "[verify] dryrun-print-version OK"
-
-      - name: Upload manifest artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: zenithjoy-agent-manifest
-          path: dist-installpack/manifest.json
-
-      - name: Cleanup
-        if: always()
-        shell: powershell
-        run: Remove-Item -Recurse -Force dist-installpack -ErrorAction SilentlyContinue
-
   publish:
-    needs: [upload-and-verify, build-line-modules]
+    needs: [build, build-line-modules]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
