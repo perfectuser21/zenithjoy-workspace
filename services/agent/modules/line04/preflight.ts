@@ -144,8 +144,9 @@ export function checkWechatVersion(): CheckOutcome {
 }
 
 // 检测 2：pywinauto 可 import。spawn python -c "import pywinauto"，退出码 0 = 通过。
+// MOCK_WECHAT_VERSION 设置时进入 CI mock 模式，跳过此检测（与非 Windows 行为一致）。
 export function checkPywinauto(pythonPath: string): Promise<CheckOutcome> {
-  if (process.platform !== 'win32') {
+  if (process.platform !== 'win32' || process.env.MOCK_WECHAT_VERSION) {
     return Promise.resolve({ ok: true, skipped: true });
   }
   return new Promise<CheckOutcome>((resolve) => {
@@ -186,9 +187,9 @@ export function checkPywinauto(pythonPath: string): Promise<CheckOutcome> {
   });
 }
 
-// 检测 3：内存 ≥ 4GB。非 Windows 跳过（视为通过）。
+// 检测 3：内存 ≥ 4GB。非 Windows 跳过（视为通过）。MOCK_WECHAT_VERSION 时也跳过（CI mock 模式）。
 export function checkMemory(): CheckOutcome {
-  if (process.platform !== 'win32') {
+  if (process.platform !== 'win32' || process.env.MOCK_WECHAT_VERSION) {
     return { ok: true, skipped: true };
   }
   if (os.totalmem() >= MIN_MEMORY_BYTES) return { ok: true };
