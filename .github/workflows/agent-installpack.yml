@@ -18,6 +18,12 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
+      # 缓存 pkg win64 二进制，避免每次从 pkg-fetch.vercel.app 下载（不稳定导致 504/compile-error）
+      - name: Cache pkg binaries
+        uses: actions/cache@v4
+        with:
+          path: ~/.pkg-cache
+          key: pkg-cache-node18-win64-v1
       - name: Install
         run: npm install --no-audit --no-fund
         working-directory: services/agent
