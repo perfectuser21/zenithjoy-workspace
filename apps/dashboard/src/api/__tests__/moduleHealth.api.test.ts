@@ -37,4 +37,19 @@ describe('fetchModuleHealth', () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, json: () => Promise.resolve({}) }));
     await expect(fetchModuleHealth()).rejects.toThrow();
   });
+
+  it('存在 license cookie 时带上 Authorization: Bearer 头（licenseAuth）', async () => {
+    Object.defineProperty(document, 'cookie', {
+      configurable: true,
+      get: () => 'license=ZJ-TEST-KEY',
+    });
+    const fetchSpy = vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve({ ok: true, data: [] }) });
+    vi.stubGlobal('fetch', fetchSpy);
+
+    await fetchModuleHealth();
+
+    const init = fetchSpy.mock.calls[0][1] as RequestInit;
+    const headers = new Headers(init.headers);
+    expect(headers.get('Authorization')).toBe('Bearer ZJ-TEST-KEY');
+  });
 });

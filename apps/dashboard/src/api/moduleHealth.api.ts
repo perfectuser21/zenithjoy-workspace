@@ -6,6 +6,21 @@
  */
 const API_BASE = import.meta.env.VITE_API_BASE_URL || '/api';
 
+/**
+ * 读取当前 license token（与 walking-skeleton-1.api 同款）。
+ * 端点 GET /api/agent/module-health 走 licenseAuth，需带 Authorization: Bearer <license>。
+ */
+function getLicenseToken(): string {
+  if (typeof document !== 'undefined') {
+    const m = document.cookie.match(/(^|; )license=([^;]+)/);
+    if (m) return decodeURIComponent(m[2]);
+  }
+  if (typeof localStorage !== 'undefined') {
+    return localStorage.getItem('zj_license') || '';
+  }
+  return '';
+}
+
 /** 单个 Line 模块的 preflight 状态 */
 export interface ModuleStatusEntry {
   ok: boolean;
@@ -28,7 +43,10 @@ export interface ModuleHealthResponse {
 }
 
 export async function fetchModuleHealth(): Promise<ModuleHealthResponse> {
-  const r = await fetch(`${API_BASE}/agent/module-health`);
+  const headers = new Headers();
+  const lic = getLicenseToken();
+  if (lic) headers.set('Authorization', `Bearer ${lic}`);
+  const r = await fetch(`${API_BASE}/agent/module-health`, { headers });
   if (!r.ok) throw new Error('failed');
   return r.json();
 }
