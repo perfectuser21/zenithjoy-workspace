@@ -24,6 +24,21 @@ jobs:
         with:
           path: ~/.pkg-cache
           key: pkg-cache-node18-win64-v1
+      # pkg-fetch.vercel.app 不稳定时（504），直接从 GitHub releases 预置二进制绕过它
+      - name: Pre-seed pkg binary from GitHub releases (fallback)
+        run: |
+          PKG_CACHE="$HOME/.pkg-cache/v3.4"
+          BINARY="fetched-v18.5.0-win-x64"
+          if [ ! -f "$PKG_CACHE/$BINARY" ]; then
+            mkdir -p "$PKG_CACHE"
+            echo "[pkg-seed] downloading node-v18.5.0-win-x64 from pkg-fetch releases..."
+            curl -L --retry 3 -o "$PKG_CACHE/$BINARY" \
+              "https://github.com/vercel/pkg-fetch/releases/download/v3.4/node-v18.5.0-win-x64"
+            chmod +x "$PKG_CACHE/$BINARY"
+            echo "[pkg-seed] seeded: $PKG_CACHE/$BINARY ($(du -sh "$PKG_CACHE/$BINARY" | cut -f1))"
+          else
+            echo "[pkg-seed] cache hit, skipping download"
+          fi
       - name: Install
         run: npm install --no-audit --no-fund
         working-directory: services/agent
