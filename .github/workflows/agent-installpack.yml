@@ -175,18 +175,12 @@ jobs:
             exit 0
           fi
 
-          pip install cos-python-sdk-v5 -q
-          python3 -c "
-import os
-from qcloud_cos import CosConfig, CosS3Client
-config = CosConfig(Region='ap-guangzhou', SecretId=os.environ['COS_SECRET_ID'], SecretKey=os.environ['COS_SECRET_KEY'])
-client = CosS3Client(config)
-try:
-    client.upload_file(Bucket='zenithjoy-static-1333590468', LocalFilePath='WeChatWin_4.1.8.exe', Key='install-pack/wechat/WeChatWin_4.1.8.exe', MAXThread=5)
-    print('[mirror-wechat] 已镜像到 COS')
-except Exception as e:
-    print('[mirror-wechat] 上传失败（非致命）:', e)
-"
+          pip install coscmd -q
+          coscmd config -a "$COS_SECRET_ID" -s "$COS_SECRET_KEY" \
+            -b "zenithjoy-static-1333590468" -e "cos.accelerate.myqcloud.com"
+          coscmd upload WeChatWin_4.1.8.exe \
+            "/install-pack/wechat/WeChatWin_4.1.8.exe" --force \
+            || echo "[mirror-wechat] coscmd upload 失败（非致命，有官方回退源）"
 
       - name: Deploy manifest.json to HK VPS
         env:
