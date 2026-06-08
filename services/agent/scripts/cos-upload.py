@@ -1,5 +1,6 @@
 """Upload a file to Tencent COS using cos-python-sdk-v5 (reliable multipart)."""
-import os, sys
+import os, sys, io
+sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
 
 try:
     from qcloud_cos import CosConfig, CosS3Client
@@ -20,7 +21,7 @@ config = CosConfig(
 )
 client = CosS3Client(config)
 
-print(f"[cos-upload] {local_path} → cos://{bucket}/{cos_key}")
+print("[cos-upload] " + local_path + " -> cos://" + bucket + "/" + cos_key)
 response = client.upload_file(
     Bucket=bucket,
     LocalFilePath=local_path,
