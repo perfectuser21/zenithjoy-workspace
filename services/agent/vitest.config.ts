@@ -6,6 +6,8 @@ export default defineConfig({
     include: [
       'src/**/__tests__/**/*.test.ts',
       'src/**/*.test.ts',
+      // sprint 06081700 — 各 Line 独立模块测试
+      'modules/**/__tests__/**/*.test.ts',
       'publishers/**/__tests__/**/*.test.ts',
       'publishers/**/__tests__/**/*.test.cjs',
       // Path 2 Sprint B-1 WS2b — douyin-comment-crawl.cjs 测试在 scripts/__tests__/
