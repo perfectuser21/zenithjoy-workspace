@@ -43,62 +43,7 @@ jobs:
           path: services/agent/dist-installpack/zenithjoy-agent-v*.tar.gz
           retention-days: 1
 
-  # COS 上传必须在 ubuntu-latest：windows runner → COS China 的 multipart TCP 连接不稳定
-  upload-cos:
-    needs: [build]
-    runs-on: ubuntu-latest
-    outputs:
-      cos_url: ${{ steps.cos_upload.outputs.cos_url }}
-      pack_name: ${{ steps.cos_upload.outputs.pack_name }}
-    steps:
-      - uses: actions/checkout@v4
-      - name: Download tar.gz artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: zenithjoy-agent-installpack
-          path: services/agent/dist-installpack/
-      - name: Upload to COS (ubuntu)
-        id: cos_upload
-        env:
-          COS_SECRET_ID: ${{ secrets.COS_SECRET_ID }}
-          COS_SECRET_KEY: ${{ secrets.COS_SECRET_KEY }}
-        run: |
-          pip install cos-python-sdk-v5 -q
-          PACK="${{ needs.build.outputs.pack_name }}"
-          BUCKET="zenithjoy-static-1333590468"
-          REGION="ap-guangzhou"
-          COS_KEY="install-pack/${PACK}"
-          COS_URL="https://${BUCKET}.cos.${REGION}.myqcloud.com/${COS_KEY}"
-
-          python3 services/agent/scripts/cos-upload.py \
-            "services/agent/dist-installpack/${PACK}" \
-            "$BUCKET" "$REGION" "$COS_KEY"
-
-          echo "cos_url=${COS_URL}" >> "$GITHUB_OUTPUT"
-          echo "pack_name=${PACK}" >> "$GITHUB_OUTPUT"
-          echo "COS_URL=${COS_URL}" >> "$GITHUB_ENV"
-          echo "[upload-cos] uploaded to $COS_URL"
-      - name: Update manifest with cos_url
-        run: |
-          python3 -c "
-          import json, os
-          path = 'services/agent/dist-installpack/manifest.json'
-          with open(path) as f:
-              m = json.load(f)
-          m['cos_url'] = os.environ['COS_URL']
-          with open(path, 'w') as f:
-              json.dump(m, f, indent=2)
-          print('manifest.json updated:', m['cos_url'])
-          "
-        env:
-          COS_URL: ${{ steps.cos_upload.outputs.cos_url }}
-      - name: Upload manifest artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: zenithjoy-agent-manifest
-          path: services/agent/dist-installpack/manifest.json
-
-  # 各 Line 模块独立打包（与 core 并行），上传到 COS modules/ 目录。
+  # 各 Line 模块独立打包（与 build 并行），上传到 COS modules/ 目录。
   # core.exe 轻量，Line 模块按需下载安装。
   build-line-modules:
     runs-on: ubuntu-latest
@@ -146,25 +91,57 @@ jobs:
           coscmd upload "$PACK" "$COS_PATH" --force
           echo "Uploaded: https://${BUCKET}.${ENDPOINT}${COS_PATH}"
 
-  # 在 self-hosted Windows (ROG, wechat-capable) 上真实跑 dryrun，
-  # 用 embedded python 真 import pywinauto/win32api/comtypes，
-  # 失败则 publish 不运行 — 防止把环境坏掉的包发到 COS/HK VPS。
-  verify-on-rog:
-    needs: [upload-cos, build-line-modules]
+  # COS 上传 + dryrun 合并在 xian-rog（中国节点）：
+  # xian-rog → COS ap-guangzhou 是国内链路，无跨境 TCP 连接被防火墙丢弃的问题。
+  # GitHub Actions ubuntu-latest（美国）→ COS China 的 multipart TCP 连接不稳定（已验证失败）。
+  upload-and-verify:
+    needs: [build]
     runs-on: [self-hosted, wechat-capable]
+    outputs:
+      cos_url: ${{ steps.cos_upload.outputs.cos_url }}
+      pack_name: ${{ steps.cos_upload.outputs.pack_name }}
     steps:
-      # 从 COS 国内加速节点下载（xian-rog 在国内，比 GitHub Artifact 快 10x+）
-      - name: Download from COS (国内加速)
+      - uses: actions/checkout@v4
+
+      - name: Download tar.gz artifact from GitHub
+        uses: actions/download-artifact@v4
+        with:
+          name: zenithjoy-agent-installpack
+          path: dist-installpack/
+
+      - name: Upload to COS (xian-rog China → COS China，国内链路稳定)
+        id: cos_upload
         shell: powershell
+        env:
+          COS_SECRET_ID: ${{ secrets.COS_SECRET_ID }}
+          COS_SECRET_KEY: ${{ secrets.COS_SECRET_KEY }}
         run: |
-          $ProgressPreference = 'SilentlyContinue'
-          $cosUrl = "${{ needs.upload-cos.outputs.cos_url }}"
-          $packName = "${{ needs.upload-cos.outputs.pack_name }}"
-          New-Item -ItemType Directory -Force -Path dist-installpack | Out-Null
-          Write-Host "[verify] Downloading from COS: $cosUrl"
-          Invoke-WebRequest -Uri $cosUrl -OutFile "dist-installpack\$packName" -UseBasicParsing
-          $sizeMB = [math]::Round((Get-Item "dist-installpack\$packName").Length / 1MB, 1)
-          Write-Host "[verify] Download complete: ${sizeMB} MB"
+          $ErrorActionPreference = 'Stop'
+          $pack = (Get-ChildItem dist-installpack\*.tar.gz | Select-Object -First 1).Name
+          $bucket = "zenithjoy-static-1333590468"
+          $region = "ap-guangzhou"
+          $cosKey = "install-pack/$pack"
+          $cosUrl = "https://$bucket.cos.$region.myqcloud.com/$cosKey"
+
+          Write-Host "[upload] Installing cos-python-sdk-v5..."
+          pip install cos-python-sdk-v5 -q 2>&1 | Write-Host
+
+          Write-Host "[upload] Uploading dist-installpack\$pack -> cos://$bucket/$cosKey"
+          python services/agent/scripts/cos-upload.py "dist-installpack\$pack" $bucket $region $cosKey
+
+          "cos_url=$cosUrl" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8NoBOM
+          "pack_name=$pack" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8NoBOM
+          Write-Host "[upload] done: $cosUrl"
+
+      - name: Update manifest with cos_url
+        shell: powershell
+        env:
+          COS_URL: ${{ steps.cos_upload.outputs.cos_url }}
+        run: |
+          $m = Get-Content "dist-installpack\manifest.json" | ConvertFrom-Json
+          $m | Add-Member -MemberType NoteProperty -Name "cos_url" -Value $env:COS_URL -Force
+          $m | ConvertTo-Json -Depth 5 | Set-Content "dist-installpack\manifest.json" -Encoding utf8NoBOM
+          Write-Host "manifest.json updated: $env:COS_URL"
 
       - name: Dryrun verify (real embedded-python import check)
         shell: powershell
@@ -179,16 +156,23 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "dryrun-print-version failed with exit code $LASTEXITCODE" }
           Write-Host "[verify] dryrun-print-version OK"
 
+      - name: Upload manifest artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: zenithjoy-agent-manifest
+          path: dist-installpack/manifest.json
+
       - name: Cleanup
         if: always()
         shell: powershell
         run: Remove-Item -Recurse -Force dist-installpack -ErrorAction SilentlyContinue
 
   publish:
-    needs: [verify-on-rog]
+    needs: [upload-and-verify, build-line-modules]
     runs-on: ubuntu-latest
     steps:
-      # COS 上传已在 upload-cos job 完成，此处只下载 manifest.json 用于部署
+      - uses: actions/checkout@v4
+
       - name: Download manifest artifact
         uses: actions/download-artifact@v4
         with:
