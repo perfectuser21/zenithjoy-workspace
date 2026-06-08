@@ -531,6 +531,14 @@ tests:
     product: 中台认证
     note: "Walking Skeleton #1 — agent heartbeat / folder bind / publish task / receipt / GET tasks 5 个 endpoint 集成测试（13 cases，含跨 license 越权 403）"
 
+  - id: api-heartbeat-modules
+    path: apps/api/tests/routes/heartbeat-modules.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 客户私域AI接管
+    note: "Sprint 06081603 — 心跳双向 modules 协议：下发 modules(4 Line × status+required_version) + 接收 module_status 持久化 + GET /api/agent/module-health 矩阵"
+
   - id: api-license-auth-middleware
     path: apps/api/src/middleware/license-auth.test.ts
     type: unit

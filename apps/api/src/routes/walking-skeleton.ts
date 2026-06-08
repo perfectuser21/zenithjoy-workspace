@@ -24,8 +24,13 @@ import {
   getPublishTask,
   isValidPublishType,
   ackPublishTask,
+  saveModuleStatus,
+  getAllModuleHealth,
+  HEARTBEAT_MODULES,
   TaskNotFoundError,
   TaskForbiddenError,
+  type ModuleStatusMap,
+  type ModuleStatusEntry,
 } from '../services/walking-skeleton.service';
 
 export const heartbeatRouter = Router();   // 挂在 /api/agent
@@ -33,15 +38,35 @@ export const publishWsRouter = Router();   // 挂在 /api/publish
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+/**
+ * 校验并归一化客户端上报的 module_status。
+ * 只接受 { [line]: { ok: boolean, reason?: string } } 结构，非法值丢弃。
+ * 返回 null 表示无可持久化内容（字段缺失/全非法）。
+ */
+function normalizeModuleStatus(raw: unknown): ModuleStatusMap | null {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+  const out: ModuleStatusMap = {};
+  for (const [line, val] of Object.entries(raw as Record<string, unknown>)) {
+    if (!val || typeof val !== 'object' || Array.isArray(val)) continue;
+    const v = val as Record<string, unknown>;
+    if (typeof v.ok !== 'boolean') continue;
+    const entry: ModuleStatusEntry = { ok: v.ok };
+    if (typeof v.reason === 'string') entry.reason = v.reason.slice(0, 500);
+    out[line.slice(0, 100)] = entry;
+  }
+  return Object.keys(out).length > 0 ? out : null;
+}
+
 // ============ POST /api/agent/heartbeat ============
 heartbeatRouter.post(
   '/heartbeat',
   licenseAuth,
   async (req: Request, res: Response) => {
-    const { version, hostname, os_type } = (req.body ?? {}) as {
+    const { version, hostname, os_type, module_status } = (req.body ?? {}) as {
       version?: unknown;
       hostname?: unknown;
       os_type?: unknown;
+      module_status?: unknown;
     };
     const lic = req.license!;
     if (!lic.tenant_id) {
@@ -61,15 +86,17 @@ heartbeatRouter.post(
         version: typeof version === 'string' ? version.slice(0, 50) : null,
         osType: typeof os_type === 'string' ? os_type.slice(0, 20) : null,
       });
+      // 客户端上报的 module_status（per-Line preflight 结果）→ 持久化最新一份
+      const normalized = normalizeModuleStatus(module_status);
+      if (normalized) {
+        await saveModuleStatus(agent.id, normalized);
+      }
       const queued = await getQueuedTasks(agent.id);
       return res.status(200).json({
         ok: true,
         agent_id: agent.id,
-        modules: {
-          'wechat-cs': 'active',
-          'video-pipeline': 'active',
-          'crm-sync': 'active',
-        },
+        // 服务端下发模块清单（第一刀硬编码 active，含 status + required_version）
+        modules: HEARTBEAT_MODULES,
         // map to agent's HeartbeatTask shape: { task_id, platform, payload }
         // payload composed from folder_path column (works for both folder_bind.local_path
         // and douyin.folder_path) + account_label default for qr_bind_douyin
@@ -101,6 +128,24 @@ heartbeatRouter.post(
       return res
         .status(500)
         .json({ ok: false, code: 'HEARTBEAT_FAILED', message: msg });
+    }
+  }
+);
+
+// ============ GET /api/agent/module-health ============
+// Dashboard 用：拉所有已注册机器的 module_status 矩阵（行=机器，列=各 Line）
+heartbeatRouter.get(
+  '/module-health',
+  licenseAuth,
+  async (_req: Request, res: Response) => {
+    try {
+      const data = await getAllModuleHealth();
+      return res.status(200).json({ ok: true, data });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'unknown';
+      return res
+        .status(500)
+        .json({ ok: false, code: 'MODULE_HEALTH_FAILED', message: msg });
     }
   }
 );

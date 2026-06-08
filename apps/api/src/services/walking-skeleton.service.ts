@@ -51,6 +51,39 @@ export interface PublishTaskRow {
   payload: Record<string, unknown> | null;
 }
 
+/** 服务端下发：单个 Line 模块的激活态 + 要求版本 */
+export interface ModuleDescriptor {
+  status: 'active' | 'locked' | 'not_purchased';
+  required_version: string;
+}
+
+/** 客户端上报：单个 Line 模块的 preflight 结果 */
+export interface ModuleStatusEntry {
+  ok: boolean;
+  reason?: string;
+}
+
+export type ModuleStatusMap = Record<string, ModuleStatusEntry>;
+
+/**
+ * 心跳响应下发的模块清单（第一刀全部硬编码 active，无真实 DB 查询）。
+ * key 用 Line 命名，与 Agent preflight / Dashboard 看板对齐。
+ */
+export const HEARTBEAT_MODULES: Record<string, ModuleDescriptor> = {
+  'line04-wechat-cs': { status: 'active', required_version: '1.0.0' },
+  'line01-publish': { status: 'active', required_version: '1.0.0' },
+  'line02-lead-gen': { status: 'active', required_version: '1.0.0' },
+  'line05-video': { status: 'active', required_version: '1.0.0' },
+};
+
+/** module-health 端点返回的单行（一台机器一行） */
+export interface ModuleHealthRow {
+  agent_id: string;
+  hostname: string | null;
+  module_status: ModuleStatusMap;
+  updated_at: string | null;
+}
+
 export type LicenseFailureCode =
   | 'INVALID_LICENSE'
   | 'EXPIRED'
@@ -319,6 +352,35 @@ export async function findActiveAgentByTenantId(tenantId: string): Promise<Agent
     [tenantId]
   );
   return rows[0] ?? null;
+}
+
+/**
+ * 持久化客户端上报的模块 preflight 结果到 agents.module_status（jsonb，存最新一份）。
+ * agentId = zenithjoy.agents.id（心跳返回的 agent_id）。
+ */
+export async function saveModuleStatus(
+  agentId: string,
+  moduleStatus: ModuleStatusMap
+): Promise<void> {
+  await pool.query(
+    `UPDATE zenithjoy.agents
+        SET module_status = $2::jsonb, updated_at = now()
+      WHERE id = $1`,
+    [agentId, JSON.stringify(moduleStatus)]
+  );
+}
+
+/**
+ * 读取所有已注册机器的模块健康矩阵，供 Dashboard 看板渲染。
+ * 按 updated_at 倒序，每台机器一行。
+ */
+export async function getAllModuleHealth(): Promise<ModuleHealthRow[]> {
+  const { rows } = await pool.query<ModuleHealthRow>(
+    `SELECT id AS agent_id, hostname, module_status, updated_at
+       FROM zenithjoy.agents
+      ORDER BY updated_at DESC NULLS LAST`
+  );
+  return rows;
 }
 
 export class NoAgentError extends Error {
