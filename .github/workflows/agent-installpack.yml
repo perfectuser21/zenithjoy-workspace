@@ -42,13 +42,23 @@ jobs:
           pip install coscmd -q
           PACK=$(basename "$(ls services/agent/dist-installpack/zenithjoy-agent-v*.tar.gz | head -1)")
           BUCKET="zenithjoy-static-1333590468"
-          ENDPOINT="cos.accelerate.myqcloud.com"
+          # 使用 ap-guangzhou 直连区域端点，accelerate 端点 multipart upload 静默失败返回 exit 0
+          ENDPOINT="cos.ap-guangzhou.myqcloud.com"
           COS_PATH="/install-pack/${PACK}"
           COS_URL="https://${BUCKET}.${ENDPOINT}${COS_PATH}"
 
           coscmd config -a "$COS_SECRET_ID" -s "$COS_SECRET_KEY" \
             -b "$BUCKET" -e "$ENDPOINT"
           coscmd upload "services/agent/dist-installpack/${PACK}" "$COS_PATH" --force
+
+          # 上传后 curl HEAD 验证，防 coscmd 静默失败（exit 0 但文件未提交到 COS）
+          for i in 1 2 3; do
+            if curl -sf -I "${COS_URL}" >/dev/null 2>&1; then
+              echo "[build] COS 验证通过: ${PACK}"; break
+            fi
+            [ "$i" -eq 3 ] && { echo "❌ COS 验证失败: ${COS_URL}"; exit 1; }
+            echo "[build] 等待 COS 传播（第 $i 次）..."; sleep 5
+          done
 
           echo "cos_url=${COS_URL}" >> "$GITHUB_OUTPUT"
           echo "pack_name=${PACK}" >> "$GITHUB_OUTPUT"
