@@ -25,7 +25,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # Job 1: windows-latest — npx tsx 直跑源码（无真实微信，含 Steps 2/3/4/6）
+  # Job 1: windows-latest — npx tsx 直跑源码（无真实微信，含 Steps 2/4/6）
+  # Step 3（非 Windows preflight）移到 module-e2e-linux job（ubuntu-latest），因为 windows-latest IS win32
   module-e2e-windows:
     name: Module E2E (windows-latest, tsx source)
     runs-on: windows-latest
@@ -62,15 +63,6 @@ jobs:
           if (called !== 1) { console.error('FAIL: downloadImpl called', called, 'times (expected 1)'); process.exit(1); }
           console.log('Step 2 OK: downloadImpl called once');
           " 2>&1
-
-      - name: Step 3 — preflight non-Windows exit 0 (no fixGuide, no skipped)
-        run: |
-          OUT=$(npx tsx modules/line04/preflight.ts 2>/dev/null)
-          echo "$OUT" | jq -e '.ok == true' || { echo "FAIL: ok not true"; exit 1; }
-          echo "$OUT" | jq -e 'has("checks")' || { echo "FAIL: missing checks"; exit 1; }
-          echo "$OUT" | jq -e 'has("fixGuide") | not' || { echo "FAIL: ok:true should have no fixGuide"; exit 1; }
-          echo "$OUT" | jq -e 'has("skipped") | not' || { echo "FAIL: skipped must not appear at top level"; exit 1; }
-          echo "Step 3 OK"
 
       - name: Step 4 — activateModule forkImpl + config + getActiveModules
         run: |
@@ -110,6 +102,33 @@ jobs:
 
       - name: Smoke script (API_UP guard)
         run: bash ../../.github/workflows/scripts/smoke/agent-module-e2e-smoke.sh
+
+  # Job 1b: ubuntu-latest — Step 3（preflight 非 Windows ok:true，无 fixGuide，无 skipped）
+  module-e2e-linux:
+    name: Module E2E Step 3 (ubuntu-latest, non-Windows preflight)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: services/agent
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: npm ci --prefer-offline
+
+      - name: Step 3 — preflight non-Windows exit 0 (no fixGuide, no skipped)
+        run: |
+          OUT=$(npx tsx modules/line04/preflight.ts 2>/dev/null)
+          echo "$OUT" | jq -e '.ok == true' || { echo "FAIL: ok not true"; exit 1; }
+          echo "$OUT" | jq -e 'has("checks")' || { echo "FAIL: missing checks"; exit 1; }
+          echo "$OUT" | jq -e 'has("fixGuide") | not' || { echo "FAIL: ok:true should have no fixGuide"; exit 1; }
+          echo "$OUT" | jq -e 'has("skipped") | not' || { echo "FAIL: skipped must not appear at top level"; exit 1; }
+          echo "Step 3 OK"
 
   # Job 2: xian-rog — self-hosted wechat-capable，先 build 再 node（真机三项检测）
   preflight-xian-rog:
