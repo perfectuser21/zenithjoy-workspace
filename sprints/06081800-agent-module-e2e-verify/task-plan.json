@@ -9,7 +9,7 @@
       "scope": "新增 agent-module-e2e.yml（windows-latest job：npx tsx 直跑源码，含 Steps 2/3/4/6；xian-rog job：npm run build + node 编译产物，含真机 Steps 3/6）；新增 agent-module-e2e-smoke.sh（API_UP guard + curl heartbeat modules + module-health 全字段 oracle）；修改 services/agent/modules/line04/preflight.ts 增加 MOCK_WECHAT_VERSION env 覆盖；更新 vitest.config.ts 加入 sprint test 路径",
       "dod": [
         "[BEHAVIOR] preflight 非 Windows ok:true + has(checks) + no fixGuide + no skipped",
-        "[BEHAVIOR] MOCK_WECHAT_VERSION=4.2.0.0 → exit 1，ok:false，fixGuide 含 WeChatWin_4.1.8.exe",
+        "[BEHAVIOR] MOCK_WECHAT_VERSION=4.2.0.0 → exit 0，ok:true，checks.wechat_version:false（version-only warning，PRD 边界情况）",
         "[BEHAVIOR] syncModules → downloadImpl 被调用恰好 1 次（PRD 场景A Step 2）",
         "[BEHAVIOR] activateModule → forkImpl + config 消息 + getActiveModules() 含 lineId（PRD 场景A Step 4）",
         "[BEHAVIOR] GET /api/agent/module-health data[0].module_status[line04-wechat-cs].ok == true（PRD 场景A Step 5）",
