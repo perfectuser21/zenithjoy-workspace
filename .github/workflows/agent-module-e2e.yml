@@ -164,6 +164,7 @@ jobs:
           $result = node dist/modules/line04/preflight.js 2>$null
           $PCODE = $LASTEXITCODE
           Remove-Item Env:\MOCK_WECHAT_VERSION -ErrorAction SilentlyContinue
+          if (-not $result) { Write-Host "FAIL: preflight.js returned empty output"; exit 1 }
           $result | Set-Content pf-xrog.json -Encoding ascii
           Write-Host "exit=$PCODE"
           if ($PCODE -ne 0) { Write-Host "FAIL: exit $PCODE should be 0 (version-only warning on xian-rog)"; exit 1 }
