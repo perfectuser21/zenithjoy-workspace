@@ -273,10 +273,11 @@ jobs:
       - name: Smoke — Heartbeat 双向 modules + module-health (Sprint 06081603)
         env:
           API_BASE: http://localhost:5200
+          # 复用 job 级 DATABASE_* 凭据（CI postgres service），不引入新硬编码凭据
           PGHOST: localhost
-          PGUSER: cecelia
-          PGPASSWORD: cecelia
-          PGDATABASE: cecelia
+          PGUSER: ${{ env.DATABASE_USER }}
+          PGPASSWORD: ${{ env.DATABASE_PASSWORD }}
+          PGDATABASE: ${{ env.DATABASE_NAME }}
         run: |
           chmod +x .github/workflows/scripts/smoke/heartbeat-module-health-smoke.sh
           bash .github/workflows/scripts/smoke/heartbeat-module-health-smoke.sh

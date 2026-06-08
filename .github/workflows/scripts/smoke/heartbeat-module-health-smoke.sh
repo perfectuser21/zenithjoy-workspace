@@ -12,16 +12,16 @@
 #
 # 退出码：0 全过 / 1 注册 / 2 取 license / 3 heartbeat modules / 4 module-health / 5 DB 校验
 #
-# 依赖：API_BASE 默认 http://localhost:5200；PG* 凭据从环境变量读取（dev 默认 cecelia）。
-#   生产跑此脚本必须 export 真 PG 凭据，defaults 不触达生产数据。
+# 依赖：API_BASE 默认 http://localhost:5200；PG 凭据必须由环境变量提供
+#   （PGUSER/PGPASSWORD/PGDATABASE），脚本不内置任何硬编码凭据，未设置直接报错退出。
 
 set -uo pipefail
 
 API_BASE="${API_BASE:-http://localhost:5200}"
-PSQL_USER="${PGUSER:-cecelia}"
-PSQL_DB="${PGDATABASE:-cecelia}"
 PSQL_HOST="${PGHOST:-localhost}"
-PSQL_PASS="${PGPASSWORD:-cecelia}"
+PSQL_USER="${PGUSER:?需设置 PGUSER 环境变量（CI 由 job env 注入）}"
+PSQL_DB="${PGDATABASE:?需设置 PGDATABASE 环境变量}"
+PSQL_PASS="${PGPASSWORD:?需设置 PGPASSWORD 环境变量}"
 
 TS=$(date +%s)
 EMAIL="hb-modhealth-${TS}@zenithjoy.test"
