@@ -62,8 +62,8 @@ jobs:
           Write-Host "[upload] Uploading services\agent\dist-installpack\$pack -> cos://$bucket/$cosKey"
           coscmd upload "services\agent\dist-installpack\$pack" "/install-pack/$pack" --force
 
-          "cos_url=$cosUrl" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8NoBOM
-          "pack_name=$pack" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8NoBOM
+          "cos_url=$cosUrl" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding ascii
+          "pack_name=$pack" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding ascii
           Write-Host "[upload] done: $cosUrl"
 
       - name: Dryrun verify (embedded-python import check)
@@ -89,7 +89,7 @@ jobs:
         run: |
           $m = Get-Content "services\agent\dist-installpack\manifest.json" | ConvertFrom-Json
           $m | Add-Member -MemberType NoteProperty -Name "cos_url" -Value $env:COS_URL -Force
-          $m | ConvertTo-Json -Depth 5 | Set-Content "services\agent\dist-installpack\manifest.json" -Encoding utf8NoBOM
+          $m | ConvertTo-Json -Depth 5 | Set-Content "services\agent\dist-installpack\manifest.json" -Encoding ascii
           Write-Host "manifest.json updated: $env:COS_URL"
 
       - name: Upload manifest artifact
