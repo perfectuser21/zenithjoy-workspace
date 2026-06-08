@@ -142,9 +142,9 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '20'
+
+      - name: Verify Node.js (self-hosted, skip setup-node to avoid proxy timeout)
+        run: node --version
 
       - name: Install + Build
         run: |
