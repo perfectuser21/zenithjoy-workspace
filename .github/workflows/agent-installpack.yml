@@ -124,7 +124,7 @@ jobs:
           $cosUrl = "https://$bucket.cos.$region.myqcloud.com/$cosKey"
 
           Write-Host "[upload] Installing cos-python-sdk-v5..."
-          pip install cos-python-sdk-v5 -q 2>&1 | Write-Host
+          python -m pip install cos-python-sdk-v5 -q 2>&1 | Write-Host
 
           Write-Host "[upload] Uploading dist-installpack\$pack -> cos://$bucket/$cosKey"
           python services/agent/scripts/cos-upload.py "dist-installpack\$pack" $bucket $region $cosKey
