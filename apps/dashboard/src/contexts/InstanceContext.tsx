@@ -68,6 +68,8 @@ const autopilotConfig: InstanceConfig = {
     'tools': true,
     'canvas': true,
     'operator-dashboard': true,  // /operator Session 健康监控（superAdmin only）
+    // Sprint 06081603 — 模块健康看板（客户机器 × Line 状态矩阵，superAdmin only）
+    'module-health': true,       // /module-health
   },
 };
 
