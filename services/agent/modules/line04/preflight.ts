@@ -132,7 +132,30 @@ export function checkWechatVersion(): CheckOutcome {
         return { ok: false, found: v, fixGuide: wechatFixGuide(v) };
       }
     } catch {
-      // 该注册表键不存在，尝试下一个
+      // 该注册表键不存在或无权访问（runner 以 SYSTEM 运行时 HKCU 不可见），尝试下一个
+    }
+  }
+  // 注册表全部查不到（runner 权限限制），退而检查安装目录下的版本子文件夹。
+  // WeChat 安装后会创建 C:\Program Files\Tencent\WeChat\[X.Y.Z.B]\ 目录。
+  const installDirs = [
+    'C:\\Program Files\\Tencent\\WeChat',
+    'C:\\Program Files (x86)\\Tencent\\WeChat',
+  ];
+  for (const dir of installDirs) {
+    if (!fs.existsSync(dir)) continue;
+    try {
+      const entries = fs.readdirSync(dir, { withFileTypes: true });
+      for (const entry of entries) {
+        if (!entry.isDirectory()) continue;
+        // 目录名格式：[3.9.12.51] 或直接 3.9.12.51
+        const clean = entry.name.replace(/^\[|\]$/g, '');
+        if (/^\d+\.\d+\.\d+/.test(clean)) {
+          if (isWechatVersionSupported(clean)) return { ok: true, found: clean };
+          return { ok: false, found: clean, fixGuide: wechatFixGuide(clean) };
+        }
+      }
+    } catch {
+      // 目录无法读取，跳过
     }
   }
   return {
@@ -196,10 +219,11 @@ export function checkMemory(): CheckOutcome {
   return { ok: false, fixGuide: memoryFixGuide() };
 }
 
-// 解析模块自带的 python-embedded/python.exe，否则回退系统 python3。
+// 解析模块自带的 python-embedded/python.exe，否则回退系统 python（Windows 无 python3）。
 export function getModulePython(moduleDir: string): string {
   const embedded = path.join(moduleDir, 'python-embedded', 'python.exe');
-  return fs.existsSync(embedded) ? embedded : 'python3';
+  if (fs.existsSync(embedded)) return embedded;
+  return process.platform === 'win32' ? 'python' : 'python3';
 }
 
 // 模块入口：core 在 fork 前调用，三项全过才激活。
