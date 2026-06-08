@@ -80,32 +80,34 @@ jobs:
     steps:
       # 从 COS 国内加速节点下载（xian-rog 在国内，比 GitHub Artifact 快 10x+）
       - name: Download from COS (国内加速)
-        shell: bash
+        shell: powershell
         run: |
-          set -euo pipefail
-          cosUrl="${{ needs.build.outputs.cos_url }}"
-          packName="${{ needs.build.outputs.pack_name }}"
-          mkdir -p dist-installpack
-          echo "[verify] Downloading from COS: $cosUrl"
-          curl -L -o "dist-installpack/$packName" "$cosUrl"
-          echo "[verify] Download complete: $(du -sh "dist-installpack/$packName" | cut -f1)"
+          $ProgressPreference = 'SilentlyContinue'
+          $cosUrl = "${{ needs.build.outputs.cos_url }}"
+          $packName = "${{ needs.build.outputs.pack_name }}"
+          New-Item -ItemType Directory -Force -Path dist-installpack | Out-Null
+          Write-Host "[verify] Downloading from COS: $cosUrl"
+          Invoke-WebRequest -Uri $cosUrl -OutFile "dist-installpack\$packName" -UseBasicParsing
+          $sizeMB = [math]::Round((Get-Item "dist-installpack\$packName").Length / 1MB, 1)
+          Write-Host "[verify] Download complete: ${sizeMB} MB"
 
       - name: Dryrun verify (real embedded-python import check)
-        shell: bash
+        shell: powershell
         run: |
-          set -euo pipefail
-          PACK=$(ls dist-installpack/*.tar.gz | head -1)
-          echo "[verify] extracting $PACK"
-          tar xzf "$PACK" -C dist-installpack/
-          AGENT_DIR=$(ls -d dist-installpack/zenithjoy-agent-v*/ | head -1)
-          echo "[verify] agent dir: $AGENT_DIR"
-          "${AGENT_DIR}python-embedded/python.exe" "${AGENT_DIR}wechat-rpa/listen_chat.py" --dryrun-print-version
-          echo "[verify] dryrun-print-version OK"
+          $ErrorActionPreference = 'Stop'
+          $pack = (Get-ChildItem dist-installpack\*.tar.gz | Select-Object -First 1).FullName
+          Write-Host "[verify] extracting $pack"
+          tar xzf $pack -C dist-installpack
+          $agentDir = (Get-ChildItem -Directory dist-installpack\zenithjoy-agent-v* | Select-Object -First 1).FullName
+          Write-Host "[verify] agent dir: $agentDir"
+          & "$agentDir\python-embedded\python.exe" "$agentDir\wechat-rpa\listen_chat.py" --dryrun-print-version
+          if ($LASTEXITCODE -ne 0) { throw "dryrun-print-version failed with exit code $LASTEXITCODE" }
+          Write-Host "[verify] dryrun-print-version OK"
 
       - name: Cleanup
         if: always()
-        shell: bash
-        run: rm -rf dist-installpack
+        shell: powershell
+        run: Remove-Item -Recurse -Force dist-installpack -ErrorAction SilentlyContinue
 
   publish:
     needs: [verify-on-rog]
