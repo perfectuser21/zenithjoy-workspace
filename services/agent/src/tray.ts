@@ -200,6 +200,54 @@ export function updateTrayModules(modules: Record<string, string>): void {
   // 菜单初始化时生效。已 ready 的托盘无法热重建 items。
 }
 
+// preflight 失败时本地弹窗提示客户「{模块名}」无法启用：{原因}。
+// 优先 node-notifier（若安装），否则 Windows PowerShell 气泡通知，
+// 非 Windows 或弹窗失败时静默降级（只打日志，绝不 crash agent）。
+export function showModuleError(moduleName: string, reason: string): void {
+  const title = 'ZenithJoy 模块预检';
+  const message = `「${moduleName}」无法启用：${reason}`;
+
+  // 1. node-notifier（跨平台原生通知，若依赖存在）
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const notifier = require('node-notifier');
+    notifier.notify({ title, message });
+    return;
+  } catch {
+    // node-notifier 未安装，继续下一档
+  }
+
+  // 2. Windows PowerShell 气泡通知兜底
+  if (process.platform === 'win32') {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const { execFile } = require('node:child_process') as typeof import('node:child_process');
+      const esc = (s: string) => s.replace(/'/g, "''");
+      const ps =
+        `Add-Type -AssemblyName System.Windows.Forms; ` +
+        `$n = New-Object System.Windows.Forms.NotifyIcon; ` +
+        `$n.Icon = [System.Drawing.SystemIcons]::Warning; ` +
+        `$n.BalloonTipTitle = '${esc(title)}'; ` +
+        `$n.BalloonTipText = '${esc(message)}'; ` +
+        `$n.Visible = $true; $n.ShowBalloonTip(10000); Start-Sleep -Seconds 11; $n.Dispose();`;
+      execFile(
+        'powershell.exe',
+        ['-NoProfile', '-NonInteractive', '-Command', ps],
+        { windowsHide: true },
+        () => {
+          // 弹窗失败也不报错
+        },
+      );
+      return;
+    } catch {
+      // PowerShell 不可用，静默降级
+    }
+  }
+
+  // 3. 静默降级：只打日志
+  console.warn(`[preflight] ${message}`);
+}
+
 export function destroyTray(): void {
   if (systray) {
     try {

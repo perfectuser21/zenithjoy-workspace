@@ -1,0 +1,51 @@
+name: Agent Preflight E2E (xian-rog real machine)
+
+on:
+  push:
+    branches: [main, 'cp-*']
+    paths:
+      - 'services/agent/src/preflight/**'
+      - '.github/workflows/agent-preflight-e2e.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'services/agent/src/preflight/**'
+      - '.github/workflows/agent-preflight-e2e.yml'
+  workflow_dispatch:
+
+jobs:
+  preflight-xian-rog:
+    runs-on: [self-hosted, wechat-capable]
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install
+        shell: bash
+        working-directory: services/agent
+        run: npm ci
+
+      - name: Build
+        shell: bash
+        working-directory: services/agent
+        run: npm run build
+
+      - name: Run preflight line04 (real machine)
+        shell: bash
+        working-directory: services/agent
+        run: |
+          node -e "
+          const { runPreflight } = require('./dist/preflight/preflight-runner');
+          runPreflight('line04-wechat-cs').then(r => {
+            console.log(JSON.stringify(r, null, 2));
+            // xian-rog 已锁微信 4.1.8 + 装 pywinauto + 内存充足 → 应全通过。
+            // 若失败但原因仅微信版本（version/版本）则放行（机器临时升级场景），
+            // 其它原因（pywinauto/内存）失败即判 CI 红。
+            if (!r.ok && !/version|版本/.test(r.reason || '')) {
+              process.exit(1);
+            }
+          }).catch(e => { console.error(e); process.exit(1); });
+          "

@@ -19,11 +19,25 @@ export interface HeartbeatTask {
   payload: Record<string, unknown>;
 }
 
+export type ModuleState = 'active' | 'locked' | 'not_purchased';
+
+// 服务端可下发简单字符串状态，或带 required_version 的描述对象（协议双向扩展）
+export interface ModuleDescriptor {
+  status: ModuleState | string;
+  required_version?: string;
+}
+
+// 客户端上报的单模块 preflight 结果
+export interface ModuleStatusReport {
+  ok: boolean;
+  reason?: string;
+}
+
 export interface HeartbeatResponse {
   ok: boolean;
   agent_id: string;
   queued_tasks?: HeartbeatTask[];
-  modules?: Record<string, 'active' | 'locked' | 'not_purchased'>;
+  modules?: Record<string, ModuleState | ModuleDescriptor>;
 }
 
 export interface HeartbeatLoopOptions {
@@ -42,6 +56,8 @@ export interface HeartbeatLoopOptions {
 export class HeartbeatLoop {
   private agentId: string | null = null;
   private timer: ReturnType<typeof setInterval> | null = null;
+  // 最近一次各模块 preflight 结果，随下一次心跳 POST body 上报中台
+  private moduleStatus: Record<string, ModuleStatusReport> | null = null;
   private readonly opts: Required<
     Pick<HeartbeatLoopOptions, 'apiBase' | 'license' | 'version' | 'hostname'>
   > & {
@@ -72,6 +88,11 @@ export class HeartbeatLoop {
     return this.agentId;
   }
 
+  // 由调用方（index.ts）在跑完 preflight 后写入，随下次心跳上报
+  setModuleStatus(status: Record<string, ModuleStatusReport>): void {
+    this.moduleStatus = status;
+  }
+
   async sendOnce(): Promise<HeartbeatResponse | null> {
     const url = `${this.opts.apiBase}/api/agent/heartbeat`;
     const body: Record<string, unknown> = {
@@ -81,6 +102,7 @@ export class HeartbeatLoop {
       os_type: this.opts.osType,
     };
     if (this.agentId) body.agent_id = this.agentId;
+    if (this.moduleStatus) body.module_status = this.moduleStatus;
 
     let resp: Response;
     try {

@@ -22,9 +22,15 @@ import { handleToutiaoPublish } from './handlers/toutiao-publish';
 import { handleWeiboPublish } from './handlers/weibo-publish';
 import { handleShipinhaoPublish } from './handlers/shipinhao-publish';
 import { handleZhihuPublish } from './handlers/zhihu-publish';
-import { startTray, updateTrayStatus, updateTrayModules, destroyTray } from './tray';
+import { startTray, updateTrayStatus, updateTrayModules, showModuleError, destroyTray } from './tray';
 // Walking Skeleton #1 — HTTP heartbeat 链路（与上面 WS 链路并存）
-import { HeartbeatLoop, type HeartbeatTask } from './handlers/heartbeat-loop';
+import {
+  HeartbeatLoop,
+  type HeartbeatTask,
+  type HeartbeatResponse,
+  type ModuleStatusReport,
+} from './handlers/heartbeat-loop';
+import { runPreflight } from './preflight/preflight-runner';
 import { handleQrBindDouyin } from './handlers/qr-bind-douyin';
 // Path 2 Sprint B-1 — burner 小号绑定 handler（独立文件，与 Path 1 主号物理隔离）
 import { handleQrBindDouyinBurner } from './handlers/qr-bind-douyin-burner';
@@ -641,6 +647,54 @@ async function handleCrawlCommentsBurner(payload: {
   });
 }
 
+// lineId → 客户可读的中文模块名（弹窗用）
+const MODULE_LABELS: Record<string, string> = {
+  'line04-wechat-cs': '微信AI客服',
+  'line01-publish': '智能发布',
+  'line02-lead-gen': '智能获客',
+  'line05-video': '视频剪辑',
+};
+
+// 把心跳响应里的 modules（可能是字符串或 {status,...} 描述对象）规整成 tray 需要的 status map
+function normalizeModules(
+  modules: NonNullable<HeartbeatResponse['modules']>,
+): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const [name, v] of Object.entries(modules)) {
+    out[name] = typeof v === 'string' ? v : v?.status ?? 'unknown';
+  }
+  return out;
+}
+
+// 对每个 active 模块跑 preflight，结果写回 loop（随下次心跳上报）+ 失败本地弹窗
+async function runModulePreflights(
+  resp: HeartbeatResponse,
+  loop: HeartbeatLoop,
+): Promise<void> {
+  const modules = resp.modules;
+  if (!modules) return;
+  const report: Record<string, ModuleStatusReport> = {};
+  for (const [lineId, v] of Object.entries(modules)) {
+    const status = typeof v === 'string' ? v : v?.status;
+    if (status !== 'active') continue;
+    try {
+      const r = await runPreflight(lineId);
+      report[lineId] = { ok: r.ok, reason: r.reason };
+      if (!r.ok && r.reason) {
+        showModuleError(MODULE_LABELS[lineId] ?? lineId, r.reason);
+      }
+    } catch (err) {
+      report[lineId] = {
+        ok: false,
+        reason: `环境预检异常：${(err as Error).message}`,
+      };
+    }
+  }
+  if (Object.keys(report).length > 0) {
+    loop.setModuleStatus(report);
+  }
+}
+
 function startWs1HeartbeatLoop(cfg: AgentConfig): void {
   const apiBase = deriveHttpApiBase(cfg);
   if (!apiBase) {
@@ -775,7 +829,10 @@ function startWs1HeartbeatLoop(cfg: AgentConfig): void {
     intervalMs: 30_000,
     onTask,
     onHeartbeat: (resp) => {
-      if (resp.modules) updateTrayModules(resp.modules);
+      if (resp.modules) {
+        updateTrayModules(normalizeModules(resp.modules));
+        void runModulePreflights(resp, loop);
+      }
     },
     onError: (err) => console.warn('[ws1:heartbeat] error:', err),
   });
