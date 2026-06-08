@@ -45,6 +45,7 @@ export async function handleWechatRpa(task: WechatRpaTask): Promise<WechatRpaRes
   return new Promise((resolve) => {
     const script = resolveScript(task);
     const py = spawn(getPythonExe(), [script], {
+      windowsHide: true,
       stdio: ['pipe', 'pipe', 'pipe'],
       env: { ...process.env, REAL_PUBLISH: '1' },
     });
@@ -101,7 +102,11 @@ export function startWechatListener(apiBase: string): void {
   const spawnOnce = (): void => {
     const child = spawn(getPythonExe(), buildListenerSpawnArgs(script, apiBase), {
       detached: false,
-      stdio: 'ignore',
+      stdio: ['ignore', 'pipe', 'pipe'] as const,
+      windowsHide: true,
+    });
+    child.stderr!.on('data', (d: Buffer) => {
+      console.warn('[listen_chat stderr]', d.toString().trim());
     });
     child.on('exit', (code) => {
       console.warn(

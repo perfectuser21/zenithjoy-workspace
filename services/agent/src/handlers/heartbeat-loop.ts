@@ -23,6 +23,7 @@ export interface HeartbeatResponse {
   ok: boolean;
   agent_id: string;
   queued_tasks?: HeartbeatTask[];
+  modules?: Record<string, 'active' | 'locked' | 'not_purchased'>;
 }
 
 export interface HeartbeatLoopOptions {
