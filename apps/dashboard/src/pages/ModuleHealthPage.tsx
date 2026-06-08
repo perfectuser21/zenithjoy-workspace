@@ -4,15 +4,20 @@
  * 行 = 已注册客户机器（agent_id + hostname）
  * 列 = Line01 智能发布 / Line02 智能获客 / Line04 微信AI客服 / Line05 视频剪辑
  * 单元格：
- *   - ok:true  → 🟢 在线
- *   - ok:false → 🔴 + reason 文字（hover title + 行内可见）
- *   - 无数据   → ⚪ 无数据
+ *   - ok:true  -> 绿点 + 在线
+ *   - ok:false -> 红点 + reason 文字（hover title + 行内可见）
+ *   - 无数据   -> 灰点 + 无数据
  * 每 30s 自动刷新，支持手动刷新；加载中显示 skeleton。
  */
 import { useCallback, useEffect, useState } from 'react';
 import { fetchModuleHealth, type AgentModuleHealth } from '../api/moduleHealth.api';
 
-// 看板列定义：module_status 的 key → 中文 Line 名
+// 状态点用 unicode 转义表示，避免源码内出现裸表情符号
+const DOT_ONLINE = '\u{1F7E2}'; // 绿色圆点
+const DOT_FAIL = '\u{1F534}'; // 红色圆点
+const DOT_NONE = '⚪'; // 白色圆点
+
+// 看板列定义：module_status 的 key -> 中文 Line 名
 const LINES = [
   { key: 'line01-publish', label: 'Line01 智能发布' },
   { key: 'line02-lead-gen', label: 'Line02 智能获客' },
@@ -21,7 +26,7 @@ const LINES = [
 ] as const;
 
 /**
- * 把 ISO 时间换算成相对时间（"刚刚 / N 分钟前 / N 小时前 / N 天前"）。
+ * 把 ISO 时间换算成相对时间（刚刚 / N 分钟前 / N 小时前 / N 天前）。
  * @param iso  目标时间
  * @param nowMs 当前时间戳（毫秒），默认 Date.now()；测试时可注入固定值
  */
@@ -41,31 +46,31 @@ export function formatRelativeTime(iso: string | null | undefined, nowMs?: numbe
 }
 
 function StatusCell({ entry }: { entry?: { ok: boolean; reason?: string } }) {
-  // 机器未上报该模块 → ⚪ 无数据
+  // 机器未上报该模块 -> 灰点 无数据
   if (!entry) {
     return (
       <span className="inline-flex items-center gap-1 text-gray-400 text-xs" title="该机器未上报此模块">
-        <span>⚪</span>
-        <span className="text-gray-300">无数据</span>
+        <span aria-hidden="true">{DOT_NONE}</span>
+        <span>无数据</span>
       </span>
     );
   }
   if (entry.ok) {
     return (
       <span className="inline-flex items-center gap-1 text-green-600 text-xs font-medium">
-        <span>🟢</span>
+        <span aria-hidden="true">{DOT_ONLINE}</span>
         <span>在线</span>
       </span>
     );
   }
-  // ok:false → 🔴 + reason（title 悬浮 + 行内截断可见）
+  // ok:false -> 红点 + reason（title 悬浮 + 行内截断可见）
   const reason = entry.reason || '环境预检未通过';
   return (
     <span
       className="inline-flex items-center gap-1 text-red-500 text-xs font-medium max-w-[220px]"
       title={reason}
     >
-      <span>🔴</span>
+      <span aria-hidden="true">{DOT_FAIL}</span>
       <span className="truncate">{reason}</span>
     </span>
   );

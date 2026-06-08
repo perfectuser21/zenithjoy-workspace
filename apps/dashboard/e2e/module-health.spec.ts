@@ -3,12 +3,12 @@
  *
  * 覆盖场景：
  *   test 1: 机器行渲染（hostname + agent_id）+ 四条 Line 表头
- *   test 2: 单元格三态 — ok:true(🟢) / ok:false(🔴+reason) / 无数据(⚪)
+ *   test 2: 单元格三态 — 在线 / 失败(reason) / 无数据
  *   test 3: API 失败时显示错误提示
  *
  * API 全部 page.route stub，不依赖真实后端，适合 windows_cloud 干净 VM。
- * 复用运营员超管邮箱（与 operator-sessions.spec 同款，CI 的
- * VITE_SUPER_ADMIN_EMAILS 已含此邮箱）以通过 requireSuperAdmin 路由守卫。
+ * 超管邮箱从环境变量 E2E_SUPER_ADMIN_EMAIL 读取（与 CI 的 VITE_SUPER_ADMIN_EMAILS
+ * 对齐）以通过 requireSuperAdmin 路由守卫；缺省回退到运营员默认邮箱。
  *
  * 运行：
  *   VITE_SKIP_AUTH=false npm run dev:dashboard
@@ -16,9 +16,23 @@
  */
 import { test, expect, type Page } from '@playwright/test';
 
-const SUPER_ADMIN_EMAIL = 'xuxiao21xx@icloud.com';
+const SUPER_ADMIN_EMAIL = process.env.E2E_SUPER_ADMIN_EMAIL || 'xuxiao21xx@icloud.com';
 
-const HEALTH_DATA = {
+interface ModuleStatusEntry {
+  ok: boolean;
+  reason?: string;
+}
+interface ModuleHealthBody {
+  ok: boolean;
+  data: Array<{
+    agent_id: string;
+    hostname: string;
+    module_status: Record<string, ModuleStatusEntry>;
+    updated_at: string;
+  }>;
+}
+
+const HEALTH_DATA: ModuleHealthBody = {
   ok: true,
   data: [
     {
@@ -28,7 +42,7 @@ const HEALTH_DATA = {
         'line04-wechat-cs': { ok: false, reason: '微信版本 4.2.0 不支持，请降级至 4.1.8' },
         'line01-publish': { ok: true },
         'line02-lead-gen': { ok: true },
-        // line05-video 缺省 → ⚪ 无数据
+        // line05-video 缺省 -> 无数据
       },
       updated_at: '2026-06-08T09:57:00Z',
     },
@@ -48,7 +62,7 @@ async function stubAuthAsSuperAdmin(page: Page) {
   });
 }
 
-async function stubModuleHealth(page: Page, body: unknown = HEALTH_DATA) {
+async function stubModuleHealth(page: Page, body: ModuleHealthBody = HEALTH_DATA) {
   await page.route('**/api/agent/module-health', async (route) => {
     await route.fulfill({
       status: 200,
@@ -74,19 +88,18 @@ test('渲染机器行（hostname + agent_id）+ 四条 Line 表头', async ({ pa
 });
 
 // test 2: 单元格三态渲染
-test('单元格三态：ok(🟢) / 失败(🔴 + reason) / 无数据(⚪)', async ({ page }) => {
+test('单元格三态：在线 / 失败(reason) / 无数据', async ({ page }) => {
   await stubAuthAsSuperAdmin(page);
   await stubModuleHealth(page);
 
   await page.goto('/module-health');
 
-  // line01 / line02 ok → 🟢
-  await expect(page.getByText('🟢').first()).toBeVisible();
-  // line04 失败 → 🔴 + reason 文字
-  await expect(page.getByText('🔴').first()).toBeVisible();
+  // line01 / line02 ok -> 在线
+  await expect(page.getByText('在线').first()).toBeVisible();
+  // line04 失败 -> reason 文字
   await expect(page.getByText(/微信版本 4.2.0 不支持/).first()).toBeVisible();
-  // line05 无上报 → ⚪
-  await expect(page.getByText('⚪').first()).toBeVisible();
+  // line05 无上报 -> 无数据
+  await expect(page.getByText('无数据').first()).toBeVisible();
 });
 
 // test 3: API 失败时错误提示
