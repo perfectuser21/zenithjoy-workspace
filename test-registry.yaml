@@ -433,6 +433,14 @@ tests:
     product: AI员工
     note: "Sprint 06081700 — line04 独立模块 preflight：微信版本比较/注册表解析/fixGuide 含 COS 旧版直链/非 Windows 不崩溃"
 
+  - id: agent-line04-preflight-cli
+    path: services/agent/modules/line04/__tests__/preflight-cli.test.ts
+    type: unit
+    ci: L2
+    status: active
+    product: AI员工
+    note: "Sprint 06081700 — line04 preflight 作为 CLI 被 core ModuleManager `node preflight.js` 执行：stdout 最后一行 JSON + 退出码与 ok 对应"
+
   - id: agent-sanitize-env
     path: services/agent/src/utils/__tests__/sanitize-env.test.ts
     type: unit

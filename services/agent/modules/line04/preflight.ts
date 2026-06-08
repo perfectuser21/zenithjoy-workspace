@@ -219,3 +219,18 @@ export async function runPreflight(moduleDir: string): Promise<ModulePreflightRe
     .join('\n');
   return { ok: false, checks, fixGuide };
 }
+
+// 作为脚本直接执行时（core ModuleManager 用 `node preflight.js`，cwd=moduleDir，不传 argv）：
+// 把结果以 JSON 打印为 stdout 最后一行，退出码与 ok 对应。moduleDir 默认取本文件所在目录。
+if (require.main === module) {
+  const moduleDir = process.argv[2] || __dirname;
+  runPreflight(moduleDir)
+    .then((result) => {
+      console.log(JSON.stringify(result));
+      process.exit(result.ok ? 0 : 1);
+    })
+    .catch((e: Error) => {
+      console.log(JSON.stringify({ ok: false, checks: {}, fixGuide: e.message }));
+      process.exit(1);
+    });
+}
