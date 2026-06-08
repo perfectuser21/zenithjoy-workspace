@@ -269,7 +269,12 @@ else
 fi
 
 echo "[build] sha256"
-shasum -a 256 "$TAR_NAME" | tee "${TAR_NAME}.sha256"
+# sha256sum (Linux/CI) 优先，shasum -a 256 (macOS) 兜底
+if command -v sha256sum >/dev/null 2>&1; then
+  sha256sum "$TAR_NAME" | tee "${TAR_NAME}.sha256"
+else
+  shasum -a 256 "$TAR_NAME" | tee "${TAR_NAME}.sha256"
+fi
 
 echo "[build] manifest.json"
 SIZE=$(wc -c < "$TAR_NAME" | tr -d ' ')
