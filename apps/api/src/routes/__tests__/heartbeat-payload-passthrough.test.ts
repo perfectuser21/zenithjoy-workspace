@@ -31,6 +31,15 @@ vi.mock('../../services/walking-skeleton.service', () => ({
   submitPublishReceipt: vi.fn(),
   getPublishTask: vi.fn(),
   isValidPublishType: vi.fn(),
+  // Sprint 06081603: heartbeat handler 新增依赖（下发 modules + 上报 module_status）
+  saveModuleStatus: vi.fn(),
+  getAllModuleHealth: vi.fn(),
+  HEARTBEAT_MODULES: {
+    'line04-wechat-cs': { status: 'active', required_version: '1.0.0' },
+    'line01-publish': { status: 'active', required_version: '1.0.0' },
+    'line02-lead-gen': { status: 'active', required_version: '1.0.0' },
+    'line05-video': { status: 'active', required_version: '1.0.0' },
+  },
 }));
 
 import { heartbeatRouter } from '../walking-skeleton';

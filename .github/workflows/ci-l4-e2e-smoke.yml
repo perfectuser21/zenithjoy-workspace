@@ -270,6 +270,17 @@ jobs:
           chmod +x .github/workflows/scripts/smoke/ai-video-pipeline-local-smoke.sh
           bash .github/workflows/scripts/smoke/ai-video-pipeline-local-smoke.sh
 
+      - name: Smoke — Heartbeat 双向 modules + module-health (Sprint 06081603)
+        env:
+          API_BASE: http://localhost:5200
+          PGHOST: localhost
+          PGUSER: cecelia
+          PGPASSWORD: cecelia
+          PGDATABASE: cecelia
+        run: |
+          chmod +x .github/workflows/scripts/smoke/heartbeat-module-health-smoke.sh
+          bash .github/workflows/scripts/smoke/heartbeat-module-health-smoke.sh
+
       - name: Smoke — Pipeline dashboard-stats/trigger
         env:
           API_BASE: http://localhost:5200

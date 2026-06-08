@@ -14,11 +14,16 @@ describe('walking-skeleton routes (export sanity)', () => {
 });
 
 describe('heartbeat modules contract', () => {
-  it('modules field contains required keys', () => {
-    const EXPECTED_MODULES = ['wechat-cs', 'video-pipeline', 'crm-sync'];
-    expect(EXPECTED_MODULES).toContain('wechat-cs');
-    expect(EXPECTED_MODULES).toContain('video-pipeline');
-    expect(EXPECTED_MODULES).toContain('crm-sync');
+  it('modules field contains required Line keys', () => {
+    // Sprint 06081603: 心跳 modules 改 Line 命名（与 Agent preflight / Dashboard 对齐）
+    const EXPECTED_MODULES = [
+      'line04-wechat-cs',
+      'line01-publish',
+      'line02-lead-gen',
+      'line05-video',
+    ];
+    expect(EXPECTED_MODULES).toContain('line04-wechat-cs');
+    expect(EXPECTED_MODULES).toContain('line01-publish');
   });
 
   it('module status values are valid enum strings', () => {
