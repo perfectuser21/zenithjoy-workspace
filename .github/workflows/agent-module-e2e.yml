@@ -131,6 +131,7 @@ jobs:
         run: |
           npm ci --prefer-offline
           npm run build
+          npx tsc --outDir dist --rootDir . --module CommonJS --esModuleInterop --resolveJsonModule --skipLibCheck --target ES2020 modules/line04/preflight.ts
 
       - name: Step 3 — preflight real machine (node compiled dist)
         run: |
