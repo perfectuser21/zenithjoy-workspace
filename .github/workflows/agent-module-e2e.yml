@@ -137,7 +137,7 @@ jobs:
     timeout-minutes: 10
     defaults:
       run:
-        shell: bash
+        shell: pwsh
         working-directory: services/agent
 
     steps:
@@ -155,14 +155,17 @@ jobs:
       - name: Step 3 — preflight real machine (node compiled dist)
         run: |
           node dist/modules/line04/preflight.js
-          echo "Step 3 OK: real machine preflight exit 0"
+          if ($LASTEXITCODE -ne 0) { Write-Host "FAIL: preflight exit $LASTEXITCODE"; exit 1 }
+          Write-Host "Step 3 OK: real machine preflight exit 0"
 
       - name: Step 6 — MOCK_WECHAT_VERSION=4.2.0.0 version-only warning on real machine
         run: |
-          MOCK_WECHAT_VERSION=4.2.0.0 node dist/modules/line04/preflight.js; echo "exit=$?"
-          MOCK_WECHAT_VERSION=4.2.0.0 node dist/modules/line04/preflight.js > /tmp/pf-xrog.json 2>/dev/null
-          PCODE=$?
-          [ "$PCODE" -eq 0 ] || { echo "FAIL: exit $PCODE should be 0 (version-only warning on xian-rog)"; exit 1; }
-          cat /tmp/pf-xrog.json | jq -e '.ok == true' || { echo "FAIL: ok should be true"; exit 1; }
-          cat /tmp/pf-xrog.json | jq -e '.checks.wechat_version == false' || { echo "FAIL: checks.wechat_version should be false"; exit 1; }
-          echo "Step 6 OK (xian-rog version-warning)"
+          $env:MOCK_WECHAT_VERSION = '4.2.0.0'
+          node dist/modules/line04/preflight.js > pf-xrog.json 2>$null
+          $PCODE = $LASTEXITCODE
+          Remove-Item Env:\MOCK_WECHAT_VERSION -ErrorAction SilentlyContinue
+          Write-Host "exit=$PCODE"
+          if ($PCODE -ne 0) { Write-Host "FAIL: exit $PCODE should be 0 (version-only warning on xian-rog)"; exit 1 }
+          node -e "const j=JSON.parse(require('fs').readFileSync('pf-xrog.json','utf8')); if(j.ok!==true){console.error('FAIL: ok should be true');process.exit(1);} if(j.checks.wechat_version!==false){console.error('FAIL: checks.wechat_version should be false');process.exit(1);} console.log('Step 6 OK (xian-rog version-warning)');"
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          Remove-Item pf-xrog.json -ErrorAction SilentlyContinue
