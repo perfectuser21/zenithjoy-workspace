@@ -16,6 +16,8 @@ export default defineConfig({
       '../../sprints/zj-douyin-article-agent-port/tests/**/*.test.ts',
       // agent-python-embedded sprint 合约测试
       '../../sprints/06031608-agent-python-embedded/tests/**/*.test.ts',
+      // agent-module-e2e-verify sprint 合约测试
+      '../../sprints/06081800-agent-module-e2e-verify/tests/**/*.test.ts',
     ],
     exclude: ['node_modules/**', 'dist/**', 'dist-pkg/**'],
   },

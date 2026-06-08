@@ -102,8 +102,14 @@ interface CheckOutcome {
   skipped?: boolean;
 }
 
-// 检测 1：微信版本。非 Windows 跳过（视为通过）。
+// 检测 1：微信版本。MOCK_WECHAT_VERSION env 可在任何平台注入版本号（跳过注册表读取）。
+// 非 Windows 且无 MOCK 时跳过（视为通过）。
 export function checkWechatVersion(): CheckOutcome {
+  const mockVersion = process.env.MOCK_WECHAT_VERSION;
+  if (mockVersion) {
+    if (isWechatVersionSupported(mockVersion)) return { ok: true, found: mockVersion };
+    return { ok: false, found: mockVersion, fixGuide: wechatFixGuide(mockVersion) };
+  }
   if (process.platform !== 'win32') {
     return { ok: true, skipped: true };
   }
@@ -138,8 +144,9 @@ export function checkWechatVersion(): CheckOutcome {
 }
 
 // 检测 2：pywinauto 可 import。spawn python -c "import pywinauto"，退出码 0 = 通过。
+// MOCK_WECHAT_VERSION 设置时进入 CI mock 模式，跳过此检测（与非 Windows 行为一致）。
 export function checkPywinauto(pythonPath: string): Promise<CheckOutcome> {
-  if (process.platform !== 'win32') {
+  if (process.platform !== 'win32' || process.env.MOCK_WECHAT_VERSION) {
     return Promise.resolve({ ok: true, skipped: true });
   }
   return new Promise<CheckOutcome>((resolve) => {
@@ -180,9 +187,9 @@ export function checkPywinauto(pythonPath: string): Promise<CheckOutcome> {
   });
 }
 
-// 检测 3：内存 ≥ 4GB。非 Windows 跳过（视为通过）。
+// 检测 3：内存 ≥ 4GB。非 Windows 跳过（视为通过）。MOCK_WECHAT_VERSION 时也跳过（CI mock 模式）。
 export function checkMemory(): CheckOutcome {
-  if (process.platform !== 'win32') {
+  if (process.platform !== 'win32' || process.env.MOCK_WECHAT_VERSION) {
     return { ok: true, skipped: true };
   }
   if (os.totalmem() >= MIN_MEMORY_BYTES) return { ok: true };
@@ -196,8 +203,10 @@ export function getModulePython(moduleDir: string): string {
 }
 
 // 模块入口：core 在 fork 前调用，三项全过才激活。
-export async function runPreflight(moduleDir: string): Promise<ModulePreflightResult> {
-  const python = getModulePython(moduleDir);
+// moduleDir 可选，不传时取本文件所在目录（CLI 直接跑时由 main guard 传入）。
+export async function runPreflight(moduleDir?: string): Promise<ModulePreflightResult> {
+  const dir = moduleDir ?? __dirname;
+  const python = getModulePython(dir);
 
   const wechat = checkWechatVersion();
   const pyw = await checkPywinauto(python);
@@ -208,11 +217,17 @@ export async function runPreflight(moduleDir: string): Promise<ModulePreflightRe
     pywinauto: pyw.ok,
     memory: mem.ok,
   };
-  const ok = wechat.ok && pyw.ok && mem.ok;
 
-  if (ok) {
+  if (wechat.ok && pyw.ok && mem.ok) {
     return { ok: true, checks };
   }
+
+  // version-only warning：仅 wechat_version 失败（pywinauto + memory 均通过）
+  // → ok:true（只告警，不判红），顶层不冒泡 fixGuide（PRD 边界情况）
+  if (!wechat.ok && pyw.ok && mem.ok) {
+    return { ok: true, checks };
+  }
+
   const fixGuide = [wechat, pyw, mem]
     .filter((c) => !c.ok && c.fixGuide)
     .map((c) => c.fixGuide)

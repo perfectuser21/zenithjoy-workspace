@@ -1,6 +1,3 @@
-contract_branch: cp-06081903-ws-28ee13e7-ws1
-sprint_dir: sprints/06081800-agent-module-e2e-verify
-
 ---
 skeleton: false
 journey_type: agent_remote
