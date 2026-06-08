@@ -217,91 +217,14 @@ def _find_send_button(mw: Any) -> Optional[Any]:
     return None
 
 
-def _force_foreground(hwnd: int) -> None:
-    """强制把指定窗口置顶并拉到前台（SetWindowPos TOPMOST + AttachThreadInput 双保险）。"""
-    try:
-        import ctypes, win32process, win32gui as _wg, win32con as _wc
-        # Step 1: TOPMOST 置顶 —— 保证坐标点击一定打到微信，不被其他窗口遮挡
-        _SWP_NM = 0x0002 | 0x0001  # SWP_NOMOVE | SWP_NOSIZE
-        _wg.SetWindowPos(hwnd, -1, 0, 0, 0, 0, _SWP_NM)  # HWND_TOPMOST = -1
-        _wg.ShowWindow(hwnd, _wc.SW_RESTORE)
-        time.sleep(0.2)
-        # Step 2: AttachThreadInput + SetForegroundWindow（让键盘事件也入坑）
-        try:
-            cur_tid = ctypes.windll.kernel32.GetCurrentThreadId()
-            tgt_tid, _ = win32process.GetWindowThreadProcessId(hwnd)
-            win32process.AttachThreadInput(cur_tid, tgt_tid, True)
-            _wg.SetForegroundWindow(hwnd)
-            win32process.AttachThreadInput(cur_tid, tgt_tid, False)
-        except Exception as e2:
-            _log(f"_force_foreground SetForegroundWindow: {e2}")
-    except Exception as exc:
-        _log(f"_force_foreground: {exc}")
-
-
-def _set_clipboard_text(text: str) -> bool:
-    """把 text 写入系统剪贴板（CF_UNICODETEXT）。成功返回 True。"""
-    try:
-        import ctypes as _ct
-        _u32 = _ct.windll.user32
-        _k32 = _ct.windll.kernel32
-        # 补全 restype/argtypes：ctypes 默认按 32 位 c_int 处理返回值，
-        # amd64 上 64 位 HANDLE/指针会被高位截断 → GlobalLock(坏handle)=NULL
-        # → memmove(NULL) access violation。HANDLE/指针必须声明为 c_void_p。
-        _k32.GlobalAlloc.restype = _ct.c_void_p
-        _k32.GlobalAlloc.argtypes = [_ct.c_uint, _ct.c_size_t]
-        _k32.GlobalLock.restype = _ct.c_void_p
-        _k32.GlobalLock.argtypes = [_ct.c_void_p]
-        _k32.GlobalUnlock.restype = _ct.c_bool
-        _k32.GlobalUnlock.argtypes = [_ct.c_void_p]
-        _u32.SetClipboardData.restype = _ct.c_void_p
-        _u32.SetClipboardData.argtypes = [_ct.c_uint, _ct.c_void_p]
-        encoded = (text + "\x00").encode("utf-16-le")
-        hMem = _k32.GlobalAlloc(0x0002, len(encoded))  # GMEM_MOVEABLE
-        if not hMem:
-            return False
-        pMem = _k32.GlobalLock(hMem)
-        _ct.memmove(pMem, encoded, len(encoded))
-        _k32.GlobalUnlock(hMem)
-        if not _u32.OpenClipboard(0):
-            return False
-        _u32.EmptyClipboard()
-        _u32.SetClipboardData(13, hMem)  # CF_UNICODETEXT = 13
-        _u32.CloseClipboard()
-        return True
-    except Exception as exc:
-        _log(f"_set_clipboard_text: {exc}")
-        return False
-
-
-def _abs_click(abs_x: int, abs_y: int) -> None:
-    """绝对屏幕坐标鼠标左键点击（VIRTUALDESK 坐标，多显示器安全）。"""
-    import ctypes as _ct
-    _u32 = _ct.windll.user32
-    # 用虚拟桌面总尺寸做归一化（含所有显示器），解决多屏坐标偏移
-    vx = _u32.GetSystemMetrics(76)   # SM_XVIRTUALSCREEN
-    vy = _u32.GetSystemMetrics(77)   # SM_YVIRTUALSCREEN
-    vw = _u32.GetSystemMetrics(78)   # SM_CXVIRTUALSCREEN
-    vh = _u32.GetSystemMetrics(79)   # SM_CYVIRTUALSCREEN
-    nx = int((abs_x - vx) * 65535 // max(vw, 1))
-    ny = int((abs_y - vy) * 65535 // max(vh, 1))
-    _MOVE_ABS_VD = 0x8000 | 0x4000 | 0x0001   # ABSOLUTE | VIRTUALDESK | MOVE
-    _DOWN_ABS_VD = 0x8000 | 0x4000 | 0x0002   # ABSOLUTE | VIRTUALDESK | LEFTDOWN
-    _UP_ABS_VD   = 0x8000 | 0x4000 | 0x0004   # ABSOLUTE | VIRTUALDESK | LEFTUP
-    _u32.mouse_event(_MOVE_ABS_VD, nx, ny, 0, 0)
-    time.sleep(0.15)
-    _u32.mouse_event(_DOWN_ABS_VD, nx, ny, 0, 0)
-    time.sleep(0.05)
-    _u32.mouse_event(_UP_ABS_VD, nx, ny, 0, 0)
 
 
 def _uia_send(uia_edit: Any, mw: Any, reply_text: str) -> bool:
     """
-    发送策略（按顺序尝试）：
-    1. 主路径（真实微信窗口 mmui::MainWindow）：拉前台 → 剪贴板 → keybd_event(Ctrl+V, Enter)
-    2. 降级路径（CI / 假 HWND / 无法识别为微信窗口）：SetValue + AttachThreadInput+Enter
-    3. 兜底：SW_RESTORE + 发送按钮 Invoke
-    成功返回 True。
+    发送策略（后台静默，纯 UIA 路径）：
+    1. SetValue 写值 + SW_SHOWNA 还原（不抢焦点）+ AttachThreadInput + PostMessageW(Enter)
+    2. 兜底：SW_RESTORE + 发送按钮 Invoke
+    成功返回 True。全程禁止 keybd_event / mouse_event（全局事件，后台会话必失败）。
     """
     import ctypes as _ct
     _u32 = _ct.windll.user32
@@ -314,56 +237,7 @@ def _uia_send(uia_edit: Any, mw: Any, reply_text: str) -> bool:
     edit_hwnd = uia_edit.element_info.handle or main_hwnd
     _log(f"_uia_send: edit_hwnd={edit_hwnd} main_hwnd={main_hwnd} was_min={was_minimized}")
     try:
-        # ── 主路径：前台剪贴板+keybd_event（仅真实微信窗口）──
-        # 用 UIA element_info.class_name 判断（find_weixin.get_main_window 已筛选为此值）
-        # GetClassNameW 返回 Win32 注册类名，与 UIA ClassName 不同，不能用于此判断
-        try:
-            mw_class = mw.element_info.class_name or ""
-        except Exception:
-            mw_class = ""
-        if False:  # 前台键盘路径已禁用：keybd_event 是全局事件，后台会话下会发到错误窗口
-            if _set_clipboard_text(reply_text):
-                _force_foreground(main_hwnd)
-                time.sleep(0.3)
-                fg = _u32.GetForegroundWindow()
-                if fg == main_hwnd:
-                    try:
-                        uia_edit.set_focus()
-                    except Exception:
-                        pass
-                    time.sleep(0.1)
-                    KEYEVENTF_KEYUP = 0x0002
-                    VK_CONTROL = 0x11
-                    # Ctrl+A（清空旧内容）
-                    _u32.keybd_event(VK_CONTROL, 0, 0, 0)
-                    _u32.keybd_event(0x41, 0, 0, 0)
-                    _u32.keybd_event(0x41, 0, KEYEVENTF_KEYUP, 0)
-                    _u32.keybd_event(VK_CONTROL, 0, KEYEVENTF_KEYUP, 0)
-                    time.sleep(0.1)
-                    # Ctrl+V（粘贴 — 微信内部按真实键盘输入处理，解锁发送按钮）
-                    _u32.keybd_event(VK_CONTROL, 0, 0, 0)
-                    _u32.keybd_event(0x56, 0, 0, 0)
-                    _u32.keybd_event(0x56, 0, KEYEVENTF_KEYUP, 0)
-                    _u32.keybd_event(VK_CONTROL, 0, KEYEVENTF_KEYUP, 0)
-                    time.sleep(0.3)
-                    # Enter（发送）
-                    _u32.keybd_event(VK_RETURN, 0, 0, 0)
-                    _u32.keybd_event(VK_RETURN, 0, KEYEVENTF_KEYUP, 0)
-                    time.sleep(0.4)
-                    try:
-                        remaining_kb = uia_edit.get_value() or ""
-                    except Exception:
-                        remaining_kb = ""
-                    if not remaining_kb:
-                        if was_minimized:
-                            _u32.ShowWindow(main_hwnd, SW_MINIMIZE)
-                        _log("_uia_send: 前台剪贴板+Enter 成功")
-                        return True
-                    _log(f"_uia_send: 前台剪贴板+Enter 失败（{len(remaining_kb)}字残留），回退 PostMessage")
-                else:
-                    _log(f"_uia_send: 未能拉前台（fg={fg}≠{main_hwnd}），回退 PostMessage")
-
-        # ── 降级路径：SetValue + AttachThreadInput+Enter ──
+        # ── 主路径：SetValue + AttachThreadInput+Enter ──
         uia_edit.iface_value.SetValue(reply_text)
         time.sleep(0.2)
         if was_minimized:
@@ -442,7 +316,7 @@ def reply_in_chat(mw: Any, item: Any, reply_text: str, sender: str = "") -> bool
     文件传输助手导致消息发错对象），再 SetValue + Enter/Invoke 发送。
     sender：目标联系人名，用于验证面板是否切换到正确会话（防止 Invoke() 后 WeChat 面板
     未及时切换就读到了旧会话的输入框，导致发到错误聊天窗口）。
-    失败 → 返回 False，下一轮询周期自动重试，绝不调 _force_foreground/_abs_click。
+    失败 → 返回 False，下一轮询周期自动重试，全程纯 UIA 不触碰鼠标/键盘事件。
     """
     def _fresh_mw():
         try:
@@ -959,6 +833,43 @@ def run_real_listen(args: argparse.Namespace) -> int:
                 time.sleep(args.interval)
                 continue
             last_unread_senders = [u["sender"] for u in unread]
+
+            # 主动发送指令：写 C:\Users\Public\zj-proactive-send.json → {target:..., message:...}
+            _psc = r"C:\Users\Public\zj-proactive-send.json"
+            if os.path.exists(_psc):
+                try:
+                    with open(_psc, "r", encoding="utf-8") as _f:
+                        _cmd = json.load(_f)
+                    os.remove(_psc)
+                    _tgt, _msg = _cmd.get("target", ""), _cmd.get("message", "")
+                    if _tgt and _msg:
+                        _log(f"[主动发送] target={_tgt!r}")
+                        _psi = None
+                        for _it in mw.descendants(control_type="ListItem"):
+                            try:
+                                if _tgt in (_it.element_info.name or "").split("\n")[0]:
+                                    _psi = _it
+                                    break
+                            except Exception:
+                                continue
+                        if _psi is not None:
+                            try:
+                                _psi.iface_invoke.Invoke()
+                                time.sleep(2.0)  # UIA 树更新需要 ≥2s，少了找不到 chat_input_field
+                                _fmw = get_main_window() or mw
+                                _ue = _find_chat_input(_fmw)
+                                if _ue is not None:
+                                    _ok = _uia_send(_ue, _fmw, _msg)
+                                    _log(f"[主动发送] ok={_ok}")
+                                else:
+                                    _log("[主动发送] chat_input_field 未找到")
+                            except Exception as _pe:
+                                import traceback as _tb
+                                _log(f"[主动发送] 异常: {_pe}\n{_tb.format_exc()}")
+                        else:
+                            _log(f"[主动发送] 找不到会话 {_tgt!r}")
+                except Exception as _exc:
+                    _log(f"[主动发送] 指令处理异常: {_exc}")
 
             for m in unread:
                 key = (m["sender"], m["content"])
