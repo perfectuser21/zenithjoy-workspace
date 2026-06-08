@@ -130,37 +130,9 @@ jobs:
           Write-Host "[upload] Installing cos-python-sdk-v5..."
           python -m pip install cos-python-sdk-v5 -q 2>&1 | Write-Host
 
-          # inline cos-upload（无需 checkout，xian-rog 访问不了 github.com）
-          $pyScript = @'
-import os, sys, time
-try:
-    from qcloud_cos import CosConfig, CosS3Client
-except ImportError:
-    import subprocess
-    subprocess.check_call([sys.executable, "-m", "pip", "install", "cos-python-sdk-v5", "-q"])
-    from qcloud_cos import CosConfig, CosS3Client
-
-local_path, bucket, region, cos_key = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4]
-config = CosConfig(Region=region, SecretId=os.environ["COS_SECRET_ID"],
-                   SecretKey=os.environ["COS_SECRET_KEY"], Timeout=600)
-client = CosS3Client(config)
-size_mb = os.path.getsize(local_path) // 1024 // 1024
-print(f"[cos-upload] {local_path} ({size_mb}MB) -> cos://{bucket}/{cos_key}")
-MAX_ATTEMPTS = 3
-for attempt in range(1, MAX_ATTEMPTS + 1):
-    try:
-        response = client.upload_file(Bucket=bucket, LocalFilePath=local_path,
-            Key=cos_key, MAXThread=1, EnableMD5=False, PartSize=5)
-        print(f"[cos-upload] done ETag={response.get('ETag', '?')}")
-        break
-    except Exception as e:
-        if attempt == MAX_ATTEMPTS: raise
-        wait = 30 * attempt
-        print(f"[cos-upload] attempt {attempt}/{MAX_ATTEMPTS} failed: {e}")
-        print(f"[cos-upload] retrying in {wait}s...")
-        time.sleep(wait)
-'@
-          $pyScript | Set-Content -Path "cos-upload-inline.py" -Encoding utf8NoBOM
+          # inline cos-upload via base64（避免 PowerShell here-string 与 YAML 缩进冲突）
+          $b64 = "aW1wb3J0IG9zLCBzeXMsIHRpbWUKdHJ5OgogICAgZnJvbSBxY2xvdWRfY29zIGltcG9ydCBDb3NDb25maWcsIENvc1MzQ2xpZW50CmV4Y2VwdCBJbXBvcnRFcnJvcjoKICAgIGltcG9ydCBzdWJwcm9jZXNzCiAgICBzdWJwcm9jZXNzLmNoZWNrX2NhbGwoW3N5cy5leGVjdXRhYmxlLCAiLW0iLCAicGlwIiwgImluc3RhbGwiLCAiY29zLXB5dGhvbi1zZGstdjUiLCAiLXEiXSkKICAgIGZyb20gcWNsb3VkX2NvcyBpbXBvcnQgQ29zQ29uZmlnLCBDb3NTM0NsaWVudAoKbG9jYWxfcGF0aCwgYnVja2V0LCByZWdpb24sIGNvc19rZXkgPSBzeXMuYXJndlsxXSwgc3lzLmFyZ3ZbMl0sIHN5cy5hcmd2WzNdLCBzeXMuYXJndls0XQpjb25maWcgPSBDb3NDb25maWcoUmVnaW9uPXJlZ2lvbiwgU2VjcmV0SWQ9b3MuZW52aXJvblsiQ09TX1NFQ1JFVF9JRCJdLAogICAgICAgICAgICAgICAgICAgU2VjcmV0S2V5PW9zLmVudmlyb25bIkNPU19TRUNSRVRfS0VZIl0sIFRpbWVvdXQ9NjAwKQpjbGllbnQgPSBDb3NTM0NsaWVudChjb25maWcpCnNpemVfbWIgPSBvcy5wYXRoLmdldHNpemUobG9jYWxfcGF0aCkgLy8gMTAyNCAvLyAxMDI0CnByaW50KCJbY29zLXVwbG9hZF0ge30gKHt9IE1CKSAtPiBjb3M6Ly97fS97fSIuZm9ybWF0KGxvY2FsX3BhdGgsIHNpemVfbWIsIGJ1Y2tldCwgY29zX2tleSkpCk1BWF9BVFRFTVBUUyA9IDMKZm9yIGF0dGVtcHQgaW4gcmFuZ2UoMSwgTUFYX0FUVEVNUFRTICsgMSk6CiAgICB0cnk6CiAgICAgICAgcmVzcG9uc2UgPSBjbGllbnQudXBsb2FkX2ZpbGUoQnVja2V0PWJ1Y2tldCwgTG9jYWxGaWxlUGF0aD1sb2NhbF9wYXRoLAogICAgICAgICAgICBLZXk9Y29zX2tleSwgTUFYVGhyZWFkPTEsIEVuYWJsZU1ENT1GYWxzZSwgUGFydFNpemU9NSkKICAgICAgICBwcmludCgiW2Nvcy11cGxvYWRdIGRvbmUgRVRhZz17fSIuZm9ybWF0KHJlc3BvbnNlLmdldCgiRVRhZyIsICI/IikpKQogICAgICAgIGJyZWFrCiAgICBleGNlcHQgRXhjZXB0aW9uIGFzIGU6CiAgICAgICAgaWYgYXR0ZW1wdCA9PSBNQVhfQVRURU1QVFM6IHJhaXNlCiAgICAgICAgd2FpdCA9IDMwICogYXR0ZW1wdAogICAgICAgIHByaW50KCJbY29zLXVwbG9hZF0gYXR0ZW1wdCB7fS97fSBmYWlsZWQ6IHt9Ii5mb3JtYXQoYXR0ZW1wdCwgTUFYX0FUVEVNUFRTLCBlKSkKICAgICAgICBwcmludCgiW2Nvcy11cGxvYWRdIHJldHJ5aW5nIGluIHt9cy4uLiIuZm9ybWF0KHdhaXQpKQogICAgICAgIHRpbWUuc2xlZXAod2FpdCkK"
+          [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String($b64)) | Set-Content "cos-upload-inline.py" -Encoding utf8NoBOM
 
           Write-Host "[upload] Uploading dist-installpack\$pack -> cos://$bucket/$cosKey"
           python cos-upload-inline.py "dist-installpack\$pack" $bucket $region $cosKey
