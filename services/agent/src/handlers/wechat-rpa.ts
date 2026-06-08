@@ -1,3 +1,10 @@
+// @deprecated Sprint 06081700 — 微信 RPA 逻辑已迁移到独立 line04 模块包
+//   （modules/line04-wechat-cs/，PR #686）。Core v2.0.0 不再直接 import 本文件，
+//   改由 ModuleManager.forwardMessage('line04-wechat-cs', ...) 转发微信任务给已激活模块子进程。
+//   本文件暂保留：① 供 wechat-rpa-real-agent-smoke.sh 校验 dist/handlers/wechat-rpa.js 真实接线；
+//   ② 后续清理 PR 删除（届时同步移除 smoke 对 dist/handlers/wechat-rpa.js 的 step 1-5 引用）。
+//   勿在 core 新代码中引用本文件。
+
 import { spawn } from 'node:child_process';
 import path from 'node:path';
 import fs from 'node:fs';
