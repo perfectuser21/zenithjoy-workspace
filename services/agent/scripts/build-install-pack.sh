@@ -95,7 +95,6 @@ cp zenithjoy-agent.exe "$PACK_DIR/"
 cp install-pack/start.bat "$PACK_DIR/"
 cp install-pack/uninstall.bat "$PACK_DIR/"
 # 进程守护：watchdog 崩溃自愈循环 + 开机自启注册脚本
-cp install-pack/listener-watchdog.bat "$PACK_DIR/"
 cp install-pack/install-autostart.ps1 "$PACK_DIR/"
 cp install-pack/.env.template "$PACK_DIR/"
 cp "install-pack/README.txt" "$PACK_DIR/"

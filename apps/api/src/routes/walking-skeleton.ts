@@ -65,6 +65,11 @@ heartbeatRouter.post(
       return res.status(200).json({
         ok: true,
         agent_id: agent.id,
+        modules: {
+          'wechat-cs': 'active',
+          'video-pipeline': 'active',
+          'crm-sync': 'active',
+        },
         // map to agent's HeartbeatTask shape: { task_id, platform, payload }
         // payload composed from folder_path column (works for both folder_bind.local_path
         // and douyin.folder_path) + account_label default for qr_bind_douyin

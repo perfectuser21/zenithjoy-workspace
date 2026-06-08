@@ -943,8 +943,15 @@ def main() -> int:
     args = parse_args()
 
     if args.dryrun_print_version:
-        emit_json({"ok": True, "info": "print-version-only"})
-        return 0
+        try:
+            import pywinauto
+            import win32api
+            import comtypes
+            emit_json({"ok": True, "pywinauto": pywinauto.__version__})
+            return 0
+        except ImportError as e:
+            emit_json({"ok": False, "error": str(e)})
+            return 1
 
     if args.dryrun:
         return run_dryrun_inject(args)

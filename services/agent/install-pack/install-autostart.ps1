@@ -3,8 +3,8 @@
   注册/注销 ZenithJoy 微信监听守护的开机自启（Windows 任务计划 ONLOGON）。
 
 .DESCRIPTION
-  以当前登录用户身份，在用户登录时自动拉起 listener-watchdog.bat
-  （watchdog 内含崩溃 30s 自愈循环）。客户开机后无需任何手动操作即开始接客。
+  以当前登录用户身份，在用户登录时自动拉起 start.bat（zenithjoy-agent.exe），
+  Agent 内置微信监听守护进程（startWechatListener），崩溃自动 30s 重启。客户开机后无需任何手动操作即开始接客。
 
 .PARAMETER Unregister
   注销已注册的开机任务。
@@ -19,9 +19,9 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
-$TaskName  = 'ZenithJoyWeChatListener'
+$TaskName  = 'ZenithJoyAgent'
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Definition
-$Target    = Join-Path $ScriptDir 'listener-watchdog.bat'
+$Target    = Join-Path $ScriptDir 'start.bat'
 
 if ($Unregister) {
     Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false -ErrorAction SilentlyContinue

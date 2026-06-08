@@ -22,7 +22,7 @@ import { handleToutiaoPublish } from './handlers/toutiao-publish';
 import { handleWeiboPublish } from './handlers/weibo-publish';
 import { handleShipinhaoPublish } from './handlers/shipinhao-publish';
 import { handleZhihuPublish } from './handlers/zhihu-publish';
-import { startTray, updateTrayStatus, destroyTray } from './tray';
+import { startTray, updateTrayStatus, updateTrayModules, destroyTray } from './tray';
 // Walking Skeleton #1 — HTTP heartbeat 链路（与上面 WS 链路并存）
 import { HeartbeatLoop, type HeartbeatTask } from './handlers/heartbeat-loop';
 import { handleQrBindDouyin } from './handlers/qr-bind-douyin';
@@ -618,7 +618,7 @@ async function handleCrawlCommentsBurner(payload: {
       `--user-data-dir=${userDataDir}`,
       `--video-url=${videoUrl}`,
       `--max-comments=${maxComments}`,
-    ]);
+    ], { windowsHide: true });
     let stdout = '';
     let stderr = '';
     proc.stdout.on('data', (d) => (stdout += d.toString()));
@@ -774,6 +774,9 @@ function startWs1HeartbeatLoop(cfg: AgentConfig): void {
     osType: process.platform,
     intervalMs: 30_000,
     onTask,
+    onHeartbeat: (resp) => {
+      if (resp.modules) updateTrayModules(resp.modules);
+    },
     onError: (err) => console.warn('[ws1:heartbeat] error:', err),
   });
   loop.start();

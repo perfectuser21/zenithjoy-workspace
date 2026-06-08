@@ -25,14 +25,54 @@ jobs:
         run: bash scripts/build-install-pack.sh
         working-directory: services/agent
 
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: zenithjoy-agent-installpack
+          path: services/agent/dist-installpack/
+
+  # 在 self-hosted Windows (ROG, wechat-capable) 上真实跑 dryrun，
+  # 用 embedded python 真 import pywinauto/win32api/comtypes，
+  # 失败则 publish 不运行 — 防止把环境坏掉的包发到 COS/HK VPS。
+  verify-on-rog:
+    needs: [build]
+    runs-on: [self-hosted, wechat-capable]
+    steps:
+      - name: Download artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: zenithjoy-agent-installpack
+          path: dist-installpack/
+
+      - name: Dryrun verify (real embedded-python import check)
+        shell: bash
+        run: |
+          set -euo pipefail
+          PACK=$(ls dist-installpack/*.tar.gz | head -1)
+          echo "[verify] extracting $PACK"
+          tar xzf "$PACK" -C dist-installpack/
+          AGENT_DIR=$(ls -d dist-installpack/zenithjoy-agent-v*/ | head -1)
+          echo "[verify] agent dir: $AGENT_DIR"
+          "${AGENT_DIR}python-embedded/python.exe" "${AGENT_DIR}wechat-rpa/listen_chat.py" --dryrun-print-version
+          echo "[verify] dryrun-print-version OK"
+
+  publish:
+    needs: [verify-on-rog]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: zenithjoy-agent-installpack
+          path: services/agent/dist-installpack/
+
       - name: Upload to COS + update manifest cos_url
         env:
           COS_SECRET_ID: ${{ secrets.COS_SECRET_ID }}
           COS_SECRET_KEY: ${{ secrets.COS_SECRET_KEY }}
         run: |
           pip install coscmd -q
-          VERSION=$(node -e "console.log(require('./services/agent/package.json').version)")
-          PACK="zenithjoy-agent-v${VERSION}.tar.gz"
+          PACK=$(basename "$(ls services/agent/dist-installpack/zenithjoy-agent-v*.tar.gz | head -1)")
           BUCKET="zenithjoy-static-1333590468"
           ENDPOINT="cos.accelerate.myqcloud.com"
           COS_PATH="/install-pack/${PACK}"
@@ -99,9 +139,3 @@ jobs:
             -H "X-Internal-Token: ${VPS_INTERNAL_TOKEN}" \
             -d @services/agent/dist-installpack/manifest.json \
             --max-time 30
-
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: zenithjoy-agent-installpack
-          path: services/agent/dist-installpack/

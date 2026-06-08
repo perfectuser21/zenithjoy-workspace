@@ -7,7 +7,8 @@
 #   3) wechat.ts DraftGenerateSchema 含 mode 字段（auto 模式透传 reply）
 #   4) build-install-pack.sh 跨平台预装 pywinauto（--platform win_amd64）
 #   5) 中台心跳端点 /api/wechat/listener-heartbeat + 断线告警服务
-#   6) 进程守护脚本：listener-watchdog.bat（30s 自愈）+ install-autostart.ps1（ONLOGON）
+#   6) 进程守护：listener-watchdog.bat 已删除，守护内化为 startWechatListener（Node.js，30s 自愈）；
+#      install-autostart.ps1 目标已改为 start.bat（ZenithJoyAgent 任务）
 set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
 
@@ -50,13 +51,20 @@ grep -qE "checkStaleListenersAndAlert|FEISHU_ALERT_WEBHOOK" "$HEARTBEAT_SVC" || 
 grep -qE "post_heartbeat" "$LISTEN" || { echo "FAIL: listen_chat 未上报心跳"; exit 1; }
 echo "  PASS 心跳端点 + 告警 + 上报"
 
-echo "=== 6: 进程守护脚本 watchdog + autostart ==="
-test -f "$WATCHDOG" || { echo "FAIL: 缺 listener-watchdog.bat"; exit 1; }
-grep -qE 'goto loop' "$WATCHDOG" || { echo "FAIL: watchdog 缺重启循环"; exit 1; }
-grep -qE 'timeout /t 30' "$WATCHDOG" || { echo "FAIL: watchdog 缺 30s 重启"; exit 1; }
+echo "=== 6: 进程守护（v1.1.109 架构：Node.js 内置守护，.bat 已删）==="
+# listener-watchdog.bat 在 v1.1.109 中删除，守护逻辑移入 wechat-rpa.ts startWechatListener
+if [ -f "$WATCHDOG" ]; then
+  echo "FAIL: listener-watchdog.bat 不应存在（已在 v1.1.109 删除）"; exit 1
+fi
+echo "  PASS listener-watchdog.bat 已正确删除"
+# install-autostart.ps1 现指向 start.bat（不再是 listener-watchdog.bat）
 test -f "$AUTOSTART" || { echo "FAIL: 缺 install-autostart.ps1"; exit 1; }
 grep -qE 'AtLogOn' "$AUTOSTART" || { echo "FAIL: autostart 缺 ONLOGON 触发"; exit 1; }
-echo "  PASS watchdog 自愈 + 开机自启"
+grep -q 'start.bat' "$AUTOSTART" || { echo "FAIL: autostart 未指向 start.bat"; exit 1; }
+if grep -q 'listener-watchdog.bat' "$AUTOSTART"; then
+  echo "FAIL: autostart 仍引用 listener-watchdog.bat（应已更新为 start.bat）"; exit 1
+fi
+echo "  PASS Node.js 内置守护 + autostart 指向 start.bat"
 
 echo ""
 echo "wechat-cs-hardening-smoke: ALL PASS"
