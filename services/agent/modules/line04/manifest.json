@@ -1,0 +1,9 @@
+{
+  "lineId": "line04-wechat-cs",
+  "version": "1.0.0",
+  "displayName": "微信AI客服",
+  "entry": "index.js",
+  "platform": ["win32"],
+  "minMemoryGB": 4,
+  "requiredChecks": ["wechat_version", "pywinauto", "memory"]
+}
