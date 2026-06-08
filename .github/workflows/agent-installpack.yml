@@ -18,30 +18,20 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
-      # key v2：invalidate v1（v1 保存的是 fetched-* 前缀，会被 pkg hash check 拦截删除再走 504）
-      - name: Cache pkg binaries
-        uses: actions/cache@v4
-        with:
-          path: ~/.pkg-cache
-          key: pkg-cache-node18-win64-v2
-      # pkg 对 built- 前缀文件跳过 hash 校验，直接使用。
-      # fetched- 前缀会做 sha256 校验（期望 e0e9a647...），CI 下载哈希不稳定，故改 built- 绕开。
-      - name: Pre-seed pkg binary (built- prefix bypasses hash check)
+      # PKG_CACHE_PATH=/tmp/pkg-local-cache：强制 pkg-fetch 只看这个目录，不再去 ~/.pkg-cache，
+      # 避免 actions/cache 恢复旧 corrupt 文件或 fetched- hash 检查链路。
+      # built- 前缀：pkg-fetch 对 built- 直接使用，不做 sha256 校验（只对 fetched- 做）。
+      - name: Pre-seed pkg binary into PKG_CACHE_PATH
         run: |
-          PKG_CACHE="$HOME/.pkg-cache/v3.4"
+          PKG_CACHE="/tmp/pkg-local-cache/v3.4"
           BINARY="built-v18.5.0-win-x64"
-          if [ ! -f "$PKG_CACHE/$BINARY" ]; then
-            mkdir -p "$PKG_CACHE"
-            echo "[pkg-seed] downloading node-v18.5.0-win-x64..."
-            curl -fsSL --retry 3 --retry-delay 5 -o "$PKG_CACHE/$BINARY" \
-              "https://github.com/vercel/pkg-fetch/releases/download/v3.4/node-v18.5.0-win-x64"
-            chmod +x "$PKG_CACHE/$BINARY"
-            SIZE=$(du -sh "$PKG_CACHE/$BINARY" | cut -f1)
-            echo "[pkg-seed] seeded built-v18.5.0-win-x64 ($SIZE)"
-          else
-            SIZE=$(du -sh "$PKG_CACHE/$BINARY" | cut -f1)
-            echo "[pkg-seed] cache hit built-v18.5.0-win-x64 ($SIZE)"
-          fi
+          mkdir -p "$PKG_CACHE"
+          echo "[pkg-seed] downloading node-v18.5.0-win-x64..."
+          curl -fsSL --retry 3 --retry-delay 5 -o "$PKG_CACHE/$BINARY" \
+            "https://github.com/vercel/pkg-fetch/releases/download/v3.4/node-v18.5.0-win-x64"
+          chmod +x "$PKG_CACHE/$BINARY"
+          SIZE=$(du -sh "$PKG_CACHE/$BINARY" | cut -f1)
+          echo "[pkg-seed] built-v18.5.0-win-x64 ($SIZE) → $PKG_CACHE/$BINARY"
       - name: Install
         run: npm install --no-audit --no-fund
         working-directory: services/agent
@@ -49,6 +39,8 @@ jobs:
         run: npm run build
         working-directory: services/agent
       - name: Build install pack
+        env:
+          PKG_CACHE_PATH: /tmp/pkg-local-cache
         run: bash scripts/build-install-pack.sh
         working-directory: services/agent
 
