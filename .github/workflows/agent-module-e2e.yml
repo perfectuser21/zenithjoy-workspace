@@ -1,0 +1,148 @@
+name: Agent Module E2E (windows-latest + xian-rog)
+
+on:
+  push:
+    branches: [main, 'cp-*']
+    paths:
+      - 'services/agent/src/module-manager.ts'
+      - 'services/agent/modules/line04/**'
+      - '.github/workflows/agent-module-e2e.yml'
+      - '.github/workflows/scripts/smoke/agent-module-e2e-smoke.sh'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'services/agent/src/module-manager.ts'
+      - 'services/agent/modules/line04/**'
+      - '.github/workflows/agent-module-e2e.yml'
+      - '.github/workflows/scripts/smoke/agent-module-e2e-smoke.sh'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: agent-module-e2e-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Job 1: windows-latest — npx tsx 直跑源码（无真实微信，含 Steps 2/3/4/6）
+  module-e2e-windows:
+    name: Module E2E (windows-latest, tsx source)
+    runs-on: windows-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        shell: bash
+        working-directory: services/agent
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: npm ci --prefer-offline
+
+      - name: Step 2 — syncModules mock (downloadImpl called once)
+        run: |
+          npx tsx -e "
+          import { ModuleManager } from './src/module-manager.js';
+          import fs from 'node:fs';
+          import os from 'node:os';
+          const root = fs.mkdtempSync(os.tmpdir() + '/zj-smoke-');
+          let called = 0;
+          const mm = new ModuleManager({
+            modulesRoot: root,
+            downloadImpl: async () => { called++; },
+            preflightImpl: async () => ({ ok: false, reason: 'smoke-skip' }),
+          });
+          await mm.syncModules({ 'line04-wechat-cs': { status: 'active', required_version: '1.0.0' } });
+          fs.rmSync(root, { recursive: true, force: true });
+          if (called !== 1) { console.error('FAIL: downloadImpl called', called, 'times (expected 1)'); process.exit(1); }
+          console.log('Step 2 OK: downloadImpl called once');
+          " 2>&1
+
+      - name: Step 3 — preflight non-Windows exit 0 (no fixGuide, no skipped)
+        run: |
+          OUT=$(npx tsx modules/line04/preflight.ts 2>/dev/null)
+          echo "$OUT" | jq -e '.ok == true' || { echo "FAIL: ok not true"; exit 1; }
+          echo "$OUT" | jq -e 'has("checks")' || { echo "FAIL: missing checks"; exit 1; }
+          echo "$OUT" | jq -e 'has("fixGuide") | not' || { echo "FAIL: ok:true should have no fixGuide"; exit 1; }
+          echo "$OUT" | jq -e 'has("skipped") | not' || { echo "FAIL: skipped must not appear at top level"; exit 1; }
+          echo "Step 3 OK"
+
+      - name: Step 4 — activateModule forkImpl + config + getActiveModules
+        run: |
+          npx tsx -e "
+          import { ModuleManager } from './src/module-manager.js';
+          import fs from 'node:fs';
+          import path from 'node:path';
+          import os from 'node:os';
+          import { EventEmitter } from 'node:events';
+          const root = fs.mkdtempSync(os.tmpdir() + '/zj-fork-');
+          const modDir = path.join(root, 'line04-wechat-cs-1.0.0');
+          fs.mkdirSync(modDir, { recursive: true });
+          fs.writeFileSync(path.join(modDir, 'manifest.json'), JSON.stringify({ lineId: 'line04-wechat-cs', version: '1.0.0', entry: 'index.js' }));
+          let sentConfig = false;
+          const fakeChild = new EventEmitter();
+          fakeChild.send = (m) => { if (m?.type === 'config') sentConfig = true; };
+          const mm = new ModuleManager({ modulesRoot: root, forkImpl: () => fakeChild });
+          const activatePromise = mm.activateModule('line04-wechat-cs');
+          setTimeout(() => fakeChild.emit('message', { type: 'ready' }), 50);
+          await activatePromise;
+          fs.rmSync(root, { recursive: true, force: true });
+          if (!sentConfig) { console.error('FAIL: config message not sent'); process.exit(1); }
+          if (!mm.getActiveModules().includes('line04-wechat-cs')) { console.error('FAIL: module not in active list'); process.exit(1); }
+          console.log('Step 4 OK: fork+config+active verified');
+          " 2>&1
+
+      - name: Step 6 — MOCK_WECHAT_VERSION=4.2.0.0 version-only warning (exit 0, ok:true)
+        run: |
+          MOCK_WECHAT_VERSION=4.2.0.0 npx tsx modules/line04/preflight.ts > /tmp/pf-mock.json 2>/dev/null
+          PCODE=$?
+          [ "$PCODE" -eq 0 ] || { echo "FAIL: exit $PCODE should be 0 (version-only warning)"; exit 1; }
+          cat /tmp/pf-mock.json | jq -e '.ok == true' || { echo "FAIL: ok should be true (version-only warning)"; exit 1; }
+          cat /tmp/pf-mock.json | jq -e '.checks.wechat_version == false' || { echo "FAIL: checks.wechat_version should be false"; exit 1; }
+          cat /tmp/pf-mock.json | jq -e 'has("fixGuide") | not' || { echo "FAIL: version-only path must not have fixGuide"; exit 1; }
+          cat /tmp/pf-mock.json | jq -e 'has("skipped") | not' || { echo "FAIL: top-level output must not have skipped"; exit 1; }
+          echo "Step 6 OK"
+
+      - name: Smoke script (API_UP guard)
+        run: bash ../../.github/workflows/scripts/smoke/agent-module-e2e-smoke.sh
+
+  # Job 2: xian-rog — self-hosted wechat-capable，先 build 再 node（真机三项检测）
+  preflight-xian-rog:
+    name: Preflight (xian-rog real machine)
+    runs-on: [self-hosted, wechat-capable]
+    timeout-minutes: 10
+    defaults:
+      run:
+        shell: bash
+        working-directory: services/agent
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install + Build
+        run: |
+          npm ci --prefer-offline
+          npm run build
+
+      - name: Step 3 — preflight real machine (node compiled dist)
+        run: |
+          node dist/modules/line04/preflight.js
+          echo "Step 3 OK: real machine preflight exit 0"
+
+      - name: Step 6 — MOCK_WECHAT_VERSION=4.2.0.0 version-only warning on real machine
+        run: |
+          MOCK_WECHAT_VERSION=4.2.0.0 node dist/modules/line04/preflight.js; echo "exit=$?"
+          MOCK_WECHAT_VERSION=4.2.0.0 node dist/modules/line04/preflight.js > /tmp/pf-xrog.json 2>/dev/null
+          PCODE=$?
+          [ "$PCODE" -eq 0 ] || { echo "FAIL: exit $PCODE should be 0 (version-only warning on xian-rog)"; exit 1; }
+          cat /tmp/pf-xrog.json | jq -e '.ok == true' || { echo "FAIL: ok should be true"; exit 1; }
+          cat /tmp/pf-xrog.json | jq -e '.checks.wechat_version == false' || { echo "FAIL: checks.wechat_version should be false"; exit 1; }
+          echo "Step 6 OK (xian-rog version-warning)"
