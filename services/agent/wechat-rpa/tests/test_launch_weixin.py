@@ -57,5 +57,7 @@ class TestLaunchWeixin:
 
     def test_uses_default_path_when_no_exe_path_given(self):
         """不传 exe_path 时使用 WEIXIN_EXE_DEFAULT（默认安装路径不存在 → False）。"""
-        result = launch_weixin()  # CI 机上没有 Weixin.exe
+        # mock isfile 防止 xian-rog 本机装有微信导致测试失败
+        with patch("find_weixin.os.path.isfile", return_value=False):
+            result = launch_weixin()
         assert result is False  # 文件不存在就返回 False，不抛异常

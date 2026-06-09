@@ -238,15 +238,85 @@ def _find_send_button(mw: Any) -> Optional[Any]:
     return None
 
 
+def _set_clipboard_text(text: str) -> bool:
+    """Win32 剪贴板写入（restype/argtypes 必须显式声明，防 amd64 64 位 HANDLE 被截断）。"""
+    import ctypes
+    CF_UNICODETEXT = 13
+    GMEM_MOVEABLE = 0x0002
+    encoded = (text + "\x00").encode("utf-16-le")
+    size = len(encoded)
+    k32 = ctypes.windll.kernel32
+    u32 = ctypes.windll.user32
+    # 必须显式声明 restype/argtypes，否则 amd64 上 64 位 HANDLE 高位被 c_int 截断
+    k32.GlobalAlloc.restype = ctypes.c_void_p
+    k32.GlobalAlloc.argtypes = [ctypes.c_uint, ctypes.c_size_t]
+    k32.GlobalLock.restype = ctypes.c_void_p
+    k32.GlobalLock.argtypes = [ctypes.c_void_p]
+    k32.GlobalUnlock.restype = ctypes.c_bool
+    k32.GlobalUnlock.argtypes = [ctypes.c_void_p]
+    u32.SetClipboardData.restype = ctypes.c_void_p
+    u32.SetClipboardData.argtypes = [ctypes.c_uint, ctypes.c_void_p]
+    try:
+        hMem = k32.GlobalAlloc(GMEM_MOVEABLE, size)
+        if not hMem:
+            return False
+        pMem = k32.GlobalLock(hMem)
+        if not pMem:
+            return False
+        ctypes.memmove(pMem, encoded, size)
+        k32.GlobalUnlock(hMem)
+        u32.OpenClipboard(None)
+        u32.EmptyClipboard()
+        u32.SetClipboardData(CF_UNICODETEXT, hMem)
+        u32.CloseClipboard()
+        return True
+    except Exception:
+        return False
 
 
 def _uia_send(uia_edit: Any, mw: Any, reply_text: str) -> bool:
     """
     发送策略（后台静默，纯 UIA 路径）：
+    0. mmui::MainWindow（微信4.1.x）：剪贴板粘贴路径（_set_clipboard_text + Ctrl+V + Enter）
     1. SetValue 写值 + SW_SHOWNA 还原（不抢焦点）+ AttachThreadInput + PostMessageW(Enter)
     2. 兜底：SW_RESTORE + 发送按钮 Invoke
     成功返回 True。全程禁止 keybd_event / mouse_event（全局事件，后台会话必失败）。
     """
+    # 微信4.1.x mmui 窗口：SetValue 写入后 Enter 不触发发送，改用剪贴板粘贴路径
+    cls = getattr(getattr(mw, 'element_info', None), 'class_name', '') or ''
+    if cls == 'mmui::MainWindow':
+        if not _set_clipboard_text(reply_text):
+            return False
+        try:
+            uia_edit.set_focus()
+            import ctypes as _ct
+            hwnd = uia_edit.element_info.handle or mw.element_info.handle
+            VK_CONTROL, VK_V, VK_RETURN = 0x11, 0x56, 0x0D
+            _u32 = _ct.windll.user32
+            _k32 = _ct.windll.kernel32
+            my_tid = _k32.GetCurrentThreadId()
+            pid_buf = _ct.c_ulong(0)
+            wx_tid = _u32.GetWindowThreadProcessId(hwnd, _ct.byref(pid_buf))
+            _u32.AttachThreadInput(my_tid, wx_tid, True)
+            _u32.PostMessageW(hwnd, 0x0100, VK_CONTROL, 0)
+            _u32.PostMessageW(hwnd, 0x0100, VK_V, 0)
+            _u32.PostMessageW(hwnd, 0x0101, VK_V, 0)
+            _u32.PostMessageW(hwnd, 0x0101, VK_CONTROL, 0)
+            time.sleep(0.15)
+            _u32.PostMessageW(hwnd, 0x0100, VK_RETURN, 0x001C0001)
+            _u32.PostMessageW(hwnd, 0x0101, VK_RETURN, 0xC01C0001)
+            _u32.AttachThreadInput(my_tid, wx_tid, False)
+            time.sleep(0.3)
+            try:
+                remaining = uia_edit.get_value() or ''
+            except Exception:
+                remaining = ''
+            if not remaining:
+                return True
+        except Exception as exc:
+            _log(f'_uia_send(mmui clipboard): {exc}')
+        return False
+
     import ctypes as _ct
     _u32 = _ct.windll.user32
     _k32 = _ct.windll.kernel32
