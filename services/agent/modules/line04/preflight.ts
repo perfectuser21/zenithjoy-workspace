@@ -221,19 +221,22 @@ export function checkMemory(): CheckOutcome {
 }
 
 // 检测 4（软检测）：微信进程是否在跑。
+// WeChat 4.1.8 启动后主进程是 WeChatAppEx.exe（WeChat.exe 是启动器，随即退出）。
 // 非 Windows 跳过。ok 始终为 true——未跑只给用户提示，不阻塞模块激活。
 export function checkWechatRunning(): CheckOutcome {
   if (process.platform !== 'win32') return { ok: true, skipped: true };
-  try {
-    const out = execSync('tasklist /FI "IMAGENAME eq WeChat.exe" /FO LIST', {
-      encoding: 'utf-8',
-      windowsHide: true,
-      timeout: 10_000,
-      stdio: ['ignore', 'pipe', 'ignore'],
-    });
-    if (/WeChat\.exe/i.test(out)) return { ok: true };
-  } catch {
-    // tasklist 失败视同未找到
+  for (const name of ['WeChat.exe', 'WeChatAppEx.exe']) {
+    try {
+      const out = execSync(`tasklist /FI "IMAGENAME eq ${name}" /FO LIST`, {
+        encoding: 'utf-8',
+        windowsHide: true,
+        timeout: 10_000,
+        stdio: ['ignore', 'pipe', 'ignore'],
+      });
+      if (new RegExp(name, 'i').test(out)) return { ok: true };
+    } catch {
+      // 该进程不存在或无权查询，继续下一个
+    }
   }
   return {
     ok: true,

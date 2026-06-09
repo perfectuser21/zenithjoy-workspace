@@ -35,7 +35,7 @@ vi.mock('../../services/walking-skeleton.service', () => ({
   saveModuleStatus: vi.fn(),
   getAllModuleHealth: vi.fn(),
   HEARTBEAT_MODULES: {
-    'line04-wechat-cs': { status: 'active', required_version: '1.0.2' },
+    'line04-wechat-cs': { status: 'active', required_version: '1.0.3' },
     'line01-publish': { status: 'active', required_version: '1.0.0' },
     'line02-lead-gen': { status: 'active', required_version: '1.0.0' },
     'line05-video': { status: 'active', required_version: '1.0.0' },

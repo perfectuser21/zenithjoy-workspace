@@ -178,7 +178,22 @@ describe('checkWechatRunning — 微信进程检测（软检测）', () => {
     expect(r.fixGuide).toBeUndefined();
   });
 
-  it('tasklist 无 WeChat.exe → ok:true + fixGuide 含"请打开微信"', () => {
+  it('WeChat.exe 无匹配，WeChatAppEx.exe 有匹配 → ok:true 无 fixGuide（4.1.8 实际常驻进程）', () => {
+    const origPlatform = process.platform;
+    Object.defineProperty(process, 'platform', { value: 'win32', configurable: true });
+    vi.mocked(execSync).mockImplementation((cmd: unknown) => {
+      if (String(cmd).includes('WeChatAppEx.exe')) {
+        return 'WeChatAppEx.exe   16948 Console   1   167,140 K\r\n' as any;
+      }
+      return 'INFO: 没有运行的任务匹配指定标准。\r\n' as any;
+    });
+    const r = checkWechatRunning();
+    Object.defineProperty(process, 'platform', { value: origPlatform, configurable: true });
+    expect(r.ok).toBe(true);
+    expect(r.fixGuide).toBeUndefined();
+  });
+
+  it('WeChat.exe 和 WeChatAppEx.exe 均无匹配 → ok:true + fixGuide 含"请打开微信"', () => {
     const origPlatform = process.platform;
     Object.defineProperty(process, 'platform', { value: 'win32', configurable: true });
     vi.mocked(execSync).mockReturnValue(
