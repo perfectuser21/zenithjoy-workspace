@@ -94,23 +94,26 @@ def test_listen_chat_dryrun_inject_mock_path():
         os.environ.pop("WECHAT_DRAFT_API_DRYRUN", None)
 
 
-def test_wm_paste_has_verification_before_return():
-    """WM_PASTE 路径必须验证输入框已清空再返回 True，不能无条件返回 True（防止消息发不出去）。
+def test_uia_send_no_clipboard():
+    """_uia_send 函数体内禁止调用剪贴板路径（_set_clipboard_text / WM_PASTE）。
 
-    背景：2026-06-09 真机发现 WM_PASTE 到 mmui::MainWindow 被无声丢弃（edit_hwnd 为 0 时
-    回退到主窗口 HWND，PostMessage 无效），但旧代码无条件 return True → auto-replied OK
-    但消息从未发出。修法：WM_PASTE 后必须 get_value() 验证输入框已清空，失败则 fall-through
-    到 SetValue + Send Button 路径（实际有效的发送手段）。
+    背景：PR #717 引入 clipboard+WM_PASTE 违反 wechat-uia-silent-send skill 禁止列表，
+    mmui handle=0 时 PostMessage 无声丢弃，消息从未发出。PR #723 整块删除该路径。
+    本测试把 skill 的禁止列表变成 CI 强制守卫，防止任何会话重新引入该路径。
+    参考：wechat-uia-silent-send skill 变更记录 2026-06。
+    注意：检测 `_set_clipboard_text(` 带括号，避免 docstring 禁止说明被误判为实际调用。
     """
     src = _read_source(LISTEN_CHAT_PATH)
-    wm_block_start = src.find("mmui::MainWindow")
-    assert wm_block_start != -1, "源码中必须有 mmui::MainWindow WM_PASTE 块"
-    # WM_PASTE 块结束：下一个 iface_value.SetValue 调用处
-    set_value_pos = src.find("iface_value.SetValue", wm_block_start)
-    wm_block = src[wm_block_start:set_value_pos] if set_value_pos > wm_block_start else src[wm_block_start:wm_block_start + 600]
-    assert "get_value" in wm_block, (
-        "WM_PASTE 块（mmui::MainWindow）必须调用 get_value() 验证发送结果后再 return True，"
-        "不能无条件返回（防止消息无声消失）"
+    uia_send_start = src.find("def _uia_send")
+    assert uia_send_start != -1, "_uia_send 函数必须存在"
+    next_def = src.find("\ndef ", uia_send_start + 1)
+    uia_send_body = src[uia_send_start:next_def] if next_def != -1 else src[uia_send_start:]
+    # 检查实际调用（带括号），不检测 docstring/注释中的字符串提及
+    assert "_set_clipboard_text(" not in uia_send_body, (
+        "_uia_send 禁止调用 _set_clipboard_text（剪贴板路径依赖前台焦点，后台 session 无效）"
+    )
+    assert "WM_PASTE" not in uia_send_body, (
+        "_uia_send 禁止使用 WM_PASTE(0x0302)（mmui handle=0 时 PostMessage 无声丢弃）"
     )
 
 
@@ -118,9 +121,15 @@ def test_send_chat_mock_path_no_real_ui():
     """REAL_PUBLISH=0 时 send_chat_message 走 mock 成功路径，不触发任何 UI 自动化。"""
     import send_chat  # noqa: PLC0415
 
-    res = send_chat.send_chat_message(
-        target="客户A", wechat_id="wx_a", message="您好，在的", real_publish=False
-    )
+    # 绕过频控（xian-rog 机器上可能有真实状态），确保测试只验证 mock 路径逻辑
+    orig_rl = send_chat.rate_limiter
+    send_chat.rate_limiter = None
+    try:
+        res = send_chat.send_chat_message(
+            target="客户A", wechat_id="wx_a", message="您好，在的", real_publish=False
+        )
+    finally:
+        send_chat.rate_limiter = orig_rl
     assert res.get("ok") is True
     assert res.get("dryRun") is True
     assert res.get("target") == "客户A"
