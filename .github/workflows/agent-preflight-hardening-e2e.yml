@@ -155,7 +155,7 @@ jobs:
           from preflight import check_lock_update
           result = check_lock_update(dry_run=False)
           print('status:', result['status'], '| detail:', result.get('detail', ''))
-          assert result['status'] in ('ok', 'fixed'), f'FAIL: status={result[\"status\"]}'
+          assert result['status'] in ('ok', 'fixed'), 'FAIL: status=' + str(result['status'])
           print('OK: check_lock_update executed successfully')
           "@
           if ($LASTEXITCODE -ne 0) { throw "FAIL: E2E-2 check_lock_update 执行失败" }
