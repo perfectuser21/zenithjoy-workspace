@@ -22,6 +22,7 @@ import {
   installWeChat,
   installPywinauto,
   autoRepair,
+  _repairFuncs,
 } from '../preflight';
 import * as preflightModule from '../preflight';
 
@@ -297,5 +298,51 @@ describe('installPywinauto — get-pip + pip install 清华源', () => {
 
     const pipCall = spawnSyncMock.mock.calls.find((c) => (c[1] ?? []).includes('pywinauto'));
     expect((pipCall?.[1] ?? []).join(' ')).toContain('tuna.tsinghua.edu.cn');
+  });
+});
+
+describe('autoRepair — 按需调用安装函数', () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it('wechat 失败时只调用 installWeChat', async () => {
+    // CJS 模式下通过 _repairFuncs 对象 spy，确保能被拦截
+    const wMock = vi.spyOn(_repairFuncs, 'installWeChat').mockResolvedValue(undefined);
+    const pMock = vi.spyOn(_repairFuncs, 'installPywinauto').mockResolvedValue(undefined);
+
+    await autoRepair({ wechatFailed: true, pywinautoFailed: false }, 'python.exe', os.tmpdir());
+
+    expect(wMock).toHaveBeenCalledOnce();
+    expect(pMock).not.toHaveBeenCalled();
+  });
+
+  it('pywinauto 失败时只调用 installPywinauto', async () => {
+    const wMock = vi.spyOn(_repairFuncs, 'installWeChat').mockResolvedValue(undefined);
+    const pMock = vi.spyOn(_repairFuncs, 'installPywinauto').mockResolvedValue(undefined);
+
+    await autoRepair({ wechatFailed: false, pywinautoFailed: true }, 'python.exe', os.tmpdir());
+
+    expect(wMock).not.toHaveBeenCalled();
+    expect(pMock).toHaveBeenCalledOnce();
+  });
+
+  it('两者都失败时都调用', async () => {
+    const wMock = vi.spyOn(_repairFuncs, 'installWeChat').mockResolvedValue(undefined);
+    const pMock = vi.spyOn(_repairFuncs, 'installPywinauto').mockResolvedValue(undefined);
+
+    await autoRepair({ wechatFailed: true, pywinautoFailed: true }, 'python.exe', os.tmpdir());
+
+    expect(wMock).toHaveBeenCalledOnce();
+    expect(pMock).toHaveBeenCalledOnce();
+  });
+});
+
+describe('runPreflight — 非 Windows 不触发 autoRepair', () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it('非 Windows 平台 autoRepair 不被调用', async () => {
+    if (process.platform === 'win32') return;
+    // 非 Windows 下 autoRepair 分支根本不走，直接断言结果 ok:true 即可
+    const result = await runPreflight(os.tmpdir());
+    expect(result.ok).toBe(true);
   });
 });

@@ -286,6 +286,30 @@ export async function installPywinauto(pythonPath: string, downloadDir: string):
   );
 }
 
+// ---------- 自动修复：按需调用安装函数 ----------
+
+export interface RepairTargets {
+  wechatFailed: boolean;
+  pywinautoFailed: boolean;
+}
+
+// _repairFuncs 允许测试替换（CJS 直接调用同文件函数无法被 vi.spyOn 拦截）
+export const _repairFuncs = {
+  installWeChat,
+  installPywinauto,
+};
+
+export async function autoRepair(
+  targets: RepairTargets,
+  pythonPath: string,
+  downloadDir: string,
+): Promise<void> {
+  const tasks: Promise<void>[] = [];
+  if (targets.wechatFailed) tasks.push(_repairFuncs.installWeChat(downloadDir));
+  if (targets.pywinautoFailed) tasks.push(_repairFuncs.installPywinauto(pythonPath, downloadDir));
+  await Promise.all(tasks);
+}
+
 // 解析模块自带的 python-embedded/python.exe，否则回退系统 python（Windows 无 python3）。
 // 回退顺序：1) 模块自带 python-embedded  2) ZENITHJOY_CORE_DIR/python-embedded  3) 系统 python
 export function getModulePython(moduleDir: string): string {
@@ -301,13 +325,31 @@ export function getModulePython(moduleDir: string): string {
 
 // 模块入口：core 在 fork 前调用，三项全过才激活。
 // moduleDir 可选，不传时取本文件所在目录（CLI 直接跑时由 main guard 传入）。
+// 两阶段：首轮检测 → Windows 且检测失败则 autoRepair → 修复后重检 → 软检测。
 export async function runPreflight(moduleDir?: string): Promise<ModulePreflightResult> {
   const dir = moduleDir ?? __dirname;
   const python = getModulePython(dir);
+  const downloadDir = path.join(os.tmpdir(), 'zenithjoy-setup');
+  fs.mkdirSync(downloadDir, { recursive: true });
 
-  const wechat = checkWechatVersion();
-  const pyw = await checkPywinauto(python);
+  // 首轮检测
+  let wechat = checkWechatVersion();
+  let pyw = await checkPywinauto(python);
   const mem = checkMemory();
+
+  // 自动修复（仅 Windows，非 CI mock 模式）
+  if (process.platform === 'win32' && !process.env.MOCK_WECHAT_VERSION) {
+    const needRepair = !wechat.ok || !pyw.ok;
+    if (needRepair) {
+      await autoRepair({ wechatFailed: !wechat.ok, pywinautoFailed: !pyw.ok }, python, downloadDir);
+      // 修复后重检
+      wechat = checkWechatVersion();
+      pyw = await checkPywinauto(python);
+    }
+  }
+
+  // 软检测：微信进程是否在跑（ok 始终 true）
+  const running = checkWechatRunning();
 
   const checks = {
     wechat_version: wechat.ok,
@@ -316,13 +358,20 @@ export async function runPreflight(moduleDir?: string): Promise<ModulePreflightR
   };
 
   if (wechat.ok && pyw.ok && mem.ok) {
-    return { ok: true, checks };
+    return {
+      ok: true,
+      checks,
+      ...(running.fixGuide ? { fixGuide: running.fixGuide } : {}),
+    };
   }
 
-  // version-only warning：仅 wechat_version 失败（pywinauto + memory 均通过）
-  // → ok:true（只告警，不判红），顶层不冒泡 fixGuide（PRD 边界情况）
+  // version-only warning：仅 wechat_version 失败（pywinauto + memory 均通过）→ ok:true
   if (!wechat.ok && pyw.ok && mem.ok) {
-    return { ok: true, checks };
+    return {
+      ok: true,
+      checks,
+      ...(running.fixGuide ? { fixGuide: running.fixGuide } : {}),
+    };
   }
 
   const fixGuide = [wechat, pyw, mem]
