@@ -6,11 +6,12 @@
 // 'python3'（Windows 上不存在），listen_chat.py 从未 spawn，Dashboard 永远显示"未找到微信"。
 // 修法：getPythonExeForTest 新增第二查找路径 process.env.ZENITHJOY_CORE_DIR/python-embedded/python.exe
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import os from 'node:os';
 import path from 'node:path';
 import fs from 'node:fs';
-import { getPythonExeForTest, buildListenerSpawnArgs } from '../handlers/wechat-rpa';
+import type { SpawnSyncReturns } from 'node:child_process';
+import { getPythonExeForTest, buildListenerSpawnArgs, _listenerKillFuncs } from '../handlers/wechat-rpa';
 
 describe('getPythonExeForTest — ZENITHJOY_CORE_DIR 回退路径', () => {
   let tmpDir: string;
@@ -105,5 +106,105 @@ describe('buildListenerSpawnArgs — agentId 传参回归', () => {
     expect(args).toContain('--middleware-url');
     expect(args).toContain('http://api.example.com');
     expect(args).toContain('--timeout');
+  });
+});
+
+// ── 回归测试：startWechatListener 必须在 spawn 前查杀已有 listen_chat.py 进程 ──
+// 背景：xian-pc 每次新装/重启 agent 未清理旧 listen_chat.py，同一机器出现多条心跳条目，
+//       Dashboard 显示多个客户端。修法：启动前用 wmic 查出所有 listen_chat.py PID 并 taskkill。
+describe('killExistingListeners — 查杀旧监听进程', () => {
+  let origSpawnSync: typeof _listenerKillFuncs.spawnSyncFn;
+  let origPlatform: string;
+
+  beforeEach(() => {
+    origSpawnSync = _listenerKillFuncs.spawnSyncFn;
+    origPlatform = _listenerKillFuncs.platform;
+    // 强制 win32，确保函数体不被 platform guard 提前 return（测试在 macOS 上跑）
+    _listenerKillFuncs.platform = 'win32';
+  });
+
+  afterEach(() => {
+    _listenerKillFuncs.spawnSyncFn = origSpawnSync;
+    _listenerKillFuncs.platform = origPlatform;
+  });
+
+  it('wmic 返回一个 listen_chat.py PID 时，taskkill /F /PID <pid> 被调用', () => {
+    const calls: Array<{ cmd: string; args: string[] }> = [];
+
+    _listenerKillFuncs.spawnSyncFn = (cmd: string, args: string[]) => {
+      calls.push({ cmd: String(cmd), args: args.map(String) });
+      if (String(cmd) === 'wmic') {
+        return {
+          stdout: 'ProcessId=9408\n\n',
+          stderr: '',
+          status: 0,
+          pid: 0,
+          output: [],
+          signal: null,
+          error: undefined,
+        } as unknown as SpawnSyncReturns<string>;
+      }
+      return { stdout: '', stderr: '', status: 0, pid: 0, output: [], signal: null, error: undefined } as unknown as SpawnSyncReturns<string>;
+    };
+
+    _listenerKillFuncs.killExistingListeners();
+
+    const taskkillCall = calls.find(c => c.cmd === 'taskkill');
+    expect(taskkillCall).toBeDefined();
+    expect(taskkillCall!.args).toContain('/PID');
+    expect(taskkillCall!.args).toContain('9408');
+  });
+
+  it('wmic 返回多个 PID 时，每个都被 taskkill', () => {
+    const killedPids: string[] = [];
+
+    _listenerKillFuncs.spawnSyncFn = (cmd: string, args: string[]) => {
+      if (String(cmd) === 'wmic') {
+        return {
+          stdout: 'ProcessId=1111\n\nProcessId=2222\n\n',
+          stderr: '',
+          status: 0,
+          pid: 0,
+          output: [],
+          signal: null,
+          error: undefined,
+        } as unknown as SpawnSyncReturns<string>;
+      }
+      if (String(cmd) === 'taskkill') {
+        const pidIdx = args.indexOf('/PID');
+        if (pidIdx >= 0) killedPids.push(args[pidIdx + 1]);
+      }
+      return { stdout: '', stderr: '', status: 0, pid: 0, output: [], signal: null, error: undefined } as unknown as SpawnSyncReturns<string>;
+    };
+
+    _listenerKillFuncs.killExistingListeners();
+
+    expect(killedPids).toContain('1111');
+    expect(killedPids).toContain('2222');
+  });
+
+  it('wmic 返回空（无 listen_chat.py 进程时）不调用 taskkill', () => {
+    const calls: string[] = [];
+
+    _listenerKillFuncs.spawnSyncFn = (cmd: string) => {
+      calls.push(String(cmd));
+      return { stdout: '\n\n', stderr: '', status: 0, pid: 0, output: [], signal: null, error: undefined } as unknown as SpawnSyncReturns<string>;
+    };
+
+    _listenerKillFuncs.killExistingListeners();
+
+    expect(calls).not.toContain('taskkill');
+  });
+
+  it('wmic 失败（status!=0）时不崩溃也不调用 taskkill', () => {
+    const calls: string[] = [];
+
+    _listenerKillFuncs.spawnSyncFn = (cmd: string) => {
+      calls.push(String(cmd));
+      return { stdout: '', stderr: 'error', status: 1, pid: 0, output: [], signal: null, error: undefined } as unknown as SpawnSyncReturns<string>;
+    };
+
+    expect(() => _listenerKillFuncs.killExistingListeners()).not.toThrow();
+    expect(calls).not.toContain('taskkill');
   });
 });
