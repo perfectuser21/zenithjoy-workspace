@@ -220,9 +220,15 @@ export function checkMemory(): CheckOutcome {
 }
 
 // 解析模块自带的 python-embedded/python.exe，否则回退系统 python（Windows 无 python3）。
+// 回退顺序：1) 模块自带 python-embedded  2) ZENITHJOY_CORE_DIR/python-embedded  3) 系统 python
 export function getModulePython(moduleDir: string): string {
   const embedded = path.join(moduleDir, 'python-embedded', 'python.exe');
   if (fs.existsSync(embedded)) return embedded;
+  const coreDir = process.env.ZENITHJOY_CORE_DIR;
+  if (coreDir) {
+    const coreEmbedded = path.join(coreDir, 'python-embedded', 'python.exe');
+    if (fs.existsSync(coreEmbedded)) return coreEmbedded;
+  }
   return process.platform === 'win32' ? 'python' : 'python3';
 }
 

@@ -3,8 +3,9 @@
 // line04 模块 preflight — TDD commit-1（红）。
 // 覆盖：微信版本比较纯函数 / 注册表解析 / 非 Windows 不崩溃 / fixGuide 含 COS URL。
 
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import os from 'node:os';
+import fs from 'node:fs';
 import {
   isWechatVersionSupported,
   parseVersionParts,
@@ -14,6 +15,7 @@ import {
   memoryFixGuide,
   WECHAT_DOWNLOAD_URL,
   runPreflight,
+  getModulePython,
 } from '../preflight';
 
 describe('微信版本比较（纯函数，<= 4.1.8.x 为支持）', () => {
@@ -96,5 +98,40 @@ describe('runPreflight 跨平台行为', () => {
     expect(r.checks.pywinauto).toBe(true);
     expect(r.checks.memory).toBe(true);
     expect(r.fixGuide).toBeUndefined();
+  });
+});
+
+describe('getModulePython — ZENITHJOY_CORE_DIR 回退', () => {
+  afterEach(() => {
+    delete process.env.ZENITHJOY_CORE_DIR;
+    vi.restoreAllMocks();
+  });
+
+  it('module 自带 python-embedded 优先', () => {
+    vi.spyOn(fs, 'existsSync').mockImplementation((p) =>
+      String(p).includes('python-embedded') && String(p).includes('moduleDir')
+    );
+    const result = getModulePython('/moduleDir');
+    expect(result).toContain('moduleDir');
+    expect(result).toContain('python.exe');
+  });
+
+  it('module 无 embedded 时回退到 ZENITHJOY_CORE_DIR', () => {
+    process.env.ZENITHJOY_CORE_DIR = '/coreDir';
+    vi.spyOn(fs, 'existsSync').mockImplementation((p) =>
+      String(p).includes('coreDir') && String(p).includes('python-embedded')
+    );
+    const result = getModulePython('/moduleDir');
+    expect(result).toContain('coreDir');
+    expect(result).toContain('python.exe');
+  });
+
+  it('两者都没有时 win32 回退到 "python"', () => {
+    vi.spyOn(fs, 'existsSync').mockReturnValue(false);
+    const origPlatform = Object.getOwnPropertyDescriptor(process, 'platform');
+    Object.defineProperty(process, 'platform', { value: 'win32', configurable: true });
+    const result = getModulePython('/moduleDir');
+    Object.defineProperty(process, 'platform', origPlatform!);
+    expect(result).toBe('python');
   });
 });
