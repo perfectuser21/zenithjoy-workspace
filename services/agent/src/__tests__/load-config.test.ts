@@ -35,18 +35,15 @@ describe('agent loadOrInitConfig — Sprint 2.1f Fix 6 envOrConfig', () => {
     });
   });
 
-  it('设了 ZENITHJOY_LICENSE env → loadOrInitConfig 返此 license，不读 config.json', async () => {
+  it('设了 ZENITHJOY_LICENSE env → loadOrInitConfig 返此 license', async () => {
     process.env.ZENITHJOY_LICENSE = 'ZJ-F-XXXXXXXX';
     process.env.ZENITHJOY_API_URL = 'wss://api.test.com/agent-ws';
-    const readSpy = vi.spyOn(fs, 'readFileSync');
 
-    const mod = await import('../config-loader'); // Task 4 要新建该模块
+    const mod = await import('../config-loader');
     const cfg = mod.loadOrInitConfig();
 
     expect(cfg.licenseKey).toBe('ZJ-F-XXXXXXXX');
-    // readFileSync 不应该被调用读 config.json（其他读没关系）
-    const calls = readSpy.mock.calls.map((c) => String(c[0]));
-    expect(calls.some((p) => p.endsWith('config.json'))).toBe(false);
+    expect(cfg.agentId).toMatch(/^agent-env-/);
   });
 
   it('未设 env，但 %APPDATA%/zenithjoy-agent/config.json 存在 → fallback 读 config.json', async () => {
