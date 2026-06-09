@@ -19,8 +19,9 @@ else
 fi
 
 # Check 2: /api/agent/module-health 端点存在
+SMOKE_AUTH="smoke-test-token" # gitleaks:allow
 STATUS=$(curl -s -o /dev/null -w "%{http_code}" -m 5 \
-  -H "Authorization: Bearer smoke-test-token" \
+  -H "Authorization: Bearer ${SMOKE_AUTH}" \
   "$API_BASE/api/agent/module-health" 2>/dev/null || echo "000")
 if [ "$STATUS" = "200" ] || [ "$STATUS" = "401" ] || [ "$STATUS" = "403" ]; then
   echo "✅ /api/agent/module-health 端点存在 (HTTP $STATUS)"
