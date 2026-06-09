@@ -433,6 +433,14 @@ tests:
     product: AI员工
     note: "Sprint 06081700 — line04 独立模块 preflight：微信版本比较/注册表解析/fixGuide 含 COS 旧版直链/非 Windows 不崩溃"
 
+  - id: module-version-sync
+    path: apps/api/tests/regression/module-version-sync.test.ts
+    type: unit
+    ci: L2
+    status: active
+    product: AI员工
+    note: "regression(2026-06-09): manifest.version 必须与 HEARTBEAT_MODULES.required_version 一致。升模块版本时此测试强制三处同步（manifest/service/test），防止服务端永远下发旧版本导致客户端模块不更新。"
+
   - id: agent-line04-python-path-fix
     path: services/agent/modules/line04/__tests__/wechat-rpa-python-path.test.ts
     type: unit
