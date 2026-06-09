@@ -1,0 +1,35 @@
+{
+  "initiative_id": "pending",
+  "journey_type": "dev_pipeline",
+  "journey_type_reason": "PRD 明确标注 Agent 系统 hardening（journey 57df0a2e）为 dev_pipeline Journey，涉及 Agent install-pack 构建链路（start.bat / preflight.py）",
+  "tasks": [
+    {
+      "task_id": "ws1",
+      "title": "preflight blocking + 四层锁 + /module-health 权限开放 + Line04PreflightCard 组件",
+      "scope": "扩展 check_lock_update() 四层锁（icacls DENY + dldir1v6.qq.com 防火墙 + 注册表 AutoUpdate=0）；将 start.bat preflight 段改为 blocking exit /b 1；删除 navigation.config.ts /module-health 的 requireSuperAdmin: true；新建 Line04PreflightCard.tsx 组件；更新 WechatCustomerServiceConfigPage.tsx 引用组件；新建 .github/workflows/agent-preflight-hardening-e2e.yml CI 验证",
+      "dod": [
+        "[BEHAVIOR] preflight.py --dry-run 写 JSON 含 9 项检测，lock_update 项存在",
+        "[BEHAVIOR] check_lock_update 执行后：icacls DENY + dldir1v6.qq.com 防火墙规则 + AutoUpdate=0 注册表",
+        "[BEHAVIOR] start.bat preflight 失败时 exit /b 1，无 'continuing to start agent' 文本",
+        "[BEHAVIOR] navigation.config.ts /module-health 块无 requireSuperAdmin: true",
+        "[BEHAVIOR] Line04PreflightCard.tsx 含 fetchModuleHealth + 'Agent 未连接' + WechatCustomerServiceConfigPage 已引用",
+        "[ARTIFACT] services/agent/wechat-rpa/preflight.py check_lock_update() 含 icacls/dldir1v6.qq.com/AutoUpdate 三层新增代码",
+        "[ARTIFACT] services/agent/install-pack/start.bat preflight 段含 exit /b 1（blocking）",
+        "[ARTIFACT] apps/dashboard/src/components/Line04PreflightCard.tsx 新建",
+        "[ARTIFACT] .github/workflows/agent-preflight-hardening-e2e.yml 新建（windows-latest）"
+      ],
+      "files": [
+        "services/agent/wechat-rpa/preflight.py",
+        "services/agent/install-pack/start.bat",
+        "apps/dashboard/src/config/navigation.config.ts",
+        "apps/dashboard/src/components/Line04PreflightCard.tsx",
+        "apps/dashboard/src/pages/WechatCustomerServiceConfigPage.tsx",
+        ".github/workflows/agent-preflight-hardening-e2e.yml",
+        "sprints/06091001-agent-module-preflight-blocking/e2e-verify.ps1"
+      ],
+      "depends_on": [],
+      "complexity": "M",
+      "estimated_minutes": 90
+    }
+  ]
+}
