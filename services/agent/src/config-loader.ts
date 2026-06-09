@@ -47,12 +47,37 @@ export function loadOrInitConfig(): AgentConfig {
       process.env.ZENITHJOY_API_URL ||
       process.env.ZENITHJOY_API_BASE ||
       'wss://api.zenithjoy.com/agent-ws';
-    return {
-      licenseKey: envLicense.trim(),
-      agentId: `agent-env-${Date.now().toString(36)}`,
-      apiUrl,
-      loggedInAt: Date.now(),
-    };
+
+    // 复用已有 agentId，防止每次重启生成新 ID → Dashboard 出现多客户端条目
+    const configFile = path.join(getConfigDir(), 'config.json');
+    let stableAgentId: string | undefined;
+    try {
+      if (fs.existsSync(configFile)) {
+        const cached = JSON.parse(fs.readFileSync(configFile, 'utf-8')) as Partial<AgentConfig>;
+        if (cached.licenseKey === envLicense.trim() && cached.agentId) {
+          stableAgentId = cached.agentId;
+        }
+      }
+    } catch {
+      // non-fatal — will generate fresh ID below
+    }
+
+    const agentId = stableAgentId ?? `agent-env-${Date.now().toString(36)}`;
+
+    // 首次启动（或 license 变更）时持久化 agentId，供下次重启复用
+    if (!stableAgentId) {
+      try {
+        fs.mkdirSync(getConfigDir(), { recursive: true });
+        fs.writeFileSync(
+          configFile,
+          JSON.stringify({ licenseKey: envLicense.trim(), agentId, apiUrl, loggedInAt: Date.now() }, null, 2)
+        );
+      } catch {
+        // non-fatal — ID 本次仍可用，只是下次重启会再生成新 ID
+      }
+    }
+
+    return { licenseKey: envLicense.trim(), agentId, apiUrl, loggedInAt: Date.now() };
   }
 
   // Priority 2: %APPDATA%/zenithjoy-agent/config.json fallback (legacy v1.0.0 customers)
