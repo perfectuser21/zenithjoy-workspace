@@ -133,9 +133,10 @@ jobs:
           COS_SECRET_KEY: ${{ secrets.COS_SECRET_KEY }}
         working-directory: services/agent
         run: |
-          PACK=$(ls dist-modules/${{ matrix.lineId }}-v*.tar.gz 2>/dev/null | head -1)
+          MANIFEST_LINE_ID=$(node -e "console.log(require('modules/${{ matrix.lineId }}/manifest.json').lineId)" 2>/dev/null || echo "${{ matrix.lineId }}")
+          PACK=$(ls dist-modules/${MANIFEST_LINE_ID}-v*.tar.gz 2>/dev/null | head -1)
           if [ -z "$PACK" ]; then
-            echo "::warning::dist-modules/${{ matrix.lineId }}-v*.tar.gz 不存在（脚本占位），跳过上传"
+            echo "::warning::dist-modules/${MANIFEST_LINE_ID}-v*.tar.gz 不存在，跳过上传"
             exit 0
           fi
           pip install coscmd -q

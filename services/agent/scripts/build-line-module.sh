@@ -11,6 +11,7 @@ MODULE_SRC="modules/$LINE_ID"
 [ -d "$MODULE_SRC" ] || { echo "[build-module] 模块目录不存在: $MODULE_SRC"; exit 1; }
 
 VERSION=$(node -e "console.log(require('./${MODULE_SRC}/manifest.json').version)")
+MANIFEST_LINE_ID=$(node -e "console.log(require('./${MODULE_SRC}/manifest.json').lineId)" 2>/dev/null || echo "$LINE_ID")
 OUT_DIR="dist-modules"
 BUILD_DIR="build-modules/$LINE_ID"
 
@@ -36,5 +37,5 @@ if [ "$LINE_ID" = "line04" ] && [ -d "wechat-rpa" ]; then
   rm -rf "$BUILD_DIR/wechat-rpa/__pycache__" "$BUILD_DIR/wechat-rpa/tests"
 fi
 
-tar czf "$OUT_DIR/${LINE_ID}-v${VERSION}.tar.gz" -C build-modules "$LINE_ID"
-echo "[build-module] ${LINE_ID}-v${VERSION}.tar.gz ready (-> $OUT_DIR/)"
+tar czf "$OUT_DIR/${MANIFEST_LINE_ID}-v${VERSION}.tar.gz" -C "build-modules/$LINE_ID" .
+echo "[build-module] ${MANIFEST_LINE_ID}-v${VERSION}.tar.gz ready (-> $OUT_DIR/)"
