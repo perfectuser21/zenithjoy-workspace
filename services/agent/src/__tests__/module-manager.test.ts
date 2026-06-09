@@ -172,6 +172,28 @@ describe('ModuleManager', () => {
     );
   });
 
+  it('activateModule fork 时 env 含 ZENITHJOY_CORE_DIR（使 line04 能找到 core python-embedded）', async () => {
+    // 回归：fork 不传 ZENITHJOY_CORE_DIR → line04 的 getPythonExe() 回退 python3 → listen_chat.py 从未起
+    const dir = path.join(root, 'line04-wechat-cs-5.0.0');
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(
+      path.join(dir, 'manifest.json'),
+      JSON.stringify({ lineId: 'line04-wechat-cs', version: '5.0.0', entry: 'index.js' }),
+    );
+    fs.writeFileSync(path.join(dir, 'index.js'), '');
+
+    const fakeChild = { on: vi.fn(), send: vi.fn(), connected: true } as any;
+    const forkImpl = vi.fn().mockReturnValue(fakeChild);
+    const preflightImpl = vi.fn().mockResolvedValue({ ok: true });
+    const mm = new ModuleManager({ modulesRoot: root, forkImpl, preflightImpl });
+
+    await mm.syncModules({ 'line04-wechat-cs': { status: 'active', required_version: '5.0.0' } });
+
+    expect(forkImpl).toHaveBeenCalledTimes(1);
+    const forkOptions = forkImpl.mock.calls[0][1] as { env?: Record<string, string> };
+    expect(forkOptions?.env?.ZENITHJOY_CORE_DIR).toBeDefined();
+  });
+
   it('forwardMessage 把消息发给已激活模块子进程', async () => {
     const dir = path.join(root, 'line04-wechat-cs-4.0.0');
     fs.mkdirSync(dir, { recursive: true });
