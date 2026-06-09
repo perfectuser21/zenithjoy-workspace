@@ -139,56 +139,56 @@ describe('getModulePython — ZENITHJOY_CORE_DIR 回退', () => {
 
   it('两者都没有时 win32 回退到 "python"', () => {
     vi.spyOn(fs, 'existsSync').mockReturnValue(false);
-    const origPlatform = Object.getOwnPropertyDescriptor(process, 'platform');
+    const origPlatform = process.platform;
     Object.defineProperty(process, 'platform', { value: 'win32', configurable: true });
     const result = getModulePython('/moduleDir');
-    Object.defineProperty(process, 'platform', origPlatform!);
+    Object.defineProperty(process, 'platform', { value: origPlatform, configurable: true });
     expect(result).toBe('python');
   });
 });
 
 describe('checkWechatRunning — 微信进程检测（软检测）', () => {
-  afterEach(() => vi.mocked(execSync).mockRestore());
+  afterEach(() => vi.mocked(execSync).mockReset());
 
   it('非 Windows 跳过，返回 ok:true skipped:true', () => {
-    const origPlatform = Object.getOwnPropertyDescriptor(process, 'platform');
+    const origPlatform = process.platform;
     Object.defineProperty(process, 'platform', { value: 'linux', configurable: true });
     const r = checkWechatRunning();
-    Object.defineProperty(process, 'platform', origPlatform!);
+    Object.defineProperty(process, 'platform', { value: origPlatform, configurable: true });
     expect(r.ok).toBe(true);
     expect(r.skipped).toBe(true);
   });
 
   it('tasklist 输出含 WeChat.exe → ok:true 无 fixGuide', () => {
-    const origPlatform = Object.getOwnPropertyDescriptor(process, 'platform');
+    const origPlatform = process.platform;
     Object.defineProperty(process, 'platform', { value: 'win32', configurable: true });
     vi.mocked(execSync).mockReturnValue(
       'WeChat.exe   1234 Console   1   12,345 K\r\n' as any
     );
     const r = checkWechatRunning();
-    Object.defineProperty(process, 'platform', origPlatform!);
+    Object.defineProperty(process, 'platform', { value: origPlatform, configurable: true });
     expect(r.ok).toBe(true);
     expect(r.fixGuide).toBeUndefined();
   });
 
   it('tasklist 无 WeChat.exe → ok:true + fixGuide 含"请打开微信"', () => {
-    const origPlatform = Object.getOwnPropertyDescriptor(process, 'platform');
+    const origPlatform = process.platform;
     Object.defineProperty(process, 'platform', { value: 'win32', configurable: true });
     vi.mocked(execSync).mockReturnValue(
       'INFO: 没有运行的任务匹配指定标准。\r\n' as any
     );
     const r = checkWechatRunning();
-    Object.defineProperty(process, 'platform', origPlatform!);
+    Object.defineProperty(process, 'platform', { value: origPlatform, configurable: true });
     expect(r.ok).toBe(true);
     expect(r.fixGuide).toContain('请打开微信');
   });
 
   it('execSync 抛出 → ok:true + fixGuide', () => {
-    const origPlatform = Object.getOwnPropertyDescriptor(process, 'platform');
+    const origPlatform = process.platform;
     Object.defineProperty(process, 'platform', { value: 'win32', configurable: true });
     vi.mocked(execSync).mockImplementation(() => { throw new Error('cmd fail'); });
     const r = checkWechatRunning();
-    Object.defineProperty(process, 'platform', origPlatform!);
+    Object.defineProperty(process, 'platform', { value: origPlatform, configurable: true });
     expect(r.ok).toBe(true);
     expect(r.fixGuide).toContain('请打开微信');
   });
