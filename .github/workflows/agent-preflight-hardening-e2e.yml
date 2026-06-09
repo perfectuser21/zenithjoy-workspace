@@ -25,6 +25,7 @@ jobs:
   preflight-e2e-static:
     name: Static / Cross-Platform Checks (Linux)
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
 
@@ -106,6 +107,7 @@ jobs:
   preflight-e2e-windows:
     name: Four-Layer Lock + Start.bat Blocking (Windows)
     runs-on: windows-latest
+    timeout-minutes: 20
     env:
       PYTHONIOENCODING: utf-8
       PYTHONUTF8: 1
@@ -227,3 +229,21 @@ jobs:
           } else {
               Write-Host "OK: E2E-6 preflight --dry-run exit=0"
           }
+
+      - name: 清理测试 fixture（防止残留影响其他 job）
+        if: always()
+        shell: pwsh
+        run: |
+          $fixtureDir = "C:\Program Files\Tencent\Weixin"
+          if (Test-Path $fixtureDir) {
+            # 先移除 icacls deny，允许删除
+            icacls "$fixtureDir" /reset /T /Q 2>$null
+            Remove-Item -Recurse -Force $fixtureDir -ErrorAction SilentlyContinue
+            Write-Host "✅ 清理测试 fixture 目录完成"
+          }
+          # 清理防火墙规则
+          netsh advfirewall firewall delete rule name="Block WeixinUpdate" 2>$null
+          netsh advfirewall firewall delete rule name="Block WeixinUpdate dldir1v6.qq.com" 2>$null
+          netsh advfirewall firewall delete rule name="Block WeChat Update weixin.qq.com" 2>$null
+          Write-Host "✅ 清理防火墙规则完成"
+
