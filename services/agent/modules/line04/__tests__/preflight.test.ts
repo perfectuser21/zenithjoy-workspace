@@ -359,3 +359,41 @@ describe('runPreflight — 非 Windows 不触发 autoRepair', () => {
     expect(result.ok).toBe(true);
   });
 });
+
+// ── 回归测试：preflight 所有检测必须 blocking（无软放行）──
+// 根因：曾存在 "version-only warning → ok:true" bypass，导致微信版本 > 4.1.8
+// 时 autoRepair 失败后模块仍激活，listen_chat.py 用 pywinauto 操作高版本微信崩溃。
+describe('runPreflight — wechat_version 失败必须 blocking（ok:false）', () => {
+  const origMock = process.env.MOCK_WECHAT_VERSION;
+
+  afterEach(() => {
+    if (origMock === undefined) delete process.env.MOCK_WECHAT_VERSION;
+    else process.env.MOCK_WECHAT_VERSION = origMock;
+    vi.restoreAllMocks();
+  });
+
+  it('MOCK_WECHAT_VERSION=4.1.10.0 时 runPreflight 返回 ok:false（不得 ok:true 软放行）', async () => {
+    if (process.platform === 'win32') return; // Windows 上 autoRepair 会真尝试修复，用另一 case
+    process.env.MOCK_WECHAT_VERSION = '4.1.10.0';
+    const result = await runPreflight(os.tmpdir());
+    expect(result.ok).toBe(false);
+    expect(result.checks.wechat_version).toBe(false);
+    expect(result.fixGuide).toContain('4.1.10.0');
+  });
+
+  it('MOCK_WECHAT_VERSION=5.0.0.0 時 runPreflight 返回 ok:false', async () => {
+    if (process.platform === 'win32') return;
+    process.env.MOCK_WECHAT_VERSION = '5.0.0.0';
+    const result = await runPreflight(os.tmpdir());
+    expect(result.ok).toBe(false);
+    expect(result.checks.wechat_version).toBe(false);
+  });
+
+  it('MOCK_WECHAT_VERSION=4.1.8.107 时 runPreflight 返回 ok:true（支持版本不阻塞）', async () => {
+    if (process.platform === 'win32') return;
+    process.env.MOCK_WECHAT_VERSION = '4.1.8.107';
+    const result = await runPreflight(os.tmpdir());
+    expect(result.ok).toBe(true);
+    expect(result.checks.wechat_version).toBe(true);
+  });
+});
