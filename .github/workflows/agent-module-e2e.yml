@@ -91,8 +91,7 @@ jobs:
 
       - name: Step 6 — MOCK_WECHAT_VERSION=4.2.0.0 version fail must block (exit 1, ok:false)
         run: |
-          MOCK_WECHAT_VERSION=4.2.0.0 npx tsx modules/line04/preflight.ts > /tmp/pf-mock.json 2>/dev/null
-          PCODE=$?
+          MOCK_WECHAT_VERSION=4.2.0.0 npx tsx modules/line04/preflight.ts > /tmp/pf-mock.json 2>/dev/null && PCODE=0 || PCODE=$?
           [ "$PCODE" -eq 1 ] || { echo "FAIL: exit $PCODE should be 1 (version fail must block)"; exit 1; }
           cat /tmp/pf-mock.json | jq -e '.ok == false' || { echo "FAIL: ok should be false (version fail must block)"; exit 1; }
           cat /tmp/pf-mock.json | jq -e '.checks.wechat_version == false' || { echo "FAIL: checks.wechat_version should be false"; exit 1; }
