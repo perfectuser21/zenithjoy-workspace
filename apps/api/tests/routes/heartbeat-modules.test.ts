@@ -74,10 +74,16 @@ describe('POST /api/agent/heartbeat — 响应 modules 双向协议', () => {
     expect(res.status).toBe(200);
     expect(res.body.ok).toBe(true);
     expect(res.body.modules).toBeDefined();
+    const EXPECTED_VERSIONS: Record<string, string> = {
+      'line04-wechat-cs': '1.0.1',
+      'line01-publish': '1.0.0',
+      'line02-lead-gen': '1.0.0',
+      'line05-video': '1.0.0',
+    };
     for (const line of EXPECTED_LINES) {
       expect(res.body.modules[line]).toBeDefined();
       expect(res.body.modules[line].status).toBe('active');
-      expect(res.body.modules[line].required_version).toBe('1.0.0');
+      expect(res.body.modules[line].required_version).toBe(EXPECTED_VERSIONS[line] ?? '1.0.0');
     }
   });
 
