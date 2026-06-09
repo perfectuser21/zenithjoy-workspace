@@ -1,0 +1,31 @@
+{
+  "initiative_id": "pending",
+  "journey_type": "user_facing",
+  "journey_type_reason": "用户通过浏览器访问 localhost:8899 的 React Flow 9 节点画布，是典型用户界面交互场景",
+  "tasks": [
+    {
+      "task_id": "ws1",
+      "title": "Line 07 video-remake thin 骨架：Python FastAPI 9 节点服务 + React Flow 画布",
+      "scope": "新建 services/video-remake/ 目录，实现 FastAPI 主服务（/health + /api/nodes + 9 个节点 POST /confirm 路由）、React Flow 9 节点前端画布（静态伺服）、requirements.txt、以及 smoke 脚本",
+      "dod": [
+        "[BEHAVIOR] GET /health → {\"status\": \"ok\"} (HTTP 200)",
+        "[BEHAVIOR] GET /api/nodes → 长度恰好 9 的数组，每节点含 id/label/status/order",
+        "[BEHAVIOR] POST /api/nodes/01/confirm → {\"ok\": true, \"node_id\": \"01\", \"status\": \"completed\"}",
+        "[BEHAVIOR] POST /api/nodes/99/confirm → HTTP 404",
+        "[ARTIFACT] services/video-remake/server.py 含 FastAPI + 9 节点路由",
+        "[ARTIFACT] services/video-remake/frontend/src/App.tsx 含 React Flow + 节点 id 01–09",
+        "[ARTIFACT] .github/workflows/scripts/smoke/line07-video-remake-smoke.sh 存在，≥5 行实质 curl 内容"
+      ],
+      "files": [
+        "services/video-remake/server.py",
+        "services/video-remake/requirements.txt",
+        "services/video-remake/frontend/src/App.tsx",
+        "services/video-remake/frontend/package.json",
+        ".github/workflows/scripts/smoke/line07-video-remake-smoke.sh"
+      ],
+      "depends_on": [],
+      "complexity": "M",
+      "estimated_minutes": 90
+    }
+  ]
+}
