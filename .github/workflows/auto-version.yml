@@ -100,7 +100,7 @@ jobs:
           git diff --cached --quiet && exit 0
 
           NEW_VERSION=$(node -e "process.stdout.write(require('./package.json').version)")
-          BRANCH_NAME="auto-version-bump-${NEW_VERSION}"
+          BRANCH_NAME="cp-auto-version-bump-${NEW_VERSION}"
 
           git push origin --delete "$BRANCH_NAME" 2>/dev/null || true
           git checkout -b "$BRANCH_NAME"
