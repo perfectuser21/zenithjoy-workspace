@@ -177,25 +177,62 @@ jobs:
           "@
           if ($LASTEXITCODE -ne 0) { throw "FAIL: E2E-2 四层锁验证失败" }
 
-      - name: E2E-3 start.bat preflight-failed → blocking (静态校验)
+      - name: E2E-3 start.bat preflight-failed → blocking（真实运行验证）
         shell: pwsh
+        timeout-minutes: 5
         run: |
-          # 静态校验 start.bat 已包含 preflight blocking 逻辑（无需运行完整 install-pack）
-          # 运行 start.bat 需要 .env / license / curl / ffmpeg 等，超出本 E2E 范围
-          $batContent = Get-Content "services\agent\install-pack\start.bat" -Raw -Encoding UTF8
-          # 1. 必须有 [preflight] FAIL 提示
-          if (-not ($batContent -match '\[preflight\]\s*FAIL')) {
-              throw "FAIL: E2E-3 start.bat 缺少 [preflight] FAIL 提示文字"
+          # 真实运行 start.bat，验证 preflight 返回非零时 bat 以 exit /b 1 退出
+          # 启动条件：
+          #   .env 含真实格式 license（非 placeholder，跳过交互提示）
+          #   ZENITHJOY_API_BASE 指向不存在端口 → curl 返回 000 → fall-through "proceeding anyway"
+          #   python-embedded\python.exe 使用系统 Python
+          #   wechat-rpa\preflight.py 是 mock，总是 sys.exit(1)
+          #   不包含 find_weixin.py → Step 0/0.5 跳过
+          $tmpDir = New-Item -ItemType Directory -Path "$env:TEMP\e2e3-$(Get-Random)" -Force
+          try {
+              # .env
+              Set-Content "$tmpDir\.env" "ZENITHJOY_LICENSE=ZJ-TEST-DUMMY`nZENITHJOY_API_BASE=http://localhost:19999"
+
+              # python-embedded\python.exe（复制系统 Python，%~dp0 路径能找到）
+              $pyPath = (Get-Command python -ErrorAction SilentlyContinue).Source
+              if (-not $pyPath) { throw "SETUP: 未找到系统 python.exe" }
+              New-Item -ItemType Directory -Path "$tmpDir\python-embedded" -Force | Out-Null
+              Copy-Item $pyPath "$tmpDir\python-embedded\python.exe"
+
+              # mock preflight.py（总是失败）
+              New-Item -ItemType Directory -Path "$tmpDir\wechat-rpa" -Force | Out-Null
+              Set-Content "$tmpDir\wechat-rpa\preflight.py" @"
+import sys
+print('[preflight] FAIL: mock failure — testing blocking behavior')
+sys.exit(1)
+"@
+
+              # 复制真实 start.bat（测真实文件，不是副本重写）
+              Copy-Item "services\agent\install-pack\start.bat" "$tmpDir\start.bat"
+
+              # 运行，最多等 90 秒
+              $p = Start-Process cmd.exe `
+                  -ArgumentList "/c start.bat" `
+                  -WorkingDirectory $tmpDir `
+                  -PassThru -NoNewWindow `
+                  -RedirectStandardOutput "$tmpDir\out.txt" `
+                  -RedirectStandardError  "$tmpDir\err.txt"
+              $ok = $p.WaitForExit(90000)
+              if (-not $ok) { $p.Kill(); throw "FAIL: E2E-3 start.bat 运行超时 90s" }
+
+              $out = Get-Content "$tmpDir\out.txt" -Raw -ErrorAction SilentlyContinue
+              Write-Host "=== start.bat 输出 ===" ; Write-Host $out
+
+              if ($p.ExitCode -ne 1) {
+                  throw "FAIL: E2E-3 start.bat exit=$($p.ExitCode)，期望 1（preflight blocking 未生效）"
+              }
+              if ($out -notmatch '\[preflight\]\s*FAIL') {
+                  throw "FAIL: E2E-3 stdout 中未见 [preflight] FAIL 输出"
+              }
+              Write-Host "OK: E2E-3 start.bat preflight blocking 真实验证通过（exit=1）"
+          } finally {
+              Remove-Item -Recurse -Force $tmpDir -ErrorAction SilentlyContinue
           }
-          # 2. 必须有 blocking exit /b 1
-          if (-not ($batContent -match 'exit /b 1')) {
-              throw "FAIL: E2E-3 start.bat 缺少 blocking exit /b 1"
-          }
-          # 3. 不允许含旧 non-blocking 文案
-          if ($batContent -match 'non-blocking|continuing to start agent') {
-              throw "FAIL: E2E-3 start.bat 仍含旧 non-blocking 文本，未改为 blocking"
-          }
-          Write-Host "OK: E2E-3 start.bat 含 [preflight] FAIL + exit /b 1 blocking 逻辑"
 
       - name: Python pytest 四层锁（Windows全套）
         shell: pwsh
