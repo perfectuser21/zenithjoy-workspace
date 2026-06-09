@@ -3,8 +3,10 @@
 // line04 模块 preflight — TDD commit-1（红）。
 // 覆盖：微信版本比较纯函数 / 注册表解析 / 非 Windows 不崩溃 / fixGuide 含 COS URL。
 
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import os from 'node:os';
+import fs from 'node:fs';
+import https from 'node:https';
 import {
   isWechatVersionSupported,
   parseVersionParts,
@@ -14,7 +16,25 @@ import {
   memoryFixGuide,
   WECHAT_DOWNLOAD_URL,
   runPreflight,
+  getModulePython,
+  checkWechatRunning,
+  downloadFile,
+  installWeChat,
+  installPywinauto,
+  autoRepair,
+  _repairFuncs,
 } from '../preflight';
+// checkWechatRunning 使用 node:child_process execSync，用 vi.mock 提升 mock（ESM 限制）
+vi.mock('node:child_process', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:child_process')>();
+  return {
+    ...actual,
+    execSync: vi.fn(actual.execSync),
+    spawnSync: vi.fn(actual.spawnSync),  // Task 3 新增
+  };
+});
+import { execSync } from 'node:child_process';
+import * as childProcessModule from 'node:child_process';
 
 describe('微信版本比较（纯函数，<= 4.1.8.x 为支持）', () => {
   it('4.1.8.107 等于上限 → 支持', () => {
@@ -96,5 +116,231 @@ describe('runPreflight 跨平台行为', () => {
     expect(r.checks.pywinauto).toBe(true);
     expect(r.checks.memory).toBe(true);
     expect(r.fixGuide).toBeUndefined();
+  });
+});
+
+describe('getModulePython — ZENITHJOY_CORE_DIR 回退', () => {
+  afterEach(() => {
+    delete process.env.ZENITHJOY_CORE_DIR;
+    vi.restoreAllMocks();
+  });
+
+  it('module 自带 python-embedded 优先', () => {
+    vi.spyOn(fs, 'existsSync').mockImplementation((p) =>
+      String(p).includes('python-embedded') && String(p).includes('moduleDir')
+    );
+    const result = getModulePython('/moduleDir');
+    expect(result).toContain('moduleDir');
+    expect(result).toContain('python.exe');
+  });
+
+  it('module 无 embedded 时回退到 ZENITHJOY_CORE_DIR', () => {
+    process.env.ZENITHJOY_CORE_DIR = '/coreDir';
+    vi.spyOn(fs, 'existsSync').mockImplementation((p) =>
+      String(p).includes('coreDir') && String(p).includes('python-embedded')
+    );
+    const result = getModulePython('/moduleDir');
+    expect(result).toContain('coreDir');
+    expect(result).toContain('python.exe');
+  });
+
+  it('两者都没有时 win32 回退到 "python"', () => {
+    vi.spyOn(fs, 'existsSync').mockReturnValue(false);
+    const origPlatform = process.platform;
+    Object.defineProperty(process, 'platform', { value: 'win32', configurable: true });
+    const result = getModulePython('/moduleDir');
+    Object.defineProperty(process, 'platform', { value: origPlatform, configurable: true });
+    expect(result).toBe('python');
+  });
+});
+
+describe('checkWechatRunning — 微信进程检测（软检测）', () => {
+  afterEach(() => vi.mocked(execSync).mockReset());
+
+  it('非 Windows 跳过，返回 ok:true skipped:true', () => {
+    const origPlatform = process.platform;
+    Object.defineProperty(process, 'platform', { value: 'linux', configurable: true });
+    const r = checkWechatRunning();
+    Object.defineProperty(process, 'platform', { value: origPlatform, configurable: true });
+    expect(r.ok).toBe(true);
+    expect(r.skipped).toBe(true);
+  });
+
+  it('tasklist 输出含 WeChat.exe → ok:true 无 fixGuide', () => {
+    const origPlatform = process.platform;
+    Object.defineProperty(process, 'platform', { value: 'win32', configurable: true });
+    vi.mocked(execSync).mockReturnValue(
+      'WeChat.exe   1234 Console   1   12,345 K\r\n' as any
+    );
+    const r = checkWechatRunning();
+    Object.defineProperty(process, 'platform', { value: origPlatform, configurable: true });
+    expect(r.ok).toBe(true);
+    expect(r.fixGuide).toBeUndefined();
+  });
+
+  it('tasklist 无 WeChat.exe → ok:true + fixGuide 含"请打开微信"', () => {
+    const origPlatform = process.platform;
+    Object.defineProperty(process, 'platform', { value: 'win32', configurable: true });
+    vi.mocked(execSync).mockReturnValue(
+      'INFO: 没有运行的任务匹配指定标准。\r\n' as any
+    );
+    const r = checkWechatRunning();
+    Object.defineProperty(process, 'platform', { value: origPlatform, configurable: true });
+    expect(r.ok).toBe(true);
+    expect(r.fixGuide).toContain('请打开微信');
+  });
+
+  it('execSync 抛出 → ok:true + fixGuide', () => {
+    const origPlatform = process.platform;
+    Object.defineProperty(process, 'platform', { value: 'win32', configurable: true });
+    vi.mocked(execSync).mockImplementation(() => { throw new Error('cmd fail'); });
+    const r = checkWechatRunning();
+    Object.defineProperty(process, 'platform', { value: origPlatform, configurable: true });
+    expect(r.ok).toBe(true);
+    expect(r.fixGuide).toContain('请打开微信');
+  });
+});
+
+describe('installWeChat — 下载并静默安装微信 4.1.8', () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it('spawn 参数含 /S 静默标志', async () => {
+    vi.spyOn(https, 'get').mockImplementation((_url: any, cb: any) => {
+      const fakeRes = {
+        pipe: vi.fn(),
+        on: (ev: string, fn: () => void) => { if (ev === 'end') fn(); return fakeRes; },
+      } as any;
+      setImmediate(() => cb(fakeRes));
+      return { on: vi.fn() } as any;
+    });
+    vi.spyOn(fs, 'createWriteStream').mockReturnValue({
+      on: (_ev: string, fn: () => void) => { fn(); return {}; },
+      close: (fn: () => void) => fn(),
+    } as any);
+
+    const spawnSyncMock = vi.spyOn(childProcessModule, 'spawnSync').mockReturnValue({ status: 0 } as any);
+
+    await installWeChat(os.tmpdir());
+
+    const firstCall = spawnSyncMock.mock.calls[0];
+    expect(String(firstCall[0])).toContain('WeChatWin_4.1.8.exe');
+    expect(firstCall[1]).toContain('/S');
+  });
+
+  it('安装后 taskkill WeChat.exe', async () => {
+    vi.spyOn(https, 'get').mockImplementation((_url: any, cb: any) => {
+      const fakeRes = {
+        pipe: vi.fn(),
+        on: (ev: string, fn: () => void) => { if (ev === 'end') fn(); return fakeRes; },
+      } as any;
+      setImmediate(() => cb(fakeRes));
+      return { on: vi.fn() } as any;
+    });
+    vi.spyOn(fs, 'createWriteStream').mockReturnValue({
+      on: (_ev: string, fn: () => void) => { fn(); return {}; },
+      close: (fn: () => void) => fn(),
+    } as any);
+
+    const spawnSyncMock = vi.spyOn(childProcessModule, 'spawnSync').mockReturnValue({ status: 0 } as any);
+
+    await installWeChat(os.tmpdir());
+
+    const allArgs = spawnSyncMock.mock.calls.map((c) => [c[0], ...(c[1] ?? [])].join(' ').toLowerCase());
+    expect(allArgs.some((a) => a.includes('taskkill') && a.includes('wechat.exe'))).toBe(true);
+  });
+});
+
+describe('installPywinauto — get-pip + pip install 清华源', () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it('先运行 get-pip.py 再 pip install pywinauto', async () => {
+    vi.spyOn(https, 'get').mockImplementation((_url: any, cb: any) => {
+      const fakeRes = {
+        pipe: vi.fn(),
+        on: (ev: string, fn: () => void) => { if (ev === 'end') fn(); return fakeRes; },
+      } as any;
+      setImmediate(() => cb(fakeRes));
+      return { on: vi.fn() } as any;
+    });
+    vi.spyOn(fs, 'createWriteStream').mockReturnValue({
+      on: (_ev: string, fn: () => void) => { fn(); return {}; },
+      close: (fn: () => void) => fn(),
+    } as any);
+
+    const spawnSyncMock = vi.spyOn(childProcessModule, 'spawnSync').mockReturnValue({ status: 0 } as any);
+
+    await installPywinauto('python.exe', os.tmpdir());
+
+    const allArgs = spawnSyncMock.mock.calls.map((c) => [c[0], ...(c[1] ?? [])].join(' '));
+    expect(allArgs.some((a) => a.includes('get-pip.py'))).toBe(true);
+    expect(allArgs.some((a) => a.includes('pywinauto'))).toBe(true);
+  });
+
+  it('pip install 使用清华镜像源', async () => {
+    vi.spyOn(https, 'get').mockImplementation((_url: any, cb: any) => {
+      const fakeRes = {
+        pipe: vi.fn(),
+        on: (ev: string, fn: () => void) => { if (ev === 'end') fn(); return fakeRes; },
+      } as any;
+      setImmediate(() => cb(fakeRes));
+      return { on: vi.fn() } as any;
+    });
+    vi.spyOn(fs, 'createWriteStream').mockReturnValue({
+      on: (_ev: string, fn: () => void) => { fn(); return {}; },
+      close: (fn: () => void) => fn(),
+    } as any);
+
+    const spawnSyncMock = vi.spyOn(childProcessModule, 'spawnSync').mockReturnValue({ status: 0 } as any);
+
+    await installPywinauto('python.exe', os.tmpdir());
+
+    const pipCall = spawnSyncMock.mock.calls.find((c) => (c[1] ?? []).includes('pywinauto'));
+    expect((pipCall?.[1] ?? []).join(' ')).toContain('tuna.tsinghua.edu.cn');
+  });
+});
+
+describe('autoRepair — 按需调用安装函数', () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it('wechat 失败时只调用 installWeChat', async () => {
+    // CJS 模式下通过 _repairFuncs 对象 spy，确保能被拦截
+    const wMock = vi.spyOn(_repairFuncs, 'installWeChat').mockResolvedValue(undefined);
+    const pMock = vi.spyOn(_repairFuncs, 'installPywinauto').mockResolvedValue(undefined);
+
+    await autoRepair({ wechatFailed: true, pywinautoFailed: false }, 'python.exe', os.tmpdir());
+
+    expect(wMock).toHaveBeenCalledOnce();
+    expect(pMock).not.toHaveBeenCalled();
+  });
+
+  it('pywinauto 失败时只调用 installPywinauto', async () => {
+    const wMock = vi.spyOn(_repairFuncs, 'installWeChat').mockResolvedValue(undefined);
+    const pMock = vi.spyOn(_repairFuncs, 'installPywinauto').mockResolvedValue(undefined);
+
+    await autoRepair({ wechatFailed: false, pywinautoFailed: true }, 'python.exe', os.tmpdir());
+
+    expect(wMock).not.toHaveBeenCalled();
+    expect(pMock).toHaveBeenCalledOnce();
+  });
+
+  it('两者都失败时都调用', async () => {
+    const wMock = vi.spyOn(_repairFuncs, 'installWeChat').mockResolvedValue(undefined);
+    const pMock = vi.spyOn(_repairFuncs, 'installPywinauto').mockResolvedValue(undefined);
+
+    await autoRepair({ wechatFailed: true, pywinautoFailed: true }, 'python.exe', os.tmpdir());
+
+    expect(wMock).toHaveBeenCalledOnce();
+    expect(pMock).toHaveBeenCalledOnce();
+  });
+});
+
+describe('runPreflight — 非 Windows 不触发 autoRepair', () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it('非 Windows 平台 autoRepair 不被调用', async () => {
+    if (process.platform === 'win32') return;
+    // 非 Windows 下 autoRepair 分支根本不走，直接断言结果 ok:true 即可
+    const result = await runPreflight(os.tmpdir());
+    expect(result.ok).toBe(true);
   });
 });

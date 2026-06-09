@@ -55,7 +55,7 @@ while IFS= read -r sha; do
     while IFS= read -r tf; do
       [ -z "$tf" ] && continue
       [ ! -f "$tf" ] && continue
-      ADDED=$(git show "$sha" -- "$tf" 2>/dev/null | grep -E '^\+' | grep -vE '^\+\+\+')
+      ADDED=$(git show "$sha" -- "$tf" 2>/dev/null | grep -E '^\+' | grep -vE '^\+\+\+' || true)
       if echo "$ADDED" | grep -qE "(^|[^a-zA-Z\.])(it|test)\s*\("; then
         ADDED_NONSKIP=$(echo "$ADDED" | grep -cE "(^|[^a-zA-Z\.])(it|test)\s*\(" || true)
         ADDED_SKIPS=$(echo "$ADDED" | grep -cE "(it|test|describe)\.skip\s*\(" || true)

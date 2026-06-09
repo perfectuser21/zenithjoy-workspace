@@ -8,10 +8,11 @@
 //
 // 非 Windows 平台：所有检测跳过并视为通过（ok:true），不崩溃。
 
-import { execSync, spawn } from 'node:child_process';
+import { execSync, spawn, spawnSync } from 'node:child_process';
 import os from 'node:os';
 import path from 'node:path';
 import fs from 'node:fs';
+import https from 'node:https';
 
 // 旧版微信 COS 直链下载地址（客户降级用）。
 export const WECHAT_DOWNLOAD_URL =
@@ -219,22 +220,136 @@ export function checkMemory(): CheckOutcome {
   return { ok: false, fixGuide: memoryFixGuide() };
 }
 
+// 检测 4（软检测）：微信进程是否在跑。
+// 非 Windows 跳过。ok 始终为 true——未跑只给用户提示，不阻塞模块激活。
+export function checkWechatRunning(): CheckOutcome {
+  if (process.platform !== 'win32') return { ok: true, skipped: true };
+  try {
+    const out = execSync('tasklist /FI "IMAGENAME eq WeChat.exe" /FO LIST', {
+      encoding: 'utf-8',
+      windowsHide: true,
+      timeout: 10_000,
+      stdio: ['ignore', 'pipe', 'ignore'],
+    });
+    if (/WeChat\.exe/i.test(out)) return { ok: true };
+  } catch {
+    // tasklist 失败视同未找到
+  }
+  return {
+    ok: true,
+    fixGuide: '微信未运行，请打开微信并登录，Agent 将在 30 秒内自动连接。',
+  };
+}
+
+// ---------- 自动修复：下载工具 ----------
+
+export function downloadFile(url: string, dest: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const file = fs.createWriteStream(dest);
+    https
+      .get(url, (res) => {
+        res.pipe(file);
+        res.on('end', () => file.close(() => resolve()));
+        res.on('error', reject);
+      })
+      .on('error', reject);
+  });
+}
+
+// ---------- 自动修复：安装微信 ----------
+
+export async function installWeChat(downloadDir: string): Promise<void> {
+  const installer = path.join(downloadDir, 'WeChatWin_4.1.8.exe');
+  await downloadFile(WECHAT_DOWNLOAD_URL, installer);
+  // 腾讯自研包静默参数是 /S（不是 NSIS 的 /VERYSILENT）
+  spawnSync(installer, ['/S'], { windowsHide: true, timeout: 120_000 });
+  // 静默安装后微信会自动启动，关掉等用户手动登录
+  spawnSync('taskkill', ['/F', '/IM', 'WeChat.exe'], {
+    windowsHide: true,
+    stdio: 'ignore',
+  });
+}
+
+// ---------- 自动修复：安装 pywinauto ----------
+
+export const GET_PIP_URL = 'https://bootstrap.pypa.io/get-pip.py';
+export const PIP_INDEX_URL = 'https://pypi.tuna.tsinghua.edu.cn/simple/';
+
+export async function installPywinauto(pythonPath: string, downloadDir: string): Promise<void> {
+  const getPipScript = path.join(downloadDir, 'get-pip.py');
+  await downloadFile(GET_PIP_URL, getPipScript);
+  spawnSync(pythonPath, [getPipScript, '--quiet'], { windowsHide: true, timeout: 60_000 });
+  spawnSync(
+    pythonPath,
+    ['-m', 'pip', 'install', 'pywinauto', '--quiet', '--index-url', PIP_INDEX_URL],
+    { windowsHide: true, timeout: 120_000 },
+  );
+}
+
+// ---------- 自动修复：按需调用安装函数 ----------
+
+export interface RepairTargets {
+  wechatFailed: boolean;
+  pywinautoFailed: boolean;
+}
+
+// _repairFuncs 允许测试替换（CJS 直接调用同文件函数无法被 vi.spyOn 拦截）
+export const _repairFuncs = {
+  installWeChat,
+  installPywinauto,
+};
+
+export async function autoRepair(
+  targets: RepairTargets,
+  pythonPath: string,
+  downloadDir: string,
+): Promise<void> {
+  const tasks: Promise<void>[] = [];
+  if (targets.wechatFailed) tasks.push(_repairFuncs.installWeChat(downloadDir));
+  if (targets.pywinautoFailed) tasks.push(_repairFuncs.installPywinauto(pythonPath, downloadDir));
+  await Promise.all(tasks);
+}
+
 // 解析模块自带的 python-embedded/python.exe，否则回退系统 python（Windows 无 python3）。
+// 回退顺序：1) 模块自带 python-embedded  2) ZENITHJOY_CORE_DIR/python-embedded  3) 系统 python
 export function getModulePython(moduleDir: string): string {
   const embedded = path.join(moduleDir, 'python-embedded', 'python.exe');
   if (fs.existsSync(embedded)) return embedded;
+  const coreDir = process.env.ZENITHJOY_CORE_DIR;
+  if (coreDir) {
+    const coreEmbedded = path.join(coreDir, 'python-embedded', 'python.exe');
+    if (fs.existsSync(coreEmbedded)) return coreEmbedded;
+  }
   return process.platform === 'win32' ? 'python' : 'python3';
 }
 
 // 模块入口：core 在 fork 前调用，三项全过才激活。
 // moduleDir 可选，不传时取本文件所在目录（CLI 直接跑时由 main guard 传入）。
+// 两阶段：首轮检测 → Windows 且检测失败则 autoRepair → 修复后重检 → 软检测。
 export async function runPreflight(moduleDir?: string): Promise<ModulePreflightResult> {
   const dir = moduleDir ?? __dirname;
   const python = getModulePython(dir);
+  const downloadDir = path.join(os.tmpdir(), 'zenithjoy-setup');
+  fs.mkdirSync(downloadDir, { recursive: true });
 
-  const wechat = checkWechatVersion();
-  const pyw = await checkPywinauto(python);
+  // 首轮检测
+  let wechat = checkWechatVersion();
+  let pyw = await checkPywinauto(python);
   const mem = checkMemory();
+
+  // 自动修复（仅 Windows，非 CI mock 模式）
+  if (process.platform === 'win32' && !process.env.MOCK_WECHAT_VERSION) {
+    const needRepair = !wechat.ok || !pyw.ok;
+    if (needRepair) {
+      await autoRepair({ wechatFailed: !wechat.ok, pywinautoFailed: !pyw.ok }, python, downloadDir);
+      // 修复后重检
+      wechat = checkWechatVersion();
+      pyw = await checkPywinauto(python);
+    }
+  }
+
+  // 软检测：微信进程是否在跑（ok 始终 true）
+  const running = checkWechatRunning();
 
   const checks = {
     wechat_version: wechat.ok,
@@ -243,11 +358,15 @@ export async function runPreflight(moduleDir?: string): Promise<ModulePreflightR
   };
 
   if (wechat.ok && pyw.ok && mem.ok) {
-    return { ok: true, checks };
+    return {
+      ok: true,
+      checks,
+      ...(running.fixGuide ? { fixGuide: running.fixGuide } : {}),
+    };
   }
 
-  // version-only warning：仅 wechat_version 失败（pywinauto + memory 均通过）
-  // → ok:true（只告警，不判红），顶层不冒泡 fixGuide（PRD 边界情况）
+  // version-only warning：仅 wechat_version 失败（pywinauto + memory 均通过）→ ok:true
+  // 不带 fixGuide：版本错时"微信未运行"提示无意义（E2E 断言 has("fixGuide")|not）
   if (!wechat.ok && pyw.ok && mem.ok) {
     return { ok: true, checks };
   }
