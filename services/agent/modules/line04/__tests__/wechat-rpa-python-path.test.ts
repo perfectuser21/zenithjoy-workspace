@@ -10,7 +10,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import os from 'node:os';
 import path from 'node:path';
 import fs from 'node:fs';
-import { getPythonExeForTest } from '../handlers/wechat-rpa';
+import { getPythonExeForTest, buildListenerSpawnArgs } from '../handlers/wechat-rpa';
 
 describe('getPythonExeForTest — ZENITHJOY_CORE_DIR 回退路径', () => {
   let tmpDir: string;
@@ -78,5 +78,32 @@ describe('getPythonExeForTest — ZENITHJOY_CORE_DIR 回退路径', () => {
     } else {
       expect(result).toBe('python3');
     }
+  });
+});
+
+// ── 回归测试：buildListenerSpawnArgs 必须把 agentId 传给 --agent-id（否则 Dashboard 显示"未知客户端"）──
+describe('buildListenerSpawnArgs — agentId 传参回归', () => {
+  it('传入 agentId 时，返回参数含 --agent-id <agentId>', () => {
+    const args = buildListenerSpawnArgs('listen_chat.py', 'http://localhost:3000', 'xian-rog-agent');
+    expect(args).toContain('--agent-id');
+    const idx = args.indexOf('--agent-id');
+    expect(args[idx + 1]).toBe('xian-rog-agent');
+  });
+
+  it('不传 agentId 时，返回参数不含 --agent-id', () => {
+    const args = buildListenerSpawnArgs('listen_chat.py', 'http://localhost:3000');
+    expect(args).not.toContain('--agent-id');
+  });
+
+  it('agentId 为空字符串时，返回参数不含 --agent-id', () => {
+    const args = buildListenerSpawnArgs('listen_chat.py', 'http://localhost:3000', '');
+    expect(args).not.toContain('--agent-id');
+  });
+
+  it('始终包含 --middleware-url 和 --timeout', () => {
+    const args = buildListenerSpawnArgs('listen_chat.py', 'http://api.example.com');
+    expect(args).toContain('--middleware-url');
+    expect(args).toContain('http://api.example.com');
+    expect(args).toContain('--timeout');
   });
 });
