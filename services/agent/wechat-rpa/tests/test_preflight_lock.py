@@ -73,6 +73,17 @@ class TestDowngradePath(unittest.TestCase):
             f"name 应为 'lock_update'，实际: {result['name']}")
 
 
+
+def _is_admin() -> bool:
+    """检查当前进程是否有管理员权限（Windows 下 icacls /deny 需要 admin）"""
+    if sys.platform != 'win32':
+        return False
+    try:
+        import ctypes
+        return bool(ctypes.windll.shell32.IsUserAnAdmin())
+    except Exception:
+        return False
+
 @unittest.skipUnless(sys.platform == "win32", "四层锁仅在 Windows 执行（Red 证据在 windows-latest 上验证）")
 class TestFourLayerLock(unittest.TestCase):
     """四层锁扩展：Generator 实现前在 windows-latest 上全部 FAIL（Red 阶段）"""
@@ -107,6 +118,7 @@ class TestFourLayerLock(unittest.TestCase):
         self.assertIn(result["status"], ("ok", "fixed", "warn"),
             f"Layer1 后 status 应为 ok/fixed/warn，实际: {result['status']}")
 
+    @unittest.skipUnless(_is_admin(), "需要 admin 权限（windows-latest/SYSTEM 才有，普通用户跳过）")
     def test_layer2_icacls_deny_after_lock(self):
         """Layer 2: disabled 文件 icacls 含 DENY（Generator 未实现前 FAIL）"""
         import subprocess
@@ -121,6 +133,7 @@ class TestFourLayerLock(unittest.TestCase):
             f"Layer2: icacls 无 DENY 输出（Generator 需实现 icacls /deny）: {r.stdout[:200]}",
         )
 
+    @unittest.skipUnless(_is_admin(), "需要 admin 权限（netsh 防火墙规则需管理员；普通用户跳过）")
     def test_layer3_domain_firewall_dldir1v6(self):
         """Layer 3: 防火墙出站规则含 dldir1v6.qq.com 域名封禁（Generator 未实现前 FAIL）"""
         import subprocess
@@ -130,6 +143,7 @@ class TestFourLayerLock(unittest.TestCase):
             ["netsh", "advfirewall", "firewall", "show", "rule", "name=all"],
             capture_output=True,
             text=True,
+            errors="replace",
         )
         self.assertIn(
             "dldir1v6.qq.com",
