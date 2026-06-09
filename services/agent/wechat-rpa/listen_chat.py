@@ -183,48 +183,39 @@ def _iter_all_controls(mw: Any, control_type: str):
 
 
 def _find_chat_input(mw: Any) -> Optional[Any]:
-    """定位回复输入框：先按 automation_id='chat_input_field'，再按位置+面积回退。
+    """定位回复输入框：先按 automation_id='chat_input_field'，找不到返回 None。
 
-    回退逻辑排除窗口上 40% 区域的 Edit（搜索栏固定在顶部 5-8%，
-    聊天输入框在底部 85%+），防止搜索栏面积大时被误选。
-    获取窗口矩形失败时退化到旧逻辑（按面积最大选）。
+    WeChat 4.1.8 后台时 UIA 树只暴露搜索框（mmui::XValidatorTextEdit, name='搜索'），
+    chat_input_field 不出现。此时绝对禁止回退到搜索框——调用方负责触发 UIA 刷新后重试。
     """
-    candidates = []
     for c in mw.descendants(control_type="Edit"):
         try:
-            aid = c.element_info.automation_id or ""
-            if aid == "chat_input_field":
+            if (c.element_info.automation_id or "") == "chat_input_field":
                 return c
-            try:
-                r = c.rectangle()
-                area = (r.right - r.left) * (r.bottom - r.top)
-            except Exception:
-                area = 0
-                r = None
-            candidates.append((area, aid, c, r))
         except Exception:
             continue
-    if not candidates:
-        return None
+    return None
 
-    # 过滤：排除窗口上 40% 的 Edit（搜索栏区域，聊天输入框在底部 85%+）
+
+def _trigger_uia_refresh(mw: Any) -> None:
+    """minimize→SW_SHOWNA 触发 WeChat 刷新 UIA 树，使 chat_input_field 可见。
+
+    WeChat 4.1.8 在 minimize→restore 循环后会重建 UIA 树，chat_input_field 才出现。
+    SW_SHOWNA=8：还原但不抢焦点（绝不使用 SW_RESTORE=9）。
+    窗口短暂最小化（≤1s），对用户几乎不可见。
+    """
+    import ctypes as _ct
+    _u32 = _ct.windll.user32
     try:
-        wr = mw.rectangle()
-        threshold = wr.top + (wr.bottom - wr.top) * 0.4
-        filtered = [
-            (area, aid, c, r)
-            for area, aid, c, r in candidates
-            if r is not None and r.top >= threshold
-        ]
-        if filtered:
-            candidates = filtered
-    except Exception:
-        pass  # 退化到旧逻辑
-
-    candidates.sort(key=lambda x: x[0], reverse=True)
-    best = candidates[0]
-    _log(f"_find_chat_input: 回退到最大 Edit area={best[0]} aid={repr(best[1])}")
-    return best[2]
+        hwnd = mw.element_info.handle
+        if hwnd and not _u32.IsIconic(hwnd):
+            _u32.ShowWindow(hwnd, 6)   # SW_MINIMIZE
+            time.sleep(0.3)
+            _u32.ShowWindow(hwnd, 8)   # SW_SHOWNA：还原不抢焦点
+            time.sleep(0.3)
+            _log("_trigger_uia_refresh: minimize→SW_SHOWNA 完成，等 UIA 刷新")
+    except Exception as e:
+        _log(f"_trigger_uia_refresh: {e}")
 
 
 def _find_send_button(mw: Any) -> Optional[Any]:
@@ -408,19 +399,24 @@ def reply_in_chat(mw: Any, item: Any, reply_text: str, sender: str = "") -> bool
     try:
         item.iface_invoke.Invoke()
         _log("reply_in_chat: Invoke 激活会话，等面板切换…")
-        for attempt in range(8):  # 最多等 4s，每 0.5s 检查
+        uia_refresh_done = False
+        for attempt in range(12):  # 最多等 6s（含 minimize→SW_SHOWNA 刷新余量）
             time.sleep(0.5)
             fmw = _fresh_mw()
-            # 前 4 次（≤2s）强制等待：skill wechat-uia-silent-send 要求 Invoke 后至少 2s
-            # chat_input_field(area≈70818) 才出现，不足 2s 只能找到搜索框(area≈6660)
+            # 前 4 次（≤2s）强制等待：Invoke 后 UIA 树需要 ≥2s 才更新
             if attempt < 4 or (attempt < 6 and not _chat_panel_ready(fmw)):
                 continue
             uia_edit = _find_chat_input(fmw)
-            if uia_edit is not None:
-                if _uia_send(uia_edit, fmw, reply_text):
-                    _navigate_away(fmw)
-                    return True
-                break
+            if uia_edit is None:
+                if not uia_refresh_done:
+                    # chat_input_field 未出现：minimize→SW_SHOWNA 触发 WeChat UIA 树刷新
+                    _trigger_uia_refresh(fmw)
+                    uia_refresh_done = True
+                continue  # 继续等待 chat_input_field 出现，绝不回退到搜索框
+            if _uia_send(uia_edit, fmw, reply_text):
+                _navigate_away(fmw)
+                return True
+            break
     except Exception as exc:
         _log(f"reply_in_chat: Invoke 失败: {exc}")
 

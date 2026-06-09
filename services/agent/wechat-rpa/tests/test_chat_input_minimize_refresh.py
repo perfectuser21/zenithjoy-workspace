@@ -135,13 +135,13 @@ def test_reply_in_chat_calls_minimize_swshowna_when_input_missing():
             with patch("time.sleep"):
                 lc.reply_in_chat(mw, item, "hello", sender="")
 
-    sw_cmds = [cmd for (_, _, cmd) in call_log if _ == "ShowWindow"]
+    sw_cmds = [cmd for (_ev, _hwnd, cmd) in call_log if _ev == "ShowWindow"]
     assert SW_RESTORE not in sw_cmds, "禁止调用 SW_RESTORE=9"
     assert SW_MINIMIZE in sw_cmds, "必须调用 SW_MINIMIZE=6 触发 UIA 刷新"
     assert SW_SHOWNA in sw_cmds, "必须调用 SW_SHOWNA=8 无前台还原"
     # minimize 必须在 SW_SHOWNA 之前
-    idx_min = next(i for i, (_, _, c) in enumerate(call_log) if c == SW_MINIMIZE)
-    idx_show = next(i for i, (_, _, c) in enumerate(call_log) if c == SW_SHOWNA)
+    idx_min = next(i for i, (_ev, _hwnd, c) in enumerate(call_log) if c == SW_MINIMIZE)
+    idx_show = next(i for i, (_ev, _hwnd, c) in enumerate(call_log) if c == SW_SHOWNA)
     assert idx_min < idx_show, "SW_MINIMIZE 必须在 SW_SHOWNA 之前"
 
 
