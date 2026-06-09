@@ -37,5 +37,7 @@ if [ "$LINE_ID" = "line04" ] && [ -d "wechat-rpa" ]; then
   rm -rf "$BUILD_DIR/wechat-rpa/__pycache__" "$BUILD_DIR/wechat-rpa/tests"
 fi
 
+# -C "build-modules/$LINE_ID" . 让文件在 tar 根目录（不产生子目录前缀）。
+# module-manager 解压到 destDir 后期望 manifest.json 在 destDir/ 根部，而非 destDir/line04/。
 tar czf "$OUT_DIR/${MANIFEST_LINE_ID}-v${VERSION}.tar.gz" -C "build-modules/$LINE_ID" .
 echo "[build-module] ${MANIFEST_LINE_ID}-v${VERSION}.tar.gz ready (-> $OUT_DIR/)"
