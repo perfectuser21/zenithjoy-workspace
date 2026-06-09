@@ -269,13 +269,12 @@ export function downloadFile(url: string, dest: string): Promise<void> {
 export async function installWeChat(downloadDir: string): Promise<void> {
   const installer = path.join(downloadDir, 'WeChatWin_4.1.8.exe');
   await downloadFile(WECHAT_DOWNLOAD_URL, installer);
+  // 先终止所有微信进程，防止文件占用导致安装包静默跳过降级
+  for (const im of ['WeChat.exe', 'WeChatAppEx.exe']) {
+    spawnSync('taskkill', ['/F', '/IM', im], { windowsHide: true, stdio: 'ignore' });
+  }
   // 腾讯自研包静默参数是 /S（不是 NSIS 的 /VERYSILENT）
   spawnSync(installer, ['/S'], { windowsHide: true, timeout: 120_000 });
-  // 静默安装后微信会自动启动，关掉等用户手动登录
-  spawnSync('taskkill', ['/F', '/IM', 'WeChat.exe'], {
-    windowsHide: true,
-    stdio: 'ignore',
-  });
 }
 
 // ---------- 自动修复：安装 pywinauto ----------

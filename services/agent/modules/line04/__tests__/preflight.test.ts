@@ -237,9 +237,9 @@ describe('installWeChat — 下载并静默安装微信 4.1.8', () => {
 
     await installWeChat(os.tmpdir());
 
-    const firstCall = spawnSyncMock.mock.calls[0];
-    expect(String(firstCall[0])).toContain('WeChatWin_4.1.8.exe');
-    expect(firstCall[1]).toContain('/S');
+    const installerCall = spawnSyncMock.mock.calls.find((c) => String(c[0]).includes('WeChatWin_4.1.8.exe'));
+    expect(installerCall).toBeDefined();
+    expect(installerCall![1]).toContain('/S');
   });
 
   it('安装后 taskkill WeChat.exe', async () => {
