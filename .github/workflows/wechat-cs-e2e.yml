@@ -9,7 +9,7 @@ name: WeChat CS Hardening — E2E
 
 on:
   push:
-    branches: [main, 'cp-*']
+    branches: [main]
   pull_request:
     branches: [main]
     paths:

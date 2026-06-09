@@ -1,3 +1,4 @@
+# DISABLED: superseded by deploy-hk-vps.yml and deploy-us-vps.yml
 name: Deploy to HK VPS
 
 on:
@@ -9,12 +10,13 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: deploy-hk-vps
+  group: deploy-legacy
   cancel-in-progress: false
 
 jobs:
   deploy-dashboard:
     name: Build & Deploy Dashboard
+    if: false
     runs-on: ubuntu-latest
 
     steps:
@@ -74,6 +76,7 @@ jobs:
 
   deploy-api:
     name: Deploy API
+    if: false
     runs-on: ubuntu-latest
 
     steps:
@@ -96,13 +99,13 @@ jobs:
 
   on_deploy_failure:
     name: Deploy Failure Alert
+    if: false
     runs-on: ubuntu-latest
     needs: [deploy-dashboard, deploy-api]
-    if: ${{ failure() }}
     steps:
       - name: Alert
         run: |
-          curl -sf -X POST http://38.23.47.81:5221/api/brain/tasks \
+          curl -sf -X POST ${{ secrets.BRAIN_URL || 'http://38.23.47.81:5221' }}/api/brain/tasks \
             -H "Content-Type: application/json" \
             -d '{
               "title": "ZenithJoy Dashboard 部署失败",

@@ -72,7 +72,7 @@ jobs:
           OPERATOR_API_URL: ${{ secrets.OPERATOR_API_URL || 'http://localhost:3000' }}
           INTERNAL_API_SECRET: ${{ secrets.INTERNAL_API_SECRET }}
           # 其他配置
-          BARK_URL: https://api.day.app/QU7ktbzPJxZbNx9pEHcstW
+          BARK_URL: ${{ secrets.BARK_DEVICE_URL }}
           FORCE_NOTIFY: ${{ github.event.inputs.force_notify || 'false' }}
         run: |
           node scripts/sessions/check-health.js

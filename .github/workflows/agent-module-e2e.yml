@@ -2,7 +2,7 @@ name: Agent Module E2E (windows-latest + xian-rog)
 
 on:
   push:
-    branches: [main, 'cp-*']
+    branches: [main]
     paths:
       - 'services/agent/src/module-manager.ts'
       - 'services/agent/modules/line04/**'

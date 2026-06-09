@@ -37,4 +37,9 @@ jobs:
           PR_TITLE: ${{ github.event.pull_request.title }}
           PR_BODY: ${{ github.event.pull_request.body }}
           PR_URL: ${{ github.event.pull_request.html_url }}
-        run: node .github/scripts/notion-sync-on-merge.js
+        run: |
+          if [ -z "$NOTION_API_KEY" ]; then
+            echo "::warning::NOTION_API_KEY 未配置，跳过 Notion 同步"
+            exit 0
+          fi
+          node .github/scripts/notion-sync-on-merge.js
