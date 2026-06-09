@@ -3073,3 +3073,35 @@ agent_suite:
     status: active
     product: 客户私域AI接管
     note: "Sprint 06081800 — preflight MOCK_WECHAT_VERSION 跨平台覆盖 + version-only warning 路径"
+
+  - id: line04-preflight-card-e2e
+    path: apps/dashboard/e2e/line04-preflight-card.spec.ts
+    type: e2e
+    ci: windows_cloud
+    status: active
+    product: 客户私域AI接管
+    note: "Sprint 06091001 — Line04PreflightCard Playwright E2E（preflight 状态卡片渲染 + ok/reason 展示）"
+
+  - id: module-health-access-e2e
+    path: apps/dashboard/e2e/module-health-access.spec.ts
+    type: e2e
+    ci: windows_cloud
+    status: active
+    product: 客户私域AI接管
+    note: "Sprint 06091001 — /module-health 权限开放 E2E（普通账号可访问，不跳 403）"
+
+  - id: line04-preflight-card-unit
+    path: sprints/06091001-agent-module-preflight-blocking/tests/line04-preflight-card.test.tsx
+    type: unit
+    ci: L3
+    status: active
+    product: 客户私域AI接管
+    note: "Sprint 06091001 — Line04PreflightCard 单元测试（有数据/无数据/error 三态）"
+
+  - id: navigation-module-health-unit
+    path: sprints/06091001-agent-module-preflight-blocking/tests/navigation-module-health.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 客户私域AI接管
+    note: "Sprint 06091001 — navigation.config.ts 单测（module-health 无 requireSuperAdmin）"

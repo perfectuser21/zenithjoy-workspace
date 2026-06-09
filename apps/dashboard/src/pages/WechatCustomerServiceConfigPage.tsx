@@ -28,6 +28,7 @@ import {
   type BusinessKB,
   type ListenerStatus,
 } from '../api/wechat-cs-config.api'
+import Line04PreflightCard from '../components/Line04PreflightCard'
 
 // ─── 默认空值 ─────────────────────────────────────────────────
 
@@ -430,7 +431,10 @@ export default function WechatCustomerServiceConfigPage() {
 
       {/* 主内容 */}
       <div className="max-w-[960px] mx-auto px-6 py-6">
-        {/* ─── 监听健康（顶部）─────────────────────────── */}
+        {/* ─── 本机环境状态（Line04 preflight 结果，顶部）── */}
+        <Line04PreflightCard />
+
+        {/* ─── 监听健康 ─────────────────────────────────── */}
         <ListenerHealthSection />
 
         {/* ─── 人设 ─────────────────────────────────────── */}

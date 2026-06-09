@@ -274,17 +274,23 @@ REM Run wechat-rpa\preflight.py with bundled python-embedded\python.exe to check
 REM the environment WeChat RPA needs (WeChat version / Narrator UIA / pywinauto / deps). Prints a
 REM report and writes C:\Users\Public\zj-preflight.json (readable by middleware dashboard).
 REM Middleware URL reuses ZENITHJOY_API_BASE (preflight also has its own default/env fallback).
-REM [Non-blocking] preflight already self-heals; remaining issues need a human but must not stop the
-REM agent from starting (a non-fatal env warning should not take down the whole publisher side). So
-REM continue regardless of exit code, only echo a clear hint for the user/dashboard.
+REM [Blocking] preflight self-heals; if any check still FAIL after self-heal, agent must not start.
+REM Line04 (WeChat AI CS) depends on correct WeChat version + env — silent failure is worse than no start.
 if exist "%~dp0python-embedded\python.exe" if exist "%~dp0wechat-rpa\preflight.py" (
     echo.
     echo  ============================================================
-    echo   WeChat RPA environment self-check ^(preflight, best-effort, non-blocking^)
+    echo   WeChat RPA environment self-check ^(preflight^)
     echo  ============================================================
     "%~dp0python-embedded\python.exe" "%~dp0wechat-rpa\preflight.py" --middleware-url "%ZENITHJOY_API_BASE%"
     if errorlevel 1 (
-        echo [preflight] WARN self-check found issues - residual after self-heal, see report above / dashboard; continuing to start agent
+        echo.
+        echo  ============================================================
+        echo   [preflight] FAIL: environment self-check found unrecoverable issues.
+        echo   See preflight report above for details on each failed check.
+        echo   Fix the issues shown above, then re-run start.bat.
+        echo  ============================================================
+        echo.
+        exit /b 1
     ) else (
         echo [preflight] environment self-check passed OK
     )
