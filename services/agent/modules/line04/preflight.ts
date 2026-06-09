@@ -225,15 +225,20 @@ export function checkMemory(): CheckOutcome {
 // 非 Windows 跳过。ok 始终为 true——未跑只给用户提示，不阻塞模块激活。
 export function checkWechatRunning(): CheckOutcome {
   if (process.platform !== 'win32') return { ok: true, skipped: true };
-  for (const name of ['WeChat.exe', 'WeChatAppEx.exe']) {
+  // 两条命令均为字面量，无模板变量，无命令注入风险。
+  const queries: Array<[string, RegExp]> = [
+    ['tasklist /FI "IMAGENAME eq WeChat.exe" /FO LIST', /WeChat\.exe/i],
+    ['tasklist /FI "IMAGENAME eq WeChatAppEx.exe" /FO LIST', /WeChatAppEx\.exe/i],
+  ];
+  for (const [cmd, pattern] of queries) {
     try {
-      const out = execSync(`tasklist /FI "IMAGENAME eq ${name}" /FO LIST`, {
+      const out = execSync(cmd, {
         encoding: 'utf-8',
         windowsHide: true,
         timeout: 10_000,
         stdio: ['ignore', 'pipe', 'ignore'],
       });
-      if (new RegExp(name, 'i').test(out)) return { ok: true };
+      if (pattern.test(out)) return { ok: true };
     } catch {
       // 该进程不存在或无权查询，继续下一个
     }
