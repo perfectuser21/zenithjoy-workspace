@@ -240,15 +240,87 @@ def _find_send_button(mw: Any) -> Optional[Any]:
 
 
 
+def _set_clipboard_text(text: str) -> bool:
+    """
+    通过 Win32 剪贴板 API 把 text 写入剪贴板，返回是否成功。
+    GlobalAlloc/GlobalLock 均声明 restype=c_void_p，防止 amd64 上 64-bit HANDLE 被截断为 32-bit。
+    """
+    import ctypes
+    CF_UNICODETEXT = 13
+    GMEM_MOVEABLE = 0x0002
+    encoded = (text + "\x00").encode("utf-16-le")
+    size = len(encoded)
+    k32 = ctypes.windll.kernel32
+    u32 = ctypes.windll.user32
+    k32.GlobalAlloc.restype = ctypes.c_void_p
+    k32.GlobalAlloc.argtypes = [ctypes.c_uint, ctypes.c_size_t]
+    k32.GlobalLock.restype = ctypes.c_void_p
+    k32.GlobalLock.argtypes = [ctypes.c_void_p]
+    k32.GlobalUnlock.restype = ctypes.c_bool
+    k32.GlobalUnlock.argtypes = [ctypes.c_void_p]
+    u32.SetClipboardData.restype = ctypes.c_void_p
+    u32.SetClipboardData.argtypes = [ctypes.c_uint, ctypes.c_void_p]
+    try:
+        hMem = k32.GlobalAlloc(GMEM_MOVEABLE, size)
+        if not hMem:
+            return False
+        pMem = k32.GlobalLock(hMem)
+        if not pMem:
+            return False
+        ctypes.memmove(pMem, encoded, size)
+        k32.GlobalUnlock(hMem)
+        u32.OpenClipboard(None)
+        u32.EmptyClipboard()
+        u32.SetClipboardData(CF_UNICODETEXT, hMem)
+        u32.CloseClipboard()
+        return True
+    except Exception:
+        return False
+
+
 def _uia_send(uia_edit: Any, mw: Any, reply_text: str) -> bool:
     """
     发送策略（后台静默，纯 UIA 路径）：
+    0. 微信4.1.x mmui::MainWindow：SetValue 已失效，改用剪贴板粘贴路径
     1. SetValue 写值 + SW_SHOWNA 还原（不抢焦点）+ AttachThreadInput + PostMessageW(Enter)
     2. 兜底：SW_RESTORE + 发送按钮 Invoke
     成功返回 True。全程禁止 keybd_event / mouse_event（全局事件，后台会话必失败）。
     """
     import ctypes as _ct
     _u32 = _ct.windll.user32
+    # 微信4.1.x 主窗口类名 mmui::MainWindow：SetValue 接口已不写入文本，改剪贴板+Ctrl+V 路径
+    if getattr(mw, 'element_info', None) and getattr(mw.element_info, 'class_name', '') == 'mmui::MainWindow':
+        if _set_clipboard_text(reply_text):
+            import ctypes as _ct2
+            _u2 = _ct2.windll.user32
+            main_hwnd = mw.element_info.handle
+            edit_hwnd = uia_edit.element_info.handle or main_hwnd
+            was_minimized = bool(_u2.IsIconic(main_hwnd))
+            VK_CONTROL = 0x11
+            VK_V = 0x56
+            VK_RETURN = 0x0D
+            if was_minimized:
+                _u2.ShowWindow(main_hwnd, 8)  # SW_SHOWNA
+                time.sleep(0.3)
+            pid_buf = _ct2.c_ulong(0)
+            wx_tid = _u2.GetWindowThreadProcessId(edit_hwnd, _ct2.byref(pid_buf))
+            _u2.AttachThreadInput(_ct2.windll.kernel32.GetCurrentThreadId(), wx_tid, True)
+            _u2.SetFocus(edit_hwnd)
+            time.sleep(0.1)
+            _u2.PostMessageW(edit_hwnd, 0x0100, VK_CONTROL, 0)
+            _u2.PostMessageW(edit_hwnd, 0x0100, VK_V, 0)
+            _u2.PostMessageW(edit_hwnd, 0x0101, VK_V, 0)
+            _u2.PostMessageW(edit_hwnd, 0x0101, VK_CONTROL, 0)
+            time.sleep(0.3)
+            _u2.PostMessageW(edit_hwnd, 0x0100, VK_RETURN, 0x001C0001)
+            time.sleep(0.05)
+            _u2.PostMessageW(edit_hwnd, 0x0101, VK_RETURN, 0xC01C0001)
+            _u2.AttachThreadInput(_ct2.windll.kernel32.GetCurrentThreadId(), wx_tid, False)
+            time.sleep(0.4)
+            if was_minimized:
+                _u2.ShowWindow(main_hwnd, 6)  # SW_MINIMIZE
+            _log("_uia_send: mmui::MainWindow 剪贴板粘贴路径完成")
+            return True
     _k32 = _ct.windll.kernel32
     SW_RESTORE = 9
     SW_MINIMIZE = 6
