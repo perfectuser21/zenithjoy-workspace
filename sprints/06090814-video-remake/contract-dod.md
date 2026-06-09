@@ -1,6 +1,3 @@
-contract_branch: cp-06090848-ws-de70f3d8-ws1
-sprint_dir: sprints/06090814-video-remake
-
 ---
 skeleton: false
 journey_type: user_facing
@@ -37,7 +34,7 @@ target_environment: local_api
 > **注**：pytest 测试通过 session-scoped fixture 自动启动 `services/video-remake/server.py`；evaluator 只需确保 Python 依赖已安装（`pip install -r services/video-remake/requirements.txt requests pytest`）。
 
 - [ ] [BEHAVIOR] `/health` 运行时返回 `{"status":"ok"}`，禁用字段 state/healthy 不存在（对应 Golden Path Step 1）
-  Test: manual:bash -c 'python -m pytest sprints/06090814-video-remake/tests/test_api.py::TestHealthEndpoint -v --tb=short 2>&1 | tail -5'
+  Test: manual:bash -c 'cd /workspace && python -m pytest sprints/06090814-video-remake/tests/test_api.py::TestHealthEndpoint -v --tb=short 2>&1 | tail -5'
   期望: 2 passed, 0 failed
 
 - [ ] [BEHAVIOR] `/api/nodes` 运行时返回 9 节点数组，schema 完整性（必填字段均在），禁用字段 node_id/state/name 反向检查通过（对应 Golden Path Step 3）
