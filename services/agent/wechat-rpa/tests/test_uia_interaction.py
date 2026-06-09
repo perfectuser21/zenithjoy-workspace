@@ -94,6 +94,26 @@ def test_listen_chat_dryrun_inject_mock_path():
         os.environ.pop("WECHAT_DRAFT_API_DRYRUN", None)
 
 
+def test_wm_paste_has_verification_before_return():
+    """WM_PASTE 路径必须验证输入框已清空再返回 True，不能无条件返回 True（防止消息发不出去）。
+
+    背景：2026-06-09 真机发现 WM_PASTE 到 mmui::MainWindow 被无声丢弃（edit_hwnd 为 0 时
+    回退到主窗口 HWND，PostMessage 无效），但旧代码无条件 return True → auto-replied OK
+    但消息从未发出。修法：WM_PASTE 后必须 get_value() 验证输入框已清空，失败则 fall-through
+    到 SetValue + Send Button 路径（实际有效的发送手段）。
+    """
+    src = _read_source(LISTEN_CHAT_PATH)
+    wm_block_start = src.find("mmui::MainWindow")
+    assert wm_block_start != -1, "源码中必须有 mmui::MainWindow WM_PASTE 块"
+    # WM_PASTE 块结束：下一个 iface_value.SetValue 调用处
+    set_value_pos = src.find("iface_value.SetValue", wm_block_start)
+    wm_block = src[wm_block_start:set_value_pos] if set_value_pos > wm_block_start else src[wm_block_start:wm_block_start + 600]
+    assert "get_value" in wm_block, (
+        "WM_PASTE 块（mmui::MainWindow）必须调用 get_value() 验证发送结果后再 return True，"
+        "不能无条件返回（防止消息无声消失）"
+    )
+
+
 def test_send_chat_mock_path_no_real_ui():
     """REAL_PUBLISH=0 时 send_chat_message 走 mock 成功路径，不触发任何 UI 自动化。"""
     import send_chat  # noqa: PLC0415
