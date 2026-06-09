@@ -6,6 +6,7 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import os from 'node:os';
 import fs from 'node:fs';
+import https from 'node:https';
 import {
   isWechatVersionSupported,
   parseVersionParts,
@@ -17,7 +18,12 @@ import {
   runPreflight,
   getModulePython,
   checkWechatRunning,
+  downloadFile,
+  installWeChat,
+  installPywinauto,
+  autoRepair,
 } from '../preflight';
+import * as preflightModule from '../preflight';
 
 // checkWechatRunning 使用 node:child_process execSync，用 vi.mock 提升 mock（ESM 限制）
 vi.mock('node:child_process', async (importOriginal) => {
@@ -25,9 +31,11 @@ vi.mock('node:child_process', async (importOriginal) => {
   return {
     ...actual,
     execSync: vi.fn(actual.execSync),
+    spawnSync: vi.fn(actual.spawnSync),  // Task 3 新增
   };
 });
 import { execSync } from 'node:child_process';
+import * as childProcessModule from 'node:child_process';
 
 describe('微信版本比较（纯函数，<= 4.1.8.x 为支持）', () => {
   it('4.1.8.107 等于上限 → 支持', () => {
@@ -191,5 +199,54 @@ describe('checkWechatRunning — 微信进程检测（软检测）', () => {
     Object.defineProperty(process, 'platform', { value: origPlatform, configurable: true });
     expect(r.ok).toBe(true);
     expect(r.fixGuide).toContain('请打开微信');
+  });
+});
+
+describe('installWeChat — 下载并静默安装微信 4.1.8', () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it('spawn 参数含 /S 静默标志', async () => {
+    vi.spyOn(https, 'get').mockImplementation((_url: any, cb: any) => {
+      const fakeRes = {
+        pipe: vi.fn(),
+        on: (ev: string, fn: () => void) => { if (ev === 'end') fn(); return fakeRes; },
+      } as any;
+      setImmediate(() => cb(fakeRes));
+      return { on: vi.fn() } as any;
+    });
+    vi.spyOn(fs, 'createWriteStream').mockReturnValue({
+      on: (_ev: string, fn: () => void) => { fn(); return {}; },
+      close: (fn: () => void) => fn(),
+    } as any);
+
+    const spawnSyncMock = vi.spyOn(childProcessModule, 'spawnSync').mockReturnValue({ status: 0 } as any);
+
+    await installWeChat(os.tmpdir());
+
+    const firstCall = spawnSyncMock.mock.calls[0];
+    expect(String(firstCall[0])).toContain('WeChatWin_4.1.8.exe');
+    expect(firstCall[1]).toContain('/S');
+  });
+
+  it('安装后 taskkill WeChat.exe', async () => {
+    vi.spyOn(https, 'get').mockImplementation((_url: any, cb: any) => {
+      const fakeRes = {
+        pipe: vi.fn(),
+        on: (ev: string, fn: () => void) => { if (ev === 'end') fn(); return fakeRes; },
+      } as any;
+      setImmediate(() => cb(fakeRes));
+      return { on: vi.fn() } as any;
+    });
+    vi.spyOn(fs, 'createWriteStream').mockReturnValue({
+      on: (_ev: string, fn: () => void) => { fn(); return {}; },
+      close: (fn: () => void) => fn(),
+    } as any);
+
+    const spawnSyncMock = vi.spyOn(childProcessModule, 'spawnSync').mockReturnValue({ status: 0 } as any);
+
+    await installWeChat(os.tmpdir());
+
+    const allArgs = spawnSyncMock.mock.calls.map((c) => [c[0], ...(c[1] ?? [])].join(' ').toLowerCase());
+    expect(allArgs.some((a) => a.includes('taskkill') && a.includes('wechat.exe'))).toBe(true);
   });
 });

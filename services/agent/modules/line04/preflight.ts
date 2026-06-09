@@ -8,10 +8,11 @@
 //
 // 非 Windows 平台：所有检测跳过并视为通过（ok:true），不崩溃。
 
-import { execSync, spawn } from 'node:child_process';
+import { execSync, spawn, spawnSync } from 'node:child_process';
 import os from 'node:os';
 import path from 'node:path';
 import fs from 'node:fs';
+import https from 'node:https';
 
 // 旧版微信 COS 直链下载地址（客户降级用）。
 export const WECHAT_DOWNLOAD_URL =
@@ -238,6 +239,35 @@ export function checkWechatRunning(): CheckOutcome {
     ok: true,
     fixGuide: '微信未运行，请打开微信并登录，Agent 将在 30 秒内自动连接。',
   };
+}
+
+// ---------- 自动修复：下载工具 ----------
+
+export function downloadFile(url: string, dest: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const file = fs.createWriteStream(dest);
+    https
+      .get(url, (res) => {
+        res.pipe(file);
+        res.on('end', () => file.close(() => resolve()));
+        res.on('error', reject);
+      })
+      .on('error', reject);
+  });
+}
+
+// ---------- 自动修复：安装微信 ----------
+
+export async function installWeChat(downloadDir: string): Promise<void> {
+  const installer = path.join(downloadDir, 'WeChatWin_4.1.8.exe');
+  await downloadFile(WECHAT_DOWNLOAD_URL, installer);
+  // 腾讯自研包静默参数是 /S（不是 NSIS 的 /VERYSILENT）
+  spawnSync(installer, ['/S'], { windowsHide: true, timeout: 120_000 });
+  // 静默安装后微信会自动启动，关掉等用户手动登录
+  spawnSync('taskkill', ['/F', '/IM', 'WeChat.exe'], {
+    windowsHide: true,
+    stdio: 'ignore',
+  });
 }
 
 // 解析模块自带的 python-embedded/python.exe，否则回退系统 python（Windows 无 python3）。
