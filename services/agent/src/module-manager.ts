@@ -191,7 +191,17 @@ export class ModuleManager {
       }
 
       try {
-        if (this.needsDownload(lineId, requiredVersion)) {
+        const needsUpgrade = this.needsDownload(lineId, requiredVersion);
+        if (needsUpgrade) {
+          // 有新版本：先 kill 旧模块 fork，再下载，再激活新版
+          // 不 kill 则旧 fork 里的 index.js 会在 listen_chat 崩溃时自愈重启旧版本，
+          // 导致 syncModules 激活分支永远走不到（active.has = true）
+          const oldChild = this.active.get(lineId);
+          if (oldChild) {
+            this.log(`${lineId} 检测到新版本 ${requiredVersion}，终止旧模块进程`);
+            oldChild.kill();
+            this.active.delete(lineId);
+          }
           this.downloading.add(lineId);
           try {
             await this.downloadModule(

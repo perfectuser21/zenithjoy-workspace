@@ -266,4 +266,59 @@ describe('ModuleManager', () => {
       apiBase: 'https://api.zenithjoy.com',
     });
   });
+
+  it('syncModules 有新版本时先 kill 旧模块 fork 再激活新版（防崩溃自愈重启旧版）', async () => {
+    // 回归：旧模块 index.js fork 活着时 active.has=true → 跳过激活 → 旧 index.js 自愈重启旧 listen_chat.py
+    // 修复：needsDownload=true 时先 kill 旧 fork，确保新版本被激活
+
+    // 只建 1.0.7 目录（旧版已安装）；1.0.8 由 downloadImpl 创建，模拟真实下载
+    const oldDir = path.join(root, 'line04-wechat-cs-1.0.7');
+    fs.mkdirSync(oldDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(oldDir, 'manifest.json'),
+      JSON.stringify({ lineId: 'line04-wechat-cs', version: '1.0.7', entry: 'index.js' }),
+    );
+
+    const killSpy = vi.fn();
+    const oldChild = {
+      kill: killSpy,
+      on: vi.fn(),
+      send: vi.fn(),
+      connected: true,
+    } as unknown as import('node:child_process').ChildProcess;
+
+    const newChild = {
+      kill: vi.fn(),
+      on: vi.fn(),
+      send: vi.fn(),
+      connected: true,
+    } as unknown as import('node:child_process').ChildProcess;
+
+    const forkImpl = vi.fn().mockReturnValue(newChild);
+    // downloadImpl 模拟真实下载：实际创建 1.0.8 目录 + manifest + index.js
+    const downloadImpl = vi.fn().mockImplementation(async (_lineId: string, version: string, _url: string, destDir: string) => {
+      fs.mkdirSync(destDir, { recursive: true });
+      fs.writeFileSync(path.join(destDir, 'manifest.json'),
+        JSON.stringify({ lineId: 'line04-wechat-cs', version, entry: 'index.js' }));
+      fs.writeFileSync(path.join(destDir, 'index.js'), '');
+    });
+    const preflightImpl = vi.fn().mockResolvedValue({ ok: true });
+    const mm = new ModuleManager({ modulesRoot: root, forkImpl, downloadImpl, preflightImpl });
+
+    // 模拟 1.0.7 已激活：直接往 active map 写旧 child（绕过 syncModules 的安装检查）
+    // @ts-expect-error accessing private field for test setup
+    mm.active.set('line04-wechat-cs', oldChild);
+
+    // 现在心跳带 required_version=1.0.8 → 触发升级
+    await mm.syncModules({
+      'line04-wechat-cs': { status: 'active', required_version: '1.0.8' },
+    });
+
+    // 旧 fork 必须被 kill
+    expect(killSpy).toHaveBeenCalledTimes(1);
+    // 新版本必须被 fork（激活）
+    expect(forkImpl).toHaveBeenCalledTimes(1);
+    // 新版本在 active 列表
+    expect(mm.getActiveModules()).toContain('line04-wechat-cs');
+  });
 });
