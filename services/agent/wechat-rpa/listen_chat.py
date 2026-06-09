@@ -289,24 +289,32 @@ def _uia_send(uia_edit: Any, mw: Any, reply_text: str) -> bool:
     """
     import ctypes as _ct
     _u32 = _ct.windll.user32
-    # 微信4.1.x 主窗口类名 mmui::MainWindow：SetValue 接口已不写入文本，改剪贴板+WM_PASTE 路径。
-    # WM_PASTE(0x0302) 直接 Post 给编辑框，不需要 SetFocus/AttachThreadInput，不抢前台。
+    # 微信4.1.x 主窗口类名 mmui::MainWindow：先尝试剪贴板+WM_PASTE 路径（不抢前台）。
+    # WM_PASTE 后必须验证 get_value()：mmui 控件 handle=0 时 PostMessage 无声丢弃，
+    # 若输入框仍空则 fall-through 到 SetValue+AttachThreadInput 路径。
     if getattr(mw, 'element_info', None) and getattr(mw.element_info, 'class_name', '') == 'mmui::MainWindow':
+        edit_hwnd_raw = uia_edit.element_info.handle or mw.element_info.handle
+        _log(f"_uia_send: mmui::MainWindow edit_hwnd={edit_hwnd_raw} (0=主窗口回退，WM_PASTE 可能无效)")
         if _set_clipboard_text(reply_text):
             import ctypes as _ct2
             _u2 = _ct2.windll.user32
-            edit_hwnd = uia_edit.element_info.handle or mw.element_info.handle
-            VK_RETURN = 0x0D
             WM_PASTE = 0x0302
-            # 直接 Post WM_PASTE，无需 SetFocus/AttachThreadInput → 不抢前台
-            _u2.PostMessageW(edit_hwnd, WM_PASTE, 0, 0)
+            _u2.PostMessageW(edit_hwnd_raw, WM_PASTE, 0, 0)
             time.sleep(0.2)
-            _u2.PostMessageW(edit_hwnd, 0x0100, VK_RETURN, 0x001C0001)
-            time.sleep(0.05)
-            _u2.PostMessageW(edit_hwnd, 0x0101, VK_RETURN, 0xC01C0001)
-            time.sleep(0.3)
-            _log("_uia_send: mmui::MainWindow WM_PASTE 路径完成（不抢前台）")
-            return True
+            # 验证 WM_PASTE 是否真的写入文本（handle=0 时 PostMessage 无效，get_value 仍空）
+            try:
+                after_paste = uia_edit.get_value() or ""
+            except Exception:
+                after_paste = ""
+            if after_paste:
+                VK_RETURN = 0x0D
+                _u2.PostMessageW(edit_hwnd_raw, 0x0100, VK_RETURN, 0x001C0001)
+                time.sleep(0.05)
+                _u2.PostMessageW(edit_hwnd_raw, 0x0101, VK_RETURN, 0xC01C0001)
+                time.sleep(0.3)
+                _log("_uia_send: mmui::MainWindow WM_PASTE 路径完成（不抢前台）")
+                return True
+            _log(f"_uia_send: WM_PASTE 无效（get_value 为空，handle={edit_hwnd_raw}），fall-through→SetValue")
     _k32 = _ct.windll.kernel32
     SW_RESTORE = 9
     SW_MINIMIZE = 6
