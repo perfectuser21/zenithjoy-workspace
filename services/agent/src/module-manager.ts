@@ -356,7 +356,11 @@ export class ModuleManager {
       throw new Error(`module ${lineId} 入口不存在：${entryPath}`);
     }
 
-    const child = (this.opts.forkImpl ?? fork)(entryPath, { cwd: moduleDir });
+    const coreDir = path.dirname(process.execPath);
+    const child = (this.opts.forkImpl ?? fork)(entryPath, {
+      cwd: moduleDir,
+      env: { ...process.env, ZENITHJOY_CORE_DIR: coreDir },
+    });
     this.active.set(lineId, child);
 
     child.on('message', (msg: unknown) => {

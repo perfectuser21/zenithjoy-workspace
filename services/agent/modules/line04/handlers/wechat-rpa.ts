@@ -14,9 +14,16 @@ export function getModuleRoot(): string {
 }
 
 // 测试用导出：允许注入 baseDir；bundled 模块含 python-embedded/python.exe。
+// 若模块目录无 python-embedded，从 ZENITHJOY_CORE_DIR 找 core Agent 的 python-embedded。
 export function getPythonExeForTest(baseDir: string): string {
   const embedded = path.join(baseDir, 'python-embedded', 'python.exe');
-  return fs.existsSync(embedded) ? embedded : 'python3';
+  if (fs.existsSync(embedded)) return embedded;
+  const coreDir = process.env.ZENITHJOY_CORE_DIR;
+  if (coreDir) {
+    const coreEmbedded = path.join(coreDir, 'python-embedded', 'python.exe');
+    if (fs.existsSync(coreEmbedded)) return coreEmbedded;
+  }
+  return process.platform === 'win32' ? 'python' : 'python3';
 }
 
 function getPythonExe(): string {
