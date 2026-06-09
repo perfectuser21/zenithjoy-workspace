@@ -58,7 +58,7 @@ jobs:
         working-directory: services/agent
         shell: pwsh
         env:
-          DOUYIN_COOKIES: ${{ secrets.DOUYIN_COOKIES }}
+          DOUYIN_COOKIES: ${{ secrets.DOUYIN_OPERATOR_SESSION }}
           SCREENSHOT_DIR: ${{ github.workspace }}\screenshots
         run: |
           node publishers/douyin-publisher/publish-douyin-article-dryrun.cjs "$env:GITHUB_WORKSPACE\queue.json"

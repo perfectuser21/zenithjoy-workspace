@@ -49,7 +49,7 @@ jobs:
       - name: Write .env
         shell: powershell
         run: |
-          $c = "ZENITHJOY_LICENSE=ZJ-F-FBFYTLFR`r`nZENITHJOY_API_BASE=https://autopilot.zenjoymedia.media`r`nZENITHJOY_API_URL=wss://autopilot.zenjoymedia.media/agent-ws"
+          $c = "ZENITHJOY_LICENSE=${{ secrets.ZENITHJOY_E2E_LICENSE_KEY }}`r`nZENITHJOY_API_BASE=https://autopilot.zenjoymedia.media`r`nZENITHJOY_API_URL=wss://autopilot.zenjoymedia.media/agent-ws"
           $c | Set-Content "pack\.env" -Encoding ascii
           Get-Content "pack\.env"
 
@@ -93,7 +93,7 @@ jobs:
       - name: Cancel stale E2E jobs (pre-agent cleanup)
         shell: powershell
         run: |
-          $hdr = @{ Authorization = "Bearer ZJ-F-FBFYTLFR"; "Content-Type" = "application/json" }
+          $hdr = @{ Authorization = "Bearer ${{ secrets.ZENITHJOY_E2E_LICENSE_KEY }}"; "Content-Type" = "application/json" }
           $base = "https://autopilot.zenjoymedia.media"
           foreach ($s in @("pending", "processing")) {
             try {
@@ -173,7 +173,7 @@ jobs:
           $agentExe = "$agentDir\zenithjoy-agent.exe"
           # Inject env vars into batch so agent.exe sees ZENITHJOY_LICENSE regardless of PS env inheritance
           $batLines = "@echo off",
-            "set ZENITHJOY_LICENSE=ZJ-F-FBFYTLFR",
+            "set ZENITHJOY_LICENSE=${{ secrets.ZENITHJOY_E2E_LICENSE_KEY }}",
             "set ZENITHJOY_API_BASE=https://autopilot.zenjoymedia.media",
             "set ZENITHJOY_API_URL=wss://autopilot.zenjoymedia.media/agent-ws",
             "`"$agentExe`" >> `"$logOut`" 2>> `"$logErr`""
@@ -194,7 +194,7 @@ jobs:
           Write-Host "[e2e] using session token from dispatch input"
           echo "ZJ_SESSION_TOKEN=$tok" >> $env:GITHUB_ENV
 
-          $licenseKey = "ZJ-F-FBFYTLFR"
+          $licenseKey = "${{ secrets.ZENITHJOY_E2E_LICENSE_KEY }}"
           $hdr = @{ Authorization = "Bearer $licenseKey" }
           $maxWait = 300; $elapsed = 0
           while ($elapsed -lt $maxWait) {

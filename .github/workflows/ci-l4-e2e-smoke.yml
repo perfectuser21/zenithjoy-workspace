@@ -455,8 +455,8 @@ jobs:
       NODE_ENV: test
       APPS_API_BASE: http://localhost:5200
       CREATOR_PIPELINE_API: http://localhost:5200
-      BRAIN_URL: http://localhost:19999       # 不存在 → can_run fallback
-      CECELIA_BRAIN_URL: http://localhost:19999
+      BRAIN_URL: ${{ secrets.BRAIN_URL || '' }}
+      CECELIA_BRAIN_URL: ${{ secrets.BRAIN_URL || '' }}
       CONTENT_OUTPUT_DIR: /tmp/ci-content-output
       DEFAULT_NOTEBOOK_ID: ''
       E2E_FAKE_EXECUTORS: 'true'
