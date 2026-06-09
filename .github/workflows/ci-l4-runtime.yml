@@ -121,6 +121,13 @@ jobs:
       - name: Run tests (src/ only — publishers require Chrome CDP not available in CI)
         working-directory: services/agent
         run: npx vitest run src/
+      - name: Check build-modules/line04/wechat-rpa in sync with source
+        run: |
+          diff -r services/agent/wechat-rpa/ \
+               services/agent/build-modules/line04/wechat-rpa/ \
+               --exclude="*.pyc" --exclude="__pycache__" && \
+            echo "build-modules in sync" || \
+            (echo "build-modules diverged from source! Run: rsync -av services/agent/wechat-rpa/ services/agent/build-modules/line04/wechat-rpa/" && exit 1)
 
   # ─── L4 Gate ──────────────────────────────────────────────────────────
   l4-passed:

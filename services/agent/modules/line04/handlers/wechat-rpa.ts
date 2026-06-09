@@ -170,7 +170,10 @@ export function startWechatListener(apiBase: string, agentId?: string): void {
       console.warn(
         `[wechat-rpa] listen_chat.py 退出(code=${code})，${LISTENER_RESTART_DELAY_MS / 1000}s 后自动重启（崩溃自愈）`,
       );
-      setTimeout(spawnOnce, LISTENER_RESTART_DELAY_MS).unref?.();
+      setTimeout(() => {
+        _listenerKillFuncs.killExistingListeners();
+        spawnOnce();
+      }, LISTENER_RESTART_DELAY_MS).unref?.();
     });
     child.on('error', (err) => {
       console.warn('[wechat-rpa] listen_chat.py 启动失败:', err);

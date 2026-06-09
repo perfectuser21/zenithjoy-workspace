@@ -170,7 +170,7 @@ export function checkWechatVersion(): CheckOutcome {
 // 检测 2：pywinauto 可 import。spawn python -c "import pywinauto"，退出码 0 = 通过。
 // MOCK_WECHAT_VERSION 设置时进入 CI mock 模式，跳过此检测（与非 Windows 行为一致）。
 export function checkPywinauto(pythonPath: string): Promise<CheckOutcome> {
-  if (process.platform !== 'win32' || process.env.MOCK_WECHAT_VERSION) {
+  if (process.platform !== 'win32' || process.env.MOCK_WECHAT_VERSION || process.env.MOCK_PYWINAUTO_OK) {
     return Promise.resolve({ ok: true, skipped: true });
   }
   return new Promise<CheckOutcome>((resolve) => {
