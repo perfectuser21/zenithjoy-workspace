@@ -72,3 +72,85 @@ describe('agent loadOrInitConfig — Sprint 2.1f Fix 6 envOrConfig', () => {
     expect(() => mod.loadOrInitConfig()).toThrowError(/ZENITHJOY_LICENSE|install pack|.env/i);
   });
 });
+
+// ── 回归测试：agentId 持久化——同机器每次重启必须复用同一个 agentId ──
+// 背景：start.bat 始终注入 ZENITHJOY_LICENSE env var → Priority 1 路径每次生成新
+//       agent-env-XXXX → Dashboard 同一台机器累积多条客户端条目。
+// 修法：Priority 1 路径先读 config.json；有同 license 的记录则复用 agentId；
+//       没有则生成新 ID 并写入 config.json 供下次复用。
+describe('agent loadOrInitConfig — agentId 持久化回归（同机多次启动稳定 ID）', () => {
+  const ENV_VARS_TO_RESTORE = ['ZENITHJOY_LICENSE', 'ZENITHJOY_API_URL', 'APPDATA', 'HOME'];
+  const original: Record<string, string | undefined> = {};
+  let tmpDir: string;
+
+  beforeEach(() => {
+    ENV_VARS_TO_RESTORE.forEach((k) => (original[k] = process.env[k]));
+    delete process.env.ZENITHJOY_LICENSE;
+    delete process.env.ZENITHJOY_API_URL;
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'zj-persist-test-'));
+    process.env.APPDATA = tmpDir;
+    process.env.HOME = tmpDir;
+    vi.resetModules();
+  });
+
+  afterEach(() => {
+    ENV_VARS_TO_RESTORE.forEach((k) => {
+      if (original[k] === undefined) delete process.env[k];
+      else process.env[k] = original[k];
+    });
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it('同 license 的 config.json 已存在时，复用其 agentId（稳定 ID，不每次生成新的）', async () => {
+    process.env.ZENITHJOY_LICENSE = 'ZJ-F-STABLE';
+    const cfgDir = path.join(tmpDir, 'zenithjoy-agent');
+    fs.mkdirSync(cfgDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(cfgDir, 'config.json'),
+      JSON.stringify({
+        licenseKey: 'ZJ-F-STABLE',
+        agentId: 'agent-stable-001',
+        apiUrl: 'wss://api.test.com/agent-ws',
+        loggedInAt: 0,
+      })
+    );
+
+    const mod = await import('../config-loader');
+    const cfg = mod.loadOrInitConfig();
+
+    expect(cfg.agentId).toBe('agent-stable-001');
+  });
+
+  it('config.json 不存在时，首次启动后自动写入 config.json（下次重启可复用 agentId）', async () => {
+    process.env.ZENITHJOY_LICENSE = 'ZJ-F-NEWINSTALL';
+    const cfgFile = path.join(tmpDir, 'zenithjoy-agent', 'config.json');
+
+    const mod = await import('../config-loader');
+    const cfg = mod.loadOrInitConfig();
+
+    expect(fs.existsSync(cfgFile)).toBe(true);
+    const saved = JSON.parse(fs.readFileSync(cfgFile, 'utf-8'));
+    expect(saved.agentId).toBe(cfg.agentId);
+    expect(saved.licenseKey).toBe('ZJ-F-NEWINSTALL');
+  });
+
+  it('license 变更时生成新 agentId（不复用旧 license 对应的 ID）', async () => {
+    process.env.ZENITHJOY_LICENSE = 'ZJ-F-NEWLICENSE';
+    const cfgDir = path.join(tmpDir, 'zenithjoy-agent');
+    fs.mkdirSync(cfgDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(cfgDir, 'config.json'),
+      JSON.stringify({
+        licenseKey: 'ZJ-F-OLDLICENSE',
+        agentId: 'agent-old-should-not-reuse',
+        apiUrl: 'wss://api.test.com/agent-ws',
+        loggedInAt: 0,
+      })
+    );
+
+    const mod = await import('../config-loader');
+    const cfg = mod.loadOrInitConfig();
+
+    expect(cfg.agentId).not.toBe('agent-old-should-not-reuse');
+  });
+});
