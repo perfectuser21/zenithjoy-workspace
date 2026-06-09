@@ -283,8 +283,8 @@ def _uia_send(uia_edit: Any, mw: Any, reply_text: str) -> bool:
     发送策略（后台静默，纯 UIA 路径）。
     SKILL: wechat-uia-silent-send — 改此函数前必须调用该 skill，禁止剪贴板路径。
     1. SetValue 写值 + SW_SHOWNA 还原（不抢焦点）+ AttachThreadInput + PostMessageW(Enter)
-    2. 兜底：SW_RESTORE + 发送按钮 Invoke
-    成功返回 True。全程禁止 keybd_event / mouse_event / _set_clipboard_text（全局事件或剪贴板路径，后台会话必失败）。
+    2. 兜底：发送按钮 iface_invoke.Invoke()（UIA 调用，不拉前台，绝对禁止 SW_RESTORE）
+    成功返回 True。全程禁止 keybd_event / mouse_event / _set_clipboard_text / SW_RESTORE（全局事件或前台激活，后台会话必失败）。
     """
     import ctypes as _ct
     _u32 = _ct.windll.user32
@@ -326,9 +326,8 @@ def _uia_send(uia_edit: Any, mw: Any, reply_text: str) -> bool:
                 _u32.ShowWindow(main_hwnd, SW_MINIMIZE)
             _log("_uia_send: AttachInput+Enter 成功（后台静默）")
             return True
-        _log(f"_uia_send: Enter未清空({len(remaining)}字)，回退SW_RESTORE+Invoke")
-        _u32.ShowWindow(main_hwnd, SW_RESTORE)
-        time.sleep(0.3)
+        _log(f"_uia_send: Enter未清空({len(remaining)}字)，Invoke兜底（禁止SW_RESTORE，不拉前台）")
+        # SW_SHOWNA 已展开窗口；UIA Invoke 不依赖前台焦点，绝对禁止 SW_RESTORE
         btn = _find_send_button(mw)
         if btn is not None:
             btn.iface_invoke.Invoke()
@@ -340,9 +339,9 @@ def _uia_send(uia_edit: Any, mw: Any, reply_text: str) -> bool:
             if not remaining2:
                 if was_minimized:
                     _u32.ShowWindow(main_hwnd, SW_MINIMIZE)
-                _log("_uia_send: SW_RESTORE+Invoke 成功（兜底）")
+                _log("_uia_send: Invoke兜底成功（后台静默，无前台激活）")
                 return True
-            _log(f"_uia_send: SW_RESTORE+Invoke 失败（输入框仍有{len(remaining2)}字）")
+            _log(f"_uia_send: Invoke兜底失败（输入框仍有{len(remaining2)}字）")
         return False
     except Exception as exc:
         _log(f"_uia_send: {exc}")
