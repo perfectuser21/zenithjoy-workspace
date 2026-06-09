@@ -270,6 +270,22 @@ export async function installWeChat(downloadDir: string): Promise<void> {
   });
 }
 
+// ---------- 自动修复：安装 pywinauto ----------
+
+export const GET_PIP_URL = 'https://bootstrap.pypa.io/get-pip.py';
+export const PIP_INDEX_URL = 'https://pypi.tuna.tsinghua.edu.cn/simple/';
+
+export async function installPywinauto(pythonPath: string, downloadDir: string): Promise<void> {
+  const getPipScript = path.join(downloadDir, 'get-pip.py');
+  await downloadFile(GET_PIP_URL, getPipScript);
+  spawnSync(pythonPath, [getPipScript, '--quiet'], { windowsHide: true, timeout: 60_000 });
+  spawnSync(
+    pythonPath,
+    ['-m', 'pip', 'install', 'pywinauto', '--quiet', '--index-url', PIP_INDEX_URL],
+    { windowsHide: true, timeout: 120_000 },
+  );
+}
+
 // 解析模块自带的 python-embedded/python.exe，否则回退系统 python（Windows 无 python3）。
 // 回退顺序：1) 模块自带 python-embedded  2) ZENITHJOY_CORE_DIR/python-embedded  3) 系统 python
 export function getModulePython(moduleDir: string): string {

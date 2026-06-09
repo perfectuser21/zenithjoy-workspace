@@ -250,3 +250,52 @@ describe('installWeChat — 下载并静默安装微信 4.1.8', () => {
     expect(allArgs.some((a) => a.includes('taskkill') && a.includes('wechat.exe'))).toBe(true);
   });
 });
+
+describe('installPywinauto — get-pip + pip install 清华源', () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it('先运行 get-pip.py 再 pip install pywinauto', async () => {
+    vi.spyOn(https, 'get').mockImplementation((_url: any, cb: any) => {
+      const fakeRes = {
+        pipe: vi.fn(),
+        on: (ev: string, fn: () => void) => { if (ev === 'end') fn(); return fakeRes; },
+      } as any;
+      setImmediate(() => cb(fakeRes));
+      return { on: vi.fn() } as any;
+    });
+    vi.spyOn(fs, 'createWriteStream').mockReturnValue({
+      on: (_ev: string, fn: () => void) => { fn(); return {}; },
+      close: (fn: () => void) => fn(),
+    } as any);
+
+    const spawnSyncMock = vi.spyOn(childProcessModule, 'spawnSync').mockReturnValue({ status: 0 } as any);
+
+    await installPywinauto('python.exe', os.tmpdir());
+
+    const allArgs = spawnSyncMock.mock.calls.map((c) => [c[0], ...(c[1] ?? [])].join(' '));
+    expect(allArgs.some((a) => a.includes('get-pip.py'))).toBe(true);
+    expect(allArgs.some((a) => a.includes('pywinauto'))).toBe(true);
+  });
+
+  it('pip install 使用清华镜像源', async () => {
+    vi.spyOn(https, 'get').mockImplementation((_url: any, cb: any) => {
+      const fakeRes = {
+        pipe: vi.fn(),
+        on: (ev: string, fn: () => void) => { if (ev === 'end') fn(); return fakeRes; },
+      } as any;
+      setImmediate(() => cb(fakeRes));
+      return { on: vi.fn() } as any;
+    });
+    vi.spyOn(fs, 'createWriteStream').mockReturnValue({
+      on: (_ev: string, fn: () => void) => { fn(); return {}; },
+      close: (fn: () => void) => fn(),
+    } as any);
+
+    const spawnSyncMock = vi.spyOn(childProcessModule, 'spawnSync').mockReturnValue({ status: 0 } as any);
+
+    await installPywinauto('python.exe', os.tmpdir());
+
+    const pipCall = spawnSyncMock.mock.calls.find((c) => (c[1] ?? []).includes('pywinauto'));
+    expect((pipCall?.[1] ?? []).join(' ')).toContain('tuna.tsinghua.edu.cn');
+  });
+});
