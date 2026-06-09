@@ -29,7 +29,7 @@ export function handleConfig(cfg: ModuleConfig, send: Send): void {
   state.ready = true;
   // Windows 上拉起 listen_chat.py 常驻监听；非 Windows 内部自动跳过。
   if (cfg.apiBase) {
-    startWechatListener(cfg.apiBase);
+    startWechatListener(cfg.apiBase, cfg.agentId || undefined);
   }
   send({ type: 'ready' });
 }

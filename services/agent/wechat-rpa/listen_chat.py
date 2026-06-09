@@ -281,45 +281,31 @@ def _set_clipboard_text(text: str) -> bool:
 def _uia_send(uia_edit: Any, mw: Any, reply_text: str) -> bool:
     """
     发送策略（后台静默，纯 UIA 路径）：
-    0. 微信4.1.x mmui::MainWindow：SetValue 已失效，改用剪贴板粘贴路径
+    0. 微信4.1.x mmui::MainWindow：SetValue 已失效，改用剪贴板+WM_PASTE 路径
+       WM_PASTE(0x0302) 直发编辑框，无需 SetFocus/AttachThreadInput → 不抢前台
     1. SetValue 写值 + SW_SHOWNA 还原（不抢焦点）+ AttachThreadInput + PostMessageW(Enter)
     2. 兜底：SW_RESTORE + 发送按钮 Invoke
     成功返回 True。全程禁止 keybd_event / mouse_event（全局事件，后台会话必失败）。
     """
     import ctypes as _ct
     _u32 = _ct.windll.user32
-    # 微信4.1.x 主窗口类名 mmui::MainWindow：SetValue 接口已不写入文本，改剪贴板+Ctrl+V 路径
+    # 微信4.1.x 主窗口类名 mmui::MainWindow：SetValue 接口已不写入文本，改剪贴板+WM_PASTE 路径。
+    # WM_PASTE(0x0302) 直接 Post 给编辑框，不需要 SetFocus/AttachThreadInput，不抢前台。
     if getattr(mw, 'element_info', None) and getattr(mw.element_info, 'class_name', '') == 'mmui::MainWindow':
         if _set_clipboard_text(reply_text):
             import ctypes as _ct2
             _u2 = _ct2.windll.user32
-            main_hwnd = mw.element_info.handle
-            edit_hwnd = uia_edit.element_info.handle or main_hwnd
-            was_minimized = bool(_u2.IsIconic(main_hwnd))
-            VK_CONTROL = 0x11
-            VK_V = 0x56
+            edit_hwnd = uia_edit.element_info.handle or mw.element_info.handle
             VK_RETURN = 0x0D
-            if was_minimized:
-                _u2.ShowWindow(main_hwnd, 8)  # SW_SHOWNA
-                time.sleep(0.3)
-            pid_buf = _ct2.c_ulong(0)
-            wx_tid = _u2.GetWindowThreadProcessId(edit_hwnd, _ct2.byref(pid_buf))
-            _u2.AttachThreadInput(_ct2.windll.kernel32.GetCurrentThreadId(), wx_tid, True)
-            _u2.SetFocus(edit_hwnd)
-            time.sleep(0.1)
-            _u2.PostMessageW(edit_hwnd, 0x0100, VK_CONTROL, 0)
-            _u2.PostMessageW(edit_hwnd, 0x0100, VK_V, 0)
-            _u2.PostMessageW(edit_hwnd, 0x0101, VK_V, 0)
-            _u2.PostMessageW(edit_hwnd, 0x0101, VK_CONTROL, 0)
-            time.sleep(0.3)
+            WM_PASTE = 0x0302
+            # 直接 Post WM_PASTE，无需 SetFocus/AttachThreadInput → 不抢前台
+            _u2.PostMessageW(edit_hwnd, WM_PASTE, 0, 0)
+            time.sleep(0.2)
             _u2.PostMessageW(edit_hwnd, 0x0100, VK_RETURN, 0x001C0001)
             time.sleep(0.05)
             _u2.PostMessageW(edit_hwnd, 0x0101, VK_RETURN, 0xC01C0001)
-            _u2.AttachThreadInput(_ct2.windll.kernel32.GetCurrentThreadId(), wx_tid, False)
-            time.sleep(0.4)
-            if was_minimized:
-                _u2.ShowWindow(main_hwnd, 6)  # SW_MINIMIZE
-            _log("_uia_send: mmui::MainWindow 剪贴板粘贴路径完成")
+            time.sleep(0.3)
+            _log("_uia_send: mmui::MainWindow WM_PASTE 路径完成（不抢前台）")
             return True
     _k32 = _ct.windll.kernel32
     SW_RESTORE = 9

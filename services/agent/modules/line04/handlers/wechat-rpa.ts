@@ -98,14 +98,17 @@ const LISTENER_TIMEOUT_SEC = 86400;
 // 监听进程退出/崩溃后重启间隔（崩溃自愈，无需外部 watchdog / 计划任务）
 const LISTENER_RESTART_DELAY_MS = 30_000;
 
-// 测试用导出：构造 listen_chat.py 的 spawn 参数（含持久 --timeout，防"5分钟死"回归）
-export function buildListenerSpawnArgs(script: string, apiBase: string): string[] {
-  return [script, '--middleware-url', apiBase, '--timeout', String(LISTENER_TIMEOUT_SEC)];
+// 测试用导出：构造 listen_chat.py 的 spawn 参数（含持久 --timeout，防"5分钟死"回归）。
+// agentId 传入时追加 --agent-id，listen_chat.py 用它上报心跳 → Dashboard 显示机器名而非"未知客户端"。
+export function buildListenerSpawnArgs(script: string, apiBase: string, agentId?: string): string[] {
+  const args = [script, '--middleware-url', apiBase, '--timeout', String(LISTENER_TIMEOUT_SEC)];
+  if (agentId) args.push('--agent-id', agentId);
+  return args;
 }
 
 // Windows only：模块激活时自动拉起 listen_chat.py 持续监听微信消息。
 // 持久（timeout 86400）+ 崩溃自愈（退出后 30s 自动重启），随模块生命周期常驻。
-export function startWechatListener(apiBase: string): void {
+export function startWechatListener(apiBase: string, agentId?: string): void {
   if (process.platform !== 'win32') {
     console.log('[wechat-rpa] 非 Windows，跳过 listen_chat 自启');
     return;
@@ -113,7 +116,7 @@ export function startWechatListener(apiBase: string): void {
   const script = path.join(getModuleRoot(), 'wechat-rpa', 'listen_chat.py');
 
   const spawnOnce = (): void => {
-    const child = spawn(getPythonExe(), buildListenerSpawnArgs(script, apiBase), {
+    const child = spawn(getPythonExe(), buildListenerSpawnArgs(script, apiBase, agentId), {
       detached: false,
       stdio: ['ignore', 'pipe', 'pipe'] as const,
       windowsHide: true,
