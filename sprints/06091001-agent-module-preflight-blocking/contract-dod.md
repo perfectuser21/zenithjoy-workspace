@@ -33,6 +33,12 @@ target_environment: windows_cloud
 - [ ] [ARTIFACT] `services/agent/wechat-rpa/tests/test_preflight_lock.py` 新建（含四层锁 + 降级路径 pytest）
   Test: node -e "require('fs').accessSync('services/agent/wechat-rpa/tests/test_preflight_lock.py');console.log('OK')"
 
+- [ ] [ARTIFACT] `apps/dashboard/e2e/module-health-access.spec.ts` 新建（mac_web Playwright failing spec，commit-1 红锚点）
+  Test: node -e "const c=require('fs').readFileSync('apps/dashboard/e2e/module-health-access.spec.ts','utf8');if(!c.includes('module-health'))process.exit(1);if(!c.includes('test('))process.exit(1);console.log('OK')"
+
+- [ ] [ARTIFACT] `apps/dashboard/e2e/line04-preflight-card.spec.ts` 新建（mac_web Playwright failing spec，commit-1 红锚点）
+  Test: node -e "const c=require('fs').readFileSync('apps/dashboard/e2e/line04-preflight-card.spec.ts','utf8');if(!c.includes('Line04PreflightCard'))process.exit(1);if(!c.includes('test('))process.exit(1);console.log('OK')"
+
 ---
 
 ## BEHAVIOR 条目
@@ -127,7 +133,7 @@ print(\"OK\")
 
 ---
 
-## 自查 checklist 执行结果（Round 2）
+## 自查 checklist 执行结果（Round 3）
 
 1. **Response Schema 字段**: N/A（无新端点）→ Reviewer 第6维自动满分 ✅
 2. **jq -e 字段对齐**: N/A → ✅
@@ -153,4 +159,4 @@ print(\"OK\")
    - BEHAVIOR 6 用 unittest.mock.patch 是单元测试标准做法，不绕过 preflight 自身逻辑 ✅
 8. **target_environment 路由**: PRD 显式 windows_cloud，理由已在 contract-draft.md 说明 ✅
 9. **TS/Python 分离**: agent-module-e2e.yml 测 TS preflight.ts；新 workflow 测 Python preflight.py；无对齐风险 ✅
-10. **B50 净变化**: Round 2 新增 Step 1b + Risks段 + test_preflight_lock.py + paths:配置说明；无冗余内容删除。Round 1 所有内容均有 PRD 依据，新增均为 Reviewer 指出的真实覆盖缺口 ✅
+10. **B50 净变化（Round 3）**: 修复三处 Reviewer 问题：① Step3/E2E-3 加 1 行正向断言；② Step6/E2E-6 bash→PowerShell 重写；③ Test Contract 加 2 行 Playwright spec 锚点 + ARTIFACT 加 2 条。净增约 20 行，全部为 PRD 显式要求的真实覆盖缺口，无冗余 ✅

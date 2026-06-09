@@ -1,4 +1,4 @@
-# Sprint Contract Draft (Round 2)
+# Sprint Contract Draft (Round 3)
 
 ## Response Schema（推导来源: N/A）
 
@@ -192,6 +192,9 @@ if ($proc.ExitCode -eq 0) { throw "FAIL: start.bat 应返回非 0（blocking）�
 if ($out -match "continuing to start agent") {
     throw "FAIL: start.bat 仍输出 'continuing to start agent'（blocking 未生效）"
 }
+if (-not ($out -match 'FAIL|preflight|失败')) {
+    throw "FAIL: start.bat 未输出失败描述（cmd 窗口应含 'FAIL' 或 'preflight' 等失败项说明）"
+}
 Write-Host "✅ Step3 PASS: start.bat blocking exit=$($proc.ExitCode)"
 ```
 
@@ -260,12 +263,17 @@ console.log('✅ Step5 PASS: Line04PreflightCard 已实现并被页面引用');
 
 **可观测行为**: preflight.py --dry-run 在 CI 环境（非 Windows，elevation/wechat_* 为 warn 非 failed）exit code = 0
 
-**验证命令**:
-```bash
-python services/agent/wechat-rpa/preflight.py --dry-run
-EXIT_CODE=$?
-[ "$EXIT_CODE" -eq 0 ] || { echo "FAIL: preflight --dry-run exit=$EXIT_CODE（有 failed 项）"; exit 1; }
-echo "✅ Step6 PASS: preflight --dry-run exit=0"
+**验证命令**（PowerShell，与 e2e-verify.ps1 E2E-6 一致）:
+```powershell
+$env:PUBLIC = $env:TEMP
+$dryRunProc = Start-Process -FilePath "python" `
+    -ArgumentList "services\agent\wechat-rpa\preflight.py", "--dry-run" `
+    -WorkingDirectory $RepoRoot `
+    -Wait -PassThru -NoNewWindow
+if ($dryRunProc.ExitCode -ne 0) {
+    throw "FAIL: preflight --dry-run 返回 exit=$($dryRunProc.ExitCode)（含 failed 项）"
+}
+Write-Host "✅ Step6 PASS: preflight --dry-run exit=0"
 ```
 
 **硬阈值**: exit code = 0
@@ -431,6 +439,9 @@ if ($proc.ExitCode -eq 0) { throw "FAIL: E2E-3 start.bat 应返回非 0（blocki
 if ($out -match "continuing to start agent") {
     throw "FAIL: E2E-3 start.bat 仍输出 'continuing to start agent'"
 }
+if (-not ($out -match 'FAIL|preflight|失败')) {
+    throw "FAIL: E2E-3 start.bat 未输出失败描述（cmd 窗口应含 'FAIL' 或 'preflight' 等失败项说明）"
+}
 Write-Host "✅ E2E-3 PASS: blocking exit=$($proc.ExitCode)"
 
 # ─── E2E-4: navigation.config.ts 无 requireSuperAdmin ────────────────────────
@@ -467,11 +478,23 @@ console.log('OK');
 if ($LASTEXITCODE -ne 0) { throw "FAIL: E2E-5 组件验证失败" }
 Write-Host "✅ E2E-5 PASS"
 
+# ─── E2E-6: preflight --dry-run 全通路径（成功路径入口） ─────────────────────────
+Write-Host "`n▶ E2E-6: preflight --dry-run 全通路径（exit 0）..."
+$env:PUBLIC = $env:TEMP
+$dryRunProc = Start-Process -FilePath "python" `
+    -ArgumentList "$RepoRoot\services\agent\wechat-rpa\preflight.py", "--dry-run" `
+    -WorkingDirectory $RepoRoot `
+    -Wait -PassThru -NoNewWindow
+if ($dryRunProc.ExitCode -ne 0) {
+    throw "FAIL: E2E-6 preflight --dry-run 返回 exit=$($dryRunProc.ExitCode)（含 failed 项未预期）"
+}
+Write-Host "✅ E2E-6 PASS: preflight --dry-run exit=0"
+
 Write-Host "`n=== ✅ 全部 E2E 验证通过 (preflight-hardening) ==="
 exit 0
 ```
 
-**PASS 标准**: 脚本 exit 0 + 全部 6 个 E2E 步骤（含 E2E-1b 降级路径）通过
+**PASS 标准**: 脚本 exit 0 + 全部 7 个 E2E 步骤（E2E-1、E2E-1b、E2E-2、E2E-3、E2E-4、E2E-5、E2E-6）全部通过
 **FAIL 标准**: 任意步骤 throw 或 exit ≠ 0
 **GHA workflow**: 新建 `.github/workflows/agent-preflight-hardening-e2e.yml`（`workflow_dispatch` + `windows-latest`，管理员权限，含 `paths:` 触发条件）
 
@@ -484,3 +507,5 @@ exit 0
 | Line04PreflightCard 组件 | `tests/line04-preflight-card.test.tsx` | fetchModuleHealth 调用、无数据提示、ok 渲染 | 组件文件不存在 → 3 failures |
 | /module-health 无超管限制 | `tests/navigation-module-health.test.ts` | requireSuperAdmin 已从 /module-health 移除 | 当前 requireSuperAdmin:true → 1 failure |
 | 四层锁扩展 + 降级路径 | `tests/test_preflight_lock.py`（新） | Layer2 icacls DENY / Layer3 域名封禁 / Layer4 AutoUpdate=0 / 4.1.9 降级检测 | windows-latest: Layer2~4 各 1 failure（现有代码无此三层）；降级路径测试因代码已存在而 PASS（覆盖补缺） |
+| Dashboard /module-health 普通账号访问 | `apps/dashboard/e2e/module-health-access.spec.ts`（mac_web Playwright） | 普通账号登录后访问 /module-health 页面不被 403/重定向拒绝 | Generator commit-1 须创建此 failing spec 文件（E2E-First 红锚点）；mac_web 环境运行，windows_cloud e2e-verify.ps1 不执行此 spec |
+| Dashboard Line04PreflightCard 渲染 | `apps/dashboard/e2e/line04-preflight-card.spec.ts`（mac_web Playwright） | WechatCustomerServiceConfigPage 顶部 Line04PreflightCard 组件可见（含 ✅/❌/无数据提示） | Generator commit-1 须创建此 failing spec 文件（E2E-First 红锚点）；mac_web 环境运行，windows_cloud e2e-verify.ps1 不执行此 spec |

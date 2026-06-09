@@ -18,7 +18,10 @@
         "[ARTIFACT] services/agent/install-pack/start.bat preflight 段含 exit /b 1（blocking）",
         "[ARTIFACT] apps/dashboard/src/components/Line04PreflightCard.tsx 新建",
         "[ARTIFACT] .github/workflows/agent-preflight-hardening-e2e.yml 新建（windows-latest，含 paths: 触发条件）",
-        "[ARTIFACT] services/agent/wechat-rpa/tests/test_preflight_lock.py 新建（四层锁 + 降级路径 pytest）"
+        "[ARTIFACT] services/agent/wechat-rpa/tests/test_preflight_lock.py 新建（四层锁 + 降级路径 pytest）",
+        "[ARTIFACT] apps/dashboard/e2e/module-health-access.spec.ts 新建（mac_web Playwright failing spec，commit-1 红锚点）",
+        "[ARTIFACT] apps/dashboard/e2e/line04-preflight-card.spec.ts 新建（mac_web Playwright failing spec，commit-1 红锚点）",
+        "[BEHAVIOR] start.bat preflight 失败时 cmd 输出含失败描述（含 'FAIL' 或 'preflight' 关键词）"
       ],
       "files": [
         "services/agent/wechat-rpa/preflight.py",
@@ -28,6 +31,8 @@
         "apps/dashboard/src/pages/WechatCustomerServiceConfigPage.tsx",
         ".github/workflows/agent-preflight-hardening-e2e.yml",
         "services/agent/wechat-rpa/tests/test_preflight_lock.py",
+        "apps/dashboard/e2e/module-health-access.spec.ts",
+        "apps/dashboard/e2e/line04-preflight-card.spec.ts",
         "sprints/06091001-agent-module-preflight-blocking/e2e-verify.ps1"
       ],
       "depends_on": [],
