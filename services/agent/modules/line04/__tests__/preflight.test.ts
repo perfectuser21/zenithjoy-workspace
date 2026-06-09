@@ -24,8 +24,6 @@ import {
   autoRepair,
   _repairFuncs,
 } from '../preflight';
-import * as preflightModule from '../preflight';
-
 // checkWechatRunning 使用 node:child_process execSync，用 vi.mock 提升 mock（ESM 限制）
 vi.mock('node:child_process', async (importOriginal) => {
   const actual = await importOriginal<typeof import('node:child_process')>();
