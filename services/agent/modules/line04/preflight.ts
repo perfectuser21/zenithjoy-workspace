@@ -373,12 +373,6 @@ export async function runPreflight(moduleDir?: string): Promise<ModulePreflightR
     };
   }
 
-  // version-only warning：仅 wechat_version 失败（pywinauto + memory 均通过）→ ok:true
-  // 不带 fixGuide：版本错时"微信未运行"提示无意义（E2E 断言 has("fixGuide")|not）
-  if (!wechat.ok && pyw.ok && mem.ok) {
-    return { ok: true, checks };
-  }
-
   const fixGuide = [wechat, pyw, mem]
     .filter((c) => !c.ok && c.fixGuide)
     .map((c) => c.fixGuide)
