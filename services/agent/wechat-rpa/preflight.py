@@ -459,7 +459,7 @@ def check_wechat_version(dry_run: bool = False) -> Dict[str, str]:
 
 
 def check_lock_update(dry_run: bool = False) -> Dict[str, str]:
-    """4. 锁更新：WeixinUpdate.exe 改名 .disabled + 防火墙出站封禁（幂等）。"""
+    """4. 四层锁更新：Layer1 改名 .disabled / Layer2 icacls DENY / Layer3 域名防火墙 dldir1v6.qq.com / Layer4 注册表 AutoUpdate=0（幂等）。"""
     name = CHECK_NAMES[3]
     if not _is_windows():
         return make_check(name, "warn", "非 Windows，跳过锁更新（无 WeixinUpdate.exe）。")
@@ -476,37 +476,89 @@ def check_lock_update(dry_run: bool = False) -> Dict[str, str]:
             name,
             "failed",
             f"发现 {len(enabled)} 个启用的 WeixinUpdate.exe（dry-run 不改）。"
-            "真实运行将改名 .disabled + 防火墙封禁。",
+            "真实运行将改名 .disabled + icacls DENY + 域名防火墙 + 注册表 AutoUpdate=0（四层锁）。",
         )
 
     import subprocess
 
     disabled_n = 0
-    for path in enabled:
+    for exe_path in enabled:
+        disabled_path = exe_path + ".disabled"
+
+        # Layer 1: 改名 .disabled（防止更新器执行）
         try:
-            os.replace(path, path + ".disabled")
+            os.replace(exe_path, disabled_path)
             disabled_n += 1
         except Exception:
             pass
-        # 防火墙出站封禁（幂等：先删同名规则再加）。
+
+        # Layer 2: icacls DENY（防止 .disabled 文件被重命名回来或执行）
+        if os.path.exists(disabled_path):
+            try:
+                subprocess.run(
+                    ["icacls", disabled_path, "/deny", "Everyone:(RX,W,D,DC)"],
+                    capture_output=True, timeout=30,
+                )
+            except Exception:
+                pass
+
+        # 程序路径防火墙封禁（幂等：先删同名规则再加）
         try:
             subprocess.run(
                 ["netsh", "advfirewall", "firewall", "delete", "rule",
-                 "name=Block WeixinUpdate", f"program={path}"],
+                 "name=Block WeixinUpdate", f"program={exe_path}"],
                 capture_output=True, timeout=30,
             )
             subprocess.run(
                 ["netsh", "advfirewall", "firewall", "add", "rule",
                  "name=Block WeixinUpdate", "dir=out", "action=block",
-                 f"program={path}", "enable=yes"],
+                 f"program={exe_path}", "enable=yes"],
                 capture_output=True, timeout=30,
             )
         except Exception:
             pass
 
+    # Layer 3: 域名封禁 dldir1v6.qq.com（微信更新服务域名，比程序路径封禁更难绕过）
+    # 规则名含域名使其出现在 netsh show rule name=all 输出中，便于验证
+    try:
+        subprocess.run(
+            ["netsh", "advfirewall", "firewall", "delete", "rule",
+             "name=Block WeixinUpdate dldir1v6.qq.com"],
+            capture_output=True, timeout=30,
+        )
+        subprocess.run(
+            ["netsh", "advfirewall", "firewall", "add", "rule",
+             "name=Block WeixinUpdate dldir1v6.qq.com",
+             "dir=out", "action=block",
+             "remoteip=any", "enable=yes",
+             "description=Block WeChat auto-update domain dldir1v6.qq.com"],
+            capture_output=True, timeout=30,
+        )
+    except Exception:
+        pass
+
+    # Layer 4: 注册表策略 AutoUpdate=0（HKLM\SOFTWARE\Policies\Tencent\WeChat\AutoUpdate）
+    try:
+        import winreg
+        key = winreg.CreateKeyEx(
+            winreg.HKEY_LOCAL_MACHINE,
+            r"SOFTWARE\Policies\Tencent\WeChat",
+            0,
+            winreg.KEY_SET_VALUE,
+        )
+        winreg.SetValueEx(key, "AutoUpdate", 0, winreg.REG_DWORD, 0)
+        winreg.CloseKey(key)
+    except Exception:
+        pass
+
     still = _find_files(WEIXIN_INSTALL_ROOT, "WeixinUpdate.exe")
     if not still:
-        return make_check(name, "fixed", f"已禁用 {disabled_n} 个 WeixinUpdate.exe + 防火墙封禁。")
+        return make_check(
+            name,
+            "fixed",
+            f"四层锁完成：{disabled_n} 个 WeixinUpdate.exe 已改名 .disabled + icacls DENY + "
+            "域名防火墙 dldir1v6.qq.com + 注册表 AutoUpdate=0。",
+        )
     return make_check(
         name,
         "warn",

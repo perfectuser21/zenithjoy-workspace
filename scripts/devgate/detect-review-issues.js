@@ -45,14 +45,7 @@ process.stdin.on('end', () => {
     || /🔴\s*未发现严重问题/.test(input)
     || /🔴\s*无严重问题/.test(input)
     || /🔴\s*没有严重问题/.test(input)
-    || /🔴\s*没有发现严重问题/.test(input)
-    // DeepSeek V3 checklist 格式：「- 🔴 逻辑问题：无」「- 🔴 代码质量：无问题」
-    // 所有含 🔴 的行均为"无问题"声明时，视为通过
-    || (() => {
-      const redLines = input.split('\n').filter(l => /🔴/.test(l));
-      const noIssuePattern = /[：:][^🔴\n]*(无|没有|不涉及|不需要|良好|无问题|无风险|无明显|不存在|质量良好)/;
-      return redLines.length > 0 && redLines.every(l => noIssuePattern.test(l));
-    })();
+    || /🔴\s*没有发现严重问题/.test(input);
 
   const textWithoutHeadings = input
     .replace(/#+\s*[^🔴\n]*[（(]🔴[)）][^\n]*/g, '')  // section headings: "### 严重问题 (🔴)"

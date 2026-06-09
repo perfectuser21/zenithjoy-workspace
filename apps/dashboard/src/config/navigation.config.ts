@@ -296,7 +296,6 @@ export const autopilotNavGroups: NavGroup[] = [
         icon: Activity,
         label: '模块健康',
         featureKey: 'module-health',
-        requireSuperAdmin: true,
         component: 'ModuleHealthPage',
       },
       {
