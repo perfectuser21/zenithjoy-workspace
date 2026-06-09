@@ -8,6 +8,8 @@
  * target_environment: mac_web
  */
 import { test, expect } from '@playwright/test';
+import * as fs from 'fs';
+import * as path from 'path';
 
 const BASE_URL = process.env.PLAYWRIGHT_BASE_URL || 'http://localhost:5174';
 
@@ -29,8 +31,6 @@ test.describe('/module-health 普通账号可访问 [BEHAVIOR]', () => {
   test('navigation.config.ts /module-health 无 requireSuperAdmin: true', async () => {
     // 静态文件检测（不依赖浏览器，直接读 TS 文件）
     // Red 阶段：文件含 requireSuperAdmin: true → 此 assertion 失败
-    const fs = require('fs');
-    const path = require('path');
     const configPath = path.resolve(__dirname, '../../src/config/navigation.config.ts');
     const src = fs.readFileSync(configPath, 'utf8');
 

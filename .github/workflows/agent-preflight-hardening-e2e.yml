@@ -229,9 +229,10 @@ jobs:
             Remove-Item -Recurse -Force $fixtureDir -ErrorAction SilentlyContinue
             Write-Host "✅ 清理测试 fixture 目录完成"
           }
-          # 清理防火墙规则
-          netsh advfirewall firewall delete rule name="Block WeixinUpdate" 2>$null
-          netsh advfirewall firewall delete rule name="Block WeixinUpdate dldir1v6.qq.com" 2>$null
-          netsh advfirewall firewall delete rule name="Block WeChat Update weixin.qq.com" 2>$null
+          # 清理防火墙规则（netsh 规则不存在时返回 1，用 | Out-Null 忽略退出码）
+          netsh advfirewall firewall delete rule name="Block WeixinUpdate" 2>$null | Out-Null
+          netsh advfirewall firewall delete rule name="Block WeixinUpdate dldir1v6.qq.com" 2>$null | Out-Null
+          netsh advfirewall firewall delete rule name="Block WeChat Update weixin.qq.com" 2>$null | Out-Null
           Write-Host "✅ 清理防火墙规则完成"
+          exit 0
 
