@@ -16,7 +16,18 @@ import {
   WECHAT_DOWNLOAD_URL,
   runPreflight,
   getModulePython,
+  checkWechatRunning,
 } from '../preflight';
+
+// checkWechatRunning 使用 node:child_process execSync，用 vi.mock 提升 mock（ESM 限制）
+vi.mock('node:child_process', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:child_process')>();
+  return {
+    ...actual,
+    execSync: vi.fn(actual.execSync),
+  };
+});
+import { execSync } from 'node:child_process';
 
 describe('微信版本比较（纯函数，<= 4.1.8.x 为支持）', () => {
   it('4.1.8.107 等于上限 → 支持', () => {
@@ -133,5 +144,52 @@ describe('getModulePython — ZENITHJOY_CORE_DIR 回退', () => {
     const result = getModulePython('/moduleDir');
     Object.defineProperty(process, 'platform', origPlatform!);
     expect(result).toBe('python');
+  });
+});
+
+describe('checkWechatRunning — 微信进程检测（软检测）', () => {
+  afterEach(() => vi.mocked(execSync).mockRestore());
+
+  it('非 Windows 跳过，返回 ok:true skipped:true', () => {
+    const origPlatform = Object.getOwnPropertyDescriptor(process, 'platform');
+    Object.defineProperty(process, 'platform', { value: 'linux', configurable: true });
+    const r = checkWechatRunning();
+    Object.defineProperty(process, 'platform', origPlatform!);
+    expect(r.ok).toBe(true);
+    expect(r.skipped).toBe(true);
+  });
+
+  it('tasklist 输出含 WeChat.exe → ok:true 无 fixGuide', () => {
+    const origPlatform = Object.getOwnPropertyDescriptor(process, 'platform');
+    Object.defineProperty(process, 'platform', { value: 'win32', configurable: true });
+    vi.mocked(execSync).mockReturnValue(
+      'WeChat.exe   1234 Console   1   12,345 K\r\n' as any
+    );
+    const r = checkWechatRunning();
+    Object.defineProperty(process, 'platform', origPlatform!);
+    expect(r.ok).toBe(true);
+    expect(r.fixGuide).toBeUndefined();
+  });
+
+  it('tasklist 无 WeChat.exe → ok:true + fixGuide 含"请打开微信"', () => {
+    const origPlatform = Object.getOwnPropertyDescriptor(process, 'platform');
+    Object.defineProperty(process, 'platform', { value: 'win32', configurable: true });
+    vi.mocked(execSync).mockReturnValue(
+      'INFO: 没有运行的任务匹配指定标准。\r\n' as any
+    );
+    const r = checkWechatRunning();
+    Object.defineProperty(process, 'platform', origPlatform!);
+    expect(r.ok).toBe(true);
+    expect(r.fixGuide).toContain('请打开微信');
+  });
+
+  it('execSync 抛出 → ok:true + fixGuide', () => {
+    const origPlatform = Object.getOwnPropertyDescriptor(process, 'platform');
+    Object.defineProperty(process, 'platform', { value: 'win32', configurable: true });
+    vi.mocked(execSync).mockImplementation(() => { throw new Error('cmd fail'); });
+    const r = checkWechatRunning();
+    Object.defineProperty(process, 'platform', origPlatform!);
+    expect(r.ok).toBe(true);
+    expect(r.fixGuide).toContain('请打开微信');
   });
 });

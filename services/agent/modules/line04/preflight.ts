@@ -219,6 +219,27 @@ export function checkMemory(): CheckOutcome {
   return { ok: false, fixGuide: memoryFixGuide() };
 }
 
+// 检测 4（软检测）：微信进程是否在跑。
+// 非 Windows 跳过。ok 始终为 true——未跑只给用户提示，不阻塞模块激活。
+export function checkWechatRunning(): CheckOutcome {
+  if (process.platform !== 'win32') return { ok: true, skipped: true };
+  try {
+    const out = execSync('tasklist /FI "IMAGENAME eq WeChat.exe" /FO LIST', {
+      encoding: 'utf-8',
+      windowsHide: true,
+      timeout: 10_000,
+      stdio: ['ignore', 'pipe', 'ignore'],
+    });
+    if (/WeChat\.exe/i.test(out)) return { ok: true };
+  } catch {
+    // tasklist 失败视同未找到
+  }
+  return {
+    ok: true,
+    fixGuide: '微信未运行，请打开微信并登录，Agent 将在 30 秒内自动连接。',
+  };
+}
+
 // 解析模块自带的 python-embedded/python.exe，否则回退系统 python（Windows 无 python3）。
 // 回退顺序：1) 模块自带 python-embedded  2) ZENITHJOY_CORE_DIR/python-embedded  3) 系统 python
 export function getModulePython(moduleDir: string): string {
