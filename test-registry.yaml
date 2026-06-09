@@ -481,6 +481,14 @@ tests:
     product: AI员工
     note: "Sprint 06081700 — line01/02/05 stub 模块结构契约：manifest 必填字段 + preflight 返回 {ok:true}"
 
+  - id: agent-tray-module-hot-rebuild
+    path: services/agent/src/__tests__/tray-module-hot-rebuild.test.ts
+    type: unit
+    ci: L2
+    status: active
+    product: AI员工
+    note: "Sprint 06090945 — updateTrayModules 首次出现模块时（0→N）热重建托盘：触发 rebuild hook / 已有模块不重建 / headless 不崩溃"
+
   # ── Walking Skeleton #1 — Agent handlers ────────────────────────────────────
   - id: agent-ws1-heartbeat-loop
     path: services/agent/src/handlers/__tests__/heartbeat-loop.test.ts

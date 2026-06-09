@@ -198,10 +198,21 @@ export function updateTrayStatus(status: TrayStatus): void {
   pushStatusToTray();
 }
 
+// 重建托盘的实际实现，抽成可注入的 hook 对象（CJS 模式下 vi.spyOn 无法拦截内部直接调用）
+export const _trayRebuildHook = {
+  invoke(h: TrayHandlers): void {
+    destroyTray();
+    startTray(h);
+  },
+};
+
 export function updateTrayModules(modules: Record<string, TrayModuleInfo>): void {
+  const wasEmpty = Object.keys(currentModules).length === 0;
   currentModules = modules;
-  // systray2 不支持运行时增删菜单项，仅缓存状态；下次 startTray（如重启 Agent）
-  // 菜单初始化时生效。已 ready 的托盘无法热重建 items。
+  // systray2 不支持运行时增删菜单项；首次出现模块时（0→N）整体重建托盘使模块条目可见。
+  if (wasEmpty && Object.keys(modules).length > 0 && handlers) {
+    _trayRebuildHook.invoke(handlers);
+  }
 }
 
 // preflight 失败时本地弹窗提示客户「{模块名}」无法启用：{原因}。
@@ -261,4 +272,18 @@ export function destroyTray(): void {
     }
     systray = null;
   }
+}
+
+// 仅供单测使用：重置模块级别状态（systray2 实例无法在测试环境真启动）
+export function _resetTrayStateForTest(): void {
+  systray = null;
+  trayReady = false;
+  currentStatus = 'connecting';
+  handlers = null;
+  currentModules = {};
+}
+
+// 仅供单测使用：直接设置 handlers 而不启动 systray2
+export function _setHandlersForTest(h: TrayHandlers | null): void {
+  handlers = h;
 }
