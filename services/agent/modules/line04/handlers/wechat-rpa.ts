@@ -4,7 +4,8 @@
 // 与原文件唯一区别：脚本/python 路径基于「模块目录」解析，而非 core.exe 同级目录。
 // 模块安装后结构：<moduleDir>/{index.js, handlers/, wechat-rpa/<*.py>, python-embedded/python.exe}
 
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
+import type { SpawnSyncReturns } from 'node:child_process';
 import path from 'node:path';
 import fs from 'node:fs';
 
@@ -106,7 +107,45 @@ export function buildListenerSpawnArgs(script: string, apiBase: string, agentId?
   return args;
 }
 
+// 测试注入点：允许替换 spawnSync 实现和 platform（CJS 直接调同文件函数无法被 vi.spyOn 拦截）。
+// killExistingListeners 在此对象上挂载，方便测试重置。
+export const _listenerKillFuncs = {
+  spawnSyncFn: spawnSync as (cmd: string, args: string[]) => SpawnSyncReturns<string>,
+  platform: process.platform as string,
+
+  // 启动新监听前查杀所有已运行的 listen_chat.py，防止多实例导致 Dashboard 出现重复客户端条目。
+  // 仅 Windows 有效；wmic 失败时静默跳过（不阻塞启动）。
+  killExistingListeners(): void {
+    if (this.platform !== 'win32') return;
+    try {
+      const result = this.spawnSyncFn('wmic', [
+        'process',
+        'where',
+        'CommandLine like "%listen_chat.py%"',
+        'get',
+        'ProcessId',
+        '/FORMAT:LIST',
+      ]);
+      if (result.status !== 0 || !result.stdout) return;
+      for (const line of result.stdout.split(/\r?\n/)) {
+        const m = line.match(/^ProcessId=(\d+)/);
+        if (!m) continue;
+        const pid = m[1];
+        try {
+          this.spawnSyncFn('taskkill', ['/F', '/PID', pid]);
+          console.log(`[wechat-rpa] 已终止旧监听进程 PID ${pid}`);
+        } catch {
+          // 进程已退出，忽略
+        }
+      }
+    } catch {
+      // wmic 不可用，跳过清理
+    }
+  },
+};
+
 // Windows only：模块激活时自动拉起 listen_chat.py 持续监听微信消息。
+// 先查杀所有旧 listen_chat.py 实例（防多条心跳/Dashboard 重复客户端），再 spawn 新进程。
 // 持久（timeout 86400）+ 崩溃自愈（退出后 30s 自动重启），随模块生命周期常驻。
 export function startWechatListener(apiBase: string, agentId?: string): void {
   if (process.platform !== 'win32') {
@@ -114,6 +153,9 @@ export function startWechatListener(apiBase: string, agentId?: string): void {
     return;
   }
   const script = path.join(getModuleRoot(), 'wechat-rpa', 'listen_chat.py');
+
+  // 查杀旧监听进程，确保干净环境
+  _listenerKillFuncs.killExistingListeners();
 
   const spawnOnce = (): void => {
     const child = spawn(getPythonExe(), buildListenerSpawnArgs(script, apiBase, agentId), {

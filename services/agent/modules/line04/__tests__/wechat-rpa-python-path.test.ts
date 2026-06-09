@@ -114,13 +114,18 @@ describe('buildListenerSpawnArgs — agentId 传参回归', () => {
 //       Dashboard 显示多个客户端。修法：启动前用 wmic 查出所有 listen_chat.py PID 并 taskkill。
 describe('killExistingListeners — 查杀旧监听进程', () => {
   let origSpawnSync: typeof _listenerKillFuncs.spawnSyncFn;
+  let origPlatform: string;
 
   beforeEach(() => {
     origSpawnSync = _listenerKillFuncs.spawnSyncFn;
+    origPlatform = _listenerKillFuncs.platform;
+    // 强制 win32，确保函数体不被 platform guard 提前 return（测试在 macOS 上跑）
+    _listenerKillFuncs.platform = 'win32';
   });
 
   afterEach(() => {
     _listenerKillFuncs.spawnSyncFn = origSpawnSync;
+    _listenerKillFuncs.platform = origPlatform;
   });
 
   it('wmic 返回一个 listen_chat.py PID 时，taskkill /F /PID <pid> 被调用', () => {
