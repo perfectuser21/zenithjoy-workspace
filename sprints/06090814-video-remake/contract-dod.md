@@ -15,10 +15,10 @@ target_environment: local_api
 - [ ] [ARTIFACT] `services/video-remake/server.py` 存在，含 FastAPI 应用初始化 + /health + /api/nodes + static 文件服务
   Test: node -e "const c=require('fs').readFileSync('services/video-remake/server.py','utf8');if(!c.includes('/health'))process.exit(1);if(!c.includes('/api/nodes'))process.exit(1);if(!c.includes('FastAPI')&&!c.includes('fastapi'))process.exit(1);console.log('OK')"
 
-- [ ] [ARTIFACT] `services/video-remake/requirements.txt` 存在，含 fastapi + uvicorn + ffmpeg-python
+- [ ] [ARTIFACT] `services/video-remake/requirements.txt` 存在，含 fastapi + uvicorn
   Test: node -e "const c=require('fs').readFileSync('services/video-remake/requirements.txt','utf8');if(!c.includes('fastapi'))process.exit(1);if(!c.includes('uvicorn'))process.exit(1);console.log('OK')"
 
-- [ ] [ARTIFACT] `services/video-remake/frontend/src/App.tsx` 存在，含 React Flow + 9 个节点定义（至少 9 个 id 为 01–09 的节点）
+- [ ] [ARTIFACT] `services/video-remake/frontend/src/App.tsx` 存在，含 React Flow + 9 个节点定义（节点 id 01–09 均出现）
   Test: node -e "const c=require('fs').readFileSync('services/video-remake/frontend/src/App.tsx','utf8');if(!c.includes('ReactFlow')&&!c.includes('react-flow'))process.exit(1);const ids=['01','02','03','04','05','06','07','08','09'];ids.forEach(id=>{if(!c.includes(id))process.exit(1);});console.log('OK')"
 
 - [ ] [ARTIFACT] `.github/workflows/scripts/smoke/line07-video-remake-smoke.sh` 存在，含实质 curl 调用（≥5 行非注释内容）
@@ -29,32 +29,38 @@ target_environment: local_api
 
 ---
 
-## BEHAVIOR 条目（内嵌可执行 manual:bash 命令，evaluator 直接跑）
+## BEHAVIOR 条目（运行时 API 验证，evaluator 直接跑 pytest — server 由 tests/test_api.py session fixture 自动启动）
 
-- [ ] [BEHAVIOR] `/health` 路由返回 `{"status":"ok"}` — server.py 含 status 字段值 ok 的 health 响应（对应 Golden Path Step 1）
-  Test: manual:bash -c 'node -e "const c=require(\"fs\").readFileSync(\"services/video-remake/server.py\",\"utf8\");if(!c.includes(\"/health\"))process.exit(1);if(!c.includes(\"status\")&&!c.includes(\"status\"))process.exit(1);if(!c.includes(\"\\\"ok\\\"\")&&!c.includes(\"'"'"'ok'"'"'\"))process.exit(1);console.log(\"OK\")"'
-  期望: OK
+> **注**：pytest 测试通过 session-scoped fixture 自动启动 `services/video-remake/server.py`；evaluator 只需确保 Python 依赖已安装（`pip install -r services/video-remake/requirements.txt requests pytest`）。
 
-- [ ] [BEHAVIOR] `/api/nodes` 路由返回含 id/label/status/order 字段的 9 节点数组 — server.py 含 9 个节点定义且含 4 个必填字段（对应 Golden Path Step 3，PRD `/api/nodes` 节点数 = 9）
-  Test: manual:bash -c 'node -e "const c=require(\"fs\").readFileSync(\"services/video-remake/server.py\",\"utf8\");if(!c.includes(\"/api/nodes\"))process.exit(1);[\"id\",\"label\",\"status\",\"order\"].forEach(f=>{if(!c.includes(f)){console.error(\"FAIL: server.py 缺字段\"+f);process.exit(1);}});const matches=(c.match(/\\\"0[1-9]\\\"/g)||c.match(\"'\''0[1-9]'\''\")||[]);if(matches.length<9){console.error(\"FAIL: 节点数\"+matches.length+\"<9\");process.exit(1);}console.log(\"OK nodes=\"+matches.length)"'
-  期望: OK
+- [ ] [BEHAVIOR] `/health` 运行时返回 `{"status":"ok"}`，禁用字段 state/healthy 不存在（对应 Golden Path Step 1）
+  Test: manual:bash -c 'cd /workspace && python -m pytest sprints/06090814-video-remake/tests/test_api.py::TestHealthEndpoint -v --tb=short 2>&1 | tail -5'
+  期望: 2 passed, 0 failed
 
-- [ ] [BEHAVIOR] `POST /api/nodes/{node_id}/confirm` 路由返回含 ok/node_id/status 字段的响应，禁用 success/state（对应 Golden Path Step 4，PRD node confirm 操作）
-  Test: manual:bash -c 'node -e "const c=require(\"fs\").readFileSync(\"services/video-remake/server.py\",\"utf8\");if(!c.includes(\"confirm\"))process.exit(1);if(!c.includes(\"\\\"ok\\\"\")&&!c.includes(\"ok:\")&&!c.includes(\"ok =\"))process.exit(1);if(!c.includes(\"node_id\"))process.exit(1);if(!c.includes(\"status\"))process.exit(1);const hasSuccess=(c.match(/[\"'"'"']success[\"'"'"']/)||[]).length;if(hasSuccess>0){console.error(\"FAIL: 含禁用字段 success\");process.exit(1);}const hasState=(c.match(/[\"'"'"']state[\"'"'"']/)||[]).length;if(hasState>0){console.error(\"FAIL: 含禁用字段 state\");process.exit(1);}console.log(\"OK\")"'
-  期望: OK
+- [ ] [BEHAVIOR] `/api/nodes` 运行时返回 9 节点数组，schema 完整性（必填字段均在），禁用字段 node_id/state/name 反向检查通过（对应 Golden Path Step 3）
+  Test: manual:bash -c 'cd /workspace && python -m pytest sprints/06090814-video-remake/tests/test_api.py::TestNodesEndpoint -v --tb=short 2>&1 | tail -5'
+  期望: 4 passed, 0 failed
 
-- [ ] [BEHAVIOR] 不存在的 node_id（99 等）confirm 请求返回 404 — server.py 含节点 id 验证逻辑（对应 Golden Path Step 5，防假绿：无验证逻辑则任意 node_id 都返回 200）
-  Test: manual:bash -c 'node -e "const c=require(\"fs\").readFileSync(\"services/video-remake/server.py\",\"utf8\");const has404=(c.includes(\"404\")||c.includes(\"status_code=404\")||c.includes(\"HTTPException\"));if(!has404){console.error(\"FAIL: server.py 无 404 错误处理\");process.exit(1);}const hasNodeCheck=(c.includes(\"not in \")&&c.includes(\"node_id\"))||(c.includes(\"node_id not in\")||(c.includes(\"raise\")));if(!hasNodeCheck){console.error(\"FAIL: 缺节点 id 验证逻辑\");process.exit(1);}console.log(\"OK\")"'
-  期望: OK
+- [ ] [BEHAVIOR] `POST /api/nodes/01/confirm` 运行时返回 `{"ok":true,...}`，keys 完整性检查通过，禁用字段 success/state 不存在，且 `~/video-remake-projects/<任务名>/` 目录已创建（对应 Golden Path Step 4）
+  Test: manual:bash -c 'cd /workspace && python -m pytest sprints/06090814-video-remake/tests/test_api.py::TestNodeConfirmEndpoint -v --tb=short 2>&1 | tail -5'
+  期望: 5 passed, 0 failed
 
-- [ ] [BEHAVIOR] smoke 脚本存在且实质覆盖 3 个 PRD 断言（/health status=ok，/api/nodes len=9，/ HTTP 200）— 非 exit 0 占位（对应 PRD E2E smoke 验收标准）
-  Test: manual:bash -c 'SMOKE=".github/workflows/scripts/smoke/line07-video-remake-smoke.sh"; [ -f "$SMOKE" ] || { echo "FAIL: smoke 脚本不存在"; exit 1; }; grep -q "status" "$SMOKE" || { echo "FAIL: smoke 缺 status 验证"; exit 1; }; grep -q "len\|length\|9" "$SMOKE" || { echo "FAIL: smoke 缺节点数量验证"; exit 1; }; grep -q "200" "$SMOKE" || { echo "FAIL: smoke 缺 HTTP 200 验证"; exit 1; }; REAL=$(grep -v "^#" "$SMOKE" | grep -v "^[[:space:]]*$" | wc -l | tr -d " "); [ "$REAL" -ge 5 ] || { echo "FAIL: smoke 实质内容仅 $REAL 行（需≥5）"; exit 1; }; echo "OK real_lines=$REAL"'
-  期望: OK real_lines=...
+- [ ] [BEHAVIOR] 节点 02–09 全流程可点通，每节点 confirm 均返回 HTTP 200 + ok==true + status==completed（对应 Golden Path Step 5）
+  Test: manual:bash -c 'cd /workspace && python -m pytest sprints/06090814-video-remake/tests/test_api.py::TestNodeClickThrough -v --tb=short 2>&1 | tail -5'
+  期望: 8 passed, 0 failed
+
+- [ ] [BEHAVIOR] error path — 不存在节点 99 返回 HTTP 404（防 catch-all 路由假绿）
+  Test: manual:bash -c 'cd /workspace && python -m pytest sprints/06090814-video-remake/tests/test_api.py::TestNodeConfirmEndpoint::test_nonexistent_node_returns_404 -v --tb=short 2>&1 | tail -3'
+  期望: 1 passed, 0 failed
 
 ---
 
-## BEHAVIOR:E2E 条目（local_api user_facing，final-e2e 跑 — 见 contract-draft.md E2E 验收脚本）
+## BEHAVIOR:E2E 条目（local_api user_facing，final-e2e 跑）
 
-- [ ] [BEHAVIOR:E2E] 运行 `sprints/06090814-video-remake/contract-draft.md` 中的 E2E 脚本（或 `line07-video-remake-smoke.sh`），5 步全通 exit 0
-  Test: 通过 `bash sprints/06090814-video-remake/e2e-smoke.sh` 触发（evaluator 本地执行，需 Python 3.10+ 和 ffmpeg-python 已安装）
+- [ ] [BEHAVIOR:E2E] pytest 全量套件通过（server 自启动），验证 Golden Path 全程端到端
+  Test: manual:bash -c 'cd /workspace && python -m pytest sprints/06090814-video-remake/tests/test_api.py -v --tb=short 2>&1 | tail -8'
+  期望: 20 passed, 0 failed（含 8 个参数化节点 02-09 测试）
+
+- [ ] [BEHAVIOR:E2E] bash e2e 脚本（含 schema 完整性 + 禁用字段反向检查 + 项目目录创建 + 02-09 全流程）exit 0
+  Test: 通过 `bash sprints/06090814-video-remake/e2e-smoke.sh` 触发（evaluator 本地执行，需 Python 3.10+ 已安装）
   期望: exit 0 + "✅ Line 07 video-remake thin 骨架 Golden Path 验证通过"

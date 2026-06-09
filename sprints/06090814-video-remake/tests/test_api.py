@@ -1,34 +1,68 @@
 """
-TDD Red 测试 — Line 07 video-remake thin 骨架
+TDD Red 测试 — Line 07 video-remake thin 骨架（Round 2）
 服务未实现时全部 FAIL，实现后全部通过。
 运行方式: cd /workspace && python -m pytest sprints/06090814-video-remake/tests/ -v
 """
+import os
+import socket
+import subprocess
+import time
+
 import pytest
 import requests
 
 BASE_URL = "http://localhost:8899"
 
 
-@pytest.fixture(scope="module", autouse=True)
-def require_server():
-    """确认服务运行中，否则 skip（Red 阶段服务不存在，直接 ConnectionRefusedError = FAIL）"""
+def _is_running():
     try:
-        r = requests.get(f"{BASE_URL}/health", timeout=3)
-        assert r.status_code == 200
-    except Exception as e:
-        pytest.fail(f"服务未启动 ({e}) — 请先运行 python services/video-remake/server.py")
+        s = socket.create_connection(("localhost", 8899), timeout=1)
+        s.close()
+        return True
+    except Exception:
+        return False
+
+
+@pytest.fixture(scope="session", autouse=True)
+def server():
+    """Session 级服务自启动：若端口未占用则启动 server.py，测试结束后停止。"""
+    if _is_running():
+        yield
+        return
+
+    proc = subprocess.Popen(
+        ["python", "server.py"],
+        cwd="/workspace/services/video-remake",
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    for _ in range(15):
+        if _is_running():
+            break
+        time.sleep(1)
+    else:
+        proc.terminate()
+        pytest.fail("services/video-remake/server.py 15s 内未就绪，请检查实现")
+
+    yield
+
+    proc.terminate()
+    try:
+        proc.wait(timeout=5)
+    except subprocess.TimeoutExpired:
+        proc.kill()
 
 
 class TestHealthEndpoint:
     def test_health_returns_ok(self):
-        """[BEHAVIOR] /health 返回 {"status": "ok"} — Golden Path Step 1"""
+        """[BEHAVIOR] /health 返回 {"status":"ok"} — Golden Path Step 1"""
         r = requests.get(f"{BASE_URL}/health")
         assert r.status_code == 200
         data = r.json()
         assert data.get("status") == "ok", f"status 期望 'ok'，实际: {data.get('status')}"
 
-    def test_health_schema_completeness(self):
-        """禁用字段反向检查: 响应不含 state/healthy 等非法字段"""
+    def test_health_forbidden_fields_absent(self):
+        """禁用字段反向检查: 响应不含 state/healthy"""
         r = requests.get(f"{BASE_URL}/health")
         data = r.json()
         assert "state" not in data, "FAIL: 含禁用字段 state（应用 status）"
@@ -55,13 +89,12 @@ class TestNodesEndpoint:
         """[BEHAVIOR] 每个节点含 id/label/status/order 四个必填字段"""
         r = requests.get(f"{BASE_URL}/api/nodes")
         nodes = r.json()
-        required_fields = ["id", "label", "status", "order"]
         for node in nodes:
-            for field in required_fields:
-                assert field in node, f"节点 {node} 缺字段 {field}"
+            for field in ["id", "label", "status", "order"]:
+                assert field in node, f"节点 {node.get('id')} 缺字段 {field}"
 
     def test_nodes_ids_are_01_to_09(self):
-        """节点 id 为 '01'–'09'，顺序覆盖全部 9 个"""
+        """节点 id 集合 = {'01', '02', ..., '09'}，覆盖全部 9 个"""
         r = requests.get(f"{BASE_URL}/api/nodes")
         nodes = r.json()
         ids = {n["id"] for n in nodes}
@@ -94,16 +127,40 @@ class TestNodeConfirmEndpoint:
         assert data.get("node_id") == "01", f"node_id 期望 '01'，实际: {data.get('node_id')}"
         assert data.get("status") == "completed", f"status 期望 'completed'，实际: {data.get('status')}"
 
-    def test_node_confirm_schema_completeness(self):
-        """confirm 响应 keys 完整性检查: keys 集合 ⊆ {ok, node_id, status}"""
+    def test_node_confirm_keys_completeness(self):
+        """confirm 响应 keys 完整性: 集合 ⊆ {ok, node_id, status}，无多余字段"""
         r = requests.post(
             f"{BASE_URL}/api/nodes/01/confirm",
             json={"video_path": "/tmp/v.mp4", "model_ref": "/tmp/m.jpg",
-                  "product_ref": "/tmp/p.jpg", "goal": "test"},
+                  "product_ref": "/tmp/p.jpg", "goal": "keys-completeness-test"},
+        )
+        data = r.json()
+        allowed = {"ok", "node_id", "status"}
+        extra = set(data.keys()) - allowed
+        assert not extra, f"FAIL: 多余字段 {extra}（仅允许 {allowed}）"
+
+    def test_node_confirm_forbidden_fields_absent(self):
+        """禁用字段反向检查: 响应不含 success/state"""
+        r = requests.post(
+            f"{BASE_URL}/api/nodes/01/confirm",
+            json={"video_path": "/tmp/v.mp4", "model_ref": "/tmp/m.jpg",
+                  "product_ref": "/tmp/p.jpg", "goal": "forbidden-test"},
         )
         data = r.json()
         assert "success" not in data, "FAIL: 含禁用字段 success（应用 ok）"
         assert "state" not in data, "FAIL: 含禁用字段 state（应用 status）"
+
+    def test_node_01_creates_project_dir(self):
+        """[BEHAVIOR] node 01 confirm 后项目目录已创建 — PRD Golden Path Step 2"""
+        task_name = f"e2e-dir-test-{int(time.time())}"
+        r = requests.post(
+            f"{BASE_URL}/api/nodes/01/confirm",
+            json={"video_path": "/tmp/v.mp4", "model_ref": "/tmp/m.jpg",
+                  "product_ref": "/tmp/p.jpg", "goal": task_name},
+        )
+        assert r.status_code == 200
+        project_dir = os.path.expanduser(f"~/video-remake-projects/{task_name}")
+        assert os.path.isdir(project_dir), f"FAIL: 项目目录未创建 {project_dir}"
 
     def test_nonexistent_node_returns_404(self):
         """[BEHAVIOR] error path — node_id=99（不存在）→ HTTP 404"""
@@ -112,3 +169,20 @@ class TestNodeConfirmEndpoint:
             json={"video_path": "/tmp/v.mp4"},
         )
         assert r.status_code == 404, f"期望 404，实际: {r.status_code}"
+
+
+class TestNodeClickThrough:
+    """[BEHAVIOR] 节点 02-09 全流程可点通 — PRD Golden Path "全流程可点通"（thin：ok:true 即通过）"""
+
+    @pytest.mark.parametrize("node_id", [f"{i:02d}" for i in range(2, 10)])
+    def test_node_confirm_returns_ok(self, node_id):
+        """每个节点 confirm 均返回 HTTP 200 + ok==true + status==completed"""
+        r = requests.post(
+            f"{BASE_URL}/api/nodes/{node_id}/confirm",
+            json={"goal": "click-through-test"},
+        )
+        assert r.status_code == 200, f"node {node_id} 返回 {r.status_code}，期望 200"
+        data = r.json()
+        assert data.get("ok") is True, f"node {node_id} ok={data.get('ok')}"
+        assert data.get("node_id") == node_id, f"node {node_id} node_id={data.get('node_id')}"
+        assert data.get("status") == "completed", f"node {node_id} status={data.get('status')}"
