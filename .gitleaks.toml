@@ -31,3 +31,12 @@ paths = [
   '''sprints/.*\.md$''',
   '''sprints/.*task-plan\.json$'''
 ]
+
+[[allowlists]]
+description = "CI smoke test Bearer token — 'smoke-test-token' is a placeholder, not a real credential"
+regexes = [
+  '''smoke-test-token'''
+]
+paths = [
+  '''.github/workflows/scripts/smoke/.*\.sh$'''
+]
