@@ -105,7 +105,7 @@ jobs:
     steps:
       - name: Alert
         run: |
-          curl -sf -X POST ${{ secrets.BRAIN_URL || 'http://38.23.47.81:5221' }}/api/brain/tasks \
+          curl -sf -X POST ${{ secrets.BRAIN_URL }}/api/brain/tasks \
             -H "Content-Type: application/json" \
             -d '{
               "title": "ZenithJoy Dashboard 部署失败",
