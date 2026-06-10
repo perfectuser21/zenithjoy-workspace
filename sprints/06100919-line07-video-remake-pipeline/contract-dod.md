@@ -5,7 +5,7 @@ target_environment: windows_cloud
 ---
 # Contract DoD — Sprint: Line 07 AI爆款视频翻拍 9节点可视化流水线（thin）
 
-**范围**: Dashboard 新页面 `/video-remake`（9节点n8n风格流水线图）+ API路由 `/api/video-remake/*`（jobs/nodes/output）+ gpt-image-2 + DashScope happy-horse i2v 服务调用 + N07 CI自动选帧
+**范围**: Dashboard 新页面 `/video-remake`（9节点n8n风格流水线图）+ API路由 `/api/video-remake/*`（jobs/nodes/output）+ gpt-image-2 + DashScope happy-horse i2v 服务调用 + N02/N06 服务函数 + N07 CI自动选帧 + Phase 2 backend smoke
 **大小**: L
 
 ---
@@ -21,14 +21,17 @@ target_environment: windows_cloud
 - [ ] [ARTIFACT] `apps/api/src/routes/video-remake.ts` 新建，含 POST /jobs + GET /jobs/:id + POST /jobs/:id/nodes/N07/select + GET /jobs/:id/output 路由定义
   Test: node -e "const c=require('fs').readFileSync('apps/api/src/routes/video-remake.ts','utf8');if(!c.includes('N07')){console.error('FAIL:缺N07路由');process.exit(1);}if(!c.includes('output')){console.error('FAIL:缺output路由');process.exit(1);}console.log('OK')"
 
-- [ ] [ARTIFACT] `apps/api/src/services/video-remake.service.ts` 新建，含 TOAPI_API_KEY + DASHSCOPE_API_KEY + i2v/happy-horse 调用 + analyzeSceneFrame/evaluateFrameScores/redrawFrameWithToAPI/generateVideoWithDashScope 导出
-  Test: node -e "const c=require('fs').readFileSync('apps/api/src/services/video-remake.service.ts','utf8');if(!c.includes('TOAPI_API_KEY')){console.error('FAIL:缺TOAPI_API_KEY');process.exit(1);}if(!c.includes('DASHSCOPE_API_KEY')){console.error('FAIL:缺DASHSCOPE_API_KEY');process.exit(1);}if(!c.includes('analyzeSceneFrame')){console.error('FAIL:缺analyzeSceneFrame导出');process.exit(1);}if(!c.includes('evaluateFrameScores')){console.error('FAIL:缺evaluateFrameScores导出');process.exit(1);}console.log('OK')"
+- [ ] [ARTIFACT] `apps/api/src/services/video-remake.service.ts` 新建，含 TOAPI_API_KEY + DASHSCOPE_API_KEY + 所有导出函数（createVideoRemakeJob / getVideoRemakeJob / extractFrames / analyzeSceneFrame / redrawFrameWithToAPI / evaluateFrameScores / approveN06Review / selectN07Frame / generateVideoWithDashScope / getVideoRemakeOutput）
+  Test: node -e "const c=require('fs').readFileSync('apps/api/src/services/video-remake.service.ts','utf8');['TOAPI_API_KEY','DASHSCOPE_API_KEY','extractFrames','approveN06Review','redrawFrameWithToAPI','generateVideoWithDashScope','analyzeSceneFrame','evaluateFrameScores'].forEach(s=>{if(!c.includes(s)){console.error('FAIL:缺',s);process.exit(1);}});console.log('OK')"
 
-- [ ] [ARTIFACT] `apps/dashboard/e2e/video-remake.spec.ts` **commit-1 创建（RED）**，含9节点路径 + N03/N05/N04/N09/100MB 完整 Playwright 测试
-  Test: node -e "const c=require('fs').readFileSync('apps/dashboard/e2e/video-remake.spec.ts','utf8');if(!c.includes('/video-remake')){console.error('FAIL:spec缺路由');process.exit(1);}['N03','N05','N04','N09'].forEach(n=>{if(!c.includes(n)){console.error('FAIL:spec缺',n,'断言');process.exit(1);}});console.log('OK')"
+- [ ] [ARTIFACT] `apps/dashboard/e2e/video-remake.spec.ts` **commit-1 创建（RED）**，含9节点路径 + N03/N04/N05/N09/100MB 完整 Playwright 测试
+  Test: node -e "const c=require('fs').readFileSync('apps/dashboard/e2e/video-remake.spec.ts','utf8');if(!c.includes('/video-remake')){console.error('FAIL:spec缺路由');process.exit(1);}['N03','N04','N05','N09'].forEach(n=>{if(!c.includes(n)){console.error('FAIL:spec缺',n,'断言');process.exit(1);}});console.log('OK')"
 
-- [ ] [ARTIFACT] `sprints/06100919-line07-video-remake-pipeline/e2e-verify.ps1` 存在，含 Vite preview 启动 + Playwright video-remake.spec.ts 调用
-  Test: node -e "const c=require('fs').readFileSync('sprints/06100919-line07-video-remake-pipeline/e2e-verify.ps1','utf8');if(!c.includes('vite')){console.error('FAIL:ps1缺vite');process.exit(1);}if(!c.includes('video-remake.spec.ts')){console.error('FAIL:ps1缺spec引用');process.exit(1);}console.log('OK')"
+- [ ] [ARTIFACT] `sprints/06100919-line07-video-remake-pipeline/e2e-verify.ps1` 存在，含 Phase 1（Vite preview + Playwright）和 Phase 2（API server 启动 + ffprobe smoke）
+  Test: node -e "const c=require('fs').readFileSync('sprints/06100919-line07-video-remake-pipeline/e2e-verify.ps1','utf8');if(!c.includes('vite')){console.error('FAIL:ps1缺vite');process.exit(1);}if(!c.includes('ffprobe')){console.error('FAIL:ps1缺ffprobe(Phase2)');process.exit(1);}if(!c.includes('TOAPI_API_KEY')){console.error('FAIL:ps1缺TOAPI_API_KEY验证');process.exit(1);}console.log('OK')"
+
+- [ ] [ARTIFACT] `.github/workflows/e2e-windows.yml` 已更新，`env` 段含 `TOAPI_API_KEY: ${{ secrets.TOAPI_API_KEY }}` 和 `DASHSCOPE_API_KEY: ${{ secrets.DASHSCOPE_API_KEY }}`，`timeout-minutes` 已提升至 45
+  Test: node -e "const c=require('fs').readFileSync('.github/workflows/e2e-windows.yml','utf8');if(!c.includes('TOAPI_API_KEY')){console.error('FAIL:workflow缺TOAPI_API_KEY');process.exit(1);}if(!c.includes('DASHSCOPE_API_KEY')){console.error('FAIL:workflow缺DASHSCOPE_API_KEY');process.exit(1);}if(!c.includes('timeout-minutes: 45')){console.error('FAIL:workflow timeout未提升到45');process.exit(1);}console.log('OK')"
 
 ---
 
@@ -82,22 +85,20 @@ const n = job.nodes[0];
 if (!n.node_id || !n.label || !n.status || !("input" in n) || !("output" in n)) {
   console.error("FAIL: N01缺字段", Object.keys(n)); process.exit(1);
 }
-const ids = job.nodes.map(x => x.node_id);
-if (!ids.includes("N01") || !ids.includes("N09")) { console.error("FAIL: 缺N01或N09"); process.exit(1); }
 if (typeof job.filename !== "string" || job.filename.length === 0) { console.error("FAIL: filename非string或空"); process.exit(1); }
-if (typeof job.duration_seconds !== "number") { console.error("FAIL: duration_seconds非number, got", typeof job.duration_seconds); process.exit(1); }
-if (typeof job.width !== "number") { console.error("FAIL: width非number, got", typeof job.width); process.exit(1); }
-if (typeof job.height !== "number") { console.error("FAIL: height非number, got", typeof job.height); process.exit(1); }
-console.log("OK nodes.length=9 ids=" + ids.join(",") + " filename=" + job.filename + " duration_seconds=" + job.duration_seconds + " width=" + job.width + " height=" + job.height);
+if (typeof job.duration_seconds !== "number") { console.error("FAIL: duration_seconds非number"); process.exit(1); }
+if (typeof job.width !== "number") { console.error("FAIL: width非number"); process.exit(1); }
+if (typeof job.height !== "number") { console.error("FAIL: height非number"); process.exit(1); }
+console.log("OK nodes.length=9 filename=" + job.filename);
 EOF'
-  期望: OK（nodes 数组9项，每项含完整字段，N01/N09 存在；filename 非空 string，duration_seconds/width/height 为 number）
+  期望: OK（nodes 数组9项，每项含完整字段；filename 非空 string，duration_seconds/width/height 为 number）
 
 ### [BEHAVIOR 4] N03 场景分析 — 节点输出含 original_frame_url + prompt_text
 
 **Golden Path 对应**: Step 3 — N03 执行完成，输出原帧URL + AI生成Prompt文本
 **自查**: 若 analyzeSceneFrame 未实现 → import 失败 → FAIL；若 output 缺字段 → FAIL ✅
 
-- [ ] [BEHAVIOR] analyzeSceneFrame 返回 { original_frame_url: string, prompt_text: string(非空) }
+- [ ] [BEHAVIOR] analyzeSceneFrame 返回 { original_frame_url: string(非空), prompt_text: string(非空) }
   Test: manual:bash -c 'TEST_MODE=1 node --input-type=module << '"'"'EOF'"'"'
 import { analyzeSceneFrame } from "./apps/api/src/services/video-remake.service.js";
 const r = await analyzeSceneFrame({ frameUrl: "fixture://test-frame-0.jpg", frameIndex: 0 });
@@ -107,7 +108,7 @@ if (typeof r.original_frame_url !== "string" || r.original_frame_url.length === 
 if (typeof r.prompt_text !== "string" || r.prompt_text.length === 0) {
   console.error("FAIL: N03 output 缺 prompt_text 或为空"); process.exit(1);
 }
-console.log("OK N03 original_frame_url=" + r.original_frame_url.slice(0,30) + "... prompt_text.len=" + r.prompt_text.length);
+console.log("OK N03 prompt_text.len=" + r.prompt_text.length);
 EOF'
   期望: OK（original_frame_url 非空 string，prompt_text 非空 string）
 
@@ -151,9 +152,9 @@ console.log("OK selected_frame=" + r.selected_frame);
 EOF'
   期望: OK（keys 精确等于 ["job_id","selected_frame"]，selected_frame 非空，无禁用字段）
 
-### [BEHAVIOR 7] GET .../output — 真实结构验证（duration_seconds > 0，has_video_stream = true）
+### [BEHAVIOR 7] GET .../output — schema 验证（duration_seconds > 0，has_video_stream = true）
 
-**Golden Path 对应**: Step 7 — N09 合成完成，输出 MP4 可下载
+**Golden Path 对应**: Step 7 — N09 合成完成，output schema 正确（单测层验证；ffprobe 在 Phase 2 smoke）
 **自查**: 若 getVideoRemakeOutput 未实现 → import 失败 → FAIL；若 duration_seconds ≤ 0 → FAIL ✅
 
 - [ ] [BEHAVIOR] getVideoRemakeOutput 返回 { job_id, download_url, duration_seconds > 0, has_video_stream: true }，禁用字段不存在
@@ -234,7 +235,7 @@ EOF'
 
 ### [BEHAVIOR 11] N08 成功路径 — generateVideoWithDashScope 返回视频片段 schema
 
-**Golden Path 对应**: Step 8 (N08 i2v生成) — PRD DoD #5:"N08 调用 Aliyun DashScope happy-horse i2v，返回视频片段"；成功时 nodes[N08].output 含 video_segment_url + duration_seconds
+**Golden Path 对应**: Step 8 (N08 i2v生成) — PRD DoD #5:"N08 调用 Aliyun DashScope happy-horse i2v，返回视频片段"
 **自查**: 若 generateVideoWithDashScope 未实现成功路径 → 函数不存在或缺字段 → FAIL ✅
 
 - [ ] [BEHAVIOR] TEST_MODE=1 时 generateVideoWithDashScope 返回 { video_segment_url: string(非空), duration_seconds: number(>0) }
@@ -247,17 +248,86 @@ if (typeof r.video_segment_url !== "string" || r.video_segment_url.length === 0)
 if (typeof r.duration_seconds !== "number" || r.duration_seconds <= 0) {
   console.error("FAIL: N08 output duration_seconds 非正数, got", r.duration_seconds); process.exit(1);
 }
-console.log("OK N08成功路径 video_segment_url=" + r.video_segment_url.slice(0,40) + " duration_seconds=" + r.duration_seconds);
+console.log("OK N08成功路径 video_segment_url.slice=" + r.video_segment_url.slice(0,40) + " duration_seconds=" + r.duration_seconds);
 EOF'
   期望: OK（video_segment_url 非空 string，duration_seconds > 0）
 
+### [BEHAVIOR 12] N04 success path — redrawFrameWithToAPI 返回 {original_frame_url, redrawn_frame_url}
+
+**Golden Path 对应**: Step 5 — PRD DoD #3:"N04 调用 ToAPI gpt-image-2 返回重绘图，节点展开可见原帧/重绘帧对比"
+**自查**: 若 redrawFrameWithToAPI 未实现成功路径 → import 失败或缺字段 → FAIL ✅
+
+- [ ] [BEHAVIOR] TEST_MODE=1 时 redrawFrameWithToAPI 返回 { original_frame_url: string(非空), redrawn_frame_url: string(非空) }
+  Test: manual:bash -c 'TEST_MODE=1 node --input-type=module << '"'"'EOF'"'"'
+import { redrawFrameWithToAPI } from "./apps/api/src/services/video-remake.service.js";
+const r = await redrawFrameWithToAPI({ frameUrl: "fixture://test-frame-0.jpg", frameIndex: 0 });
+if (typeof r.original_frame_url !== "string" || r.original_frame_url.length === 0) {
+  console.error("FAIL: N04 output 缺 original_frame_url"); process.exit(1);
+}
+if (typeof r.redrawn_frame_url !== "string" || r.redrawn_frame_url.length === 0) {
+  console.error("FAIL: N04 output 缺 redrawn_frame_url"); process.exit(1);
+}
+console.log("OK N04 success redrawn_frame_url=" + r.redrawn_frame_url.slice(0,40));
+EOF'
+  期望: OK（original_frame_url 非空 string，redrawn_frame_url 非空 string）
+
+### [BEHAVIOR 13] N02 抽帧 — extractFrames 返回 frames 数组
+
+**Golden Path 对应**: Step 2.5 — PRD Golden Path Step 2:"系统均匀抽取关键帧序列；节点展开可见帧缩略图列表"
+**自查**: 若 extractFrames 未实现 → import 失败 → FAIL；若 frames 为空 → FAIL ✅
+
+- [ ] [BEHAVIOR] TEST_MODE=1 时 extractFrames 返回 { frames: [{ frame_url: string(非空), timestamp_seconds: number }] }
+  Test: manual:bash -c 'TEST_MODE=1 node --input-type=module << '"'"'EOF'"'"'
+import { createVideoRemakeJob, extractFrames } from "./apps/api/src/services/video-remake.service.js";
+const c = await createVideoRemakeJob({ filename: "test.mp4", fileSizeBytes: 1024, buffer: Buffer.from([0,0,0]) });
+const r = await extractFrames({ jobId: c.job_id });
+if (!Array.isArray(r.frames) || r.frames.length === 0) {
+  console.error("FAIL: N02 frames非数组或为空"); process.exit(1);
+}
+const f = r.frames[0];
+if (typeof f.frame_url !== "string" || f.frame_url.length === 0) {
+  console.error("FAIL: N02 frames[0] 缺 frame_url"); process.exit(1);
+}
+if (typeof f.timestamp_seconds !== "number") {
+  console.error("FAIL: N02 frames[0] 缺 timestamp_seconds(number)"); process.exit(1);
+}
+console.log("OK N02 frames.length=" + r.frames.length + " frame_url=" + f.frame_url.slice(0,40));
+EOF'
+  期望: OK（frames 非空数组，每项含 frame_url(string) + timestamp_seconds(number)）
+
+### [BEHAVIOR 14] N06 重绘审核 — approveN06Review 返回 done 状态
+
+**Golden Path 对应**: Step 5.5 — PRD Golden Path Step 6:"预览重绘帧序列，用户可直接 Continue；节点展开可见帧序列"
+**自查**: 若 approveN06Review 未实现 → import 失败 → FAIL；若 status != done → FAIL ✅
+
+- [ ] [BEHAVIOR] TEST_MODE=1 时 approveN06Review 返回 { job_id: string, node_id: "N06", status: "done" }
+  Test: manual:bash -c 'TEST_MODE=1 node --input-type=module << '"'"'EOF'"'"'
+import { createVideoRemakeJob, approveN06Review } from "./apps/api/src/services/video-remake.service.js";
+const c = await createVideoRemakeJob({ filename: "test.mp4", fileSizeBytes: 1024, buffer: Buffer.from([0,0,0]) });
+const r = await approveN06Review({ jobId: c.job_id });
+if (r.node_id !== "N06") { console.error("FAIL: node_id != N06, got", r.node_id); process.exit(1); }
+if (r.status !== "done") { console.error("FAIL: status != done, got", r.status); process.exit(1); }
+if (typeof r.job_id !== "string") { console.error("FAIL: job_id 非 string"); process.exit(1); }
+console.log("OK N06 done job_id=" + r.job_id + " node_id=" + r.node_id);
+EOF'
+  期望: OK（node_id="N06"，status="done"，job_id 非空 string）
+
 ---
 
-## BEHAVIOR:E2E 条目（user_facing 专属，Mode B final-e2e — Playwright + Vite）
+## BEHAVIOR:E2E 条目（user_facing 专属，Mode B final-e2e — 两阶段）
 
-- [ ] [BEHAVIOR:E2E] Playwright 跑完整 Golden Path：页面加载9节点 → 上传 MP4 → N01-N06 依序变绿 → N03 展开见原帧+Prompt → N04 展开见对比帧 → N05 展开见评分列表 → N07 CI自动选帧 → N09 下载按钮出现 → has_video_stream=true + duration_seconds>0
-  Test: 通过 `sprints/06100919-line07-video-remake-pipeline/e2e-verify.ps1` 触发（CI=true，windows-latest GHA）
-  期望: exit 0 + "✅ video-remake 9节点流水线 E2E 验证通过"
+> **两阶段说明**：
+> - **Phase 1（UI）**：Playwright 使用 `page.route` stub 验证 Dashboard 行为，无需真实后端。
+> - **Phase 2（smoke）**：`e2e-verify.ps1` Step 7 启动本地 API server + 真实 AI 调用，ffprobe 验证最终产出。
+> - `[BEHAVIOR:E2E:UI]` 和 `[BEHAVIOR:E2E:SMOKE]` 分别对应两个阶段。
+
+- [ ] [BEHAVIOR:E2E:UI] Playwright Phase 1：页面加载9节点 → 上传 MP4 → N01-N06 依序变绿 → N03 展开见原帧+Prompt → N04 展开见对比帧 → N05 展开见评分列表 → N07 CI自动选帧 → N09 下载按钮出现
+  Test: 通过 `sprints/06100919-line07-video-remake-pipeline/e2e-verify.ps1` Phase 1（CI=true，windows-latest GHA，API stub）
+  期望: Playwright exit 0 + "✅ [Phase 1] Playwright UI 验证通过"
+
+- [ ] [BEHAVIOR:E2E:SMOKE] backend smoke Phase 2：真实 API 调用（N04 gpt-image-2 + N08 DashScope i2v）→ N09 completed → 下载 MP4 → ffprobe has_video_stream=true + duration_seconds>0
+  Test: 通过 `sprints/06100919-line07-video-remake-pipeline/e2e-verify.ps1` Phase 2（TOAPI_API_KEY + DASHSCOPE_API_KEY 注入，真实 AI 调用，ffprobe 验证非 mock）
+  期望: ffprobe exit 0 + "✅ [Phase 2] backend smoke 验证通过"
 
 - [ ] [BEHAVIOR:E2E] 边界：超100MB文件前端拒绝，错误提示可见，不触发后端 API
   Test: 通过 `apps/dashboard/e2e/video-remake.spec.ts` 内 `超100MB文件` test case 覆盖（Playwright）

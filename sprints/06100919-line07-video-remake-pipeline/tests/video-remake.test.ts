@@ -171,6 +171,54 @@ describe('video-remake service — getOutput', () => {
   });
 });
 
+describe('video-remake service — extractFrames (N02)', () => {
+  it('N02 extractFrames 返回 frames 非空数组，每项含 frame_url(string) + timestamp_seconds(number)', async () => {
+    process.env.TEST_MODE = '1';
+    const { createVideoRemakeJob, extractFrames } = await import(
+      '../../../apps/api/src/services/video-remake.service.js'
+    );
+    const created = await createVideoRemakeJob({ filename: 'test.mp4', fileSizeBytes: 1024, buffer: Buffer.from('') });
+    const result = await extractFrames({ jobId: created.job_id });
+    expect(Array.isArray(result.frames)).toBe(true);
+    expect(result.frames.length).toBeGreaterThan(0);
+    const f = result.frames[0];
+    expect(typeof f.frame_url).toBe('string');
+    expect(f.frame_url.length).toBeGreaterThan(0);
+    expect(typeof f.timestamp_seconds).toBe('number');
+    delete process.env.TEST_MODE;
+  });
+});
+
+describe('video-remake service — redrawFrameWithToAPI success (N04)', () => {
+  it('TEST_MODE=1 时 redrawFrameWithToAPI 返回 { original_frame_url: string, redrawn_frame_url: string }', async () => {
+    process.env.TEST_MODE = '1';
+    const { redrawFrameWithToAPI } = await import(
+      '../../../apps/api/src/services/video-remake.service.js'
+    );
+    const result = await redrawFrameWithToAPI({ frameUrl: 'fixture://test-frame-0.jpg', frameIndex: 0 });
+    expect(typeof result.original_frame_url).toBe('string');
+    expect(result.original_frame_url.length).toBeGreaterThan(0);
+    expect(typeof result.redrawn_frame_url).toBe('string');
+    expect(result.redrawn_frame_url.length).toBeGreaterThan(0);
+    delete process.env.TEST_MODE;
+  });
+});
+
+describe('video-remake service — approveN06Review (N06)', () => {
+  it('approveN06Review 返回 { job_id: string, node_id: "N06", status: "done" }', async () => {
+    process.env.TEST_MODE = '1';
+    const { createVideoRemakeJob, approveN06Review } = await import(
+      '../../../apps/api/src/services/video-remake.service.js'
+    );
+    const created = await createVideoRemakeJob({ filename: 'test.mp4', fileSizeBytes: 1024, buffer: Buffer.from('') });
+    const result = await approveN06Review({ jobId: created.job_id });
+    expect(result.node_id).toBe('N06');
+    expect(result.status).toBe('done');
+    expect(typeof result.job_id).toBe('string');
+    delete process.env.TEST_MODE;
+  });
+});
+
 describe('video-remake service — N04 error path', () => {
   it('FORCE_TOAPI_FAIL=1 时 redrawFrameWithToAPI 抛出 { code: "N04_API_FAILURE" }', async () => {
     process.env.FORCE_TOAPI_FAIL = '1';

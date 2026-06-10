@@ -11,25 +11,28 @@
       "apps/dashboard/src/pages/VideoRemakePipelinePage.tsx（新建，Playwright E2E变绿）",
       "apps/dashboard/src/components/video-remake/（新建节点图+I/O展开组件）",
       "apps/dashboard/src/config/navigation.config.ts（添加 /video-remake 路由）",
-      "apps/api/src/routes/video-remake.ts（新建路由）",
+      "apps/api/src/routes/video-remake.ts（新建路由，含 N06/continue 端点）",
       "apps/api/src/controllers/video-remake.controller.ts（新建控制器）",
-      "apps/api/src/services/video-remake.service.ts（新建服务，含 analyzeSceneFrame/evaluateFrameScores/redrawFrameWithToAPI/generateVideoWithDashScope 导出）",
+      "apps/api/src/services/video-remake.service.ts（新建服务，含 createVideoRemakeJob/getVideoRemakeJob/extractFrames/analyzeSceneFrame/redrawFrameWithToAPI/evaluateFrameScores/approveN06Review/selectN07Frame/generateVideoWithDashScope/getVideoRemakeOutput 导出，TEST_MODE=1/FORCE_TOAPI_FAIL=1/N08_TIMEOUT_MS 环境变量支持）",
       "apps/api/src/app.ts（注册 /api/video-remake 路由）",
-      "sprints/06100919-line07-video-remake-pipeline/e2e-verify.ps1（更新）"
+      "sprints/06100919-line07-video-remake-pipeline/e2e-verify.ps1（Phase 1 + Phase 2 已写入）",
+      "sprints/06100919-line07-video-remake-pipeline/tests/fixtures/test-1s-64x64.mp4（Phase 2 fallback fixture）",
+      ".github/workflows/e2e-windows.yml（已添加 TOAPI_API_KEY/DASHSCOPE_API_KEY secrets + timeout-minutes:45）"
     ]
   },
   "tasks": [
     {
       "task_id": "ws1",
       "title": "Line 07 AI爆款视频翻拍 — 9节点可视化流水线（thin）",
-      "scope": "新建 Dashboard /video-remake 页面（9节点n8n风格图）+ API路由 /api/video-remake/*（上传/节点状态/N07选帧/输出下载）+ video-remake.service.ts（gpt-image-2重绘 + DashScope happy-horse i2v调用，含 analyzeSceneFrame/evaluateFrameScores/redrawFrameWithToAPI/generateVideoWithDashScope 导出，TEST_MODE=1/FORCE_TOAPI_FAIL=1/N08_TIMEOUT_MS 环境变量支持）+ navigation.config.ts路由注册 + e2e-verify.ps1",
+      "scope": "新建 Dashboard /video-remake 页面（9节点n8n风格图）+ API路由 /api/video-remake/*（上传/节点状态/N06审核/N07选帧/输出下载）+ video-remake.service.ts（gpt-image-2重绘 + DashScope happy-horse i2v，含 createVideoRemakeJob/getVideoRemakeJob/extractFrames/analyzeSceneFrame/redrawFrameWithToAPI/evaluateFrameScores/approveN06Review/selectN07Frame/generateVideoWithDashScope/getVideoRemakeOutput 全部导出）+ navigation.config.ts路由注册 + e2e-verify.ps1（Phase 1 Playwright + Phase 2 backend smoke）+ e2e-windows.yml 添加 TOAPI/DASHSCOPE secrets + Phase 2 fallback fixture",
       "dod": [
         "[ARTIFACT] apps/dashboard/src/pages/VideoRemakePipelinePage.tsx 含 N01–N09 节点定义",
         "[ARTIFACT] apps/dashboard/src/config/navigation.config.ts 含 /video-remake 路由",
-        "[ARTIFACT] apps/api/src/routes/video-remake.ts 含 POST /jobs + GET /jobs/:id + POST /jobs/:id/nodes/N07/select + GET /jobs/:id/output",
-        "[ARTIFACT] apps/api/src/services/video-remake.service.ts 含 TOAPI_API_KEY + DASHSCOPE_API_KEY + i2v/happy-horse + analyzeSceneFrame + evaluateFrameScores + redrawFrameWithToAPI + generateVideoWithDashScope",
-        "[ARTIFACT] apps/dashboard/e2e/video-remake.spec.ts 含9节点路径+N03/N05/N04/N09完整 Playwright 测试（commit-1 RED）",
-        "[ARTIFACT] sprints/06100919-line07-video-remake-pipeline/e2e-verify.ps1 含 Vite preview + Playwright 调用",
+        "[ARTIFACT] apps/api/src/routes/video-remake.ts 含 POST /jobs + GET /jobs/:id + POST /jobs/:id/nodes/N07/select + POST /jobs/:id/nodes/N06/continue + GET /jobs/:id/output",
+        "[ARTIFACT] apps/api/src/services/video-remake.service.ts 含 TOAPI_API_KEY + DASHSCOPE_API_KEY + extractFrames + approveN06Review + redrawFrameWithToAPI + generateVideoWithDashScope 等全部导出",
+        "[ARTIFACT] apps/dashboard/e2e/video-remake.spec.ts 含9节点路径+N03/N04/N05/N09完整 Playwright 测试（commit-1 RED）",
+        "[ARTIFACT] sprints/06100919-line07-video-remake-pipeline/e2e-verify.ps1 含 Phase 1（Vite+Playwright）+ Phase 2（API server+ffprobe）",
+        "[ARTIFACT] .github/workflows/e2e-windows.yml 含 TOAPI_API_KEY + DASHSCOPE_API_KEY secrets + timeout-minutes:45",
         "[BEHAVIOR] createVideoRemakeJob 返回 job_id(string) + status='queued'，禁用字段不存在",
         "[BEHAVIOR] fileSizeBytes > 100MB 时 createVideoRemakeJob 抛出错误",
         "[BEHAVIOR] getVideoRemakeJob 返回 nodes 数组含9项，每项含 node_id/label/status/input/output",
@@ -40,7 +43,10 @@
         "[BEHAVIOR] getVideoRemakeJob('non-existent') 抛出含 404/Not Found 错误",
         "[BEHAVIOR] FORCE_TOAPI_FAIL=1 时 redrawFrameWithToAPI 抛出 code=N04_API_FAILURE",
         "[BEHAVIOR] N08_TIMEOUT_MS=1 时 generateVideoWithDashScope 抛出 code=N08_TIMEOUT",
-        "[BEHAVIOR] TEST_MODE=1 时 generateVideoWithDashScope 返回 { video_segment_url: string(非空), duration_seconds: number(>0) }"
+        "[BEHAVIOR] TEST_MODE=1 时 generateVideoWithDashScope 返回 { video_segment_url: string(非空), duration_seconds: number(>0) }",
+        "[BEHAVIOR] TEST_MODE=1 时 redrawFrameWithToAPI 返回 { original_frame_url: string, redrawn_frame_url: string }（N04 success schema）",
+        "[BEHAVIOR] TEST_MODE=1 时 extractFrames 返回 { frames: [{ frame_url: string, timestamp_seconds: number }] }（N02 output）",
+        "[BEHAVIOR] approveN06Review 返回 { job_id: string, node_id: 'N06', status: 'done' }（N06 continue）"
       ],
       "files": [
         "apps/dashboard/src/pages/VideoRemakePipelinePage.tsx",
@@ -51,7 +57,9 @@
         "apps/api/src/services/video-remake.service.ts",
         "apps/api/src/app.ts",
         "apps/dashboard/e2e/video-remake.spec.ts",
-        "sprints/06100919-line07-video-remake-pipeline/e2e-verify.ps1"
+        "sprints/06100919-line07-video-remake-pipeline/e2e-verify.ps1",
+        "sprints/06100919-line07-video-remake-pipeline/tests/fixtures/test-1s-64x64.mp4",
+        ".github/workflows/e2e-windows.yml"
       ],
       "depends_on": [],
       "complexity": "L",
