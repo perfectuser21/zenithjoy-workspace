@@ -1,0 +1,40 @@
+{
+  "initiative_id": "pending",
+  "journey_type": "user_facing",
+  "journey_type_reason": "涉及 Dashboard 新页面 /video-remake，用户直接与9节点可视化流水线图交互，并上传文件、查看AI处理结果、下载翻拍MP4",
+  "tasks": [
+    {
+      "task_id": "ws1",
+      "title": "Line 07 AI爆款视频翻拍 — 9节点可视化流水线（thin）",
+      "scope": "新建 Dashboard /video-remake 页面（9节点n8n风格图）+ API路由 /api/video-remake/*（上传/节点状态/N07选帧/输出下载）+ video-remake.service.ts（gpt-image-2重绘 + DashScope happy-horse i2v调用）+ navigation.config.ts路由注册 + Playwright E2E spec + e2e-verify.ps1",
+      "dod": [
+        "[ARTIFACT] apps/dashboard/src/pages/VideoRemakePipelinePage.tsx 含 N01–N09 节点定义",
+        "[ARTIFACT] apps/dashboard/src/config/navigation.config.ts 含 /video-remake 路由",
+        "[ARTIFACT] apps/api/src/routes/video-remake.ts 含 POST /jobs + GET /jobs/:id + POST /jobs/:id/nodes/N07/select + GET /jobs/:id/output",
+        "[ARTIFACT] apps/api/src/services/video-remake.service.ts 含 TOAPI_API_KEY + DASHSCOPE_API_KEY + i2v/happy-horse",
+        "[ARTIFACT] apps/dashboard/e2e/video-remake.spec.ts 含9节点路径完整 Playwright 测试",
+        "[ARTIFACT] sprints/06100919-line07-video-remake-pipeline/e2e-verify.ps1 含 Vite preview + Playwright 调用",
+        "[BEHAVIOR] POST /api/video-remake/jobs 返回 job_id(string) + status='queued'，禁用字段不存在",
+        "[BEHAVIOR] GET /api/video-remake/jobs/:job_id nodes 数组含9项，每项含 node_id/label/status/input/output",
+        "[BEHAVIOR] POST .../nodes/N07/select 返回 job_id + selected_frame，CI=true 自动选第一帧",
+        "[BEHAVIOR] GET .../output 返回 job_id/download_url/duration_seconds/has_video_stream，禁用字段不存在",
+        "[BEHAVIOR] error path — 无效 job_id 返回 HTTP 404 + error 字段",
+        "[BEHAVIOR] 超100MB文件 POST /jobs 返回 HTTP 400/413"
+      ],
+      "files": [
+        "apps/dashboard/src/pages/VideoRemakePipelinePage.tsx",
+        "apps/dashboard/src/components/video-remake/",
+        "apps/dashboard/src/config/navigation.config.ts",
+        "apps/api/src/routes/video-remake.ts",
+        "apps/api/src/controllers/video-remake.controller.ts",
+        "apps/api/src/services/video-remake.service.ts",
+        "apps/api/src/app.ts",
+        "apps/dashboard/e2e/video-remake.spec.ts",
+        "sprints/06100919-line07-video-remake-pipeline/e2e-verify.ps1"
+      ],
+      "depends_on": [],
+      "complexity": "L",
+      "estimated_minutes": 120
+    }
+  ]
+}
