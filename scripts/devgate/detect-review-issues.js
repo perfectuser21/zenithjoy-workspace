@@ -49,6 +49,7 @@ process.stdin.on('end', () => {
 
   const textWithoutHeadings = input
     .replace(/#+\s*[^🔴\n]*[（(]🔴[)）][^\n]*/g, '')  // section headings: "### 严重问题 (🔴)"
+    .replace(/#+\s+🔴\s*[^\n]*/g, '')                 // alt heading: "#### 🔴 严重问题"
     .replace(/🔴\s*\*\*[^*\n]+\*\*[^\n]*/g, '')        // inline heading-style: "🔴 **issue**"
     .replace(/[（(]🔴[)）]/g, '');                      // parenthesized backreferences: "修复X（🔴）"
   const hasActualRedFlag = /🔴/.test(textWithoutHeadings) && !noIssuesDeclared;
