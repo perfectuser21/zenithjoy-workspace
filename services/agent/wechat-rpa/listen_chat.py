@@ -287,18 +287,12 @@ def _force_foreground(hwnd: int) -> None:
 
 def _uia_send(uia_edit: Any, mw: Any, reply_text: str) -> bool:
     """
-    发送策略（按顺序尝试）：
-    1. 主路径（mmui::MainWindow）：拉前台 → 剪贴板 → keybd_event(Ctrl+V, Enter)。
-       session Invoke 后 WeChat 光标自然在聊天输入框；仅当 automation_id==chat_input_field
-       时才 set_focus，避免回退到搜索框时错误地把焦点移走。
-    2. 降级路径：SetValue + AttachThreadInput+Enter
-    3. 兜底：SW_RESTORE + 发送按钮 Invoke
-    成功返回 True。
+    后台静默发送：SetValue + AttachThreadInput + PostMessageW(Enter)。
+    全程无需前台焦点。兜底：发送按钮 Invoke。禁止 SW_RESTORE / keybd_event。
     """
     import ctypes as _ct
     _u32 = _ct.windll.user32
     _k32 = _ct.windll.kernel32
-    SW_RESTORE = 9
     SW_MINIMIZE = 6
     VK_RETURN = 0x0D
     main_hwnd = mw.element_info.handle
@@ -306,87 +300,41 @@ def _uia_send(uia_edit: Any, mw: Any, reply_text: str) -> bool:
     edit_hwnd = uia_edit.element_info.handle or main_hwnd
     _log(f"_uia_send: edit_hwnd={edit_hwnd} main_hwnd={main_hwnd} was_min={was_minimized}")
     try:
-        try:
-            mw_class = mw.element_info.class_name or ""
-        except Exception:
-            mw_class = ""
-        if mw_class == "mmui::MainWindow":
-            if _set_clipboard_text(reply_text):
-                _force_foreground(main_hwnd)
-                time.sleep(0.3)
-                fg = _u32.GetForegroundWindow()
-                if fg == main_hwnd:
-                    try:
-                        # 只有明确找到 chat_input_field 时才 set_focus；
-                        # 回退到搜索框时跳过——session Invoke 后光标已在聊天输入框。
-                        if (uia_edit.element_info.automation_id or "") == "chat_input_field":
-                            uia_edit.set_focus()
-                    except Exception:
-                        pass
-                    time.sleep(0.1)
-                    KEYEVENTF_KEYUP = 0x0002
-                    VK_CONTROL = 0x11
-                    _u32.keybd_event(VK_CONTROL, 0, 0, 0)
-                    _u32.keybd_event(0x41, 0, 0, 0)
-                    _u32.keybd_event(0x41, 0, KEYEVENTF_KEYUP, 0)
-                    _u32.keybd_event(VK_CONTROL, 0, KEYEVENTF_KEYUP, 0)
-                    time.sleep(0.1)
-                    _u32.keybd_event(VK_CONTROL, 0, 0, 0)
-                    _u32.keybd_event(0x56, 0, 0, 0)
-                    _u32.keybd_event(0x56, 0, KEYEVENTF_KEYUP, 0)
-                    _u32.keybd_event(VK_CONTROL, 0, KEYEVENTF_KEYUP, 0)
-                    time.sleep(0.3)
-                    _u32.keybd_event(VK_RETURN, 0, 0, 0)
-                    _u32.keybd_event(VK_RETURN, 0, KEYEVENTF_KEYUP, 0)
-                    time.sleep(0.4)
-                    try:
-                        remaining_kb = uia_edit.get_value() or ""
-                    except Exception:
-                        remaining_kb = ""
-                    if not remaining_kb:
-                        if was_minimized:
-                            _u32.ShowWindow(main_hwnd, SW_MINIMIZE)
-                        _log("_uia_send: 前台剪贴板+Enter 成功")
-                        return True
-                    _log(f"_uia_send: 前台剪贴板+Enter 失败（{len(remaining_kb)}字残留），回退 PostMessage")
-                else:
-                    _log(f"_uia_send: 未能拉前台（fg={fg}≠{main_hwnd}），回退 PostMessage")
-
-        # ── 降级路径：SetValue + AttachThreadInput+Enter ──
+        # 1. SetValue 直接写值，无需焦点
         uia_edit.iface_value.SetValue(reply_text)
         time.sleep(0.2)
+        # 2. 最小化时 SW_SHOWNA 还原但不抢焦点
         if was_minimized:
-            _u32.ShowWindow(main_hwnd, 8)  # SW_SHOWNA: 还原不抢焦点
-            _log("_uia_send: 主窗口最小化→SW_SHOWNA 还原（不抢焦点）")
+            _u32.ShowWindow(main_hwnd, 8)  # SW_SHOWNA = 8
             time.sleep(0.3)
+        # 3. AttachThreadInput + SetFocus（仅转移线程焦点，不抢前台）
         my_tid = _k32.GetCurrentThreadId()
         pid_buf = _ct.c_ulong(0)
         wx_tid = _u32.GetWindowThreadProcessId(edit_hwnd, _ct.byref(pid_buf))
         _u32.AttachThreadInput(my_tid, wx_tid, True)
         prev_focus = _u32.SetFocus(edit_hwnd)
         time.sleep(0.1)
+        # 4. PostMessageW 投递 Enter，不依赖前台
         _u32.PostMessageW(edit_hwnd, 0x0100, VK_RETURN, 0x001C0001)
         time.sleep(0.05)
         _u32.PostMessageW(edit_hwnd, 0x0101, VK_RETURN, 0xC01C0001)
+        # 5. 恢复焦点 + 断开线程绑定
         if prev_focus:
             _u32.SetFocus(prev_focus)
         _u32.AttachThreadInput(my_tid, wx_tid, False)
         time.sleep(0.4)
+        # 6. 验证：输入框清空 = 消息已发出
         try:
             remaining = uia_edit.get_value() or ""
         except Exception:
             remaining = ""
-        if not remaining and mw_class != "mmui::MainWindow":
+        if not remaining:
             if was_minimized:
                 _u32.ShowWindow(main_hwnd, SW_MINIMIZE)
             _log("_uia_send: AttachInput+Enter 成功（后台静默）")
             return True
-        if remaining:
-            _log(f"_uia_send: Enter未清空({len(remaining)}字)，回退SW_RESTORE+Invoke")
-        else:
-            _log("_uia_send: mmui 跳过 AttachInput+Enter 验证，直接 Invoke 兜底")
-        _u32.ShowWindow(main_hwnd, SW_RESTORE)
-        time.sleep(0.3)
+        _log(f"_uia_send: Enter未清空({len(remaining)}字)，回退 send button Invoke")
+        # 兜底：发送按钮 Invoke（禁止 SW_RESTORE）
         btn = _find_send_button(mw)
         if btn is not None:
             btn.iface_invoke.Invoke()
@@ -398,9 +346,9 @@ def _uia_send(uia_edit: Any, mw: Any, reply_text: str) -> bool:
             if not remaining2:
                 if was_minimized:
                     _u32.ShowWindow(main_hwnd, SW_MINIMIZE)
-                _log("_uia_send: SW_RESTORE+Invoke 成功（兜底）")
+                _log("_uia_send: send button Invoke 兜底成功")
                 return True
-            _log(f"_uia_send: SW_RESTORE+Invoke 失败（输入框仍有{len(remaining2)}字）")
+            _log(f"_uia_send: Invoke 兜底失败（输入框仍有{len(remaining2)}字）")
         return False
     except Exception as exc:
         _log(f"_uia_send: {exc}")
@@ -429,12 +377,7 @@ def _navigate_away(mw: Any) -> None:
 def reply_in_chat(mw: Any, item: Any, reply_text: str, sender: str = "") -> bool:
     """
     打开 item 对应会话并发出 reply_text。全程纯 UIA，禁止任何物理鼠标/键盘操作。
-
-    始终先 item.iface_invoke.Invoke() 激活正确会话（防止 _navigate_away 后面板停在
-    文件传输助手导致消息发错对象），再 SetValue + Enter/Invoke 发送。
-    sender：目标联系人名，用于验证面板是否切换到正确会话（防止 Invoke() 后 WeChat 面板
-    未及时切换就读到了旧会话的输入框，导致发到错误聊天窗口）。
-    失败 → 返回 False，下一轮询周期自动重试，全程纯 UIA 不触碰鼠标/键盘事件。
+    Invoke() 后等 2s（CRITICAL：UIA 树更新需要时间，少了找不到 chat_input_field）。
     """
     def _fresh_mw():
         try:
@@ -443,43 +386,18 @@ def reply_in_chat(mw: Any, item: Any, reply_text: str, sender: str = "") -> bool
         except Exception:
             return mw
 
-    def _chat_panel_ready(fmw: Any) -> bool:
-        """验证 WeChat 右侧面板已切换到 sender 对应的会话。
-
-        原理：Invoke() 打开会话后该 ListItem 的未读角标应消失（WeChat 标记已读）。
-        角标消失 = 面板已切换 = 当前 Edit 控件属于目标会话，可以安全写入。
-        """
-        if not sender:
-            return True
-        try:
-            for it in fmw.descendants(control_type="ListItem"):
-                try:
-                    name = it.element_info.name or ""
-                    if not name.startswith(sender):
-                        continue
-                    return "条]" not in name
-                except Exception:
-                    continue
-        except Exception:
-            pass
-        return False
-
     try:
         item.iface_invoke.Invoke()
-        _log("reply_in_chat: Invoke 激活会话，等面板切换…")
-        for attempt in range(6):  # 最多等 3s（每 0.5s 轮询一次）
-            time.sleep(0.5)
-            fmw = _fresh_mw()
-            if attempt < 2 or not _chat_panel_ready(fmw):
-                continue
-            uia_edit = _find_chat_input(fmw)
-            if uia_edit is not None:
-                if _uia_send(uia_edit, fmw, reply_text):
-                    _navigate_away(fmw)
-                    return True
-                break
+        _log("reply_in_chat: Invoke 激活会话，等 2s UIA 树更新…")
+        time.sleep(2.0)  # CRITICAL: chat_input_field 在 2s 后才出现在 UIA 树
+        fmw = _fresh_mw()
+        uia_edit = _find_chat_input(fmw)
+        if uia_edit is not None:
+            if _uia_send(uia_edit, fmw, reply_text):
+                _navigate_away(fmw)
+                return True
     except Exception as exc:
-        _log(f"reply_in_chat: Invoke 失败: {exc}")
+        _log(f"reply_in_chat: 失败: {exc}")
 
     _log("reply_in_chat: 发送失败，本轮跳过（下次轮询重试）")
     return False
