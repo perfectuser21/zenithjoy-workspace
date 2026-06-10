@@ -2,24 +2,44 @@
   "initiative_id": "pending",
   "journey_type": "user_facing",
   "journey_type_reason": "涉及 Dashboard 新页面 /video-remake，用户直接与9节点可视化流水线图交互，并上传文件、查看AI处理结果、下载翻拍MP4",
+  "tdd_commit_order": {
+    "commit_1_red": [
+      "sprints/06100919-line07-video-remake-pipeline/tests/video-remake.test.ts（vitest RED，所有测试失败）",
+      "apps/dashboard/e2e/video-remake.spec.ts（Playwright RED，页面不存在故所有test失败）"
+    ],
+    "commit_2_green": [
+      "apps/dashboard/src/pages/VideoRemakePipelinePage.tsx（新建，Playwright E2E变绿）",
+      "apps/dashboard/src/components/video-remake/（新建节点图+I/O展开组件）",
+      "apps/dashboard/src/config/navigation.config.ts（添加 /video-remake 路由）",
+      "apps/api/src/routes/video-remake.ts（新建路由）",
+      "apps/api/src/controllers/video-remake.controller.ts（新建控制器）",
+      "apps/api/src/services/video-remake.service.ts（新建服务，含 analyzeSceneFrame/evaluateFrameScores/redrawFrameWithToAPI/generateVideoWithDashScope 导出）",
+      "apps/api/src/app.ts（注册 /api/video-remake 路由）",
+      "sprints/06100919-line07-video-remake-pipeline/e2e-verify.ps1（更新）"
+    ]
+  },
   "tasks": [
     {
       "task_id": "ws1",
       "title": "Line 07 AI爆款视频翻拍 — 9节点可视化流水线（thin）",
-      "scope": "新建 Dashboard /video-remake 页面（9节点n8n风格图）+ API路由 /api/video-remake/*（上传/节点状态/N07选帧/输出下载）+ video-remake.service.ts（gpt-image-2重绘 + DashScope happy-horse i2v调用）+ navigation.config.ts路由注册 + Playwright E2E spec + e2e-verify.ps1",
+      "scope": "新建 Dashboard /video-remake 页面（9节点n8n风格图）+ API路由 /api/video-remake/*（上传/节点状态/N07选帧/输出下载）+ video-remake.service.ts（gpt-image-2重绘 + DashScope happy-horse i2v调用，含 analyzeSceneFrame/evaluateFrameScores/redrawFrameWithToAPI/generateVideoWithDashScope 导出，TEST_MODE=1/FORCE_TOAPI_FAIL=1/N08_TIMEOUT_MS 环境变量支持）+ navigation.config.ts路由注册 + e2e-verify.ps1",
       "dod": [
         "[ARTIFACT] apps/dashboard/src/pages/VideoRemakePipelinePage.tsx 含 N01–N09 节点定义",
         "[ARTIFACT] apps/dashboard/src/config/navigation.config.ts 含 /video-remake 路由",
         "[ARTIFACT] apps/api/src/routes/video-remake.ts 含 POST /jobs + GET /jobs/:id + POST /jobs/:id/nodes/N07/select + GET /jobs/:id/output",
-        "[ARTIFACT] apps/api/src/services/video-remake.service.ts 含 TOAPI_API_KEY + DASHSCOPE_API_KEY + i2v/happy-horse",
-        "[ARTIFACT] apps/dashboard/e2e/video-remake.spec.ts 含9节点路径完整 Playwright 测试",
+        "[ARTIFACT] apps/api/src/services/video-remake.service.ts 含 TOAPI_API_KEY + DASHSCOPE_API_KEY + i2v/happy-horse + analyzeSceneFrame + evaluateFrameScores + redrawFrameWithToAPI + generateVideoWithDashScope",
+        "[ARTIFACT] apps/dashboard/e2e/video-remake.spec.ts 含9节点路径+N03/N05/N04/N09完整 Playwright 测试（commit-1 RED）",
         "[ARTIFACT] sprints/06100919-line07-video-remake-pipeline/e2e-verify.ps1 含 Vite preview + Playwright 调用",
-        "[BEHAVIOR] POST /api/video-remake/jobs 返回 job_id(string) + status='queued'，禁用字段不存在",
-        "[BEHAVIOR] GET /api/video-remake/jobs/:job_id nodes 数组含9项，每项含 node_id/label/status/input/output",
-        "[BEHAVIOR] POST .../nodes/N07/select 返回 job_id + selected_frame，CI=true 自动选第一帧",
-        "[BEHAVIOR] GET .../output 返回 job_id/download_url/duration_seconds/has_video_stream，禁用字段不存在",
-        "[BEHAVIOR] error path — 无效 job_id 返回 HTTP 404 + error 字段",
-        "[BEHAVIOR] 超100MB文件 POST /jobs 返回 HTTP 400/413"
+        "[BEHAVIOR] createVideoRemakeJob 返回 job_id(string) + status='queued'，禁用字段不存在",
+        "[BEHAVIOR] fileSizeBytes > 100MB 时 createVideoRemakeJob 抛出错误",
+        "[BEHAVIOR] getVideoRemakeJob 返回 nodes 数组含9项，每项含 node_id/label/status/input/output",
+        "[BEHAVIOR] analyzeSceneFrame 返回 { original_frame_url: string, prompt_text: string(非空) }（N03 output）",
+        "[BEHAVIOR] evaluateFrameScores 返回 { frames: [{ redrawn_frame_url, score }] }（N05 output）",
+        "[BEHAVIOR] selectN07Frame(ciAuto=true) 返回 job_id + selected_frame，keys 精确匹配",
+        "[BEHAVIOR] getVideoRemakeOutput 返回 download_url + duration_seconds(>0) + has_video_stream(true)，禁用字段不存在",
+        "[BEHAVIOR] getVideoRemakeJob('non-existent') 抛出含 404/Not Found 错误",
+        "[BEHAVIOR] FORCE_TOAPI_FAIL=1 时 redrawFrameWithToAPI 抛出 code=N04_API_FAILURE",
+        "[BEHAVIOR] N08_TIMEOUT_MS=1 时 generateVideoWithDashScope 抛出 code=N08_TIMEOUT"
       ],
       "files": [
         "apps/dashboard/src/pages/VideoRemakePipelinePage.tsx",

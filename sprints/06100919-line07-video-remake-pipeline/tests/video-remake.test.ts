@@ -1,5 +1,5 @@
 /**
- * TDD Red — video-remake 服务 schema 验证
+ * TDD Red — video-remake 服务 schema + 行为验证
  * 所有 import 引用尚未创建的模块，全部应 FAIL（module not found）
  * Generator 写完实现后，这些测试应变绿
  */
@@ -23,6 +23,15 @@ describe('video-remake service — createJob', () => {
     expect(result).not.toHaveProperty('id');
     expect(result).not.toHaveProperty('jobId');
     expect(result).not.toHaveProperty('task_id');
+  });
+
+  it('fileSizeBytes > 100MB 时抛出错误', async () => {
+    const { createVideoRemakeJob } = await import(
+      '../../../apps/api/src/services/video-remake.service.js'
+    );
+    await expect(
+      createVideoRemakeJob({ filename: 'large.mp4', fileSizeBytes: 104857601, buffer: Buffer.from('') })
+    ).rejects.toThrow();
   });
 });
 
@@ -71,6 +80,44 @@ describe('video-remake service — getJob', () => {
   });
 });
 
+describe('video-remake service — analyzeSceneFrame (N03)', () => {
+  it('N03 output 含 original_frame_url (非空 string)', async () => {
+    const { analyzeSceneFrame } = await import(
+      '../../../apps/api/src/services/video-remake.service.js'
+    );
+    const result = await analyzeSceneFrame({ frameUrl: 'fixture://test-frame-0.jpg', frameIndex: 0 });
+    expect(typeof result.original_frame_url).toBe('string');
+    expect(result.original_frame_url.length).toBeGreaterThan(0);
+  });
+
+  it('N03 output 含 prompt_text (非空 string)', async () => {
+    const { analyzeSceneFrame } = await import(
+      '../../../apps/api/src/services/video-remake.service.js'
+    );
+    const result = await analyzeSceneFrame({ frameUrl: 'fixture://test-frame-0.jpg', frameIndex: 0 });
+    expect(typeof result.prompt_text).toBe('string');
+    expect(result.prompt_text.length).toBeGreaterThan(0);
+  });
+});
+
+describe('video-remake service — evaluateFrameScores (N05)', () => {
+  it('N05 output.frames 为非空数组，每项含 redrawn_frame_url + score', async () => {
+    const { evaluateFrameScores } = await import(
+      '../../../apps/api/src/services/video-remake.service.js'
+    );
+    const result = await evaluateFrameScores({
+      redrawnFrames: [
+        { original_frame_url: 'fixture://orig-0.jpg', redrawn_frame_url: 'fixture://redrawn-0.jpg' }
+      ]
+    });
+    expect(Array.isArray(result.frames)).toBe(true);
+    expect(result.frames.length).toBeGreaterThan(0);
+    const f = result.frames[0];
+    expect(typeof f.redrawn_frame_url).toBe('string');
+    expect(typeof f.score).toBe('number');
+  });
+});
+
 describe('video-remake service — selectN07Frame', () => {
   it('selectN07Frame 返回 job_id + selected_frame，keys == ["job_id","selected_frame"]', async () => {
     const { createVideoRemakeJob, selectN07Frame } = await import(
@@ -96,7 +143,7 @@ describe('video-remake service — selectN07Frame', () => {
 });
 
 describe('video-remake service — getOutput', () => {
-  it('getOutput 返回 job_id + download_url + duration_seconds + has_video_stream', async () => {
+  it('getOutput 返回 job_id + download_url + duration_seconds(>0) + has_video_stream(true)', async () => {
     const { createVideoRemakeJob, getVideoRemakeOutput } = await import(
       '../../../apps/api/src/services/video-remake.service.js'
     );
@@ -107,7 +154,8 @@ describe('video-remake service — getOutput', () => {
     );
     expect(typeof output.download_url).toBe('string');
     expect(typeof output.duration_seconds).toBe('number');
-    expect(typeof output.has_video_stream).toBe('boolean');
+    expect(output.duration_seconds).toBeGreaterThan(0);
+    expect(output.has_video_stream).toBe(true);
   });
 
   it('getOutput 响应不含禁用字段 url/video_url/outputUrl/hasVideo', async () => {
@@ -120,5 +168,31 @@ describe('video-remake service — getOutput', () => {
     expect(output).not.toHaveProperty('video_url');
     expect(output).not.toHaveProperty('outputUrl');
     expect(output).not.toHaveProperty('hasVideo');
+  });
+});
+
+describe('video-remake service — N04 error path', () => {
+  it('FORCE_TOAPI_FAIL=1 时 redrawFrameWithToAPI 抛出 { code: "N04_API_FAILURE" }', async () => {
+    process.env.FORCE_TOAPI_FAIL = '1';
+    const { redrawFrameWithToAPI } = await import(
+      '../../../apps/api/src/services/video-remake.service.js'
+    );
+    await expect(
+      redrawFrameWithToAPI({ frameUrl: 'test.jpg', frameIndex: 0 })
+    ).rejects.toMatchObject({ code: 'N04_API_FAILURE' });
+    delete process.env.FORCE_TOAPI_FAIL;
+  });
+});
+
+describe('video-remake service — N08 timeout path', () => {
+  it('N08_TIMEOUT_MS=1 时 generateVideoWithDashScope 抛出 { code: "N08_TIMEOUT" }', async () => {
+    process.env.N08_TIMEOUT_MS = '1';
+    const { generateVideoWithDashScope } = await import(
+      '../../../apps/api/src/services/video-remake.service.js'
+    );
+    await expect(
+      generateVideoWithDashScope({ frameUrl: 'test.jpg', apiKey: 'test-key' })
+    ).rejects.toMatchObject({ code: 'N08_TIMEOUT' });
+    delete process.env.N08_TIMEOUT_MS;
   });
 });
