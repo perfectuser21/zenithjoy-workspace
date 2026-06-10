@@ -386,3 +386,22 @@ def test_find_chat_input_fallback_when_filter_removes_all():
     assert result is edit_b, (
         "所有 Edit 在上半区时，应退化到旧逻辑返回面积最大者"
     )
+
+
+def test_find_chat_input_fallback_when_rectangle_raises():
+    """若 mw.rectangle() 抛异常（win_mid_y=None），应退化到全局面积最大者。"""
+    edit_small = _FakeEdit("", _Rect(0, 10, 500, 50))   # 面积 20000
+    edit_large = _FakeEdit("", _Rect(0, 60, 800, 100))  # 面积 32000（更大）
+
+    class _NoRectMW:
+        def rectangle(self):
+            raise AttributeError("no rectangle")
+        def descendants(self, control_type=None):
+            return [edit_small, edit_large]
+        def children(self):
+            return []
+
+    result = listen_chat._find_chat_input(_NoRectMW())
+    assert result is edit_large, (
+        "mw.rectangle() 抛异常时应退化到面积最大者（edit_large area=32000）"
+    )

@@ -201,13 +201,14 @@ def _find_chat_input(mw: Any) -> Optional[Any]:
             aid = c.element_info.automation_id or ""
             if aid == "chat_input_field":
                 return c
+            area = 0
+            top_y = 0
             try:
                 r = c.rectangle()
                 area = (r.right - r.left) * (r.bottom - r.top)
                 top_y = r.top
             except Exception:
-                area = 0
-                top_y = 0
+                pass
             candidates.append((area, aid, top_y, c))
         except Exception:
             continue
