@@ -141,7 +141,15 @@ export class ModuleManager {
             fs.statSync(path.join(this.modulesRoot, d)).isDirectory(),
         );
       if (dirs.length === 0) return null;
-      dirs.sort();
+      dirs.sort((a, b) => {
+        const pa = a.slice(prefix.length).split('.').map(Number);
+        const pb = b.slice(prefix.length).split('.').map(Number);
+        for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+          const diff = (pa[i] ?? 0) - (pb[i] ?? 0);
+          if (diff !== 0) return diff;
+        }
+        return 0;
+      });
       return dirs[dirs.length - 1].slice(prefix.length);
     } catch (err) {
       this.log(`getInstalledVersion(${lineId}) 失败：${(err as Error).message}`);
