@@ -31,7 +31,9 @@ jobs:
           E2E_SUPER_ADMIN_EMAIL: ${{ secrets.E2E_SUPER_ADMIN_EMAIL }}
           E2E_SUPER_ADMIN_PASSWORD: ${{ secrets.E2E_SUPER_ADMIN_PASSWORD }}
           TOAPI_API_KEY: ${{ secrets.TOAPI_API_KEY }}
-          DASHSCOPE_API_KEY: ${{ secrets.DASHSCOPE_API_KEY }}
+          # ALIYUN_API_KEY is the GHA secret name for the Aliyun DashScope API key;
+          # the ps1 script expects DASHSCOPE_API_KEY as the env var name
+          DASHSCOPE_API_KEY: ${{ secrets.ALIYUN_API_KEY }}
         run: |
           $sprintDir = "${{ inputs.sprint_dir }}"
           $taskId = "${{ inputs.task_id }}"
