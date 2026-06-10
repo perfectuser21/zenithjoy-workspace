@@ -2,7 +2,7 @@ name: Golden Path 4 — Private AI Wechat Smoke
 
 # Path 4 客户私域 AI 接管 端到端 smoke
 # Notion Journey: https://www.notion.so/35ac40c2ba6381af-af97-e3bc8e3b0fb4
-# Sprint:         sprints/sprint-d-path4-private-ai-thin/sprint-contract.md
+# Sprint:         sprints/sprint-d-path4-private-ai-thin/contract-dod.md
 #
 # 6 个 ws-level job (ws1..ws6) 独立跑各自短 smoke；
 # 最终 job golden-path-4-smoke 用 needs:[ws1..ws5] enforce 依赖（合同 r1 #14），

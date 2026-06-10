@@ -2,7 +2,7 @@
 # Path 2 Sprint B-1 — Golden Path E2E smoke
 # 客户已绑飞书 → 绑抖音小号 → 抓视频评论 → 写飞书 Lead 表 → dashboard 查状态
 #
-# 落地合同 sprint-contract.md 的 E2E 段全文（10 Step + 4 ENV 自检 + 时间窗口 SELECT count）
+# 落地合同 contract-dod.md 的 E2E 段全文（10 Step + 4 ENV 自检 + 时间窗口 SELECT count）
 set -euo pipefail
 
 # 自检前置 ENV
