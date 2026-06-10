@@ -115,6 +115,8 @@ export const autopilotPageComponents: Record<string, () => Promise<{ default: Co
   'WechatCustomerServiceConfigPage': () => import('../pages/WechatCustomerServiceConfigPage'),
   // Sprint 06081603 — 模块健康看板（客户机器 × Line 状态矩阵）
   'ModuleHealthPage': () => import('../pages/ModuleHealthPage'),
+  // Line 07 — AI 爆款视频翻拍
+  'VideoRemakePipelinePage': () => import('../pages/VideoRemakePipelinePage'),
 };
 
 export const pageComponents = autopilotPageComponents;
@@ -205,6 +207,13 @@ export const autopilotNavGroups: NavGroup[] = [
         label: '内容采集',
         featureKey: 'content-clipper',
         component: 'ContentClipperPage',
+      },
+      {
+        path: '/video-remake',
+        icon: Video,
+        label: 'AI 视频翻拍',
+        featureKey: 'video-remake-pipeline',
+        component: 'VideoRemakePipelinePage',
       },
       {
         path: '/dashboard/leads',
