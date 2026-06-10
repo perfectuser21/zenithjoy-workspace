@@ -25,6 +25,9 @@ jobs:
           ref: ${{ inputs.pr_branch != '' && inputs.pr_branch || github.event.repository.default_branch }}
           fetch-depth: 0
 
+      - name: Install ffmpeg
+        run: choco install ffmpeg --no-progress -y
+
       - name: Run E2E verification
         shell: pwsh
         env:
