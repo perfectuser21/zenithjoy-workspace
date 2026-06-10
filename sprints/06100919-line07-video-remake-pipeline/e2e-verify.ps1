@@ -112,12 +112,8 @@ Write-Host "✅ API TypeScript 构建完成"
 
 # 启动 API server（使用编译后的 dist/index.js，含 /api/video-remake/* 路由）
 $env:PORT     = $ApiPort
-$env:NODE_ENV = "production"
+$env:NODE_ENV = "test"
 $env:CI       = "true"
-# auth.js 在模块加载时校验 BETTER_AUTH_SECRET（≥32 字符），CI 动态生成 32 位 alphanumeric 随机值
-if ([string]::IsNullOrEmpty($env:BETTER_AUTH_SECRET)) {
-  $env:BETTER_AUTH_SECRET = -join ((48..57) + (65..90) + (97..122) | Get-Random -Count 32 | ForEach-Object { [char]$_ })
-}
 
 $apiProc = Start-Process -FilePath "cmd.exe" `
   -ArgumentList "/c node apps/api/dist/index.js" `
