@@ -114,11 +114,15 @@ class TestFourLayerLock(unittest.TestCase):
         self._run_lock()
         disabled = os.path.join(self.tmpdir, "WeixinUpdate.exe.disabled")
         self.assertTrue(os.path.exists(disabled), f"前置 Layer1 FAIL: {disabled} 不存在")
-        r = subprocess.run(["icacls", disabled], capture_output=True, text=True)
+        r = subprocess.run(
+            ["icacls", disabled], capture_output=True, text=True,
+            encoding="utf-8", errors="replace",
+        )
+        stdout = r.stdout or ""
         self.assertIn(
             "DENY",
-            r.stdout,
-            f"Layer2: icacls 无 DENY 输出（Generator 需实现 icacls /deny）: {r.stdout[:200]}",
+            stdout,
+            f"Layer2: icacls 无 DENY 输出（Generator 需实现 icacls /deny）: {stdout[:200]}",
         )
 
     def test_layer3_domain_firewall_dldir1v6(self):
@@ -130,10 +134,13 @@ class TestFourLayerLock(unittest.TestCase):
             ["netsh", "advfirewall", "firewall", "show", "rule", "name=all"],
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
         )
+        fw_stdout = fw.stdout or ""
         self.assertIn(
             "dldir1v6.qq.com",
-            fw.stdout,
+            fw_stdout,
             "Layer3: 防火墙无 dldir1v6.qq.com 域名封禁规则（Generator 需实现域名 block，不仅是程序路径 block）",
         )
 
