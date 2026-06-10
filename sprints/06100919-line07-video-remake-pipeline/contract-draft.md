@@ -1,4 +1,4 @@
-# Sprint Contract Draft (Round 4)
+# Sprint Contract Draft (Round 5)
 
 ## 已知约束（来自回归测试）
 
@@ -576,6 +576,29 @@ if ($statusObj.status -ne 'completed') {
   throw "FAIL: 超时 ${maxPoll}s status=$($statusObj.status)"
 }
 Write-Host "✅ 流水线 N09 completed"
+
+# 验证 GET /api/video-remake/jobs/:id 响应 schema（filename/duration_seconds/width/height/nodes.Count==9）
+if ([string]::IsNullOrEmpty($statusObj.filename)) {
+  Stop-Process -Id $apiProc.Id -Force -ErrorAction SilentlyContinue
+  throw "FAIL: GET /jobs/:id response 缺 filename 或为空"
+}
+if ($null -eq $statusObj.duration_seconds) {
+  Stop-Process -Id $apiProc.Id -Force -ErrorAction SilentlyContinue
+  throw "FAIL: GET /jobs/:id response 缺 duration_seconds"
+}
+if ($null -eq $statusObj.width) {
+  Stop-Process -Id $apiProc.Id -Force -ErrorAction SilentlyContinue
+  throw "FAIL: GET /jobs/:id response 缺 width"
+}
+if ($null -eq $statusObj.height) {
+  Stop-Process -Id $apiProc.Id -Force -ErrorAction SilentlyContinue
+  throw "FAIL: GET /jobs/:id response 缺 height"
+}
+if ($statusObj.nodes.Count -ne 9) {
+  Stop-Process -Id $apiProc.Id -Force -ErrorAction SilentlyContinue
+  throw "FAIL: GET /jobs/:id response nodes.Count=$($statusObj.nodes.Count) 非 9"
+}
+Write-Host "✅ GET /jobs/:id schema 验证通过: filename=$($statusObj.filename) w=$($statusObj.width) h=$($statusObj.height) nodes=$($statusObj.nodes.Count)"
 
 # GET /api/video-remake/jobs/:id/output — 验证 has_video_stream + duration_seconds
 $outputRaw = cmd.exe /c "curl -sf http://localhost:${ApiPort}/api/video-remake/jobs/$jobId/output" 2>&1

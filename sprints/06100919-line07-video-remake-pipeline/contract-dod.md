@@ -325,9 +325,9 @@ EOF'
   Test: 通过 `sprints/06100919-line07-video-remake-pipeline/e2e-verify.ps1` Phase 1（CI=true，windows-latest GHA，API stub）
   期望: Playwright exit 0 + "✅ [Phase 1] Playwright UI 验证通过"
 
-- [ ] [BEHAVIOR:E2E:SMOKE] backend smoke Phase 2：真实 API 调用（N04 gpt-image-2 + N08 DashScope i2v）→ N09 completed → 下载 MP4 → ffprobe has_video_stream=true + duration_seconds>0
-  Test: 通过 `sprints/06100919-line07-video-remake-pipeline/e2e-verify.ps1` Phase 2（TOAPI_API_KEY + DASHSCOPE_API_KEY 注入，真实 AI 调用，ffprobe 验证非 mock）
-  期望: ffprobe exit 0 + "✅ [Phase 2] backend smoke 验证通过"
+- [ ] [BEHAVIOR:E2E:SMOKE] backend smoke Phase 2：真实 API 调用（N04 gpt-image-2 + N08 DashScope i2v）→ N09 completed → 验证 GET /jobs/:id schema（filename非空/duration_seconds/width/height/nodes.Count==9）→ 下载 MP4 → ffprobe has_video_stream=true + duration_seconds>0
+  Test: 通过 `sprints/06100919-line07-video-remake-pipeline/e2e-verify.ps1` Phase 2（TOAPI_API_KEY + DASHSCOPE_API_KEY 注入，真实 AI 调用；polling完成后断言 $statusObj.filename/width/height/nodes.Count，再 ffprobe 验证非 mock）
+  期望: ffprobe exit 0 + "✅ GET /jobs/:id schema 验证通过" + "✅ [Phase 2] backend smoke 验证通过"
 
 - [ ] [BEHAVIOR:E2E] 边界：超100MB文件前端拒绝，错误提示可见，不触发后端 API
   Test: 通过 `apps/dashboard/e2e/video-remake.spec.ts` 内 `超100MB文件` test case 覆盖（Playwright）
