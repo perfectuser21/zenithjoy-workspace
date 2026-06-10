@@ -321,9 +321,9 @@ def _uia_send(uia_edit: Any, mw: Any, reply_text: str) -> bool:
         # 1. SetValue 直接写值，无需焦点
         uia_edit.iface_value.SetValue(reply_text)
         time.sleep(0.2)
-        # 2. 最小化时 SW_SHOWNA 还原但不抢焦点
+        # 2. 最小化时 SW_RESTORE 还原窗口（SW_SHOWNA=8 不恢复最小化，必须用 SW_RESTORE=9）
         if was_minimized:
-            _u32.ShowWindow(main_hwnd, 8)  # SW_SHOWNA = 8
+            _u32.ShowWindow(main_hwnd, 9)  # SW_RESTORE = 9
             time.sleep(0.3)
         # 3. AttachThreadInput + SetFocus（仅转移线程焦点，不抢前台）
         my_tid = _k32.GetCurrentThreadId()
@@ -973,6 +973,7 @@ def run_real_listen(args: argparse.Namespace) -> int:
                 if rate_limiter is not None:
                     ok, _next_at = rate_limiter.can_send("chat", m["sender"])
                     if not ok:
+                        _log(f"rate_limiter: {m['sender']} 24h限额已满，跳过回复（下次允许: {_next_at}）")
                         continue
 
                 # mode='auto' 拿中台生成的 reply 文本（已复用飞书最近 10 轮 + 营销画像 + DeepSeek）
