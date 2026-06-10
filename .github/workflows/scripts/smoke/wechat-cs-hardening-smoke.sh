@@ -20,12 +20,15 @@ BUILD=services/agent/scripts/build-install-pack.sh
 WATCHDOG=services/agent/install-pack/listener-watchdog.bat
 AUTOSTART=services/agent/install-pack/install-autostart.ps1
 
-echo "=== 1: listen_chat reply_in_chat 纯 UIA 后台形态（禁物理输入）==="
-grep -qE 'iface_invoke\.Invoke\(\)' "$LISTEN" || { echo "FAIL: reply_in_chat 未用 iface_invoke.Invoke（开会话/发送）"; exit 1; }
+echo "=== 1: listen_chat reply_in_chat UIA 填字 + SendInput Enter（WeChat 4.1.x 兼容）==="
+grep -qE 'iface_invoke\.Invoke\(\)' "$LISTEN" || { echo "FAIL: reply_in_chat 未用 iface_invoke.Invoke（开会话）"; exit 1; }
 grep -qE 'iface_value\.SetValue\(' "$LISTEN" || { echo "FAIL: reply_in_chat 未用 iface_value.SetValue（填输入框）"; exit 1; }
-! grep -qE 'item\.click_input\(\)|send_keys\(|type_keys\(' "$LISTEN" || { echo "FAIL: 仍残留物理输入（click_input/send_keys/type_keys 会抢前台）"; exit 1; }
+# v1.0.15: WeChat 4.1.x UIA hwnd=0，Invoke 不清空输入框；改用 send_keys('{ENTER}') 走 Win32 SendInput
+grep -qE "send_keys\('{ENTER}'\)" "$LISTEN" || { echo "FAIL: 未用 send_keys('{ENTER}')（WeChat 4.1.x 兼容必需）"; exit 1; }
+! grep -qE 'type_keys\(' "$LISTEN" || { echo "FAIL: 仍残留 type_keys（逐字输入会抢前台）"; exit 1; }
+! grep -qE 'item\.click_input\(\)' "$LISTEN" || { echo "FAIL: 仍残留 item.click_input()（会话切换副作用）"; exit 1; }
 ! grep -qE 'item\.select\(\)' "$LISTEN" || { echo "FAIL: 仍残留 item.select()（微信4.0 不切换会话）"; exit 1; }
-echo "  PASS 纯 UIA（Invoke 开会话 + SetValue 填字，无物理输入）"
+echo "  PASS UIA SetValue + SendInput Enter（WeChat 4.1.x 兼容）"
 
 echo "=== 2: wechat-rpa.ts 脚本路径基于 process.execPath ==="
 grep -qE 'path\.dirname\(process\.execPath\)' "$RPA_TS" || { echo "FAIL: 未用 process.execPath 目录"; exit 1; }

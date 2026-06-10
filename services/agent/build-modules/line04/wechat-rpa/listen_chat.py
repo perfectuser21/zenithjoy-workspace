@@ -380,6 +380,11 @@ def _uia_send(uia_edit: Any, mw: Any, reply_text: str) -> bool:
             except Exception as _be:
                 _log(f"_uia_send: btn click_input 异常: {_be}")
         _log("_uia_send: 所有发送方式均失败")
+        if was_minimized:
+            try:
+                _u32.ShowWindow(main_hwnd, SW_MINIMIZE)
+            except Exception:
+                pass
         return False
     except Exception as exc:
         _log(f"_uia_send: {exc}")
