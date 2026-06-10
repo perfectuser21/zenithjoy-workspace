@@ -3105,3 +3105,19 @@ agent_suite:
     status: active
     product: 客户私域AI接管
     note: "Sprint 06091001 — navigation.config.ts 单测（module-health 无 requireSuperAdmin）"
+
+  - id: line07-video-remake-unit
+    path: sprints/06100919-line07-video-remake-pipeline/tests/video-remake.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: AI爆款视频翻拍
+    note: "Sprint 06100919 — Line07 9节点服务层 schema + BEHAVIOR 验证（createJob/getJob/extractFrames/analyzeSceneFrame/redrawFrameWithToAPI/evaluateFrameScores/approveN06Review/selectN07Frame/generateVideoWithDashScope/getOutput）"
+
+  - id: line07-video-remake-e2e
+    path: apps/dashboard/e2e/video-remake.spec.ts
+    type: e2e
+    ci: windows_cloud
+    status: active
+    product: AI爆款视频翻拍
+    note: "Sprint 06100919 — Line07 Dashboard /video-remake 9节点流水线 Playwright E2E（N03/N04/N05/N09 + 100MB拒绝）"
