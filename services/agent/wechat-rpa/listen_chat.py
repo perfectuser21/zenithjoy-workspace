@@ -183,39 +183,32 @@ def _iter_all_controls(mw: Any, control_type: str):
 
 
 def _find_chat_input(mw: Any) -> Optional[Any]:
-    """定位回复输入框：先按 automation_id='chat_input_field'，找不到返回 None。
+    """定位回复输入框：先按 automation_id='chat_input_field'，再按最大 Edit 回退。
 
-    WeChat 4.1.8 后台时 UIA 树只暴露搜索框（mmui::XValidatorTextEdit, name='搜索'），
-    chat_input_field 不出现。此时绝对禁止回退到搜索框——调用方负责触发 UIA 刷新后重试。
+    WeChat 4.1.8 不在后台 UIA 树暴露 chat_input_field；回退到最大面积 Edit（搜索框）。
+    _uia_send 收到此回退值后不能调 set_focus——session Invoke 后光标已在聊天输入框，
+    强制 set_focus(搜索框) 会错误地把焦点移走导致粘贴失败。
     """
-    for c in mw.descendants(control_type="Edit"):
+    candidates = []
+    for c in _iter_all_controls(mw, "Edit"):
         try:
-            if (c.element_info.automation_id or "") == "chat_input_field":
+            aid = c.element_info.automation_id or ""
+            if aid == "chat_input_field":
                 return c
+            try:
+                r = c.rectangle()
+                area = (r.right - r.left) * (r.bottom - r.top)
+            except Exception:
+                area = 0
+            candidates.append((area, aid, c))
         except Exception:
             continue
+    if candidates:
+        candidates.sort(key=lambda x: x[0], reverse=True)
+        best = candidates[0]
+        _log(f"_find_chat_input: 回退到最大 Edit area={best[0]} aid={repr(best[1])}")
+        return best[2]
     return None
-
-
-def _trigger_uia_refresh(mw: Any) -> None:
-    """minimize→SW_SHOWNA 触发 WeChat 刷新 UIA 树，使 chat_input_field 可见。
-
-    WeChat 4.1.8 在 minimize→restore 循环后会重建 UIA 树，chat_input_field 才出现。
-    SW_SHOWNA=8：还原但不抢焦点（绝不使用 SW_RESTORE=9）。
-    窗口短暂最小化（≤1s），对用户几乎不可见。
-    """
-    import ctypes as _ct
-    _u32 = _ct.windll.user32
-    try:
-        hwnd = mw.element_info.handle
-        if hwnd and not _u32.IsIconic(hwnd):
-            _u32.ShowWindow(hwnd, 6)   # SW_MINIMIZE
-            time.sleep(0.3)
-            _u32.ShowWindow(hwnd, 8)   # SW_SHOWNA：还原不抢焦点
-            time.sleep(0.3)
-            _log("_trigger_uia_refresh: minimize→SW_SHOWNA 完成，等 UIA 刷新")
-    except Exception as e:
-        _log(f"_trigger_uia_refresh: {e}")
 
 
 def _find_send_button(mw: Any) -> Optional[Any]:
@@ -269,13 +262,38 @@ def _set_clipboard_text(text: str) -> bool:
         return False
 
 
+def _force_foreground(hwnd: int) -> None:
+    """TOPMOST + AttachThreadInput + SetForegroundWindow 三步拉前台。"""
+    import ctypes as _ct
+    _u32 = _ct.windll.user32
+    HWND_TOPMOST = -1
+    HWND_NOTOPMOST = -2
+    SWP_FLAGS = 0x0002 | 0x0001  # SWP_NOMOVE | SWP_NOSIZE
+    try:
+        _u32.SetWindowPos(hwnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_FLAGS)
+        _u32.SetWindowPos(hwnd, HWND_NOTOPMOST, 0, 0, 0, 0, SWP_FLAGS)
+        my_tid = _ct.windll.kernel32.GetCurrentThreadId()
+        fg_hwnd = _u32.GetForegroundWindow()
+        fg_tid = _u32.GetWindowThreadProcessId(fg_hwnd, None)
+        _u32.AttachThreadInput(my_tid, fg_tid, True)
+        _u32.SetForegroundWindow(hwnd)
+        _u32.AttachThreadInput(my_tid, fg_tid, False)
+    except Exception as e2:
+        try:
+            _u32.SetForegroundWindow(hwnd)
+        except Exception:
+            pass
+
+
 def _uia_send(uia_edit: Any, mw: Any, reply_text: str) -> bool:
     """
-    发送策略（后台静默，纯 UIA 路径）。
-    SKILL: wechat-uia-silent-send — 改此函数前必须调用该 skill，禁止剪贴板路径。
-    1. SetValue 写值 + SW_SHOWNA 还原（不抢焦点）+ AttachThreadInput + PostMessageW(Enter)
-    2. 兜底：发送按钮 iface_invoke.Invoke()（UIA 调用，不拉前台，绝对禁止 SW_RESTORE）
-    成功返回 True。全程禁止 keybd_event / mouse_event / _set_clipboard_text / SW_RESTORE（全局事件或前台激活，后台会话必失败）。
+    发送策略（按顺序尝试）：
+    1. 主路径（mmui::MainWindow）：拉前台 → 剪贴板 → keybd_event(Ctrl+V, Enter)。
+       session Invoke 后 WeChat 光标自然在聊天输入框；仅当 automation_id==chat_input_field
+       时才 set_focus，避免回退到搜索框时错误地把焦点移走。
+    2. 降级路径：SetValue + AttachThreadInput+Enter
+    3. 兜底：SW_RESTORE + 发送按钮 Invoke
+    成功返回 True。
     """
     import ctypes as _ct
     _u32 = _ct.windll.user32
@@ -288,7 +306,53 @@ def _uia_send(uia_edit: Any, mw: Any, reply_text: str) -> bool:
     edit_hwnd = uia_edit.element_info.handle or main_hwnd
     _log(f"_uia_send: edit_hwnd={edit_hwnd} main_hwnd={main_hwnd} was_min={was_minimized}")
     try:
-        # ── 主路径：SetValue + AttachThreadInput+Enter ──
+        try:
+            mw_class = mw.element_info.class_name or ""
+        except Exception:
+            mw_class = ""
+        if mw_class == "mmui::MainWindow":
+            if _set_clipboard_text(reply_text):
+                _force_foreground(main_hwnd)
+                time.sleep(0.3)
+                fg = _u32.GetForegroundWindow()
+                if fg == main_hwnd:
+                    try:
+                        # 只有明确找到 chat_input_field 时才 set_focus；
+                        # 回退到搜索框时跳过——session Invoke 后光标已在聊天输入框。
+                        if (uia_edit.element_info.automation_id or "") == "chat_input_field":
+                            uia_edit.set_focus()
+                    except Exception:
+                        pass
+                    time.sleep(0.1)
+                    KEYEVENTF_KEYUP = 0x0002
+                    VK_CONTROL = 0x11
+                    _u32.keybd_event(VK_CONTROL, 0, 0, 0)
+                    _u32.keybd_event(0x41, 0, 0, 0)
+                    _u32.keybd_event(0x41, 0, KEYEVENTF_KEYUP, 0)
+                    _u32.keybd_event(VK_CONTROL, 0, KEYEVENTF_KEYUP, 0)
+                    time.sleep(0.1)
+                    _u32.keybd_event(VK_CONTROL, 0, 0, 0)
+                    _u32.keybd_event(0x56, 0, 0, 0)
+                    _u32.keybd_event(0x56, 0, KEYEVENTF_KEYUP, 0)
+                    _u32.keybd_event(VK_CONTROL, 0, KEYEVENTF_KEYUP, 0)
+                    time.sleep(0.3)
+                    _u32.keybd_event(VK_RETURN, 0, 0, 0)
+                    _u32.keybd_event(VK_RETURN, 0, KEYEVENTF_KEYUP, 0)
+                    time.sleep(0.4)
+                    try:
+                        remaining_kb = uia_edit.get_value() or ""
+                    except Exception:
+                        remaining_kb = ""
+                    if not remaining_kb:
+                        if was_minimized:
+                            _u32.ShowWindow(main_hwnd, SW_MINIMIZE)
+                        _log("_uia_send: 前台剪贴板+Enter 成功")
+                        return True
+                    _log(f"_uia_send: 前台剪贴板+Enter 失败（{len(remaining_kb)}字残留），回退 PostMessage")
+                else:
+                    _log(f"_uia_send: 未能拉前台（fg={fg}≠{main_hwnd}），回退 PostMessage")
+
+        # ── 降级路径：SetValue + AttachThreadInput+Enter ──
         uia_edit.iface_value.SetValue(reply_text)
         time.sleep(0.2)
         if was_minimized:
@@ -312,13 +376,17 @@ def _uia_send(uia_edit: Any, mw: Any, reply_text: str) -> bool:
             remaining = uia_edit.get_value() or ""
         except Exception:
             remaining = ""
-        if not remaining:
+        if not remaining and mw_class != "mmui::MainWindow":
             if was_minimized:
                 _u32.ShowWindow(main_hwnd, SW_MINIMIZE)
             _log("_uia_send: AttachInput+Enter 成功（后台静默）")
             return True
-        _log(f"_uia_send: Enter未清空({len(remaining)}字)，Invoke兜底（禁止SW_RESTORE，不拉前台）")
-        # SW_SHOWNA 已展开窗口；UIA Invoke 不依赖前台焦点，绝对禁止 SW_RESTORE
+        if remaining:
+            _log(f"_uia_send: Enter未清空({len(remaining)}字)，回退SW_RESTORE+Invoke")
+        else:
+            _log("_uia_send: mmui 跳过 AttachInput+Enter 验证，直接 Invoke 兜底")
+        _u32.ShowWindow(main_hwnd, SW_RESTORE)
+        time.sleep(0.3)
         btn = _find_send_button(mw)
         if btn is not None:
             btn.iface_invoke.Invoke()
@@ -330,9 +398,9 @@ def _uia_send(uia_edit: Any, mw: Any, reply_text: str) -> bool:
             if not remaining2:
                 if was_minimized:
                     _u32.ShowWindow(main_hwnd, SW_MINIMIZE)
-                _log("_uia_send: Invoke兜底成功（后台静默，无前台激活）")
+                _log("_uia_send: SW_RESTORE+Invoke 成功（兜底）")
                 return True
-            _log(f"_uia_send: Invoke兜底失败（输入框仍有{len(remaining2)}字）")
+            _log(f"_uia_send: SW_RESTORE+Invoke 失败（输入框仍有{len(remaining2)}字）")
         return False
     except Exception as exc:
         _log(f"_uia_send: {exc}")
@@ -399,24 +467,17 @@ def reply_in_chat(mw: Any, item: Any, reply_text: str, sender: str = "") -> bool
     try:
         item.iface_invoke.Invoke()
         _log("reply_in_chat: Invoke 激活会话，等面板切换…")
-        uia_refresh_done = False
-        for attempt in range(12):  # 最多等 6s（含 minimize→SW_SHOWNA 刷新余量）
+        for attempt in range(6):  # 最多等 3s（每 0.5s 轮询一次）
             time.sleep(0.5)
             fmw = _fresh_mw()
-            # 前 4 次（≤2s）强制等待：Invoke 后 UIA 树需要 ≥2s 才更新
-            if attempt < 4 or (attempt < 6 and not _chat_panel_ready(fmw)):
+            if attempt < 2 or not _chat_panel_ready(fmw):
                 continue
             uia_edit = _find_chat_input(fmw)
-            if uia_edit is None:
-                if not uia_refresh_done:
-                    # chat_input_field 未出现：minimize→SW_SHOWNA 触发 WeChat UIA 树刷新
-                    _trigger_uia_refresh(fmw)
-                    uia_refresh_done = True
-                continue  # 继续等待 chat_input_field 出现，绝不回退到搜索框
-            if _uia_send(uia_edit, fmw, reply_text):
-                _navigate_away(fmw)
-                return True
-            break
+            if uia_edit is not None:
+                if _uia_send(uia_edit, fmw, reply_text):
+                    _navigate_away(fmw)
+                    return True
+                break
     except Exception as exc:
         _log(f"reply_in_chat: Invoke 失败: {exc}")
 

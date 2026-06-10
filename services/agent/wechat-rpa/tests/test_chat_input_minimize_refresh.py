@@ -1,23 +1,25 @@
 """
-Regression tests: _find_chat_input 不能回退到搜索框；
-reply_in_chat 找不到 chat_input_field 时必须执行 minimize→SW_SHOWNA 刷新 UIA。
+Regression tests: _find_chat_input 最大-Edit 回退；
+_uia_send 回退到搜索框时跳过 set_focus；
+reply_in_chat 使用剪贴板路径。
 
-根因：WeChat 4.1.8 后台时 UIA 树只暴露搜索框（mmui::XValidatorTextEdit, name='搜索'）
-作为唯一 Edit 控件，chat_input_field 不可见；minimize→SW_SHOWNA 触发刷新后才出现。
-诊断证据：probe_chat2_out.txt 确认 area=2960 name='搜索' 是唯一 Edit 控件。
+根因：WeChat 4.1.8 UIA 树从不暴露 chat_input_field，只有搜索框（area=2960）。
+修法（v1.0.11）：
+  - _find_chat_input：_iter_all_controls 扫全部 mmui 子窗口，回退到最大面积 Edit。
+  - _uia_send：回退 Edit 时跳过 set_focus（避免把焦点移到搜索框），
+    用剪贴板+Ctrl+V+Enter，依赖 session Invoke 后 WeChat 自然把光标放在聊天输入框。
 """
 
 import ctypes
 import platform
 import sys
-import time
 from contextlib import contextmanager
 from typing import Any
-from unittest.mock import MagicMock, call, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
-# ── macOS/Linux 下注入 ctypes.windll stub（避免 ImportError）─────────────────
+
 @contextmanager
 def _mock_windll(user32=None, kernel32=None):
     u32 = user32 or MagicMock()
@@ -57,6 +59,7 @@ def _make_edit_ctrl(aid: str, name: str, area: int, top: int = 300):
 def _make_main_window(edit_controls, win_top=220, win_bottom=860):
     mw = MagicMock()
     mw.element_info.handle = 12345
+    mw.element_info.class_name = "mmui::MainWindow"
     wr = MagicMock()
     wr.top = win_top; wr.bottom = win_bottom
     wr.left = 0; wr.right = 880
@@ -72,16 +75,14 @@ def _make_main_window(edit_controls, win_top=220, win_bottom=860):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Test 1: _find_chat_input 搜索框绝不被返回
+# Test 1: _find_chat_input 回退到最大 Edit（搜索框）
 # ─────────────────────────────────────────────────────────────────────────────
-def test_find_chat_input_never_returns_search_box():
-    """只有搜索框时，_find_chat_input 必须返回 None，不能返回搜索框。"""
+def test_find_chat_input_returns_largest_edit_as_fallback():
+    """只有搜索框时，_find_chat_input 回退到最大面积 Edit（搜索框），不返回 None。"""
     search_box = _make_edit_ctrl(aid="", name="搜索", area=2960, top=266)
     mw = _make_main_window([search_box], win_top=220, win_bottom=860)
 
     with _mock_windll():
-        import importlib, types
-        # 确保模块以新 windll 加载
         if "listen_chat" in sys.modules:
             del sys.modules["listen_chat"]
         sys.path.insert(0, str(
@@ -91,90 +92,30 @@ def test_find_chat_input_never_returns_search_box():
 
         result = lc._find_chat_input(mw)
 
-    # 搜索框不得被返回
-    assert result is None or (
-        result.element_info.name != "搜索"
-    ), "_find_chat_input 不能回退到搜索框（name='搜索'）"
+    # 应该返回搜索框（fallback），而不是 None
+    assert result is not None, "_find_chat_input 必须回退到最大 Edit，不能返回 None"
+    assert result.element_info.name == "搜索", "回退应选中搜索框（唯一 Edit 且最大）"
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Test 2: reply_in_chat 找不到 chat_input_field 时必须调用 minimize→SW_SHOWNA
+# Test 2: _uia_send 回退 Edit 时不调用 set_focus
 # ─────────────────────────────────────────────────────────────────────────────
-def test_reply_in_chat_calls_minimize_swshowna_when_input_missing():
-    """chat_input_field 缺失时 reply_in_chat 必须 ShowWindow(SW_MINIMIZE=6)
-    再 ShowWindow(SW_SHOWNA=8)，绝不调用 ShowWindow(SW_RESTORE=9)。"""
-    SW_MINIMIZE = 6
-    SW_SHOWNA = 8
-    SW_RESTORE = 9
-
+def test_uia_send_skips_set_focus_for_fallback_edit():
+    """uia_edit.automation_id 不是 chat_input_field 时，_uia_send 绝不调用 set_focus。
+    这样 session Invoke 后 WeChat 自然把焦点放在聊天输入框，Ctrl+V 粘贴到正确位置。"""
     search_box = _make_edit_ctrl(aid="", name="搜索", area=2960, top=266)
+    mw = _make_main_window([search_box])
 
-    call_log = []
+    set_focus_called = []
+
+    def capture_set_focus():
+        set_focus_called.append(True)
+
+    search_box.set_focus = capture_set_focus
+
     u32 = MagicMock()
     u32.IsIconic.return_value = False
-
-    def show_window(hwnd, cmd):
-        call_log.append(("ShowWindow", hwnd, cmd))
-        return 1
-
-    u32.ShowWindow.side_effect = show_window
-
-    mw = _make_main_window([search_box])
-    item = MagicMock()
-
-    # patch time.sleep 加速测试
-    with _mock_windll(user32=u32):
-        if "listen_chat" in sys.modules:
-            del sys.modules["listen_chat"]
-        sys.path.insert(0, str(
-            __file__.replace("/tests/test_chat_input_minimize_refresh.py", "")
-        ))
-        import listen_chat as lc
-
-        with patch.object(lc, "_find_chat_input", side_effect=[None, None, None, None]):
-            with patch("time.sleep"):
-                lc.reply_in_chat(mw, item, "hello", sender="")
-
-    sw_cmds = [cmd for (_ev, _hwnd, cmd) in call_log if _ev == "ShowWindow"]
-    assert SW_RESTORE not in sw_cmds, "禁止调用 SW_RESTORE=9"
-    assert SW_MINIMIZE in sw_cmds, "必须调用 SW_MINIMIZE=6 触发 UIA 刷新"
-    assert SW_SHOWNA in sw_cmds, "必须调用 SW_SHOWNA=8 无前台还原"
-    # minimize 必须在 SW_SHOWNA 之前
-    idx_min = next(i for i, (_ev, _hwnd, c) in enumerate(call_log) if c == SW_MINIMIZE)
-    idx_show = next(i for i, (_ev, _hwnd, c) in enumerate(call_log) if c == SW_SHOWNA)
-    assert idx_min < idx_show, "SW_MINIMIZE 必须在 SW_SHOWNA 之前"
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Test 3: minimize→SW_SHOWNA 后找到 chat_input_field → 成功发送
-# ─────────────────────────────────────────────────────────────────────────────
-def test_reply_in_chat_succeeds_after_minimize_refresh():
-    """首轮找不到 chat_input_field，minimize→SW_SHOWNA 后第二轮找到 → 成功发送，
-    全程无 SW_RESTORE。"""
-    SW_RESTORE = 9
-
-    chat_input = _make_edit_ctrl(aid="chat_input_field", name="", area=70818, top=700)
-    search_box = _make_edit_ctrl(aid="", name="搜索", area=2960, top=266)
-
-    call_log = []
-    u32 = MagicMock()
-    u32.IsIconic.return_value = False
-    u32.GetWindowThreadProcessId.return_value = 99
-    u32.AttachThreadInput.return_value = True
-    u32.SetFocus.return_value = 1
-    u32.PostMessageW.return_value = True
-
-    def show_window(hwnd, cmd):
-        call_log.append(("ShowWindow", hwnd, cmd))
-        return 1
-
-    u32.ShowWindow.side_effect = show_window
-
-    mw = _make_main_window([search_box])
-    item = MagicMock()
-
-    # _find_chat_input: 第一次 None（触发 minimize），第二次返回真正输入框
-    find_results = [None, chat_input]
+    u32.GetForegroundWindow.return_value = 12345  # 模拟前台拉到 WeChat
 
     with _mock_windll(user32=u32):
         if "listen_chat" in sys.modules:
@@ -184,12 +125,38 @@ def test_reply_in_chat_succeeds_after_minimize_refresh():
         ))
         import listen_chat as lc
 
-        with patch.object(lc, "_find_chat_input", side_effect=find_results):
+        with patch.object(lc, "_set_clipboard_text", return_value=True):
+            with patch.object(lc, "_force_foreground"):
+                with patch("time.sleep"):
+                    lc._uia_send(search_box, mw, "hello")
+
+    assert not set_focus_called, (
+        "_uia_send 不能对回退 Edit（搜索框）调用 set_focus，"
+        "否则会把焦点从聊天输入框移到搜索框"
+    )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Test 3: reply_in_chat 使用剪贴板路径并成功发送
+# ─────────────────────────────────────────────────────────────────────────────
+def test_reply_in_chat_succeeds_via_clipboard_path():
+    """_find_chat_input 返回搜索框（fallback），剪贴板+Enter 路径成功后 replied=True。"""
+    search_box = _make_edit_ctrl(aid="", name="搜索", area=2960, top=266)
+    mw = _make_main_window([search_box])
+    item = MagicMock()
+
+    with _mock_windll():
+        if "listen_chat" in sys.modules:
+            del sys.modules["listen_chat"]
+        sys.path.insert(0, str(
+            __file__.replace("/tests/test_chat_input_minimize_refresh.py", "")
+        ))
+        import listen_chat as lc
+
+        with patch.object(lc, "_find_chat_input", return_value=search_box):
             with patch.object(lc, "_uia_send", return_value=True) as mock_send:
                 with patch("time.sleep"):
                     result = lc.reply_in_chat(mw, item, "test reply", sender="")
 
-    assert result is True, "minimize→SW_SHOWNA 后应成功发送"
-    mock_send.assert_called_once()
-    sw_cmds = [cmd for (_, _, cmd) in call_log]
-    assert SW_RESTORE not in sw_cmds, "全程禁止 SW_RESTORE=9"
+    assert result is True, "剪贴板路径成功后 reply_in_chat 必须返回 True"
+    mock_send.assert_called_once_with(search_box, mw, "test reply")
