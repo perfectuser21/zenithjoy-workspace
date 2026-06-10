@@ -183,12 +183,18 @@ def _iter_all_controls(mw: Any, control_type: str):
 
 
 def _find_chat_input(mw: Any) -> Optional[Any]:
-    """定位回复输入框：先按 automation_id='chat_input_field'，再按最大 Edit 回退。
+    """定位回复输入框：先按 automation_id='chat_input_field'，再按位置+面积回退。
 
-    WeChat 4.1.8 不在后台 UIA 树暴露 chat_input_field；回退到最大面积 Edit（搜索框）。
-    _uia_send 收到此回退值后不能调 set_focus——session Invoke 后光标已在聊天输入框，
-    强制 set_focus(搜索框) 会错误地把焦点移走导致粘贴失败。
+    WeChat 4.1.8 不在后台 UIA 树暴露 chat_input_field；回退策略：
+    1. 先过滤窗口下半区（聊天输入框在底部，搜索栏在顶部）取面积最大者；
+    2. 下半区为空时退化到全局面积最大者（兼容旧场景）。
     """
+    try:
+        win_rect = mw.rectangle()
+        win_mid_y = win_rect.top + (win_rect.bottom - win_rect.top) * 0.5
+    except Exception:
+        win_mid_y = None
+
     candidates = []
     for c in _iter_all_controls(mw, "Edit"):
         try:
@@ -198,17 +204,29 @@ def _find_chat_input(mw: Any) -> Optional[Any]:
             try:
                 r = c.rectangle()
                 area = (r.right - r.left) * (r.bottom - r.top)
+                top_y = r.top
             except Exception:
                 area = 0
-            candidates.append((area, aid, c))
+                top_y = 0
+            candidates.append((area, aid, top_y, c))
         except Exception:
             continue
-    if candidates:
-        candidates.sort(key=lambda x: x[0], reverse=True)
-        best = candidates[0]
-        _log(f"_find_chat_input: 回退到最大 Edit area={best[0]} aid={repr(best[1])}")
-        return best[2]
-    return None
+
+    if not candidates:
+        return None
+
+    if win_mid_y is not None:
+        bottom_half = [e for e in candidates if e[2] >= win_mid_y]
+        if bottom_half:
+            bottom_half.sort(key=lambda x: x[0], reverse=True)
+            best = bottom_half[0]
+            _log(f"_find_chat_input: 下半区 Edit area={best[0]} aid={repr(best[1])}")
+            return best[3]
+
+    candidates.sort(key=lambda x: x[0], reverse=True)
+    best = candidates[0]
+    _log(f"_find_chat_input: 回退到最大 Edit area={best[0]} aid={repr(best[1])}")
+    return best[3]
 
 
 def _find_send_button(mw: Any) -> Optional[Any]:
@@ -390,8 +408,16 @@ def reply_in_chat(mw: Any, item: Any, reply_text: str, sender: str = "") -> bool
         item.iface_invoke.Invoke()
         _log("reply_in_chat: Invoke 激活会话，等 2s UIA 树更新…")
         time.sleep(2.0)  # CRITICAL: chat_input_field 在 2s 后才出现在 UIA 树
-        fmw = _fresh_mw()
-        uia_edit = _find_chat_input(fmw)
+        fmw = mw
+        uia_edit = None
+        for _poll in range(3):  # UIA 树更新有延迟，最多 3 次轮询
+            fmw = _fresh_mw()
+            uia_edit = _find_chat_input(fmw)
+            if uia_edit is not None:
+                break
+            if _poll < 2:
+                _log(f"reply_in_chat: 第{_poll + 1}次轮询未找到输入框，等 1s 重试…")
+                time.sleep(1.0)
         if uia_edit is not None:
             if _uia_send(uia_edit, fmw, reply_text):
                 _navigate_away(fmw)

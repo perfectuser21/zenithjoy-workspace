@@ -496,7 +496,7 @@ def check_lock_update(dry_run: bool = False) -> Dict[str, str]:
         if os.path.exists(disabled_path):
             try:
                 subprocess.run(
-                    ["icacls", disabled_path, "/deny", "Everyone:(RX,W,D,DC)"],
+                    ["icacls", disabled_path, "/deny", "Everyone:(W,D)"],
                     capture_output=True, timeout=30,
                 )
             except Exception:
