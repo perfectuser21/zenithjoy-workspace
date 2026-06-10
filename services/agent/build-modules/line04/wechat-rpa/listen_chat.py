@@ -305,68 +305,81 @@ def _force_foreground(hwnd: int) -> None:
 
 def _uia_send(uia_edit: Any, mw: Any, reply_text: str) -> bool:
     """
-    后台静默发送：SetValue + AttachThreadInput + PostMessageW(Enter)。
-    全程无需前台焦点。兜底：发送按钮 Invoke。禁止 SW_RESTORE / keybd_event。
+    后台发送：SW_RESTORE 还原窗口 → SetValue 写入并验证 → set_focus+send_keys(Enter)。
+    WeChat 4.1.x 的聊天输入框是纯 UIA 控件（hwnd=0），PostMessageW 无效，
+    必须用 mw.set_focus()+uia_edit.set_focus() 后调 keyboard.send_keys 走 SendInput。
     """
     import ctypes as _ct
     _u32 = _ct.windll.user32
-    _k32 = _ct.windll.kernel32
     SW_MINIMIZE = 6
-    VK_RETURN = 0x0D
     main_hwnd = mw.element_info.handle
     was_minimized = bool(_u32.IsIconic(main_hwnd))
     edit_hwnd = uia_edit.element_info.handle or main_hwnd
     _log(f"_uia_send: edit_hwnd={edit_hwnd} main_hwnd={main_hwnd} was_min={was_minimized}")
     try:
-        # 1. SetValue 直接写值，无需焦点
-        uia_edit.iface_value.SetValue(reply_text)
-        time.sleep(0.2)
-        # 2. 最小化时 SW_RESTORE 还原窗口（SW_SHOWNA=8 不恢复最小化，必须用 SW_RESTORE=9）
+        # 1. 还原窗口（最小化时 SetValue 静默失败）并刷新 UIA 引用
         if was_minimized:
-            _u32.ShowWindow(main_hwnd, 9)  # SW_RESTORE = 9
-            time.sleep(0.3)
-        # 3. AttachThreadInput + SetFocus（仅转移线程焦点，不抢前台）
-        my_tid = _k32.GetCurrentThreadId()
-        pid_buf = _ct.c_ulong(0)
-        wx_tid = _u32.GetWindowThreadProcessId(edit_hwnd, _ct.byref(pid_buf))
-        _u32.AttachThreadInput(my_tid, wx_tid, True)
-        prev_focus = _u32.SetFocus(edit_hwnd)
-        time.sleep(0.1)
-        # 4. PostMessageW 投递 Enter，不依赖前台
-        _u32.PostMessageW(edit_hwnd, 0x0100, VK_RETURN, 0x001C0001)
-        time.sleep(0.05)
-        _u32.PostMessageW(edit_hwnd, 0x0101, VK_RETURN, 0xC01C0001)
-        # 5. 恢复焦点 + 断开线程绑定
-        if prev_focus:
-            _u32.SetFocus(prev_focus)
-        _u32.AttachThreadInput(my_tid, wx_tid, False)
-        time.sleep(0.4)
-        # 6. 验证：输入框清空 = 消息已发出
+            _u32.ShowWindow(main_hwnd, 9)  # SW_RESTORE=9
+            time.sleep(0.8)
+            _refound = _find_chat_input(mw)
+            if _refound is not None:
+                uia_edit = _refound
+                edit_hwnd = uia_edit.element_info.handle or main_hwnd
+        # 2. SetValue 写入
+        uia_edit.iface_value.SetValue(reply_text)
+        time.sleep(0.3)
+        # 3. 验证写入（防假阳性：hwnd=0 时 SetValue 可能静默失败）
         try:
-            remaining = uia_edit.get_value() or ""
+            written = uia_edit.get_value() or ""
         except Exception:
-            remaining = ""
-        if not remaining:
+            written = ""
+        if not written:
+            _log("_uia_send: SetValue后输入框仍空，中止")
             if was_minimized:
                 _u32.ShowWindow(main_hwnd, SW_MINIMIZE)
-            _log("_uia_send: AttachInput+Enter 成功（后台静默）")
-            return True
-        _log(f"_uia_send: Enter未清空({len(remaining)}字)，回退 send button Invoke")
-        # 兜底：发送按钮 Invoke（禁止 SW_RESTORE）
-        btn = _find_send_button(mw)
-        if btn is not None:
-            btn.iface_invoke.Invoke()
+            return False
+        _log(f"_uia_send: 已写入 {len(written)} 字，尝试发送")
+        # 4. set_focus 激活输入框，keyboard.send_keys 发 Enter（SendInput，不依赖 hwnd）
+        try:
+            mw.set_focus()
+            time.sleep(0.2)
+            uia_edit.set_focus()
+            time.sleep(0.15)
+            from pywinauto.keyboard import send_keys
+            send_keys('{ENTER}')
             time.sleep(0.5)
             try:
-                remaining2 = uia_edit.get_value() or ""
+                remaining = uia_edit.get_value() or ""
             except Exception:
-                remaining2 = ""
-            if not remaining2:
+                remaining = ""
+            if not remaining:
                 if was_minimized:
                     _u32.ShowWindow(main_hwnd, SW_MINIMIZE)
-                _log("_uia_send: send button Invoke 兜底成功")
+                _log("_uia_send: send_keys Enter 成功")
                 return True
-            _log(f"_uia_send: Invoke 兜底失败（输入框仍有{len(remaining2)}字）")
+            _log(f"_uia_send: send_keys后仍有{len(remaining)}字，降级发送按钮")
+        except Exception as _ke:
+            _log(f"_uia_send: send_keys 异常: {_ke}")
+        # 5. 降级：发送按钮 click_input
+        btn = _find_send_button(mw)
+        _log(f"_uia_send: send_btn={'found' if btn else 'None'}")
+        if btn is not None:
+            try:
+                btn.click_input()
+                time.sleep(0.5)
+                try:
+                    remaining2 = uia_edit.get_value() or ""
+                except Exception:
+                    remaining2 = ""
+                if not remaining2:
+                    if was_minimized:
+                        _u32.ShowWindow(main_hwnd, SW_MINIMIZE)
+                    _log("_uia_send: btn click_input 成功")
+                    return True
+                _log(f"_uia_send: btn click后仍有{len(remaining2)}字，失败")
+            except Exception as _be:
+                _log(f"_uia_send: btn click_input 异常: {_be}")
+        _log("_uia_send: 所有发送方式均失败")
         return False
     except Exception as exc:
         _log(f"_uia_send: {exc}")
@@ -685,7 +698,7 @@ def _load_replied() -> set:
     - 旧格式 [sender, content]（2 元素，无时间戳）— 向后兼容，全部加载
     """
     try:
-        with open(_REPLIED_FILE, "r", encoding="utf-8") as _f:
+        with open(_REPLIED_FILE, "r", encoding="utf-8-sig") as _f:
             data = json.load(_f)
         now = time.time()
         s: set = set()
