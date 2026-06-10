@@ -18,6 +18,7 @@ logger = logging.getLogger(__name__)
 
 MAIN_WINDOW_CLASS = "mmui::MainWindow"
 LOGIN_WINDOW_CLASS = "mmui::LoginWindow"
+QT5_WINDOW_CLASS = "Qt51514QWindowIcon"  # xwechat Qt5 frame (4.1.10.x via xwechat patch)
 
 # 微信安装默认路径（Weixin 4.x 官方安装位置）
 WEIXIN_EXE_DEFAULT = r"C:\Program Files\Tencent\Weixin\Weixin.exe"
@@ -269,14 +270,19 @@ def assert_supported_version(exe_path: Optional[str] = None) -> None:
 
 
 def is_weixin_running() -> bool:
-    """检测 Weixin.exe 是否已有进程在跑（跨平台：非 Windows 永远返回 False）。"""
+    """检测 Weixin.exe / WeixinUpdate.exe 是否在运行（跨平台：非 Windows 返回 False）。
+
+    使用 bytes 模式避免 GBK 环境 text=True 解码失败；同时检测 WeixinUpdate.exe，
+    因为 xwechat 启动后常驻的是 WeixinUpdate.exe 而非 Weixin.exe。
+    """
     try:
         import subprocess  # noqa: PLC0415
         result = subprocess.run(
-            ["tasklist", "/FI", "IMAGENAME eq Weixin.exe", "/NH"],
-            capture_output=True, text=True, timeout=5,
+            ["tasklist"],
+            capture_output=True, timeout=5,
         )
-        return "Weixin.exe" in result.stdout
+        out = result.stdout
+        return b"Weixin.exe" in out or b"WeixinUpdate.exe" in out
     except Exception:
         return False
 
@@ -309,16 +315,21 @@ def launch_weixin(exe_path: Optional[str] = None) -> bool:
 
 def get_main_window() -> Optional[Any]:
     """
-    返回微信 4.0 主窗口（class_name == 'mmui::MainWindow'）。
+    返回微信主窗口（mmui::MainWindow 或 Qt51514QWindowIcon/微信）。
 
-    - 没找到主窗口、或只看到 'mmui::LoginWindow'（未登录）→ 返回 None，调用方据此报"需扫码登录"。
+    - mmui::MainWindow：UIA 控件树完整，可 RPA 操作
+    - Qt51514QWindowIcon（title 含"微信"）：xwechat 4.1.10+ 框架，UIA 子树可能为空
     - UI 自动化必须在微信登录的交互桌面会话里运行，否则读不到元素。
     """
     from pywinauto import Desktop  # 仅 Windows 运行时需要，顶层不 import
 
     for w in Desktop(backend="uia").windows():
         try:
-            if w.element_info.class_name == MAIN_WINDOW_CLASS:
+            cls = w.element_info.class_name
+            title = w.element_info.name or ""
+            if cls == MAIN_WINDOW_CLASS:
+                return w
+            if cls == QT5_WINDOW_CLASS and "微信" in title:
                 return w
         except Exception:
             continue
@@ -326,12 +337,16 @@ def get_main_window() -> Optional[Any]:
 
 
 def login_window_present() -> bool:
-    """是否检测到登录窗口（mmui::LoginWindow）—— 用于区分"未登录"与"没找到微信"。"""
+    """是否检测到登录窗口（mmui::LoginWindow 或 Qt5 登录帧）。"""
     from pywinauto import Desktop
 
     for w in Desktop(backend="uia").windows():
         try:
-            if w.element_info.class_name == LOGIN_WINDOW_CLASS:
+            cls = w.element_info.class_name
+            title = w.element_info.name or ""
+            if cls == LOGIN_WINDOW_CLASS:
+                return True
+            if cls == QT5_WINDOW_CLASS and title in ("Weixin", "登录"):
                 return True
         except Exception:
             continue

@@ -780,7 +780,7 @@ def run_real_listen(args: argparse.Namespace) -> int:
     last_uia_activate = time.time()
     # 自动启动微信：检测到微信未运行时自动 Popen Weixin.exe，冷却 120s 防重复拉起
     wechat_launch_cooldown = 120
-    last_wechat_launch = 0.0
+    last_wechat_launch = time.time() - wechat_launch_cooldown + 30  # 30s grace before first launch
     # replied 过期清理：每小时清一次内存里的过期条目，避免长期运行积累
     last_replied_purge = time.time()
     try:
@@ -806,6 +806,17 @@ def run_real_listen(args: argparse.Namespace) -> int:
                 mw = get_main_window()
                 if mw is None:
                     login = login_window_present()
+                else:
+                    # 主窗口已就绪时若仍有登录窗口（残留），自动关闭
+                    if login_window_present():
+                        try:
+                            import ctypes as _ctc
+                            _hwnd_login = _ctc.windll.user32.FindWindowW("mmui::LoginWindow", None)
+                            if _hwnd_login:
+                                _ctc.windll.user32.PostMessageW(_hwnd_login, 0x0010, 0, 0)
+                                _log(f"检测到多余登录窗口(hwnd={_hwnd_login})，已发 WM_CLOSE 自动关闭")
+                        except Exception as _ce:
+                            _log(f"自动关闭登录窗口失败: {_ce}")
             except Exception as exc:
                 last_error = f"{type(exc).__name__}: {exc}"
 
@@ -841,14 +852,17 @@ def run_real_listen(args: argparse.Namespace) -> int:
             if mw is None:
                 # 微信既没有主窗口也没有登录窗口 → 进程未启动 → 自动拉起 Weixin.exe（冷却 120s）
                 if not login and now - last_wechat_launch >= wechat_launch_cooldown:
-                    from find_weixin import launch_weixin  # noqa: PLC0415
-                    launched = launch_weixin()
-                    last_wechat_launch = time.time()
-                    if launched:
-                        _log("微信未运行，已自动启动 Weixin.exe — 请扫码登录")
+                    from find_weixin import launch_weixin, is_weixin_running  # noqa: PLC0415
+                    if is_weixin_running():
+                        _log("微信进程已在运行但 UIA 找不到主窗口（UIA 未就绪），跳过重复启动，等待下次激活")
                     else:
-                        _log("微信未运行，自动启动失败（Weixin.exe 不存在或 Popen 异常）")
-                    time.sleep(5)  # 等微信启动窗口
+                        launched = launch_weixin()
+                        last_wechat_launch = time.time()
+                        if launched:
+                            _log("微信未运行，已自动启动 Weixin.exe — 请扫码登录")
+                        else:
+                            _log("微信未运行，自动启动失败（Weixin.exe 不存在或 Popen 异常）")
+                        time.sleep(5)  # 等微信启动窗口
 
                 # 找不到 mmui 主窗口（多为微信4.0 UIAutomation 激活失效）→ 按冷却重做讲述人解锁补激活再重试
                 if now - last_uia_activate >= uia_reactivate_interval:
@@ -878,9 +892,10 @@ def run_real_listen(args: argparse.Namespace) -> int:
             _psc = os.path.join(_public, "zj-proactive-send.json")
             if os.path.exists(_psc):
                 try:
-                    with open(_psc, "r", encoding="utf-8") as _f:
-                        _cmd = json.load(_f)
-                    os.remove(_psc)
+                    with open(_psc, "r", encoding="utf-8-sig") as _f:
+                        _raw = _f.read()
+                    os.remove(_psc)  # 先删除再解析，防格式错误导致无限重试
+                    _cmd = json.loads(_raw)
                     _tgt, _msg = _cmd.get("target", ""), _cmd.get("message", "")
                     if _tgt and _msg:
                         _log(f"[主动发送] target={_tgt!r}")

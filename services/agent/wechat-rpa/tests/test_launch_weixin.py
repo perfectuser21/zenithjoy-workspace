@@ -20,13 +20,19 @@ from find_weixin import launch_weixin, is_weixin_running  # noqa: E402
 class TestIsWeixinRunning:
     def test_returns_true_when_weixin_in_tasklist(self):
         mock_result = MagicMock()
-        mock_result.stdout = "Weixin.exe                   1234 Console"
+        mock_result.stdout = b"Weixin.exe                   1234 Console"
         with patch("subprocess.run", return_value=mock_result):
             assert is_weixin_running() is True
 
-    def test_returns_false_when_not_in_tasklist(self):
+    def test_returns_true_when_weixinupdate_in_tasklist(self):
         mock_result = MagicMock()
-        mock_result.stdout = "System Idle Process              0 Services"
+        mock_result.stdout = b"WeixinUpdate.exe             5678 Console"
+        with patch("subprocess.run", return_value=mock_result):
+            assert is_weixin_running() is True
+
+    def test_returns_false_when_neither_in_tasklist(self):
+        mock_result = MagicMock()
+        mock_result.stdout = b"System Idle Process              0 Services"
         with patch("subprocess.run", return_value=mock_result):
             assert is_weixin_running() is False
 
