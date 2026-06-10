@@ -75,7 +75,7 @@ $env:E2E_EMAIL    = $SuperAdminEmail
 $env:E2E_PASSWORD = $SuperAdminPassword
 
 $e2eProc = Start-Process -FilePath "cmd.exe" `
-  -ArgumentList "/c npx.cmd playwright test e2e\video-remake.spec.ts --reporter=list" `
+  -ArgumentList "/c npx.cmd playwright test e2e/video-remake.spec.ts --reporter=list" `
   -WorkingDirectory "$repoRoot\apps\dashboard" `
   -Wait -PassThru -NoNewWindow
 
