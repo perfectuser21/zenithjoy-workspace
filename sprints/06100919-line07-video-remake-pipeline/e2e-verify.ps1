@@ -38,8 +38,9 @@ $pwProc = Start-Process -FilePath "cmd.exe" `
 if ($pwProc.ExitCode -ne 0) { throw "FAIL: playwright install failed exitCode=$($pwProc.ExitCode)" }
 Write-Host "✅ Playwright 安装完成"
 
-# 3. Build Dashboard
+# 3. Build Dashboard（VITE_SKIP_AUTH=true 让 E2E 跳过登录，与 walking-skeleton spec 一致）
 Write-Host "▶ [Phase 1] Building dashboard..."
+$env:VITE_SKIP_AUTH = "true"
 $buildProc = Start-Process -FilePath "cmd.exe" `
   -ArgumentList "/c npm.cmd run build" `
   -WorkingDirectory "$repoRoot\apps\dashboard" `
