@@ -112,7 +112,7 @@ Write-Host "✅ API TypeScript 构建完成"
 
 # 启动 API server（使用编译后的 dist/index.js，含 /api/video-remake/* 路由）
 $env:PORT     = $ApiPort
-$env:NODE_ENV = "production"
+$env:NODE_ENV = "test"
 $env:CI       = "true"
 
 $apiProc = Start-Process -FilePath "cmd.exe" `
