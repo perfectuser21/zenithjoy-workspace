@@ -72,8 +72,8 @@ EOF'
 **Golden Path 对应**: Step 1-2 — 9节点流水线初始化，每节点含完整字段
 **自查**: 若 getVideoRemakeJob 未实现 → import 失败 → FAIL；若 nodes 少于9项 → 断言失败 → FAIL ✅
 
-- [ ] [BEHAVIOR] getVideoRemakeJob 返回 nodes 数组含9项（N01–N09），每项含 node_id/label/status/input/output 字段
-  Test: manual:bash -c 'node --input-type=module << '"'"'EOF'"'"'
+- [ ] [BEHAVIOR] getVideoRemakeJob 返回 nodes 数组含9项（N01–N09），每项含 node_id/label/status/input/output 字段；顶层含 filename(string非空)/duration_seconds(number)/width(number)/height(number)
+  Test: manual:bash -c 'TEST_MODE=1 node --input-type=module << '"'"'EOF'"'"'
 import { createVideoRemakeJob, getVideoRemakeJob } from "./apps/api/src/services/video-remake.service.js";
 const created = await createVideoRemakeJob({ filename: "test.mp4", fileSizeBytes: 1024, buffer: Buffer.from([0,0,0]) });
 const job = await getVideoRemakeJob(created.job_id);
@@ -84,9 +84,13 @@ if (!n.node_id || !n.label || !n.status || !("input" in n) || !("output" in n)) 
 }
 const ids = job.nodes.map(x => x.node_id);
 if (!ids.includes("N01") || !ids.includes("N09")) { console.error("FAIL: 缺N01或N09"); process.exit(1); }
-console.log("OK nodes.length=9 ids=" + ids.join(","));
+if (typeof job.filename !== "string" || job.filename.length === 0) { console.error("FAIL: filename非string或空"); process.exit(1); }
+if (typeof job.duration_seconds !== "number") { console.error("FAIL: duration_seconds非number, got", typeof job.duration_seconds); process.exit(1); }
+if (typeof job.width !== "number") { console.error("FAIL: width非number, got", typeof job.width); process.exit(1); }
+if (typeof job.height !== "number") { console.error("FAIL: height非number, got", typeof job.height); process.exit(1); }
+console.log("OK nodes.length=9 ids=" + ids.join(",") + " filename=" + job.filename + " duration_seconds=" + job.duration_seconds + " width=" + job.width + " height=" + job.height);
 EOF'
-  期望: OK（nodes 数组9项，每项含完整字段，N01/N09 存在）
+  期望: OK（nodes 数组9项，每项含完整字段，N01/N09 存在；filename 非空 string，duration_seconds/width/height 为 number）
 
 ### [BEHAVIOR 4] N03 场景分析 — 节点输出含 original_frame_url + prompt_text
 
@@ -227,6 +231,25 @@ try {
 }
 EOF'
   期望: OK（N08_TIMEOUT_MS=1 时抛出 code="N08_TIMEOUT" 错误）
+
+### [BEHAVIOR 11] N08 成功路径 — generateVideoWithDashScope 返回视频片段 schema
+
+**Golden Path 对应**: Step 8 (N08 i2v生成) — PRD DoD #5:"N08 调用 Aliyun DashScope happy-horse i2v，返回视频片段"；成功时 nodes[N08].output 含 video_segment_url + duration_seconds
+**自查**: 若 generateVideoWithDashScope 未实现成功路径 → 函数不存在或缺字段 → FAIL ✅
+
+- [ ] [BEHAVIOR] TEST_MODE=1 时 generateVideoWithDashScope 返回 { video_segment_url: string(非空), duration_seconds: number(>0) }
+  Test: manual:bash -c 'TEST_MODE=1 node --input-type=module << '"'"'EOF'"'"'
+import { generateVideoWithDashScope } from "./apps/api/src/services/video-remake.service.js";
+const r = await generateVideoWithDashScope({ frameUrl: "fixture://start-frame.jpg", apiKey: "test-key" });
+if (typeof r.video_segment_url !== "string" || r.video_segment_url.length === 0) {
+  console.error("FAIL: N08 output 缺 video_segment_url"); process.exit(1);
+}
+if (typeof r.duration_seconds !== "number" || r.duration_seconds <= 0) {
+  console.error("FAIL: N08 output duration_seconds 非正数, got", r.duration_seconds); process.exit(1);
+}
+console.log("OK N08成功路径 video_segment_url=" + r.video_segment_url.slice(0,40) + " duration_seconds=" + r.duration_seconds);
+EOF'
+  期望: OK（video_segment_url 非空 string，duration_seconds > 0）
 
 ---
 

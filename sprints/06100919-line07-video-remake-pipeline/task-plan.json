@@ -39,7 +39,8 @@
         "[BEHAVIOR] getVideoRemakeOutput 返回 download_url + duration_seconds(>0) + has_video_stream(true)，禁用字段不存在",
         "[BEHAVIOR] getVideoRemakeJob('non-existent') 抛出含 404/Not Found 错误",
         "[BEHAVIOR] FORCE_TOAPI_FAIL=1 时 redrawFrameWithToAPI 抛出 code=N04_API_FAILURE",
-        "[BEHAVIOR] N08_TIMEOUT_MS=1 时 generateVideoWithDashScope 抛出 code=N08_TIMEOUT"
+        "[BEHAVIOR] N08_TIMEOUT_MS=1 时 generateVideoWithDashScope 抛出 code=N08_TIMEOUT",
+        "[BEHAVIOR] TEST_MODE=1 时 generateVideoWithDashScope 返回 { video_segment_url: string(非空), duration_seconds: number(>0) }"
       ],
       "files": [
         "apps/dashboard/src/pages/VideoRemakePipelinePage.tsx",

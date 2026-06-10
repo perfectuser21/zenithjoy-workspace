@@ -1,4 +1,4 @@
-# Sprint Contract Draft (Round 2)
+# Sprint Contract Draft (Round 3)
 
 ## 已知约束（来自回归测试）
 
@@ -47,6 +47,7 @@
 - `nodes` (array, 必填): 9个节点状态数组，`node_id` 格式 `"N01"`–`"N09"`
 - `nodes[N03].output` (object): `{ original_frame_url: string, prompt_text: string }` — N03 完成后填充
 - `nodes[N05].output` (object): `{ frames: [{ redrawn_frame_url: string, score: number }] }` — N05 完成后填充
+- `nodes[N08].output` (object): `{ video_segment_url: string, duration_seconds: number }` — N08 完成后填充
 **禁用字段名**: `id`, `node_status`, `nodeId`, `nodes_status`
 **Error (HTTP 404)**:
 ```json
@@ -97,6 +98,8 @@
   → [N08 i2v生成 → 节点展开见进度+预览，节点变绿]
   → [N09 合成导出 → 下载按钮可见，下载 MP4，ffprobe 确认有视频流+时长>0]
 ```
+
+> **[ASSUMPTION: TEST_MODE=1]** 以下 BEHAVIOR 单测中 `TEST_MODE=1` 标志使服务层函数返回固定 fixture 数据，**不实际调用** ToAPI gpt-image-2 / DashScope i2v 外部 API；真实 AI 调用仅在 `e2e-verify.ps1`（windows_cloud CI）通过真实 API Key 触发，满足 PRD DoD #8 真实 smoke 要求。若实现选择 `TEST_MODE=1` 走 mock 路径，须在服务代码中明确注释说明该 flag 行为；若实现选择直接调用真实 API（测试时需有效 API Key），须删除 `TEST_MODE=1` 前缀并在 README 说明依赖。
 
 ---
 
@@ -462,16 +465,16 @@ if (-not $conn.TcpTestSucceeded) { throw "FAIL: Vite 未在 ${maxWait}s 内就�
 Write-Host "✅ Vite 就绪 port=$VitePort"
 
 # 6. 跑 Playwright E2E（apps/dashboard/e2e/video-remake.spec.ts）
+# 在当前 session 设 env var（子进程继承），避免 -Environment 替换整体 env 导致 PATH 丢失
+$env:BASE_URL     = $BaseUrl
+$env:CI           = "true"
+$env:E2E_EMAIL    = $SuperAdminEmail
+$env:E2E_PASSWORD = $SuperAdminPassword
+
 $e2eProc = Start-Process -FilePath "cmd.exe" `
   -ArgumentList "/c npx.cmd playwright test e2e\video-remake.spec.ts --reporter=list" `
   -WorkingDirectory "$repoRoot\apps\dashboard" `
-  -Wait -PassThru -NoNewWindow `
-  -Environment @{
-    BASE_URL = $BaseUrl
-    CI = "true"
-    E2E_EMAIL = $SuperAdminEmail
-    E2E_PASSWORD = $SuperAdminPassword
-  }
+  -Wait -PassThru -NoNewWindow
 
 Stop-Process -Id $serverProc.Id -Force -ErrorAction SilentlyContinue
 

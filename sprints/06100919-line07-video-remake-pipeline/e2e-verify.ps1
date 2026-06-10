@@ -64,18 +64,16 @@ Write-Host "✅ Vite 就绪 port=$VitePort（等待 ${waited}s）"
 
 # 6. 跑 Playwright E2E（apps/dashboard/e2e/video-remake.spec.ts）
 Write-Host "▶ Running Playwright E2E: video-remake.spec.ts..."
-$e2eEnv = @{
-  BASE_URL    = $BaseUrl
-  CI          = "true"
-  E2E_EMAIL   = $SuperAdminEmail
-  E2E_PASSWORD = $SuperAdminPassword
-}
+# 在当前 session 设 env var（子进程继承），避免 -Environment 替换整体 env 导致 PATH 丢失
+$env:BASE_URL     = $BaseUrl
+$env:CI           = "true"
+$env:E2E_EMAIL    = $SuperAdminEmail
+$env:E2E_PASSWORD = $SuperAdminPassword
 
 $e2eProc = Start-Process -FilePath "cmd.exe" `
   -ArgumentList "/c npx.cmd playwright test e2e\video-remake.spec.ts --reporter=list" `
   -WorkingDirectory "$repoRoot\apps\dashboard" `
-  -Wait -PassThru -NoNewWindow `
-  -Environment $e2eEnv
+  -Wait -PassThru -NoNewWindow
 
 Stop-Process -Id $serverProc.Id -Force -ErrorAction SilentlyContinue
 
