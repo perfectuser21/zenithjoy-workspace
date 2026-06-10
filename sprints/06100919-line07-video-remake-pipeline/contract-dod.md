@@ -1,6 +1,3 @@
-contract_branch: cp-06101041-ws-a2463d95-ws1
-sprint_dir: sprints/06100919-line07-video-remake-pipeline
-
 ---
 skeleton: false
 journey_type: user_facing
