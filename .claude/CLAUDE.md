@@ -52,10 +52,10 @@
 
 1. **每个 PR 必须推进 `golden-path-1-smoke.sh` 至少多过一关**。PR 描述强制声明：「本 PR 把 Path X 的 Step Y 从 ❌/🔴 推到 ✅」。
 2. **多 Path 可并行启 sprint，但每个 sprint 必须显式声明推进哪条 Path 的哪些 Step**。Path 1 必须保持推进态势（不允许停滞 ≥2 周），Path 2/4 启 sprint 不阻塞 Path 1。新加 feature 的想法对照各 Path 步骤检查 — 不在任何 Path 上 → backlog。
-3. **新 Feature 默认 thin**。要建 medium/thick 必须用 walking-skeleton skill `thicken.js` 走升级流程（含 `replaces_old_thin` 删旧文件证据）。
+3. **新 Feature 默认 thin**。要建 medium/thick 必须通过 `/dev` 路径C 走 harness 加厚流程（含 `replaces_old_thin` 删旧文件证据）。
 4. **加厚是"先减肥再增肌"**：升级 thickness 必须两段式 commit：`commit 1 删旧 mock/hardcode` → `commit 2 写新实现`。改名 `_legacy` / TODO 注释不算删除。
 
-### 调用 sprint-planner / harness-planner 前必填 4 问
+### 调用 harness-planner 前必填 4 问
 
 ```
 □ 1. 本 sprint 推进哪条 Journey？（名 + Notion URL + 当前 Maturity）
@@ -64,11 +64,11 @@
 □ 4. Feature 0 端到端 smoke = golden-path-1-smoke.sh 跑到 Step <K>，FAIL = 整 sprint FAIL
 ```
 
-不填齐 4 问，**禁止启动 sprint-planner**。
+不填齐 4 问，**禁止启动 harness-planner**。
 
-### 触发 walking-skeleton skill 的场景
+### 触发 /dev 路径C 的场景
 
-任何"我想做 X 功能"、"加个 feature"、"feature 该多厚"、"开 sprint" 等问题 — 自动触发 `/walking-skeleton`，它会强制 anchor 到 4 条 Journey 上。
+任何"我想做 X 功能"、"加个 feature"、"feature 该多厚"、"开 sprint" 等问题 — 走 `/dev` 路径C（Harness），强制 anchor 到 4 条 Journey 上。
 
 ---
 
