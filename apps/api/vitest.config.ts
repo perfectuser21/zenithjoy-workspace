@@ -1,6 +1,10 @@
 import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
+  resolve: {
+    // Prefer .ts over .js so ESM wrappers in src/ don't shadow TypeScript sources
+    extensions: ['.ts', '.tsx', '.mts', '.cts', '.mjs', '.js', '.jsx', '.json'],
+  },
   test: {
     globals: true,
     include: [

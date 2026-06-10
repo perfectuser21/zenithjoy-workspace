@@ -47,6 +47,8 @@ import { acquisitionRouter } from './routes/acquisition';
 import { brainSprintStateRouter } from './routes/brain-sprint-state';
 // Line 00 Session Health Medium WS2 — 运营中枢 8 平台 session 端点
 import { operatorSessionsRouter } from './routes/operator-sessions';
+// Line 07 — AI 爆款视频翻拍 9节点流水线
+import videoRemakeRouter from './routes/video-remake';
 import { errorHandler, notFoundHandler } from './middleware/error';
 
 const app = express();
@@ -141,6 +143,8 @@ app.use('/api/clips/auth', clipsAuthRouter);
 app.use('/api/acquisition', acquisitionRouter);
 // Harness Sprint State — Walking Skeleton 本地持久化（Brain DB source of truth）
 app.use('/api/brain', brainSprintStateRouter);
+// Line 07 — AI 爆款视频翻拍 9节点流水线
+app.use('/api/video-remake', videoRemakeRouter);
 // (operatorSessionsRouter 已在 operatorRouter 之前注册，见上方)
 
 // Error handling
