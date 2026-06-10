@@ -321,4 +321,23 @@ describe('ModuleManager', () => {
     // 新版本在 active 列表
     expect(mm.getActiveModules()).toContain('line04-wechat-cs');
   });
+
+  it('getInstalledVersion semver 排序：1.0.12 > 1.0.9（数值比较，非字典序）', () => {
+    // 回归：dirs.sort() 字典序时 "1.0.9" > "1.0.12"（因 '9' > '1'）
+    // → getInstalledVersion 返回 "1.0.9" 而非正确的 "1.0.12"
+    // → needsDownload("line04-wechat-cs", "1.0.12") = true → 每次心跳都下载覆盖文件
+    const prefix = 'line04-wechat-cs-';
+    for (const v of ['1.0.9', '1.0.12']) {
+      const dir = path.join(root, `${prefix}${v}`);
+      fs.mkdirSync(dir, { recursive: true });
+      fs.writeFileSync(
+        path.join(dir, 'manifest.json'),
+        JSON.stringify({ lineId: 'line04-wechat-cs', version: v, entry: 'index.js' }),
+      );
+    }
+
+    const mm = new ModuleManager({ modulesRoot: root });
+    expect(mm.getInstalledVersion('line04-wechat-cs')).toBe('1.0.12');
+    expect(mm.needsDownload('line04-wechat-cs', '1.0.12')).toBe(false);
+  });
 });
