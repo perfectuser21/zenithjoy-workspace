@@ -101,13 +101,22 @@ if ([string]::IsNullOrEmpty($env:DASHSCOPE_API_KEY)) {
   throw "FAIL: DASHSCOPE_API_KEY 未注入。请在 .github/workflows/e2e-windows.yml env 段添加: DASHSCOPE_API_KEY: `${{ secrets.DASHSCOPE_API_KEY }}"
 }
 
-# 启动 API server（注入真实 API keys，CI=true 使流水线自动选帧）
+# 编译 TypeScript API（dist/index.js 含 video-remake 路由）
+Write-Host "▶ [Phase 2] Building API TypeScript..."
+$apiBuildProc = Start-Process -FilePath "cmd.exe" `
+  -ArgumentList "/c npm.cmd run build --workspace=apps/api" `
+  -WorkingDirectory $repoRoot `
+  -Wait -PassThru -NoNewWindow
+if ($apiBuildProc.ExitCode -ne 0) { throw "FAIL: API TypeScript build failed exitCode=$($apiBuildProc.ExitCode)" }
+Write-Host "✅ API TypeScript 构建完成"
+
+# 启动 API server（使用编译后的 dist/index.js，含 /api/video-remake/* 路由）
 $env:PORT     = $ApiPort
 $env:NODE_ENV = "production"
 $env:CI       = "true"
 
 $apiProc = Start-Process -FilePath "cmd.exe" `
-  -ArgumentList "/c node apps/api/src/index.js" `
+  -ArgumentList "/c node apps/api/dist/index.js" `
   -WorkingDirectory $repoRoot `
   -PassThru -NoNewWindow
 
@@ -124,12 +133,15 @@ if (-not $apiConn.TcpTestSucceeded) {
 }
 Write-Host "✅ API server 就绪 port=$ApiPort"
 
-# 生成 1s 测试 MP4（ffmpeg 在 windows-latest 内置）
+# 生成 1s 测试 MP4（choco install ffmpeg 安装，Start-Process 用 try/catch 兜底）
 $testVideoPath = "$env:TEMP\test-smoke-1s.mp4"
 $ffmpegArgs = "-f lavfi -i testsrc=duration=1:size=64x64:rate=1 -f lavfi -i sine=duration=1 -c:v libx264 -c:a aac -y `"$testVideoPath`""
-$ffmpegProc = Start-Process -FilePath "ffmpeg" `
-  -ArgumentList $ffmpegArgs `
-  -Wait -PassThru -NoNewWindow -ErrorAction SilentlyContinue
+$ffmpegProc = $null
+try {
+  $ffmpegProc = Start-Process -FilePath "ffmpeg" `
+    -ArgumentList $ffmpegArgs `
+    -Wait -PassThru -NoNewWindow
+} catch { $ffmpegProc = $null }
 
 if ($null -eq $ffmpegProc -or $ffmpegProc.ExitCode -ne 0 -or -not (Test-Path $testVideoPath)) {
   # fallback：使用预生成 fixture（Generator 负责提供）

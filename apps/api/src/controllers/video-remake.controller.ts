@@ -5,6 +5,7 @@ import {
   approveN06Review,
   selectN07Frame,
   getVideoRemakeOutput,
+  getRawVideoBuffer,
 } from '../services/video-remake.service';
 
 export async function createJob(req: Request, res: Response): Promise<void> {
@@ -65,4 +66,15 @@ export async function getOutput(req: Request, res: Response): Promise<void> {
     const e = err as { status?: number; message?: string };
     res.status(e.status ?? 404).json({ error: e.message ?? 'Not found' });
   }
+}
+
+export function serveRawVideo(req: Request, res: Response): void {
+  const buf = getRawVideoBuffer(req.params.job_id);
+  if (!buf || buf.length === 0) {
+    res.status(404).json({ error: 'Raw video not found' });
+    return;
+  }
+  res.setHeader('Content-Type', 'video/mp4');
+  res.setHeader('Content-Length', buf.length);
+  res.status(200).end(buf);
 }

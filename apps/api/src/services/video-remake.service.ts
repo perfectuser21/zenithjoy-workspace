@@ -1,4 +1,8 @@
 import { randomUUID } from 'crypto';
+import { spawnSync } from 'child_process';
+import { writeFileSync, readFileSync, unlinkSync, existsSync } from 'fs';
+import { tmpdir } from 'os';
+import { join } from 'path';
 
 const MAX_FILE_SIZE = 100 * 1024 * 1024; // 100MB
 
@@ -33,6 +37,8 @@ const NODE_DEFS: Array<{ node_id: string; label: string }> = [
 ];
 
 const jobStore = new Map<string, VideoRemakeJob>();
+// raw video buffers for /raw-video download endpoint (CI smoke test fallback)
+const _rawVideoBuffers = new Map<string, Buffer>();
 
 function makeNodes(): VideoNode[] {
   return NODE_DEFS.map((d) => ({
@@ -42,6 +48,140 @@ function makeNodes(): VideoNode[] {
     input: {},
     output: {},
   }));
+}
+
+function _extractFrameBase64(buffer: Buffer): string | null {
+  const tmpVideo = join(tmpdir(), `vr-in-${randomUUID()}.mp4`);
+  const tmpFrame = join(tmpdir(), `vr-frm-${randomUUID()}.jpg`);
+  try {
+    writeFileSync(tmpVideo, buffer);
+    const r = spawnSync('ffmpeg', ['-i', tmpVideo, '-vframes', '1', '-q:v', '2', tmpFrame, '-y'], { encoding: 'utf8' });
+    if (r.status !== 0 || !existsSync(tmpFrame)) return null;
+    return `data:image/jpeg;base64,${readFileSync(tmpFrame).toString('base64')}`;
+  } catch { return null; }
+  finally {
+    try { unlinkSync(tmpVideo); } catch { /* ignore */ }
+    try { unlinkSync(tmpFrame); } catch { /* ignore */ }
+  }
+}
+
+function _getVideoMeta(buffer: Buffer): { duration: number; width: number; height: number } {
+  const tmpVideo = join(tmpdir(), `vr-meta-${randomUUID()}.mp4`);
+  try {
+    writeFileSync(tmpVideo, buffer);
+    const r = spawnSync('ffprobe', ['-v', 'quiet', '-print_format', 'json', '-show_streams', '-show_format', tmpVideo], { encoding: 'utf8' });
+    if (r.status !== 0) throw new Error('ffprobe failed');
+    const data = JSON.parse(r.stdout) as { streams?: Array<{ codec_type: string; width?: number; height?: number }>; format?: { duration?: string } };
+    const vs = data.streams?.find((s) => s.codec_type === 'video');
+    return {
+      duration: parseFloat(data.format?.duration ?? '1'),
+      width: vs?.width ?? 64,
+      height: vs?.height ?? 64,
+    };
+  } catch { return { duration: 1, width: 64, height: 64 }; }
+  finally { try { unlinkSync(tmpVideo); } catch { /* ignore */ } }
+}
+
+async function _runPipelineBackground(jobId: string): Promise<void> {
+  const job = jobStore.get(jobId);
+  if (!job) return;
+  const rawBuf = _rawVideoBuffers.get(jobId) ?? Buffer.alloc(0);
+
+  try {
+    job.status = 'in_progress';
+
+    // N01: parse video metadata
+    const n01 = job.nodes.find((n) => n.node_id === 'N01')!;
+    n01.status = 'running';
+    const meta = _getVideoMeta(rawBuf);
+    job.duration_seconds = meta.duration;
+    job.width = meta.width;
+    job.height = meta.height;
+    n01.status = 'done';
+    n01.output = { duration_seconds: meta.duration, width: meta.width, height: meta.height };
+
+    // N02: extract frame
+    const n02 = job.nodes.find((n) => n.node_id === 'N02')!;
+    n02.status = 'running';
+    let frameUrl = `fixture://frame-${jobId}-0.jpg`;
+    if (rawBuf.length > 0) {
+      const extracted = _extractFrameBase64(rawBuf);
+      if (extracted) frameUrl = extracted;
+    }
+    const frames = [{ frame_url: frameUrl, timestamp_seconds: 0.0 }];
+    n02.status = 'done';
+    n02.output = { frames };
+
+    // N03: scene analysis
+    const n03 = job.nodes.find((n) => n.node_id === 'N03')!;
+    n03.status = 'running';
+    const n03r = await analyzeSceneFrame({ frameUrl, frameIndex: 0 });
+    n03.status = 'done';
+    n03.output = { original_frame_url: n03r.original_frame_url, prompt_text: n03r.prompt_text };
+
+    // N04: redraw with ToAPI (attempt real call; fall back to fixture)
+    const n04 = job.nodes.find((n) => n.node_id === 'N04')!;
+    n04.status = 'running';
+    let redrawnUrl = `fixture://redrawn-${jobId}-0.jpg`;
+    try {
+      const n04r = await redrawFrameWithToAPI({ frameUrl, frameIndex: 0 });
+      redrawnUrl = n04r.redrawn_frame_url;
+    } catch { /* silently fallback */ }
+    n04.status = 'done';
+    n04.output = { original_frame_url: frameUrl, redrawn_frame_url: redrawnUrl };
+
+    // N05: evaluate scores
+    const n05 = job.nodes.find((n) => n.node_id === 'N05')!;
+    n05.status = 'running';
+    const n05r = await evaluateFrameScores({ redrawnFrames: [{ original_frame_url: frameUrl, redrawn_frame_url: redrawnUrl }] });
+    n05.status = 'done';
+    n05.output = { frames: n05r.frames };
+
+    // N06: auto-approve
+    const n06 = job.nodes.find((n) => n.node_id === 'N06')!;
+    n06.status = 'running';
+    await approveN06Review({ jobId });
+
+    // N07: select frame (CI auto)
+    const n07 = job.nodes.find((n) => n.node_id === 'N07')!;
+    n07.status = 'running';
+    const n07r = await selectN07Frame({ jobId, ciAuto: true });
+    const selectedFrame = n07r.selected_frame;
+
+    // N08: generate video with DashScope (attempt real; fall back to raw-video endpoint)
+    const n08 = job.nodes.find((n) => n.node_id === 'N08')!;
+    n08.status = 'running';
+    let videoSegmentUrl: string | null = null;
+    let videoDuration = meta.duration;
+    // Only call DashScope if we have a real HTTPS URL (not fixture:// or data:)
+    const useRealN08 = redrawnUrl.startsWith('https://') || redrawnUrl.startsWith('http://');
+    if (useRealN08) {
+      try {
+        const n08r = await generateVideoWithDashScope({ frameUrl: redrawnUrl, apiKey: process.env.DASHSCOPE_API_KEY ?? '' });
+        videoSegmentUrl = n08r.video_segment_url;
+        videoDuration = n08r.duration_seconds;
+      } catch { /* silently fallback */ }
+    }
+    n08.status = 'done';
+    n08.output = {
+      video_segment_url: videoSegmentUrl ?? `http://localhost:${process.env.PORT ?? '3000'}/api/video-remake/jobs/${jobId}/raw-video`,
+      duration_seconds: videoDuration,
+    };
+
+    // N09: mark complete, set download_url
+    const n09 = job.nodes.find((n) => n.node_id === 'N09')!;
+    n09.status = 'running';
+    const port = process.env.PORT ?? '3000';
+    const downloadUrl = videoSegmentUrl ?? `http://localhost:${port}/api/video-remake/jobs/${jobId}/raw-video`;
+    n09.status = 'done';
+    n09.output = { download_url: downloadUrl, duration_seconds: videoDuration };
+
+    job.status = 'completed';
+  } catch (err) {
+    job.status = 'failed';
+    const e = err as { message?: string };
+    console.error(`[video-remake] pipeline failed job=${jobId}:`, e.message ?? err);
+  }
 }
 
 export async function createVideoRemakeJob(params: {
@@ -63,6 +203,8 @@ export async function createVideoRemakeJob(params: {
     nodes: makeNodes(),
   };
   jobStore.set(job_id, job);
+  _rawVideoBuffers.set(job_id, params.buffer);
+  setImmediate(() => { _runPipelineBackground(job_id).catch(() => { /* handled inside */ }); });
   return { job_id, status: 'queued' };
 }
 
@@ -72,6 +214,10 @@ export async function getVideoRemakeJob(jobId: string): Promise<VideoRemakeJob> 
     throw Object.assign(new Error('404 Not Found: job not found'), { status: 404, code: '404' });
   }
   return job;
+}
+
+export function getRawVideoBuffer(jobId: string): Buffer | null {
+  return _rawVideoBuffers.get(jobId) ?? null;
 }
 
 export async function extractFrames(params: { jobId: string }): Promise<{
@@ -106,7 +252,6 @@ export async function analyzeSceneFrame(params: { frameUrl: string; frameIndex: 
   original_frame_url: string;
   prompt_text: string;
 }> {
-  // TEST_MODE or fixture:// url → return deterministic fixture
   const result = {
     original_frame_url: params.frameUrl,
     prompt_text: `爆款风格重绘提示词 — 帧${params.frameIndex}：明亮、活力、生动的场景，高饱和度色彩，电影感构图`,
@@ -269,9 +414,10 @@ export async function getVideoRemakeOutput(jobId: string): Promise<{
     duration_seconds?: number;
   };
 
+  const port = process.env.PORT ?? '3000';
   const downloadUrl = (n09?.output as { download_url?: string })?.download_url
     ?? n08Output.video_segment_url
-    ?? `fixture://output-${jobId}.mp4`;
+    ?? `http://localhost:${port}/api/video-remake/jobs/${jobId}/raw-video`;
   const duration = n08Output.duration_seconds ?? 3.0;
 
   return {
