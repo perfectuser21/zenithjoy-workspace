@@ -37,12 +37,16 @@ import { assembleChatContext } from './wechat/context-assembler';
 // openrouter.ts 仍丢弃 reasoning_content 作防御：万一 ENV 切回推理模型也不会把思考漏给客户。
 //
 // 端点/模型可被 ENV 覆盖（WECHAT_CS_MODEL）；apiKey 走 TOAPI_API_KEY（1Password「ToAPI」条目，部署机 ENV 必须有）。
-const CS_LLM = {
-  model: process.env.WECHAT_CS_MODEL || 'deepseek-v3.2',
-  baseUrl: process.env.TOAPI_BASE_URL || 'https://toapis.com/v1/chat/completions',
-  apiKey: process.env.TOAPI_API_KEY,
-  maxTokens: Number(process.env.WECHAT_CS_MAX_TOKENS) || 2000,
-};
+// 惰性读 env（调用时而非模块加载时）：保证测试 beforeAll 设的 env / 部署后改的 env 都生效，
+// 不被 import 时机锁死。
+function csLlm() {
+  return {
+    model: process.env.WECHAT_CS_MODEL || 'deepseek-v3.2',
+    baseUrl: process.env.TOAPI_BASE_URL || 'https://toapis.com/v1/chat/completions',
+    apiKey: process.env.TOAPI_API_KEY,
+    maxTokens: Number(process.env.WECHAT_CS_MAX_TOKENS) || 2000,
+  };
+}
 
 // ─── 飞书 Bitable 配置（从 ENV 读，CI 用占位值 mock）────────────────────────────
 
@@ -269,20 +273,21 @@ export async function generateChatDraft(
   // 3) 调 OpenRouter DeepSeek（带人设 system + temperature；回复已在 openrouter 内剥思考块）
   let aiContent = '';
   let aiError: string | null = null;
+  const cs = csLlm();
   try {
     const result = await callOpenRouter({
       system,
       prompt: user,
       temperature: 0.8,
-      model: CS_LLM.model,
-      baseUrl: CS_LLM.baseUrl,
-      apiKey: CS_LLM.apiKey,
-      maxTokens: CS_LLM.maxTokens,
+      model: cs.model,
+      baseUrl: cs.baseUrl,
+      apiKey: cs.apiKey,
+      maxTokens: cs.maxTokens,
       purpose: 'wechat_chat_draft',
     });
     aiContent = sanitizeReply((result.content || '').trim(), persona);
     if (!aiContent) {
-      aiError = `${CS_LLM.model} 返回空文本`;
+      aiError = `${cs.model} 返回空文本`;
       aiContent = FAIL_PLACEHOLDER;
     }
   } catch (err) {
@@ -452,18 +457,19 @@ export async function generateMomentDraft(
   const prompt = buildMomentPrompt({ industry, audience, hook });
   let aiContent = '';
   let aiError: string | null = null;
+  const cs = csLlm();
   try {
     const result = await callOpenRouter({
       prompt,
-      model: CS_LLM.model,
-      baseUrl: CS_LLM.baseUrl,
-      apiKey: CS_LLM.apiKey,
-      maxTokens: CS_LLM.maxTokens,
+      model: cs.model,
+      baseUrl: cs.baseUrl,
+      apiKey: cs.apiKey,
+      maxTokens: cs.maxTokens,
       purpose: 'wechat_moment_draft',
     });
     aiContent = (result.content || '').trim();
     if (!aiContent) {
-      aiError = `${CS_LLM.model} 返回空文本`;
+      aiError = `${cs.model} 返回空文本`;
       aiContent = FAIL_PLACEHOLDER;
     }
   } catch (err) {
