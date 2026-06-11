@@ -14,8 +14,10 @@ TDD — reply_in_chat 两路纯 UIA 发送逻辑单测（纯逻辑，无 pywinau
 """
 from __future__ import annotations
 
+import ctypes
 import os
 import sys
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -45,19 +47,24 @@ class _FakeInvokePattern:
 class _FakeValuePattern:
     def __init__(self):
         self.set_value_called_with = None
-        self.CurrentValue = ""  # noqa: N815
+        self._written = ""
 
     def SetValue(self, value):  # noqa: N802
         self.set_value_called_with = value
-        self.CurrentValue = ""
+        self._written = value  # 存入，供 _FakeEdit 验证步骤使用
 
 
 class _FakeEdit:
     def __init__(self):
         self.element_info = _FakeElementInfo(automation_id="chat_input_field")
         self.iface_value = _FakeValuePattern()
+        self._get_value_calls = 0
 
     def get_value(self) -> str:
+        self._get_value_calls += 1
+        # 第一次调用 = SetValue 后验证（返回写入的文本），后续 = 发送后检查（返回空）
+        if self._get_value_calls == 1:
+            return self.iface_value._written
         return ""
 
     def set_focus(self) -> None:
@@ -113,6 +120,29 @@ class _EmptyMW:
 @pytest.fixture(autouse=True)
 def _no_sleep(monkeypatch):
     monkeypatch.setattr(listen_chat.time, "sleep", lambda *a, **k: None)
+
+
+@pytest.fixture(autouse=True)
+def _mock_windll():
+    """macOS/Linux 无 ctypes.windll，注入 stub 让 _uia_send 能跨平台跑。"""
+    if not hasattr(ctypes, "windll"):
+        windll_stub = MagicMock()
+        windll_stub.user32.IsIconic.return_value = False
+        windll_stub.user32.ShowWindow.return_value = None
+        windll_stub.user32.GetCurrentThreadId.return_value = 100
+        windll_stub.user32.GetWindowThreadProcessId.return_value = 200
+        windll_stub.user32.AttachThreadInput.return_value = None
+        windll_stub.user32.SetFocus.return_value = 0
+        windll_stub.user32.PostMessageW.return_value = None
+        windll_stub.kernel32.GetCurrentThreadId.return_value = 100
+        ctypes.windll = windll_stub
+        yield
+        try:
+            del ctypes.windll
+        except AttributeError:
+            pass
+    else:
+        yield
 
 
 def test_always_invokes_item_before_send():

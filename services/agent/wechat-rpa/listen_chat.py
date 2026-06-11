@@ -305,9 +305,9 @@ def _force_foreground(hwnd: int) -> None:
 
 def _uia_send(uia_edit: Any, mw: Any, reply_text: str) -> bool:
     """
-    后台发送：SW_RESTORE 还原窗口 → SetValue 写入并验证 → set_focus+send_keys(Enter)。
-    WeChat 4.1.x 的聊天输入框是纯 UIA 控件（hwnd=0），PostMessageW 无效，
-    必须用 mw.set_focus()+uia_edit.set_focus() 后调 keyboard.send_keys 走 SendInput。
+    后台发送：SW_RESTORE 还原窗口 → SetValue 写入并验证 → PostMessageW(WM_KEYDOWN/UP)。
+    WeChat 4.1.x 的聊天输入框 hwnd=0，直接对 main_hwnd PostMessageW(Enter) 有效
+    （xian-pc 2026-06-10 实测验证），不需要 SendInput，不抢前台。
     """
     import ctypes as _ct
     _u32 = _ct.windll.user32
@@ -339,15 +339,13 @@ def _uia_send(uia_edit: Any, mw: Any, reply_text: str) -> bool:
                 _u32.ShowWindow(main_hwnd, SW_MINIMIZE)
             return False
         _log(f"_uia_send: 已写入 {len(written)} 字，尝试发送")
-        # 4. set_focus 激活输入框，keyboard.send_keys 发 Enter（SendInput，不依赖 hwnd）
+        # 4. PostMessageW WM_KEYDOWN+UP → 直投 main_hwnd 消息队列（不抢前台，不依赖 hwnd=0 的控件）
+        VK_RETURN = 0x0D
         try:
-            mw.set_focus()
-            time.sleep(0.2)
-            uia_edit.set_focus()
-            time.sleep(0.15)
-            from pywinauto.keyboard import send_keys
-            send_keys('{ENTER}')
-            time.sleep(0.5)
+            _u32.PostMessageW(main_hwnd, 0x0100, VK_RETURN, 0x001C0001)  # WM_KEYDOWN
+            time.sleep(0.05)
+            _u32.PostMessageW(main_hwnd, 0x0101, VK_RETURN, 0xC01C0001)  # WM_KEYUP
+            time.sleep(0.4)
             try:
                 remaining = uia_edit.get_value() or ""
             except Exception:
@@ -355,17 +353,17 @@ def _uia_send(uia_edit: Any, mw: Any, reply_text: str) -> bool:
             if not remaining:
                 if was_minimized:
                     _u32.ShowWindow(main_hwnd, SW_MINIMIZE)
-                _log("_uia_send: send_keys Enter 成功")
+                _log("_uia_send: PostMessage Enter 成功")
                 return True
-            _log(f"_uia_send: send_keys后仍有{len(remaining)}字，降级发送按钮")
+            _log(f"_uia_send: PostMessage后仍有{len(remaining)}字，降级发送按钮")
         except Exception as _ke:
-            _log(f"_uia_send: send_keys 异常: {_ke}")
-        # 5. 降级：发送按钮 click_input
+            _log(f"_uia_send: PostMessage 异常: {_ke}")
+        # 5. 降级：发送按钮 iface_invoke.Invoke()（UIA 控件调用，不依赖前台焦点）
         btn = _find_send_button(mw)
         _log(f"_uia_send: send_btn={'found' if btn else 'None'}")
         if btn is not None:
             try:
-                btn.click_input()
+                btn.iface_invoke.Invoke()
                 time.sleep(0.5)
                 try:
                     remaining2 = uia_edit.get_value() or ""
@@ -374,11 +372,11 @@ def _uia_send(uia_edit: Any, mw: Any, reply_text: str) -> bool:
                 if not remaining2:
                     if was_minimized:
                         _u32.ShowWindow(main_hwnd, SW_MINIMIZE)
-                    _log("_uia_send: btn click_input 成功")
+                    _log("_uia_send: btn iface_invoke.Invoke() 成功")
                     return True
                 _log(f"_uia_send: btn click后仍有{len(remaining2)}字，失败")
             except Exception as _be:
-                _log(f"_uia_send: btn click_input 异常: {_be}")
+                _log(f"_uia_send: btn iface_invoke.Invoke() 异常: {_be}")
         _log("_uia_send: 所有发送方式均失败")
         if was_minimized:
             try:
