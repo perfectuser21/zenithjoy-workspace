@@ -546,9 +546,11 @@ def _open_chat(mw: Any, item: Any, sender: str, expect_content: str = "") -> boo
                     item.iface_invoke.Invoke()
         except Exception as exc:
             _log(f"_open_chat: 切换异常(attempt={attempt}): {exc}")
-        time.sleep(2.0)  # CRITICAL: 等 UIA 树/面板更新
-        if _verify(attempt):
-            return True
+        # 轮询验证（替代死等 2s）：切中立刻返回，最多等 ~2s。快的时候 ~0.4s 就走，多人排队提速关键。
+        for _ in range(5):  # 5 × 0.4s = 2s 上限
+            time.sleep(0.4)
+            if _verify(attempt):
+                return True
         _log(f"_open_chat: 切窗后未确认是 {sender!r}（attempt={attempt}），重试…")
 
     _log(f"_open_chat: 全部策略都无法切到 {sender!r}，放弃（绝不发进错误聊天）")
@@ -1132,6 +1134,10 @@ def run_real_listen(args: argparse.Namespace) -> int:
                 except Exception as _exc:
                     _log(f"[主动发送] 指令处理异常: {_exc}")
 
+            # ── Phase 1: 过滤可回复的未读 + 并行生成草稿 ──────────────────────────────
+            # 生成草稿是纯网络调用、不碰微信窗口，可并发；多人同时来时不再逐个排队等模型，
+            # 把"生成"从串行链路里拿出来并行做，最后只串行做"切窗+发送"（单窗口物理限制）。
+            eligible = []
             for m in unread:
                 key = (m["sender"], m["content"])
                 # per-sender 冷却：成功回复后 30s 内跳过同一 sender
@@ -1148,26 +1154,48 @@ def run_real_listen(args: argparse.Namespace) -> int:
                         _log(f"skip(cooldown {left}s) sender={m['sender']} content={m['content'][:20]!r}")
                         _skip_logged.add(key)
                     continue
-
                 # 频控：≤2 私聊/分钟、≤50/天/号，操作间隔 ≥1s（rate_limiter 是 SSOT）
                 if rate_limiter is not None:
-                    ok, _next_at = rate_limiter.can_send("chat", m["sender"])
-                    if not ok:
+                    ok_rl, _next_at = rate_limiter.can_send("chat", m["sender"])
+                    if not ok_rl:
                         _log(f"rate_limiter: {m['sender']} 24h限额已满，跳过回复（下次允许: {_next_at}）")
                         continue
+                eligible.append(m)
 
-                # mode='auto' 拿中台生成的 reply 文本（已复用飞书最近 10 轮 + 营销画像 + DeepSeek）
-                result = post_draft_generate(
-                    args.middleware_url, m["sender"],
-                    m.get("wxid") or m.get("sender_wxid") or m.get("sender", ""),
-                    m["content"], mode="auto"
-                )
-                reply = (result or {}).get("reply")
-                # AI 失败时 reply 为空 / 占位文案 → 跳过不发，绝不把"AI 生成失败"发给客户
-                if not reply or reply == FAIL_PLACEHOLDER:
-                    _log(f"skip(no reply) sender={m['sender']} result_ok={( result or {}).get('ok')} err={( result or {}).get('error')}")
+            # 并行向中台要草稿文本（最多 5 路同时，避免压垮中台）；按 id(m) 存回复
+            drafts = {}
+            if eligible:
+                import concurrent.futures
+
+                def _gen_draft(mm):
+                    return post_draft_generate(
+                        args.middleware_url, mm["sender"],
+                        mm.get("wxid") or mm.get("sender_wxid") or mm.get("sender", ""),
+                        mm["content"], mode="auto",
+                    )
+
+                with concurrent.futures.ThreadPoolExecutor(max_workers=min(5, len(eligible))) as _ex:
+                    _futs = {_ex.submit(_gen_draft, m): m for m in eligible}
+                    for _fut in concurrent.futures.as_completed(_futs):
+                        m = _futs[_fut]
+                        try:
+                            result = _fut.result()
+                        except Exception as exc:
+                            _log(f"draft-generate 异常 sender={m['sender']}: {exc}")
+                            continue
+                        reply = (result or {}).get("reply")
+                        # AI 失败时 reply 为空 / 占位文案 → 不发，绝不把"AI 生成失败"发给客户
+                        if not reply or reply == FAIL_PLACEHOLDER:
+                            _log(f"skip(no reply) sender={m['sender']} result_ok={(result or {}).get('ok')} err={(result or {}).get('error')}")
+                            continue
+                        drafts[id(m)] = reply
+
+            # ── Phase 2: 串行发送（单微信窗口，切窗+发送只能逐个；_open_chat 身份闸门防串台）──
+            for m in eligible:
+                reply = drafts.get(id(m))
+                if not reply:
                     continue
-
+                key = (m["sender"], m["content"])
                 _log(f"尝试回复 sender={m['sender']} reply_len={len(reply)}")
                 ok = False
                 try:
@@ -1176,12 +1204,12 @@ def run_real_listen(args: argparse.Namespace) -> int:
                     _log(f"reply_in_chat exception sender={m['sender']}: {exc}")
                     ok = False
                 if ok:
-                    _replied_ts[key] = now  # 记录时间戳，_save_replied 持久化用
+                    _replied_ts[key] = time.time()  # 记录时间戳，_save_replied 持久化用
                     replied.add(key)
                     _save_replied(replied)  # 持久化，防重启重复回复
                     _skip_logged.discard(key)
                     reply_failed_at.pop(key, None)
-                    sender_reply_cooldown[m["sender"]] = now  # per-sender 30s 冷却
+                    sender_reply_cooldown[m["sender"]] = time.time()  # per-sender 30s 冷却
                     last_content.pop(m["sender"], None)  # 删除防自回复风暴（存 reply 反而触发 Path2 截断误判）
                     _log(f"auto-replied OK sender={m['sender']}")
                 else:
