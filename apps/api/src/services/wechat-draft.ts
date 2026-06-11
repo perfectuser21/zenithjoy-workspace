@@ -30,17 +30,18 @@ import {
 } from './wechat/contact-memory';
 import { assembleChatContext } from './wechat/context-assembler';
 
-// ─── 客服回复 LLM 配置：走 ToAPI deepseek-v4-flash（OpenAI 兼容 /chat/completions）──
+// ─── 客服回复 LLM 配置：走 ToAPI deepseek-v3.2（OpenAI 兼容 /chat/completions）──
 //
-// deepseek-v4-flash 是「推理模型」：思考走独立字段 reasoning_content（已在 openrouter.ts 丢弃），
-// 答案在 content。推理会先吃 token，故 max_tokens 必须给足，否则 content 会被截成空串 → 回空。
+// 默认 deepseek-v3.2：非推理模型，~1.5s 出答案，比推理版 deepseek-v4-flash 快 4-8 倍且不烧
+// reasoning token（v4-flash 思考走 reasoning_content、会先吃光 max_tokens 致 content 空+慢）。
+// openrouter.ts 仍丢弃 reasoning_content 作防御：万一 ENV 切回推理模型也不会把思考漏给客户。
 //
-// 端点/模型可被 ENV 覆盖；apiKey 走 TOAPI_API_KEY（1Password「ToAPI」条目，部署机 ENV 必须有）。
+// 端点/模型可被 ENV 覆盖（WECHAT_CS_MODEL）；apiKey 走 TOAPI_API_KEY（1Password「ToAPI」条目，部署机 ENV 必须有）。
 const CS_LLM = {
-  model: process.env.WECHAT_CS_MODEL || 'deepseek-v4-flash',
+  model: process.env.WECHAT_CS_MODEL || 'deepseek-v3.2',
   baseUrl: process.env.TOAPI_BASE_URL || 'https://toapis.com/v1/chat/completions',
   apiKey: process.env.TOAPI_API_KEY,
-  maxTokens: Number(process.env.WECHAT_CS_MAX_TOKENS) || 2000, // 推理吃 token，给足防 content 被截空
+  maxTokens: Number(process.env.WECHAT_CS_MAX_TOKENS) || 2000,
 };
 
 // ─── 飞书 Bitable 配置（从 ENV 读，CI 用占位值 mock）────────────────────────────
