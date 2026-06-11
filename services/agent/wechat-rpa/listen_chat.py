@@ -825,14 +825,14 @@ def run_real_listen(args: argparse.Namespace) -> int:
     # 自动启动微信：检测到微信未运行时自动 Popen Weixin.exe，冷却 120s 防重复拉起
     wechat_launch_cooldown = 120
     last_wechat_launch = time.time() - wechat_launch_cooldown + 30  # 30s grace before first launch
-    # replied 过期清理：每小时清一次内存里的过期条目，避免长期运行积累
+    # replied 过期清理：每 REPLIED_TTL 扫一次，确保过期条目在 TTL 后立即清除
     last_replied_purge = time.time()
     try:
         while time.time() < deadline:
             now = time.time()
 
-            # 每小时清理内存里的过期 replied 条目，防长期运行内存堆积
-            if now - last_replied_purge >= 3600:
+            # 每 REPLIED_TTL 清理过期 replied 条目（不能等 3600s，否则 TTL'd 条目死锁）
+            if now - last_replied_purge >= REPLIED_TTL:
                 expired_keys = {k for k in replied if now - _replied_ts.get(k, 0) >= REPLIED_TTL}
                 if expired_keys:
                     replied -= expired_keys
@@ -840,7 +840,7 @@ def run_real_listen(args: argparse.Namespace) -> int:
                         _replied_ts.pop(k, None)
                         _skip_logged.discard(k)
                     _save_replied(replied)
-                    _log(f"已清理 {len(expired_keys)} 条过期 replied（TTL {REPLIED_TTL/3600:.0f}h）")
+                    _log(f"已清理 {len(expired_keys)} 条过期 replied（TTL {REPLIED_TTL}s）")
                 last_replied_purge = now
 
             # 取主窗口（顺带采集诊断：找到没 / 是否停在登录窗口）
@@ -1008,17 +1008,11 @@ def run_real_listen(args: argparse.Namespace) -> int:
 
                 _log(f"尝试回复 sender={m['sender']} reply_len={len(reply)}")
                 ok = False
-                for _attempt in range(2):  # 失败立刻重试一次
-                    try:
-                        ok = reply_in_chat(mw, m["_item"], reply, sender=m["sender"])
-                    except Exception as exc:
-                        _log(f"reply_in_chat exception attempt={_attempt} sender={m['sender']}: {exc}")
-                        ok = False
-                    if ok:
-                        break
-                    if _attempt == 0:
-                        _log(f"reply_in_chat attempt 1 failed, retrying sender={m['sender']}")
-                        time.sleep(2)
+                try:
+                    ok = reply_in_chat(mw, m["_item"], reply, sender=m["sender"])
+                except Exception as exc:
+                    _log(f"reply_in_chat exception sender={m['sender']}: {exc}")
+                    ok = False
                 if ok:
                     _replied_ts[key] = now  # 记录时间戳，_save_replied 持久化用
                     replied.add(key)
@@ -1026,7 +1020,7 @@ def run_real_listen(args: argparse.Namespace) -> int:
                     _skip_logged.discard(key)
                     reply_failed_at.pop(key, None)
                     sender_reply_cooldown[m["sender"]] = now  # per-sender 30s 冷却
-                    last_content[m["sender"]] = reply  # 防 last_content Path2 误触发
+                    last_content.pop(m["sender"], None)  # 删除防自回复风暴（存 reply 反而触发 Path2 截断误判）
                     _log(f"auto-replied OK sender={m['sender']}")
                 else:
                     reply_failed_at[key] = time.time()
