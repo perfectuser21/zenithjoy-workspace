@@ -12,6 +12,11 @@ export interface CallOpenRouterArgs {
   system?: string;
   /** 采样温度；不传则用 provider 默认。微信客服真人感建议 0.8。 */
   temperature?: number;
+  /** 覆盖默认端点（OpenAI 兼容 /chat/completions 全 URL）。不传走 OpenRouter。
+   *  传了即视为「自定义 provider」，此时 apiKey 必须显式提供，不回退 OPENROUTER_API_KEY。 */
+  baseUrl?: string;
+  /** 覆盖默认 API key。不传且未指定 baseUrl 时回退 OPENROUTER_API_KEY。 */
+  apiKey?: string;
 }
 
 /**
@@ -81,8 +86,12 @@ export async function callOpenRouter(args: CallOpenRouterArgs): Promise<CallOpen
     throw new Error('OpenRouter simulated 5xx (force test, NODE_ENV=test|development)');
   }
 
-  const apiKey = process.env.OPENROUTER_API_KEY;
-  if (!apiKey) throw new Error('OPENROUTER_API_KEY not set');
+  // 自定义 provider（如 ToAPI）时用传入的 baseUrl/apiKey，绝不回退 OPENROUTER_API_KEY（防把 OR 的 key 发给别家）
+  const url = args.baseUrl || OPENROUTER_URL;
+  const apiKey = args.baseUrl ? args.apiKey : (args.apiKey || process.env.OPENROUTER_API_KEY);
+  if (!apiKey) {
+    throw new Error(args.baseUrl ? `LLM apiKey 未配置（自定义端点 ${args.baseUrl}）` : 'OPENROUTER_API_KEY not set');
+  }
 
   let success = false;
   let errorMessage: string | undefined;
@@ -91,7 +100,7 @@ export async function callOpenRouter(args: CallOpenRouterArgs): Promise<CallOpen
   let actualModel = model;
 
   try {
-    const res = await fetch(OPENROUTER_URL, {
+    const res = await fetch(url, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${apiKey}`,
@@ -111,14 +120,16 @@ export async function callOpenRouter(args: CallOpenRouterArgs): Promise<CallOpen
     });
     if (!res.ok) {
       const text = await res.text().catch(() => '');
-      throw new Error(`OpenRouter ${res.status}: ${text.slice(0, 200)}`);
+      throw new Error(`LLM ${res.status}: ${text.slice(0, 200)}`);
     }
     const data = (await res.json()) as {
-      choices?: Array<{ message?: { content?: string } }>;
+      // reasoning_content：推理模型（如 ToAPI deepseek-v4-flash）把思考放这里，content 才是答案。
+      // 我们只取 content；reasoning_content 一律丢弃，绝不漏给客户。
+      choices?: Array<{ message?: { content?: string; reasoning_content?: string } }>;
       usage?: { prompt_tokens: number; completion_tokens: number; total_tokens: number };
       model?: string;
     };
-    // 始终剥离思考过程，绝不把模型推理漏给客户
+    // 始终剥离思考过程，绝不把模型推理漏给客户（content 为空时保持空 → 上游按生成失败处理，绝不回退 reasoning_content）
     content = stripThinking(data.choices?.[0]?.message?.content ?? '');
     usage = data.usage ?? usage;
     actualModel = data.model || model;

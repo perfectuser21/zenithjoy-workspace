@@ -30,6 +30,19 @@ import {
 } from './wechat/contact-memory';
 import { assembleChatContext } from './wechat/context-assembler';
 
+// ─── 客服回复 LLM 配置：走 ToAPI deepseek-v4-flash（OpenAI 兼容 /chat/completions）──
+//
+// deepseek-v4-flash 是「推理模型」：思考走独立字段 reasoning_content（已在 openrouter.ts 丢弃），
+// 答案在 content。推理会先吃 token，故 max_tokens 必须给足，否则 content 会被截成空串 → 回空。
+//
+// 端点/模型可被 ENV 覆盖；apiKey 走 TOAPI_API_KEY（1Password「ToAPI」条目，部署机 ENV 必须有）。
+const CS_LLM = {
+  model: process.env.WECHAT_CS_MODEL || 'deepseek-v4-flash',
+  baseUrl: process.env.TOAPI_BASE_URL || 'https://toapis.com/v1/chat/completions',
+  apiKey: process.env.TOAPI_API_KEY,
+  maxTokens: Number(process.env.WECHAT_CS_MAX_TOKENS) || 2000, // 推理吃 token，给足防 content 被截空
+};
+
 // ─── 飞书 Bitable 配置（从 ENV 读，CI 用占位值 mock）────────────────────────────
 
 const FEISHU_API_BASE = 'https://open.feishu.cn/open-apis';
@@ -260,12 +273,15 @@ export async function generateChatDraft(
       system,
       prompt: user,
       temperature: 0.8,
-      model: 'deepseek/deepseek-chat',
+      model: CS_LLM.model,
+      baseUrl: CS_LLM.baseUrl,
+      apiKey: CS_LLM.apiKey,
+      maxTokens: CS_LLM.maxTokens,
       purpose: 'wechat_chat_draft',
     });
     aiContent = sanitizeReply((result.content || '').trim(), persona);
     if (!aiContent) {
-      aiError = 'OpenRouter 返回空文本';
+      aiError = `${CS_LLM.model} 返回空文本`;
       aiContent = FAIL_PLACEHOLDER;
     }
   } catch (err) {
@@ -438,12 +454,15 @@ export async function generateMomentDraft(
   try {
     const result = await callOpenRouter({
       prompt,
-      model: 'deepseek/deepseek-chat',
+      model: CS_LLM.model,
+      baseUrl: CS_LLM.baseUrl,
+      apiKey: CS_LLM.apiKey,
+      maxTokens: CS_LLM.maxTokens,
       purpose: 'wechat_moment_draft',
     });
     aiContent = (result.content || '').trim();
     if (!aiContent) {
-      aiError = 'OpenRouter 返回空文本';
+      aiError = `${CS_LLM.model} 返回空文本`;
       aiContent = FAIL_PLACEHOLDER;
     }
   } catch (err) {

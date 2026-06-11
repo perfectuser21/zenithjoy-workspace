@@ -408,10 +408,161 @@ def _navigate_away(mw: Any) -> None:
         pass
 
 
+def _chat_title_matches(mw: Any, sender: str) -> Optional[bool]:
+    """当前打开会话的顶部标题是否 == sender（收件人身份校验，防串台/发错人）。
+
+    返回 True=标题命中 sender；False=找到标题但不是 sender；None=没找到任何标题文本（无法判定）。
+    标题位置：窗口上部（top < 顶部+150）且在会话列表右侧（left > 左边+窗宽/4），与会话列表项区分。
+    实现对齐 wechat-uia-silent-send skill 的 _chat_title_matches（2026-06-10 三人路由验证通过）。
+    """
+    try:
+        wr = mw.rectangle()
+    except Exception:
+        return None
+    width = wr.right - wr.left
+    saw_any_title = False
+    want = (sender or "").strip()
+    for t in mw.descendants(control_type="Text"):
+        try:
+            r = t.rectangle()
+            nm = (t.element_info.name or "").strip()
+        except Exception:
+            continue
+        # 只看右侧上部区域的文本（聊天面板标题），排除左侧会话列表项的名字
+        if r.left > wr.left + width // 4 and r.top < wr.top + 150 and nm:
+            saw_any_title = True
+            if nm == want:
+                return True
+    return False if saw_any_title else None
+
+
+def _post_click_item(item: Any, target_hwnd: int) -> bool:
+    """对 item 在 target_hwnd 客户区坐标 PostMessage 左键点击（不抢前台、不依赖焦点）。
+
+    后台/离屏模式下 item.Invoke() 只切内部状态、不触发面板重绘，PostMessage 模拟点击才真正切换。
+    windll 缺失（非 Windows，单测）时安全返回 False。
+    """
+    import ctypes as _ct
+    u32 = getattr(_ct, "windll", None)
+    if u32 is None or not target_hwnd:
+        return False
+    u32 = u32.user32
+    try:
+        r = item.rectangle()
+        cx = (r.left + r.right) // 2
+        cy = (r.top + r.bottom) // 2
+    except Exception:
+        return False
+
+    class _POINT(_ct.Structure):
+        _fields_ = [("x", _ct.c_long), ("y", _ct.c_long)]
+
+    pt = _POINT(cx, cy)
+    try:
+        if not u32.ScreenToClient(target_hwnd, _ct.byref(pt)):
+            return False
+        lp = ((pt.y & 0xFFFF) << 16) | (pt.x & 0xFFFF)
+        WM_MOUSEMOVE, WM_LBUTTONDOWN, WM_LBUTTONUP = 0x0200, 0x0201, 0x0202
+        u32.PostMessageW(target_hwnd, WM_MOUSEMOVE, 0, lp)
+        u32.PostMessageW(target_hwnd, WM_LBUTTONDOWN, 1, lp)
+        time.sleep(0.05)
+        u32.PostMessageW(target_hwnd, WM_LBUTTONUP, 0, lp)
+        _log(f"_open_chat: PostMessage点击 hwnd={target_hwnd} client=({pt.x},{pt.y})")
+        return True
+    except Exception as exc:
+        _log(f"_open_chat: PostMessage点击异常: {exc}")
+        return False
+
+
+def _find_render_subwindow(main_hwnd: int) -> int:
+    """EnumChildWindows 找 MMUIRenderSubWindowHW 渲染子窗口 hwnd（微信 4.0 自绘层）；找不到/无 windll 返回 0。"""
+    import ctypes as _ct
+    wd = getattr(_ct, "windll", None)
+    if wd is None or not main_hwnd:
+        return 0
+    u32 = wd.user32
+    found = {"hwnd": 0}
+    try:
+        WNDENUMPROC = _ct.WINFUNCTYPE(_ct.c_bool, _ct.c_void_p, _ct.c_void_p)
+
+        def _cb(hwnd, _lparam):
+            try:
+                buf = _ct.create_unicode_buffer(256)
+                u32.GetClassNameW(hwnd, buf, 256)
+                if "MMUIRenderSubWindow" in (buf.value or ""):
+                    found["hwnd"] = hwnd
+                    return False
+            except Exception:
+                pass
+            return True
+
+        u32.EnumChildWindows(main_hwnd, WNDENUMPROC(_cb), 0)
+    except Exception:
+        pass
+    return found["hwnd"]
+
+
+def _open_chat(mw: Any, item: Any, sender: str, expect_content: str = "") -> bool:
+    """切到 sender 的会话并验证归属（防串台核心）。三策略切换 × 标题/选中验证，全失败返回 False。
+
+    对齐 wechat-uia-silent-send skill 的 _open_chat（2026-06-10 三人路由验证通过）。
+    切换策略按 attempt 升级（裸 Invoke 在离屏后台切不动 → 必须 PostMessage 模拟点击会话项）：
+      attempt 0：iface_selection_item.Select()（无则 Invoke()）—— 最轻量
+      attempt 1：PostMessage 点击 MMUIRenderSubWindowHW 渲染子窗口
+      attempt 2：PostMessage 点击主窗口
+    每次切换后等 2s，再用 标题==sender / 会话项处于选中态 任一验证；命中即返回 True。
+    """
+    import ctypes as _ct
+    try:
+        main_hwnd = mw.element_info.handle
+    except Exception:
+        main_hwnd = 0
+
+    def _verify(attempt: int) -> bool:
+        if sender and _chat_title_matches(mw, sender) is True:
+            _log(f"_open_chat: {sender!r} 切换成功（验证=title, attempt={attempt}）")
+            return True
+        try:
+            if item.iface_selection_item.CurrentIsSelected:
+                _log(f"_open_chat: {sender!r} 切换成功（验证=selected, attempt={attempt}）")
+                return True
+        except Exception:
+            pass
+        return False
+
+    for attempt in range(3):
+        try:
+            if attempt == 0:
+                try:
+                    item.iface_selection_item.Select()
+                except Exception:
+                    item.iface_invoke.Invoke()
+            elif attempt == 1:
+                rhwnd = _find_render_subwindow(main_hwnd)
+                if not _post_click_item(item, rhwnd):
+                    item.iface_invoke.Invoke()  # 渲染子窗口缺失 → 回退 Invoke
+            else:
+                if not _post_click_item(item, main_hwnd):
+                    item.iface_invoke.Invoke()
+        except Exception as exc:
+            _log(f"_open_chat: 切换异常(attempt={attempt}): {exc}")
+        time.sleep(2.0)  # CRITICAL: 等 UIA 树/面板更新
+        if _verify(attempt):
+            return True
+        _log(f"_open_chat: 切窗后未确认是 {sender!r}（attempt={attempt}），重试…")
+
+    _log(f"_open_chat: 全部策略都无法切到 {sender!r}，放弃（绝不发进错误聊天）")
+    return False
+
+
 def reply_in_chat(mw: Any, item: Any, reply_text: str, sender: str = "") -> bool:
     """
     打开 item 对应会话并发出 reply_text。全程纯 UIA，禁止任何物理鼠标/键盘操作。
     Invoke() 后等 2s（CRITICAL：UIA 树更新需要时间，少了找不到 chat_input_field）。
+
+    收件人身份闸门（防串台核心，2026-06-11 加）：item.Invoke() 在后台/离屏会话里只切内部状态、
+    不触发面板重绘，叠加会话列表实时重排 → 回复发错人。故用 _open_chat 三策略切换（含 PostMessage
+    点击会话项）真正切到 sender 并验证标题命中，命中才发；切不到则中止本轮（绝不盲发，下轮重试）。
     """
     def _fresh_mw():
         try:
@@ -421,10 +572,19 @@ def reply_in_chat(mw: Any, item: Any, reply_text: str, sender: str = "") -> bool
             return mw
 
     try:
-        item.iface_invoke.Invoke()
-        _log("reply_in_chat: Invoke 激活会话，等 2s UIA 树更新…")
-        time.sleep(2.0)  # CRITICAL: chat_input_field 在 2s 后才出现在 UIA 树
-        fmw = mw
+        fmw = _fresh_mw()
+        if sender:
+            if not _open_chat(fmw, item, sender):
+                _log(f"reply_in_chat: 无法切到 {sender!r} 的会话，中止本轮（防串台，绝不发给错误的人）")
+                return False
+        else:
+            # 无 sender 信息：退回旧行为（仅 Invoke），不阻塞
+            try:
+                item.iface_invoke.Invoke()
+            except Exception as _ie:
+                _log(f"reply_in_chat: Invoke 异常: {_ie}")
+            time.sleep(2.0)
+
         uia_edit = None
         for _poll in range(3):  # UIA 树更新有延迟，最多 3 次轮询
             fmw = _fresh_mw()
@@ -435,6 +595,10 @@ def reply_in_chat(mw: Any, item: Any, reply_text: str, sender: str = "") -> bool
                 _log(f"reply_in_chat: 第{_poll + 1}次轮询未找到输入框，等 1s 重试…")
                 time.sleep(1.0)
         if uia_edit is not None:
+            # 发送前最后一道复核：找输入框期间窗口可能被新消息切走 → 再确认一次会话归属
+            if sender and _chat_title_matches(fmw, sender) is False:
+                _log(f"reply_in_chat: 发送前复核会话标题≠{sender!r}，中止（防串台）")
+                return False
             if _uia_send(uia_edit, fmw, reply_text):
                 _navigate_away(fmw)
                 return True
