@@ -117,34 +117,30 @@ def test_sender_cooldown_check_exists_in_source():
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# C. last_content 更新防 Path2 误触发（根因 B 的防护）
+# ─────────────────────────────────────────────────────────────────────────────
+# C. last_content 清除防自回复风暴（Bug Fix v1.0.16）
+#
+# 背景：旧做法 last_content[sender]=reply 在 2026-06-10 引发自回复风暴：
+#   AI 回复存入 last_content → 下次 scan 读截断 preview → Path2 误判变化
+#   → 再调 DeepSeek → 再发一条 → 风暴每 30s 一条持续
+# 修法：ok=True 后 last_content.pop(sender, None)
+#   下次扫: prev=None → "首次见"不触发 → 风暴终止
 # ─────────────────────────────────────────────────────────────────────────────
 
-def test_last_content_updated_to_reply_after_successful_send():
-    """成功回复后必须把 last_content[sender] 更新为实际发送的 reply 文本。
+def test_last_content_cleared_after_successful_send():
+    """成功回复后必须 pop(sender) 而不是存 reply 完整文本。
 
-    根因：微信 ListItem 的 preview 是截断版本（e.g., "您好，在..." 而非完整 174 字回复）。
-    如果 last_content 存的是完整 reply，下次 scan_unread 读到截断 preview ≠ last_content
-    → 误判为"内容变化" → Path 2 再次触发 → 第二个 DeepSeek 调用 → 第二条回复。
-
-    正确做法：ok=True 之后 last_content[sender] = reply（不是 content）。
-    本测试检查这行代码存在于源文件中。
+    last_content[sender]=reply 是自回复风暴根因（2026-06-10 xian-pc 复现）。
     """
     with open(LISTEN_CHAT_PATH, "r", encoding="utf-8") as f:
         src = f.read()
 
-    # 这行代码更新 last_content 为 reply（不是 content），是防双发的关键
-    assert 'last_content[m["sender"]] = reply' in src, (
-        "缺少 last_content[m[\"sender\"]] = reply 赋值 — "
-        "Path2 截断误触发根因未被修复：下次 scan_unread 读到截断 preview "
-        "!= 完整 reply → 误判内容变化 → 第二次 AI 调用 → 重复回复"
+    assert 'last_content.pop(m["sender"], None)' in src, (
+        "缺少 last_content.pop() — 成功回复后仍存 reply 全文，"
+        "Path2 截断误判 → 自回复风暴"
     )
-
-    # 并且这个赋值必须在 ok=True 之后（防止失败时也更新）
-    ok_idx = src.rfind("if ok:")
-    assign_idx = src.rfind('last_content[m["sender"]] = reply')
-    assert assign_idx > ok_idx, (
-        "last_content 赋值必须在 if ok: 成功分支内（在 ok_idx 之后）"
+    assert 'last_content[m["sender"]] = reply' not in src, (
+        "仍含 last_content[...] = reply — 此行是自回复风暴根因，必须改为 pop"
     )
 
 
@@ -385,4 +381,53 @@ def test_find_chat_input_fallback_when_filter_removes_all():
     result = listen_chat._find_chat_input(mw)
     assert result is edit_b, (
         "所有 Edit 在上半区时，应退化到旧逻辑返回面积最大者"
+    )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# G. replied 清理间隔不能是 3600s（replied 死锁 Bug Fix v1.0.16）
+#
+# 背景：REPLIED_TTL=120s，但内存清理 interval=3600s
+#   → TTL 到期的条目最长被封锁 1 小时 + _skip_logged 静默无日志
+#   → 于瑾等客户消息长达 1h 无回复（2026-06-10 xian-pc 复现）
+# 修法：清理 interval 改为 REPLIED_TTL（120s），每个 TTL 周期扫一次
+# ─────────────────────────────────────────────────────────────────────────────
+
+def test_replied_cleanup_interval_not_hourly():
+    """replied 内存清理间隔不能是 3600s（应 <= REPLIED_TTL）。
+
+    3600s 间隔 + TTL=120s → 条目过期后最长 3600s 仍在内存 → 死锁无日志。
+    """
+    with open(LISTEN_CHAT_PATH, "r", encoding="utf-8") as f:
+        lines = f.readlines()
+
+    for i, line in enumerate(lines):
+        if "last_replied_purge" in line and ">=" in line:
+            stripped = line.strip()
+            assert "3600" not in stripped, (
+                f"第 {i+1} 行: replied 清理间隔仍为 3600s — "
+                f"TTL={listen_chat.REPLIED_TTL}s 的条目过期后最长卡 3600s"
+                f"\n    {stripped}"
+            )
+            break
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# H. 主循环不得有 range(2) 重试（双发 Bug Fix v1.0.16）
+#
+# 背景：_verify_sent 离屏模式下 Qt 气泡不刷新 → 返回 False（假阴性）
+#   → for _attempt in range(2) 触发重试 → 第二次 SetValue+Enter → 第二条消息发出
+# 修法：去掉 range(2) 外层重试；只调用一次 reply_in_chat
+# ─────────────────────────────────────────────────────────────────────────────
+
+def test_no_outer_retry_loop_in_reply_dispatch():
+    """主循环 reply 分发不得有 range(2) 重试逻辑。
+
+    假阴性返回 False 触发重试 → 第二次 SetValue+Enter → 重复发送（2026-06-10 复现）。
+    """
+    with open(LISTEN_CHAT_PATH, "r", encoding="utf-8") as f:
+        src = f.read()
+
+    assert "for _attempt in range(2)" not in src, (
+        "主循环仍有 range(2) 重试 — _verify_sent 离屏假阴性触发重试 → 双发"
     )
