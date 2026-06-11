@@ -643,7 +643,17 @@ def check_uia_narrator(dry_run: bool = False) -> Dict[str, str]:
             name, "warn", "dry-run/非 Windows 跳过讲述人激活（仅 Windows 真机有效）。"
         )
 
-    # 静默激活：Start-Process Narrator → 等待 → Stop-Process（对齐 start.bat / listen_chat）。
+    # 检查 Narrator.exe 是否存在（LTSC/N/精简版 Windows 可能已移除）
+    narrator_path = r"C:\Windows\System32\Narrator.exe"
+    if not os.path.isfile(narrator_path):
+        return make_check(
+            name,
+            "failed",
+            "未找到 Narrator.exe（C:\\Windows\\System32\\Narrator.exe）。"
+            "当前系统（LTSC/N 精简版/Ghost）已移除讲述人，无法激活 UIAutomation 控件树，"
+            "微信 RPA 不可用。请使用完整版 Windows 10/11 家庭版/专业版。",
+        )
+
     try:
         import subprocess
 
@@ -661,17 +671,20 @@ def check_uia_narrator(dry_run: bool = False) -> Dict[str, str]:
     except Exception as exc:  # noqa: BLE001
         return make_check(
             name,
-            "warn",
-            f"讲述人激活失败（{exc}）。若 RPA 读不到控件，请手动开关一次讲述人。",
+            "failed",
+            f"讲述人激活失败（{exc}）。无法激活 UIAutomation 控件树，微信 RPA 不可用。"
+            "请确认：1) 非管理员身份运行 start.bat；"
+            "2) 组策略未禁用讲述人（gpedit.msc 搜索 Narrator）；"
+            "3) Windows 为完整版（非 LTSC/N 精简版）。",
         )
 
-    # 激活后看能否读到主窗口（登录态下才有；未登录读不到属正常，不在此判失败）。
+    # 激活后验证 UIA 树可读（登录态下才有主窗口；未登录属正常，不在此判失败）
     try:
         from find_weixin import get_main_window
 
         mw = get_main_window()
         if mw is not None:
-            return make_check(name, "ok", "讲述人激活成功，UIAutomation 控件树可读。")
+            return make_check(name, "ok", "讲述人激活成功，UIAutomation 控件树可读（检测到微信主窗口）。")
         return make_check(
             name,
             "warn",

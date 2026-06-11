@@ -28,7 +28,7 @@ WEIXIN_EXE_DEFAULT = r"C:\Program Files\Tencent\Weixin\Weixin.exe"
 MIN_BLOCKED_VERSION = (4, 1, 9)
 DOWNGRADE_URL = (
     "https://zenithjoy-static-1333590468.cos.accelerate.myqcloud.com"
-    "/install-pack/WeChatWin_4.1.8.exe"
+    "/install-pack/wechat/WeChatWin_4.1.8.exe"
 )
 
 

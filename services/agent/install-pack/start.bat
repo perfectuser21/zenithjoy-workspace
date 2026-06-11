@@ -17,22 +17,7 @@ reg add "HKCU\Software\Microsoft\Narrator\NoRoam" /v SpeechVolume /t REG_DWORD /
 powershell -NoProfile -Command "Start-Process Narrator; Start-Sleep -Milliseconds 1500; Stop-Process -Name Narrator -ErrorAction SilentlyContinue" >nul 2>&1
 echo [narrator] WeChat UIAutomation unlocked (Narrator start+stop, silenced)
 
-REM Step 0.5: WeChat version guard — must be 4.1.8.x or lower (4.1.9+ broke UIA tree)
-REM Blocking: wrong version = no agent start. Tells user to download 4.1.8 from COS.
-if exist "%~dp0python-embedded\python.exe" if exist "%~dp0wechat-rpa\find_weixin.py" (
-    "%~dp0python-embedded\python.exe" "%~dp0wechat-rpa\find_weixin.py" --check-version
-    if errorlevel 1 (
-        echo.
-        echo  ============================================================
-        echo   [ERROR] WeChat version not supported.
-        echo   See the message above for the correct download URL.
-        echo   Install WeChat 4.1.8, then re-run start.bat.
-        echo  ============================================================
-        echo.
-        pause
-        exit /b 1
-    )
-)
+REM Step 0.5: WeChat version guard 已迁移进 preflight.py（step 6.9），由 preflight 自动检测+自修，此处不再早退。
 
 
 REM Step 1: Verify .env exists - auto-copy from .env.template on first run
@@ -297,6 +282,15 @@ if exist "%~dp0python-embedded\python.exe" if exist "%~dp0wechat-rpa\preflight.p
     echo.
 ) else (
     echo [preflight] skipped: python-embedded or wechat-rpa\preflight.py not found (old or slim pack)
+)
+
+REM Step 6.92: 注册开机自启（幂等，每次都跑，确保任务计划条目存在）
+REM install-autostart.ps1 用 RunLevel Limited + ONLOGON，不需要管理员。
+if exist "%~dp0install-autostart.ps1" (
+    powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0install-autostart.ps1" >nul 2>&1
+    echo [autostart] boot autostart registered (ZenithJoyAgent scheduled task)
+) else (
+    echo [autostart] install-autostart.ps1 不存在，跳过（旧版安装包）
 )
 
 REM Step 6.95: Single-instance guard — kill any existing zenithjoy-agent.exe before starting
