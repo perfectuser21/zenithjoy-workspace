@@ -288,7 +288,7 @@ REM Step 6.92: 注册开机自启（幂等，每次都跑，确保任务计划�
 REM install-autostart.ps1 用 RunLevel Limited + ONLOGON，不需要管理员。
 if exist "%~dp0install-autostart.ps1" (
     powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0install-autostart.ps1" >nul 2>&1
-    echo [autostart] 开机自启已注册（ZenithJoyAgent 任务计划）
+    echo [autostart] boot autostart registered (ZenithJoyAgent scheduled task)
 ) else (
     echo [autostart] install-autostart.ps1 不存在，跳过（旧版安装包）
 )
