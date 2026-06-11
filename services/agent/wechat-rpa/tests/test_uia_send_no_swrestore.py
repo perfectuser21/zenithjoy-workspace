@@ -113,7 +113,7 @@ class TestUiaSendNoSwRestore(unittest.TestCase):
         """Enter 成功清空 → 主路径成功 → 不调用 SW_RESTORE。"""
         user32 = MagicMock()
         with _mock_windll(user32):
-            result = self._run_uia_send(user32, [""])
+            result = self._run_uia_send(user32, ["测试消息", ""])  # 首调=验证, 次调=发送后清空
         self.assertTrue(result)
         self._assert_no_sw_restore(user32)
 
@@ -121,7 +121,7 @@ class TestUiaSendNoSwRestore(unittest.TestCase):
         """Enter + Invoke 都失败 → 返回 False，仍然不调用 SW_RESTORE。"""
         user32 = MagicMock()
         with _mock_windll(user32):
-            result = self._run_uia_send(user32, ["有内容", "还有内容"])
+            result = self._run_uia_send(user32, ["有内容", "还有内容", "仍然有内容"])  # 3次均非空→Enter和Invoke均失败→False
         self.assertFalse(result, "两次都失败应返回 False")
         self._assert_no_sw_restore(user32)
 
