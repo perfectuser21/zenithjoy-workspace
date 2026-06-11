@@ -30,6 +30,24 @@ import {
 } from './wechat/contact-memory';
 import { assembleChatContext } from './wechat/context-assembler';
 
+// ─── 客服回复 LLM 配置：走 ToAPI deepseek-v3.2（OpenAI 兼容 /chat/completions）──
+//
+// 默认 deepseek-v3.2：非推理模型，~1.5s 出答案，比推理版 deepseek-v4-flash 快 4-8 倍且不烧
+// reasoning token（v4-flash 思考走 reasoning_content、会先吃光 max_tokens 致 content 空+慢）。
+// openrouter.ts 仍丢弃 reasoning_content 作防御：万一 ENV 切回推理模型也不会把思考漏给客户。
+//
+// 端点/模型可被 ENV 覆盖（WECHAT_CS_MODEL）；apiKey 走 TOAPI_API_KEY（1Password「ToAPI」条目，部署机 ENV 必须有）。
+// 惰性读 env（调用时而非模块加载时）：保证测试 beforeAll 设的 env / 部署后改的 env 都生效，
+// 不被 import 时机锁死。
+function csLlm() {
+  return {
+    model: process.env.WECHAT_CS_MODEL || 'deepseek-v3.2',
+    baseUrl: process.env.TOAPI_BASE_URL || 'https://toapis.com/v1/chat/completions',
+    apiKey: process.env.TOAPI_API_KEY,
+    maxTokens: Number(process.env.WECHAT_CS_MAX_TOKENS) || 2000,
+  };
+}
+
 // ─── 飞书 Bitable 配置（从 ENV 读，CI 用占位值 mock）────────────────────────────
 
 const FEISHU_API_BASE = 'https://open.feishu.cn/open-apis';
@@ -255,17 +273,21 @@ export async function generateChatDraft(
   // 3) 调 OpenRouter DeepSeek（带人设 system + temperature；回复已在 openrouter 内剥思考块）
   let aiContent = '';
   let aiError: string | null = null;
+  const cs = csLlm();
   try {
     const result = await callOpenRouter({
       system,
       prompt: user,
       temperature: 0.8,
-      model: 'deepseek/deepseek-chat',
+      model: cs.model,
+      baseUrl: cs.baseUrl,
+      apiKey: cs.apiKey,
+      maxTokens: cs.maxTokens,
       purpose: 'wechat_chat_draft',
     });
     aiContent = sanitizeReply((result.content || '').trim(), persona);
     if (!aiContent) {
-      aiError = 'OpenRouter 返回空文本';
+      aiError = `${cs.model} 返回空文本`;
       aiContent = FAIL_PLACEHOLDER;
     }
   } catch (err) {
@@ -435,15 +457,19 @@ export async function generateMomentDraft(
   const prompt = buildMomentPrompt({ industry, audience, hook });
   let aiContent = '';
   let aiError: string | null = null;
+  const cs = csLlm();
   try {
     const result = await callOpenRouter({
       prompt,
-      model: 'deepseek/deepseek-chat',
+      model: cs.model,
+      baseUrl: cs.baseUrl,
+      apiKey: cs.apiKey,
+      maxTokens: cs.maxTokens,
       purpose: 'wechat_moment_draft',
     });
     aiContent = (result.content || '').trim();
     if (!aiContent) {
-      aiError = 'OpenRouter 返回空文本';
+      aiError = `${cs.model} 返回空文本`;
       aiContent = FAIL_PLACEHOLDER;
     }
   } catch (err) {

@@ -75,6 +75,9 @@ beforeAll(async () => {
   process.env.FEISHU_INTERACTION_TABLE_ID = 'tbl_interaction';
   delete process.env.FEISHU_PROFILE_TABLE_ID;
   process.env.OPENROUTER_API_KEY = 'sk-test-mock';
+  // 客服回复走 ToAPI（CS_LLM.apiKey=TOAPI_API_KEY）；fetch 已全局 mock，任意 key 都行，
+  // 但 callOpenRouter 在自定义端点下会校验 apiKey 非空，故测试也要给个占位 key。
+  process.env.TOAPI_API_KEY = 'sk-test-mock';
   process.env.NODE_ENV = 'test';
   delete process.env.OPENROUTER_FORCE_5XX;
   // 用仓库内置示例配置，保证人设/企业知识库有确定性数据
