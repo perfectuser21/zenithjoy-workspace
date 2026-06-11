@@ -6,7 +6,7 @@ SQLite 文件: ~/.zenithjoy-agent/rate_limit.db（home 展开，跨平台）。
 
 硬编码上限：
   - moment（朋友圈）: ≤ 1 / 24h / wechat_id
-  - chat（私聊）   : ≤ 2 / 分钟 / wechat_id  +  ≤ 50 / 24h / wechat_id
+  - chat（私聊）   : ≤ 2 / 分钟 / wechat_id（24h 总量限制已移除，被动 CS 不需要）
   - 操作间隔        : ≥ 1 秒（最近一次 sends.sent_at 在 1s 内 → 拒）
   - 主动发起新会话  : 永远 0（不在此 module 内引入主动发起函数）
 
@@ -44,7 +44,7 @@ VERSION = "rate_limiter v1.0"
 
 MOMENT_PER_24H = 1
 CHAT_PER_MINUTE = 2
-CHAT_PER_24H = 50
+# CHAT_PER_24H 已移除：被动客服只响应用户来消息，24h 总量限制是为主动发防封号设计的，不适用。
 MIN_INTERVAL_SECONDS = 1
 
 
@@ -176,24 +176,6 @@ def can_send(action: str, wechat_id: str) -> Tuple[bool, Optional[str]]:
                     next_allowed = _parse_db_time(earliest_row[0]) + timedelta(seconds=60)
                 else:
                     next_allowed = now + timedelta(seconds=60)
-                conn.execute("ROLLBACK")
-                return (False, _iso(next_allowed))
-
-            # 24h 级
-            window_24h = now - timedelta(hours=24)
-            cnt_24h = conn.execute(
-                "SELECT COUNT(*) FROM sends WHERE wechat_id = ? AND action = 'chat' AND sent_at >= ?",
-                (wechat_id, window_24h.strftime("%Y-%m-%d %H:%M:%S")),
-            ).fetchone()[0]
-            if cnt_24h >= CHAT_PER_24H:
-                earliest_row = conn.execute(
-                    "SELECT sent_at FROM sends WHERE wechat_id = ? AND action = 'chat' AND sent_at >= ? ORDER BY id ASC LIMIT 1",
-                    (wechat_id, window_24h.strftime("%Y-%m-%d %H:%M:%S")),
-                ).fetchone()
-                if earliest_row:
-                    next_allowed = _parse_db_time(earliest_row[0]) + timedelta(hours=24)
-                else:
-                    next_allowed = now + timedelta(hours=24)
                 conn.execute("ROLLBACK")
                 return (False, _iso(next_allowed))
 
