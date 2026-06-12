@@ -39,6 +39,23 @@ const ONLINE_AGENT = {
 };
 
 describe('AgentMachines [BEHAVIOR]', () => {
+  it('agent 未连接时显示含下载链接的提示', async () => {
+    vi.mocked(wsApi.getAgentStatus).mockResolvedValue({
+      connected: false,
+      agent_id: undefined as unknown as string,
+      hostname: '',
+      version: '',
+      last_heartbeat_at: '',
+    });
+    render(<AgentMachines />, { wrapper: createWrapper() });
+    await waitFor(() => {
+      const link = screen.getByRole('link', { name: /点此下载 Agent/ });
+      expect(link).toBeInTheDocument();
+      expect(link).toHaveAttribute('href', '/dashboard/agent');
+    });
+  });
+
+
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(wsApi.getAgentStatus).mockResolvedValue(ONLINE_AGENT);
