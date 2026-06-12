@@ -272,9 +272,12 @@ if exist "%~dp0python-embedded\python.exe" if exist "%~dp0wechat-rpa\preflight.p
         echo  ============================================================
         echo   [preflight] FAIL: environment self-check found unrecoverable issues.
         echo   See preflight report above for details on each failed check.
+        echo.
+        echo   If WeChat install failed: right-click start.bat ^> Run as Administrator
         echo   Fix the issues shown above, then re-run start.bat.
         echo  ============================================================
         echo.
+        pause
         exit /b 1
     ) else (
         echo [preflight] environment self-check passed OK

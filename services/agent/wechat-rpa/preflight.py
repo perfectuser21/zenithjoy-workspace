@@ -388,7 +388,8 @@ def check_wechat_installed(dry_run: bool = False) -> Dict[str, str]:
     return make_check(
         name,
         "failed",
-        f"微信 4.1.8 静默安装失败（{info}）。请手动安装微信 4.1.8 后重启 agent。",
+        f"微信 4.1.8 静默安装失败（{info}）。"
+        "请右键 start.bat → 以管理员身份运行，或手动安装微信 4.1.8 后重启 agent。",
     )
 
 
@@ -454,7 +455,7 @@ def check_wechat_version(dry_run: bool = False) -> Dict[str, str]:
         name,
         "failed",
         f"微信降级到 4.1.8 失败（install {info}，现版本 {new_ver!r}）。"
-        "请手动卸载并安装微信 4.1.8 后重启 agent。",
+        "请右键 start.bat → 以管理员身份运行，或手动卸载后安装微信 4.1.8 再重启。",
     )
 
 
