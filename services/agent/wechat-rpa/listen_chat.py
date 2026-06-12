@@ -602,6 +602,10 @@ def reply_in_chat(mw: Any, item: Any, reply_text: str, sender: str = "") -> bool
     收件人身份闸门（防串台核心，2026-06-11 加）：item.Invoke() 在后台/离屏会话里只切内部状态、
     不触发面板重绘，叠加会话列表实时重排 → 回复发错人。故用 _open_chat 三策略切换（含 PostMessage
     点击会话项）真正切到 sender 并验证标题命中，命中才发；切不到则中止本轮（绝不盲发，下轮重试）。
+
+    托盘坐标修复（2026-06-12）：微信托盘时 item.rectangle() 返回离屏坐标(~32878,~32679)，
+    _post_click_item PostMessage 打不到列表项。回复前 _ensure_tray_visible 让坐标有效，
+    回复后（无论成功/失败）_restore_tray 还原托盘状态。
     """
     def _fresh_mw():
         try:
@@ -610,6 +614,8 @@ def reply_in_chat(mw: Any, item: Any, reply_text: str, sender: str = "") -> bool
         except Exception:
             return mw
 
+    # 确保窗口可见，UIA 坐标才有效（_open_chat PostMessage 点击依赖有效坐标）
+    tray_was_hidden = _ensure_tray_visible(mw)
     try:
         fmw = _fresh_mw()
         if sender:
@@ -643,6 +649,9 @@ def reply_in_chat(mw: Any, item: Any, reply_text: str, sender: str = "") -> bool
                 return True
     except Exception as exc:
         _log(f"reply_in_chat: 失败: {exc}")
+    finally:
+        if tray_was_hidden:
+            _restore_tray(mw)
 
     _log("reply_in_chat: 发送失败，本轮跳过（下次轮询重试）")
     return False
