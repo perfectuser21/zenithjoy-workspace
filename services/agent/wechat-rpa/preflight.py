@@ -610,8 +610,8 @@ def check_wechat_login(dry_run: bool = False) -> Dict[str, str]:
     detail = "微信未登录" + ("（停在登录窗口）" if login else "（未检测到主窗口）")
     return make_check(
         name,
-        "failed",
-        detail + "。已尝试拉起微信，请在客户机上 **扫码登录** 后重启 agent。",
+        "warn",
+        detail + "。已尝试拉起微信，请在客户机上 **扫码登录**，agent 将自动就绪。",
     )
 
 

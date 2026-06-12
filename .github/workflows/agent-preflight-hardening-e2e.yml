@@ -255,6 +255,51 @@ sys.exit(1)
               Write-Host "OK: E2E-6 preflight --dry-run exit=0"
           }
 
+      - name: E2E-7 check_wechat_login warn → start.bat 不闪退（员工机场景回归）
+        shell: pwsh
+        timeout-minutes: 5
+        run: |
+          # 验证：微信未登录 → preflight 返回 warn（非 failed）→ exit 0 → start.bat 正常启动
+          # 这是修复 "员工首次安装时微信未登录 → start.bat 闪退" 的 regression test
+          $env:PYTHONIOENCODING = 'utf-8'
+          $env:PYTHONUTF8 = '1'
+          python -c @"
+          import sys
+          sys.path.insert(0, r'services\agent\wechat-rpa')
+          from unittest.mock import patch, MagicMock
+          import preflight
+
+          # 模拟 Windows 环境 + 微信已安装但未登录（get_main_window 返回 None）
+          mock_mw_module = MagicMock()
+          mock_mw_module.get_main_window.return_value = None
+          mock_mw_module.login_window_present.return_value = False
+
+          with patch.dict(sys.modules, {'find_weixin': mock_mw_module}), \
+               patch('preflight._is_windows', return_value=True), \
+               patch('preflight.subprocess', MagicMock()):
+              result = preflight.check_wechat_login(dry_run=True)
+
+          print('wechat_login status:', result['status'])
+          assert result['status'] == 'warn', f'FAIL: 期望 warn，实际 {result[\"status\"]} — 员工机首次安装会闪退！'
+          print('OK: check_wechat_login 未登录 → warn（start.bat 不会因此闪退）')
+          "@
+          if ($LASTEXITCODE -ne 0) { throw "E2E-7 FAIL: check_wechat_login 未登录仍返回 failed" }
+
+          # 进一步验证：仅含 warn 项 → compute_exit_code = 0
+          python -c @"
+          import sys
+          sys.path.insert(0, r'services\agent\wechat-rpa')
+          from preflight import compute_exit_code
+          checks = [
+              {'name': 'wechat_login', 'status': 'warn', 'detail': '未登录'},
+              {'name': 'wechat_installed', 'status': 'ok', 'detail': '已安装'},
+          ]
+          code = compute_exit_code(checks)
+          assert code == 0, f'FAIL: compute_exit_code 含 warn 应返回 0，实际 {code}'
+          print('OK: warn-only checks → exit 0（start.bat 继续执行，不闪退）')
+          "@
+          if ($LASTEXITCODE -ne 0) { throw "E2E-7b FAIL" }
+
       - name: 清理测试 fixture（防止残留影响其他 job）
         if: always()
         shell: pwsh
