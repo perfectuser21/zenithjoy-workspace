@@ -157,8 +157,8 @@ describe('ackPublishTask — qr_bind session upsert', () => {
 });
 
 describe('HEARTBEAT_MODULES version gates', () => {
-  it('line04-wechat-cs required_version should be 1.0.15 (send_keys Enter + utf-8-sig BOM fix)', async () => {
+  it('line04-wechat-cs required_version should be 1.0.18 (tray-hidden scan fix + 3 fatal bugs)', async () => {
     const { HEARTBEAT_MODULES } = await import('./walking-skeleton.service');
-    expect(HEARTBEAT_MODULES['line04-wechat-cs'].required_version).toBe('1.0.15');
+    expect(HEARTBEAT_MODULES['line04-wechat-cs'].required_version).toBe('1.0.18');
   });
 });
