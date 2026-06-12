@@ -117,6 +117,36 @@ def _parse_item_name(name: str, require_unread: bool = True) -> Optional[Dict[st
 # ─── pywinauto 真模式：扫未读 + 自动回（函数体内 import）─────────────────────────
 
 
+def _ensure_tray_visible(mw: Any) -> bool:
+    """若微信在系统托盘（IsWindowVisible=False），SW_SHOWNA 短暂还原，返回是否做过还原。
+
+    托盘场景：窗口存在但隐藏 → mmui 虚拟列表 UIA name 不实时更新 → scan_unread 角标永远看不到。
+    SW_SHOWNA=8：还原到非最小化可见状态，但不激活/不抢焦点（用户几乎无感知）。
+    调用方扫完后若返回 True 须调 _restore_tray 送回托盘。
+    """
+    import ctypes as _ct
+    try:
+        _hwnd = mw.element_info.handle
+        if _hwnd and not _ct.windll.user32.IsWindowVisible(_hwnd):
+            _ct.windll.user32.ShowWindow(_hwnd, 8)  # SW_SHOWNA = 8
+            time.sleep(0.35)  # 等 Qt 重建 UIA 虚拟列表渲染
+            return True
+    except Exception:
+        pass
+    return False
+
+
+def _restore_tray(mw: Any) -> None:
+    """将微信窗口重新隐藏（送回托盘），与 _ensure_tray_visible 配对使用。"""
+    import ctypes as _ct
+    try:
+        _hwnd = mw.element_info.handle
+        if _hwnd:
+            _ct.windll.user32.ShowWindow(_hwnd, 0)  # SW_HIDE = 0
+    except Exception:
+        pass
+
+
 def scan_unread(mw: Any, last_content: Optional[Dict[str, str]] = None) -> List[Dict[str, Any]]:
     """遍历主窗口会话列表 ListItem，检测未读消息。
 
@@ -124,7 +154,12 @@ def scan_unread(mw: Any, last_content: Optional[Dict[str, str]] = None) -> List[
     1) 角标路径：ListItem name 含 '[N条]' → 正常未读
     2) 内容变化路径：无角标（聊天面板当前打开时消息被立即已读）但内容与上次不同 → 也触发回复
     last_content: {sender: last_seen_content}，由调用方维护，检测内容变化。
+
+    托盘修复：微信在系统托盘时 IsWindowVisible=False，mmui 虚拟列表 UIA name 不实时更新，
+    新消息角标永远扫不到。扫描前 _ensure_tray_visible SW_SHOWNA(8) 短暂还原刷新 UIA，
+    扫完再 _restore_tray SW_HIDE(0) 送回托盘（用户几乎无感知）。
     """
+    tray_was_hidden = _ensure_tray_visible(mw)
     out: List[Dict[str, Any]] = []
     seen_senders: set[str] = set()
     for it in mw.descendants(control_type="ListItem"):
@@ -153,6 +188,8 @@ def scan_unread(mw: Any, last_content: Optional[Dict[str, str]] = None) -> List[
     if last_content is not None:
         for m in out:
             last_content[m["sender"]] = m["content"]
+    if tray_was_hidden:
+        _restore_tray(mw)
     return out
 
 
