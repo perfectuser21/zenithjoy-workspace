@@ -54,7 +54,10 @@ export default function AgentMachines() {
             color: '#92400e',
           }}
         >
-          请先连接 Agent 后再绑定微信。当前 Agent 未连接 — 请先下载 Agent。
+          请先连接 Agent 后再绑定微信。当前 Agent 未连接 —{' '}
+          <a href="/dashboard/agent" style={{ color: '#92400e', fontWeight: 600 }}>
+            点此下载 Agent →
+          </a>
         </div>
       )}
 
