@@ -1,4 +1,4 @@
-# Sprint Contract Draft (Round 1) — Path 2 抖音私信主动触达 thin v1
+# Sprint Contract Draft (Round 2) — Path 2 抖音私信主动触达 thin v1
 
 ## 已知约束（来自回归测试）
 
