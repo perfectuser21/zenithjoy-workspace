@@ -273,10 +273,24 @@ export function downloadFile(url: string, dest: string): Promise<void> {
 export async function installWeChat(downloadDir: string): Promise<void> {
   const installer = path.join(downloadDir, 'WeChatWin_4.1.8.exe');
   await downloadFile(WECHAT_DOWNLOAD_URL, installer);
-  // 先终止所有微信进程，防止文件占用导致安装包静默跳过降级
-  for (const im of ['WeChat.exe', 'WeChatAppEx.exe']) {
+
+  // 终止所有微信相关进程（3.x: WeChat/WeChatAppEx；4.x: Weixin/WeixinUpdate）
+  for (const im of ['WeChat.exe', 'WeChatAppEx.exe', 'Weixin.exe', 'WeixinUpdate.exe']) {
     spawnSync('taskkill', ['/F', '/IM', im], { windowsHide: true, stdio: 'ignore' });
   }
+
+  // 卸载已有版本，防止 3.x（WeChat\）和 4.x（Weixin\）并存导致启动用错版本
+  const uninstallers = [
+    'C:\\Program Files\\Tencent\\WeChat\\Uninstall.exe',        // 3.x 64-bit
+    'C:\\Program Files (x86)\\Tencent\\WeChat\\Uninstall.exe',  // 3.x 32-bit
+    'C:\\Program Files\\Tencent\\Weixin\\Uninstall.exe',        // 4.x
+  ];
+  for (const uninst of uninstallers) {
+    if (fs.existsSync(uninst)) {
+      spawnSync(uninst, ['/S'], { windowsHide: true, timeout: 60_000, stdio: 'ignore' });
+    }
+  }
+
   // 腾讯自研包静默参数是 /S（不是 NSIS 的 /VERYSILENT）
   spawnSync(installer, ['/S'], { windowsHide: true, timeout: 120_000 });
 }
