@@ -385,6 +385,43 @@ describe('installWeChat — 下载并静默安装微信 4.1.8', () => {
     // 主安装包正常跑
     expect(calls.some((a) => a.includes('wechatwin_4.1.8.exe'))).toBe(true);
   });
+
+  // ── 安装后锁更新（防 WeixinUpdate.exe 自动升级 4.1.8 → ≥4.1.9，造成反复卸载重装循环）──
+
+  it('安装 4.1.8 后立即将 WeixinUpdate.exe 重命名 .disabled，防自动升级循环', async () => {
+    mockDownload();
+    vi.spyOn(childProcessModule, 'spawnSync').mockReturnValue({ status: 0 } as any);
+    // 模拟安装完成后 WeixinUpdate.exe 存在于 Weixin 目录
+    vi.spyOn(fs, 'existsSync').mockImplementation((p) =>
+      String(p).toLowerCase().includes('weixinupdate.exe')
+    );
+    const renameSyncMock = vi.spyOn(fs, 'renameSync').mockImplementation(() => undefined);
+
+    await installWeChat(os.tmpdir());
+
+    // renameSync 必须被调用，把 WeixinUpdate.exe 改名为 WeixinUpdate.exe.disabled
+    const lockCall = renameSyncMock.mock.calls.find(([src]) =>
+      String(src).toLowerCase().includes('weixinupdate.exe') &&
+      !String(src).toLowerCase().endsWith('.disabled')
+    );
+    expect(lockCall).toBeDefined();
+    const [src, dst] = lockCall!;
+    expect(String(dst).toLowerCase()).toBe(String(src).toLowerCase() + '.disabled');
+  });
+
+  it('WeixinUpdate.exe 不存在时跳过重命名（不抛错）', async () => {
+    mockDownload();
+    vi.spyOn(childProcessModule, 'spawnSync').mockReturnValue({ status: 0 } as any);
+    vi.spyOn(fs, 'existsSync').mockReturnValue(false);  // 无任何卸载程序也无 WeixinUpdate
+    const renameSyncMock = vi.spyOn(fs, 'renameSync').mockImplementation(() => undefined);
+
+    await expect(installWeChat(os.tmpdir())).resolves.not.toThrow();
+    // WeixinUpdate.exe 不存在时，renameSync 不应被调用
+    const lockCall = renameSyncMock.mock.calls.find(([src]) =>
+      String(src).toLowerCase().includes('weixinupdate.exe')
+    );
+    expect(lockCall).toBeUndefined();
+  });
 });
 
 describe('installPywinauto — get-pip + pip install 清华源', () => {
