@@ -448,7 +448,8 @@ router.post('/dm-outreach-result', async (req: Request, res: Response) => {
   let sessionDisabled = false;
   if (dmStatus === 'failed' && error_code && DM_SESSION_KILLERS.includes(error_code)) {
     const upd = await pool.query(
-      `UPDATE zenithjoy.agent_platform_sessions SET status='expired', updated_at=NOW()
+      // agent_platform_sessions 无 updated_at 列（只 bound_at/created_at）— 不可写 updated_at
+      `UPDATE zenithjoy.agent_platform_sessions SET status='expired'
         WHERE agent_id=$1 AND platform='douyin' AND account_label=$2 AND role='burner'`,
       [agentId, acctLabel],
     );
