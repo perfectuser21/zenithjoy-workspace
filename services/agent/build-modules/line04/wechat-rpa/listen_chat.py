@@ -56,6 +56,7 @@ SKIP_SENDERS = (
     "服务号",
     "客服消息",
     "文件传输助手",
+    "文件",  # WeChat 4.x 有时截断 "文件传输助手" → "文件"
     "微信团队",
     "订阅号",
     "折叠的群聊",
@@ -458,6 +459,7 @@ def _chat_title_matches(mw: Any, sender: str) -> Optional[bool]:
         return None
     width = wr.right - wr.left
     saw_any_title = False
+    found_texts: list = []
     want = (sender or "").strip()
     for t in mw.descendants(control_type="Text"):
         try:
@@ -468,8 +470,12 @@ def _chat_title_matches(mw: Any, sender: str) -> Optional[bool]:
         # 只看右侧上部区域的文本（聊天面板标题），排除左侧会话列表项的名字
         if r.left > wr.left + width // 4 and r.top < wr.top + 150 and nm:
             saw_any_title = True
-            if nm == want:
+            found_texts.append(nm)
+            # WeChat 4.x 有时在标题栏截断长名：nm 是 want 的前缀且 ≥4 字也算命中
+            if nm == want or (len(nm) >= 4 and want.startswith(nm)):
                 return True
+    if saw_any_title:
+        _log(f"_chat_title_matches: 找到标题 {found_texts!r} 但均不匹配 {want!r}")
     return False if saw_any_title else None
 
 
@@ -566,6 +572,24 @@ def _open_chat(mw: Any, item: Any, sender: str, expect_content: str = "") -> boo
         except Exception:
             pass
         return False
+
+    # tray 恢复后 UIA 坐标可能仍停在离屏占位值（~31989,32000），PostMessage 打不到真实位置。
+    # 检测到离屏则重新扫描列表找到新 item 引用，避免后续三次 PostMessage 全部打空。
+    try:
+        r = item.rectangle()
+        if abs(r.left) > 20000 or abs(r.top) > 20000:
+            _log(f"_open_chat: {sender!r} item 坐标离屏 ({r.left},{r.top})，重新扫描…")
+            for _new_it in mw.descendants(control_type="ListItem"):
+                try:
+                    _first_line = (_new_it.element_info.name or "").split("\n")[0].strip()
+                    if _first_line == sender:
+                        item = _new_it
+                        _log(f"_open_chat: 重扫找到 {sender!r} 新 item")
+                        break
+                except Exception:
+                    continue
+    except Exception:
+        pass
 
     for attempt in range(3):
         try:
