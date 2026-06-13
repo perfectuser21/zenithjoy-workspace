@@ -26,6 +26,7 @@ WEIXIN_EXE_DEFAULT = r"C:\Program Files\Tencent\Weixin\Weixin.exe"
 # 4.1.9 起聊天窗口的无障碍控件树(mmui)被移除（主窗口变成不透明 Qt 窗口），
 # UIA / MSAA 两层都读不到聊天控件 → RPA 不可用。4.1.8.107 = 已验证可用基线。
 MIN_BLOCKED_VERSION = (4, 1, 9)
+MIN_REQUIRED_VERSION = (4, 0, 0)  # 3.x 无 mmui::MainWindow，RPA 不可用
 DOWNGRADE_URL = (
     "https://zenithjoy-static-1333590468.cos.accelerate.myqcloud.com"
     "/install-pack/wechat/WeChatWin_4.1.8.exe"
@@ -74,8 +75,13 @@ def _parse_and_check(ver_str: Optional[str]) -> None:
     # 补齐到 3 段，便于和 MIN_BLOCKED_VERSION 比较
     head = head + (0,) * (3 - len(head))
 
+    ver_show = ".".join(str(x) for x in parsed)
+    if head < MIN_REQUIRED_VERSION:
+        raise RuntimeError(
+            f"微信版本 {ver_show} 过低：需 4.0.0+（3.x 无 mmui::MainWindow，RPA 不可用）。"
+            f"请安装 4.1.8.x（官方包 {DOWNGRADE_URL}）"
+        )
     if head >= MIN_BLOCKED_VERSION:
-        ver_show = ".".join(str(x) for x in parsed)
         raise RuntimeError(
             f"微信版本 {ver_show} 过高：4.1.9 起无障碍控件树被移除，RPA 不可用。"
             f"请降级到 4.1.8.x（官方包 {DOWNGRADE_URL}）"
