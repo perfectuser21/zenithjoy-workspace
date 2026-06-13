@@ -306,6 +306,85 @@ describe('installWeChat — 下载并静默安装微信 4.1.8', () => {
     expect(killWeChatIdx).toBeLessThan(installerIdx);
     expect(killAppExIdx).toBeLessThan(installerIdx);
   });
+
+  // ── 卸载旧版本回归测试（版本不对先卸载再安装，防止多版本并存）──────────────────
+
+  function mockDownload() {
+    vi.spyOn(https, 'get').mockImplementation((_url: any, cb: any) => {
+      const fakeRes = {
+        pipe: vi.fn(),
+        on: (ev: string, fn: () => void) => { if (ev === 'end') fn(); return fakeRes; },
+      } as any;
+      setImmediate(() => cb(fakeRes));
+      return { on: vi.fn() } as any;
+    });
+    vi.spyOn(fs, 'createWriteStream').mockReturnValue({
+      on: (_ev: string, fn: () => void) => { fn(); return {}; },
+      close: (fn: () => void) => fn(),
+    } as any);
+  }
+
+  it('检测到 WeChat 3.x 卸载程序 → 先卸载再装 4.1.8', async () => {
+    mockDownload();
+    const spawnSyncMock = vi.spyOn(childProcessModule, 'spawnSync').mockReturnValue({ status: 0 } as any);
+    // 模拟 3.x 卸载程序存在
+    vi.spyOn(fs, 'existsSync').mockImplementation((p) =>
+      String(p).toLowerCase().includes('wechat\\uninstall') ? true : false
+    );
+
+    await installWeChat(os.tmpdir());
+
+    const calls = spawnSyncMock.mock.calls.map((c) => [c[0], ...(c[1] ?? [])].join(' ').toLowerCase());
+    const uninstIdx = calls.findIndex((a) => a.includes('wechat') && a.includes('uninstall') && a.includes('/s'));
+    const installerIdx = calls.findIndex((a) => a.includes('wechatwin_4.1.8.exe'));
+    expect(uninstIdx).toBeGreaterThanOrEqual(0);        // 卸载程序被调用
+    expect(uninstIdx).toBeLessThan(installerIdx);       // 卸载在安装之前
+  });
+
+  it('检测到 Weixin 4.x 卸载程序 → 先卸载再装 4.1.8', async () => {
+    mockDownload();
+    const spawnSyncMock = vi.spyOn(childProcessModule, 'spawnSync').mockReturnValue({ status: 0 } as any);
+    // 模拟 4.x 卸载程序存在
+    vi.spyOn(fs, 'existsSync').mockImplementation((p) =>
+      String(p).toLowerCase().includes('weixin\\uninstall') ? true : false
+    );
+
+    await installWeChat(os.tmpdir());
+
+    const calls = spawnSyncMock.mock.calls.map((c) => [c[0], ...(c[1] ?? [])].join(' ').toLowerCase());
+    const uninstIdx = calls.findIndex((a) => a.includes('weixin') && a.includes('uninstall') && a.includes('/s'));
+    const installerIdx = calls.findIndex((a) => a.includes('wechatwin_4.1.8.exe'));
+    expect(uninstIdx).toBeGreaterThanOrEqual(0);
+    expect(uninstIdx).toBeLessThan(installerIdx);
+  });
+
+  it('Weixin.exe + WeixinUpdate.exe 也在 taskkill 列表里', async () => {
+    mockDownload();
+    const spawnSyncMock = vi.spyOn(childProcessModule, 'spawnSync').mockReturnValue({ status: 0 } as any);
+    vi.spyOn(fs, 'existsSync').mockReturnValue(false);
+
+    await installWeChat(os.tmpdir());
+
+    const killed = spawnSyncMock.mock.calls
+      .filter((c) => String(c[0]).toLowerCase().includes('taskkill'))
+      .flatMap((c) => (c[1] ?? []).map(String).map((s) => s.toLowerCase()));
+    expect(killed.some((s) => s.includes('weixin.exe'))).toBe(true);
+    expect(killed.some((s) => s.includes('weixinupdate.exe'))).toBe(true);
+  });
+
+  it('卸载程序不存在时跳过，正常装 4.1.8', async () => {
+    mockDownload();
+    const spawnSyncMock = vi.spyOn(childProcessModule, 'spawnSync').mockReturnValue({ status: 0 } as any);
+    vi.spyOn(fs, 'existsSync').mockReturnValue(false);   // 无卸载程序
+
+    await installWeChat(os.tmpdir());
+
+    const calls = spawnSyncMock.mock.calls.map((c) => [c[0], ...(c[1] ?? [])].join(' ').toLowerCase());
+    // 不能有任何 Uninstall 调用
+    expect(calls.some((a) => a.includes('uninstall'))).toBe(false);
+    // 主安装包正常跑
+    expect(calls.some((a) => a.includes('wechatwin_4.1.8.exe'))).toBe(true);
+  });
 });
 
 describe('installPywinauto — get-pip + pip install 清华源', () => {
