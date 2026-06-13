@@ -119,6 +119,11 @@ export function checkWechatVersion(): CheckOutcome {
     return { ok: true, skipped: true };
   }
   const keys = [
+    // 4.x（Weixin）— HKCU 下存版本，HKLM WOW6432Node 有时也有
+    'HKCU\\SOFTWARE\\Tencent\\Weixin',
+    'HKLM\\SOFTWARE\\WOW6432Node\\Tencent\\Weixin',
+    'HKLM\\SOFTWARE\\Tencent\\Weixin',
+    // 3.x（WeChat）
     'HKLM\\SOFTWARE\\WOW6432Node\\Tencent\\WeChat',
     'HKLM\\SOFTWARE\\Tencent\\WeChat',
     'HKCU\\SOFTWARE\\Tencent\\WeChat',
@@ -140,11 +145,13 @@ export function checkWechatVersion(): CheckOutcome {
       // 该注册表键不存在或无权访问（runner 以 SYSTEM 运行时 HKCU 不可见），尝试下一个
     }
   }
-  // 注册表全部查不到（runner 权限限制），退而检查安装目录下的版本子文件夹。
-  // WeChat 安装后会创建 C:\Program Files\Tencent\WeChat\[X.Y.Z.B]\ 目录。
+  // 注册表全部查不到，退而检查安装目录下的版本子文件夹。
+  // WeChat 3.x → C:\Program Files\Tencent\WeChat\[X.Y.Z.B]\
+  // Weixin 4.x → C:\Program Files\Tencent\Weixin\X.Y.Z.B\
   const installDirs = [
-    'C:\\Program Files\\Tencent\\WeChat',
-    'C:\\Program Files (x86)\\Tencent\\WeChat',
+    'C:\\Program Files\\Tencent\\Weixin',          // 4.x（Weixin）
+    'C:\\Program Files\\Tencent\\WeChat',           // 3.x（WeChat）64-bit
+    'C:\\Program Files (x86)\\Tencent\\WeChat',     // 3.x（WeChat）32-bit
   ];
   for (const dir of installDirs) {
     if (!fs.existsSync(dir)) continue;
@@ -268,6 +275,27 @@ export function downloadFile(url: string, dest: string): Promise<void> {
   });
 }
 
+// 在 weixinRoot 及其一级子目录中搜索所有 WeixinUpdate.exe（不含 .disabled）。
+// 4.x 安装结构：Weixin\<version>\WeixinUpdate.exe，只需两层遍历。
+function findWeixinUpdateExe(weixinRoot: string): string[] {
+  const found: string[] = [];
+  if (!fs.existsSync(weixinRoot)) return found;
+  // 检查根目录本身
+  const rootExe = path.join(weixinRoot, 'WeixinUpdate.exe');
+  if (fs.existsSync(rootExe)) found.push(rootExe);
+  // 检查一级版本子目录（如 4.1.8.107\WeixinUpdate.exe）
+  try {
+    for (const entry of fs.readdirSync(weixinRoot, { withFileTypes: true })) {
+      if (!entry.isDirectory()) continue;
+      const subExe = path.join(weixinRoot, entry.name, 'WeixinUpdate.exe');
+      if (fs.existsSync(subExe)) found.push(subExe);
+    }
+  } catch {
+    // 目录无法读取，跳过
+  }
+  return found;
+}
+
 // ---------- 自动修复：安装微信 ----------
 
 export async function installWeChat(downloadDir: string): Promise<void> {
@@ -294,11 +322,12 @@ export async function installWeChat(downloadDir: string): Promise<void> {
   // 腾讯自研包静默参数是 /S（不是 NSIS 的 /VERYSILENT）
   spawnSync(installer, ['/S'], { windowsHide: true, timeout: 120_000 });
 
-  // 安装后立即锁更新：WeixinUpdate.exe 随包部署，不锁会自动升级到 ≥4.1.9 → 反复卸载重装循环。
+  // 安装后立即锁更新：WeixinUpdate.exe 随包部署，不锁会自动升级到 ≥4.1.9 → 反复卸装循环。
   // Python preflight.py check_lock_update() 做四层加固，这里先做 Layer1（改名）阻断首次自启。
+  // WeixinUpdate.exe 位于版本子目录（如 Weixin\4.1.8.107\WeixinUpdate.exe），必须递归查找。
   spawnSync('taskkill', ['/F', '/IM', 'WeixinUpdate.exe'], { windowsHide: true, stdio: 'ignore' });
-  const updateExe = 'C:\\Program Files\\Tencent\\Weixin\\WeixinUpdate.exe';
-  if (fs.existsSync(updateExe)) {
+  const weixinRoot = 'C:\\Program Files\\Tencent\\Weixin';
+  for (const updateExe of findWeixinUpdateExe(weixinRoot)) {
     try {
       fs.renameSync(updateExe, updateExe + '.disabled');
     } catch {
