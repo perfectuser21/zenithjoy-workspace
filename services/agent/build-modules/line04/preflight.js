@@ -1,0 +1,369 @@
+"use strict";
+// modules/line04/preflight.ts
+//
+// line04 微信AI客服模块 — 真实环境预检（自包含，不依赖 core 源码，可独立打包）。
+// 三项检测，失败给客户看得懂的中文 fixGuide：
+//   1. 微信版本 ≤ 4.1.8.x（Windows 注册表读取；4.1.10+ 砍掉 UIA 控件树，RPA 失效）
+//   2. python -c "import pywinauto" 可成功（驱动微信自动化的底层库）
+//   3. 可用内存 ≥ 4GB
+//
+// 非 Windows 平台：所有检测跳过并视为通过（ok:true），不崩溃。
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+exports._repairFuncs = exports.PIP_INDEX_URL = exports.GET_PIP_URL = exports.WECHAT_DOWNLOAD_URL = void 0;
+exports.parseVersionParts = parseVersionParts;
+exports.isWechatVersionSupported = isWechatVersionSupported;
+exports.parseWechatVersionFromRegOutput = parseWechatVersionFromRegOutput;
+exports.wechatFixGuide = wechatFixGuide;
+exports.pywinautoFixGuide = pywinautoFixGuide;
+exports.memoryFixGuide = memoryFixGuide;
+exports.checkWechatVersion = checkWechatVersion;
+exports.checkPywinauto = checkPywinauto;
+exports.checkMemory = checkMemory;
+exports.checkWechatRunning = checkWechatRunning;
+exports.downloadFile = downloadFile;
+exports.installWeChat = installWeChat;
+exports.installPywinauto = installPywinauto;
+exports.autoRepair = autoRepair;
+exports.getModulePython = getModulePython;
+exports.runPreflight = runPreflight;
+const node_child_process_1 = require("node:child_process");
+const node_os_1 = __importDefault(require("node:os"));
+const node_path_1 = __importDefault(require("node:path"));
+const node_fs_1 = __importDefault(require("node:fs"));
+const node_https_1 = __importDefault(require("node:https"));
+// 旧版微信 COS 直链下载地址（客户降级用）。
+exports.WECHAT_DOWNLOAD_URL = 'https://zenithjoy-static-1333590468.cos.accelerate.myqcloud.com/install-pack/wechat/WeChatWin_4.1.8.exe';
+// 受支持的微信版本上限（含）：4.1.8.x。前三段 > 4.1.8 视为不支持。
+const MAX_SUPPORTED = [4, 1, 8];
+const MIN_MEMORY_BYTES = 4 * 1024 ** 3;
+// ---------- 纯函数：版本解析与比较 ----------
+// 把版本字符串拆成数字段（缺失/非法段按 0 处理）。
+function parseVersionParts(version) {
+    return version
+        .trim()
+        .split('.')
+        .map((n) => {
+        const v = parseInt(n, 10);
+        return Number.isFinite(v) ? v : 0;
+    });
+}
+// version <= 4.1.8.x 返回 true（受支持）。只比较前三段，build 段忽略。
+function isWechatVersionSupported(version) {
+    const parts = parseVersionParts(version);
+    for (let i = 0; i < MAX_SUPPORTED.length; i++) {
+        const p = parts[i] ?? 0;
+        if (p < MAX_SUPPORTED[i])
+            return true;
+        if (p > MAX_SUPPORTED[i])
+            return false;
+    }
+    return true; // 前三段全等（4.1.8.x）→ 受支持
+}
+// 微信 REG_DWORD 编码：高字节 = 0x60 + major，其余依次 minor/patch/build。
+// 例：4.1.8.107 → 0x6401086b。
+function decodeWechatDword(hex) {
+    const num = parseInt(hex, 16) >>> 0;
+    const major = ((num >> 24) & 0xff) - 0x60;
+    const minor = (num >> 16) & 0xff;
+    const patch = (num >> 8) & 0xff;
+    const build = num & 0xff;
+    return `${major}.${minor}.${patch}.${build}`;
+}
+// 解析 `reg query ... /v Version` 的 stdout，返回点分版本号；解析不出返回 null。
+// 兼容 REG_SZ（字符串）与 REG_DWORD（十六进制编码）两种存法。
+function parseWechatVersionFromRegOutput(output) {
+    const m = output.match(/Version\s+REG_\w+\s+(\S+)/i);
+    if (!m)
+        return null;
+    const raw = m[1];
+    if (/^0x[0-9a-f]+$/i.test(raw)) {
+        return decodeWechatDword(raw);
+    }
+    return raw;
+}
+// ---------- 中文修复指引 ----------
+function wechatFixGuide(found) {
+    return `微信版本 ${found} 不支持（需 ≤4.1.8）。请从此处下载旧版：${exports.WECHAT_DOWNLOAD_URL}`;
+}
+function pywinautoFixGuide(errMessage) {
+    return `缺少 pywinauto 依赖（错误：${errMessage}）。请联系技术支持。`;
+}
+function memoryFixGuide() {
+    const gb = (node_os_1.default.totalmem() / 1024 ** 3).toFixed(1);
+    return `当前内存 ${gb}GB 不足 4GB，请关闭其他程序后重试。`;
+}
+// 检测 1：微信版本。MOCK_WECHAT_VERSION env 可在任何平台注入版本号（跳过注册表读取）。
+// 非 Windows 且无 MOCK 时跳过（视为通过）。
+function checkWechatVersion() {
+    const mockVersion = process.env.MOCK_WECHAT_VERSION;
+    if (mockVersion) {
+        if (isWechatVersionSupported(mockVersion))
+            return { ok: true, found: mockVersion };
+        return { ok: false, found: mockVersion, fixGuide: wechatFixGuide(mockVersion) };
+    }
+    if (process.platform !== 'win32') {
+        return { ok: true, skipped: true };
+    }
+    const keys = [
+        'HKLM\\SOFTWARE\\WOW6432Node\\Tencent\\WeChat',
+        'HKLM\\SOFTWARE\\Tencent\\WeChat',
+        'HKCU\\SOFTWARE\\Tencent\\WeChat',
+    ];
+    for (const key of keys) {
+        try {
+            const out = (0, node_child_process_1.execSync)(`reg query "${key}" /v Version`, {
+                encoding: 'utf-8',
+                windowsHide: true,
+                timeout: 10000,
+                stdio: ['ignore', 'pipe', 'ignore'],
+            });
+            const v = parseWechatVersionFromRegOutput(out);
+            if (v) {
+                if (isWechatVersionSupported(v))
+                    return { ok: true, found: v };
+                return { ok: false, found: v, fixGuide: wechatFixGuide(v) };
+            }
+        }
+        catch {
+            // 该注册表键不存在或无权访问（runner 以 SYSTEM 运行时 HKCU 不可见），尝试下一个
+        }
+    }
+    // 注册表全部查不到（runner 权限限制），退而检查安装目录下的版本子文件夹。
+    // WeChat 安装后会创建 C:\Program Files\Tencent\WeChat\[X.Y.Z.B]\ 目录。
+    const installDirs = [
+        'C:\\Program Files\\Tencent\\WeChat',
+        'C:\\Program Files (x86)\\Tencent\\WeChat',
+    ];
+    for (const dir of installDirs) {
+        if (!node_fs_1.default.existsSync(dir))
+            continue;
+        try {
+            const entries = node_fs_1.default.readdirSync(dir, { withFileTypes: true });
+            for (const entry of entries) {
+                if (!entry.isDirectory())
+                    continue;
+                // 目录名格式：[3.9.12.51] 或直接 3.9.12.51
+                const clean = entry.name.replace(/^\[|\]$/g, '');
+                if (/^\d+\.\d+\.\d+/.test(clean)) {
+                    if (isWechatVersionSupported(clean))
+                        return { ok: true, found: clean };
+                    return { ok: false, found: clean, fixGuide: wechatFixGuide(clean) };
+                }
+            }
+        }
+        catch {
+            // 目录无法读取，跳过
+        }
+    }
+    return {
+        ok: false,
+        fixGuide: `未检测到受支持的微信安装（需已安装微信桌面版且版本 ≤4.1.8）。` +
+            `如需安装旧版：${exports.WECHAT_DOWNLOAD_URL}`,
+    };
+}
+// 检测 2：pywinauto 可 import。spawn python -c "import pywinauto"，退出码 0 = 通过。
+// MOCK_WECHAT_VERSION 设置时进入 CI mock 模式，跳过此检测（与非 Windows 行为一致）。
+function checkPywinauto(pythonPath) {
+    if (process.platform !== 'win32' || process.env.MOCK_WECHAT_VERSION || process.env.MOCK_PYWINAUTO_OK) {
+        return Promise.resolve({ ok: true, skipped: true });
+    }
+    return new Promise((resolve) => {
+        let settled = false;
+        const done = (r) => {
+            if (settled)
+                return;
+            settled = true;
+            clearTimeout(timer);
+            resolve(r);
+        };
+        let child;
+        try {
+            child = (0, node_child_process_1.spawn)(pythonPath, ['-c', 'import pywinauto; print("ok")'], {
+                windowsHide: true,
+                stdio: ['ignore', 'ignore', 'ignore'],
+            });
+        }
+        catch (e) {
+            return resolve({ ok: false, fixGuide: pywinautoFixGuide(e.message) });
+        }
+        const timer = setTimeout(() => {
+            try {
+                child.kill();
+            }
+            catch {
+                // ignore
+            }
+            done({ ok: false, fixGuide: pywinautoFixGuide('检测超时（Python 环境可能异常）') });
+        }, 15000);
+        child.on('error', (err) => {
+            done({ ok: false, fixGuide: pywinautoFixGuide(err.message) });
+        });
+        child.on('close', (code) => {
+            if (code === 0) {
+                done({ ok: true });
+            }
+            else {
+                done({ ok: false, fixGuide: pywinautoFixGuide(`python -c "import pywinauto" 退出码 ${code}`) });
+            }
+        });
+    });
+}
+// 检测 3：内存 ≥ 4GB。非 Windows 跳过（视为通过）。MOCK_WECHAT_VERSION 时也跳过（CI mock 模式）。
+function checkMemory() {
+    if (process.platform !== 'win32' || process.env.MOCK_WECHAT_VERSION) {
+        return { ok: true, skipped: true };
+    }
+    if (node_os_1.default.totalmem() >= MIN_MEMORY_BYTES)
+        return { ok: true };
+    return { ok: false, fixGuide: memoryFixGuide() };
+}
+// 检测 4（软检测）：微信进程是否在跑。
+// WeChat 4.1.8 启动后主进程是 WeChatAppEx.exe（WeChat.exe 是启动器，随即退出）。
+// 非 Windows 跳过。ok 始终为 true——未跑只给用户提示，不阻塞模块激活。
+function checkWechatRunning() {
+    if (process.platform !== 'win32')
+        return { ok: true, skipped: true };
+    // 两条命令均为字面量，无模板变量，无命令注入风险。
+    const queries = [
+        ['tasklist /FI "IMAGENAME eq WeChat.exe" /FO LIST', /WeChat\.exe/i],
+        ['tasklist /FI "IMAGENAME eq WeChatAppEx.exe" /FO LIST', /WeChatAppEx\.exe/i],
+    ];
+    for (const [cmd, pattern] of queries) {
+        try {
+            const out = (0, node_child_process_1.execSync)(cmd, {
+                encoding: 'utf-8',
+                windowsHide: true,
+                timeout: 10000,
+                stdio: ['ignore', 'pipe', 'ignore'],
+            });
+            if (pattern.test(out))
+                return { ok: true };
+        }
+        catch {
+            // 该进程不存在或无权查询，继续下一个
+        }
+    }
+    return {
+        ok: true,
+        fixGuide: '微信未运行，请打开微信并登录，Agent 将在 30 秒内自动连接。',
+    };
+}
+// ---------- 自动修复：下载工具 ----------
+function downloadFile(url, dest) {
+    return new Promise((resolve, reject) => {
+        const file = node_fs_1.default.createWriteStream(dest);
+        node_https_1.default
+            .get(url, (res) => {
+            res.pipe(file);
+            res.on('end', () => file.close(() => resolve()));
+            res.on('error', reject);
+        })
+            .on('error', reject);
+    });
+}
+// ---------- 自动修复：安装微信 ----------
+async function installWeChat(downloadDir) {
+    const installer = node_path_1.default.join(downloadDir, 'WeChatWin_4.1.8.exe');
+    await downloadFile(exports.WECHAT_DOWNLOAD_URL, installer);
+    // 先终止所有微信进程，防止文件占用导致安装包静默跳过降级
+    for (const im of ['WeChat.exe', 'WeChatAppEx.exe']) {
+        (0, node_child_process_1.spawnSync)('taskkill', ['/F', '/IM', im], { windowsHide: true, stdio: 'ignore' });
+    }
+    // 腾讯自研包静默参数是 /S（不是 NSIS 的 /VERYSILENT）
+    (0, node_child_process_1.spawnSync)(installer, ['/S'], { windowsHide: true, timeout: 120000 });
+}
+// ---------- 自动修复：安装 pywinauto ----------
+exports.GET_PIP_URL = 'https://bootstrap.pypa.io/get-pip.py';
+exports.PIP_INDEX_URL = 'https://pypi.tuna.tsinghua.edu.cn/simple/';
+async function installPywinauto(pythonPath, downloadDir) {
+    const getPipScript = node_path_1.default.join(downloadDir, 'get-pip.py');
+    await downloadFile(exports.GET_PIP_URL, getPipScript);
+    (0, node_child_process_1.spawnSync)(pythonPath, [getPipScript, '--quiet'], { windowsHide: true, timeout: 60000 });
+    (0, node_child_process_1.spawnSync)(pythonPath, ['-m', 'pip', 'install', 'pywinauto', '--quiet', '--index-url', exports.PIP_INDEX_URL], { windowsHide: true, timeout: 120000 });
+}
+// _repairFuncs 允许测试替换（CJS 直接调用同文件函数无法被 vi.spyOn 拦截）
+exports._repairFuncs = {
+    installWeChat,
+    installPywinauto,
+};
+async function autoRepair(targets, pythonPath, downloadDir) {
+    const tasks = [];
+    if (targets.wechatFailed)
+        tasks.push(exports._repairFuncs.installWeChat(downloadDir));
+    if (targets.pywinautoFailed)
+        tasks.push(exports._repairFuncs.installPywinauto(pythonPath, downloadDir));
+    await Promise.all(tasks);
+}
+// 解析模块自带的 python-embedded/python.exe，否则回退系统 python（Windows 无 python3）。
+// 回退顺序：1) 模块自带 python-embedded  2) ZENITHJOY_CORE_DIR/python-embedded  3) 系统 python
+function getModulePython(moduleDir) {
+    const embedded = node_path_1.default.join(moduleDir, 'python-embedded', 'python.exe');
+    if (node_fs_1.default.existsSync(embedded))
+        return embedded;
+    const coreDir = process.env.ZENITHJOY_CORE_DIR;
+    if (coreDir) {
+        const coreEmbedded = node_path_1.default.join(coreDir, 'python-embedded', 'python.exe');
+        if (node_fs_1.default.existsSync(coreEmbedded))
+            return coreEmbedded;
+    }
+    return process.platform === 'win32' ? 'python' : 'python3';
+}
+// 模块入口：core 在 fork 前调用，三项全过才激活。
+// moduleDir 可选，不传时取本文件所在目录（CLI 直接跑时由 main guard 传入）。
+// 两阶段：首轮检测 → Windows 且检测失败则 autoRepair → 修复后重检 → 软检测。
+async function runPreflight(moduleDir) {
+    const dir = moduleDir ?? __dirname;
+    const python = getModulePython(dir);
+    const downloadDir = node_path_1.default.join(node_os_1.default.tmpdir(), 'zenithjoy-setup');
+    node_fs_1.default.mkdirSync(downloadDir, { recursive: true });
+    // 首轮检测
+    let wechat = checkWechatVersion();
+    let pyw = await checkPywinauto(python);
+    const mem = checkMemory();
+    // 自动修复（仅 Windows，非 CI mock 模式）
+    if (process.platform === 'win32' && !process.env.MOCK_WECHAT_VERSION) {
+        const needRepair = !wechat.ok || !pyw.ok;
+        if (needRepair) {
+            await autoRepair({ wechatFailed: !wechat.ok, pywinautoFailed: !pyw.ok }, python, downloadDir);
+            // 修复后重检
+            wechat = checkWechatVersion();
+            pyw = await checkPywinauto(python);
+        }
+    }
+    // 软检测：微信进程是否在跑（ok 始终 true）
+    const running = checkWechatRunning();
+    const checks = {
+        wechat_version: wechat.ok,
+        pywinauto: pyw.ok,
+        memory: mem.ok,
+    };
+    if (wechat.ok && pyw.ok && mem.ok) {
+        return {
+            ok: true,
+            checks,
+            ...(running.fixGuide ? { fixGuide: running.fixGuide } : {}),
+        };
+    }
+    const fixGuide = [wechat, pyw, mem]
+        .filter((c) => !c.ok && c.fixGuide)
+        .map((c) => c.fixGuide)
+        .join('\n');
+    return { ok: false, checks, fixGuide };
+}
+// 作为脚本直接执行时（core ModuleManager 用 `node preflight.js`，cwd=moduleDir，不传 argv）：
+// 把结果以 JSON 打印为 stdout 最后一行，退出码与 ok 对应。moduleDir 默认取本文件所在目录。
+if (require.main === module) {
+    const moduleDir = process.argv[2] || __dirname;
+    runPreflight(moduleDir)
+        .then((result) => {
+        console.log(JSON.stringify(result));
+        process.exit(result.ok ? 0 : 1);
+    })
+        .catch((e) => {
+        console.log(JSON.stringify({ ok: false, checks: {}, fixGuide: e.message }));
+        process.exit(1);
+    });
+}

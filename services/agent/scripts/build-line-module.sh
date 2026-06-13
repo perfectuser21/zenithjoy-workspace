@@ -31,11 +31,17 @@ npx tsc "${TS_FILES[@]}" \
 cp "${MODULE_SRC}/manifest.json" "$BUILD_DIR/"
 
 # line04 特殊：打包 wechat-rpa Python 脚本（listen_chat / send_chat / qr_bind …）。
+# build-modules 保留完整 wechat-rpa（含 tests/），CI sync-check 用 diff -r 比对源码。
+# tar 时用 --exclude 排除测试/缓存，生产包不含测试代码。
 if [ "$LINE_ID" = "line04" ] && [ -d "wechat-rpa" ]; then
-  cp -r wechat-rpa "$BUILD_DIR/"
-  # 不打包 Python 缓存 / 测试，瘦身 tar。
-  rm -rf "$BUILD_DIR/wechat-rpa/__pycache__" "$BUILD_DIR/wechat-rpa/tests"
+  rsync -a --delete wechat-rpa/ "$BUILD_DIR/wechat-rpa/"
 fi
 
-tar czf "$OUT_DIR/${MANIFEST_LINE_ID}-v${VERSION}.tar.gz" -C "build-modules/$LINE_ID" .
+# 临时目录排除 tests/__pycache__ 再打包（兼容 macOS BSD tar 和 Linux GNU tar）。
+TAR_STAGE=$(mktemp -d)
+cp -r "build-modules/$LINE_ID/." "$TAR_STAGE/"
+find "$TAR_STAGE" -name "__pycache__" -type d -exec rm -rf {} + 2>/dev/null || true
+rm -rf "$TAR_STAGE/wechat-rpa/tests"
+tar czf "$OUT_DIR/${MANIFEST_LINE_ID}-v${VERSION}.tar.gz" -C "$TAR_STAGE" .
+rm -rf "$TAR_STAGE"
 echo "[build-module] ${MANIFEST_LINE_ID}-v${VERSION}.tar.gz ready (-> $OUT_DIR/)"
