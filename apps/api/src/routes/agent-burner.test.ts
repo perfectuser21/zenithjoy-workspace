@@ -57,6 +57,7 @@ vi.mock('../middleware/agent-context', () => ({
 // Mock services
 vi.mock('../services/lead-writer', () => ({
   writeLeadsFromComments: vi.fn().mockResolvedValue({ lead_write_status: 'success' }),
+  writeDmOutreachStatus: vi.fn().mockResolvedValue({ lead_write_status: 'success' }),
 }));
 
 import pool from '../db/connection';
@@ -162,5 +163,169 @@ describe('agent-burner router [ARCH agentContext]', () => {
 
     expect(r.status).toBe(200);
     expect(r.body.data.task_id).toBe('77777777-7777-7777-7777-777777777777');
+  });
+});
+
+// ── Path 2 抖音私信主动触达（dm_outreach）3 端点 ──
+describe('agent-burner router [dm_outreach]', () => {
+  beforeEach(() => {
+    vi.mocked(pool.query).mockReset();
+  });
+
+  it('POST /dm-outreach 派单 → 200 + data 只含 task_id', async () => {
+    vi.mocked(pool.query)
+      .mockResolvedValueOnce({ rows: [{ '?column?': 1 }] } as any) // burner session active
+      .mockResolvedValueOnce({ rows: [{ app_token: 'bascn_x', table_id_leads: 'tbl_b1_leads' }] } as any) // feishu binding
+      .mockResolvedValueOnce({ rows: [{ id: 'dddddddd-dddd-dddd-dddd-dddddddddddd' }] } as any); // INSERT
+
+    const app = buildApp();
+    const r = await request(app)
+      .post('/api/agent/burner/dm-outreach')
+      .send({
+        tenant_id: TENANT_UUID,
+        agent_id: AGENT_UUID,
+        account_label: '装修小号1',
+        profile_url: 'https://www.douyin.com/user/MS4w1',
+        message: '您好',
+      });
+
+    expect(r.status).toBe(200);
+    expect(Object.keys(r.body.data).sort()).toEqual(['task_id']);
+    expect(r.body.data.task_id).toBe('dddddddd-dddd-dddd-dddd-dddddddddddd');
+    // INSERT 落 task_type=dm_outreach / platform=douyin
+    const insertSql = vi.mocked(pool.query).mock.calls[2][0] as string;
+    expect(insertSql).toMatch(/'dm_outreach'/);
+    expect(insertSql).toMatch(/'douyin'/);
+  });
+
+  it('POST /dm-outreach 缺 profile_url → 400 MISSING_PROFILE_URL（不落库）', async () => {
+    const app = buildApp();
+    const r = await request(app)
+      .post('/api/agent/burner/dm-outreach')
+      .send({ tenant_id: TENANT_UUID, agent_id: AGENT_UUID, account_label: '号1', message: 'x' });
+    expect(r.status).toBe(400);
+    expect(r.body.error.code).toBe('MISSING_PROFILE_URL');
+    expect(vi.mocked(pool.query).mock.calls.length).toBe(0);
+  });
+
+  it('POST /dm-outreach 缺 message → 400 MISSING_MESSAGE', async () => {
+    const app = buildApp();
+    const r = await request(app)
+      .post('/api/agent/burner/dm-outreach')
+      .send({ tenant_id: TENANT_UUID, agent_id: AGENT_UUID, account_label: '号1', profile_url: 'https://x' });
+    expect(r.status).toBe(400);
+    expect(r.body.error.code).toBe('MISSING_MESSAGE');
+  });
+
+  it('POST /dm-outreach 无 active burner → 400 NO_BURNER_SESSION', async () => {
+    vi.mocked(pool.query).mockResolvedValueOnce({ rows: [] } as any); // 无 session
+    const app = buildApp();
+    const r = await request(app)
+      .post('/api/agent/burner/dm-outreach')
+      .send({
+        tenant_id: TENANT_UUID,
+        agent_id: AGENT_UUID,
+        account_label: '不存在的号',
+        profile_url: 'https://x',
+        message: 'x',
+      });
+    expect(r.status).toBe(400);
+    expect(r.body.error.code).toBe('NO_BURNER_SESSION');
+  });
+
+  it('POST /dm-outreach tenant 未绑飞书 → 400 FEISHU_NOT_BOUND', async () => {
+    vi.mocked(pool.query)
+      .mockResolvedValueOnce({ rows: [{ '?column?': 1 }] } as any) // burner active
+      .mockResolvedValueOnce({ rows: [] } as any); // 无 feishu binding
+    const app = buildApp();
+    const r = await request(app)
+      .post('/api/agent/burner/dm-outreach')
+      .send({
+        tenant_id: TENANT_UUID,
+        agent_id: AGENT_UUID,
+        account_label: '号1',
+        profile_url: 'https://x',
+        message: 'x',
+      });
+    expect(r.status).toBe(400);
+    expect(r.body.error.code).toBe('FEISHU_NOT_BOUND');
+  });
+
+  it('POST /dm-outreach-result sent → task done + data schema 恰 4 键（无 session_disabled）', async () => {
+    vi.mocked(pool.query)
+      .mockResolvedValueOnce({
+        rows: [{ tenant_id: TENANT_UUID, payload: { account_label: '号1', agent_id: AGENT_UUID, profile_url: 'https://x' } }],
+      } as any) // task lookup
+      .mockResolvedValueOnce({ rows: [{ app_token: 'bascn_x', table_id_leads: 'tbl_b1_leads' }] } as any) // binding
+      .mockResolvedValueOnce({ rowCount: 1, rows: [] } as any); // UPDATE task
+
+    const app = buildApp();
+    const r = await request(app)
+      .post('/api/agent/burner/dm-outreach-result')
+      .send({ task_id: 'dddddddd-dddd-dddd-dddd-dddddddddddd', agent_id: AGENT_UUID, account_label: '号1', status: 'sent', profile_url: 'https://x' });
+
+    expect(r.status).toBe(200);
+    expect(r.body.data.status).toBe('sent');
+    expect(r.body.data.lead_write_status).toBe('success');
+    expect(Object.keys(r.body.data).sort()).toEqual(['feishu_bitable_url', 'lead_write_status', 'status', 'task_id']);
+  });
+
+  it('POST /dm-outreach-result failed+SESSION_EXPIRED → session_disabled=true + 停用该号', async () => {
+    vi.mocked(pool.query)
+      .mockResolvedValueOnce({
+        rows: [{ tenant_id: TENANT_UUID, payload: { account_label: '号1', agent_id: AGENT_UUID, profile_url: 'https://x' } }],
+      } as any) // task lookup
+      .mockResolvedValueOnce({ rows: [{ app_token: 'bascn_x', table_id_leads: 'tbl_b1_leads' }] } as any) // binding
+      .mockResolvedValueOnce({ rowCount: 1, rows: [] } as any) // UPDATE session expired
+      .mockResolvedValueOnce({ rowCount: 1, rows: [] } as any); // UPDATE task
+
+    const app = buildApp();
+    const r = await request(app)
+      .post('/api/agent/burner/dm-outreach-result')
+      .send({ task_id: 'dddddddd-dddd-dddd-dddd-dddddddddddd', agent_id: AGENT_UUID, account_label: '号1', status: 'failed', error_code: 'SESSION_EXPIRED', profile_url: 'https://x' });
+
+    expect(r.status).toBe(200);
+    expect(r.body.data.status).toBe('failed');
+    expect(r.body.data.session_disabled).toBe(true);
+    // 第 3 个 query 是 UPDATE agent_platform_sessions expired
+    const killSql = vi.mocked(pool.query).mock.calls[2][0] as string;
+    expect(killSql).toMatch(/agent_platform_sessions/);
+    expect(killSql).toMatch(/expired/);
+  });
+
+  it('POST /dm-outreach-result 未知 task → 404 TASK_NOT_FOUND', async () => {
+    vi.mocked(pool.query).mockResolvedValueOnce({ rows: [] } as any);
+    const app = buildApp();
+    const r = await request(app)
+      .post('/api/agent/burner/dm-outreach-result')
+      .send({ task_id: '00000000-0000-0000-0000-000000000000', status: 'sent' });
+    expect(r.status).toBe(404);
+    expect(r.body.error.code).toBe('TASK_NOT_FOUND');
+  });
+
+  it('GET /dm-tasks/:id 终态 → 200 done/sent', async () => {
+    vi.mocked(pool.query).mockResolvedValueOnce({
+      rows: [{
+        id: 'dddddddd-dddd-dddd-dddd-dddddddddddd',
+        status: 'done',
+        response: { dm_status: 'sent', feishu_bitable_url: 'https://feishu.cn/base/bascn_x', profile_url: 'https://x', account_label: '号1' },
+        created_at: '2026-06-13T00:00:00Z',
+        updated_at: '2026-06-13T00:00:01Z',
+      }],
+    } as any);
+    const app = buildApp();
+    const r = await request(app).get('/api/agent/burner/dm-tasks/dddddddd-dddd-dddd-dddd-dddddddddddd');
+    expect(r.status).toBe(200);
+    expect(r.body.data.status).toBe('done');
+    expect(r.body.data.dm_status).toBe('sent');
+    expect(typeof r.body.data.feishu_bitable_url).toBe('string');
+  });
+
+  it('GET /dm-tasks/:id 未知 → 404 NO_DM_TASK', async () => {
+    vi.mocked(pool.query).mockResolvedValueOnce({ rows: [] } as any);
+    const app = buildApp();
+    const r = await request(app).get('/api/agent/burner/dm-tasks/00000000-0000-0000-0000-000000000000');
+    expect(r.status).toBe(404);
+    expect(r.body.error.code).toBe('NO_DM_TASK');
   });
 });

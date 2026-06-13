@@ -15,7 +15,7 @@
  */
 import { Router, Request, Response } from 'express';
 import pool from '../db/connection';
-import { writeLeadsFromComments } from '../services/lead-writer';
+import { writeLeadsFromComments, writeDmOutreachStatus, type DmStatus } from '../services/lead-writer';
 import { tenantContextOptional } from '../middleware/tenant-context';
 import { agentContext } from '../middleware/agent-context';
 
@@ -355,6 +355,186 @@ router.get('/crawl-tasks/:task_id', async (req: Request, res: Response) => {
       comment_count: resp.comment_count ?? 0,
       lead_write_status: resp.lead_write_status,
       feishu_bitable_url: resp.feishu_bitable_url,
+      created_at: row.created_at,
+      updated_at: row.updated_at,
+    }),
+  );
+});
+
+// ════════════════════════════════════════════════════════════════════════
+//  Path 2 抖音私信主动触达（dm_outreach）— 派单 / 回报 / 查状态
+//  task_type='dm_outreach' / platform='douyin'（与既有合并写法不同，按合同分列）
+// ════════════════════════════════════════════════════════════════════════
+
+const DM_SESSION_KILLERS = ['SESSION_EXPIRED', 'RISK'];
+
+// ── 7. POST /dm-outreach — 派私信触达单 ──
+router.post('/dm-outreach', tenantContextOptional, agentContext, async (req: Request, res: Response) => {
+  const { account_label, profile_url, message } = req.body || {};
+  const tenant_id = req.body?.tenant_id || req.tenantId;
+  const agent_id = req.body?.agent_id || req.agentId;
+
+  // 派单守卫（缺守卫则脏单流到真机）
+  if (!profile_url || typeof profile_url !== 'string') {
+    return res.status(400).json(ERR('MISSING_PROFILE_URL', 'profile_url 必填'));
+  }
+  if (!message || typeof message !== 'string') {
+    return res.status(400).json(ERR('MISSING_MESSAGE', 'message 必填'));
+  }
+  if (!tenant_id || !agent_id || !account_label) {
+    return res
+      .status(400)
+      .json(ERR('NO_BURNER_SESSION', 'tenant_id + agent_id + account_label 必填'));
+  }
+
+  // 必须有 active burner session（不能拿主号去私信）
+  const s = await pool.query(
+    `SELECT 1 FROM zenithjoy.agent_platform_sessions
+      WHERE agent_id=$1 AND platform='douyin' AND account_label=$2 AND role='burner' AND status='active'`,
+    [agent_id, account_label],
+  );
+  if (s.rows.length === 0) {
+    return res
+      .status(400)
+      .json(ERR('NO_BURNER_SESSION', `agent ${agent_id} 无 active burner session for ${account_label}`));
+  }
+
+  // tenant 必须绑飞书（结果要回写 Lead 表）
+  const binding = await getFeishuBinding(tenant_id);
+  if (!binding || !binding.table_id_leads) {
+    return res.status(400).json(ERR('FEISHU_NOT_BOUND', 'tenant 未绑飞书，无法回写 Lead 表'));
+  }
+
+  const r = await pool.query(
+    `INSERT INTO zenithjoy.publish_tasks
+       (agent_id, platform, status, task_type, payload, tenant_id, created_at, updated_at)
+     VALUES ($1, 'douyin', 'queued', 'dm_outreach', $2, $3, NOW(), NOW())
+     RETURNING id`,
+    [
+      agent_id,
+      JSON.stringify({ agent_id, account_label, profile_url, message, tenant_id, task_type: 'dm_outreach' }),
+      tenant_id,
+    ],
+  );
+
+  return res.json(OK({ task_id: r.rows[0].id }));
+});
+
+// ── 8. POST /dm-outreach-result — Agent 回报触达结果 → 写飞书 + 单号停用不连坐 ──
+router.post('/dm-outreach-result', async (req: Request, res: Response) => {
+  const { task_id, agent_id, account_label, status, error_code, profile_url, screenshot_path } =
+    req.body || {};
+  if (!task_id) return res.status(400).json(ERR('MISSING_TASK_ID', 'task_id 必填'));
+
+  const t = await pool.query(
+    `SELECT tenant_id, payload FROM zenithjoy.publish_tasks WHERE id=$1`,
+    [task_id],
+  );
+  if (t.rows.length === 0) {
+    return res.status(404).json(ERR('TASK_NOT_FOUND', 'task_id 未找到'));
+  }
+  const tenantId = t.rows[0].tenant_id;
+  const payload = (t.rows[0].payload || {}) as Record<string, string | undefined>;
+  const acctLabel = account_label || payload.account_label || '';
+  const agentId = agent_id || payload.agent_id || '';
+  const profileUrl = profile_url || payload.profile_url || '';
+  const dmStatus: DmStatus =
+    status === 'sent' || status === 'limited' || status === 'failed' ? status : 'failed';
+
+  const binding = await getFeishuBinding(tenantId);
+  const feishuBitableUrl = binding?.app_token ? `https://feishu.cn/base/${binding.app_token}` : '';
+
+  // failed + SESSION_EXPIRED/RISK → 仅停用「被触达的那个号」（不连坐同 agent 其他号）
+  let sessionDisabled = false;
+  if (dmStatus === 'failed' && error_code && DM_SESSION_KILLERS.includes(error_code)) {
+    const upd = await pool.query(
+      // agent_platform_sessions 无 updated_at 列（只 bound_at/created_at）— 不可写 updated_at
+      `UPDATE zenithjoy.agent_platform_sessions SET status='expired'
+        WHERE agent_id=$1 AND platform='douyin' AND account_label=$2 AND role='burner'`,
+      [agentId, acctLabel],
+    );
+    sessionDisabled = (upd.rowCount ?? 0) > 0;
+  }
+
+  // 飞书 Lead 表回写触达状态
+  let leadWriteStatus: 'success' | 'failed' = 'failed';
+  if (binding?.table_id_leads) {
+    const w = await writeDmOutreachStatus({
+      tenant_id: tenantId,
+      table_id_leads: binding.table_id_leads,
+      profile_url: profileUrl,
+      account_label: acctLabel,
+      dm_status: dmStatus,
+      error_code: error_code || null,
+    });
+    leadWriteStatus = w.lead_write_status;
+  }
+
+  // 更新 task 终态：sent/limited→done，failed→failed
+  const taskStatus = dmStatus === 'failed' ? 'failed' : 'done';
+  await pool.query(
+    `UPDATE zenithjoy.publish_tasks SET status=$2,
+       response = jsonb_build_object(
+         'dm_status', $3::text,
+         'error_code', $4::text,
+         'feishu_bitable_url', $5::text,
+         'profile_url', $6::text,
+         'account_label', $7::text,
+         'lead_write_status', $8::text,
+         'screenshot_path', $9::text
+       ),
+       updated_at = NOW()
+     WHERE id=$1`,
+    [
+      task_id,
+      taskStatus,
+      dmStatus,
+      error_code || null,
+      feishuBitableUrl,
+      profileUrl,
+      acctLabel,
+      leadWriteStatus,
+      screenshot_path || '',
+    ],
+  );
+
+  const data: Record<string, unknown> = {
+    task_id,
+    status: dmStatus,
+    lead_write_status: leadWriteStatus,
+    feishu_bitable_url: feishuBitableUrl,
+  };
+  // session_disabled 仅 failed 分支附带（sent/limited schema 不含此字段）
+  if (dmStatus === 'failed') {
+    data.session_disabled = sessionDisabled;
+  }
+
+  return res.json(OK(data));
+});
+
+// ── 9. GET /dm-tasks/:task_id — 查触达单状态（运营在飞书看到的终态代理）──
+router.get('/dm-tasks/:task_id', async (req: Request, res: Response) => {
+  const taskId = req.params.task_id;
+  const r = await pool.query(
+    `SELECT id, status, response, created_at, updated_at
+       FROM zenithjoy.publish_tasks
+      WHERE id=$1 AND task_type='dm_outreach'`,
+    [taskId],
+  );
+  if (r.rows.length === 0) {
+    return res.status(404).json(ERR('NO_DM_TASK', 'dm task 未找到'));
+  }
+  const row = r.rows[0];
+  const resp = row.response || {};
+  return res.json(
+    OK({
+      task_id: row.id,
+      status: row.status,
+      dm_status: resp.dm_status ?? null,
+      error_code: resp.error_code ?? null,
+      feishu_bitable_url: resp.feishu_bitable_url ?? null,
+      profile_url: resp.profile_url ?? null,
+      account_label: resp.account_label ?? null,
       created_at: row.created_at,
       updated_at: row.updated_at,
     }),

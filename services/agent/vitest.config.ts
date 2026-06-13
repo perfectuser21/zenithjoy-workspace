@@ -18,6 +18,8 @@ export default defineConfig({
       '../../sprints/06031608-agent-python-embedded/tests/**/*.test.ts',
       // agent-module-e2e-verify sprint 合约测试
       '../../sprints/06081800-agent-module-e2e-verify/tests/**/*.test.ts',
+      // Path 2 抖音私信主动触达 sprint 合约测试（douyin-dm-outreach handler）
+      '../../sprints/06131229-path2-douyin-dm-outreach/tests/**/*.test.ts',
     ],
     exclude: ['node_modules/**', 'dist/**', 'dist-pkg/**'],
   },

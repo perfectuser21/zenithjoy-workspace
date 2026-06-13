@@ -35,6 +35,8 @@ import { ModuleManager } from './module-manager';
 import { handleQrBindDouyin } from './handlers/qr-bind-douyin';
 // Path 2 Sprint B-1 — burner 小号绑定 handler（独立文件，与 Path 1 主号物理隔离）
 import { handleQrBindDouyinBurner } from './handlers/qr-bind-douyin-burner';
+// Path 2 — 抖音私信主动触达 handler（burner 号驱动真机 chrome 发私信）
+import { handleDouyinDmOutreach } from './handlers/douyin-dm-outreach';
 // 运营中枢 — 8 平台主号统一 qr-bind handler（Line 00 Session Health Medium）
 import { handleQrBindOperator } from './handlers/qr-bind-operator';
 import { createFolderWatchManager } from './handlers/folder-watch';
@@ -613,6 +615,36 @@ async function postBurnerCrawlResult(
   }
 }
 
+// Path 2 — 私信触达结果回报中台（→ 写飞书 Lead 触达状态 / 单号停用不连坐）
+async function postBurnerDmOutreachResult(
+  cfg: AgentConfig,
+  taskId: string,
+  body: {
+    agent_id?: string;
+    account_label?: string;
+    status?: string;
+    error_code?: string;
+    profile_url?: string;
+    screenshot_path?: string;
+  },
+): Promise<void> {
+  const apiBase = deriveHttpApiBase(cfg);
+  if (!apiBase) {
+    console.warn('[p2:dm_outreach_post] 无 apiBase，跳过 POST');
+    return;
+  }
+  try {
+    const resp = await fetch(`${apiBase}/api/agent/burner/dm-outreach-result`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ task_id: taskId, ...body }),
+    });
+    console.log(`[p2:dm_outreach_post] HTTP ${resp.status} ${resp.ok ? 'OK' : 'FAIL'}`);
+  } catch (err) {
+    console.warn('[p2:dm_outreach_post] error:', (err as Error).message);
+  }
+}
+
 async function handleCrawlCommentsBurner(payload: {
   account_label: string;
   video_url: string;
@@ -792,6 +824,30 @@ function startWs1HeartbeatLoop(cfg: AgentConfig): void {
           console.warn('[ws1:folder_bind] missing local_path');
           await postQrBindDouyinAck(cfg, task.task_id, 'failed:missing_local_path');
         }
+      } else if (
+        task.platform === 'douyin' &&
+        (task.payload as { task_type?: string }).task_type === 'dm_outreach'
+      ) {
+        // Path 2 — 抖音私信主动触达（burner 号驱动真机 chrome 发私信）
+        // platform='douyin' 但 payload.task_type='dm_outreach'，须在 folder-publish 'douyin' 分支前判定。
+        const p = task.payload as {
+          account_label?: string;
+          profile_url?: string;
+          message?: string;
+        };
+        const res = await handleDouyinDmOutreach({
+          profile_url: p.profile_url || '',
+          message: p.message || '',
+          account_label: p.account_label || '',
+        });
+        console.log('[p2:dm_outreach] result:', res.status, res.ok);
+        await postBurnerDmOutreachResult(cfg, task.task_id, {
+          agent_id: cfg.agentUuid,
+          account_label: p.account_label,
+          status: res.status,
+          error_code: res.error_code,
+          profile_url: p.profile_url,
+        });
       } else if (task.platform === 'douyin') {
         const payload = task.payload as { folder_path?: string };
         const folderPath = payload.folder_path || folderWatch.getBoundPath();
