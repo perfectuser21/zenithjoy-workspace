@@ -1,6 +1,3 @@
-contract_branch: cp-harness-propose-r3-d9db285a
-sprint_dir: sprints/06131229-path2-douyin-dm-outreach
-
 ---
 skeleton: false
 journey_type: agent_remote
