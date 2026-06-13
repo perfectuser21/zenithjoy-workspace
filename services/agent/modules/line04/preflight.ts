@@ -18,7 +18,9 @@ import https from 'node:https';
 export const WECHAT_DOWNLOAD_URL =
   'https://zenithjoy-static-1333590468.cos.accelerate.myqcloud.com/install-pack/wechat/WeChatWin_4.1.8.exe';
 
-// 受支持的微信版本上限（含）：4.1.8.x。前三段 > 4.1.8 视为不支持。
+// 受支持微信版本范围：[4.0.0, 4.1.8.x]（含两端）。
+// 3.x 使用不同窗口类（WeChatMainWndForPC），无 mmui::MainWindow，RPA 不可用。
+const MIN_SUPPORTED: readonly number[] = [4, 0, 0];
 const MAX_SUPPORTED: readonly number[] = [4, 1, 8];
 const MIN_MEMORY_BYTES = 4 * 1024 ** 3;
 
@@ -45,9 +47,11 @@ export function parseVersionParts(version: string): number[] {
     });
 }
 
-// version <= 4.1.8.x 返回 true（受支持）。只比较前三段，build 段忽略。
+// version ∈ [4.0.0, 4.1.8.x] 返回 true（受支持）。只比较前三段，build 段忽略。
 export function isWechatVersionSupported(version: string): boolean {
   const parts = parseVersionParts(version);
+  // 低于 4.0.0（3.x）：无 mmui::MainWindow，RPA 不可用
+  if ((parts[0] ?? 0) < MIN_SUPPORTED[0]) return false;
   for (let i = 0; i < MAX_SUPPORTED.length; i++) {
     const p = parts[i] ?? 0;
     if (p < MAX_SUPPORTED[i]) return true;

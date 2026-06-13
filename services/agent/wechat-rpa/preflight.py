@@ -115,6 +115,8 @@ def decide_wechat_action(version_tuple: Optional[Tuple[int, ...]]) -> str:
     head = head + (0,) * (3 - len(head))
     if head >= MIN_BLOCKED_VERSION:
         return "downgrade"
+    if head < (4, 0, 0):
+        return "install"  # 3.x 无 mmui::MainWindow，需安装 4.1.8
     return "ok"
 
 
