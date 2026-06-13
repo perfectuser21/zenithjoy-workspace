@@ -50,6 +50,11 @@ except Exception as exc:  # pragma: no cover
 # 自动回模式下中台 AI 失败时 reply 为 undefined；万一拿到占位文案也必须跳过不发给客户。
 FAIL_PLACEHOLDER = "AI 生成失败（请人审决定是否重试）"
 
+# 离屏静默模式（默认 True）：SW_SHOWNA 还原托盘后立即把窗口移到 (-2600, 60) 屏幕外，
+# 用户看不到微信弹窗；UIA 控件树在离屏位置仍完整可用。
+# 设为 False 则保留"弹窗模式"：窗口短暂出现在屏幕上，行为与 v1.0.20 以前相同。
+_OFFSCREEN_REPLY = True
+
 # 会话列表里要过滤掉的系统/非客户账号（按 element_info.name 首行匹配）。
 SKIP_SENDERS = (
     "公众号",
@@ -123,14 +128,24 @@ def _ensure_tray_visible(mw: Any) -> bool:
 
     托盘场景：窗口存在但隐藏 → mmui 虚拟列表 UIA name 不实时更新 → scan_unread 角标永远看不到。
     SW_SHOWNA=8：还原到非最小化可见状态，但不激活/不抢焦点（用户几乎无感知）。
+    _OFFSCREEN_REPLY=True（默认）：还原后立即 SetWindowPos(-2600,60) 移到屏幕外，用户看不到弹窗。
+    _OFFSCREEN_REPLY=False：保留弹窗模式，窗口短暂出现在屏幕上（与 v1.0.20 以前行为相同）。
     调用方扫完后若返回 True 须调 _restore_tray 送回托盘。
     """
     import ctypes as _ct
+    import ctypes.wintypes as _wt
     try:
         _hwnd = mw.element_info.handle
         if _hwnd and not _ct.windll.user32.IsWindowVisible(_hwnd):
             _ct.windll.user32.ShowWindow(_hwnd, 8)  # SW_SHOWNA = 8
             time.sleep(0.35)  # 等 Qt 重建 UIA 虚拟列表渲染
+            if _OFFSCREEN_REPLY:
+                # 窗口已还原但在可见区 → 移到屏幕外，用户无感知，UIA 仍可用
+                _rc = _wt.RECT()
+                _ct.windll.user32.GetWindowRect(_hwnd, _ct.byref(_rc))
+                if _rc.left > -2000:
+                    _SWP = 0x0001 | 0x0004 | 0x0010  # NOSIZE | NOZORDER | NOACTIVATE
+                    _ct.windll.user32.SetWindowPos(_hwnd, 0, -2600, 60, 0, 0, _SWP)
             return True
     except Exception:
         pass

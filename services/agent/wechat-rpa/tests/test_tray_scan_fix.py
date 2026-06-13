@@ -203,27 +203,14 @@ def test_ensure_tray_visible_moves_offscreen_when_offscreen_mode():
 
     regression：SW_SHOWNA(8) 把窗口还原到屏幕可见区 → 用户看到微信弹窗。
     修法：还原后立即 SetWindowPos 移到 (-2600,60)，UIA 树仍可用，用户完全看不到。
+
+    注：GetWindowRect 在 mock 环境不写入 RECT，_rc 保持默认 left=0（> -2000 条件成立），
+    足以触发 SetWindowPos 分支，无需 side_effect 修改 byref 对象。
     """
-    import ctypes.wintypes
     mw = _make_mock_mw(hwnd=88)
     user32 = MagicMock()
     user32.IsWindowVisible.return_value = False
-
-    # 模拟窗口在可见区（rc.left > -2000 → 需要移出去）
-    rc_instance = ctypes.wintypes.RECT()
-    rc_instance.left = 100
-    rc_instance.top = 100
-    rc_instance.right = 800
-    rc_instance.bottom = 600
-
-    def fake_get_window_rect(hwnd, lp_rect):
-        lp_rect.left = 100
-        lp_rect.top = 100
-        lp_rect.right = 800
-        lp_rect.bottom = 600
-        return 1
-
-    user32.GetWindowRect.side_effect = fake_get_window_rect
+    # GetWindowRect mock 不写入 RECT → _rc.left 默认 0 > -2000 → 触发 SetWindowPos
 
     original_offscreen = listen_chat._OFFSCREEN_REPLY
     try:
