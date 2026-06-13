@@ -17,6 +17,7 @@ import {
   WECHAT_DOWNLOAD_URL,
   runPreflight,
   getModulePython,
+  checkWechatVersion,
   checkWechatRunning,
   downloadFile,
   installWeChat,
@@ -82,6 +83,100 @@ describe('注册表输出解析（mock reg query stdout）', () => {
   });
   it('无 Version 字段返回 null', () => {
     expect(parseWechatVersionFromRegOutput('一些无关输出')).toBeNull();
+  });
+});
+
+describe('checkWechatVersion — 4.x Weixin 目录回退检测（regression: 曾漏检导致反复卸装）', () => {
+  afterEach(() => {
+    delete process.env.MOCK_WECHAT_VERSION;
+    vi.restoreAllMocks();
+    vi.mocked(execSync).mockReset();
+  });
+
+  it('MOCK_WECHAT_VERSION=4.1.8.107 → ok:true（环境变量 mock 路径仍正常）', () => {
+    process.env.MOCK_WECHAT_VERSION = '4.1.8.107';
+    const r = checkWechatVersion();
+    expect(r.ok).toBe(true);
+    expect(r.found).toBe('4.1.8.107');
+  });
+
+  it('reg query HKCU\\SOFTWARE\\Tencent\\Weixin 返回 4.1.8.107 → ok:true（4.x 注册表路径）', () => {
+    const origPlatform = process.platform;
+    Object.defineProperty(process, 'platform', { value: 'win32', configurable: true });
+    vi.mocked(execSync).mockImplementation((cmd: unknown) => {
+      const c = String(cmd);
+      if (c.includes('Tencent\\\\Weixin') || c.includes('Tencent\\Weixin')) {
+        return 'HKEY_CURRENT_USER\\SOFTWARE\\Tencent\\Weixin\r\n    Version    REG_SZ    4.1.8.107\r\n' as any;
+      }
+      throw new Error('not found');
+    });
+    const r = checkWechatVersion();
+    Object.defineProperty(process, 'platform', { value: origPlatform, configurable: true });
+    expect(r.ok).toBe(true);
+    expect(r.found).toBe('4.1.8.107');
+  });
+
+  it('注册表全失败 + C:\\Program Files\\Tencent\\Weixin\\4.1.8.107\\ 目录存在 → ok:true（4.x 目录回退）', () => {
+    const origPlatform = process.platform;
+    Object.defineProperty(process, 'platform', { value: 'win32', configurable: true });
+    vi.mocked(execSync).mockImplementation(() => { throw new Error('not found'); });
+    vi.spyOn(fs, 'existsSync').mockImplementation((p) =>
+      String(p).toLowerCase().includes('program files\\tencent\\weixin')
+    );
+    vi.spyOn(fs, 'readdirSync').mockImplementation((p) => {
+      if (String(p).toLowerCase().includes('program files\\tencent\\weixin')) {
+        return [{ name: '4.1.8.107', isDirectory: () => true }] as any;
+      }
+      return [] as any;
+    });
+    const r = checkWechatVersion();
+    Object.defineProperty(process, 'platform', { value: origPlatform, configurable: true });
+    expect(r.ok).toBe(true);
+    expect(r.found).toBe('4.1.8.107');
+  });
+});
+
+describe('installWeChat — WeixinUpdate.exe 版本子目录锁定（regression: v1.0.23 路径写死在根目录）', () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  function mockDownload() {
+    vi.spyOn(https, 'get').mockImplementation((_url: any, cb: any) => {
+      const fakeRes = {
+        pipe: vi.fn(),
+        on: (ev: string, fn: () => void) => { if (ev === 'end') fn(); return fakeRes; },
+      } as any;
+      setImmediate(() => cb(fakeRes));
+      return { on: vi.fn() } as any;
+    });
+    vi.spyOn(fs, 'createWriteStream').mockReturnValue({
+      on: (_ev: string, fn: () => void) => { fn(); return {}; },
+      close: (fn: () => void) => fn(),
+    } as any);
+  }
+
+  it('WeixinUpdate.exe 在版本子目录（如 4.1.8.107\\WeixinUpdate.exe）也能被重命名 .disabled', async () => {
+    mockDownload();
+    vi.spyOn(childProcessModule, 'spawnSync').mockReturnValue({ status: 0 } as any);
+    // 根目录无 WeixinUpdate.exe，但版本子目录有
+    const subPath = 'C:\\Program Files\\Tencent\\Weixin\\4.1.8.107\\WeixinUpdate.exe';
+    vi.spyOn(fs, 'existsSync').mockImplementation((p) => String(p) === subPath);
+    vi.spyOn(fs, 'readdirSync').mockImplementation((p) => {
+      if (String(p).toLowerCase().includes('program files\\tencent\\weixin') &&
+          !String(p).includes('4.1.8.107')) {
+        return [{ name: '4.1.8.107', isDirectory: () => true }] as any;
+      }
+      return [] as any;
+    });
+    const renameSyncMock = vi.spyOn(fs, 'renameSync').mockImplementation(() => undefined);
+
+    await installWeChat(os.tmpdir());
+
+    const lockCall = renameSyncMock.mock.calls.find(([src]) =>
+      String(src).toLowerCase().includes('weixinupdate.exe') &&
+      !String(src).toLowerCase().endsWith('.disabled')
+    );
+    expect(lockCall).toBeDefined();
+    expect(String(lockCall![1]).toLowerCase()).toBe(String(lockCall![0]).toLowerCase() + '.disabled');
   });
 });
 
