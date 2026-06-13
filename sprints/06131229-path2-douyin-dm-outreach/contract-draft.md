@@ -1,4 +1,4 @@
-# Sprint Contract Draft (Round 2) — Path 2 抖音私信主动触达 thin v1
+# Sprint Contract Draft (Round 3) — Path 2 抖音私信主动触达 thin v1
 
 ## 已知约束（来自回归测试）
 
@@ -75,9 +75,10 @@ C=$(psql "$DB" -t -A -c "SELECT count(*) FROM zenithjoy.publish_tasks WHERE id='
 
 **验证命令**:
 ```bash
-curl -sf -X POST "$API_BASE/api/_smoke/fake-agent-burner-progress" \
+PROG=$(curl -sf -X POST "$API_BASE/api/_smoke/fake-agent-burner-progress" \
   -H "X-Smoke-Token: $SMOKE_TOKEN" -H "Content-Type: application/json" \
-  -d "{\"task_id\":\"$DM_TASK_ID\",\"phase\":\"dm_in_progress\",\"current_url\":\"https://www.douyin.com/user/MS4waaa\"}" >/dev/null
+  -d "{\"task_id\":\"$DM_TASK_ID\",\"phase\":\"dm_in_progress\",\"current_url\":\"https://www.douyin.com/user/MS4waaa\"}")
+echo "$PROG" | jq -e '.success == true' || { echo "FAIL: 触达中态注入未成功"; exit 1; }
 PHASE=$(psql "$DB" -t -A -c "SELECT response->>'phase' FROM zenithjoy.publish_tasks WHERE id='$DM_TASK_ID' AND status='running' AND updated_at > NOW() - interval '60 seconds'" | tr -d ' ')
 [ "$PHASE" = "dm_in_progress" ] || { echo "FAIL: 触达中态未记录 (phase=$PHASE)"; exit 1; }
 ```
@@ -119,8 +120,10 @@ echo "$REC" | jq -e '(.["触达小号"] | length > 0) and (.["触达时间"] | l
 **验证命令**:
 ```bash
 # 新派一单走 limited 分支
-DM2=$(curl -sf -X POST "$API_BASE/api/agent/burner/dm-outreach" -H "Content-Type: application/json" \
-  -d "{\"tenant_id\":\"$TENANT_ID\",\"agent_id\":\"$AGENT_ID\",\"account_label\":\"$LABEL\",\"profile_url\":\"https://www.douyin.com/user/MS4wbbb\",\"message\":\"hi\"}" | jq -r '.data.task_id')
+DM2_RESP=$(curl -sf -X POST "$API_BASE/api/agent/burner/dm-outreach" -H "Content-Type: application/json" \
+  -d "{\"tenant_id\":\"$TENANT_ID\",\"agent_id\":\"$AGENT_ID\",\"account_label\":\"$LABEL\",\"profile_url\":\"https://www.douyin.com/user/MS4wbbb\",\"message\":\"hi\"}")
+echo "$DM2_RESP" | jq -e '.success == true and (.data.task_id | type == "string")' || { echo "FAIL: limited 分支派单未成功"; exit 1; }
+DM2=$(echo "$DM2_RESP" | jq -r '.data.task_id')
 RESP=$(curl -sf -X POST "$API_BASE/api/agent/burner/dm-outreach-result" \
   -H "X-Smoke-Token: $SMOKE_TOKEN" -H "Content-Type: application/json" \
   -d "{\"task_id\":\"$DM2\",\"agent_id\":\"$AGENT_ID\",\"account_label\":\"$LABEL\",\"status\":\"limited\",\"profile_url\":\"https://www.douyin.com/user/MS4wbbb\"}")
@@ -145,8 +148,10 @@ echo "$ALL" | jq -e '[.records[] | select(.["触达主页 URL"]=="https://www.do
 ```bash
 # 预置同 agent 第二个 burner 号（验证不连坐）
 psql "$DB" -c "INSERT INTO zenithjoy.agent_platform_sessions (agent_id, platform, account_label, role, status, bound_at, created_at) VALUES ('$AGENT_ID','douyin','装修小号2','burner','active',NOW(),NOW()) ON CONFLICT (agent_id,platform,account_label) DO UPDATE SET status='active'" >/dev/null
-DM3=$(curl -sf -X POST "$API_BASE/api/agent/burner/dm-outreach" -H "Content-Type: application/json" \
-  -d "{\"tenant_id\":\"$TENANT_ID\",\"agent_id\":\"$AGENT_ID\",\"account_label\":\"$LABEL\",\"profile_url\":\"https://www.douyin.com/user/MS4wccc\",\"message\":\"hi\"}" | jq -r '.data.task_id')
+DM3_RESP=$(curl -sf -X POST "$API_BASE/api/agent/burner/dm-outreach" -H "Content-Type: application/json" \
+  -d "{\"tenant_id\":\"$TENANT_ID\",\"agent_id\":\"$AGENT_ID\",\"account_label\":\"$LABEL\",\"profile_url\":\"https://www.douyin.com/user/MS4wccc\",\"message\":\"hi\"}")
+echo "$DM3_RESP" | jq -e '.success == true and (.data.task_id | type == "string")' || { echo "FAIL: failed 分支派单未成功"; exit 1; }
+DM3=$(echo "$DM3_RESP" | jq -r '.data.task_id')
 RESP=$(curl -sf -X POST "$API_BASE/api/agent/burner/dm-outreach-result" \
   -H "X-Smoke-Token: $SMOKE_TOKEN" -H "Content-Type: application/json" \
   -d "{\"task_id\":\"$DM3\",\"agent_id\":\"$AGENT_ID\",\"account_label\":\"$LABEL\",\"status\":\"failed\",\"error_code\":\"SESSION_EXPIRED\",\"profile_url\":\"https://www.douyin.com/user/MS4wccc\"}")
@@ -225,7 +230,8 @@ set -euo pipefail
 [ -z "${DB:-}" ] && { echo "FAIL: DB 未设置"; exit 99; }
 [ -z "${FEISHU_API_BASE:-}" ] && { echo "FAIL: 未设置 FEISHU_API_BASE，CI 模式必须指向 fake server"; exit 99; }
 [ -z "${SMOKE_TOKEN:-}" ] && { echo "FAIL: SMOKE_TOKEN 未设置"; exit 99; }
-curl -fsS -X POST "${FEISHU_API_BASE}/__test/reset" >/dev/null || true
+RESET_CODE=$(curl -s -o /dev/null -w '%{http_code}' -X POST "${FEISHU_API_BASE}/__test/reset")
+[ "$RESET_CODE" = "200" ] || { echo "FAIL: fake-feishu reset 失败 code=$RESET_CODE"; exit 1; }
 
 # ── 前置：建 tenant + 飞书 binding + agent + active burner session ──
 TENANT_ID=$(psql "$DB" -At -c "INSERT INTO zenithjoy.tenants (name, license_key, plan) VALUES ('smoke-dm-${RANDOM}', 'smoke-dm-key-${RANDOM}', 'free') RETURNING id" | grep -oE '[0-9a-f-]{36}' | head -1)
