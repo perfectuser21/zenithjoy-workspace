@@ -196,3 +196,65 @@ def test_reply_in_chat_visible_no_extra_showna():
         listen_chat.reply_in_chat(mw, item, "hello", sender="于瑾")
 
     user32.ShowWindow.assert_not_called()
+
+
+def test_ensure_tray_visible_moves_offscreen_when_offscreen_mode():
+    """_OFFSCREEN_REPLY=True 时 _ensure_tray_visible 必须在 ShowWindow(8) 之后调 SetWindowPos(-2600, 60)。
+
+    regression：SW_SHOWNA(8) 把窗口还原到屏幕可见区 → 用户看到微信弹窗。
+    修法：还原后立即 SetWindowPos 移到 (-2600,60)，UIA 树仍可用，用户完全看不到。
+    """
+    import ctypes.wintypes
+    mw = _make_mock_mw(hwnd=88)
+    user32 = MagicMock()
+    user32.IsWindowVisible.return_value = False
+
+    # 模拟窗口在可见区（rc.left > -2000 → 需要移出去）
+    rc_instance = ctypes.wintypes.RECT()
+    rc_instance.left = 100
+    rc_instance.top = 100
+    rc_instance.right = 800
+    rc_instance.bottom = 600
+
+    def fake_get_window_rect(hwnd, lp_rect):
+        lp_rect.left = 100
+        lp_rect.top = 100
+        lp_rect.right = 800
+        lp_rect.bottom = 600
+        return 1
+
+    user32.GetWindowRect.side_effect = fake_get_window_rect
+
+    original_offscreen = listen_chat._OFFSCREEN_REPLY
+    try:
+        listen_chat._OFFSCREEN_REPLY = True
+        with _mock_windll(user32), patch("time.sleep"):
+            listen_chat._ensure_tray_visible(mw)
+    finally:
+        listen_chat._OFFSCREEN_REPLY = original_offscreen
+
+    # 必须先 ShowWindow(8)，再 SetWindowPos 到 (-2600, 60)
+    user32.ShowWindow.assert_called_with(88, 8)
+    setpos_calls = user32.SetWindowPos.call_args_list
+    assert len(setpos_calls) >= 1, "必须调 SetWindowPos 把窗口移到屏幕外"
+    args = setpos_calls[0][0]  # positional args: (hwnd, hWndInsertAfter, x, y, cx, cy, flags)
+    assert args[2] == -2600, f"x 坐标必须是 -2600，实际是 {args[2]}"
+    assert args[3] == 60,    f"y 坐标必须是 60，实际是 {args[3]}"
+
+
+def test_ensure_tray_visible_no_setwindowpos_when_offscreen_mode_off():
+    """_OFFSCREEN_REPLY=False 时 _ensure_tray_visible 只调 ShowWindow(8)，不移出屏幕（保留弹窗模式）。"""
+    mw = _make_mock_mw(hwnd=89)
+    user32 = MagicMock()
+    user32.IsWindowVisible.return_value = False
+
+    original_offscreen = listen_chat._OFFSCREEN_REPLY
+    try:
+        listen_chat._OFFSCREEN_REPLY = False
+        with _mock_windll(user32), patch("time.sleep"):
+            listen_chat._ensure_tray_visible(mw)
+    finally:
+        listen_chat._OFFSCREEN_REPLY = original_offscreen
+
+    user32.ShowWindow.assert_called_with(89, 8)
+    user32.SetWindowPos.assert_not_called()
