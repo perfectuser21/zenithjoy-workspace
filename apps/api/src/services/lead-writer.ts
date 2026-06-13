@@ -109,3 +109,55 @@ export async function writeLeadsFromComments(
     lead_write_status: 'success',
   };
 }
+
+// ── Path 2 抖音私信主动触达 — 触达状态回写 Lead 表 ──
+//
+// 一次触达 = 写一条记录（触达状态 / 触达主页 URL / 触达时间 / 触达小号 / 失败原因）。
+// 映射与 agent handler douyin-dm-outreach.mapDmStatusToFeishu 保持一致（刻意不跨包 import，
+//   避免把 services/agent 拉进 apps/api 构建边界）：sent→已私信 / limited→未送达-仅互关 / failed→失败。
+// limited 绝不写「已私信」（禁止假 sent）。
+
+export type DmStatus = 'sent' | 'limited' | 'failed';
+
+const DM_STATUS_TO_FEISHU: Record<DmStatus, string> = {
+  sent: '已私信',
+  limited: '未送达-仅互关',
+  failed: '失败',
+};
+
+export interface WriteDmOutreachParams {
+  tenant_id: string;
+  table_id_leads: string;
+  profile_url: string;
+  account_label: string;
+  dm_status: DmStatus;
+  error_code?: string | null;
+  reached_at?: string;
+}
+
+export interface WriteDmOutreachResult {
+  lead_write_status: 'success' | 'failed';
+  error?: string;
+}
+
+export async function writeDmOutreachStatus(
+  params: WriteDmOutreachParams,
+): Promise<WriteDmOutreachResult> {
+  const { tenant_id, table_id_leads, profile_url, account_label, dm_status, error_code } = params;
+  const now = params.reached_at || new Date().toISOString();
+
+  const fields: Record<string, unknown> = {
+    触达状态: DM_STATUS_TO_FEISHU[dm_status] ?? '失败',
+    '触达主页 URL': profile_url,
+    触达时间: now,
+    触达小号: account_label,
+    失败原因: dm_status === 'failed' ? error_code || '' : '',
+  };
+
+  try {
+    await writeOneWithRetry(tenant_id, table_id_leads, fields);
+    return { lead_write_status: 'success' };
+  } catch (err) {
+    return { lead_write_status: 'failed', error: (err as Error).message };
+  }
+}

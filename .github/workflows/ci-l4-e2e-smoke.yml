@@ -373,6 +373,18 @@ jobs:
           chmod +x .github/workflows/scripts/smoke/golden-path-2-b1-smoke.sh
           bash .github/workflows/scripts/smoke/golden-path-2-b1-smoke.sh
 
+      # ─── Path 2 抖音私信主动触达 smoke（fake-agent 派单→回报→飞书回写）─────────
+      - name: Smoke — Path 2 抖音私信主动触达 Golden Path (dm_outreach)
+        env:
+          API_BASE: http://localhost:5200
+          DB: postgresql://cecelia:cecelia@localhost:5432/cecelia
+          FEISHU_API_BASE: http://localhost:3099
+          SMOKE_TOKEN: smoke-secret-2026
+        run: |
+          curl -fsS -X POST "$FEISHU_API_BASE/__test/reset" || true
+          chmod +x .github/workflows/scripts/smoke/golden-path-2-dm-smoke.sh
+          bash .github/workflows/scripts/smoke/golden-path-2-dm-smoke.sh
+
       - name: Smoke — Step 6 Dispatch Chain WS2 (dispatchPublishTask + ackPublishTask)
         env:
           API_BASE: http://localhost:5200

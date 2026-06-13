@@ -11,7 +11,7 @@ vi.mock('../../src/services/feishu-bitable-multitenant', () => ({
   BitableNotFoundError: class extends Error {},
 }));
 
-import { writeLeadsFromComments } from '../../src/services/lead-writer';
+import { writeLeadsFromComments, writeDmOutreachStatus } from '../../src/services/lead-writer';
 import { writeRecord } from '../../src/services/feishu-bitable-multitenant';
 
 const tenantId = '11111111-2222-3333-4444-555555555555';
@@ -98,5 +98,69 @@ describe('Workstream 4 — writeLeadsFromComments [BEHAVIOR]', () => {
     });
     expect(result.lead_write_status).toBe('failed');
     expect(result.error).toMatch(/FEISHU/);
+  });
+});
+
+describe('Path 2 抖音私信主动触达 — writeDmOutreachStatus [BEHAVIOR]', () => {
+  const dmProfile = 'https://www.douyin.com/user/MS4wDM';
+
+  it('sent → 触达状态=已私信 + 触达小号/触达时间非空 + 失败原因空', async () => {
+    (writeRecord as any).mockResolvedValue({ record_id: 'rec_dm' });
+    const r = await writeDmOutreachStatus({
+      tenant_id: tenantId,
+      table_id_leads: tableIdLeads,
+      profile_url: dmProfile,
+      account_label: '装修小号1',
+      dm_status: 'sent',
+    });
+    expect(r.lead_write_status).toBe('success');
+    const fields = (writeRecord as any).mock.calls[0][2];
+    expect(fields['触达状态']).toBe('已私信');
+    expect(fields['触达主页 URL']).toBe(dmProfile);
+    expect((fields['触达小号'] as string).length).toBeGreaterThan(0);
+    expect((fields['触达时间'] as string).length).toBeGreaterThan(0);
+    expect(fields['失败原因']).toBe('');
+  });
+
+  it('limited → 触达状态=未送达-仅互关（禁止假 sent）', async () => {
+    (writeRecord as any).mockResolvedValue({ record_id: 'rec_dm' });
+    await writeDmOutreachStatus({
+      tenant_id: tenantId,
+      table_id_leads: tableIdLeads,
+      profile_url: dmProfile,
+      account_label: '装修小号1',
+      dm_status: 'limited',
+    });
+    const fields = (writeRecord as any).mock.calls[0][2];
+    expect(fields['触达状态']).toBe('未送达-仅互关');
+    expect(fields['触达状态']).not.toBe('已私信');
+  });
+
+  it('failed → 触达状态=失败 + 失败原因=error_code', async () => {
+    (writeRecord as any).mockResolvedValue({ record_id: 'rec_dm' });
+    await writeDmOutreachStatus({
+      tenant_id: tenantId,
+      table_id_leads: tableIdLeads,
+      profile_url: dmProfile,
+      account_label: '装修小号1',
+      dm_status: 'failed',
+      error_code: 'SESSION_EXPIRED',
+    });
+    const fields = (writeRecord as any).mock.calls[0][2];
+    expect(fields['触达状态']).toBe('失败');
+    expect(fields['失败原因']).toBe('SESSION_EXPIRED');
+  });
+
+  it('writeRecord 抛错 → lead_write_status=failed', async () => {
+    (writeRecord as any).mockRejectedValue(new Error('FEISHU_DOWN'));
+    const r = await writeDmOutreachStatus({
+      tenant_id: tenantId,
+      table_id_leads: tableIdLeads,
+      profile_url: dmProfile,
+      account_label: '装修小号1',
+      dm_status: 'sent',
+    });
+    expect(r.lead_write_status).toBe('failed');
+    expect(r.error).toMatch(/FEISHU/);
   });
 });
