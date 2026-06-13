@@ -60,11 +60,24 @@ export function isWechatVersionSupported(version: string): boolean {
   return true; // 前三段全等（4.1.8.x）→ 受支持
 }
 
-// 微信 REG_DWORD 编码：高字节 = 0x60 + major，其余依次 minor/patch/build。
-// 例：4.1.8.107 → 0x6401086b。
+// WeChat/Weixin DWORD 有两种编码：
+//   3.x（高字节 = 0x60+major）：4.1.8.107 → 0x6401086b
+//   4.x（nibble-packed，byte0 ≥ 0x70）：4.1.8.107 → 0xf254186b
+//     byte[1] 低 4 位 = major, byte[2] 高 4 位 = minor, byte[2] 低 4 位 = patch, byte[3] = build
+// 实测：xian-rog HKCU\SOFTWARE\Tencent\Weixin Version = 0xf254186b（Weixin 4.1.8.107 安装）
 function decodeWechatDword(hex: string): string {
   const num = parseInt(hex, 16) >>> 0;
-  const major = ((num >> 24) & 0xff) - 0x60;
+  const byte0 = (num >> 24) & 0xff;
+  if (byte0 >= 0x70) {
+    // Weixin 4.x nibble-packed encoding
+    const major = (num >> 16) & 0x0f;
+    const minor = (num >> 12) & 0x0f;
+    const patch = (num >> 8) & 0x0f;
+    const build = num & 0xff;
+    return `${major}.${minor}.${patch}.${build}`;
+  }
+  // WeChat 3.x offset encoding: byte0 = major + 0x60
+  const major = byte0 - 0x60;
   const minor = (num >> 16) & 0xff;
   const patch = (num >> 8) & 0xff;
   const build = num & 0xff;
