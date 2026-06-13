@@ -159,10 +159,14 @@ describe('installWeChat — WeixinUpdate.exe 版本子目录锁定（regression:
     vi.spyOn(childProcessModule, 'spawnSync').mockReturnValue({ status: 0 } as any);
     // 根目录无 WeixinUpdate.exe，但版本子目录有
     const subPath = 'C:\\Program Files\\Tencent\\Weixin\\4.1.8.107\\WeixinUpdate.exe';
-    vi.spyOn(fs, 'existsSync').mockImplementation((p) => String(p) === subPath);
+    // 路径分隔符在 macOS（path.join 用 /）与 Windows（\\）不同，统一 normalize
+    const norm = (s: string) => String(s).replace(/\\/g, '/').toLowerCase();
+    vi.spyOn(fs, 'existsSync').mockImplementation((p) =>
+      norm(p) === norm(subPath) ||
+      norm(p) === 'c:/program files/tencent/weixin'
+    );
     vi.spyOn(fs, 'readdirSync').mockImplementation((p) => {
-      if (String(p).toLowerCase().includes('program files\\tencent\\weixin') &&
-          !String(p).includes('4.1.8.107')) {
+      if (norm(p).includes('program files/tencent/weixin') && !norm(p).includes('4.1.8.107')) {
         return [{ name: '4.1.8.107', isDirectory: () => true }] as any;
       }
       return [] as any;
@@ -171,12 +175,12 @@ describe('installWeChat — WeixinUpdate.exe 版本子目录锁定（regression:
 
     await installWeChat(os.tmpdir());
 
-    const lockCall = renameSyncMock.mock.calls.find(([src]) =>
-      String(src).toLowerCase().includes('weixinupdate.exe') &&
-      !String(src).toLowerCase().endsWith('.disabled')
-    );
+    const lockCall = renameSyncMock.mock.calls.find(([src]) => {
+      const s = norm(src);
+      return s.includes('weixinupdate.exe') && !s.endsWith('.disabled');
+    });
     expect(lockCall).toBeDefined();
-    expect(String(lockCall![1]).toLowerCase()).toBe(String(lockCall![0]).toLowerCase() + '.disabled');
+    expect(norm(lockCall![1])).toBe(norm(lockCall![0]) + '.disabled');
   });
 });
 
@@ -318,7 +322,7 @@ describe('checkWechatRunning — 微信进程检测（软检测）', () => {
 });
 
 describe('installWeChat — 下载并静默安装微信 4.1.8', () => {
-  afterEach(() => vi.restoreAllMocks());
+  afterEach(() => { vi.clearAllMocks(); vi.restoreAllMocks(); });
 
   it('spawn 参数含 /S 静默标志', async () => {
     vi.spyOn(https, 'get').mockImplementation((_url: any, cb: any) => {
@@ -486,9 +490,10 @@ describe('installWeChat — 下载并静默安装微信 4.1.8', () => {
   it('安装 4.1.8 后立即将 WeixinUpdate.exe 重命名 .disabled，防自动升级循环', async () => {
     mockDownload();
     vi.spyOn(childProcessModule, 'spawnSync').mockReturnValue({ status: 0 } as any);
-    // 模拟安装完成后 WeixinUpdate.exe 存在于 Weixin 目录
+    // 模拟安装完成后 WeixinUpdate.exe 存在于 Weixin 根目录（findWeixinUpdateExe 先检查根目录是否存在）
     vi.spyOn(fs, 'existsSync').mockImplementation((p) =>
-      String(p).toLowerCase().includes('weixinupdate.exe')
+      String(p).toLowerCase().includes('weixinupdate.exe') ||
+      String(p).toLowerCase() === 'c:\\program files\\tencent\\weixin'
     );
     const renameSyncMock = vi.spyOn(fs, 'renameSync').mockImplementation(() => undefined);
 
