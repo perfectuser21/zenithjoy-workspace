@@ -36,7 +36,9 @@ const node_fs_1 = __importDefault(require("node:fs"));
 const node_https_1 = __importDefault(require("node:https"));
 // 旧版微信 COS 直链下载地址（客户降级用）。
 exports.WECHAT_DOWNLOAD_URL = 'https://zenithjoy-static-1333590468.cos.accelerate.myqcloud.com/install-pack/wechat/WeChatWin_4.1.8.exe';
-// 受支持的微信版本上限（含）：4.1.8.x。前三段 > 4.1.8 视为不支持。
+// 受支持微信版本范围：[4.0.0, 4.1.8.x]（含两端）。
+// 3.x 使用不同窗口类（WeChatMainWndForPC），无 mmui::MainWindow，RPA 不可用。
+const MIN_SUPPORTED = [4, 0, 0];
 const MAX_SUPPORTED = [4, 1, 8];
 const MIN_MEMORY_BYTES = 4 * 1024 ** 3;
 // ---------- 纯函数：版本解析与比较 ----------
@@ -50,9 +52,12 @@ function parseVersionParts(version) {
         return Number.isFinite(v) ? v : 0;
     });
 }
-// version <= 4.1.8.x 返回 true（受支持）。只比较前三段，build 段忽略。
+// version ∈ [4.0.0, 4.1.8.x] 返回 true（受支持）。只比较前三段，build 段忽略。
 function isWechatVersionSupported(version) {
     const parts = parseVersionParts(version);
+    // 低于 4.0.0（3.x）：无 mmui::MainWindow，RPA 不可用
+    if ((parts[0] ?? 0) < MIN_SUPPORTED[0])
+        return false;
     for (let i = 0; i < MAX_SUPPORTED.length; i++) {
         const p = parts[i] ?? 0;
         if (p < MAX_SUPPORTED[i])

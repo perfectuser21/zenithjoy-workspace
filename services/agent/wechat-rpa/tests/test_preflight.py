@@ -46,11 +46,18 @@ def test_decide_install_when_none():
 
 
 def test_decide_ok_for_4_1_8_and_below():
-    """<=4.1.8.x → ok（已验证可用基线）。"""
+    """4.0.0 ~ 4.1.8.x → ok（已验证可用基线）。"""
     assert decide_wechat_action((4, 1, 8, 107)) == "ok"
     assert decide_wechat_action((4, 1, 8)) == "ok"
     assert decide_wechat_action((4, 0, 5, 20)) == "ok"
     assert decide_wechat_action((4, 1, 7, 999)) == "ok"
+    assert decide_wechat_action((4, 0, 0)) == "ok"   # 最低支持版本
+
+
+def test_decide_install_for_3_x():
+    """3.x 旧版 → install（无 mmui::MainWindow，需安装 4.1.8）。"""
+    assert decide_wechat_action((3, 9, 12, 51)) == "install"
+    assert decide_wechat_action((3, 0, 0, 0)) == "install"
 
 
 def test_decide_downgrade_for_4_1_9_and_above():

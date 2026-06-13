@@ -55,8 +55,14 @@ describe('微信版本比较（纯函数，<= 4.1.8.x 为支持）', () => {
   it('4.2.0 → 不支持', () => {
     expect(isWechatVersionSupported('4.2.0')).toBe(false);
   });
-  it('3.9.12.19 旧版 → 支持', () => {
-    expect(isWechatVersionSupported('3.9.12.19')).toBe(true);
+  it('3.9.12.19 旧版 3.x → 不支持（无 mmui::MainWindow，RPA 不可用）', () => {
+    expect(isWechatVersionSupported('3.9.12.19')).toBe(false);
+  });
+  it('3.0.0.0 更老版本 → 不支持', () => {
+    expect(isWechatVersionSupported('3.0.0.0')).toBe(false);
+  });
+  it('4.0.0 = 最低支持版本 → 支持', () => {
+    expect(isWechatVersionSupported('4.0.0')).toBe(true);
   });
   it('parseVersionParts 缺失段按 0 处理', () => {
     expect(parseVersionParts('4.1')).toEqual([4, 1]);

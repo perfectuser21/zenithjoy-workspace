@@ -59,7 +59,23 @@ def test_4_1_8_edge_allowed():
     assert _parse_and_check("4.1.8") is None
 
 
-# ---------- _parse_and_check：阻断 ----------
+# ---------- _parse_and_check：3.x 阻断（过低版本，mmui::MainWindow 不存在）----------
+
+
+def test_3_x_version_blocked():
+    """3.9.12.51（WeChat 3.x）→ 抛 RuntimeError（无 mmui::MainWindow）。"""
+    with pytest.raises(RuntimeError) as exc:
+        _parse_and_check("3.9.12.51")
+    assert "3.9" in str(exc.value)
+
+
+def test_3_0_version_blocked():
+    """3.0.0.0 → 抛 RuntimeError。"""
+    with pytest.raises(RuntimeError):
+        _parse_and_check("3.0.0.0")
+
+
+# ---------- _parse_and_check：阻断（过高版本）----------
 
 
 def test_4_1_9_blocked():
