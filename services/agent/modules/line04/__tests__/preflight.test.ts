@@ -77,8 +77,15 @@ describe('注册表输出解析（mock reg query stdout）', () => {
       '\r\nHKEY_LOCAL_MACHINE\\SOFTWARE\\Tencent\\WeChat\r\n    Version    REG_SZ    4.1.8.107\r\n';
     expect(parseWechatVersionFromRegOutput(out)).toBe('4.1.8.107');
   });
-  it('解析 REG_DWORD 编码版本（4.1.8.107 = 0x6401086b）', () => {
+  it('解析 REG_DWORD 编码版本（4.1.8.107 = 0x6401086b，3.x 偏移编码）', () => {
     const out = '    Version    REG_DWORD    0x6401086b';
+    expect(parseWechatVersionFromRegOutput(out)).toBe('4.1.8.107');
+  });
+  it('解析 Weixin 4.x nibble 编码 DWORD（0xf254186b → 4.1.8.107，regression: xian-rog 真实注册表值）', () => {
+    // xian-rog 实测：HKCU\SOFTWARE\Tencent\Weixin Version = REG_DWORD 0xf254186b
+    // 旧公式 major = 0xf2 - 0x60 = 146 → "146.84.24.107" → isSupported=false → 触发卸装循环
+    // 新公式 nibble-packed: major=(num>>16)&0xF=4, minor=(num>>12)&0xF=1, patch=(num>>8)&0xF=8, build=0x6b=107
+    const out = 'HKEY_CURRENT_USER\\SOFTWARE\\Tencent\\Weixin\r\n    Version    REG_DWORD    0xf254186b\r\n';
     expect(parseWechatVersionFromRegOutput(out)).toBe('4.1.8.107');
   });
   it('无 Version 字段返回 null', () => {
