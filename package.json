@@ -31,7 +31,8 @@
   },
   "overrides": {
     "vite": "^7.3.2",
-    "defu": "^6.1.6"
+    "defu": "^6.1.6",
+    "esbuild": "^0.28.1"
   },
   "optionalDependencies": {
     "@rollup/rollup-linux-arm64-gnu": "^4.60.4"
