@@ -290,6 +290,18 @@ async function installWeChat(downloadDir) {
     }
     // 腾讯自研包静默参数是 /S（不是 NSIS 的 /VERYSILENT）
     (0, node_child_process_1.spawnSync)(installer, ['/S'], { windowsHide: true, timeout: 120000 });
+    // 安装后立即锁更新：WeixinUpdate.exe 随包部署，不锁会自动升级到 ≥4.1.9 → 反复卸载重装循环。
+    // Python preflight.py check_lock_update() 做四层加固，这里先做 Layer1（改名）阻断首次自启。
+    (0, node_child_process_1.spawnSync)('taskkill', ['/F', '/IM', 'WeixinUpdate.exe'], { windowsHide: true, stdio: 'ignore' });
+    const updateExe = 'C:\\Program Files\\Tencent\\Weixin\\WeixinUpdate.exe';
+    if (node_fs_1.default.existsSync(updateExe)) {
+        try {
+            node_fs_1.default.renameSync(updateExe, updateExe + '.disabled');
+        }
+        catch {
+            // 非管理员权限改名失败不崩溃；Python preflight.py check_lock_update 会补做四层加固
+        }
+    }
 }
 // ---------- 自动修复：安装 pywinauto ----------
 exports.GET_PIP_URL = 'https://bootstrap.pypa.io/get-pip.py';
