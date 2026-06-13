@@ -1,0 +1,33 @@
+{
+  "initiative_id": "d9db285a-d1e9-4dbd-98d5-06392af0c98b",
+  "journey_type": "agent_remote",
+  "journey_type_reason": "核心是 xian-pc 常驻 agent 通过远端协议接 douyin-dm-outreach handler 驱动真机 chrome，自动 E2E 走 fake-agent 验中台编排 + 飞书回写（local_api）",
+  "tasks": [
+    {
+      "task_id": "ws1",
+      "title": "Path 2 抖音私信主动触达 thin v1：中台 dm_outreach 派单 + agent 回报 + 飞书 Lead 触达状态回写 + 单号停用不连坐",
+      "scope": "中台新增 3 端点（POST /api/agent/burner/dm-outreach 派单落 task_type=dm_outreach/platform=douyin；POST /dm-outreach-result 接 sent/limited/failed+error_code 回报；GET /dm-tasks/:task_id 查状态），复用 agent-burner 派单链路 + tenantContext/agentContext；飞书回写复用 writeRecord 写「触达状态/触达主页 URL/触达时间/触达小号/失败原因」记录到 Lead 表（sent→已私信 / limited→未送达-仅互关 / failed→失败）；error_code∈{SESSION_EXPIRED,RISK} 时把该 burner session status 置 expired（单号停用不连坐）；agent 端新增 douyin-dm-outreach handler（真 CDP semi-button-second 私信按钮+contenteditable+Enter，可注入 page 测试）+ index 注册 + 版本 2.0.13→2.0.14；smoke 脚本 golden-path-2-dm-smoke.sh（fake-agent 模式）。真发 CDP 由 xian-pc 真机手验，不入自动 E2E。",
+      "dod": [
+        "[BEHAVIOR] 派单 → DB 落 task_type=dm_outreach/platform=douyin/status=queued + 返 data.task_id（见 contract-dod.md）",
+        "[BEHAVIOR] sent → task done + dm_status=sent + 飞书新增「已私信」记录 + 查状态终态",
+        "[BEHAVIOR] limited → 飞书写「未送达-仅互关」且不含「已私信」",
+        "[BEHAVIOR] failed+SESSION_EXPIRED → task failed + 该号 expired + 另一号仍 active + 飞书失败原因",
+        "[BEHAVIOR] 查状态端点 schema + 未知 task_id 404 NO_DM_TASK",
+        "[BEHAVIOR] error path 派单守卫错码 MISSING_PROFILE_URL/MISSING_MESSAGE/NO_BURNER_SESSION",
+        "[ARTIFACT] .github/workflows/scripts/smoke/golden-path-2-dm-smoke.sh 存在含真链路",
+        "[ARTIFACT] services/agent/src/handlers/douyin-dm-outreach.ts + index 注册 + 版本 2.0.14"
+      ],
+      "files": [
+        "apps/api/src/routes/agent-burner.ts",
+        "apps/api/src/services/lead-writer.ts",
+        "services/agent/src/handlers/douyin-dm-outreach.ts",
+        "services/agent/src/index.ts",
+        "services/agent/package.json",
+        ".github/workflows/scripts/smoke/golden-path-2-dm-smoke.sh"
+      ],
+      "depends_on": [],
+      "complexity": "M",
+      "estimated_minutes": 110
+    }
+  ]
+}
