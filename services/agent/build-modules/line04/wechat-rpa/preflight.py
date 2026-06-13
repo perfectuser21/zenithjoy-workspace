@@ -36,6 +36,18 @@ import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
+# Windows GBK 控制台无法编码 emoji（✅ ⚠️ ❌），强制 UTF-8 输出避免 UnicodeEncodeError 崩溃
+if hasattr(sys.stdout, "reconfigure"):
+    try:
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
+if hasattr(sys.stderr, "reconfigure"):
+    try:
+        sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
+
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 # find_weixin 顶层零 pywinauto/windll import，安全复用其纯函数与寻址 API。
