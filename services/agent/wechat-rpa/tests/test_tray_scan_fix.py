@@ -273,15 +273,17 @@ def test_ensure_tray_visible_iconic_calls_showna():
 
 
 def test_ensure_tray_visible_iconic_moves_offscreen():
-    """最小化 + _OFFSCREEN_REPLY=True 时，_ensure_tray_visible 必须 SW_SHOWNOACTIVATE(4) + SetWindowPos(-2600, 60)。
+    """最小化 + _OFFSCREEN_REPLY=True 时，_ensure_tray_visible 必须通过 SetWindowPlacement 把窗口移到屏外。
 
-    v1.0.26 bug：IsIconic 被跳过 → SetWindowPos 从未调用 → _uia_send 的 SW_RESTORE=9 激活窗口。
-    v1.0.28 fix：使用 SW_SHOWNOACTIVATE(4) 还原，再立即 SetWindowPos(-2600,60) 移出屏幕。
+    v1.0.26 bug：IsIconic 被跳过 → 移出屏幕逻辑从未调用 → _uia_send 的 SW_RESTORE=9 激活窗口。
+    v1.0.28 fix：使用 SW_SHOWNOACTIVATE(4) + SetWindowPos(-2600,60)。
+    v1.0.29 fix：改用 SetWindowPlacement 预定位，ShowWindow(4) 直接恢复到屏外（消除 50ms 闪烁）。
     """
     mw = _make_mock_mw(hwnd=112)
     user32 = MagicMock()
     user32.IsWindowVisible.return_value = True
     user32.IsIconic.return_value = 1
+    user32.GetWindowPlacement.return_value = 1  # 模拟成功
 
     original_offscreen = listen_chat._OFFSCREEN_REPLY
     try:
@@ -292,11 +294,8 @@ def test_ensure_tray_visible_iconic_moves_offscreen():
         listen_chat._OFFSCREEN_REPLY = original_offscreen
 
     user32.ShowWindow.assert_called_with(112, 4)
-    setpos_calls = user32.SetWindowPos.call_args_list
-    assert len(setpos_calls) >= 1, "最小化 + offscreen 模式必须调 SetWindowPos 移到屏幕外"
-    args = setpos_calls[0][0]
-    assert args[2] == -2600, f"x 坐标必须是 -2600，实际是 {args[2]}"
-    assert args[3] == 60,    f"y 坐标必须是 60，实际是 {args[3]}"
+    user32.GetWindowPlacement.assert_called(), "必须调 GetWindowPlacement 获取原始坐标"
+    user32.SetWindowPlacement.assert_called(), "必须调 SetWindowPlacement 预改离屏坐标"
 
 
 # ── v1.0.28 regression：最小化必须 SW_SHOWNOACTIVATE(4)+SW_MINIMIZE(6)，不能 SW_SHOWNA(8)+SW_HIDE(0) ──
