@@ -289,9 +289,102 @@ def test_ensure_tray_visible_iconic_moves_offscreen():
     finally:
         listen_chat._OFFSCREEN_REPLY = original_offscreen
 
-    user32.ShowWindow.assert_called_with(112, 8)
     setpos_calls = user32.SetWindowPos.call_args_list
     assert len(setpos_calls) >= 1, "最小化 + offscreen 模式必须调 SetWindowPos 移到屏幕外"
     args = setpos_calls[0][0]
     assert args[2] == -2600, f"x 坐标必须是 -2600，实际是 {args[2]}"
     assert args[3] == 60,    f"y 坐标必须是 60，实际是 {args[3]}"
+
+
+# ── v1.0.28 regression：最小化必须 SW_SHOWNOACTIVATE(4)+SW_MINIMIZE(6)，不能 SW_SHOWNA(8)+SW_HIDE(0) ──
+
+
+def test_ensure_tray_visible_minimized_uses_sw_shownoactivate_not_sw_showna():
+    """最小化（IsIconic=True）必须 SW_SHOWNOACTIVATE(4)，禁止 SW_SHOWNA(8)。
+
+    v1.0.27 bug：最小化窗口用 SW_SHOWNA(8) → 窗口停在幽灵坐标 (-32000,-32000)，
+    UIA 事件无订阅者，_open_chat PostMessage 失效；UIA 坐标全错导致切窗触发 WeChat
+    内部激活逻辑，窗口弹到前台。
+    正确做法（wechat-uia-silent-send SKILL.md）：SW_SHOWNOACTIVATE(4) 还原到正常坐标
+    再 SetWindowPos(-2600,60) 移出屏幕；不抢焦点，UIA 树完整可用。
+    """
+    mw = _make_mock_mw(hwnd=113)
+    user32 = MagicMock()
+    user32.IsWindowVisible.return_value = True
+    user32.IsIconic.return_value = 1
+
+    with _mock_windll(user32), patch("time.sleep"):
+        listen_chat._ensure_tray_visible(mw)
+
+    sw_calls = [c[0] for c in user32.ShowWindow.call_args_list]
+    assert (113, 8) not in sw_calls, "最小化窗口禁止调 SW_SHOWNA(8)（幽灵坐标）"
+    assert (113, 4) in sw_calls,     "最小化窗口必须调 SW_SHOWNOACTIVATE(4)"
+
+
+def test_restore_window_state_minimized_calls_sw_minimize():
+    """_restore_window_state(mw, 'minimized') 必须调 SW_MINIMIZE(6)，禁止 SW_HIDE(0)。
+
+    v1.0.27 bug：reply_in_chat finally 调 _restore_tray → SW_HIDE(0) → 微信从任务栏消失进托盘。
+    正确行为：还原到任务栏最小化状态（SW_MINIMIZE=6），不改变状态类型。
+    """
+    mw = _make_mock_mw(hwnd=200)
+    user32 = MagicMock()
+
+    with _mock_windll(user32):
+        listen_chat._restore_window_state(mw, 'minimized')
+
+    sw_calls = [c[0] for c in user32.ShowWindow.call_args_list]
+    assert (200, 6) in sw_calls, "_restore_window_state('minimized') 必须调 SW_MINIMIZE(6)"
+    assert (200, 0) not in sw_calls, "_restore_window_state('minimized') 禁止调 SW_HIDE(0)"
+
+
+def test_scan_unread_minimized_restores_to_minimized_not_tray():
+    """最小化场景：scan_unread 扫完后必须 SW_MINIMIZE(6)，禁止 SW_HIDE(0)。
+
+    v1.0.27 bug：scan_unread 对最小化窗口调 _restore_tray(SW_HIDE=0) → 窗口进托盘，
+    改变了用户可见状态（任务栏图标消失）。正确流程：扫完应 SW_MINIMIZE(6) 还原到任务栏。
+    """
+    mw = _make_mock_mw(hwnd=55)
+    user32 = MagicMock()
+    user32.IsWindowVisible.return_value = True
+    user32.IsIconic.return_value = 1
+    sw_calls: list = []
+
+    def record_show(hwnd: int, cmd: int) -> None:
+        sw_calls.append(cmd)
+
+    user32.ShowWindow.side_effect = record_show
+
+    with _mock_windll(user32), patch("time.sleep"):
+        listen_chat.scan_unread(mw)
+
+    assert 6 in sw_calls, "scan_unread 最小化场景须调 SW_MINIMIZE(6) 还原任务栏"
+    assert 0 not in sw_calls, "scan_unread 最小化场景禁止调 SW_HIDE(0)（送回托盘会改变状态）"
+
+
+def test_reply_in_chat_minimized_restores_to_minimized_not_tray():
+    """最小化场景：reply_in_chat 发完后必须 SW_MINIMIZE(6)，禁止 SW_HIDE(0)。
+
+    v1.0.27 bug：reply_in_chat finally 调 _restore_tray(SW_HIDE=0) → 微信进托盘，
+    用户任务栏里看不到微信了。正确行为：SW_MINIMIZE(6) 保持在任务栏最小化状态。
+    """
+    mw = _make_mock_mw(hwnd=43)
+    user32 = MagicMock()
+    user32.IsWindowVisible.return_value = True
+    user32.IsIconic.return_value = 1
+    sw_calls: list = []
+
+    def record_show(hwnd: int, cmd: int) -> None:
+        sw_calls.append(cmd)
+
+    user32.ShowWindow.side_effect = record_show
+
+    item = MagicMock()
+
+    with _mock_windll(user32), \
+         patch("time.sleep"), \
+         patch.object(listen_chat, "_open_chat", return_value=False):
+        listen_chat.reply_in_chat(mw, item, "hello", sender="于瑾")
+
+    assert 6 in sw_calls, "reply_in_chat 最小化场景须调 SW_MINIMIZE(6) 还原任务栏"
+    assert 0 not in sw_calls, "reply_in_chat 最小化场景禁止调 SW_HIDE(0)"
