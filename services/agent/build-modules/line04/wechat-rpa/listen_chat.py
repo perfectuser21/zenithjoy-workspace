@@ -55,6 +55,10 @@ FAIL_PLACEHOLDER = "AI 生成失败（请人审决定是否重试）"
 # 设为 False 则保留"弹窗模式"：窗口短暂出现在屏幕上，行为与 v1.0.20 以前相同。
 _OFFSCREEN_REPLY = True
 
+# 最小化场景：保存 hwnd → 原始 rcNormalPosition，让 _restore_window_state 还原（v1.0.29）
+# key=hwnd(int), value=(left, top, right, bottom)
+_saved_normal_pos: dict = {}
+
 # 会话列表里要过滤掉的系统/非客户账号（按 element_info.name 首行匹配）。
 SKIP_SENDERS = (
     "公众号",
@@ -133,9 +137,9 @@ def _ensure_tray_visible(mw: Any) -> str:
 
     托盘 vs 最小化的还原方式不同（wechat-uia-silent-send SKILL.md）：
     - 托盘：SW_SHOWNA(8) 直接还原到上次位置（不在幽灵坐标）再移出屏幕
-    - 最小化：必须 SW_SHOWNOACTIVATE(4) 还原到正常坐标，SW_SHOWNA(8) 会留在
-      幽灵坐标 (-32000,-32000)，导致 UIA 事件无订阅者、PostMessage 失效。
-      还原后立即 SetWindowPos(-2600,60) 移出屏幕（~50ms 内，用户几乎无感知）。
+    - 最小化：先用 SetWindowPlacement 把 rcNormalPosition 改到 (-2600,60)，再
+      SW_SHOWNOACTIVATE(4) 还原——窗口直接出现在屏外，无任何可见闪烁（v1.0.29）。
+      禁止直接 SW_SHOWNA(8)：留在幽灵坐标 (-32000,-32000)，UIA 事件无订阅者。
     """
     import ctypes as _ct
     import ctypes.wintypes as _wt
@@ -158,16 +162,30 @@ def _ensure_tray_visible(mw: Any) -> str:
             time.sleep(0.30)  # 等 Qt 重建 UIA 虚拟列表渲染
             return 'tray'
         elif _is_iconic:
-            # 最小化：SW_SHOWNOACTIVATE(4) 还原到正常坐标；禁止 SW_SHOWNA(8)（幽灵坐标）
-            _ct.windll.user32.ShowWindow(_hwnd, 4)  # SW_SHOWNOACTIVATE = 4：还原不抢焦点
-            time.sleep(0.05)
+            # 最小化：v1.0.29 用 SetWindowPlacement 预改 rcNormalPosition → ShowWindow(4) 直接恢复到屏外
+            # （v1.0.28 遗留 bug：ShowWindow(4) 先在原始坐标出现 ~50ms 再 SetWindowPos 移走，用户看到弹跳）
             if _OFFSCREEN_REPLY:
-                # 立即移出屏幕：窗口仅在可见区约 50ms 后即离屏，用户无感知
-                _rc = _wt.RECT()
-                _ct.windll.user32.GetWindowRect(_hwnd, _ct.byref(_rc))
-                if _rc.left > -2000:
-                    _SWP = 0x0001 | 0x0004 | 0x0010  # NOSIZE | NOZORDER | NOACTIVATE
-                    _ct.windll.user32.SetWindowPos(_hwnd, 0, -2600, 60, 0, 0, _SWP)
+                try:
+                    class _WP(_ct.Structure):
+                        _fields_ = [
+                            ("length", _ct.c_uint), ("flags", _ct.c_uint), ("showCmd", _ct.c_uint),
+                            ("ptMinX", _ct.c_long), ("ptMinY", _ct.c_long),
+                            ("ptMaxX", _ct.c_long), ("ptMaxY", _ct.c_long),
+                            ("rcLeft", _ct.c_long), ("rcTop", _ct.c_long),
+                            ("rcRight", _ct.c_long), ("rcBottom", _ct.c_long),
+                        ]
+                    _wp = _WP()
+                    _wp.length = _ct.sizeof(_WP)
+                    if _ct.windll.user32.GetWindowPlacement(_hwnd, _ct.byref(_wp)):
+                        _w = max(_wp.rcRight - _wp.rcLeft, 400)
+                        _h = max(_wp.rcBottom - _wp.rcTop, 300)
+                        _saved_normal_pos[_hwnd] = (_wp.rcLeft, _wp.rcTop, _wp.rcRight, _wp.rcBottom)
+                        _wp.rcLeft, _wp.rcTop = -2600, 60
+                        _wp.rcRight, _wp.rcBottom = -2600 + _w, 60 + _h
+                        _ct.windll.user32.SetWindowPlacement(_hwnd, _ct.byref(_wp))
+                except Exception:
+                    pass
+            _ct.windll.user32.ShowWindow(_hwnd, 4)  # SW_SHOWNOACTIVATE = 4：恢复到 rcNormalPosition（已改为离屏）
             time.sleep(0.75)  # 最小化恢复比托盘需要更长 UIA 树重建时间
             return 'minimized'
     except Exception:
@@ -191,6 +209,25 @@ def _restore_window_state(mw: Any, original_state: str) -> None:
             _ct.windll.user32.ShowWindow(_hwnd, 0)  # SW_HIDE = 0
         elif original_state == 'minimized':
             _ct.windll.user32.ShowWindow(_hwnd, 6)  # SW_MINIMIZE = 6
+            # 还原 rcNormalPosition（v1.0.29）：确保用户手动从任务栏恢复时窗口在原始屏幕位置
+            if _OFFSCREEN_REPLY and _hwnd in _saved_normal_pos:
+                try:
+                    _orig = _saved_normal_pos.pop(_hwnd)
+                    class _WP(_ct.Structure):
+                        _fields_ = [
+                            ("length", _ct.c_uint), ("flags", _ct.c_uint), ("showCmd", _ct.c_uint),
+                            ("ptMinX", _ct.c_long), ("ptMinY", _ct.c_long),
+                            ("ptMaxX", _ct.c_long), ("ptMaxY", _ct.c_long),
+                            ("rcLeft", _ct.c_long), ("rcTop", _ct.c_long),
+                            ("rcRight", _ct.c_long), ("rcBottom", _ct.c_long),
+                        ]
+                    _wp = _WP()
+                    _wp.length = _ct.sizeof(_WP)
+                    if _ct.windll.user32.GetWindowPlacement(_hwnd, _ct.byref(_wp)):
+                        _wp.rcLeft, _wp.rcTop, _wp.rcRight, _wp.rcBottom = _orig
+                        _ct.windll.user32.SetWindowPlacement(_hwnd, _ct.byref(_wp))
+                except Exception:
+                    pass
     except Exception:
         pass
 
