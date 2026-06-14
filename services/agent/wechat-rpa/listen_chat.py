@@ -123,49 +123,81 @@ def _parse_item_name(name: str, require_unread: bool = True) -> Optional[Dict[st
 # ─── pywinauto 真模式：扫未读 + 自动回（函数体内 import）─────────────────────────
 
 
-def _ensure_tray_visible(mw: Any) -> bool:
-    """若微信在系统托盘（IsWindowVisible=False）或最小化到任务栏（IsIconic=True），SW_SHOWNA 短暂还原。
+def _ensure_tray_visible(mw: Any) -> str:
+    """若微信在托盘或最小化，将其移到离屏可操作位置。
 
-    两种隐藏场景均需处理：
-    - 托盘：IsWindowVisible=False，IsIconic=False → mmui 虚拟列表 UIA name 不实时更新
-    - 最小化：IsWindowVisible=True，IsIconic=True → _uia_send 会走 SW_RESTORE=9 拉前台（v1.0.26 bug）
+    返回原始状态字符串（调用方须持有，操作完成后调 _restore_window_state 还原）：
+    - 'tray'      系统托盘（IsWindowVisible=False）
+    - 'minimized' 最小化到任务栏（IsWindowVisible=True, IsIconic=True）
+    - ''          窗口本身已可见，无需操作
 
-    SW_SHOWNA=8：还原到可见状态，但不激活/不抢焦点（用户几乎无感知）。
-    _OFFSCREEN_REPLY=True（默认）：还原后立即 SetWindowPos(-2600,60) 移到屏幕外，用户看不到弹窗。
-    _OFFSCREEN_REPLY=False：保留弹窗模式，窗口短暂出现在屏幕上（与 v1.0.20 以前行为相同）。
-    调用方扫完后若返回 True 须调 _restore_tray 送回托盘。
+    托盘 vs 最小化的还原方式不同（wechat-uia-silent-send SKILL.md）：
+    - 托盘：SW_SHOWNA(8) 直接还原到上次位置（不在幽灵坐标）再移出屏幕
+    - 最小化：必须 SW_SHOWNOACTIVATE(4) 还原到正常坐标，SW_SHOWNA(8) 会留在
+      幽灵坐标 (-32000,-32000)，导致 UIA 事件无订阅者、PostMessage 失效。
+      还原后立即 SetWindowPos(-2600,60) 移出屏幕（~50ms 内，用户几乎无感知）。
     """
     import ctypes as _ct
     import ctypes.wintypes as _wt
     try:
         _hwnd = mw.element_info.handle
+        if not _hwnd:
+            return ''
         _is_visible = bool(_ct.windll.user32.IsWindowVisible(_hwnd))
         _is_iconic = bool(_ct.windll.user32.IsIconic(_hwnd))
-        if _hwnd and (not _is_visible or _is_iconic):
+        if not _is_visible:
+            # 托盘：SW_SHOWNA(8) 还原到正常窗口位置（非幽灵坐标）
             _ct.windll.user32.ShowWindow(_hwnd, 8)  # SW_SHOWNA = 8：还原但不激活
-            time.sleep(0.35)  # 等 Qt 重建 UIA 虚拟列表渲染
+            time.sleep(0.05)
             if _OFFSCREEN_REPLY:
-                # 窗口已还原但在可见区 → 移到屏幕外，用户无感知，UIA 仍可用
                 _rc = _wt.RECT()
                 _ct.windll.user32.GetWindowRect(_hwnd, _ct.byref(_rc))
                 if _rc.left > -2000:
                     _SWP = 0x0001 | 0x0004 | 0x0010  # NOSIZE | NOZORDER | NOACTIVATE
                     _ct.windll.user32.SetWindowPos(_hwnd, 0, -2600, 60, 0, 0, _SWP)
-            return True
+            time.sleep(0.30)  # 等 Qt 重建 UIA 虚拟列表渲染
+            return 'tray'
+        elif _is_iconic:
+            # 最小化：SW_SHOWNOACTIVATE(4) 还原到正常坐标；禁止 SW_SHOWNA(8)（幽灵坐标）
+            _ct.windll.user32.ShowWindow(_hwnd, 4)  # SW_SHOWNOACTIVATE = 4：还原不抢焦点
+            time.sleep(0.05)
+            if _OFFSCREEN_REPLY:
+                # 立即移出屏幕：窗口仅在可见区约 50ms 后即离屏，用户无感知
+                _rc = _wt.RECT()
+                _ct.windll.user32.GetWindowRect(_hwnd, _ct.byref(_rc))
+                if _rc.left > -2000:
+                    _SWP = 0x0001 | 0x0004 | 0x0010  # NOSIZE | NOZORDER | NOACTIVATE
+                    _ct.windll.user32.SetWindowPos(_hwnd, 0, -2600, 60, 0, 0, _SWP)
+            time.sleep(0.75)  # 最小化恢复比托盘需要更长 UIA 树重建时间
+            return 'minimized'
     except Exception:
         pass
-    return False
+    return ''
 
 
-def _restore_tray(mw: Any) -> None:
-    """将微信窗口重新隐藏（送回托盘），与 _ensure_tray_visible 配对使用。"""
+def _restore_window_state(mw: Any, original_state: str) -> None:
+    """将微信还原到 original_state 指定的状态，须与 _ensure_tray_visible 配对使用。
+
+    'tray'      → SW_HIDE(0) 送回系统托盘
+    'minimized' → SW_MINIMIZE(6) 还原到任务栏最小化（v1.0.28 修复：不能用 SW_HIDE(0)）
+    ''          → 无操作（窗口本身可见，不需要还原）
+    """
     import ctypes as _ct
     try:
         _hwnd = mw.element_info.handle
-        if _hwnd:
+        if not _hwnd or not original_state:
+            return
+        if original_state == 'tray':
             _ct.windll.user32.ShowWindow(_hwnd, 0)  # SW_HIDE = 0
+        elif original_state == 'minimized':
+            _ct.windll.user32.ShowWindow(_hwnd, 6)  # SW_MINIMIZE = 6
     except Exception:
         pass
+
+
+def _restore_tray(mw: Any) -> None:
+    """将微信送回系统托盘（向后兼容；仅托盘场景用，最小化场景应调 _restore_window_state）。"""
+    _restore_window_state(mw, 'tray')
 
 
 def scan_unread(mw: Any, last_content: Optional[Dict[str, str]] = None) -> List[Dict[str, Any]]:
@@ -180,7 +212,7 @@ def scan_unread(mw: Any, last_content: Optional[Dict[str, str]] = None) -> List[
     新消息角标永远扫不到。扫描前 _ensure_tray_visible SW_SHOWNA(8) 短暂还原刷新 UIA，
     扫完再 _restore_tray SW_HIDE(0) 送回托盘（用户几乎无感知）。
     """
-    tray_was_hidden = _ensure_tray_visible(mw)
+    orig_state = _ensure_tray_visible(mw)
     out: List[Dict[str, Any]] = []
     seen_senders: set[str] = set()
     for it in mw.descendants(control_type="ListItem"):
@@ -209,8 +241,7 @@ def scan_unread(mw: Any, last_content: Optional[Dict[str, str]] = None) -> List[
     if last_content is not None:
         for m in out:
             last_content[m["sender"]] = m["content"]
-    if tray_was_hidden:
-        _restore_tray(mw)
+    _restore_window_state(mw, orig_state)
     return out
 
 
@@ -670,7 +701,7 @@ def reply_in_chat(mw: Any, item: Any, reply_text: str, sender: str = "") -> bool
             return mw
 
     # 确保窗口可见，UIA 坐标才有效（_open_chat PostMessage 点击依赖有效坐标）
-    tray_was_hidden = _ensure_tray_visible(mw)
+    orig_state = _ensure_tray_visible(mw)
     try:
         fmw = _fresh_mw()
         if sender:
@@ -705,8 +736,7 @@ def reply_in_chat(mw: Any, item: Any, reply_text: str, sender: str = "") -> bool
     except Exception as exc:
         _log(f"reply_in_chat: 失败: {exc}")
     finally:
-        if tray_was_hidden:
-            _restore_tray(mw)
+        _restore_window_state(mw, orig_state)
 
     _log("reply_in_chat: 发送失败，本轮跳过（下次轮询重试）")
     return False
