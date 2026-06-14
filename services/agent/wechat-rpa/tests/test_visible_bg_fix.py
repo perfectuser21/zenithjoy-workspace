@@ -302,8 +302,8 @@ def test_restore_window_state_visible_noop_if_no_saved_pos():
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-def test_version_is_1031():
-    """manifest.json 版本号必须是 1.0.31（v1.0.31 visible-bg-noforeground 修复）。"""
+def test_version_is_1032():
+    """manifest.json 版本号必须是 1.0.32（v1.0.32 DWM-cloak 彻底消除前台弹窗）。"""
     import json
     candidates = [
         os.path.join(WECHAT_RPA_DIR, "..", "..", "build-modules", "line04", "manifest.json"),
@@ -320,4 +320,51 @@ def test_version_is_1031():
     with open(manifest_path, encoding='utf-8') as f:
         manifest = json.load(f)
     version = manifest.get("version", "")
-    assert version == "1.0.31", f"manifest.json version 必须是 '1.0.31'，实际是 {version!r}"
+    assert version == "1.0.32", f"manifest.json version 必须是 '1.0.32'，实际是 {version!r}"
+
+
+def test_ensure_tray_visible_visible_calls_dwm_cloak():
+    """可见非最小化窗口 + _OFFSCREEN_REPLY=True 时，必须调 DwmSetWindowAttribute(DWMWA_CLOAK=13, 1)。
+
+    v1.0.32 新增：DWM compositor 层 cloak，防止 WeChat 自身响应 UIA activate 时移回可视区域。
+    """
+    mw = _make_mock_mw(hwnd=210)
+    user32 = MagicMock()
+    dwmapi = MagicMock()
+    user32.IsWindowVisible.return_value = 1
+    user32.IsIconic.return_value = 0
+
+    def _fill_rect(h, rect_byref):
+        rect_byref._obj.left = 100
+        rect_byref._obj.top = 200
+        return 1
+
+    user32.GetWindowRect.side_effect = _fill_rect
+
+    original_offscreen = listen_chat._OFFSCREEN_REPLY
+    try:
+        listen_chat._OFFSCREEN_REPLY = True
+        windll_mock = MagicMock(user32=user32, kernel32=MagicMock(), dwmapi=dwmapi)
+        import ctypes as _ct
+        had_windll = hasattr(_ct, "windll")
+        original_windll = getattr(_ct, "windll", None)
+        _ct.windll = windll_mock
+        try:
+            with patch("time.sleep"):
+                listen_chat._ensure_tray_visible(mw)
+        finally:
+            if had_windll:
+                _ct.windll = original_windll
+            else:
+                try:
+                    del _ct.windll
+                except AttributeError:
+                    pass
+    finally:
+        listen_chat._OFFSCREEN_REPLY = original_offscreen
+        listen_chat._saved_visible_pos.pop(210, None)
+
+    dwmapi.DwmSetWindowAttribute.assert_called()
+    # 第一个调用必须是 cloak（第二个参数=13, 调用参数含1）
+    first_call_args = dwmapi.DwmSetWindowAttribute.call_args_list[0][0]
+    assert first_call_args[1] == 13, f"DWMWA_CLOAK 属性 ID 必须是 13，实际是 {first_call_args[1]}"

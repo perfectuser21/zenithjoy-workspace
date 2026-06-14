@@ -154,7 +154,13 @@ def _ensure_tray_visible(mw: Any) -> str:
         _is_visible = bool(_ct.windll.user32.IsWindowVisible(_hwnd))
         _is_iconic = bool(_ct.windll.user32.IsIconic(_hwnd))
         if not _is_visible:
-            # 托盘：SW_SHOWNA(8) 还原到正常窗口位置（非幽灵坐标）
+            # 托盘：v1.0.32 先 DWM cloak 再 ShowWindow，compositor 层不渲染，用户不可见
+            if _OFFSCREEN_REPLY:
+                try:
+                    _cv = _ct.c_int(1)
+                    _ct.windll.dwmapi.DwmSetWindowAttribute(_hwnd, 13, _ct.byref(_cv), 4)
+                except Exception:
+                    pass
             _ct.windll.user32.ShowWindow(_hwnd, 8)  # SW_SHOWNA = 8：还原但不激活
             time.sleep(0.05)
             if _OFFSCREEN_REPLY:
@@ -166,9 +172,15 @@ def _ensure_tray_visible(mw: Any) -> str:
             time.sleep(0.30)  # 等 Qt 重建 UIA 虚拟列表渲染
             return 'tray'
         elif _is_iconic:
-            # 最小化：v1.0.29 用 SetWindowPlacement 预改 rcNormalPosition → ShowWindow(4) 直接恢复到屏外
+            # 最小化：v1.0.32 先 DWM cloak（防 WeChat 自身 activate 时移回可视区域被用户看到）
+            # v1.0.29 SetWindowPlacement 预改 rcNormalPosition → ShowWindow(4) 直接恢复到屏外
             # （v1.0.28 遗留 bug：ShowWindow(4) 先在原始坐标出现 ~50ms 再 SetWindowPos 移走，用户看到弹跳）
             if _OFFSCREEN_REPLY:
+                try:
+                    _cv = _ct.c_int(1)
+                    _ct.windll.dwmapi.DwmSetWindowAttribute(_hwnd, 13, _ct.byref(_cv), 4)
+                except Exception:
+                    pass
                 try:
                     class _WP(_ct.Structure):
                         _fields_ = [
@@ -193,12 +205,17 @@ def _ensure_tray_visible(mw: Any) -> str:
             time.sleep(0.75)  # 最小化恢复比托盘需要更长 UIA 树重建时间
             return 'minimized'
         else:
-            # 可见非最小化（SPI 激活后常见后台状态）：窗口在屏幕正常位置，UIA 操作会激活到前台。
-            # v1.0.30：先移到离屏，UIA 操作结束后 _restore_window_state 移回。
+            # 可见非最小化（SPI 激活后常见后台状态）：v1.0.32 cloak 仅在确认需要移动时才执行
+            # （避免 already-offscreen 时 cloak 无配对 uncloak）
             if _OFFSCREEN_REPLY:
                 _rc = _wt.RECT()
                 _ct.windll.user32.GetWindowRect(_hwnd, _ct.byref(_rc))
                 if _rc.left > -2000:
+                    try:
+                        _cv = _ct.c_int(1)
+                        _ct.windll.dwmapi.DwmSetWindowAttribute(_hwnd, 13, _ct.byref(_cv), 4)
+                    except Exception:
+                        pass
                     _SWP = 0x0001 | 0x0004 | 0x0010  # NOSIZE | NOZORDER | NOACTIVATE
                     with _saved_normal_pos_lock:
                         _saved_visible_pos[_hwnd] = (_rc.left, _rc.top)
@@ -246,7 +263,7 @@ def _restore_window_state(mw: Any, original_state: str) -> None:
                 except Exception:
                     pass
         elif original_state == 'visible':
-            # v1.0.30：可见后台场景，移回原始坐标（NOACTIVATE 不抢焦点）
+            # v1.0.32：移回原始坐标后 uncloak（NOACTIVATE 不抢焦点）
             if _OFFSCREEN_REPLY:
                 with _saved_normal_pos_lock:
                     _orig = _saved_visible_pos.pop(_hwnd, None)
@@ -256,6 +273,13 @@ def _restore_window_state(mw: Any, original_state: str) -> None:
                         _ct.windll.user32.SetWindowPos(_hwnd, 0, _orig[0], _orig[1], 0, 0, _SWP)
                     except Exception:
                         pass
+        # DWM uncloak（与 _ensure_tray_visible 中的 cloak 配对，v1.0.32）
+        if _OFFSCREEN_REPLY and original_state:
+            try:
+                _cv = _ct.c_int(0)
+                _ct.windll.dwmapi.DwmSetWindowAttribute(_hwnd, 13, _ct.byref(_cv), 4)
+            except Exception:
+                pass
     except Exception:
         pass
 
