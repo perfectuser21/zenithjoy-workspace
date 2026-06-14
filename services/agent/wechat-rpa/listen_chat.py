@@ -7,7 +7,7 @@ listen_chat.py — 微信 4.0 私聊监听 + 隐形自动回（Path 4 Step 5，p
 读会话列表未读 → DeepSeek 拼上下文回 → 本人微信号自动发出，对方感知不到是 AI。
 
 跨平台行为：
-  - **Windows + 微信 4.0 登录 + 讲述人解锁过 + 装了 pywinauto**：真启监听 →
+  - **Windows + 微信 4.0 登录 + 屏幕阅读器标志激活过 + 装了 pywinauto**：真启监听 →
     Desktop(uia) 读会话列表 ListItem 的 element_info.name 解析未读 →
     校验发送者在飞书"客户档案"名单内（中台 SSOT）→ POST /api/wechat/draft-generate?mode=auto
     → 拿 reply 文本 → 纯 UIA 控件操作发出：会话项 iface_invoke.Invoke() 打开会话 →
@@ -23,7 +23,7 @@ listen_chat.py — 微信 4.0 私聊监听 + 隐形自动回（Path 4 Step 5，p
   - 退出码 0 = 成功（含 ok=false 的"调用成功但语义失败"），1 = 内部异常。
   - 只被动回名单内客户消息，不主动发起会话（A 路线护栏 + 频控 rate_limiter）。
 
-UI 自动化必须在微信登录的交互桌面会话里运行（讲述人解锁过，否则微信 4.0 屏蔽 UIAutomation）。
+UI 自动化必须在微信登录的交互桌面会话里运行（屏幕阅读器标志激活过，否则微信 4.0 屏蔽 UIAutomation）。
 pywinauto 仅在 scan_unread / reply_in_chat / 真模式入口的函数体内 import，顶层零 import，
 保证 _parse_item_name 等纯逻辑在 macOS/Linux 也能 import 单测。
 """
@@ -1190,7 +1190,7 @@ def run_real_listen(args: argparse.Namespace) -> int:
                             _log("微信未运行，自动启动失败（Weixin.exe 不存在或 Popen 异常）")
                         time.sleep(5)  # 等微信启动窗口
 
-                # 找不到 mmui 主窗口（多为微信4.0 UIAutomation 激活失效）→ 按冷却重做讲述人解锁补激活再重试
+                # 找不到 mmui 主窗口（多为微信4.0 UIAutomation 激活失效）→ 按冷却重做屏幕阅读器标志补激活再重试
                 if now - last_uia_activate >= uia_reactivate_interval:
                     print("[listen_chat] 未找到微信主窗口，重做 UIA 激活…", flush=True)
                     _activate_uia()
