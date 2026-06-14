@@ -1,14 +1,15 @@
 """
 test_preflight_oneclick.py — Agent 一键安装加固回归测试。
 
-验证 4 个修复点：
-  1. check_uia_narrator: Narrator.exe 不存在 → failed（非 dry_run 且 is_windows 时）
-  2. check_uia_narrator: subprocess 抛异常 → failed（非 dry_run 且 is_windows 时）
-  3. check_uia_narrator: subprocess 成功但无主窗口 → warn（兼容"微信未登录"场景）
+验证 5 个修复点：
+  1. check_uia_narrator: dry-run → warn（不触碰系统标志）
+  2. check_uia_narrator: 设 SPI 屏幕阅读器标志后无主窗口 → warn（兼容"微信未登录"场景）
+  3. check_uia_narrator: 设 SPI 标志成功 + 有主窗口 → ok（且调用 SystemParametersInfoW）
   4. start.bat 包含 install-autostart.ps1 调用
   5. start.bat 不再包含早退的版本守卫块
 
 跨平台纪律：所有 Windows-only 路径用 monkeypatch/mock 模拟。
+UIA 激活已从"启动讲述人 Narrator.exe"改为 ctypes 设 SPI_SETSCREENREADER 系统标志。
 """
 from __future__ import annotations
 
@@ -28,97 +29,42 @@ if WECHAT_RPA_DIR not in sys.path:
 import preflight  # noqa: E402
 from preflight import check_uia_narrator  # noqa: E402
 
-NARRATOR_PATH = r"C:\Windows\System32\Narrator.exe"
+
+# ──────────────────────────────────────────────────────────────────────────────
+# 测试 1：dry-run → warn（只检测不激活，不触碰系统标志）
+# ──────────────────────────────────────────────────────────────────────────────
+
+def test_uia_dry_run_warn():
+    result = check_uia_narrator(dry_run=True)
+    assert result["status"] == "warn"
 
 
 # ──────────────────────────────────────────────────────────────────────────────
-# 测试 1：Narrator.exe 不存在 → failed（Windows 真机路径）
+# 测试 2：设 SPI 标志成功但无主窗口 → warn（微信未登录兼容场景）
 # ──────────────────────────────────────────────────────────────────────────────
 
-def test_narrator_exe_missing_returns_failed(monkeypatch):
-    """Narrator.exe 不存在时（LTSC/N 精简版）→ status=failed，并给出明确提示。"""
+def test_uia_spi_no_window_warn(monkeypatch):
     monkeypatch.setattr(preflight, "_is_windows", lambda: True)
-    orig_isfile = os.path.isfile
-
-    def fake_isfile(path):
-        if str(path) == NARRATOR_PATH:
-            return False
-        return orig_isfile(path)
-
-    monkeypatch.setattr(os.path, "isfile", fake_isfile)
-
+    fake_windll = MagicMock()
+    monkeypatch.setattr(preflight.ctypes, "windll", fake_windll, raising=False)
+    monkeypatch.setattr("find_weixin.get_main_window", lambda: None, raising=False)
     result = check_uia_narrator(dry_run=False)
-    assert result["status"] == "failed", (
-        f"期望 failed，实际 {result['status']!r}。detail: {result['detail']}"
-    )
-    assert "Narrator" in result["detail"], "错误提示应包含 Narrator"
+    assert result["status"] == "warn"
+    assert "讲述人" not in result["detail"]
 
 
 # ──────────────────────────────────────────────────────────────────────────────
-# 测试 2：subprocess 启动 Narrator 抛异常 → failed（Windows 真机路径）
+# 测试 3：设 SPI 标志成功 + 有主窗口 → ok（且真调用 SystemParametersInfoW）
 # ──────────────────────────────────────────────────────────────────────────────
 
-def test_narrator_subprocess_exception_returns_failed(monkeypatch):
-    """Narrator.exe 存在但 subprocess 启动失败 → status=failed，并给修复指引。"""
+def test_uia_spi_ok(monkeypatch):
     monkeypatch.setattr(preflight, "_is_windows", lambda: True)
-    orig_isfile = os.path.isfile
-
-    def fake_isfile(path):
-        if str(path) == NARRATOR_PATH:
-            return True
-        return orig_isfile(path)
-
-    monkeypatch.setattr(os.path, "isfile", fake_isfile)
-
-    import subprocess as _subprocess
-
-    def fake_run(cmd, **kwargs):
-        if "Narrator" in " ".join(str(c) for c in cmd):
-            raise RuntimeError("进程启动失败：组策略禁用了讲述人")
-        return MagicMock(returncode=0)
-
-    monkeypatch.setattr(_subprocess, "run", fake_run)
-    import time as _time
-    monkeypatch.setattr(_time, "sleep", lambda _: None)
-
+    fake_windll = MagicMock()
+    monkeypatch.setattr(preflight.ctypes, "windll", fake_windll, raising=False)
+    monkeypatch.setattr("find_weixin.get_main_window", lambda: object(), raising=False)
     result = check_uia_narrator(dry_run=False)
-    assert result["status"] == "failed", (
-        f"期望 failed，实际 {result['status']!r}。detail: {result['detail']}"
-    )
-    detail_lower = result["detail"].lower()
-    assert any(kw in detail_lower for kw in ("管理员", "组策略", "完整", "narrator")), (
-        f"detail 缺少修复指引：{result['detail']}"
-    )
-
-
-# ──────────────────────────────────────────────────────────────────────────────
-# 测试 3：subprocess 成功但无主窗口 → warn（微信未登录兼容场景）
-# ──────────────────────────────────────────────────────────────────────────────
-
-def test_narrator_subprocess_ok_no_window_returns_warn(monkeypatch):
-    """Narrator 激活成功，但微信未登录时暂无主窗口 → status=warn（不阻断，登录后生效）。"""
-    monkeypatch.setattr(preflight, "_is_windows", lambda: True)
-    orig_isfile = os.path.isfile
-
-    def fake_isfile(path):
-        if str(path) == NARRATOR_PATH:
-            return True
-        return orig_isfile(path)
-
-    monkeypatch.setattr(os.path, "isfile", fake_isfile)
-
-    import subprocess as _subprocess
-    monkeypatch.setattr(_subprocess, "run", lambda *a, **kw: MagicMock(returncode=0))
-    import time as _time
-    monkeypatch.setattr(_time, "sleep", lambda _: None)
-
-    import find_weixin as _fw
-    monkeypatch.setattr(_fw, "get_main_window", lambda: None)
-
-    result = check_uia_narrator(dry_run=False)
-    assert result["status"] == "warn", (
-        f"期望 warn（微信未登录，登录后生效），实际 {result['status']!r}。detail: {result['detail']}"
-    )
+    assert result["status"] == "ok"
+    fake_windll.user32.SystemParametersInfoW.assert_called_once()
 
 
 # ──────────────────────────────────────────────────────────────────────────────

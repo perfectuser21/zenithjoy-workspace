@@ -8,14 +8,11 @@ REM Unblock all executables recursively (removes Zone Identifier / Mark of the W
 REM Without this, execFile() on bundled ffmpeg.exe / Playwright chrome.exe fails with "spawn UNKNOWN"
 powershell -NoProfile -Command "Get-ChildItem -Path '%~dp0' -Recurse -Include '*.exe','*.dll' | Unblock-File" >nul 2>&1
 
-REM Step 0: Narrator toggle - unlock WeChat UIAutomation access (prereq for WeChat 4.1.x window automation)
-REM ~2s: Start-Process Narrator -> wait -> Stop-Process; UIAutomation permission acquired
-REM Silence Narrator first (best-effort): set speech volume to 0 to avoid voice/focus stealing on launch
-reg add "HKCU\Software\Microsoft\Narrator" /v SpeechVolume /t REG_DWORD /d 0 /f >nul 2>&1
-reg add "HKCU\Software\Microsoft\Narrator" /v WinEnterLaunch /t REG_DWORD /d 0 /f >nul 2>&1
-reg add "HKCU\Software\Microsoft\Narrator\NoRoam" /v SpeechVolume /t REG_DWORD /d 0 /f >nul 2>&1
-powershell -NoProfile -Command "Start-Process Narrator; Start-Sleep -Milliseconds 1500; Stop-Process -Name Narrator -ErrorAction SilentlyContinue" >nul 2>&1
-echo [narrator] WeChat UIAutomation unlocked (Narrator start+stop, silenced)
+REM Step 0: Set SPI_SETSCREENREADER system flag to activate WeChat UIAutomation
+REM No window, no focus frame, no spoken voice - just flips the OS screen-reader flag so the WeChat
+REM 4.1.x mmui control tree exposes its UIAutomation provider.
+powershell -NoProfile -Command "Add-Type -Namespace Win -Name Spi -MemberDefinition '[DllImport(\"user32.dll\")] public static extern bool SystemParametersInfo(uint a, uint b, System.IntPtr c, uint d);'; [Win.Spi]::SystemParametersInfo(0x47,1,[System.IntPtr]::Zero,0x02) | Out-Null" >nul 2>&1
+echo [uia] WeChat UIAutomation unlocked (screen-reader flag set)
 
 REM Step 0.5: WeChat version guard 已迁移进 preflight.py（step 6.9），由 preflight 自动检测+自修，此处不再早退。
 
@@ -208,18 +205,12 @@ for /f "delims=" %%d in ('dir /b /ad "%PLAYWRIGHT_BROWSERS_PATH%\chromium-*" 2^>
     )
 )
 
-REM === Unlock WeChat UIAutomation (silent Narrator toggle, ~2s) ===
-REM WeChat 4.1.x mmui control tree only exposes once an AT client (Narrator) has activated the
-REM UIAutomation provider; Narrator is a built-in Windows component (not external). Toggle once to
-REM activate, then close immediately leaving no background process.
-REM Silence Narrator before launch (best-effort; reg write failure does not block, UIA still activates):
-REM   - HKCU\Software\Microsoft\Narrator SpeechVolume=0 (mute voice)
-REM   - WinEnterLaunch=0 to prevent next auto-start
-echo [setup] unlocking WeChat automation (silent Narrator activation)...
-reg add "HKCU\Software\Microsoft\Narrator" /v SpeechVolume /t REG_DWORD /d 0 /f >nul 2>&1
-reg add "HKCU\Software\Microsoft\Narrator" /v WinEnterLaunch /t REG_DWORD /d 0 /f >nul 2>&1
-reg add "HKCU\Software\Microsoft\Narrator\NoRoam" /v SpeechVolume /t REG_DWORD /d 0 /f >nul 2>&1
-powershell -WindowStyle Hidden -Command "Start-Process 'Narrator'; Start-Sleep 2; Stop-Process -Name 'Narrator' -ErrorAction SilentlyContinue" 2>nul
+REM === Unlock WeChat UIAutomation (set SPI_SETSCREENREADER system flag) ===
+REM WeChat 4.1.x mmui control tree only exposes once the OS screen-reader flag is on, which makes it
+REM activate its UIAutomation provider. Setting the SPI_SETSCREENREADER flag does this directly:
+REM no window, no focus frame, no spoken voice (replaces the old screen-reader start+stop toggle).
+echo [setup] unlocking WeChat automation (screen-reader flag)...
+powershell -NoProfile -Command "Add-Type -Namespace Win -Name Spi -MemberDefinition '[DllImport(\"user32.dll\")] public static extern bool SystemParametersInfo(uint a, uint b, System.IntPtr c, uint d);'; [Win.Spi]::SystemParametersInfo(0x47,1,[System.IntPtr]::Zero,0x02) | Out-Null" >nul 2>&1
 echo [setup] done
 
 REM === Lock update: prevent WeChat auto-upgrading to 4.1.9+ (accessibility tree removed = RPA dead) ===
@@ -256,7 +247,7 @@ if exist "%_WEIXIN_ROOT%" (
 
 REM === Step 6.9: WeChat RPA startup environment self-check + self-heal (preflight) ===
 REM Run wechat-rpa\preflight.py with bundled python-embedded\python.exe to check and self-heal
-REM the environment WeChat RPA needs (WeChat version / Narrator UIA / pywinauto / deps). Prints a
+REM the environment WeChat RPA needs (WeChat version / screen-reader flag UIA / pywinauto / deps). Prints a
 REM report and writes C:\Users\Public\zj-preflight.json (readable by middleware dashboard).
 REM Middleware URL reuses ZENITHJOY_API_BASE (preflight also has its own default/env fallback).
 REM [Blocking] preflight self-heals; if any check still FAIL after self-heal, agent must not start.

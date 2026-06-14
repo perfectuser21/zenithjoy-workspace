@@ -41,6 +41,7 @@ fi
 TAR_STAGE=$(mktemp -d)
 cp -r "build-modules/$LINE_ID/." "$TAR_STAGE/"
 find "$TAR_STAGE" -name "__pycache__" -type d -exec rm -rf {} + 2>/dev/null || true
+find "$TAR_STAGE" -name ".pytest_cache" -type d -exec rm -rf {} + 2>/dev/null || true
 rm -rf "$TAR_STAGE/wechat-rpa/tests"
 tar czf "$OUT_DIR/${MANIFEST_LINE_ID}-v${VERSION}.tar.gz" -C "$TAR_STAGE" .
 rm -rf "$TAR_STAGE"

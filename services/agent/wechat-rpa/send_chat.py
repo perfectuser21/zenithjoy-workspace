@@ -105,7 +105,7 @@ def send_chat_message(
             return {
                 "ok": False,
                 "reason": "wechat_not_ready",
-                "detail": "未找到 mmui::MainWindow（微信未登录或讲述人解锁失效）",
+                "detail": "未找到 mmui::MainWindow（微信未登录或 UIA 屏幕阅读器标志失效）",
                 "sent_at": sent_at,
                 "dryRun": False,
             }
