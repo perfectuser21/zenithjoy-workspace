@@ -317,7 +317,7 @@ def test_version_is_1031():
             break
 
     assert manifest_path, "找不到 manifest.json"
-    with open(manifest_path) as f:
+    with open(manifest_path, encoding='utf-8') as f:
         manifest = json.load(f)
     version = manifest.get("version", "")
     assert version == "1.0.31", f"manifest.json version 必须是 '1.0.31'，实际是 {version!r}"
