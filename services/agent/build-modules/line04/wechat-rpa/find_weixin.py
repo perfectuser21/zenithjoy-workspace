@@ -335,7 +335,8 @@ def get_main_window() -> Optional[Any]:
             title = w.element_info.name or ""
             if cls == MAIN_WINDOW_CLASS:
                 return w
-            if cls == QT5_WINDOW_CLASS and "微信" in title:
+            # 4.1.8 最小化到托盘时 Qt5 外框 title="Weixin"（英文）；4.1.10+ title 含"微信"
+            if cls == QT5_WINDOW_CLASS and ("微信" in title or title == "Weixin"):
                 return w
         except Exception:
             continue
@@ -352,7 +353,8 @@ def login_window_present() -> bool:
             title = w.element_info.name or ""
             if cls == LOGIN_WINDOW_CLASS:
                 return True
-            if cls == QT5_WINDOW_CLASS and title in ("Weixin", "登录"):
+            # "Weixin" = 已登录主窗口，不是登录界面；只有"登录"才是登录选择页
+            if cls == QT5_WINDOW_CLASS and title == "登录":
                 return True
         except Exception:
             continue
