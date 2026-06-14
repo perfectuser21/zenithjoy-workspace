@@ -302,8 +302,8 @@ def test_restore_window_state_visible_noop_if_no_saved_pos():
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-def test_version_is_1031():
-    """manifest.json 版本号必须是 1.0.31（v1.0.31 visible-bg-noforeground 修复）。"""
+def test_version_is_1032():
+    """manifest.json 版本号必须是 1.0.32（v1.0.32 DWM-cloak 彻底消除前台弹窗）。"""
     import json
     candidates = [
         os.path.join(WECHAT_RPA_DIR, "..", "..", "build-modules", "line04", "manifest.json"),
@@ -320,4 +320,4 @@ def test_version_is_1031():
     with open(manifest_path, encoding='utf-8') as f:
         manifest = json.load(f)
     version = manifest.get("version", "")
-    assert version == "1.0.31", f"manifest.json version 必须是 '1.0.31'，实际是 {version!r}"
+    assert version == "1.0.32", f"manifest.json version 必须是 '1.0.32'，实际是 {version!r}"
