@@ -157,8 +157,8 @@ describe('ackPublishTask — qr_bind session upsert', () => {
 });
 
 describe('HEARTBEAT_MODULES version gates', () => {
-  it('line04-wechat-cs required_version should be 1.0.30 (SPI 替代讲述人激活，含最小化离屏修复)', async () => {
+  it('line04-wechat-cs required_version should be 1.0.31 (SPI 后可见后台窗口离屏修复，消除微信弹前台)', async () => {
     const { HEARTBEAT_MODULES } = await import('./walking-skeleton.service');
-    expect(HEARTBEAT_MODULES['line04-wechat-cs'].required_version).toBe('1.0.30');
+    expect(HEARTBEAT_MODULES['line04-wechat-cs'].required_version).toBe('1.0.31');
   });
 });

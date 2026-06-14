@@ -90,17 +90,23 @@ def test_ensure_tray_visible_hidden_calls_showna():
 
 
 def test_ensure_tray_visible_visible_no_call():
-    """窗口可见且非最小化时 _ensure_tray_visible 不得调 ShowWindow，返回 ''。"""
+    """窗口可见且非最小化时 _ensure_tray_visible 不得调 ShowWindow。
+
+    v1.0.29 及以前：返回 ''，不做任何操作。
+    v1.0.30 fix：_OFFSCREEN_REPLY=True 时返回 'visible'（移到离屏），但 ShowWindow 仍不调。
+    断言更新为 v1.0.30 行为。
+    """
     mw = _make_mock_mw(hwnd=99)
     user32 = MagicMock()
     user32.IsWindowVisible.return_value = True
     user32.IsIconic.return_value = 0  # 非最小化
 
-    with _mock_windll(user32):
+    with _mock_windll(user32), patch("time.sleep"):
         result = listen_chat._ensure_tray_visible(mw)
 
-    assert result == ''
-    user32.ShowWindow.assert_not_called()
+    # v1.0.30：可见窗口 _OFFSCREEN_REPLY=True 时移到离屏返回 'visible'
+    assert result == 'visible'
+    user32.ShowWindow.assert_not_called()  # ShowWindow 仍不调（用 SetWindowPos 移位）
 
 
 def test_restore_tray_calls_sw_hide():
