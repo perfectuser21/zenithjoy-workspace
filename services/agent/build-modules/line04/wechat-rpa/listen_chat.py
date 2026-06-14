@@ -1100,7 +1100,7 @@ def run_real_listen(args: argparse.Namespace) -> int:
     last_heartbeat = 0.0
     last_unread_senders: List[str] = []
     last_error: Optional[str] = None
-    # 微信4.0 mmui 控件树需讲述人激活 UIAutomation 后才暴露、且会失效：启动先激活一次，失效再按冷却补激活
+    # 微信4.0 mmui 控件树需设屏幕阅读器标志激活 UIAutomation 后才暴露、且会失效：启动先激活一次，失效再按冷却补激活
     uia_reactivate_interval = 45
     _activate_uia()
     last_uia_activate = time.time()
