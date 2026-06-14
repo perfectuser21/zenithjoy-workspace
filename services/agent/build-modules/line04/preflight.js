@@ -67,11 +67,24 @@ function isWechatVersionSupported(version) {
     }
     return true; // 前三段全等（4.1.8.x）→ 受支持
 }
-// 微信 REG_DWORD 编码：高字节 = 0x60 + major，其余依次 minor/patch/build。
-// 例：4.1.8.107 → 0x6401086b。
+// WeChat/Weixin DWORD 有两种编码：
+//   3.x（高字节 = 0x60+major）：4.1.8.107 → 0x6401086b
+//   4.x（nibble-packed，byte0 ≥ 0x70）：4.1.8.107 → 0xf254186b
+//     byte[1] 低 4 位 = major, byte[2] 高 4 位 = minor, byte[2] 低 4 位 = patch, byte[3] = build
+// 实测：xian-rog HKCU\SOFTWARE\Tencent\Weixin Version = 0xf254186b（Weixin 4.1.8.107 安装）
 function decodeWechatDword(hex) {
     const num = parseInt(hex, 16) >>> 0;
-    const major = ((num >> 24) & 0xff) - 0x60;
+    const byte0 = (num >> 24) & 0xff;
+    if (byte0 >= 0x70) {
+        // Weixin 4.x nibble-packed encoding
+        const major = (num >> 16) & 0x0f;
+        const minor = (num >> 12) & 0x0f;
+        const patch = (num >> 8) & 0x0f;
+        const build = num & 0xff;
+        return `${major}.${minor}.${patch}.${build}`;
+    }
+    // WeChat 3.x offset encoding: byte0 = major + 0x60
+    const major = byte0 - 0x60;
     const minor = (num >> 16) & 0xff;
     const patch = (num >> 8) & 0xff;
     const build = num & 0xff;
@@ -113,6 +126,11 @@ function checkWechatVersion() {
         return { ok: true, skipped: true };
     }
     const keys = [
+        // 4.x（Weixin）— HKCU 下存版本，HKLM WOW6432Node 有时也有
+        'HKCU\\SOFTWARE\\Tencent\\Weixin',
+        'HKLM\\SOFTWARE\\WOW6432Node\\Tencent\\Weixin',
+        'HKLM\\SOFTWARE\\Tencent\\Weixin',
+        // 3.x（WeChat）
         'HKLM\\SOFTWARE\\WOW6432Node\\Tencent\\WeChat',
         'HKLM\\SOFTWARE\\Tencent\\WeChat',
         'HKCU\\SOFTWARE\\Tencent\\WeChat',
@@ -136,11 +154,13 @@ function checkWechatVersion() {
             // 该注册表键不存在或无权访问（runner 以 SYSTEM 运行时 HKCU 不可见），尝试下一个
         }
     }
-    // 注册表全部查不到（runner 权限限制），退而检查安装目录下的版本子文件夹。
-    // WeChat 安装后会创建 C:\Program Files\Tencent\WeChat\[X.Y.Z.B]\ 目录。
+    // 注册表全部查不到，退而检查安装目录下的版本子文件夹。
+    // WeChat 3.x → C:\Program Files\Tencent\WeChat\[X.Y.Z.B]\
+    // Weixin 4.x → C:\Program Files\Tencent\Weixin\X.Y.Z.B\
     const installDirs = [
-        'C:\\Program Files\\Tencent\\WeChat',
-        'C:\\Program Files (x86)\\Tencent\\WeChat',
+        'C:\\Program Files\\Tencent\\Weixin', // 4.x（Weixin）
+        'C:\\Program Files\\Tencent\\WeChat', // 3.x（WeChat）64-bit
+        'C:\\Program Files (x86)\\Tencent\\WeChat', // 3.x（WeChat）32-bit
     ];
     for (const dir of installDirs) {
         if (!node_fs_1.default.existsSync(dir))
@@ -269,6 +289,31 @@ function downloadFile(url, dest) {
             .on('error', reject);
     });
 }
+// 在 weixinRoot 及其一级子目录中搜索所有 WeixinUpdate.exe（不含 .disabled）。
+// 4.x 安装结构：Weixin\<version>\WeixinUpdate.exe，只需两层遍历。
+function findWeixinUpdateExe(weixinRoot) {
+    const found = [];
+    if (!node_fs_1.default.existsSync(weixinRoot))
+        return found;
+    // 检查根目录本身
+    const rootExe = node_path_1.default.join(weixinRoot, 'WeixinUpdate.exe');
+    if (node_fs_1.default.existsSync(rootExe))
+        found.push(rootExe);
+    // 检查一级版本子目录（如 4.1.8.107\WeixinUpdate.exe）
+    try {
+        for (const entry of node_fs_1.default.readdirSync(weixinRoot, { withFileTypes: true })) {
+            if (!entry.isDirectory())
+                continue;
+            const subExe = node_path_1.default.join(weixinRoot, entry.name, 'WeixinUpdate.exe');
+            if (node_fs_1.default.existsSync(subExe))
+                found.push(subExe);
+        }
+    }
+    catch {
+        // 目录无法读取，跳过
+    }
+    return found;
+}
 // ---------- 自动修复：安装微信 ----------
 async function installWeChat(downloadDir) {
     const installer = node_path_1.default.join(downloadDir, 'WeChatWin_4.1.8.exe');
@@ -290,11 +335,12 @@ async function installWeChat(downloadDir) {
     }
     // 腾讯自研包静默参数是 /S（不是 NSIS 的 /VERYSILENT）
     (0, node_child_process_1.spawnSync)(installer, ['/S'], { windowsHide: true, timeout: 120000 });
-    // 安装后立即锁更新：WeixinUpdate.exe 随包部署，不锁会自动升级到 ≥4.1.9 → 反复卸载重装循环。
+    // 安装后立即锁更新：WeixinUpdate.exe 随包部署，不锁会自动升级到 ≥4.1.9 → 反复卸装循环。
     // Python preflight.py check_lock_update() 做四层加固，这里先做 Layer1（改名）阻断首次自启。
+    // WeixinUpdate.exe 位于版本子目录（如 Weixin\4.1.8.107\WeixinUpdate.exe），必须递归查找。
     (0, node_child_process_1.spawnSync)('taskkill', ['/F', '/IM', 'WeixinUpdate.exe'], { windowsHide: true, stdio: 'ignore' });
-    const updateExe = 'C:\\Program Files\\Tencent\\Weixin\\WeixinUpdate.exe';
-    if (node_fs_1.default.existsSync(updateExe)) {
+    const weixinRoot = 'C:\\Program Files\\Tencent\\Weixin';
+    for (const updateExe of findWeixinUpdateExe(weixinRoot)) {
         try {
             node_fs_1.default.renameSync(updateExe, updateExe + '.disabled');
         }

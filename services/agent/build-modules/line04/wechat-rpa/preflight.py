@@ -13,7 +13,7 @@ preflight.py — Agent 开机环境自检 + 自愈层（Path 4 微信 RPA 前置
   4. 锁更新          —— WeixinUpdate.exe 改名 .disabled + 防火墙出站封禁（幂等）
   5. 微信登录态      —— 未登录 → 拉起微信 + 提示扫码
   6. Python+pywinauto—— import 测试；失败 → 提示重装 agent
-  7. UIA/讲述人激活  —— 静默激活讲述人后能否读到主窗口
+  7. UIA 激活        —— 设屏幕阅读器标志后能否读到主窗口
   8. 中台连通        —— GET <middleware>/health；不通 → 提示查网络
 
 跨平台纪律：pywinauto / windll / subprocess 真实自愈动作全在 **函数体内** import +
@@ -28,6 +28,7 @@ CLI：
 from __future__ import annotations
 
 import argparse
+import ctypes
 import json
 import os
 import platform
@@ -124,7 +125,7 @@ def classify_elevation(is_admin: bool) -> Tuple[str, str]:
     """
     依据"当前进程是否提权/管理员"判定 elevation 检测的 (status, detail)（纯函数，mac 可单测）。
 
-    - is_admin=True  → ('warn', 提示改用普通用户身份)：提权进程起讲述人/激活 UIA 会被
+    - is_admin=True  → ('warn', 提示改用普通用户身份)：提权进程设屏幕阅读器标志/激活 UIA 会被
       系统 UIPI 权限隔离挡掉（Access denied）→ UIA 没真激活 → 微信登录后仍识别不到窗口。
       用 warn 不用 failed：极少数配置仍可用，但必须醒目提示。
     - is_admin=False → ('ok', 普通用户身份)：UIA 可正常激活。
@@ -132,7 +133,7 @@ def classify_elevation(is_admin: bool) -> Tuple[str, str]:
     if is_admin:
         return (
             "warn",
-            "检测到以管理员/提权身份运行 → 讲述人/UIA 激活会被系统挡(Access denied) → "
+            "检测到以管理员/提权身份运行 → 屏幕阅读器标志/UIA 激活会被系统挡(Access denied) → "
             "微信登录后仍识别不到。请改用 **普通用户身份** 双击 start.bat 运行"
             "（不要右键'以管理员身份运行'）。",
         )
@@ -297,7 +298,7 @@ def check_elevation(dry_run: bool = False) -> Dict[str, str]:
     """
     提权检测：当前进程是否以管理员/提权身份运行。
 
-    真机踩坑：客户右键"以管理员身份运行"起 agent，start.bat 里讲述人激活那步报
+    真机踩坑：客户右键"以管理员身份运行"起 agent，start.bat 里 UIA 激活（设屏幕阅读器标志）那步报
     `Access is denied`（UIPI 权限隔离），UIA 没真激活 → 监听读不到微信窗口 →
     微信登录了也识别不到。普通用户身份跑就正常。故必须在此醒目提示。
 
@@ -319,7 +320,7 @@ def check_elevation(dry_run: bool = False) -> Dict[str, str]:
             name,
             "warn",
             "无法判定进程提权状态（token 查询失败），跳过。"
-            "若讲述人激活报 Access denied，请改用普通用户身份运行。",
+            "若屏幕阅读器标志激活报 Access denied，请改用普通用户身份运行。",
         )
 
     status, detail = classify_elevation(is_admin)
@@ -651,60 +652,40 @@ def check_python_pywinauto(dry_run: bool = False) -> Dict[str, str]:
 
 
 def check_uia_narrator(dry_run: bool = False) -> Dict[str, str]:
-    """7. UIA/讲述人激活：静默激活后能否读到主窗口。"""
+    """7. UIA 激活：设系统屏幕阅读器标志后能否读到微信主窗口（替代讲述人）。"""
     name = CHECK_NAMES[6]
     if dry_run or not _is_windows():
         return make_check(
-            name, "warn", "dry-run/非 Windows 跳过讲述人激活（仅 Windows 真机有效）。"
-        )
-
-    # 检查 Narrator.exe 是否存在（LTSC/N/精简版 Windows 可能已移除）
-    narrator_path = r"C:\Windows\System32\Narrator.exe"
-    if not os.path.isfile(narrator_path):
-        return make_check(
-            name,
-            "failed",
-            "未找到 Narrator.exe（C:\\Windows\\System32\\Narrator.exe）。"
-            "当前系统（LTSC/N 精简版/Ghost）已移除讲述人，无法激活 UIAutomation 控件树，"
-            "微信 RPA 不可用。请使用完整版 Windows 10/11 家庭版/专业版。",
+            name, "warn", "dry-run/非 Windows 跳过 UIA 激活（仅 Windows 真机有效）。"
         )
 
     try:
-        import subprocess
-
-        subprocess.run(
-            ["powershell", "-NoProfile", "-Command", "Start-Process Narrator"],
-            capture_output=True, timeout=15,
-        )
-        time.sleep(2)
-        subprocess.run(
-            ["powershell", "-NoProfile", "-Command",
-             "Stop-Process -Name Narrator -Force -ErrorAction SilentlyContinue"],
-            capture_output=True, timeout=15,
+        SPI_SETSCREENREADER = 0x0047
+        SPIF_SENDCHANGE = 0x0002
+        ctypes.windll.user32.SystemParametersInfoW(
+            SPI_SETSCREENREADER, True, None, SPIF_SENDCHANGE
         )
         time.sleep(1)
     except Exception as exc:  # noqa: BLE001
         return make_check(
             name,
             "failed",
-            f"讲述人激活失败（{exc}）。无法激活 UIAutomation 控件树，微信 RPA 不可用。"
-            "请确认：1) 非管理员身份运行 start.bat；"
-            "2) 组策略未禁用讲述人（gpedit.msc 搜索 Narrator）；"
-            "3) Windows 为完整版（非 LTSC/N 精简版）。",
+            f"屏幕阅读器标志设置失败（{exc}）。无法激活 UIAutomation 控件树，微信 RPA 不可用。"
+            "请确认 Windows 为完整版且未被组策略限制无障碍 API。",
         )
 
-    # 激活后验证 UIA 树可读（登录态下才有主窗口；未登录属正常，不在此判失败）
     try:
         from find_weixin import get_main_window
 
         mw = get_main_window()
         if mw is not None:
-            return make_check(name, "ok", "讲述人激活成功，UIAutomation 控件树可读（检测到微信主窗口）。")
+            return make_check(
+                name, "ok",
+                "屏幕阅读器模式已开（无需讲述人），UIAutomation 控件树可读（检测到微信主窗口）。",
+            )
         return make_check(
-            name,
-            "warn",
-            "讲述人已激活，但暂未读到微信主窗口（可能未登录/微信未启动），"
-            "登录后即可生效。",
+            name, "warn",
+            "屏幕阅读器标志已设，但暂未读到微信主窗口（可能未登录/微信未启动），登录后即可生效。",
         )
     except Exception as exc:  # noqa: BLE001
         return make_check(
@@ -748,7 +729,7 @@ def check_middleware_health(middleware_url: str, dry_run: bool = False) -> Dict[
 def run_all_checks(middleware_url: str, dry_run: bool = False) -> List[Dict[str, str]]:
     """按序跑全部检测，每项独立 try/except 兜底（单项崩不拖垮整体）。
 
-    elevation 排在 os_session 之后靠前：它影响后面 UIA/讲述人/登录项的成败。
+    elevation 排在 os_session 之后靠前：它影响后面 UIA/屏幕阅读器标志激活/登录项的成败。
     """
     runners: List[Tuple[str, Any]] = [
         ("os_session", lambda: check_os_session(dry_run)),

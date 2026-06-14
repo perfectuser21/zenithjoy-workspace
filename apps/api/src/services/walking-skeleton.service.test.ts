@@ -157,8 +157,8 @@ describe('ackPublishTask — qr_bind session upsert', () => {
 });
 
 describe('HEARTBEAT_MODULES version gates', () => {
-  it('line04-wechat-cs required_version should be 1.0.28 (最小化 SW_SHOWNOACTIVATE+SW_MINIMIZE 修复)', async () => {
+  it('line04-wechat-cs required_version should be 1.0.29 (SPI 替代讲述人激活)', async () => {
     const { HEARTBEAT_MODULES } = await import('./walking-skeleton.service');
-    expect(HEARTBEAT_MODULES['line04-wechat-cs'].required_version).toBe('1.0.28');
+    expect(HEARTBEAT_MODULES['line04-wechat-cs'].required_version).toBe('1.0.29');
   });
 });
