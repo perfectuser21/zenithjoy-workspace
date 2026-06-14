@@ -90,10 +90,11 @@ def test_ensure_tray_visible_hidden_calls_showna():
 
 
 def test_ensure_tray_visible_visible_no_call():
-    """窗口可见时 _ensure_tray_visible 不得调 ShowWindow，返回 False。"""
+    """窗口可见且非最小化时 _ensure_tray_visible 不得调 ShowWindow，返回 False。"""
     mw = _make_mock_mw(hwnd=99)
     user32 = MagicMock()
     user32.IsWindowVisible.return_value = True
+    user32.IsIconic.return_value = 0  # 非最小化
 
     with _mock_windll(user32):
         result = listen_chat._ensure_tray_visible(mw)
@@ -134,10 +135,11 @@ def test_scan_unread_tray_hidden_showna_then_hide():
 
 
 def test_scan_unread_visible_no_showna():
-    """窗口可见时 scan_unread 不得调 ShowWindow（不闪不抖动）。"""
+    """窗口可见且非最小化时 scan_unread 不得调 ShowWindow（不闪不抖动）。"""
     mw = _make_mock_mw(hwnd=55)
     user32 = MagicMock()
     user32.IsWindowVisible.return_value = True
+    user32.IsIconic.return_value = 0  # 非最小化
 
     with _mock_windll(user32):
         listen_chat.scan_unread(mw)
@@ -183,10 +185,11 @@ def test_reply_in_chat_tray_shows_before_open_chat_then_hides():
 
 
 def test_reply_in_chat_visible_no_extra_showna():
-    """窗口已可见时 reply_in_chat 不得额外调 ShowWindow（避免闪烁）。"""
+    """窗口已可见且非最小化时 reply_in_chat 不得额外调 ShowWindow（避免闪烁）。"""
     mw = _make_mock_mw(hwnd=43)
     user32 = MagicMock()
     user32.IsWindowVisible.return_value = True  # 已可见
+    user32.IsIconic.return_value = 0  # 非最小化
 
     item = MagicMock()
 
@@ -245,3 +248,50 @@ def test_ensure_tray_visible_no_setwindowpos_when_offscreen_mode_off():
 
     user32.ShowWindow.assert_called_with(89, 8)
     user32.SetWindowPos.assert_not_called()
+
+
+# ── v1.0.27 regression：最小化到任务栏场景（IsWindowVisible=True, IsIconic=True）──
+
+
+def test_ensure_tray_visible_iconic_calls_showna():
+    """最小化到任务栏时（IsWindowVisible=True, IsIconic=True）_ensure_tray_visible 必须 SW_SHOWNA(8) 并返回 True。
+
+    v1.0.26 bug：条件只判断 not IsWindowVisible，IsIconic=True 被跳过 → 返回 False →
+    scan_unread/reply_in_chat 不做离屏处理 → _uia_send 调 SW_RESTORE=9 把窗口拉前台。
+    """
+    mw = _make_mock_mw(hwnd=111)
+    user32 = MagicMock()
+    user32.IsWindowVisible.return_value = True   # 可见（最小化到任务栏时为 True）
+    user32.IsIconic.return_value = 1             # 最小化
+
+    with _mock_windll(user32), patch("time.sleep"):
+        result = listen_chat._ensure_tray_visible(mw)
+
+    assert result is True, "_ensure_tray_visible 对最小化窗口必须返回 True"
+    user32.ShowWindow.assert_called_with(111, 8)
+
+
+def test_ensure_tray_visible_iconic_moves_offscreen():
+    """最小化 + _OFFSCREEN_REPLY=True 时，_ensure_tray_visible 必须 SW_SHOWNA(8) + SetWindowPos(-2600, 60)。
+
+    v1.0.26 bug：IsIconic 被跳过 → SetWindowPos 从未调用 → _uia_send 的 SW_RESTORE=9 激活窗口。
+    """
+    mw = _make_mock_mw(hwnd=112)
+    user32 = MagicMock()
+    user32.IsWindowVisible.return_value = True
+    user32.IsIconic.return_value = 1
+
+    original_offscreen = listen_chat._OFFSCREEN_REPLY
+    try:
+        listen_chat._OFFSCREEN_REPLY = True
+        with _mock_windll(user32), patch("time.sleep"):
+            listen_chat._ensure_tray_visible(mw)
+    finally:
+        listen_chat._OFFSCREEN_REPLY = original_offscreen
+
+    user32.ShowWindow.assert_called_with(112, 8)
+    setpos_calls = user32.SetWindowPos.call_args_list
+    assert len(setpos_calls) >= 1, "最小化 + offscreen 模式必须调 SetWindowPos 移到屏幕外"
+    args = setpos_calls[0][0]
+    assert args[2] == -2600, f"x 坐标必须是 -2600，实际是 {args[2]}"
+    assert args[3] == 60,    f"y 坐标必须是 60，实际是 {args[3]}"

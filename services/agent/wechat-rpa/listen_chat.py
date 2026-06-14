@@ -124,10 +124,13 @@ def _parse_item_name(name: str, require_unread: bool = True) -> Optional[Dict[st
 
 
 def _ensure_tray_visible(mw: Any) -> bool:
-    """若微信在系统托盘（IsWindowVisible=False），SW_SHOWNA 短暂还原，返回是否做过还原。
+    """若微信在系统托盘（IsWindowVisible=False）或最小化到任务栏（IsIconic=True），SW_SHOWNA 短暂还原。
 
-    托盘场景：窗口存在但隐藏 → mmui 虚拟列表 UIA name 不实时更新 → scan_unread 角标永远看不到。
-    SW_SHOWNA=8：还原到非最小化可见状态，但不激活/不抢焦点（用户几乎无感知）。
+    两种隐藏场景均需处理：
+    - 托盘：IsWindowVisible=False，IsIconic=False → mmui 虚拟列表 UIA name 不实时更新
+    - 最小化：IsWindowVisible=True，IsIconic=True → _uia_send 会走 SW_RESTORE=9 拉前台（v1.0.26 bug）
+
+    SW_SHOWNA=8：还原到可见状态，但不激活/不抢焦点（用户几乎无感知）。
     _OFFSCREEN_REPLY=True（默认）：还原后立即 SetWindowPos(-2600,60) 移到屏幕外，用户看不到弹窗。
     _OFFSCREEN_REPLY=False：保留弹窗模式，窗口短暂出现在屏幕上（与 v1.0.20 以前行为相同）。
     调用方扫完后若返回 True 须调 _restore_tray 送回托盘。
@@ -136,8 +139,10 @@ def _ensure_tray_visible(mw: Any) -> bool:
     import ctypes.wintypes as _wt
     try:
         _hwnd = mw.element_info.handle
-        if _hwnd and not _ct.windll.user32.IsWindowVisible(_hwnd):
-            _ct.windll.user32.ShowWindow(_hwnd, 8)  # SW_SHOWNA = 8
+        _is_visible = bool(_ct.windll.user32.IsWindowVisible(_hwnd))
+        _is_iconic = bool(_ct.windll.user32.IsIconic(_hwnd))
+        if _hwnd and (not _is_visible or _is_iconic):
+            _ct.windll.user32.ShowWindow(_hwnd, 8)  # SW_SHOWNA = 8：还原但不激活
             time.sleep(0.35)  # 等 Qt 重建 UIA 虚拟列表渲染
             if _OFFSCREEN_REPLY:
                 # 窗口已还原但在可见区 → 移到屏幕外，用户无感知，UIA 仍可用
@@ -372,8 +377,19 @@ def _uia_send(uia_edit: Any, mw: Any, reply_text: str) -> bool:
     try:
         # 1. 还原窗口（最小化时 SetValue 静默失败）并刷新 UIA 引用
         if was_minimized:
-            _u32.ShowWindow(main_hwnd, 9)  # SW_RESTORE=9
-            time.sleep(0.8)
+            if _OFFSCREEN_REPLY:
+                import ctypes.wintypes as _wt
+                _u32.ShowWindow(main_hwnd, 8)  # SW_SHOWNA=8：还原不激活不抢前台
+                time.sleep(0.5)
+                _rc = _wt.RECT()
+                _u32.GetWindowRect(main_hwnd, _ct.byref(_rc))
+                if _rc.left > -2000:
+                    _SWP = 0x0001 | 0x0004 | 0x0010  # NOSIZE | NOZORDER | NOACTIVATE
+                    _u32.SetWindowPos(main_hwnd, 0, -2600, 60, 0, 0, _SWP)
+                time.sleep(0.3)
+            else:
+                _u32.ShowWindow(main_hwnd, 9)  # SW_RESTORE=9（弹窗模式保留原始行为）
+                time.sleep(0.8)
             _refound = _find_chat_input(mw)
             if _refound is not None:
                 uia_edit = _refound
