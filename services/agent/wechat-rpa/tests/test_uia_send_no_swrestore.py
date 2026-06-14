@@ -125,6 +125,39 @@ class TestUiaSendNoSwRestore(unittest.TestCase):
         self.assertFalse(result, "两次都失败应返回 False")
         self._assert_no_sw_restore(user32)
 
+    def test_uia_send_minimized_offscreen_mode_no_sw_restore(self):
+        """was_minimized=True + _OFFSCREEN_REPLY=True → SW_RESTORE=9 禁止被调用，应改用 SW_SHOWNA=8。
+
+        v1.0.26 bug：_uia_send 第 375 行无条件调 ShowWindow(main_hwnd, 9)=SW_RESTORE，
+        导致微信窗口激活到前台。修法：_OFFSCREEN_REPLY=True 时改用 SW_SHOWNA=8+SetWindowPos。
+        """
+        user32 = MagicMock()
+        user32.IsIconic.return_value = True  # 模拟最小化到任务栏
+
+        edit = MagicMock()
+        edit.element_info.handle = 88888
+        edit.get_value = MagicMock(side_effect=["测试消息", ""])
+        edit.iface_value = MagicMock()
+
+        mw = MagicMock()
+        mw.element_info.handle = 99999
+
+        original_offscreen = self.lc._OFFSCREEN_REPLY
+        try:
+            self.lc._OFFSCREEN_REPLY = True
+            with _mock_windll(user32), \
+                 patch("listen_chat._find_chat_input", return_value=edit), \
+                 patch("listen_chat._log"), \
+                 patch("time.sleep"):
+                self.lc._uia_send(edit, mw, "测试消息")
+        finally:
+            self.lc._OFFSCREEN_REPLY = original_offscreen
+
+        self._assert_no_sw_restore(user32)
+        sw_calls = [c[0][1] for c in user32.ShowWindow.call_args_list if len(c[0]) >= 2]
+        self.assertIn(8, sw_calls,
+                      "minimized + _OFFSCREEN_REPLY=True 必须调 SW_SHOWNA=8 而非 SW_RESTORE=9")
+
 
 if __name__ == "__main__":
     unittest.main()
