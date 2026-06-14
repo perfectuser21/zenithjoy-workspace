@@ -273,15 +273,17 @@ def test_ensure_tray_visible_iconic_calls_showna():
 
 
 def test_ensure_tray_visible_iconic_moves_offscreen():
-    """最小化 + _OFFSCREEN_REPLY=True 时，_ensure_tray_visible 必须 SW_SHOWNOACTIVATE(4) + SetWindowPos(-2600, 60)。
+    """最小化 + _OFFSCREEN_REPLY=True 时，_ensure_tray_visible 必须通过 SetWindowPlacement 把窗口移到屏外。
 
-    v1.0.26 bug：IsIconic 被跳过 → SetWindowPos 从未调用 → _uia_send 的 SW_RESTORE=9 激活窗口。
-    v1.0.28 fix：使用 SW_SHOWNOACTIVATE(4) 还原，再立即 SetWindowPos(-2600,60) 移出屏幕。
+    v1.0.26 bug：IsIconic 被跳过 → 移出屏幕逻辑从未调用 → _uia_send 的 SW_RESTORE=9 激活窗口。
+    v1.0.28 fix：使用 SW_SHOWNOACTIVATE(4) + SetWindowPos(-2600,60)。
+    v1.0.29 fix：改用 SetWindowPlacement 预定位，ShowWindow(4) 直接恢复到屏外（消除 50ms 闪烁）。
     """
     mw = _make_mock_mw(hwnd=112)
     user32 = MagicMock()
     user32.IsWindowVisible.return_value = True
     user32.IsIconic.return_value = 1
+    user32.GetWindowPlacement.return_value = 1  # 模拟成功
 
     original_offscreen = listen_chat._OFFSCREEN_REPLY
     try:
@@ -292,11 +294,8 @@ def test_ensure_tray_visible_iconic_moves_offscreen():
         listen_chat._OFFSCREEN_REPLY = original_offscreen
 
     user32.ShowWindow.assert_called_with(112, 4)
-    setpos_calls = user32.SetWindowPos.call_args_list
-    assert len(setpos_calls) >= 1, "最小化 + offscreen 模式必须调 SetWindowPos 移到屏幕外"
-    args = setpos_calls[0][0]
-    assert args[2] == -2600, f"x 坐标必须是 -2600，实际是 {args[2]}"
-    assert args[3] == 60,    f"y 坐标必须是 60，实际是 {args[3]}"
+    user32.GetWindowPlacement.assert_called(), "必须调 GetWindowPlacement 获取原始坐标"
+    user32.SetWindowPlacement.assert_called(), "必须调 SetWindowPlacement 预改离屏坐标"
 
 
 # ── v1.0.28 regression：最小化必须 SW_SHOWNOACTIVATE(4)+SW_MINIMIZE(6)，不能 SW_SHOWNA(8)+SW_HIDE(0) ──
@@ -391,3 +390,91 @@ def test_reply_in_chat_minimized_restores_to_minimized_not_tray():
 
     assert 6 in sw_calls, "reply_in_chat 最小化场景须调 SW_MINIMIZE(6) 还原任务栏"
     assert 0 not in sw_calls, "reply_in_chat 最小化场景禁止调 SW_HIDE(0)"
+
+
+# ── v1.0.29 regression：SetWindowPlacement 预定位离屏，消除 ShowWindow(4) 50ms 闪烁 ──
+
+
+def test_ensure_tray_visible_minimized_calls_setwindowplacement_before_showwindow():
+    """最小化 + _OFFSCREEN_REPLY=True 时，_ensure_tray_visible 必须在 ShowWindow(4) 之前调
+    GetWindowPlacement + SetWindowPlacement，把 rcNormalPosition 改成离屏坐标。
+
+    v1.0.28 bug：ShowWindow(4) 先把窗口恢复到原始屏幕位置（如100,100），50ms 后才调
+    SetWindowPos 移到 -2600。这 50ms 窗口在屏幕上可见，用户看到"弹跳"。
+
+    v1.0.29 fix：先用 SetWindowPlacement 把 rcNormalPosition 改成 (-2600,60)，
+    再调 ShowWindow(4)，窗口恢复动画直接打到屏外，用户完全看不到。
+    """
+    mw = _make_mock_mw(hwnd=222)
+    user32 = MagicMock()
+    user32.IsWindowVisible.return_value = True
+    user32.IsIconic.return_value = 1
+    call_order: list = []
+
+    user32.GetWindowPlacement.side_effect = lambda *a, **kw: call_order.append("GetWindowPlacement") or 1
+    user32.SetWindowPlacement.side_effect = lambda *a, **kw: call_order.append("SetWindowPlacement") or 1
+    user32.ShowWindow.side_effect = lambda *a, **kw: call_order.append(f"ShowWindow({a[1]})")
+
+    original_offscreen = listen_chat._OFFSCREEN_REPLY
+    try:
+        listen_chat._OFFSCREEN_REPLY = True
+        with _mock_windll(user32), patch("time.sleep"):
+            listen_chat._ensure_tray_visible(mw)
+    finally:
+        listen_chat._OFFSCREEN_REPLY = original_offscreen
+
+    assert "GetWindowPlacement" in call_order, "必须调 GetWindowPlacement 获取原始坐标"
+    assert "SetWindowPlacement" in call_order, "必须调 SetWindowPlacement 预改离屏坐标"
+    assert "ShowWindow(4)" in call_order, "仍须调 ShowWindow(4) 还原窗口"
+    assert call_order.index("SetWindowPlacement") < call_order.index("ShowWindow(4)"), \
+        "SetWindowPlacement 必须在 ShowWindow(4) 之前调用（先改位置再还原）"
+
+
+def test_ensure_tray_visible_minimized_saves_original_pos():
+    """_ensure_tray_visible 最小化场景须把原始 rcNormalPosition 存入 _saved_normal_pos。
+
+    若不保存原始坐标，SW_MINIMIZE 后用户手动还原时窗口出现在 -2600 离屏。
+    """
+    mw = _make_mock_mw(hwnd=223)
+    user32 = MagicMock()
+    user32.IsWindowVisible.return_value = True
+    user32.IsIconic.return_value = 1
+    user32.GetWindowPlacement.return_value = 1
+
+    listen_chat._saved_normal_pos.pop(223, None)
+
+    original_offscreen = listen_chat._OFFSCREEN_REPLY
+    try:
+        listen_chat._OFFSCREEN_REPLY = True
+        with _mock_windll(user32), patch("time.sleep"):
+            listen_chat._ensure_tray_visible(mw)
+    finally:
+        listen_chat._OFFSCREEN_REPLY = original_offscreen
+
+    assert 223 in listen_chat._saved_normal_pos, \
+        "_saved_normal_pos 必须保存 hwnd=223 的原始位置，供 _restore_window_state 还原"
+
+
+def test_restore_window_state_minimized_restores_rcnormalposition():
+    """_restore_window_state('minimized') 在 SW_MINIMIZE(6) 后须调 SetWindowPlacement 还原原始坐标。
+
+    v1.0.28 gap：SW_MINIMIZE(6) 后 rcNormalPosition 仍是 (-2600,60)，
+    用户手动从任务栏点开微信会出现在屏幕外。
+    v1.0.29 fix：SW_MINIMIZE 后再 SetWindowPlacement 把 rcNormalPosition 改回原始值。
+    """
+    mw = _make_mock_mw(hwnd=224)
+    user32 = MagicMock()
+    user32.GetWindowPlacement.return_value = 1
+
+    listen_chat._saved_normal_pos[224] = (100, 100, 900, 700)
+
+    original_offscreen = listen_chat._OFFSCREEN_REPLY
+    try:
+        listen_chat._OFFSCREEN_REPLY = True
+        with _mock_windll(user32):
+            listen_chat._restore_window_state(mw, 'minimized')
+    finally:
+        listen_chat._OFFSCREEN_REPLY = original_offscreen
+
+    user32.SetWindowPlacement.assert_called()
+    assert 224 not in listen_chat._saved_normal_pos, "_saved_normal_pos 应在还原后清除 hwnd=224"
