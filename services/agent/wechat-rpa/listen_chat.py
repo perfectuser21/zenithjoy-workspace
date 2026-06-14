@@ -1038,39 +1038,26 @@ def _log(msg: str) -> None:
 
 
 def _activate_uia() -> None:
-    """开关讲述人激活微信 4.0 的 UIAutomation provider。
+    """设置系统屏幕阅读器标志，激活微信 4.0 的 UIAutomation provider（替代讲述人）。
 
-    微信 4.0 把 UI 自绘在 MMUIRenderSubWindowHW 上，**只有 UIAutomation 被激活后**才暴露出
-    mmui::MainWindow 那棵可读控件树；且该激活会随时间失效。start.bat 仅在启动时解锁一次不够，
-    失效后监听就"找不到微信"。故监听需按需重做本激活（Windows-only；非 Windows 不会进到这里）。
+    微信 4.0 把 UI 自绘在 MMUIRenderSubWindowHW 上，只有"屏幕阅读器模式"被打开后才暴露
+    mmui::MainWindow 那棵可读控件树。旧实现靠启动 Windows 讲述人来打开这个开关，但讲述人
+    会在屏幕上画满跟随焦点的高亮框 + 朗读声，严重干扰客户机使用。
+
+    新实现直接用 ctypes 调 SystemParametersInfo 设 SPI_SETSCREENREADER 标志——这才是讲述人
+    背后真正打开"屏幕阅读器模式"的系统开关。纯系统调用，无窗口/无框/无声；标志在进程退出后
+    持久保持，也不会反向招起讲述人。已在 xian-pc 真机验证：不开讲述人即读到 mmui::MainWindow
+    + 92 控件。仅对微信 ≤4.1.8 有效（4.1.10+ 控件树被腾讯移除，讲述人和本标志都救不了）。
     """
     try:
-        # 启动讲述人必须走 PowerShell Start-Process（ShellExecute），对齐 start.bat。
-        # 之前用 subprocess.Popen(["Narrator.exe"]) 直接拉 → 非管理员身份报 WinError 740
-        # (需要提升) → 讲述人根本起不来 → UIA 从未激活 → 永远 found_window=False（v1.1.84 真 bug）。
-        # 禁讲述人首页弹窗，防止欢迎窗盖住微信（v1.1.96 fix）
-        subprocess.run(
-            ["powershell", "-NoProfile", "-Command",
-             "New-ItemProperty -Path 'HKCU:\\Software\\Microsoft\\Narrator' "
-             "-Name 'RunStartupPage' -Value 0 -PropertyType DWord -Force | Out-Null"],
-            capture_output=True, timeout=10,
+        import ctypes
+
+        SPI_SETSCREENREADER = 0x0047
+        SPIF_SENDCHANGE = 0x0002
+        ctypes.windll.user32.SystemParametersInfoW(
+            SPI_SETSCREENREADER, True, None, SPIF_SENDCHANGE
         )
-        subprocess.run(
-            ["powershell", "-NoProfile", "-Command",
-             "Start-Process Narrator -WindowStyle Minimized"],
-            capture_output=True, timeout=15,
-        )
-        time.sleep(2)
-        # 关讲述人也走 PowerShell Stop-Process（taskkill 关不掉，是 v1.1.83 的 bug）。
-        subprocess.run(
-            ["powershell", "-NoProfile", "-Command",
-             "Stop-Process -Name Narrator -Force -ErrorAction SilentlyContinue; "
-             "Start-Sleep 1; "
-             "Get-Process -Name Narrator -ErrorAction SilentlyContinue | Stop-Process -Force"],
-            capture_output=True, timeout=15,
-        )
-        time.sleep(1)
-        _log("UIA 激活（讲述人 Start-Process 开 + Stop-Process 关）完成")
+        _log("UIA 激活（屏幕阅读器系统标志已设，无需讲述人）完成")
     except Exception as exc:
         _log(f"UIA 激活失败: {exc}")
 
