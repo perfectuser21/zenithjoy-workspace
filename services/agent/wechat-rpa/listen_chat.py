@@ -35,6 +35,7 @@ import os
 import platform
 import subprocess
 import sys
+import threading
 import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -55,9 +56,12 @@ FAIL_PLACEHOLDER = "AI 生成失败（请人审决定是否重试）"
 # 设为 False 则保留"弹窗模式"：窗口短暂出现在屏幕上，行为与 v1.0.20 以前相同。
 _OFFSCREEN_REPLY = True
 
-# 最小化场景：保存 hwnd → 原始 rcNormalPosition，让 _restore_window_state 还原（v1.0.29）
-# key=hwnd(int), value=(left, top, right, bottom)
+# 最小化/可见场景：保存 hwnd → 原始坐标，让 _restore_window_state 还原（v1.0.29）
+# _saved_normal_pos: (left, top, right, bottom) —— WINDOWPLACEMENT.rcNormalPosition
+# _saved_visible_pos: (left, top) —— GetWindowRect 屏幕实时坐标
 _saved_normal_pos: dict = {}
+_saved_visible_pos: dict = {}
+_saved_normal_pos_lock = threading.Lock()  # 保护两个字典的并发访问
 
 # 会话列表里要过滤掉的系统/非客户账号（按 element_info.name 首行匹配）。
 SKIP_SENDERS = (
@@ -188,6 +192,19 @@ def _ensure_tray_visible(mw: Any) -> str:
             _ct.windll.user32.ShowWindow(_hwnd, 4)  # SW_SHOWNOACTIVATE = 4：恢复到 rcNormalPosition（已改为离屏）
             time.sleep(0.75)  # 最小化恢复比托盘需要更长 UIA 树重建时间
             return 'minimized'
+        else:
+            # 可见非最小化（SPI 激活后常见后台状态）：窗口在屏幕正常位置，UIA 操作会激活到前台。
+            # v1.0.30：先移到离屏，UIA 操作结束后 _restore_window_state 移回。
+            if _OFFSCREEN_REPLY:
+                _rc = _wt.RECT()
+                _ct.windll.user32.GetWindowRect(_hwnd, _ct.byref(_rc))
+                if _rc.left > -2000:
+                    _SWP = 0x0001 | 0x0004 | 0x0010  # NOSIZE | NOZORDER | NOACTIVATE
+                    with _saved_normal_pos_lock:
+                        _saved_visible_pos[_hwnd] = (_rc.left, _rc.top)
+                    _ct.windll.user32.SetWindowPos(_hwnd, 0, -2600, 60, 0, 0, _SWP)
+                    time.sleep(0.15)
+                    return 'visible'
     except Exception:
         pass
     return ''
@@ -228,6 +245,17 @@ def _restore_window_state(mw: Any, original_state: str) -> None:
                         _ct.windll.user32.SetWindowPlacement(_hwnd, _ct.byref(_wp))
                 except Exception:
                     pass
+        elif original_state == 'visible':
+            # v1.0.30：可见后台场景，移回原始坐标（NOACTIVATE 不抢焦点）
+            if _OFFSCREEN_REPLY:
+                with _saved_normal_pos_lock:
+                    _orig = _saved_visible_pos.pop(_hwnd, None)
+                if _orig is not None:
+                    try:
+                        _SWP = 0x0001 | 0x0004 | 0x0010  # NOSIZE | NOZORDER | NOACTIVATE
+                        _ct.windll.user32.SetWindowPos(_hwnd, 0, _orig[0], _orig[1], 0, 0, _SWP)
+                    except Exception:
+                        pass
     except Exception:
         pass
 
