@@ -371,17 +371,21 @@ def is_privacy_locked() -> bool:
 
     当微信启用隐私保护（隐私锁）时，锁屏界面复用 mmui::LoginWindow 类，
     但 title 保持 '微信'（app 名），区别于真正未登录的 '登录' title。
+    枚举失败（UIA 未就绪）时保守返回 False，不阻断监听主循环。
     """
     from pywinauto import Desktop
 
-    for w in Desktop(backend="uia").windows():
-        try:
-            cls = w.element_info.class_name
-            title = w.element_info.name or ""
-            if cls == LOGIN_WINDOW_CLASS and title == "微信":
-                return True
-        except Exception:
-            continue
+    try:
+        for w in Desktop(backend="uia").windows():
+            try:
+                cls = w.element_info.class_name
+                title = w.element_info.name or ""
+                if cls == LOGIN_WINDOW_CLASS and title == "微信":
+                    return True
+            except Exception:
+                continue
+    except Exception:
+        pass
     return False
 
 
