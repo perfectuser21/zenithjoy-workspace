@@ -102,6 +102,8 @@ export class ModuleManager {
   private readonly downloading = new Set<string>();
   // 最近一次各模块 preflight 结果（供心跳上报）
   private readonly statusReport = new Map<string, ModulePreflightResult>();
+  // 正在运行 preflight 的模块（并发保护：WeChat 安装耗时 2-5 分钟，心跳 30s 间隔会并发触发）
+  private readonly preflightRunning = new Set<string>();
 
   constructor(opts: ModuleManagerOptions = {}) {
     this.opts = opts;
@@ -318,7 +320,13 @@ export class ModuleManager {
   }
 
   // 运行模块目录下的 preflight.js，返回结果
+  // 并发保护：同一 lineId 同时只允许一个 preflight 进程运行（WeChat 安装耗时 2-5 分钟）
   async runModulePreflight(lineId: string): Promise<ModulePreflightResult> {
+    if (this.preflightRunning.has(lineId)) {
+      this.log(`${lineId} preflight 已在运行中，跳过本次（并发保护）`);
+      return { ok: false, reason: 'preflight_already_running' };
+    }
+
     const version = this.getInstalledVersion(lineId);
     if (!version) {
       return { ok: false, reason: 'module_not_installed' };
@@ -326,7 +334,12 @@ export class ModuleManager {
     const moduleDir = this.getModuleDir(lineId, version);
 
     if (this.opts.preflightImpl) {
-      return this.opts.preflightImpl(lineId, moduleDir);
+      this.preflightRunning.add(lineId);
+      try {
+        return await this.opts.preflightImpl(lineId, moduleDir);
+      } finally {
+        this.preflightRunning.delete(lineId);
+      }
     }
 
     const preflightJs = path.join(moduleDir, 'preflight.js');
@@ -334,13 +347,17 @@ export class ModuleManager {
       return { ok: false, reason: 'module_not_installed' };
     }
 
+    this.preflightRunning.add(lineId);
     const execFn = this.opts.execFileImpl ?? execFile;
     return new Promise<ModulePreflightResult>((resolve) => {
       execFn(
         process.execPath,
         [preflightJs],
-        { cwd: moduleDir, windowsHide: true, timeout: 60_000, env: { ...process.env, ZENITHJOY_CORE_DIR: path.dirname(process.execPath) } },
+        // 660s：WeChat 安装最长 ~5 分钟 + 其他检查 + 缓冲
+        // 旧值 60s 会在用户点击 UAC 确认框后、安装完成前把 preflight 进程杀掉
+        { cwd: moduleDir, windowsHide: true, timeout: 660_000, env: { ...process.env, ZENITHJOY_CORE_DIR: path.dirname(process.execPath) } },
         (err, stdout, stderr) => {
+          this.preflightRunning.delete(lineId);
           if (stderr) this.log(`${lineId} preflight stderr: ${stderr}`);
           try {
             const lines = (stdout || '').trim().split('\n').filter(Boolean);
