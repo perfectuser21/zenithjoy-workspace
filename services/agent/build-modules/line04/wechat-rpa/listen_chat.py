@@ -1166,7 +1166,7 @@ def run_real_listen(args: argparse.Namespace) -> int:
         return 0
 
     # 函数体内 import，避免顶层触发 pywinauto
-    from find_weixin import get_main_window, login_window_present
+    from find_weixin import get_main_window, login_window_present, is_privacy_locked
 
     print(
         f"[listen_chat] start polling (pywinauto), middleware={args.middleware_url}, "
@@ -1214,13 +1214,16 @@ def run_real_listen(args: argparse.Namespace) -> int:
                     _log(f"已清理 {len(expired_keys)} 条过期 replied（TTL {REPLIED_TTL}s）")
                 last_replied_purge = now
 
-            # 取主窗口（顺带采集诊断：找到没 / 是否停在登录窗口）
+            # 取主窗口（顺带采集诊断：找到没 / 是否停在登录窗口 / 是否隐私锁屏）
             mw = None
             login = False
+            screen_locked = False
             try:
                 mw = get_main_window()
                 if mw is None:
-                    login = login_window_present()
+                    screen_locked = is_privacy_locked()
+                    if not screen_locked:
+                        login = login_window_present()
                 else:
                     # 主窗口已就绪时若仍有登录窗口（残留），自动关闭
                     if login_window_present():
@@ -1246,16 +1249,19 @@ def run_real_listen(args: argparse.Namespace) -> int:
                 diag = {
                     "main_window_found": mw is not None,
                     "login_present": login,
+                    "screen_locked": screen_locked,
                     "sessions_seen": sessions_seen,
                     "unread_count": len(last_unread_senders),
                     "unread_senders": last_unread_senders[:10],
                     "replied_count": len(replied),
                     "last_error": last_error,
                 }
+                lock_suffix = " [隐私锁屏！请在微信设置里关闭隐私保护]" if screen_locked else ""
                 _log(
                     f"心跳 found_window={diag['main_window_found']} login={login} "
-                    f"sessions={sessions_seen} unread={diag['unread_count']}"
+                    f"locked={screen_locked} sessions={sessions_seen} unread={diag['unread_count']}"
                     f"{diag['unread_senders']} replied={diag['replied_count']} err={last_error}"
+                    f"{lock_suffix}"
                 )
                 hb = post_heartbeat(
                     args.middleware_url, agent_id=getattr(args, "agent_id", None), diag=diag
@@ -1265,6 +1271,11 @@ def run_real_listen(args: argparse.Namespace) -> int:
                     _log(f"心跳上报失败: {hb.get('error')}")
 
             if mw is None:
+                # 隐私锁屏：账号已登录但微信屏幕被锁，无法操作 → 等待用户手动解锁，不做 UIA 激活
+                if screen_locked:
+                    time.sleep(args.interval)
+                    continue
+
                 # 微信既没有主窗口也没有登录窗口 → 进程未启动 → 自动拉起 Weixin.exe（冷却 120s）
                 if not login and now - last_wechat_launch >= wechat_launch_cooldown:
                     from find_weixin import launch_weixin, is_weixin_running  # noqa: PLC0415
@@ -1287,7 +1298,9 @@ def run_real_listen(args: argparse.Namespace) -> int:
                     try:
                         mw = get_main_window()
                         if mw is None:
-                            login = login_window_present()
+                            screen_locked = is_privacy_locked()
+                            if not screen_locked:
+                                login = login_window_present()
                     except Exception as exc:
                         last_error = f"{type(exc).__name__}: {exc}"
                 if mw is None:
