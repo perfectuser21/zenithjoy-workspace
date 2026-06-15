@@ -663,3 +663,55 @@ describe('runPreflight — wechat_version 失败必须 blocking（ok:false）', 
     expect(result.checks.wechat_version).toBe(true);
   });
 });
+
+// ── 回归测试：exe 文件版本优先于注册表 ─────────────────────────────────────
+// 根因：WeChat 4.1.8.107 启动后几秒内会把
+//   HKCU\SOFTWARE\Tencent\Weixin Version 自动改写为可用更新版本（4.1.10.27）。
+// preflight 若先读注册表会误判版本 > 4.1.8 → autoRepair 杀掉微信 → 反复卸装死循环。
+// 修法：在注册表读取之前先用 PowerShell Get-Item 读取 Weixin.exe 的 FileVersion，
+//   exe 文件版本不受 WeChat 自动更新检测器修改，始终反映实际安装版本。
+describe('checkWechatVersion — exe 文件版本优先于注册表（regression: 4.1.8.107 安装后注册表被改写为 4.1.10.27 误判）', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.mocked(execSync).mockReset();
+  });
+
+  it('Weixin.exe FileVersion=4.1.8.107 时直接 ok:true，注册表不被读取（即使注册表记录 4.1.10.27）', () => {
+    const origPlatform = process.platform;
+    Object.defineProperty(process, 'platform', { value: 'win32', configurable: true });
+    let registryCalled = false;
+    vi.mocked(execSync).mockImplementation((cmd: unknown) => {
+      const c = String(cmd);
+      if (c.includes('Get-Item') && c.includes('Weixin.exe')) {
+        return '4.1.8.107\r\n' as any;
+      }
+      if (c.includes('reg query')) {
+        registryCalled = true;
+        return 'HKEY_CURRENT_USER\\SOFTWARE\\Tencent\\Weixin\r\n    Version    REG_SZ    4.1.10.27\r\n' as any;
+      }
+      throw new Error('unexpected cmd: ' + c);
+    });
+    const r = checkWechatVersion();
+    Object.defineProperty(process, 'platform', { value: origPlatform, configurable: true });
+    expect(r.ok).toBe(true);
+    expect(r.found).toBe('4.1.8.107');
+    expect(registryCalled).toBe(false);
+  });
+
+  it('Weixin.exe PowerShell 出错时回退到注册表（保留兼容）', () => {
+    const origPlatform = process.platform;
+    Object.defineProperty(process, 'platform', { value: 'win32', configurable: true });
+    vi.mocked(execSync).mockImplementation((cmd: unknown) => {
+      const c = String(cmd);
+      if (c.includes('Get-Item')) throw new Error('file not found');
+      if (c.includes('Tencent\\Weixin') || c.includes('Tencent\\\\Weixin')) {
+        return 'HKEY_CURRENT_USER\\SOFTWARE\\Tencent\\Weixin\r\n    Version    REG_SZ    4.1.8.107\r\n' as any;
+      }
+      throw new Error('not found');
+    });
+    const r = checkWechatVersion();
+    Object.defineProperty(process, 'platform', { value: origPlatform, configurable: true });
+    expect(r.ok).toBe(true);
+    expect(r.found).toBe('4.1.8.107');
+  });
+});
