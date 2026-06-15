@@ -245,37 +245,12 @@ if exist "%_WEIXIN_ROOT%" (
     echo [lock-update] WeChat install dir not found, skipping (%_WEIXIN_ROOT%)
 )
 
-REM === Step 6.9: WeChat RPA startup environment self-check + self-heal (preflight) ===
-REM Run wechat-rpa\preflight.py with bundled python-embedded\python.exe to check and self-heal
-REM the environment WeChat RPA needs (WeChat version / screen-reader flag UIA / pywinauto / deps). Prints a
-REM report and writes C:\Users\Public\zj-preflight.json (readable by middleware dashboard).
-REM Middleware URL reuses ZENITHJOY_API_BASE (preflight also has its own default/env fallback).
-REM [Blocking] preflight self-heals; if any check still FAIL after self-heal, agent must not start.
-REM Line04 (WeChat AI CS) depends on correct WeChat version + env — silent failure is worse than no start.
+REM === Step 6.9: WeChat RPA 环境自检（非阻断，由 module-manager 负责自愈）===
+REM preflight.py 已由 module-manager 在下载最新模块后自动运行（含 _run_elevated 安装微信）。
+REM start.bat 不再阻断启动流程，确保任意 Windows 机器能自愈，无需重新下载安装包。
+REM 此处仅在 core 启动前做一次信息性输出，不阻断。
 if exist "%~dp0python-embedded\python.exe" if exist "%~dp0wechat-rpa\preflight.py" (
-    echo.
-    echo  ============================================================
-    echo   WeChat RPA environment self-check ^(preflight^)
-    echo  ============================================================
-    "%~dp0python-embedded\python.exe" "%~dp0wechat-rpa\preflight.py" --middleware-url "%ZENITHJOY_API_BASE%"
-    if errorlevel 1 (
-        echo.
-        echo  ============================================================
-        echo   [preflight] FAIL: environment self-check found unrecoverable issues.
-        echo   See preflight report above for details on each failed check.
-        echo.
-        echo   If WeChat install failed: right-click start.bat ^> Run as Administrator
-        echo   Fix the issues shown above, then re-run start.bat.
-        echo  ============================================================
-        echo.
-        pause
-        exit /b 1
-    ) else (
-        echo [preflight] environment self-check passed OK
-    )
-    echo.
-) else (
-    echo [preflight] skipped: python-embedded or wechat-rpa\preflight.py not found (old or slim pack)
+    echo [preflight] 环境自检将由 agent core module-manager 在启动后自动运行...
 )
 
 REM Step 6.92: 注册开机自启（幂等，每次都跑，确保任务计划条目存在）
