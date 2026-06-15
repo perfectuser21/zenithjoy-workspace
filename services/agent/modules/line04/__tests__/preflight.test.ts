@@ -328,6 +328,52 @@ describe('checkWechatRunning — 微信进程检测（软检测）', () => {
   });
 });
 
+// ── 回归测试：installWeChat 必须用 PowerShell RunAs（普通用户直接运行安装器 = WinError 740）──
+// 根因：spawnSync(installer, ['/S']) 在普通用户身份下报 OSError: [WinError 740]，
+//   且错误提示"以管理员身份运行 start.bat"又破坏 UIA（UIA 要求普通用户身份）。
+// 修法：改用 spawnSync('powershell', ['...',  'Start-Process ... -Verb RunAs -Wait'])，
+//   只有安装器本身提权，agent 进程保持普通用户，UIA 正常激活。
+describe('installWeChat — 必须用 PowerShell RunAs 提权（regression: 直接 spawnSync 安装器 = WinError 740）', () => {
+  afterEach(() => { vi.clearAllMocks(); vi.restoreAllMocks(); });
+
+  function mockDownload() {
+    vi.spyOn(https, 'get').mockImplementation((_url: any, cb: any) => {
+      const fakeRes = {
+        pipe: vi.fn(),
+        on: (ev: string, fn: () => void) => { if (ev === 'end') fn(); return fakeRes; },
+      } as any;
+      setImmediate(() => cb(fakeRes));
+      return { on: vi.fn() } as any;
+    });
+    vi.spyOn(fs, 'createWriteStream').mockReturnValue({
+      on: (_ev: string, fn: () => void) => { fn(); return {}; },
+      close: (fn: () => void) => fn(),
+    } as any);
+  }
+
+  it('安装器通过 PowerShell Start-Process -Verb RunAs 调用（不直接 spawnSync 安装器）', async () => {
+    mockDownload();
+    const spawnSyncMock = vi.spyOn(childProcessModule, 'spawnSync').mockReturnValue({ status: 0 } as any);
+
+    await installWeChat(os.tmpdir());
+
+    // 不应直接用 spawnSync 调用 WeChatWin_4.1.8.exe（需要 admin 权限 → WinError 740）
+    const directInstall = spawnSyncMock.mock.calls.find(
+      (c) => String(c[0]).includes('WeChatWin_4.1.8.exe'),
+    );
+    expect(directInstall).toBeUndefined();
+
+    // 应通过 PowerShell Start-Process -Verb RunAs 调用（UAC 弹窗，agent 本身不提权）
+    const psCall = spawnSyncMock.mock.calls.find(
+      (c) =>
+        String(c[0]).toLowerCase().includes('powershell') &&
+        JSON.stringify(c[1]).includes('RunAs') &&
+        JSON.stringify(c[1]).includes('WeChatWin_4.1.8.exe'),
+    );
+    expect(psCall).toBeDefined();
+  });
+});
+
 describe('installWeChat — 下载并静默安装微信 4.1.8', () => {
   afterEach(() => { vi.clearAllMocks(); vi.restoreAllMocks(); });
 
