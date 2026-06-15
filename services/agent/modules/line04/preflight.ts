@@ -349,12 +349,25 @@ export async function installWeChat(downloadDir: string): Promise<void> {
   ];
   for (const uninst of uninstallers) {
     if (fs.existsSync(uninst)) {
-      spawnSync(uninst, ['/S'], { windowsHide: true, timeout: 60_000, stdio: 'ignore' });
+      // 卸载程序也需要 admin 权限，用 PowerShell RunAs 提权
+      spawnSync(
+        'powershell',
+        ['-NoProfile', '-NonInteractive', '-Command',
+          `Start-Process -FilePath '${uninst}' -ArgumentList '/S' -Verb RunAs -Wait`],
+        { windowsHide: true, timeout: 90_000 },
+      );
     }
   }
 
-  // 腾讯自研包静默参数是 /S（不是 NSIS 的 /VERYSILENT）
-  spawnSync(installer, ['/S'], { windowsHide: true, timeout: 120_000 });
+  // 用 PowerShell Start-Process -Verb RunAs 触发 UAC 弹窗安装，agent 本身保持普通用户（UIA 不受影响）。
+  // 直接 spawnSync(installer, ['/S']) 在普通用户下报 WinError 740（需提权），且叫用户
+  // "以管理员身份运行 start.bat" 会破坏 UIA（UIPI 隔离导致 Access denied）。
+  spawnSync(
+    'powershell',
+    ['-NoProfile', '-NonInteractive', '-Command',
+      `Start-Process -FilePath '${installer}' -ArgumentList '/S' -Verb RunAs -Wait`],
+    { windowsHide: true, timeout: 300_000 },
+  );
 
   // 安装后立即锁更新：WeixinUpdate.exe 随包部署，不锁会自动升级到 ≥4.1.9 → 反复卸装循环。
   // Python preflight.py check_lock_update() 做四层加固，这里先做 Layer1（改名）阻断首次自启。

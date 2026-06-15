@@ -377,7 +377,7 @@ describe('installWeChat — 必须用 PowerShell RunAs 提权（regression: 直�
 describe('installWeChat — 下载并静默安装微信 4.1.8', () => {
   afterEach(() => { vi.clearAllMocks(); vi.restoreAllMocks(); });
 
-  it('spawn 参数含 /S 静默标志', async () => {
+  it('安装器通过 PowerShell Start-Process -Verb RunAs 调用（含 /S 静默参数）', async () => {
     vi.spyOn(https, 'get').mockImplementation((_url: any, cb: any) => {
       const fakeRes = {
         pipe: vi.fn(),
@@ -395,9 +395,14 @@ describe('installWeChat — 下载并静默安装微信 4.1.8', () => {
 
     await installWeChat(os.tmpdir());
 
-    const installerCall = spawnSyncMock.mock.calls.find((c) => String(c[0]).includes('WeChatWin_4.1.8.exe'));
-    expect(installerCall).toBeDefined();
-    expect(installerCall![1]).toContain('/S');
+    const psCall = spawnSyncMock.mock.calls.find(
+      (c) =>
+        String(c[0]).toLowerCase().includes('powershell') &&
+        JSON.stringify(c[1]).includes('WeChatWin_4.1.8.exe') &&
+        JSON.stringify(c[1]).includes('RunAs'),
+    );
+    expect(psCall).toBeDefined();
+    expect(JSON.stringify(psCall![1])).toContain('/S');
   });
 
   it('安装后 taskkill WeChat.exe', async () => {
