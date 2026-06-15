@@ -3137,3 +3137,11 @@ agent_suite:
     status: active
     product: 客户私域AI接管
     note: "v1.0.35 回归测试 — checkWechatVersion() exe-first 路径（MOCK_WECHAT_VERSION 跨平台）+ isWechatVersionSupported/parseWechatVersionFromRegOutput 纯函数；防止注册表污染误判再次引发 autoRepair 杀微信死循环"
+
+  - id: wechat-cs-uia-flag-autoset
+    path: services/agent/wechat-rpa/tests/test_uia_flag_autoset.py
+    type: unit
+    ci: L3
+    status: active
+    product: 客户私域AI接管
+    note: "v1.0.36 回归测试 — _ensure_uia_flag()/_is_uia_flag_set() 每轮轮询检测 SPI_GETSCREENREADER；标志被 Windows 清除后立即补设，不等 45s 冷却；防止后台回复因 UIA 标志丢失停止响应"
