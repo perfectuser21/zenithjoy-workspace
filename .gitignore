@@ -190,3 +190,5 @@ services/agent/publishers/node_modules/
 services/agent/dist-installpack/
 .cookie-backups/
 services/content-pipeline/scripts/publishers/.cookie-backups/
+services/agent/dist-modules/*.tar.gz
+services/agent/dist-installpack/*.tar.gz
