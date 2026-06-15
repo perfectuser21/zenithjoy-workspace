@@ -1151,6 +1151,33 @@ def _activate_uia() -> None:
         _log(f"UIA 激活失败: {exc}")
 
 
+def _is_uia_flag_set() -> bool:
+    """读取 SPI_GETSCREENREADER (0x0046) 标志当前值，非 Windows 返回 True。"""
+    if platform.system() != "Windows":
+        return True
+    try:
+        import ctypes
+        val = ctypes.c_bool(False)
+        ctypes.windll.user32.SystemParametersInfoW(0x0046, 0, ctypes.byref(val), 0)
+        return bool(val.value)
+    except Exception:
+        return True
+
+
+def _ensure_uia_flag() -> bool:
+    """检查 UIA 屏幕阅读器标志；若已被 Windows 清除则立即补设。
+
+    返回 True = 标志原本就在；False = 标志丢了，已重新补设。
+    在轮询循环每轮开头调用，确保 WeChat UIA provider 始终可读，
+    无需等待 45 秒冷却。
+    """
+    if _is_uia_flag_set():
+        return True
+    _log("UIA 屏幕阅读器标志已失效，立即补设…")
+    _activate_uia()
+    return False
+
+
 def run_real_listen(args: argparse.Namespace) -> int:
     from find_weixin import assert_supported_version
     assert_supported_version()
@@ -1213,6 +1240,9 @@ def run_real_listen(args: argparse.Namespace) -> int:
                     _save_replied(replied)
                     _log(f"已清理 {len(expired_keys)} 条过期 replied（TTL {REPLIED_TTL}s）")
                 last_replied_purge = now
+
+            # 每轮检查 UIA 标志是否仍在；Windows 会话锁定等场景会清除该标志
+            _ensure_uia_flag()
 
             # 取主窗口（顺带采集诊断：找到没 / 是否停在登录窗口 / 是否隐私锁屏）
             mw = None

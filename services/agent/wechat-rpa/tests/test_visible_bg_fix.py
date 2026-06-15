@@ -302,8 +302,8 @@ def test_restore_window_state_visible_noop_if_no_saved_pos():
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-def test_version_is_1035():
-    """manifest.json 版本号必须是 1.0.35（v1.0.35 修复 preflight exe-first + WeChatAppEx.exe 检测）。"""
+def test_version_is_1036():
+    """manifest.json 版本号必须是 1.0.36（v1.0.36 修复 UIA 标志丢失后台回复停止）。"""
     import json
     candidates = [
         os.path.join(WECHAT_RPA_DIR, "..", "..", "build-modules", "line04", "manifest.json"),
@@ -320,7 +320,7 @@ def test_version_is_1035():
     with open(manifest_path, encoding='utf-8') as f:
         manifest = json.load(f)
     version = manifest.get("version", "")
-    assert version == "1.0.35", f"manifest.json version 必须是 '1.0.35'，实际是 {version!r}"
+    assert version == "1.0.36", f"manifest.json version 必须是 '1.0.36'，实际是 {version!r}"
 
 
 def test_ensure_tray_visible_visible_calls_dwm_cloak():
