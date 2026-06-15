@@ -487,7 +487,7 @@ tests:
     ci: L2
     status: active
     product: AI员工
-    note: "Sprint 06081700 — Core 模块管理器：syncModules 版本差异触发下载 / runModulePreflight 未安装返回 module_not_installed / getActiveModules / fork 激活 + IPC config / forwardMessage 不抛"
+    note: "Sprint 06081700 — Core 模块管理器：syncModules / runModulePreflight / fork 激活 + IPC / forwardMessage；v2.0.16 回归：execFile 传 ZENITHJOY_CORE_DIR，修复客户机无系统 python 时 exit 9009 卡死"
 
   - id: agent-line-stub-modules
     path: services/agent/modules/line01/__tests__/stub.test.ts

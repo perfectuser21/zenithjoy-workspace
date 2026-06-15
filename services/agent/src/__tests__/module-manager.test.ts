@@ -322,6 +322,31 @@ describe('ModuleManager', () => {
     expect(mm.getActiveModules()).toContain('line04-wechat-cs');
   });
 
+  it('runModulePreflight execFile 传 ZENITHJOY_CORE_DIR（客户机无系统 python 时能用 core embedded python）', async () => {
+    // 回归：execFile 不传 ZENITHJOY_CORE_DIR → getModulePython 回退系统 python
+    // → 无系统 python 的客户机 exit 9009 → 模块永不激活（preflight 一直 fail）
+    const dir = path.join(root, 'line04-wechat-cs-6.0.0');
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(
+      path.join(dir, 'manifest.json'),
+      JSON.stringify({ lineId: 'line04-wechat-cs', version: '6.0.0', entry: 'index.js' }),
+    );
+    fs.writeFileSync(path.join(dir, 'preflight.js'), '');
+
+    let capturedEnv: Record<string, string | undefined> | undefined;
+    const execFileImpl = vi.fn().mockImplementation(
+      (_cmd: unknown, _args: unknown, opts: { env?: Record<string, string> }, cb: (e: null, out: string, err: string) => void) => {
+        capturedEnv = opts?.env;
+        cb(null, JSON.stringify({ ok: true }), '');
+      },
+    );
+
+    const mm = new ModuleManager({ modulesRoot: root, execFileImpl });
+    await mm.runModulePreflight('line04-wechat-cs');
+
+    expect(capturedEnv?.ZENITHJOY_CORE_DIR).toBeDefined();
+  });
+
   it('getInstalledVersion semver 排序：1.0.12 > 1.0.9（数值比较，非字典序）', () => {
     // 回归：dirs.sort() 字典序时 "1.0.9" > "1.0.12"（因 '9' > '1'）
     // → getInstalledVersion 返回 "1.0.9" 而非正确的 "1.0.12"
