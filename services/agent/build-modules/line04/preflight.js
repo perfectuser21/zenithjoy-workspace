@@ -350,11 +350,16 @@ async function installWeChat(downloadDir) {
     ];
     for (const uninst of uninstallers) {
         if (node_fs_1.default.existsSync(uninst)) {
-            (0, node_child_process_1.spawnSync)(uninst, ['/S'], { windowsHide: true, timeout: 60000, stdio: 'ignore' });
+            // 卸载程序也需要 admin 权限，用 PowerShell RunAs 提权
+            (0, node_child_process_1.spawnSync)('powershell', ['-NoProfile', '-NonInteractive', '-Command',
+                `Start-Process -FilePath '${uninst}' -ArgumentList '/S' -Verb RunAs -Wait`], { windowsHide: true, timeout: 90000 });
         }
     }
-    // 腾讯自研包静默参数是 /S（不是 NSIS 的 /VERYSILENT）
-    (0, node_child_process_1.spawnSync)(installer, ['/S'], { windowsHide: true, timeout: 120000 });
+    // 用 PowerShell Start-Process -Verb RunAs 触发 UAC 弹窗安装，agent 本身保持普通用户（UIA 不受影响）。
+    // 直接 spawnSync(installer, ['/S']) 在普通用户下报 WinError 740（需提权），且叫用户
+    // "以管理员身份运行 start.bat" 会破坏 UIA（UIPI 隔离导致 Access denied）。
+    (0, node_child_process_1.spawnSync)('powershell', ['-NoProfile', '-NonInteractive', '-Command',
+        `Start-Process -FilePath '${installer}' -ArgumentList '/S' -Verb RunAs -Wait`], { windowsHide: true, timeout: 300000 });
     // 安装后立即锁更新：WeixinUpdate.exe 随包部署，不锁会自动升级到 ≥4.1.9 → 反复卸装循环。
     // Python preflight.py check_lock_update() 做四层加固，这里先做 Layer1（改名）阻断首次自启。
     // WeixinUpdate.exe 位于版本子目录（如 Weixin\4.1.8.107\WeixinUpdate.exe），必须递归查找。

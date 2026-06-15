@@ -254,11 +254,40 @@ def download_wechat_installer(
 
 
 def _run_silent(cmd: List[str], timeout: int = 600) -> Tuple[bool, str]:
-    """跑外部命令（installer /S、uninstall /S 等）。返回 (成功, 说明)。异常吞掉。"""
+    """跑外部命令（不需提权的命令）。返回 (成功, 说明)。异常吞掉。"""
     import subprocess
 
     try:
         proc = subprocess.run(cmd, capture_output=True, timeout=timeout)
+        ok = proc.returncode == 0
+        return ok, f"returncode={proc.returncode}"
+    except Exception as exc:  # noqa: BLE001
+        return False, f"{type(exc).__name__}: {exc}"
+
+
+def _run_elevated(cmd: List[str], timeout: int = 600) -> Tuple[bool, str]:
+    """用 PowerShell Start-Process -Verb RunAs -Wait 触发 UAC 弹窗提权运行命令。
+
+    agent 进程本身保持普通用户身份（UIA 可正常激活），只有被调用的命令提权。
+    直接 subprocess.run([installer, '/S']) 在普通用户下报 WinError 740；
+    且叫用户"以管理员身份运行 start.bat"会破坏 UIA（UIPI 隔离 → Access denied）。
+    """
+    import subprocess
+    import shlex
+
+    exe = cmd[0]
+    args_str = " ".join(f"'{a}'" for a in cmd[1:]) if len(cmd) > 1 else ""
+    ps_cmd = (
+        f"Start-Process -FilePath '{exe}' "
+        + (f"-ArgumentList {args_str} " if args_str else "")
+        + "-Verb RunAs -Wait"
+    )
+    try:
+        proc = subprocess.run(
+            ["powershell", "-NoProfile", "-NonInteractive", "-Command", ps_cmd],
+            capture_output=True,
+            timeout=timeout,
+        )
         ok = proc.returncode == 0
         return ok, f"returncode={proc.returncode}"
     except Exception as exc:  # noqa: BLE001
@@ -397,14 +426,15 @@ def check_wechat_installed(dry_run: bool = False) -> Dict[str, str]:
             "微信未安装且 4.1.8 安装包下载失败（COS/官方源均不可达）。"
             "请手动安装微信 4.1.8 后重启 agent。",
         )
-    ok, info = _run_silent([installer, "/S"])
+    ok, info = _run_elevated([installer, "/S"])
     if ok and _weixin_installed():
-        return make_check(name, "fixed", f"微信未安装 → 已静默安装 4.1.8（{info}）。")
+        return make_check(name, "fixed", f"微信未安装 → 已通过 UAC 提权安装 4.1.8（{info}）。")
     return make_check(
         name,
         "failed",
-        f"微信 4.1.8 静默安装失败（{info}）。"
-        "请右键 start.bat → 以管理员身份运行，或手动安装微信 4.1.8 后重启 agent。",
+        f"微信 4.1.8 安装失败（{info}）。"
+        "安装需要管理员权限，弹出 UAC 确认框时请点击'是'。"
+        "如未看到确认框或点击后仍失败，请手动安装微信 4.1.8 后重启 agent。",
     )
 
 
@@ -447,7 +477,7 @@ def check_wechat_version(dry_run: bool = False) -> Dict[str, str]:
 
     uninstaller = _find_file(WEIXIN_INSTALL_ROOT, "Uninstall.exe")
     if uninstaller:
-        _run_silent([uninstaller, "/S"], timeout=300)
+        _run_elevated([uninstaller, "/S"], timeout=300)
         time.sleep(3)
     installer = download_wechat_installer()
     if not installer:
@@ -457,20 +487,21 @@ def check_wechat_version(dry_run: bool = False) -> Dict[str, str]:
             f"需把 {ver_show} 降级到 4.1.8，但安装包下载失败。"
             "请手动卸载并安装微信 4.1.8 后重启 agent。",
         )
-    ok, info = _run_silent([installer, "/S"])
+    ok, info = _run_elevated([installer, "/S"])
     new_ver = get_weixin_version()
     new_parsed = _parse_version(new_ver)
     if ok and new_parsed is not None and decide_wechat_action(new_parsed) == "ok":
         return make_check(
             name,
             "fixed",
-            f"微信 {ver_show} → 已降级安装 4.1.8（现 {'.'.join(str(x) for x in new_parsed)}）。",
+            f"微信 {ver_show} → 已通过 UAC 提权降级安装 4.1.8（现 {'.'.join(str(x) for x in new_parsed)}）。",
         )
     return make_check(
         name,
         "failed",
         f"微信降级到 4.1.8 失败（install {info}，现版本 {new_ver!r}）。"
-        "请右键 start.bat → 以管理员身份运行，或手动卸载后安装微信 4.1.8 再重启。",
+        "安装需要管理员权限，弹出 UAC 确认框时请点击'是'。"
+        "如未看到确认框或点击后仍失败，请手动卸载后安装微信 4.1.8 再重启。",
     )
 
 

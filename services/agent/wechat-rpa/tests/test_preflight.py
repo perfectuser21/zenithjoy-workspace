@@ -184,3 +184,43 @@ def test_main_dry_run_no_middleware(tmp_path, monkeypatch):
     rc = preflight.main(["--dry-run"])
     assert rc in (0, 1)
     assert out_json.exists()
+
+
+# ── 回归测试：WeChat 安装必须用 PowerShell RunAs 触发 UAC，而非直接 subprocess.run ──
+# 根因：subprocess.run([installer, "/S"]) 在普通用户下 OSError: [WinError 740]，
+#   且错误提示"以管理员身份运行 start.bat"破坏 UIA（UIA 需普通用户身份）。
+# 修法：check_wechat_installed/_run_elevated 改用 PowerShell Start-Process -Verb RunAs -Wait。
+def test_wechat_install_uses_runas(monkeypatch, tmp_path):
+    """_run_elevated 必须通过 PowerShell Start-Process -Verb RunAs 调用安装器（不直接 subprocess.run）。
+
+    测试 preflight._run_elevated 存在且调用 PowerShell 的 RunAs 路径。
+    """
+    import subprocess
+
+    calls = []
+
+    def fake_run(cmd, **kwargs):
+        calls.append(cmd)
+        class R:
+            returncode = 0
+            stdout = b""
+            stderr = b""
+        return R()
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+
+    # _run_elevated 函数必须存在（未实现时 AttributeError → 测试失败）
+    assert hasattr(preflight, "_run_elevated"), (
+        "preflight._run_elevated 不存在 — 需实现该函数替代 _run_silent 进行 UAC 提权安装"
+    )
+
+    preflight._run_elevated(["WeChatWin_4.1.8.exe", "/S"])
+
+    assert len(calls) > 0, "_run_elevated 没有调用任何外部命令"
+    combined = " ".join(str(c) for c in calls)
+    assert "powershell" in combined.lower(), (
+        f"_run_elevated 应调用 powershell，实际调用: {calls}"
+    )
+    assert "RunAs" in combined, (
+        f"_run_elevated 应使用 -Verb RunAs，实际调用: {calls}"
+    )
