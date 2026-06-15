@@ -302,8 +302,8 @@ def test_restore_window_state_visible_noop_if_no_saved_pos():
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-def test_version_is_1033():
-    """manifest.json 版本号必须是 1.0.33（v1.0.33 修复 Qt5 Weixin 窗口误判登录界面）。"""
+def test_version_is_1034():
+    """manifest.json 版本号必须是 1.0.34（v1.0.34 修复隐私锁屏误判为未登录）。"""
     import json
     candidates = [
         os.path.join(WECHAT_RPA_DIR, "..", "..", "build-modules", "line04", "manifest.json"),
@@ -320,7 +320,7 @@ def test_version_is_1033():
     with open(manifest_path, encoding='utf-8') as f:
         manifest = json.load(f)
     version = manifest.get("version", "")
-    assert version == "1.0.33", f"manifest.json version 必须是 '1.0.33'，实际是 {version!r}"
+    assert version == "1.0.34", f"manifest.json version 必须是 '1.0.34'，实际是 {version!r}"
 
 
 def test_ensure_tray_visible_visible_calls_dwm_cloak():
