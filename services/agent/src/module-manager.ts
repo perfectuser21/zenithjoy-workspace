@@ -65,6 +65,7 @@ export interface ModuleManagerOptions {
     destDir: string,
   ) => Promise<void>;
   preflightImpl?: (lineId: string, moduleDir: string) => Promise<ModulePreflightResult>;
+  execFileImpl?: (cmd: string, args: string[], opts: { cwd: string; windowsHide: boolean; timeout: number; env: Record<string, string | undefined> }, cb: (err: Error | null, stdout: string, stderr: string) => void) => void;
   forkImpl?: (entryPath: string, opts: { cwd: string }) => ChildProcess;
   // 模块子进程发来消息时回调（core 用它转发 draft_reply 等给中台）
   onModuleMessage?: (lineId: string, msg: unknown) => void;
@@ -333,11 +334,12 @@ export class ModuleManager {
       return { ok: false, reason: 'module_not_installed' };
     }
 
+    const execFn = this.opts.execFileImpl ?? execFile;
     return new Promise<ModulePreflightResult>((resolve) => {
-      execFile(
+      execFn(
         process.execPath,
         [preflightJs],
-        { cwd: moduleDir, windowsHide: true, timeout: 60_000 },
+        { cwd: moduleDir, windowsHide: true, timeout: 60_000, env: { ...process.env, ZENITHJOY_CORE_DIR: path.dirname(process.execPath) } },
         (err, stdout, stderr) => {
           if (stderr) this.log(`${lineId} preflight stderr: ${stderr}`);
           try {
