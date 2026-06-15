@@ -131,6 +131,27 @@ export function checkWechatVersion(): CheckOutcome {
   if (process.platform !== 'win32') {
     return { ok: true, skipped: true };
   }
+  // 优先读取 exe 文件版本（比注册表可靠：WeChat 4.1.8 启动后会把注册表版本改写为可用更新版本，
+  // 但 exe FileVersion 始终是实际安装版本，不受自动更新检测器影响）。
+  const exePaths = [
+    'C:\\Program Files\\Tencent\\Weixin\\Weixin.exe',
+    'C:\\Program Files\\Tencent\\WeChat\\WeChat.exe',
+  ];
+  for (const exePath of exePaths) {
+    try {
+      const out = execSync(
+        `powershell -NoProfile -NonInteractive -Command "(Get-Item '${exePath}').VersionInfo.FileVersion"`,
+        { encoding: 'utf-8', windowsHide: true, timeout: 10_000, stdio: ['ignore', 'pipe', 'ignore'] },
+      );
+      const v = out.trim();
+      if (v && /^\d+\.\d+/.test(v)) {
+        if (isWechatVersionSupported(v)) return { ok: true, found: v };
+        return { ok: false, found: v, fixGuide: wechatFixGuide(v) };
+      }
+    } catch {
+      // exe 不存在或 PowerShell 出错，继续尝试注册表
+    }
+  }
   const keys = [
     // 4.x（Weixin）— HKCU 下存版本，HKLM WOW6432Node 有时也有
     'HKCU\\SOFTWARE\\Tencent\\Weixin',
