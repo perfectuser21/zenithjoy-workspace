@@ -276,10 +276,11 @@ def assert_supported_version(exe_path: Optional[str] = None) -> None:
 
 
 def is_weixin_running() -> bool:
-    """检测 Weixin.exe / WeixinUpdate.exe 是否在运行（跨平台：非 Windows 返回 False）。
+    """检测微信进程是否在运行（跨平台：非 Windows 返回 False）。
 
-    使用 bytes 模式避免 GBK 环境 text=True 解码失败；同时检测 WeixinUpdate.exe，
-    因为 xwechat 启动后常驻的是 WeixinUpdate.exe 而非 Weixin.exe。
+    使用 bytes 模式避免 GBK 环境 text=True 解码失败。
+    WeChat 4.x 启动后 Weixin.exe（launcher）很快退出，常驻进程是 WeChatAppEx.exe，
+    因此同时检测三个进程名。
     """
     try:
         import subprocess  # noqa: PLC0415
@@ -288,7 +289,11 @@ def is_weixin_running() -> bool:
             capture_output=True, timeout=5,
         )
         out = result.stdout
-        return b"Weixin.exe" in out or b"WeixinUpdate.exe" in out
+        return (
+            b"Weixin.exe" in out
+            or b"WeixinUpdate.exe" in out
+            or b"WeChatAppEx.exe" in out
+        )
     except Exception:
         return False
 

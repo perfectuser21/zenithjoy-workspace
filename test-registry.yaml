@@ -3129,3 +3129,11 @@ agent_suite:
     status: pending-ci
     product: 私域运营
     note: "Path 2 抖音私信主动触达 thin v1 合同 SSOT — TDD RED 来源（mapDmStatusToFeishu 三态 + handler sent/limited/failed；CI 落点在 services/agent，BEHAVIOR 实跑在 golden-path-2-dm-smoke.sh）"
+
+  - id: agent-line04-preflight-exe-first
+    path: services/agent/src/__tests__/preflight-line04-exe-first.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 客户私域AI接管
+    note: "v1.0.35 回归测试 — checkWechatVersion() exe-first 路径（MOCK_WECHAT_VERSION 跨平台）+ isWechatVersionSupported/parseWechatVersionFromRegOutput 纯函数；防止注册表污染误判再次引发 autoRepair 杀微信死循环"

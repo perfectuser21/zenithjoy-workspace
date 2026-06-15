@@ -125,6 +125,26 @@ function checkWechatVersion() {
     if (process.platform !== 'win32') {
         return { ok: true, skipped: true };
     }
+    // 优先读 exe 文件版本（比注册表可靠）：WeChat 启动后会把注册表更新为"可用更新版本"，
+    // 导致 autoRepair 误判版本过高而杀死 WeChat 进程。exe 文件版本不受此影响。
+    const exePaths = [
+        'C:\\Program Files\\Tencent\\Weixin\\Weixin.exe',
+    ];
+    for (const exePath of exePaths) {
+        if (!node_fs_1.default.existsSync(exePath))
+            continue;
+        try {
+            const verStr = (0, node_child_process_1.execSync)(`powershell -NoProfile -NonInteractive -Command "(Get-Item '${exePath}').VersionInfo.ProductVersion"`, { encoding: 'utf-8', windowsHide: true, timeout: 10000, stdio: ['ignore', 'pipe', 'ignore'] }).trim();
+            if (verStr && /^\d+\.\d+/.test(verStr)) {
+                if (isWechatVersionSupported(verStr))
+                    return { ok: true, found: verStr };
+                return { ok: false, found: verStr, fixGuide: wechatFixGuide(verStr) };
+            }
+        }
+        catch {
+            // exe 读不到版本，回退到注册表
+        }
+    }
     const keys = [
         // 4.x（Weixin）— HKCU 下存版本，HKLM WOW6432Node 有时也有
         'HKCU\\SOFTWARE\\Tencent\\Weixin',
