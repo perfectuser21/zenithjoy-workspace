@@ -365,4 +365,71 @@ describe('ModuleManager', () => {
     expect(mm.getInstalledVersion('line04-wechat-cs')).toBe('1.0.12');
     expect(mm.needsDownload('line04-wechat-cs', '1.0.12')).toBe(false);
   });
+
+  // ── 回归：并发 preflight 保护 ──────────────────────────────────────────────
+  // 根因：WeChat 安装耗时 2-5 分钟，心跳每 30s 调一次 syncModules，
+  //   若无保护会并发启动多个 preflight 进程，互相干扰导致安装失败或日志混乱。
+  // 修法：preflightRunning Set 跟踪进行中的 lineId，第二次调用直接返回
+  //   {ok: false, reason: 'preflight_already_running'} 而不启动新进程。
+  describe('runModulePreflight — 并发保护', () => {
+    it('同一 lineId 并发调用时第二次立即返回 preflight_already_running，不启动第二个进程', async () => {
+      let concurrentCalls = 0;
+      let maxConcurrent = 0;
+
+      const mm = new ModuleManager({
+        modulesRoot: root,
+        preflightImpl: async (_lineId, _dir) => {
+          concurrentCalls++;
+          maxConcurrent = Math.max(maxConcurrent, concurrentCalls);
+          await new Promise((r) => setTimeout(r, 80));
+          concurrentCalls--;
+          return { ok: true };
+        },
+      });
+
+      // 建一个假安装目录让 getInstalledVersion 能返回版本
+      const modDir = path.join(root, 'line04-wechat-cs-1.0.0');
+      fs.mkdirSync(modDir, { recursive: true });
+      fs.writeFileSync(
+        path.join(modDir, 'manifest.json'),
+        JSON.stringify({ lineId: 'line04-wechat-cs', version: '1.0.0', entry: 'index.js' }),
+      );
+
+      // 两次并发调用
+      const [r1, r2] = await Promise.all([
+        mm.runModulePreflight('line04-wechat-cs'),
+        mm.runModulePreflight('line04-wechat-cs'),
+      ]);
+
+      // 只有一个真正执行，另一个返回 preflight_already_running
+      expect(maxConcurrent).toBe(1);
+      const results = [r1, r2];
+      const running = results.filter((r) => r.reason === 'preflight_already_running');
+      const ok = results.filter((r) => r.ok === true);
+      expect(running).toHaveLength(1);
+      expect(ok).toHaveLength(1);
+    });
+
+    it('第一次 preflight 结束后，同一 lineId 可以再次正常运行', async () => {
+      let callCount = 0;
+      const mm = new ModuleManager({
+        modulesRoot: root,
+        preflightImpl: async () => {
+          callCount++;
+          return { ok: true };
+        },
+      });
+
+      const modDir = path.join(root, 'line04-wechat-cs-1.0.0');
+      fs.mkdirSync(modDir, { recursive: true });
+      fs.writeFileSync(
+        path.join(modDir, 'manifest.json'),
+        JSON.stringify({ lineId: 'line04-wechat-cs', version: '1.0.0', entry: 'index.js' }),
+      );
+
+      await mm.runModulePreflight('line04-wechat-cs');
+      await mm.runModulePreflight('line04-wechat-cs');
+      expect(callCount).toBe(2);
+    });
+  });
 });
