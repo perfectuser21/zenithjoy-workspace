@@ -457,6 +457,14 @@ tests:
     product: AI员工
     note: "Sprint 06081700 — line04 preflight 作为 CLI 被 core ModuleManager `node preflight.js` 执行：stdout 最后一行 JSON + 退出码与 ok 对应"
 
+  - id: agent-line04-listener-stdout-pipe
+    path: services/agent/modules/line04/__tests__/wechat-rpa-listener-stdout.test.ts
+    type: unit
+    ci: L2
+    status: active
+    product: AI员工
+    note: "Sprint 06161122 — startWechatListener() 必须注册 child.stdout.on('data') 消费 pipe，防止 64KB buffer 满后 Python 进程冻结（listen_chat 机子二没反应根因回归保护）"
+
   - id: agent-sanitize-env
     path: services/agent/src/utils/__tests__/sanitize-env.test.ts
     type: unit
