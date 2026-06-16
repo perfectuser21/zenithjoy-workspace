@@ -181,6 +181,14 @@ def _parse_item_name(name: str, require_unread: bool = True) -> Optional[Dict[st
 
     if not content:
         return None
+
+    # 群聊消息预览格式："成员名: 消息内容"（WeChat 在群聊条目里自动拼前缀）
+    # 私聊预览：直接是消息原文，不含 "名字:" 前缀
+    # 命名不含群/频道关键词的群聊（如"大家庭"、"老乡"）靠此兜底过滤，防止误回群聊
+    import re as _re
+    if _re.match(r'^[^\n：:]{1,30}[：:]\s', content):
+        return None
+
     return {"sender": sender, "content": content}
 
 

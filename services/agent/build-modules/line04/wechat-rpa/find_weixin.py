@@ -298,18 +298,80 @@ def is_weixin_running() -> bool:
         return False
 
 
+def discover_weixin_exe() -> Optional[str]:
+    """
+    自动发现 Weixin.exe 安装路径（无需手动配置，适配任意机器）。
+
+    检测顺序：
+    1. 已运行进程 → 从进程路径直接拿（最准确，适配非标路径）
+    2. 默认路径 WEIXIN_EXE_DEFAULT
+    3. Windows 注册表 HKCU / HKLM 中 Tencent\Weixin 安装目录
+    4. C/D 盘常见备用路径兜底
+
+    返回第一个找到的有效路径，均找不到返回 None。
+    """
+    # 1. 已运行进程 → 路径最准确
+    running = _find_running_weixin_path()
+    if running and os.path.isfile(running):
+        logger.info("discover_weixin_exe: 从运行进程找到 %r", running)
+        return running
+
+    # 2. 官方默认路径
+    if os.path.isfile(WEIXIN_EXE_DEFAULT):
+        return WEIXIN_EXE_DEFAULT
+
+    # 3. 注册表查找（winreg 仅 Windows 有）
+    try:
+        import winreg  # type: ignore[import]
+        reg_entries = [
+            (winreg.HKEY_CURRENT_USER,  r"SOFTWARE\Tencent\Weixin"),
+            (winreg.HKEY_LOCAL_MACHINE, r"SOFTWARE\WOW6432Node\Tencent\Weixin"),
+            (winreg.HKEY_LOCAL_MACHINE, r"SOFTWARE\Tencent\Weixin"),
+        ]
+        for hive, subkey in reg_entries:
+            try:
+                with winreg.OpenKey(hive, subkey) as key:
+                    install_dir, _ = winreg.QueryValueEx(key, "InstallPath")
+                    if install_dir:
+                        candidate = os.path.join(str(install_dir), "Weixin.exe")
+                        if os.path.isfile(candidate):
+                            logger.info("discover_weixin_exe: 注册表找到 %r", candidate)
+                            return candidate
+            except OSError:
+                continue
+    except ImportError:
+        pass  # 非 Windows 环境
+
+    # 4. 常见备用路径（D 盘、x86、LocalAppData 等）
+    alt_paths = [
+        r"D:\Program Files\Tencent\Weixin\Weixin.exe",
+        r"D:\Program Files (x86)\Tencent\Weixin\Weixin.exe",
+        r"C:\Program Files (x86)\Tencent\Weixin\Weixin.exe",
+        os.path.expandvars(r"%LOCALAPPDATA%\Tencent\Weixin\Weixin.exe"),
+        os.path.expandvars(r"%ProgramFiles%\Tencent\Weixin\Weixin.exe"),
+        os.path.expandvars(r"%ProgramFiles(x86)%\Tencent\Weixin\Weixin.exe"),
+    ]
+    for alt in alt_paths:
+        if os.path.isfile(alt):
+            logger.info("discover_weixin_exe: 备用路径找到 %r", alt)
+            return alt
+
+    logger.warning("discover_weixin_exe: 所有探测路径均未找到 Weixin.exe")
+    return None
+
+
 def launch_weixin(exe_path: Optional[str] = None) -> bool:
     """
     启动 Weixin.exe（微信 4.x 客户端）。
 
-    - exe_path 未指定时用 WEIXIN_EXE_DEFAULT。
+    - exe_path 未指定时自动探测（discover_weixin_exe），适配任意机器无需手动配置。
     - 成功启动返回 True；文件不存在 / 非 Windows / spawn 异常返回 False。
     - 已在运行时也返回 True（幂等）。
     """
     import subprocess  # noqa: PLC0415
-    path = exe_path or WEIXIN_EXE_DEFAULT
-    if not os.path.isfile(path):
-        logger.warning("找不到 Weixin.exe（path=%r），无法自动启动微信。", path)
+    path = exe_path or discover_weixin_exe()
+    if not path or not os.path.isfile(path):
+        logger.warning("找不到 Weixin.exe（已自动探测所有路径），无法自动启动微信。")
         return False
     try:
         CREATE_NO_WINDOW = 0x08000000
