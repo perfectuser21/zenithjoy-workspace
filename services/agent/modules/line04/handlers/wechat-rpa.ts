@@ -107,9 +107,10 @@ export function buildListenerSpawnArgs(script: string, apiBase: string, agentId?
   return args;
 }
 
-// 测试注入点：允许替换 spawnSync 实现和 platform（CJS 直接调同文件函数无法被 vi.spyOn 拦截）。
+// 测试注入点：允许替换 spawnSync / spawn 实现和 platform（CJS 直接调同文件函数无法被 vi.spyOn 拦截）。
 // killExistingListeners 在此对象上挂载，方便测试重置。
 export const _listenerKillFuncs = {
+  spawnFn: spawn as (cmd: string, args: string[], opts: object) => ReturnType<typeof spawn>,
   spawnSyncFn: spawnSync as (cmd: string, args: string[]) => SpawnSyncReturns<string>,
   platform: process.platform as string,
 
@@ -148,7 +149,7 @@ export const _listenerKillFuncs = {
 // 先查杀所有旧 listen_chat.py 实例（防多条心跳/Dashboard 重复客户端），再 spawn 新进程。
 // 持久（timeout 86400）+ 崩溃自愈（退出后 30s 自动重启），随模块生命周期常驻。
 export function startWechatListener(apiBase: string, agentId?: string): void {
-  if (process.platform !== 'win32') {
+  if (_listenerKillFuncs.platform !== 'win32') {
     console.log('[wechat-rpa] 非 Windows，跳过 listen_chat 自启');
     return;
   }
@@ -158,9 +159,9 @@ export function startWechatListener(apiBase: string, agentId?: string): void {
   _listenerKillFuncs.killExistingListeners();
 
   const spawnOnce = (): void => {
-    const child = spawn(getPythonExe(), buildListenerSpawnArgs(script, apiBase, agentId), {
+    const child = _listenerKillFuncs.spawnFn(getPythonExe(), buildListenerSpawnArgs(script, apiBase, agentId), {
       detached: false,
-      stdio: ['ignore', 'pipe', 'pipe'] as const,
+      stdio: ['ignore', 'pipe', 'pipe'],
       windowsHide: true,
     });
     child.stderr!.on('data', (d: Buffer) => {
