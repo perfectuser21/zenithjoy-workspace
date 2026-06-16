@@ -157,8 +157,8 @@ describe('ackPublishTask — qr_bind session upsert', () => {
 });
 
 describe('HEARTBEAT_MODULES version gates', () => {
-  it('line04-wechat-cs required_version should be 1.0.38 (PowerShell RunAs UAC 消除 WinError 740)', async () => {
+  it('line04-wechat-cs required_version should be 1.0.39 (UTF-8 emoji stdout fix)', async () => {
     const { HEARTBEAT_MODULES } = await import('./walking-skeleton.service');
-    expect(HEARTBEAT_MODULES['line04-wechat-cs'].required_version).toBe('1.0.38');
+    expect(HEARTBEAT_MODULES['line04-wechat-cs'].required_version).toBe('1.0.39');
   });
 });
