@@ -164,6 +164,9 @@ export function startWechatListener(apiBase: string, agentId?: string): void {
       stdio: ['ignore', 'pipe', 'pipe'],
       windowsHide: true,
     });
+    child.stdout!.on('data', (d: Buffer) => {
+      console.log('[listen_chat]', d.toString().trim());
+    });
     child.stderr!.on('data', (d: Buffer) => {
       console.warn('[listen_chat stderr]', d.toString().trim());
     });
