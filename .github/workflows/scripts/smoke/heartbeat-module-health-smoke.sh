@@ -67,7 +67,7 @@ L04_STATUS=$(echo "$RESP_3" | python3 -c "import sys,json;m=json.load(sys.stdin)
 L04_VER=$(echo "$RESP_3" | python3 -c "import sys,json;m=json.load(sys.stdin).get('modules') or {};print((m.get('line04-wechat-cs') or {}).get('required_version') or '')" 2>/dev/null || true)
 [ -z "$AGENT_ID" ] && { echo "  FAIL: 无 agent_id ($RESP_3)"; exit 3; }
 [ "$L04_STATUS" = "active" ] || { echo "  FAIL: 期望 line04 status=active，实际 '${L04_STATUS}'"; exit 3; }
-[ "$L04_VER" = "1.0.38" ] || { echo "  FAIL: 期望 line04 required_version=1.0.38，实际 '${L04_VER}'"; exit 3; }
+[ "$L04_VER" = "1.0.39" ] || { echo "  FAIL: 期望 line04 required_version=1.0.39，实际 '${L04_VER}'"; exit 3; }
 echo "  OK: agent_id=${AGENT_ID:0:8}… modules.line04={status=${L04_STATUS},ver=${L04_VER}}"
 
 # ─── Step 4：module-health 端点回读
