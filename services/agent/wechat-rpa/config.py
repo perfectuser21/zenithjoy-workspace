@@ -18,7 +18,15 @@ wechat-rpa/config.py — 微信 RPA 所有行为参数的唯一来源
 from __future__ import annotations
 import json
 import os
+import sys
 from pathlib import Path
+
+# Windows embedded Python 默认 cp1252 stdout 无法编码中文，强制 UTF-8
+if hasattr(sys.stdout, "reconfigure"):
+    try:
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
 
 # ══════════════════════════════════════════════════════════
 #  用户可调参数（影响业务行为，sprint PrepPRD 必须声明变更）
