@@ -40,12 +40,18 @@ from typing import Optional, Tuple
 
 VERSION = "rate_limiter v1.0"
 
-# ─── 上限配置（硬编码，r1 #16）──────────────────────────────────────────────
-
-MOMENT_PER_24H = 1
-CHAT_PER_MINUTE = 2
+# ─── 上限配置（从 config.py 读，机器级可覆盖）──────────────────────────────
+try:
+    from config import (  # type: ignore
+        MOMENT_PER_24H_LIMIT as MOMENT_PER_24H,
+        CHAT_PER_MINUTE_LIMIT as CHAT_PER_MINUTE,
+        MIN_OPERATION_INTERVAL_SECONDS as MIN_INTERVAL_SECONDS,
+    )
+except ImportError:
+    MOMENT_PER_24H = 1
+    CHAT_PER_MINUTE = 2
+    MIN_INTERVAL_SECONDS = 1
 # CHAT_PER_24H 已移除：被动客服只响应用户来消息，24h 总量限制是为主动发防封号设计的，不适用。
-MIN_INTERVAL_SECONDS = 1
 
 
 # ─── DB 路径（home 展开，r1 #7）─────────────────────────────────────────────

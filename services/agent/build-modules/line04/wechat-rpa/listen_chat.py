@@ -51,10 +51,66 @@ except Exception as exc:  # pragma: no cover
 # 自动回模式下中台 AI 失败时 reply 为 undefined；万一拿到占位文案也必须跳过不发给客户。
 FAIL_PLACEHOLDER = "AI 生成失败（请人审决定是否重试）"
 
-# 离屏静默模式（默认 True）：SW_SHOWNA 还原托盘后立即把窗口移到 (-2600, 60) 屏幕外，
-# 用户看不到微信弹窗；UIA 控件树在离屏位置仍完整可用。
-# 设为 False 则保留"弹窗模式"：窗口短暂出现在屏幕上，行为与 v1.0.20 以前相同。
-_OFFSCREEN_REPLY = True
+try:
+    from config import (  # type: ignore
+        OFFSCREEN_REPLY as _OFFSCREEN_REPLY,
+        OFFSCREEN_X as _OFFSCREEN_X,
+        OFFSCREEN_Y as _OFFSCREEN_Y,
+        SENDER_COOLDOWN_SECONDS as _SENDER_COOLDOWN,
+        REPLIED_TTL_SECONDS as _REPLIED_TTL,
+        REPLY_FAILURE_COOLDOWN_SECONDS as _REPLY_FAIL_COOLDOWN,
+        HEARTBEAT_INTERVAL_SECONDS as _HEARTBEAT_INTERVAL,
+        UIA_REACTIVATE_INTERVAL_SECONDS as _UIA_REACTIVATE_INTERVAL,
+        WECHAT_LAUNCH_COOLDOWN_SECONDS as _WECHAT_LAUNCH_COOLDOWN,
+        WECHAT_STARTUP_WAIT_SECONDS as _WECHAT_STARTUP_WAIT,
+        MAIN_LOOP_POLL_INTERVAL_SECONDS as _MAIN_LOOP_POLL,
+        INTER_SEND_MIN_INTERVAL_SECONDS as _INTER_SEND_MIN_INTERVAL,
+        TITLE_MIN_MATCH_LENGTH as _TITLE_MIN_MATCH_LENGTH,
+        OPEN_CHAT_MAX_ATTEMPTS as _OPEN_CHAT_MAX_ATTEMPTS,
+        OPEN_CHAT_VERIFY_POLLS as _OPEN_CHAT_VERIFY_POLLS,
+        OPEN_CHAT_POLL_INTERVAL as _OPEN_CHAT_POLL_INTERVAL,
+        FIND_INPUT_RETRIES as _FIND_INPUT_RETRIES,
+        FIND_INPUT_RETRY_SLEEP as _FIND_INPUT_RETRY_SLEEP,
+        TRAY_RESTORE_SLEEP as _TRAY_RESTORE_SLEEP,
+        MINIMIZED_RESTORE_SLEEP as _MINIMIZED_RESTORE_SLEEP,
+        VISIBLE_MOVE_SLEEP as _VISIBLE_MOVE_SLEEP,
+        UIA_SETVALUE_SLEEP as _UIA_SETVALUE_SLEEP,
+        KEYDOWN_KEYUP_SLEEP as _KEYDOWN_KEYUP_SLEEP,
+        SEND_VERIFY_SLEEP as _SEND_VERIFY_SLEEP,
+        BUTTON_CLICK_SLEEP as _BUTTON_CLICK_SLEEP,
+        OFFSCREEN_RESTORE_BEFORE_SEND_SLEEP as _OFFSCREEN_RESTORE_SLEEP,
+        OFFSCREEN_MOVE_SLEEP as _OFFSCREEN_MOVE_SLEEP,
+        print_config as _print_config,
+    )
+except ImportError:
+    _OFFSCREEN_REPLY = True
+    _OFFSCREEN_X = -2600
+    _OFFSCREEN_Y = 60
+    _SENDER_COOLDOWN = 30.0
+    _REPLIED_TTL = 120
+    _REPLY_FAIL_COOLDOWN = 60
+    _HEARTBEAT_INTERVAL = 60
+    _UIA_REACTIVATE_INTERVAL = 45
+    _WECHAT_LAUNCH_COOLDOWN = 120
+    _WECHAT_STARTUP_WAIT = 5
+    _MAIN_LOOP_POLL = 3
+    _INTER_SEND_MIN_INTERVAL = 1.0
+    _TITLE_MIN_MATCH_LENGTH = 4
+    _OPEN_CHAT_MAX_ATTEMPTS = 3
+    _OPEN_CHAT_VERIFY_POLLS = 5
+    _OPEN_CHAT_POLL_INTERVAL = 0.4
+    _FIND_INPUT_RETRIES = 3
+    _FIND_INPUT_RETRY_SLEEP = 1.0
+    _TRAY_RESTORE_SLEEP = 0.30
+    _MINIMIZED_RESTORE_SLEEP = 0.75
+    _VISIBLE_MOVE_SLEEP = 0.15
+    _UIA_SETVALUE_SLEEP = 0.3
+    _KEYDOWN_KEYUP_SLEEP = 0.05
+    _SEND_VERIFY_SLEEP = 0.4
+    _BUTTON_CLICK_SLEEP = 0.5
+    _OFFSCREEN_RESTORE_SLEEP = 0.5
+    _OFFSCREEN_MOVE_SLEEP = 0.3
+    def _print_config(): pass
 
 # 最小化/可见场景：保存 hwnd → 原始坐标，让 _restore_window_state 还原（v1.0.29）
 # _saved_normal_pos: (left, top, right, bottom) —— WINDOWPLACEMENT.rcNormalPosition
@@ -168,8 +224,8 @@ def _ensure_tray_visible(mw: Any) -> str:
                 _ct.windll.user32.GetWindowRect(_hwnd, _ct.byref(_rc))
                 if _rc.left > -2000:
                     _SWP = 0x0001 | 0x0004 | 0x0010  # NOSIZE | NOZORDER | NOACTIVATE
-                    _ct.windll.user32.SetWindowPos(_hwnd, 0, -2600, 60, 0, 0, _SWP)
-            time.sleep(0.30)  # 等 Qt 重建 UIA 虚拟列表渲染
+                    _ct.windll.user32.SetWindowPos(_hwnd, 0, _OFFSCREEN_X, _OFFSCREEN_Y, 0, 0, _SWP)
+            time.sleep(_TRAY_RESTORE_SLEEP)  # 等 Qt 重建 UIA 虚拟列表渲染
             return 'tray'
         elif _is_iconic:
             # 最小化：v1.0.33 先 DWM cloak（防 WeChat 自身 activate 时移回可视区域被用户看到）
@@ -196,13 +252,13 @@ def _ensure_tray_visible(mw: Any) -> str:
                         _w = max(_wp.rcRight - _wp.rcLeft, 400)
                         _h = max(_wp.rcBottom - _wp.rcTop, 300)
                         _saved_normal_pos[_hwnd] = (_wp.rcLeft, _wp.rcTop, _wp.rcRight, _wp.rcBottom)
-                        _wp.rcLeft, _wp.rcTop = -2600, 60
-                        _wp.rcRight, _wp.rcBottom = -2600 + _w, 60 + _h
+                        _wp.rcLeft, _wp.rcTop = _OFFSCREEN_X, _OFFSCREEN_Y
+                        _wp.rcRight, _wp.rcBottom = _OFFSCREEN_X + _w, _OFFSCREEN_Y + _h
                         _ct.windll.user32.SetWindowPlacement(_hwnd, _ct.byref(_wp))
                 except Exception:
                     pass
             _ct.windll.user32.ShowWindow(_hwnd, 4)  # SW_SHOWNOACTIVATE = 4：恢复到 rcNormalPosition（已改为离屏）
-            time.sleep(0.75)  # 最小化恢复比托盘需要更长 UIA 树重建时间
+            time.sleep(_MINIMIZED_RESTORE_SLEEP)  # 最小化恢复比托盘需要更长 UIA 树重建时间
             return 'minimized'
         else:
             # 可见非最小化（SPI 激活后常见后台状态）：v1.0.33 cloak 仅在确认需要移动时才执行
@@ -219,8 +275,8 @@ def _ensure_tray_visible(mw: Any) -> str:
                     _SWP = 0x0001 | 0x0004 | 0x0010  # NOSIZE | NOZORDER | NOACTIVATE
                     with _saved_normal_pos_lock:
                         _saved_visible_pos[_hwnd] = (_rc.left, _rc.top)
-                    _ct.windll.user32.SetWindowPos(_hwnd, 0, -2600, 60, 0, 0, _SWP)
-                    time.sleep(0.15)
+                    _ct.windll.user32.SetWindowPos(_hwnd, 0, _OFFSCREEN_X, _OFFSCREEN_Y, 0, 0, _SWP)
+                    time.sleep(_VISIBLE_MOVE_SLEEP)
                     return 'visible'
     except Exception:
         pass
@@ -500,23 +556,23 @@ def _uia_send(uia_edit: Any, mw: Any, reply_text: str) -> bool:
             if _OFFSCREEN_REPLY:
                 import ctypes.wintypes as _wt
                 _u32.ShowWindow(main_hwnd, 8)  # SW_SHOWNA=8：还原不激活不抢前台
-                time.sleep(0.5)
+                time.sleep(_OFFSCREEN_RESTORE_SLEEP)
                 _rc = _wt.RECT()
                 _u32.GetWindowRect(main_hwnd, _ct.byref(_rc))
                 if _rc.left > -2000:
                     _SWP = 0x0001 | 0x0004 | 0x0010  # NOSIZE | NOZORDER | NOACTIVATE
-                    _u32.SetWindowPos(main_hwnd, 0, -2600, 60, 0, 0, _SWP)
-                time.sleep(0.3)
+                    _u32.SetWindowPos(main_hwnd, 0, _OFFSCREEN_X, _OFFSCREEN_Y, 0, 0, _SWP)
+                time.sleep(_OFFSCREEN_MOVE_SLEEP)
             else:
                 _u32.ShowWindow(main_hwnd, 9)  # SW_RESTORE=9（弹窗模式保留原始行为）
-                time.sleep(0.8)
+                time.sleep(_MINIMIZED_RESTORE_SLEEP)
             _refound = _find_chat_input(mw)
             if _refound is not None:
                 uia_edit = _refound
                 edit_hwnd = uia_edit.element_info.handle or main_hwnd
         # 2. SetValue 写入
         uia_edit.iface_value.SetValue(reply_text)
-        time.sleep(0.3)
+        time.sleep(_UIA_SETVALUE_SLEEP)
         # 3. 验证写入（防假阳性：hwnd=0 时 SetValue 可能静默失败）
         try:
             written = uia_edit.get_value() or ""
@@ -742,7 +798,7 @@ def _open_chat(mw: Any, item: Any, sender: str, expect_content: str = "") -> boo
     except Exception:
         pass
 
-    for attempt in range(3):
+    for attempt in range(_OPEN_CHAT_MAX_ATTEMPTS):
         try:
             if attempt == 0:
                 try:
@@ -759,8 +815,8 @@ def _open_chat(mw: Any, item: Any, sender: str, expect_content: str = "") -> boo
         except Exception as exc:
             _log(f"_open_chat: 切换异常(attempt={attempt}): {exc}")
         # 轮询验证（替代死等 2s）：切中立刻返回，最多等 ~2s。快的时候 ~0.4s 就走，多人排队提速关键。
-        for _ in range(5):  # 5 × 0.4s = 2s 上限
-            time.sleep(0.4)
+        for _ in range(_OPEN_CHAT_VERIFY_POLLS):
+            time.sleep(_OPEN_CHAT_POLL_INTERVAL)
             if _verify(attempt):
                 return True
         _log(f"_open_chat: 切窗后未确认是 {sender!r}（attempt={attempt}），重试…")
@@ -806,14 +862,14 @@ def reply_in_chat(mw: Any, item: Any, reply_text: str, sender: str = "") -> bool
             time.sleep(2.0)
 
         uia_edit = None
-        for _poll in range(3):  # UIA 树更新有延迟，最多 3 次轮询
+        for _poll in range(_FIND_INPUT_RETRIES):  # UIA 树更新有延迟，最多 N 次轮询
             fmw = _fresh_mw()
             uia_edit = _find_chat_input(fmw)
             if uia_edit is not None:
                 break
-            if _poll < 2:
-                _log(f"reply_in_chat: 第{_poll + 1}次轮询未找到输入框，等 1s 重试…")
-                time.sleep(1.0)
+            if _poll < _FIND_INPUT_RETRIES - 1:
+                _log(f"reply_in_chat: 第{_poll + 1}次轮询未找到输入框，等 {_FIND_INPUT_RETRY_SLEEP}s 重试…")
+                time.sleep(_FIND_INPUT_RETRY_SLEEP)
         if uia_edit is not None:
             # 发送前最后一道复核：找输入框期间窗口可能被新消息切走 → 再确认一次会话归属
             if sender and _chat_title_matches(fmw, sender) is False:
@@ -1074,8 +1130,8 @@ _LOG_PATH = os.path.join(os.environ.get("PUBLIC", r"C:\Users\Public"), "zj-liste
 
 # ─── replied 持久化（模块顶层，供单测 monkeypatch）────────────────────────────────
 _REPLIED_FILE: str = os.path.join(os.environ.get("PUBLIC", r"C:\Users\Public"), "zj-replied.json")
-SENDER_COOLDOWN: float = 30.0  # 成功回复后同一 sender 的冷却秒数
-REPLIED_TTL: float = 120  # replied 条目 120s 后过期（2 个轮询周期，防双发但不永久封锁）
+SENDER_COOLDOWN: float = _SENDER_COOLDOWN
+REPLIED_TTL: float = _REPLIED_TTL
 _replied_ts: dict = {}  # (sender, content) → 回复时间戳，供 _save_replied 持久化
 
 
@@ -1205,23 +1261,23 @@ def run_real_listen(args: argparse.Namespace) -> int:
     replied: set[tuple[str, str]] = _load_replied()
     _log(f"已加载 replied 历史: {len(replied)} 条")
     reply_failed_at: dict[tuple[str, str], float] = {}
-    REPLY_FAIL_COOLDOWN = 60  # 60s，避免相同内容卡死
+    REPLY_FAIL_COOLDOWN = _REPLY_FAIL_COOLDOWN
     sender_reply_cooldown: dict[str, float] = {}
     _skip_logged: set[tuple[str, str]] = set()  # 只对每个 key 打一次 skip log，避免刷屏
     # 内容变化检测：{sender: last_seen_content}，捕捉聊天面板打开时的新消息（无未读角标）
     last_content: dict[str, str] = {}
     deadline = time.time() + max(1, args.timeout)
-    # 进程守护：每 60 秒向中台上报一次心跳（断 3 分钟无心跳中台飞书告警）+ 扫描诊断
-    heartbeat_interval = 60
+    # 进程守护：向中台上报心跳（断 3 分钟无心跳中台飞书告警）+ 扫描诊断
+    heartbeat_interval = _HEARTBEAT_INTERVAL
     last_heartbeat = 0.0
     last_unread_senders: List[str] = []
     last_error: Optional[str] = None
     # 微信4.0 mmui 控件树需设屏幕阅读器标志激活 UIAutomation 后才暴露、且会失效：启动先激活一次，失效再按冷却补激活
-    uia_reactivate_interval = 45
+    uia_reactivate_interval = _UIA_REACTIVATE_INTERVAL
     _activate_uia()
     last_uia_activate = time.time()
-    # 自动启动微信：检测到微信未运行时自动 Popen Weixin.exe，冷却 120s 防重复拉起
-    wechat_launch_cooldown = 120
+    # 自动启动微信：检测到微信未运行时自动 Popen Weixin.exe，冷却防重复拉起
+    wechat_launch_cooldown = _WECHAT_LAUNCH_COOLDOWN
     last_wechat_launch = time.time() - wechat_launch_cooldown + 30  # 30s grace before first launch
     # replied 过期清理：每 REPLIED_TTL 扫一次，确保过期条目在 TTL 后立即清除
     last_replied_purge = time.time()
@@ -1477,6 +1533,7 @@ def run_real_listen(args: argparse.Namespace) -> int:
 
 def main() -> int:
     args = parse_args()
+    _print_config()  # 启动时打印有效配置，方便排查
 
     if args.dryrun_print_version:
         try:
