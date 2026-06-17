@@ -32,7 +32,7 @@ def test_default_values_are_safe():
     """默认值必须是合理的安全值"""
     assert config.OFFSCREEN_REPLY is True, "默认必须静默后台，不能台前弹窗"
     assert config.OFFSCREEN_X <= -2000, "离屏坐标必须足够负（至少 -2000）"
-    assert config.CHAT_PER_MINUTE_LIMIT >= 1
+    assert config.CHAT_PER_MINUTE_LIMIT >= 0  # 0 = 不限私聊每分钟条数（客服不设硬上限）
     assert config.MOMENT_PER_24H_LIMIT >= 1
     assert config.SENDER_COOLDOWN_SECONDS >= 10
     assert config.WECHAT_MAX_VERSION < (4, 1, 9), "不能支持 4.1.9+（UIA 被砍）"
