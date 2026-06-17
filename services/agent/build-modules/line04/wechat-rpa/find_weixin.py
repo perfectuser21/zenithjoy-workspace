@@ -26,7 +26,7 @@ WEIXIN_EXE_DEFAULT = r"C:\Program Files\Tencent\Weixin\Weixin.exe"
 # 4.1.9 起聊天窗口的无障碍控件树(mmui)被移除（主窗口变成不透明 Qt 窗口），
 # UIA / MSAA 两层都读不到聊天控件 → RPA 不可用。4.1.8.107 = 已验证可用基线。
 MIN_BLOCKED_VERSION = (4, 1, 9)
-MIN_REQUIRED_VERSION = (4, 0, 0)  # 3.x 无 mmui::MainWindow，RPA 不可用
+MIN_REQUIRED_VERSION = (4, 1, 8)  # 只认 4.1.8.x：< 4.1.8 控件配方不一致，>= 4.1.9 无障碍树被砍
 DOWNGRADE_URL = (
     "https://zenithjoy-static-1333590468.cos.accelerate.myqcloud.com"
     "/install-pack/wechat/WeChatWin_4.1.8.exe"
@@ -59,8 +59,10 @@ def _parse_and_check(ver_str: Optional[str]) -> None:
     """
     解析版本串并执行守卫判定（纯函数，可单测，不依赖 Windows）。
 
+    只认 4.1.8.x（高于低于都不行）：
+    - 版本 < (4, 1, 8) → 抛 RuntimeError（控件配方不一致，RPA 不可用）
     - 版本 >= (4, 1, 9) → 抛 RuntimeError（无障碍控件树已被移除，RPA 不可用）
-    - 版本 <= (4, 1, 8.x) → 放行（返回 None）
+    - 版本 == 4.1.8.x → 放行（返回 None）
     - 解析不出版本（None / "" / 非法）→ 不抛，仅 warning，避免误杀
     """
     parsed = _parse_version(ver_str)
@@ -78,7 +80,7 @@ def _parse_and_check(ver_str: Optional[str]) -> None:
     ver_show = ".".join(str(x) for x in parsed)
     if head < MIN_REQUIRED_VERSION:
         raise RuntimeError(
-            f"微信版本 {ver_show} 过低：需 4.0.0+（3.x 无 mmui::MainWindow，RPA 不可用）。"
+            f"微信版本 {ver_show} 过低：需 4.1.8.x（高于低于都不行）。"
             f"请安装 4.1.8.x（官方包 {DOWNGRADE_URL}）"
         )
     if head >= MIN_BLOCKED_VERSION:
