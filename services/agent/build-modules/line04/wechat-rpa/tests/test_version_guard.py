@@ -49,9 +49,10 @@ def test_baseline_4_1_8_allowed():
     assert _parse_and_check("4.1.8.107") is None
 
 
-def test_old_4_0_5_allowed():
-    """更老的 4.0.5.20 → 放行，不抛。"""
-    assert _parse_and_check("4.0.5.20") is None
+def test_old_4_0_5_blocked():
+    """更老的 4.0.5.20 → 现在阻断（守卫只认 4.1.8.x，< 4.1.8 控件配方不一致）。"""
+    with pytest.raises(RuntimeError):
+        _parse_and_check("4.0.5.20")
 
 
 def test_4_1_8_edge_allowed():

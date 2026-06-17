@@ -25,6 +25,7 @@ WECHAT_RPA_DIR = os.path.abspath(os.path.join(HERE, ".."))
 if WECHAT_RPA_DIR not in sys.path:
     sys.path.insert(0, WECHAT_RPA_DIR)
 
+import rate_limiter  # noqa: E402
 from rate_limiter import can_send, reset  # noqa: E402
 
 
@@ -35,21 +36,28 @@ def _unique_id() -> str:
 
 def test_chat_per_minute_limit():
     """
-    PRD §验收第 2 条：分钟内调用 ≤ CHAT_PER_MINUTE(=2)。
+    分钟上限语义：CHAT_PER_MINUTE>0 时分钟内调用 ≤ CHAT_PER_MINUTE。
+    （默认 CHAT_PER_MINUTE=0=不限，本测试显式 patch 成 2 验证上限分支仍生效。）
     前 2 次返回 (True, None)；第 3 次返回 (False, next_allowed_at)。
     每次调用之间必须 sleep(1.1) 隔离 MIN_INTERVAL_SECONDS=1。
     """
     wid = _unique_id()
     reset(wid)
 
-    ok1, nxt1 = can_send("chat", wid)
-    assert ok1 is True, f"第 1 次应通过，实际 ok={ok1}, next={nxt1}"
+    _saved = rate_limiter.CHAT_PER_MINUTE
+    rate_limiter.CHAT_PER_MINUTE = 2  # 显式启用分钟上限验证
+    try:
+        ok1, nxt1 = can_send("chat", wid)
+        assert ok1 is True, f"第 1 次应通过，实际 ok={ok1}, next={nxt1}"
 
-    time.sleep(1.1)  # 必须等过 MIN_INTERVAL_SECONDS=1
-    ok2, nxt2 = can_send("chat", wid)
-    assert ok2 is True, f"第 2 次应通过，实际 ok={ok2}, next={nxt2}"
+        time.sleep(1.1)  # 必须等过 MIN_INTERVAL_SECONDS=1
+        ok2, nxt2 = can_send("chat", wid)
+        assert ok2 is True, f"第 2 次应通过，实际 ok={ok2}, next={nxt2}"
 
-    time.sleep(1.1)
-    ok3, nxt3 = can_send("chat", wid)
-    assert ok3 is False, f"第 3 次应被拒（超 CHAT_PER_MINUTE=2），实际 ok={ok3}"
-    assert nxt3 is not None, "第 3 次拒绝时必须返回 next_allowed_at"
+        time.sleep(1.1)
+        ok3, nxt3 = can_send("chat", wid)
+        assert ok3 is False, f"第 3 次应被拒（超 CHAT_PER_MINUTE=2），实际 ok={ok3}"
+        assert nxt3 is not None, "第 3 次拒绝时必须返回 next_allowed_at"
+    finally:
+        rate_limiter.CHAT_PER_MINUTE = _saved
+        reset(wid)

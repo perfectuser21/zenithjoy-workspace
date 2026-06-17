@@ -80,9 +80,13 @@ try:
         BUTTON_CLICK_SLEEP as _BUTTON_CLICK_SLEEP,
         OFFSCREEN_RESTORE_BEFORE_SEND_SLEEP as _OFFSCREEN_RESTORE_SLEEP,
         OFFSCREEN_MOVE_SLEEP as _OFFSCREEN_MOVE_SLEEP,
+        REPLY_DELAY_SECONDS as REPLY_DELAY_SECONDS,
+        HUMAN_PRIORITY_WAIT_SECONDS as HUMAN_PRIORITY_WAIT_SECONDS,
         print_config as _print_config,
     )
 except ImportError:
+    REPLY_DELAY_SECONDS = 2.0
+    HUMAN_PRIORITY_WAIT_SECONDS = 25.0
     _OFFSCREEN_REPLY = True
     _OFFSCREEN_X = -2600
     _OFFSCREEN_Y = 60
@@ -137,6 +141,25 @@ SKIP_GROUP_KEYWORDS = ("群", "频道", "讨论组", "直播间")
 # WeChat 会话列表 UI 状态标记：置顶/草稿等，不是实际消息内容，提取 content 时跳过。
 # 若错误提取为 content → replied[(sender, '已置顶')] 永久封锁该会话（已复现 bug）。
 _UI_STATUS_KEYWORDS = ("置顶", "草稿")
+
+
+# ─── 纯逻辑：回复等待决策（CI 单测锚点，顶层零 pywinauto，跨平台可测）────────────
+
+
+def decide_reply_wait(human_intervened: bool,
+                      reply_delay: float = REPLY_DELAY_SECONDS,
+                      human_wait: float = HUMAN_PRIORITY_WAIT_SECONDS) -> float:
+    """返回本条消息 AI 回复前应等待的秒数。
+
+    human_intervened=True（该会话近期有操作者手动消息）→ 返回 human_wait（约25s，给人工优先）
+    否则 → 返回 reply_delay（约2s）。
+    调用方在等待窗口结束后需重新检查：若期间人工已回该条 → 跳过不回。
+
+    【边界 / 未实现】识别「操作者手动发出的消息」需要 UIA 读消息方向，是真机
+    (windows_wechat) 依赖。本函数只做纯决策，不接线真实的人工介入检测信号；
+    调用处目前传 human_intervened=False 占位（见 listen_chat 主循环 TODO）。
+    """
+    return human_wait if human_intervened else reply_delay
 
 
 # ─── 纯逻辑：解析单个会话项的 element_info.name（CI 单测锚点，顶层零 pywinauto）──────
@@ -1510,7 +1533,12 @@ def run_real_listen(args: argparse.Namespace) -> int:
                 if not reply:
                     continue
                 key = (m["sender"], m["content"])
-                _log(f"尝试回复 sender={m['sender']} reply_len={len(reply)}")
+                # 拟人回复延迟：确认要回这条之后、实际发送之前等约 2s。
+                # human_intervened 固定 False —— 检测「操作者手动消息方向」需 UIA
+                # 真机(windows_wechat)接线，本次不实现该信号，仅留决策函数 + 占位。
+                _wait = decide_reply_wait(human_intervened=False)  # TODO 真机：接 UIA 消息方向检测
+                time.sleep(_wait)
+                _log(f"尝试回复 sender={m['sender']} reply_len={len(reply)} (等待 {_wait}s)")
                 ok = False
                 try:
                     ok = reply_in_chat(mw, m["_item"], reply, sender=m["sender"])

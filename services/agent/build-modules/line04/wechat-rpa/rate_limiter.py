@@ -49,7 +49,7 @@ try:
     )
 except ImportError:
     MOMENT_PER_24H = 1
-    CHAT_PER_MINUTE = 2
+    CHAT_PER_MINUTE = 0  # 0 = 不限私聊每分钟条数（与 config 默认一致）
     MIN_INTERVAL_SECONDS = 1
 # CHAT_PER_24H 已移除：被动客服只响应用户来消息，24h 总量限制是为主动发防封号设计的，不适用。
 
@@ -167,23 +167,25 @@ def can_send(action: str, wechat_id: str) -> Tuple[bool, Optional[str]]:
                 conn.execute("ROLLBACK")
                 return (False, _iso(next_allowed))
         elif action == "chat":
-            # 分钟级
-            window_min = now - timedelta(seconds=60)
-            cnt_min = conn.execute(
-                "SELECT COUNT(*) FROM sends WHERE wechat_id = ? AND action = 'chat' AND sent_at >= ?",
-                (wechat_id, window_min.strftime("%Y-%m-%d %H:%M:%S")),
-            ).fetchone()[0]
-            if cnt_min >= CHAT_PER_MINUTE:
-                earliest_row = conn.execute(
-                    "SELECT sent_at FROM sends WHERE wechat_id = ? AND action = 'chat' AND sent_at >= ? ORDER BY id ASC LIMIT 1",
+            # 分钟级上限：CHAT_PER_MINUTE=0 时不限私聊条数（客服不设每分钟硬上限），
+            # 跳过这段校验；操作间隔≥1s（上面）与 INSERT 记录（下面）照常执行。
+            if CHAT_PER_MINUTE > 0:
+                window_min = now - timedelta(seconds=60)
+                cnt_min = conn.execute(
+                    "SELECT COUNT(*) FROM sends WHERE wechat_id = ? AND action = 'chat' AND sent_at >= ?",
                     (wechat_id, window_min.strftime("%Y-%m-%d %H:%M:%S")),
-                ).fetchone()
-                if earliest_row:
-                    next_allowed = _parse_db_time(earliest_row[0]) + timedelta(seconds=60)
-                else:
-                    next_allowed = now + timedelta(seconds=60)
-                conn.execute("ROLLBACK")
-                return (False, _iso(next_allowed))
+                ).fetchone()[0]
+                if cnt_min >= CHAT_PER_MINUTE:
+                    earliest_row = conn.execute(
+                        "SELECT sent_at FROM sends WHERE wechat_id = ? AND action = 'chat' AND sent_at >= ? ORDER BY id ASC LIMIT 1",
+                        (wechat_id, window_min.strftime("%Y-%m-%d %H:%M:%S")),
+                    ).fetchone()
+                    if earliest_row:
+                        next_allowed = _parse_db_time(earliest_row[0]) + timedelta(seconds=60)
+                    else:
+                        next_allowed = now + timedelta(seconds=60)
+                    conn.execute("ROLLBACK")
+                    return (False, _iso(next_allowed))
 
         # 3) 通过 → INSERT
         conn.execute(
