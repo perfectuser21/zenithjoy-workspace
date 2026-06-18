@@ -1,0 +1,36 @@
+{
+  "initiative_id": "afa6abca",
+  "journey_type": "user_facing",
+  "journey_type_reason": "核心交付在 apps/dashboard 获客页（采集入口+7态/计数/失败原因展示+抖音号跳主页），命中 user_facing 优先级链第一条",
+  "tasks": [
+    {
+      "task_id": "ws1",
+      "title": "Path2 Step4 飞书企业信息文档 + 扩词 + 中台采集闭环（绑飞书建 docx → 获客页采集 → fake-agent 回报去重落库 → 写飞书 Leads → 获客页可见）",
+      "scope": "DB migration（acquisition_collect_tasks 7 态 + acquisition_leads 去重/残缺/待补写飞书 + tenant_feishu_bindings 加 enterprise_doc_token）；飞书 provision 扩展自动建企业信息 docx + 读 docx 纯文本；采集端点 expand(前置校验+读文档+DeepSeek 扩 3 词+手输覆盖+降级种子兜底)/start(派单)/cancel/report(去重落 DB+写飞书+断点 checkpoint+partial)/status(7 态+计数+失败原因+抖音号)/sweep-timeouts(10min 兜底)；去重逻辑 acquisition-collect.ts（(tenant_id,sec_uid)+昵称弱去重）；CI 测试替身 fake-LLM + fake-feishu docx/写表控制；获客页 UI（采集按钮+扩词确认+7 态/计数/失败原因+抖音号跳主页+残缺标记）；e2e-verify.ps1 + acquisition-collect.spec.ts + e2e-windows.yml 补 setup-node。租户隔离全链 scope。真机真抓抖音 CDP 手验另附不入自动 E2E。",
+      "dod": [
+        "[BEHAVIOR] expand 前置校验三错码(FEISHU_NOT_BOUND/NO_ENTERPRISE_DOC/EMPTY_DOC) + ai 3 词/手输/降级种子兜底（见 contract-dod.md Step1）",
+        "[BEHAVIOR] report 按 (tenant_id,sec_uid) 去重 + 昵称弱去重 + 断点 checkpoint + partial + 取消已抓保留（contract-dod.md Step2/3）",
+        "[BEHAVIOR] 写飞书 ok→success / fail→pending(待补写飞书) 且 task 不 failed（contract-dod.md Step4）",
+        "[BEHAVIOR] 查状态 7 态+三计数+error_code+抖音号主页链接/残缺标记 + 10min 超时转终态 + 双租户隔离（contract-dod.md Step5/6）",
+        "[BEHAVIOR:E2E] 获客页 Playwright 走完采集 UI 4 截图（windows_cloud e2e-verify.ps1）",
+        "[ARTIFACT] migration(7 态表+leads 去重表+enterprise_doc_token) + 采集 router 挂载 + fake-LLM/fake-feishu 替身 + ps1/spec/setup-node"
+      ],
+      "files": [
+        "apps/api/db/migrations/<ts>_acquisition_collect.sql",
+        "apps/api/src/routes/acquisition.ts",
+        "apps/api/src/services/acquisition-collect.ts",
+        "apps/api/src/services/feishu-docx.ts",
+        "apps/api/src/services/feishu-bitable-multitenant.ts",
+        "apps/api/src/routes/_smoke-fake-llm.ts",
+        "apps/api/src/routes/_smoke-feishu-seed.ts",
+        "apps/dashboard/src/pages/LeadsPage.tsx",
+        "apps/dashboard/e2e/acquisition-collect.spec.ts",
+        "sprints/06181904-acquisition-feishu-doc-collect/e2e-verify.ps1",
+        ".github/workflows/e2e-windows.yml"
+      ],
+      "depends_on": [],
+      "complexity": "L",
+      "estimated_minutes": 120
+    }
+  ]
+}
