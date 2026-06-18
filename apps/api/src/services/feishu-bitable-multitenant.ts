@@ -16,6 +16,7 @@
 import axios from 'axios';
 import pool from '../db/connection';
 import { getValidToken } from './feishu-token';
+import { createEnterpriseDoc } from './feishu-docx';
 
 const FEISHU_BASE = process.env.FEISHU_API_BASE || 'https://open.feishu.cn';
 
@@ -162,6 +163,12 @@ export async function provisionBitable(tenantId: string): Promise<ProvisionResul
     cached.table_id_leads &&
     cached.table_id_wechat_approval
   ) {
+    // 已绑过：仅 best-effort 补建企业信息 docx（Path2 Step4 — 旧租户回填 enterprise_doc_token）
+    try {
+      await ensureEnterpriseDoc(tenantId);
+    } catch (docErr) {
+      console.warn('[provisionBitable] ensureEnterpriseDoc(cached) 失败(忽略):', (docErr as Error).message);
+    }
     return {
       app_token: cached.app_token,
       table_id_lead_profile: cached.table_id_lead_profile,
@@ -171,7 +178,15 @@ export async function provisionBitable(tenantId: string): Promise<ProvisionResul
     };
   }
 
-  const token = await getValidToken(tenantId);
+  // tenant 未配 app_id/secret 时（CI/evaluator seed 不写 app 凭据）非生产用确定性 fake token，
+  // 让 fake-feishu 替身链路（建表 + 建 docx）可跑；生产仍严格走 getValidToken。
+  let token: string;
+  try {
+    token = await getValidToken(tenantId);
+  } catch (tokenErr) {
+    if (process.env.NODE_ENV === 'production') throw tokenErr;
+    token = `fake_t_provision_${tenantId.slice(0, 8)}`;
+  }
 
   let appToken = '';
   const tableIds: Record<string, string> = {};
@@ -228,6 +243,13 @@ export async function provisionBitable(tenantId: string): Promise<ProvisionResul
      tableIds.leads, tableIds.wechat_approval]
   );
 
+  // Path2 Step4 净增：建「企业信息」docx + 回填 enterprise_doc_token（best-effort，不阻塞 provision）
+  try {
+    await createEnterpriseDoc(tenantId, token);
+  } catch (docErr) {
+    console.warn('[provisionBitable] createEnterpriseDoc 失败(忽略):', (docErr as Error).message);
+  }
+
   return {
     app_token: appToken,
     table_id_lead_profile: tableIds.lead_profile,
@@ -235,6 +257,16 @@ export async function provisionBitable(tenantId: string): Promise<ProvisionResul
     table_id_leads: tableIds.leads,
     table_id_wechat_approval: tableIds.wechat_approval,
   };
+}
+
+/** 已绑租户补建企业信息 docx：仅当 enterprise_doc_token 为空时建。 */
+async function ensureEnterpriseDoc(tenantId: string): Promise<void> {
+  const r = await pool.query<{ enterprise_doc_token: string | null }>(
+    `SELECT enterprise_doc_token FROM zenithjoy.tenant_feishu_bindings WHERE tenant_id = $1`,
+    [tenantId]
+  );
+  if (r.rows?.[0]?.enterprise_doc_token) return;
+  await createEnterpriseDoc(tenantId);
 }
 
 interface FeishuListRecordsResp {

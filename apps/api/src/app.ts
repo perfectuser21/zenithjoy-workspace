@@ -32,6 +32,9 @@ import { creditsRouter } from './routes/credits';
 import feishuOauthRouter from './routes/feishu-oauth';
 import leadConfigRouter from './routes/lead-config';
 import smokeFeishuSeedRouter from './routes/_smoke-feishu-seed';
+// Path 2 Step4 — DEV-only fake-feishu / fake-LLM 替身（根路径自托管，仅非生产挂载）
+import { fakeFeishuRouter } from './routes/_smoke-feishu-seed';
+import { fakeLlmRouter } from './routes/_smoke-fake-llm';
 // Path 2 Sprint B-1 — 抖音小号绑定 + 评论抓取
 import agentBurnerRouter from './routes/agent-burner';
 import smokeFakeAgentBurnerRouter from './routes/_smoke-fake-agent-burner';
@@ -82,6 +85,14 @@ app.use('/screenshots', express.static(screenshotsDir));
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
+
+// Path 2 Step4 — fake-feishu / fake-LLM 替身：仅非生产挂载于根路径，
+// 供 evaluator/CI 把 FEISHU_API_BASE / OPENROUTER_BASE_URL 指向 apps/api 自身做端到端验证。
+// 生产不挂载 → 真飞书 / 真 OpenRouter 链路不受影响。两 router 对未匹配路径会 next() 透传。
+if (process.env.NODE_ENV !== 'production') {
+  app.use(fakeLlmRouter);
+  app.use(fakeFeishuRouter);
+}
 
 // API routes
 app.use('/api/works', worksRouter);
