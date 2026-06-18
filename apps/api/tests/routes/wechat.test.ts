@@ -108,17 +108,25 @@ describe('ws1 POST /api/wechat/scheduler-tick', () => {
     mockQuery.mockResolvedValue({ rows: [], rowCount: 0 });
   });
 
-  it('空 body → 200 + {generated, skipped}', async () => {
-    const res = await request(app).post('/api/wechat/scheduler-tick').send({});
+  it('带租户上下文（仅 tenant_id）→ 200 + {generated, skipped}', async () => {
+    // 多租户隔离后 scheduler-tick 要求租户上下文；非浏览器 caller 显式传 tenant_id。
+    const res = await request(app)
+      .post('/api/wechat/scheduler-tick')
+      .send({ tenant_id: 'tenant-route-test' });
     expect(res.status).toBe(200);
     expect(typeof res.body.generated).toBe('number');
     expect(Array.isArray(res.body.skipped)).toBe(true);
   });
 
-  it('{force:true, customer:"X"} → 200 + 结构合法', async () => {
+  it('缺租户上下文 → 4xx（不回退全量）', async () => {
+    const res = await request(app).post('/api/wechat/scheduler-tick').send({});
+    expect(res.status).toBeGreaterThanOrEqual(400);
+  });
+
+  it('{tenant_id, force:true, customer:"X"} → 200 + 结构合法', async () => {
     const res = await request(app)
       .post('/api/wechat/scheduler-tick')
-      .send({ force: true, customer: '客户A' });
+      .send({ tenant_id: 'tenant-route-test', force: true, customer: '客户A' });
     expect(res.status).toBe(200);
     expect(typeof res.body.generated).toBe('number');
     expect(Array.isArray(res.body.skipped)).toBe(true);
@@ -158,7 +166,7 @@ describe('ws3 POST /api/wechat/draft-generate — zod 校验 + 转 service', () 
     });
     const res = await request(app)
       .post('/api/wechat/draft-generate')
-      .send({ sender: '客户A', wechat_id: 'test_a', content: '在吗' });
+      .send({ sender: '客户A', wechat_id: 'test_a', content: '在吗', tenant_id: 'tenant-route-test' });
     expect(res.status).toBe(200);
     expect(res.body).toMatchObject({
       status: 'pending_review',
@@ -180,7 +188,7 @@ describe('ws3 POST /api/wechat/draft-generate — zod 校验 + 转 service', () 
     });
     const res = await request(app)
       .post('/api/wechat/draft-generate')
-      .send({ sender: '客户A', wechat_id: 'test_a', content: '在吗', mode: 'auto' });
+      .send({ sender: '客户A', wechat_id: 'test_a', content: '在吗', mode: 'auto', tenant_id: 'tenant-route-test' });
     expect(res.status).toBe(200);
     expect(res.body.reply).toBe('您好，在的');
     expect(generateChatDraft).toHaveBeenCalledWith(
@@ -202,7 +210,7 @@ describe('ws3 POST /api/wechat/draft-generate — zod 校验 + 转 service', () 
     });
     const res = await request(app)
       .post('/api/wechat/draft-generate')
-      .send({ sender: '陌生人', wechat_id: 'unknown_x', content: '嗨' });
+      .send({ sender: '陌生人', wechat_id: 'unknown_x', content: '嗨', tenant_id: 'tenant-route-test' });
     expect(res.status).toBe(200);
     expect(res.body).toMatchObject({ ok: false, reason: 'not_in_whitelist' });
   });
@@ -255,7 +263,7 @@ describe('ws4 POST /api/wechat/scheduler-tick — 真逻辑分发到 generateMom
     });
     const res = await request(app)
       .post('/api/wechat/scheduler-tick')
-      .send({ force: true, customer: '客户A' });
+      .send({ tenant_id: 'tenant-route-test', force: true, customer: '客户A' });
     expect(res.status).toBe(200);
     expect(res.body.generated).toBe(1);
     expect(Array.isArray(res.body.skipped)).toBe(true);
@@ -272,7 +280,7 @@ describe('ws4 POST /api/wechat/scheduler-tick — 真逻辑分发到 generateMom
     });
     const res = await request(app)
       .post('/api/wechat/scheduler-tick')
-      .send({ force: true, customer: '客户B' });
+      .send({ tenant_id: 'tenant-route-test', force: true, customer: '客户B' });
     expect(res.status).toBe(200);
     expect(res.body.generated).toBe(0);
     expect(res.body.skipped).toEqual(
@@ -289,7 +297,7 @@ describe('ws4 POST /api/wechat/scheduler-tick — 真逻辑分发到 generateMom
     });
     const res = await request(app)
       .post('/api/wechat/scheduler-tick')
-      .send({ force: true, customer: '客户A' });
+      .send({ tenant_id: 'tenant-route-test', force: true, customer: '客户A' });
     expect(res.status).toBe(200);
     expect(res.body.generated).toBe(0);
     expect(res.body.skipped).toEqual(
@@ -322,7 +330,7 @@ describe('ws4 POST /api/wechat/scheduler-tick — 真逻辑分发到 generateMom
       });
     const res = await request(app)
       .post('/api/wechat/scheduler-tick')
-      .send({ force: false });
+      .send({ tenant_id: 'tenant-route-test', force: false });
     expect(res.status).toBe(200);
     expect(res.body.generated).toBe(1);
     expect(res.body.skipped.length).toBe(1);
