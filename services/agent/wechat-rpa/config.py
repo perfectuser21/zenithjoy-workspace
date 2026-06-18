@@ -61,6 +61,12 @@ HUMAN_PRIORITY_WAIT_SECONDS: float = 25.0
 """操作者手动介入某会话后，该会话 AI 回复等待从 REPLY_DELAY 延长到这个值，
    留时间给人工先回（约 25s）。等待窗口结束后需重新检查：若期间人工已回该条 → 跳过不回。"""
 
+REPLY_DIRECTION_CHECK: bool = False
+"""不回自己/人工优先的消息方向检测开关。
+   True = 读最后气泡方向，右对齐判我方→跳过(防回自己/回操作者)；
+   False = 关闭方向检测，对所有未读消息都回(真机阈值未校准前默认关，否则会把收到的消息误判成我方而永不回)。
+   真机校准 _last_bubble_direction 的气泡位置阈值后再改回 True。"""
+
 # ── 频控限制 ──────────────────────────────────────────────
 CHAT_PER_MINUTE_LIMIT: int = 0
 """私聊每分钟最多回复条数。0 = 不限私聊条数（客服不设每分钟硬上限）；
@@ -182,6 +188,7 @@ def print_config() -> None:
     print(f"  私聊频控      CHAT/MIN        = {CHAT_PER_MINUTE_LIMIT} 条/分钟")
     print(f"  朋友圈频控    MOMENT/24H      = {MOMENT_PER_24H_LIMIT} 条/天")
     print(f"  发件人冷却    SENDER_COOLDOWN = {SENDER_COOLDOWN_SECONDS}s")
+    print(f"  方向检测      REPLY_DIRECTION_CHECK = {REPLY_DIRECTION_CHECK}  ({'读气泡方向跳过我方' if REPLY_DIRECTION_CHECK else '关闭（对所有未读都回）'})")
     print(f"  微信版本限制  {WECHAT_MIN_VERSION} ~ {WECHAT_MAX_VERSION}")
     print(f"  心跳间隔      HEARTBEAT       = {HEARTBEAT_INTERVAL_SECONDS}s")
     print(f"  主循环间隔    POLL            = {MAIN_LOOP_POLL_INTERVAL_SECONDS}s")
