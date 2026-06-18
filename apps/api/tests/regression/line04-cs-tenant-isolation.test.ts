@@ -125,4 +125,69 @@ describe('Line04 客服层多租户隔离 [BEHAVIOR]', () => {
     const arg = generateChatDraftMock.mock.calls[0][0];
     expect(arg, 'generateChatDraft 必须收到当前租户 scope').toMatchObject({ tenant_id: TENANT_A });
   });
+
+  // ── 生产 bug 修复（NO_TENANT_CONTEXT 全拒）：listen_chat 不传 tenant_id 只传 agent_id，
+  //    中台从 agents.tenant_id 反查推导租户。agents.agent_id 是 text UNIQUE 列。 ──
+  it('draft-generate 仅传 agent_id 时从 agents.tenant_id 推导租户并放行写入', async () => {
+    // agents 反查命中 → 返回 tenant_id；其余查询走默认 mock
+    mockQuery.mockImplementation((sql: string) => {
+      if (/from\s+zenithjoy\.agents\s+where\s+agent_id/i.test(String(sql))) {
+        return Promise.resolve({ rows: [{ tenant_id: TENANT_A }], rowCount: 1 });
+      }
+      return Promise.resolve({ rows: [{ customer: 'wxid_seed' }], rowCount: 1 });
+    });
+
+    const res = await request(app)
+      .post('/api/wechat/draft-generate')
+      .send({ sender: '客户X', wechat_id: 'wxid_x', content: '你好', agent_id: 'agent-burner-1' });
+    expect(res.status, 'agent_id 能推导出租户应放行').toBe(200);
+
+    // 必须真按 agent_id 文本列查 agents 表
+    const lookup = mockQuery.mock.calls.find((c) =>
+      /from\s+zenithjoy\.agents\s+where\s+agent_id/i.test(String(c[0])),
+    );
+    expect(lookup, '应执行 agents.agent_id 反查 tenant').toBeTruthy();
+    expect((lookup![1] ?? []) as unknown[], '反查必须绑定 agent_id').toContain('agent-burner-1');
+
+    expect(generateChatDraftMock, '推导出租户后应放行写入').toHaveBeenCalled();
+    const arg = generateChatDraftMock.mock.calls[0][0];
+    expect(arg, '写入必须归属反查到的租户A').toMatchObject({ tenant_id: TENANT_A });
+  });
+
+  // ── 边界：agent_id 查不到对应 agent → 仍拒绝，绝不回退全量（保持隔离）──
+  it('draft-generate agent_id 查不到 agent 时拒绝且绝不写入', async () => {
+    mockQuery.mockImplementation((sql: string) => {
+      if (/from\s+zenithjoy\.agents\s+where\s+agent_id/i.test(String(sql))) {
+        return Promise.resolve({ rows: [], rowCount: 0 });
+      }
+      return Promise.resolve({ rows: [{ customer: 'wxid_seed' }], rowCount: 1 });
+    });
+
+    const res = await request(app)
+      .post('/api/wechat/draft-generate')
+      .send({ sender: '客户X', wechat_id: 'wxid_x', content: '你好', agent_id: 'agent-unknown' });
+    expect(res.status, 'agent_id 查不到必须拒绝').toBeGreaterThanOrEqual(400);
+    expect(res.body.error).toBe('NO_TENANT_CONTEXT');
+    expect(generateChatDraftMock, '查不到租户绝不写入').not.toHaveBeenCalled();
+  });
+
+  // ── 兼容：显式 tenant_id 与 agent_id 同传时，显式 tenant_id 优先（不触发反查）──
+  it('draft-generate 显式 tenant_id 优先于 agent_id 反查', async () => {
+    const res = await request(app)
+      .post('/api/wechat/draft-generate')
+      .send({
+        sender: '客户X',
+        wechat_id: 'wxid_x',
+        content: '你好',
+        tenant_id: TENANT_B,
+        agent_id: 'agent-burner-1',
+      });
+    expect(res.status).toBe(200);
+    const agentLookup = mockQuery.mock.calls.find((c) =>
+      /from\s+zenithjoy\.agents\s+where\s+agent_id/i.test(String(c[0])),
+    );
+    expect(agentLookup, '显式 tenant_id 时不应触发 agents 反查').toBeFalsy();
+    const arg = generateChatDraftMock.mock.calls[0][0];
+    expect(arg, '显式 tenant_id 优先').toMatchObject({ tenant_id: TENANT_B });
+  });
 });
