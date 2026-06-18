@@ -5,6 +5,8 @@ import {
   dedupCommenters,
   profileUrlForSecUid,
   EMPTY_DOC_MIN_CHARS,
+  resolveTerminalStatus,
+  shouldSweepToTerminal,
 } from '../../../apps/api/src/services/acquisition-collect.js';
 
 describe('acquisition-collect 去重落库 [BEHAVIOR]', () => {
@@ -43,5 +45,32 @@ describe('acquisition-collect 去重落库 [BEHAVIOR]', () => {
   it('空文档阈值常量存在且为正（EMPTY_DOC 判定下限）', () => {
     expect(typeof EMPTY_DOC_MIN_CHARS).toBe('number');
     expect(EMPTY_DOC_MIN_CHARS).toBeGreaterThan(0);
+  });
+});
+
+describe('acquisition-collect 失败兜底状态机 [BEHAVIOR]', () => {
+  it('terminal=failed 携带 error_code → 字面落库区分原因（DOUYIN_RISK / DOUYIN_CAPTCHA 互异）', () => {
+    const a = resolveTerminalStatus({ terminal: 'failed', error_code: 'DOUYIN_RISK' });
+    const b = resolveTerminalStatus({ terminal: 'failed', error_code: 'DOUYIN_CAPTCHA' });
+    expect(a.status).toBe('failed');
+    expect(a.error_code).toBe('DOUYIN_RISK');
+    expect(b.error_code).toBe('DOUYIN_CAPTCHA');
+    expect(a.error_code).not.toBe(b.error_code);
+  });
+
+  it('terminal=partial → status=partial 且 error_code=partial_reason', () => {
+    const r = resolveTerminalStatus({ terminal: 'partial', partial_reason: 'video_insufficient' });
+    expect(r.status).toBe('partial');
+    expect(r.error_code).toBe('video_insufficient');
+  });
+
+  it('sweep 规则：stale running 转终态，pending(离线 agent) 永不被 sweep', () => {
+    const elevenMinAgoMs = 11 * 60 * 1000;
+    // running 超 10min → 应转终态
+    expect(shouldSweepToTerminal({ status: 'running', ageMs: elevenMinAgoMs })).toBe(true);
+    // pending 即使超 10min → 保留不丢（等离线 agent 上线续抓）
+    expect(shouldSweepToTerminal({ status: 'pending', ageMs: elevenMinAgoMs })).toBe(false);
+    // running 未超时 → 不动
+    expect(shouldSweepToTerminal({ status: 'running', ageMs: 60 * 1000 })).toBe(false);
   });
 });
