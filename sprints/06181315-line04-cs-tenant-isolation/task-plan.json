@@ -1,0 +1,29 @@
+{
+  "initiative_id": "",
+  "journey_type": "autonomous",
+  "journey_type_reason": "纯后端 apps/api 客服读写路径改造，无 UI / 无 agent 远端协议 / 无 engine。",
+  "tasks": [
+    {
+      "task_id": "ws1",
+      "title": "Line04 客服层补 tenant scope：scheduler-tick 客户枚举 + draft-generate 写入按 agents.tenant_id 隔离，缺租户拒绝不回退全量",
+      "scope": "给 apps/api 客服读写路径加租户隔离：客户枚举查询 JOIN zenithjoy.agents 并按 agents.tenant_id 过滤、绑定当前租户参数；draft-generate 写入归属当前租户 agent；缺租户上下文一律 4xx 拒绝，绝不执行无 tenant 过滤的全量查、绝不处理/写入任意客户。租户上下文沿用 agent-context 既定的 body 显式 id 向后兼容范式（cron/listen_chat 等非浏览器 caller 显式传 tenant_id）。不动 tenant 模型、不改 schema 结构、不动前端。",
+      "dod": [
+        "[BEHAVIOR] 租户A 客户枚举 SQL 含 agents JOIN + tenant_id 过滤且绑定 A 参数（vitest -t 租户A 客户枚举）",
+        "[BEHAVIOR] 租户B 枚举绑定 B 且绝不含 A（vitest -t 租户B 客户枚举）",
+        "[BEHAVIOR] 缺租户上下文 4xx 且无未带 tenant_id 的全量客户查询（vitest -t 缺租户上下文时拒绝）",
+        "[BEHAVIOR] draft-generate 缺租户拒绝且不写入（vitest -t draft-generate 缺租户上下文时拒绝）",
+        "[BEHAVIOR] draft-generate 带租户放行并透传 tenant scope（vitest -t draft-generate 带租户上下文时放行）",
+        "[ARTIFACT] apps/api/tests/regression/line04-cs-tenant-isolation.test.ts 5 条断言转绿（先红后绿）"
+      ],
+      "files": [
+        "apps/api/src/routes/wechat.ts",
+        "apps/api/src/services/scheduler.ts",
+        "apps/api/src/services/wechat-draft.ts",
+        "apps/api/tests/regression/line04-cs-tenant-isolation.test.ts"
+      ],
+      "depends_on": [],
+      "complexity": "M",
+      "estimated_minutes": 90
+    }
+  ]
+}
