@@ -40,10 +40,24 @@ class _FakeWindow:
 
 
 def _set_windows(windows):
-    """让 pywinauto.Desktop(backend='uia').windows() 返回指定列表。"""
+    """让 pywinauto.Desktop(backend='uia').windows() 返回指定列表。
+
+    直接把 Desktop 替换成可调用 mock —— rog runner 真装了 pywinauto，
+    若只设 .Desktop.return_value 对真 Desktop 类无效，会调真 pywinauto 读真窗口。
+    """
     mock_desktop_inst = MagicMock()
     mock_desktop_inst.windows.return_value = windows
-    sys.modules["pywinauto"].Desktop.return_value = mock_desktop_inst
+    sys.modules["pywinauto"].Desktop = MagicMock(return_value=mock_desktop_inst)
+
+
+@pytest.fixture(autouse=True)
+def _restore_pywinauto_desktop():
+    """还原 pywinauto.Desktop，避免污染真 pywinauto 影响别的测试。"""
+    mod = sys.modules.get("pywinauto")
+    orig = getattr(mod, "Desktop", None)
+    yield
+    if mod is not None and orig is not None:
+        mod.Desktop = orig
 
 
 # ─── login_window_present ─────────────────────────────────────────────────────

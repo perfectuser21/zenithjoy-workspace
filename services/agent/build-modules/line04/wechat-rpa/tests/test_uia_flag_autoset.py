@@ -97,7 +97,7 @@ class TestUiaFlagAutoset:
         assert isinstance(result, bool)
 
     def test_version_is_1036(self):
-        """manifest.json 版本号必须是 1.0.36（v1.0.36 修复 UIA 标志丢失后台回复停止）。"""
+        """manifest.json 版本号必须 >= 1.0.36（v1.0.36 引入 UIA 标志修复，后续 bump 不应使本测试变红）。"""
         import json
         candidates = [
             os.path.join(WECHAT_RPA_DIR, "..", "..", "build-modules", "line04", "manifest.json"),
@@ -113,6 +113,7 @@ class TestUiaFlagAutoset:
         with open(manifest_path, encoding="utf-8") as f:
             manifest = json.load(f)
         version = manifest.get("version", "")
-        assert version == "1.0.36", (
-            f"manifest.json version 必须是 '1.0.36'，实际是 {version!r}"
+        parts = tuple(int(x) for x in version.split("."))
+        assert parts >= (1, 0, 36), (
+            f"manifest version 必须 >= 1.0.36（v1.0.36 引入UIA标志修复），实际 {version!r}"
         )
