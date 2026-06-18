@@ -1,6 +1,3 @@
-contract_branch: cp-harness-propose-r2-79dd4984-a0
-sprint_dir: sprints/06181904-acquisition-feishu-doc-collect
-
 ---
 skeleton: false
 journey_type: user_facing
