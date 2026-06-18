@@ -115,6 +115,11 @@ jobs:
     name: job2 — Agent 启动路径 + listen_chat dryrun（self-hosted xian-rog）
     runs-on: [self-hosted, wechat-capable]
     timeout-minutes: 12
+    # Windows self-hosted runner 默认 locale=GBK，python 读含中文的 .py/文件会 UnicodeDecodeError，
+    # stdout 打中文会 UnicodeEncodeError。强制 UTF-8 模式根治读写两侧（Python 3.7+）。
+    env:
+      PYTHONUTF8: '1'
+      PYTHONIOENCODING: 'utf-8'
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

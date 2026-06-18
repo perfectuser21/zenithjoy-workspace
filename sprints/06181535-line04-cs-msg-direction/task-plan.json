@@ -1,0 +1,28 @@
+{
+  "initiative_id": "${INITIATIVE_ID}",
+  "journey_type": "autonomous",
+  "journey_type_reason": "wechat-rpa worker 的回复决策逻辑（后端纯函数行为），以 mock 气泡 pytest + 独立 oracle 交付，无 UI、无远端协议变更",
+  "tasks": [
+    {
+      "task_id": "ws1",
+      "title": "Line04 不回自己：listen_chat 加 _last_bubble_direction 读最底部气泡方向，接进 Phase2 回复决策 + 修 human_intervened 占位",
+      "scope": "在 services/agent/wechat-rpa/listen_chat.py 顶层（零 pywinauto）实现 _last_bubble_direction(mw)->Optional[str]（incoming/outgoing/None，按气泡中心相对聊天面板中线，复用 _chat_title_matches 的 rectangle/区域约定）；主循环 Phase2 接线：仅 incoming 进生成+发送，outgoing/None 跳过，outgoing⇒human_intervened=True 传 decide_reply_wait（移除 listen_chat.py:1539 硬编码 human_intervened=False 占位）；让 tests/test_msg_direction.py 6 case 转绿；rsync 同步 build-modules/line04/wechat-rpa 打包副本",
+      "dod": [
+        "[BEHAVIOR] oracle 6 case 全 exit 0：incoming/outgoing/operator/last_wins/empty/midline（独立 oracle 跑真实 _last_bubble_direction）",
+        "[BEHAVIOR] human_intervened 占位移除且主循环引用 _last_bubble_direction（grep 接线检查 exit 0）",
+        "[BEHAVIOR] wechat-rpa 全量 pytest 全绿（test_msg_direction 6 case 转绿 + 既有测试不回退）",
+        "[BEHAVIOR] diff -r 源码 vs build-modules/line04/wechat-rpa 无差异（CI L4 Gate 死规则）",
+        "[ARTIFACT] listen_chat.py 顶层定义 def _last_bubble_direction(",
+        "[ARTIFACT] build-modules/line04/wechat-rpa/listen_chat.py 同步含 _last_bubble_direction"
+      ],
+      "files": [
+        "services/agent/wechat-rpa/listen_chat.py",
+        "services/agent/wechat-rpa/tests/test_msg_direction.py",
+        "services/agent/build-modules/line04/wechat-rpa/listen_chat.py"
+      ],
+      "depends_on": [],
+      "complexity": "M",
+      "estimated_minutes": 75
+    }
+  ]
+}

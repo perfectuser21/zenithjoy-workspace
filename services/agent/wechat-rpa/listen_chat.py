@@ -717,6 +717,50 @@ def _chat_title_matches(mw: Any, sender: str) -> Optional[bool]:
     return False if saw_any_title else None
 
 
+def _last_bubble_direction(mw: Any) -> Optional[str]:
+    """读「聊天面板内最底部」一条消息气泡，按水平中心相对聊天面板中线判方向（不回自己/不回操作者）。
+
+    返回值：
+      "incoming"：气泡水平中心在中线**左侧** → 对方发来 → 应回
+      "outgoing"：气泡水平中心在中线**右侧或压线** → 我方/AI/操作者 → 跳过（压线倾向判我方更安全）
+      None：聊天面板内读不到任何气泡（空会话/读不到） → 安全跳过（宁可漏回不可回错）
+
+    区域约定复用 _chat_title_matches（listen_chat.py 同一窗口 rectangle / descendants("Text") 写法）：
+      - chat_left = 窗口左 + 窗宽//4（排除左侧会话列表）
+      - midline = (chat_left + 窗口右) // 2（聊天面板中线）
+      - 「消息气泡」= Text 控件且 r.left > chat_left（在聊天面板内）且 r.top >= 窗口顶+150
+        （标题区下方，沿用 150px 约定）且 name 非空
+      - 「最后一条」= 上述气泡里 r.top 最大（最底部）的那条
+    读 Text/rectangle() 抛异常 → 该控件跳过；窗口 rectangle() 抛异常 → 返回 None。
+    顶层零-pywinauto 纯函数（同 _parse_item_name CI 锚点约定），纯 Fake 注入可测。
+    """
+    try:
+        wr = mw.rectangle()
+    except Exception:
+        return None
+    width = wr.right - wr.left
+    chat_left = wr.left + width // 4
+    midline = (chat_left + wr.right) // 2
+    last_rect = None
+    last_top = None
+    for t in mw.descendants(control_type="Text"):
+        try:
+            r = t.rectangle()
+            nm = (t.element_info.name or "").strip()
+        except Exception:
+            continue
+        # 消息气泡：聊天面板内（left>chat_left）、标题区下方（top>=顶+150）、name 非空
+        if r.left > chat_left and r.top >= wr.top + 150 and nm:
+            if last_top is None or r.top > last_top:
+                last_top = r.top
+                last_rect = r
+    if last_rect is None:
+        return None
+    center = (last_rect.left + last_rect.right) // 2
+    # 压线（center == midline）倾向判「我方」更安全 → >= 判 outgoing
+    return "outgoing" if center >= midline else "incoming"
+
+
 def _post_click_item(item: Any, target_hwnd: int) -> bool:
     """对 item 在 target_hwnd 客户区坐标 PostMessage 左键点击（不抢前台、不依赖焦点）。
 
@@ -1533,10 +1577,19 @@ def run_real_listen(args: argparse.Namespace) -> int:
                 if not reply:
                     continue
                 key = (m["sender"], m["content"])
+                # 不回自己/不回操作者：读聊天面板最底部气泡方向，仅「对方发来(incoming)」才回。
+                #   incoming  → 对方发来 → 进入发送（human_intervened=False，拟人延迟约 2s）
+                #   outgoing  → 我方/AI/操作者最右气泡 → 跳过本条（human_intervened=True，人工优先）
+                #   None      → 读不到气泡 → 跳过（安全，宁可漏回不可回错）
+                direction = _last_bubble_direction(mw)
+                human_intervened = direction == "outgoing"  # 操作者最右气泡=人工介入信号
+                if direction != "incoming":
+                    _wait = decide_reply_wait(human_intervened=human_intervened)
+                    _log(f"skip(direction={direction!r}) sender={m['sender']} "
+                         f"human_intervened={human_intervened} (wait={_wait}s)")
+                    continue
                 # 拟人回复延迟：确认要回这条之后、实际发送之前等约 2s。
-                # human_intervened 固定 False —— 检测「操作者手动消息方向」需 UIA
-                # 真机(windows_wechat)接线，本次不实现该信号，仅留决策函数 + 占位。
-                _wait = decide_reply_wait(human_intervened=False)  # TODO 真机：接 UIA 消息方向检测
+                _wait = decide_reply_wait(human_intervened=human_intervened)
                 time.sleep(_wait)
                 _log(f"尝试回复 sender={m['sender']} reply_len={len(reply)} (等待 {_wait}s)")
                 ok = False
