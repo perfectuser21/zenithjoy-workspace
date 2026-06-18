@@ -82,11 +82,13 @@ try:
         OFFSCREEN_MOVE_SLEEP as _OFFSCREEN_MOVE_SLEEP,
         REPLY_DELAY_SECONDS as REPLY_DELAY_SECONDS,
         HUMAN_PRIORITY_WAIT_SECONDS as HUMAN_PRIORITY_WAIT_SECONDS,
+        REPLY_DIRECTION_CHECK as REPLY_DIRECTION_CHECK,
         print_config as _print_config,
     )
 except ImportError:
     REPLY_DELAY_SECONDS = 2.0
     HUMAN_PRIORITY_WAIT_SECONDS = 25.0
+    REPLY_DIRECTION_CHECK = False
     _OFFSCREEN_REPLY = True
     _OFFSCREEN_X = -2600
     _OFFSCREEN_Y = 60
@@ -1592,13 +1594,17 @@ def run_real_listen(args: argparse.Namespace) -> int:
                 #   incoming  → 对方发来 → 进入发送（human_intervened=False，拟人延迟约 2s）
                 #   outgoing  → 我方/AI/操作者最右气泡 → 跳过本条（human_intervened=True，人工优先）
                 #   None      → 读不到气泡 → 跳过（安全，宁可漏回不可回错）
-                direction = _last_bubble_direction(mw)
-                human_intervened = direction == "outgoing"  # 操作者最右气泡=人工介入信号
-                if direction != "incoming":
-                    _wait = decide_reply_wait(human_intervened=human_intervened)
-                    _log(f"skip(direction={direction!r}) sender={m['sender']} "
-                         f"human_intervened={human_intervened} (wait={_wait}s)")
-                    continue
+                # REPLY_DIRECTION_CHECK=False（默认）→ 完全跳过方向判断：真机气泡阈值未校准前，
+                #   方向检测会把收到的消息误判成 outgoing 而永不回，关掉后对所有未读消息正常回。
+                human_intervened = False
+                if REPLY_DIRECTION_CHECK:
+                    direction = _last_bubble_direction(mw)
+                    human_intervened = direction == "outgoing"  # 操作者最右气泡=人工介入信号
+                    if direction != "incoming":
+                        _wait = decide_reply_wait(human_intervened=human_intervened)
+                        _log(f"skip(direction={direction!r}) sender={m['sender']} "
+                             f"human_intervened={human_intervened} (wait={_wait}s)")
+                        continue
                 # 拟人回复延迟：确认要回这条之后、实际发送之前等约 2s。
                 _wait = decide_reply_wait(human_intervened=human_intervened)
                 time.sleep(_wait)
