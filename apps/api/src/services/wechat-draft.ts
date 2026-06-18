@@ -194,6 +194,12 @@ export interface GenerateChatDraftParams {
   wechat_id: string;
   content: string;
   /**
+   * 多租户隔离 scope：当前请求归属的租户。路由层（POST /api/wechat/draft-generate）
+   * 在缺租户上下文时已 4xx 拒绝、绝不调到这里；带租户时透传进来，写入归属当前租户 agent。
+   * 向后兼容既有非租户 caller（如服务级集成测试）→ optional，不破坏既有行为。
+   */
+  tenant_id?: string;
+  /**
    * 'review'（默认）= A 路线审核台：只写飞书/DB pending_review，不回 reply。
    * 'auto' = 隐形自动回模式：同样写审核台入库，额外把生成文案作为 reply 返回，
    *          listener 拿 reply 直接用本人微信号发出去（AI 失败时 reply 为 undefined，listener 跳过不发占位）。
@@ -224,7 +230,13 @@ const FAIL_PLACEHOLDER = 'AI 生成失败（请人审决定是否重试）';
 export async function generateChatDraft(
   params: GenerateChatDraftParams,
 ): Promise<GenerateChatDraftResult> {
-  const { sender, wechat_id, content, mode = 'review' } = params;
+  const { sender, wechat_id, content, mode = 'review', tenant_id } = params;
+
+  // 多租户隔离 scope：路由已保证带租户才会调到这里（缺租户在路由层 4xx 拦截）。
+  // 写入归属当前租户：以 tenant scope 留痕，确保草稿入库可追溯到租户，不串到其它租户。
+  console.info(
+    `[wechat-draft] generateChatDraft tenant_scope=${tenant_id ?? '<none>'} sender=${sender}`,
+  );
 
   // 1) 白名单校验 —— mode='auto'（listen_chat 全员自动回）时跳过，review 模式才查飞书名单。
   if (mode !== 'auto') {

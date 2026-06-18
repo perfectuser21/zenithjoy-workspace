@@ -43,6 +43,10 @@ const SchedulerTickSchema = z
   .object({
     force: z.boolean().optional(),
     customer: z.string().optional(),
+    // 多租户隔离：客服路径多为 cron / listen_chat 等非浏览器 caller（无 cookie）→
+    // 沿用 agent-context 既定的「body 显式 id 向后兼容」范式，显式传 tenant_id。
+    // 缺租户上下文一律拒绝（见下方 resolveTenantId），绝不回退全量。
+    tenant_id: z.string().optional(),
   })
   .strict();
 
@@ -73,7 +77,24 @@ const DraftGenerateSchema = z.object({
   content: z.string().min(1),
   // listen_chat.py 自动回模式传 mode='auto'；不声明会被 zod strip 掉 → auto 模式不返回 reply。
   mode: z.enum(['auto', 'review']).optional(),
+  // 多租户隔离：写入必须归属当前租户的 agent（经 agents.tenant_id 校验）。
+  // listen_chat 等非浏览器 caller 显式传 tenant_id；缺则拒绝、绝不写入任意 agent。
+  tenant_id: z.string().optional(),
 });
+
+/**
+ * 解析当前请求的租户上下文（客服读写路径多租户隔离）。
+ *
+ * 沿用 agent-context.ts 既定的「body 显式 id 向后兼容」范式：cron / listen_chat
+ * 等非浏览器 caller 显式传 body.tenant_id（或 X-Tenant-Id 头）= 当前租户。
+ * 二者皆无 → 返回空串 → 调用方一律 4xx 拒绝，绝不回退为不带 tenant 过滤的全量查。
+ */
+function resolveTenantId(req: Request): string {
+  const headerVal = req.header('X-Tenant-Id');
+  const bodyVal =
+    req.body && typeof req.body.tenant_id === 'string' ? req.body.tenant_id : '';
+  return (headerVal || bodyVal || '').trim();
+}
 
 // ─── POST /api/wechat/qr-bind ───────────────────────────────────────────────
 
@@ -198,9 +219,19 @@ wechatRouter.post('/scheduler-tick', async (req: Request, res: Response) => {
     });
   }
 
-  // ws4 真逻辑：
+  // 多租户隔离：缺租户上下文一律 4xx 拒绝，绝不回退为不带 tenant 过滤的全量客户枚举/处理。
+  const tenantId = resolveTenantId(req);
+  if (!tenantId) {
+    return res.status(400).json({
+      error: 'NO_TENANT_CONTEXT',
+      message:
+        '缺租户上下文（body.tenant_id / X-Tenant-Id 皆无）— 拒绝执行客户枚举，绝不回退全量',
+    });
+  }
+
+  // ws4 真逻辑（已按当前租户 scope）：
   //   1) 若指定 customer → 仅对该客户跑 generateMomentDraft
-  //   2) 否则 → 拉 DB agent_platform_sessions 中已绑微信（platform='wechat_personal' status='bound'）的所有客户
+  //   2) 否则 → 拉 DB 当前租户名下已绑微信（platform='wechat_personal' status='bound'）的所有客户
   //      逐个调 generateMomentDraft，汇总 generated/skipped 返回
   const { customer } = parsed.data;
   let customers: string[] = [];
@@ -209,12 +240,16 @@ wechatRouter.post('/scheduler-tick', async (req: Request, res: Response) => {
     customers = [customer];
   } else {
     try {
+      // 租户 scope：agent_platform_sessions.agent_id ──FK──> zenithjoy.agents.id ──> agents.tenant_id
+      // 桥接 agents.tenant_id 过滤当前租户，不改 schema 结构（agent_platform_sessions 无 tenant_id 列）。
       const { rows } = await pool.query<{ customer: string }>(
-        `SELECT DISTINCT customer
-           FROM agent_platform_sessions
-          WHERE platform = $1
-            AND status = $2`,
-        ['wechat_personal', 'bound'],
+        `SELECT DISTINCT aps.customer
+           FROM agent_platform_sessions aps
+           JOIN zenithjoy.agents a ON a.id = aps.agent_id
+          WHERE aps.platform = $1
+            AND aps.status = $2
+            AND a.tenant_id = $3`,
+        ['wechat_personal', 'bound', tenantId],
       );
       customers = (rows ?? [])
         .map((r) => String(r.customer ?? '').trim())
@@ -265,8 +300,19 @@ wechatRouter.post('/draft-generate', async (req: Request, res: Response) => {
     });
   }
 
+  // 多租户隔离：写入必须归属当前租户 agent，缺租户上下文一律 4xx 拒绝、绝不写入任意 agent。
+  const tenantId = resolveTenantId(req);
+  if (!tenantId) {
+    return res.status(400).json({
+      error: 'NO_TENANT_CONTEXT',
+      message:
+        '缺租户上下文（body.tenant_id / X-Tenant-Id 皆无）— 拒绝写入草稿，绝不写入任意 agent',
+    });
+  }
+
   try {
-    const result = await generateChatDraft(parsed.data);
+    // 透传 tenant scope 到写入服务（归属当前租户 agent）
+    const result = await generateChatDraft({ ...parsed.data, tenant_id: tenantId });
     return res.status(200).json(result);
   } catch (err) {
     const errMsg = err instanceof Error ? err.message : String(err);

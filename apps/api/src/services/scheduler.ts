@@ -38,11 +38,17 @@ export interface SchedulerHandle {
 export async function triggerSchedulerTick(): Promise<void> {
   const port = process.env.PORT || '5200';
   const url = `http://localhost:${port}${SCHEDULER_TICK_PATH}`;
+  // 多租户隔离：scheduler-tick 现要求租户上下文（缺租户一律 4xx 拒绝、绝不回退全量）。
+  // cron 是非浏览器 caller（无 cookie）→ 沿用 body 显式 tenant_id 范式，从 ENV 配置注入。
+  // 未配置 SCHEDULER_TENANT_ID 时不下传 → 路由侧 4xx 拒绝（安全：宁可不生成也不跨租户）。
+  const tenantId = process.env.SCHEDULER_TENANT_ID || '';
+  const body: Record<string, unknown> = { force: false };
+  if (tenantId) body.tenant_id = tenantId;
   try {
     const resp = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ force: false }),
+      body: JSON.stringify(body),
     });
     if (!resp.ok) {
       console.warn(

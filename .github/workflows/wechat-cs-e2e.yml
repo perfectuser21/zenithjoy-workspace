@@ -82,7 +82,9 @@ jobs:
 
       - name: E2E — 模拟用户消息 mode:auto（schema 透传，无凭据时合理降级）
         run: |
-          BODY='{"sender":"ci-客户","wechat_id":"ci_wx","content":"在吗","mode":"auto"}'
+          # 多租户隔离：draft-generate 现要求租户上下文（缺租户 4xx 拒绝、绝不写入任意 agent）。
+          # listen_chat 等非浏览器 caller 显式传 tenant_id（沿用 agent-context body 显式 id 范式）。
+          BODY='{"sender":"ci-客户","wechat_id":"ci_wx","content":"在吗","mode":"auto","tenant_id":"ci-tenant"}'
           CODE=$(curl -s -o /tmp/dg.json -w '%{http_code}' -X POST \
             http://localhost:5210/api/wechat/draft-generate \
             -H 'Content-Type: application/json' -d "$BODY")

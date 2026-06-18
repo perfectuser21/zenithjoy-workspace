@@ -1,6 +1,3 @@
-contract_branch: cp-harness-propose-r1-f6f0b8f9-a0
-sprint_dir: sprints/06181315-line04-cs-tenant-isolation
-
 ---
 skeleton: false
 journey_type: autonomous
