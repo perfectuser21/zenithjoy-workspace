@@ -441,6 +441,22 @@ tests:
     product: AI员工
     note: "regression(2026-06-09): manifest.version 必须与 HEARTBEAT_MODULES.required_version 一致。升模块版本时此测试强制三处同步（manifest/service/test），防止服务端永远下发旧版本导致客户端模块不更新。"
 
+  - id: line04-cs-tenant-isolation
+    path: apps/api/tests/regression/line04-cs-tenant-isolation.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: AI员工
+    note: "regression(2026-06-18) Sprint 06181315: Line04 客服层多租户隔离 — scheduler-tick 客户枚举 JOIN zenithjoy.agents 按 tenant_id 过滤+绑定参数、draft-generate 缺租户拒绝/带租户透传 scope；断言真实 SQL 文本+绑定参数。防客服读写跨租户越权。"
+
+  - id: line04-cs-tenant-isolation-sprint-archive
+    path: sprints/06181315-line04-cs-tenant-isolation/tests/tenant-isolation.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: AI员工
+    note: "Sprint 06181315 合同归档入口，re-import canonical apps/api/tests/regression/line04-cs-tenant-isolation.test.ts（单一来源，不重复维护）。"
+
   - id: agent-line04-python-path-fix
     path: services/agent/modules/line04/__tests__/wechat-rpa-python-path.test.ts
     type: unit
