@@ -1,6 +1,3 @@
-contract_branch: cp-harness-propose-r1-565118a4-a0
-sprint_dir: sprints/06181529-line04-cs-memory-backend
-
 ---
 skeleton: false
 journey_type: autonomous
