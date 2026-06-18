@@ -41,6 +41,8 @@ import smokeMockAgentRouter from './routes/_smoke-mock-agent';
 import { wechatRouter } from './routes/wechat';
 // Path 4 Sprint B — 微信客服中台配置（人设/企业知识库 CRUD + AI 帮填 A1-A5）
 import { wechatConfigRouter } from './routes/wechat-config';
+// Line04 对话记忆三层后端 — tenant 隔离的 写消息/取上下文/触发日收尾
+import { wechatMemoryRouter } from './routes/wechat-memory';
 import clipsRouter from './routes/clips';
 import clipsAuthRouter from './routes/clips-auth';
 import { acquisitionRouter } from './routes/acquisition';
@@ -138,6 +140,8 @@ app.use('/api/_smoke', smokeMockAgentRouter);
 app.use('/api/wechat', wechatRouter);
 // Path 4 Sprint B — 微信客服配置 CRUD（/persona, /business-kb, /business-kb/suggest-audience）
 app.use('/api/wechat', wechatConfigRouter);
+// Line04 对话记忆三层后端 — /api/wechat/memory/{message,consolidate,context}
+app.use('/api/wechat', wechatMemoryRouter);
 app.use('/api/clips', clipsRouter);
 app.use('/api/clips/auth', clipsAuthRouter);
 app.use('/api/acquisition', acquisitionRouter);

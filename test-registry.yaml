@@ -3169,3 +3169,37 @@ agent_suite:
     status: active
     product: 客户私域AI接管
     note: "v1.0.36 回归测试 — _ensure_uia_flag()/_is_uia_flag_set() 每轮轮询检测 SPI_GETSCREENREADER；标志被 Windows 清除后立即补设，不等 45s 冷却；防止后台回复因 UIA 标志丢失停止响应"
+
+  # ── Sprint 06181529 Line04 对话记忆三层后端 ──────────────────────────────────
+
+  - id: line04-cs-memory-service-unit
+    path: apps/api/src/services/wechat/__tests__/tenant-memory.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 客户私域AI接管
+    note: "Sprint 06181529: Line04 三层对话记忆服务契约 — appendTenantMessage/getReplyContext/runDailyConsolidation；缺 tenant_id 抛 MISSING_TENANT、每条查询带 tenant_id 隔离、空天不写空中期（mock pool+openrouter）"
+
+  - id: line04-cs-memory-route-unit
+    path: apps/api/src/routes/__tests__/wechat-memory.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 客户私域AI接管
+    note: "Sprint 06181529: /api/wechat/memory/* 路由契约 — 租户解析、缺 tenant 400 MISSING_TENANT 不回退、字段/role 校验、成功回显（mock service）"
+
+  - id: line04-cs-memory-integration
+    path: apps/api/tests/integration/p4-line04-cs-memory/tenant-memory.integration.test.ts
+    type: integration
+    ci: L4-INT
+    status: active
+    product: 客户私域AI接管
+    note: "Sprint 06181529: Line04 三层对话记忆端到端真链路 — Golden Path 六步（写短期/日收尾→中期/跨天并入长期/三层拼接/2 租户隔离/缺 tenant 400）+ summarization 降级（真 zenithjoy_test，仅 mock OpenRouter）"
+
+  - id: line04-cs-memory-sprint-archive
+    path: sprints/06181529-line04-cs-memory-backend/tests/tenant-memory.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 客户私域AI接管
+    note: "Sprint 06181529 合同归档入口 — 三层对话记忆服务级 unit（mock pool+openrouter），与 apps/api/src/services/wechat/__tests__/tenant-memory.test.ts 同源契约。"

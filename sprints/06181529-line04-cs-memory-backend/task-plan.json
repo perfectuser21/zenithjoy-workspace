@@ -1,0 +1,29 @@
+{
+  "initiative_id": "",
+  "journey_type": "autonomous",
+  "journey_type_reason": "纯后端 apps/api 记忆存储 + summarization + API，无 UI / 无 agent 远端协议 / 无 engine。",
+  "tasks": [
+    {
+      "task_id": "ws1",
+      "title": "Line04 tenant 隔离的三层对话记忆后端（短期/中期/长期 + summarization 降级 + 写消息/取上下文/触发日收尾 三能力）",
+      "scope": "新建 per tenant_id × contact 的三层记忆（cs_memory_messages 短期原文滑窗 / cs_memory_daily 中期日 summary / cs_memory_longterm 长期融合 summary）migration；新建 services/wechat/tenant-memory.ts（appendTenantMessage / getReplyContext / runDailyConsolidation，缺 tenant_id 抛 MISSING_TENANT，所有读写按 tenant_id 隔离）；summarization 经 callOpenRouter 且失败时降级为确定性本地 summary 不破坏三层数据；暴露 POST /api/wechat/memory/message、POST /api/wechat/memory/consolidate、GET /api/wechat/memory/context 三 route 并挂载到 app；让 proposer 写的 unit + integration 红测全绿。不接 listen_chat 真机回复路径，不改前端，不改 tenant 模型。",
+      "dod": [
+        "[ARTIFACT] apps/api/db/migrations/<ts>_create_cs_tenant_memory.sql 含 cs_memory_messages/cs_memory_daily/cs_memory_longterm 三表 + tenant_id + (tenant_id,contact) 索引（IF NOT EXISTS 幂等）",
+        "[ARTIFACT] apps/api/src/services/wechat/tenant-memory.ts 暴露 appendTenantMessage / getReplyContext / runDailyConsolidation",
+        "[ARTIFACT] /api/wechat/memory/{message,consolidate,context} 三 route 已挂载到 src/app.ts",
+        "[BEHAVIOR] integration tests/integration/p4-line04-cs-memory/tenant-memory.integration.test.ts 全绿（写短期/三层拼接/日收尾+跨天并入长期/隔离/缺tenant拒绝/降级）",
+        "[BEHAVIOR] sprints/06181529-line04-cs-memory-backend/e2e/golden-path-smoke.sh exit 0（HTTP 六步 + psql 5 分钟时间窗 + 跨租户零泄漏）"
+      ],
+      "files": [
+        "apps/api/db/migrations/<ts>_create_cs_tenant_memory.sql",
+        "apps/api/src/services/wechat/tenant-memory.ts",
+        "apps/api/src/routes/wechat-memory.ts",
+        "apps/api/src/app.ts",
+        "apps/api/tests/integration/p4-line04-cs-memory/tenant-memory.integration.test.ts"
+      ],
+      "depends_on": [],
+      "complexity": "M",
+      "estimated_minutes": 90
+    }
+  ]
+}
