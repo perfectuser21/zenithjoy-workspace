@@ -3203,3 +3203,45 @@ agent_suite:
     status: active
     product: 客户私域AI接管
     note: "Sprint 06181529 合同归档入口 — 三层对话记忆服务级 unit（mock pool+openrouter），与 apps/api/src/services/wechat/__tests__/tenant-memory.test.ts 同源契约。"
+
+  # ── Path2 Step4 客户智能获客：飞书企业信息文档 + 扩词 + 中台采集闭环 ──────────────
+
+  - id: acquisition-collect-service-unit
+    path: apps/api/src/services/acquisition-collect.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 客户智能获客
+    note: "Sprint 06181904: 采集纯逻辑 — dedupCommenters((tenant,sec_uid)去重+昵称弱去重)/resolveTerminalStatus(failed error_code 区分/partial)/shouldSweepToTerminal(stale running 转/pending 不转)/seedKeywordsFromDoc。与 sprints/06181904-.../tests/acquisition-collect.test.ts 同源契约。"
+
+  - id: acquisition-feishu-docx-unit
+    path: apps/api/src/services/feishu-docx.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 客户智能获客
+    note: "Sprint 06181904: 企业信息 docx 建/读 — createEnterpriseDoc 回填 enterprise_doc_token / code!=0 抛错不回填 / readEnterpriseDocText 无 token 返 null（mock pool+axios+token）。"
+
+  - id: acquisition-fake-llm-unit
+    path: apps/api/src/routes/_smoke-fake-llm.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 客户智能获客
+    note: "Sprint 06181904: fake-LLM 替身 — mode=ok 返 3 关键词 / mode=fail 返 401 触发扩词降级 / 非法 mode 400（supertest）。"
+
+  - id: acquisition-collect-dashboard-e2e
+    path: apps/dashboard/e2e/acquisition-collect.spec.ts
+    type: e2e
+    ci: L4
+    status: active
+    product: 客户智能获客
+    note: "Sprint 06181904: 获客页采集 UI Playwright — 扩词→派单→7 态/计数/失败原因→抖音号跳主页/残缺标记（windows_cloud）。"
+
+  - id: acquisition-collect-sprint-archive
+    path: sprints/06181904-acquisition-feishu-doc-collect/tests/acquisition-collect.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 客户智能获客
+    note: "Sprint 06181904 合同归档入口 — 采集去重/残缺/扩词/sweep 纯逻辑 unit，与 apps/api/src/services/acquisition-collect.test.ts 同源契约；端到端行为以 contract-dod.md [BEHAVIOR] 为 evaluator oracle。"
