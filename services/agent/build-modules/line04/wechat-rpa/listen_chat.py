@@ -1097,8 +1097,13 @@ def post_draft_generate(
     wechat_id: str,
     content: str,
     mode: str = "review",
+    agent_id: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """POST 中台生成草稿。mode='auto' 时返回值额外含 reply 文本。失败返回 {ok:false,...} 但不抛。"""
+    """POST 中台生成草稿。mode='auto' 时返回值额外含 reply 文本。失败返回 {ok:false,...} 但不抛。
+
+    agent_id：listen_chat 自身的 agent 标识。中台缺显式 tenant_id 时由此反查
+    agents.tenant_id 推导租户（修 NO_TENANT_CONTEXT 全拒），符合「租户绑定时已定」架构。
+    """
     # CI 模式：WECHAT_DRAFT_API_DRYRUN=1 → 不真发 HTTP，返回 mock
     if os.environ.get("WECHAT_DRAFT_API_DRYRUN") == "1":
         result: Dict[str, Any] = {
@@ -1114,6 +1119,8 @@ def post_draft_generate(
 
     url = middleware_url.rstrip("/") + "/api/wechat/draft-generate"
     body = {"sender": sender, "wechat_id": wechat_id, "content": content, "mode": mode}
+    if agent_id:
+        body["agent_id"] = agent_id
     # 回复关键路径 → 重试最重要：3 次（1s,2s,4s 退避），扛跨境抖动
     resp, error = _post_with_retry(url, body, timeout=30, retries=3, backoff_base=1.0)
     if error is not None:
@@ -1185,7 +1192,10 @@ def run_dryrun_inject(args: argparse.Namespace) -> int:
         )
         return 0
 
-    result = post_draft_generate(args.middleware_url, sender, wechat_id, content)
+    result = post_draft_generate(
+        args.middleware_url, sender, wechat_id, content,
+        agent_id=getattr(args, "agent_id", None),
+    )
     emit_json(
         {
             "ok": True,
@@ -1553,6 +1563,7 @@ def run_real_listen(args: argparse.Namespace) -> int:
                         args.middleware_url, mm["sender"],
                         mm.get("wxid") or mm.get("sender_wxid") or mm.get("sender", ""),
                         mm["content"], mode="auto",
+                        agent_id=getattr(args, "agent_id", None),
                     )
 
                 with concurrent.futures.ThreadPoolExecutor(max_workers=min(5, len(eligible))) as _ex:
