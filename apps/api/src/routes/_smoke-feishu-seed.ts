@@ -114,3 +114,121 @@ router.post('/feishu-seed', async (req: Request, res: Response) => {
 
 export default router;
 export { router };
+
+// ============================================================================
+// Path 2 Step4 — DEV-only fake-feishu 替身（apps/api 内自托管，FEISHU_API_BASE 指向本服务）
+//
+// 复刻飞书核心面（token / bitable apps·tables·records / docx 建·读）+ 测试控制面：
+//   POST /__test/set-doc          设置企业信息 docx 纯文本（按 doc_token）
+//   POST /__test/set-write-mode   切换写表 mode（ok | fail），控制 lead_write_status success/pending
+//   GET  /__test/seen-records     按 table_id 查所有写入记录（验证抖音号写进飞书）
+//   POST /__test/reset            清空 seen + writeMode 复位（多次跑防串扰）
+//
+// 仅在 NODE_ENV!=production 时由 app.ts 条件挂载（生产走真飞书，FEISHU_API_BASE 不指向此处）。
+// ============================================================================
+import { randomBytes } from 'crypto';
+
+const fakeFeishuRouter = Router();
+
+interface FakeRecord {
+  record_id: string;
+  fields: Record<string, unknown>;
+}
+const docStore: Record<string, string> = {};                       // doc_token -> 纯文本
+const recordStore: Record<string, Record<string, FakeRecord[]>> = {}; // app_token -> table_id -> records
+const seenRecords: Record<string, FakeRecord[]> = {};              // table_id -> records（跨 app_token）
+let writeMode: 'ok' | 'fail' = 'ok';
+
+function rid(prefix: string): string {
+  return prefix + randomBytes(8).toString('hex');
+}
+
+// ── 飞书 token ──
+fakeFeishuRouter.post('/open-apis/auth/v3/tenant_access_token/internal', (_req: Request, res: Response) => {
+  res.json({ code: 0, msg: 'success', tenant_access_token: 'fake_t_' + Date.now(), expire: 7200 });
+});
+
+// ── 建 Bitable ──
+fakeFeishuRouter.post('/open-apis/bitable/v1/apps', (_req: Request, res: Response) => {
+  const appToken = rid('bascn');
+  recordStore[appToken] = {};
+  res.json({ code: 0, msg: 'success', data: { app: { app_token: appToken, name: 'fake-app' } } });
+});
+
+// ── 建 Table ──
+fakeFeishuRouter.post('/open-apis/bitable/v1/apps/:appToken/tables', (req: Request, res: Response) => {
+  const { appToken } = req.params;
+  if (!recordStore[appToken]) recordStore[appToken] = {};
+  const tableId = rid('tbl');
+  recordStore[appToken][tableId] = [];
+  res.json({ code: 0, msg: 'success', data: { table_id: tableId } });
+});
+
+// ── 写 / 读 records ──
+fakeFeishuRouter.post(
+  '/open-apis/bitable/v1/apps/:appToken/tables/:tableId/records',
+  (req: Request, res: Response) => {
+    if (writeMode === 'fail') {
+      return res.json({ code: 1254000, msg: 'fake write fail (mode=fail)' });
+    }
+    const { appToken, tableId } = req.params;
+    const fields = req.body?.fields || {};
+    if (!recordStore[appToken]) recordStore[appToken] = {};
+    if (!recordStore[appToken][tableId]) recordStore[appToken][tableId] = [];
+    const record: FakeRecord = { record_id: rid('rec'), fields };
+    recordStore[appToken][tableId].push(record);
+    if (!seenRecords[tableId]) seenRecords[tableId] = [];
+    seenRecords[tableId].push(record);
+    return res.json({ code: 0, msg: 'success', data: { record } });
+  }
+);
+fakeFeishuRouter.get(
+  '/open-apis/bitable/v1/apps/:appToken/tables/:tableId/records',
+  (req: Request, res: Response) => {
+    const { appToken, tableId } = req.params;
+    const items = (recordStore[appToken]?.[tableId] || []).map((r) => ({
+      record_id: r.record_id,
+      fields: r.fields,
+    }));
+    res.json({ code: 0, msg: 'success', data: { items, total: items.length, has_more: false } });
+  }
+);
+
+// ── docx 建 / 读纯文本 ──
+fakeFeishuRouter.post('/open-apis/docx/v1/documents', (_req: Request, res: Response) => {
+  const docToken = rid('doccn');
+  docStore[docToken] = docStore[docToken] || '';
+  res.json({ code: 0, msg: 'success', data: { document: { document_id: docToken } } });
+});
+fakeFeishuRouter.get('/open-apis/docx/v1/documents/:docToken/raw_content', (req: Request, res: Response) => {
+  const { docToken } = req.params;
+  res.json({ code: 0, msg: 'success', data: { content: docStore[docToken] ?? '' } });
+});
+
+// ── 测试控制面 ──
+fakeFeishuRouter.post('/__test/set-doc', (req: Request, res: Response) => {
+  const { doc_token, text } = req.body || {};
+  if (!doc_token) return res.status(400).json({ ok: false, error: 'doc_token required' });
+  docStore[doc_token] = typeof text === 'string' ? text : '';
+  return res.json({ ok: true });
+});
+fakeFeishuRouter.post('/__test/set-write-mode', (req: Request, res: Response) => {
+  const mode = req.body?.mode;
+  if (mode === 'ok' || mode === 'fail') {
+    writeMode = mode;
+    return res.json({ ok: true, mode: writeMode });
+  }
+  return res.status(400).json({ ok: false, error: 'mode must be ok|fail' });
+});
+fakeFeishuRouter.get('/__test/seen-records', (req: Request, res: Response) => {
+  const tableId = String(req.query.table_id || '');
+  const items = seenRecords[tableId] || [];
+  res.json({ count: items.length, records: items.map((r) => r.fields) });
+});
+fakeFeishuRouter.post('/__test/reset', (_req: Request, res: Response) => {
+  for (const k of Object.keys(seenRecords)) delete seenRecords[k];
+  writeMode = 'ok';
+  res.json({ ok: true, reset: true });
+});
+
+export { fakeFeishuRouter };

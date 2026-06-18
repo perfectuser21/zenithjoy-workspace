@@ -1,8 +1,19 @@
-import { Router, Request, Response } from 'express';
+import { Router, Request, Response, NextFunction } from 'express';
 import { randomUUID } from 'crypto';
+import axios from 'axios';
 import { expandKeywords } from '../services/keyword-expander';
 import { writeLeadsFromComments } from '../services/lead-writer';
 import { gradeComment } from '../services/comment-grader';
+import pool from '../db/connection';
+import { readEnterpriseDocText } from '../services/feishu-docx';
+import { writeRecord } from '../services/feishu-bitable-multitenant';
+import {
+  EMPTY_DOC_MIN_CHARS,
+  SWEEP_TIMEOUT_MS,
+  profileUrlForSecUid,
+  resolveTerminalStatus,
+  seedKeywordsFromDoc,
+} from '../services/acquisition-collect';
 
 export const acquisitionRouter = Router();
 
@@ -301,4 +312,409 @@ acquisitionRouter.get('/leads', async (req: Request, res: Response) => {
     console.error('[acquisition] leads error:', (err as Error).message);
     return res.status(200).json({ leads: [], total: 0 });
   }
+});
+
+// ============================================================================
+// Path 2 Step4 — 飞书企业信息文档 + 扩词 + 中台采集闭环
+//   POST /collect/expand           前置校验 + 读文档扩 3 词（手输覆盖 / 降级种子兜底）
+//   POST /collect/start            确认派单 → 返 task_id（pending）
+//   POST /collect/cancel           取消 → cancelling（已抓先落库不丢）
+//   POST /collect/report           客户机 Agent 增量回报 → 去重落 DB + 写飞书（X-Smoke-Token 门禁）
+//   POST /collect/sweep-timeouts   只把 stale running(>10min) 转终态，pending(离线) 保留不丢
+//   GET  /collect/:task_id         获客页查状态（7 态 + 计数 + error_code + 抖音号）
+// 统一响应包裹：{success,data,timestamp} / {success,error:{code,message},timestamp}
+// ============================================================================
+
+function ok(res: Response, data: unknown, status = 200) {
+  return res.status(status).json({ success: true, data, timestamp: new Date().toISOString() });
+}
+function fail(res: Response, status: number, code: string, message: string) {
+  return res
+    .status(status)
+    .json({ success: false, error: { code, message }, timestamp: new Date().toISOString() });
+}
+
+const EXPECTED_SMOKE_TOKEN = () => process.env.SMOKE_TOKEN || 'smoke-secret-2026';
+
+// report / sweep-timeouts 门禁：X-Smoke-Token（CI fake-agent）或真 agent 鉴权
+function smokeOrAgentGate(req: Request, res: Response, next: NextFunction) {
+  const tok = req.header('X-Smoke-Token');
+  if (tok && tok === EXPECTED_SMOKE_TOKEN()) return next();
+  return fail(res, 403, 'FORBIDDEN', 'invalid X-Smoke-Token');
+}
+
+interface BindingLite {
+  enterprise_doc_token: string | null;
+  table_id_leads: string | null;
+}
+async function loadBindingLite(tenantId: string): Promise<BindingLite | null> {
+  const r = await pool.query(
+    `SELECT enterprise_doc_token, table_id_leads
+       FROM zenithjoy.tenant_feishu_bindings WHERE tenant_id = $1`,
+    [tenantId]
+  );
+  if (!r.rows || r.rows.length === 0) return null;
+  return r.rows[0] as BindingLite;
+}
+
+// DeepSeek 扩词（走 OPENROUTER_BASE_URL = FAKE_LLM_BASE；失败抛错 → 调用方种子兜底）。
+async function llmExpandKeywords(docText: string): Promise<string[]> {
+  const base = process.env.OPENROUTER_BASE_URL;
+  const url = base
+    ? `${base.replace(/\/$/, '')}/chat/completions`
+    : 'https://openrouter.ai/api/v1/chat/completions';
+  const key = process.env.OPENROUTER_API_KEY || 'fake-key';
+  const prompt =
+    `根据下面企业信息，生成 3 个用于在抖音搜索潜在客户的关键词，每行一个，只输出关键词，不加序号或标点：\n${docText}`;
+  const MAX_ATTEMPT = 2;
+  let lastErr: Error | null = null;
+  for (let attempt = 1; attempt <= MAX_ATTEMPT; attempt++) {
+    try {
+      const resp = await axios.post(
+        url,
+        {
+          model: process.env.OPENROUTER_MODEL || 'deepseek/deepseek-chat',
+          messages: [{ role: 'user', content: prompt }],
+          max_tokens: 100,
+        },
+        { headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' }, timeout: 8000 }
+      );
+      const content: string = resp.data?.choices?.[0]?.message?.content ?? '';
+      const words = content
+        .split('\n')
+        .map((s) => s.replace(/^[\d.、)\s-]+/, '').trim())
+        .filter((s) => s.length > 0)
+        .slice(0, 3);
+      if (words.length === 3) return words;
+      throw new Error(`LLM 扩词不足 3 个 (got ${words.length})`);
+    } catch (e) {
+      lastErr = e as Error;
+    }
+  }
+  throw lastErr ?? new Error('LLM 扩词失败');
+}
+
+// POST /api/acquisition/collect/expand
+acquisitionRouter.post('/collect/expand', async (req: Request, res: Response) => {
+  const tenantId = req.body?.tenant_id;
+  const manualKeywords: unknown = req.body?.manual_keywords;
+  if (!tenantId) return fail(res, 400, 'TENANT_ID_REQUIRED', '缺 tenant_id');
+
+  // 前置校验 1：未绑飞书
+  const binding = await loadBindingLite(tenantId);
+  if (!binding) return fail(res, 400, 'FEISHU_NOT_BOUND', '未绑飞书，请先去绑定页绑定');
+  // 前置校验 2：无企业信息文档
+  if (!binding.enterprise_doc_token)
+    return fail(res, 400, 'NO_ENTERPRISE_DOC', '无企业信息文档，请先在飞书填写企业信息');
+
+  // 手输优先：manual_keywords 非空 → 完全替代 AI 词（仍需通过前置校验）
+  if (Array.isArray(manualKeywords) && manualKeywords.length > 0) {
+    const keywords = manualKeywords
+      .map((w) => String(w).trim())
+      .filter((w) => w.length > 0)
+      .map((word) => ({ word, source: 'manual' as const }));
+    return ok(res, { degraded: false, keywords });
+  }
+
+  // 读文档纯文本 + 空判定
+  let docText: string | null;
+  try {
+    docText = await readEnterpriseDocText(tenantId);
+  } catch (e) {
+    console.error('[acquisition/expand] 读文档失败:', (e as Error).message);
+    docText = null;
+  }
+  if (docText === null || docText.trim().length < EMPTY_DOC_MIN_CHARS)
+    return fail(res, 400, 'EMPTY_DOC', `企业信息文档需有文字（纯文本 < ${EMPTY_DOC_MIN_CHARS} 字判为空）`);
+
+  // DeepSeek 扩 3 词；失败有限重试后种子兜底（degraded=true）
+  try {
+    const words = await llmExpandKeywords(docText);
+    return ok(res, { degraded: false, keywords: words.map((word) => ({ word, source: 'ai' as const })) });
+  } catch (e) {
+    console.warn('[acquisition/expand] DeepSeek 降级，种子兜底:', (e as Error).message);
+    const seeds = seedKeywordsFromDoc(docText);
+    return ok(res, { degraded: true, keywords: seeds.map((word) => ({ word, source: 'seed' as const })) });
+  }
+});
+
+// POST /api/acquisition/collect/start
+acquisitionRouter.post('/collect/start', async (req: Request, res: Response) => {
+  const tenantId = req.body?.tenant_id;
+  const keywords: unknown = req.body?.keywords;
+  if (!tenantId) return fail(res, 400, 'TENANT_ID_REQUIRED', '缺 tenant_id');
+  if (!Array.isArray(keywords) || keywords.length === 0)
+    return fail(res, 400, 'MISSING_KEYWORDS', 'keywords 不能为空');
+
+  const binding = await loadBindingLite(tenantId);
+  if (!binding) return fail(res, 400, 'FEISHU_NOT_BOUND', '未绑飞书');
+
+  const r = await pool.query(
+    `INSERT INTO zenithjoy.acquisition_collect_tasks (tenant_id, keywords, source, status)
+     VALUES ($1, $2::jsonb, 'ai', 'pending')
+     RETURNING id`,
+    [tenantId, JSON.stringify(keywords)]
+  );
+  const taskId = r.rows[0].id as string;
+  return ok(res, { task_id: taskId, status: 'pending' });
+});
+
+// POST /api/acquisition/collect/cancel
+acquisitionRouter.post('/collect/cancel', async (req: Request, res: Response) => {
+  const tenantId = req.body?.tenant_id;
+  const taskId = req.body?.task_id;
+  if (!tenantId || !taskId) return fail(res, 400, 'MISSING_FIELDS', '缺 tenant_id / task_id');
+
+  const r = await pool.query(
+    `UPDATE zenithjoy.acquisition_collect_tasks
+        SET status = 'cancelling', updated_at = NOW()
+      WHERE id = $1 AND tenant_id = $2
+        AND status IN ('pending', 'running')
+      RETURNING id`,
+    [taskId, tenantId]
+  );
+  if (r.rows.length === 0) {
+    // 任务不存在或已终态
+    const exists = await pool.query(
+      `SELECT id FROM zenithjoy.acquisition_collect_tasks WHERE id = $1 AND tenant_id = $2`,
+      [taskId, tenantId]
+    );
+    if (exists.rows.length === 0) return fail(res, 404, 'NO_COLLECT_TASK', '采集任务不存在');
+  }
+  return ok(res, { task_id: taskId, status: 'cancelling' });
+});
+
+// POST /api/acquisition/collect/report — 客户机 Agent 增量回报
+acquisitionRouter.post('/collect/report', smokeOrAgentGate, async (req: Request, res: Response) => {
+  const {
+    task_id: taskId,
+    keyword,
+    video_id: videoId,
+    commenters,
+    checkpoint,
+    partial_reason: partialReason,
+    terminal,
+    error_code: errorCode,
+  } = req.body || {};
+  void keyword;
+
+  if (!taskId) return fail(res, 400, 'MISSING_TASK_ID', '缺 task_id');
+  if (!videoId) return fail(res, 400, 'MISSING_VIDEO_ID', '缺 video_id');
+
+  const taskRes = await pool.query(
+    `SELECT id, tenant_id, status, error_code, video_count, lead_count_raw
+       FROM zenithjoy.acquisition_collect_tasks WHERE id = $1`,
+    [taskId]
+  );
+  if (taskRes.rows.length === 0) return fail(res, 404, 'NO_COLLECT_TASK', '采集任务不存在');
+  const task = taskRes.rows[0] as {
+    id: string;
+    tenant_id: string;
+    status: string;
+    error_code: string | null;
+    video_count: number;
+    lead_count_raw: number;
+  };
+  const tenantId = task.tenant_id;
+  const batch: Array<{ sec_uid?: string | null; nickname: string }> = Array.isArray(commenters)
+    ? commenters
+    : [];
+
+  // ── 去重落库：先处理 commenters（已抓先落库不丢，即使本次是终态回报）──
+  let inserted = 0;
+  let deduped = 0;
+  const newLeads: Array<{ sec_uid: string | null; nickname: string }> = [];
+  const seenSec = new Set<string>();
+  const seenNick = new Set<string>();
+
+  for (const c of batch) {
+    const secUid = c.sec_uid ?? null;
+    let matchId: string | null = null;
+    if (secUid) {
+      if (seenSec.has(secUid)) matchId = 'batch';
+      else {
+        const found = await pool.query(
+          `SELECT id FROM zenithjoy.acquisition_leads WHERE tenant_id = $1 AND sec_uid = $2 LIMIT 1`,
+          [tenantId, secUid]
+        );
+        if (found.rows.length > 0) matchId = found.rows[0].id;
+      }
+    } else {
+      if (seenNick.has(c.nickname)) matchId = 'batch';
+      else {
+        const found = await pool.query(
+          `SELECT id FROM zenithjoy.acquisition_leads
+             WHERE tenant_id = $1 AND sec_uid IS NULL AND nickname = $2 LIMIT 1`,
+          [tenantId, c.nickname]
+        );
+        if (found.rows.length > 0) matchId = found.rows[0].id;
+      }
+    }
+
+    if (matchId) {
+      deduped += 1;
+      if (matchId !== 'batch') {
+        // 重复仅累加来源 video_id（不重复落库）
+        await pool.query(
+          `UPDATE zenithjoy.acquisition_leads
+              SET source_video_ids = CASE
+                    WHEN source_video_ids ? $2 THEN source_video_ids
+                    ELSE source_video_ids || to_jsonb($2::text)
+                  END,
+                  updated_at = NOW()
+            WHERE id = $1`,
+          [matchId, videoId]
+        );
+      }
+      continue;
+    }
+
+    inserted += 1;
+    if (secUid) seenSec.add(secUid);
+    else seenNick.add(c.nickname);
+    await pool.query(
+      `INSERT INTO zenithjoy.acquisition_leads
+         (tenant_id, collect_task_id, sec_uid, nickname, profile_url, partial, source_video_ids, feishu_write_status)
+       VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, 'pending')`,
+      [
+        tenantId,
+        taskId,
+        secUid,
+        c.nickname,
+        profileUrlForSecUid(secUid),
+        !secUid,
+        JSON.stringify([videoId]),
+      ]
+    );
+    newLeads.push({ sec_uid: secUid, nickname: c.nickname });
+  }
+
+  // ── 写飞书 Leads（仅新落库的）：ok→success / 失败→pending(待补写飞书)，采集成功 ≠ 飞书成功 ──
+  let leadWriteStatus: 'success' | 'pending' = 'success';
+  const binding = await loadBindingLite(tenantId);
+  const tableIdLeads = binding?.table_id_leads || null;
+  for (const lead of newLeads) {
+    if (!tableIdLeads) {
+      leadWriteStatus = 'pending';
+      break;
+    }
+    let written = false;
+    for (let attempt = 1; attempt <= 2 && !written; attempt++) {
+      try {
+        await writeRecord(tenantId, tableIdLeads, {
+          抖音号: lead.sec_uid || '',
+          昵称: lead.nickname,
+          主页链接: profileUrlForSecUid(lead.sec_uid) || '',
+          来源视频: videoId,
+          采集时间: new Date().toISOString(),
+        });
+        written = true;
+      } catch {
+        // 重试
+      }
+    }
+    if (written) {
+      await pool.query(
+        `UPDATE zenithjoy.acquisition_leads
+            SET feishu_write_status = 'success', updated_at = NOW()
+          WHERE tenant_id = $1 AND collect_task_id = $2
+            AND ${lead.sec_uid ? 'sec_uid = $3' : 'sec_uid IS NULL AND nickname = $3'}`,
+        [tenantId, taskId, lead.sec_uid || lead.nickname]
+      );
+    } else {
+      leadWriteStatus = 'pending'; // 待补写飞书
+    }
+  }
+
+  // ── 终态 / 计数 / 断点 更新 ──
+  let newStatus = task.status;
+  let newErrorCode = task.error_code;
+  if (terminal) {
+    const t = resolveTerminalStatus({ terminal, error_code: errorCode, partial_reason: partialReason });
+    newStatus = t.status;
+    newErrorCode = t.error_code;
+  } else if (task.status === 'pending') {
+    newStatus = 'running';
+  }
+
+  await pool.query(
+    `UPDATE zenithjoy.acquisition_collect_tasks
+        SET status         = $2,
+            error_code     = $3,
+            video_count    = video_count + 1,
+            lead_count_raw = lead_count_raw + $4,
+            checkpoint     = COALESCE($5::jsonb, checkpoint),
+            started_at     = COALESCE(started_at, NOW()),
+            updated_at     = NOW()
+      WHERE id = $1`,
+    [taskId, newStatus, newErrorCode, batch.length, checkpoint ? JSON.stringify(checkpoint) : null]
+  );
+
+  return ok(res, {
+    task_id: taskId,
+    inserted,
+    deduped,
+    lead_write_status: leadWriteStatus,
+    status: newStatus,
+  });
+});
+
+// POST /api/acquisition/collect/sweep-timeouts — 只转 stale running，pending(离线) 保留不丢
+acquisitionRouter.post('/collect/sweep-timeouts', smokeOrAgentGate, async (_req: Request, res: Response) => {
+  const cutoffMs = SWEEP_TIMEOUT_MS;
+  const r = await pool.query(
+    `UPDATE zenithjoy.acquisition_collect_tasks t
+        SET status = CASE
+              WHEN (SELECT count(*) FROM zenithjoy.acquisition_leads l WHERE l.collect_task_id = t.id) > 0
+                THEN 'partial' ELSE 'failed' END,
+            error_code = COALESCE(error_code, 'COLLECT_TIMEOUT'),
+            updated_at = NOW()
+      WHERE status = 'running'
+        AND COALESCE(started_at, updated_at, created_at) < NOW() - ($1::int || ' milliseconds')::interval
+      RETURNING id`,
+    [cutoffMs]
+  );
+  return ok(res, { swept: r.rows.length });
+});
+
+// GET /api/acquisition/collect/:task_id — 获客页查状态（7 态 + 计数 + error_code + 抖音号）
+acquisitionRouter.get('/collect/:task_id', async (req: Request, res: Response) => {
+  const taskId = req.params.task_id;
+  const taskRes = await pool.query(
+    `SELECT id, status, error_code, degraded, video_count, lead_count_raw
+       FROM zenithjoy.acquisition_collect_tasks WHERE id = $1`,
+    [taskId]
+  );
+  if (taskRes.rows.length === 0) return fail(res, 404, 'NO_COLLECT_TASK', '采集任务不存在');
+  const t = taskRes.rows[0] as {
+    id: string;
+    status: string;
+    error_code: string | null;
+    degraded: boolean;
+    video_count: number;
+    lead_count_raw: number;
+  };
+
+  const leadsRes = await pool.query(
+    `SELECT sec_uid, nickname, profile_url, partial
+       FROM zenithjoy.acquisition_leads WHERE collect_task_id = $1 ORDER BY created_at ASC`,
+    [taskId]
+  );
+  const leads = leadsRes.rows.map((l: { sec_uid: string | null; nickname: string; profile_url: string | null; partial: boolean }) => ({
+    sec_uid: l.sec_uid,
+    nickname: l.nickname,
+    profile_url: l.profile_url,
+    partial: l.partial,
+  }));
+
+  return ok(res, {
+    task_id: t.id,
+    status: t.status,
+    video_count: t.video_count,
+    lead_count_raw: t.lead_count_raw,
+    lead_count_deduped: leads.length,
+    error_code: t.error_code,
+    degraded: t.degraded,
+    leads,
+  });
 });
