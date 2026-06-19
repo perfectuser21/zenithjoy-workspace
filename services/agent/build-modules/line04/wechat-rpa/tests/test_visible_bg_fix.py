@@ -142,9 +142,11 @@ def test_ensure_tray_visible_visible_moves_to_offscreen():
 
     user32.SetWindowPos.assert_called()
     # SetWindowPos(hwnd, hWndInsertAfter, X, Y, cx, cy, uFlags)
-    # 参数 0=hwnd, 1=hWndInsertAfter(0), 2=X(-2600), 3=Y(60)
+    # 参数 0=hwnd, 1=hWndInsertAfter(0), 2=X(配置的 OFFSCREEN_X), 3=Y(60)
+    # X 断言【配置生效的 _OFFSCREEN_X】(几何推导值，真机≈-1400)，不写死 -2600
     call_args = user32.SetWindowPos.call_args[0]
-    assert call_args[2] == -2600, f"SetWindowPos X 必须是 -2600，实际是 {call_args[2]}"
+    assert call_args[2] == listen_chat._OFFSCREEN_X, \
+        f"SetWindowPos X 必须是配置的 OFFSCREEN_X({listen_chat._OFFSCREEN_X})，实际是 {call_args[2]}"
     assert call_args[3] == 60, f"SetWindowPos Y 必须是 60，实际是 {call_args[3]}"
 
 
