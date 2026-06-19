@@ -31,8 +31,11 @@ export interface ModulePreflightResult {
     wechat_version?: boolean;
     pywinauto?: boolean;
     memory?: boolean;
+    verify_silent?: boolean;
   };
   fixGuide?: string;
+  // 上报中台 module_status 的 reason（透出微信版本号 + 静默状态，供车队看板）。
+  reason?: string;
 }
 
 // ---------- 纯函数：版本解析与比较 ----------
@@ -292,6 +295,96 @@ export function checkWechatRunning(): CheckOutcome {
   };
 }
 
+// ---------- 静默接缝自检：--verify-silent --no-send（只读，不发消息）----------
+
+// 从 listen_chat 输出里取最后一行合法 JSON（emit_json 打在最后）。解析不出返回 null。
+function parseLastJsonLine(stdout: string): Record<string, unknown> | null {
+  const lines = (stdout || '')
+    .trim()
+    .split('\n')
+    .map((l) => l.trim())
+    .filter(Boolean);
+  for (let i = lines.length - 1; i >= 0; i--) {
+    const line = lines[i];
+    if (line.startsWith('{') && line.endsWith('}')) {
+      try {
+        return JSON.parse(line) as Record<string, unknown>;
+      } catch {
+        // 继续向上找
+      }
+    }
+  }
+  return null;
+}
+
+// 解析 listen_chat.py --verify-silent --no-send 的退出码 + 输出 → 检测结论（纯函数，CI 可测）。
+//   silent:true            → ok（SILENT，窗口持续屏外）
+//   silent:false           → 红（NOT SILENT，真接缝失败）
+//   error 含环境未就绪关键词 → skip（微信未登录/未装/非Windows/pywinauto 缺）→ 不误判红
+//   解析不出（空/乱码）     → skip（不误判红）
+export function interpretVerifySilent(exitCode: number, stdout: string): CheckOutcome {
+  const parsed = parseLastJsonLine(stdout);
+  if (parsed && typeof parsed.error === 'string') {
+    const err = parsed.error;
+    if (/NO_WINDOW|未登录|必须在 Windows|pywinauto|找不到.*微信|找不到目标会话/.test(err)) {
+      return { ok: true, skipped: true, found: err };
+    }
+    return { ok: false, fixGuide: `静默自检异常：${err}` };
+  }
+  if (parsed && parsed.silent === true) {
+    return { ok: true, found: 'SILENT' };
+  }
+  if (parsed && parsed.silent === false) {
+    const worst = parsed.worst_left;
+    return {
+      ok: false,
+      found: 'NOT_SILENT',
+      fixGuide:
+        `微信窗口未持续屏外（NOT SILENT，worst_left=${worst}）— ` +
+        `检查 OFFSCREEN_X 几何推导 / 窗口是否被最小化。`,
+    };
+  }
+  // exitCode 仅作兜底参考；解析不出一律 skip 不误判红
+  void exitCode;
+  return { ok: true, skipped: true };
+}
+
+// 跑只读静默自检：spawn 内嵌 python 执行 listen_chat.py --verify-silent --no-send。
+// MOCK_VERIFY_SILENT env 可在任何平台注入（silent/not_silent/skip）；非 Windows 无 MOCK 时 skip。
+export function checkVerifySilent(moduleDir?: string): CheckOutcome {
+  const mock = process.env.MOCK_VERIFY_SILENT;
+  if (mock === 'silent') return { ok: true, found: 'SILENT' };
+  if (mock === 'not_silent') {
+    return {
+      ok: false,
+      found: 'NOT_SILENT',
+      fixGuide: '微信窗口未持续屏外（NOT SILENT）— 检查 OFFSCREEN_X / 是否被最小化。',
+    };
+  }
+  if (mock === 'skip') return { ok: true, skipped: true };
+  if (process.platform !== 'win32') return { ok: true, skipped: true };
+
+  const dir = moduleDir ?? __dirname;
+  const python = getModulePython(dir);
+  const script = path.join(dir, 'wechat-rpa', 'listen_chat.py');
+  if (!fs.existsSync(script)) {
+    return { ok: true, skipped: true, found: 'listen_chat.py 缺失，跳过静默自检' };
+  }
+  try {
+    const r = spawnSync(
+      python,
+      [script, '--verify-silent', '--no-send', '--silent-sample-seconds', '2'],
+      { encoding: 'utf-8', windowsHide: true, timeout: 30_000 },
+    );
+    const exitCode = typeof r.status === 'number' ? r.status : 1;
+    const stdout = `${r.stdout ?? ''}\n${r.stderr ?? ''}`;
+    return interpretVerifySilent(exitCode, stdout);
+  } catch (e) {
+    // spawn 失败（python 缺等）→ skip 不误判红
+    return { ok: true, skipped: true, found: `静默自检无法运行：${(e as Error).message}` };
+  }
+}
+
 // ---------- 自动修复：下载工具 ----------
 
 export function downloadFile(url: string, dest: string): Promise<void> {
@@ -462,25 +555,42 @@ export async function runPreflight(moduleDir?: string): Promise<ModulePreflightR
   // 软检测：微信进程是否在跑（ok 始终 true）
   const running = checkWechatRunning();
 
+  // 静默接缝自检（只读，不发消息）。微信没登录/没装时 skip，不误判红。
+  const silent = checkVerifySilent(dir);
+
   const checks = {
     wechat_version: wechat.ok,
     pywinauto: pyw.ok,
     memory: mem.ok,
+    verify_silent: silent.ok,
   };
 
-  if (wechat.ok && pyw.ok && mem.ok) {
+  // 透出到 module_status.reason（车队看板可见）：微信版本号 + 静默状态。
+  const summaryParts: string[] = [];
+  if (wechat.found) summaryParts.push(`微信 ${wechat.found}`);
+  else if (wechat.skipped) summaryParts.push('微信版本未检(非Windows)');
+  if (silent.found === 'SILENT') summaryParts.push('静默 SILENT');
+  else if (silent.found === 'NOT_SILENT') summaryParts.push('静默 NOT-SILENT');
+  else if (silent.skipped) summaryParts.push('静默 跳过');
+  const summary = summaryParts.join(' / ');
+
+  if (wechat.ok && pyw.ok && mem.ok && silent.ok) {
+    const okReasonParts = [summary, running.fixGuide].filter(Boolean);
+    const okReason = okReasonParts.join(' / ');
     return {
       ok: true,
       checks,
+      ...(okReason ? { reason: okReason } : {}),
       ...(running.fixGuide ? { fixGuide: running.fixGuide } : {}),
     };
   }
 
-  const fixGuide = [wechat, pyw, mem]
+  const fixGuide = [wechat, pyw, mem, silent]
     .filter((c) => !c.ok && c.fixGuide)
     .map((c) => c.fixGuide)
     .join('\n');
-  return { ok: false, checks, fixGuide };
+  const reason = summary ? `${summary}\n${fixGuide}` : fixGuide;
+  return { ok: false, checks, fixGuide, reason };
 }
 
 // 作为脚本直接执行时（core ModuleManager 用 `node preflight.js`，cwd=moduleDir，不传 argv）：
