@@ -114,10 +114,10 @@ def test_ensure_tray_visible_visible_returns_visible():
 
 
 def test_ensure_tray_visible_visible_moves_to_offscreen():
-    """可见非最小化窗口，_OFFSCREEN_REPLY=True 时必须调 SetWindowPos 移到 (-2600, 60)。
+    """可见非最小化窗口，_OFFSCREEN_REPLY=True 时必须调 SetWindowPos 移到 (_OFFSCREEN_X, _OFFSCREEN_Y)。
 
     v1.0.29 bug：可见状态没有 SetWindowPos 调用，窗口留在原始屏幕位置。
-    v1.0.30 fix：检测到 left > -2000 则 SetWindowPos(-2600, 60, ...)。
+    v1.0.30 fix：检测到 left > -2000 则 SetWindowPos(_OFFSCREEN_X, _OFFSCREEN_Y, ...)。
     """
     mw = _make_mock_mw(hwnd=202)
     user32 = MagicMock()
@@ -142,10 +142,14 @@ def test_ensure_tray_visible_visible_moves_to_offscreen():
 
     user32.SetWindowPos.assert_called()
     # SetWindowPos(hwnd, hWndInsertAfter, X, Y, cx, cy, uFlags)
-    # 参数 0=hwnd, 1=hWndInsertAfter(0), 2=X(-2600), 3=Y(60)
+    # 参数 0=hwnd, 1=hWndInsertAfter(0), 2=X, 3=Y
+    # X/Y 断言生效的 _OFFSCREEN_X/_OFFSCREEN_Y（config 几何推导值），不写死 -2600：
+    # CI Linux 回退 -2600，真机 Windows 推导 ≈-1400，两者都验证"移到【配置的】屏外坐标"。
     call_args = user32.SetWindowPos.call_args[0]
-    assert call_args[2] == -2600, f"SetWindowPos X 必须是 -2600，实际是 {call_args[2]}"
-    assert call_args[3] == 60, f"SetWindowPos Y 必须是 60，实际是 {call_args[3]}"
+    assert call_args[2] == listen_chat._OFFSCREEN_X, \
+        f"SetWindowPos X 必须是 _OFFSCREEN_X({listen_chat._OFFSCREEN_X})，实际是 {call_args[2]}"
+    assert call_args[3] == listen_chat._OFFSCREEN_Y, \
+        f"SetWindowPos Y 必须是 _OFFSCREEN_Y({listen_chat._OFFSCREEN_Y})，实际是 {call_args[3]}"
 
 
 def test_ensure_tray_visible_visible_saves_original_pos():
