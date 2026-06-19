@@ -97,7 +97,7 @@ function buildListenerSpawnArgs(script, apiBase, agentId) {
         args.push('--agent-id', agentId);
     return args;
 }
-// 测试注入点：允许替换 spawnSync 实现和 platform（CJS 直接调同文件函数无法被 vi.spyOn 拦截）。
+// 测试注入点：允许替换 spawnSync / spawn 实现和 platform（CJS 直接调同文件函数无法被 vi.spyOn 拦截）。
 // killExistingListeners 在此对象上挂载，方便测试重置。
 exports._listenerKillFuncs = {
     spawnFn: node_child_process_1.spawn,
