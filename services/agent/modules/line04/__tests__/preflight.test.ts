@@ -19,6 +19,8 @@ import {
   getModulePython,
   checkWechatVersion,
   checkWechatRunning,
+  checkVerifySilent,
+  interpretVerifySilent,
   downloadFile,
   installWeChat,
   installPywinauto,
@@ -768,5 +770,87 @@ describe('checkWechatVersion — exe 文件版本优先于注册表（regression
     Object.defineProperty(process, 'platform', { value: origPlatform, configurable: true });
     expect(r.ok).toBe(true);
     expect(r.found).toBe('4.1.8.107');
+  });
+});
+
+// ── --verify-silent 只读静默自检接缝（哨兵 P0）──────────────────────────────
+// 真机静默行为 proven-to-fire 在 xian-rog；这里测「解析 listen_chat 输出」纯逻辑 +
+// checkVerifySilent 的 MOCK/skip 分支（环境无关，CI 验得了）。
+
+describe('interpretVerifySilent — 解析 listen_chat --verify-silent --no-send 输出（纯函数）', () => {
+  it('exit 0 + silent:true → ok（SILENT）', () => {
+    const r = interpretVerifySilent(0, '日志行\n{"ok":true,"silent":true,"worst_left":-1400}');
+    expect(r.ok).toBe(true);
+    expect(r.found).toBe('SILENT');
+  });
+  it('exit 1 + silent:false → 红（NOT SILENT，真接缝失败）', () => {
+    const r = interpretVerifySilent(1, '{"ok":true,"silent":false,"worst_left":12,"intrude":7}');
+    expect(r.ok).toBe(false);
+    expect(r.fixGuide).toMatch(/NOT SILENT|未持续屏外/);
+  });
+  it('exit 1 + error NO_WINDOW（微信未登录）→ skip 不误判红', () => {
+    const r = interpretVerifySilent(1, '{"ok":false,"error":"NO_WINDOW（微信未登录 / 不在当前 session）"}');
+    expect(r.ok).toBe(true);
+    expect(r.skipped).toBe(true);
+  });
+  it('exit 1 + error 必须在 Windows → skip', () => {
+    const r = interpretVerifySilent(1, '{"ok":false,"error":"verify-silent 必须在 Windows 真机 session 1 运行"}');
+    expect(r.ok).toBe(true);
+    expect(r.skipped).toBe(true);
+  });
+  it('无法解析输出（空/乱码）→ skip 不误判红', () => {
+    const r = interpretVerifySilent(1, 'garbage no json');
+    expect(r.ok).toBe(true);
+    expect(r.skipped).toBe(true);
+  });
+});
+
+describe('checkVerifySilent — MOCK / 非 Windows 分支', () => {
+  afterEach(() => {
+    delete process.env.MOCK_VERIFY_SILENT;
+  });
+  it('MOCK_VERIFY_SILENT=silent → ok', () => {
+    process.env.MOCK_VERIFY_SILENT = 'silent';
+    expect(checkVerifySilent().ok).toBe(true);
+  });
+  it('MOCK_VERIFY_SILENT=not_silent → 红', () => {
+    process.env.MOCK_VERIFY_SILENT = 'not_silent';
+    const r = checkVerifySilent();
+    expect(r.ok).toBe(false);
+    expect(r.fixGuide).toBeTruthy();
+  });
+  it('MOCK_VERIFY_SILENT=skip → skipped', () => {
+    process.env.MOCK_VERIFY_SILENT = 'skip';
+    const r = checkVerifySilent();
+    expect(r.ok).toBe(true);
+    expect(r.skipped).toBe(true);
+  });
+  it('非 Windows 且无 MOCK → skip（不真 spawn）', () => {
+    if (process.platform === 'win32') return;
+    const r = checkVerifySilent();
+    expect(r.ok).toBe(true);
+    expect(r.skipped).toBe(true);
+  });
+});
+
+describe('runPreflight 透出微信版本 + 静默状态到 reason（薄上报，零改中台）', () => {
+  const origPlatform = process.platform;
+  afterEach(() => {
+    delete process.env.MOCK_WECHAT_VERSION;
+    delete process.env.MOCK_VERIFY_SILENT;
+    Object.defineProperty(process, 'platform', { value: origPlatform, configurable: true });
+  });
+  it('reason 含检测到的微信版本号（看板可见）', async () => {
+    process.env.MOCK_WECHAT_VERSION = '4.1.8.107';
+    process.env.MOCK_VERIFY_SILENT = 'silent';
+    const r = await runPreflight(os.tmpdir());
+    expect(r.reason).toMatch(/4\.1\.8\.107/);
+  });
+  it('MOCK_VERIFY_SILENT=not_silent → 整体 ok:false + checks.verify_silent:false', async () => {
+    process.env.MOCK_WECHAT_VERSION = '4.1.8.107';
+    process.env.MOCK_VERIFY_SILENT = 'not_silent';
+    const r = await runPreflight(os.tmpdir());
+    expect(r.checks.verify_silent).toBe(false);
+    expect(r.ok).toBe(false);
   });
 });

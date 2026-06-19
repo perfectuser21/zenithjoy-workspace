@@ -93,3 +93,31 @@ def test_machine_config_overrides_derived(tmp_path, monkeypatch):
         # 还原模块全局态，避免污染其它测试
         monkeypatch.delenv("ZENITHJOY_CORE_DIR", raising=False)
         importlib.reload(config)
+
+
+# ── --verify-silent --no-send 只读模式（开机自检接缝）──────────────────────────
+# 真机静默行为（移屏外+采样）需真窗口，proven-to-fire 在 xian-rog 跑，不进 CI。
+# 这里只回归保护「只读模式参数被接受」+「非 Windows 守卫返回 1，绝不发消息」。
+
+
+def test_verify_silent_no_send_args_accepted(monkeypatch):
+    """--verify-silent --no-send --silent-sample-seconds N 被接受（开机自检只读模式）。"""
+    import sys
+    import listen_chat
+    monkeypatch.setattr(
+        sys, "argv",
+        ["listen_chat.py", "--verify-silent", "--no-send", "--silent-sample-seconds", "3"],
+    )
+    args = listen_chat.parse_args()
+    assert args.verify_silent is True
+    assert args.no_send is True
+    assert args.silent_sample_seconds == 3
+
+
+def test_verify_silent_no_send_non_windows_guard_no_send(monkeypatch):
+    """非 Windows 上 run_verify_silent 直接守卫返回 1，绝不进入发送/采样路径。"""
+    import platform
+    import listen_chat
+    monkeypatch.setattr(platform, "system", lambda: "Darwin")
+    ns = type("NS", (), {"no_send": True, "target": None, "message": "x", "silent_sample_seconds": 2})()
+    assert listen_chat.run_verify_silent(ns) == 1
