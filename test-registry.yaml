@@ -3253,3 +3253,11 @@ agent_suite:
     status: active
     product: 中台认证
     note: "启动 env 自检机器闸门 — proven-to-fire 缺 TOAPI_API_KEY 检出 + 空串算缺失 + 完整性闸门(关键 env 读取必登记进 REQUIRED_ENV)。治 2026-06-19 生产漏 key 致客服静默不回。"
+
+  - id: env-seam-gate
+    path: apps/api/src/__tests__/env-registry.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 中台认证
+    note: "env 接缝通用闸门 — 全 src 扫描每个 process.env.X 强制分类(REQUIRED/OPTIONAL+reason/FRAMEWORK)，未分类即红；含 proven-to-fire(findUnclassifiedEnv 拦 ZZ_FAKE_UNCLASSIFIED)。升级 #800 只查 2 文件的完整性闸门为全扫描。"
