@@ -38,11 +38,65 @@ OFFSCREEN_REPLY: bool = True
    False = 台前回复（微信窗口会弹出到前台，用户可见，会闪屏）
    【常见问题】双屏幕时窗口移到 OFFSCREEN_X 坐标可能仍在可视区 → 调 OFFSCREEN_X"""
 
-OFFSCREEN_X: int = -2600
-"""静默模式下微信窗口移到的 X 坐标（负值 = 屏幕左边界之外）
-   【单屏幕 1920px】-2600 足够
-   【双屏幕左屏 2560px】需要改为 -5200 或更负
-   【ROG 双屏】如果还在闪屏，把这个值改为 -9000"""
+OFFSCREEN_X_FALLBACK: int = -2600
+"""几何推导不可用（非 Windows / GetSystemMetrics 失败）时的兜底离屏 X。
+   保持历史值 -2600，单屏机器够用。"""
+
+
+def _get_system_metrics():
+    """返回 Windows user32.GetSystemMetrics 可调用对象；非 Windows / 不可用 → None。
+
+    抽成函数是为了让单测可 monkeypatch（不依赖真实 Windows API）。
+    """
+    try:
+        import ctypes  # 仅 Windows 运行时需要
+
+        return ctypes.windll.user32.GetSystemMetrics  # type: ignore[attr-defined]
+    except Exception:
+        return None
+
+
+def rect_visible(rc, vleft: int, vtop: int, vw: int, vh: int) -> bool:
+    """窗口矩形 rc 是否与虚拟屏矩形 [vleft,vleft+vw) × [vtop,vtop+vh) 相交（=用户可见）。
+
+    rc 需有 left/top/right/bottom 属性（ctypes RECT 或等价对象）。
+    不相交 → False（完全在屏外，静默）。压边界一像素也算相交 → True。
+    """
+    return not (
+        rc.right <= vleft
+        or rc.left >= vleft + vw
+        or rc.bottom <= vtop
+        or rc.top >= vtop + vh
+    )
+
+
+def compute_offscreen_x(win_width: int = 1200) -> int:
+    """从所有显示器并集（虚拟屏）几何推导离屏 X：移到最左显示器左界之外。
+
+    禁止写死环境假设值（如 -2600）——多屏 / 不同屏幕几何上写死值会落在可见区。
+    正解 = 取虚拟屏最左边界 SM_XVIRTUALSCREEN，再减去窗口宽度和余量，确保整窗在所有显示器之外。
+
+      vleft = GetSystemMetrics(76)   # SM_XVIRTUALSCREEN  所有显示器并集左界
+      OFFSCREEN_X = vleft - win_width - 200
+
+    非 Windows / 调用失败 → 回退 OFFSCREEN_X_FALLBACK（-2600），绝不抛。
+    """
+    gsm = _get_system_metrics()
+    if gsm is None:
+        return OFFSCREEN_X_FALLBACK
+    try:
+        vleft = gsm(76)  # SM_XVIRTUALSCREEN
+        return int(vleft) - int(win_width) - 200
+    except Exception:
+        return OFFSCREEN_X_FALLBACK
+
+
+OFFSCREEN_X: int = compute_offscreen_x()
+"""静默模式下微信窗口移到的 X 坐标（负值 = 屏幕左边界之外）。
+   【几何推导】模块加载时 compute_offscreen_x() 从虚拟屏最左界推导（不写死），
+     如 ROG 单屏 vleft=0 → -1400；左侧多一屏 vleft=-1920 → -3320。
+   【machine.config.json 覆盖】显式写 OFFSCREEN_X 时仍优先（显式 > 推导，见文件末尾覆盖逻辑）。
+   【非 Windows / 推导失败】回退 OFFSCREEN_X_FALLBACK = -2600。"""
 
 OFFSCREEN_Y: int = 60
 """静默模式下微信窗口的 Y 坐标（60 = 距顶部 60px，UIA 需要非零值）"""

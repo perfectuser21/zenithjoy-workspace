@@ -52,6 +52,11 @@ except Exception as exc:  # pragma: no cover
 FAIL_PLACEHOLDER = "AI 生成失败（请人审决定是否重试）"
 
 try:
+    import config  # type: ignore  # verify-silent 用 config.compute_offscreen_x / rect_visible
+except Exception:
+    config = None  # type: ignore[assignment]
+
+try:
     from config import (  # type: ignore
         OFFSCREEN_REPLY as _OFFSCREEN_REPLY,
         OFFSCREEN_X as _OFFSCREEN_X,
@@ -1000,6 +1005,24 @@ def parse_args() -> argparse.Namespace:
     ap.add_argument("--inject-message", type=str, default=None)
     ap.add_argument("--dryrun-print-version", action="store_true")
     ap.add_argument(
+        "--verify-silent",
+        action="store_true",
+        help="真机静默自检（接缝断言）：推导离屏 X、把窗口放屏外、后台采样窗口坐标、"
+        "跑一次真实 _open_chat+_uia_send，统计是否碰可见区。SILENT→退出码0，NOT SILENT→1。",
+    )
+    ap.add_argument(
+        "--target",
+        type=str,
+        default=None,
+        help="--verify-silent 的目标会话名（缺省取会话列表第一个）。",
+    )
+    ap.add_argument(
+        "--message",
+        type=str,
+        default="[verify-silent] 静默自检",
+        help="--verify-silent 真实发送的文本。",
+    )
+    ap.add_argument(
         "--middleware-url",
         type=str,
         default=os.environ.get("ZENITHJOY_API_BASE", "http://localhost:3000"),
@@ -1637,6 +1660,157 @@ def run_real_listen(args: argparse.Namespace) -> int:
     return 0
 
 
+# ─── 静默自检（接缝断言，真机跑，不进 CI）──────────────────────────────────────
+
+
+def run_verify_silent(args: argparse.Namespace) -> int:
+    """真机静默自检：客观验证窗口在一次真实发送全程不碰可见区（不靠肉眼）。
+
+    这是「微信后台静默发送」功能的接缝断言——代码碰真实世界的那个点（真微信窗口 + 真显示器几何）。
+    逻辑（推导/可见判定）已由 tests/test_offscreen.py 在 CI 验过；本自检验真机接缝，需真微信窗口，
+    必须由 lead 在 session 1 真机跑出 SILENT 才算这个功能 done。
+
+    流程：
+      1. 读虚拟屏几何（GetSystemMetrics 76/77/78/79），推导/读取有效 OFFSCREEN_X，把窗口放屏外；
+      2. 开后台采样线程每 5ms GetWindowRect，用 config.rect_visible 统计 intrude（碰可见区次数）+ worst left；
+      3. 跑一次真实 _open_chat + _uia_send（target 缺省取会话列表第一个）；
+      4. intrude==0 → 打印 SILENT 退出码 0，否则 NOT SILENT（露头次数×5ms 估时 + worst left）退出码 1。
+    """
+    if platform.system() != "Windows":
+        emit_json({"ok": False, "error": "verify-silent 必须在 Windows 真机 session 1 运行"})
+        return 1
+    if not _pywinauto_available():
+        emit_json({"ok": False, "error": "pywinauto 不可用，无法做静默自检"})
+        return 1
+
+    import ctypes as _ct
+    import ctypes.wintypes as _wt
+
+    _u32 = _ct.windll.user32
+    gsm = _u32.GetSystemMetrics
+    vleft, vtop = gsm(76), gsm(77)   # SM_X/YVIRTUALSCREEN
+    vw, vh = gsm(78), gsm(79)        # SM_CX/CYVIRTUALSCREEN
+
+    # 推导值（不写死）vs 当前 config 有效值（machine.config.json 可能已覆盖）
+    derived_x = config.compute_offscreen_x()
+    effective_x = _OFFSCREEN_X
+    _log(
+        f"verify-silent: 虚拟屏 vleft={vleft} vtop={vtop} vw={vw} vh={vh} → "
+        f"自动推导 OFFSCREEN_X={derived_x}（当前生效={effective_x}）"
+    )
+
+    try:
+        from find_weixin import get_main_window as _gmw
+        mw = _gmw()
+    except Exception as exc:
+        emit_json({"ok": False, "error": f"找不到微信主窗口: {exc}"})
+        return 1
+    if mw is None:
+        emit_json({"ok": False, "error": "NO_WINDOW（微信未登录 / 不在当前 session）"})
+        return 1
+    main_hwnd = mw.element_info.handle
+
+    # 选目标会话
+    target = args.target
+    item = None
+    try:
+        for it in mw.descendants(control_type="ListItem"):
+            first = (it.element_info.name or "").split("\n")[0].strip()
+            if not first:
+                continue
+            if target is None:
+                target, item = first, it
+                break
+            if first == target:
+                item = it
+                break
+    except Exception as exc:
+        emit_json({"ok": False, "error": f"枚举会话列表失败: {exc}"})
+        return 1
+    if item is None or not target:
+        emit_json({"ok": False, "error": f"找不到目标会话（target={args.target!r}）"})
+        return 1
+    _log(f"verify-silent: 目标会话 = {target!r}")
+
+    # 先把窗口放到屏外（用生效的 OFFSCREEN_X）
+    try:
+        if _u32.IsIconic(main_hwnd):
+            _u32.ShowWindow(main_hwnd, 4)   # SW_SHOWNOACTIVATE
+            time.sleep(0.6)
+        _SWP = 0x0001 | 0x0004 | 0x0010     # NOSIZE | NOZORDER | NOACTIVATE
+        _u32.SetWindowPos(main_hwnd, 0, effective_x, _OFFSCREEN_Y, 0, 0, _SWP)
+        time.sleep(0.3)
+    except Exception as exc:
+        _log(f"verify-silent: 初始移屏外异常: {exc}")
+
+    # 后台采样线程：每 5ms 采一次窗口矩形，碰可见区即计数
+    SAMPLE_INTERVAL = 0.005
+    stop_flag = {"stop": False}
+    stats = {"samples": 0, "intrude": 0, "worst_left": effective_x}
+
+    def _sampler():
+        while not stop_flag["stop"]:
+            rc = _wt.RECT()
+            try:
+                _u32.GetWindowRect(main_hwnd, _ct.byref(rc))
+            except Exception:
+                time.sleep(SAMPLE_INTERVAL)
+                continue
+            stats["samples"] += 1
+            if rc.left > stats["worst_left"]:
+                stats["worst_left"] = rc.left
+            if config.rect_visible(rc, vleft, vtop, vw, vh):
+                stats["intrude"] += 1
+            time.sleep(SAMPLE_INTERVAL)
+
+    th = threading.Thread(target=_sampler, daemon=True)
+    th.start()
+
+    # 跑一次真实发送（真碰窗口的那段路径）
+    sent = False
+    try:
+        sent = reply_in_chat(mw, item, args.message, sender=target)
+    except Exception as exc:
+        _log(f"verify-silent: reply_in_chat 异常: {exc}")
+    finally:
+        stop_flag["stop"] = True
+        th.join(timeout=2)
+
+    intrude = stats["intrude"]
+    samples = stats["samples"]
+    worst_left = stats["worst_left"]
+    silent = intrude == 0
+
+    print(
+        f"自动推导 OFFSCREEN_X={derived_x} / 当前生效={effective_x} / "
+        f"采样{samples}次 / 碰可见区={intrude}次",
+        flush=True,
+    )
+    if silent:
+        print("SILENT", flush=True)
+    else:
+        # 每次采样间隔 5ms，露头次数 × 5ms 估算可见时长
+        est_ms = intrude * SAMPLE_INTERVAL * 1000
+        print(
+            f"NOT SILENT（露头估时≈{est_ms:.0f}ms / worst left={worst_left}）",
+            flush=True,
+        )
+    emit_json(
+        {
+            "ok": True,
+            "silent": silent,
+            "target": target,
+            "sent": sent,
+            "derived_offscreen_x": derived_x,
+            "effective_offscreen_x": effective_x,
+            "samples": samples,
+            "intrude": intrude,
+            "worst_left": worst_left,
+        }
+    )
+    return 0 if silent else 1
+
+
 def main() -> int:
     args = parse_args()
     _print_config()  # 启动时打印有效配置，方便排查
@@ -1651,6 +1825,9 @@ def main() -> int:
         except ImportError as e:
             emit_json({"ok": False, "error": str(e)})
             return 1
+
+    if args.verify_silent:
+        return run_verify_silent(args)
 
     if args.dryrun:
         return run_dryrun_inject(args)
