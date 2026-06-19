@@ -2,7 +2,7 @@
 //
 // line04 微信AI客服模块 — 真实环境预检（自包含，不依赖 core 源码，可独立打包）。
 // 三项检测，失败给客户看得懂的中文 fixGuide：
-//   1. 微信版本 ≤ 4.1.8.x（Windows 注册表读取；4.1.10+ 砍掉 UIA 控件树，RPA 失效）
+//   1. 微信版本 = 4.1.8.x（高于低于都不行：<4.1.8 控件配方不一致、>=4.1.9 砍掉 UIA 控件树，均 RPA 失效）
 //   2. python -c "import pywinauto" 可成功（驱动微信自动化的底层库）
 //   3. 可用内存 ≥ 4GB
 //
@@ -18,10 +18,11 @@ import https from 'node:https';
 export const WECHAT_DOWNLOAD_URL =
   'https://zenithjoy-static-1333590468.cos.accelerate.myqcloud.com/install-pack/wechat/WeChatWin_4.1.8.exe';
 
-// 受支持微信版本范围：[4.0.0, 4.1.8.x]（含两端）。
-// 3.x 使用不同窗口类（WeChatMainWndForPC），无 mmui::MainWindow，RPA 不可用。
-const MIN_SUPPORTED: readonly number[] = [4, 0, 0];
-const MAX_SUPPORTED: readonly number[] = [4, 1, 8];
+// 受支持微信版本：只认 4.1.8.x（前三段必须 == 4.1.8，build 段任意）。高于低于都不行：
+//   < 4.1.8（含 3.x / 4.0.x / 4.1.0~4.1.7）：控件配方不一致 / 无 mmui::MainWindow，RPA 不可用；
+//   >= 4.1.9：腾讯砍掉 UIA 无障碍控件树，RPA 不可用。
+// 与 wechat-rpa/preflight.py（WECHAT_MIN_VERSION=(4,1,8) / MAX=(4,1,8,999)）保持一致。
+const SUPPORTED_VERSION: readonly number[] = [4, 1, 8];
 const MIN_MEMORY_BYTES = 4 * 1024 ** 3;
 
 export interface ModulePreflightResult {
@@ -47,17 +48,14 @@ export function parseVersionParts(version: string): number[] {
     });
 }
 
-// version ∈ [4.0.0, 4.1.8.x] 返回 true（受支持）。只比较前三段，build 段忽略。
+// 只认 4.1.8.x：前三段必须 == 4.1.8（build 段任意）才返回 true。高于低于都不行。
 export function isWechatVersionSupported(version: string): boolean {
   const parts = parseVersionParts(version);
-  // 低于 4.0.0（3.x）：无 mmui::MainWindow，RPA 不可用
-  if ((parts[0] ?? 0) < MIN_SUPPORTED[0]) return false;
-  for (let i = 0; i < MAX_SUPPORTED.length; i++) {
-    const p = parts[i] ?? 0;
-    if (p < MAX_SUPPORTED[i]) return true;
-    if (p > MAX_SUPPORTED[i]) return false;
-  }
-  return true; // 前三段全等（4.1.8.x）→ 受支持
+  return (
+    (parts[0] ?? 0) === SUPPORTED_VERSION[0] &&
+    (parts[1] ?? 0) === SUPPORTED_VERSION[1] &&
+    (parts[2] ?? 0) === SUPPORTED_VERSION[2]
+  );
 }
 
 // WeChat/Weixin DWORD 有两种编码：
@@ -99,7 +97,7 @@ export function parseWechatVersionFromRegOutput(output: string): string | null {
 // ---------- 中文修复指引 ----------
 
 export function wechatFixGuide(found: string): string {
-  return `微信版本 ${found} 不支持（需 ≤4.1.8）。请从此处下载旧版：${WECHAT_DOWNLOAD_URL}`;
+  return `微信版本 ${found} 不支持（需 = 4.1.8.x，高于低于都不行）。请从此处下载 4.1.8：${WECHAT_DOWNLOAD_URL}`;
 }
 
 export function pywinautoFixGuide(errMessage: string): string {
@@ -207,8 +205,8 @@ export function checkWechatVersion(): CheckOutcome {
   return {
     ok: false,
     fixGuide:
-      `未检测到受支持的微信安装（需已安装微信桌面版且版本 ≤4.1.8）。` +
-      `如需安装旧版：${WECHAT_DOWNLOAD_URL}`,
+      `未检测到受支持的微信安装（需已安装微信桌面版且版本 = 4.1.8.x，高于低于都不行）。` +
+      `如需安装 4.1.8：${WECHAT_DOWNLOAD_URL}`,
   };
 }
 
