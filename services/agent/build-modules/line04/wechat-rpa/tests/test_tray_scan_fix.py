@@ -229,13 +229,17 @@ def test_ensure_tray_visible_moves_offscreen_when_offscreen_mode():
     finally:
         listen_chat._OFFSCREEN_REPLY = original_offscreen
 
-    # 必须先 ShowWindow(8)，再 SetWindowPos 到 (-2600, 60)
+    # 必须先 ShowWindow(8)，再 SetWindowPos 到 (_OFFSCREEN_X, _OFFSCREEN_Y)
     user32.ShowWindow.assert_called_with(88, 8)
     setpos_calls = user32.SetWindowPos.call_args_list
     assert len(setpos_calls) >= 1, "必须调 SetWindowPos 把窗口移到屏幕外"
     args = setpos_calls[0][0]  # positional args: (hwnd, hWndInsertAfter, x, y, cx, cy, flags)
-    assert args[2] == -2600, f"x 坐标必须是 -2600，实际是 {args[2]}"
-    assert args[3] == 60,    f"y 坐标必须是 60，实际是 {args[3]}"
+    # x 坐标断言生效的 _OFFSCREEN_X（config 几何推导值），不写死 -2600：
+    # CI Linux 回退 -2600，真机 Windows 推导 ≈-1400，两者都验证"移到【配置的】屏外坐标"。
+    assert args[2] == listen_chat._OFFSCREEN_X, \
+        f"x 坐标必须是 _OFFSCREEN_X({listen_chat._OFFSCREEN_X})，实际是 {args[2]}"
+    assert args[3] == listen_chat._OFFSCREEN_Y, \
+        f"y 坐标必须是 _OFFSCREEN_Y({listen_chat._OFFSCREEN_Y})，实际是 {args[3]}"
 
 
 def test_ensure_tray_visible_no_setwindowpos_when_offscreen_mode_off():
