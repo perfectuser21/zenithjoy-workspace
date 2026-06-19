@@ -45,13 +45,25 @@ def test_decide_install_when_none():
     assert decide_wechat_action(None) == "install"
 
 
-def test_decide_ok_for_4_1_8_and_below():
-    """4.0.0 ~ 4.1.8.x → ok（已验证可用基线）。"""
+def test_decide_ok_only_for_4_1_8_x():
+    """只有 4.1.8.x → ok（已验证可用基线，高于低于都不行）。"""
     assert decide_wechat_action((4, 1, 8, 107)) == "ok"
     assert decide_wechat_action((4, 1, 8)) == "ok"
-    assert decide_wechat_action((4, 0, 5, 20)) == "ok"
-    assert decide_wechat_action((4, 1, 7, 999)) == "ok"
-    assert decide_wechat_action((4, 0, 0)) == "ok"   # 最低支持版本
+    assert decide_wechat_action((4, 1, 8, 0)) == "ok"
+    assert decide_wechat_action((4, 1, 8, 999)) == "ok"
+
+
+def test_decide_downgrade_for_below_4_1_8():
+    """【必须是 4.1.8 不是小】4.0.0 ~ 4.1.7.x 低于基线 → 不是 ok，必须替换成 4.1.8。
+
+    回归守卫：曾经把 [4.0.0, 4.1.8) 漏判成 'ok'（只卡 >=4.1.9 上界，下界只卡到
+    4.0.0），导致 4.1.7 机器 preflight 说"可用别动"，但 RPA 时 find_weixin 的
+    assert_supported_version 又抛 RuntimeError（< 4.1.8 控件配方不一致）。两守卫自相矛盾。
+    """
+    assert decide_wechat_action((4, 0, 5, 20)) == "downgrade"
+    assert decide_wechat_action((4, 1, 0)) == "downgrade"
+    assert decide_wechat_action((4, 1, 7, 999)) == "downgrade"
+    assert decide_wechat_action((4, 0, 0)) == "downgrade"
 
 
 def test_decide_install_for_3_x():
@@ -69,9 +81,10 @@ def test_decide_downgrade_for_4_1_9_and_above():
 
 def test_decide_handles_short_tuple():
     """不足 3 段的版本元组也能判定（补 0）。"""
-    assert decide_wechat_action((4, 1)) == "ok"
-    assert decide_wechat_action((4,)) == "ok"
-    assert decide_wechat_action((5,)) == "downgrade"
+    assert decide_wechat_action((4, 1, 8)) == "ok"
+    assert decide_wechat_action((4, 1)) == "downgrade"  # (4,1,0) < 4.1.8
+    assert decide_wechat_action((4,)) == "downgrade"    # (4,0,0) < 4.1.8
+    assert decide_wechat_action((5,)) == "downgrade"    # (5,0,0) >= 4.1.9
 
 
 # ---------- 报告汇总（all_ok / counts / exit code）----------
