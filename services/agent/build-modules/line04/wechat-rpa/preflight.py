@@ -118,9 +118,14 @@ def decide_wechat_action(version_tuple: Optional[Tuple[int, ...]]) -> str:
         return "install"
     head = tuple(version_tuple[:3])
     head = head + (0,) * (3 - len(head))
+    # 四档分界（MIN_REQUIRED_VERSION=(4,1,8) / MIN_BLOCKED_VERSION=(4,1,9) 从 find_weixin 导入）：
+    #   3.x（< 4.0.0）          → install   （无 mmui::MainWindow，按未安装处理）
+    #   [4.0.0, 4.1.8)          → downgrade （低于基线，控件配方不一致，卸载重装 4.1.8）
+    #   [4.1.9, +∞)             → downgrade （无障碍控件树被砍，卸载重装 4.1.8）
+    #   == 4.1.8.x              → ok         （已验证可用基线）
+    # 下界 [4.0.0,4.1.8) 与上界覆盖见 tests/test_preflight.py::test_decide_downgrade_for_below_4_1_8
     if head < (4, 0, 0):
-        return "install"  # 3.x 无 mmui::MainWindow，需安装 4.1.8
-    # 不是 4.1.8.x（低于基线 < 4.1.8，或高于上界 >= 4.1.9）→ 卸载现版后装 4.1.8
+        return "install"
     if head < MIN_REQUIRED_VERSION or head >= MIN_BLOCKED_VERSION:
         return "downgrade"
     return "ok"
