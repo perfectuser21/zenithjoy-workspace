@@ -3255,7 +3255,7 @@ agent_suite:
     note: "启动 env 自检机器闸门 — proven-to-fire 缺 TOAPI_API_KEY 检出 + 空串算缺失 + 完整性闸门(关键 env 读取必登记进 REQUIRED_ENV)。治 2026-06-19 生产漏 key 致客服静默不回。"
 
   - id: env-seam-gate
-    path: apps/api/src/__tests__/env-gate.test.ts
+    path: apps/api/src/__tests__/env-registry.test.ts
     type: unit
     ci: L3
     status: active

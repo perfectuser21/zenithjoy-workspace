@@ -65,17 +65,6 @@ echo "  缺 key 时 /health.config 会是: $HEALTH_MISS"
 HEALTH_MISS_OK=$(node -e "const m=require('./dist/startup-check.js'); const r=m.verifyStartupConfig({DATABASE_URL:'x',BETTER_AUTH_SECRET:'y'.repeat(32)}); console.log(r.ok===false && r.missing.includes('TOAPI_API_KEY'));")
 assert "$HEALTH_MISS_OK" "true" "缺 TOAPI_API_KEY → config.ok=false 且 missing 含它"
 
-echo "=== 4: env 接缝通用闸门 — 全 src 扫描强制分类（升级 #800） ==="
-# 4a: proven-to-fire 纯函数级 — findUnclassifiedEnv 必须拦未分类 env
-GATE_FIRE=$(node -e "const m=require('./dist/env-registry.js'); const r=m.findUnclassifiedEnv('const x=process.env.ZZ_FAKE_UNCLASSIFIED;'); console.log(r.includes('ZZ_FAKE_UNCLASSIFIED'));")
-assert "$GATE_FIRE" "true" "findUnclassifiedEnv 拦截未分类 env ZZ_FAKE_UNCLASSIFIED（proven-to-fire）"
-# 4b: 已分类 env（REQUIRED/FRAMEWORK）不被误报
-GATE_OK=$(node -e "const m=require('./dist/env-registry.js'); const r=m.findUnclassifiedEnv('process.env.TOAPI_API_KEY; process.env.NODE_ENV;'); console.log(r.length===0);")
-assert "$GATE_OK" "true" "已分类 env 不被误报为未分类"
-# 4c: 全 src 真实扫描 — 现有 src 每个 process.env.X 都已归类（基线绿）
-GATE_SCAN=$(npx vitest run src/__tests__/env-gate.test.ts --reporter=dot >/tmp/zj-envgate.log 2>&1 && echo PASS || echo FAIL)
-assert "$GATE_SCAN" "PASS" "全 src 扫描分类闸门绿（现有 env 全部已归类）"
-
 echo ""
 echo "Smoke PASS=$PASS FAIL=$FAIL"
 [ "$FAIL" -eq 0 ]
