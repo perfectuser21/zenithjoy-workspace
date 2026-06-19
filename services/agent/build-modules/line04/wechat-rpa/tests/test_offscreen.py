@@ -36,6 +36,14 @@ def test_compute_offscreen_x_left_monitor(monkeypatch):
     assert derived < -1920, "推导值必须落在左屏更左（虚拟屏左界之外）"
 
 
+def test_compute_offscreen_x_clamps_nonpositive_width(monkeypatch):
+    """win_width 传负值/0（非法）→ 钳到保守宽度 1200，不算出错误（落可见区）的离屏值。"""
+    fake = _make_fake_gsm({76: 0, 77: 0, 78: 2560, 79: 1600})
+    monkeypatch.setattr(config, "_get_system_metrics", lambda: fake)
+    assert config.compute_offscreen_x(0) == 0 - 1200 - 200 == -1400
+    assert config.compute_offscreen_x(-500) == 0 - 1200 - 200 == -1400
+
+
 def test_compute_offscreen_x_fallback_when_unavailable(monkeypatch):
     """非 Windows / GetSystemMetrics 不可用 → 回退兜底 -2600，绝不抛。"""
     monkeypatch.setattr(config, "_get_system_metrics", lambda: None)

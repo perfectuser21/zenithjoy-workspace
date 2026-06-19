@@ -81,14 +81,18 @@ def compute_offscreen_x(win_width: int = 1200) -> int:
 
     非 Windows / 调用失败 → 回退 OFFSCREEN_X_FALLBACK（-2600），绝不抛。
     """
+    # 防御：win_width 非正（负值/0）会让窗口算不出真离屏，钳到一个保守宽度（典型微信窗 ~1200）
+    if not isinstance(win_width, int) or win_width <= 0:
+        win_width = 1200
     gsm = _get_system_metrics()
     if gsm is None:
         return OFFSCREEN_X_FALLBACK
     try:
-        vleft = gsm(76)  # SM_XVIRTUALSCREEN
-        return int(vleft) - int(win_width) - 200
+        vleft = int(gsm(76))  # SM_XVIRTUALSCREEN
     except Exception:
+        # API 调用 / 类型转换失败 → 回退兜底，绝不抛
         return OFFSCREEN_X_FALLBACK
+    return vleft - win_width - 200
 
 
 OFFSCREEN_X: int = compute_offscreen_x()

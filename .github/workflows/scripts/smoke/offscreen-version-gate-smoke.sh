@@ -16,6 +16,9 @@ REPO_ROOT="$(cd "$(dirname "$0")/../../../.." && pwd)"
 EXPECTED="1.0.44"
 echo "offscreen-version-gate-smoke: 期望 line04 版本 = $EXPECTED (repo=$REPO_ROOT)"
 
+command -v node >/dev/null 2>&1   || { echo "FAIL: 缺 node"; exit 6; }
+command -v python3 >/dev/null 2>&1 || { echo "FAIL: 缺 python3"; exit 6; }
+
 MOD_MANIFEST="$REPO_ROOT/services/agent/modules/line04/manifest.json"
 V1=$(node -e "process.stdout.write(require('$MOD_MANIFEST').version)")
 [ "$V1" = "$EXPECTED" ] || { echo "FAIL: modules/line04 manifest version=$V1 != $EXPECTED"; exit 2; }
@@ -36,8 +39,8 @@ DERIVED=$(cd "$REPO_ROOT/services/agent/wechat-rpa" && python3 -c "
 import config
 config._get_system_metrics = lambda: (lambda i: {76:0,77:0,78:2560,79:1600}[i])
 print(config.compute_offscreen_x(1200))
-")
-[ "$DERIVED" = "-1400" ] || { echo "FAIL: compute_offscreen_x mock vleft=0 期望 -1400，实际 $DERIVED"; exit 5; }
+") || { echo "FAIL: python3 跑 compute_offscreen_x 出错（config 缺失/语法错误？）"; exit 5; }
+[ "$DERIVED" = "-1400" ] || { echo "FAIL: compute_offscreen_x mock vleft=0 期望 -1400，实际 ${DERIVED}"; exit 5; }
 echo "  OK: compute_offscreen_x 几何推导 = ${DERIVED} (不写死 -2600)"
 
 echo "offscreen-version-gate-smoke: PASS"
