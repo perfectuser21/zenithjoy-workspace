@@ -1023,6 +1023,18 @@ def parse_args() -> argparse.Namespace:
         help="--verify-silent 真实发送的文本。",
     )
     ap.add_argument(
+        "--no-send",
+        action="store_true",
+        help="--verify-silent 只读模式：移屏外 + 采样验静默，不开会话不发消息（开机自检用，"
+        "测核心不变量「窗口持续屏外 + 绝不最小化」）。",
+    )
+    ap.add_argument(
+        "--silent-sample-seconds",
+        type=int,
+        default=2,
+        help="--verify-silent --no-send 只读采样时长（秒）。",
+    )
+    ap.add_argument(
         "--middleware-url",
         type=str,
         default=os.environ.get("ZENITHJOY_API_BASE", "http://localhost:3000"),
@@ -1673,7 +1685,8 @@ def run_verify_silent(args: argparse.Namespace) -> int:
     流程：
       1. 读虚拟屏几何（GetSystemMetrics 76/77/78/79），推导/读取有效 OFFSCREEN_X，把窗口放屏外；
       2. 开后台采样线程每 5ms GetWindowRect，用 config.rect_visible 统计 intrude（碰可见区次数）+ worst left；
-      3. 跑一次真实 _open_chat + _uia_send（target 缺省取会话列表第一个）；
+      3. 默认：跑一次真实 _open_chat + _uia_send（target 缺省取会话列表第一个）；
+         --no-send 只读模式（开机自检用）：不开会话不发消息，只固定采样 N 秒，验窗口持续屏外；
       4. intrude==0 → 打印 SILENT 退出码 0，否则 NOT SILENT（露头次数×5ms 估时 + worst left）退出码 1。
     """
     if platform.system() != "Windows":
@@ -1710,27 +1723,32 @@ def run_verify_silent(args: argparse.Namespace) -> int:
         return 1
     main_hwnd = mw.element_info.handle
 
-    # 选目标会话
+    no_send = getattr(args, "no_send", False)
+
+    # 选目标会话（只读模式 --no-send 不需要：不开会话不发消息）
     target = args.target
     item = None
-    try:
-        for it in mw.descendants(control_type="ListItem"):
-            first = (it.element_info.name or "").split("\n")[0].strip()
-            if not first:
-                continue
-            if target is None:
-                target, item = first, it
-                break
-            if first == target:
-                item = it
-                break
-    except Exception as exc:
-        emit_json({"ok": False, "error": f"枚举会话列表失败: {exc}"})
-        return 1
-    if item is None or not target:
-        emit_json({"ok": False, "error": f"找不到目标会话（target={args.target!r}）"})
-        return 1
-    _log(f"verify-silent: 目标会话 = {target!r}")
+    if no_send:
+        _log("verify-silent: 只读模式(--no-send)，不开会话不发消息，只验窗口持续屏外")
+    else:
+        try:
+            for it in mw.descendants(control_type="ListItem"):
+                first = (it.element_info.name or "").split("\n")[0].strip()
+                if not first:
+                    continue
+                if target is None:
+                    target, item = first, it
+                    break
+                if first == target:
+                    item = it
+                    break
+        except Exception as exc:
+            emit_json({"ok": False, "error": f"枚举会话列表失败: {exc}"})
+            return 1
+        if item is None or not target:
+            emit_json({"ok": False, "error": f"找不到目标会话（target={args.target!r}）"})
+            return 1
+        _log(f"verify-silent: 目标会话 = {target!r}")
 
     # 先把窗口放到屏外（用生效的 OFFSCREEN_X）
     try:
@@ -1766,12 +1784,17 @@ def run_verify_silent(args: argparse.Namespace) -> int:
     th = threading.Thread(target=_sampler, daemon=True)
     th.start()
 
-    # 跑一次真实发送（真碰窗口的那段路径）
+    # no_send：只读采样固定时长（不碰会话不发消息）；否则跑一次真实发送（真碰窗口那段路径）
     sent = False
     try:
-        sent = reply_in_chat(mw, item, args.message, sender=target)
+        if no_send:
+            sample_s = max(1, getattr(args, "silent_sample_seconds", 2))
+            _log(f"verify-silent: 只读采样 {sample_s}s（验窗口持续屏外）")
+            time.sleep(sample_s)
+        else:
+            sent = reply_in_chat(mw, item, args.message, sender=target)
     except Exception as exc:
-        _log(f"verify-silent: reply_in_chat 异常: {exc}")
+        _log(f"verify-silent: {'只读采样' if no_send else 'reply_in_chat'} 异常: {exc}")
     finally:
         stop_flag["stop"] = True
         th.join(timeout=2)
