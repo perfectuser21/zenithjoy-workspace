@@ -1,0 +1,96 @@
+/**
+ * 启动 env 自检（哨兵第一样板）
+ *
+ * 治根：2026-06-19 生产 mmv 的 apps/api/.env 漏了 TOAPI_API_KEY → 微信客服 AI 生成失败、
+ * 静默不回（中台返回 ok 但无 reply，aiError 不打日志），排查很久。当时手动补 key——
+ * 没有守卫，换机/重部署必再犯。本模块在启动早期大声自检关键 env，并把状态暴露到 /health。
+ *
+ * 设计纪律：
+ * - 缺 key → console.error 大声打红日志（明确列缺哪些 + 后果），不静默。
+ * - 不让进程崩（避免缺个非致命 key 直接挂掉生产），但响亮可见。
+ * - 只列"缺了就会让核心功能静默坏掉"的 key，不列可选项（可选项有默认兜底，不进这里）。
+ */
+
+/**
+ * 中台运行必须的关键 env。缺任何一个，核心功能会静默坏掉：
+ * - TOAPI_API_KEY：LLM 调用凭据（clients/toapi.client.ts / services/video-remake.service.ts）。
+ *   缺失 → 微信客服 AI 生成会失败、静默不回（2026-06-19 真实事故根因）。
+ * - DATABASE_URL：数据库连接串（生产部署用，缺失 → 数据读写全挂）。
+ * - BETTER_AUTH_SECRET：登录态签名密钥（auth.ts，生产缺失会直接 throw）。
+ *   缺失 → 所有需要登录的接口全部 401，用户登不进。
+ */
+export const REQUIRED_ENV: string[] = [
+  'TOAPI_API_KEY',
+  'DATABASE_URL',
+  'BETTER_AUTH_SECRET',
+];
+
+/**
+ * 缺各 key 的后果说明（用于大声日志，让运维一眼看懂影响面）。
+ */
+const CONSEQUENCE: Record<string, string> = {
+  TOAPI_API_KEY: '微信客服 AI 生成会失败、静默不回（2026-06-19 生产事故根因）',
+  DATABASE_URL: '数据库连接缺连接串 → 数据读写全部失败',
+  BETTER_AUTH_SECRET: '登录态签名缺失 → 所有需登录接口 401，用户登不进',
+};
+
+/**
+ * 完整性闸门数据源：声明"哪个关键 key 在哪个源码文件被 process.env.X 读取"。
+ * 测试（startup-check.test.ts）会扫这些文件真实源码，断言 key 确实被读取且已进 REQUIRED_ENV。
+ * 以后谁加了新的关键 env 读取，在这里补一行 + 进 REQUIRED_ENV，否则闸门红、合不进。
+ *
+ * 注：DATABASE_URL 当前由部署环境注入连接池（非源码内 process.env 直读），故不在此列；
+ * 这里只放"源码内确有 process.env.<KEY> 读取"的关键 key，保证闸门断言为真。
+ */
+export const CRITICAL_ENV_USAGE: { key: string; file: string }[] = [
+  { key: 'TOAPI_API_KEY', file: 'clients/toapi.client.ts' },
+  { key: 'BETTER_AUTH_SECRET', file: 'auth.ts' },
+];
+
+export interface StartupConfigResult {
+  ok: boolean;
+  missing: string[];
+  present: string[];
+}
+
+/**
+ * 逐个查 REQUIRED_ENV 是否存在且非空（空串/纯空白算缺失）。
+ */
+export function verifyStartupConfig(
+  env: NodeJS.ProcessEnv | Record<string, string | undefined> = process.env,
+): StartupConfigResult {
+  const missing: string[] = [];
+  const present: string[] = [];
+  for (const key of REQUIRED_ENV) {
+    const val = env[key];
+    if (val == null || String(val).trim() === '') {
+      missing.push(key);
+    } else {
+      present.push(key);
+    }
+  }
+  return { ok: missing.length === 0, missing, present };
+}
+
+/**
+ * 启动早期调用：自检 + 大声打红日志（缺 key 列出后果），不崩进程。
+ * 返回结果供 /health 暴露与冒烟使用。
+ */
+export function runStartupConfigCheck(
+  env: NodeJS.ProcessEnv | Record<string, string | undefined> = process.env,
+): StartupConfigResult {
+  const result = verifyStartupConfig(env);
+  if (result.ok) {
+    console.log(`✅ 启动 env 自检通过（${result.present.length}/${REQUIRED_ENV.length} 关键 key 就绪）`);
+    return result;
+  }
+  console.error('==================================================================');
+  console.error('🔴🔴🔴 启动 env 自检失败：缺少关键环境变量，核心功能会静默坏掉 🔴🔴🔴');
+  for (const key of result.missing) {
+    console.error(`🔴 缺失 ${key} → ${CONSEQUENCE[key] ?? '核心功能受影响'}`);
+  }
+  console.error(`🔴 请检查部署机的 apps/api/.env，补齐：${result.missing.join(', ')}`);
+  console.error('🔴 进程继续运行（避免单个 key 缺失直接挂生产），但相关功能不可用。');
+  console.error('==================================================================');
+  return result;
+}

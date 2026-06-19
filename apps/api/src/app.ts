@@ -55,6 +55,7 @@ import { operatorSessionsRouter } from './routes/operator-sessions';
 // Line 07 — AI 爆款视频翻拍 9节点流水线
 import videoRemakeRouter from './routes/video-remake';
 import { errorHandler, notFoundHandler } from './middleware/error';
+import { verifyStartupConfig } from './startup-check';
 
 const app = express();
 
@@ -81,9 +82,14 @@ app.use(express.json());
 const screenshotsDir = process.env.SCREENSHOTS_DIR || '/opt/zenithjoy/screenshots';
 app.use('/screenshots', express.static(screenshotsDir));
 
-// Health check
+// Health check —— 含 env 自检状态，让部署后冒烟能看到配置是否漏 key
 app.get('/health', (req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+  const cfg = verifyStartupConfig();
+  res.json({
+    status: 'ok',
+    timestamp: new Date().toISOString(),
+    config: { ok: cfg.ok, missing: cfg.missing },
+  });
 });
 
 // Path 2 Step4 — fake-feishu / fake-LLM 替身：仅非生产挂载于根路径，

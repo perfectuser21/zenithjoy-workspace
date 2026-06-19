@@ -3,8 +3,13 @@ import http from 'http';
 import app from './app';
 import { attachAgentWS } from './services/agent-ws';
 import { startStaleListenerMonitor } from './services/wechat-heartbeat';
+import { runStartupConfigCheck } from './startup-check';
 
 dotenv.config();
+
+// 启动早期自检关键 env（哨兵）：缺 key 大声打红日志但不崩进程。
+// 治根 2026-06-19 生产漏 TOAPI_API_KEY → 客服静默不回。
+runStartupConfigCheck();
 
 const PORT = process.env.PORT || 3000;
 
