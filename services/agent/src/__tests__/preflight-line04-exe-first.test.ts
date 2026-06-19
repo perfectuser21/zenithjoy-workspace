@@ -56,11 +56,12 @@ describe('preflight.js checkWechatVersion — exe-first 回归测试', () => {
     expect(result.skipped).toBe(true);
   });
 
-  it('isWechatVersionSupported: 4.1.8.107 = true，4.1.10.27 = false', () => {
+  it('isWechatVersionSupported: 只认 4.1.8.x（4.0.0/4.1.7 低于基线也 false）', () => {
     const preflight = require(PREFLIGHT_PATH);
     expect(preflight.isWechatVersionSupported('4.1.8.107')).toBe(true);
     expect(preflight.isWechatVersionSupported('4.1.10.27')).toBe(false);
-    expect(preflight.isWechatVersionSupported('4.0.0')).toBe(true);
+    expect(preflight.isWechatVersionSupported('4.0.0')).toBe(false);
+    expect(preflight.isWechatVersionSupported('4.1.7.25')).toBe(false);
     expect(preflight.isWechatVersionSupported('3.9.12.51')).toBe(false);
   });
 

@@ -37,15 +37,15 @@ vi.mock('node:child_process', async (importOriginal) => {
 import { execSync } from 'node:child_process';
 import * as childProcessModule from 'node:child_process';
 
-describe('微信版本比较（纯函数，<= 4.1.8.x 为支持）', () => {
-  it('4.1.8.107 等于上限 → 支持', () => {
+describe('微信版本比较（纯函数，只认 4.1.8.x 为支持，高于低于都不行）', () => {
+  it('4.1.8.107 = 基线 → 支持', () => {
     expect(isWechatVersionSupported('4.1.8.107')).toBe(true);
   });
   it('4.1.8 → 支持', () => {
     expect(isWechatVersionSupported('4.1.8')).toBe(true);
   });
-  it('4.1.7.25 低于上限 → 支持', () => {
-    expect(isWechatVersionSupported('4.1.7.25')).toBe(true);
+  it('【必须是 4.1.8 不是小】4.1.7.25 低于基线 4.1.8 → 不支持', () => {
+    expect(isWechatVersionSupported('4.1.7.25')).toBe(false);
   });
   it('4.1.9 → 不支持', () => {
     expect(isWechatVersionSupported('4.1.9')).toBe(false);
@@ -62,8 +62,12 @@ describe('微信版本比较（纯函数，<= 4.1.8.x 为支持）', () => {
   it('3.0.0.0 更老版本 → 不支持', () => {
     expect(isWechatVersionSupported('3.0.0.0')).toBe(false);
   });
-  it('4.0.0 = 最低支持版本 → 支持', () => {
-    expect(isWechatVersionSupported('4.0.0')).toBe(true);
+  it('【必须是 4.1.8 不是小】4.0.0 低于基线 4.1.8 → 不支持', () => {
+    expect(isWechatVersionSupported('4.0.0')).toBe(false);
+  });
+  it('4.1.0 / 4.0.5.20 低于基线 → 不支持', () => {
+    expect(isWechatVersionSupported('4.1.0')).toBe(false);
+    expect(isWechatVersionSupported('4.0.5.20')).toBe(false);
   });
   it('parseVersionParts 缺失段按 0 处理', () => {
     expect(parseVersionParts('4.1')).toEqual([4, 1]);
