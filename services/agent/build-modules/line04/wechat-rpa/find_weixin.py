@@ -267,8 +267,10 @@ def assert_supported_version(exe_path: Optional[str] = None) -> None:
     """
     版本守卫入口：读 Weixin.exe 版本并断言其在 RPA 可用范围内。
 
+    只认 4.1.8.x（高于低于都不行，委托 _parse_and_check）：
+    - < 4.1.8 → 抛 RuntimeError（控件配方不一致，RPA 不可用）
     - >= 4.1.9 → 抛 RuntimeError（无障碍控件树被移除，RPA 不可用）
-    - <= 4.1.8.x → 放行（返回 None）
+    - == 4.1.8.x → 放行（返回 None）
     - 版本读不到 → 不硬阻断（返回 None + warning），避免误杀
 
     应在任何 RPA 寻址前调用。
