@@ -3245,3 +3245,11 @@ agent_suite:
     status: active
     product: 客户智能获客
     note: "Sprint 06181904 合同归档入口 — 采集去重/残缺/扩词/sweep 纯逻辑 unit，与 apps/api/src/services/acquisition-collect.test.ts 同源契约；端到端行为以 contract-dod.md [BEHAVIOR] 为 evaluator oracle。"
+
+  - id: startup-env-selfcheck
+    path: apps/api/src/__tests__/startup-check.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 中台认证
+    note: "启动 env 自检机器闸门 — proven-to-fire 缺 TOAPI_API_KEY 检出 + 空串算缺失 + 完整性闸门(关键 env 读取必登记进 REQUIRED_ENV)。治 2026-06-19 生产漏 key 致客服静默不回。"
