@@ -9,7 +9,7 @@ preflight.py — Agent 开机环境自检 + 自愈层（Path 4 微信 RPA 前置
 8 个检测项（每项 detect → fix → 修不了 prompt，产出 {name,status,detail}）：
   1. OS/交互会话    —— 是 Windows + 有活动桌面会话（不可自愈）
   2. 微信安装        —— Weixin.exe 在不在；不在 → 下载 4.1.8 静默装
-  3. 微信版本        —— >=4.1.9 → 卸载 + 装 4.1.8；=4.1.8 → ok
+  3. 微信版本        —— 不是 4.1.8.x（>=4.1.9 或 <4.1.8）→ 卸载 + 装 4.1.8；=4.1.8.x → ok
   4. 锁更新          —— WeixinUpdate.exe 改名 .disabled + 防火墙出站封禁（幂等）
   5. 微信登录态      —— 未登录 → 拉起微信 + 提示扫码
   6. Python+pywinauto—— import 测试；失败 → 提示重装 agent
@@ -54,6 +54,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 # find_weixin 顶层零 pywinauto/windll import，安全复用其纯函数与寻址 API。
 from find_weixin import (  # noqa: E402
     MIN_BLOCKED_VERSION,
+    MIN_REQUIRED_VERSION,
     WEIXIN_EXE_DEFAULT,
     _parse_version,
     get_weixin_version,
@@ -106,18 +107,22 @@ def decide_wechat_action(version_tuple: Optional[Tuple[int, ...]]) -> str:
     """
     依据微信版本元组决定该执行的动作（纯函数，mac 可单测）。
 
+    只认 4.1.8.x（高于低于都不行，与 find_weixin._parse_and_check 守卫保持一致）：
     - None（读不到 / 未安装）→ 'install'（装 4.1.8）
-    - >= (4,1,9)            → 'downgrade'（无障碍控件树被砍，卸载后装 4.1.8）
-    - <= 4.1.8.x           → 'ok'（已验证可用基线）
+    - 3.x（< 4.0.0）        → 'install'（无 mmui::MainWindow，按未安装处理装 4.1.8）
+    - 4.0.0 ~ 4.1.7.x      → 'downgrade'（低于基线，控件配方不一致，卸载后装 4.1.8）
+    - >= 4.1.9             → 'downgrade'（无障碍控件树被砍，卸载后装 4.1.8）
+    - == 4.1.8.x          → 'ok'（已验证可用基线）
     """
     if version_tuple is None:
         return "install"
     head = tuple(version_tuple[:3])
     head = head + (0,) * (3 - len(head))
-    if head >= MIN_BLOCKED_VERSION:
-        return "downgrade"
     if head < (4, 0, 0):
         return "install"  # 3.x 无 mmui::MainWindow，需安装 4.1.8
+    # 不是 4.1.8.x（低于基线 < 4.1.8，或高于上界 >= 4.1.9）→ 卸载现版后装 4.1.8
+    if head < MIN_REQUIRED_VERSION or head >= MIN_BLOCKED_VERSION:
+        return "downgrade"
     return "ok"
 
 
@@ -439,7 +444,7 @@ def check_wechat_installed(dry_run: bool = False) -> Dict[str, str]:
 
 
 def check_wechat_version(dry_run: bool = False) -> Dict[str, str]:
-    """3. 微信版本：>=4.1.9 → 卸载+装4.1.8；=4.1.8 → ok；读不到 → warn。"""
+    """3. 微信版本：不是 4.1.8.x（高于 >=4.1.9 或低于 <4.1.8）→ 卸载+装4.1.8；=4.1.8.x → ok；读不到 → warn。"""
     name = CHECK_NAMES[2]
     ver_str = get_weixin_version()
     parsed = _parse_version(ver_str)
@@ -451,7 +456,7 @@ def check_wechat_version(dry_run: bool = False) -> Dict[str, str]:
                 name,
                 "warn",
                 f"读不到微信版本号（raw={ver_str!r}），跳过版本守卫。"
-                "若 RPA 异常请人工确认版本 <=4.1.8。",
+                "若 RPA 异常请人工确认版本 = 4.1.8.x。",
             )
         return make_check(
             name, "failed", "微信未安装，无法判定版本（应先过'微信安装'项）。"
@@ -461,18 +466,24 @@ def check_wechat_version(dry_run: bool = False) -> Dict[str, str]:
     ver_show = ".".join(str(x) for x in parsed)
 
     if action == "ok":
-        return make_check(name, "ok", f"微信版本 {ver_show} <=4.1.8，RPA 可用。")
+        return make_check(name, "ok", f"微信版本 {ver_show} = 4.1.8.x（已验证可用基线），RPA 可用。")
 
     if action == "install":  # 理论上 parsed 非 None 不会走到这
         return make_check(name, "failed", "微信未安装（应先过'微信安装'项）。")
 
-    # downgrade：>=4.1.9，无障碍控件树被砍，必须卸载后装 4.1.8。
+    # downgrade：不是 4.1.8.x（高于 >=4.1.9 控件树被砍 / 低于 <4.1.8 控件配方不一致），必须卸载后装 4.1.8。
+    head = tuple(parsed[:3]) + (0,) * (3 - len(parsed[:3]))
+    reason = (
+        "高于上界 >=4.1.9（无障碍控件树被砍）"
+        if head >= MIN_BLOCKED_VERSION
+        else "低于基线 <4.1.8（控件配方不一致）"
+    )
     if dry_run or not _is_windows():
         return make_check(
             name,
             "failed",
-            f"微信版本 {ver_show} >=4.1.9（无障碍控件树被砍，RPA 不可用）。"
-            "dry-run/非 Windows 跳过自动降级；真实运行将卸载后装 4.1.8。",
+            f"微信版本 {ver_show} {reason}，RPA 不可用。"
+            "dry-run/非 Windows 跳过自动替换；真实运行将卸载后装 4.1.8。",
         )
 
     uninstaller = _find_file(WEIXIN_INSTALL_ROOT, "Uninstall.exe")
@@ -484,7 +495,7 @@ def check_wechat_version(dry_run: bool = False) -> Dict[str, str]:
         return make_check(
             name,
             "failed",
-            f"需把 {ver_show} 降级到 4.1.8，但安装包下载失败。"
+            f"需把 {ver_show} 换成 4.1.8.x，但安装包下载失败。"
             "请手动卸载并安装微信 4.1.8 后重启 agent。",
         )
     ok, info = _run_elevated([installer, "/S"])
@@ -494,12 +505,12 @@ def check_wechat_version(dry_run: bool = False) -> Dict[str, str]:
         return make_check(
             name,
             "fixed",
-            f"微信 {ver_show} → 已通过 UAC 提权降级安装 4.1.8（现 {'.'.join(str(x) for x in new_parsed)}）。",
+            f"微信 {ver_show} → 已通过 UAC 提权卸载重装 4.1.8.x（现 {'.'.join(str(x) for x in new_parsed)}）。",
         )
     return make_check(
         name,
         "failed",
-        f"微信降级到 4.1.8 失败（install {info}，现版本 {new_ver!r}）。"
+        f"微信换成 4.1.8.x 失败（install {info}，现版本 {new_ver!r}）。"
         "安装需要管理员权限，弹出 UAC 确认框时请点击'是'。"
         "如未看到确认框或点击后仍失败，请手动卸载后安装微信 4.1.8 再重启。",
     )
