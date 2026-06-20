@@ -11,7 +11,7 @@ xian-pc 真机（微信 4.1.8.107）已验证：不开讲述人即读到 mmui::M
 
 ## 范围与约束
 - 仅改 Windows 真机微信 RPA 激活路径；非 Windows 走 dry-run 短路，不受影响。
-- 硬约束不变：仅对微信 ≤4.1.8 有效（4.1.10+ 控件树被腾讯移除）。版本守卫逻辑保持原样。
+- 硬约束不变：仅对微信 4.1.8.x 有效（4.1.10+ 控件树被腾讯移除）。版本守卫逻辑保持原样。
 - 权威实现来源：找回的 .newfunc.tmp（新版 _activate_uia）。
 
 ## 改动清单（单元 + 边界）
@@ -25,7 +25,7 @@ xian-pc 真机（微信 4.1.8.107）已验证：不开讲述人即读到 mmui::M
   SPIF_SENDCHANGE = 0x0002
   ctypes.windll.user32.SystemParametersInfoW(SPI_SETSCREENREADER, True, None, SPIF_SENDCHANGE)
   ```
-- docstring 更新为 SPI 说明（无框无声/持久/≤4.1.8）。
+- docstring 更新为 SPI 说明（无框无声/持久/4.1.8.x）。
 
 ### 2. preflight.py · `check_uia_narrator()`（约 653-704，第 7 项自检）
 - **保持**：注册键 `CHECK_NAMES[6] == "uia_narrator"`（内部 id，dashboard/测试引用，不改名）；dry_run/非 Windows → warn 短路；激活后 get_main_window() 验证逻辑。
