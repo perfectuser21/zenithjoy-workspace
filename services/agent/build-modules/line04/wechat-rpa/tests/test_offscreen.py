@@ -121,3 +121,20 @@ def test_verify_silent_no_send_non_windows_guard_no_send(monkeypatch):
     monkeypatch.setattr(platform, "system", lambda: "Darwin")
     ns = type("NS", (), {"no_send": True, "target": None, "message": "x", "silent_sample_seconds": 2})()
     assert listen_chat.run_verify_silent(ns) == 1
+
+
+def test_verify_silent_restores_window_after_measure():
+    """run_verify_silent 量完必须把窗口还原回量测前状态/位置（开机自检不该把客户机微信窗口留屏外）。
+
+    源码级回归守卫：真机还原行为(碰真窗口)proven-to-fire 在 xian-rog 跑；这里钉住"还原代码不被删"。
+    """
+    import inspect
+    import listen_chat
+    src = inspect.getsource(listen_chat.run_verify_silent)
+    # 量测前记录原状态（iconic/visible/坐标）
+    assert "_orig_iconic" in src and "_orig_visible" in src
+    # 量测后还原：minimized→SW_MINIMIZE(6) / tray→SW_HIDE(0) / visible→SetWindowPos 回原坐标
+    assert "ShowWindow(main_hwnd, 6)" in src
+    assert "ShowWindow(main_hwnd, 0)" in src
+    assert "_orig_left" in src and "SetWindowPos" in src
+    assert "已还原窗口到量测前" in src
