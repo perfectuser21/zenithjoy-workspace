@@ -14,7 +14,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
-import ModuleHealthPage, { formatRelativeTime } from '../../pages/ModuleHealthPage';
+import ModuleHealthPage, { formatRelativeTime, parseWechatStatus } from '../../pages/ModuleHealthPage';
 import * as moduleHealthApi from '../../api/moduleHealth.api';
 
 vi.mock('../../api/moduleHealth.api', () => ({
@@ -107,5 +107,33 @@ describe('formatRelativeTime', () => {
   it('空值返回占位符', () => {
     expect(formatRelativeTime(null)).toBe('—');
     expect(formatRelativeTime('')).toBe('—');
+  });
+});
+
+describe('parseWechatStatus — 从 line04 reason 解析微信版本+静默状态（车队看板专列）', () => {
+  it('SILENT：解析版本号 + 静默', () => {
+    const r = parseWechatStatus('微信 4.1.8.107 / 静默 SILENT');
+    expect(r.version).toBe('4.1.8.107');
+    expect(r.silent).toBe('SILENT');
+  });
+  it('NOT-SILENT（含露头）：版本 + 红静默（不能误判成 SILENT）', () => {
+    const r = parseWechatStatus('微信 4.1.8.107 / 静默 NOT-SILENT\n窗口未持续屏外');
+    expect(r.version).toBe('4.1.8.107');
+    expect(r.silent).toBe('NOT_SILENT');
+  });
+  it('静默跳过（微信没登录/没装）', () => {
+    expect(parseWechatStatus('微信 4.1.8.107 / 静默 跳过').silent).toBe('SKIP');
+  });
+  it('非 Windows 未检到版本 → version=null', () => {
+    const r = parseWechatStatus('微信版本未检(非Windows) / 静默 跳过');
+    expect(r.version).toBeNull();
+    expect(r.silent).toBe('SKIP');
+  });
+  it('版本错(4.1.7)红 reason 里也能抠出版本号', () => {
+    expect(parseWechatStatus('微信 4.1.7.25 不支持（需 = 4.1.8.x）').version).toBe('4.1.7.25');
+  });
+  it('空 reason → 全 null', () => {
+    expect(parseWechatStatus(undefined)).toEqual({ version: null, silent: null });
+    expect(parseWechatStatus('')).toEqual({ version: null, silent: null });
   });
 });
