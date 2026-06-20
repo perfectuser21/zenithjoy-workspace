@@ -102,7 +102,6 @@ export const OPTIONAL_ENV: { name: string; reason: string }[] = [
   { name: 'CECELIA_BRAIN_URL', reason: 'Cecelia Brain 地址，缺则不回写 Brain' },
   { name: 'CONTENT_SERVICE_PROXY_URL', reason: '内容服务代理地址，缺则直连' },
   { name: 'CONTENT_OUTPUT_DIR', reason: '内容产出目录，缺则用默认目录' },
-  { name: 'ILINK_BASE_URL', reason: 'iLink 协议网关地址，缺则用默认' },
   { name: 'SCREENSHOTS_DIR', reason: '截图输出目录，缺则用默认目录' },
 
   // —— 杂项可调参数 / 租户 ——

@@ -1833,31 +1833,7 @@ tests:
     product: 私域运营
     note: "P4 WS1 — wechat.ts pairing unit (router export + 3 endpoint registration). 真业务测试在 integration"
 
-  # ─── P4 Step 1 — 微信 iLink 客户端通道（移植腾讯官方 openclaw-weixin 协议）──
-
-  - id: p4-step1-ilink-client
-    path: apps/api/src/services/__tests__/ilink-client.test.ts
-    type: unit
-    ci: L3
-    status: active
-    product: 私域运营
-    note: "P4 Step1 — iLink client：parseUpdates(只留单聊 text) / buildSendMessageBody / isSessionTimeoutError(-14)"
-
-  - id: p4-step1-ilink-poller
-    path: apps/api/src/services/__tests__/ilink-poller.test.ts
-    type: unit
-    ci: L3
-    status: active
-    product: 私域运营
-    note: "P4 Step1 — iLink poller 闭环 B→C→D→E（DeepSeek 回复→sendmessage→writeLead）+ -14 切 needs_rebind + openrouter 失败 skip"
-
-  - id: p4-step1-wechat-ilink-routes
-    path: apps/api/src/routes/__tests__/wechat-ilink.test.ts
-    type: unit
-    ci: L3
-    status: active
-    product: 私域运营
-    note: "P4 Step1 — wechat.ts 注册 3 个 iLink 端点（login-start/login-status/poller-start），旧路由不破坏"
+  # ─── P4 Step 1 — 微信 iLink 通道已彻底删除（用户否决，决策 9d2234ba；iLink 收不到客户私聊，与 AI 客服需求无关）──
 
   # ─── P4 Sprint 1 WS2 — 飞书 Bitable 审批表 + draft-submit 路由 ──
 
