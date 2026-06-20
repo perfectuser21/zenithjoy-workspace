@@ -1,7 +1,7 @@
 // services/agent/src/preflight/line04-preflight.ts
 //
 // Line04 微信AI客服模块 preflight — 三项真实检测：
-//   1. 微信版本 ≤ 4.1.8.x（Windows 注册表读取，4.1.10+ 砍掉 UIA 控件树，RPA 失效）
+//   1. 微信版本 = 4.1.8.x（高于低于都不行：<4.1.8 控件配方不一致 / >=4.1.9 砍掉 UIA 控件树，均 RPA 失效）
 //   2. python -c "import pywinauto" 可成功（驱动微信自动化的底层库）
 //   3. 可用内存 ≥ 4GB
 //
@@ -12,8 +12,9 @@ import { execSync, spawn } from 'node:child_process';
 import os from 'node:os';
 import type { CheckOutcome, PreflightResult } from './types';
 
-// 受支持的微信版本上限（含）：4.1.8.x。前三段 > 4.1.8 视为不支持。
-const MAX_SUPPORTED: readonly number[] = [4, 1, 8];
+// 受支持的微信版本：只认 4.1.8.x（前三段必须 == 4.1.8，build 段任意）。高于低于都不行。
+// 与 modules/line04/preflight.ts 和 wechat-rpa/preflight.py(WECHAT_MIN=(4,1,8)) 一致。
+const SUPPORTED_VERSION: readonly number[] = [4, 1, 8];
 
 // 把版本字符串拆成数字段（缺失段按 0 处理）
 export function parseVersionParts(version: string): number[] {
@@ -26,16 +27,14 @@ export function parseVersionParts(version: string): number[] {
     });
 }
 
-// 纯函数：version <= 4.1.8.x 返回 true（受支持）。只比较前三段，build 段忽略。
+// 纯函数：只认 4.1.8.x —— 前三段必须 == 4.1.8（build 段任意）才受支持。高于低于都不行。
 export function isWechatVersionSupported(version: string): boolean {
   const parts = parseVersionParts(version);
-  for (let i = 0; i < MAX_SUPPORTED.length; i++) {
-    const p = parts[i] ?? 0;
-    if (p < MAX_SUPPORTED[i]) return true;
-    if (p > MAX_SUPPORTED[i]) return false;
-  }
-  // 前三段全部相等（4.1.8.x）→ 受支持
-  return true;
+  return (
+    (parts[0] ?? 0) === SUPPORTED_VERSION[0] &&
+    (parts[1] ?? 0) === SUPPORTED_VERSION[1] &&
+    (parts[2] ?? 0) === SUPPORTED_VERSION[2]
+  );
 }
 
 // 微信把 Version 存成 REG_DWORD 时的编码：高字节 = 0x60 + major，其余字节依次 minor/patch/build。
@@ -84,7 +83,7 @@ export async function checkWechatVersion(): Promise<CheckOutcome> {
         if (isWechatVersionSupported(v)) return { ok: true };
         return {
           ok: false,
-          reason: `微信版本 ${v} 不支持自动化（请降级至 4.1.8 或更低）`,
+          reason: `微信版本 ${v} 不支持自动化（需 = 4.1.8.x，高于低于都不行）`,
         };
       }
     } catch {
@@ -93,7 +92,7 @@ export async function checkWechatVersion(): Promise<CheckOutcome> {
   }
   return {
     ok: false,
-    reason: '未检测到受支持的微信安装（请确认已安装微信桌面版且版本 ≤ 4.1.8）',
+    reason: '未检测到受支持的微信安装（请确认已安装微信桌面版且版本 = 4.1.8.x）',
   };
 }
 

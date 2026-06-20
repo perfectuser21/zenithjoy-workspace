@@ -4,7 +4,7 @@
 
 **Goal:** 把微信 4.0 UIA 激活从"启动 Windows 讲述人"换成"ctypes 设 SPI_SETSCREENREADER 系统标志"，消除讲述人满屏框+朗读声。
 
-**Architecture:** 只换 `_activate_uia()` / `check_uia_narrator()` 的实现体（函数名、调用点、注册键 `uia_narrator` 不变），文案去"讲述人"。源改动 1:1 镜像到 build-modules/line04，bump line04 module 1.0.28→1.0.29 并重打包。仅对微信 ≤4.1.8 有效（版本守卫不动）。
+**Architecture:** 只换 `_activate_uia()` / `check_uia_narrator()` 的实现体（函数名、调用点、注册键 `uia_narrator` 不变），文案去"讲述人"。源改动 1:1 镜像到 build-modules/line04，bump line04 module 1.0.28→1.0.29 并重打包。仅对微信 4.1.8.x 有效（版本守卫不动）。
 
 **Tech Stack:** Python 3.11 embedded, ctypes(user32.SystemParametersInfoW), pywinauto, unittest/pytest。所有改动需双树同步（CI module-version-sync 回归）。
 
@@ -117,7 +117,7 @@ def _activate_uia() -> None:
     新实现直接用 ctypes 调 SystemParametersInfo 设 SPI_SETSCREENREADER 标志——这才是讲述人
     背后真正打开"屏幕阅读器模式"的系统开关。纯系统调用，无窗口/无框/无声；标志在进程退出后
     持久保持，也不会反向招起讲述人。已在 xian-pc 真机验证：不开讲述人即读到 mmui::MainWindow
-    + 92 控件。仅对微信 ≤4.1.8 有效（4.1.10+ 控件树被腾讯移除，讲述人和本标志都救不了）。
+    + 92 控件。仅对微信 4.1.8.x 有效（4.1.10+ 控件树被腾讯移除，讲述人和本标志都救不了）。
     """
     try:
         import ctypes
