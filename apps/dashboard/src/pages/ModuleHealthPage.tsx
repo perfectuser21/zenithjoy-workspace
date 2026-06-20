@@ -89,12 +89,63 @@ function SkeletonRows() {
               <div className="h-3 w-16 bg-gray-100 rounded mx-auto" />
             </td>
           ))}
+          <td className="border border-gray-200 px-4 py-3 text-center">
+            <div className="h-3 w-16 bg-gray-100 rounded mx-auto" />
+          </td>
           <td className="border border-gray-200 px-4 py-3">
             <div className="h-3 w-16 bg-gray-100 rounded" />
           </td>
         </tr>
       ))}
     </>
+  );
+}
+
+/**
+ * 从 line04-wechat-cs 的 reason 字符串里解析出「微信版本号」+「静默状态」。
+ * reason 由 agent line04 preflight 透出（如 "微信 4.1.8.107 / 静默 SILENT"），
+ * 看板单元格只显示 {ok,reason}，绿了看不到这两项 → 本函数把它们抠出来单独成列。
+ */
+export function parseWechatStatus(reason?: string): {
+  version: string | null;
+  silent: 'SILENT' | 'NOT_SILENT' | 'SKIP' | null;
+} {
+  const r = reason || '';
+  const vm = r.match(/微信\s+(\d+\.\d+\.\d+(?:\.\d+)?)/);
+  const version = vm ? vm[1] : null;
+  let silent: 'SILENT' | 'NOT_SILENT' | 'SKIP' | null = null;
+  // 必须先判 NOT-SILENT（它含子串 SILENT，否则会被误判成 SILENT）
+  if (/静默[\s:：]*NOT[\s-]*SILENT/i.test(r)) silent = 'NOT_SILENT';
+  else if (/静默[\s:：]*SILENT/i.test(r)) silent = 'SILENT';
+  else if (/静默[\s:：]*跳过/.test(r)) silent = 'SKIP';
+  return { version, silent };
+}
+
+/** 微信版本 + 静默状态专列单元格：绿红都常显（不像通用 StatusCell 绿了只显"在线"）。 */
+function WechatStatusCell({ entry }: { entry?: { ok: boolean; reason?: string } }) {
+  if (!entry) {
+    return (
+      <span className="text-gray-400 text-xs" title="该机器未上报 line04 微信客服模块">
+        {DOT_NONE} 无数据
+      </span>
+    );
+  }
+  const { version, silent } = parseWechatStatus(entry.reason);
+  const silentBadge =
+    silent === 'SILENT' ? (
+      <span className="text-green-600">{DOT_ONLINE} 静默</span>
+    ) : silent === 'NOT_SILENT' ? (
+      <span className="text-red-500">{DOT_FAIL} 露头</span>
+    ) : silent === 'SKIP' ? (
+      <span className="text-gray-400">静默未检</span>
+    ) : (
+      <span className="text-gray-400">—</span>
+    );
+  return (
+    <span className="inline-flex flex-col gap-0.5 text-xs leading-tight">
+      <span className="font-mono text-gray-700">{version || '版本未知'}</span>
+      {silentBadge}
+    </span>
   );
 }
 
@@ -162,6 +213,9 @@ export default function ModuleHealthPage() {
                 </th>
               ))}
               <th className="border border-gray-200 px-4 py-2 text-center font-medium text-gray-600">
+                微信版本 / 静默
+              </th>
+              <th className="border border-gray-200 px-4 py-2 text-center font-medium text-gray-600">
                 最后更新
               </th>
             </tr>
@@ -172,7 +226,7 @@ export default function ModuleHealthPage() {
             ) : rows.length === 0 ? (
               <tr>
                 <td
-                  colSpan={LINES.length + 2}
+                  colSpan={LINES.length + 3}
                   className="border border-gray-200 px-4 py-8 text-center text-gray-400"
                 >
                   暂无已注册机器
@@ -190,6 +244,9 @@ export default function ModuleHealthPage() {
                       <StatusCell entry={row.module_status?.[l.key]} />
                     </td>
                   ))}
+                  <td className="border border-gray-200 px-4 py-3 text-center">
+                    <WechatStatusCell entry={row.module_status?.['line04-wechat-cs']} />
+                  </td>
                   <td className="border border-gray-200 px-4 py-3 text-center text-xs text-gray-500">
                     {formatRelativeTime(row.updated_at)}
                   </td>
