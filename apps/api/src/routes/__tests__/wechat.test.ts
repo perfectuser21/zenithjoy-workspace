@@ -25,17 +25,16 @@ describe('wechat.ts — router export', () => {
     expect(paths).toContain('/scheduler-tick');
   });
 
-  it('registers exactly 8 unique endpoints (4 原有 + 3 iLink + 1 心跳)', () => {
+  it('registers exactly 5 unique endpoints (4 原有 + 1 心跳；iLink 已删除)', () => {
     const stack = (wechatRouter as any).stack;
     const paths = [...new Set(stack.filter((l: any) => l.route).map((l: any) => l.route.path))];
     // 原有 4：qr-bind / draft-review-poll / scheduler-tick / draft-generate
     expect(paths).toContain('/draft-generate');
-    // P4 Step1 新增 3 个 iLink 端点
-    expect(paths).toContain('/ilink-login-start');
-    expect(paths).toContain('/ilink-login-status');
-    expect(paths).toContain('/ilink-poller-start');
+    // iLink 个人号通道已彻底删除（用户否决，决策 9d2234ba）—— 不应再注册任何 ilink-* 端点
+    expect(paths).not.toContain('/ilink-login-start');
+    expect(paths).not.toContain('/ilink-poller-start');
     // 进程守护：监听心跳上报端点
     expect(paths).toContain('/listener-heartbeat');
-    expect(paths.length).toBe(8);
+    expect(paths.length).toBe(5);
   });
 });
