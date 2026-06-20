@@ -1688,6 +1688,8 @@ def run_verify_silent(args: argparse.Namespace) -> int:
       3. 默认：跑一次真实 _open_chat + _uia_send（target 缺省取会话列表第一个）；
          --no-send 只读模式（开机自检用）：不开会话不发消息，只固定采样 N 秒，验窗口持续屏外；
       4. intrude==0 → 打印 SILENT 退出码 0，否则 NOT SILENT（露头次数×5ms 估时 + worst left）退出码 1。
+      5. 量完把窗口还原回自检前的状态/位置（minimized→最小化 / tray→托盘 / visible→原坐标），
+         别把客户机微信窗口留在屏外（诊断工具不应改变窗口最终状态）。
     """
     if platform.system() != "Windows":
         emit_json({"ok": False, "error": "verify-silent 必须在 Windows 真机 session 1 运行"})
@@ -1750,6 +1752,16 @@ def run_verify_silent(args: argparse.Namespace) -> int:
             return 1
         _log(f"verify-silent: 目标会话 = {target!r}")
 
+    # 记录窗口自检前的状态/位置，量完还原回去（开机自检是诊断工具，不该把客户机微信窗口留在屏外）
+    _orig_iconic = bool(_u32.IsIconic(main_hwnd))
+    _orig_visible = bool(_u32.IsWindowVisible(main_hwnd))
+    _orig_rc = _wt.RECT()
+    try:
+        _u32.GetWindowRect(main_hwnd, _ct.byref(_orig_rc))
+    except Exception:
+        pass
+    _orig_left, _orig_top = _orig_rc.left, _orig_rc.top
+
     # 先把窗口放到屏外（用生效的 OFFSCREEN_X）
     try:
         if _u32.IsIconic(main_hwnd):
@@ -1798,6 +1810,22 @@ def run_verify_silent(args: argparse.Namespace) -> int:
     finally:
         stop_flag["stop"] = True
         th.join(timeout=2)
+
+    # 量完把窗口还原回自检前的状态/位置（别把客户机微信窗口留在屏外）
+    try:
+        if _orig_iconic:
+            _u32.ShowWindow(main_hwnd, 6)   # SW_MINIMIZE：原来最小化 → 还原成最小化
+        elif not _orig_visible:
+            _u32.ShowWindow(main_hwnd, 0)   # SW_HIDE：原来在托盘 → 放回托盘
+        else:
+            _SWP_R = 0x0001 | 0x0004 | 0x0010   # NOSIZE | NOZORDER | NOACTIVATE
+            _u32.SetWindowPos(main_hwnd, 0, _orig_left, _orig_top, 0, 0, _SWP_R)  # 原来可见 → 挪回原坐标
+        _log(
+            f"verify-silent: 已还原窗口到量测前（iconic={_orig_iconic} "
+            f"visible={_orig_visible} left={_orig_left}）"
+        )
+    except Exception as _re:
+        _log(f"verify-silent: 还原窗口异常: {_re}")
 
     intrude = stats["intrude"]
     samples = stats["samples"]
