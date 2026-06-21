@@ -385,6 +385,80 @@ export function checkVerifySilent(moduleDir?: string): CheckOutcome {
   }
 }
 
+// ---------- 带发送接缝自检：--verify-silent --target 文件传输助手（真发一条到自己）----------
+// 只读自检（--no-send）不覆盖真送达 + 切会话后焦点归还，必须带发送才触发那两条。给「文件传输助手」
+// 发（自己的会话，不打扰真人），读回确认原文真出现（真送达）+ 操作后焦点还回（不抢焦点）。
+
+// 解析 --verify-silent --target（带发送）的输出 → 真送达+焦点归还结论（纯函数，CI 可测）。
+//   sent:true && restored:true → ok（DELIVERED + 焦点归还）
+//   sent:false                 → 红（NOT DELIVERED，真送达失败）
+//   sent:true && restored:false→ 红（NOT RESTORED，送达了但焦点没还回）
+//   error 含环境未就绪关键词    → skip（微信未登录/找不到会话/非Windows/pywinauto 缺）
+//   解析不出                    → skip
+export function interpretVerifyDelivery(exitCode: number, stdout: string): CheckOutcome {
+  const parsed = parseLastJsonLine(stdout);
+  if (parsed && typeof parsed.error === 'string') {
+    const err = parsed.error;
+    if (/NO_WINDOW|未登录|必须在 Windows|pywinauto|找不到.*微信|找不到目标会话/.test(err)) {
+      return { ok: true, skipped: true, found: err };
+    }
+    return { ok: false, fixGuide: `带发送自检异常：${err}` };
+  }
+  if (parsed && parsed.sent === false) {
+    return {
+      ok: false,
+      found: 'NOT_DELIVERED',
+      fixGuide:
+        '微信客服真送达失败（NOT DELIVERED）— 发出后读回会话预览未确认原文，' +
+        '检查 _uia_send / 会话切换 / _read_session_preview。',
+    };
+  }
+  if (parsed && parsed.sent === true && parsed.restored === false) {
+    return {
+      ok: false,
+      found: 'NOT_RESTORED',
+      fixGuide:
+        '消息已送达但前台焦点未还回（NOT RESTORED）— 检查 _set_foreground_window 的三方 AttachThreadInput。',
+    };
+  }
+  if (parsed && parsed.sent === true && parsed.restored === true) {
+    return { ok: true, found: 'DELIVERED' };
+  }
+  void exitCode;
+  return { ok: true, skipped: true };
+}
+
+// 跑带发送自检：spawn listen_chat.py --verify-silent --target 文件传输助手（真发到自己，验真送达+焦点归还）。
+// MOCK_VERIFY_DELIVERY env（delivered/not_delivered/skip）可在任何平台注入；非 Windows 无 MOCK 时 skip。
+export function checkVerifyDelivery(moduleDir?: string): CheckOutcome {
+  const mock = process.env.MOCK_VERIFY_DELIVERY;
+  if (mock === 'delivered') return { ok: true, found: 'DELIVERED' };
+  if (mock === 'not_delivered') {
+    return { ok: false, found: 'NOT_DELIVERED', fixGuide: '微信客服真送达失败（NOT DELIVERED）。' };
+  }
+  if (mock === 'skip') return { ok: true, skipped: true };
+  if (process.platform !== 'win32') return { ok: true, skipped: true };
+
+  const dir = moduleDir ?? __dirname;
+  const python = getModulePython(dir);
+  const script = path.join(dir, 'wechat-rpa', 'listen_chat.py');
+  if (!fs.existsSync(script)) {
+    return { ok: true, skipped: true, found: 'listen_chat.py 缺失，跳过带发送自检' };
+  }
+  try {
+    const r = spawnSync(
+      python,
+      [script, '--verify-silent', '--target', '文件传输助手', '--message', '[preflight-selfcheck] 真送达+焦点自检'],
+      { encoding: 'utf-8', windowsHide: true, timeout: 45_000 },
+    );
+    const exitCode = typeof r.status === 'number' ? r.status : 1;
+    const stdout = `${r.stdout ?? ''}\n${r.stderr ?? ''}`;
+    return interpretVerifyDelivery(exitCode, stdout);
+  } catch (e) {
+    return { ok: true, skipped: true, found: `带发送自检无法运行：${(e as Error).message}` };
+  }
+}
+
 // ---------- 自动修复：下载工具 ----------
 
 export function downloadFile(url: string, dest: string): Promise<void> {
@@ -557,24 +631,31 @@ export async function runPreflight(moduleDir?: string): Promise<ModulePreflightR
 
   // 静默接缝自检（只读，不发消息）。微信没登录/没装时 skip，不误判红。
   const silent = checkVerifySilent(dir);
+  // 带发送接缝自检（真发到「文件传输助手」，验真送达 + 焦点归还）。环境不就绪 skip 不误红。
+  const delivery = checkVerifyDelivery(dir);
 
   const checks = {
     wechat_version: wechat.ok,
     pywinauto: pyw.ok,
     memory: mem.ok,
     verify_silent: silent.ok,
+    verify_delivery: delivery.ok,
   };
 
-  // 透出到 module_status.reason（车队看板可见）：微信版本号 + 静默状态。
+  // 透出到 module_status.reason（车队看板可见）：微信版本号 + 静默 + 真送达状态。
   const summaryParts: string[] = [];
   if (wechat.found) summaryParts.push(`微信 ${wechat.found}`);
   else if (wechat.skipped) summaryParts.push('微信版本未检(非Windows)');
   if (silent.found === 'SILENT') summaryParts.push('静默 SILENT');
   else if (silent.found === 'NOT_SILENT') summaryParts.push('静默 NOT-SILENT');
   else if (silent.skipped) summaryParts.push('静默 跳过');
+  if (delivery.found === 'DELIVERED') summaryParts.push('送达 DELIVERED');
+  else if (delivery.found === 'NOT_DELIVERED') summaryParts.push('送达 NOT-DELIVERED');
+  else if (delivery.found === 'NOT_RESTORED') summaryParts.push('焦点 NOT-RESTORED');
+  else if (delivery.skipped) summaryParts.push('送达 跳过');
   const summary = summaryParts.join(' / ');
 
-  if (wechat.ok && pyw.ok && mem.ok && silent.ok) {
+  if (wechat.ok && pyw.ok && mem.ok && silent.ok && delivery.ok) {
     const okReasonParts = [summary, running.fixGuide].filter(Boolean);
     const okReason = okReasonParts.join(' / ');
     return {
@@ -585,7 +666,7 @@ export async function runPreflight(moduleDir?: string): Promise<ModulePreflightR
     };
   }
 
-  const fixGuide = [wechat, pyw, mem, silent]
+  const fixGuide = [wechat, pyw, mem, silent, delivery]
     .filter((c) => !c.ok && c.fixGuide)
     .map((c) => c.fixGuide)
     .join('\n');
