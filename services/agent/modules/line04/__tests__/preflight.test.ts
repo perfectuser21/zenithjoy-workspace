@@ -21,6 +21,8 @@ import {
   checkWechatRunning,
   checkVerifySilent,
   interpretVerifySilent,
+  checkVerifyDelivery,
+  interpretVerifyDelivery,
   downloadFile,
   installWeChat,
   installPywinauto,
@@ -852,5 +854,81 @@ describe('runPreflight 透出微信版本 + 静默状态到 reason（薄上报�
     const r = await runPreflight(os.tmpdir());
     expect(r.checks.verify_silent).toBe(false);
     expect(r.ok).toBe(false);
+  });
+});
+
+describe('interpretVerifyDelivery — 带发送自检解析（真送达 + 焦点归还，纯函数）', () => {
+  it('sent:true + restored:true → ok（DELIVERED + 焦点归还）', () => {
+    const out = JSON.stringify({ ok: true, sent: true, silent: true, restored: true, target: '文件传输助手' });
+    const r = interpretVerifyDelivery(0, out);
+    expect(r.ok).toBe(true);
+    expect(r.found).toBe('DELIVERED');
+  });
+
+  it('sent:false → 红（NOT DELIVERED，真送达失败）', () => {
+    const out = JSON.stringify({ ok: true, sent: false, silent: true, restored: true, target: '文件传输助手' });
+    const r = interpretVerifyDelivery(1, out);
+    expect(r.ok).toBe(false);
+    expect(r.found).toBe('NOT_DELIVERED');
+    expect(r.fixGuide).toBeTruthy();
+  });
+
+  it('sent:true + restored:false → 红（送达了但焦点没还回）', () => {
+    const out = JSON.stringify({ ok: true, sent: true, silent: false, restored: false, target: '文件传输助手' });
+    const r = interpretVerifyDelivery(1, out);
+    expect(r.ok).toBe(false);
+    expect(r.found).toBe('NOT_RESTORED');
+    expect(r.fixGuide).toBeTruthy();
+  });
+
+  it('error 含环境未就绪关键词 → skip（不误判红）', () => {
+    const out = JSON.stringify({ ok: false, error: 'NO_WINDOW（微信未登录 / 不在当前 session）' });
+    const r = interpretVerifyDelivery(1, out);
+    expect(r.ok).toBe(true);
+    expect(r.skipped).toBe(true);
+  });
+
+  it('error 找不到目标会话 → skip（文件传输助手会话不在也不误红）', () => {
+    const out = JSON.stringify({ ok: false, error: '找不到目标会话（target=文件传输助手）' });
+    const r = interpretVerifyDelivery(1, out);
+    expect(r.ok).toBe(true);
+    expect(r.skipped).toBe(true);
+  });
+
+  it('解析不出 JSON → skip（不误判红）', () => {
+    const r = interpretVerifyDelivery(1, '乱码乱码\n系统找不到路径');
+    expect(r.ok).toBe(true);
+    expect(r.skipped).toBe(true);
+  });
+});
+
+describe('checkVerifyDelivery — MOCK_VERIFY_DELIVERY env 注入（跨平台可测）', () => {
+  afterEach(() => {
+    delete process.env.MOCK_VERIFY_DELIVERY;
+  });
+
+  it('mock=delivered → ok', () => {
+    process.env.MOCK_VERIFY_DELIVERY = 'delivered';
+    expect(checkVerifyDelivery().ok).toBe(true);
+  });
+
+  it('mock=not_delivered → 红', () => {
+    process.env.MOCK_VERIFY_DELIVERY = 'not_delivered';
+    expect(checkVerifyDelivery().ok).toBe(false);
+  });
+
+  it('mock=skip → skip', () => {
+    process.env.MOCK_VERIFY_DELIVERY = 'skip';
+    const r = checkVerifyDelivery();
+    expect(r.ok).toBe(true);
+    expect(r.skipped).toBe(true);
+  });
+
+  it('非 Windows 无 mock → skip（不误判红）', () => {
+    const r = checkVerifyDelivery();
+    if (process.platform !== 'win32') {
+      expect(r.ok).toBe(true);
+      expect(r.skipped).toBe(true);
+    }
   });
 });
