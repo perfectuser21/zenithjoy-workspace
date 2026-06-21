@@ -30,7 +30,7 @@ def test_user_facing_params_exist():
 
 def test_default_values_are_safe():
     """默认值必须是合理的安全值"""
-    assert config.OFFSCREEN_REPLY is True, "默认必须静默后台，不能台前弹窗"
+    assert config.OFFSCREEN_REPLY is False, "默认必须窗口可见模式（B 方案，PrepPRD 06211342），不藏屏外"
     # 离屏坐标必须【真在屏外】——按机器几何判断，不写死阈值：整窗(默认宽1200)在虚拟屏左界之外；
     # 非 Windows（CI）取不到几何 → 回退到兜底负值 OFFSCREEN_X_FALLBACK。
     import ctypes as _ct
@@ -64,6 +64,6 @@ def test_machine_override_non_existent_file(tmp_path, monkeypatch):
     import importlib
     monkeypatch.setenv("ZENITHJOY_CORE_DIR", str(tmp_path / "nonexistent"))
     importlib.reload(config)
-    assert config.OFFSCREEN_REPLY is True
+    assert config.OFFSCREEN_REPLY is False
     # 无 machine.config 覆盖时，OFFSCREEN_X == 几何推导的默认值（真机推导/非Windows回退），不写死 -2600
     assert config.OFFSCREEN_X == config.compute_offscreen_x()

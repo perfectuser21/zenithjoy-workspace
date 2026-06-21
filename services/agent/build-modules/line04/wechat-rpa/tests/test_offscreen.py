@@ -123,18 +123,20 @@ def test_verify_silent_no_send_non_windows_guard_no_send(monkeypatch):
     assert listen_chat.run_verify_silent(ns) == 1
 
 
-def test_verify_silent_restores_window_after_measure():
-    """run_verify_silent 量完必须把窗口还原回量测前状态/位置（开机自检不该把客户机微信窗口留屏外）。
+def test_verify_silent_samples_foreground_not_offscreen():
+    """run_verify_silent（B 方案重定义）：窗口可见模式，采样前台焦点判归还，绝不把窗口移屏外。
 
-    源码级回归守卫：真机还原行为(碰真窗口)proven-to-fire 在 xian-rog 跑；这里钉住"还原代码不被删"。
+    方向反转（PrepPRD §0）：旧「移屏外+采样坐标碰可见区」→ 新「窗口可见+采样前台焦点是否归还」。
+    源码级回归守卫：真机焦点归还行为 proven-to-fire 在 xian-rog 跑；这里钉住「采样焦点 + 不移屏外」，
+    任何把哨兵改回「移窗口屏外」的回退都让它变红。
     """
     import inspect
     import listen_chat
     src = inspect.getsource(listen_chat.run_verify_silent)
-    # 量测前记录原状态（iconic/visible/坐标）
-    assert "_orig_iconic" in src and "_orig_visible" in src
-    # 量测后还原：minimized→SW_MINIMIZE(6) / tray→SW_HIDE(0) / visible→SetWindowPos 回原坐标
-    assert "ShowWindow(main_hwnd, 6)" in src
-    assert "ShowWindow(main_hwnd, 0)" in src
-    assert "_orig_left" in src and "SetWindowPos" in src
-    assert "已还原窗口到量测前" in src
+    # 采样前台焦点（不抢焦点判定），用 _focus_steal_verdict 判 SILENT
+    assert "GetForegroundWindow" in src
+    assert "_focus_steal_verdict" in src
+    assert "fg_before" in src and "fg_after" in src
+    # 不再把窗口移屏外（旧藏窗口方向已废）：源码不得含离屏坐标推导/移动
+    assert "effective_x" not in src, "verify-silent 不应再把窗口移屏外（藏窗口已废）"
+    assert "compute_offscreen_x" not in src, "verify-silent 不应再推导离屏坐标"
