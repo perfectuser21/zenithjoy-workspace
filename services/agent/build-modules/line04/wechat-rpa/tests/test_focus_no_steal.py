@@ -139,3 +139,66 @@ def test_offscreen_reply_defaults_to_visible():
     import config
 
     assert config.OFFSCREEN_REPLY is False, "默认必须是窗口可见模式（OFFSCREEN_REPLY=False）"
+
+
+# ─── 还焦点必须用 AttachThreadInput 绕 Windows SetForegroundWindow 限制 ──────────
+
+
+def test_set_foreground_uses_attachthreadinput(monkeypatch):
+    """真机 bug（2026-06-21 xian-pc 实测 NOT SILENT）：裸 SetForegroundWindow 受 Windows 限制，
+    非前台进程切不动别的窗口 → 切会话后微信占前台，焦点没还回。必须用 AttachThreadInput
+    把当前线程附到当前前台窗口线程后再 SetForegroundWindow，焦点归还才真生效。
+
+    任何把还焦点退回裸 SetForegroundWindow 的回退让本测试变红。
+    """
+    import ctypes
+
+    calls = []
+
+    class _U32:
+        def GetForegroundWindow(self):
+            return 999  # 当前前台（切会话后是微信）
+
+        def GetWindowThreadProcessId(self, h, p):
+            return 5  # 当前前台窗口的线程 id
+
+        def AttachThreadInput(self, a, b, f):
+            calls.append(("Attach", bool(f)))
+            return 1
+
+        def SetForegroundWindow(self, h):
+            calls.append(("SetFg", h))
+            return 1
+
+    class _K32:
+        def GetCurrentThreadId(self):
+            return 7
+
+    class _WD:
+        user32 = _U32()
+        kernel32 = _K32()
+
+    monkeypatch.setattr(ctypes, "windll", _WD(), raising=False)
+    listen_chat._set_foreground_window(100)
+
+    assert ("SetFg", 100) in calls, "必须把焦点设给目标窗口 hwnd=100"
+    assert ("Attach", True) in calls and ("Attach", False) in calls, \
+        "必须 AttachThreadInput 配对(True 后 False)绕过 Windows 前台限制"
+
+
+# ─── verify-silent 独立跑必须自激活 SPI（哨兵/开机自检才能找到微信窗口）────────────
+
+
+def test_verify_silent_activates_uia_before_finding_window():
+    """真机 gap（2026-06-21 xian-pc NO_WINDOW）：微信 4.x 需先激活 SPI_SETSCREENREADER 才暴露
+    UIA 控件树。真模式 main loop 会激活，但 run_verify_silent 独立跑（哨兵/开机自检）若不自激活，
+    get_main_window 找不到窗口 → NO_WINDOW。run_verify_silent 必须在 get_main_window 前调
+    _activate_uia()。任何去掉的回退让本测试变红。
+    """
+    import inspect
+
+    src = inspect.getsource(listen_chat.run_verify_silent)
+    assert "_activate_uia()" in src, "verify-silent 必须自激活 SPI（独立跑/哨兵自检才找得到窗口）"
+    # 锚点用 import 语句（唯一，不被注释里的字样干扰）
+    assert src.index("_activate_uia()") < src.index("from find_weixin import get_main_window"), \
+        "_activate_uia 必须在 get_main_window 导入/调用之前"

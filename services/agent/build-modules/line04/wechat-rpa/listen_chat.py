@@ -565,17 +565,38 @@ def _get_foreground_window() -> int:
 
 
 def _set_foreground_window(hwnd: int) -> None:
-    """把前台焦点还给 hwnd（不抢用户正在用的窗口）。空 hwnd / 非 Windows → noop。"""
+    """把前台焦点还给 hwnd（不抢用户正在用的窗口）。空 hwnd / 非 Windows → noop。
+
+    真机修正（2026-06-21 xian-pc 实测 NOT SILENT）：裸 SetForegroundWindow 受 Windows 限制——
+    非前台进程切不动别的窗口（切会话后微信占前台，焦点没还回）。用 AttachThreadInput 把当前
+    线程附到「当前前台窗口」线程后再 SetForegroundWindow，绕过限制，焦点归还才真生效。
+    """
     if not hwnd:
         return
     import ctypes as _ct
     wd = getattr(_ct, "windll", None)
     if wd is None:
         return
+    u32 = wd.user32
     try:
-        wd.user32.SetForegroundWindow(hwnd)
+        fg = u32.GetForegroundWindow()  # 当前前台（切会话后通常是微信）
+        my_tid = wd.kernel32.GetCurrentThreadId()
+        fg_tid = u32.GetWindowThreadProcessId(fg, None)      # 当前前台（微信）线程
+        tgt_tid = u32.GetWindowThreadProcessId(hwnd, None)   # 目标（操作前窗口）线程
+        # 同时附到当前前台线程 + 目标线程，输入状态共享后 SetForegroundWindow 才不被 Windows 拦
+        u32.AttachThreadInput(my_tid, fg_tid, True)
+        u32.AttachThreadInput(my_tid, tgt_tid, True)
+        try:
+            u32.SetForegroundWindow(hwnd)
+            u32.BringWindowToTop(hwnd)
+        finally:
+            u32.AttachThreadInput(my_tid, tgt_tid, False)
+            u32.AttachThreadInput(my_tid, fg_tid, False)
     except Exception:
-        pass
+        try:
+            u32.SetForegroundWindow(hwnd)
+        except Exception:
+            pass
 
 
 def _safe_hwnd(mw: Any) -> int:
@@ -1093,6 +1114,8 @@ def reply_in_chat(mw: Any, item: Any, reply_text: str, sender: str = "") -> bool
         _restore_window_state(mw, orig_state)
         # Qt 上切会话 Select() 会短暂抢前台 ~2s → 操作完把焦点还给操作前的窗口，不抢用户键鼠焦点
         if _should_restore_foreground(prev_fg, wechat_hwnd):
+            # 等切会话 / _navigate_away 的前台激活落定，再还焦点（否则被晚到的激活覆盖，焦点留在微信）
+            time.sleep(0.3)
             _set_foreground_window(prev_fg)
             _log(f"reply_in_chat: 焦点已归还操作前前台窗口(hwnd={prev_fg})")
 
@@ -1838,6 +1861,11 @@ def run_verify_silent(args: argparse.Namespace) -> int:
 
     _u32 = _ct.windll.user32
 
+    # 微信 4.x 需先激活 SPI_SETSCREENREADER 才暴露 UIA 控件树。真模式 main loop 会激活，
+    # 但独立跑 verify-silent（哨兵/开机自检）必须自激活，否则 get_main_window 找不到窗口（NO_WINDOW）。
+    _activate_uia()
+    time.sleep(0.5)
+
     try:
         from find_weixin import get_main_window as _gmw
         mw = _gmw()
@@ -1918,7 +1946,8 @@ def run_verify_silent(args: argparse.Namespace) -> int:
         stop_flag["stop"] = True
         th.join(timeout=2)
 
-    # 操作后前台窗口（reply_in_chat 内部已尝试把焦点还给 fg_before）
+    # 操作后前台窗口（reply_in_chat 内部已尝试把焦点还给 fg_before）。等焦点切换落定再读最终态。
+    time.sleep(0.5)
     try:
         fg_after = int(_u32.GetForegroundWindow())
     except Exception:
