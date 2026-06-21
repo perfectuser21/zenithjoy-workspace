@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # offscreen-version-gate-smoke.sh
-# Sprint cp-06190205 — OFFSCREEN_X 几何推导 + 静默自检 + line04 模块版本 1.0.46 一致性 smoke
+# Sprint cp-06190205 — OFFSCREEN_X 几何推导 + 静默自检 + line04 模块版本 1.0.47 一致性 smoke
 #
 # 验证链路（不依赖运行中的服务，纯仓内一致性 + 推导逻辑真链路）：
 #   1. node 解析 services/agent/modules/line04/manifest.json → version == EXPECTED
@@ -13,7 +13,7 @@
 set -uo pipefail
 
 REPO_ROOT="$(cd "$(dirname "$0")/../../../.." && pwd)"
-EXPECTED="1.0.46"
+EXPECTED="1.0.47"
 echo "offscreen-version-gate-smoke: 期望 line04 版本 = $EXPECTED (repo=$REPO_ROOT)"
 
 command -v node >/dev/null 2>&1   || { echo "FAIL: 缺 node"; exit 6; }

@@ -74,10 +74,11 @@ class _TitleMW:
 
     WIN = _Rect(0, 0, 800, 600)
 
-    def __init__(self, open_title: str, edit=None):
+    def __init__(self, open_title: str, edit=None, last_message: str = ""):
         self.element_info = _EI()
         self._open_title = open_title
         self._edit = edit
+        self._last_message = last_message
 
     def rectangle(self):
         return self.WIN
@@ -89,6 +90,10 @@ class _TitleMW:
             # 左侧会话列表项（left=10），即使名字撞上也不能被当成标题
             list_item = _FakeText("苏", _Rect(10, 20, 180, 50))
             return [title, list_item]
+        if control_type == "ListItem":
+            # 真送达验证读回源：目标会话项 element_info.name 含最后消息预览（发送成功后已更新）
+            preview = f"{self._open_title}\n{self._last_message}\n12:45"
+            return [_FakeText(preview, _Rect(10, 100, 180, 140))]
         if control_type == "Edit" and self._edit is not None:
             return [self._edit]
         return []
@@ -162,8 +167,9 @@ def test_aborts_when_open_chat_is_wrong_person(_stub_uia_send):
 
 
 def test_sends_when_open_chat_matches_sender(_stub_uia_send):
-    """正常路径：Invoke 后打开的就是『于锦』→ 校验通过 → 正常发送。"""
-    mw = _TitleMW(open_title="于锦")
+    """正常路径：Invoke 后打开的就是『于锦』→ 校验通过 → 发送 → 读回会话预览确认真送达 → True。"""
+    # last_message 模拟发送成功后该会话项预览已更新为刚发的原文（供真送达验证读回确认）
+    mw = _TitleMW(open_title="于锦", last_message="你好于锦")
     item = _FakeItem()
 
     ok = listen_chat.reply_in_chat(mw, item, "你好于锦", sender="于锦")

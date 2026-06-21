@@ -90,11 +90,11 @@ def test_ensure_tray_visible_hidden_calls_showna():
 
 
 def test_ensure_tray_visible_visible_no_call():
-    """窗口可见且非最小化时 _ensure_tray_visible 不得调 ShowWindow。
+    """窗口可见且非最小化时 _ensure_tray_visible 不移动、不抢焦点。
 
-    v1.0.29 及以前：返回 ''，不做任何操作。
-    v1.0.30 fix：_OFFSCREEN_REPLY=True 时返回 'visible'（移到离屏），但 ShowWindow 仍不调。
-    断言更新为 v1.0.30 行为。
+    B 方案默认（OFFSCREEN_REPLY=False，PrepPRD 06211342）：可见窗口返回 ''，完全不动
+    （不移屏外、不调 ShowWindow/SetWindowPos）。窗口留屏上用户能看。
+    （旧 OFFSCREEN_REPLY=True 离屏路径返回 'visible' 的行为由 test_visible_bg_fix.py 显式 patch 覆盖。）
     """
     mw = _make_mock_mw(hwnd=99)
     user32 = MagicMock()
@@ -104,9 +104,10 @@ def test_ensure_tray_visible_visible_no_call():
     with _mock_windll(user32), patch("time.sleep"):
         result = listen_chat._ensure_tray_visible(mw)
 
-    # v1.0.30：可见窗口 _OFFSCREEN_REPLY=True 时移到离屏返回 'visible'
-    assert result == 'visible'
-    user32.ShowWindow.assert_not_called()  # ShowWindow 仍不调（用 SetWindowPos 移位）
+    # B 方案默认可见模式：可见非最小化窗口 → 返回 ''，不移动
+    assert result == ''
+    user32.ShowWindow.assert_not_called()
+    user32.SetWindowPos.assert_not_called()
 
 
 def test_restore_tray_calls_sw_hide():

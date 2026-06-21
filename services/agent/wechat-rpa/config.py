@@ -33,10 +33,15 @@ if hasattr(sys.stdout, "reconfigure"):
 # ══════════════════════════════════════════════════════════
 
 # ── 回复模式 ──────────────────────────────────────────────
-OFFSCREEN_REPLY: bool = True
-"""True = 静默后台回复（微信窗口移到屏外，用户看不见操作过程）
-   False = 台前回复（微信窗口会弹出到前台，用户可见，会闪屏）
-   【常见问题】双屏幕时窗口移到 OFFSCREEN_X 坐标可能仍在可视区 → 调 OFFSCREEN_X"""
+OFFSCREEN_REPLY: bool = False
+"""默认 False = 窗口可见模式（B 方案，PrepPRD 06211342）：微信窗口留屏上用户随时能看，
+   回复全程纯 UIA SetValue+PostMessage（不碰系统鼠标键盘）+ NOACTIVATE（不激活），
+   操作完把前台焦点还给操作前的窗口（不抢用户键鼠焦点）。配「真送达读回验证」确认真送达。
+
+   True = 旧「藏窗口」离屏模式（微信移到屏外 -2600 + DWM cloak）—— 已知错方向（PrepPRD §0.3）：
+   用户看不了、没法验证送达、还会卡死（窗口留屏外+cloak 打不开）。保留为可选开关仅供回退，
+   默认不用。新「静默」语义 = 不抢焦点，而非藏窗口（memory wechat_qt_uia_works_dont_downgrade）。
+   【常见问题】True 模式双屏幕时窗口移到 OFFSCREEN_X 坐标可能仍在可视区 → 调 OFFSCREEN_X"""
 
 OFFSCREEN_X_FALLBACK: int = -2600
 """几何推导不可用（非 Windows / GetSystemMetrics 失败）时的兜底离屏 X。

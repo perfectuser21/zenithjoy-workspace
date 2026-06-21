@@ -52,7 +52,7 @@ except Exception as exc:  # pragma: no cover
 FAIL_PLACEHOLDER = "AI 生成失败（请人审决定是否重试）"
 
 try:
-    import config  # type: ignore  # verify-silent 用 config.compute_offscreen_x / rect_visible
+    import config  # type: ignore  # 读 OFFSCREEN_* / 频控 / 版本等配置
 except Exception:
     config = None  # type: ignore[assignment]
 
@@ -552,6 +552,70 @@ def _set_clipboard_text(text: str) -> bool:
         return False
 
 
+def _get_foreground_window() -> int:
+    """读当前前台窗口 hwnd（操作前记录，操作后据此还焦点）。非 Windows/失败 → 0。"""
+    import ctypes as _ct
+    wd = getattr(_ct, "windll", None)
+    if wd is None:
+        return 0
+    try:
+        return int(wd.user32.GetForegroundWindow())
+    except Exception:
+        return 0
+
+
+def _set_foreground_window(hwnd: int) -> None:
+    """把前台焦点还给 hwnd（不抢用户正在用的窗口）。空 hwnd / 非 Windows → noop。"""
+    if not hwnd:
+        return
+    import ctypes as _ct
+    wd = getattr(_ct, "windll", None)
+    if wd is None:
+        return
+    try:
+        wd.user32.SetForegroundWindow(hwnd)
+    except Exception:
+        pass
+
+
+def _safe_hwnd(mw: Any) -> int:
+    try:
+        return int(mw.element_info.handle or 0)
+    except Exception:
+        return 0
+
+
+def _should_restore_foreground(prev_fg: int, wechat_hwnd: int) -> bool:
+    """窗口可见模式：操作后要不要把前台焦点还给操作前的前台窗口（不抢用户正在用的窗口）。
+
+    Qt 上切会话只能 Select()，会短暂抢前台 ~2s → 操作完把焦点还回去抵消（PrepPRD 需求 2）。
+    仅当操作前前台是「别的窗口」（prev_fg 有效且 != 微信）才还；前台本来就是微信、或拿不到
+    （prev_fg=0）则不动。顶层零-pywinauto 纯函数。
+    """
+    return bool(prev_fg) and prev_fg != wechat_hwnd
+
+
+def _focus_steal_verdict(
+    fg_before: int, fg_after: int, steal_samples: int, total_samples: int
+) -> dict:
+    """焦点「静默」判定（替代旧『窗口不碰可见区』）：操作后前台焦点是否归还。
+
+    新定义（PrepPRD §0 / memory wechat_qt_uia_works_dont_downgrade）：silent = 不抢前台焦点。
+    切会话瞬间 Select() 会短暂抢（steal_samples 量化露头次数，仅诊断），只要操作后焦点最终
+    归还到操作前那个窗口即算 SILENT。
+      - fg_before 已知：要求 fg_after == fg_before（还给原来那个窗口）。
+      - fg_before 未知（0）：只要 fg_after 非零（焦点没被卡死在无效态）即容忍判 SILENT。
+    顶层零-pywinauto 纯函数。
+    """
+    restored = (fg_after == fg_before) if fg_before else (fg_after != 0)
+    return {
+        "silent": bool(restored),
+        "restored": bool(restored),
+        "steal_samples": steal_samples,
+        "total_samples": total_samples,
+    }
+
+
 def _force_foreground(hwnd: int) -> None:
     """TOPMOST + AttachThreadInput + SetForegroundWindow 三步拉前台。"""
     import ctypes as _ct
@@ -768,6 +832,54 @@ def _last_bubble_direction(mw: Any) -> Optional[str]:
     return "outgoing" if center >= midline else "incoming"
 
 
+def _delivery_confirmed(readback_text: str, sent_text: str) -> bool:
+    """读回目标会话最后气泡/预览文本，确认发送原文真出现（替代 _uia_send 的 sent=True 自报）。
+
+    血泪修正（06211342 sprint）：_uia_send 返回 True 只是"输入框清空 + 发了 Enter"的自报，
+    不等于真送达。发完必须读回会话确认原文出现才算 DELIVERED；读不到 → 判未送达，下轮重试。
+
+    规范化（去全部空白）后命中规则：
+      - 发送原文整体出现在读回文本里 → 命中。
+      - 微信会话列表预览会截断长消息 → 发送原文前 16 字符（足够独特防误判、又短于预览长度）
+        作为前缀命中也算送达。
+    读不到回读文本 / 发送原文为空 → False（保守，宁可判未送达重试，不假报成功）。
+    顶层零-pywinauto 纯函数（同 _parse_item_name CI 锚点约定），纯 Fake 注入可测。
+    """
+    s = "".join((sent_text or "").split())
+    r = "".join((readback_text or "").split())
+    if not s or not r:
+        return False
+    if s in r:
+        return True
+    if len(s) >= 16:
+        return s[:16] in r
+    return False
+
+
+def _read_session_preview(mw: Any, sender: str) -> str:
+    """读 sender 会话项的 element_info.name（含最后消息预览），供真送达验证读回（PrepPRD §5）。
+
+    真机证据：发完读"默忆"会话项 name = '默忆\\nTest 1234 verify\\n12:45'（含最后消息）。
+    会话项 name 首行 == sender 即命中该会话；读不到/sender 空 → 返回 ''（调用方判未送达）。
+    顶层零-pywinauto 纯函数，纯 Fake 注入可测。
+    """
+    want = (sender or "").strip()
+    if not want:
+        return ""
+    try:
+        items = mw.descendants(control_type="ListItem")
+    except Exception:
+        return ""
+    for it in items:
+        try:
+            nm = it.element_info.name or ""
+        except Exception:
+            continue
+        if nm.split("\n")[0].strip() == want:
+            return nm
+    return ""
+
+
 def _post_click_item(item: Any, target_hwnd: int) -> bool:
     """对 item 在 target_hwnd 客户区坐标 PostMessage 左键点击（不抢前台、不依赖焦点）。
 
@@ -927,6 +1039,9 @@ def reply_in_chat(mw: Any, item: Any, reply_text: str, sender: str = "") -> bool
         except Exception:
             return mw
 
+    # 不抢前台焦点（PrepPRD 需求 2）：先记录操作前的前台窗口，操作完还回去。
+    prev_fg = _get_foreground_window()
+    wechat_hwnd = _safe_hwnd(mw)
     # 确保窗口可见，UIA 坐标才有效（_open_chat PostMessage 点击依赖有效坐标）
     orig_state = _ensure_tray_visible(mw)
     try:
@@ -958,12 +1073,28 @@ def reply_in_chat(mw: Any, item: Any, reply_text: str, sender: str = "") -> bool
                 _log(f"reply_in_chat: 发送前复核会话标题≠{sender!r}，中止（防串台）")
                 return False
             if _uia_send(uia_edit, fmw, reply_text):
+                # 真送达验证（替代 _uia_send 的 sent=True 自报，治假阳性）：读回目标会话预览，
+                # 确认发送原文真出现才算 DELIVERED；读不到 → 判未送达，本轮返回 False 下轮重试。
+                # sender 为空（fallback 路径，无目标会话可读）时保持旧行为不强验。
+                if sender:
+                    preview = _read_session_preview(_fresh_mw(), sender)
+                    if not _delivery_confirmed(preview, reply_text):
+                        _log(
+                            f"reply_in_chat: _uia_send 自报成功但读回未确认送达"
+                            f"(preview={preview!r})，判未送达，下轮重试"
+                        )
+                        return False
+                    _log(f"reply_in_chat: 真送达确认 DELIVERED(sender={sender!r})")
                 _navigate_away(fmw)
                 return True
     except Exception as exc:
         _log(f"reply_in_chat: 失败: {exc}")
     finally:
         _restore_window_state(mw, orig_state)
+        # Qt 上切会话 Select() 会短暂抢前台 ~2s → 操作完把焦点还给操作前的窗口，不抢用户键鼠焦点
+        if _should_restore_foreground(prev_fg, wechat_hwnd):
+            _set_foreground_window(prev_fg)
+            _log(f"reply_in_chat: 焦点已归还操作前前台窗口(hwnd={prev_fg})")
 
     _log("reply_in_chat: 发送失败，本轮跳过（下次轮询重试）")
     return False
@@ -978,6 +1109,10 @@ def _pywinauto_available() -> bool:
 
 
 def _emit_version_to_stderr() -> None:
+    # pythonw 下 sys.stderr 为 None：直接 .write 会抛 AttributeError → import 顶层调用时
+    # 整个模块崩溃却不报错，上层脚本读到上次 python.exe 的旧输出 → 假"成功"信号（PrepPRD §5）。
+    if sys.stderr is None:
+        return
     try:
         import pywinauto
 
@@ -1007,8 +1142,8 @@ def parse_args() -> argparse.Namespace:
     ap.add_argument(
         "--verify-silent",
         action="store_true",
-        help="真机静默自检（接缝断言）：推导离屏 X、把窗口放屏外、后台采样窗口坐标、"
-        "跑一次真实 _open_chat+_uia_send，统计是否碰可见区。SILENT→退出码0，NOT SILENT→1。",
+        help="真机静默自检（接缝断言，B 方案）：窗口可见模式下后台采样前台焦点，跑一次真实 "
+        "reply_in_chat，验操作后焦点是否归还操作前窗口（不抢焦点）。SILENT→退出码0，NOT SILENT→1。",
     )
     ap.add_argument(
         "--target",
@@ -1025,8 +1160,8 @@ def parse_args() -> argparse.Namespace:
     ap.add_argument(
         "--no-send",
         action="store_true",
-        help="--verify-silent 只读模式：移屏外 + 采样验静默，不开会话不发消息（开机自检用，"
-        "测核心不变量「窗口持续屏外 + 绝不最小化」）。",
+        help="--verify-silent 只读模式：窗口可见 + 采样前台焦点，不开会话不发消息（开机自检用，"
+        "测核心不变量「前台焦点不被微信卡住」）。",
     )
     ap.add_argument(
         "--silent-sample-seconds",
@@ -1676,20 +1811,21 @@ def run_real_listen(args: argparse.Namespace) -> int:
 
 
 def run_verify_silent(args: argparse.Namespace) -> int:
-    """真机静默自检：客观验证窗口在一次真实发送全程不碰可见区（不靠肉眼）。
+    """真机静默自检（B 方案重定义）：窗口可见模式下，客观验证一次真实发送全程「不抢前台焦点」
+    （操作完焦点归还操作前的窗口），而非旧「窗口藏屏外不碰可见区」。
 
-    这是「微信后台静默发送」功能的接缝断言——代码碰真实世界的那个点（真微信窗口 + 真显示器几何）。
-    逻辑（推导/可见判定）已由 tests/test_offscreen.py 在 CI 验过；本自检验真机接缝，需真微信窗口，
-    必须由 lead 在 session 1 真机跑出 SILENT 才算这个功能 done。
+    新「静默」语义（PrepPRD §0 / memory wechat_qt_uia_works_dont_downgrade）：silent = 不抢焦点。
+    窗口留屏上可见；Qt 上切会话 Select() 会短暂抢前台（focus_steal 量化露头），只要操作后焦点
+    还回操作前那个窗口即 SILENT。这是接缝断言——代码碰真实世界那个点（真微信 + 真前台焦点），
+    必须由 lead 在 session 1 真机跑出 SILENT 才算 done。
 
     流程：
-      1. 读虚拟屏几何（GetSystemMetrics 76/77/78/79），推导/读取有效 OFFSCREEN_X，把窗口放屏外；
-      2. 开后台采样线程每 5ms GetWindowRect，用 config.rect_visible 统计 intrude（碰可见区次数）+ worst left；
-      3. 默认：跑一次真实 _open_chat + _uia_send（target 缺省取会话列表第一个）；
-         --no-send 只读模式（开机自检用）：不开会话不发消息，只固定采样 N 秒，验窗口持续屏外；
-      4. intrude==0 → 打印 SILENT 退出码 0，否则 NOT SILENT（露头次数×5ms 估时 + worst left）退出码 1。
-      5. 量完把窗口还原回自检前的状态/位置（minimized→最小化 / tray→托盘 / visible→原坐标），
-         别把客户机微信窗口留在屏外（诊断工具不应改变窗口最终状态）。
+      1. 记录操作前前台窗口 fg_before = GetForegroundWindow()；
+      2. 开后台采样线程每 5ms GetForegroundWindow，统计 focus_steal（前台 == 微信主窗口的次数）；
+      3. 默认：跑一次真实 reply_in_chat（内部发完会把焦点还给 fg_before + 真送达读回确认）；
+         --no-send 只读模式（开机自检用）：不开会话不发消息，固定采样 N 秒，验前台不被微信卡住；
+      4. 操作后 fg_after = GetForegroundWindow()；_focus_steal_verdict 判 restored
+         → SILENT 退出码 0 / NOT SILENT（焦点未归还）退出码 1。
     """
     if platform.system() != "Windows":
         emit_json({"ok": False, "error": "verify-silent 必须在 Windows 真机 session 1 运行"})
@@ -1699,20 +1835,8 @@ def run_verify_silent(args: argparse.Namespace) -> int:
         return 1
 
     import ctypes as _ct
-    import ctypes.wintypes as _wt
 
     _u32 = _ct.windll.user32
-    gsm = _u32.GetSystemMetrics
-    vleft, vtop = gsm(76), gsm(77)   # SM_X/YVIRTUALSCREEN
-    vw, vh = gsm(78), gsm(79)        # SM_CX/CYVIRTUALSCREEN
-
-    # 推导值（不写死）vs 当前 config 有效值（machine.config.json 可能已覆盖）
-    derived_x = config.compute_offscreen_x()
-    effective_x = _OFFSCREEN_X
-    _log(
-        f"verify-silent: 虚拟屏 vleft={vleft} vtop={vtop} vw={vw} vh={vh} → "
-        f"自动推导 OFFSCREEN_X={derived_x}（当前生效={effective_x}）"
-    )
 
     try:
         from find_weixin import get_main_window as _gmw
@@ -1731,7 +1855,7 @@ def run_verify_silent(args: argparse.Namespace) -> int:
     target = args.target
     item = None
     if no_send:
-        _log("verify-silent: 只读模式(--no-send)，不开会话不发消息，只验窗口持续屏外")
+        _log("verify-silent: 只读模式(--no-send)，不开会话不发消息，只验前台焦点不被微信卡住")
     else:
         try:
             for it in mw.descendants(control_type="ListItem"):
@@ -1752,56 +1876,39 @@ def run_verify_silent(args: argparse.Namespace) -> int:
             return 1
         _log(f"verify-silent: 目标会话 = {target!r}")
 
-    # 记录窗口自检前的状态/位置，量完还原回去（开机自检是诊断工具，不该把客户机微信窗口留在屏外）
-    _orig_iconic = bool(_u32.IsIconic(main_hwnd))
-    _orig_visible = bool(_u32.IsWindowVisible(main_hwnd))
-    _orig_rc = _wt.RECT()
+    # 记录操作前前台窗口（窗口可见模式不移动窗口；自检完焦点应归还到它，由 reply_in_chat 内部完成）
     try:
-        _u32.GetWindowRect(main_hwnd, _ct.byref(_orig_rc))
+        fg_before = int(_u32.GetForegroundWindow())
     except Exception:
-        pass
-    _orig_left, _orig_top = _orig_rc.left, _orig_rc.top
+        fg_before = 0
+    _log(f"verify-silent: 操作前前台 hwnd={fg_before}（微信主窗口={main_hwnd}）")
 
-    # 先把窗口放到屏外（用生效的 OFFSCREEN_X）
-    try:
-        if _u32.IsIconic(main_hwnd):
-            _u32.ShowWindow(main_hwnd, 4)   # SW_SHOWNOACTIVATE
-            time.sleep(0.6)
-        _SWP = 0x0001 | 0x0004 | 0x0010     # NOSIZE | NOZORDER | NOACTIVATE
-        _u32.SetWindowPos(main_hwnd, 0, effective_x, _OFFSCREEN_Y, 0, 0, _SWP)
-        time.sleep(0.3)
-    except Exception as exc:
-        _log(f"verify-silent: 初始移屏外异常: {exc}")
-
-    # 后台采样线程：每 5ms 采一次窗口矩形，碰可见区即计数
+    # 后台采样线程：每 5ms 采前台窗口，前台 == 微信主窗口则计 steal（微信抢了前台焦点）
     SAMPLE_INTERVAL = 0.005
     stop_flag = {"stop": False}
-    stats = {"samples": 0, "intrude": 0, "worst_left": effective_x}
+    stats = {"samples": 0, "steal": 0}
 
     def _sampler():
         while not stop_flag["stop"]:
-            rc = _wt.RECT()
             try:
-                _u32.GetWindowRect(main_hwnd, _ct.byref(rc))
+                fg = int(_u32.GetForegroundWindow())
             except Exception:
                 time.sleep(SAMPLE_INTERVAL)
                 continue
             stats["samples"] += 1
-            if rc.left > stats["worst_left"]:
-                stats["worst_left"] = rc.left
-            if config.rect_visible(rc, vleft, vtop, vw, vh):
-                stats["intrude"] += 1
+            if fg == main_hwnd:
+                stats["steal"] += 1
             time.sleep(SAMPLE_INTERVAL)
 
     th = threading.Thread(target=_sampler, daemon=True)
     th.start()
 
-    # no_send：只读采样固定时长（不碰会话不发消息）；否则跑一次真实发送（真碰窗口那段路径）
+    # no_send：只读采样固定时长（不碰会话不发消息）；否则跑一次真实发送（含还焦点 + 真送达读回）
     sent = False
     try:
         if no_send:
             sample_s = max(1, getattr(args, "silent_sample_seconds", 2))
-            _log(f"verify-silent: 只读采样 {sample_s}s（验窗口持续屏外）")
+            _log(f"verify-silent: 只读采样 {sample_s}s（验前台不被微信卡住）")
             time.sleep(sample_s)
         else:
             sent = reply_in_chat(mw, item, args.message, sender=target)
@@ -1811,52 +1918,43 @@ def run_verify_silent(args: argparse.Namespace) -> int:
         stop_flag["stop"] = True
         th.join(timeout=2)
 
-    # 量完把窗口还原回自检前的状态/位置（别把客户机微信窗口留在屏外）
+    # 操作后前台窗口（reply_in_chat 内部已尝试把焦点还给 fg_before）
     try:
-        if _orig_iconic:
-            _u32.ShowWindow(main_hwnd, 6)   # SW_MINIMIZE：原来最小化 → 还原成最小化
-        elif not _orig_visible:
-            _u32.ShowWindow(main_hwnd, 0)   # SW_HIDE：原来在托盘 → 放回托盘
-        else:
-            _SWP_R = 0x0001 | 0x0004 | 0x0010   # NOSIZE | NOZORDER | NOACTIVATE
-            _u32.SetWindowPos(main_hwnd, 0, _orig_left, _orig_top, 0, 0, _SWP_R)  # 原来可见 → 挪回原坐标
-        _log(
-            f"verify-silent: 已还原窗口到量测前（iconic={_orig_iconic} "
-            f"visible={_orig_visible} left={_orig_left}）"
-        )
-    except Exception as _re:
-        _log(f"verify-silent: 还原窗口异常: {_re}")
+        fg_after = int(_u32.GetForegroundWindow())
+    except Exception:
+        fg_after = 0
 
-    intrude = stats["intrude"]
+    verdict = _focus_steal_verdict(fg_before, fg_after, stats["steal"], stats["samples"])
+    silent = verdict["silent"]
+    steal = stats["steal"]
     samples = stats["samples"]
-    worst_left = stats["worst_left"]
-    silent = intrude == 0
+    est_ms = steal * SAMPLE_INTERVAL * 1000
 
     print(
-        f"自动推导 OFFSCREEN_X={derived_x} / 当前生效={effective_x} / "
-        f"采样{samples}次 / 碰可见区={intrude}次",
+        f"操作前前台={fg_before} / 操作后前台={fg_after} / 微信窗口={main_hwnd} / "
+        f"采样{samples}次 / 微信占前台={steal}次（≈{est_ms:.0f}ms）",
         flush=True,
     )
     if silent:
         print("SILENT", flush=True)
     else:
-        # 每次采样间隔 5ms，露头次数 × 5ms 估算可见时长
-        est_ms = intrude * SAMPLE_INTERVAL * 1000
         print(
-            f"NOT SILENT（露头估时≈{est_ms:.0f}ms / worst left={worst_left}）",
+            f"NOT SILENT（焦点未归还操作前窗口：操作后前台={fg_after}≠操作前={fg_before}）",
             flush=True,
         )
     emit_json(
         {
             "ok": True,
             "silent": silent,
+            "restored": verdict["restored"],
             "target": target,
             "sent": sent,
-            "derived_offscreen_x": derived_x,
-            "effective_offscreen_x": effective_x,
+            "fg_before": fg_before,
+            "fg_after": fg_after,
+            "wechat_hwnd": main_hwnd,
             "samples": samples,
-            "intrude": intrude,
-            "worst_left": worst_left,
+            "focus_steal_samples": steal,
+            "focus_steal_est_ms": est_ms,
         }
     )
     return 0 if silent else 1
