@@ -2774,7 +2774,23 @@ agent_suite:
     ci: L3
     status: active
     product: 私域运营
-    note: "Path 4 Step 5 generateChatDraft mode:auto 返回 reply 文本（隐形自动回 J1-J4）"
+    note: "Path 4 Step 5 generateChatDraft mode:auto 返回 reply 文本（隐形自动回 J1-J5；C1 后 J4 改为名单外 not_in_whitelist）"
+
+  - id: wechat-draft-auto-wiring
+    path: apps/api/src/services/__tests__/wechat-draft-auto-wiring.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 私域运营
+    note: "Sprint 06220821 — line04 无审批自动回复闭环 C1：generateChatDraft(mode:auto) 决策层接线运行时断言（W1 监控态不回 / W2 名单外不烧LLM / W3 名单内ON营业时间内回 / W4 营业时间外不回 / W5 超daily_limit不回）"
+
+  - id: line04-cs-route-decision
+    path: apps/api/src/services/wechat/__tests__/cs-route-decision.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 私域运营
+    note: "Sprint 06220821 — line04 无审批自动回复闭环 C1：TS 侧路由真值表 decideReplyRoute/withinBusinessHours（与 auto_reply.py 1:1 镜像，含跨午夜）"
 
   - id: path4-wechat-cs-persona
     path: apps/api/src/services/wechat/__tests__/persona.test.ts

@@ -29,6 +29,7 @@ import {
   consolidate,
   getContactMemory,
 } from '../../../src/services/wechat/contact-memory';
+import { saveAutoAgentConfig } from '../../../src/services/wechat/cs-config-store';
 
 const SENDER = '客户A';
 const WECHAT_ID = 'wx_cs_engine_e2e';
@@ -96,6 +97,16 @@ beforeEach(async () => {
   // 每个 it 从干净记忆起步
   await pool.query('DELETE FROM zenithjoy.wechat_messages WHERE contact_key = $1', [CONTACT_KEY]);
   await pool.query('DELETE FROM zenithjoy.wechat_contact_memory WHERE contact_key = $1', [CONTACT_KEY]);
+  // C1 接线后 mode:auto 受 getAutoAgentConfig 控制（默认关=监控态不返回 reply）。本测试要走到
+  // reply 净化路径，需把自动代理配齐为：总开关 ON + 营业时间全天（00:00–24:00）+ 不限额。
+  // 联系人在白名单内由上面飞书 search mock 命中。这是「适配 C1 正确新行为」，不是绕过白名单。
+  await saveAutoAgentConfig({
+    auto_agent_enabled: true,
+    business_hours_start: '00:00',
+    business_hours_end: '24:00',
+    key_contact_wechat: '',
+    daily_limit: 0,
+  });
   // 飞书 mock：token + 任意 search 命中白名单 + records.create 成功
   (mockedAxios.post as any).mockImplementation(async (url: string) => {
     if (url.includes('tenant_access_token')) {
