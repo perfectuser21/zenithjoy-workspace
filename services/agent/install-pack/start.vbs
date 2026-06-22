@@ -52,7 +52,14 @@ If AgentRunning() Then
   WScript.Quit 0
 End If
 
+' ── 拉起前先确认 start.bat 真实存在（缺失则留痕报修，不静默失败）──
+If Not fso.FileExists(batPath) Then
+  WriteLog "[vbs] ERROR start.bat not found at " & batPath & " — 安装包可能未完整解压"
+  WScript.Quit 1
+End If
+
 ' ── 隐藏拉起 start.bat（windowStyle=0 + 不等待）──
+' batPath 由本 vbs 自身所在目录推导（非外部输入）且整体加引号传入，无注入面。
 WriteLog "[vbs] launch start.bat (hidden, windowStyle=0)"
 shell.Run """" & batPath & """", 0, False
 

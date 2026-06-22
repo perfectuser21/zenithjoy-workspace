@@ -16,25 +16,32 @@ BAT="$AGENT/install-pack/start.bat"
 BUILD="$AGENT/scripts/build-install-pack.sh"
 PKG="$AGENT/package.json"
 
-fail() { echo "FAIL: $1"; exit 1; }
+# 失败统一走 stderr，带 [smoke] 前缀 + 具体原因，便于 CI 日志定位
+fail() { echo "[smoke] FAIL: $1" >&2; exit 1; }
+# require <file> <pattern> <reason>：文件不存在或 pattern 缺失都报明确原因（不静默退出）
+require() {
+  local file="$1" pat="$2" reason="$3"
+  [ -f "$file" ] || fail "$reason（文件不存在: $file）"
+  grep -Eq "$pat" "$file" || fail "$reason（$file 未命中: $pat）"
+}
 
 echo "▶ Step 1/5: start.vbs 无窗口入口 + 日志轮转"
-[ -f "$VBS" ] || fail "start.vbs 不存在"
-grep -Eq '\.Run\b.*,[[:space:]]*0[[:space:]]*,' "$VBS" || fail "start.vbs 未用 windowStyle=0 隐藏启动"
-grep -q 'start\.bat' "$VBS" || fail "start.vbs 未拉起 start.bat"
-grep -q 'launch\.log' "$VBS" || fail "start.vbs 未写 launch.log"
-grep -Eq '1048576|\.Size|GetFile' "$VBS" || fail "start.vbs 缺日志大小轮转"
+require "$VBS" '\.Run\b.*,[[:space:]]*0[[:space:]]*,' "start.vbs 未用 windowStyle=0 隐藏启动"
+require "$VBS" 'start\.bat' "start.vbs 未拉起 start.bat"
+require "$VBS" 'launch\.log' "start.vbs 未写 launch.log"
+require "$VBS" '1048576|\.Size|GetFile' "start.vbs 缺日志大小轮转"
 
 echo "▶ Step 2: 单实例守卫 + 拉起失败留痕"
-grep -q 'Win32_Process' "$VBS" || fail "start.vbs 缺 WMI 进程探测"
-grep -q 'zenithjoy-agent\.exe' "$VBS" || fail "start.vbs 未探测 zenithjoy-agent.exe"
-grep -Eqi 'Quit|skip|already' "$VBS" || fail "start.vbs 未走已运行跳过分支"
-grep -Eqi 'On Error|Err\.|ERROR' "$VBS" || fail "start.vbs 缺错误处理/失败留痕（R2）"
+require "$VBS" 'Win32_Process' "start.vbs 缺 WMI 进程探测"
+require "$VBS" 'zenithjoy-agent\.exe' "start.vbs 未探测 zenithjoy-agent.exe"
+require "$VBS" 'Quit|skip|already' "start.vbs 未走已运行跳过分支"
+require "$VBS" 'On Error|Err\.|ERROR' "start.vbs 缺错误处理/失败留痕（R2）"
 
 echo "▶ Step 3: tray.ts 零 powershell + 走 node-notifier（运行期不 spawn powershell）"
-if grep -q 'powershell' "$TRAY"; then fail "tray.ts 仍含 powershell 通知路径"; fi
-grep -q 'node-notifier' "$TRAY" || fail "tray.ts 未走 node-notifier"
-grep -q 'showModuleError' "$TRAY" || fail "tray.ts 缺 showModuleError"
+[ -f "$TRAY" ] || fail "tray.ts 不存在: $TRAY"
+if grep -q 'powershell' "$TRAY"; then fail "tray.ts 仍含 powershell 通知路径（去黑窗硬保证被破坏）"; fi
+require "$TRAY" 'node-notifier' "tray.ts 未走 node-notifier"
+require "$TRAY" 'showModuleError' "tray.ts 缺 showModuleError"
 ( cd "$AGENT" && npx tsx -e '
   const cp = require("node:child_process");
   let ps = false;
@@ -47,13 +54,14 @@ grep -q 'showModuleError' "$TRAY" || fail "tray.ts 缺 showModuleError"
 ' ) || fail "运行期 showModuleError 触发了 powershell"
 
 echo "▶ Step 4: install-autostart.ps1 指向 start.vbs"
-grep -q 'start\.vbs' "$AUTOSTART" || fail "install-autostart.ps1 未指向 start.vbs"
+require "$AUTOSTART" 'start\.vbs' "install-autostart.ps1 未指向 start.vbs"
 if grep -Eq "Target\s*=.*start\.bat'" "$AUTOSTART"; then fail "自启目标仍是 start.bat"; fi
 
 echo "▶ Step 5: start.bat probe 守卫 + 打包 + 依赖"
-grep -q 'ZJ_LAUNCH_PROBE' "$BAT" || fail "start.bat 缺 ZJ_LAUNCH_PROBE 守卫"
-grep -q 'Get-Process -Name zenithjoy-agent' "$BAT" || fail "start.bat 破坏了单实例 kill 回归"
-grep -q 'install-pack/start\.vbs' "$BUILD" || fail "build-install-pack.sh 未拷 start.vbs"
+require "$BAT" 'ZJ_LAUNCH_PROBE' "start.bat 缺 ZJ_LAUNCH_PROBE 守卫"
+require "$BAT" 'Get-Process -Name zenithjoy-agent' "start.bat 破坏了单实例 kill 回归"
+require "$BUILD" 'install-pack/start\.vbs' "build-install-pack.sh 未拷 start.vbs"
+[ -f "$PKG" ] || fail "package.json 不存在: $PKG"
 node -e "const p=require('./$PKG'); if(!(p.dependencies&&p.dependencies['node-notifier'])) process.exit(1)" \
   || fail "package.json 缺 node-notifier 依赖"
 
