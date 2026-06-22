@@ -3449,3 +3449,35 @@ agent_suite:
     status: active
     product: 中台认证
     note: "发版自洽 — migration runner 幂等/排序纯逻辑：只取 .sql + 文件名升序 + computePending 幂等（重复跑不重复应用、新 migration 被算进、旧文件不报错）。"
+
+  - id: line04-per-cs-config-store-sprint
+    path: sprints/06222337-line04-per-cs-config/tests/cs-account-config-store.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: AI员工
+    note: "Sprint 06222337 每客服配置存取层 oracle：按 wechat_id 物理分行 upsert/read、写一行不覆盖另一行（钉死 Issue defe1a42 串台）、未注册返回 null、默认 auto_agent_enabled=false。"
+
+  - id: line04-per-cs-config-gate-sprint
+    path: sprints/06222337-line04-per-cs-config/tests/cs-config-gate.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: AI员工
+    note: "Sprint 06222337 客户机真发 gate 决策 oracle：resolveSendMode（OFF/ON/拉失败强制 dryrun）+ resolveActiveConfig（断网期缓存继续判定）+ shouldReply（白名单内外）。"
+
+  - id: line04-per-cs-account-config-store-unit
+    path: apps/api/src/services/wechat/__tests__/cs-account-config-store.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: AI员工
+    note: "Sprint 06222337 每客服配置存取层 + 身份校验异常读写单测（vi.mock db/connection，按 wechat_id 隔离 + 补默认值 + identity alert 读写）。"
+
+  - id: line04-per-cs-config-ui-e2e
+    path: apps/dashboard/e2e/per-cs-config.spec.ts
+    type: e2e
+    ci: windows_cloud
+    status: active
+    product: AI员工
+    note: "Sprint 06222337 前台每客服设置区编辑 UI（page.route 拦截后端，验保存 PUT url 含 wxid_csa + body.persona.self_name=萌萌 + 回显），windows-latest job2 跑。"

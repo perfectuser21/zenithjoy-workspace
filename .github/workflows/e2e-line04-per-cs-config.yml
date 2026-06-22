@@ -1,0 +1,64 @@
+name: E2E Line04 Per-CS Config
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'apps/api/**'
+      - 'apps/dashboard/**'
+      - 'services/agent/build-modules/line04/**'
+      - 'sprints/06222337-line04-per-cs-config/**'
+      - '.github/workflows/e2e-line04-per-cs-config.yml'
+
+concurrency:
+  group: e2e-line04-per-cs-config-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend-isolation:                       # job1：后端隔离/身份/gate/迁移（postgres service 仅 Linux）
+    name: job1 — 后端 curl+psql（ubuntu + postgres）
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: cecelia
+          POSTGRES_PASSWORD: cecelia
+          POSTGRES_DB: cecelia
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready --health-interval 10s
+          --health-timeout 5s --health-retries 5
+    env:
+      DATABASE_URL: postgresql://cecelia:cecelia@localhost:5432/cecelia
+      DATABASE_HOST: localhost
+      DATABASE_PORT: '5432'
+      DATABASE_USER: cecelia
+      DATABASE_PASSWORD: cecelia
+      DATABASE_NAME: cecelia
+      BETTER_AUTH_SECRET: ci-only-secret-32-chars-min-not-prod-123
+      BETTER_AUTH_URL: http://localhost:3000
+      ZENITHJOY_INTERNAL_TOKEN: ci-only-internal-token-not-prod
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: package-lock.json
+      - name: Backend E2E（curl 中台 API + psql 验 DB）
+        run: bash sprints/06222337-line04-per-cs-config/e2e-backend-verify.sh
+
+  dashboard-ui:                            # job2：前台每客服设置区 Playwright UI（windows，无 DB）
+    name: job2 — 前台每客服设置区 Playwright UI（windows）
+    runs-on: windows-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Dashboard UI E2E（Playwright，page.route 拦截后端）
+        shell: pwsh
+        run: ./sprints/06222337-line04-per-cs-config/e2e-ui-verify.ps1
