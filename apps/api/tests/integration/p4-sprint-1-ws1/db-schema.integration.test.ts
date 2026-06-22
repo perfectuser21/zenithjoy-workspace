@@ -61,19 +61,39 @@ describe('P4 WS1 — wechat_publish_task + llm_audit [BEHAVIOR]', () => {
     expect(hasCheck).toBe(true);
   });
 
-  it('INSERT approval_source=system 抛 23514 CHECK violation', async () => {
-    let code: string | undefined;
+  // 注意：Line04 无审批自动回复闭环（20260622 迁移）放开 approval_source 容 'system'
+  //（AI 无人审自动发，来源是系统而非飞书人审）。此处由「system 被拒」更新为
+  // 「system 现被接受 + 真正非法值仍 23514 拒」，与新契约 SSOT 一致。
+  it('INSERT approval_source=system 现被接受（自动回复闭环）；非法值仍抛 23514', async () => {
+    // ① system 现可写（迁移放开后）
+    let systemCode: string | undefined;
     try {
       await pool.query(`
         INSERT INTO zenithjoy.wechat_publish_task
           (agent_id, task_type, content, scheduled_at, status, approval_source)
         VALUES
-          (gen_random_uuid(), 'moments', 'test', NOW(), 'draft', 'system')
+          (gen_random_uuid(), 'moments', 'test-system', NOW(), 'draft', 'system')
       `);
     } catch (e: any) {
-      code = e.code;
+      systemCode = e.code;
     }
-    expect(code).toBe('23514');
+    expect(systemCode).toBeUndefined();
+    // 清理本测试插入的行，避免污染其它计数类断言
+    await pool.query(`DELETE FROM zenithjoy.wechat_publish_task WHERE content='test-system'`);
+
+    // ② 真正非法的 approval_source 仍被 CHECK 拒（23514）
+    let badCode: string | undefined;
+    try {
+      await pool.query(`
+        INSERT INTO zenithjoy.wechat_publish_task
+          (agent_id, task_type, content, scheduled_at, status, approval_source)
+        VALUES
+          (gen_random_uuid(), 'moments', 'test', NOW(), 'draft', 'hacker_ai')
+      `);
+    } catch (e: any) {
+      badCode = e.code;
+    }
+    expect(badCode).toBe('23514');
   });
 
   it('zenithjoy.llm_audit INSERT/SELECT roundtrip', async () => {
