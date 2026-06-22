@@ -352,7 +352,7 @@ psql "$DB" -c "INSERT INTO zenithjoy.wechat_cs_config(key,value) VALUES ('person
 
 # 0c. 启 apps/api 等就绪
 ( cd apps/api && npm start >/tmp/api.log 2>&1 & )
-for i in $(seq 1 30); do curl -fs "$API/health" >/dev/null 2>&1 && break; [ "$i" = 30 ] && { echo "FAIL: 中台 30s 未就绪"; cat /tmp/api.log; exit 1; }; sleep 1; done
+for i in $(seq 1 30); do CODE=$(curl -s -o /dev/null -w '%{http_code}' "$API/health" 2>/dev/null || echo 000); [ "$CODE" = "200" ] && break; [ "$i" = 30 ] && { echo "FAIL: 中台 30s 未就绪 code=$CODE"; cat /tmp/api.log; exit 1; }; sleep 1; done
 
 # 1. 迁移向后兼容：存量人设迁为 legacy 行
 psql "$DB" -t -c "SELECT persona->>'self_name' FROM zenithjoy.wechat_cs_account_config WHERE wechat_id='wxid_legacy_global'" | grep -q '存量小助手' || { echo "FAIL: 迁移未保留存量人设"; exit 1; }
