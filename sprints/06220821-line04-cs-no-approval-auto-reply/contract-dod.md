@@ -1,6 +1,3 @@
-contract_branch: cp-harness-propose-r3-344b92cf-a4
-sprint_dir: sprints/06220821-line04-cs-no-approval-auto-reply
-
 ---
 skeleton: false
 journey_type: agent_remote
