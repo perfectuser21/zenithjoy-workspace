@@ -11,6 +11,9 @@ export default defineConfig({
       'tests/**/*.test.ts',
       'src/**/*.test.{ts,js}',
       'src/**/__tests__/**/*.test.{ts,js}',
+      // Line04 无审批自动回复闭环 sprint oracle（合同 BEHAVIOR 用
+      // `cd apps/api && npx vitest run ../../sprints/.../tests/...` 跑，须在 include 内才收集）
+      '../../sprints/06220821-line04-cs-no-approval-auto-reply/tests/**/*.test.ts',
     ],
     exclude: ['node_modules/**', 'tests/integration/**', 'tests/ws1/**', 'tests/ws2/**', 'tests/ws3/**', 'tests/ws4/**', 'tests/ws5/**', 'tests/ws6/**'],
     coverage: {

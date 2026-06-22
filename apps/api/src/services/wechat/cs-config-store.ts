@@ -22,6 +22,34 @@ import type { BusinessKB, Persona } from './types';
 
 const KEY_PERSONA = 'persona';
 const KEY_BUSINESS_KB = 'business_kb';
+const KEY_AUTO_AGENT = 'auto_agent';
+
+// ─── 自动代理（无审批自动回复闭环）配置 ──────────────────────────────────────────
+
+/**
+ * 自动代理 5 配置键（Line 04 无审批自动回复闭环）。整体作为一个 JSONB 对象存在
+ * key='auto_agent' 下（标量 jsonb 在 parseJsonbValue 里读不回，必须整对象存）。
+ */
+export interface AutoAgentConfig {
+  /** 「开启自动代理」总开关。默认 false = 监控态（出草稿不自动发）。 */
+  auto_agent_enabled: boolean;
+  /** 营业时间起（HH:MM）。 */
+  business_hours_start: string;
+  /** 营业时间止（HH:MM，'24:00' = 到午夜；支持跨午夜如 '02:00'）。 */
+  business_hours_end: string;
+  /** 关键人微信（上下线播报 / 失败告警的接收者）。空 = 跳过播报。 */
+  key_contact_wechat: string;
+  /** 每日单号自动回上限。0 = 不限；>0 且超额 → 转 pending_human。 */
+  daily_limit: number;
+}
+
+const AUTO_AGENT_DEFAULTS: AutoAgentConfig = {
+  auto_agent_enabled: false,
+  business_hours_start: '06:00',
+  business_hours_end: '24:00',
+  key_contact_wechat: '',
+  daily_limit: 0,
+};
 
 // ─── jsonb 解析容错 ─────────────────────────────────────────────────────────────
 
@@ -105,4 +133,21 @@ export async function getBusinessKB(): Promise<BusinessKB> {
 /** 保存企业知识库（upsert）。失败 console.warn 不抛。 */
 export async function saveBusinessKB(kb: BusinessKB): Promise<void> {
   await writeConfig(KEY_BUSINESS_KB, kb);
+}
+
+// ─── ③ 自动代理配置 AutoAgentConfig ─────────────────────────────────────────────
+
+/**
+ * 取自动代理配置。DB 有 key='auto_agent' 行 → 合并到默认值返回；无行 / DB 失败 → 全默认（默认关）。
+ * 默认关（auto_agent_enabled=false）= 监控态，绝不在没人配过时就自动发。
+ */
+export async function getAutoAgentConfig(): Promise<AutoAgentConfig> {
+  const fromDb = await readConfig<Partial<AutoAgentConfig>>(KEY_AUTO_AGENT);
+  return { ...AUTO_AGENT_DEFAULTS, ...(fromDb ?? {}) };
+}
+
+/** 保存自动代理配置（partial 合并 upsert）。失败 console.warn 不抛。 */
+export async function saveAutoAgentConfig(cfg: Partial<AutoAgentConfig>): Promise<void> {
+  const current = await getAutoAgentConfig();
+  await writeConfig(KEY_AUTO_AGENT, { ...current, ...cfg });
 }

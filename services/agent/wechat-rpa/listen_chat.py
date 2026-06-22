@@ -47,6 +47,9 @@ except Exception as exc:  # pragma: no cover
     rate_limiter = None  # type: ignore[assignment]
     print(f"[listen_chat] rate_limiter import failed: {exc}", file=sys.stderr)
 
+# 无审批自动回复闭环决策层（纯函数：拟人延迟 / 路由 / 去重 / 播报 / 告警 / 回执）。
+import auto_reply  # type: ignore  # noqa: E402
+
 # AI 失败占位 —— 与 apps/api wechat-draft.ts 的 FAIL_PLACEHOLDER 对齐。
 # 自动回模式下中台 AI 失败时 reply 为 undefined；万一拿到占位文案也必须跳过不发给客户。
 FAIL_PLACEHOLDER = "AI 生成失败（请人审决定是否重试）"
@@ -1798,8 +1801,14 @@ def run_real_listen(args: argparse.Namespace) -> int:
                         _log(f"skip(direction={direction!r}) sender={m['sender']} "
                              f"human_intervened={human_intervened} (wait={_wait}s)")
                         continue
-                # 拟人回复延迟：确认要回这条之后、实际发送之前等约 2s。
-                _wait = decide_reply_wait(human_intervened=human_intervened)
+                # 拟人回复延迟：确认要回这条之后、实际发送之前等待。
+                #   - 名单内自动回（human_intervened=False）→ auto_reply.pick_reply_delay() 随机 1~5s（拟人，防机械等距）
+                #   - 人工介入（outgoing）→ decide_reply_wait 给人工优先的长等待
+                _wait = (
+                    auto_reply.pick_reply_delay()
+                    if not human_intervened
+                    else decide_reply_wait(human_intervened=human_intervened)
+                )
                 time.sleep(_wait)
                 _log(f"尝试回复 sender={m['sender']} reply_len={len(reply)} (等待 {_wait}s)")
                 ok = False
