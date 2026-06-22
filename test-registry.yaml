@@ -553,6 +553,14 @@ tests:
     product: 中台认证
     note: "Sprint 06222100 — 心跳响应下发 required_agent_version(version/sha256/size)，核心自升级单一信号；单一来源 getRequiredAgentVersion=install pack manifest.version，回退 DEFAULT_REQUIRED_AGENT_VERSION。"
 
+  - id: agent-core-self-upgrade-smoke
+    path: .github/workflows/scripts/smoke/agent-core-self-upgrade-smoke.sh
+    type: e2e
+    ci: L4
+    status: active
+    product: AI员工
+    note: "Sprint 06222100 (#824) — 客户机 Agent 核心自升级端到端 smoke：A 真编译 install-pack-manifest 读取器(单一来源 version/sha256/size)+ service/route 源码接线断言(required_agent_version 真挂心跳响应) / B 真编译 core-upgrader 跑 upgradeIfNeeded(semver 触发→sha 不符回滚不切换→sha 一致写 .active-core 指针+解压 extracted/zenithjoy-agent-v<ver>+优雅退出) / C start.bat 读 .active-core 指针选最新核心+回退本地核心。接进 ci-l4-runtime agent-test job。"
+
   - id: agent-self-heal-smoke
     path: .github/workflows/scripts/smoke/agent-self-heal-smoke.sh
     type: e2e

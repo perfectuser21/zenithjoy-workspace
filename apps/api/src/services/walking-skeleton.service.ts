@@ -15,6 +15,7 @@
 
 import crypto from 'node:crypto';
 import pool from '../db/connection';
+import { readInstallPackManifest } from './install-pack-manifest';
 
 export interface LicenseRowMin {
   id: string;
@@ -102,15 +103,8 @@ export const DEFAULT_REQUIRED_AGENT_VERSION = '2.0.22';
 export function getRequiredAgentVersion(
   readManifest?: () => { version: string; sha256?: string; size?: number } | null,
 ): RequiredAgentVersion {
-  let reader = readManifest;
-  if (!reader) {
-    // 延迟 require，避免顶层循环依赖 + 让测试可注入
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const mod = require('./install-pack-manifest') as {
-      readInstallPackManifest: () => { version: string; sha256?: string; size?: number } | null;
-    };
-    reader = mod.readInstallPackManifest;
-  }
+  // 默认走 install-pack manifest（单一来源）；测试可注入 readManifest 控制返回
+  const reader = readManifest ?? readInstallPackManifest;
   try {
     const m = reader();
     if (m && typeof m.version === 'string' && /^\d+\.\d+\.\d+$/.test(m.version)) {
