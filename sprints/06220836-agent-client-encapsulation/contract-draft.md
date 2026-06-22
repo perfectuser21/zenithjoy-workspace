@@ -1,4 +1,4 @@
-# Sprint Contract Draft (Round 2)
+# Sprint Contract Draft (Round 3)
 
 Sprint: **Agent 客户端封装（去黑窗 + 托盘静默通知）**
 journey_type: `agent_remote`
@@ -34,12 +34,12 @@ target_environment: `windows_cloud`（GHA windows-latest 干净 VM；执行 `${S
 
 **验证命令**（机制层，windows_cloud 可证伪）:
 ```bash
-# 入口存在 + 隐藏窗口样式（Run ..., 0,）
-test -f services/agent/install-pack/start.vbs || { echo "FAIL: start.vbs 不存在"; exit 1; }
-grep -Eq '\.Run\b.*,[[:space:]]*0[[:space:]]*,' services/agent/install-pack/start.vbs \
-  || { echo "FAIL: start.vbs 未用 windowStyle=0 隐藏窗口启动"; exit 1; }
-grep -q 'start\.bat' services/agent/install-pack/start.vbs \
-  || { echo "FAIL: start.vbs 未拉起 start.bat"; exit 1; }
+# 隐藏窗口样式（Run ..., 0,）+ 拉起 start.bat —— grep 同时隐含覆盖"入口存在"（文件缺失则 grep 失败，无需独立 test -f）
+VBS=services/agent/install-pack/start.vbs
+grep -Eq '\.Run\b.*,[[:space:]]*0[[:space:]]*,' "$VBS" \
+  || { echo "FAIL: start.vbs 缺失或未用 windowStyle=0 隐藏窗口启动"; exit 1; }
+grep -q 'start\.bat' "$VBS" \
+  || { echo "FAIL: start.vbs 缺失或未拉起 start.bat"; exit 1; }
 echo OK
 ```
 GHA 真实执行验证见 `## E2E 验收` 脚本 Phase 2（probe 模式真跑 vbs→bat 链，断言 launch.log + start.bat probe 标记写入）。
