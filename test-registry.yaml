@@ -2792,6 +2792,14 @@ agent_suite:
     product: 私域运营
     note: "Sprint 06220821 — line04 无审批自动回复闭环 C1：TS 侧路由真值表 decideReplyRoute/withinBusinessHours（与 auto_reply.py 1:1 镜像，含跨午夜）"
 
+  - id: line04-cs-outbound
+    path: apps/api/src/services/wechat/__tests__/cs-outbound.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 私域运营
+    note: "Sprint 06220821 — line04 关键人出站任务 service 单测（mock pool）：enqueueKeyContactBroadcast 跳变播报/未配跳过/入库失败不抛 + enqueueFailureAlert 去重 + markOutboundReceipt 回执翻 auto_sent/send_failed"
+
   - id: path4-wechat-cs-persona
     path: apps/api/src/services/wechat/__tests__/persona.test.ts
     type: unit
