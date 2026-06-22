@@ -1,4 +1,4 @@
-# Sprint Contract Draft (Round 2) — 客户管理后台
+# Sprint Contract Draft (Round 3) — 客户管理后台
 
 > journey_id e6270293-7ca3-4261-b01d-4de4c66e0352 · step_id L10-S1
 > journey_type **user_facing** · target_environment **windows_cloud**
@@ -9,7 +9,7 @@
 
 ## 预期受影响文件（R2 补 .github/workflows/ci-l4-e2e-smoke.yml — 阻塞1b）
 
-- `apps/api/db/migrations/<新>_customer_admin_backend.sql`
+- `apps/api/db/migrations/<新>_customer_admin_backend.sql`（含 `customer_admin_audit` 审计表 — R3 补 PRD NFR 轻量审计）
 - `apps/api/src/routes/customer-admin.ts`（+ `apps/api/src/lib/sub-account-quota.ts` / `customer-admin-rules.ts`）
 - `apps/dashboard/src/pages/AdminCustomersPage.tsx` + `apps/dashboard/src/api/customer-admin.api.ts`
 - `.github/workflows/scripts/smoke/customer-admin-backend-smoke.sh`
@@ -131,6 +131,12 @@ SUB_ACCOUNT_LIMITS = { free: 0, basic: 3, matrix: 5, studio: 10, enterprise: 30 
 **硬阈值**: 跨租户列表 0 泄漏；软删后列表不含、`deleted_at` 置位、物理行保留。
 **验证**: dod [BEHAVIOR] **Step6 租户隔离 + 软删**
 
+### Step 7: 轻量审计落库（建/改/删账号·绑定记 who/when/what）
+**来源**: `[FROM_PRD]` — PRD「范围限定·在范围内：轻量审计」+ NFR「审计：建/改/删账号·绑定记轻量 audit（who / when / what）」（R3 reviewer 阻塞 scope_match_prd=6 修复，PRD 明列但 R2 合同零覆盖）
+**可观测行为**: 任一建/改/删账号或绑定操作后，`customer_admin_audit` 新增一行，含 actor(who) + action(what) + created_at(when) + tenant_id（租户隔离）。建与删是不同 action。
+**硬阈值**: 操作后 5 分钟内审计表 ≥1 行带非空 actor + 非空 action + 正确 tenant_id；同租户「建+删」序列产生 ≥2 行且 ≥2 个不同 action 值（避免硬编码具体 action 字符串，只验区分度）。
+**验证**: dod [BEHAVIOR] **轻量审计落库**（psql 查 customer_admin_audit 带 created_at>NOW()-interval'5 minutes' 时间窗）
+
 ---
 
 ## CI 接线（阻塞1 — CI_GAP 修复）
@@ -190,5 +196,5 @@ FAIL 标准：vite 30s 未就绪 / spec 任一断言失败 / 截图缺失。
 | 功能 | Test File | BEHAVIOR 覆盖 | 预期红证据 |
 |---|---|---|---|
 | 整个 Sprint | `tests/customer-admin-backend.test.ts` | 配额映射 / role 合法性 / 绑定守卫（单元级护栏，import 失败即红）| 模块未实现 → import 失败 / 断言 FAIL |
-| 后端真链路（CI gate）| `.github/workflows/scripts/smoke/customer-admin-backend-smoke.sh`（接进 ci-l4-e2e-smoke.yml）| dod 11 条 [BEHAVIOR]：改名 / 子账号+role / 子账号配额 / 双唯一 / 机器配额 / 软删 / 隔离 / schema 纯度 / 403 / module-health | 端点 404/无表/schema drift → FAIL |
+| 后端真链路（CI gate）| `.github/workflows/scripts/smoke/customer-admin-backend-smoke.sh`（接进 ci-l4-e2e-smoke.yml）| dod 12 条 [BEHAVIOR]：改名 / 子账号+role / 子账号配额 / 双唯一 / 机器配额 / 软删 / 隔离 / schema 纯度 / 403 / module-health / 轻量审计 | 端点 404/无表/schema drift/审计无记录 → FAIL |
 | UI 可见行为（windows_cloud）| `apps/dashboard/e2e/customer-admin-backend.spec.ts` | 4 区用户路径 + 5 截图 | 页面/元素缺失 → toBeVisible 超时 FAIL |

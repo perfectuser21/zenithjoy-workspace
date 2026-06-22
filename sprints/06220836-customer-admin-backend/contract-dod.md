@@ -16,8 +16,8 @@ target_environment: windows_cloud
 
 ## ARTIFACT 条目
 
-- [ ] [ARTIFACT] migration 建 tenant_sub_accounts / service_agents 表 + 双唯一 + 软删字段
-  Test: node -e "const fs=require('fs'),g=require('child_process').execSync('ls apps/api/db/migrations/').toString();const f=g.split('\n').find(x=>/customer_admin_backend\.sql$/.test(x));if(!f)process.exit(1);const c=fs.readFileSync('apps/api/db/migrations/'+f,'utf8');if(!/tenant_sub_accounts/.test(c)||!/service_agents/.test(c)||!/deleted_at/.test(c)||!/UNIQUE/i.test(c))process.exit(1)"
+- [ ] [ARTIFACT] migration 建 tenant_sub_accounts / service_agents / customer_admin_audit 表 + 双唯一 + 软删字段 + 审计列(actor/action)
+  Test: node -e "const fs=require('fs'),g=require('child_process').execSync('ls apps/api/db/migrations/').toString();const f=g.split('\n').find(x=>/customer_admin_backend\.sql$/.test(x));if(!f)process.exit(1);const c=fs.readFileSync('apps/api/db/migrations/'+f,'utf8');if(!/tenant_sub_accounts/.test(c)||!/service_agents/.test(c)||!/deleted_at/.test(c)||!/UNIQUE/i.test(c)||!/customer_admin_audit/.test(c)||!/\bactor\b/.test(c)||!/\baction\b/.test(c))process.exit(1)"
 
 - [ ] [ARTIFACT] 新路由文件含 4 个新端点 + superAdminGuard
   Test: node -e "const fs=require('fs');const cand=['apps/api/src/routes/tenant-admin.ts','apps/api/src/routes/customer-admin.ts','apps/api/src/routes/admin-customers.ts'];const c=cand.filter(p=>fs.existsSync(p)).map(p=>fs.readFileSync(p,'utf8')).join('\n');if(!/accounts/.test(c)||!/service-agents/.test(c)||!/bind-device/.test(c)||!/superAdminGuard/.test(c))process.exit(1)"
@@ -78,6 +78,10 @@ target_environment: windows_cloud
 
 - [ ] [BEHAVIOR] error-path 非超管 403 — X-Feishu-User-Id: not-an-admin 访问新端点 → 403
   Test: manual:bash -c 'set -e; A="${API_BASE:-http://localhost:5200}"; CODE=$(curl -s -o /dev/null -w "%{http_code}" -H "X-Feishu-User-Id: not-an-admin" "$A/api/tenant/00000000-0000-0000-0000-000000000000/accounts"); [ "$CODE" = "403" ] || { echo "FAIL code=$CODE"; exit 1; }; echo OK'
+  期望: OK
+
+- [ ] [BEHAVIOR] 轻量审计落库（PRD NFR 审计 who/when/what）— 建/删子账号后 customer_admin_audit 5 分钟内有记录，含 actor(who)非空 + action(what)非空 + created_at(when) 时间窗，且建与删产生不同 action
+  Test: manual:bash -c 'set -e; A="${API_BASE:-http://localhost:5200}"; PH="${PGHOST:-localhost}"; PU="${PGUSER:-cecelia}"; PD="${PGDATABASE:-cecelia}"; export PGPASSWORD="${PGPASSWORD:-cecelia}"; T="${ZENITHJOY_INTERNAL_TOKEN:-}"; Q(){ psql -h $PH -U $PU -d $PD -tAc "$1"; }; LK="lk-aud-$(date +%s)$$"; TID=$(Q "INSERT INTO zenithjoy.tenants(name,license_key,plan) VALUES('\''AUD'\'','\''$LK'\'','\''matrix'\'') RETURNING id" | tr -d " "); Q "INSERT INTO zenithjoy.licenses(license_key,tier,max_machines,tenant_id,expires_at) VALUES('\''$LK'\'','\''matrix'\'',5,'\''$TID'\'',NOW()+interval '\''365 days'\'')" >/dev/null; AID=$(curl -sf -X POST "$A/api/tenant/$TID/accounts" -H "Content-Type: application/json" -H "X-Internal-Token: $T" -d "{\"email\":\"aud@a.test\",\"display_name\":\"a\",\"role\":\"operator\"}" | jq -r ".data.account_id"); curl -sf -X DELETE "$A/api/tenant/$TID/accounts/$AID" -H "X-Internal-Token: $T" >/dev/null; C=$(Q "SELECT count(*) FROM zenithjoy.customer_admin_audit WHERE tenant_id='\''$TID'\'' AND actor IS NOT NULL AND length(actor)>0 AND action IS NOT NULL AND created_at > NOW() - interval '\''5 minutes'\''" | tr -d " "); [ "$C" -ge 2 ] || { echo "FAIL: 审计行数=$C <2（建+删未各记一条）"; exit 1; }; D=$(Q "SELECT count(DISTINCT action) FROM zenithjoy.customer_admin_audit WHERE tenant_id='\''$TID'\'' AND created_at > NOW() - interval '\''5 minutes'\''" | tr -d " "); [ "$D" -ge 2 ] || { echo "FAIL: 建与删未产生不同 action, distinct=$D"; exit 1; }; echo OK'
   期望: OK
 
 ## BEHAVIOR:E2E 条目（user_facing 专属，Mode B final-e2e windows_cloud Playwright 跑）
