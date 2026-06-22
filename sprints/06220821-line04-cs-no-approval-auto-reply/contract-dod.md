@@ -13,8 +13,8 @@ target_environment: windows_wechat
 - [ ] [ARTIFACT] auto_reply.py 纯决策模块存在且导出核心函数
   Test: python3 -c "import sys; sys.path.insert(0,'services/agent/wechat-rpa'); import auto_reply as m; [getattr(m,n) for n in ('decide_reply_route','within_business_hours','pick_reply_delay','is_duplicate','broadcast_action','alert_on_failure')]"
 
-- [ ] [ARTIFACT] DB 迁移文件存在且对 wechat_publish_task 两个 CHECK 做 DROP/ADD（含新状态 auto_sent + pending_human）
-  Test: node -e "const fs=require('fs'),d='apps/api/db/migrations';const ok=fs.readdirSync(d).some(x=>x.endsWith('.sql')&&/auto_sent/.test(fs.readFileSync(d+'/'+x,'utf8'))&&/pending_human/.test(fs.readFileSync(d+'/'+x,'utf8'))&&/approval_source/.test(fs.readFileSync(d+'/'+x,'utf8')));process.exit(ok?0:1)"
+- [ ] [ARTIFACT] DB 迁移文件存在且对 wechat_publish_task 两个 CHECK 做 DROP/ADD（含新状态 auto_sent + pending_human + send_failed）
+  Test: node -e "const fs=require('fs'),d='apps/api/db/migrations';const ok=fs.readdirSync(d).some(x=>x.endsWith('.sql')&&/auto_sent/.test(fs.readFileSync(d+'/'+x,'utf8'))&&/pending_human/.test(fs.readFileSync(d+'/'+x,'utf8'))&&/send_failed/.test(fs.readFileSync(d+'/'+x,'utf8'))&&/approval_source/.test(fs.readFileSync(d+'/'+x,'utf8')));process.exit(ok?0:1)"
 
 - [ ] [ARTIFACT] 配置存取层新增自动代理 5 键的读写函数
   Test: node -e "const c=require('fs').readFileSync('apps/api/src/services/wechat/cs-config-store.ts','utf8');if(!/auto_agent_enabled/.test(c)||!/business_hours_start/.test(c)||!/key_contact_wechat/.test(c))process.exit(1)"
@@ -64,9 +64,9 @@ target_environment: windows_wechat
   Test: manual:bash -c 'cd apps/api && npx vitest run ../../sprints/06220821-line04-cs-no-approval-auto-reply/tests/cs-auto-agent-config.test.ts'
   期望: exit 0
 
-- [ ] [BEHAVIOR] DB CHECK 放开：approval_source 容 system + status 容 auto_sent/pending_human，非法 status 仍 23514 拒
-  Test: manual:bash -c 'DB="${DB:-${DATABASE_URL:-postgresql://localhost/zenithjoy}}"; npx tsx apps/api/db/migrations/run-migration.ts >/dev/null 2>&1 || node apps/api/db/migrations/run-migration.js >/dev/null 2>&1; psql "$DB" -c "INSERT INTO zenithjoy.wechat_publish_task (agent_id,task_type,content,status,approval_source) VALUES (gen_random_uuid(),'"'"'private_chat'"'"','"'"'c'"'"','"'"'auto_sent'"'"','"'"'system'"'"')" >/dev/null && psql "$DB" -c "INSERT INTO zenithjoy.wechat_publish_task (agent_id,task_type,content,status,approval_source) VALUES (gen_random_uuid(),'"'"'private_chat'"'"','"'"'c'"'"','"'"'pending_human'"'"','"'"'system'"'"')" >/dev/null && (psql "$DB" -c "INSERT INTO zenithjoy.wechat_publish_task (agent_id,task_type,content,status,approval_source) VALUES (gen_random_uuid(),'"'"'private_chat'"'"','"'"'c'"'"','"'"'garbage'"'"','"'"'system'"'"')" 2>&1 | grep -q "violates check constraint") && echo OK'
-  期望: OK
+- [ ] [BEHAVIOR] DB CHECK 放开：approval_source 容 system + status 容 auto_sent/pending_human/send_failed，非法 status 仍 23514 拒
+  Test: manual:bash -c 'DB="${DB:-${DATABASE_URL:-postgresql://localhost/zenithjoy}}"; npx tsx apps/api/db/migrations/run-migration.ts >/dev/null 2>&1 || node apps/api/db/migrations/run-migration.js >/dev/null 2>&1; psql "$DB" -c "INSERT INTO zenithjoy.wechat_publish_task (agent_id,task_type,content,status,approval_source) VALUES (gen_random_uuid(),'"'"'private_chat'"'"','"'"'c'"'"','"'"'auto_sent'"'"','"'"'system'"'"')" >/dev/null && psql "$DB" -c "INSERT INTO zenithjoy.wechat_publish_task (agent_id,task_type,content,status,approval_source) VALUES (gen_random_uuid(),'"'"'private_chat'"'"','"'"'c'"'"','"'"'pending_human'"'"','"'"'system'"'"')" >/dev/null && psql "$DB" -c "INSERT INTO zenithjoy.wechat_publish_task (agent_id,task_type,content,status,approval_source) VALUES (gen_random_uuid(),'"'"'private_chat'"'"','"'"'c'"'"','"'"'send_failed'"'"','"'"'system'"'"')" >/dev/null && (psql "$DB" -c "INSERT INTO zenithjoy.wechat_publish_task (agent_id,task_type,content,status,approval_source) VALUES (gen_random_uuid(),'"'"'private_chat'"'"','"'"'c'"'"','"'"'garbage'"'"','"'"'system'"'"')" 2>&1 | grep -q "violates check constraint") && echo OK'
+  期望: OK（auto_sent/pending_human/send_failed 三条 INSERT 均 exit 0；garbage 命中 23514）
 
 - [ ] [BEHAVIOR] error path：非法营业时间格式 / 缺关键人 不崩主链路
   Test: manual:bash -c 'python3 -c "import sys;sys.path.insert(0,\"services/agent/wechat-rpa\");import auto_reply as m;

@@ -1,4 +1,4 @@
-# Sprint Contract Draft (Round 1) — 微信客服 无审批自动回复闭环（Line 04）
+# Sprint Contract Draft (Round 3) — 微信客服 无审批自动回复闭环（Line 04）
 
 **journey_type**: agent_remote
 **target_environment**: windows_wechat（xian-rog self-hosted runner，真实微信 4.1.8 已登录）
@@ -57,11 +57,11 @@
 - `reason` (string 字面量 `"not_in_whitelist"`, rejected 时必填)：来源——现有 `GenerateChatDraftRejected.reason`
 **禁用字段名**：`text`/`message`/`content`/`answer`（回复文本字段一律叫 `reply`）；`error`（rejected 用 `reason` 不用 `error`）。
 
-### ③ listen_chat.py --dryrun receipt（复用现有，新增 `route` 字段，`NEW_PATTERN`）
+### ③ listen_chat.py --dryrun receipt（复用现有，字面字段名不可改）
 ```json
-{"ok": true, "dryRun": true, "draft_generated": true, "route": "auto"}
+{"ok": true, "dryRun": true, "draft_generated": true}
 ```
-- `route` (string, 新增)：取值同 ① 的 4 字面量。来源——`NEW_PATTERN`（现有 receipt 无此字段）。
+路由取值由 ① `decide_reply_route` 纯函数 oracle 全覆盖验证（route ⊆ 4 字面量 + 禁用同义词反向断言，见 contract-dod BEHAVIOR）；receipt 不再单独声明无独立 CI oracle 的 `route` 字段（listen_chat 依赖 Windows-only UIA，linux CI 无法 codify；接缝层真送达由 e2e-verify.ps1 验证）。
 
 ---
 
@@ -170,7 +170,7 @@ python3 -m pytest services/agent/wechat-rpa/tests/test_auto_reply_route.py -q \
 
 > **DB SSOT 锚定**：迁移 `20260513_221814_create_wechat_publish_task.sql` 定义 `status CHECK IN (draft,approved,rejected,sent,failed)` + `approval_source CHECK IN (feishu_user,feishu_api)`。本 sprint 新迁移须 `DROP/ADD` 这两个 CHECK：status 增 `auto_sent`/`pending_human`/`send_failed`；approval_source 增 `system`。
 
-**可观测行为**: 迁移后真 INSERT `approval_source='system'` + `status IN ('auto_sent','pending_human')` 成功；INSERT 非法 `status='garbage'` 仍报 23514。
+**可观测行为**: 迁移后真 INSERT `approval_source='system'` + `status IN ('auto_sent','pending_human','send_failed')` 成功；INSERT 非法 `status='garbage'` 仍报 23514。
 
 **验证命令**:
 ```bash
@@ -181,10 +181,12 @@ npx tsx apps/api/db/migrations/run-migration.ts 2>/dev/null || node apps/api/db/
 psql "$DB" -c "INSERT INTO zenithjoy.wechat_publish_task (agent_id, task_type, content, status, approval_source) VALUES (gen_random_uuid(),'private_chat','c1','auto_sent','system')" >/dev/null
 # pending_human 可写
 psql "$DB" -c "INSERT INTO zenithjoy.wechat_publish_task (agent_id, task_type, content, status, approval_source) VALUES (gen_random_uuid(),'private_chat','c2','pending_human','system')" >/dev/null
+# send_failed 可写（读回失败/掉线回执依赖此状态，漏写则运行时每次失败触发 23514）
+psql "$DB" -c "INSERT INTO zenithjoy.wechat_publish_task (agent_id, task_type, content, status, approval_source) VALUES (gen_random_uuid(),'private_chat','c3','send_failed','system')" >/dev/null
 # 非法 status 仍被拒（期望非 0 exit）
-psql "$DB" -c "INSERT INTO zenithjoy.wechat_publish_task (agent_id, task_type, content, status, approval_source) VALUES (gen_random_uuid(),'private_chat','c3','garbage_status','system')" 2>&1 | grep -q "violates check constraint" && echo "REJECT-OK"
+psql "$DB" -c "INSERT INTO zenithjoy.wechat_publish_task (agent_id, task_type, content, status, approval_source) VALUES (gen_random_uuid(),'private_chat','c4','garbage_status','system')" 2>&1 | grep -q "violates check constraint" && echo "REJECT-OK"
 ```
-**硬阈值**: 前两条 INSERT exit 0；第三条命中 `violates check constraint`（23514）打印 `REJECT-OK`。
+**硬阈值**: 前三条 INSERT exit 0；第四条命中 `violates check constraint`（23514）打印 `REJECT-OK`。
 
 ---
 
