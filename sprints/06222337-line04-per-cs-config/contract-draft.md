@@ -165,6 +165,7 @@ psql "$DB" -t -c "SELECT whitelist FROM zenithjoy.wechat_cs_account_config WHERE
 **可观测行为**:
 (a) 中台侧：开关 OFF 时 agent-config 返回 `auto_agent_enabled=false`；管理员打开后下一轮拉到 `true`；
 (b) 客户机侧 gate 决策纯函数 `resolveSendMode(config, pullOk)`：`(enabled=true, pullOk=true)→'real'`；`(enabled=false, *)→'dryrun'`；`(enabled=true, pullOk=false 拉失败)→'dryrun'`（强制演练，绝不误真发）。
+(c) 断网期缓存继续判定纯函数 `resolveActiveConfig(fresh, cached, pullOk)`（PRD 边界「拉配置失败 → 用上次缓存的自己那份 + 强制 dryrun → 恢复后自动重拉」完整 codify）：`pullOk=true→fresh`（用拉到的新配置）；`pullOk=false→cached`（用上次缓存的自己那份继续判定 shouldReply，不丢配置），且与 (b) 串联后下游强制 dryrun。
 
 **验证命令**:
 ```bash
@@ -181,6 +182,14 @@ const ok = resolveSendMode({auto_agent_enabled:true},true)==="real"
   && resolveSendMode({auto_agent_enabled:false},true)==="dryrun"
   && resolveSendMode({auto_agent_enabled:true},false)==="dryrun";
 if(!ok){console.error("FAIL: gate 决策错误");process.exit(1)}'
+# (c) 断网期缓存继续判定（拉失败用上次缓存的自己那份，不丢配置 + 下游强制 dryrun）
+node -e 'const {resolveActiveConfig,shouldReply,resolveSendMode}=require("./services/agent/build-modules/line04/cs-config-gate.js");
+const fresh={auto_agent_enabled:true,whitelist:["客户甲"]}, cached={auto_agent_enabled:true,whitelist:["客户乙"]};
+const ok = JSON.stringify(resolveActiveConfig(fresh,cached,true))===JSON.stringify(fresh)
+  && JSON.stringify(resolveActiveConfig(null,cached,false))===JSON.stringify(cached)
+  && shouldReply(resolveActiveConfig(null,cached,false),"客户乙")===true
+  && resolveSendMode(resolveActiveConfig(null,cached,false),false)==="dryrun";
+if(!ok){console.error("FAIL: 缓存继续判定错误");process.exit(1)}'
 ```
 **硬阈值 + 可执行验证**: 默认值必须 dryrun（开关默认 false）
 ```bash
@@ -355,4 +364,4 @@ exit 0
 | 功能 | Test File | BEHAVIOR 覆盖 | 预期红证据 |
 |---|---|---|---|
 | 每客服配置存取层 | `tests/cs-account-config-store.test.ts` | 按 wechat_id 隔离 upsert/read；写一行不影响另一行；未注册返回 null | → import 不存在模块 FAIL |
-| 客户机 gate 决策 | `tests/cs-config-gate.test.ts` | resolveSendMode（OFF/ON/拉失败）+ shouldReply（白名单内外） | → import 不存在模块 FAIL |
+| 客户机 gate 决策 | `tests/cs-config-gate.test.ts` | resolveSendMode（OFF/ON/拉失败）+ resolveActiveConfig（断网期缓存继续判定）+ shouldReply（白名单内外） | → import 不存在模块 FAIL |

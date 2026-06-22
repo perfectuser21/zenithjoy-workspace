@@ -14,8 +14,8 @@ journey_type: user_facing
 - [ ] [ARTIFACT] 每客服配置表 migration（key=微信号）+ 存量全局迁移 SQL
   Test: node -e "const fs=require('fs');const f=fs.readdirSync('apps/api/db/migrations').find(n=>/wechat_cs_account_config/.test(n));if(!f)process.exit(1);const c=fs.readFileSync('apps/api/db/migrations/'+f,'utf8');if(!/CREATE TABLE IF NOT EXISTS zenithjoy\.wechat_cs_account_config/.test(c))process.exit(1);if(!/wxid_legacy_global/.test(c)||!/wechat_cs_config/.test(c))process.exit(1)"
 
-- [ ] [ARTIFACT] 客户机 gate 决策模块存在（resolveSendMode + shouldReply）
-  Test: node -e "const m=require('./services/agent/build-modules/line04/cs-config-gate.js');if(typeof m.resolveSendMode!=='function'||typeof m.shouldReply!=='function')process.exit(1)"
+- [ ] [ARTIFACT] 客户机 gate 决策模块存在（resolveSendMode + resolveActiveConfig + shouldReply）
+  Test: node -e "const m=require('./services/agent/build-modules/line04/cs-config-gate.js');if(typeof m.resolveSendMode!=='function'||typeof m.resolveActiveConfig!=='function'||typeof m.shouldReply!=='function')process.exit(1)"
 
 - [ ] [ARTIFACT] 前台「每客服设置区」UI 存在（apps/dashboard 编辑该客服那一行）
   Test: node -e "const cp=require('child_process');const o=cp.execSync('grep -rl \"cs/config\" apps/dashboard/src 2>/dev/null || true').toString();if(!o.trim())process.exit(1)"
@@ -48,6 +48,10 @@ journey_type: user_facing
 
 - [ ] [BEHAVIOR] 客户机 gate 决策纯函数：ON+拉成功=real，OFF=dryrun，ON+拉失败=强制 dryrun（绝不误真发）
   Test: manual:bash -c 'node -e '"'"'const {resolveSendMode}=require("./services/agent/build-modules/line04/cs-config-gate.js"); const ok=resolveSendMode({auto_agent_enabled:true},true)==="real"&&resolveSendMode({auto_agent_enabled:false},true)==="dryrun"&&resolveSendMode({auto_agent_enabled:true},false)==="dryrun"; if(!ok){console.error("FAIL: gate 决策错误");process.exit(1)}'"'"' && echo OK'
+  期望: OK
+
+- [ ] [BEHAVIOR] 断网期缓存继续判定：拉失败用上次缓存的自己那份（不丢配置 + 下游强制 dryrun，绝不误真发）
+  Test: manual:bash -c 'node -e '"'"'const {resolveActiveConfig,shouldReply,resolveSendMode}=require("./services/agent/build-modules/line04/cs-config-gate.js"); const fresh={auto_agent_enabled:true,whitelist:["客户甲"]}; const cached={auto_agent_enabled:true,whitelist:["客户乙"]}; const a1=resolveActiveConfig(fresh,cached,true); const a2=resolveActiveConfig(null,cached,false); const ok = JSON.stringify(a1)===JSON.stringify(fresh) && JSON.stringify(a2)===JSON.stringify(cached) && shouldReply(a2,"客户乙")===true && resolveSendMode(a2,false)==="dryrun"; if(!ok){console.error("FAIL: 缓存继续判定错误");process.exit(1)}'"'"' && echo OK'
   期望: OK
 
 - [ ] [BEHAVIOR] 第二台客户机各拉各配置互不串（交叉断言 persona 不相等）

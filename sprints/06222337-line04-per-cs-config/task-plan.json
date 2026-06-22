@@ -11,10 +11,11 @@
         "[BEHAVIOR] 两客服按微信号 key 物理分行互不覆盖（钉死 Issue defe1a42 串台）：PUT/GET /api/wechat/cs/config/:wechatId + psql 两独立行（5min 时间窗）",
         "[BEHAVIOR] 客户机 GET /api/wechat/cs/agent-config?wechat_id=X 注册号拉自己那份；未注册号 403 拒绝不泄漏 persona + 写诊断异常（诊断页可见 + psql 5min 时间窗）",
         "[BEHAVIOR] 真发 gate 跟随 auto_agent_enabled：默认 OFF=dryrun，开启拉到 ON；resolveSendMode(config,pullOk) ON+拉失败=强制 dryrun",
+        "[BEHAVIOR] 断网期缓存继续判定 resolveActiveConfig(fresh,cached,pullOk)：拉失败用上次缓存的自己那份（不丢配置 + 下游强制 dryrun）",
         "[BEHAVIOR] error path：PUT 空 persona → 400 INVALID_BODY",
         "[BEHAVIOR] 迁移向后兼容：存量全局 wechat_cs_config 迁为 wxid_legacy_global 那一行（幂等）",
         "[ARTIFACT] migration apps/api/db/migrations/*_wechat_cs_account_config.sql（建表 + 存量迁移）",
-        "[ARTIFACT] services/agent/build-modules/line04/cs-config-gate.js（resolveSendMode + shouldReply）",
+        "[ARTIFACT] services/agent/build-modules/line04/cs-config-gate.js（resolveSendMode + resolveActiveConfig + shouldReply）",
         "[ARTIFACT] apps/api/src/services/wechat/cs-account-config-store.ts（按 wechat_id 隔离存取）",
         "[BEHAVIOR:E2E] windows_cloud e2e-verify.ps1：Playwright 验前台编辑 + curl/psql 验隔离/身份/gate/迁移"
       ],
