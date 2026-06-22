@@ -20,39 +20,58 @@ jobs:
           key: ${{ secrets.US_MAC_SSH_KEY }}
           port: ${{ secrets.US_MAC_PORT }}
           script_stop: true
+          # 发版自洽 6 步（治 2026-06-22 三连坑：launchctl 不生效 / migration 没跑到生产 / 发成功但跑旧代码）
+          envs: DEPLOY_SHA
+          command_timeout: 15m
           script: |
             set -euo pipefail
             REPO=/Users/administrator/perfect21/zenithjoy
+            DEPLOY_SHA="${{ github.sha }}"
 
-            echo "=== [1/4] git sync ==="
+            echo "=== [1/6] git sync → ${DEPLOY_SHA} ==="
             git -C "$REPO" fetch --force --prune origin main
-            git -C "$REPO" reset --hard FETCH_HEAD
+            git -C "$REPO" reset --hard "$DEPLOY_SHA"
 
-            echo "=== [2/4] install & build ==="
+            echo "=== [2/6] install & build（build 内写 dist/build-info.json）==="
             cd "$REPO"
+            export BUILD_SHA="$DEPLOY_SHA"
             npm ci --workspace=apps/api --ignore-scripts 2>/dev/null || \
-              (cd apps/api && npm ci --ignore-scripts)
+              (cd "$REPO/apps/api" && npm ci --ignore-scripts)
             npm run build --workspace=apps/api 2>/dev/null || \
-              (cd apps/api && npm run build)
+              (cd "$REPO/apps/api" && BUILD_SHA="$DEPLOY_SHA" npm run build)
 
-            echo "=== [3/4] launchd reload ==="
+            echo "=== [3/6] DB migration（幂等，失败则发版红、不重启）==="
+            # 对生产 cecelia 库应用所有未应用 migration；schema_migrations 记录已应用，跳过已应用。
+            (cd "$REPO/apps/api" && npm run migrate)
+
+            echo "=== [4/6] 干净重启：先杀占 :5200 的任何进程，再 launchctl stop/start ==="
+            # shellcheck source=/dev/null
+            source "$REPO/.github/workflows/scripts/deploy-lib.sh"
             launchctl stop com.zenithjoy.api || true
-            sleep 3
+            sleep 2
+            kill_port 5200
             launchctl start com.zenithjoy.api
 
-            echo "=== [4/4] health check ==="
+            echo "=== [5/6] health check ==="
             sleep 5
+            HEALTHY=0
             for i in $(seq 1 12); do
               if curl -sf http://localhost:5200/health > /dev/null 2>&1; then
                 echo "Health check passed (attempt $i)"
-                exit 0
+                HEALTHY=1
+                break
               fi
               echo "Attempt $i/12 failed, waiting 5s..."
               sleep 5
             done
-            echo "Health check FAILED after 65s"
-            cat ~/Library/Logs/zenithjoy-api.error.log | tail -30 || true
-            exit 1
+            if [ "$HEALTHY" -ne 1 ]; then
+              echo "Health check FAILED after 65s"
+              tail -30 ~/Library/Logs/zenithjoy-api.error.log || true
+              exit 1
+            fi
+
+            echo "=== [6/6] 版本自检：断言运行进程 sha == ${DEPLOY_SHA}（治"发成功但旧进程还在"）==="
+            assert_version "http://localhost:5200" "$DEPLOY_SHA"
 
   notify-failure:
     name: Notify Brain on failure

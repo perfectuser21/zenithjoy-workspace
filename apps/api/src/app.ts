@@ -57,6 +57,7 @@ import { operatorSessionsRouter } from './routes/operator-sessions';
 import videoRemakeRouter from './routes/video-remake';
 import { errorHandler, notFoundHandler } from './middleware/error';
 import { verifyStartupConfig } from './startup-check';
+import { getBuildInfo } from './build-info';
 
 const app = express();
 
@@ -83,14 +84,21 @@ app.use(express.json());
 const screenshotsDir = process.env.SCREENSHOTS_DIR || '/opt/zenithjoy/screenshots';
 app.use('/screenshots', express.static(screenshotsDir));
 
-// Health check —— 含 env 自检状态，让部署后冒烟能看到配置是否漏 key
+// Health check —— 含 env 自检状态 + 构建信息，让部署后冒烟能看到配置是否漏 key、跑的是哪个构建
 app.get('/health', (req, res) => {
   const cfg = verifyStartupConfig();
   res.json({
     status: 'ok',
     timestamp: new Date().toISOString(),
     config: { ok: cfg.ok, missing: cfg.missing },
+    build: getBuildInfo(),
   });
+});
+
+// Version —— 暴露真正在跑的构建（git sha / version / 构建时间）。
+// 发版脚本干净重启后断言 /version.sha == 刚部署 commit，不一致 = 跑的是旧进程 → 发版红。
+app.get('/version', (req, res) => {
+  res.json(getBuildInfo());
 });
 
 // Path 2 Step4 — fake-feishu / fake-LLM 替身：仅非生产挂载于根路径，

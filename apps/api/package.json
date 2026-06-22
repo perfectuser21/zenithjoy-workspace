@@ -6,7 +6,8 @@
   "scripts": {
     "start": "node -r dotenv/config dist/index.js",
     "dev": "ts-node-dev --respawn --transpile-only src/index.ts",
-    "build": "tsc",
+    "build": "tsc && bash scripts/write-build-info.sh",
+    "migrate": "ts-node db/migrations/run-migration.ts",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:integration": "vitest run --config vitest.integration.config.ts",
