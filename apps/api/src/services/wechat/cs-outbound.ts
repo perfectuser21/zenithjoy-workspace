@@ -28,6 +28,34 @@ const STATUS_FAILED = 'send_failed';
 // 告警去重时间窗（毫秒）。同 (关键人, 原因) 在窗内只入一条，防刷屏。
 const ALERT_DEDUP_WINDOW_MS = 5 * 60 * 1000;
 
+// UUID v4 形态（agents.id 主键）。wechat_publish_task.agent_id 列是 uuid 类型。
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * 把传入的 agent 标识规范化为 agents.id(UUID) —— 治「入队/拉取身份对不上」根。
+ *
+ * 入队端（PUT /cs/auto-agent，agent_id 是 z.string().uuid()）写的是 UUID；
+ * 但客户机 listen_chat.py 的 --agent-id 在 register 失败/老 config 时会回退成
+ * env 标识（agent-env-xxx，= agents.agent_id text UNIQUE 列）。两套身份对不上 →
+ * 出站任务永远拉不到 → 关键人收不到播报。
+ *
+ * 规则（不新造第三套 id，全对齐到稳定身份 UUID）：
+ *   - 已是 UUID → 原样返回（覆盖 register 成功传 UUID 的情况，零额外查询）
+ *   - 是 env-id → SELECT id FROM agents WHERE agent_id=$1 反查 UUID（覆盖回退情况）
+ *   - env-id 无映射 → 返回 null（调用方据此返回空，不去 uuid 列比对 env 串触发 22P02）
+ */
+async function resolveAgentUuid(idOrEnvId: string): Promise<string | null> {
+  const v = (idOrEnvId || '').trim();
+  if (!v) return null;
+  if (UUID_RE.test(v)) return v; // 已是 UUID，直接用
+  const { rows } = await pool.query<{ id: string }>(
+    'SELECT id FROM zenithjoy.agents WHERE agent_id = $1 LIMIT 1',
+    [v],
+  );
+  return rows[0]?.id ?? null;
+}
+
 export interface BroadcastEnqueueResult {
   action: 'online' | 'offline' | 'skip';
   task_id?: string;
@@ -109,6 +137,11 @@ export async function enqueueFailureAlert(params: {
   const { reason, keyContact, agentId } = params;
   if (!keyContact) return {};
 
+  // listen_chat 的 post_failure_alert 可能传 env-id（/cs/alert 仅校验非空字符串）；
+  // 规范化到 UUID，保证告警入队与拉取（listPendingOutbound）落同一身份。
+  const uuid = await resolveAgentUuid(agentId);
+  if (!uuid) return {}; // 身份无法解析 → 不入队（不拿 env 串去 uuid 列触发 22P02）
+
   const alertText = `⚠️ 智能客服异常：${reason}`;
   try {
     // 去重：同 agent + 同关键人 + 同告警文案 在窗口内已有 system 出站任务 → 跳过
@@ -120,12 +153,12 @@ export async function enqueueFailureAlert(params: {
           AND approval_source = 'system'
           AND created_at > now() - ($4::int || ' milliseconds')::interval
         LIMIT 1`,
-      [agentId, keyContact, alertText, ALERT_DEDUP_WINDOW_MS],
+      [uuid, keyContact, alertText, ALERT_DEDUP_WINDOW_MS],
     );
     if (dup.rows.length > 0) {
       return { deduped: true };
     }
-    const taskId = await insertOutbound(agentId, keyContact, alertText);
+    const taskId = await insertOutbound(uuid, keyContact, alertText);
     return { task_id: taskId };
   } catch (err) {
     console.warn('[cs-outbound] 告警出站任务入库失败:', err);
@@ -133,8 +166,14 @@ export async function enqueueFailureAlert(params: {
   }
 }
 
-/** 列出某 agent 的待发出站任务（status=approved + system）。供 agent 轮询拉取。 */
+/**
+ * 列出某 agent 的待发出站任务（status=approved + system）。供 agent 轮询拉取。
+ * 传入的 agentId 可能是 UUID(agents.id) 或 env-id(agents.agent_id)——统一规范化到 UUID
+ * 再按 wechat_publish_task.agent_id(uuid 列) 过滤，保证与入队身份对齐。
+ */
 export async function listPendingOutbound(agentId: string): Promise<OutboundTask[]> {
+  const uuid = await resolveAgentUuid(agentId);
+  if (!uuid) return []; // 身份无法解析（env-id 无映射）→ 无任务，绝不拿 env 串比 uuid 列触发 22P02
   const { rows } = await pool.query<{
     id: string;
     target_friend_alias: string;
@@ -147,7 +186,7 @@ export async function listPendingOutbound(agentId: string): Promise<OutboundTask
         AND approval_source = 'system'
         AND status = $2
       ORDER BY created_at ASC`,
-    [agentId, STATUS_PENDING_SEND],
+    [uuid, STATUS_PENDING_SEND],
   );
   return rows.map((r) => ({
     task_id: r.id,
