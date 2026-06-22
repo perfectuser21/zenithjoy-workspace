@@ -262,6 +262,19 @@ jobs:
       - name: Run lint-no-fake-test
         run: bash .github/workflows/scripts/lint-no-fake-test.sh origin/main
 
+  test-deploy-lib:
+    name: Test — Deploy Lib (发版自洽函数库)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: shellcheck deploy-lib
+        run: |
+          shellcheck .github/workflows/scripts/deploy-lib.sh
+          shellcheck .github/workflows/scripts/__tests__/deploy-lib.test.sh
+      - name: Run deploy-lib unit test (proven-to-fire — sha 不符必返非0)
+        run: bash .github/workflows/scripts/__tests__/deploy-lib.test.sh
+
   lint-feature-has-smoke:
     name: Lint — Feature Has Smoke
     runs-on: ubuntu-latest

@@ -3345,3 +3345,19 @@ agent_suite:
     status: pending-ci
     product: 中台认证
     note: "Sprint 06220836 — Agent 客户端封装 去黑窗+托盘静默通知合同 SSOT（TDD RED 来源）：start.vbs windowStyle=0/单实例/launch.log 轮转、tray.ts 去 powershell 走 node-notifier、自启指 start.vbs、打包含 vbs、node-notifier 依赖、start.bat ZJ_LAUNCH_PROBE 守卫。机制层在 e2e-verify.ps1(GHA windows-latest) 真验；视觉/重启接缝 S1/S2/S3 logic-done-pending(xian-pc)。"
+
+  - id: deploy-build-info
+    path: apps/api/src/__tests__/build-info.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 中台认证
+    note: "发版自洽 — build-info 探针：env>file>unknown 优先级 + trim + 坏 JSON 不崩。/version 暴露运行进程 sha，发版脚本断言命中部署 commit（治"发成功但旧进程还在"）。"
+
+  - id: deploy-migration-core
+    path: apps/api/src/__tests__/migration-core.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 中台认证
+    note: "发版自洽 — migration runner 幂等/排序纯逻辑：只取 .sql + 文件名升序 + computePending 幂等（重复跑不重复应用、新 migration 被算进、旧文件不报错）。"
