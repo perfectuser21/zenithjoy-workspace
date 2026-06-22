@@ -21,7 +21,9 @@ $ErrorActionPreference = 'Stop'
 
 $TaskName  = 'ZenithJoyAgent'
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Definition
-$Target    = Join-Path $ScriptDir 'start.bat'
+# 开机自启目标 = start.vbs（无窗口入口）：登录时经 wscript 隐藏拉起 start.bat，开机即无黑窗自起。
+# （旧版指向 start.bat 会闪 cmd 黑窗，本 sprint 改为 vbs 入口）
+$Target    = Join-Path $ScriptDir 'start.vbs'
 
 if ($Unregister) {
     Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false -ErrorAction SilentlyContinue

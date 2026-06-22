@@ -34,6 +34,9 @@ export interface TrayModuleInfo {
   running: boolean;
 }
 let currentModules: Record<string, TrayModuleInfo> = {};
+// 模块预检失败的「托盘红点」降级态：node-notifier 不可用时记录最近一条错误，
+// 经 systray2 重建路径渲染成红点菜单项（绝不回退到任何外部弹窗进程）。
+let lastModuleError: string | null = null;
 
 function statusLabel(): string {
   switch (currentStatus) {
@@ -98,6 +101,19 @@ export function startTray(h: TrayHandlers): void {
     checked: false,
   }));
 
+  // 模块预检失败降级红点：node-notifier 不可用时，把最近一条错误渲染成「🔴 …」菜单项
+  const errorItems = lastModuleError
+    ? [
+        SysTray.separator,
+        {
+          title: `🔴 ${lastModuleError}`,
+          tooltip: '模块预检失败',
+          enabled: false,
+          checked: false,
+        },
+      ]
+    : [];
+
   try {
     systray = new SysTray({
     menu: {
@@ -124,6 +140,7 @@ export function startTray(h: TrayHandlers): void {
           checked: false,
         },
         ...(moduleItems.length > 0 ? [SysTray.separator, ...moduleItems] : []),
+        ...errorItems,
         SysTray.separator,
         {
           title: '重启',
@@ -215,52 +232,33 @@ export function updateTrayModules(modules: Record<string, TrayModuleInfo>): void
   }
 }
 
-// preflight 失败时本地弹窗提示客户「{模块名}」无法启用：{原因}。
-// 优先 node-notifier（若安装），否则 Windows PowerShell 气泡通知，
-// 非 Windows 或弹窗失败时静默降级（只打日志，绝不 crash agent）。
+// preflight 失败时提示客户「{模块名}」无法启用：{原因}。
+// 两档静默通知，绝不弹任何外部窗口进程（去黑窗硬保证 —— 已彻底删除旧 PowerShell 气泡档）：
+//   1. node-notifier（跨平台原生图形通知，首选）
+//   2. 降级「托盘红点 + 日志」：node-notifier 不可用时记录错误并经 systray2 既有重建路径
+//      （_trayRebuildHook / updateTrayModules）让 🔴 菜单项可见，最后兜底 console.warn。
+// 任何分支都不 spawn 子进程弹窗，不 crash agent。
 export function showModuleError(moduleName: string, reason: string): void {
   const title = 'ZenithJoy 模块预检';
   const message = `「${moduleName}」无法启用：${reason}`;
 
-  // 1. node-notifier（跨平台原生通知，若依赖存在）
+  // 1. node-notifier（跨平台原生图形通知，若依赖存在）
   try {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     const notifier = require('node-notifier');
     notifier.notify({ title, message });
     return;
   } catch {
-    // node-notifier 未安装，继续下一档
+    // node-notifier 不可用 —— 降级，绝不回退到外部弹窗进程
   }
 
-  // 2. Windows PowerShell 气泡通知兜底
-  if (process.platform === 'win32') {
-    try {
-      // eslint-disable-next-line @typescript-eslint/no-var-requires
-      const { execFile } = require('node:child_process') as typeof import('node:child_process');
-      const esc = (s: string) => s.replace(/'/g, "''");
-      const ps =
-        `Add-Type -AssemblyName System.Windows.Forms; ` +
-        `$n = New-Object System.Windows.Forms.NotifyIcon; ` +
-        `$n.Icon = [System.Drawing.SystemIcons]::Warning; ` +
-        `$n.BalloonTipTitle = '${esc(title)}'; ` +
-        `$n.BalloonTipText = '${esc(message)}'; ` +
-        `$n.Visible = $true; $n.ShowBalloonTip(10000); Start-Sleep -Seconds 11; $n.Dispose();`;
-      execFile(
-        'powershell.exe',
-        ['-NoProfile', '-NonInteractive', '-Command', ps],
-        { windowsHide: true },
-        () => {
-          // 弹窗失败也不报错
-        },
-      );
-      return;
-    } catch {
-      // PowerShell 不可用，静默降级
-    }
-  }
-
-  // 3. 静默降级：只打日志
+  // 2. 降级「托盘红点 + 日志」：沿用 systray2 既有重建路径，不新引第二套重建逻辑。
+  lastModuleError = message;
   console.warn(`[preflight] ${message}`);
+  if (handlers) {
+    // systray2 不支持运行时增删菜单项 → 复用 _trayRebuildHook 整体重建，使 🔴 红点条目可见
+    _trayRebuildHook.invoke(handlers);
+  }
 }
 
 export function destroyTray(): void {
@@ -281,6 +279,7 @@ export function _resetTrayStateForTest(): void {
   currentStatus = 'connecting';
   handlers = null;
   currentModules = {};
+  lastModuleError = null;
 }
 
 // 仅供单测使用：直接设置 handlers 而不启动 systray2
