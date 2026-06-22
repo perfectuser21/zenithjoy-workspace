@@ -3042,6 +3042,22 @@ agent_suite:
     product: 客户私域AI接管
     note: "Sprint 06220821 — line04 关键人出站任务接线 process_outbound_once：拉取→send_chat 真发→回执 auto_sent/send_failed→自身失败再报告警（真机 UIA 发送是接缝，mock send 验链路接通无 orphan）"
 
+  - id: wechat-cs-real-publish-env-compat
+    path: services/agent/wechat-rpa/tests/test_real_publish_env_compat.py
+    type: unit
+    ci: L3
+    status: active
+    product: 客户私域AI接管
+    note: "Sprint 06221839 修出站播报假发(#818)：_resolve_real_publish 必须同认 REAL_PUBLISH 和 ZENITHJOY_AGENT_REAL_PUBLISH（prod 长驻 listener 注入的是后者，旧代码只认前者→real_publish=False→出站走 mock 假发标 auto_sent）。listen_chat 主循环 + send_chat.main 两处都验。"
+
+  - id: wechat-cs-outbound-readback
+    path: services/agent/wechat-rpa/tests/test_outbound_readback.py
+    type: unit
+    ci: L3
+    status: active
+    product: 客户私域AI接管
+    note: "Sprint 06221839 修出站播报假发(#818)：出站 REAL 路径 send_chat→reply_in_chat 必须传 sender=target 激活真送达读回 gate。_uia_send 自报成功但读回未现原文→ok=false/send_failed，绝不在没真送达时标 auto_sent。"
+
   - id: wechat-cs-uia-interaction
     path: services/agent/wechat-rpa/tests/test_uia_interaction.py
     type: unit
