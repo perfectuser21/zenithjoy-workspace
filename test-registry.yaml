@@ -529,6 +529,30 @@ tests:
     product: AI员工
     note: "Sprint 06081700 — Core 模块管理器：syncModules / runModulePreflight / fork 激活 + IPC / forwardMessage；v2.0.16 回归：execFile 传 ZENITHJOY_CORE_DIR，修复客户机无系统 python 时 exit 9009 卡死"
 
+  - id: agent-core-upgrader
+    path: services/agent/src/__tests__/core-upgrader.test.ts
+    type: unit
+    ci: L2
+    status: active
+    product: AI员工
+    note: "Sprint 06222100 — 核心自升级 CoreUpgrader：compareSemver 版本比较 / needsUpgrade(required>current 触发) / buildCosUrl(install-pack/zenithjoy-agent-v<ver>.tar.gz) / upgradeIfNeeded(下载→sha 校验→解压 extracted/zenithjoy-agent-v<ver>→拷 .env→写 .active-core 指针→优雅退出) / 校验失败/下载抛错回滚不切换 / 并发去重 / verifyFile 真实 sha+size 校验。根治客户机核心不自升级。"
+
+  - id: agent-start-bat-active-core-pointer
+    path: services/agent/src/__tests__/start-bat-active-core-pointer.test.ts
+    type: unit
+    ci: L2
+    status: active
+    product: AI员工
+    note: "Sprint 06222100 — 核心自换+重启接缝：start.bat 读 .active-core 指针选 extracted/zenithjoy-agent-v<ver> 最新核心目录启动，指针缺失/损坏回退本地核心（防自换把客户机搞挂）。计划任务 ONLOGON 始终拉起启动器，启动器据指针拉起新核心。"
+
+  - id: api-heartbeat-required-agent-version
+    path: apps/api/src/routes/__tests__/heartbeat-required-agent-version.test.ts
+    type: unit
+    ci: L2
+    status: active
+    product: 中台认证
+    note: "Sprint 06222100 — 心跳响应下发 required_agent_version(version/sha256/size)，核心自升级单一信号；单一来源 getRequiredAgentVersion=install pack manifest.version，回退 DEFAULT_REQUIRED_AGENT_VERSION。"
+
   - id: agent-self-heal-smoke
     path: .github/workflows/scripts/smoke/agent-self-heal-smoke.sh
     type: e2e

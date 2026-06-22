@@ -162,3 +162,36 @@ describe('HEARTBEAT_MODULES version gates', () => {
     expect(HEARTBEAT_MODULES['line04-wechat-cs'].required_version).toBe('1.0.55');
   });
 });
+
+describe('getRequiredAgentVersion（核心自升级单一来源）', () => {
+  it('manifest 可读时，required_agent_version = manifest.version（已发布最新核心）', async () => {
+    const { getRequiredAgentVersion } = await import('./walking-skeleton.service');
+    const ver = getRequiredAgentVersion(() => ({
+      version: '2.0.30',
+      sha256: 'abc',
+      download_url: '/download/zenithjoy-agent-v2.0.30.tar.gz',
+      size: 100,
+      build_time: 'x',
+    }));
+    expect(ver.version).toBe('2.0.30');
+    // sha/size 透传给客户端做校验（防中途篡改）
+    expect(ver.sha256).toBe('abc');
+    expect(ver.size).toBe(100);
+  });
+
+  it('manifest 不可读时回退到内置常量 DEFAULT_REQUIRED_AGENT_VERSION（永不返回空，防客户端无所适从）', async () => {
+    const { getRequiredAgentVersion, DEFAULT_REQUIRED_AGENT_VERSION } = await import(
+      './walking-skeleton.service'
+    );
+    const ver = getRequiredAgentVersion(() => null);
+    expect(ver.version).toBe(DEFAULT_REQUIRED_AGENT_VERSION);
+    expect(DEFAULT_REQUIRED_AGENT_VERSION).toMatch(/^\d+\.\d+\.\d+$/);
+  });
+
+  it('DEFAULT_REQUIRED_AGENT_VERSION 必须 >= 2.0.22（本 sprint bump 的核心自升级首版）', async () => {
+    const { DEFAULT_REQUIRED_AGENT_VERSION } = await import('./walking-skeleton.service');
+    const [maj, min, pat] = DEFAULT_REQUIRED_AGENT_VERSION.split('.').map(Number);
+    const cmp = maj * 1_000_000 + min * 1_000 + pat;
+    expect(cmp).toBeGreaterThanOrEqual(2 * 1_000_000 + 0 * 1_000 + 22);
+  });
+});
