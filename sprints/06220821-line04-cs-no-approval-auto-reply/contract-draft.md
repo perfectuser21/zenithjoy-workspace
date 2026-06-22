@@ -175,8 +175,8 @@ python3 -m pytest services/agent/wechat-rpa/tests/test_auto_reply_route.py -q \
 **验证命令**:
 ```bash
 DB="${DB:-${DATABASE_URL:-postgresql://localhost/zenithjoy}}"
-# 应用本 sprint 新迁移（幂等）
-npx tsx apps/api/db/migrations/run-migration.ts 2>/dev/null || node apps/api/db/migrations/run-migration.js 2>/dev/null || true
+# 应用本 sprint 新迁移（runner 幂等：已应用则 no-op exit 0；tsx 不可用回退 node；两者皆失败=环境问题，须 FAIL 不吞）
+npx tsx apps/api/db/migrations/run-migration.ts 2>/dev/null || node apps/api/db/migrations/run-migration.js 2>/dev/null
 # system + auto_sent 可写
 psql "$DB" -c "INSERT INTO zenithjoy.wechat_publish_task (agent_id, task_type, content, status, approval_source) VALUES (gen_random_uuid(),'private_chat','c1','auto_sent','system')" >/dev/null
 # pending_human 可写
