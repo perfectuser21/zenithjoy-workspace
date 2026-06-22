@@ -457,6 +457,14 @@ tests:
     product: AI员工
     note: "Sprint 06181315 合同归档入口，re-import canonical apps/api/tests/regression/line04-cs-tenant-isolation.test.ts（单一来源，不重复维护）。"
 
+  - id: line04-cs-no-approval-auto-reply-config
+    path: sprints/06220821-line04-cs-no-approval-auto-reply/tests/cs-auto-agent-config.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: AI员工
+    note: "Sprint 06220821 无审批自动回复闭环：自动代理 5 配置键 getAutoAgentConfig/saveAutoAgentConfig oracle（vi.mock db/connection，默认关 + partial 合并 upsert）。"
+
   - id: agent-line04-python-path-fix
     path: services/agent/modules/line04/__tests__/wechat-rpa-python-path.test.ts
     type: unit
