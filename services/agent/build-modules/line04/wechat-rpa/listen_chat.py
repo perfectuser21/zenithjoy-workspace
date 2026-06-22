@@ -1523,6 +1523,27 @@ def run_dryrun_inject(args: argparse.Namespace) -> int:
 
 _LOG_PATH = os.path.join(os.environ.get("PUBLIC", r"C:\Users\Public"), "zj-listener.log")
 
+# 自愈件4：本地健康文件 —— line04 模块（Node）读它合成 listen_chat 真实健康（found_window /
+# last_delivery_ts）经 IPC 上报 core → 随心跳上报中台。每轮心跳写一次，损坏/失败吞掉不拖垮监听。
+_HEALTH_FILE = os.path.join(os.environ.get("PUBLIC", r"C:\Users\Public"), "zj-listener-health.json")
+
+
+def write_health_file(diag: Dict[str, Any], last_delivery_ts: Optional[int]) -> None:
+    """把扫描诊断 + 最近送达时间写本地健康文件。任何失败吞掉（健康文件不能拖垮监听）。"""
+    try:
+        payload = {
+            "ts": int(time.time() * 1000),
+            "found_window": bool(diag.get("main_window_found")),
+            "login_present": bool(diag.get("login_present")),
+            "sessions_seen": diag.get("sessions_seen"),
+        }
+        if last_delivery_ts is not None:
+            payload["last_delivery_ts"] = last_delivery_ts
+        with open(_HEALTH_FILE, "w", encoding="utf-8") as f:
+            json.dump(payload, f)
+    except Exception:
+        pass
+
 # ─── replied 持久化（模块顶层，供单测 monkeypatch）────────────────────────────────
 _REPLIED_FILE: str = os.path.join(os.environ.get("PUBLIC", r"C:\Users\Public"), "zj-replied.json")
 SENDER_COOLDOWN: float = _SENDER_COOLDOWN
@@ -1667,6 +1688,8 @@ def run_real_listen(args: argparse.Namespace) -> int:
     last_heartbeat = 0.0
     last_unread_senders: List[str] = []
     last_error: Optional[str] = None
+    # 自愈件4：最近一次出站/回复成功送达的时间戳（ms），写进健康文件供模块/中台看模块真实健康
+    last_delivery_ts: Optional[int] = None
     # 微信4.0 mmui 控件树需设屏幕阅读器标志激活 UIAutomation 后才暴露、且会失效：启动先激活一次，失效再按冷却补激活
     uia_reactivate_interval = _UIA_REACTIVATE_INTERVAL
     _activate_uia()
@@ -1747,6 +1770,8 @@ def run_real_listen(args: argparse.Namespace) -> int:
                 hb = post_heartbeat(
                     args.middleware_url, agent_id=getattr(args, "agent_id", None), diag=diag
                 )
+                # 自愈件4：写本地健康文件（line04 模块读它合成真实健康 → IPC 上报 core）
+                write_health_file(diag, last_delivery_ts)
                 last_heartbeat = now
                 if not hb.get("ok"):
                     _log(f"心跳上报失败: {hb.get('error')}")
@@ -1806,6 +1831,8 @@ def run_real_listen(args: argparse.Namespace) -> int:
                 )
                 if _ob:
                     _log(f"[关键人出站] 发送 {_ob} 条")
+                    # 自愈件4：记录最近一次成功送达时间（写进健康文件给中台看模块真实健康）
+                    last_delivery_ts = int(time.time() * 1000)
             except Exception as _obexc:
                 _log(f"[关键人出站] 处理异常: {_obexc}")
 

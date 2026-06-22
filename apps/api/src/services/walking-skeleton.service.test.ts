@@ -157,8 +157,8 @@ describe('ackPublishTask — qr_bind session upsert', () => {
 });
 
 describe('HEARTBEAT_MODULES version gates', () => {
-  it('line04-wechat-cs required_version should be 1.0.54 (出站播报认 ZENITHJOY_AGENT_REAL_PUBLISH + 读回真送达发货版本，三面一致)', async () => {
+  it('line04-wechat-cs required_version should be 1.0.55 (自愈四件——模块保活/统一身份/统一真发/自检上报发货版本，三面一致)', async () => {
     const { HEARTBEAT_MODULES } = await import('./walking-skeleton.service');
-    expect(HEARTBEAT_MODULES['line04-wechat-cs'].required_version).toBe('1.0.54');
+    expect(HEARTBEAT_MODULES['line04-wechat-cs'].required_version).toBe('1.0.55');
   });
 });

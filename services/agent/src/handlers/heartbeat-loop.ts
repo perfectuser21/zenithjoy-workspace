@@ -27,10 +27,14 @@ export interface ModuleDescriptor {
   required_version?: string;
 }
 
-// 客户端上报的单模块 preflight 结果
+// 客户端上报的单模块健康（preflight 结果 + 自愈件4 listen_chat 真实健康字段）
 export interface ModuleStatusReport {
   ok: boolean;
   reason?: string;
+  // 自愈件4：line04 listen_chat 真实健康（进程在不在 / 微信窗口找到没 / 最近一次成功送达 ms）
+  listener_alive?: boolean;
+  found_window?: boolean;
+  last_delivery_ts?: number;
 }
 
 export interface HeartbeatResponse {

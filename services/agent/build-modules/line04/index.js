@@ -6,6 +6,7 @@
 //   core → 本模块：{ type:'config', agentId, apiBase } / { type:'incoming_message', data }
 //   本模块 → core：{ type:'ready' } / { type:'status', ok, reason } / { type:'draft_reply', messageId, draft }
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.reportHealthOnce = reportHealthOnce;
 exports.handleConfig = handleConfig;
 exports.handleMessage = handleMessage;
 exports.registerIpc = registerIpc;
@@ -13,7 +14,14 @@ exports.start = start;
 const wechat_rpa_1 = require("./handlers/wechat-rpa");
 // 模块运行时状态（由 config 消息初始化）。
 const state = { ready: false };
-// 收到 config：初始化身份 + 启动微信监听（Windows），回 ready。
+// 自愈件4：模块健康自检上报间隔（合成 listen_chat 真实健康 → IPC 上报 core → 随心跳上报中台）。
+const HEALTH_REPORT_INTERVAL_MS = 30000;
+// 自检一次：合成 listen_chat 真实健康（进程在不在 / 微信窗口找到没 / 最近一次成功送达）→ IPC status。
+function reportHealthOnce(send) {
+    const health = (0, wechat_rpa_1.collectListenerHealth)({ listenerAlive: (0, wechat_rpa_1.isListenerAlive)() });
+    send((0, wechat_rpa_1.buildHealthStatusMessage)(health));
+}
+// 收到 config：初始化身份 + 启动微信监听（Windows），回 ready，并启动健康自检上报 loop。
 function handleConfig(cfg, send) {
     state.agentId = cfg.agentId;
     state.apiBase = cfg.apiBase;
@@ -23,6 +31,12 @@ function handleConfig(cfg, send) {
         (0, wechat_rpa_1.startWechatListener)(cfg.apiBase, cfg.agentId || undefined);
     }
     send({ type: 'ready' });
+    // 自愈件4：周期性把 listen_chat 真实健康上报 core（管理员/诊断页看模块"实际健康"）。
+    if (!state.healthTimer) {
+        reportHealthOnce(send);
+        state.healthTimer = setInterval(() => reportHealthOnce(send), HEALTH_REPORT_INTERVAL_MS);
+        state.healthTimer.unref?.();
+    }
 }
 // 收到 incoming_message：thin 阶段先回执已接收（draft 生成由后续加厚接入 LLM）。
 function handleMessage(data, send) {
