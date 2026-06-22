@@ -1,0 +1,36 @@
+{
+  "initiative_id": "ab27c321-85c9-4029-acba-581e94015167",
+  "journey_type": "user_facing",
+  "journey_type_reason": "涉及 apps/dashboard 客户管理页『每客服设置区』编辑 UI（优先级链首条命中）；核心可验证不变量为中台每客服配置物理隔离 + 客户机按身份拉配置。",
+  "tasks": [
+    {
+      "task_id": "ws1",
+      "title": "Line04 每客服独立配置 + 客户机按身份拉配置（中台多租户隔离 thin→medium）",
+      "scope": "新增按微信号 key 物理分行的每客服配置表 + 存量全局配置迁移；新增每客服配置 CRUD 端点（写一行不影响其他行）+ 客户机按自己微信号身份拉自己那份（含登录号校验报红 + 诊断异常）+ 诊断页数据端点；前台『每客服设置区』编辑该客服那一行 UI；客户机真发 gate 跟随该客服 auto_agent_enabled（默认 dryrun，拉失败强制 dryrun，不再靠装包写死 env）。不含 D 真客户 onboarding/转人工/飞书 SSOT，不动全局 NFR。",
+      "dod": [
+        "[BEHAVIOR] 两客服按微信号 key 物理分行互不覆盖（钉死 Issue defe1a42 串台）：PUT/GET /api/wechat/cs/config/:wechatId + psql 两独立行（5min 时间窗）",
+        "[BEHAVIOR] 客户机 GET /api/wechat/cs/agent-config?wechat_id=X 注册号拉自己那份；未注册号 403 拒绝不泄漏 persona + 写诊断异常（诊断页可见 + psql 5min 时间窗）",
+        "[BEHAVIOR] 真发 gate 跟随 auto_agent_enabled：默认 OFF=dryrun，开启拉到 ON；resolveSendMode(config,pullOk) ON+拉失败=强制 dryrun",
+        "[BEHAVIOR] error path：PUT 空 persona → 400 INVALID_BODY",
+        "[BEHAVIOR] 迁移向后兼容：存量全局 wechat_cs_config 迁为 wxid_legacy_global 那一行（幂等）",
+        "[ARTIFACT] migration apps/api/db/migrations/*_wechat_cs_account_config.sql（建表 + 存量迁移）",
+        "[ARTIFACT] services/agent/build-modules/line04/cs-config-gate.js（resolveSendMode + shouldReply）",
+        "[ARTIFACT] apps/api/src/services/wechat/cs-account-config-store.ts（按 wechat_id 隔离存取）",
+        "[BEHAVIOR:E2E] windows_cloud e2e-verify.ps1：Playwright 验前台编辑 + curl/psql 验隔离/身份/gate/迁移"
+      ],
+      "files": [
+        "apps/api/db/migrations/20260622_210000_create_wechat_cs_account_config.sql",
+        "apps/api/src/services/wechat/cs-account-config-store.ts",
+        "apps/api/src/routes/wechat-config.ts",
+        "apps/api/src/services/wechat/cs-identity-diagnostics.ts",
+        "apps/dashboard/src/(每客服设置区组件)",
+        "apps/dashboard/e2e/per-cs-config.spec.ts",
+        "services/agent/build-modules/line04/cs-config-gate.js",
+        "services/agent/build-modules/line04/wechat-rpa/listen_chat.py"
+      ],
+      "depends_on": [],
+      "complexity": "L",
+      "estimated_minutes": 120
+    }
+  ]
+}
