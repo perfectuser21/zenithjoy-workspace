@@ -233,7 +233,7 @@ export function updateTrayModules(modules: Record<string, TrayModuleInfo>): void
 }
 
 // preflight 失败时提示客户「{模块名}」无法启用：{原因}。
-// 两档静默通知，绝不弹任何外部窗口进程（去黑窗硬保证 —— 已彻底删除旧 PowerShell 气泡档）：
+// 两档静默通知，绝不弹任何外部窗口进程（去黑窗硬保证 —— 已彻底删除旧 PS 气泡弹窗档）：
 //   1. node-notifier（跨平台原生图形通知，首选）
 //   2. 降级「托盘红点 + 日志」：node-notifier 不可用时记录错误并经 systray2 既有重建路径
 //      （_trayRebuildHook / updateTrayModules）让 🔴 菜单项可见，最后兜底 console.warn。
