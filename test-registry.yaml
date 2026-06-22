@@ -3237,3 +3237,11 @@ agent_suite:
     status: active
     product: 中台认证
     note: "env 接缝通用闸门 — 全 src 扫描每个 process.env.X 强制分类(REQUIRED/OPTIONAL+reason/FRAMEWORK)，未分类即红；含 proven-to-fire(findUnclassifiedEnv 拦 ZZ_FAKE_UNCLASSIFIED)。升级 #800 只查 2 文件的完整性闸门为全扫描。"
+
+  - id: agent-client-encapsulation-contract
+    path: sprints/06220836-agent-client-encapsulation/tests/agent-client-encapsulation.test.ts
+    type: unit
+    ci: windows_cloud
+    status: pending-ci
+    product: 中台认证
+    note: "Sprint 06220836 — Agent 客户端封装 去黑窗+托盘静默通知合同 SSOT（TDD RED 来源）：start.vbs windowStyle=0/单实例/launch.log 轮转、tray.ts 去 powershell 走 node-notifier、自启指 start.vbs、打包含 vbs、node-notifier 依赖、start.bat ZJ_LAUNCH_PROBE 守卫。机制层在 e2e-verify.ps1(GHA windows-latest) 真验；视觉/重启接缝 S1/S2/S3 logic-done-pending(xian-pc)。"
