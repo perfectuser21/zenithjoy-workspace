@@ -22,6 +22,7 @@ import { agentInstallPackRouter } from './routes/agent-install-pack';
 import { adminLicenseRouter } from './routes/admin-license';
 import { adminUsersRouter } from './routes/admin-users';
 import { adminCustomersRouter } from './routes/admin-customers';
+import { customerAdminRouter } from './routes/customer-admin';
 import { operatorRouter } from './routes/operator';
 import { accountRouter } from './routes/account';
 import { profileRouter } from './routes/profile';
@@ -130,6 +131,8 @@ app.use('/api/publish', publishWsRouter);
 app.use('/api/admin/license', adminLicenseRouter);
 app.use('/api/admin/users', adminUsersRouter);
 app.use('/api/admin/customers', adminCustomersRouter);
+// Line 10 客户管理后台 — 公司名 / 子账号 / 客服-PC 绑定 / 诊断（singular /api/tenant，区别于 /api/tenants 复数）
+app.use('/api/tenant', customerAdminRouter);
 // operatorSessionsRouter 必须在 operatorRouter 之前注册：
 // operator.ts 有 router.use(superAdminGuard) 全局拦截所有 /api/operator/* 请求，
 // 若先注册 operatorRouter，sessions 的 GET/POST 会被 superAdminGuard 401 终止，

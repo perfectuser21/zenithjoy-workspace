@@ -4,6 +4,17 @@ setlocal enabledelayedexpansion
 
 cd /d "%~dp0"
 
+REM === E2E test seam: ZJ_LAUNCH_PROBE early-exit guard ===
+REM 当 ZJ_LAUNCH_PROBE 置位时（仅 e2e-verify.ps1 / smoke 设置），写一个 probe 标记到
+REM %APPDATA%\zenithjoy-agent\probe-marker.txt 后立即退出，证明 start.vbs→start.bat 隐藏拉起链
+REM 真执行而无需跑完整重活 / 避免 GHA 上 pause 挂死。生产运行从不设此变量，故不影响真实启动。
+if defined ZJ_LAUNCH_PROBE (
+    if not exist "%APPDATA%\zenithjoy-agent" mkdir "%APPDATA%\zenithjoy-agent" >nul 2>&1
+    echo probe %DATE% %TIME% pid=%RANDOM%> "%APPDATA%\zenithjoy-agent\probe-marker.txt"
+    echo [probe] ZJ_LAUNCH_PROBE set, vbs->bat chain verified, exiting early
+    exit /b 0
+)
+
 REM Unblock all executables recursively (removes Zone Identifier / Mark of the Web)
 REM Without this, execFile() on bundled ffmpeg.exe / Playwright chrome.exe fails with "spawn UNKNOWN"
 powershell -NoProfile -Command "Get-ChildItem -Path '%~dp0' -Recurse -Include '*.exe','*.dll' | Unblock-File" >nul 2>&1

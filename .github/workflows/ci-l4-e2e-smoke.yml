@@ -243,6 +243,19 @@ jobs:
           chmod +x .github/workflows/scripts/smoke/credits-smoke.sh
           bash .github/workflows/scripts/smoke/credits-smoke.sh
 
+      # ─── Line 10 客户管理后台 — 公司名/子账号/客服-PC 绑定/诊断 后端真链路 ───
+      - name: Smoke — Customer Admin Backend (Line 10)
+        env:
+          API_BASE: http://localhost:5200
+          ZENITHJOY_INTERNAL_TOKEN: ci-only-internal-token-abc-not-prod
+          PGHOST: localhost
+          PGUSER: cecelia
+          PGPASSWORD: cecelia
+          PGDATABASE: cecelia
+        run: |
+          chmod +x .github/workflows/scripts/smoke/customer-admin-backend-smoke.sh
+          bash .github/workflows/scripts/smoke/customer-admin-backend-smoke.sh
+
       - name: Smoke — Admin Users 超管会员管理 (PR-A)
         env:
           API_BASE: http://localhost:5200

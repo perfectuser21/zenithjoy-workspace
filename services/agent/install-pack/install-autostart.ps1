@@ -21,7 +21,9 @@ $ErrorActionPreference = 'Stop'
 
 $TaskName  = 'ZenithJoyAgent'
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Definition
-$Target    = Join-Path $ScriptDir 'start.bat'
+# 开机自启目标 = start.vbs（无窗口入口）：登录时经 wscript 隐藏拉起 start.bat，开机即无黑窗自起。
+# （旧版指向 start.bat 会闪 cmd 黑窗，本 sprint 改为 vbs 入口）
+$Target    = Join-Path $ScriptDir 'start.vbs'
 
 if ($Unregister) {
     Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false -ErrorAction SilentlyContinue
@@ -34,7 +36,9 @@ if (-not (Test-Path $Target)) {
 }
 
 # 以当前登录用户身份、登录时（ONLOGON）触发；交互式以便 listen_chat 能操作微信桌面 UI
-$action    = New-ScheduledTaskAction -Execute $Target -WorkingDirectory $ScriptDir
+# 显式用 wscript.exe 拉起 .vbs，不依赖系统把 .vbs 关联到 wscript（企业组策略/杀软可能改掉关联，
+# 导致任务"成功"却没真拉起 Agent 且无日志）。$Target 用引号包裹，路径带空格也安全。
+$action    = New-ScheduledTaskAction -Execute 'wscript.exe' -Argument "`"$Target`"" -WorkingDirectory $ScriptDir
 $trigger   = New-ScheduledTaskTrigger -AtLogOn -User $env:USERNAME
 $principal = New-ScheduledTaskPrincipal -UserId $env:USERNAME -LogonType Interactive -RunLevel Limited
 $settings  = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable -ExecutionTimeLimit ([TimeSpan]::Zero)
