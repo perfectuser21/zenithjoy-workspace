@@ -18,7 +18,6 @@ import {
   Target,
   KeyRound,
   ShieldCheck,
-  UserCog,
   Download,
   Music2,
   Folder,
@@ -88,7 +87,7 @@ export const autopilotPageComponents: Record<string, () => Promise<{ default: Co
   'AgentDebugPage': () => import('../pages/AgentDebugPage'),
   'LicensePage': () => import('../pages/LicensePage'),
   'AdminLicensePage': () => import('../pages/AdminLicensePage'),
-  'AdminUsersPage': () => import('../pages/AdminUsersPage'),
+  // #816: 会员管理已并入「客户管理」(AdminCustomersPage)，AdminUsersPage 已删
   'AdminCustomersPage': () => import('../pages/AdminCustomersPage'),
   // Walking Skeleton #1 — 客户首次成功路径（抖音版）
   'AgentDownloadPage': () => import('../pages/AgentDownloadPage'),
@@ -316,14 +315,7 @@ export const autopilotNavGroups: NavGroup[] = [
         component: 'AdminLicensePage',
       },
       {
-        path: '/admin/users',
-        icon: UserCog,
-        label: '会员管理',
-        featureKey: 'users-admin',
-        requireSuperAdmin: true,
-        component: 'AdminUsersPage',
-      },
-      {
+        // #816: 「会员管理」(/admin/users) 已并入「客户管理」，导航只保留一个客户管理入口
         path: '/admin/customers',
         icon: Building2,
         label: '客户管理',

@@ -93,7 +93,7 @@ beforeEach(() => {
   vi.mocked(customerAdminApi.removeMember).mockResolvedValue(undefined as unknown as void);
   vi.mocked(customerAdminApi.bindDevice).mockResolvedValue({ binding_id: 'b1' });
   vi.mocked(customerAdminApi.updateCompanyName).mockResolvedValue({ tenant_id: TID, name: '晨悦传媒' });
-  vi.mocked(moduleHealthApi.fetchModuleHealth).mockResolvedValue({ success: true, data: [] });
+  vi.mocked(moduleHealthApi.fetchModuleHealth).mockResolvedValue({ ok: true, data: [] });
 });
 
 describe('AdminCustomersPage [BEHAVIOR]', () => {
@@ -108,9 +108,8 @@ describe('AdminCustomersPage [BEHAVIOR]', () => {
   it('公司表格渲染 name 与成员数 member_count', async () => {
     render(<AdminCustomersPage />, { wrapper: createWrapper() });
     await waitFor(() => {
-      expect(screen.getByTestId('companies-table')).toBeInTheDocument();
+      expect(screen.getByText('晨悦传媒')).toBeInTheDocument();
     });
-    expect(screen.getByText('晨悦传媒')).toBeInTheDocument();
     // 成员数列展示 2
     const row = screen.getByTestId('company-row');
     expect(row).toHaveTextContent('2');
@@ -119,9 +118,11 @@ describe('AdminCustomersPage [BEHAVIOR]', () => {
   it('选中公司后 ① 成员区列出成员（email + role）', async () => {
     render(<AdminCustomersPage />, { wrapper: createWrapper() });
     await waitFor(() => {
-      expect(screen.getByText('alice@t.test')).toBeInTheDocument();
+      expect(screen.getAllByTestId('member-row')).toHaveLength(2);
     });
-    expect(screen.getByText('svc@t.test')).toBeInTheDocument();
+    const rows = screen.getAllByTestId('member-row');
+    expect(rows[0]).toHaveTextContent('alice@t.test');
+    expect(rows[1]).toHaveTextContent('svc@t.test');
     expect(screen.getByTestId('region-members')).toBeInTheDocument();
   });
 
@@ -141,7 +142,7 @@ describe('AdminCustomersPage [BEHAVIOR]', () => {
   it('移除成员 → 调 removeMember', async () => {
     render(<AdminCustomersPage />, { wrapper: createWrapper() });
     await waitFor(() => {
-      expect(screen.getByText('alice@t.test')).toBeInTheDocument();
+      expect(screen.getAllByTestId('member-row')).toHaveLength(2);
     });
     const removeBtns = await screen.findAllByTestId('member-remove');
     fireEvent.click(removeBtns[0]);
@@ -153,8 +154,9 @@ describe('AdminCustomersPage [BEHAVIOR]', () => {
 
   it('② 绑定区把成员绑到机器 → 调 bindDevice', async () => {
     render(<AdminCustomersPage />, { wrapper: createWrapper() });
+    // 等成员加载完（绑定下拉的选项来自成员列表）
     await waitFor(() => {
-      expect(screen.getByTestId('bind-member-select')).toBeInTheDocument();
+      expect(screen.getAllByTestId('member-row')).toHaveLength(2);
     });
     fireEvent.change(screen.getByTestId('bind-member-select'), { target: { value: 'usr-2' } });
     fireEvent.change(screen.getByTestId('bind-machine-input'), { target: { value: 'pc-1' } });

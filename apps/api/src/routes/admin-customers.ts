@@ -22,19 +22,28 @@ router.get('/', async (req: Request, res: Response) => {
     const rows = await pool.query<{
       tenant_id: string;
       email: string;
+      name: string | null;
+      member_count: number | string;
       license_status: string;
       platform_count: number | string;
       last_publish_at: string | null;
     }>(`
       SELECT
         t.id AS tenant_id,
+        t.name AS name,
         COALESCE(l.customer_email, '') AS email,
+        COALESCE(mc.member_count, 0) AS member_count,
         COALESCE(l.tier, 'none') AS license_status,
         COALESCE(ps.platform_count, 0) AS platform_count,
         pl.last_publish_at
       FROM zenithjoy.tenants t
       LEFT JOIN zenithjoy.licenses l
         ON l.tenant_id = t.id AND l.revoked_at IS NULL
+      LEFT JOIN (
+        SELECT tm.tenant_id, COUNT(*)::int AS member_count
+        FROM zenithjoy.tenant_members tm
+        GROUP BY tm.tenant_id
+      ) mc ON mc.tenant_id = t.id
       LEFT JOIN (
         SELECT a.tenant_id, COUNT(aps.id)::int AS platform_count
         FROM zenithjoy.agents a
@@ -52,7 +61,9 @@ router.get('/', async (req: Request, res: Response) => {
 
     const data = rows.rows.map((r) => ({
       tenant_id: r.tenant_id,
+      name: r.name ?? '',
       email: r.email,
+      member_count: Number(r.member_count),
       license_status: r.license_status,
       platform_count: Number(r.platform_count),
       last_publish_at: r.last_publish_at ?? null,

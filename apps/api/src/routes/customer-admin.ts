@@ -1,33 +1,43 @@
 /**
- * Line 10 客户管理后台路由 — 公司名 / 子账号(role+配额) / 客服-PC 绑定(1:1 双唯一) / 诊断
+ * Line 10 客户管理后台路由 — 公司名 / 成员(better-auth user + tenant_members) / 客服-PC 绑定 / 诊断
  *
  * 挂载点：/api/tenant（见 app.ts）。全路由挂 superAdminGuard（超管 / internal token）。
- * 租户隔离：所有读写按路径 :id（tenant_id）过滤，子账号 / 绑定绝不跨公司可见。
+ * 租户隔离：所有读写按路径 :id（tenant_id）过滤，成员 / 绑定绝不跨公司可见。
  *
- * 端点（contract-draft.md Response Schema SSOT）：
- *   PUT    /:id                                   改公司名（tenants.name）
- *   GET    /:id/accounts                          子账号列表 + 配额
- *   POST   /:id/accounts                          建子账号（role + plan 配额硬拒）
- *   DELETE /:id/accounts/:aid                     软删子账号
- *   GET    /:id/service-agents                    客服-PC 绑定列表（含 online）
- *   POST   /:id/service-agents/:aid/bind-device   绑客服到 PC（1:1 双唯一 + 机器配额）
- *   DELETE /:id/service-agents/:bid               软删绑定
+ * 账号模型（#816 去重后）：统一到老的 better-auth 注册用户 + tenant_members，
+ * 废掉 tenant_sub_accounts。客服-PC 绑定改绑真实成员（service_agents.member_user_id）。
+ *
+ * 端点（contract Response Schema SSOT）：
+ *   PUT    /:id                                      改公司名（tenants.name）
+ *   GET    /:id/members                              成员列表（tenant_members JOIN user）
+ *   POST   /:id/members                              按 email 拉注册用户进本公司
+ *   DELETE /:id/members/:userId                      移除成员
+ *   GET    /:id/service-agents                       客服-PC 绑定列表（含 online）
+ *   POST   /:id/service-agents/:userId/bind-device   把成员绑到 PC（1:1 双唯一 + 机器配额）
+ *   DELETE /:id/service-agents/:bid                  软删绑定
  *
  * 诊断报告页复用既有 GET /api/agent/module-health（本文件不实现，仅前端消费）。
  */
 import { Router, Request, Response } from 'express';
 import { superAdminGuard } from '../middleware/super-admin';
 import pool from '../db/connection';
-import { computeSubAccountLimit } from '../lib/sub-account-quota';
-import {
-  isValidRole,
-  assertBindable,
-  CUSTOMER_ADMIN_ERROR_CODES as E,
-} from '../lib/customer-admin-rules';
 
 const router = Router();
 
 router.use(superAdminGuard);
+
+const VALID_ROLES = new Set(['owner', 'admin', 'member']);
+
+const ERR = {
+  TENANT_NOT_FOUND: 'TENANT_NOT_FOUND',
+  INVALID_NAME: 'INVALID_NAME',
+  INVALID_INPUT: 'INVALID_INPUT',
+  USER_NOT_FOUND: 'USER_NOT_FOUND',
+  MEMBER_NOT_FOUND: 'MEMBER_NOT_FOUND',
+  ALREADY_BOUND: 'ALREADY_BOUND',
+  MACHINE_QUOTA_EXCEEDED: 'MACHINE_QUOTA_EXCEEDED',
+  BINDING_NOT_FOUND: 'BINDING_NOT_FOUND',
+} as const;
 
 function nowIso(): string {
   return new Date().toISOString();
@@ -94,7 +104,7 @@ router.put('/:id', async (req: Request, res: Response) => {
   const tenantId = req.params.id;
   const name = typeof req.body?.name === 'string' ? req.body.name.trim() : '';
   if (!name) {
-    return fail(res, 400, E.INVALID_NAME, '公司名不能为空');
+    return fail(res, 400, ERR.INVALID_NAME, '公司名不能为空');
   }
   try {
     const r = await pool.query<{ id: string; name: string }>(
@@ -103,7 +113,7 @@ router.put('/:id', async (req: Request, res: Response) => {
       [name, tenantId]
     );
     if (r.rowCount === 0) {
-      return fail(res, 404, E.TENANT_NOT_FOUND, '租户不存在');
+      return fail(res, 404, ERR.TENANT_NOT_FOUND, '租户不存在');
     }
     await audit(req, tenantId, 'update_tenant_name', 'tenant', tenantId);
     return res.json({ success: true, data: { tenant_id: r.rows[0].id, name: r.rows[0].name } });
@@ -112,139 +122,96 @@ router.put('/:id', async (req: Request, res: Response) => {
   }
 });
 
-// ──────────────────── GET /:id/accounts — 子账号列表 + 配额 ────────────────────
-router.get('/:id/accounts', async (req: Request, res: Response) => {
+// ──────────────────── GET /:id/members — 成员列表 ────────────────────
+// 复用 better-auth user + tenant_members（tenant_members.feishu_user_id 存 user.id）
+router.get('/:id/members', async (req: Request, res: Response) => {
   const tenantId = req.params.id;
   try {
-    const lic = await getTenantLicense(tenantId);
-    const limit = computeSubAccountLimit(lic?.tier);
-
     const rows = await pool.query<{
-      account_id: string;
+      user_id: string;
       email: string;
-      display_name: string;
+      name: string | null;
       role: string;
-      created_at: string;
+      joined_at: string;
     }>(
-      `SELECT id AS account_id, email, display_name, role, created_at
-         FROM zenithjoy.tenant_sub_accounts
-        WHERE tenant_id = $1 AND deleted_at IS NULL
-        ORDER BY created_at ASC`,
+      `SELECT tm.feishu_user_id AS user_id,
+              u.email,
+              u.name,
+              tm.role,
+              tm.created_at AS joined_at
+         FROM zenithjoy.tenant_members tm
+         JOIN "user" u ON u.id = tm.feishu_user_id
+        WHERE tm.tenant_id = $1
+        ORDER BY tm.created_at ASC`,
       [tenantId]
     );
-
     const data = rows.rows.map((r) => ({
-      account_id: r.account_id,
+      user_id: r.user_id,
       email: r.email,
-      display_name: r.display_name,
+      name: r.name ?? '',
       role: r.role,
-      created_at: r.created_at,
+      joined_at: r.joined_at,
     }));
-
-    return res.json({
-      success: true,
-      data,
-      total: data.length,
-      quota: { used: data.length, limit },
-    });
+    return res.json({ success: true, data, total: data.length });
   } catch (err) {
     return fail(res, 500, 'FETCH_FAILED', err instanceof Error ? err.message : 'unknown');
   }
 });
 
-// ──────────────────── POST /:id/accounts — 建子账号 ────────────────────
-router.post('/:id/accounts', async (req: Request, res: Response) => {
+// ──────────────────── POST /:id/members — 按 email 拉用户进公司 ────────────────────
+router.post('/:id/members', async (req: Request, res: Response) => {
   const tenantId = req.params.id;
   const email = typeof req.body?.email === 'string' ? req.body.email.trim() : '';
-  const displayName = typeof req.body?.display_name === 'string' ? req.body.display_name.trim() : '';
-  const role = req.body?.role;
-
-  if (!isValidRole(role)) {
-    return fail(res, 400, E.INVALID_ROLE, `非法角色：${String(role)}`);
-  }
+  const role = typeof req.body?.role === 'string' && VALID_ROLES.has(req.body.role) ? req.body.role : 'member';
   if (!email) {
-    return fail(res, 400, E.INVALID_NAME, '邮箱不能为空');
+    return fail(res, 400, ERR.INVALID_INPUT, 'email 不能为空');
   }
-
   try {
-    const tenant = await pool.query(`SELECT id FROM zenithjoy.tenants WHERE id = $1`, [tenantId]);
-    if (tenant.rowCount === 0) {
-      return fail(res, 404, E.TENANT_NOT_FOUND, '租户不存在');
-    }
-
-    const lic = await getTenantLicense(tenantId);
-    const limit = computeSubAccountLimit(lic?.tier);
-    const usedRes = await pool.query<{ used: number | string }>(
-      `SELECT count(*)::int AS used
-         FROM zenithjoy.tenant_sub_accounts
-        WHERE tenant_id = $1 AND deleted_at IS NULL`,
-      [tenantId]
+    const u = await pool.query<{ id: string; email: string }>(
+      `SELECT id, email FROM "user" WHERE lower(email) = lower($1) LIMIT 1`,
+      [email]
     );
-    const used = Number(usedRes.rows[0]?.used ?? 0);
-    if (used >= limit) {
-      return fail(res, 409, E.SUBACCOUNT_QUOTA_EXCEEDED, `配额已满，当前 ${used}/${limit}`);
+    if (u.rowCount === 0) {
+      return fail(res, 404, ERR.USER_NOT_FOUND, '该邮箱未注册，请用户先注册再拉入');
     }
-
-    const dup = await pool.query(
-      `SELECT 1 FROM zenithjoy.tenant_sub_accounts
-        WHERE tenant_id = $1 AND lower(email) = lower($2) AND deleted_at IS NULL`,
-      [tenantId, email]
+    const userId = u.rows[0].id;
+    await pool.query(
+      `INSERT INTO zenithjoy.tenant_members (tenant_id, feishu_user_id, role)
+       VALUES ($1, $2, $3)
+       ON CONFLICT (tenant_id, feishu_user_id) DO UPDATE SET role = EXCLUDED.role`,
+      [tenantId, userId, role]
     );
-    if ((dup.rowCount ?? 0) > 0) {
-      return fail(res, 409, E.EMAIL_EXISTS, '该邮箱已存在');
-    }
-
-    const ins = await pool.query<{
-      id: string;
-      email: string;
-      display_name: string;
-      role: string;
-    }>(
-      `INSERT INTO zenithjoy.tenant_sub_accounts (tenant_id, email, display_name, role)
-       VALUES ($1, $2, $3, $4)
-       RETURNING id, email, display_name, role`,
-      [tenantId, email, displayName, role]
-    );
-    const row = ins.rows[0];
-    await audit(req, tenantId, 'create_account', 'sub_account', row.id);
+    await audit(req, tenantId, 'add_member', 'member', userId);
     return res.status(201).json({
       success: true,
-      data: { account_id: row.id, email: row.email, display_name: row.display_name, role: row.role },
+      data: { user_id: userId, email: u.rows[0].email, role },
     });
   } catch (err) {
-    if (isUniqueViolation(err)) {
-      return fail(res, 409, E.EMAIL_EXISTS, '该邮箱已存在');
-    }
-    return fail(res, 500, 'CREATE_FAILED', err instanceof Error ? err.message : 'unknown');
+    return fail(res, 500, 'ADD_FAILED', err instanceof Error ? err.message : 'unknown');
   }
 });
 
-// ──────────────────── DELETE /:id/accounts/:aid — 软删子账号 ────────────────────
-router.delete('/:id/accounts/:aid', async (req: Request, res: Response) => {
+// ──────────────────── DELETE /:id/members/:userId — 移除成员 ────────────────────
+router.delete('/:id/members/:userId', async (req: Request, res: Response) => {
   const tenantId = req.params.id;
-  const accountId = req.params.aid;
+  const userId = req.params.userId;
   try {
-    const r = await pool.query<{ id: string }>(
-      `UPDATE zenithjoy.tenant_sub_accounts
-          SET deleted_at = now(), updated_at = now()
-        WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL
-        RETURNING id`,
-      [accountId, tenantId]
-    );
-    if (r.rowCount === 0) {
-      return fail(res, 404, E.ACCOUNT_NOT_FOUND, '子账号不存在或已删除');
-    }
-    // 连带软删该账号的有效绑定（保持 1:1 不变式）
+    // 先解绑该成员名下绑定，保持 1:1 不变式
     await pool.query(
       `UPDATE zenithjoy.service_agents
           SET deleted_at = now(), updated_at = now()
-        WHERE account_id = $1 AND tenant_id = $2 AND deleted_at IS NULL`,
-      [accountId, tenantId]
+        WHERE member_user_id = $1 AND tenant_id = $2 AND deleted_at IS NULL`,
+      [userId, tenantId]
     );
-    await audit(req, tenantId, 'delete_account', 'sub_account', accountId);
-    return res.json({ success: true, data: { account_id: accountId, deleted: true } });
+    await pool.query(
+      `DELETE FROM zenithjoy.tenant_members
+        WHERE tenant_id = $1 AND feishu_user_id = $2`,
+      [tenantId, userId]
+    );
+    await audit(req, tenantId, 'remove_member', 'member', userId);
+    return res.json({ success: true, data: { user_id: userId, removed: true } });
   } catch (err) {
-    return fail(res, 500, 'DELETE_FAILED', err instanceof Error ? err.message : 'unknown');
+    return fail(res, 500, 'REMOVE_FAILED', err instanceof Error ? err.message : 'unknown');
   }
 });
 
@@ -254,8 +221,8 @@ router.get('/:id/service-agents', async (req: Request, res: Response) => {
   try {
     const rows = await pool.query<{
       binding_id: string;
-      account_id: string;
-      account_email: string;
+      member_user_id: string;
+      member_email: string | null;
       machine_id: string;
       hostname: string | null;
       last_seen: string | null;
@@ -263,14 +230,14 @@ router.get('/:id/service-agents', async (req: Request, res: Response) => {
     }>(
       `SELECT DISTINCT ON (sa.id)
               sa.id AS binding_id,
-              sa.account_id,
-              a.email AS account_email,
+              sa.member_user_id,
+              u.email AS member_email,
               sa.machine_id,
               lm.hostname,
               lm.last_seen,
               sa.created_at AS bound_at
          FROM zenithjoy.service_agents sa
-         JOIN zenithjoy.tenant_sub_accounts a ON a.id = sa.account_id
+         LEFT JOIN "user" u ON u.id = sa.member_user_id
          LEFT JOIN zenithjoy.licenses l ON l.tenant_id = sa.tenant_id AND l.revoked_at IS NULL
          LEFT JOIN zenithjoy.license_machines lm
                 ON lm.machine_id = sa.machine_id AND lm.license_id = l.id
@@ -285,8 +252,8 @@ router.get('/:id/service-agents', async (req: Request, res: Response) => {
         const online = last > 0 && Date.now() - last < 60_000;
         return {
           binding_id: r.binding_id,
-          account_id: r.account_id,
-          account_email: r.account_email,
+          member_user_id: r.member_user_id,
+          member_email: r.member_email ?? null,
           machine_id: r.machine_id,
           hostname: r.hostname ?? null,
           online,
@@ -301,38 +268,34 @@ router.get('/:id/service-agents', async (req: Request, res: Response) => {
   }
 });
 
-// ──────────────────── POST /:id/service-agents/:aid/bind-device — 绑客服到 PC ────────────────────
-router.post('/:id/service-agents/:aid/bind-device', async (req: Request, res: Response) => {
+// ──────────────────── POST /:id/service-agents/:userId/bind-device — 绑成员到 PC ────────────────────
+router.post('/:id/service-agents/:userId/bind-device', async (req: Request, res: Response) => {
   const tenantId = req.params.id;
-  const accountId = req.params.aid;
+  const memberUserId = req.params.userId;
   const machineId = typeof req.body?.machine_id === 'string' ? req.body.machine_id.trim() : '';
   if (!machineId) {
-    return fail(res, 400, E.INVALID_NAME, 'machine_id 不能为空');
+    return fail(res, 400, ERR.INVALID_INPUT, 'machine_id 不能为空');
   }
 
   try {
-    const acc = await pool.query<{ role: string }>(
-      `SELECT role FROM zenithjoy.tenant_sub_accounts
-        WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL`,
-      [accountId, tenantId]
+    // 成员必须属于该公司（tenant_members）
+    const mem = await pool.query<{ feishu_user_id: string }>(
+      `SELECT feishu_user_id FROM zenithjoy.tenant_members
+        WHERE tenant_id = $1 AND feishu_user_id = $2`,
+      [tenantId, memberUserId]
     );
-    if (acc.rowCount === 0) {
-      return fail(res, 404, E.ACCOUNT_NOT_FOUND, '子账号不存在');
-    }
-    try {
-      assertBindable({ role: acc.rows[0].role });
-    } catch {
-      return fail(res, 400, E.INVALID_BIND_ROLE, '只有 service_agent 角色可绑 PC');
+    if (mem.rowCount === 0) {
+      return fail(res, 404, ERR.MEMBER_NOT_FOUND, '该成员不属于本公司');
     }
 
     // 双唯一应用层预检（DB partial unique 兜底）
-    const accBound = await pool.query(
+    const memBound = await pool.query(
       `SELECT 1 FROM zenithjoy.service_agents
-        WHERE account_id = $1 AND deleted_at IS NULL`,
-      [accountId]
+        WHERE member_user_id = $1 AND deleted_at IS NULL`,
+      [memberUserId]
     );
-    if ((accBound.rowCount ?? 0) > 0) {
-      return fail(res, 409, E.ALREADY_BOUND, '该客服已绑定 PC');
+    if ((memBound.rowCount ?? 0) > 0) {
+      return fail(res, 409, ERR.ALREADY_BOUND, '该成员已绑定 PC');
     }
     const machineBound = await pool.query(
       `SELECT 1 FROM zenithjoy.service_agents
@@ -340,7 +303,7 @@ router.post('/:id/service-agents/:aid/bind-device', async (req: Request, res: Re
       [machineId]
     );
     if ((machineBound.rowCount ?? 0) > 0) {
-      return fail(res, 409, E.ALREADY_BOUND, '该 PC 已被绑定');
+      return fail(res, 409, ERR.ALREADY_BOUND, '该 PC 已被绑定');
     }
 
     // 机器配额：绑定占用 license.max_machines。新机器（未在 license_machines）超额硬拒。
@@ -361,7 +324,7 @@ router.post('/:id/service-agents/:aid/bind-device', async (req: Request, res: Re
         return fail(
           res,
           409,
-          E.MACHINE_QUOTA_EXCEEDED,
+          ERR.MACHINE_QUOTA_EXCEEDED,
           `机器配额已满，当前 ${existing}/${lic.max_machines}`
         );
       }
@@ -374,19 +337,19 @@ router.post('/:id/service-agents/:aid/bind-device', async (req: Request, res: Re
     }
 
     const ins = await pool.query<{ id: string }>(
-      `INSERT INTO zenithjoy.service_agents (tenant_id, account_id, machine_id)
+      `INSERT INTO zenithjoy.service_agents (tenant_id, member_user_id, machine_id)
        VALUES ($1, $2, $3) RETURNING id`,
-      [tenantId, accountId, machineId]
+      [tenantId, memberUserId, machineId]
     );
     const bindingId = ins.rows[0].id;
     await audit(req, tenantId, 'bind_device', 'binding', bindingId);
     return res.status(201).json({
       success: true,
-      data: { binding_id: bindingId, account_id: accountId, machine_id: machineId },
+      data: { binding_id: bindingId, member_user_id: memberUserId, machine_id: machineId },
     });
   } catch (err) {
     if (isUniqueViolation(err)) {
-      return fail(res, 409, E.ALREADY_BOUND, '客服或 PC 已被绑定');
+      return fail(res, 409, ERR.ALREADY_BOUND, '成员或 PC 已被绑定');
     }
     return fail(res, 500, 'BIND_FAILED', err instanceof Error ? err.message : 'unknown');
   }
@@ -405,7 +368,7 @@ router.delete('/:id/service-agents/:bid', async (req: Request, res: Response) =>
       [bindingId, tenantId]
     );
     if (r.rowCount === 0) {
-      return fail(res, 404, E.BINDING_NOT_FOUND, '绑定不存在或已删除');
+      return fail(res, 404, ERR.BINDING_NOT_FOUND, '绑定不存在或已删除');
     }
     await audit(req, tenantId, 'unbind_device', 'binding', bindingId);
     return res.json({ success: true, data: { binding_id: bindingId, deleted: true } });

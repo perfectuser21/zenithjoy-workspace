@@ -365,13 +365,13 @@ tests:
     product: 中台认证
     note: "PR-A — 超管会员管理路由 GET/POST/DELETE + superAdminGuard 鉴权（mock DB）"
 
-  - id: dashboard-admin-users-page
-    path: apps/dashboard/src/pages/__tests__/AdminUsersPage.test.tsx
+  - id: dashboard-admin-customers-page
+    path: apps/dashboard/src/pages/__tests__/AdminCustomersPage.test.tsx
     type: unit
     ci: L3
     status: active
-    product: 中台认证
-    note: "PR-A — AdminUsersPage 超管后台（搜索/拉人/踢人/删用户 + 非 admin 拒绝）"
+    product: 客户管理
+    note: "#816 合并 — AdminCustomersPage 唯一客户管理页（公司表格 name/成员数 + 成员区列/加/移 + 客服-PC 绑定 + 非 admin 403）。会员管理 AdminUsersPage 已并入此页。"
 
   - id: dashboard-license-api
     path: apps/dashboard/src/api/__tests__/license.api.test.ts
@@ -3302,30 +3302,17 @@ agent_suite:
     product: 中台认证
     note: "env 接缝通用闸门 — 全 src 扫描每个 process.env.X 强制分类(REQUIRED/OPTIONAL+reason/FRAMEWORK)，未分类即红；含 proven-to-fire(findUnclassifiedEnv 拦 ZZ_FAKE_UNCLASSIFIED)。升级 #800 只查 2 文件的完整性闸门为全扫描。"
 
-  # ─── Line 10 客户管理后台（Sprint 06220836）──────────────────────────────
-  - id: customer-admin-sub-account-quota-unit
-    path: apps/api/src/lib/sub-account-quota.test.ts
-    type: unit
-    ci: L3
-    status: active
-    product: 客户管理
-    note: "Sprint 06220836: 子账号配额映射 tier→上限（free0/basic3/matrix5/studio10/enterprise30）+ 未知 tier 保守 0。"
-
-  - id: customer-admin-rules-unit
-    path: apps/api/src/lib/customer-admin-rules.test.ts
-    type: unit
-    ci: L3
-    status: active
-    product: 客户管理
-    note: "Sprint 06220836: 子账号 role 枚举校验 + 只有 service_agent 可绑 PC（assertBindable 抛 INVALID_BIND_ROLE）。"
-
+  # ─── Line 10 客户管理后台（Sprint 06220836 → #816 合并去重）──────────────────
+  # 注：#816 废 tenant_sub_accounts，统一到 better-auth user + tenant_members。
+  # 已删测试：sub-account-quota / customer-admin-rules（角色/绑定守卫概念随子账号一并废）
+  #          及 sprint 归档 customer-admin-backend.test.ts。
   - id: customer-admin-routes-unit
     path: apps/api/src/routes/customer-admin.test.ts
     type: unit
     ci: L3
     status: active
     product: 客户管理
-    note: "Sprint 06220836: /api/tenant 路由 supertest — 改名/建号(配额)/schema 纯度/绑定守卫/机器配额(mock pool)；端到端以 contract-dod.md [BEHAVIOR] 为 evaluator oracle。"
+    note: "#816 合并: /api/tenant 路由 supertest — 改名/按 tenant 列+加+删成员(tenant_members)/绑真实成员(member_user_id)1:1+机器配额/子账号端点已 404(mock pool)。"
 
   - id: customer-admin-api-client-unit
     path: apps/dashboard/src/api/customer-admin.api.test.ts
@@ -3333,7 +3320,7 @@ agent_suite:
     ci: L3
     status: active
     product: 客户管理
-    note: "Sprint 06220836: Dashboard customer-admin API 客户端 — PUT 改名/GET accounts+quota/配额满抛错/bind-device 路由（stub fetch）。"
+    note: "#816 合并: Dashboard customer-admin API 客户端 — PUT 改名/listMembers/addMemberByEmail(用户不存在抛错)/removeMember/bindDevice 绑真实成员路由（stub fetch）。"
 
   - id: customer-admin-backend-e2e
     path: apps/dashboard/e2e/customer-admin-backend.spec.ts
@@ -3341,15 +3328,8 @@ agent_suite:
     ci: L4
     status: active
     product: 客户管理
-    note: "Sprint 06220836: 客户管理后台 4 区 Golden Path Playwright（公司名→3 子账号→绑 1 客服 1 PC→诊断）+ 5 截图（windows_cloud）。"
+    note: "#816 合并: 客户管理后台 Golden Path Playwright（公司名→成员→绑 1 成员 1 PC→诊断）+ 截图（windows_cloud）。"
 
-  - id: customer-admin-backend-sprint-archive
-    path: sprints/06220836-customer-admin-backend/tests/customer-admin-backend.test.ts
-    type: unit
-    ci: L3
-    status: active
-    product: 客户管理
-    note: "Sprint 06220836 合同归档入口 — 配额映射/role 合法性/绑定守卫纯逻辑 unit；端到端行为以 contract-dod.md [BEHAVIOR] manual:bash 为 evaluator oracle。"
   - id: agent-client-encapsulation-contract
     path: sprints/06220836-agent-client-encapsulation/tests/agent-client-encapsulation.test.ts
     type: unit

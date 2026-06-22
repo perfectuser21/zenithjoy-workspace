@@ -1,31 +1,32 @@
 /**
  * 客户管理后台 E2E — Line 10 Golden Path（windows_cloud / 干净 VM Playwright）
  *
- * 4 区用户路径（管理员真实操作）：
- *   1. 打开「客户管理」页 → 公司列表 + 4 区可见            01-customers-page.png
- *   2. 设公司名 → 列表/详情显示新名                        02-company-named.png
- *   3. 建 3 子账号(1 service_agent) → 列表 3 行 + role 标签  03-accounts.png
- *   4. 绑 1 客服到 1 PC → 「客服 @ PC ● 在线/离线」行        04-bound.png
- *   5. 看诊断 → 模块矩阵表格（或空态文案）                  05-diagnosis.png
+ * #816 合并去重后：账号模型统一到 better-auth user + tenant_members（废 tenant_sub_accounts）。
+ * 用户路径（管理员真实操作）：
+ *   1. 打开「客户管理」页 → 公司表格（name/成员数）+ 各区可见       01-customers-page.png
+ *   2. 改公司名 → 表格该行显示新名                                  02-company-named.png
+ *   3. ① 成员区：按 email 拉成员进公司 → 成员行出现                 03-members.png
+ *   4. ② 绑 1 成员到 1 PC → 「成员 @ PC ● 在线/离线」行            04-bound.png
+ *   5. ③ 看诊断 → 模块矩阵表格（或空态文案）                       05-diagnosis.png
  *
- * 所有后端端点用 page.route stub（干净 VM 无后端）；维护内存态让建/绑后 GET 反映变化。
+ * 所有后端端点用 page.route stub（干净 VM 无后端）；维护内存态让加/绑后 GET 反映变化。
  * 超管身份由 build 注入 VITE_SKIP_AUTH=true + VITE_SUPER_ADMIN_EMAILS（见 e2e-verify.ps1）。
  */
 import { test, expect, type Page } from '@playwright/test';
 
 const TID = '11111111-1111-1111-1111-111111111111';
 
-interface Acct {
-  account_id: string;
+interface Member {
+  user_id: string;
   email: string;
-  display_name: string;
+  name: string;
   role: string;
-  created_at: string;
+  joined_at: string;
 }
 interface Binding {
   binding_id: string;
-  account_id: string;
-  account_email: string;
+  member_user_id: string;
+  member_email: string;
   machine_id: string;
   hostname: string | null;
   online: boolean;
@@ -34,18 +35,18 @@ interface Binding {
 
 async function stubBackend(page: Page) {
   let companyName = 'Personal-old@zj.test';
-  const accounts: Acct[] = [];
+  const members: Member[] = [];
   const bindings: Binding[] = [];
   let seq = 0;
 
-  // 公司列表
+  // 公司列表（含 name + member_count）
   await page.route('**/api/admin/customers', async (route) => {
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify({
         success: true,
-        data: [{ tenant_id: TID, email: 'cust@zj.test', name: companyName }],
+        data: [{ tenant_id: TID, email: 'cust@zj.test', name: companyName, member_count: members.length, license_status: 'matrix' }],
         total: 1,
       }),
     });
@@ -73,39 +74,43 @@ async function stubBackend(page: Page) {
     });
   });
 
-  // 子账号 GET/POST
-  await page.route(`**/api/tenant/${TID}/accounts`, async (route) => {
+  // 成员 GET/POST（POST 按 email 拉注册用户进公司）
+  await page.route(`**/api/tenant/${TID}/members`, async (route) => {
     const req = route.request();
     if (req.method() === 'POST') {
       const body = JSON.parse(req.postData() || '{}');
-      const acc: Acct = {
-        account_id: `acc-${++seq}`,
+      const mem: Member = {
+        user_id: `usr-${++seq}`,
         email: body.email,
-        display_name: body.display_name,
-        role: body.role,
-        created_at: new Date(0).toISOString(),
+        name: body.email.split('@')[0],
+        role: body.role || 'member',
+        joined_at: new Date(0).toISOString(),
       };
-      accounts.push(acc);
-      await route.fulfill({ status: 201, contentType: 'application/json', body: JSON.stringify({ success: true, data: acc }) });
+      members.push(mem);
+      await route.fulfill({
+        status: 201,
+        contentType: 'application/json',
+        body: JSON.stringify({ success: true, data: { user_id: mem.user_id, email: mem.email, role: mem.role } }),
+      });
       return;
     }
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
-      body: JSON.stringify({ success: true, data: accounts, total: accounts.length, quota: { used: accounts.length, limit: 5 } }),
+      body: JSON.stringify({ success: true, data: members, total: members.length }),
     });
   });
 
-  // 绑定 POST
+  // 绑定 POST（绑真实成员 :userId）
   await page.route(`**/api/tenant/${TID}/service-agents/*/bind-device`, async (route) => {
     const req = route.request();
-    const accountId = req.url().split('/service-agents/')[1].split('/bind-device')[0];
+    const memberUserId = req.url().split('/service-agents/')[1].split('/bind-device')[0];
     const body = JSON.parse(req.postData() || '{}');
-    const acc = accounts.find((a) => a.account_id === accountId);
+    const mem = members.find((m) => m.user_id === memberUserId);
     bindings.push({
       binding_id: `b-${++seq}`,
-      account_id: accountId,
-      account_email: acc?.email ?? 'svc@zj.test',
+      member_user_id: memberUserId,
+      member_email: mem?.email ?? 'svc@zj.test',
       machine_id: body.machine_id,
       hostname: 'PC-A',
       online: true,
@@ -114,7 +119,7 @@ async function stubBackend(page: Page) {
     await route.fulfill({
       status: 201,
       contentType: 'application/json',
-      body: JSON.stringify({ success: true, data: { binding_id: `b-${seq}`, account_id: accountId, machine_id: body.machine_id } }),
+      body: JSON.stringify({ success: true, data: { binding_id: `b-${seq}`, member_user_id: memberUserId, machine_id: body.machine_id } }),
     });
   });
 
@@ -139,43 +144,42 @@ async function stubBackend(page: Page) {
   });
 }
 
-test('客户管理后台 4 区 Golden Path + 5 截图', async ({ page }) => {
+test('客户管理后台 Golden Path + 5 截图（成员统一到注册用户）', async ({ page }) => {
   await stubBackend(page);
 
-  // ── Step 1：打开客户管理页，4 区可见 ──
+  // ── Step 1：打开客户管理页，各区可见 ──
   await page.goto('/admin/customers');
   await expect(page.getByTestId('customer-admin-page')).toBeVisible({ timeout: 15_000 });
-  await expect(page.getByTestId('region-company')).toBeVisible();
-  await expect(page.getByTestId('region-accounts')).toBeVisible();
+  await expect(page.getByTestId('region-companies')).toBeVisible();
+  await expect(page.getByTestId('companies-table')).toBeVisible();
+  await expect(page.getByTestId('region-members')).toBeVisible();
   await expect(page.getByTestId('region-bindings')).toBeVisible();
   await expect(page.getByTestId('region-diagnosis')).toBeVisible();
   await page.screenshot({ path: 'e2e/screenshots/01-customers-page.png', fullPage: true });
 
-  // ── Step 2：设公司名 ──
-  await page.getByTestId('company-name-input').fill('晨悦传媒');
-  await page.getByTestId('company-name-save').click();
-  await expect(page.getByTestId('company-name-display')).toContainText('晨悦传媒');
+  // ── Step 2：改公司名 ──
+  await page.getByTestId('company-row').first().click();
+  await page.getByTestId('company-name-input').first().fill('晨悦传媒');
+  await page.getByTestId('company-name-save').first().click();
+  await expect(page.getByTestId('company-name').filter({ hasText: '晨悦传媒' })).toBeVisible();
   await page.screenshot({ path: 'e2e/screenshots/02-company-named.png', fullPage: true });
 
-  // ── Step 3：建 3 子账号（1 service_agent） ──
-  const newAccounts = [
-    { email: 'admin@cust.test', name: '管理员', role: 'admin' },
-    { email: 'op@cust.test', name: '运营', role: 'operator' },
-    { email: 'svc@cust.test', name: '客服', role: 'service_agent' },
+  // ── Step 3：① 按 email 拉成员进公司 ──
+  const newMembers = [
+    { email: 'admin@cust.test', role: 'admin' },
+    { email: 'svc@cust.test', role: 'member' },
   ];
-  for (const a of newAccounts) {
-    await page.getByTestId('account-email').fill(a.email);
-    await page.getByTestId('account-display').fill(a.name);
-    await page.getByTestId('account-role').selectOption(a.role);
-    await page.getByTestId('account-add').click();
-    await expect(page.getByTestId('account-row').filter({ hasText: a.email })).toBeVisible();
+  for (const m of newMembers) {
+    await page.getByTestId('member-email-input').fill(m.email);
+    await page.getByTestId('member-role-select').selectOption(m.role);
+    await page.getByTestId('member-add').click();
+    await expect(page.getByTestId('member-row').filter({ hasText: m.email })).toBeVisible();
   }
-  await expect(page.getByTestId('account-row')).toHaveCount(3);
-  await expect(page.getByTestId('account-role-tag').filter({ hasText: 'service_agent' })).toBeVisible();
-  await page.screenshot({ path: 'e2e/screenshots/03-accounts.png', fullPage: true });
+  await expect(page.getByTestId('member-row')).toHaveCount(2);
+  await page.screenshot({ path: 'e2e/screenshots/03-members.png', fullPage: true });
 
-  // ── Step 4：绑 1 客服到 1 PC ──
-  await page.getByTestId('bind-account-select').selectOption({ label: 'svc@cust.test' });
+  // ── Step 4：② 绑 1 成员到 1 PC ──
+  await page.getByTestId('bind-member-select').selectOption({ label: 'svc@cust.test' });
   await page.getByTestId('bind-machine-input').fill('PC-001');
   await page.getByTestId('bind-submit').click();
   await expect(page.getByTestId('binding-row')).toHaveCount(1);
@@ -183,7 +187,7 @@ test('客户管理后台 4 区 Golden Path + 5 截图', async ({ page }) => {
   await expect(page.getByTestId('binding-online').first()).toBeVisible();
   await page.screenshot({ path: 'e2e/screenshots/04-bound.png', fullPage: true });
 
-  // ── Step 5：看诊断 ──
+  // ── Step 5：③ 看诊断 ──
   await expect(page.getByTestId('diagnosis-table')).toBeVisible();
   await expect(page.getByTestId('diagnosis-row').first()).toBeVisible();
   await page.screenshot({ path: 'e2e/screenshots/05-diagnosis.png', fullPage: true });
