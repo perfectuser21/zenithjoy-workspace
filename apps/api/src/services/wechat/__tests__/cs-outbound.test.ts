@@ -22,6 +22,7 @@ import {
   enqueueKeyContactBroadcast,
   enqueueFailureAlert,
   markOutboundReceipt,
+  listPendingOutbound,
   ONLINE_TEXT,
   OFFLINE_TEXT,
 } from '../cs-outbound';
@@ -108,6 +109,42 @@ describe('enqueueFailureAlert 失败告警 + 去重', () => {
     const r = await enqueueFailureAlert({ reason: 'send_failed', keyContact: '', agentId: AGENT });
     expect(r.task_id).toBeUndefined();
     expect(queryMock).not.toHaveBeenCalled();
+  });
+});
+
+describe('listPendingOutbound agent_id 身份对齐（env-id→UUID 兜底映射）', () => {
+  const UUID = '3755783c-33fd-483c-bc28-10be65c4872a';
+  const ENV_ID = 'agent-env-mqm92olb';
+
+  it('传入已是 UUID → 不反查 agents，直接按 UUID 过滤（只一次 query）', async () => {
+    queryMock.mockResolvedValueOnce({ rows: [] }); // 直接拉任务
+    await listPendingOutbound(UUID);
+    expect(queryMock).toHaveBeenCalledTimes(1);
+    // 唯一一次 query 必须是拉 wechat_publish_task、参数含 UUID 原值
+    expect(String(queryMock.mock.calls[0][0])).toMatch(/wechat_publish_task/);
+    expect(queryMock.mock.calls[0][1]).toContain(UUID);
+  });
+
+  it('传入是 env-id → 先 SELECT agents 反查 UUID，再用 UUID 过滤', async () => {
+    queryMock
+      .mockResolvedValueOnce({ rows: [{ id: UUID }] }) // 反查 agents：env-id→UUID
+      .mockResolvedValueOnce({ rows: [] }); // 用 UUID 拉任务
+    await listPendingOutbound(ENV_ID);
+    expect(queryMock).toHaveBeenCalledTimes(2);
+    // 第一次：反查 agents 用 env-id
+    expect(String(queryMock.mock.calls[0][0])).toMatch(/FROM zenithjoy\.agents/i);
+    expect(queryMock.mock.calls[0][1]).toContain(ENV_ID);
+    // 第二次：拉任务用反查出的 UUID（不是 env-id）
+    expect(String(queryMock.mock.calls[1][0])).toMatch(/wechat_publish_task/);
+    expect(queryMock.mock.calls[1][1]).toContain(UUID);
+    expect(queryMock.mock.calls[1][1]).not.toContain(ENV_ID);
+  });
+
+  it('env-id 在 agents 表无映射 → 返回空数组，不拉任务、不抛', async () => {
+    queryMock.mockResolvedValueOnce({ rows: [] }); // 反查 agents：无命中
+    const tasks = await listPendingOutbound('agent-env-nonexistent');
+    expect(tasks).toEqual([]);
+    expect(queryMock).toHaveBeenCalledTimes(1); // 只反查，不再拉任务
   });
 });
 
