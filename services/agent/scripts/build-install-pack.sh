@@ -7,10 +7,11 @@ cd "$AGENT_DIR"
 
 # ── Args: --dry-run (CI 静态验证，不下载二进制) / --out <dir> (自定义输出目录) ──
 DRY_RUN=false
-CUSTOM_OUT=""
+# CUSTOM_OUT 同时支持 --out <dir> 与环境变量 CUSTOM_OUT（e2e-verify.ps1 Phase 1 用 env 传产物目录）
+CUSTOM_OUT="${CUSTOM_OUT:-}"
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --dry-run) DRY_RUN=true ;;
+    --dry-run|--dryrun) DRY_RUN=true ;;
     --out) CUSTOM_OUT="$2"; shift ;;
     *) ;;
   esac
@@ -56,10 +57,12 @@ if [ "$DRY_RUN" = true ]; then
   for f in wechat-rpa/*.py; do cp "$f" "${PACK_DIR}/wechat-rpa/" 2>/dev/null || true; done
   echo "[build-dryrun] wechat-rpa/*.py 拷贝完成"
 
-  # 文本资产（start.bat 含讲述人解锁命令）
+  # 文本资产（start.bat 含讲述人解锁命令；start.vbs 无窗口启动入口）
   cp install-pack/start.bat "${PACK_DIR}/"
+  cp install-pack/start.vbs "${PACK_DIR}/"
+  cp install-pack/install-autostart.ps1 "${PACK_DIR}/" 2>/dev/null || true
   cp install-pack/.env.template "${PACK_DIR}/" 2>/dev/null || true
-  echo "[build-dryrun] start.bat + 文本资产拷贝完成"
+  echo "[build-dryrun] start.bat + start.vbs + 文本资产拷贝完成"
 
   echo "[build-dryrun] PACK_DIR=${PACK_DIR} 内容: $(ls ${PACK_DIR}/)"
   echo "[build-dryrun] ✅ dry-run 验证结构就绪"
@@ -93,6 +96,8 @@ fi
 echo "[build] copying assets to ${PACK_DIR}/"
 cp zenithjoy-agent.exe "$PACK_DIR/"
 cp install-pack/start.bat "$PACK_DIR/"
+# start.vbs — 无窗口启动入口（去黑窗），客户双击此文件启动，自启亦指向它
+cp install-pack/start.vbs "$PACK_DIR/"
 cp install-pack/uninstall.bat "$PACK_DIR/"
 # 进程守护：watchdog 崩溃自愈循环 + 开机自启注册脚本
 cp install-pack/install-autostart.ps1 "$PACK_DIR/"

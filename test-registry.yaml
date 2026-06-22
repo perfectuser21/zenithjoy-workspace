@@ -529,6 +529,14 @@ tests:
     product: AI员工
     note: "Sprint 06090945 — updateTrayModules 首次出现模块时（0→N）热重建托盘：触发 rebuild hook / 已有模块不重建 / headless 不崩溃"
 
+  - id: agent-tray-show-module-error-degrade
+    path: services/agent/src/__tests__/tray-show-module-error-degrade.test.ts
+    type: unit
+    ci: L2
+    status: active
+    product: AI员工
+    note: "Sprint 06220836（PR #815 review 跟进）— Agent 客户端封装 去黑窗：showModuleError 降级红点分支真验。node-notifier 不可用（注入必失败 _notifierHook）时记录 lastModuleError + 触发 _trayRebuildHook 渲染 🔴 + 绝不 spawn 任何子进程（尤其 powershell）；含 headless(handlers=null) 分支。"
+
   # ── Walking Skeleton #1 — Agent handlers ────────────────────────────────────
   - id: agent-ws1-heartbeat-loop
     path: services/agent/src/handlers/__tests__/heartbeat-loop.test.ts
@@ -3286,3 +3294,10 @@ agent_suite:
     status: active
     product: 客户管理
     note: "Sprint 06220836 合同归档入口 — 配额映射/role 合法性/绑定守卫纯逻辑 unit；端到端行为以 contract-dod.md [BEHAVIOR] manual:bash 为 evaluator oracle。"
+  - id: agent-client-encapsulation-contract
+    path: sprints/06220836-agent-client-encapsulation/tests/agent-client-encapsulation.test.ts
+    type: unit
+    ci: windows_cloud
+    status: pending-ci
+    product: 中台认证
+    note: "Sprint 06220836 — Agent 客户端封装 去黑窗+托盘静默通知合同 SSOT（TDD RED 来源）：start.vbs windowStyle=0/单实例/launch.log 轮转、tray.ts 去 powershell 走 node-notifier、自启指 start.vbs、打包含 vbs、node-notifier 依赖、start.bat ZJ_LAUNCH_PROBE 守卫。机制层在 e2e-verify.ps1(GHA windows-latest) 真验；视觉/重启接缝 S1/S2/S3 logic-done-pending(xian-pc)。"
