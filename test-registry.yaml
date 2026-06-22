@@ -465,6 +465,14 @@ tests:
     product: AI员工
     note: "Sprint 06220821 无审批自动回复闭环：自动代理 5 配置键 getAutoAgentConfig/saveAutoAgentConfig oracle（vi.mock db/connection，默认关 + partial 合并 upsert）。"
 
+  - id: line04-ship-version-sync
+    path: .github/workflows/scripts/smoke/line04-ship-version-sync-smoke.sh
+    type: smoke
+    ci: L4
+    status: active
+    product: AI员工
+    note: "Sprint 06221415 修 #817 部署 gap：line04 三个版本面（modules manifest / build-modules manifest / 中台心跳 required_version）必须三面一致且 >=1.0.52，否则客户机被告知已最新永不重下，拿不到自动回复闭环代码。同时断言发货 Python 源 services/agent/wechat-rpa 含 auto_reply.py + listen_chat.process_outbound_once/fetch_outbound_tasks + 决策层 decide_reply_route/is_duplicate/alert_on_failure。"
+
   - id: agent-line04-python-path-fix
     path: services/agent/modules/line04/__tests__/wechat-rpa-python-path.test.ts
     type: unit

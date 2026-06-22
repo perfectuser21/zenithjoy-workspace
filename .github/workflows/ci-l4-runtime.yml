@@ -129,6 +129,31 @@ jobs:
             echo "build-modules in sync" || \
             (echo "build-modules diverged from source! Run: rsync -av services/agent/wechat-rpa/ services/agent/build-modules/line04/wechat-rpa/" && exit 1)
 
+      # 防漂移守卫（修 #817 部署 gap 的根）：line04 三个版本面必须完全一致。
+      # build-line-module.sh 真读 modules/line04/manifest.json 决定 COS 包版本；
+      # build-modules manifest 是打包基线；中台心跳 required_version 告诉客户机要哪个版本。
+      # 任一面落后 → 客户机被告知已最新永不重下 → 拿不到新代码（#817 就是只 bump 了 build-modules）。
+      - name: Check line04 三个版本面一致（modules / build-modules / 中台心跳）
+        run: |
+          V_MOD=$(node -e "process.stdout.write(require('./services/agent/modules/line04/manifest.json').version)")
+          V_BUILD=$(node -e "process.stdout.write(require('./services/agent/build-modules/line04/manifest.json').version)")
+          V_HB=$(grep -oE "'line04-wechat-cs': \{ status: 'active', required_version: '[0-9.]+' \}" \
+                 apps/api/src/services/walking-skeleton.service.ts | grep -oE "[0-9]+\.[0-9]+\.[0-9]+")
+          echo "modules=$V_MOD build-modules=$V_BUILD heartbeat=$V_HB"
+          if [ "$V_MOD" != "$V_BUILD" ] || [ "$V_MOD" != "$V_HB" ]; then
+            echo "FAIL: line04 三个版本面不一致 — 三者必须相等，否则客户机永不真升级。"
+            echo "  改 line04 版本时必须同步：services/agent/modules/line04/manifest.json"
+            echo "                          services/agent/build-modules/line04/manifest.json"
+            echo "                          apps/api/src/services/walking-skeleton.service.ts HEARTBEAT_MODULES"
+            exit 1
+          fi
+          echo "OK: line04 三个版本面一致 = $V_MOD"
+
+      - name: Smoke — line04 发货版本面 + 自动回复闭环（修 #817 部署 gap）
+        run: |
+          chmod +x .github/workflows/scripts/smoke/line04-ship-version-sync-smoke.sh
+          bash .github/workflows/scripts/smoke/line04-ship-version-sync-smoke.sh
+
   # ─── L4 Gate ──────────────────────────────────────────────────────────
   l4-passed:
     name: L4 Runtime Gate Passed
