@@ -1729,6 +1729,13 @@ def run_real_listen(args: argparse.Namespace) -> int:
             eligible = []
             for m in unread:
                 key = (m["sender"], m["content"])
+                # UIA 重复读防护：同 (联系人, 文本) 在去重时间窗内只回一次（auto_reply.is_duplicate
+                # 是 SSOT；pywinauto 轮询常把同一条未读重复读出来，这里挡掉防重复发）。
+                if auto_reply.is_duplicate(m["sender"], m["content"], now):
+                    if key not in _skip_logged:
+                        _log(f"skip(dup) sender={m['sender']} content={m['content'][:20]!r}")
+                        _skip_logged.add(key)
+                    continue
                 # per-sender 冷却：成功回复后 30s 内跳过同一 sender
                 if now - sender_reply_cooldown.get(m["sender"], 0) < SENDER_COOLDOWN:
                     continue
@@ -1817,6 +1824,8 @@ def run_real_listen(args: argparse.Namespace) -> int:
                 except Exception as exc:
                     _log(f"reply_in_chat exception sender={m['sender']}: {exc}")
                     ok = False
+                # 回执（auto_reply.build_receipt 是 SSOT）：成功 auto_sent / 失败 send_failed 不重发。
+                receipt = auto_reply.build_receipt("auto", ok=ok, reason=None if ok else "send_failed")
                 if ok:
                     _replied_ts[key] = time.time()  # 记录时间戳，_save_replied 持久化用
                     replied.add(key)
@@ -1825,10 +1834,26 @@ def run_real_listen(args: argparse.Namespace) -> int:
                     reply_failed_at.pop(key, None)
                     sender_reply_cooldown[m["sender"]] = time.time()  # per-sender 30s 冷却
                     last_content.pop(m["sender"], None)  # 删除防自回复风暴（存 reply 反而触发 Path2 截断误判）
-                    _log(f"auto-replied OK sender={m['sender']}")
+                    _log(f"auto-replied OK sender={m['sender']} receipt={receipt['status']}")
                 else:
                     reply_failed_at[key] = time.time()
-                    _log(f"reply_in_chat FAILED sender={m['sender']} (冷却 {REPLY_FAIL_COOLDOWN}s 再试)")
+                    # 读回失败/掉线告警：auto_reply.alert_on_failure 产出关键人告警 payload（同时要求写飞书）。
+                    # 关键人由中台配置（auto_agent.key_contact_wechat）下发；agent 侧拿不到则 target 留空，
+                    # 仍把告警随心跳 diag 上报中台，由中台真送达关键人（真送达是接缝，xian-rog 真机验）。
+                    key_contact = getattr(args, "key_contact", "") or os.environ.get("ZJ_KEY_CONTACT", "")
+                    alert = auto_reply.alert_on_failure("reply_in_chat_failed", key_contact)
+                    _log(
+                        f"reply_in_chat FAILED sender={m['sender']} receipt={receipt['status']} "
+                        f"alert_target={alert['target']!r} (冷却 {REPLY_FAIL_COOLDOWN}s 再试)"
+                    )
+                    try:
+                        post_heartbeat(
+                            args.middleware_url,
+                            agent_id=getattr(args, "agent_id", None),
+                            diag={"alert": alert, "receipt": receipt},
+                        )
+                    except Exception as _hbexc:
+                        _log(f"[告警上报] 心跳异常: {_hbexc}")
                 time.sleep(1)  # 操作间隔 ≥1s
 
             time.sleep(args.interval)

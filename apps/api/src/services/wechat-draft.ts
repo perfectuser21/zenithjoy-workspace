@@ -21,7 +21,14 @@ import pool from '../db/connection';
 import { callOpenRouter } from '../llm/openrouter';
 import type { ChatMessage, ContactFact, ContactMemory, Persona } from './wechat/types';
 import { retrieveRelevantKB } from './wechat/business-kb';
-import { getPersona, getBusinessKB } from './wechat/cs-config-store';
+import { getPersona, getBusinessKB, getAutoAgentConfig } from './wechat/cs-config-store';
+import {
+  decideReplyRoute,
+  withinBusinessHours,
+  nowMinutesLocal,
+  ROUTE_AUTO,
+  ROUTE_REVIEW,
+} from './wechat/cs-route-decision';
 import {
   appendMessage,
   consolidate,
@@ -201,10 +208,25 @@ export interface GenerateChatDraftParams {
   tenant_id?: string;
   /**
    * 'review'（默认）= A 路线审核台：只写飞书/DB pending_review，不回 reply。
-   * 'auto' = 隐形自动回模式：同样写审核台入库，额外把生成文案作为 reply 返回，
-   *          listener 拿 reply 直接用本人微信号发出去（AI 失败时 reply 为 undefined，listener 跳过不发占位）。
+   * 'auto' = 无审批自动回模式：受 getAutoAgentConfig 控制（C1 接线）——读总开关/营业时间/
+   *          daily_limit + 查飞书白名单 → 按 decideReplyRoute 真值表分流：
+   *            route=auto          → 生成 + 返回 reply（listener 真发）
+   *            route=review        → 总开关 OFF（监控态）：仍生成草稿写飞书 pending_review，不返回 reply
+   *            route=pending_human → 名单外 / 超 daily_limit：不生成不发，名单外返回 not_in_whitelist
+   *            route=skip_offhours → 营业时间外：不返回 reply
+   *          AI 失败时 reply 为 undefined（listener 跳过不发占位）。
    */
   mode?: 'auto' | 'review';
+  /**
+   * 测试 / 调用方可注入「当前分钟数」（当天 0–1439）做营业时间判定，避开真实时钟漂移。
+   * 缺省 → 用本地时钟（nowMinutesLocal）。
+   */
+  now_minutes?: number;
+  /**
+   * 该联系人当天已自动回次数（daily_limit 判定用）。缺省 0。
+   * thin 阶段由调用方/上层统计传入；服务端不在此查 DB（保持纯函数式决策可测）。
+   */
+  daily_count?: number;
 }
 
 export interface GenerateChatDraftSuccess {
@@ -238,18 +260,69 @@ export async function generateChatDraft(
     `[wechat-draft] generateChatDraft tenant_scope=${tenant_id ?? '<none>'} sender=${sender}`,
   );
 
-  // 1) 白名单校验 —— mode='auto'（listen_chat 全员自动回）时跳过，review 模式才查飞书名单。
-  if (mode !== 'auto') {
+  // 1) 白名单校验 —— 两种模式都查飞书"客户档案"名单（C1 修复：auto 不再无条件跳过）。
+  //    名单成员关系是后续路由真值表的入参（名单外 → pending_human，绝不自动回陌生人）。
+  let inWhitelist = false;
+  {
     let customers: FeishuRecord[] = [];
     try {
       customers = await searchTable(getCustomerTableId(), sender);
     } catch (err) {
       console.warn('[wechat-draft] 飞书"客户档案"search 失败，按名单外处理:', err);
+      customers = [];
+    }
+    inWhitelist = Boolean(customers && customers.length > 0);
+  }
+
+  // review 模式（A 路线审核台）保持原契约：名单外直接拒，不生成不入库。
+  if (mode !== 'auto' && !inWhitelist) {
+    return { ok: false, reason: 'not_in_whitelist' };
+  }
+
+  // 1b) auto 模式（C1 接线核心）：读自动代理配置 → 按真值表分流。
+  //     决策真正生效点在此（不再让 listen_chat 无条件全员回）。
+  //     - route=pending_human 且名单外 → 立即拒（not_in_whitelist），不烧 LLM、不入库草稿。
+  //     - route=skip_offhours / 超额 pending_human → 不返回 reply，也不生成（省 LLM），仅返回监控态。
+  //     - route=review（总开关 OFF=监控态）→ 继续生成草稿写 pending_review，但不返回 reply。
+  //     - route=auto → 继续生成 + 返回 reply（真发）。
+  let autoShouldReturnReply = false;
+  if (mode === 'auto') {
+    const cfg = await getAutoAgentConfig();
+    let businessHoursOk = true;
+    try {
+      const nowMin = params.now_minutes ?? nowMinutesLocal();
+      businessHoursOk = withinBusinessHours(
+        cfg.business_hours_start,
+        cfg.business_hours_end,
+        nowMin,
+      );
+    } catch (err) {
+      // 营业时间格式脏（UI 漏校验）→ 不崩主链路，按"营业中"处理但记日志（保守可回）。
+      console.warn('[wechat-draft] 营业时间格式非法，按营业中处理:', err);
+      businessHoursOk = true;
+    }
+    const route = decideReplyRoute(
+      inWhitelist,
+      businessHoursOk,
+      cfg.auto_agent_enabled,
+      params.daily_count ?? 0,
+      cfg.daily_limit,
+    );
+    console.info(
+      `[wechat-draft] auto route=${route} inWhitelist=${inWhitelist} ` +
+        `enabled=${cfg.auto_agent_enabled} businessHoursOk=${businessHoursOk}`,
+    );
+
+    if (!inWhitelist && cfg.auto_agent_enabled) {
+      // 名单外 + 开关 ON → pending_human：不生成不发，返回 not_in_whitelist（上层记 pending_human）。
       return { ok: false, reason: 'not_in_whitelist' };
     }
-    if (!customers || customers.length === 0) {
-      return { ok: false, reason: 'not_in_whitelist' };
+    if (route !== ROUTE_AUTO && route !== ROUTE_REVIEW) {
+      // skip_offhours / 超 daily_limit 的 pending_human：不返回 reply，不生成草稿（省 LLM），监控态返回。
+      return { ok: true, status: 'pending_review', task_id: crypto.randomUUID(), draft_id: '' };
     }
+    // route=auto → 真发；route=review（监控态）→ 生成草稿但不返回 reply。
+    autoShouldReturnReply = route === ROUTE_AUTO;
   }
 
   // 2) 三层记忆 + 人设 + 企业知识库 → 上下文装配（替代旧的"飞书取最近10轮+营销画像"）
@@ -359,9 +432,10 @@ export async function generateChatDraft(
     console.warn('[wechat-draft] AI 草稿生成失败 fallback 占位:', aiError);
   }
 
-  // mode:'auto' 隐形自动回 —— AI 成功才回 reply 文本；AI 失败（aiContent=FAIL_PLACEHOLDER）reply 留 undefined，
-  // listener 检测到 undefined 即跳过不发，绝不把占位文案发给客户。mode:'review'（默认）永不带 reply。
-  const reply = mode === 'auto' && !aiError ? aiContent : undefined;
+  // 无审批自动回 —— 仅 route=auto（autoShouldReturnReply）且 AI 成功才回 reply 文本；
+  // AI 失败（aiContent=FAIL_PLACEHOLDER）reply 留 undefined，listener 检测到 undefined 即跳过不发，
+  // 绝不把占位文案发给客户。route=review（监控态）/ mode:'review'（默认）永不带 reply。
+  const reply = autoShouldReturnReply && !aiError ? aiContent : undefined;
 
   return {
     ok: true,
