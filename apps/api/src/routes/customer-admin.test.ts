@@ -43,7 +43,7 @@ beforeEach(() => {
 
 describe('superAdminGuard', () => {
   it('非超管 X-Feishu-User-Id: not-an-admin → 403', async () => {
-    const res = await request(app).get(`/api/tenant/${TID}/accounts`).set('X-Feishu-User-Id', 'not-an-admin');
+    const res = await request(app).get(`/api/tenant/${TID}/members`).set('X-Feishu-User-Id', 'not-an-admin');
     expect(res.status).toBe(403);
   });
 });
@@ -75,137 +75,139 @@ describe('PUT /api/tenant/:id 改公司名', () => {
   });
 });
 
-describe('POST /api/tenant/:id/accounts 建子账号', () => {
-  it('非法 role → 400 INVALID_ROLE，不写库', async () => {
-    const res = await request(app)
-      .post(`/api/tenant/${TID}/accounts`)
-      .send({ email: 'x@t.test', display_name: 'x', role: 'boss' });
-    expect(res.status).toBe(400);
-    expect(res.body.error.code).toBe('INVALID_ROLE');
-    // 角色校验在任何 DB 写之前
-    const insertCalls = mockQuery.mock.calls.filter((c) => /INSERT INTO zenithjoy\.tenant_sub_accounts/.test(String(c[0])));
-    expect(insertCalls.length).toBe(0);
-  });
-
-  it('配额满 → 409 SUBACCOUNT_QUOTA_EXCEEDED 且 message 含「配额」与「/」', async () => {
+// ────────────────────────────────────────────────────────────────────
+// 按 tenant 列成员（复用 better-auth user + tenant_members）
+// ────────────────────────────────────────────────────────────────────
+describe('GET /api/tenant/:id/members 列成员', () => {
+  it('返回该 tenant 的 tenant_members + 关联 user email/role，schema 纯净', async () => {
     setHandler((sql) => {
-      if (/FROM zenithjoy\.tenants WHERE id/.test(sql)) return { rows: [{ id: TID }], rowCount: 1 };
-      if (/FROM zenithjoy\.licenses/.test(sql)) return { rows: [{ id: 'lic', tier: 'basic', max_machines: 1 }], rowCount: 1 };
-      if (/count\(\*\)::int AS used/.test(sql)) return { rows: [{ used: 3 }], rowCount: 1 };
-      return { rows: [], rowCount: 0 };
-    });
-    const res = await request(app)
-      .post(`/api/tenant/${TID}/accounts`)
-      .send({ email: 'over@t.test', display_name: 'o', role: 'operator' });
-    expect(res.status).toBe(409);
-    expect(res.body.error.code).toBe('SUBACCOUNT_QUOTA_EXCEEDED');
-    expect(res.body.error.message).toMatch(/配额/);
-    expect(res.body.error.message).toMatch(/\//);
-  });
-
-  it('正常建号 → 201 且 data.role 回显', async () => {
-    setHandler((sql) => {
-      if (/FROM zenithjoy\.tenants WHERE id/.test(sql)) return { rows: [{ id: TID }], rowCount: 1 };
-      if (/FROM zenithjoy\.licenses/.test(sql)) return { rows: [{ id: 'lic', tier: 'matrix', max_machines: 5 }], rowCount: 1 };
-      if (/count\(\*\)::int AS used/.test(sql)) return { rows: [{ used: 0 }], rowCount: 1 };
-      if (/INSERT INTO zenithjoy\.tenant_sub_accounts/.test(sql))
-        return { rows: [{ id: 'acc-1', email: 'svc@t.test', display_name: '客服', role: 'service_agent' }], rowCount: 1 };
-      return { rows: [], rowCount: 0 };
-    });
-    const res = await request(app)
-      .post(`/api/tenant/${TID}/accounts`)
-      .send({ email: 'svc@t.test', display_name: '客服', role: 'service_agent' });
-    expect(res.status).toBe(201);
-    expect(res.body.data.role).toBe('service_agent');
-    expect(res.body.data.account_id).toBe('acc-1');
-  });
-});
-
-describe('GET /api/tenant/:id/accounts schema 纯度', () => {
-  it('顶层 keys 恰为 [data,quota,success,total]，data 项用 account_id 不泄漏 id', async () => {
-    setHandler((sql) => {
-      if (/FROM zenithjoy\.licenses/.test(sql)) return { rows: [{ id: 'lic', tier: 'matrix', max_machines: 5 }], rowCount: 1 };
-      if (/FROM zenithjoy\.tenant_sub_accounts/.test(sql))
+      if (/FROM zenithjoy\.tenant_members tm/.test(sql) && /JOIN "user"/.test(sql))
         return {
-          rows: [{ account_id: 'acc-1', email: 'a@t.test', display_name: 'a', role: 'operator', created_at: '2026-06-22T00:00:00Z' }],
-          rowCount: 1,
+          rows: [
+            { user_id: 'usr-1', email: 'alice@t.test', name: 'Alice', role: 'owner', joined_at: '2026-06-22T00:00:00Z' },
+            { user_id: 'usr-2', email: 'svc@t.test', name: '客服', role: 'member', joined_at: '2026-06-22T01:00:00Z' },
+          ],
+          rowCount: 2,
         };
       return { rows: [], rowCount: 0 };
     });
-    const res = await request(app).get(`/api/tenant/${TID}/accounts`);
+    const res = await request(app).get(`/api/tenant/${TID}/members`);
     expect(res.status).toBe(200);
-    expect(Object.keys(res.body).sort()).toEqual(['data', 'quota', 'success', 'total']);
-    expect(res.body).not.toHaveProperty('users');
-    expect(res.body).not.toHaveProperty('id');
-    expect(res.body.data[0]).toHaveProperty('account_id');
-    expect(res.body.data[0]).not.toHaveProperty('id');
-    expect(res.body.quota).toHaveProperty('limit');
-    expect(res.body.quota).toHaveProperty('used');
+    expect(Object.keys(res.body).sort()).toEqual(['data', 'success', 'total']);
+    expect(res.body.total).toBe(2);
+    expect(res.body.data[0]).toHaveProperty('user_id');
+    expect(res.body.data[0]).toHaveProperty('email');
+    expect(res.body.data[0]).toHaveProperty('role');
+    expect(res.body.data[0].email).toBe('alice@t.test');
+  });
+
+  it('成员查询按 tenant_id 过滤（SQL 含 tm.tenant_id = $1）', async () => {
+    setHandler(() => ({ rows: [], rowCount: 0 }));
+    await request(app).get(`/api/tenant/${TID}/members`);
+    const call = mockQuery.mock.calls.find((c) => /FROM zenithjoy\.tenant_members tm/.test(String(c[0])));
+    expect(call).toBeDefined();
+    expect(String(call![0])).toMatch(/tm\.tenant_id\s*=\s*\$1/);
   });
 });
 
-describe('getTenantLicense 只认 status=active 的 license（review 跟进）', () => {
-  it('license 查询 SQL 必须含 status = \'active\' 过滤', async () => {
-    setHandler((sql) => {
-      if (/FROM zenithjoy\.licenses/.test(sql)) return { rows: [{ id: 'lic', tier: 'matrix', max_machines: 5 }], rowCount: 1 };
-      if (/FROM zenithjoy\.tenant_sub_accounts/.test(sql)) return { rows: [], rowCount: 0 };
-      return { rows: [], rowCount: 0 };
-    });
-    await request(app).get(`/api/tenant/${TID}/accounts`);
-    const licCall = mockQuery.mock.calls.find((c) => /FROM zenithjoy\.licenses/.test(String(c[0])));
-    expect(licCall).toBeDefined();
-    expect(String(licCall![0])).toMatch(/status\s*=\s*'active'/);
+describe('POST /api/tenant/:id/members 拉成员进公司', () => {
+  it('缺 user_id → 400 INVALID_INPUT', async () => {
+    const res = await request(app).post(`/api/tenant/${TID}/members`).send({ role: 'member' });
+    expect(res.status).toBe(400);
+    expect(res.body.error.code).toBe('INVALID_INPUT');
   });
 
-  it('只有 expired/suspended license（active 过滤后查不到）→ quota.limit=0', async () => {
-    // 模拟 DB：active 过滤后查不到有效 license（expired/suspended 被排除）→ rows 空
+  it('user email 不存在 → 404 USER_NOT_FOUND', async () => {
     setHandler((sql) => {
-      if (/FROM zenithjoy\.licenses/.test(sql)) return { rows: [], rowCount: 0 };
-      if (/FROM zenithjoy\.tenant_sub_accounts/.test(sql)) return { rows: [], rowCount: 0 };
+      if (/FROM "user"/.test(sql)) return { rows: [], rowCount: 0 };
       return { rows: [], rowCount: 0 };
     });
-    const res = await request(app).get(`/api/tenant/${TID}/accounts`);
+    const res = await request(app).post(`/api/tenant/${TID}/members`).send({ email: 'ghost@t.test' });
+    expect(res.status).toBe(404);
+    expect(res.body.error.code).toBe('USER_NOT_FOUND');
+  });
+
+  it('按 email 拉用户进公司 → 201 写 tenant_members', async () => {
+    setHandler((sql) => {
+      if (/FROM "user"/.test(sql)) return { rows: [{ id: 'usr-9', email: 'svc@t.test' }], rowCount: 1 };
+      if (/INSERT INTO zenithjoy\.tenant_members/.test(sql)) return { rows: [], rowCount: 1 };
+      return { rows: [], rowCount: 0 };
+    });
+    const res = await request(app).post(`/api/tenant/${TID}/members`).send({ email: 'svc@t.test', role: 'member' });
+    expect(res.status).toBe(201);
+    expect(res.body.success).toBe(true);
+    expect(res.body.data.user_id).toBe('usr-9');
+    const ins = mockQuery.mock.calls.find((c) => /INSERT INTO zenithjoy\.tenant_members/.test(String(c[0])));
+    expect(ins).toBeDefined();
+  });
+});
+
+describe('DELETE /api/tenant/:id/members/:userId 移除成员', () => {
+  it('移除成员 → 200', async () => {
+    setHandler((sql) => {
+      if (/DELETE FROM zenithjoy\.tenant_members/.test(sql)) return { rows: [], rowCount: 1 };
+      return { rows: [], rowCount: 0 };
+    });
+    const res = await request(app).delete(`/api/tenant/${TID}/members/usr-9`);
     expect(res.status).toBe(200);
-    expect(res.body.quota.limit).toBe(0);
+    expect(res.body.success).toBe(true);
   });
+});
 
-  it('只有 expired/suspended license → 建子账号被配额拒（SUBACCOUNT_QUOTA_EXCEEDED）', async () => {
-    setHandler((sql) => {
-      if (/FROM zenithjoy\.tenants WHERE id/.test(sql)) return { rows: [{ id: TID }], rowCount: 1 };
-      // active 过滤后查不到 license → 无有效配额
-      if (/FROM zenithjoy\.licenses/.test(sql)) return { rows: [], rowCount: 0 };
-      if (/count\(\*\)::int AS used/.test(sql)) return { rows: [{ used: 0 }], rowCount: 1 };
-      return { rows: [], rowCount: 0 };
-    });
+// ────────────────────────────────────────────────────────────────────
+// 子账号端点已废除（#816 tenant_sub_accounts 删除）
+// ────────────────────────────────────────────────────────────────────
+describe('子账号端点已移除（tenant_sub_accounts 废除）', () => {
+  it('GET /api/tenant/:id/accounts → 404（路由不存在）', async () => {
+    const res = await request(app).get(`/api/tenant/${TID}/accounts`);
+    expect(res.status).toBe(404);
+  });
+  it('POST /api/tenant/:id/accounts → 404（路由不存在）', async () => {
     const res = await request(app)
       .post(`/api/tenant/${TID}/accounts`)
-      .send({ email: 'x@t.test', display_name: 'x', role: 'operator' });
-    expect(res.status).toBe(409);
-    expect(res.body.error.code).toBe('SUBACCOUNT_QUOTA_EXCEEDED');
+      .send({ email: 'x@t.test', role: 'service_agent' });
+    expect(res.status).toBe(404);
   });
 });
 
-describe('POST /api/tenant/:id/service-agents/:aid/bind-device 绑定', () => {
-  it('账号非 service_agent → 400 INVALID_BIND_ROLE', async () => {
+// ────────────────────────────────────────────────────────────────────
+// 客服-PC 绑定：改绑真实成员（service_agents.member_user_id）
+// ────────────────────────────────────────────────────────────────────
+describe('POST /api/tenant/:id/service-agents/:userId/bind-device 绑真实成员', () => {
+  it('成员不属于该公司 → 404 MEMBER_NOT_FOUND', async () => {
     setHandler((sql) => {
-      if (/SELECT role FROM zenithjoy\.tenant_sub_accounts/.test(sql)) return { rows: [{ role: 'operator' }], rowCount: 1 };
+      if (/FROM zenithjoy\.tenant_members/.test(sql)) return { rows: [], rowCount: 0 };
       return { rows: [], rowCount: 0 };
     });
     const res = await request(app)
-      .post(`/api/tenant/${TID}/service-agents/acc-1/bind-device`)
+      .post(`/api/tenant/${TID}/service-agents/usr-x/bind-device`)
       .send({ machine_id: 'pc-1' });
-    expect(res.status).toBe(400);
-    expect(res.body.error.code).toBe('INVALID_BIND_ROLE');
+    expect(res.status).toBe(404);
+    expect(res.body.error.code).toBe('MEMBER_NOT_FOUND');
   });
 
-  it('客服已绑 → 409 ALREADY_BOUND', async () => {
+  it('成员已绑 → 409 ALREADY_BOUND', async () => {
     setHandler((sql) => {
-      if (/SELECT role FROM zenithjoy\.tenant_sub_accounts/.test(sql)) return { rows: [{ role: 'service_agent' }], rowCount: 1 };
-      if (/WHERE account_id = \$1 AND deleted_at IS NULL/.test(sql)) return { rows: [{ x: 1 }], rowCount: 1 };
+      if (/FROM zenithjoy\.tenant_members/.test(sql)) return { rows: [{ feishu_user_id: 'usr-1' }], rowCount: 1 };
+      if (/WHERE member_user_id = \$1 AND deleted_at IS NULL/.test(sql)) return { rows: [{ x: 1 }], rowCount: 1 };
       return { rows: [], rowCount: 0 };
     });
     const res = await request(app)
-      .post(`/api/tenant/${TID}/service-agents/acc-1/bind-device`)
+      .post(`/api/tenant/${TID}/service-agents/usr-1/bind-device`)
+      .send({ machine_id: 'pc-1' });
+    expect(res.status).toBe(409);
+    expect(res.body.error.code).toBe('ALREADY_BOUND');
+  });
+
+  it('PC 已被绑 → 409 ALREADY_BOUND', async () => {
+    setHandler((sql) => {
+      if (/FROM zenithjoy\.tenant_members/.test(sql)) return { rows: [{ feishu_user_id: 'usr-1' }], rowCount: 1 };
+      if (/WHERE member_user_id = \$1 AND deleted_at IS NULL/.test(sql)) return { rows: [], rowCount: 0 };
+      if (/WHERE machine_id = \$1 AND deleted_at IS NULL/.test(sql)) return { rows: [{ x: 1 }], rowCount: 1 };
+      return { rows: [], rowCount: 0 };
+    });
+    const res = await request(app)
+      .post(`/api/tenant/${TID}/service-agents/usr-1/bind-device`)
       .send({ machine_id: 'pc-1' });
     expect(res.status).toBe(409);
     expect(res.body.error.code).toBe('ALREADY_BOUND');
@@ -213,8 +215,8 @@ describe('POST /api/tenant/:id/service-agents/:aid/bind-device 绑定', () => {
 
   it('机器配额满 → 409 MACHINE_QUOTA_EXCEEDED', async () => {
     setHandler((sql) => {
-      if (/SELECT role FROM zenithjoy\.tenant_sub_accounts/.test(sql)) return { rows: [{ role: 'service_agent' }], rowCount: 1 };
-      if (/WHERE account_id = \$1 AND deleted_at IS NULL/.test(sql)) return { rows: [], rowCount: 0 };
+      if (/FROM zenithjoy\.tenant_members/.test(sql)) return { rows: [{ feishu_user_id: 'usr-1' }], rowCount: 1 };
+      if (/WHERE member_user_id = \$1 AND deleted_at IS NULL/.test(sql)) return { rows: [], rowCount: 0 };
       if (/WHERE machine_id = \$1 AND deleted_at IS NULL/.test(sql)) return { rows: [], rowCount: 0 };
       if (/FROM zenithjoy\.licenses/.test(sql)) return { rows: [{ id: 'lic', tier: 'basic', max_machines: 1 }], rowCount: 1 };
       if (/count\(\*\)::int AS cnt FROM zenithjoy\.license_machines WHERE license_id = \$1$/.test(sql.trim()))
@@ -223,23 +225,43 @@ describe('POST /api/tenant/:id/service-agents/:aid/bind-device 绑定', () => {
       return { rows: [], rowCount: 0 };
     });
     const res = await request(app)
-      .post(`/api/tenant/${TID}/service-agents/acc-1/bind-device`)
+      .post(`/api/tenant/${TID}/service-agents/usr-1/bind-device`)
       .send({ machine_id: 'pc-new' });
     expect(res.status).toBe(409);
     expect(res.body.error.code).toBe('MACHINE_QUOTA_EXCEEDED');
   });
+
+  it('正常绑定 → 201', async () => {
+    setHandler((sql) => {
+      if (/FROM zenithjoy\.tenant_members/.test(sql)) return { rows: [{ feishu_user_id: 'usr-1' }], rowCount: 1 };
+      if (/WHERE member_user_id = \$1 AND deleted_at IS NULL/.test(sql)) return { rows: [], rowCount: 0 };
+      if (/WHERE machine_id = \$1 AND deleted_at IS NULL/.test(sql)) return { rows: [], rowCount: 0 };
+      if (/FROM zenithjoy\.licenses/.test(sql)) return { rows: [{ id: 'lic', tier: 'matrix', max_machines: 5 }], rowCount: 1 };
+      if (/count\(\*\)::int AS cnt FROM zenithjoy\.license_machines WHERE license_id = \$1$/.test(sql.trim()))
+        return { rows: [{ cnt: 0 }], rowCount: 1 };
+      if (/WHERE license_id = \$1 AND machine_id = \$2/.test(sql)) return { rows: [{ cnt: 0 }], rowCount: 1 };
+      if (/INSERT INTO zenithjoy\.service_agents/.test(sql)) return { rows: [{ id: 'bind-1' }], rowCount: 1 };
+      return { rows: [], rowCount: 0 };
+    });
+    const res = await request(app)
+      .post(`/api/tenant/${TID}/service-agents/usr-1/bind-device`)
+      .send({ machine_id: 'pc-new' });
+    expect(res.status).toBe(201);
+    expect(res.body.data.binding_id).toBe('bind-1');
+    expect(res.body.data.member_user_id).toBe('usr-1');
+  });
 });
 
-describe('GET /api/tenant/:id/service-agents schema 纯度', () => {
-  it('顶层 keys 恰为 [data,success,total]，data 项用 binding_id 不泄漏 id', async () => {
+describe('GET /api/tenant/:id/service-agents 绑定列表（join user 取 email）', () => {
+  it('顶层 keys 恰为 [data,success,total]，data 项用 binding_id + member_user_id', async () => {
     setHandler((sql) => {
       if (/FROM zenithjoy\.service_agents sa/.test(sql))
         return {
           rows: [
             {
               binding_id: 'b-1',
-              account_id: 'acc-1',
-              account_email: 'svc@t.test',
+              member_user_id: 'usr-1',
+              member_email: 'svc@t.test',
               machine_id: 'pc-1',
               hostname: 'PC-A',
               last_seen: null,
@@ -254,7 +276,9 @@ describe('GET /api/tenant/:id/service-agents schema 纯度', () => {
     expect(res.status).toBe(200);
     expect(Object.keys(res.body).sort()).toEqual(['data', 'success', 'total']);
     expect(res.body.data[0]).toHaveProperty('binding_id');
-    expect(res.body.data[0]).not.toHaveProperty('id');
+    expect(res.body.data[0]).toHaveProperty('member_user_id');
+    expect(res.body.data[0]).toHaveProperty('member_email');
     expect(res.body.data[0]).toHaveProperty('online');
+    expect(res.body.data[0]).not.toHaveProperty('id');
   });
 });

@@ -1,22 +1,34 @@
+/**
+ * AdminCustomersPage — 合并后的唯一「客户管理」页（#816 结构性去重）
+ *
+ * 账号模型统一到老的 better-auth 注册用户 + tenant_members（废 tenant_sub_accounts）。
+ * 结构：
+ *   公司表格（公司名 / License / 成员数，可选中一行）
+ *   选中后：① 成员（tenant_members，按 email 拉人 / 移除）
+ *           ② 客服-PC 绑定（把成员绑到机器，1:1 双唯一 + 机器配额）
+ *           ③ 诊断报告（复用 module-health）
+ */
 import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../contexts/AuthContext';
 import { adminFetch } from '../lib/admin-fetch';
 import {
-  listAccounts,
-  createAccount,
-  deleteAccount,
+  listMembers,
+  addMemberByEmail,
+  removeMember,
   listServiceAgents,
   bindDevice,
   updateCompanyName,
-  type SubAccountRole,
+  type MemberRole,
 } from '../api/customer-admin.api';
 import { fetchModuleHealth } from '../api/moduleHealth.api';
 
 interface CustomerRow {
   tenant_id: string;
-  email: string;
   name?: string;
+  email: string;
+  member_count?: number;
+  license_status?: string;
 }
 
 interface CustomersResponse {
@@ -31,7 +43,7 @@ async function fetchCustomers(email?: string): Promise<CustomersResponse> {
   return res.json();
 }
 
-const ROLE_OPTIONS: SubAccountRole[] = ['admin', 'operator', 'service_agent'];
+const ROLE_OPTIONS: MemberRole[] = ['member', 'admin', 'owner'];
 
 export default function AdminCustomersPage() {
   const { isSuperAdmin, user } = useAuth();
@@ -40,11 +52,9 @@ export default function AdminCustomersPage() {
 
   const [selectedTenant, setSelectedTenant] = useState<string | null>(null);
   const [companyName, setCompanyName] = useState('');
-  const [savedName, setSavedName] = useState('');
-  const [acctEmail, setAcctEmail] = useState('');
-  const [acctDisplay, setAcctDisplay] = useState('');
-  const [acctRole, setAcctRole] = useState<SubAccountRole>('service_agent');
-  const [bindAccount, setBindAccount] = useState('');
+  const [memberEmail, setMemberEmail] = useState('');
+  const [memberRole, setMemberRole] = useState<MemberRole>('member');
+  const [bindMember, setBindMember] = useState('');
   const [bindMachine, setBindMachine] = useState('');
   const [diagMachine, setDiagMachine] = useState('');
   const [err, setErr] = useState('');
@@ -57,9 +67,9 @@ export default function AdminCustomersPage() {
 
   const tenantId = selectedTenant ?? customers?.data?.[0]?.tenant_id ?? null;
 
-  const { data: accounts } = useQuery({
-    queryKey: ['tenant-accounts', tenantId],
-    queryFn: () => listAccounts(tenantId!, email),
+  const { data: members } = useQuery({
+    queryKey: ['tenant-members', tenantId],
+    queryFn: () => listMembers(tenantId!, email),
     enabled: isSuperAdmin && !!tenantId,
   });
 
@@ -95,14 +105,14 @@ export default function AdminCustomersPage() {
     }
   }
 
-  const serviceAgentAccounts = (accounts?.data ?? []).filter((a) => a.role === 'service_agent');
+  const memberRows = members?.data ?? [];
   const healthRows = health?.data ?? [];
 
   return (
     <div style={{ padding: 24, maxWidth: 1280 }} data-testid="customer-admin-page">
       <h1 style={{ fontSize: 24, fontWeight: 600, marginBottom: 4 }}>客户管理（super-admin）</h1>
       <p style={{ color: '#6b7280', fontSize: 13, marginBottom: 16 }}>
-        公司 / 子账号 / 客服-PC 绑定 / 诊断 一站式后台
+        公司 / 成员 / 客服-PC 绑定 / 诊断 一站式后台
       </p>
       {err && (
         <div data-testid="error-banner" style={{ color: '#b91c1c', marginBottom: 12 }}>
@@ -110,61 +120,88 @@ export default function AdminCustomersPage() {
         </div>
       )}
 
-      {/* ───────── 区 1：公司 ───────── */}
-      <Section title="① 公司" testId="region-company">
-        <div style={{ marginBottom: 12 }}>
-          <select
-            data-testid="company-select"
-            value={tenantId ?? ''}
-            onChange={(e) => {
-              setSelectedTenant(e.target.value);
-              setCompanyName('');
-              setSavedName('');
-            }}
-          >
-            {(customers?.data ?? []).map((c) => (
-              <option key={c.tenant_id} value={c.tenant_id}>
-                {c.name || c.email || c.tenant_id}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          <input
-            data-testid="company-name-input"
-            placeholder="公司名"
-            value={companyName}
-            onChange={(e) => setCompanyName(e.target.value)}
-          />
-          <button
-            data-testid="company-name-save"
-            disabled={!tenantId || !companyName.trim()}
-            onClick={() =>
-              run(async () => {
-                const out = await updateCompanyName(tenantId!, companyName.trim(), email);
-                setSavedName(out.name);
-              })
-            }
-          >
-            保存公司名
-          </button>
-          {savedName && (
-            <span data-testid="company-name-display" style={{ color: '#065f46' }}>
-              当前公司名：{savedName}
-            </span>
-          )}
-        </div>
+      {/* ───────── 公司表格 ───────── */}
+      <Section title="公司" testId="region-companies">
+        <table data-testid="companies-table" style={{ width: '100%', borderCollapse: 'collapse' }}>
+          <thead>
+            <tr style={{ background: '#f9fafb' }}>
+              <Th>公司名</Th>
+              <Th>License</Th>
+              <Th>成员数</Th>
+              <Th>改公司名</Th>
+            </tr>
+          </thead>
+          <tbody>
+            {(customers?.data ?? []).map((c) => {
+              const selected = c.tenant_id === tenantId;
+              return (
+                <tr
+                  key={c.tenant_id}
+                  data-testid="company-row"
+                  onClick={() => {
+                    setSelectedTenant(c.tenant_id);
+                    setCompanyName('');
+                  }}
+                  style={{
+                    borderTop: '1px solid #e5e7eb',
+                    cursor: 'pointer',
+                    background: selected ? '#eff6ff' : undefined,
+                  }}
+                >
+                  <Td>
+                    <span data-testid="company-name">{c.name?.trim() ? c.name : '(未命名)'}</span>
+                  </Td>
+                  <Td>{c.license_status ?? 'none'}</Td>
+                  <Td>
+                    <span data-testid="company-member-count">{c.member_count ?? 0}</span>
+                  </Td>
+                  <Td onClick={(e) => e.stopPropagation()}>
+                    <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                      <input
+                        data-testid="company-name-input"
+                        placeholder="新公司名"
+                        value={selected ? companyName : ''}
+                        onChange={(ev) => {
+                          setSelectedTenant(c.tenant_id);
+                          setCompanyName(ev.target.value);
+                        }}
+                        style={{ width: 140 }}
+                      />
+                      <button
+                        data-testid="company-name-save"
+                        disabled={!selected || !companyName.trim()}
+                        onClick={() =>
+                          run(async () => {
+                            await updateCompanyName(c.tenant_id, companyName.trim(), email);
+                            setCompanyName('');
+                          })
+                        }
+                      >
+                        保存
+                      </button>
+                    </div>
+                  </Td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
       </Section>
 
-      {/* ───────── 区 2：子账号 ───────── */}
-      <Section title="② 子账号" testId="region-accounts">
-        <p style={{ fontSize: 12, color: '#6b7280' }} data-testid="accounts-quota">
-          配额：{accounts?.quota?.used ?? 0}/{accounts?.quota?.limit ?? 0}
-        </p>
+      {/* ───────── ① 成员 ───────── */}
+      <Section title="① 成员（注册用户 + tenant_members）" testId="region-members">
         <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
-          <input data-testid="account-email" placeholder="邮箱" value={acctEmail} onChange={(e) => setAcctEmail(e.target.value)} />
-          <input data-testid="account-display" placeholder="显示名" value={acctDisplay} onChange={(e) => setAcctDisplay(e.target.value)} />
-          <select data-testid="account-role" value={acctRole} onChange={(e) => setAcctRole(e.target.value as SubAccountRole)}>
+          <input
+            data-testid="member-email-input"
+            placeholder="按 email 拉用户进本公司"
+            value={memberEmail}
+            onChange={(e) => setMemberEmail(e.target.value)}
+          />
+          <select
+            data-testid="member-role-select"
+            value={memberRole}
+            onChange={(e) => setMemberRole(e.target.value as MemberRole)}
+          >
             {ROLE_OPTIONS.map((r) => (
               <option key={r} value={r}>
                 {r}
@@ -172,43 +209,40 @@ export default function AdminCustomersPage() {
             ))}
           </select>
           <button
-            data-testid="account-add"
-            disabled={!tenantId || !acctEmail.trim()}
+            data-testid="member-add"
+            disabled={!tenantId || !memberEmail.trim()}
             onClick={() =>
               run(
                 async () => {
-                  await createAccount(
-                    tenantId!,
-                    { email: acctEmail.trim(), display_name: acctDisplay.trim(), role: acctRole },
-                    email
-                  );
-                  setAcctEmail('');
-                  setAcctDisplay('');
+                  await addMemberByEmail(tenantId!, memberEmail.trim(), memberRole, email);
+                  setMemberEmail('');
                 },
-                'tenant-accounts'
+                'tenant-members'
               )
             }
           >
-            新增账号
+            拉成员进公司
           </button>
         </div>
-        <table data-testid="accounts-list" style={{ width: '100%', borderCollapse: 'collapse' }}>
+        <table data-testid="members-list" style={{ width: '100%', borderCollapse: 'collapse' }}>
           <tbody>
-            {(accounts?.data ?? []).map((a) => (
-              <tr key={a.account_id} data-testid="account-row" style={{ borderTop: '1px solid #e5e7eb' }}>
-                <Td>{a.email}</Td>
-                <Td>{a.display_name}</Td>
+            {memberRows.map((m) => (
+              <tr key={m.user_id} data-testid="member-row" style={{ borderTop: '1px solid #e5e7eb' }}>
+                <Td>{m.email}</Td>
                 <Td>
-                  <span data-testid="account-role-tag" style={{ padding: '2px 8px', background: '#eef2ff', borderRadius: 999, fontSize: 12 }}>
-                    {a.role}
+                  <span
+                    data-testid="member-role-tag"
+                    style={{ padding: '2px 8px', background: '#eef2ff', borderRadius: 999, fontSize: 12 }}
+                  >
+                    {m.role}
                   </span>
                 </Td>
                 <Td>
                   <button
-                    data-testid="account-delete"
-                    onClick={() => run(() => deleteAccount(tenantId!, a.account_id, email), 'tenant-accounts', 'tenant-bindings')}
+                    data-testid="member-remove"
+                    onClick={() => run(() => removeMember(tenantId!, m.user_id, email), 'tenant-members', 'tenant-bindings')}
                   >
-                    删除
+                    移除
                   </button>
                 </Td>
               </tr>
@@ -217,27 +251,27 @@ export default function AdminCustomersPage() {
         </table>
       </Section>
 
-      {/* ───────── 区 3：客服-PC 绑定 ───────── */}
-      <Section title="③ 客服-PC 绑定" testId="region-bindings">
+      {/* ───────── ② 客服-PC 绑定 ───────── */}
+      <Section title="② 客服-PC 绑定" testId="region-bindings">
         <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
-          <select data-testid="bind-account-select" value={bindAccount} onChange={(e) => setBindAccount(e.target.value)}>
-            <option value="">选择客服账号</option>
-            {serviceAgentAccounts.map((a) => (
-              <option key={a.account_id} value={a.account_id}>
-                {a.email}
+          <select data-testid="bind-member-select" value={bindMember} onChange={(e) => setBindMember(e.target.value)}>
+            <option value="">选择成员</option>
+            {memberRows.map((m) => (
+              <option key={m.user_id} value={m.user_id}>
+                {m.email}
               </option>
             ))}
           </select>
           <input data-testid="bind-machine-input" placeholder="机器 ID" value={bindMachine} onChange={(e) => setBindMachine(e.target.value)} />
           <button
             data-testid="bind-submit"
-            disabled={!tenantId || !bindAccount || !bindMachine.trim()}
+            disabled={!tenantId || !bindMember || !bindMachine.trim()}
             onClick={() =>
               run(
                 async () => {
-                  await bindDevice(tenantId!, bindAccount, bindMachine.trim(), email);
+                  await bindDevice(tenantId!, bindMember, bindMachine.trim(), email);
                   setBindMachine('');
-                  setBindAccount('');
+                  setBindMember('');
                 },
                 'tenant-bindings'
               )
@@ -251,7 +285,7 @@ export default function AdminCustomersPage() {
             {(bindings?.data ?? []).map((b) => (
               <tr key={b.binding_id} data-testid="binding-row" style={{ borderTop: '1px solid #e5e7eb' }}>
                 <Td>
-                  客服 {b.account_email} @ PC {b.machine_id}{' '}
+                  成员 {b.member_email ?? b.member_user_id} @ PC {b.machine_id}{' '}
                   <span data-testid="binding-online" style={{ color: b.online ? '#16a34a' : '#9ca3af' }}>
                     {b.online ? '● 在线' : '○ 离线'}
                   </span>
@@ -262,8 +296,8 @@ export default function AdminCustomersPage() {
         </table>
       </Section>
 
-      {/* ───────── 区 4：诊断报告 ───────── */}
-      <Section title="④ 诊断报告" testId="region-diagnosis">
+      {/* ───────── ③ 诊断报告 ───────── */}
+      <Section title="③ 诊断报告" testId="region-diagnosis">
         <div style={{ marginBottom: 12 }}>
           <select data-testid="diagnosis-machine-select" value={diagMachine} onChange={(e) => setDiagMachine(e.target.value)}>
             <option value="">选择客户机</option>
@@ -325,6 +359,6 @@ function Th({ children }: { children: React.ReactNode }) {
   return <th style={{ padding: '8px 12px', textAlign: 'left', fontSize: 13, color: '#374151' }}>{children}</th>;
 }
 
-function Td({ children }: { children: React.ReactNode }) {
-  return <td style={{ padding: '8px 12px', fontSize: 14 }}>{children}</td>;
+function Td({ children, onClick }: { children: React.ReactNode; onClick?: React.MouseEventHandler<HTMLTableCellElement> }) {
+  return <td onClick={onClick} style={{ padding: '8px 12px', fontSize: 14 }}>{children}</td>;
 }

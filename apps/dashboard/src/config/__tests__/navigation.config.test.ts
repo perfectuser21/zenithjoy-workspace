@@ -59,3 +59,18 @@ describe('config/navigation — 三组结构', () => {
     expect(paths).not.toContain('/dashboard/feishu-bind');
   });
 });
+
+describe('config/navigation — 会员管理并入客户管理（#816 结构性去重）', () => {
+  it('删除独立的「会员管理」菜单（/admin/users 不再出现在导航）', () => {
+    const all = autopilotNavGroups.flatMap((g) => g.items);
+    expect(all.find((i) => i.path === '/admin/users')).toBeUndefined();
+  });
+
+  it('只保留一个「客户管理」入口（/admin/customers，requireSuperAdmin）', () => {
+    const all = autopilotNavGroups.flatMap((g) => g.items);
+    const customers = all.filter((i) => i.path === '/admin/customers');
+    expect(customers).toHaveLength(1);
+    expect(customers[0].requireSuperAdmin).toBe(true);
+    expect(customers[0].label).toBe('客户管理');
+  });
+});

@@ -68,7 +68,7 @@ describe('GET /api/admin/customers', () => {
     mockQuery
       .mockResolvedValueOnce({ rows: [{ total: 1 }] })
       .mockResolvedValueOnce({ rows: [
-        { tenant_id: 'aaa', email: 'a@b.com', license_status: 'pro', platform_count: 3, last_publish_at: '2026-01-01T00:00:00Z' },
+        { tenant_id: 'aaa', email: 'a@b.com', name: '晨悦传媒', member_count: 2, license_status: 'pro', platform_count: 3, last_publish_at: '2026-01-01T00:00:00Z' },
       ] });
     const res = await request(app).get('/api/admin/customers');
     const item = res.body.data[0];
@@ -77,6 +77,32 @@ describe('GET /api/admin/customers', () => {
     expect(item).toHaveProperty('license_status');
     expect(item).toHaveProperty('platform_count');
     expect(item).toHaveProperty('last_publish_at');
+  });
+
+  it('data items 含 name（公司名）与 member_count（成员数）', async () => {
+    mockQuery
+      .mockResolvedValueOnce({ rows: [{ total: 1 }] })
+      .mockResolvedValueOnce({ rows: [
+        { tenant_id: 'aaa', email: 'a@b.com', name: '晨悦传媒', member_count: 3, license_status: 'pro', platform_count: 1, last_publish_at: null },
+      ] });
+    const res = await request(app).get('/api/admin/customers');
+    const item = res.body.data[0];
+    expect(item).toHaveProperty('name');
+    expect(item.name).toBe('晨悦传媒');
+    expect(item).toHaveProperty('member_count');
+    expect(item.member_count).toBe(3);
+  });
+
+  it('name 为空时回退空字符串，member_count 缺省为 0', async () => {
+    mockQuery
+      .mockResolvedValueOnce({ rows: [{ total: 1 }] })
+      .mockResolvedValueOnce({ rows: [
+        { tenant_id: 'bbb', email: '', name: null, member_count: 0, license_status: 'none', platform_count: 0, last_publish_at: null },
+      ] });
+    const res = await request(app).get('/api/admin/customers');
+    const item = res.body.data[0];
+    expect(item.name).toBe('');
+    expect(item.member_count).toBe(0);
   });
 
   it('non-super-admin (X-Feishu-User-Id: not-an-admin) returns 403', async () => {

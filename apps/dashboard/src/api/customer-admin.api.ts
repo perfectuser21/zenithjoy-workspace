@@ -1,40 +1,39 @@
 /**
- * Line 10 客户管理后台 API 客户端
+ * Line 10 客户管理后台 API 客户端（#816 去重后：成员统一到 better-auth user + tenant_members）
  *
  * 调 /api/tenant/* 后端（superAdminGuard，带 X-User-Email 头透传超管身份）：
  *   updateCompanyName   PUT    /api/tenant/:id
- *   listAccounts        GET    /api/tenant/:id/accounts
- *   createAccount       POST   /api/tenant/:id/accounts
- *   deleteAccount       DELETE /api/tenant/:id/accounts/:aid
+ *   listMembers         GET    /api/tenant/:id/members
+ *   addMemberByEmail    POST   /api/tenant/:id/members
+ *   removeMember        DELETE /api/tenant/:id/members/:userId
  *   listServiceAgents   GET    /api/tenant/:id/service-agents
- *   bindDevice          POST   /api/tenant/:id/service-agents/:aid/bind-device
+ *   bindDevice          POST   /api/tenant/:id/service-agents/:userId/bind-device
  *   deleteBinding       DELETE /api/tenant/:id/service-agents/:bid
  *
  * 诊断报告页复用既有 GET /api/agent/module-health（见 moduleHealth.api.ts）。
  */
 import { adminFetch } from '../lib/admin-fetch';
 
-export type SubAccountRole = 'admin' | 'operator' | 'service_agent';
+export type MemberRole = 'owner' | 'admin' | 'member';
 
-export interface SubAccount {
-  account_id: string;
+export interface TenantMember {
+  user_id: string;
   email: string;
-  display_name: string;
-  role: SubAccountRole;
-  created_at: string;
+  name: string;
+  role: MemberRole;
+  joined_at: string;
 }
 
-export interface AccountsResponse {
+export interface MembersResponse {
   success: boolean;
-  data: SubAccount[];
+  data: TenantMember[];
   total: number;
-  quota: { used: number; limit: number };
 }
 
 export interface ServiceAgentBinding {
   binding_id: string;
-  account_id: string;
-  account_email: string;
+  member_user_id: string;
+  member_email: string | null;
   machine_id: string;
   hostname: string | null;
   online: boolean;
@@ -75,31 +74,32 @@ export async function updateCompanyName(
   return body.data;
 }
 
-export async function listAccounts(tenantId: string, email?: string): Promise<AccountsResponse> {
-  const res = await adminFetch(`/api/tenant/${tenantId}/accounts`, email);
-  return parse<AccountsResponse>(res);
+export async function listMembers(tenantId: string, email?: string): Promise<MembersResponse> {
+  const res = await adminFetch(`/api/tenant/${tenantId}/members`, email);
+  return parse<MembersResponse>(res);
 }
 
-export async function createAccount(
+export async function addMemberByEmail(
   tenantId: string,
-  input: { email: string; display_name: string; role: SubAccountRole },
+  memberEmail: string,
+  role: MemberRole = 'member',
   email?: string
-): Promise<SubAccount> {
-  const res = await adminFetch(`/api/tenant/${tenantId}/accounts`, email, {
+): Promise<{ user_id: string; email: string; role: MemberRole }> {
+  const res = await adminFetch(`/api/tenant/${tenantId}/members`, email, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(input),
+    body: JSON.stringify({ email: memberEmail, role }),
   });
-  const body = await parse<{ data: SubAccount }>(res);
+  const body = await parse<{ data: { user_id: string; email: string; role: MemberRole } }>(res);
   return body.data;
 }
 
-export async function deleteAccount(
+export async function removeMember(
   tenantId: string,
-  accountId: string,
+  userId: string,
   email?: string
 ): Promise<void> {
-  const res = await adminFetch(`/api/tenant/${tenantId}/accounts/${accountId}`, email, {
+  const res = await adminFetch(`/api/tenant/${tenantId}/members/${userId}`, email, {
     method: 'DELETE',
   });
   await parse<unknown>(res);
@@ -115,12 +115,12 @@ export async function listServiceAgents(
 
 export async function bindDevice(
   tenantId: string,
-  accountId: string,
+  memberUserId: string,
   machineId: string,
   email?: string
 ): Promise<{ binding_id: string }> {
   const res = await adminFetch(
-    `/api/tenant/${tenantId}/service-agents/${accountId}/bind-device`,
+    `/api/tenant/${tenantId}/service-agents/${memberUserId}/bind-device`,
     email,
     {
       method: 'POST',
