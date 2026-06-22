@@ -77,7 +77,7 @@ async function getTenantLicense(
   const r = await pool.query<{ id: string; tier: string; max_machines: number }>(
     `SELECT id, tier, max_machines
        FROM zenithjoy.licenses
-      WHERE tenant_id = $1 AND revoked_at IS NULL
+      WHERE tenant_id = $1 AND revoked_at IS NULL AND status = 'active'
       ORDER BY created_at DESC
       LIMIT 1`,
     [tenantId]

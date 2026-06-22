@@ -144,6 +144,47 @@ describe('GET /api/tenant/:id/accounts schema 纯度', () => {
   });
 });
 
+describe('getTenantLicense 只认 status=active 的 license（review 跟进）', () => {
+  it('license 查询 SQL 必须含 status = \'active\' 过滤', async () => {
+    setHandler((sql) => {
+      if (/FROM zenithjoy\.licenses/.test(sql)) return { rows: [{ id: 'lic', tier: 'matrix', max_machines: 5 }], rowCount: 1 };
+      if (/FROM zenithjoy\.tenant_sub_accounts/.test(sql)) return { rows: [], rowCount: 0 };
+      return { rows: [], rowCount: 0 };
+    });
+    await request(app).get(`/api/tenant/${TID}/accounts`);
+    const licCall = mockQuery.mock.calls.find((c) => /FROM zenithjoy\.licenses/.test(String(c[0])));
+    expect(licCall).toBeDefined();
+    expect(String(licCall![0])).toMatch(/status\s*=\s*'active'/);
+  });
+
+  it('只有 expired/suspended license（active 过滤后查不到）→ quota.limit=0', async () => {
+    // 模拟 DB：active 过滤后查不到有效 license（expired/suspended 被排除）→ rows 空
+    setHandler((sql) => {
+      if (/FROM zenithjoy\.licenses/.test(sql)) return { rows: [], rowCount: 0 };
+      if (/FROM zenithjoy\.tenant_sub_accounts/.test(sql)) return { rows: [], rowCount: 0 };
+      return { rows: [], rowCount: 0 };
+    });
+    const res = await request(app).get(`/api/tenant/${TID}/accounts`);
+    expect(res.status).toBe(200);
+    expect(res.body.quota.limit).toBe(0);
+  });
+
+  it('只有 expired/suspended license → 建子账号被配额拒（SUBACCOUNT_QUOTA_EXCEEDED）', async () => {
+    setHandler((sql) => {
+      if (/FROM zenithjoy\.tenants WHERE id/.test(sql)) return { rows: [{ id: TID }], rowCount: 1 };
+      // active 过滤后查不到 license → 无有效配额
+      if (/FROM zenithjoy\.licenses/.test(sql)) return { rows: [], rowCount: 0 };
+      if (/count\(\*\)::int AS used/.test(sql)) return { rows: [{ used: 0 }], rowCount: 1 };
+      return { rows: [], rowCount: 0 };
+    });
+    const res = await request(app)
+      .post(`/api/tenant/${TID}/accounts`)
+      .send({ email: 'x@t.test', display_name: 'x', role: 'operator' });
+    expect(res.status).toBe(409);
+    expect(res.body.error.code).toBe('SUBACCOUNT_QUOTA_EXCEEDED');
+  });
+});
+
 describe('POST /api/tenant/:id/service-agents/:aid/bind-device 绑定', () => {
   it('账号非 service_agent → 400 INVALID_BIND_ROLE', async () => {
     setHandler((sql) => {
