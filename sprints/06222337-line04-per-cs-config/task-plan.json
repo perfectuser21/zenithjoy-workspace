@@ -17,7 +17,8 @@
         "[ARTIFACT] migration apps/api/db/migrations/*_wechat_cs_account_config.sql（建表 + 存量迁移）",
         "[ARTIFACT] services/agent/build-modules/line04/cs-config-gate.js（resolveSendMode + resolveActiveConfig + shouldReply）",
         "[ARTIFACT] apps/api/src/services/wechat/cs-account-config-store.ts（按 wechat_id 隔离存取）",
-        "[BEHAVIOR:E2E] windows_cloud e2e-verify.ps1：Playwright 验前台编辑 + curl/psql 验隔离/身份/gate/迁移"
+        "[BEHAVIOR:E2E] 双 job 拆分（GHA e2e-line04-per-cs-config.yml）：job1 ubuntu+postgres 跑 e2e-backend-verify.sh（curl/psql 验隔离/身份/gate/迁移）+ job2 windows 跑 e2e-ui-verify.ps1（Playwright 验前台每客服设置区编辑，page.route 拦截无 DB）",
+        "[ARTIFACT] .github/workflows/e2e-line04-per-cs-config.yml（job1 ubuntu-latest+postgres service + job2 windows-latest）+ sprints/06222337-line04-per-cs-config/e2e-backend-verify.sh + e2e-ui-verify.ps1"
       ],
       "files": [
         "apps/api/db/migrations/20260622_210000_create_wechat_cs_account_config.sql",
@@ -26,6 +27,9 @@
         "apps/api/src/services/wechat/cs-identity-diagnostics.ts",
         "apps/dashboard/src/(每客服设置区组件)",
         "apps/dashboard/e2e/per-cs-config.spec.ts",
+        ".github/workflows/e2e-line04-per-cs-config.yml",
+        "sprints/06222337-line04-per-cs-config/e2e-backend-verify.sh",
+        "sprints/06222337-line04-per-cs-config/e2e-ui-verify.ps1",
         "services/agent/build-modules/line04/cs-config-gate.js",
         "services/agent/build-modules/line04/wechat-rpa/listen_chat.py"
       ],

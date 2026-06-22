@@ -66,7 +66,7 @@ journey_type: user_facing
   Test: manual:bash -c 'DB=${DB:-postgresql://localhost/cecelia}; psql "$DB" -c "INSERT INTO zenithjoy.wechat_cs_config(key,value) VALUES ('"'"'persona'"'"','"'"'{\"self_name\":\"存量小助手\",\"address_style\":\"\",\"tone\":\"\",\"sentence_style\":\"\",\"use_emoji\":\"\",\"banned_phrases\":[],\"few_shot\":[]}'"'"') ON CONFLICT(key) DO UPDATE SET value=EXCLUDED.value" >/dev/null; ( cd apps/api && npm run migrate ) >/dev/null 2>&1; psql "$DB" -t -c "SELECT persona->>'"'"'self_name'"'"' FROM zenithjoy.wechat_cs_account_config WHERE wechat_id='"'"'wxid_legacy_global'"'"'" | grep -q "存量小助手" || { echo "FAIL: 存量人设未迁移"; exit 1; }; echo OK'
   期望: OK
 
-## BEHAVIOR:E2E 条目（user_facing 专属，Mode B final-e2e 跑 — 见 contract-draft.md ## E2E 验收 e2e-verify.ps1）
+## BEHAVIOR:E2E 条目（user_facing 专属，Mode B final-e2e 跑 — 见 contract-draft.md ## E2E 验收：双 job 拆分 e2e-backend-verify.sh[ubuntu+postgres] + e2e-ui-verify.ps1[windows 无 DB]）
 
 - [ ] [BEHAVIOR:E2E] 管理员在前台「每客服设置区」编辑某客服那一行并保存，落库该行不污染其他客服；截图可视化验证
   Screenshots:

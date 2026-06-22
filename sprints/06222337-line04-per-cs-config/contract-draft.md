@@ -268,94 +268,163 @@ psql "$DB" -t -c "SELECT persona->>'self_name' FROM zenithjoy.wechat_cs_account_
 
 ---
 
-## E2E 验收（最终 final-e2e 跑 — target_environment = windows_cloud）
+## E2E 验收（最终 final-e2e 跑 — 双 job 拆分：ubuntu 后端 + windows 前端 UI）
 
 **journey_type**: user_facing
-**target_environment**: windows_cloud（GitHub Actions windows-latest，干净 sandbox；postgres service + node + curl + psql）
+**target_environment**: windows_cloud（前台「每客服设置区」Playwright UI = windows-latest 干净 sandbox）**＋** ubuntu-latest（后端 DB/API/迁移 curl+psql 断言 = postgres:15 service container）
 
-> 选 windows_cloud 依据：ZenithJoy 产品（CLAUDE.md E2E 死规则 ZenithJoy UI/Dashboard → windows_cloud）+ PRD 显式钉。本 sprint verifiable scope（中台配置隔离 + 按身份拉 + gate 决策 + 迁移）全是逻辑断言，可在 GHA 干净 VM 上 curl 中台 API + psql 验 DB 完成；真机微信部分是接缝（见接缝清单），不在本环境验。
-> 含两段：① Playwright 验前台「每客服设置区」编辑 UI（user_facing 步骤 1 的用户可见验证）；② curl + psql 验隔离/身份/gate/迁移 invariant（PRD 显式「curl 中台 API + psql 验 DB」）。
+> **关键修正（round-3，处理 reviewer ci_workflow_alignment=4 阻塞，对齐既有 `.github/workflows/wechat-cs-e2e.yml` 拆分）**：GHA `services:`（postgres）**仅 Linux runner 支持，windows-latest 不可承载**——本 repo 带 postgres service 的 workflow（ci-l4-e2e-smoke / ci-l4-integration / ci-walking-skeleton-1）全部 `runs-on: ubuntu-latest`。故 round-2 把 psql 验 DB 放进 windows ps1（且虚构 `$env:DATABASE_URL # postgres service GHA 注入`）跑不起来。本版本删除「windows-latest + postgres service」字样，改双 job：
+> - **job1 `backend-isolation`（ubuntu-latest + `services: postgres:15`，注入 `DATABASE_URL`）**：迁移 → 启 apps/api → curl 中台 API + psql 验 DB（隔离/身份/诊断/gate/迁移）。本 sprint verifiable scope 的全部后端逻辑断言（PRD 显式「curl 中台 API + psql 验 DB」全在此 job）。
+> - **job2 `dashboard-ui`（windows-latest，无 postgres、无 psql）**：build dashboard + vite preview + Playwright 验前台「每客服设置区」编辑 UI（user_facing 步骤 1 用户可见验证），用 `page.route` 拦截后端，纯前端行为验证，不碰 DB。
+> 真机微信读号/真发/读回送达 = 接缝（见接缝清单），走 xian-rog windows_wechat，不在本环境验。
 
-写入 `sprints/06222337-line04-per-cs-config/e2e-verify.ps1`：
+### GHA workflow（写入 `.github/workflows/e2e-line04-per-cs-config.yml`，evaluator 用此 workflow，不复用通用 `e2e-windows.yml`）
 
-```powershell
-# final-e2e — Line04 每客服独立配置（windows_cloud / windows-latest）
-Set-StrictMode -Version Latest
-$ErrorActionPreference = "Stop"
+```yaml
+name: E2E Line04 Per-CS Config
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'apps/api/**'
+      - 'apps/dashboard/**'
+      - 'services/agent/build-modules/line04/**'
+      - 'sprints/06222337-line04-per-cs-config/**'
+      - '.github/workflows/e2e-line04-per-cs-config.yml'
+jobs:
+  backend-isolation:                       # job1：后端隔离/身份/gate/迁移（postgres service 仅 Linux）
+    name: job1 — 后端 curl+psql（ubuntu + postgres）
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: cecelia
+          POSTGRES_PASSWORD: cecelia
+          POSTGRES_DB: cecelia
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready --health-interval 10s
+          --health-timeout 5s --health-retries 5
+    env:
+      DATABASE_URL: postgresql://cecelia:cecelia@localhost:5432/cecelia
+      DATABASE_HOST: localhost
+      DATABASE_PORT: '5432'
+      DATABASE_USER: cecelia
+      DATABASE_PASSWORD: cecelia
+      DATABASE_NAME: cecelia
+      ZENITHJOY_INTERNAL_TOKEN: ci-only-internal-token-not-prod
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '20' }
+      - name: Backend E2E（curl 中台 API + psql 验 DB）
+        run: bash sprints/06222337-line04-per-cs-config/e2e-backend-verify.sh
 
-$ScriptStart = Get-Date
-$scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
-$repoRoot  = Resolve-Path "$scriptDir\..\.."
-$ApiBase   = "http://localhost:3000"
-$VitePort  = 5174
-$DbUrl     = $env:DATABASE_URL  # postgres service，GHA workflow 注入
+  dashboard-ui:                            # job2：前台每客服设置区 Playwright UI（windows，无 DB）
+    name: job2 — 前台每客服设置区 Playwright UI（windows）
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '20' }
+      - name: Dashboard UI E2E（Playwright，page.route 拦截后端）
+        shell: pwsh
+        run: ./sprints/06222337-line04-per-cs-config/e2e-ui-verify.ps1
+```
 
-# 0. 依赖 + 迁移 + 启动中台
-Push-Location $repoRoot
-& cmd.exe /c "npm.cmd ci --prefer-offline" ; if ($LASTEXITCODE -ne 0) { throw "FAIL: npm ci" }
-& cmd.exe /c "npx.cmd playwright install chromium --with-deps" | Out-Null
+### job1 后端脚本（写入 `sprints/06222337-line04-per-cs-config/e2e-backend-verify.sh`，ubuntu 跑，DATABASE_URL 来自 postgres service）
 
-# 0b. 种入存量全局配置（验迁移向后兼容）后跑迁移
-& psql $DbUrl -c "INSERT INTO zenithjoy.wechat_cs_config(key,value) VALUES ('persona','{\""self_name\"":\""存量小助手\"",\""address_style\"":\""\"",\""tone\"":\""\"",\""sentence_style\"":\""\"",\""use_emoji\"":\""\"",\""banned_phrases\"":[],\""few_shot\"":[]}') ON CONFLICT(key) DO UPDATE SET value=EXCLUDED.value"
-Push-Location "$repoRoot\apps\api"
-& cmd.exe /c "npm.cmd run build" ; if ($LASTEXITCODE -ne 0) { throw "FAIL: api build" }
-& cmd.exe /c "npm.cmd run migrate" ; if ($LASTEXITCODE -ne 0) { throw "FAIL: migrate" }
-$api = Start-Process -FilePath "cmd.exe" -ArgumentList "/c npm.cmd start" -WorkingDirectory "$repoRoot\apps\api" -PassThru -NoNewWindow
-Pop-Location
-# 等中台就绪
-$ok=$false; for($i=0;$i -lt 30;$i++){ Start-Sleep 1; try{ if((Invoke-RestMethod "$ApiBase/health").status){$ok=$true;break} }catch{} }
-if(-not $ok){ throw "FAIL: 中台 30s 未就绪" }
+```bash
+#!/bin/bash
+set -euo pipefail
+API=${API_BASE:-http://localhost:3000}
+DB=${DATABASE_URL:?FAIL: DATABASE_URL 未注入（应由 ubuntu postgres service 提供）}
+
+# 0. 依赖 + 迁移（创建 zenithjoy schema + 表）
+( cd apps/api && npm ci --prefer-offline && npm run build && npm run migrate )
+
+# 0b. 种入存量全局配置后再跑迁移（验向后兼容；迁移须幂等可重跑）
+psql "$DB" -c "INSERT INTO zenithjoy.wechat_cs_config(key,value) VALUES ('persona','{\"self_name\":\"存量小助手\",\"address_style\":\"\",\"tone\":\"\",\"sentence_style\":\"\",\"use_emoji\":\"\",\"banned_phrases\":[],\"few_shot\":[]}') ON CONFLICT(key) DO UPDATE SET value=EXCLUDED.value"
+( cd apps/api && npm run migrate )
+
+# 0c. 启 apps/api 等就绪
+( cd apps/api && npm start >/tmp/api.log 2>&1 & )
+for i in $(seq 1 30); do curl -fs "$API/health" >/dev/null 2>&1 && break; [ "$i" = 30 ] && { echo "FAIL: 中台 30s 未就绪"; cat /tmp/api.log; exit 1; }; sleep 1; done
 
 # 1. 迁移向后兼容：存量人设迁为 legacy 行
-$legacy = (& psql $DbUrl -t -c "SELECT persona->>'self_name' FROM zenithjoy.wechat_cs_account_config WHERE wechat_id='wxid_legacy_global'").Trim()
-if ($legacy -ne "存量小助手") { throw "FAIL: 迁移未保留存量人设 got=$legacy" }
+psql "$DB" -t -c "SELECT persona->>'self_name' FROM zenithjoy.wechat_cs_account_config WHERE wechat_id='wxid_legacy_global'" | grep -q '存量小助手' || { echo "FAIL: 迁移未保留存量人设"; exit 1; }
 
-# 2. Playwright 验前台「每客服设置区」编辑 UI（步骤 1 user_facing）
+# 2. 两客服物理隔离不串台（钉死 Issue defe1a42）
+PA='{"persona":{"self_name":"萌萌","address_style":"x","tone":"x","sentence_style":"x","use_emoji":"x","banned_phrases":[],"few_shot":[]}}'
+PB='{"persona":{"self_name":"天下第一","address_style":"y","tone":"y","sentence_style":"y","use_emoji":"y","banned_phrases":[],"few_shot":[]},"auto_agent_enabled":true}'
+curl -sf -X PUT "$API/api/wechat/cs/config/wxid_csa" -H 'Content-Type: application/json' -d "$PA" | jq -e '.success == true and .config.persona.self_name == "萌萌"'
+curl -sf -X PUT "$API/api/wechat/cs/config/wxid_csb" -H 'Content-Type: application/json' -d "$PB" | jq -e '.config.auto_agent_enabled == true'
+A=$(curl -sf "$API/api/wechat/cs/agent-config?wechat_id=wxid_csa")
+B=$(curl -sf "$API/api/wechat/cs/agent-config?wechat_id=wxid_csb")
+echo "$A" | jq -e '.persona.self_name == "萌萌" and .auto_agent_enabled == false'
+echo "$B" | jq -e '.persona.self_name == "天下第一" and .auto_agent_enabled == true'
+[ "$(echo "$A" | jq -r .persona.self_name)" != "$(echo "$B" | jq -r .persona.self_name)" ] || { echo "FAIL: 人设串台"; exit 1; }
+# DB 两独立行（5 分钟时间窗防伪）
+C=$(psql "$DB" -t -c "SELECT count(*) FROM zenithjoy.wechat_cs_account_config WHERE wechat_id IN ('wxid_csa','wxid_csb') AND updated_at > NOW() - interval '5 minutes'" | tr -d ' ')
+[ "$C" = "2" ] || { echo "FAIL: 期望两独立行 实际 $C"; exit 1; }
+
+# 3. 未注册号拒绝 + 不泄漏 + 诊断入库（时间窗防伪）
+CODE=$(curl -s -o /tmp/unreg.json -w '%{http_code}' "$API/api/wechat/cs/agent-config?wechat_id=wxid_never_zzz")
+[ "$CODE" = "403" ] || { echo "FAIL: 未注册号未拒绝 code=$CODE"; exit 1; }
+jq -e 'has("persona") | not' /tmp/unreg.json
+curl -sf "$API/api/wechat/cs/diagnostics" | jq -e '[.alerts[] | select(.wechat_id == "wxid_never_zzz")] | length >= 1'
+AC=$(psql "$DB" -t -c "SELECT count(*) FROM zenithjoy.wechat_cs_identity_alert WHERE wechat_id='wxid_never_zzz' AND created_at > NOW() - interval '5 minutes'" | tr -d ' ')
+[ "$AC" -ge 1 ] || { echo "FAIL: 诊断异常未入库"; exit 1; }
+
+# 4. 客户机 gate 决策 + 断网期缓存继续判定纯函数（拉失败强制 dryrun，绝不误真发）
+node -e 'const {resolveSendMode,resolveActiveConfig,shouldReply}=require("./services/agent/build-modules/line04/cs-config-gate.js");
+const cached={auto_agent_enabled:true,whitelist:["客户乙"]};
+const ok = resolveSendMode({auto_agent_enabled:true},true)==="real"
+  && resolveSendMode({auto_agent_enabled:false},true)==="dryrun"
+  && resolveSendMode({auto_agent_enabled:true},false)==="dryrun"
+  && JSON.stringify(resolveActiveConfig(null,cached,false))===JSON.stringify(cached)
+  && shouldReply(cached,"客户乙")===true && shouldReply(cached,"路人")===false;
+if(!ok){console.error("FAIL: gate/缓存判定错误");process.exit(1)}'
+
+echo "✅ job1 后端全过：迁移向后兼容 + 两客服物理隔离不串 + 未注册拒绝+诊断入库 + gate 决策"
+```
+
+### job2 前端脚本（写入 `sprints/06222337-line04-per-cs-config/e2e-ui-verify.ps1`，windows 跑，无 DB）
+
+```powershell
+# 前台「每客服设置区」Playwright UI（windows-latest，无 postgres/psql，page.route 拦截后端）
+Set-StrictMode -Version Latest
+$ErrorActionPreference = "Stop"
+$VitePort = 5174
+$scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+$repoRoot  = Resolve-Path "$scriptDir\..\.."
+
+& cmd.exe /c "npm.cmd ci --prefer-offline" ; if ($LASTEXITCODE -ne 0) { throw "FAIL: npm ci" }
+& cmd.exe /c "npx.cmd playwright install chromium --with-deps" | Out-Null
 Push-Location "$repoRoot\apps\dashboard"
 & cmd.exe /c "npm.cmd run build" ; if ($LASTEXITCODE -ne 0) { throw "FAIL: dashboard build" }
 $vite = Start-Process -FilePath "cmd.exe" -ArgumentList "/c npx.cmd vite preview --port $VitePort --host" -WorkingDirectory "$repoRoot\apps\dashboard" -PassThru -NoNewWindow
 $vok=$false; for($i=0;$i -lt 30;$i++){ Start-Sleep 1; if((Test-NetConnection localhost -Port $VitePort -WarningAction SilentlyContinue).TcpTestSucceeded){$vok=$true;break} }
 if(-not $vok){ throw "FAIL: Vite 30s 未就绪" }
-$e2e = Start-Process -FilePath "cmd.exe" -ArgumentList "/c npx.cmd playwright test e2e/per-cs-config.spec.ts --reporter=list" -WorkingDirectory "$repoRoot\apps\dashboard" -Wait -PassThru -NoNewWindow -Environment @{ BASE_URL="http://localhost:$VitePort"; API_BASE=$ApiBase }
+$e2e = Start-Process -FilePath "cmd.exe" -ArgumentList "/c npx.cmd playwright test e2e/per-cs-config.spec.ts --reporter=list" -WorkingDirectory "$repoRoot\apps\dashboard" -Wait -PassThru -NoNewWindow -Environment @{ BASE_URL="http://localhost:$VitePort" }
 Stop-Process -Id $vite.Id -Force -ErrorAction SilentlyContinue
-if ($e2e.ExitCode -ne 0) { throw "FAIL: Playwright 每客服设置区 E2E exit=$($e2e.ExitCode)" }
-Pop-Location
-
-# 3. curl + psql 验隔离/身份/gate（PRD 显式 curl 中台 + psql 验 DB）
-$pa = '{"persona":{"self_name":"萌萌","address_style":"x","tone":"x","sentence_style":"x","use_emoji":"x","banned_phrases":[],"few_shot":[]}}'
-$pb = '{"persona":{"self_name":"天下第一","address_style":"y","tone":"y","sentence_style":"y","use_emoji":"y","banned_phrases":[],"few_shot":[]},"auto_agent_enabled":true}'
-$ra = Invoke-RestMethod -Method Put "$ApiBase/api/wechat/cs/config/wxid_csa" -ContentType 'application/json' -Body $pa
-$rb = Invoke-RestMethod -Method Put "$ApiBase/api/wechat/cs/config/wxid_csb" -ContentType 'application/json' -Body $pb
-if (-not $ra.success -or -not $rb.success) { throw "FAIL: PUT 未成功" }
-$ga = Invoke-RestMethod "$ApiBase/api/wechat/cs/agent-config?wechat_id=wxid_csa"
-$gb = Invoke-RestMethod "$ApiBase/api/wechat/cs/agent-config?wechat_id=wxid_csb"
-if ($ga.persona.self_name -ne "萌萌")     { throw "FAIL: A 串台 got=$($ga.persona.self_name)" }
-if ($gb.persona.self_name -ne "天下第一") { throw "FAIL: B 串台 got=$($gb.persona.self_name)" }
-if ($ga.auto_agent_enabled -ne $false)    { throw "FAIL: A 默认应 dryrun" }
-if ($gb.auto_agent_enabled -ne $true)     { throw "FAIL: B 开关未生效" }
-# 未注册号拒绝 + 不泄漏
-$code = (Invoke-WebRequest "$ApiBase/api/wechat/cs/agent-config?wechat_id=wxid_never_zzz" -SkipHttpErrorCheck).StatusCode
-if ($code -ne 403) { throw "FAIL: 未注册号未拒绝 code=$code" }
-# 诊断异常入库（时间窗防伪）
-$alerts = (& psql $DbUrl -t -c "SELECT count(*) FROM zenithjoy.wechat_cs_identity_alert WHERE wechat_id='wxid_never_zzz' AND created_at > NOW() - interval '5 minutes'").Trim()
-if ([int]$alerts -lt 1) { throw "FAIL: 诊断异常未入库" }
-# DB 两独立行（时间窗防伪）
-$cnt = (& psql $DbUrl -t -c "SELECT count(*) FROM zenithjoy.wechat_cs_account_config WHERE wechat_id IN ('wxid_csa','wxid_csb') AND updated_at > NOW() - interval '5 minutes'").Trim()
-if ([int]$cnt -ne 2) { throw "FAIL: 期望两独立行 got=$cnt" }
-
-# 4. 客户机 gate 决策纯函数（拉失败强制 dryrun）
-$node = & node -e 'const {resolveSendMode}=require("./services/agent/build-modules/line04/cs-config-gate.js"); const ok=resolveSendMode({auto_agent_enabled:true},true)==="real"&&resolveSendMode({auto_agent_enabled:false},true)==="dryrun"&&resolveSendMode({auto_agent_enabled:true},false)==="dryrun"; process.exit(ok?0:1)'
-if ($LASTEXITCODE -ne 0) { throw "FAIL: gate 决策错误" }
-
-Stop-Process -Id $api.Id -Force -ErrorAction SilentlyContinue
-Pop-Location
-Write-Host "✅ windows_cloud E2E 全过：每客服配置物理隔离 + 按身份拉 + gate 决策 + 迁移向后兼容"
+if ($e2e.ExitCode -ne 0) { throw "FAIL: Playwright 每客服设置区 UI exit=$($e2e.ExitCode)" }
+Write-Host "✅ job2 前端每客服设置区编辑 UI 验证通过"
 exit 0
 ```
 
-**PASS 标准**: 脚本 exit 0（迁移保留存量 + Playwright 编辑 UI 过 + 两客服配置物理隔离不串 + 未注册拒绝且诊断入库 + gate 决策正确）
-**FAIL 标准**: 任一 throw / Playwright 失败 / 串台 / 未注册号未拒绝 / 默认非 dryrun
-**GHA workflow**: `.github/workflows/e2e-windows.yml`（`workflow_dispatch` + `windows-latest` + postgres service）
+Playwright spec（写入 `apps/dashboard/e2e/per-cs-config.spec.ts`，`page.route` 拦截 `**/api/wechat/cs/config/**` 验前台行为，不依赖 DB；截图存 `${SPRINT_DIR}/screenshots/<step>.png`）：
+- `01-initial.png`：每客服设置区初始加载，客服微信号输入框 + 人设/开关/白名单字段 `toBeVisible`
+- 填客服 A 微信号 `wxid_csa` + 人设「萌萌」点保存 → 拦截到的 PUT 断言 `url` 含 `wxid_csa`（验「只写该客服那一行」）且 `body.persona.self_name === "萌萌"`
+- `02-action.png`：保存后成功提示 `toBeVisible`
+- `03-result.png`：回显人设「萌萌」`toHaveText`
+
+**PASS 标准**: job1 exit 0（迁移向后兼容 + 两客服物理隔离不串 + 未注册拒绝且诊断入库 + gate/缓存判定）**且** job2 exit 0（每客服设置区编辑 UI + 保存请求 URL/body 正确）
+**FAIL 标准**: 任一 job 非 0 / 串台 / 未注册号未拒绝 / 默认非 dryrun / Playwright 失败
+**GHA workflow**: `.github/workflows/e2e-line04-per-cs-config.yml`（`workflow_dispatch` + PR paths；job1 `ubuntu-latest`+postgres service，job2 `windows-latest` 无 DB）
 
 ---
 
