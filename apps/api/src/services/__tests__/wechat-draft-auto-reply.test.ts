@@ -29,6 +29,22 @@ vi.mock('axios', () => ({
   default: { post: vi.fn(), get: vi.fn() },
 }));
 
+// C1 接线后 mode:auto 受 getAutoAgentConfig 控制（默认关=监控态）。J1-J4 测的是
+// 「自动代理已 ON + 营业时间全天 + 不限额」前提下的自动回行为 → 这里统一 mock 成 ON。
+vi.mock('../wechat/cs-config-store', async (importOriginal) => {
+  const actual = await importOriginal<Record<string, unknown>>();
+  return {
+    ...actual,
+    getAutoAgentConfig: vi.fn().mockResolvedValue({
+      auto_agent_enabled: true,
+      business_hours_start: '00:00',
+      business_hours_end: '24:00',
+      key_contact_wechat: '',
+      daily_limit: 0,
+    }),
+  };
+});
+
 const FAIL_PLACEHOLDER = 'AI 生成失败（请人审决定是否重试）';
 const mockedPost = vi.mocked(axios.post);
 
@@ -127,10 +143,11 @@ describe('generateChatDraft mode:auto [BEHAVIOR]', () => {
     expect(result.reply).toBeUndefined();
   });
 
-  it('J4: mode:auto + sender 不在飞书名单 → 跳过白名单全员回复，返回 {ok:true, reply:...}', async () => {
-    // 全员自动回 — 白名单检查被绕过，陌生人也能得到 AI 回复
-    setupFeishuMock([], []); // 空 customers，mode:auto 不查飞书名单
-    vi.mocked(callOpenRouter).mockResolvedValue({ content: '你好，我是小齐' } as any);
+  it('J4: mode:auto + sender 不在飞书名单 → 名单外不自动回，{ok:false, not_in_whitelist}，不烧 LLM', async () => {
+    // C1 修复：mode:auto 不再跳过白名单。名单外（route=pending_human）→ 不生成不发，
+    // 返回 not_in_whitelist（上层记 pending_human），绝不把陌生人当客户自动回。
+    setupFeishuMock([], []); // 空 customers = 名单外
+    const llm = vi.mocked(callOpenRouter).mockResolvedValue({ content: '你好，我是小齐' } as any);
 
     const mod = await import('../wechat-draft');
     const result: any = await mod.generateChatDraft({
@@ -140,8 +157,10 @@ describe('generateChatDraft mode:auto [BEHAVIOR]', () => {
       mode: 'auto',
     } as any);
 
-    expect(result.ok).toBe(true);
-    expect(result.reply).toBe('你好，我是小齐');
+    expect(result.ok).toBe(false);
+    expect(result.reason).toBe('not_in_whitelist');
+    expect(result.reply).toBeUndefined();
+    expect(llm).not.toHaveBeenCalled();
   });
 
   it('J5: mode:review + sender 不在飞书名单 → 仍走白名单检查 {ok:false, reason:"not_in_whitelist"}', async () => {

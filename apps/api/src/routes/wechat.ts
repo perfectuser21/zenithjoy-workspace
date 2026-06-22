@@ -19,6 +19,11 @@ import pool from '../db/connection';
 import { generateChatDraft, generateMomentDraft } from '../services/wechat-draft';
 import { pollOnce } from '../services/feishu-poll';
 import { recordHeartbeat, listHeartbeats } from '../services/wechat-heartbeat';
+import {
+  enqueueFailureAlert,
+  listPendingOutbound,
+  markOutboundReceipt,
+} from '../services/wechat/cs-outbound';
 
 export const wechatRouter = Router();
 
@@ -336,5 +341,68 @@ wechatRouter.post('/draft-generate', async (req: Request, res: Response) => {
       error: 'DRAFT_GENERATE_FAILED',
       message: errMsg,
     });
+  }
+});
+
+// ─── 关键人出站任务（上下线播报 + 失败告警）：agent 拉取真机发送 + 回执 ─────────────
+// agent-facing（与 draft-generate/heartbeat 同 router，不挂 superAdminGuard——listen_chat
+// 无 admin 凭据）。真机 UIA 发送是接缝（xian-rog 真验），中台只管「派任务 + 收回执」。
+
+// GET /api/wechat/cs/outbound?agent_id=  → 列出该 agent 待发给关键人的出站任务
+wechatRouter.get('/cs/outbound', async (req: Request, res: Response) => {
+  const agentId = typeof req.query.agent_id === 'string' ? req.query.agent_id.trim() : '';
+  if (!agentId) {
+    return res.status(400).json({ error: 'MISSING_AGENT_ID', message: '缺 agent_id' });
+  }
+  try {
+    const tasks = await listPendingOutbound(agentId);
+    return res.status(200).json({ ok: true, tasks });
+  } catch (err) {
+    const errMsg = err instanceof Error ? err.message : String(err);
+    console.error('[wechat/cs/outbound] list 失败:', errMsg);
+    return res.status(500).json({ error: 'OUTBOUND_LIST_FAILED', message: errMsg });
+  }
+});
+
+// POST /api/wechat/cs/outbound/:id/receipt  {ok:boolean}  → 真机发送回执，翻 auto_sent/send_failed
+const OutboundReceiptSchema = z.object({ ok: z.boolean() });
+wechatRouter.post('/cs/outbound/:id/receipt', async (req: Request, res: Response) => {
+  const taskId = req.params.id;
+  const parsed = OutboundReceiptSchema.safeParse(req.body ?? {});
+  if (!parsed.success) {
+    return res.status(400).json({ error: 'INVALID_BODY', message: '缺 ok:boolean' });
+  }
+  try {
+    const updated = await markOutboundReceipt(taskId, parsed.data.ok);
+    return res.status(200).json({ ok: true, updated });
+  } catch (err) {
+    const errMsg = err instanceof Error ? err.message : String(err);
+    console.error('[wechat/cs/outbound/receipt] 失败:', errMsg);
+    return res.status(500).json({ error: 'OUTBOUND_RECEIPT_FAILED', message: errMsg });
+  }
+});
+
+// POST /api/wechat/cs/alert  {agent_id, key_contact, reason}  → 失败/掉线 → 入告警出站任务（去重）
+const AlertSchema = z.object({
+  agent_id: z.string().min(1),
+  key_contact: z.string().min(1),
+  reason: z.string().min(1),
+});
+wechatRouter.post('/cs/alert', async (req: Request, res: Response) => {
+  const parsed = AlertSchema.safeParse(req.body ?? {});
+  if (!parsed.success) {
+    return res.status(400).json({ error: 'INVALID_BODY', message: '缺 agent_id/key_contact/reason' });
+  }
+  try {
+    const r = await enqueueFailureAlert({
+      agentId: parsed.data.agent_id,
+      keyContact: parsed.data.key_contact,
+      reason: parsed.data.reason,
+    });
+    return res.status(200).json({ ok: true, ...r });
+  } catch (err) {
+    const errMsg = err instanceof Error ? err.message : String(err);
+    console.error('[wechat/cs/alert] 失败:', errMsg);
+    return res.status(500).json({ error: 'ALERT_FAILED', message: errMsg });
   }
 });

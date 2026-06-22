@@ -457,6 +457,14 @@ tests:
     product: AI员工
     note: "Sprint 06181315 合同归档入口，re-import canonical apps/api/tests/regression/line04-cs-tenant-isolation.test.ts（单一来源，不重复维护）。"
 
+  - id: line04-cs-no-approval-auto-reply-config
+    path: sprints/06220821-line04-cs-no-approval-auto-reply/tests/cs-auto-agent-config.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: AI员工
+    note: "Sprint 06220821 无审批自动回复闭环：自动代理 5 配置键 getAutoAgentConfig/saveAutoAgentConfig oracle（vi.mock db/connection，默认关 + partial 合并 upsert）。"
+
   - id: agent-line04-python-path-fix
     path: services/agent/modules/line04/__tests__/wechat-rpa-python-path.test.ts
     type: unit
@@ -2774,7 +2782,31 @@ agent_suite:
     ci: L3
     status: active
     product: 私域运营
-    note: "Path 4 Step 5 generateChatDraft mode:auto 返回 reply 文本（隐形自动回 J1-J4）"
+    note: "Path 4 Step 5 generateChatDraft mode:auto 返回 reply 文本（隐形自动回 J1-J5；C1 后 J4 改为名单外 not_in_whitelist）"
+
+  - id: wechat-draft-auto-wiring
+    path: apps/api/src/services/__tests__/wechat-draft-auto-wiring.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 私域运营
+    note: "Sprint 06220821 — line04 无审批自动回复闭环 C1：generateChatDraft(mode:auto) 决策层接线运行时断言（W1 监控态不回 / W2 名单外不烧LLM / W3 名单内ON营业时间内回 / W4 营业时间外不回 / W5 超daily_limit不回）"
+
+  - id: line04-cs-route-decision
+    path: apps/api/src/services/wechat/__tests__/cs-route-decision.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 私域运营
+    note: "Sprint 06220821 — line04 无审批自动回复闭环 C1：TS 侧路由真值表 decideReplyRoute/withinBusinessHours（与 auto_reply.py 1:1 镜像，含跨午夜）"
+
+  - id: line04-cs-outbound
+    path: apps/api/src/services/wechat/__tests__/cs-outbound.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 私域运营
+    note: "Sprint 06220821 — line04 关键人出站任务 service 单测（mock pool）：enqueueKeyContactBroadcast 跳变播报/未配跳过/入库失败不抛 + enqueueFailureAlert 去重 + markOutboundReceipt 回执翻 auto_sent/send_failed"
 
   - id: path4-wechat-cs-persona
     path: apps/api/src/services/wechat/__tests__/persona.test.ts
@@ -2839,6 +2871,14 @@ agent_suite:
     status: active
     product: 客户私域AI接管
     note: "Path 4 Step 3 Sprint B — 配置 CRUD 路由集成（真DB往返 + suggest-audience AI帮填）"
+
+  - id: line04-cs-broadcast-outbound
+    path: apps/api/tests/integration/p4-wechat-cs-broadcast/cs-broadcast-outbound.integration.test.ts
+    type: integration
+    ci: L4
+    status: active
+    product: 客户私域AI接管
+    note: "Sprint 06220821 — line04 关键人上下线播报 + 失败/掉线告警入「待发出站任务」(zenithjoy.wechat_publish_task approved/system)，agent 拉取真机 UIA 发送回执；含开关跳变播报/未配跳过/告警去重/回执翻 auto_sent。真机 UIA 发送是接缝。"
 
   - id: path4-wechat-cs-config-page-e2e
     path: apps/dashboard/e2e/wechat-cs-config.spec.ts
@@ -2977,6 +3017,14 @@ agent_suite:
     status: active
     product: 客户私域AI接管
     note: "listen_chat 每60s 上报中台心跳，失败不抛（进程守护断线告警数据源）"
+
+  - id: wechat-cs-outbound-keycontact
+    path: services/agent/wechat-rpa/tests/test_outbound_keycontact.py
+    type: unit
+    ci: L3
+    status: active
+    product: 客户私域AI接管
+    note: "Sprint 06220821 — line04 关键人出站任务接线 process_outbound_once：拉取→send_chat 真发→回执 auto_sent/send_failed→自身失败再报告警（真机 UIA 发送是接缝，mock send 验链路接通无 orphan）"
 
   - id: wechat-cs-uia-interaction
     path: services/agent/wechat-rpa/tests/test_uia_interaction.py

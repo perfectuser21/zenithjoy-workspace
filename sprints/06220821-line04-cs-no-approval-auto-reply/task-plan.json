@@ -1,0 +1,38 @@
+{
+  "initiative_id": "344b92cf-673b-46b0-a806-c19bd966db72",
+  "journey_type": "agent_remote",
+  "journey_type_reason": "核心 ability 是远端 wechat-rpa agent 上的自动回复闭环（真送达/读回/主动发送），配置页仅为支撑入口。",
+  "tasks": [
+    {
+      "task_id": "ws1",
+      "title": "微信客服 无审批自动回复闭环（Line 04）— 名单内自动回 + 名单外 pending_human + 自动代理总开关 + 上下线播报",
+      "scope": "新建 services/agent/wechat-rpa/auto_reply.py 纯决策层（路由真值表/营业时间含跨午夜/1~5s 拟人延迟/去重幂等/LLM 超时跳过/daily_limit/开关跳变播报/失败告警/回执），接进 listen_chat.py 自动回闭环（复用 send_chat.py 真送达+读回+不抢焦点）；cs-config-store.ts 新增自动代理 5 配置键读写 + 配置页开关跳变触发播报；DB 迁移放开 wechat_publish_task 的 status/approval_source CHECK（容 system + auto_sent/pending_human/send_failed）；扩展 wechat-draft-auto-mode-smoke.sh 覆盖三态+名单外+回执+播报+去重+告警。逻辑层 CI 绿即逻辑 done；真机送达接缝走 e2e-verify.ps1 标 logic-done-pending。",
+      "dod": [
+        "[BEHAVIOR] decide_reply_route 真值表 5 行字面量正确（auto/review/pending_human/skip_offhours），取值 ⊆ 4 字面量且不含禁用同义词",
+        "[BEHAVIOR] within_business_hours 含跨午夜 + end=24:00；pick_reply_delay 落 [1.0,5.0] 且随机；is_duplicate 同(联系人,文本,窗)只回一次；llm_timeout_skip>20s 跳过；daily_limit 0=不限/超额→pending_human",
+        "[BEHAVIOR] broadcast_action OFF→ON online / ON→OFF offline / 关键人未配 skip；alert_on_failure 产出关键人告警 payload；build_receipt 成功 auto_sent / 失败 send_failed 不重发",
+        "[BEHAVIOR] cs-config-store 自动代理 5 键可 upsert 读回一致（auto_agent_enabled 默认 false，daily_limit 默认 0）",
+        "[BEHAVIOR] DB CHECK 放开：approval_source 容 system + status 容 auto_sent/pending_human/send_failed，非法 status 仍 23514 拒（真 psql）",
+        "[BEHAVIOR:接缝] xian-rog 真机：上下线播报真送达 + 名单内自动回真送达不抢焦点 + 名单外 pending_human 真可见 + 失败告警真送达（未真验标 logic-done-pending）",
+        "[ARTIFACT] services/agent/wechat-rpa/auto_reply.py 导出 8 个核心函数",
+        "[ARTIFACT] apps/api/db/migrations 新迁移含 auto_sent + pending_human + send_failed + approval_source(system) 的 CHECK DROP/ADD",
+        "[ARTIFACT] cs-config-store.ts 新增 auto_agent_enabled/business_hours_start/key_contact_wechat 等键存取",
+        "[ARTIFACT] wechat-draft-auto-mode-smoke.sh 扩展覆盖 pending_human/auto_sent/broadcast"
+      ],
+      "files": [
+        "services/agent/wechat-rpa/auto_reply.py",
+        "services/agent/wechat-rpa/listen_chat.py",
+        "apps/api/src/services/wechat/cs-config-store.ts",
+        "apps/api/src/services/wechat-draft.ts",
+        "apps/api/db/migrations/<new>_wechat_publish_task_auto_reply_states.sql",
+        "apps/dashboard/src/pages/WechatCustomerServiceConfigPage.tsx",
+        "apps/dashboard/src/api/wechat-cs-config.api.ts",
+        ".github/workflows/scripts/smoke/wechat-draft-auto-mode-smoke.sh",
+        ".github/workflows/e2e-wechat-rpa.yml"
+      ],
+      "depends_on": [],
+      "complexity": "M",
+      "estimated_minutes": 110
+    }
+  ]
+}
