@@ -1361,6 +1361,104 @@ def post_heartbeat(
     return {"ok": True}
 
 
+# ─── 关键人出站任务（上下线播报 + 失败告警）：拉取 → 真机发送 → 回执 ──────────────────
+#
+# C1 尾巴接线：中台把「主动发给关键人」的出站任务入库（status=approved/system），
+# listen_chat 每轮拉取 → 调 send_chat_message 真机 UIA 发送（target=关键人）→ 回写回执。
+# 真机 UIA 发送是接缝（xian-rog 真验）；这里负责把「中台任务 → 真机发送」链路接通，不留 orphan。
+
+
+def fetch_outbound_tasks(
+    middleware_url: str, agent_id: Optional[str], timeout: int = 10
+) -> List[Dict[str, Any]]:
+    """GET 中台待发给关键人的出站任务。失败返回 []（不抛，不拖垮监听）。"""
+    if not agent_id:
+        return []
+    try:
+        import requests  # 仅运行时需要
+    except Exception as exc:
+        print(f"[listen_chat] outbound: requests not available: {exc}", file=sys.stderr)
+        return []
+    url = middleware_url.rstrip("/") + "/api/wechat/cs/outbound"
+    try:
+        resp = requests.get(url, params={"agent_id": agent_id}, timeout=timeout)
+        if getattr(resp, "status_code", 0) != 200:
+            return []
+        data = resp.json()
+        tasks = data.get("tasks") if isinstance(data, dict) else None
+        return tasks if isinstance(tasks, list) else []
+    except Exception as exc:
+        print(f"[listen_chat] outbound fetch 失败: {exc}", file=sys.stderr)
+        return []
+
+
+def post_outbound_receipt(
+    middleware_url: str, task_id: str, ok: bool, timeout: int = 10
+) -> None:
+    """回写出站任务回执（auto_sent / send_failed）。失败吞掉不抛。"""
+    url = middleware_url.rstrip("/") + f"/api/wechat/cs/outbound/{task_id}/receipt"
+    resp, error = _post_with_retry(
+        url, {"ok": ok}, timeout=timeout, retries=2, backoff_base=0.5, max_total=10
+    )
+    if error is not None:
+        print(f"[listen_chat] outbound receipt 失败 task={task_id}: {error}", file=sys.stderr)
+
+
+def post_failure_alert(
+    middleware_url: str,
+    agent_id: Optional[str],
+    key_contact: str,
+    reason: str,
+    timeout: int = 10,
+) -> None:
+    """发送失败/掉线 → 让中台入一条关键人告警出站任务（中台侧去重）。失败吞掉。"""
+    if not agent_id or not key_contact:
+        return
+    url = middleware_url.rstrip("/") + "/api/wechat/cs/alert"
+    body = {"agent_id": agent_id, "key_contact": key_contact, "reason": reason}
+    _post_with_retry(url, body, timeout=timeout, retries=2, backoff_base=0.5, max_total=10)
+
+
+def process_outbound_once(
+    middleware_url: str, agent_id: Optional[str], real_publish: bool
+) -> int:
+    """拉取关键人出站任务 → 逐条真机发送 → 回执。返回成功发送条数。
+
+    复用 send_chat.send_chat_message（纯 UIA 真发配方，target=关键人，支持 _find_session_item）。
+    REAL_PUBLISH=0（默认 / CI）走 send_chat mock 路径，链路照样接通可测。
+    """
+    tasks = fetch_outbound_tasks(middleware_url, agent_id)
+    if not tasks:
+        return 0
+    try:
+        from send_chat import send_chat_message  # 函数体内 import，复用真发配方
+    except Exception as exc:
+        print(f"[listen_chat] outbound: send_chat import 失败: {exc}", file=sys.stderr)
+        return 0
+
+    sent = 0
+    for t in tasks:
+        task_id = str(t.get("task_id") or "")
+        target = str(t.get("target") or "")
+        message = str(t.get("message") or "")
+        if not task_id or not target or not message:
+            continue
+        try:
+            # 关键人主动发送：wechat_id 复用 target（关键人无独立 wxid 时以 target 作频控键）
+            result = send_chat_message(target, target, message, real_publish)
+            ok = bool(result.get("ok"))
+        except Exception as exc:
+            print(f"[listen_chat] outbound 发送异常 target={target}: {exc}", file=sys.stderr)
+            ok = False
+        post_outbound_receipt(middleware_url, task_id, ok)
+        if ok:
+            sent += 1
+        else:
+            # 关键人播报/告警自身发送失败 → 再报一条告警（中台去重防刷屏）
+            post_failure_alert(middleware_url, agent_id, target, "key_contact_send_failed")
+    return sent
+
+
 # ─── dryrun 入口（CI 单次模拟）────────────────────────────────────────────────
 
 
@@ -1684,6 +1782,19 @@ def run_real_listen(args: argparse.Namespace) -> int:
                 continue
             last_unread_senders = [u["sender"] for u in unread]
 
+            # 关键人出站任务（上下线播报 + 失败告警）：拉中台待发任务 → 真机 UIA 发送 → 回执。
+            # 与「被动回名单内客户」同循环，但走 send_chat 真发配方（target=关键人）。失败吞掉不拖垮监听。
+            try:
+                _ob = process_outbound_once(
+                    args.middleware_url,
+                    getattr(args, "agent_id", None),
+                    os.environ.get("REAL_PUBLISH", "0") == "1",
+                )
+                if _ob:
+                    _log(f"[关键人出站] 发送 {_ob} 条")
+            except Exception as _obexc:
+                _log(f"[关键人出站] 处理异常: {_obexc}")
+
             # 主动发送指令：写 %PUBLIC%\zj-proactive-send.json → {target:..., message:...}
             _public = os.environ.get("PUBLIC", r"C:\Users\Public")
             _psc = os.path.join(_public, "zj-proactive-send.json")
@@ -1837,23 +1948,30 @@ def run_real_listen(args: argparse.Namespace) -> int:
                     _log(f"auto-replied OK sender={m['sender']} receipt={receipt['status']}")
                 else:
                     reply_failed_at[key] = time.time()
-                    # 读回失败/掉线告警：auto_reply.alert_on_failure 产出关键人告警 payload（同时要求写飞书）。
-                    # 关键人由中台配置（auto_agent.key_contact_wechat）下发；agent 侧拿不到则 target 留空，
-                    # 仍把告警随心跳 diag 上报中台，由中台真送达关键人（真送达是接缝，xian-rog 真机验）。
+                    # 读回失败/掉线告警：auto_reply.alert_on_failure 产出关键人告警 payload（决策 SSOT）。
+                    # 关键人由中台配置（auto_agent.key_contact_wechat）下发；agent 侧拿不到则 target 留空。
                     key_contact = getattr(args, "key_contact", "") or os.environ.get("ZJ_KEY_CONTACT", "")
                     alert = auto_reply.alert_on_failure("reply_in_chat_failed", key_contact)
                     _log(
                         f"reply_in_chat FAILED sender={m['sender']} receipt={receipt['status']} "
                         f"alert_target={alert['target']!r} (冷却 {REPLY_FAIL_COOLDOWN}s 再试)"
                     )
+                    # 真机主动告警接线：让中台入一条关键人告警出站任务（中台去重）→ 下一轮
+                    # process_outbound_once 真机 UIA 发给关键人。同时随心跳 diag 上报留痕。
                     try:
+                        post_failure_alert(
+                            args.middleware_url,
+                            getattr(args, "agent_id", None),
+                            key_contact,
+                            "reply_in_chat_failed",
+                        )
                         post_heartbeat(
                             args.middleware_url,
                             agent_id=getattr(args, "agent_id", None),
                             diag={"alert": alert, "receipt": receipt},
                         )
                     except Exception as _hbexc:
-                        _log(f"[告警上报] 心跳异常: {_hbexc}")
+                        _log(f"[告警上报] 异常: {_hbexc}")
                 time.sleep(1)  # 操作间隔 ≥1s
 
             time.sleep(args.interval)

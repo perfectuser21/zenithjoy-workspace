@@ -25,16 +25,19 @@ describe('wechat.ts — router export', () => {
     expect(paths).toContain('/scheduler-tick');
   });
 
-  it('registers exactly 5 unique endpoints (4 原有 + 1 心跳；iLink 已删除)', () => {
+  it('registers exactly 8 unique endpoints (5 原有 + 3 关键人出站；iLink 已删除)', () => {
     const stack = (wechatRouter as any).stack;
     const paths = [...new Set(stack.filter((l: any) => l.route).map((l: any) => l.route.path))];
-    // 原有 4：qr-bind / draft-review-poll / scheduler-tick / draft-generate
+    // 原有 5：qr-bind / draft-review-poll / scheduler-tick / draft-generate / listener-heartbeat
     expect(paths).toContain('/draft-generate');
+    expect(paths).toContain('/listener-heartbeat');
     // iLink 个人号通道已彻底删除（用户否决，决策 9d2234ba）—— 不应再注册任何 ilink-* 端点
     expect(paths).not.toContain('/ilink-login-start');
     expect(paths).not.toContain('/ilink-poller-start');
-    // 进程守护：监听心跳上报端点
-    expect(paths).toContain('/listener-heartbeat');
-    expect(paths.length).toBe(5);
+    // C1 尾巴：关键人出站任务 3 端点（agent 拉取待发 / 回执 / 失败告警入队）
+    expect(paths).toContain('/cs/outbound');
+    expect(paths).toContain('/cs/outbound/:id/receipt');
+    expect(paths).toContain('/cs/alert');
+    expect(paths.length).toBe(8);
   });
 });

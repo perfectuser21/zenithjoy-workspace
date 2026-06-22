@@ -57,4 +57,19 @@ grep -q "auto_sent" "$ROOT/apps/api/db/migrations/20260622_090000_wechat_publish
 grep -q "pending_human" "$ROOT/apps/api/db/migrations/20260622_090000_wechat_publish_task_auto_reply_states.sql"
 echo "  migration 放开 auto_sent / pending_human OK"
 
+echo "[4/4] 关键人播报+告警 真机主动发送接线：端点 + service + agent 链路守卫"
+# 服务端：PUT 开关端点 + 出站任务 service + agent 拉取端点
+grep -q "cs/auto-agent" "$ROOT/apps/api/src/routes/wechat-config.ts"
+grep -q "enqueueKeyContactBroadcast" "$ROOT/apps/api/src/services/wechat/cs-outbound.ts"
+grep -q "cs/outbound" "$ROOT/apps/api/src/routes/wechat.ts"
+grep -q "cs/alert" "$ROOT/apps/api/src/routes/wechat.ts"
+# agent 侧：listen_chat 真有 process_outbound_once 把出站任务接到 send_chat 真发（不留 orphan）
+grep -q "process_outbound_once" "$ROOT/services/agent/wechat-rpa/listen_chat.py"
+grep -q "from send_chat import send_chat_message" "$ROOT/services/agent/wechat-rpa/listen_chat.py"
+# 两份 listen_chat 同步（services/ 与 build-modules/line04/）
+diff -q "$ROOT/services/agent/wechat-rpa/listen_chat.py" \
+        "$ROOT/services/agent/build-modules/line04/wechat-rpa/listen_chat.py" >/dev/null \
+  && echo "  出站接线端点+service+agent链路+双份同步 OK" \
+  || { echo "  FAIL: build-modules/line04 listen_chat 未与 services 同步"; exit 1; }
+
 echo "PASS wechat-draft-auto-mode-smoke"

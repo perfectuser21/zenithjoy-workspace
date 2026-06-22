@@ -27,7 +27,11 @@ import {
   savePersona,
   getBusinessKB,
   saveBusinessKB,
+  getAutoAgentConfig,
+  saveAutoAgentConfig,
 } from '../services/wechat/cs-config-store';
+import { enqueueKeyContactBroadcast } from '../services/wechat/cs-outbound';
+import { superAdminGuard } from '../middleware/super-admin';
 import type { KBAudienceSegment } from '../services/wechat/types';
 
 export const wechatConfigRouter = Router();
@@ -224,6 +228,52 @@ wechatConfigRouter.post('/business-kb/suggest-audience', async (req: Request, re
   }
 
   return res.status(200).json({ audience_segments: segments });
+});
+
+// ─── ④ 自动代理配置（总开关 + 营业时间 + 关键人 + daily_limit）────────────────────
+//
+// PUT /api/wechat/cs/auto-agent（super-admin）：保存配置 + 在 auto_agent_enabled OFF↔ON
+// 跳变时给关键人入「上下线播报」出站任务（agent 拉取后真机 UIA 发送）。
+
+const AutoAgentConfigSchema = z
+  .object({
+    auto_agent_enabled: z.boolean().optional(),
+    business_hours_start: z.string().optional(),
+    business_hours_end: z.string().optional(),
+    key_contact_wechat: z.string().optional(),
+    daily_limit: z.number().int().min(0).optional(),
+    // 播报出站任务归属的 agent（NOT NULL uuid）。thin：单租户由调用方传入。
+    agent_id: z.string().uuid().optional(),
+  })
+  .strict();
+
+wechatConfigRouter.get('/cs/auto-agent', superAdminGuard, async (_req: Request, res: Response) => {
+  const cfg = await getAutoAgentConfig();
+  return res.status(200).json(cfg);
+});
+
+wechatConfigRouter.put('/cs/auto-agent', superAdminGuard, async (req: Request, res: Response) => {
+  const parsed = AutoAgentConfigSchema.safeParse(req.body ?? {});
+  if (!parsed.success) return invalidBody(res, parsed.error);
+  const { agent_id, ...cfgPatch } = parsed.data;
+
+  // 跳变检测：取保存前的开关态 + 保存后的开关态
+  const before = await getAutoAgentConfig();
+  await saveAutoAgentConfig(cfgPatch);
+  const after = await getAutoAgentConfig();
+
+  // OFF↔ON 跳变 → 给关键人入上/下线播报出站任务（关键人未配 / 无跳变 → skip，不阻塞保存）。
+  let broadcast: { action: string; task_id?: string } = { action: 'skip' };
+  if (agent_id) {
+    broadcast = await enqueueKeyContactBroadcast({
+      prevOn: before.auto_agent_enabled,
+      nextOn: after.auto_agent_enabled,
+      keyContact: after.key_contact_wechat,
+      agentId: agent_id,
+    });
+  }
+
+  return res.status(200).json({ success: true, config: after, broadcast });
 });
 
 export default wechatConfigRouter;

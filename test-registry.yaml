@@ -3002,6 +3002,14 @@ agent_suite:
     product: 客户私域AI接管
     note: "listen_chat 每60s 上报中台心跳，失败不抛（进程守护断线告警数据源）"
 
+  - id: wechat-cs-outbound-keycontact
+    path: services/agent/wechat-rpa/tests/test_outbound_keycontact.py
+    type: unit
+    ci: L3
+    status: active
+    product: 客户私域AI接管
+    note: "Sprint 06220821 — line04 关键人出站任务接线 process_outbound_once：拉取→send_chat 真发→回执 auto_sent/send_failed→自身失败再报告警（真机 UIA 发送是接缝，mock send 验链路接通无 orphan）"
+
   - id: wechat-cs-uia-interaction
     path: services/agent/wechat-rpa/tests/test_uia_interaction.py
     type: unit
