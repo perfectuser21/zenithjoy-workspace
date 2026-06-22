@@ -2,10 +2,13 @@
 """
 send_chat.py — 私聊真发（Path 4 Step 5，pywinauto 版）。
 
+真发开关（任一 =1/true 即真发）：REAL_PUBLISH 或 ZENITHJOY_AGENT_REAL_PUBLISH。
+  prod 长驻 listener / module-manager 注入的是 ZENITHJOY_AGENT_REAL_PUBLISH=1（#818）。
+
 跨平台行为：
-  - **REAL_PUBLISH=0**（默认）：不真控微信，输出 mock 成功 JSON
+  - **未开真发**（默认）：不真控微信，输出 mock 成功 JSON
         {"ok": true, "sent_at": ISO8601, "dryRun": true}
-  - **REAL_PUBLISH=1 + Windows + 微信 4.0 登录 + 装了 pywinauto**：
+  - **开真发 + Windows + 微信 4.0 登录 + 装了 pywinauto**：
     复用 listen_chat 的纯 UIA 配方 —— get_main_window() 找主窗口 →
     在会话列表定位 target 的会话项 → reply_in_chat()（会话项 iface_invoke.Invoke() 打开会话 →
     chat_input_field iface_value.SetValue() 写值 → "发送"按钮 iface_invoke.Invoke()）。
@@ -120,7 +123,9 @@ def send_chat_message(
                 "dryRun": False,
             }
 
-        ok_sent = reply_in_chat(mw, item, message)
+        # sender=target：激活 reply_in_chat 的真送达读回 gate（#818 治出站播报假发）。
+        # 不传 sender 会走 fallback 分支跳过读回 → _uia_send 自报 True 即返回 True（假阳性）。
+        ok_sent = reply_in_chat(mw, item, message, sender=target)
         return {
             "ok": bool(ok_sent),
             "reason": None if ok_sent else "send_failed",
@@ -139,8 +144,20 @@ def send_chat_message(
         }
 
 
+def _resolve_real_publish() -> bool:
+    """真发判定：同时认 REAL_PUBLISH 和 ZENITHJOY_AGENT_REAL_PUBLISH，任一 =1/true 即真发。
+
+    #818：prod 长驻 listener / module-manager 注入的是 ZENITHJOY_AGENT_REAL_PUBLISH=1
+    （与抖音/快手 handler 一致）。两个名都认，避免按需 spawn 同样假发。
+    """
+    for name in ("REAL_PUBLISH", "ZENITHJOY_AGENT_REAL_PUBLISH"):
+        if os.environ.get(name, "").strip().lower() in ("1", "true"):
+            return True
+    return False
+
+
 def main() -> int:
-    real_publish = os.environ.get("REAL_PUBLISH", "0") == "1"
+    real_publish = _resolve_real_publish()
 
     raw = sys.stdin.read()
     try:

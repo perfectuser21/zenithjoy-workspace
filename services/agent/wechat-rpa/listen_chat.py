@@ -156,6 +156,20 @@ _UI_STATUS_KEYWORDS = ("置顶", "草稿")
 # ─── 纯逻辑：回复等待决策（CI 单测锚点，顶层零 pywinauto，跨平台可测）────────────
 
 
+def _resolve_real_publish() -> bool:
+    """真发判定：同时认 REAL_PUBLISH 和 ZENITHJOY_AGENT_REAL_PUBLISH，任一 =1/true 即真发。
+
+    #818 真机 bug：prod agent 的 module-manager 起长驻 listener 时注入的是
+    ZENITHJOY_AGENT_REAL_PUBLISH=1（与抖音/快手 handler 一致），不是 REAL_PUBLISH。
+    旧代码只认 REAL_PUBLISH → real_publish=False → 出站走 send_chat mock 假发但中台标
+    auto_sent，关键人没收到。两个名都认 → prod 现成 env 直接生效，无需机器加新 env。
+    """
+    for name in ("REAL_PUBLISH", "ZENITHJOY_AGENT_REAL_PUBLISH"):
+        if os.environ.get(name, "").strip().lower() in ("1", "true"):
+            return True
+    return False
+
+
 def decide_reply_wait(human_intervened: bool,
                       reply_delay: float = REPLY_DELAY_SECONDS,
                       human_wait: float = HUMAN_PRIORITY_WAIT_SECONDS) -> float:
@@ -1788,7 +1802,7 @@ def run_real_listen(args: argparse.Namespace) -> int:
                 _ob = process_outbound_once(
                     args.middleware_url,
                     getattr(args, "agent_id", None),
-                    os.environ.get("REAL_PUBLISH", "0") == "1",
+                    _resolve_real_publish(),
                 )
                 if _ob:
                     _log(f"[关键人出站] 发送 {_ob} 条")
