@@ -1,0 +1,41 @@
+{
+  "initiative_id": "ab2ed63d-f01a-4408-a530-ddbc493bb1c3",
+  "journey_type": "agent_remote",
+  "journey_type_reason": "核心新能力 = wechat-rpa 远端 agent 自动收发 + send_chat.py 主动播报；配置页为已有页面复用。逻辑断言走 CI vitest/smoke，接缝断言走 xian-rog 真机。",
+  "tasks": [
+    {
+      "task_id": "ws1",
+      "title": "微信客服无审批自动回复闭环：自动代理开关 + 营业时间 + 关键人播报 + 名单内自动回 + 名单外 pending_human + 回执回写 + migration 放开",
+      "scope": "在已验证的 B 方案真送达/客户名单/三层记忆/人设/send_chat 之上，加自动代理总开关闭环。WHAT：① 配置页 + GET/PUT /api/wechat/auto-agent + cs-config-store 落 4 键（auto_agent_enabled 默认 false / business_hours_start '06:00' / business_hours_end '24:00' / key_contact_wechat）；② decideReplyMode 四态裁决（ON+名单内+营业内→auto / OFF→review监控 / ON+名单外→pending_human / ON+营业外→out_of_hours）；③ isWithinBusinessHours 营业窗含跨午夜；④ humanDelayMs 1~5s 拟人延迟；⑤ resolveToggleBroadcast 开关跳变 online/offline/none/skip 播报，复用 send_chat 对关键人发；⑥ listen_chat 模式路由接入裁决+延迟+真送达读回，名单外写 pending_human；⑦ 回执回写飞书/DB（auto_sent/send_failed/receipt_status/receipt_error，send_failed 不重发）；⑧ migration idempotent ALTER：approval_source 容纳 system + approval_status 新增 auto_sent/pending_human/send_failed（以运行时代码实际列为准）；⑨ 扩 wechat-draft-auto-mode-smoke.sh 到四路由；⑩ e2e-verify.ps1（xian-rog 接缝）。",
+      "dod": [
+        "[BEHAVIOR] decideReplyMode 四态裁决：vitest apps/api/src/services/wechat/__tests__/auto-mode.test.ts 全过",
+        "[BEHAVIOR] humanDelayMs 500 采样恒 ∈[1000,5000] 且非常量",
+        "[BEHAVIOR] isWithinBusinessHours 含跨午夜：vitest business-hours.test.ts 全过",
+        "[BEHAVIOR] resolveToggleBroadcast online/offline/none/skip：vitest agent-toggle.test.ts 全过",
+        "[BEHAVIOR] 配置端点 Response Schema：vitest wechat-auto-agent.test.ts 全过（GET 4 字段/PUT 200 {success:true}/400 INVALID_BODY）",
+        "[BEHAVIOR] 既有 wechat-draft-auto-reply.test.ts 回归保持绿",
+        "[BEHAVIOR] migration 含 system/auto_sent/pending_human/send_failed（node 内容断言）",
+        "[BEHAVIOR] 扩后 smoke 覆盖 pending_human/out_of_hours 四路由（grep 守卫 + bash 跑过）",
+        "[BEHAVIOR:E2E] (logic-done-pending) xian-rog 真机：开关播报真收 / 名单内 1~5s 真回不抢焦点 / 名单外 pending_human / ToAPI 真出 reply",
+        "[ARTIFACT] auto-mode.ts / business-hours.ts / agent-toggle.ts / cs-config-store 4 键 / 路由 /auto-agent / migration / 配置页 4 键 / e2e-verify.ps1 均存在"
+      ],
+      "files": [
+        "apps/api/src/services/wechat/auto-mode.ts",
+        "apps/api/src/services/wechat/business-hours.ts",
+        "apps/api/src/services/wechat/agent-toggle.ts",
+        "apps/api/src/services/wechat/cs-config-store.ts",
+        "apps/api/src/routes/wechat-config.ts",
+        "apps/api/db/migrations/20260622_000000_wechat_auto_reply_status.sql",
+        "apps/dashboard/src/pages/WechatCustomerServiceConfigPage.tsx",
+        "apps/dashboard/src/api/wechat-cs-config.api.ts",
+        "services/agent/wechat-rpa/listen_chat.py",
+        "services/agent/wechat-rpa/send_chat.py",
+        ".github/workflows/scripts/smoke/wechat-draft-auto-mode-smoke.sh",
+        "sprints/06220821-line04-cs-no-approval-auto-reply/e2e-verify.ps1"
+      ],
+      "depends_on": [],
+      "complexity": "L",
+      "estimated_minutes": 120
+    }
+  ]
+}
