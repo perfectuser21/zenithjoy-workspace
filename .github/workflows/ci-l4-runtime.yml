@@ -159,6 +159,11 @@ jobs:
           chmod +x .github/workflows/scripts/smoke/agent-self-heal-smoke.sh
           bash .github/workflows/scripts/smoke/agent-self-heal-smoke.sh
 
+      - name: Smoke — 客户机 Agent 核心自升级（#824 required_agent_version + .active-core 自换重启）
+        run: |
+          chmod +x .github/workflows/scripts/smoke/agent-core-self-upgrade-smoke.sh
+          bash .github/workflows/scripts/smoke/agent-core-self-upgrade-smoke.sh
+
   # ─── L4 Gate ──────────────────────────────────────────────────────────
   l4-passed:
     name: L4 Runtime Gate Passed
