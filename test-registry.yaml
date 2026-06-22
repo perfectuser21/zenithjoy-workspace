@@ -529,6 +529,14 @@ tests:
     product: AI员工
     note: "Sprint 06090945 — updateTrayModules 首次出现模块时（0→N）热重建托盘：触发 rebuild hook / 已有模块不重建 / headless 不崩溃"
 
+  - id: agent-tray-show-module-error-degrade
+    path: services/agent/src/__tests__/tray-show-module-error-degrade.test.ts
+    type: unit
+    ci: L2
+    status: active
+    product: AI员工
+    note: "Sprint 06220836（PR #815 review 跟进）— Agent 客户端封装 去黑窗：showModuleError 降级红点分支真验。node-notifier 不可用（注入必失败 _notifierHook）时记录 lastModuleError + 触发 _trayRebuildHook 渲染 🔴 + 绝不 spawn 任何子进程（尤其 powershell）；含 headless(handlers=null) 分支。"
+
   # ── Walking Skeleton #1 — Agent handlers ────────────────────────────────────
   - id: agent-ws1-heartbeat-loop
     path: services/agent/src/handlers/__tests__/heartbeat-loop.test.ts
