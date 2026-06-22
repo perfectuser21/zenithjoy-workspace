@@ -529,6 +529,14 @@ tests:
     product: AI员工
     note: "Sprint 06081700 — Core 模块管理器：syncModules / runModulePreflight / fork 激活 + IPC / forwardMessage；v2.0.16 回归：execFile 传 ZENITHJOY_CORE_DIR，修复客户机无系统 python 时 exit 9009 卡死"
 
+  - id: agent-self-heal-smoke
+    path: .github/workflows/scripts/smoke/agent-self-heal-smoke.sh
+    type: e2e
+    ci: L4
+    status: active
+    product: AI员工
+    note: "Sprint 06221906 (#822) — 客户机 Agent 自愈四件端到端 smoke：真编译 ModuleManager + line04 handler，断言 件1 进程退出自动重启(指数退避)+超上限告警 / 件2 ZENITHJOY_AGENT_REAL_PUBLISH→REAL_PUBLISH 注入 / 件3 config.agentId 用稳定 UUID / 件4 collectListenerHealth+buildHealthStatusMessage 含 listener_alive/found_window/last_delivery_ts。"
+
   - id: agent-module-supervise
     path: services/agent/src/__tests__/module-supervise.test.ts
     type: unit
