@@ -16,6 +16,7 @@
         "[BEHAVIOR] install-autostart.ps1 $Target 指向 start.vbs（非 start.bat）",
         "[BEHAVIOR] build-install-pack.sh 拷 start.vbs；package.json 含 node-notifier 依赖",
         "[BEHAVIOR] start.bat 含 ZJ_LAUNCH_PROBE 守卫且保留 Get-Process zenithjoy-agent kill 回归",
+        "[BEHAVIOR] start.vbs 含错误处理 + 拉起失败写 launch.log 留痕（PRD 边界#2，风险 R2）",
         "[ARTIFACT] install-pack/start.vbs + smoke + e2e-verify.ps1 存在",
         "[E2E] windows_cloud e2e-verify.ps1 五 Phase 全过（机制层）；视觉/重启接缝 logic-done-pending（真目标 xian-pc）"
       ],

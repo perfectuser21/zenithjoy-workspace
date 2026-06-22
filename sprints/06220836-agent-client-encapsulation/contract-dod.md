@@ -61,3 +61,7 @@ target_environment: windows_cloud
 - [ ] [BEHAVIOR] start.bat 含 ZJ_LAUNCH_PROBE 测试守卫（E2E 真跑 vbs→bat 链而不挂死，且不破坏既有单实例 kill 回归）
   Test: manual:bash -c 'F=services/agent/install-pack/start.bat; grep -q "ZJ_LAUNCH_PROBE" "$F" && grep -q "Get-Process -Name zenithjoy-agent" "$F" || exit 1; echo OK'
   期望: OK
+
+- [ ] [BEHAVIOR] start.vbs 含错误处理 + 拉起失败写 launch.log 留痕（PRD 边界#2，供报修；风险 R2 缓解）
+  Test: manual:bash -c 'F=services/agent/install-pack/start.vbs; grep -Eqi "On Error|Err\.|ERROR" "$F" && grep -q "launch\.log" "$F" || exit 1; echo OK'
+  期望: OK

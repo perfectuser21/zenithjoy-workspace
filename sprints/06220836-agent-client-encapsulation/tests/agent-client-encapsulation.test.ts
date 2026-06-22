@@ -29,6 +29,14 @@ describe('Agent 客户端封装 [BEHAVIOR]', () => {
     });
   });
 
+  describe('边界 R2 — vbs 拉起失败写 launch.log 留痕（PRD 边界#2）', () => {
+    it('start.vbs 含错误处理且失败时写 launch.log', () => {
+      const vbs = read('install-pack/start.vbs');
+      expect(vbs).toMatch(/On Error|Err\.|ERROR/i);
+      expect(vbs).toContain('launch.log');
+    });
+  });
+
   describe('Step 2 — 单实例守卫', () => {
     it('start.vbs 探测 zenithjoy-agent.exe 已运行则跳过', () => {
       const vbs = read('install-pack/start.vbs');

@@ -1,4 +1,4 @@
-# Sprint Contract Draft (Round 1)
+# Sprint Contract Draft (Round 2)
 
 Sprint: **Agent 客户端封装（去黑窗 + 托盘静默通知）**
 journey_type: `agent_remote`
@@ -191,6 +191,27 @@ echo OK
 | **S3 重启自起** | 重启电脑后 Agent 经 start.vbs 自动起并连中台 | install-autostart.ps1 $Target 指向 start.vbs | xian-pc 重启，确认 Agent 无窗口自起 + 中台 module-health 收到 heartbeat |
 
 > **禁止写死环境假设值**：start.vbs 的日志路径用 `%APPDATA%` 环境推导（不写死绝对路径）；轮转阈值 1MB 为显式常量（非屏幕坐标类假设值，可接受）；单实例探测走 WMI 真实进程表（非假设）。
+
+---
+
+## Risks（真实失败模式 + 缓解；机制层 GHA 真验，视觉/真机层接 S1–S3）
+
+> 本 sprint 是客户机交付体验改造，失败模式集中在「依赖/平台不可用时不得回退黑窗」「无窗口入口被环境拦」「日志写入竞态」三类。每条登记真实触发场景 + 缓解 + 可验证落点。
+
+| # | 风险（真实失败模式） | 触发场景 | 缓解（mitigation） | 验证落点 |
+|---|---|---|---|---|
+| **R1** | node-notifier 安装失败 / 平台不支持（无 SnoreToast、无可用通知后端）→ 模块出错时无通知 | 客户机缺通知运行库；`npm i node-notifier` 未落地；OS 不支持原生 toast | showModuleError 降级"托盘红点 + 日志"，**绝不回退 powershell.exe 气泡**；console.warn 为最后兜底 | 机制层：Step 3 ② 运行期 trap 断言 0 次 powershell spawn + tray.ts grep 零 powershell（E2E Phase 5）。视觉层：接缝 **S2**（xian-pc 触发 preflight 失败看降级红点可见、无 PowerShell 闪窗），标 `logic-done-pending` |
+| **R2** | `wscript.exe` 被组策略 / AV 禁用 → start.vbs 拉不起，托盘不出现，客户无从判断 | 企业组策略禁脚本宿主；杀软拦 .vbs | start.vbs `On Error Resume Next` + 拉起失败写一行 `ERROR` 到 `%APPDATA%\zenithjoy-agent\launch.log` 留痕供报修（呼应 PRD 边界 #2）；客户凭日志报修 | 源码层断言：`grep -Eqi 'On Error\|err\.\|ERROR' start.vbs` 且写 launch.log（见下方守卫命令）。真机层：S1（双击后托盘不出现凭日志定位）属报修路径，非自动验 |
+| **R3** | launch.log 轮转与写入竞态 → 轮转时正写入导致日志损坏 / 轮转判断读到半截大小 | 轮转截断与追加写并发；多次快速拉起 | **写前先轮转**（先判大小→超阈值截断/重建→再顺序追加写），单线程 vbs 顺序执行，不并发写同一句柄 | 机制层：E2E Phase 4 预置 >1MB 日志跑 vbs 后断言 size 回落 < 1MB 且日志可正常追加（不损坏） |
+| **R4** | start.vbs 层单实例「跳过」与 start.bat 既有 kill+restart 语义冲突 → 要么双实例要么互踢 | vbs 跳过分支与 start.bat Step 6.95 kill 逻辑职责重叠 | 职责分层：**单实例守卫只在 vbs 层做"已运行则跳过、不再拉 bat"**；start.bat 的 kill+restart 保留不动（见「已知约束」回归）；二者不互相调用，不引第二套实例逻辑 | 回归层：`src/__tests__/start-bat-single-instance.test.ts` 既有回归须保持绿；本 sprint Step 2 单实例验在 vbs 层（E2E Phase 3 skip 行） |
+
+**R2 守卫命令**（补 PRD 边界 #2 漏覆盖的 vbs 拉起失败留痕断言 — 源码层可证伪）:
+```bash
+# start.vbs 必须含错误处理 + 失败写 launch.log（拉不起时留痕供报修）
+grep -Eqi 'On Error|Err\.|ERROR' services/agent/install-pack/start.vbs \
+  || { echo "FAIL: start.vbs 缺错误处理/失败留痕（PRD 边界#2: 拉起失败写 launch.log）"; exit 1; }
+echo OK
+```
 
 ---
 
