@@ -1,6 +1,3 @@
-contract_branch: cp-harness-propose-r3-0530b5c9-a2
-sprint_dir: sprints/06220836-customer-admin-backend
-
 ---
 skeleton: false
 journey_type: user_facing
