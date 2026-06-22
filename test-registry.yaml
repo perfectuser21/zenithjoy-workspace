@@ -2856,6 +2856,14 @@ agent_suite:
     product: 客户私域AI接管
     note: "Path 4 Step 3 Sprint B — 配置 CRUD 路由集成（真DB往返 + suggest-audience AI帮填）"
 
+  - id: line04-cs-broadcast-outbound
+    path: apps/api/tests/integration/p4-wechat-cs-broadcast/cs-broadcast-outbound.integration.test.ts
+    type: integration
+    ci: L4
+    status: active
+    product: 客户私域AI接管
+    note: "Sprint 06220821 — line04 关键人上下线播报 + 失败/掉线告警入「待发出站任务」(zenithjoy.wechat_publish_task approved/system)，agent 拉取真机 UIA 发送回执；含开关跳变播报/未配跳过/告警去重/回执翻 auto_sent。真机 UIA 发送是接缝。"
+
   - id: path4-wechat-cs-config-page-e2e
     path: apps/dashboard/e2e/wechat-cs-config.spec.ts
     type: e2e
