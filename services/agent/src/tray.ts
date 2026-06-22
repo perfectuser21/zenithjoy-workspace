@@ -232,6 +232,17 @@ export function updateTrayModules(modules: Record<string, TrayModuleInfo>): void
   }
 }
 
+// 原生通知发送抽成可注入 hook（CJS 下 vi.mock 无法拦截源码内 require('node-notifier')，
+// 单测需可注入一个「必失败」实现来真验降级红点分支）。默认实现 = 动态 require node-notifier。
+// notify 抛错（依赖缺失或原生调用失败）即视为不可用，落入降级路径。
+export const _notifierHook = {
+  notify(title: string, message: string): void {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const notifier = require('node-notifier');
+    notifier.notify({ title, message });
+  },
+};
+
 // preflight 失败时提示客户「{模块名}」无法启用：{原因}。
 // 两档静默通知，绝不弹任何外部窗口进程（去黑窗硬保证 —— 已彻底删除旧 PS 气泡弹窗档）：
 //   1. node-notifier（跨平台原生图形通知，首选）
@@ -244,9 +255,7 @@ export function showModuleError(moduleName: string, reason: string): void {
 
   // 1. node-notifier（跨平台原生图形通知，若依赖存在）
   try {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const notifier = require('node-notifier');
-    notifier.notify({ title, message });
+    _notifierHook.notify(title, message);
     return;
   } catch {
     // node-notifier 不可用 —— 降级，绝不回退到外部弹窗进程
@@ -285,4 +294,9 @@ export function _resetTrayStateForTest(): void {
 // 仅供单测使用：直接设置 handlers 而不启动 systray2
 export function _setHandlersForTest(h: TrayHandlers | null): void {
   handlers = h;
+}
+
+// 仅供单测使用：读取降级态 lastModuleError（验证 showModuleError 红点降级路径真生效）
+export function _getLastModuleErrorForTest(): string | null {
+  return lastModuleError;
 }
