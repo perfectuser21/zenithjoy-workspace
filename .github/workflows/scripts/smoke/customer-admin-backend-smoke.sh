@@ -17,7 +17,9 @@ PGDATABASE="${PGDATABASE:-cecelia}"
 export PGPASSWORD="${PGPASSWORD:-cecelia}"
 TOKEN="${ZENITHJOY_INTERNAL_TOKEN:-}"
 
-Q() { psql -h "$PGHOST" -U "$PGUSER" -d "$PGDATABASE" -tAc "$1"; }
+# 只取首行：INSERT...RETURNING 在某些 psql 版本会把命令标签(INSERT 0 1)打到第二行，
+# 取首行=真值；sed -n '1p' 读完整输入(不早退)→ 不触发 SIGPIPE，psql 出错仍经 pipefail 透传。
+Q() { psql -h "$PGHOST" -U "$PGUSER" -d "$PGDATABASE" -tAc "$1" | sed -n '1p'; }
 H_TOKEN=(-H "X-Internal-Token: $TOKEN")
 SUF="$(date +%s)$$"
 
