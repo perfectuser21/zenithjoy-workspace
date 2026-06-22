@@ -20,7 +20,7 @@ set -uo pipefail
 
 REPO_ROOT="$(cd "$(dirname "$0")/../../../.." && pwd)"
 # 发货版本下界：高于 #817 误落在 build-modules 的 1.0.51，避免版本号混。
-MIN_SHIP_VERSION="1.0.52"
+MIN_SHIP_VERSION="1.0.53"
 echo "line04-ship-version-sync-smoke: 发货版本下界 = $MIN_SHIP_VERSION (repo=$REPO_ROOT)"
 
 command -v node >/dev/null 2>&1    || { echo "FAIL: 缺 node"; exit 6; }

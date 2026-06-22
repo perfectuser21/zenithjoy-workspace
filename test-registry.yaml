@@ -2888,6 +2888,14 @@ agent_suite:
     product: 客户私域AI接管
     note: "Sprint 06220821 — line04 关键人上下线播报 + 失败/掉线告警入「待发出站任务」(zenithjoy.wechat_publish_task approved/system)，agent 拉取真机 UIA 发送回执；含开关跳变播报/未配跳过/告警去重/回执翻 auto_sent。真机 UIA 发送是接缝。"
 
+  - id: line04-cs-outbound-agent-id-identity
+    path: apps/api/tests/integration/p4-wechat-cs-broadcast/cs-outbound-agent-id-identity.integration.test.ts
+    type: integration
+    ci: L4
+    status: active
+    product: 客户私域AI接管
+    note: "Sprint 06221740 — 修真机 bug：出站任务 agent_id 身份对齐。中台入队写 UUID(agents.id)，客户机 listen_chat 回退用 env-id(agents.agent_id text 列) 拉 → 对不上拉不到关键人播报。服务端 listPendingOutbound 兜底把 env-id 反查成 UUID 再过滤；验 UUID 入队 / env-id 拉得到 + UUID 拉得到 + 别 agent env-id 拉不到 + 未知 env-id 不 500。"
+
   - id: path4-wechat-cs-config-page-e2e
     path: apps/dashboard/e2e/wechat-cs-config.spec.ts
     type: e2e
