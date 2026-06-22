@@ -112,6 +112,8 @@ export const autopilotPageComponents: Record<string, () => Promise<{ default: Co
   'AdminPublishLogsPage': () => import('../pages/AdminPublishLogsPage'),
   // Path 4 Sprint B — 微信客服中台配置
   'WechatCustomerServiceConfigPage': () => import('../pages/WechatCustomerServiceConfigPage'),
+  // Line04 每客服独立配置 — 每客服设置区
+  'PerCsConfigPage': () => import('../pages/PerCsConfigPage'),
   // Sprint 06081603 — 模块健康看板（客户机器 × Line 状态矩阵）
   'ModuleHealthPage': () => import('../pages/ModuleHealthPage'),
   // Line 07 — AI 爆款视频翻拍
@@ -384,6 +386,9 @@ export const additionalRoutes: RouteConfig[] = [
   // === 客户管理子页面（super-admin only）===
   { path: '/admin/customers/platform-sessions', component: 'AdminPlatformSessionsPage', requireAuth: true, requireSuperAdmin: true },
   { path: '/admin/customers/publish-logs', component: 'AdminPublishLogsPage', requireAuth: true, requireSuperAdmin: true },
+
+  // === Line04 每客服设置区（纯前端表单，page.route 拦后端验证；E2E 在 windows job 跑）===
+  { path: '/wechat/per-cs-config', component: 'PerCsConfigPage', requireAuth: false },
 
 ];
 

@@ -31,6 +31,12 @@ import {
   saveAutoAgentConfig,
 } from '../services/wechat/cs-config-store';
 import { enqueueKeyContactBroadcast } from '../services/wechat/cs-outbound';
+import {
+  getCSConfig,
+  saveCSConfig,
+  recordIdentityAlert,
+  listIdentityAlerts,
+} from '../services/wechat/cs-account-config-store';
 import { superAdminGuard } from '../middleware/super-admin';
 import type { KBAudienceSegment } from '../services/wechat/types';
 
@@ -274,6 +280,68 @@ wechatConfigRouter.put('/cs/auto-agent', superAdminGuard, async (req: Request, r
   }
 
   return res.status(200).json({ success: true, config: after, broadcast });
+});
+
+// ─── ⑤ 每客服独立配置（按微信号 key 物理分行，多租户隔离）────────────────────────
+//
+// 钉死 Issue defe1a42 全局单行串台：每客服 = 一个微信号 = 一行配置，写一行不动别人那行。
+//
+// 鉴权：与本 router 的 /persona、/business-kb 一致 —— 不挂 superAdminGuard。
+//   原因同文件头注释：superAdminGuard 在 ZENITHJOY_INTERNAL_TOKEN 已设但请求不带 token 时会 401，
+//   而中台前台（better-auth session）和客户机 agent 拉配置都不带该 internal token → 全被拦。
+//   配置隔离已由 wechat_id 主 key 保证；客户机身份校验在 /cs/agent-config 内做（未注册号 403 + 写诊断）。
+
+const CSAccountConfigBodySchema = z
+  .object({
+    persona: PersonaSchema,
+    auto_agent_enabled: z.boolean().optional(),
+    business_hours_start: z.string().optional(),
+    business_hours_end: z.string().optional(),
+    key_contact_wechat: z.string().optional(),
+    whitelist: z.array(z.string()).optional(),
+    daily_limit: z.number().int().min(0).optional(),
+  })
+  .strict();
+
+// PUT /api/wechat/cs/config/:wechatId — 按微信号 upsert 该客服那一行（只写该行）
+wechatConfigRouter.put('/cs/config/:wechatId', async (req: Request, res: Response) => {
+  const wechatId = req.params.wechatId;
+  const parsed = CSAccountConfigBodySchema.safeParse(req.body ?? {});
+  if (!parsed.success) return invalidBody(res, parsed.error);
+  await saveCSConfig(wechatId, parsed.data);
+  const config = await getCSConfig(wechatId);
+  return res.status(200).json({ success: true, config });
+});
+
+// GET /api/wechat/cs/config/:wechatId — 读该客服那一行供前台编辑
+wechatConfigRouter.get('/cs/config/:wechatId', async (req: Request, res: Response) => {
+  const config = await getCSConfig(req.params.wechatId);
+  if (!config) {
+    return res.status(404).json({ error: 'NOT_FOUND', message: '该微信号尚无配置' });
+  }
+  return res.status(200).json(config);
+});
+
+// GET /api/wechat/cs/agent-config?wechat_id=X — 客户机按自己登录微信号身份拉自己那份。
+//   注册号 → 返回该号那份；未注册/无对应行 → 403 且响应体不含任何 persona + 写诊断异常。
+wechatConfigRouter.get('/cs/agent-config', async (req: Request, res: Response) => {
+  const wechatId = typeof req.query.wechat_id === 'string' ? req.query.wechat_id : '';
+  const config = wechatId ? await getCSConfig(wechatId) : null;
+  if (!config) {
+    await recordIdentityAlert(wechatId || '(empty)', 'unregistered_wechat');
+    // 严禁返回任意一份配置（不泄漏 persona）
+    return res.status(403).json({
+      error: 'UNREGISTERED_WECHAT',
+      message: '该微信号未在中台注册，拒绝下发配置',
+    });
+  }
+  return res.status(200).json(config);
+});
+
+// GET /api/wechat/cs/diagnostics — 诊断页数据源：最近身份校验异常
+wechatConfigRouter.get('/cs/diagnostics', async (_req: Request, res: Response) => {
+  const alerts = await listIdentityAlerts();
+  return res.status(200).json({ alerts });
 });
 
 export default wechatConfigRouter;
