@@ -1,6 +1,3 @@
-contract_branch: cp-harness-propose-r3-c848305e-a4
-sprint_dir: sprints/06220836-agent-client-encapsulation
-
 ---
 skeleton: false
 journey_type: agent_remote
