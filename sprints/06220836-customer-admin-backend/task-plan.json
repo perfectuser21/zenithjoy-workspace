@@ -1,0 +1,31 @@
+{
+  "initiative_id": "L10-customer-admin-backend",
+  "journey_type": "user_facing",
+  "journey_type_reason": "核心交付物是 apps/dashboard/ 管理员可操作页面，命中 user_facing 优先级链首条",
+  "tasks": [
+    {
+      "task_id": "ws1",
+      "title": "客户管理后台 — 公司名/子账号(role+配额)/客服-PC 绑定(1:1双唯一)/诊断报告页",
+      "scope": "建 migration(tenant_sub_accounts + service_agents + customer_admin_audit 表 + 双唯一 partial unique + 软删字段 + 审计列 actor/action/created_at)；建/改/删账号·绑定写一行轻量审计(who/when/what)；新增 PUT /api/tenant/:id、/api/tenant/:id/accounts(GET/POST/DELETE)、/api/tenant/:id/service-agents(GET) + .../:aid/bind-device(POST) + .../:bid(DELETE) 路由(挂 superAdminGuard，租户隔离)；子账号配额随 license tier 映射并超限硬拒；客服-PC 绑定占 license.max_machines 超额硬拒(MACHINE_QUOTA_EXCEEDED)；列表端点 schema 纯度(account_id/binding_id，禁 id/users)；扩 Dashboard 客户管理页公司/子账号/绑定/诊断 4 区(诊断复用 GET /api/agent/module-health)；写 smoke 并接进 ci-l4-e2e-smoke.yml 的 smoke-api-contract job(否则后端断言不进 CI gate) + Playwright spec。不动注册/计费/RBAC/登录鉴权。",
+      "dod": [
+        "[BEHAVIOR] PUT 改公司名落库；POST 子账号带 role 5 分钟内入库；超 plan 配额返 4xx「配额 N/M」不写库；bind 写 service_agents 且重复绑同客服/PC 返 409 ALREADY_BOUND 无新行；机器配额满再绑新机返 4xx MACHINE_QUOTA_EXCEEDED 无新行；软删置 deleted_at 且列表不含、物理行保留；跨租户列表 0 泄漏；GET /accounts、/service-agents schema 纯度(子集卡 + 反向 ! id/! users)；GET /api/agent/module-health 返 {ok,data:array}；非超管 403；建/删账号后 customer_admin_audit 5 分钟内有记录含 actor/action/created_at（详见 contract-dod.md 12 条 [BEHAVIOR] manual:bash，psql 字面量用 '\\''…'\\'' 真单引号）",
+        "[BEHAVIOR:E2E] windows_cloud Playwright 走完 4 区 Golden Path + 5 张截图",
+        "[ARTIFACT] migration/路由/Dashboard 页/smoke/spec/e2e-verify.ps1 齐备 + smoke 接进 ci-l4-e2e-smoke.yml(PR 触发)且非空壳（详见 contract-dod.md 6 条 [ARTIFACT]）"
+      ],
+      "files": [
+        "apps/api/db/migrations/20260622_120000_customer_admin_backend.sql",
+        "apps/api/src/routes/customer-admin.ts",
+        "apps/api/src/lib/sub-account-quota.ts",
+        "apps/api/src/lib/customer-admin-rules.ts",
+        "apps/dashboard/src/pages/AdminCustomersPage.tsx",
+        "apps/dashboard/src/api/customer-admin.api.ts",
+        ".github/workflows/scripts/smoke/customer-admin-backend-smoke.sh",
+        ".github/workflows/ci-l4-e2e-smoke.yml",
+        "apps/dashboard/e2e/customer-admin-backend.spec.ts"
+      ],
+      "depends_on": [],
+      "complexity": "L",
+      "estimated_minutes": 120
+    }
+  ]
+}
