@@ -32,6 +32,8 @@ import {
 // Sprint 06081700 — Core 模块管理器（下载/解压/preflight/fork）。
 // Line 特有逻辑（wechat-rpa / preflight）下沉到按需下载的 Line 模块包，core 不再直接引用。
 import { ModuleManager } from './module-manager';
+// Sprint 06222100 — 核心运行时本体自升级（下载新核心包→解压→写 .active-core 指针→优雅退出）。
+import { CoreUpgrader } from './core-upgrader';
 import { handleQrBindDouyin } from './handlers/qr-bind-douyin';
 // Path 2 Sprint B-1 — burner 小号绑定 handler（独立文件，与 Path 1 主号物理隔离）
 import { handleQrBindDouyinBurner } from './handlers/qr-bind-douyin-burner';
@@ -182,6 +184,13 @@ const moduleManager = new ModuleManager({
     console.log(`[module:${lineId}] →core`, msg);
   },
 });
+
+// Sprint 06222100 — 核心运行时本体自升级单例。
+// 心跳收到 required_agent_version > 自身 VERSION 时：下载新核心包 → sha 校验 → 解压到
+// extracted/zenithjoy-agent-v<ver> → 拷 .env/license/已下模块 → 写 .active-core 指针 →
+// 优雅退出（由计划任务 ONLOGON 拉起的 start.bat 读指针拉起新核心）。
+// 失败回滚到旧核心，绝不把客户机搞挂（与模块自升级同纪律）。
+const coreUpgrader = new CoreUpgrader({ currentVersion: VERSION });
 
 function makeMsg(type: string, payload: unknown, taskId?: string) {
   return {
@@ -728,6 +737,27 @@ async function syncModulesFromHeartbeat(
   updateTrayModules(buildTrayModules(modules));
 }
 
+// Sprint 06222100 — 心跳收到 required_agent_version：交给 CoreUpgrader 判断是否升级核心本体。
+//   needsUpgrade=false → no-op；true → 下载新核心包→sha 校验→解压→写 .active-core 指针→优雅退出
+//   （成功则本进程退出，由启动器拉起新核心）。任何失败回滚旧核心，绝不让 core 崩溃。
+async function maybeUpgradeCore(resp: HeartbeatResponse): Promise<void> {
+  const req = resp.required_agent_version;
+  if (!req || !req.version) return;
+  try {
+    const r = await coreUpgrader.upgradeIfNeeded(req.version, {
+      sha256: req.sha256,
+      size: req.size,
+    });
+    if (r.upgraded) {
+      console.log(`[core-upgrade] 核心已升级到 ${r.version}，等待启动器拉起新核心`);
+    } else if (r.reason && r.reason !== 'up_to_date') {
+      console.warn(`[core-upgrade] 未升级：${r.reason}`);
+    }
+  } catch (err) {
+    console.warn('[core-upgrade] 升级流程异常（保留旧核心）：', err);
+  }
+}
+
 // 把心跳 modules + ModuleManager 激活态合成托盘渲染数据（仅展示已购买/激活的 Line）
 function buildTrayModules(
   modules: NonNullable<HeartbeatResponse['modules']>,
@@ -903,6 +933,9 @@ function startWs1HeartbeatLoop(cfg: AgentConfig): void {
     intervalMs: 30_000,
     onTask,
     onHeartbeat: (resp) => {
+      // 核心自升级优先：若中台要求更高核心版本，下载自换重启（成功则本进程已退出）。
+      // 放在 syncModules 之前——核心是承载模块的底座，先把底座升到位。
+      void maybeUpgradeCore(resp);
       if (resp.modules) {
         void syncModulesFromHeartbeat(resp, loop);
       }

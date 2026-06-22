@@ -279,11 +279,43 @@ REM causing repeated disconnects ("又掉了" / "车没油" symptom when upgradi
 powershell -NoProfile -Command "Get-Process -Name zenithjoy-agent -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue" >nul 2>&1
 echo [agent] previous agent processes stopped (if any)
 
-REM Step 7: Spawn agent.exe (foreground)
+REM === Step 6.96: 核心自升级自换 — 读 .active-core 指针选最新核心目录（Sprint 06222100）===
+REM 客户机布局：<root>\extracted\zenithjoy-agent-v<ver>\（本 start.bat 所在）。CoreUpgrader 升级后把
+REM 新核心解压到同级 extracted\zenithjoy-agent-v<新ver>，并在 <root>\.active-core 写下目标目录名，
+REM 然后优雅退出。计划任务 ONLOGON 始终拉起本启动器；本启动器读 .active-core 指针 → 切到被选中的最新
+REM 核心目录运行其 zenithjoy-agent.exe。这样重启后跑的就是新核心，不依赖人手动重装。
+REM 回退（防自换把客户机搞挂）：指针文件不存在 / 指向目录的 exe 不存在 → 用 %~dp0 本地核心。
+set "CORE_RUN_DIR=%~dp0"
+REM <root> = extracted 的父 = %~dp0 的祖父目录
+for %%i in ("%~dp0..") do set "EXTRACTED_DIR=%%~fi"
+for %%i in ("%EXTRACTED_DIR%\..") do set "ROOT_DIR=%%~fi"
+set "ACTIVE_CORE_FILE=%ROOT_DIR%\.active-core"
+if exist "%ACTIVE_CORE_FILE%" (
+    set "ACTIVE_CORE_NAME="
+    for /f "usebackq delims=" %%n in ("%ACTIVE_CORE_FILE%") do if not defined ACTIVE_CORE_NAME set "ACTIVE_CORE_NAME=%%n"
+    if defined ACTIVE_CORE_NAME (
+        set "POINTED_DIR=%EXTRACTED_DIR%\!ACTIVE_CORE_NAME!"
+        if exist "!POINTED_DIR!\zenithjoy-agent.exe" (
+            set "CORE_RUN_DIR=!POINTED_DIR!\"
+            echo [active-core] 指针选中最新核心: !ACTIVE_CORE_NAME!
+        ) else (
+            echo [active-core] WARN 指针指向 !ACTIVE_CORE_NAME! 但缺 zenithjoy-agent.exe — fallback 回退本地核心
+        )
+    ) else (
+        echo [active-core] WARN .active-core 指针为空 — fallback 回退本地核心
+    )
+) else (
+    echo [active-core] 无 .active-core 指针，使用本地核心（首装/未升级）
+)
+
+REM Step 7: Spawn agent.exe (foreground) — 跑指针选中的最新核心（无指针则本地）
 mkdir "%USERPROFILE%\.zj" 2>nul
-echo [agent] starting zenithjoy-agent.exe ...
+echo [agent] starting zenithjoy-agent.exe (dir=%CORE_RUN_DIR%) ...
+pushd "%CORE_RUN_DIR%"
 zenithjoy-agent.exe
-if errorlevel 1 (
-    echo [agent] agent.exe exited with error %errorlevel%
+set "_AGENT_EXIT=%errorlevel%"
+popd
+if not "%_AGENT_EXIT%"=="0" (
+    echo [agent] agent.exe exited with error %_AGENT_EXIT%
     pause
 )

@@ -37,11 +37,20 @@ export interface ModuleStatusReport {
   last_delivery_ts?: number;
 }
 
+// 核心自升级（Sprint 06222100）：中台下发的 Agent 核心要求版本（含 sha256/size 供下载校验）
+export interface RequiredAgentVersion {
+  version: string;
+  sha256?: string;
+  size?: number;
+}
+
 export interface HeartbeatResponse {
   ok: boolean;
   agent_id: string;
   queued_tasks?: HeartbeatTask[];
   modules?: Record<string, ModuleState | ModuleDescriptor>;
+  // 核心自升级信号：> 自身 version 时客户端下载新核心包自换重启
+  required_agent_version?: RequiredAgentVersion;
 }
 
 export interface HeartbeatLoopOptions {

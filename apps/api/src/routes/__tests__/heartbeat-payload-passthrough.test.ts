@@ -40,6 +40,8 @@ vi.mock('../../services/walking-skeleton.service', () => ({
     'line02-lead-gen': { status: 'active', required_version: '1.0.0' },
     'line05-video': { status: 'active', required_version: '1.0.0' },
   },
+  // Sprint 06222100: heartbeat handler 新增依赖（下发核心自升级要求版本）
+  getRequiredAgentVersion: vi.fn(() => ({ version: '2.0.22' })),
 }));
 
 import { heartbeatRouter } from '../walking-skeleton';

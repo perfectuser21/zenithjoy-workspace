@@ -27,6 +27,7 @@ import {
   saveModuleStatus,
   getAllModuleHealth,
   HEARTBEAT_MODULES,
+  getRequiredAgentVersion,
   TaskNotFoundError,
   TaskForbiddenError,
   type ModuleStatusMap,
@@ -97,6 +98,9 @@ heartbeatRouter.post(
         agent_id: agent.id,
         // 服务端下发模块清单（第一刀硬编码 active，含 status + required_version）
         modules: HEARTBEAT_MODULES,
+        // 核心自升级（Sprint 06222100）：下发 Agent 核心要求版本（含 sha256/size 供下载校验）。
+        // 客户端 CoreUpgrader 对比自身 version，> 自身则下载新核心包自换重启。
+        required_agent_version: getRequiredAgentVersion(),
         // map to agent's HeartbeatTask shape: { task_id, platform, payload }
         // payload composed from folder_path column (works for both folder_bind.local_path
         // and douyin.folder_path) + account_label default for qr_bind_douyin

@@ -76,6 +76,52 @@ export const HEARTBEAT_MODULES: Record<string, ModuleDescriptor> = {
   'line05-video': { status: 'active', required_version: '1.0.0' },
 };
 
+/**
+ * 核心自升级（Sprint 06222100）：心跳下发的 Agent 核心运行时本体的要求版本。
+ *
+ * 模块（line04 等）走 HEARTBEAT_MODULES.required_version 自升级，核心 node 运行时本体一直没有
+ * 自升级信号——核心改了客户机仍跑旧核心要人手动重装。这里给核心补上同机制的"要求版本"信号。
+ *
+ * 单一来源（防版本漂移）= install pack manifest.version（CI build-install-pack.sh 发布时写的
+ * 已发布最新核心版本）。manifest 不可读时回退内置常量，永不返回空（防客户端无所适从）。
+ */
+export interface RequiredAgentVersion {
+  version: string;
+  sha256?: string;
+  size?: number;
+}
+
+// manifest 不可读时的兜底版本。必须 <= 已发布的最新核心，且随核心 bump 同步抬高。
+// 当前核心自升级首版 = 2.0.22。
+export const DEFAULT_REQUIRED_AGENT_VERSION = '2.0.22';
+
+/**
+ * 返回心跳要下发的核心要求版本。
+ * @param readManifest 注入 manifest 读取器（默认走 install-pack-manifest），便于单测。
+ */
+export function getRequiredAgentVersion(
+  readManifest?: () => { version: string; sha256?: string; size?: number } | null,
+): RequiredAgentVersion {
+  let reader = readManifest;
+  if (!reader) {
+    // 延迟 require，避免顶层循环依赖 + 让测试可注入
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const mod = require('./install-pack-manifest') as {
+      readInstallPackManifest: () => { version: string; sha256?: string; size?: number } | null;
+    };
+    reader = mod.readInstallPackManifest;
+  }
+  try {
+    const m = reader();
+    if (m && typeof m.version === 'string' && /^\d+\.\d+\.\d+$/.test(m.version)) {
+      return { version: m.version, sha256: m.sha256, size: m.size };
+    }
+  } catch {
+    // fall through to default
+  }
+  return { version: DEFAULT_REQUIRED_AGENT_VERSION };
+}
+
 /** module-health 端点返回的单行（一台机器一行） */
 export interface ModuleHealthRow {
   agent_id: string;
