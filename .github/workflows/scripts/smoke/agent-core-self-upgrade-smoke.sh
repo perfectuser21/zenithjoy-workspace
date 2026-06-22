@@ -28,8 +28,10 @@ trap 'rm -rf "$TMP"' EXIT
 # walking-skeleton.service 顶层 import pool（pg），整文件 require 会拉真 DB 连接；这里改为
 # 真编译"单一来源"的 manifest 读取器（无 DB 依赖）跑真链路，再对 service/route 源码做接线断言，
 # 证明 required_agent_version 真从 manifest.version 取、真挂进心跳响应。
-cd "$API_DIR"
-npx tsc src/services/install-pack-manifest.ts \
+# 注：本 smoke 跑在 agent-test job（只 npm ci services/agent），apps/api 无 typescript；
+# 故统一用 agent 目录的 tsc（按绝对路径编译任意文件，cwd 在 AGENT_DIR）。
+cd "$AGENT_DIR"
+npx tsc "$API_DIR/src/services/install-pack-manifest.ts" \
   --outDir "$TMP/api" --module commonjs --target ES2020 --moduleResolution node \
   --esModuleInterop --skipLibCheck --types node 2>/dev/null \
   || { echo "FAIL: install-pack-manifest.ts 编译失败"; exit 5; }
