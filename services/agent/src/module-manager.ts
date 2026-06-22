@@ -50,6 +50,19 @@ export interface ModulePreflightResult {
   fixGuide?: string;
 }
 
+// 模块通过 IPC {type:'status'} 上报的真实健康（listen_chat 进程在不在 / 微信窗口找到没 /
+// 最近一次成功送达时间戳）。core 把它纳入 module_status，随心跳上报中台。
+export interface ModuleHealth {
+  ok: boolean;
+  reason?: string;
+  // line04 专有：listen_chat 子进程存活态
+  listener_alive?: boolean;
+  // line04 专有：微信主窗口是否被 UIA 找到
+  found_window?: boolean;
+  // line04 专有：最近一次出站/回复成功送达的时间戳（ms）
+  last_delivery_ts?: number;
+}
+
 export interface ModuleManagerOptions {
   // 模块安装根目录；不传则按平台推导
   modulesRoot?: string;
@@ -71,7 +84,22 @@ export interface ModuleManagerOptions {
   onModuleMessage?: (lineId: string, msg: unknown) => void;
   // preflight 失败时回调（core 用它本地弹窗 + 心跳上报）
   onPreflightFail?: (lineId: string, result: ModulePreflightResult) => void;
+  // 自愈件1：受监管模块崩溃次数超上限时回调（core 用它本地告警 + 心跳上报，让管理员看到"修不动了"）
+  onModuleAlert?: (lineId: string, reason: string) => void;
   logger?: (msg: string) => void;
+
+  // ── 自愈件1：长驻模块进程保活（supervise）配置 ──
+  // 需要保活的 lineId 列表（如 line04-wechat-cs：宿主 listen_chat 长驻监听微信）。
+  // 受监管模块子进程退出/崩溃 → 自动重启（指数退避 + 上限），不靠外部 watchdog / 计划任务。
+  superviseLines?: string[];
+  // 重启退避基数（首次重启延迟），默认 5s
+  restartBaseDelayMs?: number;
+  // 重启退避上限（指数增长封顶），默认 5min
+  restartMaxDelayMs?: number;
+  // 连续崩溃重启次数上限，超过则停止重启并 onModuleAlert，默认 8 次
+  restartMaxRetries?: number;
+  // 测试注入点：替换 setTimeout（生产留空走真实 setTimeout）
+  setTimeoutImpl?: (fn: () => void, ms: number) => ReturnType<typeof setTimeout>;
 }
 
 const DEFAULT_COS_BASE =
@@ -105,12 +133,31 @@ export class ModuleManager {
   // 正在运行 preflight 的模块（并发保护：WeChat 安装耗时 2-5 分钟，心跳 30s 间隔会并发触发）
   private readonly preflightRunning = new Set<string>();
 
+  // ── 自愈件1：supervise 状态 ──
+  // 受监管的 lineId 集合
+  private readonly superviseLines: Set<string>;
+  // 各模块连续崩溃重启计数（成功稳定运行会被 syncModules 重新激活时清零）
+  private readonly restartCount = new Map<string, number>();
+  // 升级时主动 kill 的模块（其 exit 是 intentional，不触发自愈重启）
+  private readonly intentionalKill = new Set<string>();
+  private readonly restartBaseDelayMs: number;
+  private readonly restartMaxDelayMs: number;
+  private readonly restartMaxRetries: number;
+  private readonly setTimeoutFn: (fn: () => void, ms: number) => ReturnType<typeof setTimeout>;
+  // ── 自愈件4：模块 IPC 上报的真实健康（覆盖 preflight 结果，给管理员看模块"实际健康"）──
+  private readonly healthReport = new Map<string, ModuleHealth>();
+
   constructor(opts: ModuleManagerOptions = {}) {
     this.opts = opts;
     this.modulesRoot = opts.modulesRoot ?? defaultModulesRoot();
     this.cosBase = (opts.cosBase ?? DEFAULT_COS_BASE).replace(/\/+$/, '');
     this.agentId = opts.agentId;
     this.apiBase = opts.apiBase;
+    this.superviseLines = new Set(opts.superviseLines ?? []);
+    this.restartBaseDelayMs = opts.restartBaseDelayMs ?? 5_000;
+    this.restartMaxDelayMs = opts.restartMaxDelayMs ?? 300_000;
+    this.restartMaxRetries = opts.restartMaxRetries ?? 8;
+    this.setTimeoutFn = opts.setTimeoutImpl ?? ((fn, ms) => setTimeout(fn, ms));
   }
 
   private log(msg: string): void {
@@ -210,6 +257,8 @@ export class ModuleManager {
           const oldChild = this.active.get(lineId);
           if (oldChild) {
             this.log(`${lineId} 检测到新版本 ${requiredVersion}，终止旧模块进程`);
+            // 标记为主动 kill：其 exit 不应被 supervise 当成崩溃触发自愈重启
+            this.intentionalKill.add(lineId);
             oldChild.kill();
             this.active.delete(lineId);
           }
@@ -230,6 +279,8 @@ export class ModuleManager {
 
         if (pf.ok) {
           if (!this.active.has(lineId)) {
+            // 经心跳重新激活成功 → 清崩溃计数（让 supervise 重新获得完整退避预算）
+            this.restartCount.delete(lineId);
             await this.activateModule(lineId);
           }
         } else {
@@ -401,15 +452,20 @@ export class ModuleManager {
     this.active.set(lineId, child);
 
     child.on('message', (msg: unknown) => {
+      // 自愈件4：模块上报的 {type:'status'|'health',...} 纳入健康报告（覆盖 preflight 结果），
+      // 让管理员/诊断页看到 listen_chat 真实健康；其余消息（draft_reply 等）原样透传给 core。
+      if (this.captureModuleHealth(lineId, msg)) return;
       this.opts.onModuleMessage?.(lineId, msg);
     });
     child.on('exit', (code) => {
       this.log(`module ${lineId} 子进程退出 code=${code}`);
       this.active.delete(lineId);
+      this.handleModuleExit(lineId);
     });
     child.on('error', (err: Error) => {
       this.log(`module ${lineId} 子进程错误：${err.message}`);
       this.active.delete(lineId);
+      this.handleModuleExit(lineId);
     });
 
     try {
@@ -445,11 +501,88 @@ export class ModuleManager {
     return [...this.active.keys()];
   }
 
-  // 各模块最近 preflight 结果（供心跳 module_status 上报）
-  getModuleStatusReport(): Record<string, { ok: boolean; reason?: string }> {
-    const out: Record<string, { ok: boolean; reason?: string }> = {};
+  // ── 自愈件4：捕获模块 IPC 上报的真实健康 ──
+  // 返回 true 表示这是健康消息（已消费，不再透传 onModuleMessage）。
+  private captureModuleHealth(lineId: string, msg: unknown): boolean {
+    if (!msg || typeof msg !== 'object') return false;
+    const m = msg as { type?: string } & ModuleHealth;
+    if (m.type !== 'status' && m.type !== 'health') return false;
+    const health: ModuleHealth = {
+      ok: !!m.ok,
+      reason: m.reason,
+      listener_alive: m.listener_alive,
+      found_window: m.found_window,
+      last_delivery_ts: m.last_delivery_ts,
+    };
+    this.healthReport.set(lineId, health);
+    this.log(
+      `module ${lineId} 健康上报：ok=${health.ok} listener_alive=${health.listener_alive} found_window=${health.found_window}`,
+    );
+    return true;
+  }
+
+  // ── 自愈件1：受监管模块退出 → 自动重启（指数退避 + 上限告警）──
+  private handleModuleExit(lineId: string): void {
+    // 升级时主动 kill 的退出：消费标记，不触发自愈
+    if (this.intentionalKill.has(lineId)) {
+      this.intentionalKill.delete(lineId);
+      return;
+    }
+    if (!this.superviseLines.has(lineId)) return;
+
+    const attempts = (this.restartCount.get(lineId) ?? 0) + 1;
+    this.restartCount.set(lineId, attempts);
+
+    if (attempts > this.restartMaxRetries) {
+      const reason = `module ${lineId} 连续崩溃 ${attempts - 1} 次仍未恢复，已停止自动重启（超过上限 ${this.restartMaxRetries}），需人工介入`;
+      this.log(reason);
+      // 标记健康为不健康 + 写 module_status，让管理员/诊断页看到"修不动了"
+      this.healthReport.set(lineId, { ok: false, reason, listener_alive: false });
+      this.statusReport.set(lineId, { ok: false, reason });
+      this.opts.onModuleAlert?.(lineId, reason);
+      return;
+    }
+
+    // 指数退避：base * 2^(attempts-1)，封顶 restartMaxDelayMs
+    const delay = Math.min(
+      this.restartBaseDelayMs * Math.pow(2, attempts - 1),
+      this.restartMaxDelayMs,
+    );
+    this.log(`module ${lineId} 退出，第 ${attempts} 次自动重启将在 ${delay}ms 后执行（指数退避）`);
+    const t = this.setTimeoutFn(() => {
+      // 已被别的路径重新激活则跳过
+      if (this.active.has(lineId)) return;
+      void this.activateModule(lineId).catch((err) => {
+        this.log(`module ${lineId} 自动重启失败：${(err as Error).message}`);
+        // 重启 fork 本身失败也算一次崩溃，递归交给 exit/error handler 或下次心跳兜底
+        this.handleModuleExit(lineId);
+      });
+    }, delay);
+    (t as unknown as { unref?: () => void }).unref?.();
+  }
+
+  // 各模块健康状态（供心跳 module_status 上报）。
+  // 优先用模块 IPC 上报的真实健康（listen_chat 进程/窗口/送达），无则回退 preflight 结果。
+  getModuleStatusReport(): Record<
+    string,
+    { ok: boolean; reason?: string; listener_alive?: boolean; found_window?: boolean; last_delivery_ts?: number }
+  > {
+    const out: Record<
+      string,
+      { ok: boolean; reason?: string; listener_alive?: boolean; found_window?: boolean; last_delivery_ts?: number }
+    > = {};
     for (const [lineId, r] of this.statusReport.entries()) {
       out[lineId] = { ok: r.ok, reason: r.reason ?? r.fixGuide };
+    }
+    // 模块 IPC 上报的真实健康覆盖 preflight 结果（更新鲜、更贴近"实际运行健康"）
+    for (const [lineId, h] of this.healthReport.entries()) {
+      out[lineId] = {
+        ok: h.ok,
+        reason: h.reason ?? out[lineId]?.reason,
+        listener_alive: h.listener_alive,
+        found_window: h.found_window,
+        last_delivery_ts: h.last_delivery_ts,
+      };
     }
     return out;
   }

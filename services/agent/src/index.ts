@@ -164,11 +164,19 @@ const MAX_BACKOFF = 30000;
 // 收到心跳 modules 响应后按需下载/解压/preflight/fork Line 模块；
 // preflight 失败本地弹窗，模块子进程消息回流由 onModuleMessage 接住。
 const moduleManager = new ModuleManager({
+  // 自愈件1：line04（微信AI客服，宿主 listen_chat 长驻监听）必须保活——
+  // 子进程退出/崩溃自动重启（指数退避 + 上限），不靠人手动 schtasks/重启。
+  superviseLines: ['line04-wechat-cs'],
   onPreflightFail: (lineId, result) => {
     showModuleError(
       MODULE_LABELS[lineId] ?? lineId,
       result.fixGuide ?? result.reason ?? '环境预检未通过',
     );
+  },
+  // 自愈件1：连续崩溃超上限（修不动了）→ 本地告警 + 随心跳上报中台，让管理员看到。
+  onModuleAlert: (lineId, reason) => {
+    console.warn(`[module:${lineId}] ALERT`, reason);
+    showModuleError(MODULE_LABELS[lineId] ?? lineId, reason);
   },
   onModuleMessage: (lineId, msg) => {
     console.log(`[module:${lineId}] →core`, msg);

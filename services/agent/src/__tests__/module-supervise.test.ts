@@ -77,13 +77,24 @@ describe('ModuleManager — 长驻模块保活（supervise）', () => {
     const root = mkRoot();
     installModule(root);
 
-    const children = [makeFakeChild(), makeFakeChild(), makeFakeChild(), makeFakeChild()];
-    let idx = 0;
-    const forkImpl = vi.fn(() => children[idx++].child);
+    // 每个 fork 出来的子进程一注册 exit handler 就立即崩溃（模拟"起来就死"的连环崩溃），
+    // 配合 setTimeoutImpl 立即执行重启 → 链式触发，观察退避序列。
+    const crashOnExit = () => {
+      const child = {
+        on: (ev: string, cb: (...a: unknown[]) => void) => {
+          if (ev === 'exit') setTimeout(() => cb(1), 0); // 异步崩溃，避开重入
+        },
+        send: vi.fn(),
+        kill: vi.fn(),
+        connected: true,
+      } as unknown as import('node:child_process').ChildProcess;
+      return child;
+    };
+    const forkImpl = vi.fn(() => crashOnExit());
     const delays: number[] = [];
     const setTimeoutImpl = vi.fn((fn: () => void, ms?: number) => {
       delays.push(ms ?? 0);
-      fn(); // 立即执行下一次重启，模拟时间流逝
+      if (delays.length < 4) fn(); // 触发前几次重启即可观察退避增长
       return 0 as unknown as ReturnType<typeof setTimeout>;
     });
 
@@ -99,9 +110,8 @@ describe('ModuleManager — 长驻模块保活（supervise）', () => {
     });
 
     await mm.syncModules({ 'line04-wechat-cs': { status: 'active', required_version: '1.0.0' } });
-
-    // 首个进程崩溃 → 链式重启（setTimeoutImpl 立即执行下一次）
-    children[0].emit(1);
+    // 等首个子进程异步崩溃事件 + 链式重启完成
+    await new Promise((r) => setTimeout(r, 20));
 
     // 退避序列必须指数增长：1000, 2000, 4000 ...
     expect(delays[0]).toBe(1000);
