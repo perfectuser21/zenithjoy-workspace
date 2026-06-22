@@ -529,6 +529,38 @@ tests:
     product: AI员工
     note: "Sprint 06081700 — Core 模块管理器：syncModules / runModulePreflight / fork 激活 + IPC / forwardMessage；v2.0.16 回归：execFile 传 ZENITHJOY_CORE_DIR，修复客户机无系统 python 时 exit 9009 卡死"
 
+  - id: agent-module-supervise
+    path: services/agent/src/__tests__/module-supervise.test.ts
+    type: unit
+    ci: L2
+    status: active
+    product: AI员工
+    note: "Sprint 06221906 自愈件1 — 长驻模块（line04 listen_chat 宿主）进程保活：子进程退出自动重启（指数退避 base*2^n + 上限 restartMaxDelayMs）+ 超 restartMaxRetries 上报 onModuleAlert；升级 intentional kill 不触发自愈；非监管模块保持原行为"
+
+  - id: agent-module-identity-health
+    path: services/agent/src/__tests__/module-identity-health.test.ts
+    type: unit
+    ci: L2
+    status: active
+    product: AI员工
+    note: "Sprint 06221906 自愈件3+4 — activateModule 下发的 config.agentId 用注册得到的稳定 UUID（身份一处定，配合中台 #820）；模块 IPC {type:status,...} 上报 listen_chat 真实健康（listener_alive/found_window/last_delivery_ts）纳入 getModuleStatusReport 随心跳上报；draft_reply 等非健康消息仍透传不污染报告"
+
+  - id: agent-line04-listener-real-publish-env
+    path: services/agent/modules/line04/__tests__/listener-real-publish-env.test.ts
+    type: unit
+    ci: L2
+    status: active
+    product: AI员工
+    note: "Sprint 06221906 自愈件2 — 真发开关一处传：startWechatListener spawn listen_chat 时把 agent 配置 ZENITHJOY_AGENT_REAL_PUBLISH 显式注入成 REAL_PUBLISH（配合 #821 兼容两名），长驻 listener 与按需 handler 一样能真发"
+
+  - id: agent-line04-listener-health-report
+    path: services/agent/modules/line04/__tests__/listener-health-report.test.ts
+    type: unit
+    ci: L2
+    status: active
+    product: AI员工
+    note: "Sprint 06221906 自愈件4 — line04 模块侧：collectListenerHealth 读 listen_chat 健康文件（found_window/last_delivery_ts）+ child 存活态合成真实健康；buildHealthStatusMessage 产出 IPC status 消息上报 core"
+
   - id: agent-line-stub-modules
     path: services/agent/modules/line01/__tests__/stub.test.ts
     type: unit
