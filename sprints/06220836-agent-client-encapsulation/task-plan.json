@@ -1,0 +1,36 @@
+{
+  "initiative_id": "${INITIATIVE_ID}",
+  "journey_type": "agent_remote",
+  "journey_type_reason": "改造跑在客户机上的 zenithjoy-agent 远端客户端（start.vbs 入口 + 托盘进程 + 打包/自启脚本），属远端 agent 协议范畴；OS 行为须在 windows_cloud 干净 VM 验证",
+  "tasks": [
+    {
+      "task_id": "ws1",
+      "title": "Agent 客户端封装：去黑窗（start.vbs 无窗口入口 + 单实例 + 日志轮转）+ 托盘静默通知（tray.ts 弃 powershell 改 node-notifier/降级红点）+ 打包/自启接入",
+      "scope": "新增 install-pack/start.vbs（WScript.Shell.Run windowStyle=0 隐藏拉起 start.bat；WMI 单实例守卫已运行则跳过；写 %APPDATA%\\zenithjoy-agent\\launch.log 并按 1MB 轮转）；改 src/tray.ts showModuleError：删尽 powershell.exe 气泡路径，保留 node-notifier 首档 + 降级'托盘红点+日志'（沿用 _trayRebuildHook/updateTrayModules 重建路径），绝不回退 powershell；改 install-pack/install-autostart.ps1 $Target 由 start.bat 改 start.vbs；改 scripts/build-install-pack.sh 正式+dryrun 两路径都 cp start.vbs 进产物；package.json dependencies 加 node-notifier；start.bat 顶部加 ZJ_LAUNCH_PROBE 早退守卫（E2E test seam，保留既有 Step6.95 单实例 kill 回归不动）；新增 .github/workflows/scripts/smoke/agent-client-encapsulation-smoke.sh",
+      "dod": [
+        "[BEHAVIOR] start.vbs 用 windowStyle=0 隐藏拉起 start.bat（grep .Run...,0, + start.bat）",
+        "[BEHAVIOR] start.vbs 单实例守卫（Win32_Process + zenithjoy-agent.exe + Quit/skip）",
+        "[BEHAVIOR] start.vbs launch.log 大小轮转（1048576/.Size/GetFile）",
+        "[BEHAVIOR] tray.ts 零 powershell（grep 命中数=0）+ 走 node-notifier",
+        "[BEHAVIOR] 运行期 showModuleError 不 spawn powershell（tsx trap 行为验证）",
+        "[BEHAVIOR] install-autostart.ps1 $Target 指向 start.vbs（非 start.bat）",
+        "[BEHAVIOR] build-install-pack.sh 拷 start.vbs；package.json 含 node-notifier 依赖",
+        "[BEHAVIOR] start.bat 含 ZJ_LAUNCH_PROBE 守卫且保留 Get-Process zenithjoy-agent kill 回归",
+        "[ARTIFACT] install-pack/start.vbs + smoke + e2e-verify.ps1 存在",
+        "[E2E] windows_cloud e2e-verify.ps1 五 Phase 全过（机制层）；视觉/重启接缝 logic-done-pending（真目标 xian-pc）"
+      ],
+      "files": [
+        "services/agent/install-pack/start.vbs",
+        "services/agent/src/tray.ts",
+        "services/agent/install-pack/install-autostart.ps1",
+        "services/agent/install-pack/start.bat",
+        "services/agent/scripts/build-install-pack.sh",
+        "services/agent/package.json",
+        ".github/workflows/scripts/smoke/agent-client-encapsulation-smoke.sh"
+      ],
+      "depends_on": [],
+      "complexity": "M",
+      "estimated_minutes": 90
+    }
+  ]
+}
