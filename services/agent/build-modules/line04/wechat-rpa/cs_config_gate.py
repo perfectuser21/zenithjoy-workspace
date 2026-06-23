@@ -1,0 +1,60 @@
+# -*- coding: utf-8 -*-
+"""客户机真发 gate 决策（纯函数）+ 按 machine_id 拉自己那份配置。
+
+对齐 services/agent/build-modules/line04/cs-config-gate.js（同语义）：JS 版给 Node 测/smoke 用，
+本 Python 版是 listen_chat 真正运行时用。
+
+背景：原先客户机靠装包写死 env（REAL_PUBLISH / ZENITHJOY_AGENT_REAL_PUBLISH）决定真发，
+导致「装一次写死一次、改开关要重装」。本模块把真发 gate 改成「跟随该客服中台配置的
+auto_agent_enabled」，并对「中台不可达拉配置失败」做强制 dryrun 兜底——绝不误真发。
+身份链路（决策 143f5d00）：按本机 machine_id 拉（中台 service_agents 反查绑定 wechat_id）。
+"""
+import requests
+
+
+def resolve_send_mode(config, pull_ok):
+    """真发 gate 决策：
+    - auto_agent_enabled=True 且 pull_ok=True → 'real'（真发）
+    - auto_agent_enabled=False               → 'dryrun'（演练）
+    - pull_ok=False（拉配置失败/中台不可达）  → 'dryrun'（强制演练，绝不误真发）
+    """
+    if not pull_ok:
+        return "dryrun"
+    if config and config.get("auto_agent_enabled") is True:
+        return "real"
+    return "dryrun"
+
+
+def resolve_active_config(fresh, cached, pull_ok):
+    """断网期缓存继续判定：pull_ok=True 用 fresh；否则用上次缓存的自己那份（不丢配置，
+    下游由 resolve_send_mode 强制 dryrun，中台恢复后自动重拉）。"""
+    return fresh if pull_ok else cached
+
+
+def should_reply(config, sender_name):
+    """白名单判定：发件人在 config.whitelist 内才回。"""
+    wl = config.get("whitelist") if config else None
+    if not isinstance(wl, list):
+        return False
+    return sender_name in wl
+
+
+def fetch_cs_config(middleware_url, machine_id, timeout=10):
+    """按 machine_id 拉该客服那一份配置 → (config|None, pull_ok)。
+
+    200 → (config, True)；403（未绑/未配）/ 其它码 / 网络异常 / 坏 JSON → (None, False)。
+    pull_ok=False 让 resolve_send_mode 强制 dryrun，绝不误真发；不抛，不拖垮监听主链路。
+    """
+    if not middleware_url or not machine_id:
+        return None, False
+    url = middleware_url.rstrip("/") + "/api/wechat/cs/agent-config"
+    try:
+        resp = requests.get(url, params={"machine_id": machine_id}, timeout=timeout)
+    except Exception:
+        return None, False
+    if resp.status_code != 200:
+        return None, False
+    try:
+        return resp.json(), True
+    except Exception:
+        return None, False

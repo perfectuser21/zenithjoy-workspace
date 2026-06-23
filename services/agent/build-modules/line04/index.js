@@ -25,10 +25,12 @@ function reportHealthOnce(send) {
 function handleConfig(cfg, send) {
     state.agentId = cfg.agentId;
     state.apiBase = cfg.apiBase;
+    state.machineId = cfg.machineId;
     state.ready = true;
     // Windows 上拉起 listen_chat.py 常驻监听；非 Windows 内部自动跳过。
+    // machineId 下发给 listener → 按它拉「自己那份」每客服配置（真发跟随中台 auto_agent 开关）。
     if (cfg.apiBase) {
-        (0, wechat_rpa_1.startWechatListener)(cfg.apiBase, cfg.agentId || undefined);
+        (0, wechat_rpa_1.startWechatListener)(cfg.apiBase, cfg.agentId || undefined, cfg.machineId || undefined);
     }
     send({ type: 'ready' });
     // 自愈件4：周期性把 listen_chat 真实健康上报 core（管理员/诊断页看模块"实际健康"）。
@@ -52,7 +54,7 @@ function registerIpc(send = (m) => process.send?.(m)) {
         if (!msg || typeof msg !== 'object')
             return;
         if (msg.type === 'config') {
-            handleConfig({ agentId: msg.agentId ?? '', apiBase: msg.apiBase ?? '' }, send);
+            handleConfig({ agentId: msg.agentId ?? '', apiBase: msg.apiBase ?? '', machineId: msg.machineId }, send);
         }
         else if (msg.type === 'incoming_message') {
             handleMessage(msg.data ?? {}, send);

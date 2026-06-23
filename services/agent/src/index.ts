@@ -521,9 +521,11 @@ async function main(): Promise<void> {
   console.log('[agent] ffmpeg + hyperframes ready — starting loops');
 
   // Sprint 06081700 — 把 agentId / apiBase 交给模块管理器，激活模块时随 config 消息下发
+  // 06230819 — 同时下发 machineId：line04 listen_chat 按它向中台拉「自己那份」每客服配置
   moduleManager.setIdentity(
     cfg.agentUuid ?? cfg.agentId,
     deriveHttpApiBase(cfg) ?? undefined,
+    cfg.machineId,
   );
 
   startWs1HeartbeatLoop(cfg);
