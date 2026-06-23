@@ -57,6 +57,9 @@ grep -q "getRequiredAgentVersion" "$SVC" || { echo "FAIL: A3 service 缺 getRequ
 grep -q "readInstallPackManifest" "$SVC" || { echo "FAIL: A3 service 未用 manifest 单一来源"; exit 1; }
 grep -q "DEFAULT_REQUIRED_AGENT_VERSION" "$SVC" || { echo "FAIL: A3 service 缺回退常量"; exit 1; }
 grep -q "required_agent_version: getRequiredAgentVersion()" "$RTE" || { echo "FAIL: A3 心跳响应未下发 required_agent_version"; exit 1; }
+# A3b：回退常量必须 >= 2.0.23（含 #826 machineId IPC，真客户机自升后不靠 env 激活每客服配置）
+DEF_VER=$(grep -oE "DEFAULT_REQUIRED_AGENT_VERSION = '[0-9]+\.[0-9]+\.[0-9]+'" "$SVC" | grep -oE "[0-9]+\.[0-9]+\.[0-9]+")
+node -e "const v='$DEF_VER'.split('.').map(Number); const c=v[0]*1e6+v[1]*1e3+v[2]; if(c<2*1e6+0*1e3+23){console.error('FAIL: A3b DEFAULT_REQUIRED_AGENT_VERSION='+'$DEF_VER'+' < 2.0.23');process.exit(1)} console.log('  OK A3b: 回退常量 '+'$DEF_VER'+' >= 2.0.23')"
 echo "  OK A3: service getRequiredAgentVersion(manifest+回退) 真挂进心跳响应 required_agent_version"
 
 # ── B：core-upgrader semver 真触发 + sha 真校验 + 写指针 + 优雅退出（真编译 core-upgrader）──
