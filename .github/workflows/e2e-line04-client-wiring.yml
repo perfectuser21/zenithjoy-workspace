@@ -1,0 +1,58 @@
+name: E2E Line04 Client Wiring
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'apps/api/**'
+      - 'services/agent/build-modules/line04/**'
+      - 'sprints/06230819-line04-client-wiring/**'
+      - '.github/workflows/e2e-line04-client-wiring.yml'
+
+concurrency:
+  group: e2e-line04-client-wiring-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend-machine-config:
+    name: 后端 — 客户机按 machine_id 拉自己那份（ubuntu + postgres）
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: cecelia
+          POSTGRES_PASSWORD: cecelia
+          POSTGRES_DB: cecelia
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready --health-interval 10s
+          --health-timeout 5s --health-retries 5
+    env:
+      DATABASE_URL: postgresql://cecelia:cecelia@localhost:5432/cecelia
+      DATABASE_HOST: localhost
+      DATABASE_PORT: '5432'
+      DATABASE_USER: cecelia
+      DATABASE_PASSWORD: cecelia
+      DATABASE_NAME: cecelia
+      BETTER_AUTH_SECRET: ci-only-secret-32-chars-min-not-prod-123
+      BETTER_AUTH_URL: http://localhost:3000
+      ZENITHJOY_INTERNAL_TOKEN: ci-only-internal-token
+      PORT: '3000'
+      API_BASE: http://localhost:3000
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: package-lock.json
+      - name: install + build + migrate
+        run: |
+          npm ci --workspace=apps/api
+          ( cd apps/api && npm run build && npm run migrate )
+      - name: 起中台 + 跑 E2E（真 API + 真 postgres + 真 curl + 真查库）
+        run: |
+          ( cd apps/api && node dist/index.js >/tmp/api.log 2>&1 & )
+          bash sprints/06230819-line04-client-wiring/e2e-machine-config-verify.sh
