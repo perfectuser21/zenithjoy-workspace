@@ -449,6 +449,30 @@ tests:
     product: AI员工
     note: "regression(2026-06-18) Sprint 06181315: Line04 客服层多租户隔离 — scheduler-tick 客户枚举 JOIN zenithjoy.agents 按 tenant_id 过滤+绑定参数、draft-generate 缺租户拒绝/带租户透传 scope；断言真实 SQL 文本+绑定参数。防客服读写跨租户越权。"
 
+  - id: line04-cs-config-permission
+    path: apps/api/tests/regression/line04-cs-config-permission.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: AI员工
+    note: "regression(2026-06-23) Sprint 06232248: Line04 客服配置写接口安全闸 — /cs/config /cs/setup /cs/auto-agent 三写接口 member 403 NOT_ADMIN / 跨租户 403 CROSS_TENANT / 无身份 401 / deny-by-default 404 TARGET_NOT_FOUND + 0 写库。钉死 Issue 96db53be 越权写库串台。"
+
+  - id: line04-cs-config-guard
+    path: apps/api/src/middleware/cs-config-guard.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: AI员工
+    note: "Sprint 06232248: cs-config-guard 中间件配套单测 — requireCsAdmin 角色闸 + requireSameTenant 租户隔离/deny-by-default/super-admin 短路。"
+
+  - id: line04-cs-config-permission-e2e
+    path: apps/dashboard/e2e/cs-config-permission.spec.ts
+    type: e2e
+    ci: L4
+    status: active
+    product: AI员工
+    note: "Sprint 06232248: 客服配置权限前台 E2E（windows Playwright）— 管理员看到营业时间+每日上限输入并保存读回；member 只读+「仅管理员可配置」。page.route 拦后端 my-role/config。"
+
   - id: line04-cs-tenant-isolation-sprint-archive
     path: sprints/06181315-line04-cs-tenant-isolation/tests/tenant-isolation.test.ts
     type: unit

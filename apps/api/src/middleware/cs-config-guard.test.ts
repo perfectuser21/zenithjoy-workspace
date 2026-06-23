@@ -21,20 +21,24 @@ import { requireCsAdmin, requireSameTenant } from './cs-config-guard';
 const TENANT_A = 'aaaaaaaa-1111-2222-3333-444444444444';
 const TENANT_B = 'bbbbbbbb-1111-2222-3333-444444444444';
 
+interface DenyBody {
+  error?: { code?: string };
+}
+
 function mkRes() {
   const res = {
     statusCode: 0,
-    body: undefined as unknown,
+    body: undefined as DenyBody | undefined,
     status(code: number) {
       this.statusCode = code;
       return this;
     },
     json(payload: unknown) {
-      this.body = payload;
+      this.body = payload as DenyBody;
       return this;
     },
   };
-  return res as unknown as Response & { statusCode: number; body: any };
+  return res as unknown as Response & { statusCode: number; body: DenyBody };
 }
 
 beforeEach(() => {
@@ -48,7 +52,7 @@ describe('requireCsAdmin — 管理员角色闸', () => {
     const next = vi.fn();
     requireCsAdmin(req, res, next);
     expect(res.statusCode).toBe(403);
-    expect(res.body.error.code).toBe('NOT_ADMIN');
+    expect(res.body.error?.code).toBe('NOT_ADMIN');
     expect(next).not.toHaveBeenCalled();
   });
 
@@ -88,7 +92,7 @@ describe('requireSameTenant — 租户隔离 + deny by default', () => {
     const next = vi.fn();
     await requireSameTenant('wechatId')(req, res, next);
     expect(res.statusCode).toBe(403);
-    expect(res.body.error.code).toBe('CROSS_TENANT');
+    expect(res.body.error?.code).toBe('CROSS_TENANT');
     expect(next).not.toHaveBeenCalled();
   });
 
@@ -99,7 +103,7 @@ describe('requireSameTenant — 租户隔离 + deny by default', () => {
     const next = vi.fn();
     await requireSameTenant('wechatId')(req, res, next);
     expect(res.statusCode).toBe(404);
-    expect(res.body.error.code).toBe('TARGET_NOT_FOUND');
+    expect(res.body.error?.code).toBe('TARGET_NOT_FOUND');
     expect(next).not.toHaveBeenCalled();
   });
 
