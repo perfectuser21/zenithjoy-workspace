@@ -134,8 +134,12 @@ export function getPageComponent(name: string) {
 
 // ============ 导航配置 ============
 
+// ============ 导航配置：按 Line 组织（客户侧栏 = 有内容的 Line；Line 00/10 收进「管理后台」）
+//   原则（2026-06-23 老板拍板）：一条 Line 一个分组；客户看 Line 01/02/04/05/07；
+//   Line 00 运营中枢 + Line 10 客户管理 = 我们管理用 → 收进「管理后台」(super-admin)；
+//   全局只有一个「设置」(账号级：下载 Agent / License)；各线自己的绑定放进对应 Line 分组里。
 export const autopilotNavGroups: NavGroup[] = [
-  // ─── 主功能 ───────────────────────────────────────────────────
+  // ─── 首页 ─────────────────────────────────────────────────────
   {
     title: '',
     items: [
@@ -146,185 +150,78 @@ export const autopilotNavGroups: NavGroup[] = [
         featureKey: 'workbench',
         component: 'Dashboard'
       },
-      {
-        path: '/media',
-        icon: Video,
-        label: '新媒体运营',
-        featureKey: 'media-scenario',
-        component: 'MediaScenarioPage'
-      },
-      {
-        path: '/ai-employees',
-        icon: Users,
-        label: 'AI 员工',
-        featureKey: 'ai-employees',
-        component: 'AiEmployeesPage'
-      },
-      {
-        path: '/works',
-        icon: Database,
-        label: '作品管理',
-        featureKey: 'works-management',
-        component: 'WorksListPage'
-      },
-      {
-        path: '/platform-data',
-        icon: Database,
-        label: '平台数据',
-        featureKey: 'platform-data',
-        component: 'PlatformDataPage'
-      },
-      {
-        path: '/ai-video',
-        icon: Sparkles,
-        label: 'AI 视频',
-        featureKey: 'ai-video-generation',
-        component: 'AiVideoGenerationPage'
-      },
-      {
-        path: '/local-video',
-        icon: Scissors,
-        label: '本地视频处理',
-        featureKey: 'local-video-pipeline',
-        component: 'LocalVideoPipelinePage'
-      },
-      {
-        path: '/content-factory',
-        icon: Factory,
-        label: '内容工厂',
-        featureKey: 'content-factory',
-        component: 'ContentFactoryPage'
-      },
-      {
-        path: '/competitor-research',
-        icon: Target,
-        label: '智能对标',
-        featureKey: 'competitor_research',
-        component: 'CompetitorResearchPage',
-      },
-      {
-        path: '/clips',
-        icon: Scissors,
-        label: '内容采集',
-        featureKey: 'content-clipper',
-        component: 'ContentClipperPage',
-      },
-      {
-        path: '/video-remake',
-        icon: Video,
-        label: 'AI 视频翻拍',
-        featureKey: 'video-remake-pipeline',
-        component: 'VideoRemakePipelinePage',
-      },
-      {
-        path: '/dashboard/leads',
-        icon: Target,
-        label: '获客 Leads',
-        featureKey: 'acquisition-leads',
-        component: 'LeadsPage',
-      },
     ]
   },
 
-  // ─── 设置 ─────────────────────────────────────────────────────
+  // ─── Line 01 · 智能发布 ───────────────────────────────────────
   {
-    title: '设置',
+    title: 'Line 01 · 智能发布',
     items: [
-      {
-        path: '/dashboard/agent',
-        icon: Download,
-        label: '下载 Agent',
-        featureKey: 'ws1-agent-download',
-        component: 'AgentDownloadPage',
-      },
-      {
-        path: '/dashboard/platforms/douyin',
-        icon: Music2,
-        label: '抖音绑定',
-        featureKey: 'ws1-douyin-bind',
-        component: 'DouyinBindPage',
-      },
-      {
-        path: '/dashboard/douyin-burner-bind',
-        icon: KeyRound,
-        label: '绑抖音小号',
-        featureKey: 'douyinBurnerBind',
-        component: 'DouyinBurnerBindPage',
-      },
-      {
-        path: '/dashboard/folder',
-        icon: Folder,
-        label: '文件夹绑定',
-        featureKey: 'ws1-folder-bind',
-        component: 'FolderBindPage',
-      },
-      {
-        path: '/dashboard/feishu-bind',
-        icon: KeyRound,
-        label: '飞书绑定',
-        featureKey: 'feishuBind',
-        component: 'FeishuBindTenant',
-      },
-      {
-        path: '/dashboard/publish',
-        icon: Send,
-        label: '一键发布',
-        featureKey: 'ws1-publish',
-        component: 'PublishPage',
-      },
-      {
-        path: '/wechat/cs-config',
-        icon: MessageCircle,
-        label: '微信客服配置',
-        featureKey: 'wechat-cs-config',
-        component: 'WechatCustomerServiceConfigPage',
-      },
-      {
-        path: '/license',
-        icon: KeyRound,
-        label: 'License',
-        featureKey: 'license',
-        component: 'LicensePage',
-      },
+      { path: '/dashboard/publish', icon: Send, label: '一键发布', featureKey: 'ws1-publish', component: 'PublishPage' },
+      { path: '/dashboard/platforms/douyin', icon: Music2, label: '抖音绑定', featureKey: 'ws1-douyin-bind', component: 'DouyinBindPage' },
+      { path: '/dashboard/folder', icon: Folder, label: '文件夹绑定', featureKey: 'ws1-folder-bind', component: 'FolderBindPage' },
+      { path: '/works', icon: Database, label: '作品管理', featureKey: 'works-management', component: 'WorksListPage' },
+      { path: '/platform-data', icon: Database, label: '平台数据', featureKey: 'platform-data', component: 'PlatformDataPage' },
+      { path: '/content-factory', icon: Factory, label: '内容工厂', featureKey: 'content-factory', component: 'ContentFactoryPage' },
+      { path: '/ai-video', icon: Sparkles, label: 'AI 视频', featureKey: 'ai-video-generation', component: 'AiVideoGenerationPage' },
     ]
   },
 
-  // ─── 管理员（仅 superadmin 可见）────────────────────────────────
+  // ─── Line 02 · 智能获客 ───────────────────────────────────────
   {
-    title: '管理员',
+    title: 'Line 02 · 智能获客',
     items: [
-      {
-        path: '/operator',
-        icon: MonitorCheck,
-        label: 'Session 健康监控',
-        featureKey: 'operator-dashboard',
-        requireSuperAdmin: true,
-        component: 'OperatorPage',
-      },
-      {
-        path: '/module-health',
-        icon: Activity,
-        label: '模块健康',
-        featureKey: 'module-health',
-        component: 'ModuleHealthPage',
-      },
-      {
-        path: '/admin/license',
-        icon: ShieldCheck,
-        label: 'License 管理',
-        featureKey: 'license-admin',
-        requireSuperAdmin: true,
-        component: 'AdminLicensePage',
-      },
-      {
-        // #816: 「会员管理」(/admin/users) 已并入「客户管理」，导航只保留一个客户管理入口
-        path: '/admin/customers',
-        icon: Building2,
-        label: '客户管理',
-        featureKey: 'customers-admin',
-        requireSuperAdmin: true,
-        component: 'AdminCustomersPage',
-      },
+      { path: '/dashboard/leads', icon: Target, label: '获客 Leads', featureKey: 'acquisition-leads', component: 'LeadsPage' },
+      { path: '/competitor-research', icon: Target, label: '智能对标', featureKey: 'competitor_research', component: 'CompetitorResearchPage' },
+      { path: '/dashboard/douyin-burner-bind', icon: KeyRound, label: '绑抖音小号', featureKey: 'douyinBurnerBind', component: 'DouyinBurnerBindPage' },
+      { path: '/dashboard/feishu-bind', icon: KeyRound, label: '飞书绑定', featureKey: 'feishuBind', component: 'FeishuBindTenant' },
+    ]
+  },
+
+  // ─── Line 04 · 私域 AI 接管（微信客服）─────────────────────────
+  {
+    title: 'Line 04 · 私域 AI 接管',
+    items: [
+      { path: '/wechat/cs-config', icon: MessageCircle, label: '微信客服配置', featureKey: 'wechat-cs-config', component: 'WechatCustomerServiceConfigPage' },
+      // Line04 每客服独立配置 — 之前只挂隐藏路由、侧栏看不到，本次加进 Line 04
+      { path: '/wechat/per-cs-config', icon: Users, label: '每客服设置', featureKey: 'wechat-cs-config', component: 'PerCsConfigPage' },
+    ]
+  },
+
+  // ─── Line 05 · 视频剪辑 ───────────────────────────────────────
+  {
+    title: 'Line 05 · 视频剪辑',
+    items: [
+      { path: '/local-video', icon: Scissors, label: '本地视频处理', featureKey: 'local-video-pipeline', component: 'LocalVideoPipelinePage' },
+      { path: '/clips', icon: Scissors, label: '内容采集', featureKey: 'content-clipper', component: 'ContentClipperPage' },
+    ]
+  },
+
+  // ─── Line 07 · AI 爆款翻拍 ────────────────────────────────────
+  {
+    title: 'Line 07 · AI 爆款翻拍',
+    items: [
+      { path: '/video-remake', icon: Video, label: 'AI 视频翻拍', featureKey: 'video-remake-pipeline', component: 'VideoRemakePipelinePage' },
+    ]
+  },
+
+  // ─── ⚙️ 设置（全局唯一，账号级）───────────────────────────────
+  {
+    title: '⚙️ 设置',
+    items: [
+      { path: '/dashboard/agent', icon: Download, label: '下载 Agent', featureKey: 'ws1-agent-download', component: 'AgentDownloadPage' },
+      { path: '/license', icon: KeyRound, label: 'License', featureKey: 'license', component: 'LicensePage' },
+    ]
+  },
+
+  // ─── 管理后台（Line 00 运营中枢 + Line 10 客户管理，仅 super-admin）─
+  {
+    title: '管理后台',
+    items: [
+      { path: '/admin/customers', icon: Building2, label: '客户管理', featureKey: 'customers-admin', requireSuperAdmin: true, component: 'AdminCustomersPage' },
+      { path: '/operator', icon: MonitorCheck, label: 'Session 健康监控', featureKey: 'operator-dashboard', requireSuperAdmin: true, component: 'OperatorPage' },
+      { path: '/module-health', icon: Activity, label: '模块健康', featureKey: 'module-health', component: 'ModuleHealthPage' },
+      { path: '/admin/license', icon: ShieldCheck, label: 'License 管理', featureKey: 'license-admin', requireSuperAdmin: true, component: 'AdminLicensePage' },
     ]
   },
 ];
