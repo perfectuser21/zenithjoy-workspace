@@ -4,14 +4,22 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-const { rows, alerts } = vi.hoisted(() => ({
+const { rows, alerts, bindings } = vi.hoisted(() => ({
   rows: new Map<string, Record<string, unknown>>(),
   alerts: [] as Array<{ wechat_id: string; reason: string; created_at: Date }>,
+  // machine_id → wechat_id（service_agents 绑定的内存表；值为 null = 已绑 PC 但管理员没填微信号）
+  bindings: new Map<string, string | null>(),
 }));
 
 vi.mock('../../../db/connection', () => ({
   default: {
     query: vi.fn(async (sql: string, params: unknown[]) => {
+      // commit 1 新增：按 machine_id 反查该客服绑定的 wechat_id（service_agents）
+      if (/SELECT[\s\S]*wechat_id[\s\S]+FROM zenithjoy\.service_agents/i.test(sql)) {
+        const machineId = params?.[0] as string;
+        if (!bindings.has(machineId)) return { rows: [] };
+        return { rows: [{ wechat_id: bindings.get(machineId) }] };
+      }
       if (/INSERT INTO zenithjoy\.wechat_cs_identity_alert/i.test(sql)) {
         alerts.push({
           wechat_id: String(params[0]),
@@ -43,6 +51,7 @@ import {
   saveCSConfig,
   recordIdentityAlert,
   listIdentityAlerts,
+  getCSConfigByMachine,
 } from '../cs-account-config-store';
 
 const personaOf = (name: string) => ({
@@ -58,6 +67,7 @@ const personaOf = (name: string) => ({
 beforeEach(() => {
   rows.clear();
   alerts.length = 0;
+  bindings.clear();
   vi.clearAllMocks();
 });
 
@@ -96,5 +106,44 @@ describe('cs-account-config-store — 身份校验异常', () => {
     expect(list.length).toBe(1);
     expect(list[0].wechat_id).toBe('wxid_bad');
     expect(list[0].reason).toBe('unregistered_wechat');
+  });
+});
+
+describe('cs-account-config-store — 按 machine_id 解析该客服配置（客户机按身份拉）', () => {
+  it('已绑定 machine_id → 解析到 wechat_id → 返回该客服那一行', async () => {
+    await saveCSConfig('wxid_a', { persona: personaOf('萌萌'), whitelist: ['客户甲'] });
+    bindings.set('machine-1', 'wxid_a');
+    const c = await getCSConfigByMachine('machine-1');
+    expect(c?.wechat_id).toBe('wxid_a');
+    expect(c?.persona.self_name).toBe('萌萌');
+    expect(c?.whitelist).toContain('客户甲');
+  });
+
+  it('两台机各绑各号 → 各拉各的，绝不串台（钉死 Issue defe1a42 在客户机侧）', async () => {
+    await saveCSConfig('wxid_a', { persona: personaOf('萌萌') });
+    await saveCSConfig('wxid_b', { persona: personaOf('天下第一'), auto_agent_enabled: true });
+    bindings.set('machine-1', 'wxid_a');
+    bindings.set('machine-2', 'wxid_b');
+    const a = await getCSConfigByMachine('machine-1');
+    const b = await getCSConfigByMachine('machine-2');
+    expect(a?.persona.self_name).toBe('萌萌');
+    expect(a?.auto_agent_enabled).toBe(false);
+    expect(b?.persona.self_name).toBe('天下第一');
+    expect(b?.auto_agent_enabled).toBe(true);
+  });
+
+  it('未绑定的 machine_id → null（不返回任意一份配置）', async () => {
+    await saveCSConfig('wxid_a', { persona: personaOf('萌萌') });
+    expect(await getCSConfigByMachine('machine-unbound')).toBeNull();
+  });
+
+  it('已绑 PC 但管理员没填微信号（wechat_id 为空）→ null', async () => {
+    bindings.set('machine-3', null);
+    expect(await getCSConfigByMachine('machine-3')).toBeNull();
+  });
+
+  it('绑了微信号但该号还没配过 → null（绑定在、配置无）', async () => {
+    bindings.set('machine-4', 'wxid_not_configured');
+    expect(await getCSConfigByMachine('machine-4')).toBeNull();
   });
 });
