@@ -38,6 +38,7 @@ import {
   recordIdentityAlert,
   listIdentityAlerts,
   listPendingMachines,
+  listAllMachines,
   setupCSByMachine,
 } from '../services/wechat/cs-account-config-store';
 import { superAdminGuard } from '../middleware/super-admin';
@@ -366,6 +367,12 @@ wechatConfigRouter.get('/cs/diagnostics', async (_req: Request, res: Response) =
 // GET /api/wechat/cs/pending-machines — 列「在敲门但没配」的机器（机器自己注册上来报到）
 wechatConfigRouter.get('/cs/pending-machines', async (_req: Request, res: Response) => {
   const machines = await listPendingMachines();
+  return res.status(200).json({ machines });
+});
+
+// GET /api/wechat/cs/machines — 列「我的全部客服机」(已配+待配)，前台可点已配的改白名单
+wechatConfigRouter.get('/cs/machines', async (_req: Request, res: Response) => {
+  const machines = await listAllMachines();
   return res.status(200).json({ machines });
 });
 

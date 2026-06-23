@@ -1,21 +1,26 @@
 /**
- * CsOneClickSetupPage — 微信客服「一键配置」(2026-06-23 老板拍板)
+ * CsOneClickSetupPage — 微信客服「一键配置 / 我的客服机」(2026-06-23 老板拍板)
  *
- * 不让人手抄 machine_id：机器装好 Agent 自己注册上来报到 → 这里自动列出「等待配置的机器」。
- * 管理员只填 人设名 / 白名单 / 关键人 / 自动回复开关 → 点【设置完毕】→ 后端自动绑定+写配置。
- * 机器约 30 秒内拉到配置生效，去微信发条消息即可验证。
+ * 不让人手抄 machine_id：机器装好 Agent 自己注册上来报到 → 这里列出「我的全部客服机」(已配+待配)。
+ * 点任意一台 → 填/改 人设名 / 白名单 / 关键人 / 自动回复开关 → 点【设置完毕】→ 后端自动绑定+写配置。
+ * 已配的机器点进去会预填当前白名单，方便随时改；约 30 秒生效，去微信发条消息即可验证。
  */
 import { useEffect, useState } from 'react';
 import { Loader2, CheckCircle2, RefreshCw, MonitorSmartphone } from 'lucide-react';
 
-interface PendingMachine {
+interface CSMachine {
   machine_id: string;
   hostname?: string;
   last_seen?: string;
+  configured: boolean;
+  wechat_id?: string;
+  self_name?: string;
+  whitelist?: string[];
+  auto_agent_enabled?: boolean;
 }
 
 export default function CsOneClickSetupPage() {
-  const [machines, setMachines] = useState<PendingMachine[]>([]);
+  const [machines, setMachines] = useState<CSMachine[]>([]);
   const [loadingList, setLoadingList] = useState(false);
   const [machineId, setMachineId] = useState('');
   const [selfName, setSelfName] = useState('');
@@ -26,10 +31,10 @@ export default function CsOneClickSetupPage() {
   const [done, setDone] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const loadPending = async () => {
+  const loadMachines = async () => {
     setLoadingList(true);
     try {
-      const res = await fetch('/api/wechat/cs/pending-machines');
+      const res = await fetch('/api/wechat/cs/machines');
       const data = await res.json();
       setMachines(Array.isArray(data.machines) ? data.machines : []);
     } catch {
@@ -40,14 +45,26 @@ export default function CsOneClickSetupPage() {
   };
 
   useEffect(() => {
-    loadPending();
+    loadMachines();
   }, []);
+
+  // 选中一台机器：已配的把它当前配置预填进表单，方便直接改白名单。
+  const selectMachine = (m: CSMachine) => {
+    setMachineId(m.machine_id);
+    setDone(null);
+    setError(null);
+    if (m.configured) {
+      setSelfName(m.self_name ?? '');
+      setWhitelist((m.whitelist ?? []).join(', '));
+      setAutoAgent(m.auto_agent_enabled ?? true);
+    }
+  };
 
   const submit = async () => {
     setError(null);
     setDone(null);
     if (!machineId) {
-      setError('先选一台等待配置的机器');
+      setError('先选一台机器');
       return;
     }
     if (!selfName.trim()) {
@@ -83,7 +100,7 @@ export default function CsOneClickSetupPage() {
         return;
       }
       setDone(data.wechat_id);
-      loadPending();
+      loadMachines();
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -93,19 +110,19 @@ export default function CsOneClickSetupPage() {
 
   return (
     <div className="max-w-2xl mx-auto">
-      <h2 className="text-xl font-semibold mb-1 text-gray-900 dark:text-white">微信客服 · 一键配置</h2>
+      <h2 className="text-xl font-semibold mb-1 text-gray-900 dark:text-white">微信客服 · 我的客服机</h2>
       <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">
-        机器装好 Agent 会自己报到，下面挑一台 → 填人设/白名单/开关 → 点设置完毕，约 30 秒生效。
+        装好 Agent 的机器会自己报到。点一台 → 填/改 人设·白名单·开关 → 点设置完毕，约 30 秒生效。已配过的也能点进去改。
       </p>
 
       {/* ① 选机器 */}
       <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-5 mb-4">
         <div className="flex items-center justify-between mb-3">
           <h3 className="font-medium text-gray-900 dark:text-white flex items-center gap-2">
-            <MonitorSmartphone className="w-4 h-4 text-sky-500" /> ① 选机器（等待配置的）
+            <MonitorSmartphone className="w-4 h-4 text-sky-500" /> ① 选机器
           </h3>
           <button
-            onClick={loadPending}
+            onClick={loadMachines}
             className="text-xs text-sky-600 dark:text-sky-400 flex items-center gap-1 hover:underline"
             data-testid="refresh-pending"
           >
@@ -114,7 +131,7 @@ export default function CsOneClickSetupPage() {
         </div>
         {machines.length === 0 ? (
           <p className="text-sm text-gray-400">
-            暂无等待配置的机器。请确认客户机装了 Agent、连上中台（它会自动报到）。
+            还没有机器报到。请确认客户机装了 Agent、连上中台（它会自动报到）。
           </p>
         ) : (
           <div className="space-y-2">
@@ -132,7 +149,7 @@ export default function CsOneClickSetupPage() {
                   name="machine"
                   value={m.machine_id}
                   checked={machineId === m.machine_id}
-                  onChange={() => setMachineId(m.machine_id)}
+                  onChange={() => selectMachine(m)}
                   data-testid="machine-radio"
                 />
                 <span className="text-sm text-gray-700 dark:text-gray-200">
@@ -145,8 +162,14 @@ export default function CsOneClickSetupPage() {
                     <span className="font-mono">机器 {m.machine_id.slice(0, 12)}…</span>
                   )}
                 </span>
-                {m.last_seen && (
-                  <span className="text-xs text-gray-400 ml-auto">报到 {new Date(m.last_seen).toLocaleTimeString()}</span>
+                {m.configured ? (
+                  <span className="text-xs px-1.5 py-0.5 rounded bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">
+                    已配{m.whitelist?.length ? ` · 白名单${m.whitelist.length}人` : ''}
+                  </span>
+                ) : (
+                  <span className="text-xs px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
+                    待配置
+                  </span>
                 )}
               </label>
             ))}
