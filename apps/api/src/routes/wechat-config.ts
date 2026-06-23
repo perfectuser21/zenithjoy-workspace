@@ -37,6 +37,8 @@ import {
   saveCSConfig,
   recordIdentityAlert,
   listIdentityAlerts,
+  listPendingMachines,
+  setupCSByMachine,
 } from '../services/wechat/cs-account-config-store';
 import { superAdminGuard } from '../middleware/super-admin';
 import type { KBAudienceSegment } from '../services/wechat/types';
@@ -358,6 +360,40 @@ wechatConfigRouter.get('/cs/agent-config', async (req: Request, res: Response) =
 wechatConfigRouter.get('/cs/diagnostics', async (_req: Request, res: Response) => {
   const alerts = await listIdentityAlerts();
   return res.status(200).json({ alerts });
+});
+
+// ─── 一键配置（2026-06-23）：管理员只填人设/白名单/开关，machine_id 自动 ───────────
+// GET /api/wechat/cs/pending-machines — 列「在敲门但没配」的机器（机器自己注册上来报到）
+wechatConfigRouter.get('/cs/pending-machines', async (_req: Request, res: Response) => {
+  const machines = await listPendingMachines();
+  return res.status(200).json({ machines });
+});
+
+const CSSetupBodySchema = z
+  .object({
+    persona: PersonaSchema,
+    auto_agent_enabled: z.boolean().optional(),
+    business_hours_start: z.string().optional(),
+    business_hours_end: z.string().optional(),
+    key_contact_wechat: z.string().optional(),
+    whitelist: z.array(z.string()).optional(),
+    daily_limit: z.number().int().min(0).optional(),
+    wechat_id: z.string().optional(), // 友好名，缺省自动派生 cs-<前缀>
+  })
+  .strict();
+
+// PUT /api/wechat/cs/setup/:machineId — 一键配置：自动解析租户 + 自动绑定 + 写配置
+//   管理员不碰 machine_id（从 pending 列表挑那台机器）；机器没注册过 → 400。
+wechatConfigRouter.put('/cs/setup/:machineId', async (req: Request, res: Response) => {
+  const parsed = CSSetupBodySchema.safeParse(req.body ?? {});
+  if (!parsed.success) return invalidBody(res, parsed.error);
+  try {
+    const { wechat_id } = await setupCSByMachine(req.params.machineId, parsed.data);
+    const config = await getCSConfig(wechat_id);
+    return res.status(200).json({ success: true, wechat_id, config });
+  } catch (e) {
+    return res.status(400).json({ error: 'SETUP_FAILED', message: (e as Error).message });
+  }
 });
 
 export default wechatConfigRouter;

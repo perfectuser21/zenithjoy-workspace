@@ -110,6 +110,8 @@ export const autopilotPageComponents: Record<string, () => Promise<{ default: Co
   'VideoRemakePipelinePage': () => import('../pages/VideoRemakePipelinePage'),
   // 2026-06-23 — 业务区总览页（短侧栏下钻：区 → 总览卡片 → 子页）
   'AreaHubPage': () => import('../pages/AreaHubPage'),
+  // 2026-06-23 — 微信客服一键配置（选机器→填人设/白名单/开关→设置完毕，machine_id 自动）
+  'CsOneClickSetupPage': () => import('../pages/CsOneClickSetupPage'),
 };
 
 export const pageComponents = autopilotPageComponents;
@@ -167,6 +169,7 @@ export const additionalRoutes: RouteConfig[] = [
   { path: '/dashboard/douyin-burner-bind', component: 'DouyinBurnerBindPage', requireAuth: true },
   { path: '/dashboard/feishu-bind', component: 'FeishuBindTenant', requireAuth: true },
   { path: '/wechat/cs-config', component: 'WechatCustomerServiceConfigPage', requireAuth: true },
+  { path: '/wechat/setup', component: 'CsOneClickSetupPage', requireAuth: true },
   { path: '/local-video', component: 'LocalVideoPipelinePage', requireAuth: true },
   { path: '/clips', component: 'ContentClipperPage', requireAuth: true },
   { path: '/video-remake', component: 'VideoRemakePipelinePage', requireAuth: true },

@@ -141,6 +141,86 @@ export async function getCSConfigByMachine(machineId: string): Promise<CSAccount
   return getCSConfig(wechatId);
 }
 
+export interface PendingMachine {
+  machine_id: string;
+  hostname?: string;
+  last_seen?: string;
+}
+
+/**
+ * 列出「在敲门但还没配」的机器：最近 10 分钟拉配置被拒(unregistered_machine)、且还没绑定的
+ * machine_id。供一键配置页让管理员挑选——机器自己注册上来报到，管理员不用手抄 machine_id。
+ */
+export async function listPendingMachines(limit = 50): Promise<PendingMachine[]> {
+  try {
+    const res = await pool.query(
+      `SELECT a.wechat_id AS machine_id,
+              MAX(a.created_at) AS last_seen,
+              MAX(lm.hostname) AS hostname
+         FROM zenithjoy.wechat_cs_identity_alert a
+         LEFT JOIN zenithjoy.license_machines lm ON lm.machine_id = a.wechat_id
+        WHERE a.reason = 'unregistered_machine'
+          AND a.created_at > NOW() - interval '10 minutes'
+          AND NOT EXISTS (
+            SELECT 1 FROM zenithjoy.service_agents s
+             WHERE s.machine_id = a.wechat_id AND s.deleted_at IS NULL
+          )
+        GROUP BY a.wechat_id
+        ORDER BY MAX(a.created_at) DESC
+        LIMIT $1`,
+      [limit],
+    );
+    return (res.rows ?? []).map((r: Record<string, unknown>) => ({
+      machine_id: String(r.machine_id),
+      hostname: r.hostname ? String(r.hostname) : undefined,
+      last_seen:
+        r.last_seen instanceof Date ? r.last_seen.toISOString() : (r.last_seen as string | undefined),
+    }));
+  } catch (err) {
+    console.warn('[cs-account-config-store] listPendingMachines 失败:', err);
+    return [];
+  }
+}
+
+/**
+ * 一键配置：给某台机器(machine_id)自动绑定 + 写配置。管理员只填人设/白名单/开关，
+ * machine_id 由机器自己注册上来(前台从 pending 列表挑)，wechat_id/租户/绑定全自动——
+ * 不再让人手抄 machine_id hash。
+ *
+ * 流程：① 经 license_machines 解析机器所属租户 ② 派生 wechat_id(可填友好名，缺省 cs-<前缀>)
+ * ③ upsert service_agents 绑定 ④ saveCSConfig 写配置。机器没注册过(无 license)→ 抛错(路由转 400)。
+ */
+export async function setupCSByMachine(
+  machineId: string,
+  patch: Partial<CSAccountConfig> & { persona: Persona; wechat_id?: string },
+): Promise<{ wechat_id: string }> {
+  const ten = await pool.query(
+    `SELECT l.tenant_id
+       FROM zenithjoy.license_machines lm
+       JOIN zenithjoy.licenses l ON l.id = lm.license_id
+      WHERE lm.machine_id = $1
+      LIMIT 1`,
+    [machineId],
+  );
+  const tenantId = ten.rows?.[0]?.tenant_id as string | undefined;
+  if (!tenantId) {
+    throw new Error(`machine ${machineId} 未注册到任何 license/租户，无法配置`);
+  }
+  const wechatId =
+    typeof patch.wechat_id === 'string' && patch.wechat_id.trim()
+      ? patch.wechat_id.trim()
+      : `cs-${machineId.slice(0, 8)}`;
+  await pool.query(
+    `INSERT INTO zenithjoy.service_agents (tenant_id, machine_id, wechat_id)
+     VALUES ($1, $2, $3)
+     ON CONFLICT (machine_id) WHERE deleted_at IS NULL
+       DO UPDATE SET wechat_id = EXCLUDED.wechat_id, updated_at = now()`,
+    [tenantId, machineId, wechatId],
+  );
+  await saveCSConfig(wechatId, patch);
+  return { wechat_id: wechatId };
+}
+
 /**
  * upsert「该客服那一行」（patch 必含 persona；其余字段缺省走默认值）。
  * 只写该 wechat_id 那一行，ON CONFLICT 更新同行，绝不动其他客服行。

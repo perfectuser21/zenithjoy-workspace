@@ -55,9 +55,10 @@ export const AREA_HUBS: Record<string, AreaHub> = {
     title: '私域客服',
     subtitle: '微信号 AI 接管：自动回复、关键人播报，按客服分别配置。',
     cards: [
-      { label: '微信客服配置', desc: '人设、营业时间、自动回复总开关', to: '/wechat/cs-config', Icon: MessageCircle, color: 'text-green-500' },
-      { label: '每客服设置', desc: '给每个客服号单独设人设/白名单/开关', to: '/wechat/per-cs-config', Icon: Users, color: 'text-emerald-500' },
-      { label: '下载客户机', desc: '在客服 PC 上装 Agent，连中台', to: '/dashboard/agent', Icon: Download, color: 'text-sky-500' },
+      { label: '一键配置', desc: '选机器→填人设/白名单/开关→设置完毕，自动生效', to: '/wechat/setup', Icon: Sparkles, color: 'text-sky-500' },
+      { label: '下载客户机', desc: '在客服 PC 上装 Agent，连中台', to: '/dashboard/agent', Icon: Download, color: 'text-emerald-500' },
+      { label: '微信客服配置（高级）', desc: '人设、营业时间、自动回复总开关', to: '/wechat/cs-config', Icon: MessageCircle, color: 'text-green-500' },
+      { label: '每客服设置（高级）', desc: '按微信号单独设人设/白名单/开关', to: '/wechat/per-cs-config', Icon: Users, color: 'text-teal-500' },
     ],
   },
   video: {
