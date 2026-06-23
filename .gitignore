@@ -69,6 +69,8 @@ log/
 !apps/api/db/migrations/*.sql
 !db/migrations/*.sql
 !packages/db/migrations/*.sql
+# 例外：sprint E2E 种子 SQL 是 CI 工件，必须入库
+!sprints/**/*.sql
 
 # Backup files
 *.bak

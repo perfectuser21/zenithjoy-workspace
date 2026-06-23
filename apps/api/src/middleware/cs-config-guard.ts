@@ -1,0 +1,109 @@
+/**
+ * cs-config-guard — 客服配置写接口安全闸（管理员角色闸 + 租户隔离，deny by default）
+ *
+ * 钉死 Issue 96db53be P1：`PUT /cs/config/:wechatId`、`PUT /cs/setup/:machineId`、
+ * `PUT /cs/auto-agent` 原本无「管理员 + 租户隔离」闸 → 任何登录用户可改任意客服配置 = 串台。
+ *
+ * 用法（与 tenantContext 串联，tenantContext 必须排在前面以填 req.tenantId / req.tenantRole）：
+ *   router.put('/cs/config/:wechatId', tenantContext, requireCsAdmin, requireSameTenant('wechatId'), handler)
+ *   router.put('/cs/setup/:machineId',  tenantContext, requireCsAdmin, requireSameTenant('machineId'), handler)
+ *   router.put('/cs/auto-agent',        tenantContext, requireCsAdmin, handler)  // 全局单行，无跨租户目标
+ *
+ * 拒绝响应统一用嵌套 error.code 形状（与 tenantContext / customer-admin 一致）：
+ *   403 NOT_ADMIN        — member / 无 role（非 owner/admin）
+ *   403 CROSS_TENANT     — 目标客服属别家租户
+ *   404 TARGET_NOT_FOUND — 目标客服解析不到所属租户（deny by default，绝不放行写库）
+ *   （401 UNAUTHORIZED / 403 NO_TENANT 由上游 tenantContext 负责）
+ */
+import type { Request, Response, NextFunction } from 'express';
+import pool from '../db/connection';
+
+/** 视为「管理员」的角色（super-admin 来自 tenantContext 的 X-Bypass-Tenant 通道） */
+const ADMIN_ROLES = new Set(['owner', 'admin', 'super-admin']);
+
+function deny(res: Response, status: number, code: string, message: string): void {
+  res.status(status).json({
+    success: false,
+    data: null,
+    error: { code, message },
+    timestamp: new Date().toISOString(),
+  });
+}
+
+/**
+ * 角色闸：要求 tenantContext 已解出 req.tenantRole ∈ {owner, admin, super-admin}。
+ * member / 无 role → 403 NOT_ADMIN（前台据此显示「仅管理员可配置」）。
+ */
+export function requireCsAdmin(req: Request, res: Response, next: NextFunction): void {
+  const role = req.tenantRole;
+  if (!role || !ADMIN_ROLES.has(role)) {
+    deny(res, 403, 'NOT_ADMIN', '仅管理员可配置（需 owner / admin 角色）');
+    return;
+  }
+  next();
+}
+
+/** 目标客服（wechat_id）→ 所属租户 tenant_id；查不到返回 null。 */
+async function resolveTenantByWechatId(wechatId: string): Promise<string | null> {
+  const r = await pool.query(
+    `SELECT tenant_id
+       FROM zenithjoy.service_agents
+      WHERE wechat_id = $1 AND deleted_at IS NULL
+      LIMIT 1`,
+    [wechatId]
+  );
+  return (r.rows?.[0]?.tenant_id as string | undefined) ?? null;
+}
+
+/** 目标客服机（machine_id）→ 所属租户 tenant_id（license_machines JOIN licenses，与 setupCSByMachine 同源）；查不到返回 null。 */
+async function resolveTenantByMachineId(machineId: string): Promise<string | null> {
+  const r = await pool.query(
+    `SELECT l.tenant_id
+       FROM zenithjoy.license_machines lm
+       JOIN zenithjoy.licenses l ON l.id = lm.license_id
+      WHERE lm.machine_id = $1
+      ORDER BY lm.last_seen DESC
+      LIMIT 1`,
+    [machineId]
+  );
+  return (r.rows?.[0]?.tenant_id as string | undefined) ?? null;
+}
+
+/**
+ * 租户隔离闸 factory：按路径参数（wechatId / machineId）解析目标客服所属租户，
+ * 与当前用户租户比对。deny by default — 解析不出目标租户绝不放行写库。
+ */
+export function requireSameTenant(kind: 'wechatId' | 'machineId') {
+  return async function (req: Request, res: Response, next: NextFunction): Promise<void> {
+    const key = (req.params[kind] ?? '').trim();
+    if (!key) {
+      deny(res, 404, 'TARGET_NOT_FOUND', '目标客服标识缺失，已拒绝写入（deny by default）');
+      return;
+    }
+
+    let targetTenant: string | null;
+    try {
+      targetTenant =
+        kind === 'wechatId'
+          ? await resolveTenantByWechatId(key)
+          : await resolveTenantByMachineId(key);
+    } catch (err) {
+      deny(res, 500, 'TARGET_LOOKUP_FAILED', err instanceof Error ? err.message : 'unknown');
+      return;
+    }
+
+    // deny by default：解析不到目标租户 → 绝不默认放行到任一租户
+    if (!targetTenant) {
+      deny(res, 404, 'TARGET_NOT_FOUND', '目标客服解析不到所属租户，已拒绝写入（deny by default）');
+      return;
+    }
+
+    // super-admin（X-Bypass-Tenant 通道）放行；否则目标租户必须 == 当前用户租户
+    if (req.tenantRole !== 'super-admin' && targetTenant !== req.tenantId) {
+      deny(res, 403, 'CROSS_TENANT', '不能修改其他租户的客服配置（租户隔离）');
+      return;
+    }
+
+    next();
+  };
+}
