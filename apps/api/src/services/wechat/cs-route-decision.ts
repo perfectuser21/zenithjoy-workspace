@@ -93,7 +93,19 @@ export function withinBusinessHours(
   return nowMinutes >= start || nowMinutes < end;
 }
 
-/** 取本地「现在」的当天分钟数（生产默认）。测试可注入 now_minutes 绕过真实时钟。 */
+/**
+ * 取「现在」按【客户所在时区(中国 Asia/Shanghai)】的当天分钟数（生产默认）。
+ * 必须按客户时区算营业时间——中台部署在美区，若用服务器本地时间，北京下午会被当成"非营业"
+ * 把回复全跳过(2026-06-23 实测到的坑)。测试可注入 now_minutes 绕过真实时钟。
+ */
 export function nowMinutesLocal(d: Date = new Date()): number {
-  return d.getHours() * 60 + d.getMinutes();
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Asia/Shanghai',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(d);
+  const hh = Number(parts.find((p) => p.type === 'hour')?.value ?? '0');
+  const mm = Number(parts.find((p) => p.type === 'minute')?.value ?? '0');
+  return (hh % 24) * 60 + mm;
 }

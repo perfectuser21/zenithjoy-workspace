@@ -22,6 +22,7 @@ import { callOpenRouter } from '../llm/openrouter';
 import type { ChatMessage, ContactFact, ContactMemory, Persona } from './wechat/types';
 import { retrieveRelevantKB } from './wechat/business-kb';
 import { getPersona, getBusinessKB, getAutoAgentConfig } from './wechat/cs-config-store';
+import { getCSConfigByAgentId } from './wechat/cs-account-config-store';
 import {
   decideReplyRoute,
   withinBusinessHours,
@@ -227,6 +228,11 @@ export interface GenerateChatDraftParams {
    * thin 阶段由调用方/上层统计传入；服务端不在此查 DB（保持纯函数式决策可测）。
    */
   daily_count?: number;
+  /**
+   * 客户机 agent 身份。带上时，中台优先按【该客服自己那份配置】(每客服 wechat_cs_account_config)
+   * 判白名单/人设/开关——每客户独立、改一个不动别人；解不到才回落旧的全局/飞书逻辑（向后兼容）。
+   */
+  agent_id?: string;
 }
 
 export interface GenerateChatDraftSuccess {
@@ -252,7 +258,11 @@ const FAIL_PLACEHOLDER = 'AI 生成失败（请人审决定是否重试）';
 export async function generateChatDraft(
   params: GenerateChatDraftParams,
 ): Promise<GenerateChatDraftResult> {
-  const { sender, wechat_id, content, mode = 'review', tenant_id } = params;
+  const { sender, wechat_id, content, mode = 'review', tenant_id, agent_id } = params;
+
+  // 每客服配置（本地 DB = 引擎，决策 dd320e56）：带 agent_id 时优先用【这台机自己那份配置】
+  // 判白名单/人设/开关——每客户独立、改一个不动别人。解不到 → null，回落旧的飞书/全局逻辑（向后兼容）。
+  const csConfig = agent_id ? await getCSConfigByAgentId(agent_id) : null;
 
   // 多租户隔离 scope：路由已保证带租户才会调到这里（缺租户在路由层 4xx 拦截）。
   // 写入归属当前租户：以 tenant scope 留痕，确保草稿入库可追溯到租户，不串到其它租户。
@@ -263,7 +273,10 @@ export async function generateChatDraft(
   // 1) 白名单校验 —— 两种模式都查飞书"客户档案"名单（C1 修复：auto 不再无条件跳过）。
   //    名单成员关系是后续路由真值表的入参（名单外 → pending_human，绝不自动回陌生人）。
   let inWhitelist = false;
-  {
+  if (csConfig) {
+    // 每客服白名单（一键配置/前台填，将来飞书 sync 进来）—— sender 在该客服自己名单内才算客户。
+    inWhitelist = Array.isArray(csConfig.whitelist) && csConfig.whitelist.includes(sender);
+  } else {
     let customers: FeishuRecord[] = [];
     try {
       customers = await searchTable(getCustomerTableId(), sender);
@@ -287,7 +300,15 @@ export async function generateChatDraft(
   //     - route=auto → 继续生成 + 返回 reply（真发）。
   let autoShouldReturnReply = false;
   if (mode === 'auto') {
-    const cfg = await getAutoAgentConfig();
+    // 每客服配置在册 → 用这台机自己那份的开关/营业时间/日上限；否则回落全局。
+    const cfg = csConfig
+      ? {
+          auto_agent_enabled: csConfig.auto_agent_enabled,
+          business_hours_start: csConfig.business_hours_start,
+          business_hours_end: csConfig.business_hours_end,
+          daily_limit: csConfig.daily_limit,
+        }
+      : await getAutoAgentConfig();
     let businessHoursOk = true;
     try {
       const nowMin = params.now_minutes ?? nowMinutesLocal();
@@ -333,7 +354,8 @@ export async function generateChatDraft(
     console.warn('[wechat-draft] 写入站消息失败（不影响生成）:', err);
   }
 
-  const persona = await getPersona();
+  // 人设：每客服配置在册 → 用这台机自己的人设；否则回落全局。企业知识库暂仍全局（每客服 KB 后续）。
+  const persona = csConfig ? csConfig.persona : await getPersona();
   const kb = await getBusinessKB();
   let shortTerm: ChatMessage[] = [];
   let memory: ContactMemory = { summary: '', facts: [] as ContactFact[] };

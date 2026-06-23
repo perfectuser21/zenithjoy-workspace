@@ -141,6 +141,29 @@ export async function getCSConfigByMachine(machineId: string): Promise<CSAccount
   return getCSConfig(wechatId);
 }
 
+/**
+ * 按 agent_id 拉每客服配置：agent_id → license_machines.machine_id → 该客服配置。
+ * 中台草稿生成(generateChatDraft)用它拿这台机自己那份白名单/人设/开关，而不是查全局/飞书。
+ * 解不到(无 agent_id 链 / 未绑定 / 未配) → null（调用方回落旧逻辑，向后兼容）。
+ */
+export async function getCSConfigByAgentId(agentId: string): Promise<CSAccountConfig | null> {
+  let machineId: string | null = null;
+  try {
+    const res = await pool.query(
+      `SELECT machine_id FROM zenithjoy.license_machines
+        WHERE agent_id = $1 ORDER BY last_seen DESC LIMIT 1`,
+      [agentId],
+    );
+    const raw = res.rows?.[0]?.machine_id;
+    machineId = typeof raw === 'string' && raw.length > 0 ? raw : null;
+  } catch (err) {
+    console.warn(`[cs-account-config-store] getCSConfigByAgentId(${agentId}) 反查 machine 失败:`, err);
+    return null;
+  }
+  if (!machineId) return null;
+  return getCSConfigByMachine(machineId);
+}
+
 export interface PendingMachine {
   machine_id: string;
   hostname?: string;
@@ -193,16 +216,18 @@ export async function listPendingMachines(limit = 50): Promise<PendingMachine[]>
 export async function setupCSByMachine(
   machineId: string,
   patch: Partial<CSAccountConfig> & { persona: Persona; wechat_id?: string },
-): Promise<{ wechat_id: string }> {
+): Promise<{ wechat_id: string; agent_id: string | null }> {
   const ten = await pool.query(
-    `SELECT l.tenant_id
+    `SELECT l.tenant_id, lm.agent_id
        FROM zenithjoy.license_machines lm
        JOIN zenithjoy.licenses l ON l.id = lm.license_id
       WHERE lm.machine_id = $1
+      ORDER BY lm.last_seen DESC
       LIMIT 1`,
     [machineId],
   );
   const tenantId = ten.rows?.[0]?.tenant_id as string | undefined;
+  const agentId = (ten.rows?.[0]?.agent_id as string | undefined) ?? null;
   if (!tenantId) {
     throw new Error(`machine ${machineId} 未注册到任何 license/租户，无法配置`);
   }
@@ -218,7 +243,7 @@ export async function setupCSByMachine(
     [tenantId, machineId, wechatId],
   );
   await saveCSConfig(wechatId, patch);
-  return { wechat_id: wechatId };
+  return { wechat_id: wechatId, agent_id: agentId };
 }
 
 /**
