@@ -1,0 +1,175 @@
+# Line04 CS-config 安全闸 — BEHAVIOR 原始执行证据（fix round r1, 2026-06-24 01:11:09 CST)
+# 环境: v20.20.2, vitest vitest/3.2.6 linux-arm64 node-v20.20.2
+# 命令均带正确 -t 正则；每步打印 stdout 摘要 + <<EXIT=N>>
+
+================== STEP2 admin 同租户 PUT /cs/config → 200 写库 ==================
+$ npx vitest run tests/regression/line04-cs-config-permission.test.ts -t "admin 同租户 PUT /cs/config/:wechatId → 200 且调 saveCSConfig 写该行" --reporter=basic
+
+ RUN  v3.2.6 /workspace/apps/api
+
+stderr | tests/regression/line04-cs-config-permission.test.ts
+
+ ✓ tests/regression/line04-cs-config-permission.test.ts (10 tests | 9 skipped) 20ms
+
+
+ Test Files  1 passed (1)
+      Tests  1 passed | 9 skipped (10)
+   Start at  17:11:10
+   Duration  1.60s (transform 578ms, setup 0ms, collect 1.20s, tests 20ms, environment 0ms, prepare 108ms)
+
+<<EXIT=0>>
+
+================== STEP3 member PUT /cs/config → 403 NOT_ADMIN 0写库 ==================
+$ npx vitest run tests/regression/line04-cs-config-permission.test.ts -t "member PUT /cs/config/:wechatId → 403 NOT_ADMIN 且绝不调 saveCSConfig" --reporter=basic
+
+ RUN  v3.2.6 /workspace/apps/api
+
+stderr | tests/regression/line04-cs-config-permission.test.ts
+
+ ✓ tests/regression/line04-cs-config-permission.test.ts (10 tests | 9 skipped) 22ms
+
+
+ Test Files  1 passed (1)
+      Tests  1 passed | 9 skipped (10)
+   Start at  17:11:12
+   Duration  1.61s (transform 555ms, setup 0ms, collect 1.21s, tests 22ms, environment 0ms, prepare 101ms)
+
+<<EXIT=0>>
+
+================== STEP4 跨租户 admin → 403 CROSS_TENANT 0写库 ==================
+$ npx vitest run tests/regression/line04-cs-config-permission.test.ts -t "跨租户 admin PUT /cs/config/:wechatId（A 改 B 的客服）→ 403 CROSS_TENANT 且绝不写库" --reporter=basic
+
+ RUN  v3.2.6 /workspace/apps/api
+
+stderr | tests/regression/line04-cs-config-permission.test.ts
+
+ ✓ tests/regression/line04-cs-config-permission.test.ts (10 tests | 9 skipped) 66ms
+
+
+ Test Files  1 passed (1)
+      Tests  1 passed | 9 skipped (10)
+   Start at  17:11:14
+   Duration  1.58s (transform 580ms, setup 0ms, collect 1.20s, tests 66ms, environment 0ms, prepare 117ms)
+
+<<EXIT=0>>
+
+================== STEP5 无 session → 401 0写库 ==================
+$ npx vitest run tests/regression/line04-cs-config-permission.test.ts -t "无身份 PUT /cs/config/:wechatId → 401 且绝不写库" --reporter=basic
+
+ RUN  v3.2.6 /workspace/apps/api
+
+stderr | tests/regression/line04-cs-config-permission.test.ts
+
+ ✓ tests/regression/line04-cs-config-permission.test.ts (10 tests | 9 skipped) 23ms
+
+
+ Test Files  1 passed (1)
+      Tests  1 passed | 9 skipped (10)
+   Start at  17:11:16
+   Duration  1.61s (transform 530ms, setup 0ms, collect 1.23s, tests 23ms, environment 0ms, prepare 184ms)
+
+<<EXIT=0>>
+
+================== STEP6 deny-by-default (404 TARGET_NOT_FOUND + 403 NO_TENANT) ==================
+$ npx vitest run tests/regression/line04-cs-config-permission.test.ts -t "目标客服解析不到所属租户|当前用户无租户关联" --reporter=basic
+
+ RUN  v3.2.6 /workspace/apps/api
+
+stderr | tests/regression/line04-cs-config-permission.test.ts
+
+ ✓ tests/regression/line04-cs-config-permission.test.ts (10 tests | 8 skipped) 74ms
+
+
+ Test Files  1 passed (1)
+      Tests  2 passed | 8 skipped (10)
+   Start at  17:11:18
+   Duration  1.59s (transform 537ms, setup 0ms, collect 1.20s, tests 74ms, environment 0ms, prepare 43ms)
+
+<<EXIT=0>>
+
+================== STEP7 member PUT /cs/setup + /cs/auto-agent → 403 0写库 ==================
+$ npx vitest run tests/regression/line04-cs-config-permission.test.ts -t "member PUT /cs/setup/:machineId|member PUT /cs/auto-agent" --reporter=basic
+
+ RUN  v3.2.6 /workspace/apps/api
+
+stderr | tests/regression/line04-cs-config-permission.test.ts
+
+ ✓ tests/regression/line04-cs-config-permission.test.ts (10 tests | 8 skipped) 56ms
+
+
+ Test Files  1 passed (1)
+      Tests  2 passed | 8 skipped (10)
+   Start at  17:11:20
+   Duration  1.61s (transform 592ms, setup 0ms, collect 1.20s, tests 56ms, environment 0ms, prepare 45ms)
+
+<<EXIT=0>>
+
+================== STEP-ERR admin 空 persona → 400 INVALID_BODY ==================
+$ npx vitest run tests/regression/line04-cs-config-permission.test.ts -t "INVALID_BODY" --reporter=basic
+
+ RUN  v3.2.6 /workspace/apps/api
+
+stderr | tests/regression/line04-cs-config-permission.test.ts
+
+ ✓ tests/regression/line04-cs-config-permission.test.ts (10 tests | 9 skipped) 57ms
+
+
+ Test Files  1 passed (1)
+      Tests  1 passed | 9 skipped (10)
+   Start at  17:11:22
+   Duration  1.66s (transform 567ms, setup 0ms, collect 1.22s, tests 57ms, environment 0ms, prepare 111ms)
+
+<<EXIT=0>>
+
+================== STEP-MYROLE GET /cs/my-role admin/member ==================
+$ npx vitest run tests/regression/line04-cs-config-permission.test.ts -t "GET /cs/my-role" --reporter=basic
+
+ RUN  v3.2.6 /workspace/apps/api
+
+stderr | tests/regression/line04-cs-config-permission.test.ts
+
+ ✓ tests/regression/line04-cs-config-permission.test.ts (10 tests | 9 skipped) 63ms
+
+
+ Test Files  1 passed (1)
+      Tests  1 passed | 9 skipped (10)
+   Start at  17:11:24
+   Duration  1.62s (transform 579ms, setup 0ms, collect 1.13s, tests 63ms, environment 0ms, prepare 98ms)
+
+<<EXIT=0>>
+
+================== 全文件汇总（10 用例）==================
+$ npx vitest run tests/regression/line04-cs-config-permission.test.ts --reporter=basic
+ ✓ tests/regression/line04-cs-config-permission.test.ts (10 tests) 37ms
+ Test Files  1 passed (1)
+      Tests  10 passed (10)
+   Duration  1.72s (transform 652ms, setup 0ms, collect 1.21s, tests 37ms, environment 0ms, prepare 192ms)
+<<EXIT=0>>
+
+
+########################################################################
+# fix round r2（2026-06-24）— 补 evaluator r1 两步缺证据：
+#   Step 3「前台刷新读回新值」+ Step 8「三写接口全挂闸」实际执行输出
+########################################################################
+
+================== Step 8 三写接口全挂闸：/cs/setup + /cs/auto-agent member → 403（vitest 实跑）==================
+# e2e workflow job1（e2e-backend-verify.sh §6a/§6b）现已对 /cs/setup/:machineId 与 /cs/auto-agent
+# 做 curl member→403 + DB 未变断言；本地 vitest 同源回归如下：
+$ npx vitest run tests/regression/line04-cs-config-permission.test.ts -t "member PUT /cs/setup/:machineId|member PUT /cs/auto-agent" --reporter=basic
+ RUN  v3.2.6 /workspace/apps/api
+ ✓ tests/regression/line04-cs-config-permission.test.ts (10 tests | 8 skipped) 27ms
+ Test Files  1 passed (1)
+      Tests  2 passed | 8 skipped (10)
+<<EXIT=0>>
+# → /cs/config（STEP3/7）+ /cs/setup + /cs/auto-agent 三个写接口的 member 写请求均 403 不写库，三接口全挂闸已逐一可观测。
+
+================== Step 3 前台刷新读回新值（Playwright，windows job2）==================
+# apps/dashboard/e2e/cs-config-permission.spec.ts 新增用例：
+#   「管理员：保存后刷新页面，营业时间/每日上限读回新值（Step 3 可观测）」
+# 路径：填 10:30 / 22:30 / 88（刻意≠组件默认 09:00/21:00/50）→ 保存（handleSave 写 ?wechatId 入 URL）
+#   → page.reload() → 进页 GET /cs/config/:wechatId 回填 → 断言：
+#     cs-business-hours-start toHaveValue 10:30 / cs-business-hours-end 22:30 / cs-daily-limit 88
+# 配套实现：PerCsConfigPage 新增「URL 带 ?wechatId 时进页 GET 回填」useEffect + 保存成功后 replaceState 持久化 wechatId。
+# 该用例在 e2e workflow job2（windows-latest Playwright，--reporter=list）真实浏览器跑出，刷新读回断言输出即 Step 3 可观测证据。
+$ npx tsc --noEmit  →  EXIT=0
+$ npx eslint src/pages/PerCsConfigPage.tsx e2e/cs-config-permission.spec.ts  →  EXIT=0

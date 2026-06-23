@@ -33,8 +33,10 @@ psql "$DB" -t -c "SELECT persona->>'self_name' FROM zenithjoy.wechat_cs_account_
 echo "── 2. 两客服物理隔离不串台（钉死 Issue defe1a42）──"
 PA='{"persona":{"self_name":"萌萌","address_style":"x","tone":"x","sentence_style":"x","use_emoji":"x","banned_phrases":[],"few_shot":[]}}'
 PB='{"persona":{"self_name":"天下第一","address_style":"y","tone":"y","sentence_style":"y","use_emoji":"y","banned_phrases":[],"few_shot":[]},"auto_agent_enabled":true}'
-curl -sf -X PUT "$API/api/wechat/cs/config/wxid_csa" -H 'Content-Type: application/json' -d "$PA" | jq -e '.success == true and .config.persona.self_name == "萌萌"'
-curl -sf -X PUT "$API/api/wechat/cs/config/wxid_csb" -H 'Content-Type: application/json' -d "$PB" | jq -e '.config.auto_agent_enabled == true'
+# 写接口已加管理员/服务闸（Sprint 06232248 Issue 96db53be）：服务级 e2e 用 internal token 走超管/服务通道
+CSAUTH="X-Internal-Token: ${ZENITHJOY_INTERNAL_TOKEN:-ci-only-internal-token-not-prod}"
+curl -sf -X PUT "$API/api/wechat/cs/config/wxid_csa" -H 'Content-Type: application/json' -H "$CSAUTH" -d "$PA" | jq -e '.success == true and .config.persona.self_name == "萌萌"'
+curl -sf -X PUT "$API/api/wechat/cs/config/wxid_csb" -H 'Content-Type: application/json' -H "$CSAUTH" -d "$PB" | jq -e '.config.auto_agent_enabled == true'
 A=$(curl -sf "$API/api/wechat/cs/agent-config?wechat_id=wxid_csa")
 B=$(curl -sf "$API/api/wechat/cs/agent-config?wechat_id=wxid_csb")
 echo "$A" | jq -e '.persona.self_name == "萌萌" and .auto_agent_enabled == false'
@@ -52,7 +54,7 @@ AC=$(psql "$DB" -t -c "SELECT count(*) FROM zenithjoy.wechat_cs_identity_alert W
 [ "$AC" -ge 1 ] || { echo "FAIL: 诊断异常未入库"; exit 1; }
 
 echo "── 4. error path：PUT 空 persona → 400 INVALID_BODY ──"
-CODE=$(curl -s -o /tmp/badbody.json -w '%{http_code}' -X PUT "$API/api/wechat/cs/config/wxid_csa" -H 'Content-Type: application/json' -d '{"persona":{}}')
+CODE=$(curl -s -o /tmp/badbody.json -w '%{http_code}' -X PUT "$API/api/wechat/cs/config/wxid_csa" -H 'Content-Type: application/json' -H "$CSAUTH" -d '{"persona":{}}')
 [ "$CODE" = "400" ] || { echo "FAIL: 非法 body 未返 400 code=$CODE"; exit 1; }
 jq -e '.error == "INVALID_BODY"' /tmp/badbody.json
 

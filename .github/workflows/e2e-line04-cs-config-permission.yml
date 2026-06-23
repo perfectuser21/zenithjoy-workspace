@@ -1,0 +1,65 @@
+name: E2E Line04 CS Config Permission
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'apps/api/**'
+      - 'apps/dashboard/**'
+      - 'sprints/06232248-line04-cs-config-permission/**'
+      - '.github/workflows/e2e-line04-cs-config-permission.yml'
+
+concurrency:
+  group: e2e-line04-cs-config-permission-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend-isolation:                       # job1：后端越权/隔离/deny-by-default（postgres service 仅 Linux）
+    name: job1 — 后端 curl+psql（ubuntu + postgres）
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    # 凭据均走 secrets 上下文（未配置时用 fallback 临时值）——postgres service 容器随 runner 销毁、
+    # auth secret/token 是 ci-only 非生产值，无任何真实凭据明文入库。
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: ${{ secrets.CI_PG_USER || 'cecelia' }}
+          POSTGRES_PASSWORD: ${{ secrets.CI_PG_PASSWORD || 'cecelia' }}
+          POSTGRES_DB: ${{ secrets.CI_PG_DB || 'cecelia' }}
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready --health-interval 10s
+          --health-timeout 5s --health-retries 5
+    env:
+      DATABASE_URL: postgresql://${{ secrets.CI_PG_USER || 'cecelia' }}:${{ secrets.CI_PG_PASSWORD || 'cecelia' }}@localhost:5432/${{ secrets.CI_PG_DB || 'cecelia' }}
+      DATABASE_HOST: localhost
+      DATABASE_PORT: '5432'
+      DATABASE_USER: ${{ secrets.CI_PG_USER || 'cecelia' }}
+      DATABASE_PASSWORD: ${{ secrets.CI_PG_PASSWORD || 'cecelia' }}
+      DATABASE_NAME: ${{ secrets.CI_PG_DB || 'cecelia' }}
+      BETTER_AUTH_SECRET: ${{ secrets.CI_BETTER_AUTH_SECRET || 'ci-only-secret-32-chars-min-not-prod-123' }}
+      BETTER_AUTH_URL: http://localhost:3000
+      ZENITHJOY_INTERNAL_TOKEN: ${{ secrets.CI_INTERNAL_TOKEN || 'ci-only-internal-token-not-prod' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: package-lock.json
+      - name: Backend E2E（curl 中台 API 越权断言 + psql 验 DB 未变 / 时间窗）
+        run: bash sprints/06232248-line04-cs-config-permission/e2e-backend-verify.sh
+
+  dashboard-ui:                            # job2：前台客服配置权限 Playwright UI（windows，无 DB）
+    name: job2 — 前台客服配置权限 Playwright UI（windows）
+    runs-on: windows-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Dashboard UI E2E（Playwright，page.route 拦截后端）
+        shell: pwsh
+        run: ./sprints/06232248-line04-cs-config-permission/e2e-ui-verify.ps1

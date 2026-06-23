@@ -1,6 +1,3 @@
-contract_branch: cp-harness-propose-r2-40f8ef0b-a2
-sprint_dir: sprints/06232248-line04-cs-config-permission
-
 ---
 skeleton: false
 journey_type: user_facing
@@ -46,11 +43,11 @@ journey_type: user_facing
   期望: exit 0（401 + saveCSConfig 0 调用）
 
 - [ ] [BEHAVIOR] deny by default — 目标客服解析不到租户 → 404 TARGET_NOT_FOUND 且不写库；当前用户无租户 → 403 NO_TENANT 且不写库
-  Test: manual:bash -c 'cd apps/api && npx vitest run tests/regression/line04-cs-config-permission.test.ts -t "目标客服解析不到所属租户|当前用户无租户关联" --reporter=basic'
+  Test: manual:bash -c 'cd apps/api && npx vitest run tests/regression/line04-cs-config-permission.test.ts -t "目标客服解析不到所属租户" -t "当前用户无租户关联" --reporter=basic'
   期望: exit 0（404 TARGET_NOT_FOUND + 403 NO_TENANT，两者 0 写库）
 
 - [ ] [BEHAVIOR] 第二、三个写接口同样挂闸 — member PUT /cs/setup/:machineId 与 /cs/auto-agent → 403 且 0 写库
-  Test: manual:bash -c 'cd apps/api && npx vitest run tests/regression/line04-cs-config-permission.test.ts -t "member PUT /cs/setup/:machineId|member PUT /cs/auto-agent" --reporter=basic'
+  Test: manual:bash -c 'cd apps/api && npx vitest run tests/regression/line04-cs-config-permission.test.ts -t "member PUT /cs/setup/:machineId" -t "member PUT /cs/auto-agent" --reporter=basic'
   期望: exit 0（两接口 member 403，setupCSByMachine / saveAutoAgentConfig 0 调用）
 
 - [ ] [BEHAVIOR] error path — 既有 zod body 校验保持不变：admin 合法身份传空 persona → 400 INVALID_BODY（不被新闸吞掉，也不误判 403）

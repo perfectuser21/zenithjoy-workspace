@@ -32,6 +32,9 @@ export default function CsOneClickSetupPage() {
   const [keyContact, setKeyContact] = useState('');
   const [whitelist, setWhitelist] = useState('');
   const [autoAgent, setAutoAgent] = useState(true);
+  const [businessHoursStart, setBusinessHoursStart] = useState('09:00');
+  const [businessHoursEnd, setBusinessHoursEnd] = useState('21:00');
+  const [dailyLimit, setDailyLimit] = useState('50');
   const [saving, setSaving] = useState(false);
   const [done, setDone] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -93,6 +96,9 @@ export default function CsOneClickSetupPage() {
           },
           auto_agent_enabled: autoAgent,
           key_contact_wechat: keyContact.trim(),
+          business_hours_start: businessHoursStart,
+          business_hours_end: businessHoursEnd,
+          daily_limit: Number.parseInt(dailyLimit, 10) || 0,
           whitelist: whitelist
             .split(/[\n,，、]/)
             .map((s) => s.trim())
@@ -241,6 +247,41 @@ export default function CsOneClickSetupPage() {
             value={keyContact}
             onChange={(e) => setKeyContact(e.target.value)}
             placeholder="比如：默忆"
+            className="w-full px-3 py-2 rounded border border-slate-300 dark:border-slate-600 dark:bg-slate-900 text-sm"
+          />
+        </div>
+        {/* 营业时间 + 每日上限（Issue d2987606 补全后端已支持的配置项前台入口） */}
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm text-gray-600 dark:text-gray-300 mb-1">营业时间（开始）</label>
+            <input
+              type="time"
+              data-testid="setup-business-hours-start"
+              value={businessHoursStart}
+              onChange={(e) => setBusinessHoursStart(e.target.value)}
+              className="w-full px-3 py-2 rounded border border-slate-300 dark:border-slate-600 dark:bg-slate-900 text-sm"
+            />
+          </div>
+          <div>
+            <label className="block text-sm text-gray-600 dark:text-gray-300 mb-1">营业时间（结束）</label>
+            <input
+              type="time"
+              data-testid="setup-business-hours-end"
+              value={businessHoursEnd}
+              onChange={(e) => setBusinessHoursEnd(e.target.value)}
+              className="w-full px-3 py-2 rounded border border-slate-300 dark:border-slate-600 dark:bg-slate-900 text-sm"
+            />
+          </div>
+        </div>
+        <div>
+          <label className="block text-sm text-gray-600 dark:text-gray-300 mb-1">每日上限（每号每日自动回条数，0 = 不限）</label>
+          <input
+            type="number"
+            min={0}
+            data-testid="setup-daily-limit"
+            value={dailyLimit}
+            onChange={(e) => setDailyLimit(e.target.value)}
+            placeholder="50"
             className="w-full px-3 py-2 rounded border border-slate-300 dark:border-slate-600 dark:bg-slate-900 text-sm"
           />
         </div>

@@ -42,6 +42,8 @@ import {
   setupCSByMachine,
 } from '../services/wechat/cs-account-config-store';
 import { superAdminGuard } from '../middleware/super-admin';
+import { tenantContext } from '../middleware/tenant-context';
+import { requireCsAdminOrSuperAdmin, requireCsWriteAccess } from '../middleware/cs-config-guard';
 import type { KBAudienceSegment } from '../services/wechat/types';
 
 export const wechatConfigRouter = Router();
@@ -262,7 +264,10 @@ wechatConfigRouter.get('/cs/auto-agent', superAdminGuard, async (_req: Request, 
   return res.status(200).json(cfg);
 });
 
-wechatConfigRouter.put('/cs/auto-agent', superAdminGuard, async (req: Request, res: Response) => {
+// 鉴权升级（Issue 96db53be）：原 superAdminGuard 只认飞书白名单 / internal token，不认
+// dashboard better-auth session。改用兼容闸 requireCsAdminOrSuperAdmin —— 既保留 legacy 服务/超管
+// 通道（中台→出站任务服务流），又放行 dashboard 租户管理员（session）；member/无凭证 → 403。
+wechatConfigRouter.put('/cs/auto-agent', requireCsAdminOrSuperAdmin, async (req: Request, res: Response) => {
   const parsed = AutoAgentConfigSchema.safeParse(req.body ?? {});
   if (!parsed.success) return invalidBody(res, parsed.error);
   const { agent_id, ...cfgPatch } = parsed.data;
@@ -307,8 +312,20 @@ const CSAccountConfigBodySchema = z
   })
   .strict();
 
+// GET /api/wechat/cs/my-role — 供前台渲染只读态（管理员可编辑 / member 只读）
+wechatConfigRouter.get('/cs/my-role', tenantContext, (req: Request, res: Response) => {
+  const role = req.tenantRole ?? 'member';
+  const can_config = role === 'owner' || role === 'admin' || role === 'super-admin';
+  return res.status(200).json({ role, can_config });
+});
+
 // PUT /api/wechat/cs/config/:wechatId — 按微信号 upsert 该客服那一行（只写该行）
-wechatConfigRouter.put('/cs/config/:wechatId', async (req: Request, res: Response) => {
+//   安全闸（Issue 96db53be）：tenantContext（401/403 NO_TENANT）→ 管理员角色闸（403 NOT_ADMIN）
+//   → 租户隔离（403 CROSS_TENANT / 404 TARGET_NOT_FOUND，deny by default）。
+wechatConfigRouter.put(
+  '/cs/config/:wechatId',
+  requireCsWriteAccess('wechatId'),
+  async (req: Request, res: Response) => {
   const wechatId = req.params.wechatId;
   const parsed = CSAccountConfigBodySchema.safeParse(req.body ?? {});
   if (!parsed.success) return invalidBody(res, parsed.error);
@@ -391,7 +408,11 @@ const CSSetupBodySchema = z
 
 // PUT /api/wechat/cs/setup/:machineId — 一键配置：自动解析租户 + 自动绑定 + 写配置
 //   管理员不碰 machine_id（从 pending 列表挑那台机器）；机器没注册过 → 400。
-wechatConfigRouter.put('/cs/setup/:machineId', async (req: Request, res: Response) => {
+//   安全闸（Issue 96db53be）：tenantContext → 管理员角色闸 → 租户隔离（按 machineId 解析所属租户）。
+wechatConfigRouter.put(
+  '/cs/setup/:machineId',
+  requireCsWriteAccess('machineId'),
+  async (req: Request, res: Response) => {
   const parsed = CSSetupBodySchema.safeParse(req.body ?? {});
   if (!parsed.success) return invalidBody(res, parsed.error);
   try {
