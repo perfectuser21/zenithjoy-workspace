@@ -350,8 +350,8 @@ wechatConfigRouter.get('/cs/agent-config', async (req: Request, res: Response) =
     return res.status(403).json({
       error: machineId ? 'UNBOUND_MACHINE' : 'UNREGISTERED_WECHAT',
       message: machineId
-        ? '该客户机未绑定客服微信号（或微信号未配置），拒绝下发配置'
-        : '该微信号未在中台注册，拒绝下发配置',
+        ? '这台机器还没配置成客服——去前台「我的客服机」选它，填人设/白名单即可生效（无需任何注册）'
+        : '这个微信号还没配置——去前台「我的客服机」配置后生效',
     });
   }
   return res.status(200).json(config);

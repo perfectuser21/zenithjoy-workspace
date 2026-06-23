@@ -9,7 +9,7 @@ import { Link, useLocation } from 'react-router-dom';
 import type { LucideIcon } from 'lucide-react';
 import {
   Send, Music2, Folder, Database, Factory, Sparkles,
-  Target, KeyRound, MessageCircle, Users, Download,
+  Target, KeyRound, MessageCircle, Download,
   Scissors, Video, Building2, MonitorCheck, Activity, ShieldCheck,
 } from 'lucide-react';
 
@@ -53,12 +53,11 @@ export const AREA_HUBS: Record<string, AreaHub> = {
   },
   wechat: {
     title: '私域客服',
-    subtitle: '微信号 AI 接管：自动回复、关键人播报，按客服分别配置。',
+    subtitle: '微信号 AI 接管：每台客服机一处看健康、一处配人设/白名单/开关。',
     cards: [
-      { label: '一键配置', desc: '选机器→填人设/白名单/开关→设置完毕，自动生效', to: '/wechat/setup', Icon: Sparkles, color: 'text-sky-500' },
-      { label: '下载客户机', desc: '在客服 PC 上装 Agent，连中台', to: '/dashboard/agent', Icon: Download, color: 'text-emerald-500' },
-      { label: '微信客服配置（高级）', desc: '人设、营业时间、自动回复总开关', to: '/wechat/cs-config', Icon: MessageCircle, color: 'text-green-500' },
-      { label: '每客服设置（高级）', desc: '按微信号单独设人设/白名单/开关', to: '/wechat/per-cs-config', Icon: Users, color: 'text-teal-500' },
+      { label: '我的客服机', desc: '所有机器一处看（在线/微信状态）+ 点一台配人设/白名单/开关', to: '/wechat/setup', Icon: Sparkles, color: 'text-sky-500' },
+      { label: '下载客户机', desc: '在客服 PC 上装 Agent，装好自动报到这里', to: '/dashboard/agent', Icon: Download, color: 'text-emerald-500' },
+      { label: '话术知识库', desc: '公司/产品/人群/常见问答（AI 回复的素材，全客服共用）', to: '/wechat/cs-config', Icon: MessageCircle, color: 'text-green-500' },
     ],
   },
   video: {
