@@ -1,0 +1,33 @@
+{
+  "initiative_id": "90617c40-defb-4bcc-9d03-90c7eda97052",
+  "journey_type": "user_facing",
+  "journey_type_reason": "核心交付物是 apps/dashboard 下「客服工作汇总」前台页面，管理员可见，故 user_facing",
+  "tasks": [
+    {
+      "task_id": "ws1",
+      "title": "客服工作汇总：消息盖客服身份章 + 北京时区每客服每日 4 数 stats 接口 + 前台汇总页（今天/昨天）",
+      "scope": "给 cs_memory_messages 加 nullable cs_wechat_id + (cs_wechat_id, created_at) 索引；in/out 落库经已有身份解析链（agent_id→machine→service_agents→wechat_id）盖 cs_wechat_id，落到被 stats 聚合的 cs_memory_messages（解不到落 NULL 不报错）；新增 GET /api/wechat/cs/stats?date=today|yesterday，按北京时区(Asia/Shanghai)每客服聚合 received_count/reply_count/served_customers/work_duration_minutes，NULL 身份不计入、A/B 不串台；前台「客服工作汇总」页每客服一张卡 + 今天/昨天切换，挂 Line04 区导航。不回填历史、无趋势图、无总计行、无导出。",
+      "dod": [
+        "[ARTIFACT] migration 加 cs_wechat_id nullable 列 + (cs_wechat_id, created_at) 索引",
+        "[ARTIFACT] apps/dashboard CsWorkStats 页 + 路由 + navigation.config.ts Line04 入口 + apps/dashboard/e2e/cs-work-stats.spec.ts",
+        "[BEHAVIOR] cs-stats-verify.sh math/isolation/null/tz/yesterday/empty-zero 全 PASS（4 数口径 + 北京时区 + NULL 不计入 + 不串台 + 空日不报错）",
+        "[BEHAVIOR] cs-stats-verify.sh stamp PASS（in 落库经真身份链盖 cs_wechat_id；out 标 logic-done-pending 需真目标 LLM 补验）",
+        "[BEHAVIOR] GET /api/wechat/cs/stats?date=garbage → HTTP 400 + error 字段为字符串",
+        "[BEHAVIOR:E2E] windows_cloud Playwright cs-work-stats.spec.ts 全绿（卡片 4 数 toHaveText + 今天/昨天切换数字变化 + 不串台 + 空卡 4 零）"
+      ],
+      "files": [
+        "apps/api/db/migrations/<新>_add_cs_wechat_id.sql",
+        "apps/api/src/services/wechat/tenant-memory.ts",
+        "apps/api/src/services/wechat-draft.ts",
+        "apps/api/src/services/wechat/cs-stats.ts",
+        "apps/api/src/routes/wechat.ts",
+        "apps/dashboard/src/pages/CsWorkStatsPage.tsx",
+        "apps/dashboard/src/config/navigation.config.ts",
+        "apps/dashboard/e2e/cs-work-stats.spec.ts"
+      ],
+      "depends_on": [],
+      "complexity": "M",
+      "estimated_minutes": 110
+    }
+  ]
+}
