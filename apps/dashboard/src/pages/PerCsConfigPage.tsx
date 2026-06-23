@@ -50,6 +50,40 @@ export default function PerCsConfigPage() {
     }
   }, [])
 
+  // 进页若 URL 带 ?wechatId= → 拉该客服已存配置回填（保存成功后刷新页面据此读回新值，Issue d2987606 验收 Step 3）
+  useEffect(() => {
+    const wid = new URLSearchParams(window.location.search).get('wechatId')
+    if (!wid) return
+    setWechatId(wid)
+    let alive = true
+    ;(async () => {
+      try {
+        const res = await fetch(`/api/wechat/cs/config/${encodeURIComponent(wid)}`)
+        if (!res.ok) return // 尚无配置（404）等 → 沿用默认值，不阻塞
+        const cfg = (await res.json()) as {
+          persona?: { self_name?: string }
+          auto_agent_enabled?: boolean
+          business_hours_start?: string
+          business_hours_end?: string
+          daily_limit?: number
+          whitelist?: string[]
+        }
+        if (!alive) return
+        if (cfg.persona?.self_name != null) setSelfName(cfg.persona.self_name)
+        if (typeof cfg.auto_agent_enabled === 'boolean') setAutoAgent(cfg.auto_agent_enabled)
+        if (cfg.business_hours_start) setBusinessHoursStart(cfg.business_hours_start)
+        if (cfg.business_hours_end) setBusinessHoursEnd(cfg.business_hours_end)
+        if (typeof cfg.daily_limit === 'number') setDailyLimit(String(cfg.daily_limit))
+        if (Array.isArray(cfg.whitelist)) setWhitelist(cfg.whitelist.join(', '))
+      } catch {
+        /* 拉不到已存配置不阻塞，沿用默认值 */
+      }
+    })()
+    return () => {
+      alive = false
+    }
+  }, [])
+
   const handleSave = async () => {
     setSaving(true)
     setError(null)
@@ -82,6 +116,10 @@ export default function PerCsConfigPage() {
       if (!res.ok) throw new Error(`保存失败 (${res.status})`)
       const data = (await res.json()) as { config?: SavedConfig }
       setSavedName(data.config?.persona?.self_name ?? selfName)
+      // 持久化 wechatId 到 URL，使刷新页面后能 GET 回填读回新值（Step 3 可观测）
+      const u = new URL(window.location.href)
+      u.searchParams.set('wechatId', wechatId)
+      window.history.replaceState(null, '', u.toString())
     } catch (e) {
       setError(e instanceof Error ? e.message : '保存失败')
     } finally {

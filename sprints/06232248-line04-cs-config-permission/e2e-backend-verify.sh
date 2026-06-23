@@ -55,6 +55,22 @@ jq -e '.error.code == "TARGET_NOT_FOUND"' /tmp/d.json
 DC=$(psql "$DB" -t -c "SELECT count(*) FROM zenithjoy.wechat_cs_account_config WHERE wechat_id='wxid_never_zzz'" | tr -d ' ')
 [ "$DC" = "0" ] || { echo "FAIL: deny-by-default 仍写了库 cnt=$DC"; exit 1; }
 
+echo "── 6. Step 8 三写接口全挂闸：member 改 /cs/setup + /cs/auto-agent 同样 403 不写库 ──"
+# 6a. PUT /cs/setup/:machineId（machine-csa → wxid_csa），member → 403 NOT_ADMIN 且 wxid_csa 那行不被改
+SU_BEFORE=$(psql "$DB" -t -c "SELECT updated_at FROM zenithjoy.wechat_cs_account_config WHERE wechat_id='wxid_csa'" | tr -d ' ')
+SETUP_BODY=$(jq -n --argjson p "$PERSONA" '{persona:$p, business_hours_start:"08:00", daily_limit:30}')
+CODE=$(curl -s -o /tmp/su.json -w '%{http_code}' -X PUT "$API/api/wechat/cs/setup/machine-csa" -H 'Content-Type: application/json' -H 'X-Feishu-User-Id: user-member-A' -d "$SETUP_BODY")
+[ "$CODE" = "403" ] || { echo "FAIL: member /cs/setup 未被拒 code=$CODE"; cat /tmp/su.json; exit 1; }
+jq -e '.error.code == "NOT_ADMIN"' /tmp/su.json
+SU_AFTER=$(psql "$DB" -t -c "SELECT updated_at FROM zenithjoy.wechat_cs_account_config WHERE wechat_id='wxid_csa'" | tr -d ' ')
+[ "$SU_BEFORE" = "$SU_AFTER" ] || { echo "FAIL: member /cs/setup 越权改了 DB before=$SU_BEFORE after=$SU_AFTER"; exit 1; }
+
+# 6b. PUT /cs/auto-agent（全局自动代理配置），member → 403 NOT_ADMIN（闸在写库前拦下）
+CODE=$(curl -s -o /tmp/aa.json -w '%{http_code}' -X PUT "$API/api/wechat/cs/auto-agent" -H 'Content-Type: application/json' -H 'X-Feishu-User-Id: user-member-A' -d '{"auto_agent_enabled":true}')
+[ "$CODE" = "403" ] || { echo "FAIL: member /cs/auto-agent 未被拒 code=$CODE"; cat /tmp/aa.json; exit 1; }
+jq -e '.error.code == "NOT_ADMIN"' /tmp/aa.json
+echo "✅ Step 8 三写接口全挂闸：/cs/config + /cs/setup + /cs/auto-agent 的 member 写请求均 403 不写库"
+
 # gate-allow: cheat/or-true 这是 teardown — 清理后台 API 进程，非断言；进程已退时 kill 失败必须忽略（不影响越权/隔离/deny 等真实验收结论）
 kill "$(cat /tmp/api.pid)" 2>/dev/null || true
-echo "✅ job1 后端全过：管理员写入(时间窗) + member 403 不写库 + 跨租户 403 不写库 + 无 session 401 + deny-by-default 404 不写库"
+echo "✅ job1 后端全过：管理员写入(时间窗) + member 403 不写库 + 跨租户 403 不写库 + 无 session 401 + deny-by-default 404 不写库 + /cs/setup + /cs/auto-agent member 403 不写库（三接口全挂闸）"
