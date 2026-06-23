@@ -142,16 +142,24 @@ export async function getCSConfigByMachine(machineId: string): Promise<CSAccount
 }
 
 /**
- * 按 agent_id 拉每客服配置：agent_id → license_machines.machine_id → 该客服配置。
+ * 按 agent 身份拉每客服配置：agent 身份 → license_machines.machine_id → 该客服配置。
  * 中台草稿生成(generateChatDraft)用它拿这台机自己那份白名单/人设/开关，而不是查全局/飞书。
- * 解不到(无 agent_id 链 / 未绑定 / 未配) → null（调用方回落旧逻辑，向后兼容）。
+ *
+ * agent 身份两种都认（决策 8383f3e3）：
+ *  - env-id（agents.agent_id 文本列，= license_machines.agent_id）→ 直接命中
+ *  - register 返的 agents.id UUID（core setIdentity 传 agentUuid）→ 经 agents 折成 env-id 再命中
+ * listener 实际传的是 UUID，只按 env-id 查会落空 → 回落飞书 → 名单内被拒（2026-06-23 实测根因）。
+ * 解不到(无链 / 未绑定 / 未配) → null（调用方回落旧逻辑，向后兼容）。
  */
 export async function getCSConfigByAgentId(agentId: string): Promise<CSAccountConfig | null> {
   let machineId: string | null = null;
   try {
     const res = await pool.query(
-      `SELECT machine_id FROM zenithjoy.license_machines
-        WHERE agent_id = $1 ORDER BY last_seen DESC LIMIT 1`,
+      `SELECT lm.machine_id
+         FROM zenithjoy.license_machines lm
+        WHERE lm.agent_id = $1
+           OR lm.agent_id IN (SELECT agent_id FROM zenithjoy.agents WHERE id::text = $1)
+        ORDER BY lm.last_seen DESC LIMIT 1`,
       [agentId],
     );
     const raw = res.rows?.[0]?.machine_id;

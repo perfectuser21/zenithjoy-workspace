@@ -105,8 +105,11 @@ async function resolveTenantId(req: Request): Promise<string> {
     req.body && typeof req.body.agent_id === 'string' ? req.body.agent_id.trim() : '';
   if (!agentId) return '';
   try {
+    // listen_chat 的 agent_id 可能是 env-id（agents.agent_id 文本列）或 register 返的
+    // agents.id UUID（core setIdentity 传 agentUuid??agentId）。两种都认，否则 listener 传
+    // UUID 时按 agent_id 列查不到 → NO_TENANT_CONTEXT，名单内也静默不回（2026-06-23 实测根因）。
     const { rows } = await pool.query(
-      'SELECT tenant_id FROM zenithjoy.agents WHERE agent_id = $1 LIMIT 1',
+      'SELECT tenant_id FROM zenithjoy.agents WHERE agent_id = $1 OR id::text = $1 LIMIT 1',
       [agentId],
     );
     if (rows[0] && rows[0].tenant_id) return String(rows[0].tenant_id).trim();
