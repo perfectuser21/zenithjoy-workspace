@@ -20,9 +20,11 @@ done
 
 echo "── 1. seed：两客服各自配置 + 一租户 + 四种绑定 ──"
 TEN=$(psql "$DB" -t -A -c "INSERT INTO zenithjoy.tenants(name,license_key) VALUES ('e2e-cw','e2e-cw-license-key') RETURNING id" | head -1 | tr -d '[:space:]')
-curl -sf -X PUT "$API/api/wechat/cs/config/wxid_csa" -H 'Content-Type: application/json' \
+# 写接口已加管理员/服务闸（Sprint 06232248 Issue 96db53be）：服务级 e2e 用 internal token 走超管/服务通道
+CSAUTH="X-Internal-Token: ${ZENITHJOY_INTERNAL_TOKEN:-ci-only-internal-token}"
+curl -sf -X PUT "$API/api/wechat/cs/config/wxid_csa" -H 'Content-Type: application/json' -H "$CSAUTH" \
   -d '{"persona":{"self_name":"萌萌","address_style":"x","tone":"x","sentence_style":"x","use_emoji":"x","banned_phrases":[],"few_shot":[]},"whitelist":["客户甲"]}' >/dev/null
-curl -sf -X PUT "$API/api/wechat/cs/config/wxid_csb" -H 'Content-Type: application/json' \
+curl -sf -X PUT "$API/api/wechat/cs/config/wxid_csb" -H 'Content-Type: application/json' -H "$CSAUTH" \
   -d '{"persona":{"self_name":"天下第一","address_style":"y","tone":"y","sentence_style":"y","use_emoji":"y","banned_phrases":[],"few_shot":[]},"auto_agent_enabled":true}' >/dev/null
 # 四种绑定：A→csa(已配)、B→csb(已配)、C→已绑没填号、D→填了号但该号没配过
 psql "$DB" -q -c "INSERT INTO zenithjoy.service_agents(tenant_id,machine_id,wechat_id) VALUES

@@ -79,6 +79,25 @@ export function requireCsAdminOrSuperAdmin(req: Request, res: Response, next: Ne
   tenantContext(req, res, () => requireCsAdmin(req, res, next));
 }
 
+/**
+ * /cs/config/:wechatId、/cs/setup/:machineId 写接口闸（带 per-tenant 目标隔离）：
+ *   1) legacy 服务/超管：飞书白名单 id 或 internal token（superAdminGuard）——保留服务/自动化写入流，
+ *      与 super-admin 一样跨租户放行（service-level 写入按 wechat_id/machine_id 物理分行已天然隔离）。
+ *   2) dashboard 租户管理员：tenantContext → requireCsAdmin → requireSameTenant(kind)（角色闸 + 租户隔离）。
+ * member / 无凭证 → 403/401；跨租户 dashboard 用户 → 403 CROSS_TENANT；解析不出目标 → 404 TARGET_NOT_FOUND。
+ */
+export function requireCsWriteAccess(kind: 'wechatId' | 'machineId') {
+  return function (req: Request, res: Response, next: NextFunction): void {
+    if (hasLegacyServiceCredential(req)) {
+      superAdminGuard(req, res, next);
+      return;
+    }
+    tenantContext(req, res, () =>
+      requireCsAdmin(req, res, () => requireSameTenant(kind)(req, res, next))
+    );
+  };
+}
+
 /** 目标客服（wechat_id）→ 所属租户 tenant_id；查不到返回 null。 */
 async function resolveTenantByWechatId(wechatId: string): Promise<string | null> {
   const r = await pool.query(

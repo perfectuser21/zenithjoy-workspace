@@ -43,7 +43,7 @@ import {
 } from '../services/wechat/cs-account-config-store';
 import { superAdminGuard } from '../middleware/super-admin';
 import { tenantContext } from '../middleware/tenant-context';
-import { requireCsAdmin, requireSameTenant, requireCsAdminOrSuperAdmin } from '../middleware/cs-config-guard';
+import { requireCsAdminOrSuperAdmin, requireCsWriteAccess } from '../middleware/cs-config-guard';
 import type { KBAudienceSegment } from '../services/wechat/types';
 
 export const wechatConfigRouter = Router();
@@ -324,9 +324,7 @@ wechatConfigRouter.get('/cs/my-role', tenantContext, (req: Request, res: Respons
 //   → 租户隔离（403 CROSS_TENANT / 404 TARGET_NOT_FOUND，deny by default）。
 wechatConfigRouter.put(
   '/cs/config/:wechatId',
-  tenantContext,
-  requireCsAdmin,
-  requireSameTenant('wechatId'),
+  requireCsWriteAccess('wechatId'),
   async (req: Request, res: Response) => {
   const wechatId = req.params.wechatId;
   const parsed = CSAccountConfigBodySchema.safeParse(req.body ?? {});
@@ -413,9 +411,7 @@ const CSSetupBodySchema = z
 //   安全闸（Issue 96db53be）：tenantContext → 管理员角色闸 → 租户隔离（按 machineId 解析所属租户）。
 wechatConfigRouter.put(
   '/cs/setup/:machineId',
-  tenantContext,
-  requireCsAdmin,
-  requireSameTenant('machineId'),
+  requireCsWriteAccess('machineId'),
   async (req: Request, res: Response) => {
   const parsed = CSSetupBodySchema.safeParse(req.body ?? {});
   if (!parsed.success) return invalidBody(res, parsed.error);
