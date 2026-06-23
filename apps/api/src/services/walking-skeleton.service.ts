@@ -93,8 +93,10 @@ export interface RequiredAgentVersion {
 }
 
 // manifest 不可读时的兜底版本。必须 <= 已发布的最新核心，且随核心 bump 同步抬高。
-// 当前核心自升级首版 = 2.0.22。
-export const DEFAULT_REQUIRED_AGENT_VERSION = '2.0.22';
+// bump 到 2.0.23：含 module-manager→模块 config IPC 的 machineId 透传（#826），真客户机
+// 自升 2.0.23 后 listen_chat 能直接拿到 machineId 拉每客服配置，不再靠手设 env ZENITHJOY_MACHINE_ID。
+// 核心包按约定 install-pack/zenithjoy-agent-v2.0.23.tar.gz 从 COS 下载（已发布）。
+export const DEFAULT_REQUIRED_AGENT_VERSION = '2.0.23';
 
 /**
  * 返回心跳要下发的核心要求版本。
