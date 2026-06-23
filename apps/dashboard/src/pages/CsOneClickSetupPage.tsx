@@ -17,6 +17,11 @@ interface CSMachine {
   self_name?: string;
   whitelist?: string[];
   auto_agent_enabled?: boolean;
+  online?: boolean;
+  wechat_ok?: boolean;
+  wechat_reason?: string;
+  found_window?: boolean;
+  login_present?: boolean;
 }
 
 export default function CsOneClickSetupPage() {
@@ -138,7 +143,7 @@ export default function CsOneClickSetupPage() {
             {machines.map((m) => (
               <label
                 key={m.machine_id}
-                className={`flex items-center gap-2 p-2 rounded border cursor-pointer ${
+                className={`flex items-start gap-2 p-2 rounded border cursor-pointer ${
                   machineId === m.machine_id
                     ? 'border-sky-500 bg-sky-50 dark:bg-sky-900/20'
                     : 'border-slate-200 dark:border-slate-700'
@@ -151,26 +156,52 @@ export default function CsOneClickSetupPage() {
                   checked={machineId === m.machine_id}
                   onChange={() => selectMachine(m)}
                   data-testid="machine-radio"
+                  className="mt-1"
                 />
-                <span className="text-sm text-gray-700 dark:text-gray-200">
-                  {m.hostname ? (
-                    <>
-                      <span className="font-medium">{m.hostname}</span>
-                      <span className="font-mono text-xs text-gray-400 ml-2">{m.machine_id.slice(0, 8)}…</span>
-                    </>
-                  ) : (
-                    <span className="font-mono">机器 {m.machine_id.slice(0, 12)}…</span>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-sm text-gray-700 dark:text-gray-200">
+                      {m.hostname ? (
+                        <>
+                          <span className="font-medium">{m.hostname}</span>
+                          <span className="font-mono text-xs text-gray-400 ml-2">{m.machine_id.slice(0, 8)}…</span>
+                        </>
+                      ) : (
+                        <span className="font-mono">机器 {m.machine_id.slice(0, 12)}…</span>
+                      )}
+                    </span>
+                    {/* 在线状态 */}
+                    <span
+                      className={`text-xs px-1.5 py-0.5 rounded ${
+                        m.online
+                          ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
+                          : 'bg-gray-100 text-gray-500 dark:bg-slate-700 dark:text-gray-400'
+                      }`}
+                    >
+                      {m.online ? '● 在线' : '○ 离线'}
+                    </span>
+                    {/* 配置状态 */}
+                    {m.configured ? (
+                      <span className="text-xs px-1.5 py-0.5 rounded bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-400">
+                        已配{m.whitelist?.length ? ` · 白名单${m.whitelist.length}人` : ''}
+                      </span>
+                    ) : (
+                      <span className="text-xs px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
+                        待配置
+                      </span>
+                    )}
+                  </div>
+                  {/* 微信健康：好了显绿，坏了显精确原因（整合诊断，一处看到） */}
+                  {m.online && (
+                    <div className="text-xs mt-1">
+                      {m.wechat_ok ? (
+                        <span className="text-green-600 dark:text-green-400">微信就绪，可自动回复</span>
+                      ) : m.wechat_reason ? (
+                        <span className="text-red-500">⚠ {m.wechat_reason}</span>
+                      ) : null}
+                    </div>
                   )}
-                </span>
-                {m.configured ? (
-                  <span className="text-xs px-1.5 py-0.5 rounded bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">
-                    已配{m.whitelist?.length ? ` · 白名单${m.whitelist.length}人` : ''}
-                  </span>
-                ) : (
-                  <span className="text-xs px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
-                    待配置
-                  </span>
-                )}
+                </div>
               </label>
             ))}
           </div>

@@ -222,6 +222,12 @@ export interface CSMachine {
   self_name?: string;
   whitelist?: string[];
   auto_agent_enabled?: boolean;
+  // 健康（最新一份 line04 自报，前台一处看到，不用再去诊断页）：
+  online?: boolean; // 5 分钟内有心跳
+  wechat_ok?: boolean; // line04 健康（窗口找到+能发）
+  wechat_reason?: string; // 不健康原因（#835 精确：没登录 / 登录了但UIA瞎 …）
+  found_window?: boolean;
+  login_present?: boolean;
 }
 
 /**
@@ -239,17 +245,35 @@ export async function listAllMachines(limit = 100): Promise<CSMachine[]> {
               MAX(c.persona->>'self_name')   AS self_name,
               MAX(c.whitelist::text)         AS whitelist,
               bool_or(c.auto_agent_enabled)  AS auto_agent_enabled,
-              bool_or(c.wechat_id IS NOT NULL) AS configured
+              bool_or(c.wechat_id IS NOT NULL) AS configured,
+              MAX(h.l04_ok)        AS wechat_ok,
+              MAX(h.l04_reason)    AS wechat_reason,
+              MAX(h.found_window)  AS found_window,
+              MAX(h.login_present) AS login_present,
+              bool_or(h.last_hb > NOW() - interval '5 minutes') AS online
          FROM zenithjoy.license_machines lm
          LEFT JOIN zenithjoy.service_agents sa
                 ON sa.machine_id = lm.machine_id AND sa.deleted_at IS NULL
          LEFT JOIN zenithjoy.wechat_cs_account_config c
                 ON c.wechat_id = sa.wechat_id
+         LEFT JOIN LATERAL (
+                SELECT a.module_status->'line04-wechat-cs'->>'ok'           AS l04_ok,
+                       a.module_status->'line04-wechat-cs'->>'reason'       AS l04_reason,
+                       a.module_status->'line04-wechat-cs'->>'found_window' AS found_window,
+                       a.module_status->'line04-wechat-cs'->>'login_present' AS login_present,
+                       a.last_heartbeat_at AS last_hb
+                  FROM zenithjoy.agents a
+                 WHERE a.hostname = lm.hostname AND a.last_heartbeat_at IS NOT NULL
+                 ORDER BY a.last_heartbeat_at DESC LIMIT 1
+              ) h ON true
         GROUP BY lm.machine_id
-        ORDER BY MAX(lm.last_seen) DESC NULLS LAST
+        ORDER BY bool_or(h.last_hb > NOW() - interval '5 minutes') DESC NULLS LAST,
+                 MAX(lm.last_seen) DESC NULLS LAST
         LIMIT $1`,
       [limit],
     );
+    const asBool = (v: unknown): boolean | undefined =>
+      v === null || v === undefined ? undefined : String(v) === 'true' || v === true;
     return (res.rows ?? []).map((r: Record<string, unknown>) => {
       let whitelist: string[] | undefined;
       try {
@@ -267,6 +291,11 @@ export async function listAllMachines(limit = 100): Promise<CSMachine[]> {
         self_name: r.self_name ? String(r.self_name) : undefined,
         whitelist,
         auto_agent_enabled: r.auto_agent_enabled === null ? undefined : Boolean(r.auto_agent_enabled),
+        online: r.online === null ? undefined : Boolean(r.online),
+        wechat_ok: asBool(r.wechat_ok),
+        wechat_reason: r.wechat_reason ? String(r.wechat_reason) : undefined,
+        found_window: asBool(r.found_window),
+        login_present: asBool(r.login_present),
       };
     });
   } catch (err) {

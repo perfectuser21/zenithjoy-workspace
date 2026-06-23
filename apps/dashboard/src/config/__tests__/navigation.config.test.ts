@@ -83,10 +83,13 @@ describe('config/navigation — License 入口仍可达（防误删）', () => {
 });
 
 describe('AreaHubPage — 区配置（每区总览卡片下钻）', () => {
-  it('私域客服区含「每客服设置」下钻卡片（钉死老板看不到的微信号页）', () => {
+  it('私域客服区主卡是「我的客服机」(/wechat/setup)，且不再有重复的「每客服设置」卡（整合成一个客服中心）', () => {
     const wechat = AREA_HUBS['wechat'];
     expect(wechat).toBeDefined();
-    expect(wechat.cards.some((c) => c.to === '/wechat/per-cs-config')).toBe(true);
+    // 整合后：客服机一处看健康+配置 = /wechat/setup 是主入口
+    expect(wechat.cards.some((c) => c.to === '/wechat/setup')).toBe(true);
+    // 删掉重复的「每客服设置」卡（功能并进「我的客服机」），前台不再暴露
+    expect(wechat.cards.some((c) => c.to === '/wechat/per-cs-config')).toBe(false);
   });
 
   it('每个客户区都有至少一张下钻卡片', () => {
