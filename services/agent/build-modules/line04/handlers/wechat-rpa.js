@@ -221,6 +221,8 @@ function collectListenerHealth(input) {
     const { listenerAlive } = input;
     let found_window;
     let last_delivery_ts;
+    let login_present;
+    let sessions_seen;
     const file = input.healthFile ?? defaultListenerHealthFile();
     try {
         if (node_fs_1.default.existsSync(file)) {
@@ -229,6 +231,10 @@ function collectListenerHealth(input) {
                 found_window = raw.found_window;
             if (typeof raw.last_delivery_ts === 'number')
                 last_delivery_ts = raw.last_delivery_ts;
+            if (typeof raw.login_present === 'boolean')
+                login_present = raw.login_present;
+            if (typeof raw.sessions_seen === 'number')
+                sessions_seen = raw.sessions_seen;
         }
     }
     catch {
@@ -241,19 +247,30 @@ function collectListenerHealth(input) {
             listener_alive: false,
             found_window,
             last_delivery_ts,
+            login_present,
+            sessions_seen,
         };
     }
-    // 进程在但微信主窗口没找到（UIA 没激活/没登录）→ 不健康，但 listener_alive 仍 true
+    // 进程在但微信主窗口没找到 → 不健康。按 login_present 给【精确】reason，中台直接看出是哪种：
+    //  - 没登录 → 让客户扫码登录
+    //  - 登录了但窗口找不到 → UIA 屏幕阅读器标志失效 / agent 与微信会话隔离(权限/Administrator) / 窗口最小化
     if (found_window === false) {
+        const reason = login_present === true
+            ? '微信已登录但 UIA 找不到主窗口（屏幕阅读器标志失效 / agent 与微信不在同一会话权限 / 窗口最小化）'
+            : login_present === false
+                ? '微信未登录（需在该机扫码登录）'
+                : '微信主窗口未找到（未登录或 UIA 未就绪）';
         return {
             ok: false,
-            reason: '微信主窗口未找到（未登录或 UIA 未就绪）',
+            reason,
             listener_alive: true,
             found_window: false,
             last_delivery_ts,
+            login_present,
+            sessions_seen,
         };
     }
-    return { ok: true, listener_alive: true, found_window, last_delivery_ts };
+    return { ok: true, listener_alive: true, found_window, last_delivery_ts, login_present, sessions_seen };
 }
 // 把合成健康打包成发给 core 的 IPC status 消息。
 function buildHealthStatusMessage(h) {

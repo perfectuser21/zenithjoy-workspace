@@ -249,6 +249,9 @@ export interface ListenerHealth {
   listener_alive: boolean;
   found_window?: boolean;
   last_delivery_ts?: number;
+  // 自报精确诊断（让中台直接看出"没登录"还是"登录了但 UIA 瞎"，不用再问人版本）。
+  login_present?: boolean;
+  sessions_seen?: number;
 }
 
 // 默认健康文件路径（与 listen_chat.py 约定一致，落 %PUBLIC%）。
@@ -263,6 +266,8 @@ export function collectListenerHealth(input: ListenerHealthInput): ListenerHealt
   const { listenerAlive } = input;
   let found_window: boolean | undefined;
   let last_delivery_ts: number | undefined;
+  let login_present: boolean | undefined;
+  let sessions_seen: number | undefined;
 
   const file = input.healthFile ?? defaultListenerHealthFile();
   try {
@@ -270,9 +275,13 @@ export function collectListenerHealth(input: ListenerHealthInput): ListenerHealt
       const raw = JSON.parse(fs.readFileSync(file, 'utf-8')) as {
         found_window?: boolean;
         last_delivery_ts?: number;
+        login_present?: boolean;
+        sessions_seen?: number;
       };
       if (typeof raw.found_window === 'boolean') found_window = raw.found_window;
       if (typeof raw.last_delivery_ts === 'number') last_delivery_ts = raw.last_delivery_ts;
+      if (typeof raw.login_present === 'boolean') login_present = raw.login_present;
+      if (typeof raw.sessions_seen === 'number') sessions_seen = raw.sessions_seen;
     }
   } catch {
     // 健康文件损坏：不抛，按保守结论
@@ -285,19 +294,31 @@ export function collectListenerHealth(input: ListenerHealthInput): ListenerHealt
       listener_alive: false,
       found_window,
       last_delivery_ts,
+      login_present,
+      sessions_seen,
     };
   }
-  // 进程在但微信主窗口没找到（UIA 没激活/没登录）→ 不健康，但 listener_alive 仍 true
+  // 进程在但微信主窗口没找到 → 不健康。按 login_present 给【精确】reason，中台直接看出是哪种：
+  //  - 没登录 → 让客户扫码登录
+  //  - 登录了但窗口找不到 → UIA 屏幕阅读器标志失效 / agent 与微信会话隔离(权限/Administrator) / 窗口最小化
   if (found_window === false) {
+    const reason =
+      login_present === true
+        ? '微信已登录但 UIA 找不到主窗口（屏幕阅读器标志失效 / agent 与微信不在同一会话权限 / 窗口最小化）'
+        : login_present === false
+          ? '微信未登录（需在该机扫码登录）'
+          : '微信主窗口未找到（未登录或 UIA 未就绪）';
     return {
       ok: false,
-      reason: '微信主窗口未找到（未登录或 UIA 未就绪）',
+      reason,
       listener_alive: true,
       found_window: false,
       last_delivery_ts,
+      login_present,
+      sessions_seen,
     };
   }
-  return { ok: true, listener_alive: true, found_window, last_delivery_ts };
+  return { ok: true, listener_alive: true, found_window, last_delivery_ts, login_present, sessions_seen };
 }
 
 // 把合成健康打包成发给 core 的 IPC status 消息。
