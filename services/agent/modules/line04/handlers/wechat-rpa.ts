@@ -113,9 +113,16 @@ export function resolveRealPublishEnv(
 
 // 测试用导出：构造 listen_chat.py 的 spawn 参数（含持久 --timeout，防"5分钟死"回归）。
 // agentId 传入时追加 --agent-id，listen_chat.py 用它上报心跳 → Dashboard 显示机器名而非"未知客户端"。
-export function buildListenerSpawnArgs(script: string, apiBase: string, agentId?: string): string[] {
+// machineId 传入时追加 --machine-id，listen_chat.py 按它向中台拉「自己那份」每客服配置（决策 143f5d00）。
+export function buildListenerSpawnArgs(
+  script: string,
+  apiBase: string,
+  agentId?: string,
+  machineId?: string,
+): string[] {
   const args = [script, '--middleware-url', apiBase, '--timeout', String(LISTENER_TIMEOUT_SEC)];
   if (agentId) args.push('--agent-id', agentId);
+  if (machineId) args.push('--machine-id', machineId);
   return args;
 }
 
@@ -167,7 +174,7 @@ export function isListenerAlive(): boolean {
 // Windows only：模块激活时自动拉起 listen_chat.py 持续监听微信消息。
 // 先查杀所有旧 listen_chat.py 实例（防多条心跳/Dashboard 重复客户端），再 spawn 新进程。
 // 持久（timeout 86400）+ 崩溃自愈（退出后 30s 自动重启），随模块生命周期常驻。
-export function startWechatListener(apiBase: string, agentId?: string): void {
+export function startWechatListener(apiBase: string, agentId?: string, machineId?: string): void {
   if (_listenerKillFuncs.platform !== 'win32') {
     console.log('[wechat-rpa] 非 Windows，跳过 listen_chat 自启');
     return;
@@ -187,7 +194,7 @@ export function startWechatListener(apiBase: string, agentId?: string): void {
   };
 
   const spawnOnce = (): void => {
-    const child = _listenerKillFuncs.spawnFn(getPythonExe(), buildListenerSpawnArgs(script, apiBase, agentId), {
+    const child = _listenerKillFuncs.spawnFn(getPythonExe(), buildListenerSpawnArgs(script, apiBase, agentId, machineId), {
       detached: false,
       stdio: ['ignore', 'pipe', 'pipe'],
       windowsHide: true,

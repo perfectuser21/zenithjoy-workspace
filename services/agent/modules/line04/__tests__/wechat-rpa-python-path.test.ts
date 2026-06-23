@@ -96,6 +96,19 @@ describe('buildListenerSpawnArgs — agentId 传参回归', () => {
     expect(args).not.toContain('--agent-id');
   });
 
+  // ── 回归：machineId 必须传给 --machine-id（listen_chat 按它拉每客服配置，决策 143f5d00）──
+  it('传入 machineId 时，返回参数含 --machine-id <machineId>', () => {
+    const args = buildListenerSpawnArgs('listen_chat.py', 'http://localhost:3000', 'a-id', 'machine-xian-rog');
+    const idx = args.indexOf('--machine-id');
+    expect(idx).toBeGreaterThanOrEqual(0);
+    expect(args[idx + 1]).toBe('machine-xian-rog');
+  });
+
+  it('不传 machineId 时，返回参数不含 --machine-id（回落旧 env 真发判定）', () => {
+    const args = buildListenerSpawnArgs('listen_chat.py', 'http://localhost:3000', 'a-id');
+    expect(args).not.toContain('--machine-id');
+  });
+
   it('agentId 为空字符串时，返回参数不含 --agent-id', () => {
     const args = buildListenerSpawnArgs('listen_chat.py', 'http://localhost:3000', '');
     expect(args).not.toContain('--agent-id');

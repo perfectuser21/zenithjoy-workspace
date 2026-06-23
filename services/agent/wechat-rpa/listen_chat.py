@@ -49,6 +49,8 @@ except Exception as exc:  # pragma: no cover
 
 # 无审批自动回复闭环决策层（纯函数：拟人延迟 / 路由 / 去重 / 播报 / 告警 / 回执）。
 import auto_reply  # type: ignore  # noqa: E402
+# 每客服真发 gate（按 machine_id 拉自己那份配置；真发跟随中台 auto_agent 开关，拉失败强制 dryrun）。
+import cs_config_gate  # type: ignore  # noqa: E402
 
 # AI 失败占位 —— 与 apps/api wechat-draft.ts 的 FAIL_PLACEHOLDER 对齐。
 # 自动回模式下中台 AI 失败时 reply 为 undefined；万一拿到占位文案也必须跳过不发给客户。
@@ -1222,6 +1224,13 @@ def parse_args() -> argparse.Namespace:
         default=os.environ.get("ZENITHJOY_AGENT_ID"),
         help="心跳上报用的 agent 标识（缺省取 env ZENITHJOY_AGENT_ID）",
     )
+    ap.add_argument(
+        "--machine-id",
+        type=str,
+        default=os.environ.get("ZENITHJOY_MACHINE_ID"),
+        help="本机 machine_id：按它向中台拉「自己那份」每客服配置（决策 143f5d00，缺省取 env ZENITHJOY_MACHINE_ID）。"
+             "设了即走每客服 gate（真发跟随中台 auto_agent 开关）；不设则回落旧 env 真发判定。",
+    )
     return ap.parse_args()
 
 
@@ -1699,9 +1708,28 @@ def run_real_listen(args: argparse.Namespace) -> int:
     last_wechat_launch = time.time() - wechat_launch_cooldown + 30  # 30s grace before first launch
     # replied 过期清理：每 REPLIED_TTL 扫一次，确保过期条目在 TTL 后立即清除
     last_replied_purge = time.time()
+    # 每客服配置：按 machine_id 周期性拉「自己那份」→ 缓存（断网用缓存继续判定，强制 dryrun）。
+    cs_config: Optional[Dict[str, Any]] = None
+    cs_pull_ok = False
+    last_cs_pull = 0.0
+    CS_PULL_INTERVAL = 30  # 秒；与心跳同量级，开关一改约 30s 内生效
     try:
         while time.time() < deadline:
             now = time.time()
+
+            # 每客服 gate：machine_id 在册 → 周期拉自己那份 → 真发跟随中台 auto_agent 开关；
+            # 不在册 → 回落旧 env 真发判定（向后兼容）。拉失败 resolve_send_mode 强制 dryrun，绝不误真发。
+            _machine_id = getattr(args, "machine_id", None)
+            if _machine_id and now - last_cs_pull >= CS_PULL_INTERVAL:
+                _fresh, _ok = cs_config_gate.fetch_cs_config(args.middleware_url, _machine_id)
+                cs_config = cs_config_gate.resolve_active_config(_fresh, cs_config, _ok)
+                cs_pull_ok = _ok
+                last_cs_pull = now
+                _log(f"[每客服] 拉配置 pull_ok={_ok} mode={cs_config_gate.resolve_send_mode(cs_config, cs_pull_ok)}")
+            if _machine_id:
+                _real_publish = cs_config_gate.resolve_send_mode(cs_config, cs_pull_ok) == "real"
+            else:
+                _real_publish = _resolve_real_publish()
 
             # 每 REPLIED_TTL 清理过期 replied 条目（不能等 3600s，否则 TTL'd 条目死锁）
             if now - last_replied_purge >= REPLIED_TTL:
@@ -1827,7 +1855,7 @@ def run_real_listen(args: argparse.Namespace) -> int:
                 _ob = process_outbound_once(
                     args.middleware_url,
                     getattr(args, "agent_id", None),
-                    _resolve_real_publish(),
+                    _real_publish,
                 )
                 if _ob:
                     _log(f"[关键人出站] 发送 {_ob} 条")
@@ -1875,12 +1903,27 @@ def run_real_listen(args: argparse.Namespace) -> int:
                 except Exception as _exc:
                     _log(f"[主动发送] 指令处理异常: {_exc}")
 
+            # 每客服 gate（入站自动回复）：machine_id 在册且本轮非真发（中台该客服 auto_agent
+            # OFF / 拉配置失败）→ 整轮不自动回复（演练），绝不在开关关着时真回客户。
+            if getattr(args, "machine_id", None) and not _real_publish:
+                if unread:
+                    _log(f"[每客服] auto_agent OFF/拉配置失败 → 本轮跳过 {len(unread)} 条自动回复(dryrun)")
+                time.sleep(args.interval)
+                continue
+
             # ── Phase 1: 过滤可回复的未读 + 并行生成草稿 ──────────────────────────────
             # 生成草稿是纯网络调用、不碰微信窗口，可并发；多人同时来时不再逐个排队等模型，
             # 把"生成"从串行链路里拿出来并行做，最后只串行做"切窗+发送"（单窗口物理限制）。
+            # 白名单：该客服配了 whitelist 则只回名单内（should_reply）；没配（空）→ 不限，保持现状。
+            _cs_whitelist = (cs_config or {}).get("whitelist") if getattr(args, "machine_id", None) else None
             eligible = []
             for m in unread:
                 key = (m["sender"], m["content"])
+                if _cs_whitelist and not cs_config_gate.should_reply(cs_config, m["sender"]):
+                    if key not in _skip_logged:
+                        _log(f"skip(不在该客服白名单) sender={m['sender']}")
+                        _skip_logged.add(key)
+                    continue
                 # UIA 重复读防护：同 (联系人, 文本) 在去重时间窗内只回一次（auto_reply.is_duplicate
                 # 是 SSOT；pywinauto 轮询常把同一条未读重复读出来，这里挡掉防重复发）。
                 if auto_reply.is_duplicate(m["sender"], m["content"], now):

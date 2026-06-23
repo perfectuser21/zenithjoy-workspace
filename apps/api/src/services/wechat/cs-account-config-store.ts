@@ -110,6 +110,38 @@ export async function getCSConfig(wechatId: string): Promise<CSAccountConfig | n
 }
 
 /**
+ * 客户机按身份拉：machine_id → service_agents 绑定的 wechat_id → 该客服那一行。
+ *
+ * 身份链路（决策 143f5d00）：agents.id 那个 UUID 与 service_agents 无直接链，唯一通用 join
+ * 键是 machine_id（agent 注册时带、service_agents 也存）。管理员在前台给该客服-PC 绑定填
+ * wechat_id（= 该客服配置主 key）。客户机用本机 machine_id 拉自己那份，不靠 RPA 读真实微信号。
+ *
+ * 任一断点 → null（绝不返回任意一份，不串台）：
+ *   - machine_id 未绑定 service_agents（或已软删）
+ *   - 已绑 PC 但管理员还没填 wechat_id（wechat_id 为空）
+ *   - 绑了微信号但该号还没配过（wechat_cs_account_config 无该行）
+ */
+export async function getCSConfigByMachine(machineId: string): Promise<CSAccountConfig | null> {
+  let wechatId: string | null = null;
+  try {
+    const res = await pool.query(
+      `SELECT wechat_id
+         FROM zenithjoy.service_agents
+        WHERE machine_id = $1 AND deleted_at IS NULL
+        LIMIT 1`,
+      [machineId],
+    );
+    const raw = res.rows?.[0]?.wechat_id;
+    wechatId = typeof raw === 'string' && raw.length > 0 ? raw : null;
+  } catch (err) {
+    console.warn(`[cs-account-config-store] getCSConfigByMachine(${machineId}) 反查绑定失败:`, err);
+    return null;
+  }
+  if (!wechatId) return null;
+  return getCSConfig(wechatId);
+}
+
+/**
  * upsert「该客服那一行」（patch 必含 persona；其余字段缺省走默认值）。
  * 只写该 wechat_id 那一行，ON CONFLICT 更新同行，绝不动其他客服行。
  */

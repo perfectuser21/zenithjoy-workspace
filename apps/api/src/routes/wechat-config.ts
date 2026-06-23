@@ -33,6 +33,7 @@ import {
 import { enqueueKeyContactBroadcast } from '../services/wechat/cs-outbound';
 import {
   getCSConfig,
+  getCSConfigByMachine,
   saveCSConfig,
   recordIdentityAlert,
   listIdentityAlerts,
@@ -322,17 +323,32 @@ wechatConfigRouter.get('/cs/config/:wechatId', async (req: Request, res: Respons
   return res.status(200).json(config);
 });
 
-// GET /api/wechat/cs/agent-config?wechat_id=X — 客户机按自己登录微信号身份拉自己那份。
-//   注册号 → 返回该号那份；未注册/无对应行 → 403 且响应体不含任何 persona + 写诊断异常。
+// GET /api/wechat/cs/agent-config — 客户机按自己身份拉自己那份配置。
+//   首选 machine_id（决策 143f5d00：客户机可靠持有 machine_id，经 service_agents 反查绑定
+//   的 wechat_id；不靠 RPA 读真实微信号）；兼容 wechat_id 直拉（前台/测试）。
+//   命中 → 返回该客服那份（含 wechat_id 供客户机软校验）；未绑定/未注册/无行 → 403 且响应体
+//   不含任何 persona + 写诊断异常（不泄漏，不串台）。
 wechatConfigRouter.get('/cs/agent-config', async (req: Request, res: Response) => {
+  const machineId = typeof req.query.machine_id === 'string' ? req.query.machine_id : '';
   const wechatId = typeof req.query.wechat_id === 'string' ? req.query.wechat_id : '';
-  const config = wechatId ? await getCSConfig(wechatId) : null;
+  const config = machineId
+    ? await getCSConfigByMachine(machineId)
+    : wechatId
+      ? await getCSConfig(wechatId)
+      : null;
   if (!config) {
-    await recordIdentityAlert(wechatId || '(empty)', 'unregistered_wechat');
+    // 诊断留痕：machine_id 路径记 machine 未绑定/未配；wechat_id 路径记未注册号
+    if (machineId) {
+      await recordIdentityAlert(machineId, 'unregistered_machine');
+    } else {
+      await recordIdentityAlert(wechatId || '(empty)', 'unregistered_wechat');
+    }
     // 严禁返回任意一份配置（不泄漏 persona）
     return res.status(403).json({
-      error: 'UNREGISTERED_WECHAT',
-      message: '该微信号未在中台注册，拒绝下发配置',
+      error: machineId ? 'UNBOUND_MACHINE' : 'UNREGISTERED_WECHAT',
+      message: machineId
+        ? '该客户机未绑定客服微信号（或微信号未配置），拒绝下发配置'
+        : '该微信号未在中台注册，拒绝下发配置',
     });
   }
   return res.status(200).json(config);

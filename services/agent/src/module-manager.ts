@@ -70,6 +70,7 @@ export interface ModuleManagerOptions {
   cosBase?: string;
   agentId?: string;
   apiBase?: string;
+  machineId?: string;
   // ↓↓ 以下为单测注入点，生产留空走真实实现 ↓↓
   downloadImpl?: (
     lineId: string,
@@ -122,6 +123,7 @@ export class ModuleManager {
   private readonly cosBase: string;
   private agentId?: string;
   private apiBase?: string;
+  private machineId?: string;
   private readonly opts: ModuleManagerOptions;
 
   // 已 fork 激活的模块子进程
@@ -153,6 +155,7 @@ export class ModuleManager {
     this.cosBase = (opts.cosBase ?? DEFAULT_COS_BASE).replace(/\/+$/, '');
     this.agentId = opts.agentId;
     this.apiBase = opts.apiBase;
+    this.machineId = opts.machineId;
     this.superviseLines = new Set(opts.superviseLines ?? []);
     this.restartBaseDelayMs = opts.restartBaseDelayMs ?? 5_000;
     this.restartMaxDelayMs = opts.restartMaxDelayMs ?? 300_000;
@@ -165,9 +168,14 @@ export class ModuleManager {
   }
 
   // 由 index.ts 在 register/连接后写入，activateModule 时随 config 消息下发
-  setIdentity(agentId: string | undefined, apiBase: string | undefined): void {
+  setIdentity(
+    agentId: string | undefined,
+    apiBase: string | undefined,
+    machineId?: string | undefined,
+  ): void {
     if (agentId) this.agentId = agentId;
     if (apiBase) this.apiBase = apiBase;
+    if (machineId) this.machineId = machineId;
   }
 
   getModulesRoot(): string {
@@ -473,6 +481,7 @@ export class ModuleManager {
         type: 'config',
         agentId: this.agentId,
         apiBase: this.apiBase,
+        machineId: this.machineId,
       });
     } catch (err) {
       this.log(`module ${lineId} 发送 config 失败：${(err as Error).message}`);
