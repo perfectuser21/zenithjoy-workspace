@@ -1,4 +1,4 @@
-# Sprint Contract Draft (Round 1)
+# Sprint Contract Draft (Round 2)
 
 Sprint: 客服配置写接口安全闸（管理员 + 租户隔离）+ 管理员前台补全
 journey_type: user_facing ｜ target_environment: windows_cloud（2-job：ubuntu curl+psql 后端隔离 + windows Playwright UI）
@@ -253,9 +253,11 @@ echo "── 5. deny by default：目标客服解析不到租户 → 404 TARGET_
 CODE=$(curl -s -o /tmp/d.json -w '%{http_code}' -X PUT "$API/api/wechat/cs/config/wxid_never_zzz" -H 'Content-Type: application/json' -H 'X-Feishu-User-Id: user-admin-A' -d "$BODY")
 [ "$CODE" = "404" ] || { echo "FAIL: 解析不出目标未 404 code=$CODE"; exit 1; }
 jq -e '.error.code == "TARGET_NOT_FOUND"' /tmp/d.json
+# gate-allow: domain/db-no-time-window wxid_never_zzz 是从不存在的目标，deny-by-default 断言要求全时段 count==0（任何时间都不许有该行）；加 5 分钟时间窗反而会漏过历史泄漏行，全时段计数才是更强且正确的 oracle
 DC=$(psql "$DB" -t -c "SELECT count(*) FROM zenithjoy.wechat_cs_account_config WHERE wechat_id='wxid_never_zzz'" | tr -d ' ')
 [ "$DC" = "0" ] || { echo "FAIL: deny-by-default 仍写了库 cnt=$DC"; exit 1; }
 
+# gate-allow: cheat/or-true 这是 teardown — 清理后台 API 进程，非断言；进程已退时 kill 失败必须忽略（不影响越权/隔离/deny 等真实验收结论）
 kill "$(cat /tmp/api.pid)" 2>/dev/null || true
 echo "✅ job1 后端全过：管理员写入(时间窗) + member 403 不写库 + 跨租户 403 不写库 + 无 session 401 + deny-by-default 404 不写库"
 ```
