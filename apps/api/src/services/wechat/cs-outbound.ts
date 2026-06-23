@@ -167,6 +167,30 @@ export async function enqueueFailureAlert(params: {
 }
 
 /**
+ * 一键配置完成 → 给关键人发一条「设置成功」。这条一到，整条真发链(中台→出站→客户机 UIA 发)
+ * 当场被证明通了，也是给管理员的确认。关键人未配 / 身份无法解析 → 不入（静默跳过，不阻塞保存）。
+ */
+const SETUP_SUCCESS_TEXT =
+  '✅ 智能客服已配置成功，现在可以开始自动回复名单内客户了。（这条是配置完成的确认）';
+
+export async function enqueueSetupSuccess(params: {
+  keyContact: string;
+  agentId: string;
+}): Promise<{ task_id?: string }> {
+  const { keyContact, agentId } = params;
+  if (!keyContact) return {};
+  const uuid = await resolveAgentUuid(agentId);
+  if (!uuid) return {};
+  try {
+    const taskId = await insertOutbound(uuid, keyContact, SETUP_SUCCESS_TEXT);
+    return { task_id: taskId };
+  } catch (err) {
+    console.warn('[cs-outbound] 设置成功出站入库失败（不阻塞配置保存）:', err);
+    return {};
+  }
+}
+
+/**
  * 列出某 agent 的待发出站任务（status=approved + system）。供 agent 轮询拉取。
  * 传入的 agentId 可能是 UUID(agents.id) 或 env-id(agents.agent_id)——统一规范化到 UUID
  * 再按 wechat_publish_task.agent_id(uuid 列) 过滤，保证与入队身份对齐。

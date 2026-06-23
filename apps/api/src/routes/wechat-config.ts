@@ -30,7 +30,7 @@ import {
   getAutoAgentConfig,
   saveAutoAgentConfig,
 } from '../services/wechat/cs-config-store';
-import { enqueueKeyContactBroadcast } from '../services/wechat/cs-outbound';
+import { enqueueKeyContactBroadcast, enqueueSetupSuccess } from '../services/wechat/cs-outbound';
 import {
   getCSConfig,
   getCSConfigByMachine,
@@ -388,9 +388,17 @@ wechatConfigRouter.put('/cs/setup/:machineId', async (req: Request, res: Respons
   const parsed = CSSetupBodySchema.safeParse(req.body ?? {});
   if (!parsed.success) return invalidBody(res, parsed.error);
   try {
-    const { wechat_id } = await setupCSByMachine(req.params.machineId, parsed.data);
+    const { wechat_id, agent_id } = await setupCSByMachine(req.params.machineId, parsed.data);
     const config = await getCSConfig(wechat_id);
-    return res.status(200).json({ success: true, wechat_id, config });
+    // 设置成功 → 给关键人发一条确认（证明真发链通：中台→出站→客户机 UIA 真发）。失败不阻塞。
+    let setup_notice: { task_id?: string } | null = null;
+    if (agent_id && config?.key_contact_wechat) {
+      setup_notice = await enqueueSetupSuccess({
+        keyContact: config.key_contact_wechat,
+        agentId: agent_id,
+      });
+    }
+    return res.status(200).json({ success: true, wechat_id, config, setup_notice });
   } catch (e) {
     return res.status(400).json({ error: 'SETUP_FAILED', message: (e as Error).message });
   }
