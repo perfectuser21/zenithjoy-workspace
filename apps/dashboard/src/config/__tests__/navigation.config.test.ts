@@ -30,33 +30,47 @@ describe('config/navigation', () => {
   });
 });
 
-describe('config/navigation — 三组结构', () => {
-  it('共有 3 个导航分组：主功能 / 设置 / 管理员', () => {
-    expect(autopilotNavGroups).toHaveLength(3);
-    expect(autopilotNavGroups[0].title).toBe('');
-    expect(autopilotNavGroups[1].title).toBe('设置');
-    expect(autopilotNavGroups[2].title).toBe('管理员');
+describe('config/navigation — 按 Line 组织（2026-06-23 重构）', () => {
+  const groupByTitle = (t: string) => autopilotNavGroups.find((g) => g.title === t);
+
+  it('客户侧栏按 Line 分组：Line 01/02/04/05/07 都在', () => {
+    for (const t of [
+      'Line 01 · 智能发布',
+      'Line 02 · 智能获客',
+      'Line 04 · 私域 AI 接管',
+      'Line 05 · 视频剪辑',
+      'Line 07 · AI 爆款翻拍',
+    ]) {
+      expect(groupByTitle(t)).toBeDefined();
+    }
   });
 
-  it('设置分组含 下载 Agent 和 飞书绑定', () => {
-    const settings = autopilotNavGroups[1];
-    const paths = settings.items.map((i) => i.path);
+  it('每客服设置（/wechat/per-cs-config）已进 Line 04 侧栏（之前隐藏、侧栏看不到）', () => {
+    const line04 = groupByTitle('Line 04 · 私域 AI 接管');
+    const paths = line04?.items.map((i) => i.path) ?? [];
+    expect(paths).toContain('/wechat/cs-config');
+    expect(paths).toContain('/wechat/per-cs-config');
+  });
+
+  it('全局只有一个「设置」分组（账号级：下载 Agent + License）', () => {
+    const settings = autopilotNavGroups.filter((g) => g.title === '⚙️ 设置');
+    expect(settings).toHaveLength(1);
+    const paths = settings[0].items.map((i) => i.path);
     expect(paths).toContain('/dashboard/agent');
-    expect(paths).toContain('/dashboard/feishu-bind');
+    expect(paths).toContain('/license');
   });
 
-  it('/operator 在管理员分组且 requireSuperAdmin: true', () => {
-    const admin = autopilotNavGroups[2];
-    const operator = admin.items.find((i) => i.path === '/operator');
-    expect(operator).toBeDefined();
-    expect(operator?.requireSuperAdmin).toBe(true);
+  it('Line 00/10 收进「管理后台」super-admin，不出现在客户 Line 分组', () => {
+    const admin = groupByTitle('管理后台');
+    expect(admin).toBeDefined();
+    expect(admin?.items.find((i) => i.path === '/admin/customers')?.requireSuperAdmin).toBe(true);
+    expect(admin?.items.find((i) => i.path === '/operator')?.requireSuperAdmin).toBe(true);
   });
 
-  it('主功能分组不含设置类页面（文件夹绑定等）', () => {
-    const main = autopilotNavGroups[0];
-    const paths = main.items.map((i) => i.path);
-    expect(paths).not.toContain('/dashboard/folder');
-    expect(paths).not.toContain('/dashboard/feishu-bind');
+  it('旧聚合页（AI 员工 /ai-employees、新媒体运营 /media）已从侧栏移除', () => {
+    const all = autopilotNavGroups.flatMap((g) => g.items).map((i) => i.path);
+    expect(all).not.toContain('/ai-employees');
+    expect(all).not.toContain('/media');
   });
 });
 
