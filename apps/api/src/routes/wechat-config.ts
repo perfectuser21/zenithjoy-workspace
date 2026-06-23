@@ -43,7 +43,7 @@ import {
 } from '../services/wechat/cs-account-config-store';
 import { superAdminGuard } from '../middleware/super-admin';
 import { tenantContext } from '../middleware/tenant-context';
-import { requireCsAdmin, requireSameTenant } from '../middleware/cs-config-guard';
+import { requireCsAdmin, requireSameTenant, requireCsAdminOrSuperAdmin } from '../middleware/cs-config-guard';
 import type { KBAudienceSegment } from '../services/wechat/types';
 
 export const wechatConfigRouter = Router();
@@ -265,8 +265,9 @@ wechatConfigRouter.get('/cs/auto-agent', superAdminGuard, async (_req: Request, 
 });
 
 // 鉴权升级（Issue 96db53be）：原 superAdminGuard 只认飞书白名单 / internal token，不认
-// dashboard better-auth session → 改用 tenantContext + 管理员角色闸（全局单行配置无跨租户目标）。
-wechatConfigRouter.put('/cs/auto-agent', tenantContext, requireCsAdmin, async (req: Request, res: Response) => {
+// dashboard better-auth session。改用兼容闸 requireCsAdminOrSuperAdmin —— 既保留 legacy 服务/超管
+// 通道（中台→出站任务服务流），又放行 dashboard 租户管理员（session）；member/无凭证 → 403。
+wechatConfigRouter.put('/cs/auto-agent', requireCsAdminOrSuperAdmin, async (req: Request, res: Response) => {
   const parsed = AutoAgentConfigSchema.safeParse(req.body ?? {});
   if (!parsed.success) return invalidBody(res, parsed.error);
   const { agent_id, ...cfgPatch } = parsed.data;

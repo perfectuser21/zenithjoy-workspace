@@ -17,6 +17,8 @@
  */
 import type { Request, Response, NextFunction } from 'express';
 import pool from '../db/connection';
+import { superAdminGuard } from './super-admin';
+import { tenantContext } from './tenant-context';
 
 /** 视为「管理员」的角色（super-admin 来自 tenantContext 的 X-Bypass-Tenant 通道） */
 const ADMIN_ROLES = new Set(['owner', 'admin', 'super-admin']);
@@ -41,6 +43,40 @@ export function requireCsAdmin(req: Request, res: Response, next: NextFunction):
     return;
   }
   next();
+}
+
+/** 当前请求是否带「legacy 服务/超管」凭证（飞书白名单 id 或 internal token）。 */
+function hasLegacyServiceCredential(req: Request): boolean {
+  const feishuId =
+    typeof req.headers['x-feishu-user-id'] === 'string'
+      ? req.headers['x-feishu-user-id'].trim()
+      : '';
+  const adminIds = (process.env.ADMIN_FEISHU_OPENIDS ?? '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+  if (feishuId !== '' && adminIds.includes(feishuId)) return true;
+
+  const authz = req.headers.authorization || '';
+  const bearer = authz.startsWith('Bearer ') ? authz.slice('Bearer '.length).trim() : '';
+  const internalHeader =
+    typeof req.headers['x-internal-token'] === 'string' ? req.headers['x-internal-token'].trim() : '';
+  return bearer !== '' || internalHeader !== '';
+}
+
+/**
+ * /cs/auto-agent 专用闸（全局单行配置，无 per-tenant 目标）：兼容两条管理员通道——
+ *   1) legacy 服务/超管：飞书白名单 id 或 internal token（superAdminGuard）——保留「中台→出站任务」服务流
+ *   2) dashboard 租户管理员：better-auth session / 非白名单 X-Feishu-User-Id → tenant_members owner/admin
+ * 二者皆不满足（member / 无凭证）→ 403（NOT_ADMIN 经租户路径 / FORBIDDEN 经超管路径）。
+ */
+export function requireCsAdminOrSuperAdmin(req: Request, res: Response, next: NextFunction): void {
+  if (hasLegacyServiceCredential(req)) {
+    superAdminGuard(req, res, next);
+    return;
+  }
+  // 无 legacy 凭证 → 走 dashboard 租户 session 管理员闸
+  tenantContext(req, res, () => requireCsAdmin(req, res, next));
 }
 
 /** 目标客服（wechat_id）→ 所属租户 tenant_id；查不到返回 null。 */
