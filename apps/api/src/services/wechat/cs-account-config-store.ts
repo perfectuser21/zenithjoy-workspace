@@ -213,6 +213,68 @@ export async function listPendingMachines(limit = 50): Promise<PendingMachine[]>
   }
 }
 
+export interface CSMachine {
+  machine_id: string;
+  hostname?: string;
+  last_seen?: string;
+  configured: boolean;
+  wechat_id?: string;
+  self_name?: string;
+  whitelist?: string[];
+  auto_agent_enabled?: boolean;
+}
+
+/**
+ * 列出「我的全部客服机」：注册过的每台机器(license_machines)+ 它当前的配置状态(已配/待配 +
+ * 白名单/人设/开关)。供前台「我的客服机」列表——已配的也能点进去改白名单，不像 pending 列表
+ * 只显示没配过的。按 machine_id 去重取最新一条 hostname。
+ */
+export async function listAllMachines(limit = 100): Promise<CSMachine[]> {
+  try {
+    const res = await pool.query(
+      `SELECT lm.machine_id,
+              MAX(lm.hostname)        AS hostname,
+              MAX(lm.last_seen)       AS last_seen,
+              MAX(sa.wechat_id)       AS wechat_id,
+              MAX(c.persona->>'self_name')   AS self_name,
+              MAX(c.whitelist::text)         AS whitelist,
+              bool_or(c.auto_agent_enabled)  AS auto_agent_enabled,
+              bool_or(c.wechat_id IS NOT NULL) AS configured
+         FROM zenithjoy.license_machines lm
+         LEFT JOIN zenithjoy.service_agents sa
+                ON sa.machine_id = lm.machine_id AND sa.deleted_at IS NULL
+         LEFT JOIN zenithjoy.wechat_cs_account_config c
+                ON c.wechat_id = sa.wechat_id
+        GROUP BY lm.machine_id
+        ORDER BY MAX(lm.last_seen) DESC NULLS LAST
+        LIMIT $1`,
+      [limit],
+    );
+    return (res.rows ?? []).map((r: Record<string, unknown>) => {
+      let whitelist: string[] | undefined;
+      try {
+        whitelist = r.whitelist ? (JSON.parse(String(r.whitelist)) as string[]) : undefined;
+      } catch {
+        whitelist = undefined;
+      }
+      return {
+        machine_id: String(r.machine_id),
+        hostname: r.hostname ? String(r.hostname) : undefined,
+        last_seen:
+          r.last_seen instanceof Date ? r.last_seen.toISOString() : (r.last_seen as string | undefined),
+        configured: Boolean(r.configured),
+        wechat_id: r.wechat_id ? String(r.wechat_id) : undefined,
+        self_name: r.self_name ? String(r.self_name) : undefined,
+        whitelist,
+        auto_agent_enabled: r.auto_agent_enabled === null ? undefined : Boolean(r.auto_agent_enabled),
+      };
+    });
+  } catch (err) {
+    console.warn('[cs-account-config-store] listAllMachines 失败:', err);
+    return [];
+  }
+}
+
 /**
  * 一键配置：给某台机器(machine_id)自动绑定 + 写配置。管理员只填人设/白名单/开关，
  * machine_id 由机器自己注册上来(前台从 pending 列表挑)，wechat_id/租户/绑定全自动——
