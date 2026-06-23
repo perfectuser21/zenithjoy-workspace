@@ -17,9 +17,17 @@ const BASE_URL = process.env.BASE_URL || 'http://localhost:5174'
 const SHOT_DIR = '../../sprints/06222337-line04-per-cs-config/screenshots'
 
 // 让 auth 快速判定为未登录（requireAuth:false 路由直接渲染该页，不跳登录）
+// 该页编辑动作需管理员（Sprint 06232248 Issue 96db53be 加了 my-role 只读闸）→ stub 成 admin 可编辑。
 async function stubAuth(page: import('@playwright/test').Page) {
   await page.route('**/api/auth/**', (route) =>
     route.fulfill({ status: 401, contentType: 'application/json', body: '{}' }),
+  )
+  await page.route('**/api/wechat/cs/my-role', (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ role: 'admin', can_config: true }),
+    }),
   )
 }
 
