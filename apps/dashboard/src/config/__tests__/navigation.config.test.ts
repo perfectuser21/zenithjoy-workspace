@@ -1,26 +1,78 @@
 /**
- * 单元覆盖：navigation.config 导航配置中关键 License 路由
+ * 单元覆盖：navigation.config — 短侧栏 + 区下钻（2026-06-23 重构）
  *
- * 防止后续修改时误删 /license 或 /admin/license 入口。
+ * 侧栏只放"区"入口（人话名、不暴露 Line、无 emoji）→ AreaHubPage 总览页 → 卡片下钻子页。
+ * 子页路由收进 additionalRoutes（仍可达）。License / 每客服设置 等不再直接挂侧栏。
  */
 import { describe, it, expect } from 'vitest';
 import {
   autopilotNavGroups,
   autopilotPageComponents,
+  additionalRoutes,
 } from '../navigation.config';
+import { AREA_HUBS } from '../../pages/AreaHubPage';
 
-describe('config/navigation', () => {
-  it('autopilotNavGroups 含 /license 入口（所有登录用户）', () => {
-    const all = autopilotNavGroups.flatMap((g) => g.items);
-    const license = all.find((i) => i.path === '/license');
-    expect(license).toBeDefined();
-    expect(license?.requireSuperAdmin).not.toBe(true);
+const navItems = () => autopilotNavGroups.flatMap((g) => g.items);
+const navPaths = () => navItems().map((i) => i.path);
+const routePaths = () => additionalRoutes.map((r) => r.path);
+
+describe('config/navigation — 短侧栏 + 区下钻', () => {
+  it('侧栏"区"入口都指向 AreaHubPage，且标签不暴露 Line', () => {
+    const areaItems = navItems().filter((i) => i.path.startsWith('/area/'));
+    expect(areaItems.length).toBeGreaterThanOrEqual(6);
+    for (const it of areaItems) {
+      expect(it.component).toBe('AreaHubPage');
+      expect(it.label).not.toMatch(/line/i);
+    }
   });
 
-  it('autopilotNavGroups 含 /admin/license 入口（requireSuperAdmin: true）', () => {
-    const all = autopilotNavGroups.flatMap((g) => g.items);
-    const adminLic = all.find((i) => i.path === '/admin/license');
-    expect(adminLic).toBeDefined();
+  it('客户区齐全：智能发布/智能获客/私域客服/视频剪辑/爆款翻拍/设置', () => {
+    const paths = navPaths();
+    for (const p of [
+      '/area/publish',
+      '/area/acquisition',
+      '/area/wechat',
+      '/area/video',
+      '/area/remake',
+      '/area/settings',
+    ]) {
+      expect(paths).toContain(p);
+    }
+  });
+
+  it('管理后台 /area/admin 仅 super-admin 可见', () => {
+    const admin = navItems().find((i) => i.path === '/area/admin');
+    expect(admin).toBeDefined();
+    expect(admin?.requireSuperAdmin).toBe(true);
+  });
+
+  it('AreaHubPage 已注册懒加载组件', () => {
+    expect(typeof autopilotPageComponents['AreaHubPage']).toBe('function');
+  });
+
+  it('子页收进 additionalRoutes（下钻可达）：每客服设置 / 微信客服配置 / License / 客户管理', () => {
+    const paths = routePaths();
+    expect(paths).toContain('/wechat/per-cs-config');
+    expect(paths).toContain('/wechat/cs-config');
+    expect(paths).toContain('/license');
+    expect(paths).toContain('/admin/customers');
+  });
+
+  it('旧扁平菜单项不再直接挂侧栏（子页/旧聚合页都不在侧栏）', () => {
+    const paths = navPaths();
+    expect(paths).not.toContain('/dashboard/publish');
+    expect(paths).not.toContain('/wechat/cs-config');
+    expect(paths).not.toContain('/ai-employees');
+    expect(paths).not.toContain('/media');
+  });
+});
+
+describe('config/navigation — License 入口仍可达（防误删）', () => {
+  it('/license 与 /admin/license 都在 additionalRoutes', () => {
+    const paths = routePaths();
+    expect(paths).toContain('/license');
+    expect(paths).toContain('/admin/license');
+    const adminLic = additionalRoutes.find((r) => r.path === '/admin/license');
     expect(adminLic?.requireSuperAdmin).toBe(true);
   });
 
@@ -30,61 +82,16 @@ describe('config/navigation', () => {
   });
 });
 
-describe('config/navigation — 按 Line 组织（2026-06-23 重构）', () => {
-  const groupByTitle = (t: string) => autopilotNavGroups.find((g) => g.title === t);
+describe('AreaHubPage — 区配置（每区总览卡片下钻）', () => {
+  it('私域客服区含「每客服设置」下钻卡片（钉死老板看不到的微信号页）', () => {
+    const wechat = AREA_HUBS['wechat'];
+    expect(wechat).toBeDefined();
+    expect(wechat.cards.some((c) => c.to === '/wechat/per-cs-config')).toBe(true);
+  });
 
-  it('客户侧栏按 Line 分组：Line 01/02/04/05/07 都在', () => {
-    for (const t of [
-      'Line 01 · 智能发布',
-      'Line 02 · 智能获客',
-      'Line 04 · 私域 AI 接管',
-      'Line 05 · 视频剪辑',
-      'Line 07 · AI 爆款翻拍',
-    ]) {
-      expect(groupByTitle(t)).toBeDefined();
+  it('每个客户区都有至少一张下钻卡片', () => {
+    for (const key of ['publish', 'acquisition', 'wechat', 'video', 'remake', 'settings']) {
+      expect(AREA_HUBS[key]?.cards.length ?? 0).toBeGreaterThanOrEqual(1);
     }
-  });
-
-  it('每客服设置（/wechat/per-cs-config）已进 Line 04 侧栏（之前隐藏、侧栏看不到）', () => {
-    const line04 = groupByTitle('Line 04 · 私域 AI 接管');
-    const paths = line04?.items.map((i) => i.path) ?? [];
-    expect(paths).toContain('/wechat/cs-config');
-    expect(paths).toContain('/wechat/per-cs-config');
-  });
-
-  it('全局只有一个「设置」分组（账号级：下载 Agent + License）', () => {
-    const settings = autopilotNavGroups.filter((g) => g.title === '⚙️ 设置');
-    expect(settings).toHaveLength(1);
-    const paths = settings[0].items.map((i) => i.path);
-    expect(paths).toContain('/dashboard/agent');
-    expect(paths).toContain('/license');
-  });
-
-  it('Line 00/10 收进「管理后台」super-admin，不出现在客户 Line 分组', () => {
-    const admin = groupByTitle('管理后台');
-    expect(admin).toBeDefined();
-    expect(admin?.items.find((i) => i.path === '/admin/customers')?.requireSuperAdmin).toBe(true);
-    expect(admin?.items.find((i) => i.path === '/operator')?.requireSuperAdmin).toBe(true);
-  });
-
-  it('旧聚合页（AI 员工 /ai-employees、新媒体运营 /media）已从侧栏移除', () => {
-    const all = autopilotNavGroups.flatMap((g) => g.items).map((i) => i.path);
-    expect(all).not.toContain('/ai-employees');
-    expect(all).not.toContain('/media');
-  });
-});
-
-describe('config/navigation — 会员管理并入客户管理（#816 结构性去重）', () => {
-  it('删除独立的「会员管理」菜单（/admin/users 不再出现在导航）', () => {
-    const all = autopilotNavGroups.flatMap((g) => g.items);
-    expect(all.find((i) => i.path === '/admin/users')).toBeUndefined();
-  });
-
-  it('只保留一个「客户管理」入口（/admin/customers，requireSuperAdmin）', () => {
-    const all = autopilotNavGroups.flatMap((g) => g.items);
-    const customers = all.filter((i) => i.path === '/admin/customers');
-    expect(customers).toHaveLength(1);
-    expect(customers[0].requireSuperAdmin).toBe(true);
-    expect(customers[0].label).toBe('客户管理');
   });
 });
