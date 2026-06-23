@@ -1,0 +1,37 @@
+{
+  "initiative_id": "",
+  "journey_type": "user_facing",
+  "journey_type_reason": "涉及 apps/dashboard/ PerCsConfigPage/CsOneClickSetupPage 管理员配置页交互（补营业时间+每日上限输入、非管理员只读），按优先级链命中 user_facing",
+  "tasks": [
+    {
+      "task_id": "ws1",
+      "title": "客服配置写接口安全闸（管理员+租户隔离）+ 前台营业时间/每日上限补全 + 非管理员只读",
+      "scope": "给 /cs/config/:wechatId、/cs/setup/:machineId、/cs/auto-agent 三个写接口前置 tenantContext + 管理员角色闸（member/无 role → 403 NOT_ADMIN）+ 租户隔离（目标客服所属租户 != 当前用户租户 → 403 CROSS_TENANT）+ deny by default（目标解析不出租户 → 404 TARGET_NOT_FOUND，绝不放行写库）；新增 GET /cs/my-role 供前台渲染只读态；PerCsConfigPage/CsOneClickSetupPage 补营业时间 start/end + daily_limit 输入框，非管理员只读+显示「仅管理员可配置」。复用 tenant-context.ts + customer-admin.ts 角色模式，不新增表、不改 wechat_cs_account_config 结构、不动中台全局 NFR。",
+      "dod": [
+        "[BEHAVIOR] member PUT /cs/config/:wechatId → 403 NOT_ADMIN 且 saveCSConfig 0 调用（apps/api/tests/regression/line04-cs-config-permission.test.ts 转绿）",
+        "[BEHAVIOR] 跨租户 admin → 403/404 且 0 写库；无 session → 401；目标解析不出 → 404 TARGET_NOT_FOUND 不写库",
+        "[BEHAVIOR] 本租户 admin → 200 且写该客服那一行（含营业时间/每日上限）",
+        "[BEHAVIOR:E2E] windows Playwright：管理员看到营业时间+每日上限输入并保存读回；member 只读+「仅管理员可配置」",
+        "[ARTIFACT] wechat-config.ts 三写接口挂 tenantContext + NOT_ADMIN 角色闸",
+        "[ARTIFACT] PerCsConfigPage 含 cs-business-hours-start / cs-daily-limit / cs-readonly-notice testid",
+        "[ARTIFACT] .github/workflows/e2e-line04-cs-config-permission.yml 2-job（ubuntu 后端 + windows Playwright）"
+      ],
+      "files": [
+        "apps/api/src/routes/wechat-config.ts",
+        "apps/api/src/middleware/cs-config-guard.ts",
+        "apps/api/tests/regression/line04-cs-config-permission.test.ts",
+        "apps/dashboard/src/pages/PerCsConfigPage.tsx",
+        "apps/dashboard/src/pages/CsOneClickSetupPage.tsx",
+        "apps/dashboard/e2e/cs-config-permission.spec.ts",
+        "sprints/06232248-line04-cs-config-permission/e2e-backend-verify.sh",
+        "sprints/06232248-line04-cs-config-permission/e2e-ui-verify.ps1",
+        "sprints/06232248-line04-cs-config-permission/seed-e2e.sql",
+        ".github/workflows/e2e-line04-cs-config-permission.yml",
+        ".github/workflows/scripts/smoke/line04-cs-config-permission-smoke.sh"
+      ],
+      "depends_on": [],
+      "complexity": "M",
+      "estimated_minutes": 90
+    }
+  ]
+}
