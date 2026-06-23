@@ -36,6 +36,7 @@ import {
   getContactMemory,
   getShortTerm,
 } from './wechat/contact-memory';
+import { appendTenantMessage } from './wechat/tenant-memory';
 import { assembleChatContext } from './wechat/context-assembler';
 
 // ─── 客服回复 LLM 配置：走 ToAPI deepseek-v3.2（OpenAI 兼容 /chat/completions）──
@@ -291,6 +292,26 @@ export type GenerateChatDraftResult =
 
 const FAIL_PLACEHOLDER = 'AI 生成失败（请人审决定是否重试）';
 
+/**
+ * 把一条 in/out 消息盖客服身份章落到被 stats 聚合的 zenithjoy.cs_memory_messages。
+ * 接缝 #1：经身份解析链解出的 csWechatId 盖到该行；解不到 → null（不计入任何客服、不报错）。
+ * 非致命：缺租户上下文 / DB 抖动一律 console.warn 吞掉，绝不阻塞草稿主链路。
+ */
+async function stampCsMemory(
+  tenantId: string | undefined,
+  contact: string,
+  role: 'in' | 'out',
+  text: string,
+  csWechatId: string | null,
+): Promise<void> {
+  if (!tenantId) return; // 无租户上下文不盖章（既有非租户 caller 行为不变）
+  try {
+    await appendTenantMessage({ tenantId, contact, role, text, csWechatId });
+  } catch (err) {
+    console.warn('[wechat-draft] cs_memory 盖章落库失败（不影响生成）:', err);
+  }
+}
+
 export async function generateChatDraft(
   params: GenerateChatDraftParams,
 ): Promise<GenerateChatDraftResult> {
@@ -299,6 +320,8 @@ export async function generateChatDraft(
   // 每客服配置（本地 DB = 引擎，决策 dd320e56）：带 agent_id 时优先用【这台机自己那份配置】
   // 判白名单/人设/开关——每客户独立、改一个不动别人。解不到 → null，回落旧的飞书/全局逻辑（向后兼容）。
   const csConfig = agent_id ? await getCSConfigByAgentId(agent_id) : null;
+  // 客服身份章：每客服配置在册 → 该客服微信号；解不到 → null（落 NULL，stats 不计入、不报错）。
+  const csWechatId = csConfig?.wechat_id ?? null;
 
   // S3 客服工作汇总：解析「处理本消息的客服微信号」给 in/out 落库盖身份章。
   // 优先用已配过的 csConfig.wechat_id；未配但已绑 PC → 经 service_agents 解出绑定的 wechat_id。
@@ -395,6 +418,8 @@ export async function generateChatDraft(
   } catch (err) {
     console.warn('[wechat-draft] 写入站消息失败（不影响生成）:', err);
   }
+  // 接缝 #1：同一条 in 盖客服身份章落到被 stats 聚合的 cs_memory_messages（解不到落 NULL）。
+  await stampCsMemory(tenant_id, sender, 'in', content, csWechatId);
 
   // IA 重设计刀1（反转 PR#940）：AI 回复读【每号完整 persona + 每号 business_kb】（每号独立人设+知识库）。
   //   - 带 agent_id 解到该号配置(csConfig) → persona 全套 style + self_name + business_kb 全用【这个号自己的】。
@@ -458,6 +483,8 @@ export async function generateChatDraft(
     } catch (err) {
       console.warn('[wechat-draft] 写出站消息/固化失败（不影响回复）:', err);
     }
+    // 接缝 #1：同一条 out 盖客服身份章落到被 stats 聚合的 cs_memory_messages（LLM 成功才有 out）。
+    await stampCsMemory(tenant_id, sender, 'out', aiContent, csWechatId);
   }
 
   // 4) 写飞书"互动记录"表（pending_review，approval_source NULL — A 路线护栏起点）

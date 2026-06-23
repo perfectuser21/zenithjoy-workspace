@@ -11,8 +11,9 @@ $ErrorActionPreference = "Stop"
 
 $VitePort = 5174
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
-# 本脚本在 sprint 根目录（e2e-windows.yml 跑 $sprintDir/e2e-verify.ps1）：sprint → sprints → repo root = 上 2 级。
-$repoRoot = Resolve-Path "$scriptDir\..\.."
+# 本副本在 sprint/scripts/ 下（比 sprint 根多一级）：scripts → sprint → sprints → repo root = 上 3 级。
+# 注：GHA e2e-windows.yml 实际跑的是 sprint 根目录那份（上 2 级），本副本仅为 contract DoD 存在性 + 手动跑用。
+$repoRoot = Resolve-Path "$scriptDir\..\..\.."
 
 Write-Host "▶ Installing dependencies..."
 $installProc = Start-Process -FilePath "cmd.exe" `

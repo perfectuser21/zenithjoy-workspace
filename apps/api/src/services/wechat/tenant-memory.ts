@@ -129,15 +129,21 @@ export async function appendTenantMessage(input: {
   contact: string;
   role: 'in' | 'out';
   text: string;
+  /**
+   * 客服微信号身份章（盖到被 stats 聚合的 cs_memory_messages 行上）。
+   * 经身份解析链 agent_id→machine→service_agents→wechat_id 解出；解不到 → null（向后兼容，
+   * stats 聚合不计入任何客服、不报错）。缺省 null = 不盖章（既有非客服 caller 行为不变）。
+   */
+  csWechatId?: string | null;
 }): Promise<{ message_id: number }> {
   const tenantId = (input.tenantId || '').trim();
   if (!tenantId) throw new MissingTenantError();
 
   const res = await pool.query(
-    `INSERT INTO zenithjoy.cs_memory_messages (tenant_id, contact, role, text)
-     VALUES ($1, $2, $3, $4)
+    `INSERT INTO zenithjoy.cs_memory_messages (tenant_id, contact, role, text, cs_wechat_id)
+     VALUES ($1, $2, $3, $4, $5)
      RETURNING id`,
-    [tenantId, input.contact, input.role, input.text],
+    [tenantId, input.contact, input.role, input.text, input.csWechatId ?? null],
   );
   return { message_id: Number(res.rows[0].id) };
 }
