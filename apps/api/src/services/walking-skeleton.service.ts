@@ -93,10 +93,11 @@ export interface RequiredAgentVersion {
 }
 
 // manifest 不可读时的兜底版本。必须 <= 已发布的最新核心，且随核心 bump 同步抬高。
-// bump 到 2.0.23：含 module-manager→模块 config IPC 的 machineId 透传（#826），真客户机
-// 自升 2.0.23 后 listen_chat 能直接拿到 machineId 拉每客服配置，不再靠手设 env ZENITHJOY_MACHINE_ID。
-// 核心包按约定 install-pack/zenithjoy-agent-v2.0.23.tar.gz 从 COS 下载（已发布）。
-export const DEFAULT_REQUIRED_AGENT_VERSION = '2.0.23';
+// bump 到 2.0.24：修 #826 的 IPC gap —— 用缓存配置启动(跳过注册)的 agent，cfg.machineId 为空，
+// 旧代码经 IPC 下发空 machineId → listen_chat 回落 env。2.0.24 改 setIdentity 传
+// `cfg.machineId || computeMachineId()`，IPC 一定带真实身份 → 真客户机彻底不靠 env 激活每客服配置。
+// 核心包按约定 install-pack/zenithjoy-agent-v2.0.24.tar.gz 从 COS 下载。
+export const DEFAULT_REQUIRED_AGENT_VERSION = '2.0.24';
 
 /**
  * 返回心跳要下发的核心要求版本。

@@ -188,10 +188,10 @@ describe('getRequiredAgentVersion（核心自升级单一来源）', () => {
     expect(DEFAULT_REQUIRED_AGENT_VERSION).toMatch(/^\d+\.\d+\.\d+$/);
   });
 
-  it('DEFAULT_REQUIRED_AGENT_VERSION 必须 >= 2.0.23（含 machineId IPC 透传，真客户机才能不靠 env 激活每客服配置）', async () => {
+  it('DEFAULT_REQUIRED_AGENT_VERSION 必须 >= 2.0.24（IPC 下发算好的 machineId，真客户机彻底不靠 env 激活每客服配置）', async () => {
     const { DEFAULT_REQUIRED_AGENT_VERSION } = await import('./walking-skeleton.service');
     const [maj, min, pat] = DEFAULT_REQUIRED_AGENT_VERSION.split('.').map(Number);
     const cmp = maj * 1_000_000 + min * 1_000 + pat;
-    expect(cmp).toBeGreaterThanOrEqual(2 * 1_000_000 + 0 * 1_000 + 23);
+    expect(cmp).toBeGreaterThanOrEqual(2 * 1_000_000 + 0 * 1_000 + 24);
   });
 });

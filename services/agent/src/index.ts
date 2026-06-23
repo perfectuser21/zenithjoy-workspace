@@ -522,10 +522,15 @@ async function main(): Promise<void> {
 
   // Sprint 06081700 — 把 agentId / apiBase 交给模块管理器，激活模块时随 config 消息下发
   // 06230819 — 同时下发 machineId：line04 listen_chat 按它向中台拉「自己那份」每客服配置
+  // 06231024 修：传【算好的】machineId，不是可能为空的 cfg.machineId。
+  //   用缓存配置启动（命中 ws_token，跳过 registerWithLicense）的 agent，cfg.machineId 为空，
+  //   旧代码把空值经 IPC 下发给模块 → listen_chat 拿不到 --machine-id → 回落 env。
+  //   这里用与注册同款 `cfg.machineId || computeMachineId()`，保证 IPC 一定带上真实身份，
+  //   真客户机无需手设 env ZENITHJOY_MACHINE_ID 即可激活每客服配置。
   moduleManager.setIdentity(
     cfg.agentUuid ?? cfg.agentId,
     deriveHttpApiBase(cfg) ?? undefined,
-    cfg.machineId,
+    cfg.machineId || computeMachineId(),
   );
 
   startWs1HeartbeatLoop(cfg);
