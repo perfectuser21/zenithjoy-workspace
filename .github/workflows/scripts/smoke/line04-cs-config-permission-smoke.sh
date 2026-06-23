@@ -9,19 +9,21 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/../../../.." && pwd)"
 cd "$ROOT"
 
-echo "── ① 写接口挂闸：wechat-config.ts 三个 PUT 前置 tenantContext + 角色闸 ──"
+echo "── ① 写接口挂闸：wechat-config.ts 三个 PUT 前置 tenantContext + 管理员角色闸 + 租户隔离 ──"
+# 闸由兼容工厂 requireCsWriteAccess(kind) 承载：内部组合 tenantContext→requireCsAdmin→requireSameTenant(kind)
+# （cs/auto-agent 无路径参数、无目标租户可解析，用 requireCsAdminOrSuperAdmin）。
 node -e '
 const fs = require("fs");
 const c = fs.readFileSync("apps/api/src/routes/wechat-config.ts", "utf8");
 const checks = [
   [/tenantContext/, "缺 tenantContext"],
-  [/requireCsAdmin/, "缺管理员角色闸 requireCsAdmin"],
-  [/requireSameTenant\(.wechatId.\)/, "cs/config 缺租户隔离闸"],
-  [/requireSameTenant\(.machineId.\)/, "cs/setup 缺租户隔离闸"],
+  [/requireCsWriteAccess\(.wechatId.\)/, "cs/config 缺写访问闸 requireCsWriteAccess(wechatId)"],
+  [/requireCsWriteAccess\(.machineId.\)/, "cs/setup 缺写访问闸 requireCsWriteAccess(machineId)"],
+  [/requireCsAdminOrSuperAdmin/, "cs/auto-agent 缺管理员角色闸 requireCsAdminOrSuperAdmin"],
   [/cs\/my-role/, "缺 GET /cs/my-role"],
 ];
 for (const [re, msg] of checks) { if (!re.test(c)) { console.error("FAIL: " + msg); process.exit(1); } }
-console.log("PASS: 三写接口挂闸 + my-role");
+console.log("PASS: 三写接口挂闸（requireCsWriteAccess + requireCsAdminOrSuperAdmin）+ my-role");
 '
 
 echo "── ② guard 中间件实现拒绝码 NOT_ADMIN / CROSS_TENANT / TARGET_NOT_FOUND ──"
