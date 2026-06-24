@@ -1,7 +1,7 @@
-ZenithJoy Agent v1.1.97 — 部署说明
+ZenithJoy Agent — 部署说明
 =====================================
 
-[ 一、微信 AI 客服（核心功能）]
+[ 一、安装与启动（无黑窗）]
 
 前提：微信必须是 4.1.8.107 版本（4.1.9/4.1.10 不支持）
       开机已登录微信
@@ -11,15 +11,17 @@ ZenithJoy Agent v1.1.97 — 部署说明
    编辑 .env，把 ZENITHJOY_LICENSE 改成你的真 license
    （dashboard https://autopilot.zenjoymedia.media/dashboard/agent "License" 页拷贝）
 
-2. 以管理员身份用 PowerShell 注册开机自启：
-   powershell -ExecutionPolicy Bypass -File install-autostart.ps1
+2. 双击「启动 ZenithJoy Agent」快捷方式（安装时自动生成，指向 start.vbs 无窗入口）
+   —— 全程无黑色控制台窗口；首次启动会自动注册开机自启。
+   （start.bat 是内部启动脚本，由快捷方式/开机自启隐藏调用，不需要也不要手动双击它）
 
-3. 双击 listener-watchdog.bat 立刻开始监听（不用等重启）
+3. 任务栏右下角出现「悦升云端」托盘图标即启动成功；
+   打开 Dashboard https://autopilot.zenjoymedia.media/dashboard/agent 看到"Agent 在线"即可。
 
-4. 用另一个微信给本机微信发一条消息，等 5-15 秒收到 AI 回复即装好
+4. 用另一个微信给本机微信发一条消息，等 5-15 秒收到 AI 回复即装好。
 
-日志：C:\Users\Public\zj-listener.log
-已回复记录（重启不丢）：C:\Users\Public\zj-replied.json
+日志：%APPDATA%\zenithjoy-agent\launch.log（启动器）
+      %USERPROFILE%\.zj\agent.log（Agent 主进程）
 
 功能说明：
 - 后台静默回复：微信可最小化/后台，AI 仍能读消息并回复，不抢鼠标键盘
@@ -28,19 +30,7 @@ ZenithJoy Agent v1.1.97 — 部署说明
 - 微信自启：检测到微信未运行时自动拉起，等扫码登录
 
 
-[ 二、Agent 主进程（Dashboard + 视频流水线）]
-
-1. 确保 .env 已填好 ZENITHJOY_LICENSE（同上）
-
-2. 双击 start.bat（需要 Dashboard 或视频功能时运行）
-
-3. 打开 Dashboard https://autopilot.zenjoymedia.media/dashboard/agent
-   看到"Agent 在线"即可
-
-agent 日志：%USERPROFILE%\.zj\agent.log
-
-
-[ 三、常见问题 ]
+[ 二、常见问题 ]
 
 SmartScreen 弹"Windows 已保护你的电脑"：
   点"更多信息" -> "仍要运行"
@@ -53,5 +43,5 @@ SmartScreen 弹"Windows 已保护你的电脑"：
   powershell -ExecutionPolicy Bypass -File install-autostart.ps1 -Unregister
 
 升级安装包：
-  解压新版到新目录，复制旧 .env 过去，重新注册自启即可
-  C:\Users\Public\ 下的日志和已回复记录自动继承
+  解压新版到新目录，复制旧 .env 过去，重新双击快捷方式即可
+  %APPDATA% 下的日志和已回复记录自动继承
