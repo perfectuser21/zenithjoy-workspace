@@ -9,9 +9,14 @@
 auto_agent_enabled」，并对「中台不可达拉配置失败」做强制 dryrun 兜底——绝不误真发。
 身份链路（决策 143f5d00）：按本机 machine_id 拉（中台 service_agents 反查绑定 wechat_id）。
 """
-# 注意：requests 在 fetch_cs_config 内部惰性 import —— 纯函数（should_reply / resolve_send_mode /
-# resolve_active_config）不依赖 HTTP 库，避免 `from cs_config_gate import should_reply` 在没装 requests
-# 的环境（smoke / CI gate 验白名单纯函数）里 ModuleNotFoundError。
+# requests 顶层 import 但容忍缺失：纯函数（should_reply / resolve_send_mode / resolve_active_config）
+# 不依赖 HTTP 库，没装 requests 的环境（smoke / CI gate 只验白名单纯函数）也要能 `import cs_config_gate`。
+# 同时保留模块级 `requests` 属性（=None 时）让单测的 monkeypatch.setattr(gate.requests, ...) 在装了
+# requests 的 agent 测试环境仍可用——两个环境都不破。
+try:
+    import requests
+except ImportError:  # pragma: no cover —— 纯函数环境没装 requests
+    requests = None
 
 
 def resolve_send_mode(config, pull_ok):
@@ -49,7 +54,8 @@ def fetch_cs_config(middleware_url, machine_id, timeout=10):
     """
     if not middleware_url or not machine_id:
         return None, False
-    import requests
+    if requests is None:  # 没装 requests 的纯函数环境不该走到真拉配置；强制 dryrun 兜底
+        return None, False
     url = middleware_url.rstrip("/") + "/api/wechat/cs/agent-config"
     try:
         resp = requests.get(url, params={"machine_id": machine_id}, timeout=timeout)
