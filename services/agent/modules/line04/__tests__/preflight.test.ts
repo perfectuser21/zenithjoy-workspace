@@ -41,7 +41,7 @@ vi.mock('node:child_process', async (importOriginal) => {
 import { execSync } from 'node:child_process';
 import * as childProcessModule from 'node:child_process';
 
-describe('微信版本比较（纯函数，只认 4.1.8.x 为支持，高于低于都不行）', () => {
+describe('微信版本比较（纯函数，>= 4.1.8 一律支持；6-21 放开上界，仅卡 < 4.1.8 下界）', () => {
   it('4.1.8.107 = 基线 → 支持', () => {
     expect(isWechatVersionSupported('4.1.8.107')).toBe(true);
   });
@@ -51,14 +51,14 @@ describe('微信版本比较（纯函数，只认 4.1.8.x 为支持，高于低�
   it('【必须是 4.1.8 不是小】4.1.7.25 低于基线 4.1.8 → 不支持', () => {
     expect(isWechatVersionSupported('4.1.7.25')).toBe(false);
   });
-  it('4.1.9 → 不支持', () => {
-    expect(isWechatVersionSupported('4.1.9')).toBe(false);
+  it('4.1.9 → 支持（6-21 放开上界，Qt UIA 可用）', () => {
+    expect(isWechatVersionSupported('4.1.9')).toBe(true);
   });
-  it('4.1.10 → 不支持（砍掉 UIA 控件树）', () => {
-    expect(isWechatVersionSupported('4.1.10.0')).toBe(false);
+  it('4.1.10 → 支持（死闸误判的核心版本，现放行）', () => {
+    expect(isWechatVersionSupported('4.1.10.0')).toBe(true);
   });
-  it('4.2.0 → 不支持', () => {
-    expect(isWechatVersionSupported('4.2.0')).toBe(false);
+  it('4.2.0 → 支持（>= 4.1.8 一律放行）', () => {
+    expect(isWechatVersionSupported('4.2.0')).toBe(true);
   });
   it('3.9.12.19 旧版 3.x → 不支持（无 mmui::MainWindow，RPA 不可用）', () => {
     expect(isWechatVersionSupported('3.9.12.19')).toBe(false);
@@ -685,10 +685,12 @@ describe('runPreflight — 非 Windows 不触发 autoRepair', () => {
   });
 });
 
-// ── 回归测试：preflight 所有检测必须 blocking（无软放行）──
-// 根因：曾存在 "version-only warning → ok:true" bypass，导致微信版本 > 4.1.8
-// 时 autoRepair 失败后模块仍激活，listen_chat.py 用 pywinauto 操作高版本微信崩溃。
-describe('runPreflight — wechat_version 失败必须 blocking（ok:false）', () => {
+// ── 回归测试：>= 4.1.8 一律放行（6-21 放开上界，死闸不再误判 4.1.10+）──
+// 根因（旧死闸）：曾"只认 4.1.8.x，>=4.1.9 一律 fail"，导致新机（微信 4.1.10+）
+// preflight 第一关 wechat_version 就 fail → module-manager 不激活 line04 → listen_chat 永不跑。
+// 6-21 真机验证 Qt51514QWindowIcon 窗口 UIA 照样能发，故放开上界：>= 4.1.8 一律 ok:true。
+// 仅 < 4.1.8 仍 blocking（这部分由下界用例守卫，见 4.1.7 mock 路径）。
+describe('runPreflight — >= 4.1.8 放行 / < 4.1.8 仍 blocking', () => {
   const origMock = process.env.MOCK_WECHAT_VERSION;
 
   afterEach(() => {
@@ -697,24 +699,33 @@ describe('runPreflight — wechat_version 失败必须 blocking（ok:false）', 
     vi.restoreAllMocks();
   });
 
-  it('MOCK_WECHAT_VERSION=4.1.10.0 时 runPreflight 返回 ok:false（不得 ok:true 软放行）', async () => {
-    if (process.platform === 'win32') return; // Windows 上 autoRepair 会真尝试修复，用另一 case
+  it('MOCK_WECHAT_VERSION=4.1.10.0 时 runPreflight 返回 ok:true（死闸误判版本现放行）', async () => {
+    if (process.platform === 'win32') return;
     process.env.MOCK_WECHAT_VERSION = '4.1.10.0';
     const result = await runPreflight(os.tmpdir());
-    expect(result.ok).toBe(false);
-    expect(result.checks.wechat_version).toBe(false);
-    expect(result.fixGuide).toContain('4.1.10.0');
+    expect(result.ok).toBe(true);
+    expect(result.checks.wechat_version).toBe(true);
+    expect(result.reason).toContain('4.1.10.0');
   });
 
-  it('MOCK_WECHAT_VERSION=5.0.0.0 時 runPreflight 返回 ok:false', async () => {
+  it('MOCK_WECHAT_VERSION=5.0.0.0 時 runPreflight 返回 ok:true（>= 4.1.8 一律放行）', async () => {
     if (process.platform === 'win32') return;
     process.env.MOCK_WECHAT_VERSION = '5.0.0.0';
     const result = await runPreflight(os.tmpdir());
-    expect(result.ok).toBe(false);
-    expect(result.checks.wechat_version).toBe(false);
+    expect(result.ok).toBe(true);
+    expect(result.checks.wechat_version).toBe(true);
   });
 
-  it('MOCK_WECHAT_VERSION=4.1.8.107 时 runPreflight 返回 ok:true（支持版本不阻塞）', async () => {
+  it('MOCK_WECHAT_VERSION=4.1.7.25 时 runPreflight 返回 ok:false（< 4.1.8 下界仍阻断）', async () => {
+    if (process.platform === 'win32') return;
+    process.env.MOCK_WECHAT_VERSION = '4.1.7.25';
+    const result = await runPreflight(os.tmpdir());
+    expect(result.ok).toBe(false);
+    expect(result.checks.wechat_version).toBe(false);
+    expect(result.fixGuide).toContain('4.1.7.25');
+  });
+
+  it('MOCK_WECHAT_VERSION=4.1.8.107 时 runPreflight 返回 ok:true（基线版本不阻塞）', async () => {
     if (process.platform === 'win32') return;
     process.env.MOCK_WECHAT_VERSION = '4.1.8.107';
     const result = await runPreflight(os.tmpdir());

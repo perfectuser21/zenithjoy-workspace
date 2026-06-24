@@ -1,9 +1,12 @@
 """
 微信版本守卫单测 — `find_weixin._parse_and_check` / `_parse_version` 纯函数。
 
-【背景铁证】微信 Windows 4.1.10.27 起把聊天窗口的无障碍控件树(mmui)砍了，
-  UIA/MSAA 两层都读不到聊天控件；4.1.9.57 主窗口也已不透明。
-  4.1.8.107 = 已验证可用基线。所以 RPA 必须跑在 = 4.1.8.x 的微信上（高于低于都不行）。
+【2026-06-24 政策更新】6-21 真机验证（memory wechat_qt_uia_works_dont_downgrade）：
+  微信升 4.1.10+ Qt 窗口（Qt51514QWindowIcon）后 UIA 照样能发，版本锁不住也不需要降。
+  旧死闸"只认 4.1.8.x，>=4.1.9 一律 fail"导致新机（4.1.10+）preflight 第一关就 fail、
+  line04 模块永不激活。现放开上界：**>= 4.1.8 一律放行**（含 4.1.9 / 4.1.10+ / 未来版本）。
+  仅保留下界：< 4.1.8（3.x / 4.0.x / 4.1.0~4.1.7）仍阻断——这些版本无 mmui::MainWindow /
+  控件配方不一致，6-21 结论只向上验证（Qt 新版可用），未覆盖这些老版本。
 
 【关键约束】版本比较走纯函数（_parse_version / _parse_and_check），
   不碰 ctypes/windll —— 可在 mac（无 windll）下用 pytest 直接跑通。
@@ -76,26 +79,22 @@ def test_3_0_version_blocked():
         _parse_and_check("3.0.0.0")
 
 
-# ---------- _parse_and_check：阻断（过高版本）----------
+# ---------- _parse_and_check：放行（高版本，6-21 政策放开上界）----------
 
 
-def test_4_1_9_blocked():
-    """4.1.9.57 起无障碍控件树被移除 → 抛 RuntimeError。"""
-    with pytest.raises(RuntimeError) as exc:
-        _parse_and_check("4.1.9.57")
-    assert "4.1.9" in str(exc.value)
+def test_4_1_9_allowed():
+    """4.1.9.57 → 现放行（Qt 窗口 UIA 照样能用，不再因上界 fail）。"""
+    assert _parse_and_check("4.1.9.57") is None
 
 
-def test_4_1_10_blocked():
-    """4.1.10.27 = 铁证版本 → 抛 RuntimeError。"""
-    with pytest.raises(RuntimeError):
-        _parse_and_check("4.1.10.27")
+def test_4_1_10_allowed():
+    """4.1.10.27 = 死闸误判的核心版本 → 现必须放行（这是本次修复要证的）。"""
+    assert _parse_and_check("4.1.10.27") is None
 
 
-def test_future_5_x_blocked():
-    """更高的主版本（如 5.0.0.0）→ 抛。"""
-    with pytest.raises(RuntimeError):
-        _parse_and_check("5.0.0.0")
+def test_future_5_x_allowed():
+    """更高的主版本（如 5.0.0.0）→ 放行（>= 4.1.8 一律过）。"""
+    assert _parse_and_check("5.0.0.0") is None
 
 
 # ---------- _parse_and_check：读不到版本不硬阻断 ----------
@@ -139,19 +138,31 @@ def test_assert_supported_version_non_windows_skips():
     assert result is None
 
 
-def test_assert_supported_version_blocks_419():
-    """用 mock 验证：get_weixin_version 返回 4.1.9.57 时 assert_supported_version 抛 RuntimeError。"""
+def test_assert_supported_version_allows_4110():
+    """用 mock 验证：get_weixin_version 返回 4.1.10.27 时 assert_supported_version 不抛（放开上界）。"""
     from unittest import mock
     import importlib
     import find_weixin as fw
     importlib.reload(fw)
 
-    with mock.patch("find_weixin.get_weixin_version", return_value="4.1.9.57"):
+    with mock.patch("find_weixin.get_weixin_version", return_value="4.1.10.27"):
+        result = fw.assert_supported_version()
+        assert result is None
+
+
+def test_assert_supported_version_blocks_below_418():
+    """用 mock 验证：4.1.7.25（< 4.1.8 下界）仍抛 RuntimeError（控件配方不一致）。"""
+    from unittest import mock
+    import importlib
+    import find_weixin as fw
+    importlib.reload(fw)
+
+    with mock.patch("find_weixin.get_weixin_version", return_value="4.1.7.25"):
         try:
             fw.assert_supported_version()
-            raise AssertionError("Expected RuntimeError for 4.1.9.57")
+            raise AssertionError("Expected RuntimeError for 4.1.7.25")
         except RuntimeError as e:
-            assert "4.1.9" in str(e)
+            assert "4.1.7" in str(e)
 
 
 def test_assert_supported_version_passes_418():
