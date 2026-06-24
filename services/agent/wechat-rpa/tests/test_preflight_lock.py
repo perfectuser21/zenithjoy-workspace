@@ -1,21 +1,12 @@
 """
-test_preflight_lock.py — TDD Red 阶段：preflight.py 四层锁扩展验证 + 降级路径覆盖
+test_preflight_lock.py — preflight.py 版本降级路径覆盖（锁版本动作已删，本文件只留版本判定守卫）。
 
-Red 证据（Generator 实现前在 windows-latest 上的预期结果）：
-  - TestFourLayerLock::test_layer2_icacls_deny   → FAIL（check_lock_update 未加 icacls，输出无 DENY）
-  - TestFourLayerLock::test_layer3_domain_firewall → FAIL（当前封程序路径非域名，无 dldir1v6.qq.com）
-  - TestFourLayerLock::test_layer4_registry_autoupdate → FAIL（注册表键不存在，Generator 未写入）
+【2026-06-24】lock-update（锁微信 4.1.8 + 禁自动更新四层锁）整套删除——实测锁不住（客户机重启
+微信自动升 4.1.10），且 4.1.10 UIA 客服照样能发，锁既无效又无必要。故 check_lock_update 已移除，
+CHECK_NAMES 不再含 lock_update（8 项检测）。本文件保留版本降级路径（< 4.1.8 仍降级）的覆盖。
 
-降级路径（代码已存在，补覆盖）：
-  - TestDowngradePath::test_version_419_* → 预期 PASS（check_wechat_version 降级逻辑已在 line 428-429）
-    这两条测试保护既有逻辑不被 Generator 意外删除
-
-运行方式：
-  # Windows（全部测试）：
+运行：
   python -m pytest services/agent/wechat-rpa/tests/test_preflight_lock.py -v
-
-  # Mac/Linux（仅降级路径）：
-  python -m pytest services/agent/wechat-rpa/tests/test_preflight_lock.py -v -k TestDowngradePath
 """
 from __future__ import annotations
 
@@ -29,143 +20,42 @@ WECHAT_RPA_DIR = os.path.abspath(os.path.join(HERE, ".."))
 if WECHAT_RPA_DIR not in sys.path:
     sys.path.insert(0, WECHAT_RPA_DIR)
 
-from preflight import CHECK_NAMES, check_lock_update, check_wechat_version
+from preflight import CHECK_NAMES, check_wechat_version
 
 
-class TestDowngradePath(unittest.TestCase):
-    """PRD 边界情况：微信版本 ≥4.1.9 → 降级路径被检测到（跨平台，用 mock）"""
+class TestVersionDowngradePath(unittest.TestCase):
+    """< 4.1.8 仍降级；>= 4.1.8（含 4.1.10+）放行（6-21 放开上界，#852）。"""
 
-    def test_version_419_dry_run_returns_failed_with_418_message(self):
-        """版本 4.1.9 在 dry_run 模式下 → status=failed，detail 含 4.1.8"""
-        with patch("preflight.get_weixin_version", return_value="4.1.9"), \
-             patch("preflight._is_windows", return_value=True):
-            result = check_wechat_version(dry_run=True)
-        self.assertEqual(
-            result["status"],
-            "failed",
-            f"版本 4.1.9 在 dry_run 下应返回 failed，实际: {result['status']}",
-        )
-        self.assertIn(
-            "4.1.8",
-            result.get("detail", ""),
-            "detail 应包含 '4.1.8' 降级说明",
-        )
-
-    def test_version_420_also_triggers_downgrade_detection(self):
-        """版本 4.2.0（高于 4.1.9）同样触发降级检测"""
-        with patch("preflight.get_weixin_version", return_value="4.2.0"), \
+    def test_version_417_below_baseline_downgrade(self):
+        """版本 4.1.7（< 4.1.8 下界）在 dry_run 模式下 → status=failed，detail 含 4.1.8。"""
+        with patch("preflight.get_weixin_version", return_value="4.1.7"), \
              patch("preflight._is_windows", return_value=True):
             result = check_wechat_version(dry_run=True)
         self.assertEqual(result["status"], "failed",
-            f"版本 4.2.0 在 dry_run 下应返回 failed，实际: {result['status']}")
+            f"版本 4.1.7（<4.1.8）应 failed，实际: {result['status']}")
+        self.assertIn("4.1.8", result.get("detail", ""),
+            "detail 应包含 '4.1.8' 降级说明")
 
-    def test_lock_update_check_name_is_correct(self):
-        """CHECK_NAMES[3] == 'lock_update'（索引不串位保护）"""
-        self.assertEqual(CHECK_NAMES[3], "lock_update",
-            f"CHECK_NAMES[3] 应为 'lock_update'，实际: {CHECK_NAMES[3]}")
-
-    def test_lock_update_returns_dict_with_required_fields(self):
-        """check_lock_update() 返回值含 name/status/detail 字段（跨平台接口契约）"""
-        result = check_lock_update(dry_run=True)
-        self.assertIn("name", result, "返回值缺 'name' 字段")
-        self.assertIn("status", result, "返回值缺 'status' 字段")
-        self.assertEqual(result["name"], "lock_update",
-            f"name 应为 'lock_update'，实际: {result['name']}")
+    def test_version_4110_above_baseline_ok(self):
+        """版本 4.1.10（>= 4.1.8）→ status=ok（放开上界，不再降级）。"""
+        with patch("preflight.get_weixin_version", return_value="4.1.10"), \
+             patch("preflight._is_windows", return_value=True):
+            result = check_wechat_version(dry_run=True)
+        self.assertEqual(result["status"], "ok",
+            f"版本 4.1.10（>=4.1.8）应放行 ok，实际: {result['status']}")
 
 
-@unittest.skipUnless(sys.platform == "win32", "四层锁仅在 Windows 执行（Red 证据在 windows-latest 上验证）")
-class TestFourLayerLock(unittest.TestCase):
-    """四层锁扩展：Generator 实现前在 windows-latest 上全部 FAIL（Red 阶段）"""
+class TestCheckNamesNoLockUpdate(unittest.TestCase):
+    """锁版本动作已删：CHECK_NAMES 不再含 lock_update，共 8 项。"""
 
-    def setUp(self):
-        import shutil
-        import tempfile
+    def test_lock_update_removed_from_check_names(self):
+        self.assertNotIn("lock_update", CHECK_NAMES,
+            "lock_update 应已从 CHECK_NAMES 移除（锁版本动作整套删除）")
 
-        self.tmpdir = tempfile.mkdtemp(prefix="zj-lock-test-")
-        shutil.copy(
-            r"C:\Windows\System32\notepad.exe",
-            os.path.join(self.tmpdir, "WeixinUpdate.exe"),
-        )
-
-    def tearDown(self):
-        import shutil
-
-        shutil.rmtree(self.tmpdir, ignore_errors=True)
-
-    def _run_lock(self):
-        with patch("preflight.WEIXIN_INSTALL_ROOT", self.tmpdir):
-            return check_lock_update(dry_run=False)
-
-    def test_layer1_file_renamed_to_disabled(self):
-        """Layer 1: WeixinUpdate.exe 已改名为 .disabled（现有逻辑，预期 PASS 作为基准）"""
-        result = self._run_lock()
-        disabled = os.path.join(self.tmpdir, "WeixinUpdate.exe.disabled")
-        self.assertTrue(
-            os.path.exists(disabled),
-            f"Layer1: {disabled} 不存在，rename 未执行",
-        )
-        self.assertIn(result["status"], ("ok", "fixed", "warn"),
-            f"Layer1 后 status 应为 ok/fixed/warn，实际: {result['status']}")
-
-    def test_layer2_icacls_deny_after_lock(self):
-        """Layer 2: disabled 文件 icacls 含 DENY（Generator 未实现前 FAIL）"""
-        import subprocess
-
-        self._run_lock()
-        disabled = os.path.join(self.tmpdir, "WeixinUpdate.exe.disabled")
-        self.assertTrue(os.path.exists(disabled), f"前置 Layer1 FAIL: {disabled} 不存在")
-        r = subprocess.run(
-            ["icacls", disabled], capture_output=True, text=True,
-            encoding="utf-8", errors="replace",
-        )
-        stdout = r.stdout or ""
-        self.assertIn(
-            "DENY",
-            stdout,
-            f"Layer2: icacls 无 DENY 输出（Generator 需实现 icacls /deny）: {stdout[:200]}",
-        )
-
-    def test_layer3_domain_firewall_dldir1v6(self):
-        """Layer 3: 防火墙出站规则含 dldir1v6.qq.com 域名封禁（Generator 未实现前 FAIL）"""
-        import subprocess
-
-        self._run_lock()
-        fw = subprocess.run(
-            ["netsh", "advfirewall", "firewall", "show", "rule", "name=all"],
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-        )
-        fw_stdout = fw.stdout or ""
-        self.assertIn(
-            "dldir1v6.qq.com",
-            fw_stdout,
-            "Layer3: 防火墙无 dldir1v6.qq.com 域名封禁规则（Generator 需实现域名 block，不仅是程序路径 block）",
-        )
-
-    def test_layer4_registry_autoupdate_zero(self):
-        """Layer 4: HKLM\\SOFTWARE\\Policies\\Tencent\\WeChat\\AutoUpdate == 0（Generator 未实现前 FAIL）"""
-        import winreg
-
-        self._run_lock()
-        try:
-            k = winreg.OpenKey(
-                winreg.HKEY_LOCAL_MACHINE,
-                r"SOFTWARE\Policies\Tencent\WeChat",
-            )
-            v, _ = winreg.QueryValueEx(k, "AutoUpdate")
-            self.assertEqual(
-                v,
-                0,
-                f"Layer4: AutoUpdate={v}，期望 0",
-            )
-        except FileNotFoundError:
-            self.fail(
-                "Layer4: 注册表键 HKLM\\SOFTWARE\\Policies\\Tencent\\WeChat\\AutoUpdate 不存在，"
-                "Generator 尚未实现注册表写入"
-            )
+    def test_check_names_count_is_8(self):
+        self.assertEqual(len(CHECK_NAMES), 8,
+            f"删 lock_update 后应为 8 项，实际: {len(CHECK_NAMES)}")
 
 
 if __name__ == "__main__":
-    unittest.main(verbosity=2)
+    unittest.main()
