@@ -8,8 +8,7 @@ vi.mock('../client', () => ({
 import { apiClient } from '../client';
 import { wechatCsDailyReportApi } from '../wechat-cs-daily-report.api';
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const mockedGet = vi.mocked((apiClient as any).get);
+const mockedGet = vi.mocked((apiClient as { get: ReturnType<typeof vi.fn> }).get);
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -29,8 +28,7 @@ describe('wechatCsDailyReportApi.getReports', () => {
     const rows = await wechatCsDailyReportApi.getReports('2026-06-20');
     const [url, cfg] = mockedGet.mock.calls[0];
     expect(url).toBe('/wechat/cs/daily-report');
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    expect((cfg as any).params.date).toBe('2026-06-20');
+    expect((cfg as { params: { date: string } }).params.date).toBe('2026-06-20');
     expect(rows).toHaveLength(1);
     expect(rows[0].cs_wechat_id).toBe('wxid_a');
     expect(rows[0].received_count).toBe(15);

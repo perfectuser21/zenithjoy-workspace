@@ -8,8 +8,7 @@ vi.mock('../client', () => ({
 import { apiClient } from '../client';
 import { wechatCsStatsApi } from '../wechat-cs-stats.api';
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const mockedGet = vi.mocked((apiClient as any).get);
+const mockedGet = vi.mocked((apiClient as { get: ReturnType<typeof vi.fn> }).get);
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -29,8 +28,7 @@ describe('wechatCsStatsApi.getStats', () => {
     const rows = await wechatCsStatsApi.getStats('today');
     const [url, cfg] = mockedGet.mock.calls[0];
     expect(url).toBe('/wechat/cs/stats');
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    expect((cfg as any).params.date).toBe('today');
+    expect((cfg as { params: { date: string } }).params.date).toBe('today');
     expect(rows).toHaveLength(1);
     expect(rows[0].cs_wechat_id).toBe('wxid_a');
     expect(rows[0].received_count).toBe(3);
@@ -39,8 +37,7 @@ describe('wechatCsStatsApi.getStats', () => {
   it('yesterday 透传到 params.date', async () => {
     mockedGet.mockResolvedValueOnce({ data: { ok: true, date: 'yesterday', stats: [] } });
     await wechatCsStatsApi.getStats('yesterday');
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    expect((mockedGet.mock.calls[0][1] as any).params.date).toBe('yesterday');
+    expect((mockedGet.mock.calls[0][1] as { params: { date: string } }).params.date).toBe('yesterday');
   });
 
   it('响应缺 stats → 返回空数组（不崩）', async () => {
