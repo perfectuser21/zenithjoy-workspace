@@ -1,0 +1,35 @@
+name: E2E Line04 CS Stats
+
+# Line04 客服工作汇总(S3) + 客服日报(S4) 前端 Playwright UI（windows_cloud）。
+# 后端 smoke（真 DB curl/psql）走 ci-l4-e2e-smoke.yml 的 smoke-api-contract job，这里只跑前台 UI。
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'apps/dashboard/e2e/cs-work-stats.spec.ts'
+      - 'apps/dashboard/e2e/cs-daily-report.spec.ts'
+      - 'apps/dashboard/src/pages/CsWorkStatsPage.tsx'
+      - 'apps/dashboard/src/pages/CsDailyReportPage.tsx'
+      - 'apps/dashboard/src/api/wechat-cs-stats.api.ts'
+      - 'apps/dashboard/src/api/wechat-cs-daily-report.api.ts'
+      - 'sprints/06241445-line04-cs-stats-ci-wiring/**'
+      - '.github/workflows/e2e-line04-cs-stats.yml'
+
+concurrency:
+  group: e2e-line04-cs-stats-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  dashboard-ui:                            # job2：前台客服工作汇总 + 日报 Playwright UI（windows，无 DB，page.route 拦后端）
+    name: job2 — 前台客服工作汇总/日报 Playwright UI（windows）
+    runs-on: windows-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Dashboard UI E2E（Playwright，page.route 拦截后端）
+        shell: pwsh
+        run: ./sprints/06241445-line04-cs-stats-ci-wiring/e2e-ui-verify.ps1

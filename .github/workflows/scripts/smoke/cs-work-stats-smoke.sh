@@ -34,14 +34,18 @@ node -e '
 const fs=require("fs"),path=require("path");
 const dir=path.join(process.argv[1],"apps/api/db/migrations");
 const files=fs.readdirSync(dir).filter(f=>f.endsWith(".sql"));
-const blob=files.map(f=>fs.readFileSync(path.join(dir,f),"utf8")).join("\n");
-// cs_wechat_id 列加到 wechat_messages（nullable：不带 NOT NULL）
-if(!/ALTER TABLE\s+zenithjoy\.wechat_messages[\s\S]*cs_wechat_id/i.test(blob)){
+// 只看「给 wechat_messages 加 cs_wechat_id」那条 migration（按内容定位，避免 daily_report.cs_wechat_id
+// (那是 NOT NULL，正确) 误命中 nullable 断言）。
+const wmFile=files.map(f=>fs.readFileSync(path.join(dir,f),"utf8"))
+  .find(s=>/ALTER TABLE\s+zenithjoy\.wechat_messages[\s\S]*cs_wechat_id/i.test(s));
+if(!wmFile){
   console.error("FAIL: 缺 ALTER TABLE wechat_messages ADD cs_wechat_id");process.exit(1);}
-if(/cs_wechat_id[^\n,;]*NOT\s+NULL/i.test(blob)){
-  console.error("FAIL: cs_wechat_id 不应为 NOT NULL（向后兼容铁律：nullable）");process.exit(1);}
-// (cs_wechat_id, created_at) 索引
-if(!/INDEX[\s\S]*wechat_messages\s*\(\s*cs_wechat_id\s*,\s*created_at\s*\)/i.test(blob)){
+// 该 ALTER 行不带 NOT NULL（nullable，向后兼容铁律）
+const alterLine=(wmFile.match(/ADD COLUMN[\s\S]*?cs_wechat_id[^\n;]*/i)||[""])[0];
+if(/NOT\s+NULL/i.test(alterLine)){
+  console.error("FAIL: wechat_messages.cs_wechat_id 不应为 NOT NULL（向后兼容铁律：nullable）");process.exit(1);}
+// (cs_wechat_id, created_at) 索引（在同一文件里）
+if(!/INDEX[\s\S]*wechat_messages\s*\(\s*cs_wechat_id\s*,\s*created_at\s*\)/i.test(wmFile)){
   console.error("FAIL: 缺 (cs_wechat_id, created_at) 索引");process.exit(1);}
 console.log("  PASS: cs_wechat_id nullable + (cs_wechat_id, created_at) 索引就位");
 ' "$ROOT"
