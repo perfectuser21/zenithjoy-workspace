@@ -89,15 +89,25 @@ jobs:
           console.log('Step 4 OK: fork+config+active verified');
           " 2>&1
 
-      - name: Step 6 — MOCK_WECHAT_VERSION=4.2.0.0 version fail must block (exit 1, ok:false)
+      - name: Step 6a — MOCK_WECHAT_VERSION=4.2.0.0（>=4.1.8）放行（exit 0, ok:true，6-21 放开上界 #852）
         run: |
-          MOCK_WECHAT_VERSION=4.2.0.0 npx tsx modules/line04/preflight.ts > /tmp/pf-mock.json 2>/dev/null && PCODE=0 || PCODE=$?
-          [ "$PCODE" -eq 1 ] || { echo "FAIL: exit $PCODE should be 1 (version fail must block)"; exit 1; }
-          cat /tmp/pf-mock.json | jq -e '.ok == false' || { echo "FAIL: ok should be false (version fail must block)"; exit 1; }
-          cat /tmp/pf-mock.json | jq -e '.checks.wechat_version == false' || { echo "FAIL: checks.wechat_version should be false"; exit 1; }
-          cat /tmp/pf-mock.json | jq -e 'has("fixGuide")' || { echo "FAIL: version fail must have fixGuide with download URL"; exit 1; }
-          cat /tmp/pf-mock.json | jq -e 'has("skipped") | not' || { echo "FAIL: top-level output must not have skipped"; exit 1; }
-          echo "Step 6 OK"
+          # 6-21 放开上界：4.1.10+/4.2.0 Qt 窗口 UIA 可用，>=4.1.8 一律放行（不再因上界 fail）。
+          MOCK_WECHAT_VERSION=4.2.0.0 npx tsx modules/line04/preflight.ts > /tmp/pf-hi.json 2>/dev/null && PCODE=0 || PCODE=$?
+          [ "$PCODE" -eq 0 ] || { echo "FAIL: exit $PCODE should be 0 (>=4.1.8 must pass)"; cat /tmp/pf-hi.json; exit 1; }
+          cat /tmp/pf-hi.json | jq -e '.ok == true' || { echo "FAIL: ok should be true (>=4.1.8 放行)"; exit 1; }
+          cat /tmp/pf-hi.json | jq -e '.checks.wechat_version == true' || { echo "FAIL: checks.wechat_version should be true"; exit 1; }
+          echo "Step 6a OK (4.2.0 放行)"
+
+      - name: Step 6b — MOCK_WECHAT_VERSION=4.1.7.0（<4.1.8）仍阻断（exit 1, ok:false, 下界守卫）
+        run: |
+          # 下界仍卡：<4.1.8 控件配方不一致 / 无 mmui::MainWindow，必须 block。
+          MOCK_WECHAT_VERSION=4.1.7.0 npx tsx modules/line04/preflight.ts > /tmp/pf-lo.json 2>/dev/null && PCODE=0 || PCODE=$?
+          [ "$PCODE" -eq 1 ] || { echo "FAIL: exit $PCODE should be 1 (<4.1.8 must block)"; cat /tmp/pf-lo.json; exit 1; }
+          cat /tmp/pf-lo.json | jq -e '.ok == false' || { echo "FAIL: ok should be false (<4.1.8 阻断)"; exit 1; }
+          cat /tmp/pf-lo.json | jq -e '.checks.wechat_version == false' || { echo "FAIL: checks.wechat_version should be false"; exit 1; }
+          cat /tmp/pf-lo.json | jq -e 'has("fixGuide")' || { echo "FAIL: version fail must have fixGuide with download URL"; exit 1; }
+          cat /tmp/pf-lo.json | jq -e 'has("skipped") | not' || { echo "FAIL: top-level output must not have skipped"; exit 1; }
+          echo "Step 6b OK (4.1.7 阻断)"
 
       - name: Smoke script (API_UP guard)
         run: bash ../../.github/workflows/scripts/smoke/agent-module-e2e-smoke.sh
@@ -157,16 +167,32 @@ jobs:
           if ($LASTEXITCODE -ne 0) { Write-Host "FAIL: preflight exit $LASTEXITCODE"; exit 1 }
           Write-Host "Step 3 OK: real machine preflight exit 0"
 
-      - name: Step 6 — MOCK_WECHAT_VERSION=4.2.0.0 version fail must block on real machine
+      - name: Step 6a — MOCK_WECHAT_VERSION=4.2.0.0（>=4.1.8）放行 on real machine（6-21 放开上界 #852）
         run: |
+          # 6-21 放开上界：4.2.0/4.1.10+ Qt 窗口 UIA 可用，>=4.1.8 一律放行。
           $env:MOCK_WECHAT_VERSION = '4.2.0.0'
           $result = node dist/modules/line04/preflight.js 2>$null
           $PCODE = $LASTEXITCODE
           Remove-Item Env:\MOCK_WECHAT_VERSION -ErrorAction SilentlyContinue
           if (-not $result) { Write-Host "FAIL: preflight.js returned empty output"; exit 1 }
-          $result | Set-Content pf-xrog.json -Encoding ascii
+          $result | Set-Content pf-xrog-hi.json -Encoding ascii
           Write-Host "exit=$PCODE"
-          if ($PCODE -ne 1) { Write-Host "FAIL: exit $PCODE should be 1 (version fail must block on xian-rog)"; exit 1 }
-          node -e "const j=JSON.parse(require('fs').readFileSync('pf-xrog.json','utf8')); if(j.ok!==false){console.error('FAIL: ok should be false');process.exit(1);} if(j.checks.wechat_version!==false){console.error('FAIL: checks.wechat_version should be false');process.exit(1);} if(!j.fixGuide){console.error('FAIL: fixGuide must be present');process.exit(1);} console.log('Step 6 OK (xian-rog version-blocking)');"
+          if ($PCODE -ne 0) { Write-Host "FAIL: exit $PCODE should be 0 (>=4.1.8 must pass on xian-rog)"; exit 1 }
+          node -e "const j=JSON.parse(require('fs').readFileSync('pf-xrog-hi.json','utf8')); if(j.ok!==true){console.error('FAIL: ok should be true');process.exit(1);} if(j.checks.wechat_version!==true){console.error('FAIL: checks.wechat_version should be true');process.exit(1);} console.log('Step 6a OK (xian-rog 4.2.0 放行)');"
           if ($LASTEXITCODE -ne 0) { exit 1 }
-          Remove-Item pf-xrog.json -ErrorAction SilentlyContinue
+          Remove-Item pf-xrog-hi.json -ErrorAction SilentlyContinue
+
+      - name: Step 6b — MOCK_WECHAT_VERSION=4.1.7.0（<4.1.8）仍阻断 on real machine（下界守卫）
+        run: |
+          # 下界仍卡：<4.1.8 控件配方不一致 / 无 mmui::MainWindow，必须 block。
+          $env:MOCK_WECHAT_VERSION = '4.1.7.0'
+          $result = node dist/modules/line04/preflight.js 2>$null
+          $PCODE = $LASTEXITCODE
+          Remove-Item Env:\MOCK_WECHAT_VERSION -ErrorAction SilentlyContinue
+          if (-not $result) { Write-Host "FAIL: preflight.js returned empty output"; exit 1 }
+          $result | Set-Content pf-xrog-lo.json -Encoding ascii
+          Write-Host "exit=$PCODE"
+          if ($PCODE -ne 1) { Write-Host "FAIL: exit $PCODE should be 1 (<4.1.8 must block on xian-rog)"; exit 1 }
+          node -e "const j=JSON.parse(require('fs').readFileSync('pf-xrog-lo.json','utf8')); if(j.ok!==false){console.error('FAIL: ok should be false');process.exit(1);} if(j.checks.wechat_version!==false){console.error('FAIL: checks.wechat_version should be false');process.exit(1);} if(!j.fixGuide){console.error('FAIL: fixGuide must be present');process.exit(1);} console.log('Step 6b OK (xian-rog 4.1.7 阻断)');"
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          Remove-Item pf-xrog-lo.json -ErrorAction SilentlyContinue
