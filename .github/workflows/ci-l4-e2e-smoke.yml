@@ -410,6 +410,31 @@ jobs:
           chmod +x .github/workflows/scripts/smoke/line04-feishu-customer-list-smoke.sh
           bash .github/workflows/scripts/smoke/line04-feishu-customer-list-smoke.sh
 
+      # ─── Line04 客服工作汇总（S3）smoke：真 DB 灌 in/out → /cs/stats 断言 4 数精确 ──
+      # 复用本 job 的 cecelia 库（migration 已建 wechat_messages.cs_wechat_id）+ localhost:5200 API。
+      - name: Smoke — Line04 客服工作汇总 (Path 4 S3)
+        env:
+          API_BASE: http://localhost:5200
+          PGHOST: localhost
+          PGUSER: cecelia
+          PGDATABASE: cecelia
+          PGPASSWORD: cecelia
+        run: |
+          chmod +x .github/workflows/scripts/smoke/cs-work-stats-smoke.sh
+          bash .github/workflows/scripts/smoke/cs-work-stats-smoke.sh
+
+      # ─── Line04 客服日报（S4）smoke：灌 in/out → 触发结算 → daily_report 行精确 + 幂等不翻倍 ──
+      - name: Smoke — Line04 客服日报 (Path 4 S4)
+        env:
+          API_BASE: http://localhost:5200
+          PGHOST: localhost
+          PGUSER: cecelia
+          PGDATABASE: cecelia
+          PGPASSWORD: cecelia
+        run: |
+          chmod +x .github/workflows/scripts/smoke/cs-daily-report-smoke.sh
+          bash .github/workflows/scripts/smoke/cs-daily-report-smoke.sh
+
       - name: Smoke — Step 6 Dispatch Chain WS2 (dispatchPublishTask + ackPublishTask)
         env:
           API_BASE: http://localhost:5200
