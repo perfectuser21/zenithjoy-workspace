@@ -93,12 +93,13 @@ export interface RequiredAgentVersion {
 }
 
 // manifest 不可读时的兜底版本。必须 <= 已发布的最新核心，且随核心 bump 同步抬高。
-// bump 到 2.0.26：2.0.25 的 exe 打包坏了（pkg 打完后 rcedit 改图标截断了 snapshot overlay
-// → exe 37.8MB、运行时 `Pkg: Error reading from file` → agent 起不来）。2.0.26 把图标改成
-// 在 pkg **之前**嵌进 base 二进制（scripts/prepare-base-icon.js），overlay 完整、exe 可运行。
-// 兜底抬到 2.0.26，让 manifest 读不到时新客户机也直接解析到能用的版本（绝不回落到坏的 2.0.25）。
-// 核心包按约定 install-pack/zenithjoy-agent-v2.0.26.tar.gz 从 COS 下载。
-export const DEFAULT_REQUIRED_AGENT_VERSION = '2.0.26';
+// bump 到 2.0.27：2.0.25 的 exe 打包坏了（pkg 后 rcedit 截断 overlay → Pkg error）；2.0.26 修好
+// overlay 但图标没真嵌上（真机抠出来还是默认绿六边形 node 图标）。2.0.27 让 prepare-base-icon.js
+// 给缓存里所有 win-x64 base 二进制写图标 + 回读校验体积增长（rcedit 返回成功不等于真写进去），
+// 并加 CI 图标 gate（抠 exe 图标断言是蓝色悦升 logo、非绿色默认 node 图标）。
+// 兜底抬到 2.0.27，让 manifest 读不到时新客户机也直接解析到能用且图标对的版本。
+// 核心包按约定 install-pack/zenithjoy-agent-v2.0.27.tar.gz 从 COS 下载。
+export const DEFAULT_REQUIRED_AGENT_VERSION = '2.0.27';
 
 /**
  * 返回心跳要下发的核心要求版本。
