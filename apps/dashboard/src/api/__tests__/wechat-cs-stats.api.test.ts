@@ -1,22 +1,24 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+/**
+ * wechat-cs-stats.api 客户端单测：mock apiClient，验证 GET /wechat/cs/stats 带 date 参数 + 解 stats 数组。
+ */
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 
-// mock apiClient（axios 封装）—— 钉死 GET /wechat/cs/stats 带 date 参数 + 解出 stats 数组。
+const { mockGet } = vi.hoisted(() => ({ mockGet: vi.fn() }));
+
 vi.mock('../client', () => ({
-  apiClient: { get: vi.fn() },
+  apiClient: { get: mockGet },
 }));
 
-import { apiClient } from '../client';
 import { wechatCsStatsApi } from '../wechat-cs-stats.api';
-
-const mockedGet = vi.mocked((apiClient as { get: ReturnType<typeof vi.fn> }).get);
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mockGet.mockResolvedValue({ data: { ok: true, date: 'today', stats: [] } });
 });
 
 describe('wechatCsStatsApi.getStats', () => {
   it('GET /wechat/cs/stats 带 date 参数，返回 stats 数组', async () => {
-    mockedGet.mockResolvedValueOnce({
+    mockGet.mockResolvedValueOnce({
       data: {
         ok: true,
         date: 'today',
@@ -26,22 +28,20 @@ describe('wechatCsStatsApi.getStats', () => {
       },
     });
     const rows = await wechatCsStatsApi.getStats('today');
-    const [url, cfg] = mockedGet.mock.calls[0];
-    expect(url).toBe('/wechat/cs/stats');
-    expect((cfg as { params: { date: string } }).params.date).toBe('today');
+    expect(mockGet).toHaveBeenCalledWith('/wechat/cs/stats', { params: { date: 'today' } });
     expect(rows).toHaveLength(1);
     expect(rows[0].cs_wechat_id).toBe('wxid_a');
     expect(rows[0].received_count).toBe(3);
   });
 
   it('yesterday 透传到 params.date', async () => {
-    mockedGet.mockResolvedValueOnce({ data: { ok: true, date: 'yesterday', stats: [] } });
+    mockGet.mockResolvedValueOnce({ data: { ok: true, date: 'yesterday', stats: [] } });
     await wechatCsStatsApi.getStats('yesterday');
-    expect((mockedGet.mock.calls[0][1] as { params: { date: string } }).params.date).toBe('yesterday');
+    expect(mockGet).toHaveBeenCalledWith('/wechat/cs/stats', { params: { date: 'yesterday' } });
   });
 
   it('响应缺 stats → 返回空数组（不崩）', async () => {
-    mockedGet.mockResolvedValueOnce({ data: { ok: true, date: 'today' } });
+    mockGet.mockResolvedValueOnce({ data: { ok: true, date: 'today' } });
     const rows = await wechatCsStatsApi.getStats('today');
     expect(rows).toEqual([]);
   });

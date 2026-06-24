@@ -1,22 +1,24 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+/**
+ * wechat-cs-daily-report.api 客户端单测：mock apiClient，验证 GET /wechat/cs/daily-report 带 date 参数 + 解 reports 数组。
+ */
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 
-// mock apiClient（axios 封装）—— 钉死 GET /wechat/cs/daily-report 带 date 参数 + 解出 reports 数组。
+const { mockGet } = vi.hoisted(() => ({ mockGet: vi.fn() }));
+
 vi.mock('../client', () => ({
-  apiClient: { get: vi.fn() },
+  apiClient: { get: mockGet },
 }));
 
-import { apiClient } from '../client';
 import { wechatCsDailyReportApi } from '../wechat-cs-daily-report.api';
-
-const mockedGet = vi.mocked((apiClient as { get: ReturnType<typeof vi.fn> }).get);
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mockGet.mockResolvedValue({ data: { ok: true, date: '2026-06-20', reports: [] } });
 });
 
 describe('wechatCsDailyReportApi.getReports', () => {
   it('GET /wechat/cs/daily-report 带 date 参数，返回 reports 数组', async () => {
-    mockedGet.mockResolvedValueOnce({
+    mockGet.mockResolvedValueOnce({
       data: {
         ok: true,
         date: '2026-06-20',
@@ -26,9 +28,7 @@ describe('wechatCsDailyReportApi.getReports', () => {
       },
     });
     const rows = await wechatCsDailyReportApi.getReports('2026-06-20');
-    const [url, cfg] = mockedGet.mock.calls[0];
-    expect(url).toBe('/wechat/cs/daily-report');
-    expect((cfg as { params: { date: string } }).params.date).toBe('2026-06-20');
+    expect(mockGet).toHaveBeenCalledWith('/wechat/cs/daily-report', { params: { date: '2026-06-20' } });
     expect(rows).toHaveLength(1);
     expect(rows[0].cs_wechat_id).toBe('wxid_a');
     expect(rows[0].received_count).toBe(15);
@@ -36,7 +36,7 @@ describe('wechatCsDailyReportApi.getReports', () => {
   });
 
   it('响应缺 reports → 返回空数组（不崩）', async () => {
-    mockedGet.mockResolvedValueOnce({ data: { ok: true, date: '2026-06-20' } });
+    mockGet.mockResolvedValueOnce({ data: { ok: true, date: '2026-06-20' } });
     const rows = await wechatCsDailyReportApi.getReports('2026-06-20');
     expect(rows).toEqual([]);
   });
