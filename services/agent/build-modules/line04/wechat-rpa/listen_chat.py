@@ -1617,7 +1617,10 @@ def _activate_uia() -> None:
     新实现直接用 ctypes 调 SystemParametersInfo 设 SPI_SETSCREENREADER 标志——这才是讲述人
     背后真正打开"屏幕阅读器模式"的系统开关。纯系统调用，无窗口/无框/无声；标志在进程退出后
     持久保持，也不会反向招起讲述人。已在 xian-pc 真机验证：不开讲述人即读到 mmui::MainWindow
-    + 92 控件。仅对微信 ≤4.1.8 有效（4.1.10+ 控件树被腾讯移除，讲述人和本标志都救不了）。
+    + 92 控件。
+
+    2026-06-24：对 4.1.10+ 的 Qt 窗口（Qt51514QWindowIcon）同样设此标志——6-21 真机验证
+    Qt 框下 UIA 子树照样可读、消息照样能发，不因版本跳过激活。本函数无版本分支，恒设标志。
     """
     try:
         import ctypes

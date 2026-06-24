@@ -3,7 +3,7 @@
 //
 // line04 微信AI客服模块 — 真实环境预检（自包含，不依赖 core 源码，可独立打包）。
 // 三项检测，失败给客户看得懂的中文 fixGuide：
-//   1. 微信版本 = 4.1.8.x（高于低于都不行：<4.1.8 控件配方不一致、>=4.1.9 砍掉 UIA 控件树，均 RPA 失效）
+//   1. 微信版本 >= 4.1.8（仅 <4.1.8 控件配方不一致/无 mmui::MainWindow 不可用；4.1.10+ Qt UIA 可用，放行）
 //   2. python -c "import pywinauto" 可成功（驱动微信自动化的底层库）
 //   3. 可用内存 ≥ 4GB
 //
@@ -40,10 +40,10 @@ const node_fs_1 = __importDefault(require("node:fs"));
 const node_https_1 = __importDefault(require("node:https"));
 // 旧版微信 COS 直链下载地址（客户降级用）。
 exports.WECHAT_DOWNLOAD_URL = 'https://zenithjoy-static-1333590468.cos.accelerate.myqcloud.com/install-pack/wechat/WeChatWin_4.1.8.exe';
-// 受支持微信版本：只认 4.1.8.x（前三段必须 == 4.1.8，build 段任意）。高于低于都不行：
+// 受支持微信版本：>= 4.1.8 一律放行（含 4.1.9 / 4.1.10+）。2026-06-24 放开上界：
 //   < 4.1.8（含 3.x / 4.0.x / 4.1.0~4.1.7）：控件配方不一致 / 无 mmui::MainWindow，RPA 不可用；
-//   >= 4.1.9：腾讯砍掉 UIA 无障碍控件树，RPA 不可用。
-// 与 wechat-rpa/preflight.py（WECHAT_MIN_VERSION=(4,1,8) / MAX=(4,1,8,999)）保持一致。
+//   >= 4.1.8：6-21 真机验证 Qt51514QWindowIcon 窗口 UIA 照样能发，不再因上界 fail。
+// 与 wechat-rpa/find_weixin.py（MIN_REQUIRED_VERSION=(4,1,8)，仅卡下界）保持一致。
 const SUPPORTED_VERSION = [4, 1, 8];
 const MIN_MEMORY_BYTES = 4 * 1024 ** 3;
 // ---------- 纯函数：版本解析与比较 ----------
@@ -57,12 +57,19 @@ function parseVersionParts(version) {
         return Number.isFinite(v) ? v : 0;
     });
 }
-// 只认 4.1.8.x：前三段必须 == 4.1.8（build 段任意）才返回 true。高于低于都不行。
+// >= 4.1.8 一律支持（含 4.1.9 / 4.1.10+）：按 major.minor.patch 三段做版本比较，>= 基线返回 true。
+// 2026-06-24 放开上界——旧实现要求前三段 == 4.1.8 把 4.1.10+ 误判为不支持，导致 line04 永不激活。
 function isWechatVersionSupported(version) {
     const parts = parseVersionParts(version);
-    return ((parts[0] ?? 0) === SUPPORTED_VERSION[0] &&
-        (parts[1] ?? 0) === SUPPORTED_VERSION[1] &&
-        (parts[2] ?? 0) === SUPPORTED_VERSION[2]);
+    const head = [parts[0] ?? 0, parts[1] ?? 0, parts[2] ?? 0];
+    // 三段元组字典序比较：head >= SUPPORTED_VERSION([4,1,8]) 即放行。
+    for (let i = 0; i < 3; i++) {
+        if (head[i] > SUPPORTED_VERSION[i])
+            return true;
+        if (head[i] < SUPPORTED_VERSION[i])
+            return false;
+    }
+    return true; // 三段完全相等（== 4.1.8.x）
 }
 // WeChat/Weixin DWORD 有两种编码：
 //   3.x（高字节 = 0x60+major）：4.1.8.107 → 0x6401086b
@@ -101,7 +108,7 @@ function parseWechatVersionFromRegOutput(output) {
 }
 // ---------- 中文修复指引 ----------
 function wechatFixGuide(found) {
-    return `微信版本 ${found} 不支持（需 = 4.1.8.x，高于低于都不行）。请从此处下载 4.1.8：${exports.WECHAT_DOWNLOAD_URL}`;
+    return `微信版本 ${found} 过低（需 >= 4.1.8）。请从此处下载 4.1.8：${exports.WECHAT_DOWNLOAD_URL}`;
 }
 function pywinautoFixGuide(errMessage) {
     return `缺少 pywinauto 依赖（错误：${errMessage}）。请联系技术支持。`;
@@ -202,7 +209,7 @@ function checkWechatVersion() {
     }
     return {
         ok: false,
-        fixGuide: `未检测到受支持的微信安装（需已安装微信桌面版且版本 = 4.1.8.x，高于低于都不行）。` +
+        fixGuide: `未检测到受支持的微信安装（需已安装微信桌面版且版本 >= 4.1.8）。` +
             `如需安装 4.1.8：${exports.WECHAT_DOWNLOAD_URL}`,
     };
 }

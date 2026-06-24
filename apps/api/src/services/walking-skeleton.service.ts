@@ -71,7 +71,7 @@ export type ModuleStatusMap = Record<string, ModuleStatusEntry>;
  * key 用 Line 命名，与 Agent preflight / Dashboard 看板对齐。
  */
 export const HEARTBEAT_MODULES: Record<string, ModuleDescriptor> = {
-  'line04-wechat-cs': { status: 'active', required_version: '1.0.57' },
+  'line04-wechat-cs': { status: 'active', required_version: '1.0.58' },
   'line01-publish': { status: 'active', required_version: '1.0.0' },
   'line02-lead-gen': { status: 'active', required_version: '1.0.0' },
   'line05-video': { status: 'active', required_version: '1.0.0' },

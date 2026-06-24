@@ -9,7 +9,7 @@ preflight.py — Agent 开机环境自检 + 自愈层（Path 4 微信 RPA 前置
 8 个检测项（每项 detect → fix → 修不了 prompt，产出 {name,status,detail}）：
   1. OS/交互会话    —— 是 Windows + 有活动桌面会话（不可自愈）
   2. 微信安装        —— Weixin.exe 在不在；不在 → 下载 4.1.8 静默装
-  3. 微信版本        —— 不是 4.1.8.x（>=4.1.9 或 <4.1.8）→ 卸载 + 装 4.1.8；=4.1.8.x → ok
+  3. 微信版本        —— < 4.1.8 → 卸载 + 装 4.1.8；>= 4.1.8（含 4.1.10+）→ ok（6-21 放开上界）
   4. 锁更新          —— WeixinUpdate.exe 改名 .disabled + 防火墙出站封禁（幂等）
   5. 微信登录态      —— 未登录 → 拉起微信 + 提示扫码
   6. Python+pywinauto—— import 测试；失败 → 提示重装 agent
@@ -53,7 +53,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 # find_weixin 顶层零 pywinauto/windll import，安全复用其纯函数与寻址 API。
 from find_weixin import (  # noqa: E402
-    MIN_BLOCKED_VERSION,
     MIN_REQUIRED_VERSION,
     WEIXIN_EXE_DEFAULT,
     _parse_version,
@@ -107,26 +106,24 @@ def decide_wechat_action(version_tuple: Optional[Tuple[int, ...]]) -> str:
     """
     依据微信版本元组决定该执行的动作（纯函数，mac 可单测）。
 
-    只认 4.1.8.x（高于低于都不行，与 find_weixin._parse_and_check 守卫保持一致）：
+    2026-06-24 放开上界（>= 4.1.8 一律 ok，与 find_weixin._parse_and_check 守卫保持一致）：
     - None（读不到 / 未安装）→ 'install'（装 4.1.8）
     - 3.x（< 4.0.0）        → 'install'（无 mmui::MainWindow，按未安装处理装 4.1.8）
     - 4.0.0 ~ 4.1.7.x      → 'downgrade'（低于基线，控件配方不一致，卸载后装 4.1.8）
-    - >= 4.1.9             → 'downgrade'（无障碍控件树被砍，卸载后装 4.1.8）
-    - == 4.1.8.x          → 'ok'（已验证可用基线）
+    - >= 4.1.8（含 4.1.9 / 4.1.10+）→ 'ok'（Qt 窗口 UIA 照样能发，6-21 真机验证，不再卸载降级）
     """
     if version_tuple is None:
         return "install"
     head = tuple(version_tuple[:3])
     head = head + (0,) * (3 - len(head))
-    # 四档分界（MIN_REQUIRED_VERSION=(4,1,8) / MIN_BLOCKED_VERSION=(4,1,9) 从 find_weixin 导入）：
+    # 三档分界（MIN_REQUIRED_VERSION=(4,1,8) 从 find_weixin 导入）：
     #   3.x（< 4.0.0）          → install   （无 mmui::MainWindow，按未安装处理）
     #   [4.0.0, 4.1.8)          → downgrade （低于基线，控件配方不一致，卸载重装 4.1.8）
-    #   [4.1.9, +∞)             → downgrade （无障碍控件树被砍，卸载重装 4.1.8）
-    #   == 4.1.8.x              → ok         （已验证可用基线）
-    # 下界 [4.0.0,4.1.8) 与上界覆盖见 tests/test_preflight.py::test_decide_downgrade_for_below_4_1_8
+    #   >= 4.1.8（含 4.1.10+）  → ok         （6-21 放开上界，Qt UIA 可用，不再降级）
+    # 下界 [4.0.0,4.1.8) 覆盖见 tests/test_preflight.py::test_decide_downgrade_for_below_4_1_8
     if head < (4, 0, 0):
         return "install"
-    if head < MIN_REQUIRED_VERSION or head >= MIN_BLOCKED_VERSION:
+    if head < MIN_REQUIRED_VERSION:
         return "downgrade"
     return "ok"
 
@@ -471,18 +468,14 @@ def check_wechat_version(dry_run: bool = False) -> Dict[str, str]:
     ver_show = ".".join(str(x) for x in parsed)
 
     if action == "ok":
-        return make_check(name, "ok", f"微信版本 {ver_show} = 4.1.8.x（已验证可用基线），RPA 可用。")
+        return make_check(name, "ok", f"微信版本 {ver_show} >= 4.1.8（含 4.1.10+，Qt UIA 可用），RPA 可用。")
 
     if action == "install":  # 理论上 parsed 非 None 不会走到这
         return make_check(name, "failed", "微信未安装（应先过'微信安装'项）。")
 
-    # downgrade：不是 4.1.8.x（高于 >=4.1.9 控件树被砍 / 低于 <4.1.8 控件配方不一致），必须卸载后装 4.1.8。
-    head = tuple(parsed[:3]) + (0,) * (3 - len(parsed[:3]))
-    reason = (
-        "高于上界 >=4.1.9（无障碍控件树被砍）"
-        if head >= MIN_BLOCKED_VERSION
-        else "低于基线 <4.1.8（控件配方不一致）"
-    )
+    # downgrade 只可能是 < 4.1.8（控件配方不一致 / 无 mmui::MainWindow），必须卸载后装 4.1.8。
+    # （>= 4.1.8 现一律 ok，不再 downgrade；6-21 放开上界。）
+    reason = "低于基线 <4.1.8（控件配方不一致 / 无 mmui::MainWindow）"
     if dry_run or not _is_windows():
         return make_check(
             name,
