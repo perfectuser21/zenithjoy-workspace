@@ -29,7 +29,8 @@ CONTACT="${CONTACT:-客户甲_$$}"
 ADMIN_A="${ADMIN_A:-ou_crm_smoke_admin_A_$$}"
 ADMIN_B="${ADMIN_B:-ou_crm_smoke_admin_B_$$}"
 
-psql_q() { PGPASSWORD="$PSQL_PASS" psql -h "$PSQL_HOST" -U "$PSQL_USER" -d "$PSQL_DB" -tAc "$1"; }
+# -q 抑制命令状态标签（如 "INSERT 0 1"），否则 INSERT...RETURNING 捕获会把标签和 id 一起带出 → tenant_id 被污染成 "uuid\nINSERT 0 1"
+psql_q() { PGPASSWORD="$PSQL_PASS" psql -h "$PSQL_HOST" -U "$PSQL_USER" -d "$PSQL_DB" -qtAc "$1"; }
 
 # A 租户管理员的 curl（X-Feishu-User-Id 头）
 ca()  { curl -s -H "X-Feishu-User-Id: $ADMIN_A" "$@"; }
@@ -41,6 +42,13 @@ bootstrap() {
   psql_q "CREATE SCHEMA IF NOT EXISTS zenithjoy;" >/dev/null || true
   PGPASSWORD="$PSQL_PASS" psql -h "$PSQL_HOST" -U "$PSQL_USER" -d "$PSQL_DB" -v ON_ERROR_STOP=0 \
     -f "$ROOT/apps/api/db/migrations/20260624_210000_create_crm_customers.sql" >/dev/null 2>&1 || true
+
+  # 幂等清场：固定 CS_WECHAT_ID 无唯一约束，重复跑（mode_a + cookie-seam leg 各跑一次 bootstrap）会
+  # 在不同租户下堆叠同名 service_agents 行 → wechat_id→tenant 解析歧义 → 误判 CROSS_TENANT。先清掉本 smoke
+  # 的旧客服机行（连带其 crm_customers / wechat_cs_account_config），保证当前 wechat_id 仅属当前租户。
+  psql_q "DELETE FROM zenithjoy.crm_customers WHERE cs_wechat_id IN ('$CS_WECHAT_ID','$CS_WECHAT_ID_B');" >/dev/null || true
+  psql_q "DELETE FROM zenithjoy.wechat_cs_account_config WHERE wechat_id IN ('$CS_WECHAT_ID','$CS_WECHAT_ID_B');" >/dev/null || true
+  psql_q "DELETE FROM zenithjoy.service_agents WHERE wechat_id IN ('$CS_WECHAT_ID','$CS_WECHAT_ID_B');" >/dev/null || true
 
   echo "[bootstrap] 造两租户 + 管理员 + 客服机 + 一条已聊消息"
   TENANT_A=$(psql_q "INSERT INTO zenithjoy.tenants (name, license_key) VALUES ('crm-smoke-A','lk_crm_smoke_A_$$') ON CONFLICT (license_key) DO UPDATE SET name=EXCLUDED.name RETURNING id;")

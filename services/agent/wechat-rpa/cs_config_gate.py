@@ -9,7 +9,9 @@
 auto_agent_enabled」，并对「中台不可达拉配置失败」做强制 dryrun 兜底——绝不误真发。
 身份链路（决策 143f5d00）：按本机 machine_id 拉（中台 service_agents 反查绑定 wechat_id）。
 """
-import requests
+# 注意：requests 在 fetch_cs_config 内部惰性 import —— 纯函数（should_reply / resolve_send_mode /
+# resolve_active_config）不依赖 HTTP 库，避免 `from cs_config_gate import should_reply` 在没装 requests
+# 的环境（smoke / CI gate 验白名单纯函数）里 ModuleNotFoundError。
 
 
 def resolve_send_mode(config, pull_ok):
@@ -47,6 +49,7 @@ def fetch_cs_config(middleware_url, machine_id, timeout=10):
     """
     if not middleware_url or not machine_id:
         return None, False
+    import requests
     url = middleware_url.rstrip("/") + "/api/wechat/cs/agent-config"
     try:
         resp = requests.get(url, params={"machine_id": machine_id}, timeout=timeout)
