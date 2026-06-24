@@ -1,0 +1,32 @@
+{
+  "initiative_id": "${INITIATIVE_ID}",
+  "journey_type": "user_facing",
+  "journey_type_reason": "涉及 apps/dashboard 客户列表页，管理员在浏览器中可见可交互（勾接管/改状态/加客户）",
+  "tasks": [
+    {
+      "task_id": "ws1",
+      "title": "Line04 中台 CRM 客户列表页 thin：列表读(租户闸)+接管开关写whitelist+状态A1-A5持久化+加客户+修未登录bug",
+      "scope": "中台一屏客户列表：GET /api/crm/customers 按 req.tenantId scope 聚合 cs_memory_messages distinct 联系人 ∪ crm_customers 手动行（含 status/last_contact_at/managed）；PUT /api/crm/customers/manage 接管开关写 wechat_cs_account_config.whitelist；PUT /api/crm/customers/status 落库 A1-A5；POST /api/crm/customers 手动入册；dashboard 客户列表页(状态下拉/接管开关/加客户) + 写接口 fetch 补 credentials 修『未登录』；新增 crm_customers 迁移；两租户隔离 + 登录 401/200 smoke + windows_cloud Playwright E2E",
+      "dod": [
+        "[BEHAVIOR] GET /api/crm/customers 租户内返回客户数组含 name/wechat_id/status/last_contact_at/managed，跨租户取不到（对应 contract Step 1/6）",
+        "[BEHAVIOR] 接管开关 PUT → 200『保存成功』且 whitelist 5 分钟内真写入；登录态正确不再 401（对应 Step 2/7）",
+        "[BEHAVIOR] 状态 A3 PUT 持久化 crm_customers 且刷新仍 A3；非法 status 返 400（对应 Step 4）",
+        "[BEHAVIOR] +加客户 POST 入册 source=manual 且列表可见（对应 Step 5）",
+        "[BEHAVIOR] should_reply 白名单 gate 命中/未命中 pytest 全过（对应 Step 3）",
+        "[ARTIFACT] apps/api/db/migrations/*_create_crm_customers.sql + .github/workflows/scripts/smoke/line04-crm-customer-list-smoke.sh + apps/dashboard/e2e/crm-customer-list.spec.ts"
+      ],
+      "files": [
+        "apps/api/src/routes/crm.ts",
+        "apps/api/src/services/crm/customer-roster.ts",
+        "apps/api/db/migrations/_create_crm_customers.sql",
+        "apps/dashboard/src/pages/CustomerListPage.tsx",
+        "apps/dashboard/src/pages/PerCsConfigPage.tsx",
+        "apps/dashboard/e2e/crm-customer-list.spec.ts",
+        ".github/workflows/scripts/smoke/line04-crm-customer-list-smoke.sh"
+      ],
+      "depends_on": [],
+      "complexity": "M",
+      "estimated_minutes": 110
+    }
+  ]
+}
