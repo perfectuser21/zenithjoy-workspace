@@ -13,7 +13,9 @@
         "[BEHAVIOR] 状态 A3 PUT 持久化 crm_customers 且刷新仍 A3；非法 status 返 400（对应 Step 4）",
         "[BEHAVIOR] +加客户 POST 入册 source=manual 且列表可见（对应 Step 5）",
         "[BEHAVIOR] should_reply 白名单 gate 命中/未命中 pytest 全过（对应 Step 3）",
-        "[ARTIFACT] apps/api/db/migrations/*_create_crm_customers.sql + .github/workflows/scripts/smoke/line04-crm-customer-list-smoke.sh + apps/dashboard/e2e/crm-customer-list.spec.ts"
+        "[BEHAVIOR:E2E:COOKIE-SEAM] cookie 接缝真目标验证：linux CI 真后端 + 真 cookie 注入浏览器(无 stub/无 VITE_SKIP_AUTH) 点接管开关 → 真 200『保存成功』+ psql 复核 whitelist 真写入（对应 Step 9；未跑则 logic-done-pending，禁 stub 绿冒充 done）",
+        "[ARTIFACT] 客户列表页所有 CRM fetch 带 credentials（覆盖 CustomerListPage manage/status/POST/GET + PerCsConfigPage，非单文件 grep）",
+        "[ARTIFACT] apps/api/db/migrations/*_create_crm_customers.sql + line04-crm-customer-list-smoke.sh(含 cookie-seam leg 编排) + apps/dashboard/e2e/crm-customer-list.spec.ts(UI stub) + apps/dashboard/e2e/crm-cookie-seam.spec.ts(真后端无 stub)"
       ],
       "files": [
         "apps/api/src/routes/crm.ts",
@@ -22,6 +24,7 @@
         "apps/dashboard/src/pages/CustomerListPage.tsx",
         "apps/dashboard/src/pages/PerCsConfigPage.tsx",
         "apps/dashboard/e2e/crm-customer-list.spec.ts",
+        "apps/dashboard/e2e/crm-cookie-seam.spec.ts",
         ".github/workflows/scripts/smoke/line04-crm-customer-list-smoke.sh"
       ],
       "depends_on": [],

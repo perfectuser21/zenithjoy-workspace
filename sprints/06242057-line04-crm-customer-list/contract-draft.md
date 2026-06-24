@@ -219,7 +219,9 @@ jq -e '.error.code == "CROSS_TENANT"' /tmp/x.json || { echo "FAIL: 非 CROSS_TEN
 ### Step 7: 登录态修复 — 缺/失效登录态写接口返 401 + 提示；登录后重试成功
 **来源**: `[FROM_PRD]` — 边界情况「写接管开关返回 401/无权限 → 提示登录失效，重新登录后重试成功」（本次必修 cs-config-guard 登录态未传到写接口 bug）
 
-**可观测行为**: 不带 cookie PUT manage → 401（前端据此提示「登录已失效，请重新登录」）；带正确登录 cookie 重试 → 200 不再 401。**这是 dashboard fetch 缺 `credentials:'include'` 的接缝，必须在真浏览器 E2E 验证（见接缝清单）**。
+**可观测行为**: 不带 cookie PUT manage → 401（前端据此提示「登录已失效，请重新登录」）；带正确登录 cookie 重试 → 200 不再 401。
+
+> **接缝诚实声明（对齐 reviewer 问题1）**：下面两条 curl 命令是 **API-level 逻辑断言**——它在 curl 层手动带/不带 cookie，验的是**后端**对 cookie 在/不在的 401/200 行为，**不验** dashboard 前端 fetch 是否真带了 `credentials:'include'`（即真正的「未登录」bug 接缝）。该前端→后端 cookie 接缝的**真目标验证**在 `[BEHAVIOR:E2E:COOKIE-SEAM]`（Step 9 + 接缝清单 #1）：真浏览器在真后端上点开关、真发 session cookie。windows_cloud stub Playwright **不**算这条接缝的验证。
 
 **验证命令**:
 ```bash
@@ -250,11 +252,30 @@ OUT=$(PGPASSWORD="$PSQL_PASS" psql -h "$PSQL_HOST" -U "$PSQL_USER" -d "$PSQL_DB"
 
 ---
 
+### Step 9: cookie 接缝真目标验证 — 真浏览器在真后端上点接管开关，真发 better-auth session cookie
+**来源**: `[AI_ADDED]` — 理由：reviewer 问题1（阻塞）。本 sprint 的**必修 bug**就是 dashboard 写接口 fetch 缺 `credentials:'include'` 导致浏览器不带 session cookie → 后端 401「未登录」。此接缝**唯一**能被真验的方式是"真浏览器 + 真 cookie + 真后端"；ARTIFACT 静态 grep / Mode A 的 `curl -b` / windows_cloud 的 `page.route` stub 三者都绕过它，故新增本步骤作真目标腿。
+
+**可观测行为**: 在能起真 `:5200` + 真 postgres + dashboard preview（vite proxy `/api`→`:5200`）的 **linux CI** 上：先真登录拿真 better-auth session cookie → `context.addCookies` 注入浏览器 → goto `/customers`（真 GET 带 cookie 出真数据）→ 点接管开关（**不 stub** `/api/crm/customers/manage`）→ 浏览器 fetch 带 `credentials:'include'` → 真后端真收 cookie → 真 200。断言「保存成功」可见、「登录已失效」count=0，并 psql 复核 whitelist 5 分钟内真写入该 contact（证明 cookie 真到达后端触发真写，前端确实带了凭据）。
+
+**验证命令**（linux CI，真后端 leg；REAL_SESSION_COOKIE 由 smoke 真登录 bootstrap 产出，不写死）:
+```bash
+cd apps/dashboard
+E2E_BASE_URL="http://localhost:5174" E2E_REAL_SESSION_COOKIE="$REAL_SESSION_COOKIE" \
+  npx playwright test e2e/crm-cookie-seam.spec.ts --reporter=line || { echo "FAIL: cookie 接缝真浏览器 leg 未过"; exit 1; }
+IN=$(PGPASSWORD="$PSQL_PASS" psql -h "$PSQL_HOST" -U "$PSQL_USER" -d "$PSQL_DB" -tAc \
+  "SELECT (whitelist @> to_jsonb('$CONTACT'::text)) FROM zenithjoy.wechat_cs_account_config WHERE wechat_id='$CS_WECHAT_ID' AND updated_at > NOW() - interval '5 minutes'")
+[ "$IN" = "t" ] || { echo "FAIL: 点开关后 whitelist 无真写入 = cookie 未真到达后端"; exit 1; }
+```
+**硬阈值**: 真浏览器无 stub 点开关 → 真 200「保存成功」、无「登录已失效」、whitelist 5 分钟内真写入。
+**done 判定**: 本步骤 PASS 才算 cookie 接缝真 done；CI 暂无真后端 leg 而本步未跑 → 接缝清单 #1 标 `logic-done-pending`，禁止用 stub 绿 / 静态 grep 冒充 done。
+
+---
+
 ## 接缝清单（接缝 vs 逻辑 — 真目标验证，未真验标 logic-done-pending）
 
 | # | 接缝点（碰真实世界处） | 类型 | 真目标验证方式 | done 判定 |
 |---|---|---|---|---|
-| 1 | dashboard fetch 写接口的 **better-auth session cookie 传递**（未登录 bug）| 接缝（真浏览器 cookie + 真 auth）| **windows_cloud Playwright**：真实登录 session 下点接管开关 → 见「保存成功」、**不**见「登录已失效」；并交叉 `page.request` 复核后端 200 非 401 | 真浏览器 E2E 绿才 done；仅 curl 带 header 过 = `logic-done-pending` |
+| 1 | dashboard fetch 写接口的 **better-auth session cookie 传递**（未登录 bug，覆盖客户列表页 manage/status/POST/GET 全部 CRM fetch）| 接缝（真浏览器 cookie + 真 auth + 真后端）| **Step 9 / `[BEHAVIOR:E2E:COOKIE-SEAM]`**：linux CI 真 :5200 + 真 postgres + dashboard preview，真登录拿真 cookie 注入浏览器（`addCookies`），**无 page.route stub、无 VITE_SKIP_AUTH** 点接管开关 → 真后端真收 cookie 返 200、见「保存成功」不见「登录已失效」+ psql 复核 whitelist 真写入。**windows_cloud stub Playwright 不算此接缝的验证**（它只验 UI 渲染） | `crm-cookie-seam.spec.ts` 真后端 leg PASS 才 done；该 leg 未跑（含 windows_cloud stub 绿 / curl -b / 静态 grep）= `logic-done-pending`，禁止冒充 done |
 | 2 | **租户隔离**读/写 SQL WHERE tenant_id=req.tenantId | 逻辑（SQL，环境无关）| smoke.sh 真 psql 两租户造数 + vitest 断言 SQL 文本带 tenant 绑定参数 | CI 绿 = done |
 | 3 | **白名单 gate** should_reply | 逻辑（纯函数）| pytest 真跑 cs_config_gate | CI 绿 = done |
 | 4 | whitelist / status **DB 真写入** | 逻辑（SQL upsert）| smoke.sh 真 psql 带 5 分钟时间窗读回 | CI 绿 = done |
@@ -271,9 +292,10 @@ OUT=$(PGPASSWORD="$PSQL_PASS" psql -h "$PSQL_HOST" -U "$PSQL_USER" -d "$PSQL_DB"
 > 两层：
 > **模式 A（evaluator/CI 逐项跑，真后端 API-level）** = 上方各 Step 的 curl :5200 + psql zenithjoy 命令 + pytest gate + vitest 租户隔离回归，打包进
 > `.github/workflows/scripts/smoke/line04-crm-customer-list-smoke.sh`（真 API+psql，造两租户验隔离 + 登录态 401/200 + whitelist 写 + status 持久化）。
-> **模式 B（final-e2e，windows_cloud UI-level）** = Playwright 真浏览器走客户列表页 Golden Path（下方脚本），由 evaluator 派 e2e-windows.yml 执行。
+> **此 smoke 还负责 cookie 接缝真 leg（Step 9）**：起 dashboard preview（vite proxy /api→:5200）→ 真登录 bootstrap 拿真 better-auth session cookie 导出 `REAL_SESSION_COOKIE` → `npx playwright test e2e/crm-cookie-seam.spec.ts`（无 stub）→ psql 复核 whitelist 真写入。
+> **模式 B（final-e2e，windows_cloud UI-level）** = Playwright 真浏览器走客户列表页 Golden Path（模板 ①，stub + VITE_SKIP_AUTH，只验 UI），由 evaluator 派 e2e-windows.yml 执行；**cookie 接缝不靠它验**（见模板 ② + Step 9）。
 
-### Playwright spec 模板（`apps/dashboard/e2e/crm-customer-list.spec.ts`，windows_cloud 干净 VM，API 用 page.route stub 渲染 + 真实 DOM 断言）
+### Playwright spec 模板 ①（`apps/dashboard/e2e/crm-customer-list.spec.ts`，windows_cloud 干净 VM，API 用 page.route stub + VITE_SKIP_AUTH，**只验 UI 渲染/交互/文案，不验 cookie 接缝**）
 
 ```typescript
 import { test, expect } from '@playwright/test';
@@ -326,6 +348,42 @@ evaluator 验收后执行：
 mkdir -p "${SPRINT_DIR}/screenshots/" && cp screenshots/*.png "${SPRINT_DIR}/screenshots/" 2>/dev/null || true
 ```
 
+### Playwright spec 模板 ②（`apps/dashboard/e2e/crm-cookie-seam.spec.ts`，**linux CI 真后端 leg — cookie 接缝真目标验证**）
+
+> 与模板 ① 的根本区别：**无任何 `page.route` stub、无 `VITE_SKIP_AUTH`**；真后端 `:5200`（vite proxy）+ 真 better-auth session cookie 注入浏览器 context。点接管开关时浏览器 fetch 必须带 `credentials:'include'` 把 cookie 发给真后端，否则真后端 401 → 断言失败。这才真验「未登录」bug 的接缝。run by `line04-crm-customer-list-smoke.sh`（已起真后端 + 真登录拿 cookie）。
+
+```typescript
+import { test, expect } from '@playwright/test';
+
+// 真 cookie 由 smoke 真登录 bootstrap 产出，形如 "better-auth.session_token=<token>"（name=value）
+const RAW = process.env.E2E_REAL_SESSION_COOKIE || '';
+const BASE = process.env.E2E_BASE_URL || 'http://localhost:5174';
+
+test('cookie 接缝 — 真浏览器在真后端上点接管开关，真发 session cookie', async ({ browser }) => {
+  test.skip(!RAW, 'E2E_REAL_SESSION_COOKIE 未注入：真后端 leg 未具备，cookie 接缝 logic-done-pending');
+  const [name, ...rest] = RAW.split('=');
+  const value = rest.join('=');
+  const context = await browser.newContext(); // 不用 VITE_SKIP_AUTH，不 stub
+  await context.addCookies([{ name, value, domain: 'localhost', path: '/' }]);
+  const page = await context.newPage();
+
+  // 真 GET（带 cookie 经 vite proxy 打真 :5200）
+  await page.goto(`${BASE}/customers`);
+  await page.waitForLoadState('networkidle');
+  await expect(page.getByTestId('crm-customer-row').first()).toBeVisible({ timeout: 15000 });
+
+  // 点接管开关 —— 不 stub /api/crm/customers/manage，浏览器 fetch 必须带 credentials 把 cookie 发给真后端
+  await page.getByTestId('crm-manage-toggle').first().click();
+  await expect(page.getByText('保存成功')).toBeVisible({ timeout: 15000 });
+  await expect(page.getByText('登录已失效')).toHaveCount(0);
+
+  // 交叉复核：浏览器 context 内 GET 真后端，managed 已真反映（cookie 真到后端 + 真写）
+  const resp = await page.request.get(`${BASE}/api/crm/customers`);
+  expect(resp.status()).toBe(200);
+  await context.close();
+});
+```
+
 ### windows_cloud 用户路径 1:1 映射检查（已 cat `.github/workflows/e2e-windows.yml`）
 
 workflow 现状：`workflow_dispatch`(task_id/sprint_dir/pr_branch) → checkout → setup-node@20 → ffmpeg → `pwsh & "$sprintDir/e2e-verify.ps1"`（exit code 透传）。
@@ -336,8 +394,9 @@ workflow 现状：`workflow_dispatch`(task_id/sprint_dir/pr_branch) → checkout
 | 打开客户列表页 | build dashboard + vite preview:5174 + Playwright goto /customers + assert rows | ✅ |
 | 勾接管开关 → 保存成功 | Playwright click toggle + assert「保存成功」可见 | ✅ |
 | 改状态下拉 → 刷新仍在 | Playwright selectOption + reload + toHaveValue | ✅ |
-| 接管真写 whitelist（DB）| `[CI_GAP: DB 写入在 windows_cloud Playwright 用 page.route stub，不碰真 DB]` → **真 DB 写入由模式 A smoke.sh（line04-crm-customer-list-smoke.sh）在 CI linux 真 psql 验**，非 Playwright | ✅（分层覆盖）|
-| 租户隔离 / 登录 401-fix | `[CI_GAP]` 同上 → 模式 A smoke.sh 真后端验两租户 + 401/200 | ✅（分层覆盖）|
+| 接管真写 whitelist（DB）| `[CI_GAP: windows_cloud Playwright 用 stub 不碰真 DB]` → 真 DB 写入由模式 A smoke.sh（linux 真 psql）+ Step 9 cookie 接缝 leg（真浏览器点开关真写 whitelist）双重验 | ✅（分层覆盖）|
+| 租户隔离 | `[CI_GAP]` → 模式 A smoke.sh 真后端造两租户验隔离 + 403 CROSS_TENANT | ✅（分层覆盖）|
+| 登录 cookie 接缝（未登录 bug）| `[CI_GAP: windows_cloud stub + VITE_SKIP_AUTH 不验 cookie 接缝]` → **真目标验证 = Step 9 `crm-cookie-seam.spec.ts`（linux CI 真后端 + 真 cookie 注入浏览器，无 stub）**；smoke.sh 的 curl -b 仅验后端 401/200 逻辑，不验前端 credentials | ✅（真接缝由 Step 9 验；未跑则 logic-done-pending）|
 
 > e2e-windows.yml 已含 setup-node（无新增 CI_GAP 需 generator 补 workflow）；真后端断言不在此 workflow，归 smoke CI（linux）。
 > secrets：`E2E_SUPER_ADMIN_EMAIL` / `E2E_SUPER_ADMIN_PASSWORD`（已在 e2e-windows.yml env 注入）。

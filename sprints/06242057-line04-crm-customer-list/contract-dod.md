@@ -18,11 +18,14 @@ target_environment: windows_cloud
 - [ ] [ARTIFACT] crm_customers 迁移含 A1-A5 CHECK + 租户列
   Test: node -e "const fs=require('fs');const f=fs.readdirSync('apps/api/db/migrations').find(n=>n.includes('crm_customers'));if(!f)process.exit(1);const c=fs.readFileSync('apps/api/db/migrations/'+f,'utf8');if(!c.includes('crm_customers')||!c.includes(\"'A1','A2','A3','A4','A5'\")||!c.includes('tenant_id'))process.exit(1)"
 
-- [ ] [ARTIFACT] dashboard 写接口 fetch 补 credentials（修「未登录」bug）
-  Test: node -e "const c=require('fs').readFileSync('apps/dashboard/src/pages/PerCsConfigPage.tsx','utf8');if(!c.includes(\"credentials: 'include'\")&&!c.includes('credentials:\"include\"'))process.exit(1)"
+- [ ] [ARTIFACT] dashboard 客户列表页**所有** CRM 读/写接口 fetch 都带凭据（修「未登录」bug，覆盖 manage/status/POST/GET，非仅一处）
+  Test: node -e "const fs=require('fs');const cl=fs.readFileSync('apps/dashboard/src/pages/CustomerListPage.tsx','utf8');['/api/crm/customers/manage','/api/crm/customers/status'].forEach(e=>{if(!cl.includes(e))process.exit(1)});const usesHelper=/adminFetch|crmFetch|apiFetch/.test(cl);const crmCalls=(cl.match(/(^|[^A-Za-z])fetch\([^)]*\/api\/crm/g)||[]).length;const creds=(cl.match(/credentials:\s*['\\\"]include['\\\"]/g)||[]).length;if(!usesHelper && (crmCalls===0 || creds<crmCalls))process.exit(1);const pc=fs.readFileSync('apps/dashboard/src/pages/PerCsConfigPage.tsx','utf8');if(!/credentials:\s*['\\\"]include['\\\"]/.test(pc))process.exit(1)"
 
-- [ ] [ARTIFACT] smoke 接入 CI（line04-crm-customer-list-smoke.sh 存在且含真 psql + 双租户）
-  Test: node -e "const c=require('fs').readFileSync('.github/workflows/scripts/smoke/line04-crm-customer-list-smoke.sh','utf8');if(!c.includes('psql')||!c.includes('/api/crm/customers')||!c.includes('CROSS_TENANT'))process.exit(1)"
+- [ ] [ARTIFACT] cookie 接缝真验证脚本存在：真后端真 cookie 浏览器 leg，无 page.route stub / 无 VITE_SKIP_AUTH
+  Test: node -e "const c=require('fs').readFileSync('apps/dashboard/e2e/crm-cookie-seam.spec.ts','utf8');if(c.includes('page.route'))process.exit(1);if(!c.includes('addCookies'))process.exit(1);if(!c.includes('/api/crm/customers/manage'))process.exit(1)"
+
+- [ ] [ARTIFACT] smoke 接入 CI（line04-crm-customer-list-smoke.sh 存在且含真 psql + 双租户 + cookie 接缝 leg 编排）
+  Test: node -e "const c=require('fs').readFileSync('.github/workflows/scripts/smoke/line04-crm-customer-list-smoke.sh','utf8');if(!c.includes('psql')||!c.includes('/api/crm/customers')||!c.includes('CROSS_TENANT'))process.exit(1);if(!c.includes('crm-cookie-seam')||!c.includes('REAL_SESSION_COOKIE'))process.exit(1)"
 
 ## BEHAVIOR 条目（内嵌 manual:bash，evaluator 直跑；真后端 :5200 + psql zenithjoy）
 
@@ -68,9 +71,17 @@ target_environment: windows_cloud
 
 ## BEHAVIOR:E2E 条目（user_facing 专属，Mode B final-e2e windows_cloud 跑）
 
-- [ ] [BEHAVIOR:E2E] 用户走完客户列表 Golden Path，截图可视化验证
+> **windows_cloud 限界声明（诚实标注，对齐 reviewer 问题1）**：windows_cloud 干净 VM **无真后端**，下方 Playwright 用 `page.route` stub + `VITE_SKIP_AUTH` 注入超管身份——它**只验 UI 渲染/交互/文案**，**不验** cookie 接缝（真浏览器向真 :5200 发 better-auth session cookie）。cookie 接缝的真验证在下面 `[BEHAVIOR:E2E:COOKIE-SEAM]`（linux CI 真后端 leg）。
+
+- [ ] [BEHAVIOR:E2E] 用户走完客户列表 Golden Path，截图可视化验证（windows_cloud，UI 层）
   Screenshots:
     - 01-initial.png   期望：客户列表页加载，≥1 客户行（crm-customer-row）含姓名、状态下拉（crm-status-select）、接管开关（crm-manage-toggle）可见
-    - 02-action.png    期望：勾接管开关后出现「保存成功」，无「登录已失效」提示（登录态接缝修复）
+    - 02-action.png    期望：勾接管开关后出现「保存成功」，无「登录已失效」提示（UI 文案层，非真后端）
     - 03-result.png    期望：状态下拉改 A3、刷新后该行状态仍显示 A3（持久化）
   期望：所有截图与期望描述一致，Claude Read 图自验通过；evaluator 验收后截图复制到 ${SPRINT_DIR}/screenshots/
+
+- [ ] [BEHAVIOR:E2E:COOKIE-SEAM] **cookie 接缝真目标验证**（linux CI 真后端 + 真 better-auth cookie 注入浏览器，无 page.route stub / 无 VITE_SKIP_AUTH）
+  说明：在能起真 :5200 + 真 postgres + dashboard preview（vite proxy /api→:5200）的 linux CI 跑 `apps/dashboard/e2e/crm-cookie-seam.spec.ts`：真登录拿真 session cookie → `context.addCookies` 注入浏览器 → goto /customers（真 GET）→ 点接管开关 → 浏览器 fetch 带 credentials:'include' → 真后端真收 cookie → 真 200。断言「保存成功」可见、「登录已失效」count=0，并经 psql 复核 whitelist 真写入该 contact（5 分钟时间窗，证明 cookie 真到达后端触发真写）。
+  Test: manual:bash -c 'set -e; cd apps/dashboard; E2E_BASE_URL="http://localhost:5174" E2E_REAL_SESSION_COOKIE="$REAL_SESSION_COOKIE" npx playwright test e2e/crm-cookie-seam.spec.ts --reporter=line; IN=$(PGPASSWORD="$PSQL_PASS" psql -h "$PSQL_HOST" -U "$PSQL_USER" -d "$PSQL_DB" -tAc "SELECT (whitelist @> to_jsonb('"'"'$CONTACT'"'"'::text)) FROM zenithjoy.wechat_cs_account_config WHERE wechat_id='"'"'$CS_WECHAT_ID'"'"' AND updated_at > NOW() - interval '"'"'5 minutes'"'"'"); [ "$IN" = "t" ] || { echo "FAIL: cookie 接缝—点开关后 whitelist 无真写入，cookie 未真到达后端"; exit 1; }; echo OK'
+  期望: OK
+  **done 判定**：本条 PASS 才算 cookie 接缝真 done。若 CI 暂不具备真后端 leg 而本条未跑 → cookie 接缝标 `logic-done-pending`（逻辑/UI 已绿，真接缝待补），**不得**用 windows_cloud stub 绿或 ARTIFACT 静态 grep 冒充 done。
