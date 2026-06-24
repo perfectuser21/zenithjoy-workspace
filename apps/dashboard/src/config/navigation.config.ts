@@ -116,6 +116,7 @@ export const autopilotPageComponents: Record<string, () => Promise<{ default: Co
   'CsWorkStatsPage': () => import('../pages/CsWorkStatsPage'),
   // S4 — 客服日报（回看任意历史日期每客服 4 个数 + 小结）
   'CsDailyReportPage': () => import('../pages/CsDailyReportPage'),
+  'CustomerListPage': () => import('../pages/CustomerListPage'),
 };
 
 export const pageComponents = autopilotPageComponents;
@@ -176,6 +177,9 @@ export const additionalRoutes: RouteConfig[] = [
   { path: '/wechat/setup', component: 'CsOneClickSetupPage', requireAuth: true },
   { path: '/wechat/cs-stats', component: 'CsWorkStatsPage', requireAuth: true },
   { path: '/wechat/cs-daily-report', component: 'CsDailyReportPage', requireAuth: true },
+  // requireAuth:false：SPA 路由直接渲染（与 /wechat/per-cs-config 同款），真正的鉴权在后端
+  // tenantContext —— 未登录时 GET /api/crm/customers 返 401，页面提示「登录已失效」。
+  { path: '/customers', component: 'CustomerListPage', requireAuth: false },
   { path: '/local-video', component: 'LocalVideoPipelinePage', requireAuth: true },
   { path: '/clips', component: 'ContentClipperPage', requireAuth: true },
   { path: '/video-remake', component: 'VideoRemakePipelinePage', requireAuth: true },
