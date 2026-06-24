@@ -12,7 +12,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Deploy via SSH
+      - name: Deploy via SSH (蓝绿：staging :5201 验过 → promote :5200 → 失败自动回滚)
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.US_MAC_HOST }}
@@ -20,19 +20,23 @@ jobs:
           key: ${{ secrets.US_MAC_SSH_KEY }}
           port: ${{ secrets.US_MAC_PORT }}
           script_stop: true
-          # 发版自洽 6 步（治 2026-06-22 三连坑：launchctl 不生效 / migration 没跑到生产 / 发成功但跑旧代码）
+          # 蓝绿部署（PrepPRD 2026-06-24，方案 A：切换=把验过的新 build 重启进 :5200）：
+          #   先发 staging slot :5201（连 zenithjoy_test 库、无客户流量）→ 在 :5201 跑部署验证
+          #   （migration可跑通/health/版本断言/golden-path smoke）→ 全绿才 promote 切 :5200
+          #   → staging 验证红：不 promote，:5200 纹丝不动 → promote 中失败：自动回滚到上一版 sha
+          #   全部编排逻辑在 deploy-lib.sh 的 blue_green_deploy（单测 + smoke proven-to-fire）。
           envs: DEPLOY_SHA
-          command_timeout: 15m
+          command_timeout: 20m
           script: |
             set -euo pipefail
             REPO=/Users/administrator/perfect21/zenithjoy
             DEPLOY_SHA="${{ github.sha }}"
 
-            echo "=== [1/6] git sync → ${DEPLOY_SHA} ==="
+            echo "=== [1/3] git sync → ${DEPLOY_SHA} ==="
             git -C "$REPO" fetch --force --prune origin main
             git -C "$REPO" reset --hard "$DEPLOY_SHA"
 
-            echo "=== [2/6] install & build（build 内写 dist/build-info.json）==="
+            echo "=== [2/3] install & build（build 内写 dist/build-info.json）==="
             cd "$REPO"
             export BUILD_SHA="$DEPLOY_SHA"
             npm ci --workspace=apps/api --ignore-scripts 2>/dev/null || \
@@ -40,38 +44,32 @@ jobs:
             npm run build --workspace=apps/api 2>/dev/null || \
               (cd "$REPO/apps/api" && BUILD_SHA="$DEPLOY_SHA" npm run build)
 
-            echo "=== [3/6] DB migration（幂等，失败则发版红、不重启）==="
-            # 对生产 cecelia 库应用所有未应用 migration；schema_migrations 记录已应用，跳过已应用。
-            (cd "$REPO/apps/api" && npm run migrate)
-
-            echo "=== [4/6] 干净重启：先杀占 :5200 的任何进程，再 launchctl stop/start ==="
+            echo "=== [3/3] 蓝绿部署：staging :5201 验过 → promote :5200（失败自动回滚）==="
             # shellcheck source=/dev/null
             source "$REPO/.github/workflows/scripts/deploy-lib.sh"
-            launchctl stop com.zenithjoy.api || true
-            sleep 2
-            kill_port 5200
-            launchctl start com.zenithjoy.api
 
-            echo "=== [5/6] health check ==="
-            sleep 5
-            HEALTHY=0
-            for i in $(seq 1 12); do
-              if curl -sf http://localhost:5200/health > /dev/null 2>&1; then
-                echo "Health check passed (attempt $i)"
-                HEALTHY=1
-                break
-              fi
-              echo "Attempt $i/12 failed, waiting 5s..."
-              sleep 5
-            done
-            if [ "$HEALTHY" -ne 1 ]; then
-              echo "Health check FAILED after 65s"
-              tail -30 ~/Library/Logs/zenithjoy-api.error.log || true
-              exit 1
-            fi
+            # mmv 上下文（deploy-lib hook 实现读取）
+            export ZJ_REPO="$REPO"
+            export ZJ_API_DIR="$REPO/apps/api"
+            export ZJ_PROD_PORT=5200
+            export ZJ_STAGING_PORT=5201
+            export ZJ_PROD_LABEL=com.zenithjoy.api
+            export ZJ_STAGING_DB=zenithjoy_test
+            export ZJ_PROD_PLIST="$HOME/Library/LaunchAgents/com.zenithjoy.api.plist"
+            export ZJ_NODE=/opt/homebrew/bin/node
+            export BRAIN_URL="${BRAIN_URL:-http://localhost:5221}"
 
-            echo "=== [6/6] 版本自检：断言运行进程 sha == ${DEPLOY_SHA}（治"发成功但旧进程还在"）==="
-            assert_version "http://localhost:5200" "$DEPLOY_SHA"
+            # 把蓝绿编排器的 hook 指向 deploy-lib.sh 里的 mmv 真实实现
+            export BG_DEPLOY_STAGING_FN=staging_deploy_slot
+            export BG_VERIFY_STAGING_FN=staging_verify
+            export BG_RECORD_ANCHOR_FN=staging_record_anchor
+            export BG_PROMOTE_FN=staging_promote
+            export BG_VERIFY_PROD_FN=staging_verify_prod
+            export BG_ROLLBACK_FN=staging_rollback
+            export BG_DESTROY_STAGING_FN=staging_destroy_slot
+            export BG_ALERT_P0_FN=staging_alert_p0
+
+            blue_green_deploy "$DEPLOY_SHA"
 
   notify-failure:
     name: Notify Brain on failure
