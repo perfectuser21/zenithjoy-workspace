@@ -33,6 +33,7 @@ import { creditsRouter } from './routes/credits';
 import feishuOauthRouter from './routes/feishu-oauth';
 import feishuCustomerListRouter from './routes/feishu-customer-list';
 import leadConfigRouter from './routes/lead-config';
+import crmRouter from './routes/crm';
 import smokeFeishuSeedRouter from './routes/_smoke-feishu-seed';
 // Path 2 Step4 — DEV-only fake-feishu / fake-LLM 替身（根路径自托管，仅非生产挂载）
 import { fakeFeishuRouter } from './routes/_smoke-feishu-seed';
@@ -160,6 +161,8 @@ app.use('/api/feishu/oauth', feishuOauthRouter);
 app.use('/api/lead-config', leadConfigRouter);
 // Path 4 S5 — Line04 飞书「客户列表」表 + 飞书→本地单向同步
 app.use('/api/feishu/customer-list', feishuCustomerListRouter);
+// Line04 中台 AI-native CRM·客户列表页（/customers 读名册租户闸 + manage/status/POST 写接口）
+app.use('/api/crm', crmRouter);
 // Path 2 Sprint A WS5 — DEV-only 飞书 seed helper（生产 NODE_ENV=production 必返 404）
 app.use('/api/_smoke', smokeFeishuSeedRouter);
 // Path 2 Sprint B-1 — 抖音小号绑定 6 路由 + smoke fake-agent helper
