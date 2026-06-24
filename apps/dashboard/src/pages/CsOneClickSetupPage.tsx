@@ -24,6 +24,22 @@ interface CSMachine {
   login_present?: boolean;
 }
 
+// 从任意后端错误响应里抽出「可读字符串」。绝不返回对象——渲染对象会让 React 崩溃白屏。
+//   扁平：{ message } / { error: 'xxx' }
+//   嵌套（cs-config-guard 安全闸 / tenantContext）：{ error: { code, message } }
+function errorMessage(data: unknown): string | null {
+  if (!data || typeof data !== 'object') return typeof data === 'string' ? data : null;
+  const d = data as Record<string, unknown>;
+  if (typeof d.message === 'string' && d.message) return d.message;
+  if (typeof d.error === 'string' && d.error) return d.error;
+  if (d.error && typeof d.error === 'object') {
+    const e = d.error as Record<string, unknown>;
+    if (typeof e.message === 'string' && e.message) return e.message;
+    if (typeof e.code === 'string' && e.code) return e.code;
+  }
+  return null;
+}
+
 export default function CsOneClickSetupPage() {
   const [machines, setMachines] = useState<CSMachine[]>([]);
   const [loadingList, setLoadingList] = useState(false);
@@ -105,9 +121,11 @@ export default function CsOneClickSetupPage() {
             .filter(Boolean),
         }),
       });
-      const data = await res.json();
-      if (!res.ok || !data.success) {
-        setError(data.message || data.error || '设置失败');
+      const data = await res.json().catch(() => null);
+      if (!res.ok || !data?.success) {
+        // 后端错误形状不一：扁平 {message}/{error:'..'} 或安全闸的嵌套 {error:{code,message}}。
+        // 必须取出「字符串」再 setError——直接把对象塞进 error state 渲染 {error} 会让 React 整树崩溃白屏。
+        setError(errorMessage(data) ?? `设置失败（${res.status}）`);
         return;
       }
       setDone(data.wechat_id);

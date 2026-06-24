@@ -1,0 +1,90 @@
+name: E2E CS OneClick Setup (Windows)
+
+# 「我的客服机 / 一键配置」页 Playwright E2E（回归 P0：设白名单点设置完毕→整页白屏）
+# 在 windows-latest 上起真实 Chrome 走 /wechat/setup 全路径。
+# API 全部 stub（page.route），不依赖外部服务。
+# 复现并防回归：后端写接口安全闸（#838）返 403 时 error 是对象 {code,message}，
+# 旧前端渲染对象 → React 整树崩溃白屏。此 spec 断言遇 403 不白屏且显示可读提示。
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'apps/dashboard/src/pages/CsOneClickSetupPage.tsx'
+      - 'apps/dashboard/e2e/cs-oneclick-setup.spec.ts'
+      - '.github/workflows/e2e-cs-oneclick-setup-windows.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'apps/dashboard/src/pages/CsOneClickSetupPage.tsx'
+      - 'apps/dashboard/e2e/cs-oneclick-setup.spec.ts'
+      - '.github/workflows/e2e-cs-oneclick-setup-windows.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: e2e-cs-oneclick-setup-windows-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  playwright-windows:
+    name: Playwright — CS OneClick Setup (Windows Chrome)
+    runs-on: windows-latest
+    timeout-minutes: 20
+
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          # 不缓存：npm cache 是 macOS 生成的，缺 Windows optional deps（@rollup/rollup-win32-x64-msvc）
+
+      - name: Install deps
+        run: npm ci
+
+      - name: Install Windows rollup native binding
+        # package-lock.json 由 macOS 生成，不含 @rollup/rollup-win32-x64-msvc。
+        # Vite dev server 启动时无条件加载 rollup native，不装就 crash。
+        run: npm install @rollup/rollup-win32-x64-msvc --no-save
+
+      - name: Install Playwright Chromium
+        working-directory: apps/dashboard
+        run: npx playwright install chromium --with-deps
+
+      - name: Start Vite dev server (VITE_SKIP_AUTH=true)
+        working-directory: apps/dashboard
+        env:
+          VITE_SKIP_AUTH: 'true'
+          VITE_MOCK_USER_ID: 'dev-user-001'
+          VITE_MOCK_USER_NAME: '测试用户'
+        run: |
+          npx vite --port 5173 &
+          echo $! > /tmp/vite.pid
+          for i in $(seq 1 30); do
+            if curl -fs http://localhost:5173 >/dev/null 2>&1; then
+              echo "Vite ready after ${i}s"
+              break
+            fi
+            sleep 1
+          done
+          curl -fs http://localhost:5173 || (echo "Vite failed to start"; exit 1)
+
+      - name: Run Playwright E2E — CS OneClick Setup
+        working-directory: apps/dashboard
+        env:
+          E2E_BASE_URL: 'http://localhost:5173'
+        run: npx playwright test e2e/cs-oneclick-setup.spec.ts --reporter=list
+
+      - name: Upload Playwright artifacts on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-cs-oneclick-setup-artifacts
+          path: |
+            apps/dashboard/test-results/
+            apps/dashboard/playwright-report/
+          retention-days: 7
