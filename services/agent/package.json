@@ -1,6 +1,6 @@
 {
   "name": "@zenithjoy/agent",
-  "version": "2.0.25",
+  "version": "2.0.26",
   "description": "ZenithJoy Agent — 后台进程，把 Windows 主机变成 ZenithJoy 中台的发布端",
   "main": "dist/index.js",
   "bin": "dist/index.js",
@@ -8,7 +8,7 @@
     "start": "tsx src/index.ts",
     "build": "tsc -p tsconfig.build.json",
     "build:bundle": "esbuild src/index.ts --bundle --platform=node --target=node18 --format=cjs --outfile=dist/index.js --external:systray2",
-    "package:win": "npm run build && pkg . --targets node18-win-x64 --output zenithjoy-agent.exe",
+    "package:win": "npm run build && node scripts/prepare-base-icon.js build/icon.ico && pkg . --targets node18-win-x64 --output zenithjoy-agent.exe",
     "package:mac": "npm run build && pkg . --targets node18-macos-x64 --output zenithjoy-agent-mac",
     "package:linux": "npm run build && pkg . --targets node18-linux-x64 --output zenithjoy-agent-linux",
     "test": "vitest run",

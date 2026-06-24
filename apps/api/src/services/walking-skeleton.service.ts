@@ -93,11 +93,12 @@ export interface RequiredAgentVersion {
 }
 
 // manifest 不可读时的兜底版本。必须 <= 已发布的最新核心，且随核心 bump 同步抬高。
-// bump 到 2.0.24：修 #826 的 IPC gap —— 用缓存配置启动(跳过注册)的 agent，cfg.machineId 为空，
-// 旧代码经 IPC 下发空 machineId → listen_chat 回落 env。2.0.24 改 setIdentity 传
-// `cfg.machineId || computeMachineId()`，IPC 一定带真实身份 → 真客户机彻底不靠 env 激活每客服配置。
-// 核心包按约定 install-pack/zenithjoy-agent-v2.0.24.tar.gz 从 COS 下载。
-export const DEFAULT_REQUIRED_AGENT_VERSION = '2.0.24';
+// bump 到 2.0.26：2.0.25 的 exe 打包坏了（pkg 打完后 rcedit 改图标截断了 snapshot overlay
+// → exe 37.8MB、运行时 `Pkg: Error reading from file` → agent 起不来）。2.0.26 把图标改成
+// 在 pkg **之前**嵌进 base 二进制（scripts/prepare-base-icon.js），overlay 完整、exe 可运行。
+// 兜底抬到 2.0.26，让 manifest 读不到时新客户机也直接解析到能用的版本（绝不回落到坏的 2.0.25）。
+// 核心包按约定 install-pack/zenithjoy-agent-v2.0.26.tar.gz 从 COS 下载。
+export const DEFAULT_REQUIRED_AGENT_VERSION = '2.0.26';
 
 /**
  * 返回心跳要下发的核心要求版本。
