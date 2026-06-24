@@ -43,7 +43,12 @@ const s=http.createServer((req,res)=>{
 s.listen('"$FAKE_PORT"',()=>{});
 ' "old0000sha111" &
 FAKE_PID=$!
-sleep 1
+# 等 mock /version 真就绪再断言（治 sleep 1 在 CI 高负载下端口未绑好的竞态 flaky：
+# server 没起来时 F 不符凑巧返非0像通过、F2 相符拿不到 sha 误判失败）
+for _i in $(seq 1 50); do
+  if curl -sf "http://localhost:${FAKE_PORT}/version" >/dev/null 2>&1; then break; fi
+  sleep 0.2
+done
 
 set +e
 assert_version "http://localhost:${FAKE_PORT}" "new9999sha222" >/tmp/dlib-assert-mismatch.txt 2>&1
