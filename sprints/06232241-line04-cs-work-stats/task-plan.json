@@ -1,0 +1,38 @@
+{
+  "initiative_id": "15704ac2",
+  "journey_id": "bfeed805",
+  "step_id": "L04-S3",
+  "journey_type": "user_facing",
+  "journey_type_reason": "新增 apps/dashboard 客服工作汇总页（Playwright），命中 user_facing",
+  "target_environment": "windows_cloud",
+  "tasks": [
+    {
+      "task_id": "ws1",
+      "title": "客服工作汇总统计页：cs_wechat_id 身份章 + GET /cs/stats（北京时区）+ dashboard 汇总页（今天/昨天）",
+      "scope": "迁移给 cs_memory_messages 加 cs_wechat_id(nullable)+索引(cs_wechat_id,created_at)；落库 in/out 两处盖身份章(取当前客服机配置微信号,非mock)；apps/api 新增 GET /api/wechat/cs/stats?date=today|yesterday，枚举 wechat_cs_account_config LEFT JOIN cs_memory_messages 当天聚合(北京时区日界)，返回每台客服机一张卡{cs_wechat_id,received_count,reply_count,served_customers,work_duration_minutes,cs_name,auto_agent_enabled,online}；非法 date 返 400；纯口径聚合抽 cs-work-stats.ts(aggregateMessages/beijingDateExpr)；dashboard CsWorkStatsPage 卡片+今天/昨天切换，navigation.config/DynamicSidebar Line04 区挂路由 /wechat/cs-stats。NULL cs_wechat_id 不计入不报错。",
+      "dod": [
+        "[BEHAVIOR] GET /api/wechat/cs/stats?date=today 对 seed 数据返回 received=3/reply=2/served=2/work_minutes=17，顶层 keys==[cards,date,ok]，禁用字段不漏网（contract-dod 口径精确+schema 条目）",
+        "[BEHAVIOR] 数据隔离/时区(北京00:30归今天)/NULL兼容/切昨天/非法date400 五条 contract-dod BEHAVIOR 全 OK",
+        "[BEHAVIOR] 落库行 cs_wechat_id=配置微信号（接缝1，真写入路径，禁 MOCK_*）",
+        "[BEHAVIOR:E2E] windows_cloud Playwright 打开客服工作汇总页，卡片4数可见，点昨天数字变化，截图自验",
+        "[ARTIFACT] 迁移文件加 cs_wechat_id(nullable)+索引(cs_wechat_id,created_at)",
+        "[ARTIFACT] vitest tests/cs-work-stats.test.ts 由红转绿（aggregateMessages/beijingDateExpr 口径）"
+      ],
+      "files": [
+        "apps/api/db/migrations/20260624_HHMMSS_add_cs_wechat_id_to_cs_memory_messages.sql",
+        "apps/api/src/services/cs-work-stats.ts",
+        "apps/api/src/services/wechat-draft.ts",
+        "apps/api/src/services/wechat/tenant-memory.ts",
+        "apps/api/src/routes/wechat.ts",
+        "apps/dashboard/src/pages/CsWorkStatsPage.tsx",
+        "apps/dashboard/src/api/cs-work-stats.api.ts",
+        "apps/dashboard/src/config/navigation.config.ts",
+        "apps/dashboard/e2e/cs-work-stats.spec.ts",
+        ".github/workflows/e2e-windows.yml"
+      ],
+      "depends_on": [],
+      "complexity": "M",
+      "estimated_minutes": 110
+    }
+  ]
+}
