@@ -1,6 +1,3 @@
-contract_branch: cp-harness-propose-r2-598a7faf-a4
-sprint_dir: sprints/06232241-line04-cs-work-stats
-
 ---
 skeleton: false
 journey_type: user_facing
