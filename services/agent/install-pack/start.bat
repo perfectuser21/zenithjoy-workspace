@@ -5,9 +5,10 @@ setlocal enabledelayedexpansion
 cd /d "%~dp0"
 
 REM === E2E test seam: ZJ_LAUNCH_PROBE early-exit guard ===
-REM 当 ZJ_LAUNCH_PROBE 置位时（仅 e2e-verify.ps1 / smoke 设置），写一个 probe 标记到
-REM %APPDATA%\zenithjoy-agent\probe-marker.txt 后立即退出，证明 start.vbs→start.bat 隐藏拉起链
-REM 真执行而无需跑完整重活 / 避免 GHA 上 pause 挂死。生产运行从不设此变量，故不影响真实启动。
+REM When ZJ_LAUNCH_PROBE is set (only e2e-verify.ps1 / smoke set it), write a probe marker to
+REM %APPDATA%\zenithjoy-agent\probe-marker.txt then exit immediately, proving the
+REM start.vbs->start.bat hidden launch chain really runs without the full heavy work / avoids
+REM pause hanging on GHA. Production runs never set this var, so real startup is unaffected.
 if defined ZJ_LAUNCH_PROBE (
     if not exist "%APPDATA%\zenithjoy-agent" mkdir "%APPDATA%\zenithjoy-agent" >nul 2>&1
     echo probe %DATE% %TIME% pid=%RANDOM%> "%APPDATA%\zenithjoy-agent\probe-marker.txt"
@@ -25,7 +26,7 @@ REM 4.1.x mmui control tree exposes its UIAutomation provider.
 powershell -NoProfile -Command "Add-Type -Namespace Win -Name Spi -MemberDefinition '[DllImport(\"user32.dll\")] public static extern bool SystemParametersInfo(uint a, uint b, System.IntPtr c, uint d);'; [Win.Spi]::SystemParametersInfo(0x47,1,[System.IntPtr]::Zero,0x02) | Out-Null" >nul 2>&1
 echo [uia] WeChat UIAutomation unlocked (screen-reader flag set)
 
-REM Step 0.5: WeChat version guard 已迁移进 preflight.py（step 6.9），由 preflight 自动检测+自修，此处不再早退。
+REM Step 0.5: WeChat version guard moved into preflight.py (step 6.9); preflight auto-detects + self-repairs, no early-exit here.
 
 
 REM Step 1: Verify .env exists - auto-copy from .env.template on first run
@@ -45,7 +46,7 @@ REM Step 1.5: Append missing new keys to .env (upgrade-compatible, never overwri
 powershell -NoProfile -Command "if (!(Select-String -Path '.env' -Pattern 'ZENITHJOY_AGENT_DRYRUN_BROWSER' -Quiet)) { Add-Content -Path '.env' -Value 'ZENITHJOY_AGENT_DRYRUN_BROWSER=mock'; Write-Host '[setup] ZENITHJOY_AGENT_DRYRUN_BROWSER=mock appended to .env' }"
 powershell -NoProfile -Command "if (!(Select-String -Path '.env' -Pattern 'ZENITHJOY_AGENT_REAL_PUBLISH' -Quiet)) { Add-Content -Path '.env' -Value 'ZENITHJOY_AGENT_REAL_PUBLISH=1'; Write-Host '[setup] ZENITHJOY_AGENT_REAL_PUBLISH=1 appended to .env' }"
 
-REM Step 1.8: Normalize .env line endings — strip \r so CRLF files don't pollute env vars
+REM Step 1.8: Normalize .env line endings - strip \r so CRLF files don't pollute env vars
 REM for/f keeps \r from Windows CRLF files, causing URL parse errors ("https://api.com\r/api/...")
 powershell -NoProfile -Command "$c=[IO.File]::ReadAllText('.env') -replace '\r',''; [IO.File]::WriteAllText('.env',$c)" >nul 2>&1
 
@@ -256,46 +257,49 @@ if exist "%_WEIXIN_ROOT%" (
     echo [lock-update] WeChat install dir not found, skipping (%_WEIXIN_ROOT%)
 )
 
-REM === Step 6.9: WeChat RPA 环境自检（非阻断，由 module-manager 负责自愈）===
-REM preflight.py 已由 module-manager 在下载最新模块后自动运行（含 _run_elevated 安装微信）。
-REM start.bat 不再阻断启动流程，确保任意 Windows 机器能自愈，无需重新下载安装包。
-REM 此处仅在 core 启动前做一次信息性输出，不阻断。
+REM === Step 6.9: WeChat RPA environment self-check (non-blocking, module-manager handles self-heal) ===
+REM preflight.py already runs automatically via module-manager after it downloads the latest module
+REM (incl. _run_elevated WeChat install). start.bat no longer blocks startup, so any Windows machine
+REM can self-heal without re-downloading the install pack. This is just an informational line before
+REM core launch, non-blocking.
 if exist "%~dp0python-embedded\python.exe" if exist "%~dp0wechat-rpa\preflight.py" (
-    echo [preflight] 环境自检将由 agent core module-manager 在启动后自动运行...
+    echo [preflight] environment self-check will run automatically via agent core module-manager after startup...
 )
 
-REM Step 6.92: 注册开机自启（幂等，每次都跑，确保任务计划条目存在）
-REM install-autostart.ps1 用 RunLevel Limited + ONLOGON，不需要管理员。
+REM Step 6.92: Register boot autostart (idempotent, runs every time to ensure the scheduled task entry exists)
+REM install-autostart.ps1 uses RunLevel Limited + ONLOGON, no admin required.
 if exist "%~dp0install-autostart.ps1" (
     powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0install-autostart.ps1" >nul 2>&1
     echo [autostart] boot autostart registered (ZenithJoyAgent scheduled task)
 ) else (
-    echo [autostart] install-autostart.ps1 不存在，跳过（旧版安装包）
+    echo [autostart] install-autostart.ps1 not found, skipping (old install pack)
 )
 
-REM Step 6.93: 生成无窗快捷方式（幂等）— 桌面 + 安装目录各放一个「启动 ZenithJoy Agent」
-REM 指向 start.vbs（无窗），让用户只点得到无黑窗入口；start.bat 本身转内部隐藏用。
+REM Step 6.93: Create windowless shortcuts (idempotent) - one "Start ZenithJoy Agent" on desktop + install dir
+REM Points to start.vbs (windowless) so users only get a no-black-window entry; start.bat is for internal hidden use.
 if exist "%~dp0create-shortcut.ps1" (
     powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0create-shortcut.ps1" >nul 2>&1
-    echo [shortcut] 无窗快捷方式已生成（指向 start.vbs）
+    echo [shortcut] windowless shortcut created (points to start.vbs)
 ) else (
-    echo [shortcut] create-shortcut.ps1 不存在，跳过（旧版安装包）
+    echo [shortcut] create-shortcut.ps1 not found, skipping (old install pack)
 )
 
-REM Step 6.95: Single-instance guard — kill any existing zenithjoy-agent.exe before starting
+REM Step 6.95: Single-instance guard - kill any existing zenithjoy-agent.exe before starting
 REM Two agents with the same license kick each other off the server WS connection,
-REM causing repeated disconnects ("又掉了" / "车没油" symptom when upgrading without closing old).
+REM causing repeated disconnects ("dropped again" / "out of gas" symptom when upgrading without closing old).
 powershell -NoProfile -Command "Get-Process -Name zenithjoy-agent -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue" >nul 2>&1
 echo [agent] previous agent processes stopped (if any)
 
-REM === Step 6.96: 核心自升级自换 — 读 .active-core 指针选最新核心目录（Sprint 06222100）===
-REM 客户机布局：<root>\extracted\zenithjoy-agent-v<ver>\（本 start.bat 所在）。CoreUpgrader 升级后把
-REM 新核心解压到同级 extracted\zenithjoy-agent-v<新ver>，并在 <root>\.active-core 写下目标目录名，
-REM 然后优雅退出。计划任务 ONLOGON 始终拉起本启动器；本启动器读 .active-core 指针 → 切到被选中的最新
-REM 核心目录运行其 zenithjoy-agent.exe。这样重启后跑的就是新核心，不依赖人手动重装。
-REM 回退（防自换把客户机搞挂）：指针文件不存在 / 指向目录的 exe 不存在 → 用 %~dp0 本地核心。
+REM === Step 6.96: Core self-upgrade/self-swap - read .active-core pointer to pick the newest core dir (Sprint 06222100) ===
+REM Client layout: <root>\extracted\zenithjoy-agent-v<ver>\ (where this start.bat lives). After upgrading,
+REM CoreUpgrader extracts the new core to a sibling extracted\zenithjoy-agent-v<newver>, writes the target
+REM dir name into <root>\.active-core, then exits gracefully. The ONLOGON scheduled task always launches
+REM this launcher; this launcher reads the .active-core pointer -> switches to the selected newest core dir
+REM and runs its zenithjoy-agent.exe. So after a restart it runs the new core, no manual reinstall needed.
+REM Fallback (so self-swap can't brick the client machine): pointer file missing / pointed dir's exe missing
+REM -> use the local %~dp0 core.
 set "CORE_RUN_DIR=%~dp0"
-REM <root> = extracted 的父 = %~dp0 的祖父目录
+REM <root> = parent of extracted = grandparent of %~dp0
 for %%i in ("%~dp0..") do set "EXTRACTED_DIR=%%~fi"
 for %%i in ("%EXTRACTED_DIR%\..") do set "ROOT_DIR=%%~fi"
 set "ACTIVE_CORE_FILE=%ROOT_DIR%\.active-core"
@@ -306,18 +310,18 @@ if exist "%ACTIVE_CORE_FILE%" (
         set "POINTED_DIR=%EXTRACTED_DIR%\!ACTIVE_CORE_NAME!"
         if exist "!POINTED_DIR!\zenithjoy-agent.exe" (
             set "CORE_RUN_DIR=!POINTED_DIR!\"
-            echo [active-core] 指针选中最新核心: !ACTIVE_CORE_NAME!
+            echo [active-core] pointer selected newest core: !ACTIVE_CORE_NAME!
         ) else (
-            echo [active-core] WARN 指针指向 !ACTIVE_CORE_NAME! 但缺 zenithjoy-agent.exe — fallback 回退本地核心
+            echo [active-core] WARN pointer points to !ACTIVE_CORE_NAME! but zenithjoy-agent.exe missing - fallback to local core
         )
     ) else (
-        echo [active-core] WARN .active-core 指针为空 — fallback 回退本地核心
+        echo [active-core] WARN .active-core pointer empty - fallback to local core
     )
 ) else (
-    echo [active-core] 无 .active-core 指针，使用本地核心（首装/未升级）
+    echo [active-core] no .active-core pointer, using local core (first install/not upgraded)
 )
 
-REM Step 7: Spawn agent.exe (foreground) — 跑指针选中的最新核心（无指针则本地）
+REM Step 7: Spawn agent.exe (foreground) - run the pointer-selected newest core (local if no pointer)
 mkdir "%USERPROFILE%\.zj" 2>nul
 echo [agent] starting zenithjoy-agent.exe (dir=%CORE_RUN_DIR%) ...
 pushd "%CORE_RUN_DIR%"
