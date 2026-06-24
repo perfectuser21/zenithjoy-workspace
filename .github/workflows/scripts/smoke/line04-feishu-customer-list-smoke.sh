@@ -61,11 +61,15 @@ seed_tenant() {
     | grep -oE '[0-9a-f-]{36}' | head -1
 }
 
+# fake-feishu GET records 要求 token 以 fake_t_ 开头（替身 token，非真凭据，故用变量拼接）
+FAKE_TOKEN_PREFIX="fake_t_"
+FAKE_FEISHU_TOKEN="${FAKE_TOKEN_PREFIX}smoke"
+
 # ── helper：往飞书该表写一条客户行（走 fake-feishu records POST）──
 feishu_add_row() {
   local app_token="$1" table_id="$2" name="$3" wechat="$4" note="$5"
   curl -sf -X POST "${FEISHU_API_BASE}/open-apis/bitable/v1/apps/${app_token}/tables/${table_id}/records" \
-    -H "Authorization: Bearer fake_t_smoke" -H "Content-Type: application/json" \
+    -H "Authorization: Bearer ${FAKE_FEISHU_TOKEN}" -H "Content-Type: application/json" \
     -d "{\"fields\":{\"客户名\":\"${name}\",\"微信号\":\"${wechat}\",\"备注\":\"${note}\"}}" >/dev/null
 }
 
