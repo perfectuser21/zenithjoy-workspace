@@ -32,32 +32,38 @@ if WECHAT_RPA_DIR not in sys.path:
 from preflight import CHECK_NAMES, check_lock_update, check_wechat_version
 
 
-class TestDowngradePath(unittest.TestCase):
-    """PRD 边界情况：微信版本 ≥4.1.9 → 降级路径被检测到（跨平台，用 mock）"""
+class TestUpperBoundReleased(unittest.TestCase):
+    """6-21 放开上界：微信 >= 4.1.8（含 4.1.9 / 4.1.10+ / 4.2.0）→ 放行（status=ok），
+    仅 < 4.1.8 仍降级（跨平台，用 mock）。"""
 
-    def test_version_419_dry_run_returns_failed_with_418_message(self):
-        """版本 4.1.9 在 dry_run 模式下 → status=failed，detail 含 4.1.8"""
+    def test_version_419_dry_run_now_ok(self):
+        """版本 4.1.9 → status=ok（Qt 窗口 UIA 可用，不再降级）。"""
         with patch("preflight.get_weixin_version", return_value="4.1.9"), \
              patch("preflight._is_windows", return_value=True):
             result = check_wechat_version(dry_run=True)
         self.assertEqual(
             result["status"],
-            "failed",
-            f"版本 4.1.9 在 dry_run 下应返回 failed，实际: {result['status']}",
-        )
-        self.assertIn(
-            "4.1.8",
-            result.get("detail", ""),
-            "detail 应包含 '4.1.8' 降级说明",
+            "ok",
+            f"版本 4.1.9（>=4.1.8）应放行 ok，实际: {result['status']}",
         )
 
-    def test_version_420_also_triggers_downgrade_detection(self):
-        """版本 4.2.0（高于 4.1.9）同样触发降级检测"""
+    def test_version_420_now_ok(self):
+        """版本 4.2.0（>= 4.1.8）→ status=ok（放行）。"""
         with patch("preflight.get_weixin_version", return_value="4.2.0"), \
              patch("preflight._is_windows", return_value=True):
             result = check_wechat_version(dry_run=True)
+        self.assertEqual(result["status"], "ok",
+            f"版本 4.2.0（>=4.1.8）应放行 ok，实际: {result['status']}")
+
+    def test_version_417_below_baseline_still_downgrade(self):
+        """版本 4.1.7（< 4.1.8 下界）→ status=failed，detail 含 4.1.8（仍降级）。"""
+        with patch("preflight.get_weixin_version", return_value="4.1.7"), \
+             patch("preflight._is_windows", return_value=True):
+            result = check_wechat_version(dry_run=True)
         self.assertEqual(result["status"], "failed",
-            f"版本 4.2.0 在 dry_run 下应返回 failed，实际: {result['status']}")
+            f"版本 4.1.7（<4.1.8）应 failed，实际: {result['status']}")
+        self.assertIn("4.1.8", result.get("detail", ""),
+            "detail 应包含 '4.1.8' 降级说明")
 
     def test_lock_update_check_name_is_correct(self):
         """CHECK_NAMES[3] == 'lock_update'（索引不串位保护）"""
