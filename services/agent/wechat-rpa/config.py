@@ -160,6 +160,10 @@ HEARTBEAT_INTERVAL_SECONDS: int = 60
 UIA_REACTIVATE_INTERVAL_SECONDS: int = 45
 """UIAutomation 屏幕阅读器标志失效后重新激活的冷却时间（秒）"""
 
+UPDATE_LOCK_INTERVAL_SECONDS: int = 300
+"""关死微信自动更新的重施间隔（秒）。微信会恢复更新器，每隔此时间重施一次 + verify。
+默认 5 分钟（24h 待机工作机：足够压住自升，又不过度 taskkill）。"""
+
 WECHAT_LAUNCH_COOLDOWN_SECONDS: int = 120
 """微信进程自动拉起的冷却时间（秒），防重复启动"""
 
