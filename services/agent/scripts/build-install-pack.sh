@@ -57,12 +57,15 @@ if [ "$DRY_RUN" = true ]; then
   for f in wechat-rpa/*.py; do cp "$f" "${PACK_DIR}/wechat-rpa/" 2>/dev/null || true; done
   echo "[build-dryrun] wechat-rpa/*.py 拷贝完成"
 
-  # 文本资产（start.bat 含讲述人解锁命令；start.vbs 无窗口启动入口）
+  # 文本资产（start.bat = 内部隐藏入口；start.vbs = 无窗启动入口；create-shortcut.ps1 = 生成无窗快捷方式）
   cp install-pack/start.bat "${PACK_DIR}/"
   cp install-pack/start.vbs "${PACK_DIR}/"
+  cp install-pack/create-shortcut.ps1 "${PACK_DIR}/" 2>/dev/null || true
   cp install-pack/install-autostart.ps1 "${PACK_DIR}/" 2>/dev/null || true
   cp install-pack/.env.template "${PACK_DIR}/" 2>/dev/null || true
-  echo "[build-dryrun] start.bat + start.vbs + 文本资产拷贝完成"
+  # icon.ico = 悦升云端 logo（快捷方式图标 + exe 应用图标同源）
+  cp build/icon.ico "${PACK_DIR}/" 2>/dev/null || true
+  echo "[build-dryrun] start.bat + start.vbs + create-shortcut.ps1 + icon.ico 拷贝完成"
 
   echo "[build-dryrun] PACK_DIR=${PACK_DIR} 内容: $(ls ${PACK_DIR}/)"
   echo "[build-dryrun] ✅ dry-run 验证结构就绪"
@@ -95,9 +98,14 @@ fi
 
 echo "[build] copying assets to ${PACK_DIR}/"
 cp zenithjoy-agent.exe "$PACK_DIR/"
+# start.bat — 内部隐藏启动脚本（由 vbs/快捷方式/自启隐藏拉起，用户不应手动双击，会弹黑窗）
 cp install-pack/start.bat "$PACK_DIR/"
-# start.vbs — 无窗口启动入口（去黑窗），客户双击此文件启动，自启亦指向它
+# start.vbs — 无窗口启动入口（去黑窗），快捷方式与开机自启都指向它
 cp install-pack/start.vbs "$PACK_DIR/"
+# create-shortcut.ps1 — 生成「启动 ZenithJoy Agent」无窗快捷方式（指向 start.vbs），收口用户入口
+cp install-pack/create-shortcut.ps1 "$PACK_DIR/"
+# icon.ico — 悦升云端 logo（快捷方式图标 + exe 应用图标同源）
+cp build/icon.ico "$PACK_DIR/"
 cp install-pack/uninstall.bat "$PACK_DIR/"
 # 进程守护：watchdog 崩溃自愈循环 + 开机自启注册脚本
 cp install-pack/install-autostart.ps1 "$PACK_DIR/"

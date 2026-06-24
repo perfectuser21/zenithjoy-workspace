@@ -164,6 +164,11 @@ jobs:
           chmod +x .github/workflows/scripts/smoke/agent-core-self-upgrade-smoke.sh
           bash .github/workflows/scripts/smoke/agent-core-self-upgrade-smoke.sh
 
+      - name: Smoke — Agent 形态收口（悦升云端图标 + 安装包无窗，Sprint 06240003）
+        run: |
+          chmod +x .github/workflows/scripts/smoke/agent-form-smoke.sh
+          bash .github/workflows/scripts/smoke/agent-form-smoke.sh
+
   # ─── L4 Gate ──────────────────────────────────────────────────────────
   l4-passed:
     name: L4 Runtime Gate Passed

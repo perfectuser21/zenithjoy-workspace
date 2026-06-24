@@ -273,6 +273,15 @@ if exist "%~dp0install-autostart.ps1" (
     echo [autostart] install-autostart.ps1 不存在，跳过（旧版安装包）
 )
 
+REM Step 6.93: 生成无窗快捷方式（幂等）— 桌面 + 安装目录各放一个「启动 ZenithJoy Agent」
+REM 指向 start.vbs（无窗），让用户只点得到无黑窗入口；start.bat 本身转内部隐藏用。
+if exist "%~dp0create-shortcut.ps1" (
+    powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0create-shortcut.ps1" >nul 2>&1
+    echo [shortcut] 无窗快捷方式已生成（指向 start.vbs）
+) else (
+    echo [shortcut] create-shortcut.ps1 不存在，跳过（旧版安装包）
+)
+
 REM Step 6.95: Single-instance guard — kill any existing zenithjoy-agent.exe before starting
 REM Two agents with the same license kick each other off the server WS connection,
 REM causing repeated disconnects ("又掉了" / "车没油" symptom when upgrading without closing old).
