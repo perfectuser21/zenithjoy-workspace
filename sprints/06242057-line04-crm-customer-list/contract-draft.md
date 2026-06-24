@@ -258,6 +258,9 @@ OUT=$(PGPASSWORD="$PSQL_PASS" psql -h "$PSQL_HOST" -U "$PSQL_USER" -d "$PSQL_DB"
 **可观测行为**: 在能起真 `:5200` + 真 postgres + dashboard preview（vite proxy `/api`→`:5200`）的 **linux CI** 上：先真登录拿真 better-auth session cookie → `context.addCookies` 注入浏览器 → goto `/customers`（真 GET 带 cookie 出真数据）→ 点接管开关（**不 stub** `/api/crm/customers/manage`）→ 浏览器 fetch 带 `credentials:'include'` → 真后端真收 cookie → 真 200。断言「保存成功」可见、「登录已失效」count=0，并 psql 复核 whitelist 5 分钟内真写入该 contact（证明 cookie 真到达后端触发真写，前端确实带了凭据）。
 
 **验证命令**（linux CI，真后端 leg；REAL_SESSION_COOKIE 由 smoke 真登录 bootstrap 产出，不写死）:
+
+gate-allow: env_missing cookie 接缝真后端 leg 仅在 `line04-crm-customer-list-smoke.sh`（linux CI）内运行，该 smoke 已 `npx playwright install chromium` 备好浏览器；REAL_SESSION_COOKIE 未注入时 spec 内 `test.skip` 自动降级为 logic-done-pending（见接缝清单 #1），非环境真缺失，故豁免 playwright env 检测。
+
 ```bash
 cd apps/dashboard
 E2E_BASE_URL="http://localhost:5174" E2E_REAL_SESSION_COOKIE="$REAL_SESSION_COOKIE" \
@@ -343,9 +346,12 @@ test('客户列表 Golden Path — 列表/接管开关/状态下拉', async ({ p
 });
 ```
 
-evaluator 验收后执行：
+evaluator 验收后执行（截图归档，非 oracle；不吞 exit code，用 `ls` 守卫实现"无 png 也不报错"）：
 ```bash
-mkdir -p "${SPRINT_DIR}/screenshots/" && cp screenshots/*.png "${SPRINT_DIR}/screenshots/" 2>/dev/null || true
+mkdir -p "${SPRINT_DIR}/screenshots/"
+if ls screenshots/*.png >/dev/null 2>&1; then
+  cp screenshots/*.png "${SPRINT_DIR}/screenshots/"
+fi
 ```
 
 ### Playwright spec 模板 ②（`apps/dashboard/e2e/crm-cookie-seam.spec.ts`，**linux CI 真后端 leg — cookie 接缝真目标验证**）
