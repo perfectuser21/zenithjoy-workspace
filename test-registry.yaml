@@ -3585,3 +3585,35 @@ agent_suite:
     status: active
     product: AI员工
     note: "S4 前台日报 API 客户端单测（vi.mock client）：GET /wechat/cs/daily-report 带 date 参数 + 解 reports 数组 + 缺字段回空。"
+
+  - id: line04-crm-customer-roster-contract-oracle
+    path: sprints/06242057-line04-crm-customer-list/tests/crm-customers.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 客户私域AI接管
+    note: "中台 CRM 客户列表 合同 oracle：buildCustomerRoster 名册聚合（messages∪manual∪whitelist）+ 租户隔离 + managed 实时 + status A1-A5 规范。"
+
+  - id: line04-crm-customer-roster-unit
+    path: apps/api/src/services/crm/customer-roster.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 客户私域AI接管
+    note: "buildCustomerRoster 纯函数单测（customer-roster.test.ts）：合并去重 / managed 由 whitelist 实时 / manual 覆盖 message / normalizeStatus。"
+
+  - id: line04-crm-customer-list-ui-e2e
+    path: apps/dashboard/e2e/crm-customer-list.spec.ts
+    type: e2e
+    ci: windows_cloud
+    status: active
+    product: 客户私域AI接管
+    note: "中台 CRM 客户列表页 Golden Path（page.route stub UI 层）：列表行 + 状态下拉 + 接管开关 + 「保存成功」文案，windows-latest 跑。"
+
+  - id: line04-crm-cookie-seam-e2e
+    path: apps/dashboard/e2e/crm-cookie-seam.spec.ts
+    type: e2e
+    ci: L4
+    status: active
+    product: 客户私域AI接管
+    note: "cookie 接缝真目标验证（linux 真后端 :5200 + 真 better-auth cookie 注入浏览器，无 stub）：点接管开关真发凭据 → 真 200 + whitelist 真写入；由 line04-crm-customer-list-smoke.sh --leg=cookie-seam 编排。"
