@@ -264,8 +264,7 @@ gate-allow: env_missing/playwright cookie 接缝真后端 leg 仅在 `line04-crm
 ```bash
 cd apps/dashboard
 # REAL_SESSION_COOKIE 由 smoke 真登录 bootstrap 导出（不写死）；未注入时兜底空串，spec 内 test.skip 降级 logic-done-pending
-REAL_SESSION_COOKIE="${REAL_SESSION_COOKIE:-}"
-E2E_BASE_URL="${E2E_BASE_URL:-http://localhost:5174}" E2E_REAL_SESSION_COOKIE="$REAL_SESSION_COOKIE" \
+E2E_BASE_URL="${E2E_BASE_URL:-http://localhost:5174}" E2E_REAL_SESSION_COOKIE="${REAL_SESSION_COOKIE:-}" \
   npx playwright test e2e/crm-cookie-seam.spec.ts --reporter=line || { echo "FAIL: cookie 接缝真浏览器 leg 未过"; exit 1; }
 IN=$(PGPASSWORD="$PSQL_PASS" psql -h "$PSQL_HOST" -U "$PSQL_USER" -d "$PSQL_DB" -tAc \
   "SELECT (whitelist @> to_jsonb('$CONTACT'::text)) FROM zenithjoy.wechat_cs_account_config WHERE wechat_id='$CS_WECHAT_ID' AND updated_at > NOW() - interval '5 minutes'")
