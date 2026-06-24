@@ -545,6 +545,14 @@ tests:
     product: AI员工
     note: "watchdog CRLF regression — listener-watchdog.bat 读 .env 前必须剥 \\r，防 ZENITHJOY_API_BASE 污染"
 
+  - id: agent-tray-fallback-icon
+    path: services/agent/src/__tests__/tray-fallback-icon.test.ts
+    type: unit
+    ci: L2
+    status: active
+    product: AI员工
+    note: "Sprint 06240003 形态收口 — 托盘兜底图标必须是悦升云端 logo（32x32），绝不是 1x1 透明空白（Issue 5c770b55）"
+
   - id: agent-module-manager
     path: services/agent/src/__tests__/module-manager.test.ts
     type: unit
