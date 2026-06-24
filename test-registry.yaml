@@ -473,6 +473,14 @@ tests:
     product: AI员工
     note: "Sprint 06232248: 客服配置权限前台 E2E（windows Playwright）— 管理员看到营业时间+每日上限输入并保存读回；member 只读+「仅管理员可配置」。page.route 拦后端 my-role/config。"
 
+  - id: line04-cs-oneclick-setup-whitescreen-e2e
+    path: apps/dashboard/e2e/cs-oneclick-setup.spec.ts
+    type: e2e
+    ci: L4
+    status: active
+    product: AI员工
+    note: "回归 P0：「我的客服机/一键配置」设白名单点设置完毕遇 403（写接口安全闸 #838 的 error 是对象 {code,message}）→ 旧前端渲染对象崩 React 整页白屏。断言遇 403 不白屏且显示可读提示，200 成功提示。windows Playwright，page.route 拦 cs/machines 与 cs/setup。"
+
   - id: line04-cs-tenant-isolation-sprint-archive
     path: sprints/06181315-line04-cs-tenant-isolation/tests/tenant-isolation.test.ts
     type: unit
