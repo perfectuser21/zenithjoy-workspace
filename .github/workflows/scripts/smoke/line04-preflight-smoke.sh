@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # line04-preflight-smoke.sh — Line04 微信AI客服模块环境预检 smoke test
 # 验收标准：
-#   1. preflight.py --dry-run 返回 9 项检测结果，exit code 0（dry-run 跳过自愈）
+#   1. preflight.py --dry-run 返回 8 项检测结果，exit code 0（dry-run 跳过自愈；锁版本已删）
 #   2. /module-health API 端点存在且返回 200
 #   3. Dashboard navigation 中 module-health 条目不含 requireSuperAdmin: true
 set -euo pipefail

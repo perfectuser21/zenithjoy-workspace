@@ -225,37 +225,11 @@ echo [setup] unlocking WeChat automation (screen-reader flag)...
 powershell -NoProfile -Command "Add-Type -Namespace Win -Name Spi -MemberDefinition '[DllImport(\"user32.dll\")] public static extern bool SystemParametersInfo(uint a, uint b, System.IntPtr c, uint d);'; [Win.Spi]::SystemParametersInfo(0x47,1,[System.IntPtr]::Zero,0x02) | Out-Null" >nul 2>&1
 echo [setup] done
 
-REM === Lock update: prevent WeChat auto-upgrading to 4.1.9+ (accessibility tree removed = RPA dead) ===
-REM Idempotent: safe to re-run. Two measures:
-REM   1) Rename WeixinUpdate.exe -> .disabled in each version subdir under the Weixin install dir
-REM   2) Add an outbound firewall block rule so WeixinUpdate.exe cannot fetch new versions
-REM Use dir /s /b to find real subdir paths (version dir name changes, cannot hardcode).
-echo [lock-update] locking WeChat version, disabling auto-update...
-set "_WEIXIN_ROOT=C:\Program Files\Tencent\Weixin"
-if exist "%_WEIXIN_ROOT%" (
-    for /f "delims=" %%u in ('dir /s /b "%_WEIXIN_ROOT%\WeixinUpdate.exe" 2^>nul') do (
-        REM 1) rename to disable (already-.disabled ones won't match, naturally idempotent)
-        ren "%%u" "WeixinUpdate.exe.disabled" >nul 2>&1
-        if exist "%%u" (
-            echo [lock-update] WARN rename failed - file in use?: %%u
-        ) else (
-            echo [lock-update] disabled %%u
-        )
-        REM 2) outbound firewall block (idempotent: delete same-name rule first, then add)
-        netsh advfirewall firewall delete rule name="Block WeixinUpdate" program="%%u" >nul 2>&1
-        netsh advfirewall firewall add rule name="Block WeixinUpdate" dir=out action=block program="%%u" enable=yes >nul 2>&1
-    )
-    REM also add a firewall rule for already-.disabled ones (fallback if restored)
-    for /f "delims=" %%d in ('dir /s /b "%_WEIXIN_ROOT%\WeixinUpdate.exe.disabled" 2^>nul') do (
-        set "_ORIG=%%d"
-        set "_ORIG=!_ORIG:.disabled=!"
-        netsh advfirewall firewall delete rule name="Block WeixinUpdate" program="!_ORIG!" >nul 2>&1
-        netsh advfirewall firewall add rule name="Block WeixinUpdate" dir=out action=block program="!_ORIG!" enable=yes >nul 2>&1
-    )
-    echo [lock-update] done
-) else (
-    echo [lock-update] WeChat install dir not found, skipping (%_WEIXIN_ROOT%)
-)
+REM === Lock-update removed (2026-06-24) ===
+REM The old four-layer lock (rename WeixinUpdate.exe + firewall block + AutoUpdate=0) is gone:
+REM it did not actually hold (clients restarted WeChat and it auto-upgraded to 4.1.10 anyway),
+REM and 4.1.10's Qt window UIA still sends/replies fine, so the lock was both ineffective and
+REM unnecessary. We no longer fight WeChat auto-update.
 
 REM === Step 6.9: WeChat RPA environment self-check (non-blocking, module-manager handles self-heal) ===
 REM preflight.py already runs automatically via module-manager after it downloads the latest module

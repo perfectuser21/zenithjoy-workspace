@@ -91,11 +91,10 @@ def test_version_guard_4187_allowed():
     assert _parse_and_check("4.1.8.107") is None
 
 
-def test_version_guard_419_blocked():
-    """4.1.9 过高 → 抛 RuntimeError。"""
+def test_version_guard_419_allowed():
+    """4.1.9（>= 4.1.8）→ 现放行（6-21 放开上界 #852，Qt 窗口 UIA 可用），不抛。"""
     from find_weixin import _parse_and_check
-    with pytest.raises(RuntimeError):
-        _parse_and_check("4.1.9")
+    assert _parse_and_check("4.1.9") is None
 
 
 def test_version_guard_min_required_is_418():

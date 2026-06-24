@@ -37,7 +37,7 @@ jobs:
       - name: Install Python test deps
         run: pip install pytest
 
-      - name: E2E-1 preflight.py --dry-run 9项检测（Linux cross-platform）
+      - name: E2E-1 preflight.py --dry-run 8项检测（Linux cross-platform，锁版本已删）
         run: |
           cd services/agent/wechat-rpa
           PUBLIC=/tmp python preflight.py --dry-run || true
@@ -46,26 +46,31 @@ jobs:
           jpath = os.path.join('/tmp', 'zj-preflight.json')
           r = json.load(open(jpath, encoding='utf-8'))
           checks = r['checks']
-          assert len(checks) == 9, f'FAIL: 期望9项，实际{len(checks)}项'
-          lk = [x for x in checks if x['name'] == 'lock_update']
-          assert lk, f'FAIL: lock_update 项不存在，现有: {[c[\"name\"] for c in checks]}'
-          print('OK: 9项检测，含lock_update，status=' + lk[0]['status'])
+          assert len(checks) == 8, f'FAIL: 期望8项，实际{len(checks)}项'
+          assert not [x for x in checks if x['name'] == 'lock_update'], 'FAIL: lock_update 应已删除'
+          print('OK: 8项检测，无 lock_update')
           "
 
-      - name: E2E-1b 降级路径逻辑验证（mock 4.1.9，cross-platform）
+      - name: E2E-1b 版本闸逻辑（4.1.9 放行 / 4.1.7 降级，cross-platform）
         run: |
           cd services/agent/wechat-rpa
           python -c "
           import sys
           from unittest.mock import patch
           sys.path.insert(0, '.')
+          from preflight import check_wechat_version
+          # 4.1.9（>=4.1.8）→ 放行（6-21 放开上界 #852）
           with patch('preflight.get_weixin_version', return_value='4.1.9'), \
                patch('preflight._is_windows', return_value=True):
-              from preflight import check_wechat_version
-              result = check_wechat_version(dry_run=True)
-          assert result['status'] == 'failed', f'FAIL: 4.1.9 dry_run 应返回 failed，实际 {result[\"status\"]}'
-          assert '4.1.8' in result.get('detail', ''), 'FAIL: detail 未提及 4.1.8'
-          print('OK: 4.1.9 → 降级路径被检测到')
+              hi = check_wechat_version(dry_run=True)
+          assert hi['status'] == 'ok', f'FAIL: 4.1.9（>=4.1.8）应放行 ok，实际 {hi[\"status\"]}'
+          # 4.1.7（<4.1.8 下界）→ 降级
+          with patch('preflight.get_weixin_version', return_value='4.1.7'), \
+               patch('preflight._is_windows', return_value=True):
+              lo = check_wechat_version(dry_run=True)
+          assert lo['status'] == 'failed', f'FAIL: 4.1.7（<4.1.8）应 failed，实际 {lo[\"status\"]}'
+          assert '4.1.8' in lo.get('detail', ''), 'FAIL: detail 未提及 4.1.8'
+          print('OK: 4.1.9 放行 / 4.1.7 降级')
           "
 
       - name: Set up Node.js
@@ -99,13 +104,13 @@ jobs:
           console.log('OK: Line04PreflightCard 已实现并被页面引用');
           "
 
-      - name: Python pytest 降级路径 + 四层锁接口（cross-platform）
+      - name: Python pytest 版本降级路径（cross-platform）
         run: |
           cd services/agent/wechat-rpa
-          python -m pytest tests/test_preflight_lock.py -v -k TestDowngradePath
+          python -m pytest tests/test_preflight_lock.py -v
 
   preflight-e2e-windows:
-    name: Four-Layer Lock + Start.bat Blocking (Windows)
+    name: Start.bat Blocking + Preflight (Windows)
     runs-on: windows-latest
     timeout-minutes: 20
     env:
@@ -122,7 +127,7 @@ jobs:
       - name: Install Python test deps
         run: pip install pytest
 
-      - name: E2E-1 preflight.py --dry-run 9项检测（Windows）
+      - name: E2E-1 preflight.py --dry-run 8项检测（Windows，锁版本已删）
         shell: pwsh
         run: |
           $env:PUBLIC = $env:TEMP
@@ -135,47 +140,11 @@ jobs:
           jpath = os.path.join(os.environ.get('TEMP', '/tmp'), 'zj-preflight.json')
           r = json.load(open(jpath, encoding='utf-8'))
           checks = r['checks']
-          assert len(checks) == 9, f'FAIL: 期望9项，实际{len(checks)}项'
-          lk = [x for x in checks if x['name'] == 'lock_update']
-          assert lk, f'FAIL: lock_update 项不存在'
-          print('OK: 9项检测，含lock_update，status=' + lk[0]['status'])
+          assert len(checks) == 8, f'FAIL: 期望8项，实际{len(checks)}项'
+          assert not [x for x in checks if x['name'] == 'lock_update'], 'FAIL: lock_update 应已删除'
+          print('OK: 8项检测，无 lock_update')
           "@
           if ($LASTEXITCODE -ne 0) { throw "E2E-1 FAIL" }
-
-      - name: E2E-2 check_lock_update 四层锁验证
-        shell: pwsh
-        run: |
-          $env:PYTHONIOENCODING = 'utf-8'
-          $env:PYTHONUTF8 = '1'
-          $fixtureDir = "C:\Program Files\Tencent\Weixin"
-          New-Item -ItemType Directory -Force -Path $fixtureDir | Out-Null
-          Copy-Item "$env:SystemRoot\System32\notepad.exe" "$fixtureDir\WeixinUpdate.exe" -Force
-
-          python -c @"
-          import sys
-          sys.path.insert(0, r'services\agent\wechat-rpa')
-          from preflight import check_lock_update
-          result = check_lock_update(dry_run=False)
-          print('status:', result['status'], '| detail:', result.get('detail', ''))
-          assert result['status'] in ('ok', 'fixed'), 'FAIL: status=' + str(result['status'])
-          print('OK: check_lock_update executed successfully')
-          "@
-          if ($LASTEXITCODE -ne 0) { throw "FAIL: E2E-2 check_lock_update 执行失败" }
-
-          python -c @"
-          import subprocess, winreg, os
-          disabled = r'C:\Program Files\Tencent\Weixin\WeixinUpdate.exe.disabled'
-          assert os.path.exists(disabled), f'FAIL Layer1: 文件未改名'
-          r = subprocess.run(['icacls', disabled], capture_output=True, text=True)
-          assert 'DENY' in r.stdout, f'FAIL Layer2: icacls 无 DENY: {r.stdout[:300]}'
-          fw = subprocess.run(['netsh','advfirewall','firewall','show','rule','name=all'], capture_output=True, text=True)
-          assert 'dldir1v6.qq.com' in fw.stdout, 'FAIL Layer3: 防火墙无 dldir1v6.qq.com 规则'
-          k = winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, r'SOFTWARE\Policies\Tencent\WeChat')
-          v, _ = winreg.QueryValueEx(k, 'AutoUpdate')
-          assert v == 0, f'FAIL Layer4: AutoUpdate={v}，期望0'
-          print('OK: 四层锁全验证通过')
-          "@
-          if ($LASTEXITCODE -ne 0) { throw "FAIL: E2E-2 四层锁验证失败" }
 
       - name: E2E-3 start.bat preflight-failed → blocking（真实运行验证）
         shell: pwsh
@@ -234,7 +203,7 @@ sys.exit(1)
               Remove-Item -Recurse -Force $tmpDir -ErrorAction SilentlyContinue
           }
 
-      - name: Python pytest 四层锁（Windows全套）
+      - name: Python pytest 版本降级路径（Windows全套）
         shell: pwsh
         run: |
           python -m pytest services/agent/wechat-rpa/tests/test_preflight_lock.py -v
