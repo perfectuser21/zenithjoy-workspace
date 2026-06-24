@@ -66,6 +66,61 @@ jobs:
           }
           Write-Host "[verify-exe] OK: exe overlay intact ($sizeMB MB) and runnable"
 
+      # exe icon gate: the embedded app icon MUST be the ZenithJoy logo (blue), NOT the
+      # default pkg/node icon (green hexagon). #846 fixed overlay but the icon silently
+      # stayed default -> real machine extraction showed a green hexagon. This step
+      # extracts the exe's largest icon frame and asserts it is predominantly BLUE
+      # (ZenithJoy logo) and NOT predominantly green (default node icon). ASCII-only body.
+      - name: Verify exe app icon is ZenithJoy logo (not default node icon)
+        shell: powershell
+        working-directory: services/agent
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Add-Type -AssemblyName System.Drawing
+          $exe = (Resolve-Path "zenithjoy-agent.exe").Path
+
+          # ExtractIconEx pulls the actual PE RT_GROUP_ICON resource (not the generic assoc icon).
+          $sig = @"
+          using System;
+          using System.Runtime.InteropServices;
+          public class IconEx {
+            [DllImport("Shell32.dll", CharSet=CharSet.Auto)]
+            public static extern uint ExtractIconEx(string lpszFile, int nIconIndex, IntPtr[] phiconLarge, IntPtr[] phiconSmall, uint nIcons);
+            [DllImport("user32.dll")] public static extern bool DestroyIcon(IntPtr hIcon);
+          }
+          "@
+          Add-Type -TypeDefinition $sig
+
+          $large = New-Object IntPtr[] 1
+          $small = New-Object IntPtr[] 1
+          $n = [IconEx]::ExtractIconEx($exe, 0, $large, $small, 1)
+          if ($large[0] -eq [IntPtr]::Zero) { throw "could not extract app icon from exe" }
+          $icon = [System.Drawing.Icon]::FromHandle($large[0])
+          $bmp = $icon.ToBitmap()
+          Write-Host "[verify-icon] extracted icon $($bmp.Width)x$($bmp.Height)"
+
+          # Sample every pixel; accumulate average RGB over non-transparent pixels.
+          $rSum = 0.0; $gSum = 0.0; $bSum = 0.0; $cnt = 0
+          for ($y = 0; $y -lt $bmp.Height; $y++) {
+            for ($x = 0; $x -lt $bmp.Width; $x++) {
+              $px = $bmp.GetPixel($x, $y)
+              if ($px.A -lt 32) { continue }
+              $rSum += $px.R; $gSum += $px.G; $bSum += $px.B; $cnt++
+            }
+          }
+          [IconEx]::DestroyIcon($large[0]) | Out-Null
+          if ($cnt -eq 0) { throw "icon has no opaque pixels - extraction failed" }
+          $rAvg = [int]($rSum / $cnt); $gAvg = [int]($gSum / $cnt); $bAvg = [int]($bSum / $cnt)
+          Write-Host "[verify-icon] avg opaque RGB = ($rAvg, $gAvg, $bAvg) over $cnt px"
+
+          # ZenithJoy logo = blue text on white/transparent => blue channel dominates over green.
+          # Default node icon = green hexagon => green channel dominates over blue.
+          # Assert blue is meaningfully >= green (logo), reject green-dominant (default node).
+          if ($gAvg -gt ($bAvg + 8)) {
+            throw "exe icon looks like the DEFAULT node icon (green-dominant: g=$gAvg > b=$bAvg) - ZenithJoy logo was NOT embedded"
+          }
+          Write-Host "[verify-icon] OK: exe app icon is ZenithJoy logo (blue>=green: b=$bAvg g=$gAvg)"
+
       - name: Get pack name
         id: get_pack
         shell: bash

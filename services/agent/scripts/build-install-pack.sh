@@ -73,7 +73,12 @@ if [ "$DRY_RUN" = true ]; then
 fi
 
 echo "[build] running pkg (npm run package:win)"
-npm run package:win 2>&1 | tail -10
+# 不再 `| tail -10`：那会吞掉 prepare-base-icon 的图标日志（#846 排查时看不到图标到底嵌没嵌），
+# 且管道会吞 npm 的真实退出码。直接全量输出 + 显式查退出码。
+if ! npm run package:win 2>&1; then
+    echo "ERROR: npm run package:win failed"
+    exit 1
+fi
 
 if [ ! -f "zenithjoy-agent.exe" ]; then
     echo "ERROR: zenithjoy-agent.exe not produced by pkg"
