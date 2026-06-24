@@ -1,0 +1,33 @@
+{
+  "initiative_id": "",
+  "journey_type": "user_facing",
+  "journey_type_reason": "推进物含 apps/dashboard/ 新「客服工作汇总」页（管理员可见交互），命中 user_facing 优先级",
+  "tasks": [
+    {
+      "task_id": "ws1",
+      "title": "Line04 客服工作汇总统计页 — cs_wechat_id 身份章 + /cs/stats 北京时区聚合 + dashboard 汇总页",
+      "scope": "1) migration 给 zenithjoy.cs_memory_messages 加 nullable cs_wechat_id 列 + 索引 (cs_wechat_id, created_at)（IF NOT EXISTS 幂等，不回填历史）；2) 落库 in/out 两处盖当前客服微信号身份章（来源 csConfig.wechat_id）；3) GET /api/wechat/cs/stats?date=today|yesterday 按北京时区(Asia/Shanghai)聚合每客服 4 数（received_count/reply_count/served_customers/work_duration_minutes）+ cs_name/online/mode，NULL 不计入、按 cs_wechat_id 隔离不串台；4) dashboard CsWorkSummaryPage（每客服一卡 4 数 + 今天/昨天切换 + 真发/演练标）挂 Line04 私域客服区。不做趋势图/任意日期/总计行/历史回填/导出/每日报告(YAGNI)。",
+      "dod": [
+        "[BEHAVIOR] /cs/stats?date=today 口径精确：seed 5in+3out(2客户) → received_count=5/reply_count=3/served_customers=2（见 contract-dod.md）",
+        "[BEHAVIOR] 北京时区日界：北京00:30消息归今天、昨天消息归昨天（防 #832）",
+        "[BEHAVIOR] 数据隔离：A(4)/B(1) 各算各的不串台；NULL cs_wechat_id 不计入、接口 200 不报错",
+        "[BEHAVIOR] error path：非法 date 返 400 + error 字段",
+        "[BEHAVIOR:E2E] windows_cloud Playwright：汇总页每客服一卡 4 数 + 真发标 + 今天/昨天切换",
+        "[ARTIFACT] migration 含 cs_wechat_id 列 + (cs_wechat_id, created_at) 索引；CsWorkSummaryPage + 路由注册；cs-work-stats-smoke.sh + cs-work-summary.spec.ts 就位"
+      ],
+      "files": [
+        "apps/api/db/migrations/2026XXXX_add_cs_wechat_id_to_cs_memory_messages.sql",
+        "apps/api/src/services/wechat-draft.ts",
+        "apps/api/src/services/wechat/cs-stats.ts",
+        "apps/api/src/routes/wechat.ts",
+        "apps/dashboard/src/pages/CsWorkSummaryPage.tsx",
+        "apps/dashboard/src/config/navigation.config.ts",
+        "apps/dashboard/e2e/cs-work-summary.spec.ts",
+        ".github/workflows/scripts/smoke/cs-work-stats-smoke.sh"
+      ],
+      "depends_on": [],
+      "complexity": "M",
+      "estimated_minutes": 90
+    }
+  ]
+}
