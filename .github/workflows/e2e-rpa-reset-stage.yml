@@ -1,0 +1,91 @@
+name: RPA Reset Stage (逻辑层单测 + 复位台闸)
+
+# WS-B（sprints/06242347-zenithjoy-staging-promote/prep-prd.md）：
+#   xian-rog 升级为「专用 + 可复位 + 禁手工调试」。复位脚本逻辑层（UI driver 全 mock）必须进 CI，
+#   并设闸门：PR 碰 wechat-rpa 模块但没带逻辑单测 → CI 红。
+#   （UI 驱动半在 xian-rog 真机 smoke，由 rpa-reset-stage-smoke.sh 跑，不在本 CI。）
+
+on:
+  push:
+    branches: [main, 'cp-*']
+    paths:
+      - 'services/agent/wechat-rpa/**'
+      - '.github/workflows/e2e-rpa-reset-stage.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'services/agent/wechat-rpa/**'
+      - '.github/workflows/e2e-rpa-reset-stage.yml'
+  workflow_dispatch:
+
+jobs:
+  reset-stage-logic:
+    name: Reset Stage 逻辑层单测 (UI driver mock, Linux)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Python test deps
+        run: pip install pytest
+
+      - name: Reset Stage 逻辑层单测（复位四步判定 + 版本范围 + proven-to-fire 登出/版本红）
+        run: |
+          cd services/agent/wechat-rpa
+          python -m pytest tests/test_reset_stage.py -v
+
+  rpa-logic-test-gate:
+    name: 闸门 — 碰 wechat-rpa 模块必须带逻辑单测
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: 碰 wechat-rpa src 但没改/加逻辑单测 → 红
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          set -euo pipefail
+          CHANGED=$(git diff --name-only "origin/${BASE_REF}...HEAD")
+          echo "本 PR 改动文件："
+          echo "$CHANGED" | sed 's/^/  - /'
+          echo ""
+
+          # 改了 wechat-rpa 下的 .py 业务逻辑（排除 tests/ 自身）
+          SRC_CHANGED=$(echo "$CHANGED" \
+            | grep '^services/agent/wechat-rpa/' \
+            | grep '\.py$' \
+            | grep -v '^services/agent/wechat-rpa/tests/' || true)
+
+          if [ -z "$SRC_CHANGED" ]; then
+            echo "✅ 未改 wechat-rpa 业务 .py，逻辑单测闸门不适用"
+            exit 0
+          fi
+
+          echo "改动了 wechat-rpa 业务逻辑："
+          echo "$SRC_CHANGED" | sed 's/^/  - /'
+
+          # 必须同时改/加 tests/ 下的逻辑单测
+          TEST_CHANGED=$(echo "$CHANGED" \
+            | grep '^services/agent/wechat-rpa/tests/.*\.py$' || true)
+
+          if [ -z "$TEST_CHANGED" ]; then
+            echo ""
+            echo "❌ 闸门红：改了 wechat-rpa 业务逻辑但没带任何逻辑单测（tests/*.py）。"
+            echo "   PrepPRD WS-B：逻辑层单测（UI driver mock）是 RPA 模块改动的强制项。"
+            exit 1
+          fi
+
+          echo ""
+          echo "✅ 闸门绿：本 PR 带了逻辑单测："
+          echo "$TEST_CHANGED" | sed 's/^/  - /'
