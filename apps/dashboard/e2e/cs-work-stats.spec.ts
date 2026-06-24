@@ -3,7 +3,8 @@ import { test, expect } from '@playwright/test'
 // Line04 客服工作汇总页（S3）E2E — 目标环境 windows_cloud（GHA windows-latest）。
 // 打开「客服工作汇总」页 → 看到每客服一张卡片(接收/回复/接待/时长 4 个数 + 真发/演练标)
 // → 点「昨天」4 个数变为昨天的值。stats 接口用 page.route 注入 today/yesterday 两套数据。
-const SHOT = '../../sprints/06232241-line04-cs-work-stats/screenshots'
+// 截图写到 apps/dashboard/screenshots/（Playwright cwd 相对路径），CI 把整目录传成 artifact 供老板眼见为实。
+const SHOT = 'screenshots/cs-work-stats'
 
 // 两套 stats（今天 vs 昨天），点切换时按 ?date= 返回对应一套
 const TODAY = {

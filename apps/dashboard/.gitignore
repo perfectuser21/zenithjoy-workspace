@@ -33,3 +33,8 @@ public/gallery/
 # Logs
 *.log
 npm-debug.log*
+
+# Playwright E2E 产物（CI 运行时生成，传 artifact，不入 git）
+screenshots/
+test-results/
+playwright-report/

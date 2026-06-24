@@ -48,9 +48,11 @@ try {
   if (-not $conn.TcpTestSucceeded) { throw "FAIL: vite 未在 ${maxWait}s 内就绪 port=$VitePort" }
   Write-Host "✅ vite 就绪 :$VitePort"
 
-  # Step 5: 跑 Playwright（两个 spec；config baseURL 读 E2E_BASE_URL，spec 用相对 goto）
+  # Step 5: 跑 Playwright（两个 spec；config baseURL 读 E2E_BASE_URL，spec 用相对 goto）。
+  # 关键：spec 路径用正斜杠 e2e/xxx.spec.ts —— windows 上反斜杠 e2e\xxx 会让 Playwright path-filter
+  # 匹配不到 → "No tests found"（对照绿的 cs-config-permission.ps1 / agent-e2e-video.yml 都用正斜杠）。
   $e2e = Start-Process -FilePath "cmd.exe" `
-    -ArgumentList "/c npx.cmd playwright test e2e\cs-work-stats.spec.ts e2e\cs-daily-report.spec.ts --reporter=list" `
+    -ArgumentList "/c npx.cmd playwright test e2e/cs-work-stats.spec.ts e2e/cs-daily-report.spec.ts --reporter=list" `
     -WorkingDirectory $dashRoot -Wait -PassThru -NoNewWindow `
     -Environment @{ E2E_BASE_URL = $BaseUrl }
   if ($e2e.ExitCode -ne 0) { throw "FAIL: Playwright 客服工作汇总/日报 UI exit=$($e2e.ExitCode)" }
