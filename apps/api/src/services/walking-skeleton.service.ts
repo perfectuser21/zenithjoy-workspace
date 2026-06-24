@@ -93,13 +93,13 @@ export interface RequiredAgentVersion {
 }
 
 // manifest 不可读时的兜底版本。必须 <= 已发布的最新核心，且随核心 bump 同步抬高。
-// bump 到 2.0.27：2.0.25 的 exe 打包坏了（pkg 后 rcedit 截断 overlay → Pkg error）；2.0.26 修好
-// overlay 但图标没真嵌上（真机抠出来还是默认绿六边形 node 图标）。2.0.27 让 prepare-base-icon.js
-// 给缓存里所有 win-x64 base 二进制写图标 + 回读校验体积增长（rcedit 返回成功不等于真写进去），
-// 并加 CI 图标 gate（抠 exe 图标断言是蓝色悦升 logo、非绿色默认 node 图标）。
-// 兜底抬到 2.0.27，让 manifest 读不到时新客户机也直接解析到能用且图标对的版本。
-// 核心包按约定 install-pack/zenithjoy-agent-v2.0.27.tar.gz 从 COS 下载。
-export const DEFAULT_REQUIRED_AGENT_VERSION = '2.0.27';
+// bump 到 2.0.28：图标三连坑收口。2.0.25 pkg 后 rcedit 截断 overlay；2.0.26/2.0.27 改成 pkg 前给
+// base 写图标但图标没生效——真因（xian-rog 真机用 pkg-fetch 源码定位）：pkg.need() 会校验 base 的
+// hash，rcedit 改了 base→hash 变→pkg 判不符**重新下原版（绿图标）base 覆盖**。2.0.28 在写完图标后
+// 把新 hash patch 进 pkg-fetch EXPECTED_HASHES，pkg 复用带蓝 logo 的 base。CI 图标 gate 兜底守卫。
+// 兜底抬到 2.0.28，让 manifest 读不到时新客户机也直接解析到图标对的版本。
+// 核心包按约定 install-pack/zenithjoy-agent-v2.0.28.tar.gz 从 COS 下载。
+export const DEFAULT_REQUIRED_AGENT_VERSION = '2.0.28';
 
 /**
  * 返回心跳要下发的核心要求版本。
