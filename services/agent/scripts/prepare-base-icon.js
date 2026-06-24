@@ -1,24 +1,23 @@
 #!/usr/bin/env node
 // prepare-base-icon.js — 在 pkg 追加 snapshot overlay **之前**，把应用图标（悦升云端 logo）
-// 嵌进 pkg 要用的 base Node 二进制。
+// 嵌进 pkg 要用的 base Node 二进制，并改掉 pkg-fetch 的期望 hash 让它接受这个被改过的 base。
 //
-// 为什么不能 pkg 打完再用 rcedit 改 exe（PR #841 的坏法，导致 2.0.25 不可用）：
-//   pkg 把 [base node 二进制] + [payload] + [prelude] + [bakery] 顺序拼成 exe，
-//   payload/prelude/bakery 就是「overlay」（bundled Node + 应用字节码），pkg 打包时已把
-//   overlay 的绝对 offset 烤进 prelude。pkg 打完后再 rcedit --set-icon 改 PE 资源会插入
-//   字节、整体后移 overlay → 烤死的 offset 失配 → 运行时 `Pkg: Error reading from file`。
-//   现象：2.0.25 exe 只有 37.8MB（overlay 被截断），正常应 ~69-70MB。
+// 背景（三次踩坑后的完整真相）：
+//   1) PR #841(2.0.25)：pkg 打完后 rcedit 改 exe 图标 → 截断追加在 exe 末尾的 snapshot overlay
+//      → exe 37.8MB、运行时 `Pkg: Error reading from file` → agent 起不来。
+//   2) PR #846(2.0.26)：改成 pkg **之前**给 base 二进制写图标。overlay 修对了（exe 67.5MB、
+//      跑得起来、无 Pkg error），但真机抠 exe 图标还是**默认绿色六边形 node 图标**。
+//   3) 真因（在 xian-rog 真机用 pkg-fetch 源码定位）：pkg 通过 pkg-fetch.need() 拿 base 二进制时，
+//      会先 `hash(cached) === EXPECTED_HASHES[name]` 校验；我们 rcedit 改了 base → hash 变了 →
+//      pkg 判定「Binary hash does NOT match. Re-fetching...」→ **重新下载一份原版（绿图标）base**
+//      覆盖掉我们写好图标的那份 → 最终 exe 用的是原版绿图标 base。
 //
-// 正确做法：先把图标写进 base node 二进制，**再让 pkg 用这个已带图标的二进制打包**。
-// overlay 在图标之后才追加，offset 基于「已带图标」的二进制计算 → offset 正确、overlay 完整。
+// 正解（本脚本）：写完图标后，把 base 的**新 hash 写回 pkg-fetch 的 EXPECTED_HASHES**
+// （改 node_modules/pkg-fetch/lib-es5/expected.js）。这样 pkg 随后 need() 校验时 hash 命中
+//   → 直接复用我们带蓝色 logo 的 base → 打出来的 exe 既有正确图标、overlay 又完整
+//   （overlay 在图标之后追加，offset 正确——已在真机验证 base+overlay 不破坏图标）。
 //
-// 健壮性（#846 教训：overlay 修对了但图标没嵌上，真机抠出来还是默认绿六边形 node 图标）：
-// pkg 的 base 二进制缓存在 ~/.pkg-cache/<tag>/ 下，可能是 fetched-<ver>-win-x64 或
-// built-<ver>-win-x64（取决于是否 forceBuild / 缓存命中哪个）。pkg-fetch.need() 返回当前会按
-// forceBuild=false 解析到的那条，但为稳妥起见，本脚本对**缓存目录下所有 win-x64 的 node base
-// 二进制**都写一遍图标（同一图标，幂等），保证不管 pkg 最终挑哪条都带图标。写完逐个**回读校验**
-// 体积真增长（rcedit 返回成功不等于资源真写进去——回读才是 proven-to-fire），主 base 没写成功
-// 直接硬失败，绝不出一个图标没改对的包。
+// 顺序铁律：build → prepare-base-icon（need 下原版→写图标→patch hash）→ pkg。
 //
 // 用法：node scripts/prepare-base-icon.js <ico>
 //
@@ -28,54 +27,49 @@
 
 const fs = require('node:fs');
 const path = require('node:path');
-const os = require('node:os');
+const crypto = require('node:crypto');
 
-// 很多大尺寸图标在 .ico 里用 PNG 压缩存储，嵌进 PE 资源后二进制里会出现 PNG 头，做辅证。
-const PNG_SIG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
-
-function findCachedWinBinaries() {
-  // pkg-fetch 缓存路径：PKG_CACHE_PATH 或 ~/.pkg-cache。各 tag 目录（v3.x）里
-  // fetched-vX-win-x64 / built-vX-win-x64 是 base 二进制。
-  const cacheRoot = process.env.PKG_CACHE_PATH || path.join(os.homedir(), '.pkg-cache');
-  const found = [];
-  if (!fs.existsSync(cacheRoot)) return found;
-  for (const tag of fs.readdirSync(cacheRoot)) {
-    const tagDir = path.join(cacheRoot, tag);
-    let stat;
-    try {
-      stat = fs.statSync(tagDir);
-    } catch {
-      continue;
-    }
-    if (!stat.isDirectory()) continue;
-    for (const name of fs.readdirSync(tagDir)) {
-      if (/^(fetched|built)-v\d+\.\d+\.\d+-win-x64$/.test(name)) {
-        found.push(path.join(tagDir, name));
-      }
-    }
-  }
-  return found;
+function sha256(file) {
+  return crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex');
 }
 
-async function iconAndVerify(rcedit, binaryPath, icoPath) {
-  const before = fs.statSync(binaryPath).size;
-  await rcedit(binaryPath, { icon: icoPath });
-  const after = fs.statSync(binaryPath).size;
-  const grew = after - before;
-
-  let hasPng = false;
-  try {
-    hasPng = fs.readFileSync(binaryPath).includes(PNG_SIG);
-  } catch {
-    // 大文件读失败不致命，以体积增长为准
+// 把 pkg-fetch 的 EXPECTED_HASHES['node-v<ver>-win-x64'] 改成 newHash。
+// 解析 require 到的 pkg-fetch 主入口 → 推 lib-es5/expected.js 路径 → 正则替换那一行。
+function patchExpectedHash(name, newHash) {
+  // pkg-fetch 主入口在 dist/index.js 或 lib-es5/index.js；expected.js 与之同目录。
+  const entry = require.resolve('pkg-fetch');
+  const dir = path.dirname(entry);
+  const candidates = [
+    path.join(dir, 'expected.js'),
+    path.join(dir, '..', 'lib-es5', 'expected.js'),
+    path.join(dir, 'lib-es5', 'expected.js'),
+  ];
+  const expectedFile = candidates.find((p) => fs.existsSync(p));
+  if (!expectedFile) {
+    throw new Error(`找不到 pkg-fetch expected.js（试过: ${candidates.join(', ')}）`);
   }
-  // 图标资源 ~360KB；保守门槛 1KB（rcedit 没真写则 grew≈0）。
-  const ok = grew > 1024;
-  console.log(
-    `[prepare-base-icon] ${ok ? 'OK' : 'WARN'} ${binaryPath} ` +
-      `${before} -> ${after} bytes (delta=${grew}, png-in-ico=${hasPng})`,
-  );
-  return ok;
+  let src = fs.readFileSync(expectedFile, 'utf8');
+  // 形如:  'node-v18.5.0-win-x64': 'e0e9a647...',
+  const re = new RegExp(`('${name.replace(/\./g, '\\.')}':\\s*')[0-9a-f]+(')`);
+  if (!re.test(src)) {
+    throw new Error(`expected.js 里找不到 ${name} 的 hash 行，无法 patch`);
+  }
+  src = src.replace(re, `$1${newHash}$2`);
+  fs.writeFileSync(expectedFile, src);
+  // 回读确认
+  if (!fs.readFileSync(expectedFile, 'utf8').includes(`'${newHash}'`)) {
+    throw new Error('patch 后回读未命中新 hash');
+  }
+  return expectedFile;
+}
+
+// 由 base 二进制的实际文件名（fetched-v18.5.0-win-x64）推出 EXPECTED_HASHES 的 key
+// （node-v18.5.0-win-x64）。
+function remoteNameFromBinary(binaryPath) {
+  const fname = path.basename(binaryPath); // fetched-v18.5.0-win-x64 / built-...
+  const m = fname.match(/^(?:fetched|built)-(v\d+\.\d+\.\d+-win-x64)$/);
+  if (!m) throw new Error(`base 二进制文件名不符预期: ${fname}`);
+  return `node-${m[1]}`;
 }
 
 async function main() {
@@ -99,43 +93,40 @@ async function main() {
   }
   console.log(`[prepare-base-icon] icon = ${icoPath} (${fs.statSync(icoPath).size} bytes)`);
 
-  // 1) 先让 pkg-fetch 确保「当前会被 pkg 选中的」base 二进制就位并拿到其路径（主目标）。
+  // 1) 让 pkg-fetch 下原版 base（此刻 hash 还匹配官方），拿到路径。
   // eslint-disable-next-line @typescript-eslint/no-var-requires
   const { need } = require('pkg-fetch');
-  console.log('[prepare-base-icon] pkg-fetch.need(node18-win-x64) — 确保 base 二进制就位…');
-  const primary = await need({ nodeRange: 'node18', platform: 'win', arch: 'x64' });
-  console.log(`[prepare-base-icon] pkg-fetch 返回主 base: ${primary}`);
-
-  // 2) 收集缓存目录下所有 win-x64 base 二进制（fetched- / built-），连同主目标去重。
-  const candidates = new Set();
-  if (primary && fs.existsSync(primary)) candidates.add(path.resolve(primary));
-  for (const p of findCachedWinBinaries()) {
-    if (fs.existsSync(p)) candidates.add(path.resolve(p));
+  console.log('[prepare-base-icon] pkg-fetch.need(node18-win-x64) — 下/取原版 base 二进制…');
+  const binaryPath = await need({ nodeRange: 'node18', platform: 'win', arch: 'x64' });
+  if (!binaryPath || !fs.existsSync(binaryPath)) {
+    throw new Error(`pkg-fetch 未返回有效 base 二进制路径: ${binaryPath}`);
   }
-  if (candidates.size === 0) {
-    console.error('[prepare-base-icon] 缓存里找不到任何 win-x64 base 二进制，无法写图标');
-    process.exit(1);
-  }
-  console.log(`[prepare-base-icon] 将给 ${candidates.size} 个 base 二进制写图标:`);
-  for (const p of candidates) console.log(`  - ${p}`);
+  const before = fs.statSync(binaryPath).size;
+  console.log(`[prepare-base-icon] base = ${binaryPath} (${before} bytes)`);
 
-  // 3) 逐个写图标 + 回读校验。
+  // 2) rcedit 把图标写进 base。
   // eslint-disable-next-line @typescript-eslint/no-var-requires
   const rcedit = require('rcedit');
-  let primaryOk = false;
-  for (const p of candidates) {
-    const ok = await iconAndVerify(rcedit, p, icoPath);
-    if (primary && path.resolve(primary) === p) primaryOk = ok;
+  await rcedit(binaryPath, { icon: icoPath });
+  const after = fs.statSync(binaryPath).size;
+  const grew = after - before;
+  console.log(`[prepare-base-icon] rcedit 写图标: ${before} -> ${after} bytes (delta=${grew})`);
+  if (grew <= 1024) {
+    // 图标资源 ~360KB；几乎没增长 = rcedit 没真写进去 → 硬失败，绝不出图标错误的包。
+    throw new Error('rcedit 后 base 体积几乎没增长，图标可能未写入');
   }
 
-  // 主 base（pkg 真正会用的那条）必须写成功，否则硬失败——绝不出一个图标没改对的包。
-  if (primary && !primaryOk) {
-    console.error(
-      `[prepare-base-icon] 失败：主 base 二进制 ${primary} 图标未写入（体积未增长）。不能出图标错误的包。`,
-    );
-    process.exit(1);
-  }
-  console.log('[prepare-base-icon] DONE：base 二进制已带图标，pkg 随后追加 overlay 在图标之后');
+  // 3) 算新 hash，patch pkg-fetch EXPECTED_HASHES，让 pkg 接受这个改过的 base（否则 pkg
+  //    会判 hash 不符、重新下原版覆盖掉我们的图标 —— 这正是 2.0.26 图标没生效的真因）。
+  const newHash = sha256(binaryPath);
+  const remoteName = remoteNameFromBinary(binaryPath);
+  console.log(`[prepare-base-icon] base 新 sha256 = ${newHash}`);
+  const patched = patchExpectedHash(remoteName, newHash);
+  console.log(
+    `[prepare-base-icon] 已 patch ${patched}：EXPECTED_HASHES['${remoteName}'] = 新 hash，` +
+      'pkg 随后 need() 校验命中 → 复用带图标的 base',
+  );
+  console.log('[prepare-base-icon] DONE：base 已带图标且 pkg 不会再重新下原版覆盖');
 }
 
 main().catch((err) => {
