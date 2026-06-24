@@ -67,6 +67,11 @@ mock_rollback() { local anchor="$1"; echo "OLD" > "$PROD_STATE_FILE"; echo "$anc
 PASS=0; FAIL=0
 ok()  { echo "  ✅ $1"; PASS=$((PASS+1)); }
 bad() { echo "  ❌ $1"; FAIL=$((FAIL+1)); }
+# assert <实际> <期望> <说明>：相等→ok，否则→bad（避免 A && B || C 误判，shellcheck 干净）
+assert() {
+  local got="$1" want="$2" desc="$3"
+  if [ "$got" = "$want" ]; then ok "$desc"; else bad "$desc（实际=$got 期望=$want）"; fi
+}
 
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo "  蓝绿部署 staging→promote 闸 smoke — blue_green_deploy proven-to-fire"
@@ -86,9 +91,9 @@ BG_DESTROY_STAGING_FN=mock_destroy_staging \
 BG_ALERT_P0_FN=mock_alert_p0 \
   blue_green_deploy "$NEW_SHA"
 RC1=$?
-[ "$RC1" -eq 0 ] && ok "路径1 返回 0（部署成功）" || bad "路径1 应返 0，实返 $RC1"
-[ "$(cat "$PROD_STATE_FILE")" = "NEW" ] && ok "路径1 生产已切到 NEW" || bad "路径1 生产未切到 NEW（$(cat "$PROD_STATE_FILE")）"
-[ "$(cat "$PROD_SHA_FILE")" = "$NEW_SHA" ] && ok "路径1 生产 sha == 新 sha" || bad "路径1 生产 sha 不对"
+assert "$RC1" "0" "路径1 返回 0（部署成功）"
+assert "$(cat "$PROD_STATE_FILE")" "NEW" "路径1 生产已切到 NEW"
+assert "$(cat "$PROD_SHA_FILE")" "$NEW_SHA" "路径1 生产 sha == 新 sha"
 
 # ─── 路径 2：staging 验证红 → 生产纹丝不动 → 销毁 staging → P0 ───
 echo ""
@@ -104,11 +109,11 @@ BG_DESTROY_STAGING_FN=mock_destroy_staging \
 BG_ALERT_P0_FN=mock_alert_p0 \
   blue_green_deploy "$NEW_SHA"
 RC2=$?
-[ "$RC2" -ne 0 ] && ok "路径2 返回非 0（发版红）" || bad "路径2 staging 红却返 0"
-[ "$(cat "$PROD_STATE_FILE")" = "OLD" ] && ok "路径2 生产纹丝不动（仍 OLD）— 230 客户无感" || bad "路径2 生产被碰了（$(cat "$PROD_STATE_FILE")）"
-[ "$(cat "$PROD_SHA_FILE")" = "$OLD_SHA" ] && ok "路径2 生产 sha 仍是旧 sha" || bad "路径2 生产 sha 被改"
-[ "$(cat "$STAGING_FILE")" = "DESTROYED" ] && ok "路径2 staging slot 已销毁" || bad "路径2 staging 残留未清"
-[ "$(cat "$P0_FILE")" = "YES" ] && ok "路径2 已开 P0" || bad "路径2 未开 P0"
+if [ "$RC2" -ne 0 ]; then ok "路径2 返回非 0（发版红）"; else bad "路径2 staging 红却返 0"; fi
+assert "$(cat "$PROD_STATE_FILE")" "OLD" "路径2 生产纹丝不动（仍 OLD）— 230 客户无感"
+assert "$(cat "$PROD_SHA_FILE")" "$OLD_SHA" "路径2 生产 sha 仍是旧 sha"
+assert "$(cat "$STAGING_FILE")" "DESTROYED" "路径2 staging slot 已销毁"
+assert "$(cat "$P0_FILE")" "YES" "路径2 已开 P0"
 
 # ─── 路径 3：promote 中失败 → 自动回滚到上一版 sha → 生产健康 → P0 ───
 echo ""
@@ -124,10 +129,10 @@ BG_DESTROY_STAGING_FN=mock_destroy_staging \
 BG_ALERT_P0_FN=mock_alert_p0 \
   blue_green_deploy "$NEW_SHA"
 RC3=$?
-[ "$RC3" -ne 0 ] && ok "路径3 返回非 0（发版红）" || bad "路径3 promote 失败却返 0"
-[ "$(cat "$PROD_STATE_FILE")" = "OLD" ] && ok "路径3 生产已回滚到健康 OLD 态（不停在半死）" || bad "路径3 生产停在 $(cat "$PROD_STATE_FILE")"
-[ "$(cat "$PROD_SHA_FILE")" = "$OLD_SHA" ] && ok "路径3 生产 sha 回滚到上一版" || bad "路径3 回滚 sha 不对（$(cat "$PROD_SHA_FILE")）"
-[ "$(cat "$P0_FILE")" = "YES" ] && ok "路径3 已开 P0" || bad "路径3 未开 P0"
+if [ "$RC3" -ne 0 ]; then ok "路径3 返回非 0（发版红）"; else bad "路径3 promote 失败却返 0"; fi
+assert "$(cat "$PROD_STATE_FILE")" "OLD" "路径3 生产已回滚到健康 OLD 态（不停在半死）"
+assert "$(cat "$PROD_SHA_FILE")" "$OLD_SHA" "路径3 生产 sha 回滚到上一版"
+assert "$(cat "$P0_FILE")" "YES" "路径3 已开 P0"
 
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"

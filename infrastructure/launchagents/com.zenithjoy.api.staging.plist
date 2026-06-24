@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  com.zenithjoy.api.staging.plist — 蓝绿部署 staging slot（:5201）launchd 定义
+
+  作用：CD 把目标 sha 的新 build 先拉起到这个 staging slot（端口 5201、连 zenithjoy_test 库、
+  无客户流量），在它上面跑部署验证（migration 可跑通 / /health / 版本断言 / golden-path smoke）。
+  全绿才 promote 到生产 :5200（com.zenithjoy.api）。验证红则销毁本 slot，生产纹丝不动。
+
+  与生产 com.zenithjoy.api.plist 的差异（其余 env 由 deploy 脚本从生产 plist 继承注入，不在此硬编码密钥）：
+    · Label            = com.zenithjoy.api.staging（独立 launchd 实例）
+    · PORT             = 5201（生产 5200）
+    · DATABASE_NAME    = zenithjoy_test（生产 cecelia，物理隔离，部署验证绝不写生产库）
+    · NODE_ENV         = staging
+    · 日志             = zenithjoy-api.staging.{log,error.log}
+    · KeepAlive=false / RunAtLoad=false：staging slot 由 deploy 脚本显式 start/stop，
+      不常驻、不开机自启（验证完即销毁，省得占着 :5201 漂移）
+
+  注意：本文件不含任何密钥。staging slot 起进程时，deploy-lib.sh 的 staging_deploy_slot()
+  会从生产 plist 解析非密钥安全 env + 必要密钥，覆写 PORT/DATABASE_NAME/NODE_ENV 后注入。
+-->
+<plist version="1.0">
+<dict>
+	<key>Label</key>
+	<string>com.zenithjoy.api.staging</string>
+	<key>ProgramArguments</key>
+	<array>
+		<string>/opt/homebrew/bin/node</string>
+		<string>/Users/administrator/perfect21/zenithjoy/apps/api/dist/index.js</string>
+	</array>
+	<key>EnvironmentVariables</key>
+	<dict>
+		<key>PORT</key>
+		<string>5201</string>
+		<key>DATABASE_NAME</key>
+		<string>zenithjoy_test</string>
+		<key>DATABASE_HOST</key>
+		<string>localhost</string>
+		<key>DATABASE_PORT</key>
+		<string>5432</string>
+		<key>DATABASE_USER</key>
+		<string>cecelia</string>
+		<key>NODE_ENV</key>
+		<string>staging</string>
+	</dict>
+	<key>KeepAlive</key>
+	<false/>
+	<key>RunAtLoad</key>
+	<false/>
+	<key>StandardErrorPath</key>
+	<string>/Users/administrator/Library/Logs/zenithjoy-api.staging.error.log</string>
+	<key>StandardOutPath</key>
+	<string>/Users/administrator/Library/Logs/zenithjoy-api.staging.log</string>
+	<key>WorkingDirectory</key>
+	<string>/Users/administrator/perfect21/zenithjoy/apps/api</string>
+</dict>
+</plist>
