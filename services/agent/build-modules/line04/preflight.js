@@ -466,31 +466,6 @@ function downloadFile(url, dest) {
             .on('error', reject);
     });
 }
-// 在 weixinRoot 及其一级子目录中搜索所有 WeixinUpdate.exe（不含 .disabled）。
-// 4.x 安装结构：Weixin\<version>\WeixinUpdate.exe，只需两层遍历。
-function findWeixinUpdateExe(weixinRoot) {
-    const found = [];
-    if (!node_fs_1.default.existsSync(weixinRoot))
-        return found;
-    // 检查根目录本身
-    const rootExe = node_path_1.default.join(weixinRoot, 'WeixinUpdate.exe');
-    if (node_fs_1.default.existsSync(rootExe))
-        found.push(rootExe);
-    // 检查一级版本子目录（如 4.1.8.107\WeixinUpdate.exe）
-    try {
-        for (const entry of node_fs_1.default.readdirSync(weixinRoot, { withFileTypes: true })) {
-            if (!entry.isDirectory())
-                continue;
-            const subExe = node_path_1.default.join(weixinRoot, entry.name, 'WeixinUpdate.exe');
-            if (node_fs_1.default.existsSync(subExe))
-                found.push(subExe);
-        }
-    }
-    catch {
-        // 目录无法读取，跳过
-    }
-    return found;
-}
 // ---------- 自动修复：安装微信 ----------
 async function installWeChat(downloadDir) {
     const installer = node_path_1.default.join(downloadDir, 'WeChatWin_4.1.8.exe');
@@ -517,19 +492,8 @@ async function installWeChat(downloadDir) {
     // "以管理员身份运行 start.bat" 会破坏 UIA（UIPI 隔离导致 Access denied）。
     (0, node_child_process_1.spawnSync)('powershell', ['-NoProfile', '-NonInteractive', '-Command',
         `Start-Process -FilePath '${installer}' -ArgumentList '/S' -Verb RunAs -Wait`], { windowsHide: true, timeout: 300000 });
-    // 安装后立即锁更新：WeixinUpdate.exe 随包部署，不锁会自动升级到 ≥4.1.9 → 反复卸装循环。
-    // Python preflight.py check_lock_update() 做四层加固，这里先做 Layer1（改名）阻断首次自启。
-    // WeixinUpdate.exe 位于版本子目录（如 Weixin\4.1.8.107\WeixinUpdate.exe），必须递归查找。
-    (0, node_child_process_1.spawnSync)('taskkill', ['/F', '/IM', 'WeixinUpdate.exe'], { windowsHide: true, stdio: 'ignore' });
-    const weixinRoot = 'C:\\Program Files\\Tencent\\Weixin';
-    for (const updateExe of findWeixinUpdateExe(weixinRoot)) {
-        try {
-            node_fs_1.default.renameSync(updateExe, updateExe + '.disabled');
-        }
-        catch {
-            // 非管理员权限改名失败不崩溃；Python preflight.py check_lock_update 会补做四层加固
-        }
-    }
+    // 锁更新动作已删（2026-06-24）：实测锁不住（客户机重启微信自动升 4.1.10），且 4.1.10 UIA
+    // 客服照样能发，锁既无效又无必要。装完即可，不再改名 WeixinUpdate.exe / 不再禁自动更新。
 }
 // ---------- 自动修复：安装 pywinauto ----------
 exports.GET_PIP_URL = 'https://bootstrap.pypa.io/get-pip.py';

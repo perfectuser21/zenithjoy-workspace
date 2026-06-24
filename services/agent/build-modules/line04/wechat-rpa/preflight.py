@@ -6,15 +6,15 @@ preflight.py — Agent 开机环境自检 + 自愈层（Path 4 微信 RPA 前置
 修不了的给明确提示**，最后产出报告（打印 + 写本地 JSON + best-effort 上报中台，
 让运营在 Dashboard 远程看，不用 SSH 进客户机）。
 
-8 个检测项（每项 detect → fix → 修不了 prompt，产出 {name,status,detail}）：
+8 个检测项（7 项主序 + elevation 追加在末尾；每项 detect → fix → 修不了 prompt）：
   1. OS/交互会话    —— 是 Windows + 有活动桌面会话（不可自愈）
   2. 微信安装        —— Weixin.exe 在不在；不在 → 下载 4.1.8 静默装
   3. 微信版本        —— < 4.1.8 → 卸载 + 装 4.1.8；>= 4.1.8（含 4.1.10+）→ ok（6-21 放开上界）
-  4. 锁更新          —— WeixinUpdate.exe 改名 .disabled + 防火墙出站封禁（幂等）
-  5. 微信登录态      —— 未登录 → 拉起微信 + 提示扫码
-  6. Python+pywinauto—— import 测试；失败 → 提示重装 agent
-  7. UIA 激活        —— 设屏幕阅读器标志后能否读到主窗口
-  8. 中台连通        —— GET <middleware>/health；不通 → 提示查网络
+  4. 微信登录态      —— 未登录 → 拉起微信 + 提示扫码
+  5. Python+pywinauto—— import 测试；失败 → 提示重装 agent
+  6. UIA 激活        —— 设屏幕阅读器标志后能否读到主窗口
+  7. 中台连通        —— GET <middleware>/health；不通 → 提示查网络
+  （锁更新 check_lock_update 已删——实测锁不住且 4.1.10 UIA 客服照样能发，2026-06-24）
 
 跨平台纪律：pywinauto / windll / subprocess 真实自愈动作全在 **函数体内** import +
 try/except 包裹；**顶层 import 在 mac/linux 也能成功**（供 CI 单测）。mac 上 windll
@@ -86,11 +86,12 @@ _STATUS_ICON = {"ok": "✅", "fixed": "🔧", "warn": "⚠️", "failed": "❌"}
 # 检测项的稳定名称（报告/看板按此对齐）。
 # 注意：elevation 追加在末尾（保证既有按下标引用的检测项不串位），
 # 但在 run_all_checks 的执行序列里排在 os_session 之后靠前（它影响后面 UIA/登录项成败）。
+# 2026-06-24：lock_update（锁微信 4.1.8 + 禁自动更新四层锁）已整套删除——实测锁不住
+# （客户机重启微信自动升 4.1.10），且 4.1.10 UIA 客服照样能发，锁既无效又无必要。共 8 项。
 CHECK_NAMES = (
     "os_session",
     "wechat_installed",
     "wechat_version",
-    "lock_update",
     "wechat_login",
     "python_pywinauto",
     "uia_narrator",
@@ -342,7 +343,7 @@ def check_elevation(dry_run: bool = False) -> Dict[str, str]:
     能识别"以管理员身份运行"的提权态），失败回退 shell32.IsUserAnAdmin()。
     非 Windows / 查不到 → warn 并跳过（mac dry-run 优雅降级，不崩）。
     """
-    name = CHECK_NAMES[8]
+    name = CHECK_NAMES[7]
     if not _is_windows():
         return make_check(
             name,
@@ -514,118 +515,9 @@ def check_wechat_version(dry_run: bool = False) -> Dict[str, str]:
     )
 
 
-def check_lock_update(dry_run: bool = False) -> Dict[str, str]:
-    """4. 四层锁更新：Layer1 改名 .disabled / Layer2 icacls DENY / Layer3 域名防火墙 dldir1v6.qq.com / Layer4 注册表 AutoUpdate=0（幂等）。"""
-    name = CHECK_NAMES[3]
-    if not _is_windows():
-        return make_check(name, "warn", "非 Windows，跳过锁更新（无 WeixinUpdate.exe）。")
-
-    if not os.path.isdir(WEIXIN_INSTALL_ROOT):
-        return make_check(name, "warn", f"未发现微信安装目录，跳过锁更新（{WEIXIN_INSTALL_ROOT}）。")
-
-    enabled = _find_files(WEIXIN_INSTALL_ROOT, "WeixinUpdate.exe")
-    if not enabled:
-        return make_check(name, "ok", "WeixinUpdate.exe 已禁用（未发现启用的自动更新器）。")
-
-    if dry_run:
-        return make_check(
-            name,
-            "failed",
-            f"发现 {len(enabled)} 个启用的 WeixinUpdate.exe（dry-run 不改）。"
-            "真实运行将改名 .disabled + icacls DENY + 域名防火墙 + 注册表 AutoUpdate=0（四层锁）。",
-        )
-
-    import subprocess
-
-    disabled_n = 0
-    for exe_path in enabled:
-        disabled_path = exe_path + ".disabled"
-
-        # Layer 1: 改名 .disabled（防止更新器执行）
-        try:
-            os.replace(exe_path, disabled_path)
-            disabled_n += 1
-        except Exception:
-            pass
-
-        # Layer 2: icacls DENY（防止 .disabled 文件被重命名回来或执行）
-        if os.path.exists(disabled_path):
-            try:
-                subprocess.run(
-                    ["icacls", disabled_path, "/deny", "Everyone:(W,D)"],
-                    capture_output=True, timeout=30,
-                )
-            except Exception:
-                pass
-
-        # 程序路径防火墙封禁（幂等：先删同名规则再加）
-        try:
-            subprocess.run(
-                ["netsh", "advfirewall", "firewall", "delete", "rule",
-                 "name=Block WeixinUpdate", f"program={exe_path}"],
-                capture_output=True, timeout=30,
-            )
-            subprocess.run(
-                ["netsh", "advfirewall", "firewall", "add", "rule",
-                 "name=Block WeixinUpdate", "dir=out", "action=block",
-                 f"program={exe_path}", "enable=yes"],
-                capture_output=True, timeout=30,
-            )
-        except Exception:
-            pass
-
-    # Layer 3: 域名封禁 dldir1v6.qq.com（微信更新服务域名，比程序路径封禁更难绕过）
-    # 规则名含域名使其出现在 netsh show rule name=all 输出中，便于验证
-    try:
-        subprocess.run(
-            ["netsh", "advfirewall", "firewall", "delete", "rule",
-             "name=Block WeixinUpdate dldir1v6.qq.com"],
-            capture_output=True, timeout=30,
-        )
-        subprocess.run(
-            ["netsh", "advfirewall", "firewall", "add", "rule",
-             "name=Block WeixinUpdate dldir1v6.qq.com",
-             "dir=out", "action=block",
-             "remoteip=any", "enable=yes",
-             "description=Block WeChat auto-update domain dldir1v6.qq.com"],
-            capture_output=True, timeout=30,
-        )
-    except Exception:
-        pass
-
-    # Layer 4: 注册表策略 AutoUpdate=0（HKLM\SOFTWARE\Policies\Tencent\WeChat\AutoUpdate）
-    try:
-        import winreg
-        key = winreg.CreateKeyEx(
-            winreg.HKEY_LOCAL_MACHINE,
-            r"SOFTWARE\Policies\Tencent\WeChat",
-            0,
-            winreg.KEY_SET_VALUE,
-        )
-        winreg.SetValueEx(key, "AutoUpdate", 0, winreg.REG_DWORD, 0)
-        winreg.CloseKey(key)
-    except Exception:
-        pass
-
-    still = _find_files(WEIXIN_INSTALL_ROOT, "WeixinUpdate.exe")
-    if not still:
-        return make_check(
-            name,
-            "fixed",
-            f"四层锁完成：{disabled_n} 个 WeixinUpdate.exe 已改名 .disabled + icacls DENY + "
-            "域名防火墙 dldir1v6.qq.com + 注册表 AutoUpdate=0。",
-        )
-    return make_check(
-        name,
-        "warn",
-        f"已禁用 {disabled_n} 个，仍有 {len(still)} 个改名失败（可能被占用）。"
-        "建议关闭微信后重跑 preflight。",
-    )
-
-
 def check_wechat_login(dry_run: bool = False) -> Dict[str, str]:
-    """5. 微信登录态：未登录 → 拉起微信 + 提示扫码。"""
-    name = CHECK_NAMES[4]
+    """4. 微信登录态：未登录 → 拉起微信 + 提示扫码。"""
+    name = CHECK_NAMES[3]
     try:
         from find_weixin import get_main_window, login_window_present
     except Exception as exc:  # noqa: BLE001
@@ -671,8 +563,8 @@ def check_wechat_login(dry_run: bool = False) -> Dict[str, str]:
 
 
 def check_python_pywinauto(dry_run: bool = False) -> Dict[str, str]:
-    """6. Python+pywinauto：import 测试；失败 → 提示重装 agent。"""
-    name = CHECK_NAMES[5]
+    """5. Python+pywinauto：import 测试；失败 → 提示重装 agent。"""
+    name = CHECK_NAMES[4]
     try:
         import pywinauto  # noqa: F401
 
@@ -692,8 +584,8 @@ def check_python_pywinauto(dry_run: bool = False) -> Dict[str, str]:
 
 
 def check_uia_narrator(dry_run: bool = False) -> Dict[str, str]:
-    """7. UIA 激活：设系统屏幕阅读器标志后能否读到微信主窗口（替代讲述人）。"""
-    name = CHECK_NAMES[6]
+    """6. UIA 激活：设系统屏幕阅读器标志后能否读到微信主窗口（替代讲述人）。"""
+    name = CHECK_NAMES[5]
     if dry_run or not _is_windows():
         return make_check(
             name, "warn", "dry-run/非 Windows 跳过 UIA 激活（仅 Windows 真机有效）。"
@@ -734,8 +626,8 @@ def check_uia_narrator(dry_run: bool = False) -> Dict[str, str]:
 
 
 def check_middleware_health(middleware_url: str, dry_run: bool = False) -> Dict[str, str]:
-    """8. 中台连通：GET <url>/health 或 /api/health（短超时）。"""
-    name = CHECK_NAMES[7]
+    """7. 中台连通：GET <url>/health 或 /api/health（短超时）。"""
+    name = CHECK_NAMES[6]
     if not middleware_url:
         return make_check(name, "warn", "未提供 middleware-url，跳过中台连通检测。")
 
@@ -776,7 +668,6 @@ def run_all_checks(middleware_url: str, dry_run: bool = False) -> List[Dict[str,
         ("elevation", lambda: check_elevation(dry_run)),
         ("wechat_installed", lambda: check_wechat_installed(dry_run)),
         ("wechat_version", lambda: check_wechat_version(dry_run)),
-        ("lock_update", lambda: check_lock_update(dry_run)),
         ("wechat_login", lambda: check_wechat_login(dry_run)),
         ("python_pywinauto", lambda: check_python_pywinauto(dry_run)),
         ("uia_narrator", lambda: check_uia_narrator(dry_run)),
