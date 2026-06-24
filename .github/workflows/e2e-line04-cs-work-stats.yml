@@ -1,0 +1,27 @@
+name: E2E Line04 CS Work Stats
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'apps/dashboard/**'
+      - 'sprints/06232241-line04-cs-work-stats/**'
+      - '.github/workflows/e2e-line04-cs-work-stats.yml'
+
+concurrency:
+  group: e2e-line04-cs-work-stats-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  dashboard-ui:                            # 前台客服工作汇总 Playwright UI（windows，page.route 拦后端，无 DB）
+    name: 客服工作汇总页 Playwright UI（windows）
+    runs-on: windows-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Dashboard UI E2E（Playwright，page.route 拦后端）
+        shell: pwsh
+        run: ./sprints/06232241-line04-cs-work-stats/e2e-ui-verify.ps1

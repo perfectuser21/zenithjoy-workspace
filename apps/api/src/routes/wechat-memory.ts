@@ -46,8 +46,15 @@ wechatMemoryRouter.post('/memory/message', async (req, res) => {
     return res.status(400).json({ error: 'INVALID_ROLE', message: 'role 必须为 in 或 out' });
   }
 
+  // 客服微信号身份章：X-Cs-Wechat-Id 头优先，回退 body.cs_wechat_id（listen_chat 解析当前客服后传入）。
+  // 缺/解析失败 → 不传（落库 NULL）：Line04 工作汇总统计按它聚合，NULL 不计入、不串台。
+  const headerCs = req.header('X-Cs-Wechat-Id');
+  const bodyCs =
+    req.body && typeof req.body.cs_wechat_id === 'string' ? req.body.cs_wechat_id : '';
+  const csWechatId = (headerCs || bodyCs || '').trim() || null;
+
   try {
-    const r = await appendTenantMessage({ tenantId, contact, role, text });
+    const r = await appendTenantMessage({ tenantId, contact, role, text, csWechatId });
     return res.status(200).json({
       ok: true,
       message_id: r.message_id,

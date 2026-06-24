@@ -24,6 +24,7 @@ import {
   listPendingOutbound,
   markOutboundReceipt,
 } from '../services/wechat/cs-outbound';
+import { getCsStats, type StatsDate } from '../services/wechat/cs-stats';
 
 export const wechatRouter = Router();
 
@@ -382,6 +383,23 @@ wechatRouter.post('/cs/outbound/:id/receipt', async (req: Request, res: Response
     const errMsg = err instanceof Error ? err.message : String(err);
     console.error('[wechat/cs/outbound/receipt] 失败:', errMsg);
     return res.status(500).json({ error: 'OUTBOUND_RECEIPT_FAILED', message: errMsg });
+  }
+});
+
+// GET /api/wechat/cs/stats?date=today|yesterday  → 每客服工作汇总（按北京时区聚合四数 + mode）
+// Line04 客服工作汇总统计页数据源（PRD Golden Path）。非法 date → 400。无 agent → agents:[]。
+wechatRouter.get('/cs/stats', async (req: Request, res: Response) => {
+  const date = typeof req.query.date === 'string' ? req.query.date : 'today';
+  if (date !== 'today' && date !== 'yesterday') {
+    return res.status(400).json({ error: 'INVALID_DATE', message: 'date 必须是 today 或 yesterday' });
+  }
+  try {
+    const agents = await getCsStats(date as StatsDate);
+    return res.status(200).json({ ok: true, date, timezone: 'Asia/Shanghai', agents });
+  } catch (err) {
+    const errMsg = err instanceof Error ? err.message : String(err);
+    console.error('[wechat/cs/stats] 失败:', errMsg);
+    return res.status(500).json({ error: 'STATS_FAILED', message: errMsg });
   }
 });
 

@@ -444,6 +444,16 @@ jobs:
           chmod +x .github/workflows/scripts/smoke/line04-cs-memory-smoke.sh
           bash .github/workflows/scripts/smoke/line04-cs-memory-smoke.sh
 
+      # ─── Line04 客服工作汇总统计 — 每客服 4 数 + mode + 北京时区/隔离/NULL/error ───
+      - name: Smoke — Line04 CS Work Stats
+        env:
+          API_BASE: http://localhost:5200
+          DATABASE_URL: postgresql://cecelia:cecelia@localhost:5432/cecelia   # ci-l4 原无此变量，smoke 用 psql "$DATABASE_URL" 故補
+          PGPASSWORD: cecelia
+        run: |
+          chmod +x .github/workflows/scripts/smoke/cs-work-stats-smoke.sh
+          bash .github/workflows/scripts/smoke/cs-work-stats-smoke.sh
+
       - name: Stop fake-feishu-server
         if: always()
         run: |

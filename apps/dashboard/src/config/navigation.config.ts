@@ -112,6 +112,8 @@ export const autopilotPageComponents: Record<string, () => Promise<{ default: Co
   'AreaHubPage': () => import('../pages/AreaHubPage'),
   // 2026-06-23 — 微信客服一键配置（选机器→填人设/白名单/开关→设置完毕，machine_id 自动）
   'CsOneClickSetupPage': () => import('../pages/CsOneClickSetupPage'),
+  // Line04 客服工作汇总统计页（每台客服机今天/昨天 4 个数 + 真发/演练标）
+  'CsWorkSummaryPage': () => import('../pages/CsWorkSummaryPage'),
 };
 
 export const pageComponents = autopilotPageComponents;
@@ -237,6 +239,9 @@ export const additionalRoutes: RouteConfig[] = [
 
   // === Line04 每客服设置区（纯前端表单，page.route 拦后端验证；E2E 在 windows job 跑）===
   { path: '/wechat/per-cs-config', component: 'PerCsConfigPage', requireAuth: false },
+
+  // === Line04 客服工作汇总统计页（纯渲染，page.route 拦后端；E2E 在 windows job 跑）===
+  { path: '/wechat/cs-stats', component: 'CsWorkSummaryPage', requireAuth: false },
 
 ];
 
