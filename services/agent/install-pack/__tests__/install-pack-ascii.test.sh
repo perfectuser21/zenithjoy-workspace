@@ -10,7 +10,7 @@ PACK=services/agent/install-pack
 FAIL=0
 
 echo "=== 1: install-pack 顶层无非 ASCII 文件名 ==="
-BAD=$(ls "$PACK" | perl -ne 'print if /[^\x00-\x7F]/' || true)
+BAD=$(find "$PACK" -maxdepth 1 -mindepth 1 -printf '%f\n' | perl -ne 'print if /[^\x00-\x7F]/' || true)
 if [ -n "$BAD" ]; then
   echo "FAIL: 发现非 ASCII 文件名（会导致 Windows tar 解压中断）:"; echo "$BAD"; FAIL=1
 else
