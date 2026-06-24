@@ -489,6 +489,32 @@ tests:
     product: AI员工
     note: "Sprint 06220821 无审批自动回复闭环：自动代理 5 配置键 getAutoAgentConfig/saveAutoAgentConfig oracle（vi.mock db/connection，默认关 + partial 合并 upsert）。"
 
+  # ── Sprint 06232241 Line04 客服工作汇总统计页 ────────────────────────────────
+
+  - id: line04-cs-work-stats-aggregate-oracle
+    path: sprints/06232241-line04-cs-work-stats/tests/cs-work-stats.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: AI员工
+    note: "Sprint 06232241 客服工作汇总：aggregateCsStats 口径纯函数契约 — 接收/回复/接待/工作时长 + 北京时区日界（北京00:30归今天）+ NULL 排除 + 按 cs_wechat_id 隔离不串台。"
+
+  - id: line04-cs-work-stats-service-unit
+    path: apps/api/src/services/wechat/__tests__/cs-stats.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: AI员工
+    note: "Sprint 06232241 客服工作汇总：cs-stats.ts aggregateCsStats colocated 单测（lint-test-pairing 配对），与 sprint oracle 同源口径契约。"
+
+  - id: line04-cs-work-stats-e2e
+    path: apps/dashboard/e2e/cs-work-summary.spec.ts
+    type: e2e
+    ci: L4
+    status: active
+    product: AI员工
+    note: "Sprint 06232241 客服工作汇总页前台 E2E（windows Playwright，经 e2e-line04-cs-work-stats.yml）— 每客服一卡 4 数 + 真发标 + 今天/昨天切换；page.route 拦 /cs/stats 后端。"
+
   - id: line04-ship-version-sync
     path: .github/workflows/scripts/smoke/line04-ship-version-sync-smoke.sh
     type: smoke
