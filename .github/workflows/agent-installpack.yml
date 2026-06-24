@@ -31,6 +31,37 @@ jobs:
         shell: bash
         run: bash scripts/build-install-pack.sh
         working-directory: services/agent
+
+      # ── exe overlay 完整性 + 可运行 gate（钉死 2.0.25 的 Pkg-error 回归）──────────────────
+      # 2.0.25 坏在：pkg 打完后 rcedit --set-icon 改 PE 资源截断了追加在 exe 末尾的 snapshot
+      # overlay → exe 从 69.7MB 掉到 37.8MB → 运行时 `Pkg: Error reading from file`。
+      # 本 gate 在真 Windows runner 上直接验产出的 exe：① 大小 ≥60MB（overlay 完整）
+      # ② 实跑 `--print-version` 不报 Pkg error、退出码 0（pkg 能读 overlay）。任一失败 → 红 job。
+      - name: Verify exe overlay intact & runnable
+        shell: powershell
+        working-directory: services/agent
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $exe = "zenithjoy-agent.exe"
+          if (-not (Test-Path $exe)) { throw "exe 未产出: $exe" }
+          $sizeMB = [math]::Round((Get-Item $exe).Length / 1MB, 1)
+          Write-Host "[verify-exe] $exe 大小 = $sizeMB MB"
+          # overlay 完整时整包 ~69-70MB；被截断的 2.0.25 只有 37.8MB。门槛 60MB 留余量。
+          if ($sizeMB -lt 60) {
+            throw "exe 仅 $sizeMB MB (<60MB) — snapshot overlay 疑被截断（2.0.25 Pkg-error 回归）"
+          }
+          Write-Host "[verify-exe] 实跑 exe --print-version（验 pkg 能读 overlay，不报 Pkg error）"
+          $out = & ".\$exe" --print-version 2>&1
+          $code = $LASTEXITCODE
+          Write-Host "[verify-exe] exit=$code output: $out"
+          if ($out -match "Pkg: Error reading from file" -or $out -match "Pkg: Error") {
+            throw "exe 运行报 Pkg overlay 读取错误 — overlay 损坏: $out"
+          }
+          if ($code -ne 0) {
+            throw "exe --print-version 退出码 $code (应为 0) — exe 起不来: $out"
+          }
+          Write-Host "[verify-exe] OK: exe overlay 完整 ($sizeMB MB) 且可运行"
+
       - name: Get pack name
         id: get_pack
         shell: bash
