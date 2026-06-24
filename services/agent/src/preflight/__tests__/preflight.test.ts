@@ -36,7 +36,7 @@ describe('runPreflight 路由', () => {
   });
 });
 
-describe('微信版本比较（纯函数，只认 4.1.8.x 为支持，高于低于都不行）', () => {
+describe('微信版本比较（纯函数，>= 4.1.8 一律支持；6-21 放开上界，仅卡 < 4.1.8 下界）', () => {
   it('4.1.8.107 = 基线 → 支持', () => {
     expect(isWechatVersionSupported('4.1.8.107')).toBe(true);
   });
@@ -50,11 +50,14 @@ describe('微信版本比较（纯函数，只认 4.1.8.x 为支持，高于低�
     expect(isWechatVersionSupported('4.0.5')).toBe(false);
     expect(isWechatVersionSupported('4.1.0')).toBe(false);
   });
-  it('4.1.9 → 不支持', () => {
-    expect(isWechatVersionSupported('4.1.9')).toBe(false);
+  it('4.1.9 → 支持（6-21 放开上界，Qt UIA 可用）', () => {
+    expect(isWechatVersionSupported('4.1.9')).toBe(true);
   });
-  it('4.2.0 → 不支持', () => {
-    expect(isWechatVersionSupported('4.2.0')).toBe(false);
+  it('4.1.10 → 支持（死闸误判的核心版本，现放行）', () => {
+    expect(isWechatVersionSupported('4.1.10.27')).toBe(true);
+  });
+  it('4.2.0 → 支持（>= 4.1.8 一律放行）', () => {
+    expect(isWechatVersionSupported('4.2.0')).toBe(true);
   });
   it('3.9.12.19 旧版 3.x → 不支持（无 mmui::MainWindow）', () => {
     expect(isWechatVersionSupported('3.9.12.19')).toBe(false);
