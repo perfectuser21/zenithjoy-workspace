@@ -172,6 +172,38 @@ export async function getCSConfigByAgentId(agentId: string): Promise<CSAccountCo
   return getCSConfigByMachine(machineId);
 }
 
+/**
+ * 仅解析「该 agent 绑定的客服微信号」(service_agents.wechat_id)，不要求已配过(wechat_cs_account_config)。
+ *
+ * 用于 S3 客服工作汇总：消息落库时盖身份章 —— 即使该客服还没在前台配人设/白名单，
+ * 只要 PC 已绑定(管理员填了 wechat_id)，就该把消息算到这台客服头上。比 getCSConfigByAgentId
+ * 宽（后者要求 config 行存在，无配置 → null）。
+ *
+ * 身份链同 getCSConfigByAgentId（env-id 与 UUID 两种都认）→ machine_id → service_agents.wechat_id。
+ * 任一断点 → null（解不到就不盖章，老数据/解析失败按 NULL，统计时不计入、不串台）。
+ */
+export async function resolveCsWechatIdByAgentId(agentId: string): Promise<string | null> {
+  if (!agentId) return null;
+  try {
+    const res = await pool.query(
+      `SELECT sa.wechat_id
+         FROM zenithjoy.license_machines lm
+         JOIN zenithjoy.service_agents sa
+           ON sa.machine_id = lm.machine_id AND sa.deleted_at IS NULL
+        WHERE lm.agent_id = $1
+           OR lm.agent_id IN (SELECT agent_id FROM zenithjoy.agents WHERE id::text = $1)
+        ORDER BY lm.last_seen DESC
+        LIMIT 1`,
+      [agentId],
+    );
+    const raw = res.rows?.[0]?.wechat_id;
+    return typeof raw === 'string' && raw.length > 0 ? raw : null;
+  } catch (err) {
+    console.warn(`[cs-account-config-store] resolveCsWechatIdByAgentId(${agentId}) 反查失败:`, err);
+    return null;
+  }
+}
+
 export interface PendingMachine {
   machine_id: string;
   hostname?: string;

@@ -24,6 +24,8 @@ import {
   listPendingOutbound,
   markOutboundReceipt,
 } from '../services/wechat/cs-outbound';
+import { getCsWorkStats, type StatsDate } from '../services/wechat/cs-work-stats';
+import { runDailyReportSettlement, getDailyReports } from '../services/wechat/cs-daily-report';
 
 export const wechatRouter = Router();
 
@@ -407,5 +409,55 @@ wechatRouter.post('/cs/alert', async (req: Request, res: Response) => {
     const errMsg = err instanceof Error ? err.message : String(err);
     console.error('[wechat/cs/alert] 失败:', errMsg);
     return res.status(500).json({ error: 'ALERT_FAILED', message: errMsg });
+  }
+});
+
+// ─── GET /api/wechat/cs/stats?date=today|yesterday（S3 客服工作汇总）────────────
+// 每台客服机当天 4 个工作数据：接收/回复/接待客人数/工作时长，按 Asia/Shanghai 当天分组每客服微信号。
+// date 缺省 today；非法值回落 today。纯 DB 读 + 展示，无外部依赖。
+wechatRouter.get('/cs/stats', async (req: Request, res: Response) => {
+  const raw = typeof req.query.date === 'string' ? req.query.date : 'today';
+  const date: StatsDate = raw === 'yesterday' ? 'yesterday' : 'today';
+  try {
+    const stats = await getCsWorkStats(date);
+    return res.status(200).json({ ok: true, date, stats });
+  } catch (err) {
+    const errMsg = err instanceof Error ? err.message : String(err);
+    console.error('[wechat/cs/stats] 聚合失败:', errMsg);
+    return res.status(500).json({ error: 'CS_STATS_FAILED', message: errMsg });
+  }
+});
+
+// ─── POST /api/wechat/cs/daily-report/settle（S4 结算）─────────────────────────
+// 把 date（today/yesterday，缺省 today）的每客服 4 个数固化进 daily_report（upsert 保幂等）。
+// 由中台 scheduler 每天北京 23:55 调（结算「today」）；smoke / 手动补算也调它。
+const DailyReportSettleSchema = z.object({ date: z.enum(['today', 'yesterday']).optional() });
+wechatRouter.post('/cs/daily-report/settle', async (req: Request, res: Response) => {
+  const parsed = DailyReportSettleSchema.safeParse(req.body ?? {});
+  const date: StatsDate = parsed.success && parsed.data.date === 'yesterday' ? 'yesterday' : 'today';
+  try {
+    const r = await runDailyReportSettlement(date);
+    return res.status(200).json({ ok: true, ...r });
+  } catch (err) {
+    const errMsg = err instanceof Error ? err.message : String(err);
+    console.error('[wechat/cs/daily-report/settle] 结算失败:', errMsg);
+    return res.status(500).json({ error: 'DAILY_REPORT_SETTLE_FAILED', message: errMsg });
+  }
+});
+
+// ─── GET /api/wechat/cs/daily-report?date=YYYY-MM-DD（S4 回看）──────────────────
+// 回看任意历史日期的每客服日报（4 个数 + 小结）。date 缺省 = 北京今天。
+wechatRouter.get('/cs/daily-report', async (req: Request, res: Response) => {
+  const raw = typeof req.query.date === 'string' ? req.query.date.trim() : '';
+  const date = /^\d{4}-\d{2}-\d{2}$/.test(raw)
+    ? raw
+    : new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Shanghai' });
+  try {
+    const reports = await getDailyReports(date);
+    return res.status(200).json({ ok: true, date, reports });
+  } catch (err) {
+    const errMsg = err instanceof Error ? err.message : String(err);
+    console.error('[wechat/cs/daily-report] 查询失败:', errMsg);
+    return res.status(500).json({ error: 'DAILY_REPORT_QUERY_FAILED', message: errMsg });
   }
 });

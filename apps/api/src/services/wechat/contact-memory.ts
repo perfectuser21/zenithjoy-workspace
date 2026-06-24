@@ -54,18 +54,22 @@ interface MessageRow {
 /**
  * 追加一条对话消息（短期记忆原文逐条入库，不砍字数）。
  * DB 失败 → console.warn 不抛。
+ *
+ * csWechatId（S3 客服工作汇总）：处理该消息的客服微信号，落库时盖身份章供按客服聚合统计。
+ * optional + 默认 null（向后兼容既有 caller / 老数据）；解析不到 → null，统计时不计入、不串台。
  */
 export async function appendMessage(
   contactKey: string,
   senderName: string,
   direction: Direction,
   content: string,
+  csWechatId?: string | null,
 ): Promise<void> {
   try {
     await pool.query(
-      `INSERT INTO zenithjoy.wechat_messages (contact_key, sender_name, direction, content)
-       VALUES ($1, $2, $3, $4)`,
-      [contactKey, senderName, direction, content],
+      `INSERT INTO zenithjoy.wechat_messages (contact_key, sender_name, direction, content, cs_wechat_id)
+       VALUES ($1, $2, $3, $4, $5)`,
+      [contactKey, senderName, direction, content, csWechatId ?? null],
     );
   } catch (err) {
     console.warn('[contact-memory] appendMessage 写入失败:', err);

@@ -3529,3 +3529,51 @@ agent_suite:
     status: active
     product: AI员工
     note: "Sprint 06240002 飞书客户列表路由单测（X-Smoke-Token/X-Internal-Token 鉴权 + provision/sync 入参校验 + 拉取失败返 502 + 透传 inject_error/mock_records）。"
+
+  - id: line04-cs-work-stats-service-unit
+    path: apps/api/src/services/wechat/__tests__/cs-work-stats.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: AI员工
+    note: "S3 客服工作汇总聚合口径单测（vi.mock db）：接收=count in/回复=count out/接待=distinct contact_key/时长=末-首 + Asia/Shanghai 时区 + 排除 cs_wechat_id IS NULL + today/yesterday 偏移。"
+
+  - id: line04-cs-daily-report-service-unit
+    path: apps/api/src/services/wechat/__tests__/cs-daily-report.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: AI员工
+    note: "S4 客服日报结算单测（vi.mock db + getCsWorkStats）：复用 S3 口径 + upsert ON CONFLICT(cs_wechat_id,report_date) 保幂等 + Asia/Shanghai 日界 + 空数据不写脏行 + getDailyReports 按 report_date 查。"
+
+  - id: line04-cs-work-stats-ui-e2e
+    path: apps/dashboard/e2e/cs-work-stats.spec.ts
+    type: e2e
+    ci: windows_cloud
+    status: active
+    product: AI员工
+    note: "S3 前台客服工作汇总页（page.route 拦 /cs/stats，验每客服卡片 4 数 + 真发/演练标 + 切昨天数字变化 + 无数据全 0），windows-latest 跑。"
+
+  - id: line04-cs-daily-report-ui-e2e
+    path: apps/dashboard/e2e/cs-daily-report.spec.ts
+    type: e2e
+    ci: windows_cloud
+    status: active
+    product: AI员工
+    note: "S4 前台客服日报页（page.route 拦 /cs/daily-report，验选历史日期看每客服 4 数 + 小结 + 全 0 行不漏），windows-latest 跑。"
+
+  - id: line04-cs-stats-api-client-unit
+    path: apps/dashboard/src/api/__tests__/wechat-cs-stats.api.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: AI员工
+    note: "S3 前台 stats API 客户端单测（vi.mock client）：GET /wechat/cs/stats 带 date 参数 + 解 stats 数组 + 缺字段回空。"
+
+  - id: line04-cs-daily-report-api-client-unit
+    path: apps/dashboard/src/api/__tests__/wechat-cs-daily-report.api.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: AI员工
+    note: "S4 前台日报 API 客户端单测（vi.mock client）：GET /wechat/cs/daily-report 带 date 参数 + 解 reports 数组 + 缺字段回空。"

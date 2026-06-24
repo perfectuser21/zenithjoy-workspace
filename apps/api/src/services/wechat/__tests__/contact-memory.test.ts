@@ -42,13 +42,21 @@ beforeEach(() => {
 // ─── appendMessage ─────────────────────────────────────────────────────────────
 
 describe('appendMessage', () => {
-  it('发一条 INSERT 到 wechat_messages，带正确参数', async () => {
+  it('发一条 INSERT 到 wechat_messages，带正确参数（缺客服身份 → cs_wechat_id=null）', async () => {
     await appendMessage('wxid_1', '于瑾', 'in', '你好');
 
     expect(mockedQuery).toHaveBeenCalledTimes(1);
     const [sql, params] = mockedQuery.mock.calls[0];
     expect(String(sql)).toMatch(/INSERT INTO zenithjoy\.wechat_messages/);
-    expect(params).toEqual(['wxid_1', '于瑾', 'in', '你好']);
+    expect(String(sql)).toMatch(/cs_wechat_id/);
+    // 不传 csWechatId → 第 5 个参数为 null（向后兼容老数据，统计时不计入）
+    expect(params).toEqual(['wxid_1', '于瑾', 'in', '你好', null]);
+  });
+
+  it('带 csWechatId → 盖客服身份章（第 5 个参数 = 该客服微信号）', async () => {
+    await appendMessage('wxid_1', '于瑾', 'in', '你好', 'wxid_cs_a');
+    const [, params] = mockedQuery.mock.calls[0];
+    expect(params).toEqual(['wxid_1', '于瑾', 'in', '你好', 'wxid_cs_a']);
   });
 
   it('DB 失败时 console.warn 不抛', async () => {
