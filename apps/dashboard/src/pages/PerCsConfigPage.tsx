@@ -35,7 +35,7 @@ export default function PerCsConfigPage() {
     let alive = true
     ;(async () => {
       try {
-        const res = await fetch('/api/wechat/cs/my-role')
+        const res = await fetch('/api/wechat/cs/my-role', { credentials: 'include' })
         if (!res.ok) throw new Error(String(res.status))
         const data = (await res.json()) as { can_config?: boolean }
         if (alive) setCanConfig(data.can_config === true)
@@ -58,7 +58,9 @@ export default function PerCsConfigPage() {
     let alive = true
     ;(async () => {
       try {
-        const res = await fetch(`/api/wechat/cs/config/${encodeURIComponent(wid)}`)
+        const res = await fetch(`/api/wechat/cs/config/${encodeURIComponent(wid)}`, {
+          credentials: 'include',
+        })
         if (!res.ok) return // 尚无配置（404）等 → 沿用默认值，不阻塞
         const cfg = (await res.json()) as {
           persona?: { self_name?: string }
@@ -110,6 +112,7 @@ export default function PerCsConfigPage() {
       }
       const res = await fetch(`/api/wechat/cs/config/${encodeURIComponent(wechatId)}`, {
         method: 'PUT',
+        credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       })

@@ -127,6 +127,16 @@ export default defineConfig({
         target: 'http://localhost:5200',
         changeOrigin: true,
       },
+      // Line04 中台 CRM 客户列表 — 名册读 + 接管/状态/加客户写
+      '/api/crm': {
+        target: 'http://localhost:5200',
+        changeOrigin: true,
+      },
+      // Line04 微信客服配置 / 角色（cookie 接缝真后端 leg 经此 proxy 打 :5200）
+      '/api/wechat': {
+        target: 'http://localhost:5200',
+        changeOrigin: true,
+      },
       // 内容图片代理 — ~/claude-output/images/
       '/content-images': {
         target: 'http://localhost:9998',

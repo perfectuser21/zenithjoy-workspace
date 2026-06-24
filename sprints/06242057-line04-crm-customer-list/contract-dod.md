@@ -1,6 +1,3 @@
-contract_branch: cp-harness-propose-r6-48e72495-a0
-sprint_dir: sprints/06242057-line04-crm-customer-list
-
 ---
 skeleton: false
 journey_type: user_facing
