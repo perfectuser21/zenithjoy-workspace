@@ -2,7 +2,8 @@ import { test, expect } from '@playwright/test'
 
 // Line04 客服日报页（S4）E2E — 目标环境 windows_cloud（GHA windows-latest）。
 // 选历史日期 → 看到那天每客服 4 个数 + 小结。daily-report 查询端点用 page.route 注入。
-const SHOT = '../../sprints/06240001-line04-cs-daily-report/screenshots'
+// 截图写到 apps/dashboard/screenshots/（Playwright cwd 相对路径），CI 把整目录传成 artifact 供老板眼见为实。
+const SHOT = 'screenshots/cs-daily-report'
 
 const REPORTS = {
   ok: true,

@@ -14,6 +14,7 @@ on:
       - 'apps/dashboard/src/api/wechat-cs-stats.api.ts'
       - 'apps/dashboard/src/api/wechat-cs-daily-report.api.ts'
       - 'sprints/06241445-line04-cs-stats-ci-wiring/**'
+      - 'sprints/06241510-cs-stats-playwright-fix/**'
       - '.github/workflows/e2e-line04-cs-stats.yml'
 
 concurrency:
@@ -33,3 +34,12 @@ jobs:
       - name: Dashboard UI E2E（Playwright，page.route 拦截后端）
         shell: pwsh
         run: ./sprints/06241445-line04-cs-stats-ci-wiring/e2e-ui-verify.ps1
+      # 截图 artifact：老板眼见为实——汇总页/日报页真渲染出来的样子。
+      # if: always() → 即使 Playwright 失败也传（失败截图同样有诊断价值）。
+      - name: Upload screenshots artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cs-stats-ui-screenshots
+          path: apps/dashboard/screenshots/
+          if-no-files-found: warn
