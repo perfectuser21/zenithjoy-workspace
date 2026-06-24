@@ -259,11 +259,13 @@ OUT=$(PGPASSWORD="$PSQL_PASS" psql -h "$PSQL_HOST" -U "$PSQL_USER" -d "$PSQL_DB"
 
 **验证命令**（linux CI，真后端 leg；REAL_SESSION_COOKIE 由 smoke 真登录 bootstrap 产出，不写死）:
 
-gate-allow: env_missing cookie 接缝真后端 leg 仅在 `line04-crm-customer-list-smoke.sh`（linux CI）内运行，该 smoke 已 `npx playwright install chromium` 备好浏览器；REAL_SESSION_COOKIE 未注入时 spec 内 `test.skip` 自动降级为 logic-done-pending（见接缝清单 #1），非环境真缺失，故豁免 playwright env 检测。
+gate-allow: env_missing/playwright cookie 接缝真后端 leg 仅在 `line04-crm-customer-list-smoke.sh`（linux CI）内运行，该 smoke 已 `npx playwright install chromium` 备好浏览器并由真登录 bootstrap 导出 REAL_SESSION_COOKIE；未注入时下方 `${REAL_SESSION_COOKIE:-}` 兜底 + spec 内 `test.skip` 自动降级为 logic-done-pending（见接缝清单 #1），非环境真缺失，故豁免 playwright env 检测。
 
 ```bash
 cd apps/dashboard
-E2E_BASE_URL="http://localhost:5174" E2E_REAL_SESSION_COOKIE="$REAL_SESSION_COOKIE" \
+# REAL_SESSION_COOKIE 由 smoke 真登录 bootstrap 导出（不写死）；未注入时兜底空串，spec 内 test.skip 降级 logic-done-pending
+REAL_SESSION_COOKIE="${REAL_SESSION_COOKIE:-}"
+E2E_BASE_URL="${E2E_BASE_URL:-http://localhost:5174}" E2E_REAL_SESSION_COOKIE="$REAL_SESSION_COOKIE" \
   npx playwright test e2e/crm-cookie-seam.spec.ts --reporter=line || { echo "FAIL: cookie 接缝真浏览器 leg 未过"; exit 1; }
 IN=$(PGPASSWORD="$PSQL_PASS" psql -h "$PSQL_HOST" -U "$PSQL_USER" -d "$PSQL_DB" -tAc \
   "SELECT (whitelist @> to_jsonb('$CONTACT'::text)) FROM zenithjoy.wechat_cs_account_config WHERE wechat_id='$CS_WECHAT_ID' AND updated_at > NOW() - interval '5 minutes'")
