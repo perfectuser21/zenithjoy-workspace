@@ -40,3 +40,12 @@ regexes = [
 paths = [
   '''.github/workflows/scripts/smoke/.*\.sh$'''
 ]
+
+[[allowlists]]
+description = "fake-feishu 替身 token — 'fake_t_*' 是 fake-feishu-server 要求的占位前缀（GET records 校 token 以 fake_t_ 开头），非真凭据"
+regexes = [
+  '''fake_t_[A-Za-z0-9_]*'''
+]
+paths = [
+  '''.github/workflows/scripts/smoke/.*\.sh$'''
+]
