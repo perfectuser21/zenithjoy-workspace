@@ -1099,6 +1099,14 @@ function startAcquisitionKeywordLoop(cfg: AgentConfig): void {
 
 // H-2 Bug 9: 仅作为入口脚本时运行 main()。test import 不触发 main()，让 buildHelloPayload 等纯函数可单测。
 if (require.main === module) {
+  // --print-version / --version：打印版本后立即退出 0，不启守护进程。
+  // 这条轻量路径同时是 CI 的 exe overlay 完整性探针：pkg 打的 exe 跑这个会真去读
+  // 追加在 exe 末尾的 snapshot overlay（require('../package.json')）。overlay 被截断时
+  // 这里会抛 `Pkg: Error reading from file` → CI gate 红，钉死 2.0.25 那类打包回归。
+  if (process.argv.includes('--print-version') || process.argv.includes('--version')) {
+    console.log(VERSION);
+    process.exit(0);
+  }
   main().catch((err) => {
     console.error('[agent] main() 异常退出:', err);
     process.exit(1);
