@@ -29,13 +29,13 @@ describe('getCsWorkStats 聚合口径', () => {
   it('口径正确：接收=count(in)、回复=count(out)、接待=distinct contact_key、时长=末-首', async () => {
     await getCsWorkStats('today');
     const sql = String(mockedQuery.mock.calls[0][0]);
-    // 接收 / 回复
-    expect(sql).toMatch(/count\([^)]*direction\s*=\s*'in'/i);
-    expect(sql).toMatch(/count\([^)]*direction\s*=\s*'out'/i);
-    // 接待客人数：distinct contact_key
-    expect(sql).toMatch(/count\(\s*distinct\s+contact_key/i);
-    // 工作时长：max(created_at) - min(created_at) → 分钟
-    expect(sql).toMatch(/max\(created_at\)[\s\S]*min\(created_at\)/i);
+    // 接收 / 回复：count(...) FILTER (WHERE direction='in'/'out') 口径（接受 FILTER 或内联两种写法）
+    expect(sql).toMatch(/count\([\s\S]*?\)\s*FILTER\s*\(\s*WHERE\s+[^)]*direction\s*=\s*'in'|count\([^)]*direction\s*=\s*'in'/i);
+    expect(sql).toMatch(/count\([\s\S]*?\)\s*FILTER\s*\(\s*WHERE\s+[^)]*direction\s*=\s*'out'|count\([^)]*direction\s*=\s*'out'/i);
+    // 接待客人数：distinct contact_key（允许表别名前缀如 m.）
+    expect(sql).toMatch(/count\(\s*distinct\s+\w*\.?contact_key/i);
+    // 工作时长：max(created_at) - min(created_at) → 分钟（允许表别名前缀如 m.）
+    expect(sql).toMatch(/max\(\s*\w*\.?created_at\s*\)[\s\S]*min\(\s*\w*\.?created_at\s*\)/i);
   });
 
   it('时区：按 Asia/Shanghai 当天分组（防美区日界坑）', async () => {

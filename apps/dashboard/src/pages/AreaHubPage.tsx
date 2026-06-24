@@ -56,6 +56,7 @@ export const AREA_HUBS: Record<string, AreaHub> = {
     subtitle: '微信号 AI 接管：每台客服机一处看健康、一处配人设/白名单/开关。',
     cards: [
       { label: '我的客服机', desc: '所有机器一处看（在线/微信状态）+ 点一台配人设/白名单/开关', to: '/wechat/setup', Icon: Sparkles, color: 'text-sky-500' },
+      { label: '客服工作汇总', desc: '每台客服机今天/昨天 接收/回复/接待/工作时长 + 真发/演练', to: '/wechat/cs-stats', Icon: Activity, color: 'text-indigo-500' },
       { label: '下载客户机', desc: '在客服 PC 上装 Agent，装好自动报到这里', to: '/dashboard/agent', Icon: Download, color: 'text-emerald-500' },
       { label: '话术知识库', desc: '公司/产品/人群/常见问答（AI 回复的素材，全客服共用）', to: '/wechat/cs-config', Icon: MessageCircle, color: 'text-green-500' },
     ],

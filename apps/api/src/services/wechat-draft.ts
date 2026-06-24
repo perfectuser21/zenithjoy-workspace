@@ -22,7 +22,7 @@ import { callOpenRouter } from '../llm/openrouter';
 import type { ChatMessage, ContactFact, ContactMemory, Persona } from './wechat/types';
 import { retrieveRelevantKB } from './wechat/business-kb';
 import { getPersona, getBusinessKB, getAutoAgentConfig } from './wechat/cs-config-store';
-import { getCSConfigByAgentId } from './wechat/cs-account-config-store';
+import { getCSConfigByAgentId, resolveCsWechatIdByAgentId } from './wechat/cs-account-config-store';
 import {
   decideReplyRoute,
   withinBusinessHours,
@@ -264,6 +264,12 @@ export async function generateChatDraft(
   // 判白名单/人设/开关——每客户独立、改一个不动别人。解不到 → null，回落旧的飞书/全局逻辑（向后兼容）。
   const csConfig = agent_id ? await getCSConfigByAgentId(agent_id) : null;
 
+  // S3 客服工作汇总：解析「处理本消息的客服微信号」给 in/out 落库盖身份章。
+  // 优先用已配过的 csConfig.wechat_id；未配但已绑 PC → 经 service_agents 解出绑定的 wechat_id。
+  // 解不到（无 agent_id / 未绑定）→ null：消息照常落库，只是不计入任何客服统计、不串台。
+  const csWechatId: string | null =
+    csConfig?.wechat_id ?? (agent_id ? await resolveCsWechatIdByAgentId(agent_id) : null);
+
   // 多租户隔离 scope：路由已保证带租户才会调到这里（缺租户在路由层 4xx 拦截）。
   // 写入归属当前租户：以 tenant scope 留痕，确保草稿入库可追溯到租户，不串到其它租户。
   console.info(
@@ -349,7 +355,7 @@ export async function generateChatDraft(
   // 2) 三层记忆 + 人设 + 企业知识库 → 上下文装配（替代旧的"飞书取最近10轮+营销画像"）
   const contactKey = wechat_id || sender;
   try {
-    await appendMessage(contactKey, sender, 'in', content);
+    await appendMessage(contactKey, sender, 'in', content, csWechatId);
   } catch (err) {
     console.warn('[wechat-draft] 写入站消息失败（不影响生成）:', err);
   }
@@ -405,7 +411,7 @@ export async function generateChatDraft(
   // 成功生成才记入"我方回复"短期记忆 + 触发固化（失败不污染记忆）
   if (!aiError) {
     try {
-      await appendMessage(contactKey, sender, 'out', aiContent);
+      await appendMessage(contactKey, sender, 'out', aiContent, csWechatId);
       await consolidate(contactKey);
     } catch (err) {
       console.warn('[wechat-draft] 写出站消息/固化失败（不影响回复）:', err);

@@ -112,6 +112,8 @@ export const autopilotPageComponents: Record<string, () => Promise<{ default: Co
   'AreaHubPage': () => import('../pages/AreaHubPage'),
   // 2026-06-23 — 微信客服一键配置（选机器→填人设/白名单/开关→设置完毕，machine_id 自动）
   'CsOneClickSetupPage': () => import('../pages/CsOneClickSetupPage'),
+  // S3 — 客服工作汇总（每客服机今天/昨天 接收/回复/接待/时长 4 个数 + 真发/演练标）
+  'CsWorkStatsPage': () => import('../pages/CsWorkStatsPage'),
 };
 
 export const pageComponents = autopilotPageComponents;
@@ -170,6 +172,7 @@ export const additionalRoutes: RouteConfig[] = [
   { path: '/dashboard/feishu-bind', component: 'FeishuBindTenant', requireAuth: true },
   { path: '/wechat/cs-config', component: 'WechatCustomerServiceConfigPage', requireAuth: true },
   { path: '/wechat/setup', component: 'CsOneClickSetupPage', requireAuth: true },
+  { path: '/wechat/cs-stats', component: 'CsWorkStatsPage', requireAuth: true },
   { path: '/local-video', component: 'LocalVideoPipelinePage', requireAuth: true },
   { path: '/clips', component: 'ContentClipperPage', requireAuth: true },
   { path: '/video-remake', component: 'VideoRemakePipelinePage', requireAuth: true },

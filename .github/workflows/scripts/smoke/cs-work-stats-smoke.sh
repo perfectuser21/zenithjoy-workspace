@@ -47,14 +47,15 @@ console.log("  PASS: cs_wechat_id nullable + (cs_wechat_id, created_at) 索引�
 ' "$ROOT"
 
 echo "── ② 口径精确：灌已知 in/out（今天）→ /cs/stats?date=today ──"
-# CSA 今天：3 条 in（2 个不同客户 c1/c2）+ 2 条 out，首尾相隔 20 分钟 → 时长=20
+# CSA 今天：3 条 in（2 个不同客户 c1/c2）+ 2 条 out。
+# 首条 = now()-20min，末条 = now()（同一 INSERT 里 now() 语句级稳定 → 首末精确相隔 20 分钟 → 时长=20）。
 Q "INSERT INTO zenithjoy.wechat_messages(contact_key,sender_name,direction,content,cs_wechat_id,created_at)
    VALUES
     ('c1_${SUF}','客户1','in','你好',        '${CSA}', now() - interval '20 minutes'),
     ('c1_${SUF}','客户1','out','您好在的',    '${CSA}', now() - interval '19 minutes'),
     ('c1_${SUF}','客户1','in','多少钱',      '${CSA}', now() - interval '15 minutes'),
     ('c2_${SUF}','客户2','in','在吗',        '${CSA}', now() - interval '5 minutes'),
-    ('c2_${SUF}','客户2','out','在的呢',      '${CSA}', now() - interval '1 minutes')" >/dev/null
+    ('c2_${SUF}','客户2','out','在的呢',      '${CSA}', now())" >/dev/null
 # 落库时间窗自检（防假绿）
 SEEDED=$(Q "SELECT count(*) FROM zenithjoy.wechat_messages WHERE cs_wechat_id='${CSA}' AND created_at > NOW() - interval '5 minutes'" | tr -d ' ')
 [ "${SEEDED:-0}" -ge 1 ] || { echo "FAIL: CSA 种子未落库（时间窗内）"; exit 1; }

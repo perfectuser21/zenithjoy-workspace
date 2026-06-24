@@ -24,6 +24,7 @@ import {
   listPendingOutbound,
   markOutboundReceipt,
 } from '../services/wechat/cs-outbound';
+import { getCsWorkStats, type StatsDate } from '../services/wechat/cs-work-stats';
 
 export const wechatRouter = Router();
 
@@ -407,5 +408,21 @@ wechatRouter.post('/cs/alert', async (req: Request, res: Response) => {
     const errMsg = err instanceof Error ? err.message : String(err);
     console.error('[wechat/cs/alert] 失败:', errMsg);
     return res.status(500).json({ error: 'ALERT_FAILED', message: errMsg });
+  }
+});
+
+// ─── GET /api/wechat/cs/stats?date=today|yesterday（S3 客服工作汇总）────────────
+// 每台客服机当天 4 个工作数据：接收/回复/接待客人数/工作时长，按 Asia/Shanghai 当天分组每客服微信号。
+// date 缺省 today；非法值回落 today。纯 DB 读 + 展示，无外部依赖。
+wechatRouter.get('/cs/stats', async (req: Request, res: Response) => {
+  const raw = typeof req.query.date === 'string' ? req.query.date : 'today';
+  const date: StatsDate = raw === 'yesterday' ? 'yesterday' : 'today';
+  try {
+    const stats = await getCsWorkStats(date);
+    return res.status(200).json({ ok: true, date, stats });
+  } catch (err) {
+    const errMsg = err instanceof Error ? err.message : String(err);
+    console.error('[wechat/cs/stats] 聚合失败:', errMsg);
+    return res.status(500).json({ error: 'CS_STATS_FAILED', message: errMsg });
   }
 });
