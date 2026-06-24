@@ -71,6 +71,7 @@ try:
         REPLY_FAILURE_COOLDOWN_SECONDS as _REPLY_FAIL_COOLDOWN,
         HEARTBEAT_INTERVAL_SECONDS as _HEARTBEAT_INTERVAL,
         UIA_REACTIVATE_INTERVAL_SECONDS as _UIA_REACTIVATE_INTERVAL,
+        UPDATE_LOCK_INTERVAL_SECONDS as _UPDATE_LOCK_INTERVAL,
         WECHAT_LAUNCH_COOLDOWN_SECONDS as _WECHAT_LAUNCH_COOLDOWN,
         WECHAT_STARTUP_WAIT_SECONDS as _WECHAT_STARTUP_WAIT,
         MAIN_LOOP_POLL_INTERVAL_SECONDS as _MAIN_LOOP_POLL,
@@ -107,6 +108,7 @@ except ImportError:
     _REPLY_FAIL_COOLDOWN = 60
     _HEARTBEAT_INTERVAL = 60
     _UIA_REACTIVATE_INTERVAL = 45
+    _UPDATE_LOCK_INTERVAL = 300
     _WECHAT_LAUNCH_COOLDOWN = 120
     _WECHAT_STARTUP_WAIT = 5
     _MAIN_LOOP_POLL = 3
@@ -1662,6 +1664,21 @@ def _ensure_uia_flag() -> bool:
     return False
 
 
+def _relock_update() -> None:
+    """每轮（按 UPDATE_LOCK_INTERVAL 冷却）重施"关死微信自动更新"+ verify。
+
+    微信会恢复更新器（install-dir + AppData xwechat 两处），故 agent 必须周期重施。
+    诚实：腾讯更新硬，做不到 100%，wechat_update_lock 会如实标 locked=True/False。
+    任何异常吞掉（关更新失败绝不拖垮监听主循环）。
+    """
+    try:
+        from wechat_update_lock import run_update_lock
+        r = run_update_lock(dry_run=False)
+        _log(f"关更新重施: locked={r.get('locked')} {r.get('detail', '')}")
+    except Exception as exc:
+        _log(f"关更新重施异常（已吞，不拖垮监听）: {exc}")
+
+
 def run_real_listen(args: argparse.Namespace) -> int:
     from find_weixin import assert_supported_version
     assert_supported_version()
@@ -1706,6 +1723,10 @@ def run_real_listen(args: argparse.Namespace) -> int:
     uia_reactivate_interval = _UIA_REACTIVATE_INTERVAL
     _activate_uia()
     last_uia_activate = time.time()
+    # 关死微信自动更新：启动先施一次，之后每 UPDATE_LOCK_INTERVAL 重施（微信会恢复更新器）
+    update_lock_interval = _UPDATE_LOCK_INTERVAL
+    _relock_update()
+    last_update_lock = time.time()
     # 自动启动微信：检测到微信未运行时自动 Popen Weixin.exe，冷却防重复拉起
     wechat_launch_cooldown = _WECHAT_LAUNCH_COOLDOWN
     last_wechat_launch = time.time() - wechat_launch_cooldown + 30  # 30s grace before first launch
@@ -1748,6 +1769,11 @@ def run_real_listen(args: argparse.Namespace) -> int:
 
             # 每轮检查 UIA 标志是否仍在；Windows 会话锁定等场景会清除该标志
             _ensure_uia_flag()
+
+            # 周期性重施"关死微信自动更新"（微信会恢复更新器，按 UPDATE_LOCK_INTERVAL 冷却重施 + verify）
+            if now - last_update_lock >= update_lock_interval:
+                _relock_update()
+                last_update_lock = now
 
             # 取主窗口（顺带采集诊断：找到没 / 是否停在登录窗口 / 是否隐私锁屏）
             mw = None
