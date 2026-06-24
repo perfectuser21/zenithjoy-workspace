@@ -170,6 +170,7 @@ def _find_updaters(roots: List[str], suffix_disabled: bool = False) -> List[str]
     """在 roots 下递归找所有 WeixinUpdate.exe（suffix_disabled=True 找 .disabled 的）。"""
     target = UPDATER_EXE_NAME + (".disabled" if suffix_disabled else "")
     found: List[str] = []
+    seen: set = set()  # 去重：roots 可能重叠（如 xwechat 根 + 其下 WeixinUpdate 子目录）
     for root in roots:
         if not root or not os.path.isdir(root):
             continue
@@ -177,7 +178,10 @@ def _find_updaters(roots: List[str], suffix_disabled: bool = False) -> List[str]
             for dirpath, _dirs, files in os.walk(root):
                 for f in files:
                     if f.lower() == target.lower():
-                        found.append(os.path.join(dirpath, f))
+                        p = os.path.normcase(os.path.normpath(os.path.join(dirpath, f)))
+                        if p not in seen:
+                            seen.add(p)
+                            found.append(os.path.join(dirpath, f))
         except Exception:
             continue
     return found
