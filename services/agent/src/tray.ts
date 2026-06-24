@@ -14,6 +14,39 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
+// 悦升云端 logo 内嵌兜底（32x32 PNG，base64）——
+// 即使 pkg 虚拟 FS 读 build/tray-icon.png 失败，托盘也显悦升云端 logo，
+// 绝不再回退到 1x1 透明 PNG（=用户看到的空白托盘，Issue 5c770b55）。
+// 来源 build/tray-icon.png 缩 32x32 -strip 后 base64；与 exe 应用图标 build/icon.ico 同 logo。
+const FALLBACK_TRAY_ICON_BASE64 =
+  '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' +
+  'AABJRU5ErkJggg==';
+
 type TrayStatus = 'connecting' | 'online' | 'offline';
 
 interface TrayHandlers {
@@ -69,11 +102,8 @@ function loadIconBase64(): string {
       // ignore
     }
   }
-  // 兜底：1x1 透明 PNG
-  return (
-    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGA' +
-    'WjzIeAAAAABJRU5ErkJggg=='
-  );
+  // 兜底：内嵌悦升云端 logo（非 1x1 透明，避免空白托盘）
+  return FALLBACK_TRAY_ICON_BASE64;
 }
 
 export function startTray(h: TrayHandlers): void {
@@ -299,4 +329,14 @@ export function _setHandlersForTest(h: TrayHandlers | null): void {
 // 仅供单测使用：读取降级态 lastModuleError（验证 showModuleError 红点降级路径真生效）
 export function _getLastModuleErrorForTest(): string | null {
   return lastModuleError;
+}
+
+// 仅供单测使用：读取内嵌悦升云端兜底图标 base64（验证兜底非 1x1 透明空白）
+export function _getFallbackIconBase64ForTest(): string {
+  return FALLBACK_TRAY_ICON_BASE64;
+}
+
+// 仅供单测使用：在所有候选路径都不存在时走兜底分支（验证返回的是悦升云端 logo 而非空白）
+export function _loadIconBase64ForTest(): string {
+  return loadIconBase64();
 }
