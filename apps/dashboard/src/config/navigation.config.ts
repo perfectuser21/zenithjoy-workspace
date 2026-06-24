@@ -114,6 +114,8 @@ export const autopilotPageComponents: Record<string, () => Promise<{ default: Co
   'CsOneClickSetupPage': () => import('../pages/CsOneClickSetupPage'),
   // S3 — 客服工作汇总（每客服机今天/昨天 接收/回复/接待/时长 4 个数 + 真发/演练标）
   'CsWorkStatsPage': () => import('../pages/CsWorkStatsPage'),
+  // S4 — 客服日报（回看任意历史日期每客服 4 个数 + 小结）
+  'CsDailyReportPage': () => import('../pages/CsDailyReportPage'),
 };
 
 export const pageComponents = autopilotPageComponents;
@@ -173,6 +175,7 @@ export const additionalRoutes: RouteConfig[] = [
   { path: '/wechat/cs-config', component: 'WechatCustomerServiceConfigPage', requireAuth: true },
   { path: '/wechat/setup', component: 'CsOneClickSetupPage', requireAuth: true },
   { path: '/wechat/cs-stats', component: 'CsWorkStatsPage', requireAuth: true },
+  { path: '/wechat/cs-daily-report', component: 'CsDailyReportPage', requireAuth: true },
   { path: '/local-video', component: 'LocalVideoPipelinePage', requireAuth: true },
   { path: '/clips', component: 'ContentClipperPage', requireAuth: true },
   { path: '/video-remake', component: 'VideoRemakePipelinePage', requireAuth: true },

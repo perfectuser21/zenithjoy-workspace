@@ -25,7 +25,7 @@ describe('wechat.ts — router export', () => {
     expect(paths).toContain('/scheduler-tick');
   });
 
-  it('registers exactly 9 unique endpoints (5 原有 + 3 关键人出站 + 1 客服工作汇总；iLink 已删除)', () => {
+  it('registers exactly 11 unique endpoints (5 原有 + 3 关键人出站 + S3 汇总 + S4 日报×2；iLink 已删除)', () => {
     const stack = (wechatRouter as any).stack;
     const paths = [...new Set(stack.filter((l: any) => l.route).map((l: any) => l.route.path))];
     // 原有 5：qr-bind / draft-review-poll / scheduler-tick / draft-generate / listener-heartbeat
@@ -40,6 +40,9 @@ describe('wechat.ts — router export', () => {
     expect(paths).toContain('/cs/alert');
     // S3：客服工作汇总统计
     expect(paths).toContain('/cs/stats');
-    expect(paths.length).toBe(9);
+    // S4：客服日报（结算 + 回看）
+    expect(paths).toContain('/cs/daily-report/settle');
+    expect(paths).toContain('/cs/daily-report');
+    expect(paths.length).toBe(11);
   });
 });
