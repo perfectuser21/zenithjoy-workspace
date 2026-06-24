@@ -275,6 +275,17 @@ jobs:
       - name: Run deploy-lib unit test (proven-to-fire — sha 不符必返非0)
         run: bash .github/workflows/scripts/__tests__/deploy-lib.test.sh
 
+  test-install-pack-ascii:
+    name: Test — Install Pack ASCII (start.bat 纯ASCII回归守卫)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: shellcheck install-pack-ascii test
+        run: shellcheck services/agent/install-pack/__tests__/install-pack-ascii.test.sh
+      - name: Run install-pack-ascii guard (start.bat 含中文必报红)
+        run: bash services/agent/install-pack/__tests__/install-pack-ascii.test.sh
+
   lint-feature-has-smoke:
     name: Lint — Feature Has Smoke
     runs-on: ubuntu-latest
