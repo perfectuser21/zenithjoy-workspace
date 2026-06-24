@@ -37,30 +37,34 @@ jobs:
       # overlay → exe 从 69.7MB 掉到 37.8MB → 运行时 `Pkg: Error reading from file`。
       # 本 gate 在真 Windows runner 上直接验产出的 exe：① 大小 ≥60MB（overlay 完整）
       # ② 实跑 `--print-version` 不报 Pkg error、退出码 0（pkg 能读 overlay）。任一失败 → 红 job。
-      - name: Verify exe overlay intact & runnable
+      # 注意：本 step 的 PowerShell 脚本体必须**纯 ASCII**。windows-latest 的
+      # Windows PowerShell 5.1 不按 UTF-8 解析内联 .ps1，中文/em-dash/全角括号会乱码成
+      # 非法 token（曾让本 gate 在 parse 阶段就崩，根本没跑到验 exe）。中文说明只放在上面的
+      # YAML 注释里（注释不进 PowerShell 解析）。
+      - name: Verify exe overlay intact and runnable
         shell: powershell
         working-directory: services/agent
         run: |
           $ErrorActionPreference = 'Stop'
           $exe = "zenithjoy-agent.exe"
-          if (-not (Test-Path $exe)) { throw "exe 未产出: $exe" }
+          if (-not (Test-Path $exe)) { throw "exe not produced: $exe" }
           $sizeMB = [math]::Round((Get-Item $exe).Length / 1MB, 1)
-          Write-Host "[verify-exe] $exe 大小 = $sizeMB MB"
-          # overlay 完整时整包 ~69-70MB；被截断的 2.0.25 只有 37.8MB。门槛 60MB 留余量。
+          Write-Host "[verify-exe] $exe size = $sizeMB MB"
+          # overlay intact => whole exe ~69-70MB; truncated 2.0.25 was only 37.8MB. Floor 60MB.
           if ($sizeMB -lt 60) {
-            throw "exe 仅 $sizeMB MB (<60MB) — snapshot overlay 疑被截断（2.0.25 Pkg-error 回归）"
+            throw "exe only $sizeMB MB (<60MB) - snapshot overlay likely truncated (2.0.25 Pkg-error regression)"
           }
-          Write-Host "[verify-exe] 实跑 exe --print-version（验 pkg 能读 overlay，不报 Pkg error）"
-          $out = & ".\$exe" --print-version 2>&1
+          Write-Host "[verify-exe] running exe --print-version (proves pkg can read overlay, no Pkg error)"
+          $out = & ".\$exe" --print-version 2>&1 | Out-String
           $code = $LASTEXITCODE
           Write-Host "[verify-exe] exit=$code output: $out"
-          if ($out -match "Pkg: Error reading from file" -or $out -match "Pkg: Error") {
-            throw "exe 运行报 Pkg overlay 读取错误 — overlay 损坏: $out"
+          if ($out -match "Pkg: Error") {
+            throw "exe reports Pkg overlay read error - overlay corrupted: $out"
           }
           if ($code -ne 0) {
-            throw "exe --print-version 退出码 $code (应为 0) — exe 起不来: $out"
+            throw "exe --print-version exit code $code (expected 0) - exe cannot start: $out"
           }
-          Write-Host "[verify-exe] OK: exe overlay 完整 ($sizeMB MB) 且可运行"
+          Write-Host "[verify-exe] OK: exe overlay intact ($sizeMB MB) and runnable"
 
       - name: Get pack name
         id: get_pack
