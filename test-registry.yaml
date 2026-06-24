@@ -3505,3 +3505,19 @@ agent_suite:
     status: active
     product: AI员工
     note: "Sprint 06222337 前台每客服设置区编辑 UI（page.route 拦截后端，验保存 PUT url 含 wxid_csa + body.persona.self_name=萌萌 + 回显），windows-latest job2 跑。"
+
+  - id: line04-feishu-customer-list-service-unit
+    path: apps/api/src/services/feishu-customer-list.test.ts
+    type: unit
+    ci: L4
+    status: active
+    product: AI员工
+    note: "Sprint 06240002 飞书客户列表服务单测（provision 幂等 / sync upsert 不翻倍 / 拉取失败抛 FeishuFetchError 不动本地 / 软删 / mockRecords 覆盖）。"
+
+  - id: line04-feishu-customer-list-route-unit
+    path: apps/api/src/routes/feishu-customer-list.test.ts
+    type: unit
+    ci: L4
+    status: active
+    product: AI员工
+    note: "Sprint 06240002 飞书客户列表路由单测（X-Smoke-Token/X-Internal-Token 鉴权 + provision/sync 入参校验 + 拉取失败返 502 + 透传 inject_error/mock_records）。"
