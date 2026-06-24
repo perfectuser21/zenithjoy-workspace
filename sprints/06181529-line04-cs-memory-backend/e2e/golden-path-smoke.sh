@@ -26,9 +26,12 @@ psql "postgresql://${DATABASE_USER}:${DATABASE_PASSWORD}@${DATABASE_HOST}:${DATA
   || psql "postgresql://${DATABASE_USER}:${DATABASE_PASSWORD}@${DATABASE_HOST}:${DATABASE_PORT}/postgres" \
        -c "CREATE DATABASE \"${DATABASE_NAME}\""
 psql "$PSQL" -c "CREATE SCHEMA IF NOT EXISTS zenithjoy; CREATE EXTENSION IF NOT EXISTS pgcrypto;"
-MIG=$(ls "$API_DIR"/db/migrations/*cs_memory*.sql "$API_DIR"/db/migrations/*tenant_memory*.sql 2>/dev/null | head -1)
-[ -n "$MIG" ] || { echo "FAIL: 找不到三层记忆 migration"; exit 1; }
-psql "$PSQL" -f "$MIG"
+# 应用全部三层记忆相关 migration（按文件名时序），含 create 建表 + 后续 ALTER 加列
+# （如 add_cs_wechat_id 身份章列）—— 只跑 head -1 会漏掉后续列，导致 appendTenantMessage
+# 的 INSERT 引用新列报错（Sprint 06232241 客服工作汇总加 cs_wechat_id 列后回归）。
+MIGS=$(ls "$API_DIR"/db/migrations/*cs_memory*.sql "$API_DIR"/db/migrations/*tenant_memory*.sql 2>/dev/null | sort -u)
+[ -n "$MIGS" ] || { echo "FAIL: 找不到三层记忆 migration"; exit 1; }
+for MIG in $MIGS; do psql "$PSQL" -v ON_ERROR_STOP=1 -f "$MIG"; done
 
 # 1) 起服务
 ( cd "$API_DIR" && npm run dev >/tmp/line04-mem-e2e.log 2>&1 ) &
