@@ -68,6 +68,21 @@ CID=$(PGPASSWORD="$PSQL_PASS" psql -h "$PSQL_HOST" -U "$PSQL_USER" -d "$PSQL_DB"
 [ "${CID}" = "${USER_ID_VALID}" ] || { echo "  FAIL: 期望 licenses.customer_id=${USER_ID_VALID} 实际 '${CID}'（Gap2 回填未生效）"; exit 1; }
 echo "  OK: licenses.customer_id 已回填为 ${CID}（付费客户能下载 agent、Account 显示 license）"
 
+echo "==> [2c/6] Gap4：付费注册即 owner（否则配不了自己客服机：cs/setup 要 owner/admin）"
+# (a) DB：tenant_members.role 必须是 owner（不是 member）
+ROLE=$(PGPASSWORD="$PSQL_PASS" psql -h "$PSQL_HOST" -U "$PSQL_USER" -d "$PSQL_DB" -t -A -c \
+  "SELECT role FROM zenithjoy.tenant_members WHERE tenant_id = '${TENANT_BR_ID}' AND feishu_user_id = '${USER_ID_VALID}';")
+[ "${ROLE}" = "owner" ] || { echo "  FAIL: 期望 tenant_members.role=owner 实际 '${ROLE}'（Gap4 未生效，付费客户配不了自己客服机）"; exit 1; }
+echo "  OK: 付费用户 role=owner"
+# (b) 行为：付费用户 cookie 调 cs/setup（owner/admin 闸）不得 403 NOT_ADMIN。
+#     机器未注册 → setupCSByMachine 抛 SETUP_FAILED（400），证明已过了管理员角色闸（member 会先被 403 NOT_ADMIN 挡掉）。
+SETUP_CODE=$(curl -s -o /tmp/cs-setup-gap4.json -w "%{http_code}" -b "$COOKIE_VALID" \
+  -X PUT "${API_BASE}/api/wechat/cs/setup/mc_gap4_unreg_$$" \
+  -H 'Content-Type: application/json' -d '{"persona":{}}')
+NOT_ADMIN=$(jq -r '.error.code // .error // ""' /tmp/cs-setup-gap4.json 2>/dev/null || echo "")
+[ "$SETUP_CODE" != "403" ] || { echo "  FAIL: 付费 owner 调 cs/setup 仍 403（${NOT_ADMIN}）——Gap4 角色闸没过"; cat /tmp/cs-setup-gap4.json; exit 1; }
+echo "  OK: 付费 owner 过了 cs/setup 管理员闸（HTTP=${SETUP_CODE}，非 403 NOT_ADMIN）"
+
 echo "==> [3/6] 用 cookie 调 GET /api/works → 应 200（不是 403 NO_TENANT）"
 HTTP_3=$(curl -s -o /tmp/works-valid.json -w "%{http_code}" -b "$COOKIE_VALID" "${API_BASE}/api/works")
 [ "$HTTP_3" = "200" ] || { echo "  FAIL: 期望 200 实际 ${HTTP_3} body=$(cat /tmp/works-valid.json)"; exit 1; }

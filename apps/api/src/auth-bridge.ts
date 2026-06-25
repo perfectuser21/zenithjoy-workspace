@@ -1,7 +1,8 @@
 /**
  * auth-bridge — Better-auth user → tenant_members 桥接
  *
- * PR-2 行为：注册带有效 license_key → 加入对应 tenant（role='member'）
+ * PR-2 行为：注册带有效 license_key → 加入对应 tenant（role='owner'，Gap4 修复：注册自己
+ *   租户的人即主人，须能配自己客服机；旧 'member' 过不了 cs/setup 的 owner/admin 闸）
  * PR-B 行为（2026-04-29 主理人决策"注册即试用"）：
  *   注册不带 / 带无效 license_key → 自动创建：
  *     1. free license（tier='free', max_machines=0, customer_id=userId, 10 年有效）
@@ -31,7 +32,12 @@ export interface BridgeArgs {
   email?: string | null;
   /** 注册请求 body 中的 license_key（可选） */
   licenseKey: string | undefined | null;
-  /** 角色（默认 member；free fallback 强制 owner） */
+  /**
+   * 角色（Gap4 修复：默认 owner；free fallback 也是 owner）。
+   * 带 license 注册自己租户的人就是这个租户的主人，必须给 owner——否则 cs/setup
+   * （配自己客服机）要 owner/admin，member 过不了 requireCsWriteAccess/requireCsAdmin。
+   * 仍保留参数：上游若显式传 admin/member（如未来邀请协作者入伙）则尊重该值。
+   */
   role?: 'owner' | 'admin' | 'member';
 }
 
@@ -51,7 +57,7 @@ export interface BridgeResult {
  *
  * 流程：
  *   1. 有 license_key → SELECT licenses；status='active' 且 tenant_id 非空 →
- *      INSERT tenant_members(role='member')（PR-2 paid 路径）
+ *      INSERT tenant_members(role='owner')（PR-2 paid 路径，Gap4：注册自己租户即 owner）
  *   2. 否则（缺 / 无效 / 孤儿）→ 走 free fallback 事务：
  *      BEGIN
  *      INSERT licenses (tier='free', max_machines=0, customer_id=userId,
@@ -63,7 +69,8 @@ export interface BridgeResult {
  *   3. 任何异常 → ROLLBACK + 记 console.error，返回 reason='DB_ERROR'
  */
 export async function bridgeNewUserToTenant(args: BridgeArgs): Promise<BridgeResult> {
-  const { userId, email, licenseKey, role = 'member' } = args;
+  // Gap4：默认 owner（带 license 注册自己租户的人即租户主人，须能配自己客服机）。
+  const { userId, email, licenseKey, role = 'owner' } = args;
 
   const trimmedKey = typeof licenseKey === 'string' ? licenseKey.trim() : '';
 
