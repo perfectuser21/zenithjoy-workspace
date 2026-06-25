@@ -78,6 +78,10 @@ describe('auth-bridge / bridgeNewUserToTenant — PR-2 paid path', () => {
     const insertParams = insertCall[1] as unknown[];
     expect(insertParams).toContain('auth-user-uuid-1');
     expect(insertParams).toContain('tenant-uuid-pr2');
+    // Gap4：带 license 注册自己租户的人 = 租户主人 → role 必须是 owner（否则配不了自己客服机：
+    //   cs/setup 要 owner/admin，member 过不了 requireCsWriteAccess/requireCsAdmin）。与 free 路径一致。
+    expect(insertParams).toContain('owner');
+    expect(insertParams).not.toContain('member');
     // Gap2：第 3 条 UPDATE licenses SET customer_id=userId WHERE license_key=...
     const updateCall = mockQuery.mock.calls[2];
     const updateSql = updateCall[0] as string;
@@ -88,6 +92,41 @@ describe('auth-bridge / bridgeNewUserToTenant — PR-2 paid path', () => {
     expect(updateParams).toContain('ZJ-VALID-001');
     // paid 路径不开事务
     expect(mockConnect).not.toHaveBeenCalled();
+  });
+
+  it('Gap4：不传 role 时付费路径默认 owner（调用方 auth.ts 未传 role，必须默认 owner 而非 member）', async () => {
+    mockQuery.mockResolvedValueOnce({
+      rows: [{ tenant_id: 'tenant-gap4', status: 'active' }],
+    });
+    mockQuery.mockResolvedValueOnce({ rowCount: 1 }); // tenant_members
+    mockQuery.mockResolvedValueOnce({ rowCount: 1 }); // customer_id 回填
+    // 模拟真实调用方 auth.ts:97 —— 只传 userId/email/licenseKey，不传 role
+    const result = await bridgeNewUserToTenant({
+      userId: 'auth-user-gap4',
+      email: 'gap4@test',
+      licenseKey: 'ZJ-VALID-004',
+    });
+    expect(result.linked).toBe(true);
+    expect(result.reason).toBe('PAID_TENANT_LINKED');
+    const insertParams = mockQuery.mock.calls[1][1] as unknown[];
+    expect(insertParams).toContain('owner');
+    expect(insertParams).not.toContain('member');
+  });
+
+  it('Gap4：显式传 role=admin 时尊重该 role（管理员也能配客服机；不强制覆盖成 owner）', async () => {
+    mockQuery.mockResolvedValueOnce({
+      rows: [{ tenant_id: 'tenant-gap4b', status: 'active' }],
+    });
+    mockQuery.mockResolvedValueOnce({ rowCount: 1 });
+    mockQuery.mockResolvedValueOnce({ rowCount: 1 });
+    const result = await bridgeNewUserToTenant({
+      userId: 'auth-user-gap4b',
+      licenseKey: 'ZJ-VALID-005',
+      role: 'admin',
+    });
+    expect(result.linked).toBe(true);
+    const insertParams = mockQuery.mock.calls[1][1] as unknown[];
+    expect(insertParams).toContain('admin');
   });
 
   it('Gap2：customer_id 回填 DB 异常时不翻车（member 已写成功仍 linked=true）', async () => {
