@@ -110,10 +110,13 @@ export const OPTIONAL_ENV: { name: string; reason: string }[] = [
   { name: 'SCHEDULER_TENANT_ID', reason: '调度器默认租户，缺则用默认/逐租户' },
   { name: 'N08_TIMEOUT_MS', reason: 'N08 任务超时毫秒，缺则用默认超时' },
 
-  // —— 数据库分量（DATABASE_URL 在 REQUIRED；这些是拆分式连接参数，部署二选一）——
+  // —— 数据库连接（DATABASE_URL 与拆分式 DATABASE_HOST+DATABASE_NAME 二选一，启动自检按组校验）——
+  // 注：db/connection.ts 实际用拆分式参数；DATABASE_URL 是另一种部署形态的连接串，二者满足其一即可。
+  // 启动自检（startup-check.ts REQUIRED_ENV_GROUPS）按"二选一组"校验，不再硬列 DATABASE_URL 进 REQUIRED。
+  { name: 'DATABASE_URL', reason: '数据库连接串（整串形态），与拆分式 DATABASE_HOST+DATABASE_NAME 二选一' },
   { name: 'DATABASE_HOST', reason: '数据库 host（拆分式连接），与 DATABASE_URL 二选一' },
   { name: 'DATABASE_PORT', reason: '数据库端口（拆分式连接），缺则用默认 5432' },
-  { name: 'DATABASE_NAME', reason: '数据库名（拆分式连接）' },
+  { name: 'DATABASE_NAME', reason: '数据库名（拆分式连接），与 DATABASE_URL 二选一' },
   { name: 'DATABASE_USER', reason: '数据库用户（拆分式连接）' },
   { name: 'DATABASE_PASSWORD', reason: '数据库密码（拆分式连接）' },
 
