@@ -17,6 +17,8 @@
     · PORT             = 5201（生产 5200）
     · DATABASE_NAME    = zenithjoy_test（生产 cecelia，物理隔离，部署验证绝不写生产库）
     · NODE_ENV         = staging
+    · BETTER_AUTH_URL / BETTER_AUTH_TRUSTED_ORIGINS = staging-autopilot.zenjoymedia.media
+      （生产是 autopilot.zenjoymedia.media；不收口则 staging 登录被判 invalid origin）
     · 从 releases/staging 软链跑（生产从 releases/current 跑）
     · 日志             = zenithjoy-api.staging.{log,error.log}
     · KeepAlive=true / RunAtLoad=true：常驻、崩溃自拉起、开机自启（与生产对称，供人工随时打开看）
@@ -48,6 +50,13 @@
 		<string>cecelia</string>
 		<key>NODE_ENV</key>
 		<string>staging</string>
+		<!-- better-auth 必须收口到 staging 域名，否则从 staging-autopilot.zenjoymedia.media 登录被判
+		     invalid origin（2026-06-25 真实事故）。deploy-lib.sh 的 staging_overrides 也会强制收口这两个 key，
+		     这里声明属 defense-in-depth + 自文档，供手动安装时不踩坑。 -->
+		<key>BETTER_AUTH_URL</key>
+		<string>https://staging-autopilot.zenjoymedia.media</string>
+		<key>BETTER_AUTH_TRUSTED_ORIGINS</key>
+		<string>https://staging-autopilot.zenjoymedia.media,http://localhost:5173</string>
 	</dict>
 	<key>KeepAlive</key>
 	<true/>
