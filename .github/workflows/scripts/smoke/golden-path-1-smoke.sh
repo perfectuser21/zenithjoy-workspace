@@ -365,22 +365,24 @@ if [ -f "$AGENT_DIST" ]; then
     " 2>/dev/null \
     || fail "Step 6.7 type=video 路由验证失败 (P0 bug 防回归 — WS2)" 6
 
+  # 6.8 type=article 路由：article 现在是受支持类型，有专属 dryrun 脚本（douyin-article 已落地）。
+  # 防回归断言改为「路由到自己的 article 脚本，绝不 fallback 成 image/video 脚本」——
+  # 守的还是原 P0 bug（类型路由串台），只是 article 已从"抛错"升级为"有专属脚本"。
   node -e "
     const { resolveDouyinScriptPath } = require('./services/agent/dist/handlers/douyin-publish.js');
-    try {
-      resolveDouyinScriptPath({type:'article'}, {});
-      console.error('FAIL: article 应抛错但 silent pass');
+    const p = resolveDouyinScriptPath({type:'article'}, {ZENITHJOY_AGENT_REAL_PUBLISH:'0'});
+    if (!/publish-douyin-article-dryrun\\.cjs\$/.test(p)) {
+      console.error('FAIL: article 应路由到专属 article-dryrun 脚本，实际:', p);
       process.exit(1);
-    } catch (e) {
-      if (!/no script for type article|unsupported type article/i.test(e.message)) {
-        console.error('FAIL: 错误信息不规范:', e.message);
-        process.exit(1);
-      }
-      console.log('OK: type=article 显式抛错（不 fallback image） →', e.message);
     }
+    if (/image|video/.test(require('path').basename(p))) {
+      console.error('FAIL: article 串台 fallback 到 image/video 脚本:', p);
+      process.exit(1);
+    }
+    console.log('OK: type=article → publish-douyin-article-dryrun.cjs（专属，不串台）');
   " 2>/dev/null \
-    || fail "Step 6.8 type=article 反向用例失败 (P0 bug 防回归)" 6
-  ok "Step 6 ✅ dispatch chain 全通 + video 路由通 + article 反向不 fallback"
+    || fail "Step 6.8 type=article 路由验证失败 (P0 bug 防回归：类型不串台)" 6
+  ok "Step 6 ✅ dispatch chain 全通 + video/article 路由各归各位（不串台）"
 else
   ok "Step 6 ✅ dispatch chain 全通（POST /api/works/:id/publish + task-ack + publish_status=success）"
 fi

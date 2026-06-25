@@ -305,34 +305,30 @@ PY
 }
 
 # ════════════════════════════════════════════════════════════════════════════
-# ensure_staging_plist —— 从生产 plist 程序化派生常驻 staging plist（自愈 provisioning）。
+# ensure_staging_plist —— 确保部署机有常驻 staging plist（自愈 provisioning）。
 #
-# 治根（2026-06-25 真实事故）：部署机只有生产 com.zenithjoy.api.plist，**没有 staging plist**。
-# staging_deploy_slot 用 `launchctl start com.zenithjoy.api.staging` 起 slot，但 launchctl start
-# 对不存在的 label 是**静默空操作** → :5201 永不 listen → 20s 健康超时 → 部署判失败。
-# 蓝绿从启用起从没成功部署过一次的根因就是它。
+# 治根（2026-06-25 真实事故）：部署机只有生产 com.zenithjoy.api.plist，**staging label 没注册**
+# （CI 干净环境无此 label）。staging_deploy_slot 用 `launchctl start com.zenithjoy.api.staging`
+# 起 slot，但 launchctl start 对没注册的 label 是**静默空操作**（那行还带 ||true）→ :5201 永不
+# listen → 20s 超时 → 部署判失败。蓝绿从启用起从没成功一次的根因就是它。
 #
-# 自愈：任何机器只要有生产 plist，部署时就能程序化派生出 staging plist（幂等，每轮重生）：
-#   · Label → com.zenithjoy.api.staging
-#   · env.PORT → 5201、env.ZENITHJOY_API_URL → http://localhost:5201
-#   · env.DATABASE_NAME → zenithjoy_test、env.NODE_ENV → staging（其余 DB_HOST/PORT/USER + 密钥整段继承）
-#   · ProgramArguments[1] / WorkingDirectory → 常驻 staging release（releases/staging/dist/index.js）
-#   · StandardOut/ErrorPath → zenithjoy-api.staging.log|.staging.error.log
-#   · KeepAlive + RunAtLoad → true（常驻）
-# 用 python plistlib 程序化转换：密钥只在机器上、绝不进 repo、绝不 echo 到日志。
-# 生产 plist 不存在 → 返非0（绝不凭空造无密钥的残废 plist）。
+# 优先级（lead 2026-06-25 精炼）：
+#   ① 仓库有 committed 模板 infrastructure/launchagents/com.zenithjoy.api.staging.plist →
+#      以它为基（已含 Label/PORT/DB/ProgramArguments→releases/staging/dist/index.js/日志，不含密钥），
+#      **合并注入**生产 plist 的密钥 env（登录/LLM 等要用）。优先既有模板、避免维护两套派生逻辑。
+#      模板已声明的 PORT/DATABASE_*/NODE_ENV 以模板为准，再用 staging_overrides 收口，
+#      绝不让生产值（:5200/cecelia/production）漏进 staging。
+#   ② 仓库无模板（异常退路）→ 从生产 plist 程序化派生（覆写 PORT/DB/Label/Program/日志）。
+# 两条都用 python plistlib：密钥只在机器上、绝不进 repo、绝不 echo。生产 plist 不存在 → 返非0。幂等。
 #
 # 约定环境变量（调用方/单测注入）：
-#   ZJ_PROD_PLIST     生产 plist 路径（模板，只读）
-#   ZJ_STAGING_PLIST  要写出的 staging plist 路径（默认 ~/Library/LaunchAgents/com.zenithjoy.api.staging.plist）
-#   ZJ_STAGING_PORT   staging 端口（5201）
-#   ZJ_STAGING_DB     staging 库名（zenithjoy_test）
-#   ZJ_STAGING_LABEL  staging launchd label（com.zenithjoy.api.staging）
-#   ZJ_RELEASES_DIR   release 隔离根（staging 软链 releases/staging 在此下）
-#   ZJ_NODE           node 可执行路径
-#   ZJ_STAGING_LOG_DIR 日志目录（默认 ~/Library/Logs）
+#   ZJ_PROD_PLIST       生产 plist 路径（密钥来源，只读）
+#   ZJ_STAGING_TEMPLATE committed 模板路径（默认 $ZJ_REPO/infrastructure/launchagents/com.zenithjoy.api.staging.plist）
+#   ZJ_STAGING_PLIST    写出的 staging plist 路径（默认 ~/Library/LaunchAgents/com.zenithjoy.api.staging.plist）
+#   ZJ_STAGING_PORT/ZJ_STAGING_DB/ZJ_STAGING_LABEL/ZJ_RELEASES_DIR/ZJ_NODE/ZJ_STAGING_LOG_DIR  覆写/派生值
 ensure_staging_plist() {
   local prod_plist="${ZJ_PROD_PLIST:-}"
+  local template="${ZJ_STAGING_TEMPLATE:-${ZJ_REPO:-}/infrastructure/launchagents/com.zenithjoy.api.staging.plist}"
   local out_plist="${ZJ_STAGING_PLIST:-$HOME/Library/LaunchAgents/com.zenithjoy.api.staging.plist}"
   local port="${ZJ_STAGING_PORT:-5201}"
   local db="${ZJ_STAGING_DB:-zenithjoy_test}"
@@ -342,54 +338,82 @@ ensure_staging_plist() {
   local logdir="${ZJ_STAGING_LOG_DIR:-$HOME/Library/Logs}"
 
   if [ ! -f "$prod_plist" ]; then
-    echo "❌ ensure_staging_plist：生产 plist 不存在（${prod_plist}），拒绝凭空造 staging plist" >&2
+    echo "❌ ensure_staging_plist：生产 plist 不存在（${prod_plist}），无密钥来源，拒绝造残废 plist" >&2
     return 1
   fi
 
   mkdir -p "$(dirname "$out_plist")" "$logdir" 2>/dev/null || true
 
-  PROD_PLIST="$prod_plist" OUT_PLIST="$out_plist" STAGING_PORT="$port" \
-  STAGING_DB="$db" STAGING_LABEL="$label" RELEASES_DIR="$releases" \
+  PROD_PLIST="$prod_plist" TEMPLATE="$template" OUT_PLIST="$out_plist" \
+  STAGING_PORT="$port" STAGING_DB="$db" STAGING_LABEL="$label" RELEASES_DIR="$releases" \
   NODE_BIN="$node" LOG_DIR="$logdir" \
   /usr/bin/python3 - <<'PY'
 import plistlib, os, sys
-prod   = os.environ["PROD_PLIST"]
-out    = os.environ["OUT_PLIST"]
-port   = os.environ["STAGING_PORT"]
-db     = os.environ["STAGING_DB"]
-label  = os.environ["STAGING_LABEL"]
-rels   = os.environ["RELEASES_DIR"]
-node   = os.environ["NODE_BIN"]
-logdir = os.environ["LOG_DIR"]
+prod     = os.environ["PROD_PLIST"]
+template = os.environ["TEMPLATE"]
+out      = os.environ["OUT_PLIST"]
+port     = os.environ["STAGING_PORT"]
+db       = os.environ["STAGING_DB"]
+label    = os.environ["STAGING_LABEL"]
+rels     = os.environ["RELEASES_DIR"]
+node     = os.environ["NODE_BIN"]
+logdir   = os.environ["LOG_DIR"]
 
 with open(prod, "rb") as f:
-    data = plistlib.load(f)
+    prod_data = plistlib.load(f)
+prod_env = dict(prod_data.get("EnvironmentVariables", {}))
 
-env = dict(data.get("EnvironmentVariables", {}))
-# staging 差异化覆写（其余 DB_HOST/PORT/USER + 全部密钥整段继承）
-env["PORT"] = str(port)
-env["ZENITHJOY_API_URL"] = f"http://localhost:{port}"
-env["DATABASE_NAME"] = db
-env["NODE_ENV"] = "staging"
-data["EnvironmentVariables"] = env
+# staging 自身权威 env（绝不被生产值覆盖回 :5200/cecelia/production）。
+staging_overrides = {
+    "PORT": str(port),
+    "ZENITHJOY_API_URL": f"http://localhost:{port}",
+    "DATABASE_NAME": db,
+    "NODE_ENV": "staging",
+}
 
-data["Label"] = label
-# 常驻 staging 从 releases/staging 软链跑（release 根布局：dist/index.js）
-data["ProgramArguments"] = [node, f"{rels}/staging/dist/index.js"]
-data["WorkingDirectory"] = f"{rels}/staging"
-data["StandardOutPath"]  = f"{logdir}/zenithjoy-api.staging.log"
-data["StandardErrorPath"] = f"{logdir}/zenithjoy-api.staging.error.log"
-data["KeepAlive"] = True
-data["RunAtLoad"] = True
+if os.path.isfile(template):
+    # ① 模板优先：以 committed 模板为基（结构 + DB env），合并注入生产密钥。
+    with open(template, "rb") as f:
+        data = plistlib.load(f)
+    tmpl_env = dict(data.get("EnvironmentVariables", {}))
+    merged = {}
+    merged.update(prod_env)           # 生产密钥 + 其余 env 打底
+    merged.update(tmpl_env)           # 模板显式声明的（PORT/DATABASE_*/NODE_ENV 等）盖回 staging 安全值
+    merged.update(staging_overrides)  # 强制收口，杜绝任何生产值漏进
+    data["EnvironmentVariables"] = merged
+    # 模板已带 Label/ProgramArguments/WorkingDirectory/日志/KeepAlive/RunAtLoad，照用；缺失才兜底。
+    data.setdefault("Label", label)
+    data.setdefault("ProgramArguments", [node, f"{rels}/staging/dist/index.js"])
+    data.setdefault("WorkingDirectory", f"{rels}/staging")
+    data.setdefault("StandardOutPath", f"{logdir}/zenithjoy-api.staging.log")
+    data.setdefault("StandardErrorPath", f"{logdir}/zenithjoy-api.staging.error.log")
+    data.setdefault("KeepAlive", True)
+    data.setdefault("RunAtLoad", True)
+    src = "committed 模板 + 生产密钥注入"
+else:
+    # ② 无模板（异常退路）：从生产 plist 派生。
+    data = dict(prod_data)
+    env = dict(prod_env)
+    env.update(staging_overrides)
+    data["EnvironmentVariables"] = env
+    data["Label"] = label
+    data["ProgramArguments"] = [node, f"{rels}/staging/dist/index.js"]
+    data["WorkingDirectory"] = f"{rels}/staging"
+    data["StandardOutPath"]  = f"{logdir}/zenithjoy-api.staging.log"
+    data["StandardErrorPath"] = f"{logdir}/zenithjoy-api.staging.error.log"
+    data["KeepAlive"] = True
+    data["RunAtLoad"] = True
+    src = "生产 plist 派生（仓库无模板）"
 
 with open(out, "wb") as f:
     plistlib.dump(data, f)
 
 # 不打印任何密钥值，只确认结构
-sys.stderr.write(f"✅ 已派生 staging plist: {out} (Label={label} PORT={port} DB={db} env_keys={len(env)})\n")
+n = len(data.get("EnvironmentVariables", {}))
+sys.stderr.write(f"✅ staging plist 就绪（{src}）: {out} (Label={data.get('Label')} PORT={port} DB={db} env_keys={n})\n")
 PY
   local rc=$?
-  [ "$rc" -eq 0 ] || { echo "❌ ensure_staging_plist：派生失败（rc=$rc）" >&2; return 1; }
+  [ "$rc" -eq 0 ] || { echo "❌ ensure_staging_plist：写出失败（rc=$rc）" >&2; return 1; }
   return 0
 }
 
@@ -477,24 +501,31 @@ staging_deploy_slot() {
   fi
   echo "✅ releases/staging → ${sha}"
 
-  # 自愈 provisioning：确保常驻 staging plist 存在（从生产 plist 程序化派生，幂等每轮重生）。
-  # 治根：部署机只有生产 plist，launchctl start 不存在的 staging label 是静默空操作 → :5201 永不起。
+  # 自愈 provisioning：确保部署机有常驻 staging plist（优先 committed 模板 + 注入生产密钥，
+  # 无模板才从生产 plist 派生；幂等每轮重生）。治根：部署机只有生产 plist、staging label 没注册，
+  # launchctl start 不存在的 label 是静默空操作（那行还带 ||true）→ :5201 永不起。
   local staging_label="${ZJ_STAGING_LABEL:-com.zenithjoy.api.staging}"
   local staging_plist="${ZJ_STAGING_PLIST:-$HOME/Library/LaunchAgents/${staging_label}.plist}"
   export ZJ_PROD_PLIST ZJ_STAGING_PLIST="${staging_plist}" ZJ_STAGING_PORT ZJ_STAGING_DB \
-         ZJ_STAGING_LABEL="${staging_label}" ZJ_RELEASES_DIR ZJ_NODE
+         ZJ_STAGING_LABEL="${staging_label}" ZJ_RELEASES_DIR ZJ_NODE ZJ_REPO
   if ! ensure_staging_plist; then
-    echo "❌ 派生/确保常驻 staging plist 失败（生产 plist 缺失？）"; return 1
+    echo "❌ 确保常驻 staging plist 失败（生产 plist 缺失？）"; return 1
   fi
-  # 重新加载 staging launchd（plist 可能刚新建/变更，需 unload→load 让 launchd 认到新定义）
-  launchctl unload "${staging_plist}" 2>/dev/null || true
-  launchctl load "${staging_plist}" 2>/dev/null || true
 
-  # 重启常驻 staging launchd（先杀占端口残留，再 kickstart）
+  # 注册 + 重启 staging launchd。先杀占端口残留；用 bootout/bootstrap（新 launchctl 语法，
+  # load/unload 已 deprecated）把 plist 注册进 GUI domain，再用 kickstart -k 强制（重）启动——
+  # -k 对已存在的服务强制重启，比 launchctl start 可靠（start 对没注册的 label 静默空操作正是病根）。
   kill_port "${ZJ_STAGING_PORT}"
-  launchctl stop "${staging_label}" 2>/dev/null || true
-  sleep 1
-  launchctl start "${staging_label}" 2>/dev/null || true
+  local gui_domain; gui_domain="gui/$(id -u)"
+  local svc_target="${gui_domain}/${staging_label}"
+  launchctl bootout "${svc_target}" 2>/dev/null || true   # 幂等：没注册也无妨
+  if ! launchctl bootstrap "${gui_domain}" "${staging_plist}" 2>/dev/null; then
+    echo "ℹ️  bootstrap 失败/不支持，回退 launchctl load 兜底"
+    launchctl unload "${staging_plist}" 2>/dev/null || true
+    launchctl load "${staging_plist}" 2>/dev/null || true
+  fi
+  launchctl kickstart -k "${svc_target}" 2>/dev/null \
+    || launchctl start "${staging_label}" 2>/dev/null || true
 
   # 等 staging health
   local up=0
