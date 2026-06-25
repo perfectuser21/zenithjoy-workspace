@@ -50,6 +50,12 @@ export default defineConfig({
         ]
       },
       workbox: {
+        // 部署即更新（2026-06-25）：新 SW 安装好立刻接管 + 抢控所有页面 + 清旧版缓存，
+        // 避免运营被 service worker 缓存挡着看不到新前端（registerType:'autoUpdate' 配合下，
+        // 用户刷新即拿到新版，无需关掉所有标签页等待）。
+        skipWaiting: true,
+        clientsClaim: true,
+        cleanupOutdatedCaches: true,
         navigateFallbackDenylist: [/^\/api\//],
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
         runtimeCaching: [

@@ -211,6 +211,15 @@ export default function CsOneClickSetupPage() {
                         待配置
                       </span>
                     )}
+                    {/* 客服人设名（小苏小助手等）—— per-operator 重做：人设名归在「我的客服机」卡，不在客户列表 */}
+                    {m.self_name && (
+                      <span
+                        data-testid="cs-machine-persona"
+                        className="text-xs px-1.5 py-0.5 rounded bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300"
+                      >
+                        {m.self_name}{m.online ? ' 在线' : ''}
+                      </span>
+                    )}
                   </div>
                   {/* 微信健康：好了显绿，坏了显精确原因（整合诊断，一处看到） */}
                   {m.online && (

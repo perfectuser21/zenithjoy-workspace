@@ -8,6 +8,10 @@
  * 模式 B（final-e2e windows_cloud 干净 VM，无真后端）：page.route stub 所有 /api/crm + my-role，
  * **只验 UI 渲染/交互/文案**，**不验** cookie 接缝（真目标验证在 crm-cookie-seam.spec.ts）。
  *
+ * **per-operator 重做（2026-06-25 契约）**：运营登录即看自己客户。
+ *  - GET /customers 走普通 session fetch，**不带 X-User-Email 超管头**、**不带 cs_wechat_id**（后端按租户 scope）。
+ *  - **没有「选客服机」下拉**；单微信直接显示。立即扫好友用后端回的 cs_wechat_id。
+ *
  * 运行：npx playwright test e2e/crm-customer-list.spec.ts（cwd=apps/dashboard，由 e2e-verify.ps1 dispatch）
  */
 import { test, expect, type Page } from '@playwright/test';
@@ -47,22 +51,12 @@ const PROFILE = {
   ],
 };
 
-// 客服机下拉数据源（整合 2026-06-25）：默认选第一台已配机器，第二台未配应被过滤
-const MACHINES = [
-  { machine_id: 'm-1', hostname: 'PC-A', wechat_id: 'wx_cs_A', self_name: '客服A', configured: true, online: true },
-  { machine_id: 'm-2', hostname: 'PC-NEW', configured: false, online: false },
-];
-
 async function stubAuth(page: Page) {
   await page.route('**/api/auth/**', (route) =>
     route.fulfill({ status: 401, contentType: 'application/json', body: '{}' }),
   );
   await page.route('**/api/wechat/cs/my-role', (route) =>
     route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ role: 'admin', can_config: true }) }),
-  );
-  // 客服机下拉（整合）：CustomerListPage 顶部下拉数据源
-  await page.route('**/api/wechat/cs/machines', (route) =>
-    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ machines: MACHINES }) }),
   );
 }
 
@@ -179,13 +173,19 @@ test('旧顶层 /customers 重定向到板块内 /wechat/crm', async ({ page }) 
   await expect(page.getByTestId('crm-customer-row').first()).toBeVisible();
 });
 
-// 整合（2026-06-25）：客服机下拉默认选第一台 + 「立即扫好友」按钮调 trigger 端点并回显
-test('客服机下拉默认第一台 + 立即扫好友通知客服机', async ({ page }) => {
+// per-operator（2026-06-25 契约）：无「选客服机」下拉 + /customers 不带超管头 + 立即扫好友用后端回的 cs_wechat_id
+test('per-operator — 无选客服机下拉，/customers 不带超管头，立即扫好友通知客服机', async ({ page }) => {
   await stubAuth(page);
 
-  await page.route('**/api/crm/customers**', (route) =>
-    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ customers: ROWS, total: 2, cs_wechat_id: 'wx_cs_A' }) }),
-  );
+  // 抓 /api/crm/customers 请求的 header/url，断言无 X-User-Email、无 cs_wechat_id
+  let customersHeaders: Record<string, string> = {};
+  let customersUrl = '';
+  await page.route('**/api/crm/customers**', (route) => {
+    const req = route.request();
+    customersHeaders = req.headers();
+    customersUrl = req.url();
+    return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ customers: ROWS, total: 2, cs_wechat_id: 'wx_cs_A' }) });
+  });
   await page.route('**/api/crm/onboarding/**', (route) =>
     route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ onboarding: ONBOARDING }) }),
   );
@@ -199,14 +199,14 @@ test('客服机下拉默认第一台 + 立即扫好友通知客服机', async ({
   await page.goto(`${BASE_URL}/wechat/crm`);
   await page.waitForLoadState('networkidle');
 
-  // 下拉默认选中第一台已配机器（wx_cs_A），未配的 m-2 被过滤（只 1 个选项）
-  const select = page.getByTestId('crm-cs-machine-select');
-  await expect(select).toBeVisible();
-  await expect(select).toHaveValue('wx_cs_A');
-  await expect(select.locator('option')).toHaveCount(1);
-  await page.screenshot({ path: path.join(SHOTS, '06-cs-machine-select.png'), fullPage: true });
+  // 1. 没有「选客服机」下拉
+  await expect(page.getByTestId('crm-cs-machine-select')).toHaveCount(0);
+  // 2. /customers 请求不带超管头（X-User-Email）、不带 cs_wechat_id（后端按租户 scope）
+  expect(customersHeaders['x-user-email']).toBeUndefined();
+  expect(customersUrl).not.toContain('cs_wechat_id');
+  await page.screenshot({ path: path.join(SHOTS, '06-per-operator.png'), fullPage: true });
 
-  // 点「立即扫好友」→ 调 trigger 带 {cs_wechat_id}，回显「已通知客服机」
+  // 3. 点「立即扫好友」→ 调 trigger 带后端回的 {cs_wechat_id}，回显「已通知客服机」
   await page.getByTestId('crm-force-scan-btn').click();
   await expect(page.getByTestId('crm-toast')).toContainText('已通知客服机', { timeout: 10000 });
   expect(triggerBody).toEqual({ cs_wechat_id: 'wx_cs_A' });
