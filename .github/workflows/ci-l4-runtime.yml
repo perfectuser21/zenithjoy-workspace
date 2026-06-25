@@ -133,6 +133,8 @@ jobs:
           python -m pytest tests/test_scan_recent_contacts.py \
                            tests/test_friend_scan_ingest.py \
                            tests/test_friend_scan_pending.py \
+                           tests/test_friend_scan_scroll.py \
+                           tests/test_contact_profile_parse.py \
                            tests/test_cs_config_gate.py \
                            tests/test_scan_unread.py -q
       - name: Check build-modules/line04/wechat-rpa in sync with source
@@ -167,6 +169,11 @@ jobs:
         run: |
           chmod +x .github/workflows/scripts/smoke/line04-ship-version-sync-smoke.sh
           bash .github/workflows/scripts/smoke/line04-ship-version-sync-smoke.sh
+
+      - name: Smoke — line04 1.0.64 滚动扫全 + 微信号/加微信时间（Track A）
+        run: |
+          chmod +x .github/workflows/scripts/smoke/line04-friend-scan-scroll-smoke.sh
+          bash .github/workflows/scripts/smoke/line04-friend-scan-scroll-smoke.sh
 
       - name: Smoke — 客户机 Agent 自愈四件（#822 保活/统一身份/统一真发/自检上报）
         run: |
