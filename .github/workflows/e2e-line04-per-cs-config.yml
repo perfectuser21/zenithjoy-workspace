@@ -50,15 +50,6 @@ jobs:
       - name: Backend E2E（curl 中台 API + psql 验 DB）
         run: bash sprints/06222337-line04-per-cs-config/e2e-backend-verify.sh
 
-  dashboard-ui:                            # job2：前台每客服设置区 Playwright UI（windows，无 DB）
-    name: job2 — 前台每客服设置区 Playwright UI（windows）
-    runs-on: windows-latest
-    timeout-minutes: 25
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-      - name: Dashboard UI E2E（Playwright，page.route 拦截后端）
-        shell: pwsh
-        run: ./sprints/06222337-line04-per-cs-config/e2e-ui-verify.ps1
+  # job2（前台每客服设置区 Playwright UI）已删：整合（2026-06-25）删了 PerCsConfigPage
+  # 与 e2e/per-cs-config.spec.ts（每客服配置并进「我的客服机」CsOneClickSetupPage）。
+  # 前台配置 UI 回归改由 e2e/cs-oneclick-setup.spec.ts 覆盖。后端（backend-isolation）仍保留。

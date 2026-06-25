@@ -1,7 +1,10 @@
 /**
- * CsOneClickSetupPage（我的客服机 / 一键配置）E2E — 设白名单点「设置完毕」不白屏
+ * CsOneClickSetupPage（我的客服机 / 一键配置）E2E — 配置点「设置完毕」不白屏
  *
- * 复现 P0 bug（2026-06-23 老板实测）：在「我的客服机」选机器、填白名单、点【设置完毕】，
+ * 整合（2026-06-25）：白名单/关键人字段已删（接管开关搬到「客户好友表」黑名单语义），
+ * 这里只填 人设名/营业时间/每日上限/真发开关。下面回归测试验证 403 错误对象不白屏的 P0 bug。
+ *
+ * 复现 P0 bug（2026-06-23 老板实测）：在「我的客服机」选机器、填配置、点【设置完毕】，
  * 后端写接口安全闸（#838）对非管理员/跨租户返回 403，响应体 `error` 是对象
  * `{code, message}`。旧前端把 `data.error`（对象）直接塞进 error state 再渲染 `{error}`，
  * React 抛「Objects are not valid as a React child」→ 无 ErrorBoundary → 整页白屏。
@@ -21,7 +24,6 @@ const MOCK_MACHINES = {
       configured: true,
       wechat_id: 'cs-mid',
       self_name: '小助手',
-      whitelist: ['默忆'],
       auto_agent_enabled: true,
       online: true,
       wechat_ok: true,
@@ -59,10 +61,10 @@ test('设白名单点「设置完毕」遇 403（error 是对象）— 页面不
 
   await page.goto(`${BASE_URL}/wechat/setup`)
 
-  // 选机器（已配那台，预填白名单）
+  // 选机器（已配那台，预填人设名）
   await page.getByTestId('machine-radio').first().check()
-  // 改白名单后点设置完毕
-  await page.getByTestId('setup-whitelist').fill('默忆, 客户A')
+  // 改人设名后点设置完毕
+  await page.getByTestId('setup-self-name').fill('小助手2')
   await page.getByTestId('setup-submit').click()
 
   // —— 关键断言：页面没白屏 —— 表单标题还在，且显示了可读的错误提示而非整树崩溃 ——
@@ -84,7 +86,6 @@ test('设置成功（200）— 显示成功提示', async ({ page }) => {
   await page.goto(`${BASE_URL}/wechat/setup`)
   await page.getByTestId('machine-radio').first().check()
   await page.getByTestId('setup-self-name').fill('小助手')
-  await page.getByTestId('setup-whitelist').fill('默忆')
   await page.getByTestId('setup-submit').click()
 
   await expect(page.getByText(/设置成功/)).toBeVisible()

@@ -50,12 +50,16 @@ describe('config/navigation — 短侧栏 + 区下钻', () => {
     expect(typeof autopilotPageComponents['AreaHubPage']).toBe('function');
   });
 
-  it('子页收进 additionalRoutes（下钻可达）：每客服设置 / 微信客服配置 / License / 客户管理', () => {
+  it('子页收进 additionalRoutes（下钻可达）：话术知识库 / License / 客户管理', () => {
     const paths = routePaths();
-    expect(paths).toContain('/wechat/per-cs-config');
     expect(paths).toContain('/wechat/cs-config');
     expect(paths).toContain('/license');
     expect(paths).toContain('/admin/customers');
+  });
+
+  it('孤儿页 /wechat/per-cs-config 路由已删（整合：每客服设置并进「我的客服机」）', () => {
+    const paths = routePaths();
+    expect(paths).not.toContain('/wechat/per-cs-config');
   });
 
   it('旧扁平菜单项不再直接挂侧栏（子页/旧聚合页都不在侧栏）', () => {
@@ -96,6 +100,47 @@ describe('AreaHubPage — 区配置（每区总览卡片下钻）', () => {
     for (const key of ['publish', 'acquisition', 'wechat', 'video', 'remake', 'settings']) {
       expect(AREA_HUBS[key]?.cards.length ?? 0).toBeGreaterThanOrEqual(1);
     }
+  });
+});
+
+// 整合（2026-06-25）：私域客服区收敛成 5 卡，工作汇总+日报合一，去掉设置区重复下载卡
+describe('AreaHubPage — 私域客服区整合成 5 卡（2026-06-25）', () => {
+  it('私域客服区正好 5 卡：客户好友表 / 我的客服机 / 客服工作汇总 / 话术知识库 / 下载客户机', () => {
+    const wechat = AREA_HUBS['wechat'];
+    expect(wechat.cards.length).toBe(5);
+    const tos = wechat.cards.map((c) => c.to);
+    expect(tos).toContain('/wechat/crm'); // 客户好友表
+    expect(tos).toContain('/wechat/setup'); // 我的客服机
+    expect(tos).toContain('/wechat/cs-stats'); // 客服工作汇总（含历史日报 Tab）
+    expect(tos).toContain('/wechat/cs-config'); // 话术知识库
+    expect(tos).toContain('/dashboard/agent'); // 下载客户机
+  });
+
+  it('「客服日报」独立卡已去掉（并进客服工作汇总的历史 Tab），旧路由重定向', () => {
+    const wechat = AREA_HUBS['wechat'];
+    expect(wechat.cards.some((c) => c.to === '/wechat/cs-daily-report')).toBe(false);
+    const legacy = additionalRoutes.find((r) => r.path === '/wechat/cs-daily-report');
+    expect(legacy?.redirect).toBe('/wechat/cs-stats');
+    expect(legacy?.component).toBeUndefined();
+  });
+
+  it('设置区不再有重复的「下载 Agent」卡（下载入口只在私域客服区保留一处）', () => {
+    const settings = AREA_HUBS['settings'];
+    expect(settings.cards.some((c) => c.to === '/dashboard/agent')).toBe(false);
+  });
+});
+
+// 整合：孤儿页路由 + lazy 映射全删
+describe('config/navigation — 孤儿页已删（2026-06-25 整合）', () => {
+  it('PerCsConfigPage / CrmConfigPage / AgentMachines / CsDailyReportPage 的 lazy 映射都已删', () => {
+    expect(autopilotPageComponents['PerCsConfigPage']).toBeUndefined();
+    expect(autopilotPageComponents['CrmConfigPage']).toBeUndefined();
+    expect(autopilotPageComponents['AgentMachines']).toBeUndefined();
+    expect(autopilotPageComponents['CsDailyReportPage']).toBeUndefined();
+  });
+
+  it('/wechat/per-cs-config 路由已从 additionalRoutes 删除', () => {
+    expect(additionalRoutes.some((r) => r.path === '/wechat/per-cs-config')).toBe(false);
   });
 });
 

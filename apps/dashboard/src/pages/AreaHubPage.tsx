@@ -53,14 +53,13 @@ export const AREA_HUBS: Record<string, AreaHub> = {
   },
   wechat: {
     title: '私域客服',
-    subtitle: '微信号 AI 接管：每台客服机一处看健康、一处配人设/白名单/开关。',
+    subtitle: '微信号 AI 接管：客户好友表 + 客服机健康/配置 + 工作汇总 + 话术知识库。',
     cards: [
       { label: '客户好友表', desc: 'agent 自动扫来的近期好友：默认全接管，勾排除=加黑名单；点客户看画像/状态/聊天记录', to: '/wechat/crm', Icon: Users, color: 'text-rose-500' },
-      { label: '我的客服机', desc: '所有机器一处看（在线/微信状态）+ 点一台配人设/白名单/开关', to: '/wechat/setup', Icon: Sparkles, color: 'text-sky-500' },
-      { label: '客服工作汇总', desc: '每台客服机今天/昨天 接收/回复/接待/工作时长 + 真发/演练', to: '/wechat/cs-stats', Icon: Activity, color: 'text-indigo-500' },
-      { label: '客服日报', desc: '回看任意历史日期每台客服机的工作日报（4 个数 + 小结）', to: '/wechat/cs-daily-report', Icon: Database, color: 'text-cyan-500' },
-      { label: '下载客户机', desc: '在客服 PC 上装 Agent，装好自动报到这里', to: '/dashboard/agent', Icon: Download, color: 'text-emerald-500' },
+      { label: '我的客服机', desc: '所有机器一处看（在线/微信监听健康）+ 点一台配人设/营业时间/每日上限/真发开关', to: '/wechat/setup', Icon: Sparkles, color: 'text-sky-500' },
+      { label: '客服工作汇总', desc: '每台客服机 今天/昨天/历史任意一天 接收/回复/接待/工作时长 + 真发/演练', to: '/wechat/cs-stats', Icon: Activity, color: 'text-indigo-500' },
       { label: '话术知识库', desc: '公司/产品/人群/常见问答（AI 回复的素材，全客服共用）', to: '/wechat/cs-config', Icon: MessageCircle, color: 'text-green-500' },
+      { label: '下载客户机', desc: '在客服 PC 上装 Agent，装好自动报到这里', to: '/dashboard/agent', Icon: Download, color: 'text-emerald-500' },
     ],
   },
   video: {
@@ -80,9 +79,8 @@ export const AREA_HUBS: Record<string, AreaHub> = {
   },
   settings: {
     title: '设置',
-    subtitle: '账号级设置：装客户机、License。',
+    subtitle: '账号级设置：License 与授权额度。',
     cards: [
-      { label: '下载 Agent', desc: '在客户机上装 Agent，连中台', to: '/dashboard/agent', Icon: Download, color: 'text-sky-500' },
       { label: 'License', desc: '查看你的授权与额度', to: '/license', Icon: KeyRound, color: 'text-amber-500' },
     ],
   },
