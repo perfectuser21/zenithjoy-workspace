@@ -45,6 +45,53 @@ def test_should_reply_whitelist():
     assert gate.should_reply(None, "默忆") is False
 
 
+# ─── CRM 重做：黑名单主模型（默认全接管 + 黑名单排除）─────────────────────────────
+
+
+def test_should_reply_blacklist_mode_excludes_only_blacklisted():
+    """blacklist 模式（takeover_mode='blacklist'）：sender ∉ blacklist → 回；∈ → 不回。
+
+    黑名单主模型核心断言：默认全接管，只有被显式拉黑的人不回。
+    """
+    cfg = {"takeover_mode": "blacklist", "blacklist": ["我的小号", "测试号"]}
+    assert gate.should_reply(cfg, "真实客户") is True   # 不在黑名单 → 回
+    assert gate.should_reply(cfg, "路人甲") is True      # 不在黑名单 → 回（默认全接管）
+    assert gate.should_reply(cfg, "我的小号") is False   # 在黑名单 → 不回
+    assert gate.should_reply(cfg, "测试号") is False     # 在黑名单 → 不回
+
+
+def test_should_reply_blacklist_mode_empty_blacklist_replies_all():
+    """blacklist 模式 + 空黑名单 → 全员都回（默认全接管，黑名单为空时谁都不排除）。"""
+    cfg = {"takeover_mode": "blacklist", "blacklist": []}
+    assert gate.should_reply(cfg, "任何人") is True
+    # 黑名单字段缺失也按空处理 → 全员回
+    assert gate.should_reply({"takeover_mode": "blacklist"}, "任何人") is True
+
+
+def test_should_reply_whitelist_mode_falls_back_to_old_logic():
+    """takeover_mode='whitelist' → 回退旧逻辑：sender ∈ whitelist 才回（存量客服机零误发）。"""
+    cfg = {"takeover_mode": "whitelist", "whitelist": ["客户甲", "默忆"]}
+    assert gate.should_reply(cfg, "默忆") is True
+    assert gate.should_reply(cfg, "路人") is False
+    assert gate.should_reply({"takeover_mode": "whitelist", "whitelist": []}, "默忆") is False
+
+
+def test_should_reply_default_mode_is_whitelist_for_legacy_compat():
+    """无 takeover_mode 字段（存量配置）→ 默认按 whitelist 旧逻辑，绝不突变成全接管误发。
+
+    决策 1（lead 拍板）：存量客服机保持原行为；只有显式标 blacklist 模式才全接管。
+    """
+    cfg = {"whitelist": ["客户甲"]}  # 老配置无 takeover_mode
+    assert gate.should_reply(cfg, "客户甲") is True
+    assert gate.should_reply(cfg, "路人") is False     # 不在白名单 → 不回（不误发）
+
+
+def test_should_reply_blacklist_field_not_list_treated_as_empty():
+    """blacklist 模式但 blacklist 不是 list（脏数据）→ 当空黑名单处理（全员回，但不崩）。"""
+    cfg = {"takeover_mode": "blacklist", "blacklist": "脏数据"}
+    assert gate.should_reply(cfg, "任何人") is True
+
+
 def test_fetch_cs_config_200_returns_config_pull_ok(monkeypatch):
     captured = {}
 
