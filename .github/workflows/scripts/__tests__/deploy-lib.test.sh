@@ -24,6 +24,8 @@ PASSED=0; FAILED=0
 
 ok() { echo "  PASS [$1]"; PASSED=$((PASSED+1)); }
 bad() { echo "  FAIL [$1]"; FAILED=$((FAILED+1)); }
+# expect_eq <actual> <expected> <label>：相等→ok，否则→bad（用 if 而非 A&&B||C，规避 SC2015）。
+expect_eq() { if [ "$1" = "$2" ]; then ok "$3"; else bad "$3（实际=$1）"; fi; }
 
 # --- sha_matches ---
 if sha_matches "abc1234def" "abc1234def"; then ok "A 完全相等命中"; else bad "A 完全相等命中"; fi
@@ -187,20 +189,20 @@ else:
     print(d.get(key,""))
 PY
 }
-[ "$(_lread Label)" = "com.zenithjoy.api.staging" ] && ok "L Label→staging" || bad "L Label 应=com.zenithjoy.api.staging（实际=$(_lread Label)）"
-[ "$(_lread env:PORT)" = "5201" ] && ok "L PORT→5201" || bad "L PORT 应=5201（实际=$(_lread env:PORT)）"
-[ "$(_lread env:DATABASE_NAME)" = "zenithjoy_test" ] && ok "L DATABASE_NAME→zenithjoy_test" || bad "L DB 应=zenithjoy_test（实际=$(_lread env:DATABASE_NAME)）"
-[ "$(_lread env:ZENITHJOY_API_URL)" = "http://localhost:5201" ] && ok "L ZENITHJOY_API_URL→:5201" || bad "L API_URL 应=:5201（实际=$(_lread env:ZENITHJOY_API_URL)）"
-[ "$(_lread env:SOME_SECRET)" = "super-secret-value-123" ] && ok "L 密钥从生产继承" || bad "L 密钥未继承（实际=$(_lread env:SOME_SECRET)）"
-[ "$(_lread program1)" = "/fake/releases/staging/dist/index.js" ] && ok "L Program→releases/staging/dist/index.js" || bad "L Program 应指向 releases/staging（实际=$(_lread program1)）"
-[ "$(_lread WorkingDirectory)" = "/fake/releases/staging" ] && ok "L WorkingDir→releases/staging" || bad "L WorkingDir 应=releases/staging（实际=$(_lread WorkingDirectory)）"
+expect_eq "$(_lread Label)" "com.zenithjoy.api.staging" "L Label→staging"
+expect_eq "$(_lread env:PORT)" "5201" "L PORT→5201"
+expect_eq "$(_lread env:DATABASE_NAME)" "zenithjoy_test" "L DATABASE_NAME→zenithjoy_test"
+expect_eq "$(_lread env:ZENITHJOY_API_URL)" "http://localhost:5201" "L ZENITHJOY_API_URL→:5201"
+expect_eq "$(_lread env:SOME_SECRET)" "super-secret-value-123" "L 密钥从生产继承"
+expect_eq "$(_lread program1)" "/fake/releases/staging/dist/index.js" "L Program→releases/staging/dist/index.js"
+expect_eq "$(_lread WorkingDirectory)" "/fake/releases/staging" "L WorkingDir→releases/staging"
 
 # 幂等：再跑一次仍成功且结果一致
 ZJ_PROD_PLIST="$LBOX/prod.plist" ZJ_STAGING_PLIST="$L_OUT" ZJ_STAGING_PORT=5201 \
 ZJ_STAGING_DB=zenithjoy_test ZJ_STAGING_LABEL=com.zenithjoy.api.staging \
 ZJ_RELEASES_DIR=/fake/releases ZJ_NODE=/opt/homebrew/bin/node ZJ_STAGING_LOG_DIR="$LBOX/logs" \
   ensure_staging_plist >/dev/null 2>&1
-[ "$(_lread env:PORT)" = "5201" ] && ok "L 幂等：二次运行仍正确" || bad "L 幂等失败"
+expect_eq "$(_lread env:PORT)" "5201" "L 幂等：二次运行仍正确"
 
 # 生产 plist 不存在 → 返非0（拒绝凭空造）
 set +e
@@ -210,7 +212,7 @@ ZJ_RELEASES_DIR=/fake/releases ZJ_NODE=/opt/homebrew/bin/node \
   ensure_staging_plist >/dev/null 2>&1
 L_NOPROD=$?
 set -e 2>/dev/null || true
-[ "$L_NOPROD" -ne 0 ] && ok "L 生产 plist 缺失→返非0（不凭空造）" || bad "L 生产 plist 缺失应返非0"
+if [ "$L_NOPROD" -ne 0 ]; then ok "L 生产 plist 缺失→返非0（不凭空造）"; else bad "L 生产 plist 缺失应返非0"; fi
 
 rm -rf "$LBOX"
 
