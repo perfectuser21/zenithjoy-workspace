@@ -535,6 +535,20 @@ jobs:
           chmod +x .github/workflows/scripts/smoke/line04-crm-customer-profile-smoke.sh
           bash .github/workflows/scripts/smoke/line04-crm-customer-profile-smoke.sh
 
+      # ─── Line04 CRM 外层表重做：6列 + 身份三态（add_friend_time + identity 落库 / ingest 向前兼容 / internal 排除）───
+      - name: Smoke — Line04 CRM 外层表重做（identity + add_friend_time）
+        env:
+          API_BASE: http://localhost:5200
+          ZENITHJOY_INTERNAL_TOKEN: ci-only-internal-token-abc-not-prod
+          SMOKE_ADMIN_EMAIL: boss@zenjoymedia.media
+          PSQL_HOST: localhost
+          PSQL_USER: cecelia
+          PSQL_DB: cecelia
+          PSQL_PASS: cecelia
+        run: |
+          chmod +x .github/workflows/scripts/smoke/line04-crm-table-identity-smoke.sh
+          bash .github/workflows/scripts/smoke/line04-crm-table-identity-smoke.sh
+
       - name: Stop fake-feishu-server
         if: always()
         run: |
