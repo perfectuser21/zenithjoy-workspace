@@ -55,11 +55,21 @@ interface CustomerRow {
   identity?: CrmIdentity | null;
 }
 
-// 身份列展示：客户行 managed=true→「客户·接管」/ managed=false→「客户·已排除」；identity=blacklist→「黑名单」；internal→「内部人员」
-function identityLabel(row: CustomerRow): string {
-  if (row.identity === 'internal') return '内部人员';
-  if (row.identity === 'blacklist') return '黑名单';
-  return row.managed ? '客户·接管' : '客户·已排除';
+// 身份下拉三态（值 + 中文标签）。客户·接管=customer / 黑名单=blacklist / 内部人员=internal。
+const IDENTITY_OPTIONS: CrmIdentity[] = ['customer', 'blacklist', 'internal'];
+const IDENTITY_LABELS: Record<CrmIdentity, string> = {
+  customer: '客户·接管',
+  blacklist: '黑名单',
+  internal: '内部人员',
+};
+
+// 当前身份值（下拉选中态）：优先看 identity 列；缺省时按 managed 推导（已排除=黑名单，接管中=客户）。
+// internal 行后端已从列表排除，正常不会出现在此，留作防御。
+function currentIdentity(row: CustomerRow): CrmIdentity {
+  if (row.identity === 'internal') return 'internal';
+  if (row.identity === 'blacklist') return 'blacklist';
+  if (row.identity === 'customer') return row.managed ? 'customer' : 'blacklist';
+  return row.managed ? 'customer' : 'blacklist';
 }
 
 interface CustomerListResponse {
@@ -207,21 +217,8 @@ export default function CustomerListPage() {
     [flash],
   );
 
-  // 接管开关（黑名单语义）：managed=true→接管中；勾掉→managed=false→后端加 blacklist
-  const onToggleManage = useCallback(
-    async (row: CustomerRow) => {
-      const next = !row.managed;
-      const out = (await writeJson('/api/crm/customers/manage', 'PUT', {
-        wechat_id: csWechatId,
-        contact: row.contact,
-        managed: next,
-      })) as { managed?: boolean; message?: string } | null;
-      if (!out) return;
-      flash(out.message ?? (next ? '已恢复接管' : '已加入黑名单'));
-      await loadCustomers();
-    },
-    [csWechatId, writeJson, flash, loadCustomers],
-  );
+  // 接管态（客户·接管 ↔ 黑名单）现统一走身份下拉 onChangeIdentity（后端同步 config.blacklist），
+  // 不再单独留接管勾选框 —— 黑名单 = 身份三态之一，口径单一，避免开关与下拉两套并存。
 
   const onChangeStatus = useCallback(
     async (row: CustomerRow, status: CrmStatus) => {
@@ -232,6 +229,22 @@ export default function CustomerListPage() {
       });
       if (!out) return;
       flash('保存成功');
+      await loadCustomers();
+    },
+    [csWechatId, writeJson, flash, loadCustomers],
+  );
+
+  // 标身份三态：customer / blacklist / internal。选完调 PUT /customers/identity，成功后刷新
+  //（标 internal 的人即从列表消失；标 blacklist 后端同步 config.blacklist 让 AI 停回他）。
+  const onChangeIdentity = useCallback(
+    async (row: CustomerRow, identity: CrmIdentity) => {
+      const out = await writeJson('/api/crm/customers/identity', 'PUT', {
+        wechat_id: csWechatId,
+        contact: row.contact,
+        identity,
+      });
+      if (!out) return;
+      flash(identity === 'internal' ? '已标为内部人员（移出客户列表）' : '保存成功');
       await loadCustomers();
     },
     [csWechatId, writeJson, flash, loadCustomers],
@@ -468,22 +481,24 @@ export default function CustomerListPage() {
                     </td>
                     {/* 最近联系 */}
                     <td style={{ padding: 8 }}>{fmtTime(row.last_contact_at)}</td>
-                    {/* 身份（客户·接管 / 客户·已排除 / 黑名单 / 内部人员）+ 接管开关 */}
+                    {/* 身份（可改下拉：客户·接管 / 黑名单 / 内部人员）。选「内部人员」该人即从列表消失 */}
                     <td style={{ padding: 8 }}>
-                      <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
-                        <input
-                          type="checkbox"
-                          data-testid="crm-manage-toggle"
-                          checked={row.managed}
-                          onChange={() => void onToggleManage(row)}
-                        />
-                        <span
-                          data-testid="crm-identity-label"
-                          style={{ fontSize: 12, color: row.managed ? '#15803d' : '#dc2626' }}
-                        >
-                          {identityLabel(row)}
-                        </span>
-                      </label>
+                      <select
+                        data-testid="crm-identity-select"
+                        value={currentIdentity(row)}
+                        onChange={(e) => void onChangeIdentity(row, e.target.value as CrmIdentity)}
+                        style={{
+                          fontSize: 12,
+                          padding: '2px 4px',
+                          color: currentIdentity(row) === 'customer' ? '#15803d' : '#dc2626',
+                        }}
+                      >
+                        {IDENTITY_OPTIONS.map((opt) => (
+                          <option key={opt} value={opt}>
+                            {IDENTITY_LABELS[opt]}
+                          </option>
+                        ))}
+                      </select>
                     </td>
                   </tr>
                 ))}

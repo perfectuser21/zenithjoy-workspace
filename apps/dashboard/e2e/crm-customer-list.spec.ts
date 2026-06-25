@@ -60,7 +60,7 @@ async function stubAuth(page: Page) {
   );
 }
 
-test('客户好友表 Golden Path — 列表/黑名单开关/状态下拉/onboarding 条', async ({ page }) => {
+test('客户好友表 Golden Path — 列表/身份下拉/状态下拉/onboarding 条', async ({ page }) => {
   await stubAuth(page);
 
   let blacklisted = false;
@@ -71,7 +71,10 @@ test('客户好友表 Golden Path — 列表/黑名单开关/状态下拉/onboar
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify({
-        customers: [{ ...ROWS[0], status: lastStatus, managed: !blacklisted }, ROWS[1]],
+        customers: [
+          { ...ROWS[0], status: lastStatus, managed: !blacklisted, identity: blacklisted ? 'blacklist' : 'customer' },
+          ROWS[1],
+        ],
         total: 2,
         cs_wechat_id: 'wx_cs_A',
       }),
@@ -89,7 +92,7 @@ test('客户好友表 Golden Path — 列表/黑名单开关/状态下拉/onboar
   await expect(page.getByTestId('crm-customer-row')).toHaveCount(2);
   await expect(page.getByTestId('crm-customer-row').first()).toContainText('张三');
   await expect(page.getByTestId('crm-status-select').first()).toBeVisible();
-  await expect(page.getByTestId('crm-manage-toggle').first()).toBeVisible();
+  await expect(page.getByTestId('crm-identity-select').first()).toBeVisible();
   // 6 列表头齐全
   await expect(page.getByRole('columnheader', { name: '姓名' })).toBeVisible();
   await expect(page.getByRole('columnheader', { name: '微信号' })).toBeVisible();
@@ -102,17 +105,19 @@ test('客户好友表 Golden Path — 列表/黑名单开关/状态下拉/onboar
   await expect(page.getByTestId('crm-customer-add-friend-time').first()).not.toHaveText('—');
   await expect(page.getByTestId('crm-onboarding-bar')).toBeVisible();
   await expect(page.getByTestId('crm-onboarding-step')).toHaveCount(5);
-  // 默认全接管：开关勾上、身份标签「客户·接管」
-  await expect(page.getByTestId('crm-manage-toggle').first()).toBeChecked();
-  await expect(page.getByTestId('crm-identity-label').first()).toHaveText('客户·接管');
+  // 默认全接管：身份下拉选中「客户·接管」(customer)
+  await expect(page.getByTestId('crm-identity-select').first()).toHaveValue('customer');
 
-  // 2. 勾掉接管 = 加黑名单 → 身份标签变「客户·已排除」、不见「登录已失效」
-  await page.route('**/api/crm/customers/manage', (route) => {
+  // 2. 身份下拉改「黑名单」→ 调 PUT /identity → 刷新后下拉变 blacklist、不见「登录已失效」
+  let identityBody: unknown = null;
+  await page.route('**/api/crm/customers/identity', (route) => {
+    identityBody = JSON.parse(route.request().postData() || '{}');
     blacklisted = true;
-    return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ success: true, managed: false, message: '已加入黑名单' }) });
+    return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ success: true, identity: 'blacklist' }) });
   });
-  await page.getByTestId('crm-manage-toggle').first().click();
-  await expect(page.getByTestId('crm-identity-label').first()).toHaveText('客户·已排除', { timeout: 10000 });
+  await page.getByTestId('crm-identity-select').first().selectOption('blacklist');
+  await expect(page.getByTestId('crm-identity-select').first()).toHaveValue('blacklist', { timeout: 10000 });
+  expect(identityBody).toMatchObject({ contact: '张三', identity: 'blacklist' });
   await expect(page.getByText('登录已失效')).toHaveCount(0);
   await page.screenshot({ path: path.join(SHOTS, '02-blacklist.png'), fullPage: true });
 

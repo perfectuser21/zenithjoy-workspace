@@ -25,6 +25,7 @@ import type { RosterScanRow, TakeoverMode } from '../services/crm/customer-roste
 const router = Router();
 
 const VALID_STATUS = new Set(['A1', 'A2', 'A3', 'A4', 'A5']);
+const VALID_IDENTITY = new Set(['customer', 'blacklist', 'internal']);
 
 /**
  * 把 body.wechat_id（客服机微信号）映射到 req.params.wechatId，供 requireCsWriteAccess('wechatId')
@@ -373,6 +374,71 @@ router.put(
       return res.json({ success: true, managed: !bl.includes(name), message: '保存成功' });
     } catch (err) {
       return fail(res, 500, 'MANAGE_FAILED', err instanceof Error ? err.message : 'unknown');
+    }
+  },
+);
+
+// PUT /api/crm/customers/identity — 运营在界面标客户身份三态（customer/blacklist/internal）
+//
+// 口径（lead 拍板 2026-06-25）：identity 列 = 名册成员资格单一真相源。
+//   - 'internal' → 只写 crm_customers.identity（内部人员从 GET /customers 列表消失）；**不碰** config.blacklist
+//     （内部人员若之前在 blacklist 里留着无妨——AI 本就不该回自己人，留着更安全，不为这点加复杂逻辑）。
+//   - 'blacklist' → 写 identity 列 + 把 contact 加进 wechat_cs_account_config.blacklist
+//     （让 agent should_reply 真的停回他，回复网关不破；与 PUT /manage managed=false 落同一集合）。
+//   - 'customer'  → 写 identity 列 + 从 config.blacklist 移除 contact（恢复接管；与 PUT /manage managed=true 一致）。
+// 鉴权 / 同租户隔离复用 manage 那套（bodyWechatIdToParam + requireCsWriteAccess('wechatId')；跨租户 → 403 CROSS_TENANT）。
+router.put(
+  '/customers/identity',
+  bodyWechatIdToParam,
+  requireCsWriteAccess('wechatId'),
+  async (req: Request, res: Response) => {
+    const { wechat_id, contact, identity } = req.body as {
+      wechat_id?: string;
+      contact?: string;
+      identity?: string;
+    };
+    const csWechatId = (wechat_id ?? '').trim();
+    const name = (contact ?? '').trim();
+    const id = (identity ?? '').trim();
+    if (!csWechatId || !name) return res.status(400).json({ error: 'wechat_id 和 contact 必填' });
+    if (!VALID_IDENTITY.has(id))
+      return res.status(400).json({ error: 'identity 必须是 customer/blacklist/internal' });
+    const tenantId = await resolveTenantId(req, csWechatId);
+    if (!tenantId) return fail(res, 404, 'TARGET_NOT_FOUND', '解析不到所属租户');
+    try {
+      // 1) identity 列单一真相源：upsert crm_customers.identity（行不存在则建占位 source=manual）。
+      await pool.query(
+        `INSERT INTO zenithjoy.crm_customers (tenant_id, cs_wechat_id, contact, identity, source, updated_at)
+         VALUES ($1::uuid, $2, $3, $4, 'manual', now())
+         ON CONFLICT (tenant_id, cs_wechat_id, contact) DO UPDATE SET identity = $4, updated_at = now()`,
+        [tenantId, csWechatId, name, id],
+      );
+
+      // 2) blacklist/customer 与 config.blacklist 双向同步（internal 不碰 config）。
+      if (id === 'blacklist' || id === 'customer') {
+        const cur = await pool.query(
+          `SELECT blacklist FROM zenithjoy.wechat_cs_account_config WHERE wechat_id = $1`,
+          [csWechatId],
+        );
+        let bl: string[] = Array.isArray(cur.rows?.[0]?.blacklist)
+          ? cur.rows[0].blacklist.filter((x: unknown): x is string => typeof x === 'string')
+          : [];
+        if (id === 'blacklist') {
+          if (!bl.includes(name)) bl.push(name);
+        } else {
+          bl = bl.filter((x) => x !== name);
+        }
+        await pool.query(
+          `INSERT INTO zenithjoy.wechat_cs_account_config (wechat_id, persona, blacklist, updated_at)
+           VALUES ($1, '{}'::jsonb, $2::jsonb, now())
+           ON CONFLICT (wechat_id) DO UPDATE SET blacklist = $2::jsonb, updated_at = now()`,
+          [csWechatId, JSON.stringify(bl)],
+        );
+      }
+
+      return res.json({ success: true, identity: id });
+    } catch (err) {
+      return fail(res, 500, 'IDENTITY_FAILED', err instanceof Error ? err.message : 'unknown');
     }
   },
 );

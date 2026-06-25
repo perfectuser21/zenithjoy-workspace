@@ -3067,6 +3067,14 @@ agent_suite:
     product: 客户私域AI接管
     note: "Line04 外层 CRM 表重做路由单测（mock pool + supertest）— ingest 向前兼容收 wechat_id/add_friend_time 写库 + GET /customers 返 identity/add_friend_time 且排除 internal"
 
+  - id: line04-crm-identity-mark-routes
+    path: apps/api/tests/routes/crm-identity-mark.test.ts
+    type: unit
+    ci: L4
+    status: active
+    product: 客户私域AI接管
+    note: "Line04 身份标记端点 PUT /customers/identity 路由单测（mock pool + supertest）— internal 只写 identity 不碰 config / blacklist+customer 与 config.blacklist 双向同步 / 非法值 400 / 404"
+
   - id: path4-crm-migration
     path: sprints/06030910-path4-crm-wechat-sync/tests/crm-migration.test.ts
     type: contract
