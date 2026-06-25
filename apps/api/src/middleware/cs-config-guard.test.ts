@@ -172,14 +172,33 @@ describe('requireServiceCredential — agent/服务专用闸（internal/service 
     else process.env.ADMIN_FEISHU_OPENIDS = old;
   });
 
-  it('无任何服务凭证 → 401 SERVICE_CREDENTIAL_REQUIRED，不调 next', () => {
+  it('env 已设 + 无凭证 → 401（生产闸，拒绝无 token 上报）', () => {
+    // beforeEach 已设 ZENITHJOY_INTERNAL_TOKEN=svc-tok-123
     const req = { headers: {} } as unknown as Request;
     const res = mkRes();
     const next = vi.fn();
     requireServiceCredential(req, res, next);
     expect(res.statusCode).toBe(401);
-    expect(res.body.error?.code).toBe('SERVICE_CREDENTIAL_REQUIRED');
     expect(next).not.toHaveBeenCalled();
+  });
+
+  it('env 已设 + 错 token → 401（生产闸）', () => {
+    const req = { headers: { 'x-internal-token': 'wrong-tok' } } as unknown as Request;
+    const res = mkRes();
+    const next = vi.fn();
+    requireServiceCredential(req, res, next);
+    expect(res.statusCode).toBe(401);
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  it('env 未设 + 无头 → dev 放行 next()（与 agent post_friend_scan「未设不带头」对齐）', () => {
+    delete process.env.ZENITHJOY_INTERNAL_TOKEN;
+    const req = { headers: {} } as unknown as Request;
+    const res = mkRes();
+    const next = vi.fn();
+    requireServiceCredential(req, res, next);
+    expect(next).toHaveBeenCalledOnce();
+    expect(res.statusCode).toBe(0);
   });
 });
 

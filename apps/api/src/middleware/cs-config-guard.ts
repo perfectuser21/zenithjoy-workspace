@@ -116,14 +116,13 @@ export function requireCsReadAccess(req: Request, res: Response, next: NextFunct
 
 /**
  * 服务/agent 专用闸（ingest 上报 + onboarding 回写：agent 无人类 session，只走 internal/service token）。
- *   legacy 服务凭证（飞书白名单 id / internal token / Bearer）→ superAdminGuard 放行；
- *   完全无服务凭证 → 401 SERVICE_CREDENTIAL_REQUIRED（不走人类 session 通道，避免 dashboard 用户冒充 agent 上报）。
+ * 直接复用 superAdminGuard（不读 better-auth session，天然挡人类 dashboard cookie 用户）——三态：
+ *   - ZENITHJOY_INTERNAL_TOKEN **已设** + 合法 X-Internal-Token/Bearer/超管飞书头 → 放行；无/错凭证 → 401。
+ *   - ZENITHJOY_INTERNAL_TOKEN **未设**（dev/CI）+ 不带头 → dev 放行。
+ * 这与 agent 侧 post_friend_scan「env 未设时不带 X-Internal-Token 头」严格对齐（跨 teammate 契约，PR#860）：
+ * 生产必设 token 才成闸；dev/CI 未设 token 时 agent 不带头、后端放行，两端一致不互锁。
  */
 export function requireServiceCredential(req: Request, res: Response, next: NextFunction): void {
-  if (!hasLegacyServiceCredential(req)) {
-    deny(res, 401, 'SERVICE_CREDENTIAL_REQUIRED', '需服务凭证（internal token / Bearer / 超管飞书 id），agent 上报专用');
-    return;
-  }
   superAdminGuard(req, res, next);
 }
 
