@@ -25,6 +25,8 @@ PSQL_USER="${PSQL_USER:-${PGUSER:-cecelia}}"
 PSQL_DB="${PSQL_DB:-${PGDATABASE:-cecelia}}"
 PSQL_PASS="${PSQL_PASS:-${PGPASSWORD:-cecelia}}"
 INTERNAL_TOKEN="${ZENITHJOY_INTERNAL_TOKEN:-ci-only-internal-token-abc-not-prod}"
+# 邮箱超管：必须 ∈ 后端 ADMIN_EMAILS（CI step env 已注入同值）。修 403：邮箱超管走 X-User-Email 通道读名册。
+ADMIN_EMAIL="${SMOKE_ADMIN_EMAIL:-boss@zenjoymedia.media}"
 
 CS="${CS_WECHAT_ID:-wx_cs_crm2_$$}"
 CONTACT_KEEP="客户接管_$$"
@@ -35,6 +37,8 @@ psql_q() { PGPASSWORD="$PSQL_PASS" psql -h "$PSQL_HOST" -U "$PSQL_USER" -d "$PSQ
 # service/super-admin 通道 curl（internal token）
 ci()  { curl -s  -H "X-Internal-Token: $INTERNAL_TOKEN" "$@"; }
 cif() { curl -sf -H "X-Internal-Token: $INTERNAL_TOKEN" "$@"; }
+# 邮箱超管通道 curl（X-User-Email，无 token——专测「修 403」邮箱旁路）
+ce()  { curl -s  -H "X-User-Email: $ADMIN_EMAIL" "$@"; }
 
 bootstrap() {
   echo "[bootstrap] 建 schema + 三迁移（A blacklist / B scan / C onboarding，幂等）"
@@ -44,7 +48,8 @@ bootstrap() {
     "$ROOT/apps/api/db/migrations/20260624_210000_create_crm_customers.sql" \
     "$ROOT/apps/api/db/migrations/20260625_100000_add_blacklist_and_takeover_mode.sql" \
     "$ROOT/apps/api/db/migrations/20260625_101000_crm_customers_add_scan_source.sql" \
-    "$ROOT/apps/api/db/migrations/20260625_102000_create_crm_onboarding_state.sql"; do
+    "$ROOT/apps/api/db/migrations/20260625_102000_create_crm_onboarding_state.sql" \
+    "$ROOT/apps/api/db/migrations/20260625_150000_crm_onboarding_add_force_scan.sql"; do
     PGPASSWORD="$PSQL_PASS" psql -h "$PSQL_HOST" -U "$PSQL_USER" -d "$PSQL_DB" -v ON_ERROR_STOP=0 -f "$f" >/dev/null 2>&1 || true
   done
 
@@ -71,6 +76,10 @@ main() {
   echo "[4] 403 修法：super-admin 经 internal token 多通道读名册 → 非 401/403（带显式 cs_wechat_id scope）"
   CODE=$(ci -o /tmp/crm2_get.json -w "%{http_code}" "${API_BASE}/api/crm/customers?cs_wechat_id=$CS")
   [ "$CODE" = "200" ] || { echo "FAIL: super-admin 读名册未 200 实际 $CODE"; cat /tmp/crm2_get.json; exit 1; }
+
+  echo "[4b] 403 修法（邮箱超管）：X-User-Email ∈ ADMIN_EMAILS 读名册 → 200（无 token，纯邮箱旁路）"
+  CODE=$(ce -o /tmp/crm2_get_email.json -w "%{http_code}" "${API_BASE}/api/crm/customers?cs_wechat_id=$CS")
+  [ "$CODE" = "200" ] || { echo "FAIL: 邮箱超管读名册未 200 实际 $CODE（修 403 未生效；检查 API ADMIN_EMAILS=$ADMIN_EMAIL）"; cat /tmp/crm2_get_email.json; exit 1; }
 
   echo "[1a] 名册：blacklist 主模型 managed = contact∉blacklist（KEEP=true / EXCL=false）"
   jq -e --arg c "$CONTACT_KEEP" 'any(.customers[]; .contact==$c and .managed==true)'  /tmp/crm2_get.json >/dev/null || { echo "FAIL: KEEP 应 managed=true（不在黑名单=接管中）"; cat /tmp/crm2_get.json; exit 1; }
@@ -130,7 +139,35 @@ main() {
     echo "[6] 跳过（后端 ZENITHJOY_INTERNAL_TOKEN 未设=dev 放行模式，与 agent「未设不带头」对齐）"
   fi
 
-  echo "✅ Line04 CRM 重做 blacklist/ingest/onboarding smoke 全过"
+  echo "[7] 立即扫好友：trigger 设标志 → pending 返 force=true → ingest 清标志 → pending 返 force=false"
+  # [7a] 邮箱超管点 trigger（网页用户通道，requireCsReadAccess）→ ok + requested_at 非空
+  R7=$(ce -X POST "${API_BASE}/api/crm/friend-scan/trigger" -H 'Content-Type: application/json' \
+    -d "{\"cs_wechat_id\":\"$CS\"}") || { echo "FAIL: trigger 非 200"; exit 1; }
+  echo "$R7" | jq -e '.ok==true and (.requested_at|type=="string")' >/dev/null || { echo "FAIL: trigger 响应不符 $R7"; exit 1; }
+  # DB 落标志
+  FSR=$(psql_q "SELECT (force_scan_requested_at IS NOT NULL) FROM zenithjoy.crm_onboarding_state WHERE cs_wechat_id='$CS'")
+  [ "$FSR" = "t" ] || { echo "FAIL: trigger 后 force_scan_requested_at 仍为空"; exit 1; }
+
+  # [7b] agent 轮询 pending（requireServiceCredential, internal token）→ force=true
+  P1=$(cif "${API_BASE}/api/crm/friend-scan/pending?cs_wechat_id=$CS") || { echo "FAIL: pending 非 200"; exit 1; }
+  echo "$P1" | jq -e '.ok==true and .force==true and (.requested_at|type=="string")' >/dev/null || { echo "FAIL: pending 应 force=true $P1"; exit 1; }
+
+  # [7c] agent 扫完 ingest 一轮 → 后端清标志
+  cif -X POST "${API_BASE}/api/crm/friend-scan/ingest" -H 'Content-Type: application/json' \
+    -d "{\"cs_wechat_id\":\"$CS\",\"contacts\":[{\"name\":\"$CONTACT_SCAN\",\"last_message\":\"强制扫\"}]}" \
+    | jq -e '.success==true' >/dev/null || { echo "FAIL: 强制扫后 ingest 非 200"; exit 1; }
+  FSR2=$(psql_q "SELECT (force_scan_requested_at IS NULL) FROM zenithjoy.crm_onboarding_state WHERE cs_wechat_id='$CS'")
+  [ "$FSR2" = "t" ] || { echo "FAIL: ingest 后 force_scan_requested_at 未清空（应 NULL）"; exit 1; }
+
+  # [7d] 清标志后 pending → force=false（消费完毕，agent 回到 24h 节奏）
+  P2=$(cif "${API_BASE}/api/crm/friend-scan/pending?cs_wechat_id=$CS") || { echo "FAIL: pending 二次非 200"; exit 1; }
+  echo "$P2" | jq -e '.ok==true and .force==false and (.requested_at==null)' >/dev/null || { echo "FAIL: 清后 pending 应 force=false $P2"; exit 1; }
+
+  # [7e] pending 缺 cs_wechat_id → 400
+  CODE=$(ci -o /dev/null -w "%{http_code}" "${API_BASE}/api/crm/friend-scan/pending")
+  [ "$CODE" = "400" ] || { echo "FAIL: pending 缺 cs_wechat_id 未 400 实际 $CODE"; exit 1; }
+
+  echo "✅ Line04 CRM 重做 blacklist/ingest/onboarding/trigger-pending smoke 全过"
 }
 
 main "$@"

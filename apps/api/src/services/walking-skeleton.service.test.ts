@@ -157,9 +157,9 @@ describe('ackPublishTask — qr_bind session upsert', () => {
 });
 
 describe('HEARTBEAT_MODULES version gates', () => {
-  it('line04-wechat-cs required_version should be 1.0.61 (CRM 重做 agent 侧：近期好友扫描上报+黑名单接管发货版本，三面一致)', async () => {
+  it('line04-wechat-cs required_version should be 1.0.62 (立即扫好友 trigger/pending agent 侧发货版本，三面一致)', async () => {
     const { HEARTBEAT_MODULES } = await import('./walking-skeleton.service');
-    expect(HEARTBEAT_MODULES['line04-wechat-cs'].required_version).toBe('1.0.61');
+    expect(HEARTBEAT_MODULES['line04-wechat-cs'].required_version).toBe('1.0.62');
   });
 });
 
