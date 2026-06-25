@@ -69,8 +69,13 @@ svc -X POST "${API_BASE}/api/crm/friend-scan/ingest" -H 'Content-Type: applicati
   -d "{\"cs_wechat_id\":\"$CS_WECHAT_ID\",\"contacts\":[{\"name\":\"$INTERNAL\",\"last_message\":\"嗨\"}]}" \
   | jq -e '.success==true' >/dev/null || { echo "FAIL: 旧字段 ingest 报错了"; exit 1; }
 
-echo "[3] 把 $INTERNAL 标 internal（内部人员，模拟运营标记）"
-psql_q "UPDATE zenithjoy.crm_customers SET identity='internal' WHERE cs_wechat_id='$CS_WECHAT_ID' AND contact='$INTERNAL';" >/dev/null
+echo "[3] PUT /api/crm/customers/identity — 把 $INTERNAL 标 internal（标身份入口，替代手动 seed）"
+svc -X PUT "${API_BASE}/api/crm/customers/identity" -H 'Content-Type: application/json' \
+  -d "{\"wechat_id\":\"$CS_WECHAT_ID\",\"contact\":\"$INTERNAL\",\"identity\":\"internal\"}" \
+  | jq -e '.success==true and .identity=="internal"' >/dev/null || { echo "FAIL: PUT identity=internal 未 200/未回 identity"; exit 1; }
+# 入口真落库断言（防端点空过）
+DB_IDENT=$(psql_q "SELECT identity FROM zenithjoy.crm_customers WHERE cs_wechat_id='$CS_WECHAT_ID' AND contact='$INTERNAL'")
+[ "$DB_IDENT" = "internal" ] || { echo "FAIL: identity 没写进库（实际 $DB_IDENT）"; exit 1; }
 
 echo "[4] GET /api/crm/customers — 行带 identity + add_friend_time，且 internal 被排除"
 RESP=$(sa "${API_BASE}/api/crm/customers?cs_wechat_id=$CS_WECHAT_ID") || { echo "FAIL: GET customers 非 200"; exit 1; }
@@ -81,4 +86,19 @@ echo "$RESP" | jq -e --arg i "$INTERNAL" 'all(.customers[]; .contact != $i)' >/d
 echo "$RESP" | jq -e --arg c "$CUST" '.customers[] | select(.contact==$c) | .identity=="customer"' >/dev/null \
   || { echo "FAIL: 客户 identity 非 customer"; exit 1; }
 
-echo "✅ Line04 CRM 外层表重做（identity + add_friend_time）smoke 全过"
+echo "[5] PUT identity=blacklist — 把 $CUST 标黑名单（名册标记，GET 仍返回该行且 identity=blacklist）"
+svc -X PUT "${API_BASE}/api/crm/customers/identity" -H 'Content-Type: application/json' \
+  -d "{\"wechat_id\":\"$CS_WECHAT_ID\",\"contact\":\"$CUST\",\"identity\":\"blacklist\"}" \
+  | jq -e '.success==true and .identity=="blacklist"' >/dev/null || { echo "FAIL: PUT identity=blacklist 未 200"; exit 1; }
+RESP2=$(sa "${API_BASE}/api/crm/customers?cs_wechat_id=$CS_WECHAT_ID") || { echo "FAIL: GET customers(2) 非 200"; exit 1; }
+echo "$RESP2" | jq -e --arg c "$CUST" '.customers[] | select(.contact==$c) | .identity=="blacklist"' >/dev/null \
+  || { echo "FAIL: blacklist 标记后 GET 未回 identity=blacklist（黑名单仍是客户行，不排除）"; exit 1; }
+
+echo "[6] PUT identity 三态校验 — 非法值 → 400 INVALID_INPUT，不落库"
+CODE=$(svc -o /dev/null -w '%{http_code}' -X PUT "${API_BASE}/api/crm/customers/identity" -H 'Content-Type: application/json' \
+  -d "{\"wechat_id\":\"$CS_WECHAT_ID\",\"contact\":\"$CUST\",\"identity\":\"vip\"}")
+[ "$CODE" = "400" ] || { echo "FAIL: 非法 identity 未 400（实际 $CODE）"; exit 1; }
+STILL=$(psql_q "SELECT identity FROM zenithjoy.crm_customers WHERE cs_wechat_id='$CS_WECHAT_ID' AND contact='$CUST'")
+[ "$STILL" = "blacklist" ] || { echo "FAIL: 非法 identity 竟改了库（实际 $STILL，应保持 blacklist）"; exit 1; }
+
+echo "✅ Line04 CRM 外层表重做（identity + add_friend_time + 标身份入口 PUT）smoke 全过"

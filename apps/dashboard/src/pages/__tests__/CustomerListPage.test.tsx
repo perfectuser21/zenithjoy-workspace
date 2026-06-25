@@ -47,11 +47,16 @@ function jsonRes(body: unknown, status = 200) {
 function mockFetchRouting() {
   global.fetch = vi.fn().mockImplementation((url: string, init?: RequestInit) => {
     fetchCalls.push({ url, init });
+    // 标身份入口：PUT /api/crm/customers/identity → 写 crm_customers.identity（地基 D）
+    if (url.startsWith('/api/crm/customers/identity')) {
+      const body = init?.body ? (JSON.parse(init.body as string) as { identity?: string }) : {};
+      return Promise.resolve(jsonRes({ success: true, identity: body.identity }));
+    }
     if (url.startsWith('/api/crm/customers')) {
       return Promise.resolve(
         jsonRes({
           customers: [
-            { name: '客户甲', contact: '客户甲', wechat_id: null, status: 'A1', last_contact_at: null, managed: true },
+            { name: '客户甲', contact: '客户甲', wechat_id: null, status: 'A1', last_contact_at: null, managed: true, identity: 'customer' },
           ],
           total: 1,
           cs_wechat_id: CS_WID,
@@ -137,5 +142,56 @@ describe('CustomerListPage [per-operator BEHAVIOR]', () => {
       expect(JSON.parse(call!.init?.body as string)).toEqual({ cs_wechat_id: CS_WID });
     });
     await screen.findByText(/已通知客服机/);
+  });
+});
+
+describe('CustomerListPage 标身份入口（地基 D：身份列可改下拉）', () => {
+  it('身份列是可选下拉（客户·接管/黑名单/内部人员），默认值反映 row.identity', async () => {
+    render(<CustomerListPage />);
+    await screen.findByText('客户甲');
+    const select = (await screen.findByTestId('crm-identity-select')) as HTMLSelectElement;
+    // 三态选项齐全
+    const values = Array.from(select.options).map((o) => o.value).sort();
+    expect(values).toEqual(['blacklist', 'customer', 'internal']);
+    // identity='customer' → 默认选中 customer
+    expect(select.value).toBe('customer');
+  });
+
+  it('改身份 → PUT /api/crm/customers/identity（带 wechat_id+contact+identity），改完即时刷新名册', async () => {
+    render(<CustomerListPage />);
+    await screen.findByText('客户甲');
+    fetchCalls = []; // 清掉首挂载的 GET，专看改身份触发的调用
+    const select = (await screen.findByTestId('crm-identity-select')) as HTMLSelectElement;
+
+    fireEvent.change(select, { target: { value: 'blacklist' } });
+
+    await waitFor(() => {
+      const put = fetchCalls.find((c) => c.url.startsWith('/api/crm/customers/identity'));
+      expect(put).toBeDefined();
+      expect(put!.init?.method).toBe('PUT');
+      expect(put!.init?.credentials).toBe('include');
+      expect(JSON.parse(put!.init?.body as string)).toEqual({
+        wechat_id: CS_WID,
+        contact: '客户甲',
+        identity: 'blacklist',
+      });
+    });
+    // 改完即时刷新：重新 GET /customers
+    await waitFor(() => {
+      expect(fetchCalls.some((c) => c.url === '/api/crm/customers')).toBe(true);
+    });
+  });
+
+  it('标 internal → 仍走 PUT identity（后端回该行从列表排除，刷新后消失）', async () => {
+    render(<CustomerListPage />);
+    await screen.findByText('客户甲');
+    fetchCalls = [];
+    const select = (await screen.findByTestId('crm-identity-select')) as HTMLSelectElement;
+    fireEvent.change(select, { target: { value: 'internal' } });
+    await waitFor(() => {
+      const put = fetchCalls.find((c) => c.url.startsWith('/api/crm/customers/identity'));
+      expect(put).toBeDefined();
+      expect(JSON.parse(put!.init?.body as string).identity).toBe('internal');
+    });
   });
 });
