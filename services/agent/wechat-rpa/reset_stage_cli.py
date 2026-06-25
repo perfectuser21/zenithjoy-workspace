@@ -20,11 +20,47 @@ from __future__ import annotations
 import os
 import sys
 import subprocess
-from typing import Optional
+from typing import Any, Callable, Optional
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from reset_stage import reset_stage  # noqa: E402
+
+
+def ensure_window_ready(
+    get_window: Callable[[], Optional[Any]],
+    launch: Callable[[], bool],
+    sleep: Callable[[float], None],
+    activate: Optional[Callable[[], None]] = None,
+    attempts: int = 12,
+    interval: float = 1.0,
+) -> Optional[Any]:
+    """确保微信主窗口就绪，必要时重启微信。纯逻辑（依赖全注入）→ 可单测。
+
+    复位第①步会 taskkill 微信，故验登录前必须把微信重新拉起来再读窗口，否则
+    get_window() 恒为 None → 误判「测试号未登录」复位红（2026-06-25 xian-rog 真机 bug）。
+
+    流程：
+      1. 先读一次窗口；已在 → 激活 UIA 后直接返回（不重启，幂等）。
+      2. 没窗口 → launch() 启动微信，轮询 attempts 次等窗口出现。
+      3. 窗口出现 → activate()（激活 UIA 屏幕阅读器标志，微信 4.x 才暴露控件树）→ 返回窗口。
+      4. 等满仍无窗口（微信起不来/崩了）→ 返回 None（复位会红，符合预期）。
+    """
+    win = get_window()
+    if win is not None:
+        if activate is not None:
+            activate()
+        return win
+
+    launch()
+    for _ in range(attempts):
+        sleep(interval)
+        win = get_window()
+        if win is not None:
+            if activate is not None:
+                activate()
+            return win
+    return None
 
 
 class RealWinDriver:
@@ -56,10 +92,31 @@ class RealWinDriver:
             return False
 
     def get_logged_in_account(self) -> Optional[str]:
-        """③ 当前已登录账号标识。主窗口在且非登录/隐私锁屏 → 返 expected_account；否则 None。"""
+        """③ 当前已登录账号标识。
+
+        关键：复位第①步已 taskkill 微信，本步必须先把微信重新拉起来（ensure_window_ready）
+        再读主窗口，否则恒读到 None 误判「测试号未登录」（2026-06-25 xian-rog 真机 bug）。
+        主窗口在且非登录/隐私锁屏 → 返 expected_account；否则 None。
+        """
         try:
-            from find_weixin import get_main_window, LOGIN_WINDOW_CLASS  # 真机才 import（依赖 Win UIA）
-            mw = get_main_window()
+            import time
+            from find_weixin import (  # 真机才 import（依赖 Win UIA）
+                get_main_window,
+                launch_weixin,
+                LOGIN_WINDOW_CLASS,
+            )
+            try:
+                from listen_chat import _activate_uia  # 激活屏幕阅读器标志，暴露 4.x 控件树
+                activate = _activate_uia
+            except Exception:  # noqa: BLE001
+                activate = None
+
+            mw = ensure_window_ready(
+                get_window=get_main_window,
+                launch=launch_weixin,
+                sleep=time.sleep,
+                activate=activate,
+            )
             if mw is None:
                 return None
             # 若是登录窗（mmui::LoginWindow）说明没真登录进去
@@ -85,6 +142,14 @@ class RealWinDriver:
 
 
 def main() -> int:
+    # Windows 控制台默认 GBK，打印 ✅/❌/━ 会 UnicodeEncodeError 把真实复位结果掩盖掉。
+    # 强制 stdout/stderr 走 UTF-8（errors=replace 兜底），确保结果总能打出来。
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(encoding="utf-8", errors="replace")  # type: ignore[attr-defined]
+        except Exception:  # noqa: BLE001
+            pass
+
     expected = os.environ.get("RESET_EXPECTED_ACCOUNT", "测试号_zr")
     print(f"━━━ RPA 复位台：洗回黄金态（expected_account={expected}）━━━")
     result = reset_stage(RealWinDriver(), expected_account=expected)
