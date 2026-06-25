@@ -11,8 +11,15 @@ name: Promote Dashboard to Production (autopilot 人工放行闸)
 #
 #   流程：人工打开 https://staging-autopilot.zenjoymedia.media 看过、确认 OK
 #         → 来 Actions 手点本 workflow、confirm 框输入 PROMOTE
-#         → build 生产 dist（VITE env 注入）→ 落生产容器挂载目录 → 重启 autopilot-dashboard
+#         → build 生产 dist（VITE env 注入）→ release 隔离 promote → 重启 autopilot-dashboard
 #         → 公网验证 https://autopilot.zenjoymedia.media。
+#
+#   release 隔离（2026-06-25 补，配套 rollback-dashboard-prod.yml）：
+#     旧模型是 `cp -r dist` 原地覆盖、零留存、零回档（炸了回不来）。现改 sha-keyed release：
+#     build 进 DASH_DIR/releases/<sha>/ → 原子切 dist 软链（dist→releases/current→releases/<sha>）
+#     → 留最近 5 份。docker bind-mount 在容器启动解析软链，故切完必 restart 让容器重解析。
+#     回档走 rollback-dashboard-prod.yml（软链回拨到上一个/指定留存 release + restart）。
+#     首次上线自动把当前实体 dist 存成 baseline release 再转软链，不丢现网版本、上线即有可回退点。
 #
 #   ☠️ 绝无 push/schedule 自动触发。每次都人点。绝不碰 staging 容器。
 # ───────────────────────────────────────────────────────────────────────────
@@ -55,13 +62,18 @@ jobs:
           command_timeout: 20m
           script: |
             set -euo pipefail
-            echo "=== [1/4] git sync（候选 = origin/main）==="
-            git -C /opt/zenithjoy/repo remote prune origin 2>/dev/null || true
-            git -C /opt/zenithjoy/repo fetch --force --prune origin main
-            git -C /opt/zenithjoy/repo reset --hard origin/main
+            REPO=/opt/zenithjoy/repo
+            DASH_DIR=/opt/zenithjoy/autopilot-dashboard
 
-            echo "=== [2/4] npm build（生产 build env）==="
-            cd /opt/zenithjoy/repo
+            echo "=== [1/5] git sync（候选 = origin/main）==="
+            git -C "$REPO" remote prune origin 2>/dev/null || true
+            git -C "$REPO" fetch --force --prune origin main
+            git -C "$REPO" reset --hard origin/main
+            SHA="$(git -C "$REPO" rev-parse HEAD)"
+            echo "候选 sha=$SHA"
+
+            echo "=== [2/5] npm build（生产 build env）==="
+            cd "$REPO"
             npm ci --silent --workspace=apps/dashboard
             # VITE_* build env 显式注入：apps/dashboard/.env.production 被 gitignore，
             # git reset --hard 后 HK 上没有该文件 → 不注入则 VITE_SUPER_ADMIN_EMAILS 为空，
@@ -71,12 +83,26 @@ jobs:
             export VITE_SUPER_ADMIN_EMAILS='xuxiao21xx@icloud.com,alexperfectapi01@gmail.com'
             npm run build --workspace=apps/dashboard
 
-            echo "=== [3/4] cp dist → 生产容器挂载目录 + restart（绝不碰 staging 容器）==="
-            cp -r /opt/zenithjoy/repo/apps/dashboard/dist/. /opt/zenithjoy/autopilot-dashboard/dist/
+            echo "=== [3/5] 首次迁移：若 dist 还是实体目录（旧 cp 覆盖模型）→ 转成 release 软链 ==="
+            # 旧模型 dist 是实体目录、零留存。第一次走新模型前，把当前 dist 内容存成一个 baseline
+            # release 再让 dist 变软链——这样上线即有"上一份"可回退，不丢现网版本。
+            if [ -d "$DASH_DIR/dist" ] && [ ! -L "$DASH_DIR/dist" ]; then
+              echo "检测到 dist 为实体目录，迁移为 release 软链模型（保留当前内容为 baseline release）"
+              mkdir -p "$DASH_DIR/releases/baseline-$SHA"
+              cp -R "$DASH_DIR/dist/." "$DASH_DIR/releases/baseline-$SHA/" 2>/dev/null || true
+              rm -rf "$DASH_DIR/dist"
+              ln -sfn "releases/baseline-$SHA" "$DASH_DIR/dist"  # 临时指向 baseline，下一步 promote 会切到新 release
+            fi
+
+            echo "=== [4/5] release 隔离 promote（cp 进 releases/<sha>/ + 原子切软链 + 留存5份）==="
+            # shellcheck source=/dev/null
+            source "$REPO/.github/workflows/scripts/deploy-lib.sh"
+            dashboard_release_promote "$DASH_DIR" "$SHA" "$REPO/apps/dashboard/dist" 5
+            # docker bind-mount 在容器启动时解析软链 → 切完软链必须 restart 让容器重解析（绝不碰 staging 容器）
             docker restart autopilot-dashboard
             sleep 3
 
-            echo "=== [4/4] 公网验证（Cloudflare 全链路）==="
+            echo "=== [5/5] 公网验证（Cloudflare 全链路）==="
             HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 20 https://autopilot.zenjoymedia.media/ || echo "000")
             echo "公网 HTTP 状态码: $HTTP_CODE"
             if [ "$HTTP_CODE" != "200" ]; then

@@ -88,9 +88,26 @@ promote 之后才发现新版本有问题，要把生产 :5200 回拨到留存�
 也可走 GitHub Actions 人工放行闸：手点 **`rollback-prod.yml`**（workflow_dispatch + confirm=`ROLLBACK`，
 sha 留空=上一个 release）。机制与本地 `rollback.sh` 完全一致（SSH 进 mmv 跑同一个脚本）。
 
-> 拓扑：只回拨 **API 生产 mmv:5200**。Dashboard 生产在 HK 且**尚无 release 隔离**
-> （`promote-dashboard-prod.yml` 是 `cp -r dist` 原地覆盖、零留存），无可回退版本——
-> Dashboard 回滚需先给 HK 上 symlink-releases，是独立任务，`rollback.sh` 不冒充能回滚它。
+### 5. Dashboard（HK）回滚
+
+Dashboard 生产在 HK，2026-06-25 起也上了 **同款 sha-keyed release 隔离**：
+`promote-dashboard-prod.yml` build 进 `/opt/zenithjoy/autopilot-dashboard/releases/<sha>/` →
+原子切 `dist` 软链（`dist → releases/current → releases/<sha>`）→ 留最近 5 份。
+docker bind-mount 在容器启动解析软链，所以切完软链都要 `docker restart autopilot-dashboard`。
+
+```bash
+# 在 HK 上（生产机）
+./rollback.sh dashboard --list      # 看留存（只读）
+./rollback.sh dashboard             # 回退到上一个 release（只切软链）
+./rollback.sh dashboard <sha>       # 指定留存 release
+# 切完软链后必须重启容器让 bind-mount 重解析：
+docker restart autopilot-dashboard
+```
+
+或手点 **`rollback-dashboard-prod.yml`**（confirm=`ROLLBACK`，SSH 进 HK 跑上面的脚本 + restart + 公网验证）。
+
+> 拓扑收口：**API 生产 mmv:5200** 回滚走 `rollback.sh`（默认/`api`）/ `rollback-prod.yml`；
+> **Dashboard 生产 HK** 回滚走 `rollback.sh dashboard` / `rollback-dashboard-prod.yml`。两条都是 sha-keyed 软链回拨。
 
 ## 风险与护栏
 
