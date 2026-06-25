@@ -567,4 +567,152 @@ router.put('/onboarding/:csWechatId', requireServiceCredential, async (req: Requ
   }
 });
 
+// ─────────────────────────────────────────────────────────────────────────────
+// 修正2：三层下钻 层2/3 数据端点（客户画像 + 状态时间线 + 每日小结流 + 真实聊天记录）
+// 响应 shape 严格对齐 crm-frontend CustomerProfilePage 已编码契约（它是 shape 源）。
+// ─────────────────────────────────────────────────────────────────────────────
+
+const PROFILE_MSG_DEFAULT_LIMIT = 200; // 聊天逐句默认上限（防拉爆；前端按需展开但不分页，给个保底大窗）
+
+// GET /api/crm/customers/:contactKey/profile — 单客户画像聚合（多通道读闸）
+// :contactKey = encodeURIComponent(contact)（微信昵称）；cs_wechat_id 走 query ?cs=（前端契约）。
+// scope：contact + cs_wechat_id + tenant 三元组定位，绝不跨租户泄漏。
+// 数据源：portrait←cs_memory_longterm，dailies←cs_memory_daily，messages←cs_memory_messages，
+//   timeline/基础信息←crm_customers（无状态历史表→timeline 返回当前状态单元素）。
+// 响应：{ profile: { name, contact, wechat_id, status, managed, last_contact_at, portrait, timeline, dailies, messages } }。
+router.get('/customers/:contactKey/profile', requireCsReadAccess, async (req: Request, res: Response) => {
+  const contact = decodeURIComponent((req.params.contactKey ?? '').trim());
+  if (!contact) return res.status(400).json({ error: 'contactKey 必填' });
+  // 前端用 ?cs=<cs_wechat_id>；兼容 ?cs_wechat_id=
+  const csWechatId =
+    (typeof req.query.cs === 'string' ? req.query.cs.trim() : '') ||
+    (typeof req.query.cs_wechat_id === 'string' ? req.query.cs_wechat_id.trim() : '');
+
+  // 解析所属租户：租户 session 用 req.tenantId；super-admin（无 tenantId）按 cs_wechat_id 反查（决策5 须显式 cs）。
+  const tenantId = await resolveTenantId(req, csWechatId);
+  if (!tenantId) return fail(res, 404, 'TARGET_NOT_FOUND', '解析不到所属租户（缺 cs 或客服机不存在）');
+
+  // super-admin 经 cs 反查出 tenant 后，cs_wechat_id 必属该 tenant（反查即保证）；
+  // 租户 session 用户带了 cs 时，校验该 cs 属本租户（deny by default 跨租户偷看）。
+  if (req.tenantId && csWechatId) {
+    const own = await pool.query(
+      `SELECT 1 FROM zenithjoy.service_agents
+        WHERE wechat_id = $1 AND tenant_id = $2::uuid AND deleted_at IS NULL LIMIT 1`,
+      [csWechatId, tenantId],
+    );
+    if (own.rowCount === 0)
+      return fail(res, 403, 'CROSS_TENANT', '该客服机不属于当前租户');
+  }
+
+  const msgLimit = (() => {
+    const n = parseInt(typeof req.query.limit === 'string' ? req.query.limit : '', 10);
+    return Number.isFinite(n) && n > 0 && n <= 1000 ? n : PROFILE_MSG_DEFAULT_LIMIT;
+  })();
+
+  try {
+    // crm_customers 基础信息（状态 / 微信号 / 来源 / 扫描观测）——按 tenant + contact 定位；
+    // 带 cs 时收窄到该客服机那一行（同 contact 跨客服机理论可重，带 cs 更精确）。
+    const custParams: unknown[] = csWechatId ? [tenantId, contact, csWechatId] : [tenantId, contact];
+    const custRes = await pool.query(
+      `SELECT contact, wechat_id, status, source, last_seen_at, updated_at
+         FROM zenithjoy.crm_customers
+        WHERE tenant_id = $1::uuid AND contact = $2${csWechatId ? ' AND cs_wechat_id = $3' : ''}
+        ORDER BY updated_at DESC LIMIT 1`,
+      custParams,
+    );
+    const cust = custRes.rows?.[0] as
+      | { wechat_id: string | null; status: string; last_seen_at: Date | null; updated_at: Date }
+      | undefined;
+
+    // 长期记忆融合 summary（cs_memory 三表按 tenant_id text × contact 隔离，与 tenant-memory.ts 同模式）
+    const ltRes = await pool.query(
+      `SELECT summary, updated_at FROM zenithjoy.cs_memory_longterm
+        WHERE tenant_id = $1 AND contact = $2 LIMIT 1`,
+      [tenantId, contact],
+    );
+    const ltSummary = (ltRes.rows?.[0]?.summary as string | undefined) ?? null;
+    // portrait：第一刀无结构化 need/budget/concern 列，全文落 summary（前端兜底全展示）；有则给对象，无则 null。
+    const portrait = ltSummary
+      ? { need: null, budget: null, concern: null, summary: ltSummary }
+      : null;
+
+    // 每日小结流（按天倒序，新在前）
+    const dailyRes = await pool.query(
+      `SELECT to_char(summary_day, 'YYYY-MM-DD') AS day, summary
+         FROM zenithjoy.cs_memory_daily
+        WHERE tenant_id = $1 AND contact = $2
+        ORDER BY summary_day DESC`,
+      [tenantId, contact],
+    );
+    const dailies = dailyRes.rows.map((r) => ({ day: r.day as string, summary: r.summary as string }));
+
+    // 真实聊天逐句（role in=客户 / out=客服）。库内取最近 N 条（DESC 防拉爆），再翻成升序给前端按气泡流自然展示。
+    const msgRes = await pool.query(
+      `SELECT role, text, created_at
+         FROM zenithjoy.cs_memory_messages
+        WHERE tenant_id = $1 AND contact = $2
+        ORDER BY created_at DESC, id DESC
+        LIMIT $3`,
+      [tenantId, contact, msgLimit],
+    );
+    const messages = msgRes.rows
+      .map((r) => ({
+        role: r.role as 'in' | 'out',
+        text: r.text as string,
+        created_at: r.created_at ? new Date(r.created_at).toISOString() : null,
+      }))
+      .reverse();
+
+    // last_contact_at：优先聊天最后时间，回落扫描观测 last_seen_at
+    const lastMsgAt = msgRes.rows.length > 0 ? new Date(msgRes.rows[0].created_at).toISOString() : null;
+    const lastContactAt =
+      lastMsgAt ?? (cust?.last_seen_at ? new Date(cust.last_seen_at).toISOString() : null);
+
+    // managed 实时判定（与名册同模型）：读该 cs 的 takeover_mode + blacklist/whitelist。
+    let managed = true;
+    if (csWechatId) {
+      const cfgRes = await pool.query(
+        `SELECT whitelist, blacklist, takeover_mode FROM zenithjoy.wechat_cs_account_config WHERE wechat_id = $1`,
+        [csWechatId],
+      );
+      const cfg = cfgRes.rows?.[0];
+      if (cfg) {
+        const mode = cfg.takeover_mode === 'blacklist' ? 'blacklist' : cfg.takeover_mode === 'whitelist' ? 'whitelist' : undefined;
+        const bl = new Set((Array.isArray(cfg.blacklist) ? cfg.blacklist : []).filter((x: unknown): x is string => typeof x === 'string'));
+        const wl = new Set((Array.isArray(cfg.whitelist) ? cfg.whitelist : []).filter((x: unknown): x is string => typeof x === 'string'));
+        managed = mode === 'blacklist' ? !bl.has(contact) : mode === 'whitelist' ? wl.has(contact) : !bl.has(contact);
+      }
+    }
+
+    const status = normalizeProfileStatus(cust?.status);
+    // timeline：无状态历史表 → 返回当前状态单元素（at=最后更新时间，note 说明）。
+    const timeline =
+      cust !== undefined
+        ? [{ status, at: cust.updated_at ? new Date(cust.updated_at).toISOString() : null, note: '当前状态（无历史流转表）' }]
+        : [];
+
+    return res.json({
+      profile: {
+        name: contact,
+        contact,
+        wechat_id: (cust?.wechat_id as string | null) ?? null,
+        status,
+        managed,
+        last_contact_at: lastContactAt,
+        portrait,
+        timeline,
+        dailies,
+        messages,
+      },
+    });
+  } catch (err) {
+    return fail(res, 500, 'PROFILE_FAILED', err instanceof Error ? err.message : 'unknown');
+  }
+});
+
+/** 画像状态规范到 A1-A5（与 customer-roster.normalizeStatus 同口径，缺省 A1）。 */
+function normalizeProfileStatus(s: unknown): 'A1' | 'A2' | 'A3' | 'A4' | 'A5' {
+  return typeof s === 'string' && VALID_STATUS.has(s) ? (s as 'A1' | 'A2' | 'A3' | 'A4' | 'A5') : 'A1';
+}
+
 export default router;
