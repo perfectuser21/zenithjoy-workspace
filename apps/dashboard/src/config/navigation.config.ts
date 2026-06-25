@@ -117,6 +117,8 @@ export const autopilotPageComponents: Record<string, () => Promise<{ default: Co
   // S4 — 客服日报（回看任意历史日期每客服 4 个数 + 小结）
   'CsDailyReportPage': () => import('../pages/CsDailyReportPage'),
   'CustomerListPage': () => import('../pages/CustomerListPage'),
+  // Line04 CRM 重做 — 层2 状态/画像页（内含层3 聊天记录下钻）
+  'CustomerProfilePage': () => import('../pages/CustomerProfilePage'),
 };
 
 export const pageComponents = autopilotPageComponents;
@@ -178,8 +180,14 @@ export const additionalRoutes: RouteConfig[] = [
   { path: '/wechat/cs-stats', component: 'CsWorkStatsPage', requireAuth: true },
   { path: '/wechat/cs-daily-report', component: 'CsDailyReportPage', requireAuth: true },
   // requireAuth:false：SPA 路由直接渲染（与 /wechat/per-cs-config 同款），真正的鉴权在后端
-  // tenantContext —— 未登录时 GET /api/crm/customers 返 401，页面提示「登录已失效」。
-  { path: '/customers', component: 'CustomerListPage', requireAuth: false },
+  // tenantContext / 多通道闸 —— 未登录时 GET /api/crm/customers 返 401，页面提示「登录已失效」。
+  // CRM 重做（2026-06-25）：入口归进「私域客服」板块（/area/wechat 卡片下钻），不再游离顶层。
+  // 层1 好友表 /wechat/crm；层2 状态/画像页（含层3 聊天记录下钻）/wechat/crm/:contactKey。
+  { path: '/wechat/crm', component: 'CustomerListPage', requireAuth: false },
+  { path: '/wechat/crm/:contactKey', component: 'CustomerProfilePage', requireAuth: false },
+  // 旧顶层 /customers 重定向到板块内入口，兼容老链接/书签
+  // requireAuth:false：未登录时也放行（让 <Navigate> 先把 URL 换成 /wechat/crm，鉴权在后端）
+  { path: '/customers', redirect: '/wechat/crm', requireAuth: false },
   { path: '/local-video', component: 'LocalVideoPipelinePage', requireAuth: true },
   { path: '/clips', component: 'ContentClipperPage', requireAuth: true },
   { path: '/video-remake', component: 'VideoRemakePipelinePage', requireAuth: true },

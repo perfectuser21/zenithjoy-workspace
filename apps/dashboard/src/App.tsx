@@ -67,9 +67,17 @@ function AppContent() {
   const navItems = navGroups.flatMap(g => g.items);
 
   // 检查当前路由是否允许未认证访问
-  const currentRouteAllowsUnauthenticated = additionalRoutes.some(
-    route => location.pathname === route.path && route.requireAuth === false
-  );
+  // 支持带参数路由（如 /wechat/crm/:contactKey）：把 :param 段转成正则匹配 location.pathname，
+  // 否则层2 状态/画像页这类公开下钻页会被未登录闸打回登录页。
+  const currentRouteAllowsUnauthenticated = additionalRoutes.some(route => {
+    if (route.requireAuth !== false) return false;
+    if (location.pathname === route.path) return true;
+    if (!route.path.includes(':')) return false;
+    const pattern = new RegExp(
+      '^' + route.path.replace(/:[^/]+/g, '[^/]+').replace(/\//g, '\\/') + '\\/?$',
+    );
+    return pattern.test(location.pathname);
+  });
 
   // 全宽独立页面（不渲染 sidebar / header / p-8）
   const isFullBleed = /^\/content-factory\/[^/]+\/output\/?$/.test(location.pathname);
