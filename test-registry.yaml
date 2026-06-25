@@ -3628,3 +3628,43 @@ agent_suite:
     status: active
     product: 客户私域AI接管
     note: "cookie 接缝真目标验证（linux 真后端 :5200 + 真 better-auth cookie 注入浏览器，无 stub）：点接管开关真发凭据 → 真 200 + whitelist 真写入；由 line04-crm-customer-list-smoke.sh --leg=cookie-seam 编排。"
+
+  - id: line04-per-operator-crm-smoke-unit
+    path: apps/api/src/routes/crm-per-operator.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 客户私域AI接管
+    note: "per-operator 钉死：普通租户运营(owner,不带 cs_wechat_id)GET /api/crm/customers 自动按 req.tenantId scope 出名册、不回 CS_WECHAT_ID_REQUIRED；未登录 401；超管不带 cs→400(决策5 仅超管旁路);friend-scan/trigger 普通运营 200 / 跨租户 403。"
+
+  - id: line04-cs-machines-tenant-scope-unit
+    path: apps/api/src/routes/cs-machines-tenant-scope.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 客户私域AI接管
+    note: "GET /api/wechat/cs/machines 按账号租户 scope(修乱列表)：普通运营 listAllMachines(tenantId) 只列自己租户机器；超管无 tenantId 旁路列全部；未登录 401。"
+
+  - id: line04-tenant-context-selfheal-unit
+    path: apps/api/src/middleware/tenant-context-selfheal.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 客户私域AI接管
+    note: "tenantContext self-heal：无 tenant_members 行但名下有带 tenant 的 active license→自动补 owner member 放行(根治 partial-bridge 403 NO_TENANT)；无 license 维持 403；有成员行不触发自愈。"
+
+  - id: line04-cs-real-wechat-id-unit
+    path: apps/api/src/services/wechat/__tests__/cs-real-wechat-id.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 客户私域AI接管
+    note: "真实微信号(SSOT)落库：setupCSByMachine 写 real_wechat_id/wechat_display_name/wxid_internal 三列(COALESCE 幂等)、合成 wechat_id 不变；listAllMachines 返回 real_wechat_id+wechat_display_name 供前端 display。"
+
+  - id: line04-per-operator-smoke
+    path: .github/workflows/scripts/smoke/line04-per-operator-smoke.sh
+    type: smoke
+    ci: L4
+    status: active
+    product: 客户私域AI接管
+    note: "per-operator 真后端 smoke(:5200+postgres)：普通运营自动按租户 scope 名册 + friend-scan/trigger 不需超管 + /cs/machines 只列自己机器 + setup 手填 real_wechat_id 落库且 /cs/machines 回显昵称。接进 ci-l4-e2e-smoke.yml。"

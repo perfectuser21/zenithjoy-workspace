@@ -43,7 +43,11 @@ import {
 } from '../services/wechat/cs-account-config-store';
 import { superAdminGuard } from '../middleware/super-admin';
 import { tenantContext } from '../middleware/tenant-context';
-import { requireCsAdminOrSuperAdmin, requireCsWriteAccess } from '../middleware/cs-config-guard';
+import {
+  requireCsAdminOrSuperAdmin,
+  requireCsWriteAccess,
+  requireCsReadAccess,
+} from '../middleware/cs-config-guard';
 import type { KBAudienceSegment } from '../services/wechat/types';
 
 export const wechatConfigRouter = Router();
@@ -387,9 +391,11 @@ wechatConfigRouter.get('/cs/pending-machines', async (_req: Request, res: Respon
   return res.status(200).json({ machines });
 });
 
-// GET /api/wechat/cs/machines — 列「我的全部客服机」(已配+待配)，前台可点已配的改白名单
-wechatConfigRouter.get('/cs/machines', async (_req: Request, res: Response) => {
-  const machines = await listAllMachines();
+// GET /api/wechat/cs/machines — 列「我的全部客服机」，按账号租户 scope（修「乱列表」）
+//   普通租户运营：requireCsReadAccess → tenantContext 解出 req.tenantId → 只列自己租户那台/那几台，
+//     别把全平台 20 台（含 E2E 测试机）都倒出来。super-admin 旁路（无 req.tenantId）→ 列全部。
+wechatConfigRouter.get('/cs/machines', requireCsReadAccess, async (req: Request, res: Response) => {
+  const machines = await listAllMachines(req.tenantId || undefined);
   return res.status(200).json({ machines });
 });
 
@@ -402,7 +408,12 @@ const CSSetupBodySchema = z
     key_contact_wechat: z.string().optional(),
     whitelist: z.array(z.string()).optional(),
     daily_limit: z.number().int().min(0).optional(),
-    wechat_id: z.string().optional(), // 友好名，缺省自动派生 cs-<前缀>
+    wechat_id: z.string().optional(), // 合成主 key 覆写位（一般不填，缺省自动派生 cs-<前缀>）
+    // SSOT：真实微信号(perfect-xx)——运营前台手填"你的微信号"（wxauto 读不到，必须人填）。
+    real_wechat_id: z.string().optional(),
+    // 微信昵称 + 内部 wxid：一般由 agent 扫码/上报带入；前端若把扫码结果透传也接受。
+    wechat_display_name: z.string().optional(),
+    wxid_internal: z.string().optional(),
   })
   .strict();
 

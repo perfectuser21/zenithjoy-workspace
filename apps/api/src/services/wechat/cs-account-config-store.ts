@@ -250,8 +250,10 @@ export interface CSMachine {
   hostname?: string;
   last_seen?: string;
   configured: boolean;
-  wechat_id?: string;
-  self_name?: string;
+  wechat_id?: string; // 合成 id（cs-<前缀>）= 配置主 key，内部用
+  real_wechat_id?: string; // 真实微信号（perfect-xx，SSOT，运营手填）
+  wechat_display_name?: string; // 微信昵称（默忆，前端 display）
+  self_name?: string; // AI 人设名（小苏），≠ 微信昵称
   whitelist?: string[];
   auto_agent_enabled?: boolean;
   // 健康（最新一份 line04 自报，前台一处看到，不用再去诊断页）：
@@ -266,14 +268,38 @@ export interface CSMachine {
  * 列出「我的全部客服机」：注册过的每台机器(license_machines)+ 它当前的配置状态(已配/待配 +
  * 白名单/人设/开关)。供前台「我的客服机」列表——已配的也能点进去改白名单，不像 pending 列表
  * 只显示没配过的。按 machine_id 去重取最新一条 hostname。
+ *
+ * per-operator scope（修「乱列表」）：传 tenantId（普通租户运营）→ **只列绑到该租户的客服机**
+ *   （按 service_agents.tenant_id 过滤，该列在一键配置时由 license 落定，是客服机的归属租户主键）。
+ *   不传 tenantId（super-admin 旁路）→ 列全部（保留超管全局视角，与 CRM 读闸同模型）。
+ *   注意：scope 时以 service_agents 为驱动表（INNER），未绑定/待配机器不出现在运营视图
+ *   （那是「待配」列表 listPendingMachines 的职责，运营不该看见别人未认领的机器）。
  */
-export async function listAllMachines(limit = 100): Promise<CSMachine[]> {
+export async function listAllMachines(tenantId?: string, limit = 100): Promise<CSMachine[]> {
   try {
+    const scoped = typeof tenantId === 'string' && tenantId.length > 0;
+    const fromAndJoins = scoped
+      ? // 运营视图：service_agents 驱动（只该租户的绑定），再回连 license_machines 取 hostname/心跳
+        // 运营视图：service_agents 驱动（只该租户的绑定），LEFT JOIN license_machines 取 hostname/心跳
+        // —— 用 LEFT JOIN 而非 INNER：客服机已绑 service_agents 但 license_machines 尚无行（如刚一键配置、
+        // 还没正式注册装机）也要出现在「我的客服机」里，不能因缺 license_machines 行而漏掉自己的机器。
+        `FROM zenithjoy.service_agents sa
+         LEFT JOIN zenithjoy.license_machines lm ON lm.machine_id = sa.machine_id`
+      : // 超管视图：license_machines 驱动，左连 service_agents（含未绑定机器）
+        `FROM zenithjoy.license_machines lm
+         LEFT JOIN zenithjoy.service_agents sa
+                ON sa.machine_id = lm.machine_id AND sa.deleted_at IS NULL`;
+    const scopeWhere = scoped ? `WHERE sa.tenant_id = $2::uuid AND sa.deleted_at IS NULL` : '';
+    // 机器 id 与 GROUP BY：运营视图以 sa.machine_id 为准（license_machines 可能缺行）；超管视图以 lm.machine_id。
+    const machineIdExpr = scoped ? 'sa.machine_id' : 'lm.machine_id';
+    const params: unknown[] = scoped ? [limit, tenantId] : [limit];
     const res = await pool.query(
-      `SELECT lm.machine_id,
+      `SELECT ${machineIdExpr} AS machine_id,
               MAX(lm.hostname)        AS hostname,
               MAX(lm.last_seen)       AS last_seen,
               MAX(sa.wechat_id)       AS wechat_id,
+              MAX(sa.real_wechat_id)      AS real_wechat_id,
+              MAX(sa.wechat_display_name) AS wechat_display_name,
               MAX(c.persona->>'self_name')   AS self_name,
               MAX(c.whitelist::text)         AS whitelist,
               bool_or(c.auto_agent_enabled)  AS auto_agent_enabled,
@@ -283,9 +309,7 @@ export async function listAllMachines(limit = 100): Promise<CSMachine[]> {
               MAX(h.found_window)  AS found_window,
               MAX(h.login_present) AS login_present,
               bool_or(h.last_hb > NOW() - interval '5 minutes') AS online
-         FROM zenithjoy.license_machines lm
-         LEFT JOIN zenithjoy.service_agents sa
-                ON sa.machine_id = lm.machine_id AND sa.deleted_at IS NULL
+         ${fromAndJoins}
          LEFT JOIN zenithjoy.wechat_cs_account_config c
                 ON c.wechat_id = sa.wechat_id
          LEFT JOIN LATERAL (
@@ -298,11 +322,12 @@ export async function listAllMachines(limit = 100): Promise<CSMachine[]> {
                  WHERE a.hostname = lm.hostname AND a.last_heartbeat_at IS NOT NULL
                  ORDER BY a.last_heartbeat_at DESC LIMIT 1
               ) h ON true
-        GROUP BY lm.machine_id
+        ${scopeWhere}
+        GROUP BY ${machineIdExpr}
         ORDER BY bool_or(h.last_hb > NOW() - interval '5 minutes') DESC NULLS LAST,
                  MAX(lm.last_seen) DESC NULLS LAST
         LIMIT $1`,
-      [limit],
+      params,
     );
     const asBool = (v: unknown): boolean | undefined =>
       v === null || v === undefined ? undefined : String(v) === 'true' || v === true;
@@ -320,6 +345,8 @@ export async function listAllMachines(limit = 100): Promise<CSMachine[]> {
           r.last_seen instanceof Date ? r.last_seen.toISOString() : (r.last_seen as string | undefined),
         configured: Boolean(r.configured),
         wechat_id: r.wechat_id ? String(r.wechat_id) : undefined,
+        real_wechat_id: r.real_wechat_id ? String(r.real_wechat_id) : undefined,
+        wechat_display_name: r.wechat_display_name ? String(r.wechat_display_name) : undefined,
         self_name: r.self_name ? String(r.self_name) : undefined,
         whitelist,
         auto_agent_enabled: r.auto_agent_enabled === null ? undefined : Boolean(r.auto_agent_enabled),
@@ -346,7 +373,15 @@ export async function listAllMachines(limit = 100): Promise<CSMachine[]> {
  */
 export async function setupCSByMachine(
   machineId: string,
-  patch: Partial<CSAccountConfig> & { persona: Persona; wechat_id?: string },
+  patch: Partial<CSAccountConfig> & {
+    persona: Persona;
+    wechat_id?: string;
+    // SSOT 真实微信号(perfect-xx)——运营手填(wxauto 读不到微信号)；昵称/内部 wxid 由 agent 上报，
+    // 一键配置若已带上(前端把扫码结果透传)也一并落库。三者写进 service_agents 新列，不动合成 wechat_id 主 key。
+    real_wechat_id?: string;
+    wechat_display_name?: string;
+    wxid_internal?: string;
+  },
 ): Promise<{ wechat_id: string; agent_id: string | null }> {
   const ten = await pool.query(
     `SELECT l.tenant_id, lm.agent_id
@@ -366,12 +401,24 @@ export async function setupCSByMachine(
     typeof patch.wechat_id === 'string' && patch.wechat_id.trim()
       ? patch.wechat_id.trim()
       : `cs-${machineId.slice(0, 8)}`;
+  // 真实微信号(SSOT)/昵称/内部 wxid：缺省 NULL（存量/未填兼容）；trim 空串也归一成 NULL，避免空串占唯一索引。
+  const trimOrNull = (v: unknown): string | null =>
+    typeof v === 'string' && v.trim() ? v.trim() : null;
+  const realWechatId = trimOrNull(patch.real_wechat_id);
+  const displayName = trimOrNull(patch.wechat_display_name);
+  const wxidInternal = trimOrNull(patch.wxid_internal);
+  // COALESCE 保留既有非空值：本次没传(NULL)不抹掉上次填的真实微信号/昵称/wxid（幂等补填，不回退）。
   await pool.query(
-    `INSERT INTO zenithjoy.service_agents (tenant_id, machine_id, wechat_id)
-     VALUES ($1, $2, $3)
+    `INSERT INTO zenithjoy.service_agents
+       (tenant_id, machine_id, wechat_id, real_wechat_id, wechat_display_name, wxid_internal)
+     VALUES ($1, $2, $3, $4, $5, $6)
      ON CONFLICT (machine_id) WHERE deleted_at IS NULL
-       DO UPDATE SET wechat_id = EXCLUDED.wechat_id, updated_at = now()`,
-    [tenantId, machineId, wechatId],
+       DO UPDATE SET wechat_id = EXCLUDED.wechat_id,
+                     real_wechat_id = COALESCE(EXCLUDED.real_wechat_id, zenithjoy.service_agents.real_wechat_id),
+                     wechat_display_name = COALESCE(EXCLUDED.wechat_display_name, zenithjoy.service_agents.wechat_display_name),
+                     wxid_internal = COALESCE(EXCLUDED.wxid_internal, zenithjoy.service_agents.wxid_internal),
+                     updated_at = now()`,
+    [tenantId, machineId, wechatId, realWechatId, displayName, wxidInternal],
   );
   await saveCSConfig(wechatId, patch);
   return { wechat_id: wechatId, agent_id: agentId };

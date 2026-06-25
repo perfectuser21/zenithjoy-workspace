@@ -495,6 +495,18 @@ jobs:
           chmod +x .github/workflows/scripts/smoke/line04-crm-customer-list-smoke.sh
           bash .github/workflows/scripts/smoke/line04-crm-customer-list-smoke.sh
 
+      # ─── Line04 per-operator：普通运营自动按租户 scope + /cs/machines 只列自己机器 + 真实微信号(SSOT)落库 ───
+      - name: Smoke — Line04 per-operator（租户自动 scope + cs/machines scope + real_wechat_id 落库）
+        env:
+          API_BASE: http://localhost:5200
+          PSQL_HOST: localhost
+          PSQL_USER: cecelia
+          PSQL_DB: cecelia
+          PSQL_PASS: cecelia
+        run: |
+          chmod +x .github/workflows/scripts/smoke/line04-per-operator-smoke.sh
+          bash .github/workflows/scripts/smoke/line04-per-operator-smoke.sh
+
       # ─── Line04 CRM 重做：blacklist 写 / friend-scan ingest+trigger+pending / onboarding 状态机 / 403 修法（含邮箱超管） ───
       # SMOKE_ADMIN_EMAIL 须 ∈ job-level ADMIN_EMAILS，邮箱超管旁路（修 403）smoke 才能 200。
       - name: Smoke — Line04 CRM 重做 blacklist+ingest+onboarding+trigger
