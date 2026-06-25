@@ -73,6 +73,17 @@ test('设白名单点「设置完毕」遇 403（error 是对象）— 页面不
   await page.screenshot({ path: 'screenshots/cs-oneclick-403-no-whitescreen.png', fullPage: true })
 })
 
+// per-operator 重做（2026-06-25 契约）：客服机人设名（小苏/小助手）+ 在线状态归在「我的客服机」卡，不在客户列表
+test('我的客服机卡显示客服人设名 + 在线状态（人设名挪出客户列表）', async ({ page }) => {
+  await stubMachines(page)
+  await page.goto(`${BASE_URL}/wechat/setup`)
+  // 已配机器行上显示人设名「小助手」与在线
+  const persona = page.getByTestId('cs-machine-persona').first()
+  await expect(persona).toBeVisible()
+  await expect(persona).toContainText('小助手')
+  await expect(persona).toContainText('在线')
+})
+
 test('设置成功（200）— 显示成功提示', async ({ page }) => {
   await stubMachines(page)
   await page.route('**/api/wechat/cs/setup/**', (route) =>
