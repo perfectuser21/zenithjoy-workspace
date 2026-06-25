@@ -39,6 +39,12 @@ jobs:
             echo "=== [2/4] npm build ==="
             cd /opt/zenithjoy/repo
             npm ci --silent --workspace=apps/dashboard
+            # VITE_* build env 显式注入：apps/dashboard/.env.production 被 gitignore，
+            # git reset --hard 后 HK 上没有该文件 → 不注入则 VITE_SUPER_ADMIN_EMAILS 为空，
+            # 超管功能在生产失效（已知 bug，2026-06-25 修）。
+            export VITE_FEISHU_APP_ID='cli_a937a808ca395bd6'
+            export VITE_SKIP_AUTH='false'
+            export VITE_SUPER_ADMIN_EMAILS='xuxiao21xx@icloud.com,alexperfectapi01@gmail.com'
             npm run build --workspace=apps/dashboard
 
             echo "=== [3/4] cp dist → 容器挂载目录 + restart ==="
