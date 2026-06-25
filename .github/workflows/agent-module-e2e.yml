@@ -89,15 +89,28 @@ jobs:
           console.log('Step 4 OK: fork+config+active verified');
           " 2>&1
 
-      - name: Step 6 — MOCK_WECHAT_VERSION=4.2.0.0 version fail must block (exit 1, ok:false)
+      # 2026-06-24 微信版本死闸放开（>=4.1.8 全放行、去上界，#852/#853）后，4.2.0.0 应放行而非阻断。
+      # 旧 Step 6 还断言"4.2.0.0 必须阻断"是放闸漏清的 stale 测试。这里改为两段断言，正反路径都保留：
+      #   6a 上界放行：4.2.0.0（>=4.1.8）→ exit 0 / ok:true / checks.wechat_version:true（防 #852/#853 回退）
+      #   6b 下界阻断：4.1.7.0（<4.1.8）→ exit 1 / ok:false / fixGuide（证明真不支持的版本仍被挡，负路径不丢）
+      - name: Step 6a — MOCK_WECHAT_VERSION=4.2.0.0 上界放行（>=4.1.8 应通过，exit 0, ok:true）
         run: |
-          MOCK_WECHAT_VERSION=4.2.0.0 npx tsx modules/line04/preflight.ts > /tmp/pf-mock.json 2>/dev/null && PCODE=0 || PCODE=$?
-          [ "$PCODE" -eq 1 ] || { echo "FAIL: exit $PCODE should be 1 (version fail must block)"; exit 1; }
-          cat /tmp/pf-mock.json | jq -e '.ok == false' || { echo "FAIL: ok should be false (version fail must block)"; exit 1; }
-          cat /tmp/pf-mock.json | jq -e '.checks.wechat_version == false' || { echo "FAIL: checks.wechat_version should be false"; exit 1; }
-          cat /tmp/pf-mock.json | jq -e 'has("fixGuide")' || { echo "FAIL: version fail must have fixGuide with download URL"; exit 1; }
-          cat /tmp/pf-mock.json | jq -e 'has("skipped") | not' || { echo "FAIL: top-level output must not have skipped"; exit 1; }
-          echo "Step 6 OK"
+          MOCK_WECHAT_VERSION=4.2.0.0 npx tsx modules/line04/preflight.ts > /tmp/pf-pass.json 2>/dev/null && PCODE=0 || PCODE=$?
+          [ "$PCODE" -eq 0 ] || { echo "FAIL: exit $PCODE should be 0 (>=4.1.8 放行)"; cat /tmp/pf-pass.json; exit 1; }
+          cat /tmp/pf-pass.json | jq -e '.ok == true' || { echo "FAIL: ok should be true (4.2.0.0 应放行)"; exit 1; }
+          cat /tmp/pf-pass.json | jq -e '.checks.wechat_version == true' || { echo "FAIL: checks.wechat_version should be true"; exit 1; }
+          cat /tmp/pf-pass.json | jq -e 'has("fixGuide") | not' || { echo "FAIL: 放行不应有 fixGuide"; exit 1; }
+          echo "Step 6a OK (上界放行)"
+
+      - name: Step 6b — MOCK_WECHAT_VERSION=4.1.7.0 下界阻断（<4.1.8 必须挡，exit 1, ok:false）
+        run: |
+          MOCK_WECHAT_VERSION=4.1.7.0 npx tsx modules/line04/preflight.ts > /tmp/pf-block.json 2>/dev/null && PCODE=0 || PCODE=$?
+          [ "$PCODE" -eq 1 ] || { echo "FAIL: exit $PCODE should be 1 (version fail must block)"; cat /tmp/pf-block.json; exit 1; }
+          cat /tmp/pf-block.json | jq -e '.ok == false' || { echo "FAIL: ok should be false (version fail must block)"; exit 1; }
+          cat /tmp/pf-block.json | jq -e '.checks.wechat_version == false' || { echo "FAIL: checks.wechat_version should be false"; exit 1; }
+          cat /tmp/pf-block.json | jq -e 'has("fixGuide")' || { echo "FAIL: version fail must have fixGuide with download URL"; exit 1; }
+          cat /tmp/pf-block.json | jq -e 'has("skipped") | not' || { echo "FAIL: top-level output must not have skipped"; exit 1; }
+          echo "Step 6b OK (下界阻断)"
 
       - name: Smoke script (API_UP guard)
         run: bash ../../.github/workflows/scripts/smoke/agent-module-e2e-smoke.sh
@@ -157,9 +170,24 @@ jobs:
           if ($LASTEXITCODE -ne 0) { Write-Host "FAIL: preflight exit $LASTEXITCODE"; exit 1 }
           Write-Host "Step 3 OK: real machine preflight exit 0"
 
-      - name: Step 6 — MOCK_WECHAT_VERSION=4.2.0.0 version fail must block on real machine
+      # 与 ubuntu Step 6 同步（放闸后 4.2.0.0 应放行）：正反两段——6a 上界放行 / 6b 下界阻断。
+      - name: Step 6a — MOCK_WECHAT_VERSION=4.2.0.0 上界放行 on real machine（>=4.1.8 应通过，exit 0, ok:true）
         run: |
           $env:MOCK_WECHAT_VERSION = '4.2.0.0'
+          $result = node dist/modules/line04/preflight.js 2>$null
+          $PCODE = $LASTEXITCODE
+          Remove-Item Env:\MOCK_WECHAT_VERSION -ErrorAction SilentlyContinue
+          if (-not $result) { Write-Host "FAIL: preflight.js returned empty output"; exit 1 }
+          $result | Set-Content pf-pass.json -Encoding ascii
+          Write-Host "exit=$PCODE"
+          if ($PCODE -ne 0) { Write-Host "FAIL: exit $PCODE should be 0 (>=4.1.8 放行)"; Get-Content pf-pass.json; exit 1 }
+          node -e "const j=JSON.parse(require('fs').readFileSync('pf-pass.json','utf8')); if(j.ok!==true){console.error('FAIL: ok should be true (4.2.0.0 应放行)');process.exit(1);} if(j.checks.wechat_version!==true){console.error('FAIL: checks.wechat_version should be true');process.exit(1);} if(j.fixGuide){console.error('FAIL: 放行不应有 fixGuide');process.exit(1);} console.log('Step 6a OK (xian-rog 上界放行)');"
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          Remove-Item pf-pass.json -ErrorAction SilentlyContinue
+
+      - name: Step 6b — MOCK_WECHAT_VERSION=4.1.7.0 下界阻断 on real machine（<4.1.8 必须挡，exit 1, ok:false）
+        run: |
+          $env:MOCK_WECHAT_VERSION = '4.1.7.0'
           $result = node dist/modules/line04/preflight.js 2>$null
           $PCODE = $LASTEXITCODE
           Remove-Item Env:\MOCK_WECHAT_VERSION -ErrorAction SilentlyContinue
@@ -167,6 +195,6 @@ jobs:
           $result | Set-Content pf-xrog.json -Encoding ascii
           Write-Host "exit=$PCODE"
           if ($PCODE -ne 1) { Write-Host "FAIL: exit $PCODE should be 1 (version fail must block on xian-rog)"; exit 1 }
-          node -e "const j=JSON.parse(require('fs').readFileSync('pf-xrog.json','utf8')); if(j.ok!==false){console.error('FAIL: ok should be false');process.exit(1);} if(j.checks.wechat_version!==false){console.error('FAIL: checks.wechat_version should be false');process.exit(1);} if(!j.fixGuide){console.error('FAIL: fixGuide must be present');process.exit(1);} console.log('Step 6 OK (xian-rog version-blocking)');"
+          node -e "const j=JSON.parse(require('fs').readFileSync('pf-xrog.json','utf8')); if(j.ok!==false){console.error('FAIL: ok should be false');process.exit(1);} if(j.checks.wechat_version!==false){console.error('FAIL: checks.wechat_version should be false');process.exit(1);} if(!j.fixGuide){console.error('FAIL: fixGuide must be present');process.exit(1);} console.log('Step 6b OK (xian-rog 下界阻断)');"
           if ($LASTEXITCODE -ne 0) { exit 1 }
           Remove-Item pf-xrog.json -ErrorAction SilentlyContinue
