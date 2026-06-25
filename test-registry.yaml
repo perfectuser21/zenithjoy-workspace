@@ -2195,6 +2195,14 @@ tests:
     product: AI视频本地流水线
     note: "TemplateSelector 组件 — 渲染/选择/取消模板单测"
 
+  - id: dashboard-env-badge
+    path: apps/dashboard/src/components/EnvBadge.test.tsx
+    type: unit
+    ci: L4
+    status: active
+    product: 运营中台
+    note: "环境角标 — staging/dev/production 各分支判定 + 生产不渲染 + pointer-events 单测"
+
   - id: agent-video-pipeline-template-branch
     path: services/agent/src/handlers/__tests__/video-pipeline-template.test.ts
     type: unit

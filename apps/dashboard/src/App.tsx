@@ -15,6 +15,8 @@ import DynamicRouter from './components/DynamicRouter';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { ThemeProvider, useTheme } from './contexts/ThemeContext';
 import { InstanceProvider, useInstance } from './contexts/InstanceContext';
+// 环境角标（staging/dev 显示，生产不显示）
+import EnvBadge from './components/EnvBadge';
 // Path 2 Sprint A: FeishuBindTenant 通过 navigation.config 'feishu-bind' 路径懒加载（DynamicRouter 注册）
 // 静态引用避免 tree-shake 误删懒加载入口
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -339,6 +341,8 @@ function App() {
     <ThemeProvider>
       <InstanceProvider>
         <AuthProvider>
+          {/* 环境角标置于最外层，登录页/加载页/任意页面都可见 */}
+          <EnvBadge />
           <AppContent />
         </AuthProvider>
       </InstanceProvider>

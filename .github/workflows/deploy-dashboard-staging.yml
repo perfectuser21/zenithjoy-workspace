@@ -64,6 +64,8 @@ jobs:
             export VITE_FEISHU_APP_ID='cli_a937a808ca395bd6'
             export VITE_SKIP_AUTH='false'
             export VITE_SUPER_ADMIN_EMAILS='xuxiao21xx@icloud.com,alexperfectapi01@gmail.com'
+            # 环境角标：staging build 注入 staging → 前端右上角显橙色 STAGING 旗（生产 promote 注入 production，不显示）。
+            export VITE_DEPLOY_ENV='staging'
             npm run build --workspace=apps/dashboard
 
             echo "=== [3/5] 落 staging dist + staging nginx.conf（绝不碰生产 autopilot-dashboard）==="
