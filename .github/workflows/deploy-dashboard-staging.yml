@@ -1,0 +1,113 @@
+name: Deploy Dashboard to STAGING (staging-autopilot, API :5201)
+
+# ───────────────────────────────────────────────────────────────────────────
+# Dashboard STAGING 实例（PrepPRD 2026-06-25）
+#   背景：API 已有蓝绿常驻 staging :5201（deploy-us-vps.yml 把 main 候选发 :5201 连
+#         zenithjoy_test 库），但 dashboard 一直只能走 deploy-hk-vps.yml 直发生产 HK，
+#         前端改动没法先给用户验。本 workflow 补上 dashboard 的 staging。
+#
+#   做什么：把 dashboard 用 STAGING build env build 出来，发到 HK 上独立的
+#           autopilot-staging 容器（host :521）。该容器用 nginx.staging.conf——
+#           所有 /api/ → 常驻 staging API :5201（不碰生产 :5200）。
+#           对外地址：https://staging-autopilot.zenjoymedia.media（Cloudflare tunnel）。
+#
+#   死规矩：AI 只发到 staging；生产 autopilot 由用户在 deploy-hk-vps.yml 手点放行。
+#           本 workflow 绝不碰生产 autopilot-dashboard 容器 / nginx.conf。
+#
+#   触发：① push main 命中 dashboard / staging nginx 路径（自动给用户铺好候选）
+#         ② workflow_dispatch（手动重发）
+# ───────────────────────────────────────────────────────────────────────────
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'apps/dashboard/**'
+      - 'deploy/nginx.staging.conf'
+      - 'deploy/docker-compose.staging.yml'
+  workflow_dispatch: {}
+
+concurrency:
+  group: deploy-dashboard-staging
+  cancel-in-progress: false
+
+jobs:
+  deploy-staging-dashboard:
+    name: Build + Deploy STAGING Dashboard (autopilot-staging :521 / API :5201)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Deploy via SSH（build staging dist + 起 autopilot-staging 容器）
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.HK_VPS_HOST }}
+          username: ${{ secrets.HK_VPS_USER }}
+          key: ${{ secrets.HK_VPS_SSH_KEY }}
+          port: ${{ secrets.HK_VPS_PORT }}
+          script_stop: true
+          command_timeout: 20m
+          script: |
+            set -euo pipefail
+            REPO=/opt/zenithjoy/repo
+            STAGING_DIR=/opt/zenithjoy/autopilot-staging
+
+            echo "=== [1/5] git sync（候选 = origin/main）==="
+            git -C "$REPO" remote prune origin 2>/dev/null || true
+            git -C "$REPO" fetch --force --prune origin main
+            git -C "$REPO" reset --hard origin/main
+
+            echo "=== [2/5] build dashboard（STAGING build env）==="
+            cd "$REPO"
+            npm ci --silent --workspace=apps/dashboard
+            # VITE_* build env 在 workflow 里显式注入（.env.* 被 gitignore，不进 repo / CI）。
+            # staging 与生产唯一区别：API 走 staging nginx → :5201；其余 super-admin 等一致。
+            export VITE_FEISHU_APP_ID='cli_a937a808ca395bd6'
+            export VITE_SKIP_AUTH='false'
+            export VITE_SUPER_ADMIN_EMAILS='xuxiao21xx@icloud.com,alexperfectapi01@gmail.com'
+            npm run build --workspace=apps/dashboard
+
+            echo "=== [3/5] 落 staging dist + staging nginx.conf（绝不碰生产 autopilot-dashboard）==="
+            mkdir -p "$STAGING_DIR/dist"
+            rm -rf "$STAGING_DIR/dist"/*
+            cp -r "$REPO/apps/dashboard/dist/." "$STAGING_DIR/dist/"
+            cp "$REPO/deploy/nginx.staging.conf" "$STAGING_DIR/nginx.conf"
+
+            echo "=== [4/5] 起 / 重建 autopilot-staging 容器（compose 幂等）==="
+            cd "$REPO/deploy"
+            # zenithjoy-net 由生产 compose 创建（external），这里只起 staging 容器
+            docker compose -f docker-compose.staging.yml up -d --force-recreate autopilot-staging
+            sleep 3
+
+            echo "=== [5/5] 验证：本地 :521 + 公网 staging 域名 ==="
+            LOCAL=$(curl -s -o /dev/null -w "%{http_code}" --max-time 15 http://localhost:521/ || echo "000")
+            echo "本地 :521 = $LOCAL"
+            if [ "$LOCAL" != "200" ]; then
+              echo "❌ staging 容器本地未起 (期望 200，实际 $LOCAL)"
+              echo "容器状态: $(docker inspect autopilot-staging --format '{{.State.Status}}' 2>/dev/null || echo missing)"
+              docker logs --tail 30 autopilot-staging 2>&1 || true
+              exit 1
+            fi
+            PUB=$(curl -s -o /dev/null -w "%{http_code}" --max-time 20 https://staging-autopilot.zenjoymedia.media/ || echo "000")
+            echo "公网 staging-autopilot = $PUB"
+            if [ "$PUB" != "200" ]; then
+              echo "⚠️ 公网 staging 域名未通（HTTP $PUB）——若是首次部署，需先在 Cloudflare 加 tunnel ingress + DNS（见 PR 说明）。容器本身已 OK。"
+            else
+              echo "✅ STAGING dashboard 部署完成，公网验证通过。地址：https://staging-autopilot.zenjoymedia.media"
+            fi
+
+  notify-failure:
+    name: Notify Brain on failure
+    runs-on: ubuntu-latest
+    needs: [deploy-staging-dashboard]
+    if: failure()
+    steps:
+      - name: Post alert to Brain
+        run: |
+          curl -sf -X POST ${{ secrets.BRAIN_URL }}/api/brain/tasks \
+            -H "Content-Type: application/json" \
+            -d '{
+              "title": "ZenithJoy STAGING Dashboard 部署失败",
+              "priority": "P1",
+              "task_type": "dev",
+              "description": "deploy-dashboard-staging.yml 失败（不影响生产），请排查"
+            }' || echo "Brain API 不可达，跳过告警"
