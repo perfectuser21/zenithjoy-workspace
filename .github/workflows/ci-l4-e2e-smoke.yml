@@ -73,6 +73,8 @@ jobs:
       NODE_ENV: test
       # Sprint B 多租户 smoke 用：API 识别 super-admin
       ADMIN_FEISHU_OPENIDS: ou_admin_smoke_999
+      # Line04 CRM 邮箱超管旁路（修 403）：API 识别 X-User-Email ∈ ADMIN_EMAILS（须与 smoke SMOKE_ADMIN_EMAIL 同值）
+      ADMIN_EMAILS: boss@zenjoymedia.media
       # PR-1 better-auth 邮箱+密码登录
       BETTER_AUTH_SECRET: ci-only-secret-32-chars-min-not-prod-123
       BETTER_AUTH_URL: http://localhost:5200
@@ -493,11 +495,13 @@ jobs:
           chmod +x .github/workflows/scripts/smoke/line04-crm-customer-list-smoke.sh
           bash .github/workflows/scripts/smoke/line04-crm-customer-list-smoke.sh
 
-      # ─── Line04 CRM 重做：blacklist 写 / friend-scan ingest / onboarding 状态机 / 403 修法 ───
-      - name: Smoke — Line04 CRM 重做 blacklist+ingest+onboarding
+      # ─── Line04 CRM 重做：blacklist 写 / friend-scan ingest+trigger+pending / onboarding 状态机 / 403 修法（含邮箱超管） ───
+      # SMOKE_ADMIN_EMAIL 须 ∈ job-level ADMIN_EMAILS，邮箱超管旁路（修 403）smoke 才能 200。
+      - name: Smoke — Line04 CRM 重做 blacklist+ingest+onboarding+trigger
         env:
           API_BASE: http://localhost:5200
           ZENITHJOY_INTERNAL_TOKEN: ci-only-internal-token-abc-not-prod
+          SMOKE_ADMIN_EMAIL: boss@zenjoymedia.media
           PSQL_HOST: localhost
           PSQL_USER: cecelia
           PSQL_DB: cecelia

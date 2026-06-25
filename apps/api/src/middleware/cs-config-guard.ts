@@ -45,7 +45,7 @@ export function requireCsAdmin(req: Request, res: Response, next: NextFunction):
   next();
 }
 
-/** 当前请求是否带「legacy 服务/超管」凭证（飞书白名单 id 或 internal token）。 */
+/** 当前请求是否带「legacy 服务/超管」凭证（飞书白名单 id、邮箱超管 或 internal token）。 */
 function hasLegacyServiceCredential(req: Request): boolean {
   const feishuId =
     typeof req.headers['x-feishu-user-id'] === 'string'
@@ -56,6 +56,18 @@ function hasLegacyServiceCredential(req: Request): boolean {
     .map((s) => s.trim())
     .filter(Boolean);
   if (feishuId !== '' && adminIds.includes(feishuId)) return true;
+
+  // 邮箱超管通道（修 403）：X-User-Email ∈ ADMIN_EMAILS → 走 superAdminGuard 的邮箱路径（super-admin.ts:60-76）。
+  // 没有这一旁路时，邮箱超管（无飞书头、无 token）会落到裸 tenantContext，而超管邮箱常不属任何租户 → 403。
+  const userEmail =
+    typeof req.headers['x-user-email'] === 'string'
+      ? req.headers['x-user-email'].trim().toLowerCase()
+      : '';
+  const adminEmails = (process.env.ADMIN_EMAILS ?? '')
+    .split(',')
+    .map((s) => s.trim().toLowerCase())
+    .filter(Boolean);
+  if (userEmail !== '' && adminEmails.includes(userEmail)) return true;
 
   const authz = req.headers.authorization || '';
   const bearer = authz.startsWith('Bearer ') ? authz.slice('Bearer '.length).trim() : '';

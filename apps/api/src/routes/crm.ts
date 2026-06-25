@@ -460,13 +460,14 @@ router.post('/friend-scan/ingest', requireServiceCredential, async (req: Request
       if (up.rows?.[0]?.inserted === true) newCount += 1;
     }
 
-    // 更新 onboarding O2 scanned_count + step_o2_scanned（拉到人即 ok，0 人记 fail）
+    // 更新 onboarding O2 scanned_count + step_o2_scanned（拉到人即 ok，0 人记 fail）；
+    // 同时消费掉「立即扫好友」强制请求（force_scan_requested_at 置 NULL）——本次 ingest 即这次强制扫的结果。
     const scannedCount = rows.length;
     await client.query(
-      `INSERT INTO zenithjoy.crm_onboarding_state (tenant_id, cs_wechat_id, step_o2_scanned, scanned_count, updated_at)
-       VALUES ($1::uuid, $2, $3, $4, now())
+      `INSERT INTO zenithjoy.crm_onboarding_state (tenant_id, cs_wechat_id, step_o2_scanned, scanned_count, force_scan_requested_at, updated_at)
+       VALUES ($1::uuid, $2, $3, $4, NULL, now())
        ON CONFLICT (tenant_id, cs_wechat_id) DO UPDATE
-         SET step_o2_scanned = $3, scanned_count = $4, updated_at = now()`,
+         SET step_o2_scanned = $3, scanned_count = $4, force_scan_requested_at = NULL, updated_at = now()`,
       [tenantId, csWechatId, scannedCount > 0 ? 'ok' : 'fail', scannedCount],
     );
 
@@ -477,6 +478,78 @@ router.post('/friend-scan/ingest', requireServiceCredential, async (req: Request
     return fail(res, 500, 'INGEST_FAILED', err instanceof Error ? err.message : 'unknown');
   } finally {
     client.release();
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 立即扫好友：trigger（网页用户点）→ pending（agent 轮询）→ ingest 成功后后端清标志
+// ─────────────────────────────────────────────────────────────────────────────
+
+// POST /api/crm/friend-scan/trigger — 网页用户点「立即扫好友」，设 force_scan_requested_at=now()
+// body: { cs_wechat_id }
+// 鉴权 requireCsReadAccess（同租户/超管，**不是** requireServiceCredential——要让网页用户能点）。
+// 响应: { ok, requested_at }
+router.post('/friend-scan/trigger', requireCsReadAccess, async (req: Request, res: Response) => {
+  const csWechatId = (typeof req.body?.cs_wechat_id === 'string' ? req.body.cs_wechat_id : '').trim();
+  if (!csWechatId) return res.status(400).json({ error: 'cs_wechat_id 必填' });
+
+  // 解析所属租户：租户 session 用 req.tenantId；super-admin（无 tenantId）按 cs_wechat_id 反查。
+  const tenantId = await resolveTenantId(req, csWechatId);
+  if (!tenantId) return fail(res, 404, 'TARGET_NOT_FOUND', '解析不到该客服机所属租户');
+
+  // 租户 session 用户带 cs 时，校验该 cs 属本租户（deny by default 跨租户偷点别家的客服机）。
+  if (req.tenantId) {
+    const own = await pool.query(
+      `SELECT 1 FROM zenithjoy.service_agents
+        WHERE wechat_id = $1 AND tenant_id = $2::uuid AND deleted_at IS NULL LIMIT 1`,
+      [csWechatId, tenantId],
+    );
+    if (own.rowCount === 0) return fail(res, 403, 'CROSS_TENANT', '该客服机不属于当前租户');
+  }
+
+  try {
+    // 设 force_scan_requested_at=now()；首插带默认其它列，冲突只更该列。
+    const r = await pool.query(
+      `INSERT INTO zenithjoy.crm_onboarding_state (tenant_id, cs_wechat_id, force_scan_requested_at, updated_at)
+       VALUES ($1::uuid, $2, now(), now())
+       ON CONFLICT (tenant_id, cs_wechat_id) DO UPDATE
+         SET force_scan_requested_at = now(), updated_at = now()
+       RETURNING force_scan_requested_at`,
+      [tenantId, csWechatId],
+    );
+    const requestedAt = r.rows?.[0]?.force_scan_requested_at
+      ? new Date(r.rows[0].force_scan_requested_at).toISOString()
+      : null;
+    return res.json({ ok: true, requested_at: requestedAt });
+  } catch (err) {
+    return fail(res, 500, 'TRIGGER_FAILED', err instanceof Error ? err.message : 'unknown');
+  }
+});
+
+// GET /api/crm/friend-scan/pending?cs_wechat_id=X — agent 轮询是否有未消费的强制扫描请求
+// 鉴权 requireServiceCredential（agent internal token；非人类 session）。
+// 响应: { ok, force, requested_at }
+//   force = force_scan_requested_at IS NOT NULL（ingest 成功后会被置 NULL，所以非空即「这次还没扫过」）。
+router.get('/friend-scan/pending', requireServiceCredential, async (req: Request, res: Response) => {
+  const csWechatId = (typeof req.query.cs_wechat_id === 'string' ? req.query.cs_wechat_id : '').trim();
+  if (!csWechatId) return res.status(400).json({ error: 'cs_wechat_id 必填' });
+
+  // agent 无 req.tenantId（service token），按 cs_wechat_id → service_agents.tenant_id 解析所属租户。
+  const tenantId = await resolveTenantId(req, csWechatId);
+  if (!tenantId) return fail(res, 404, 'TARGET_NOT_FOUND', '解析不到该客服机所属租户');
+
+  try {
+    const r = await pool.query(
+      `SELECT force_scan_requested_at
+         FROM zenithjoy.crm_onboarding_state
+        WHERE tenant_id = $1::uuid AND cs_wechat_id = $2 LIMIT 1`,
+      [tenantId, csWechatId],
+    );
+    const raw = r.rows?.[0]?.force_scan_requested_at ?? null;
+    const requestedAt = raw ? new Date(raw).toISOString() : null;
+    return res.json({ ok: true, force: requestedAt !== null, requested_at: requestedAt });
+  } catch (err) {
+    return fail(res, 500, 'PENDING_FAILED', err instanceof Error ? err.message : 'unknown');
   }
 });
 
