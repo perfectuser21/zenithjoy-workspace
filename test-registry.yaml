@@ -3059,6 +3059,14 @@ agent_suite:
     product: 客户私域AI接管
     note: "Line04 立即扫好友 trigger/pending/ingest 路由单测（mock pool + supertest）— 缺参/404/邮箱超管成功/DB失败 + force=true/false + ingest 清 force_scan_requested_at 标志契约"
 
+  - id: line04-crm-table-identity-routes
+    path: apps/api/tests/routes/crm-table-identity.test.ts
+    type: unit
+    ci: L4
+    status: active
+    product: 客户私域AI接管
+    note: "Line04 外层 CRM 表重做路由单测（mock pool + supertest）— ingest 向前兼容收 wechat_id/add_friend_time 写库 + GET /customers 返 identity/add_friend_time 且排除 internal"
+
   - id: path4-crm-migration
     path: sprints/06030910-path4-crm-wechat-sync/tests/crm-migration.test.ts
     type: contract
