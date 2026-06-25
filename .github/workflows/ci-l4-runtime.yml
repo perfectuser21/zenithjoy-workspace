@@ -121,6 +121,19 @@ jobs:
       - name: Run tests (src/ only — publishers require Chrome CDP not available in CI)
         working-directory: services/agent
         run: npx vitest run src/
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: wechat-rpa 纯函数单测（顶层零 pywinauto，clean CI 可跑）
+        working-directory: services/agent/wechat-rpa
+        run: |
+          python -m pip install --quiet pytest
+          # CRM 重做 agent 侧纯逻辑：好友扫描解析 / ingest 上报 / 黑名单 should_reply 翻转
+          # 这些测试用 stub 注入 pywinauto，CI 无真机也能跑（修 a4699d21：smoke 必须真接 CI）。
+          python -m pytest tests/test_scan_recent_contacts.py \
+                           tests/test_friend_scan_ingest.py \
+                           tests/test_cs_config_gate.py \
+                           tests/test_scan_unread.py -q
       - name: Check build-modules/line04/wechat-rpa in sync with source
         run: |
           diff -r services/agent/wechat-rpa/ \

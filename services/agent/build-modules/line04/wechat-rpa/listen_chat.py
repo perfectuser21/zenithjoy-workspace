@@ -449,6 +449,86 @@ def scan_unread(mw: Any, last_content: Optional[Dict[str, str]] = None) -> List[
     return out
 
 
+# ─── CRM 好友表行源：列出近期会话联系人（不要求未读）────────────────────────────
+#
+# 背景（PrepPRD §3.4 / 修正5）：把"客服白名单手填"换成"agent 扫客服机微信近期会话
+# 联系人 → 报中台 → 中台拉成客户好友表"。scan_unread 只挑有 [N条] 未读角标的会话，
+# 没有"列出全部近期会话联系人"的能力。这里补上：不要求未读，复用同款 SKIP 过滤。
+
+
+def _collect_recent_contacts(item_names: List[str], limit: int = 100) -> List[Dict[str, str]]:
+    """纯函数（CI clean 可跑，顶层零 pywinauto）：把一批 ListItem 的 element_info.name
+    解析成 distinct 近期会话联系人。
+
+    - 不要求未读（require_unread=False）：含/不含 [N条] 角标的私聊都收。
+    - 复用 SKIP_SENDERS / SKIP_GROUP_KEYWORDS / 群预览前缀过滤（只要私聊，去系统账号）。
+    - 同一 sender 多次出现只留第一条（列表顶部 = 最近）。
+    - 仅有 UI 状态标记（"已置顶"/"草稿"）无真实消息的会话：人仍要列出（这是"列联系人"，
+      不是"挑未读"），last_message 给空串。
+    - 截断到 limit（取靠前 = 最近的 N 个）。
+
+    返回 [{"name": sender, "last_message": preview}]（last_seen 由真机入口补，纯解析拿不到）。
+    """
+    out: List[Dict[str, str]] = []
+    seen: set[str] = set()
+    for name in item_names:
+        name = name or ""
+        parts = name.split("\n")
+        if len(parts) < 2:
+            continue
+        sender = parts[0].strip()
+        if not sender or sender in seen:
+            continue
+        if any(s in sender for s in SKIP_SENDERS):
+            continue
+        if any(kw in sender for kw in SKIP_GROUP_KEYWORDS):
+            continue
+        # 复用 _parse_item_name 拿真实消息预览（不要求未读）；拿不到 = 仅 UI 标记 → 空预览
+        parsed = _parse_item_name(name, require_unread=False)
+        if parsed is not None:
+            # _parse_item_name 已过滤群预览前缀（"成员名: 内容"）→ 返回 None；
+            # 这里 parsed 非空说明是私聊，sender 以解析结果为准（去掉潜在空白）
+            sender = parsed["sender"]
+            if sender in seen:
+                continue
+            preview = parsed["content"]
+        else:
+            # 仅 UI 标记 / 无真实消息：群预览前缀也会落这里——需二次判定剔群
+            import re as _re
+            content_segs = [s.strip() for s in parts[1:] if s.strip()]
+            joined = "\n".join(content_segs)
+            if any(_re.match(r'^[^\n：:]{1,30}[：:]\s', seg) for seg in content_segs):
+                continue  # 群预览前缀 → 群聊，跳过
+            preview = ""
+        seen.add(sender)
+        out.append({"name": sender, "last_message": preview})
+        if len(out) >= limit:
+            break
+    return out
+
+
+def scan_recent_contacts(mw: Any, limit: int = 100) -> List[Dict[str, str]]:
+    """遍历主窗口会话列表 ListItem，列出近期会话联系人（CRM 好友表行源）。
+
+    与 scan_unread 的区别：scan_unread 只挑未读；本函数列"近期会话联系人"（不要求未读），
+    供中台拉成客户好友表（默认全接管 + 黑名单排除）。
+
+    托盘/最小化场景同 scan_unread：扫描前 _ensure_tray_visible 短暂移出离屏刷新 UIA，
+    扫完 _restore_window_state 还原（后台无感知）。返回纯函数 _collect_recent_contacts 的结果。
+    """
+    orig_state = _ensure_tray_visible(mw)
+    try:
+        names: List[str] = []
+        for it in mw.descendants(control_type="ListItem"):
+            try:
+                names.append(it.element_info.name or "")
+            except Exception:
+                continue
+        return _collect_recent_contacts(names, limit=limit)
+    finally:
+        _restore_window_state(mw, orig_state)
+
+
 def _iter_all_controls(mw: Any, control_type: str):
     """扫主窗口控件树，再扫同一进程的其他 mmui:: 子窗口（仅微信自身弹窗）。
 
@@ -1386,6 +1466,66 @@ def post_heartbeat(
     return {"ok": True}
 
 
+# ─── CRM 好友扫描上报：scan_recent_contacts → 中台 ingest（internal token）───────────
+
+
+def post_friend_scan(
+    middleware_url: str,
+    cs_wechat_id: str,
+    contacts: List[Dict[str, Any]],
+    timeout: int = 15,
+) -> Dict[str, Any]:
+    """上报近期会话联系人到中台 ingest 端点（CRM 好友表行源）。
+
+    契约（PrepPRD §3.2）：
+      POST /api/crm/friend-scan/ingest
+      鉴权：X-Internal-Token（agent 无人类 session；env ZENITHJOY_INTERNAL_TOKEN，
+            未设时不带头——后端 dev 模式放行，生产必设）
+      body：{ cs_wechat_id, contacts:[{name, last_message?, last_seen?}] }
+      幂等：后端按 (tenant_id, cs_wechat_id, contact) upsert。
+
+    纪律（同 post_heartbeat）：任何失败吞掉返回 {ok:false}，绝不抛——上报不能拖垮监听。
+    - 空 contacts → 不发 HTTP（无意义），返回 {ok:true, ingested:0}。
+    - 缺 cs_wechat_id → 不知上报给谁 → {ok:false}，不发 HTTP。
+    """
+    if not cs_wechat_id:
+        return {"ok": False, "error": "missing cs_wechat_id"}
+    if not contacts:
+        return {"ok": True, "ingested": 0}
+    try:
+        import requests  # 仅运行时需要
+    except Exception as exc:
+        return {"ok": False, "error": f"requests not available: {exc}"}
+
+    url = middleware_url.rstrip("/") + "/api/crm/friend-scan/ingest"
+    body = {"cs_wechat_id": cs_wechat_id, "contacts": contacts}
+    headers: Dict[str, str] = {}
+    _token = os.environ.get("ZENITHJOY_INTERNAL_TOKEN", "").strip()
+    if _token:
+        headers["X-Internal-Token"] = _token
+    try:
+        resp = requests.post(url, json=body, timeout=timeout, headers=headers)
+    except Exception as exc:
+        return {"ok": False, "error": f"{type(exc).__name__}: {exc}"}
+    status = getattr(resp, "status_code", 0)
+    if status != 200:
+        try:
+            text = (resp.text or "")[:200]
+        except Exception:
+            text = ""
+        return {"ok": False, "error": f"middleware HTTP {status}: {text}"}
+    try:
+        data = resp.json()
+    except Exception:
+        data = {}
+    result: Dict[str, Any] = {"ok": True}
+    if isinstance(data, dict):
+        for k in ("ingested", "new", "scanned_count"):
+            if k in data:
+                result[k] = data[k]
+    return result
+
+
 # ─── 关键人出站任务（上下线播报 + 失败告警）：拉取 → 真机发送 → 回执 ──────────────────
 #
 # C1 尾巴接线：中台把「主动发给关键人」的出站任务入库（status=approved/system），
@@ -1737,6 +1877,11 @@ def run_real_listen(args: argparse.Namespace) -> int:
     cs_pull_ok = False
     last_cs_pull = 0.0
     CS_PULL_INTERVAL = 30  # 秒；与心跳同量级，开关一改约 30s 内生效
+    # CRM 好友扫描上报（PrepPRD §3.4 / 决策 3）：onboarding 必跑一次 + 每日一次低频。
+    # 低频是因为扫描要短暂移窗刷新 UIA，频繁会扰动；每日一次足以维护好友表。
+    last_friend_scan = 0.0
+    friend_scan_done_once = False
+    FRIEND_SCAN_INTERVAL = 24 * 3600  # 每日一次
     try:
         while time.time() < deadline:
             now = time.time()
@@ -1878,6 +2023,23 @@ def run_real_listen(args: argparse.Namespace) -> int:
                 continue
             last_unread_senders = [u["sender"] for u in unread]
 
+            # CRM 好友扫描上报（onboarding 必跑一次 + 每日一次低频，决策 3）：
+            # machine_id 在册且已拉到自己 wechat_id → scan_recent_contacts → POST 中台 ingest。
+            # 失败吞掉不拖垮监听（post_friend_scan 内部已处理）。
+            _cs_wid = (cs_config or {}).get("wechat_id") if getattr(args, "machine_id", None) else None
+            if _cs_wid and (not friend_scan_done_once or now - last_friend_scan >= FRIEND_SCAN_INTERVAL):
+                try:
+                    _contacts = scan_recent_contacts(mw, limit=100)
+                    _res = post_friend_scan(args.middleware_url, _cs_wid, _contacts)
+                    if _res.get("ok"):
+                        friend_scan_done_once = True
+                        last_friend_scan = now
+                        _log(f"[CRM好友扫描] 扫到 {len(_contacts)} 人 → 上报 ingested={_res.get('ingested')}")
+                    else:
+                        _log(f"[CRM好友扫描] 上报失败: {_res.get('error')}（下轮重试）")
+                except Exception as _fsexc:
+                    _log(f"[CRM好友扫描] 异常: {_fsexc}")
+
             # 关键人出站任务（上下线播报 + 失败告警）：拉中台待发任务 → 真机 UIA 发送 → 回执。
             # 与「被动回名单内客户」同循环，但走 send_chat 真发配方（target=关键人）。失败吞掉不拖垮监听。
             try:
@@ -1943,14 +2105,21 @@ def run_real_listen(args: argparse.Namespace) -> int:
             # ── Phase 1: 过滤可回复的未读 + 并行生成草稿 ──────────────────────────────
             # 生成草稿是纯网络调用、不碰微信窗口，可并发；多人同时来时不再逐个排队等模型，
             # 把"生成"从串行链路里拿出来并行做，最后只串行做"切窗+发送"（单窗口物理限制）。
-            # 白名单：该客服配了 whitelist 则只回名单内（should_reply）；没配（空）→ 不限，保持现状。
-            _cs_whitelist = (cs_config or {}).get("whitelist") if getattr(args, "machine_id", None) else None
+            # 接管名单门（CRM 重做：黑名单主模型 + whitelist 兼容回退，见 cs_config_gate.should_reply）：
+            # - blacklist 模式（takeover_mode='blacklist'）：默认全接管，sender∈blacklist 才跳过。
+            # - whitelist 模式 / 无 takeover_mode 存量配置：配了 whitelist 则只回名单内；没配（空）→ 不限，保持现状。
+            # 是否启用名单门：machine_id 在册 且（blacklist 模式 或 配了非空 whitelist）。
+            _cs_cfg = cs_config if getattr(args, "machine_id", None) else None
+            _cs_mode = (_cs_cfg or {}).get("takeover_mode")
+            _cs_whitelist = (_cs_cfg or {}).get("whitelist")
+            _roster_gate_on = bool(_cs_cfg) and (_cs_mode == "blacklist" or bool(_cs_whitelist))
             eligible = []
             for m in unread:
                 key = (m["sender"], m["content"])
-                if _cs_whitelist and not cs_config_gate.should_reply(cs_config, m["sender"]):
+                if _roster_gate_on and not cs_config_gate.should_reply(_cs_cfg, m["sender"]):
                     if key not in _skip_logged:
-                        _log(f"skip(不在该客服白名单) sender={m['sender']}")
+                        _reason = "黑名单内" if _cs_mode == "blacklist" else "不在该客服白名单"
+                        _log(f"skip({_reason}) sender={m['sender']}")
                         _skip_logged.add(key)
                     continue
                 # UIA 重复读防护：同 (联系人, 文本) 在去重时间窗内只回一次（auto_reply.is_duplicate
