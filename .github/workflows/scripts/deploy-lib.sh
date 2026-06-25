@@ -146,9 +146,12 @@ prune_old_releases() {
   keep_sha="$(current_release_sha "$root")"
   # 按 mtime 新→旧列出 release 目录名（排除 current/staging 软链）。release 名是 git sha（纯字母数字），
   # 不含特殊字符，ls 安全。
-  local dirs
-  # shellcheck disable=SC2012
-  dirs="$(cd "$root" && ls -1dt -- */ 2>/dev/null | sed 's:/*$::' | grep -vE '^(current|staging)$' || true)"
+  local dirs=""
+  if cd "$root" 2>/dev/null; then
+    # shellcheck disable=SC2012
+    dirs="$(ls -1dt -- */ 2>/dev/null | sed 's:/*$::' | grep -vE '^(current|staging)$')"
+    cd - >/dev/null 2>&1 || true
+  fi
   local i=0
   local d
   while IFS= read -r d; do
