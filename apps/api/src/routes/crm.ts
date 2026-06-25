@@ -581,7 +581,9 @@ const PROFILE_MSG_DEFAULT_LIMIT = 200; // 聊天逐句默认上限（防拉爆�
 //   timeline/基础信息←crm_customers（无状态历史表→timeline 返回当前状态单元素）。
 // 响应：{ profile: { name, contact, wechat_id, status, managed, last_contact_at, portrait, timeline, dailies, messages } }。
 router.get('/customers/:contactKey/profile', requireCsReadAccess, async (req: Request, res: Response) => {
-  const contact = decodeURIComponent((req.params.contactKey ?? '').trim());
+  // Express 已对路由参数自动 decode（前端 encodeURIComponent 一次 → 这里拿到的就是原始 contact）。
+  // 绝不再 decodeURIComponent：含字面 % 的昵称（如 "5%off"）会 URI malformed 抛错并崩进程（double-decode bug）。
+  const contact = (req.params.contactKey ?? '').trim();
   if (!contact) return res.status(400).json({ error: 'contactKey 必填' });
   // 前端用 ?cs=<cs_wechat_id>；兼容 ?cs_wechat_id=
   const csWechatId =
