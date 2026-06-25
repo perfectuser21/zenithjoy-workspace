@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  com.zenithjoy.api.plist.template — 生产 API launchd 定义【release 隔离版模板】
+
+  蓝绿加固 Line A（2026-06-25）：生产 launchd 从 release 隔离软链 releases/current 跑，
+  不再从 git 工作树 apps/api/dist/index.js 跑。promote = 原子重指 current → 新 release，
+  rollback = 软链回上一 release（秒级、不重编译、不碰工作树）。
+
+  ⚠️ 本文件是【模板】：不含密钥。真实生产 plist 在 ~/Library/LaunchAgents/com.zenithjoy.api.plist，
+     由全部生产密钥的 EnvironmentVariables 组成（ANTHROPIC_API_KEY / BETTER_AUTH_SECRET / ...）。
+     切到 release 隔离模型时，只需把真实 plist 的两处指向工作树的路径改成 releases/current：
+       ProgramArguments[1] : .../apps/api/dist/index.js  →  /Users/administrator/zenithjoy-releases/current/dist/index.js
+       WorkingDirectory    : .../apps/api               →  /Users/administrator/zenithjoy-releases/current
+     EnvironmentVariables（密钥）原样保留不动。
+
+  真机 cutover 步骤见 docs/blue-green-cutover-runbook.md（碰真生产，需用户放行后再做）。
+-->
+<plist version="1.0">
+<dict>
+	<key>Label</key>
+	<string>com.zenithjoy.api</string>
+	<key>ProgramArguments</key>
+	<array>
+		<string>/opt/homebrew/bin/node</string>
+		<string>/Users/administrator/zenithjoy-releases/current/dist/index.js</string>
+	</array>
+	<!--
+	  EnvironmentVariables：真实生产 plist 含全部密钥（PORT=5200 / DATABASE_NAME=cecelia /
+	  NODE_ENV=production / ANTHROPIC_API_KEY / BETTER_AUTH_SECRET / FEISHU_* / ... ）。
+	  模板不写密钥；cutover 时保留真实 plist 的这一段不动，只改上面的 ProgramArguments[1] 与
+	  下面的 WorkingDirectory 两处路径。
+	-->
+	<key>EnvironmentVariables</key>
+	<dict>
+		<key>PORT</key>
+		<string>5200</string>
+		<key>DATABASE_NAME</key>
+		<string>cecelia</string>
+		<key>NODE_ENV</key>
+		<string>production</string>
+	</dict>
+	<key>KeepAlive</key>
+	<true/>
+	<key>RunAtLoad</key>
+	<true/>
+	<key>StandardErrorPath</key>
+	<string>/Users/administrator/Library/Logs/zenithjoy-api.error.log</string>
+	<key>StandardOutPath</key>
+	<string>/Users/administrator/Library/Logs/zenithjoy-api.log</string>
+	<key>WorkingDirectory</key>
+	<string>/Users/administrator/zenithjoy-releases/current</string>
+</dict>
+</plist>

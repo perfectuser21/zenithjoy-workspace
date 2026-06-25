@@ -86,6 +86,97 @@ assert_version() {
 }
 
 # ════════════════════════════════════════════════════════════════════════════
+# release 隔离原语（releases/<sha>/ + current 软链）
+#
+# 治根（PrepPRD 2026-06-25）：旧 staging_rollback 用 `git reset --hard 锚点 + 重 build`
+# 在工作树原地搞——回滚要重新编译、碰整个 repo 工作树、首次部署无锚点就只能祈祷。
+# 改成 Cecelia 原子 mv 纪律的 release 隔离形态（落地用 releases/current 软链，不是 docker）：
+#   · build 进独立 releases/<sha>/（apps/api 产物：dist + node_modules + package.json）
+#   · 生产 launchd 从 releases/current 软链跑（current → releases/<活跃sha>）
+#   · promote = 原子重指 current → 新 release（ln -sfn 临时名 + mv -hf 原子 rename）+ 重启
+#   · rollback = 原子重指 current → 上一个 release（秒级、不重编译、不碰工作树）
+#
+# 下面四个原语纯操作软链/目录，无外部副作用（除文件系统），可被单测（Case H/I/J/K）。
+# ════════════════════════════════════════════════════════════════════════════
+
+# release_dir_for <releases_root> <sha>：拼出某 sha 的 release 目录路径（不创建）。
+release_dir_for() {
+  local root="$1" sha="$2"
+  echo "${root}/${sha}"
+}
+
+# current_release_sha <releases_root>：读 current 软链指向的 release 的 sha（= basename）。
+# current 不存在 / 不是软链 / 指向不存在目录 → 打印空串。
+current_release_sha() {
+  local root="$1"
+  local link="${root}/current"
+  [ -L "$link" ] || return 0
+  local target
+  target="$(readlink "$link" 2>/dev/null || echo "")"
+  [ -z "$target" ] && return 0
+  basename "$target"
+}
+
+# atomic_repoint_current <releases_root> <target_release_dir>：原子把 current 重指到目标 release。
+# 先建临时软链指向目标，再原子 rename 覆盖 current，保证 current 任一时刻要么旧要么新、绝不悬空。
+# 跨平台坑：current 已存在且是软链时，裸 `mv -f tmp current` 在 Lin/GNU 会**跟随** current 软链
+# 把 tmp 塞进它指向的目录（不是替换 current）。所以必须用「不跟随目标软链」的 rename：
+#   · GNU/Linux：mv -fT（--no-target-directory，把目标当普通文件原子覆盖）
+#   · BSD/macOS：mv -hf（-h 不跟随软链目标）
+#   · 都不认时：rm -f current 后再 mv（非原子，但语义正确，兜底）
+# 目标 release 目录不存在 → 返 1（绝不把 current 指向不存在的 release）。
+# _atomic_swap_symlink <target> <link>：把 <link> 原子重指到 <target>（跨平台不跟随旧软链）。
+_atomic_swap_symlink() {
+  local target="$1" link="$2"
+  local tmp="${link}.tmp.$$"
+  ln -sfn "$target" "$tmp" || { echo "❌ 建临时软链失败" >&2; return 1; }
+  if mv -fT "$tmp" "$link" 2>/dev/null; then return 0; fi   # GNU/Linux 原子覆盖
+  if mv -hf "$tmp" "$link" 2>/dev/null; then return 0; fi   # BSD/macOS 原子覆盖
+  # 兜底（非原子）：先删旧软链本身（不跟随），再 mv 进去
+  rm -f "$link" 2>/dev/null || true
+  mv -f "$tmp" "$link" || { echo "❌ 重指软链 ${link} 失败" >&2; rm -f "$tmp"; return 1; }
+  return 0
+}
+
+atomic_repoint_current() {
+  local root="$1" target="$2"
+  if [ ! -d "$target" ]; then
+    echo "❌ atomic_repoint_current：目标 release 不存在 $target，拒绝重指 current" >&2
+    return 1
+  fi
+  _atomic_swap_symlink "$target" "${root}/current"
+}
+
+# prune_old_releases <releases_root> <keep_n>：按 mtime 保留最新 keep_n 个 release 目录，
+# 删更旧的——但 current 软链指向的 release **绝不删**（即便它已超出 keep_n）。
+prune_old_releases() {
+  local root="$1" keep="${2:-5}"
+  [ -d "$root" ] || return 0
+  local keep_sha
+  keep_sha="$(current_release_sha "$root")"
+  # 按 mtime 新→旧列出 release 目录名（排除 current/staging 软链）。release 名是 git sha（纯字母数字），
+  # 不含特殊字符，ls 安全。
+  local dirs=""
+  if cd "$root" 2>/dev/null; then
+    # shellcheck disable=SC2012
+    dirs="$(ls -1dt -- */ 2>/dev/null | sed 's:/*$::' | grep -vE '^(current|staging)$')"
+    cd - >/dev/null 2>&1 || true
+  fi
+  local i=0
+  local d
+  while IFS= read -r d; do
+    [ -z "$d" ] && continue
+    i=$((i+1))
+    # 保留最新 keep 个
+    [ "$i" -le "$keep" ] && continue
+    # current 指向的绝不删
+    [ "$d" = "$keep_sha" ] && continue
+    rm -rf "${root:?}/${d:?}"
+  done <<< "$dirs"
+  return 0
+}
+
+# ════════════════════════════════════════════════════════════════════════════
 # 蓝绿部署编排器（staging → promote 闸 + 自动回滚）
 #
 # 治根（PrepPRD 2026-06-24）：现状 main 合并 → CD 直接重启生产 :5200，没有 staging，
@@ -191,6 +282,10 @@ blue_green_deploy() {
 #   ZJ_STAGING_DB    staging 库名（zenithjoy_test）
 #   ZJ_PROD_PLIST    生产 plist 路径（用来继承运行时 env）
 #   ZJ_NODE          node 可执行（/opt/homebrew/bin/node）
+#   ZJ_RELEASES_DIR  release 隔离根（如 /Users/administrator/zenithjoy-releases）
+#                    布局：$ZJ_RELEASES_DIR/<sha>/（apps/api 产物）+ $ZJ_RELEASES_DIR/current 软链
+#                    生产 launchd 从 $ZJ_RELEASES_DIR/current/dist/index.js 跑。
+#   ZJ_KEEP_RELEASES 保留几个旧 release（默认 5），prune 多的（current 指向的绝不删）
 #   BRAIN_URL        Brain API（报 P0 用）
 # ════════════════════════════════════════════════════════════════════════════
 
@@ -209,36 +304,59 @@ for k, v in env.items():
 PY
 }
 
-# staging_deploy_slot <sha>：把新 build 拉起到 staging slot :5201（连 test 库）。
-# 继承生产 env，覆写 PORT/DATABASE_NAME/NODE_ENV；先杀占端口的残留进程，再后台起 node。
+# build_release <sha>：把 apps/api 产物 build 进独立 release 目录 releases/<sha>/。
+# 幂等：同 sha 已 build 过（有 dist/index.js）直接复用，不重复 build。
+# release 目录自包含：dist + node_modules + package.json，promote/rollback 切软链即换代码。
+build_release() {
+  local sha="$1"
+  local reldir; reldir="$(release_dir_for "${ZJ_RELEASES_DIR}" "$sha")"
+  if [ -f "${reldir}/dist/index.js" ]; then
+    echo "✅ release ${sha} 已存在（${reldir}），复用"
+    return 0
+  fi
+  echo "build release ${sha} → ${reldir} ..."
+  mkdir -p "${reldir}"
+  # 从工作树（deploy yml 已 git reset 到目标 sha）build，产物拷进 release 目录。
+  ( cd "${ZJ_API_DIR}" || exit 1
+    BUILD_SHA="${sha}" npm run build
+  ) || { echo "❌ build 失败"; return 1; }
+  # 拷自包含运行所需：dist + package.json + node_modules（node_modules 用硬链快拷省空间/时间）
+  cp -R "${ZJ_API_DIR}/dist" "${reldir}/dist" || { echo "❌ 拷 dist 失败"; return 1; }
+  cp "${ZJ_API_DIR}/package.json" "${reldir}/package.json" 2>/dev/null || true
+  if [ -d "${ZJ_API_DIR}/node_modules" ]; then
+    cp -Rc "${ZJ_API_DIR}/node_modules" "${reldir}/node_modules" 2>/dev/null \
+      || cp -R "${ZJ_API_DIR}/node_modules" "${reldir}/node_modules" \
+      || { echo "❌ 拷 node_modules 失败"; return 1; }
+  fi
+  [ -f "${reldir}/dist/index.js" ] || { echo "❌ release 产物缺 dist/index.js"; return 1; }
+  echo "✅ release ${sha} build 完成"
+  return 0
+}
+
+# staging_deploy_slot <sha>：build release + 把【常驻 staging 实例】(:5201) 切到该 release。
+# 治根（B）：main 合并只动常驻 staging，绝不碰生产 :5200。
+# 常驻 staging launchd（com.zenithjoy.api.staging）从 releases/staging 软链跑——这里：
+#   ① build release  ② 原子重指 releases/staging 软链 → 新 release  ③ kunload/load 重启常驻 staging
+# staging 进程 env（PORT=5201 / DATABASE_NAME=zenithjoy_test / NODE_ENV=staging）在 plist 里定义。
 staging_deploy_slot() {
   local sha="$1"
-  echo "起 staging slot :${ZJ_STAGING_PORT}（DB=${ZJ_STAGING_DB}）..."
+  echo "起常驻 staging :${ZJ_STAGING_PORT}（DB=${ZJ_STAGING_DB}）→ release ${sha} ..."
+
+  if ! build_release "$sha"; then echo "❌ staging release build 失败"; return 1; fi
+
+  local reldir; reldir="$(release_dir_for "${ZJ_RELEASES_DIR}" "$sha")"
+  # 常驻 staging 用独立软链 releases/staging（与生产 current 隔离），原子重指到新 release
+  if ! _atomic_swap_symlink "$reldir" "${ZJ_RELEASES_DIR}/staging"; then
+    echo "❌ 重指 staging 软链失败"; return 1
+  fi
+  echo "✅ releases/staging → ${sha}"
+
+  # 重启常驻 staging launchd（先杀占端口残留，再 kickstart）
   kill_port "${ZJ_STAGING_PORT}"
-
-  # 收集生产运行时 env → 写临时 env 文件 → 覆写 staging 专属项（覆写放最后，后值生效）
-  local env_file; env_file="$(mktemp)"
-  _extract_prod_env "${ZJ_PROD_PLIST}" > "$env_file"
-  {
-    echo "PORT=${ZJ_STAGING_PORT}"
-    echo "DATABASE_NAME=${ZJ_STAGING_DB}"
-    echo "NODE_ENV=staging"
-    echo "BUILD_SHA=${sha}"
-  } >> "$env_file"
-
-  # 后台起 staging 进程：env <file> 形式逐行注入（KEY=VALUE），不挂 launchd、不开机自启
-  ( cd "${ZJ_API_DIR}" || exit 1
-    # 逐行 export，避免值里含空格/特殊字符被 word-split
-    while IFS='=' read -r _k _v; do
-      [ -z "$_k" ] && continue
-      export "${_k}=${_v}"
-    done < "$env_file"
-    nohup "${ZJ_NODE}" dist/index.js \
-      > /Users/administrator/Library/Logs/zenithjoy-api.staging.log \
-      2> /Users/administrator/Library/Logs/zenithjoy-api.staging.error.log &
-    echo $! > /tmp/zj-staging.pid
-  )
-  rm -f "$env_file"
+  local staging_label="${ZJ_STAGING_LABEL:-com.zenithjoy.api.staging}"
+  launchctl stop "${staging_label}" 2>/dev/null || true
+  sleep 1
+  launchctl start "${staging_label}" 2>/dev/null || true
 
   # 等 staging health
   local up=0
@@ -247,11 +365,11 @@ staging_deploy_slot() {
     sleep 2
   done
   if [ "$up" -ne 1 ]; then
-    echo "❌ staging slot 20s 内没起来"
+    echo "❌ 常驻 staging 20s 内没起来"
     tail -20 /Users/administrator/Library/Logs/zenithjoy-api.staging.error.log 2>/dev/null || true
     return 1
   fi
-  echo "✅ staging slot :${ZJ_STAGING_PORT} 已起"
+  echo "✅ 常驻 staging :${ZJ_STAGING_PORT} 已起（release ${sha}）"
   return 0
 }
 
@@ -275,7 +393,13 @@ staging_verify() {
   echo "④ golden-path smoke（API_BASE=${base}）..."
   local smoke="${ZJ_REPO}/.github/workflows/scripts/smoke/golden-path-1-smoke.sh"
   if [ -x "$smoke" ] || [ -f "$smoke" ]; then
-    if ! API_BASE="${base}" bash "$smoke"; then echo "❌ golden-path smoke 在 staging 红"; return 1; fi
+    # staging 上 install-pack tarball 未必已构建/部署（是独立 ops 关注点，不是本次 API 回归）。
+    # 默认把 install-pack manifest/download/license burn-in 这类环境性断言降级（治蓝绿 C 假阳）；
+    # 想在 staging 也严验 install-pack 的，部署时 export ZJ_STAGING_SKIP_INSTALL_PACK=0。
+    local skip_ip="${ZJ_STAGING_SKIP_INSTALL_PACK:-1}"
+    if ! API_BASE="${base}" GOLDEN_PATH_SKIP_INSTALL_PACK="${skip_ip}" bash "$smoke"; then
+      echo "❌ golden-path smoke 在 staging 红"; return 1
+    fi
   else
     echo "⚠️  golden-path smoke 缺失，跳过（不应发生）"
   fi
@@ -289,14 +413,27 @@ staging_record_anchor() {
     | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{try{process.stdout.write(String(JSON.parse(s).sha||""))}catch{process.stdout.write("")}})' 2>/dev/null || echo ""
 }
 
-# staging_promote <sha>：方案 A —— 对生产库跑 migration，把验过的新 build 重启进 :5200。
+# staging_promote <sha>：release 隔离版 —— 确保 release 存在 → 对生产库跑 migration →
+# 原子重指 releases/current → 新 release → 干净重启生产 launchd（从 current 跑）。
+# 不再碰工作树、不再原地重 build；切换是软链原子 rename（秒级）。
 staging_promote() {
   local sha="$1"
-  echo "promote：对生产库跑 migration（幂等）..."
-  if ! ( cd "${ZJ_API_DIR}" && npm run migrate ); then
+
+  echo "promote：确保 release ${sha} 已 build（幂等）..."
+  if ! build_release "$sha"; then echo "❌ promote release build 失败"; return 1; fi
+  local reldir; reldir="$(release_dir_for "${ZJ_RELEASES_DIR}" "$sha")"
+
+  echo "promote：对生产库跑 migration（从 release 目录跑，幂等）..."
+  if ! ( cd "${reldir}" && npm run migrate ); then
     echo "❌ 生产库 migration 失败"; return 1
   fi
-  echo "promote：干净重启 ${ZJ_PROD_LABEL}（先杀占 :${ZJ_PROD_PORT} 进程）..."
+
+  echo "promote：原子重指 releases/current → ${sha}..."
+  if ! atomic_repoint_current "${ZJ_RELEASES_DIR}" "${reldir}"; then
+    echo "❌ 原子重指 current 失败"; return 1
+  fi
+
+  echo "promote：干净重启 ${ZJ_PROD_LABEL}（生产 launchd 从 current 跑，先杀占 :${ZJ_PROD_PORT} 进程）..."
   launchctl stop "${ZJ_PROD_LABEL}" || true
   sleep 2
   kill_port "${ZJ_PROD_PORT}"
@@ -307,6 +444,8 @@ staging_promote() {
     sleep 5
   done
   [ "$up" -eq 1 ] || { echo "❌ promote 后 :${ZJ_PROD_PORT} 没起来"; return 1; }
+  # 成功后 prune 旧 release（current 指向的绝不删）
+  prune_old_releases "${ZJ_RELEASES_DIR}" "${ZJ_KEEP_RELEASES:-5}" || true
   return 0
 }
 
@@ -318,15 +457,20 @@ staging_verify_prod() {
   assert_version "${base}" "${sha}"
 }
 
-# staging_rollback <anchor_sha>：promote 失败时把生产恢复到上一版。
-# 方案 A 下 dist 已被新 build 覆盖，回滚 = git checkout 锚点 sha 重 build 再重启。
-# 锚点为空（首次部署无旧版本）则仅重启确保不停在半死。
+# staging_rollback <anchor_sha>：release 隔离版 —— 把生产恢复到上一版。
+# 回滚 = 原子重指 releases/current → 锚点 sha 的 release + 重启（秒级、不重编译、不碰工作树）。
+# 锚点为空（首次部署无旧版本）/ 锚点 release 目录不存在 → 仅重启 current 现状兜底（不停在半死）。
 staging_rollback() {
   local anchor="$1"
-  echo "⏪ 回滚生产到锚点 sha=${anchor:-<空>}"
+  echo "⏪ 回滚生产到锚点 sha=${anchor:-<空>}（原子软链回上一 release）"
   if [ -n "$anchor" ]; then
-    ( cd "${ZJ_REPO}" && git reset --hard "$anchor" 2>/dev/null ) || echo "⚠️ git reset 锚点失败，尝试仅重启兜底"
-    ( cd "${ZJ_API_DIR}" && BUILD_SHA="$anchor" npm run build ) || echo "⚠️ 回滚 build 失败"
+    local reldir; reldir="$(release_dir_for "${ZJ_RELEASES_DIR}" "$anchor")"
+    if [ -d "$reldir" ]; then
+      atomic_repoint_current "${ZJ_RELEASES_DIR}" "$reldir" \
+        || echo "⚠️ 原子重指锚点 release 失败，尝试仅重启 current 现状兜底"
+    else
+      echo "⚠️ 锚点 release 目录不存在（${reldir}），current 保持现状，仅重启兜底确保不停在半死"
+    fi
   fi
   launchctl stop "${ZJ_PROD_LABEL}" || true
   sleep 2
@@ -338,21 +482,19 @@ staging_rollback() {
     sleep 5
   done
   [ "$up" -eq 1 ] || { echo "❌❌ 回滚后 :${ZJ_PROD_PORT} 仍不健康，需人工立即介入"; return 1; }
-  if [ -n "$anchor" ]; then
+  if [ -n "$anchor" ] && [ -d "$(release_dir_for "${ZJ_RELEASES_DIR}" "$anchor")" ]; then
     assert_version "http://localhost:${ZJ_PROD_PORT}" "$anchor" || { echo "❌ 回滚后版本断言不命中锚点"; return 1; }
   fi
   echo "✅ 已回滚到健康态"
   return 0
 }
 
-# staging_destroy_slot：销毁 staging slot 进程（验证完/部署成功后清理）。
+# staging_destroy_slot：常驻 staging 不销毁（KeepAlive 常驻，等下次部署覆盖）。
+# 释义改变（B）：staging 不再是「验完即销毁的临时 slot」，而是常驻实例供人工打开看。
+# 这里仅做成功后的旧 release prune（current/staging 指向的绝不删），不停 staging 进程。
 staging_destroy_slot() {
-  if [ -f /tmp/zj-staging.pid ]; then
-    kill "$(cat /tmp/zj-staging.pid)" 2>/dev/null || true
-    rm -f /tmp/zj-staging.pid
-  fi
-  kill_port "${ZJ_STAGING_PORT}"
-  echo "✅ staging slot :${ZJ_STAGING_PORT} 已销毁"
+  prune_old_releases "${ZJ_RELEASES_DIR}" "${ZJ_KEEP_RELEASES:-5}" || true
+  echo "ℹ️  常驻 staging :${ZJ_STAGING_PORT} 保留（不销毁），仅 prune 旧 release"
   return 0
 }
 

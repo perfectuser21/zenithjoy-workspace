@@ -273,10 +273,13 @@ jobs:
           shellcheck .github/workflows/scripts/deploy-lib.sh
           shellcheck .github/workflows/scripts/__tests__/deploy-lib.test.sh
           shellcheck .github/workflows/scripts/smoke/staging-promote-smoke.sh
-      - name: Run deploy-lib unit test (proven-to-fire — sha 不符必返非0)
+          shellcheck .github/workflows/scripts/smoke/staging-promote-workflow-smoke.sh
+      - name: Run deploy-lib unit test (proven-to-fire — sha 不符必返非0 + release 隔离原语 H/I/J/K)
         run: bash .github/workflows/scripts/__tests__/deploy-lib.test.sh
-      - name: Run staging-promote smoke (proven-to-fire — staging红/promote红都护住生产:5200)
+      - name: Run staging-promote smoke (单元级 — staging红/promote红都护住生产:5200)
         run: bash .github/workflows/scripts/smoke/staging-promote-smoke.sh
+      - name: Run staging-promote WORKFLOW smoke (完整 workflow 级 proven-to-fire — 真 release 原语 + :5200/current 不变性)
+        run: bash .github/workflows/scripts/smoke/staging-promote-workflow-smoke.sh
 
   test-install-pack-ascii:
     name: Test — Install Pack ASCII (start.bat 纯ASCII回归守卫)
