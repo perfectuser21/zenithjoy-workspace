@@ -58,6 +58,37 @@ function downloadFileToPath(url: string, dest: string): Promise<void> {
 
 export const agentInstallPackRouter = Router();
 
+// ── agent→staging 隔离：按"本 API 实例自己的对外地址"烧 .env ──────────────────
+// 让"从 staging 域名下载的 agent 自动连 staging、从生产下载的连生产"，零写死。
+// 地址从本进程 env 读（staging slot / 生产 slot 各配自己的 AGENT_PUBLIC_*），不硬编码。
+//   · AGENT_PUBLIC_WS_URL   → 烧成 .env 的 ZENITHJOY_API_URL（wss://.../agent-ws，agent 走 WS 连）
+//   · AGENT_PUBLIC_BASE_URL → 烧成 .env 的 ZENITHJOY_API_BASE（https:// 根，注册/心跳/install-pack 用）
+// start.bat 加载顺序是「先 source .env（set），再 if not defined 兜底生产值」，所以 .env 烧了值就赢，
+// start.bat 不需要改。两个 env 都没配（如本地 dev）→ 返回空，行为同旧（agent 用 start.bat 生产兜底）。
+function agentApiUrlEnvLines(): string[] {
+  const lines: string[] = [];
+  const wsUrl = (process.env.AGENT_PUBLIC_WS_URL || '').trim();
+  const baseUrl = (process.env.AGENT_PUBLIC_BASE_URL || '').trim();
+  if (wsUrl) lines.push(`ZENITHJOY_API_URL=${wsUrl}`);
+  if (baseUrl) lines.push(`ZENITHJOY_API_BASE=${baseUrl}`);
+  return lines;
+}
+
+// 把一组 KEY=VALUE 行 upsert 进 .env 文本：已有该 KEY 行就替换，没有就追加。幂等。
+function upsertEnvLines(envText: string, kvLines: string[]): string {
+  let out = envText;
+  for (const line of kvLines) {
+    const key = line.slice(0, line.indexOf('='));
+    const re = new RegExp(`^${key}=.*$`, 'm');
+    if (re.test(out)) {
+      out = out.replace(re, line);
+    } else {
+      out = (out.endsWith('\n') || out === '' ? out : out + '\n') + line + '\n';
+    }
+  }
+  return out;
+}
+
 agentInstallPackRouter.get('/manifest', (_req: Request, res: Response) => {
   const m = readInstallPackManifest();
   if (!m) {
@@ -208,6 +239,9 @@ agentInstallPackRouter.get('/download', async (req: Request, res: Response) => {
     if (burned === orig) {
       burned = (orig.endsWith('\n') ? orig : orig + '\n') + `ZENITHJOY_LICENSE=${licenseKey}\n`;
     }
+    // agent→staging 隔离：再烧本实例对外地址（staging slot 烧 staging 域名，生产 slot 烧生产域名）。
+    // 两个 AGENT_PUBLIC_* env 都没配则 no-op，行为同旧（靠 start.bat 生产兜底）。
+    burned = upsertEnvLines(burned, agentApiUrlEnvLines());
     const targetEnv: string = envPath;
     fs.writeFileSync(targetEnv, burned, 'utf-8');
     // 如果是 .env.template 烧的，复制一份成 .env
@@ -292,8 +326,9 @@ agentInstallPackRouter.get('/dotenv', async (req: Request, res: Response) => {
     return res.status(500).json({ ok: false, code: 'DB_ERROR', message: msg });
   }
 
-  // 3. 返回个人 .env（license 已烧入）
-  const content = `ZENITHJOY_LICENSE=${licenseKey}\n`;
+  // 3. 返回个人 .env（license + 本实例对外地址已烧入）
+  // agent→staging 隔离：从 staging 域名取 dotenv 会带 staging URL，从生产取带生产 URL。
+  const content = [`ZENITHJOY_LICENSE=${licenseKey}`, ...agentApiUrlEnvLines(), ''].join('\n');
   res.setHeader('Content-Type', 'text/plain; charset=utf-8');
   res.setHeader('Content-Disposition', 'attachment; filename=".env"');
   res.setHeader('Content-Length', String(Buffer.byteLength(content)));
