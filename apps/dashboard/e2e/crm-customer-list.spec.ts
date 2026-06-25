@@ -21,8 +21,8 @@ const BASE_URL = process.env.BASE_URL || 'http://localhost:5174';
 const SHOTS = path.join('screenshots');
 
 const ROWS = [
-  { name: '张三', contact: '张三', wechat_id: 'wx_001', status: 'A1', last_contact_at: '2026-06-24T08:00:00.000Z', managed: true, source: 'scan', last_message: '你们这个多少钱' },
-  { name: '李四', contact: '李四', wechat_id: 'wx_002', status: 'A2', last_contact_at: '2026-06-23T08:00:00.000Z', managed: true, source: 'scan', last_message: '我考虑下' },
+  { name: '张三', contact: '张三', wechat_id: 'wx_001', status: 'A1', last_contact_at: '2026-06-24T08:00:00.000Z', managed: true, source: 'scan', last_message: '你们这个多少钱', add_friend_time: '2026-06-01T08:00:00.000Z', identity: 'customer' },
+  { name: '李四', contact: '李四', wechat_id: 'wx_002', status: 'A2', last_contact_at: '2026-06-23T08:00:00.000Z', managed: true, source: 'scan', last_message: '我考虑下', add_friend_time: '2026-06-02T08:00:00.000Z', identity: 'customer' },
 ];
 
 const ONBOARDING = {
@@ -85,24 +85,34 @@ test('客户好友表 Golden Path — 列表/黑名单开关/状态下拉/onboar
   await page.waitForLoadState('networkidle');
   await page.screenshot({ path: path.join(SHOTS, '01-list.png'), fullPage: true });
 
-  // 1. 列表 2 行，含姓名/状态下拉/接管开关；onboarding 条可见
+  // 1. 列表 2 行（6 列：姓名/微信号/加微信时间/意向/最近联系/身份），onboarding 条可见
   await expect(page.getByTestId('crm-customer-row')).toHaveCount(2);
   await expect(page.getByTestId('crm-customer-row').first()).toContainText('张三');
   await expect(page.getByTestId('crm-status-select').first()).toBeVisible();
   await expect(page.getByTestId('crm-manage-toggle').first()).toBeVisible();
+  // 6 列表头齐全
+  await expect(page.getByRole('columnheader', { name: '姓名' })).toBeVisible();
+  await expect(page.getByRole('columnheader', { name: '微信号' })).toBeVisible();
+  await expect(page.getByRole('columnheader', { name: '加微信时间' })).toBeVisible();
+  await expect(page.getByRole('columnheader', { name: '意向' })).toBeVisible();
+  await expect(page.getByRole('columnheader', { name: '最近联系' })).toBeVisible();
+  await expect(page.getByRole('columnheader', { name: '身份' })).toBeVisible();
+  // 微信号 + 加微信时间 列渲染出真值
+  await expect(page.getByTestId('crm-customer-wechat-id').first()).toHaveText('wx_001');
+  await expect(page.getByTestId('crm-customer-add-friend-time').first()).not.toHaveText('—');
   await expect(page.getByTestId('crm-onboarding-bar')).toBeVisible();
   await expect(page.getByTestId('crm-onboarding-step')).toHaveCount(5);
-  // 默认全接管：开关勾上、标签「接管中」
+  // 默认全接管：开关勾上、身份标签「客户·接管」
   await expect(page.getByTestId('crm-manage-toggle').first()).toBeChecked();
-  await expect(page.getByTestId('crm-manage-label').first()).toHaveText('接管中');
+  await expect(page.getByTestId('crm-identity-label').first()).toHaveText('客户·接管');
 
-  // 2. 勾掉接管 = 加黑名单 → 标签变「已排除」、不见「登录已失效」
+  // 2. 勾掉接管 = 加黑名单 → 身份标签变「客户·已排除」、不见「登录已失效」
   await page.route('**/api/crm/customers/manage', (route) => {
     blacklisted = true;
     return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ success: true, managed: false, message: '已加入黑名单' }) });
   });
   await page.getByTestId('crm-manage-toggle').first().click();
-  await expect(page.getByTestId('crm-manage-label').first()).toHaveText('已排除', { timeout: 10000 });
+  await expect(page.getByTestId('crm-identity-label').first()).toHaveText('客户·已排除', { timeout: 10000 });
   await expect(page.getByText('登录已失效')).toHaveCount(0);
   await page.screenshot({ path: path.join(SHOTS, '02-blacklist.png'), fullPage: true });
 
