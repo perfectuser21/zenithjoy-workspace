@@ -12,7 +12,7 @@
 | staging | 无（或临时 slot） | 常驻 `com.zenithjoy.api.staging` :5201，跑 `releases/staging` |
 | main 合并 | 自动重启生产 :5200 | 只部署常驻 staging :5201，**不碰 :5200** |
 | 切生产 | 自动 | 人手点 `promote-prod.yml`（workflow_dispatch） |
-| 回滚 | `git reset --hard` 工作树 + 重 build | 原子软链 `current` 回上一 release（秒级） |
+| 回滚 | `git reset --hard` 工作树 + 重 build | 人工入口 `rollback.sh`（无参=上一 release / 带 sha=留存里挑）或 `rollback-prod.yml`，原子软链 `current`（秒级） |
 
 `ZJ_RELEASES_DIR` 默认 `/Users/administrator/zenithjoy-releases`。
 
@@ -70,17 +70,27 @@ bash .github/workflows/scripts/smoke/staging-promote-workflow-smoke.sh
 # 应看到 "④ 真生产 :5200 运行 sha 全程不变" 通过
 ```
 
-### 4. 回滚演练（可选，建议做一次）
+### 4. 回滚（人工入口 `rollback.sh`）
+
+promote 之后才发现新版本有问题，要把生产 :5200 回拨到留存的旧 release，用仓库根 `rollback.sh`
+（薄封装 `deploy-lib.sh` 的 `previous_release`/`atomic_repoint_current`/`staging_rollback`：
+自动算"上一个 release"、校验"指定 sha 在不在留存里"、回拨后做 health + 版本断言）。
 
 ```bash
-# 看历史 release
-ls -lt "$ZJ_RELEASES_DIR"
-# 手动回滚到上一 release（原子软链，不重 build）
-prev=<上一个 release 的 sha>
-atomic_repoint_current "$ZJ_RELEASES_DIR" "$ZJ_RELEASES_DIR/$prev"
-launchctl kickstart -k gui/$(id -u)/com.zenithjoy.api
-curl -s http://localhost:5200/version    # sha 应 = $prev
+# 在 mmv 上（生产机），先看留存清单（只读，不动生产）
+./rollback.sh --list
+# 无参 = 回退到 current 的上一个留存 release（最常用）
+./rollback.sh
+# 或指定某个留存 release sha（不在留存内会报错退出，绝不臆造）
+./rollback.sh <sha>
 ```
+
+也可走 GitHub Actions 人工放行闸：手点 **`rollback-prod.yml`**（workflow_dispatch + confirm=`ROLLBACK`，
+sha 留空=上一个 release）。机制与本地 `rollback.sh` 完全一致（SSH 进 mmv 跑同一个脚本）。
+
+> 拓扑：只回拨 **API 生产 mmv:5200**。Dashboard 生产在 HK 且**尚无 release 隔离**
+> （`promote-dashboard-prod.yml` 是 `cp -r dist` 原地覆盖、零留存），无可回退版本——
+> Dashboard 回滚需先给 HK 上 symlink-releases，是独立任务，`rollback.sh` 不冒充能回滚它。
 
 ## 风险与护栏
 

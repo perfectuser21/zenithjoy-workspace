@@ -176,6 +176,41 @@ prune_old_releases() {
   return 0
 }
 
+# list_releases <releases_root>：按 mtime 新→旧逐行打印 release 目录名（即 git sha），
+# 排除 current/staging 软链。供人工回滚入口列出留存的可回退版本。
+# 与 prune_old_releases 同一套排序口径（ls -1dt + 排除软链），保证"留存5份"和"挑哪个"一致。
+list_releases() {
+  local root="$1"
+  [ -d "$root" ] || return 0
+  if cd "$root" 2>/dev/null; then
+    # shellcheck disable=SC2012
+    ls -1dt -- */ 2>/dev/null | sed 's:/*$::' | grep -vE '^(current|staging)$'
+    cd - >/dev/null 2>&1 || true
+  fi
+  return 0
+}
+
+# previous_release <releases_root>：打印「current 指向的 release 的上一个」release sha。
+# 上一个 = list_releases（mtime 新→旧）里紧跟在 current sha 之后的那个。
+# current 不存在 / current 是列表里最老的一个（没有更旧的可回退）→ 打印空串。
+# 这是人工 rollback 无参时的回退目标（退到上一版）。
+previous_release() {
+  local root="$1"
+  local cur
+  cur="$(current_release_sha "$root")"
+  [ -z "$cur" ] && return 0
+  local found_cur=0 d
+  while IFS= read -r d; do
+    [ -z "$d" ] && continue
+    if [ "$found_cur" -eq 1 ]; then
+      echo "$d"      # current 之后紧邻的那个 = 上一版
+      return 0
+    fi
+    [ "$d" = "$cur" ] && found_cur=1
+  done <<< "$(list_releases "$root")"
+  return 0           # 没有更旧的可回退 → 空串
+}
+
 # ════════════════════════════════════════════════════════════════════════════
 # 蓝绿部署编排器（staging → promote 闸 + 自动回滚）
 #
