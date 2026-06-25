@@ -1,0 +1,100 @@
+name: Rollback Production :5200 (人工回滚闸)
+
+# ───────────────────────────────────────────────────────────────────────────
+# 生产 API :5200 人工回滚入口（2026-06-25，配套 promote-prod.yml）：
+#   promote 把生产切到新 release 后，若过段时间才发现新版本有问题，需要把生产【回拨到上一个
+#   留存 release】。现状只有 blue_green_deploy 内部 promote 失败时的【自动】回滚，没有给人手点的
+#   独立回滚入口——本 workflow 补这个缺口。
+#
+#   拓扑（按 repo 真相）：API 生产 = mmv:5200（美国 Mac mini 本机，连生产 cecelia 库），不是 HK。
+#   只回拨 API；Dashboard 生产在 HK 且尚无 release 隔离（promote-dashboard-prod.yml 是 cp -r dist
+#   原地覆盖、零留存），无可回退版本——Dashboard 回滚需先给 HK 上 symlink-releases（独立任务）。
+#
+#   机制：SSH 进 mmv → 跑仓库根 rollback.sh。
+#     · sha 留空 → 回退到 current 的上一个留存 release（previous_release）
+#     · sha 指定 → 从留存的 release 里挑该 sha；不在留存内 rollback.sh 报错退出（绝不臆造）
+#   rollback.sh 复用 deploy-lib.sh 的 staging_rollback：原子重指 current + 重启 + health + 版本断言。
+#
+#   ☠️ 死规则：只能人手点（workflow_dispatch + confirm=ROLLBACK），绝无 push/schedule 自动触发。
+# ───────────────────────────────────────────────────────────────────────────
+
+on:
+  workflow_dispatch:
+    inputs:
+      sha:
+        description: '要回滚到的留存 release sha（留空=回退到 current 的上一个 release）'
+        required: false
+        default: ''
+      confirm:
+        description: '输入 ROLLBACK 确认回滚生产 :5200（人工卡点二次确认）'
+        required: true
+        default: ''
+
+# 串行：与 promote 互斥的同一资源（:5200），但用独立 group 防止误取消正在跑的 promote。
+concurrency:
+  group: rollback-prod
+  cancel-in-progress: false
+
+jobs:
+  rollback:
+    name: Rollback 生产 :5200 → 上一个/指定 release（人工放行）
+    runs-on: ubuntu-latest
+    steps:
+      - name: 二次确认闸（必须输入 ROLLBACK）
+        run: |
+          if [ "${{ github.event.inputs.confirm }}" != "ROLLBACK" ]; then
+            echo "❌ confirm 不是 ROLLBACK（实际='${{ github.event.inputs.confirm }}'）——拒绝回滚。"
+            echo "   人工卡点：确认要把生产 :5200 回拨到上一个/指定 release，再在 confirm 框输入 ROLLBACK。"
+            exit 1
+          fi
+          echo "✅ 人工二次确认通过，开始回滚。"
+
+      - name: Rollback via SSH（跑 mmv 上 rollback.sh：原子重指 current → 目标 release + 重启 + 验证）
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.US_MAC_HOST }}
+          username: ${{ secrets.US_MAC_USER }}
+          key: ${{ secrets.US_MAC_SSH_KEY }}
+          port: ${{ secrets.US_MAC_PORT }}
+          script_stop: true
+          command_timeout: 15m
+          script: |
+            set -euo pipefail
+            REPO=/Users/administrator/perfect21/zenithjoy
+            INPUT_SHA="${{ github.event.inputs.sha }}"
+
+            export ZJ_REPO="$REPO"
+            export ZJ_API_DIR="$REPO/apps/api"
+            export ZJ_PROD_PORT=5200
+            export ZJ_PROD_DB=cecelia
+            export ZJ_PROD_LABEL=com.zenithjoy.api
+            export ZJ_PROD_PLIST="$HOME/Library/LaunchAgents/com.zenithjoy.api.plist"
+            export ZJ_NODE=/opt/homebrew/bin/node
+            export ZJ_RELEASES_DIR="${ZJ_RELEASES_DIR:-/Users/administrator/zenithjoy-releases}"
+
+            echo "=== 当前留存 release ==="
+            bash "$REPO/rollback.sh" --list || true
+
+            echo "=== 执行回滚（sha='${INPUT_SHA}'，空=上一个 release）==="
+            if [ -n "$INPUT_SHA" ]; then
+              bash "$REPO/rollback.sh" "$INPUT_SHA"
+            else
+              bash "$REPO/rollback.sh"
+            fi
+
+  notify-failure:
+    name: Notify Brain on rollback failure
+    runs-on: ubuntu-latest
+    needs: [rollback]
+    if: failure()
+    steps:
+      - name: Post P0 alert to Brain
+        run: |
+          curl -sf -X POST ${{ secrets.BRAIN_URL }}/api/brain/tasks \
+            -H "Content-Type: application/json" \
+            -d '{
+              "title": "ZenithJoy 生产 :5200 人工回滚失败",
+              "priority": "P0",
+              "task_type": "dev",
+              "description": "rollback-prod.yml 失败。生产 :5200 可能停在半死或仍是旧版本，请人工立即核实健康。"
+            }' || echo "Brain API 不可达，跳过告警"

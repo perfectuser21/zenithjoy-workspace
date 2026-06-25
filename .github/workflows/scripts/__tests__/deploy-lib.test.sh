@@ -436,6 +436,124 @@ else
 fi
 rm -rf "$OBOX"
 
+# ════════════════════════════════════════════════════════════════════════════
+# Case P: list_releases / previous_release —— 人工回滚的"留存清单 + 上一版"判定（纯函数）。
+# previous_release = mtime 新→旧里紧跟 current 之后的那个；current 是最老时返空（无可回退）。
+# ════════════════════════════════════════════════════════════════════════════
+PBOX="$(mktemp -d)"; PREL="$PBOX/releases"; mkdir -p "$PREL"
+# 造 4 个 release，mtime 递增（r1 最老 → r4 最新）
+for d in r1aaaaa r2bbbbb r3ccccc r4ddddd; do mkdir -p "$PREL/$d"; done
+touch -t 202601010001 "$PREL/r1aaaaa"
+touch -t 202601020001 "$PREL/r2bbbbb"
+touch -t 202601030001 "$PREL/r3ccccc"
+touch -t 202601040001 "$PREL/r4ddddd"
+
+# list_releases 新→旧
+P_LIST="$(list_releases "$PREL" | tr '\n' ',')"
+expect_eq "$P_LIST" "r4ddddd,r3ccccc,r2bbbbb,r1aaaaa," "P list_releases 新→旧排序"
+
+# current=r3ccccc → previous=r2bbbbb（紧跟其后的更旧一个）
+atomic_repoint_current "$PREL" "$PREL/r3ccccc" >/dev/null 2>&1
+expect_eq "$(previous_release "$PREL")" "r2bbbbb" "P previous_release(current=r3)→r2"
+
+# current=最新 r4 → previous=r3
+atomic_repoint_current "$PREL" "$PREL/r4ddddd" >/dev/null 2>&1
+expect_eq "$(previous_release "$PREL")" "r3ccccc" "P previous_release(current=最新r4)→r3"
+
+# current=最老 r1 → 无更旧可回退 → 空
+atomic_repoint_current "$PREL" "$PREL/r1aaaaa" >/dev/null 2>&1
+expect_eq "$(previous_release "$PREL")" "" "P previous_release(current=最老r1)→空（无可回退）"
+
+# list_releases 排除 current/staging 软链（只列真 release sha 目录）
+ln -sfn "$PREL/r2bbbbb" "$PREL/staging" 2>/dev/null || true
+P_LIST2="$(list_releases "$PREL" | grep -cE '^(current|staging)$' || true)"
+expect_eq "$P_LIST2" "0" "P list_releases 不含 current/staging 软链"
+rm -rf "$PBOX"
+
+# ════════════════════════════════════════════════════════════════════════════
+# Case Q: rollback.sh 入口的【挑哪个 + 安全校验】逻辑（注入 mock staging_rollback，不碰真生产）。
+# 钩子：ZJ_DEPLOY_LIB 指向一个 stub lib（复用真 deploy-lib 的纯函数，但把 staging_rollback 换成
+# 只把目标 sha 写进文件的 mock）→ 跑 rollback.sh → 断言它选对了目标 / 该报错时报错退出。
+# 这样 promote v1→v2→rollback→断言"回退目标=v1"在本地临时目录里完整走通，绝不重启真 :5200。
+# ════════════════════════════════════════════════════════════════════════════
+ROLLBACK_SH="$SCRIPT_DIR/../../../rollback.sh"   # repo 根的 rollback.sh
+if [ ! -f "$ROLLBACK_SH" ]; then
+  bad "Q 找不到 rollback.sh（$ROLLBACK_SH）"
+else
+  QBOX="$(mktemp -d)"; QREL="$QBOX/releases"; mkdir -p "$QREL"
+  # stub lib：source 真 deploy-lib 拿纯函数，再覆盖 staging_rollback 为 mock（写目标到 $Q_HIT）
+  cat > "$QBOX/stub-lib.sh" <<STUB
+# shellcheck source=/dev/null
+source "$SCRIPT_DIR/deploy-lib.sh"
+staging_rollback() { echo "\$1" > "$QBOX/hit.txt"; return 0; }
+STUB
+
+  # 模拟 promote v1→v2：建两个 release，current 指向 v2（最新），v1 是上一版
+  mkdir -p "$QREL/v1aaaaaa" "$QREL/v2bbbbbb"
+  touch -t 202601010001 "$QREL/v1aaaaaa"
+  touch -t 202601020001 "$QREL/v2bbbbbb"
+  atomic_repoint_current "$QREL" "$QREL/v2bbbbbb" >/dev/null 2>&1
+
+  run_rollback() {
+    ZJ_DEPLOY_LIB="$QBOX/stub-lib.sh" ZJ_RELEASES_DIR="$QREL" \
+      bash "$ROLLBACK_SH" "$@" >/tmp/dlib-rollback-out.txt 2>&1
+  }
+
+  # 注意：上面已有 case 把 errexit 打开（行 68/79 等 `set -e 2>/dev/null||true`），到这里仍生效。
+  # rollback.sh 该报错的分支会 exit 1，errexit 下会连累本测试脚本一起退出 → 关掉 errexit 跑 Q 块
+  # （与本文件 sha/kill_port 段的 `set +e` 同款做法），块末再恢复。
+  set +e
+
+  # Q1 无参 → 应回退到上一版 v1（promote v1→v2→rollback→断言软链/目标回 v1）
+  rm -f "$QBOX/hit.txt"
+  run_rollback; Q1_RC=$?
+  Q1_HIT="$(cat "$QBOX/hit.txt" 2>/dev/null || echo "")"
+  if [ "$Q1_RC" -eq 0 ] && [ "$Q1_HIT" = "v1aaaaaa" ]; then
+    ok "Q 无参 rollback 选中上一版 v1（promote v1→v2→rollback→回 v1）"
+  else
+    bad "Q 无参 rollback 应回 v1aaaaaa（rc=$Q1_RC hit=$Q1_HIT）"
+  fi
+
+  # Q2 带不存在的 sha → 报错退出（绝不臆造），不调 staging_rollback
+  rm -f "$QBOX/hit.txt"
+  run_rollback "nosuchsha999"; Q2_RC=$?
+  if [ "$Q2_RC" -ne 0 ] && [ ! -f "$QBOX/hit.txt" ]; then
+    ok "Q 带不在留存的 sha → 报错退出且不回滚（proven-to-fire）"
+  else
+    bad "Q 不存在 sha 应报错退出不回滚（rc=$Q2_RC hit=$(cat "$QBOX/hit.txt" 2>/dev/null))"
+  fi
+
+  # Q3 带留存内的 sha v1 → 选中 v1
+  rm -f "$QBOX/hit.txt"
+  run_rollback "v1aaaaaa"; Q3_RC=$?
+  Q3_HIT="$(cat "$QBOX/hit.txt" 2>/dev/null || echo "")"
+  if [ "$Q3_RC" -eq 0 ] && [ "$Q3_HIT" = "v1aaaaaa" ]; then
+    ok "Q 带留存内 sha v1 → 选中 v1 回滚"
+  else
+    bad "Q 带留存 sha 应回 v1（rc=$Q3_RC hit=$Q3_HIT）"
+  fi
+
+  # Q4 带 = current 的 sha → 拒绝（无需回滚），不调 staging_rollback
+  rm -f "$QBOX/hit.txt"
+  run_rollback "v2bbbbbb"; Q4_RC=$?
+  if [ "$Q4_RC" -ne 0 ] && [ ! -f "$QBOX/hit.txt" ]; then
+    ok "Q 带 = current 的 sha → 拒绝（无需回滚）"
+  else
+    bad "Q current sha 应被拒（rc=$Q4_RC hit=$(cat "$QBOX/hit.txt" 2>/dev/null))"
+  fi
+
+  # Q5 --list → 列出留存且不调 staging_rollback（只读）
+  rm -f "$QBOX/hit.txt"
+  run_rollback --list; Q5_RC=$?
+  if [ "$Q5_RC" -eq 0 ] && [ ! -f "$QBOX/hit.txt" ] && grep -q "v2bbbbbb" /tmp/dlib-rollback-out.txt; then
+    ok "Q --list 只读列出留存（不回滚）"
+  else
+    bad "Q --list 应只读列出（rc=$Q5_RC hit=$(cat "$QBOX/hit.txt" 2>/dev/null))"
+  fi
+  set -e 2>/dev/null || true
+  rm -rf "$QBOX"
+fi
+
 echo ""
 echo "deploy-lib.test.sh: PASSED=$PASSED FAILED=$FAILED"
 [ "$FAILED" -eq 0 ]
