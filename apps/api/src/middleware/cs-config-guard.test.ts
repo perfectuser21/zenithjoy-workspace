@@ -8,7 +8,7 @@
  *
  * 端到端 HTTP + 写库 0 调用断言见 tests/regression/line04-cs-config-permission.test.ts。
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import type { Request, Response } from 'express';
 
 const { mockQuery } = vi.hoisted(() => ({ mockQuery: vi.fn() }));
@@ -16,7 +16,12 @@ vi.mock('../db/connection', () => ({
   default: { query: mockQuery, connect: vi.fn(), end: vi.fn() },
 }));
 
-import { requireCsAdmin, requireSameTenant } from './cs-config-guard';
+import {
+  requireCsAdmin,
+  requireSameTenant,
+  requireCsReadAccess,
+  requireServiceCredential,
+} from './cs-config-guard';
 
 const TENANT_A = 'aaaaaaaa-1111-2222-3333-444444444444';
 const TENANT_B = 'bbbbbbbb-1111-2222-3333-444444444444';
@@ -124,5 +129,82 @@ describe('requireSameTenant — 租户隔离 + deny by default', () => {
     const next = vi.fn();
     await requireSameTenant('machineId')(req, res, next);
     expect(next).toHaveBeenCalledOnce();
+  });
+});
+
+describe('requireServiceCredential — agent/服务专用闸（internal/service token，非人类 session）', () => {
+  const OLD_ENV = process.env.ZENITHJOY_INTERNAL_TOKEN;
+  beforeEach(() => {
+    process.env.ZENITHJOY_INTERNAL_TOKEN = 'svc-tok-123';
+  });
+  afterEach(() => {
+    // 还原 env，避免污染其它用例
+    if (OLD_ENV === undefined) delete process.env.ZENITHJOY_INTERNAL_TOKEN;
+    else process.env.ZENITHJOY_INTERNAL_TOKEN = OLD_ENV;
+  });
+
+  it('合法 X-Internal-Token → next()', () => {
+    const req = { headers: { 'x-internal-token': 'svc-tok-123' } } as unknown as Request;
+    const res = mkRes();
+    const next = vi.fn();
+    requireServiceCredential(req, res, next);
+    expect(next).toHaveBeenCalledOnce();
+    expect(res.statusCode).toBe(0);
+  });
+
+  it('合法 Bearer token → next()', () => {
+    const req = { headers: { authorization: 'Bearer svc-tok-123' } } as unknown as Request;
+    const res = mkRes();
+    const next = vi.fn();
+    requireServiceCredential(req, res, next);
+    expect(next).toHaveBeenCalledOnce();
+  });
+
+  it('ADMIN_FEISHU_OPENIDS 头 → next()（super-admin 飞书白名单）', () => {
+    const old = process.env.ADMIN_FEISHU_OPENIDS;
+    process.env.ADMIN_FEISHU_OPENIDS = 'ou_admin_x';
+    const req = { headers: { 'x-feishu-user-id': 'ou_admin_x' } } as unknown as Request;
+    const res = mkRes();
+    const next = vi.fn();
+    requireServiceCredential(req, res, next);
+    expect(next).toHaveBeenCalledOnce();
+    if (old === undefined) delete process.env.ADMIN_FEISHU_OPENIDS;
+    else process.env.ADMIN_FEISHU_OPENIDS = old;
+  });
+
+  it('无任何服务凭证 → 401 SERVICE_CREDENTIAL_REQUIRED，不调 next', () => {
+    const req = { headers: {} } as unknown as Request;
+    const res = mkRes();
+    const next = vi.fn();
+    requireServiceCredential(req, res, next);
+    expect(res.statusCode).toBe(401);
+    expect(res.body.error?.code).toBe('SERVICE_CREDENTIAL_REQUIRED');
+    expect(next).not.toHaveBeenCalled();
+  });
+});
+
+describe('requireCsReadAccess — 读接口多通道闸（legacy/super-admin ∪ 租户 session）', () => {
+  it('legacy 服务凭证（internal token）→ superAdminGuard 放行 next()', () => {
+    const old = process.env.ZENITHJOY_INTERNAL_TOKEN;
+    process.env.ZENITHJOY_INTERNAL_TOKEN = 'svc-tok-123';
+    const req = { headers: { 'x-internal-token': 'svc-tok-123' } } as unknown as Request;
+    const res = mkRes();
+    const next = vi.fn();
+    requireCsReadAccess(req, res, next);
+    expect(next).toHaveBeenCalledOnce();
+    if (old === undefined) delete process.env.ZENITHJOY_INTERNAL_TOKEN;
+    else process.env.ZENITHJOY_INTERNAL_TOKEN = old;
+  });
+
+  it('super-admin 飞书白名单头 → 放行 next()', () => {
+    const old = process.env.ADMIN_FEISHU_OPENIDS;
+    process.env.ADMIN_FEISHU_OPENIDS = 'ou_admin_y';
+    const req = { headers: { 'x-feishu-user-id': 'ou_admin_y' } } as unknown as Request;
+    const res = mkRes();
+    const next = vi.fn();
+    requireCsReadAccess(req, res, next);
+    expect(next).toHaveBeenCalledOnce();
+    if (old === undefined) delete process.env.ADMIN_FEISHU_OPENIDS;
+    else process.env.ADMIN_FEISHU_OPENIDS = old;
   });
 });

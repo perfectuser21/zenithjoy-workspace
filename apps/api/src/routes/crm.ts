@@ -14,9 +14,13 @@
  */
 import { Router, Request, Response, NextFunction } from 'express';
 import pool from '../db/connection';
-import { tenantContext } from '../middleware/tenant-context';
-import { requireCsWriteAccess } from '../middleware/cs-config-guard';
+import {
+  requireCsWriteAccess,
+  requireCsReadAccess,
+  requireServiceCredential,
+} from '../middleware/cs-config-guard';
 import { buildCustomerRoster } from '../services/crm/customer-roster';
+import type { RosterScanRow, TakeoverMode } from '../services/crm/customer-roster';
 
 const router = Router();
 
@@ -135,19 +139,71 @@ router.post('/daily-analysis', async (req: Request, res: Response) => {
 // Line04 中台 AI-native CRM·客户列表页
 // ─────────────────────────────────────────────────────────────────────────────
 
-// GET /api/crm/customers — 当前租户客户名册（读接口补租户闸：scope = req.tenantId 自己客服机）
-router.get('/customers', tenantContext, async (req: Request, res: Response) => {
-  const tenantId = req.tenantId as string;
-  try {
-    // 该租户名下所有客服机微信号
+/**
+ * 解析读名册的有效 scope（修正6 多通道 + 修正5 super-admin 显式 scope）：
+ *   - 租户 session 用户（req.tenantId 非空）：scope = 该租户名下所有客服机；可选 cs_wechat_id 查询参数收窄到单台。
+ *   - super-admin（req.tenantId 空/不存在）：必须显式传 cs_wechat_id（决策5：不一次拉全平台），
+ *     按 cs_wechat_id → service_agents.tenant_id 解析所属租户后 scope 该单台。缺 cs_wechat_id → 返回 null（路由报 400）。
+ * 返回 { tenantId, csWechatIds }；csWechatIds 为本次名册聚合覆盖的客服机微信号集合。
+ */
+async function resolveReadScope(
+  req: Request,
+): Promise<{ tenantId: string; csWechatIds: string[] } | { error: { status: number; code: string; message: string } }> {
+  const explicitCs =
+    typeof req.query.cs_wechat_id === 'string' ? req.query.cs_wechat_id.trim() : '';
+
+  // 租户 session 用户：req.tenantId 非空
+  if (req.tenantId) {
+    const tenantId = req.tenantId;
+    if (explicitCs) {
+      // 收窄到单台，但必须属于本租户（deny by default 跨租户偷看）
+      const r = await pool.query(
+        `SELECT 1 FROM zenithjoy.service_agents
+          WHERE wechat_id = $1 AND tenant_id = $2::uuid AND deleted_at IS NULL LIMIT 1`,
+        [explicitCs, tenantId],
+      );
+      if (r.rowCount === 0)
+        return { error: { status: 403, code: 'CROSS_TENANT', message: '该客服机不属于当前租户' } };
+      return { tenantId, csWechatIds: [explicitCs] };
+    }
     const agentsRes = await pool.query(
       `SELECT wechat_id FROM zenithjoy.service_agents
         WHERE tenant_id = $1::uuid AND deleted_at IS NULL AND wechat_id IS NOT NULL`,
       [tenantId],
     );
-    const csWechatIds: string[] = agentsRes.rows
+    const csWechatIds = agentsRes.rows
       .map((r) => r.wechat_id as string)
       .filter((w): w is string => typeof w === 'string' && w.length > 0);
+    return { tenantId, csWechatIds };
+  }
+
+  // super-admin（无 tenantId）：必须显式 cs_wechat_id（决策5），解析其租户
+  if (!explicitCs)
+    return {
+      error: {
+        status: 400,
+        code: 'CS_WECHAT_ID_REQUIRED',
+        message: 'super-admin 读名册须显式传 cs_wechat_id（不一次拉全平台）',
+      },
+    };
+  const tr = await pool.query(
+    `SELECT tenant_id FROM zenithjoy.service_agents WHERE wechat_id = $1 AND deleted_at IS NULL LIMIT 1`,
+    [explicitCs],
+  );
+  const tenantId = (tr.rows?.[0]?.tenant_id as string | undefined) ?? '';
+  if (!tenantId)
+    return { error: { status: 404, code: 'TARGET_NOT_FOUND', message: '解析不到该客服机所属租户' } };
+  return { tenantId, csWechatIds: [explicitCs] };
+}
+
+// GET /api/crm/customers — 客户好友表（多通道鉴权修 403：租户 session ∪ legacy/super-admin）
+// 黑名单主模型：response.managed = !blacklist.has(contact)（blacklist 模式）/ whitelist 模式回退；含 source/last_message。
+router.get('/customers', requireCsReadAccess, async (req: Request, res: Response) => {
+  try {
+    const scope = await resolveReadScope(req);
+    if ('error' in scope)
+      return fail(res, scope.error.status, scope.error.code, scope.error.message);
+    const { tenantId, csWechatIds } = scope;
 
     // 已聊过的人：cs_memory_messages 按 tenant×contact distinct + 最后联系时间
     const msgRes = await pool.query(
@@ -162,40 +218,70 @@ router.get('/customers', tenantContext, async (req: Request, res: Response) => {
       last_contact_at: r.last_contact_at ? new Date(r.last_contact_at).toISOString() : null,
     }));
 
-    // 手动入册 + 已落状态的客户：crm_customers
-    const manualRes = await pool.query(
-      `SELECT contact, wechat_id, status FROM zenithjoy.crm_customers WHERE tenant_id = $1::uuid`,
-      [tenantId],
+    // 手动入册 + agent 扫好友 + 已落状态的客户：crm_customers（按 source 拆 manual / scan 两源喂名册）
+    const csWhere =
+      csWechatIds.length > 0 ? ' AND cs_wechat_id = ANY($2::text[])' : '';
+    const custParams: unknown[] = csWechatIds.length > 0 ? [tenantId, csWechatIds] : [tenantId];
+    const custRes = await pool.query(
+      `SELECT contact, wechat_id, status, source, last_message, last_seen_at
+         FROM zenithjoy.crm_customers WHERE tenant_id = $1::uuid${csWhere}`,
+      custParams,
     );
-    const manualCustomers = manualRes.rows.map((r) => ({
-      contact: r.contact as string,
-      wechat_id: (r.wechat_id as string | null) ?? null,
-      status: r.status as string,
-    }));
+    const manualCustomers = custRes.rows
+      .filter((r) => r.source !== 'scan')
+      .map((r) => ({
+        contact: r.contact as string,
+        wechat_id: (r.wechat_id as string | null) ?? null,
+        status: r.status as string,
+      }));
+    const scanContacts: RosterScanRow[] = custRes.rows
+      .filter((r) => r.source === 'scan')
+      .map((r) => ({
+        contact: r.contact as string,
+        wechat_id: (r.wechat_id as string | null) ?? null,
+        status: r.status as string,
+        last_message: (r.last_message as string | null) ?? null,
+        last_seen_at: r.last_seen_at ? new Date(r.last_seen_at).toISOString() : null,
+      }));
 
-    // 接管态：该租户所有客服机 whitelist 并集（实时读，非缓存）
+    // 接管态：该 scope 内客服机配置（blacklist / whitelist / takeover_mode）
     let whitelist: string[] = [];
+    let blacklist: string[] = [];
+    let takeoverMode: TakeoverMode | undefined;
     if (csWechatIds.length > 0) {
-      const wlRes = await pool.query(
-        `SELECT whitelist FROM zenithjoy.wechat_cs_account_config WHERE wechat_id = ANY($1::text[])`,
+      const cfgRes = await pool.query(
+        `SELECT whitelist, blacklist, takeover_mode FROM zenithjoy.wechat_cs_account_config
+          WHERE wechat_id = ANY($1::text[])`,
         [csWechatIds],
       );
-      const set = new Set<string>();
-      for (const row of wlRes.rows) {
-        const wl = Array.isArray(row.whitelist) ? row.whitelist : [];
-        for (const name of wl) if (typeof name === 'string') set.add(name);
+      const wlSet = new Set<string>();
+      const blSet = new Set<string>();
+      const modes = new Set<string>();
+      for (const row of cfgRes.rows) {
+        for (const n of Array.isArray(row.whitelist) ? row.whitelist : [])
+          if (typeof n === 'string') wlSet.add(n);
+        for (const n of Array.isArray(row.blacklist) ? row.blacklist : [])
+          if (typeof n === 'string') blSet.add(n);
+        if (typeof row.takeover_mode === 'string') modes.add(row.takeover_mode);
       }
-      whitelist = Array.from(set);
+      whitelist = Array.from(wlSet);
+      blacklist = Array.from(blSet);
+      // scope 内模式不一：任一台是 blacklist → 整体按 blacklist 主模型（默认全接管，黑名单排除）。
+      // 单台 scope（前端进单客服机视图 / super-admin 显式 cs_wechat_id）时该台模式即准确模式。
+      takeoverMode = modes.has('blacklist') ? 'blacklist' : modes.has('whitelist') ? 'whitelist' : undefined;
     }
 
     const customers = await buildCustomerRoster({
       tenantId,
       csWechatId: csWechatIds[0] ?? '',
+      takeoverMode,
       whitelist,
+      blacklist,
       messages,
       manualCustomers,
+      scanContacts,
     });
-    // cs_wechat_id：本租户主客服机微信号，供前端写接口（manage/status/POST）作目标 key；
+    // cs_wechat_id：本 scope 主客服机微信号，供前端写接口（manage/status/POST）作目标 key；
     // 非客户行字段，不在禁用字段之列，不影响 customers[] 形态。
     return res.json({ customers, total: customers.length, cs_wechat_id: csWechatIds[0] ?? null });
   } catch (err) {
@@ -203,7 +289,9 @@ router.get('/customers', tenantContext, async (req: Request, res: Response) => {
   }
 });
 
-// PUT /api/crm/customers/manage — 接管开关 → 写 whitelist（幂等）
+// PUT /api/crm/customers/manage — 接管开关 → 写 blacklist（黑名单主模型，幂等）
+// 黑名单语义（修正3/4）：managed=false（排除）→ 把 contact 加进 blacklist；managed=true（接管）→ 从 blacklist 移除。
+// 该客服机 takeover_mode 缺省（新接入）即 blacklist 主模型；first-write 时 INSERT 默认 takeover_mode=blacklist。
 router.put(
   '/customers/manage',
   bodyWechatIdToParam,
@@ -219,25 +307,29 @@ router.put(
     if (!csWechatId || !name) return res.status(400).json({ error: 'wechat_id 和 contact 必填' });
     try {
       const cur = await pool.query(
-        `SELECT whitelist FROM zenithjoy.wechat_cs_account_config WHERE wechat_id = $1`,
+        `SELECT blacklist FROM zenithjoy.wechat_cs_account_config WHERE wechat_id = $1`,
         [csWechatId],
       );
-      let wl: string[] = Array.isArray(cur.rows?.[0]?.whitelist)
-        ? cur.rows[0].whitelist.filter((x: unknown): x is string => typeof x === 'string')
+      let bl: string[] = Array.isArray(cur.rows?.[0]?.blacklist)
+        ? cur.rows[0].blacklist.filter((x: unknown): x is string => typeof x === 'string')
         : [];
       if (managed) {
-        if (!wl.includes(name)) wl.push(name);
+        // 接管 → 从黑名单移除
+        bl = bl.filter((x) => x !== name);
       } else {
-        wl = wl.filter((x) => x !== name);
+        // 排除 → 加进黑名单
+        if (!bl.includes(name)) bl.push(name);
       }
-      // 只更新 whitelist，保留既有 persona/其它配置；新客服机首次写入给 persona 占位满足 NOT NULL
+      // 只更新 blacklist，保留既有 persona/whitelist/其它配置；新客服机首次写入给 persona 占位满足 NOT NULL，
+      // takeover_mode 留列默认（blacklist，新接入主模型）。
       await pool.query(
-        `INSERT INTO zenithjoy.wechat_cs_account_config (wechat_id, persona, whitelist, updated_at)
+        `INSERT INTO zenithjoy.wechat_cs_account_config (wechat_id, persona, blacklist, updated_at)
          VALUES ($1, '{}'::jsonb, $2::jsonb, now())
-         ON CONFLICT (wechat_id) DO UPDATE SET whitelist = $2::jsonb, updated_at = now()`,
-        [csWechatId, JSON.stringify(wl)],
+         ON CONFLICT (wechat_id) DO UPDATE SET blacklist = $2::jsonb, updated_at = now()`,
+        [csWechatId, JSON.stringify(bl)],
       );
-      return res.json({ success: true, managed: wl.includes(name), message: '保存成功' });
+      // managed = 不在黑名单（与 GET 名册 managed 判定 + agent should_reply 同字面一致）
+      return res.json({ success: true, managed: !bl.includes(name), message: '保存成功' });
     } catch (err) {
       return fail(res, 500, 'MANAGE_FAILED', err instanceof Error ? err.message : 'unknown');
     }
@@ -310,5 +402,169 @@ router.post(
     }
   },
 );
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 修正5：agent 扫好友上报 ingest（service token 专用，非人类 session）
+// ─────────────────────────────────────────────────────────────────────────────
+
+// POST /api/crm/friend-scan/ingest — agent 上报客服机近期会话联系人，upsert 幂等落 crm_customers source='scan'
+// body: { cs_wechat_id, contacts:[{name, last_message?, last_seen?}] }
+// 响应: { success, ingested, new, scanned_count }
+router.post('/friend-scan/ingest', requireServiceCredential, async (req: Request, res: Response) => {
+  const body = req.body as {
+    cs_wechat_id?: string;
+    contacts?: Array<{ name?: string; last_message?: string; last_seen?: string }>;
+  };
+  const csWechatId = (body.cs_wechat_id ?? '').trim();
+  const contacts = Array.isArray(body.contacts) ? body.contacts : [];
+  if (!csWechatId) return res.status(400).json({ error: 'cs_wechat_id 必填' });
+  if (!Array.isArray(body.contacts))
+    return res.status(400).json({ error: 'contacts 必须是数组' });
+
+  // ingest 无 req.tenantId（service token），按 cs_wechat_id → service_agents.tenant_id 解析所属租户
+  const tenantId = await resolveTenantId(req, csWechatId);
+  if (!tenantId) return fail(res, 404, 'TARGET_NOT_FOUND', '解析不到该客服机所属租户');
+
+  // 规范化 + 去重（同名取首条），过滤空名
+  const seen = new Set<string>();
+  const rows: Array<{ name: string; last_message: string | null; last_seen: string | null }> = [];
+  for (const c of contacts) {
+    const name = (c?.name ?? '').trim();
+    if (!name || seen.has(name)) continue;
+    seen.add(name);
+    rows.push({
+      name,
+      last_message: typeof c?.last_message === 'string' ? c.last_message : null,
+      last_seen: typeof c?.last_seen === 'string' ? c.last_seen : null,
+    });
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    let newCount = 0;
+    for (const r of rows) {
+      // upsert 幂等（按 tenant_id, cs_wechat_id, contact）：新行 source='scan'；已存在则只补扫描观测字段，
+      // 绝不把已聊过/手动入册（source=message/manual）的行降级成 scan（COALESCE 保 source 不回退）。
+      const up = await client.query(
+        `INSERT INTO zenithjoy.crm_customers
+           (tenant_id, cs_wechat_id, contact, source, last_message, last_seen_at, updated_at)
+         VALUES ($1::uuid, $2, $3, 'scan', $4, $5, now())
+         ON CONFLICT (tenant_id, cs_wechat_id, contact) DO UPDATE
+           SET last_message = COALESCE(EXCLUDED.last_message, zenithjoy.crm_customers.last_message),
+               last_seen_at = COALESCE(EXCLUDED.last_seen_at, zenithjoy.crm_customers.last_seen_at),
+               updated_at = now()
+         RETURNING (xmax = 0) AS inserted`,
+        [tenantId, csWechatId, r.name, r.last_message, r.last_seen],
+      );
+      if (up.rows?.[0]?.inserted === true) newCount += 1;
+    }
+
+    // 更新 onboarding O2 scanned_count + step_o2_scanned（拉到人即 ok，0 人记 fail）
+    const scannedCount = rows.length;
+    await client.query(
+      `INSERT INTO zenithjoy.crm_onboarding_state (tenant_id, cs_wechat_id, step_o2_scanned, scanned_count, updated_at)
+       VALUES ($1::uuid, $2, $3, $4, now())
+       ON CONFLICT (tenant_id, cs_wechat_id) DO UPDATE
+         SET step_o2_scanned = $3, scanned_count = $4, updated_at = now()`,
+      [tenantId, csWechatId, scannedCount > 0 ? 'ok' : 'fail', scannedCount],
+    );
+
+    await client.query('COMMIT');
+    return res.json({ success: true, ingested: rows.length, new: newCount, scanned_count: scannedCount });
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
+    return fail(res, 500, 'INGEST_FAILED', err instanceof Error ? err.message : 'unknown');
+  } finally {
+    client.release();
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 修正7：onboarding 状态机（O1-O5 自检态）
+// ─────────────────────────────────────────────────────────────────────────────
+
+const ONBOARDING_STEP_KEYS = [
+  'step_o1_online',
+  'step_o2_scanned',
+  'step_o3_roster',
+  'step_o4_realpublish',
+  'step_o5_replied',
+] as const;
+const VALID_STEP_STATE = new Set(['pending', 'ok', 'fail']);
+
+// GET /api/crm/onboarding/:csWechatId — 读 onboarding 状态机（多通道：租户 session ∪ legacy/super-admin）
+router.get('/onboarding/:csWechatId', requireCsReadAccess, async (req: Request, res: Response) => {
+  const csWechatId = (req.params.csWechatId ?? '').trim();
+  if (!csWechatId) return res.status(400).json({ error: 'csWechatId 必填' });
+  const tenantId = await resolveTenantId(req, csWechatId);
+  if (!tenantId) return fail(res, 404, 'TARGET_NOT_FOUND', '解析不到该客服机所属租户');
+  try {
+    const r = await pool.query(
+      `SELECT step_o1_online, step_o2_scanned, scanned_count, step_o3_roster,
+              blacklist_count, step_o4_realpublish, step_o5_replied, updated_at
+         FROM zenithjoy.crm_onboarding_state
+        WHERE tenant_id = $1::uuid AND cs_wechat_id = $2 LIMIT 1`,
+      [tenantId, csWechatId],
+    );
+    // 无记录 → 返回全 pending 的默认态（前端状态条照常画灰）
+    const row = r.rows?.[0] ?? {
+      step_o1_online: 'pending',
+      step_o2_scanned: 'pending',
+      scanned_count: 0,
+      step_o3_roster: 'pending',
+      blacklist_count: 0,
+      step_o4_realpublish: 'pending',
+      step_o5_replied: 'pending',
+      updated_at: null,
+    };
+    return res.json({ success: true, cs_wechat_id: csWechatId, onboarding: row });
+  } catch (err) {
+    return fail(res, 500, 'ONBOARDING_READ_FAILED', err instanceof Error ? err.message : 'unknown');
+  }
+});
+
+// PUT /api/crm/onboarding/:csWechatId — agent/系统回写某步自检结果（service token 专用）
+// body: { step_o1_online?, step_o2_scanned?, scanned_count?, step_o3_roster?, blacklist_count?, step_o4_realpublish?, step_o5_replied? }
+router.put('/onboarding/:csWechatId', requireServiceCredential, async (req: Request, res: Response) => {
+  const csWechatId = (req.params.csWechatId ?? '').trim();
+  if (!csWechatId) return res.status(400).json({ error: 'csWechatId 必填' });
+  const tenantId = await resolveTenantId(req, csWechatId);
+  if (!tenantId) return fail(res, 404, 'TARGET_NOT_FOUND', '解析不到该客服机所属租户');
+
+  const body = (req.body ?? {}) as Record<string, unknown>;
+  // 校验 step 三态合法
+  for (const k of ONBOARDING_STEP_KEYS) {
+    if (k in body && !VALID_STEP_STATE.has(String(body[k])))
+      return res.status(400).json({ error: `${k} 必须是 pending/ok/fail` });
+  }
+
+  // 动态拼可变更新列（只更传了的字段；缺省列保留旧值 / 首插落默认）
+  const updatable: Record<string, unknown> = {};
+  for (const k of ONBOARDING_STEP_KEYS) if (k in body) updatable[k] = String(body[k]);
+  if ('scanned_count' in body) updatable.scanned_count = Number(body.scanned_count) || 0;
+  if ('blacklist_count' in body) updatable.blacklist_count = Number(body.blacklist_count) || 0;
+
+  const cols = Object.keys(updatable);
+  if (cols.length === 0) return res.status(400).json({ error: '无可更新字段' });
+
+  try {
+    // INSERT ... ON CONFLICT DO UPDATE：首插带传入字段（其余列走表默认），冲突则只更传入列。
+    const insertCols = ['tenant_id', 'cs_wechat_id', ...cols];
+    const insertVals = [tenantId, csWechatId, ...cols.map((c) => updatable[c])];
+    const placeholders = insertCols.map((_, i) => `$${i + 1}`);
+    placeholders[0] = '$1::uuid';
+    const setClause = cols.map((c) => `${c} = EXCLUDED.${c}`).concat('updated_at = now()').join(', ');
+    await pool.query(
+      `INSERT INTO zenithjoy.crm_onboarding_state (${insertCols.join(', ')})
+       VALUES (${placeholders.join(', ')})
+       ON CONFLICT (tenant_id, cs_wechat_id) DO UPDATE SET ${setClause}`,
+      insertVals,
+    );
+    return res.json({ success: true, cs_wechat_id: csWechatId, updated: cols });
+  } catch (err) {
+    return fail(res, 500, 'ONBOARDING_WRITE_FAILED', err instanceof Error ? err.message : 'unknown');
+  }
+});
 
 export default router;

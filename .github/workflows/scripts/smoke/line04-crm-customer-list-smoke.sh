@@ -38,10 +38,15 @@ caf() { curl -sf -H "X-Feishu-User-Id: $ADMIN_A" "$@"; }
 cb()  { curl -s -H "X-Feishu-User-Id: $ADMIN_B" "$@"; }
 
 bootstrap() {
-  echo "[bootstrap] 建 schema + crm_customers 迁移（幂等）"
+  echo "[bootstrap] 建 schema + crm_customers + blacklist 迁移（幂等）"
   psql_q "CREATE SCHEMA IF NOT EXISTS zenithjoy;" >/dev/null || true
-  PGPASSWORD="$PSQL_PASS" psql -h "$PSQL_HOST" -U "$PSQL_USER" -d "$PSQL_DB" -v ON_ERROR_STOP=0 \
-    -f "$ROOT/apps/api/db/migrations/20260624_210000_create_crm_customers.sql" >/dev/null 2>&1 || true
+  for f in \
+    "$ROOT/apps/api/db/migrations/20260622_210000_create_wechat_cs_account_config.sql" \
+    "$ROOT/apps/api/db/migrations/20260624_210000_create_crm_customers.sql" \
+    "$ROOT/apps/api/db/migrations/20260625_100000_add_blacklist_and_takeover_mode.sql"; do
+    PGPASSWORD="$PSQL_PASS" psql -h "$PSQL_HOST" -U "$PSQL_USER" -d "$PSQL_DB" -v ON_ERROR_STOP=0 \
+      -f "$f" >/dev/null 2>&1 || true
+  done
 
   # 幂等清场：固定 CS_WECHAT_ID 无唯一约束，重复跑（mode_a + cookie-seam leg 各跑一次 bootstrap）会
   # 在不同租户下堆叠同名 service_agents 行 → wechat_id→tenant 解析歧义 → 误判 CROSS_TENANT。先清掉本 smoke
@@ -81,12 +86,19 @@ mode_a() {
   echo "$RESP" | jq -e --arg c "$CONTACT" 'any(.customers[]; .contact==$c and has("name") and has("wechat_id") and has("status") and has("last_contact_at") and has("managed"))' >/dev/null || { echo "FAIL: 客户行缺字段/缺 $CONTACT"; exit 1; }
   echo "$RESP" | jq -e '.customers[0] | (has("rating") or has("is_managed") or has("enabled")) | not' >/dev/null || { echo "FAIL: 出现禁用字段"; exit 1; }
 
-  echo "[3] 接管开关 PUT → 200 保存成功 + whitelist 真写入"
+  echo "[3] 接管开关 PUT（黑名单主模型）→ managed=false 加黑名单 / managed=true 移除"
+  # 修正3/4：接管开关写 blacklist（非 whitelist）。managed=false（排除）→ 加进 blacklist。
+  ca -X PUT "${API_BASE}/api/crm/customers/manage" -H 'Content-Type: application/json' \
+    -d "{\"wechat_id\":\"$CS_WECHAT_ID\",\"contact\":\"$CONTACT\",\"managed\":false}" \
+    | jq -e '.success==true and .managed==false and .message=="保存成功"' >/dev/null || { echo "FAIL: manage 排除未 200"; exit 1; }
+  IN=$(psql_q "SELECT (blacklist @> to_jsonb('$CONTACT'::text)) FROM zenithjoy.wechat_cs_account_config WHERE wechat_id='$CS_WECHAT_ID'")
+  [ "$IN" = "t" ] || { echo "FAIL: blacklist 未含被排除的 $CONTACT"; exit 1; }
+  # managed=true（接管）→ 从 blacklist 移除
   ca -X PUT "${API_BASE}/api/crm/customers/manage" -H 'Content-Type: application/json' \
     -d "{\"wechat_id\":\"$CS_WECHAT_ID\",\"contact\":\"$CONTACT\",\"managed\":true}" \
-    | jq -e '.success==true and .managed==true and .message=="保存成功"' >/dev/null || { echo "FAIL: manage 未 200/保存成功"; exit 1; }
-  IN=$(psql_q "SELECT (whitelist @> to_jsonb('$CONTACT'::text)) FROM zenithjoy.wechat_cs_account_config WHERE wechat_id='$CS_WECHAT_ID'")
-  [ "$IN" = "t" ] || { echo "FAIL: whitelist 未含 $CONTACT"; exit 1; }
+    | jq -e '.success==true and .managed==true' >/dev/null || { echo "FAIL: manage 接管未 200"; exit 1; }
+  OUT=$(psql_q "SELECT (blacklist @> to_jsonb('$CONTACT'::text)) FROM zenithjoy.wechat_cs_account_config WHERE wechat_id='$CS_WECHAT_ID'")
+  [ "$OUT" = "f" ] || { echo "FAIL: 接管后 $CONTACT 仍在 blacklist"; exit 1; }
 
   echo "[4] 状态 A3 持久化 + 刷新仍 A3；非法 A9 → 400"
   ca -X PUT "${API_BASE}/api/crm/customers/status" -H 'Content-Type: application/json' \
