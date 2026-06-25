@@ -388,12 +388,13 @@ if [ -f "$OBOX/checkout/${MIGRATE_REL}" ]; then ok "O 主 checkout 解析得到 
 # 防回归——避免有人改回从 release 目录跑。用 grep -F 固定串匹配迁移那行（避开 SC2016）。
 PROMOTE_BODY="$(sed -n '/^staging_promote() {/,/^}/p' "$SCRIPT_DIR/deploy-lib.sh")"
 MIGRATE_CTX="$(echo "$PROMOTE_BODY" | grep 'npm run migrate' | head -1)"
-# 故意用单引号固定串匹配源码里的字面量 cd "${ZJ_API_DIR}"（不让 shell 展开），disable SC2016。
-# shellcheck disable=SC2016
-if echo "$MIGRATE_CTX" | grep -qF 'cd "${ZJ_API_DIR}"'; then
+# 匹配源码里的字面量 cd "<var>"。用 $D 代表字面 $ 拼 needle，规避单引号内 ${} 触发 SC2016。
+D='$'
+O_API_NEEDLE="cd \"${D}{ZJ_API_DIR}\""
+O_REL_NEEDLE="cd \"${D}{reldir}\""
+if printf '%s' "$MIGRATE_CTX" | grep -qF -- "$O_API_NEEDLE"; then
   ok "O staging_promote 迁移从主 checkout(ZJ_API_DIR) 跑"
-# shellcheck disable=SC2016
-elif echo "$MIGRATE_CTX" | grep -qF 'cd "${reldir}"'; then
+elif printf '%s' "$MIGRATE_CTX" | grep -qF -- "$O_REL_NEEDLE"; then
   bad "O staging_promote 迁移仍从 release 目录跑（旧 bug 没修）"
 else
   bad "O staging_promote 迁移行无法识别 cwd：${MIGRATE_CTX}"
