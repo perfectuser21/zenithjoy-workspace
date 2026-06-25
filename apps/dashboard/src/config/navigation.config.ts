@@ -100,10 +100,8 @@ export const autopilotPageComponents: Record<string, () => Promise<{ default: Co
   // zj10 Customer Mgmt — 平台绑定状态 + 发布日志
   'AdminPlatformSessionsPage': () => import('../pages/AdminPlatformSessionsPage'),
   'AdminPublishLogsPage': () => import('../pages/AdminPublishLogsPage'),
-  // Path 4 Sprint B — 微信客服中台配置
+  // Path 4 Sprint B — 微信客服中台配置（话术知识库）
   'WechatCustomerServiceConfigPage': () => import('../pages/WechatCustomerServiceConfigPage'),
-  // Line04 每客服独立配置 — 每客服设置区
-  'PerCsConfigPage': () => import('../pages/PerCsConfigPage'),
   // Sprint 06081603 — 模块健康看板（客户机器 × Line 状态矩阵）
   'ModuleHealthPage': () => import('../pages/ModuleHealthPage'),
   // Line 07 — AI 爆款视频翻拍
@@ -112,10 +110,8 @@ export const autopilotPageComponents: Record<string, () => Promise<{ default: Co
   'AreaHubPage': () => import('../pages/AreaHubPage'),
   // 2026-06-23 — 微信客服一键配置（选机器→填人设/白名单/开关→设置完毕，machine_id 自动）
   'CsOneClickSetupPage': () => import('../pages/CsOneClickSetupPage'),
-  // S3 — 客服工作汇总（每客服机今天/昨天 接收/回复/接待/时长 4 个数 + 真发/演练标）
+  // 客服工作汇总（今天/昨天实时 + 历史任意一天日报含小结，已并入旧 S4 客服日报）
   'CsWorkStatsPage': () => import('../pages/CsWorkStatsPage'),
-  // S4 — 客服日报（回看任意历史日期每客服 4 个数 + 小结）
-  'CsDailyReportPage': () => import('../pages/CsDailyReportPage'),
   'CustomerListPage': () => import('../pages/CustomerListPage'),
   // Line04 CRM 重做 — 层2 状态/画像页（内含层3 聊天记录下钻）
   'CustomerProfilePage': () => import('../pages/CustomerProfilePage'),
@@ -178,8 +174,9 @@ export const additionalRoutes: RouteConfig[] = [
   { path: '/wechat/cs-config', component: 'WechatCustomerServiceConfigPage', requireAuth: true },
   { path: '/wechat/setup', component: 'CsOneClickSetupPage', requireAuth: true },
   { path: '/wechat/cs-stats', component: 'CsWorkStatsPage', requireAuth: true },
-  { path: '/wechat/cs-daily-report', component: 'CsDailyReportPage', requireAuth: true },
-  // requireAuth:false：SPA 路由直接渲染（与 /wechat/per-cs-config 同款），真正的鉴权在后端
+  // 客服日报已并进「客服工作汇总」(CsWorkStatsPage 历史日期 Tab)，旧路由重定向兼容老书签
+  { path: '/wechat/cs-daily-report', redirect: '/wechat/cs-stats', requireAuth: true },
+  // requireAuth:false：SPA 路由直接渲染，真正的鉴权在后端
   // tenantContext / 多通道闸 —— 未登录时 GET /api/crm/customers 返 401，页面提示「登录已失效」。
   // CRM 重做（2026-06-25）：入口归进「私域客服」板块（/area/wechat 卡片下钻），不再游离顶层。
   // 层1 好友表 /wechat/crm；层2 状态/画像页（含层3 聊天记录下钻）/wechat/crm/:contactKey。
@@ -252,9 +249,6 @@ export const additionalRoutes: RouteConfig[] = [
   // === 客户管理子页面（super-admin only）===
   { path: '/admin/customers/platform-sessions', component: 'AdminPlatformSessionsPage', requireAuth: true, requireSuperAdmin: true },
   { path: '/admin/customers/publish-logs', component: 'AdminPublishLogsPage', requireAuth: true, requireSuperAdmin: true },
-
-  // === Line04 每客服设置区（纯前端表单，page.route 拦后端验证；E2E 在 windows job 跑）===
-  { path: '/wechat/per-cs-config', component: 'PerCsConfigPage', requireAuth: false },
 
 ];
 

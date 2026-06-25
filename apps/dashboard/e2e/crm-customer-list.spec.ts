@@ -47,12 +47,22 @@ const PROFILE = {
   ],
 };
 
+// 客服机下拉数据源（整合 2026-06-25）：默认选第一台已配机器，第二台未配应被过滤
+const MACHINES = [
+  { machine_id: 'm-1', hostname: 'PC-A', wechat_id: 'wx_cs_A', self_name: '客服A', configured: true, online: true },
+  { machine_id: 'm-2', hostname: 'PC-NEW', configured: false, online: false },
+];
+
 async function stubAuth(page: Page) {
   await page.route('**/api/auth/**', (route) =>
     route.fulfill({ status: 401, contentType: 'application/json', body: '{}' }),
   );
   await page.route('**/api/wechat/cs/my-role', (route) =>
     route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ role: 'admin', can_config: true }) }),
+  );
+  // 客服机下拉（整合）：CustomerListPage 顶部下拉数据源
+  await page.route('**/api/wechat/cs/machines', (route) =>
+    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ machines: MACHINES }) }),
   );
 }
 
@@ -62,7 +72,7 @@ test('客户好友表 Golden Path — 列表/黑名单开关/状态下拉/onboar
   let blacklisted = false;
   let lastStatus = 'A1';
 
-  await page.route('**/api/crm/customers', (route) =>
+  await page.route('**/api/crm/customers**', (route) =>
     route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -117,7 +127,7 @@ test('客户好友表 Golden Path — 列表/黑名单开关/状态下拉/onboar
 test('三层下钻 — 点客户 → 状态/画像页（层2）→ 聊天记录（层3）', async ({ page }) => {
   await stubAuth(page);
 
-  await page.route('**/api/crm/customers', (route) =>
+  await page.route('**/api/crm/customers**', (route) =>
     route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ customers: ROWS, total: 2, cs_wechat_id: 'wx_cs_A' }) }),
   );
   await page.route('**/api/crm/onboarding/**', (route) =>
@@ -156,7 +166,7 @@ test('三层下钻 — 点客户 → 状态/画像页（层2）→ 聊天记录�
 
 test('旧顶层 /customers 重定向到板块内 /wechat/crm', async ({ page }) => {
   await stubAuth(page);
-  await page.route('**/api/crm/customers', (route) =>
+  await page.route('**/api/crm/customers**', (route) =>
     route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ customers: ROWS, total: 2, cs_wechat_id: 'wx_cs_A' }) }),
   );
   await page.route('**/api/crm/onboarding/**', (route) =>
@@ -167,4 +177,38 @@ test('旧顶层 /customers 重定向到板块内 /wechat/crm', async ({ page }) 
   await page.waitForLoadState('networkidle');
   await expect(page).toHaveURL(/\/wechat\/crm$/);
   await expect(page.getByTestId('crm-customer-row').first()).toBeVisible();
+});
+
+// 整合（2026-06-25）：客服机下拉默认选第一台 + 「立即扫好友」按钮调 trigger 端点并回显
+test('客服机下拉默认第一台 + 立即扫好友通知客服机', async ({ page }) => {
+  await stubAuth(page);
+
+  await page.route('**/api/crm/customers**', (route) =>
+    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ customers: ROWS, total: 2, cs_wechat_id: 'wx_cs_A' }) }),
+  );
+  await page.route('**/api/crm/onboarding/**', (route) =>
+    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ onboarding: ONBOARDING }) }),
+  );
+
+  let triggerBody: unknown = null;
+  await page.route('**/api/crm/friend-scan/trigger', (route) => {
+    triggerBody = JSON.parse(route.request().postData() || '{}');
+    return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, requested_at: '2026-06-25T00:00:00Z' }) });
+  });
+
+  await page.goto(`${BASE_URL}/wechat/crm`);
+  await page.waitForLoadState('networkidle');
+
+  // 下拉默认选中第一台已配机器（wx_cs_A），未配的 m-2 被过滤（只 1 个选项）
+  const select = page.getByTestId('crm-cs-machine-select');
+  await expect(select).toBeVisible();
+  await expect(select).toHaveValue('wx_cs_A');
+  await expect(select.locator('option')).toHaveCount(1);
+  await page.screenshot({ path: path.join(SHOTS, '06-cs-machine-select.png'), fullPage: true });
+
+  // 点「立即扫好友」→ 调 trigger 带 {cs_wechat_id}，回显「已通知客服机」
+  await page.getByTestId('crm-force-scan-btn').click();
+  await expect(page.getByTestId('crm-toast')).toContainText('已通知客服机', { timeout: 10000 });
+  expect(triggerBody).toEqual({ cs_wechat_id: 'wx_cs_A' });
+  await page.screenshot({ path: path.join(SHOTS, '07-force-scan.png'), fullPage: true });
 });

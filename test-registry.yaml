@@ -387,7 +387,15 @@ tests:
     ci: L3
     status: active
     product: 中台认证
-    note: "Sprint A WS2/WS3 — navigation.config /license 与 /admin/license 入口存在性"
+    note: "Sprint A WS2/WS3 — navigation.config /license 与 /admin/license 入口存在性；整合(2026-06-25) 补断言私域客服区正好 5 卡 + 孤儿路由/lazy 已删。"
+
+  - id: line04-crm-customer-list-page-unit
+    path: apps/dashboard/src/pages/__tests__/CustomerListPage.test.tsx
+    type: unit
+    ci: L3
+    status: active
+    product: 客户私域AI接管
+    note: "整合(2026-06-25) CustomerListPage 行为单测：三处 fetch+写接口走 adminFetch 注入 X-User-Email(修403) + 客服机下拉默认第一台/过滤未配 + GET 带 ?cs_wechat_id=X(决策5) + 「立即扫好友」调 POST /friend-scan/trigger 带 {cs_wechat_id} 并回显。"
 
   # ── PR-3 better-auth 邮箱+密码 UI ────────────────────────────────────────────
 
@@ -465,13 +473,10 @@ tests:
     product: AI员工
     note: "Sprint 06232248: cs-config-guard 中间件配套单测 — requireCsAdmin 角色闸 + requireSameTenant 租户隔离/deny-by-default/super-admin 短路。"
 
-  - id: line04-cs-config-permission-e2e
-    path: apps/dashboard/e2e/cs-config-permission.spec.ts
-    type: e2e
-    ci: L4
-    status: active
-    product: AI员工
-    note: "Sprint 06232248: 客服配置权限前台 E2E（windows Playwright）— 管理员看到营业时间+每日上限输入并保存读回；member 只读+「仅管理员可配置」。page.route 拦后端 my-role/config。"
+  # line04-cs-config-permission-e2e 已删（整合 2026-06-25）：PerCsConfigPage 删除，
+  # e2e/cs-config-permission.spec.ts 已删（每客服配置并进「我的客服机」CsOneClickSetupPage）。
+  # 营业时间/每日上限 UI 回归改由 line04-cs-oneclick-setup-whitescreen-e2e 覆盖；
+  # 后端越权/隔离仍由 line04-cs-config-permission 单测守。
 
   - id: line04-cs-oneclick-setup-whitescreen-e2e
     path: apps/dashboard/e2e/cs-oneclick-setup.spec.ts
@@ -479,7 +484,7 @@ tests:
     ci: L4
     status: active
     product: AI员工
-    note: "回归 P0：「我的客服机/一键配置」设白名单点设置完毕遇 403（写接口安全闸 #838 的 error 是对象 {code,message}）→ 旧前端渲染对象崩 React 整页白屏。断言遇 403 不白屏且显示可读提示，200 成功提示。windows Playwright，page.route 拦 cs/machines 与 cs/setup。"
+    note: "回归 P0：「我的客服机/一键配置」点设置完毕遇 403（写接口安全闸 #838 的 error 是对象 {code,message}）→ 旧前端渲染对象崩 React 整页白屏。断言遇 403 不白屏且显示可读提示，200 成功提示。整合(2026-06-25) 白名单字段已删，改填人设名验证。windows Playwright，page.route 拦 cs/machines 与 cs/setup。"
 
   - id: line04-cs-tenant-isolation-sprint-archive
     path: sprints/06181315-line04-cs-tenant-isolation/tests/tenant-isolation.test.ts
@@ -2533,10 +2538,8 @@ agent_suite:
     path: apps/api/tests/scripts/feishu-fixtures.test.ts
     status: active
     note: "Path 4 Sprint 1 ws2 — 8 个飞书 fixture script --help 契约（spawn node）"
-  - id: path4-sprint-1-ws2-agent-machines-page
-    path: apps/dashboard/src/pages/__tests__/AgentMachines.test.tsx
-    status: active
-    note: "Path 4 Sprint 1 ws2 — Dashboard AgentMachines 绑定微信按钮 + 通道下拉（个微/企微 disabled）BEHAVIOR"
+  # path4-sprint-1-ws2-agent-machines-page 已删（整合 2026-06-25）：孤儿页 AgentMachines.tsx
+  # 与 AgentMachines.test.tsx 删除（无路由引用）。客服机列表/绑定改由「我的客服机」CsOneClickSetupPage 承担。
   - id: path4-sprint-1-ws2-wechat-api
     path: apps/dashboard/src/api/__tests__/wechat.api.test.ts
     status: active
@@ -3522,13 +3525,9 @@ agent_suite:
     product: AI员工
     note: "Sprint 06222337 每客服配置存取层 + 身份校验异常读写单测（vi.mock db/connection，按 wechat_id 隔离 + 补默认值 + identity alert 读写）。"
 
-  - id: line04-per-cs-config-ui-e2e
-    path: apps/dashboard/e2e/per-cs-config.spec.ts
-    type: e2e
-    ci: windows_cloud
-    status: active
-    product: AI员工
-    note: "Sprint 06222337 前台每客服设置区编辑 UI（page.route 拦截后端，验保存 PUT url 含 wxid_csa + body.persona.self_name=萌萌 + 回显），windows-latest job2 跑。"
+  # line04-per-cs-config-ui-e2e 已删（整合 2026-06-25）：PerCsConfigPage 与 e2e/per-cs-config.spec.ts 删除
+  # （每客服配置并进「我的客服机」CsOneClickSetupPage）。前台配置 UI 回归改由 line04-cs-oneclick-setup-whitescreen-e2e 覆盖；
+  # 存取层/gate 后端单测（line04-per-cs-config-store-sprint / line04-per-cs-config-gate-sprint）仍保留。
 
   - id: line04-feishu-customer-list-service-unit
     path: apps/api/src/services/feishu-customer-list.test.ts
@@ -3568,15 +3567,11 @@ agent_suite:
     ci: windows_cloud
     status: active
     product: AI员工
-    note: "S3 前台客服工作汇总页（page.route 拦 /cs/stats，验每客服卡片 4 数 + 真发/演练标 + 切昨天数字变化 + 无数据全 0），windows-latest 跑。"
+    note: "前台客服工作汇总页（page.route 拦 /cs/stats，验每客服卡片 4 数 + 真发/演练标 + 切昨天数字变化 + 无数据全 0）；整合(2026-06-25) 加「历史」Tab 验拉 /cs/daily-report 看任意一天 4 数 + 小结（并入旧 S4 客服日报）。windows-latest 跑。"
 
-  - id: line04-cs-daily-report-ui-e2e
-    path: apps/dashboard/e2e/cs-daily-report.spec.ts
-    type: e2e
-    ci: windows_cloud
-    status: active
-    product: AI员工
-    note: "S4 前台客服日报页（page.route 拦 /cs/daily-report，验选历史日期看每客服 4 数 + 小结 + 全 0 行不漏），windows-latest 跑。"
+  # line04-cs-daily-report-ui-e2e 已删（整合 2026-06-25）：CsDailyReportPage 与 e2e/cs-daily-report.spec.ts 删除
+  # （历史日期 + 小结能力并进客服工作汇总「历史」Tab，旧路由 /wechat/cs-daily-report 重定向）。
+  # 历史日报 UI 回归改由 line04-cs-work-stats-ui-e2e「历史」Tab 用例覆盖；后端结算单测 line04-cs-daily-report-service-unit 仍保留。
 
   - id: line04-cs-stats-api-client-unit
     path: apps/dashboard/src/api/__tests__/wechat-cs-stats.api.test.ts
@@ -3616,7 +3611,15 @@ agent_suite:
     ci: windows_cloud
     status: active
     product: 客户私域AI接管
-    note: "中台 CRM 客户列表页 Golden Path（page.route stub UI 层）：列表行 + 状态下拉 + 接管开关 + 「保存成功」文案，windows-latest 跑。"
+    note: "中台 CRM 客户列表页 Golden Path（page.route stub UI 层）：列表行 + 状态下拉 + 接管开关 + 「保存成功」文案；整合(2026-06-25) 补客服机下拉默认第一台 + 「立即扫好友」调 trigger 端点回显，windows-latest 跑。"
+
+  - id: line04-cs-consolidation-area-hub-ui-e2e
+    path: apps/dashboard/e2e/area-hub-wechat-consolidation.spec.ts
+    type: e2e
+    ci: windows_cloud
+    status: active
+    product: 客户私域AI接管
+    note: "整合(2026-06-25) 私域客服区总览 5 卡 E2E（windows Playwright，VITE_SKIP_AUTH）：/area/wechat 主内容区正好 5 张下钻卡（客户好友表/我的客服机/客服工作汇总/话术知识库/下载客户机）+ 不再有「客服日报」独立卡。"
 
   - id: line04-crm-cookie-seam-e2e
     path: apps/dashboard/e2e/crm-cookie-seam.spec.ts

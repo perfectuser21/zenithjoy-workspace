@@ -9,11 +9,16 @@
  * 顶部一条 onboarding 状态条（O1-O5 绿/灰/红，GET /onboarding/:csWechatId）。
  * 点某行 → 下钻层2 状态/画像页（/wechat/crm/:contactKey）。
  *
- * 所有 CRM fetch 带 `credentials: 'include'`（带 better-auth session cookie）；后端多通道闸
- * （租户 session ∪ legacy/super-admin），401 → 「登录已失效」。
+ * **整合（2026-06-25）**：
+ *  - 全部 CRM 请求改 adminFetch（注入 X-User-Email），让邮箱超管走 superAdminGuard 通道（修 403）。
+ *  - 顶部「客服机下拉」（数据源 GET /api/wechat/cs/machines，默认第一台/唯一一台）：选中后所有 CRM 请求
+ *    带 ?cs_wechat_id=X（满足决策5：超管读 CRM 须显式指定一台客服机）。
+ *  - 「立即扫好友」按钮（POST /api/crm/friend-scan/trigger）：通知该客服机无视 24h 间隔立刻扫一轮。
  */
 import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../contexts/AuthContext';
+import { adminFetch } from '../lib/admin-fetch';
 
 type CrmStatus = 'A1' | 'A2' | 'A3' | 'A4' | 'A5';
 
@@ -42,6 +47,16 @@ interface CustomerListResponse {
   customers: CustomerRow[];
   total: number;
   cs_wechat_id: string | null;
+}
+
+// 客服机下拉项（数据源 GET /api/wechat/cs/machines）
+interface CsMachine {
+  machine_id: string;
+  hostname?: string;
+  wechat_id?: string; // 已配机器的 cs_wechat_id；未配则空
+  self_name?: string;
+  configured: boolean;
+  online?: boolean;
 }
 
 // onboarding 状态机（O1-O5），与后端 crm_onboarding_state 对齐
@@ -84,8 +99,15 @@ function StepDot({ state }: { state: OnboardingStepState }) {
 
 export default function CustomerListPage() {
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const email = user?.email;
+
   const [rows, setRows] = useState<CustomerRow[]>([]);
+  // 选中的客服机微信号（决策5：所有 CRM 请求带 ?cs_wechat_id=X）。从下拉选，默认第一台。
   const [csWechatId, setCsWechatId] = useState<string>('');
+  const [machines, setMachines] = useState<CsMachine[]>([]);
+  // 客服机列表是否已尝试加载完（避免首挂载用空 cs_wechat_id 误发一次 400 请求）
+  const [machinesReady, setMachinesReady] = useState(false);
   const [onboarding, setOnboarding] = useState<OnboardingState | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>('');
@@ -94,70 +116,108 @@ export default function CustomerListPage() {
   const [adding, setAdding] = useState(false);
   const [newName, setNewName] = useState('');
   const [newWechatId, setNewWechatId] = useState('');
+  const [scanning, setScanning] = useState(false);
 
   const flash = useCallback((msg: string) => {
     setToast(msg);
     window.setTimeout(() => setToast(''), 4000);
   }, []);
 
-  const loadCustomers = useCallback(async () => {
-    setLoading(true);
-    setError('');
+  // 客服机下拉数据源：只取「已配」（有 cs_wechat_id）的机器，默认选第一台
+  const loadMachines = useCallback(async () => {
     try {
-      const res = await fetch('/api/crm/customers', { credentials: 'include' });
-      if (res.status === 401) {
-        setAuthExpired(true);
-        setError('登录已失效，请重新登录');
-        setRows([]);
-        return;
-      }
-      if (!res.ok) throw new Error(`加载失败（${res.status}）`);
-      const data = (await res.json()) as CustomerListResponse;
-      setAuthExpired(false);
-      setRows(data.customers ?? []);
-      setCsWechatId(data.cs_wechat_id ?? '');
-    } catch (e) {
-      setError(e instanceof Error ? e.message : '加载失败');
-      setRows([]);
+      const res = await fetch('/api/wechat/cs/machines');
+      if (!res.ok) return;
+      const data = (await res.json()) as { machines?: CsMachine[] };
+      const all = Array.isArray(data.machines) ? data.machines : [];
+      const configured = all.filter((m) => m.configured && m.wechat_id);
+      setMachines(configured);
+      // 默认选第一台/唯一一台（决策5：超管必须指定一台才能读名册）
+      setCsWechatId((prev) => prev || configured[0]?.wechat_id || '');
+    } catch {
+      // 静默：无客服机时下拉为空，列表请求会因缺 cs_wechat_id 返回空/400，页面给出提示
     } finally {
-      setLoading(false);
+      setMachinesReady(true);
     }
   }, []);
 
+  // 拉客户名册：带 ?cs_wechat_id=X（决策5）；adminFetch 注入 X-User-Email（修 403）
+  const loadCustomers = useCallback(
+    async (wechatId: string) => {
+      setLoading(true);
+      setError('');
+      try {
+        const qs = wechatId ? `?cs_wechat_id=${encodeURIComponent(wechatId)}` : '';
+        const res = await adminFetch(`/api/crm/customers${qs}`, email);
+        if (res.status === 401) {
+          setAuthExpired(true);
+          setError('登录已失效，请重新登录');
+          setRows([]);
+          return;
+        }
+        if (res.status === 400 && !wechatId) {
+          // 超管未选客服机：后端按决策5 返 400，引导先选一台
+          setRows([]);
+          setError('请先在上方选择一台客服机');
+          return;
+        }
+        if (!res.ok) throw new Error(`加载失败（${res.status}）`);
+        const data = (await res.json()) as CustomerListResponse;
+        setAuthExpired(false);
+        setRows(data.customers ?? []);
+        // 后端回的主客服机号兜底（租户单台场景）
+        if (!wechatId && data.cs_wechat_id) setCsWechatId(data.cs_wechat_id);
+      } catch (e) {
+        setError(e instanceof Error ? e.message : '加载失败');
+        setRows([]);
+      } finally {
+        setLoading(false);
+      }
+    },
+    [email],
+  );
+
   // onboarding 状态条：按当前主客服机 cs_wechat_id 拉。失败/无客服机时静默（不阻塞列表）。
-  const loadOnboarding = useCallback(async (wechatId: string) => {
-    if (!wechatId) {
-      setOnboarding(null);
-      return;
-    }
-    try {
-      const res = await fetch(`/api/crm/onboarding/${encodeURIComponent(wechatId)}`, { credentials: 'include' });
-      if (!res.ok) {
+  const loadOnboarding = useCallback(
+    async (wechatId: string) => {
+      if (!wechatId) {
         setOnboarding(null);
         return;
       }
-      const data = (await res.json()) as { onboarding?: OnboardingState } | OnboardingState;
-      const ob = (data as { onboarding?: OnboardingState }).onboarding ?? (data as OnboardingState);
-      setOnboarding(ob && 'step_o1_online' in ob ? ob : null);
-    } catch {
-      setOnboarding(null);
-    }
-  }, []);
+      try {
+        const res = await adminFetch(`/api/crm/onboarding/${encodeURIComponent(wechatId)}`, email);
+        if (!res.ok) {
+          setOnboarding(null);
+          return;
+        }
+        const data = (await res.json()) as { onboarding?: OnboardingState } | OnboardingState;
+        const ob = (data as { onboarding?: OnboardingState }).onboarding ?? (data as OnboardingState);
+        setOnboarding(ob && 'step_o1_online' in ob ? ob : null);
+      } catch {
+        setOnboarding(null);
+      }
+    },
+    [email],
+  );
 
+  // 首挂载：先拉客服机列表（确定默认 cs_wechat_id）
   useEffect(() => {
-    void loadCustomers();
-  }, [loadCustomers]);
+    void loadMachines();
+  }, [loadMachines]);
 
+  // 客服机列表 ready 后（含默认选中 cs_wechat_id）→ 拉名册 + onboarding。
+  // 等 machinesReady 再发，避免首挂载用空 cs_wechat_id 误打一次 400。
   useEffect(() => {
+    if (!machinesReady) return;
+    void loadCustomers(csWechatId);
     void loadOnboarding(csWechatId);
-  }, [csWechatId, loadOnboarding]);
+  }, [machinesReady, csWechatId, loadCustomers, loadOnboarding]);
 
   // 写接口统一处理：401 → 登录已失效；其它非 2xx → 提示失败；2xx → 返回解析后的 json
   const writeJson = useCallback(
     async (url: string, method: string, body: unknown): Promise<unknown | null> => {
-      const res = await fetch(url, {
+      const res = await adminFetch(url, email, {
         method,
-        credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       });
@@ -173,7 +233,7 @@ export default function CustomerListPage() {
       setAuthExpired(false);
       return res.json();
     },
-    [flash],
+    [email, flash],
   );
 
   // 接管开关（黑名单语义）：managed=true→接管中；勾掉→managed=false→后端加 blacklist
@@ -187,7 +247,7 @@ export default function CustomerListPage() {
       })) as { managed?: boolean; message?: string } | null;
       if (!out) return;
       flash(out.message ?? (next ? '已恢复接管' : '已加入黑名单'));
-      await loadCustomers();
+      await loadCustomers(csWechatId);
     },
     [csWechatId, writeJson, flash, loadCustomers],
   );
@@ -201,7 +261,7 @@ export default function CustomerListPage() {
       });
       if (!out) return;
       flash('保存成功');
-      await loadCustomers();
+      await loadCustomers(csWechatId);
     },
     [csWechatId, writeJson, flash, loadCustomers],
   );
@@ -222,8 +282,26 @@ export default function CustomerListPage() {
     setNewWechatId('');
     setAdding(false);
     flash('保存成功');
-    await loadCustomers();
+    await loadCustomers(csWechatId);
   }, [newName, csWechatId, writeJson, flash, loadCustomers]);
+
+  // 立即扫好友：通知该客服机无视 24h 间隔立刻扫一轮近期会话联系人（POST /friend-scan/trigger）
+  const onForceScan = useCallback(async () => {
+    if (!csWechatId) {
+      flash('请先选择一台客服机');
+      return;
+    }
+    setScanning(true);
+    try {
+      const out = (await writeJson('/api/crm/friend-scan/trigger', 'POST', {
+        cs_wechat_id: csWechatId,
+      })) as { ok?: boolean } | null;
+      if (!out) return;
+      flash('已通知客服机，扫到的好友会自动出现（约几十秒）');
+    } finally {
+      setScanning(false);
+    }
+  }, [csWechatId, writeJson, flash]);
 
   // 点行下钻层2：用 contact 作 key（与 whitelist/should_reply 同字面，§7 决策4）
   const openProfile = useCallback(
@@ -239,24 +317,43 @@ export default function CustomerListPage() {
 
   return (
     <div className="customer-list-page" style={{ padding: 24 }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
         <h1 style={{ fontSize: 20, fontWeight: 600 }}>客户好友表</h1>
-        <button
-          data-testid="crm-add-customer-btn"
-          onClick={() => setAdding((v) => !v)}
-          style={{ padding: '6px 12px', borderRadius: 6, border: '1px solid #ddd', cursor: 'pointer' }}
-        >
-          ＋加客户
-        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          {/* 客服机下拉（决策5：选一台才读它的名册） */}
+          <select
+            data-testid="crm-cs-machine-select"
+            value={csWechatId}
+            onChange={(e) => setCsWechatId(e.target.value)}
+            style={{ padding: '6px 10px', borderRadius: 6, border: '1px solid #ddd' }}
+            title="选择要查看的客服机"
+          >
+            {machines.length === 0 && <option value="">（暂无已配客服机）</option>}
+            {machines.map((m) => (
+              <option key={m.machine_id} value={m.wechat_id ?? ''}>
+                {m.self_name || m.hostname || m.wechat_id}
+                {m.online ? ' · 在线' : ''}
+              </option>
+            ))}
+          </select>
+          <button
+            data-testid="crm-add-customer-btn"
+            onClick={() => setAdding((v) => !v)}
+            style={{ padding: '6px 12px', borderRadius: 6, border: '1px solid #ddd', cursor: 'pointer' }}
+          >
+            ＋加客户
+          </button>
+        </div>
       </div>
 
-      {/* onboarding 状态条（O1-O5）—— 一眼看到这台客服机走到哪一步、哪步没做 */}
+      {/* onboarding 状态条（O1-O5）+ 立即扫好友 —— 一眼看到这台客服机走到哪一步、哪步没做 */}
       {onboarding && (
         <div
           data-testid="crm-onboarding-bar"
           style={{
             display: 'flex',
             flexWrap: 'wrap',
+            alignItems: 'center',
             gap: 16,
             margin: '12px 0',
             padding: '10px 14px',
@@ -284,6 +381,23 @@ export default function CustomerListPage() {
               </div>
             );
           })}
+          <button
+            data-testid="crm-force-scan-btn"
+            onClick={() => void onForceScan()}
+            disabled={scanning || !csWechatId}
+            style={{
+              marginLeft: 'auto',
+              padding: '6px 12px',
+              borderRadius: 6,
+              border: '1px solid #2563eb',
+              background: '#2563eb',
+              color: '#fff',
+              cursor: scanning || !csWechatId ? 'not-allowed' : 'pointer',
+              opacity: scanning || !csWechatId ? 0.6 : 1,
+            }}
+          >
+            {scanning ? '通知中…' : '立即扫好友'}
+          </button>
         </div>
       )}
 
@@ -331,7 +445,25 @@ export default function CustomerListPage() {
           </p>
           {rows.length === 0 ? (
             <div data-testid="crm-empty">
-              暂无好友。等客服机 agent 扫一轮近期会话联系人后会自动出现，也可点「＋加客户」手动入册。
+              暂无好友。等客服机 agent 扫一轮近期会话联系人后会自动出现，也可点
+              <button
+                data-testid="crm-empty-force-scan-btn"
+                onClick={() => void onForceScan()}
+                disabled={scanning || !csWechatId}
+                style={{
+                  margin: '0 4px',
+                  padding: '2px 8px',
+                  borderRadius: 6,
+                  border: '1px solid #2563eb',
+                  background: '#fff',
+                  color: '#2563eb',
+                  cursor: scanning || !csWechatId ? 'not-allowed' : 'pointer',
+                  opacity: scanning || !csWechatId ? 0.6 : 1,
+                }}
+              >
+                {scanning ? '通知中…' : '立即扫好友'}
+              </button>
+              ，或点「＋加客户」手动入册。
             </div>
           ) : (
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>

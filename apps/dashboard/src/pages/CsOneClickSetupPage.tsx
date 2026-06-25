@@ -1,12 +1,14 @@
 /**
- * CsOneClickSetupPage — 微信客服「一键配置 / 我的客服机」(2026-06-23 老板拍板)
+ * CsOneClickSetupPage — 微信客服「我的客服机」(整合后；2026-06-25 整合拍板)
  *
  * 不让人手抄 machine_id：机器装好 Agent 自己注册上来报到 → 这里列出「我的全部客服机」(已配+待配)。
- * 点任意一台 → 填/改 人设名 / 白名单 / 关键人 / 自动回复开关 → 点【设置完毕】→ 后端自动绑定+写配置。
- * 已配的机器点进去会预填当前白名单，方便随时改；约 30 秒生效，去微信发条消息即可验证。
+ * 点任意一台 → 填/改 人设名 / 营业时间 / 每日上限 / 真发开关 → 点【设置完毕】→ 后端自动绑定+写配置。
+ * 整合：删掉白名单/关键人手填（接管开关搬到「客户好友表」黑名单语义），并入「监听健康看板」(一处看机器健康)。
+ * 已配的机器点进去会预填当前配置；约 30 秒生效，去微信发条消息即可验证。
  */
 import { useEffect, useState } from 'react';
 import { Loader2, CheckCircle2, RefreshCw, MonitorSmartphone } from 'lucide-react';
+import ListenerHealthSection from '../components/ListenerHealthSection';
 
 interface CSMachine {
   machine_id: string;
@@ -15,7 +17,6 @@ interface CSMachine {
   configured: boolean;
   wechat_id?: string;
   self_name?: string;
-  whitelist?: string[];
   auto_agent_enabled?: boolean;
   online?: boolean;
   wechat_ok?: boolean;
@@ -45,8 +46,6 @@ export default function CsOneClickSetupPage() {
   const [loadingList, setLoadingList] = useState(false);
   const [machineId, setMachineId] = useState('');
   const [selfName, setSelfName] = useState('');
-  const [keyContact, setKeyContact] = useState('');
-  const [whitelist, setWhitelist] = useState('');
   const [autoAgent, setAutoAgent] = useState(true);
   const [businessHoursStart, setBusinessHoursStart] = useState('09:00');
   const [businessHoursEnd, setBusinessHoursEnd] = useState('21:00');
@@ -72,14 +71,13 @@ export default function CsOneClickSetupPage() {
     loadMachines();
   }, []);
 
-  // 选中一台机器：已配的把它当前配置预填进表单，方便直接改白名单。
+  // 选中一台机器：已配的把它当前配置预填进表单，方便直接改。
   const selectMachine = (m: CSMachine) => {
     setMachineId(m.machine_id);
     setDone(null);
     setError(null);
     if (m.configured) {
       setSelfName(m.self_name ?? '');
-      setWhitelist((m.whitelist ?? []).join(', '));
       setAutoAgent(m.auto_agent_enabled ?? true);
     }
   };
@@ -111,14 +109,9 @@ export default function CsOneClickSetupPage() {
             few_shot: [],
           },
           auto_agent_enabled: autoAgent,
-          key_contact_wechat: keyContact.trim(),
           business_hours_start: businessHoursStart,
           business_hours_end: businessHoursEnd,
           daily_limit: Number.parseInt(dailyLimit, 10) || 0,
-          whitelist: whitelist
-            .split(/[\n,，、]/)
-            .map((s) => s.trim())
-            .filter(Boolean),
         }),
       });
       const data = await res.json().catch(() => null);
@@ -141,8 +134,12 @@ export default function CsOneClickSetupPage() {
     <div className="max-w-2xl mx-auto">
       <h2 className="text-xl font-semibold mb-1 text-gray-900 dark:text-white">微信客服 · 我的客服机</h2>
       <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">
-        装好 Agent 的机器会自己报到。点一台 → 填/改 人设·白名单·开关 → 点设置完毕，约 30 秒生效。已配过的也能点进去改。
+        装好 Agent 的机器会自己报到。点一台 → 填/改 人设·营业时间·每日上限·真发开关 → 点设置完毕，约 30 秒生效。
+        谁接管/谁拉黑去「客户好友表」按客户逐个开关。
       </p>
+
+      {/* 监听健康看板（整合：客服机健康一处看） */}
+      <ListenerHealthSection />
 
       {/* ① 选机器 */}
       <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-5 mb-4">
@@ -207,7 +204,7 @@ export default function CsOneClickSetupPage() {
                     {/* 配置状态 */}
                     {m.configured ? (
                       <span className="text-xs px-1.5 py-0.5 rounded bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-400">
-                        已配{m.whitelist?.length ? ` · 白名单${m.whitelist.length}人` : ''}
+                        已配
                       </span>
                     ) : (
                       <span className="text-xs px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
@@ -242,29 +239,6 @@ export default function CsOneClickSetupPage() {
             value={selfName}
             onChange={(e) => setSelfName(e.target.value)}
             placeholder="比如：小助手"
-            className="w-full px-3 py-2 rounded border border-slate-300 dark:border-slate-600 dark:bg-slate-900 text-sm"
-          />
-        </div>
-        <div>
-          <label className="block text-sm text-gray-600 dark:text-gray-300 mb-1">
-            白名单（名单内客户才自动回，逗号/换行分隔）
-          </label>
-          <textarea
-            data-testid="setup-whitelist"
-            value={whitelist}
-            onChange={(e) => setWhitelist(e.target.value)}
-            placeholder="默忆, 客户A, 客户B"
-            rows={2}
-            className="w-full px-3 py-2 rounded border border-slate-300 dark:border-slate-600 dark:bg-slate-900 text-sm"
-          />
-        </div>
-        <div>
-          <label className="block text-sm text-gray-600 dark:text-gray-300 mb-1">关键人（上下线播报给谁）</label>
-          <input
-            data-testid="setup-key-contact"
-            value={keyContact}
-            onChange={(e) => setKeyContact(e.target.value)}
-            placeholder="比如：默忆"
             className="w-full px-3 py-2 rounded border border-slate-300 dark:border-slate-600 dark:bg-slate-900 text-sm"
           />
         </div>
@@ -328,7 +302,7 @@ export default function CsOneClickSetupPage() {
         <div className="mt-4 p-4 rounded-lg bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 flex items-start gap-2">
           <CheckCircle2 className="w-5 h-5 text-green-500 mt-0.5" />
           <div className="text-sm text-green-800 dark:text-green-300">
-            设置成功（客服号 {done}）。机器约 30 秒内拉到配置生效，去微信让名单内的人发条消息验证即可。
+            设置成功（客服号 {done}）。机器约 30 秒内拉到配置生效，去微信让客户发条消息验证即可。
           </div>
         </div>
       )}

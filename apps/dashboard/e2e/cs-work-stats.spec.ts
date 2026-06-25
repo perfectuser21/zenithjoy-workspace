@@ -64,6 +64,36 @@ test('客服工作汇总：每客服卡片 4 个数 + 真发/演练标，切昨�
   await page.screenshot({ path: `${SHOT}/02-yesterday.png`, fullPage: true })
 })
 
+// 整合（2026-06-25）：客服日报并进「历史」Tab，拉 GET /wechat/cs/daily-report?date=YYYY-MM-DD（含小结）
+test('历史 Tab：选日期看那天的日报（4 个数 + 一句话小结）', async ({ page }) => {
+  page.route('**/api/auth/**', (r) => r.fulfill({ status: 401, contentType: 'application/json', body: '{}' }))
+  // 今天/昨天走 stats（默认进页拉 today）
+  page.route('**/api/wechat/cs/stats**', (route) =>
+    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(TODAY) }))
+  // 历史走 daily-report，返回带 summary_text 的结算日报
+  page.route('**/api/wechat/cs/daily-report**', (route) =>
+    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({
+      ok: true, date: '2026-06-20',
+      reports: [{ cs_wechat_id: 'wxid_csa', self_name: '小齐', report_date: '2026-06-20',
+        received_count: 20, reply_count: 18, served_customers: 9, work_duration_minutes: 240,
+        summary_text: '当天高峰咨询，回复及时' }],
+    }) }))
+
+  await page.goto('/wechat/cs-stats')
+  // 切「历史」Tab → 出现日期选择器 + 查看按钮
+  await page.getByTestId('cs-stats-tab-history').click()
+  await expect(page.getByTestId('cs-stats-date-input')).toBeVisible()
+  await page.getByTestId('cs-stats-date-input').fill('2026-06-20')
+  await page.getByTestId('cs-stats-history-load-btn').click()
+
+  const card = page.getByTestId('cs-stat-card-wxid_csa')
+  await expect(card.getByTestId('stat-received')).toContainText('20')
+  await expect(card.getByTestId('stat-duration')).toContainText('240')
+  // 历史日报特有：一句话小结
+  await expect(card.getByTestId('stat-summary')).toContainText('当天高峰咨询')
+  await page.screenshot({ path: `${SHOT}/04-history-daily-report.png`, fullPage: true })
+})
+
 test('某客服无数据 → 卡片显示 4 个 0（不报错不消失）', async ({ page }) => {
   page.route('**/api/auth/**', (r) => r.fulfill({ status: 401, contentType: 'application/json', body: '{}' }))
   page.route('**/api/wechat/cs/stats**', (route) =>
