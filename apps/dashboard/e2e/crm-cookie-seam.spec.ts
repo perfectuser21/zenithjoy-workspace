@@ -28,7 +28,7 @@ test('cookie 接缝 — 真浏览器在真后端上点接管开关，真发 sess
   const page = await context.newPage();
 
   // 真 GET（带 cookie 经 vite proxy 打真 :5200）→ 真出客户行
-  await page.goto(`${BASE}/customers`);
+  await page.goto(`${BASE}/wechat/crm`);
   await page.waitForLoadState('networkidle');
   await expect(page.getByTestId('crm-customer-row').first()).toBeVisible({ timeout: 15000 });
 

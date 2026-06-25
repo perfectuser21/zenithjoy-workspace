@@ -1,0 +1,36 @@
+name: E2E Line04 CRM 客户好友表（三层下钻 + 黑名单）
+# CRM 重做前端 UI E2E（windows_cloud runner，ZenithJoy UI 死规则）。
+# PR 自动触发：碰 dashboard / 本 sprint / 本 workflow 时跑。job = windows Playwright（page.route 拦后端，无 DB）。
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'apps/dashboard/**'
+      - 'sprints/06251400-line04-crm-redo-frontend/**'
+      - '.github/workflows/e2e-line04-crm-redo.yml'
+
+concurrency:
+  group: e2e-line04-crm-redo-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  dashboard-ui:                            # 前台客户好友表三层下钻 Playwright UI（windows，无 DB）
+    name: 前台 CRM 客户好友表三层下钻 UI（windows）
+    runs-on: windows-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Dashboard UI E2E（Playwright，page.route 拦后端）
+        shell: pwsh
+        run: ./sprints/06251400-line04-crm-redo-frontend/e2e-ui-verify.ps1
+      - name: Upload screenshots on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: crm-redo-ui-screenshots
+          path: sprints/06251400-line04-crm-redo-frontend/screenshots/*.png
+          retention-days: 3

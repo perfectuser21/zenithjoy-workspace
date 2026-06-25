@@ -10,7 +10,7 @@ import type { LucideIcon } from 'lucide-react';
 import {
   Send, Music2, Folder, Database, Factory, Sparkles,
   Target, KeyRound, MessageCircle, Download,
-  Scissors, Video, Building2, MonitorCheck, Activity, ShieldCheck,
+  Scissors, Video, Building2, MonitorCheck, Activity, ShieldCheck, Users,
 } from 'lucide-react';
 
 interface HubCard {
@@ -55,6 +55,7 @@ export const AREA_HUBS: Record<string, AreaHub> = {
     title: '私域客服',
     subtitle: '微信号 AI 接管：每台客服机一处看健康、一处配人设/白名单/开关。',
     cards: [
+      { label: '客户好友表', desc: 'agent 自动扫来的近期好友：默认全接管，勾排除=加黑名单；点客户看画像/状态/聊天记录', to: '/wechat/crm', Icon: Users, color: 'text-rose-500' },
       { label: '我的客服机', desc: '所有机器一处看（在线/微信状态）+ 点一台配人设/白名单/开关', to: '/wechat/setup', Icon: Sparkles, color: 'text-sky-500' },
       { label: '客服工作汇总', desc: '每台客服机今天/昨天 接收/回复/接待/工作时长 + 真发/演练', to: '/wechat/cs-stats', Icon: Activity, color: 'text-indigo-500' },
       { label: '客服日报', desc: '回看任意历史日期每台客服机的工作日报（4 个数 + 小结）', to: '/wechat/cs-daily-report', Icon: Database, color: 'text-cyan-500' },
