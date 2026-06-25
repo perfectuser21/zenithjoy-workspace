@@ -280,16 +280,21 @@ export async function listAllMachines(tenantId?: string, limit = 100): Promise<C
     const scoped = typeof tenantId === 'string' && tenantId.length > 0;
     const fromAndJoins = scoped
       ? // 运营视图：service_agents 驱动（只该租户的绑定），再回连 license_machines 取 hostname/心跳
+        // 运营视图：service_agents 驱动（只该租户的绑定），LEFT JOIN license_machines 取 hostname/心跳
+        // —— 用 LEFT JOIN 而非 INNER：客服机已绑 service_agents 但 license_machines 尚无行（如刚一键配置、
+        // 还没正式注册装机）也要出现在「我的客服机」里，不能因缺 license_machines 行而漏掉自己的机器。
         `FROM zenithjoy.service_agents sa
-         JOIN zenithjoy.license_machines lm ON lm.machine_id = sa.machine_id`
+         LEFT JOIN zenithjoy.license_machines lm ON lm.machine_id = sa.machine_id`
       : // 超管视图：license_machines 驱动，左连 service_agents（含未绑定机器）
         `FROM zenithjoy.license_machines lm
          LEFT JOIN zenithjoy.service_agents sa
                 ON sa.machine_id = lm.machine_id AND sa.deleted_at IS NULL`;
     const scopeWhere = scoped ? `WHERE sa.tenant_id = $2::uuid AND sa.deleted_at IS NULL` : '';
+    // 机器 id 与 GROUP BY：运营视图以 sa.machine_id 为准（license_machines 可能缺行）；超管视图以 lm.machine_id。
+    const machineIdExpr = scoped ? 'sa.machine_id' : 'lm.machine_id';
     const params: unknown[] = scoped ? [limit, tenantId] : [limit];
     const res = await pool.query(
-      `SELECT lm.machine_id,
+      `SELECT ${machineIdExpr} AS machine_id,
               MAX(lm.hostname)        AS hostname,
               MAX(lm.last_seen)       AS last_seen,
               MAX(sa.wechat_id)       AS wechat_id,
@@ -318,7 +323,7 @@ export async function listAllMachines(tenantId?: string, limit = 100): Promise<C
                  ORDER BY a.last_heartbeat_at DESC LIMIT 1
               ) h ON true
         ${scopeWhere}
-        GROUP BY lm.machine_id
+        GROUP BY ${machineIdExpr}
         ORDER BY bool_or(h.last_hb > NOW() - interval '5 minutes') DESC NULLS LAST,
                  MAX(lm.last_seen) DESC NULLS LAST
         LIMIT $1`,
