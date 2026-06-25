@@ -150,6 +150,8 @@ cat > "$LBOX/prod.plist" <<'PLIST'
     <key>DATABASE_NAME</key><string>cecelia</string>
     <key>NODE_ENV</key><string>production</string>
     <key>ZENITHJOY_API_URL</key><string>http://localhost:5200</string>
+    <key>BETTER_AUTH_URL</key><string>https://autopilot.zenjoymedia.media</string>
+    <key>BETTER_AUTH_TRUSTED_ORIGINS</key><string>https://autopilot.zenjoymedia.media</string>
     <key>SOME_SECRET</key><string>super-secret-value-123</string>
   </dict>
   <key>Label</key><string>com.zenithjoy.api</string>
@@ -195,6 +197,10 @@ expect_eq "$(_lread Label)" "com.zenithjoy.api.staging" "L Label→staging"
 expect_eq "$(_lread env:PORT)" "5201" "L PORT→5201"
 expect_eq "$(_lread env:DATABASE_NAME)" "zenithjoy_test" "L DATABASE_NAME→zenithjoy_test"
 expect_eq "$(_lread env:ZENITHJOY_API_URL)" "http://localhost:5201" "L ZENITHJOY_API_URL→:5201"
+# 回归（2026-06-25 invalid origin 事故）：生产 plist 的 better-auth 是 autopilot 域名，
+# staging 必须收口到 staging 域名，否则从 staging-autopilot 登录被判 invalid origin（403）。
+expect_eq "$(_lread env:BETTER_AUTH_URL)" "https://staging-autopilot.zenjoymedia.media" "L BETTER_AUTH_URL→staging（不漏生产 autopilot）"
+expect_eq "$(_lread env:BETTER_AUTH_TRUSTED_ORIGINS)" "https://staging-autopilot.zenjoymedia.media,http://localhost:5173" "L TRUSTED_ORIGINS→staging（不漏生产 autopilot）"
 expect_eq "$(_lread env:SOME_SECRET)" "super-secret-value-123" "L 密钥从生产继承"
 expect_eq "$(_lread program1)" "/fake/releases/staging/dist/index.js" "L Program→releases/staging/dist/index.js"
 expect_eq "$(_lread WorkingDirectory)" "/fake/releases/staging" "L WorkingDir→releases/staging"
@@ -264,6 +270,9 @@ expect_eq "$(_l2read env:SOME_SECRET)" "super-secret-value-123" "L2 注入生产
 expect_eq "$(_l2read env:PORT)" "5201" "L2 PORT=staging 值（非生产5200）"
 expect_eq "$(_l2read env:DATABASE_NAME)" "zenithjoy_test" "L2 DB=staging 值（非生产cecelia）"
 expect_eq "$(_l2read env:NODE_ENV)" "staging" "L2 NODE_ENV=staging（非生产production）"
+# 回归：模板派生路径同样必须把 better-auth 收口到 staging（staging_overrides 盖过生产继承）。
+expect_eq "$(_l2read env:BETTER_AUTH_URL)" "https://staging-autopilot.zenjoymedia.media" "L2 BETTER_AUTH_URL→staging（不漏生产 autopilot）"
+expect_eq "$(_l2read env:BETTER_AUTH_TRUSTED_ORIGINS)" "https://staging-autopilot.zenjoymedia.media,http://localhost:5173" "L2 TRUSTED_ORIGINS→staging（不漏生产 autopilot）"
 
 rm -rf "$LBOX"
 
