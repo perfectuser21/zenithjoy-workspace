@@ -27,6 +27,8 @@ CS="${CS_WECHAT_ID:-wx_cs_prof_$$}"
 CS_OTHER="wx_cs_prof_other_$$"
 CONTACT="画像客户_$$"
 CONTACT_BL="拉黑客户_$$"
+# 含字面 % 的昵称——验后端不 double-decode（express 已解码一次，handler 不能再 decodeURIComponent）
+CONTACT_PCT="折扣5%off_$$"
 
 psql_q() { PGPASSWORD="$PSQL_PASS" psql -h "$PSQL_HOST" -U "$PSQL_USER" -d "$PSQL_DB" -qtAc "$1"; }
 ci()  { curl -s  -H "X-Internal-Token: $INTERNAL_TOKEN" "$@"; }
@@ -72,6 +74,9 @@ bootstrap() {
   # 聊天逐句（in 客户 / out 客服）
   psql_q "INSERT INTO zenithjoy.cs_memory_messages (tenant_id, contact, role, text) VALUES ('$TENANT','$CONTACT','in','你好在吗');" >/dev/null
   psql_q "INSERT INTO zenithjoy.cs_memory_messages (tenant_id, contact, role, text) VALUES ('$TENANT','$CONTACT','out','在的，请问需要什么');" >/dev/null
+
+  # 含字面 % 的昵称客户（验 double-decode 回归）
+  psql_q "INSERT INTO zenithjoy.crm_customers (tenant_id, cs_wechat_id, contact, status, source) VALUES ('$TENANT','$CS','$CONTACT_PCT','A2','manual') ON CONFLICT (tenant_id, cs_wechat_id, contact) DO UPDATE SET status='A2';" >/dev/null
   export TENANT TENANT_B
 }
 
@@ -110,6 +115,12 @@ main() {
   echo "[5b] 缺 cs 且非租户 session（super-admin 通道）→ 404 解析不到租户"
   CODE=$(ci -o /tmp/prof_nocs.json -w "%{http_code}" "${API_BASE}/api/crm/customers/${CK}/profile")
   [ "$CODE" = "404" ] || { echo "FAIL: 缺 cs 未 404 实际 $CODE"; cat /tmp/prof_nocs.json; exit 1; }
+
+  echo "[6] double-decode 回归：含字面 % 的昵称 → 200 + status 命中（express 已解码，handler 不可再 decode）"
+  CKP=$(urlenc "$CONTACT_PCT")
+  CODEP=$(ci -o /tmp/prof_pct.json -w "%{http_code}" "${API_BASE}/api/crm/customers/${CKP}/profile?cs=$CS")
+  [ "$CODEP" = "200" ] || { echo "FAIL: 含 % 昵称未 200 实际 $CODEP（疑 double-decode 崩）"; cat /tmp/prof_pct.json; exit 1; }
+  jq -e --arg c "$CONTACT_PCT" '.profile.contact==$c and .profile.status=="A2"' /tmp/prof_pct.json >/dev/null || { echo "FAIL: 含 % 昵称 contact/status 不符（double-decode 解坏了 contact）"; cat /tmp/prof_pct.json; exit 1; }
 
   echo "✅ Line04 CRM 客户画像 profile smoke 全过"
 }
