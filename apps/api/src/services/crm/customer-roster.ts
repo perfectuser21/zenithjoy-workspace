@@ -27,12 +27,26 @@ export interface RosterMessageRow {
   last_contact_at?: string | null;
 }
 
+/** 身份三态：customer（普通客户）| blacklist（已拉黑·展示标记）| internal（内部人员，列表已在 SQL 排除）。 */
+export type CrmIdentity = 'customer' | 'blacklist' | 'internal';
+
+const VALID_IDENTITY: ReadonlySet<string> = new Set(['customer', 'blacklist', 'internal']);
+
+/** 把任意输入规范到三态之内，非法 / 缺省一律落 'customer'。 */
+export function normalizeIdentity(s: unknown): CrmIdentity {
+  return typeof s === 'string' && VALID_IDENTITY.has(s) ? (s as CrmIdentity) : 'customer';
+}
+
 /** crm_customers 手动入册行。 */
 export interface RosterManualRow {
   contact: string;
   name?: string | null;
   wechat_id?: string | null;
   status?: string | null;
+  /** 加微信时间 ISO（可空）。 */
+  add_friend_time?: string | null;
+  /** 身份三态（缺省 customer）。 */
+  identity?: string | null;
 }
 
 /** crm_customers source='scan' 扫描好友行（agent 扫客服机近期会话联系人上报落库）。 */
@@ -45,6 +59,10 @@ export interface RosterScanRow {
   last_message?: string | null;
   /** 扫描观测到的最后时间 ISO（可空），并进 last_contact_at。 */
   last_seen_at?: string | null;
+  /** 加微信时间 ISO（agent 上报，可空）。 */
+  add_friend_time?: string | null;
+  /** 身份三态（缺省 customer）。 */
+  identity?: string | null;
 }
 
 /** 接管模式：blacklist（主模型，默认全接管 + 黑名单排除）| whitelist（小众兼容，只接管名单内）。 */
@@ -62,6 +80,10 @@ export interface CustomerRosterRow {
   source: 'message' | 'manual' | 'scan' | 'whitelist';
   /** 扫描 / 最近一条消息预览（可空）。 */
   last_message: string | null;
+  /** 加微信时间 ISO（可空）。 */
+  add_friend_time: string | null;
+  /** 身份三态（customer/blacklist/internal；internal 已在 SQL 层排除，不会出现在此列表）。 */
+  identity: CrmIdentity;
 }
 
 export interface BuildCustomerRosterParams {
@@ -123,6 +145,8 @@ export async function buildCustomerRoster(
       managed: false,
       source: prev?.source ?? 'message',
       last_message: prev?.last_message ?? null,
+      add_friend_time: prev?.add_friend_time ?? null,
+      identity: prev?.identity ?? 'customer',
     });
   }
 
@@ -141,6 +165,8 @@ export async function buildCustomerRoster(
       // 已聊过的 message/manual 来源优先保留；纯扫进来的标 scan
       source: prev?.source ?? 'scan',
       last_message: s.last_message ?? prev?.last_message ?? null,
+      add_friend_time: s.add_friend_time ?? prev?.add_friend_time ?? null,
+      identity: prev?.identity ?? normalizeIdentity(s.identity),
     });
   }
 
@@ -158,6 +184,8 @@ export async function buildCustomerRoster(
       // manual 显式入册优先覆盖来源标记（除非该 contact 已有 message 来源——保留 message 历史）
       source: prev?.source === 'message' ? 'message' : 'manual',
       last_message: prev?.last_message ?? null,
+      add_friend_time: c.add_friend_time ?? prev?.add_friend_time ?? null,
+      identity: normalizeIdentity(c.identity ?? prev?.identity),
     });
   }
 
@@ -175,6 +203,8 @@ export async function buildCustomerRoster(
           managed: true,
           source: 'whitelist',
           last_message: null,
+          add_friend_time: null,
+          identity: 'customer',
         });
       }
     }
@@ -208,6 +238,8 @@ export async function buildCustomerRoster(
         managed: false,
         source: 'manual',
         last_message: null,
+        add_friend_time: null,
+        identity: 'customer',
       },
     ];
   }

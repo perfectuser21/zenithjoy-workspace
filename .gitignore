@@ -67,6 +67,7 @@ log/
 # 例外：迁移脚本必须入库
 !services/creator/migrations/*.sql
 !apps/api/db/migrations/*.sql
+!apps/api/db/seeds/*.sql
 !db/migrations/*.sql
 !packages/db/migrations/*.sql
 # 例外：sprint E2E 种子 SQL 是 CI 工件，必须入库

@@ -28,6 +28,8 @@ function sessionFetch(url: string, init?: RequestInit): Promise<Response> {
 }
 
 type CrmStatus = 'A1' | 'A2' | 'A3' | 'A4' | 'A5';
+// 身份三态（后端 GET /customers 返回；internal 已在后端排除，正常不会出现在列表，留型供防御渲染）
+type CrmIdentity = 'customer' | 'blacklist' | 'internal';
 
 const STATUS_OPTIONS: CrmStatus[] = ['A1', 'A2', 'A3', 'A4', 'A5'];
 const STATUS_LABELS: Record<CrmStatus, string> = {
@@ -48,6 +50,16 @@ interface CustomerRow {
   // CRM 重做新增（后端 buildCustomerRoster 扩展，旧后端无此字段时安全降级）
   source?: 'message' | 'manual' | 'scan' | null;
   last_message?: string | null;
+  // 外层表重做新增：加微信时间 + 身份三态（旧后端无此字段时安全降级）
+  add_friend_time?: string | null;
+  identity?: CrmIdentity | null;
+}
+
+// 身份列展示：客户行 managed=true→「客户·接管」/ managed=false→「客户·已排除」；identity=blacklist→「黑名单」；internal→「内部人员」
+function identityLabel(row: CustomerRow): string {
+  if (row.identity === 'internal') return '内部人员';
+  if (row.identity === 'blacklist') return '黑名单';
+  return row.managed ? '客户·接管' : '客户·已排除';
 }
 
 interface CustomerListResponse {
@@ -395,18 +407,21 @@ export default function CustomerListPage() {
               「扫一遍微信好友导入客户」立刻扫，或点「＋加客户」手动入册。
             </div>
           ) : (
-            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <table data-testid="crm-customer-table" style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead>
                 <tr>
                   <th style={{ textAlign: 'left', padding: 8, borderBottom: '1px solid #eee' }}>姓名</th>
-                  <th style={{ textAlign: 'left', padding: 8, borderBottom: '1px solid #eee' }}>状态</th>
-                  <th style={{ textAlign: 'left', padding: 8, borderBottom: '1px solid #eee' }}>最后联系</th>
-                  <th style={{ textAlign: 'left', padding: 8, borderBottom: '1px solid #eee' }}>接管</th>
+                  <th style={{ textAlign: 'left', padding: 8, borderBottom: '1px solid #eee' }}>微信号</th>
+                  <th style={{ textAlign: 'left', padding: 8, borderBottom: '1px solid #eee' }}>加微信时间</th>
+                  <th style={{ textAlign: 'left', padding: 8, borderBottom: '1px solid #eee' }}>意向</th>
+                  <th style={{ textAlign: 'left', padding: 8, borderBottom: '1px solid #eee' }}>最近联系</th>
+                  <th style={{ textAlign: 'left', padding: 8, borderBottom: '1px solid #eee' }}>身份</th>
                 </tr>
               </thead>
               <tbody>
                 {rows.map((row) => (
                   <tr key={row.contact} data-testid="crm-customer-row">
+                    {/* 姓名（超链接进主页） */}
                     <td style={{ padding: 8 }}>
                       <button
                         type="button"
@@ -429,6 +444,15 @@ export default function CustomerListPage() {
                         <div style={{ color: '#9ca3af', fontSize: 12, marginTop: 2 }}>{row.last_message}</div>
                       )}
                     </td>
+                    {/* 微信号（agent 扫好友上报 / 手填，可空） */}
+                    <td data-testid="crm-customer-wechat-id" style={{ padding: 8, color: row.wechat_id ? '#374151' : '#9ca3af' }}>
+                      {row.wechat_id || '—'}
+                    </td>
+                    {/* 加微信时间（agent 上报，可空） */}
+                    <td data-testid="crm-customer-add-friend-time" style={{ padding: 8 }}>
+                      {fmtTime(row.add_friend_time ?? null)}
+                    </td>
+                    {/* 意向 A1-A5（下拉，持久化 status） */}
                     <td style={{ padding: 8 }}>
                       <select
                         data-testid="crm-status-select"
@@ -442,7 +466,9 @@ export default function CustomerListPage() {
                         ))}
                       </select>
                     </td>
+                    {/* 最近联系 */}
                     <td style={{ padding: 8 }}>{fmtTime(row.last_contact_at)}</td>
+                    {/* 身份（客户·接管 / 客户·已排除 / 黑名单 / 内部人员）+ 接管开关 */}
                     <td style={{ padding: 8 }}>
                       <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
                         <input
@@ -452,10 +478,10 @@ export default function CustomerListPage() {
                           onChange={() => void onToggleManage(row)}
                         />
                         <span
-                          data-testid="crm-manage-label"
+                          data-testid="crm-identity-label"
                           style={{ fontSize: 12, color: row.managed ? '#15803d' : '#dc2626' }}
                         >
-                          {row.managed ? '接管中' : '已排除'}
+                          {identityLabel(row)}
                         </span>
                       </label>
                     </td>
