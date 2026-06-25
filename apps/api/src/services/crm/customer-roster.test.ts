@@ -170,3 +170,57 @@ describe('buildCustomerRoster — 黑名单主模型（默认全接管 + 黑名�
     expect(Object.prototype.hasOwnProperty.call(row, 'tenant_id')).toBe(false);
   });
 });
+
+describe('buildCustomerRoster — 身份三态 + 加微信时间（地基 Track C）[BEHAVIOR]', () => {
+  it('身份派生：内部人员 → internal，黑名单内 → blacklist，其余接管中 → customer', async () => {
+    const roster = await buildCustomerRoster({
+      tenantId: 't-A',
+      csWechatId: 'wx_cs_A',
+      takeoverMode: 'blacklist',
+      messages: [{ contact: '客户甲' }, { contact: '客户乙' }, { contact: '徐啸' }],
+      blacklist: ['客户乙'],
+      internalStaff: ['徐啸', '于瑾', '苏彦卿'],
+    });
+    expect(roster.find((r) => r.contact === '客户甲')?.identity).toBe('customer');
+    expect(roster.find((r) => r.contact === '客户乙')?.identity).toBe('blacklist');
+    expect(roster.find((r) => r.contact === '徐啸')?.identity).toBe('internal');
+  });
+
+  it('内部人员排除出客户接管：identity=internal 时 managed 强制 false（即便不在黑名单）', async () => {
+    const roster = await buildCustomerRoster({
+      tenantId: 't-A',
+      csWechatId: 'wx_cs_A',
+      takeoverMode: 'blacklist', // 默认全接管，但内部人员不接管
+      messages: [{ contact: '于瑾' }],
+      internalStaff: ['徐啸', '于瑾', '苏彦卿'],
+    });
+    const row = roster.find((r) => r.contact === '于瑾');
+    expect(row?.identity).toBe('internal');
+    expect(row?.managed).toBe(false);
+  });
+
+  it('add_friend_time 从 scan/manual 行透传到输出（无则 null）', async () => {
+    const roster = await buildCustomerRoster({
+      tenantId: 't-A',
+      csWechatId: 'wx_cs_A',
+      takeoverMode: 'blacklist',
+      scanContacts: [{ contact: '新好友', add_friend_time: '2026-06-25T03:00:00.000Z' }],
+      manualCustomers: [{ contact: '手动客户' }],
+    });
+    expect(roster.find((r) => r.contact === '新好友')?.add_friend_time).toBe('2026-06-25T03:00:00.000Z');
+    expect(roster.find((r) => r.contact === '手动客户')?.add_friend_time).toBeNull();
+  });
+
+  it('不传 internalStaff 时身份只有 customer/blacklist（向后兼容）', async () => {
+    const roster = await buildCustomerRoster({
+      tenantId: 't-A',
+      csWechatId: 'wx_cs_A',
+      takeoverMode: 'blacklist',
+      messages: [{ contact: '甲' }, { contact: '乙' }],
+      blacklist: ['乙'],
+    });
+    expect(roster.find((r) => r.contact === '甲')?.identity).toBe('customer');
+    expect(roster.find((r) => r.contact === '乙')?.identity).toBe('blacklist');
+    expect(roster.every((r) => r.identity !== 'internal')).toBe(true);
+  });
+});
