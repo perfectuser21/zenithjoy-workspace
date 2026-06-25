@@ -42,7 +42,7 @@ mkdir -p "$ZJ_RELEASES_DIR"
 
 PROC_PID=""
 cleanup() {
-  [ -n "$PROC_PID" ] && kill "$PROC_PID" 2>/dev/null || true
+  if [ -n "$PROC_PID" ]; then kill "$PROC_PID" 2>/dev/null || true; fi
   rm -rf "$SANDBOX"
 }
 trap cleanup EXIT
