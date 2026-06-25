@@ -375,6 +375,12 @@ staging_overrides = {
     "NODE_ENV": "staging",
     "BETTER_AUTH_URL": "https://staging-autopilot.zenjoymedia.media",
     "BETTER_AUTH_TRUSTED_ORIGINS": "https://staging-autopilot.zenjoymedia.media,http://localhost:5173",
+    # agent→staging 隔离：install-pack 下载按本实例对外地址烧 agent 连接 URL（apps/api agent-install-pack.ts
+    # 读这两个 env 烧进 agent .env 的 ZENITHJOY_API_URL/ZENITHJOY_API_BASE）。staging 必须收口到 staging 域名，
+    # 否则 merged.update(prod_env) 会把生产 AGENT_PUBLIC_*=autopilot 抄进 staging → 从 staging 下载的 agent 连生产，
+    # 隔离失效（2026-06-25 真实事故：staging slot 一度被填成生产值）。生产 slot 在生产 plist 各配生产值。
+    "AGENT_PUBLIC_WS_URL": "wss://staging-autopilot.zenjoymedia.media/agent-ws",
+    "AGENT_PUBLIC_BASE_URL": "https://staging-autopilot.zenjoymedia.media",
 }
 
 if os.path.isfile(template):
