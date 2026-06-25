@@ -118,23 +118,33 @@ current_release_sha() {
 }
 
 # atomic_repoint_current <releases_root> <target_release_dir>：原子把 current 重指到目标 release。
-# 用「ln -sfn 临时软链 + mv -hf 原子 rename」保证 current 任一时刻要么旧要么新、绝不悬空中间态。
+# 先建临时软链指向目标，再原子 rename 覆盖 current，保证 current 任一时刻要么旧要么新、绝不悬空。
+# 跨平台坑：current 已存在且是软链时，裸 `mv -f tmp current` 在 Lin/GNU 会**跟随** current 软链
+# 把 tmp 塞进它指向的目录（不是替换 current）。所以必须用「不跟随目标软链」的 rename：
+#   · GNU/Linux：mv -fT（--no-target-directory，把目标当普通文件原子覆盖）
+#   · BSD/macOS：mv -hf（-h 不跟随软链目标）
+#   · 都不认时：rm -f current 后再 mv（非原子，但语义正确，兜底）
 # 目标 release 目录不存在 → 返 1（绝不把 current 指向不存在的 release）。
+# _atomic_swap_symlink <target> <link>：把 <link> 原子重指到 <target>（跨平台不跟随旧软链）。
+_atomic_swap_symlink() {
+  local target="$1" link="$2"
+  local tmp="${link}.tmp.$$"
+  ln -sfn "$target" "$tmp" || { echo "❌ 建临时软链失败" >&2; return 1; }
+  if mv -fT "$tmp" "$link" 2>/dev/null; then return 0; fi   # GNU/Linux 原子覆盖
+  if mv -hf "$tmp" "$link" 2>/dev/null; then return 0; fi   # BSD/macOS 原子覆盖
+  # 兜底（非原子）：先删旧软链本身（不跟随），再 mv 进去
+  rm -f "$link" 2>/dev/null || true
+  mv -f "$tmp" "$link" || { echo "❌ 重指软链 ${link} 失败" >&2; rm -f "$tmp"; return 1; }
+  return 0
+}
+
 atomic_repoint_current() {
   local root="$1" target="$2"
   if [ ! -d "$target" ]; then
     echo "❌ atomic_repoint_current：目标 release 不存在 $target，拒绝重指 current" >&2
     return 1
   fi
-  local link="${root}/current"
-  local tmp="${root}/.current.tmp.$$"
-  # 先建临时软链指向目标，再原子 rename 覆盖 current（mv -h 不跟随软链，rename 是原子的）
-  ln -sfn "$target" "$tmp" || { echo "❌ 建临时软链失败" >&2; return 1; }
-  if ! mv -hf "$tmp" "$link" 2>/dev/null; then
-    # 兜底：部分平台 mv 不认 -h，退回 mv -f（target 不是软链时安全）
-    mv -f "$tmp" "$link" || { echo "❌ 原子 rename current 失败" >&2; rm -f "$tmp"; return 1; }
-  fi
-  return 0
+  _atomic_swap_symlink "$target" "${root}/current"
 }
 
 # prune_old_releases <releases_root> <keep_n>：按 mtime 保留最新 keep_n 个 release 目录，
@@ -336,10 +346,9 @@ staging_deploy_slot() {
 
   local reldir; reldir="$(release_dir_for "${ZJ_RELEASES_DIR}" "$sha")"
   # 常驻 staging 用独立软链 releases/staging（与生产 current 隔离），原子重指到新 release
-  local staging_link="${ZJ_RELEASES_DIR}/staging"
-  local tmp="${ZJ_RELEASES_DIR}/.staging.tmp.$$"
-  ln -sfn "$reldir" "$tmp" || { echo "❌ 建 staging 临时软链失败"; return 1; }
-  mv -hf "$tmp" "$staging_link" 2>/dev/null || mv -f "$tmp" "$staging_link" || { echo "❌ 重指 staging 软链失败"; rm -f "$tmp"; return 1; }
+  if ! _atomic_swap_symlink "$reldir" "${ZJ_RELEASES_DIR}/staging"; then
+    echo "❌ 重指 staging 软链失败"; return 1
+  fi
   echo "✅ releases/staging → ${sha}"
 
   # 重启常驻 staging launchd（先杀占端口残留，再 kickstart）
