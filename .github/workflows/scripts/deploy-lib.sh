@@ -656,8 +656,15 @@ staging_promote() {
   if ! build_release "$sha"; then echo "❌ promote release build 失败"; return 1; fi
   local reldir; reldir="$(release_dir_for "${ZJ_RELEASES_DIR}" "$sha")"
 
-  echo "promote：对生产库跑 migration（从 release 目录跑，幂等）..."
-  if ! ( cd "${reldir}" && npm run migrate ); then
+  # 对生产库跑 migration。治根（promote run 28148797888 实证）：从 release 目录跑
+  # `ts-node db/migrations/run-migration.ts` 报 Cannot find module './run-migration.ts'——
+  # release 是 build 产物（只有 dist，没有 db/migrations 的 .ts 源 + 没有 ts-node/tsconfig），
+  # ts-node 项目解析不到源文件，**每次 promote 都卡在这一步**，走不到后面的 plist 切 current + 重启。
+  # 改成从【主 checkout】跑（deploy yml 已 git-sync 到目标 sha、有 ts-node/tsconfig/db/migrations 源），
+  # 显式连生产库（ZJ_PROD_DB 默认 cecelia）。这与 staging_verify 那步迁移同样的 cwd/调用方式（已跑通）。
+  # 幂等：已 applied 就 no-op（"All migrations already applied"）。
+  echo "promote：对生产库（${ZJ_PROD_DB:-cecelia}）跑 migration（从主 checkout 跑，幂等）..."
+  if ! ( cd "${ZJ_API_DIR}" && DATABASE_NAME="${ZJ_PROD_DB:-cecelia}" npm run migrate ); then
     echo "❌ 生产库 migration 失败"; return 1
   fi
 
