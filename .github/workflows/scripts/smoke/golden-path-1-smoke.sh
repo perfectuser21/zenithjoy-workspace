@@ -19,7 +19,13 @@ set -uo pipefail
 
 API_BASE="${API_BASE:-http://localhost:3001}"
 DASHBOARD_BASE="${DASHBOARD_BASE:-http://localhost:5173}"
-TEST_EMAIL="${TEST_EMAIL:-smoke-$(date +%s)@zenithjoy.test}"
+
+# 唯一 token：秒级 date +%s 在「同一秒内/连续多次」跑会撞 email → sign-up 422（已观测到 flaky）。
+# 用 秒 + PID + RANDOM + 单调计数器 拼出每次调用都唯一的 token，杜绝重复注册。
+_UNIQ_N=0
+uniq_token() { _UNIQ_N=$((_UNIQ_N+1)); echo "$(date +%s)-$$-${RANDOM}-${_UNIQ_N}"; }
+
+TEST_EMAIL="${TEST_EMAIL:-smoke-$(uniq_token)@zenithjoy.test}"
 TEST_PASSWORD="${TEST_PASSWORD:-Smoke!Test2026}"
 
 ok()   { echo "✅ $1"; }
@@ -50,7 +56,7 @@ echo "▶ Step 1: 注册自动登录"
 
 S1_COOKIES=$(mktemp)
 S1_TMP=$(mktemp)
-S1_EMAIL="smoke-$(date +%s)@zenithjoy.test"
+S1_EMAIL="smoke-$(uniq_token)@zenithjoy.test"
 
 # 1.1 POST sign-up/email → 200 + user.id
 S1_HTTP=$(curl -s -o "$S1_TMP" -w "%{http_code}" --max-time 30 \
@@ -289,7 +295,7 @@ ok "Step 5 ✅ AI 视频流水线 API 全通（PR #296 #297）"
 echo "▶ Step 6: 中台派任务 + Agent 路由 + dryrun 发布抖音 video（WS2 Sprint 2.1a 加固）"
 
 # 6.1 注册 + 拿 license_key（独立新用户，避免与 Step 1 邮箱冲突）
-SK_EMAIL="smoke-s6-$(date +%s)@zenithjoy.test"
+SK_EMAIL="smoke-s6-$(uniq_token)@zenithjoy.test"
 SIGNUP=$(curl -fsS -c /tmp/sk-step6.cookies -X POST "$API_BASE/api/auth/sign-up/email" \
   -H 'content-type: application/json' \
   -d "{\"email\":\"$SK_EMAIL\",\"password\":\"$TEST_PASSWORD\",\"name\":\"smoke\"}" 2>/dev/null) \
