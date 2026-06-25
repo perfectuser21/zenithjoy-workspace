@@ -1,23 +1,29 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <!--
-  com.zenithjoy.api.staging.plist — 蓝绿部署 staging slot（:5201）launchd 定义
+  com.zenithjoy.api.staging.plist — 蓝绿部署【常驻 staging 实例】(:5201) launchd 定义
 
-  作用：CD 把目标 sha 的新 build 先拉起到这个 staging slot（端口 5201、连 zenithjoy_test 库、
-  无客户流量），在它上面跑部署验证（migration 可跑通 / /health / 版本断言 / golden-path smoke）。
-  全绿才 promote 到生产 :5200（com.zenithjoy.api）。验证红则销毁本 slot，生产纹丝不动。
+  蓝绿加固解耦后（2026-06-25，Line B）：staging 不再是「验完即销毁的临时 slot」，而是
+  ★常驻实例★——main 合并 → CD 把候选 build 进 release 隔离目录、原子重指 releases/staging
+  软链、重启本实例（连 zenithjoy_test 库、无客户流量），在它上面跑 golden-path 出 report，
+  并保持常驻供人工打开看（SSH 隧道 / Cloudflare Access，见 docs/staging-access.md）。
+  确认 OK 后人手点 promote-prod.yml 才切生产 :5200。
+
+  release 隔离：本实例从 releases/staging 软链跑（staging 软链 → releases/<候选sha>），
+  与生产 releases/current 物理隔离。promote 切的是 current，不动 staging。
 
   与生产 com.zenithjoy.api.plist 的差异（其余 env 由 deploy 脚本从生产 plist 继承注入，不在此硬编码密钥）：
     · Label            = com.zenithjoy.api.staging（独立 launchd 实例）
     · PORT             = 5201（生产 5200）
     · DATABASE_NAME    = zenithjoy_test（生产 cecelia，物理隔离，部署验证绝不写生产库）
     · NODE_ENV         = staging
+    · 从 releases/staging 软链跑（生产从 releases/current 跑）
     · 日志             = zenithjoy-api.staging.{log,error.log}
-    · KeepAlive=false / RunAtLoad=false：staging slot 由 deploy 脚本显式 start/stop，
-      不常驻、不开机自启（验证完即销毁，省得占着 :5201 漂移）
+    · KeepAlive=true / RunAtLoad=true：常驻、崩溃自拉起、开机自启（与生产对称，供人工随时打开看）
 
-  注意：本文件不含任何密钥。staging slot 起进程时，deploy-lib.sh 的 staging_deploy_slot()
+  注意：本文件不含任何密钥。staging 实例起进程时，deploy-lib.sh 的 staging_deploy_slot()
   会从生产 plist 解析非密钥安全 env + 必要密钥，覆写 PORT/DATABASE_NAME/NODE_ENV 后注入。
+  releases 根目录如不同于下面默认值，安装本 plist 时按实际路径替换 ProgramArguments。
 -->
 <plist version="1.0">
 <dict>
@@ -26,7 +32,7 @@
 	<key>ProgramArguments</key>
 	<array>
 		<string>/opt/homebrew/bin/node</string>
-		<string>/Users/administrator/perfect21/zenithjoy/apps/api/dist/index.js</string>
+		<string>/Users/administrator/zenithjoy-releases/staging/dist/index.js</string>
 	</array>
 	<key>EnvironmentVariables</key>
 	<dict>
@@ -44,14 +50,14 @@
 		<string>staging</string>
 	</dict>
 	<key>KeepAlive</key>
-	<false/>
+	<true/>
 	<key>RunAtLoad</key>
-	<false/>
+	<true/>
 	<key>StandardErrorPath</key>
 	<string>/Users/administrator/Library/Logs/zenithjoy-api.staging.error.log</string>
 	<key>StandardOutPath</key>
 	<string>/Users/administrator/Library/Logs/zenithjoy-api.staging.log</string>
 	<key>WorkingDirectory</key>
-	<string>/Users/administrator/perfect21/zenithjoy/apps/api</string>
+	<string>/Users/administrator/zenithjoy-releases/staging</string>
 </dict>
 </plist>

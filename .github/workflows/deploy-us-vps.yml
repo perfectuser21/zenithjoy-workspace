@@ -1,18 +1,33 @@
-name: Deploy API to US Mac
+name: Deploy API to US Mac (常驻 staging :5201)
+
+# ───────────────────────────────────────────────────────────────────────────
+# 蓝绿加固解耦（PrepPRD 2026-06-25，Line B/E）：
+#   main 合并 = 候选，★不再是生产★。本 workflow 只把候选 build 进 release 隔离目录、
+#   切到【常驻 staging 实例 :5201】（连 zenithjoy_test 库、无客户流量）并在上面跑
+#   golden-path（最严酷版）出 report。**绝不碰生产 :5200**。
+#
+#   切生产 :5200 由独立的、人手点的 promote workflow（promote-prod.yml，workflow_dispatch）
+#   完成——人工打开 staging 看过、确认 OK 再点放行。这是死的人工卡点（smoke 还会假阳，
+#   绝不自动 promote）。
+#
+#   生产 release 隔离：build 进 releases/<sha>/，生产 launchd 从 releases/current 软链跑；
+#   promote = 原子重指 current；rollback = 软链回上一 release。全部逻辑在 deploy-lib.sh。
+# ───────────────────────────────────────────────────────────────────────────
 
 on:
   push:
     branches: [main]
     paths:
       - 'apps/api/**'
+  workflow_dispatch: {}
 
 jobs:
-  deploy-api:
-    name: Deploy API to US Mac (launchd)
+  deploy-staging:
+    name: 部署候选到常驻 staging :5201（不碰生产 :5200）
     runs-on: ubuntu-latest
 
     steps:
-      - name: Deploy via SSH (蓝绿：staging :5201 验过 → promote :5200 → 失败自动回滚)
+      - name: Deploy via SSH (build release + 切常驻 staging :5201 + golden-path)
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.US_MAC_HOST }}
@@ -20,11 +35,6 @@ jobs:
           key: ${{ secrets.US_MAC_SSH_KEY }}
           port: ${{ secrets.US_MAC_PORT }}
           script_stop: true
-          # 蓝绿部署（PrepPRD 2026-06-24，方案 A：切换=把验过的新 build 重启进 :5200）：
-          #   先发 staging slot :5201（连 zenithjoy_test 库、无客户流量）→ 在 :5201 跑部署验证
-          #   （migration可跑通/health/版本断言/golden-path smoke）→ 全绿才 promote 切 :5200
-          #   → staging 验证红：不 promote，:5200 纹丝不动 → promote 中失败：自动回滚到上一版 sha
-          #   全部编排逻辑在 deploy-lib.sh 的 blue_green_deploy（单测 + smoke proven-to-fire）。
           envs: DEPLOY_SHA
           command_timeout: 20m
           script: |
@@ -36,15 +46,12 @@ jobs:
             git -C "$REPO" fetch --force --prune origin main
             git -C "$REPO" reset --hard "$DEPLOY_SHA"
 
-            echo "=== [2/3] install & build（build 内写 dist/build-info.json）==="
+            echo "=== [2/3] install deps（build 在 build_release 内做，写进 releases/<sha>/）==="
             cd "$REPO"
-            export BUILD_SHA="$DEPLOY_SHA"
             npm ci --workspace=apps/api --ignore-scripts 2>/dev/null || \
               (cd "$REPO/apps/api" && npm ci --ignore-scripts)
-            npm run build --workspace=apps/api 2>/dev/null || \
-              (cd "$REPO/apps/api" && BUILD_SHA="$DEPLOY_SHA" npm run build)
 
-            echo "=== [3/3] 蓝绿部署：staging :5201 验过 → promote :5200（失败自动回滚）==="
+            echo "=== [3/3] 部署候选到【常驻 staging :5201】+ golden-path（绝不碰生产 :5200）==="
             # shellcheck source=/dev/null
             source "$REPO/.github/workflows/scripts/deploy-lib.sh"
 
@@ -54,27 +61,37 @@ jobs:
             export ZJ_PROD_PORT=5200
             export ZJ_STAGING_PORT=5201
             export ZJ_PROD_LABEL=com.zenithjoy.api
+            export ZJ_STAGING_LABEL=com.zenithjoy.api.staging
             export ZJ_STAGING_DB=zenithjoy_test
             export ZJ_PROD_PLIST="$HOME/Library/LaunchAgents/com.zenithjoy.api.plist"
             export ZJ_NODE=/opt/homebrew/bin/node
+            export ZJ_RELEASES_DIR="${ZJ_RELEASES_DIR:-/Users/administrator/zenithjoy-releases}"
+            export ZJ_KEEP_RELEASES="${ZJ_KEEP_RELEASES:-5}"
             export BRAIN_URL="${BRAIN_URL:-http://localhost:5221}"
+            mkdir -p "$ZJ_RELEASES_DIR"
 
-            # 把蓝绿编排器的 hook 指向 deploy-lib.sh 里的 mmv 真实实现
-            export BG_DEPLOY_STAGING_FN=staging_deploy_slot
-            export BG_VERIFY_STAGING_FN=staging_verify
-            export BG_RECORD_ANCHOR_FN=staging_record_anchor
-            export BG_PROMOTE_FN=staging_promote
-            export BG_VERIFY_PROD_FN=staging_verify_prod
-            export BG_ROLLBACK_FN=staging_rollback
-            export BG_DESTROY_STAGING_FN=staging_destroy_slot
-            export BG_ALERT_P0_FN=staging_alert_p0
+            # 只跑「起常驻 staging + 验证」两步——绝不进 promote（promote 是独立人工 workflow）。
+            #   ① build release + 切常驻 staging :5201（连 test 库）
+            #   ② 在 :5201 跑部署验证（migration on test / health / 版本断言 / golden-path）
+            # 任一失败：报 P0，:5200 全程未触碰。
+            if ! staging_deploy_slot "$DEPLOY_SHA"; then
+              staging_alert_p0 "候选 ${DEPLOY_SHA} 起常驻 staging :5201 失败，:5200 未触碰" || true
+              exit 1
+            fi
+            if ! staging_verify "$DEPLOY_SHA"; then
+              staging_alert_p0 "候选 ${DEPLOY_SHA} staging :5201 验证红，:5200 未触碰，等待修复后重试" || true
+              exit 1
+            fi
+            # 部署成功后 prune 旧 release（current/staging 指向的绝不删）
+            prune_old_releases "$ZJ_RELEASES_DIR" "$ZJ_KEEP_RELEASES" || true
 
-            blue_green_deploy "$DEPLOY_SHA"
+            echo "✅ 候选 ${DEPLOY_SHA} 已上常驻 staging :5201 并通过 golden-path。"
+            echo "   ▶ 人工打开 staging 看过后，去 Actions 手点 promote-prod.yml 放行到生产 :5200。"
 
   notify-failure:
     name: Notify Brain on failure
     runs-on: ubuntu-latest
-    needs: [deploy-api]
+    needs: [deploy-staging]
     if: failure()
     steps:
       - name: Post P0 alert to Brain
@@ -82,8 +99,8 @@ jobs:
           curl -sf -X POST ${{ secrets.BRAIN_URL }}/api/brain/tasks \
             -H "Content-Type: application/json" \
             -d '{
-              "title": "ZenithJoy US API 部署失败",
+              "title": "ZenithJoy 常驻 staging 部署失败",
               "priority": "P0",
               "task_type": "dev",
-              "description": "deploy-us-vps.yml 失败，请人工介入"
+              "description": "deploy-us-vps.yml（staging :5201）失败，:5200 未触碰，请人工介入"
             }' || echo "Brain API 不可达，跳过告警"

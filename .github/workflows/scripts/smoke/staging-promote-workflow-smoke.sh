@@ -58,6 +58,7 @@ const s=http.createServer((req,res)=>{
 s.listen('"$MOCK_PROD_PORT"',()=>{});
 ' "$PROD_RELEASE_SHA" &
 MOCK_PROD_PID=$!
+disown "$MOCK_PROD_PID" 2>/dev/null || true   # 抑制 trap kill 时的 "Terminated" 作业通知
 for _i in $(seq 1 50); do
   if curl -sf "http://localhost:${MOCK_PROD_PORT}/version" >/dev/null 2>&1; then break; fi
   sleep 0.2
@@ -84,6 +85,7 @@ sb_promote() {
   const s=http.createServer((q,r)=>{if(q.url==="/version"){r.end(JSON.stringify({sha}));}else if(q.url==="/health"){r.end("ok");}else{r.statusCode=404;r.end("no");}});
   s.listen('"$MOCK_PROD_PORT"',()=>{});' "$sha" &
   MOCK_PROD_PID=$!
+  disown "$MOCK_PROD_PID" 2>/dev/null || true
   return 0
 }
 sb_verify_prod() { local sha="$1"; assert_version "http://localhost:${MOCK_PROD_PORT}" "$sha"; }
