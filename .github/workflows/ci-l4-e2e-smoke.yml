@@ -506,6 +506,19 @@ jobs:
           chmod +x .github/workflows/scripts/smoke/line04-crm-blacklist-ingest-onboarding-smoke.sh
           bash .github/workflows/scripts/smoke/line04-crm-blacklist-ingest-onboarding-smoke.sh
 
+      # ─── Line04 CRM 三层下钻 层2/3 数据端点（客户画像 + 时间线 + 每日小结 + 聊天记录）───
+      - name: Smoke — Line04 CRM 客户画像 profile（层2/3）
+        env:
+          API_BASE: http://localhost:5200
+          ZENITHJOY_INTERNAL_TOKEN: ci-only-internal-token-abc-not-prod
+          PSQL_HOST: localhost
+          PSQL_USER: cecelia
+          PSQL_DB: cecelia
+          PSQL_PASS: cecelia
+        run: |
+          chmod +x .github/workflows/scripts/smoke/line04-crm-customer-profile-smoke.sh
+          bash .github/workflows/scripts/smoke/line04-crm-customer-profile-smoke.sh
+
       - name: Stop fake-feishu-server
         if: always()
         run: |
