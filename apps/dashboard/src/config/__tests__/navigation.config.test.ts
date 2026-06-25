@@ -98,3 +98,33 @@ describe('AreaHubPage — 区配置（每区总览卡片下钻）', () => {
     }
   });
 });
+
+// Line04 CRM 重做（2026-06-25）：客户好友表入口归进「私域客服」板块，三层下钻 + 旧顶层 /customers 重定向
+describe('config/navigation — CRM 客户好友表入口（修正1 入口移进私域客服板块）', () => {
+  it('私域客服区有「客户好友表」卡，下钻 /wechat/crm', () => {
+    const wechat = AREA_HUBS['wechat'];
+    const crmCard = wechat.cards.find((c) => c.to === '/wechat/crm');
+    expect(crmCard).toBeDefined();
+    expect(crmCard?.label).toContain('客户好友表');
+  });
+
+  it('层1 列表 /wechat/crm + 层2 状态画像 /wechat/crm/:contactKey 都在 additionalRoutes', () => {
+    const paths = routePaths();
+    expect(paths).toContain('/wechat/crm');
+    expect(paths).toContain('/wechat/crm/:contactKey');
+    const list = additionalRoutes.find((r) => r.path === '/wechat/crm');
+    expect(list?.component).toBe('CustomerListPage');
+    const profile = additionalRoutes.find((r) => r.path === '/wechat/crm/:contactKey');
+    expect(profile?.component).toBe('CustomerProfilePage');
+  });
+
+  it('旧顶层 /customers 重定向到 /wechat/crm（不再游离顶层菜单）', () => {
+    const legacy = additionalRoutes.find((r) => r.path === '/customers');
+    expect(legacy?.redirect).toBe('/wechat/crm');
+    expect(legacy?.component).toBeUndefined();
+  });
+
+  it('层2/层3 页组件 CustomerProfilePage 已注册懒加载', () => {
+    expect(typeof autopilotPageComponents['CustomerProfilePage']).toBe('function');
+  });
+});
