@@ -12,17 +12,40 @@
  */
 
 /**
- * 中台运行必须的关键 env。缺任何一个，核心功能会静默坏掉：
+ * 中台运行必须的【单 key】关键 env。缺任何一个，核心功能会静默坏掉：
  * - TOAPI_API_KEY：LLM 调用凭据（clients/toapi.client.ts / services/video-remake.service.ts）。
  *   缺失 → 微信客服 AI 生成会失败、静默不回（2026-06-19 真实事故根因）。
- * - DATABASE_URL：数据库连接串（生产部署用，缺失 → 数据读写全挂）。
  * - BETTER_AUTH_SECRET：登录态签名密钥（auth.ts，生产缺失会直接 throw）。
  *   缺失 → 所有需要登录的接口全部 401，用户登不进。
+ *
+ * 注：数据库连接【不在此】——它是"二选一组"（见 REQUIRED_ENV_GROUPS），不是单 key 硬必需。
+ * 治根（2026-06-25 假阳事故）：旧版把 DATABASE_URL 硬列进来，但 db/connection.ts 实际用拆分式
+ * DATABASE_HOST/PORT/NAME/USER/PASSWORD，从不读 DATABASE_URL → 生产 config.ok=false /
+ * missing DATABASE_URL 是假阳（DB 实际正常），污染蓝绿 /health 健康判定 + 验 staging 误导用户。
  */
 export const REQUIRED_ENV: string[] = [
   'TOAPI_API_KEY',
-  'DATABASE_URL',
   'BETTER_AUTH_SECRET',
+];
+
+/**
+ * 必需的【二选一组】env：组内任一"备选"（alternative）满足，则该组算满足。
+ * 一个 alternative = 一组必须【同时】齐的 key（AND）；多个 alternatives 之间是【或】（OR）。
+ *
+ * DB 连接组：DATABASE_URL（整串形态）  OR  DATABASE_HOST + DATABASE_NAME（拆分式，db/connection.ts 实际用）。
+ * 既去掉"硬列 DATABASE_URL"的假阳，又保留对"真没配库"的防呆（两种形态都没配 → 仍报红）。
+ */
+export interface RequiredEnvGroup {
+  label: string;            // 组名（用于日志/missing 展示）
+  alternatives: string[][]; // 每个备选 = 一组 AND 的 key；备选之间 OR
+  consequence: string;      // 整组都不满足时的后果说明
+}
+export const REQUIRED_ENV_GROUPS: RequiredEnvGroup[] = [
+  {
+    label: 'DATABASE_URL | (DATABASE_HOST+DATABASE_NAME)',
+    alternatives: [['DATABASE_URL'], ['DATABASE_HOST', 'DATABASE_NAME']],
+    consequence: '数据库连接两种形态都没配（整串 DATABASE_URL 或 拆分式 HOST+NAME）→ 数据读写全部失败',
+  },
 ];
 
 /**
@@ -30,7 +53,6 @@ export const REQUIRED_ENV: string[] = [
  */
 const CONSEQUENCE: Record<string, string> = {
   TOAPI_API_KEY: '微信客服 AI 生成会失败、静默不回（2026-06-19 生产事故根因）',
-  DATABASE_URL: '数据库连接缺连接串 → 数据读写全部失败',
   BETTER_AUTH_SECRET: '登录态签名缺失 → 所有需登录接口 401，用户登不进',
 };
 
@@ -53,21 +75,31 @@ export interface StartupConfigResult {
   present: string[];
 }
 
+// 单个 env key 是否存在且非空（空串/纯空白算缺失）。
+function _hasEnv(env: Record<string, string | undefined>, key: string): boolean {
+  const val = env[key];
+  return !(val == null || String(val).trim() === '');
+}
+
 /**
- * 逐个查 REQUIRED_ENV 是否存在且非空（空串/纯空白算缺失）。
+ * 查 ① REQUIRED_ENV（单 key 硬必需）+ ② REQUIRED_ENV_GROUPS（二选一组）是否都满足。
+ * 组：任一备选（一组 AND 的 key 全齐）满足则该组满足；所有备选都不满足 → 把组 label 计入 missing。
  */
 export function verifyStartupConfig(
   env: NodeJS.ProcessEnv | Record<string, string | undefined> = process.env,
 ): StartupConfigResult {
   const missing: string[] = [];
   const present: string[] = [];
+  // ① 单 key 硬必需
   for (const key of REQUIRED_ENV) {
-    const val = env[key];
-    if (val == null || String(val).trim() === '') {
-      missing.push(key);
-    } else {
-      present.push(key);
-    }
+    if (_hasEnv(env, key)) present.push(key);
+    else missing.push(key);
+  }
+  // ② 二选一组：任一备选全齐即满足
+  for (const group of REQUIRED_ENV_GROUPS) {
+    const satisfied = group.alternatives.some((alt) => alt.every((k) => _hasEnv(env, k)));
+    if (satisfied) present.push(group.label);
+    else missing.push(group.label);
   }
   return { ok: missing.length === 0, missing, present };
 }
@@ -87,7 +119,10 @@ export function runStartupConfigCheck(
   console.error('==================================================================');
   console.error('🔴🔴🔴 启动 env 自检失败：缺少关键环境变量，核心功能会静默坏掉 🔴🔴🔴');
   for (const key of result.missing) {
-    console.error(`🔴 缺失 ${key} → ${CONSEQUENCE[key] ?? '核心功能受影响'}`);
+    // missing 项可能是单 key（查 CONSEQUENCE）或二选一组的 label（查组的 consequence）。
+    const group = REQUIRED_ENV_GROUPS.find((g) => g.label === key);
+    const why = group ? group.consequence : (CONSEQUENCE[key] ?? '核心功能受影响');
+    console.error(`🔴 缺失 ${key} → ${why}`);
   }
   console.error(`🔴 请检查部署机的 apps/api/.env，补齐：${result.missing.join(', ')}`);
   console.error('🔴 进程继续运行（避免单个 key 缺失直接挂生产），但相关功能不可用。');
