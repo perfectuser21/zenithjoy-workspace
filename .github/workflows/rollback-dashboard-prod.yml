@@ -1,0 +1,107 @@
+name: Rollback Dashboard Production (autopilot 人工回滚闸)
+
+# ───────────────────────────────────────────────────────────────────────────
+# 生产 Dashboard 人工回滚入口（2026-06-25，配套 promote-dashboard-prod.yml 的 release 隔离）：
+#   promote-dashboard-prod.yml 把生产 autopilot 切到新 release（sha-keyed，dist 软链）。若过段时间
+#   才发现新版本有问题，用本 workflow 把生产 dashboard【回拨到上一个/指定留存 release】。
+#
+#   拓扑：Dashboard 生产在 HK VPS autopilot.zenjoymedia.media，docker 容器 bind-mount
+#         /opt/zenithjoy/autopilot-dashboard/dist（软链 → releases/current → releases/<sha>）。
+#
+#   机制：SSH 进 HK → 跑仓库根 rollback.sh dashboard（只切软链）→ docker restart 让容器重解析挂载
+#         → 公网验证。
+#     · sha 留空 → 回退到 releases/current 的上一个留存 release（previous_release）
+#     · sha 指定 → 从留存里挑该 sha；不在留存内 rollback.sh 报错退出（绝不臆造）
+#   rollback.sh 复用 deploy-lib.sh 的 dashboard_release_rollback（原子重指 releases/current）。
+#
+#   ☠️ 死规则：只能人手点（workflow_dispatch + confirm=ROLLBACK），绝无 push/schedule 自动触发。
+#      绝不碰 staging 容器（autopilot-staging）/ 生产 nginx.conf。
+# ───────────────────────────────────────────────────────────────────────────
+
+on:
+  workflow_dispatch:
+    inputs:
+      sha:
+        description: '要回滚到的留存 release sha（留空=回退到 current 的上一个 release）'
+        required: false
+        default: ''
+      confirm:
+        description: '输入 ROLLBACK 确认回滚生产 dashboard autopilot.zenjoymedia.media（人工卡点二次确认）'
+        required: true
+        default: ''
+
+concurrency:
+  group: rollback-dashboard-prod
+  cancel-in-progress: false
+
+jobs:
+  rollback-dashboard:
+    name: Rollback 生产 dashboard → 上一个/指定 release（人工放行）
+    runs-on: ubuntu-latest
+    steps:
+      - name: 二次确认闸（必须输入 ROLLBACK）
+        run: |
+          if [ "${{ github.event.inputs.confirm }}" != "ROLLBACK" ]; then
+            echo "❌ confirm 不是 ROLLBACK（实际='${{ github.event.inputs.confirm }}'）——拒绝回滚。"
+            echo "   人工卡点：确认要把生产 dashboard 回拨到上一个/指定 release，再在 confirm 框输入 ROLLBACK。"
+            exit 1
+          fi
+          echo "✅ 人工二次确认通过，开始回滚生产 dashboard。"
+
+      - name: Rollback via SSH（rollback.sh dashboard 切软链 + docker restart + 公网验证）
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.HK_VPS_HOST }}
+          username: ${{ secrets.HK_VPS_USER }}
+          key: ${{ secrets.HK_VPS_SSH_KEY }}
+          port: ${{ secrets.HK_VPS_PORT }}
+          script_stop: true
+          command_timeout: 15m
+          script: |
+            set -euo pipefail
+            REPO=/opt/zenithjoy/repo
+            DASH_DIR=/opt/zenithjoy/autopilot-dashboard
+            INPUT_SHA="${{ github.event.inputs.sha }}"
+
+            # rollback.sh + deploy-lib.sh 都在 HK 的 repo checkout 里（git reset --hard 同步过）。
+            export ZJ_DASHBOARD_DIR="$DASH_DIR"
+
+            echo "=== [1/3] 当前留存 release ==="
+            bash "$REPO/rollback.sh" dashboard --list || true
+
+            echo "=== [2/3] 切软链（sha='${INPUT_SHA}'，空=上一个 release）==="
+            if [ -n "$INPUT_SHA" ]; then
+              bash "$REPO/rollback.sh" dashboard "$INPUT_SHA"
+            else
+              bash "$REPO/rollback.sh" dashboard
+            fi
+            # 容器重解析挂载（绝不碰 staging 容器）
+            docker restart autopilot-dashboard
+            sleep 3
+
+            echo "=== [3/3] 公网验证（Cloudflare 全链路）==="
+            HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 20 https://autopilot.zenjoymedia.media/ || echo "000")
+            echo "公网 HTTP 状态码: $HTTP_CODE"
+            if [ "$HTTP_CODE" != "200" ]; then
+              echo "❌ 回滚后公网验证失败（期望 200，实际 $HTTP_CODE）"
+              echo "容器状态: $(docker inspect autopilot-dashboard --format '{{.State.Status}}' 2>/dev/null || echo missing)"
+              exit 1
+            fi
+            echo "✅ 生产 dashboard 回滚完成，公网验证通过 (HTTP 200)。"
+
+  notify-failure:
+    name: Notify Brain on rollback failure
+    runs-on: ubuntu-latest
+    needs: [rollback-dashboard]
+    if: failure()
+    steps:
+      - name: Post P0 alert to Brain
+        run: |
+          curl -sf -X POST ${{ secrets.BRAIN_URL }}/api/brain/tasks \
+            -H "Content-Type: application/json" \
+            -d '{
+              "title": "ZenithJoy 生产 Dashboard 人工回滚失败",
+              "priority": "P0",
+              "task_type": "dev",
+              "description": "rollback-dashboard-prod.yml 失败。生产 dashboard 可能停在异常状态，请人工立即核实 autopilot.zenjoymedia.media 健康。"
+            }' || echo "Brain API 不可达，跳过告警"

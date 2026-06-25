@@ -7,8 +7,8 @@ name: Rollback Production :5200 (人工回滚闸)
 #   独立回滚入口——本 workflow 补这个缺口。
 #
 #   拓扑（按 repo 真相）：API 生产 = mmv:5200（美国 Mac mini 本机，连生产 cecelia 库），不是 HK。
-#   只回拨 API；Dashboard 生产在 HK 且尚无 release 隔离（promote-dashboard-prod.yml 是 cp -r dist
-#   原地覆盖、零留存），无可回退版本——Dashboard 回滚需先给 HK 上 symlink-releases（独立任务）。
+#   本 workflow 只回拨 API（mmv:5200）。Dashboard 生产在 HK，回滚走另一个 workflow：
+#   rollback-dashboard-prod.yml（2026-06-25 起 dashboard 也上了 sha-keyed release 隔离 + 软链回拨）。
 #
 #   机制：SSH 进 mmv → 跑仓库根 rollback.sh。
 #     · sha 留空 → 回退到 current 的上一个留存 release（previous_release）

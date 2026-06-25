@@ -554,6 +554,121 @@ STUB
   rm -rf "$QBOX"
 fi
 
+# ════════════════════════════════════════════════════════════════════════════
+# Case R: dashboard_release_promote / dashboard_release_rollback —— HK Dashboard
+# release 隔离编排（复用 sha-keyed 原语 + dist 软链）。纯目录/软链操作，本地临时目录单测。
+# 模拟 HK 上 /opt/zenithjoy/autopilot-dashboard/，绝不碰真 HK、绝不 docker。
+# ════════════════════════════════════════════════════════════════════════════
+RBOX="$(mktemp -d)"; DASH="$RBOX/autopilot-dashboard"
+mkdir -p "$DASH" "$RBOX/built_v1" "$RBOX/built_v2"
+echo "v1-content" > "$RBOX/built_v1/index.html"
+echo "v2-content" > "$RBOX/built_v2/index.html"
+
+set +e   # 部分 case 探测返非0，关 errexit（同 Q/F 段做法），块末恢复
+
+dashboard_release_promote "$DASH" "dv1aaaaa" "$RBOX/built_v1" 5 >/dev/null 2>&1; R_RC1=$?
+sleep 1
+dashboard_release_promote "$DASH" "dv2bbbbb" "$RBOX/built_v2" 5 >/dev/null 2>&1; R_RC2=$?
+if [ "$R_RC1" -eq 0 ] && [ "$R_RC2" -eq 0 ]; then ok "R dashboard promote v1/v2 返0"; else bad "R dashboard promote 返非0（$R_RC1/$R_RC2）"; fi
+
+expect_eq "$(readlink "$DASH/dist")" "$DASH/releases/current" "R dist 软链 → releases/current"
+expect_eq "$(current_release_sha "$DASH/releases")" "dv2bbbbb" "R releases/current → v2"
+expect_eq "$(cat "$DASH/dist/index.html")" "v2-content" "R dist 内容解析到 v2（穿透两层软链）"
+
+dashboard_release_promote "$DASH" "dv3ccccc" "$RBOX/nonexist" 5 >/dev/null 2>&1; R_EMPTY=$?
+if [ "$R_EMPTY" -ne 0 ]; then ok "R build 产物不存在→promote 返非0（不造空 release）"; else bad "R 空 build 应返非0"; fi
+
+dashboard_release_rollback "$DASH" "dv1aaaaa" >/dev/null 2>&1; R_RB=$?
+expect_eq "$(current_release_sha "$DASH/releases")" "dv1aaaaa" "R rollback → releases/current=v1"
+expect_eq "$(cat "$DASH/dist/index.html")" "v1-content" "R rollback 后 dist 内容=v1（promote v1→v2→rollback→回 v1）"
+if [ "$R_RB" -eq 0 ]; then ok "R dashboard_release_rollback 返0"; else bad "R rollback 返非0"; fi
+
+dashboard_release_rollback "$DASH" "nosuch999" >/dev/null 2>&1; R_BAD=$?
+if [ "$R_BAD" -ne 0 ]; then ok "R rollback 到不存在 release→返非0"; else bad "R 不存在 release 应返非0"; fi
+
+# prune：再 promote 到第 7 个，keep=5 → 只剩最新 5 个，最老 v1 被删
+i=3
+for s in dv3ccccc dv4ddddd dv5eeeee dv6fffff dv7ggggg; do
+  mkdir -p "$RBOX/b$i"; echo "c$i" > "$RBOX/b$i/index.html"
+  dashboard_release_promote "$DASH" "$s" "$RBOX/b$i" 5 >/dev/null 2>&1
+  sleep 1; i=$((i+1))
+done
+R_COUNT="$(list_releases "$DASH/releases" | wc -l | tr -d ' ')"
+expect_eq "$R_COUNT" "5" "R prune 后留存 5 个 release"
+if [ ! -d "$DASH/releases/dv1aaaaa" ]; then ok "R 最老 v1 被 prune 删"; else bad "R v1 应被删"; fi
+
+set -e 2>/dev/null || true
+rm -rf "$RBOX"
+
+# ════════════════════════════════════════════════════════════════════════════
+# Case S: rollback.sh dashboard 路径（挑哪个 + 校验，本地临时目录，不碰真 HK/docker）。
+# dashboard 编排是纯软链操作无需 mock，直接真跑；API 路径用 mock staging_rollback 防误跑 launchctl。
+# 断言 promote v1→v2→dashboard rollback→releases/current 回 v1；并验 API 路径向后兼容。
+# ════════════════════════════════════════════════════════════════════════════
+ROLLBACK_SH="$SCRIPT_DIR/../../../rollback.sh"
+if [ ! -f "$ROLLBACK_SH" ]; then
+  bad "S 找不到 rollback.sh（$ROLLBACK_SH）"
+else
+  SBOX="$(mktemp -d)"; SDASH="$SBOX/autopilot-dashboard"
+  mkdir -p "$SDASH" "$SBOX/bv1" "$SBOX/bv2"
+  echo "sv1" > "$SBOX/bv1/index.html"; echo "sv2" > "$SBOX/bv2/index.html"
+  dashboard_release_promote "$SDASH" "sv1aaaaa" "$SBOX/bv1" 5 >/dev/null 2>&1
+  sleep 1
+  dashboard_release_promote "$SDASH" "sv2bbbbb" "$SBOX/bv2" 5 >/dev/null 2>&1
+
+  cat > "$SBOX/stub-lib.sh" <<STUB
+# shellcheck source=/dev/null
+source "$SCRIPT_DIR/deploy-lib.sh"
+staging_rollback() { echo "\$1" > "$SBOX/api_hit.txt"; return 0; }
+STUB
+
+  set +e   # rollback.sh 报错分支 exit 1，errexit 下会连累测试脚本（同 Case Q）
+
+  run_dash() { ZJ_DEPLOY_LIB="$SBOX/stub-lib.sh" ZJ_DASHBOARD_DIR="$SDASH" \
+    bash "$ROLLBACK_SH" dashboard "$@" >/tmp/dlib-dash-out.txt 2>&1; }
+
+  run_dash --list; S1_RC=$?
+  if [ "$S1_RC" -eq 0 ] && grep -q "sv2bbbbb" /tmp/dlib-dash-out.txt \
+     && [ "$(current_release_sha "$SDASH/releases")" = "sv2bbbbb" ]; then
+    ok "S dashboard --list 只读列出（current 不动）"
+  else
+    bad "S dashboard --list 应只读（rc=$S1_RC current=$(current_release_sha "$SDASH/releases"))"
+  fi
+
+  run_dash; S2_RC=$?
+  if [ "$S2_RC" -eq 0 ] && [ "$(current_release_sha "$SDASH/releases")" = "sv1aaaaa" ] \
+     && [ "$(cat "$SDASH/dist/index.html")" = "sv1" ]; then
+    ok "S dashboard 无参 rollback→v1（promote v1→v2→rollback→回 v1，dist 内容=v1）"
+  else
+    bad "S dashboard 无参应回 v1（rc=$S2_RC current=$(current_release_sha "$SDASH/releases"))"
+  fi
+
+  run_dash "nosuchdash"; S3_RC=$?
+  if [ "$S3_RC" -ne 0 ] && [ "$(current_release_sha "$SDASH/releases")" = "sv1aaaaa" ]; then
+    ok "S dashboard 不存在 sha→报错退出且 current 不变"
+  else
+    bad "S dashboard 不存在 sha 应报错不切（rc=$S3_RC current=$(current_release_sha "$SDASH/releases"))"
+  fi
+
+  # API 向后兼容：不带 api/dashboard 关键字 + 留存 API release → 走 API 调 mock staging_rollback
+  mkdir -p "$SBOX/apirel/a111111" "$SBOX/apirel/b222222"
+  touch -t 202601010001 "$SBOX/apirel/a111111"; touch -t 202601020001 "$SBOX/apirel/b222222"
+  ln -sfn "$SBOX/apirel/b222222" "$SBOX/apirel/current"
+  rm -f "$SBOX/api_hit.txt"
+  ZJ_DEPLOY_LIB="$SBOX/stub-lib.sh" ZJ_RELEASES_DIR="$SBOX/apirel" \
+    bash "$ROLLBACK_SH" >/tmp/dlib-api-bc.txt 2>&1
+  S4_RC=$?
+  S4_HIT="$(cat "$SBOX/api_hit.txt" 2>/dev/null || echo "")"
+  if [ "$S4_RC" -eq 0 ] && [ "$S4_HIT" = "a111111" ]; then
+    ok "S API 向后兼容：无关键字仍走 API，回上一版 a111111"
+  else
+    bad "S API 向后兼容应回 a111111（rc=$S4_RC hit=$S4_HIT）"
+  fi
+
+  set -e 2>/dev/null || true
+  rm -rf "$SBOX"
+fi
+
 echo ""
 echo "deploy-lib.test.sh: PASSED=$PASSED FAILED=$FAILED"
 [ "$FAILED" -eq 0 ]

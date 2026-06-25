@@ -212,6 +212,80 @@ previous_release() {
 }
 
 # ════════════════════════════════════════════════════════════════════════════
+# HK Dashboard release 隔离（静态 dist + 软链）—— 复用上面的 sha-keyed 原语，不另发明 tag。
+#
+# 治根（2026-06-25）：promote-dashboard-prod.yml 是 `cp -r dist/. .../dist/` 原地覆盖、零留存、
+# 零回档——是整条部署线最后一个"炸了回不来"的点。改成与 API 同款 sha-keyed release 隔离：
+#
+# 布局（HK 上 /opt/zenithjoy/autopilot-dashboard/）：
+#   releases/<sha>/            每次 build 的 dist 实体（自包含静态文件）
+#   releases/current           软链 → releases/<活跃sha>（用现有 current_release_sha/atomic_repoint_current）
+#   dist                       软链 → releases/current（容器 bind-mount 的就是它）
+#
+# ⚠️ docker bind-mount 在容器启动时解析软链到真实 inode，活体换软链不会切已跑容器的挂载，
+#    所以 promote/rollback 切完软链都必须 `docker restart` 让容器重解析（与现状 promote 一样要 restart）。
+#    nginx 不用改（root /usr/share/nginx/html 就是挂进来的 dist 内容）。
+#
+# 两个编排函数纯操作目录/软链（无 docker/ssh 副作用），可在本地临时目录单测（Case R/S）。
+# ════════════════════════════════════════════════════════════════════════════
+
+# dashboard_release_promote <dashboard_dir> <sha> <built_dist_dir> [keep_n]
+#   把 built_dist_dir 的内容落进 <dashboard_dir>/releases/<sha>/ → 原子重指 releases/current → <sha>
+#   → 确保 <dashboard_dir>/dist 软链 → releases/current → prune 到最近 keep_n（默认 5，current 指向的不删）。
+#   幂等：同 sha 再来一次覆盖该 release 目录内容、指针不变。built_dist_dir 不存在/为空 → 返 1。
+dashboard_release_promote() {
+  local dash_dir="$1" sha="$2" built="$3" keep="${4:-5}"
+  if [ -z "$dash_dir" ] || [ -z "$sha" ]; then
+    echo "❌ dashboard_release_promote：缺 dashboard_dir / sha" >&2; return 1
+  fi
+  if [ ! -d "$built" ] || [ -z "$(ls -A "$built" 2>/dev/null)" ]; then
+    echo "❌ dashboard_release_promote：build 产物目录不存在或为空（${built}）" >&2; return 1
+  fi
+  local rels="${dash_dir}/releases"
+  local reldir; reldir="$(release_dir_for "$rels" "$sha")"
+  # 幂等：同 sha 重来先整目录删掉再建，避免残留旧文件（不用 dir/* glob，空目录会报 no match）。
+  rm -rf "${reldir:?}" 2>/dev/null || true
+  mkdir -p "$reldir" || { echo "❌ 建 release 目录失败 $reldir" >&2; return 1; }
+  # 实体落静态文件（自包含）。
+  cp -R "${built%/}/." "$reldir/" || { echo "❌ cp dist → release 失败" >&2; return 1; }
+  # 原子重指 releases/current → 新 release
+  if ! atomic_repoint_current "$rels" "$reldir"; then
+    echo "❌ 原子重指 releases/current 失败" >&2; return 1
+  fi
+  # 确保 dist 软链 → releases/current（容器挂载点）。用同款不跟随旧软链的原子换链。
+  if ! _atomic_swap_symlink "${rels}/current" "${dash_dir}/dist"; then
+    echo "❌ 重指 dist → releases/current 失败" >&2; return 1
+  fi
+  prune_old_releases "$rels" "$keep"
+  echo "✅ dashboard release promote：current → ${sha}，dist → releases/current"
+  return 0
+}
+
+# dashboard_release_rollback <dashboard_dir> <target_sha>
+#   把 releases/current 原子重指回 <target_sha>（必须是留存的 release，不在则返 1）。
+#   dist 软链恒指 releases/current（promote 已建），故只需切 current。调用方负责 docker restart。
+dashboard_release_rollback() {
+  local dash_dir="$1" target="$2"
+  if [ -z "$dash_dir" ] || [ -z "$target" ]; then
+    echo "❌ dashboard_release_rollback：缺 dashboard_dir / target_sha" >&2; return 1
+  fi
+  local rels="${dash_dir}/releases"
+  local reldir; reldir="$(release_dir_for "$rels" "$target")"
+  if [ ! -d "$reldir" ]; then
+    echo "❌ dashboard_release_rollback：目标 release 不在留存里（${reldir}）" >&2; return 1
+  fi
+  if ! atomic_repoint_current "$rels" "$reldir"; then
+    echo "❌ 原子重指 releases/current → ${target} 失败" >&2; return 1
+  fi
+  # dist 软链兜底（首次/异常时可能未建）：确保它指向 releases/current。
+  if [ ! -L "${dash_dir}/dist" ] || [ "$(readlink "${dash_dir}/dist")" != "${rels}/current" ]; then
+    _atomic_swap_symlink "${rels}/current" "${dash_dir}/dist" || true
+  fi
+  echo "✅ dashboard release rollback：current → ${target}（dist 软链恒指 releases/current）"
+  return 0
+}
+
+# ════════════════════════════════════════════════════════════════════════════
 # 蓝绿部署编排器（staging → promote 闸 + 自动回滚）
 #
 # 治根（PrepPRD 2026-06-24）：现状 main 合并 → CD 直接重启生产 :5200，没有 staging，
