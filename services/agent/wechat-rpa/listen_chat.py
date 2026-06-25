@@ -1526,6 +1526,61 @@ def post_friend_scan(
     return result
 
 
+def fetch_friend_scan_pending(
+    middleware_url: str,
+    cs_wechat_id: str,
+    timeout: int = 10,
+) -> Dict[str, Any]:
+    """查询中台「立即扫好友」强制标志（运营在 Dashboard 点了"立即扫好友"按钮）。
+
+    契约（line04-cs-consolidation-contract §cs-agent / 与 cs-be 对齐）：
+      GET /api/crm/friend-scan/pending?cs_wechat_id=<wid>
+      鉴权：X-Internal-Token（agent 无人类 session；env ZENITHJOY_INTERNAL_TOKEN，
+            未设时不带头——后端 dev 模式放行，与 post_friend_scan 同范式）
+      返回：{ force: <bool>, requested_at: <ts|null> }
+            force=true 表示 force_scan_requested_at 仍未被消费（> 上次成功 scan）。
+
+    消费逻辑（主循环）：force=true → 无视 24h 间隔立刻 scan_recent_contacts + post_friend_scan；
+    ingest 成功后由后端清 force_scan_requested_at（agent 不另调清除端点）。
+
+    纪律（同 fetch_outbound_tasks / post_friend_scan）：任何失败保守返回
+    {ok:False, force:False}，绝不抛——拉指令不能拖垮监听，也绝不误触发扫描。
+    - 缺 cs_wechat_id → 不知道查谁 → 不发 HTTP，{ok:False, force:False}。
+    - 非 200 / 连接异常 / body 非 JSON → 保守 force=False。
+    """
+    if not cs_wechat_id:
+        return {"ok": False, "force": False, "error": "missing cs_wechat_id"}
+    try:
+        import requests  # 仅运行时需要
+    except Exception as exc:
+        return {"ok": False, "force": False, "error": f"requests not available: {exc}"}
+
+    url = middleware_url.rstrip("/") + "/api/crm/friend-scan/pending"
+    headers: Dict[str, str] = {}
+    _token = os.environ.get("ZENITHJOY_INTERNAL_TOKEN", "").strip()
+    if _token:
+        headers["X-Internal-Token"] = _token
+    try:
+        resp = requests.get(
+            url, params={"cs_wechat_id": cs_wechat_id}, timeout=timeout, headers=headers
+        )
+    except Exception as exc:
+        return {"ok": False, "force": False, "error": f"{type(exc).__name__}: {exc}"}
+    if getattr(resp, "status_code", 0) != 200:
+        return {"ok": False, "force": False, "error": f"middleware HTTP {getattr(resp, 'status_code', 0)}"}
+    try:
+        data = resp.json()
+    except Exception:
+        return {"ok": False, "force": False, "error": "bad json"}
+    if not isinstance(data, dict):
+        return {"ok": False, "force": False, "error": "unexpected payload"}
+    return {
+        "ok": True,
+        "force": bool(data.get("force")),  # 缺字段 → False（保守，绝不误触发扫描）
+        "requested_at": data.get("requested_at"),
+    }
+
+
 # ─── 关键人出站任务（上下线播报 + 失败告警）：拉取 → 真机发送 → 回执 ──────────────────
 #
 # C1 尾巴接线：中台把「主动发给关键人」的出站任务入库（status=approved/system），
@@ -1882,6 +1937,11 @@ def run_real_listen(args: argparse.Namespace) -> int:
     last_friend_scan = 0.0
     friend_scan_done_once = False
     FRIEND_SCAN_INTERVAL = 24 * 3600  # 每日一次
+    # 「立即扫好友」强制标志（运营在 Dashboard 点按钮 → 中台置 force_scan_requested_at）。
+    # 主循环每轮 poll 太频（~3s），按 FORCE_SCAN_POLL_INTERVAL 节流拉 pending，
+    # force=true 时本轮无视 24h 间隔立刻扫一遍；ingest 成功后由后端清标志。
+    last_force_scan_poll = 0.0
+    FORCE_SCAN_POLL_INTERVAL = 20  # 秒；点了按钮后约 20s 内客服机响应
     try:
         while time.time() < deadline:
             now = time.time()
@@ -2027,14 +2087,35 @@ def run_real_listen(args: argparse.Namespace) -> int:
             # machine_id 在册且已拉到自己 wechat_id → scan_recent_contacts → POST 中台 ingest。
             # 失败吞掉不拖垮监听（post_friend_scan 内部已处理）。
             _cs_wid = (cs_config or {}).get("wechat_id") if getattr(args, "machine_id", None) else None
-            if _cs_wid and (not friend_scan_done_once or now - last_friend_scan >= FRIEND_SCAN_INTERVAL):
+
+            # 「立即扫好友」强制标志：运营在 Dashboard 点了按钮 → 中台 force_scan_requested_at。
+            # 节流拉 pending（复用现有拉指令模式，参考 process_outbound_once）；force=true 则本轮
+            # 无视 24h 间隔立刻扫一遍。失败保守 force=False（绝不误触发），绝不拖垮监听。
+            _force_scan = False
+            if _cs_wid and now - last_force_scan_poll >= FORCE_SCAN_POLL_INTERVAL:
+                last_force_scan_poll = now
+                try:
+                    _pending = fetch_friend_scan_pending(args.middleware_url, _cs_wid)
+                    _force_scan = bool(_pending.get("force"))
+                    if _force_scan:
+                        _log(f"[CRM好友扫描] 收到「立即扫好友」指令(requested_at={_pending.get('requested_at')}) → 本轮强制扫描")
+                except Exception as _fpexc:
+                    _log(f"[CRM好友扫描] 拉强制标志异常: {_fpexc}")
+
+            if _cs_wid and (
+                _force_scan
+                or not friend_scan_done_once
+                or now - last_friend_scan >= FRIEND_SCAN_INTERVAL
+            ):
                 try:
                     _contacts = scan_recent_contacts(mw, limit=100)
                     _res = post_friend_scan(args.middleware_url, _cs_wid, _contacts)
                     if _res.get("ok"):
                         friend_scan_done_once = True
                         last_friend_scan = now
-                        _log(f"[CRM好友扫描] 扫到 {len(_contacts)} 人 → 上报 ingested={_res.get('ingested')}")
+                        # 强制扫已消费：后端在 ingest 成功后清 force_scan_requested_at（agent 不另调清除端点）。
+                        _trig = "强制" if _force_scan else "周期"
+                        _log(f"[CRM好友扫描] ({_trig})扫到 {len(_contacts)} 人 → 上报 ingested={_res.get('ingested')}")
                     else:
                         _log(f"[CRM好友扫描] 上报失败: {_res.get('error')}（下轮重试）")
                 except Exception as _fsexc:

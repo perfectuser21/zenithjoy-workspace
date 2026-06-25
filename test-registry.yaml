@@ -3040,6 +3040,14 @@ agent_suite:
     product: 客户私域AI接管
     note: "Path 4 Step 2 CRM 路由覆盖率测试 — /api/crm/init, /wechat-contacts, /match-preview, /daily-analysis"
 
+  - id: line04-crm-friend-scan-trigger-routes
+    path: apps/api/tests/routes/crm-friend-scan-trigger.test.ts
+    type: unit
+    ci: L4
+    status: active
+    product: 客户私域AI接管
+    note: "Line04 立即扫好友 trigger/pending/ingest 路由单测（mock pool + supertest）— 缺参/404/邮箱超管成功/DB失败 + force=true/false + ingest 清 force_scan_requested_at 标志契约"
+
   - id: path4-crm-migration
     path: sprints/06030910-path4-crm-wechat-sync/tests/crm-migration.test.ts
     type: contract
