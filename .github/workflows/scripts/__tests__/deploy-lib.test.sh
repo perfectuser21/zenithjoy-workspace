@@ -214,6 +214,55 @@ L_NOPROD=$?
 set -e 2>/dev/null || true
 if [ "$L_NOPROD" -ne 0 ]; then ok "L 生产 plist 缺失→返非0（不凭空造）"; else bad "L 生产 plist 缺失应返非0"; fi
 
+# --- L2: committed 模板优先（模板为基 + 注入生产密钥 + staging 值收口，生产值不漏进）---
+# 造一个 committed 模板（无密钥，自带 DB env + Program 指 releases/staging），断言：
+#   · 模板的 ProgramArguments / DATABASE_USER 被采用
+#   · 生产密钥 SOME_SECRET 被注入进来
+#   · PORT/DATABASE_NAME/NODE_ENV 是 staging 值（绝不是生产的 5200/cecelia/production）
+cat > "$LBOX/template.plist" <<'PLIST'
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>com.zenithjoy.api.staging</string>
+  <key>ProgramArguments</key>
+  <array><string>/opt/homebrew/bin/node</string><string>/tmpl/releases/staging/dist/index.js</string></array>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PORT</key><string>5201</string>
+    <key>DATABASE_NAME</key><string>zenithjoy_test</string>
+    <key>DATABASE_USER</key><string>cecelia</string>
+    <key>NODE_ENV</key><string>staging</string>
+  </dict>
+  <key>WorkingDirectory</key><string>/tmpl/releases/staging</string>
+  <key>KeepAlive</key><true/>
+  <key>RunAtLoad</key><true/>
+</dict>
+</plist>
+PLIST
+L2_OUT="$LBOX/from-template.plist"
+ZJ_PROD_PLIST="$LBOX/prod.plist" ZJ_STAGING_TEMPLATE="$LBOX/template.plist" \
+ZJ_STAGING_PLIST="$L2_OUT" ZJ_STAGING_PORT=5201 ZJ_STAGING_DB=zenithjoy_test \
+ZJ_STAGING_LABEL=com.zenithjoy.api.staging ZJ_RELEASES_DIR=/fake/releases \
+ZJ_NODE=/opt/homebrew/bin/node ZJ_STAGING_LOG_DIR="$LBOX/logs" \
+  ensure_staging_plist >/dev/null 2>&1
+_l2read() { /usr/bin/python3 - "$L2_OUT" "$1" <<'PY'
+import plistlib,sys
+d=plistlib.load(open(sys.argv[1],'rb'))
+k=sys.argv[2]
+if k.startswith("env:"): print(d.get("EnvironmentVariables",{}).get(k[4:],""))
+elif k=="program1": print(d.get("ProgramArguments",["",""])[1] if len(d.get("ProgramArguments",[]))>1 else "")
+else: print(d.get(k,""))
+PY
+}
+if [ -f "$L2_OUT" ]; then ok "L2 模板优先：生成了 staging plist"; else bad "L2 模板优先没生成"; fi
+expect_eq "$(_l2read program1)" "/tmpl/releases/staging/dist/index.js" "L2 用模板的 ProgramArguments"
+expect_eq "$(_l2read env:DATABASE_USER)" "cecelia" "L2 用模板的 DATABASE_USER"
+expect_eq "$(_l2read env:SOME_SECRET)" "super-secret-value-123" "L2 注入生产密钥"
+expect_eq "$(_l2read env:PORT)" "5201" "L2 PORT=staging 值（非生产5200）"
+expect_eq "$(_l2read env:DATABASE_NAME)" "zenithjoy_test" "L2 DB=staging 值（非生产cecelia）"
+expect_eq "$(_l2read env:NODE_ENV)" "staging" "L2 NODE_ENV=staging（非生产production）"
+
 rm -rf "$LBOX"
 
 # ════════════════════════════════════════════════════════════════════════════
