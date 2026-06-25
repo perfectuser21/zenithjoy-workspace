@@ -15,6 +15,7 @@
 # Case L: ensure_staging_plist 从生产 plist 程序化派生 staging plist（PORT/DB/Label/Program 覆写 + 密钥继承）
 # Case M: ensure_release_node_modules 在 release node_modules 为空时从 hoisted 根兜底填充
 # Case N: ensure_prod_plist_points_to_current 把生产 plist 改指 releases/current（只改路径/不碰密钥/幂等/不碰真 plist）
+# Case O: promote 的生产 migration 从主 checkout（有 db/migrations 源）跑，不从 release 产物目录跑（防 Cannot find module 回归）
 set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -267,10 +268,13 @@ expect_eq "$(_l2read env:NODE_ENV)" "staging" "L2 NODE_ENV=staging（非生产pr
 rm -rf "$LBOX"
 
 # ════════════════════════════════════════════════════════════════════════════
-# Case M: ensure_release_node_modules —— monorepo hoist 兜底。
+# Case M: ensure_release_node_modules —— monorepo hoist 兜底（★方案 A 自包含：实体拷贝，非 symlink★）。
 # 治根（2026-06-25 真实事故）：依赖 hoist 到 repo 根 node_modules，apps/api/node_modules 是空目录，
 # build_release 拷空 node_modules → release 跑 node 报 Cannot find module 'dotenv' → :5201 起不来。
-# 规则：release node_modules 缺 dotenv（哨兵模块）时，从 hoisted 根 node_modules 兜底填充（symlink）。
+# 决策（lead 2026-06-25）：兜底必须**实体拷贝**根 node_modules 进 release（APFS 用 cp -c CoW），
+# **不能 symlink**——symlink 会让 deploy 时 npm ci 改到正在跑的生产共享 node_modules，且跨依赖
+# 变更 rollback 不干净。规则：release node_modules 缺 dotenv（哨兵）时，从根**实体拷**填充，
+# 且 release/node_modules 必须是**真目录而非软链**。
 # ════════════════════════════════════════════════════════════════════════════
 MBOX="$(mktemp -d)"
 # 造 hoisted 根 node_modules（含哨兵 dotenv）+ release 目录（node_modules 为空）
@@ -286,6 +290,21 @@ if [ "$M_RC" -eq 0 ] && [ -e "$MBOX/rel/node_modules/dotenv/package.json" ]; the
 else
   bad "M 兜底失败（rc=$M_RC，dotenv 存在=$([ -e "$MBOX/rel/node_modules/dotenv/package.json" ] && echo y || echo n)）"
 fi
+# ★方案 A 关键断言：release/node_modules 必须是真目录、不是软链（自包含，与根解耦）
+if [ -L "$MBOX/rel/node_modules" ]; then
+  bad "M release node_modules 是软链（方案A 要求实体拷贝，不许 symlink 到根）"
+else
+  ok "M release node_modules 是真目录（自包含，非 symlink 到根）"
+fi
+# 自包含验证：删掉根 node_modules 后，release 里的 dotenv 仍在（证明是实体拷贝而非软链依赖根）
+rm -rf "$MBOX/root_nm"
+if [ -e "$MBOX/rel/node_modules/dotenv/package.json" ]; then
+  ok "M 删掉根 node_modules 后 release 仍自带 dotenv（实体拷贝，rollback 干净）"
+else
+  bad "M 删根后 release dotenv 没了（说明是软链依赖根，方案A 不允许）"
+fi
+# 重新造根供后续子 case 用
+mkdir -p "$MBOX/root_nm/dotenv"; echo '{}' > "$MBOX/root_nm/dotenv/package.json"
 
 # 已自带依赖（含 dotenv）时不应覆盖
 mkdir -p "$MBOX/rel2/node_modules/dotenv" "$MBOX/rel2/dist"
@@ -362,6 +381,43 @@ if command -v plutil >/dev/null 2>&1; then
   if plutil -lint "$NBOX/prod.plist" >/dev/null 2>&1; then ok "N plutil -lint 生成的 plist 合法"; else bad "N plutil -lint 不通过"; fi
 fi
 rm -rf "$NBOX"
+
+# ════════════════════════════════════════════════════════════════════════════
+# Case O: promote 的生产 migration 必须从【有 db/migrations 源的目录】跑，不能从 release 产物目录跑。
+# 治根（promote run 28148797888 实证）：release 是 build 产物（只有 dist，无 db/migrations/*.ts），
+# `ts-node db/migrations/run-migration.ts` 在 release 目录解析不到源 → Cannot find module
+# './run-migration.ts' → 每次 promote 卡死在迁移步。修法：promote 的迁移从主 checkout（ZJ_API_DIR，
+# 有 db/migrations 源）跑。本 case proven-to-fire：迁移入口脚本只在"有源"的目录可解析，release 产物目录不可。
+# 纯文件路径解析判断，不连真库、不跑真迁移。
+# ════════════════════════════════════════════════════════════════════════════
+OBOX="$(mktemp -d)"
+MIGRATE_REL="db/migrations/run-migration.ts"
+# 主 checkout 模拟：有 db/migrations 源
+mkdir -p "$OBOX/checkout/db/migrations"; echo "// src" > "$OBOX/checkout/${MIGRATE_REL}"
+# release 产物模拟：只有 dist，没有 db/migrations 源
+mkdir -p "$OBOX/release/dist"; echo "x" > "$OBOX/release/dist/index.js"
+
+# proven-to-fire：从 release 产物目录解析迁移入口 → 不存在（这就是旧 bug 的根因）
+if [ ! -f "$OBOX/release/${MIGRATE_REL}" ]; then ok "O release 产物目录解析不到 ${MIGRATE_REL}（旧 bug 根因，proven-to-fire）"; else bad "O release 不该有迁移源"; fi
+# 修法验证：从主 checkout 解析迁移入口 → 存在
+if [ -f "$OBOX/checkout/${MIGRATE_REL}" ]; then ok "O 主 checkout 解析得到 ${MIGRATE_REL}（promote 迁移应从这里跑）"; else bad "O 主 checkout 应有迁移源"; fi
+
+# staging_promote 源码守卫：迁移步必须 cd ZJ_API_DIR（主checkout），不能 cd reldir（release）。
+# 防回归——避免有人改回从 release 目录跑。用 grep -F 固定串匹配迁移那行（避开 SC2016）。
+PROMOTE_BODY="$(sed -n '/^staging_promote() {/,/^}/p' "$SCRIPT_DIR/deploy-lib.sh")"
+MIGRATE_CTX="$(echo "$PROMOTE_BODY" | grep 'npm run migrate' | head -1)"
+# 匹配源码里的字面量 cd "<var>"。用 $D 代表字面 $ 拼 needle，规避单引号内 ${} 触发 SC2016。
+D='$'
+O_API_NEEDLE="cd \"${D}{ZJ_API_DIR}\""
+O_REL_NEEDLE="cd \"${D}{reldir}\""
+if printf '%s' "$MIGRATE_CTX" | grep -qF -- "$O_API_NEEDLE"; then
+  ok "O staging_promote 迁移从主 checkout(ZJ_API_DIR) 跑"
+elif printf '%s' "$MIGRATE_CTX" | grep -qF -- "$O_REL_NEEDLE"; then
+  bad "O staging_promote 迁移仍从 release 目录跑（旧 bug 没修）"
+else
+  bad "O staging_promote 迁移行无法识别 cwd：${MIGRATE_CTX}"
+fi
+rm -rf "$OBOX"
 
 echo ""
 echo "deploy-lib.test.sh: PASSED=$PASSED FAILED=$FAILED"
