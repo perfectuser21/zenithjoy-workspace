@@ -88,6 +88,8 @@ export const OPTIONAL_ENV: { name: string; reason: string }[] = [
 
   // —— Agent / 安装包分发 ——
   { name: 'ZENITHJOY_API_URL', reason: '中台对外 API url，缺则用默认/请求推导' },
+  { name: 'AGENT_PUBLIC_WS_URL', reason: '本实例对外 agent WS 地址(wss://.../agent-ws)，下载时烧进 agent .env 的 ZENITHJOY_API_URL；缺则不烧(agent 用 start.bat 生产兜底)' },
+  { name: 'AGENT_PUBLIC_BASE_URL', reason: '本实例对外 agent HTTPS 根地址，下载时烧进 agent .env 的 ZENITHJOY_API_BASE；缺则不烧' },
   { name: 'INSTALL_PACK_MANIFEST_PATH', reason: '安装包 manifest 路径，缺则用默认路径' },
   { name: 'INSTALL_PACK_STATIC_ROOT', reason: '安装包静态目录，缺则用默认目录' },
   { name: 'INSTALL_PACK_REMOTE_URL', reason: '安装包远程直链，缺则不走远程直链' },
