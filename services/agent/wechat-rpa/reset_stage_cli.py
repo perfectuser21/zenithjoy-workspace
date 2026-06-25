@@ -37,8 +37,9 @@ def ensure_window_ready(
 ) -> Optional[Any]:
     """确保微信主窗口就绪，必要时重启微信。纯逻辑（依赖全注入）→ 可单测。
 
-    复位第①步会 taskkill 微信，故验登录前必须把微信重新拉起来再读窗口，否则
-    get_window() 恒为 None → 误判「测试号未登录」复位红（2026-06-25 xian-rog 真机 bug）。
+    复位第①步现在保留已登录主进程（见 wechat_close_targets），故通常窗口已在直接读；
+    仅当微信恰好没在跑时才 launch 起一个再等窗口。这样无论哪种情况都能稳妥拿到主窗口，
+    避免「读不到窗口 → 误判测试号未登录」复位红（2026-06-25 xian-rog 真机 bug）。
 
     流程：
       1. 先读一次窗口；已在 → 激活 UIA 后直接返回（不重启，幂等）。
@@ -63,16 +64,48 @@ def ensure_window_ready(
     return None
 
 
+def wechat_close_targets(is_running: bool) -> list:
+    """复位第①步要 taskkill 的进程名列表（纯函数 → 可单测）。
+
+    用户决策(2026-06-25 方向 a)：xian-rog 是「专用 + 常驻唯一登录测试号」机器，
+    微信本就该一直登录常驻。复位第①步语义从「杀了重启」改成「确认微信常驻登录干净」：
+
+      · 微信主进程在(已登录) → 返回 [] —— 绝不强杀任何微信进程，保留常驻登录态。
+        (真机根因:taskkill /F /T 强杀微信 4.x 后重启必崩 t≈9s 弹 crashpad，
+         而未被强杀的已登录实例稳定。)
+      · 微信没在跑 → 主进程不存在，没什么登录态要保留；只清可能残留的孤儿渲染子进程
+        (WeChatAppEx，主进程没了却挂着的僵尸)，绝不把主进程 Weixin.exe 列入。
+        验登录步(ensure_window_ready)会负责 launch_weixin 起一个干净实例。
+
+    不变式：任何状态下 Weixin.exe(主进程) 都不在强杀目标里。
+    """
+    if is_running:
+        return []
+    # 微信没在跑：只清孤儿渲染子进程残留，不碰主进程
+    return ["WeChatAppEx.exe"]
+
+
 class RealWinDriver:
     """xian-rog 真机 UI driver（pywinauto + taskkill）。各方法只做副作用，判定交给 reset_stage。"""
 
     def close_running_wechat(self) -> bool:
-        """① 关掉残留微信 app（幂等：没在跑也算成功）。"""
+        """① 确认微信常驻登录干净（绝不强杀已登录主进程）。
+
+        改自旧「taskkill /F /T 杀光微信」——那会损坏微信 4.x 状态致重启崩溃
+        (2026-06-25 xian-rog 真机根因)。新语义见 wechat_close_targets。幂等。
+        """
         try:
-            # /F 强制、/T 连子进程；Weixin.exe（4.x）+ WeChat.exe（老）都试
-            for exe in ("Weixin.exe", "WeChat.exe", "WeChatAppEx.exe"):
-                subprocess.run(["taskkill", "/F", "/T", "/IM", exe],
-                               capture_output=True, text=True)
+            from find_weixin import is_weixin_running
+            running = is_weixin_running()
+            targets = wechat_close_targets(running)
+            if not targets:
+                # 微信常驻登录中 → 保留，什么都不杀
+                print("close_running_wechat: 微信常驻登录中，保留主进程（不强杀）")
+                return True
+            # 微信没在跑 → 仅清孤儿渲染子进程残留
+            for exe in targets:
+                subprocess.run(["taskkill", "/F", "/IM", exe],
+                               capture_output=True)
             return True
         except Exception as exc:  # noqa: BLE001
             print(f"close_running_wechat 异常: {exc}", file=sys.stderr)
@@ -94,8 +127,8 @@ class RealWinDriver:
     def get_logged_in_account(self) -> Optional[str]:
         """③ 当前已登录账号标识。
 
-        关键：复位第①步已 taskkill 微信，本步必须先把微信重新拉起来（ensure_window_ready）
-        再读主窗口，否则恒读到 None 误判「测试号未登录」（2026-06-25 xian-rog 真机 bug）。
+        复位第①步现在保留已登录主进程（不强杀），故主进程通常在 → ensure_window_ready
+        直接读现成主窗口；若微信恰好没在跑则它会 launch_weixin 起一个再轮询等窗口 + 激活 UIA。
         主窗口在且非登录/隐私锁屏 → 返 expected_account；否则 None。
         """
         try:
