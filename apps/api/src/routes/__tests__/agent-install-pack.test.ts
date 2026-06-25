@@ -161,6 +161,112 @@ describe('Sprint 2.1f Fix 7 — GET /api/agent/install-pack/download server-side
   });
 });
 
+// agent→staging 隔离 — 下载时烧本实例对外地址进 .env（让 staging 下的 agent 连 staging）
+describe('agent→staging — download 烧 AGENT_PUBLIC_* 进 .env 的 ZENITHJOY_API_URL/BASE', () => {
+  let app: any;
+
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    const fixDir = path.join(os.tmpdir(), `install-pack-urlburn-${Date.now()}`);
+    fs.mkdirSync(fixDir, { recursive: true });
+    // fixture .env 带生产 base（模拟静态包默认），断言被 staging 值覆盖
+    fs.writeFileSync(
+      path.join(fixDir, '.env'),
+      'ZENITHJOY_API_BASE=https://autopilot.zenjoymedia.media\nZENITHJOY_LICENSE=__PLACEHOLDER__\n'
+    );
+    const fixturePath = path.join(os.tmpdir(), `install-pack-urlburn-${Date.now()}.tar.gz`);
+    spawnSync('tar', ['-czf', fixturePath, '-C', fixDir, '.'], { stdio: 'pipe' });
+    process.env.INSTALL_PACK_FIXTURE_PATH = fixturePath;
+    (manifestSvc.readInstallPackManifest as any).mockReturnValue({
+      version: '1.0.1', sha256: 'a'.repeat(64),
+      download_url: '/download/zenithjoy-agent-v1.0.1.tar.gz',
+      size: 60000000, build_time: '2026-05-09T10:00:00Z',
+    });
+    app = (await import('../../app')).default;
+  });
+
+  afterEach(() => {
+    delete process.env.AGENT_PUBLIC_WS_URL;
+    delete process.env.AGENT_PUBLIC_BASE_URL;
+  });
+
+  async function downloadEnv(): Promise<string> {
+    const { auth } = await import('../../auth');
+    const pool = (await import('../../db/connection')).default;
+    vi.spyOn(auth.api, 'getSession').mockResolvedValue({
+      user: { id: 'user-urlburn', email: 'u@test', name: 'U' },
+    } as any);
+    vi.spyOn(pool, 'query').mockResolvedValue({
+      rows: [{ license_key: 'ZJ-F-UUUU1111' }],
+    } as any);
+    const res = await request(app).get('/api/agent/install-pack/download');
+    expect(res.status).toBe(200);
+    const tmpOut = path.join(os.tmpdir(), `dl-urlburn-${Date.now()}-${Math.random()}`);
+    fs.mkdirSync(tmpOut, { recursive: true });
+    const tarPath = path.join(tmpOut, 'pack.tar.gz');
+    fs.writeFileSync(tarPath, res.body);
+    spawnSync('tar', ['-xzf', tarPath, '-C', tmpOut], { stdio: 'pipe' });
+    return fs.readFileSync(path.join(tmpOut, '.env'), 'utf-8');
+  }
+
+  it('AGENT_PUBLIC_* 设为 staging → .env 烧 staging 的 ZENITHJOY_API_URL/BASE（覆盖生产 base）', async () => {
+    process.env.AGENT_PUBLIC_WS_URL = 'wss://staging-autopilot.zenjoymedia.media/agent-ws';
+    process.env.AGENT_PUBLIC_BASE_URL = 'https://staging-autopilot.zenjoymedia.media';
+    const env = await downloadEnv();
+    expect(env).toContain('ZENITHJOY_API_URL=wss://staging-autopilot.zenjoymedia.media/agent-ws');
+    expect(env).toContain('ZENITHJOY_API_BASE=https://staging-autopilot.zenjoymedia.media');
+    // 关键：原 fixture 的生产 base 被覆盖，不残留
+    expect(env).not.toContain('ZENITHJOY_API_BASE=https://autopilot.zenjoymedia.media');
+    expect(env).toContain('ZENITHJOY_LICENSE=ZJ-F-UUUU1111');
+  });
+
+  it('AGENT_PUBLIC_* 未设（如本地 dev）→ 不烧 URL（no-op，保持原 .env 不动）', async () => {
+    delete process.env.AGENT_PUBLIC_WS_URL;
+    delete process.env.AGENT_PUBLIC_BASE_URL;
+    const env = await downloadEnv();
+    // 不注入 ZENITHJOY_API_URL；原生产 base 原样保留（行为同旧）
+    expect(env).not.toContain('ZENITHJOY_API_URL=');
+    expect(env).toContain('ZENITHJOY_API_BASE=https://autopilot.zenjoymedia.media');
+    expect(env).toContain('ZENITHJOY_LICENSE=ZJ-F-UUUU1111');
+  });
+});
+
+// agent→staging — /dotenv 也带本实例对外地址
+describe('agent→staging — /dotenv 含 AGENT_PUBLIC_* 烧的 ZENITHJOY_API_URL/BASE', () => {
+  let app: any;
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    (manifestSvc.readInstallPackManifest as any).mockReturnValue({
+      version: '1.1.3', sha256: 'a'.repeat(64),
+      download_url: '/download/zenithjoy-agent-v1.1.3.tar.gz',
+      size: 169197376, build_time: '2026-05-20T00:00:00Z',
+    });
+    app = (await import('../../app')).default;
+  });
+  afterEach(() => {
+    delete process.env.AGENT_PUBLIC_WS_URL;
+    delete process.env.AGENT_PUBLIC_BASE_URL;
+  });
+
+  it('staging slot 的 /dotenv → 含 staging 的 ZENITHJOY_API_URL/BASE', async () => {
+    process.env.AGENT_PUBLIC_WS_URL = 'wss://staging-autopilot.zenjoymedia.media/agent-ws';
+    process.env.AGENT_PUBLIC_BASE_URL = 'https://staging-autopilot.zenjoymedia.media';
+    const { auth } = await import('../../auth');
+    const pool = (await import('../../db/connection')).default;
+    vi.spyOn(auth.api, 'getSession').mockResolvedValue({
+      user: { id: 'user-dotenv-staging', email: 'ds@test', name: 'DS' },
+    } as any);
+    vi.spyOn(pool, 'query').mockResolvedValue({
+      rows: [{ license_key: 'ZJ-F-DDDD2222' }],
+    } as any);
+    const res = await request(app).get('/api/agent/install-pack/dotenv');
+    expect(res.status).toBe(200);
+    expect(res.text).toContain('ZENITHJOY_LICENSE=ZJ-F-DDDD2222');
+    expect(res.text).toContain('ZENITHJOY_API_URL=wss://staging-autopilot.zenjoymedia.media/agent-ws');
+    expect(res.text).toContain('ZENITHJOY_API_BASE=https://staging-autopilot.zenjoymedia.media');
+  });
+});
+
 // Sprint 2.1h — INSTALL_PACK_REMOTE_URL fallback（本地 tar.gz 不存在时远端拉取缓存）
 describe('Sprint 2.1h — INSTALL_PACK_REMOTE_URL fallback', () => {
   let app: any;
