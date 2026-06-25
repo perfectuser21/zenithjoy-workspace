@@ -11,9 +11,15 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import type { Request, Response } from 'express';
 
-const { mockQuery } = vi.hoisted(() => ({ mockQuery: vi.fn() }));
+const { mockQuery, mockValidateLicense } = vi.hoisted(() => ({
+  mockQuery: vi.fn(),
+  mockValidateLicense: vi.fn(),
+}));
 vi.mock('../db/connection', () => ({
   default: { query: mockQuery, connect: vi.fn(), end: vi.fn() },
+}));
+vi.mock('../services/walking-skeleton.service', () => ({
+  validateLicense: mockValidateLicense,
 }));
 
 import {
@@ -48,6 +54,7 @@ function mkRes() {
 
 beforeEach(() => {
   mockQuery.mockReset();
+  mockValidateLicense.mockReset();
 });
 
 describe('requireCsAdmin — 管理员角色闸', () => {
@@ -199,6 +206,70 @@ describe('requireServiceCredential — agent/服务专用闸（internal/service 
     requireServiceCredential(req, res, next);
     expect(next).toHaveBeenCalledOnce();
     expect(res.statusCode).toBe(0);
+  });
+});
+
+// ─── Gap1：agent license 自证鉴权（不再依赖客户端 .env 烧共享 internal token）───
+// 真 agent 只有 license（注册/心跳已用 license 认证），ingest/pending/onboarding 上报时带
+// X-License-Key 自证身份。后端校验 license → tenant_id，挂到 req.tenantId 供 handler 同租户隔离。
+describe('requireServiceCredential — Gap1 agent license 自证（X-License-Key / 合规 Bearer）', () => {
+  const OLD_ENV = process.env.ZENITHJOY_INTERNAL_TOKEN;
+  const TENANT_LIC = 'cccccccc-1111-2222-3333-444444444444';
+  beforeEach(() => {
+    // 生产闸：internal token 已设（模拟生产环境），但 agent 没有它——只能靠 license 自证。
+    process.env.ZENITHJOY_INTERNAL_TOKEN = 'svc-tok-123';
+  });
+  afterEach(() => {
+    if (OLD_ENV === undefined) delete process.env.ZENITHJOY_INTERNAL_TOKEN;
+    else process.env.ZENITHJOY_INTERNAL_TOKEN = OLD_ENV;
+  });
+
+  it('合法 X-License-Key（active + 有 tenant）→ 放行 next() 并挂 req.tenantId', async () => {
+    mockValidateLicense.mockResolvedValue({
+      ok: true,
+      license: { id: 'lic-1', license_key: 'ZJ-B-AAAA1111', tenant_id: TENANT_LIC, status: 'active', expires_at: '2099-01-01' },
+    });
+    const req = { headers: { 'x-license-key': 'ZJ-B-AAAA1111' } } as unknown as Request & { tenantId?: string };
+    const res = mkRes();
+    const next = vi.fn();
+    await requireServiceCredential(req, res, next);
+    expect(mockValidateLicense).toHaveBeenCalledWith('ZJ-B-AAAA1111');
+    expect(next).toHaveBeenCalledOnce();
+    expect(res.statusCode).toBe(0);
+    expect(req.tenantId).toBe(TENANT_LIC);
+  });
+
+  it('合法 Bearer <license_key>（ZJ- 格式）→ 走 license 自证放行', async () => {
+    mockValidateLicense.mockResolvedValue({
+      ok: true,
+      license: { id: 'lic-2', license_key: 'ZJ-F-BBBB2222', tenant_id: TENANT_LIC, status: 'active', expires_at: '2099-01-01' },
+    });
+    const req = { headers: { authorization: 'Bearer ZJ-F-BBBB2222' } } as unknown as Request & { tenantId?: string };
+    const res = mkRes();
+    const next = vi.fn();
+    await requireServiceCredential(req, res, next);
+    expect(next).toHaveBeenCalledOnce();
+    expect(req.tenantId).toBe(TENANT_LIC);
+  });
+
+  it('无效/吊销 license（validateLicense 失败）→ 401，不放行', async () => {
+    mockValidateLicense.mockResolvedValue({ ok: false, code: 'REVOKED', message: 'license 已吊销' });
+    const req = { headers: { 'x-license-key': 'ZJ-B-DEADBEEF' } } as unknown as Request;
+    const res = mkRes();
+    const next = vi.fn();
+    await requireServiceCredential(req, res, next);
+    expect(res.statusCode).toBe(401);
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  it('Bearer <internal-token>（非 ZJ- 格式）→ 仍走 superAdminGuard token 路径（向后兼容）', async () => {
+    const req = { headers: { authorization: 'Bearer svc-tok-123' } } as unknown as Request;
+    const res = mkRes();
+    const next = vi.fn();
+    await requireServiceCredential(req, res, next);
+    expect(next).toHaveBeenCalledOnce();
+    // 没走 license 路径（不该调 validateLicense）
+    expect(mockValidateLicense).not.toHaveBeenCalled();
   });
 });
 

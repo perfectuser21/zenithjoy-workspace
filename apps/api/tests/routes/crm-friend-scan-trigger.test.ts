@@ -15,16 +15,22 @@ import { describe, it, expect, vi, beforeEach, beforeAll, afterAll } from 'vites
 import express from 'express';
 import request from 'supertest';
 
-const { mockQuery, mockConnect } = vi.hoisted(() => ({
+const { mockQuery, mockConnect, mockValidateLicense } = vi.hoisted(() => ({
   mockQuery: vi.fn(),
   mockConnect: vi.fn(),
+  mockValidateLicense: vi.fn(),
 }));
 vi.mock('../../src/db/connection', () => ({
   default: { query: mockQuery, connect: mockConnect, end: vi.fn() },
 }));
+vi.mock('../../src/services/walking-skeleton.service', () => ({
+  validateLicense: mockValidateLicense,
+}));
 
 const TENANT_A = 'aaaaaaaa-1111-2222-3333-444444444444';
+const TENANT_B = 'bbbbbbbb-1111-2222-3333-444444444444';
 const CS = 'wx_cs_unit';
+const AGENT_LICENSE = 'ZJ-B-AAAA1111';
 // trigger 走 requireCsReadAccess：网页超管经 X-User-Email ∈ ADMIN_EMAILS 旁路放行（修 403 的同一通道）。
 const ADMIN_EMAIL = 'boss@unit.test';
 
@@ -57,6 +63,7 @@ afterAll(() => {
 beforeEach(() => {
   mockQuery.mockReset();
   mockConnect.mockReset();
+  mockValidateLicense.mockReset();
 });
 
 describe('POST /api/crm/friend-scan/trigger — 立即扫好友（网页用户）', () => {
@@ -180,5 +187,83 @@ describe('POST /api/crm/friend-scan/ingest — 成功后清 force 标志', () =>
     );
     expect(onboardingCall).toBeDefined();
     expect(onboardingCall?.[0]).toContain('force_scan_requested_at = NULL');
+  });
+});
+
+// ─── Gap1：真 agent（只有 license、无 internal token）扫好友能写进 CRM ───
+// 生产环境 ZENITHJOY_INTERNAL_TOKEN 已设 → 不带 token 的 agent 原本 401。
+// 修复后：agent 带 X-License-Key 自证 → requireServiceCredential 校验 license→tenant，挂 req.tenantId，
+// handler 校验 cs_wechat_id 属该 tenant 后放行写库。跨租户 cs_wechat_id → 403。
+describe('Gap1 — agent license 自证 ingest（生产 internal token 已设，agent 只有 license）', () => {
+  const OLD = process.env.ZENITHJOY_INTERNAL_TOKEN;
+  beforeEach(() => {
+    process.env.ZENITHJOY_INTERNAL_TOKEN = 'svc-tok-prod';
+  });
+  afterAll(() => {
+    if (OLD === undefined) delete process.env.ZENITHJOY_INTERNAL_TOKEN;
+    else process.env.ZENITHJOY_INTERNAL_TOKEN = OLD;
+  });
+
+  it('真 agent 无 internal token 但带 X-License-Key → 扫好友写进 crm_customers（200）', async () => {
+    // requireServiceCredential 校验 license → tenant_id=TENANT_A，挂 req.tenantId。
+    mockValidateLicense.mockResolvedValue({
+      ok: true,
+      license: { id: 'lic-a', license_key: AGENT_LICENSE, tenant_id: TENANT_A, status: 'active', expires_at: '2099-01-01' },
+    });
+    // handler 内：cs_wechat_id 属 req.tenantId 校验（service_agents 反查 → TENANT_A，同租户）。
+    mockQuery.mockResolvedValueOnce({ rows: [{ tenant_id: TENANT_A }], rowCount: 1 });
+    const clientQuery = vi.fn();
+    clientQuery
+      .mockResolvedValueOnce({}) // BEGIN
+      .mockResolvedValueOnce({ rows: [{ inserted: true }], rowCount: 1 }) // upsert contact
+      .mockResolvedValueOnce({}) // onboarding upsert
+      .mockResolvedValueOnce({}); // COMMIT
+    mockConnect.mockResolvedValueOnce({ query: clientQuery, release: vi.fn() });
+
+    const res = await request(app)
+      .post('/api/crm/friend-scan/ingest')
+      .set('X-License-Key', AGENT_LICENSE) // 注意：不带 X-Internal-Token
+      .send({ cs_wechat_id: CS, contacts: [{ name: '甲', last_message: '在吗' }] });
+
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({ success: true, ingested: 1 });
+    // 写库真发生了（事务跑了）
+    expect(mockConnect).toHaveBeenCalled();
+  });
+
+  it('生产 token 已设 + 无 license + 无 token → 401（证明确实是 license 救了 agent）', async () => {
+    const res = await request(app)
+      .post('/api/crm/friend-scan/ingest')
+      .send({ cs_wechat_id: CS, contacts: [{ name: '甲' }] });
+    expect(res.status).toBe(401);
+    expect(mockConnect).not.toHaveBeenCalled();
+  });
+
+  it('agent license 属 TENANT_A，但 cs_wechat_id 属 TENANT_B → 403 CROSS_TENANT（不写库）', async () => {
+    mockValidateLicense.mockResolvedValue({
+      ok: true,
+      license: { id: 'lic-a', license_key: AGENT_LICENSE, tenant_id: TENANT_A, status: 'active', expires_at: '2099-01-01' },
+    });
+    // cs_wechat_id 反查属 TENANT_B（别家），与 license 的 TENANT_A 不符 → 拒。
+    mockQuery.mockResolvedValueOnce({ rows: [{ tenant_id: TENANT_B }], rowCount: 1 });
+
+    const res = await request(app)
+      .post('/api/crm/friend-scan/ingest')
+      .set('X-License-Key', AGENT_LICENSE)
+      .send({ cs_wechat_id: 'wx_other_tenant', contacts: [{ name: '乙' }] });
+
+    expect(res.status).toBe(403);
+    expect(res.body.error?.code).toBe('CROSS_TENANT');
+    expect(mockConnect).not.toHaveBeenCalled();
+  });
+
+  it('吊销 license → 401（不写库）', async () => {
+    mockValidateLicense.mockResolvedValue({ ok: false, code: 'REVOKED', message: 'license 已吊销' });
+    const res = await request(app)
+      .post('/api/crm/friend-scan/ingest')
+      .set('X-License-Key', 'ZJ-B-DEADBEEF')
+      .send({ cs_wechat_id: CS, contacts: [{ name: '甲' }] });
+    expect(res.status).toBe(401);
+    expect(mockConnect).not.toHaveBeenCalled();
   });
 });

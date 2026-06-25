@@ -87,6 +87,26 @@ export async function bridgeNewUserToTenant(args: BridgeArgs): Promise<BridgeRes
              ON CONFLICT (tenant_id, feishu_user_id) DO NOTHING`,
             [lic.tenant_id, userId, role]
           );
+
+          // ─── Gap2 修复：付费注册回填 licenses.customer_id = userId ───
+          // 不回填会让 install-pack/download 与 /account/me（都按 customer_id 查 license）
+          // 找不到该 user 的 license → 新付费客户 503 NO_ACTIVE_LICENSE、Account 显示 license=null。
+          // 与 free 路径（createFreeTenantForUser 建 license 时即写 customer_id）对齐。
+          // WHERE 限定 license_key 且 customer_id 仍为空 / 已是本 user，避免抢别家已绑的 license。
+          // 回填失败不翻车（member 已写成功，注册主流程不被这步阻塞）——尽力而为。
+          try {
+            await pool.query(
+              `UPDATE zenithjoy.licenses
+                  SET customer_id = $1, updated_at = now()
+                WHERE license_key = $2
+                  AND (customer_id IS NULL OR customer_id = $1)`,
+              [userId, trimmedKey]
+            );
+          } catch (backfillErr) {
+            const m = backfillErr instanceof Error ? backfillErr.message : 'unknown';
+            console.error('[auth-bridge] paid customer_id 回填失败（不阻塞注册）:', m);
+          }
+
           return {
             linked: true,
             tenantId: lic.tenant_id,

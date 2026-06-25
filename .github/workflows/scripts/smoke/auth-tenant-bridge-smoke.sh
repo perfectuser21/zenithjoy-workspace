@@ -39,9 +39,12 @@ INSERT INTO zenithjoy.tenants (id, name, license_key, plan)
 VALUES ('${TENANT_BR_ID}', 'TenantBridge-Smoke', '${LICENSE_KEY}', 'matrix')
 ON CONFLICT (license_key) DO NOTHING;
 
+-- Gap2：模拟真实付费 license——admin 预先发放、customer_id 尚未回填（NULL，待客户注册认领）。
 INSERT INTO zenithjoy.licenses (license_key, tier, max_machines, customer_id, expires_at, tenant_id, status)
-VALUES ('${LICENSE_KEY}', 'matrix', 3, '', now() + interval '365 days', '${TENANT_BR_ID}', 'active')
+VALUES ('${LICENSE_KEY}', 'matrix', 3, NULL, now() + interval '365 days', '${TENANT_BR_ID}', 'active')
 ON CONFLICT (license_key) DO NOTHING;
+-- 幂等重跑：把 customer_id 复位成 NULL（上轮已被回填时也能重测 Gap2）。
+UPDATE zenithjoy.licenses SET customer_id = NULL WHERE license_key = '${LICENSE_KEY}';
 EOF
 echo "  OK: bootstrap 完成"
 
@@ -53,11 +56,17 @@ USER_ID_VALID=$(echo "$RESP_1" | sed -E 's/.*"id":"([^"]+)".*/\1/' | head -c 64)
 [ -n "$USER_ID_VALID" ] || { echo "  FAIL: 注册响应无 user.id  body=$RESP_1"; exit 1; }
 echo "  OK: 注册成功 user.id=$USER_ID_VALID"
 
-echo "==> [2/6] tenant_members 表应有新行（feishu_user_id = $USER_ID_VALID）"
+echo "==> [2/6] tenant_members 表应有新行（feishu_user_id = ${USER_ID_VALID}）"
 COUNT=$(PGPASSWORD="$PSQL_PASS" psql -h "$PSQL_HOST" -U "$PSQL_USER" -d "$PSQL_DB" -t -A -c \
   "SELECT count(*) FROM zenithjoy.tenant_members WHERE tenant_id = '${TENANT_BR_ID}' AND feishu_user_id = '${USER_ID_VALID}';")
 [ "$COUNT" = "1" ] || { echo "  FAIL: 期望 tenant_members 1 行，实际 ${COUNT}"; exit 1; }
 echo "  OK: tenant_members 行已插入"
+
+echo "==> [2b/6] Gap2：付费注册回填 licenses.customer_id = user.id（否则 download/account-me 按 customer_id 查不到 → 503）"
+CID=$(PGPASSWORD="$PSQL_PASS" psql -h "$PSQL_HOST" -U "$PSQL_USER" -d "$PSQL_DB" -t -A -c \
+  "SELECT customer_id FROM zenithjoy.licenses WHERE license_key = '${LICENSE_KEY}';")
+[ "${CID}" = "${USER_ID_VALID}" ] || { echo "  FAIL: 期望 licenses.customer_id=${USER_ID_VALID} 实际 '${CID}'（Gap2 回填未生效）"; exit 1; }
+echo "  OK: licenses.customer_id 已回填为 ${CID}（付费客户能下载 agent、Account 显示 license）"
 
 echo "==> [3/6] 用 cookie 调 GET /api/works → 应 200（不是 403 NO_TENANT）"
 HTTP_3=$(curl -s -o /tmp/works-valid.json -w "%{http_code}" -b "$COOKIE_VALID" "${API_BASE}/api/works")

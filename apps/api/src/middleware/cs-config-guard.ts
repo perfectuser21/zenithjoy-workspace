@@ -19,9 +19,31 @@ import type { Request, Response, NextFunction } from 'express';
 import pool from '../db/connection';
 import { superAdminGuard } from './super-admin';
 import { tenantContext } from './tenant-context';
+import { validateLicense } from '../services/walking-skeleton.service';
 
 /** 视为「管理员」的角色（super-admin 来自 tenantContext 的 X-Bypass-Tenant 通道） */
 const ADMIN_ROLES = new Set(['owner', 'admin', 'super-admin']);
+
+/** license key 形如 ZJ-[FBMSE]-XXXXXXXX；据此把 agent license 自证与 internal token 区分开。 */
+const LICENSE_KEY_PATTERN = /^ZJ-[FBMSE]-[A-Z0-9]{8}$/;
+
+/**
+ * 从请求里取「看起来像 agent license」的 key（Gap1 自证）：
+ *   1. X-License-Key 头（agent 上报专用，最明确）
+ *   2. Authorization: Bearer <ZJ-...>（仅当值匹配 license 格式时；普通 internal token Bearer 不在此列）
+ * 取不到返回 null（→ 调用方回落到 internal token / super-admin 路径）。
+ */
+function extractAgentLicenseKey(req: Request): string | null {
+  const headerKey =
+    typeof req.headers['x-license-key'] === 'string' ? req.headers['x-license-key'].trim() : '';
+  if (headerKey && LICENSE_KEY_PATTERN.test(headerKey)) return headerKey;
+
+  const authz = req.headers.authorization || '';
+  const bearer = authz.startsWith('Bearer ') ? authz.slice('Bearer '.length).trim() : '';
+  if (bearer && LICENSE_KEY_PATTERN.test(bearer)) return bearer;
+
+  return null;
+}
 
 function deny(res: Response, status: number, code: string, message: string): void {
   res.status(status).json({
@@ -127,14 +149,42 @@ export function requireCsReadAccess(req: Request, res: Response, next: NextFunct
 }
 
 /**
- * 服务/agent 专用闸（ingest 上报 + onboarding 回写：agent 无人类 session，只走 internal/service token）。
- * 直接复用 superAdminGuard（不读 better-auth session，天然挡人类 dashboard cookie 用户）——三态：
- *   - ZENITHJOY_INTERNAL_TOKEN **已设** + 合法 X-Internal-Token/Bearer/超管飞书头 → 放行；无/错凭证 → 401。
- *   - ZENITHJOY_INTERNAL_TOKEN **未设**（dev/CI）+ 不带头 → dev 放行。
- * 这与 agent 侧 post_friend_scan「env 未设时不带 X-Internal-Token 头」严格对齐（跨 teammate 契约，PR#860）：
- * 生产必设 token 才成闸；dev/CI 未设 token 时 agent 不带头、后端放行，两端一致不互锁。
+ * 服务/agent 专用闸（ingest 上报 + onboarding 回写：agent 无人类 session）。
+ *
+ * Gap1 修复（2026-06-25）：agent 自证身份，不再依赖客户端 .env 烧共享 internal token。
+ *   下载烧进 agent .env 的只有 LICENSE（注册/心跳已用 license 认证），共享 internal token 不该下发到每台
+ *   客户端（泄漏即全租户沦陷）。所以 agent 上报时带 X-License-Key（或 Bearer <ZJ-...>）自证：
+ *   - 带「合法 license（active + 已绑 tenant）」→ 校验通过即放行，并把 license.tenant_id 挂到 req.tenantId，
+ *     供 handler 做同租户隔离（cs_wechat_id 必须属该 tenant）。无效/吊销/过期 → 401。
+ *   - 不带 license → 回落到原 superAdminGuard 通道（向后兼容 internal token / 超管飞书头 / dev 放行）：
+ *       · ZENITHJOY_INTERNAL_TOKEN 已设 + 合法 token/超管头 → 放行；无/错 → 401。
+ *       · ZENITHJOY_INTERNAL_TOKEN 未设（dev/CI）+ 不带头 → dev 放行。
+ * 这样：真 agent（只有 license、无 internal token）也能 ingest；老的 internal token 服务流照旧不破。
  */
-export function requireServiceCredential(req: Request, res: Response, next: NextFunction): void {
+export async function requireServiceCredential(
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
+  const licenseKey = extractAgentLicenseKey(req);
+  if (licenseKey) {
+    try {
+      const result = await validateLicense(licenseKey);
+      if (result.ok && result.license.tenant_id) {
+        // license 自证通过：挂 tenantId，handler 据此做同租户隔离（cs_wechat_id 必属此 tenant）。
+        req.tenantId = result.license.tenant_id;
+        next();
+        return;
+      }
+      // license 存在但无效（吊销/过期/无 tenant）/ 不存在 → 拒绝（不再回落 token，避免越权）。
+      deny(res, 401, 'INVALID_LICENSE', result.ok ? 'license 未关联 tenant' : result.message);
+      return;
+    } catch (err) {
+      deny(res, 500, 'LICENSE_LOOKUP_FAILED', err instanceof Error ? err.message : 'unknown');
+      return;
+    }
+  }
+  // 无 agent license → 走原 internal token / 超管 / dev 通道（向后兼容）
   superAdminGuard(req, res, next);
 }
 

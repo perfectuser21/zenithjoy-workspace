@@ -107,9 +107,30 @@ def test_pending_no_token_omits_header(monkeypatch):
     fake_requests = types.SimpleNamespace(get=fake_get)
     monkeypatch.setitem(sys.modules, "requests", fake_requests)
     monkeypatch.delenv("ZENITHJOY_INTERNAL_TOKEN", raising=False)
+    monkeypatch.delenv("ZENITHJOY_LICENSE", raising=False)
 
     res = listen_chat.fetch_friend_scan_pending("http://mw", "wxid_cs1")
     assert res["ok"] is True
+    assert "X-Internal-Token" not in captured["headers"]
+    assert "X-License-Key" not in captured["headers"]
+
+
+def test_pending_sends_license_key_header_for_self_auth(monkeypatch):
+    """Gap1：生产 agent 只有 license → pending 轮询也带 X-License-Key 自证（与 ingest 同范式）。"""
+    captured = {}
+
+    def fake_get(url, params=None, timeout=None, headers=None):
+        captured["headers"] = headers or {}
+        return FakeResp(200, {"force": True, "requested_at": "2026-06-25T10:00:00Z"})
+
+    fake_requests = types.SimpleNamespace(get=fake_get)
+    monkeypatch.setitem(sys.modules, "requests", fake_requests)
+    monkeypatch.delenv("ZENITHJOY_INTERNAL_TOKEN", raising=False)
+    monkeypatch.setenv("ZENITHJOY_LICENSE", "ZJ-B-AAAA1111")
+
+    res = listen_chat.fetch_friend_scan_pending("http://mw", "wxid_cs1")
+    assert res["ok"] is True
+    assert captured["headers"].get("X-License-Key") == "ZJ-B-AAAA1111"
     assert "X-Internal-Token" not in captured["headers"]
 
 

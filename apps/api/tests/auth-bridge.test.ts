@@ -53,12 +53,15 @@ describe('auth-bridge / bridgeNewUserToTenant — PR-2 paid path', () => {
     expect(typeof bridgeNewUserToTenant).toBe('function');
   });
 
-  it('有效 license_key + active license + 有 tenant_id → 插入 tenant_members', async () => {
+  it('有效 license_key + active license + 有 tenant_id → 插入 tenant_members + 回填 licenses.customer_id', async () => {
     // 1. 查 license：返回 1 行
     mockQuery.mockResolvedValueOnce({
       rows: [{ tenant_id: 'tenant-uuid-pr2', status: 'active' }],
     });
     // 2. 插入 tenant_members
+    mockQuery.mockResolvedValueOnce({ rowCount: 1 });
+    // 3. 回填 licenses.customer_id（Gap2 修复：付费注册必须把 license 绑到该 user，
+    //    否则 install-pack/download 与 /account/me 按 customer_id 查不到 → 503 NO_ACTIVE_LICENSE）
     mockQuery.mockResolvedValueOnce({ rowCount: 1 });
 
     const result = await bridgeNewUserToTenant({
@@ -69,14 +72,38 @@ describe('auth-bridge / bridgeNewUserToTenant — PR-2 paid path', () => {
     expect(result.linked).toBe(true);
     expect(result.tenantId).toBe('tenant-uuid-pr2');
     expect(result.reason).toBe('PAID_TENANT_LINKED');
-    expect(mockQuery).toHaveBeenCalledTimes(2);
+    expect(mockQuery).toHaveBeenCalledTimes(3);
     // 验证 INSERT 用了 user.id 作 feishu_user_id 列
     const insertCall = mockQuery.mock.calls[1];
     const insertParams = insertCall[1] as unknown[];
     expect(insertParams).toContain('auth-user-uuid-1');
     expect(insertParams).toContain('tenant-uuid-pr2');
+    // Gap2：第 3 条 UPDATE licenses SET customer_id=userId WHERE license_key=...
+    const updateCall = mockQuery.mock.calls[2];
+    const updateSql = updateCall[0] as string;
+    const updateParams = updateCall[1] as unknown[];
+    expect(updateSql).toMatch(/UPDATE\s+zenithjoy\.licenses/i);
+    expect(updateSql).toMatch(/customer_id/i);
+    expect(updateParams).toContain('auth-user-uuid-1');
+    expect(updateParams).toContain('ZJ-VALID-001');
     // paid 路径不开事务
     expect(mockConnect).not.toHaveBeenCalled();
+  });
+
+  it('Gap2：customer_id 回填 DB 异常时不翻车（member 已写成功仍 linked=true）', async () => {
+    mockQuery.mockResolvedValueOnce({
+      rows: [{ tenant_id: 'tenant-uuid-idem', status: 'active' }],
+    });
+    mockQuery.mockResolvedValueOnce({ rowCount: 1 }); // tenant_members
+    mockQuery.mockRejectedValueOnce(new Error('update failed')); // customer_id 回填失败
+    const result = await bridgeNewUserToTenant({
+      userId: 'auth-user-idem',
+      licenseKey: 'ZJ-VALID-IDEM',
+    });
+    expect(result.linked).toBe(true);
+    expect(result.tenantId).toBe('tenant-uuid-idem');
+    expect(result.reason).toBe('PAID_TENANT_LINKED');
+    expect(mockQuery).toHaveBeenCalledTimes(3);
   });
 
   it('license_key 用 trim 处理后查询', async () => {

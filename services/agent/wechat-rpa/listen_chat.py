@@ -1466,7 +1466,27 @@ def post_heartbeat(
     return {"ok": True}
 
 
-# ─── CRM 好友扫描上报：scan_recent_contacts → 中台 ingest（internal token）───────────
+# ─── CRM 好友扫描上报：scan_recent_contacts → 中台 ingest ───────────────────────────
+
+
+def _service_auth_headers() -> Dict[str, str]:
+    """构造 agent→中台 service 路径鉴权头（ingest / pending / onboarding 回写共用）。
+
+    Gap1（2026-06-25）：agent 自证身份，不再依赖客户端 .env 烧共享 internal token。
+      · X-License-Key：本机 license（ZENITHJOY_LICENSE，注册/心跳已用 license 认证）。
+        后端按 license→tenant 鉴权放行，并校验 cs_wechat_id 属该 tenant——真 agent 只有 license
+        也能写进 CRM（共享 internal token 不该下发到每台客户端，泄漏即全租户沦陷）。
+      · X-Internal-Token：若 env 设了 internal token（如内网服务/CI）仍带上，兼容老 token 通道。
+    两者都没有（dev/CI 未设）→ 不带头，后端 dev 模式放行。
+    """
+    headers: Dict[str, str] = {}
+    _lic = os.environ.get("ZENITHJOY_LICENSE", "").strip()
+    if _lic:
+        headers["X-License-Key"] = _lic
+    _token = os.environ.get("ZENITHJOY_INTERNAL_TOKEN", "").strip()
+    if _token:
+        headers["X-Internal-Token"] = _token
+    return headers
 
 
 def post_friend_scan(
@@ -1477,10 +1497,10 @@ def post_friend_scan(
 ) -> Dict[str, Any]:
     """上报近期会话联系人到中台 ingest 端点（CRM 好友表行源）。
 
-    契约（PrepPRD §3.2）：
+    契约（PrepPRD §3.2 + Gap1 2026-06-25）：
       POST /api/crm/friend-scan/ingest
-      鉴权：X-Internal-Token（agent 无人类 session；env ZENITHJOY_INTERNAL_TOKEN，
-            未设时不带头——后端 dev 模式放行，生产必设）
+      鉴权：X-License-Key 自证（env ZENITHJOY_LICENSE；后端按 license→tenant 放行 + 校验
+            cs_wechat_id 属该 tenant）。兼容 X-Internal-Token。两者皆无 → dev 放行。见 _service_auth_headers()。
       body：{ cs_wechat_id, contacts:[{name, last_message?, last_seen?}] }
       幂等：后端按 (tenant_id, cs_wechat_id, contact) upsert。
 
@@ -1499,10 +1519,7 @@ def post_friend_scan(
 
     url = middleware_url.rstrip("/") + "/api/crm/friend-scan/ingest"
     body = {"cs_wechat_id": cs_wechat_id, "contacts": contacts}
-    headers: Dict[str, str] = {}
-    _token = os.environ.get("ZENITHJOY_INTERNAL_TOKEN", "").strip()
-    if _token:
-        headers["X-Internal-Token"] = _token
+    headers = _service_auth_headers()
     try:
         resp = requests.post(url, json=body, timeout=timeout, headers=headers)
     except Exception as exc:
@@ -1535,8 +1552,8 @@ def fetch_friend_scan_pending(
 
     契约（line04-cs-consolidation-contract §cs-agent / 与 cs-be 对齐）：
       GET /api/crm/friend-scan/pending?cs_wechat_id=<wid>
-      鉴权：X-Internal-Token（agent 无人类 session；env ZENITHJOY_INTERNAL_TOKEN，
-            未设时不带头——后端 dev 模式放行，与 post_friend_scan 同范式）
+      鉴权：X-License-Key 自证（env ZENITHJOY_LICENSE）+ 兼容 X-Internal-Token；
+            与 post_friend_scan 同范式（见 _service_auth_headers()，Gap1 2026-06-25）。
       返回：{ force: <bool>, requested_at: <ts|null> }
             force=true 表示 force_scan_requested_at 仍未被消费（> 上次成功 scan）。
 
@@ -1556,10 +1573,7 @@ def fetch_friend_scan_pending(
         return {"ok": False, "force": False, "error": f"requests not available: {exc}"}
 
     url = middleware_url.rstrip("/") + "/api/crm/friend-scan/pending"
-    headers: Dict[str, str] = {}
-    _token = os.environ.get("ZENITHJOY_INTERNAL_TOKEN", "").strip()
-    if _token:
-        headers["X-Internal-Token"] = _token
+    headers = _service_auth_headers()
     try:
         resp = requests.get(
             url, params={"cs_wechat_id": cs_wechat_id}, timeout=timeout, headers=headers
