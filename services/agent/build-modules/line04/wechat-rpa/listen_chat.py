@@ -33,6 +33,7 @@ import argparse
 import json
 import os
 import platform
+import re
 import subprocess
 import sys
 import threading
@@ -507,26 +508,301 @@ def _collect_recent_contacts(item_names: List[str], limit: int = 100) -> List[Di
     return out
 
 
-def scan_recent_contacts(mw: Any, limit: int = 100) -> List[Dict[str, str]]:
-    """遍历主窗口会话列表 ListItem，列出近期会话联系人（CRM 好友表行源）。
+# ─── 滚动扫全（Track A1，line04 1.0.64）+ 资料读取（A2）纯逻辑 ──────────────────
+#
+# 旧 scan_recent_contacts 只 mw.descendants 枚举一次 → 只拿可见 ~6 条，列表更靠下的
+# 活跃客户被漏。改为滚动（PageDown/WM_VSCROLL）滚完整个会话列表，累计 distinct 到
+# 连续若干轮无新增（滚到底）。下列纯函数顶层零 pywinauto，CI clean 可跑。
+
+_SESSION_SCROLL_MAX = 40       # 兜底最多滚 40 屏，绝不无限滚（每屏 ~6-10 条，够 300+ 会话）
+_SESSION_SCROLL_STABLE = 2     # 连续 2 屏无新增 = 滚到底
+_SESSION_SCROLL_SETTLE = 0.35  # 每滚一屏后等列表重绘
+_PROFILE_OPEN_SETTLE = 0.6     # 打开资料卡后等渲染
+_CHAT_SCROLL_TOP_SETTLE = 0.3  # 聊天面板每次上翻后等重绘
+
+
+def _accumulate_scrolled_names(
+    read_names_fn, scroll_fn,
+    max_scrolls: int = _SESSION_SCROLL_MAX, stable_rounds: int = _SESSION_SCROLL_STABLE,
+) -> List[str]:
+    """纯函数（顶层零 pywinauto）：滚动会话列表累计 distinct 名字直到无新增。
+
+    - read_names_fn() -> List[str]：读当前可见 ListItem 的 element_info.name。
+    - scroll_fn() -> None：向下滚一屏（PageDown / WM_VSCROLL）。
+    按首行（sender）去重、保序累计；连续 stable_rounds 轮无新增即停（滚到底），
+    max_scrolls 兜底防死循环（列表实时重排也不会无限滚）。
+    """
+    ordered: List[str] = []
+    seen: set[str] = set()
+    no_new = 0
+    for i in range(max_scrolls + 1):  # max_scrolls+1 次读（初始 1 屏 + 每滚一屏再读）
+        added = 0
+        for name in (read_names_fn() or []):
+            key = (name or "").split("\n")[0].strip()
+            if not key or key in seen:
+                continue
+            seen.add(key)
+            ordered.append(name)
+            added += 1
+        if added == 0:
+            no_new += 1
+            if no_new >= stable_rounds:
+                break
+        else:
+            no_new = 0
+        if i >= max_scrolls:  # 已滚满 max_scrolls 次，兜底停（绝不无限滚），不再多滚
+            break
+        scroll_fn()
+    return ordered
+
+
+_WECHAT_ID_RE = re.compile(r'^[A-Za-z][-_a-zA-Z0-9]{5,19}$')  # 微信号：字母开头,6-20位
+
+
+def _parse_wechat_id_from_texts(texts: List[str]) -> Optional[str]:
+    """纯函数：从资料卡 Text 列表解析对方「微信号」。
+
+    支持两种排布：
+      - 同段内联："微信号：wxid_abc123" / "微信号: cecelia-666"（中英文冒号都吃）。
+      - 标签与值拆成相邻两段：["微信号", "Zhang_Wei88"]。
+    值必须符合微信号规则（字母开头、6-20 位、字母/数字/_/-）——中文昵称误命中一律拒。
+    找不到 → None。
+    """
+    items = [(t or "").strip() for t in (texts or [])]
+    for i, t in enumerate(items):
+        m = re.match(r'^微信号\s*[:：]\s*(\S+)$', t)
+        if m:
+            cand = m.group(1).strip()
+            return cand if _WECHAT_ID_RE.match(cand) else None
+        if t.replace(" ", "") == "微信号":
+            for j in range(i + 1, min(i + 3, len(items))):
+                cand = items[j].strip()
+                if not cand:
+                    continue
+                return cand if _WECHAT_ID_RE.match(cand) else None
+    return None
+
+
+def _parse_earliest_date_from_texts(
+    texts: List[str], default_year: Optional[int] = None
+) -> Optional[str]:
+    """纯函数：从（滚到顶后的）聊天时间戳文本里解析最早日期 ≈ 加微信时间。
+
+    支持："2025年3月14日 上午9:23"（含年）/ "3月14日 12:30"（无年，用 default_year 补）。
+    返回最早（最小）日期，归一化 "YYYY-MM-DD"；无任何可解析日期 → None。
+    """
+    dates = []
+    for t in (texts or []):
+        t = (t or "").strip()
+        m = re.search(r'(\d{4})\s*年\s*(\d{1,2})\s*月\s*(\d{1,2})\s*日', t)
+        if m:
+            dates.append((int(m.group(1)), int(m.group(2)), int(m.group(3))))
+            continue
+        m = re.search(r'(?<!\d)(\d{1,2})\s*月\s*(\d{1,2})\s*日', t)
+        if m and default_year is not None:
+            dates.append((int(default_year), int(m.group(1)), int(m.group(2))))
+    if not dates:
+        return None
+    y, mo, d = min(dates)
+    return f"{y:04d}-{mo:02d}-{d:02d}"
+
+
+def _enrich_contacts(contacts, wechat_id_fn, add_time_fn):
+    """纯函数：给每个 contact 补 wechat_id + add_friend_time（注入读取器，CI 可测）。
+
+    读到才写键（payload 保持瘦）；读取器抛异常 → 吞掉跳过该字段，绝不拖垮整批扫描。
+    """
+    for c in contacts:
+        name = c.get("name")
+        try:
+            wid = wechat_id_fn(name)
+        except Exception:
+            wid = None
+        if wid:
+            c["wechat_id"] = wid
+        try:
+            t = add_time_fn(name)
+        except Exception:
+            t = None
+        if t:
+            c["add_friend_time"] = t
+    return contacts
+
+
+def scan_recent_contacts(
+    mw: Any, limit: int = 100, enrich: bool = False
+) -> List[Dict[str, str]]:
+    """滚动遍历主窗口会话列表，列出近期会话联系人（CRM 好友表行源）。
 
     与 scan_unread 的区别：scan_unread 只挑未读；本函数列"近期会话联系人"（不要求未读），
     供中台拉成客户好友表（默认全接管 + 黑名单排除）。
 
+    Track A1（1.0.64）：不再只读一屏，改为滚动累计 distinct 直到滚到底（_accumulate_scrolled_names），
+    一次扫全活跃会话，不漏靠下的客户。
+    Track A2（enrich=True，主循环用）：每客户开资料卡读对方微信号 + 滚聊天到顶读最早消息日期
+    （≈ 加微信时间），补进 payload 的 wechat_id / add_friend_time。读不到的字段静默跳过（不回退）。
+
     托盘/最小化场景同 scan_unread：扫描前 _ensure_tray_visible 短暂移出离屏刷新 UIA，
-    扫完 _restore_window_state 还原（后台无感知）。返回纯函数 _collect_recent_contacts 的结果。
+    扫完 _restore_window_state 还原（后台无感知）。
     """
     orig_state = _ensure_tray_visible(mw)
     try:
-        names: List[str] = []
-        for it in mw.descendants(control_type="ListItem"):
+        def _read_names() -> List[str]:
+            names: List[str] = []
             try:
-                names.append(it.element_info.name or "")
+                for it in mw.descendants(control_type="ListItem"):
+                    try:
+                        names.append(it.element_info.name or "")
+                    except Exception:
+                        continue
             except Exception:
-                continue
-        return _collect_recent_contacts(names, limit=limit)
+                pass
+            return names
+
+        all_names = _accumulate_scrolled_names(
+            _read_names, lambda: _scroll_session_list(mw)
+        )
+        contacts = _collect_recent_contacts(all_names, limit=limit)
+        if enrich and contacts:
+            contacts = _enrich_contacts(
+                contacts,
+                lambda nm: _read_contact_wechat_id(mw, nm),
+                lambda nm: _read_contact_earliest_date(mw, nm),
+            )
+        return contacts
     finally:
         _restore_window_state(mw, orig_state)
+
+
+def _scroll_session_list(mw: Any) -> None:
+    """向下滚一屏会话列表（PageDown）。后台 PostMessage，best-effort，绝不抛。"""
+    import ctypes as _ct
+    try:
+        hwnd = mw.element_info.handle
+        u32 = _ct.windll.user32
+    except Exception:
+        return
+    VK_NEXT = 0x22  # PageDown
+    try:
+        u32.PostMessageW(hwnd, 0x0100, VK_NEXT, 0)  # WM_KEYDOWN
+        u32.PostMessageW(hwnd, 0x0101, VK_NEXT, 0)  # WM_KEYUP
+    except Exception:
+        pass
+    try:
+        time.sleep(_SESSION_SCROLL_SETTLE)
+    except Exception:
+        pass
+
+
+def _read_panel_texts(mw: Any) -> List[str]:
+    """读主窗口 + 微信自身弹窗（资料卡）里所有非空 Text，供资料/时间戳解析。best-effort。"""
+    texts: List[str] = []
+    try:
+        for c in _iter_all_controls(mw, "Text"):
+            try:
+                nm = (c.element_info.name or "").strip()
+            except Exception:
+                continue
+            if nm:
+                texts.append(nm)
+    except Exception:
+        pass
+    return texts
+
+
+def _find_list_item_by_sender(mw: Any, sender: str) -> Optional[Any]:
+    """会话列表里按首行（昵称）找到 sender 的 ListItem 引用。找不到 → None。"""
+    try:
+        for it in mw.descendants(control_type="ListItem"):
+            try:
+                if (it.element_info.name or "").split("\n")[0].strip() == sender:
+                    return it
+            except Exception:
+                continue
+    except Exception:
+        pass
+    return None
+
+
+def _read_contact_wechat_id(mw: Any, sender: str) -> Optional[str]:
+    """开 sender 会话 → 打开对方资料卡 → 读「微信号」。best-effort，任何失败返回 None。
+
+    资料卡入口随 WeChat 版本变（聊天信息/查看资料/点头像），逐个尝试；打不开就放弃，
+    payload 不带 wechat_id（_enrich_contacts 容忍缺字段）。纯解析交 _parse_wechat_id_from_texts。
+    """
+    try:
+        item = _find_list_item_by_sender(mw, sender)
+        if item is None or not _open_chat(mw, item, sender):
+            return None
+        opened = False
+        for label in ("聊天信息", "查看资料", "更多"):
+            try:
+                for b in _iter_all_controls(mw, "Button"):
+                    try:
+                        if (b.element_info.name or "").strip() == label:
+                            b.iface_invoke.Invoke()
+                            time.sleep(_PROFILE_OPEN_SETTLE)
+                            opened = True
+                            break
+                    except Exception:
+                        continue
+            except Exception:
+                continue
+            if opened:
+                break
+        wid = _parse_wechat_id_from_texts(_read_panel_texts(mw))
+        return wid
+    except Exception:
+        return None
+
+
+def _read_contact_earliest_date(mw: Any, sender: str) -> Optional[str]:
+    """开 sender 会话 → 把聊天面板滚到顶 → 读最早一条时间戳 ≈ 加微信时间。best-effort → None。
+
+    上翻（PageUp）若干次到顶（连续 _SESSION_SCROLL_STABLE 次文本数不再增长视为到顶），
+    再读 Text 时间戳，交 _parse_earliest_date_from_texts 解析最早日期（无年时用当年补）。
+    """
+    try:
+        item = _find_list_item_by_sender(mw, sender)
+        if item is None or not _open_chat(mw, item, sender):
+            return None
+        import ctypes as _ct
+        try:
+            hwnd = mw.element_info.handle
+            u32 = _ct.windll.user32
+        except Exception:
+            hwnd, u32 = 0, None
+        VK_PRIOR = 0x21  # PageUp
+        prev_count = -1
+        stable = 0
+        for _ in range(_SESSION_SCROLL_MAX):
+            if u32 is not None:
+                try:
+                    u32.PostMessageW(hwnd, 0x0100, VK_PRIOR, 0)
+                    u32.PostMessageW(hwnd, 0x0101, VK_PRIOR, 0)
+                except Exception:
+                    pass
+            try:
+                time.sleep(_CHAT_SCROLL_TOP_SETTLE)
+            except Exception:
+                pass
+            count = len(_read_panel_texts(mw))
+            if count <= prev_count:
+                stable += 1
+                if stable >= _SESSION_SCROLL_STABLE:
+                    break
+            else:
+                stable = 0
+            prev_count = count
+        default_year = None
+        try:
+            import datetime as _dt
+            default_year = _dt.date.today().year
+        except Exception:
+            default_year = None
+        return _parse_earliest_date_from_texts(_read_panel_texts(mw), default_year=default_year)
+    except Exception:
+        return None
 
 
 def _iter_all_controls(mw: Any, control_type: str):
@@ -1501,7 +1777,8 @@ def post_friend_scan(
       POST /api/crm/friend-scan/ingest
       鉴权：X-License-Key 自证（env ZENITHJOY_LICENSE；后端按 license→tenant 放行 + 校验
             cs_wechat_id 属该 tenant）。兼容 X-Internal-Token。两者皆无 → dev 放行。见 _service_auth_headers()。
-      body：{ cs_wechat_id, contacts:[{name, last_message?, last_seen?}] }
+      body：{ cs_wechat_id, contacts:[{name, last_message?, last_seen?, wechat_id?, add_friend_time?}] }
+            （wechat_id=对方微信号，add_friend_time=最早消息日期≈加微信时间；A2 读到才带，缺则省）
       幂等：后端按 (tenant_id, cs_wechat_id, contact) upsert。
 
     纪律（同 post_heartbeat）：任何失败吞掉返回 {ok:false}，绝不抛——上报不能拖垮监听。
@@ -2122,7 +2399,7 @@ def run_real_listen(args: argparse.Namespace) -> int:
                 or now - last_friend_scan >= FRIEND_SCAN_INTERVAL
             ):
                 try:
-                    _contacts = scan_recent_contacts(mw, limit=100)
+                    _contacts = scan_recent_contacts(mw, limit=100, enrich=True)
                     _res = post_friend_scan(args.middleware_url, _cs_wid, _contacts)
                     if _res.get("ok"):
                         friend_scan_done_once = True
