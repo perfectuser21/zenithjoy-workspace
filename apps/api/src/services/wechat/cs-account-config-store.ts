@@ -266,9 +266,26 @@ export interface CSMachine {
  * 列出「我的全部客服机」：注册过的每台机器(license_machines)+ 它当前的配置状态(已配/待配 +
  * 白名单/人设/开关)。供前台「我的客服机」列表——已配的也能点进去改白名单，不像 pending 列表
  * 只显示没配过的。按 machine_id 去重取最新一条 hostname。
+ *
+ * per-operator scope（修「乱列表」）：传 tenantId（普通租户运营）→ **只列绑到该租户的客服机**
+ *   （按 service_agents.tenant_id 过滤，该列在一键配置时由 license 落定，是客服机的归属租户主键）。
+ *   不传 tenantId（super-admin 旁路）→ 列全部（保留超管全局视角，与 CRM 读闸同模型）。
+ *   注意：scope 时以 service_agents 为驱动表（INNER），未绑定/待配机器不出现在运营视图
+ *   （那是「待配」列表 listPendingMachines 的职责，运营不该看见别人未认领的机器）。
  */
-export async function listAllMachines(limit = 100): Promise<CSMachine[]> {
+export async function listAllMachines(tenantId?: string, limit = 100): Promise<CSMachine[]> {
   try {
+    const scoped = typeof tenantId === 'string' && tenantId.length > 0;
+    const fromAndJoins = scoped
+      ? // 运营视图：service_agents 驱动（只该租户的绑定），再回连 license_machines 取 hostname/心跳
+        `FROM zenithjoy.service_agents sa
+         JOIN zenithjoy.license_machines lm ON lm.machine_id = sa.machine_id`
+      : // 超管视图：license_machines 驱动，左连 service_agents（含未绑定机器）
+        `FROM zenithjoy.license_machines lm
+         LEFT JOIN zenithjoy.service_agents sa
+                ON sa.machine_id = lm.machine_id AND sa.deleted_at IS NULL`;
+    const scopeWhere = scoped ? `WHERE sa.tenant_id = $2::uuid AND sa.deleted_at IS NULL` : '';
+    const params: unknown[] = scoped ? [limit, tenantId] : [limit];
     const res = await pool.query(
       `SELECT lm.machine_id,
               MAX(lm.hostname)        AS hostname,
@@ -283,9 +300,7 @@ export async function listAllMachines(limit = 100): Promise<CSMachine[]> {
               MAX(h.found_window)  AS found_window,
               MAX(h.login_present) AS login_present,
               bool_or(h.last_hb > NOW() - interval '5 minutes') AS online
-         FROM zenithjoy.license_machines lm
-         LEFT JOIN zenithjoy.service_agents sa
-                ON sa.machine_id = lm.machine_id AND sa.deleted_at IS NULL
+         ${fromAndJoins}
          LEFT JOIN zenithjoy.wechat_cs_account_config c
                 ON c.wechat_id = sa.wechat_id
          LEFT JOIN LATERAL (
@@ -298,11 +313,12 @@ export async function listAllMachines(limit = 100): Promise<CSMachine[]> {
                  WHERE a.hostname = lm.hostname AND a.last_heartbeat_at IS NOT NULL
                  ORDER BY a.last_heartbeat_at DESC LIMIT 1
               ) h ON true
+        ${scopeWhere}
         GROUP BY lm.machine_id
         ORDER BY bool_or(h.last_hb > NOW() - interval '5 minutes') DESC NULLS LAST,
                  MAX(lm.last_seen) DESC NULLS LAST
         LIMIT $1`,
-      [limit],
+      params,
     );
     const asBool = (v: unknown): boolean | undefined =>
       v === null || v === undefined ? undefined : String(v) === 'true' || v === true;
