@@ -3,15 +3,15 @@ name: Deploy Dashboard to STAGING (staging-autopilot, API :5201)
 # ───────────────────────────────────────────────────────────────────────────
 # Dashboard STAGING 实例（PrepPRD 2026-06-25）
 #   背景：API 已有蓝绿常驻 staging :5201（deploy-us-vps.yml 把 main 候选发 :5201 连
-#         zenithjoy_test 库），但 dashboard 一直只能走 deploy-hk-vps.yml 直发生产 HK，
-#         前端改动没法先给用户验。本 workflow 补上 dashboard 的 staging。
+#         zenithjoy_test 库）。dashboard 现也走 staging 优先：合 main → 本 workflow 上 staging；
+#         生产 autopilot 由用户手点 promote-dashboard-prod.yml 放行（不再合 main 就上生产）。
 #
 #   做什么：把 dashboard 用 STAGING build env build 出来，发到 HK 上独立的
 #           autopilot-staging 容器（host :521）。该容器用 nginx.staging.conf——
 #           所有 /api/ → 常驻 staging API :5201（不碰生产 :5200）。
 #           对外地址：https://staging-autopilot.zenjoymedia.media（Cloudflare tunnel）。
 #
-#   死规矩：AI 只发到 staging；生产 autopilot 由用户在 deploy-hk-vps.yml 手点放行。
+#   死规矩：AI 只发到 staging；生产 autopilot 由用户手点 promote-dashboard-prod.yml 放行。
 #           本 workflow 绝不碰生产 autopilot-dashboard 容器 / nginx.conf。
 #
 #   触发：① push main 命中 dashboard / staging nginx 路径（自动给用户铺好候选）
@@ -74,7 +74,11 @@ jobs:
 
             echo "=== [4/5] 起 / 重建 autopilot-staging 容器（compose 幂等）==="
             cd "$REPO/deploy"
-            # zenithjoy-net 由生产 compose 创建（external），这里只起 staging 容器
+            # zenithjoy-net 由生产 compose 创建（external），这里只起 staging 容器。
+            # 先幂等清掉可能存在的同名容器（手动起过 / compose project 名不一致都会留下孤儿同名容器，
+            # 否则 compose up 会报 "container name already in use" 冲突）。
+            # ⚠️ 绝不用 --remove-orphans：生产 autopilot-dashboard 会被 compose 当 orphan 删掉，等于杀生产。
+            docker rm -f autopilot-staging 2>/dev/null || true
             docker compose -f docker-compose.staging.yml up -d --force-recreate autopilot-staging
             sleep 3
 

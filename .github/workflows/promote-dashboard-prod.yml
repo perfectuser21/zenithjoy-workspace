@@ -1,0 +1,106 @@
+name: Promote Dashboard to Production (autopilot 人工放行闸)
+
+# ───────────────────────────────────────────────────────────────────────────
+# 生产 dashboard 人工放行闸（2026-06-25）
+#   死规矩：AI 只到 staging，生产由用户手点放行（同 API 侧 promote-prod.yml）。
+#
+#   过去 deploy-hk-vps.yml 是 push:main 命中 dashboard 路径就自动上生产 autopilot——
+#   这把前端改动直接推生产，违反"生产手点"规矩。现已改为：
+#     · 合 main → 只跑 deploy-dashboard-staging.yml 上 staging-autopilot（候选）
+#     · 生产 autopilot = 本 workflow，★只能人手点★（workflow_dispatch + confirm=PROMOTE）
+#
+#   流程：人工打开 https://staging-autopilot.zenjoymedia.media 看过、确认 OK
+#         → 来 Actions 手点本 workflow、confirm 框输入 PROMOTE
+#         → build 生产 dist（VITE env 注入）→ 落生产容器挂载目录 → 重启 autopilot-dashboard
+#         → 公网验证 https://autopilot.zenjoymedia.media。
+#
+#   ☠️ 绝无 push/schedule 自动触发。每次都人点。绝不碰 staging 容器。
+# ───────────────────────────────────────────────────────────────────────────
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: '输入 PROMOTE 确认放行到生产 autopilot.zenjoymedia.media（人工卡点二次确认）'
+        required: true
+        default: ''
+
+concurrency:
+  group: promote-dashboard-prod
+  cancel-in-progress: false
+
+jobs:
+  promote-dashboard:
+    name: Promote 候选 dashboard → 生产 autopilot（人工放行）
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 二次确认闸（必须输入 PROMOTE）
+        run: |
+          if [ "${{ github.event.inputs.confirm }}" != "PROMOTE" ]; then
+            echo "❌ confirm 不是 PROMOTE（实际='${{ github.event.inputs.confirm }}'）——拒绝 promote。"
+            echo "   人工卡点：请先打开 https://staging-autopilot.zenjoymedia.media 看过、确认 OK，再在 confirm 框输入 PROMOTE。"
+            exit 1
+          fi
+          echo "✅ 人工二次确认通过，开始 promote 生产 dashboard。"
+
+      - name: Promote via SSH（build 生产 dist + 切生产 autopilot-dashboard）
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.HK_VPS_HOST }}
+          username: ${{ secrets.HK_VPS_USER }}
+          key: ${{ secrets.HK_VPS_SSH_KEY }}
+          port: ${{ secrets.HK_VPS_PORT }}
+          script_stop: true
+          command_timeout: 20m
+          script: |
+            set -euo pipefail
+            echo "=== [1/4] git sync（候选 = origin/main）==="
+            git -C /opt/zenithjoy/repo remote prune origin 2>/dev/null || true
+            git -C /opt/zenithjoy/repo fetch --force --prune origin main
+            git -C /opt/zenithjoy/repo reset --hard origin/main
+
+            echo "=== [2/4] npm build（生产 build env）==="
+            cd /opt/zenithjoy/repo
+            npm ci --silent --workspace=apps/dashboard
+            # VITE_* build env 显式注入：apps/dashboard/.env.production 被 gitignore，
+            # git reset --hard 后 HK 上没有该文件 → 不注入则 VITE_SUPER_ADMIN_EMAILS 为空，
+            # 超管功能在生产失效（已知 bug，2026-06-25 修）。
+            export VITE_FEISHU_APP_ID='cli_a937a808ca395bd6'
+            export VITE_SKIP_AUTH='false'
+            export VITE_SUPER_ADMIN_EMAILS='xuxiao21xx@icloud.com,alexperfectapi01@gmail.com'
+            npm run build --workspace=apps/dashboard
+
+            echo "=== [3/4] cp dist → 生产容器挂载目录 + restart（绝不碰 staging 容器）==="
+            cp -r /opt/zenithjoy/repo/apps/dashboard/dist/. /opt/zenithjoy/autopilot-dashboard/dist/
+            docker restart autopilot-dashboard
+            sleep 3
+
+            echo "=== [4/4] 公网验证（Cloudflare 全链路）==="
+            HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 20 https://autopilot.zenjoymedia.media/ || echo "000")
+            echo "公网 HTTP 状态码: $HTTP_CODE"
+            if [ "$HTTP_CODE" != "200" ]; then
+              echo "❌ 公网验证失败（期望 200，实际 $HTTP_CODE）"
+              echo "容器状态: $(docker inspect autopilot-dashboard --format '{{.State.Status}}')"
+              echo "本地访问: $(curl -s -o /dev/null -w '%{http_code}' http://localhost/ || echo 'failed')"
+              echo "排查：Cloudflare Tunnel ingress 必须是 http://172.17.0.1:80"
+              exit 1
+            fi
+            echo "✅ 生产 dashboard promote 完成，公网验证通过 (HTTP 200)。"
+
+  notify-failure:
+    name: Notify Brain on failure
+    runs-on: ubuntu-latest
+    needs: [promote-dashboard]
+    if: failure()
+    steps:
+      - name: Post P0 alert to Brain
+        run: |
+          curl -sf -X POST ${{ secrets.BRAIN_URL }}/api/brain/tasks \
+            -H "Content-Type: application/json" \
+            -d '{
+              "title": "ZenithJoy 生产 Dashboard promote 失败",
+              "priority": "P0",
+              "task_type": "dev",
+              "description": "promote-dashboard-prod.yml 失败（人工放行闸），请人工介入"
+            }' || echo "Brain API 不可达，跳过告警"
