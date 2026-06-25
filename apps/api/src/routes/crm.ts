@@ -256,7 +256,7 @@ router.get('/customers', requireCsReadAccess, async (req: Request, res: Response
       csWechatIds.length > 0 ? ' AND cs_wechat_id = ANY($2::text[])' : '';
     const custParams: unknown[] = csWechatIds.length > 0 ? [tenantId, csWechatIds] : [tenantId];
     const custRes = await pool.query(
-      `SELECT contact, wechat_id, status, source, last_message, last_seen_at
+      `SELECT contact, wechat_id, status, source, last_message, last_seen_at, add_friend_time
          FROM zenithjoy.crm_customers WHERE tenant_id = $1::uuid${csWhere}`,
       custParams,
     );
@@ -266,6 +266,7 @@ router.get('/customers', requireCsReadAccess, async (req: Request, res: Response
         contact: r.contact as string,
         wechat_id: (r.wechat_id as string | null) ?? null,
         status: r.status as string,
+        add_friend_time: r.add_friend_time ? new Date(r.add_friend_time).toISOString() : null,
       }));
     const scanContacts: RosterScanRow[] = custRes.rows
       .filter((r) => r.source === 'scan')
@@ -275,7 +276,14 @@ router.get('/customers', requireCsReadAccess, async (req: Request, res: Response
         status: r.status as string,
         last_message: (r.last_message as string | null) ?? null,
         last_seen_at: r.last_seen_at ? new Date(r.last_seen_at).toISOString() : null,
+        add_friend_time: r.add_friend_time ? new Date(r.add_friend_time).toISOString() : null,
       }));
+
+    // 身份三态之「内部人员」：全局名册（徐啸/于瑾/苏彦卿…）。命中 contact → identity=internal + 排除出客户接管。
+    const staffRes = await pool.query(`SELECT name FROM zenithjoy.crm_internal_staff`);
+    const internalStaff = staffRes.rows
+      .map((r) => r.name as string)
+      .filter((n): n is string => typeof n === 'string' && n.length > 0);
 
     // 接管态：该 scope 内客服机配置（blacklist / whitelist / takeover_mode）
     let whitelist: string[] = [];
@@ -313,6 +321,7 @@ router.get('/customers', requireCsReadAccess, async (req: Request, res: Response
       messages,
       manualCustomers,
       scanContacts,
+      internalStaff,
     });
     // cs_wechat_id：本 scope 主客服机微信号，供前端写接口（manage/status/POST）作目标 key；
     // 非客户行字段，不在禁用字段之列，不影响 customers[] 形态。
@@ -446,7 +455,13 @@ router.post(
 router.post('/friend-scan/ingest', requireServiceCredential, async (req: Request, res: Response) => {
   const body = req.body as {
     cs_wechat_id?: string;
-    contacts?: Array<{ name?: string; last_message?: string; last_seen?: string }>;
+    contacts?: Array<{
+      name?: string;
+      wechat_id?: string;
+      last_message?: string;
+      last_seen?: string;
+      add_friend_time?: string;
+    }>;
   };
   const csWechatId = (body.cs_wechat_id ?? '').trim();
   const contacts = Array.isArray(body.contacts) ? body.contacts : [];
@@ -460,17 +475,26 @@ router.post('/friend-scan/ingest', requireServiceCredential, async (req: Request
   if ('error' in scope) return fail(res, scope.error.status, scope.error.code, scope.error.message);
   const tenantId = scope.tenantId;
 
-  // 规范化 + 去重（同名取首条），过滤空名
+  // 规范化 + 去重（同名取首条），过滤空名。除最后消息/最后观测外，还收「客户微信号」+「加微信时间」。
   const seen = new Set<string>();
-  const rows: Array<{ name: string; last_message: string | null; last_seen: string | null }> = [];
+  const rows: Array<{
+    name: string;
+    wechat_id: string | null;
+    last_message: string | null;
+    last_seen: string | null;
+    add_friend_time: string | null;
+  }> = [];
   for (const c of contacts) {
     const name = (c?.name ?? '').trim();
     if (!name || seen.has(name)) continue;
     seen.add(name);
     rows.push({
       name,
+      wechat_id: typeof c?.wechat_id === 'string' && c.wechat_id.trim() ? c.wechat_id.trim() : null,
       last_message: typeof c?.last_message === 'string' ? c.last_message : null,
       last_seen: typeof c?.last_seen === 'string' ? c.last_seen : null,
+      add_friend_time:
+        typeof c?.add_friend_time === 'string' && c.add_friend_time.trim() ? c.add_friend_time.trim() : null,
     });
   }
 
@@ -483,14 +507,16 @@ router.post('/friend-scan/ingest', requireServiceCredential, async (req: Request
       // 绝不把已聊过/手动入册（source=message/manual）的行降级成 scan（COALESCE 保 source 不回退）。
       const up = await client.query(
         `INSERT INTO zenithjoy.crm_customers
-           (tenant_id, cs_wechat_id, contact, source, last_message, last_seen_at, updated_at)
-         VALUES ($1::uuid, $2, $3, 'scan', $4, $5, now())
+           (tenant_id, cs_wechat_id, contact, wechat_id, source, last_message, last_seen_at, add_friend_time, updated_at)
+         VALUES ($1::uuid, $2, $3, $4, 'scan', $5, $6, $7, now())
          ON CONFLICT (tenant_id, cs_wechat_id, contact) DO UPDATE
-           SET last_message = COALESCE(EXCLUDED.last_message, zenithjoy.crm_customers.last_message),
+           SET wechat_id = COALESCE(EXCLUDED.wechat_id, zenithjoy.crm_customers.wechat_id),
+               last_message = COALESCE(EXCLUDED.last_message, zenithjoy.crm_customers.last_message),
                last_seen_at = COALESCE(EXCLUDED.last_seen_at, zenithjoy.crm_customers.last_seen_at),
+               add_friend_time = COALESCE(EXCLUDED.add_friend_time, zenithjoy.crm_customers.add_friend_time),
                updated_at = now()
          RETURNING (xmax = 0) AS inserted`,
-        [tenantId, csWechatId, r.name, r.last_message, r.last_seen],
+        [tenantId, csWechatId, r.name, r.wechat_id, r.last_message, r.last_seen, r.add_friend_time],
       );
       if (up.rows?.[0]?.inserted === true) newCount += 1;
     }

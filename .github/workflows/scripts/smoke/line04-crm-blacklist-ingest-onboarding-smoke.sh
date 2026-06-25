@@ -49,7 +49,8 @@ bootstrap() {
     "$ROOT/apps/api/db/migrations/20260625_100000_add_blacklist_and_takeover_mode.sql" \
     "$ROOT/apps/api/db/migrations/20260625_101000_crm_customers_add_scan_source.sql" \
     "$ROOT/apps/api/db/migrations/20260625_102000_create_crm_onboarding_state.sql" \
-    "$ROOT/apps/api/db/migrations/20260625_150000_crm_onboarding_add_force_scan.sql"; do
+    "$ROOT/apps/api/db/migrations/20260625_150000_crm_onboarding_add_force_scan.sql" \
+    "$ROOT/apps/api/db/migrations/20260625_220000_crm_customers_add_friend_time_and_identity.sql"; do
     PGPASSWORD="$PSQL_PASS" psql -h "$PSQL_HOST" -U "$PSQL_USER" -d "$PSQL_DB" -v ON_ERROR_STOP=0 -f "$f" >/dev/null 2>&1 || true
   done
 
@@ -201,7 +202,37 @@ main() {
   XCNT=$(psql_q "SELECT count(*) FROM zenithjoy.crm_customers WHERE cs_wechat_id='$CS_OTHER'")
   [ "$XCNT" = "0" ] || { echo "FAIL: 跨租户写入竟落库 $XCNT 行"; exit 1; }
 
-  echo "✅ Line04 CRM 重做 blacklist/ingest/onboarding/trigger-pending + Gap1 license自证 smoke 全过"
+  # ─── 地基 Track C：add_friend_time + 身份三态（内部人员） ───
+  echo "[C1] ingest 收 wechat_id + add_friend_time → 落库 + GET 返回"
+  CONTACT_C="加时间客户_$$"
+  AFT="2026-06-20T02:00:00+00:00"
+  cif -X POST "${API_BASE}/api/crm/friend-scan/ingest" -H 'Content-Type: application/json' \
+    -d "{\"cs_wechat_id\":\"$CS\",\"contacts\":[{\"name\":\"$CONTACT_C\",\"wechat_id\":\"wx_aft_$$\",\"add_friend_time\":\"$AFT\",\"last_message\":\"加我了\"}]}" \
+    | jq -e '.success==true and .ingested==1' >/dev/null || { echo "FAIL: C1 ingest 非 200"; exit 1; }
+  DBWID=$(psql_q "SELECT wechat_id FROM zenithjoy.crm_customers WHERE cs_wechat_id='$CS' AND contact='$CONTACT_C'")
+  [ "$DBWID" = "wx_aft_$$" ] || { echo "FAIL: C1 wechat_id 未落库（实际 '$DBWID'）"; exit 1; }
+  DBAFT=$(psql_q "SELECT (add_friend_time IS NOT NULL) FROM zenithjoy.crm_customers WHERE cs_wechat_id='$CS' AND contact='$CONTACT_C'")
+  [ "$DBAFT" = "t" ] || { echo "FAIL: C1 add_friend_time 未落库"; exit 1; }
+
+  echo "[C2] 内部人员（徐啸，seed 全局名册）→ identity=internal + managed=false（排除出客户接管）"
+  cif -X POST "${API_BASE}/api/crm/friend-scan/ingest" -H 'Content-Type: application/json' \
+    -d "{\"cs_wechat_id\":\"$CS\",\"contacts\":[{\"name\":\"徐啸\",\"last_message\":\"内部对接\"}]}" \
+    | jq -e '.success==true' >/dev/null || { echo "FAIL: C2 内部人员 ingest 非 200"; exit 1; }
+  ci -o /tmp/crmC_get.json -w "%{http_code}" "${API_BASE}/api/crm/customers?cs_wechat_id=$CS" >/dev/null
+  # GET 行含 add_friend_time + identity 字段
+  jq -e '.customers[0] | has("add_friend_time") and has("identity")' /tmp/crmC_get.json >/dev/null \
+    || { echo "FAIL: C2 名册行缺 add_friend_time/identity"; cat /tmp/crmC_get.json; exit 1; }
+  # 徐啸 = internal + managed=false
+  jq -e 'any(.customers[]; .contact=="徐啸" and .identity=="internal" and .managed==false)' /tmp/crmC_get.json >/dev/null \
+    || { echo "FAIL: C2 徐啸 应 identity=internal + managed=false"; cat /tmp/crmC_get.json; exit 1; }
+  # 加时间客户：identity=customer（不在黑名单、非内部）+ add_friend_time 非空回出
+  jq -e --arg c "$CONTACT_C" 'any(.customers[]; .contact==$c and .identity=="customer" and (.add_friend_time|type=="string"))' /tmp/crmC_get.json >/dev/null \
+    || { echo "FAIL: C2 $CONTACT_C 应 identity=customer + add_friend_time 非空"; cat /tmp/crmC_get.json; exit 1; }
+  # 黑名单（CONTACT_EXCL 预置在黑名单）：identity=blacklist
+  jq -e --arg c "$CONTACT_EXCL" 'any(.customers[]; .contact==$c and .identity=="blacklist")' /tmp/crmC_get.json >/dev/null \
+    || { echo "FAIL: C2 $CONTACT_EXCL 应 identity=blacklist"; cat /tmp/crmC_get.json; exit 1; }
+
+  echo "✅ Line04 CRM 重做 blacklist/ingest/onboarding/trigger-pending + Gap1 license自证 + 地基C(add_friend_time/身份三态) smoke 全过"
 }
 
 main "$@"

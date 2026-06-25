@@ -38,6 +38,9 @@ const STATUS_LABELS: Record<CrmStatus, string> = {
   A5: 'A5 流失',
 };
 
+// 身份三态：customer（客户·接管）| blacklist（黑名单·排除）| internal（内部人员）。
+type CrmIdentity = 'customer' | 'blacklist' | 'internal';
+
 interface CustomerRow {
   name: string;
   contact: string;
@@ -48,7 +51,21 @@ interface CustomerRow {
   // CRM 重做新增（后端 buildCustomerRoster 扩展，旧后端无此字段时安全降级）
   source?: 'message' | 'manual' | 'scan' | null;
   last_message?: string | null;
+  // 地基 Track C 新增：加微信时间 + 身份三态（旧后端无此字段时按 managed 降级派生）
+  add_friend_time?: string | null;
+  identity?: CrmIdentity | null;
 }
+
+// 身份显示文案。后端有 identity 用它；缺省（旧后端）按 managed 降级派生 customer/blacklist。
+function rowIdentity(row: CustomerRow): CrmIdentity {
+  if (row.identity) return row.identity;
+  return row.managed ? 'customer' : 'blacklist';
+}
+const IDENTITY_LABELS: Record<CrmIdentity, string> = {
+  customer: '客户·接管',
+  blacklist: '黑名单',
+  internal: '内部人员',
+};
 
 interface CustomerListResponse {
   customers: CustomerRow[];
@@ -399,68 +416,95 @@ export default function CustomerListPage() {
               <thead>
                 <tr>
                   <th style={{ textAlign: 'left', padding: 8, borderBottom: '1px solid #eee' }}>姓名</th>
-                  <th style={{ textAlign: 'left', padding: 8, borderBottom: '1px solid #eee' }}>状态</th>
-                  <th style={{ textAlign: 'left', padding: 8, borderBottom: '1px solid #eee' }}>最后联系</th>
-                  <th style={{ textAlign: 'left', padding: 8, borderBottom: '1px solid #eee' }}>接管</th>
+                  <th style={{ textAlign: 'left', padding: 8, borderBottom: '1px solid #eee' }}>微信号</th>
+                  <th style={{ textAlign: 'left', padding: 8, borderBottom: '1px solid #eee' }}>加微信时间</th>
+                  <th style={{ textAlign: 'left', padding: 8, borderBottom: '1px solid #eee' }}>意向</th>
+                  <th style={{ textAlign: 'left', padding: 8, borderBottom: '1px solid #eee' }}>最近联系</th>
+                  <th style={{ textAlign: 'left', padding: 8, borderBottom: '1px solid #eee' }}>身份</th>
                 </tr>
               </thead>
               <tbody>
-                {rows.map((row) => (
-                  <tr key={row.contact} data-testid="crm-customer-row">
-                    <td style={{ padding: 8 }}>
-                      <button
-                        type="button"
-                        data-testid="crm-customer-name"
-                        onClick={() => openProfile(row)}
-                        title="点开看画像 / 状态 / 聊天记录"
-                        style={{
-                          background: 'none',
-                          border: 'none',
-                          padding: 0,
-                          color: '#2563eb',
-                          cursor: 'pointer',
-                          font: 'inherit',
-                          textAlign: 'left',
-                        }}
-                      >
-                        {row.name}
-                      </button>
-                      {row.last_message && (
-                        <div style={{ color: '#9ca3af', fontSize: 12, marginTop: 2 }}>{row.last_message}</div>
-                      )}
-                    </td>
-                    <td style={{ padding: 8 }}>
-                      <select
-                        data-testid="crm-status-select"
-                        value={row.status}
-                        onChange={(e) => void onChangeStatus(row, e.target.value as CrmStatus)}
-                      >
-                        {STATUS_OPTIONS.map((s) => (
-                          <option key={s} value={s}>
-                            {STATUS_LABELS[s]}
-                          </option>
-                        ))}
-                      </select>
-                    </td>
-                    <td style={{ padding: 8 }}>{fmtTime(row.last_contact_at)}</td>
-                    <td style={{ padding: 8 }}>
-                      <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
-                        <input
-                          type="checkbox"
-                          data-testid="crm-manage-toggle"
-                          checked={row.managed}
-                          onChange={() => void onToggleManage(row)}
-                        />
-                        <span
-                          data-testid="crm-manage-label"
-                          style={{ fontSize: 12, color: row.managed ? '#15803d' : '#dc2626' }}
+                {rows.map((row) => {
+                  const identity = rowIdentity(row);
+                  const isInternal = identity === 'internal';
+                  return (
+                    <tr key={row.contact} data-testid="crm-customer-row">
+                      {/* 1. 姓名（超链接 → 下钻画像） */}
+                      <td style={{ padding: 8 }}>
+                        <button
+                          type="button"
+                          data-testid="crm-customer-name"
+                          onClick={() => openProfile(row)}
+                          title="点开看画像 / 状态 / 聊天记录"
+                          style={{
+                            background: 'none',
+                            border: 'none',
+                            padding: 0,
+                            color: '#2563eb',
+                            cursor: 'pointer',
+                            font: 'inherit',
+                            textAlign: 'left',
+                          }}
                         >
-                          {row.managed ? '接管中' : '已排除'}
-                        </span>
-                      </label>
-                    </td>
-                  </tr>
-                ))}
+                          {row.name}
+                        </button>
+                        {row.last_message && (
+                          <div style={{ color: '#9ca3af', fontSize: 12, marginTop: 2 }}>{row.last_message}</div>
+                        )}
+                      </td>
+                      {/* 2. 微信号 */}
+                      <td style={{ padding: 8 }} data-testid="crm-customer-wechat-id">
+                        {row.wechat_id || '—'}
+                      </td>
+                      {/* 3. 加微信时间 */}
+                      <td style={{ padding: 8 }} data-testid="crm-customer-add-friend-time">
+                        {fmtTime(row.add_friend_time ?? null)}
+                      </td>
+                      {/* 4. 意向 A1-A5 */}
+                      <td style={{ padding: 8 }}>
+                        <select
+                          data-testid="crm-status-select"
+                          value={row.status}
+                          onChange={(e) => void onChangeStatus(row, e.target.value as CrmStatus)}
+                        >
+                          {STATUS_OPTIONS.map((s) => (
+                            <option key={s} value={s}>
+                              {STATUS_LABELS[s]}
+                            </option>
+                          ))}
+                        </select>
+                      </td>
+                      {/* 5. 最近联系 */}
+                      <td style={{ padding: 8 }}>{fmtTime(row.last_contact_at)}</td>
+                      {/* 6. 身份三态：内部人员只读标；客户/黑名单沿用接管开关（接管中/已排除） */}
+                      <td style={{ padding: 8 }} data-testid="crm-customer-identity" data-identity={identity}>
+                        {isInternal ? (
+                          <span
+                            data-testid="crm-identity-label"
+                            style={{ fontSize: 12, color: '#6b7280', fontWeight: 600 }}
+                          >
+                            {IDENTITY_LABELS.internal}
+                          </span>
+                        ) : (
+                          <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
+                            <input
+                              type="checkbox"
+                              data-testid="crm-manage-toggle"
+                              checked={row.managed}
+                              onChange={() => void onToggleManage(row)}
+                            />
+                            <span
+                              data-testid="crm-manage-label"
+                              style={{ fontSize: 12, color: row.managed ? '#15803d' : '#dc2626' }}
+                            >
+                              {row.managed ? '接管中' : '已排除'}
+                            </span>
+                          </label>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           )}

@@ -93,11 +93,13 @@ describe('GET /api/crm/customers — 普通运营 per-operator 自动 scope（�
     // 3) crm_customers：手动 + scan
     mockQuery.mockResolvedValueOnce({
       rows: [
-        { contact: '李四', wechat_id: null, status: 'A2', source: 'manual', last_message: null, last_seen_at: null },
+        { contact: '李四', wechat_id: null, status: 'A2', source: 'manual', last_message: null, last_seen_at: null, add_friend_time: null },
       ],
       rowCount: 1,
     } as any);
-    // 4) wechat_cs_account_config：接管态
+    // 4) crm_internal_staff：内部人员名册（身份三态）
+    mockQuery.mockResolvedValueOnce({ rows: [{ name: '徐啸' }], rowCount: 1 } as any);
+    // 5) wechat_cs_account_config：接管态
     mockQuery.mockResolvedValueOnce({
       rows: [{ whitelist: [], blacklist: [], takeover_mode: 'blacklist' }],
       rowCount: 1,

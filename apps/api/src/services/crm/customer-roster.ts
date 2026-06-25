@@ -25,6 +25,8 @@ export interface RosterMessageRow {
   contact: string;
   wechat_id?: string | null;
   last_contact_at?: string | null;
+  /** 加微信时间 ISO（可空；cs_memory_messages 一般无此值）。 */
+  add_friend_time?: string | null;
 }
 
 /** crm_customers 手动入册行。 */
@@ -33,6 +35,8 @@ export interface RosterManualRow {
   name?: string | null;
   wechat_id?: string | null;
   status?: string | null;
+  /** 加微信时间 ISO（可空）。 */
+  add_friend_time?: string | null;
 }
 
 /** crm_customers source='scan' 扫描好友行（agent 扫客服机近期会话联系人上报落库）。 */
@@ -45,10 +49,15 @@ export interface RosterScanRow {
   last_message?: string | null;
   /** 扫描观测到的最后时间 ISO（可空），并进 last_contact_at。 */
   last_seen_at?: string | null;
+  /** 加微信时间 ISO（可空）。 */
+  add_friend_time?: string | null;
 }
 
 /** 接管模式：blacklist（主模型，默认全接管 + 黑名单排除）| whitelist（小众兼容，只接管名单内）。 */
 export type TakeoverMode = 'blacklist' | 'whitelist';
+
+/** 身份三态：customer（客户·接管）| blacklist（黑名单·排除）| internal（内部人员，排除出客户接管）。 */
+export type CrmIdentity = 'customer' | 'blacklist' | 'internal';
 
 /** 输出行（合同 GET /api/crm/customers 的 customers[] 元素）。 */
 export interface CustomerRosterRow {
@@ -62,6 +71,10 @@ export interface CustomerRosterRow {
   source: 'message' | 'manual' | 'scan' | 'whitelist';
   /** 扫描 / 最近一条消息预览（可空）。 */
   last_message: string | null;
+  /** 加微信时间 ISO（成为好友的时间，可空）。 */
+  add_friend_time: string | null;
+  /** 身份三态：customer / blacklist / internal。internal 排除出客户接管（managed=false）。 */
+  identity: CrmIdentity;
 }
 
 export interface BuildCustomerRosterParams {
@@ -82,6 +95,8 @@ export interface BuildCustomerRosterParams {
   manualCustomers?: RosterManualRow[];
   /** agent 扫描好友（由路由查 crm_customers source='scan' 注入；生产恒传数组，可空）。 */
   scanContacts?: RosterScanRow[];
+  /** 内部人员名册（昵称集合，由路由查 crm_internal_staff 注入）。命中 → identity=internal + managed 强制 false。 */
+  internalStaff?: string[];
 }
 
 /**
@@ -106,6 +121,7 @@ export async function buildCustomerRoster(
   const wlSet = new Set(whitelist.map((w) => (w ?? '').trim()).filter(Boolean));
   const blacklist = params.blacklist ?? [];
   const blSet = new Set(blacklist.map((b) => (b ?? '').trim()).filter(Boolean));
+  const internalSet = new Set((params.internalStaff ?? []).map((n) => (n ?? '').trim()).filter(Boolean));
   const { messages, manualCustomers: manual, scanContacts: scan } = params;
 
   const byContact = new Map<string, CustomerRosterRow>();
@@ -123,6 +139,8 @@ export async function buildCustomerRoster(
       managed: false,
       source: prev?.source ?? 'message',
       last_message: prev?.last_message ?? null,
+      add_friend_time: m.add_friend_time ?? prev?.add_friend_time ?? null,
+      identity: 'customer',
     });
   }
 
@@ -141,6 +159,8 @@ export async function buildCustomerRoster(
       // 已聊过的 message/manual 来源优先保留；纯扫进来的标 scan
       source: prev?.source ?? 'scan',
       last_message: s.last_message ?? prev?.last_message ?? null,
+      add_friend_time: s.add_friend_time ?? prev?.add_friend_time ?? null,
+      identity: 'customer',
     });
   }
 
@@ -158,6 +178,8 @@ export async function buildCustomerRoster(
       // manual 显式入册优先覆盖来源标记（除非该 contact 已有 message 来源——保留 message 历史）
       source: prev?.source === 'message' ? 'message' : 'manual',
       last_message: prev?.last_message ?? null,
+      add_friend_time: c.add_friend_time ?? prev?.add_friend_time ?? null,
+      identity: 'customer',
     });
   }
 
@@ -175,14 +197,25 @@ export async function buildCustomerRoster(
           managed: true,
           source: 'whitelist',
           last_message: null,
+          add_friend_time: null,
+          identity: 'customer',
         });
       }
     }
   }
 
-  // managed 实时判定：blacklist 模式 → ∉ blacklist 即接管；否则（whitelist/缺省）→ ∈ whitelist 即接管。
+  // managed + identity 实时判定（防前端臆测，列表显示与库当前内容一致）：
+  //   - 内部人员（contact ∈ internalSet）：identity=internal，排除出客户接管 → managed 强制 false。
+  //   - 否则 managed：blacklist 模式 → ∉ blacklist 即接管；whitelist/缺省 → ∈ whitelist 即接管。
+  //     identity = managed ? 'customer'（客户·接管）: 'blacklist'（黑名单·排除）。
   for (const row of byContact.values()) {
+    if (internalSet.has(row.contact)) {
+      row.identity = 'internal';
+      row.managed = false;
+      continue;
+    }
     row.managed = isBlacklistMode ? !blSet.has(row.contact) : wlSet.has(row.contact);
+    row.identity = row.managed ? 'customer' : 'blacklist';
   }
 
   const roster = Array.from(byContact.values());
@@ -208,6 +241,8 @@ export async function buildCustomerRoster(
         managed: false,
         source: 'manual',
         last_message: null,
+        add_friend_time: null,
+        identity: 'blacklist',
       },
     ];
   }

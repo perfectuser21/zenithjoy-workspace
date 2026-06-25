@@ -139,3 +139,67 @@ describe('CustomerListPage [per-operator BEHAVIOR]', () => {
     await screen.findByText(/已通知客服机/);
   });
 });
+
+describe('CustomerListPage [地基 Track C — 6 列 + 身份三态 BEHAVIOR]', () => {
+  // 后端返回带 wechat_id / add_friend_time / identity 的三类身份行
+  function mockSixColRouting() {
+    global.fetch = vi.fn().mockImplementation((url: string, init?: RequestInit) => {
+      fetchCalls.push({ url, init });
+      if (url.startsWith('/api/crm/customers')) {
+        return Promise.resolve(
+          jsonRes({
+            customers: [
+              { name: '客户甲', contact: '客户甲', wechat_id: 'wx_abc', add_friend_time: '2026-06-20T02:00:00.000Z', status: 'A2', last_contact_at: '2026-06-24T08:00:00.000Z', managed: true, identity: 'customer' },
+              { name: '黑名单乙', contact: '黑名单乙', wechat_id: null, add_friend_time: null, status: 'A1', last_contact_at: null, managed: false, identity: 'blacklist' },
+              { name: '徐啸', contact: '徐啸', wechat_id: 'wx_xx', add_friend_time: '2026-06-01T00:00:00.000Z', status: 'A1', last_contact_at: null, managed: false, identity: 'internal' },
+            ],
+            total: 3,
+            cs_wechat_id: CS_WID,
+          }),
+        );
+      }
+      return Promise.resolve(jsonRes({}));
+    }) as unknown as typeof fetch;
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    fetchCalls = [];
+    mockSixColRouting();
+  });
+
+  it('表头 6 列：姓名/微信号/加微信时间/意向/最近联系/身份', async () => {
+    render(<CustomerListPage />);
+    await screen.findByText('客户甲');
+    for (const h of ['姓名', '微信号', '加微信时间', '意向', '最近联系', '身份']) {
+      expect(screen.getByRole('columnheader', { name: h })).toBeInTheDocument();
+    }
+  });
+
+  it('微信号列显示客户微信号（无则 —）', async () => {
+    render(<CustomerListPage />);
+    await screen.findByText('客户甲');
+    const wechatCells = screen.getAllByTestId('crm-customer-wechat-id').map((e) => e.textContent);
+    expect(wechatCells).toContain('wx_abc');
+    expect(wechatCells).toContain('—'); // 黑名单乙 无微信号
+  });
+
+  it('身份三态：内部人员显示「内部人员」只读标，不渲染接管开关', async () => {
+    render(<CustomerListPage />);
+    await screen.findByText('徐啸');
+    const rows = screen.getAllByTestId('crm-customer-identity');
+    const internalCell = rows.find((c) => c.getAttribute('data-identity') === 'internal');
+    expect(internalCell).toBeDefined();
+    expect(internalCell!.textContent).toContain('内部人员');
+    // 内部人员行不出现接管开关
+    expect(internalCell!.querySelector('[data-testid="crm-manage-toggle"]')).toBeNull();
+  });
+
+  it('客户/黑名单行沿用接管开关（接管中/已排除），不破存量 e2e', async () => {
+    render(<CustomerListPage />);
+    await screen.findByText('客户甲');
+    const labels = screen.getAllByTestId('crm-manage-label').map((e) => e.textContent);
+    expect(labels).toContain('接管中'); // customer
+    expect(labels).toContain('已排除'); // blacklist
+  });
+});
