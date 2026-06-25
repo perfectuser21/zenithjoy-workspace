@@ -98,6 +98,34 @@ export function requireCsWriteAccess(kind: 'wechatId' | 'machineId') {
   };
 }
 
+/**
+ * 读接口多通道闸（修正6：GET /api/crm/customers、GET /api/crm/onboarding 复用写接口同款多通道，修 403）：
+ *   1) legacy 服务/超管：飞书白名单 id 或 internal token / Bearer（superAdminGuard）→ 放行（super-admin 看自己关心的客服机）。
+ *   2) dashboard 租户用户：tenantContext → req.tenantId scope（租户 owner/admin/member 都能读**自己**客服机好友表，
+ *      读接口不要求 admin 角色——全员可用，写才要 requireCsAdmin）。
+ * member / 无凭证 → 401/403 由 tenantContext 负责。与裸 tenantContext 的区别：多了 legacy/super-admin 旁路（修 session-only super-admin 403）。
+ */
+export function requireCsReadAccess(req: Request, res: Response, next: NextFunction): void {
+  if (hasLegacyServiceCredential(req)) {
+    superAdminGuard(req, res, next);
+    return;
+  }
+  // 无 legacy 凭证 → 走 dashboard 租户 session（不加角色闸，读接口全员可用）
+  tenantContext(req, res, next);
+}
+
+/**
+ * 服务/agent 专用闸（ingest 上报 + onboarding 回写：agent 无人类 session，只走 internal/service token）。
+ * 直接复用 superAdminGuard（不读 better-auth session，天然挡人类 dashboard cookie 用户）——三态：
+ *   - ZENITHJOY_INTERNAL_TOKEN **已设** + 合法 X-Internal-Token/Bearer/超管飞书头 → 放行；无/错凭证 → 401。
+ *   - ZENITHJOY_INTERNAL_TOKEN **未设**（dev/CI）+ 不带头 → dev 放行。
+ * 这与 agent 侧 post_friend_scan「env 未设时不带 X-Internal-Token 头」严格对齐（跨 teammate 契约，PR#860）：
+ * 生产必设 token 才成闸；dev/CI 未设 token 时 agent 不带头、后端放行，两端一致不互锁。
+ */
+export function requireServiceCredential(req: Request, res: Response, next: NextFunction): void {
+  superAdminGuard(req, res, next);
+}
+
 /** 目标客服（wechat_id）→ 所属租户 tenant_id；查不到返回 null。 */
 async function resolveTenantByWechatId(wechatId: string): Promise<string | null> {
   const r = await pool.query(

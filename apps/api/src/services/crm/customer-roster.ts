@@ -35,6 +35,21 @@ export interface RosterManualRow {
   status?: string | null;
 }
 
+/** crm_customers source='scan' 扫描好友行（agent 扫客服机近期会话联系人上报落库）。 */
+export interface RosterScanRow {
+  contact: string;
+  name?: string | null;
+  wechat_id?: string | null;
+  status?: string | null;
+  /** 扫描时观测到的最后消息预览（可空）。 */
+  last_message?: string | null;
+  /** 扫描观测到的最后时间 ISO（可空），并进 last_contact_at。 */
+  last_seen_at?: string | null;
+}
+
+/** 接管模式：blacklist（主模型，默认全接管 + 黑名单排除）| whitelist（小众兼容，只接管名单内）。 */
+export type TakeoverMode = 'blacklist' | 'whitelist';
+
 /** 输出行（合同 GET /api/crm/customers 的 customers[] 元素）。 */
 export interface CustomerRosterRow {
   name: string;
@@ -43,30 +58,55 @@ export interface CustomerRosterRow {
   status: CrmStatus;
   last_contact_at: string | null;
   managed: boolean;
+  /** 行来源：message（已聊过）| manual（手动入册）| scan（agent 扫好友）| whitelist（仅接管成员占位）。 */
+  source: 'message' | 'manual' | 'scan' | 'whitelist';
+  /** 扫描 / 最近一条消息预览（可空）。 */
+  last_message: string | null;
 }
 
 export interface BuildCustomerRosterParams {
   tenantId: string;
   csWechatId: string;
-  /** 该租户客服机当前白名单（接管态由它实时决定，非缓存）。 */
+  /**
+   * 接管模式。缺省（undefined）→ 回退旧 whitelist 语义（向后兼容存量调用）；
+   * 'blacklist' → 黑名单主模型（默认全接管，黑名单内排除）；'whitelist' → 仅接管名单内。
+   */
+  takeoverMode?: TakeoverMode;
+  /** 该租户客服机当前白名单（whitelist 模式 / 缺省模式下接管态由它实时决定，非缓存）。 */
   whitelist?: string[];
+  /** 该客服机黑名单（blacklist 模式下：managed = contact ∉ blacklist）。 */
+  blacklist?: string[];
   /** 已聊过的联系人（由路由查 cs_memory_messages 注入；生产恒传数组，可空）。 */
   messages?: RosterMessageRow[];
-  /** 手动入册客户（由路由查 crm_customers 注入；生产恒传数组，可空）。 */
+  /** 手动入册客户（由路由查 crm_customers source='manual' 注入；生产恒传数组，可空）。 */
   manualCustomers?: RosterManualRow[];
+  /** agent 扫描好友（由路由查 crm_customers source='scan' 注入；生产恒传数组，可空）。 */
+  scanContacts?: RosterScanRow[];
 }
 
 /**
- * 合并名册。身份 key = contact（第一刀用微信昵称，与 whitelist / should_reply 的 sender_name 同字面）。
- * 合并优先级：manual 行覆盖 message 行的可填字段（name / wechat_id / status）；whitelist 成员即便
- * 没聊过 / 没手动加也保证入册；managed 最终由 whitelist 实时判定（true ⇔ contact ∈ whitelist）。
+ * 合并名册。身份 key = contact（第一刀用微信昵称，与 blacklist / whitelist / should_reply 的 sender_name 同字面）。
+ *
+ * 四源合并（同 contact 合并成一行，不重复）：
+ *   message（cs_memory_messages 已聊过）∪ manual（crm_customers 手动入册）∪
+ *   scan（crm_customers source='scan' agent 扫好友）∪ whitelist 成员（whitelist 模式占位）。
+ * 合并优先级：manual 行覆盖 message/scan 的 name/status；scan 补 last_message；message/scan 提供 last_contact_at。
+ *
+ * managed 实时判定（防前端臆测，列表显示与库当前内容一致）：
+ *   - takeoverMode='blacklist'（主模型）：managed = contact ∉ blacklist（默认全接管，黑名单排除）。
+ *   - takeoverMode='whitelist' 或缺省（向后兼容）：managed = contact ∈ whitelist。
  */
 export async function buildCustomerRoster(
   params: BuildCustomerRosterParams,
 ): Promise<CustomerRosterRow[]> {
+  const mode: TakeoverMode | undefined = params.takeoverMode;
+  const isBlacklistMode = mode === 'blacklist';
+
   const whitelist = params.whitelist ?? [];
   const wlSet = new Set(whitelist.map((w) => (w ?? '').trim()).filter(Boolean));
-  const { messages, manualCustomers: manual } = params;
+  const blacklist = params.blacklist ?? [];
+  const blSet = new Set(blacklist.map((b) => (b ?? '').trim()).filter(Boolean));
+  const { messages, manualCustomers: manual, scanContacts: scan } = params;
 
   const byContact = new Map<string, CustomerRosterRow>();
 
@@ -81,6 +121,26 @@ export async function buildCustomerRoster(
       status: prev?.status ?? 'A1',
       last_contact_at: m.last_contact_at ?? prev?.last_contact_at ?? null,
       managed: false,
+      source: prev?.source ?? 'message',
+      last_message: prev?.last_message ?? null,
+    });
+  }
+
+  // 第四源 scan：与 message/manual 同 key 合并（补 last_message / last_seen → last_contact_at）。
+  for (const s of scan ?? []) {
+    const contact = (s.contact ?? '').trim();
+    if (!contact) continue;
+    const prev = byContact.get(contact);
+    byContact.set(contact, {
+      name: (s.name ?? '').trim() || prev?.name || contact,
+      contact,
+      wechat_id: s.wechat_id ?? prev?.wechat_id ?? null,
+      status: prev ? prev.status : normalizeStatus(s.status),
+      last_contact_at: prev?.last_contact_at ?? s.last_seen_at ?? null,
+      managed: false,
+      // 已聊过的 message/manual 来源优先保留；纯扫进来的标 scan
+      source: prev?.source ?? 'scan',
+      last_message: s.last_message ?? prev?.last_message ?? null,
     });
   }
 
@@ -95,41 +155,60 @@ export async function buildCustomerRoster(
       status: normalizeStatus(c.status ?? prev?.status),
       last_contact_at: prev?.last_contact_at ?? null,
       managed: false,
+      // manual 显式入册优先覆盖来源标记（除非该 contact 已有 message 来源——保留 message 历史）
+      source: prev?.source === 'message' ? 'message' : 'manual',
+      last_message: prev?.last_message ?? null,
     });
   }
 
-  // 白名单成员确保入册（接管中但还没聊过 / 没手动加的人也要出现在列表）
-  for (const name of wlSet) {
-    if (!byContact.has(name)) {
-      byContact.set(name, {
-        name,
-        contact: name,
-        wechat_id: null,
-        status: 'A1',
-        last_contact_at: null,
-        managed: true,
-      });
+  // whitelist 模式（或缺省）：名单成员确保入册（接管中但还没聊过 / 没手动加 / 没扫到的人也要出现）。
+  // blacklist 模式不据 whitelist 补行（默认全接管，列表行源 = 实扫/实聊/手动，黑名单只标排除）。
+  if (!isBlacklistMode) {
+    for (const name of wlSet) {
+      if (!byContact.has(name)) {
+        byContact.set(name, {
+          name,
+          contact: name,
+          wechat_id: null,
+          status: 'A1',
+          last_contact_at: null,
+          managed: true,
+          source: 'whitelist',
+          last_message: null,
+        });
+      }
     }
   }
 
-  // managed 实时由 whitelist 决定（防前端臆测：列表显示与 whitelist 当前内容一致）
+  // managed 实时判定：blacklist 模式 → ∉ blacklist 即接管；否则（whitelist/缺省）→ ∈ whitelist 即接管。
   for (const row of byContact.values()) {
-    row.managed = wlSet.has(row.contact);
+    row.managed = isBlacklistMode ? !blSet.has(row.contact) : wlSet.has(row.contact);
   }
 
   const roster = Array.from(byContact.values());
 
-  // 裸调用（无任何数据源：messages / manualCustomers 均未注入且 whitelist 为空）→ 返回单条占位样本，
-  // 仅供纯函数形态演示 / 单测断言。生产路由 routes/crm.ts 恒显式传 messages + manualCustomers 数组
+  // 裸调用（无任何数据源且非 blacklist 模式且 whitelist 为空）→ 返回单条占位样本，
+  // 仅供纯函数形态演示 / 单测断言。生产路由 routes/crm.ts 恒显式传 messages + manualCustomers + scanContacts 数组
   // （即便为空数组），绝不进此分支 —— 因此真客户列表永远是真数据，不会混入占位行。
   if (
     roster.length === 0 &&
     messages === undefined &&
     manual === undefined &&
-    wlSet.size === 0
+    scan === undefined &&
+    wlSet.size === 0 &&
+    !isBlacklistMode
   ) {
     return [
-      { name: '示例客户', contact: '示例客户', wechat_id: null, status: 'A1', last_contact_at: null, managed: false },
+      {
+        name: '示例客户',
+        contact: '示例客户',
+        wechat_id: null,
+        status: 'A1',
+        last_contact_at: null,
+        managed: false,
+        source: 'manual',
+        last_message: null,
+      },
     ];
   }
 

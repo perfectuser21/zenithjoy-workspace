@@ -10,7 +10,8 @@
 // 三个纯函数：
 //   resolveSendMode(config, pullOk)        → 'real' | 'dryrun'
 //   resolveActiveConfig(fresh, cached, pullOk) → config（断网期用上次缓存的自己那份继续判定）
-//   shouldReply(config, senderName)        → boolean（senderName 在 config.whitelist 内才回）
+//   shouldReply(config, senderName)        → boolean（黑名单主模型：blacklist 模式 sender∉blacklist 才回；
+//                                              whitelist 模式/无 takeover_mode 回退旧白名单逻辑）
 
 /**
  * 真发 gate 决策。
@@ -44,14 +45,25 @@ function resolveActiveConfig(fresh, cached, pullOk) {
 }
 
 /**
- * 白名单判定：发件人在 config.whitelist 内才回。
+ * 接管判定（CRM 重做：黑名单主模型 + whitelist 兼容回退，与 cs_config_gate.py should_reply 同语义）。
  *
- * @param {{whitelist?: string[]}|null|undefined} config 当前生效配置
+ * takeover_mode 决定语义（决策 1，lead 拍板）：
+ *   - 'blacklist'（新接入客服机主模型）：默认全接管，senderName ∉ blacklist 才回。
+ *     空黑名单 / blacklist 非数组（脏数据）→ 当空处理 → 全员回。
+ *   - 'whitelist' / 无 takeover_mode（存量旧配置）：回退旧逻辑——senderName ∈ whitelist 才回。
+ *     绝不让存量客服机一升级就突变成全接管误发。
+ *
+ * @param {{takeover_mode?: string, whitelist?: string[], blacklist?: string[]}|null|undefined} config
  * @param {string} senderName 来消息的发件人名
  * @returns {boolean}
  */
 function shouldReply(config, senderName) {
-  const wl = config && Array.isArray(config.whitelist) ? config.whitelist : [];
+  if (!config) return false;
+  if (config.takeover_mode === 'blacklist') {
+    const bl = Array.isArray(config.blacklist) ? config.blacklist : [];
+    return !bl.includes(senderName);
+  }
+  const wl = Array.isArray(config.whitelist) ? config.whitelist : [];
   return wl.includes(senderName);
 }
 

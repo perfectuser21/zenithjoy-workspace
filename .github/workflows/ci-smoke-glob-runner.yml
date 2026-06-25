@@ -1,0 +1,213 @@
+name: Smoke Glob Runner (report-only)
+
+# ───────────────────────────────────────────────────────────────────────────
+# smoke glob-runner —— report-only 守卫地基（Issue a4699d21）
+#
+# 背景：.github/workflows/scripts/smoke/ 下有 146 个 *-smoke.sh，但只有 ~48 个
+# 被现有 workflow 逐个点名跑进 CI。剩下 ~98 个里大多数是纯 DB/API（curl + psql）
+# 冒烟脚本，本可在 clean CI 跑，却从没跑过 → 长期 drift 无人发现。
+#
+# 本 job 起标准 postgres + apps/api，自动发现 smoke 目录下全部 *-smoke.sh，
+# 跳过 DENYLIST（真机/RPA：pywinauto 真执行、真微信、扫码——CI 跑不了）后全跑，
+# 出一份"现在真能过几个 / 几个 drift 失败"的报告。
+#
+# ⚠️ report-only：本 job **不阻塞合并**。
+#   - 整个 job continue-on-error: true（job 失败不让 PR 变红）
+#   - 不在分支保护的 required checks 里
+#   - 这是测试守卫地基的第一刀；稳定后再单独 ratchet 成必跑闸（下一步，非本 PR）
+# ───────────────────────────────────────────────────────────────────────────
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: '0 19 * * *'   # 每天 03:00 UTC+8 跑一次，盯 drift
+  workflow_dispatch:
+
+concurrency:
+  group: smoke-glob-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  smoke-glob-runner:
+    name: Smoke Glob Runner (report-only)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    # report-only：本 job 失败绝不阻塞合并
+    continue-on-error: true
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: cecelia
+          POSTGRES_PASSWORD: cecelia
+          POSTGRES_DB: cecelia
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      # 与 ci-l4-e2e-smoke.yml 的 smoke-api-contract job 保持一致
+      DATABASE_HOST: localhost
+      DATABASE_PORT: 5432
+      DATABASE_USER: cecelia
+      DATABASE_PASSWORD: cecelia
+      DATABASE_NAME: cecelia
+      DATABASE_URL: postgres://cecelia:cecelia@localhost:5432/cecelia
+      PGHOST: localhost
+      PGPORT: 5432
+      PGUSER: cecelia
+      PGPASSWORD: cecelia
+      PGDATABASE: cecelia
+      PORT: 5200
+      NODE_ENV: test
+      ADMIN_FEISHU_OPENIDS: ou_admin_smoke_999
+      BETTER_AUTH_SECRET: ci-only-secret-32-chars-min-not-prod-123
+      BETTER_AUTH_URL: http://localhost:5200
+      ZENITHJOY_INTERNAL_TOKEN: ci-only-internal-token-abc-not-prod
+      FEISHU_API_BASE: http://localhost:3099
+      FEISHU_STATE_SECRET: ci-only-state-secret-2026
+      DASHBOARD_BASE_URL: http://localhost:5173
+      SMOKE_TOKEN: smoke-secret-2026
+      # smoke 脚本用到的多种 base-url 别名，全部指向本 job 的 apps/api
+      API_BASE: http://localhost:5200
+      API_URL: http://localhost:5200
+      API_PORT: '5200'                       # 少数脚本用 API_PORT 默认 3001，强制 5200
+      BASE_URL: http://localhost:5200
+      ZENITHJOY_API_BASE: http://localhost:5200
+      API_BASE_URL: http://localhost:5200
+      # 少数脚本直接读 $DB 连接串
+      DB: postgres://cecelia:cecelia@localhost:5432/cecelia
+      # fake executor base：本 repo 在 apps/api 里挂了 _smoke-fake-* 路由，指回自身
+      FAKE_LLM_BASE: http://localhost:5200
+      FAKE_AGENT_BASE: http://localhost:5200
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: package-lock.json
+
+      - name: Install apps/api deps
+        run: npm ci --workspace=apps/api
+
+      - name: Create zenithjoy schema + pgcrypto
+        run: |
+          psql -h localhost -U cecelia -d cecelia -c "CREATE SCHEMA IF NOT EXISTS zenithjoy;"
+          psql -h localhost -U cecelia -d cecelia -c "CREATE EXTENSION IF NOT EXISTS \"pgcrypto\";"
+
+      - name: Run apps/api/db migrations
+        run: |
+          for f in apps/api/db/migrations/*.sql; do
+            echo "→ $f"
+            psql -h localhost -U cecelia -d cecelia -v ON_ERROR_STOP=1 -f "$f"
+          done
+
+      - name: Build apps/api
+        working-directory: apps/api
+        run: npm run build
+
+      - name: Start fake-feishu-server (部分 smoke 依赖)
+        working-directory: apps/api
+        run: |
+          if [ -f test-utils/fake-feishu-server.ts ]; then
+            if [ -f node_modules/.bin/ts-node ]; then
+              node_modules/.bin/ts-node --transpile-only test-utils/fake-feishu-server.ts > /tmp/fake-feishu.log 2>&1 &
+            else
+              npx -y -p ts-node@10 ts-node --transpile-only test-utils/fake-feishu-server.ts > /tmp/fake-feishu.log 2>&1 &
+            fi
+            for i in $(seq 1 20); do
+              curl -fs http://localhost:3099/healthz >/dev/null 2>&1 && { echo "fake-feishu ready ${i}s"; break; }
+              sleep 1
+            done
+          else
+            echo "fake-feishu-server.ts 不存在，跳过（依赖它的 smoke 会失败，report-only 接受）"
+          fi
+
+      - name: Start apps/api
+        working-directory: apps/api
+        run: |
+          node dist/index.js > /tmp/apps-api.log 2>&1 &
+          echo $! > /tmp/apps-api.pid
+          for i in $(seq 1 40); do
+            curl -fs http://localhost:5200/health >/dev/null 2>&1 && { echo "apps/api ready ${i}s"; break; }
+            sleep 1
+          done
+          curl -fs http://localhost:5200/health || (cat /tmp/apps-api.log && exit 1)
+
+      - name: Discover + run all CI-capable smoke scripts (report-only)
+        id: glob
+        run: |
+          set -uo pipefail
+          DIR=".github/workflows/scripts/smoke"
+
+          # ── DENYLIST：真机/RPA smoke，CI 跑不了（真实执行 pywinauto / 真微信 /
+          #    扫码 / 浏览器自动化）。只列"真去执行真机动作"的；纯 grep 源码做静态
+          #    结构校验的 wechat-*-smoke.sh / path4-*-smoke.sh 不在此列（CI 能跑）。
+          #    依据：report-only 首轮本地实跑结果（见 PR body）。
+          DENYLIST="
+          wechat-auto-launch-smoke.sh
+          wechat-rpa-auto-reply-smoke.sh
+          wechat-cs-visible-delivery-smoke.sh
+          line04-preflight-smoke.sh
+          "
+
+          is_denied() {
+            local n="$1"
+            for d in $DENYLIST; do [ "$n" = "$d" ] && return 0; done
+            return 1
+          }
+
+          RESULTS=$(mktemp)
+          PASS=0; FAIL=0; SKIP=0
+          for f in "$DIR"/*.sh; do
+            name=$(basename "$f")
+            if is_denied "$name"; then
+              echo "::group::SKIP (denylist 真机/RPA) $name"; echo "skipped"; echo "::endgroup::"
+              printf '%s\tSKIP\t-\n' "$name" >> "$RESULTS"
+              SKIP=$((SKIP+1))
+              continue
+            fi
+            echo "::group::RUN $name"
+            chmod +x "$f"
+            if timeout 90 bash "$f"; then
+              echo "→ PASS $name"
+              printf '%s\tPASS\t0\n' "$name" >> "$RESULTS"
+              PASS=$((PASS+1))
+            else
+              rc=$?
+              echo "→ FAIL ($rc) $name"
+              printf '%s\tFAIL\t%s\n' "$name" "$rc" >> "$RESULTS"
+              FAIL=$((FAIL+1))
+            fi
+            echo "::endgroup::"
+          done
+
+          TOTAL=$((PASS+FAIL))
+          {
+            echo "# Smoke Glob Runner 报告（report-only）"
+            echo ""
+            echo "- 候选执行（非 denylist）: **$TOTAL**"
+            echo "- ✅ PASS: **$PASS**"
+            echo "- ❌ FAIL: **$FAIL**"
+            echo "- ⏭️ SKIP（denylist 真机/RPA）: **$SKIP**"
+            echo ""
+            echo "## 失败清单"
+            echo ""
+            awk -F'\t' '$2=="FAIL"{print "- `"$1"` (exit "$3")"}' "$RESULTS" || true
+            echo ""
+            echo "> ⚠️ report-only：本 job 不阻塞合并。失败=drift 信号，逐个根治后再 ratchet 成必跑闸。"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          echo "TOTAL=$TOTAL PASS=$PASS FAIL=$FAIL SKIP=$SKIP"
+          # report-only：永远 exit 0，不让本步骤红
+          exit 0
