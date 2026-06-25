@@ -15,6 +15,7 @@
 # Case L: ensure_staging_plist 从生产 plist 程序化派生 staging plist（PORT/DB/Label/Program 覆写 + 密钥继承）
 # Case M: ensure_release_node_modules 在 release node_modules 为空时从 hoisted 根兜底填充
 # Case N: ensure_prod_plist_points_to_current 把生产 plist 改指 releases/current（只改路径/不碰密钥/幂等/不碰真 plist）
+# Case O: promote 的生产 migration 从主 checkout（有 db/migrations 源）跑，不从 release 产物目录跑（防 Cannot find module 回归）
 set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -362,6 +363,42 @@ if command -v plutil >/dev/null 2>&1; then
   if plutil -lint "$NBOX/prod.plist" >/dev/null 2>&1; then ok "N plutil -lint 生成的 plist 合法"; else bad "N plutil -lint 不通过"; fi
 fi
 rm -rf "$NBOX"
+
+# ════════════════════════════════════════════════════════════════════════════
+# Case O: promote 的生产 migration 必须从【有 db/migrations 源的目录】跑，不能从 release 产物目录跑。
+# 治根（promote run 28148797888 实证）：release 是 build 产物（只有 dist，无 db/migrations/*.ts），
+# `ts-node db/migrations/run-migration.ts` 在 release 目录解析不到源 → Cannot find module
+# './run-migration.ts' → 每次 promote 卡死在迁移步。修法：promote 的迁移从主 checkout（ZJ_API_DIR，
+# 有 db/migrations 源）跑。本 case proven-to-fire：迁移入口脚本只在"有源"的目录可解析，release 产物目录不可。
+# 纯文件路径解析判断，不连真库、不跑真迁移。
+# ════════════════════════════════════════════════════════════════════════════
+OBOX="$(mktemp -d)"
+MIGRATE_REL="db/migrations/run-migration.ts"
+# 主 checkout 模拟：有 db/migrations 源
+mkdir -p "$OBOX/checkout/db/migrations"; echo "// src" > "$OBOX/checkout/${MIGRATE_REL}"
+# release 产物模拟：只有 dist，没有 db/migrations 源
+mkdir -p "$OBOX/release/dist"; echo "x" > "$OBOX/release/dist/index.js"
+
+# proven-to-fire：从 release 产物目录解析迁移入口 → 不存在（这就是旧 bug 的根因）
+if [ ! -f "$OBOX/release/${MIGRATE_REL}" ]; then ok "O release 产物目录解析不到 ${MIGRATE_REL}（旧 bug 根因，proven-to-fire）"; else bad "O release 不该有迁移源"; fi
+# 修法验证：从主 checkout 解析迁移入口 → 存在
+if [ -f "$OBOX/checkout/${MIGRATE_REL}" ]; then ok "O 主 checkout 解析得到 ${MIGRATE_REL}（promote 迁移应从这里跑）"; else bad "O 主 checkout 应有迁移源"; fi
+
+# staging_promote 源码守卫：迁移步必须 cd ZJ_API_DIR（主checkout），不能 cd reldir（release）。
+# 防回归——避免有人改回从 release 目录跑。用 grep -F 固定串匹配迁移那行（避开 SC2016）。
+PROMOTE_BODY="$(sed -n '/^staging_promote() {/,/^}/p' "$SCRIPT_DIR/deploy-lib.sh")"
+MIGRATE_CTX="$(echo "$PROMOTE_BODY" | grep 'npm run migrate' | head -1)"
+# 故意用单引号固定串匹配源码里的字面量 cd "${ZJ_API_DIR}"（不让 shell 展开），disable SC2016。
+# shellcheck disable=SC2016
+if echo "$MIGRATE_CTX" | grep -qF 'cd "${ZJ_API_DIR}"'; then
+  ok "O staging_promote 迁移从主 checkout(ZJ_API_DIR) 跑"
+# shellcheck disable=SC2016
+elif echo "$MIGRATE_CTX" | grep -qF 'cd "${reldir}"'; then
+  bad "O staging_promote 迁移仍从 release 目录跑（旧 bug 没修）"
+else
+  bad "O staging_promote 迁移行无法识别 cwd：${MIGRATE_CTX}"
+fi
+rm -rf "$OBOX"
 
 echo ""
 echo "deploy-lib.test.sh: PASSED=$PASSED FAILED=$FAILED"
