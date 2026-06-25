@@ -490,24 +490,46 @@ PY
 # （生产 :5200 没撞上是因为它从 repo 树内 apps/api/dist 跑，node 向上走能找到根 node_modules；
 #  release 目录在 repo 树外，向上走找不到根 → 必须自带或兜底。）
 #
-# 规则：release node_modules 缺哨兵模块（dotenv）时，从 hoisted 根 node_modules 兜底（symlink）。
-# symlink 而非 cp：省 ~185M×N 拷贝/时间；根 node_modules 由 npm ci 维护（幂等、极少变）。
+# 规则（方案 A，lead 2026-06-25 决策）：release node_modules 缺哨兵模块（dotenv）时，
+# 从 hoisted 根 node_modules **实体拷贝**填充，让 release 真正自包含——**绝不 symlink 到根**。
+# 为何不 symlink（否决方案 C）：① symlink 后 deploy 时 `npm ci` 改根 node_modules 会改到
+# **正在跑的生产/旧 release**（它们共享同一份）；② 跨依赖变更 rollback 不干净（回到旧 release
+# 仍用当前根 deps）。实体拷 = dist 与 node_modules 都按 sha 冻结，promote/rollback 切软链即换。
+# 拷贝成本：macOS/APFS 用 `cp -c -R`（clonefile / CoW，近零磁盘 + 秒级）；非 APFS/Linux 回退
+# `cp -R`（较慢但正确，CI 可接受）。磁盘由 prune_old_releases 控（只留最近 N 个 release）。
 # 参数：<release_dir> <hoisted_root_node_modules>
 ensure_release_node_modules() {
   local reldir="$1" root_nm="$2"
   local rel_nm="${reldir}/node_modules"
-  # 已自带可解析的 dotenv（哨兵）→ 不动
-  if [ -e "${rel_nm}/dotenv/package.json" ]; then
+  # 已自带可解析的 dotenv（哨兵）且是真目录（非软链）→ 已自包含，不动
+  if [ -e "${rel_nm}/dotenv/package.json" ] && [ ! -L "$rel_nm" ]; then
     return 0
+  fi
+  # 根 node_modules 自己可能是软链（如开发 worktree 把 node_modules 软链到主 checkout）；
+  # 拷前先解引用到真实路径，保证 cp 复制的是真目录内容而非把软链本身拷过去。
+  if [ -L "$root_nm" ]; then
+    local resolved; resolved="$(cd "$root_nm" 2>/dev/null && pwd -P || echo "")"
+    [ -n "$resolved" ] && root_nm="$resolved"
   fi
   if [ ! -e "${root_nm}/dotenv/package.json" ]; then
     echo "❌ ensure_release_node_modules：hoisted 根 node_modules 也缺 dotenv（${root_nm}），无法兜底" >&2
     return 1
   fi
-  # release 自带的 node_modules 是空目录/缺哨兵 → 移除后 symlink 到根
+  # release 自带的 node_modules 是空目录 / 软链 / 缺哨兵 → 移除后从根**实体拷贝**（CoW 优先）
   rm -rf "$rel_nm" 2>/dev/null || true
-  ln -sfn "$root_nm" "$rel_nm" || { echo "❌ symlink release node_modules 失败" >&2; return 1; }
-  echo "ℹ️  release node_modules 缺依赖，已 symlink 到 hoisted 根 node_modules（${root_nm}）"
+  if cp -c -R "$root_nm" "$rel_nm" 2>/dev/null; then
+    echo "ℹ️  release node_modules 缺依赖，已从 hoisted 根 **CoW 实体拷贝**（cp -c，${root_nm}）"
+  elif cp -R "$root_nm" "$rel_nm" 2>/dev/null; then
+    echo "ℹ️  release node_modules 缺依赖，已从 hoisted 根 **实体拷贝**（cp -R 回退，${root_nm}）"
+  else
+    echo "❌ 实体拷贝 release node_modules 失败（${root_nm} → ${rel_nm}）" >&2
+    return 1
+  fi
+  # 自包含校验：拷完哨兵必须可解析、且 rel_nm 是真目录（不是软链）
+  if [ -L "$rel_nm" ] || [ ! -e "${rel_nm}/dotenv/package.json" ]; then
+    echo "❌ 拷贝后 release node_modules 仍非自包含（软链=$([ -L "$rel_nm" ] && echo y || echo n) / dotenv 缺失）" >&2
+    return 1
+  fi
   return 0
 }
 
@@ -527,20 +549,21 @@ build_release() {
   ( cd "${ZJ_API_DIR}" || exit 1
     BUILD_SHA="${sha}" npm run build
   ) || { echo "❌ build 失败"; return 1; }
-  # 拷自包含运行所需：dist + package.json + node_modules（node_modules 用硬链快拷省空间/时间）
+  # 拷自包含运行所需：dist + package.json + node_modules（CoW 优先 cp -c，回退 cp -R）。
   cp -R "${ZJ_API_DIR}/dist" "${reldir}/dist" || { echo "❌ 拷 dist 失败"; return 1; }
   cp "${ZJ_API_DIR}/package.json" "${reldir}/package.json" 2>/dev/null || true
-  if [ -d "${ZJ_API_DIR}/node_modules" ]; then
-    cp -Rc "${ZJ_API_DIR}/node_modules" "${reldir}/node_modules" 2>/dev/null \
+  if [ -d "${ZJ_API_DIR}/node_modules" ] && [ ! -L "${ZJ_API_DIR}/node_modules" ]; then
+    cp -c -R "${ZJ_API_DIR}/node_modules" "${reldir}/node_modules" 2>/dev/null \
       || cp -R "${ZJ_API_DIR}/node_modules" "${reldir}/node_modules" \
       || { echo "❌ 拷 node_modules 失败"; return 1; }
   fi
-  # monorepo hoist 兜底：依赖 hoist 到 repo 根时 apps/api/node_modules 是空的，拷进来还是空，
-  # release 跑 node 会报 Cannot find module 'dotenv'。缺哨兵模块时 symlink 到 hoisted 根。
+  # monorepo hoist 兜底（方案 A 自包含）：依赖 hoist 到 repo 根时 apps/api/node_modules 是空的/软链，
+  # 拷进来还是空 → release 跑 node 报 Cannot find module 'dotenv'。缺哨兵模块时从 hoisted 根
+  # **实体拷贝**（绝不 symlink，见 ensure_release_node_modules 注释）。
   # 根 node_modules = $ZJ_REPO/node_modules（ZJ_API_DIR = $ZJ_REPO/apps/api）。
   local root_nm="${ZJ_REPO:-$(cd "${ZJ_API_DIR}/../.." && pwd)}/node_modules"
   if ! ensure_release_node_modules "${reldir}" "${root_nm}"; then
-    echo "❌ release node_modules 兜底失败（dotenv 不可解析）"; return 1
+    echo "❌ release node_modules 自包含填充失败（dotenv 不可解析）"; return 1
   fi
   [ -f "${reldir}/dist/index.js" ] || { echo "❌ release 产物缺 dist/index.js"; return 1; }
   echo "✅ release ${sha} build 完成"

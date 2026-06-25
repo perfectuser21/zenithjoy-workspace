@@ -268,10 +268,13 @@ expect_eq "$(_l2read env:NODE_ENV)" "staging" "L2 NODE_ENV=staging（非生产pr
 rm -rf "$LBOX"
 
 # ════════════════════════════════════════════════════════════════════════════
-# Case M: ensure_release_node_modules —— monorepo hoist 兜底。
+# Case M: ensure_release_node_modules —— monorepo hoist 兜底（★方案 A 自包含：实体拷贝，非 symlink★）。
 # 治根（2026-06-25 真实事故）：依赖 hoist 到 repo 根 node_modules，apps/api/node_modules 是空目录，
 # build_release 拷空 node_modules → release 跑 node 报 Cannot find module 'dotenv' → :5201 起不来。
-# 规则：release node_modules 缺 dotenv（哨兵模块）时，从 hoisted 根 node_modules 兜底填充（symlink）。
+# 决策（lead 2026-06-25）：兜底必须**实体拷贝**根 node_modules 进 release（APFS 用 cp -c CoW），
+# **不能 symlink**——symlink 会让 deploy 时 npm ci 改到正在跑的生产共享 node_modules，且跨依赖
+# 变更 rollback 不干净。规则：release node_modules 缺 dotenv（哨兵）时，从根**实体拷**填充，
+# 且 release/node_modules 必须是**真目录而非软链**。
 # ════════════════════════════════════════════════════════════════════════════
 MBOX="$(mktemp -d)"
 # 造 hoisted 根 node_modules（含哨兵 dotenv）+ release 目录（node_modules 为空）
@@ -287,6 +290,21 @@ if [ "$M_RC" -eq 0 ] && [ -e "$MBOX/rel/node_modules/dotenv/package.json" ]; the
 else
   bad "M 兜底失败（rc=$M_RC，dotenv 存在=$([ -e "$MBOX/rel/node_modules/dotenv/package.json" ] && echo y || echo n)）"
 fi
+# ★方案 A 关键断言：release/node_modules 必须是真目录、不是软链（自包含，与根解耦）
+if [ -L "$MBOX/rel/node_modules" ]; then
+  bad "M release node_modules 是软链（方案A 要求实体拷贝，不许 symlink 到根）"
+else
+  ok "M release node_modules 是真目录（自包含，非 symlink 到根）"
+fi
+# 自包含验证：删掉根 node_modules 后，release 里的 dotenv 仍在（证明是实体拷贝而非软链依赖根）
+rm -rf "$MBOX/root_nm"
+if [ -e "$MBOX/rel/node_modules/dotenv/package.json" ]; then
+  ok "M 删掉根 node_modules 后 release 仍自带 dotenv（实体拷贝，rollback 干净）"
+else
+  bad "M 删根后 release dotenv 没了（说明是软链依赖根，方案A 不允许）"
+fi
+# 重新造根供后续子 case 用
+mkdir -p "$MBOX/root_nm/dotenv"; echo '{}' > "$MBOX/root_nm/dotenv/package.json"
 
 # 已自带依赖（含 dotenv）时不应覆盖
 mkdir -p "$MBOX/rel2/node_modules/dotenv" "$MBOX/rel2/dist"
