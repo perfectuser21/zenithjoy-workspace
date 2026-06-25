@@ -93,9 +93,33 @@ def test_post_friend_scan_no_token_still_posts_without_header(monkeypatch):
     fake_requests = types.SimpleNamespace(post=fake_post)
     monkeypatch.setitem(sys.modules, "requests", fake_requests)
     monkeypatch.delenv("ZENITHJOY_INTERNAL_TOKEN", raising=False)
+    monkeypatch.delenv("ZENITHJOY_LICENSE", raising=False)
 
     res = listen_chat.post_friend_scan("http://mw", "wxid_cs1", [{"name": "甲"}])
     assert res["ok"] is True
+    assert "X-Internal-Token" not in captured["headers"]
+    assert "X-License-Key" not in captured["headers"]
+
+
+def test_post_friend_scan_sends_license_key_header_for_self_auth(monkeypatch):
+    """Gap1：生产 agent 只有 license（无 internal token）→ 上报带 X-License-Key 自证身份。
+    后端按 license→tenant 鉴权放行，扫好友才写得进 CRM。"""
+    captured = {}
+
+    def fake_post(url, json=None, timeout=None, headers=None):
+        captured["headers"] = headers or {}
+        return FakeResp(200, {"success": True, "ingested": 1, "new": 1})
+
+    fake_requests = types.SimpleNamespace(post=fake_post)
+    monkeypatch.setitem(sys.modules, "requests", fake_requests)
+    # 生产典型：agent .env 只烧了 LICENSE，没有 internal token
+    monkeypatch.delenv("ZENITHJOY_INTERNAL_TOKEN", raising=False)
+    monkeypatch.setenv("ZENITHJOY_LICENSE", "ZJ-B-AAAA1111")
+
+    res = listen_chat.post_friend_scan("http://mw", "wxid_cs1", [{"name": "甲"}])
+    assert res["ok"] is True
+    assert captured["headers"].get("X-License-Key") == "ZJ-B-AAAA1111"
+    # 没 internal token 时不带该头（与后端 license 自证路径对齐）
     assert "X-Internal-Token" not in captured["headers"]
 
 

@@ -267,6 +267,63 @@ describe('agent→staging — /dotenv 含 AGENT_PUBLIC_* 烧的 ZENITHJOY_API_UR
   });
 });
 
+// Gap3 — 大包别经服务器中转流式（经 CF tunnel 322MB 只回 19.5MB 就断、tar 解不开）：
+// manifest 有 cos_url → /download 直接 302 重定向到 COS 直链，客户端直连 COS 拉整包（rog 实测 7.6s OK）。
+// license 走独立 /dotenv 端点（不再夹在 tar 里），避免大包重打包/流式截断。
+describe('Gap3 — GET /download 有 cos_url 时 302 重定向到 COS 直链（不再服务器中转流式）', () => {
+  let app: any;
+  const COS_URL = 'https://zenithjoy-1234.cos.ap-shanghai.myqcloud.com/install-pack/zenithjoy-agent-v1.0.1.tar.gz';
+
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    delete process.env.INSTALL_PACK_FIXTURE_PATH; // 不走本地 fixture
+    (manifestSvc.readInstallPackManifest as any).mockReturnValue({
+      version: '1.0.1',
+      sha256: 'a'.repeat(64),
+      download_url: '/download/zenithjoy-agent-v1.0.1.tar.gz',
+      cos_url: COS_URL,
+      size: 337000000, // 322MB 级大包
+      build_time: '2026-06-25T00:00:00Z',
+    });
+    app = (await import('../../app')).default;
+  });
+
+  it('登录 user + manifest 有 cos_url → 302 Location=cos_url（不重打包/不流式）', async () => {
+    const { auth } = await import('../../auth');
+    const pool = (await import('../../db/connection')).default;
+    vi.spyOn(auth.api, 'getSession').mockResolvedValue({
+      user: { id: 'user-cos-302', email: 'c@test', name: 'C' },
+    } as any);
+    vi.spyOn(pool, 'query').mockResolvedValue({
+      rows: [{ license_key: 'ZJ-F-COSCOS11' }],
+    } as any);
+
+    const res = await request(app).get('/api/agent/install-pack/download').redirects(0);
+    expect(res.status).toBe(302);
+    expect(res.headers.location).toBe(COS_URL);
+  });
+
+  it('未登录 → 仍 401（302 不绕过鉴权）', async () => {
+    const { auth } = await import('../../auth');
+    vi.spyOn(auth.api, 'getSession').mockResolvedValue(null as any);
+    const res = await request(app).get('/api/agent/install-pack/download').redirects(0);
+    expect(res.status).toBe(401);
+    expect(res.body.code).toBe('UNAUTHORIZED');
+  });
+
+  it('登录但无 license → 仍 503 NO_ACTIVE_LICENSE（鉴权后才考虑 302）', async () => {
+    const { auth } = await import('../../auth');
+    const pool = (await import('../../db/connection')).default;
+    vi.spyOn(auth.api, 'getSession').mockResolvedValue({
+      user: { id: 'user-cos-nolic', email: 'cn@test', name: 'CN' },
+    } as any);
+    vi.spyOn(pool, 'query').mockResolvedValue({ rows: [] } as any);
+    const res = await request(app).get('/api/agent/install-pack/download').redirects(0);
+    expect(res.status).toBe(503);
+    expect(res.body.code).toBe('NO_ACTIVE_LICENSE');
+  });
+});
+
 // Sprint 2.1h — INSTALL_PACK_REMOTE_URL fallback（本地 tar.gz 不存在时远端拉取缓存）
 describe('Sprint 2.1h — INSTALL_PACK_REMOTE_URL fallback', () => {
   let app: any;
@@ -460,9 +517,11 @@ describe('COS CDN 路由 — GET /api/agent/install-pack/dotenv', () => {
   });
 });
 
-// EROFS fix — 本地文件不存在时 fallback 写 /tmp，不写只读挂载目录
-describe('EROFS fix — fallback download 写 /tmp，cos_url 优先', () => {
+// Gap3 替代旧 EROFS fix 用例：cos_url 设 → 不再服务器中转拉取，直接 302 到 COS（不 crash、不 503）。
+// 旧行为（cos_url 设 → 服务器从 cos 拉回再重打包流式）已被 Gap3 替换，原"远端拉失败 503"断言不再适用。
+describe('Gap3 替代旧 EROFS — cos_url 设 → 302 直连 COS（不再服务器中转）', () => {
   let app: any;
+  const COS = 'https://example-cos.com/agent/zenithjoy-agent-v1.1.3.tar.gz';
 
   beforeEach(async () => {
     vi.clearAllMocks();
@@ -473,14 +532,14 @@ describe('EROFS fix — fallback download 写 /tmp，cos_url 优先', () => {
       version: '1.1.3',
       sha256: 'b'.repeat(64),
       download_url: '/download/zenithjoy-agent-v1.1.3.tar.gz',
-      cos_url: 'https://example-cos.com/agent/zenithjoy-agent-v1.1.3.tar.gz',
+      cos_url: COS,
       size: 169197376,
       build_time: '2026-05-19T09:20:00Z',
     });
     app = (await import('../../app')).default;
   });
 
-  it('本地文件不存在 + cos_url 设 + 无 INSTALL_PACK_REMOTE_URL → 从 cos_url 拉，503 但不 crash', async () => {
+  it('本地文件不存在 + cos_url 设 → 302 Location=cos_url（不服务器拉取、不 503、不 crash）', async () => {
     const { auth } = await import('../../auth');
     const pool = (await import('../../db/connection')).default;
     vi.spyOn(auth.api, 'getSession').mockResolvedValue({
@@ -490,11 +549,9 @@ describe('EROFS fix — fallback download 写 /tmp，cos_url 优先', () => {
       rows: [{ license_key: 'ZJ-F-EEEE5555' }],
     } as any);
 
-    // cos_url 指向一个不存在的地址 → remote fetch 失败 → 503，不 crash
-    const res = await request(app).get('/api/agent/install-pack/download');
-    expect(res.status).toBe(503);
-    expect(res.body.code).toBe('INSTALL_PACK_NOT_BUILT');
-    expect(res.body.message).toContain('remote fetch also failed');
+    const res = await request(app).get('/api/agent/install-pack/download').redirects(0);
+    expect(res.status).toBe(302);
+    expect(res.headers.location).toBe(COS);
   });
 });
 

@@ -62,6 +62,19 @@ bootstrap() {
   TENANT=$(psql_q "INSERT INTO zenithjoy.tenants (name, license_key) VALUES ('crm2-smoke','lk_crm2_$$') ON CONFLICT (license_key) DO UPDATE SET name=EXCLUDED.name RETURNING id;")
   [ -n "$TENANT" ] || { echo "FAIL: 造租户失败"; exit 1; }
   psql_q "INSERT INTO zenithjoy.service_agents (tenant_id, machine_id, wechat_id) VALUES ('$TENANT','mc_crm2_$$','$CS') ON CONFLICT DO NOTHING;" >/dev/null
+
+  # Gap1：造一条绑该租户的 active license（agent license 自证 ingest 用）。key 用合法 ZJ- 格式（后端按格式区分 license vs internal token）。
+  AGENT_LICENSE="ZJ-B-CRM2SM01"
+  psql_q "DELETE FROM zenithjoy.licenses WHERE license_key='$AGENT_LICENSE';" >/dev/null || true
+  psql_q "INSERT INTO zenithjoy.licenses (license_key, tier, max_machines, tenant_id, status, expires_at) VALUES ('$AGENT_LICENSE','basic',1,'$TENANT','active', now() + interval '3650 days');" >/dev/null
+  export AGENT_LICENSE
+
+  # Gap1 跨租户拒绝用：另造一个租户 + 客服机（agent license 属本租户，不得往别租户 cs_wechat_id 写）。
+  CS_OTHER="wx_cs_crm2_other_$$"
+  psql_q "DELETE FROM zenithjoy.service_agents WHERE wechat_id='$CS_OTHER';" >/dev/null || true
+  TENANT_OTHER=$(psql_q "INSERT INTO zenithjoy.tenants (name, license_key) VALUES ('crm2-smoke-other','lk_crm2_other_$$') ON CONFLICT (license_key) DO UPDATE SET name=EXCLUDED.name RETURNING id;")
+  psql_q "INSERT INTO zenithjoy.service_agents (tenant_id, machine_id, wechat_id) VALUES ('$TENANT_OTHER','mc_crm2_other_$$','$CS_OTHER') ON CONFLICT DO NOTHING;" >/dev/null
+  export CS_OTHER
   # 该客服机配置：blacklist 主模型（新接入默认），把 CONTACT_EXCL 预置进黑名单
   psql_q "INSERT INTO zenithjoy.wechat_cs_account_config (wechat_id, persona, takeover_mode, blacklist) VALUES ('$CS','{}'::jsonb,'blacklist', to_jsonb(ARRAY['$CONTACT_EXCL']::text[])) ON CONFLICT (wechat_id) DO UPDATE SET takeover_mode='blacklist', blacklist=EXCLUDED.blacklist;" >/dev/null
   # 一条已聊消息（让名册 distinct 出 CONTACT_KEEP）
@@ -167,7 +180,28 @@ main() {
   CODE=$(ci -o /dev/null -w "%{http_code}" "${API_BASE}/api/crm/friend-scan/pending")
   [ "$CODE" = "400" ] || { echo "FAIL: pending 缺 cs_wechat_id 未 400 实际 $CODE"; exit 1; }
 
-  echo "✅ Line04 CRM 重做 blacklist/ingest/onboarding/trigger-pending smoke 全过"
+  # ─── Gap1：真 agent 只有 license（无 internal token）扫好友能写进 CRM ───
+  # 核心 DoD：agent 带 X-License-Key 自证（不带任何 internal token）→ ingest 200 写库；
+  #          license 属 A 租户但 cs_wechat_id 属 B 租户 → 403 CROSS_TENANT 不写库。
+  echo "[8] Gap1 agent license 自证 ingest（X-License-Key，无 internal token）"
+  CONTACT_LIC="license自证客户_$$"
+  R8=$(curl -s -H "X-License-Key: $AGENT_LICENSE" -X POST "${API_BASE}/api/crm/friend-scan/ingest" \
+    -H 'Content-Type: application/json' \
+    -d "{\"cs_wechat_id\":\"$CS\",\"contacts\":[{\"name\":\"$CONTACT_LIC\",\"last_message\":\"license来的\"}]}")
+  echo "$R8" | jq -e '.success==true and .ingested==1' >/dev/null || { echo "FAIL: license 自证 ingest 未成功 $R8"; exit 1; }
+  LIC_SRC=$(psql_q "SELECT source FROM zenithjoy.crm_customers WHERE cs_wechat_id='$CS' AND contact='$CONTACT_LIC'")
+  [ "$LIC_SRC" = "scan" ] || { echo "FAIL: license 自证写入的客户未落库（source=$LIC_SRC）"; exit 1; }
+
+  echo "[8b] Gap1 跨租户拒绝：license 属本租户但 cs_wechat_id 属别租户 → 403 CROSS_TENANT（不写库）"
+  CODE=$(curl -s -o /tmp/crm2_cross.json -w "%{http_code}" -H "X-License-Key: $AGENT_LICENSE" \
+    -X POST "${API_BASE}/api/crm/friend-scan/ingest" -H 'Content-Type: application/json' \
+    -d "{\"cs_wechat_id\":\"$CS_OTHER\",\"contacts\":[{\"name\":\"越权客户_$$\"}]}")
+  [ "$CODE" = "403" ] || { echo "FAIL: 跨租户 license 写入未 403 实际 $CODE"; cat /tmp/crm2_cross.json; exit 1; }
+  jq -e '.error.code=="CROSS_TENANT"' /tmp/crm2_cross.json >/dev/null || { echo "FAIL: 跨租户应 CROSS_TENANT $(cat /tmp/crm2_cross.json)"; exit 1; }
+  XCNT=$(psql_q "SELECT count(*) FROM zenithjoy.crm_customers WHERE cs_wechat_id='$CS_OTHER'")
+  [ "$XCNT" = "0" ] || { echo "FAIL: 跨租户写入竟落库 $XCNT 行"; exit 1; }
+
+  echo "✅ Line04 CRM 重做 blacklist/ingest/onboarding/trigger-pending + Gap1 license自证 smoke 全过"
 }
 
 main "$@"

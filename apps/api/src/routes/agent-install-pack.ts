@@ -175,6 +175,16 @@ agentInstallPackRouter.get('/download', async (req: Request, res: Response) => {
   if (!m) {
     return res.status(503).json({ ok: false, code: 'INSTALL_PACK_NOT_BUILT' });
   }
+
+  // Gap3 修复：大包别经服务器中转流式（"从 COS 拉 322MB 回服务器再重打包流式回传"经 CF tunnel
+  // 只回 19.5MB 就断、tar 解不开）。manifest 有 cos_url → 鉴权通过后直接 302 重定向到 COS 直链，
+  // 客户端直连 COS 拉整包（rog 实测 COS 直链 322MB 7.6s OK）。license 走独立 /dotenv 端点（个人 .env），
+  // 不再夹进 tar 重打包——既避开流式截断，也省去服务器重打包大包的开销。
+  if (m.cos_url && m.cos_url.trim()) {
+    console.log(`[install-pack/download] 302 → COS 直链（大包不中转）: ${m.cos_url}`);
+    return res.redirect(302, m.cos_url.trim());
+  }
+
   // download_url 形如 /download/zenithjoy-agent-v1.0.1.tar.gz
   // 静态根目录从 manifest 路径推：默认 /opt/zenithjoy/autopilot-dashboard/dist
   const STATIC_ROOT =

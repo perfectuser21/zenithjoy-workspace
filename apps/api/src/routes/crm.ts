@@ -46,6 +46,39 @@ async function resolveTenantId(req: Request, csWechatId: string): Promise<string
   return (r.rows?.[0]?.tenant_id as string | undefined) ?? null;
 }
 
+/**
+ * service/agent 写路径解析目标租户 + 同租户隔离（Gap1）。
+ *   - req.tenantId 已挂（agent license 自证 / 租户 session）：cs_wechat_id 反查的租户**必须 == req.tenantId**，
+ *     否则 403 CROSS_TENANT（防 A 租户 agent 拿自己的 license 往 B 租户 cs_wechat_id 写）；
+ *     cs_wechat_id 反查不到 → 404（deny by default，不默认落到 req.tenantId）。
+ *   - req.tenantId 未挂（legacy internal token / dev 放行）：按 cs_wechat_id 反查租户（沿用旧行为）。
+ * 返回 { tenantId } 或 { error:{status,code,message} }。
+ */
+async function resolveServiceWriteTenant(
+  req: Request,
+  csWechatId: string,
+): Promise<{ tenantId: string } | { error: { status: number; code: string; message: string } }> {
+  const r = await pool.query(
+    `SELECT tenant_id FROM zenithjoy.service_agents WHERE wechat_id = $1 AND deleted_at IS NULL LIMIT 1`,
+    [csWechatId],
+  );
+  const targetTenant = (r.rows?.[0]?.tenant_id as string | undefined) ?? null;
+
+  if (req.tenantId) {
+    // license 自证 / 租户 session：cs_wechat_id 必属该租户（deny by default 跨租户写）。
+    if (!targetTenant)
+      return { error: { status: 404, code: 'TARGET_NOT_FOUND', message: '解析不到该客服机所属租户' } };
+    if (targetTenant !== req.tenantId)
+      return { error: { status: 403, code: 'CROSS_TENANT', message: '该客服机不属于当前 license 的租户' } };
+    return { tenantId: req.tenantId };
+  }
+
+  // legacy internal token / dev：按 cs_wechat_id 反查（无 req.tenantId 上下文）。
+  if (!targetTenant)
+    return { error: { status: 404, code: 'TARGET_NOT_FOUND', message: '解析不到该客服机所属租户' } };
+  return { tenantId: targetTenant };
+}
+
 function fail(res: Response, status: number, code: string, message: string): Response {
   return res
     .status(status)
@@ -421,9 +454,11 @@ router.post('/friend-scan/ingest', requireServiceCredential, async (req: Request
   if (!Array.isArray(body.contacts))
     return res.status(400).json({ error: 'contacts 必须是数组' });
 
-  // ingest 无 req.tenantId（service token），按 cs_wechat_id → service_agents.tenant_id 解析所属租户
-  const tenantId = await resolveTenantId(req, csWechatId);
-  if (!tenantId) return fail(res, 404, 'TARGET_NOT_FOUND', '解析不到该客服机所属租户');
+  // Gap1：解析目标租户 + 同租户隔离。agent license 自证时 req.tenantId 已挂 → cs_wechat_id 必属该租户；
+  // legacy internal token（无 req.tenantId）→ 按 cs_wechat_id 反查（旧行为）。
+  const scope = await resolveServiceWriteTenant(req, csWechatId);
+  if ('error' in scope) return fail(res, scope.error.status, scope.error.code, scope.error.message);
+  const tenantId = scope.tenantId;
 
   // 规范化 + 去重（同名取首条），过滤空名
   const seen = new Set<string>();
@@ -534,9 +569,10 @@ router.get('/friend-scan/pending', requireServiceCredential, async (req: Request
   const csWechatId = (typeof req.query.cs_wechat_id === 'string' ? req.query.cs_wechat_id : '').trim();
   if (!csWechatId) return res.status(400).json({ error: 'cs_wechat_id 必填' });
 
-  // agent 无 req.tenantId（service token），按 cs_wechat_id → service_agents.tenant_id 解析所属租户。
-  const tenantId = await resolveTenantId(req, csWechatId);
-  if (!tenantId) return fail(res, 404, 'TARGET_NOT_FOUND', '解析不到该客服机所属租户');
+  // Gap1：agent license 自证时 req.tenantId 已挂 → cs_wechat_id 必属该租户；legacy token → 反查（旧行为）。
+  const scope = await resolveServiceWriteTenant(req, csWechatId);
+  if ('error' in scope) return fail(res, scope.error.status, scope.error.code, scope.error.message);
+  const tenantId = scope.tenantId;
 
   try {
     const r = await pool.query(
@@ -602,8 +638,10 @@ router.get('/onboarding/:csWechatId', requireCsReadAccess, async (req: Request, 
 router.put('/onboarding/:csWechatId', requireServiceCredential, async (req: Request, res: Response) => {
   const csWechatId = (req.params.csWechatId ?? '').trim();
   if (!csWechatId) return res.status(400).json({ error: 'csWechatId 必填' });
-  const tenantId = await resolveTenantId(req, csWechatId);
-  if (!tenantId) return fail(res, 404, 'TARGET_NOT_FOUND', '解析不到该客服机所属租户');
+  // Gap1：agent license 自证时 req.tenantId 已挂 → cs_wechat_id 必属该租户；legacy token → 反查（旧行为）。
+  const scope = await resolveServiceWriteTenant(req, csWechatId);
+  if ('error' in scope) return fail(res, scope.error.status, scope.error.code, scope.error.message);
+  const tenantId = scope.tenantId;
 
   const body = (req.body ?? {}) as Record<string, unknown>;
   // 校验 step 三态合法
