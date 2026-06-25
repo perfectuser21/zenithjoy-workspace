@@ -226,4 +226,45 @@ describe('requireCsReadAccess — 读接口多通道闸（legacy/super-admin ∪
     if (old === undefined) delete process.env.ADMIN_FEISHU_OPENIDS;
     else process.env.ADMIN_FEISHU_OPENIDS = old;
   });
+
+  // 修 403：邮箱超管（X-User-Email ∈ ADMIN_EMAILS）必须经 legacy 旁路走 superAdminGuard 邮箱路径放行，
+  // 否则落到裸 tenantContext，而超管邮箱常不属任何租户 → 403。
+  it('邮箱超管头（X-User-Email ∈ ADMIN_EMAILS）→ 放行 next()（修 403）', () => {
+    const old = process.env.ADMIN_EMAILS;
+    process.env.ADMIN_EMAILS = 'boss@zenjoymedia.media,alex@example.com';
+    const req = { headers: { 'x-user-email': 'boss@zenjoymedia.media' } } as unknown as Request;
+    const res = mkRes();
+    const next = vi.fn();
+    requireCsReadAccess(req, res, next);
+    expect(next).toHaveBeenCalledOnce();
+    expect(res.statusCode).toBe(0);
+    if (old === undefined) delete process.env.ADMIN_EMAILS;
+    else process.env.ADMIN_EMAILS = old;
+  });
+
+  it('邮箱超管大小写不敏感（X-User-Email 大写仍匹配小写白名单）', () => {
+    const old = process.env.ADMIN_EMAILS;
+    process.env.ADMIN_EMAILS = 'boss@zenjoymedia.media';
+    const req = { headers: { 'x-user-email': 'BOSS@ZenJoyMedia.Media' } } as unknown as Request;
+    const res = mkRes();
+    const next = vi.fn();
+    requireCsReadAccess(req, res, next);
+    expect(next).toHaveBeenCalledOnce();
+    if (old === undefined) delete process.env.ADMIN_EMAILS;
+    else process.env.ADMIN_EMAILS = old;
+  });
+
+  it('非白名单邮箱不被当 legacy 超管（不短路，落 tenantContext）', () => {
+    // 不在 ADMIN_EMAILS 的邮箱不应被 hasLegacyServiceCredential 认作超管 → 不调 superAdminGuard 的放行路径。
+    // 无 tenant 上下文 + 无 better-auth session → 经 tenantContext 必拒（401/403），断言未被直接 next() 放行。
+    const old = process.env.ADMIN_EMAILS;
+    process.env.ADMIN_EMAILS = 'boss@zenjoymedia.media';
+    const req = { headers: { 'x-user-email': 'stranger@evil.com' } } as unknown as Request;
+    const res = mkRes();
+    const next = vi.fn();
+    requireCsReadAccess(req, res, next);
+    expect(next).not.toHaveBeenCalled();
+    if (old === undefined) delete process.env.ADMIN_EMAILS;
+    else process.env.ADMIN_EMAILS = old;
+  });
 });
