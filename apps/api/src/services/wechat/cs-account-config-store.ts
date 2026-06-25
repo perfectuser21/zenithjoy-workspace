@@ -250,8 +250,10 @@ export interface CSMachine {
   hostname?: string;
   last_seen?: string;
   configured: boolean;
-  wechat_id?: string;
-  self_name?: string;
+  wechat_id?: string; // 合成 id（cs-<前缀>）= 配置主 key，内部用
+  real_wechat_id?: string; // 真实微信号（perfect-xx，SSOT，运营手填）
+  wechat_display_name?: string; // 微信昵称（默忆，前端 display）
+  self_name?: string; // AI 人设名（小苏），≠ 微信昵称
   whitelist?: string[];
   auto_agent_enabled?: boolean;
   // 健康（最新一份 line04 自报，前台一处看到，不用再去诊断页）：
@@ -291,6 +293,8 @@ export async function listAllMachines(tenantId?: string, limit = 100): Promise<C
               MAX(lm.hostname)        AS hostname,
               MAX(lm.last_seen)       AS last_seen,
               MAX(sa.wechat_id)       AS wechat_id,
+              MAX(sa.real_wechat_id)      AS real_wechat_id,
+              MAX(sa.wechat_display_name) AS wechat_display_name,
               MAX(c.persona->>'self_name')   AS self_name,
               MAX(c.whitelist::text)         AS whitelist,
               bool_or(c.auto_agent_enabled)  AS auto_agent_enabled,
@@ -336,6 +340,8 @@ export async function listAllMachines(tenantId?: string, limit = 100): Promise<C
           r.last_seen instanceof Date ? r.last_seen.toISOString() : (r.last_seen as string | undefined),
         configured: Boolean(r.configured),
         wechat_id: r.wechat_id ? String(r.wechat_id) : undefined,
+        real_wechat_id: r.real_wechat_id ? String(r.real_wechat_id) : undefined,
+        wechat_display_name: r.wechat_display_name ? String(r.wechat_display_name) : undefined,
         self_name: r.self_name ? String(r.self_name) : undefined,
         whitelist,
         auto_agent_enabled: r.auto_agent_enabled === null ? undefined : Boolean(r.auto_agent_enabled),
@@ -362,7 +368,15 @@ export async function listAllMachines(tenantId?: string, limit = 100): Promise<C
  */
 export async function setupCSByMachine(
   machineId: string,
-  patch: Partial<CSAccountConfig> & { persona: Persona; wechat_id?: string },
+  patch: Partial<CSAccountConfig> & {
+    persona: Persona;
+    wechat_id?: string;
+    // SSOT 真实微信号(perfect-xx)——运营手填(wxauto 读不到微信号)；昵称/内部 wxid 由 agent 上报，
+    // 一键配置若已带上(前端把扫码结果透传)也一并落库。三者写进 service_agents 新列，不动合成 wechat_id 主 key。
+    real_wechat_id?: string;
+    wechat_display_name?: string;
+    wxid_internal?: string;
+  },
 ): Promise<{ wechat_id: string; agent_id: string | null }> {
   const ten = await pool.query(
     `SELECT l.tenant_id, lm.agent_id
@@ -382,12 +396,24 @@ export async function setupCSByMachine(
     typeof patch.wechat_id === 'string' && patch.wechat_id.trim()
       ? patch.wechat_id.trim()
       : `cs-${machineId.slice(0, 8)}`;
+  // 真实微信号(SSOT)/昵称/内部 wxid：缺省 NULL（存量/未填兼容）；trim 空串也归一成 NULL，避免空串占唯一索引。
+  const trimOrNull = (v: unknown): string | null =>
+    typeof v === 'string' && v.trim() ? v.trim() : null;
+  const realWechatId = trimOrNull(patch.real_wechat_id);
+  const displayName = trimOrNull(patch.wechat_display_name);
+  const wxidInternal = trimOrNull(patch.wxid_internal);
+  // COALESCE 保留既有非空值：本次没传(NULL)不抹掉上次填的真实微信号/昵称/wxid（幂等补填，不回退）。
   await pool.query(
-    `INSERT INTO zenithjoy.service_agents (tenant_id, machine_id, wechat_id)
-     VALUES ($1, $2, $3)
+    `INSERT INTO zenithjoy.service_agents
+       (tenant_id, machine_id, wechat_id, real_wechat_id, wechat_display_name, wxid_internal)
+     VALUES ($1, $2, $3, $4, $5, $6)
      ON CONFLICT (machine_id) WHERE deleted_at IS NULL
-       DO UPDATE SET wechat_id = EXCLUDED.wechat_id, updated_at = now()`,
-    [tenantId, machineId, wechatId],
+       DO UPDATE SET wechat_id = EXCLUDED.wechat_id,
+                     real_wechat_id = COALESCE(EXCLUDED.real_wechat_id, zenithjoy.service_agents.real_wechat_id),
+                     wechat_display_name = COALESCE(EXCLUDED.wechat_display_name, zenithjoy.service_agents.wechat_display_name),
+                     wxid_internal = COALESCE(EXCLUDED.wxid_internal, zenithjoy.service_agents.wxid_internal),
+                     updated_at = now()`,
+    [tenantId, machineId, wechatId, realWechatId, displayName, wxidInternal],
   );
   await saveCSConfig(wechatId, patch);
   return { wechat_id: wechatId, agent_id: agentId };
