@@ -40,6 +40,14 @@ const STATUS_LABELS: Record<CrmStatus, string> = {
   A5: 'A5 流失',
 };
 
+// 身份三态下拉（标身份入口，地基 D）：选 internal → 后端 GET /customers 排除 → 刷新后该行消失。
+const IDENTITY_OPTIONS: CrmIdentity[] = ['customer', 'blacklist', 'internal'];
+const IDENTITY_LABELS: Record<CrmIdentity, string> = {
+  customer: '客户·接管',
+  blacklist: '黑名单',
+  internal: '内部人员',
+};
+
 interface CustomerRow {
   name: string;
   contact: string;
@@ -55,12 +63,6 @@ interface CustomerRow {
   identity?: CrmIdentity | null;
 }
 
-// 身份列展示：客户行 managed=true→「客户·接管」/ managed=false→「客户·已排除」；identity=blacklist→「黑名单」；internal→「内部人员」
-function identityLabel(row: CustomerRow): string {
-  if (row.identity === 'internal') return '内部人员';
-  if (row.identity === 'blacklist') return '黑名单';
-  return row.managed ? '客户·接管' : '客户·已排除';
-}
 
 interface CustomerListResponse {
   customers: CustomerRow[];
@@ -232,6 +234,22 @@ export default function CustomerListPage() {
       });
       if (!out) return;
       flash('保存成功');
+      await loadCustomers();
+    },
+    [csWechatId, writeJson, flash, loadCustomers],
+  );
+
+  // 标身份入口（地基 D）：改名册身份 → PUT /api/crm/customers/identity → 即时刷新名册。
+  // 选 internal（内部人员）→ 后端 GET /customers 排除 → 刷新后该行从列表消失。
+  const onChangeIdentity = useCallback(
+    async (row: CustomerRow, identity: CrmIdentity) => {
+      const out = await writeJson('/api/crm/customers/identity', 'PUT', {
+        wechat_id: csWechatId,
+        contact: row.contact,
+        identity,
+      });
+      if (!out) return;
+      flash(identity === 'internal' ? '已标为内部人员，已从客户列表移除' : '保存成功');
       await loadCustomers();
     },
     [csWechatId, writeJson, flash, loadCustomers],
@@ -468,22 +486,40 @@ export default function CustomerListPage() {
                     </td>
                     {/* 最近联系 */}
                     <td style={{ padding: 8 }}>{fmtTime(row.last_contact_at)}</td>
-                    {/* 身份（客户·接管 / 客户·已排除 / 黑名单 / 内部人员）+ 接管开关 */}
+                    {/* 身份（可选下拉：客户·接管 / 黑名单 / 内部人员）+ AI 接管开关 */}
                     <td style={{ padding: 8 }}>
-                      <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
-                        <input
-                          type="checkbox"
-                          data-testid="crm-manage-toggle"
-                          checked={row.managed}
-                          onChange={() => void onToggleManage(row)}
-                        />
-                        <span
-                          data-testid="crm-identity-label"
-                          style={{ fontSize: 12, color: row.managed ? '#15803d' : '#dc2626' }}
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                        {/* 标身份入口（地基 D）：改完即时刷新；选「内部人员」该行即从列表消失 */}
+                        <select
+                          data-testid="crm-identity-select"
+                          value={row.identity ?? 'customer'}
+                          onChange={(e) => void onChangeIdentity(row, e.target.value as CrmIdentity)}
+                          title="标这一行是客户 / 黑名单 / 内部人员（内部人员不算客户，会从列表移除）"
                         >
-                          {identityLabel(row)}
-                        </span>
-                      </label>
+                          {IDENTITY_OPTIONS.map((id) => (
+                            <option key={id} value={id}>
+                              {IDENTITY_LABELS[id]}
+                            </option>
+                          ))}
+                        </select>
+                        {/* AI 接管开关 = 「AI 回不回他」的 gate（独立于名册身份）；内部人员不是客户，不显开关 */}
+                        {row.identity !== 'internal' && (
+                          <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
+                            <input
+                              type="checkbox"
+                              data-testid="crm-manage-toggle"
+                              checked={row.managed}
+                              onChange={() => void onToggleManage(row)}
+                            />
+                            <span
+                              data-testid="crm-identity-label"
+                              style={{ fontSize: 12, color: row.managed ? '#15803d' : '#dc2626' }}
+                            >
+                              {row.managed ? 'AI 接管中' : 'AI 已停（黑名单）'}
+                            </span>
+                          </label>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))}

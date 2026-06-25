@@ -10,6 +10,7 @@
  * GET  /api/crm/customers         — 当前租户客户名册（需登录；按 req.tenantId scope）
  * PUT  /api/crm/customers/manage  — 接管开关 → 写 wechat_cs_account_config.whitelist（管理员+同租户）
  * PUT  /api/crm/customers/status  — 状态 A1-A5 持久化 crm_customers（管理员+同租户）
+ * PUT  /api/crm/customers/identity — 标身份三态 customer/blacklist/internal → crm_customers.identity（管理员+同租户）
  * POST /api/crm/customers         — +加客户手动入册 source=manual（管理员+同租户）
  */
 import { Router, Request, Response, NextFunction } from 'express';
@@ -25,6 +26,8 @@ import type { RosterScanRow, TakeoverMode } from '../services/crm/customer-roste
 const router = Router();
 
 const VALID_STATUS = new Set(['A1', 'A2', 'A3', 'A4', 'A5']);
+// 身份三态（与 crm_customers_identity_check 钉死同值）：customer 客户 / blacklist 黑名单 / internal 内部人员。
+const VALID_IDENTITY = new Set(['customer', 'blacklist', 'internal']);
 
 /**
  * 把 body.wechat_id（客服机微信号）映射到 req.params.wechatId，供 requireCsWriteAccess('wechatId')
@@ -405,6 +408,43 @@ router.put(
       return res.json({ success: true, status: st });
     } catch (err) {
       return fail(res, 500, 'STATUS_FAILED', err instanceof Error ? err.message : 'unknown');
+    }
+  },
+);
+
+// PUT /api/crm/customers/identity — 标身份入口（地基 D）：把某行身份改成 customer/blacklist/internal，
+// 写 crm_customers.identity。complement PR#892（identity 列 + internal 排除已上线，原本只有手动 seed）。
+// 复用 status/manage 同款闸：bodyWechatIdToParam + requireCsWriteAccess（per-operator 写权限）+ resolveTenantId（租户隔离）。
+// internal = 内部人员（GET /customers 排除，列表里即消失）；blacklist = 名册标记（行仍返回，AI 接管 gate 仍以 wechat_cs_account_config.blacklist 为准，本列不替代 gate）。
+router.put(
+  '/customers/identity',
+  bodyWechatIdToParam,
+  requireCsWriteAccess('wechatId'),
+  async (req: Request, res: Response) => {
+    const { wechat_id, contact, identity } = req.body as {
+      wechat_id?: string;
+      contact?: string;
+      identity?: string;
+    };
+    const csWechatId = (wechat_id ?? '').trim();
+    const name = (contact ?? '').trim();
+    const ident = (identity ?? '').trim();
+    if (!csWechatId || !name) return fail(res, 400, 'INVALID_INPUT', 'wechat_id 和 contact 必填');
+    if (!VALID_IDENTITY.has(ident))
+      return fail(res, 400, 'INVALID_INPUT', 'identity 必须是 customer / blacklist / internal');
+    const tenantId = await resolveTenantId(req, csWechatId);
+    if (!tenantId) return fail(res, 404, 'TARGET_NOT_FOUND', '解析不到所属租户');
+    try {
+      // 租户隔离靠 tenant_id 进 UNIQUE 键；首次入册的行 status/source 走列默认（A1 / manual）。
+      await pool.query(
+        `INSERT INTO zenithjoy.crm_customers (tenant_id, cs_wechat_id, contact, identity, source, updated_at)
+         VALUES ($1::uuid, $2, $3, $4, 'manual', now())
+         ON CONFLICT (tenant_id, cs_wechat_id, contact) DO UPDATE SET identity = $4, updated_at = now()`,
+        [tenantId, csWechatId, name, ident],
+      );
+      return res.json({ success: true, identity: ident });
+    } catch (err) {
+      return fail(res, 500, 'IDENTITY_FAILED', err instanceof Error ? err.message : 'unknown');
     }
   },
 );
