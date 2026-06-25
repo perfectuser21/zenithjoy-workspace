@@ -3,7 +3,7 @@
  *
  * 与 crm-customer-list.spec.ts 的根本区别：**无任何前端路由拦截 stub、无 VITE_SKIP_AUTH**。
  * 真后端 :5200（vite proxy /api→:5200）+ 真 better-auth session cookie 注入浏览器 context。
- * 点接管开关时浏览器 fetch 必须带 `credentials:'include'` 把 cookie 发给真后端，否则真后端 401 →
+ * 改身份下拉（黑名单）时浏览器 fetch 必须带 `credentials:'include'` 把 cookie 发给真后端，否则真后端 401 →
  * 断言失败。这才真验本 sprint 必修的「未登录」bug 接缝。
  *
  * 由 line04-crm-customer-list-smoke.sh --leg=cookie-seam 编排运行（它已起真后端 + 真登录拿 cookie）：
@@ -16,7 +16,7 @@ import { test, expect } from '@playwright/test';
 const RAW = process.env.E2E_REAL_SESSION_COOKIE || '';
 const BASE = process.env.E2E_BASE_URL || 'http://localhost:5174';
 
-test('cookie 接缝 — 真浏览器在真后端上点接管开关，真发 session cookie', async ({ browser }) => {
+test('cookie 接缝 — 真浏览器在真后端上改身份下拉，真发 session cookie', async ({ browser }) => {
   test.skip(!RAW, 'E2E_REAL_SESSION_COOKIE 未注入：真后端 leg 未具备，cookie 接缝 logic-done-pending');
 
   const eq = RAW.indexOf('=');
@@ -32,12 +32,12 @@ test('cookie 接缝 — 真浏览器在真后端上点接管开关，真发 sess
   await page.waitForLoadState('networkidle');
   await expect(page.getByTestId('crm-customer-row').first()).toBeVisible({ timeout: 15000 });
 
-  // 点接管开关 —— 不 stub /api/crm/customers/manage，浏览器 fetch 须带 credentials 把 cookie 发给真后端
-  await page.getByTestId('crm-manage-toggle').first().click();
+  // 改身份下拉为黑名单 —— 不 stub /api/crm/customers/identity，浏览器 fetch 须带 credentials 把 cookie 发给真后端
+  await page.getByTestId('crm-identity-select').first().selectOption('blacklist');
   await expect(page.getByText('保存成功')).toBeVisible({ timeout: 15000 });
   await expect(page.getByText('登录已失效')).toHaveCount(0);
 
-  // 交叉复核：浏览器 context 内 GET 真后端，managed 已真反映（cookie 真到后端 + 真写 whitelist）
+  // 交叉复核：浏览器 context 内 GET 真后端，identity 已真反映（cookie 真到后端 + 真写 identity/blacklist）
   const resp = await page.request.get(`${BASE}/api/crm/customers`);
   expect(resp.status()).toBe(200);
 

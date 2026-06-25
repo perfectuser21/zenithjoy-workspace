@@ -112,7 +112,10 @@ describe('PUT /api/crm/customers/identity — blacklist/customer 与 config.blac
     expect(res.body).toMatchObject({ success: true, identity: 'blacklist' });
     // config.blacklist upsert 真发生，且参数里含被拉黑的人
     const cfgUpsert = mockQuery.mock.calls.find(
-      (c) => typeof c[0] === 'string' && c[0].includes('wechat_cs_account_config') && c[0].includes('blacklist'),
+      (c) =>
+        typeof c[0] === 'string' &&
+        c[0].includes('INSERT INTO zenithjoy.wechat_cs_account_config') &&
+        c[0].includes('blacklist'),
     );
     expect(cfgUpsert).toBeDefined();
     expect(JSON.stringify(cfgUpsert?.[1])).toContain('小号A');
@@ -128,7 +131,10 @@ describe('PUT /api/crm/customers/identity — blacklist/customer 与 config.blac
     expect(res.status).toBe(200);
     expect(res.body).toMatchObject({ success: true, identity: 'customer' });
     const cfgUpsert = mockQuery.mock.calls.find(
-      (c) => typeof c[0] === 'string' && c[0].includes('wechat_cs_account_config') && c[0].includes('blacklist'),
+      (c) =>
+        typeof c[0] === 'string' &&
+        c[0].includes('INSERT INTO zenithjoy.wechat_cs_account_config') &&
+        c[0].includes('blacklist'),
     );
     expect(cfgUpsert).toBeDefined();
     // 移除后 blacklist 不再含 小号A，但保留别人
