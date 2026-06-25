@@ -507,24 +507,242 @@ def _collect_recent_contacts(item_names: List[str], limit: int = 100) -> List[Di
     return out
 
 
+class _ScrollAccumulator:
+    """滚动扫会话列表的累计器（纯逻辑，顶层零 pywinauto，CI clean 可跑）。
+
+    微信会话列表是 Qt 虚拟滚动：一次 descendants 只渲染可见 ~6 条 ListItem，相邻屏有重叠。
+    每滚一屏把可见 ListItem 名字喂进来 feed(page) → 复用 _collect_recent_contacts 的过滤/解析，
+    并入保序 distinct 集合，返回「本屏新增了几个」。新增=0 表示这屏全见过（重叠或滚到底）。
+
+    - 保序：先见到的排前（列表顶部 = 最近会话）。
+    - distinct：跨屏同名只留首次。
+    - limit：累计满 limit 后不再增长，feed 返回 0。
+    """
+
+    def __init__(self, limit: int = 100) -> None:
+        self._limit = limit
+        self._seen: set[str] = set()
+        self._contacts: List[Dict[str, str]] = []
+
+    def feed(self, item_names: List[str]) -> int:
+        """喂一屏 ListItem 名字，返回本屏新增的 distinct 联系人数。"""
+        if len(self._contacts) >= self._limit:
+            return 0
+        # 复用纯函数解析/过滤本屏（不要求未读）；它自带屏内去重，这里再跨屏去重。
+        parsed = _collect_recent_contacts(item_names, limit=self._limit)
+        added = 0
+        for c in parsed:
+            name = c["name"]
+            if name in self._seen:
+                continue
+            if len(self._contacts) >= self._limit:
+                break
+            self._seen.add(name)
+            self._contacts.append(c)
+            added += 1
+        return added
+
+    def contacts(self) -> List[Dict[str, str]]:
+        """已累计的 distinct 联系人（保序，截到 limit）。"""
+        return list(self._contacts[: self._limit])
+
+
+def _should_stop_scroll(no_new_streak: int, max_streak: int) -> bool:
+    """终止判定：连续 max_streak 屏无新增 → 认为滚到底，停。"""
+    return no_new_streak >= max_streak
+
+
+def _merge_contact_detail(
+    contact: Dict[str, Any],
+    wechat_id: Optional[str] = None,
+    add_friend_time: Optional[str] = None,
+) -> Dict[str, Any]:
+    """把真机读到的对方微信号 + 加好友时间合进 contact dict（纯函数，不就地改入参）。
+
+    - wechat_id：开资料页读对方微信号；读不到（None/空串）→ 不塞 key。
+    - add_friend_time：滚聊天记录到最顶读最早消息日期（≈加微信时间）；读不到 → 不塞 key。
+    缺失字段一律不进 payload（保持干净，后端按缺省处理），绝不塞 None/空串污染。
+    """
+    out = dict(contact)
+    if wechat_id:
+        out["wechat_id"] = wechat_id
+    if add_friend_time:
+        out["add_friend_time"] = add_friend_time
+    return out
+
+
+# 滚动扫会话列表参数：每屏后等 UIA 重建虚拟列表 + 连续无新增阈值（滚到底判定）。
+_SCROLL_SETTLE_SLEEP = 0.25
+_SCROLL_NO_NEW_MAX_STREAK = 2
+_SCROLL_MAX_PAGES = 80  # 安全上限（约 80*重叠步长 条），防异常下无限滚
+
+
+def _read_visible_item_names(mw: Any) -> List[str]:
+    """读一屏当前渲染的会话 ListItem 名字（虚拟列表只暴露可见项）。"""
+    names: List[str] = []
+    for it in mw.descendants(control_type="ListItem"):
+        try:
+            names.append(it.element_info.name or "")
+        except Exception:
+            continue
+    return names
+
+
+def _read_contact_wechat_id(mw: Any) -> Optional[str]:
+    """从当前打开会话的资料页读对方微信号（A2）。
+
+    真机：会话标题区/资料卡里「微信号：xxx」文本节点。纯 UIA 文本扫描，找不到 → None。
+    不可 CI 测（依赖真机资料页渲染）；这里只做安全的文本提取，任何异常吞掉返回 None。
+    """
+    try:
+        import re as _re
+        for c in _iter_all_controls(mw, "Text"):
+            try:
+                txt = (c.element_info.name or "").strip()
+            except Exception:
+                continue
+            m = _re.search(r'微信号[:：]\s*([A-Za-z0-9_\-]{4,40})', txt)
+            if m:
+                return m.group(1)
+    except Exception as exc:
+        _log(f"_read_contact_wechat_id: 读微信号异常: {exc}")
+    return None
+
+
+def _read_contact_earliest_date(mw: Any) -> Optional[str]:
+    """滚聊天记录到最顶，读最早一条消息的日期（≈加微信时间，A2）。
+
+    真机：聊天面板顶部时间分隔条文本（"2026年3月12日"/"3月12日" 等）。纯 UIA 文本扫描，
+    归一成 YYYY-MM-DD；读不到 → None。任何异常吞掉返回 None（绝不拖垮扫描）。
+    """
+    try:
+        import re as _re
+        from datetime import datetime as _dt
+        # 滚到最顶：PageUp 若干次（与 PageDown 同款 PostMessage，不抢焦点）
+        try:
+            import ctypes as _ct
+            main_hwnd = mw.element_info.handle
+            if main_hwnd:
+                _u32 = _ct.windll.user32
+                VK_PRIOR = 0x21  # PageUp
+                for _ in range(_SCROLL_MAX_PAGES):
+                    _u32.PostMessageW(main_hwnd, 0x0100, VK_PRIOR, 0x00490001)
+                    time.sleep(0.02)
+                    _u32.PostMessageW(main_hwnd, 0x0101, VK_PRIOR, 0xC0490001)
+                    time.sleep(0.08)
+        except Exception:
+            pass
+        earliest: Optional[str] = None
+        for c in _iter_all_controls(mw, "Text"):
+            try:
+                txt = (c.element_info.name or "").strip()
+            except Exception:
+                continue
+            # "2026年3月12日" / "3月12日" / "2026-03-12"
+            m = _re.search(r'(?:(\d{4})年)?(\d{1,2})月(\d{1,2})日', txt)
+            if m:
+                year = int(m.group(1)) if m.group(1) else _dt.now().year
+                cand = f"{year:04d}-{int(m.group(2)):02d}-{int(m.group(3)):02d}"
+            else:
+                m2 = _re.search(r'(\d{4})-(\d{1,2})-(\d{1,2})', txt)
+                if not m2:
+                    continue
+                cand = f"{int(m2.group(1)):04d}-{int(m2.group(2)):02d}-{int(m2.group(3)):02d}"
+            if earliest is None or cand < earliest:
+                earliest = cand
+        return earliest
+    except Exception as exc:
+        _log(f"_read_contact_earliest_date: 读最早消息日期异常: {exc}")
+        return None
+
+
+def enrich_contacts_with_details(mw: Any, contacts: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """逐个打开会话读对方微信号 + 加好友时间，合进 contact（A2）。
+
+    复用 _open_chat 切到目标会话（防串台），再读资料页微信号 + 滚聊天记录到顶读最早日期，
+    用纯函数 _merge_contact_detail 合并（缺失字段不进 payload）。任何单个失败只跳过该字段，
+    绝不抛、绝不拖垮整批（保持与 post_friend_scan 同纪律）。
+    """
+    enriched: List[Dict[str, Any]] = []
+    for c in contacts:
+        wid: Optional[str] = None
+        aft: Optional[str] = None
+        name = c.get("name") or ""
+        try:
+            item = _find_session_item(mw, name)
+            if item is not None and _open_chat(mw, item, name):
+                wid = _read_contact_wechat_id(mw)
+                aft = _read_contact_earliest_date(mw)
+        except Exception as exc:
+            _log(f"enrich_contacts_with_details: {name!r} 读细节异常: {exc}")
+        enriched.append(_merge_contact_detail(c, wechat_id=wid, add_friend_time=aft))
+    return enriched
+
+
+def _find_session_item(mw: Any, sender: str) -> Optional[Any]:
+    """在会话列表里按 sender 名字找到对应 ListItem（供 enrich 打开会话）。"""
+    try:
+        for it in mw.descendants(control_type="ListItem"):
+            try:
+                nm = it.element_info.name or ""
+            except Exception:
+                continue
+            if nm.split("\n")[0].strip() == sender:
+                return it
+    except Exception:
+        pass
+    return None
+
+
+def _scroll_session_list_pagedown(mw: Any) -> None:
+    """向会话列表投递一次 PageDown 翻屏（键盘，不抢前台焦点）。
+
+    用 PostMessageW(WM_KEYDOWN/UP, VK_NEXT) 直投主窗口消息队列——与 _uia_send 的 Enter 同款，
+    不依赖前台焦点、不动鼠标（会话 List 不暴露 ScrollPattern，PsExec session 无鼠标输入权，
+    禁止用鼠标 wheel）。失败吞掉（滚不动 = 累计逻辑自然按「无新增」终止）。
+    """
+    try:
+        import ctypes as _ct
+        main_hwnd = mw.element_info.handle
+        if not main_hwnd:
+            return
+        _u32 = _ct.windll.user32
+        VK_NEXT = 0x22  # PageDown
+        _u32.PostMessageW(main_hwnd, 0x0100, VK_NEXT, 0x00510001)  # WM_KEYDOWN
+        time.sleep(0.03)
+        _u32.PostMessageW(main_hwnd, 0x0101, VK_NEXT, 0xC0510001)  # WM_KEYUP
+    except Exception as exc:
+        _log(f"_scroll_session_list_pagedown: 投递 PageDown 异常: {exc}")
+
+
 def scan_recent_contacts(mw: Any, limit: int = 100) -> List[Dict[str, str]]:
-    """遍历主窗口会话列表 ListItem，列出近期会话联系人（CRM 好友表行源）。
+    """滚动遍历主窗口会话列表 ListItem，列出全部近期会话联系人（CRM 好友表行源）。
 
     与 scan_unread 的区别：scan_unread 只挑未读；本函数列"近期会话联系人"（不要求未读），
     供中台拉成客户好友表（默认全接管 + 黑名单排除）。
 
+    虚拟滚动处理（A1）：微信会话列表是 Qt 虚拟列表，一次 descendants 只渲染可见 ~6 条。
+    这里边滚边累计：读一屏 → _ScrollAccumulator 去重并入 → PageDown 翻下一屏，
+    直到连续 _SCROLL_NO_NEW_MAX_STREAK 屏无新增（滚到底）或到 limit / 安全上限为止。
+
     托盘/最小化场景同 scan_unread：扫描前 _ensure_tray_visible 短暂移出离屏刷新 UIA，
-    扫完 _restore_window_state 还原（后台无感知）。返回纯函数 _collect_recent_contacts 的结果。
+    扫完 _restore_window_state 还原（后台无感知）。
     """
     orig_state = _ensure_tray_visible(mw)
     try:
-        names: List[str] = []
-        for it in mw.descendants(control_type="ListItem"):
-            try:
-                names.append(it.element_info.name or "")
-            except Exception:
-                continue
-        return _collect_recent_contacts(names, limit=limit)
+        acc = _ScrollAccumulator(limit=limit)
+        no_new_streak = 0
+        for _ in range(_SCROLL_MAX_PAGES):
+            added = acc.feed(_read_visible_item_names(mw))
+            if added == 0:
+                no_new_streak += 1
+            else:
+                no_new_streak = 0
+            if len(acc.contacts()) >= limit or _should_stop_scroll(no_new_streak, _SCROLL_NO_NEW_MAX_STREAK):
+                break
+            _scroll_session_list_pagedown(mw)
+            time.sleep(_SCROLL_SETTLE_SLEEP)
+        return acc.contacts()
     finally:
         _restore_window_state(mw, orig_state)
 
@@ -2123,6 +2341,9 @@ def run_real_listen(args: argparse.Namespace) -> int:
             ):
                 try:
                     _contacts = scan_recent_contacts(mw, limit=100)
+                    # A2：逐个补对方微信号 + 加好友时间（资料页 + 聊天记录最顶日期）。
+                    # 失败只跳过该字段，base 列表不受影响。
+                    _contacts = enrich_contacts_with_details(mw, _contacts)
                     _res = post_friend_scan(args.middleware_url, _cs_wid, _contacts)
                     if _res.get("ok"):
                         friend_scan_done_once = True
