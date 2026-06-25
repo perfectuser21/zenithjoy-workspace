@@ -364,11 +364,17 @@ with open(prod, "rb") as f:
 prod_env = dict(prod_data.get("EnvironmentVariables", {}))
 
 # staging 自身权威 env（绝不被生产值覆盖回 :5200/cecelia/production）。
+# better-auth 两个 key 必须收口到 staging 域名：否则 merged.update(prod_env) 会把生产的
+# BETTER_AUTH_URL/TRUSTED_ORIGINS=autopilot.zenjoymedia.media 抄进 staging，导致从
+# staging-autopilot.zenjoymedia.media 登录被 better-auth 判 invalid origin（403）。
+# auth.ts 已读这两个 env（trustedOrigins/baseURL），无需改代码（2026-06-25 真实事故）。
 staging_overrides = {
     "PORT": str(port),
     "ZENITHJOY_API_URL": f"http://localhost:{port}",
     "DATABASE_NAME": db,
     "NODE_ENV": "staging",
+    "BETTER_AUTH_URL": "https://staging-autopilot.zenjoymedia.media",
+    "BETTER_AUTH_TRUSTED_ORIGINS": "https://staging-autopilot.zenjoymedia.media,http://localhost:5173",
 }
 
 if os.path.isfile(template):

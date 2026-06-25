@@ -1,10 +1,12 @@
 #!/usr/bin/env bash
-# validate-deploy-workflow.sh — 验证 deploy-hk-vps.yml 语法和必要字段
+# validate-deploy-workflow.sh — 验证 dashboard 部署 workflow 语法和必要字段
 # 用法: bash validate-deploy-workflow.sh [workflow-file]
 # 退出码: 0=PASS, 1=FAIL
+# 注：deploy-hk-vps.yml 已于 2026-06-25 拆为 deploy-dashboard-staging.yml（合 main 自动上 staging）
+#     + promote-dashboard-prod.yml（人工放行上生产）。默认校验 staging 部署 workflow。
 set -euo pipefail
 
-WORKFLOW="${1:-.github/workflows/deploy-hk-vps.yml}"
+WORKFLOW="${1:-.github/workflows/deploy-dashboard-staging.yml}"
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 WORKFLOW_PATH="$REPO_ROOT/$WORKFLOW"
 
