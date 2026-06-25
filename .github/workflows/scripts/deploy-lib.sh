@@ -418,6 +418,70 @@ PY
 }
 
 # ════════════════════════════════════════════════════════════════════════════
+# ensure_prod_plist_points_to_current —— 让生产 plist 从 releases/current 软链跑（promote 真生效）。
+#
+# 治根（2026-06-25 勘察缺口）：生产 com.zenithjoy.api 的 ProgramArguments 写死指主 checkout
+# `apps/api/dist/index.js`，而 staging_promote 是"原子重指 releases/current 软链 + 重启"。
+# **重指 current 对生产实际跑什么零效果**——launchctl 还是按 plist 写死的主 checkout 路径起，
+# promote 不真生效。要让 release 隔离的 promote/rollback 真生效，生产 plist 的 Program/WorkingDir
+# 必须指向 releases/current/dist/index.js（与 staging 指 releases/staging 对称）。
+#
+# 本函数（同 ensure_staging_plist 套路，plistlib 程序化、幂等、只改路径不碰 env/密钥）：
+#   · 读生产 plist → ProgramArguments[1] 改 releases/current/dist/index.js、WorkingDirectory 改 releases/current
+#   · env / 密钥 / Label / 日志 / KeepAlive 等**原样保留**（只动这两处路径）
+#   · 已指向 current 则幂等（结果一致）
+# **安全纪律**：本函数只改 plist 文件本身（写到 ZJ_PROD_PLIST 指定路径），**不 unload/load/kickstart
+#   任何 launchd 服务**——重启副作用由调用方（staging_promote）显式控制，便于 dry-run 单测。
+#
+# 约定环境变量：
+#   ZJ_PROD_PLIST    生产 plist 路径（读+写回同一文件）
+#   ZJ_RELEASES_DIR  release 隔离根（current 软链在此下）
+#   ZJ_NODE          node 可执行路径（仅当原 plist 无 ProgramArguments 时兜底 [0]）
+ensure_prod_plist_points_to_current() {
+  local prod_plist="${ZJ_PROD_PLIST:-}"
+  local releases="${ZJ_RELEASES_DIR:?ZJ_RELEASES_DIR 未设}"
+  local node="${ZJ_NODE:-/opt/homebrew/bin/node}"
+
+  if [ ! -f "$prod_plist" ]; then
+    echo "❌ ensure_prod_plist_points_to_current：生产 plist 不存在（${prod_plist}）" >&2
+    return 1
+  fi
+
+  PROD_PLIST="$prod_plist" RELEASES_DIR="$releases" NODE_BIN="$node" \
+  /usr/bin/python3 - <<'PY'
+import plistlib, os, sys
+prod = os.environ["PROD_PLIST"]
+rels = os.environ["RELEASES_DIR"]
+node = os.environ["NODE_BIN"]
+
+with open(prod, "rb") as f:
+    data = plistlib.load(f)
+
+want_index = f"{rels}/current/dist/index.js"
+want_wd    = f"{rels}/current"
+
+# ProgramArguments[0] 保留原 node 路径（有就用原来的，没有才兜底 NODE_BIN）。
+args = list(data.get("ProgramArguments", []))
+node_bin = args[0] if args else node
+new_args = [node_bin, want_index]
+
+already = (data.get("ProgramArguments") == new_args and data.get("WorkingDirectory") == want_wd)
+data["ProgramArguments"] = new_args
+data["WorkingDirectory"] = want_wd
+# env / Label / 日志 / KeepAlive / RunAtLoad 等一概不动（只改这两处路径）。
+
+with open(prod, "wb") as f:
+    plistlib.dump(data, f)
+
+state = "已是 current（幂等）" if already else "已改指 releases/current"
+sys.stderr.write(f"✅ 生产 plist {state}: ProgramArguments[1]={want_index} WorkingDirectory={want_wd}\n")
+PY
+  local rc=$?
+  [ "$rc" -eq 0 ] || { echo "❌ ensure_prod_plist_points_to_current：写出失败（rc=$rc）" >&2; return 1; }
+  return 0
+}
+
+# ════════════════════════════════════════════════════════════════════════════
 # ensure_release_node_modules —— monorepo hoist 兜底（让 release 自包含可跑）。
 #
 # 治根（2026-06-25 真实事故）：依赖被 npm hoist 到 repo 根 node_modules，apps/api/node_modules
@@ -597,16 +661,29 @@ staging_promote() {
     echo "❌ 生产库 migration 失败"; return 1
   fi
 
+  # 安全顺序：先把 current 原子重指到【已验过的】release（current 此刻一定指向真实存在的 release），
+  # 再改生产 plist 指 current，最后才重启——任一前置失败都不碰运行中的生产进程。
   echo "promote：原子重指 releases/current → ${sha}..."
   if ! atomic_repoint_current "${ZJ_RELEASES_DIR}" "${reldir}"; then
     echo "❌ 原子重指 current 失败"; return 1
   fi
 
+  # 让生产 plist 从 releases/current 跑（治"重指 current 对生产零效果"缺口）。幂等、只改路径不碰密钥。
+  echo "promote：确保生产 plist 指向 releases/current（重启前）..."
+  export ZJ_PROD_PLIST ZJ_RELEASES_DIR ZJ_NODE
+  if ! ensure_prod_plist_points_to_current; then
+    echo "❌ 生产 plist 改指 current 失败，放弃 promote（不重启，生产仍跑旧进程不受影响）"; return 1
+  fi
+
   echo "promote：干净重启 ${ZJ_PROD_LABEL}（生产 launchd 从 current 跑，先杀占 :${ZJ_PROD_PORT} 进程）..."
-  launchctl stop "${ZJ_PROD_LABEL}" || true
+  # plist 文件已变（Program/WorkingDir 指 current），必须 bootout+bootstrap 让 launchd 重读定义，
+  # 否则 kickstart 重启的还是旧定义。bootstrap 不支持回退 unload/load 兜底。
+  local _gui; _gui="gui/$(id -u)"
+  launchctl bootout "${_gui}/${ZJ_PROD_LABEL}" 2>/dev/null || launchctl unload "${ZJ_PROD_PLIST}" 2>/dev/null || true
   sleep 2
   kill_port "${ZJ_PROD_PORT}"
-  launchctl start "${ZJ_PROD_LABEL}"
+  launchctl bootstrap "${_gui}" "${ZJ_PROD_PLIST}" 2>/dev/null || launchctl load "${ZJ_PROD_PLIST}" 2>/dev/null || true
+  launchctl kickstart -k "${_gui}/${ZJ_PROD_LABEL}" 2>/dev/null || launchctl start "${ZJ_PROD_LABEL}" 2>/dev/null || true
   local up=0
   for _ in $(seq 1 12); do
     if curl -sf "http://localhost:${ZJ_PROD_PORT}/health" >/dev/null 2>&1; then up=1; break; fi
@@ -641,10 +718,14 @@ staging_rollback() {
       echo "⚠️ 锚点 release 目录不存在（${reldir}），current 保持现状，仅重启兜底确保不停在半死"
     fi
   fi
-  launchctl stop "${ZJ_PROD_LABEL}" || true
+  # 生产 plist 已指 releases/current（promote 改过），回滚只需把 current 重指回锚点即生效；
+  # 重启用 bootout+bootstrap+kickstart（与 promote 对称：让 launchd 重读定义、强制重启）。
+  local _gui; _gui="gui/$(id -u)"
+  launchctl bootout "${_gui}/${ZJ_PROD_LABEL}" 2>/dev/null || launchctl unload "${ZJ_PROD_PLIST}" 2>/dev/null || true
   sleep 2
   kill_port "${ZJ_PROD_PORT}"
-  launchctl start "${ZJ_PROD_LABEL}"
+  launchctl bootstrap "${_gui}" "${ZJ_PROD_PLIST}" 2>/dev/null || launchctl load "${ZJ_PROD_PLIST}" 2>/dev/null || true
+  launchctl kickstart -k "${_gui}/${ZJ_PROD_LABEL}" 2>/dev/null || launchctl start "${ZJ_PROD_LABEL}" 2>/dev/null || true
   local up=0
   for _ in $(seq 1 12); do
     if curl -sf "http://localhost:${ZJ_PROD_PORT}/health" >/dev/null 2>&1; then up=1; break; fi

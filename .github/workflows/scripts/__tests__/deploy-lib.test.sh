@@ -14,6 +14,7 @@
 # Case K: prune_old_releases 保留最新 N 个、删旧的、绝不删 current 指向的 release
 # Case L: ensure_staging_plist 从生产 plist 程序化派生 staging plist（PORT/DB/Label/Program 覆写 + 密钥继承）
 # Case M: ensure_release_node_modules 在 release node_modules 为空时从 hoisted 根兜底填充
+# Case N: ensure_prod_plist_points_to_current 把生产 plist 改指 releases/current（只改路径/不碰密钥/幂等/不碰真 plist）
 set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -297,6 +298,70 @@ else
   bad "M 不该覆盖自带依赖"
 fi
 rm -rf "$MBOX"
+
+# ════════════════════════════════════════════════════════════════════════════
+# Case N: ensure_prod_plist_points_to_current —— 让生产 plist 从 releases/current 跑（promote 真生效）。
+# 治根（2026-06-25 缺口）：生产 plist 写死指主 checkout apps/api/dist/index.js，promote 重指
+# releases/current 软链对生产实际跑什么零效果。本函数把 Program/WorkingDir 改指 releases/current，
+# 只动两处路径、不碰 env/密钥/Label、幂等。纯文件操作可单测（用临时假 plist，绝不碰真生产 plist）。
+# ════════════════════════════════════════════════════════════════════════════
+NBOX="$(mktemp -d)"
+cat > "$NBOX/prod.plist" <<'PLIST'
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>com.zenithjoy.api</string>
+  <key>ProgramArguments</key>
+  <array><string>/opt/homebrew/bin/node</string><string>/Users/x/perfect21/zenithjoy/apps/api/dist/index.js</string></array>
+  <key>WorkingDirectory</key><string>/Users/x/perfect21/zenithjoy/apps/api</string>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PORT</key><string>5200</string>
+    <key>DATABASE_NAME</key><string>cecelia</string>
+    <key>SOME_SECRET</key><string>prod-secret-xyz</string>
+  </dict>
+  <key>StandardOutPath</key><string>/logs/api.log</string>
+  <key>KeepAlive</key><true/>
+  <key>RunAtLoad</key><true/>
+</dict>
+</plist>
+PLIST
+ZJ_PROD_PLIST="$NBOX/prod.plist" ZJ_RELEASES_DIR=/fake/releases ZJ_NODE=/opt/homebrew/bin/node \
+  ensure_prod_plist_points_to_current >/dev/null 2>&1
+N_RC=$?
+_nread() { /usr/bin/python3 - "$NBOX/prod.plist" "$1" <<'PY'
+import plistlib,sys
+d=plistlib.load(open(sys.argv[1],'rb'))
+k=sys.argv[2]
+if k.startswith("env:"): print(d.get("EnvironmentVariables",{}).get(k[4:],""))
+elif k=="program0": print(d.get("ProgramArguments",["",""])[0] if d.get("ProgramArguments") else "")
+elif k=="program1": print(d.get("ProgramArguments",["",""])[1] if len(d.get("ProgramArguments",[]))>1 else "")
+else: print(d.get(k,""))
+PY
+}
+if [ "$N_RC" -eq 0 ]; then ok "N ensure_prod_plist_points_to_current 跑通"; else bad "N 返非0（rc=$N_RC）"; fi
+expect_eq "$(_nread program1)" "/fake/releases/current/dist/index.js" "N Program→releases/current/dist/index.js"
+expect_eq "$(_nread WorkingDirectory)" "/fake/releases/current" "N WorkingDir→releases/current"
+expect_eq "$(_nread program0)" "/opt/homebrew/bin/node" "N ProgramArguments[0] node 保留"
+expect_eq "$(_nread Label)" "com.zenithjoy.api" "N Label 不动"
+expect_eq "$(_nread env:SOME_SECRET)" "prod-secret-xyz" "N 密钥/env 原样保留（不碰）"
+expect_eq "$(_nread env:DATABASE_NAME)" "cecelia" "N 生产 DB 不动（不改成 staging）"
+# 幂等：再跑一次结果一致
+ZJ_PROD_PLIST="$NBOX/prod.plist" ZJ_RELEASES_DIR=/fake/releases ZJ_NODE=/opt/homebrew/bin/node \
+  ensure_prod_plist_points_to_current >/dev/null 2>&1
+expect_eq "$(_nread program1)" "/fake/releases/current/dist/index.js" "N 幂等：二次运行仍正确"
+# 生产 plist 不存在 → 返非0
+set +e
+ZJ_PROD_PLIST="$NBOX/nope.plist" ZJ_RELEASES_DIR=/fake/releases ensure_prod_plist_points_to_current >/dev/null 2>&1
+N_NOPROD=$?
+set -e 2>/dev/null || true
+if [ "$N_NOPROD" -ne 0 ]; then ok "N 生产 plist 缺失→返非0"; else bad "N 生产 plist 缺失应返非0"; fi
+# plutil 校验生成的 plist 合法（macOS 有 plutil 才跑）
+if command -v plutil >/dev/null 2>&1; then
+  if plutil -lint "$NBOX/prod.plist" >/dev/null 2>&1; then ok "N plutil -lint 生成的 plist 合法"; else bad "N plutil -lint 不通过"; fi
+fi
+rm -rf "$NBOX"
 
 echo ""
 echo "deploy-lib.test.sh: PASSED=$PASSED FAILED=$FAILED"
