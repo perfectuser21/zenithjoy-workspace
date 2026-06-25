@@ -481,6 +481,31 @@ jobs:
           chmod +x .github/workflows/scripts/smoke/line04-cs-memory-smoke.sh
           bash .github/workflows/scripts/smoke/line04-cs-memory-smoke.sh
 
+      # ─── Line04 CRM 客户列表（PR#855，黑名单语义重做后接 CI；修 issue a4699d21 死文件）───
+      - name: Smoke — Line04 CRM 客户列表（黑名单主模型）
+        env:
+          API_BASE: http://localhost:5200
+          PSQL_HOST: localhost
+          PSQL_USER: cecelia
+          PSQL_DB: cecelia
+          PSQL_PASS: cecelia
+        run: |
+          chmod +x .github/workflows/scripts/smoke/line04-crm-customer-list-smoke.sh
+          bash .github/workflows/scripts/smoke/line04-crm-customer-list-smoke.sh
+
+      # ─── Line04 CRM 重做：blacklist 写 / friend-scan ingest / onboarding 状态机 / 403 修法 ───
+      - name: Smoke — Line04 CRM 重做 blacklist+ingest+onboarding
+        env:
+          API_BASE: http://localhost:5200
+          ZENITHJOY_INTERNAL_TOKEN: ci-only-internal-token-abc-not-prod
+          PSQL_HOST: localhost
+          PSQL_USER: cecelia
+          PSQL_DB: cecelia
+          PSQL_PASS: cecelia
+        run: |
+          chmod +x .github/workflows/scripts/smoke/line04-crm-blacklist-ingest-onboarding-smoke.sh
+          bash .github/workflows/scripts/smoke/line04-crm-blacklist-ingest-onboarding-smoke.sh
+
       - name: Stop fake-feishu-server
         if: always()
         run: |
