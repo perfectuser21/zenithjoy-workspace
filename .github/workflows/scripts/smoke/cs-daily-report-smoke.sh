@@ -81,11 +81,19 @@ RB=$(Q "SELECT received_count||'/'||reply_count FROM zenithjoy.daily_report
 [ "$RB" = "1/0" ] || { echo "FAIL: CSB 日报行 != 1/0 (实际 $RB)"; exit 1; }
 echo "  OK 两客服日报互不串"
 
-echo "── ⑤ 前台「客服日报」页就位（windows_cloud Playwright 跑真行为）──"
+echo "── ⑤ 前台「客服日报」入口就位（整合 2026-06-25：并进客服工作汇总「历史」Tab）──"
+# 整合后独立的 CsDailyReportPage 已删，历史日报回看并进 CsWorkStatsPage 的「历史」Tab
+# （拉同一个 /cs/daily-report 端点）。这里改查它含历史 Tab + daily-report 客户端调用。
 node -e '
 const fs=require("fs");
-if(!fs.existsSync(process.argv[1])){console.error("FAIL: 缺 CsDailyReportPage");process.exit(1)}
-console.log("  PASS: CsDailyReportPage 就位")' "$ROOT/apps/dashboard/src/pages/CsDailyReportPage.tsx"
+const p=process.argv[1];
+if(!fs.existsSync(p)){console.error("FAIL: 缺 CsWorkStatsPage");process.exit(1)}
+const c=fs.readFileSync(p,"utf8");
+// 「历史」Tab：Tab value="history"（testid 由 cs-stats-tab-${value} 动态拼）
+if(!/value="history"/.test(c)){console.error("FAIL: CsWorkStatsPage 缺「历史」Tab(value=\"history\")");process.exit(1)}
+// 历史 Tab 接旧 S4 日报端点
+if(!/wechatCsDailyReportApi|daily-report/.test(c)){console.error("FAIL: 历史 Tab 未接 daily-report 端点");process.exit(1)}
+console.log("  PASS: 客服工作汇总「历史」Tab 就位（并入旧 S4 日报）")' "$ROOT/apps/dashboard/src/pages/CsWorkStatsPage.tsx"
 
 # 读回查询端点（按日期回看）
 R=$(curl -sf "$API_BASE/api/wechat/cs/daily-report?date=$(TZ=Asia/Shanghai date +%F)")

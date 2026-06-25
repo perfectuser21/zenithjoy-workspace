@@ -40,13 +40,14 @@ done
 echo "  PASS 4 飞书表名全 hit"
 
 echo "=== ws2 Step 4: Dashboard 绑微信入口 ==="
-AGENT_PAGE=apps/dashboard/src/pages/AgentMachines.tsx
-test -f "$AGENT_PAGE" || AGENT_PAGE=$(find apps/dashboard/src -name "AgentMachines*" 2>/dev/null | head -1)
-[ -n "$AGENT_PAGE" ] && [ -f "$AGENT_PAGE" ] \
-  || { echo "FAIL: AgentMachines 页面缺"; exit 1; }
+# 整合(2026-06-25)：孤儿页 AgentMachines.tsx 已删，绑微信/客服机入口并进
+# 「我的客服机」CsOneClickSetupPage（选机器→绑 wechat→配置）。这里改查它。
+AGENT_PAGE=apps/dashboard/src/pages/CsOneClickSetupPage.tsx
+[ -f "$AGENT_PAGE" ] \
+  || { echo "FAIL: 客服机绑微信页(CsOneClickSetupPage) 缺"; exit 1; }
 grep -qE "微信|wechat" "$AGENT_PAGE" \
-  || { echo "FAIL: AgentMachines 缺 微信/wechat 入口"; exit 1; }
-echo "  PASS Dashboard 绑微信入口"
+  || { echo "FAIL: 客服机页缺 微信/wechat 入口"; exit 1; }
+echo "  PASS Dashboard 绑微信入口（CsOneClickSetupPage）"
 
 echo "=== ws2 Step 5: 8 fixture script ==="
 FIXTURES=(
