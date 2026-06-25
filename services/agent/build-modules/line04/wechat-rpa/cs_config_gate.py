@@ -39,8 +39,28 @@ def resolve_active_config(fresh, cached, pull_ok):
 
 
 def should_reply(config, sender_name):
-    """白名单判定：发件人在 config.whitelist 内才回。"""
-    wl = config.get("whitelist") if config else None
+    """接管判定（CRM 重做：黑名单主模型 + whitelist 兼容回退）。
+
+    takeover_mode 决定语义（决策 1，lead 拍板）：
+    - 'blacklist'（新接入客服机主模型）：**默认全接管**，sender ∉ blacklist 才回；
+      被显式拉黑（自己小号/测试号/朋友）→ 不回。空黑名单 / blacklist 非 list（脏数据）
+      → 当空处理 → 全员回。
+    - 'whitelist'（存量客服机 / 小众）或**无 takeover_mode 字段（存量旧配置）**：
+      回退旧逻辑——sender ∈ whitelist 才回。绝不让存量客服机一升级就突变成全接管误发。
+
+    注意：本函数只决定"该不该回这个人"，不决定"真发还是 dryrun"——真发由
+    resolve_send_mode（跟随 auto_agent_enabled + pull_ok）控制，双重护栏。
+    """
+    if not config:
+        return False
+    mode = config.get("takeover_mode")
+    if mode == "blacklist":
+        bl = config.get("blacklist")
+        if not isinstance(bl, list):
+            bl = []  # 脏数据/缺失 → 当空黑名单，默认全接管
+        return sender_name not in bl
+    # whitelist 模式 + 无 takeover_mode 的存量配置 → 旧白名单逻辑（零误发兜底）
+    wl = config.get("whitelist")
     if not isinstance(wl, list):
         return False
     return sender_name in wl
