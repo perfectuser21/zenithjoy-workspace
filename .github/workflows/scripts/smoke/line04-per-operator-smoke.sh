@@ -44,6 +44,11 @@ TENANT=$(psql_q "INSERT INTO zenithjoy.tenants (name, license_key) VALUES ('pero
 psql_q "INSERT INTO zenithjoy.tenant_members (tenant_id, feishu_user_id, role) VALUES ('$TENANT','$OWNER','owner') ON CONFLICT (tenant_id, feishu_user_id) DO UPDATE SET role='owner';" >/dev/null
 psql_q "INSERT INTO zenithjoy.service_agents (tenant_id, machine_id, wechat_id) VALUES ('$TENANT','$MACHINE','$CS_WX') ON CONFLICT DO NOTHING;" >/dev/null
 psql_q "INSERT INTO zenithjoy.cs_memory_messages (tenant_id, contact, role, text) VALUES ('$TENANT','$CONTACT','in','你好');" >/dev/null
+# license + license_machines:PUT /cs/setup 的 requireSameTenant('machineId') 按
+# license_machines→licenses.tenant_id 解析机器所属租户,缺这条链 setup 会 404 TARGET_NOT_FOUND。
+LIC=$(psql_q "INSERT INTO zenithjoy.licenses (license_key, tier, max_machines, status, tenant_id, expires_at) VALUES ('lk_perop_lic_$$','free',1,'active','$TENANT', now()+interval '3650 days') ON CONFLICT (license_key) DO UPDATE SET tenant_id=EXCLUDED.tenant_id RETURNING id;")
+[ -n "$LIC" ] || { echo "FAIL: 造 license 失败"; exit 1; }
+psql_q "INSERT INTO zenithjoy.license_machines (license_id, machine_id) VALUES ('$LIC','$MACHINE') ON CONFLICT DO NOTHING;" >/dev/null
 
 echo "[1] 普通运营(owner,不带 cs_wechat_id)→ 200 自动按租户 scope 出名册,含 $CONTACT"
 RESP=$(cof "${API_BASE}/api/crm/customers") || { echo "FAIL: GET customers 非 200(per-operator 该自动放行)"; exit 1; }
