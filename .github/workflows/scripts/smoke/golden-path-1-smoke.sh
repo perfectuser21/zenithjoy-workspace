@@ -238,12 +238,17 @@ S5_HTTP=$(curl -s -o "$S5_TMP" -w "%{http_code}" --max-time 30 \
   -H "Content-Type: application/json" \
   -d '{"local_path":"C:\\Users\\smoke\\video.mp4","topic":"golden-path-step5-smoke"}')
 [ "$S5_HTTP" = "201" ] || { rm -f "$S5_TMP"; fail "Step 5.1 createJob expected 201, got $S5_HTTP" 5; }
-S5_ID=$(python3 -c "import json,sys; print(json.load(open(sys.argv[1]))['id'])" "$S5_TMP" 2>/dev/null)
+# 响应结构：{"job":{"id":...,"status":...}}（id 嵌在 job 下，不是顶层）
+S5_ID=$(python3 -c "import json,sys; print(json.load(open(sys.argv[1]))['job']['id'])" "$S5_TMP" 2>/dev/null)
 [ -n "$S5_ID" ] || { rm -f "$S5_TMP"; fail "Step 5.1 no job id in response" 5; }
 ok "Step 5.1 createJob → id=$S5_ID"
 
-# 5.2 src_video 存本地路径（含文件名）
-S5_SRC=$(python3 -c "import json,sys; print(json.load(open(sys.argv[1]))['src_video'])" "$S5_TMP" 2>/dev/null)
+# 5.2 src_video 存本地路径（含文件名）—— create 响应不带 src_video，需 GET 任务读回
+S5_JOB_TMP=$(mktemp)
+S5_GET=$(curl -s -o "$S5_JOB_TMP" -w "%{http_code}" --max-time 15 "$API_BASE/api/ai-video/jobs/$S5_ID")
+[ "$S5_GET" = "200" ] || { rm -f "$S5_TMP" "$S5_JOB_TMP"; fail "Step 5.2 GET job expected 200, got $S5_GET" 5; }
+S5_SRC=$(python3 -c "import json,sys; print(json.load(open(sys.argv[1]))['src_video'])" "$S5_JOB_TMP" 2>/dev/null)
+rm -f "$S5_JOB_TMP"
 [[ "$S5_SRC" == *"video.mp4"* ]] || { rm -f "$S5_TMP"; fail "Step 5.2 src_video 不含文件名 (got: $S5_SRC)" 5; }
 ok "Step 5.2 src_video=本地路径 ✓"
 

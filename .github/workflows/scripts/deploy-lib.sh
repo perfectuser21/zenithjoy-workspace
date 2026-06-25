@@ -304,6 +304,125 @@ for k, v in env.items():
 PY
 }
 
+# ════════════════════════════════════════════════════════════════════════════
+# ensure_staging_plist —— 从生产 plist 程序化派生常驻 staging plist（自愈 provisioning）。
+#
+# 治根（2026-06-25 真实事故）：部署机只有生产 com.zenithjoy.api.plist，**没有 staging plist**。
+# staging_deploy_slot 用 `launchctl start com.zenithjoy.api.staging` 起 slot，但 launchctl start
+# 对不存在的 label 是**静默空操作** → :5201 永不 listen → 20s 健康超时 → 部署判失败。
+# 蓝绿从启用起从没成功部署过一次的根因就是它。
+#
+# 自愈：任何机器只要有生产 plist，部署时就能程序化派生出 staging plist（幂等，每轮重生）：
+#   · Label → com.zenithjoy.api.staging
+#   · env.PORT → 5201、env.ZENITHJOY_API_URL → http://localhost:5201
+#   · env.DATABASE_NAME → zenithjoy_test、env.NODE_ENV → staging（其余 DB_HOST/PORT/USER + 密钥整段继承）
+#   · ProgramArguments[1] / WorkingDirectory → 常驻 staging release（releases/staging/dist/index.js）
+#   · StandardOut/ErrorPath → zenithjoy-api.staging.log|.staging.error.log
+#   · KeepAlive + RunAtLoad → true（常驻）
+# 用 python plistlib 程序化转换：密钥只在机器上、绝不进 repo、绝不 echo 到日志。
+# 生产 plist 不存在 → 返非0（绝不凭空造无密钥的残废 plist）。
+#
+# 约定环境变量（调用方/单测注入）：
+#   ZJ_PROD_PLIST     生产 plist 路径（模板，只读）
+#   ZJ_STAGING_PLIST  要写出的 staging plist 路径（默认 ~/Library/LaunchAgents/com.zenithjoy.api.staging.plist）
+#   ZJ_STAGING_PORT   staging 端口（5201）
+#   ZJ_STAGING_DB     staging 库名（zenithjoy_test）
+#   ZJ_STAGING_LABEL  staging launchd label（com.zenithjoy.api.staging）
+#   ZJ_RELEASES_DIR   release 隔离根（staging 软链 releases/staging 在此下）
+#   ZJ_NODE           node 可执行路径
+#   ZJ_STAGING_LOG_DIR 日志目录（默认 ~/Library/Logs）
+ensure_staging_plist() {
+  local prod_plist="${ZJ_PROD_PLIST:-}"
+  local out_plist="${ZJ_STAGING_PLIST:-$HOME/Library/LaunchAgents/com.zenithjoy.api.staging.plist}"
+  local port="${ZJ_STAGING_PORT:-5201}"
+  local db="${ZJ_STAGING_DB:-zenithjoy_test}"
+  local label="${ZJ_STAGING_LABEL:-com.zenithjoy.api.staging}"
+  local releases="${ZJ_RELEASES_DIR:?ZJ_RELEASES_DIR 未设}"
+  local node="${ZJ_NODE:-/opt/homebrew/bin/node}"
+  local logdir="${ZJ_STAGING_LOG_DIR:-$HOME/Library/Logs}"
+
+  if [ ! -f "$prod_plist" ]; then
+    echo "❌ ensure_staging_plist：生产 plist 不存在（${prod_plist}），拒绝凭空造 staging plist" >&2
+    return 1
+  fi
+
+  mkdir -p "$(dirname "$out_plist")" "$logdir" 2>/dev/null || true
+
+  PROD_PLIST="$prod_plist" OUT_PLIST="$out_plist" STAGING_PORT="$port" \
+  STAGING_DB="$db" STAGING_LABEL="$label" RELEASES_DIR="$releases" \
+  NODE_BIN="$node" LOG_DIR="$logdir" \
+  /usr/bin/python3 - <<'PY'
+import plistlib, os, sys
+prod   = os.environ["PROD_PLIST"]
+out    = os.environ["OUT_PLIST"]
+port   = os.environ["STAGING_PORT"]
+db     = os.environ["STAGING_DB"]
+label  = os.environ["STAGING_LABEL"]
+rels   = os.environ["RELEASES_DIR"]
+node   = os.environ["NODE_BIN"]
+logdir = os.environ["LOG_DIR"]
+
+with open(prod, "rb") as f:
+    data = plistlib.load(f)
+
+env = dict(data.get("EnvironmentVariables", {}))
+# staging 差异化覆写（其余 DB_HOST/PORT/USER + 全部密钥整段继承）
+env["PORT"] = str(port)
+env["ZENITHJOY_API_URL"] = f"http://localhost:{port}"
+env["DATABASE_NAME"] = db
+env["NODE_ENV"] = "staging"
+data["EnvironmentVariables"] = env
+
+data["Label"] = label
+# 常驻 staging 从 releases/staging 软链跑（release 根布局：dist/index.js）
+data["ProgramArguments"] = [node, f"{rels}/staging/dist/index.js"]
+data["WorkingDirectory"] = f"{rels}/staging"
+data["StandardOutPath"]  = f"{logdir}/zenithjoy-api.staging.log"
+data["StandardErrorPath"] = f"{logdir}/zenithjoy-api.staging.error.log"
+data["KeepAlive"] = True
+data["RunAtLoad"] = True
+
+with open(out, "wb") as f:
+    plistlib.dump(data, f)
+
+# 不打印任何密钥值，只确认结构
+sys.stderr.write(f"✅ 已派生 staging plist: {out} (Label={label} PORT={port} DB={db} env_keys={len(env)})\n")
+PY
+  local rc=$?
+  [ "$rc" -eq 0 ] || { echo "❌ ensure_staging_plist：派生失败（rc=$rc）" >&2; return 1; }
+  return 0
+}
+
+# ════════════════════════════════════════════════════════════════════════════
+# ensure_release_node_modules —— monorepo hoist 兜底（让 release 自包含可跑）。
+#
+# 治根（2026-06-25 真实事故）：依赖被 npm hoist 到 repo 根 node_modules，apps/api/node_modules
+# 是**空目录**，build_release 的 `cp -Rc apps/api/node_modules` 拷进来还是空 → release 跑
+# `node dist/index.js` 报 `Cannot find module 'dotenv'` → :5201/promote 后 :5200 都起不来。
+# （生产 :5200 没撞上是因为它从 repo 树内 apps/api/dist 跑，node 向上走能找到根 node_modules；
+#  release 目录在 repo 树外，向上走找不到根 → 必须自带或兜底。）
+#
+# 规则：release node_modules 缺哨兵模块（dotenv）时，从 hoisted 根 node_modules 兜底（symlink）。
+# symlink 而非 cp：省 ~185M×N 拷贝/时间；根 node_modules 由 npm ci 维护（幂等、极少变）。
+# 参数：<release_dir> <hoisted_root_node_modules>
+ensure_release_node_modules() {
+  local reldir="$1" root_nm="$2"
+  local rel_nm="${reldir}/node_modules"
+  # 已自带可解析的 dotenv（哨兵）→ 不动
+  if [ -e "${rel_nm}/dotenv/package.json" ]; then
+    return 0
+  fi
+  if [ ! -e "${root_nm}/dotenv/package.json" ]; then
+    echo "❌ ensure_release_node_modules：hoisted 根 node_modules 也缺 dotenv（${root_nm}），无法兜底" >&2
+    return 1
+  fi
+  # release 自带的 node_modules 是空目录/缺哨兵 → 移除后 symlink 到根
+  rm -rf "$rel_nm" 2>/dev/null || true
+  ln -sfn "$root_nm" "$rel_nm" || { echo "❌ symlink release node_modules 失败" >&2; return 1; }
+  echo "ℹ️  release node_modules 缺依赖，已 symlink 到 hoisted 根 node_modules（${root_nm}）"
+  return 0
+}
+
 # build_release <sha>：把 apps/api 产物 build 进独立 release 目录 releases/<sha>/。
 # 幂等：同 sha 已 build 过（有 dist/index.js）直接复用，不重复 build。
 # release 目录自包含：dist + node_modules + package.json，promote/rollback 切软链即换代码。
@@ -328,6 +447,13 @@ build_release() {
       || cp -R "${ZJ_API_DIR}/node_modules" "${reldir}/node_modules" \
       || { echo "❌ 拷 node_modules 失败"; return 1; }
   fi
+  # monorepo hoist 兜底：依赖 hoist 到 repo 根时 apps/api/node_modules 是空的，拷进来还是空，
+  # release 跑 node 会报 Cannot find module 'dotenv'。缺哨兵模块时 symlink 到 hoisted 根。
+  # 根 node_modules = $ZJ_REPO/node_modules（ZJ_API_DIR = $ZJ_REPO/apps/api）。
+  local root_nm="${ZJ_REPO:-$(cd "${ZJ_API_DIR}/../.." && pwd)}/node_modules"
+  if ! ensure_release_node_modules "${reldir}" "${root_nm}"; then
+    echo "❌ release node_modules 兜底失败（dotenv 不可解析）"; return 1
+  fi
   [ -f "${reldir}/dist/index.js" ] || { echo "❌ release 产物缺 dist/index.js"; return 1; }
   echo "✅ release ${sha} build 完成"
   return 0
@@ -351,9 +477,21 @@ staging_deploy_slot() {
   fi
   echo "✅ releases/staging → ${sha}"
 
+  # 自愈 provisioning：确保常驻 staging plist 存在（从生产 plist 程序化派生，幂等每轮重生）。
+  # 治根：部署机只有生产 plist，launchctl start 不存在的 staging label 是静默空操作 → :5201 永不起。
+  local staging_label="${ZJ_STAGING_LABEL:-com.zenithjoy.api.staging}"
+  local staging_plist="${ZJ_STAGING_PLIST:-$HOME/Library/LaunchAgents/${staging_label}.plist}"
+  export ZJ_PROD_PLIST ZJ_STAGING_PLIST="${staging_plist}" ZJ_STAGING_PORT ZJ_STAGING_DB \
+         ZJ_STAGING_LABEL="${staging_label}" ZJ_RELEASES_DIR ZJ_NODE
+  if ! ensure_staging_plist; then
+    echo "❌ 派生/确保常驻 staging plist 失败（生产 plist 缺失？）"; return 1
+  fi
+  # 重新加载 staging launchd（plist 可能刚新建/变更，需 unload→load 让 launchd 认到新定义）
+  launchctl unload "${staging_plist}" 2>/dev/null || true
+  launchctl load "${staging_plist}" 2>/dev/null || true
+
   # 重启常驻 staging launchd（先杀占端口残留，再 kickstart）
   kill_port "${ZJ_STAGING_PORT}"
-  local staging_label="${ZJ_STAGING_LABEL:-com.zenithjoy.api.staging}"
   launchctl stop "${staging_label}" 2>/dev/null || true
   sleep 1
   launchctl start "${staging_label}" 2>/dev/null || true
