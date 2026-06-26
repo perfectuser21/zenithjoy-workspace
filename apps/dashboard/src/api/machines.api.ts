@@ -77,13 +77,13 @@ async function parseEnvelope<T>(r: Response): Promise<T> {
 
 /** 列出本租户机器 */
 export async function fetchMachines(): Promise<Machine[]> {
-  const r = await fetch(`${API_BASE}/agent/machines`, { headers: authHeaders() });
+  const r = await fetch(`${API_BASE}/agent/machines`, { headers: authHeaders(), credentials: 'include' });
   return parseEnvelope<Machine[]>(r);
 }
 
 /** 机器详情 + 抖音号列表 */
 export async function fetchMachineDetail(id: string): Promise<MachineDetail> {
-  const r = await fetch(`${API_BASE}/agent/machines/${id}`, { headers: authHeaders() });
+  const r = await fetch(`${API_BASE}/agent/machines/${id}`, { headers: authHeaders(), credentials: 'include' });
   return parseEnvelope<MachineDetail>(r);
 }
 
@@ -94,6 +94,7 @@ export async function updateMachine(
 ): Promise<Machine> {
   const r = await fetch(`${API_BASE}/agent/machines/${id}`, {
     method: 'PUT',
+    credentials: 'include',
     headers: authHeaders({ 'Content-Type': 'application/json' }),
     body: JSON.stringify(patch),
   });
@@ -110,6 +111,7 @@ export async function dispatchQrBind(params: {
 }): Promise<{ task_id?: string }> {
   const r = await fetch(`${API_BASE}/agent/burner/qr-bind`, {
     method: 'POST',
+    credentials: 'include',
     headers: authHeaders({ 'Content-Type': 'application/json' }),
     body: JSON.stringify(params),
   });

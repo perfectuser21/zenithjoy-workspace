@@ -6,13 +6,20 @@
  *   GET    /api/agent/machines/:id        机器详情 + 抖音号列表
  *   PUT    /api/agent/machines/:id        改 nickname / machine_role
  *
- * tenant 隔离复刻 agent-burner.ts /sessions：按 query.tenant_id 过滤，缺则不跨租户。
+ * tenant 隔离复刻 agent-burner.ts：挂 tenantContextOptional，租户从 req.tenantId 取
+ *   - dashboard：better-auth session（cookie）服务端解析 → 安全，前端不传 tenant
+ *   - smoke / 非浏览器 caller：传 X-Tenant-Id 头
+ * 绝不信客户端 query.tenant_id（越权风险）。无 session 且无头 → tenantContext 返回 401。
  * agent_platform_sessions.agent_id 存的是 agents.id(uuid)，故关联用 a.id = s.agent_id。
  */
 import { Router, Request, Response } from 'express';
 import pool from '../db/connection';
+import { tenantContextOptional } from '../middleware/tenant-context';
 
 const router = Router();
+
+// 所有机器管理端点统一从已认证上下文解析租户（session / X-Tenant-Id 头）
+router.use(tenantContextOptional);
 
 const ERR = (code: string, message: string) => ({
   success: false,
@@ -44,9 +51,9 @@ function normMachine(row: Record<string, unknown>) {
 
 // ── 1. GET /machines — 列机器 + session_count（LEFT JOIN COUNT）──
 router.get('/', async (req: Request, res: Response) => {
-  const tenantId = req.query.tenant_id as string;
+  const tenantId = req.tenantId;
   if (!tenantId) {
-    return res.json(OK([]));
+    return res.status(401).json(ERR("NO_TENANT", "缺租户上下文（未登录或无 X-Tenant-Id）"));
   }
 
   const r = await pool.query(
@@ -66,7 +73,7 @@ router.get('/', async (req: Request, res: Response) => {
 
 // ── 2. GET /machines/:id — 机器详情 + 抖音号列表 ──
 router.get('/:id', async (req: Request, res: Response) => {
-  const tenantId = req.query.tenant_id as string;
+  const tenantId = req.tenantId;
   const machineId = req.params.id;
 
   const m = await pool.query(
@@ -102,7 +109,7 @@ router.get('/:id', async (req: Request, res: Response) => {
 
 // ── 3. PUT /machines/:id — 改 nickname / machine_role ──
 router.put('/:id', async (req: Request, res: Response) => {
-  const tenantId = req.query.tenant_id as string;
+  const tenantId = req.tenantId;
   const machineId = req.params.id;
   const { nickname, machine_role } = req.body || {};
 
