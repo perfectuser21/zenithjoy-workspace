@@ -16,6 +16,11 @@ import {
   type Machine,
   type MachineDetail,
 } from '../api/machines.api';
+import {
+  fetchMachineEvents,
+  type MachineEvents,
+  type LogEvent,
+} from '../api/machine-events.api';
 
 const DOT_ONLINE = '\u{1F7E2}'; // 绿点
 const DOT_OFFLINE = '\u{1F534}'; // 红点
@@ -111,6 +116,143 @@ function MachineList({
         </tbody>
       </table>
     </div>
+  );
+}
+
+// ============ 模块与日志块（观测事件） ============
+function logLevelClass(level: LogEvent['level']): string {
+  switch (level) {
+    case 'error':
+      return 'text-red-600';
+    case 'warn':
+      return 'text-yellow-600';
+    default:
+      return 'text-gray-500';
+  }
+}
+
+function clampPercent(p: number | null): number {
+  if (p == null || Number.isNaN(p)) return 0;
+  return Math.max(0, Math.min(100, p));
+}
+
+const REFRESH_MS = 10_000;
+
+function MachineEventsSection({ machineId }: { machineId: string }) {
+  const [events, setEvents] = useState<MachineEvents>({ logs: [], upgrades: [] });
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    try {
+      const data = await fetchMachineEvents(machineId, { limit: 50 });
+      setEvents(data);
+      setError(null);
+    } catch {
+      setError('加载模块与日志失败，请稍后重试');
+    } finally {
+      setLoading(false);
+    }
+  }, [machineId]);
+
+  useEffect(() => {
+    load();
+    const t = setInterval(load, REFRESH_MS); // 自动轮询 10s
+    return () => clearInterval(t);
+  }, [load]);
+
+  const { logs, upgrades } = events;
+
+  return (
+    <section className="rounded border p-4">
+      <div className="mb-3 flex items-center justify-between">
+        <h3 className="text-base font-medium">模块与日志</h3>
+        <button
+          type="button"
+          onClick={load}
+          className="rounded bg-blue-600 px-3 py-1 text-xs text-white hover:bg-blue-700"
+        >
+          刷新
+        </button>
+      </div>
+
+      {error ? (
+        <div className="mb-3 rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-600">
+          {error}
+        </div>
+      ) : null}
+
+      {/* 升级进度 */}
+      <div className="mb-5">
+        <div className="mb-2 text-sm font-medium text-gray-700">升级进度</div>
+        {loading && upgrades.length === 0 ? (
+          <div className="text-sm text-gray-400">加载中…</div>
+        ) : upgrades.length === 0 ? (
+          <div className="text-sm text-gray-400">暂无升级记录</div>
+        ) : (
+          <ul className="space-y-3">
+            {upgrades.map((u) => {
+              const pct = clampPercent(u.percent);
+              return (
+                <li key={u.id} className="rounded border border-gray-100 p-3">
+                  <div className="mb-1 flex items-center justify-between text-sm">
+                    <span className="font-medium">{u.module || '—'}</span>
+                    <span className="text-xs text-gray-500">
+                      {u.phase || '—'} · {pct}%
+                    </span>
+                  </div>
+                  <div className="h-2 w-full overflow-hidden rounded bg-gray-200">
+                    <div
+                      data-testid={`upgrade-bar-${u.id}`}
+                      className={`h-2 rounded ${
+                        u.phase === 'failed' ? 'bg-red-500' : 'bg-blue-600'
+                      }`}
+                      style={{ width: `${pct}%` }}
+                    />
+                  </div>
+                  {u.message ? (
+                    <div className="mt-1 text-xs text-gray-600">{u.message}</div>
+                  ) : null}
+                  <div className="mt-1 text-xs text-gray-400">{formatTime(u.created_at)}</div>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </div>
+
+      {/* 最近错误 / 日志 */}
+      <div>
+        <div className="mb-2 text-sm font-medium text-gray-700">最近错误 / 日志</div>
+        {loading && logs.length === 0 ? (
+          <div className="text-sm text-gray-400">加载中…</div>
+        ) : logs.length === 0 ? (
+          <div className="text-sm text-gray-400">暂无日志</div>
+        ) : (
+          <ul className="divide-y divide-gray-100">
+            {logs.map((l) => (
+              <li key={l.id} className="flex items-start gap-2 py-2 text-sm">
+                <span
+                  data-testid={`log-level-${l.id}`}
+                  className={`mt-0.5 w-12 shrink-0 text-xs font-semibold uppercase ${logLevelClass(
+                    l.level
+                  )}`}
+                >
+                  {l.level || 'info'}
+                </span>
+                <div className="min-w-0 flex-1">
+                  <div className="break-words text-gray-800">{l.message || '—'}</div>
+                  <div className="text-xs text-gray-400">
+                    {l.module ? `${l.module} · ` : ''}
+                    {formatTime(l.created_at)}
+                  </div>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </section>
   );
 }
 
@@ -308,6 +450,9 @@ function MachineDetailView({
           </button>
         </div>
       </section>
+
+      {/* 模块与日志（观测事件：升级进度 + 错误日志） */}
+      <MachineEventsSection machineId={machine.id} />
     </div>
   );
 }
