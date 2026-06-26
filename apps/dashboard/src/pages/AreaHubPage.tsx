@@ -46,6 +46,7 @@ export const AREA_HUBS: Record<string, AreaHub> = {
     subtitle: '对标找客、抓评论挖客、触达，把流量变成线索。',
     cards: [
       { label: '获客 Leads', desc: '收集到的客户线索', to: '/dashboard/leads', Icon: Target, color: 'text-green-500' },
+      { label: '机器管理', desc: '客户机器与抖音号管理（主/副机、添加号）', to: '/dashboard/machines', Icon: MonitorCheck, color: 'text-sky-500' },
       { label: '智能对标', desc: '找对标账号与爆款视频', to: '/competitor-research', Icon: Target, color: 'text-teal-500' },
       { label: '绑抖音小号', desc: '绑定用于触达的小号', to: '/dashboard/douyin-burner-bind', Icon: KeyRound, color: 'text-orange-500' },
       { label: '飞书绑定', desc: '绑定飞书企业，自动建表', to: '/dashboard/feishu-bind', Icon: KeyRound, color: 'text-blue-500' },
