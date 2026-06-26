@@ -16,6 +16,8 @@ export default defineConfig({
       '../../sprints/06220821-line04-cs-no-approval-auto-reply/tests/**/*.test.ts',
       // Line04 中台 CRM 客户列表页 sprint oracle（buildCustomerRoster 名册聚合 + 租户隔离）
       '../../sprints/06242057-line04-crm-customer-list/tests/**/*.test.ts',
+      // Line02 机器管理模块 sprint oracle（machines 列表/详情/改名/加号 + tenant 隔离）
+      '../../sprints/06260400-machine-management/tests/**/*.test.ts',
     ],
     exclude: ['node_modules/**', 'tests/integration/**', 'tests/ws1/**', 'tests/ws2/**', 'tests/ws3/**', 'tests/ws4/**', 'tests/ws5/**', 'tests/ws6/**'],
     coverage: {

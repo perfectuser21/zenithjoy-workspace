@@ -115,6 +115,8 @@ export const autopilotPageComponents: Record<string, () => Promise<{ default: Co
   'CustomerListPage': () => import('../pages/CustomerListPage'),
   // Line04 CRM 重做 — 层2 状态/画像页（内含层3 聊天记录下钻）
   'CustomerProfilePage': () => import('../pages/CustomerProfilePage'),
+  // Line02 机器管理 — 客户机器 + 机器上抖音号管理（智能获客板块）
+  'MachineManagementPage': () => import('../pages/MachineManagementPage'),
 };
 
 export const pageComponents = autopilotPageComponents;
@@ -171,6 +173,8 @@ export const additionalRoutes: RouteConfig[] = [
   { path: '/competitor-research', component: 'CompetitorResearchPage', requireAuth: true },
   { path: '/dashboard/douyin-burner-bind', component: 'DouyinBurnerBindPage', requireAuth: true },
   { path: '/dashboard/feishu-bind', component: 'FeishuBindTenant', requireAuth: true },
+  // Line02 机器管理（智能获客板块下钻）— 客户机器 + 机器上抖音号管理
+  { path: '/dashboard/machines', component: 'MachineManagementPage', requireAuth: false },
   { path: '/wechat/cs-config', component: 'WechatCustomerServiceConfigPage', requireAuth: true },
   { path: '/wechat/setup', component: 'CsOneClickSetupPage', requireAuth: true },
   { path: '/wechat/cs-stats', component: 'CsWorkStatsPage', requireAuth: true },
