@@ -115,6 +115,8 @@ export const autopilotPageComponents: Record<string, () => Promise<{ default: Co
   'CustomerListPage': () => import('../pages/CustomerListPage'),
   // Line04 CRM 重做 — 层2 状态/画像页（内含层3 聊天记录下钻）
   'CustomerProfilePage': () => import('../pages/CustomerProfilePage'),
+  // Line02 智能获客 — 机器管理（机器列表 + 主副命名 + 机器下管抖音号 + 在机器上加号）
+  'MachineManagementPage': () => import('../pages/MachineManagementPage'),
 };
 
 export const pageComponents = autopilotPageComponents;
@@ -170,6 +172,9 @@ export const additionalRoutes: RouteConfig[] = [
   { path: '/dashboard/leads', component: 'LeadsPage', requireAuth: true },
   { path: '/competitor-research', component: 'CompetitorResearchPage', requireAuth: true },
   { path: '/dashboard/douyin-burner-bind', component: 'DouyinBurnerBindPage', requireAuth: true },
+  // 智能获客 → 机器管理（机器列表/主副命名/机器下管抖音号/在机器上加号）
+  // requireAuth:false：SPA 直接渲染，真正鉴权在后端（未登录时 GET /api/agent/machines 返 401，页面提示「登录已失效」）
+  { path: '/acquisition/machines', component: 'MachineManagementPage', requireAuth: false },
   { path: '/dashboard/feishu-bind', component: 'FeishuBindTenant', requireAuth: true },
   { path: '/wechat/cs-config', component: 'WechatCustomerServiceConfigPage', requireAuth: true },
   { path: '/wechat/setup', component: 'CsOneClickSetupPage', requireAuth: true },
