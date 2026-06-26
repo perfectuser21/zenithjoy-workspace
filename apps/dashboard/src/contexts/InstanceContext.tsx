@@ -53,6 +53,8 @@ const autopilotConfig: InstanceConfig = {
     'ws1-publish': true,         // /dashboard/publish
     // Content Clipper — 内容采集
     'content-clipper': true,     // /clips
+    // Path 2 — 客户智能获客（侧栏「智能获客」板块入口；漏配导致整组侧栏不显示）
+    'acquisition-leads': true,   // /area/acquisition（AreaHubPage 获客 hub：Leads/机器管理/智能对标/绑抖音小号/飞书绑定）
     // Path 2 Sprint A — 客户智能获客路径（飞书集成）
     'feishuBind': true,          // /dashboard/feishu-bind
     // Path 4 — 微信客服中台配置（人设/企业/产品/人群/Q&A + AI帮填A1-A5）
