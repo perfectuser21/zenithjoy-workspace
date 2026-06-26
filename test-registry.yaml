@@ -3813,3 +3813,11 @@ agent_suite:
     status: active
     product: 私域运营
     note: "Line02 分析+指派 smoke(:5200+postgres)：建 tenant → GET config无认证401/返默认 → PUT config非法400/合法upsert落库 → 建2 active burner+3 leads → POST build(scored=3+assigned落dm_assignments) → GET plan见指派 → POST run(dispatched落dm_outreach_log) → GET cookie-health分类。X-Tenant-Id头驱动租户。"
+
+  - id: line02-acquisition-dispatch-service-unit
+    path: apps/api/src/services/acquisition-dispatch.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 私域运营
+    note: "分析+指派引擎纯函数单测：heuristicScore/validateConfigPatch/parseHHMM/withinActiveWindow/defaultConfig。配对 acquisition-dispatch.ts。"
