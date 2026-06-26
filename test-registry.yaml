@@ -3692,3 +3692,36 @@ agent_suite:
     status: active
     product: 客户私域AI接管
     note: "per-operator 真后端 smoke(:5200+postgres)：普通运营自动按租户 scope 名册 + friend-scan/trigger 不需超管 + /cs/machines 只列自己机器 + setup 手填 real_wechat_id 落库且 /cs/machines 回显昵称。接进 ci-l4-e2e-smoke.yml。"
+
+  # ─── Line02 机器管理模块（sprint 06260400）───────────────────────────────────
+  - id: line02-machine-management-contract
+    path: sprints/06260400-machine-management/tests/machine-management.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 私域运营
+    note: "Line02 机器管理 sprint oracle（TDD RED 来源）：machines 列表/详情/改名改角色/加号 4 端点 + 7 字段 schema + tenant 隔离 + INVALID_ROLE 不写库。cd apps/api && npx vitest run ../../sprints/06260400-machine-management/tests/。"
+
+  - id: line02-agent-machines-unit
+    path: apps/api/src/routes/agent-machines.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 私域运营
+    note: "Line02 机器管理 API vitest 单测（ARTIFACT）：pool + tenant-context mock，覆盖四端点含 PUT 改 machine_role / 禁用 drift 字段反向 / valid 派生。"
+
+  - id: line02-machine-management-e2e
+    path: apps/dashboard/e2e/machine-management.spec.ts
+    type: e2e
+    ci: L4
+    status: active
+    product: 私域运营
+    note: "Line02 机器管理页 windows_cloud Playwright（page.route stub，只验 UI）：列表→命名标主副→详情→加号，3 截图视觉自验。由 e2e-verify.ps1 dispatch。"
+
+  - id: line02-machine-management-smoke
+    path: .github/workflows/scripts/smoke/machine-management-smoke.sh
+    type: smoke
+    ci: L4
+    status: active
+    product: 私域运营
+    note: "Line02 机器管理 curl+psql 真链路 smoke(:5200+postgres)：列表 7 字段 + PUT 持久化 + add-douyin 派单→burner 回写→新号出现在详情。与 contract-dod mode-A BEHAVIOR 同源。"
