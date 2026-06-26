@@ -150,7 +150,8 @@ router.get(
         ? req.query.kind
         : null;
 
-    const params: unknown[] = [tenantId, agentId];
+    // agent 上报 events 时 agent_id 可能用文本 agent_id(ws1-xxx) 或 uuid(agents.id)——两种都匹配
+    const params: unknown[] = [tenantId, [agentId, machineId]];
     let kindClause = '';
     if (kindFilter) {
       params.push(kindFilter);
@@ -162,7 +163,7 @@ router.get(
     const r = await pool.query(
       `SELECT id, kind, level, module, phase, percent, message, created_at
          FROM zenithjoy.agent_events
-        WHERE tenant_id = $1 AND agent_id = $2${kindClause}
+        WHERE tenant_id = $1 AND agent_id = ANY($2)${kindClause}
         ORDER BY created_at DESC
         LIMIT ${limitParam}`,
       params,
