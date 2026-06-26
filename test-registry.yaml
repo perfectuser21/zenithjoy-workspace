@@ -3661,6 +3661,14 @@ agent_suite:
     product: 客户私域AI接管
     note: "中台 CRM 客户列表页 Golden Path（page.route stub UI 层）：列表行 + 状态下拉 + 接管开关 + 「保存成功」文案；整合(2026-06-25) 补客服机下拉默认第一台 + 「立即扫好友」调 trigger 端点回显，windows-latest 跑。"
 
+  - id: line04-crm-glide-grid-ui-e2e
+    path: apps/dashboard/e2e/crm-glide.spec.ts
+    type: e2e
+    ci: windows_cloud
+    status: active
+    product: 客户私域AI接管
+    note: "Glide DataGrid 暗色 AI 客户运营台 E2E（windows Playwright，VITE_SKIP_AUTH）：搜索框计数变化 + A4 chip 过滤 + 编辑面板自动选中首行（status/identity select DOM）+ 点客户名导航到画像页 + 画像页 AI 三段论卡片字段断言；Glide canvas 不 read 直接，全部通过编辑面板 DOM 和计数 DOM 验证。"
+
   - id: line04-cs-consolidation-area-hub-ui-e2e
     path: apps/dashboard/e2e/area-hub-wechat-consolidation.spec.ts
     type: e2e
