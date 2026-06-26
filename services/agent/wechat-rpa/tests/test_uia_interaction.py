@@ -2,12 +2,17 @@
 回归测试 — 监听/发送的交互层必须是 **纯 UIA 控件操作**，永久禁止回退到物理鼠标键盘。
 
 【背景】2026-06-05 xian-pc 微信 4.1.8.107 真机验证：
-  click_input / send_keys / type_keys / SetCursorPos 这类物理输入会抢前台、抢光标，
-  跟 Agent 其他自动化打架，且跨会话被拒（SetCursorPos access denied）。
-  正确做法全部走 UIAPattern：
+  click_input / send_keys / type_keys 这类 pywinauto 高级物理输入会抢前台、抢光标，
+  跟 Agent 其他自动化打架。发送/回复交互层正确做法全部走 UIAPattern：
     - 打开会话：listitem.iface_invoke.Invoke()
     - 填回复：  edit.iface_value.SetValue(text)
     - 点发送：  AttachThreadInput+PostMessage(VK_RETURN)（button.iface_invoke.Invoke 为 fallback）
+
+【SetCursorPos 例外（2026-06-26 rog 真机实证，task 5c6c2e11）】会话列表滚动是唯一例外：
+  长列表 PostMessage WM_MOUSEWHEEL 合成滚轮滚到一半卡死（Qt 虚拟列表不 fetch 下一批），
+  手鼠标硬件滚轮能滚全 → 滚动必须用真硬件滚轮 SetCursorPos+mouse_event(MOUSEEVENTF_WHEEL)。
+  仅限滚动用、扫前后存还原光标、无桌面输入权时回退 PostMessage。故 SetCursorPos 不在黑名单里；
+  发送/回复层仍永久禁止任何 click_input/send_keys/type_keys。
 
 本测试用「源码字符串断言 + dryrun mock」两条防线，CI 无微信环境也能跑过：
   1) 源码不得含任何物理输入 API（防回退）。
@@ -30,8 +35,9 @@ if WECHAT_RPA_DIR not in sys.path:
 LISTEN_CHAT_PATH = os.path.join(WECHAT_RPA_DIR, "listen_chat.py")
 SEND_CHAT_PATH = os.path.join(WECHAT_RPA_DIR, "send_chat.py")
 
-# 物理输入 API 黑名单：一旦交互层回退到这些就抢前台/抢光标，永久禁止出现在实现代码里。
-FORBIDDEN_PHYSICAL_INPUT = ("click_input", "send_keys", "type_keys", "SetCursorPos")
+# 物理输入 API 黑名单：发送/回复交互层一旦回退到这些 pywinauto 高级输入就抢前台/抢光标，永久禁止。
+# （SetCursorPos 已移出黑名单——会话列表滚动唯一例外用真硬件滚轮，见文件头说明。）
+FORBIDDEN_PHYSICAL_INPUT = ("click_input", "send_keys", "type_keys")
 # UIA pattern 白名单：证明交互走的是 InvokePattern / ValuePattern。
 REQUIRED_UIA_PATTERNS = ("iface_invoke", "iface_value")
 
