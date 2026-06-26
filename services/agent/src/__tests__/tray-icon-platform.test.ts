@@ -45,8 +45,11 @@ describe('trayIconCandidates — 按平台选托盘图标格式', () => {
   it('候选路径覆盖 snapshot/cwd/exe 三处（pkg 虚拟 FS + 真实 FS 兼容）', () => {
     const candidates = trayIconCandidates('win32', dirname, cwd, execDir);
     expect(candidates.length).toBe(3);
-    expect(candidates[0]).toContain(dirname);
-    expect(candidates[1]).toContain(cwd);
-    expect(candidates[2]).toContain(execDir);
+    // 三处都指向 build/<图标>；candidate[0] 是 snapshot（dirname/../build），cwd/exe 不含 ..
+    for (const c of candidates) {
+      expect(c.endsWith(path.join('build', 'icon.ico'))).toBe(true);
+    }
+    expect(candidates[1]).toBe(path.join(cwd, 'build', 'icon.ico'));
+    expect(candidates[2]).toBe(path.join(execDir, 'build', 'icon.ico'));
   });
 });

@@ -128,6 +128,9 @@ export class ModuleManager {
 
   // 已 fork 激活的模块子进程
   private readonly active = new Map<string, ChildProcess>();
+  // 各模块「实际已激活的版本」（activateModule 时写、子进程退出时删）。
+  // 自检守卫用它核对 activated == required，发现自升级没真正完成（卡旧版）。
+  private readonly activeVersion = new Map<string, string>();
   // 正在下载中的模块（去重 + 供 tray/调试观测）
   private readonly downloading = new Set<string>();
   // 最近一次各模块 preflight 结果（供心跳上报）
@@ -186,6 +189,19 @@ export class ModuleManager {
     return path.join(this.modulesRoot, `${lineId}-${version}`);
   }
 
+  // 一个模块版本目录是否「完整可用」= 含 manifest.json。
+  // 核心防线（修卡 1.0.62 真因）：下载/解压失败（COS 跨境抖动常见）会留下空/残缺目录；
+  // 若把这种残缺目录当「已安装」，getInstalledVersion 返回它 → needsDownload 永久 false 不再重试
+  // + preflight 永久 fail 永不激活 → 卡旧版。只认含 manifest 的完整目录，残缺目录视为未安装（自愈重下）。
+  // 注：不强求 entry 文件存在（manifest 坏时 activateModule 会回退 index.js，保留既有容错语义）。
+  private isModuleDirComplete(moduleDir: string): boolean {
+    try {
+      return fs.existsSync(path.join(moduleDir, 'manifest.json'));
+    } catch {
+      return false;
+    }
+  }
+
   // 扫描模块根目录，返回该 lineId 已安装的版本（取目录名排序最大者），无则 null
   getInstalledVersion(lineId: string): string | null {
     try {
@@ -196,7 +212,9 @@ export class ModuleManager {
         .filter(
           (d) =>
             d.startsWith(prefix) &&
-            fs.statSync(path.join(this.modulesRoot, d)).isDirectory(),
+            fs.statSync(path.join(this.modulesRoot, d)).isDirectory() &&
+            // 残缺目录（无 manifest）不算已安装 → 不毒化升级判定
+            this.isModuleDirComplete(path.join(this.modulesRoot, d)),
         );
       if (dirs.length === 0) return null;
       dirs.sort((a, b) => {
@@ -295,6 +313,21 @@ export class ModuleManager {
           this.log(`${lineId} preflight 未通过：${pf.reason ?? pf.fixGuide ?? ''}`);
           this.opts.onPreflightFail?.(lineId, pf);
         }
+
+        // 自检守卫：核对「实际激活的版本 == 要求版本」。不一致 = 自升级没真正完成（卡旧版），
+        // 红日志 + 记入 module_status 随心跳上报中台，让管理员看得见。
+        // 这是真机环境接缝（CI 测不到客户机自升级）；proven-to-fire：放残缺目录会看它报红。
+        const activatedVersion = this.activeVersion.get(lineId);
+        if (activatedVersion && activatedVersion !== requiredVersion) {
+          const reason = `自升级未完成：实际激活 ${activatedVersion} ≠ 要求 ${requiredVersion}`;
+          this.log(`[self-check] ${lineId} ${reason}`);
+          const prev = this.statusReport.get(lineId);
+          this.statusReport.set(lineId, {
+            ok: false,
+            reason,
+            fixGuide: prev?.fixGuide,
+          });
+        }
       } catch (err) {
         const reason = `模块同步失败：${(err as Error).message}`;
         this.log(`${lineId} ${reason}`);
@@ -303,32 +336,71 @@ export class ModuleManager {
     }
   }
 
-  // 从 COS 下载 tar.gz，解压到模块目录
+  // 从 COS 下载 tar.gz，原子安装到模块目录。
+  // 成熟模式（对齐 CoreUpgrader 已验证做法）：下载/解压到 staging 临时目录 → 校验完整（含 manifest）
+  //   → 原子 rename 落位（先删正式目录里可能存在的残缺/旧版本）→ 任何失败回滚删 staging。
+  // 绝不在正式目录留半成品：半成品会被 getInstalledVersion 误当「已装最新」→ 永不重试 → 卡旧版（修卡 1.0.62 真因）。
   async downloadModule(
     lineId: string,
     version: string,
     cosUrl: string,
   ): Promise<void> {
     const destDir = this.getModuleDir(lineId, version);
-    if (this.opts.downloadImpl) {
-      await this.opts.downloadImpl(lineId, version, cosUrl, destDir);
-      return;
-    }
-
-    const tmpFile = path.join(
-      os.tmpdir(),
-      `zj-module-${lineId}-${version}.tar.gz`,
+    // staging 与正式目录同在 modulesRoot 下（同文件系统 → rename 原子）。
+    // 名字用 `.staging-` 前缀，确保不被 getInstalledVersion 的 `${lineId}-` 前缀匹配（否则会被当成一个版本）。
+    const stagingDir = path.join(
+      this.modulesRoot,
+      `.staging-${lineId}-${version}-${process.pid}`,
     );
-    this.log(`下载 ${lineId} v${version}：${cosUrl}`);
-    await this.httpsDownload(cosUrl, tmpFile);
-    fs.mkdirSync(destDir, { recursive: true });
-    await this.extractTarGz(tmpFile, destDir);
+    // 清掉可能残留的旧 staging
     try {
-      fs.rmSync(tmpFile, { force: true });
+      fs.rmSync(stagingDir, { recursive: true, force: true });
     } catch {
       // ignore
     }
-    this.log(`${lineId} v${version} 解压到 ${destDir}`);
+
+    try {
+      if (this.opts.downloadImpl) {
+        // 注入路径（单测）：让实现写到 staging，再统一校验 + 原子落位
+        await this.opts.downloadImpl(lineId, version, cosUrl, stagingDir);
+      } else {
+        const tmpFile = path.join(
+          os.tmpdir(),
+          `zj-module-${lineId}-${version}.tar.gz`,
+        );
+        this.log(`下载 ${lineId} v${version}：${cosUrl}`);
+        await this.httpsDownload(cosUrl, tmpFile);
+        fs.mkdirSync(stagingDir, { recursive: true });
+        await this.extractTarGz(tmpFile, stagingDir);
+        try {
+          fs.rmSync(tmpFile, { force: true });
+        } catch {
+          // ignore
+        }
+      }
+
+      // 校验：staging 必须是完整模块目录（含 manifest），否则视为下载失败 → 回滚
+      if (!this.isModuleDirComplete(stagingDir)) {
+        throw new Error(`下载产物不完整（缺 manifest）：${stagingDir}`);
+      }
+
+      // 原子落位：先删正式目录里可能存在的残缺/旧版本，再 rename（同 FS 原子）
+      try {
+        fs.rmSync(destDir, { recursive: true, force: true });
+      } catch {
+        // ignore
+      }
+      fs.renameSync(stagingDir, destDir);
+      this.log(`${lineId} v${version} 原子安装到 ${destDir}`);
+    } catch (err) {
+      // 回滚：删 staging，绝不在正式目录留半成品毒化升级判定
+      try {
+        fs.rmSync(stagingDir, { recursive: true, force: true });
+      } catch {
+        // ignore
+      }
+      throw err;
+    }
   }
 
   // Node https 下载到文件（跟随 301/302 重定向）
@@ -458,6 +530,8 @@ export class ModuleManager {
       env: { ...process.env, ZENITHJOY_CORE_DIR: coreDir },
     });
     this.active.set(lineId, child);
+    // 记录实际激活的版本（自检守卫核对 activated == required）
+    this.activeVersion.set(lineId, version);
 
     child.on('message', (msg: unknown) => {
       // 自愈件4：模块上报的 {type:'status'|'health',...} 纳入健康报告（覆盖 preflight 结果），
@@ -468,11 +542,13 @@ export class ModuleManager {
     child.on('exit', (code) => {
       this.log(`module ${lineId} 子进程退出 code=${code}`);
       this.active.delete(lineId);
+      this.activeVersion.delete(lineId);
       this.handleModuleExit(lineId);
     });
     child.on('error', (err: Error) => {
       this.log(`module ${lineId} 子进程错误：${err.message}`);
       this.active.delete(lineId);
+      this.activeVersion.delete(lineId);
       this.handleModuleExit(lineId);
     });
 

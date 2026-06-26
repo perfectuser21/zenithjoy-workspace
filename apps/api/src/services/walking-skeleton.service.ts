@@ -101,8 +101,12 @@ export interface RequiredAgentVersion {
 // 2.0.29：start.bat 全量 ASCII 化——修客户机装机日志满屏 'xxx is not recognized'（chcp 65001 下
 // cmd 把中文 REM/echo 残片当命令跑）。start.bat 是 build-install-pack.sh 直接 cp 的文本资产，不进 exe，
 // 不碰 2.0.28 的 pkg-fetch EXPECTED_HASHES / 图标 overlay 链。install-pack-ascii guard 接 CI 防回归。
-// 核心包按约定 install-pack/zenithjoy-agent-v2.0.29.tar.gz 从 COS 下载。
-export const DEFAULT_REQUIRED_AGENT_VERSION = '2.0.29';
+// 2.0.32：① 模块 OTA 原子升级——modulesRoot 残缺目录不再毒化 getInstalledVersion（修客户机卡 line04
+// 1.0.62 永不自升级→扫好友 401 真因）：下载到 staging→校验 manifest→原子 rename→失败回滚 + 开机自检
+// activated==required 上报；② Windows 托盘图标改喂 ICO（systray2 文档要求 win32 用 .ico，旧版喂 PNG
+// 渲染失败=用户长期看到的「错 logo」，与 exe 应用图标无关）。
+// 核心包按约定 install-pack/zenithjoy-agent-v2.0.32.tar.gz 从 COS 下载（live 源是已发布 manifest，本常量仅兜底）。
+export const DEFAULT_REQUIRED_AGENT_VERSION = '2.0.32';
 
 /**
  * 返回心跳要下发的核心要求版本。
