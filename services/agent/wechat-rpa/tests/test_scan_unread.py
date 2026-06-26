@@ -114,9 +114,13 @@ def test_g10_private_message_with_ascii_colon_link_not_dropped():
     assert result == {"sender": "李四", "content": "链接: http://x.com"}
 
 
-def test_g11_named_group_still_filtered_rule1():
-    """规则1 保留：sender 含"群" → 仍排除（学习指导群这类真群）。"""
-    assert _parse_item_name("学习指导群\n[1条] \n大家好\n10:00\n") is None
+def test_g11_name_with_group_word_no_longer_dropped_by_parse():
+    """删规则1：sender 名字含"群"不再在解析端排除（人名"李立群"/群发会误伤，名字不可靠）。
+    群/私聊改由打开会话读右上角标题 (N) 判定（见 enrich 层 _is_group_by_header）。"""
+    # 人名含"群"字 → 必须返回（之前被规则1误删）
+    assert _parse_item_name("李立群\n[1条] \n你好\n10:00\n") == {"sender": "李立群", "content": "你好"}
+    # 即便真群命名带"群"，解析端也不再删（由标题 (N) 判，采集端不靠名字猜）
+    assert _parse_item_name("学习指导群\n[1条] \n大家好\n10:00\n") == {"sender": "学习指导群", "content": "大家好"}
 
 
 def test_g12_official_account_still_filtered_rule2():

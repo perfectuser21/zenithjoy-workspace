@@ -105,22 +105,20 @@ def test_collect_filters_official_and_service_accounts():
     assert [c["name"] for c in out] == ["真客户"]
 
 
-def test_collect_filters_only_named_groups_not_colon_preview():
-    """只按 SKIP_GROUP_KEYWORDS（名字含 群/频道/讨论组/直播间）排真群；
-    不再靠"消息预览有冒号前缀"瞎猜群（误删客户小群 + 带冒号私聊的真凶，规则3 已删）。
-
-    规则3 误杀实证（rog 真机 + 用户确认）：
-      - 客户小群"客户名、徐先生企业自媒体-Ai助力"（名字无"群"，2-3 人）被群前缀误删 → 业务要它进 CRM。
-      - "成员名: 内容"预览也可能是私聊转发/真群——采集端不瞎猜，漏进的群由 CRM 黑名单标记处理。
-    """
+def test_collect_no_longer_filters_by_name_keyword():
+    """删规则1：采集端不再按名字含"群/频道"瞎排（人名"李立群"/群发会误伤）。
+    群/私聊改由 enrich 层打开会话读右上角标题 (N) 判定，采集端只去系统号（规则2）。
+    名字含"群"的也照样列出（漏进的群由 enrich 标题判定剔除，不在名字上猜）。"""
     names = [
-        "老乡交流群\n大家好\n11:09\n",                       # 名字含"群" → 真群，排除（规则1）
-        "某频道\n上新了\n09:00\n",                            # 名字含"频道" → 排除（规则1）
-        "客户名、徐先生企业自媒体-Ai助力\n小明: 收到\n08:00\n",  # 客户小群名字无"群" → 必须收（规则3 已删）
+        "老乡交流群\n大家好\n11:09\n",                       # 名字含"群" → 采集端不再排，列出（enrich 读标题判）
+        "某频道\n上新了\n09:00\n",                            # 名字含"频道" → 同上，列出
+        "客户名、徐先生企业自媒体-Ai助力\n小明: 收到\n08:00\n",  # 客户小群名字无"群" → 列出
         "真客户\n在吗\n15:00\n",
     ]
     out = listen_chat._collect_recent_contacts(names, limit=100)
-    assert [c["name"] for c in out] == ["客户名、徐先生企业自媒体-Ai助力", "真客户"]
+    assert [c["name"] for c in out] == [
+        "老乡交流群", "某频道", "客户名、徐先生企业自媒体-Ai助力", "真客户",
+    ]
 
 
 def test_collect_keeps_private_chat_with_colon_message():

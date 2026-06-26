@@ -215,8 +215,9 @@ def _parse_item_name(name: str, require_unread: bool = True) -> Optional[Dict[st
     sender = parts[0].strip()
     if not sender or any(s in sender for s in SKIP_SENDERS):
         return None
-    if any(kw in sender for kw in SKIP_GROUP_KEYWORDS):
-        return None
+    # 注：旧"规则1"（名字含 群/频道/讨论组/直播间 → return None）已删——名字不可靠
+    # （人名"李立群"、"群发助手"误伤；客户小群命名也常无"群"字）。群/私聊改由打开会话读右上角
+    # 标题 "(人数)" 判定（_is_group_by_header，在 enrich 层），采集端只去精确系统号（规则2）。
 
     content = ""
     for seg in parts[1:]:
@@ -234,9 +235,8 @@ def _parse_item_name(name: str, require_unread: bool = True) -> Optional[Dict[st
         return None
 
     # 注：旧"规则3"（按消息预览"成员名: 内容"冒号前缀猜群）已删（rog 真机实证误杀真客户）——
-    # 私聊消息本就常以"词+冒号"开头（"提醒：发货"/"链接: http"/"通知：..."），客户小群命名也无"群"字，
-    # 都被误删。群只按 sender 命名关键词（规则1 SKIP_GROUP_KEYWORDS）排，漏进的非客户群由 CRM 黑名单标记处理，
-    # 采集端不在消息内容上瞎猜身份。
+    # 私聊消息本就常以"词+冒号"开头（"提醒：发货"/"链接: http"/"通知：..."）都被误删。
+    # 群/私聊不在解析端按名字/预览瞎猜，统一由 enrich 层打开会话读右上角标题 "(人数)" 判定。
     return {"sender": sender, "content": content}
 
 
@@ -458,7 +458,8 @@ def _collect_recent_contacts(item_names: List[str], limit: int = 100) -> List[Di
     解析成 distinct 近期会话联系人。
 
     - 不要求未读（require_unread=False）：含/不含 [N条] 角标的私聊都收。
-    - 复用 SKIP_SENDERS / SKIP_GROUP_KEYWORDS / 群预览前缀过滤（只要私聊，去系统账号）。
+    - 只复用 SKIP_SENDERS 去精确系统账号（公众号/服务号等）；群/私聊不在此层判（名字不可靠），
+      由 enrich 层打开会话读右上角标题 "(人数)" 判定（_is_group_by_header）。
     - 同一 sender 多次出现只留第一条（列表顶部 = 最近）。
     - 仅有 UI 状态标记（"已置顶"/"草稿"）无真实消息的会话：人仍要列出（这是"列联系人"，
       不是"挑未读"），last_message 给空串。
@@ -478,8 +479,8 @@ def _collect_recent_contacts(item_names: List[str], limit: int = 100) -> List[Di
             continue
         if any(s in sender for s in SKIP_SENDERS):
             continue
-        if any(kw in sender for kw in SKIP_GROUP_KEYWORDS):
-            continue
+        # 注：旧"规则1"（名字含 群/频道/讨论组/直播间 → 跳过）已删，与 _parse_item_name 同步
+        # （名字不可靠，误伤人名/客户小群）。群/私聊由 enrich 层读标题 "(人数)" 判定。
         # 复用 _parse_item_name 拿真实消息预览（不要求未读）；拿不到 = 仅 UI 标记 → 空预览
         parsed = _parse_item_name(name, require_unread=False)
         if parsed is not None:
@@ -497,6 +498,29 @@ def _collect_recent_contacts(item_names: List[str], limit: int = 100) -> List[Di
         if len(out) >= limit:
             break
     return out
+
+
+def _is_group_by_header(texts: List[Optional[str]]) -> Optional[int]:
+    """纯函数（CI 可测）：从打开会话后右上角标题文本判断是否群聊。
+
+    业务规则（用户拍板 + rog 真机 100% 准）：会话左列名字分不出群/私聊，唯一可靠信号 =
+    打开会话后右上角标题——私聊=名字无括号；群=名字带 "(人数)"。
+      群：  "华涛数码、徐先生企业自媒体-Ai助力(3)" / "某客户群（5）"
+      私聊："中瑞家具 冯涛18192241985" / "Lancelot 。"
+
+    命中 "(纯数字)"（半角或全角括号）→ 返回人数（int，是群）；否则 → None（私聊）。
+    """
+    import re as _re
+    for t in texts:
+        if not t:
+            continue
+        m = _re.search(r'[（(]\s*(\d+)\s*[)）]', t)
+        if m:
+            try:
+                return int(m.group(1))
+            except ValueError:
+                continue
+    return None
 
 
 class _ScrollAccumulator:
@@ -648,12 +672,47 @@ def _read_contact_earliest_date(mw: Any) -> Optional[str]:
         return None
 
 
-def enrich_contacts_with_details(mw: Any, contacts: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    """逐个打开会话读对方微信号 + 加好友时间，合进 contact（A2）。
+# 标题区判定参数：聊天面板标题在窗口右侧上方（会话列表在左列，标题在其右）。
+_HEADER_TOP_MAX = 210     # 标题 Text 控件 rect.top 上限（顶部标题栏）
+_HEADER_LEFT_MIN = 460    # 标题 Text 控件 rect.left 下限（会话列表右侧）
 
-    复用 _open_chat 切到目标会话（防串台），再读资料页微信号 + 滚聊天记录到顶读最早日期，
-    用纯函数 _merge_contact_detail 合并（缺失字段不进 payload）。任何单个失败只跳过该字段，
-    绝不抛、绝不拖垮整批（保持与 post_friend_scan 同纪律）。
+
+def _read_chat_header_texts(mw: Any) -> List[str]:
+    """读当前打开会话右上角标题区的 Text 文本（供 _is_group_by_header 判群）。
+
+    真机：标题在聊天面板顶部、会话列表右侧 → 过滤 rect.top<_HEADER_TOP_MAX 且 left>=_HEADER_LEFT_MIN
+    的 Text 控件名。拿不到 rect 的也收（宽松，纯函数那层只认 "(N)"）。任何异常吞掉返回 []。
+    """
+    out: List[str] = []
+    try:
+        for c in _iter_all_controls(mw, "Text"):
+            try:
+                txt = (c.element_info.name or "").strip()
+            except Exception:
+                continue
+            if not txt:
+                continue
+            try:
+                r = c.rectangle()
+                if r.top >= _HEADER_TOP_MAX or r.left < _HEADER_LEFT_MIN:
+                    continue
+            except Exception:
+                pass  # 拿不到坐标 → 仍纳入候选（_is_group_by_header 只认 "(N)"）
+            out.append(txt)
+    except Exception as exc:
+        _log(f"_read_chat_header_texts: 读标题异常: {exc}")
+    return out
+
+
+def enrich_contacts_with_details(mw: Any, contacts: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """逐个打开会话：读右上角标题判群（群剔除，不进 CRM）+ 读微信号/加好友时间（A2）。
+
+    业务规则（用户拍板）：群不进 CRM，客户=纯一对一私聊。开会话后读右上角标题，标题带 "(人数)"
+    → 群 → 该联系人从结果剔除（不进 ingest）；无括号 → 私聊 → 保留。
+    复用 _open_chat 切到目标会话（防串台）。任何单个失败只跳过该联系人的判定/字段，绝不抛、
+    绝不拖垮整批（保持与 post_friend_scan 同纪律）。
+
+    注：A2 的微信号/加好友时间读取维持现状（资料卡那条另有 PR），本层只新增"读标题判群+剔群"。
     """
     enriched: List[Dict[str, Any]] = []
     for c in contacts:
@@ -663,6 +722,11 @@ def enrich_contacts_with_details(mw: Any, contacts: List[Dict[str, Any]]) -> Lis
         try:
             item = _find_session_item(mw, name)
             if item is not None and _open_chat(mw, item, name):
+                # 群判定（唯一可靠信号）：读右上角标题 "(人数)" → 是群 → 剔除（不进 CRM）。
+                group_size = _is_group_by_header(_read_chat_header_texts(mw))
+                if group_size is not None:
+                    _log(f"enrich_contacts_with_details: {name!r} 标题带({group_size})=群，剔除不进 CRM")
+                    continue
                 wid = _read_contact_wechat_id(mw)
                 aft = _read_contact_earliest_date(mw)
         except Exception as exc:

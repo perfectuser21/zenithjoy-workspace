@@ -104,16 +104,17 @@ def test_accumulate_respects_limit_stops_growing():
     assert acc.feed(_page("zz\n新\n11:00\n")) == 0
 
 
-def test_accumulate_filters_groups_and_official_same_as_collect():
-    """累计复用 _collect_recent_contacts 的过滤：群/公众号/系统账号不进集合。"""
+def test_accumulate_filters_official_keeps_named_group_for_header_judgment():
+    """累计复用 _collect_recent_contacts：只去精确系统号（公众号）；名字含"群"不再在此层删
+    （规则1 已删，群/私聊由 enrich 读标题 "(人数)" 判），所以群名也累计进来等后续判定。"""
     acc = listen_chat._ScrollAccumulator(limit=100)
     new = acc.feed(_page(
-        "公众号\n广告\n11:09\n",
-        "老乡交流群\n大家好\n10:00\n",
+        "公众号\n广告\n11:09\n",          # 系统号 → 去掉（规则2）
+        "老乡交流群\n大家好\n10:00\n",     # 名字含"群" → 保留（采集端不按名字猜，enrich 读标题判）
         "真客户\n你好\n15:00\n",
     ))
-    assert new == 1
-    assert [c["name"] for c in acc.contacts()] == ["真客户"]
+    assert new == 2
+    assert [c["name"] for c in acc.contacts()] == ["老乡交流群", "真客户"]
 
 
 # ─── _should_stop_scroll：连续无新增达阈值 → 停 ─────────────────────────────────
