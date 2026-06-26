@@ -3796,3 +3796,20 @@ agent_suite:
     status: active
     product: 私域运营
     note: "机器观测事件前端 API 客户端 — mock fetch 验 URL/query/credentials/信封解析/容错。配对 machine-events.api.ts。"
+
+  # ─── Line02 智能获客「分析+指派」中台大脑（刀1 / Sprint 06262145）────────────
+  - id: line02-acquisition-dispatch-api
+    path: apps/api/tests/routes/acquisition-dispatch.test.ts
+    type: integration
+    ci: L4
+    status: active
+    product: 私域运营
+    note: "Line02 分析+指派引擎+路由 — 引擎纯逻辑(scoreLeads启发式/buildAssignments按分降序+轮换分摊burner+(tenant,lead,label)去重+天预算闸+时段内排期/dispatchDue时段闸+per-hour上限闸/cookieHealth陈旧度分类) 用内存fakePool真跑；路由 supertest+mock pg.Pool 验 config默认/PUT范围校验400/plan/cookie-health + tenant隔离(不信query.tenant_id)/无认证401。22例。"
+
+  - id: line02-acquisition-dispatch-smoke
+    path: .github/workflows/scripts/smoke/acquisition-dispatch-smoke.sh
+    type: smoke
+    ci: L4
+    status: active
+    product: 私域运营
+    note: "Line02 分析+指派 smoke(:5200+postgres)：建 tenant → GET config无认证401/返默认 → PUT config非法400/合法upsert落库 → 建2 active burner+3 leads → POST build(scored=3+assigned落dm_assignments) → GET plan见指派 → POST run(dispatched落dm_outreach_log) → GET cookie-health分类。X-Tenant-Id头驱动租户。"
