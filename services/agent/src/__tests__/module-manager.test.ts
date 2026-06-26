@@ -432,4 +432,83 @@ describe('ModuleManager', () => {
       expect(callCount).toBe(2);
     });
   });
+
+  // ── 回归：OTA 自升级残缺目录毒化（卡 1.0.62 真因）─────────────────────────
+  // 根因：downloadModule 下载/解压失败留下空/残缺版本目录（COS 跨境 CDN 抖动常见），
+  //   getInstalledVersion 只按目录名排序取最大、不校验内容 → 空 1.0.70 目录被当
+  //   「已装最新」→ needsDownload 永久 false 不再重试 + preflight 永久 fail 永不激活 → 卡旧版。
+  // 修法：getInstalledVersion 只认含 manifest.json 的完整目录（残缺目录视为未安装，自愈重下）
+  //   + downloadModule 原子安装（staging→校验→rename→失败回滚），绝不在正式目录留半成品。
+  describe('OTA 残缺目录毒化自愈', () => {
+    it('getInstalledVersion 忽略无 manifest 的残缺版本目录，返回较低的完整版本', () => {
+      // 残缺的 1.0.70（空目录，无 manifest）+ 完整的 1.0.62
+      fs.mkdirSync(path.join(root, 'line04-wechat-cs-1.0.70'), { recursive: true });
+      const okDir = path.join(root, 'line04-wechat-cs-1.0.62');
+      fs.mkdirSync(okDir, { recursive: true });
+      fs.writeFileSync(
+        path.join(okDir, 'manifest.json'),
+        JSON.stringify({ lineId: 'line04-wechat-cs', version: '1.0.62', entry: 'index.js' }),
+      );
+
+      const mm = new ModuleManager({ modulesRoot: root });
+      // 残缺 1.0.70 不算已装 → 返回完整的 1.0.62
+      expect(mm.getInstalledVersion('line04-wechat-cs')).toBe('1.0.62');
+      // 因而仍需要下载 1.0.70（不被毒化目录 latch 成 false）
+      expect(mm.needsDownload('line04-wechat-cs', '1.0.70')).toBe(true);
+    });
+
+    it('下载留下残缺（空）目录时不被 latch：needsDownload 仍 true 且不留毒化目录', async () => {
+      // downloadImpl 模拟失败：只 mkdir 空目录，不写 manifest（真实 COS 抖动/解压中断的产物）
+      const downloadImpl = vi.fn().mockImplementation(
+        async (_l: string, _v: string, _u: string, destDir: string) => {
+          fs.mkdirSync(destDir, { recursive: true });
+        },
+      );
+      const mm = new ModuleManager({ modulesRoot: root, downloadImpl });
+
+      await mm.syncModules({
+        'line04-wechat-cs': { status: 'active', required_version: '1.0.70' },
+      });
+
+      // 残缺安装不能被当成功 → 下次心跳仍需重下
+      expect(mm.needsDownload('line04-wechat-cs', '1.0.70')).toBe(true);
+      // 原子性：失败回滚，正式目录不得残留半成品
+      expect(fs.existsSync(path.join(root, 'line04-wechat-cs-1.0.70'))).toBe(false);
+    });
+
+    it('瞬时下载失败后下一次心跳自愈：最终装到 required 版本并激活', async () => {
+      let attempt = 0;
+      const downloadImpl = vi.fn().mockImplementation(
+        async (_l: string, version: string, _u: string, destDir: string) => {
+          attempt++;
+          if (attempt === 1) {
+            // 第一次：残缺（空目录），模拟 COS 抖动
+            fs.mkdirSync(destDir, { recursive: true });
+            return;
+          }
+          // 第二次：完整下载
+          fs.mkdirSync(destDir, { recursive: true });
+          fs.writeFileSync(
+            path.join(destDir, 'manifest.json'),
+            JSON.stringify({ lineId: 'line04-wechat-cs', version, entry: 'index.js' }),
+          );
+          fs.writeFileSync(path.join(destDir, 'index.js'), '');
+        },
+      );
+      const forkImpl = vi.fn().mockReturnValue({
+        kill: vi.fn(), on: vi.fn(), send: vi.fn(), connected: true,
+      } as unknown as import('node:child_process').ChildProcess);
+      const preflightImpl = vi.fn().mockResolvedValue({ ok: true });
+      const mm = new ModuleManager({ modulesRoot: root, downloadImpl, forkImpl, preflightImpl });
+
+      // 第一次心跳：下载残缺 → 不应 latch
+      await mm.syncModules({ 'line04-wechat-cs': { status: 'active', required_version: '1.0.70' } });
+      expect(mm.needsDownload('line04-wechat-cs', '1.0.70')).toBe(true);
+
+      // 第二次心跳：自愈重下成功 → 装到 1.0.70 + 激活
+      await mm.syncModules({ 'line04-wechat-cs': { status: 'active', required_version: '1.0.70' } });
+      expect(mm.getInstalledVersion('line04-wechat-cs')).toBe('1.0.70');
+      expect(mm.getActiveModules()).toContain('line04-wechat-cs');
+    });
+  });
 });

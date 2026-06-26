@@ -566,6 +566,14 @@ tests:
     product: AI员工
     note: "Sprint 06240003 形态收口 — 托盘兜底图标必须是悦升云端 logo（32x32），绝不是 1x1 透明空白（Issue 5c770b55）"
 
+  - id: agent-tray-icon-platform
+    path: services/agent/src/__tests__/tray-icon-platform.test.ts
+    type: unit
+    ci: L2
+    status: active
+    product: AI员工
+    note: "Sprint 06261816 — 托盘图标按平台选格式：win32 用 .ico（systray2 文档要求，喂 PNG 渲染失败=用户长期看到的错 logo），非 win32 用 .png；修 trayIconCandidates"
+
   - id: agent-module-manager
     path: services/agent/src/__tests__/module-manager.test.ts
     type: unit

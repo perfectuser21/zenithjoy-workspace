@@ -82,17 +82,32 @@ function statusLabel(): string {
   }
 }
 
-function loadIconBase64(): string {
-  // pkg 把 build/tray-icon.png 标为 asset，运行时从虚拟 fs 读取
-  // 候选路径：
-  //   1. process.cwd 旁边的 build/
-  //   2. exe 同目录的 build/
-  //   3. snapshot 内（pkg）：__dirname/../build/tray-icon.png
-  const candidates = [
-    path.join(__dirname, '..', 'build', 'tray-icon.png'),
-    path.join(process.cwd(), 'build', 'tray-icon.png'),
-    path.join(path.dirname(process.execPath), 'build', 'tray-icon.png'),
+// 按平台选托盘图标候选路径。
+// systray2 文档明确：「.png on macOS/Linux, .ico on Windows」——Windows 托盘二进制不认 PNG，
+// 喂 PNG 会渲染失败（空白/默认图标，= 用户长期看到的「错 logo」真因，过去只修了 exe overlay 图标没碰托盘）。
+// win32 复用已验证的应用图标 build/icon.ico（蓝 logo，多分辨率 ICO，与 exe 应用图标同源），
+// 非 win32 用 build/tray-icon.png。三处候选兼容 pkg 虚拟 FS（snapshot）+ 真实 FS（cwd / exe 同目录）。
+export function trayIconCandidates(
+  platform: string,
+  dirname: string,
+  cwd: string,
+  execDir: string,
+): string[] {
+  const file = platform === 'win32' ? 'icon.ico' : 'tray-icon.png';
+  return [
+    path.join(dirname, '..', 'build', file),
+    path.join(cwd, 'build', file),
+    path.join(execDir, 'build', file),
   ];
+}
+
+function loadIconBase64(): string {
+  const candidates = trayIconCandidates(
+    process.platform,
+    __dirname,
+    process.cwd(),
+    path.dirname(process.execPath),
+  );
   for (const p of candidates) {
     try {
       if (fs.existsSync(p)) {
