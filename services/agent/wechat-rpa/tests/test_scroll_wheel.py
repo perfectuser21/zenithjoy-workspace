@@ -108,11 +108,12 @@ def test_wheel_posts_wm_mousewheel_negative_delta_at_list_screen_coords():
 
     assert user32.PostMessageW.called, "必须投递消息"
     calls = user32.PostMessageW.call_args_list
-    # 全部消息都应是 WM_MOUSEWHEEL，且投到主窗口 hwnd
-    for c in calls:
+    # 只看 WM_MOUSEWHEEL 消息（现在还会夹 WM_MOUSEMOVE 悬停消息）：负 delta + 会话列表屏幕坐标
+    wheel_calls = [c for c in calls if c.args[1] == WM_MOUSEWHEEL]
+    assert wheel_calls, "必须投 WM_MOUSEWHEEL"
+    for c in wheel_calls:
         args = c.args
         assert args[0] == mw.element_info.handle
-        assert args[1] == WM_MOUSEWHEEL, f"应投 WM_MOUSEWHEEL，实际 {hex(args[1])}"
         assert _decode_delta(args[2]) < 0, "delta 必须为负（下滚）"
         x, y = _decode_lparam(args[3])
         # x = 会话项中心 x 的中位数（(100+457)/2≈278），y 落在第一项内（180-240）
@@ -126,7 +127,37 @@ def test_wheel_posts_multiple_pulses_per_page():
     user32 = MagicMock()
     with _mock_windll(user32):
         listen_chat._scroll_session_list_wheel(mw)
-    assert user32.PostMessageW.call_count >= 3, f"每屏应投≥3 次 wheel，实际 {user32.PostMessageW.call_count}"
+    wheel_count = sum(1 for c in user32.PostMessageW.call_args_list if c.args[1] == WM_MOUSEWHEEL)
+    assert wheel_count >= 3, f"每屏应投≥3 次 wheel，实际 {wheel_count}"
+
+
+def test_mousemove_precedes_each_wheel_with_same_lparam():
+    """真凶修法：每次 WM_MOUSEWHEEL 之前紧挨一个 WM_MOUSEMOVE(0x0200) 到同一会话列表屏幕坐标。
+
+    Qt 按「鼠标当前悬停在哪个控件」路由滚轮——只发滚轮不更新悬停 → 投给上次悬停控件（时灵时不灵）。
+    先 WM_MOUSEMOVE 到会话列表点，Qt 认定悬停在列表上，滚轮稳稳路由给它。
+    """
+    WM_MOUSEMOVE = 0x0200
+    rects = [(100, 180, 457, 240), (100, 240, 457, 300)]
+    mw = _make_mw_with_item_rects(rects)
+    user32 = MagicMock()
+    with _mock_windll(user32):
+        listen_chat._scroll_session_list_wheel(mw)
+
+    calls = user32.PostMessageW.call_args_list
+    msgs = [c.args[1] for c in calls]
+    assert WM_MOUSEMOVE in msgs, "必须投 WM_MOUSEMOVE 更新悬停位置"
+    # 每个 WM_MOUSEWHEEL 紧前一条必须是 WM_MOUSEMOVE，且 lParam 与该 wheel 相同（同一屏幕点）
+    saw_pair = False
+    for i, c in enumerate(calls):
+        if c.args[1] == WM_MOUSEWHEEL:
+            assert i >= 1, "WM_MOUSEWHEEL 前必须先有 WM_MOUSEMOVE"
+            prev = calls[i - 1]
+            assert prev.args[1] == WM_MOUSEMOVE, \
+                f"wheel 紧前一条应是 WM_MOUSEMOVE，实际 {hex(prev.args[1])}"
+            assert prev.args[3] == c.args[3], "WM_MOUSEMOVE 与 WM_MOUSEWHEEL 的 lParam 必须同一屏幕点"
+            saw_pair = True
+    assert saw_pair, "至少有一对 MOUSEMOVE→WHEEL"
 
 
 def test_wheel_no_items_falls_back_without_crash():
