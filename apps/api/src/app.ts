@@ -41,6 +41,7 @@ import { fakeLlmRouter } from './routes/_smoke-fake-llm';
 // Path 2 Sprint B-1 — 抖音小号绑定 + 评论抓取
 import agentBurnerRouter from './routes/agent-burner';
 import agentMachinesRouter from './routes/agent-machines';
+import agentEventsRouter from './routes/agent-events';
 import smokeFakeAgentBurnerRouter from './routes/_smoke-fake-agent-burner';
 // Path 2 Sprint B-1 architecture hotfix — DEV-only mock-agent helper
 import smokeMockAgentRouter from './routes/_smoke-mock-agent';
@@ -134,6 +135,9 @@ app.use('/api/competitor-research', competitorResearchRouter);
 app.use('/api/agent/tasks', tasksRouter);
 // /api/agent/machines 同样必须在 /api/agent(agentRouter) 之前注册（按顺序匹配，避免被吞）
 app.use('/api/agent/machines', agentMachinesRouter);
+// 观测事件路由：POST /api/agent/events + GET /api/agent/machines/:id/events
+// 必须在 agentMachinesRouter 之后、agentRouter 之前注册（路径写全，避免被吞）
+app.use('/api/agent', agentEventsRouter);
 // Walking Skeleton #1：先挂 heartbeat / folder/bind，再挂旧 agentRouter（按顺序匹配）
 app.use('/api/agent', heartbeatRouter);
 app.use('/api/agent', agentRouter);
