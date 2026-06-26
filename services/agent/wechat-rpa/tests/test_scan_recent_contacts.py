@@ -105,16 +105,36 @@ def test_collect_filters_official_and_service_accounts():
     assert [c["name"] for c in out] == ["真客户"]
 
 
-def test_collect_filters_group_chats():
-    """群聊/频道/讨论组按 SKIP_GROUP_KEYWORDS + 群预览前缀过滤（只要私聊）。"""
+def test_collect_filters_only_named_groups_not_colon_preview():
+    """只按 SKIP_GROUP_KEYWORDS（名字含 群/频道/讨论组/直播间）排真群；
+    不再靠"消息预览有冒号前缀"瞎猜群（误删客户小群 + 带冒号私聊的真凶，规则3 已删）。
+
+    规则3 误杀实证（rog 真机 + 用户确认）：
+      - 客户小群"客户名、徐先生企业自媒体-Ai助力"（名字无"群"，2-3 人）被群前缀误删 → 业务要它进 CRM。
+      - "成员名: 内容"预览也可能是私聊转发/真群——采集端不瞎猜，漏进的群由 CRM 黑名单标记处理。
+    """
     names = [
-        "老乡交流群\n大家好\n11:09\n",          # 名字含"群"
-        "某频道\n上新了\n09:00\n",              # 名字含"频道"
-        "大家庭\n小明: 吃了吗\n08:00\n",        # 群预览前缀"成员名: "
+        "老乡交流群\n大家好\n11:09\n",                       # 名字含"群" → 真群，排除（规则1）
+        "某频道\n上新了\n09:00\n",                            # 名字含"频道" → 排除（规则1）
+        "客户名、徐先生企业自媒体-Ai助力\n小明: 收到\n08:00\n",  # 客户小群名字无"群" → 必须收（规则3 已删）
         "真客户\n在吗\n15:00\n",
     ]
     out = listen_chat._collect_recent_contacts(names, limit=100)
-    assert [c["name"] for c in out] == ["真客户"]
+    assert [c["name"] for c in out] == ["客户名、徐先生企业自媒体-Ai助力", "真客户"]
+
+
+def test_collect_keeps_private_chat_with_colon_message():
+    """带冒号开头的私聊消息（"提醒：..."/"链接: ..."/"通知：..."）不得被当群删掉（规则3 真凶）。"""
+    names = [
+        "张三\n提醒：明天发货\n15:26\n",
+        "李四\n链接: http://x.com\n11:09\n",
+        "王五\n通知：已到账\n09:00\n",
+    ]
+    out = listen_chat._collect_recent_contacts(names, limit=100)
+    assert [c["name"] for c in out] == ["张三", "李四", "王五"]
+    by = {c["name"]: c for c in out}
+    assert by["张三"]["last_message"] == "提醒：明天发货"
+    assert by["李四"]["last_message"] == "链接: http://x.com"
 
 
 def test_collect_distinct_dedup_keeps_first():
