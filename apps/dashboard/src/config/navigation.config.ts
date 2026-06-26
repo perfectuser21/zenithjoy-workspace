@@ -106,6 +106,8 @@ export const autopilotPageComponents: Record<string, () => Promise<{ default: Co
   'ModuleHealthPage': () => import('../pages/ModuleHealthPage'),
   // Sprint 06260400 — 机器管理（机器列表 + 抖音号 + 主/副 + 添加号）
   'MachineManagementPage': () => import('../pages/MachineManagementPage'),
+  // Line02 刀1 — 智能获客「分析+指派」配置（参数表单 + 指派计划 + Cookie 健康）
+  'AcquisitionConfigPage': () => import('../pages/AcquisitionConfigPage'),
   // Line 07 — AI 爆款视频翻拍
   'VideoRemakePipelinePage': () => import('../pages/VideoRemakePipelinePage'),
   // 2026-06-23 — 业务区总览页（短侧栏下钻：区 → 总览卡片 → 子页）
@@ -173,6 +175,7 @@ export const additionalRoutes: RouteConfig[] = [
   { path: '/competitor-research', component: 'CompetitorResearchPage', requireAuth: true },
   { path: '/dashboard/douyin-burner-bind', component: 'DouyinBurnerBindPage', requireAuth: true },
   { path: '/dashboard/machines', component: 'MachineManagementPage', requireAuth: true },
+  { path: '/dashboard/acquisition-config', component: 'AcquisitionConfigPage', requireAuth: true },
   { path: '/dashboard/feishu-bind', component: 'FeishuBindTenant', requireAuth: true },
   { path: '/wechat/cs-config', component: 'WechatCustomerServiceConfigPage', requireAuth: true },
   { path: '/wechat/setup', component: 'CsOneClickSetupPage', requireAuth: true },
