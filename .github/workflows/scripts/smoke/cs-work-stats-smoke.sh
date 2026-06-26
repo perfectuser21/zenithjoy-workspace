@@ -23,6 +23,17 @@ PGDATABASE="${PGDATABASE:-cecelia}"
 export PGPASSWORD="${PGPASSWORD:-cecelia}"
 ROOT="$(cd "$(dirname "$0")/../../../.." && pwd)"
 
+# ── 北京午夜守卫 ────────────────────────────────────────────────────────────
+# 测试向前插 20 分钟的消息；若当前北京时间在 00:00-00:25 窗口内，
+# 那 20 分钟前的消息跨到昨天，API "今日"计数会少算 → 跳过，非本 PR 引起。
+_BJT_HOUR=$(TZ="Asia/Shanghai" date +%H)
+_BJT_MIN=$(TZ="Asia/Shanghai" date +%M)
+if [ "$_BJT_HOUR" = "00" ] && [ "$_BJT_MIN" -le 25 ]; then
+  echo "⚠️  北京时间 ${_BJT_HOUR}:${_BJT_MIN}，处于午夜 25 分钟窗口，时区边界跳过（非测试失败）"
+  exit 0
+fi
+# ─────────────────────────────────────────────────────────────────────────────
+
 Q() { psql -h "$PGHOST" -U "$PGUSER" -d "$PGDATABASE" -tAc "$1" | sed -n '1p'; }
 SUF="$(date +%s)$$"
 # 本轮两个客服微信号（带随机后缀，互不串台 + 不污染存量）
