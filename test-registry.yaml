@@ -3700,3 +3700,28 @@ agent_suite:
     status: active
     product: 客户私域AI接管
     note: "per-operator 真后端 smoke(:5200+postgres)：普通运营自动按租户 scope 名册 + friend-scan/trigger 不需超管 + /cs/machines 只列自己机器 + setup 手填 real_wechat_id 落库且 /cs/machines 回显昵称。接进 ci-l4-e2e-smoke.yml。"
+
+  # ─── Line02 机器管理（Sprint 06260400）─────────────────────────────────────
+  - id: line02-machine-management-api
+    path: apps/api/tests/routes/agent-machines.test.ts
+    type: integration
+    ci: L4
+    status: active
+    product: 私域运营
+    note: "Line02 机器管理后端 — GET /api/agent/machines(列表+session_count) / GET :id(机器+sessions) / PUT 改名角色；tenant 隔离404 + 非法role400 + 空号sessions:[]。supertest + mock pg.Pool，9例。"
+
+  - id: line02-machine-management-api-client-unit
+    path: apps/dashboard/src/api/machines.api.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 私域运营
+    note: "Line02 机器管理前端 API 客户端 — mock fetch 验 URL/方法/body/信封解析/错误抛出（fetchMachines/Detail/updateMachine/dispatchQrBind）。"
+
+  - id: line02-machine-management-e2e
+    path: apps/dashboard/e2e/agent-machines.spec.ts
+    type: e2e
+    ci: e2e-machines-windows
+    status: active
+    product: 私域运营
+    note: "Line02 机器管理页 Playwright Windows E2E：机器列表+N个号 / 点进显示抖音号 / 添加抖音号派qr-bind / 重命名+设主副PUT持久化。page.route stub 三端点。"
