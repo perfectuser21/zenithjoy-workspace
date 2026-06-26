@@ -736,6 +736,12 @@ def _scroll_session_list_wheel(mw: Any) -> None:
     - 投到**主窗口 hwnd**；wParam 高 16 位 = 负 delta（下滚）；
     - lParam = 会话列表控件内一点的**屏幕坐标**（WM_MOUSEWHEEL lParam 是屏幕坐标，
       与鼠标键消息相反——关键坑）。
+
+    真凶（rog 真机 + 用户屏前实证，1.0.65 时灵时不灵）：Qt 按「鼠标当前悬停在哪个控件」
+    路由滚轮——只发滚轮不更新悬停 → 投给上次悬停的控件（碰巧悬停会话列表才滚得动）。
+    修法：**每次 WM_MOUSEWHEEL 前先 WM_MOUSEMOVE(0x0200) 到会话列表同一屏幕坐标**，
+    让 Qt 认定悬停在会话列表上，滚轮稳稳路由给它。
+
     每屏投 _WHEEL_PULSES_PER_PAGE 次（单次不够一屏）。失败吞掉（滚不动 = 累计按无新增自然终止）。
     """
     try:
@@ -749,10 +755,13 @@ def _scroll_session_list_wheel(mw: Any) -> None:
             return
         x, y = pt
         _u32 = _ct.windll.user32
+        WM_MOUSEMOVE = 0x0200
         WM_MOUSEWHEEL = 0x020A
         wparam = (_WHEEL_DELTA << 16) & 0xFFFFFFFF       # 高 16 位 = 负 delta
         lparam = ((y & 0xFFFF) << 16) | (x & 0xFFFF)     # 屏幕坐标（高=Y 低=X）
         for _ in range(_WHEEL_PULSES_PER_PAGE):
+            # 先更新悬停位置（真凶修法）：Qt 才会把紧接着的滚轮路由给会话列表。
+            _u32.PostMessageW(main_hwnd, WM_MOUSEMOVE, 0, lparam)
             _u32.PostMessageW(main_hwnd, WM_MOUSEWHEEL, wparam, lparam)
             time.sleep(_WHEEL_PULSE_SLEEP)
     except Exception as exc:
