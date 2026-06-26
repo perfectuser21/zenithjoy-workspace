@@ -502,6 +502,30 @@ tests:
     product: AI员工
     note: "Sprint 06220821 无审批自动回复闭环：自动代理 5 配置键 getAutoAgentConfig/saveAutoAgentConfig oracle（vi.mock db/connection，默认关 + partial 合并 upsert）。"
 
+  - id: machine-management-sprint-oracle
+    path: sprints/06260400-machine-management/tests/machine-management.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 新媒体运营
+    note: "Sprint 06260400 机器管理：machines 路由层 supertest（GET 列表租户 scope + 禁用字段反向 / GET 详情 accounts role+valid / PUT 改名标主副 + INVALID_INPUT），vi.mock db/connection + tenant-context。"
+
+  - id: machine-management-route
+    path: apps/api/src/routes/agent-machines.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 新媒体运营
+    note: "agent-machines 路由配套单测：列表/详情/改名 + 404 MACHINE_NOT_FOUND + 403 CROSS_TENANT + 401 无登录态。"
+
+  - id: machine-management-e2e
+    path: apps/dashboard/e2e/machine-management.spec.ts
+    type: e2e
+    ci: L4
+    status: active
+    product: 新媒体运营
+    note: "机器管理 Golden Path（windows_cloud，Mode B page.route stub）：机器列表/改名标主副/详情看抖音号/离线机器加号置灰，截图 01-initial/02-action/03-result。"
+
   - id: line04-ship-version-sync
     path: .github/workflows/scripts/smoke/line04-ship-version-sync-smoke.sh
     type: smoke
