@@ -1,0 +1,36 @@
+{
+  "initiative_id": "",
+  "journey_type": "user_facing",
+  "journey_type_reason": "改 apps/dashboard/ 前端页面（CustomerListPage），命中 user_facing 优先级链第一条",
+  "tasks": [
+    {
+      "task_id": "ws1",
+      "title": "CustomerListPage 用 Glide Data Grid 重做暗色运营台 + 搜索/A1-A5意向/身份纯前端筛选 +「N位客户」计数实时同步",
+      "scope": "仅前端：裸 HTML 表替换为 Glide Data Grid（暗色，意向色阶 A1灰→A5绿，import glide index.css），接既有 GET /api/crm/customers 真数据；抽纯函数 filterCustomers(rows,{search,intents,identities}) 做 name/wechat 搜索(大小写不敏感)+A1-A5意向+customer/blacklist身份的 AND 过滤；crm-count 显示过滤后条数；点 Glide 首行姓名格跳现有 /wechat/crm/:contact 详情路由。保留 onboarding 条/状态写接口/身份写接口/立即扫好友/per-operator/旧路由重定向不回归。零后端改动。",
+      "dod": [
+        "[BEHAVIOR] filterCustomers 搜索/意向/身份/组合AND/空筛选 vitest 全绿（逻辑断言，CI绿=done）",
+        "[BEHAVIOR] 组件 crm-count 随搜索/意向/身份交互实时同步 + 空数据count=0+crm-empty + 401不白屏 vitest 全绿",
+        "[BEHAVIOR] 既有 CustomerListPage 组件测（per-operator 套件）保持全绿不回归",
+        "[BEHAVIOR:E2E] windows_cloud Playwright crm-glide-list.spec.ts：Glide canvas渲染(CSS已import,boundingBox>0)+计数随真交互三筛同步+点格跳详情路由（接缝S1/S2/S3，真目标验过才done，否则logic-done-pending）",
+        "[ARTIFACT] @glideapps/glide-data-grid 入 package.json+package-lock；CustomerListPage import glide index.css；apps/dashboard/src/pages/crm/customerFilter.ts 导出 filterCustomers",
+        "[ARTIFACT] .github/workflows/e2e-line04-crm-glide-list.yml(windows-latest 跑 e2e-verify.ps1) + scripts/smoke/line04-crm-glide-list-smoke.sh 接入 CI"
+      ],
+      "files": [
+        "apps/dashboard/src/pages/CustomerListPage.tsx",
+        "apps/dashboard/src/pages/crm/customerFilter.ts",
+        "apps/dashboard/src/pages/crm/__tests__/customerFilter.test.ts",
+        "apps/dashboard/src/pages/__tests__/CustomerListPage.test.tsx",
+        "apps/dashboard/e2e/crm-glide-list.spec.ts",
+        "apps/dashboard/e2e/crm-customer-list.spec.ts",
+        "apps/dashboard/package.json",
+        "apps/dashboard/package-lock.json",
+        "sprints/06262245-line04-crm-glide-list/e2e-verify.ps1",
+        ".github/workflows/e2e-line04-crm-glide-list.yml",
+        ".github/workflows/scripts/smoke/line04-crm-glide-list-smoke.sh"
+      ],
+      "depends_on": [],
+      "complexity": "M",
+      "estimated_minutes": 110
+    }
+  ]
+}
