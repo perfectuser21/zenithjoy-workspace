@@ -27,26 +27,41 @@ PSQL_PASS="${PSQL_PASS:-cecelia}"
 ADMIN_A="${ADMIN_A:-ou_mm_smoke_admin_A_$$}"
 ADMIN_B="${ADMIN_B:-ou_mm_smoke_admin_B_$$}"
 
+# 依赖工具自检（缺则早失败，给清晰提示，而不是中途莫名报错）
+for tool in curl jq psql; do
+  command -v "$tool" >/dev/null 2>&1 || { echo "FAIL: 缺依赖工具 $tool"; exit 1; }
+done
+
+# 临时文件统一清理（避免残留）
+TMP_EMPTY=$(mktemp /tmp/mm_empty.XXXXXX.json)
+TMP_XT=$(mktemp /tmp/mm_xt.XXXXXX.json)
+trap 'rm -f "$TMP_EMPTY" "$TMP_XT"' EXIT
+
+# curl 统一超时（防真机/CI 网络卡死），所有 helper 复用
+CURL_OPTS=(--connect-timeout 5 --max-time 30)
+
 # -q 抑制命令状态标签（如 "INSERT 0 1"），否则 RETURNING 捕获会把标签和 id 一起带出
 psql_q() { PGPASSWORD="$PSQL_PASS" psql -h "$PSQL_HOST" -U "$PSQL_USER" -d "$PSQL_DB" -qtAc "$1"; }
 
 # A 租户管理员的 curl（X-Feishu-User-Id 头）
-ca()  { curl -s -H "X-Feishu-User-Id: $ADMIN_A" "$@"; }
-caf() { curl -sf -H "X-Feishu-User-Id: $ADMIN_A" "$@"; }
-cb()  { curl -s -H "X-Feishu-User-Id: $ADMIN_B" "$@"; }
+ca()  { curl -s "${CURL_OPTS[@]}" -H "X-Feishu-User-Id: $ADMIN_A" "$@"; }
+caf() { curl -sf "${CURL_OPTS[@]}" -H "X-Feishu-User-Id: $ADMIN_A" "$@"; }
+cb()  { curl -s "${CURL_OPTS[@]}" -H "X-Feishu-User-Id: $ADMIN_B" "$@"; }
 
 bootstrap() {
-  echo "[bootstrap] 跑 migration（agents + nickname/machine_role + sessions role）幂等"
-  psql_q "CREATE SCHEMA IF NOT EXISTS zenithjoy;" >/dev/null || true
-  for f in \
-    "$ROOT/apps/api/db/migrations/20260428_100100_create_agents.sql" \
-    "$ROOT/apps/api/db/migrations/20260507_115000_walking_skeleton_1.sql" \
-    "$ROOT/apps/api/db/migrations/20260510_0c10fc_agent_platform_sessions_add_role.sql" \
-    "$ROOT/apps/api/db/migrations/20260602_103000_agent_platform_sessions_ilink.sql" \
-    "$ROOT/apps/api/db/migrations/20260626_040000_agents_add_nickname_machine_role.sql"; do
+  echo "[bootstrap] 按序跑全部 migration（幂等；不写死单个文件名，对改名/新增鲁棒）"
+  psql_q "CREATE SCHEMA IF NOT EXISTS zenithjoy;" >/dev/null
+  psql_q "CREATE EXTENSION IF NOT EXISTS pgcrypto;" >/dev/null
+  MIG_DIR="$ROOT/apps/api/db/migrations"
+  [ -d "$MIG_DIR" ] || { echo "FAIL: 找不到 migration 目录 $MIG_DIR"; exit 1; }
+  # 幂等迁移：ON_ERROR_STOP=0 容忍「已存在」噪声，但下面用 schema 后置断言兜底真失败
+  for f in "$MIG_DIR"/*.sql; do
     PGPASSWORD="$PSQL_PASS" psql -h "$PSQL_HOST" -U "$PSQL_USER" -d "$PSQL_DB" -v ON_ERROR_STOP=0 \
       -f "$f" >/dev/null 2>&1 || true
   done
+  # 后置断言：本 sprint 关键列必须真建出来（迁移若真失败，这里早失败，不让后续测试静默错位）
+  COLS=$(psql_q "SELECT count(*) FROM information_schema.columns WHERE table_schema='zenithjoy' AND table_name='agents' AND column_name IN ('nickname','machine_role')")
+  [ "$COLS" = "2" ] || { echo "FAIL: agents 缺 nickname/machine_role 列（migration 未生效，count=$COLS）"; exit 1; }
 
   echo "[bootstrap] 造两租户 + 管理员 + 两台机器（在线/离线）+ 一条失效 burner session"
   TENANT_A=$(psql_q "INSERT INTO zenithjoy.tenants (name, license_key) VALUES ('mm-smoke-A','lk_mm_smoke_A_$$') ON CONFLICT (license_key) DO UPDATE SET name=EXCLUDED.name RETURNING id;")
@@ -95,9 +110,9 @@ mode_a() {
   caf "${API_BASE}/api/agent/machines" | jq -e --arg m "$MACHINE_ID" '.machines[] | select(.id==$m) | .nickname=="主控机A" and .machine_role=="main"' >/dev/null || { echo "FAIL: 刷新未持久化"; exit 1; }
 
   echo "[4] error path — 改名为空 / 非法角色 → 400 INVALID_INPUT"
-  CODE=$(ca -o /tmp/mm_empty.json -w "%{http_code}" -X PUT "${API_BASE}/api/agent/machines/${MACHINE_ID}" -H 'Content-Type: application/json' -d '{"nickname":"","machine_role":"main"}')
+  CODE=$(ca -o "$TMP_EMPTY" -w "%{http_code}" -X PUT "${API_BASE}/api/agent/machines/${MACHINE_ID}" -H 'Content-Type: application/json' -d '{"nickname":"","machine_role":"main"}')
   [ "$CODE" = "400" ] || { echo "FAIL: 空名未 400 实际 $CODE"; exit 1; }
-  jq -e '.error.code=="INVALID_INPUT"' /tmp/mm_empty.json >/dev/null || { echo "FAIL: 空名非 INVALID_INPUT"; exit 1; }
+  jq -e '.error.code=="INVALID_INPUT"' "$TMP_EMPTY" >/dev/null || { echo "FAIL: 空名非 INVALID_INPUT"; exit 1; }
   CODE=$(ca -o /dev/null -w "%{http_code}" -X PUT "${API_BASE}/api/agent/machines/${MACHINE_ID}" -H 'Content-Type: application/json' -d '{"nickname":"x","machine_role":"boss"}')
   [ "$CODE" = "400" ] || { echo "FAIL: 非法角色未 400 实际 $CODE"; exit 1; }
 
@@ -126,7 +141,7 @@ mode_a() {
 
   echo "[8] 跨租户隔离 — B 读不到 A 的机器 + 跨写 403/404"
   cb "${API_BASE}/api/agent/machines" | jq -e --arg m "$MACHINE_ID" 'all(.machines[]; .id != $m)' >/dev/null || { echo "FAIL: B 看到 A 的机器=串台"; exit 1; }
-  CODE=$(cb -o /tmp/mm_xt.json -w "%{http_code}" -X PUT "${API_BASE}/api/agent/machines/${MACHINE_ID}" -H 'Content-Type: application/json' -d '{"nickname":"窃改","machine_role":"main"}')
+  CODE=$(cb -o "$TMP_XT" -w "%{http_code}" -X PUT "${API_BASE}/api/agent/machines/${MACHINE_ID}" -H 'Content-Type: application/json' -d '{"nickname":"窃改","machine_role":"main"}')
   { [ "$CODE" = "403" ] || [ "$CODE" = "404" ]; } || { echo "FAIL: 跨租户写未拦 实际 $CODE"; exit 1; }
 
   echo "✅ 机器管理 模式 A smoke 全过"
