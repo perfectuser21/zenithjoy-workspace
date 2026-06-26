@@ -95,3 +95,30 @@ def test_g8_draft_indicator_returns_none():
     assert _parse_item_name("糊糊大老婆\n[1条] \n草稿\n14:30\n") is None, (
         "'草稿'作为独立段时应返回 None"
     )
+
+
+# ─── 规则3 删除回归：私聊消息常以"词+冒号"开头，不得被当群删（rog 真机实证误杀真客户）───
+
+
+def test_g9_private_message_with_colon_prefix_not_dropped():
+    """私聊消息"提醒：明天发货"以词+冒号开头 → 必须返回该联系人，不得被旧规则3当群删掉。"""
+    result = _parse_item_name("张三\n[1条] \n提醒：明天发货\n15:26\n")
+    assert result == {"sender": "张三", "content": "提醒：明天发货"}, (
+        f"带冒号私聊不得被删，实际: {result}"
+    )
+
+
+def test_g10_private_message_with_ascii_colon_link_not_dropped():
+    """私聊"链接: http://x" 半角冒号+空格 → 仍是私聊，不得被删。"""
+    result = _parse_item_name("李四\n[1条] \n链接: http://x.com\n11:09\n")
+    assert result == {"sender": "李四", "content": "链接: http://x.com"}
+
+
+def test_g11_named_group_still_filtered_rule1():
+    """规则1 保留：sender 含"群" → 仍排除（学习指导群这类真群）。"""
+    assert _parse_item_name("学习指导群\n[1条] \n大家好\n10:00\n") is None
+
+
+def test_g12_official_account_still_filtered_rule2():
+    """规则2 保留：公众号系统号 → 仍排除。"""
+    assert _parse_item_name("公众号\n[1条] \n推广\n10:00\n") is None
