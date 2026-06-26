@@ -3791,6 +3791,14 @@ agent_suite:
     product: 私域运营
     note: "Sprint cp-06261900 观测上报 — reportEvent POST /api/agent/events 带 x-license-key；失败静默吞不崩 agent；无 apiBase/license 跳过。接 T2 端点。"
 
+  - id: agent-task-event-reporter
+    path: services/agent/src/shared/__tests__/task-event-reporter.test.ts
+    type: unit
+    ci: L2
+    status: active
+    product: 私域运营
+    note: "Sprint cp-06262240 任务观测上报 — 把任务 handler 开始/失败/成功接进 reportEvent 管子；失败时 message 原样含 handler error（qr-bind 为什么失败：playwright 未安装/Edge 启动失败/profile 锁）；上报失败静默吞绝不崩任务；platform→line module 映射。接 onTask + keyword loop。"
+
   - id: agent-keyword-search-douyin-shared-launcher
     path: services/agent/src/handlers/__tests__/keyword-search-douyin.test.ts
     type: unit
