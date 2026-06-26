@@ -26,6 +26,10 @@ const router = Router();
 
 const VALID_STATUS = new Set(['A1', 'A2', 'A3', 'A4', 'A5']);
 const VALID_IDENTITY = new Set(['customer', 'blacklist', 'internal']);
+// 对账参数：连续 K 次没扫到才软删；默认干跑（只日志不写 deleted_at），仅 env 字面 'false' 进真模式。
+const RECONCILE_K = 3;
+// 已知非客户系统/机器人会话，扫到默认标黑名单（不覆盖人工已设 identity）。
+const DEFAULT_BLACKLIST_NAMES = new Set(['微信ClawBot']);
 
 /**
  * 把 body.wechat_id（客服机微信号）映射到 req.params.wechatId，供 requireCsWriteAccess('wechatId')
@@ -261,7 +265,7 @@ router.get('/customers', requireCsReadAccess, async (req: Request, res: Response
     const custRes = await pool.query(
       `SELECT contact, wechat_id, status, source, last_message, last_seen_at, add_friend_time, identity
          FROM zenithjoy.crm_customers
-        WHERE tenant_id = $1::uuid AND identity <> 'internal'${csWhere}`,
+        WHERE tenant_id = $1::uuid AND identity <> 'internal' AND deleted_at IS NULL${csWhere}`,
       custParams,
     );
     const customerRows = custRes.rows.filter((r) => (r.identity as string | null) !== 'internal');
@@ -520,6 +524,8 @@ router.post(
 router.post('/friend-scan/ingest', requireServiceCredential, async (req: Request, res: Response) => {
   const body = req.body as {
     cs_wechat_id?: string;
+    // self_name：运营本人会话名，匹配则该 contact 不入册（向前兼容，agent 不传 → 无影响）。
+    self_name?: string;
     contacts?: Array<{
       name?: string;
       last_message?: string;
@@ -530,6 +536,7 @@ router.post('/friend-scan/ingest', requireServiceCredential, async (req: Request
     }>;
   };
   const csWechatId = (body.cs_wechat_id ?? '').trim();
+  const selfName = typeof body.self_name === 'string' ? body.self_name.trim() : '';
   const contacts = Array.isArray(body.contacts) ? body.contacts : [];
   if (!csWechatId) return res.status(400).json({ error: 'cs_wechat_id 必填' });
   if (!Array.isArray(body.contacts))
@@ -553,6 +560,7 @@ router.post('/friend-scan/ingest', requireServiceCredential, async (req: Request
   for (const c of contacts) {
     const name = (c?.name ?? '').trim();
     if (!name || seen.has(name)) continue;
+    if (selfName && name === selfName) continue; // self 跳过：运营本人会话不入册
     seen.add(name);
     rows.push({
       name,
@@ -571,18 +579,22 @@ router.post('/friend-scan/ingest', requireServiceCredential, async (req: Request
     for (const r of rows) {
       // upsert 幂等（按 tenant_id, cs_wechat_id, contact）：新行 source='scan'；已存在则只补扫描观测字段，
       // 绝不把已聊过/手动入册（source=message/manual）的行降级成 scan（COALESCE 保 source 不回退）。
+      // ClawBot 等已知非客户会话默认标黑名单；ON CONFLICT 不动 identity（保护人工已设）。
+      const identityVal = DEFAULT_BLACKLIST_NAMES.has(r.name) ? 'blacklist' : 'customer';
       const up = await client.query(
         `INSERT INTO zenithjoy.crm_customers
-           (tenant_id, cs_wechat_id, contact, source, last_message, last_seen_at, wechat_id, add_friend_time, updated_at)
-         VALUES ($1::uuid, $2, $3, 'scan', $4, $5, $6, $7, now())
+           (tenant_id, cs_wechat_id, contact, source, last_message, last_seen_at, wechat_id, add_friend_time, identity, updated_at)
+         VALUES ($1::uuid, $2, $3, 'scan', $4, $5, $6, $7, $8, now())
          ON CONFLICT (tenant_id, cs_wechat_id, contact) DO UPDATE
            SET last_message = COALESCE(EXCLUDED.last_message, zenithjoy.crm_customers.last_message),
                last_seen_at = COALESCE(EXCLUDED.last_seen_at, zenithjoy.crm_customers.last_seen_at),
                wechat_id = COALESCE(EXCLUDED.wechat_id, zenithjoy.crm_customers.wechat_id),
                add_friend_time = COALESCE(EXCLUDED.add_friend_time, zenithjoy.crm_customers.add_friend_time),
+               scan_miss_count = 0,
+               deleted_at = NULL,
                updated_at = now()
          RETURNING (xmax = 0) AS inserted`,
-        [tenantId, csWechatId, r.name, r.last_message, r.last_seen, r.wechat_id, r.add_friend_time],
+        [tenantId, csWechatId, r.name, r.last_message, r.last_seen, r.wechat_id, r.add_friend_time, identityVal],
       );
       if (up.rows?.[0]?.inserted === true) newCount += 1;
     }
@@ -597,6 +609,35 @@ router.post('/friend-scan/ingest', requireServiceCredential, async (req: Request
          SET step_o2_scanned = $3, scanned_count = $4, force_scan_requested_at = NULL, updated_at = now()`,
       [tenantId, csWechatId, scannedCount > 0 ? 'ok' : 'fail', scannedCount],
     );
+
+    // 对账：本次没扫到的 source='scan' 行累计 miss；满 K 软删（同事务原子）。
+    // 空扫描（rows.length===0）整体跳过——agent 扫一半失败返回 0 人时绝不把全部 scan 行记 miss
+    // （连续失败会误删全部）。放 onboarding 之后、COMMIT 之前，保现有事务测试序列不破。
+    const reconcileDryRun = process.env.CRM_RECONCILE_DRYRUN !== 'false';
+    if (rows.length > 0) {
+      const presentNames = rows.map((r) => r.name);
+      const rec = await client.query(
+        `UPDATE zenithjoy.crm_customers
+            SET scan_miss_count = scan_miss_count + 1,
+                deleted_at = CASE
+                  WHEN $4::boolean THEN deleted_at
+                  WHEN scan_miss_count + 1 >= $5 THEN now()
+                  ELSE deleted_at END
+          WHERE tenant_id = $1::uuid AND cs_wechat_id = $2
+            AND source = 'scan' AND deleted_at IS NULL
+            AND contact <> ALL($3::text[])
+          RETURNING contact, scan_miss_count, deleted_at`,
+        [tenantId, csWechatId, presentNames, reconcileDryRun, RECONCILE_K],
+      );
+      for (const row of rec.rows ?? []) {
+        const miss = Number(row.scan_miss_count);
+        if (reconcileDryRun && miss >= RECONCILE_K) {
+          console.warn(`[reconcile-dryrun] cs=${csWechatId} 本应软删 contact=${row.contact} (miss=${miss})`);
+        } else if (!reconcileDryRun && row.deleted_at) {
+          console.info(`[reconcile] cs=${csWechatId} 软删 contact=${row.contact} (miss=${miss})`);
+        }
+      }
+    }
 
     await client.query('COMMIT');
     return res.json({ success: true, ingested: rows.length, new: newCount, scanned_count: scannedCount });

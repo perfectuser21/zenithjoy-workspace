@@ -3059,6 +3059,14 @@ agent_suite:
     product: 客户私域AI接管
     note: "Line04 立即扫好友 trigger/pending/ingest 路由单测（mock pool + supertest）— 缺参/404/邮箱超管成功/DB失败 + force=true/false + ingest 清 force_scan_requested_at 标志契约"
 
+  - id: line04-crm-friend-scan-reconcile-routes
+    path: apps/api/tests/routes/crm-friend-scan-reconcile.test.ts
+    type: unit
+    ci: L4
+    status: active
+    product: 客户私域AI接管
+    note: "Line04 采集对账路由单测（mock pool + supertest）— 对账三态/空扫描跳过/真模式SQL含now()/ClawBot默认黑名单/self_name跳过"
+
   - id: line04-crm-table-identity-routes
     path: apps/api/tests/routes/crm-table-identity.test.ts
     type: unit

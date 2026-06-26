@@ -33,6 +33,7 @@ export const OPTIONAL_ENV: { name: string; reason: string }[] = [
   { name: 'FEISHU_STATE_SECRET', reason: '飞书 OAuth state 签名，缺则用内置默认值（生产应覆盖）' },
   { name: 'ZENITHJOY_INTERNAL_TOKEN', reason: '内部接口/super-admin 鉴权 token，缺则相应内部接口拒绝访问' },
   { name: 'SMOKE_TOKEN', reason: 'smoke 测试用临时 token，仅冒烟链路读取' },
+  { name: 'CRM_RECONCILE_DRYRUN', reason: 'CRM 采集对账干跑开关，缺则默认干跑（只日志不软删，最安全）；仅字面 false 进真删模式' },
 
   // —— LLM / AI 供应商（feature 级，缺则对应模型路径不可用）——
   { name: 'TOAPI_BASE_URL', reason: 'toapi 网关地址，缺则用默认 base url' },
