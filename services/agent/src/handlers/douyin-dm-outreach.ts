@@ -14,6 +14,7 @@
 
 import path from 'node:path';
 import os from 'node:os';
+import { loadChromium } from '../shared/playwright-launcher';
 
 /** 触达三态：sent=已发出 / limited=仅互关受限 / failed=失败 */
 export type DmStatus = 'sent' | 'limited' | 'failed';
@@ -157,26 +158,14 @@ async function createRealDmPage(
   payload: DmOutreachPayload,
   options: DmOutreachOptions,
 ): Promise<DmPage> {
-  const moduleName = 'playwright';
-  // eslint-disable-next-line @typescript-eslint/no-implied-eval, no-new-func
-  const dynImport = new Function('m', 'return import(m)') as (m: string) => Promise<{ chromium?: unknown }>;
-  let playwright: { chromium?: unknown } | null = null;
-  try {
-    playwright = await dynImport(moduleName);
-  } catch {
-    playwright = null;
-  }
-  const chromium = playwright?.chromium as
-    | {
-        launchPersistentContext(
-          dir: string,
-          opts?: { channel?: string; headless?: boolean },
-        ): Promise<RealContext>;
-      }
-    | undefined;
-  if (!chromium) {
-    throw new Error('playwright 未安装；真机需先装 playwright (npm i playwright)');
-  }
+  // 共享底座：优先 playwright-core（包里打进的那个），失败回退 playwright；
+  // 打包真机 .exe 不再报「playwright 未安装」（旧版 import('playwright') 完整包没进 pkg）。
+  const chromium = (await loadChromium()) as unknown as {
+    launchPersistentContext(
+      dir: string,
+      opts?: { channel?: string; headless?: boolean },
+    ): Promise<RealContext>;
+  };
 
   const userDataDir = getBurnerUserDataDir(payload.account_label, options.userDataDirRoot);
   const ctx = await chromium.launchPersistentContext(userDataDir, {

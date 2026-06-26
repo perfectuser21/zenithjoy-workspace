@@ -13,6 +13,7 @@
 import path from 'node:path';
 import os from 'node:os';
 import fs from 'node:fs';
+import { loadChromium } from '../shared/playwright-launcher';
 
 export interface QrBindDouyinBurnerPayload {
   account_label: string;
@@ -86,20 +87,11 @@ function getBurnerUserDataDir(accountLabel: string, root?: string): string {
   );
 }
 
+// 共享底座：优先 playwright-core（包里打进的那个），失败回退 playwright；
+// 打包真机 .exe 不再报「playwright 未安装」（旧版直接 import('playwright')，完整包没进 pkg）。
 async function loadDefaultLauncher(): Promise<ChromiumLauncher> {
-  const moduleName = 'playwright';
-  let playwright: any = null;
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-implied-eval, no-new-func
-    const dynImport = new Function('m', 'return import(m)') as (m: string) => Promise<any>;
-    playwright = await dynImport(moduleName);
-  } catch {
-    playwright = null;
-  }
-  if (!playwright?.chromium) {
-    throw new Error('playwright 未安装；客户机需先装 playwright (npm i playwright)');
-  }
-  return playwright.chromium as ChromiumLauncher;
+  const chromium = await loadChromium();
+  return chromium as unknown as ChromiumLauncher;
 }
 
 export async function handleQrBindDouyinBurner(
