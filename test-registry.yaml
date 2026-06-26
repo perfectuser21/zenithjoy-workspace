@@ -3733,3 +3733,20 @@ agent_suite:
     status: active
     product: 私域运营
     note: "Line02 机器管理页 Playwright Windows E2E：机器列表+N个号 / 点进显示抖音号 / 添加抖音号派qr-bind / 重命名+设主副PUT持久化。page.route stub 三端点。"
+
+  # ─── Line02/Agent 观测端点（Sprint 06261900）─────────────────────────────────
+  - id: line02-agent-events-api
+    path: apps/api/tests/routes/agent-events.test.ts
+    type: integration
+    ci: L4
+    status: active
+    product: 私域运营
+    note: "Line02/Agent 观测后端 — POST /api/agent/events(x-license-key 鉴权,单+批量,tenant 来自 license,kind 非法400/license无效401) / GET /api/agent/machines/:id/events(tenantContextOptional,分类logs+upgrades,tenant隔离404,limit/kind)。supertest + mock pg.Pool，9例。"
+
+  - id: line02-agent-events-smoke
+    path: .github/workflows/scripts/smoke/agent-events-smoke.sh
+    type: smoke
+    ci: L4
+    status: active
+    product: 私域运营
+    note: "Line02/Agent 观测端点 smoke(:5200+postgres)：建 tenant+license → POST events 真 license 头落库且 tenant_id 来自 license / 批量 count=2 / license 无效401 / GET machines/:id/events 无认证401。"
