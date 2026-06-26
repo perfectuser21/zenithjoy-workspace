@@ -233,13 +233,10 @@ def _parse_item_name(name: str, require_unread: bool = True) -> Optional[Dict[st
     if not content:
         return None
 
-    # 群聊消息预览格式："成员名: 消息内容"（WeChat 在群聊条目里自动拼前缀）
-    # 私聊预览：直接是消息原文，不含 "名字:" 前缀
-    # 命名不含群/频道关键词的群聊（如"大家庭"、"老乡"）靠此兜底过滤，防止误回群聊
-    import re as _re
-    if _re.match(r'^[^\n：:]{1,30}[：:]\s', content):
-        return None
-
+    # 注：旧"规则3"（按消息预览"成员名: 内容"冒号前缀猜群）已删（rog 真机实证误杀真客户）——
+    # 私聊消息本就常以"词+冒号"开头（"提醒：发货"/"链接: http"/"通知：..."），客户小群命名也无"群"字，
+    # 都被误删。群只按 sender 命名关键词（规则1 SKIP_GROUP_KEYWORDS）排，漏进的非客户群由 CRM 黑名单标记处理，
+    # 采集端不在消息内容上瞎猜身份。
     return {"sender": sender, "content": content}
 
 
@@ -486,19 +483,14 @@ def _collect_recent_contacts(item_names: List[str], limit: int = 100) -> List[Di
         # 复用 _parse_item_name 拿真实消息预览（不要求未读）；拿不到 = 仅 UI 标记 → 空预览
         parsed = _parse_item_name(name, require_unread=False)
         if parsed is not None:
-            # _parse_item_name 已过滤群预览前缀（"成员名: 内容"）→ 返回 None；
-            # 这里 parsed 非空说明是私聊，sender 以解析结果为准（去掉潜在空白）
+            # 解析出真实消息预览的私聊：sender 以解析结果为准（去掉潜在空白）
             sender = parsed["sender"]
             if sender in seen:
                 continue
             preview = parsed["content"]
         else:
-            # 仅 UI 标记 / 无真实消息：群预览前缀也会落这里——需二次判定剔群
-            import re as _re
-            content_segs = [s.strip() for s in parts[1:] if s.strip()]
-            joined = "\n".join(content_segs)
-            if any(_re.match(r'^[^\n：:]{1,30}[：:]\s', seg) for seg in content_segs):
-                continue  # 群预览前缀 → 群聊，跳过
+            # 仅 UI 标记 / 无真实消息预览 → 仍列出该联系人（空预览）。
+            # 旧"群预览冒号前缀"二次剔群判定已删（与 _parse_item_name 规则3 同根，误杀真客户）。
             preview = ""
         seen.add(sender)
         out.append({"name": sender, "last_message": preview})
