@@ -54,6 +54,7 @@ import { wechatMemoryRouter } from './routes/wechat-memory';
 import clipsRouter from './routes/clips';
 import clipsAuthRouter from './routes/clips-auth';
 import { acquisitionRouter } from './routes/acquisition';
+import { acquisitionDispatchRouter } from './routes/acquisition-dispatch';
 import { brainSprintStateRouter } from './routes/brain-sprint-state';
 // Line 00 Session Health Medium WS2 — 运营中枢 8 平台 session 端点
 import { operatorSessionsRouter } from './routes/operator-sessions';
@@ -185,6 +186,8 @@ app.use('/api/wechat', wechatConfigRouter);
 app.use('/api/wechat', wechatMemoryRouter);
 app.use('/api/clips', clipsRouter);
 app.use('/api/clips/auth', clipsAuthRouter);
+// 智能获客「分析+指派」中台大脑（刀1）— 挂同前缀，路径(/config,/dispatch/*,/cookie-health)不与 acquisitionRouter 冲突
+app.use('/api/acquisition', acquisitionDispatchRouter);
 app.use('/api/acquisition', acquisitionRouter);
 // Harness Sprint State — Walking Skeleton 本地持久化（Brain DB source of truth）
 app.use('/api/brain', brainSprintStateRouter);
