@@ -397,6 +397,14 @@ tests:
     product: 客户私域AI接管
     note: "整合(2026-06-25) CustomerListPage 行为单测：三处 fetch+写接口走 adminFetch 注入 X-User-Email(修403) + 客服机下拉默认第一台/过滤未配 + GET 带 ?cs_wechat_id=X(决策5) + 「立即扫好友」调 POST /friend-scan/trigger 带 {cs_wechat_id} 并回显。"
 
+  - id: line04-crm-customer-profile-page-unit
+    path: apps/dashboard/src/pages/__tests__/CustomerProfilePage.test.tsx
+    type: unit
+    ci: L3
+    status: active
+    product: 客户私域AI接管
+    note: "回归(2026-06-27) 详情页路由参数：用真实参数名 {contactKey} mock useParams，断言肖像页加载并渲染客户名(不卡「加载中」)。复现并守卫 useParams 读 contact(应为 contactKey) → undefined → loadProfile 提前 return 卡加载 的 bug。"
+
   # ── PR-3 better-auth 邮箱+密码 UI ────────────────────────────────────────────
 
   - id: dashboard-signup-page
