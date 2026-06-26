@@ -141,7 +141,9 @@ function EmptyHint({ testId, children }: { testId: string; children: React.React
 // ──────────────────────────────────────────────────────────────────────────────
 
 export default function CustomerProfilePage() {
-  const { contact } = useParams<{ contact: string }>();
+  // 路由定义参数名是 :contactKey（navigation.config.ts），别名为 contact 供下方逻辑使用。
+  // 历史 bug：曾读 useParams().contact → 永远 undefined → loadProfile 提前 return 卡「加载中」。
+  const { contactKey: contact } = useParams<{ contactKey: string }>();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const csWechatId = searchParams.get('cs') ?? '';
