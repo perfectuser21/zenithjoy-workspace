@@ -867,44 +867,105 @@ def _session_list_screen_point(mw: Any) -> Optional[tuple]:
         return None
 
 
+def _session_list_center_point(mw: Any) -> Optional[tuple]:
+    """算会话列表中心屏幕坐标（供真硬件滚轮 SetCursorPos 用）：会话项中心 x 中位数 + 中心 y 中位数。"""
+    try:
+        cxs: List[int] = []
+        cys: List[int] = []
+        for it in mw.descendants(control_type="ListItem"):
+            try:
+                r = it.rectangle()
+                cxs.append((int(r.left) + int(r.right)) // 2)
+                cys.append((int(r.top) + int(r.bottom)) // 2)
+            except Exception:
+                continue
+        if not cxs or not cys:
+            return None
+        cxs.sort()
+        cys.sort()
+        return (cxs[len(cxs) // 2], cys[len(cys) // 2])
+    except Exception:
+        return None
+
+
+# 真硬件滚轮档数：clicks 负=下滚，每 click=120（一档）。-3 ≈ 旧 _WHEEL_DELTA -360。
+_WHEEL_CLICKS = -3
+
+
 def _scroll_session_list_wheel(mw: Any) -> None:
-    """向会话列表投 WM_MOUSEWHEEL 翻屏（真机实证可滚，不抢前台焦点）。
+    """滚动会话列表翻屏（不抢前台焦点）。
 
-    真机根因（rog 实证）：微信是 Qt，PostMessage 键盘事件只派发给有焦点的内部 widget，
-    会话列表没焦点 → PageDown 完全滚不动。改投 WM_MOUSEWHEEL：
-    - 投到**主窗口 hwnd**；wParam 高 16 位 = 负 delta（下滚）；
-    - lParam = 会话列表控件内一点的**屏幕坐标**（WM_MOUSEWHEEL lParam 是屏幕坐标，
-      与鼠标键消息相反——关键坑）。
+    主路径 = **真硬件滚轮**（rog 真机实证）：长列表 PostMessage WM_MOUSEWHEEL 合成消息滚到某点
+    卡死（加力 12 次不动，只覆盖 16 条），手鼠标硬件滚轮能流畅滚全 → 合成消息非硬件级输入，
+    微信 4.1.8 Qt 虚拟列表响应不完整、到点不再 fetch 下一批。改用：
+    - SetCursorPos(会话列表中心屏幕坐标) 把光标移到列表上；
+    - mouse_event(MOUSEEVENTF_WHEEL=0x0800, 0,0, c_int(120*clicks).value, 0)，clicks 负=下滚。
+    扫描前 GetCursorPos 存光标、滚完 SetCursorPos 还原（不干扰运营正在用的鼠标）。
 
-    真凶（rog 真机 + 用户屏前实证，1.0.65 时灵时不灵）：Qt 按「鼠标当前悬停在哪个控件」
-    路由滚轮——只发滚轮不更新悬停 → 投给上次悬停的控件（碰巧悬停会话列表才滚得动）。
-    修法：**每次 WM_MOUSEWHEEL 前先 WM_MOUSEMOVE(0x0200) 到会话列表同一屏幕坐标**，
-    让 Qt 认定悬停在会话列表上，滚轮稳稳路由给它。
+    回退路径：SetCursorPos 失败（无桌面输入权，PsExec 探测态）→ 回退原 PostMessage 合成滚轮
+    （WM_MOUSEMOVE 建悬停 + WM_MOUSEWHEEL），别硬崩。
 
-    每屏投 _WHEEL_PULSES_PER_PAGE 次（单次不够一屏）。失败吞掉（滚不动 = 累计按无新增自然终止）。
+    每屏滚 _WHEEL_PULSES_PER_PAGE 次（单次不够一屏）。失败吞掉（滚不动 = 累计按无新增自然终止）。
     """
     try:
         import ctypes as _ct
         main_hwnd = mw.element_info.handle
         if not main_hwnd:
             return
-        pt = _session_list_screen_point(mw)
-        if pt is None:
-            _log("_scroll_session_list_wheel: 拿不到会话列表坐标，跳过本次滚动")
+        center = _session_list_center_point(mw)
+        if center is None:
+            _log("_scroll_session_list_wheel: 拿不到会话列表中心坐标，跳过本次滚动")
             return
-        x, y = pt
+        cx, cy = center
         _u32 = _ct.windll.user32
+
+        # ── 主路径：真硬件滚轮 ──────────────────────────────────────
+        class _POINT(_ct.Structure):
+            _fields_ = [("x", _ct.c_long), ("y", _ct.c_long)]
+
+        saved = _POINT()
+        had_cursor = False
+        try:
+            had_cursor = bool(_u32.GetCursorPos(_ct.byref(saved)))
+        except Exception:
+            had_cursor = False
+
+        moved = False
+        try:
+            moved = bool(_u32.SetCursorPos(int(cx), int(cy)))
+        except Exception:
+            moved = False
+
+        if moved:
+            MOUSEEVENTF_WHEEL = 0x0800
+            delta = _ct.c_int(120 * _WHEEL_CLICKS).value  # 负=下滚
+            try:
+                for _ in range(_WHEEL_PULSES_PER_PAGE):
+                    # 每次重置光标到列表中心（防运营或前面操作把光标挪走）再发真滚轮。
+                    _u32.SetCursorPos(int(cx), int(cy))
+                    _u32.mouse_event(MOUSEEVENTF_WHEEL, 0, 0, delta, 0)
+                    time.sleep(_WHEEL_PULSE_SLEEP)
+            finally:
+                # 还原光标，不干扰运营正在用的鼠标。
+                if had_cursor:
+                    try:
+                        _u32.SetCursorPos(saved.x, saved.y)
+                    except Exception:
+                        pass
+            return
+
+        # ── 回退路径：无桌面输入权 → PostMessage 合成滚轮 ──────────────
+        _log("_scroll_session_list_wheel: SetCursorPos 失败（无输入权），回退 PostMessage 合成滚轮")
         WM_MOUSEMOVE = 0x0200
         WM_MOUSEWHEEL = 0x020A
         wparam = (_WHEEL_DELTA << 16) & 0xFFFFFFFF       # 高 16 位 = 负 delta
-        lparam = ((y & 0xFFFF) << 16) | (x & 0xFFFF)     # 屏幕坐标（高=Y 低=X）
+        lparam = ((cy & 0xFFFF) << 16) | (cx & 0xFFFF)   # 屏幕坐标（高=Y 低=X）
         for _ in range(_WHEEL_PULSES_PER_PAGE):
-            # 先更新悬停位置（真凶修法）：Qt 才会把紧接着的滚轮路由给会话列表。
-            _u32.PostMessageW(main_hwnd, WM_MOUSEMOVE, 0, lparam)
+            _u32.PostMessageW(main_hwnd, WM_MOUSEMOVE, 0, lparam)   # 建悬停（Qt 按悬停路由滚轮）
             _u32.PostMessageW(main_hwnd, WM_MOUSEWHEEL, wparam, lparam)
             time.sleep(_WHEEL_PULSE_SLEEP)
     except Exception as exc:
-        _log(f"_scroll_session_list_wheel: 投递 WM_MOUSEWHEEL 异常: {exc}")
+        _log(f"_scroll_session_list_wheel: 滚动异常: {exc}")
 
 
 def _click_screen_point(mw: Any, pt: tuple) -> bool:

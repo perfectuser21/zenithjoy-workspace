@@ -96,85 +96,106 @@ def _decode_delta(wparam):
     return d - 0x10000 if d >= 0x8000 else d  # 还原有符号 delta
 
 
-def test_wheel_posts_wm_mousewheel_negative_delta_at_list_screen_coords():
-    """投 WM_MOUSEWHEEL 到主窗口，wParam 负 delta（下滚），lParam=会话列表项算出的屏幕坐标。"""
-    # 真机实测左列会话项 x≈100-457，三项纵向排开
+MOUSEEVENTF_WHEEL = 0x0800
+
+
+def _c_int_value(v):
+    """还原 ctypes.c_int(...).value（mouse_event 第 4 参传的是 c_int(...).value，已是有符号 int）。"""
+    return v
+
+
+# ─── 主路径：真硬件滚轮 SetCursorPos + mouse_event（长列表 PostMessage 合成滚轮会卡死）──
+
+
+def test_real_wheel_setcursorpos_to_list_center_then_mouse_event_negative():
+    """真硬件滚轮：SetCursorPos 到会话列表中心 → mouse_event(MOUSEEVENTF_WHEEL, 负 delta) 下滚。"""
     rects = [(100, 180, 457, 240), (100, 240, 457, 300), (100, 300, 457, 360)]
     mw = _make_mw_with_item_rects(rects)
     user32 = MagicMock()
+    user32.SetCursorPos.return_value = 1  # 有桌面输入权
+    user32.GetCursorPos.return_value = 1
 
     with _mock_windll(user32):
         listen_chat._scroll_session_list_wheel(mw)
 
-    assert user32.PostMessageW.called, "必须投递消息"
-    calls = user32.PostMessageW.call_args_list
-    # 只看 WM_MOUSEWHEEL 消息（现在还会夹 WM_MOUSEMOVE 悬停消息）：负 delta + 会话列表屏幕坐标
-    wheel_calls = [c for c in calls if c.args[1] == WM_MOUSEWHEEL]
-    assert wheel_calls, "必须投 WM_MOUSEWHEEL"
-    for c in wheel_calls:
-        args = c.args
-        assert args[0] == mw.element_info.handle
-        assert _decode_delta(args[2]) < 0, "delta 必须为负（下滚）"
-        x, y = _decode_lparam(args[3])
-        # x = 会话项中心 x 的中位数（(100+457)/2≈278），y 落在第一项内（180-240）
-        assert 270 <= x <= 286, f"x 应≈会话列表中位 x，实际 {x}"
-        assert 180 <= y <= 240, f"y 应落在第一会话项内，实际 {y}"
+    # 移光标到会话列表中心（x≈中位 278，y≈纵向中位 270）
+    assert user32.SetCursorPos.called, "必须 SetCursorPos 把光标移到列表中心"
+    move_calls = [c for c in user32.SetCursorPos.call_args_list]
+    cx, cy = move_calls[0].args
+    assert 270 <= cx <= 286, f"光标 x 应≈列表中位，实际 {cx}"
+    assert 180 <= cy <= 360, f"光标 y 应落在列表纵向范围，实际 {cy}"
+
+    # mouse_event(MOUSEEVENTF_WHEEL, 0, 0, 负 delta, 0)
+    assert user32.mouse_event.called, "必须发真硬件滚轮 mouse_event"
+    for c in user32.mouse_event.call_args_list:
+        a = c.args
+        assert a[0] == MOUSEEVENTF_WHEEL, f"flag 应 MOUSEEVENTF_WHEEL，实际 {hex(a[0])}"
+        assert _c_int_value(a[3]) < 0, f"wheel delta 必须为负（下滚），实际 {a[3]}"
+    # 不走 PostMessage 合成滚轮（主路径成功时）
+    assert not any(c.args[1] == WM_MOUSEWHEEL for c in user32.PostMessageW.call_args_list), \
+        "真硬件滚轮成功时不应再投 PostMessage 合成滚轮"
 
 
-def test_wheel_posts_multiple_pulses_per_page():
-    """每翻一屏投多次 wheel（真机单次滚不够一屏），≥3 次。"""
+def test_real_wheel_saves_and_restores_cursor():
+    """扫描前 GetCursorPos 存光标、滚完 SetCursorPos 还原（不干扰运营正在用的鼠标）。"""
+    rects = [(100, 180, 457, 240)]
+    mw = _make_mw_with_item_rects(rects)
+    user32 = MagicMock()
+    user32.SetCursorPos.return_value = 1
+    user32.GetCursorPos.return_value = 1
+    with _mock_windll(user32):
+        listen_chat._scroll_session_list_wheel(mw)
+    assert user32.GetCursorPos.called, "必须先 GetCursorPos 存原光标位置"
+    # 最后一次 SetCursorPos 是还原（应在所有 mouse_event 之后）——这里只校验 GetCursorPos+SetCursorPos 都调过
+    assert user32.SetCursorPos.call_count >= 2, "至少移到列表中心 + 还原两次 SetCursorPos"
+
+
+def test_real_wheel_multiple_pulses():
+    """每翻一屏发多次真滚轮（单次滚不够一屏），≥3 次 mouse_event。"""
     mw = _make_mw_with_item_rects([(100, 180, 457, 240)])
     user32 = MagicMock()
+    user32.SetCursorPos.return_value = 1
+    user32.GetCursorPos.return_value = 1
     with _mock_windll(user32):
         listen_chat._scroll_session_list_wheel(mw)
-    wheel_count = sum(1 for c in user32.PostMessageW.call_args_list if c.args[1] == WM_MOUSEWHEEL)
-    assert wheel_count >= 3, f"每屏应投≥3 次 wheel，实际 {wheel_count}"
+    assert user32.mouse_event.call_count >= 3, f"每屏应发≥3 次真滚轮，实际 {user32.mouse_event.call_count}"
 
 
-def test_mousemove_precedes_each_wheel_with_same_lparam():
-    """真凶修法：每次 WM_MOUSEWHEEL 之前紧挨一个 WM_MOUSEMOVE(0x0200) 到同一会话列表屏幕坐标。
+# ─── 回退路径：SetCursorPos 失败（无桌面输入权，PsExec 探测态）→ 回退 PostMessage 合成滚轮 ──
 
-    Qt 按「鼠标当前悬停在哪个控件」路由滚轮——只发滚轮不更新悬停 → 投给上次悬停控件（时灵时不灵）。
-    先 WM_MOUSEMOVE 到会话列表点，Qt 认定悬停在列表上，滚轮稳稳路由给它。
-    """
-    WM_MOUSEMOVE = 0x0200
+
+def test_fallback_to_postmessage_when_setcursorpos_fails():
+    """SetCursorPos 返 0（无输入权）→ 回退原 PostMessage WM_MOUSEWHEEL 合成滚轮，不硬崩。"""
     rects = [(100, 180, 457, 240), (100, 240, 457, 300)]
     mw = _make_mw_with_item_rects(rects)
     user32 = MagicMock()
+    user32.SetCursorPos.return_value = 0   # 无桌面输入权
+    user32.GetCursorPos.return_value = 0
     with _mock_windll(user32):
         listen_chat._scroll_session_list_wheel(mw)
-
-    calls = user32.PostMessageW.call_args_list
-    msgs = [c.args[1] for c in calls]
-    assert WM_MOUSEMOVE in msgs, "必须投 WM_MOUSEMOVE 更新悬停位置"
-    # 每个 WM_MOUSEWHEEL 紧前一条必须是 WM_MOUSEMOVE，且 lParam 与该 wheel 相同（同一屏幕点）
-    saw_pair = False
-    for i, c in enumerate(calls):
-        if c.args[1] == WM_MOUSEWHEEL:
-            assert i >= 1, "WM_MOUSEWHEEL 前必须先有 WM_MOUSEMOVE"
-            prev = calls[i - 1]
-            assert prev.args[1] == WM_MOUSEMOVE, \
-                f"wheel 紧前一条应是 WM_MOUSEMOVE，实际 {hex(prev.args[1])}"
-            assert prev.args[3] == c.args[3], "WM_MOUSEMOVE 与 WM_MOUSEWHEEL 的 lParam 必须同一屏幕点"
-            saw_pair = True
-    assert saw_pair, "至少有一对 MOUSEMOVE→WHEEL"
+    wheel_calls = [c for c in user32.PostMessageW.call_args_list if c.args[1] == WM_MOUSEWHEEL]
+    assert wheel_calls, "SetCursorPos 失败应回退 PostMessage 合成滚轮"
+    for c in wheel_calls:
+        assert _decode_delta(c.args[2]) < 0, "回退滚轮 delta 仍为负（下滚）"
 
 
 def test_wheel_no_items_falls_back_without_crash():
-    """会话列表空（拿不到 item rect）→ 不崩，退化用窗口中心或直接不投，安全返回。"""
+    """会话列表空（拿不到 item rect）→ 不崩，安全返回。"""
     mw = MagicMock()
     mw.element_info.handle = 999
     mw.descendants.return_value = []
     user32 = MagicMock()
+    user32.SetCursorPos.return_value = 1
     with _mock_windll(user32):
         listen_chat._scroll_session_list_wheel(mw)  # 不抛即可
 
 
 def test_wheel_no_hwnd_safe():
-    """主窗口 hwnd 为 0 → 直接安全返回，不投消息。"""
+    """主窗口 hwnd 为 0 → 直接安全返回，不滚不投。"""
     mw = MagicMock()
     mw.element_info.handle = 0
     user32 = MagicMock()
     with _mock_windll(user32):
         listen_chat._scroll_session_list_wheel(mw)
+    assert not user32.mouse_event.called
     assert not user32.PostMessageW.called
