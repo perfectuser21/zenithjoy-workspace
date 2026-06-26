@@ -34,6 +34,13 @@ import {
 import { ModuleManager } from './module-manager';
 // Sprint 06222100 — 核心运行时本体自升级（下载新核心包→解压→写 .active-core 指针→优雅退出）。
 import { CoreUpgrader } from './core-upgrader';
+// Sprint cp-06262240 — 任务观测上报：把 handler 开始/失败/成功接进 reportEvent 管子
+import {
+  reportTaskStart,
+  reportTaskFail,
+  reportTaskOk,
+} from './shared/task-event-reporter';
+import type { EventReporterConfig } from './shared/event-reporter';
 import { handleQrBindDouyin } from './handlers/qr-bind-douyin';
 // Path 2 Sprint B-1 — burner 小号绑定 handler（独立文件，与 Path 1 主号物理隔离）
 import { handleQrBindDouyinBurner } from './handlers/qr-bind-douyin-burner';
@@ -800,6 +807,13 @@ function startWs1HeartbeatLoop(cfg: AgentConfig): void {
   // 去重锁：heartbeat 每 30s 重派 pending task，同一 task_id 并发派会开多个 Chrome 窗口
   const processingTasks = new Set<string>();
 
+  // Sprint cp-06262240 — 观测上报 cfg（与下方 coreUpgrader.setReporter 同源）。
+  const eventCfg: EventReporterConfig = {
+    apiBase,
+    license: cfg.licenseKey,
+    agentId: cfg.agentUuid ?? cfg.agentId,
+  };
+
   const onTask = async (task: HeartbeatTask): Promise<void> => {
     if (processingTasks.has(task.task_id)) {
       console.log(`[ws1] skip duplicate task_id=${task.task_id} (already processing)`);
@@ -807,12 +821,24 @@ function startWs1HeartbeatLoop(cfg: AgentConfig): void {
     }
     processingTasks.add(task.task_id);
     console.log('[ws1] task:', task.platform, task.task_id);
+    // 观测：任务开始（info）。account_label 尽力从 payload 取。
+    const acctLabel = (task.payload as { account_label?: string } | undefined)?.account_label;
+    void reportTaskStart(eventCfg, {
+      platform: task.platform,
+      taskId: task.task_id,
+      accountLabel: acctLabel,
+    });
     try {
       if (task.platform === 'qr_bind_douyin') {
         const res = await handleQrBindDouyin(
           task.payload as { account_label?: string },
         );
         console.log('[ws1:qr_bind_douyin] result:', res);
+        if (res.ok) {
+          void reportTaskOk(eventCfg, { platform: task.platform, taskId: task.task_id, accountLabel: acctLabel });
+        } else {
+          void reportTaskFail(eventCfg, { platform: task.platform, taskId: task.task_id, error: res.error ?? 'unknown', accountLabel: acctLabel });
+        }
         const ackResult = res.qr_login ?? (res.ok ? 'success' : (res.error ? `failed:${res.error}` : 'failed'));
         await postQrBindDouyinAck(cfg, task.task_id, ackResult);
       } else if (
@@ -824,6 +850,13 @@ function startWs1HeartbeatLoop(cfg: AgentConfig): void {
           task.payload as { account_label: string },
         );
         console.log('[p2-b1:qr_bind_douyin_burner] result:', res);
+        // 观测：qr-bind 失败必把 handler 的 error 原样上报中台（playwright 未安装 /
+        // Edge 启动失败 / profile 锁等）—— 本 sprint 核心目的。
+        if (res.ok) {
+          void reportTaskOk(eventCfg, { platform: task.platform, taskId: task.task_id, accountLabel: (task.payload as { account_label?: string }).account_label });
+        } else {
+          void reportTaskFail(eventCfg, { platform: task.platform, taskId: task.task_id, error: res.error ?? 'unknown', accountLabel: (task.payload as { account_label?: string }).account_label });
+        }
         // ✨ 真回报 backend (修 burner 'chrome 一直闪' loop bug):
         // 没这一步 task 永远 'pending' → 每 30s heartbeat 重派 → 重启 chrome 撞 lock。
         await postBurnerQrBindResult(cfg, task.task_id, {
@@ -846,6 +879,11 @@ function startWs1HeartbeatLoop(cfg: AgentConfig): void {
         const platformName = task.platform.replace('qr_bind/', '');
         const res = await handleQrBindOperator({ platform: platformName, ...task.payload as Record<string, unknown> });
         console.log(`[ws1:${task.platform}] result: ok=${res.ok}`);
+        if (res.ok) {
+          void reportTaskOk(eventCfg, { platform: task.platform, taskId: task.task_id, accountLabel: acctLabel });
+        } else {
+          void reportTaskFail(eventCfg, { platform: task.platform, taskId: task.task_id, error: res.error ?? 'unknown', accountLabel: acctLabel });
+        }
         // task-ack：没这一步 task 永远 queued → 每次心跳重派 → Chrome 反复弹
         await postQrBindDouyinAck(cfg, task.task_id, res.ok ? 'success' : `failed:${res.error ?? 'unknown'}`);
       } else if (
@@ -886,6 +924,11 @@ function startWs1HeartbeatLoop(cfg: AgentConfig): void {
           account_label: p.account_label || '',
         });
         console.log('[p2:dm_outreach] result:', res.status, res.ok);
+        if (res.ok) {
+          void reportTaskOk(eventCfg, { platform: task.platform, taskId: task.task_id, accountLabel: p.account_label });
+        } else {
+          void reportTaskFail(eventCfg, { platform: task.platform, taskId: task.task_id, error: res.error_code ?? res.status ?? 'unknown', accountLabel: p.account_label });
+        }
         await postBurnerDmOutreachResult(cfg, task.task_id, {
           agent_id: cfg.agentUuid,
           account_label: p.account_label,
@@ -926,6 +969,13 @@ function startWs1HeartbeatLoop(cfg: AgentConfig): void {
       }
     } catch (err) {
       console.warn('[ws1] task handler threw:', err);
+      // 观测：handler 抛异常也上报失败（error 文本原样进 message）
+      void reportTaskFail(eventCfg, {
+        platform: task.platform,
+        taskId: task.task_id,
+        error: err instanceof Error ? err.message : String(err),
+        accountLabel: acctLabel,
+      });
     } finally {
       processingTasks.delete(task.task_id);
     }
@@ -1022,6 +1072,13 @@ function startAcquisitionKeywordLoop(cfg: AgentConfig): void {
 
   const POLL_INTERVAL_MS = 30_000;
 
+  // Sprint cp-06262240 — 观测上报 cfg（与 ws1 heartbeat 同源）。
+  const eventCfg: EventReporterConfig = {
+    apiBase,
+    license: cfg.licenseKey,
+    agentId: cfg.agentUuid ?? cfg.agentId,
+  };
+
   async function pollAndProcess(): Promise<void> {
     try {
       const resp = await fetch(`${apiBase}/api/acquisition/pending-keyword-tasks`);
@@ -1036,11 +1093,19 @@ function startAcquisitionKeywordLoop(cfg: AgentConfig): void {
         const { task_id, keywords } = task;
         const allVideoUrls: string[] = [];
 
+        void reportTaskStart(eventCfg, { platform: 'keyword_search_douyin', taskId: task_id });
+
         // 逐词搜索热门视频
         for (const kw of keywords) {
           const result = await searchDouyinVideosByKeyword(kw);
           if (result.ok && result.video_urls.length > 0) {
             allVideoUrls.push(...result.video_urls);
+          } else if (!result.ok) {
+            void reportTaskFail(eventCfg, {
+              platform: 'keyword_search_douyin',
+              taskId: task_id,
+              error: `关键词「${kw}」搜索失败: ${(result as { error?: string }).error ?? 'unknown'}`,
+            });
           }
         }
 
