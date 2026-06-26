@@ -563,6 +563,16 @@ jobs:
           chmod +x .github/workflows/scripts/smoke/line04-crm-identity-mark-smoke.sh
           bash .github/workflows/scripts/smoke/line04-crm-identity-mark-smoke.sh
 
+      # ─── Line04 CRM Glide 运营台 — 验证前端依赖的 5 个后端端点可用 ───
+      - name: Smoke — Line04 CRM Glide 运营台（前端依赖端点健康检查）
+        env:
+          API_BASE: http://localhost:5200
+          ZENITHJOY_INTERNAL_TOKEN: ci-only-internal-token-abc-not-prod
+          SMOKE_ADMIN_EMAIL: boss@zenjoymedia.media
+        run: |
+          chmod +x .github/workflows/scripts/smoke/line04-crm-glide-smoke.sh
+          bash .github/workflows/scripts/smoke/line04-crm-glide-smoke.sh
+
       - name: Stop fake-feishu-server
         if: always()
         run: |

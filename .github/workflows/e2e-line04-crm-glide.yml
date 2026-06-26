@@ -1,0 +1,85 @@
+name: "[CONFIG] E2E Line04 CRM Glide 运营台（暗色 AI 客户管理台）"
+
+# Line04 CRM Glide 运营台 Playwright E2E
+# ZenithJoy UI 死规则 → windows-latest runner。
+# Glide canvas 不可直接 read，测 DOM：搜索计数/chip 过滤/编辑面板/画像页字段。
+# page.route 拦截全部后端 API（不依赖真 DB）。
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'apps/dashboard/src/pages/CustomerListPage.tsx'
+      - 'apps/dashboard/src/pages/CustomerProfilePage.tsx'
+      - 'apps/dashboard/e2e/crm-glide.spec.ts'
+      - 'apps/dashboard/e2e/crm-customer-list.spec.ts'
+      - '.github/workflows/e2e-line04-crm-glide.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: e2e-line04-crm-glide-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  playwright-windows:
+    name: Playwright — CRM Glide 运营台 (Windows Chrome)
+    runs-on: windows-latest
+    timeout-minutes: 25
+
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          # 不缓存：macOS lock 缺 Windows optional deps（@rollup/rollup-win32-x64-msvc）
+
+      - name: Install deps
+        run: npm ci
+
+      - name: Install Windows rollup native binding
+        # package-lock.json 由 macOS 生成，缺 @rollup/rollup-win32-x64-msvc
+        run: npm install @rollup/rollup-win32-x64-msvc --no-save
+
+      - name: Install Playwright Chromium
+        working-directory: apps/dashboard
+        run: npx playwright install chromium --with-deps
+
+      - name: Start Vite dev server (VITE_SKIP_AUTH=true)
+        working-directory: apps/dashboard
+        env:
+          VITE_SKIP_AUTH: 'true'
+          VITE_MOCK_USER_ID: 'dev-user-001'
+          VITE_MOCK_USER_NAME: '测试用户'
+        run: |
+          npx vite --port 5174 &
+          echo $! > /tmp/vite.pid
+          for i in $(seq 1 30); do
+            if curl -fs http://localhost:5174 >/dev/null 2>&1; then
+              echo "Vite ready after ${i}s"
+              break
+            fi
+            sleep 1
+          done
+          curl -fs http://localhost:5174 || (echo "Vite failed to start"; exit 1)
+
+      - name: Run Playwright E2E — CRM Glide 运营台
+        working-directory: apps/dashboard
+        env:
+          BASE_URL: 'http://localhost:5174'
+        run: npx playwright test e2e/crm-glide.spec.ts e2e/crm-customer-list.spec.ts --reporter=list
+
+      - name: Upload Playwright artifacts on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-crm-glide-artifacts
+          path: |
+            apps/dashboard/test-results/
+            apps/dashboard/playwright-report/
+            apps/dashboard/screenshots/
+          retention-days: 7

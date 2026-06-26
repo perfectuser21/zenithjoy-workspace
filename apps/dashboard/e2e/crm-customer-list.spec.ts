@@ -60,26 +60,32 @@ async function stubAuth(page: Page) {
   );
 }
 
-test('客户好友表 Golden Path — 列表/身份下拉/状态下拉/onboarding 条', async ({ page }) => {
+test('客户好友表 Golden Path — 计数/编辑面板/身份下拉/状态下拉/onboarding 条', async ({ page }) => {
   await stubAuth(page);
 
   let blacklisted = false;
   let lastStatus = 'A1';
 
-  await page.route('**/api/crm/customers**', (route) =>
-    route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify({
-        customers: [
-          { ...ROWS[0], status: lastStatus, managed: !blacklisted, identity: blacklisted ? 'blacklist' : 'customer' },
-          ROWS[1],
-        ],
-        total: 2,
-        cs_wechat_id: 'wx_cs_A',
-      }),
-    }),
-  );
+  await page.route('**/api/crm/customers**', (route) => {
+    const url = route.request().url();
+    const method = route.request().method();
+    if (method === 'GET' && !url.includes('/profile') && !url.includes('/status') &&
+        !url.includes('/identity') && !url.includes('/friend-scan')) {
+      return route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          customers: [
+            { ...ROWS[0], status: lastStatus, managed: !blacklisted, identity: blacklisted ? 'blacklist' : 'customer' },
+            ROWS[1],
+          ],
+          total: 2,
+          cs_wechat_id: 'wx_cs_A',
+        }),
+      });
+    }
+    return route.continue();
+  });
   await page.route('**/api/crm/onboarding/**', (route) =>
     route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ onboarding: ONBOARDING }) }),
   );
@@ -88,19 +94,13 @@ test('客户好友表 Golden Path — 列表/身份下拉/状态下拉/onboardin
   await page.waitForLoadState('networkidle');
   await page.screenshot({ path: path.join(SHOTS, '01-list.png'), fullPage: true });
 
-  // 1. 列表 2 行（6 列：姓名/微信号/加微信时间/意向/最近联系/身份），onboarding 条可见
-  await expect(page.getByTestId('crm-customer-row')).toHaveCount(2);
-  await expect(page.getByTestId('crm-customer-row').first()).toContainText('张三');
-  await expect(page.getByTestId('crm-status-select').first()).toBeVisible();
+  // 1. 计数显示 2 位客户，onboarding 条可见
+  // （Glide 是 canvas — 用 crm-customer-count DOM 计数代替旧 crm-customer-row 断言）
+  await expect(page.getByTestId('crm-customer-count')).toContainText('2', { timeout: 8000 });
+  // 编辑面板自动选中首行（张三）→ 状态/身份下拉可见
+  await expect(page.getByTestId('crm-status-select').first()).toBeVisible({ timeout: 8000 });
   await expect(page.getByTestId('crm-identity-select').first()).toBeVisible();
-  // 6 列表头齐全
-  await expect(page.getByRole('columnheader', { name: '姓名' })).toBeVisible();
-  await expect(page.getByRole('columnheader', { name: '微信号' })).toBeVisible();
-  await expect(page.getByRole('columnheader', { name: '加微信时间' })).toBeVisible();
-  await expect(page.getByRole('columnheader', { name: '意向' })).toBeVisible();
-  await expect(page.getByRole('columnheader', { name: '最近联系' })).toBeVisible();
-  await expect(page.getByRole('columnheader', { name: '身份' })).toBeVisible();
-  // 微信号 + 加微信时间 列渲染出真值
+  // 微信号 + 加微信时间在编辑面板里渲染出真值
   await expect(page.getByTestId('crm-customer-wechat-id').first()).toHaveText('wx_001');
   await expect(page.getByTestId('crm-customer-add-friend-time').first()).not.toHaveText('—');
   await expect(page.getByTestId('crm-onboarding-bar')).toBeVisible();
@@ -121,7 +121,7 @@ test('客户好友表 Golden Path — 列表/身份下拉/状态下拉/onboardin
   await expect(page.getByText('登录已失效')).toHaveCount(0);
   await page.screenshot({ path: path.join(SHOTS, '02-blacklist.png'), fullPage: true });
 
-  // 3. 改状态 A3 → 刷新仍 A3
+  // 3. 改状态 A3 → 刷新仍 A3（编辑面板随刷新后 rows[0] 更新）
   await page.route('**/api/crm/customers/status', (route) => {
     lastStatus = 'A3';
     return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ success: true, status: 'A3' }) });
@@ -129,7 +129,7 @@ test('客户好友表 Golden Path — 列表/身份下拉/状态下拉/onboardin
   await page.getByTestId('crm-status-select').first().selectOption('A3');
   await page.reload();
   await page.waitForLoadState('networkidle');
-  await expect(page.getByTestId('crm-status-select').first()).toHaveValue('A3');
+  await expect(page.getByTestId('crm-status-select').first()).toHaveValue('A3', { timeout: 8000 });
   await page.screenshot({ path: path.join(SHOTS, '03-status.png'), fullPage: true });
 });
 
@@ -185,7 +185,8 @@ test('旧顶层 /customers 重定向到板块内 /wechat/crm', async ({ page }) 
   await page.goto(`${BASE_URL}/customers`);
   await page.waitForLoadState('networkidle');
   await expect(page).toHaveURL(/\/wechat\/crm$/);
-  await expect(page.getByTestId('crm-customer-row').first()).toBeVisible();
+  // 重定向后页面正常加载，计数可见（Glide 是 canvas — 不用 crm-customer-row）
+  await expect(page.getByTestId('crm-customer-count')).toContainText('2', { timeout: 8000 });
 });
 
 // per-operator（2026-06-25 契约）：无「选客服机」下拉 + /customers 不带超管头 + 立即扫好友用后端回的 cs_wechat_id
