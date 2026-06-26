@@ -694,25 +694,69 @@ def _find_session_item(mw: Any, sender: str) -> Optional[Any]:
     return None
 
 
-def _scroll_session_list_pagedown(mw: Any) -> None:
-    """向会话列表投递一次 PageDown 翻屏（键盘，不抢前台焦点）。
+_WHEEL_PULSES_PER_PAGE = 4      # 每翻一屏投几次 wheel（单次滚不够一屏）
+_WHEEL_DELTA = -360             # 负=向下滚（每 120 = 一档，3 档/次）
+_WHEEL_PULSE_SLEEP = 0.12       # 两次 wheel 之间间隔
 
-    用 PostMessageW(WM_KEYDOWN/UP, VK_NEXT) 直投主窗口消息队列——与 _uia_send 的 Enter 同款，
-    不依赖前台焦点、不动鼠标（会话 List 不暴露 ScrollPattern，PsExec session 无鼠标输入权，
-    禁止用鼠标 wheel）。失败吞掉（滚不动 = 累计逻辑自然按「无新增」终止）。
+
+def _session_list_screen_point(mw: Any) -> Optional[tuple]:
+    """算会话列表控件内一点的屏幕坐标（供 WM_MOUSEWHEEL lParam 用）。
+
+    真机：会话列表 = 左列（mmui::XTableView），ListItem 的 rect x≈100-457。
+    取所有会话项中心 x 的中位数作 x、第一个会话项中心 y 作 y（真机实测 (278,195) 可滚）。
+    拿不到任何会话项 rect → 返回 None（调用方退化/不投）。
+    """
+    try:
+        centers_x: List[int] = []
+        first_y: Optional[int] = None
+        for it in mw.descendants(control_type="ListItem"):
+            try:
+                r = it.rectangle()
+                cx = (r.left + r.right) // 2
+                cy = (r.top + r.bottom) // 2
+            except Exception:
+                continue
+            centers_x.append(cx)
+            if first_y is None:
+                first_y = cy
+        if not centers_x or first_y is None:
+            return None
+        centers_x.sort()
+        mid_x = centers_x[len(centers_x) // 2]
+        return (mid_x, first_y)
+    except Exception:
+        return None
+
+
+def _scroll_session_list_wheel(mw: Any) -> None:
+    """向会话列表投 WM_MOUSEWHEEL 翻屏（真机实证可滚，不抢前台焦点）。
+
+    真机根因（rog 实证）：微信是 Qt，PostMessage 键盘事件只派发给有焦点的内部 widget，
+    会话列表没焦点 → PageDown 完全滚不动。改投 WM_MOUSEWHEEL：
+    - 投到**主窗口 hwnd**；wParam 高 16 位 = 负 delta（下滚）；
+    - lParam = 会话列表控件内一点的**屏幕坐标**（WM_MOUSEWHEEL lParam 是屏幕坐标，
+      与鼠标键消息相反——关键坑）。
+    每屏投 _WHEEL_PULSES_PER_PAGE 次（单次不够一屏）。失败吞掉（滚不动 = 累计按无新增自然终止）。
     """
     try:
         import ctypes as _ct
         main_hwnd = mw.element_info.handle
         if not main_hwnd:
             return
+        pt = _session_list_screen_point(mw)
+        if pt is None:
+            _log("_scroll_session_list_wheel: 拿不到会话列表坐标，跳过本次滚动")
+            return
+        x, y = pt
         _u32 = _ct.windll.user32
-        VK_NEXT = 0x22  # PageDown
-        _u32.PostMessageW(main_hwnd, 0x0100, VK_NEXT, 0x00510001)  # WM_KEYDOWN
-        time.sleep(0.03)
-        _u32.PostMessageW(main_hwnd, 0x0101, VK_NEXT, 0xC0510001)  # WM_KEYUP
+        WM_MOUSEWHEEL = 0x020A
+        wparam = (_WHEEL_DELTA << 16) & 0xFFFFFFFF       # 高 16 位 = 负 delta
+        lparam = ((y & 0xFFFF) << 16) | (x & 0xFFFF)     # 屏幕坐标（高=Y 低=X）
+        for _ in range(_WHEEL_PULSES_PER_PAGE):
+            _u32.PostMessageW(main_hwnd, WM_MOUSEWHEEL, wparam, lparam)
+            time.sleep(_WHEEL_PULSE_SLEEP)
     except Exception as exc:
-        _log(f"_scroll_session_list_pagedown: 投递 PageDown 异常: {exc}")
+        _log(f"_scroll_session_list_wheel: 投递 WM_MOUSEWHEEL 异常: {exc}")
 
 
 def scan_recent_contacts(mw: Any, limit: int = 100) -> List[Dict[str, str]]:
@@ -722,8 +766,9 @@ def scan_recent_contacts(mw: Any, limit: int = 100) -> List[Dict[str, str]]:
     供中台拉成客户好友表（默认全接管 + 黑名单排除）。
 
     虚拟滚动处理（A1）：微信会话列表是 Qt 虚拟列表，一次 descendants 只渲染可见 ~6 条。
-    这里边滚边累计：读一屏 → _ScrollAccumulator 去重并入 → PageDown 翻下一屏，
-    直到连续 _SCROLL_NO_NEW_MAX_STREAK 屏无新增（滚到底）或到 limit / 安全上限为止。
+    这里边滚边累计：读一屏 → _ScrollAccumulator 去重并入 → WM_MOUSEWHEEL 翻下一屏（真机实证
+    PageDown 滚不动，Qt 键盘事件只给有焦点 widget），直到连续 _SCROLL_NO_NEW_MAX_STREAK 屏
+    无新增（滚到底）或到 limit / 安全上限为止。
 
     托盘/最小化场景同 scan_unread：扫描前 _ensure_tray_visible 短暂移出离屏刷新 UIA，
     扫完 _restore_window_state 还原（后台无感知）。
@@ -740,7 +785,7 @@ def scan_recent_contacts(mw: Any, limit: int = 100) -> List[Dict[str, str]]:
                 no_new_streak = 0
             if len(acc.contacts()) >= limit or _should_stop_scroll(no_new_streak, _SCROLL_NO_NEW_MAX_STREAK):
                 break
-            _scroll_session_list_pagedown(mw)
+            _scroll_session_list_wheel(mw)
             time.sleep(_SCROLL_SETTLE_SLEEP)
         return acc.contacts()
     finally:
