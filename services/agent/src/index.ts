@@ -931,6 +931,10 @@ function startWs1HeartbeatLoop(cfg: AgentConfig): void {
     }
   };
 
+  // Sprint cp-06261900 — 把观测上报配置回填给核心自升级单例，
+  // 升级各阶段（download/verify/extract/activate/done）+ 错误会 POST /api/agent/events（失败静默吞）。
+  coreUpgrader.setReporter({ apiBase, license: cfg.licenseKey, agentId: cfg.agentUuid ?? cfg.agentId });
+
   const loop = new HeartbeatLoop({
     apiBase,
     license: cfg.licenseKey,

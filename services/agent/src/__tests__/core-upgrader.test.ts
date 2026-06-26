@@ -187,4 +187,96 @@ describe('CoreUpgrader', () => {
     expect(await up.verifyFile(tmpFile, { sha256: realSha, size: sz })).toBe(true);
     expect(await up.verifyFile(tmpFile, { sha256: realSha, size: sz + 1 })).toBe(false);
   });
+
+  // ── Sprint cp-06261900：观测上报接进升级各阶段 ──
+  it('成功升级路径上报 upgrade 各阶段（download→verify→extract→activate→done）', async () => {
+    const downloadImpl = vi.fn(async (_ver: string, _url: string, destDir: string) => {
+      fs.mkdirSync(destDir, { recursive: true });
+      fs.writeFileSync(path.join(destDir, 'zenithjoy-agent.exe'), 'NEW');
+    });
+    const exitImpl = vi.fn();
+    const reportImpl = vi.fn(async (_cfg: any, _event: any) => undefined);
+    const up = new CoreUpgrader({
+      currentVersion: '2.0.21',
+      coreDir,
+      downloadImpl,
+      exitImpl,
+      reporter: { apiBase: 'https://api.x', license: 'K', agentId: 'a1' },
+      reportImpl,
+    });
+    const r = await up.upgradeIfNeeded('2.0.22');
+    expect(r.upgraded).toBe(true);
+
+    const phases = reportImpl.mock.calls
+      .map((c) => c[1])
+      .filter((e: any) => e.kind === 'upgrade')
+      .map((e: any) => e.phase);
+    expect(phases).toContain('download');
+    expect(phases).toContain('verify');
+    expect(phases).toContain('extract');
+    expect(phases).toContain('activate');
+    expect(phases).toContain('done');
+  });
+
+  it('下载失败路径上报 upgrade=failed + log=error，且不崩升级（仍正常回滚）', async () => {
+    const downloadImpl = vi.fn(async () => {
+      throw new Error('cos 502');
+    });
+    const exitImpl = vi.fn();
+    const reportImpl = vi.fn(async (_cfg: any, _event: any) => undefined);
+    const up = new CoreUpgrader({
+      currentVersion: '2.0.21',
+      coreDir,
+      downloadImpl,
+      exitImpl,
+      reporter: { apiBase: 'https://api.x', license: 'K', agentId: 'a1' },
+      reportImpl,
+    });
+    const r = await up.upgradeIfNeeded('2.0.22');
+    expect(r.upgraded).toBe(false);
+    expect(exitImpl).not.toHaveBeenCalled();
+
+    const events = reportImpl.mock.calls.map((c) => c[1]);
+    expect(events.some((e: any) => e.kind === 'upgrade' && e.phase === 'failed')).toBe(true);
+    expect(events.some((e: any) => e.kind === 'log' && e.level === 'error')).toBe(true);
+  });
+
+  it('reportImpl 抛错也不影响升级主流程（观测旁路静默）', async () => {
+    const downloadImpl = vi.fn(async (_ver: string, _url: string, destDir: string) => {
+      fs.mkdirSync(destDir, { recursive: true });
+      fs.writeFileSync(path.join(destDir, 'zenithjoy-agent.exe'), 'NEW');
+    });
+    const exitImpl = vi.fn();
+    const reportImpl = vi.fn(async () => {
+      throw new Error('report boom');
+    });
+    const up = new CoreUpgrader({
+      currentVersion: '2.0.21',
+      coreDir,
+      downloadImpl,
+      exitImpl,
+      reporter: { apiBase: 'https://api.x', license: 'K', agentId: 'a1' },
+      reportImpl,
+    });
+    const r = await up.upgradeIfNeeded('2.0.22');
+    expect(r.upgraded).toBe(true);
+    expect(exitImpl).toHaveBeenCalled();
+  });
+
+  it('无 reporter 配置 → 不上报（向后兼容）', async () => {
+    const downloadImpl = vi.fn(async (_ver: string, _url: string, destDir: string) => {
+      fs.mkdirSync(destDir, { recursive: true });
+      fs.writeFileSync(path.join(destDir, 'zenithjoy-agent.exe'), 'NEW');
+    });
+    const reportImpl = vi.fn(async (_cfg: any, _event: any) => undefined);
+    const up = new CoreUpgrader({
+      currentVersion: '2.0.21',
+      coreDir,
+      downloadImpl,
+      exitImpl: vi.fn(),
+      reportImpl, // 提供 impl 但不提供 reporter → 不应被调用
+    });
+    await up.upgradeIfNeeded('2.0.22');
+    expect(reportImpl).not.toHaveBeenCalled();
+  });
 });

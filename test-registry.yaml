@@ -3750,3 +3750,34 @@ agent_suite:
     status: active
     product: 私域运营
     note: "Line02/Agent 观测端点 smoke(:5200+postgres)：建 tenant+license → POST events 真 license 头落库且 tenant_id 来自 license / 批量 count=2 / license 无效401 / GET machines/:id/events 无认证401。"
+  - id: agent-playwright-launcher
+    path: services/agent/src/shared/__tests__/playwright-launcher.test.ts
+    type: unit
+    ci: L2
+    status: active
+    product: 私域运营
+    note: "Sprint cp-06261900 Playwright 共享底座 — loadChromium 优先 playwright-core（包里打进的那个）失败回退 playwright；注入 chromiumLoader/Launcher；源码用动态 import 防 pkg VFS 崩溃。修三个掉队 handler 真机报「playwright 未安装」。"
+
+  - id: agent-event-reporter
+    path: services/agent/src/shared/__tests__/event-reporter.test.ts
+    type: unit
+    ci: L2
+    status: active
+    product: 私域运营
+    note: "Sprint cp-06261900 观测上报 — reportEvent POST /api/agent/events 带 x-license-key；失败静默吞不崩 agent；无 apiBase/license 跳过。接 T2 端点。"
+
+  - id: agent-keyword-search-douyin-shared-launcher
+    path: services/agent/src/handlers/__tests__/keyword-search-douyin.test.ts
+    type: unit
+    ci: L2
+    status: active
+    product: 私域运营
+    note: "Sprint cp-06261900 — keyword-search-douyin 改走共享 loadChromium（playwright-core 优先），源码不再裸 import(playwright)；注入 launcher 连 CDP 抓视频 URL，不抛「未安装」。"
+
+  - id: agent-douyin-dm-outreach-shared-launcher
+    path: services/agent/src/handlers/__tests__/douyin-dm-outreach.test.ts
+    type: unit
+    ci: L2
+    status: active
+    product: 私域运营
+    note: "Sprint cp-06261900 — douyin-dm-outreach 改走共享 loadChromium，不再内联 import(playwright)；sent/limited/failed 三态走注入 DmPage 验证。"

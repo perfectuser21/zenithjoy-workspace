@@ -23,6 +23,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import crypto from 'node:crypto';
+import { reportEvent, type EventReporterConfig, type AgentEvent } from './shared/event-reporter';
 
 const DEFAULT_COS_BASE =
   'https://zenithjoy-static-1333590468.cos.accelerate.myqcloud.com/install-pack';
@@ -53,6 +54,10 @@ export interface CoreUpgraderOptions {
   verifyImpl?: (filePath: string, info: CoreVerifyInfo) => Promise<boolean>;
   // 优雅退出（真实实现：process.exit(0)，由启动器拉起新核心）
   exitImpl?: () => void;
+  // 观测上报配置（apiBase+license+agentId）；不传则不上报（旁路，绝不影响升级主流程）。
+  reporter?: EventReporterConfig;
+  // 上报实现注入点（单测断言上报调用；不传走真实 reportEvent）。
+  reportImpl?: (cfg: EventReporterConfig, event: AgentEvent) => Promise<void>;
 }
 
 export interface UpgradeResult {
@@ -106,8 +111,24 @@ export class CoreUpgrader {
     (this.opts.logger ?? ((m) => console.log(`[core-upgrader] ${m}`)))(msg);
   }
 
+  // 观测旁路：上报升级进度 / 错误到中台。无 reporter 配置则跳过；上报本身失败静默吞（绝不崩升级）。
+  private async report(event: AgentEvent): Promise<void> {
+    if (!this.opts.reporter) return;
+    const impl = this.opts.reportImpl ?? reportEvent;
+    try {
+      await impl(this.opts.reporter, event);
+    } catch {
+      // 上报失败绝不影响升级主流程
+    }
+  }
+
   getCurrentVersion(): string {
     return this.currentVersion;
+  }
+
+  // 运行时注入观测上报配置（index.ts 起 heartbeat-loop 时拿到 apiBase/license/agentId 后回填）。
+  setReporter(reporter: EventReporterConfig): void {
+    this.opts.reporter = reporter;
   }
 
   // required > current 且都是合法版本 → 需要升级
@@ -149,6 +170,13 @@ export class CoreUpgrader {
       const destDir = this.newCoreDir(requiredVersion);
       const cosUrl = this.buildCosUrl(requiredVersion);
       this.log(`核心需升级 ${this.currentVersion} → ${requiredVersion}，下载 ${cosUrl}`);
+      await this.report({
+        kind: 'upgrade',
+        phase: 'download',
+        percent: 10,
+        message: `核心升级 ${this.currentVersion} → ${requiredVersion}，开始下载`,
+        context: { from: this.currentVersion, to: requiredVersion },
+      });
 
       // 1. 下载 + 解压到新核心目录（真实实现内含 sha 校验后才解压；注入实现自定）
       try {
@@ -156,17 +184,35 @@ export class CoreUpgrader {
       } catch (err) {
         const reason = `核心包下载/校验失败：${(err as Error).message}`;
         this.log(`${reason}（回滚，保留旧核心 ${this.currentVersion}）`);
+        await this.report({ kind: 'upgrade', phase: 'failed', message: reason, context: { to: requiredVersion } });
+        await this.report({ kind: 'log', level: 'error', message: reason, context: { to: requiredVersion } });
         this.safeCleanup(destDir);
         return { upgraded: false, reason };
       }
+      await this.report({
+        kind: 'upgrade',
+        phase: 'verify',
+        percent: 50,
+        message: '核心包下载 + 校验通过',
+        context: { to: requiredVersion },
+      });
 
       // 2. 解压产物自检：新核心目录必须有 zenithjoy-agent.exe（缺 = 包损坏 → 回滚）
       if (!fs.existsSync(path.join(destDir, 'zenithjoy-agent.exe'))) {
         const reason = '新核心目录缺 zenithjoy-agent.exe（包损坏），回滚';
         this.log(reason);
+        await this.report({ kind: 'upgrade', phase: 'failed', message: reason, context: { to: requiredVersion } });
+        await this.report({ kind: 'log', level: 'error', message: reason, context: { to: requiredVersion } });
         this.safeCleanup(destDir);
         return { upgraded: false, reason };
       }
+      await this.report({
+        kind: 'upgrade',
+        phase: 'extract',
+        percent: 70,
+        message: '新核心解压自检通过',
+        context: { to: requiredVersion },
+      });
 
       // 3. 拷过 .env / license / 已下模块（保住客户配置与已安装模块，不让升级丢状态）
       this.carryOverState(destDir);
@@ -182,11 +228,27 @@ export class CoreUpgrader {
       } catch (err) {
         const reason = `写 .active-core 指针失败：${(err as Error).message}`;
         this.log(`${reason}（回滚，保留旧核心）`);
+        await this.report({ kind: 'upgrade', phase: 'failed', message: reason, context: { to: requiredVersion } });
+        await this.report({ kind: 'log', level: 'error', message: reason, context: { to: requiredVersion } });
         return { upgraded: false, reason };
       }
+      await this.report({
+        kind: 'upgrade',
+        phase: 'activate',
+        percent: 90,
+        message: `已写 .active-core 指针 → ${CORE_DIR_PREFIX}${requiredVersion}`,
+        context: { to: requiredVersion },
+      });
 
       // 5. 优雅退出 → 计划任务/启动器读指针拉起新核心（自换+重启接缝，真机验）
       this.log(`核心 ${requiredVersion} 已就位，优雅退出由启动器拉起新核心`);
+      await this.report({
+        kind: 'upgrade',
+        phase: 'done',
+        percent: 100,
+        message: `核心 ${requiredVersion} 已就位，优雅退出由启动器拉起新核心`,
+        context: { to: requiredVersion },
+      });
       (this.opts.exitImpl ?? (() => process.exit(0)))();
       return { upgraded: true, version: requiredVersion };
     } finally {

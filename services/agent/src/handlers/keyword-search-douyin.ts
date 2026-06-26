@@ -6,6 +6,7 @@
 // 每个关键词：打开 douyin.com/search/{kw}?type=video → 等待视频列表 → 取前 N 条 URL
 
 import path from 'node:path';
+import { loadChromium, type ChromiumLike, type LoadChromiumOptions } from '../shared/playwright-launcher';
 
 export interface KeywordSearchResult {
   ok: boolean;
@@ -14,7 +15,7 @@ export interface KeywordSearchResult {
   error?: string;
 }
 
-export interface KeywordSearchOptions {
+export interface KeywordSearchOptions extends LoadChromiumOptions {
   cdpPort?: number;
   maxVideosPerKeyword?: number;
 }
@@ -23,7 +24,10 @@ export async function searchDouyinVideosByKeyword(
   keyword: string,
   options: KeywordSearchOptions = {},
 ): Promise<KeywordSearchResult> {
-  const { chromium } = await import('playwright');
+  // 共享底座：优先 playwright-core（包里打进的那个），打包真机不再报「playwright 未安装」
+  const chromium = (await loadChromium(options)) as ChromiumLike & {
+    connectOverCDP(url: string): Promise<any>;
+  };
   const cdpPort = options.cdpPort ?? parseInt(process.env.DOUYIN_CDP_PORT ?? '19222');
   const maxVideos = options.maxVideosPerKeyword ?? 5;
 
