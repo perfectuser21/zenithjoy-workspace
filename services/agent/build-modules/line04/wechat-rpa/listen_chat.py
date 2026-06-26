@@ -564,8 +564,52 @@ class _ScrollAccumulator:
 
 
 def _should_stop_scroll(no_new_streak: int, max_streak: int) -> bool:
-    """终止判定：连续 max_streak 屏无新增 → 认为滚到底，停。"""
+    """（旧）终止判定：连续 max_streak 屏无新增 → 停。已被 _bottom_reached_by_last_item 取代，保留兼容。"""
     return no_new_streak >= max_streak
+
+
+def _bottom_reached_by_last_item(unchanged_streak: int, max_unchanged: int) -> bool:
+    """鲁棒到底判定：末项（最后一个会话名）连续 >= max_unchanged 次不变 → 认为滚到底。
+
+    旧逻辑"连续 2 屏无新增即停"会半路停（滚动偶发 stall 几屏不动 → 误判到底漏底部）。
+    改用末项不变 streak，阈值放大（_SCROLL_LAST_ITEM_UNCHANGED_MAX），多滚到底无害绝不少滚。
+    """
+    return unchanged_streak >= max_unchanged
+
+
+def _filter_left_column_item_names(items: List[tuple], x_max: int = 460) -> List[str]:
+    """只保留会话列表（左列，中心 x < x_max）ListItem 的名字（纯函数）。
+
+    入参 items = [(name, center_x), ...]。开着聊天时右侧聊天面板的消息气泡/时间戳
+    （"08:22"/"[preflight-selfcheck]"）会被 descendants 一起读进来当噪音 → 按中心 x 剔除。
+    """
+    out: List[str] = []
+    for name, cx in items:
+        try:
+            if cx < x_max:
+                out.append(name)
+        except TypeError:
+            continue
+    return out
+
+
+def _find_left_nav_button_point(
+    buttons: List[tuple], name: str, left_max: int = 90
+) -> Optional[tuple]:
+    """在最左导航栏（rect.left < left_max）按 name 找按钮，返回其中心屏幕坐标点（纯函数）。
+
+    入参 buttons = [(name, rect), ...]，rect 有 .left/.top/.right/.bottom。
+    用于切 tab 回顶：定位「通讯录」「微信」导航按钮（不写死坐标）。右侧同名控件（x>=left_max）不选。
+    """
+    for nm, r in buttons:
+        if nm != name:
+            continue
+        try:
+            if r.left < left_max:
+                return ((r.left + r.right) // 2, (r.top + r.bottom) // 2)
+        except AttributeError:
+            continue
+    return None
 
 
 def _merge_contact_detail(
@@ -587,21 +631,60 @@ def _merge_contact_detail(
     return out
 
 
-# 滚动扫会话列表参数：每屏后等 UIA 重建虚拟列表 + 连续无新增阈值（滚到底判定）。
+# 滚动扫会话列表参数：每屏后等 UIA 重建虚拟列表 + 鲁棒到底判定。
 _SCROLL_SETTLE_SLEEP = 0.25
-_SCROLL_NO_NEW_MAX_STREAK = 2
-_SCROLL_MAX_PAGES = 80  # 安全上限（约 80*重叠步长 条），防异常下无限滚
+_SCROLL_NO_NEW_MAX_STREAK = 2          # 旧无新增阈值（保留兼容，已不用于终止）
+_SCROLL_LAST_ITEM_UNCHANGED_MAX = 10   # 末项连续不变达此次数 → 判到底（鲁棒，扛滚动偶发 stall）
+_SCROLL_MAX_PAGES = 35                 # 硬上限（多滚到底无害，绝不少滚漏底部）
+_SESSION_LIST_X_MAX_FALLBACK = 460     # 左列会话中心 x 上限回退值（取不到 ChatSessionList rect.right 时）
+
+
+def _session_list_x_max(mw: Any) -> int:
+    """会话列表右边界 x（左列过滤阈值）：优先取 mmui::ChatSessionList/XTableView 控件 rect.right，
+    取不到回退 _SESSION_LIST_X_MAX_FALLBACK。"""
+    try:
+        from pywinauto import Desktop  # noqa: F401  仅确认环境
+    except Exception:
+        return _SESSION_LIST_X_MAX_FALLBACK
+    try:
+        for c in mw.descendants():
+            try:
+                cls = c.element_info.class_name or ""
+            except Exception:
+                continue
+            if "ChatSessionList" in cls or "XTableView" in cls:
+                try:
+                    r = c.rectangle()
+                    if r.right > 0:
+                        return r.right
+                except Exception:
+                    continue
+    except Exception:
+        pass
+    return _SESSION_LIST_X_MAX_FALLBACK
 
 
 def _read_visible_item_names(mw: Any) -> List[str]:
-    """读一屏当前渲染的会话 ListItem 名字（虚拟列表只暴露可见项）。"""
-    names: List[str] = []
+    """读一屏当前渲染的「左列会话」ListItem 名字（虚拟列表只暴露可见项）。
+
+    只保留会话列表所在左列（中心 x < 会话列表右边界）的 ListItem——开着聊天时右侧聊天面板的
+    消息气泡/时间戳也会被 descendants 读进来当噪音（"08:22"/"[preflight-selfcheck]"），按 x 剔除。
+    """
+    x_max = _session_list_x_max(mw)
+    items: List[tuple] = []
     for it in mw.descendants(control_type="ListItem"):
         try:
-            names.append(it.element_info.name or "")
+            nm = it.element_info.name or ""
         except Exception:
             continue
-    return names
+        cx = 0  # 默认 0 = 当左列保守收（拿不到/非数字坐标都不误剔真会话）
+        try:
+            r = it.rectangle()
+            cx = int((int(r.left) + int(r.right)) // 2)
+        except Exception:
+            cx = 0
+        items.append((nm, cx))
+    return _filter_left_column_item_names(items, x_max=x_max)
 
 
 def _read_contact_wechat_id(mw: Any) -> Optional[str]:
@@ -824,31 +907,113 @@ def _scroll_session_list_wheel(mw: Any) -> None:
         _log(f"_scroll_session_list_wheel: 投递 WM_MOUSEWHEEL 异常: {exc}")
 
 
+def _click_screen_point(mw: Any, pt: tuple) -> bool:
+    """对屏幕坐标 pt 在渲染子窗口 client 坐标 PostMessage 左键点击（同 _post_click_item 写法）。
+
+    WM_LBUTTON* 的 lParam 是 client 坐标 → ScreenToClient + 投 MMUIRenderSubWindow 渲染子窗口。
+    无 windll（单测）/拿不到子窗口 → 安全返回 False。
+    """
+    import ctypes as _ct
+    wd = getattr(_ct, "windll", None)
+    if wd is None:
+        return False
+    try:
+        main_hwnd = mw.element_info.handle
+    except Exception:
+        return False
+    if not main_hwnd:
+        return False
+    target = _find_render_subwindow(main_hwnd) or main_hwnd
+    u32 = wd.user32
+
+    class _POINT(_ct.Structure):
+        _fields_ = [("x", _ct.c_long), ("y", _ct.c_long)]
+
+    p = _POINT(int(pt[0]), int(pt[1]))
+    try:
+        if not u32.ScreenToClient(target, _ct.byref(p)):
+            return False
+        lp = ((p.y & 0xFFFF) << 16) | (p.x & 0xFFFF)
+        WM_MOUSEMOVE, WM_LBUTTONDOWN, WM_LBUTTONUP = 0x0200, 0x0201, 0x0202
+        u32.PostMessageW(target, WM_MOUSEMOVE, 0, lp)
+        u32.PostMessageW(target, WM_LBUTTONDOWN, 1, lp)
+        time.sleep(0.05)
+        u32.PostMessageW(target, WM_LBUTTONUP, 0, lp)
+        return True
+    except Exception as exc:
+        _log(f"_click_screen_point: 点击异常: {exc}")
+        return False
+
+
+def _reset_session_list_to_top(mw: Any) -> bool:
+    """把会话列表弹回真顶 = 切 tab：点左侧导航「通讯录」→ 再点「微信」（rog 真机唯一验证有效的回顶法）。
+
+    真因：会话列表向上滚彻底失效（正 delta wheel / Home / Ctrl+Home / WM_VSCROLL SB_TOP / 拖滚动条
+    全试过不动）。切到通讯录再切回微信，会话列表重建并停在真顶。按钮用 UIA Button name + 左列 x<90
+    动态定位（不写死坐标），render 子窗口 client 坐标点击。失败吞掉返回 False（不拖垮扫描）。
+    """
+    try:
+        buttons: List[tuple] = []
+        for b in _iter_all_controls(mw, "Button"):
+            try:
+                nm = (b.element_info.name or "").strip()
+                r = b.rectangle()
+            except Exception:
+                continue
+            buttons.append((nm, r))
+        ok = False
+        for tab in ("通讯录", "微信"):
+            pt = _find_left_nav_button_point(buttons, tab, left_max=90)
+            if pt is None:
+                _log(f"_reset_session_list_to_top: 左导航栏找不到「{tab}」按钮")
+                continue
+            if _click_screen_point(mw, pt):
+                ok = True
+                time.sleep(0.3)  # 等 tab 切换 + 列表重建
+        return ok
+    except Exception as exc:
+        _log(f"_reset_session_list_to_top: 切 tab 回顶异常: {exc}")
+        return False
+
+
 def scan_recent_contacts(mw: Any, limit: int = 100) -> List[Dict[str, str]]:
     """滚动遍历主窗口会话列表 ListItem，列出全部近期会话联系人（CRM 好友表行源）。
 
     与 scan_unread 的区别：scan_unread 只挑未读；本函数列"近期会话联系人"（不要求未读），
     供中台拉成客户好友表（默认全接管 + 黑名单排除）。
 
-    虚拟滚动处理（A1）：微信会话列表是 Qt 虚拟列表，一次 descendants 只渲染可见 ~6 条。
-    这里边滚边累计：读一屏 → _ScrollAccumulator 去重并入 → WM_MOUSEWHEEL 翻下一屏（真机实证
-    PageDown 滚不动，Qt 键盘事件只给有焦点 widget），直到连续 _SCROLL_NO_NEW_MAX_STREAK 屏
-    无新增（滚到底）或到 limit / 安全上限为止。
+    扫全三件套（rog 真机实证）：
+    1. 扫前切 tab（通讯录→微信）把会话列表弹回真顶（向上滚彻底失效，列表停哪从哪扫会漏上半截）。
+    2. 只读左列会话（_read_visible_item_names 已按 x 过滤右侧聊天面板噪音）。
+    3. 鲁棒到底：末项连续 _SCROLL_LAST_ITEM_UNCHANGED_MAX 次不变才判到底（旧 2 屏无新增半路停漏底）。
+
+    虚拟滚动（A1）：Qt 虚拟列表一次 descendants 只渲染可见 ~6 条；边滚（WM_MOUSEWHEEL）边累计去重。
 
     托盘/最小化场景同 scan_unread：扫描前 _ensure_tray_visible 短暂移出离屏刷新 UIA，
     扫完 _restore_window_state 还原（后台无感知）。
     """
     orig_state = _ensure_tray_visible(mw)
     try:
+        # 件套 1：扫前回真顶（切 tab）。失败也继续扫（至少扫当前窗口，不拖垮）。
+        _reset_session_list_to_top(mw)
+        time.sleep(_SCROLL_SETTLE_SLEEP)
+
         acc = _ScrollAccumulator(limit=limit)
-        no_new_streak = 0
+        last_item: Optional[str] = None
+        unchanged_streak = 0
         for _ in range(_SCROLL_MAX_PAGES):
-            added = acc.feed(_read_visible_item_names(mw))
-            if added == 0:
-                no_new_streak += 1
+            names = _read_visible_item_names(mw)
+            acc.feed(names)
+            # 件套 3：末项不变 streak 判到底（鲁棒，扛滚动偶发 stall 几屏不动）。
+            cur_last = names[-1] if names else None
+            if cur_last is not None and cur_last == last_item:
+                unchanged_streak += 1
             else:
-                no_new_streak = 0
-            if len(acc.contacts()) >= limit or _should_stop_scroll(no_new_streak, _SCROLL_NO_NEW_MAX_STREAK):
+                unchanged_streak = 0
+            last_item = cur_last
+            if len(acc.contacts()) >= limit or _bottom_reached_by_last_item(
+                unchanged_streak, _SCROLL_LAST_ITEM_UNCHANGED_MAX
+            ):
                 break
             _scroll_session_list_wheel(mw)
             time.sleep(_SCROLL_SETTLE_SLEEP)
