@@ -3742,6 +3742,23 @@ agent_suite:
     product: 私域运营
     note: "Line02 机器管理页 Playwright Windows E2E：机器列表+N个号 / 点进显示抖音号 / 添加抖音号派qr-bind / 重命名+设主副PUT持久化。page.route stub 三端点。"
 
+  # ─── Line02 智能获客「分析+指派」中台大脑（刀1, Sprint 06262145）─────────────
+  - id: line02-acquisition-dispatch-api-client-unit
+    path: apps/dashboard/src/api/acquisition-dispatch.api.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 私域运营
+    note: "Line02 获客分析+指派前端 API 客户端 — mock fetch 验 URL/方法/body/信封解析/错误抛出（config GET/PUT、dispatch build/run、plan 带 status query、cookie-health）。"
+
+  - id: line02-acquisition-config-e2e
+    path: apps/dashboard/e2e/acquisition-config.spec.ts
+    type: e2e
+    ci: e2e-acquisition-config-windows
+    status: active
+    product: 私域运营
+    note: "Line02 获客「分析+指派」配置页 Playwright Windows E2E：配置表单渲染+改值保存调PUT / 指派计划表(客户nickname+relevance_score×小号×排期×状态) / 跑分析指派调build / Cookie健康三态healthy绿stale黄expired红+需重扫。page.route stub config+plan+cookie-health。"
+
   # ─── Line02/Agent 观测端点（Sprint 06261900）─────────────────────────────────
   - id: line02-agent-events-api
     path: apps/api/tests/routes/agent-events.test.ts
@@ -3808,8 +3825,11 @@ agent_suite:
 
   - id: line02-acquisition-dispatch-smoke
     path: .github/workflows/scripts/smoke/acquisition-dispatch-smoke.sh
+  - id: line02-acquisition-config-ui-smoke
+    path: .github/workflows/scripts/smoke/acquisition-config-ui-smoke.sh
     type: smoke
     ci: L4
     status: active
     product: 私域运营
     note: "Line02 分析+指派 smoke(:5200+postgres)：建 tenant → GET config无认证401/返默认 → PUT config非法400/合法upsert落库 → 建2 active burner+3 leads → POST build(scored=3+assigned落dm_assignments) → GET plan见指派 → POST run(dispatched落dm_outreach_log) → GET cookie-health分类。X-Tenant-Id头驱动租户。"
+    note: "获客配置页/分析+指派面板依赖端点 smoke：无认证 config 401 + 带租户 config 默认值 + dispatch/plan + cookie-health JSON 信封。"
