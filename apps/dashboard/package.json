@@ -20,6 +20,8 @@
     "e2e:install": "playwright install chromium"
   },
   "dependencies": {
+    "@glideapps/glide-data-grid": "^6.0.3",
+    "@glideapps/glide-data-grid-cells": "^6.0.3",
     "@hello-pangea/dnd": "^18.0.1",
     "@tanstack/react-query": "^5.90.20",
     "@tiptap/extension-image": "^3.19.0",

@@ -1,21 +1,39 @@
 /**
- * CustomerProfilePage — Line04 CRM 客户状态/画像页（层2）+ 真实聊天记录（层3）
+ * CustomerProfilePage — Line04 AI 客户运营台 · 客户人物肖像页（暗色重做）
  *
- * 路由：/wechat/crm/:contactKey（?cs=<cs_wechat_id>&name=<显示名>）
+ * 路由：/wechat/crm/:contact?cs=<wechat_id>
  *
- * 层2（整页详情，参考 PipelineOutputPage）：
- *   - Profile 基础信息（姓名 / 微信号 / 状态 A1-A5 / 最后联系）
- *   - AI 画像（需求 / 预算 / 顾虑，源自 cs_memory_longterm 融合 summary）
- *   - 状态时间线（A1→A5 流转）
- *   - 每日小结流（cs_memory_daily 按天 summary）
- * 层3（层2 内按需下钻，参考 ContentFactoryPage handleToggleExpand）：
- *   - 真实聊天记录逐句气泡流（cs_memory_messages：客户 in / 客服 out）
- *
- * 数据源：GET /api/crm/customers/:contactKey/profile（session 多通道，credentials:'include'）。
- *   依赖 backend PR 提供该端点；端点未落地时整页安全降级（显示空态，不报错）。
+ * 暗色人物肖像：字母头像 + 状态徽章 + AI 三段论画像 + 时间轴 + 日报 + 聊天记录。
+ * 全部 data-testid 保持与旧版一致（per 2026-06-25 Playwright 合同）。
  */
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
+
+// ──────────────────────────────────────────────────────────────────────────────
+// 工具
+// ──────────────────────────────────────────────────────────────────────────────
+
+function sessionFetch(url: string, init?: RequestInit): Promise<Response> {
+  return fetch(url, { ...init, credentials: 'include' });
+}
+
+function fmtDateTime(iso: string | null): string {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? '—'
+    : d.toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' });
+}
+
+function fmtDate(iso: string | null): string {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? '—'
+    : d.toLocaleDateString('zh-CN', { timeZone: 'Asia/Shanghai' });
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// 类型
+// ──────────────────────────────────────────────────────────────────────────────
 
 type CrmStatus = 'A1' | 'A2' | 'A3' | 'A4' | 'A5';
 
@@ -27,300 +45,450 @@ const STATUS_LABELS: Record<CrmStatus, string> = {
   A5: 'A5 流失',
 };
 
-// 层3 一句聊天：role in=客户 / out=客服
-interface ChatMessage {
-  role: 'in' | 'out';
-  text: string;
-  created_at?: string | null;
+const STATUS_COLORS: Record<CrmStatus, string> = {
+  A1: '#7a8092',
+  A2: '#5b8cc4',
+  A3: '#8f7bd6',
+  A4: '#e3b169',
+  A5: '#c0594d',
+};
+
+interface Portrait {
+  need?: string | null;
+  budget?: string | null;
+  concern?: string | null;
+  summary?: string | null;
+  style?: string | null;
 }
 
-// 状态时间线一条流转
-interface StatusEvent {
+interface TimelineEvent {
   status: CrmStatus;
-  at: string | null;
+  at: string;
   note?: string | null;
 }
 
-// 每日小结一条
-interface DailySummary {
+interface DailyItem {
   day: string;
   summary: string;
 }
 
-// AI 画像（从长期记忆抽取）
-interface AiPortrait {
-  need?: string | null; // 需求
-  budget?: string | null; // 预算
-  concern?: string | null; // 顾虑
-  summary?: string | null; // 长期记忆融合原文（兜底全展示）
+interface ChatMessage {
+  role: 'in' | 'out';
+  text: string;
+  created_at?: string;
 }
 
 interface CustomerProfile {
   name: string;
   contact: string;
-  wechat_id: string | null;
+  wechat_id?: string | null;
   status: CrmStatus;
-  managed: boolean;
-  last_contact_at: string | null;
-  portrait: AiPortrait | null;
-  timeline: StatusEvent[];
-  dailies: DailySummary[];
-  messages: ChatMessage[];
+  managed?: boolean;
+  last_contact_at?: string | null;
+  add_friend_time?: string | null;
+  portrait?: Portrait | null;
+  timeline?: TimelineEvent[] | null;
+  dailies?: DailyItem[] | null;
+  messages?: ChatMessage[] | null;
 }
 
-function fmtTime(iso: string | null | undefined): string {
-  if (!iso) return '—';
-  const d = new Date(iso);
-  return Number.isNaN(d.getTime()) ? '—' : d.toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' });
+// ──────────────────────────────────────────────────────────────────────────────
+// 公共原子组件
+// ──────────────────────────────────────────────────────────────────────────────
+
+function Card({ testId, children, style }: {
+  testId?: string; children: React.ReactNode; style?: React.CSSProperties;
+}) {
+  return (
+    <div
+      data-testid={testId}
+      style={{
+        background: '#191c27',
+        border: '1px solid rgba(35,39,52,.55)',
+        borderRadius: 12,
+        padding: '18px 20px',
+        ...style,
+      }}
+    >
+      {children}
+    </div>
+  );
 }
 
-const card: React.CSSProperties = {
-  background: '#fff',
-  border: '1px solid #eee',
-  borderRadius: 10,
-  padding: 16,
-  marginBottom: 16,
-};
-const sectionTitle: React.CSSProperties = { fontSize: 15, fontWeight: 600, marginBottom: 10, color: '#111827' };
+function CardTitle({ children }: { children: React.ReactNode }) {
+  return (
+    <h3 style={{
+      margin: '0 0 12px',
+      fontSize: 11,
+      fontWeight: 700,
+      letterSpacing: '.15em',
+      textTransform: 'uppercase' as const,
+      color: '#6f7588',
+    }}>{children}</h3>
+  );
+}
+
+function EmptyHint({ testId, children }: { testId: string; children: React.ReactNode }) {
+  return (
+    <p data-testid={testId} style={{ color: '#6f7588', fontSize: 13, margin: 0, lineHeight: 1.6 }}>
+      {children}
+    </p>
+  );
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// 主组件
+// ──────────────────────────────────────────────────────────────────────────────
 
 export default function CustomerProfilePage() {
+  const { contact } = useParams<{ contact: string }>();
+  const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  const { contactKey = '' } = useParams();
-  const [search] = useSearchParams();
-  const contact = useMemo(() => decodeURIComponent(contactKey), [contactKey]);
-  const csWechatId = search.get('cs') ?? '';
-  const fallbackName = search.get('name') ?? contact;
+  const csWechatId = searchParams.get('cs') ?? '';
+  const nameHint = searchParams.get('name') ?? '';
 
   const [profile, setProfile] = useState<CustomerProfile | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string>('');
   const [authExpired, setAuthExpired] = useState(false);
-
-  // 层3 聊天记录按需展开（参考 ContentFactoryPage.handleToggleExpand）
-  const [chatExpanded, setChatExpanded] = useState(false);
+  const [error, setError] = useState<string>('');
+  const [showChat, setShowChat] = useState(false);
 
   const loadProfile = useCallback(async () => {
+    if (!contact) return;
     setLoading(true);
     setError('');
     try {
       const params = new URLSearchParams();
-      if (csWechatId) params.set('cs', csWechatId);
+      if (csWechatId) params.set('cs_wechat_id', csWechatId);
       const qs = params.toString();
-      const url = `/api/crm/customers/${encodeURIComponent(contact)}/profile${qs ? `?${qs}` : ''}`;
-      const res = await fetch(url, { credentials: 'include' });
+      const res = await sessionFetch(
+        `/api/crm/customers/${encodeURIComponent(contact)}/profile${qs ? `?${qs}` : ''}`,
+      );
       if (res.status === 401) {
         setAuthExpired(true);
         setError('登录已失效，请重新登录');
         return;
       }
-      if (res.status === 404) {
-        // 端点未落地 / 客户无记录 → 空态降级（仍渲染骨架，不报错）
-        setProfile(null);
-        return;
-      }
       if (!res.ok) throw new Error(`加载失败（${res.status}）`);
       const data = (await res.json()) as { profile?: CustomerProfile } | CustomerProfile;
       const p = (data as { profile?: CustomerProfile }).profile ?? (data as CustomerProfile);
-      setProfile(p && typeof p === 'object' && 'contact' in p ? p : null);
       setAuthExpired(false);
+      setProfile(p);
     } catch (e) {
       setError(e instanceof Error ? e.message : '加载失败');
-      setProfile(null);
     } finally {
       setLoading(false);
     }
   }, [contact, csWechatId]);
 
-  useEffect(() => {
-    void loadProfile();
-  }, [loadProfile]);
+  useEffect(() => { void loadProfile(); }, [loadProfile]);
 
-  const displayName = profile?.name || fallbackName;
-  const portrait = profile?.portrait ?? null;
-  const timeline = profile?.timeline ?? [];
-  const dailies = profile?.dailies ?? [];
-  const messages = profile?.messages ?? [];
+  // 全局暗色字体注入（Fraunces + Hanken Grotesk）
+  useEffect(() => {
+    const link = document.createElement('link');
+    link.href = 'https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,600;1,9..144,500&family=Hanken+Grotesk:wght@400;500;600&display=swap';
+    link.rel = 'stylesheet';
+    document.head.appendChild(link);
+    return () => { document.head.removeChild(link); };
+  }, []);
+
+  const displayName = profile?.name || profile?.contact || nameHint || contact || '—';
+  const status = (profile?.status as CrmStatus) ?? 'A1';
+  const statusColor = STATUS_COLORS[status] ?? '#7a8092';
+  const statusLabel = STATUS_LABELS[status] ?? status;
+
+  // ── 样式对象 ──────────────────────────────────────────────────────────────
+
+  const S = {
+    page: {
+      minHeight: '100vh',
+      background: `
+        radial-gradient(1000px 500px at 90% 0%, rgba(227,177,105,.08), transparent 55%),
+        radial-gradient(800px 400px at 0% 100%, rgba(143,123,214,.07), transparent 50%),
+        #0c0d11
+      `,
+      color: '#eef0f6',
+      fontFamily: '"Hanken Grotesk","PingFang SC","Microsoft YaHei",system-ui,sans-serif',
+      WebkitFontSmoothing: 'antialiased' as const,
+    },
+    wrap: { maxWidth: 900, margin: '0 auto', padding: '24px 28px 60px' },
+    backBtn: {
+      background: 'none', border: '1px solid rgba(35,39,52,.8)', padding: '5px 12px',
+      borderRadius: 8, color: '#aeb4c6', cursor: 'pointer', fontSize: 13,
+      fontFamily: 'inherit', display: 'inline-flex', alignItems: 'center', gap: 6,
+      marginBottom: 20,
+    },
+    heroRow: { display: 'flex', alignItems: 'flex-start', gap: 20, marginBottom: 24 },
+    avatar: {
+      width: 52, height: 52, borderRadius: '50%', flexShrink: 0,
+      background: statusColor, display: 'flex', alignItems: 'center',
+      justifyContent: 'center', fontSize: 22, fontWeight: 700, color: '#0c0d11',
+    },
+    heroRight: { flex: 1 },
+    heroName: {
+      fontFamily: '"Fraunces",serif', fontWeight: 600, fontSize: 32,
+      margin: '0 0 6px', lineHeight: 1.1, letterSpacing: '-.01em',
+    },
+    badgeRow: { display: 'flex', gap: 8, flexWrap: 'wrap' as const, marginBottom: 8 },
+    badge: (color: string): React.CSSProperties => ({
+      display: 'inline-flex', alignItems: 'center', gap: 5,
+      padding: '3px 10px', borderRadius: 999,
+      border: `1px solid ${color}33`,
+      background: `${color}18`, color, fontSize: 12, fontWeight: 600,
+    }),
+    metaRow: { color: '#6f7588', fontSize: 12, display: 'flex', gap: 16, flexWrap: 'wrap' as const },
+    grid: { display: 'grid', gap: 14, gridTemplateColumns: 'repeat(auto-fit,minmax(320px,1fr))' },
+    fieldRow: { display: 'flex', gap: 10, marginBottom: 10, alignItems: 'flex-start' },
+    fieldLabel: {
+      minWidth: 64, fontSize: 11, color: '#6f7588', letterSpacing: '.04em',
+      paddingTop: 2, flexShrink: 0,
+    },
+    fieldVal: { color: '#eef0f6', fontSize: 13, lineHeight: 1.55, flex: 1 },
+    tlItem: {
+      borderLeft: `2px solid rgba(35,39,52,.8)`, paddingLeft: 14, paddingBottom: 14,
+      position: 'relative' as const,
+    },
+    tlDot: (color: string): React.CSSProperties => ({
+      width: 9, height: 9, borderRadius: '50%', background: color,
+      position: 'absolute', left: -5.5, top: 2, border: '1.5px solid #0c0d11',
+    }),
+    tlTime: { fontSize: 11, color: '#6f7588' },
+    tlText: { fontSize: 13, color: '#eef0f6', marginTop: 3 },
+    dailyItem: { padding: '10px 0', borderBottom: '1px solid rgba(35,39,52,.5)' },
+    dailyDay: { fontSize: 11, color: '#6f7588', marginBottom: 4 },
+    dailySummary: { fontSize: 13, color: '#aeb4c6', lineHeight: 1.55 },
+    chatToggle: {
+      background: 'none', border: '1px solid rgba(35,39,52,.8)',
+      padding: '6px 14px', borderRadius: 8, color: '#aeb4c6',
+      cursor: 'pointer', fontSize: 13, fontFamily: 'inherit',
+    },
+    chatBubble: (role: string): React.CSSProperties => ({
+      display: 'flex',
+      justifyContent: role === 'out' ? 'flex-end' : 'flex-start',
+      marginBottom: 8,
+    }),
+    bubblePill: (role: string): React.CSSProperties => ({
+      maxWidth: '75%', padding: '8px 12px', borderRadius: 12, fontSize: 13, lineHeight: 1.5,
+      background: role === 'out' ? '#2563eb' : '#232734',
+      color: role === 'out' ? '#fff' : '#eef0f6',
+    }),
+  };
 
   return (
-    <div className="customer-profile-page" style={{ padding: 24, maxWidth: 880, margin: '0 auto' }}>
-      <button
-        type="button"
-        data-testid="crm-profile-back"
-        onClick={() => navigate('/wechat/crm')}
-        style={{ background: 'none', border: 'none', color: '#2563eb', cursor: 'pointer', padding: 0, marginBottom: 12 }}
-      >
-        ← 返回客户好友表
-      </button>
+    <div style={S.page}>
+      <div style={S.wrap}>
+        {/* 返回按钮 */}
+        <button
+          data-testid="crm-profile-back"
+          style={S.backBtn}
+          onClick={() => navigate(-1)}
+        >
+          ← 返回列表
+        </button>
 
-      <h1 data-testid="crm-profile-name" style={{ fontSize: 22, fontWeight: 700, marginBottom: 4 }}>
-        {displayName}
-      </h1>
+        {authExpired && (
+          <div role="alert" data-testid="crm-profile-auth-expired"
+            style={{ color: '#f87171', marginBottom: 16, fontSize: 13 }}>
+            登录已失效，请重新登录
+          </div>
+        )}
 
-      {authExpired && (
-        <div role="alert" data-testid="crm-profile-auth-expired" style={{ color: '#b91c1c', margin: '8px 0' }}>
-          登录已失效，请重新登录
-        </div>
-      )}
-      {error && !authExpired && (
-        <div role="alert" style={{ color: '#b91c1c', margin: '8px 0' }}>
-          错误：{error}
-        </div>
-      )}
+        {loading && (
+          <p style={{ color: '#6f7588', textAlign: 'center', padding: '32px 0' }}>加载中…</p>
+        )}
 
-      {loading ? (
-        <div>加载中...</div>
-      ) : (
-        <>
-          {/* ── Profile 基础信息 ── */}
-          <div style={card} data-testid="crm-profile-basic">
-            <div style={sectionTitle}>基础信息</div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, fontSize: 14, color: '#374151' }}>
-              <div>微信号：{profile?.wechat_id ?? '—'}</div>
-              <div>
-                状态：{profile?.status ? STATUS_LABELS[profile.status] : '—'}
+        {!loading && error && !authExpired && (
+          <p role="alert" style={{ color: '#f87171' }}>错误：{error}</p>
+        )}
+
+        {!loading && profile && (
+          <>
+            {/* ── 人物肖像头部 ── */}
+            <div style={S.heroRow}>
+              <div style={S.avatar}>{displayName.charAt(0)}</div>
+              <div style={S.heroRight}>
+                <h1 data-testid="crm-profile-name" style={S.heroName}>{displayName}</h1>
+                <div style={S.badgeRow}>
+                  <span style={S.badge(statusColor)}>
+                    <span style={{
+                      width: 7, height: 7, borderRadius: '50%',
+                      background: statusColor, display: 'inline-block',
+                    }} />
+                    {statusLabel}
+                  </span>
+                  {profile.managed !== false && (
+                    <span style={S.badge('#5b8cc4')}>AI 接管中</span>
+                  )}
+                </div>
+                <div style={S.metaRow}>
+                  {profile.wechat_id && <span>微信号：{profile.wechat_id}</span>}
+                  {profile.add_friend_time && <span>加好友：{fmtDate(profile.add_friend_time)}</span>}
+                  {profile.last_contact_at && <span>最近联系：{fmtDate(profile.last_contact_at)}</span>}
+                </div>
               </div>
-              <div>
-                接管：
-                <span style={{ color: profile?.managed === false ? '#dc2626' : '#15803d' }}>
-                  {profile?.managed === false ? '已排除（黑名单）' : '接管中'}
-                </span>
-              </div>
-              <div>最后联系：{fmtTime(profile?.last_contact_at)}</div>
             </div>
-          </div>
 
-          {/* ── AI 画像（需求 / 预算 / 顾虑，源自长期记忆） ── */}
-          <div style={card} data-testid="crm-profile-portrait">
-            <div style={sectionTitle}>AI 画像</div>
-            {portrait ? (
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, fontSize: 14 }}>
-                <div data-testid="crm-portrait-need">
-                  <div style={{ color: '#9ca3af', fontSize: 12, marginBottom: 4 }}>需求</div>
-                  <div>{portrait.need || '—'}</div>
+            {/* ── 卡片网格 ── */}
+            <div style={S.grid}>
+              {/* 基本信息 */}
+              <Card testId="crm-profile-basic">
+                <CardTitle>基本信息</CardTitle>
+                <div style={S.fieldRow}>
+                  <span style={S.fieldLabel}>姓名</span>
+                  <span style={S.fieldVal}>{profile.name || '—'}</span>
                 </div>
-                <div data-testid="crm-portrait-budget">
-                  <div style={{ color: '#9ca3af', fontSize: 12, marginBottom: 4 }}>预算</div>
-                  <div>{portrait.budget || '—'}</div>
+                <div style={S.fieldRow}>
+                  <span style={S.fieldLabel}>联系人</span>
+                  <span style={S.fieldVal}>{profile.contact || '—'}</span>
                 </div>
-                <div data-testid="crm-portrait-concern">
-                  <div style={{ color: '#9ca3af', fontSize: 12, marginBottom: 4 }}>顾虑</div>
-                  <div>{portrait.concern || '—'}</div>
+                <div style={S.fieldRow}>
+                  <span style={S.fieldLabel}>意向</span>
+                  <span style={{ ...S.fieldVal, color: statusColor, fontWeight: 600 }}>{statusLabel}</span>
                 </div>
-                {portrait.summary && (
-                  <div style={{ gridColumn: '1 / -1', marginTop: 8, color: '#6b7280', whiteSpace: 'pre-wrap' }}>
-                    {portrait.summary}
-                  </div>
-                )}
-              </div>
-            ) : (
-              <div data-testid="crm-portrait-empty" style={{ color: '#9ca3af', fontSize: 14 }}>
-                暂无 AI 画像（聊得多了 AI 会自动总结需求/预算/顾虑）
-              </div>
-            )}
-          </div>
+                <div style={S.fieldRow}>
+                  <span style={S.fieldLabel}>加微信</span>
+                  <span style={S.fieldVal}>{fmtDateTime(profile.add_friend_time ?? null)}</span>
+                </div>
+                <div style={S.fieldRow}>
+                  <span style={S.fieldLabel}>最近联系</span>
+                  <span style={S.fieldVal}>{fmtDateTime(profile.last_contact_at ?? null)}</span>
+                </div>
+              </Card>
 
-          {/* ── 状态时间线 ── */}
-          <div style={card} data-testid="crm-profile-timeline">
-            <div style={sectionTitle}>状态时间线</div>
-            {timeline.length === 0 ? (
-              <div data-testid="crm-timeline-empty" style={{ color: '#9ca3af', fontSize: 14 }}>
-                暂无状态流转记录
-              </div>
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                {timeline.map((ev, i) => (
-                  <div key={i} data-testid="crm-timeline-event" style={{ display: 'flex', gap: 10, fontSize: 14 }}>
-                    <span style={{ color: '#9ca3af', minWidth: 150 }}>{fmtTime(ev.at)}</span>
-                    <span style={{ fontWeight: 600 }}>{STATUS_LABELS[ev.status] ?? ev.status}</span>
-                    {ev.note && <span style={{ color: '#6b7280' }}>{ev.note}</span>}
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* ── 每日小结流（cs_memory_daily） ── */}
-          <div style={card} data-testid="crm-profile-dailies">
-            <div style={sectionTitle}>每日小结</div>
-            {dailies.length === 0 ? (
-              <div data-testid="crm-dailies-empty" style={{ color: '#9ca3af', fontSize: 14 }}>
-                暂无每日小结
-              </div>
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                {dailies.map((d, i) => (
-                  <div key={i} data-testid="crm-daily-item">
-                    <div style={{ color: '#9ca3af', fontSize: 12, marginBottom: 2 }}>{d.day}</div>
-                    <div style={{ fontSize: 14, color: '#374151', whiteSpace: 'pre-wrap' }}>{d.summary}</div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* ── 层3：真实聊天记录（按需展开下钻） ── */}
-          <div style={card} data-testid="crm-profile-chat">
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <div style={sectionTitle}>聊天记录</div>
-              <button
-                type="button"
-                data-testid="crm-chat-toggle"
-                onClick={() => setChatExpanded((v) => !v)}
-                style={{
-                  padding: '4px 10px',
-                  fontSize: 13,
-                  borderRadius: 6,
-                  border: '1px solid #ddd',
-                  background: '#f9fafb',
-                  cursor: 'pointer',
-                }}
-              >
-                {chatExpanded ? '收起聊天记录' : '查看聊天记录'}
-              </button>
-            </div>
-            {chatExpanded && (
-              <div data-testid="crm-chat-panel" style={{ marginTop: 12 }}>
-                {messages.length === 0 ? (
-                  <div data-testid="crm-chat-empty" style={{ color: '#9ca3af', fontSize: 14 }}>
-                    暂无聊天记录
-                  </div>
+              {/* AI 客户画像 */}
+              <Card testId="crm-profile-portrait">
+                <CardTitle>AI 客户画像</CardTitle>
+                {!profile.portrait ||
+                  (!profile.portrait.need && !profile.portrait.budget && !profile.portrait.concern) ? (
+                  <EmptyHint testId="crm-portrait-empty">
+                    AI 还没生成画像。等客户多发几条消息，AI 会自动分析需求/预算/顾虑。
+                  </EmptyHint>
                 ) : (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                    {messages.map((m, i) => {
-                      const isCustomer = m.role === 'in';
+                  <>
+                    {profile.portrait.need && (
+                      <div style={S.fieldRow}>
+                        <span style={S.fieldLabel}>核心需求</span>
+                        <span data-testid="crm-portrait-need" style={S.fieldVal}>
+                          {profile.portrait.need}
+                        </span>
+                      </div>
+                    )}
+                    {profile.portrait.budget && (
+                      <div style={S.fieldRow}>
+                        <span style={S.fieldLabel}>预算</span>
+                        <span data-testid="crm-portrait-budget" style={S.fieldVal}>
+                          {profile.portrait.budget}
+                        </span>
+                      </div>
+                    )}
+                    {profile.portrait.concern && (
+                      <div style={S.fieldRow}>
+                        <span style={S.fieldLabel}>顾虑</span>
+                        <span data-testid="crm-portrait-concern" style={S.fieldVal}>
+                          {profile.portrait.concern}
+                        </span>
+                      </div>
+                    )}
+                    {profile.portrait.style && (
+                      <div style={S.fieldRow}>
+                        <span style={S.fieldLabel}>风格</span>
+                        <span style={S.fieldVal}>{profile.portrait.style}</span>
+                      </div>
+                    )}
+                    {profile.portrait.summary && (
+                      <div style={{
+                        marginTop: 8, padding: '8px 10px',
+                        background: 'rgba(35,39,52,.5)',
+                        borderRadius: 8, fontSize: 12.5, color: '#aeb4c6', lineHeight: 1.6,
+                      }}>
+                        {profile.portrait.summary}
+                      </div>
+                    )}
+                  </>
+                )}
+              </Card>
+
+              {/* 状态时间轴 */}
+              <Card testId="crm-profile-timeline">
+                <CardTitle>状态时间轴</CardTitle>
+                {!profile.timeline?.length ? (
+                  <EmptyHint testId="crm-timeline-empty">还没有状态变化记录。</EmptyHint>
+                ) : (
+                  <div>
+                    {profile.timeline.map((ev, i) => {
+                      const evStatus = ev.status as CrmStatus;
+                      const color = STATUS_COLORS[evStatus] ?? '#7a8092';
                       return (
-                        <div
-                          key={i}
-                          data-testid="crm-chat-bubble"
-                          data-role={m.role}
-                          style={{ display: 'flex', justifyContent: isCustomer ? 'flex-start' : 'flex-end' }}
-                        >
-                          <div
-                            style={{
-                              maxWidth: '70%',
-                              padding: '8px 12px',
-                              borderRadius: 12,
-                              fontSize: 14,
-                              background: isCustomer ? '#f3f4f6' : '#dbeafe',
-                              color: '#111827',
-                              whiteSpace: 'pre-wrap',
-                            }}
-                          >
-                            <div style={{ color: '#9ca3af', fontSize: 11, marginBottom: 2 }}>
-                              {isCustomer ? '客户' : '客服'} · {fmtTime(m.created_at)}
-                            </div>
-                            {m.text}
+                        <div key={i} data-testid="crm-timeline-event" style={S.tlItem}>
+                          <span style={S.tlDot(color)} />
+                          <div style={S.tlTime}>
+                            {fmtDate(ev.at)} ·{' '}
+                            <span style={{ color }}>
+                              {STATUS_LABELS[evStatus] ?? ev.status}
+                            </span>
                           </div>
+                          {ev.note && <div style={S.tlText}>{ev.note}</div>}
                         </div>
                       );
                     })}
                   </div>
                 )}
+              </Card>
+
+              {/* 每日日报 */}
+              <Card testId="crm-profile-dailies">
+                <CardTitle>每日 AI 日报</CardTitle>
+                {!profile.dailies?.length ? (
+                  <EmptyHint testId="crm-dailies-empty">
+                    还没有日报。等 AI 每天凌晨汇总后自动出现。
+                  </EmptyHint>
+                ) : (
+                  <div>
+                    {profile.dailies.map((d, i) => (
+                      <div key={i} data-testid="crm-daily-item" style={S.dailyItem}>
+                        <div style={S.dailyDay}>{fmtDate(d.day)}</div>
+                        <div style={S.dailySummary}>{d.summary}</div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </Card>
+            </div>
+
+            {/* 聊天记录（可展开/折叠）*/}
+            <Card testId="crm-profile-chat" style={{ marginTop: 14 }}>
+              <div style={{
+                display: 'flex', alignItems: 'center',
+                justifyContent: 'space-between', marginBottom: 12,
+              }}>
+                <CardTitle>聊天记录</CardTitle>
+                <button
+                  data-testid="crm-chat-toggle"
+                  style={S.chatToggle}
+                  onClick={() => setShowChat(v => !v)}
+                >
+                  {showChat ? '收起' : '展开聊天记录'}
+                </button>
               </div>
-            )}
-          </div>
-        </>
-      )}
+              {showChat && (
+                <div data-testid="crm-chat-panel">
+                  {!profile.messages?.length ? (
+                    <EmptyHint testId="crm-chat-empty">还没有聊天记录。</EmptyHint>
+                  ) : (
+                    <div>
+                      {profile.messages.map((msg, i) => (
+                        <div key={i} data-testid="crm-chat-bubble" style={S.chatBubble(msg.role)}>
+                          <div style={S.bubblePill(msg.role)}>{msg.text}</div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </Card>
+          </>
+        )}
+      </div>
     </div>
   );
 }
