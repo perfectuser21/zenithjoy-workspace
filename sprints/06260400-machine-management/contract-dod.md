@@ -1,6 +1,3 @@
-contract_branch: cp-harness-propose-r1-5c8ae3a7-a0
-sprint_dir: sprints/06260400-machine-management
-
 ---
 skeleton: false
 journey_type: user_facing

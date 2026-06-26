@@ -1,0 +1,35 @@
+{
+  "initiative_id": "afa6abca",
+  "journey_type": "user_facing",
+  "journey_type_reason": "新建 apps/dashboard 机器管理页 + 前端交互（命名/标主副/点进详情/添加号），命中 user_facing",
+  "tasks": [
+    {
+      "task_id": "ws1",
+      "title": "Line02 机器管理模块 thin — agents 加 nickname+machine_role + machines 列表/详情/改名/加号 API + 前端机器管理页接入智能获客",
+      "scope": "把既有零件（agents 表 / agent_platform_sessions(role) / qr-bind 派单 / burner 回写）组装成统一机器管理后台：migration 给 zenithjoy.agents 加 nickname + machine_role(main/sub) 幂等；新增 agent-machines.ts 路由（GET 列表含号数聚合 / GET 详情含 sessions+valid / PUT 改名改角色 / POST add-douyin 复用 qr-bind 派单），挂在 /api/agent(agentRouter) 之前；按 tenant scope 过滤，跨租户详情 404；前端机器管理页（列表+命名标主副+详情+添加号）接入智能获客板块 + 注册路由；fake-agent 走既有 burner/qr-bind-result 回写验证派单闭环。不拉真浏览器扫码，不做计费。",
+      "dod": [
+        "[BEHAVIOR] GET /api/agent/machines 返当前租户机器，行含 nickname/hostname/status/version/machine_role/douyin_account_count，号数等于真实 douyin session 行数（contract-dod BEHAVIOR Step1）",
+        "[BEHAVIOR] PUT /api/agent/machines/:id 改 nickname+machine_role 5 分钟内 DB 持久化 + 列表反映；非法 role→400 不写库（Step2/Step7）",
+        "[BEHAVIOR] GET /api/agent/machines/:id 返 machine+sessions，active→valid:true expired→valid:false（Step3）",
+        "[BEHAVIOR] POST /api/agent/machines/:id/add-douyin 派单→fake-agent 回写→新号 role=burner status=active 出现在详情（Step4）",
+        "[BEHAVIOR] 租户隔离：B 列表不含 A 机器 + 跨租户 GET/:id 404（Step6）",
+        "[BEHAVIOR:E2E] windows_cloud Playwright（stub）走完机器管理 Golden Path，3 截图视觉自验（列表/命名标主副/详情加号）",
+        "[ARTIFACT] migration 加 nickname+machine_role；agent-machines.ts 挂载早于 agentRouter；前端机器管理页接入 navigation；vitest 单测覆盖四端点"
+      ],
+      "files": [
+        "apps/api/db/migrations/20260626_040000_agents_add_nickname_machine_role.sql",
+        "apps/api/src/routes/agent-machines.ts",
+        "apps/api/src/routes/agent-machines.test.ts",
+        "apps/api/src/app.ts",
+        "apps/dashboard/src/pages/MachineManagementPage.tsx",
+        "apps/dashboard/src/config/navigation.config.ts",
+        "apps/dashboard/src/App.tsx",
+        "apps/dashboard/e2e/machine-management.spec.ts",
+        "sprints/06260400-machine-management/e2e-verify.ps1"
+      ],
+      "depends_on": [],
+      "complexity": "M",
+      "estimated_minutes": 100
+    }
+  ]
+}
