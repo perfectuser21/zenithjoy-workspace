@@ -1,0 +1,35 @@
+{
+  "initiative_id": "",
+  "journey_type": "user_facing",
+  "journey_type_reason": "新建 apps/dashboard 机器管理页 + 导航入口，运营在浏览器操作（看列表/改名/点进看号/加号）",
+  "tasks": [
+    {
+      "task_id": "ws1",
+      "title": "机器管理模块：机器列表 + 主副命名 + 机器下管抖音号 + 在机器上加号",
+      "scope": "migration 给 zenithjoy.agents 加 nickname(可空默认hostname) + machine_role(main/sub 默认sub, CHECK)；apps/api 新增 machines 路由（GET /api/agent/machines 按 tenant 列机器+号数、GET /api/agent/machines/:id 机器+其 douyin sessions、PUT /api/agent/machines/:id 改名+角色，均带租户闸 + 跨租户403）；复用 agent-burner qr-bind 在机器上加号（fake-agent 经真路由 qr-bind-result 回写）；apps/dashboard 新建机器管理页+机器详情视图+API client，接 navigation.config「智能获客」板块；apps/dashboard/e2e/machine-management.spec.ts + e2e-verify.ps1（windows_cloud）；machine-management-smoke.sh 真后端 cookie 接缝 leg",
+      "dod": [
+        "[BEHAVIOR] GET /api/agent/machines 返回租户机器数组含 machine_role/status/douyin_account_count，禁用字段反向通过",
+        "[BEHAVIOR] PUT /api/agent/machines/:id 改名+标主副 200 + DB 真写入(5分钟窗) + 刷新持久化；空名/非法角色 400 INVALID_INPUT",
+        "[BEHAVIOR] GET /api/agent/machines/:id 返回 {machine,accounts}，号含 role/valid(boolean)",
+        "[BEHAVIOR] 在机器上 qr-bind 加号→fake-agent 经真路由回写→新 burner session 真写入+现身机器详情",
+        "[BEHAVIOR] 离线机器 status=offline + 失效 session valid=false + 跨租户隔离 403/404 + 无cookie 401",
+        "[ARTIFACT] migration agents 加 nickname+machine_role(CHECK main|sub)",
+        "[ARTIFACT] apps/dashboard 机器管理页 + navigation.config 入口 + machine-management.spec.ts(含 toBeVisible 断言)"
+      ],
+      "files": [
+        "apps/api/db/migrations/20260626_xxxxxx_agents_add_nickname_machine_role.sql",
+        "apps/api/src/routes/agent-machines.ts",
+        "apps/api/src/routes/agent-machines.test.ts",
+        "apps/dashboard/src/pages/MachineManagementPage.tsx",
+        "apps/dashboard/src/api/agent-machines.api.ts",
+        "apps/dashboard/src/config/navigation.config.ts",
+        "apps/dashboard/e2e/machine-management.spec.ts",
+        "sprints/06260400-machine-management/e2e-verify.ps1",
+        ".github/workflows/scripts/smoke/machine-management-smoke.sh"
+      ],
+      "depends_on": [],
+      "complexity": "M",
+      "estimated_minutes": 110
+    }
+  ]
+}
