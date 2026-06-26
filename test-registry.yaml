@@ -1488,6 +1488,14 @@ tests:
     product: 内容采集
     note: "Content Clipper — Unit（detectPlatform 5例）+ Integration（POST/GET/callback 9例）全套测试"
 
+  - id: machine-events-e2e-windows
+    path: apps/dashboard/e2e/machine-events.spec.ts
+    type: e2e
+    ci: e2e-machine-events-windows
+    status: active
+    product: 智能获客
+    note: "机器详情「模块与日志」块 — Playwright Windows E2E：升级进度条(按 percent)/错误日志(error级)/空态。events 端点 page.route stub。"
+
   - id: p2-sprint-a-ws3-bitable-mt-unit
     path: apps/api/tests/ws3/feishu-bitable-mt.test.ts
     type: unit
@@ -3781,3 +3789,10 @@ agent_suite:
     status: active
     product: 私域运营
     note: "Sprint cp-06261900 — douyin-dm-outreach 改走共享 loadChromium，不再内联 import(playwright)；sent/limited/failed 三态走注入 DmPage 验证。"
+  - id: line02-machine-events-api-client-unit
+    path: apps/dashboard/src/api/machine-events.api.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 私域运营
+    note: "机器观测事件前端 API 客户端 — mock fetch 验 URL/query/credentials/信封解析/容错。配对 machine-events.api.ts。"
