@@ -130,3 +130,7 @@ bf08663c9c9712bb698808867d05d0158efc3ead:sprints/zj-ai-video-ws1-ws3-ws4/contrac
 
 # Sprint 06091001 — smoke 脚本 Bearer 测试 token，后续 commit 已改用变量形式，无实际泄露
 4307f08976cce527d0408be51eb8a49b47a4ee83:.github/workflows/scripts/smoke/line04-preflight-smoke.sh:curl-auth-header:22
+
+# PR #937 — walking-skeleton.test.ts 的测试假 license（ZJ-B-AGTUUID01，非真凭据），
+# 后续 commit 已改为低熵 fake-test-license，无实际泄露
+b1221a58be60b2a2173215535ef6a47e8f38e132:apps/api/src/routes/walking-skeleton.test.ts:generic-api-key:73
