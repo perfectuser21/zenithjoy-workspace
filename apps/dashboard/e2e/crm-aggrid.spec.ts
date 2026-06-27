@@ -95,6 +95,16 @@ test('AG Grid 运营台 — 客户名出现在 DOM（非 canvas）', async ({ pa
   await expect(page.locator('.ag-cell[col-id="name"]').first()).toContainText('张三', { timeout: 10000 });
   await expect(page.locator('.ag-cell[col-id="name"]').nth(1)).toContainText('李四');
   await expect(page.locator('.ag-cell[col-id="name"]').nth(2)).toContainText('王五');
+
+  // 回归守卫：cellRenderer 必须返回 JSX 不是 HTML 字符串。
+  // AgGridReact 会把字符串当文本转义 → 单元格显示成 `<span style=...>` 原始标签（"乱码"）。
+  // 断言意向/姓名单元格里看不到原始 HTML 标签文字。
+  const intentText = await page.locator('.ag-cell[col-id="status"]').first().innerText();
+  expect(intentText).not.toContain('<span');
+  expect(intentText).not.toContain('style=');
+  expect(intentText).toMatch(/●/); // 正常渲染应有色点 + 标签
+  const nameText = await page.locator('.ag-cell[col-id="name"]').first().innerText();
+  expect(nameText).not.toContain('<span');
 });
 
 test('AG Grid 运营台 — 搜索框 quickFilterText 过滤「N 位客户」计数变化', async ({ page }) => {
