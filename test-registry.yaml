@@ -3725,6 +3725,14 @@ agent_suite:
     product: 客户私域AI接管
     note: "per-operator 钉死：普通租户运营(owner,不带 cs_wechat_id)GET /api/crm/customers 自动按 req.tenantId scope 出名册、不回 CS_WECHAT_ID_REQUIRED；未登录 401；超管不带 cs→400(决策5 仅超管旁路);friend-scan/trigger 普通运营 200 / 跨租户 403。"
 
+  - id: line04-crm-view-prefs-unit
+    path: apps/api/src/routes/crm-view-prefs.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 客户私域AI接管
+    note: "CRM 列偏好服务端持久化：GET /api/crm/view-prefs(200+prefs/200+null/400缺参/401) + PUT /api/crm/view-prefs(200写入/400缺prefs/400结构错/401未登录/200多视图)。鉴权同 requireCsReadAccess/requireCsWriteAccess。"
+
   - id: line04-cs-machines-tenant-scope-unit
     path: apps/api/src/routes/cs-machines-tenant-scope.test.ts
     type: unit
