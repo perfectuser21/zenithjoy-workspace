@@ -447,8 +447,9 @@ acquisitionRouter.post('/collect/expand', tenantContextOptional, async (req: Req
       return ok(res, { degraded: true, keywords: seeds.map((word) => ({ word, source: 'seed' as const })) });
     }
   } catch (err) {
-    console.error('[acquisition/expand]', (err as Error).message);
-    return fail(res, 500, 'EXPAND_FAILED', (err as Error).message);
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error('[acquisition/expand]', msg);
+    return fail(res, 500, 'EXPAND_FAILED', msg);
   }
 });
 
@@ -474,8 +475,9 @@ acquisitionRouter.post('/collect/start', tenantContextOptional, async (req: Requ
     const taskId = r.rows[0].id as string;
     return ok(res, { task_id: taskId, status: 'pending' });
   } catch (err) {
-    console.error('[acquisition/start]', (err as Error).message);
-    return fail(res, 500, 'START_FAILED', (err as Error).message);
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error('[acquisition/start]', msg);
+    return fail(res, 500, 'START_FAILED', msg);
   }
 });
 
