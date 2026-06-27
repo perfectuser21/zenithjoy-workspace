@@ -69,13 +69,21 @@ export async function agentContext(
     return;
   }
 
-  // 3. 查 agents 表（status='online' 是 zenithjoy.agents 真实 schema check 值）
+  // 3. 查 agents 表 — 身份统一：优先取该 tenant 的 license.pinned_agent_id（与心跳/me/status 投递落到同一去重行），
+  //    避免 qr-bind 派单投到裂出的另一行 → 任务卡 queued。pinned 为空/已废时兜底取最新 online 行。
   try {
     const { rows } = await pool.query<AgentRow>(
-      `SELECT id
-         FROM zenithjoy.agents
-        WHERE tenant_id = $1 AND status = 'online'
-        ORDER BY created_at DESC
+      `SELECT a.id
+         FROM zenithjoy.agents a
+        WHERE a.tenant_id = $1 AND a.status = 'online'
+        ORDER BY
+          CASE WHEN a.id = (
+            SELECT l.pinned_agent_id FROM zenithjoy.licenses l
+             WHERE l.tenant_id = $1 AND l.pinned_agent_id IS NOT NULL
+             ORDER BY l.updated_at DESC NULLS LAST
+             LIMIT 1
+          ) THEN 0 ELSE 1 END ASC,
+          a.created_at DESC
         LIMIT 1`,
       [tenantId]
     );

@@ -20,6 +20,7 @@
  */
 import { Router, Request, Response, NextFunction } from 'express';
 import pool from '../db/connection';
+import { upsertAgent } from '../services/agent-db';
 
 const router = Router();
 
@@ -69,21 +70,33 @@ router.post('/mock-agent', async (req: Request, res: Response) => {
   }
 
   try {
+    // 身份统一：走与生产一致的去重 upsert（同 tenant+hostname 复用单行，不裂行）
+    await upsertAgent({
+      tenantId,
+      agentId: agentIdText,
+      capabilities: [],
+      version: '0.0.0',
+      hostname,
+    });
+    // 取回收敛后的去重行 id（去重时 agent_id 已收敛为本次 agentIdText）
     const r = await pool.query<{ id: string }>(
-      `INSERT INTO zenithjoy.agents (tenant_id, agent_id, hostname, status, last_seen)
-         VALUES ($1, $2, $3, 'online', now())
-       ON CONFLICT (agent_id) DO UPDATE
-         SET tenant_id = EXCLUDED.tenant_id,
-             hostname  = EXCLUDED.hostname,
-             status    = 'online',
-             last_seen = now(),
-             updated_at = now()
-       RETURNING id`,
-      [tenantId, agentIdText, hostname]
+      `SELECT id FROM zenithjoy.agents
+        WHERE tenant_id = $1 AND hostname = $2 AND hostname IS NOT NULL AND hostname <> ''
+        ORDER BY created_at ASC
+        LIMIT 1`,
+      [tenantId, hostname]
     );
+    const agentUuid =
+      r.rows[0]?.id ??
+      (
+        await pool.query<{ id: string }>(
+          `SELECT id FROM zenithjoy.agents WHERE agent_id = $1 LIMIT 1`,
+          [agentIdText]
+        )
+      ).rows[0]?.id;
     return res.json({
       success: true,
-      data: { agent_uuid: r.rows[0].id, agent_id_text: agentIdText },
+      data: { agent_uuid: agentUuid, agent_id_text: agentIdText },
       timestamp: new Date().toISOString(),
     });
   } catch (err) {

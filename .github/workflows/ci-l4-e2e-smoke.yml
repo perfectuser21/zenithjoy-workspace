@@ -296,6 +296,18 @@ jobs:
           chmod +x .github/workflows/scripts/smoke/heartbeat-module-health-smoke.sh
           bash .github/workflows/scripts/smoke/heartbeat-module-health-smoke.sh
 
+      - name: Smoke — Agent 身份统一去重 (tenant,hostname)
+        env:
+          API_BASE: http://localhost:5200
+          SMOKE_TOKEN: smoke-secret-2026
+          PGHOST: localhost
+          PGUSER: cecelia
+          PGPASSWORD: cecelia
+          PGDATABASE: cecelia
+        run: |
+          chmod +x .github/workflows/scripts/smoke/agent-identity-dedup-smoke.sh
+          bash .github/workflows/scripts/smoke/agent-identity-dedup-smoke.sh
+
       - name: Smoke — Pipeline dashboard-stats/trigger
         env:
           API_BASE: http://localhost:5200
