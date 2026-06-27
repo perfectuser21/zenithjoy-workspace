@@ -45,6 +45,7 @@ describe('license register agents row [Bug 9 layer 3]', () => {
       .mockResolvedValueOnce({ rows: [{ id: 'machine-uuid-1' }] } as any) // upsert license_machines
       .mockResolvedValueOnce({ rows: [{ ws_token: 'tok' }] } as any) // create ws_token
       .mockResolvedValueOnce({ rows: [{ tenant_id: 'tenant-uuid-1' }] } as any) // tenant lookup
+      .mockResolvedValueOnce({ rows: [] } as any) // (tenant_id,hostname) dedup SELECT 未命中 → 走 INSERT
       .mockResolvedValueOnce({ rows: [{ id: 'agent-uuid-1' }] } as any); // upsert agent INSERT
 
     await registerAgent({

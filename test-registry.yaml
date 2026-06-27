@@ -3881,3 +3881,11 @@ agent_suite:
     product: 私域运营
     note: "Line02 分析+指派 smoke(:5200+postgres)：建 tenant → GET config无认证401/返默认 → PUT config非法400/合法upsert落库 → 建2 active burner+3 leads → POST build(scored=3+assigned落dm_assignments) → GET plan见指派 → POST run(dispatched落dm_outreach_log) → GET cookie-health分类。X-Tenant-Id头驱动租户。"
     note: "获客配置页/分析+指派面板依赖端点 smoke：无认证 config 401 + 带租户 config 默认值 + dispatch/plan + cookie-health JSON 信封。"
+
+  - id: line02-license-register-dedup-unit
+    path: apps/api/src/services/__tests__/license-register-dedup.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 私域运营
+    note: "register 路径按 (tenant,hostname) 去重不再 500（修 #921 唯一索引引入的回归）：同 hostname 复用行返回去重id / tenant隔离 / 空hostname走原INSERT。"

@@ -335,6 +335,41 @@ async function upsertAgentRowGetUuid(input: RegisterInput, licenseId: string): P
     throw new Error('LICENSE_NO_TENANT: license 没有关联的 tenant，无法注册 agent');
   }
   const displayName = input.agent_id || input.hostname || `m-${input.machine_id.slice(0, 16)}`;
+  const hostname = typeof input.hostname === 'string' ? input.hostname.trim() : '';
+
+  // 身份统一去重（复用 #921 思路，修真机 register 撞 uq_agents_tenant_hostname → 500）：
+  // 同一台机器以不同 agent_id 再次 register（hostname 不变）时，旧逻辑走 INSERT ... ON CONFLICT(agent_id)，
+  // 会因 partial unique index uq_agents_tenant_hostname (WHERE hostname 非空) 抛 duplicate key。
+  // 这里先按 (tenant_id, hostname) 探测：命中同 hostname 行 → UPDATE 复用并返回那行 id；
+  // 未命中 / hostname 空 → 退回原 INSERT ... ON CONFLICT(agent_id)（partial index 不卡空 hostname）。
+  if (hostname) {
+    const dedup = await pool.query<{ id: string }>(
+      `SELECT id
+         FROM zenithjoy.agents
+        WHERE tenant_id = $1 AND hostname = $2 AND hostname IS NOT NULL AND hostname <> ''
+        ORDER BY created_at ASC
+        LIMIT 1`,
+      [tenantId, hostname],
+    );
+    const existingId = dedup.rows[0]?.id;
+    if (existingId) {
+      const upd = await pool.query<{ id: string }>(
+        `UPDATE zenithjoy.agents
+            SET agent_id     = $2,
+                license_id   = COALESCE($3, license_id),
+                capabilities = $4,
+                version      = $5,
+                status       = 'online',
+                last_seen    = now(),
+                updated_at   = now()
+          WHERE id = $1
+          RETURNING id`,
+        [existingId, displayName, licenseId, [], input.version ?? '0.1.0'],
+      );
+      return upd.rows[0]?.id ?? existingId;
+    }
+  }
+
   const r = await pool.query<{ id: string }>(
     `INSERT INTO zenithjoy.agents (tenant_id, agent_id, license_id, hostname, capabilities, version, status, last_seen)
      VALUES ($1, $2, $3, $4, $5, $6, 'online', now())
@@ -348,7 +383,7 @@ async function upsertAgentRowGetUuid(input: RegisterInput, licenseId: string): P
            last_seen = now(),
            updated_at = now()
      RETURNING id`,
-    [tenantId ?? null, displayName, licenseId, input.hostname ?? null, [], input.version ?? '0.1.0']
+    [tenantId ?? null, displayName, licenseId, hostname || null, [], input.version ?? '0.1.0']
   );
   return r.rows[0]?.id ?? '00000000-0000-0000-0000-000000000000';
 }

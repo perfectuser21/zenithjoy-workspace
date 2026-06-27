@@ -65,7 +65,8 @@ describe('POST /api/agent/register — 4 大场景', () => {
       .mockResolvedValueOnce({ rows: [] }) // INSERT license_machines
       // H-1 ws3 新增：upsertAgentRowGetUuid 内 2 query
       .mockResolvedValueOnce({ rows: [{ tenant_id: 'tenant-1' }] }) // tenant lookup
-      .mockResolvedValueOnce({ rows: [{ id: 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee' }] }); // UPSERT agents
+      .mockResolvedValueOnce({ rows: [] }) // hostname dedup 探测：未命中 → 走 INSERT
+      .mockResolvedValueOnce({ rows: [{ id: 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee' }] }); // INSERT agents
 
     const res = await request(app).post('/api/agent/register').send(validBody);
     expect(res.status).toBe(200);
@@ -103,7 +104,8 @@ describe('POST /api/agent/register — 4 大场景', () => {
       // H-1 reconnect 也走 SELECT COUNT + upsert agents
       .mockResolvedValueOnce({ rows: [{ count: 1 }] }) // count active
       .mockResolvedValueOnce({ rows: [{ tenant_id: 'tenant-1' }] }) // tenant lookup
-      .mockResolvedValueOnce({ rows: [{ id: 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee' }] }); // UPSERT agents
+      .mockResolvedValueOnce({ rows: [] }) // hostname dedup 探测：未命中 → 走 INSERT
+      .mockResolvedValueOnce({ rows: [{ id: 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee' }] }); // INSERT agents
 
     const res = await request(app).post('/api/agent/register').send(validBody);
     expect(res.status).toBe(200);
