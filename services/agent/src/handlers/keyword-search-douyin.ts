@@ -81,7 +81,7 @@ export async function searchDouyinVideosByKeyword(
       await page.close().catch(() => null);
     }
   } catch (err) {
-    const msg = (err as Error).message;
+    const msg = err instanceof Error ? err.message : String(err);
     console.warn(`[keyword-search-douyin] keyword="${keyword}" error:`, msg);
     return { ok: false, keyword, video_urls: [], error: msg };
   } finally {
@@ -115,7 +115,7 @@ function spawnKeywordSearchProcess(
 
   return new Promise<KeywordSearchResult>((resolve) => {
     let stdout = '';
-    const proc = spawn(nodeExe, args, { env: { ...process.env } });
+    const proc = spawn(nodeExe, args, { env: { ...process.env }, timeout: 60000 });
     proc.stdout.on('data', (d: Buffer) => { stdout += d.toString(); });
     proc.stderr.on('data', (d: Buffer) => { console.log('[keyword-search-douyin]', d.toString().trimEnd()); });
     proc.on('close', () => {
