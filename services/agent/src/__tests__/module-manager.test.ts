@@ -433,6 +433,69 @@ describe('ModuleManager', () => {
     });
   });
 
+  // ── 回归：preflight 是「激活门禁」而非周期健康检查 ──────────────────────────
+  // 根因：syncModules 每次心跳（~30s）无条件调 runModulePreflight，即便模块已激活
+  //   (active.has=true) 且版本一致 (needsDownload=false)。preflight → spawn preflight.js
+  //   → checkVerifySilent() → spawn listen_chat.py --verify-silent → 激活 UIA 碰微信窗口，
+  //   用户体感「自检每 30s 抢键盘」。
+  // 修法：已激活 + 版本一致 → 跳过 runModulePreflight，保持激活态不动；
+  //   只在「未激活 或 需升级」时才跑 preflight + 激活逻辑。
+  describe('preflight gating — 已激活+版本一致不重跑（根治 verify-silent 抢键盘）', () => {
+    it('模块已激活且版本一致时 syncModules 不重跑 runModulePreflight', async () => {
+      const dir = path.join(root, 'line04-wechat-cs-1.0.0');
+      fs.mkdirSync(dir, { recursive: true });
+      fs.writeFileSync(
+        path.join(dir, 'manifest.json'),
+        JSON.stringify({ lineId: 'line04-wechat-cs', version: '1.0.0', entry: 'index.js' }),
+      );
+
+      const preflightImpl = vi.fn().mockResolvedValue({ ok: true });
+      const downloadImpl = vi.fn();
+      const mm = new ModuleManager({ modulesRoot: root, preflightImpl, downloadImpl });
+
+      // 模拟模块已激活：直接往 active map 写一个假 child（绕过 fork 检查）
+      // @ts-expect-error accessing private field for test setup
+      mm.active.set('line04-wechat-cs', {
+        kill: vi.fn(), on: vi.fn(), send: vi.fn(), connected: true,
+      } as unknown as import('node:child_process').ChildProcess);
+
+      // 心跳 required_version 与已安装一致 → needsDownload=false
+      await mm.syncModules({
+        'line04-wechat-cs': { status: 'active', required_version: '1.0.0' },
+      });
+
+      // 核心断言：已激活 + 版本一致 → 不应重跑 preflight（不 spawn verify-silent 抢窗口）
+      expect(preflightImpl).not.toHaveBeenCalled();
+      expect(downloadImpl).not.toHaveBeenCalled();
+      // 模块保持激活态不动
+      expect(mm.getActiveModules()).toContain('line04-wechat-cs');
+    });
+
+    it('对照：模块未激活时仍跑一次 preflight 并激活（门禁照常生效）', async () => {
+      const dir = path.join(root, 'line04-wechat-cs-1.0.0');
+      fs.mkdirSync(dir, { recursive: true });
+      fs.writeFileSync(
+        path.join(dir, 'manifest.json'),
+        JSON.stringify({ lineId: 'line04-wechat-cs', version: '1.0.0', entry: 'index.js' }),
+      );
+      fs.writeFileSync(path.join(dir, 'index.js'), '');
+
+      const preflightImpl = vi.fn().mockResolvedValue({ ok: true });
+      const forkImpl = vi.fn().mockReturnValue({
+        kill: vi.fn(), on: vi.fn(), send: vi.fn(), connected: true,
+      } as unknown as import('node:child_process').ChildProcess);
+      const mm = new ModuleManager({ modulesRoot: root, preflightImpl, forkImpl });
+
+      await mm.syncModules({
+        'line04-wechat-cs': { status: 'active', required_version: '1.0.0' },
+      });
+
+      // 未激活 → preflight 跑一次完成首次门禁 + 激活
+      expect(preflightImpl).toHaveBeenCalledTimes(1);
+      expect(mm.getActiveModules()).toContain('line04-wechat-cs');
+    });
+  });
+
   // ── 回归：OTA 自升级残缺目录毒化（卡 1.0.62 真因）─────────────────────────
   // 根因：downloadModule 下载/解压失败留下空/残缺版本目录（COS 跨境 CDN 抖动常见），
   //   getInstalledVersion 只按目录名排序取最大、不校验内容 → 空 1.0.70 目录被当

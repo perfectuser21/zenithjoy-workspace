@@ -276,6 +276,20 @@ export class ModuleManager {
 
       try {
         const needsUpgrade = this.needsDownload(lineId, requiredVersion);
+
+        // 门禁语义：preflight 是「激活门禁」（首次激活/升级时跑一次），不是周期健康检查。
+        // 模块已激活 (active.has) 且版本一致 (!needsUpgrade) → 已过门禁，保持激活态不动，
+        // 跳过 runModulePreflight。否则每次心跳（~30s）都会 spawn preflight.js →
+        // checkVerifySilent() → spawn listen_chat.py --verify-silent → 激活 UIA 碰微信窗口，
+        // 用户体感「自检每 30s 抢键盘」。模块真实健康由 IPC health 上报覆盖，不靠周期 preflight。
+        if (this.active.has(lineId) && !needsUpgrade) {
+          // 轻量保留一个 ok 状态（首次激活后通常已有 statusReport，这里仅兜底不覆盖既有）
+          if (!this.statusReport.has(lineId)) {
+            this.statusReport.set(lineId, { ok: true });
+          }
+          continue;
+        }
+
         if (needsUpgrade) {
           // 有新版本：先 kill 旧模块 fork，再下载，再激活新版
           // 不 kill 则旧 fork 里的 index.js 会在 listen_chat 崩溃时自愈重启旧版本，
