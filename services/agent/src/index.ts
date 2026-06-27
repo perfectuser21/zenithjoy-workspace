@@ -371,6 +371,20 @@ export function buildHelloPayload(cfg: AgentConfig): {
   return payload;
 }
 
+// 身份统一（cp-06270030）：事件上报 cfg 构造器 — agentId 统一用 register 返的 agentUuid，
+//   而不是运行期 agent-env-xxx 文本，确保任务事件 agent_id 能匹配中台去重后的机器行。
+//   cfg.agentUuid 缺失（老 cfg/register 失败）时退回 agentId（旁路观测，graceful）。
+export function buildEventReporterConfig(
+  cfg: AgentConfig,
+  apiBase: string,
+): EventReporterConfig {
+  return {
+    apiBase,
+    license: cfg.licenseKey,
+    agentId: cfg.agentUuid ?? cfg.agentId,
+  };
+}
+
 function connect(cfg: AgentConfig): void {
   const url = `${cfg.apiUrl}?token=${encodeURIComponent(cfg.licenseKey)}`;
   console.log(`[agent] connecting to ${cfg.apiUrl}...`);
@@ -808,11 +822,8 @@ function startWs1HeartbeatLoop(cfg: AgentConfig): void {
   const processingTasks = new Set<string>();
 
   // Sprint cp-06262240 — 观测上报 cfg（与下方 coreUpgrader.setReporter 同源）。
-  const eventCfg: EventReporterConfig = {
-    apiBase,
-    license: cfg.licenseKey,
-    agentId: cfg.agentUuid ?? cfg.agentId,
-  };
+  // 身份统一（cp-06270030）：agentId 用 register 返的 agentUuid，匹配中台去重机器行。
+  const eventCfg: EventReporterConfig = buildEventReporterConfig(cfg, apiBase);
 
   const onTask = async (task: HeartbeatTask): Promise<void> => {
     if (processingTasks.has(task.task_id)) {
@@ -990,6 +1001,8 @@ function startWs1HeartbeatLoop(cfg: AgentConfig): void {
     license: cfg.licenseKey,
     version: VERSION,
     hostname: os.hostname() || safeHostnameSlug(),
+    // 身份统一（cp-06270030）：心跳带 register 返的 UUID → 中台复用同一行，不裂身份
+    agentUuid: cfg.agentUuid,
     osType: process.platform,
     intervalMs: 30_000,
     onTask,
@@ -1073,11 +1086,8 @@ function startAcquisitionKeywordLoop(cfg: AgentConfig): void {
   const POLL_INTERVAL_MS = 30_000;
 
   // Sprint cp-06262240 — 观测上报 cfg（与 ws1 heartbeat 同源）。
-  const eventCfg: EventReporterConfig = {
-    apiBase,
-    license: cfg.licenseKey,
-    agentId: cfg.agentUuid ?? cfg.agentId,
-  };
+  // 身份统一（cp-06270030）：agentId 用 register 返的 agentUuid。
+  const eventCfg: EventReporterConfig = buildEventReporterConfig(cfg, apiBase);
 
   async function pollAndProcess(): Promise<void> {
     try {

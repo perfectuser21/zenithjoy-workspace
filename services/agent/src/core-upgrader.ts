@@ -44,6 +44,9 @@ export interface CoreUpgraderOptions {
   currentVersion: string;
   // 当前运行核心目录（…/extracted/zenithjoy-agent-v<current>）；不传按 process.execPath 推
   coreDir?: string;
+  // 身份统一（cp-06270030）：%APPDATA%/zenithjoy-agent 目录（含 config.json，存 apiUrl/agentUuid）。
+  // 不传按 APPDATA / 平台默认推。升级时把 config.json 带到新核心目录，新核心据此拿 apiBase，不回落生产。
+  configDir?: string;
   // COS 核心包基地址；不传用默认
   cosBase?: string;
   logger?: (msg: string) => void;
@@ -93,6 +96,8 @@ export class CoreUpgrader {
   // 客户机产品根（extracted 的父，.active-core 指针写这里）
   private readonly rootDir: string;
   private readonly cosBase: string;
+  // %APPDATA%/zenithjoy-agent 目录（config.json 所在）；carry-over 时从这里把 config.json 带到新核心
+  private readonly configDir: string;
   private readonly opts: CoreUpgraderOptions;
   // 升级中标记：同一进程内只升一次（升级中再来心跳不重复下载）
   private upgrading = false;
@@ -105,6 +110,21 @@ export class CoreUpgrader {
     this.extractedDir = path.dirname(this.coreDir);
     this.rootDir = path.dirname(this.extractedDir);
     this.cosBase = (opts.cosBase ?? DEFAULT_COS_BASE).replace(/\/+$/, '');
+    this.configDir = opts.configDir ?? CoreUpgrader.defaultConfigDir();
+  }
+
+  // %APPDATA%/zenithjoy-agent（与 config-loader.getConfigDir 同口径），供 carry-over config.json
+  private static defaultConfigDir(): string {
+    if (process.env.APPDATA) {
+      return path.join(process.env.APPDATA, 'zenithjoy-agent');
+    }
+    if (process.platform === 'win32') {
+      return path.join(os.homedir(), 'AppData', 'Roaming', 'zenithjoy-agent');
+    }
+    if (process.platform === 'darwin') {
+      return path.join(os.homedir(), 'Library', 'Application Support', 'zenithjoy-agent');
+    }
+    return path.join(os.homedir(), '.config', 'zenithjoy-agent');
   }
 
   private log(msg: string): void {
@@ -331,6 +351,24 @@ export class CoreUpgrader {
       } catch (err) {
         this.log(`carry-over ${f} 失败（非致命）：${(err as Error).message}`);
       }
+    }
+    // 身份统一（cp-06270030）：把 %APPDATA%/zenithjoy-agent/config.json（含 apiUrl + agentUuid + agentId）
+    // 带到新核心目录，让新核心拿得到 apiBase / 稳定身份，绝不静默回落生产 / 重新 register 裂身份。
+    // 来源优先 configDir（真客户机 SSOT），其次旧核心目录内的 config.json。
+    try {
+      const candidates = [
+        path.join(this.configDir, 'config.json'),
+        path.join(this.coreDir, 'config.json'),
+      ];
+      const srcCfg = candidates.find((p) => fs.existsSync(p));
+      if (srcCfg) {
+        fs.copyFileSync(srcCfg, path.join(destDir, 'config.json'));
+        this.log(`carry-over config.json（来自 ${srcCfg}）`);
+      } else {
+        this.log('未找到 config.json，跳过 carry-over（新核心可能需重新配置 apiUrl）');
+      }
+    } catch (err) {
+      this.log(`carry-over config.json 失败（非致命）：${(err as Error).message}`);
     }
     // 已下模块若就放在核心目录内（modules/）一并带过去；模块也可放 %APPDATA% 不在核心目录，
     // 那种情况下新核心 module-manager 会按 defaultModulesRoot 复用，无需拷。

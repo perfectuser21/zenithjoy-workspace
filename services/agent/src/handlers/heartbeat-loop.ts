@@ -58,6 +58,9 @@ export interface HeartbeatLoopOptions {
   license: string;
   version: string;
   hostname: string;
+  // 身份统一（cp-06270030）：register 返的 agents.id (UUID)。
+  // 随每次心跳上报，让中台按 (tenant, hostname) 复用同一行，不再生成新 ws1-<hash> 裂身份。
+  agentUuid?: string;
   osType?: string;
   intervalMs?: number;
   fetchImpl?: typeof fetch;
@@ -74,6 +77,7 @@ export class HeartbeatLoop {
   private readonly opts: Required<
     Pick<HeartbeatLoopOptions, 'apiBase' | 'license' | 'version' | 'hostname'>
   > & {
+    agentUuid?: string;
     osType?: string;
     intervalMs: number;
     fetchImpl: typeof fetch;
@@ -88,6 +92,7 @@ export class HeartbeatLoop {
       license: options.license,
       version: options.version,
       hostname: options.hostname,
+      agentUuid: options.agentUuid,
       osType: options.osType,
       intervalMs: options.intervalMs ?? 30_000,
       fetchImpl: options.fetchImpl ?? (globalThis.fetch as typeof fetch),
@@ -114,7 +119,13 @@ export class HeartbeatLoop {
       hostname: this.opts.hostname,
       os_type: this.opts.osType,
     };
-    if (this.agentId) body.agent_id = this.agentId;
+    // 身份统一（cp-06270030）：
+    //   - agent_id 优先用响应已收敛的 id；首次心跳响应还没回来时退回 register UUID，
+    //     让中台第一次就能按 UUID/(tenant,hostname) 命中复用行，不再 INSERT 新 ws1-<hash>。
+    //   - 额外带 agent_uuid（register 返的稳定 UUID）供中台明确匹配，不被运行期 id 漂移影响。
+    const agentIdToSend = this.agentId ?? this.opts.agentUuid;
+    if (agentIdToSend) body.agent_id = agentIdToSend;
+    if (this.opts.agentUuid) body.agent_uuid = this.opts.agentUuid;
     if (this.moduleStatus) body.module_status = this.moduleStatus;
 
     let resp: Response;

@@ -43,23 +43,33 @@ export function loadOrInitConfig(): AgentConfig {
   // Priority 1: environment variable (injected by start.bat via for /f .env parsing)
   const envLicense = process.env.ZENITHJOY_LICENSE;
   if (envLicense && envLicense.trim()) {
-    const apiUrl =
-      process.env.ZENITHJOY_API_URL ||
-      process.env.ZENITHJOY_API_BASE ||
-      'wss://api.zenithjoy.com/agent-ws';
-
-    // 复用已有 agentId，防止每次重启生成新 ID → Dashboard 出现多客户端条目
+    // 复用已有 agentId，防止每次重启生成新 ID → Dashboard 出现多客户端条目。
+    // 身份统一（cp-06270030）：同一 config.json 也作为 apiUrl 来源——
+    //   自升级后新核心拿不到 ZENITHJOY_API_URL env 时，从 carry-over 来的 config.json 读 apiUrl，
+    //   而不是默默回落生产（连错环境会裂身份）。
     const configFile = path.join(getConfigDir(), 'config.json');
     let stableAgentId: string | undefined;
+    let cachedApiUrl: string | undefined;
     try {
       if (fs.existsSync(configFile)) {
         const cached = JSON.parse(fs.readFileSync(configFile, 'utf-8')) as Partial<AgentConfig>;
         if (cached.licenseKey === envLicense.trim() && cached.agentId) {
           stableAgentId = cached.agentId;
         }
+        if (cached.apiUrl) cachedApiUrl = cached.apiUrl;
       }
     } catch {
       // non-fatal — will generate fresh ID below
+    }
+
+    // apiUrl 优先级：env → 同 license 的 config.json → 报错（绝不默默连生产）
+    const apiUrl =
+      process.env.ZENITHJOY_API_URL || process.env.ZENITHJOY_API_BASE || cachedApiUrl;
+    if (!apiUrl || !apiUrl.trim()) {
+      throw new Error(
+        '未找到 apiUrl（ZENITHJOY_API_URL / ZENITHJOY_API_BASE / config.json 均无）。' +
+          '拒绝默默回落生产地址 —— 请在 .env 或 config.json 显式配置中台地址，再重启 Agent。',
+      );
     }
 
     const agentId = stableAgentId ?? `agent-env-${Date.now().toString(36)}`;
