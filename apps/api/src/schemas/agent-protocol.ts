@@ -19,6 +19,7 @@ export type SkillStatusItem = z.infer<typeof SkillStatusItem>;
 export const HelloPayload = z.object({
   agentId: z.string(),
   agentUuid: z.string().uuid().optional(), // H-2 Bug 9: 新 Agent 复用 register 时已创的 row UUID
+  hostname: z.string().optional(),         // 身份统一：让中台按 (tenant_id, hostname) 去重，不再裂行
   version: z.string(),
   capabilities: z.array(z.string()),
   skills: z.array(SkillStatusItem).optional(),

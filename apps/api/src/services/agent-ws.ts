@@ -73,7 +73,7 @@ export function attachAgentWS(server: HttpServer): WebSocketServer {
     }
 
     wss.handleUpgrade(req, socket, head, (ws) => {
-      (ws as any).__tenantId = tenantId;
+      (ws as WebSocket & { __tenantId?: string }).__tenantId = tenantId;
       wss.emit('connection', ws, req);
     });
   });
@@ -84,7 +84,7 @@ export function attachAgentWS(server: HttpServer): WebSocketServer {
     let agentId: string | null = null;       // UUID
     let displayName: string | null = null;   // 原 hello string
     let pendingHeartbeats: Array<{ uptime: number; busy: boolean }> = []; // R5: 缓存 hello 完成前的 heartbeat
-    const tenantId: string = (ws as any).__tenantId || '';
+    const tenantId: string = (ws as WebSocket & { __tenantId?: string }).__tenantId || '';
 
     // 初始化 _isAlive 标志，pong 回来时置 true
     (ws as WebSocket & { _isAlive?: boolean })._isAlive = true;
@@ -106,6 +106,7 @@ export function attachAgentWS(server: HttpServer): WebSocketServer {
             agentId = await resolveAgentUuidFromHello({
               agentId: msg.payload.agentId,
               agentUuid: msg.payload.agentUuid, // H-2 Bug 9
+              hostname: msg.payload.hostname,    // 身份统一：按 (tenant_id, hostname) 去重
               capabilities: msg.payload.capabilities,
               version: msg.payload.version,
               tenantId: tenantId || null,
@@ -126,6 +127,7 @@ export function attachAgentWS(server: HttpServer): WebSocketServer {
             agentId: displayName, // upsertAgent 用 display name 作 agent_id 列（保留原 schema）
             capabilities: msg.payload.capabilities,
             version: msg.payload.version,
+            hostname: msg.payload.hostname, // 身份统一：同 (tenant_id, hostname) 复用去重行
           }).catch((e) => console.warn('[agent-ws] upsertAgent failed:', e));
           if (msg.payload.skills?.length) {
             upsertAgentSkillStatuses(displayName, msg.payload.skills).catch(
@@ -190,6 +192,7 @@ export function sendToAgent(agentId: string, msg: ReturnType<typeof makeMsg>): b
 export async function resolveAgentUuidFromHello(params: {
   agentId: string;
   agentUuid?: string;
+  hostname?: string;
   capabilities: string[];
   version: string;
   tenantId?: string | null;
@@ -215,6 +218,7 @@ export async function resolveAgentUuidFromHello(params: {
     tenantId: params.tenantId ?? null,
     capabilities: params.capabilities,
     version: params.version,
+    hostname: params.hostname ?? null,
   });
   return result.uuid;
 }
