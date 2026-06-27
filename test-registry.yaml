@@ -395,7 +395,7 @@ tests:
     ci: L3
     status: active
     product: 客户私域AI接管
-    note: "整合(2026-06-25) CustomerListPage 行为单测：三处 fetch+写接口走 adminFetch 注入 X-User-Email(修403) + 客服机下拉默认第一台/过滤未配 + GET 带 ?cs_wechat_id=X(决策5) + 「立即扫好友」调 POST /friend-scan/trigger 带 {cs_wechat_id} 并回显。"
+    note: "整合(2026-06-27 AG Grid) CustomerListPage 行为单测：session fetch 无超管头/无 cs_wechat_id + 「立即扫好友」调 POST /friend-scan/trigger 带 {cs_wechat_id} 并回显 + 断言 ag-theme-quartz-dark 容器存在（非 Glide canvas）+ 无底部编辑面板。"
 
   - id: line04-crm-customer-profile-page-unit
     path: apps/dashboard/src/pages/__tests__/CustomerProfilePage.test.tsx
@@ -3693,13 +3693,13 @@ agent_suite:
     product: 客户私域AI接管
     note: "中台 CRM 客户列表页 Golden Path（page.route stub UI 层）：列表行 + 状态下拉 + 接管开关 + 「保存成功」文案；整合(2026-06-25) 补客服机下拉默认第一台 + 「立即扫好友」调 trigger 端点回显，windows-latest 跑。"
 
-  - id: line04-crm-glide-grid-ui-e2e
-    path: apps/dashboard/e2e/crm-glide.spec.ts
+  - id: line04-crm-aggrid-grid-ui-e2e
+    path: apps/dashboard/e2e/crm-aggrid.spec.ts
     type: e2e
     ci: windows_cloud
     status: active
     product: 客户私域AI接管
-    note: "Glide DataGrid 暗色 AI 客户运营台 E2E（windows Playwright，VITE_SKIP_AUTH）：搜索框计数变化 + A4 chip 过滤 + 编辑面板自动选中首行（status/identity select DOM）+ 点客户名导航到画像页 + 画像页 AI 三段论卡片字段断言；Glide canvas 不 read 直接，全部通过编辑面板 DOM 和计数 DOM 验证。"
+    note: "AG Grid DOM 渲染 CRM 运营台 E2E（windows Playwright，VITE_SKIP_AUTH）：客户名直接 DOM 断言（ag-cell）+ 搜索 quickFilterText 计数变化 + A4 chip 过滤 + 双击意向行内编辑 PUT /status + 点姓名导航到画像页 + 画像页 AI 三段论卡片字段断言；修复 Glide canvas 点击错位问题。"
 
   - id: line04-cs-consolidation-area-hub-ui-e2e
     path: apps/dashboard/e2e/area-hub-wechat-consolidation.spec.ts
