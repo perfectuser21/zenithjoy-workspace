@@ -203,9 +203,43 @@ export async function upsertAgentByHeartbeat(args: {
   hostname: string | null;
   version: string | null;
   osType?: string | null;
+  /** 若 Agent 侧在心跳 body 中携带了自身 UUID，优先按 WHERE id=$agentUuid 精确 UPDATE，
+   *  命中则跳过 (license_id, hostname) 去重逻辑，防止 hostname=null 时新建幽灵行。
+   *  未传或未匹配时退化到原有逻辑（向后兼容）。*/
+  agentUuid?: string;
 }): Promise<AgentRow> {
-  const { licenseId, tenantId, hostname, version, osType } = args;
+  const { licenseId, tenantId, hostname, version, osType, agentUuid } = args;
 
+  // ── 精确路径：按 agentUuid 直接 UPDATE（跳过 hostname 去重，防幽灵行） ──
+  if (agentUuid) {
+    const precise = await pool.query<AgentRow>(
+      `UPDATE zenithjoy.agents
+          SET version          = COALESCE($1, version),
+              hostname         = COALESCE($2, hostname),
+              os_type          = COALESCE($4, os_type),
+              last_heartbeat_at = now(),
+              last_seen        = now(),
+              status           = 'online',
+              updated_at       = now()
+        WHERE id = $3
+          AND license_id = $5
+        RETURNING id, tenant_id, agent_id, hostname, version, license_id,
+                  bound_folder_path, last_heartbeat_at, status, last_seen`,
+      [version, hostname, agentUuid, osType ?? null, licenseId],
+    );
+    if (precise.rows[0]) {
+      // 如果 license 还没有 pinned_agent，把这台设为 pinned
+      await pool.query(
+        `UPDATE zenithjoy.licenses SET pinned_agent_id = $1
+          WHERE id = $2 AND pinned_agent_id IS NULL`,
+        [precise.rows[0].id, licenseId],
+      );
+      return precise.rows[0];
+    }
+    // agentUuid 未命中（极少情况：UUID 错或行被删）→ 退化到 (license_id, hostname) 逻辑
+  }
+
+  // ── 原有路径：按 (license_id, hostname) 去重 ──
   const existing = await pool.query<AgentRow>(
     `SELECT id, tenant_id, agent_id, hostname, version, license_id,
             bound_folder_path, last_heartbeat_at, status, last_seen

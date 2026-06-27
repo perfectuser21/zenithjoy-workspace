@@ -201,6 +201,23 @@ export default function AgentDownloadPage() {
             >
               ⬇ 下载 Agent 完整安装包
             </a>
+            <a
+              href="/api/agent/install-pack/dotenv"
+              download=".env"
+              style={{
+                display: 'inline-block',
+                marginLeft: 12,
+                padding: '8px 16px',
+                background: '#fff',
+                color: '#2563eb',
+                borderRadius: 6,
+                textDecoration: 'none',
+                border: '1px solid #bfdbfe',
+                fontSize: 14,
+              }}
+            >
+              ⬇ 下载个人配置 .env（含你的 License + 服务地址）
+            </a>
           </div>
         )}
       </section>
@@ -255,6 +272,22 @@ export default function AgentDownloadPage() {
 {`cd "%USERPROFILE%"
 tar -xzf "Downloads\\zenithjoy-agent-v${manifest?.version || '...'}.tar.gz"
 cd zenithjoy-agent`}
+            </pre>
+          </li>
+          <li>
+            将下载的 <code>.env</code> 文件放进 <code>zenithjoy-agent</code> 目录，
+            覆盖原有 <code>.env</code>（含你的 License 和正确服务地址）：
+            <pre
+              style={{
+                background: '#f3f4f6',
+                padding: 10,
+                borderRadius: 4,
+                marginTop: 6,
+                fontSize: 13,
+                overflowX: 'auto',
+              }}
+            >
+{`copy "%USERPROFILE%\\Downloads\\.env" "%USERPROFILE%\\zenithjoy-agent\\.env"`}
             </pre>
           </li>
           <li>

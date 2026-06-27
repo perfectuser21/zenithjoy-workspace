@@ -97,7 +97,7 @@ describe('acquisition-dispatch.api', () => {
     const plan = [
       { id: 'a1', lead_id: 'l1', nickname: '客户A', relevance_score: 88, profile_url: 'u', account_label: 'perfect-02', status: 'queued', scheduled_for: 'x' },
     ];
-    const f = mockFetchOnce({ success: true, data: plan });
+    const f = mockFetchOnce({ success: true, data: { plan, total: plan.length } });
     vi.stubGlobal('fetch', f);
 
     const out = await fetchDispatchPlan('queued');
@@ -108,7 +108,7 @@ describe('acquisition-dispatch.api', () => {
   });
 
   it('fetchDispatchPlan 不传 status 时无 query', async () => {
-    const f = mockFetchOnce({ success: true, data: [] });
+    const f = mockFetchOnce({ success: true, data: { plan: [], total: 0 } });
     vi.stubGlobal('fetch', f);
 
     await fetchDispatchPlan();

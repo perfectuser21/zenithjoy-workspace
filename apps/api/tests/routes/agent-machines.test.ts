@@ -178,3 +178,56 @@ describe('PUT /api/agent/machines/:id', () => {
     expect(res.body.error.code).toBe('MACHINE_NOT_FOUND');
   });
 });
+
+// ── [回归守卫] status 按 last_seen 实时计算（防幽灵行永远 online）──────────────────
+//
+// Bug 背景：幽灵行（id f388b5aa，hostname=null，ws1- 前缀）3 小时无心跳但 status 列仍为 'online'；
+// /machines 直读 a.status 列 → 返回 online → 前端显示重复机器均在线。
+// 修复：SELECT 里用 CASE WHEN a.last_seen > NOW() - INTERVAL '3 minutes' 实时计算 status，
+//       不依赖 DB 中存储的 status 列（该列只反映最后一次心跳写入时的状态）。
+//
+// 测试设计：断言 SQL 字符串含 CASE WHEN / last_seen / INTERVAL（结构守卫，修复前必 FAIL）
+
+describe('GET /api/agent/machines — status 按 last_seen 实时计算（防幽灵行永 online）', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it(
+    '回归守卫：SELECT SQL 必须包含 CASE WHEN last_seen INTERVAL，禁止直读 a.status 列',
+    async () => {
+      mockQuery.mockResolvedValueOnce({ rows: [machineRow()] });
+      await request(app).get('/api/agent/machines').set(AUTH);
+
+      const sql = mockQuery.mock.calls[0][0] as string;
+      // 修复前：SELECT a.status ... → sql 不含 CASE WHEN → 断言 FAIL
+      // 修复后：CASE WHEN a.last_seen > NOW() - INTERVAL '3 minutes' ... → 断言 PASS
+      expect(sql.toUpperCase()).toContain('CASE WHEN');
+      expect(sql.toLowerCase()).toContain('last_seen');
+      expect(sql.toUpperCase()).toContain('INTERVAL');
+      expect(sql.toUpperCase()).toContain("'ONLINE'");
+      expect(sql.toUpperCase()).toContain("'OFFLINE'");
+    },
+  );
+
+  it('last_seen 超 3 分钟 → 机器列表返回 status=offline', async () => {
+    const fourMinsAgo = new Date(Date.now() - 4 * 60 * 1000).toISOString();
+    // mock 模拟 DB CASE WHEN 计算结果（last_seen > 3min → offline）
+    mockQuery.mockResolvedValueOnce({
+      rows: [machineRow({ status: 'offline', last_seen: fourMinsAgo })],
+    });
+
+    const res = await request(app).get('/api/agent/machines').set(AUTH);
+    expect(res.status).toBe(200);
+    expect(res.body.data[0].status).toBe('offline');
+  });
+
+  it('last_seen 1 分钟前 → 机器列表返回 status=online', async () => {
+    const oneMinsAgo = new Date(Date.now() - 1 * 60 * 1000).toISOString();
+    mockQuery.mockResolvedValueOnce({
+      rows: [machineRow({ status: 'online', last_seen: oneMinsAgo })],
+    });
+
+    const res = await request(app).get('/api/agent/machines').set(AUTH);
+    expect(res.status).toBe(200);
+    expect(res.body.data[0].status).toBe('online');
+  });
+});

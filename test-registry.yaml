@@ -1956,6 +1956,14 @@ tests:
     product: 中台认证
     note: "H-2 Bug 9 layer 4 — heartbeat polling 接 pending/queued/dispatched"
 
+  - id: walking-skeleton-service-unit
+    path: apps/api/src/services/__tests__/walking-skeleton.service.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 私域运营
+    note: upsertAgentByHeartbeat 精确UPDATE license_id fall-through 防跨租户
+
   - id: b1-burner-heartbeat-payload-passthrough
     path: apps/api/src/routes/__tests__/heartbeat-payload-passthrough.test.ts
     type: unit
@@ -3669,6 +3677,14 @@ agent_suite:
     product: AI员工
     note: "S4 前台日报 API 客户端单测（vi.mock client）：GET /wechat/cs/daily-report 带 date 参数 + 解 reports 数组 + 缺字段回空。"
 
+  - id: line02-acquisition-dispatch-api-client-unit
+    path: apps/dashboard/src/api/__tests__/acquisition-dispatch.api.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 智能获客
+    note: "Line02 分析指派 API 客户端单测（mock global.fetch）：fetchDispatchPlan 返回数组而非对象（白屏 regression）+ 空 plan 边界；fetchCookieHealth.items[].health 后端 status 字段映射验证。"
+
   - id: line04-crm-customer-roster-contract-oracle
     path: sprints/06242057-line04-crm-customer-list/tests/crm-customers.test.ts
     type: unit
@@ -3905,3 +3921,11 @@ agent_suite:
     status: active
     product: 私域运营
     note: "守卫：line02 前端页面不再硬编码占位 tenant（DouyinBurnerBindPage 的 tenant_id=current / LeadsPage 的 TENANT_ID=e2e-acq-tenant），靠 session 解析（修 staging 主链 502，PR #935）。"
+
+  - id: dashboard-agent-download-dotenv-link
+    path: apps/dashboard/src/pages/__tests__/agent-download-dotenv-link.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 私域运营
+    note: "守卫：AgentDownloadPage 必须含指向 /api/agent/install-pack/dotenv 的下载链接（防 staging 用户拿到写死生产地址的 .env，401 bug 修复 #936）。源码断言风格。"
