@@ -177,8 +177,9 @@ router.get('/sessions', tenantContextOptional, async (req: Request, res: Respons
     );
     return res.json(OK({ sessions: r.rows }));
   } catch (err) {
-    console.error('[burner/sessions] query failed:', (err as Error).message);
-    return res.status(500).json(ERR('SESSIONS_QUERY_FAILED', (err as Error).message));
+    const msg = err instanceof Error ? err.message : 'unknown';
+    console.error('[burner/sessions] query failed:', msg);
+    return res.status(500).json(ERR('SESSIONS_QUERY_FAILED', msg));
   }
 });
 
@@ -341,8 +342,9 @@ router.get('/crawl-tasks/latest', tenantContextOptional, async (req: Request, re
       }),
     );
   } catch (err) {
-    console.error('[burner/crawl-tasks/latest] query failed:', (err as Error).message);
-    return res.status(500).json(ERR('CRAWL_LATEST_QUERY_FAILED', (err as Error).message));
+    const msg = err instanceof Error ? err.message : 'unknown';
+    console.error('[burner/crawl-tasks/latest] query failed:', msg);
+    return res.status(500).json(ERR('CRAWL_LATEST_QUERY_FAILED', msg));
   }
 });
 
