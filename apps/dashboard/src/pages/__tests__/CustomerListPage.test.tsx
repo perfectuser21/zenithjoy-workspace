@@ -16,13 +16,27 @@ import { describe, it, expect, vi, beforeEach, beforeAll } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import CustomerListPage from '../CustomerListPage';
 
-// ── AG Grid 使用 ResizeObserver，jsdom 里没有，需要 mock ──
+// ── AG Grid 需要 ResizeObserver 和 localStorage，jsdom 里没有，需要 mock ──
 beforeAll(() => {
   (window as unknown as Record<string, unknown>).ResizeObserver = class ResizeObserver {
     observe() { /* noop */ }
     unobserve() { /* noop */ }
     disconnect() { /* noop */ }
   };
+
+  // AG Grid onGridReady 等异步回调会访问 localStorage
+  const store: Record<string, string> = {};
+  Object.defineProperty(global, 'localStorage', {
+    value: {
+      getItem: (k: string) => store[k] ?? null,
+      setItem: (k: string, v: string) => { store[k] = v; },
+      removeItem: (k: string) => { delete store[k]; },
+      clear: () => { Object.keys(store).forEach(k => delete store[k]); },
+      get length() { return Object.keys(store).length; },
+      key: (i: number) => Object.keys(store)[i] ?? null,
+    },
+    writable: true,
+  });
 });
 
 const mockAuth = vi.hoisted(() => ({
