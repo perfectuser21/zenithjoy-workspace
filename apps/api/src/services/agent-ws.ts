@@ -73,7 +73,7 @@ export function attachAgentWS(server: HttpServer): WebSocketServer {
     }
 
     wss.handleUpgrade(req, socket, head, (ws) => {
-      (ws as any).__tenantId = tenantId;
+      (ws as WebSocket & { __tenantId?: string }).__tenantId = tenantId;
       wss.emit('connection', ws, req);
     });
   });
@@ -84,7 +84,7 @@ export function attachAgentWS(server: HttpServer): WebSocketServer {
     let agentId: string | null = null;       // UUID
     let displayName: string | null = null;   // 原 hello string
     let pendingHeartbeats: Array<{ uptime: number; busy: boolean }> = []; // R5: 缓存 hello 完成前的 heartbeat
-    const tenantId: string = (ws as any).__tenantId || '';
+    const tenantId: string = (ws as WebSocket & { __tenantId?: string }).__tenantId || '';
 
     // 初始化 _isAlive 标志，pong 回来时置 true
     (ws as WebSocket & { _isAlive?: boolean })._isAlive = true;
