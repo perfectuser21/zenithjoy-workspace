@@ -14,4 +14,3 @@ global.IntersectionObserver = class IntersectionObserver {
   }
   unobserve() {}
 } as unknown as typeof IntersectionObserver;
-
