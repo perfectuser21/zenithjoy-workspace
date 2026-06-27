@@ -20,13 +20,14 @@
     "e2e:install": "playwright install chromium"
   },
   "dependencies": {
-    "@glideapps/glide-data-grid": "^6.0.3",
     "@hello-pangea/dnd": "^18.0.1",
     "@tanstack/react-query": "^5.90.20",
     "@tiptap/extension-image": "^3.19.0",
     "@tiptap/extension-link": "^3.19.0",
     "@tiptap/react": "^3.19.0",
     "@tiptap/starter-kit": "^3.19.0",
+    "ag-grid-community": "32.2.1",
+    "ag-grid-react": "32.2.1",
     "axios": "^1.6.2",
     "lodash": "^4.18.1",
     "lucide-react": "^0.294.0",

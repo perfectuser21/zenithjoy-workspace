@@ -1,9 +1,8 @@
-name: "[CONFIG] E2E Line04 CRM Glide 运营台（暗色 AI 客户管理台）"
+name: "[CONFIG] E2E Line04 CRM AG Grid 运营台（DOM 行内编辑 AI 客户管理台）"
 
-# Line04 CRM Glide 运营台 Playwright E2E
+# Line04 CRM AG Grid 运营台 Playwright E2E
 # ZenithJoy UI 死规则 → windows-latest runner。
-# Glide canvas 不可直接 read，测 DOM：搜索计数/chip 过滤/编辑面板/画像页字段。
-# page.route 拦截全部后端 API（不依赖真 DB）。
+# AG Grid DOM 渲染，直接断言单元格文字 + 行内编辑 + 点姓名导航。
 
 on:
   pull_request:
@@ -11,18 +10,18 @@ on:
     paths:
       - 'apps/dashboard/src/pages/CustomerListPage.tsx'
       - 'apps/dashboard/src/pages/CustomerProfilePage.tsx'
-      - 'apps/dashboard/e2e/crm-glide.spec.ts'
+      - 'apps/dashboard/e2e/crm-aggrid.spec.ts'
       - 'apps/dashboard/e2e/crm-customer-list.spec.ts'
-      - '.github/workflows/e2e-line04-crm-glide.yml'
+      - '.github/workflows/e2e-line04-crm-aggrid.yml'
   workflow_dispatch:
 
 concurrency:
-  group: e2e-line04-crm-glide-${{ github.ref }}
+  group: e2e-line04-crm-aggrid-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
   playwright-windows:
-    name: Playwright — CRM Glide 运营台 (Windows Chrome)
+    name: Playwright — CRM AG Grid 运营台 (Windows Chrome)
     runs-on: windows-latest
     timeout-minutes: 25
 
@@ -67,17 +66,17 @@ jobs:
           done
           curl -fs http://localhost:5174 || (echo "Vite failed to start"; exit 1)
 
-      - name: Run Playwright E2E — CRM Glide 运营台
+      - name: Run Playwright E2E — CRM AG Grid 运营台
         working-directory: apps/dashboard
         env:
           BASE_URL: 'http://localhost:5174'
-        run: npx playwright test e2e/crm-glide.spec.ts e2e/crm-customer-list.spec.ts --reporter=list
+        run: npx playwright test e2e/crm-aggrid.spec.ts e2e/crm-customer-list.spec.ts --reporter=list
 
       - name: Upload Playwright artifacts on failure
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: playwright-crm-glide-artifacts
+          name: playwright-crm-aggrid-artifacts
           path: |
             apps/dashboard/test-results/
             apps/dashboard/playwright-report/

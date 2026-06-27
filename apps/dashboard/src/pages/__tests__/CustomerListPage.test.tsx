@@ -6,34 +6,36 @@
  *  - 「立即扫好友」按钮显眼，POST /api/crm/friend-scan/trigger 用后端回的 cs_wechat_id，回显提示。
  *  - 客户列表只有客户行（姓名/状态/最后联系/接管），**不含人设名「小苏」那类客服机信息**。
  *
- * 注意（2026-06-26 Glide 重做）：
- *  CustomerListPage 现在使用 Glide DataGrid（canvas），客户名在 canvas 里不是 DOM 文本。
- *  jsdom 里需要 mock ResizeObserver（Glide 用到）。
- *  业务断言改为：等编辑面板自动选中首行（crm-customer-name button）出现，
- *  或等 crm-customer-count 反映正确计数。
+ * 注意（2026-06-27 AG Grid 重做）：
+ *  CustomerListPage 现在使用 AG Grid（DOM 渲染），不再用 Glide DataGrid canvas。
+ *  jsdom 里需要 mock ResizeObserver（AG Grid 也用到），不再需要 canvas mock。
+ *  业务断言：等 crm-force-scan-btn 出现（数据加载完成信号），
+ *  或等 ag-theme-quartz-dark 容器出现（AG Grid 渲染信号）。
  */
 import { describe, it, expect, vi, beforeEach, beforeAll } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import CustomerListPage, { crmCellIsEdit } from '../CustomerListPage';
+import CustomerListPage from '../CustomerListPage';
 
-// ── Glide DataGrid 使用 ResizeObserver，jsdom 里没有，需要 mock ──
+// ── AG Grid 需要 ResizeObserver 和 localStorage，jsdom 里没有，需要 mock ──
 beforeAll(() => {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  (window as any).ResizeObserver = class ResizeObserver {
+  (window as unknown as Record<string, unknown>).ResizeObserver = class ResizeObserver {
     observe() { /* noop */ }
     unobserve() { /* noop */ }
     disconnect() { /* noop */ }
   };
-  // Glide 也需要 HTMLCanvasElement.getContext
-  HTMLCanvasElement.prototype.getContext = vi.fn().mockReturnValue({
-    clearRect: vi.fn(), fillRect: vi.fn(), drawImage: vi.fn(),
-    scale: vi.fn(), save: vi.fn(), restore: vi.fn(),
-    beginPath: vi.fn(), moveTo: vi.fn(), lineTo: vi.fn(), stroke: vi.fn(),
-    fillText: vi.fn(), measureText: vi.fn().mockReturnValue({ width: 10, actualBoundingBoxAscent: 10, actualBoundingBoxDescent: 0 }),
-    getImageData: vi.fn().mockReturnValue({ data: new Uint8ClampedArray(4) }),
-    putImageData: vi.fn(),
-    font: '', fillStyle: '', strokeStyle: '', lineWidth: 1, globalAlpha: 1,
-    textBaseline: '', textAlign: '',
+
+  // AG Grid onGridReady 等异步回调会访问 localStorage
+  const store: Record<string, string> = {};
+  Object.defineProperty(global, 'localStorage', {
+    value: {
+      getItem: (k: string) => store[k] ?? null,
+      setItem: (k: string, v: string) => { store[k] = v; },
+      removeItem: (k: string) => { delete store[k]; },
+      clear: () => { Object.keys(store).forEach(k => delete store[k]); },
+      get length() { return Object.keys(store).length; },
+      key: (i: number) => Object.keys(store)[i] ?? null,
+    },
+    writable: true,
   });
 });
 
@@ -114,8 +116,7 @@ beforeEach(() => {
 describe('CustomerListPage [per-operator BEHAVIOR]', () => {
   it('运营登录即看自己客户：GET /customers 走普通 session fetch，无超管头、无 cs_wechat_id', async () => {
     render(<CustomerListPage />);
-    // 等编辑面板自动选中第一行（数据加载完成的信号）
-    // Glide canvas 不在 DOM，改用 crm-customer-count 等页面加载完成
+    // 等 crm-force-scan-btn 出现（数据加载完成的信号）
     await screen.findByTestId('crm-force-scan-btn');
     await waitFor(() => {
       const call = fetchCalls.find((c) => c.url.startsWith('/api/crm/customers'));
@@ -136,7 +137,7 @@ describe('CustomerListPage [per-operator BEHAVIOR]', () => {
   it('没有「选客服机」下拉——单微信直接显示客户', async () => {
     render(<CustomerListPage />);
     await screen.findByTestId('crm-force-scan-btn');
-    // Glide 重做：不再有「选客服机」下拉
+    // AG Grid 重做：不再有「选客服机」下拉
     expect(screen.queryByTestId('crm-cs-machine-select')).toBeNull();
   });
 
@@ -177,15 +178,17 @@ describe('CustomerListPage [per-operator BEHAVIOR]', () => {
     });
     await screen.findByText(/已通知客服机/);
   });
-});
 
-// ── Glide 单元格点击路由（Notion 化导航）：意向/身份列=快捷编辑，其余=进主页 ──
-describe('crmCellIsEdit — 点击路由', () => {
-  it('意向(col 2) / 身份(col 3) 列点击 → 编辑（返回 true）', () => {
-    expect(crmCellIsEdit(2)).toBe(true);
-    expect(crmCellIsEdit(3)).toBe(true);
-  });
-  it('姓名(0)/微信号(1)/加微信(4)/最近联系(5)/最后消息(6)/打开(7) 点击 → 进主页（返回 false）', () => {
-    [0, 1, 4, 5, 6, 7].forEach((c) => expect(crmCellIsEdit(c)).toBe(false));
+  it('使用 AG Grid（DOM 渲染），容器带 ag-theme-quartz-dark 类，不再有 Glide canvas 容器', async () => {
+    render(<CustomerListPage />);
+    await screen.findByTestId('crm-force-scan-btn');
+    await waitFor(() => {
+      // AG Grid 渲染：容器挂 ag-theme-quartz-dark 类
+      expect(document.querySelector('.ag-theme-quartz-dark')).not.toBeNull();
+    });
+    // Glide canvas 容器已移除
+    expect(document.querySelector('[data-testid="crm-glide-grid"]')).toBeNull();
+    // 底部编辑面板已移除（编辑改为行内操作）
+    expect(document.querySelector('[data-testid="crm-edit-panel"]')).toBeNull();
   });
 });

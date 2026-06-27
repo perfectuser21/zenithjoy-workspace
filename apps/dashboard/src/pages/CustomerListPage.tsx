@@ -1,28 +1,38 @@
 /**
- * CustomerListPage — Line04 中台 AI 客户运营台（Glide Data Grid 暗色重做）
+ * CustomerListPage — Line04 中台 AI 客户运营台（AG Grid DOM 重做 2026-06-27）
  *
  * 路由：/wechat/crm（归进「私域客服」板块；旧 /customers 301 → 此处）
  *
- * 暗色 AI 运营台：Glide Data Grid canvas 视图 + 编辑面板（HTML DOM）。
- *  - Glide canvas：视觉展示（Fraunces 标题 + Hanken Grotesk 正文 + 金色点缀 + 噪点背景）
- *  - 编辑面板（data-testid DOM）：自动选中首行，点 Glide 行切换；意向/身份下拉在此操作
+ * 暗色 AI 运营台：AG Grid Community（DOM 渲染，修 Glide canvas 点击错位）。
+ *  - AG Grid quartz-dark 主题 + 金色 CSS 变量
+ *  - 行内编辑：意向/身份双击单元格 → 下拉选择 → onCellValueChanged 写回后端
+ *  - 列偏好持久化：列宽/显隐/顺序存 localStorage（crm-col-state）
+ *  - 点姓名或「打开主页 ↗」→ navigate /wechat/crm/:contact
  *
  * **保留所有现有行为（per-operator 契约 2026-06-25）**：
  *  - session fetch credentials:include，不注入超管头
  *  - onboarding 状态条 O1-O5
  *  - 扫好友按钮 + 加客户表单
  *  - PUT /customers/status + PUT /customers/identity
- *  - 点名字导航 /wechat/crm/:contact
+ *  - 意向 A1-A5 chip 筛选 + 搜索框 quickFilterText
  *
  * **意向色阶**（A4=成交金，A5=流失暗红，语义正确）：
  *  A1 新客#7a8092 · A2 沟通中#5b8cc4 · A3 意向#8f7bd6 · A4 成交#e3b169 · A5 流失#c0594d
  *
  * 注意：这个运营台自带暗色 surface，不跟随 dashboard 全局亮暗主题切换。
  */
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import 'ag-grid-community/styles/ag-grid.css';
+import 'ag-grid-community/styles/ag-theme-quartz.css';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { DataEditor, GridCellKind, type GridColumn, type Item, type GridCell } from '@glideapps/glide-data-grid';
-import '@glideapps/glide-data-grid/dist/index.css';
+import { AgGridReact } from 'ag-grid-react';
+import type {
+  ColDef,
+  GridReadyEvent,
+  ModelUpdatedEvent,
+  CellValueChangedEvent,
+  ICellRendererParams,
+} from 'ag-grid-community';
 
 // ──────────────────────────────────────────────────────────────────────────────
 // 类型 & 常量
@@ -106,12 +116,6 @@ const ONBOARDING_STEPS: { key: keyof OnboardingState; label: string; hint: strin
 // 工具函数
 // ──────────────────────────────────────────────────────────────────────────────
 
-function fmtTime(iso: string | null): string {
-  if (!iso) return '—';
-  const d = new Date(iso);
-  return Number.isNaN(d.getTime()) ? '—' : d.toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' });
-}
-
 function fmtDate(iso: string | null): string {
   if (!iso) return '—';
   const d = new Date(iso);
@@ -126,65 +130,8 @@ function currentIdentity(row: CustomerRow): CrmIdentity {
   return row.managed ? 'customer' : 'blacklist';
 }
 
-// ──────────────────────────────────────────────────────────────────────────────
-// Glide 暗色主题
-// ──────────────────────────────────────────────────────────────────────────────
-
-const DARK_THEME = {
-  accentColor: '#e3b169',
-  accentLight: 'rgba(227,177,105,.18)',
-  textDark: '#eef0f6',
-  textMedium: '#aeb4c6',
-  textLight: '#6f7588',
-  textBubble: '#eef0f6',
-  bgIconHeader: '#aeb4c6',
-  fgIconHeader: '#14161f',
-  textHeader: '#9aa0b2',
-  textHeaderSelected: '#fff',
-  bgCell: '#14161f',
-  bgCellMedium: '#171a24',
-  bgHeader: '#101218',
-  bgHeaderHasFocus: '#191c27',
-  bgHeaderHovered: '#161924',
-  bgBubble: '#222634',
-  bgBubbleSelected: '#2d3346',
-  bgSearchResult: '#3a3320',
-  borderColor: 'rgba(35,39,52,.34)',
-  horizontalBorderColor: '#1d212c',
-  drilldownBorder: '#2d3242',
-  linkColor: '#e3b169',
-  cellHorizontalPadding: 14,
-  cellVerticalPadding: 12,
-  headerFontStyle: '600 12px',
-  baseFontStyle: '13px',
-  fontFamily: '"Hanken Grotesk","PingFang SC","Microsoft YaHei",sans-serif',
-};
-
-// ──────────────────────────────────────────────────────────────────────────────
-// Glide 列定义
-// ──────────────────────────────────────────────────────────────────────────────
-
-/**
- * Glide 单元格点击路由：意向(col 2)/身份(col 3) 列点击 = 快捷编辑那两个属性；
- * 其余所有列（姓名/微信号/加微信/最近联系/最后消息/打开）= 进客户主页。
- * 让「进主页」的点击目标尽量大、必中，符合 Notion 点行进页的直觉。
- */
-export function crmCellIsEdit(col: number): boolean {
-  return col === 2 || col === 3;
-}
-
-const COLS: GridColumn[] = [
-  { title: '姓名', id: 'name', width: 148 },
-  { title: '微信号', id: 'wx', width: 140 },
-  { title: '意向', id: 'intent', width: 112 },
-  { title: '身份', id: 'identity', width: 90 },
-  { title: '加微信', id: 'add', width: 96 },
-  { title: '最近联系', id: 'last', width: 100 },
-  { title: '最后消息', id: 'msg', width: 126 },
-  { title: '', id: 'open', width: 100 },
-];
-// 列索引：0 姓名 / 1 微信号 / 2 意向 / 3 身份 / 4 加微信 / 5 最近联系 / 6 最后消息 / 7 打开
-const OPEN_COL = 7;
+// localStorage key 存列状态偏好
+const COL_STATE_KEY = 'crm-col-state';
 
 // ──────────────────────────────────────────────────────────────────────────────
 // onboarding 圆点
@@ -220,12 +167,13 @@ export default function CustomerListPage() {
   const [newWechatId, setNewWechatId] = useState('');
   const [scanning, setScanning] = useState(false);
 
-  // 搜索 & 过滤状态
+  // 搜索 & chip 过滤状态
   const [searchQ, setSearchQ] = useState('');
   const [intentSel, setIntentSel] = useState<Set<string>>(() => new Set());
 
-  // 编辑面板：自动选中首行（auto-set when rows load，点 Glide 行切换）
-  const [editingRow, setEditingRow] = useState<CustomerRow | null>(null);
+  // AG Grid 显示计数（onModelUpdated 更新）
+  const [displayedCount, setDisplayedCount] = useState(0);
+  const gridRef = useRef<AgGridReact<CustomerRow>>(null);
 
   const flash = useCallback((msg: string) => {
     setToast(msg);
@@ -269,12 +217,6 @@ export default function CustomerListPage() {
 
   useEffect(() => { void loadCustomers(); }, [loadCustomers]);
   useEffect(() => { void loadOnboarding(csWechatId); }, [csWechatId, loadOnboarding]);
-
-  // 不再加载即自动选中首行（避免页面一打开就弹出底部编辑面板造成困惑）。
-  // 编辑面板仅在用户点击「意向」/「身份」列时出现。rows 刷新后清掉过期选中。
-  useEffect(() => {
-    setEditingRow((prev) => (prev ? rows.find((r) => r.contact === prev.contact) ?? null : null));
-  }, [rows]);
 
   const writeJson = useCallback(async (url: string, method: string, body: unknown): Promise<unknown | null> => {
     const res = await sessionFetch(url, {
@@ -339,82 +281,150 @@ export default function CustomerListPage() {
     setIntentSel(prev => { const n = new Set(prev); if (n.has(k)) { n.delete(k); } else { n.add(k); } return n; });
   }, []);
 
-  // 客户端过滤
-  const filteredRows = useMemo(() => {
-    return rows.filter(row => {
-      if (intentSel.size > 0 && !intentSel.has(row.status)) return false;
-      if (searchQ) {
-        const q = searchQ.toLowerCase();
-        const name = (row.name || row.contact).toLowerCase();
-        const wx = (row.wechat_id || '').toLowerCase();
-        if (!name.includes(q) && !wx.includes(q)) return false;
-      }
-      return true;
-    });
-  }, [rows, searchQ, intentSel]);
+  // chip 过滤（不含搜索文字，搜索交给 AG Grid quickFilterText）
+  const chipFilteredRows = useMemo(() => {
+    return rows.filter(row => intentSel.size === 0 || intentSel.has(row.status));
+  }, [rows, intentSel]);
 
-  // Glide getCellContent
-  const getCellContent = useCallback((cell: Item): GridCell => {
-    const [col, row] = cell;
-    const r = filteredRows[row];
-    if (!r) return { kind: GridCellKind.Text, data: '', displayData: '', allowOverlay: false };
+  // chip 变化时同步初始计数
+  useEffect(() => {
+    setDisplayedCount(chipFilteredRows.length);
+  }, [chipFilteredRows]);
 
-    switch (col) {
-      case 0:
-        return { kind: GridCellKind.Text, data: r.name, displayData: r.name, allowOverlay: false,
-          themeOverride: { textDark: '#ffffff', baseFontStyle: '600 13.5px' } };
-      case 1:
-        return { kind: GridCellKind.Text, data: r.wechat_id ?? '—', displayData: r.wechat_id ?? '—',
-          allowOverlay: false, themeOverride: { textDark: '#8b91a4', baseFontStyle: '12px' } };
-      case 2: {
-        const clr = STATUS_COLORS[r.status] ?? '#7a8092';
-        return { kind: GridCellKind.Text, data: r.status,
-          displayData: '● ' + STATUS_LABELS[r.status], allowOverlay: false,
-          themeOverride: { textDark: clr, baseFontStyle: '600 13px' } };
+  // ── AG Grid 事件处理 ────────────────────────────────────────────────────────
+
+  // 列偏好恢复
+  const onGridReady = useCallback((params: GridReadyEvent<CustomerRow>) => {
+    try {
+      const saved = localStorage.getItem(COL_STATE_KEY);
+      if (saved) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        params.api.applyColumnState({ state: JSON.parse(saved) as any[], applyOrder: true });
       }
-      case 3: {
-        const id = currentIdentity(r);
-        return { kind: GridCellKind.Text, data: id, displayData: IDENTITY_LABELS[id],
-          allowOverlay: false, themeOverride: { textDark: IDENTITY_COLORS[id] ?? '#aeb4c6' } };
-      }
-      case 4:
-        return { kind: GridCellKind.Text, data: fmtDate(r.add_friend_time ?? null),
-          displayData: fmtDate(r.add_friend_time ?? null), allowOverlay: false,
-          themeOverride: { textDark: '#8b91a4', baseFontStyle: '12px' } };
-      case 5:
-        return { kind: GridCellKind.Text, data: fmtDate(r.last_contact_at),
-          displayData: fmtDate(r.last_contact_at), allowOverlay: false,
-          themeOverride: { textDark: '#aeb4c6', baseFontStyle: '12px' } };
-      case 6: {
-        const hot = r.status === 'A3' || r.status === 'A4';
-        return { kind: GridCellKind.Text, data: r.last_message ?? '—',
-          displayData: r.last_message ?? '—', allowOverlay: false,
-          themeOverride: { textDark: hot ? '#e3b169' : '#6f7588', baseFontStyle: '12px' } };
-      }
-      case 7:
-        return { kind: GridCellKind.Text, data: '打开主页', displayData: '打开主页 ↗', allowOverlay: false,
-          themeOverride: { textDark: '#e3b169', baseFontStyle: '600 12.5px' } };
-      default:
-        return { kind: GridCellKind.Text, data: '', displayData: '', allowOverlay: false };
+    } catch { /* localStorage 不可用或格式损坏时忽略 */ }
+  }, []);
+
+  // 计数更新（quickFilterText 过滤后）
+  const onModelUpdated = useCallback((event: ModelUpdatedEvent<CustomerRow>) => {
+    setDisplayedCount(event.api.getDisplayedRowCount());
+  }, []);
+
+  // 列偏好保存
+  const saveColState = useCallback(() => {
+    const api = gridRef.current?.api;
+    if (!api) return;
+    try {
+      localStorage.setItem(COL_STATE_KEY, JSON.stringify(api.getColumnState()));
+    } catch { /* localStorage 不可用时忽略 */ }
+  }, []);
+
+  // 行内编辑完成 → 写回后端
+  // identity 列没有 field（用 valueGetter），靠 colDef.colId 识别
+  const onCellValueChanged = useCallback(async (event: CellValueChangedEvent<CustomerRow>) => {
+    const row = event.data;
+    if (!row) return;
+    const id = event.colDef.field ?? event.colDef.colId;
+    if (id === 'status') {
+      await onChangeStatus(row, event.newValue as CrmStatus);
+    } else if (id === 'identity') {
+      await onChangeIdentity(row, event.newValue as CrmIdentity);
     }
-  }, [filteredRows]);
+  }, [onChangeStatus, onChangeIdentity]);
 
-  // 点击路由（Notion 化）：点意向/身份列 → 快捷编辑那两个属性；
-  // 点其余任何列（姓名/微信号/加微信/最近联系/最后消息/「打开主页」）→ 直接进客户主页。
-  // 跳转目标大、必中，不用精准点中窄姓名列。
-  const onCellClicked = useCallback((cell: Item) => {
-    const [col, row] = cell;
-    const r = filteredRows[row];
-    if (!r) return;
-    if (crmCellIsEdit(col)) {
-      setEditingRow(r);
-    } else {
-      openProfile(r);
-    }
-  }, [filteredRows, openProfile]);
+  // ── AG Grid 列定义 ─────────────────────────────────────────────────────────
 
-  // ─── 今日 AI 规划统计（仅 raw rows，非 filteredRows）─────────────────────────
-  const statsToday = rows.filter(r => currentIdentity(r) !== 'internal' && ['A1','A2','A3'].includes(r.status)).length;
+  const columnDefs = useMemo<ColDef<CustomerRow>[]>(() => [
+    {
+      field: 'name',
+      colId: 'name',
+      headerName: '姓名',
+      width: 150,
+      pinned: 'left' as const,
+      cellRenderer: (p: ICellRendererParams<CustomerRow>) =>
+        `<span style="color:#fff;font-weight:600;cursor:pointer">${p.value ?? '—'}</span>`,
+      onCellClicked: (p) => { if (p.data) openProfile(p.data); },
+    },
+    {
+      field: 'wechat_id',
+      colId: 'wechat_id',
+      headerName: '微信号',
+      width: 140,
+      cellStyle: { color: '#8b91a4' },
+      valueFormatter: (p) => (p.value as string | null) ?? '—',
+    },
+    {
+      field: 'status',
+      colId: 'status',
+      headerName: '意向',
+      width: 128,
+      editable: true,
+      cellEditor: 'agSelectCellEditor',
+      cellEditorParams: { values: STATUS_OPTIONS },
+      cellRenderer: (p: ICellRendererParams<CustomerRow>) => {
+        const val = (p.value as CrmStatus) ?? 'A1';
+        const color = STATUS_COLORS[val] ?? '#7a8092';
+        const label = STATUS_LABELS[val] ?? val;
+        return `<span style="color:${color};font-weight:600">● ${label}</span>`;
+      },
+    },
+    {
+      colId: 'identity',
+      headerName: '身份',
+      width: 120,
+      editable: true,
+      cellEditor: 'agSelectCellEditor',
+      cellEditorParams: { values: IDENTITY_OPTIONS },
+      // valueGetter 把计算后的 identity 作为单元格值，供编辑器和 cellRenderer 使用
+      valueGetter: (p) => (p.data ? currentIdentity(p.data) : 'customer'),
+      cellRenderer: (p: ICellRendererParams<CustomerRow>) => {
+        const id = (p.value as CrmIdentity) ?? 'customer';
+        const color = IDENTITY_COLORS[id] ?? '#aeb4c6';
+        return `<span style="color:${color}">${IDENTITY_LABELS[id] ?? id}</span>`;
+      },
+      // identity 列没有 field，onCellValueChanged 靠 colDef.field 路由；
+      // 这里单独用 colId 标识，编辑完成由 onCellValueChanged 通过 colDef.colId 识别
+    },
+    {
+      field: 'add_friend_time',
+      colId: 'add_friend_time',
+      headerName: '加微信',
+      width: 96,
+      cellStyle: { color: '#8b91a4' },
+      valueFormatter: (p) => fmtDate(p.value as string | null),
+    },
+    {
+      field: 'last_contact_at',
+      colId: 'last_contact_at',
+      headerName: '最近联系',
+      width: 110,
+      cellStyle: { color: '#aeb4c6' },
+      valueFormatter: (p) => fmtDate(p.value as string | null),
+    },
+    {
+      field: 'last_message',
+      colId: 'last_message',
+      headerName: '最后消息',
+      width: 200,
+      cellStyle: (p) => ({
+        color: (p.data?.status === 'A3' || p.data?.status === 'A4') ? '#e3b169' : '#6f7588',
+      }),
+      valueFormatter: (p) => (p.value as string | null) ?? '—',
+    },
+    {
+      colId: 'open',
+      headerName: '',
+      width: 118,
+      sortable: false,
+      filter: false,
+      resizable: false,
+      cellRenderer: () =>
+        `<span style="color:#e3b169;font-weight:600;cursor:pointer;font-size:12.5px">打开主页 ↗</span>`,
+      onCellClicked: (p) => { if (p.data) openProfile(p.data); },
+    },
+  ], [openProfile]);
+
+  // ── 今日 AI 规划统计 ──────────────────────────────────────────────────────
+  const statsToday = rows.filter(r => currentIdentity(r) !== 'internal' && ['A1', 'A2', 'A3'].includes(r.status)).length;
   const statsHighIntent = rows.filter(r => r.status === 'A3').length;
   const statsNoContact = rows.filter(r => {
     if (!r.last_contact_at) return true;
@@ -422,7 +432,7 @@ export default function CustomerListPage() {
   }).length;
 
   // ──────────────────────────────────────────────────────────────────────────────
-  // 渲染
+  // 样式常量
   // ──────────────────────────────────────────────────────────────────────────────
 
   // 全局字体注入（Fraunces + Hanken Grotesk）
@@ -435,7 +445,6 @@ export default function CustomerListPage() {
   }, []);
 
   const S = {
-    // 页面容器：暗色全屏
     page: {
       minHeight: '100vh',
       background: `
@@ -449,8 +458,6 @@ export default function CustomerListPage() {
       position: 'relative' as const,
     },
     wrap: { maxWidth: 1280, margin: '0 auto', padding: '28px 28px 40px' },
-
-    // 顶部左侧：品牌 + 标题
     brandRow: { display: 'flex', alignItems: 'center', gap: 8, color: '#6f7588', fontSize: 12,
       letterSpacing: '.18em', textTransform: 'uppercase' as const, marginBottom: 8 },
     brandDot: { width: 7, height: 7, borderRadius: '50%', background: '#e3b169',
@@ -459,8 +466,6 @@ export default function CustomerListPage() {
       lineHeight: 1.05, margin: 0, letterSpacing: '-.01em' },
     titleEm: { fontStyle: 'italic', color: '#e3b169', fontWeight: 500 },
     sub: { color: '#aeb4c6', fontSize: 13.5, marginTop: 7, lineHeight: 1.5 },
-
-    // 今日 AI 规划卡
     planCard: { minWidth: 280, border: '1px solid #2d3242', borderRadius: 16,
       padding: '14px 18px',
       background: 'linear-gradient(160deg,rgba(227,177,105,.10),rgba(20,22,31,.4))',
@@ -473,8 +478,6 @@ export default function CustomerListPage() {
     planNumB: { fontFamily: '"Fraunces",serif', fontSize: 28, fontWeight: 600,
       display: 'block', lineHeight: 1, color: '#eef0f6' },
     planNumSpan: { fontSize: 11, color: '#6f7588', letterSpacing: '.03em' },
-
-    // 工具栏
     bar: { display: 'flex', alignItems: 'center', gap: 12, margin: '14px 0', flexWrap: 'wrap' as const },
     searchWrap: { position: 'relative' as const, flex: '0 0 260px' },
     searchInput: {
@@ -497,35 +500,11 @@ export default function CustomerListPage() {
     spacer: { flex: 1 },
     count: { color: '#6f7588', fontSize: 12.5 },
     countB: { color: '#eef0f6', fontWeight: 600 },
-
-    // Glide 容器
-    gridFrame: {
-      border: '1px solid rgba(35,39,52,.8)', borderRadius: 16, overflow: 'hidden',
-      boxShadow: '0 30px 80px -30px rgba(0,0,0,.7)', background: '#14161f',
-      height: 520,
-    },
-
-    // 编辑面板
-    editPanel: {
-      marginTop: 10, padding: '12px 16px', background: '#191c27',
-      border: '1px solid rgba(35,39,52,.6)', borderRadius: 12,
-      display: 'flex', flexWrap: 'wrap' as const, alignItems: 'center', gap: 14,
-    },
-    editLabel: { fontSize: 11, color: '#6f7588' },
-    editSelect: {
-      background: '#14161f', border: '1px solid rgba(35,39,52,.8)',
-      borderRadius: 7, padding: '5px 9px', fontSize: 13, fontFamily: 'inherit',
-      cursor: 'pointer', outline: 'none',
-    },
-
-    // onboarding 条
     onboardBar: {
       display: 'flex', flexWrap: 'wrap' as const, alignItems: 'center', gap: 14,
       margin: '10px 0', padding: '10px 14px', background: '#14161f',
       border: '1px solid rgba(35,39,52,.6)', borderRadius: 10,
     },
-
-    // 操作按钮
     btnPrimary: {
       padding: '8px 16px', borderRadius: 8, border: '1px solid #2563eb',
       background: '#2563eb', color: '#fff', fontWeight: 600, cursor: 'pointer',
@@ -536,15 +515,11 @@ export default function CustomerListPage() {
       background: '#14161f', color: '#aeb4c6', cursor: 'pointer',
       fontSize: 13, fontFamily: 'inherit',
     },
-
-    // 加客户表单
     addForm: { margin: '10px 0', display: 'flex', gap: 8 },
     addInput: {
       padding: '7px 10px', borderRadius: 8, border: '1px solid rgba(35,39,52,.8)',
       background: '#14161f', color: '#eef0f6', fontSize: 13, fontFamily: 'inherit', outline: 'none',
     },
-
-    // 图例
     legend: { display: 'flex', gap: 16, marginTop: 12, flexWrap: 'wrap' as const,
       color: '#6f7588', fontSize: 11.5 },
     legendItem: { display: 'inline-flex', alignItems: 'center', gap: 5 },
@@ -552,6 +527,37 @@ export default function CustomerListPage() {
       width: 7, height: 7, borderRadius: '50%', background: c,
     }),
   };
+
+  // AG Grid quartz-dark 主题 CSS 变量（金色运营台调色）
+  const agThemeVars: React.CSSProperties = {
+    // @ts-expect-error — CSS 自定义属性
+    '--ag-background-color': '#14161f',
+    '--ag-foreground-color': '#eef0f6',
+    '--ag-header-background-color': '#101218',
+    '--ag-header-foreground-color': '#9aa0b2',
+    '--ag-border-color': '#232734',
+    '--ag-row-border-color': '#1d212c',
+    '--ag-row-hover-color': '#191c27',
+    '--ag-selected-row-background-color': 'rgba(227,177,105,.10)',
+    '--ag-accent-color': '#e3b169',
+    '--ag-input-focus-border-color': '#e3b169',
+    '--ag-odd-row-background-color': '#14161f',
+    '--ag-font-family': '"Hanken Grotesk","PingFang SC",sans-serif',
+    '--ag-font-size': '13px',
+    '--ag-header-height': '44px',
+    '--ag-row-height': '46px',
+    '--ag-border-radius': '14px',
+    '--ag-wrapper-border-radius': '16px',
+    border: '1px solid #232734',
+    borderRadius: 16,
+    overflow: 'hidden',
+    boxShadow: '0 30px 80px -30px rgba(0,0,0,.7)',
+    height: 520,
+  };
+
+  // ──────────────────────────────────────────────────────────────────────────────
+  // 渲染
+  // ──────────────────────────────────────────────────────────────────────────────
 
   return (
     <div style={S.page}>
@@ -566,7 +572,7 @@ export default function CustomerListPage() {
             <h1 style={S.title}>
               AI 客户<em style={S.titleEm}>运营台</em>
             </h1>
-            <p style={S.sub}>不是给人看的客户表 —— 是 AI 读取、按 A1–A5 规划下一步动作的工作面。</p>
+            <p style={S.sub}>双击意向/身份可直接编辑 · 拖动列边调宽 · 点列▾ 隐藏列 · 点姓名进主页。</p>
           </div>
           <div style={S.planCard}>
             <h3 style={S.planTitle}>
@@ -655,7 +661,7 @@ export default function CustomerListPage() {
           </div>
         )}
 
-        {/* ── 搜索 + 过滤 Toolbar ── */}
+        {/* ── 搜索 + chip 过滤 Toolbar ── */}
         <div style={S.bar}>
           <div style={S.searchWrap}>
             <svg style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)',
@@ -687,103 +693,42 @@ export default function CustomerListPage() {
           </div>
           <div style={S.spacer} />
           <div style={S.count}>
-            <b data-testid="crm-customer-count" style={S.countB}>{filteredRows.length}</b>{' '}
+            <b data-testid="crm-customer-count" style={S.countB}>{displayedCount}</b>{' '}
             位客户
           </div>
         </div>
 
-        {/* ── Glide Data Grid ── */}
+        {/* ── AG Grid ── */}
         {loading ? (
           <div style={{ color: '#6f7588', padding: '32px 0', textAlign: 'center' }}>加载中…</div>
         ) : error && !authExpired ? (
           <div role="alert" style={{ color: '#f87171', padding: '16px 0' }}>错误：{error}</div>
-        ) : filteredRows.length === 0 ? (
+        ) : chipFilteredRows.length === 0 ? (
           <div data-testid="crm-empty" style={{ color: '#6f7588', padding: '32px 0', textAlign: 'center' }}>
             暂无好友。等客服机 agent 扫一轮后自动出现，或点「扫一遍微信好友导入客户」立刻扫，
             或点「＋加客户」手动入册。
           </div>
         ) : (
-          <div data-testid="crm-glide-grid" style={S.gridFrame}>
-            <DataEditor
-              columns={COLS}
-              rows={filteredRows.length}
-              getCellContent={getCellContent}
-              onCellClicked={onCellClicked}
-              theme={DARK_THEME}
-              width="100%"
-              height="100%"
+          <div
+            className="ag-theme-quartz-dark"
+            style={agThemeVars}
+          >
+            <AgGridReact<CustomerRow>
+              ref={gridRef}
+              rowData={chipFilteredRows}
+              columnDefs={columnDefs}
+              defaultColDef={{ resizable: true, sortable: true, filter: true }}
               rowHeight={46}
-              headerHeight={42}
-              smoothScrollX
-              smoothScrollY
-              rowMarkers="none"
-              verticalBorder={false}
-              getCellsForSelection
+              animateRows={true}
+              quickFilterText={searchQ}
+              onGridReady={onGridReady}
+              onModelUpdated={onModelUpdated}
+              onCellValueChanged={(e) => void onCellValueChanged(e)}
+              onColumnResized={saveColState}
+              onColumnVisible={saveColState}
+              onColumnMoved={saveColState}
+              suppressMovableColumns={false}
             />
-          </div>
-        )}
-
-        {/* ── 编辑面板（DOM，自动选中首行；点 Glide 行切换）── */}
-        {editingRow && !loading && (
-          <div data-testid="crm-edit-panel" style={S.editPanel}>
-            {/* 字母头像 */}
-            <div style={{
-              width: 34, height: 34, borderRadius: '50%', flexShrink: 0,
-              background: STATUS_COLORS[editingRow.status] ?? '#7a8092',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontSize: 15, fontWeight: 700, color: '#0c0d11',
-            }}>
-              {(editingRow.name || editingRow.contact).charAt(0)}
-            </div>
-            {/* 名字 + 微信号 + 加微信时间 */}
-            <div>
-              <button
-                type="button"
-                data-testid="crm-customer-name"
-                onClick={() => openProfile(editingRow)}
-                style={{ background: 'none', border: 'none', cursor: 'pointer',
-                  color: '#e3b169', fontWeight: 600, fontSize: 14, padding: 0, fontFamily: 'inherit' }}
-                title="点开看画像 / 状态 / 聊天记录"
-              >
-                {editingRow.name || editingRow.contact}
-              </button>
-              <div style={{ fontSize: 11, color: '#6f7588', marginTop: 2 }}>
-                <span data-testid="crm-customer-wechat-id">{editingRow.wechat_id || '—'}</span>
-                <span style={{ margin: '0 5px' }}>·</span>
-                <span data-testid="crm-customer-add-friend-time">{fmtTime(editingRow.add_friend_time ?? null)}</span>
-              </div>
-            </div>
-            {/* 意向下拉 */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-              <label style={S.editLabel}>意向</label>
-              <select
-                data-testid="crm-status-select"
-                value={editingRow.status}
-                onChange={e => void onChangeStatus(editingRow, e.target.value as CrmStatus)}
-                style={{ ...S.editSelect, color: STATUS_COLORS[editingRow.status] ?? '#aeb4c6' }}
-              >
-                {STATUS_OPTIONS.map(s => (
-                  <option key={s} value={s}>{STATUS_LABELS[s]}</option>
-                ))}
-              </select>
-            </div>
-            {/* 身份下拉 */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-              <label style={S.editLabel}>身份</label>
-              <select
-                data-testid="crm-identity-select"
-                value={currentIdentity(editingRow)}
-                onChange={e => void onChangeIdentity(editingRow, e.target.value as CrmIdentity)}
-                style={{ ...S.editSelect, color: IDENTITY_COLORS[currentIdentity(editingRow)] ?? '#aeb4c6' }}
-              >
-                {IDENTITY_OPTIONS.map(opt => (
-                  <option key={opt} value={opt}>{IDENTITY_LABELS[opt]}</option>
-                ))}
-              </select>
-            </div>
-            <div style={{ ...S.editLabel, marginLeft: 'auto' }}>
-              点击上方表格行可切换编辑对象
-            </div>
           </div>
         )}
 
@@ -795,6 +740,15 @@ export default function CustomerListPage() {
               {STATUS_LABELS[k]}
             </i>
           ))}
+        </div>
+
+        {/* ── 使用提示 ── */}
+        <div style={{ marginTop: 12, color: '#6f7588', fontSize: 12, lineHeight: 1.7 }}>
+          <b style={{ color: '#caa15f' }}>使用：</b>
+          ① 拖动列边调宽 ·
+          ② 点表头排序 ·
+          ③ 双击「意向」「身份」单元格行内编辑（自动保存）·
+          ④ 点姓名或「打开主页 ↗」进客户画像页
         </div>
       </div>
     </div>

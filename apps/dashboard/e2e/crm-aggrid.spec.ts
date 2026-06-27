@@ -1,13 +1,14 @@
 /**
- * crm-glide.spec.ts — Line04 CRM Glide 运营台 UI E2E（windows_cloud，VITE_SKIP_AUTH）
+ * crm-aggrid.spec.ts — Line04 CRM AG Grid 运营台 UI E2E（windows_cloud，VITE_SKIP_AUTH）
  *
- * Glide 是 canvas：不能直接 read 单元格文字。测策略：
- *  1. 搜索框 → 「N 位客户」计数（DOM data-testid）变化
- *  2. 意向 chip 过滤 → 计数变化
- *  3. 编辑面板（DOM，自动选中首行）→ 状态/身份下拉可见，可改值
- *  4. 点客户名导航到画像页 → 画像页卡片字段是真 DOM
+ * AG Grid 是 DOM 渲染：可直接 read 单元格文字（不再需要绕过 canvas）。测策略：
+ *  1. 客户名直接出现在 .ag-cell DOM（AG Grid 不用 canvas）
+ *  2. 搜索框 quickFilterText → 「N 位客户」计数（DOM data-testid）变化
+ *  3. 意向 chip 过滤 → 计数变化
+ *  4. 点姓名单元格 → navigate /wechat/crm/:contact（画像页 DOM）
+ *  5. 双击意向单元格 → ag-select 行内编辑 → PUT /status
  *
- * 运行：npx playwright test e2e/crm-glide.spec.ts
+ * 运行：npx playwright test e2e/crm-aggrid.spec.ts
  */
 import { test, expect, type Page } from '@playwright/test';
 
@@ -85,7 +86,18 @@ async function stubCrmApis(page: Page) {
   );
 }
 
-test('Glide 运营台 — 搜索框过滤「N 位客户」计数变化', async ({ page }) => {
+test('AG Grid 运营台 — 客户名出现在 DOM（非 canvas）', async ({ page }) => {
+  await stubCrmApis(page);
+  await page.goto(`${BASE_URL}/wechat/crm`);
+  await page.waitForLoadState('networkidle');
+
+  // AG Grid DOM 渲染：可直接断言客户名文字（Glide canvas 做不到）
+  await expect(page.locator('.ag-cell[col-id="name"]').first()).toContainText('张三', { timeout: 10000 });
+  await expect(page.locator('.ag-cell[col-id="name"]').nth(1)).toContainText('李四');
+  await expect(page.locator('.ag-cell[col-id="name"]').nth(2)).toContainText('王五');
+});
+
+test('AG Grid 运营台 — 搜索框 quickFilterText 过滤「N 位客户」计数变化', async ({ page }) => {
   await stubCrmApis(page);
   await page.goto(`${BASE_URL}/wechat/crm`);
   await page.waitForLoadState('networkidle');
@@ -102,7 +114,7 @@ test('Glide 运营台 — 搜索框过滤「N 位客户」计数变化', async (
   await expect(page.getByTestId('crm-customer-count')).toContainText('3', { timeout: 5000 });
 });
 
-test('Glide 运营台 — A4 意向 chip 过滤', async ({ page }) => {
+test('AG Grid 运营台 — A4 意向 chip 过滤', async ({ page }) => {
   await stubCrmApis(page);
   await page.goto(`${BASE_URL}/wechat/crm`);
   await page.waitForLoadState('networkidle');
@@ -119,7 +131,7 @@ test('Glide 运营台 — A4 意向 chip 过滤', async ({ page }) => {
   await expect(page.getByTestId('crm-customer-count')).toContainText('3', { timeout: 5000 });
 });
 
-test('Glide 运营台 — 编辑面板自动选中首行，可改状态', async ({ page }) => {
+test('AG Grid 运营台 — 双击意向单元格行内编辑，写回 PUT /status', async ({ page }) => {
   await stubCrmApis(page);
 
   let statusBody: unknown = null;
@@ -134,24 +146,35 @@ test('Glide 运营台 — 编辑面板自动选中首行，可改状态', async 
   await page.goto(`${BASE_URL}/wechat/crm`);
   await page.waitForLoadState('networkidle');
 
-  // 编辑面板自动选中首行（张三），状态/身份 select 可见
-  await expect(page.getByTestId('crm-status-select')).toBeVisible({ timeout: 8000 });
-  await expect(page.getByTestId('crm-identity-select')).toBeVisible();
+  // 等 AG Grid 行渲染
+  await expect(page.locator('.ag-cell[col-id="name"]').first()).toContainText('张三', { timeout: 10000 });
 
-  // 修改状态 A3 → 调 PUT /status → toast 显示保存成功
-  await page.getByTestId('crm-status-select').selectOption('A3');
+  // 双击意向单元格（第一行，张三，当前 A1）
+  await page.locator('.ag-cell[col-id="status"]').first().dblclick();
+
+  // AG Grid select 编辑器出现
+  const selectEditor = page.locator('.ag-select-cell-editor select, .ag-cell-editor select, select.ag-select__native-select');
+  await expect(selectEditor).toBeVisible({ timeout: 5000 });
+  await selectEditor.selectOption('A3');
+
+  // 按 Tab 确认（触发 onCellValueChanged）
+  await page.keyboard.press('Tab');
+
+  // PUT /status 被调用，toast 回显
+  await waitFor(() => expect(statusBody).toMatchObject({ contact: '张三', status: 'A3' }), page);
   await expect(page.getByTestId('crm-toast')).toContainText('保存成功', { timeout: 8000 });
-  expect(statusBody).toMatchObject({ contact: '张三', status: 'A3' });
 });
 
-test('Glide 运营台 — 点编辑面板客户名导航到画像页', async ({ page }) => {
+test('AG Grid 运营台 — 点姓名单元格导航到画像页', async ({ page }) => {
   await stubCrmApis(page);
   await page.goto(`${BASE_URL}/wechat/crm`);
   await page.waitForLoadState('networkidle');
 
-  // 编辑面板自动显示第一行（张三），点名字跳转画像
-  await expect(page.getByTestId('crm-customer-name')).toBeVisible({ timeout: 8000 });
-  await page.getByTestId('crm-customer-name').click();
+  // 等 AG Grid 行渲染
+  await expect(page.locator('.ag-cell[col-id="name"]').first()).toContainText('张三', { timeout: 10000 });
+
+  // 点姓名单元格（onCellClicked → openProfile → navigate）
+  await page.locator('.ag-cell[col-id="name"]').first().click();
   await page.waitForLoadState('networkidle');
   await expect(page).toHaveURL(/\/wechat\/crm\/.+/);
   await expect(page.getByTestId('crm-profile-name')).toContainText('张三');
@@ -163,7 +186,7 @@ test('画像页暗色皮肤 — AI 画像卡片字段 DOM 断言', async ({ page
   await page.goto(`${BASE_URL}/wechat/crm/%E5%BC%A0%E4%B8%89`);
   await page.waitForLoadState('networkidle');
 
-  // 画像页各卡片 DOM 可访问（不依赖 canvas）
+  // 画像页各卡片 DOM 可访问
   await expect(page.getByTestId('crm-profile-name')).toContainText('张三');
   await expect(page.getByTestId('crm-profile-basic')).toBeVisible();
   await expect(page.getByTestId('crm-profile-portrait')).toBeVisible();
@@ -178,3 +201,13 @@ test('画像页暗色皮肤 — AI 画像卡片字段 DOM 断言', async ({ page
   await expect(page.getByTestId('crm-chat-bubble')).toHaveCount(2);
   await expect(page.getByTestId('crm-chat-bubble').first()).toContainText('你们这个多少钱');
 });
+
+// 辅助函数：在 Playwright 里 "waitFor" 式断言
+async function waitFor(fn: () => void, page: Page, timeout = 8000) {
+  const start = Date.now();
+  while (Date.now() - start < timeout) {
+    try { fn(); return; } catch { /* retry */ }
+    await page.waitForTimeout(200);
+  }
+  fn(); // 最后一次，让错误抛出
+}
