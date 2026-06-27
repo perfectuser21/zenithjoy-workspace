@@ -18,8 +18,7 @@ import CustomerListPage from '../CustomerListPage';
 
 // ── AG Grid 使用 ResizeObserver，jsdom 里没有，需要 mock ──
 beforeAll(() => {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  (window as any).ResizeObserver = class ResizeObserver {
+  (window as unknown as Record<string, unknown>).ResizeObserver = class ResizeObserver {
     observe() { /* noop */ }
     unobserve() { /* noop */ }
     disconnect() { /* noop */ }
