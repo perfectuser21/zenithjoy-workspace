@@ -8,7 +8,7 @@
  *  - 行内编辑：意向/身份双击单元格 → 下拉选择 → onCellValueChanged 写回后端
  *  - 列偏好持久化：服务端（GET/PUT /api/crm/view-prefs）按账号存储，多视图扩展结构
  *    onGridReady 恢复列宽/顺序/排序/筛选/quickFilter；变更 debounce 600ms 写回
- *  - 点姓名或「打开主页 ↗」→ navigate /wechat/crm/:contact
+ *  - 点姓名 → navigate /wechat/crm/:contact
  *
  * **保留所有现有行为（per-operator 契约 2026-06-25）**：
  *  - session fetch credentials:include，不注入超管头
@@ -76,7 +76,7 @@ const IDENTITY_COLORS: Record<CrmIdentity, string> = {
   blacklist: '#d4685f',
 };
 
-// 「列 ▾」菜单可勾选显隐的列（不含「打开主页」操作列）
+// 「列 ▾」菜单可勾选显隐的列
 const COL_TOGGLES: { colId: string; label: string }[] = [
   { colId: 'name', label: '姓名' },
   { colId: 'wechat_id', label: '微信号' },
@@ -554,18 +554,6 @@ export default function CustomerListPage() {
       }),
       valueFormatter: (p) => (p.value as string | null) ?? '—',
     },
-    {
-      colId: 'open',
-      headerName: '',
-      width: 118,
-      sortable: false,
-      filter: false,
-      resizable: false,
-      cellRenderer: () => (
-        <span style={{ color: '#e3b169', fontWeight: 600, cursor: 'pointer', fontSize: 12.5 }}>打开主页 ↗</span>
-      ),
-      onCellClicked: (p) => { if (p.data) openProfile(p.data); },
-    },
   ], [openProfile]);
 
   // ── 今日 AI 规划统计 ──────────────────────────────────────────────────────
@@ -939,7 +927,7 @@ export default function CustomerListPage() {
           ① 拖动列边调宽 ·
           ② 点表头排序 ·
           ③ 双击「意向」「身份」单元格行内编辑（自动保存）·
-          ④ 点姓名或「打开主页 ↗」进客户画像页
+          ④ 点姓名进客户画像页
         </div>
       </div>
     </div>
