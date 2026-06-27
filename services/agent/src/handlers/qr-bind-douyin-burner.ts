@@ -9,11 +9,17 @@
 //   - 上报：{ ok, sessionPath, cookie_local_path, qr_login, account_nickname }
 //
 // 与 Path 1 主号的物理隔离 — handler 不 import './qr-bind-douyin'，路径互不相交。
+//
+// 注：生产路径通过 spawn publishers/qr-bind-douyin-burner.cjs 实现，
+//     绕过 pkg 二进制内 require('playwright')/import('playwright-core') 在 Node 18+ 的
+//     "Invalid host defined options" 崩溃（真机打包版上一直崩，binary 内 dynamic import
+//     playwright-core 也崩；唯一能跑通的是 spawn 外部 .cjs 从真实文件系统 require）。
+//     测试路径（options.chromiumLauncher 注入）仍走内部逻辑，保持单元测试可控。
 
 import path from 'node:path';
 import os from 'node:os';
 import fs from 'node:fs';
-import { loadChromium } from '../shared/playwright-launcher';
+import { spawn } from 'node:child_process';
 
 export interface QrBindDouyinBurnerPayload {
   account_label: string;
@@ -87,11 +93,66 @@ function getBurnerUserDataDir(accountLabel: string, root?: string): string {
   );
 }
 
-// 共享底座：优先 playwright-core（包里打进的那个），失败回退 playwright；
-// 打包真机 .exe 不再报「playwright 未安装」（旧版直接 import('playwright')，完整包没进 pkg）。
-async function loadDefaultLauncher(): Promise<ChromiumLauncher> {
-  const chromium = await loadChromium();
-  return chromium as unknown as ChromiumLauncher;
+// 解析外部脚本路径（与 qr-bind-operator.ts 相同的查找逻辑）
+export function resolveBurnerScript(): string {
+  // pkg 场景：脚本与 .exe 同目录的 publishers/
+  const beside = path.join(path.dirname(process.execPath), 'publishers', 'qr-bind-douyin-burner.cjs');
+  if (fs.existsSync(beside)) return beside;
+  // 开发场景：从 __dirname 推导（src/handlers → ../../publishers）
+  const dev = path.resolve(__dirname, '..', '..', 'publishers', 'qr-bind-douyin-burner.cjs');
+  return dev;
+}
+
+function resolveNodeExe(): string {
+  const env = process.env.ZJ_NODE_EXE;
+  if (env && fs.existsSync(env)) return env;
+  return 'node';
+}
+
+// 生产路径：spawn 外部 Node.js 进程跑 .cjs（绕过 pkg+playwright 崩溃），读最后一行 JSON 当结果。
+async function spawnBurnerProcess(
+  accountLabel: string,
+  sessionDir: string,
+  userDataDirRoot: string,
+  timeoutMs: number,
+  fallbackSessionPath: string,
+): Promise<QrBindDouyinBurnerResult> {
+  const scriptPath = resolveBurnerScript();
+  const nodeExe = resolveNodeExe();
+  const args = [scriptPath, accountLabel, sessionDir, userDataDirRoot, String(timeoutMs)];
+
+  return new Promise<QrBindDouyinBurnerResult>((resolve) => {
+    let stdout = '';
+    const proc = spawn(nodeExe, args, {
+      env: { ...process.env },
+      timeout: timeoutMs + 15000,
+    });
+    proc.stdout.on('data', (d: Buffer) => { stdout += d.toString(); });
+    proc.stderr.on('data', (d: Buffer) => {
+      console.log('[qr-bind-douyin-burner]', d.toString().trimEnd());
+    });
+    proc.on('close', () => {
+      const lastLine = stdout.trim().split('\n').filter(Boolean).pop() ?? '';
+      try {
+        resolve(JSON.parse(lastLine) as QrBindDouyinBurnerResult);
+      } catch {
+        resolve({
+          ok: false,
+          sessionPath: fallbackSessionPath,
+          qr_login: 'failed',
+          error: `result parse failed: ${lastLine || '(no output)'}`,
+        });
+      }
+    });
+    proc.on('error', (err: Error) => {
+      resolve({
+        ok: false,
+        sessionPath: fallbackSessionPath,
+        qr_login: 'failed',
+        error: `spawn failed: ${err.message}`,
+      });
+    });
+  });
 }
 
 export async function handleQrBindDouyinBurner(
@@ -108,21 +169,27 @@ export async function handleQrBindDouyinBurner(
   }
 
   const sessionPath = getBurnerSessionPath('douyin', accountLabel, options.sessionDir);
+
+  // 生产路径：spawn 外部 .cjs（绕过 pkg+playwright 崩溃）。
+  // 测试路径：注入 chromiumLauncher 时走下方内部逻辑。
+  if (!options.chromiumLauncher) {
+    const COOKIE_POLL_TIMEOUT_MS = 600000; // 10 分钟，与内部逻辑一致
+    return spawnBurnerProcess(
+      accountLabel,
+      options.sessionDir ?? path.join(os.homedir(), DEFAULT_SESSION_DIR_NAME, 'sessions'),
+      options.userDataDirRoot ?? '',
+      COOKIE_POLL_TIMEOUT_MS,
+      sessionPath,
+    );
+  }
+
+  // ── 以下为测试专用内部路径（options.chromiumLauncher 注入）──
   const userDataDir = getBurnerUserDataDir(accountLabel, options.userDataDirRoot);
   const loginUrl = options.loginUrl ?? 'https://creator.douyin.com/';
   const channel = options.channel ?? 'msedge';
   const headless = options.headless ?? false; // 真扫码需要 user 看见浏览器；headless true 仅 lead 自验有桌面
 
-  let launcher: ChromiumLauncher;
-  try {
-    launcher = options.chromiumLauncher ?? (await loadDefaultLauncher());
-  } catch (err) {
-    return {
-      ok: false,
-      sessionPath,
-      error: err instanceof Error ? err.message : String(err),
-    };
-  }
+  const launcher: ChromiumLauncher = options.chromiumLauncher;
 
   // 确保 user-data-dir + sessionPath 父目录存在
   try {
