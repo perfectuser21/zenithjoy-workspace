@@ -58,13 +58,15 @@ router.get('/', async (req: Request, res: Response) => {
 
   const r = await pool.query(
     `SELECT a.id, a.agent_id, a.hostname, a.nickname, a.machine_role,
-            a.status, a.version, a.last_seen,
+            CASE WHEN a.last_seen > NOW() - INTERVAL '3 minutes'
+                 THEN 'online' ELSE 'offline' END AS status,
+            a.version, a.last_seen,
             COUNT(s.id) AS session_count
        FROM zenithjoy.agents a
        LEFT JOIN zenithjoy.agent_platform_sessions s ON s.agent_id = a.id
       WHERE a.tenant_id = $1
       GROUP BY a.id
-      ORDER BY (a.status = 'online') DESC, a.hostname ASC`,
+      ORDER BY (a.last_seen > NOW() - INTERVAL '3 minutes') DESC, a.hostname ASC`,
     [tenantId],
   );
 

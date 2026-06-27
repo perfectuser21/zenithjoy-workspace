@@ -63,11 +63,12 @@ heartbeatRouter.post(
   '/heartbeat',
   licenseAuth,
   async (req: Request, res: Response) => {
-    const { version, hostname, os_type, module_status } = (req.body ?? {}) as {
+    const { version, hostname, os_type, module_status, agent_uuid } = (req.body ?? {}) as {
       version?: unknown;
       hostname?: unknown;
       os_type?: unknown;
       module_status?: unknown;
+      agent_uuid?: unknown;
     };
     const lic = req.license!;
     if (!lic.tenant_id) {
@@ -86,6 +87,10 @@ heartbeatRouter.post(
         hostname: typeof hostname === 'string' ? hostname.slice(0, 200) : null,
         version: typeof version === 'string' ? version.slice(0, 50) : null,
         osType: typeof os_type === 'string' ? os_type.slice(0, 20) : null,
+        // agent_uuid 由 cp-06270030 起 Agent 在心跳 body 中携带；
+        // 传入后 service 侧按 WHERE id=$agentUuid 精确更新，跳过 (license_id, hostname) 去重，
+        // 防止 hostname=null 时新建 ws1- 幽灵行。
+        agentUuid: typeof agent_uuid === 'string' ? agent_uuid : undefined,
       });
       // 客户端上报的 module_status（per-Line preflight 结果）→ 持久化最新一份
       const normalized = normalizeModuleStatus(module_status);
