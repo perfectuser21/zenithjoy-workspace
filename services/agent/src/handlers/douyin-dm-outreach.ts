@@ -13,8 +13,8 @@
 // 与 qr-bind-douyin-burner 物理隔离一致：burner profile 用同一 user-data-dir 约定。
 
 import path from 'node:path';
-import os from 'node:os';
-import { loadChromium } from '../shared/playwright-launcher';
+import fs from 'node:fs';
+import { spawn } from 'node:child_process';
 
 /** 触达三态：sent=已发出 / limited=仅互关受限 / failed=失败 */
 export type DmStatus = 'sent' | 'limited' | 'failed';
@@ -37,7 +37,7 @@ export interface DmOutreachResult {
 /**
  * handler 真正驱动的页面抽象。
  * - 单测注入 fake page（只实现这 6 个方法）。
- * - 真机由 createRealDmPage 把 Playwright page 包成此接口。
+ * - 真机路径由外部 .cjs 独立进程承担（spawn 生产路径）。
  */
 export interface DmPage {
   url(): string;
@@ -73,21 +73,6 @@ export function mapDmStatusToFeishu(status: DmStatus): string {
   }
 }
 
-/** burner profile user-data-dir，与 qr-bind-douyin-burner getBurnerUserDataDir 同约定 */
-function getBurnerUserDataDir(accountLabel: string, root?: string): string {
-  if (root) return path.join(root, accountLabel);
-  if (process.platform === 'win32') {
-    return path.join('C:\\Temp', 'zj-douyin-burner-v1', accountLabel);
-  }
-  return path.join(
-    os.homedir(),
-    '.zenithjoy-agent',
-    'chrome-profile',
-    'douyin-burner',
-    accountLabel,
-  );
-}
-
 /**
  * 核心编排：只调用 DmPage 6 个方法，单测 / 真机共用同一判定逻辑。
  *   点私信 → 失败=limited；可点 → 输入 → 回车 → 看气泡 → sent，否则 failed。
@@ -105,19 +90,12 @@ export async function handleDouyinDmOutreach(
     return { ok: false, status: 'failed', account_label, profile_url, error_code: 'MISSING_MESSAGE', error: 'message 必填' };
   }
 
-  let page: DmPage;
-  try {
-    page = options.page ?? (await createRealDmPage(payload, options));
-  } catch (err) {
-    return {
-      ok: false,
-      status: 'failed',
-      account_label,
-      profile_url,
-      error_code: 'PAGE_LAUNCH_FAILED',
-      error: err instanceof Error ? err.message : String(err),
-    };
+  // 生产路径：无注入 page → spawn 外部 .cjs（完整三态编排在 .cjs 内，绕 pkg+playwright 崩溃）。
+  // 测试路径：注入 page → 走下方内部三态编排（保旧单测绿）。
+  if (!options.page) {
+    return spawnDmOutreachProcess(payload, options);
   }
+  const page: DmPage = options.page;
 
   try {
     await page.goto(profile_url);
@@ -149,99 +127,43 @@ export async function handleDouyinDmOutreach(
   }
 }
 
-/**
- * 真机：把已登录 burner Chrome 的 Playwright page 包成 DmPage。
- * 仅 xian-pc 真机手验路径走到这里；CI/单测都注入 fake page，不触达此函数。
- * 选择器对齐抖音 Semi UI：私信按钮 semi-button-second + contenteditable 输入框 + Enter。
- */
-async function createRealDmPage(
+// 解析外部脚本路径（与 qr-bind-douyin-burner resolveBurnerScript 同款查找）
+export function resolveDmOutreachScript(): string {
+  const beside = path.join(path.dirname(process.execPath), 'publishers', 'douyin-dm-outreach.cjs');
+  if (fs.existsSync(beside)) return beside;
+  return path.resolve(__dirname, '..', '..', 'publishers', 'douyin-dm-outreach.cjs');
+}
+
+function resolveNodeExe(): string {
+  const env = process.env.ZJ_NODE_EXE;
+  if (env && fs.existsSync(env)) return env;
+  return 'node';
+}
+
+// 生产路径：spawn 外部 Node 进程跑 .cjs，读末行 JSON 当结果。
+function spawnDmOutreachProcess(
   payload: DmOutreachPayload,
   options: DmOutreachOptions,
-): Promise<DmPage> {
-  // 共享底座：优先 playwright-core（包里打进的那个），失败回退 playwright；
-  // 打包真机 .exe 不再报「playwright 未安装」（旧版 import('playwright') 完整包没进 pkg）。
-  const chromium = (await loadChromium()) as unknown as {
-    launchPersistentContext(
-      dir: string,
-      opts?: { channel?: string; headless?: boolean },
-    ): Promise<RealContext>;
-  };
+): Promise<DmOutreachResult> {
+  const scriptPath = resolveDmOutreachScript();
+  const nodeExe = resolveNodeExe();
+  const args = [scriptPath, payload.profile_url, payload.message, payload.account_label, options.userDataDirRoot ?? ''];
 
-  const userDataDir = getBurnerUserDataDir(payload.account_label, options.userDataDirRoot);
-  const ctx = await chromium.launchPersistentContext(userDataDir, {
-    channel: options.channel ?? 'msedge',
-    headless: options.headless ?? false,
-  });
-  const pages = ctx.pages();
-  const pwPage: RealPage = pages.length > 0 ? pages[0] : await ctx.newPage();
-
-  // 抖音私信按钮（Semi UI）：href 含 /message 或 button 文本「私信」
-  const DM_BUTTON_SELECTORS = [
-    'button.semi-button-secondary:has-text("私信")',
-    'button:has-text("私信")',
-    'a[href*="/message"]',
-  ];
-  const EDITOR_SELECTOR = 'div[contenteditable="true"]';
-
-  return {
-    url: () => pwPage.url(),
-    goto: async (url: string) => {
-      await pwPage.goto(url, { waitUntil: 'domcontentloaded' });
-      // 模拟滑动 + 随机停留，降低风控
-      await pwPage.mouse?.wheel?.(0, 600).catch(() => undefined);
-      await new Promise((r) => setTimeout(r, 1500 + Math.floor(payload.message.length % 5) * 300));
-    },
-    clickDmButton: async () => {
-      for (const sel of DM_BUTTON_SELECTORS) {
-        const loc = pwPage.locator(sel).first();
-        try {
-          if ((await loc.count()) > 0 && (await loc.isEnabled())) {
-            await loc.click({ timeout: 5000 });
-            return true;
-          }
-        } catch {
-          // 该 selector 不可点，试下一个
-        }
-      }
-      return false; // 没有可点私信按钮 = 仅互关受限
-    },
-    typeMessage: async (text: string) => {
-      const editor = pwPage.locator(EDITOR_SELECTOR).first();
-      await editor.click({ timeout: 5000 });
-      await editor.fill(text);
-    },
-    pressEnter: async () => {
-      await pwPage.keyboard.press('Enter');
-    },
-    hasMessageBubble: async (text: string) => {
+  return new Promise<DmOutreachResult>((resolve) => {
+    let stdout = '';
+    const proc = spawn(nodeExe, args, { env: { ...process.env } });
+    proc.stdout.on('data', (d: Buffer) => { stdout += d.toString(); });
+    proc.stderr.on('data', (d: Buffer) => { console.log('[douyin-dm-outreach]', d.toString().trimEnd()); });
+    proc.on('close', () => {
+      const lastLine = stdout.trim().split('\n').filter(Boolean).pop() ?? '';
       try {
-        const bubble = pwPage.locator(`text=${text}`).first();
-        await bubble.waitFor({ state: 'visible', timeout: 5000 });
-        return true;
+        resolve(JSON.parse(lastLine) as DmOutreachResult);
       } catch {
-        return false;
+        resolve({ ok: false, status: 'failed', account_label: payload.account_label, profile_url: payload.profile_url, error_code: 'SPAWN_PARSE_FAILED', error: `result parse failed: ${lastLine || '(no output)'}` });
       }
-    },
-  };
-}
-
-// ── 真机 Playwright 最小类型（避免硬依赖 playwright 类型；真机才用到）──
-interface RealLocator {
-  first(): RealLocator;
-  count(): Promise<number>;
-  isEnabled(): Promise<boolean>;
-  click(opts?: { timeout?: number }): Promise<void>;
-  fill(text: string): Promise<void>;
-  waitFor(opts?: { state?: string; timeout?: number }): Promise<void>;
-}
-interface RealPage {
-  url(): string;
-  goto(url: string, opts?: { waitUntil?: string }): Promise<unknown>;
-  locator(sel: string): RealLocator;
-  keyboard: { press(key: string): Promise<void> };
-  mouse?: { wheel?(x: number, y: number): Promise<void> };
-}
-interface RealContext {
-  pages(): RealPage[];
-  newPage(): Promise<RealPage>;
+    });
+    proc.on('error', (err: Error) => {
+      resolve({ ok: false, status: 'failed', account_label: payload.account_label, profile_url: payload.profile_url, error_code: 'SPAWN_FAILED', error: `spawn failed: ${err.message}` });
+    });
+  });
 }
