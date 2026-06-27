@@ -119,6 +119,51 @@ describe('CoreUpgrader', () => {
     expect(exitImpl).toHaveBeenCalledTimes(1);
   });
 
+  // ── 身份统一（cp-06270030）：自升级必须把 %APPDATA%/zenithjoy-agent/config.json
+  //    （含 apiUrl + agentUuid + agentId）带到新核心可读处，否则新核心拿不到 apiBase
+  //    → 静默回落生产 / 重新 register 裂身份。 ──
+  it('upgradeIfNeeded：carry-over 把 config.json（含 apiUrl/agentUuid）带到新核心目录', async () => {
+    const newVer = '2.0.22';
+    const newCoreDir = path.join(root, 'extracted', `zenithjoy-agent-v${newVer}`);
+    // 模拟客户机 %APPDATA%/zenithjoy-agent/config.json
+    const appdata = path.join(root, 'appdata');
+    const cfgDir = path.join(appdata, 'zenithjoy-agent');
+    fs.mkdirSync(cfgDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(cfgDir, 'config.json'),
+      JSON.stringify({
+        licenseKey: 'ZJ-REAL-KEY',
+        agentId: 'agent-stable',
+        agentUuid: 'uuid-from-register',
+        apiUrl: 'wss://api.staging.test/agent-ws',
+        loggedInAt: 0,
+      })
+    );
+
+    const downloadImpl = vi.fn(async (_ver: string, _url: string, destDir: string) => {
+      fs.mkdirSync(destDir, { recursive: true });
+      fs.writeFileSync(path.join(destDir, 'zenithjoy-agent.exe'), 'NEW-CORE-BINARY');
+    });
+    const exitImpl = vi.fn();
+    const up = new CoreUpgrader({
+      currentVersion: '2.0.21',
+      coreDir,
+      configDir: cfgDir, // 注入测试用 config 目录
+      downloadImpl,
+      exitImpl,
+    });
+
+    const r = await up.upgradeIfNeeded(newVer);
+
+    expect(r.upgraded).toBe(true);
+    // config.json 已带到新核心目录，新核心据此拿到 apiUrl + agentUuid，不会回落生产
+    const carried = path.join(newCoreDir, 'config.json');
+    expect(fs.existsSync(carried)).toBe(true);
+    const parsed = JSON.parse(fs.readFileSync(carried, 'utf-8'));
+    expect(parsed.apiUrl).toBe('wss://api.staging.test/agent-ws');
+    expect(parsed.agentUuid).toBe('uuid-from-register');
+  });
+
   it('upgradeIfNeeded：sha 校验注入失败 → 回滚（不写指针、不退出）', async () => {
     const newVer = '2.0.22';
     const downloadImpl = vi.fn(async (_ver: string, _url: string, destDir: string) => {

@@ -68,6 +68,36 @@ describe('agent loadOrInitConfig — Sprint 2.1f Fix 6 envOrConfig', () => {
     const mod = await import('../config-loader');
     expect(() => mod.loadOrInitConfig()).toThrowError(/ZENITHJOY_LICENSE|install pack|.env/i);
   });
+
+  // ── 身份统一（cp-06270030）：有 license 但无 apiBase 配置时绝不静默回落生产 ──
+  // 背景：自升级后新核心若拿不到 apiUrl，旧代码默认连 wss://api.zenithjoy.com →
+  //       客户机静默连错环境（staging 机连到生产）→ 身份裂开。改成报清晰错误。
+  it('有 license 但无 ZENITHJOY_API_URL/ZENITHJOY_API_BASE → 抛错，不回落生产', async () => {
+    process.env.ZENITHJOY_LICENSE = 'ZJ-F-NOAPI';
+    // 故意不设 ZENITHJOY_API_URL / ZENITHJOY_API_BASE
+    const mod = await import('../config-loader');
+    expect(() => mod.loadOrInitConfig()).toThrowError(/apiUrl|api.url|ZENITHJOY_API|api.?base/i);
+  });
+
+  it('返回的 apiUrl 永不等于硬编码生产地址（无配置应报错而非默认生产）', async () => {
+    process.env.ZENITHJOY_LICENSE = 'ZJ-F-NOAPI2';
+    const mod = await import('../config-loader');
+    let apiUrl: string | undefined;
+    try {
+      apiUrl = mod.loadOrInitConfig().apiUrl;
+    } catch {
+      apiUrl = undefined; // 报错是预期行为
+    }
+    expect(apiUrl).not.toBe('wss://api.zenithjoy.com/agent-ws');
+  });
+
+  it('显式设了 ZENITHJOY_API_URL 时正常返回该地址', async () => {
+    process.env.ZENITHJOY_LICENSE = 'ZJ-F-OK';
+    process.env.ZENITHJOY_API_URL = 'wss://api.staging.test/agent-ws';
+    const mod = await import('../config-loader');
+    const cfg = mod.loadOrInitConfig();
+    expect(cfg.apiUrl).toBe('wss://api.staging.test/agent-ws');
+  });
 });
 
 // ── 回归测试：agentId 持久化——同机器每次重启必须复用同一个 agentId ──
@@ -120,6 +150,7 @@ describe('agent loadOrInitConfig — agentId 持久化回归（同机多次启�
 
   it('config.json 不存在时，首次启动后自动写入 config.json（下次重启可复用 agentId）', async () => {
     process.env.ZENITHJOY_LICENSE = 'ZJ-F-NEWINSTALL';
+    process.env.ZENITHJOY_API_URL = 'wss://api.test.com/agent-ws'; // 身份统一后无 apiUrl 会报错，显式提供
     const cfgFile = path.join(tmpDir, 'zenithjoy-agent', 'config.json');
 
     const mod = await import('../config-loader');
