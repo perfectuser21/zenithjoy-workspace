@@ -585,6 +585,15 @@ jobs:
           chmod +x .github/workflows/scripts/smoke/line04-crm-aggrid-smoke.sh
           bash .github/workflows/scripts/smoke/line04-crm-aggrid-smoke.sh
 
+      - name: Line04 CRM view-prefs smoke（列偏好服务端持久化 GET/PUT）
+        env:
+          API_BASE: http://localhost:5200
+          ZENITHJOY_INTERNAL_TOKEN: ci-only-internal-token-abc-not-prod
+          SMOKE_ADMIN_EMAIL: boss@zenjoymedia.media
+        run: |
+          chmod +x .github/workflows/scripts/smoke/line04-crm-view-prefs-smoke.sh
+          bash .github/workflows/scripts/smoke/line04-crm-view-prefs-smoke.sh
+
       - name: Stop fake-feishu-server
         if: always()
         run: |
