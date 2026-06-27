@@ -1730,6 +1730,14 @@ tests:
     product: 私域运营
     note: "Path 2 Sprint B-1 WS2a 落点 — burner handler 物理隔离 Path 1"
 
+  - id: p2-sprint-b1-ws2a-qr-bind-burner-spawn-cjs
+    path: services/agent/src/handlers/__tests__/qr-bind-douyin-burner.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 私域运营
+    note: "burner handler 改 spawn 外部 publishers/qr-bind-douyin-burner.cjs（绕过 pkg+playwright 'Invalid host defined options' 崩溃）；断言 resolveBurnerScript 指向 .cjs + spawn argv 构造(accountLabel/sessionDir/userDataDirRoot/timeout) + 末行 JSON 解析 + 不再 loadChromium"
+
   - id: p2-sprint-b1-ws2b-douyin-comment-crawl
     path: services/agent/scripts/__tests__/douyin-comment-crawl.test.cjs
     type: unit
