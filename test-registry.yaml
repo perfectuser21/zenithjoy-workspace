@@ -622,6 +622,14 @@ tests:
     product: AI员工
     note: "Sprint 06222100 (#824) — 客户机 Agent 核心自升级端到端 smoke：A 真编译 install-pack-manifest 读取器(单一来源 version/sha256/size)+ service/route 源码接线断言(required_agent_version 真挂心跳响应) / B 真编译 core-upgrader 跑 upgradeIfNeeded(semver 触发→sha 不符回滚不切换→sha 一致写 .active-core 指针+解压 extracted/zenithjoy-agent-v<ver>+优雅退出) / C start.bat 读 .active-core 指针选最新核心+回退本地核心。接进 ci-l4-runtime agent-test job。"
 
+  - id: agent-identity-dedup-smoke
+    path: .github/workflows/scripts/smoke/agent-identity-dedup-smoke.sh
+    type: e2e
+    ci: L4
+    status: active
+    product: 中台认证
+    note: "身份统一 E2E — 同 (tenant_id, hostname) 两个不同 agent_id_text upsert 后 agents 只剩 1 行且 agent_uuid 收敛一致；hostname/tenant 双向隔离不误并；qr-bind 派单 agent_id = license.pinned_agent_id（投递落到同一去重行→任务不卡 queued）。复用 /api/_smoke/mock-agent（已改走 upsertAgent 去重逻辑）。"
+
   - id: agent-self-heal-smoke
     path: .github/workflows/scripts/smoke/agent-self-heal-smoke.sh
     type: e2e
@@ -1030,6 +1038,14 @@ tests:
   #   note: "飞书登录完整流程（Playwright）"
 
   # ── Agent Fleet（PR #228 引入，drive-by 登记） ─────────────────────────────
+
+  - id: api-agent-db-dedup
+    path: apps/api/src/services/__tests__/agent-db-dedup.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 中台认证
+    note: "身份统一 — agent-db 按 (tenant_id, hostname) 去重：upsertAgent / findOrCreateAgentUuid 同 hostname 命中已有行走 UPDATE 不 INSERT 新行（修真机 XX-ROG 裂两行→qr-bind 卡 queued）；hostname 空退回 agent_id upsert；tenant 隔离。"
 
   - id: api-agent-db-service
     path: apps/api/src/services/__tests__/agent-db.test.ts
@@ -1803,7 +1819,7 @@ tests:
     ci: L3
     status: active
     product: 私域运营
-    note: "Path 2 Sprint B-1 architecture hotfix — agentContext middleware (4 边界 happy / NO_AGENT_CONTEXT / 多 agent 取最新 / DB 错 / 显式 body 兼容)"
+    note: "Path 2 Sprint B-1 architecture hotfix — agentContext middleware (happy / NO_AGENT_CONTEXT / DB 错 / 显式 body 兼容) + 身份统一：派单优先 license.pinned_agent_id（与心跳/me-status 对齐），pinned 空兜底 created_at DESC"
 
   - id: p2-b1-arch-smoke-mock-agent
     path: apps/api/src/routes/_smoke-mock-agent.test.ts

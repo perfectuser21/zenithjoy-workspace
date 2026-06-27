@@ -67,7 +67,8 @@ describe('agentContext middleware [ARCH]', () => {
     expect(r.body.error.code).toBe('NO_AGENT_CONTEXT');
   });
 
-  it('多 agent 取最新（query order by created_at DESC + LIMIT 1）', async () => {
+  it('身份统一：派单优先 license.pinned_agent_id（与心跳/me/status 对齐）', async () => {
+    // SQL 必须引用 pinned_agent_id，确保与心跳投递落到同一去重行
     (pool.query as any).mockResolvedValueOnce({
       rows: [{ id: '33333333-3333-3333-3333-333333333333' }],
     });
@@ -77,9 +78,24 @@ describe('agentContext middleware [ARCH]', () => {
       .set('X-Test-Tenant-Id', '22222222-2222-2222-2222-222222222222')
       .send({});
     expect(r.status).toBe(200);
-    // 验证 SQL 包含 ORDER BY created_at DESC LIMIT 1
+    expect(r.body.agentId).toBe('33333333-3333-3333-3333-333333333333');
     const callArg = (pool.query as any).mock.calls[0][0] as string;
-    expect(callArg).toMatch(/ORDER\s+BY\s+created_at\s+DESC/i);
+    expect(callArg).toMatch(/pinned_agent_id/i);
+  });
+
+  it('pinned 为空时兜底取最新（ORDER BY created_at DESC LIMIT 1）', async () => {
+    (pool.query as any).mockResolvedValueOnce({
+      rows: [{ id: '55555555-5555-5555-5555-555555555555' }],
+    });
+    const app = buildApp();
+    const r = await request(app)
+      .post('/test')
+      .set('X-Test-Tenant-Id', '22222222-2222-2222-2222-222222222222')
+      .send({});
+    expect(r.status).toBe(200);
+    // 兜底分支仍按 created_at DESC LIMIT 1 选行
+    const callArg = (pool.query as any).mock.calls[0][0] as string;
+    expect(callArg).toMatch(/ORDER\s+BY[\s\S]*created_at\s+DESC/i);
     expect(callArg).toMatch(/LIMIT\s+1/i);
   });
 

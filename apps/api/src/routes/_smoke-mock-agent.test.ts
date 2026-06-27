@@ -83,9 +83,11 @@ describe('_smoke/mock-agent endpoint [SECURITY + BEHAVIOR]', () => {
   it('[SECURITY] NODE_ENV=production + SMOKE_TOKEN env 已设 + 正确 header → 200（生产可调）', async () => {
     process.env.NODE_ENV = 'production';
     process.env.SMOKE_TOKEN = 'prod-explicit-secret-xyz';
-    vi.mocked(pool.query).mockResolvedValueOnce({
-      rows: [{ id: '88888888-8888-8888-8888-888888888888' }],
-    } as any);
+    // 去重 upsert：① findDedupRowByHostname SELECT 未命中 ② INSERT ON CONFLICT ③ 取回去重行 id
+    vi.mocked(pool.query)
+      .mockResolvedValueOnce({ rows: [] } as any) // dedup SELECT 未命中
+      .mockResolvedValueOnce({ rows: [{ id: '88888888-8888-8888-8888-888888888888' }] } as any) // INSERT
+      .mockResolvedValueOnce({ rows: [{ id: '88888888-8888-8888-8888-888888888888' }] } as any); // 回查去重行
     const app = buildApp();
     const r = await request(app)
       .post('/api/_smoke/mock-agent')
@@ -119,10 +121,12 @@ describe('_smoke/mock-agent endpoint [SECURITY + BEHAVIOR]', () => {
     expect(r.body.error.code).toBe('AGENT_ID_TEXT_REQUIRED');
   });
 
-  it('[BEHAVIOR] 正常 → 200 + UPSERT agents 行 + 返 agent_uuid', async () => {
-    vi.mocked(pool.query).mockResolvedValueOnce({
-      rows: [{ id: '99999999-9999-9999-9999-999999999999' }],
-    } as any);
+  it('[BEHAVIOR] 正常 → 200 + 去重 UPSERT agents 行 + 返 agent_uuid', async () => {
+    // 身份统一：mock-agent 改走 upsertAgent 去重逻辑（hostname 默认非空 → 先 dedup SELECT）
+    vi.mocked(pool.query)
+      .mockResolvedValueOnce({ rows: [] } as any) // dedup SELECT 未命中
+      .mockResolvedValueOnce({ rows: [{ id: '99999999-9999-9999-9999-999999999999' }] } as any) // INSERT ON CONFLICT
+      .mockResolvedValueOnce({ rows: [{ id: '99999999-9999-9999-9999-999999999999' }] } as any); // 回查去重行
     const app = buildApp();
     const r = await request(app)
       .post('/api/_smoke/mock-agent')
@@ -135,9 +139,11 @@ describe('_smoke/mock-agent endpoint [SECURITY + BEHAVIOR]', () => {
     expect(r.body.success).toBe(true);
     expect(r.body.data.agent_uuid).toBe('99999999-9999-9999-9999-999999999999');
 
-    const callArg = vi.mocked(pool.query).mock.calls[0][0] as string;
-    expect(callArg).toMatch(/INSERT\s+INTO\s+zenithjoy\.agents/i);
-    expect(callArg).toMatch(/ON\s+CONFLICT/i);
-    expect(callArg).toMatch(/'online'/);
+    // 第 1 次 query = 去重探测 SELECT (tenant_id, hostname)；INSERT 在后续调用里
+    const sqls = vi.mocked(pool.query).mock.calls.map((c) => c[0] as string).join('\n');
+    expect(sqls).toMatch(/SELECT[\s\S]*FROM\s+zenithjoy\.agents[\s\S]*hostname/i);
+    expect(sqls).toMatch(/INSERT\s+INTO\s+zenithjoy\.agents/i);
+    expect(sqls).toMatch(/ON\s+CONFLICT/i);
+    expect(sqls).toMatch(/'online'/);
   });
 });
