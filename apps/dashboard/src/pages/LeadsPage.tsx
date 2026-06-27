@@ -32,8 +32,6 @@ interface CollectStatus {
   leads: CollectLead[];
 }
 
-const TENANT_ID = 'e2e-acq-tenant';
-
 const VALID_GRADES = ['感兴趣', '精准', '高意向'] as const;
 type Grade = (typeof VALID_GRADES)[number] | '';
 
@@ -74,7 +72,7 @@ export default function LeadsPage() {
       const res = await fetch('/api/acquisition/collect/expand', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tenant_id: TENANT_ID }),
+        body: JSON.stringify({}),
       });
       const body = await res.json();
       if (!res.ok || !body.success) {
@@ -95,7 +93,7 @@ export default function LeadsPage() {
       const res = await fetch('/api/acquisition/collect/start', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tenant_id: TENANT_ID, keywords: acqKeywords.map((k) => k.word) }),
+        body: JSON.stringify({ keywords: acqKeywords.map((k) => k.word) }),
       });
       const body = await res.json();
       if (!res.ok || !body.success) {
