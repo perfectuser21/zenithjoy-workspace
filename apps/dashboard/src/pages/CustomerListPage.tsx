@@ -164,15 +164,27 @@ const DARK_THEME = {
 // Glide 列定义
 // ──────────────────────────────────────────────────────────────────────────────
 
+/**
+ * Glide 单元格点击路由：意向(col 2)/身份(col 3) 列点击 = 快捷编辑那两个属性；
+ * 其余所有列（姓名/微信号/加微信/最近联系/最后消息/打开）= 进客户主页。
+ * 让「进主页」的点击目标尽量大、必中，符合 Notion 点行进页的直觉。
+ */
+export function crmCellIsEdit(col: number): boolean {
+  return col === 2 || col === 3;
+}
+
 const COLS: GridColumn[] = [
-  { title: '姓名', id: 'name', width: 140 },
-  { title: '微信号', id: 'wx', width: 160 },
-  { title: '意向', id: 'intent', width: 118 },
-  { title: '身份', id: 'identity', width: 92 },
-  { title: '加微信', id: 'add', width: 116 },
-  { title: '最近联系', id: 'last', width: 108 },
-  { title: '最后消息', id: 'msg', width: 240 },
+  { title: '姓名', id: 'name', width: 148 },
+  { title: '微信号', id: 'wx', width: 140 },
+  { title: '意向', id: 'intent', width: 112 },
+  { title: '身份', id: 'identity', width: 90 },
+  { title: '加微信', id: 'add', width: 96 },
+  { title: '最近联系', id: 'last', width: 100 },
+  { title: '最后消息', id: 'msg', width: 126 },
+  { title: '', id: 'open', width: 100 },
 ];
+// 列索引：0 姓名 / 1 微信号 / 2 意向 / 3 身份 / 4 加微信 / 5 最近联系 / 6 最后消息 / 7 打开
+const OPEN_COL = 7;
 
 // ──────────────────────────────────────────────────────────────────────────────
 // onboarding 圆点
@@ -258,9 +270,10 @@ export default function CustomerListPage() {
   useEffect(() => { void loadCustomers(); }, [loadCustomers]);
   useEffect(() => { void loadOnboarding(csWechatId); }, [csWechatId, loadOnboarding]);
 
-  // 首行自动选中（rows 变化时更新编辑面板到最新 rows[0]）
+  // 不再加载即自动选中首行（避免页面一打开就弹出底部编辑面板造成困惑）。
+  // 编辑面板仅在用户点击「意向」/「身份」列时出现。rows 刷新后清掉过期选中。
   useEffect(() => {
-    if (rows.length > 0) setEditingRow(rows[0]);
+    setEditingRow((prev) => (prev ? rows.find((r) => r.contact === prev.contact) ?? null : null));
   }, [rows]);
 
   const writeJson = useCallback(async (url: string, method: string, body: unknown): Promise<unknown | null> => {
@@ -378,20 +391,25 @@ export default function CustomerListPage() {
           displayData: r.last_message ?? '—', allowOverlay: false,
           themeOverride: { textDark: hot ? '#e3b169' : '#6f7588', baseFontStyle: '12px' } };
       }
+      case 7:
+        return { kind: GridCellKind.Text, data: '打开主页', displayData: '打开主页 ↗', allowOverlay: false,
+          themeOverride: { textDark: '#e3b169', baseFontStyle: '600 12.5px' } };
       default:
         return { kind: GridCellKind.Text, data: '', displayData: '', allowOverlay: false };
     }
   }, [filteredRows]);
 
-  // 点 Glide 行 → 选中到编辑面板；点姓名列 → 进主页
+  // 点击路由（Notion 化）：点意向/身份列 → 快捷编辑那两个属性；
+  // 点其余任何列（姓名/微信号/加微信/最近联系/最后消息/「打开主页」）→ 直接进客户主页。
+  // 跳转目标大、必中，不用精准点中窄姓名列。
   const onCellClicked = useCallback((cell: Item) => {
     const [col, row] = cell;
     const r = filteredRows[row];
     if (!r) return;
-    if (col === 0) {
-      openProfile(r);
-    } else {
+    if (crmCellIsEdit(col)) {
       setEditingRow(r);
+    } else {
+      openProfile(r);
     }
   }, [filteredRows, openProfile]);
 

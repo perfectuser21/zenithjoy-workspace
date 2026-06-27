@@ -14,7 +14,7 @@
  */
 import { describe, it, expect, vi, beforeEach, beforeAll } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import CustomerListPage from '../CustomerListPage';
+import CustomerListPage, { crmCellIsEdit } from '../CustomerListPage';
 
 // ── Glide DataGrid 使用 ResizeObserver，jsdom 里没有，需要 mock ──
 beforeAll(() => {
@@ -176,5 +176,16 @@ describe('CustomerListPage [per-operator BEHAVIOR]', () => {
       expect(JSON.parse(call!.init?.body as string)).toEqual({ cs_wechat_id: CS_WID });
     });
     await screen.findByText(/已通知客服机/);
+  });
+});
+
+// ── Glide 单元格点击路由（Notion 化导航）：意向/身份列=快捷编辑，其余=进主页 ──
+describe('crmCellIsEdit — 点击路由', () => {
+  it('意向(col 2) / 身份(col 3) 列点击 → 编辑（返回 true）', () => {
+    expect(crmCellIsEdit(2)).toBe(true);
+    expect(crmCellIsEdit(3)).toBe(true);
+  });
+  it('姓名(0)/微信号(1)/加微信(4)/最近联系(5)/最后消息(6)/打开(7) 点击 → 进主页（返回 false）', () => {
+    [0, 1, 4, 5, 6, 7].forEach((c) => expect(crmCellIsEdit(c)).toBe(false));
   });
 });
