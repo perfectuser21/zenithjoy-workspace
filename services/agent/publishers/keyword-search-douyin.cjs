@@ -31,7 +31,6 @@ async function main() {
     const contexts = browser.contexts();
     if (contexts.length === 0) {
       emit({ ok: false, keyword, video_urls: [], error: 'NO_CDP_CONTEXT' });
-      process.exit(1);
       return;
     }
     const ctx = contexts[0];
@@ -58,7 +57,6 @@ async function main() {
         return results;
       }, maxVideos);
       emit({ ok: true, keyword, video_urls: videoUrls });
-      process.exit(0);
     } finally {
       await page.close().catch(() => null);
     }
@@ -66,10 +64,10 @@ async function main() {
     const msg = String(err && err.message ? err.message : err);
     process.stderr.write(`[keyword-search-douyin] keyword="${keyword}" error: ${msg}\n`);
     emit({ ok: false, keyword, video_urls: [], error: msg });
-    process.exit(1);
   } finally {
     if (browser) await browser.close().catch(() => null);
   }
+  process.exit(0);
 }
 
 main().catch((e) => {
