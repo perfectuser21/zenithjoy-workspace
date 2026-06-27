@@ -6,6 +6,8 @@
 // 每个关键词：打开 douyin.com/search/{kw}?type=video → 等待视频列表 → 取前 N 条 URL
 
 import path from 'node:path';
+import fs from 'node:fs';
+import { spawn } from 'node:child_process';
 import { loadChromium, type ChromiumLike, type LoadChromiumOptions } from '../shared/playwright-launcher';
 
 export interface KeywordSearchResult {
@@ -24,6 +26,12 @@ export async function searchDouyinVideosByKeyword(
   keyword: string,
   options: KeywordSearchOptions = {},
 ): Promise<KeywordSearchResult> {
+  // 生产路径：无注入 → spawn 外部 .cjs（绕 pkg+playwright 崩溃）。
+  // 测试路径：注入 chromiumLauncher/chromiumLoader → 走下方内部 loadChromium 逻辑（保旧单测绿）。
+  if (!options.chromiumLauncher && !options.chromiumLoader) {
+    return spawnKeywordSearchProcess(keyword, options);
+  }
+
   // 共享底座：优先 playwright-core（包里打进的那个），打包真机不再报「playwright 未安装」
   const chromium = (await loadChromium(options)) as ChromiumLike & {
     connectOverCDP(url: string): Promise<any>;
@@ -73,10 +81,53 @@ export async function searchDouyinVideosByKeyword(
       await page.close().catch(() => null);
     }
   } catch (err) {
-    const msg = (err as Error).message;
+    const msg = err instanceof Error ? err.message : String(err);
     console.warn(`[keyword-search-douyin] keyword="${keyword}" error:`, msg);
     return { ok: false, keyword, video_urls: [], error: msg };
   } finally {
     if (browser) await browser.close().catch(() => null);
   }
+}
+
+// 解析外部脚本路径（与 qr-bind-douyin-burner resolveBurnerScript 同款查找）
+export function resolveKeywordSearchScript(): string {
+  const beside = path.join(path.dirname(process.execPath), 'publishers', 'keyword-search-douyin.cjs');
+  if (fs.existsSync(beside)) return beside;
+  return path.resolve(__dirname, '..', '..', 'publishers', 'keyword-search-douyin.cjs');
+}
+
+function resolveNodeExe(): string {
+  const env = process.env.ZJ_NODE_EXE;
+  if (env && fs.existsSync(env)) return env;
+  return 'node';
+}
+
+// 生产路径：spawn 外部 Node 进程跑 .cjs，读末行 JSON 当结果。
+function spawnKeywordSearchProcess(
+  keyword: string,
+  options: KeywordSearchOptions,
+): Promise<KeywordSearchResult> {
+  const scriptPath = resolveKeywordSearchScript();
+  const nodeExe = resolveNodeExe();
+  const cdpPort = options.cdpPort ?? parseInt(process.env.DOUYIN_CDP_PORT ?? '19222');
+  const maxVideos = options.maxVideosPerKeyword ?? 5;
+  const args = [scriptPath, keyword, String(cdpPort), String(maxVideos)];
+
+  return new Promise<KeywordSearchResult>((resolve) => {
+    let stdout = '';
+    const proc = spawn(nodeExe, args, { env: { ...process.env }, timeout: 60000 });
+    proc.stdout.on('data', (d: Buffer) => { stdout += d.toString(); });
+    proc.stderr.on('data', (d: Buffer) => { console.log('[keyword-search-douyin]', d.toString().trimEnd()); });
+    proc.on('close', () => {
+      const lastLine = stdout.trim().split('\n').filter(Boolean).pop() ?? '';
+      try {
+        resolve(JSON.parse(lastLine) as KeywordSearchResult);
+      } catch {
+        resolve({ ok: false, keyword, video_urls: [], error: `result parse failed: ${lastLine || '(no output)'}` });
+      }
+    });
+    proc.on('error', (err: Error) => {
+      resolve({ ok: false, keyword, video_urls: [], error: `spawn failed: ${err.message}` });
+    });
+  });
 }

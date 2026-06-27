@@ -9,7 +9,8 @@
 import { describe, it, expect, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { handleDouyinDmOutreach, mapDmStatusToFeishu } from '../douyin-dm-outreach';
+import { EventEmitter } from 'node:events';
+import { handleDouyinDmOutreach, mapDmStatusToFeishu, resolveDmOutreachScript } from '../douyin-dm-outreach';
 
 const HANDLER_PATH = path.resolve(__dirname, '../douyin-dm-outreach.ts');
 
@@ -26,12 +27,13 @@ function fakePage(over: Partial<Record<string, any>> = {}) {
 }
 
 describe('douyin-dm-outreach — 共享 launcher + 三态 [BEHAVIOR]', () => {
-  it('源码改走共享 loadChromium，不再内联 import(playwright)', () => {
+  it('源码生产路径 spawn 外部 .cjs，删除 createRealDmPage 内联 playwright', () => {
     const src = fs.readFileSync(HANDLER_PATH, 'utf8');
-    expect(src).toMatch(/loadChromium/);
-    expect(src).toMatch(/playwright-launcher/);
-    // 不再裸字符串 'playwright' 走 dynImport（共享 launcher 内部才处理 core/回退）
-    expect(src).not.toMatch(/const\s+moduleName\s*=\s*['"]playwright['"]/);
+    expect(src).toMatch(/spawn/);
+    expect(src).toMatch(/douyin-dm-outreach\.cjs/);
+    // createRealDmPage 已删（真机逻辑搬进 .cjs），不再 binary 内 loadChromium
+    expect(src).not.toMatch(/loadChromium/);
+    expect(src).not.toMatch(/createRealDmPage/);
   });
 
   it('可点私信 + 气泡出现 → sent', async () => {
@@ -66,5 +68,50 @@ describe('douyin-dm-outreach — 共享 launcher + 三态 [BEHAVIOR]', () => {
     expect(mapDmStatusToFeishu('sent')).toBe('已私信');
     expect(mapDmStatusToFeishu('limited')).toBe('未送达-仅互关');
     expect(mapDmStatusToFeishu('failed')).toBe('失败');
+  });
+});
+
+describe('douyin-dm-outreach — spawn 外部 .cjs（生产）[BEHAVIOR]', () => {
+  it('resolveDmOutreachScript 指向 publishers/douyin-dm-outreach.cjs', () => {
+    expect(resolveDmOutreachScript()).toMatch(/[\\/]publishers[\\/]douyin-dm-outreach\.cjs$/);
+  });
+
+  it('publishers/douyin-dm-outreach.cjs 文件真实存在', () => {
+    expect(fs.existsSync(resolveDmOutreachScript())).toBe(true);
+  });
+});
+
+vi.mock('node:child_process', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:child_process')>();
+  return { ...actual, spawn: vi.fn() };
+});
+
+describe('douyin-dm-outreach — spawn 路径 argv [BEHAVIOR]', () => {
+  function makeFakeProc(stdoutLine: string) {
+    const proc = new EventEmitter() as EventEmitter & { stdout: EventEmitter; stderr: EventEmitter };
+    proc.stdout = new EventEmitter();
+    proc.stderr = new EventEmitter();
+    setTimeout(() => { proc.stdout.emit('data', Buffer.from(stdoutLine + '\n')); proc.emit('close', 0); }, 0);
+    return proc;
+  }
+
+  it('未注入 page → spawn .cjs，argv=[脚本,profile,message,label,udd]，返回末行 JSON', async () => {
+    const { spawn } = await import('node:child_process');
+    const spawnMock = vi.mocked(spawn);
+    spawnMock.mockReturnValue(
+      makeFakeProc(JSON.stringify({ ok: true, status: 'sent', account_label: 'b1', profile_url: 'https://www.douyin.com/user/x' })) as unknown as ReturnType<typeof spawn>,
+    );
+
+    const r = await handleDouyinDmOutreach({ profile_url: 'https://www.douyin.com/user/x', message: '你好', account_label: 'b1' });
+
+    expect(spawnMock).toHaveBeenCalledTimes(1);
+    const [nodeExe, argv, spawnOpts] = spawnMock.mock.calls[0];
+    expect(nodeExe).toBeTruthy();
+    expect(argv![0]).toMatch(/douyin-dm-outreach\.cjs$/);
+    expect(argv![1]).toBe('https://www.douyin.com/user/x');
+    expect(argv![2]).toBe('你好');
+    expect(argv![3]).toBe('b1');
+    expect((spawnOpts as { timeout?: number } | undefined)?.timeout).toBe(60000);
+    expect(r).toMatchObject({ ok: true, status: 'sent' });
   });
 });

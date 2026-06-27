@@ -9,7 +9,8 @@
 import { describe, it, expect, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { searchDouyinVideosByKeyword } from '../keyword-search-douyin';
+import { EventEmitter } from 'node:events';
+import { searchDouyinVideosByKeyword, resolveKeywordSearchScript } from '../keyword-search-douyin';
 
 const HANDLER_PATH = path.resolve(__dirname, '../keyword-search-douyin.ts');
 
@@ -68,5 +69,55 @@ describe('keyword-search-douyin — 共享 launcher [BEHAVIOR]', () => {
     // 无 CDP context → ok:false NO_CDP_CONTEXT，但绝不是「未安装」
     expect(result.error).not.toMatch(/未安装/);
     expect(loaded[0]).toBe('playwright-core');
+  });
+});
+
+describe('keyword-search-douyin — spawn 外部 .cjs（生产）[BEHAVIOR]', () => {
+  it('源码生产路径 spawn 外部 .cjs（绕 pkg+playwright 崩溃）', () => {
+    const src = fs.readFileSync(HANDLER_PATH, 'utf8');
+    expect(src).toMatch(/spawn/);
+    expect(src).toMatch(/keyword-search-douyin\.cjs/);
+  });
+
+  it('resolveKeywordSearchScript 指向 publishers/keyword-search-douyin.cjs', () => {
+    expect(resolveKeywordSearchScript()).toMatch(/[\\/]publishers[\\/]keyword-search-douyin\.cjs$/);
+  });
+
+  it('publishers/keyword-search-douyin.cjs 文件真实存在', () => {
+    expect(fs.existsSync(resolveKeywordSearchScript())).toBe(true);
+  });
+});
+
+vi.mock('node:child_process', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:child_process')>();
+  return { ...actual, spawn: vi.fn() };
+});
+
+describe('keyword-search-douyin — spawn 路径 argv [BEHAVIOR]', () => {
+  function makeFakeProc(stdoutLine: string) {
+    const proc = new EventEmitter() as EventEmitter & { stdout: EventEmitter; stderr: EventEmitter };
+    proc.stdout = new EventEmitter();
+    proc.stderr = new EventEmitter();
+    setTimeout(() => { proc.stdout.emit('data', Buffer.from(stdoutLine + '\n')); proc.emit('close', 0); }, 0);
+    return proc;
+  }
+
+  it('未注入 launcher/loader → spawn .cjs，argv=[脚本,keyword,cdpPort,maxVideos]，返回末行 JSON', async () => {
+    const { spawn } = await import('node:child_process');
+    const spawnMock = vi.mocked(spawn);
+    spawnMock.mockReturnValue(
+      makeFakeProc(JSON.stringify({ ok: true, keyword: '装修', video_urls: ['https://www.douyin.com/video/9'] })) as unknown as ReturnType<typeof spawn>,
+    );
+
+    const result = await searchDouyinVideosByKeyword('装修', { cdpPort: 19222, maxVideosPerKeyword: 5 });
+
+    expect(spawnMock).toHaveBeenCalledTimes(1);
+    const [nodeExe, argv] = spawnMock.mock.calls[0];
+    expect(nodeExe).toBeTruthy();
+    expect(argv![0]).toMatch(/keyword-search-douyin\.cjs$/);
+    expect(argv![1]).toBe('装修');
+    expect(argv![2]).toBe('19222');
+    expect(argv![3]).toBe('5');
+    expect(result).toMatchObject({ ok: true, keyword: '装修', video_urls: ['https://www.douyin.com/video/9'] });
   });
 });
