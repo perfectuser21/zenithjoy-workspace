@@ -3897,3 +3897,11 @@ agent_suite:
     status: active
     product: 私域运营
     note: "register 路径按 (tenant,hostname) 去重不再 500（修 #921 唯一索引引入的回归）：同 hostname 复用行返回去重id / tenant隔离 / 空hostname走原INSERT。"
+
+  - id: line02-no-placeholder-tenant-frontend
+    path: apps/dashboard/src/pages/__tests__/no-placeholder-tenant.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 私域运营
+    note: "守卫：line02 前端页面不再硬编码占位 tenant（DouyinBurnerBindPage 的 tenant_id=current / LeadsPage 的 TENANT_ID=e2e-acq-tenant），靠 session 解析（修 staging 主链 502，PR #935）。"
