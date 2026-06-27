@@ -32,6 +32,15 @@ const OK = (data: unknown) => ({
   timestamp: new Date().toISOString(),
 });
 
+function tenantOf(req: Request, res: Response): string | null {
+  const t = req.tenantId;
+  if (!t) {
+    res.status(401).json(ERR('NO_TENANT', '缺租户上下文（未登录或无 X-Tenant-Id）'));
+    return null;
+  }
+  return t;
+}
+
 // ── helper: 检查飞书 binding ──
 async function getFeishuBinding(tenantId: string) {
   const r = await pool.query(
@@ -144,32 +153,33 @@ router.post('/qr-bind-result', async (req: Request, res: Response) => {
   return res.json(OK({ task_id, sessions_updated: 1 }));
 });
 
-// ── 3. GET /sessions?tenant_id= — 列 burner sessions ──
-router.get('/sessions', async (req: Request, res: Response) => {
-  const tenantId = req.query.tenant_id as string;
-  if (!tenantId) {
-    return res.json(OK({ sessions: [] }));
+// ── 3. GET /sessions — 列 burner sessions（从 session 解析 tenant，不信 query 占位）──
+router.get('/sessions', tenantContextOptional, async (req: Request, res: Response) => {
+  const tenantId = tenantOf(req, res);
+  if (!tenantId) return;
+  try {
+    const r = await pool.query(
+      `SELECT s.account_label, s.role, s.status, s.bound_at,
+              s.created_at,
+              (SELECT response->>'account_nickname'
+                 FROM zenithjoy.publish_tasks
+                WHERE agent_id=s.agent_id
+                  AND task_type='qr_bind/douyin_burner'
+                  AND payload->>'account_label' = s.account_label
+                ORDER BY created_at DESC LIMIT 1) AS account_nickname
+         FROM zenithjoy.agent_platform_sessions s
+         JOIN zenithjoy.agents a ON a.id = s.agent_id
+        WHERE a.tenant_id=$1
+          AND s.role='burner'
+          AND s.platform='douyin'
+        ORDER BY s.created_at DESC`,
+      [tenantId],
+    );
+    return res.json(OK({ sessions: r.rows }));
+  } catch (err) {
+    console.error('[burner/sessions] query failed:', (err as Error).message);
+    return res.status(500).json(ERR('SESSIONS_QUERY_FAILED', (err as Error).message));
   }
-
-  const r = await pool.query(
-    `SELECT s.account_label, s.role, s.status, s.bound_at,
-            s.created_at,
-            (SELECT response->>'account_nickname'
-               FROM zenithjoy.publish_tasks
-              WHERE agent_id=s.agent_id
-                AND task_type='qr_bind/douyin_burner'
-                AND payload->>'account_label' = s.account_label
-              ORDER BY created_at DESC LIMIT 1) AS account_nickname
-       FROM zenithjoy.agent_platform_sessions s
-       JOIN zenithjoy.agents a ON a.id = s.agent_id
-      WHERE a.tenant_id=$1
-        AND s.role='burner'
-        AND s.platform='douyin'
-      ORDER BY s.created_at DESC`,
-    [tenantId],
-  );
-
-  return res.json(OK({ sessions: r.rows }));
 });
 
 // ── 4. POST /crawl-comments — 派抓评论 task ──
@@ -302,36 +312,38 @@ router.post('/crawl-comments-result', async (req: Request, res: Response) => {
 
 // ── 6a. GET /crawl-tasks/latest — 查最近一次 crawl task 状态（dashboard 自动恢复用）──
 //     必须在 /:task_id 之前注册（Express 顺序匹配）
-router.get('/crawl-tasks/latest', async (req: Request, res: Response) => {
-  const tenantId = (req.query.tenant_id as string) || '';
-  const r = await pool.query(
-    tenantId
-      ? `SELECT id, status, response, created_at, updated_at
-           FROM zenithjoy.publish_tasks
-          WHERE task_type='crawl_comments/douyin' AND tenant_id=$1
-          ORDER BY created_at DESC LIMIT 1`
-      : `SELECT id, status, response, created_at, updated_at
-           FROM zenithjoy.publish_tasks
-          WHERE task_type='crawl_comments/douyin'
-          ORDER BY created_at DESC LIMIT 1`,
-    tenantId ? [tenantId] : [],
-  );
-  if (r.rows.length === 0) {
-    return res.status(404).json(ERR('NO_CRAWL_TASK', '暂无 crawl task'));
+//     从 session 解析 tenant，不信 query 占位
+router.get('/crawl-tasks/latest', tenantContextOptional, async (req: Request, res: Response) => {
+  const tenantId = tenantOf(req, res);
+  if (!tenantId) return;
+  try {
+    const r = await pool.query(
+      `SELECT id, status, response, created_at, updated_at
+         FROM zenithjoy.publish_tasks
+        WHERE task_type='crawl_comments/douyin' AND tenant_id=$1
+        ORDER BY created_at DESC LIMIT 1`,
+      [tenantId],
+    );
+    if (r.rows.length === 0) {
+      return res.status(404).json(ERR('NO_CRAWL_TASK', '暂无 crawl task'));
+    }
+    const row = r.rows[0];
+    const resp = row.response || {};
+    return res.json(
+      OK({
+        task_id: row.id,
+        status: row.status,
+        comment_count: resp.comment_count ?? 0,
+        lead_write_status: resp.lead_write_status,
+        feishu_bitable_url: resp.feishu_bitable_url,
+        created_at: row.created_at,
+        updated_at: row.updated_at,
+      }),
+    );
+  } catch (err) {
+    console.error('[burner/crawl-tasks/latest] query failed:', (err as Error).message);
+    return res.status(500).json(ERR('CRAWL_LATEST_QUERY_FAILED', (err as Error).message));
   }
-  const row = r.rows[0];
-  const resp = row.response || {};
-  return res.json(
-    OK({
-      task_id: row.id,
-      status: row.status,
-      comment_count: resp.comment_count ?? 0,
-      lead_write_status: resp.lead_write_status,
-      feishu_bitable_url: resp.feishu_bitable_url,
-      created_at: row.created_at,
-      updated_at: row.updated_at,
-    }),
-  );
 });
 
 // ── 6b. GET /crawl-tasks/:task_id — 查 crawl task 状态 ──
