@@ -3669,6 +3669,14 @@ agent_suite:
     product: AI员工
     note: "S4 前台日报 API 客户端单测（vi.mock client）：GET /wechat/cs/daily-report 带 date 参数 + 解 reports 数组 + 缺字段回空。"
 
+  - id: line02-acquisition-dispatch-api-client-unit
+    path: apps/dashboard/src/api/__tests__/acquisition-dispatch.api.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 智能获客
+    note: "Line02 分析指派 API 客户端单测（mock global.fetch）：fetchDispatchPlan 返回数组而非对象（白屏 regression）+ 空 plan 边界；fetchCookieHealth.items[].health 后端 status 字段映射验证。"
+
   - id: line04-crm-customer-roster-contract-oracle
     path: sprints/06242057-line04-crm-customer-list/tests/crm-customers.test.ts
     type: unit

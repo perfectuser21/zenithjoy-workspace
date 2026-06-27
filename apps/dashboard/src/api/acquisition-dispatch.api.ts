@@ -176,7 +176,9 @@ export async function fetchDispatchPlan(
     headers: authHeaders(),
     credentials: 'include',
   });
-  return parseEnvelope<DispatchPlanItem[]>(r);
+  // 后端返回信封 {plan: DispatchPlanItem[], total: number}，需提取 .plan 数组
+  const result = await parseEnvelope<{ plan: DispatchPlanItem[]; total: number }>(r);
+  return result.plan ?? [];
 }
 
 /** 读 Cookie 健康 */
@@ -185,5 +187,17 @@ export async function fetchCookieHealth(): Promise<CookieHealthResult> {
     headers: authHeaders(),
     credentials: 'include',
   });
-  return parseEnvelope<CookieHealthResult>(r);
+  // 后端真实字段是 status（'healthy'|'stale'|'expired'），接口定义用 health；
+  // 在 API 层映射，页面侧 it.health 无需改动。
+  const raw = await parseEnvelope<{
+    items: Array<Omit<CookieHealthItem, 'health'> & { status?: string; health?: string }>;
+    alert_count: number;
+  }>(r);
+  return {
+    alert_count: raw.alert_count,
+    items: (raw.items ?? []).map((item) => ({
+      ...item,
+      health: (item.health ?? item.status ?? '') as CookieHealthItem['health'],
+    })),
+  };
 }
