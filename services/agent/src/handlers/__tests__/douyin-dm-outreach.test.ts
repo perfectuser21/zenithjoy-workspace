@@ -105,12 +105,13 @@ describe('douyin-dm-outreach — spawn 路径 argv [BEHAVIOR]', () => {
     const r = await handleDouyinDmOutreach({ profile_url: 'https://www.douyin.com/user/x', message: '你好', account_label: 'b1' });
 
     expect(spawnMock).toHaveBeenCalledTimes(1);
-    const [nodeExe, argv] = spawnMock.mock.calls[0];
+    const [nodeExe, argv, spawnOpts] = spawnMock.mock.calls[0];
     expect(nodeExe).toBeTruthy();
     expect(argv![0]).toMatch(/douyin-dm-outreach\.cjs$/);
     expect(argv![1]).toBe('https://www.douyin.com/user/x');
     expect(argv![2]).toBe('你好');
     expect(argv![3]).toBe('b1');
+    expect((spawnOpts as { timeout?: number } | undefined)?.timeout).toBe(60000);
     expect(r).toMatchObject({ ok: true, status: 'sent' });
   });
 });

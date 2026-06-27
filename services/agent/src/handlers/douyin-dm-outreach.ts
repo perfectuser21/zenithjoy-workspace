@@ -55,8 +55,7 @@ export interface DmOutreachOptions {
   page?: DmPage;
   /** burner profile 根目录覆盖（默认与 qr-bind-burner 一致） */
   userDataDirRoot?: string;
-  channel?: string;
-  headless?: boolean;
+
 }
 
 /** 触达态 → 飞书 Lead 表「触达状态」中文枚举。limited 绝不写「已私信」（禁止假 sent）。 */
@@ -151,7 +150,7 @@ function spawnDmOutreachProcess(
 
   return new Promise<DmOutreachResult>((resolve) => {
     let stdout = '';
-    const proc = spawn(nodeExe, args, { env: { ...process.env } });
+    const proc = spawn(nodeExe, args, { env: { ...process.env }, timeout: 60000 });
     proc.stdout.on('data', (d: Buffer) => { stdout += d.toString(); });
     proc.stderr.on('data', (d: Buffer) => { console.log('[douyin-dm-outreach]', d.toString().trimEnd()); });
     proc.on('close', () => {

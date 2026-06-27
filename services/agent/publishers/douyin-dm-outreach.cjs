@@ -77,7 +77,7 @@ async function main() {
     const page = pages.length > 0 ? pages[0] : await context.newPage();
 
     // 进主页 + 模拟滑动随机停留降风控
-    await page.goto(profileUrl, { waitUntil: 'domcontentloaded' });
+    await page.goto(profileUrl, { waitUntil: 'domcontentloaded', timeout: 20000 });
     await page.mouse.wheel(0, 600).catch(() => undefined);
     await new Promise((r) => setTimeout(r, 1500 + (message.length % 5) * 300));
 
