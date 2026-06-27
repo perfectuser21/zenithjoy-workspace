@@ -41,7 +41,14 @@ export interface AgentEvent {
 export async function reportEvent(cfg: EventReporterConfig, event: AgentEvent): Promise<void> {
   try {
     const apiBase = (cfg.apiBase ?? '').replace(/\/+$/, '');
-    if (!apiBase || !cfg.license) return; // 没配置好就静默跳过
+    if (!apiBase || !cfg.license) {
+      // 身份统一（cp-06270030）：不再静默 return —— 真机上"事件不浮现"难诊断，
+      // 缺 apiBase/license 时打一行 warn 指明真因（仍不 fetch、不抛、不崩 agent）。
+      console.warn(
+        `[event-reporter] 跳过上报：${!apiBase ? '缺 apiBase' : '缺 license'}（事件无法上报中台，请检查 config.json/start.bat 注入）`,
+      );
+      return;
+    }
 
     const body: Record<string, unknown> = {
       agent_id: cfg.agentId ?? '',

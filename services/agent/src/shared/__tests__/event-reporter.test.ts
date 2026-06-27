@@ -96,4 +96,32 @@ describe('event-reporter — reportEvent [BEHAVIOR]', () => {
 
     expect(fetchMock).not.toHaveBeenCalled();
   });
+
+  // ── 身份统一（cp-06270030）：apiBase/license 为空时不再静默 return，
+  //    打一行 warn 便于真机诊断"事件为什么不浮现" ──
+  it('无 apiBase → 打 console.warn 说明跳过原因（不再静默）', async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    await reportEvent({ apiBase: '', license: 'K', agentId: 'a1' }, { kind: 'log', message: 'x' });
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(warnSpy).toHaveBeenCalled();
+    expect(String(warnSpy.mock.calls[0][0])).toMatch(/apiBase|license|event-reporter/i);
+  });
+
+  it('无 license → 打 console.warn 说明跳过原因（不再静默）', async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    await reportEvent(
+      { apiBase: 'https://api.example.com', license: '', agentId: 'a1' },
+      { kind: 'log', message: 'x' },
+    );
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(warnSpy).toHaveBeenCalled();
+  });
 });

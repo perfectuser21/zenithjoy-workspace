@@ -186,4 +186,49 @@ describe('HeartbeatLoop', () => {
     expect(received[0].platform).toBe('douyin');
     expect(received[0].task_id).toBe('task-video-1');
   });
+
+  // ── 身份统一（cp-06270030）：心跳必须带 register 返的 agentUuid，
+  //    让中台按 (tenant, hostname) 复用同一行，不再生成新 ws1-<hash> 裂身份 ──
+  it('心跳 POST body 含 register 返的 agentUuid（首次心跳即带，不依赖响应）', async () => {
+    const fetchImpl = vi.fn<typeof fetch>(async () =>
+      new Response(
+        JSON.stringify({ ok: true, agent_id: 'ws1-server-id', queued_tasks: [] }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      ),
+    );
+
+    const loop = new HeartbeatLoop({
+      apiBase: 'https://api.example.com',
+      license: 'zj-test',
+      version: '0.1.0',
+      hostname: 'host-x',
+      agentUuid: 'uuid-from-register-abc',
+      fetchImpl: fetchImpl as any,
+    });
+
+    await loop.sendOnce();
+
+    const body = JSON.parse(String(fetchImpl.mock.calls[0][1]?.body));
+    // 首次心跳就带 register UUID（响应还没回来），中台据此复用行
+    expect(body.agent_id).toBe('uuid-from-register-abc');
+    expect(body.agent_uuid).toBe('uuid-from-register-abc');
+  });
+
+  it('未传 agentUuid 时不带 agent_uuid 字段（向后兼容老 agent）', async () => {
+    const fetchImpl = vi.fn<typeof fetch>(async () =>
+      new Response(JSON.stringify({ ok: true, agent_id: 'agent-1', queued_tasks: [] }), {
+        status: 200,
+      }),
+    );
+    const loop = new HeartbeatLoop({
+      apiBase: 'https://api.example.com',
+      license: 'zj-test',
+      version: '0.1.0',
+      hostname: 'host-x',
+      fetchImpl: fetchImpl as any,
+    });
+    await loop.sendOnce();
+    const body = JSON.parse(String(fetchImpl.mock.calls[0][1]?.body));
+    expect(body.agent_uuid).toBeUndefined();
+  });
 });
