@@ -212,6 +212,22 @@ test('画像页暗色皮肤 — AI 画像卡片字段 DOM 断言', async ({ page
   await expect(page.getByTestId('crm-chat-bubble').first()).toContainText('你们这个多少钱');
 });
 
+test('AG Grid 运营台 — 「列 ▾」菜单隐藏/显示列（拖列不再误删列）', async ({ page }) => {
+  await stubCrmApis(page);
+  await page.goto(`${BASE_URL}/wechat/crm`);
+  await page.waitForLoadState('networkidle');
+  await expect(page.locator('.ag-cell[col-id="name"]').first()).toContainText('张三', { timeout: 10000 });
+
+  // 身份列默认可见
+  await expect(page.locator('.ag-header-cell[col-id="identity"]')).toBeVisible();
+
+  // 打开「列 ▾」菜单 → 取消勾选「身份」→ 身份列消失（隐藏列的正确入口，不靠拖出网格）
+  await page.getByTestId('crm-col-menu-btn').click();
+  await expect(page.getByTestId('crm-col-menu')).toBeVisible();
+  await page.getByTestId('crm-col-menu').getByText('身份', { exact: true }).click();
+  await expect(page.locator('.ag-header-cell[col-id="identity"]')).toHaveCount(0);
+});
+
 // 辅助函数：在 Playwright 里 "waitFor" 式断言
 async function waitFor(fn: () => void, page: Page, timeout = 8000) {
   const start = Date.now();

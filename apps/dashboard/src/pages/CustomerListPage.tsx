@@ -76,6 +76,17 @@ const IDENTITY_COLORS: Record<CrmIdentity, string> = {
   blacklist: '#d4685f',
 };
 
+// 「列 ▾」菜单可勾选显隐的列（不含「打开主页」操作列）
+const COL_TOGGLES: { colId: string; label: string }[] = [
+  { colId: 'name', label: '姓名' },
+  { colId: 'wechat_id', label: '微信号' },
+  { colId: 'status', label: '意向' },
+  { colId: 'identity', label: '身份' },
+  { colId: 'add_friend_time', label: '加微信' },
+  { colId: 'last_contact_at', label: '最近联系' },
+  { colId: 'last_message', label: '最后消息' },
+];
+
 interface CustomerRow {
   name: string;
   contact: string;
@@ -203,6 +214,19 @@ export default function CustomerListPage() {
   // AG Grid 显示计数（onModelUpdated 更新）
   const [displayedCount, setDisplayedCount] = useState(0);
   const gridRef = useRef<AgGridReact<CustomerRow>>(null);
+
+  // 「列 ▾」显隐菜单
+  const [colMenuOpen, setColMenuOpen] = useState(false);
+  // 用一个版本号触发菜单复选框按 grid 当前列状态重渲染
+  const [colMenuTick, setColMenuTick] = useState(0);
+  const isColVisible = useCallback((colId: string): boolean => {
+    const st = gridRef.current?.api?.getColumnState?.().find(c => c.colId === colId);
+    return st ? !st.hide : true;
+  }, []);
+  const toggleColVisible = useCallback((colId: string, visible: boolean) => {
+    gridRef.current?.api?.setColumnsVisible([colId], visible);
+    setColMenuTick(t => t + 1); // 保存由 onColumnVisible→onColChange debounce 处理
+  }, []);
 
   // 服务端偏好保存防抖 ref（600ms）
   const saveDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -812,6 +836,47 @@ export default function CustomerListPage() {
               );
             })}
           </div>
+          {/* 「列 ▾」显隐菜单（隐藏/显示列的正确入口；拖列只重排序不消失） */}
+          <div style={{ position: 'relative' }}>
+            <button
+              data-testid="crm-col-menu-btn"
+              onClick={() => { setColMenuTick(t => t + 1); setColMenuOpen(v => !v); }}
+              style={{
+                background: '#14161f', border: '1px solid #2d3242', color: '#aeb4c6',
+                padding: '8px 13px', borderRadius: 10, fontSize: 13, cursor: 'pointer',
+                fontFamily: 'inherit', whiteSpace: 'nowrap',
+              }}
+            >
+              列 ▾
+            </button>
+            {colMenuOpen && (
+              <>
+                <div onClick={() => setColMenuOpen(false)}
+                  style={{ position: 'fixed', inset: 0, zIndex: 40 }} />
+                <div data-testid="crm-col-menu" style={{
+                  position: 'absolute', top: 42, left: 0, zIndex: 50, minWidth: 170,
+                  background: '#191c27', border: '1px solid #2d3242', borderRadius: 12,
+                  padding: '8px 6px', boxShadow: '0 24px 60px -20px rgba(0,0,0,.7)',
+                }}>
+                  {COL_TOGGLES.map(c => {
+                    void colMenuTick; // 触发按当前列状态重渲染勾选态
+                    const visible = isColVisible(c.colId);
+                    return (
+                      <label key={c.colId} style={{
+                        display: 'flex', alignItems: 'center', gap: 9, padding: '7px 12px',
+                        fontSize: 13, color: '#aeb4c6', cursor: 'pointer', borderRadius: 7,
+                      }}>
+                        <input type="checkbox" checked={visible}
+                          onChange={e => toggleColVisible(c.colId, e.target.checked)}
+                          style={{ accentColor: '#e3b169' }} />
+                        {c.label}
+                      </label>
+                    );
+                  })}
+                </div>
+              </>
+            )}
+          </div>
           <div style={S.spacer} />
           <div style={S.count}>
             <b data-testid="crm-customer-count" style={S.countB}>{displayedCount}</b>{' '}
@@ -851,6 +916,9 @@ export default function CustomerListPage() {
               onSortChanged={onColChange}
               onFilterChanged={onColChange}
               suppressMovableColumns={false}
+              // 拖列只重排序，不再"拖出网格 = 隐藏列"（默认行为会让列一拖就消失）。
+              // 隐藏/显示列走顶部「列 ▾」菜单，符合 Notion/Excel 直觉。
+              suppressDragLeaveHidesColumns={true}
             />
           </div>
         )}
