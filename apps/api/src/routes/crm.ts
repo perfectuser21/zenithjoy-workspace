@@ -962,3 +962,94 @@ function normalizeProfileStatus(s: unknown): 'A1' | 'A2' | 'A3' | 'A4' | 'A5' {
 }
 
 export default router;
+
+// ─── GET /api/crm/view-prefs — 读取该运营的列偏好 ──────────────────────────
+// 按 (tenant_id, cs_wechat_id) scope 查 crm_view_prefs。
+// 无记录 → data.prefs=null（前端用默认值）。
+// 鉴权：requireCsReadAccess（与 GET /customers 一致）。
+router.get('/view-prefs', requireCsReadAccess, async (req: Request, res: Response) => {
+  const csWechatId = (req.query['cs_wechat_id'] as string | undefined)?.trim() ?? '';
+  if (!csWechatId) {
+    return fail(res, 400, 'CS_WECHAT_ID_REQUIRED', 'cs_wechat_id 不能为空');
+  }
+
+  // 超管无 tenantId → 按 cs_wechat_id 解出租户
+  let tenantId = req.tenantId ?? '';
+  if (!tenantId) {
+    const r = await pool.query(
+      `SELECT tenant_id FROM zenithjoy.service_agents WHERE wechat_id = $1 AND deleted_at IS NULL LIMIT 1`,
+      [csWechatId],
+    );
+    tenantId = (r.rows?.[0]?.tenant_id as string | undefined) ?? '';
+  }
+  if (!tenantId) {
+    return fail(res, 404, 'TENANT_NOT_FOUND', '解析不到该客服机所属租户');
+  }
+
+  try {
+    const r = await pool.query(
+      `SELECT prefs FROM zenithjoy.crm_view_prefs WHERE tenant_id = $1 AND cs_wechat_id = $2 LIMIT 1`,
+      [tenantId, csWechatId],
+    );
+    const prefs = r.rows?.[0]?.prefs ?? null;
+    return res.json({
+      success: true,
+      data: { prefs },
+      timestamp: new Date().toISOString(),
+    });
+  } catch (err) {
+    return fail(res, 500, 'VIEW_PREFS_FETCH_FAILED', err instanceof Error ? err.message : 'unknown');
+  }
+});
+
+// ─── PUT /api/crm/view-prefs — 保存该运营的列偏好 ──────────────────────────
+// body: { wechat_id: string, prefs: ViewPrefs }
+// ViewPrefs = { views: ViewDef[], activeViewId: string }（多视图扩展结构）
+// 鉴权：requireCsWriteAccess('wechatId')（同 PUT /customers/status，含同租户隔离）。
+//
+// 验证：
+//   - wechat_id 缺 → bodyWechatIdToParam 给空串 → requireCsWriteAccess 鉴权后 resolveServiceWriteTenant 返 404
+//   - prefs 缺 → 400 PREFS_REQUIRED
+//   - prefs 不含 views 数组 → 400 PREFS_INVALID
+router.put(
+  '/view-prefs',
+  bodyWechatIdToParam,
+  requireCsWriteAccess('wechatId'),
+  async (req: Request, res: Response) => {
+    const { wechat_id, prefs } = req.body as { wechat_id?: string; prefs?: unknown };
+    const csWechatId = (typeof wechat_id === 'string' ? wechat_id.trim() : '');
+
+    if (prefs === undefined || prefs === null) {
+      return fail(res, 400, 'PREFS_REQUIRED', 'prefs 不能为空');
+    }
+    if (
+      typeof prefs !== 'object' ||
+      !Array.isArray((prefs as Record<string, unknown>)['views'])
+    ) {
+      return fail(res, 400, 'PREFS_INVALID', 'prefs 必须含 views 数组（多视图结构）');
+    }
+
+    const resolveResult = await resolveServiceWriteTenant(req, csWechatId);
+    if ('error' in resolveResult) {
+      return fail(res, resolveResult.error.status, resolveResult.error.code, resolveResult.error.message);
+    }
+    const { tenantId } = resolveResult;
+
+    try {
+      await pool.query(
+        `INSERT INTO zenithjoy.crm_view_prefs (tenant_id, cs_wechat_id, prefs, updated_at)
+         VALUES ($1, $2, $3, now())
+         ON CONFLICT (tenant_id, cs_wechat_id)
+         DO UPDATE SET prefs = EXCLUDED.prefs, updated_at = now()`,
+        [tenantId, csWechatId, JSON.stringify(prefs)],
+      );
+      return res.json({
+        success: true,
+        data: null,
+        timestamp: new Date().toISOString(),
+      });
+    } catch (err) {
+      return fail(res, 500, 'VIEW_PREFS_SAVE_FAILED', err instanceof Error ? err.message : 'unknown');
+    }
+  },
+);

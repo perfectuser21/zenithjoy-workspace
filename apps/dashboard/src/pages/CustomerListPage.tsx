@@ -6,7 +6,8 @@
  * 暗色 AI 运营台：AG Grid Community（DOM 渲染，修 Glide canvas 点击错位）。
  *  - AG Grid quartz-dark 主题 + 金色 CSS 变量
  *  - 行内编辑：意向/身份双击单元格 → 下拉选择 → onCellValueChanged 写回后端
- *  - 列偏好持久化：列宽/显隐/顺序存 localStorage（crm-col-state）
+ *  - 列偏好持久化：服务端（GET/PUT /api/crm/view-prefs）按账号存储，多视图扩展结构
+ *    onGridReady 恢复列宽/顺序/排序/筛选/quickFilter；变更 debounce 600ms 写回
  *  - 点姓名或「打开主页 ↗」→ navigate /wechat/crm/:contact
  *
  * **保留所有现有行为（per-operator 契约 2026-06-25）**：
@@ -28,6 +29,7 @@ import { useNavigate } from 'react-router-dom';
 import { AgGridReact } from 'ag-grid-react';
 import type {
   ColDef,
+  ColumnState,
   GridReadyEvent,
   ModelUpdatedEvent,
   CellValueChangedEvent,
@@ -104,6 +106,36 @@ interface OnboardingState {
   step_o5_replied: OnboardingStepState;
 }
 
+// ── 视图偏好（多视图扩展结构，本期只用 1 个默认视图） ────────────────────────
+interface ViewDef {
+  id: string;
+  name: string;
+  columnState: ColumnState[];
+  sortModel: { colId: string; sort: 'asc' | 'desc' | null; sortIndex?: number }[];
+  filterModel: Record<string, unknown>;
+  quickFilter: string;
+}
+interface ViewPrefs {
+  views: ViewDef[];
+  activeViewId: string;
+}
+
+const DEFAULT_VIEW_ID = 'default';
+
+function buildDefaultPrefs(): ViewPrefs {
+  return {
+    views: [{
+      id: DEFAULT_VIEW_ID,
+      name: '默认视图',
+      columnState: [],
+      sortModel: [],
+      filterModel: {},
+      quickFilter: '',
+    }],
+    activeViewId: DEFAULT_VIEW_ID,
+  };
+}
+
 const ONBOARDING_STEPS: { key: keyof OnboardingState; label: string; hint: string }[] = [
   { key: 'step_o1_online', label: 'O1 客服机在线', hint: '客服机已上线 / 绑 license' },
   { key: 'step_o2_scanned', label: 'O2 扫到好友', hint: 'agent 扫近期会话联系人上报' },
@@ -129,9 +161,6 @@ function currentIdentity(row: CustomerRow): CrmIdentity {
   if (row.identity === 'customer') return row.managed ? 'customer' : 'blacklist';
   return row.managed ? 'customer' : 'blacklist';
 }
-
-// localStorage key 存列状态偏好
-const COL_STATE_KEY = 'crm-col-state';
 
 // ──────────────────────────────────────────────────────────────────────────────
 // onboarding 圆点
@@ -175,9 +204,91 @@ export default function CustomerListPage() {
   const [displayedCount, setDisplayedCount] = useState(0);
   const gridRef = useRef<AgGridReact<CustomerRow>>(null);
 
+  // 服务端偏好保存防抖 ref（600ms）
+  const saveDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // 用 ref 取当前值避免闭包过时
+  const csWechatIdRef = useRef(csWechatId);
+  const searchQRef = useRef(searchQ);
+  useEffect(() => { csWechatIdRef.current = csWechatId; }, [csWechatId]);
+  useEffect(() => { searchQRef.current = searchQ; }, [searchQ]);
+  // 待应用的偏好（prefs 先到、grid 未 ready 时暂存）
+  const pendingPrefsRef = useRef<ViewPrefs | null>(null);
+
   const flash = useCallback((msg: string) => {
     setToast(msg);
     window.setTimeout(() => setToast(''), 4000);
+  }, []);
+
+  // ── 服务端偏好持久化 ─────────────────────────────────────────────────────
+
+  /** 把偏好应用到 AG Grid：恢复列宽/顺序/排序/筛选/quickFilter。 */
+  const applyViewPrefs = useCallback((prefs: ViewPrefs) => {
+    const api = gridRef.current?.api;
+    if (!api) return;
+    const view = prefs.views.find(v => v.id === prefs.activeViewId) ?? prefs.views[0];
+    if (!view) return;
+    if (view.columnState?.length) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      api.applyColumnState({ state: view.columnState as any[], applyOrder: true });
+    }
+    if (view.filterModel && Object.keys(view.filterModel).length > 0) {
+      api.setFilterModel(view.filterModel);
+    }
+    if (view.quickFilter) {
+      setSearchQ(view.quickFilter);
+    }
+  }, []);
+
+  /** GET /api/crm/view-prefs → 恢复偏好；若 grid 尚未 ready 则暂存到 pendingPrefsRef。 */
+  const loadViewPrefs = useCallback(async (csWid: string) => {
+    if (!csWid) return;
+    try {
+      const res = await sessionFetch(`/api/crm/view-prefs?cs_wechat_id=${encodeURIComponent(csWid)}`);
+      if (!res.ok) return;
+      const data = (await res.json()) as { data?: { prefs?: ViewPrefs | null } };
+      const prefs = data?.data?.prefs;
+      if (!prefs) return;
+      const api = gridRef.current?.api;
+      if (api) {
+        applyViewPrefs(prefs);
+      } else {
+        // grid 还没 ready，暂存等 onGridReady 里消费
+        pendingPrefsRef.current = prefs;
+      }
+    } catch { /* 偏好加载失败不影响主流程 */ }
+  }, [applyViewPrefs]);
+
+  /** PUT /api/crm/view-prefs（debounce 600ms），从 grid 读当前状态写回服务端。 */
+  const saveViewPrefs = useCallback(() => {
+    if (saveDebounceRef.current) clearTimeout(saveDebounceRef.current);
+    saveDebounceRef.current = setTimeout(() => {
+      const csWid = csWechatIdRef.current;
+      if (!csWid) return;
+      const api = gridRef.current?.api;
+      if (!api) return;
+      const columnState = api.getColumnState();
+      const sortModel = columnState
+        .filter(c => c.sort != null)
+        .map(c => ({ colId: c.colId ?? '', sort: c.sort ?? null, sortIndex: c.sortIndex ?? 0 }));
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const filterModel = api.getFilterModel() as Record<string, any>;
+      const prefs: ViewPrefs = {
+        ...buildDefaultPrefs(),
+        views: [{
+          id: DEFAULT_VIEW_ID,
+          name: '默认视图',
+          columnState: columnState as ColumnState[],
+          sortModel,
+          filterModel,
+          quickFilter: searchQRef.current,
+        }],
+      };
+      void sessionFetch('/api/crm/view-prefs', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ wechat_id: csWid, prefs }),
+      }).catch(() => { /* 偏好保存失败静默忽略 */ });
+    }, 600);
   }, []);
 
   const loadCustomers = useCallback(async () => {
@@ -195,7 +306,9 @@ export default function CustomerListPage() {
       const data = (await res.json()) as CustomerListResponse;
       setAuthExpired(false);
       setRows(data.customers ?? []);
-      if (data.cs_wechat_id) setCsWechatId(data.cs_wechat_id);
+      if (data.cs_wechat_id) {
+        setCsWechatId(data.cs_wechat_id);
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : '加载失败');
       setRows([]);
@@ -216,7 +329,18 @@ export default function CustomerListPage() {
   }, []);
 
   useEffect(() => { void loadCustomers(); }, [loadCustomers]);
+  // csWechatId 就绪后加载视图偏好 + onboarding
+  useEffect(() => {
+    if (csWechatId) {
+      void loadViewPrefs(csWechatId);
+    }
+  }, [csWechatId, loadViewPrefs]);
   useEffect(() => { void loadOnboarding(csWechatId); }, [csWechatId, loadOnboarding]);
+
+  // searchQ 变化时也触发偏好保存（debounced）
+  useEffect(() => {
+    if (csWechatIdRef.current) saveViewPrefs();
+  }, [searchQ, saveViewPrefs]);
 
   const writeJson = useCallback(async (url: string, method: string, body: unknown): Promise<unknown | null> => {
     const res = await sessionFetch(url, {
@@ -293,30 +417,25 @@ export default function CustomerListPage() {
 
   // ── AG Grid 事件处理 ────────────────────────────────────────────────────────
 
-  // 列偏好恢复
+  // grid ready：消费暂存偏好（prefs 先到 grid 后 ready 的情况）
   const onGridReady = useCallback((params: GridReadyEvent<CustomerRow>) => {
-    try {
-      const saved = localStorage.getItem(COL_STATE_KEY);
-      if (saved) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        params.api.applyColumnState({ state: JSON.parse(saved) as any[], applyOrder: true });
-      }
-    } catch { /* localStorage 不可用或格式损坏时忽略 */ }
-  }, []);
+    if (pendingPrefsRef.current) {
+      applyViewPrefs(pendingPrefsRef.current);
+      pendingPrefsRef.current = null;
+    }
+    // 触发一次计数更新
+    setDisplayedCount(params.api.getDisplayedRowCount());
+  }, [applyViewPrefs]);
 
   // 计数更新（quickFilterText 过滤后）
   const onModelUpdated = useCallback((event: ModelUpdatedEvent<CustomerRow>) => {
     setDisplayedCount(event.api.getDisplayedRowCount());
   }, []);
 
-  // 列偏好保存
-  const saveColState = useCallback(() => {
-    const api = gridRef.current?.api;
-    if (!api) return;
-    try {
-      localStorage.setItem(COL_STATE_KEY, JSON.stringify(api.getColumnState()));
-    } catch { /* localStorage 不可用时忽略 */ }
-  }, []);
+  // 列变更 → debounce 保存偏好（列宽/显隐/顺序/排序/筛选）
+  const onColChange = useCallback(() => {
+    saveViewPrefs();
+  }, [saveViewPrefs]);
 
   // 行内编辑完成 → 写回后端
   // identity 列没有 field（用 valueGetter），靠 colDef.colId 识别
@@ -724,9 +843,11 @@ export default function CustomerListPage() {
               onGridReady={onGridReady}
               onModelUpdated={onModelUpdated}
               onCellValueChanged={(e) => void onCellValueChanged(e)}
-              onColumnResized={saveColState}
-              onColumnVisible={saveColState}
-              onColumnMoved={saveColState}
+              onColumnResized={onColChange}
+              onColumnVisible={onColChange}
+              onColumnMoved={onColChange}
+              onSortChanged={onColChange}
+              onFilterChanged={onColChange}
               suppressMovableColumns={false}
             />
           </div>
