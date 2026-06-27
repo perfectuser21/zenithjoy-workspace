@@ -222,9 +222,10 @@ export async function upsertAgentByHeartbeat(args: {
               status           = 'online',
               updated_at       = now()
         WHERE id = $3
+          AND license_id = $5
         RETURNING id, tenant_id, agent_id, hostname, version, license_id,
                   bound_folder_path, last_heartbeat_at, status, last_seen`,
-      [version, hostname, agentUuid, osType ?? null],
+      [version, hostname, agentUuid, osType ?? null, licenseId],
     );
     if (precise.rows[0]) {
       // 如果 license 还没有 pinned_agent，把这台设为 pinned
