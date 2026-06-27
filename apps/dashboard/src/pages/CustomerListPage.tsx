@@ -459,8 +459,9 @@ export default function CustomerListPage() {
       headerName: '姓名',
       width: 150,
       pinned: 'left' as const,
-      cellRenderer: (p: ICellRendererParams<CustomerRow>) =>
-        `<span style="color:#fff;font-weight:600;cursor:pointer">${p.value ?? '—'}</span>`,
+      cellRenderer: (p: ICellRendererParams<CustomerRow>) => (
+        <span style={{ color: '#fff', fontWeight: 600, cursor: 'pointer' }}>{p.value ?? '—'}</span>
+      ),
       onCellClicked: (p) => { if (p.data) openProfile(p.data); },
     },
     {
@@ -483,7 +484,7 @@ export default function CustomerListPage() {
         const val = (p.value as CrmStatus) ?? 'A1';
         const color = STATUS_COLORS[val] ?? '#7a8092';
         const label = STATUS_LABELS[val] ?? val;
-        return `<span style="color:${color};font-weight:600">● ${label}</span>`;
+        return <span style={{ color, fontWeight: 600 }}>● {label}</span>;
       },
     },
     {
@@ -498,7 +499,7 @@ export default function CustomerListPage() {
       cellRenderer: (p: ICellRendererParams<CustomerRow>) => {
         const id = (p.value as CrmIdentity) ?? 'customer';
         const color = IDENTITY_COLORS[id] ?? '#aeb4c6';
-        return `<span style="color:${color}">${IDENTITY_LABELS[id] ?? id}</span>`;
+        return <span style={{ color }}>{IDENTITY_LABELS[id] ?? id}</span>;
       },
       // identity 列没有 field，onCellValueChanged 靠 colDef.field 路由；
       // 这里单独用 colId 标识，编辑完成由 onCellValueChanged 通过 colDef.colId 识别
@@ -536,8 +537,9 @@ export default function CustomerListPage() {
       sortable: false,
       filter: false,
       resizable: false,
-      cellRenderer: () =>
-        `<span style="color:#e3b169;font-weight:600;cursor:pointer;font-size:12.5px">打开主页 ↗</span>`,
+      cellRenderer: () => (
+        <span style={{ color: '#e3b169', fontWeight: 600, cursor: 'pointer', fontSize: 12.5 }}>打开主页 ↗</span>
+      ),
       onCellClicked: (p) => { if (p.data) openProfile(p.data); },
     },
   ], [openProfile]);
