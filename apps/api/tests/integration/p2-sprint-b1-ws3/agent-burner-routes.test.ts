@@ -102,7 +102,7 @@ describe('Workstream 3a — agent-burner routes [BEHAVIOR]', () => {
   });
 
   it('GET /api/agent/burner/sessions 返 burner 列表', async () => {
-    const r = await request(app).get(`/api/agent/burner/sessions?tenant_id=${tenantId}`);
+    const r = await request(app).get('/api/agent/burner/sessions').set('X-Tenant-Id', tenantId);
     expect(r.status).toBe(200);
     expect(Array.isArray(r.body.data.sessions)).toBe(true);
     expect(r.body.data.sessions.every((s: any) => s.role === 'burner')).toBe(true);

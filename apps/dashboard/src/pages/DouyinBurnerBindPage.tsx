@@ -48,7 +48,7 @@ export default function DouyinBurnerBindPage() {
         const bound = !!j?.data?.bound;
         setFeishuBound(bound);
         if (bound) {
-          const sr = await fetch('/api/agent/burner/sessions?tenant_id=current');
+          const sr = await fetch('/api/agent/burner/sessions');
           const sj = await sr.json();
           if (cancelled) return;
           setSessions(sj?.data?.sessions || []);

@@ -1,7 +1,25 @@
-import { describe, it, expect, vi } from 'vitest';
+/* eslint-disable @typescript-eslint/no-explicit-any */
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import request from 'supertest';
 import express from 'express';
 import { acquisitionRouter } from './acquisition';
+
+vi.mock('../db/connection', () => ({
+  default: { query: vi.fn() },
+}));
+
+vi.mock('../middleware/tenant-context', () => ({
+  tenantContext: (req: any, _res: any, next: any) => {
+    const t = req.headers['x-test-tenant-id'];
+    if (typeof t === 'string' && t.length > 0) req.tenantId = t;
+    next();
+  },
+  tenantContextOptional: (req: any, _res: any, next: any) => {
+    const t = req.headers['x-test-tenant-id'] || req.body?.tenant_id || '';
+    if (typeof t === 'string' && t.length > 0) req.tenantId = t;
+    next();
+  },
+}));
 
 vi.mock('../services/keyword-expander', () => ({
   expandKeywords: vi.fn().mockResolvedValue(['装修', '装修公司', '室内装修', '家装', '装修报价']),
@@ -174,5 +192,33 @@ describe('GET /api/acquisition/leads', () => {
     expect(res.status).toBe(200);
     expect(res.body).toHaveProperty('leads');
     expect(res.body).toHaveProperty('total');
+  });
+});
+
+describe('collect/start — tenant 从 session，不信前端占位 [BEHAVIOR]', () => {
+  beforeEach(() => { vi.clearAllMocks(); });
+
+  it('带 x-test-tenant-id + keywords → 用 session tenant 派单（不拿 body 占位）', async () => {
+    const mod = await import('../db/connection');
+    // loadBindingLite 命中 + INSERT 返 id（按实现里 query 次序 mock）
+    (mod.default.query as any)
+      .mockResolvedValueOnce({ rows: [{ tenant_id: 'real', app_token: 'x', enterprise_doc_token: 'd' }] }) // loadBindingLite
+      .mockResolvedValueOnce({ rows: [{ id: 'task-1' }] }); // INSERT
+    const res = await request(app)
+      .post('/api/acquisition/collect/start')
+      .set('x-test-tenant-id', '4807edc7-da2a-4e8d-9223-31f4d25c12c6')
+      .send({ keywords: ['装修'] }); // 不传 tenant_id
+    expect([200, 400]).toContain(res.status); // 200 派单 / 400 仅当 binding 判定不过——关键是不 401、不崩
+    // 至少 loadBindingLite 用的是 session tenant
+    const firstArgs = (mod.default.query as any).mock.calls[0][1];
+    expect(JSON.stringify(firstArgs)).toContain('4807edc7-da2a-4e8d-9223-31f4d25c12c6');
+    expect(JSON.stringify(firstArgs)).not.toContain('current');
+  });
+
+  it('无 tenant 上下文 → 401 NO_TENANT（不是 400 TENANT_ID_REQUIRED、不崩）', async () => {
+    const res = await request(app)
+      .post('/api/acquisition/collect/start')
+      .send({ keywords: ['装修'] });
+    expect(res.status).toBe(401);
   });
 });

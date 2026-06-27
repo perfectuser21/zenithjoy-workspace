@@ -329,3 +329,39 @@ describe('agent-burner router [dm_outreach]', () => {
     expect(r.body.error.code).toBe('NO_DM_TASK');
   });
 });
+
+describe('GET /sessions — tenant 从 session 解析，不信 query [BEHAVIOR]', () => {
+  beforeEach(() => { vi.clearAllMocks(); });
+
+  it('带 x-test-tenant-id → 200，pool 用该 tenant 查（不用 query）', async () => {
+    vi.mocked(pool.query).mockResolvedValueOnce({ rows: [{ account_label: 'live101942', role: 'burner', status: 'active', bound_at: null, created_at: null, account_nickname: null }] } as any);
+    const app = buildApp();
+    const res = await request(app)
+      .get('/api/agent/burner/sessions?tenant_id=current')
+      .set('x-test-tenant-id', '4807edc7-da2a-4e8d-9223-31f4d25c12c6');
+    expect(res.status).toBe(200);
+    expect(res.body?.data?.sessions?.[0]?.account_label).toBe('live101942');
+    // 关键：pool 拿的是 session tenant，不是 query 的 'current'
+    const calledWith = vi.mocked(pool.query).mock.calls[0][1];
+    expect(calledWith).toContain('4807edc7-da2a-4e8d-9223-31f4d25c12c6');
+    expect(JSON.stringify(calledWith)).not.toContain('current');
+  });
+
+  it('无 tenant 上下文（只带 ?tenant_id=current）→ 401，绝不崩/不拿 current 查', async () => {
+    const app = buildApp();
+    const res = await request(app).get('/api/agent/burner/sessions?tenant_id=current');
+    expect(res.status).toBe(401);
+    expect(res.body?.error?.code).toBe('NO_TENANT');
+    expect(vi.mocked(pool.query)).not.toHaveBeenCalled();
+  });
+
+  it('pool 抛错 → 500 JSON（try/catch 兜，不抛崩进程）', async () => {
+    vi.mocked(pool.query).mockRejectedValueOnce(new Error('invalid input syntax for type uuid'));
+    const app = buildApp();
+    const res = await request(app)
+      .get('/api/agent/burner/sessions')
+      .set('x-test-tenant-id', '4807edc7-da2a-4e8d-9223-31f4d25c12c6');
+    expect(res.status).toBe(500);
+    expect(res.body?.success).toBe(false);
+  });
+});

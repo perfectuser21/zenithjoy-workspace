@@ -14,6 +14,7 @@ import {
   resolveTerminalStatus,
   seedKeywordsFromDoc,
 } from '../services/acquisition-collect';
+import { tenantContextOptional } from '../middleware/tenant-context';
 
 export const acquisitionRouter = Router();
 
@@ -333,6 +334,14 @@ function fail(res: Response, status: number, code: string, message: string) {
     .status(status)
     .json({ success: false, error: { code, message }, timestamp: new Date().toISOString() });
 }
+function tenantOf(req: Request, res: Response): string | null {
+  const t = req.tenantId;
+  if (!t) {
+    fail(res, 401, 'NO_TENANT', '缺租户上下文（未登录或无 X-Tenant-Id）');
+    return null;
+  }
+  return t;
+}
 
 const EXPECTED_SMOKE_TOKEN = () => process.env.SMOKE_TOKEN || 'smoke-secret-2026';
 
@@ -395,68 +404,81 @@ async function llmExpandKeywords(docText: string): Promise<string[]> {
 }
 
 // POST /api/acquisition/collect/expand
-acquisitionRouter.post('/collect/expand', async (req: Request, res: Response) => {
-  const tenantId = req.body?.tenant_id;
+acquisitionRouter.post('/collect/expand', tenantContextOptional, async (req: Request, res: Response) => {
+  const tenantId = tenantOf(req, res);
+  if (!tenantId) return;
   const manualKeywords: unknown = req.body?.manual_keywords;
-  if (!tenantId) return fail(res, 400, 'TENANT_ID_REQUIRED', '缺 tenant_id');
 
-  // 前置校验 1：未绑飞书
-  const binding = await loadBindingLite(tenantId);
-  if (!binding) return fail(res, 400, 'FEISHU_NOT_BOUND', '未绑飞书，请先去绑定页绑定');
-  // 前置校验 2：无企业信息文档
-  if (!binding.enterprise_doc_token)
-    return fail(res, 400, 'NO_ENTERPRISE_DOC', '无企业信息文档，请先在飞书填写企业信息');
-
-  // 手输优先：manual_keywords 非空 → 完全替代 AI 词（仍需通过前置校验）
-  if (Array.isArray(manualKeywords) && manualKeywords.length > 0) {
-    const keywords = manualKeywords
-      .map((w) => String(w).trim())
-      .filter((w) => w.length > 0)
-      .map((word) => ({ word, source: 'manual' as const }));
-    return ok(res, { degraded: false, keywords });
-  }
-
-  // 读文档纯文本 + 空判定
-  let docText: string | null;
   try {
-    docText = await readEnterpriseDocText(tenantId);
-  } catch (e) {
-    console.error('[acquisition/expand] 读文档失败:', (e as Error).message);
-    docText = null;
-  }
-  if (docText === null || docText.trim().length < EMPTY_DOC_MIN_CHARS)
-    return fail(res, 400, 'EMPTY_DOC', `企业信息文档需有文字（纯文本 < ${EMPTY_DOC_MIN_CHARS} 字判为空）`);
+    // 前置校验 1：未绑飞书
+    const binding = await loadBindingLite(tenantId);
+    if (!binding) return fail(res, 400, 'FEISHU_NOT_BOUND', '未绑飞书，请先去绑定页绑定');
+    // 前置校验 2：无企业信息文档
+    if (!binding.enterprise_doc_token)
+      return fail(res, 400, 'NO_ENTERPRISE_DOC', '无企业信息文档，请先在飞书填写企业信息');
 
-  // DeepSeek 扩 3 词；失败有限重试后种子兜底（degraded=true）
-  try {
-    const words = await llmExpandKeywords(docText);
-    return ok(res, { degraded: false, keywords: words.map((word) => ({ word, source: 'ai' as const })) });
-  } catch (e) {
-    console.warn('[acquisition/expand] DeepSeek 降级，种子兜底:', (e as Error).message);
-    const seeds = seedKeywordsFromDoc(docText);
-    return ok(res, { degraded: true, keywords: seeds.map((word) => ({ word, source: 'seed' as const })) });
+    // 手输优先：manual_keywords 非空 → 完全替代 AI 词（仍需通过前置校验）
+    if (Array.isArray(manualKeywords) && manualKeywords.length > 0) {
+      const keywords = manualKeywords
+        .map((w) => String(w).trim())
+        .filter((w) => w.length > 0)
+        .map((word) => ({ word, source: 'manual' as const }));
+      return ok(res, { degraded: false, keywords });
+    }
+
+    // 读文档纯文本 + 空判定
+    let docText: string | null;
+    try {
+      docText = await readEnterpriseDocText(tenantId);
+    } catch (e) {
+      console.error('[acquisition/expand] 读文档失败:', (e as Error).message);
+      docText = null;
+    }
+    if (docText === null || docText.trim().length < EMPTY_DOC_MIN_CHARS)
+      return fail(res, 400, 'EMPTY_DOC', `企业信息文档需有文字（纯文本 < ${EMPTY_DOC_MIN_CHARS} 字判为空）`);
+
+    // DeepSeek 扩 3 词；失败有限重试后种子兜底（degraded=true）
+    try {
+      const words = await llmExpandKeywords(docText);
+      return ok(res, { degraded: false, keywords: words.map((word) => ({ word, source: 'ai' as const })) });
+    } catch (e) {
+      console.warn('[acquisition/expand] DeepSeek 降级，种子兜底:', (e as Error).message);
+      const seeds = seedKeywordsFromDoc(docText);
+      return ok(res, { degraded: true, keywords: seeds.map((word) => ({ word, source: 'seed' as const })) });
+    }
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error('[acquisition/expand]', msg);
+    return fail(res, 500, 'EXPAND_FAILED', msg);
   }
 });
 
 // POST /api/acquisition/collect/start
-acquisitionRouter.post('/collect/start', async (req: Request, res: Response) => {
-  const tenantId = req.body?.tenant_id;
+acquisitionRouter.post('/collect/start', tenantContextOptional, async (req: Request, res: Response) => {
+  const tenantId = tenantOf(req, res);
+  if (!tenantId) return;
   const keywords: unknown = req.body?.keywords;
-  if (!tenantId) return fail(res, 400, 'TENANT_ID_REQUIRED', '缺 tenant_id');
-  if (!Array.isArray(keywords) || keywords.length === 0)
-    return fail(res, 400, 'MISSING_KEYWORDS', 'keywords 不能为空');
 
-  const binding = await loadBindingLite(tenantId);
-  if (!binding) return fail(res, 400, 'FEISHU_NOT_BOUND', '未绑飞书');
+  try {
+    if (!Array.isArray(keywords) || keywords.length === 0)
+      return fail(res, 400, 'MISSING_KEYWORDS', 'keywords 不能为空');
 
-  const r = await pool.query(
-    `INSERT INTO zenithjoy.acquisition_collect_tasks (tenant_id, keywords, source, status)
-     VALUES ($1, $2::jsonb, 'ai', 'pending')
-     RETURNING id`,
-    [tenantId, JSON.stringify(keywords)]
-  );
-  const taskId = r.rows[0].id as string;
-  return ok(res, { task_id: taskId, status: 'pending' });
+    const binding = await loadBindingLite(tenantId);
+    if (!binding) return fail(res, 400, 'FEISHU_NOT_BOUND', '未绑飞书');
+
+    const r = await pool.query(
+      `INSERT INTO zenithjoy.acquisition_collect_tasks (tenant_id, keywords, source, status)
+       VALUES ($1, $2::jsonb, 'ai', 'pending')
+       RETURNING id`,
+      [tenantId, JSON.stringify(keywords)]
+    );
+    const taskId = r.rows[0].id as string;
+    return ok(res, { task_id: taskId, status: 'pending' });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error('[acquisition/start]', msg);
+    return fail(res, 500, 'START_FAILED', msg);
+  }
 });
 
 // POST /api/acquisition/collect/cancel

@@ -64,7 +64,7 @@ SESSION_COUNT=$(psql "$DB" -t -A -c "SELECT count(*) FROM zenithjoy.agent_platfo
 [ "$SESSION_COUNT" = "1" ] || { echo "FAIL Step 5: burner session 写入数 $SESSION_COUNT"; exit 1; }
 
 echo "=== Step 6: dashboard 查询 burner sessions ==="
-curl -fsS "$API_BASE/api/agent/burner/sessions?tenant_id=$TENANT_ID" \
+curl -fsS "$API_BASE/api/agent/burner/sessions" -H "X-Tenant-Id: $TENANT_ID" \
   | jq -e '.data.sessions | length >= 1' >/dev/null \
   || { echo "FAIL Step 6: 无 burner sessions"; exit 1; }
 
