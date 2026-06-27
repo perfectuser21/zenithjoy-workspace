@@ -3913,3 +3913,11 @@ agent_suite:
     status: active
     product: 私域运营
     note: "守卫：line02 前端页面不再硬编码占位 tenant（DouyinBurnerBindPage 的 tenant_id=current / LeadsPage 的 TENANT_ID=e2e-acq-tenant），靠 session 解析（修 staging 主链 502，PR #935）。"
+
+  - id: dashboard-agent-download-dotenv-link
+    path: apps/dashboard/src/pages/__tests__/agent-download-dotenv-link.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 私域运营
+    note: "守卫：AgentDownloadPage 必须含指向 /api/agent/install-pack/dotenv 的下载链接（防 staging 用户拿到写死生产地址的 .env，401 bug 修复 #936）。源码断言风格。"
