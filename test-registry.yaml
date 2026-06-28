@@ -3773,6 +3773,14 @@ agent_suite:
     product: 客户私域AI接管
     note: "真实微信号(SSOT)落库：setupCSByMachine 写 real_wechat_id/wechat_display_name/wxid_internal 三列(COALESCE 幂等)、合成 wechat_id 不变；listAllMachines 返回 real_wechat_id+wechat_display_name 供前端 display。"
 
+  - id: line04-cs-machines-health-overlay-unit
+    path: apps/api/src/services/wechat/__tests__/cs-machines-health-overlay.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 客户私域AI接管
+    note: "车看板治'未找到微信'假象(C/issue 205799b8)：listAllMachines 用 listen_chat 心跳 diag.main_window_found(内存 Map 真值)覆盖恒空的 preflight found_window，按 agent_uuid/agent_id 匹配，true→found_window/wechat_ok 真+清假告警、新鲜→在线；过期不谎报。选机器列表含未绑定上线机(D)：scoped 改 license_machines 驱动+licenses.tenant_id scope，未绑定机以 configured=false 出现。"
+
   - id: line04-per-operator-smoke
     path: .github/workflows/scripts/smoke/line04-per-operator-smoke.sh
     type: smoke
