@@ -19,7 +19,7 @@ import crypto from 'node:crypto';
 import axios from 'axios';
 import pool from '../db/connection';
 import { callOpenRouter } from '../llm/openrouter';
-import type { ChatMessage, ContactFact, ContactMemory, Persona } from './wechat/types';
+import type { BusinessKB, ChatMessage, ContactFact, ContactMemory, Persona } from './wechat/types';
 import { retrieveRelevantKB } from './wechat/business-kb';
 import { getPersona, getBusinessKB, getAutoAgentConfig } from './wechat/cs-config-store';
 import { getCSConfigByAgentId, resolveCsWechatIdByAgentId } from './wechat/cs-account-config-store';
@@ -195,6 +195,42 @@ function sanitizeReply(text: string, persona: Persona): string {
   return out.replace(/[ \t]{2,}/g, ' ').trim();
 }
 
+// ─── IA 重设计刀1：每号 persona / business_kb 优先，字段/整份缺失回落全局（兼容、不退化）──
+
+/**
+ * 每号 persona 优先：cs 命中的字段用 cs 的，空字段（含整份缺失）回落全局对应字段。
+ * 这样新号还没填全的字段不会让回复退化，已填字段绝对用该号自己的（每号独立人设）。
+ */
+function mergePersonaPreferCs(cs: Partial<Persona> | undefined, global: Persona): Persona {
+  if (!cs) return global;
+  const pick = (v: string | undefined, fb: string) =>
+    typeof v === 'string' && v.trim() ? v : fb;
+  return {
+    self_name: pick(cs.self_name, global.self_name),
+    address_style: pick(cs.address_style, global.address_style),
+    tone: pick(cs.tone, global.tone),
+    sentence_style: pick(cs.sentence_style, global.sentence_style),
+    use_emoji: pick(cs.use_emoji, global.use_emoji),
+    banned_phrases:
+      Array.isArray(cs.banned_phrases) && cs.banned_phrases.length
+        ? cs.banned_phrases
+        : global.banned_phrases,
+    few_shot:
+      Array.isArray(cs.few_shot) && cs.few_shot.length ? cs.few_shot : global.few_shot,
+  };
+}
+
+/** 每号 business_kb 是否有实质内容（有 → 用每号；空 → 回落全局兜底）。 */
+function csKbHasContent(kb: BusinessKB | undefined): boolean {
+  if (!kb) return false;
+  return Boolean(
+    kb.company?.name?.trim() ||
+      (Array.isArray(kb.products) && kb.products.length) ||
+      (Array.isArray(kb.audience_segments) && kb.audience_segments.length) ||
+      (Array.isArray(kb.qa_docs) && kb.qa_docs.length),
+  );
+}
+
 // ─── 主入口 ───────────────────────────────────────────────────────────────────
 
 export interface GenerateChatDraftParams {
@@ -360,17 +396,15 @@ export async function generateChatDraft(
     console.warn('[wechat-draft] 写入站消息失败（不影响生成）:', err);
   }
 
-  // 人设单一 SSOT（消除「话术知识库」↔「客服机」两份重复）：
-  //   - persona 的 style（语气/称呼/句式/emoji/禁用词/few_shot）唯一真相来源 = 全局话术库 getPersona()，
-  //     运营在一个地方编辑就处处生效（不再被每客服一键配置的硬编码死值盖掉）。
-  //   - 每客服仅保留 self_name（人设名）作为 per-operator 覆盖位（不同客服可叫不同名）。
-  // 企业知识库暂仍全局（每客服 KB 后续）。
+  // IA 重设计刀1（反转 PR#940）：AI 回复读【每号完整 persona + 每号 business_kb】（每号独立人设+知识库）。
+  //   - 带 agent_id 解到该号配置(csConfig) → persona 全套 style + self_name + business_kb 全用【这个号自己的】。
+  //   - csConfig 缺失（无 agent_id / 未配）→ 回落全局 getPersona()/getBusinessKB()（向后兼容）。
+  //   - csConfig 命中但个别字段/整份 business_kb 为空（新号没填全）→ 该处回落全局，保证回复不退化。
   const globalPersona = await getPersona();
-  const selfNameOverride = csConfig?.persona?.self_name?.trim();
-  const persona = selfNameOverride
-    ? { ...globalPersona, self_name: selfNameOverride }
-    : globalPersona;
-  const kb = await getBusinessKB();
+  const persona = mergePersonaPreferCs(csConfig?.persona, globalPersona);
+  const kb: BusinessKB = csKbHasContent(csConfig?.business_kb)
+    ? (csConfig!.business_kb as BusinessKB)
+    : await getBusinessKB();
   let shortTerm: ChatMessage[] = [];
   let memory: ContactMemory = { summary: '', facts: [] as ContactFact[] };
   try {

@@ -19,6 +19,9 @@ import {
   getBusinessKB,
   saveBusinessKB,
   suggestAudience,
+  listCSMachines,
+  getCSAccountConfig,
+  saveCSAccountConfig,
   type Persona,
   type BusinessKB,
 } from '../wechat-cs-config.api';
@@ -81,5 +84,31 @@ describe('wechat-cs-config api 客户端', () => {
       industry: '餐饮',
     });
     expect(r.audience_segments[0].code).toBe('A1');
+  });
+
+  // ── IA 重设计刀1：每号配置 ──
+  it('listCSMachines → GET /wechat/cs/machines 返回 machines 数组', async () => {
+    mockGet.mockResolvedValue({ data: { machines: [{ machine_id: 'm1', configured: true, wechat_id: 'wxid_a' }] } });
+    const r = await listCSMachines();
+    expect(mockGet).toHaveBeenCalledWith('/wechat/cs/machines');
+    expect(r[0].wechat_id).toBe('wxid_a');
+  });
+
+  it('getCSAccountConfig → GET /wechat/cs/config/:wechatId 返回该号 persona+business_kb', async () => {
+    mockGet.mockResolvedValue({ data: { wechat_id: 'wxid_a', persona: PERSONA, business_kb: KB } });
+    const r = await getCSAccountConfig('wxid_a');
+    expect(mockGet).toHaveBeenCalledWith('/wechat/cs/config/wxid_a');
+    expect(r?.persona.self_name).toBe('小齐');
+  });
+
+  it('getCSAccountConfig 404 → 返回 null（前端填空表）', async () => {
+    mockGet.mockRejectedValue(new Error('404'));
+    const r = await getCSAccountConfig('wxid_none');
+    expect(r).toBeNull();
+  });
+
+  it('saveCSAccountConfig → PUT /wechat/cs/config/:wechatId 带 persona+business_kb', async () => {
+    await saveCSAccountConfig('wxid_a', { persona: PERSONA, business_kb: KB });
+    expect(mockPut).toHaveBeenCalledWith('/wechat/cs/config/wxid_a', { persona: PERSONA, business_kb: KB });
   });
 });

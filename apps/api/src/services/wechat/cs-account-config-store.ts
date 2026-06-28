@@ -17,16 +17,20 @@
 
 import pool from '../../db/connection';
 import { listHeartbeats, type HeartbeatRecord } from '../wechat-heartbeat';
-import type { Persona } from './types';
+import type { BusinessKB, Persona } from './types';
 
 export interface CSAccountConfig {
   wechat_id: string;
   /**
-   * persona 单一 SSOT 后：此字段**只有 self_name 有意义**（per-operator 人设名覆盖位）。
-   * style（语气/称呼/句式/emoji/禁用词/few_shot）的真相在全局话术库（wechat_cs_config），
-   * 不在每客服独立存储。类型仍为 Persona 以兼容存量行读取，但 saveCSConfig 落库只截 self_name。
+   * IA 重设计刀1（反转 PR#940）：每号承载**完整** persona（self_name + 全套 style），每号独立。
+   * 用户拍板「每个客服号要不同名字+语气+话术」。全局话术库 wechat_cs_config 仅作回落兜底（deprecated）。
    */
   persona: Persona;
+  /**
+   * IA 重设计刀1：每号独立的企业知识库（company/products/audience_segments/qa_docs）。
+   * 用户拍板「知识库也每号独立（不同号可扮不同业务）」。空 {} → AI 回复回落全局兜底。
+   */
+  business_kb: BusinessKB;
   auto_agent_enabled: boolean;
   business_hours_start: string;
   business_hours_end: string;
@@ -37,7 +41,7 @@ export interface CSAccountConfig {
 }
 
 /** 每客服配置默认值（新客服默认关 = dryrun，绝不在没人配过时真发）。 */
-const CS_ACCOUNT_DEFAULTS: Omit<CSAccountConfig, 'wechat_id' | 'persona'> = {
+const CS_ACCOUNT_DEFAULTS: Omit<CSAccountConfig, 'wechat_id' | 'persona' | 'business_kb'> = {
   auto_agent_enabled: false,
   business_hours_start: '06:00',
   business_hours_end: '24:00',
@@ -45,6 +49,10 @@ const CS_ACCOUNT_DEFAULTS: Omit<CSAccountConfig, 'wechat_id' | 'persona'> = {
   whitelist: [],
   daily_limit: 0,
 };
+
+/** 空 persona / 空 business_kb（新号无配时占位，落库写 {}，读出补结构）。 */
+const EMPTY_PERSONA = {} as Persona;
+const EMPTY_KB = {} as BusinessKB;
 
 export interface IdentityAlert {
   wechat_id: string;
@@ -71,6 +79,7 @@ function normalizeRow(row: Record<string, unknown>): CSAccountConfig {
   return {
     wechat_id: String(row.wechat_id),
     persona: asObject<Persona>(row.persona, {} as Persona),
+    business_kb: asObject<BusinessKB>(row.business_kb, {} as BusinessKB),
     auto_agent_enabled: row.auto_agent_enabled === true,
     business_hours_start:
       typeof row.business_hours_start === 'string'
@@ -100,7 +109,7 @@ function normalizeRow(row: Record<string, unknown>): CSAccountConfig {
 export async function getCSConfig(wechatId: string): Promise<CSAccountConfig | null> {
   try {
     const res = await pool.query(
-      `SELECT wechat_id, persona, auto_agent_enabled, business_hours_start, business_hours_end,
+      `SELECT wechat_id, persona, business_kb, auto_agent_enabled, business_hours_start, business_hours_end,
               key_contact_wechat, whitelist, daily_limit, updated_at
          FROM zenithjoy.wechat_cs_account_config
         WHERE wechat_id = $1`,
@@ -423,9 +432,11 @@ export async function listAllMachines(tenantId?: string, limit = 100): Promise<C
  */
 export async function setupCSByMachine(
   machineId: string,
-  patch: Partial<Omit<CSAccountConfig, 'persona'>> & {
-    // persona 单一 SSOT：每客服只需 self_name（人设名）；style 真相在全局话术库。
-    persona?: Pick<Persona, 'self_name'> & Partial<Persona>;
+  patch: Partial<Omit<CSAccountConfig, 'persona' | 'business_kb'>> & {
+    // IA 重设计刀1：客服机页只发运营参数；persona/business_kb 由「话术库」页每号编辑，setup 一般不带。
+    // 仍接受（兼容存量一键配置写法），行级 merge 不清空已配人设/知识库。
+    persona?: Partial<Persona>;
+    business_kb?: Partial<BusinessKB>;
     wechat_id?: string;
     // SSOT 真实微信号(perfect-xx)——运营手填(wxauto 读不到微信号)；昵称/内部 wxid 由 agent 上报，
     // 一键配置若已带上(前端把扫码结果透传)也一并落库。三者写进 service_agents 新列，不动合成 wechat_id 主 key。
@@ -478,34 +489,53 @@ export async function setupCSByMachine(
 /**
  * upsert「该客服那一行」。只写该 wechat_id 那一行，ON CONFLICT 更新同行，绝不动其他客服行。
  *
- * persona 单一 SSOT（消除话术库↔客服机重复）：每客服 persona **只存 self_name**（人设名，
- * per-operator 覆盖位）。style（语气/称呼/句式/emoji/禁用词/few_shot）的真相在全局话术库
- * （wechat_cs_config），不在这里独立存储——调用方即便传来整份 persona（历史一键配置写法），
- * 落库也只截取 self_name，杜绝两边各存一份导致「对不上 / 抢」。
+ * IA 重设计刀1（反转 PR#940）：每号承载**完整** persona + 每号 business_kb，落库存整份（不再截 self_name）。
+ *
+ * 行级 merge（关键）：本表现被两个页面写同一行——「话术库」页写 persona/business_kb、「客服机」页写运营参数。
+ * 若按整行覆盖，两页会互相把对方字段写成默认/空（= 数据丢失 + 新的「抢」）。故先读既有行，patch 里
+ * **没传的字段保留既有值**：persona/business_kb 未传 → 保留；运营参数未传 → 保留。这样两页各写各的互不清空。
  */
 export async function saveCSConfig(
   wechatId: string,
-  patch: Partial<Omit<CSAccountConfig, 'persona'>> & {
-    persona?: Pick<Persona, 'self_name'> & Partial<Persona>;
+  patch: Partial<Omit<CSAccountConfig, 'wechat_id' | 'persona' | 'business_kb' | 'updated_at'>> & {
+    persona?: Partial<Persona>;
+    business_kb?: Partial<BusinessKB>;
   },
 ): Promise<void> {
+  // 行级 merge 基线：既有行 → 用它；无行（新号）→ 默认值 + 空 persona/kb。
+  const existing = await getCSConfig(wechatId);
+  const base: Omit<CSAccountConfig, 'wechat_id' | 'updated_at'> = existing
+    ? {
+        persona: existing.persona,
+        business_kb: existing.business_kb,
+        auto_agent_enabled: existing.auto_agent_enabled,
+        business_hours_start: existing.business_hours_start,
+        business_hours_end: existing.business_hours_end,
+        key_contact_wechat: existing.key_contact_wechat,
+        whitelist: existing.whitelist,
+        daily_limit: existing.daily_limit,
+      }
+    : { persona: EMPTY_PERSONA, business_kb: EMPTY_KB, ...CS_ACCOUNT_DEFAULTS };
+
   const full: Omit<CSAccountConfig, 'wechat_id' | 'updated_at'> = {
-    // 只截取 self_name：每客服不再独立存储 style（style SSOT = 全局话术库）。
-    persona: { self_name: patch.persona?.self_name ?? '' } as Persona,
-    auto_agent_enabled: patch.auto_agent_enabled ?? CS_ACCOUNT_DEFAULTS.auto_agent_enabled,
-    business_hours_start: patch.business_hours_start ?? CS_ACCOUNT_DEFAULTS.business_hours_start,
-    business_hours_end: patch.business_hours_end ?? CS_ACCOUNT_DEFAULTS.business_hours_end,
-    key_contact_wechat: patch.key_contact_wechat ?? CS_ACCOUNT_DEFAULTS.key_contact_wechat,
-    whitelist: patch.whitelist ?? CS_ACCOUNT_DEFAULTS.whitelist,
-    daily_limit: patch.daily_limit ?? CS_ACCOUNT_DEFAULTS.daily_limit,
+    // 完整 persona / business_kb：本次传了就整份替换（话术库页发整份），没传保留既有（客服机页只发运营参数）。
+    persona: patch.persona !== undefined ? (patch.persona as Persona) : base.persona,
+    business_kb: patch.business_kb !== undefined ? (patch.business_kb as BusinessKB) : base.business_kb,
+    auto_agent_enabled: patch.auto_agent_enabled ?? base.auto_agent_enabled,
+    business_hours_start: patch.business_hours_start ?? base.business_hours_start,
+    business_hours_end: patch.business_hours_end ?? base.business_hours_end,
+    key_contact_wechat: patch.key_contact_wechat ?? base.key_contact_wechat,
+    whitelist: patch.whitelist ?? base.whitelist,
+    daily_limit: patch.daily_limit ?? base.daily_limit,
   };
   try {
     await pool.query(
       `INSERT INTO zenithjoy.wechat_cs_account_config
-         (wechat_id, persona, auto_agent_enabled, business_hours_start, business_hours_end,
+         (wechat_id, persona, business_kb, auto_agent_enabled, business_hours_start, business_hours_end,
           key_contact_wechat, whitelist, daily_limit, updated_at)
        SELECT $1,
               ($2::jsonb)->'persona',
+              COALESCE(($2::jsonb)->'business_kb', '{}'::jsonb),
               COALESCE((($2::jsonb)->>'auto_agent_enabled')::boolean, false),
               ($2::jsonb)->>'business_hours_start',
               ($2::jsonb)->>'business_hours_end',
@@ -515,6 +545,7 @@ export async function saveCSConfig(
               now()
        ON CONFLICT (wechat_id) DO UPDATE
          SET persona = EXCLUDED.persona,
+             business_kb = EXCLUDED.business_kb,
              auto_agent_enabled = EXCLUDED.auto_agent_enabled,
              business_hours_start = EXCLUDED.business_hours_start,
              business_hours_end = EXCLUDED.business_hours_end,

@@ -72,13 +72,18 @@ const PersonaSchema = z
   .strict();
 
 /**
- * 每客服 persona 校验：persona 单一 SSOT 后，每客服**只接受 self_name**（人设名覆盖位）。
- * style 真相在全局话术库（PUT /persona 用 PersonaSchema 编辑整份）。
- * 非 .strict()：存量/旧前端若仍传整份 persona，多余 style 字段由 zod 默认剥离，只留 self_name
- * （API 边界即完成去重，绝不把 style 落进每客服表）。
+ * IA 重设计刀1（反转 PR#940）：每号承载**完整** persona（每号独立人设）。
+ * self_name 必填（人设名）；其余 style 字段可选并补默认（话术库页一般发整份，存量/部分发也兼容）。
+ * 非 .strict()：多余字段由 zod 剥离，不报错。
  */
 const CsPersonaSchema = z.object({
   self_name: z.string().min(1, '人设名必填'),
+  address_style: z.string().optional().default(''),
+  tone: z.string().optional().default(''),
+  sentence_style: z.string().optional().default(''),
+  use_emoji: z.string().optional().default(''),
+  banned_phrases: z.array(z.string()).optional().default([]),
+  few_shot: z.array(PersonaFewShotSchema).optional().default([]),
 });
 
 const KBCompanySchema = z
@@ -316,7 +321,9 @@ wechatConfigRouter.put('/cs/auto-agent', requireCsAdminOrSuperAdmin, async (req:
 
 const CSAccountConfigBodySchema = z
   .object({
+    // 话术库页发整份 persona（必填，保留 zod 必填校验：空 body → 400）+ 每号 business_kb（可选）。
     persona: CsPersonaSchema,
+    business_kb: BusinessKBSchema.optional(),
     auto_agent_enabled: z.boolean().optional(),
     business_hours_start: z.string().optional(),
     business_hours_end: z.string().optional(),
@@ -411,7 +418,10 @@ wechatConfigRouter.get('/cs/machines', requireCsReadAccess, async (req: Request,
 
 const CSSetupBodySchema = z
   .object({
-    persona: CsPersonaSchema,
+    // IA 重设计刀1：人设挪到「话术库」页每号编辑，客服机页只发运营参数 → persona 改可选；
+    // business_kb 同样可选（兼容存量一键配置；行级 merge 不传不清空）。
+    persona: CsPersonaSchema.optional(),
+    business_kb: BusinessKBSchema.optional(),
     auto_agent_enabled: z.boolean().optional(),
     business_hours_start: z.string().optional(),
     business_hours_end: z.string().optional(),

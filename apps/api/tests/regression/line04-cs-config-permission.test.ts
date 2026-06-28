@@ -283,3 +283,50 @@ describe('Line04 客服配置写接口安全闸（管理员 + 租户隔离）[BE
     expect(memberRes.body?.can_config).toBe(false);
   });
 });
+
+// ── IA 重设计刀1：每号承载【完整 persona + business_kb】（API 接收并转发给 store）──
+describe('Line04 IA重设计刀1 — 每号 persona/business_kb 读写 [BEHAVIOR]', () => {
+  const FULL_PERSONA = {
+    self_name: '小苏',
+    address_style: '亲切',
+    tone: '友好专业',
+    sentence_style: '简洁',
+    use_emoji: '少量',
+    banned_phrases: ['呵呵'],
+    few_shot: [{ customer: 'a', me: 'b' }],
+  };
+  const KB = {
+    company: { name: '甲号公司', what_we_do: '做A', value_prop: 'V', contact: 'wx-a' },
+    products: [{ name: 'P1', selling_points: 'sp', price: '￥9' }],
+    audience_segments: [{ code: 'A1', label: 'L', desc: 'D' }],
+    qa_docs: [{ q: 'q', a: 'a' }],
+  };
+
+  it('admin PUT /cs/config 带【完整 persona + business_kb】→ 200 且原样转发给 saveCSConfig', async () => {
+    const res = await request(app)
+      .put('/api/wechat/cs/config/wxid_csa')
+      .set('X-Feishu-User-Id', 'user-admin-A')
+      .send({ persona: FULL_PERSONA, business_kb: KB });
+    expect(res.status, '完整 persona + business_kb 应被接受').toBe(200);
+    expect(store.saveCSConfig).toHaveBeenCalledTimes(1);
+    const patch = store.saveCSConfig.mock.calls[0][1] as Record<string, unknown>;
+    // 完整 persona（含 style 字段）不被截断
+    expect(patch.persona).toMatchObject({ self_name: '小苏', tone: '友好专业' });
+    // business_kb 被转发
+    expect(patch.business_kb).toMatchObject({ company: { name: '甲号公司' } });
+  });
+
+  it('admin PUT /cs/setup 不带 persona（人设已挪到话术库页）→ 200 且不报 zod 必填错', async () => {
+    const res = await request(app)
+      .put('/api/wechat/cs/setup/machine-A')
+      .set('X-Feishu-User-Id', 'user-admin-A')
+      .send({
+        auto_agent_enabled: true,
+        business_hours_start: '09:00',
+        business_hours_end: '21:00',
+        daily_limit: 50,
+      });
+    expect(res.status, '客服机页只发运营参数应被接受').toBe(200);
+    expect(store.setupCSByMachine).toHaveBeenCalledTimes(1);
+  });
+});

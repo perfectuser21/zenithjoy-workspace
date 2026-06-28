@@ -3,17 +3,13 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { callOpenRouter } from '../../llm/openrouter';
 
 /**
- * persona 单一 SSOT 行为测试（消除「话术知识库」全局 ↔「客服机」每客服两份重复）。
+ * IA 重设计刀1：AI 回复读【每号完整 persona + 每号 business_kb】行为测试。
  *
- * 背景（用户原话「两个地方是抢的，有很多重复内容」）：
- *   persona 的「话术风格」（语气/称呼/句式/emoji/禁用词/few_shot）此前被每客服配置
- *   （wechat_cs_account_config.persona，由一键配置写死 address_style:'亲切' 等死值）
- *   盖掉了全局「话术知识库」（wechat_cs_config）里用户精心配的人设 → 两边对不上。
- *
- * 收敛后契约（本测试守护）：
- *   - persona 的 style 字段唯一真相来源 = 全局 getPersona()（话术知识库）。
- *   - 每客服配置只保留 self_name（人设名）作为 per-operator 覆盖位。
- *   - 因此送进 LLM 的 system prompt：style 用【全局】，self_name 用【该客服自己的】。
+ * 背景（反转 PR#940 的折中）：用户拍板「每个客服号要不同名字+语气+话术，知识库也每号独立」。
+ * 之前 PR#940 把 style 收敛到全局话术库（getPersona）、每号只留 self_name；本刀反转：
+ *   - 带 agent_id 解到该号配置(csConfig) → persona（完整 style + self_name）+ business_kb 全部读【这个号自己的】。
+ *   - csConfig 缺失（无 agent_id / 未配）→ 回落全局 getPersona()/getBusinessKB()（向后兼容）。
+ *   - csConfig 命中但个别字段空 → 该字段回落全局（不退化）。
  *
  * mock 对齐 wechat-draft.ts 真实依赖（同 wechat-draft-auto-reply.test.ts 风格）。
  */
@@ -30,31 +26,14 @@ vi.mock('axios', () => ({
   default: { post: vi.fn().mockResolvedValue({ data: { code: 0 } }), get: vi.fn() },
 }));
 
-// 每客服配置：带白名单命中 + 自动开关 ON；persona 里塞 style 死值（模拟一键配置历史写法），
-// 只有 self_name 是真正的 per-operator 值（小苏）。
+// 每号配置 mock：可被各 it 覆写（默认每号完整人设 + 每号知识库）。
+const csConfigMock = vi.fn();
 vi.mock('../wechat/cs-account-config-store', () => ({
-  getCSConfigByAgentId: vi.fn().mockResolvedValue({
-    wechat_id: 'wxid_cs_a',
-    persona: {
-      self_name: '小苏',
-      address_style: 'CS_称呼死值',
-      tone: 'CS_语气死值',
-      sentence_style: 'CS_句式死值',
-      use_emoji: 'CS_emoji死值',
-      banned_phrases: ['CS禁用词'],
-      few_shot: [{ customer: 'cs问', me: 'cs答' }],
-    },
-    auto_agent_enabled: true,
-    business_hours_start: '00:00',
-    business_hours_end: '24:00',
-    key_contact_wechat: '',
-    whitelist: ['于瑾'],
-    daily_limit: 0,
-  }),
+  getCSConfigByAgentId: (...a: unknown[]) => csConfigMock(...a),
   resolveCsWechatIdByAgentId: vi.fn().mockResolvedValue('wxid_cs_a'),
 }));
 
-// 全局 persona（话术知识库 = SSOT）：style 全用「全局」可识别值，self_name 用「全局默认名」。
+// 全局话术库（仅作回落兜底）：style 全用「全局」可识别值。
 vi.mock('../wechat/cs-config-store', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>();
   return {
@@ -62,14 +41,14 @@ vi.mock('../wechat/cs-config-store', async (importOriginal) => {
     getPersona: vi.fn().mockResolvedValue({
       self_name: '全局默认名',
       address_style: '全局_称呼',
-      tone: '全局_语气SSOT',
+      tone: '全局_语气',
       sentence_style: '全局_句式',
       use_emoji: '全局_emoji',
       banned_phrases: ['全局禁用词'],
       few_shot: [{ customer: '全局问', me: '全局答' }],
     }),
     getBusinessKB: vi.fn().mockResolvedValue({
-      company: { name: 'X', what_we_do: '', value_prop: '', contact: '' },
+      company: { name: '全局公司', what_we_do: '', value_prop: '', contact: '' },
       products: [],
       audience_segments: [],
       qa_docs: [],
@@ -79,13 +58,39 @@ vi.mock('../wechat/cs-config-store', async (importOriginal) => {
 
 const mockedLlm = vi.mocked(callOpenRouter);
 
-describe('generateChatDraft — persona 单一 SSOT [BEHAVIOR]', () => {
+const fullCsConfig = {
+  wechat_id: 'wxid_cs_a',
+  persona: {
+    self_name: '小苏',
+    address_style: 'CS_称呼',
+    tone: 'CS_语气',
+    sentence_style: 'CS_句式',
+    use_emoji: 'CS_emoji',
+    banned_phrases: ['CS禁用词'],
+    few_shot: [{ customer: 'cs问', me: 'cs答' }],
+  },
+  business_kb: {
+    company: { name: 'CS号知识库公司', what_we_do: 'CS做什么', value_prop: 'CS价值', contact: 'wx-cs' },
+    products: [],
+    audience_segments: [],
+    qa_docs: [],
+  },
+  auto_agent_enabled: true,
+  business_hours_start: '00:00',
+  business_hours_end: '24:00',
+  key_contact_wechat: '',
+  whitelist: ['于瑾'],
+  daily_limit: 0,
+};
+
+describe('generateChatDraft — 每号完整 persona + 每号 business_kb [BEHAVIOR]', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockedLlm.mockResolvedValue({ content: '好的' } as any);
   });
 
-  it('回复 system prompt 的 style 用【全局话术库】，self_name 用【该客服自己的】', async () => {
+  it('csConfig 命中 → system prompt 的 style/self_name/知识库全部用【该号自己的】，不用全局', async () => {
+    csConfigMock.mockResolvedValue(fullCsConfig);
     const mod = await import('../wechat-draft');
     const result: any = await mod.generateChatDraft({
       sender: '于瑾',
@@ -99,15 +104,56 @@ describe('generateChatDraft — persona 单一 SSOT [BEHAVIOR]', () => {
     expect(mockedLlm).toHaveBeenCalledTimes(1);
     const system = String((mockedLlm.mock.calls[0][0] as any).system);
 
-    // style 字段：必须来自全局 SSOT（话术知识库）
-    expect(system).toContain('全局_语气SSOT');
-    expect(system).toContain('全局禁用词');
-    // 绝不再使用每客服那份 style 死值（这正是「两边对不上」的根）
-    expect(system).not.toContain('CS_语气死值');
-    expect(system).not.toContain('CS禁用词');
-
-    // self_name：保留 per-operator 覆盖（该客服自己的人设名），不被全局默认名盖掉
+    // 完整 persona 用每号自己的（style 不再来自全局）
     expect(system).toContain('小苏');
+    expect(system).toContain('CS_语气');
+    expect(system).toContain('CS禁用词');
+    expect(system).not.toContain('全局_语气');
+    expect(system).not.toContain('全局禁用词');
     expect(system).not.toContain('全局默认名');
+
+    // 每号 business_kb 用每号自己的（公司信息进 system）
+    expect(system).toContain('CS号知识库公司');
+    expect(system).not.toContain('全局公司');
+  });
+
+  it('csConfig 缺失（未带 agent_id）→ 不读每号配置，走全局回落（向后兼容）', async () => {
+    csConfigMock.mockResolvedValue(null);
+    const mod = await import('../wechat-draft');
+    const result: any = await mod.generateChatDraft({
+      sender: '于瑾',
+      wechat_id: 'wxid_yujin',
+      content: '你好',
+      mode: 'review',
+    } as any);
+
+    // 未带 agent_id → 根本不去解析每号配置（走全局回落路径）。
+    expect(csConfigMock).not.toHaveBeenCalled();
+    // review 模式 + 飞书名单外（mock axios 无 items）→ 既有契约拒绝；关键是未读每号、未抛错。
+    expect(result.ok).toBe(false);
+  });
+
+  it('csConfig 命中但 business_kb 为空 → 知识库回落全局（不退化），人设仍用每号', async () => {
+    csConfigMock.mockResolvedValue({
+      ...fullCsConfig,
+      business_kb: {
+        company: { name: '', what_we_do: '', value_prop: '', contact: '' },
+        products: [],
+        audience_segments: [],
+        qa_docs: [],
+      },
+    });
+    const mod = await import('../wechat-draft');
+    await mod.generateChatDraft({
+      sender: '于瑾',
+      wechat_id: 'wxid_yujin',
+      content: '你好',
+      mode: 'auto',
+      agent_id: 'agent-x',
+    } as any);
+
+    const system = String((mockedLlm.mock.calls[0][0] as any).system);
+    expect(system).toContain('全局公司'); // 每号知识库空 → 用全局兜底
+    expect(system).toContain('小苏'); // 人设仍用每号
   });
 });

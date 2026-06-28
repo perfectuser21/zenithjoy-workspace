@@ -98,22 +98,54 @@ describe('cs-account-config-store — 按 wechat_id 隔离', () => {
     expect(await getCSConfig('wxid_never')).toBeNull();
   });
 
-  it('persona 单一 SSOT：saveCSConfig 只持久化 self_name，丢弃 style 字段（style 真相在全局话术库）', async () => {
-    // 调用方即便传来整份 persona（含一键配置历史的 style 死值），落库也只应留 self_name。
-    await saveCSConfig('wxid_dedup', {
-      persona: {
-        self_name: '小苏',
-        address_style: '亲切',
-        tone: '友好专业',
-        sentence_style: '简洁',
-        use_emoji: '少量',
-        banned_phrases: ['呵呵'],
-        few_shot: [{ customer: 'a', me: 'b' }],
-      },
-    });
-    const stored = rows.get('wxid_dedup') as { persona: Record<string, unknown> };
-    // 每客服 persona 只保留 self_name —— 不再独立存储 style，杜绝与全局话术库重复/抢占。
-    expect(stored.persona).toEqual({ self_name: '小苏' });
+  it('IA重设计刀1：saveCSConfig 持久化【完整 persona + 每号 business_kb】（每号独立，不再只截 self_name）', async () => {
+    // 反转 PR#940：每号现在独立存完整人设 + 知识库（用户拍板「每个号完全不同」）。
+    const fullPersona = {
+      self_name: '小苏',
+      address_style: '亲切',
+      tone: '友好专业',
+      sentence_style: '简洁',
+      use_emoji: '少量',
+      banned_phrases: ['呵呵'],
+      few_shot: [{ customer: 'a', me: 'b' }],
+    };
+    const kb = {
+      company: { name: '甲号公司', what_we_do: '做A', value_prop: 'V', contact: 'wx-a' },
+      products: [{ name: 'P1', selling_points: 'sp' }],
+      audience_segments: [{ code: 'A1', label: 'L', desc: 'D' }],
+      qa_docs: [{ q: 'q', a: 'a' }],
+    };
+    await saveCSConfig('wxid_full', { persona: fullPersona, business_kb: kb });
+    const stored = rows.get('wxid_full') as {
+      persona: Record<string, unknown>;
+      business_kb: Record<string, unknown>;
+    };
+    // 完整 persona 落库（style 字段不再被丢弃）
+    expect(stored.persona).toEqual(fullPersona);
+    // 每号 business_kb 落库
+    expect(stored.business_kb).toEqual(kb);
+    // 读回一致
+    const c = await getCSConfig('wxid_full');
+    expect(c?.persona.tone).toBe('友好专业');
+    expect(c?.business_kb.company.name).toBe('甲号公司');
+  });
+
+  it('IA重设计刀1：行级 merge —— 分别写 persona 与运营参数互不清空（话术库页 vs 客服机页写同一行）', async () => {
+    // 话术库页先写完整 persona + business_kb
+    const kb = {
+      company: { name: '号X公司', what_we_do: '', value_prop: '', contact: '' },
+      products: [],
+      audience_segments: [],
+      qa_docs: [],
+    };
+    await saveCSConfig('wxid_merge', { persona: personaOf('小苏'), business_kb: kb });
+    // 客服机页随后只改运营参数（不带 persona/business_kb）—— 不应把人设/知识库清空
+    await saveCSConfig('wxid_merge', { auto_agent_enabled: true, daily_limit: 50 });
+    const c = await getCSConfig('wxid_merge');
+    expect(c?.persona.self_name, '人设没被运营参数写入清空').toBe('小苏');
+    expect(c?.business_kb.company.name, '知识库没被清空').toBe('号X公司');
+    expect(c?.auto_agent_enabled).toBe(true);
+    expect(c?.daily_limit).toBe(50);
   });
 });
 
