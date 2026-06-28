@@ -2985,7 +2985,15 @@ agent_suite:
     ci: L3
     status: active
     product: 私域运营
-    note: "Sprint 06280330 — persona 收敛单一 SSOT：回复 system prompt 的 style 用全局话术库、self_name 用每客服覆盖；消除话术库↔客服机两份重复（用户「两个地方是抢的」）"
+    note: "Sprint 06280210 IA重设计刀1 — 反转 PR#940：AI 回复读【每号完整 persona + 每号 business_kb】，csConfig 缺失/字段空时回落全局（每号独立人设+知识库）"
+
+  - id: wechat-cs-account-fullkb-migration
+    path: apps/api/src/__tests__/wechat-cs-account-fullkb-migration.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 私域运营
+    note: "Sprint 06280210 IA重设计刀1 — 每号 wechat_cs_account_config 升级承载完整 persona+business_kb 的纯 .sql 迁移幂等/不丢已配人设静态守卫"
 
   - id: line04-cs-route-decision
     path: apps/api/src/services/wechat/__tests__/cs-route-decision.test.ts

@@ -1,8 +1,9 @@
 /**
  * CsOneClickSetupPage（我的客服机 / 一键配置）E2E — 配置点「设置完毕」不白屏
  *
- * 整合（2026-06-25）：白名单/关键人字段已删（接管开关搬到「客户好友表」黑名单语义），
- * 这里只填 人设名/营业时间/每日上限/真发开关。下面回归测试验证 403 错误对象不白屏的 P0 bug。
+ * IA 重设计刀1（2026-06-28）：人设（含人设名 self_name）已移到「话术知识库」页每号编辑，
+ * 客服机页只留运营参数（营业时间/每日上限/真发开关）+ 机器绑定。下面回归测试验证：
+ *   ① 403 错误对象不白屏的 P0 bug ② 不填人设名也能提交（人设不在本页了）。
  *
  * 复现 P0 bug（2026-06-23 老板实测）：在「我的客服机」选机器、填配置、点【设置完毕】，
  * 后端写接口安全闸（#838）对非管理员/跨租户返回 403，响应体 `error` 是对象
@@ -49,7 +50,7 @@ async function stubMachines(page: import('@playwright/test').Page) {
   )
 }
 
-test('设白名单点「设置完毕」遇 403（error 是对象）— 页面不白屏，显示可读提示', async ({ page }) => {
+test('点「设置完毕」遇 403（error 是对象）— 页面不白屏，显示可读提示', async ({ page }) => {
   await stubMachines(page)
   await page.route('**/api/wechat/cs/setup/**', (route) =>
     route.fulfill({
@@ -61,10 +62,8 @@ test('设白名单点「设置完毕」遇 403（error 是对象）— 页面不
 
   await page.goto(`${BASE_URL}/wechat/setup`)
 
-  // 选机器（已配那台，预填人设名）
+  // 选机器后直接点设置完毕（人设名已移到话术库页，本页不再有 setup-self-name 输入）
   await page.getByTestId('machine-radio').first().check()
-  // 改人设名后点设置完毕
-  await page.getByTestId('setup-self-name').fill('小助手2')
   await page.getByTestId('setup-submit').click()
 
   // —— 关键断言：页面没白屏 —— 表单标题还在，且显示了可读的错误提示而非整树崩溃 ——
@@ -96,8 +95,14 @@ test('设置成功（200）— 显示成功提示', async ({ page }) => {
 
   await page.goto(`${BASE_URL}/wechat/setup`)
   await page.getByTestId('machine-radio').first().check()
-  await page.getByTestId('setup-self-name').fill('小助手')
   await page.getByTestId('setup-submit').click()
 
   await expect(page.getByText(/设置成功/)).toBeVisible()
+})
+
+// IA 重设计刀1：本页不再有人设名输入（人设已移到话术库页每号编辑）
+test('客服机页不再出现人设名输入框（已移到话术库页）', async ({ page }) => {
+  await stubMachines(page)
+  await page.goto(`${BASE_URL}/wechat/setup`)
+  await expect(page.getByTestId('setup-self-name')).toHaveCount(0)
 })
