@@ -145,10 +145,10 @@ describe('POST /api/agent/heartbeat — body.agent_uuid 精准路由（防幽灵
   );
 
   it(
-    '[回归守卫] precheck 裸探针（无 hostname 无 agent_uuid）→ upsertAgentByHeartbeat 不得被调用（防幽灵行复活）',
+    '[回归守卫] precheck 裸探针（machine_id="precheck"）→ upsertAgentByHeartbeat 不得被调用（防幽灵行复活）',
     async () => {
-      // start.bat 发的 precheck：{"machine_id":"precheck","agent_version":"1.0.1"}
-      // route 读不到 hostname 也读不到 agent_uuid → 必须跳过 upsert，直接 200
+      // start.bat Step4 发的 precheck：{"machine_id":"precheck","agent_version":"1.0.1"}
+      // machine_id="precheck" 是专属标识，route 必须跳过 upsert 直接 200
       const res = await request(app)
         .post('/api/agent/heartbeat')
         .send({ license: LICENSE_KEY, machine_id: 'precheck', agent_version: '1.0.1' });

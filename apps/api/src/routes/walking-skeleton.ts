@@ -63,12 +63,13 @@ heartbeatRouter.post(
   '/heartbeat',
   licenseAuth,
   async (req: Request, res: Response) => {
-    const { version, hostname, os_type, module_status, agent_uuid } = (req.body ?? {}) as {
+    const { version, hostname, os_type, module_status, agent_uuid, machine_id } = (req.body ?? {}) as {
       version?: unknown;
       hostname?: unknown;
       os_type?: unknown;
       module_status?: unknown;
       agent_uuid?: unknown;
+      machine_id?: unknown;
     };
     const lic = req.license!;
     if (!lic.tenant_id) {
@@ -83,9 +84,9 @@ heartbeatRouter.post(
     const resolvedHostname = typeof hostname === 'string' ? hostname.slice(0, 200) : null;
     const resolvedAgentUuid = typeof agent_uuid === 'string' ? agent_uuid : undefined;
 
-    // precheck 裸探针（start.bat 发 {"machine_id":"precheck"}，无 hostname 无 agent_uuid）：
-    // 只校验 license，不注册机器行，防止 hostname=null 路径复活旧幽灵行。
-    if (!resolvedHostname && !resolvedAgentUuid) {
+    // start.bat Step4 precheck：machine_id="precheck" 是专属标识（见 install-pack/start.bat）。
+    // 只校验 license，不注册/更新机器行，防止 hostname=null 路径复活旧幽灵行。
+    if (machine_id === 'precheck') {
       return res.status(200).json({
         ok: true,
         agent_id: null,
