@@ -261,3 +261,31 @@ describe('collect/start — tenant 从 session，不信前端占位 [BEHAVIOR]',
     expect(res.status).toBe(401);
   });
 });
+
+describe('collect/report — 无需 smoke token，agent 直接调用 [REGRESSION: Bug-D]', () => {
+  beforeEach(() => { vi.clearAllMocks(); });
+
+  it('无 X-Smoke-Token 也能调用（不返回 403）', async () => {
+    const mod = await import('../db/connection');
+    (mod.default.query as any)
+      .mockResolvedValueOnce({ rows: [{ id: 'task-1', tenant_id: 't1', status: 'running', error_code: null, video_count: 0, lead_count_raw: 0 }] }) // SELECT task
+      .mockResolvedValueOnce({ rows: [] }) // SELECT for sec_uid dedup (empty commenters batch, won't hit)
+      .mockResolvedValueOnce({ rows: [] }); // UPDATE status
+    const res = await request(app)
+      .post('/api/acquisition/collect/report')
+      .send({ task_id: 'task-1', video_id: 'no_videos', commenters: [], terminal: true });
+    // agent 无 smoke token 下不应被 403 拒，status 不能是 403
+    expect(res.status).not.toBe(403);
+  });
+
+  it('有 task_id + video_id → 终态回报可达（不返回 403 Forbidden）', async () => {
+    const mod = await import('../db/connection');
+    (mod.default.query as any)
+      .mockResolvedValueOnce({ rows: [{ id: 'task-2', tenant_id: 't2', status: 'running', error_code: null, video_count: 0, lead_count_raw: 0 }] })
+      .mockResolvedValueOnce({ rows: [] }); // UPDATE
+    const res = await request(app)
+      .post('/api/acquisition/collect/report')
+      .send({ task_id: 'task-2', video_id: '7123456789', commenters: [], terminal: true });
+    expect(res.status).not.toBe(403);
+  });
+});
