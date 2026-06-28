@@ -51,7 +51,7 @@ acquisitionRouter.post('/keyword-search', async (req: Request, res: Response) =>
     try {
       const pool = (await import('../db/connection')).default;
       const { rows } = await pool.query<{ id: string }>(
-        `SELECT id FROM zenithjoy.agent_platform_sessions WHERE role='main' AND status IN ('active','connected') LIMIT 1`
+        `SELECT id FROM zenithjoy.agents WHERE status = 'online' LIMIT 1`
       );
       if (rows.length === 0) {
         return res.status(503).json({ error: 'AGENT_OFFLINE' });
@@ -121,6 +121,49 @@ acquisitionRouter.get('/pending-keyword-tasks', async (_req: Request, res: Respo
     return res.status(200).json({ tasks, total: tasks.length });
   } catch (err) {
     console.error('[acquisition] pending-keyword-tasks error:', (err as Error).message);
+    return res.status(200).json({ tasks: [], total: 0 });
+  }
+});
+
+// Agent 轮询端点 — 返回待处理的 collect 任务（来自 collect/start 写入的 acquisition_collect_tasks）
+acquisitionRouter.get('/pending-collect-tasks', async (_req: Request, res: Response) => {
+  if (process.env.VITEST) {
+    return res.status(200).json({ tasks: [], total: 0 });
+  }
+
+  try {
+    const pool = (await import('../db/connection')).default;
+    const { rows } = await pool.query<{
+      id: string;
+      keywords: string[];
+      tenant_id: string;
+    }>(
+      `SELECT id, keywords, tenant_id
+         FROM zenithjoy.acquisition_collect_tasks
+        WHERE status = 'pending'
+        ORDER BY created_at ASC
+        LIMIT 5`
+    );
+
+    if (rows.length > 0) {
+      const ids = rows.map((r) => r.id);
+      await pool.query(
+        `UPDATE zenithjoy.acquisition_collect_tasks
+            SET status = 'running', updated_at = NOW()
+          WHERE id = ANY($1::uuid[])`,
+        [ids]
+      );
+    }
+
+    const tasks = rows.map((r) => ({
+      task_id: r.id,
+      tenant_id: r.tenant_id,
+      keywords: Array.isArray(r.keywords) ? r.keywords : [],
+    }));
+
+    return res.status(200).json({ tasks, total: tasks.length });
+  } catch (err) {
+    console.error('[acquisition] pending-collect-tasks error:', (err as Error).message);
     return res.status(200).json({ tasks: [], total: 0 });
   }
 });

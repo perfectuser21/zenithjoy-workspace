@@ -2,6 +2,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import request from 'supertest';
 import express from 'express';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
 import { acquisitionRouter } from './acquisition';
 
 vi.mock('../db/connection', () => ({
@@ -192,6 +194,43 @@ describe('GET /api/acquisition/leads', () => {
     expect(res.status).toBe(200);
     expect(res.body).toHaveProperty('leads');
     expect(res.body).toHaveProperty('total');
+  });
+});
+
+// ────── Bug A 回归：keyword-search agent 门禁改用 agents 表 ──────
+describe('POST /api/acquisition/keyword-search — agent 门禁用 agents 表 [REGRESSION]', () => {
+  it('源码不再检查 agent_platform_sessions role=main（只能用 burner 的 rog 不再被拦）', () => {
+    const src = fs.readFileSync(
+      path.resolve(__dirname, './acquisition.ts'),
+      'utf8',
+    );
+    expect(src).not.toMatch(/agent_platform_sessions.*role.*main/);
+    expect(src).not.toMatch(/role.*main.*agent_platform_sessions/);
+  });
+  it('源码改为检查 agents 表 status=online', () => {
+    const src = fs.readFileSync(
+      path.resolve(__dirname, './acquisition.ts'),
+      'utf8',
+    );
+    expect(src).toMatch(/agents.*status.*=.*online|agents.*online/);
+  });
+});
+
+// ────── Bug B 回归：pending-collect-tasks 端点 ──────
+describe('GET /api/acquisition/pending-collect-tasks — Bug B regression [BEHAVIOR]', () => {
+  it('VITEST 模式返回 200 + tasks 数组', async () => {
+    const res = await request(app).get('/api/acquisition/pending-collect-tasks');
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveProperty('tasks');
+    expect(Array.isArray(res.body.tasks)).toBe(true);
+    expect(res.body).toHaveProperty('total');
+    expect(typeof res.body.total).toBe('number');
+  });
+
+  it('VITEST 模式返回空任务列表', async () => {
+    const res = await request(app).get('/api/acquisition/pending-collect-tasks');
+    expect(res.body.tasks).toEqual([]);
+    expect(res.body.total).toBe(0);
   });
 });
 
