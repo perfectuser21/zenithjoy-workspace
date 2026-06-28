@@ -1,8 +1,9 @@
 /**
  * 单元覆盖：navigation.config — 短侧栏 + 区下钻（2026-06-23 重构）
+ *   + 私域客服「以号为中心」IA 重设计刀2（2026-06-28）：/area/wechat 入口改 CsAreaEntryPage 分诊，
+ *     新增 客服号总览 /wechat/accounts + 单号工作台 /wechat/account/:machineId（5 Tab 容器）。
  *
- * 侧栏只放"区"入口（人话名、不暴露 Line、无 emoji）→ AreaHubPage 总览页 → 卡片下钻子页。
- * 子页路由收进 additionalRoutes（仍可达）。License / 每客服设置 等不再直接挂侧栏。
+ * 侧栏只放"区"入口（人话名、不暴露 Line、无 emoji）→ 区总览/分诊 → 下钻子页。
  */
 import { describe, it, expect } from 'vitest';
 import {
@@ -17,11 +18,16 @@ const navPaths = () => navItems().map((i) => i.path);
 const routePaths = () => additionalRoutes.map((r) => r.path);
 
 describe('config/navigation — 短侧栏 + 区下钻', () => {
-  it('侧栏"区"入口都指向 AreaHubPage，且标签不暴露 Line', () => {
+  it('侧栏"区"入口指向区组件（多数 AreaHubPage；私域客服 = CsAreaEntryPage 分诊），标签不暴露 Line', () => {
     const areaItems = navItems().filter((i) => i.path.startsWith('/area/'));
     expect(areaItems.length).toBeGreaterThanOrEqual(6);
     for (const it of areaItems) {
-      expect(it.component).toBe('AreaHubPage');
+      if (it.path === '/area/wechat') {
+        // 私域客服改「以号为中心」：入口落分诊页（超管/多号→总览，运营单号→工作台）
+        expect(it.component).toBe('CsAreaEntryPage');
+      } else {
+        expect(it.component).toBe('AreaHubPage');
+      }
       expect(it.label).not.toMatch(/line/i);
     }
   });
@@ -57,7 +63,7 @@ describe('config/navigation — 短侧栏 + 区下钻', () => {
     expect(paths).toContain('/admin/customers');
   });
 
-  it('孤儿页 /wechat/per-cs-config 路由已删（整合：每客服设置并进「我的客服机」）', () => {
+  it('孤儿页 /wechat/per-cs-config 路由已删（整合：每客服设置并进工作台）', () => {
     const paths = routePaths();
     expect(paths).not.toContain('/wechat/per-cs-config');
   });
@@ -87,72 +93,50 @@ describe('config/navigation — License 入口仍可达（防误删）', () => {
 });
 
 describe('AreaHubPage — 区配置（每区总览卡片下钻）', () => {
-  it('私域客服区主卡是「我的客服机」(/wechat/setup)，且不再有重复的「每客服设置」卡（整合成一个客服中心）', () => {
-    const wechat = AREA_HUBS['wechat'];
-    expect(wechat).toBeDefined();
-    // 整合后：客服机一处看健康+配置 = /wechat/setup 是主入口
-    expect(wechat.cards.some((c) => c.to === '/wechat/setup')).toBe(true);
-    // 删掉重复的「每客服设置」卡（功能并进「我的客服机」），前台不再暴露
-    expect(wechat.cards.some((c) => c.to === '/wechat/per-cs-config')).toBe(false);
-  });
-
-  it('每个客户区都有至少一张下钻卡片', () => {
-    for (const key of ['publish', 'acquisition', 'wechat', 'video', 'remake', 'settings']) {
+  it('每个仍用 hub 的客户区都有至少一张下钻卡片（私域客服已改分诊，不在此列）', () => {
+    for (const key of ['publish', 'acquisition', 'video', 'remake', 'settings']) {
       expect(AREA_HUBS[key]?.cards.length ?? 0).toBeGreaterThanOrEqual(1);
     }
   });
 });
 
-// 整合（2026-06-25）：私域客服区收敛成 5 卡，工作汇总+日报合一，去掉设置区重复下载卡
-describe('AreaHubPage — 私域客服区整合成 5 卡（2026-06-25）', () => {
-  it('私域客服区正好 5 卡：客户好友表 / 我的客服机 / 客服工作汇总 / 话术知识库 / 下载客户机', () => {
-    const wechat = AREA_HUBS['wechat'];
-    expect(wechat.cards.length).toBe(5);
-    const tos = wechat.cards.map((c) => c.to);
-    expect(tos).toContain('/wechat/crm'); // 客户好友表
-    expect(tos).toContain('/wechat/setup'); // 我的客服机
-    expect(tos).toContain('/wechat/cs-stats'); // 客服工作汇总（含历史日报 Tab）
-    expect(tos).toContain('/wechat/cs-config'); // 话术知识库
-    expect(tos).toContain('/dashboard/agent'); // 下载客户机
+// 私域客服「以号为中心」IA 重设计刀2（2026-06-28）
+describe('config/navigation — 私域客服以号为中心工作台（IA 重设计刀2）', () => {
+  it('/area/wechat 入口改 CsAreaEntryPage（分诊），旧 5 卡 wechat hub 已删', () => {
+    const wechat = navItems().find((i) => i.path === '/area/wechat');
+    expect(wechat?.component).toBe('CsAreaEntryPage');
+    expect(AREA_HUBS['wechat']).toBeUndefined();
   });
 
-  it('「客服日报」独立卡已去掉（并进客服工作汇总的历史 Tab），旧路由重定向', () => {
-    const wechat = AREA_HUBS['wechat'];
-    expect(wechat.cards.some((c) => c.to === '/wechat/cs-daily-report')).toBe(false);
-    const legacy = additionalRoutes.find((r) => r.path === '/wechat/cs-daily-report');
-    expect(legacy?.redirect).toBe('/wechat/cs-stats');
-    expect(legacy?.component).toBeUndefined();
+  it('客服号总览 /wechat/accounts + 单号工作台 /wechat/account/:machineId 在 additionalRoutes', () => {
+    const overview = additionalRoutes.find((r) => r.path === '/wechat/accounts');
+    expect(overview?.component).toBe('CsAccountOverviewPage');
+    const workbench = additionalRoutes.find((r) => r.path === '/wechat/account/:machineId');
+    expect(workbench?.component).toBe('CsAccountWorkbenchPage');
   });
 
-  it('设置区不再有重复的「下载 Agent」卡（下载入口只在私域客服区保留一处）', () => {
-    const settings = AREA_HUBS['settings'];
-    expect(settings.cards.some((c) => c.to === '/dashboard/agent')).toBe(false);
-  });
-});
-
-// 整合：孤儿页路由 + lazy 映射全删
-describe('config/navigation — 孤儿页已删（2026-06-25 整合）', () => {
-  it('PerCsConfigPage / CrmConfigPage / AgentMachines / CsDailyReportPage 的 lazy 映射都已删', () => {
-    expect(autopilotPageComponents['PerCsConfigPage']).toBeUndefined();
-    expect(autopilotPageComponents['CrmConfigPage']).toBeUndefined();
-    expect(autopilotPageComponents['AgentMachines']).toBeUndefined();
-    expect(autopilotPageComponents['CsDailyReportPage']).toBeUndefined();
+  it('总览/工作台/分诊三页组件已注册懒加载', () => {
+    expect(typeof autopilotPageComponents['CsAreaEntryPage']).toBe('function');
+    expect(typeof autopilotPageComponents['CsAccountOverviewPage']).toBe('function');
+    expect(typeof autopilotPageComponents['CsAccountWorkbenchPage']).toBe('function');
   });
 
-  it('/wechat/per-cs-config 路由已从 additionalRoutes 删除', () => {
-    expect(additionalRoutes.some((r) => r.path === '/wechat/per-cs-config')).toBe(false);
+  it('旧 5 平级页路由仍保留（深链/老书签不死链）：cs-config / setup / cs-stats / crm', () => {
+    const paths = routePaths();
+    expect(paths).toContain('/wechat/cs-config');
+    expect(paths).toContain('/wechat/setup');
+    expect(paths).toContain('/wechat/cs-stats');
+    expect(paths).toContain('/wechat/crm');
+    // 这些子页组件正是工作台 Tab 复用的页面，懒加载注册仍在
+    expect(typeof autopilotPageComponents['WechatCustomerServiceConfigPage']).toBe('function');
+    expect(typeof autopilotPageComponents['CsOneClickSetupPage']).toBe('function');
+    expect(typeof autopilotPageComponents['CsWorkStatsPage']).toBe('function');
+    expect(typeof autopilotPageComponents['CustomerListPage']).toBe('function');
   });
 });
 
-// Line04 CRM 重做（2026-06-25）：客户好友表入口归进「私域客服」板块，三层下钻 + 旧顶层 /customers 重定向
-describe('config/navigation — CRM 客户好友表入口（修正1 入口移进私域客服板块）', () => {
-  it('私域客服区有「客户好友表」卡，下钻 /wechat/crm', () => {
-    const wechat = AREA_HUBS['wechat'];
-    const crmCard = wechat.cards.find((c) => c.to === '/wechat/crm');
-    expect(crmCard).toBeDefined();
-    expect(crmCard?.label).toContain('客户好友表');
-  });
-
+// Line04 CRM 重做（2026-06-25）：层级路由仍在（工作台「客户」Tab 复用 CustomerListPage）
+describe('config/navigation — CRM 客户好友表路由仍在（工作台客户 Tab 复用）', () => {
   it('层1 列表 /wechat/crm + 层2 状态画像 /wechat/crm/:contactKey 都在 additionalRoutes', () => {
     const paths = routePaths();
     expect(paths).toContain('/wechat/crm');
@@ -171,5 +155,21 @@ describe('config/navigation — CRM 客户好友表入口（修正1 入口移进
 
   it('层2/层3 页组件 CustomerProfilePage 已注册懒加载', () => {
     expect(typeof autopilotPageComponents['CustomerProfilePage']).toBe('function');
+  });
+});
+
+// 整合：孤儿页路由 + lazy 映射全删（防回潮）
+describe('config/navigation — 孤儿页已删', () => {
+  it('PerCsConfigPage / CrmConfigPage / AgentMachines / CsDailyReportPage 的 lazy 映射都已删', () => {
+    expect(autopilotPageComponents['PerCsConfigPage']).toBeUndefined();
+    expect(autopilotPageComponents['CrmConfigPage']).toBeUndefined();
+    expect(autopilotPageComponents['AgentMachines']).toBeUndefined();
+    expect(autopilotPageComponents['CsDailyReportPage']).toBeUndefined();
+  });
+
+  it('客服日报旧路由 /wechat/cs-daily-report 重定向到工作汇总', () => {
+    const legacy = additionalRoutes.find((r) => r.path === '/wechat/cs-daily-report');
+    expect(legacy?.redirect).toBe('/wechat/cs-stats');
+    expect(legacy?.component).toBeUndefined();
   });
 });
