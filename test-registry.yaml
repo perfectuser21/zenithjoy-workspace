@@ -3969,3 +3969,27 @@ agent_suite:
     status: active
     product: 智能获客
     note: "Sprint 合约验收测试：GET/PUT company-profile + GET account-status + collect/start 主账号检查 + collect/:task_id 6字段 + terminal→stage_1_done（PR #949）。"
+
+  - id: api-route-company-profile-unit
+    path: apps/api/src/routes/company-profile.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 智能获客
+    note: "路由存在性检查：GET 200 + PUT 无 company_name 返 400（test-pairing 配套 company-profile.ts，PR #949）。"
+
+  - id: api-route-line02-unit
+    path: apps/api/src/routes/line02.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 智能获客
+    note: "路由存在性检查：GET /api/line02/account-status 返回 {accounts: []}（test-pairing 配套 line02.ts，PR #949）。"
+
+  - id: dashboard-company-profile-api-unit
+    path: apps/dashboard/src/api/company-profile.api.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 智能获客
+    note: "getCompanyProfile / updateCompanyProfile fetch wrapper 单元测试（test-pairing 配套 company-profile.api.ts，PR #949）。"
