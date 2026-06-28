@@ -24,7 +24,7 @@
  */
 import 'ag-grid-community/styles/ag-grid.css';
 import 'ag-grid-community/styles/ag-theme-quartz.css';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AgGridReact } from 'ag-grid-react';
 import type {
@@ -34,7 +34,38 @@ import type {
   ModelUpdatedEvent,
   CellValueChangedEvent,
   ICellRendererParams,
+  ICellEditorParams,
 } from 'ag-grid-community';
+
+// ── 自定义原生 select 单元格编辑器（让 Playwright 可用 selectOption 操作）──
+type NativeSelectEditorParams = ICellEditorParams & { values: string[] };
+interface NativeSelectEditorRef { getValue(): string }
+const NativeSelectCellEditor = forwardRef<NativeSelectEditorRef, NativeSelectEditorParams>(
+  function NativeSelectCellEditor({ value, values, stopEditing }, ref) {
+    const [val, setVal] = useState<string>(value as string);
+    const selectEl = useRef<HTMLSelectElement>(null);
+
+    useImperativeHandle(ref, () => ({ getValue: () => val }));
+
+    useEffect(() => { selectEl.current?.focus(); }, []);
+
+    return (
+      <select
+        ref={selectEl}
+        value={val}
+        className="ag-select__native-select"
+        onChange={e => { setVal(e.target.value); }}
+        onBlur={() => stopEditing()}
+        style={{ height: '100%', width: '100%', background: '#14161f',
+          color: '#eef0f6', border: 'none', outline: 'none', padding: '0 4px' }}
+      >
+        {values.map((v) => (
+          <option key={v} value={v}>{v}</option>
+        ))}
+      </select>
+    );
+  }
+);
 
 // ──────────────────────────────────────────────────────────────────────────────
 // 类型 & 常量
@@ -542,7 +573,7 @@ export default function CustomerListPage({
       headerName: '意向',
       width: 128,
       editable: true,
-      cellEditor: 'agSelectCellEditor',
+      cellEditor: NativeSelectCellEditor,
       cellEditorParams: { values: STATUS_OPTIONS },
       cellRenderer: (p: ICellRendererParams<CustomerRow>) => {
         const val = (p.value as CrmStatus) ?? 'A1';
@@ -556,7 +587,7 @@ export default function CustomerListPage({
       headerName: '身份',
       width: 120,
       editable: true,
-      cellEditor: 'agSelectCellEditor',
+      cellEditor: NativeSelectCellEditor,
       cellEditorParams: { values: IDENTITY_OPTIONS },
       // valueGetter 把计算后的 identity 作为单元格值，供编辑器和 cellRenderer 使用
       valueGetter: (p) => (p.data ? currentIdentity(p.data) : 'customer'),
