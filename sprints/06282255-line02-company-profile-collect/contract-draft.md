@@ -1,4 +1,4 @@
-# Sprint Contract Draft (Round 2) — Line 02 公司信息页 + 采集任务 Table + 主号全链
+# Sprint Contract Draft (Round 3) — Line 02 公司信息页 + 采集任务 Table + 主号全链
 
 > **验证 SSOT**：所有可执行验证命令以 `contract-dod.md` 的 `[BEHAVIOR]` manual:bash 为唯一真相源（evaluator 直接跑那一份）。本文件每个 Golden Path Step 只写「可观测行为 + 硬阈值」并引用对应 DoD `[BEHAVIOR]` Step 标签。
 
@@ -219,13 +219,14 @@
 **来源**: `[FROM_PRD]` — Golden Path Step5「Table 状态 = 阶段一完成 | 结束时间 | 视频数 N | Lead 数 M → 启动阶段二按钮高亮（UI 占位）」
 
 **可观测行为**:
-- POST collect/report（terminal="done"）→ task status = "done"
-- GET `/api/acquisition/collect/:task_id` 返回 `status == "done"`, `video_count ≥ 1`, `lead_count_raw ≥ 1`
+- POST collect/report（terminal="done"）→ task status = `"stage_1_done"`（`terminal:"done"` 参数映射到 DB status = `stage_1_done`，非 `"done"`）
+- GET `/api/acquisition/collect/:task_id` 返回 `status == "stage_1_done"`, `video_count ≥ 1`, `lead_count_raw ≥ 1`, `ended_at != null`
 - 前端 Table 状态列显示「阶段一完成」，「启动阶段二」按钮 visible 但 disabled（UI 占位）
 
 **硬阈值**:
-- GET task 返回 `data.status == "done"`, `data.video_count ≥ 1`, `data.lead_count_raw ≥ 1`
-- `data` 包含 `task_id`, `status`, `video_count`, `lead_count_raw` 四个必填字段
+- GET task 返回 `data.status == "stage_1_done"`, `data.video_count ≥ 1`, `data.lead_count_raw ≥ 1`
+- `data.ended_at != null`（terminal 后必须写入结束时间）
+- `data` 顶层 keys 完全等于 `["created_at","ended_at","lead_count_raw","status","task_id","video_count"]`（排序后，6 个字段）
 
 **验证**: contract-dod.md `[BEHAVIOR] Step5-a/b`
 
@@ -235,11 +236,15 @@
 - 主号 session 失效 → GET account-status 返回 `health == "expired"` → 前端账号状态块变红「需重扫」
 - 主号未绑定时 POST collect/start → 可写入 pending（正常），但 Agent 轮询后立即标 failed（PRD 边界情况）
 
-**验证**: contract-dod.md `[BEHAVIOR] Error-a`、`[BEHAVIOR] Error-b`、`[BEHAVIOR] Error-c`
+**验证**: contract-dod.md `[BEHAVIOR] Error-a`、`[BEHAVIOR] Error-b`、`[BEHAVIOR] Error-c`、`[BEHAVIOR] Error-d`
 
 **出错路径（补充）**:
 - 主号 session 失效 → DB 中主号 session 的 health 字段更新为 `expired` → GET account-status 响应中 `accounts` 数组内对应条目 `health == "expired"` → 前端账号状态块变红「需重扫」
   **验证**: contract-dod.md `[BEHAVIOR] Error-c`
+
+- 主号未绑定（`zenithjoy.line02_account_sessions` 无 `role='main'` 记录）→ POST collect/start 正常写入 `pending` → 但 Agent 第一次轮询时立即标记 `failed`（API `GET /api/acquisition/collect/:task_id` 返回 `status == "failed"`）
+  **来源**: `[FROM_PRD]` — 边界情况「主号未绑定时采集任务写入后立即标记 failed」
+  **验证**: contract-dod.md `[BEHAVIOR] Error-d`
 
 ---
 

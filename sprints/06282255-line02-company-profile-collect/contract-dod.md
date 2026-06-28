@@ -27,6 +27,9 @@ target_environment: windows_cloud
 - [ ] [ARTIFACT] `services/agent/publishers/crawl-comments-douyin.cjs` 存在（新建）
   Test: node -e "require('fs').accessSync('services/agent/publishers/crawl-comments-douyin.cjs')"
 
+- [ ] [ARTIFACT] Migration 文件存在且包含 `zenithjoy.line02_account_sessions` 建表语句（含 `(tenant_id, account_label)` 唯一约束，Error-c 的 ON CONFLICT 依赖此约束）
+  Test: node -e "const fs=require('fs'),g=require('glob');const f=g.sync('apps/api/db/migrations/*account_sessions*');if(!f.length)process.exit(1);const c=fs.readFileSync(f[0],'utf8');if(!c.includes('line02_account_sessions')||!c.includes('UNIQUE')||!c.includes('tenant_id')||!c.includes('account_label'))process.exit(1)"
+
 - [ ] [ARTIFACT] `services/agent/modules/line02/index.ts` 不再只含 stub（必须有轮询 + 调用逻辑）
   Test: node -e "const c=require('fs').readFileSync('services/agent/modules/line02/index.ts','utf8');if(c.includes('stub')||!c.includes('pending-collect-tasks'))process.exit(1)"
 
@@ -132,7 +135,7 @@ target_environment: windows_cloud
 
 ### [BEHAVIOR] Step2-a — GET /api/line02/account-status 返回 accounts 数组 + schema 正确
 
-- [ ] [BEHAVIOR] GET /api/line02/account-status 返回 200 + data.accounts 数组含 role 字段
+- [ ] [BEHAVIOR] GET /api/line02/account-status 返回 200 + data.accounts 数组含 role=main 条目 + label/health 字段
   Test: manual:bash -c '
   API="${API_URL:-http://localhost:3000}"
   TENANT="2ac0aa4a-99f4-470a-aed7-c3a9fe03149b"
@@ -140,7 +143,10 @@ target_environment: windows_cloud
   echo "$RESP" | jq -e ".success == true" || { echo "FAIL: success!=true"; exit 1; }
   echo "$RESP" | jq -e ".data | keys == [\"accounts\"]" || { echo "FAIL: data keys 不是 [accounts]"; exit 1; }
   echo "$RESP" | jq -e ".data.accounts | type == \"array\"" || { echo "FAIL: accounts 不是数组"; exit 1; }
-  echo "$RESP" | jq -e ".data.accounts | map(select(.role==\"main\")) | length >= 0" || { echo "FAIL: accounts 结构异常"; exit 1; }
+  echo "$RESP" | jq -e ".data.accounts | map(select(.role==\"main\")) | length >= 1" || { echo "FAIL: accounts 中无 role=main 条目（length>=1 要求）"; exit 1; }
+  echo "$RESP" | jq -e ".data.accounts[0] | has(\"label\")" || { echo "FAIL: accounts[0] 缺 label 字段"; exit 1; }
+  echo "$RESP" | jq -e ".data.accounts[0] | has(\"health\")" || { echo "FAIL: accounts[0] 缺 health 字段"; exit 1; }
+  echo "$RESP" | jq -e ".data.accounts[0].health | test(\"^(ok|expired|unknown)$\")" || { echo "FAIL: health 值不在枚举 ok/expired/unknown"; exit 1; }
   echo OK'
   期望: OK
 
@@ -219,7 +225,7 @@ target_environment: windows_cloud
 
 ### [BEHAVIOR] Step5-a — 终态回报后 GET task 返回 done + video_count/lead_count_raw ≥ 1
 
-- [ ] [BEHAVIOR] terminal=done 上报后 GET collect/:task_id 返回 status=done 且计数 ≥ 1
+- [ ] [BEHAVIOR] terminal=done 上报后 GET collect/:task_id 返回 status=stage_1_done + ended_at 非 null + 计数 ≥ 1
   Test: manual:bash -c '
   API="${API_URL:-http://localhost:3000}"
   TENANT="2ac0aa4a-99f4-470a-aed7-c3a9fe03149b"
@@ -229,21 +235,22 @@ target_environment: windows_cloud
     -H "X-Tenant-Id: $TENANT" \
     -d "{\"keywords\":[\"terminal-smoke\"]}" | jq -r ".data.task_id")
   [ -n "$TASK_ID" ] || { echo "FAIL: 无法建任务"; exit 1; }
-  # 上报 commenter + terminal=done
+  # 上报 commenter + terminal=done（terminal参数"done"映射到DB status="stage_1_done"）
   curl -sf -X POST "$API/api/acquisition/collect/report" \
     -H "Content-Type: application/json" \
     -d "{\"task_id\":\"$TASK_ID\",\"video_id\":\"v-001\",\"commenters\":[{\"sec_uid\":\"MS4w001\",\"nickname\":\"终态用户\"}],\"terminal\":\"done\"}" > /dev/null
   # 验 GET status
   RESP=$(curl -sf "$API/api/acquisition/collect/$TASK_ID")
-  echo "$RESP" | jq -e ".data.status == \"done\"" || { echo "FAIL: status!=done"; exit 1; }
+  echo "$RESP" | jq -e ".data.status == \"stage_1_done\"" || { echo "FAIL: status!=stage_1_done（terminal:done 必须映射为 stage_1_done，不是 done）"; exit 1; }
   echo "$RESP" | jq -e ".data.video_count >= 0" || { echo "FAIL: video_count 缺字段"; exit 1; }
   echo "$RESP" | jq -e ".data.lead_count_raw >= 1" || { echo "FAIL: lead_count_raw<1"; exit 1; }
+  echo "$RESP" | jq -e ".data.ended_at != null" || { echo "FAIL: ended_at 为 null（terminal 后必须写入结束时间）"; exit 1; }
   echo OK'
   期望: OK
 
 ### [BEHAVIOR] Step5-b — GET /api/acquisition/collect/:task_id schema 完整性检查
 
-- [ ] [BEHAVIOR] GET task 响应 data 包含必填字段 task_id/status/video_count/lead_count_raw
+- [ ] [BEHAVIOR] GET task 响应 data 6 字段完整性检查（task_id/status/video_count/lead_count_raw/created_at/ended_at）
   Test: manual:bash -c '
   API="${API_URL:-http://localhost:3000}"
   TENANT="2ac0aa4a-99f4-470a-aed7-c3a9fe03149b"
@@ -252,7 +259,10 @@ target_environment: windows_cloud
     -H "X-Tenant-Id: $TENANT" \
     -d "{\"keywords\":[\"schema-check\"]}" | jq -r ".data.task_id")
   RESP=$(curl -sf "$API/api/acquisition/collect/$TASK_ID")
-  echo "$RESP" | jq -e ".data | has(\"task_id\") and has(\"status\") and has(\"video_count\") and has(\"lead_count_raw\")" || { echo "FAIL: data 缺必填字段"; exit 1; }
+  echo "$RESP" | jq -e ".data | has(\"task_id\") and has(\"status\") and has(\"video_count\") and has(\"lead_count_raw\") and has(\"created_at\") and has(\"ended_at\")" || { echo "FAIL: data 缺必填字段（需全部 6 个：task_id/status/video_count/lead_count_raw/created_at/ended_at）"; exit 1; }
+  echo "$RESP" | jq -e ".data | keys | sort == [\"created_at\",\"ended_at\",\"lead_count_raw\",\"status\",\"task_id\",\"video_count\"]" || { echo "FAIL: data keys 完整性检查失败（应恰好 6 个字段，排序后）"; exit 1; }
+  echo "$RESP" | jq -e ".data | has(\"id\") | not" || { echo "FAIL: 禁用字段 id 漏网"; exit 1; }
+  echo "$RESP" | jq -e ".data | has(\"leads\") | not" || { echo "FAIL: 禁用字段 leads 漏网"; exit 1; }
   echo OK'
   期望: OK
 
@@ -306,6 +316,29 @@ target_environment: windows_cloud
   psql "$DB" -c "UPDATE zenithjoy.line02_account_sessions SET health='"'"'ok'"'"' WHERE tenant_id='"'"'$TENANT'"'"' AND account_label='"'"'live101942'"'"'" 2>/dev/null || true
   echo OK'
   期望: OK（expired 条目数 ≥ 1）
+
+### [BEHAVIOR] Error-d — 主号未绑定时 POST collect/start 写入后 task 立即标 failed
+
+- [ ] [BEHAVIOR] 无 role=main 账号时，task 状态在轮询后立即变 failed（API 层直接标 failed）
+  Test: manual:bash -c '
+  API="${API_URL:-http://localhost:3000}"
+  DB="${DB_URL:-postgresql://localhost/zenithjoy}"
+  TENANT="11111111-1111-1111-1111-000000000002"
+  # 确保该租户无 role=main session（干净测试 tenant，与其他 BEHAVIOR 隔离）
+  psql "$DB" -c "DELETE FROM zenithjoy.line02_account_sessions WHERE tenant_id='"'"'$TENANT'"'"'" 2>/dev/null || true
+  # POST collect/start（主号未绑定）
+  RESP=$(curl -sf -X POST "$API/api/acquisition/collect/start" \
+    -H "Content-Type: application/json" \
+    -H "X-Tenant-Id: $TENANT" \
+    -d "{\"keywords\":[\"no-main-acc-smoke\"]}")
+  TASK_ID=$(echo "$RESP" | jq -r ".data.task_id")
+  echo "$RESP" | jq -e ".data.status == \"pending\"" || { echo "FAIL: collect/start 未返回 pending"; exit 1; }
+  # API 在无主号情况下应将任务立即置为 failed（无需等 Agent 轮询）
+  sleep 1
+  TASK_RESP=$(curl -sf "$API/api/acquisition/collect/$TASK_ID")
+  echo "$TASK_RESP" | jq -e ".data.status == \"failed\"" || { echo "FAIL: 无主号时 task 未立即标 failed，当前 status=$(echo $TASK_RESP | jq -r .data.status)"; exit 1; }
+  echo OK'
+  期望: OK（task.status == "failed"，因无 role=main 账号）
 
 ---
 
