@@ -1,4 +1,4 @@
-# Sprint Contract Draft (Round 1) — Line 02 公司信息页 + 采集任务 Table + 主号全链
+# Sprint Contract Draft (Round 2) — Line 02 公司信息页 + 采集任务 Table + 主号全链
 
 > **验证 SSOT**：所有可执行验证命令以 `contract-dod.md` 的 `[BEHAVIOR]` manual:bash 为唯一真相源（evaluator 直接跑那一份）。本文件每个 Golden Path Step 只写「可观测行为 + 硬阈值」并引用对应 DoD `[BEHAVIOR]` Step 标签。
 
@@ -86,6 +86,33 @@
 - `data.accounts[].health` (enum `"ok"`|`"expired"`|`"unknown"`): PRD 出错路径「账号状态块变红」
 - `data.accounts` 顶层 keys 必须**完全等于** `["accounts"]`
 **禁用字段名**: `status`(顶层 data 裸)、`main_account`、`burner_accounts`(单独字段)
+
+### Endpoint 5: GET /api/acquisition/collect/:task_id
+**Header**: `X-Tenant-Id: <uuid>`（tenantContextOptional 中间件读取）
+**Success (HTTP 200)**:
+```json
+{
+  "success": true,
+  "data": {
+    "task_id": "<uuid>",
+    "status": "pending|running|stage_1_done|failed",
+    "video_count": 0,
+    "lead_count_raw": 0,
+    "created_at": "<iso>",
+    "ended_at": "<iso>|null"
+  },
+  "timestamp": "<iso>"
+}
+```
+- `data.task_id` (string uuid, 必填): 来源 PRD Step5「Table 状态 = 阶段一完成」的任务标识
+- `data.status` (string enum, 必填): PRD Step5 Table 状态列，约束为已有 CHECK 7态之一
+- `data.video_count` (number, 必填): PRD Step5「视频数 N」
+- `data.lead_count_raw` (number, 必填): PRD Step5「Lead 数 M」
+- `data.created_at` (string iso, 必填): 任务创建时间
+- `data.ended_at` (string iso | null, 必填): 阶段一结束时间（进行中为 null）
+- `data` 顶层 keys 必须**完全等于** `["created_at","ended_at","lead_count_raw","status","task_id","video_count"]`（排序后）
+**Error (HTTP 404)**: 任务不存在时返回 `{"success": false, "error": {"code": "TASK_NOT_FOUND", "message": "<string>"}, "timestamp": "<iso>"}`
+**禁用字段名**: `id`（不用裸 id）、`leads`（不用 leads 而用 lead_count_raw）
 
 ---
 
@@ -208,7 +235,21 @@
 - 主号 session 失效 → GET account-status 返回 `health == "expired"` → 前端账号状态块变红「需重扫」
 - 主号未绑定时 POST collect/start → 可写入 pending（正常），但 Agent 轮询后立即标 failed（PRD 边界情况）
 
-**验证**: contract-dod.md `[BEHAVIOR] Error-a`
+**验证**: contract-dod.md `[BEHAVIOR] Error-a`、`[BEHAVIOR] Error-b`、`[BEHAVIOR] Error-c`
+
+**出错路径（补充）**:
+- 主号 session 失效 → DB 中主号 session 的 health 字段更新为 `expired` → GET account-status 响应中 `accounts` 数组内对应条目 `health == "expired"` → 前端账号状态块变红「需重扫」
+  **验证**: contract-dod.md `[BEHAVIOR] Error-c`
+
+---
+
+## Risks
+
+| # | 风险 | 后果 | 缓解措施 |
+|---|---|---|---|
+| R1 | `products`/`key_advantages`/`qa_list` 存为 JSONB vs TEXT[]：两者在 psql 聚合查询、GIN 索引语法不同；Generator 若存 TEXT[] 但 API 层按 JSONB 反序列化，数组字段读回会报 parse error | GET /api/company-profile 返回 500 或字段为 null | Migration 明确声明 `JSONB NOT NULL DEFAULT '[]'`；API 路由做 `JSON.parse` 兜底；BEHAVIOR Step1-b 验证 `products` 长度 ≥ 1（而非只验字段存在），隐性覆盖序列化正确性 |
+| R2 | `commenter 主页抓取 ≤30s` NFR 无法在 windows_cloud CI 验证（接缝 1 — logic-done-pending）：crawl-comments-douyin.cjs 真实翻页时间依赖抖音网络，CI 以 mock report 绕过后可能在 rog 真机炸 timeout | rog 真机运行时 Table 卡在 running，Agent 超时失败 | ① crawl-comments 实现须在每个视频内加单页 ≤30s 超时（`page.waitForSelector` + 30000ms timeout 抛 TimeoutError）；② rog 真机第一次跑后补充实测数据驱动阈值调整；③ 接缝 1 解除 pending 前必须在 rog 验过至少一条评论区完整抓取 |
+| R3 | `X-Tenant-Id` header 无鉴权（tenantContextOptional = 匿名可读写）：合同所有 BEHAVIOR 手动传 tenant_id，任何知道 API 地址的调用方可跨租操作 | staging/prod 数据被未授权写入 | 本 sprint 范围内仅 staging 环境，API 网关限内网；加厚阶段须在 API 路由层做 JWT 校验后改为 tenantContextRequired；合同 Step1-c 的不同租户隔离测试是当前唯一防护 |
 
 ---
 
@@ -230,6 +271,92 @@
 # 所有 API stub via page.route — 不依赖真后端，不依赖 staging DB
 # Screenshots: sprints/06282255-line02-company-profile-collect/screenshots/
 ```
+
+### GHA Workflow 骨架（Generator 必须按此写 `.github/workflows/e2e-line02-company-profile-collect.yml`）
+
+```yaml
+name: E2E Line02 公司信息页 + 采集任务 Table (Windows)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'apps/dashboard/src/pages/CompanyProfilePage.tsx'
+      - 'apps/dashboard/src/pages/AcquisitionConfigPage.tsx'
+      - 'apps/dashboard/e2e/line02-company-profile-collect.spec.ts'
+      - 'apps/api/src/routes/company-profile.ts'
+      - '.github/workflows/e2e-line02-company-profile-collect.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'apps/dashboard/src/pages/CompanyProfilePage.tsx'
+      - 'apps/dashboard/src/pages/AcquisitionConfigPage.tsx'
+      - 'apps/dashboard/e2e/line02-company-profile-collect.spec.ts'
+      - 'apps/api/src/routes/company-profile.ts'
+      - '.github/workflows/e2e-line02-company-profile-collect.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: e2e-line02-company-profile-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  playwright-windows:
+    name: Playwright — Line02 Company Profile + Collect (Windows Chrome)
+    runs-on: windows-latest
+    timeout-minutes: 20
+
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install deps
+        run: npm ci
+
+      - name: Install Windows rollup native binding
+        run: npm install @rollup/rollup-win32-x64-msvc --no-save
+
+      - name: Install Playwright Chromium
+        working-directory: apps/dashboard
+        run: npx playwright install chromium --with-deps
+
+      - name: Build dashboard
+        working-directory: apps/dashboard
+        run: npm run build
+
+      - name: Start Vite preview & run Playwright E2E
+        working-directory: apps/dashboard
+        env:
+          E2E_BASE_URL: 'http://localhost:5174'
+          VITE_SKIP_AUTH: 'true'
+        run: |
+          npx vite preview --port 5174 --host &
+          for i in $(seq 1 30); do
+            curl -fs http://localhost:5174 >/dev/null 2>&1 && break
+            sleep 1
+          done
+          curl -fs http://localhost:5174 || (echo "Vite failed to start"; exit 1)
+          npx playwright test e2e/line02-company-profile-collect.spec.ts --reporter=list
+
+      - name: Upload Playwright artifacts on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-line02-artifacts
+          path: |
+            apps/dashboard/test-results/
+            apps/dashboard/playwright-report/
+          retention-days: 7
+```
+
+**[CI_GAP 注记]**：workflow 目前无后端 API 真实启动步骤（所有 API 通过 `page.route` stub）；若未来需要真实 API 层验证，需额外添加 `npm run start:api` step 并更新 `page.route` 到真实端点。
 
 ---
 

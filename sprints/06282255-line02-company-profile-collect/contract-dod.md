@@ -56,17 +56,54 @@ target_environment: windows_cloud
   echo OK'
   期望: OK
 
-### [BEHAVIOR] Step1-b — GET /api/company-profile 读回刚写入的字段（租户正确）
+### [BEHAVIOR] Step1-b — GET /api/company-profile 读回所有 9 个必填字段（租户正确）
 
-- [ ] [BEHAVIOR] GET /api/company-profile 返回刚保存的 company_name 字段
+- [ ] [BEHAVIOR] GET /api/company-profile 返回 company_name / city / industry / description 四个基础字段
   Test: manual:bash -c '
   API="${API_URL:-http://localhost:3000}"
   TENANT="2ac0aa4a-99f4-470a-aed7-c3a9fe03149b"
   RESP=$(curl -sf "$API/api/company-profile" -H "X-Tenant-Id: $TENANT")
   echo "$RESP" | jq -e ".success == true" || { echo "FAIL: success!=true"; exit 1; }
   echo "$RESP" | jq -e ".data.company_name == \"Smoke 公司\"" || { echo "FAIL: company_name 读回不匹配"; exit 1; }
+  echo "$RESP" | jq -e ".data.city == \"西安\"" || { echo "FAIL: city 读回不匹配"; exit 1; }
+  echo "$RESP" | jq -e ".data.industry == \"餐饮\"" || { echo "FAIL: industry 读回不匹配"; exit 1; }
+  echo "$RESP" | jq -e ".data.description == \"测试描述\"" || { echo "FAIL: description 读回不匹配"; exit 1; }
+  echo OK'
+  期望: OK
+
+- [ ] [BEHAVIOR] GET /api/company-profile 返回 key_advantages / customer_problem / customer_portrait / products / qa_list 五个字段
+  Test: manual:bash -c '
+  API="${API_URL:-http://localhost:3000}"
+  TENANT="2ac0aa4a-99f4-470a-aed7-c3a9fe03149b"
+  RESP=$(curl -sf "$API/api/company-profile" -H "X-Tenant-Id: $TENANT")
+  echo "$RESP" | jq -e ".data.key_advantages | length >= 1" || { echo "FAIL: key_advantages 为空"; exit 1; }
+  echo "$RESP" | jq -e ".data.customer_problem == \"测试问题\"" || { echo "FAIL: customer_problem 读回不匹配"; exit 1; }
+  echo "$RESP" | jq -e ".data.customer_portrait == \"25-35岁消费者\"" || { echo "FAIL: customer_portrait 读回不匹配"; exit 1; }
   echo "$RESP" | jq -e ".data.products | length >= 1" || { echo "FAIL: products 为空"; exit 1; }
   echo "$RESP" | jq -e ".data.qa_list | length >= 1" || { echo "FAIL: qa_list 为空"; exit 1; }
+  echo OK'
+  期望: OK
+
+- [ ] [BEHAVIOR] GET /api/company-profile data keys 完整性（9 个必填字段全在，无多无少）
+  Test: manual:bash -c '
+  API="${API_URL:-http://localhost:3000}"
+  TENANT="2ac0aa4a-99f4-470a-aed7-c3a9fe03149b"
+  RESP=$(curl -sf "$API/api/company-profile" -H "X-Tenant-Id: $TENANT")
+  EXPECTED="[\"city\",\"company_name\",\"customer_portrait\",\"customer_problem\",\"description\",\"key_advantages\",\"products\",\"qa_list\"]"
+  echo "$RESP" | jq -e ".data | del(.key_advantages,.products,.qa_list) | keys == [\"city\",\"company_name\",\"customer_portrait\",\"customer_problem\",\"description\"]" || { echo "FAIL: data scalar keys 不完整"; exit 1; }
+  echo "$RESP" | jq -e ".data | has(\"key_advantages\") and has(\"products\") and has(\"qa_list\")" || { echo "FAIL: data 缺数组字段"; exit 1; }
+  echo OK'
+  期望: OK
+
+- [ ] [BEHAVIOR] GET /api/company-profile data 禁用字段反向检查（profile / result / tenant_id 裸 / companyName 不存在）
+  Test: manual:bash -c '
+  API="${API_URL:-http://localhost:3000}"
+  TENANT="2ac0aa4a-99f4-470a-aed7-c3a9fe03149b"
+  RESP=$(curl -sf "$API/api/company-profile" -H "X-Tenant-Id: $TENANT")
+  echo "$RESP" | jq -e ".data | has(\"profile\") | not" || { echo "FAIL: 禁用字段 profile 漏网"; exit 1; }
+  echo "$RESP" | jq -e ".data | has(\"result\") | not" || { echo "FAIL: 禁用字段 result 漏网"; exit 1; }
+  echo "$RESP" | jq -e ".data | has(\"tenant_id\") | not" || { echo "FAIL: 禁用字段 tenant_id 裸字段漏网"; exit 1; }
+  echo "$RESP" | jq -e ".data | has(\"companyName\") | not" || { echo "FAIL: 禁用字段 companyName(camelCase) 漏网"; exit 1; }
   echo OK'
   期望: OK
 
@@ -246,6 +283,29 @@ target_environment: windows_cloud
   [ "$CODE" = "400" ] || { echo "FAIL: 缺 company_name 未返 400，得到 $CODE"; exit 1; }
   echo OK'
   期望: OK
+
+### [BEHAVIOR] Error-c — 主号 session 失效时 GET account-status 返回 health="expired"
+
+- [ ] [BEHAVIOR] DB 注入 expired 状态后，GET /api/line02/account-status accounts 含 health=="expired" 条目
+  Test: manual:bash -c '
+  DB="${DB_URL:-postgresql://localhost/zenithjoy}"
+  API="${API_URL:-http://localhost:3000}"
+  TENANT="2ac0aa4a-99f4-470a-aed7-c3a9fe03149b"
+  # 前提：zenithjoy.line02_account_sessions 表存在（Generator 建，含 tenant_id / account_label / role / health 字段）
+  # 注入 expired 状态（若记录不存在先 INSERT，再 UPDATE）
+  psql "$DB" -c "
+    INSERT INTO zenithjoy.line02_account_sessions (tenant_id, account_label, role, health)
+    VALUES ('"'"'$TENANT'"'"', '"'"'live101942'"'"', '"'"'main'"'"', '"'"'expired'"'"')
+    ON CONFLICT (tenant_id, account_label) DO UPDATE SET health='"'"'expired'"'"', updated_at=NOW()
+  " || { echo "FAIL: DB 注入 expired 状态失败"; exit 1; }
+  # GET account-status 验证
+  RESP=$(curl -sf "$API/api/line02/account-status" -H "X-Tenant-Id: $TENANT")
+  EXPIRED_COUNT=$(echo "$RESP" | jq "[.data.accounts[] | select(.health==\"expired\")] | length")
+  [ "$EXPIRED_COUNT" -ge 1 ] || { echo "FAIL: accounts 中无 health==expired 条目，RESP=$RESP"; exit 1; }
+  # 恢复状态（测试完清理，避免污染其他 BEHAVIOR）
+  psql "$DB" -c "UPDATE zenithjoy.line02_account_sessions SET health='"'"'ok'"'"' WHERE tenant_id='"'"'$TENANT'"'"' AND account_label='"'"'live101942'"'"'" 2>/dev/null || true
+  echo OK'
+  期望: OK（expired 条目数 ≥ 1）
 
 ---
 
