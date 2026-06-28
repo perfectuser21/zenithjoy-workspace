@@ -105,7 +105,7 @@ test.describe('Line02 公司信息页 + 采集任务 Table', () => {
   });
 
   test('公司信息页 — 加载、填写、保存、刷新后数据仍在', async ({ page }) => {
-    await page.goto(`${BASE_URL}/company-profile`);
+    await page.goto(`${BASE_URL}/company-profile`, { waitUntil: 'networkidle' });
     await page.screenshot({ path: 'sprints/06282255-line02-company-profile-collect/screenshots/01-company-profile-initial.png' });
 
     // 验证三个 Section 标题可见
@@ -128,7 +128,7 @@ test.describe('Line02 公司信息页 + 采集任务 Table', () => {
   });
 
   test('采集页 — 账号状态块 + 关键词配置 + 采集任务 Table', async ({ page }) => {
-    await page.goto(`${BASE_URL}/acquisition-config`);
+    await page.goto(`${BASE_URL}/dashboard/acquisition-config`, { waitUntil: 'networkidle' });
 
     // 截图 - 账号状态页面
     await page.screenshot({ path: 'sprints/06282255-line02-company-profile-collect/screenshots/04-acquisition-page-status.png' });

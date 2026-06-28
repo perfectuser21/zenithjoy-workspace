@@ -108,6 +108,8 @@ export const autopilotPageComponents: Record<string, () => Promise<{ default: Co
   'MachineManagementPage': () => import('../pages/MachineManagementPage'),
   // Line02 刀1 — 智能获客「分析+指派」配置（参数表单 + 指派计划 + Cookie 健康）
   'AcquisitionConfigPage': () => import('../pages/AcquisitionConfigPage'),
+  // Line02 — 公司信息页（公司画像 + 产品卖点 + 客户画像）
+  'CompanyProfilePage': () => import('../pages/CompanyProfilePage'),
   // Line 07 — AI 爆款视频翻拍
   'VideoRemakePipelinePage': () => import('../pages/VideoRemakePipelinePage'),
   // 2026-06-23 — 业务区总览页（短侧栏下钻：区 → 总览卡片 → 子页）
@@ -181,6 +183,7 @@ export const additionalRoutes: RouteConfig[] = [
   { path: '/dashboard/douyin-burner-bind', component: 'DouyinBurnerBindPage', requireAuth: true },
   { path: '/dashboard/machines', component: 'MachineManagementPage', requireAuth: true },
   { path: '/dashboard/acquisition-config', component: 'AcquisitionConfigPage', requireAuth: true },
+  { path: '/company-profile', component: 'CompanyProfilePage', requireAuth: true },
   { path: '/dashboard/feishu-bind', component: 'FeishuBindTenant', requireAuth: true },
   // 以号为中心 IA 重设计刀2：客服号总览 + 单号工作台（5 Tab 容器）。
   //   /wechat/accounts 总览（超管/多号）；/wechat/account/:machineId 单号工作台。
