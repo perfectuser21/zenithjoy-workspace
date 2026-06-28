@@ -16,6 +16,7 @@
  */
 
 import pool from '../../db/connection';
+import { listHeartbeats, type HeartbeatRecord } from '../wechat-heartbeat';
 import type { Persona } from './types';
 
 export interface CSAccountConfig {
@@ -262,6 +263,7 @@ export interface CSMachine {
   wechat_reason?: string; // 不健康原因（#835 精确：没登录 / 登录了但UIA瞎 …）
   found_window?: boolean;
   login_present?: boolean;
+  agent_id?: string; // license_machines.agent_id（env-id），匹配 listen_chat 心跳用
 }
 
 /**
@@ -278,20 +280,22 @@ export interface CSMachine {
 export async function listAllMachines(tenantId?: string, limit = 100): Promise<CSMachine[]> {
   try {
     const scoped = typeof tenantId === 'string' && tenantId.length > 0;
+    // Bug D：scoped(运营) 原以 service_agents 为驱动表(INNER) → 已装 Agent 上线但「未绑定/待配」的机器
+    // 漏掉，不在「选机器」列表（只在 listPendingMachines）。改以 license_machines 为驱动（机器装 Agent
+    // 注册即落此表），经 licenses.tenant_id scope 到该运营租户，LEFT JOIN service_agents（含未绑定：
+    // sa.* 为 NULL → configured=false → 前台显「待配置」可点配置）。绑定过的机器必有 license_machines
+    // 行（setupCSByMachine 要先解析 license 才能绑），故 lm 驱动不会漏掉已绑机器。
     const fromAndJoins = scoped
-      ? // 运营视图：service_agents 驱动（只该租户的绑定），再回连 license_machines 取 hostname/心跳
-        // 运营视图：service_agents 驱动（只该租户的绑定），LEFT JOIN license_machines 取 hostname/心跳
-        // —— 用 LEFT JOIN 而非 INNER：客服机已绑 service_agents 但 license_machines 尚无行（如刚一键配置、
-        // 还没正式注册装机）也要出现在「我的客服机」里，不能因缺 license_machines 行而漏掉自己的机器。
-        `FROM zenithjoy.service_agents sa
-         LEFT JOIN zenithjoy.license_machines lm ON lm.machine_id = sa.machine_id`
+      ? `FROM zenithjoy.license_machines lm
+         JOIN zenithjoy.licenses l ON l.id = lm.license_id
+         LEFT JOIN zenithjoy.service_agents sa
+                ON sa.machine_id = lm.machine_id AND sa.deleted_at IS NULL`
       : // 超管视图：license_machines 驱动，左连 service_agents（含未绑定机器）
         `FROM zenithjoy.license_machines lm
          LEFT JOIN zenithjoy.service_agents sa
                 ON sa.machine_id = lm.machine_id AND sa.deleted_at IS NULL`;
-    const scopeWhere = scoped ? `WHERE sa.tenant_id = $2::uuid AND sa.deleted_at IS NULL` : '';
-    // 机器 id 与 GROUP BY：运营视图以 sa.machine_id 为准（license_machines 可能缺行）；超管视图以 lm.machine_id。
-    const machineIdExpr = scoped ? 'sa.machine_id' : 'lm.machine_id';
+    const scopeWhere = scoped ? `WHERE l.tenant_id = $2::uuid` : '';
+    const machineIdExpr = 'lm.machine_id';
     const params: unknown[] = scoped ? [limit, tenantId] : [limit];
     const res = await pool.query(
       `SELECT ${machineIdExpr} AS machine_id,
@@ -300,6 +304,8 @@ export async function listAllMachines(tenantId?: string, limit = 100): Promise<C
               MAX(sa.wechat_id)       AS wechat_id,
               MAX(sa.real_wechat_id)      AS real_wechat_id,
               MAX(sa.wechat_display_name) AS wechat_display_name,
+              MAX(lm.agent_id)        AS agent_id,
+              MAX(h.agent_uuid)       AS agent_uuid,
               MAX(c.persona->>'self_name')   AS self_name,
               MAX(c.whitelist::text)         AS whitelist,
               bool_or(c.auto_agent_enabled)  AS auto_agent_enabled,
@@ -313,7 +319,8 @@ export async function listAllMachines(tenantId?: string, limit = 100): Promise<C
          LEFT JOIN zenithjoy.wechat_cs_account_config c
                 ON c.wechat_id = sa.wechat_id
          LEFT JOIN LATERAL (
-                SELECT a.module_status->'line04-wechat-cs'->>'ok'           AS l04_ok,
+                SELECT a.id::text AS agent_uuid,
+                       a.module_status->'line04-wechat-cs'->>'ok'           AS l04_ok,
                        a.module_status->'line04-wechat-cs'->>'reason'       AS l04_reason,
                        a.module_status->'line04-wechat-cs'->>'found_window' AS found_window,
                        a.module_status->'line04-wechat-cs'->>'login_present' AS login_present,
@@ -331,6 +338,21 @@ export async function listAllMachines(tenantId?: string, limit = 100): Promise<C
     );
     const asBool = (v: unknown): boolean | undefined =>
       v === null || v === undefined ? undefined : String(v) === 'true' || v === true;
+
+    // Bug C（issue 205799b8）：preflight statusReport（agents.module_status）的 found_window 生产恒空，
+    // 真值在 listen_chat.py 直报心跳的 diag.main_window_found（内存 Map，本进程可读）。这里按 agent 身份
+    // 用「最新一条心跳」覆盖恒空的 preflight，让「微信窗口状态」看板读到真值（main_window_found=true →
+    // found_window 真、wechat_ok 真、清掉「微信主窗口未找到」假告警；=false → 给精确不健康原因）。
+    const HB_FRESH_MS = 5 * 60 * 1000;
+    const now = Date.now();
+    // listen_chat 心跳只带 agent_id（无 wechat_id/machine_id），按 agent_id 取每个 agent 最新一条。
+    const hbByAgent = new Map<string, HeartbeatRecord>();
+    for (const hb of listHeartbeats()) {
+      if (!hb.agent_id) continue;
+      const prev = hbByAgent.get(hb.agent_id);
+      if (!prev || hb.ts > prev.ts) hbByAgent.set(hb.agent_id, hb);
+    }
+
     return (res.rows ?? []).map((r: Record<string, unknown>) => {
       let whitelist: string[] | undefined;
       try {
@@ -338,7 +360,7 @@ export async function listAllMachines(tenantId?: string, limit = 100): Promise<C
       } catch {
         whitelist = undefined;
       }
-      return {
+      const m: CSMachine = {
         machine_id: String(r.machine_id),
         hostname: r.hostname ? String(r.hostname) : undefined,
         last_seen:
@@ -355,7 +377,30 @@ export async function listAllMachines(tenantId?: string, limit = 100): Promise<C
         wechat_reason: r.wechat_reason ? String(r.wechat_reason) : undefined,
         found_window: asBool(r.found_window),
         login_present: asBool(r.login_present),
+        agent_id: r.agent_id ? String(r.agent_id) : undefined,
       };
+
+      // listener 实际传的可能是 agents.id UUID（决策 8383f3e3），也可能是 env-id；两者都试。
+      const hb: HeartbeatRecord | undefined =
+        (r.agent_uuid ? hbByAgent.get(String(r.agent_uuid)) : undefined) ??
+        (r.agent_id ? hbByAgent.get(String(r.agent_id)) : undefined);
+      if (hb?.diag && hb.diag.main_window_found !== undefined) {
+        const fresh = now - hb.ts < HB_FRESH_MS;
+        m.found_window = hb.diag.main_window_found;
+        if (hb.diag.login_present !== undefined) m.login_present = hb.diag.login_present;
+        if (fresh) m.online = true; // 直报心跳新鲜 → 在线（preflight 心跳可能已陈旧）
+        if (hb.diag.main_window_found === true) {
+          // 窗口找到 = 看板转绿，覆盖 preflight 的「未找到微信」假告警
+          m.wechat_ok = true;
+          m.wechat_reason = undefined;
+        } else {
+          m.wechat_ok = false;
+          m.wechat_reason = hb.diag.login_present
+            ? '微信未登录（需在该机扫码登录）'
+            : '未找到微信窗口';
+        }
+      }
+      return m;
     });
   } catch (err) {
     console.warn('[cs-account-config-store] listAllMachines 失败:', err);
