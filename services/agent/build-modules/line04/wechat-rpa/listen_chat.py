@@ -2427,6 +2427,71 @@ def _ensure_uia_flag() -> bool:
     return False
 
 
+# ─── 微信 mmui 无障碍树塌缩自愈（decision 4ab9b6f7，xian-rog 4.1.8.107 实地坐实 2026-06-29）──
+# 根因：微信 mmui a11y 树【仅在微信进程启动时 SPI_SETSCREENREADER 标志已置位】才构建。
+# autologon/外部启动的微信若启动时标志没设 → mmui::MainWindow 的 UIA 子树永久塌缩到只剩
+# 1 个 MMUIRenderSubWindowHW 空 Pane（descendants=1、ListItem=0），会话列表完全不暴露 →
+# sessions 永远 0 → 永不回复。事后 _activate_uia(SPIF_SENDCHANGE 广播)/OFF→ON 翻转/SetForeground/
+# set_focus 全部无法让【已运行进程】重建树（逐一实测失败）。唯一根因修法 = 重启微信，让 mmui
+# 在 screenreader 激活态下重建完整树（实测 descendants 1→71、ListItem 0→6、默忆[5条] 读出）。
+_COLLAPSED_TREE_MAX_DESCENDANTS = 2      # 整树 descendants ≤ 此值 = 塌缩(仅 render pane);树建好即便0会话也有几十控件
+_COLLAPSED_SUSTAIN_SECONDS = 90         # 树持续塌缩 ≥ 此时长才重启(避开启动过渡/瞬时态)
+_WECHAT_RESTART_COOLDOWN_SECONDS = 600  # 两次重启间隔 ≥ 10min(重启重而慢,防抖)
+_WECHAT_RESTART_MAX = 5                 # 单 listener 进程生命周期内最多重启 5 次(防无限重启 loop)
+
+
+def _is_uia_tree_collapsed(descendants_count: int) -> bool:
+    """纯函数(CI可测)：mmui::MainWindow 整树是否塌缩(无障碍树未构建)。
+
+    塌缩态(实地观测) = 整棵子树只剩 1 个 MMUIRenderSubWindowHW 空 Pane(descendants≤2)。
+    与"树已建但暂无会话"区分：后者即便 0 会话也有搜索框/导航/按钮等几十个控件(descendants 远>2)，
+    所以不能只靠 ListItem==0 判定(会误伤刚开机/真无会话的正常态)。
+    """
+    return descendants_count <= _COLLAPSED_TREE_MAX_DESCENDANTS
+
+
+def _should_restart_for_collapsed_tree(
+    now: float, last_restart_at: float, cooldown_s: float,
+    restarts_done: int, max_restarts: int,
+) -> bool:
+    """纯函数(CI可测)：塌缩已持续达阈值后，是否现在重启微信。
+
+    冷却(防抖：重启重而慢，别每轮都杀) + 单进程重启上限(防"重启也修不好"时无限 loop，
+    留给进程级/人工介入)。调用方负责"塌缩已持续 _COLLAPSED_SUSTAIN_SECONDS"的前置判断。
+    """
+    if restarts_done >= max_restarts:
+        return False
+    if now - last_restart_at < cooldown_s:
+        return False
+    return True
+
+
+def _restart_wechat_for_uia() -> bool:
+    """微信进程在跑但 mmui 无障碍树塌缩(UIA 读不到会话)时，重启微信以重建 a11y 树。
+
+    步骤：① _activate_uia() 确保 screenreader 标志已置位(这样微信重启时就能读到 → mmui 构建完整树)
+         ② taskkill /F Weixin.exe(微信吞 WM_CLOSE，优雅退无效，只能强杀；实测 /F + 等待 + 重启不崩)
+         ③ launch_weixin() 重启。返回是否成功发起重启。非 Windows 直接 False。
+    """
+    if platform.system() != "Windows":
+        return False
+    try:
+        _activate_uia()  # 杀之前先置标志：微信重启时读到 screenreader=on → mmui 构建完整 a11y 树
+        import subprocess
+        subprocess.run(
+            ["taskkill", "/F", "/IM", "Weixin.exe", "/T"],
+            capture_output=True, timeout=20,
+        )
+        time.sleep(6)  # 等进程真正退出 + 文件锁释放(防紧接重启崩 crashpad)
+        from find_weixin import launch_weixin
+        ok = launch_weixin()
+        _log(f"UIA树塌缩→已重启微信(重建a11y树): launch_weixin={ok}")
+        return bool(ok)
+    except Exception as exc:
+        _log(f"重启微信(重建UIA树)失败: {exc}")
+        return False
+
+
 def _relock_update() -> None:
     """每轮（按 UPDATE_LOCK_INTERVAL 冷却）重施"关死微信自动更新"+ verify。
 
@@ -2493,6 +2558,11 @@ def run_real_listen(args: argparse.Namespace) -> int:
     # 自动启动微信：检测到微信未运行时自动 Popen Weixin.exe，冷却防重复拉起
     wechat_launch_cooldown = _WECHAT_LAUNCH_COOLDOWN
     last_wechat_launch = time.time() - wechat_launch_cooldown + 30  # 30s grace before first launch
+    # UIA 树塌缩自愈（decision 4ab9b6f7）：微信在跑+主窗口找到但 a11y 树未构建(descendants≤2)→
+    # 会话永远扫不到。持续 _COLLAPSED_SUSTAIN_SECONDS 后重启微信重建树（冷却+上限保护）。
+    collapsed_tree_since: Optional[float] = None
+    last_wechat_restart = 0.0
+    wechat_restart_count = 0
     # replied 过期清理：每 REPLIED_TTL 扫一次，确保过期条目在 TTL 后立即清除
     last_replied_purge = time.time()
     # 每客服配置：按 machine_id 周期性拉「自己那份」→ 缓存（断网用缓存继续判定，强制 dryrun）。
@@ -2575,9 +2645,11 @@ def run_real_listen(args: argparse.Namespace) -> int:
             # 心跳 + 扫描诊断上报中台（运营在 Dashboard「监听健康」看板一眼定位卡在哪）
             if now - last_heartbeat >= heartbeat_interval:
                 sessions_seen = 0
+                tree_size: Optional[int] = None  # mmui::MainWindow 整树控件数（塌缩自愈判定用）
                 if mw is not None:
                     try:
                         sessions_seen = len(mw.descendants(control_type="ListItem"))
+                        tree_size = len(mw.descendants())
                     except Exception as exc:
                         last_error = f"{type(exc).__name__}: {exc}"
                 diag = {
@@ -2605,6 +2677,35 @@ def run_real_listen(args: argparse.Namespace) -> int:
                 last_heartbeat = now
                 if not hb.get("ok"):
                     _log(f"心跳上报失败: {hb.get('error')}")
+
+                # UIA 树塌缩自愈（decision 4ab9b6f7）：主窗口找到(mw非空)但整树塌缩(descendants≤2,
+                # mmui a11y 树未构建,会话列表完全不暴露)→ sessions 永远 0 → 永不回复。事后置标志/
+                # 广播都救不了已运行进程，唯一根因修法 = 重启微信(标志已置位态下 mmui 重建完整树)。
+                # 持续 _COLLAPSED_SUSTAIN_SECONDS 才动手(避开启动过渡)，且冷却+上限防抖防无限重启。
+                if mw is not None and tree_size is not None and _is_uia_tree_collapsed(tree_size):
+                    if collapsed_tree_since is None:
+                        collapsed_tree_since = now
+                        _log(
+                            f"检测到微信 UIA 树塌缩(descendants={tree_size},mmui a11y 树未构建,会话不可见)，"
+                            f"持续 {_COLLAPSED_SUSTAIN_SECONDS}s 未恢复将重启微信重建树"
+                        )
+                else:
+                    collapsed_tree_since = None
+                if (
+                    collapsed_tree_since is not None
+                    and now - collapsed_tree_since >= _COLLAPSED_SUSTAIN_SECONDS
+                    and _should_restart_for_collapsed_tree(
+                        now, last_wechat_restart, _WECHAT_RESTART_COOLDOWN_SECONDS,
+                        wechat_restart_count, _WECHAT_RESTART_MAX,
+                    )
+                ):
+                    if _restart_wechat_for_uia():
+                        last_wechat_restart = now
+                        last_wechat_launch = now  # 防主循环 auto-launch 紧接重复拉起
+                        wechat_restart_count += 1
+                    collapsed_tree_since = None  # 重启后重新计时(失败也别每轮狂杀,等下个塌缩周期)
+                    time.sleep(args.interval)
+                    continue
 
             if mw is None:
                 # 隐私锁屏：账号已登录但微信屏幕被锁，无法操作 → 等待用户手动解锁，不做 UIA 激活
