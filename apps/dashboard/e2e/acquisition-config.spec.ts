@@ -99,10 +99,22 @@ async function stubCookieHealth(page: Page, result = COOKIE_HEALTH) {
   });
 }
 
+async function stubAccountStatus(page: Page) {
+  await page.route('**/api/line02/account-status', async (route) => {
+    if (route.request().method() !== 'GET') return route.fallback();
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ success: true, data: { accounts: [] } }),
+    });
+  });
+}
+
 async function stubAll(page: Page) {
   await stubConfig(page);
   await stubPlan(page);
   await stubCookieHealth(page);
+  await stubAccountStatus(page);
 }
 
 // test a: 配置表单渲染 + 改值保存调 PUT

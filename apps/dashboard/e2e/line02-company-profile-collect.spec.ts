@@ -134,10 +134,10 @@ test.describe('Line02 公司信息页 + 采集任务 Table', () => {
     await page.screenshot({ path: 'sprints/06282255-line02-company-profile-collect/screenshots/04-acquisition-page-status.png' });
 
     // 验证账号状态块可见（标签 live101942）
-    await expect(page.getByText('live101942')).toBeVisible({ timeout: 5000 });
+    await expect(page.getByText('live101942').first()).toBeVisible({ timeout: 5000 });
 
-    // 验证主号状态标签
-    await expect(page.getByText(/已登录|ok/)).toBeVisible({ timeout: 5000 });
+    // 验证主号状态标签（已登录）
+    await expect(page.getByText('已登录').first()).toBeVisible({ timeout: 5000 });
 
     await page.screenshot({ path: 'sprints/06282255-line02-company-profile-collect/screenshots/05-acquisition-task-table.png' });
   });
