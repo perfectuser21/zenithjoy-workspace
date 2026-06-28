@@ -1,8 +1,13 @@
 #!/bin/bash
-set -e
+set -euo pipefail
 
 # ZenithJoy Workspace 部署脚本
 # 用法: ./deploy/deploy.sh hk
+
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+NC='\033[0m'
 
 TARGET=${1:-hk}
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -14,6 +19,7 @@ case $TARGET in
     HOST="hk"  # SSH config 中的别名
     REMOTE_PATH="/opt/zenithjoy/autopilot-dashboard"
     SERVICE_NAME="autopilot-dashboard"
+    SMOKE_URL="https://autopilot.zenjoymedia.media"
     ;;
   *)
     echo "未知目标: $TARGET"
@@ -37,6 +43,31 @@ if [ "$CURRENT_BRANCH" != "main" ]; then
     exit 1
   fi
 fi
+
+# git 安全检查：未提交
+if ! git -C "$PROJECT_ROOT" diff --quiet || ! git -C "$PROJECT_ROOT" diff --cached --quiet; then
+  echo -e "${RED}BLOCKED: 有未提交的改动${NC}"
+  git -C "$PROJECT_ROOT" status --short
+  exit 1
+fi
+
+# git 安全检查：未跟踪的源文件
+UNTRACKED=$(git -C "$PROJECT_ROOT" ls-files --others --exclude-standard -- apps/dashboard/src/ apps/dashboard/public/ | head -5)
+if [ -n "$UNTRACKED" ]; then
+  echo -e "${RED}BLOCKED: 有未跟踪的源文件${NC}"
+  echo "$UNTRACKED"
+  exit 1
+fi
+
+# git 安全检查：未 push
+LOCAL_SHA=$(git -C "$PROJECT_ROOT" rev-parse HEAD)
+REMOTE_SHA=$(git -C "$PROJECT_ROOT" rev-parse "origin/$CURRENT_BRANCH" 2>/dev/null || echo "none")
+if [ "$LOCAL_SHA" != "$REMOTE_SHA" ]; then
+  echo -e "${RED}BLOCKED: 本地 $CURRENT_BRANCH 和远端不同步，请先 push${NC}"
+  exit 1
+fi
+
+echo -e "${GREEN}✓ Git 检查通过${NC} (branch: $CURRENT_BRANCH, sha: ${LOCAL_SHA:0:7})"
 
 # 2. 构建
 echo ""
@@ -92,3 +123,12 @@ echo "✅ 部署完成!"
 echo "   目标: $HOST:$REMOTE_PATH"
 echo "   备份: /opt/zenithjoy/.backups/$BACKUP_NAME"
 echo "========================================"
+
+# 公网 smoke
+echo ""
+echo ">>> 公网 smoke..."
+if curl -sf "$SMOKE_URL" --max-time 15 > /dev/null 2>&1; then
+  echo -e "${GREEN}✅ 公网 smoke 通过: $SMOKE_URL${NC}"
+else
+  echo -e "${YELLOW}⚠️  公网 smoke 失败，检查 nginx/CDN: $SMOKE_URL${NC}"
+fi
