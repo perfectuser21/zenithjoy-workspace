@@ -71,6 +71,16 @@ const PersonaSchema = z
   })
   .strict();
 
+/**
+ * 每客服 persona 校验：persona 单一 SSOT 后，每客服**只接受 self_name**（人设名覆盖位）。
+ * style 真相在全局话术库（PUT /persona 用 PersonaSchema 编辑整份）。
+ * 非 .strict()：存量/旧前端若仍传整份 persona，多余 style 字段由 zod 默认剥离，只留 self_name
+ * （API 边界即完成去重，绝不把 style 落进每客服表）。
+ */
+const CsPersonaSchema = z.object({
+  self_name: z.string().min(1, '人设名必填'),
+});
+
 const KBCompanySchema = z
   .object({
     name: z.string(),
@@ -306,7 +316,7 @@ wechatConfigRouter.put('/cs/auto-agent', requireCsAdminOrSuperAdmin, async (req:
 
 const CSAccountConfigBodySchema = z
   .object({
-    persona: PersonaSchema,
+    persona: CsPersonaSchema,
     auto_agent_enabled: z.boolean().optional(),
     business_hours_start: z.string().optional(),
     business_hours_end: z.string().optional(),
@@ -401,7 +411,7 @@ wechatConfigRouter.get('/cs/machines', requireCsReadAccess, async (req: Request,
 
 const CSSetupBodySchema = z
   .object({
-    persona: PersonaSchema,
+    persona: CsPersonaSchema,
     auto_agent_enabled: z.boolean().optional(),
     business_hours_start: z.string().optional(),
     business_hours_end: z.string().optional(),

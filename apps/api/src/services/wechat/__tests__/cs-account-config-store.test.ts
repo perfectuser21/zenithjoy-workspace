@@ -97,6 +97,24 @@ describe('cs-account-config-store — 按 wechat_id 隔离', () => {
   it('未注册号 getCSConfig 返回 null', async () => {
     expect(await getCSConfig('wxid_never')).toBeNull();
   });
+
+  it('persona 单一 SSOT：saveCSConfig 只持久化 self_name，丢弃 style 字段（style 真相在全局话术库）', async () => {
+    // 调用方即便传来整份 persona（含一键配置历史的 style 死值），落库也只应留 self_name。
+    await saveCSConfig('wxid_dedup', {
+      persona: {
+        self_name: '小苏',
+        address_style: '亲切',
+        tone: '友好专业',
+        sentence_style: '简洁',
+        use_emoji: '少量',
+        banned_phrases: ['呵呵'],
+        few_shot: [{ customer: 'a', me: 'b' }],
+      },
+    });
+    const stored = rows.get('wxid_dedup') as { persona: Record<string, unknown> };
+    // 每客服 persona 只保留 self_name —— 不再独立存储 style，杜绝与全局话术库重复/抢占。
+    expect(stored.persona).toEqual({ self_name: '小苏' });
+  });
 });
 
 describe('cs-account-config-store — 身份校验异常', () => {

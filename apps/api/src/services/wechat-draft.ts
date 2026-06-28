@@ -360,8 +360,16 @@ export async function generateChatDraft(
     console.warn('[wechat-draft] 写入站消息失败（不影响生成）:', err);
   }
 
-  // 人设：每客服配置在册 → 用这台机自己的人设；否则回落全局。企业知识库暂仍全局（每客服 KB 后续）。
-  const persona = csConfig ? csConfig.persona : await getPersona();
+  // 人设单一 SSOT（消除「话术知识库」↔「客服机」两份重复）：
+  //   - persona 的 style（语气/称呼/句式/emoji/禁用词/few_shot）唯一真相来源 = 全局话术库 getPersona()，
+  //     运营在一个地方编辑就处处生效（不再被每客服一键配置的硬编码死值盖掉）。
+  //   - 每客服仅保留 self_name（人设名）作为 per-operator 覆盖位（不同客服可叫不同名）。
+  // 企业知识库暂仍全局（每客服 KB 后续）。
+  const globalPersona = await getPersona();
+  const selfNameOverride = csConfig?.persona?.self_name?.trim();
+  const persona = selfNameOverride
+    ? { ...globalPersona, self_name: selfNameOverride }
+    : globalPersona;
   const kb = await getBusinessKB();
   let shortTerm: ChatMessage[] = [];
   let memory: ContactMemory = { summary: '', facts: [] as ContactFact[] };

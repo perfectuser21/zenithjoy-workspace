@@ -99,15 +99,9 @@ export default function CsOneClickSetupPage() {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          persona: {
-            self_name: selfName.trim(),
-            address_style: '亲切',
-            tone: '友好专业',
-            sentence_style: '简洁',
-            use_emoji: '少量',
-            banned_phrases: [],
-            few_shot: [],
-          },
+          // persona 单一 SSOT：客服机只设 self_name（人设名）。语气/称呼/emoji/禁用词/few_shot
+          // 等话术风格统一在「话术知识库」编辑（全局 SSOT），不再在这里硬编码死值（杜绝两边对不上）。
+          persona: { self_name: selfName.trim() },
           auto_agent_enabled: autoAgent,
           business_hours_start: businessHoursStart,
           business_hours_end: businessHoursEnd,

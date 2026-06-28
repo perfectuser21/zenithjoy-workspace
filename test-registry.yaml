@@ -2979,6 +2979,14 @@ agent_suite:
     product: 私域运营
     note: "Sprint 06220821 — line04 无审批自动回复闭环 C1：generateChatDraft(mode:auto) 决策层接线运行时断言（W1 监控态不回 / W2 名单外不烧LLM / W3 名单内ON营业时间内回 / W4 营业时间外不回 / W5 超daily_limit不回）"
 
+  - id: wechat-draft-persona-ssot
+    path: apps/api/src/services/__tests__/wechat-draft-persona-ssot.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 私域运营
+    note: "Sprint 06280330 — persona 收敛单一 SSOT：回复 system prompt 的 style 用全局话术库、self_name 用每客服覆盖；消除话术库↔客服机两份重复（用户「两个地方是抢的」）"
+
   - id: line04-cs-route-decision
     path: apps/api/src/services/wechat/__tests__/cs-route-decision.test.ts
     type: unit
