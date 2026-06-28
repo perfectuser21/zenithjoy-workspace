@@ -14,7 +14,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 
 # 配置
-case $TARGET in
+case "$TARGET" in
   hk)
     HOST="hk"  # SSH config 中的别名
     REMOTE_PATH="/opt/zenithjoy/autopilot-dashboard"
@@ -79,16 +79,16 @@ npm run build
 echo ""
 echo ">>> 备份远端现有版本..."
 BACKUP_NAME="${SERVICE_NAME}-$(date +%Y%m%d-%H%M%S)"
-ssh $HOST "mkdir -p /opt/zenithjoy/.backups && \
+ssh "$HOST" "mkdir -p /opt/zenithjoy/.backups && \
   if [ -d $REMOTE_PATH ]; then \
     cp -r $REMOTE_PATH /opt/zenithjoy/.backups/$BACKUP_NAME; \
-    echo '备份到: /opt/zenithjoy/.backups/$BACKUP_NAME'; \
+    echo \"备份到: /opt/zenithjoy/.backups/$BACKUP_NAME\"; \
   fi"
 
 # 4. 同步文件
 echo ""
 echo ">>> 同步 dist 到 $HOST:$REMOTE_PATH..."
-ssh $HOST "mkdir -p $REMOTE_PATH"
+ssh "$HOST" "mkdir -p $REMOTE_PATH"
 rsync -avz --delete \
   "$PROJECT_ROOT/apps/dashboard/dist/" \
   "$HOST:$REMOTE_PATH/dist/"
@@ -104,13 +104,13 @@ fi
 # 6. 重启服务
 echo ""
 echo ">>> 重启服务..."
-ssh $HOST "cd $REMOTE_PATH && docker compose up -d --force-recreate 2>/dev/null || echo '无 docker-compose，跳过重启'"
+ssh "$HOST" "cd $REMOTE_PATH && docker compose up -d --force-recreate 2>/dev/null || echo '无 docker-compose，跳过重启'"
 
 # 7. 健康检查
 echo ""
 echo ">>> 健康检查..."
 sleep 3
-if ssh $HOST "curl -sf http://localhost:5211 > /dev/null 2>&1"; then
+if ssh "$HOST" "curl -sf http://localhost:5211 > /dev/null 2>&1"; then
   echo "✅ 服务正常运行"
 else
   echo "⚠️  健康检查失败，可能需要检查日志"
