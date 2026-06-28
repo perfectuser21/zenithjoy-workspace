@@ -55,6 +55,8 @@ import clipsRouter from './routes/clips';
 import clipsAuthRouter from './routes/clips-auth';
 import { acquisitionRouter } from './routes/acquisition';
 import { acquisitionDispatchRouter } from './routes/acquisition-dispatch';
+import { companyProfileRouter } from './routes/company-profile';
+import { line02Router } from './routes/line02';
 import { brainSprintStateRouter } from './routes/brain-sprint-state';
 // Line 00 Session Health Medium WS2 — 运营中枢 8 平台 session 端点
 import { operatorSessionsRouter } from './routes/operator-sessions';
@@ -193,6 +195,9 @@ app.use('/api/acquisition', acquisitionRouter);
 app.use('/api/brain', brainSprintStateRouter);
 // Line 07 — AI 爆款视频翻拍 9节点流水线
 app.use('/api/video-remake', videoRemakeRouter);
+// Line 02 — 公司信息页 + 账号状态
+app.use('/api/company-profile', companyProfileRouter);
+app.use('/api/line02', line02Router);
 // (operatorSessionsRouter 已在 operatorRouter 之前注册，见上方)
 
 // Error handling

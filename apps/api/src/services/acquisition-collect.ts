@@ -18,13 +18,14 @@ export const EMPTY_DOC_MIN_CHARS = 20;
 /** 整体采集超时：started 早于 NOW-10min 仍 running → sweep 转终态（PRD「不假死在 running」）。 */
 export const SWEEP_TIMEOUT_MS = 10 * 60 * 1000;
 
-/** 7 态状态机枚举（与 migration CHECK 约束一致）。 */
+/** 8 态状态机枚举（与 migration CHECK 约束一致）。 */
 export const COLLECT_STATUSES = [
   'pending',
   'running',
   'cancelling',
   'cancelled',
   'done',
+  'stage_1_done',
   'partial',
   'failed',
 ] as const;
@@ -135,7 +136,7 @@ export function resolveTerminalStatus(report: TerminalReport): TerminalResolutio
   if (report.terminal === 'partial') {
     return { status: 'partial', error_code: report.partial_reason ?? report.error_code ?? null };
   }
-  return { status: 'done', error_code: null };
+  return { status: 'stage_1_done', error_code: null };
 }
 
 export interface SweepCandidate {
