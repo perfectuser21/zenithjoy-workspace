@@ -23,6 +23,7 @@ import {
   type CookieHealthItem,
   type CookieHealthResult,
 } from '../api/acquisition-dispatch.api';
+import { getLine02AccountStatus, type Line02Account } from '../api/line02.api';
 
 // ============ 配置字段元数据（驱动表单分组渲染 + 校验） ============
 
@@ -436,6 +437,45 @@ function CookieHealthBlock() {
   );
 }
 
+// ============ 主号状态块 ============
+function AccountStatusBlock() {
+  const [accounts, setAccounts] = useState<Line02Account[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let alive = true;
+    getLine02AccountStatus()
+      .then(data => { if (alive) setAccounts(data.accounts); })
+      .catch(() => {})
+      .finally(() => { if (alive) setLoading(false); });
+    return () => { alive = false; };
+  }, []);
+
+  const healthLabel = (h: string) => h === 'ok' ? '已登录' : h === 'expired' ? '已过期' : '未知';
+  const healthCls = (h: string) => h === 'ok' ? 'text-green-600' : 'text-red-500';
+
+  return (
+    <section className="bg-white dark:bg-slate-800 rounded-lg shadow p-6 border border-slate-200 dark:border-slate-700">
+      <h3 className="font-medium text-gray-900 dark:text-white mb-4">主号状态</h3>
+      {loading ? (
+        <p className="text-sm text-gray-400">加载中…</p>
+      ) : accounts.length === 0 ? (
+        <p className="text-sm text-gray-400">暂无绑定账号</p>
+      ) : (
+        <ul className="space-y-2">
+          {accounts.map(a => (
+            <li key={a.label} className="flex items-center gap-3 text-sm">
+              <span className="font-medium text-gray-800 dark:text-gray-200">{a.label}</span>
+              <span className="text-gray-400">{a.role === 'main' ? '主号' : '小号'}</span>
+              <span className={healthCls(a.health)}>{healthLabel(a.health)}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+}
+
 // ============ 页面 ============
 export default function AcquisitionConfigPage() {
   return (
@@ -446,6 +486,7 @@ export default function AcquisitionConfigPage() {
           中台大脑：调采集/触达/养号/Cookie 参数，跑分析把 Leads 指派给小号并排期，盯各号 Cookie 健康。
         </p>
       </div>
+      <AccountStatusBlock />
       <ConfigForm />
       <DispatchPlanBlock />
       <CookieHealthBlock />

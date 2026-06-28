@@ -3993,3 +3993,11 @@ agent_suite:
     status: active
     product: 智能获客
     note: "getCompanyProfile / updateCompanyProfile fetch wrapper 单元测试（test-pairing 配套 company-profile.api.ts，PR #949）。"
+
+  - id: dashboard-line02-api-unit
+    path: apps/dashboard/src/api/line02.api.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 智能获客
+    note: "getLine02AccountStatus fetch wrapper 单元测试（test-pairing 配套 line02.api.ts，PR #949）。"

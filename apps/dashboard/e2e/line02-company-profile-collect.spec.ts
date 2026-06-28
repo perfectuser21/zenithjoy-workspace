@@ -109,9 +109,9 @@ test.describe('Line02 公司信息页 + 采集任务 Table', () => {
     await page.screenshot({ path: 'sprints/06282255-line02-company-profile-collect/screenshots/01-company-profile-initial.png' });
 
     // 验证三个 Section 标题可见
-    await expect(page.getByText('基础信息')).toBeVisible();
-    await expect(page.getByText('产品卖点')).toBeVisible();
-    await expect(page.getByText('客户画像')).toBeVisible();
+    await expect(page.getByText('基础信息').first()).toBeVisible();
+    await expect(page.getByText('产品卖点').first()).toBeVisible();
+    await expect(page.getByRole('heading', { name: '客户画像' })).toBeVisible();
 
     // 验证数据已从 stub API 加载
     const companyNameInput = page.locator('input').first();
