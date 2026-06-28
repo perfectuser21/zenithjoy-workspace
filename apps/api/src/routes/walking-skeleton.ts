@@ -63,12 +63,13 @@ heartbeatRouter.post(
   '/heartbeat',
   licenseAuth,
   async (req: Request, res: Response) => {
-    const { version, hostname, os_type, module_status, agent_uuid } = (req.body ?? {}) as {
+    const { version, hostname, os_type, module_status, agent_uuid, machine_id } = (req.body ?? {}) as {
       version?: unknown;
       hostname?: unknown;
       os_type?: unknown;
       module_status?: unknown;
       agent_uuid?: unknown;
+      machine_id?: unknown;
     };
     const lic = req.license!;
     if (!lic.tenant_id) {
@@ -80,17 +81,29 @@ heartbeatRouter.post(
       });
     }
 
+    const resolvedHostname = typeof hostname === 'string' ? hostname.slice(0, 200) : null;
+    const resolvedAgentUuid = typeof agent_uuid === 'string' ? agent_uuid : undefined;
+
+    // start.bat Step4 precheck：machine_id="precheck" 是专属标识（见 install-pack/start.bat）。
+    // 只校验 license，不注册/更新机器行，防止 hostname=null 路径复活旧幽灵行。
+    if (machine_id === 'precheck') {
+      return res.status(200).json({
+        ok: true,
+        agent_id: null,
+        modules: HEARTBEAT_MODULES,
+        required_agent_version: getRequiredAgentVersion(),
+        queued_tasks: [],
+      });
+    }
+
     try {
       const agent = await upsertAgentByHeartbeat({
         licenseId: lic.id,
         tenantId: lic.tenant_id,
-        hostname: typeof hostname === 'string' ? hostname.slice(0, 200) : null,
+        hostname: resolvedHostname,
         version: typeof version === 'string' ? version.slice(0, 50) : null,
         osType: typeof os_type === 'string' ? os_type.slice(0, 20) : null,
-        // agent_uuid 由 cp-06270030 起 Agent 在心跳 body 中携带；
-        // 传入后 service 侧按 WHERE id=$agentUuid 精确更新，跳过 (license_id, hostname) 去重，
-        // 防止 hostname=null 时新建 ws1- 幽灵行。
-        agentUuid: typeof agent_uuid === 'string' ? agent_uuid : undefined,
+        agentUuid: resolvedAgentUuid,
       });
       // 客户端上报的 module_status（per-Line preflight 结果）→ 持久化最新一份
       const normalized = normalizeModuleStatus(module_status);
