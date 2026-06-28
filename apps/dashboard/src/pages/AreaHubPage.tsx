@@ -9,8 +9,8 @@ import { Link, useLocation } from 'react-router-dom';
 import type { LucideIcon } from 'lucide-react';
 import {
   Send, Music2, Folder, Database, Factory, Sparkles,
-  Target, KeyRound, MessageCircle, Download,
-  Scissors, Video, Building2, MonitorCheck, Activity, ShieldCheck, Users,
+  Target, KeyRound,
+  Scissors, Video, Building2, MonitorCheck, Activity, ShieldCheck,
 } from 'lucide-react';
 
 interface HubCard {
@@ -53,17 +53,8 @@ export const AREA_HUBS: Record<string, AreaHub> = {
       { label: '飞书绑定', desc: '绑定飞书企业，自动建表', to: '/dashboard/feishu-bind', Icon: KeyRound, color: 'text-blue-500' },
     ],
   },
-  wechat: {
-    title: '私域客服',
-    subtitle: '微信号 AI 接管：客户好友表 + 客服机健康/配置 + 工作汇总 + 话术知识库。',
-    cards: [
-      { label: '客户好友表', desc: 'agent 自动扫来的近期好友：默认全接管，勾排除=加黑名单；点客户看画像/状态/聊天记录', to: '/wechat/crm', Icon: Users, color: 'text-rose-500' },
-      { label: '我的客服机', desc: '所有机器一处看（在线/微信监听健康）+ 点一台配人设/营业时间/每日上限/真发开关', to: '/wechat/setup', Icon: Sparkles, color: 'text-sky-500' },
-      { label: '客服工作汇总', desc: '每台客服机 今天/昨天/历史任意一天 接收/回复/接待/工作时长 + 真发/演练', to: '/wechat/cs-stats', Icon: Activity, color: 'text-indigo-500' },
-      { label: '话术知识库', desc: '公司/产品/人群/常见问答（AI 回复的素材，全客服共用）', to: '/wechat/cs-config', Icon: MessageCircle, color: 'text-green-500' },
-      { label: '下载客户机', desc: '在客服 PC 上装 Agent，装好自动报到这里', to: '/dashboard/agent', Icon: Download, color: 'text-emerald-500' },
-    ],
-  },
+  // 私域客服区已改「以号为中心」(IA 重设计刀2)：入口走 CsAreaEntryPage（总览 + 单号工作台 5 Tab），
+  // 不再用本 hub 的 5 张平级卡。旧子页路由仍保留在 additionalRoutes（深链不死链）。
   video: {
     title: '视频剪辑',
     subtitle: '本地 AI 视频流水线：采集、剪辑、出片。',

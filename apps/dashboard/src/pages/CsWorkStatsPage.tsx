@@ -85,7 +85,12 @@ function StatCell({
   );
 }
 
-export default function CsWorkStatsPage() {
+export default function CsWorkStatsPage({
+  filterWechatId,
+}: {
+  // 单号工作台「成效」Tab：只看该号的工作汇总卡；不传 = 旧独立页（全部号）。
+  filterWechatId?: string;
+} = {}) {
   const [tab, setTab] = useState<TabKey>('today');
   const [historyDate, setHistoryDate] = useState<string>(todayBeijing());
   const [rows, setRows] = useState<UnifiedRow[]>([]);
@@ -139,6 +144,7 @@ export default function CsWorkStatsPage() {
   }, [tab, historyDate, loadLive, loadHistory]);
 
   const isHistory = tab === 'history';
+  const shownRows = filterWechatId ? rows.filter((r) => r.cs_wechat_id === filterWechatId) : rows;
 
   const Tab = ({ value, label }: { value: TabKey; label: string }) => (
     <button
@@ -205,7 +211,7 @@ export default function CsWorkStatsPage() {
         </div>
       )}
 
-      {!loading && !error && rows.length === 0 && (
+      {!loading && !error && shownRows.length === 0 && (
         <div data-testid="cs-stats-empty" className="text-sm text-gray-500 dark:text-gray-400 py-10 text-center">
           {isHistory
             ? `${historyDate} 还没有日报（当天可能未到结算时间或无任何客服消息）。`
@@ -214,7 +220,7 @@ export default function CsWorkStatsPage() {
       )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {rows.map((s) => {
+        {shownRows.map((s) => {
           const isReal = s.auto_agent_enabled === true;
           return (
             <div

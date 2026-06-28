@@ -126,7 +126,20 @@ function AddRowButton({ label, onClick }: { label: string; onClick: () => void }
 
 // ─── 主页面 ───────────────────────────────────────────────────
 
-export default function WechatCustomerServiceConfigPage() {
+export default function WechatCustomerServiceConfigPage({
+  wechatId: fixedWechatId,
+  section = 'all',
+  embedded = false,
+}: {
+  // 单号工作台「人设话术」/「知识库」Tab：固定到该号、藏掉号选择器与页面外壳，只渲染对应段落。
+  //   section='persona' → 只人设；'kb' → 只企业/产品/人群/Q&A；'all' = 旧独立「话术知识库」页全渲染。
+  // 注意：embedded 仍加载【完整】配置（persona + business_kb）再保存完整，避免只编辑半边时把另一半清空。
+  wechatId?: string
+  section?: 'persona' | 'kb' | 'all'
+  embedded?: boolean
+} = {}) {
+  const showPersona = section !== 'kb'
+  const showKb = section !== 'persona'
   const [persona, setPersona] = useState<Persona>(EMPTY_PERSONA)
   const [kb, setKb] = useState<BusinessKB>(EMPTY_KB)
   const [machines, setMachines] = useState<CSMachine[]>([])
@@ -178,8 +191,15 @@ export default function WechatCustomerServiceConfigPage() {
   }, [loadConfig])
 
   useEffect(() => {
-    loadMachines()
-  }, [loadMachines])
+    if (embedded && fixedWechatId) {
+      // 工作台模式：号已定，直接加载该号完整配置，跳过号列表/选择器。
+      setSelectedWechatId(fixedWechatId)
+      void loadConfig(fixedWechatId)
+    } else {
+      loadMachines()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [embedded, fixedWechatId, loadConfig, loadMachines])
 
   // 切换号 → 重新加载该号配置。
   const onSelectAccount = async (wechatId: string) => {
@@ -242,7 +262,11 @@ export default function WechatCustomerServiceConfigPage() {
   }
 
   if (loading) {
-    return (
+    return embedded ? (
+      <div className="flex items-center justify-center py-16">
+        <Loader2 className="w-7 h-7 text-blue-500 animate-spin" />
+      </div>
+    ) : (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-blue-50 dark:from-slate-900 dark:to-slate-800">
         <Loader2 className="w-8 h-8 text-blue-500 animate-spin" />
       </div>
@@ -250,18 +274,26 @@ export default function WechatCustomerServiceConfigPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 dark:from-slate-900 dark:to-slate-800">
-      {/* 顶栏 */}
-      <div className="border-b border-slate-200 dark:border-slate-700 bg-white/80 dark:bg-slate-900/80 backdrop-blur-sm">
-        <div className="max-w-[960px] mx-auto px-6 py-4 flex items-center gap-3">
-          <MessageCircle className="w-6 h-6 text-blue-600 dark:text-blue-400" />
-          <h1 className="text-xl font-bold text-slate-900 dark:text-white">微信客服 · 话术知识库（每号）</h1>
+    <div
+      className={
+        embedded
+          ? ''
+          : 'min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 dark:from-slate-900 dark:to-slate-800'
+      }
+    >
+      {/* 顶栏（独立页才显示，工作台已有自己的标题/状态条）*/}
+      {!embedded && (
+        <div className="border-b border-slate-200 dark:border-slate-700 bg-white/80 dark:bg-slate-900/80 backdrop-blur-sm">
+          <div className="max-w-[960px] mx-auto px-6 py-4 flex items-center gap-3">
+            <MessageCircle className="w-6 h-6 text-blue-600 dark:text-blue-400" />
+            <h1 className="text-xl font-bold text-slate-900 dark:text-white">微信客服 · 话术知识库（每号）</h1>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* 消息提示 */}
       {message && (
-        <div className="max-w-[960px] mx-auto px-6 pt-4">
+        <div className={embedded ? 'pb-4' : 'max-w-[960px] mx-auto px-6 pt-4'}>
           <div
             className={`flex items-center gap-2 px-4 py-3 rounded-lg text-sm ${
               message.type === 'success'
@@ -280,45 +312,51 @@ export default function WechatCustomerServiceConfigPage() {
       )}
 
       {/* 主内容 */}
-      <div className="max-w-[960px] mx-auto px-6 py-6">
-        {/* ─── 本机环境状态（Line04 preflight 结果，顶部）── */}
-        <Line04PreflightCard />
+      <div className={embedded ? '' : 'max-w-[960px] mx-auto px-6 py-6'}>
+        {/* 独立页才显示：本机环境状态 + 监听健康 + 号选择器（工作台已固定号 + 顶部状态条）*/}
+        {!embedded && (
+          <>
+            {/* ─── 本机环境状态（Line04 preflight 结果，顶部）── */}
+            <Line04PreflightCard />
 
-        {/* ─── 监听健康 ─────────────────────────────────── */}
-        <ListenerHealthSection />
+            {/* ─── 监听健康 ─────────────────────────────────── */}
+            <ListenerHealthSection />
 
-        {/* ─── 客服号选择器（每号编辑）──────────────────── */}
-        <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-5 mb-5">
-          <div className="flex items-center gap-3">
-            <Users className="w-5 h-5 text-blue-600 dark:text-blue-400" />
-            <div className="flex-1">
-              <label className={labelCls}>编辑哪个客服号的人设 / 知识库</label>
-              {machines.length > 0 ? (
-                <select
-                  data-testid="cs-account-selector"
-                  className={inputCls}
-                  value={selectedWechatId}
-                  onChange={(e) => onSelectAccount(e.target.value)}
-                >
-                  {machines.map((m) => (
-                    <option key={m.wechat_id} value={m.wechat_id}>
-                      {(m.self_name || m.hostname || m.wechat_id) +
-                        (m.real_wechat_id ? `（${m.real_wechat_id}）` : '')}
-                    </option>
-                  ))}
-                </select>
-              ) : (
-                <p className="text-sm text-amber-600 dark:text-amber-400">
-                  还没有已配置的客服号。请先去「客服机」页选机器、绑定一个客服号，再回来配人设/知识库。
-                </p>
-              )}
+            {/* ─── 客服号选择器（每号编辑）──────────────────── */}
+            <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-5 mb-5">
+              <div className="flex items-center gap-3">
+                <Users className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                <div className="flex-1">
+                  <label className={labelCls}>编辑哪个客服号的人设 / 知识库</label>
+                  {machines.length > 0 ? (
+                    <select
+                      data-testid="cs-account-selector"
+                      className={inputCls}
+                      value={selectedWechatId}
+                      onChange={(e) => onSelectAccount(e.target.value)}
+                    >
+                      {machines.map((m) => (
+                        <option key={m.wechat_id} value={m.wechat_id}>
+                          {(m.self_name || m.hostname || m.wechat_id) +
+                            (m.real_wechat_id ? `（${m.real_wechat_id}）` : '')}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <p className="text-sm text-amber-600 dark:text-amber-400">
+                      还没有已配置的客服号。请先去「客服机」页选机器、绑定一个客服号，再回来配人设/知识库。
+                    </p>
+                  )}
+                </div>
+              </div>
             </div>
-          </div>
-        </div>
+          </>
+        )}
 
-        {machines.length === 0 ? null : (
+        {(embedded || machines.length > 0) && (
         <>
         {/* ─── 人设 ─────────────────────────────────────── */}
+        {showPersona && (
         <Section
           title="人设"
           desc="AI 客服扮演的角色：自称、称呼、语气、句长、emoji、禁用词、示范对话"
@@ -453,7 +491,10 @@ export default function WechatCustomerServiceConfigPage() {
             />
           </div>
         </Section>
+        )}
 
+        {showKb && (
+        <>
         {/* ─── 企业信息 ─────────────────────────────────── */}
         <Section
           title="企业信息"
@@ -698,6 +739,8 @@ export default function WechatCustomerServiceConfigPage() {
             onClick={() => setKb({ ...kb, qa_docs: [...kb.qa_docs, { q: '', a: '' }] })}
           />
         </Section>
+        </>
+        )}
         </>
         )}
       </div>

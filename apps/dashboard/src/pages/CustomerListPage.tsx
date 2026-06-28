@@ -192,11 +192,18 @@ function StepDot({ state }: { state: OnboardingStepState }) {
 // 主组件
 // ──────────────────────────────────────────────────────────────────────────────
 
-export default function CustomerListPage() {
+export default function CustomerListPage({
+  csWechatId: fixedCsWechatId,
+}: {
+  // 单号工作台「客户」Tab：固定到该号 cs_wechat_id，按号过滤名册（GET /customers?cs_wechat_id=）。
+  // super-admin 读名册后端强制要求显式 cs_wechat_id（决策5），工作台必须透传。
+  // 不传 = 旧独立 /wechat/crm 页行为（后端按 session 租户 scope）。
+  csWechatId?: string;
+} = {}) {
   const navigate = useNavigate();
 
   const [rows, setRows] = useState<CustomerRow[]>([]);
-  const [csWechatId, setCsWechatId] = useState<string>('');
+  const [csWechatId, setCsWechatId] = useState<string>(fixedCsWechatId ?? '');
   const [onboarding, setOnboarding] = useState<OnboardingState | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>('');
@@ -319,7 +326,11 @@ export default function CustomerListPage() {
     setLoading(true);
     setError('');
     try {
-      const res = await sessionFetch('/api/crm/customers');
+      // 工作台模式按号过滤；独立页不带参数（后端按 session 租户 scope）。
+      const url = fixedCsWechatId
+        ? `/api/crm/customers?cs_wechat_id=${encodeURIComponent(fixedCsWechatId)}`
+        : '/api/crm/customers';
+      const res = await sessionFetch(url);
       if (res.status === 401) {
         setAuthExpired(true);
         setError('登录已失效，请重新登录');
@@ -339,7 +350,7 @@ export default function CustomerListPage() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [fixedCsWechatId]);
 
   const loadOnboarding = useCallback(async (wechatId: string) => {
     if (!wechatId) { setOnboarding(null); return; }
