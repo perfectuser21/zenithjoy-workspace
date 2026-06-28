@@ -24,7 +24,7 @@ line02Router.get('/account-status', tenantContextOptional, async (req: Request, 
       health: row.health,
     }));
     return ok(res, { accounts });
-  } catch (err) {
+  } catch {
     return ok(res, { accounts: [] });
   }
 });

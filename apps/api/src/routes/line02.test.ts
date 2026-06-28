@@ -1,7 +1,15 @@
-import { describe, it, expect } from 'vitest';
-import { line02Router } from './line02';
-import express from 'express';
+import { describe, it, expect, vi } from 'vitest';
+import express, { Request, Response, NextFunction } from 'express';
 import request from 'supertest';
+
+vi.mock('../middleware/tenant-context', () => ({
+  tenantContextOptional: (req: Request, _res: Response, next: NextFunction) => {
+    req.tenantId = undefined;
+    next();
+  },
+}));
+
+import { line02Router } from './line02';
 
 // 轻量级路由存在性检查 — 详细行为测试在 sprints/06282255-line02-company-profile-collect/tests/
 function buildApp() {
