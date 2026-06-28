@@ -101,6 +101,12 @@ jobs:
               echo "✅ STAGING dashboard 部署完成，公网验证通过。地址：https://staging-autopilot.zenjoymedia.media"
             fi
 
+            # 根因：appleboy/ssh-action（script_stop + set -e）会把 script 末尾 if/else 复合语句的
+            # 退出码当成整段退出码——本地必 200、公网已校验通过的情况下仍误判为 1 → CI 误报 failure +
+            # 误发 P1 告警。此处显式 exit 0 收口：只要跑到这里就明确返回成功（本地 != 200 仍在上面 exit 1）。
+            echo "[done] STAGING dashboard 部署流程结束（容器已起 + 本地/公网均 200）"
+            exit 0
+
   notify-failure:
     name: Notify Brain on failure
     runs-on: ubuntu-latest
