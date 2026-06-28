@@ -558,9 +558,10 @@ async function main(): Promise<void> {
 
   // Path 4 微信监听已下沉到 line04 模块（按需下载 + fork），core 不再直接启动。
 
-  // 智能获客：关键词任务轮询 + 抖音视频搜索
+  // 智能获客：关键词任务轮询 + 抖音视频搜索 + collect 任务轮询
   if (process.env.ZENITHJOY_DISABLE_ACQUISITION !== '1') {
     startAcquisitionKeywordLoop(cfg);
+    startAcquisitionCollectLoop(cfg);
   }
 
   const _hbApiBase = sanitizeApiBase(process.env.ZENITHJOY_API_BASE);
@@ -1173,6 +1174,75 @@ function startAcquisitionKeywordLoop(cfg: AgentConfig): void {
   const timer = setInterval(pollAndProcess, POLL_INTERVAL_MS);
   console.log(`[acquisition] keyword 轮询已启动，间隔 ${POLL_INTERVAL_MS / 1000}s`);
   // 防止 timer 阻止进程退出
+  if (timer.unref) timer.unref();
+}
+
+// ────── 智能获客：collect 任务轮询（来自 /collect/start 写入的 acquisition_collect_tasks）──────
+function startAcquisitionCollectLoop(cfg: AgentConfig): void {
+  const apiBase = deriveHttpApiBase(cfg);
+  if (!apiBase) {
+    console.log('[acquisition] 无法推导 apiBase，跳过 collect 轮询');
+    return;
+  }
+
+  const POLL_INTERVAL_MS = 30_000;
+
+  async function pollAndProcess(): Promise<void> {
+    try {
+      const resp = await fetch(`${apiBase}/api/acquisition/pending-collect-tasks`);
+      if (!resp.ok) return;
+      const data = await resp.json() as {
+        tasks?: Array<{ task_id: string; tenant_id: string; keywords: string[] }>;
+        total?: number;
+      };
+      const tasks = data.tasks ?? [];
+      if (tasks.length === 0) return;
+
+      console.log(`[acquisition] 发现 ${tasks.length} 个 collect 采集任务`);
+
+      for (const task of tasks) {
+        const { task_id, keywords } = task;
+        const allVideoIds: string[] = [];
+
+        for (const kw of keywords) {
+          const result = await searchDouyinVideosByKeyword(kw);
+          if (result.ok && result.video_urls.length > 0) {
+            for (const url of result.video_urls) {
+              const m = url.match(/\/video\/(\d+)/);
+              if (m) allVideoIds.push(m[1]);
+            }
+          } else if (!result.ok) {
+            console.warn(
+              `[acquisition] collect 关键词「${kw}」失败: ${(result as { error?: string }).error ?? 'unknown'}`,
+            );
+          }
+        }
+
+        // 每个视频上报一次（commenters 留空，此阶段只需视频 ID 落库）
+        for (const videoId of allVideoIds.slice(0, 10)) {
+          await fetch(`${apiBase}/api/acquisition/collect/report`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ task_id, video_id: videoId, commenters: [], terminal: false }),
+          }).catch((e) => console.warn('[acquisition] collect/report POST failed:', e.message));
+        }
+
+        // 终态回报
+        const finalVideoId = allVideoIds[0] ?? 'no_videos';
+        await fetch(`${apiBase}/api/acquisition/collect/report`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ task_id, video_id: finalVideoId, commenters: [], terminal: true }),
+        }).catch(() => null);
+      }
+    } catch (err) {
+      console.warn('[acquisition] collect poll error:', (err as Error).message);
+    }
+  }
+
+  pollAndProcess();
+  const timer = setInterval(pollAndProcess, POLL_INTERVAL_MS);
+  console.log(`[acquisition] collect 轮询已启动，间隔 ${POLL_INTERVAL_MS / 1000}s`);
   if (timer.unref) timer.unref();
 }
 

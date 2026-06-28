@@ -19,6 +19,22 @@ function emit(r) {
   process.stdout.write(JSON.stringify(r) + '\n');
 }
 
+function findHeadlessShell() {
+  const fs = require('fs');
+  const path = require('path');
+  const envExe = process.env.ZJ_CHROME_EXE;
+  if (envExe && fs.existsSync(envExe)) return envExe;
+  if (process.platform !== 'win32') return null;
+  const userProfile = process.env.USERPROFILE || process.env.HOME || 'C:\\Users\\asus';
+  const candidates = [
+    path.join(userProfile, '.cache', 'hyperframes', 'chrome', 'chrome-headless-shell',
+      'win64-131.0.6778.85', 'chrome-headless-shell-win64', 'chrome-headless-shell.exe'),
+    path.join(userProfile, 'AppData', 'Local', 'ms-playwright', 'chromium-1148',
+      'chrome-win', 'chrome.exe'),
+  ];
+  return candidates.find(p => fs.existsSync(p)) || null;
+}
+
 async function main() {
   if (!keyword) {
     emit({ ok: false, keyword, video_urls: [], error: 'MISSING_KEYWORD' });
@@ -27,13 +43,27 @@ async function main() {
   }
   let browser = null;
   try {
-    browser = await chromium.connectOverCDP(`http://localhost:${cdpPort}`);
-    const contexts = browser.contexts();
-    if (contexts.length === 0) {
-      emit({ ok: false, keyword, video_urls: [], error: 'NO_CDP_CONTEXT' });
-      return;
+    let launchMode = false;
+    try {
+      browser = await chromium.connectOverCDP(`http://localhost:${cdpPort}`);
+    } catch (_cdpErr) {
+      // CDP 不可用（无持久 Chrome），改为直接 launch headless Chrome
+      const executablePath = findHeadlessShell() || undefined;
+      process.stderr.write(`[keyword-search-douyin] CDP 不可用，改 launch${executablePath ? `（${executablePath}）` : ''}\n`);
+      browser = await chromium.launch({ executablePath, headless: true });
+      launchMode = true;
     }
-    const ctx = contexts[0];
+    let ctx;
+    if (launchMode) {
+      ctx = await browser.newContext();
+    } else {
+      const contexts = browser.contexts();
+      if (contexts.length === 0) {
+        emit({ ok: false, keyword, video_urls: [], error: 'NO_CDP_CONTEXT' });
+        return;
+      }
+      ctx = contexts[0];
+    }
     const page = await ctx.newPage();
     try {
       const searchUrl = `https://www.douyin.com/search/${encodeURIComponent(keyword)}?type=video`;

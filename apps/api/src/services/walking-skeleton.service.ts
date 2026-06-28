@@ -105,8 +105,8 @@ export interface RequiredAgentVersion {
 // 1.0.62 永不自升级→扫好友 401 真因）：下载到 staging→校验 manifest→原子 rename→失败回滚 + 开机自检
 // activated==required 上报；② Windows 托盘图标改喂 ICO（systray2 文档要求 win32 用 .ico，旧版喂 PNG
 // 渲染失败=用户长期看到的「错 logo」，与 exe 应用图标无关）。
-// 核心包按约定 install-pack/zenithjoy-agent-v2.0.32.tar.gz 从 COS 下载（live 源是已发布 manifest，本常量仅兜底）。
-export const DEFAULT_REQUIRED_AGENT_VERSION = '2.0.32';
+// 核心包按约定 install-pack/zenithjoy-agent-v2.0.39.tar.gz 从 COS 下载（live 源是已发布 manifest，本常量仅兜底）。
+export const DEFAULT_REQUIRED_AGENT_VERSION = '2.0.39';
 
 /**
  * 返回心跳要下发的核心要求版本。
