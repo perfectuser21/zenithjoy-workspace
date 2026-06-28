@@ -549,8 +549,8 @@ acquisitionRouter.post('/collect/cancel', async (req: Request, res: Response) =>
   return ok(res, { task_id: taskId, status: 'cancelling' });
 });
 
-// POST /api/acquisition/collect/report — 客户机 Agent 增量回报
-acquisitionRouter.post('/collect/report', smokeOrAgentGate, async (req: Request, res: Response) => {
+// POST /api/acquisition/collect/report — 客户机 Agent 增量回报（无需 smoke token，agent 直接调用）
+acquisitionRouter.post('/collect/report', async (req: Request, res: Response) => {
   const {
     task_id: taskId,
     keyword,
