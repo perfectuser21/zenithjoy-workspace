@@ -61,6 +61,31 @@ export interface SuggestAudienceInput {
   value_prop?: string;
 }
 
+// ─── 客服号（machine→wechat_id 绑定）+ 每号配置（IA 重设计刀1）──────────────────
+
+// 客服号列表项（GET /wechat/cs/machines，已按账号租户 scope：运营只看自己的号，超管看全部）
+export interface CSMachine {
+  machine_id: string;
+  hostname?: string;
+  configured: boolean;
+  wechat_id?: string; // 该号配置主 key（= 每号 persona/business_kb 读写 key）
+  real_wechat_id?: string; // 真实微信号（perfect-xx）
+  self_name?: string; // 该号人设名（快速标签）
+  online?: boolean;
+}
+
+// 每号完整配置（GET /wechat/cs/config/:wechatId）
+export interface CSAccountConfig {
+  wechat_id: string;
+  persona: Persona;
+  business_kb: BusinessKB;
+  auto_agent_enabled?: boolean;
+  business_hours_start?: string;
+  business_hours_end?: string;
+  daily_limit?: number;
+  whitelist?: string[];
+}
+
 // ─── 监听健康（Agent listen_chat.py 心跳）────────────────────────
 // 对齐后端 GET /api/wechat/listener-heartbeat。diag 可能整体缺失或字段缺失，全部可选。
 
@@ -115,6 +140,37 @@ export const wechatCsConfigApi = {
     return res.data;
   },
 
+  // ── 每号配置（IA 重设计刀1）──
+  // 列出当前账号可见的客服号（运营只看自己的号，超管看全部 = 既有 scope）
+  listCSMachines: async (): Promise<CSMachine[]> => {
+    const res = await apiClient.get<{ machines?: CSMachine[] }>('/wechat/cs/machines');
+    return res.data?.machines ?? [];
+  },
+
+  // 读某个号的完整 persona + business_kb（404 → null，前端用空默认）
+  getCSAccountConfig: async (wechatId: string): Promise<CSAccountConfig | null> => {
+    try {
+      const res = await apiClient.get<CSAccountConfig>(
+        `/wechat/cs/config/${encodeURIComponent(wechatId)}`
+      );
+      return res.data;
+    } catch {
+      return null; // 该号尚无配置（404）→ 前端填空表
+    }
+  },
+
+  // 保存某个号的 persona + business_kb（行级 merge：不传运营参数不清空它们）
+  saveCSAccountConfig: async (
+    wechatId: string,
+    body: { persona: Persona; business_kb: BusinessKB }
+  ) => {
+    const res = await apiClient.put<{ success: boolean }>(
+      `/wechat/cs/config/${encodeURIComponent(wechatId)}`,
+      body
+    );
+    return res.data;
+  },
+
   // 客户机 Agent 监听心跳（listen_chat.py 每分钟上报）
   getListenerStatus: async (): Promise<ListenerStatus[]> => {
     const res = await apiClient.get<{ listeners?: ListenerStatus[] }>(
@@ -132,4 +188,7 @@ export const {
   saveBusinessKB,
   suggestAudience,
   getListenerStatus,
+  listCSMachines,
+  getCSAccountConfig,
+  saveCSAccountConfig,
 } = wechatCsConfigApi;

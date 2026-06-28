@@ -1,9 +1,11 @@
 /**
- * WechatCustomerServiceConfigPage — 微信客服中台配置页（Path 4 Sprint B）
+ * WechatCustomerServiceConfigPage — 微信客服「话术知识库」页（IA 重设计刀1：每号编辑）
  *
- * 把 Sprint A 写死在 apps/api/config/*.json 的人设 + 企业知识库「搬上中台」。
- * 运营在页面填、保存即生效。含「AI 帮填 A1–A5 人群画像」。
- * 范式照 ContentTypeConfigPage.tsx（加载 GET / 保存 PUT / saving+loading / toast / 深色模式）。
+ * 反转「全局编辑」：顶部加【客服号选择器】，persona + business_kb 都按某个号读写——
+ *   - GET /wechat/cs/machines → 号列表（运营只看自己租户的号，超管看全部 = 既有 scope）
+ *   - GET /wechat/cs/config/:wechatId → 该号完整 persona + business_kb 填表
+ *   - PUT /wechat/cs/config/:wechatId → 保存该号 persona + business_kb（行级 merge，不碰运营参数）
+ * 每号一份人设+知识库，物理上不可能与「客服机」页重复（人设名 self_name 也归到这里）。
  */
 import { useState, useEffect, useCallback } from 'react'
 import {
@@ -15,15 +17,16 @@ import {
   Plus,
   Trash2,
   Sparkles,
+  Users,
 } from 'lucide-react'
 import {
-  getPersona,
-  savePersona,
-  getBusinessKB,
-  saveBusinessKB,
+  listCSMachines,
+  getCSAccountConfig,
+  saveCSAccountConfig,
   suggestAudience,
   type Persona,
   type BusinessKB,
+  type CSMachine,
 } from '../api/wechat-cs-config.api'
 import Line04PreflightCard from '../components/Line04PreflightCard'
 import ListenerHealthSection from '../components/ListenerHealthSection'
@@ -126,6 +129,8 @@ function AddRowButton({ label, onClick }: { label: string; onClick: () => void }
 export default function WechatCustomerServiceConfigPage() {
   const [persona, setPersona] = useState<Persona>(EMPTY_PERSONA)
   const [kb, setKb] = useState<BusinessKB>(EMPTY_KB)
+  const [machines, setMachines] = useState<CSMachine[]>([])
+  const [selectedWechatId, setSelectedWechatId] = useState<string>('')
   const [loading, setLoading] = useState(true)
   const [savingPersona, setSavingPersona] = useState(false)
   const [savingCompany, setSavingCompany] = useState(false)
@@ -137,53 +142,81 @@ export default function WechatCustomerServiceConfigPage() {
 
   const notify = (type: 'success' | 'error', text: string) => setMessage({ type, text })
 
-  const loadAll = useCallback(async () => {
+  // 加载某个号的 persona + business_kb 填表（无配置 → 空默认）。
+  const loadConfig = useCallback(async (wechatId: string) => {
+    if (!wechatId) {
+      setPersona(EMPTY_PERSONA)
+      setKb(EMPTY_KB)
+      return
+    }
     setLoading(true)
     setMessage(null)
     try {
-      const [p, b] = await Promise.all([getPersona(), getBusinessKB()])
-      setPersona({ ...EMPTY_PERSONA, ...p })
-      setKb({ ...EMPTY_KB, ...b })
+      const cfg = await getCSAccountConfig(wechatId)
+      setPersona({ ...EMPTY_PERSONA, ...(cfg?.persona ?? {}) })
+      setKb({ ...EMPTY_KB, ...(cfg?.business_kb ?? {}) })
     } catch {
-      notify('error', '加载配置失败')
+      notify('error', '加载该号配置失败')
     }
     setLoading(false)
   }, [])
 
-  useEffect(() => {
-    loadAll()
-  }, [loadAll])
-
-  // ─── 保存：人设 ───────────────────────────────────────────
-  const handleSavePersona = async () => {
-    setSavingPersona(true)
+  // 首次：拉号列表（已 scope），默认选第一个已配号。
+  const loadMachines = useCallback(async () => {
+    setLoading(true)
     setMessage(null)
     try {
-      await savePersona(persona)
-      notify('success', '人设已保存')
+      const list = (await listCSMachines()).filter((m) => m.configured && m.wechat_id)
+      setMachines(list)
+      const first = list[0]?.wechat_id ?? ''
+      setSelectedWechatId(first)
+      await loadConfig(first)
     } catch {
-      notify('error', '人设保存失败')
+      notify('error', '加载客服号失败')
+      setLoading(false)
     }
-    setSavingPersona(false)
+  }, [loadConfig])
+
+  useEffect(() => {
+    loadMachines()
+  }, [loadMachines])
+
+  // 切换号 → 重新加载该号配置。
+  const onSelectAccount = async (wechatId: string) => {
+    setSelectedWechatId(wechatId)
+    await loadConfig(wechatId)
   }
 
-  // ─── 保存：企业信息 / 产品 / 人群 / Q&A（都 PUT business-kb 整体）──
-  const saveKbWith = async (
-    next: BusinessKB,
+  // 统一保存：每次都 PUT 该号的 {persona, business_kb}（后端行级 merge，不碰运营参数）。
+  const persistAccount = async (
+    nextPersona: Persona,
+    nextKb: BusinessKB,
     setSaving: (v: boolean) => void,
     okText: string
   ) => {
+    if (!selectedWechatId) {
+      notify('error', '请先选择一个客服号')
+      return
+    }
     setSaving(true)
     setMessage(null)
     try {
-      await saveBusinessKB(next)
-      setKb(next)
+      await saveCSAccountConfig(selectedWechatId, { persona: nextPersona, business_kb: nextKb })
+      setPersona(nextPersona)
+      setKb(nextKb)
       notify('success', okText)
     } catch {
       notify('error', '保存失败')
     }
     setSaving(false)
   }
+
+  // ─── 保存：人设（每号）───────────────────────────────────────
+  const handleSavePersona = () => persistAccount(persona, kb, setSavingPersona, '人设已保存')
+
+  // ─── 保存：企业信息 / 产品 / 人群 / Q&A（都写该号 business_kb，连带 persona 一起 PUT）──
+  const saveKbWith = (next: BusinessKB, setSaving: (v: boolean) => void, okText: string) =>
+    persistAccount(persona, next, setSaving, okText)
 
   // ─── AI 帮我生成 A1–A5 ─────────────────────────────────────
   const handleSuggestAudience = async () => {
@@ -222,7 +255,7 @@ export default function WechatCustomerServiceConfigPage() {
       <div className="border-b border-slate-200 dark:border-slate-700 bg-white/80 dark:bg-slate-900/80 backdrop-blur-sm">
         <div className="max-w-[960px] mx-auto px-6 py-4 flex items-center gap-3">
           <MessageCircle className="w-6 h-6 text-blue-600 dark:text-blue-400" />
-          <h1 className="text-xl font-bold text-slate-900 dark:text-white">微信客服配置</h1>
+          <h1 className="text-xl font-bold text-slate-900 dark:text-white">微信客服 · 话术知识库（每号）</h1>
         </div>
       </div>
 
@@ -254,6 +287,37 @@ export default function WechatCustomerServiceConfigPage() {
         {/* ─── 监听健康 ─────────────────────────────────── */}
         <ListenerHealthSection />
 
+        {/* ─── 客服号选择器（每号编辑）──────────────────── */}
+        <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-5 mb-5">
+          <div className="flex items-center gap-3">
+            <Users className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+            <div className="flex-1">
+              <label className={labelCls}>编辑哪个客服号的人设 / 知识库</label>
+              {machines.length > 0 ? (
+                <select
+                  data-testid="cs-account-selector"
+                  className={inputCls}
+                  value={selectedWechatId}
+                  onChange={(e) => onSelectAccount(e.target.value)}
+                >
+                  {machines.map((m) => (
+                    <option key={m.wechat_id} value={m.wechat_id}>
+                      {(m.self_name || m.hostname || m.wechat_id) +
+                        (m.real_wechat_id ? `（${m.real_wechat_id}）` : '')}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <p className="text-sm text-amber-600 dark:text-amber-400">
+                  还没有已配置的客服号。请先去「客服机」页选机器、绑定一个客服号，再回来配人设/知识库。
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {machines.length === 0 ? null : (
+        <>
         {/* ─── 人设 ─────────────────────────────────────── */}
         <Section
           title="人设"
@@ -634,6 +698,8 @@ export default function WechatCustomerServiceConfigPage() {
             onClick={() => setKb({ ...kb, qa_docs: [...kb.qa_docs, { q: '', a: '' }] })}
           />
         </Section>
+        </>
+        )}
       </div>
     </div>
   )

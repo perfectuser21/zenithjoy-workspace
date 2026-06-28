@@ -2,9 +2,9 @@
  * CsOneClickSetupPage — 微信客服「我的客服机」(整合后；2026-06-25 整合拍板)
  *
  * 不让人手抄 machine_id：机器装好 Agent 自己注册上来报到 → 这里列出「我的全部客服机」(已配+待配)。
- * 点任意一台 → 填/改 人设名 / 营业时间 / 每日上限 / 真发开关 → 点【设置完毕】→ 后端自动绑定+写配置。
- * 整合：删掉白名单/关键人手填（接管开关搬到「客户好友表」黑名单语义），并入「监听健康看板」(一处看机器健康)。
- * 已配的机器点进去会预填当前配置；约 30 秒生效，去微信发条消息即可验证。
+ * 点任意一台 → 填/改 营业时间 / 每日上限 / 真发开关 → 点【设置完毕】→ 后端自动绑定+写配置。
+ * IA 重设计刀1：人设（含人设名 self_name）已移到「话术知识库」页每号编辑，本页只留运营参数 + 绑定；
+ * 机器卡上仍展示该号人设名（只读快速标签）。约 30 秒生效，去微信发条消息即可验证。
  */
 import { useEffect, useState } from 'react';
 import { Loader2, CheckCircle2, RefreshCw, MonitorSmartphone } from 'lucide-react';
@@ -45,7 +45,6 @@ export default function CsOneClickSetupPage() {
   const [machines, setMachines] = useState<CSMachine[]>([]);
   const [loadingList, setLoadingList] = useState(false);
   const [machineId, setMachineId] = useState('');
-  const [selfName, setSelfName] = useState('');
   const [autoAgent, setAutoAgent] = useState(true);
   const [businessHoursStart, setBusinessHoursStart] = useState('09:00');
   const [businessHoursEnd, setBusinessHoursEnd] = useState('21:00');
@@ -77,7 +76,6 @@ export default function CsOneClickSetupPage() {
     setDone(null);
     setError(null);
     if (m.configured) {
-      setSelfName(m.self_name ?? '');
       setAutoAgent(m.auto_agent_enabled ?? true);
     }
   };
@@ -89,19 +87,13 @@ export default function CsOneClickSetupPage() {
       setError('先选一台机器');
       return;
     }
-    if (!selfName.trim()) {
-      setError('填一个客服人设名（比如：小助手）');
-      return;
-    }
     setSaving(true);
     try {
       const res = await fetch(`/api/wechat/cs/setup/${encodeURIComponent(machineId)}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          // persona 单一 SSOT：客服机只设 self_name（人设名）。语气/称呼/emoji/禁用词/few_shot
-          // 等话术风格统一在「话术知识库」编辑（全局 SSOT），不再在这里硬编码死值（杜绝两边对不上）。
-          persona: { self_name: selfName.trim() },
+          // IA 重设计刀1：本页只发运营参数 + 绑定；人设（含 self_name）/知识库在「话术知识库」页每号编辑。
           auto_agent_enabled: autoAgent,
           business_hours_start: businessHoursStart,
           business_hours_end: businessHoursEnd,
@@ -128,8 +120,8 @@ export default function CsOneClickSetupPage() {
     <div className="max-w-2xl mx-auto">
       <h2 className="text-xl font-semibold mb-1 text-gray-900 dark:text-white">微信客服 · 我的客服机</h2>
       <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">
-        装好 Agent 的机器会自己报到。点一台 → 填/改 人设·营业时间·每日上限·真发开关 → 点设置完毕，约 30 秒生效。
-        谁接管/谁拉黑去「客户好友表」按客户逐个开关。
+        装好 Agent 的机器会自己报到。点一台 → 填/改 营业时间·每日上限·真发开关 → 点设置完毕，约 30 秒生效。
+        人设·语气·话术·知识库去「话术知识库」页按号编辑；谁接管/谁拉黑去「客户好友表」按客户逐个开关。
       </p>
 
       {/* 监听健康看板（整合：客服机健康一处看） */}
@@ -234,17 +226,10 @@ export default function CsOneClickSetupPage() {
 
       {/* ② 填配置 */}
       <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-5 mb-4 space-y-4">
-        <h3 className="font-medium text-gray-900 dark:text-white">② 填配置</h3>
-        <div>
-          <label className="block text-sm text-gray-600 dark:text-gray-300 mb-1">客服人设名</label>
-          <input
-            data-testid="setup-self-name"
-            value={selfName}
-            onChange={(e) => setSelfName(e.target.value)}
-            placeholder="比如：小助手"
-            className="w-full px-3 py-2 rounded border border-slate-300 dark:border-slate-600 dark:bg-slate-900 text-sm"
-          />
-        </div>
+        <h3 className="font-medium text-gray-900 dark:text-white">② 填配置（运营参数）</h3>
+        <p className="text-xs text-gray-400">
+          人设名 / 语气 / 话术 / 知识库 去「话术知识库」页按号编辑（每号独立）。
+        </p>
         {/* 营业时间 + 每日上限（Issue d2987606 补全后端已支持的配置项前台入口） */}
         <div className="grid grid-cols-2 gap-4">
           <div>
