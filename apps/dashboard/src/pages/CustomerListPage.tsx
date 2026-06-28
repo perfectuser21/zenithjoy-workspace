@@ -42,10 +42,12 @@ type NativeSelectEditorParams = ICellEditorParams & { values: string[] };
 interface NativeSelectEditorRef { getValue(): string }
 const NativeSelectCellEditor = forwardRef<NativeSelectEditorRef, NativeSelectEditorParams>(
   function NativeSelectCellEditor({ value, values, stopEditing }, ref) {
+    // 用 ref 保证 getValue() 在 stopEditing() 调用时拿到最新值（绕过 React 批量更新延迟）
+    const valRef = useRef<string>(value as string);
     const [val, setVal] = useState<string>(value as string);
     const selectEl = useRef<HTMLSelectElement>(null);
 
-    useImperativeHandle(ref, () => ({ getValue: () => val }));
+    useImperativeHandle(ref, () => ({ getValue: () => valRef.current }), []);
 
     useEffect(() => { selectEl.current?.focus(); }, []);
 
@@ -54,8 +56,11 @@ const NativeSelectCellEditor = forwardRef<NativeSelectEditorRef, NativeSelectEdi
         ref={selectEl}
         value={val}
         className="ag-select__native-select"
-        onChange={e => { setVal(e.target.value); }}
-        onBlur={() => stopEditing()}
+        onChange={e => {
+          valRef.current = e.target.value;
+          setVal(e.target.value);
+          stopEditing(); // 选择后立即提交（select 类编辑器不需要二次确认）
+        }}
         style={{ height: '100%', width: '100%', background: '#14161f',
           color: '#eef0f6', border: 'none', outline: 'none', padding: '0 4px' }}
       >
