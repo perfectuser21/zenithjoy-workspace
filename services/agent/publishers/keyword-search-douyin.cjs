@@ -4,9 +4,9 @@
  * keyword-search-douyin.cjs — 搜抖音关键词取热门视频 URL（外部进程）
  *
  * 架构：
- *   1. 从 .env 文件读取 ZJ_BURNER_DATA_DIR（不依赖进程 env 继承）
+ *   1. 从 .env 文件读取 ZJ_MAIN_DATA_DIR（不依赖进程 env 继承）
  *   2. spawn 真 Chrome（不带 --enable-automation）+ --disable-gpu（防 agent 子进程崩溃）
- *   3. CDP 连入，在 burner 已登录 session 下搜索
+ *   3. CDP 连入，在主号已登录 session 下搜索
  *   4. 兜底：headless-shell（无登录 session，大概率遇验证码）
  *
  * Usage:  node keyword-search-douyin.cjs <keyword> [cdpPort=19222] [maxVideos=5]
@@ -45,10 +45,10 @@ function readEnvFile() {
 }
 
 function getBurnerDataDir() {
-  let v = process.env.ZJ_BURNER_DATA_DIR;
+  let v = process.env.ZJ_MAIN_DATA_DIR;
   if (!v || v === 'null') {
     const env = readEnvFile();
-    v = env['ZJ_BURNER_DATA_DIR'];
+    v = env['ZJ_MAIN_DATA_DIR'];
   }
   return v || null;
 }

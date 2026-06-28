@@ -47,7 +47,7 @@ describe('acquisition-collect 失败兜底状态机', () => {
 
   it('terminal=partial→status=partial error_code=partial_reason；done→null', () => {
     expect(resolveTerminalStatus({ terminal: 'partial', partial_reason: 'video_insufficient' })).toEqual({ status: 'partial', error_code: 'video_insufficient' });
-    expect(resolveTerminalStatus({ terminal: 'done' })).toEqual({ status: 'done', error_code: null });
+    expect(resolveTerminalStatus({ terminal: 'done' })).toEqual({ status: 'stage_1_done', error_code: null });
   });
 
   it('sweep：stale running 转终态，pending 永不转', () => {

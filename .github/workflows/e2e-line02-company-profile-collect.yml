@@ -1,0 +1,87 @@
+name: E2E — Line02 公司信息 + 采集任务
+
+on:
+  push:
+    branches: [main, 'cp-*']
+    paths:
+      - 'apps/dashboard/src/pages/CompanyProfilePage.tsx'
+      - 'apps/dashboard/src/pages/AcquisitionConfigPage.tsx'
+      - 'apps/dashboard/src/api/company-profile.api.ts'
+      - 'apps/dashboard/e2e/line02-company-profile-collect.spec.ts'
+      - '.github/workflows/e2e-line02-company-profile-collect.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'apps/dashboard/src/pages/CompanyProfilePage.tsx'
+      - 'apps/dashboard/src/pages/AcquisitionConfigPage.tsx'
+      - 'apps/dashboard/src/api/company-profile.api.ts'
+      - 'apps/dashboard/e2e/line02-company-profile-collect.spec.ts'
+      - '.github/workflows/e2e-line02-company-profile-collect.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: e2e-line02-company-profile-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  e2e-line02:
+    name: Line02 Company Profile & Collect E2E
+    runs-on: windows-latest
+    timeout-minutes: 20
+
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          # 不缓存：npm cache 是 macOS 生成的，缺 Windows optional deps
+
+      - name: Install deps
+        run: npm ci
+
+      - name: Install Windows rollup native binding
+        # package-lock.json 由 macOS 生成，不含 @rollup/rollup-win32-x64-msvc
+        run: npm install @rollup/rollup-win32-x64-msvc --no-save
+
+      - name: Install Playwright Chromium
+        working-directory: apps/dashboard
+        run: npx playwright install chromium --with-deps
+
+      - name: Start Vite dev server (VITE_SKIP_AUTH=true)
+        working-directory: apps/dashboard
+        env:
+          VITE_SKIP_AUTH: 'true'
+          VITE_MOCK_USER_ID: 'e2e-user-001'
+          VITE_MOCK_USER_NAME: 'E2E 测试用户'
+        run: |
+          npx vite --port 5174 &
+          echo $! > /tmp/vite.pid
+          for i in $(seq 1 30); do
+            if curl -fs http://localhost:5174 >/dev/null 2>&1; then
+              echo "Vite ready after ${i}s"
+              break
+            fi
+            sleep 1
+          done
+          curl -fs http://localhost:5174 || (echo "Vite failed to start"; exit 1)
+
+      - name: Run E2E tests
+        working-directory: apps/dashboard
+        env:
+          E2E_BASE_URL: 'http://localhost:5174'
+        run: npx playwright test e2e/line02-company-profile-collect.spec.ts --reporter=list
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-line02
+          path: |
+            apps/dashboard/test-results/
+            apps/dashboard/playwright-report/
+          retention-days: 7

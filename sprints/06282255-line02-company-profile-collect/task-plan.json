@@ -1,0 +1,60 @@
+{
+  "initiative_id": "",
+  "journey_type": "user_facing",
+  "journey_type_reason": "涉及 apps/dashboard/ 前端公司信息页 + Line02 采集页，用户直接操作 Dashboard",
+  "tasks": [
+    {
+      "task_id": "ws1",
+      "title": "Line02 公司信息页 + 采集任务 Table + 主号全链实现",
+      "scope": "① zenithjoy.tenant_company_profiles 表 migration + GET/PUT /api/company-profile + Dashboard 公司信息页（三 Section）；② GET /api/line02/account-status 端点；③ AcquisitionConfigPage 补账号状态块 + 采集任务 Table（收 status/video_count/lead_count_raw 实时更新）；④ line02/index.ts 从 stub 改为真实轮询 pending-collect-tasks → spawn keyword-search（主号 profile）→ spawn crawl-comments；⑤ keyword-search-douyin.cjs 修正读 ZJ_MAIN_DATA_DIR 而非 ZJ_BURNER_DATA_DIR；⑥ crawl-comments-douyin.cjs 新建（视频 → commenter 主页 → POST collect/report）",
+      "dod": [
+        "[BEHAVIOR] PUT /api/company-profile 返回 200 data.updated==true，data keys==[\"updated\"]",
+        "[BEHAVIOR] GET /api/company-profile 返回 company_name/city/industry/description 四个基础字段",
+        "[BEHAVIOR] GET /api/company-profile 返回 key_advantages/customer_problem/customer_portrait/products/qa_list 五个字段",
+        "[BEHAVIOR] GET /api/company-profile data keys 完整性（9 字段全在）",
+        "[BEHAVIOR] GET /api/company-profile data 禁用字段反向检查（profile/result/tenant_id裸/companyName）",
+        "[BEHAVIOR] 首次访问（无记录）GET 返回 200 + company_name 空串（非 404）",
+        "[BEHAVIOR] DB zenithjoy.tenant_company_profiles 5 分钟时间窗有记录",
+        "[BEHAVIOR] GET /api/line02/account-status 返回 200，data.accounts 含 role=main 条目(length>=1) + label/health字段",
+        "[BEHAVIOR] GET /api/line02/account-status data keys==[\"accounts\"] 且不含禁用字段 status/main_account",
+        "[BEHAVIOR] POST collect/start 返回 200 task_id UUID + status=pending",
+        "[BEHAVIOR] acquisition_collect_tasks 5 分钟时间窗有 pending 记录",
+        "[BEHAVIOR] POST collect/report 返回 200 data.inserted>=1",
+        "[BEHAVIOR] acquisition_leads 5 分钟时间窗有 sec_uid 非空记录",
+        "[BEHAVIOR] terminal=done 上报后 GET task 返回 status=stage_1_done + ended_at!=null + lead_count_raw>=1",
+        "[BEHAVIOR] GET task 6字段完整性（task_id/status/video_count/lead_count_raw/created_at/ended_at）keys完全匹配",
+        "[BEHAVIOR] 空 keywords 时 collect/start 返回 400",
+        "[BEHAVIOR] 缺 company_name 时 PUT 返回 400",
+        "[BEHAVIOR] DB 注入 expired → GET account-status accounts 含 health==expired 条目",
+        "[BEHAVIOR] 主号未绑定时（无role=main session）collect/start 写入后 task 立即标 failed",
+        "[BEHAVIOR:E2E] Playwright line02-company-profile-collect.spec.ts 全程通过（公司信息保存+刷新+采集页+任务Table）",
+        "[ARTIFACT] apps/api/src/routes/company-profile.ts",
+        "[ARTIFACT] apps/api/db/migrations/*_tenant_company_profiles.sql",
+        "[ARTIFACT] apps/api/db/migrations/*_line02_account_sessions.sql（含 UNIQUE(tenant_id,account_label) 约束）",
+        "[ARTIFACT] apps/dashboard/src/pages/CompanyProfilePage.tsx",
+        "[ARTIFACT] apps/dashboard/src/api/company-profile.api.ts",
+        "[ARTIFACT] services/agent/publishers/crawl-comments-douyin.cjs",
+        "[ARTIFACT] services/agent/modules/line02/index.ts（stub 已移除）",
+        "[ARTIFACT] apps/dashboard/e2e/line02-company-profile-collect.spec.ts",
+        "[ARTIFACT] .github/workflows/e2e-line02-company-profile-collect.yml"
+      ],
+      "files": [
+        "apps/api/src/routes/company-profile.ts",
+        "apps/api/src/routes/line02.ts",
+        "apps/api/db/migrations/20260628_line02_tenant_company_profiles.sql",
+        "apps/api/db/migrations/20260628_line02_account_sessions.sql",
+        "apps/dashboard/src/pages/CompanyProfilePage.tsx",
+        "apps/dashboard/src/pages/AcquisitionConfigPage.tsx",
+        "apps/dashboard/src/api/company-profile.api.ts",
+        "services/agent/modules/line02/index.ts",
+        "services/agent/publishers/keyword-search-douyin.cjs",
+        "services/agent/publishers/crawl-comments-douyin.cjs",
+        "apps/dashboard/e2e/line02-company-profile-collect.spec.ts",
+        ".github/workflows/e2e-line02-company-profile-collect.yml"
+      ],
+      "depends_on": [],
+      "complexity": "L",
+      "estimated_minutes": 120
+    }
+  ]
+}

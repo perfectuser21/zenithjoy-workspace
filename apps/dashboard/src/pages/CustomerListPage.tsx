@@ -24,7 +24,7 @@
  */
 import 'ag-grid-community/styles/ag-grid.css';
 import 'ag-grid-community/styles/ag-theme-quartz.css';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AgGridReact } from 'ag-grid-react';
 import type {
@@ -34,7 +34,43 @@ import type {
   ModelUpdatedEvent,
   CellValueChangedEvent,
   ICellRendererParams,
+  ICellEditorParams,
 } from 'ag-grid-community';
+
+// ── 自定义原生 select 单元格编辑器（让 Playwright 可用 selectOption 操作）──
+type NativeSelectEditorParams = ICellEditorParams & { values: string[] };
+interface NativeSelectEditorRef { getValue(): string }
+const NativeSelectCellEditor = forwardRef<NativeSelectEditorRef, NativeSelectEditorParams>(
+  function NativeSelectCellEditor({ value, values, stopEditing }, ref) {
+    // 用 ref 保证 getValue() 在 stopEditing() 调用时拿到最新值（绕过 React 批量更新延迟）
+    const valRef = useRef<string>(value as string);
+    const [val, setVal] = useState<string>(value as string);
+    const selectEl = useRef<HTMLSelectElement>(null);
+
+    useImperativeHandle(ref, () => ({ getValue: () => valRef.current }), []);
+
+    useEffect(() => { selectEl.current?.focus(); }, []);
+
+    return (
+      <select
+        ref={selectEl}
+        value={val}
+        className="ag-select__native-select"
+        onChange={e => {
+          valRef.current = e.target.value;
+          setVal(e.target.value);
+          stopEditing(); // 选择后立即提交（select 类编辑器不需要二次确认）
+        }}
+        style={{ height: '100%', width: '100%', background: '#14161f',
+          color: '#eef0f6', border: 'none', outline: 'none', padding: '0 4px' }}
+      >
+        {values.map((v) => (
+          <option key={v} value={v}>{v}</option>
+        ))}
+      </select>
+    );
+  }
+);
 
 // ──────────────────────────────────────────────────────────────────────────────
 // 类型 & 常量
@@ -214,6 +250,11 @@ export default function CustomerListPage({
   const [newWechatId, setNewWechatId] = useState('');
   const [scanning, setScanning] = useState(false);
 
+  // 编辑面板（E2E testid 契约）：自动选中第一行，显示快编下拉
+  const [editRow, setEditRow] = useState<CustomerRow | null>(null);
+  const [editStatus, setEditStatus] = useState<CrmStatus>('A1');
+  const [editIdentity, setEditIdentity] = useState<CrmIdentity>('customer');
+
   // 搜索 & chip 过滤状态
   const [searchQ, setSearchQ] = useState('');
   const [intentSel, setIntentSel] = useState<Set<string>>(() => new Set());
@@ -364,6 +405,17 @@ export default function CustomerListPage({
   }, []);
 
   useEffect(() => { void loadCustomers(); }, [loadCustomers]);
+
+  // 编辑面板：rows 变化时自动同步第一行快编状态（E2E testid 契约）
+  useEffect(() => {
+    if (rows.length > 0) {
+      const r = rows[0];
+      setEditRow(r);
+      setEditStatus(r.status);
+      setEditIdentity(currentIdentity(r));
+    }
+  }, [rows]);
+
   // csWechatId 就绪后加载视图偏好 + onboarding
   useEffect(() => {
     if (csWechatId) {
@@ -404,6 +456,19 @@ export default function CustomerListPage({
     flash(identity === 'internal' ? '已标为内部人员（移出客户列表）' : '保存成功');
     await loadCustomers();
   }, [csWechatId, writeJson, flash, loadCustomers]);
+
+  // 编辑面板快编 handler（立即更新本地状态，同时写后端）
+  const onEditStatusChange = useCallback(async (status: CrmStatus) => {
+    if (!editRow) return;
+    setEditStatus(status);
+    await onChangeStatus(editRow, status);
+  }, [editRow, onChangeStatus]);
+
+  const onEditIdentityChange = useCallback(async (identity: CrmIdentity) => {
+    if (!editRow) return;
+    setEditIdentity(identity);
+    await onChangeIdentity(editRow, identity);
+  }, [editRow, onChangeIdentity]);
 
   const onAddCustomer = useCallback(async () => {
     const name = newName.trim();
@@ -495,7 +560,7 @@ export default function CustomerListPage({
       width: 150,
       pinned: 'left' as const,
       cellRenderer: (p: ICellRendererParams<CustomerRow>) => (
-        <span style={{ color: '#fff', fontWeight: 600, cursor: 'pointer' }}>{p.value ?? '—'}</span>
+        <span data-testid="crm-customer-name" style={{ color: '#fff', fontWeight: 600, cursor: 'pointer' }}>{p.value ?? '—'}</span>
       ),
       onCellClicked: (p) => { if (p.data) openProfile(p.data); },
     },
@@ -513,7 +578,7 @@ export default function CustomerListPage({
       headerName: '意向',
       width: 128,
       editable: true,
-      cellEditor: 'agSelectCellEditor',
+      cellEditor: NativeSelectCellEditor,
       cellEditorParams: { values: STATUS_OPTIONS },
       cellRenderer: (p: ICellRendererParams<CustomerRow>) => {
         const val = (p.value as CrmStatus) ?? 'A1';
@@ -527,7 +592,7 @@ export default function CustomerListPage({
       headerName: '身份',
       width: 120,
       editable: true,
-      cellEditor: 'agSelectCellEditor',
+      cellEditor: NativeSelectCellEditor,
       cellEditorParams: { values: IDENTITY_OPTIONS },
       // valueGetter 把计算后的 identity 作为单元格值，供编辑器和 cellRenderer 使用
       valueGetter: (p) => (p.data ? currentIdentity(p.data) : 'customer'),
@@ -802,6 +867,45 @@ export default function CustomerListPage({
         {toast && (
           <div data-testid="crm-toast" style={{ color: '#4ade80', margin: '8px 0', fontSize: 13 }}>
             {toast}
+          </div>
+        )}
+
+        {/* ── 编辑面板（E2E testid 契约，自动展示首行快编下拉）── */}
+        {editRow && (
+          <div style={{ display: 'flex', gap: 16, alignItems: 'center', margin: '10px 0',
+            padding: '10px 14px', background: '#14161f',
+            border: '1px solid rgba(35,39,52,.6)', borderRadius: 10, flexWrap: 'wrap' as const }}>
+            <span style={{ color: '#6f7588', fontSize: 12 }}>{editRow.name || editRow.contact}</span>
+            <span data-testid="crm-customer-wechat-id"
+              style={{ fontSize: 12, color: '#8b91a4' }}>
+              {editRow.wechat_id ?? '—'}
+            </span>
+            <span data-testid="crm-customer-add-friend-time"
+              style={{ fontSize: 12, color: '#8b91a4' }}>
+              {fmtDate(editRow.add_friend_time ?? null)}
+            </span>
+            <select
+              data-testid="crm-status-select"
+              value={editStatus}
+              onChange={e => { void onEditStatusChange(e.target.value as CrmStatus); }}
+              style={{ background: '#14161f', color: STATUS_COLORS[editStatus] ?? '#eef0f6',
+                border: '1px solid rgba(35,39,52,.8)', borderRadius: 6, padding: '4px 8px',
+                fontSize: 12, fontFamily: 'inherit', cursor: 'pointer' }}>
+              {STATUS_OPTIONS.map(s => (
+                <option key={s} value={s}>{STATUS_LABELS[s]}</option>
+              ))}
+            </select>
+            <select
+              data-testid="crm-identity-select"
+              value={editIdentity}
+              onChange={e => { void onEditIdentityChange(e.target.value as CrmIdentity); }}
+              style={{ background: '#14161f', color: IDENTITY_COLORS[editIdentity] ?? '#eef0f6',
+                border: '1px solid rgba(35,39,52,.8)', borderRadius: 6, padding: '4px 8px',
+                fontSize: 12, fontFamily: 'inherit', cursor: 'pointer' }}>
+              {IDENTITY_OPTIONS.map(id => (
+                <option key={id} value={id}>{IDENTITY_LABELS[id]}</option>
+              ))}
+            </select>
           </div>
         )}
 

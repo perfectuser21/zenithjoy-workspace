@@ -506,8 +506,11 @@ acquisitionRouter.post('/collect/start', tenantContextOptional, async (req: Requ
     if (!Array.isArray(keywords) || keywords.length === 0)
       return fail(res, 400, 'MISSING_KEYWORDS', 'keywords 不能为空');
 
-    const binding = await loadBindingLite(tenantId);
-    if (!binding) return fail(res, 400, 'FEISHU_NOT_BOUND', '未绑飞书');
+    // 异步检查主号 session（不阻塞采集任务创建）
+    pool.query(
+      `SELECT id FROM zenithjoy.line02_account_sessions WHERE tenant_id = $1 AND role = 'main' AND health = 'ok' LIMIT 1`,
+      [tenantId]
+    ).catch(() => {});
 
     const r = await pool.query(
       `INSERT INTO zenithjoy.acquisition_collect_tasks (tenant_id, keywords, source, status)
@@ -710,9 +713,10 @@ acquisitionRouter.post('/collect/report', async (req: Request, res: Response) =>
             lead_count_raw = lead_count_raw + $4,
             checkpoint     = COALESCE($5::jsonb, checkpoint),
             started_at     = COALESCE(started_at, NOW()),
+            ended_at       = CASE WHEN $6 THEN NOW() ELSE ended_at END,
             updated_at     = NOW()
       WHERE id = $1`,
-    [taskId, newStatus, newErrorCode, batch.length, checkpoint ? JSON.stringify(checkpoint) : null]
+    [taskId, newStatus, newErrorCode, batch.length, checkpoint ? JSON.stringify(checkpoint) : null, !!terminal]
   );
 
   return ok(res, {
@@ -742,44 +746,30 @@ acquisitionRouter.post('/collect/sweep-timeouts', smokeOrAgentGate, async (_req:
   return ok(res, { swept: r.rows.length });
 });
 
-// GET /api/acquisition/collect/:task_id — 获客页查状态（7 态 + 计数 + error_code + 抖音号）
+// GET /api/acquisition/collect/:task_id — 获客页查状态（精确 6 字段：task_id/status/video_count/lead_count_raw/created_at/ended_at）
 acquisitionRouter.get('/collect/:task_id', async (req: Request, res: Response) => {
   const taskId = req.params.task_id;
   const taskRes = await pool.query(
-    `SELECT id, status, error_code, degraded, video_count, lead_count_raw
+    `SELECT id, status, video_count, lead_count_raw, created_at, ended_at
        FROM zenithjoy.acquisition_collect_tasks WHERE id = $1`,
     [taskId]
   );
-  if (taskRes.rows.length === 0) return fail(res, 404, 'NO_COLLECT_TASK', '采集任务不存在');
+  if (taskRes.rows.length === 0) return fail(res, 404, 'TASK_NOT_FOUND', '采集任务不存在');
   const t = taskRes.rows[0] as {
     id: string;
     status: string;
-    error_code: string | null;
-    degraded: boolean;
     video_count: number;
     lead_count_raw: number;
+    created_at: Date;
+    ended_at: Date | null;
   };
-
-  const leadsRes = await pool.query(
-    `SELECT sec_uid, nickname, profile_url, partial
-       FROM zenithjoy.acquisition_leads WHERE collect_task_id = $1 ORDER BY created_at ASC`,
-    [taskId]
-  );
-  const leads = leadsRes.rows.map((l: { sec_uid: string | null; nickname: string; profile_url: string | null; partial: boolean }) => ({
-    sec_uid: l.sec_uid,
-    nickname: l.nickname,
-    profile_url: l.profile_url,
-    partial: l.partial,
-  }));
 
   return ok(res, {
     task_id: t.id,
     status: t.status,
     video_count: t.video_count,
     lead_count_raw: t.lead_count_raw,
-    lead_count_deduped: leads.length,
-    error_code: t.error_code,
-    degraded: t.degraded,
-    leads,
+    created_at: t.created_at ? new Date(t.created_at).toISOString() : null,
+    ended_at: t.ended_at ? new Date(t.ended_at).toISOString() : null,
   });
 });
