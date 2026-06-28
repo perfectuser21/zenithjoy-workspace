@@ -21,6 +21,11 @@ import type { Persona } from './types';
 
 export interface CSAccountConfig {
   wechat_id: string;
+  /**
+   * persona 单一 SSOT 后：此字段**只有 self_name 有意义**（per-operator 人设名覆盖位）。
+   * style（语气/称呼/句式/emoji/禁用词/few_shot）的真相在全局话术库（wechat_cs_config），
+   * 不在每客服独立存储。类型仍为 Persona 以兼容存量行读取，但 saveCSConfig 落库只截 self_name。
+   */
   persona: Persona;
   auto_agent_enabled: boolean;
   business_hours_start: string;
@@ -418,8 +423,9 @@ export async function listAllMachines(tenantId?: string, limit = 100): Promise<C
  */
 export async function setupCSByMachine(
   machineId: string,
-  patch: Partial<CSAccountConfig> & {
-    persona: Persona;
+  patch: Partial<Omit<CSAccountConfig, 'persona'>> & {
+    // persona 单一 SSOT：每客服只需 self_name（人设名）；style 真相在全局话术库。
+    persona?: Pick<Persona, 'self_name'> & Partial<Persona>;
     wechat_id?: string;
     // SSOT 真实微信号(perfect-xx)——运营手填(wxauto 读不到微信号)；昵称/内部 wxid 由 agent 上报，
     // 一键配置若已带上(前端把扫码结果透传)也一并落库。三者写进 service_agents 新列，不动合成 wechat_id 主 key。
@@ -470,15 +476,22 @@ export async function setupCSByMachine(
 }
 
 /**
- * upsert「该客服那一行」（patch 必含 persona；其余字段缺省走默认值）。
- * 只写该 wechat_id 那一行，ON CONFLICT 更新同行，绝不动其他客服行。
+ * upsert「该客服那一行」。只写该 wechat_id 那一行，ON CONFLICT 更新同行，绝不动其他客服行。
+ *
+ * persona 单一 SSOT（消除话术库↔客服机重复）：每客服 persona **只存 self_name**（人设名，
+ * per-operator 覆盖位）。style（语气/称呼/句式/emoji/禁用词/few_shot）的真相在全局话术库
+ * （wechat_cs_config），不在这里独立存储——调用方即便传来整份 persona（历史一键配置写法），
+ * 落库也只截取 self_name，杜绝两边各存一份导致「对不上 / 抢」。
  */
 export async function saveCSConfig(
   wechatId: string,
-  patch: Partial<CSAccountConfig> & { persona: Persona },
+  patch: Partial<Omit<CSAccountConfig, 'persona'>> & {
+    persona?: Pick<Persona, 'self_name'> & Partial<Persona>;
+  },
 ): Promise<void> {
   const full: Omit<CSAccountConfig, 'wechat_id' | 'updated_at'> = {
-    persona: patch.persona,
+    // 只截取 self_name：每客服不再独立存储 style（style SSOT = 全局话术库）。
+    persona: { self_name: patch.persona?.self_name ?? '' } as Persona,
     auto_agent_enabled: patch.auto_agent_enabled ?? CS_ACCOUNT_DEFAULTS.auto_agent_enabled,
     business_hours_start: patch.business_hours_start ?? CS_ACCOUNT_DEFAULTS.business_hours_start,
     business_hours_end: patch.business_hours_end ?? CS_ACCOUNT_DEFAULTS.business_hours_end,
