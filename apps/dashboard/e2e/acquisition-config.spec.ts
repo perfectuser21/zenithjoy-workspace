@@ -83,7 +83,8 @@ async function stubPlan(page: Page, plan = PLAN) {
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
-      body: JSON.stringify({ success: true, data: plan }),
+      // fetchDispatchPlan expects data: { plan: [...], total: N }
+      body: JSON.stringify({ success: true, data: { plan, total: plan.length } }),
     });
   });
 }
