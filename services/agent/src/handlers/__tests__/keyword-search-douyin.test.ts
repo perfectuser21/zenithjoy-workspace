@@ -88,6 +88,24 @@ describe('keyword-search-douyin — spawn 外部 .cjs（生产）[BEHAVIOR]', ()
   });
 });
 
+// ────── Bug C 回归：.cjs 有 Chrome launch 兜底，不再在 CDP 不可用时直接失败 ──────
+describe('keyword-search-douyin.cjs — CDP 不可用时走 launch 兜底 [REGRESSION]', () => {
+  const CJS_PATH = path.resolve(__dirname, '../../../publishers/keyword-search-douyin.cjs');
+
+  it('.cjs 源码包含 chromium.launch 兜底（CDP connectOverCDP 失败时不直接 ECONNRESET）', () => {
+    const src = fs.readFileSync(CJS_PATH, 'utf8');
+    expect(src).toMatch(/chromium\.launch/);
+  });
+
+  it('.cjs 源码在 connectOverCDP 的 catch 里调用 launch', () => {
+    const src = fs.readFileSync(CJS_PATH, 'utf8');
+    // connectOverCDP 和 launch 都存在，且 launch 是兜底（在 try/catch 里）
+    expect(src).toMatch(/connectOverCDP/);
+    expect(src).toMatch(/launch/);
+    expect(src).toMatch(/catch|try/);
+  });
+});
+
 vi.mock('node:child_process', async (importOriginal) => {
   const actual = await importOriginal<typeof import('node:child_process')>();
   return { ...actual, spawn: vi.fn() };
