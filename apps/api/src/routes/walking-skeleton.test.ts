@@ -143,4 +143,20 @@ describe('POST /api/agent/heartbeat — body.agent_uuid 精准路由（防幽灵
       expect(wsService.upsertAgentByHeartbeat).toHaveBeenCalledOnce();
     },
   );
+
+  it(
+    '[回归守卫] precheck 裸探针（无 hostname 无 agent_uuid）→ upsertAgentByHeartbeat 不得被调用（防幽灵行复活）',
+    async () => {
+      // start.bat 发的 precheck：{"machine_id":"precheck","agent_version":"1.0.1"}
+      // route 读不到 hostname 也读不到 agent_uuid → 必须跳过 upsert，直接 200
+      const res = await request(app)
+        .post('/api/agent/heartbeat')
+        .send({ license: LICENSE_KEY, machine_id: 'precheck', agent_version: '1.0.1' });
+
+      expect(res.status).toBe(200);
+      expect(res.body.ok).toBe(true);
+      // 核心断言：precheck 不触发 upsert，否则 hostname=null 路径会复活幽灵行
+      expect(wsService.upsertAgentByHeartbeat).not.toHaveBeenCalled();
+    },
+  );
 });
