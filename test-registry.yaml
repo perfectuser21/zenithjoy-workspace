@@ -3733,13 +3733,13 @@ agent_suite:
     product: 客户私域AI接管
     note: "AG Grid DOM 渲染 CRM 运营台 E2E（windows Playwright，VITE_SKIP_AUTH）：客户名直接 DOM 断言（ag-cell）+ 搜索 quickFilterText 计数变化 + A4 chip 过滤 + 双击意向行内编辑 PUT /status + 点姓名导航到画像页 + 画像页 AI 三段论卡片字段断言；修复 Glide canvas 点击错位问题。"
 
-  - id: line04-cs-consolidation-area-hub-ui-e2e
-    path: apps/dashboard/e2e/area-hub-wechat-consolidation.spec.ts
+  - id: cs-account-workbench-ia-e2e
+    path: apps/dashboard/e2e/cs-account-workbench.spec.ts
     type: e2e
     ci: windows_cloud
     status: active
     product: 客户私域AI接管
-    note: "整合(2026-06-25) 私域客服区总览 5 卡 E2E（windows Playwright，VITE_SKIP_AUTH）：/area/wechat 主内容区正好 5 张下钻卡（客户好友表/我的客服机/客服工作汇总/话术知识库/下载客户机）+ 不再有「客服日报」独立卡。"
+    note: "以号为中心 IA 重设计刀2（2026-06-28）E2E（windows Playwright，VITE_SKIP_AUTH）：多号→/area/wechat 客服号总览表→点号下钻进单号工作台(顶部状态条+5 Tab，复用现有页面 embedded)+切 Tab；运营单号直进工作台；URL 直敲别人号→无权访问兜底。取代旧 area-hub-wechat-consolidation（私域客服区已从 5 卡 hub 改以号为中心）。"
 
   - id: line04-crm-cookie-seam-e2e
     path: apps/dashboard/e2e/crm-cookie-seam.spec.ts

@@ -41,10 +41,18 @@ function errorMessage(data: unknown): string | null {
   return null;
 }
 
-export default function CsOneClickSetupPage() {
+export default function CsOneClickSetupPage({
+  fixedMachineId,
+  embedded = false,
+}: {
+  // 单号工作台「运营设置」Tab：固定到该机器，藏掉选机器列表 + 监听健康（工作台顶部已有状态条）。
+  // 不传 = 旧独立「我的客服机」页（选机器 + 列表 + 健康看板）。
+  fixedMachineId?: string;
+  embedded?: boolean;
+} = {}) {
   const [machines, setMachines] = useState<CSMachine[]>([]);
   const [loadingList, setLoadingList] = useState(false);
-  const [machineId, setMachineId] = useState('');
+  const [machineId, setMachineId] = useState(fixedMachineId ?? '');
   const [autoAgent, setAutoAgent] = useState(true);
   const [businessHoursStart, setBusinessHoursStart] = useState('09:00');
   const [businessHoursEnd, setBusinessHoursEnd] = useState('21:00');
@@ -58,7 +66,13 @@ export default function CsOneClickSetupPage() {
     try {
       const res = await fetch('/api/wechat/cs/machines');
       const data = await res.json();
-      setMachines(Array.isArray(data.machines) ? data.machines : []);
+      const list: CSMachine[] = Array.isArray(data.machines) ? data.machines : [];
+      setMachines(list);
+      // 工作台模式：固定机器选中并把它已有配置预填进表单。
+      if (fixedMachineId) {
+        const m = list.find((x) => x.machine_id === fixedMachineId);
+        if (m?.configured) setAutoAgent(m.auto_agent_enabled ?? true);
+      }
     } catch {
       setMachines([]);
     } finally {
@@ -68,7 +82,8 @@ export default function CsOneClickSetupPage() {
 
   useEffect(() => {
     loadMachines();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fixedMachineId]);
 
   // 选中一台机器：已配的把它当前配置预填进表单，方便直接改。
   const selectMachine = (m: CSMachine) => {
@@ -117,17 +132,22 @@ export default function CsOneClickSetupPage() {
   };
 
   return (
-    <div className="max-w-2xl mx-auto">
-      <h2 className="text-xl font-semibold mb-1 text-gray-900 dark:text-white">微信客服 · 我的客服机</h2>
-      <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">
-        装好 Agent 的机器会自己报到。点一台 → 填/改 营业时间·每日上限·真发开关 → 点设置完毕，约 30 秒生效。
-        人设·语气·话术·知识库去「话术知识库」页按号编辑；谁接管/谁拉黑去「客户好友表」按客户逐个开关。
-      </p>
+    <div className={embedded ? '' : 'max-w-2xl mx-auto'}>
+      {!embedded && (
+        <>
+          <h2 className="text-xl font-semibold mb-1 text-gray-900 dark:text-white">微信客服 · 我的客服机</h2>
+          <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">
+            装好 Agent 的机器会自己报到。点一台 → 填/改 营业时间·每日上限·真发开关 → 点设置完毕，约 30 秒生效。
+            人设·语气·话术·知识库去「话术知识库」页按号编辑；谁接管/谁拉黑去「客户好友表」按客户逐个开关。
+          </p>
 
-      {/* 监听健康看板（整合：客服机健康一处看） */}
-      <ListenerHealthSection />
+          {/* 监听健康看板（整合：客服机健康一处看） */}
+          <ListenerHealthSection />
+        </>
+      )}
 
-      {/* ① 选机器 */}
+      {/* ① 选机器（工作台模式机器已定，藏掉列表）*/}
+      {!embedded && (
       <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-5 mb-4">
         <div className="flex items-center justify-between mb-3">
           <h3 className="font-medium text-gray-900 dark:text-white flex items-center gap-2">
@@ -223,6 +243,7 @@ export default function CsOneClickSetupPage() {
           </div>
         )}
       </div>
+      )}
 
       {/* ② 填配置 */}
       <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-5 mb-4 space-y-4">

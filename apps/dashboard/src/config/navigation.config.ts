@@ -119,6 +119,10 @@ export const autopilotPageComponents: Record<string, () => Promise<{ default: Co
   'CustomerListPage': () => import('../pages/CustomerListPage'),
   // Line04 CRM 重做 — 层2 状态/画像页（内含层3 聊天记录下钻）
   'CustomerProfilePage': () => import('../pages/CustomerProfilePage'),
+  // 2026-06-28 — 微信客服「以号为中心」IA 重设计刀2：区入口分诊 + 客服号总览 + 单号工作台（5 Tab）
+  'CsAreaEntryPage': () => import('../pages/CsAreaEntryPage'),
+  'CsAccountOverviewPage': () => import('../pages/CsAccountOverviewPage'),
+  'CsAccountWorkbenchPage': () => import('../pages/CsAccountWorkbenchPage'),
 };
 
 export const pageComponents = autopilotPageComponents;
@@ -144,7 +148,8 @@ export const autopilotNavGroups: NavGroup[] = [
       { path: '/', icon: LayoutDashboard, label: '工作台', featureKey: 'workbench', component: 'Dashboard' },
       { path: '/area/publish', icon: Send, label: '智能发布', featureKey: 'ws1-publish', component: 'AreaHubPage' },
       { path: '/area/acquisition', icon: Target, label: '智能获客', featureKey: 'acquisition-leads', component: 'AreaHubPage' },
-      { path: '/area/wechat', icon: MessageCircle, label: '私域客服', featureKey: 'wechat-cs-config', component: 'AreaHubPage' },
+      // 私域客服改「以号为中心」(IA 重设计刀2)：入口落 CsAreaEntryPage 分诊 → 超管/多号进总览，运营单号直进工作台。
+      { path: '/area/wechat', icon: MessageCircle, label: '私域客服', featureKey: 'wechat-cs-config', component: 'CsAreaEntryPage' },
       { path: '/area/video', icon: Scissors, label: '视频剪辑', featureKey: 'local-video-pipeline', component: 'AreaHubPage' },
       { path: '/area/remake', icon: Video, label: '爆款翻拍', featureKey: 'video-remake-pipeline', component: 'AreaHubPage' },
       { path: '/area/settings', icon: KeyRound, label: '设置', featureKey: 'license', component: 'AreaHubPage' },
@@ -177,6 +182,11 @@ export const additionalRoutes: RouteConfig[] = [
   { path: '/dashboard/machines', component: 'MachineManagementPage', requireAuth: true },
   { path: '/dashboard/acquisition-config', component: 'AcquisitionConfigPage', requireAuth: true },
   { path: '/dashboard/feishu-bind', component: 'FeishuBindTenant', requireAuth: true },
+  // 以号为中心 IA 重设计刀2：客服号总览 + 单号工作台（5 Tab 容器）。
+  //   /wechat/accounts 总览（超管/多号）；/wechat/account/:machineId 单号工作台。
+  { path: '/wechat/accounts', component: 'CsAccountOverviewPage', requireAuth: true },
+  { path: '/wechat/account/:machineId', component: 'CsAccountWorkbenchPage', requireAuth: true },
+  // 旧 5 个平级页路由保留（深链/老书签不死链）；其内容也作为工作台 Tab 复用承载。
   { path: '/wechat/cs-config', component: 'WechatCustomerServiceConfigPage', requireAuth: true },
   { path: '/wechat/setup', component: 'CsOneClickSetupPage', requireAuth: true },
   { path: '/wechat/cs-stats', component: 'CsWorkStatsPage', requireAuth: true },

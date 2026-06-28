@@ -72,6 +72,13 @@ export interface CSMachine {
   real_wechat_id?: string; // 真实微信号（perfect-xx）
   self_name?: string; // 该号人设名（快速标签）
   online?: boolean;
+  // 健康 + 运营态（后端 listAllMachines 一并返回，供「客服号总览」/「单号工作台」状态条用）
+  auto_agent_enabled?: boolean; // 真发(true)/演练(false)
+  wechat_ok?: boolean; // 微信整体健康
+  wechat_reason?: string; // 不健康原因
+  found_window?: boolean; // 找到微信主窗口（已登录）
+  login_present?: boolean; // 检测到扫码登录界面（需扫码）
+  agent_id?: string; // license_machines.agent_id，匹配监听心跳用
 }
 
 // 每号完整配置（GET /wechat/cs/config/:wechatId）

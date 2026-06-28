@@ -1,8 +1,8 @@
-name: E2E Line04 私域客服整合（5 卡 + 孤儿页删除）
+name: E2E Line04 微信客服以号为中心工作台（IA 重设计刀2）
 
-# 私域客服整合（2026-06-25）前端验收：
-#  - vitest（ubuntu）：navigation.config 断言私域客服区正好 5 卡 + 孤儿路由/lazy 已删
-#  - Playwright（windows_cloud，ZenithJoy UI 死规则）：/area/wechat 总览页正好 5 张下钻卡、无「客服日报」独立卡
+# 私域客服「以号为中心」IA 重设计刀2（2026-06-28）前端验收：
+#  - vitest（ubuntu）：navigation.config 断言 /area/wechat→CsAreaEntryPage + 总览/单号工作台路由 + 旧路由保留
+#  - Playwright（windows_cloud，ZenithJoy UI 死规则）：多号→总览表→下钻工作台 5 Tab；单号直进；越权兜底
 # API 全部 stub（page.route），不依赖外部服务。
 # windows 惯例（4 条）：npm ci 不缓存 / 装 rollup-win32 native / playwright --with-deps / VITE_SKIP_AUTH=true。
 
@@ -10,28 +10,42 @@ on:
   push:
     branches: [main]
     paths:
-      - 'apps/dashboard/src/pages/AreaHubPage.tsx'
+      - 'apps/dashboard/src/pages/CsAreaEntryPage.tsx'
+      - 'apps/dashboard/src/pages/CsAccountOverviewPage.tsx'
+      - 'apps/dashboard/src/pages/CsAccountWorkbenchPage.tsx'
+      - 'apps/dashboard/src/pages/WechatCustomerServiceConfigPage.tsx'
+      - 'apps/dashboard/src/pages/CsOneClickSetupPage.tsx'
+      - 'apps/dashboard/src/pages/CustomerListPage.tsx'
+      - 'apps/dashboard/src/pages/CsWorkStatsPage.tsx'
+      - 'apps/dashboard/src/components/ListenerHealthSection.tsx'
       - 'apps/dashboard/src/config/navigation.config.ts'
       - 'apps/dashboard/src/config/__tests__/navigation.config.test.ts'
-      - 'apps/dashboard/e2e/area-hub-wechat-consolidation.spec.ts'
-      - '.github/workflows/e2e-line04-cs-consolidation.yml'
+      - 'apps/dashboard/e2e/cs-account-workbench.spec.ts'
+      - '.github/workflows/e2e-cs-account-workbench.yml'
   pull_request:
     branches: [main]
     paths:
-      - 'apps/dashboard/src/pages/AreaHubPage.tsx'
+      - 'apps/dashboard/src/pages/CsAreaEntryPage.tsx'
+      - 'apps/dashboard/src/pages/CsAccountOverviewPage.tsx'
+      - 'apps/dashboard/src/pages/CsAccountWorkbenchPage.tsx'
+      - 'apps/dashboard/src/pages/WechatCustomerServiceConfigPage.tsx'
+      - 'apps/dashboard/src/pages/CsOneClickSetupPage.tsx'
+      - 'apps/dashboard/src/pages/CustomerListPage.tsx'
+      - 'apps/dashboard/src/pages/CsWorkStatsPage.tsx'
+      - 'apps/dashboard/src/components/ListenerHealthSection.tsx'
       - 'apps/dashboard/src/config/navigation.config.ts'
       - 'apps/dashboard/src/config/__tests__/navigation.config.test.ts'
-      - 'apps/dashboard/e2e/area-hub-wechat-consolidation.spec.ts'
-      - '.github/workflows/e2e-line04-cs-consolidation.yml'
+      - 'apps/dashboard/e2e/cs-account-workbench.spec.ts'
+      - '.github/workflows/e2e-cs-account-workbench.yml'
   workflow_dispatch:
 
 concurrency:
-  group: e2e-line04-cs-consolidation-${{ github.ref }}
+  group: e2e-cs-account-workbench-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
   navigation-vitest:                       # job1：navigation.config 单测（ubuntu，纯前端断言）
-    name: job1 — navigation 5 卡 + 孤儿删除 vitest（ubuntu）
+    name: job1 — navigation 以号为中心 IA vitest（ubuntu）
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -43,12 +57,12 @@ jobs:
           cache-dependency-path: package-lock.json
       - name: Install deps
         run: npm ci
-      - name: Vitest — navigation.config（5 卡 + 孤儿路由/lazy 已删）
+      - name: Vitest — navigation.config（入口分诊 + 总览/工作台路由）
         working-directory: apps/dashboard
         run: npx vitest run src/config/__tests__/navigation.config.test.ts --reporter=verbose
 
-  dashboard-ui:                            # job2：/area/wechat 总览 5 卡 Playwright UI（windows，无 DB）
-    name: job2 — 私域客服区 5 卡总览 UI（windows）
+  dashboard-ui:                            # job2：客服号总览 + 单号工作台 Playwright UI（windows，无 DB）
+    name: job2 — 客服号总览 + 单号工作台 5 Tab UI（windows）
     runs-on: windows-latest
     timeout-minutes: 20
     defaults:
@@ -65,8 +79,6 @@ jobs:
         run: npm ci
 
       - name: Install Windows rollup native binding
-        # package-lock.json 由 macOS 生成，不含 @rollup/rollup-win32-x64-msvc。
-        # Vite dev server 启动时无条件加载 rollup native，不装就 crash。
         run: npm install @rollup/rollup-win32-x64-msvc --no-save
 
       - name: Install Playwright Chromium
@@ -91,17 +103,17 @@ jobs:
           done
           curl -fs http://localhost:5173 || (echo "Vite failed to start"; exit 1)
 
-      - name: Run Playwright E2E — 私域客服区 5 卡总览
+      - name: Run Playwright E2E — 客服号总览 + 单号工作台
         working-directory: apps/dashboard
         env:
           E2E_BASE_URL: 'http://localhost:5173'
-        run: npx playwright test e2e/area-hub-wechat-consolidation.spec.ts --reporter=list
+        run: npx playwright test e2e/cs-account-workbench.spec.ts --reporter=list
 
       - name: Upload Playwright artifacts on failure
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: playwright-cs-consolidation-artifacts
+          name: playwright-cs-account-workbench-artifacts
           path: |
             apps/dashboard/screenshots/
             apps/dashboard/test-results/

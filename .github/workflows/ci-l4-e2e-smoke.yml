@@ -450,6 +450,12 @@ jobs:
           chmod +x .github/workflows/scripts/smoke/cs-daily-report-smoke.sh
           bash .github/workflows/scripts/smoke/cs-daily-report-smoke.sh
 
+      # ─── 微信客服以号为中心工作台（IA 重设计刀2）smoke：前端 IA 重组静态验证（入口分诊+总览/工作台路由+5 Tab 复用+按号 scope）──
+      - name: Smoke — 微信客服以号为中心工作台 (Path 4 IA 刀2)
+        run: |
+          chmod +x .github/workflows/scripts/smoke/cs-account-workbench-smoke.sh
+          bash .github/workflows/scripts/smoke/cs-account-workbench-smoke.sh
+
       - name: Smoke — Step 6 Dispatch Chain WS2 (dispatchPublishTask + ackPublishTask)
         env:
           API_BASE: http://localhost:5200

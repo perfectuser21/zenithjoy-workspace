@@ -114,11 +114,28 @@ function ListenerCard({ listener, now }: { listener: ListenerStatus; now: number
   )
 }
 
-export default function ListenerHealthSection() {
+export default function ListenerHealthSection({
+  filterWechatId,
+  filterAgentId,
+}: {
+  // 单号工作台视角：只显示该号（按 wechat_id 或 agent_id 匹配）的监听卡，过滤掉其它号。
+  // 不传 = 旧行为：展示全部监听上报（独立「话术知识库」「客服机」页保持不变）。
+  filterWechatId?: string
+  filterAgentId?: string
+} = {}) {
   const [listeners, setListeners] = useState<ListenerStatus[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(false)
   const [now, setNow] = useState(() => Date.now())
+
+  const filtered =
+    filterWechatId || filterAgentId
+      ? listeners.filter(
+          (l) =>
+            (filterWechatId && l.wechat_id === filterWechatId) ||
+            (filterAgentId && l.agent_id === filterAgentId),
+        )
+      : listeners
 
   useEffect(() => {
     let cancelled = false
@@ -170,13 +187,13 @@ export default function ListenerHealthSection() {
           <AlertCircle className="w-4 h-4" />
           加载监听状态失败
         </div>
-      ) : listeners.length === 0 ? (
+      ) : filtered.length === 0 ? (
         <div className="py-6 text-center text-sm text-slate-400 dark:text-slate-500">
           暂无监听上报（客户端 Agent 未连或未启动）
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-3">
-          {listeners.map((l, i) => (
+          {filtered.map((l, i) => (
             <ListenerCard key={l.agent_id || l.wechat_id || i} listener={l} now={now} />
           ))}
         </div>
