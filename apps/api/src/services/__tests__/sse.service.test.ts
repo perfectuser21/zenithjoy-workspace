@@ -26,7 +26,7 @@ function mockReq(): { listeners: Record<string, (() => void)[]>; on(e: string, c
 
 describe('sseService', () => {
   it('subscribe 设置正确响应头', async () => {
-    const { sseService } = await import('../src/services/sse.service');
+    const { sseService } = await import('../sse.service');
     const req = mockReq();
     const res = mockRes();
     sseService.subscribe('task-1', req as unknown as Request, res as unknown as Response, { status: 'pending' });
@@ -36,7 +36,7 @@ describe('sseService', () => {
   });
 
   it('subscribe 立即发送 catch-up 初始数据', async () => {
-    const { sseService } = await import('../src/services/sse.service');
+    const { sseService } = await import('../sse.service');
     const req = mockReq();
     const res = mockRes();
     sseService.subscribe('task-2', req as unknown as Request, res as unknown as Response, { status: 'running', progress: 30 });
@@ -46,7 +46,7 @@ describe('sseService', () => {
   });
 
   it('emit 将事件发送到所有订阅者', async () => {
-    const { sseService } = await import('../src/services/sse.service');
+    const { sseService } = await import('../sse.service');
     const req1 = mockReq();
     const res1 = mockRes();
     const req2 = mockReq();
@@ -61,12 +61,12 @@ describe('sseService', () => {
   });
 
   it('emit 对未知 taskId 不报错', async () => {
-    const { sseService } = await import('../src/services/sse.service');
+    const { sseService } = await import('../sse.service');
     expect(() => sseService.emit('nonexistent', { x: 1 })).not.toThrow();
   });
 
   it('close 发送最终事件并断开所有订阅', async () => {
-    const { sseService } = await import('../src/services/sse.service');
+    const { sseService } = await import('../sse.service');
     const req = mockReq();
     const res = mockRes();
     sseService.subscribe('task-4', req as unknown as Request, res as unknown as Response, { status: 'pending' });
@@ -75,7 +75,7 @@ describe('sseService', () => {
   });
 
   it('req close 事件触发自动清理', async () => {
-    const { sseService } = await import('../src/services/sse.service');
+    const { sseService } = await import('../sse.service');
     const req = mockReq();
     const res = mockRes();
     sseService.subscribe('task-5', req as unknown as Request, res as unknown as Response, { status: 'pending' });
