@@ -188,16 +188,41 @@ export async function requireServiceCredential(
   superAdminGuard(req, res, next);
 }
 
-/** 目标客服（wechat_id）→ 所属租户 tenant_id；查不到返回 null。 */
-async function resolveTenantByWechatId(wechatId: string): Promise<string | null> {
-  const r = await pool.query(
+/**
+ * 修 D：目标客服（wechat_id）→ 所属租户候选**集合**（不止一条）。
+ *
+ * 号→租户解析历史两条路不一致（同一机器 cs-<前缀> 在 license_machines 可有多行属不同租户）。
+ * 旧实现只查 service_agents 单行：cs 微信号在 service_agents 没行（绑了但断链）→ 解不到 → 接管开关 404；
+ * 或只看一条 → 误判 CROSS_TENANT 403。改为收集所有候选：
+ *   ① service_agents.tenant_id（按 wechat_id）
+ *   ② 回退 machine→license 链：wechat_id 形如 cs-<machine_id 前缀>（setupCSByMachine 自动派生名约定）
+ *      → license_machines.machine_id LIKE 前缀% → licenses.tenant_id（可能多行多租户，全收）。
+ * 调用方按「当前租户 ∈ 候选」放行（别只看一条）。友好名（非 cs-前缀）无法派生 machine → 只走 ①。
+ */
+async function resolveTenantCandidatesByWechatId(wechatId: string): Promise<string[]> {
+  const set = new Set<string>();
+  const sa = await pool.query(
     `SELECT tenant_id
        FROM zenithjoy.service_agents
-      WHERE wechat_id = $1 AND deleted_at IS NULL
-      LIMIT 1`,
+      WHERE wechat_id = $1 AND deleted_at IS NULL`,
     [wechatId]
   );
-  return (r.rows?.[0]?.tenant_id as string | undefined) ?? null;
+  for (const r of sa.rows ?? []) if (r.tenant_id) set.add(String(r.tenant_id));
+
+  // 回退 machine→license 链：仅当 wechat_id 是 cs-<hex 前缀>（自动派生名）时可逆推 machine_id。
+  const m = /^cs-([0-9a-fA-F]{6,})$/.exec(wechatId);
+  if (m) {
+    const prefix = m[1].toLowerCase();
+    const lm = await pool.query(
+      `SELECT l.tenant_id
+         FROM zenithjoy.license_machines lm
+         JOIN zenithjoy.licenses l ON l.id = lm.license_id
+        WHERE lm.machine_id LIKE $1 || '%'`,
+      [prefix]
+    );
+    for (const r of lm.rows ?? []) if (r.tenant_id) set.add(String(r.tenant_id));
+  }
+  return Array.from(set);
 }
 
 /** 目标客服机（machine_id）→ 所属租户 tenant_id（license_machines JOIN licenses，与 setupCSByMachine 同源）；查不到返回 null。 */
@@ -226,25 +251,30 @@ export function requireSameTenant(kind: 'wechatId' | 'machineId') {
       return;
     }
 
-    let targetTenant: string | null;
+    // wechatId：解析候选租户集合（service_agents ∪ machine→license 链，修 D 接管开关 403/404）；
+    // machineId：单一来源（license_machines JOIN licenses）。
+    let candidates: string[];
     try {
-      targetTenant =
+      candidates =
         kind === 'wechatId'
-          ? await resolveTenantByWechatId(key)
-          : await resolveTenantByMachineId(key);
+          ? await resolveTenantCandidatesByWechatId(key)
+          : await (async () => {
+              const t = await resolveTenantByMachineId(key);
+              return t ? [t] : [];
+            })();
     } catch (err) {
       deny(res, 500, 'TARGET_LOOKUP_FAILED', err instanceof Error ? err.message : 'unknown');
       return;
     }
 
-    // deny by default：解析不到目标租户 → 绝不默认放行到任一租户
-    if (!targetTenant) {
+    // deny by default：两条路都解不到目标租户 → 绝不默认放行到任一租户
+    if (candidates.length === 0) {
       deny(res, 404, 'TARGET_NOT_FOUND', '目标客服解析不到所属租户，已拒绝写入（deny by default）');
       return;
     }
 
-    // super-admin（X-Bypass-Tenant 通道）放行；否则目标租户必须 == 当前用户租户
-    if (req.tenantRole !== 'super-admin' && targetTenant !== req.tenantId) {
+    // super-admin（X-Bypass-Tenant 通道）放行；否则当前用户租户必须在候选集合内（别只看一条）。
+    if (req.tenantRole !== 'super-admin' && !(req.tenantId && candidates.includes(req.tenantId))) {
       deny(res, 403, 'CROSS_TENANT', '不能修改其他租户的客服配置（租户隔离）');
       return;
     }

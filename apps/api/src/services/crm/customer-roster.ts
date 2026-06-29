@@ -90,8 +90,9 @@ export interface BuildCustomerRosterParams {
   tenantId: string;
   csWechatId: string;
   /**
-   * 接管模式。缺省（undefined）→ 回退旧 whitelist 语义（向后兼容存量调用）；
-   * 'blacklist' → 黑名单主模型（默认全接管，黑名单内排除）；'whitelist' → 仅接管名单内。
+   * 接管模式。缺省（undefined / 运营没配过接管 / 解析不到 takeover_mode）→ **默认 blacklist 主模型（全接管）**
+   * （修 D：旧版缺省回退 whitelist 语义 → whitelist 空 → 全 managed=false → 前台全显"黑名单"，反直觉错误默认）；
+   * 'blacklist' → 黑名单主模型（默认全接管，黑名单内排除）；'whitelist' → 仅接管名单内（小众显式兼容）。
    */
   takeoverMode?: TakeoverMode;
   /** 该租户客服机当前白名单（whitelist 模式 / 缺省模式下接管态由它实时决定，非缓存）。 */
@@ -115,14 +116,17 @@ export interface BuildCustomerRosterParams {
  * 合并优先级：manual 行覆盖 message/scan 的 name/status；scan 补 last_message；message/scan 提供 last_contact_at。
  *
  * managed 实时判定（防前端臆测，列表显示与库当前内容一致）：
- *   - takeoverMode='blacklist'（主模型）：managed = contact ∉ blacklist（默认全接管，黑名单排除）。
- *   - takeoverMode='whitelist' 或缺省（向后兼容）：managed = contact ∈ whitelist。
+ *   - takeoverMode='blacklist' 或缺省（主模型 / 未配接管）：managed = contact ∉ blacklist（默认全接管，黑名单排除）。
+ *   - takeoverMode='whitelist'（显式小众）：managed = contact ∈ whitelist。
  */
 export async function buildCustomerRoster(
   params: BuildCustomerRosterParams,
 ): Promise<CustomerRosterRow[]> {
   const mode: TakeoverMode | undefined = params.takeoverMode;
-  const isBlacklistMode = mode === 'blacklist';
+  // 修 D：缺省（未配接管 / 解析不到 takeover_mode）= blacklist 主模型（默认全接管），
+  // 不再静默回退 whitelist 语义（whitelist 空 → 全 managed=false → 前台全显"黑名单"，反直觉错误默认）。
+  // 仅当显式 'whitelist' 时才走名单内接管语义。
+  const isBlacklistMode = mode !== 'whitelist';
 
   const whitelist = params.whitelist ?? [];
   const wlSet = new Set(whitelist.map((w) => (w ?? '').trim()).filter(Boolean));
@@ -189,8 +193,8 @@ export async function buildCustomerRoster(
     });
   }
 
-  // whitelist 模式（或缺省）：名单成员确保入册（接管中但还没聊过 / 没手动加 / 没扫到的人也要出现）。
-  // blacklist 模式不据 whitelist 补行（默认全接管，列表行源 = 实扫/实聊/手动，黑名单只标排除）。
+  // whitelist 模式（仅显式）：名单成员确保入册（接管中但还没聊过 / 没手动加 / 没扫到的人也要出现）。
+  // blacklist 主模型 / 缺省不据 whitelist 补行（默认全接管，列表行源 = 实扫/实聊/手动，黑名单只标排除）。
   if (!isBlacklistMode) {
     for (const name of wlSet) {
       if (!byContact.has(name)) {
@@ -210,23 +214,23 @@ export async function buildCustomerRoster(
     }
   }
 
-  // managed 实时判定：blacklist 模式 → ∉ blacklist 即接管；否则（whitelist/缺省）→ ∈ whitelist 即接管。
+  // managed 实时判定：blacklist 主模型 / 缺省 → ∉ blacklist 即接管（默认全接管）；显式 whitelist → ∈ whitelist 即接管。
   for (const row of byContact.values()) {
     row.managed = isBlacklistMode ? !blSet.has(row.contact) : wlSet.has(row.contact);
   }
 
   const roster = Array.from(byContact.values());
 
-  // 裸调用（无任何数据源且非 blacklist 模式且 whitelist 为空）→ 返回单条占位样本，
-  // 仅供纯函数形态演示 / 单测断言。生产路由 routes/crm.ts 恒显式传 messages + manualCustomers + scanContacts 数组
-  // （即便为空数组），绝不进此分支 —— 因此真客户列表永远是真数据，不会混入占位行。
+  // 裸调用（完全无数据源且 whitelist 为空）→ 返回单条占位样本，仅供纯函数形态演示 / 单测断言。
+  // 生产路由 routes/crm.ts 恒显式传 messages + manualCustomers + scanContacts 数组（即便为空数组），
+  // 绝不进此分支 —— 因此真客户列表永远是真数据，不会混入占位行。
+  // 注意：与 takeoverMode 无关（修 D 后缺省=blacklist 主模型；占位样本仍按裸调用判定，不依赖模式）。
   if (
     roster.length === 0 &&
     messages === undefined &&
     manual === undefined &&
     scan === undefined &&
-    wlSet.size === 0 &&
-    !isBlacklistMode
+    wlSet.size === 0
   ) {
     return [
       {
