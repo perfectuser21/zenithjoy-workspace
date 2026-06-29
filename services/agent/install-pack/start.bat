@@ -284,6 +284,25 @@ REM python-embedded.exe regardless of name, then kill the whole tree.
 powershell -NoProfile -Command "Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object { $_.CommandLine -like '*listen_chat*' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }" >nul 2>&1
 echo [agent] orphan listen_chat listeners stopped (if any)
 
+REM Step 6.956 (hand-off env-standardize / PR-B): purge legacy stale artifacts so every client
+REM converges to ONE clean standard state (single module version + single listener + no old residue).
+REM
+REM 1) Remove the legacy standalone %APPDATA%\zenithjoy\zj-start-listen.bat. Older installs left this
+REM    file behind pointing at an OLD module version (e.g. line04 1.0.33) + PRODUCTION middleware. The
+REM    WeChat listener is now launched SOLELY by the module fork (agent core module-manager), so this
+REM    rogue bat can only spawn an orphan listener on the wrong version/env -> delete it (single listener).
+if exist "%APPDATA%\zenithjoy\zj-start-listen.bat" (
+    powershell -NoProfile -Command "Remove-Item -LiteralPath '%APPDATA%\zenithjoy\zj-start-listen.bat' -Force -ErrorAction SilentlyContinue" >nul 2>&1
+    echo [cleanup] removed legacy zj-start-listen.bat (listener now launched only by module fork)
+)
+REM
+REM 2) Purge OLD extracted agent residue under Downloads\zenithjoy-agent-v* . Two guards so we ONLY ever
+REM    delete a real old ZenithJoy agent extract and NEVER a user file or the live install:
+REM      a) Signature: the directory must contain BOTH start.bat AND zenithjoy-agent.exe (Test-Path both).
+REM      b) Self-exclude: skip the currently running install dir (%~dp0) and any ancestor it lives under.
+powershell -NoProfile -Command "$cur=(Resolve-Path -LiteralPath '%~dp0').Path.TrimEnd('\'); $dl=Join-Path $env:USERPROFILE 'Downloads'; if (Test-Path $dl) { Get-ChildItem -Path $dl -Directory -Filter 'zenithjoy-agent-v*' -ErrorAction SilentlyContinue | Where-Object { (Test-Path (Join-Path $_.FullName 'start.bat')) -and (Test-Path (Join-Path $_.FullName 'zenithjoy-agent.exe')) -and ($_.FullName.TrimEnd('\') -ne $cur) -and (-not $cur.StartsWith($_.FullName.TrimEnd('\') + '\')) } | ForEach-Object { Remove-Item -LiteralPath $_.FullName -Recurse -Force -ErrorAction SilentlyContinue; Write-Host ('[cleanup] removed old agent residue: ' + $_.FullName) } }" >nul 2>&1
+echo [cleanup] old Downloads\zenithjoy-agent-v* residue purged (signature-verified, current install preserved)
+
 REM === Step 6.96: Core self-upgrade/self-swap - read .active-core pointer to pick the newest core dir (Sprint 06222100) ===
 REM Client layout: <root>\extracted\zenithjoy-agent-v<ver>\ (where this start.bat lives). After upgrading,
 REM CoreUpgrader extracts the new core to a sibling extracted\zenithjoy-agent-v<newver>, writes the target

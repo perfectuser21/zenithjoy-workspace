@@ -145,6 +145,8 @@ export class ModuleManager {
   private readonly statusReport = new Map<string, ModulePreflightResult>();
   // 正在运行 preflight 的模块（并发保护：WeChat 安装耗时 2-5 分钟，心跳 30s 间隔会并发触发）
   private readonly preflightRunning = new Set<string>();
+  // 已对某 lineId@version 做过旧版本目录清理（避免每次心跳重复 readdir；清完即收敛，幂等）
+  private readonly cleanedVersions = new Set<string>();
 
   // ── 自愈件1：supervise 状态 ──
   // 受监管的 lineId 集合
@@ -246,6 +248,59 @@ export class ModuleManager {
     return this.getInstalledVersion(lineId) !== requiredVersion;
   }
 
+  // ── hand-off 环境标准化 PR-B：OTA 切到 required_version 后清旧版本目录（单版本收敛）──
+  // 客户机长期累积 lineId-1.0.10 ~ lineId-1.0.78 一大堆旧版本目录（每次升级只新增不清理）→
+  // 磁盘垃圾 + 旧 preflight.js/旧 listen_chat 误被翻出来跑。这里删 modulesRoot 下该 lineId 的
+  // 所有「非当前 required_version」纯版本目录，只保留正在跑的那一个。
+  //
+  // 三道"只删旧、绝不误删"安全闸：
+  //   1) 保留版本目录必须存在且完整（含 manifest）——复用 1.0.62 教训：残缺目录会毒化升级判定。
+  //      若保留版本不健康，一律不删任何旧版本（宁可留垃圾，绝不把机器删成"无模块"）。
+  //   2) 只动 `${lineId}-` 前缀的目录，且前缀后剩余部分必须是纯版本号（`\d+(.\d+)*`）。
+  //      防止同前缀的其它东西（如 `.staging-*` / `lineId-backup` / 同前缀的别的模块）被误吞。
+  //   3) 跳过保留版本本身（keepName），逐个 try/catch 删，任何单目录删失败不影响其余 + 不抛。
+  private cleanupOldVersionDirs(lineId: string, keepVersion: string): void {
+    const dedupKey = `${lineId}@${keepVersion}`;
+    if (this.cleanedVersions.has(dedupKey)) return; // 该版本已清过，幂等收手（省每次心跳 readdir）
+    try {
+      // 闸 1：保留版本必须完整健康，否则不删（避免删成无模块）
+      const keepDir = this.getModuleDir(lineId, keepVersion);
+      if (!this.isModuleDirComplete(keepDir)) {
+        this.log(
+          `cleanupOldVersionDirs 跳过：保留版本 ${lineId}-${keepVersion} 不完整（缺 manifest），不删旧版本`,
+        );
+        return;
+      }
+      if (!fs.existsSync(this.modulesRoot)) return;
+
+      const prefix = `${lineId}-`;
+      const keepName = `${lineId}-${keepVersion}`;
+      let removed = 0;
+      for (const d of fs.readdirSync(this.modulesRoot)) {
+        if (!d.startsWith(prefix)) continue; // 只动该 lineId 的目录
+        if (d === keepName) continue; // 闸 3：保留当前 required_version
+        // 闸 2：前缀后必须是纯版本号，防同前缀误吞（如 lineId-backup / 别的同前缀模块）
+        const rest = d.slice(prefix.length);
+        if (!/^\d+(\.\d+)*$/.test(rest)) continue;
+        const full = path.join(this.modulesRoot, d);
+        try {
+          if (!fs.statSync(full).isDirectory()) continue;
+          fs.rmSync(full, { recursive: true, force: true });
+          removed += 1;
+          this.log(`cleanupOldVersionDirs：删除旧版本目录 ${d}（保留 ${keepName}）`);
+        } catch (err) {
+          this.log(`cleanupOldVersionDirs 删 ${d} 失败：${(err as Error).message}`);
+        }
+      }
+      this.cleanedVersions.add(dedupKey);
+      if (removed > 0) {
+        this.log(`${lineId} 旧版本目录清理完成：删 ${removed} 个，仅保留 ${keepName}`);
+      }
+    } catch (err) {
+      this.log(`cleanupOldVersionDirs(${lineId}) 失败：${(err as Error).message}`);
+    }
+  }
+
   getDownloading(): string[] {
     return [...this.downloading];
   }
@@ -295,6 +350,9 @@ export class ModuleManager {
           if (!this.statusReport.has(lineId)) {
             this.statusReport.set(lineId, { ok: true });
           }
+          // 稳态也收敛历史堆积：已在 required_version 上跑稳，清掉残留的旧版本目录（幂等去重，
+          // 让"升级前就攒了一堆旧版本"的脏机器在不触发升级时也能收到单版本标准态）。
+          this.cleanupOldVersionDirs(lineId, requiredVersion);
           continue;
         }
 
@@ -341,6 +399,9 @@ export class ModuleManager {
             this.restartCount.delete(lineId);
             await this.activateModule(lineId);
           }
+          // OTA 装好 + preflight 通过（当前版本健康）→ 清掉所有旧版本目录，收敛到单一 required_version。
+          // cleanupOldVersionDirs 内部再校验保留版本完整性（双保险），不健康则不删。
+          this.cleanupOldVersionDirs(lineId, requiredVersion);
         } else {
           this.log(`${lineId} preflight 未通过：${pf.reason ?? pf.fixGuide ?? ''}`);
           this.opts.onPreflightFail?.(lineId, pf);

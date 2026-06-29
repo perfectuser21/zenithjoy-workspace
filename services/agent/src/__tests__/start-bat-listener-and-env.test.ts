@@ -51,3 +51,28 @@ describe('start.bat — F 安装包环境选择', () => {
     expect(envIdx).toBeLessThan(precheckIdx);
   });
 });
+
+describe('start.bat — G 清旧 agent 残留 / 旧 zj-start-listen.bat（环境标准化收敛单版本）', () => {
+  it('删掉遗留的 zj-start-listen.bat（旧版本/生产残留；listener 现由模块 fork 单一启动）', () => {
+    // 旧机器残留的独立启动 bat 指向旧 line04 版本 + 生产中台，会 spawn 错版本/错环境的孤儿 listener
+    expect(START_BAT).toMatch(/zj-start-listen\.bat/);
+    expect(START_BAT).toMatch(/Remove-Item/i);
+  });
+
+  it('清 Downloads\\zenithjoy-agent-v* 旧解压残留：按签名确认 + 排除当前运行目录（不误删用户文件）', () => {
+    expect(START_BAT).toMatch(/zenithjoy-agent-v\*/);
+    expect(START_BAT).toMatch(/Downloads/);
+    // 签名校验：必须确认目录里同时含 start.bat 与 zenithjoy-agent.exe 才认定是旧 agent
+    expect(START_BAT).toMatch(/Test-Path/i);
+    // 自排除：绝不删当前正在运行的安装目录
+    expect(START_BAT).toMatch(/%~dp0/);
+  });
+
+  it('遗留残留清理出现在 agent 启动命令之前', () => {
+    const cleanupIdx = START_BAT.indexOf('zj-start-listen.bat');
+    const startIdx = START_BAT.indexOf('\nzenithjoy-agent.exe');
+    expect(cleanupIdx).toBeGreaterThan(-1);
+    expect(startIdx).toBeGreaterThan(-1);
+    expect(cleanupIdx).toBeLessThan(startIdx);
+  });
+});

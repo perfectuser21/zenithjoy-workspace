@@ -74,6 +74,80 @@ describe('ModuleManager — agent 核心清理（hand-off 2）', () => {
     });
   });
 
+  // ── D：OTA 切到 required_version 后清旧版本目录（环境标准化 / 单版本收敛，hand-off PR-B）──
+  describe('D — OTA 切到 required_version 后清旧版本目录（只留当前版本）', () => {
+    it('OTA 升级到 required_version 后，删所有非当前版本目录，仅保留 required_version', async () => {
+      // 模拟客户机堆积：1.0.0 + 1.0.33（旧生产残留示例）
+      seedModule('1.0.0');
+      seedModule('1.0.33');
+
+      // downloadImpl 必须写进传入的 staging 目录（ModuleManager 校验 staging 完整后原子 rename 落位）
+      const downloadImpl = vi.fn(
+        async (_l: string, version: string, _u: string, destDir: string) => {
+          fs.mkdirSync(destDir, { recursive: true });
+          fs.writeFileSync(
+            path.join(destDir, 'manifest.json'),
+            JSON.stringify({ lineId: 'line04-wechat-cs', version, entry: 'index.js' }),
+          );
+          fs.writeFileSync(path.join(destDir, 'index.js'), '');
+        },
+      );
+      const forkImpl = vi.fn().mockReturnValue({
+        pid: 0, kill: vi.fn(), on: vi.fn(), send: vi.fn(), connected: true,
+      } as unknown as ChildProcess);
+      const preflightImpl = vi.fn().mockResolvedValue({ ok: true });
+
+      const mm = new ModuleManager({
+        modulesRoot: root,
+        downloadImpl,
+        forkImpl,
+        preflightImpl,
+      });
+
+      await mm.syncModules({
+        'line04-wechat-cs': { status: 'active', required_version: '1.0.78' },
+      });
+
+      const dirs = fs
+        .readdirSync(root)
+        .filter((d) => d.startsWith('line04-wechat-cs-'));
+      // 只剩 required_version 这一个版本目录
+      expect(dirs).toEqual(['line04-wechat-cs-1.0.78']);
+      expect(fs.existsSync(path.join(root, 'line04-wechat-cs-1.0.0'))).toBe(false);
+      expect(fs.existsSync(path.join(root, 'line04-wechat-cs-1.0.33'))).toBe(false);
+      expect(fs.existsSync(path.join(root, 'line04-wechat-cs-1.0.78'))).toBe(true);
+    });
+
+    it('安全闸：当前 required_version 目录残缺（缺 manifest）时不删任何旧版本（绝不删成无模块）', () => {
+      seedModule('1.0.0');
+      // 当前版本目录残缺（无 manifest）—— 不健康
+      fs.mkdirSync(path.join(root, 'line04-wechat-cs-1.0.78'), { recursive: true });
+
+      const mm = new ModuleManager({ modulesRoot: root });
+      // @ts-expect-error 私有方法：直接测安全闸
+      mm.cleanupOldVersionDirs('line04-wechat-cs', '1.0.78');
+
+      // 旧版本仍在（安全闸生效，宁可留垃圾也不删成空）
+      expect(fs.existsSync(path.join(root, 'line04-wechat-cs-1.0.0'))).toBe(true);
+    });
+
+    it('只删该 lineId 的纯版本目录，不误删非版本目录（防同前缀误吞）', () => {
+      seedModule('1.0.0'); // 旧
+      seedModule('1.0.78'); // 当前
+      // 非版本号目录（同前缀），绝不能被当成旧版本删掉
+      fs.mkdirSync(path.join(root, 'line04-wechat-cs-backup'), { recursive: true });
+      fs.writeFileSync(path.join(root, 'line04-wechat-cs-backup', 'keep.txt'), 'x');
+
+      const mm = new ModuleManager({ modulesRoot: root });
+      // @ts-expect-error 私有方法
+      mm.cleanupOldVersionDirs('line04-wechat-cs', '1.0.78');
+
+      expect(fs.existsSync(path.join(root, 'line04-wechat-cs-1.0.0'))).toBe(false); // 旧版本删
+      expect(fs.existsSync(path.join(root, 'line04-wechat-cs-1.0.78'))).toBe(true); // 当前留
+      expect(fs.existsSync(path.join(root, 'line04-wechat-cs-backup'))).toBe(true); // 非版本目录不动
+    });
+  });
+
   // ── C：preflight 并发"跳过"不上报 ok:false（修假"未安装"）──
   describe('C — preflight 并发跳过保留上次状态，不报 ok:false', () => {
     it('runModulePreflight 并发跳过时返回 skipped=true 并保留上次 ok 状态', async () => {
