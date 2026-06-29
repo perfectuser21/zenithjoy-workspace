@@ -1060,7 +1060,7 @@ def _reset_session_list_to_top(mw: Any) -> bool:
         return False
 
 
-def scan_recent_contacts(mw: Any, limit: int = 100) -> List[Dict[str, str]]:
+def scan_recent_contacts(mw: Any, limit: int = 100, max_seconds: float = 0) -> List[Dict[str, str]]:
     """滚动遍历主窗口会话列表 ListItem，列出全部近期会话联系人（CRM 好友表行源）。
 
     与 scan_unread 的区别：scan_unread 只挑未读；本函数列"近期会话联系人"（不要求未读），
@@ -1085,7 +1085,12 @@ def scan_recent_contacts(mw: Any, limit: int = 100) -> List[Dict[str, str]]:
         acc = _ScrollAccumulator(limit=limit)
         last_item: Optional[str] = None
         unchanged_streak = 0
+        _scan_start = time.time()
         for _ in range(_SCROLL_MAX_PAGES):
+            # PR2 窗口锁：采集软超时——滚太久立即中断、返回已采集的，让回回复(Ability A)。
+            if _scan_deadline_exceeded(_scan_start, time.time(), max_seconds):
+                _log(f"[CRM好友扫描] 采集超时(>{max_seconds:.0f}s)，中断滚动让回回复（已采 {len(acc.contacts())} 人）")
+                break
             names = _read_visible_item_names(mw)
             acc.feed(names)
             # 件套 3：末项不变 streak 判到底（鲁棒，扛滚动偶发 stall 几屏不动）。
@@ -2214,19 +2219,28 @@ def fetch_friend_scan_pending(
     }
 
 
+# CRM 采集(Ability B)单次硬超时上限（秒）：滚太久中断让回回复(Ability A)，防长扫饿死实时回复。
+_FRIEND_SCAN_MAX_SECONDS = 120
+
+
 def run_friend_scan(
-    mw: Any, middleware_url: str, cs_wechat_id: str
+    mw: Any, middleware_url: str, cs_wechat_id: str,
+    max_seconds: float = _FRIEND_SCAN_MAX_SECONDS,
 ) -> Dict[str, Any]:
     """CRM 好友采集 job（Ability B，纯采集，不掺回复）。
 
     做法二（拆两 Ability）：把"滚全会话列表 → 逐个开会话抓微信号/加好友时间 → POST 中台 ingest"
     抽成独立采集体，与客服回复(Ability A)解耦。两者共用同一微信窗口/UIA/焦点，**不能并行**，
-    故本 job 只由中台显式「立即扫好友」触发（见 _should_run_friend_scan），未来受窗口锁保护(PR2)。
+    故本 job 只由中台显式「立即扫好友」触发（见 _should_insert_scan，回复优先）。
+
+    PR2 窗口锁纪律：
+    - max_seconds 软超时：滚动阶段跑超 max_seconds 立即中断、返回已采集的，让回回复（防长扫饿死）。
+    - finally 必重建可读态：B 跑完（含异常）补设 SPI 屏幕阅读器标志，否则 A 接手读不到会话。
 
     返回 {ok, count, ingested, error}。失败吞掉不抛（绝不拖垮监听）。
     """
     try:
-        contacts = scan_recent_contacts(mw, limit=100)
+        contacts = scan_recent_contacts(mw, limit=100, max_seconds=max_seconds)
         # A2：逐个补对方微信号 + 加好友时间（资料页 + 聊天记录最顶日期）。失败只跳过该字段。
         contacts = enrich_contacts_with_details(mw, contacts)
         res = post_friend_scan(middleware_url, cs_wechat_id, contacts)
@@ -2235,6 +2249,10 @@ def run_friend_scan(
         return {"ok": False, "count": len(contacts), "error": res.get("error")}
     except Exception as exc:
         return {"ok": False, "error": f"{type(exc).__name__}: {exc}"}
+    finally:
+        # 窗口锁释放：B 跑完务必把微信恢复到 A 能读的可读态（scan 的 finally 已回顶+还原窗口，
+        # 这里再补设 SPI 标志兜底，确保下一轮 scan_unread 接手时屏幕阅读器树仍在）。
+        _ensure_uia_flag()
 
 
 def _should_run_friend_scan(
@@ -2256,6 +2274,26 @@ def _should_run_friend_scan(
     （把旧自动逻辑加回去 → tests/test_friend_scan_trigger.py 必红。）
     """
     return bool(force)
+
+
+def _should_insert_scan(force: bool, has_pending_unread: bool) -> bool:
+    """CRM 采集(Ability B)本轮是否插入执行——【回复优先 / 窗口锁调度】（纯函数，做法二 PR2）。
+
+    单进程单循环里 A(回复)与 B(采集)共用同一微信窗口，不能并行。调度规则：
+    - B 只由中台 force 触发（PR1 已删自动路径）；
+    - 即便 force=True，本轮若有 pending 未读（A 还有客户消息要回）→ B 让位、不插入，
+      让 A 先回；force 标志中台未清，下一轮无未读时再插入采集。
+    回复永远优先，绝不让批处理采集饿死实时回复。
+    """
+    return bool(force) and not has_pending_unread
+
+
+def _scan_deadline_exceeded(start_ts: float, now_ts: float, max_seconds: float) -> bool:
+    """CRM 采集单次硬超时判定（纯函数，做法二 PR2）：跑满 max_seconds → True，中断滚动让回 A。
+
+    防长扫（滚全列表 + 逐个开会话）长时间独占微信窗口饿死回复。max_seconds<=0 视为不限。
+    """
+    return max_seconds > 0 and (now_ts - start_ts) >= max_seconds
 
 
 # ─── 关键人出站任务（上下线播报 + 失败告警）：拉取 → 真机发送 → 回执 ──────────────────
@@ -2902,11 +2940,11 @@ def run_real_listen(args: argparse.Namespace) -> int:
                 except Exception as _fpexc:
                     _log(f"[CRM好友扫描] 拉强制标志异常: {_fpexc}")
 
-            # 触发判定走纯函数守卫：只认 force（自动路径已删，见 _should_run_friend_scan）。
-            if _cs_wid and _should_run_friend_scan(
-                _force_scan, friend_scan_done_once, now, last_friend_scan, FRIEND_SCAN_INTERVAL
-            ):
-                _r = run_friend_scan(mw, args.middleware_url, _cs_wid)
+            # 窗口锁调度：回复优先——本轮有 pending 未读则 B 让位（force 标志留到下轮无未读再采集）。
+            # _should_run_friend_scan 仍由 test_friend_scan_trigger 守卫"只认 force"；这里再叠回复优先。
+            _has_pending_unread = bool(last_unread_senders)
+            if _cs_wid and _should_insert_scan(_force_scan, _has_pending_unread):
+                _r = run_friend_scan(mw, args.middleware_url, _cs_wid)  # 内含 ≤120s 软超时 + 跑完重建可读态
                 if _r.get("ok"):
                     friend_scan_done_once = True
                     last_friend_scan = now
@@ -2914,6 +2952,8 @@ def run_real_listen(args: argparse.Namespace) -> int:
                     _log(f"[CRM好友扫描] (中台触发)扫到 {_r.get('count')} 人 → 上报 ingested={_r.get('ingested')}")
                 elif _r.get("error"):
                     _log(f"[CRM好友扫描] 失败: {_r.get('error')}（下次中台触发重试）")
+            elif _cs_wid and _force_scan and _has_pending_unread:
+                _log("[CRM好友扫描] 收到指令但本轮有未读，回复优先——先回复，下轮无未读再采集")
 
             # 关键人出站任务（上下线播报 + 失败告警）：拉中台待发任务 → 真机 UIA 发送 → 回执。
             # 与「被动回名单内客户」同循环，但走 send_chat 真发配方（target=关键人）。失败吞掉不拖垮监听。
