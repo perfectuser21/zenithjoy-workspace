@@ -35,8 +35,8 @@ const STEPS: Step[] = [
   },
   {
     num: 2,
-    label: '绑定采集账号',
-    desc: '绑定抖音小号（用来评论触达）和飞书（自动存线索表）。',
+    label: '绑定抖音小号',
+    desc: '绑定用于评论触达的抖音小号，线索直接存入中台数据库。',
     cta: '绑定小号',
     to: '/dashboard/douyin-burner-bind',
     Icon: KeyRound,
@@ -71,7 +71,6 @@ const STEPS: Step[] = [
 const ADVANCED = [
   { label: '机器管理', desc: '管理客户机器与抖音号', to: '/dashboard/machines', Icon: MonitorCheck },
   { label: '智能对标', desc: '找对标账号与爆款视频', to: '/competitor-research', Icon: Target },
-  { label: '飞书绑定', desc: '绑定飞书企业，自动建表', to: '/dashboard/feishu-bind', Icon: KeyRound },
 ];
 
 export default function AcquisitionHubPage() {
@@ -115,7 +114,7 @@ export default function AcquisitionHubPage() {
         <span className="text-xs text-gray-400 dark:text-gray-500">高级工具</span>
         <div className="flex-1 h-px bg-gray-200 dark:bg-slate-700" />
       </div>
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-2 gap-3">
         {ADVANCED.map((a) => {
           const Icon = a.Icon;
           return (
