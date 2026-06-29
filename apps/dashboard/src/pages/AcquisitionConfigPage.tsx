@@ -10,6 +10,8 @@
  * 契约见 scratchpad/dispatch-engine-contract.md（架构 A：薄指挥放中台，thin 第一刀手动触发）。
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { getCompanyProfile, type CompanyProfile } from '../api/company-profile.api';
+import { buildRecommendedKeywords } from '../utils/keywords';
 import {
   fetchAcquisitionConfig,
   updateAcquisitionConfig,
@@ -476,6 +478,51 @@ function AccountStatusBlock() {
   );
 }
 
+// ============ 推荐关键词 + 开场白话术块 ============
+function KeywordsAndOpeningBlock() {
+  const [profile, setProfile] = useState<CompanyProfile | null>(null);
+  const [opening, setOpening] = useState('');
+
+  useEffect(() => {
+    getCompanyProfile().then(p => {
+      setProfile(p);
+    }).catch(() => {});
+  }, []);
+
+  const chips = profile ? buildRecommendedKeywords(profile) : [];
+  const openingPlaceholder = profile?.company_name
+    ? `例：您好，我是${profile.company_name}，专注${profile.industry || '行业'}服务，欢迎了解...`
+    : '加载公司信息后自动生成开场白建议...';
+
+  return (
+    <section className="bg-white dark:bg-slate-800 rounded-lg shadow p-6 border border-slate-200 dark:border-slate-700">
+      <h3 className="font-medium text-gray-900 dark:text-white mb-4">推荐关键词 &amp; 开场白话术</h3>
+      {chips.length > 0 && (
+        <div className="mb-4">
+          <span className="text-sm text-gray-500 dark:text-gray-400 block mb-2">推荐关键词（基于公司画像）</span>
+          <div className="flex flex-wrap gap-2">
+            {chips.map(kw => (
+              <span key={kw} className="inline-flex items-center px-3 py-1 rounded-full text-sm bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-200">
+                {kw}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+      <label className="block">
+        <span className="text-sm text-gray-600 dark:text-gray-400 mb-1 block">开场白话术</span>
+        <textarea
+          value={opening}
+          onChange={e => setOpening(e.target.value)}
+          placeholder={openingPlaceholder}
+          rows={3}
+          className="w-full rounded border border-slate-300 dark:border-slate-600 dark:bg-slate-700 px-3 py-2 text-sm"
+        />
+      </label>
+    </section>
+  );
+}
+
 // ============ 采集任务块 ============
 const TENANT_ID = '2ac0aa4a-99f4-470a-aed7-c3a9fe03149b';
 
@@ -637,6 +684,7 @@ export default function AcquisitionConfigPage() {
         </p>
       </div>
       <AccountStatusBlock />
+      <KeywordsAndOpeningBlock />
       <CollectTasksBlock />
       <ConfigForm />
       <DispatchPlanBlock />

@@ -1,6 +1,3 @@
-contract_branch: cp-06291133-ws-8f6f6966-ws1
-sprint_dir: sprints/06291030-line02-profile-tabs-integration
-
 ---
 skeleton: false
 journey_type: user_facing
@@ -93,6 +90,7 @@ echo OK'
 - [ ] [BEHAVIOR] tests/line02-profile-tabs.test.ts 单测全部通过（TDD Green，Generator 实现后）
   Test: manual:bash -c 'npx vitest run sprints/06291030-line02-profile-tabs-integration/tests/line02-profile-tabs.test.ts --reporter=verbose'
   期望: exit 0（全测试通过）
+  # 红证据（注释附记，不作为执行命令）: 2026-06-29 03:10 实测 — 7 failed (7)，buildRecommendedKeywords 未实现 + spec 全局 stub 存在 + CompanyProfilePage Tab 断言缺失
 
 ### [BEHAVIOR 7] 开场白 placeholder 含公司信息（FROM_PRD Step 7）
 
@@ -113,3 +111,22 @@ console.log(\"OK\");
 - [ ] [BEHAVIOR] Playwright spec 含保存失败 EP 断言（page.route 拦截 PUT → 500 + 验证红色 toast）
   Test: manual:bash -c 'node -e "const c=require(\"fs\").readFileSync(\"apps/dashboard/e2e/line02-company-profile-collect.spec.ts\",\"utf8\");if(!c.includes(\"保存失败\")&&!c.includes(\"请重试\"))process.exit(1);if(!c.includes(\"page.route\")&&!c.includes(\"fulfill\"))process.exit(1);console.log(\"OK\")"'
   期望: OK
+
+---
+
+## BEHAVIOR:E2E 条目（user_facing 专属，windows_cloud Mode B final-e2e 跑）
+
+- [ ] [BEHAVIOR:E2E] 用户完整走完 Golden Path（3 Tab + onBlur 保存 + 持久化 + 推荐 chips + 开场白 placeholder），截图可视化验证
+  Screenshots:
+    - 01-company-profile-tabs.png   期望：公司信息页显示 3 个 Tab 标签，Tab 1「基础信息」处于激活态
+    - 02-save-toast.png             期望：Tab 切换后「已保存 ✓」或「已保存」toast 可见
+    - 03-after-refresh.png          期望：页面刷新后 Tab 1 公司名仍为「烟雨楼测试公司」
+    - 04-acquisition-chips.png      期望：/dashboard/acquisition-config 推荐关键词 chips 至少 1 个可见
+    - 05-save-error-toast.png       期望：保存失败场景下「保存失败」或「请重试」红色 toast 可见
+  期望：所有截图与期望描述一致，Claude Read 图自验通过
+
+evaluator 完成验收后执行：
+```bash
+mkdir -p "sprints/06291030-line02-profile-tabs-integration/screenshots/"
+cp screenshots/*.png "sprints/06291030-line02-profile-tabs-integration/screenshots/" 2>/dev/null || true
+```
