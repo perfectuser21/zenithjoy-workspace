@@ -115,6 +115,8 @@ export const autopilotPageComponents: Record<string, () => Promise<{ default: Co
   'VideoRemakePipelinePage': () => import('../pages/VideoRemakePipelinePage'),
   // 2026-06-23 — 业务区总览页（短侧栏下钻：区 → 总览卡片 → 子页）
   'AreaHubPage': () => import('../pages/AreaHubPage'),
+  // 2026-06-29 — 智能获客 Step-by-Step 向导（替换 AreaHubPage 6 平级磁贴）
+  'AcquisitionHubPage': () => import('../pages/AcquisitionHubPage'),
   // 2026-06-23 — 微信客服一键配置（选机器→填人设/白名单/开关→设置完毕，machine_id 自动）
   'CsOneClickSetupPage': () => import('../pages/CsOneClickSetupPage'),
   // 客服工作汇总（今天/昨天实时 + 历史任意一天日报含小结，已并入旧 S4 客服日报）
@@ -150,7 +152,7 @@ export const autopilotNavGroups: NavGroup[] = [
     items: [
       { path: '/', icon: LayoutDashboard, label: '工作台', featureKey: 'workbench', component: 'Dashboard' },
       { path: '/area/publish', icon: Send, label: '智能发布', featureKey: 'ws1-publish', component: 'AreaHubPage' },
-      { path: '/area/acquisition', icon: Target, label: '智能获客', featureKey: 'acquisition-leads', component: 'AreaHubPage' },
+      { path: '/area/acquisition', icon: Target, label: '智能获客', featureKey: 'acquisition-leads', component: 'AcquisitionHubPage' },
       // 私域客服改「以号为中心」(IA 重设计刀2)：入口落 CsAreaEntryPage 分诊 → 超管/多号进总览，运营单号直进工作台。
       { path: '/area/wechat', icon: MessageCircle, label: '私域客服', featureKey: 'wechat-cs-config', component: 'CsAreaEntryPage' },
       { path: '/area/video', icon: Scissors, label: '视频剪辑', featureKey: 'local-video-pipeline', component: 'AreaHubPage' },
