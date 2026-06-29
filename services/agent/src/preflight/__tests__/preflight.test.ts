@@ -50,14 +50,15 @@ describe('微信版本比较（纯函数，>= 4.1.8 一律支持；6-21 放开�
     expect(isWechatVersionSupported('4.0.5')).toBe(false);
     expect(isWechatVersionSupported('4.1.0')).toBe(false);
   });
-  it('4.1.9 → 支持（6-21 放开上界，Qt UIA 可用）', () => {
-    expect(isWechatVersionSupported('4.1.9')).toBe(true);
+  it('4.1.9 → 不支持（锁 4.1.8.x，>=4.1.9 控件适配未做）', () => {
+    expect(isWechatVersionSupported('4.1.9')).toBe(false);
   });
-  it('4.1.10 → 支持（死闸误判的核心版本，现放行）', () => {
-    expect(isWechatVersionSupported('4.1.10.27')).toBe(true);
+  it('4.1.10 → 不支持（核心：锁 4.1.8.x 触发降级，2026-06-29 反转放开上界）', () => {
+    expect(isWechatVersionSupported('4.1.10.27')).toBe(false);
   });
-  it('4.2.0 → 支持（>= 4.1.8 一律放行）', () => {
-    expect(isWechatVersionSupported('4.2.0')).toBe(true);
+  it('4.2.0 / 5.0.0.0 → 不支持（>=4.1.9 一律拒，只认 4.1.8.x）', () => {
+    expect(isWechatVersionSupported('4.2.0')).toBe(false);
+    expect(isWechatVersionSupported('5.0.0.0')).toBe(false);
   });
   it('3.9.12.19 旧版 3.x → 不支持（无 mmui::MainWindow）', () => {
     expect(isWechatVersionSupported('3.9.12.19')).toBe(false);
