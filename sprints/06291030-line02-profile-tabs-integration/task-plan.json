@@ -1,0 +1,34 @@
+{
+  "initiative_id": "8f6f6966",
+  "journey_type": "user_facing",
+  "journey_type_reason": "涉及 apps/dashboard/ 的 CompanyProfilePage.tsx 和 AcquisitionConfigPage.tsx 前端页面交互，需 Playwright 浏览器真实操作验收",
+  "tasks": [
+    {
+      "task_id": "ws1",
+      "title": "Line02 公司信息 3 Tab + onBlur 自动保存 + 推荐关键词 chips + Playwright E2E 去 stub",
+      "scope": "1. CompanyProfilePage.tsx 改 3 Tab 布局（基础信息/产品与价值/目标客群），每个字段 onBlur 触发 PUT /api/company-profile + 1.5s '已保存 ✓' toast。2. apps/dashboard/src/utils/keywords.ts 导出 buildRecommendedKeywords 纯函数（city+industry/product 组合，去重 slice(0,5)）。3. AcquisitionConfigPage（或 CollectTasksBlock）接入 getCompanyProfile() 推导 chips，开场白 placeholder 带公司信息占位文案。4. line02-company-profile-collect.spec.ts 删除所有 company-profile/acquisition API stubs，保留 auth stubs；补 3 Tab / onBlur 保存 / 刷新持久化 / chips 出现 4 类断言。5. line02-company-profile-collect-smoke.sh 补 psql 时间窗验证（2 个 psql 检查）。6. sprints/06291030-line02-profile-tabs-integration/e2e-verify.ps1 按合同 E2E 脚本实现。",
+      "dod": [
+        "[BEHAVIOR] PUT /api/company-profile → success=true, data.updated=true（smoke API 验）",
+        "[BEHAVIOR] GET /api/company-profile → 返回刚写入的 company_name（持久化）",
+        "[BEHAVIOR] POST /api/acquisition/collect/start → data.task_id string, data.status=pending",
+        "[BEHAVIOR] PUT 空 company_name → 400（error path）",
+        "[BEHAVIOR] POST collect/start 空 keywords → 400（error path）",
+        "[BEHAVIOR] CompanyProfilePage.tsx 含 3 Tab 标识文字",
+        "[ARTIFACT] line02-company-profile-collect.spec.ts 已无 company-profile/acquisition API stubs",
+        "[ARTIFACT] smoke.sh 含 NOW() - interval psql 时间窗验证",
+        "[ARTIFACT] e2e-verify.ps1 存在且含 Playwright 调用"
+      ],
+      "files": [
+        "apps/dashboard/src/pages/CompanyProfilePage.tsx",
+        "apps/dashboard/src/utils/keywords.ts",
+        "apps/dashboard/src/pages/AcquisitionConfigPage.tsx",
+        "apps/dashboard/e2e/line02-company-profile-collect.spec.ts",
+        ".github/workflows/scripts/smoke/line02-company-profile-collect-smoke.sh",
+        "sprints/06291030-line02-profile-tabs-integration/e2e-verify.ps1"
+      ],
+      "depends_on": [],
+      "complexity": "M",
+      "estimated_minutes": 90
+    }
+  ]
+}
