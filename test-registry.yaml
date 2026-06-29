@@ -3688,6 +3688,23 @@ agent_suite:
     status: active
     product: AI员工
     note: "S3 客服工作汇总聚合口径单测（vi.mock db）：接收=count in/回复=count out/接待=distinct contact_key/时长=末-首 + Asia/Shanghai 时区 + 排除 cs_wechat_id IS NULL + today/yesterday 偏移。"
+  - id: line04-cs-work-stats-compute-sprint
+    path: sprints/06232241-line04-cs-work-stats/tests/cs-stats.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 客户私域AI接管
+    note: "Sprint 06232241 客服工作汇总 computeCsStats 口径 oracle：received=in/reply=out/served=distinct contact/work_duration_minutes=末-首 created_at；cs_wechat_id=NULL 不计入；字段名锁定（禁用 in_count/out_count/wechat_id/duration/customers 漂移）。"
+
+  - id: line04-cs-work-stats-compute-unit
+    path: apps/api/src/services/wechat/__tests__/cs-stats.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 客户私域AI接管
+    note: "Sprint 06232241 同目录配对单测：computeCsStats 4 数口径 + A/B 不串台 + 单条 duration=0 + NULL 不计入 + 空输入空数组 + 字段名锁定（纯函数，环境无关）。"
+
+
 
   - id: line04-cs-daily-report-service-unit
     path: apps/api/src/services/wechat/__tests__/cs-daily-report.test.ts
