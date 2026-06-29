@@ -46,6 +46,7 @@ export const AREA_HUBS: Record<string, AreaHub> = {
     subtitle: '对标找客、抓评论挖客、触达，把流量变成线索。',
     cards: [
       { label: '获客 Leads', desc: '收集到的客户线索', to: '/dashboard/leads', Icon: Target, color: 'text-green-500' },
+      { label: '公司信息', desc: '填写公司画像、产品卖点、目标客群，Line02/Line04 共用', to: '/company-profile', Icon: Building2, color: 'text-violet-500' },
       { label: '分析+指派', desc: '调获客参数、跑分析把 Leads 指派给小号排期、盯 Cookie 健康', to: '/dashboard/acquisition-config', Icon: Activity, color: 'text-emerald-500' },
       { label: '机器管理', desc: '客户机器与抖音号管理（主/副机、添加号）', to: '/dashboard/machines', Icon: MonitorCheck, color: 'text-sky-500' },
       { label: '智能对标', desc: '找对标账号与爆款视频', to: '/competitor-research', Icon: Target, color: 'text-teal-500' },

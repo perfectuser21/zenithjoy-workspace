@@ -9,7 +9,7 @@
  *
  * 契约见 scratchpad/dispatch-engine-contract.md（架构 A：薄指挥放中台，thin 第一刀手动触发）。
  */
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   fetchAcquisitionConfig,
   updateAcquisitionConfig,
@@ -476,6 +476,156 @@ function AccountStatusBlock() {
   );
 }
 
+// ============ 采集任务块 ============
+const TENANT_ID = '2ac0aa4a-99f4-470a-aed7-c3a9fe03149b';
+
+interface CollectTask {
+  id: string;
+  keywords: string[];
+  status: string;
+  created_at: string;
+  video_count: number;
+  lead_count_raw: number;
+}
+
+const COLLECT_STATUS_LABEL: Record<string, string> = {
+  pending: '待处理',
+  running: '采集中',
+  done: '完成',
+  partial: '部分完成',
+  failed: '失败',
+  cancelled: '已取消',
+  cancelling: '取消中',
+};
+
+function CollectTasksBlock() {
+  const [tasks, setTasks] = useState<CollectTask[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [keyword, setKeyword] = useState('');
+  const [starting, setStarting] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const [msg, setMsg] = useState<string | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await fetch('/api/acquisition/collect-tasks', {
+        headers: { 'X-Tenant-Id': TENANT_ID },
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const json = (await res.json()) as { success: boolean; data?: { tasks: CollectTask[] }; tasks?: CollectTask[] };
+      const list = json.data?.tasks ?? (json as unknown as { tasks: CollectTask[] }).tasks ?? [];
+      setTasks(list);
+      setErr(null);
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : '加载采集任务失败');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  const onStart = async () => {
+    const kw = keyword.trim();
+    if (!kw) {
+      setErr('请输入关键词');
+      inputRef.current?.focus();
+      return;
+    }
+    setStarting(true);
+    setErr(null);
+    setMsg(null);
+    try {
+      const res = await fetch('/api/acquisition/collect/start', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Tenant-Id': TENANT_ID },
+        body: JSON.stringify({ keywords: [kw] }),
+      });
+      const json = (await res.json()) as { success: boolean; data?: { task_id: string }; error?: { message: string } };
+      if (!res.ok || !json.success) {
+        throw new Error(json.error?.message ?? `HTTP ${res.status}`);
+      }
+      setMsg(`采集任务已提交（task_id: ${json.data?.task_id ?? '?'}）`);
+      setKeyword('');
+      await load();
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : '提交失败');
+    } finally {
+      setStarting(false);
+    }
+  };
+
+  return (
+    <section className="bg-white dark:bg-slate-800 rounded-lg shadow p-6 border border-slate-200 dark:border-slate-700">
+      <h3 className="font-medium text-gray-900 dark:text-white mb-4">关键词采集任务</h3>
+
+      {/* 关键词输入 + 开始采集 */}
+      <div className="flex items-center gap-2 mb-4 flex-wrap">
+        <input
+          ref={inputRef}
+          type="text"
+          placeholder="输入关键词，例如：装修公司"
+          value={keyword}
+          onChange={(e) => { setKeyword(e.target.value); setErr(null); }}
+          onKeyDown={(e) => { if (e.key === 'Enter') void onStart(); }}
+          className="flex-1 min-w-[200px] rounded border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white px-3 py-1.5 text-sm"
+        />
+        <button
+          type="button"
+          onClick={() => void onStart()}
+          disabled={starting}
+          className="rounded bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white px-4 py-1.5 text-sm whitespace-nowrap"
+        >
+          {starting ? '提交中…' : '开始采集'}
+        </button>
+      </div>
+
+      {msg && <p className="text-sm text-green-600 mb-3">{msg}</p>}
+      {err && <p className="text-sm text-red-500 mb-3">{err}</p>}
+
+      {/* 采集任务列表 */}
+      {loading ? (
+        <p className="text-sm text-gray-500">加载采集任务中…</p>
+      ) : tasks.length === 0 ? (
+        <p className="text-sm text-gray-500">暂无采集任务。输入关键词点「开始采集」发起第一个任务。</p>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-left text-gray-500 dark:text-gray-400 border-b border-slate-200 dark:border-slate-700">
+                <th className="py-2 pr-4">关键词</th>
+                <th className="py-2 pr-4">状态</th>
+                <th className="py-2 pr-4">创建时间</th>
+                <th className="py-2 pr-4">视频数</th>
+                <th className="py-2 pr-4">Lead 数</th>
+              </tr>
+            </thead>
+            <tbody>
+              {tasks.map((t) => (
+                <tr key={t.id} className="border-b border-slate-100 dark:border-slate-700/50">
+                  <td className="py-2 pr-4 text-gray-900 dark:text-white max-w-[200px] truncate">
+                    {Array.isArray(t.keywords) ? t.keywords.join('、') : String(t.keywords)}
+                  </td>
+                  <td className="py-2 pr-4">{COLLECT_STATUS_LABEL[t.status] ?? t.status}</td>
+                  <td className="py-2 pr-4 text-gray-500 dark:text-gray-400 whitespace-nowrap">
+                    {t.created_at ? new Date(t.created_at).toLocaleString('zh-CN', { hour12: false }) : '—'}
+                  </td>
+                  <td className="py-2 pr-4">{t.video_count ?? 0}</td>
+                  <td className="py-2 pr-4">{t.lead_count_raw ?? 0}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </section>
+  );
+}
+
 // ============ 页面 ============
 export default function AcquisitionConfigPage() {
   return (
@@ -487,6 +637,7 @@ export default function AcquisitionConfigPage() {
         </p>
       </div>
       <AccountStatusBlock />
+      <CollectTasksBlock />
       <ConfigForm />
       <DispatchPlanBlock />
       <CookieHealthBlock />
