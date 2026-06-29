@@ -320,9 +320,6 @@ export async function generateChatDraft(
   // 每客服配置（本地 DB = 引擎，决策 dd320e56）：带 agent_id 时优先用【这台机自己那份配置】
   // 判白名单/人设/开关——每客户独立、改一个不动别人。解不到 → null，回落旧的飞书/全局逻辑（向后兼容）。
   const csConfig = agent_id ? await getCSConfigByAgentId(agent_id) : null;
-  // 客服身份章：每客服配置在册 → 该客服微信号；解不到 → null（落 NULL，stats 不计入、不报错）。
-  const csWechatId = csConfig?.wechat_id ?? null;
-
   // S3 客服工作汇总：解析「处理本消息的客服微信号」给 in/out 落库盖身份章。
   // 优先用已配过的 csConfig.wechat_id；未配但已绑 PC → 经 service_agents 解出绑定的 wechat_id。
   // 解不到（无 agent_id / 未绑定）→ null：消息照常落库，只是不计入任何客服统计、不串台。
