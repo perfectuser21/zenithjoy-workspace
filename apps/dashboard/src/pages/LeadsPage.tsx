@@ -110,7 +110,7 @@ export default function LeadsPage() {
   const [acqTaskId, setAcqTaskId] = useState<string | null>(null);
   const [acqStatus, setAcqStatus] = useState<CollectStatus | null>(null);
   const [acqError, setAcqError] = useState<string | null>(null);
-  const acqPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const acqSseRef = useRef<EventSource | null>(null);
 
   const handleCollect = async () => {
     setAcqError(null);
@@ -155,16 +155,22 @@ export default function LeadsPage() {
 
   useEffect(() => {
     if (!acqTaskId) return;
-    const poll = async () => {
+    const es = new EventSource(`/api/acquisition/collect/${acqTaskId}/sse`);
+    acqSseRef.current = es;
+    es.onmessage = (event) => {
       try {
-        const res = await fetch(`/api/acquisition/collect/${acqTaskId}`);
-        const body = await res.json();
-        if (res.ok && body.success) setAcqStatus(body.data as CollectStatus);
-      } catch { /* 轮询失败忽略 */ }
+        const data = JSON.parse(event.data) as CollectStatus;
+        setAcqStatus(data);
+        const terminal = ['done', 'failed', 'cancelled', 'partial'];
+        if (terminal.includes(data.status)) es.close();
+      } catch { /* ignore parse error */ }
     };
-    poll();
-    acqPollRef.current = setInterval(poll, 1500);
-    return () => { if (acqPollRef.current) clearInterval(acqPollRef.current); };
+    es.onerror = () => {
+      if (es.readyState === EventSource.CLOSED) {
+        acqSseRef.current = null;
+      }
+    };
+    return () => { es.close(); acqSseRef.current = null; };
   }, [acqTaskId]);
 
   const load = async (grade: Grade) => {
