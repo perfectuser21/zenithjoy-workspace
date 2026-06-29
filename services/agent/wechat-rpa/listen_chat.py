@@ -414,6 +414,10 @@ def scan_unread(mw: Any, last_content: Optional[Dict[str, str]] = None) -> List[
     扫完再 _restore_tray SW_HIDE(0) 送回托盘（用户几乎无感知）。
     """
     orig_state = _ensure_tray_visible(mw)
+    # Qt 虚拟列表只渲染可视区。CRM scan_recent_contacts 会把列表滚到底，
+    # 导致下一轮 scan_unread 只能看到底部条目，顶部新未读被漏掉。
+    # 扫前强制回顶（切通讯录→切回微信），确保从顶部开始扫。
+    _reset_session_list_to_top(mw)
     out: List[Dict[str, Any]] = []
     seen_senders: set[str] = set()
     for it in mw.descendants(control_type="ListItem"):
@@ -1681,7 +1685,14 @@ def _open_chat(mw: Any, item: Any, sender: str, expect_content: str = "") -> boo
     try:
         r = item.rectangle()
         if abs(r.left) > 20000 or abs(r.top) > 20000:
-            _log(f"_open_chat: {sender!r} item 坐标离屏 ({r.left},{r.top})，重新扫描…")
+            _log(f"_open_chat: {sender!r} item 坐标离屏 ({r.left},{r.top})，Select() 激活后重扫…")
+            # Qt 虚拟列表只渲染可视区，离屏 item 不在 descendants 里。
+            # 先 Select() 强制虚拟列表把目标项滚进可视区渲染出有效坐标，再重扫。
+            try:
+                item.iface_selection_item.Select()
+                time.sleep(0.3)
+            except Exception:
+                pass
             for _new_it in mw.descendants(control_type="ListItem"):
                 try:
                     _first_line = (_new_it.element_info.name or "").split("\n")[0].strip()
