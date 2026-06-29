@@ -96,6 +96,9 @@ jobs:
             echo "[done] STAGING dashboard 部署流程结束（容器已起）"
             exit 0
 
+      - name: Checkout (smoke script)
+        uses: actions/checkout@v4
+
       - name: Staging smoke
         run: |
           bash .github/workflows/scripts/smoke/staging-smoke.sh \
