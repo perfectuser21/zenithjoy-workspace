@@ -16,6 +16,7 @@ import {
   Send,
   Scissors,
   Building2,
+  Briefcase,
   MessageCircle,
 } from 'lucide-react';
 
@@ -154,6 +155,7 @@ export const autopilotNavGroups: NavGroup[] = [
       { path: '/area/wechat', icon: MessageCircle, label: '私域客服', featureKey: 'wechat-cs-config', component: 'CsAreaEntryPage' },
       { path: '/area/video', icon: Scissors, label: '视频剪辑', featureKey: 'local-video-pipeline', component: 'AreaHubPage' },
       { path: '/area/remake', icon: Video, label: '爆款翻拍', featureKey: 'video-remake-pipeline', component: 'AreaHubPage' },
+      { path: '/company-profile', icon: Briefcase, label: '公司信息', featureKey: 'acquisition-leads', component: 'CompanyProfilePage' },
       { path: '/area/settings', icon: KeyRound, label: '设置', featureKey: 'license', component: 'AreaHubPage' },
     ]
   },
