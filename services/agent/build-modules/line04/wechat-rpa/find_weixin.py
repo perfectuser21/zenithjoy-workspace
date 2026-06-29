@@ -25,13 +25,14 @@ QT5_WINDOW_CLASS = "Qt51514QWindowIcon"  # xwechat Qt5 frame (4.1.10.x via xwech
 WEIXIN_EXE_DEFAULT = r"C:\Program Files\Tencent\Weixin\Weixin.exe"
 
 # 2026-06-24 政策放开上界（6-21 真机验证 wechat_qt_uia_works_dont_downgrade）：
-# 微信 4.1.9/4.1.10+ 主窗口变成 Qt 框（Qt51514QWindowIcon，mmui::MainWindow 没了），
-# 但 UIA 控件树照样可读、消息照样能发，版本锁不住也不需要降。
-# 故只保留下界 4.1.8：< 4.1.8（3.x / 4.0.x / 4.1.0~4.1.7）控件配方不一致 / 无 mmui::MainWindow，
-# RPA 不可用（6-21 结论只向上验证，未覆盖这些老版本，保守仍卡）。
-# MIN_BLOCKED_VERSION 保留为常量供 decide_wechat_action 历史引用（不再用于阻断 _parse_and_check）。
-MIN_BLOCKED_VERSION = (4, 1, 9)
-MIN_REQUIRED_VERSION = (4, 1, 8)  # 下界：< 4.1.8 阻断；>= 4.1.8 一律放行（含 4.1.10+）
+# 锁死 4.1.8.x（2026-06-29 决策，反转 #852/#853 的"放开上界"）：
+#   < 4.1.8（3.x / 4.0.x / 4.1.0~4.1.7）：控件配方不一致 / 无 mmui::MainWindow，RPA 不可用 → 阻断。
+#   >= 4.1.9（含 4.1.10+）：UIA 机制其实一样（没被封），但新版【控件适配未做】——登录检测误报、
+#     微信重启自愈不自动登录、_reset_session_list_to_top 找不到导航按钮 等在 4.1.10 上坏。
+#     4.1.8 已全适配+验证（rog 真发 DELIVERED），花大力气适配 4.1.10 没必要 → 阻断，锁 4.1.8.x。
+#     将来真用不了 4.1.8（封了 UIA / 装不上）再拿新版适配。
+MIN_BLOCKED_VERSION = (4, 1, 9)   # 上界（含）：>= 此值阻断（4.1.9 / 4.1.10+）
+MIN_REQUIRED_VERSION = (4, 1, 8)  # 下界：< 此值阻断。合起来 = 只认 4.1.8.x
 DOWNGRADE_URL = (
     "https://zenithjoy-static-1333590468.cos.accelerate.myqcloud.com"
     "/install-pack/wechat/WeChatWin_4.1.8.exe"
@@ -85,8 +86,17 @@ def _parse_and_check(ver_str: Optional[str]) -> None:
     ver_show = ".".join(str(x) for x in parsed)
     if head < MIN_REQUIRED_VERSION:
         raise RuntimeError(
-            f"微信版本 {ver_show} 过低：需 >= 4.1.8（< 4.1.8 控件配方不一致 / 无 mmui::MainWindow）。"
+            f"微信版本 {ver_show} 过低：只支持 4.1.8.x（< 4.1.8 控件配方不一致 / 无 mmui::MainWindow）。"
             f"请安装 4.1.8.x（官方包 {DOWNGRADE_URL}）"
+        )
+    # 上界：>= 4.1.9（含 4.1.10+）阻断——这些新版的控件适配【未做】（登录状态检测误报 /
+    # 微信重启自愈不自动登录 / _reset_session_list_to_top 找不到导航按钮 等在 4.1.10 上坏），
+    # 不是 UIA 被封（机制 4.1.8/4.1.10 一样），是适配工作量。锁死 4.1.8.x（已全验证），
+    # 将来真用不了 4.1.8 再拿新版适配。2026-06-29 有意识反转 #852/#853 的"放开上界"（前提变了）。
+    if head >= MIN_BLOCKED_VERSION:
+        raise RuntimeError(
+            f"微信版本 {ver_show} 过高：只支持 4.1.8.x（>= 4.1.9 控件适配未做，RPA 不可用）。"
+            f"请降级到 4.1.8.x（官方包 {DOWNGRADE_URL}）"
         )
     return None
 
@@ -267,9 +277,10 @@ def assert_supported_version(exe_path: Optional[str] = None) -> None:
     """
     版本守卫入口：读 Weixin.exe 版本并断言其在 RPA 可用范围内。
 
-    放开上界（>= 4.1.8 一律放行，委托 _parse_and_check）：
+    锁死 4.1.8.x（委托 _parse_and_check，2026-06-29 决策）：
     - < 4.1.8 → 抛 RuntimeError（控件配方不一致 / 无 mmui::MainWindow，RPA 不可用）
-    - >= 4.1.8（含 4.1.9 / 4.1.10+）→ 放行（Qt 窗口 UIA 照样能发，6-21 真机验证）
+    - >= 4.1.9（含 4.1.10+）→ 抛 RuntimeError（新版控件适配未做，RPA 不可用，需降回 4.1.8.x）
+    - 仅 4.1.8.x → 放行（已全适配+验证）
     - 版本读不到 → 不硬阻断（返回 None + warning），避免误杀
 
     应在任何 RPA 寻址前调用。

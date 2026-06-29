@@ -45,12 +45,23 @@ def test_decide_install_when_none():
     assert decide_wechat_action(None) == "install"
 
 
-def test_decide_ok_for_4_1_8_and_above():
-    """>= 4.1.8 → ok（4.1.8 基线 + 4.1.9/4.1.10+ 6-21 放开上界，Qt UIA 照样能用）。"""
+def test_decide_ok_only_for_4_1_8():
+    """仅 4.1.8.x → ok（2026-06-29 锁回基线，4.1.8 已全适配+验证）。"""
     assert decide_wechat_action((4, 1, 8, 107)) == "ok"
     assert decide_wechat_action((4, 1, 8)) == "ok"
     assert decide_wechat_action((4, 1, 8, 0)) == "ok"
     assert decide_wechat_action((4, 1, 8, 999)) == "ok"
+
+
+def test_decide_downgrade_for_4_1_9_and_above():
+    """>= 4.1.9（含 4.1.10+）→ downgrade（锁 4.1.8.x：新版控件适配未做，卸载重装 4.1.8）。
+
+    与 find_weixin._parse_and_check 的上界阻断一致：两守卫都把 4.1.9+ 视为不可用、要拉回 4.1.8.x。
+    """
+    assert decide_wechat_action((4, 1, 9, 57)) == "downgrade"
+    assert decide_wechat_action((4, 1, 10, 27)) == "downgrade"
+    assert decide_wechat_action((4, 1, 9)) == "downgrade"
+    assert decide_wechat_action((5, 0, 0, 0)) == "downgrade"
 
 
 def test_decide_downgrade_for_below_4_1_8():
@@ -72,19 +83,12 @@ def test_decide_install_for_3_x():
     assert decide_wechat_action((3, 0, 0, 0)) == "install"
 
 
-def test_decide_ok_for_4_1_9_and_above():
-    """>=4.1.9 → ok（6-21 放开上界：Qt 窗口 UIA 可用，不再卸载降级）。"""
-    assert decide_wechat_action((4, 1, 9, 57)) == "ok"
-    assert decide_wechat_action((4, 1, 10, 27)) == "ok"
-    assert decide_wechat_action((5, 0, 0, 0)) == "ok"
-
-
 def test_decide_handles_short_tuple():
     """不足 3 段的版本元组也能判定（补 0）。"""
     assert decide_wechat_action((4, 1, 8)) == "ok"
     assert decide_wechat_action((4, 1)) == "downgrade"  # (4,1,0) < 4.1.8
     assert decide_wechat_action((4,)) == "downgrade"    # (4,0,0) < 4.1.8
-    assert decide_wechat_action((5,)) == "ok"           # (5,0,0) >= 4.1.8
+    assert decide_wechat_action((5,)) == "downgrade"    # (5,0,0) >= 4.1.9 → 锁回 4.1.8.x
 
 
 # ---------- 报告汇总（all_ok / counts / exit code）----------

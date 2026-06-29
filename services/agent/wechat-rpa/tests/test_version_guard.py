@@ -4,7 +4,7 @@
 【2026-06-24 政策更新】6-21 真机验证（memory wechat_qt_uia_works_dont_downgrade）：
   微信升 4.1.10+ Qt 窗口（Qt51514QWindowIcon）后 UIA 照样能发，版本锁不住也不需要降。
   旧死闸"只认 4.1.8.x，>=4.1.9 一律 fail"导致新机（4.1.10+）preflight 第一关就 fail、
-  line04 模块永不激活。现放开上界：**>= 4.1.8 一律放行**（含 4.1.9 / 4.1.10+ / 未来版本）。
+  line04 模块永不激活。2026-06-29 锁回 4.1.8.x：>= 4.1.9（含 4.1.10+）控件适配未做 → 阻断（反转放开上界）。
   仅保留下界：< 4.1.8（3.x / 4.0.x / 4.1.0~4.1.7）仍阻断——这些版本无 mmui::MainWindow /
   控件配方不一致，6-21 结论只向上验证（Qt 新版可用），未覆盖这些老版本。
 
@@ -79,22 +79,25 @@ def test_3_0_version_blocked():
         _parse_and_check("3.0.0.0")
 
 
-# ---------- _parse_and_check：放行（高版本，6-21 政策放开上界）----------
+# ---------- _parse_and_check：阻断（>= 4.1.9，2026-06-29 锁回 4.1.8.x）----------
 
 
-def test_4_1_9_allowed():
-    """4.1.9.57 → 现放行（Qt 窗口 UIA 照样能用，不再因上界 fail）。"""
-    assert _parse_and_check("4.1.9.57") is None
+def test_4_1_9_blocked():
+    """4.1.9.57 → 阻断（锁 4.1.8.x：>= 4.1.9 控件适配未做，RPA 不可用）。"""
+    with pytest.raises(RuntimeError):
+        _parse_and_check("4.1.9.57")
 
 
-def test_4_1_10_allowed():
-    """4.1.10.27 = 死闸误判的核心版本 → 现必须放行（这是本次修复要证的）。"""
-    assert _parse_and_check("4.1.10.27") is None
+def test_4_1_10_blocked():
+    """4.1.10.27 → 阻断（核心：4.1.10 适配未做，登录检测/自愈/会话回顶在新版坏，需降回 4.1.8.x）。"""
+    with pytest.raises(RuntimeError):
+        _parse_and_check("4.1.10.27")
 
 
-def test_future_5_x_allowed():
-    """更高的主版本（如 5.0.0.0）→ 放行（>= 4.1.8 一律过）。"""
-    assert _parse_and_check("5.0.0.0") is None
+def test_future_5_x_blocked():
+    """更高的主版本（如 5.0.0.0）→ 阻断（>= 4.1.9 一律拒，只认 4.1.8.x）。"""
+    with pytest.raises(RuntimeError):
+        _parse_and_check("5.0.0.0")
 
 
 # ---------- _parse_and_check：读不到版本不硬阻断 ----------
@@ -138,16 +141,17 @@ def test_assert_supported_version_non_windows_skips():
     assert result is None
 
 
-def test_assert_supported_version_allows_4110():
-    """用 mock 验证：get_weixin_version 返回 4.1.10.27 时 assert_supported_version 不抛（放开上界）。"""
+def test_assert_supported_version_blocks_4110():
+    """用 mock 验证：get_weixin_version 返回 4.1.10.27 时 assert_supported_version 抛 RuntimeError
+    （2026-06-29 锁回 4.1.8.x：4.1.10 适配未做，必须挡住，不带病跑）。"""
     from unittest import mock
     import importlib
     import find_weixin as fw
     importlib.reload(fw)
 
     with mock.patch("find_weixin.get_weixin_version", return_value="4.1.10.27"):
-        result = fw.assert_supported_version()
-        assert result is None
+        with pytest.raises(RuntimeError):
+            fw.assert_supported_version()
 
 
 def test_assert_supported_version_blocks_below_418():

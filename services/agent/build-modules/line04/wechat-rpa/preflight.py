@@ -9,7 +9,7 @@ preflight.py — Agent 开机环境自检 + 自愈层（Path 4 微信 RPA 前置
 8 个检测项（7 项主序 + elevation 追加在末尾；每项 detect → fix → 修不了 prompt）：
   1. OS/交互会话    —— 是 Windows + 有活动桌面会话（不可自愈）
   2. 微信安装        —— Weixin.exe 在不在；不在 → 下载 4.1.8 静默装
-  3. 微信版本        —— < 4.1.8 → 卸载 + 装 4.1.8；>= 4.1.8（含 4.1.10+）→ ok（6-21 放开上界）
+  3. 微信版本        —— 锁 4.1.8.x：< 4.1.8 或 >= 4.1.9（含 4.1.10+）→ 卸载 + 装 4.1.8；仅 4.1.8.x → ok
   4. 微信登录态      —— 未登录 → 拉起微信 + 提示扫码
   5. Python+pywinauto—— import 测试；失败 → 提示重装 agent
   6. UIA 激活        —— 设屏幕阅读器标志后能否读到主窗口
@@ -53,6 +53,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 # find_weixin 顶层零 pywinauto/windll import，安全复用其纯函数与寻址 API。
 from find_weixin import (  # noqa: E402
+    MIN_BLOCKED_VERSION,
     MIN_REQUIRED_VERSION,
     WEIXIN_EXE_DEFAULT,
     _parse_version,
@@ -107,24 +108,28 @@ def decide_wechat_action(version_tuple: Optional[Tuple[int, ...]]) -> str:
     """
     依据微信版本元组决定该执行的动作（纯函数，mac 可单测）。
 
-    2026-06-24 放开上界（>= 4.1.8 一律 ok，与 find_weixin._parse_and_check 守卫保持一致）：
+    2026-06-29 锁死 4.1.8.x（与 find_weixin._parse_and_check 守卫一致，反转 6-24 的放开上界）：
     - None（读不到 / 未安装）→ 'install'（装 4.1.8）
     - 3.x（< 4.0.0）        → 'install'（无 mmui::MainWindow，按未安装处理装 4.1.8）
     - 4.0.0 ~ 4.1.7.x      → 'downgrade'（低于基线，控件配方不一致，卸载后装 4.1.8）
-    - >= 4.1.8（含 4.1.9 / 4.1.10+）→ 'ok'（Qt 窗口 UIA 照样能发，6-21 真机验证，不再卸载降级）
+    - 仅 4.1.8.x           → 'ok'（已全适配+验证）
+    - >= 4.1.9（含 4.1.10+）→ 'downgrade'（控件适配未做，卸载后装 4.1.8——与 <4.1.8 一致处理，
+      自动把机器拉回 4.1.8.x；不是 UIA 被封，是适配工作量没做）
     """
     if version_tuple is None:
         return "install"
     head = tuple(version_tuple[:3])
     head = head + (0,) * (3 - len(head))
-    # 三档分界（MIN_REQUIRED_VERSION=(4,1,8) 从 find_weixin 导入）：
+    # 四档分界（MIN_REQUIRED_VERSION=(4,1,8) / MIN_BLOCKED_VERSION=(4,1,9) 从 find_weixin 导入）：
     #   3.x（< 4.0.0）          → install   （无 mmui::MainWindow，按未安装处理）
-    #   [4.0.0, 4.1.8)          → downgrade （低于基线，控件配方不一致，卸载重装 4.1.8）
-    #   >= 4.1.8（含 4.1.10+）  → ok         （6-21 放开上界，Qt UIA 可用，不再降级）
-    # 下界 [4.0.0,4.1.8) 覆盖见 tests/test_preflight.py::test_decide_downgrade_for_below_4_1_8
+    #   [4.0.0, 4.1.8)          → downgrade （低于基线，卸载重装 4.1.8）
+    #   4.1.8.x                 → ok         （已全适配+验证）
+    #   >= 4.1.9（含 4.1.10+）  → downgrade （新版适配未做，卸载重装 4.1.8，锁回基线）
     if head < (4, 0, 0):
         return "install"
     if head < MIN_REQUIRED_VERSION:
+        return "downgrade"
+    if head >= MIN_BLOCKED_VERSION:
         return "downgrade"
     return "ok"
 
