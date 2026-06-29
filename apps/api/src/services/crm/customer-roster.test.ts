@@ -21,6 +21,7 @@ describe('buildCustomerRoster — 名册合并 + 租户隔离 [BEHAVIOR]', () =>
     const roster = await buildCustomerRoster({
       tenantId: 't-A',
       csWechatId: 'wx_cs_A',
+      takeoverMode: 'whitelist',
       messages: [{ contact: '张三' }, { contact: '李四' }],
       whitelist: ['张三'],
     });
@@ -32,6 +33,7 @@ describe('buildCustomerRoster — 名册合并 + 租户隔离 [BEHAVIOR]', () =>
     const roster = await buildCustomerRoster({
       tenantId: 't-A',
       csWechatId: 'wx_cs_A',
+      takeoverMode: 'whitelist',
       messages: [],
       manualCustomers: [],
       whitelist: ['新接管的人'],
@@ -98,16 +100,29 @@ describe('buildCustomerRoster — 黑名单主模型（默认全接管 + 黑名�
     expect(roster.find((r) => r.contact === '新扫进来的人')?.managed).toBe(true);
   });
 
-  it('不传 takeoverMode 时回退 whitelist 语义（向后兼容存量调用）', async () => {
+  it('修 D：没配接管（缺省 takeoverMode）+ 空黑名单 → 默认全接管 managed=true，绝不静默全黑', async () => {
+    // 运营从没配过接管（wechat_cs_account_config 没那行 / 解析不到 takeover_mode）→ takeoverMode 缺省。
+    // 旧错误默认 = whitelist 语义 → whitelist 空 → 全 managed=false（前台全显"黑名单/未接管"，于姐撞的就是这个）。
+    // 新默认 = blacklist 主模型（全接管），空黑名单 → 全 managed=true。
     const roster = await buildCustomerRoster({
       tenantId: 't-A',
       csWechatId: 'wx_cs_A',
       messages: [{ contact: '张三' }, { contact: '李四' }],
-      whitelist: ['张三'],
+      // 不传 takeoverMode、不传 whitelist/blacklist：未配接管的真实场景
     });
-    // 缺省 = whitelist 语义：仅 whitelist 内 managed=true
     expect(roster.find((r) => r.contact === '张三')?.managed).toBe(true);
-    expect(roster.find((r) => r.contact === '李四')?.managed).toBe(false);
+    expect(roster.find((r) => r.contact === '李四')?.managed).toBe(true);
+  });
+
+  it('修 D：缺省 takeoverMode + 有 blacklist → 仅黑名单内排除（其余仍全接管）', async () => {
+    const roster = await buildCustomerRoster({
+      tenantId: 't-A',
+      csWechatId: 'wx_cs_A',
+      messages: [{ contact: '客户甲' }, { contact: '客户乙' }],
+      blacklist: ['客户乙'], // 缺省也按 blacklist 主模型判定
+    });
+    expect(roster.find((r) => r.contact === '客户甲')?.managed).toBe(true);
+    expect(roster.find((r) => r.contact === '客户乙')?.managed).toBe(false);
   });
 
   it('whitelist 模式：回退旧逻辑 managed = wlSet.has(contact)（小众兼容）', async () => {
