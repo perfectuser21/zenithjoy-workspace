@@ -1532,6 +1532,32 @@ def _delivery_confirmed(readback_text: str, sent_text: str) -> bool:
     return False
 
 
+# 送达读回【轮询】参数（decision/rog E2E 2026-06-29）：微信会话列表预览异步更新 + 刚 _open_chat
+# 切完会话那刻 UIA 读偶发空 → 单次 _read_session_preview 读空 ≠ 未送达。轮询几轮给预览更新留时间。
+_DELIVERY_READBACK_POLLS = 5            # 最多读回 5 轮
+_DELIVERY_READBACK_POLL_SLEEP = 0.6     # 每轮间隔(约 3s 总窗口,够预览异步落定)
+
+
+def _confirm_delivery(read_preview_fn, sent_text, polls, sleep_fn):
+    """轮询读回确认送达：任一轮 _delivery_confirmed 命中即 (True, preview)；polls 轮都没命中
+    才 (False, 最后一次 preview)。
+
+    治假阴性（rog E2E 实地）：_uia_send 自报成功后，会话预览异步更新 + UIA 读偶发空，
+    单次读空就判未送达会误报 send_failed（消息其实送达了）。轮询给预览更新留时间。
+    不引入假阳性：仍要求发送原文真出现在读回里（_delivery_confirmed 不放宽）。
+    纯逻辑：read_preview_fn/sleep_fn 注入，CI Fake 可测，顶层零 pywinauto。
+    """
+    preview = ""
+    n = max(1, polls)
+    for i in range(n):
+        preview = read_preview_fn()
+        if _delivery_confirmed(preview, sent_text):
+            return True, preview
+        if i < n - 1:
+            sleep_fn()
+    return False, preview
+
+
 def _read_session_preview(mw: Any, sender: str) -> str:
     """读 sender 会话项的 element_info.name（含最后消息预览），供真送达验证读回（PrepPRD §5）。
 
@@ -1753,11 +1779,17 @@ def reply_in_chat(mw: Any, item: Any, reply_text: str, sender: str = "") -> bool
                 # 确认发送原文真出现才算 DELIVERED；读不到 → 判未送达，本轮返回 False 下轮重试。
                 # sender 为空（fallback 路径，无目标会话可读）时保持旧行为不强验。
                 if sender:
-                    preview = _read_session_preview(_fresh_mw(), sender)
-                    if not _delivery_confirmed(preview, reply_text):
+                    # 轮询读回（治假阴性）：预览异步更新 + 刚切完会话 UIA 读偶发空，单次读空≠未送达。
+                    delivered, preview = _confirm_delivery(
+                        lambda: _read_session_preview(_fresh_mw(), sender),
+                        reply_text,
+                        _DELIVERY_READBACK_POLLS,
+                        lambda: time.sleep(_DELIVERY_READBACK_POLL_SLEEP),
+                    )
+                    if not delivered:
                         _log(
                             f"reply_in_chat: _uia_send 自报成功但读回未确认送达"
-                            f"(preview={preview!r})，判未送达，下轮重试"
+                            f"(轮询{_DELIVERY_READBACK_POLLS}次 preview={preview!r})，判未送达，下轮重试"
                         )
                         return False
                     _log(f"reply_in_chat: 真送达确认 DELIVERED(sender={sender!r})")
