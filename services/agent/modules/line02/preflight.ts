@@ -4,3 +4,16 @@
 export async function runPreflight(_moduleDir: string) {
   return { ok: true, checks: {} };
 }
+
+if (require.main === module) {
+  const moduleDir = process.argv[2] || __dirname;
+  runPreflight(moduleDir)
+    .then((result) => {
+      console.log(JSON.stringify(result));
+      process.exit(result.ok ? 0 : 1);
+    })
+    .catch((e: Error) => {
+      console.log(JSON.stringify({ ok: false, checks: {}, fixGuide: e.message }));
+      process.exit(1);
+    });
+}
