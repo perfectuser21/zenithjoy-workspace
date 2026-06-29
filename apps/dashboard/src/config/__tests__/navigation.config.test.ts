@@ -18,13 +18,16 @@ const navPaths = () => navItems().map((i) => i.path);
 const routePaths = () => additionalRoutes.map((r) => r.path);
 
 describe('config/navigation — 短侧栏 + 区下钻', () => {
-  it('侧栏"区"入口指向区组件（多数 AreaHubPage；私域客服 = CsAreaEntryPage 分诊），标签不暴露 Line', () => {
+  it('侧栏"区"入口指向区组件（多数 AreaHubPage；私域客服 = CsAreaEntryPage；智能获客 = AcquisitionHubPage），标签不暴露 Line', () => {
     const areaItems = navItems().filter((i) => i.path.startsWith('/area/'));
     expect(areaItems.length).toBeGreaterThanOrEqual(6);
     for (const it of areaItems) {
       if (it.path === '/area/wechat') {
         // 私域客服改「以号为中心」：入口落分诊页（超管/多号→总览，运营单号→工作台）
         expect(it.component).toBe('CsAreaEntryPage');
+      } else if (it.path === '/area/acquisition') {
+        // 智能获客改 Step-by-Step 4 步向导入口（2026-06-29）
+        expect(it.component).toBe('AcquisitionHubPage');
       } else {
         expect(it.component).toBe('AreaHubPage');
       }
