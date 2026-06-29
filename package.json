@@ -29,6 +29,9 @@
     "node": ">=20.0.0",
     "npm": ">=9.0.0"
   },
+  "devDependencies": {
+    "vitest": "^4.0.18"
+  },
   "overrides": {
     "vite": "^7.3.2",
     "defu": "^6.1.6",
