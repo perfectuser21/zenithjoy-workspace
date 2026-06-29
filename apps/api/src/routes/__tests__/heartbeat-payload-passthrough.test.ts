@@ -36,9 +36,9 @@ vi.mock('../../services/walking-skeleton.service', () => ({
   getAllModuleHealth: vi.fn(),
   HEARTBEAT_MODULES: {
     'line04-wechat-cs': { status: 'active', required_version: '1.0.8' },
-    'line01-publish': { status: 'active', required_version: '1.0.0' },
-    'line02-lead-gen': { status: 'active', required_version: '1.0.0' },
-    'line05-video': { status: 'active', required_version: '1.0.0' },
+    'line01-publish': { status: 'active', required_version: '1.0.1' },
+    'line02-lead-gen': { status: 'active', required_version: '1.0.1' },
+    'line05-video': { status: 'active', required_version: '1.0.1' },
   },
   // Sprint 06222100: heartbeat handler 新增依赖（下发核心自升级要求版本）
   getRequiredAgentVersion: vi.fn(() => ({ version: '2.0.22' })),

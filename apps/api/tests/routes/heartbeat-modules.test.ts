@@ -76,9 +76,9 @@ describe('POST /api/agent/heartbeat — 响应 modules 双向协议', () => {
     expect(res.body.modules).toBeDefined();
     const EXPECTED_VERSIONS: Record<string, string> = {
       'line04-wechat-cs': '1.0.75',
-      'line01-publish': '1.0.0',
-      'line02-lead-gen': '1.0.0',
-      'line05-video': '1.0.0',
+      'line01-publish': '1.0.1',
+      'line02-lead-gen': '1.0.1',
+      'line05-video': '1.0.1',
     };
     for (const line of EXPECTED_LINES) {
       expect(res.body.modules[line]).toBeDefined();
