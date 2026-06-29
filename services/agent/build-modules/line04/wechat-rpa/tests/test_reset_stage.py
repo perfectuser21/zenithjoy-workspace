@@ -97,11 +97,20 @@ def test_reset_version_too_low_is_red():
 
 
 def test_reset_version_in_range_ok():
-    """>= 4.1.8（含 4.1.10+，Qt UIA 可用）→ 版本校验过。"""
-    for v in ["4.1.8.107", "4.1.10.0", "4.2.0.1"]:
+    """只认 4.1.8.x → 版本校验过。"""
+    for v in ["4.1.8.107", "4.1.8.0", "4.1.8"]:
         d = _driver(version=v)
         r = reset_stage(d, expected_account=EXPECTED)
         assert r.ok is True, f"版本 {v} 应放行，实际 {r}"
+
+
+def test_reset_version_too_high_is_red():
+    """>= 4.1.9（含 4.1.10）→ 复位红（锁 4.1.8.x，与 find_weixin/preflight 同口径，无放行裂缝）。"""
+    for v in ["4.1.9.57", "4.1.10.0", "4.2.0.1"]:
+        d = _driver(version=v)
+        r = reset_stage(d, expected_account=EXPECTED)
+        assert r.ok is False, f"版本 {v} 应阻断（只认 4.1.8.x），实际 {r}"
+        assert "version" in r.failed_step or "版本" in r.reason
 
 
 def test_reset_version_unparseable_is_red():
