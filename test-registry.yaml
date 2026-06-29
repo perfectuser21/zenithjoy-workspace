@@ -4066,3 +4066,11 @@ agent_suite:
     status: active
     product: 智能获客
     note: "TDD Red/Green 测试：公司信息 3-Tab + onBlur 自动保存 + 推荐关键词 buildRecommendedKeywords（sprint ws1 harness）。"
+
+  - id: agent-write-env-var-unit
+    path: services/agent/src/utils/__tests__/write-env-var.test.ts
+    type: unit
+    ci: L1
+    status: active
+    product: 智能获客
+    note: "writeEnvVar 工具函数单测：新建/追加/替换/不存在文件 4 场景，保证 bind 后 ZJ_MAIN_DATA_DIR 正确写入 .env。"
