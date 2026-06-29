@@ -45,6 +45,8 @@ if not exist .env (
 REM Step 1.5: Append missing new keys to .env (upgrade-compatible, never overwrite user values)
 powershell -NoProfile -Command "if (!(Select-String -Path '.env' -Pattern 'ZENITHJOY_AGENT_DRYRUN_BROWSER' -Quiet)) { Add-Content -Path '.env' -Value 'ZENITHJOY_AGENT_DRYRUN_BROWSER=mock'; Write-Host '[setup] ZENITHJOY_AGENT_DRYRUN_BROWSER=mock appended to .env' }"
 powershell -NoProfile -Command "if (!(Select-String -Path '.env' -Pattern 'ZENITHJOY_AGENT_REAL_PUBLISH' -Quiet)) { Add-Content -Path '.env' -Value 'ZENITHJOY_AGENT_REAL_PUBLISH=1'; Write-Host '[setup] ZENITHJOY_AGENT_REAL_PUBLISH=1 appended to .env' }"
+REM F: environment selector - prod by default; set ZENITHJOY_ENV=staging in .env to point the agent at staging middleware
+powershell -NoProfile -Command "if (!(Select-String -Path '.env' -Pattern 'ZENITHJOY_ENV' -Quiet)) { Add-Content -Path '.env' -Value 'ZENITHJOY_ENV=prod'; Write-Host '[setup] ZENITHJOY_ENV=prod appended to .env (set to staging to target staging-autopilot)' }"
 
 REM Step 1.8: Normalize .env line endings - strip \r so CRLF files don't pollute env vars
 REM for/f keeps \r from Windows CRLF files, causing URL parse errors ("https://api.com\r/api/...")
@@ -84,6 +86,16 @@ if "%_IS_PLACEHOLDER%"=="1" (
     powershell -NoProfile -Command "(Get-Content .env) -replace '^ZENITHJOY_LICENSE=.*', 'ZENITHJOY_LICENSE=!ZENITHJOY_LICENSE!' | Set-Content .env"
     echo [setup] License saved to .env
     echo.
+)
+REM === Step 3.5 (F): Environment selection ===
+REM ZENITHJOY_ENV=staging points the agent at the staging middleware (staging-autopilot) so the Lead
+REM can self-verify without hand-editing .env. Default (unset / 'prod') keeps production URLs.
+REM Order matters: an explicitly-defined ZENITHJOY_API_BASE/URL (advanced override) always wins; then
+REM staging fills staging defaults when ZENITHJOY_ENV=staging; finally prod defaults backfill anything left.
+if /i "%ZENITHJOY_ENV%"=="staging" (
+    if not defined ZENITHJOY_API_BASE set "ZENITHJOY_API_BASE=https://staging-autopilot.zenjoymedia.media"
+    if not defined ZENITHJOY_API_URL set "ZENITHJOY_API_URL=wss://staging-autopilot.zenjoymedia.media/agent-ws"
+    echo [env] ZENITHJOY_ENV=staging - targeting staging-autopilot middleware
 )
 if not defined ZENITHJOY_API_BASE set "ZENITHJOY_API_BASE=https://autopilot.zenjoymedia.media"
 REM Fix 10 - ws link uses its own var ZENITHJOY_API_URL (does not read ZENITHJOY_API_BASE), defaults to wss
@@ -263,6 +275,14 @@ REM Two agents with the same license kick each other off the server WS connectio
 REM causing repeated disconnects ("dropped again" / "out of gas" symptom when upgrading without closing old).
 powershell -NoProfile -Command "Get-Process -Name zenithjoy-agent -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue" >nul 2>&1
 echo [agent] previous agent processes stopped (if any)
+
+REM Step 6.955 (hand-off B): Kill orphan listen_chat python listeners before starting.
+REM Killing only the core exe above leaves the old python listen_chat as an orphan that keeps
+REM grabbing WeChat for up to 24h (timeout=86400) and runs preflight in parallel -> "preflight_already_running"
+REM -> module falsely shows "not installed". Match by command line so we catch python.exe AND
+REM python-embedded.exe regardless of name, then kill the whole tree.
+powershell -NoProfile -Command "Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object { $_.CommandLine -like '*listen_chat*' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }" >nul 2>&1
+echo [agent] orphan listen_chat listeners stopped (if any)
 
 REM === Step 6.96: Core self-upgrade/self-swap - read .active-core pointer to pick the newest core dir (Sprint 06222100) ===
 REM Client layout: <root>\extracted\zenithjoy-agent-v<ver>\ (where this start.bat lives). After upgrading,

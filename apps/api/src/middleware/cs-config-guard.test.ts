@@ -139,6 +139,81 @@ describe('requireSameTenant — 租户隔离 + deny by default', () => {
   });
 });
 
+// ─── 修 D：wechatId 解析回退 machine→license 链（号→租户两条路历史不一致）───
+// 现象：于姐对客服机点接管开关 → 403/404 改不了。根因：cs 微信号在 service_agents 没行（绑了但断链）
+// → resolveTenantByWechatId 只查 service_agents 解不到 → 404；或 cs-<machine 前缀> 在 license_machines
+// 有 2 行属 2 租户，只看一条会误判 CROSS_TENANT。修法：候选租户 = service_agents ∪ cs-前缀 machine→license 链，
+// 当前租户 ∈ 候选即放行（别只看一条）。
+describe('requireSameTenant(wechatId) — 回退 machine→license 链（修 D 接管开关 403/404）', () => {
+  it('service_agents 无该 cs 行，但 cs-<前缀>→license_machines→licenses 解到本租户 → next（不再 404）', async () => {
+    // 1) service_agents 查不到（绑定断链）
+    mockQuery.mockResolvedValueOnce({ rows: [], rowCount: 0 });
+    // 2) cs-前缀 machine→license 链解到 TENANT_A
+    mockQuery.mockResolvedValueOnce({ rows: [{ tenant_id: TENANT_A }], rowCount: 1 });
+    const req = {
+      params: { wechatId: 'cs-425b144f' },
+      tenantId: TENANT_A,
+      tenantRole: 'admin',
+    } as unknown as Request;
+    const res = mkRes();
+    const next = vi.fn();
+    await requireSameTenant('wechatId')(req, res, next);
+    expect(next).toHaveBeenCalledOnce();
+    expect(res.statusCode).toBe(0);
+  });
+
+  it('machine→license 链有 2 行属 2 租户（cs-425b144f 历史坑）→ 当前租户在候选内即放行（别只看一条）', async () => {
+    // service_agents 无行
+    mockQuery.mockResolvedValueOnce({ rows: [], rowCount: 0 });
+    // machine 链 2 行 2 租户，含本租户 TENANT_A
+    mockQuery.mockResolvedValueOnce({
+      rows: [{ tenant_id: TENANT_B }, { tenant_id: TENANT_A }],
+      rowCount: 2,
+    });
+    const req = {
+      params: { wechatId: 'cs-425b144f' },
+      tenantId: TENANT_A,
+      tenantRole: 'admin',
+    } as unknown as Request;
+    const res = mkRes();
+    const next = vi.fn();
+    await requireSameTenant('wechatId')(req, res, next);
+    expect(next).toHaveBeenCalledOnce();
+  });
+
+  it('两条路都解不到本租户 → 403 CROSS_TENANT（deny by default，不越权）', async () => {
+    mockQuery.mockResolvedValueOnce({ rows: [], rowCount: 0 }); // service_agents 无
+    mockQuery.mockResolvedValueOnce({ rows: [{ tenant_id: TENANT_B }], rowCount: 1 }); // 链只解到别家
+    const req = {
+      params: { wechatId: 'cs-425b144f' },
+      tenantId: TENANT_A,
+      tenantRole: 'admin',
+    } as unknown as Request;
+    const res = mkRes();
+    const next = vi.fn();
+    await requireSameTenant('wechatId')(req, res, next);
+    expect(res.statusCode).toBe(403);
+    expect(res.body.error?.code).toBe('CROSS_TENANT');
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  it('非 cs-前缀 友好名（无法派生 machine）+ service_agents 无行 → 404（不瞎查 machine 链）', async () => {
+    mockQuery.mockResolvedValueOnce({ rows: [], rowCount: 0 });
+    const req = {
+      params: { wechatId: '小苏的号' },
+      tenantId: TENANT_A,
+      tenantRole: 'admin',
+    } as unknown as Request;
+    const res = mkRes();
+    const next = vi.fn();
+    await requireSameTenant('wechatId')(req, res, next);
+    expect(res.statusCode).toBe(404);
+    expect(res.body.error?.code).toBe('TARGET_NOT_FOUND');
+    // 只查 service_agents 一次（友好名不触发 machine 链查询）
+    expect(mockQuery).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe('requireServiceCredential — agent/服务专用闸（internal/service token，非人类 session）', () => {
   const OLD_ENV = process.env.ZENITHJOY_INTERNAL_TOKEN;
   beforeEach(() => {

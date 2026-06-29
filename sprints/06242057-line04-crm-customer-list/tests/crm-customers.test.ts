@@ -16,10 +16,12 @@ describe('客户名册聚合 + 租户隔离 [BEHAVIOR]', () => {
     expect(row).toHaveProperty('managed');
   });
 
-  it('managed 由 whitelist 实时决定：whitelist 含 contact → managed=true', async () => {
+  it('managed 由 whitelist 实时决定：whitelist 含 contact → managed=true（显式 whitelist 模式）', async () => {
+    // 修 D：whitelist 语义现为显式小众模式（缺省已改 blacklist 主模型全接管），故显式传 takeoverMode。
     const roster = await buildCustomerRoster({
       tenantId: 't-A',
       csWechatId: 'wx_cs_A',
+      takeoverMode: 'whitelist',
       whitelist: ['张三'],
     });
     const zhang = roster.find((r: { contact: string }) => r.contact === '张三');

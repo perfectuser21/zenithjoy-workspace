@@ -48,6 +48,10 @@ export interface ModulePreflightResult {
   ok: boolean;
   reason?: string;
   fixGuide?: string;
+  // 并发保护「跳过本次」标记：另一个 preflight 正在跑，本次未真正执行。
+  // syncModules 见到 skipped=true 时不可用它覆盖上次真实 statusReport（否则把"正在跑"
+  // 显示成"未安装"——苏的客服模块"未安装"假象的真因之一）。
+  skipped?: boolean;
 }
 
 // 模块通过 IPC {type:'status'} 上报的真实健康（listen_chat 进程在不在 / 微信窗口找到没 /
@@ -81,6 +85,10 @@ export interface ModuleManagerOptions {
   preflightImpl?: (lineId: string, moduleDir: string) => Promise<ModulePreflightResult>;
   execFileImpl?: (cmd: string, args: string[], opts: { cwd: string; windowsHide: boolean; timeout: number; env: Record<string, string | undefined> }, cb: (err: Error | null, stdout: string, stderr: string) => void) => void;
   forkImpl?: (entryPath: string, opts: { cwd: string }) => ChildProcess;
+  // OTA 升级杀旧模块时杀「整棵进程树」（含模块 fork spawn 的 python listen_chat 孙进程）。
+  // Node child.kill() 只杀 fork 本身，杀不到孙进程 → 孤儿 listener 再抢微信跑满 24h。
+  // 生产留空走真实实现（Windows taskkill /T /F /PID；非 Windows 回退 child.kill）。
+  killProcessTreeImpl?: (pid: number) => void;
   // 模块子进程发来消息时回调（core 用它转发 draft_reply 等给中台）
   onModuleMessage?: (lineId: string, msg: unknown) => void;
   // preflight 失败时回调（core 用它本地弹窗 + 心跳上报）
@@ -296,10 +304,12 @@ export class ModuleManager {
           // 导致 syncModules 激活分支永远走不到（active.has = true）
           const oldChild = this.active.get(lineId);
           if (oldChild) {
-            this.log(`${lineId} 检测到新版本 ${requiredVersion}，终止旧模块进程`);
+            this.log(`${lineId} 检测到新版本 ${requiredVersion}，终止旧模块进程（含孙进程）`);
             // 标记为主动 kill：其 exit 不应被 supervise 当成崩溃触发自愈重启
             this.intentionalKill.add(lineId);
-            oldChild.kill();
+            // 杀整棵进程树：旧模块 fork spawn 的 python listen_chat 是孙进程，
+            // child.kill() 杀不到 → 孤儿 listener 抢微信 + 跑 preflight 跑满 24h（hand-off B）。
+            this.killModuleTree(oldChild);
             this.active.delete(lineId);
           }
           this.downloading.add(lineId);
@@ -315,6 +325,14 @@ export class ModuleManager {
         }
 
         const pf = await this.runModulePreflight(lineId);
+
+        // 并发跳过：另一个 preflight 正在跑，本次未真正执行 → 绝不用它覆盖上次真实状态，
+        // 否则前端把"正在跑"显示成"未安装"（hand-off C）。保留既有 statusReport，本轮直接收手。
+        if (pf.skipped) {
+          this.log(`${lineId} preflight 并发跳过，保留上次状态（不覆盖为未安装）`);
+          continue;
+        }
+
         this.statusReport.set(lineId, pf);
 
         if (pf.ok) {
@@ -469,7 +487,15 @@ export class ModuleManager {
   async runModulePreflight(lineId: string): Promise<ModulePreflightResult> {
     if (this.preflightRunning.has(lineId)) {
       this.log(`${lineId} preflight 已在运行中，跳过本次（并发保护）`);
-      return { ok: false, reason: 'preflight_already_running' };
+      // 「跳过」≠「失败」：保留上次真实状态（若上次 ok 则维持 ok），并打 skipped 标记，
+      // 让 syncModules 知道别用本次结果覆盖 statusReport（否则前端假"未安装"，hand-off C）。
+      const prev = this.statusReport.get(lineId);
+      return {
+        ok: prev?.ok ?? false,
+        reason: prev?.reason ?? 'preflight_already_running',
+        fixGuide: prev?.fixGuide,
+        skipped: true,
+      };
     }
 
     const version = this.getInstalledVersion(lineId);
@@ -618,6 +644,38 @@ export class ModuleManager {
       `module ${lineId} 健康上报：ok=${health.ok} listener_alive=${health.listener_alive} found_window=${health.found_window}`,
     );
     return true;
+  }
+
+  // ── hand-off B：杀整棵模块进程树（含 python listen_chat 孙进程）──
+  // 模块 fork 自己 spawn 的 python listen_chat 是孙进程；Node child.kill() 只给 fork 发信号，
+  // 杀不到孙进程 → 孤儿 listener 继续抢微信窗口 + 跑 preflight 跑满 24h（假"未安装" + 抢键盘）。
+  // Windows 用 taskkill /T（按 pid 杀进程树）；非 Windows / 无 pid 回退 child.kill()。
+  private killModuleTree(child: ChildProcess): void {
+    const pid = child.pid;
+    if (this.opts.killProcessTreeImpl) {
+      if (pid) this.opts.killProcessTreeImpl(pid);
+      else child.kill();
+      return;
+    }
+    if (process.platform === 'win32' && pid) {
+      try {
+        execFile('taskkill', ['/T', '/F', '/PID', String(pid)], { windowsHide: true }, (err) => {
+          if (err) {
+            this.log(`killModuleTree taskkill 失败（回退 child.kill）：${err.message}`);
+            try {
+              child.kill();
+            } catch {
+              // ignore
+            }
+          }
+        });
+      } catch (err) {
+        this.log(`killModuleTree 异常（回退 child.kill）：${(err as Error).message}`);
+        child.kill();
+      }
+    } else {
+      child.kill();
+    }
   }
 
   // ── 自愈件1：受监管模块退出 → 自动重启（指数退避 + 上限告警）──

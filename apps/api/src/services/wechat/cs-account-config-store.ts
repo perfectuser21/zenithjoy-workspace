@@ -294,22 +294,36 @@ export interface CSMachine {
 export async function listAllMachines(tenantId?: string, limit = 100): Promise<CSMachine[]> {
   try {
     const scoped = typeof tenantId === 'string' && tenantId.length > 0;
-    // Bug D：scoped(运营) 原以 service_agents 为驱动表(INNER) → 已装 Agent 上线但「未绑定/待配」的机器
-    // 漏掉，不在「选机器」列表（只在 listPendingMachines）。改以 license_machines 为驱动（机器装 Agent
-    // 注册即落此表），经 licenses.tenant_id scope 到该运营租户，LEFT JOIN service_agents（含未绑定：
-    // sa.* 为 NULL → configured=false → 前台显「待配置」可点配置）。绑定过的机器必有 license_machines
-    // 行（setupCSByMachine 要先解析 license 才能绑），故 lm 驱动不会漏掉已绑机器。
+    // Bug D（旧修）：scoped(运营) 原以 service_agents 为驱动表(INNER) → 已装 Agent 上线但「未绑定/待配」的机器
+    // 漏掉。曾改以 license_machines 为驱动 + LEFT JOIN service_agents（含未绑定 → configured=false 可点配置）。
+    //
+    // Bug G（本次修）：上面假设「绑定过的机器必有 license_machines 行」实测不成立 —— 机器在 service_agents
+    // （已绑、有 sa.tenant_id）但没 license_machines 行（实测 d026489c/07c37bd4）→ 仍被漏掉。改为：
+    // scoped 机器来源 = license_machines(licenses.tenant_id) ∪ service_agents(sa.tenant_id) 的 **并集**
+    // （UNION 两个 machine_id 来源，各按自身租户 scope），再 LEFT JOIN lm/sa 取详情。这样「绑了但没
+    // license_machines 行」和「装了 Agent 但没绑」两类机器都不漏。service_agents 在并集子查询里用别名 svc
+    // （避开 'service_agents sa' 字面，防误判驱动表）；主查询的 LEFT JOIN 仍用 sa（其它列 MAX(sa.*) 沿用）。
     const fromAndJoins = scoped
-      ? `FROM zenithjoy.license_machines lm
-         JOIN zenithjoy.licenses l ON l.id = lm.license_id
+      ? `FROM (
+           SELECT lm2.machine_id
+             FROM zenithjoy.license_machines lm2
+             JOIN zenithjoy.licenses l ON l.id = lm2.license_id
+            WHERE l.tenant_id = $2::uuid
+           UNION
+           SELECT svc.machine_id
+             FROM zenithjoy.service_agents svc
+            WHERE svc.tenant_id = $2::uuid AND svc.deleted_at IS NULL
+         ) sm
+         LEFT JOIN zenithjoy.license_machines lm ON lm.machine_id = sm.machine_id
          LEFT JOIN zenithjoy.service_agents sa
-                ON sa.machine_id = lm.machine_id AND sa.deleted_at IS NULL`
+                ON sa.machine_id = sm.machine_id AND sa.deleted_at IS NULL`
       : // 超管视图：license_machines 驱动，左连 service_agents（含未绑定机器）
         `FROM zenithjoy.license_machines lm
          LEFT JOIN zenithjoy.service_agents sa
                 ON sa.machine_id = lm.machine_id AND sa.deleted_at IS NULL`;
-    const scopeWhere = scoped ? `WHERE l.tenant_id = $2::uuid` : '';
-    const machineIdExpr = 'lm.machine_id';
+    // scoped 的租户过滤已下推进 UNION 子查询；超管无 scope。主查询层不再加 WHERE。
+    const scopeWhere = '';
+    const machineIdExpr = scoped ? 'sm.machine_id' : 'lm.machine_id';
     const params: unknown[] = scoped ? [limit, tenantId] : [limit];
     const res = await pool.query(
       `SELECT ${machineIdExpr} AS machine_id,
