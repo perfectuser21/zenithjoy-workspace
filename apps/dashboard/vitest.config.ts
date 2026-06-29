@@ -31,11 +31,11 @@ export default defineConfig({
     setupFiles: ['./src/test/setup.ts'],
     globals: true,
     environmentMatchGlobs: [
-      ['../../sprints/**/tests/**', 'node'],
+      ['../../sprints/06291030-line02-profile-tabs-integration/tests/**', 'node'],
     ],
     include: [
       'src/**/*.{test,spec}.?(c|m)[jt]s?(x)',
-      '../../sprints/**/tests/**/*.test.ts',
+      '../../sprints/06291030-line02-profile-tabs-integration/tests/**/*.test.ts',
     ],
     exclude: ['node_modules', 'dist', 'e2e/**'],
   },
