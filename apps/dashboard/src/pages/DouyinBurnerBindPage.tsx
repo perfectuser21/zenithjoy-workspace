@@ -1,14 +1,13 @@
 /**
  * Path 2 Sprint B-1 WS5 — DouyinBurnerBindPage
  *
- * 单页：绑抖音小号 + 抓视频评论 → 写客户飞书 Lead 表
+ * 单页：绑抖音小号 + 抓视频评论 → 线索存中台本地 DB
  *
- * 5 态行为（合同 ws5 BEHAVIOR 测试覆盖）：
- *   1. 飞书未绑 → disabled + 提示「请先完成飞书绑定」
- *   2. account_label='default' → 校验报错 + 提交 disabled
- *   3. burner sessions 列表渲染（label/昵称/状态/bound_at）
- *   4. 抓取完成 status=done + comment_count=5 → 显示「抓取完成 5 条」+ Bitable URL
- *   5. comment_count=0 → 显示「该视频暂无评论」
+ * 4 态行为：
+ *   1. account_label='default' → 校验报错 + 提交 disabled
+ *   2. burner sessions 列表渲染（label/昵称/状态/bound_at）
+ *   3. 抓取完成 status=done + comment_count=5 → 显示「抓取完成 5 条」
+ *   4. comment_count=0 → 显示「该视频暂无评论」
  */
 import { useEffect, useState } from 'react';
 
@@ -24,12 +23,11 @@ interface CrawlTaskState {
   status: string;
   comment_count?: number;
   lead_write_status?: string;
-  feishu_bitable_url?: string;
 }
 
 export default function DouyinBurnerBindPage() {
-  const [feishuBound, setFeishuBound] = useState<boolean | null>(null);
   const [sessions, setSessions] = useState<BurnerSession[]>([]);
+  const [loading, setLoading] = useState(true);
   const [accountLabel, setAccountLabel] = useState('');
   const [labelError, setLabelError] = useState('');
   const [videoUrl, setVideoUrl] = useState('');
@@ -37,36 +35,28 @@ export default function DouyinBurnerBindPage() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
 
-  // 1. 查飞书 binding 状态 + sessions + 最近一次 crawl 状态（让页面 reload 后自动恢复"抓取完成"显示）
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
-        const r = await fetch('/api/feishu/oauth/status');
-        const j = await r.json();
+        const sr = await fetch('/api/agent/burner/sessions');
+        const sj = await sr.json();
         if (cancelled) return;
-        const bound = !!j?.data?.bound;
-        setFeishuBound(bound);
-        if (bound) {
-          const sr = await fetch('/api/agent/burner/sessions');
-          const sj = await sr.json();
-          if (cancelled) return;
-          setSessions(sj?.data?.sessions || []);
+        setSessions(sj?.data?.sessions || []);
 
-          // 自动拉一次最近 crawl-task 状态（让 reload 不丢"抓取完成"标识）
-          // 测试 mock 第 3 个 fetch 即此步
-          try {
-            const cr = await fetch('/api/agent/burner/crawl-tasks/latest');
-            const cj = await cr.json();
-            if (!cancelled && cj?.data) {
-              setCrawlTask(cj.data as CrawlTaskState);
-            }
-          } catch {
-            // ignore — latest 可能 404，不算错
+        try {
+          const cr = await fetch('/api/agent/burner/crawl-tasks/latest');
+          const cj = await cr.json();
+          if (!cancelled && cj?.data) {
+            setCrawlTask(cj.data as CrawlTaskState);
           }
+        } catch {
+          // ignore — latest 可能 404
         }
       } catch (e) {
         if (!cancelled) setError(String((e as Error).message || e));
+      } finally {
+        if (!cancelled) setLoading(false);
       }
     })();
     return () => {
@@ -74,13 +64,10 @@ export default function DouyinBurnerBindPage() {
     };
   }, []);
 
-  // account_label 校验
   function onLabelChange(v: string) {
     setAccountLabel(v);
     if (v === 'default') {
       setLabelError('account_label 不能用 default — 这个名字保留给主号');
-    } else if (v.length === 0) {
-      setLabelError('');
     } else {
       setLabelError('');
     }
@@ -126,7 +113,6 @@ export default function DouyinBurnerBindPage() {
         setError(j?.error?.message || '派抓评论 task 失败');
         return;
       }
-      // 轮询 task 状态
       const tr = await fetch(`/api/agent/burner/crawl-tasks/${taskId}`);
       const tj = await tr.json();
       setCrawlTask(tj?.data || null);
@@ -137,27 +123,7 @@ export default function DouyinBurnerBindPage() {
     }
   }
 
-  // 渲染态 1: 飞书未绑
-  if (feishuBound === false) {
-    return (
-      <div className="p-6">
-        <h1 className="text-xl font-semibold mb-4">绑抖音小号 + 抓评论</h1>
-        <div className="rounded border border-yellow-300 bg-yellow-50 p-4 text-yellow-900">
-          请先完成飞书绑定，才能绑抖音小号和把评论写进飞书 Lead 表。
-        </div>
-        <div className="mt-3">
-          <a
-            href="/dashboard/feishu-bind"
-            className="inline-block rounded bg-blue-600 px-4 py-2 text-white"
-          >
-            去绑飞书
-          </a>
-        </div>
-      </div>
-    );
-  }
-
-  if (feishuBound === null) {
+  if (loading) {
     return (
       <div className="p-6">
         <h1 className="text-xl font-semibold mb-4">绑抖音小号 + 抓评论</h1>
@@ -250,24 +216,9 @@ export default function DouyinBurnerBindPage() {
         {crawlTask ? (
           <div className="mt-4 rounded bg-gray-50 p-3">
             {crawlTask.status === 'done' && (crawlTask.comment_count ?? 0) > 0 ? (
-              <>
-                <div className="font-medium text-green-700">
-                  抓取完成 {crawlTask.comment_count} 条
-                </div>
-                {crawlTask.feishu_bitable_url ? (
-                  <a
-                    href={crawlTask.feishu_bitable_url}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="mt-1 inline-block text-blue-600 underline"
-                  >
-                    {crawlTask.feishu_bitable_url}
-                  </a>
-                ) : null}
-                {crawlTask.lead_write_status === 'failed' ? (
-                  <div className="mt-2 text-red-600">写入飞书失败，可重试</div>
-                ) : null}
-              </>
+              <div className="font-medium text-green-700">
+                抓取完成 {crawlTask.comment_count} 条，线索已存入中台数据库
+              </div>
             ) : null}
 
             {crawlTask.status === 'done' && (crawlTask.comment_count ?? 0) === 0 ? (
