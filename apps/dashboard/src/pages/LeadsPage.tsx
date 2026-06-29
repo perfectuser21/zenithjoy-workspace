@@ -1,5 +1,9 @@
-import { useState, useEffect, useRef } from 'react';
+import 'ag-grid-community/styles/ag-grid.css';
+import 'ag-grid-community/styles/ag-theme-quartz.css';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { RefreshCw, Search } from 'lucide-react';
+import { AgGridReact } from 'ag-grid-react';
+import type { ColDef, ICellRendererParams } from 'ag-grid-community';
 
 interface Lead {
   commenter_id: string;
@@ -10,7 +14,7 @@ interface Lead {
   keyword: string;
 }
 
-// ── Path 2 Step4 采集闭环（飞书企业信息文档 → 扩词 → 派单 → 状态）──
+// ── Path 2 Step4 采集闭环 ──
 interface ExpandKeyword {
   word: string;
   source: 'ai' | 'manual' | 'seed';
@@ -36,10 +40,52 @@ const VALID_GRADES = ['感兴趣', '精准', '高意向'] as const;
 type Grade = (typeof VALID_GRADES)[number] | '';
 
 const GRADE_STYLE: Record<string, string> = {
-  高意向: 'bg-red-100 text-red-800',
-  精准: 'bg-orange-100 text-orange-800',
-  感兴趣: 'bg-blue-100 text-blue-800',
+  高意向: 'bg-red-900/40 text-red-300',
+  精准:   'bg-orange-900/40 text-orange-300',
+  感兴趣: 'bg-blue-900/40 text-blue-300',
 };
+
+// AG Grid quartz-dark CSS 变量（与 CustomerListPage 保持一致）
+const AG_THEME: React.CSSProperties = {
+  width: '100%',
+  height: '100%',
+  '--ag-background-color':              '#14161f',
+  '--ag-foreground-color':              '#eef0f6',
+  '--ag-header-background-color':       '#101218',
+  '--ag-header-foreground-color':       '#9aa0b2',
+  '--ag-border-color':                  '#232734',
+  '--ag-row-border-color':              '#1d212c',
+  '--ag-row-hover-color':               '#191c27',
+  '--ag-selected-row-background-color': 'rgba(227,177,105,.10)',
+  '--ag-accent-color':                  '#e3b169',
+  '--ag-input-focus-border-color':      '#e3b169',
+  '--ag-odd-row-background-color':      '#14161f',
+  '--ag-font-family':                   '"Hanken Grotesk","PingFang SC",sans-serif',
+  '--ag-font-size':                     '13px',
+  '--ag-header-height':                 '44px',
+  '--ag-row-height':                    '46px',
+  '--ag-border-radius':                 '14px',
+  '--ag-wrapper-border-radius':         '16px',
+} as React.CSSProperties;
+
+function GradeBadge({ value }: { value: string }) {
+  if (!value) return null;
+  return (
+    <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${GRADE_STYLE[value] ?? 'bg-gray-700 text-gray-300'}`}>
+      {value}
+    </span>
+  );
+}
+
+function VideoLink({ value }: { value: string }) {
+  if (!value) return <span className="text-gray-600">—</span>;
+  return (
+    <a href={value} target="_blank" rel="noopener noreferrer"
+       className="text-blue-400 hover:text-blue-300 hover:underline truncate block max-w-xs">
+      {value}
+    </a>
+  );
+}
 
 async function fetchLeads(grade: string): Promise<{ leads: Lead[]; total: number }> {
   const params = grade ? `?grade=${encodeURIComponent(grade)}` : '';
@@ -107,7 +153,6 @@ export default function LeadsPage() {
     }
   };
 
-  // 派单后轮询任务状态（持续轮询直到组件卸载，让 7 态/计数/失败原因实时刷新）
   useEffect(() => {
     if (!acqTaskId) return;
     const poll = async () => {
@@ -115,15 +160,11 @@ export default function LeadsPage() {
         const res = await fetch(`/api/acquisition/collect/${acqTaskId}`);
         const body = await res.json();
         if (res.ok && body.success) setAcqStatus(body.data as CollectStatus);
-      } catch {
-        /* 轮询失败忽略，下次再试 */
-      }
+      } catch { /* 轮询失败忽略 */ }
     };
     poll();
     acqPollRef.current = setInterval(poll, 1500);
-    return () => {
-      if (acqPollRef.current) clearInterval(acqPollRef.current);
-    };
+    return () => { if (acqPollRef.current) clearInterval(acqPollRef.current); };
   }, [acqTaskId]);
 
   const load = async (grade: Grade) => {
@@ -140,31 +181,74 @@ export default function LeadsPage() {
     }
   };
 
-  useEffect(() => {
-    load(gradeFilter);
-  }, [gradeFilter]);
+  useEffect(() => { load(gradeFilter); }, [gradeFilter]);
+
+  const columnDefs = useMemo<ColDef<Lead>[]>(() => [
+    {
+      field: 'commenter_id',
+      headerName: '抖音号',
+      width: 160,
+      pinned: 'left',
+    },
+    {
+      field: 'comment_text',
+      headerName: '评论内容',
+      flex: 2,
+      minWidth: 200,
+      tooltipField: 'comment_text',
+    },
+    {
+      field: 'grade',
+      headerName: '等级',
+      width: 100,
+      cellRenderer: (p: ICellRendererParams<Lead>) => <GradeBadge value={p.value as string} />,
+    },
+    {
+      field: 'source_video_url',
+      headerName: '来源视频',
+      flex: 2,
+      minWidth: 180,
+      cellRenderer: (p: ICellRendererParams<Lead>) => <VideoLink value={p.value as string} />,
+    },
+    {
+      field: 'crawled_at',
+      headerName: '时间',
+      width: 160,
+      valueFormatter: (p) => p.value ? new Date(p.value as string).toLocaleString('zh-CN') : '—',
+    },
+    {
+      field: 'keyword',
+      headerName: '关键词',
+      width: 120,
+    },
+  ], []);
 
   return (
-    <div className="p-6">
-      <div className="flex items-center justify-between mb-4">
-        <h1 className="text-xl font-semibold">获客 Leads</h1>
+    <div className="flex flex-col h-full p-4 gap-4" style={{ minHeight: 0 }}>
+      {/* 顶栏 */}
+      <div className="flex items-center justify-between flex-shrink-0">
+        <h1 className="text-xl font-semibold text-white">获客 Leads</h1>
         <div className="flex items-center gap-3">
-          <select
-            value={gradeFilter}
-            onChange={(e) => setGradeFilter(e.target.value as Grade)}
-            className="border rounded px-3 py-1.5 text-sm"
-          >
-            <option value="">全部等级</option>
-            {VALID_GRADES.map((g) => (
-              <option key={g} value={g}>
-                {g}
-              </option>
+          {/* 等级快筛 */}
+          <div className="flex gap-1">
+            {(['', ...VALID_GRADES] as Grade[]).map((g) => (
+              <button
+                key={g}
+                onClick={() => setGradeFilter(g)}
+                className={`px-3 py-1 rounded text-xs font-medium transition-colors ${
+                  gradeFilter === g
+                    ? 'bg-yellow-500/20 text-yellow-300 border border-yellow-600/40'
+                    : 'text-gray-400 hover:text-gray-200'
+                }`}
+              >
+                {g || '全部'}
+              </button>
             ))}
-          </select>
+          </div>
           <button
             onClick={() => load(gradeFilter)}
             disabled={loading}
-            className="flex items-center gap-1 border rounded px-3 py-1.5 text-sm hover:bg-gray-50"
+            className="flex items-center gap-1 text-gray-400 hover:text-gray-200 text-sm"
           >
             <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
             刷新
@@ -173,52 +257,44 @@ export default function LeadsPage() {
       </div>
 
       {error && (
-        <div className="mb-4 p-3 bg-red-50 text-red-700 rounded text-sm">{error}</div>
+        <div className="flex-shrink-0 p-3 bg-red-900/30 text-red-400 rounded text-sm">{error}</div>
       )}
 
-      {/* ── Path 2 Step4 采集闭环面板 ── */}
-      <div className="mb-6 p-4 border rounded-lg bg-white">
+      {/* 采集闭环面板 */}
+      <div className="flex-shrink-0 p-4 rounded-xl border border-slate-700 bg-slate-800/60">
         <div className="flex items-center gap-3 mb-3">
           <button
             data-testid="acq-collect-button"
             onClick={handleCollect}
-            className="flex items-center gap-1 bg-blue-600 text-white rounded px-4 py-1.5 text-sm hover:bg-blue-700"
+            className="flex items-center gap-1 bg-yellow-500/20 text-yellow-300 border border-yellow-600/40 rounded px-4 py-1.5 text-sm hover:bg-yellow-500/30"
           >
             <Search size={14} />
             采集
           </button>
-          <span className="text-sm text-gray-500">读企业信息文档 → 扩词 → 派客户机采集抖音号</span>
+          <span className="text-sm text-gray-500">公司画像 → AI 扩词 → 派客户机采集抖音评论</span>
         </div>
 
         {acqError && (
-          <div className="mb-3 p-2 bg-red-50 text-red-700 rounded text-xs" data-testid="acq-expand-error">
+          <div className="mb-3 p-2 bg-red-900/30 text-red-400 rounded text-xs" data-testid="acq-expand-error">
             {acqError}
           </div>
         )}
 
         {acqPhase !== 'idle' && acqKeywords.length > 0 && (
           <div data-testid="acq-expand-result" className="mb-3">
-            <div className="text-sm font-medium mb-1">
-              扩词结果{acqDegraded && <span className="ml-2 text-orange-600 text-xs">降级</span>}
+            <div className="text-sm font-medium mb-1 text-gray-300">
+              扩词结果{acqDegraded && <span className="ml-2 text-orange-400 text-xs">降级</span>}
             </div>
             <div className="flex flex-wrap items-center gap-2">
               {acqKeywords.map((k, i) => (
-                <span
-                  key={i}
-                  data-testid="acq-expand-keyword"
-                  className="inline-flex items-center gap-1 px-2 py-0.5 bg-gray-100 rounded text-sm"
-                >
+                <span key={i} data-testid="acq-expand-keyword"
+                  className="inline-flex items-center gap-1 px-2 py-0.5 bg-slate-700 rounded text-sm text-gray-300">
                   {k.word}
-                  <span data-testid="acq-keyword-source" className="text-xs text-gray-400">
-                    {k.source}
-                  </span>
+                  <span data-testid="acq-keyword-source" className="text-xs text-gray-500">{k.source}</span>
                 </span>
               ))}
-              <button
-                data-testid="acq-confirm-button"
-                onClick={handleConfirm}
-                className="ml-2 bg-green-600 text-white rounded px-3 py-1 text-xs hover:bg-green-700"
-              >
+              <button data-testid="acq-confirm-button" onClick={handleConfirm}
+                className="ml-2 bg-emerald-600/30 text-emerald-300 border border-emerald-600/40 rounded px-3 py-1 text-xs hover:bg-emerald-600/50">
                 确认派单
               </button>
             </div>
@@ -226,38 +302,26 @@ export default function LeadsPage() {
         )}
 
         {acqPhase === 'dispatched' && acqStatus && (
-          <div data-testid="acq-task-status" className="mt-2 text-sm">
+          <div data-testid="acq-task-status" className="mt-2 text-sm text-gray-300">
             <div className="flex flex-wrap gap-4 items-center">
-              <span>
-                状态：<b data-testid="acq-status-value">{acqStatus.status}</b>
-              </span>
-              <span data-testid="acq-video-count">视频数：{acqStatus.video_count}</span>
-              <span data-testid="acq-lead-count-raw">去重前：{acqStatus.lead_count_raw}</span>
-              <span data-testid="acq-lead-count-deduped">去重后：{acqStatus.lead_count_deduped}</span>
+              <span>状态：<b data-testid="acq-status-value" className="text-yellow-300">{acqStatus.status}</b></span>
+              <span data-testid="acq-video-count">视频：{acqStatus.video_count}</span>
+              <span data-testid="acq-lead-count-raw">原始：{acqStatus.lead_count_raw}</span>
+              <span data-testid="acq-lead-count-deduped">去重：{acqStatus.lead_count_deduped}</span>
               {acqStatus.error_code && (
-                <span data-testid="acq-error-code" className="text-red-600">
-                  失败原因：{acqStatus.error_code}
-                </span>
+                <span data-testid="acq-error-code" className="text-red-400">失败：{acqStatus.error_code}</span>
               )}
             </div>
             <ul className="mt-2 space-y-1">
               {acqStatus.leads.map((l, i) => (
-                <li key={i} className="flex items-center gap-2">
+                <li key={i} className="flex items-center gap-2 text-gray-400">
                   <span>{l.nickname}</span>
                   {l.profile_url ? (
-                    <a
-                      data-testid="acq-lead-profile-link"
-                      href={l.profile_url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-blue-600 hover:underline text-xs"
-                    >
-                      抖音主页
-                    </a>
+                    <a data-testid="acq-lead-profile-link" href={l.profile_url}
+                       target="_blank" rel="noopener noreferrer"
+                       className="text-blue-400 hover:underline text-xs">抖音主页</a>
                   ) : (
-                    <span data-testid="acq-lead-partial-badge" className="text-xs text-orange-600">
-                      残缺/待核
-                    </span>
+                    <span data-testid="acq-lead-partial-badge" className="text-xs text-orange-400">残缺/待核</span>
                   )}
                 </li>
               ))}
@@ -266,68 +330,28 @@ export default function LeadsPage() {
         )}
       </div>
 
-      <div className="text-sm text-gray-500 mb-2">共 {total} 条</div>
+      {/* 数量 */}
+      <div className="flex-shrink-0 text-xs text-gray-500">共 {total} 条</div>
 
-      <div className="overflow-x-auto">
-        <table
-          data-testid="leads-table"
-          className="w-full border-collapse text-sm"
-        >
-          <thead>
-            <tr className="bg-gray-50">
-              <th className="text-left px-4 py-2 border-b font-medium">抖音号</th>
-              <th className="text-left px-4 py-2 border-b font-medium">评论内容</th>
-              <th className="text-left px-4 py-2 border-b font-medium">等级</th>
-              <th className="text-left px-4 py-2 border-b font-medium">来源视频</th>
-              <th className="text-left px-4 py-2 border-b font-medium">时间</th>
-              <th className="text-left px-4 py-2 border-b font-medium">关键词</th>
-            </tr>
-          </thead>
-          <tbody>
-            {leads.length === 0 ? (
-              <tr>
-                <td colSpan={6} className="px-4 py-8 text-center text-gray-400">
-                  {loading ? '加载中...' : '暂无数据'}
-                </td>
-              </tr>
-            ) : (
-              leads.map((lead, idx) => (
-                <tr key={idx} className="hover:bg-gray-50 border-b">
-                  <td className="px-4 py-2">{lead.commenter_id}</td>
-                  <td className="px-4 py-2 max-w-xs truncate">{lead.comment_text}</td>
-                  <td className="px-4 py-2">
-                    <span
-                      data-testid="grade-badge"
-                      className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
-                        GRADE_STYLE[lead.grade] ?? 'bg-gray-100 text-gray-700'
-                      }`}
-                    >
-                      {lead.grade}
-                    </span>
-                  </td>
-                  <td className="px-4 py-2">
-                    {lead.source_video_url ? (
-                      <a
-                        href={lead.source_video_url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-blue-600 hover:underline truncate block max-w-xs"
-                      >
-                        {lead.source_video_url}
-                      </a>
-                    ) : (
-                      '-'
-                    )}
-                  </td>
-                  <td className="px-4 py-2 whitespace-nowrap">
-                    {lead.crawled_at ? new Date(lead.crawled_at).toLocaleString('zh-CN') : '-'}
-                  </td>
-                  <td className="px-4 py-2">{lead.keyword}</td>
-                </tr>
-              ))
+      {/* AG Grid 主表格 */}
+      <div className="flex-1 min-h-0" style={{ minHeight: '400px' }}>
+        <div className="ag-theme-quartz-dark" style={AG_THEME}>
+          <AgGridReact<Lead>
+            rowData={leads}
+            columnDefs={columnDefs}
+            defaultColDef={{ resizable: true, sortable: true, filter: true }}
+            rowHeight={46}
+            animateRows={true}
+            suppressMovableColumns={false}
+            suppressDragLeaveHidesColumns={true}
+            loadingOverlayComponent={() => (
+              <span className="text-gray-400 text-sm">加载中…</span>
             )}
-          </tbody>
-        </table>
+            noRowsOverlayComponent={() => (
+              <span className="text-gray-500 text-sm">暂无线索数据</span>
+            )}
+          />
+        </div>
       </div>
     </div>
   );
