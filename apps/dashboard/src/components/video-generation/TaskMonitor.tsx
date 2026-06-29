@@ -1,11 +1,6 @@
-/**
- * 任务监控组件
- */
-
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { Loader2, CheckCircle, XCircle, Clock } from 'lucide-react';
 import type { UnifiedTask } from '../../types/video-generation.types';
-import { pollTaskStatus } from '../../api/video-generation.api';
 
 interface TaskMonitorProps {
   taskId: string;
@@ -17,20 +12,61 @@ interface TaskMonitorProps {
 export default function TaskMonitor({ taskId, platform, onComplete, onError }: TaskMonitorProps) {
   const [task, setTask] = useState<UnifiedTask | null>(null);
   const [elapsedTime, setElapsedTime] = useState(0);
+  const sseRef = useRef<EventSource | null>(null);
 
   useEffect(() => {
-    // 轮询任务状态
-    pollTaskStatus(
-      platform,
-      taskId,
-      (updatedTask) => {
-        setTask(updatedTask);
-      },
-      3000, // 每 3 秒轮询一次
-      1800000 // 30 分钟超时（AI 视频生成通常需要 10-20 分钟）
-    )
-      .then(onComplete)
-      .catch(onError);
+    let closed = false;
+
+    // 初始拉取完整 task（含 platform/model 字段）
+    fetch(`/api/ai-video/task/${taskId}`)
+      .then((r) => r.json())
+      .then((data) => {
+        if (closed) return;
+        const t = data as UnifiedTask;
+        setTask(t);
+        if (t.status === 'completed') { onComplete(t); return; }
+        if (t.status === 'failed')    { onError(new Error(t.error?.message ?? 'Task failed')); return; }
+      })
+      .catch((e: unknown) => { if (!closed) onError(e instanceof Error ? e : new Error(String(e))); });
+
+    // SSE 实时推送
+    const es = new EventSource(`/api/ai-video/task/${taskId}/sse`);
+    sseRef.current = es;
+
+    es.onmessage = (event) => {
+      if (closed) return;
+      try {
+        const raw = JSON.parse(event.data) as { id: string; status: string; progress: number; error?: string };
+        setTask((prev) => {
+          if (!prev) return prev;
+          return {
+            ...prev,
+            status: raw.status as UnifiedTask['status'],
+            progress: raw.progress,
+            error: raw.error ? { message: raw.error } : prev.error,
+          };
+        });
+        if (raw.status === 'completed') {
+          es.close();
+          closed = true;
+          // 再拉一次获取 videoUrl 等终态字段
+          fetch(`/api/ai-video/task/${taskId}`)
+            .then((r) => r.json())
+            .then((data) => onComplete(data as UnifiedTask))
+            .catch(onError);
+        } else if (raw.status === 'failed') {
+          es.close();
+          closed = true;
+          onError(new Error(raw.error ?? 'Task failed'));
+        }
+      } catch { /* ignore parse error */ }
+    };
+
+    es.onerror = () => {
+      if (es.readyState === EventSource.CLOSED) {
+        sseRef.current = null;
+      }
+    };
 
     // 计时器
     const startTime = Date.now();
@@ -38,7 +74,12 @@ export default function TaskMonitor({ taskId, platform, onComplete, onError }: T
       setElapsedTime(Math.floor((Date.now() - startTime) / 1000));
     }, 1000);
 
-    return () => clearInterval(timer);
+    return () => {
+      closed = true;
+      es.close();
+      sseRef.current = null;
+      clearInterval(timer);
+    };
   }, [taskId, platform, onComplete, onError]);
 
   if (!task) {
@@ -77,16 +118,11 @@ export default function TaskMonitor({ taskId, platform, onComplete, onError }: T
   };
 
   const config = statusConfig[task.status] || {
-    // 兜底配置：当状态未知时显示加载状态
     icon: Loader2,
     color: 'text-blue-500',
     bgColor: 'bg-blue-50 dark:bg-blue-900/20',
     label: '加载中'
   };
-
-  if (!statusConfig[task.status]) {
-    console.warn('Unknown task status, using fallback:', task.status);
-  }
 
   const Icon = config.icon;
 
@@ -160,7 +196,6 @@ export default function TaskMonitor({ taskId, platform, onComplete, onError }: T
   );
 }
 
-// 格式化时间（秒 → MM:SS）
 function formatTime(seconds: number): string {
   const mins = Math.floor(seconds / 60);
   const secs = seconds % 60;
