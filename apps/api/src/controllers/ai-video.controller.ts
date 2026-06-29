@@ -3,6 +3,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { AiVideoService } from '../services/ai-video.service';
 import { AiVideoUploadService } from '../services/ai-video-upload.service';
+import { sseService } from '../services/sse.service';
 
 const aiVideoService = new AiVideoService();
 const uploadService = new AiVideoUploadService();
@@ -62,10 +63,21 @@ export class AiVideoController {
     try {
       const { id } = req.params;
       const generation = await aiVideoService.updateGeneration(id, req.body);
+      const TERMINAL_VIDEO = ['completed', 'failed'];
+      const emitData = { id: generation.id, status: generation.status, progress: (generation as { progress?: number }).progress ?? 0, error: (generation as { error_message?: string }).error_message ?? undefined };
+      if (TERMINAL_VIDEO.includes(generation.status)) {
+        sseService.close(generation.id, emitData);
+      } else {
+        sseService.emit(generation.id, emitData);
+      }
       res.json(generation);
     } catch (error) {
       next(error);
     }
+  }
+
+  async getGenerationByIdRaw(id: string) {
+    return aiVideoService.getGenerationById(id);
   }
 
   async deleteGeneration(req: Request, res: Response, next: NextFunction) {
