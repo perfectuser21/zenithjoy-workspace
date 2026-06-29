@@ -15,6 +15,25 @@ on:
         default: ''
 
 jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.pr_branch != '' && inputs.pr_branch || github.event.repository.default_branch }}
+      - name: Install psql
+        run: sudo apt-get install -y postgresql-client
+      - name: Run smoke
+        env:
+          API_URL: ${{ secrets.E2E_API_URL }}
+          DB_URL: ${{ secrets.E2E_DATABASE_URL }}
+          TENANT: "2ac0aa4a-99f4-470a-aed7-c3a9fe03149b"
+        run: |
+          SMOKE=".github/workflows/scripts/smoke/line02-company-profile-collect-smoke.sh"
+          if [ -f "$SMOKE" ]; then bash "$SMOKE"; else echo "smoke.sh not found, skipping"; fi
+
   e2e:
     runs-on: windows-latest
     timeout-minutes: 45
@@ -44,6 +63,8 @@ jobs:
           # ALIYUN_API_KEY is the GHA secret name for the Aliyun DashScope API key;
           # the ps1 script expects DASHSCOPE_API_KEY as the env var name
           DASHSCOPE_API_KEY: ${{ secrets.ALIYUN_API_KEY }}
+          E2E_DATABASE_URL: ${{ secrets.E2E_DATABASE_URL }}
+          E2E_API_URL: ${{ secrets.E2E_API_URL }}
         run: |
           $sprintDir = "${{ inputs.sprint_dir }}"
           $taskId = "${{ inputs.task_id }}"
