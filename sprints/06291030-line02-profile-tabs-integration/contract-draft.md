@@ -1,4 +1,4 @@
-# Sprint Contract Draft (Round 2)
+# Sprint Contract Draft (Round 3)
 
 ## Response Schema（推导来源: PRD 字面 + 现有路由代码推导）
 
@@ -480,4 +480,4 @@ echo "=== Line02 Smoke PASSED ==="
 |---|---|---|---|
 | 推荐关键词组合逻辑 | `tests/line02-profile-tabs.test.ts` | buildRecommendedKeywords 纯函数 | import 文件不存在 → 1 failure |
 | CompanyProfilePage Tab 布局 | `tests/line02-profile-tabs.test.ts` | Tab role 元素存在 | getByRole('tab') 返回 0 → 1 failure |
-| Playwright spec 去 stub | `tests/line02-profile-tabs.test.ts` | 无 page.route company-profile stub | 当前 spec 含 stub → 1 failure |
+| Playwright spec 去全局 stub | `tests/line02-profile-tabs.test.ts` | 无无条件 company-profile stub（EP-3 条件性 PUT 拦截允许保留）| 当前 spec 含无条件全局 stub → 1 failure |

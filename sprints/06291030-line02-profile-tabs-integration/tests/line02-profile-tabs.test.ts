@@ -103,10 +103,14 @@ describe('CompanyProfilePage Tab 布局 [BEHAVIOR]', () => {
       'apps/dashboard/e2e/line02-company-profile-collect.spec.ts',
       'utf8',
     );
-    // 当前 spec 含 MOCK_COMPANY_PROFILE 和 page.route stub → 本测试失败 = TDD Red
-    const hasCompanyProfileStub = src.includes("page.route('**/api/company-profile'");
-    if (hasCompanyProfileStub) {
-      throw new Error('Playwright spec 仍含 company-profile API stub，需删除 page.route 模拟');
+    // EP-3 错误路径测试中的条件性 PUT 拦截（含 method() 检查）允许保留
+    // 禁止的是无条件全局 stub（无 method() 检查），通常在 beforeEach 中
+    const parts = src.split("page.route('**/api/company-profile'");
+    for (let i = 1; i < parts.length; i++) {
+      const after = parts[i].slice(0, 400);
+      if (!after.includes('route.request().method()')) {
+        throw new Error('Playwright spec 仍含无条件 company-profile stub（缺 method() 检查），需删除旧全局 mock');
+      }
     }
   });
 });

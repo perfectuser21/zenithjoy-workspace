@@ -17,8 +17,8 @@ journey_type: user_facing
 - [ ] [ARTIFACT] `apps/dashboard/src/pages/CompanyProfilePage.tsx` 含 onBlur 自动保存逻辑
   Test: node -e "const c=require('fs').readFileSync('apps/dashboard/src/pages/CompanyProfilePage.tsx','utf8');if(!c.includes('onBlur')&&!c.includes('handleBlur'))process.exit(1)"
 
-- [ ] [ARTIFACT] `apps/dashboard/e2e/line02-company-profile-collect.spec.ts` 已删除 company-profile/acquisition API stubs
-  Test: node -e "const c=require('fs').readFileSync('apps/dashboard/e2e/line02-company-profile-collect.spec.ts','utf8');if(c.includes(\"page.route('**/api/company-profile\"))process.exit(1);if(c.includes(\"page.route('**/api/acquisition/collect\"))process.exit(1)"
+- [ ] [ARTIFACT] `apps/dashboard/e2e/line02-company-profile-collect.spec.ts` 已删除 beforeEach/无条件全局 company-profile stub（EP-3 在 it 块内含 method() 检查的条件性 PUT 拦截允许保留）；acquisition stub 完全删除
+  Test: node -e "const c=require('fs').readFileSync('apps/dashboard/e2e/line02-company-profile-collect.spec.ts','utf8');const parts=c.split(\"page.route('**/api/company-profile'\");for(let i=1;i<parts.length;i++){const after=parts[i].slice(0,400);if(!after.includes('route.request().method()')){console.error('FAIL: 无条件 company-profile stub（缺 method() 检查），旧全局 stub 仍存在');process.exit(1);}}if(c.includes(\"page.route('**/api/acquisition/collect\")){console.error('FAIL: acquisition stub 仍存在');process.exit(1);}console.log('OK')"
 
 - [ ] [ARTIFACT] `.github/workflows/scripts/smoke/line02-company-profile-collect-smoke.sh` 含 psql 时间窗验证（`NOW() - interval`）
   Test: node -e "const c=require('fs').readFileSync('.github/workflows/scripts/smoke/line02-company-profile-collect-smoke.sh','utf8');if(!c.includes('NOW() - interval'))process.exit(1)"
@@ -85,12 +85,12 @@ echo OK'
   Test: manual:bash -c 'API="${API_URL:-http://localhost:3000}"; TENANT="${TENANT:-2ac0aa4a-99f4-470a-aed7-c3a9fe03149b}"; CODE=$(curl -s -o /tmp/dod_err.json -w "%{http_code}" -X PUT "$API/api/company-profile" -H "Content-Type: application/json" -H "X-Tenant-Id: $TENANT" -d "{\"company_name\":\"\"}"); [ "$CODE" = "400" ] || { echo "FAIL: 空 company_name 未返 400，实际=$CODE"; exit 1; }; cat /tmp/dod_err.json | jq -e ".success == false" || { echo "FAIL: success!=false"; exit 1; }; echo OK'
   期望: OK
 
-### [BEHAVIOR 6] TDD 红证据 — tests/line02-profile-tabs.test.ts 在 Generator 实现前失败
+### [BEHAVIOR 6] TDD Green — tests/line02-profile-tabs.test.ts Generator 实现后全部通过
 
-- [ ] [BEHAVIOR] vitest run tests/line02-profile-tabs.test.ts 在 Generator 实现前失败（≥1 failure），实现后转绿
-  Test: manual:bash -c 'OUT=$(npx vitest run sprints/06291030-line02-profile-tabs-integration/tests/line02-profile-tabs.test.ts --reporter=verbose 2>&1 || true); echo "$OUT" | grep -qE "failed|FAIL" && { echo "RED-confirmed: $(echo "$OUT" | grep -oE "[0-9]+ failed" | head -1)"; } || echo "GREEN（Generator 已实现）"; exit 0'
-  期望: RED-confirmed（Generator 实现前）/ GREEN（Generator 实现后）
-  红证据: 2026-06-29 03:10 实测 — 7 failed (7)，错误：buildRecommendedKeywords not implemented + Playwright spec 含 company-profile stub + CompanyProfilePage 相关断言
+- [ ] [BEHAVIOR] tests/line02-profile-tabs.test.ts 单测全部通过（TDD Green，Generator 实现后）
+  Test: manual:bash -c 'npx vitest run sprints/06291030-line02-profile-tabs-integration/tests/line02-profile-tabs.test.ts --reporter=verbose'
+  期望: exit 0（全测试通过）
+  # 红证据（注释附记，不作为执行命令）: 2026-06-29 03:10 实测 — 7 failed (7)，buildRecommendedKeywords 未实现 + spec 全局 stub 存在 + CompanyProfilePage Tab 断言缺失
 
 ### [BEHAVIOR 7] 开场白 placeholder 含公司信息（FROM_PRD Step 7）
 
