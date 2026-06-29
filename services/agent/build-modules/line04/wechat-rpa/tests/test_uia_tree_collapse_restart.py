@@ -121,3 +121,44 @@ class TestRestartWechatForUia:
             "必须 taskkill 微信"
         fake_launch.assert_called_once()  # 必须 launch_weixin 重启
         assert result is True
+class TestRestartGuardedByRecentScan:
+    """回归（#950 误重启真因，xian-rog 0629 实地铁证坐实）：
+
+    心跳块在【隐藏态】裸读 `mw.descendants()`（未 _ensure_tray_visible）→ 恒报塌缩假象
+    （sessions=0/tree≤2），而同一微信 scan_unread（可见态）正在【连续 DELIVERED】。
+    旧逻辑据此假象反复误重启正在工作的微信 → 每次重启造成多分钟死区 → 回复变得断续 →
+    用户体感"回一次就不理"。#811(B方案)无此重启故超级稳定。
+
+    修法（决策 6fc13ca3）：以 scan_unread 的【可见态】读为准——只要 scan 在 grace 窗口内
+    读到过健康可见态树（微信能读会话 = 没塌缩），绝不重启。真持续塌缩（autologon 案例，
+    可见态仍 ≤2、scan 也读不到）才重启，保留 #950 对真塌缩的修复能力。
+
+    本文件是永久 regression test，禁止删除。
+    """
+
+    def test_no_restart_when_scan_read_recently(self):
+        # scan_unread 5s 前刚读到健康可见态树（正在连续送达）→ 即便心跳裸读报塌缩，也绝不重启
+        assert listen_chat._should_restart_for_collapsed_tree(
+            now=1000.0, last_restart_at=0.0, cooldown_s=600.0,
+            restarts_done=0, max_restarts=5,
+            last_readable_scan_at=995.0, readable_grace_s=90.0) is False
+
+    def test_restart_when_scan_stale_and_collapsed(self):
+        # scan 已 200s 没读到健康树（真塌缩，autologon 案例）+ 冷却已过 + 未到上限 → 允许重启
+        assert listen_chat._should_restart_for_collapsed_tree(
+            now=1000.0, last_restart_at=0.0, cooldown_s=600.0,
+            restarts_done=0, max_restarts=5,
+            last_readable_scan_at=800.0, readable_grace_s=90.0) is True
+
+    def test_readable_guard_overrides_cooldown_and_max(self):
+        # 近期可读优先级最高：即便冷却已过，只要微信能读会话就不重启（不打断正在工作的微信）
+        assert listen_chat._should_restart_for_collapsed_tree(
+            now=2000.0, last_restart_at=1000.0, cooldown_s=600.0,
+            restarts_done=0, max_restarts=5,
+            last_readable_scan_at=1990.0, readable_grace_s=90.0) is False
+
+    def test_backward_compat_default_no_guard(self):
+        # 不传 readable 参数（向后兼容默认）→ 守卫不生效，沿用旧冷却/上限判定
+        assert listen_chat._should_restart_for_collapsed_tree(
+            now=5000.0, last_restart_at=0.0, cooldown_s=600.0,
+            restarts_done=0, max_restarts=5) is True
