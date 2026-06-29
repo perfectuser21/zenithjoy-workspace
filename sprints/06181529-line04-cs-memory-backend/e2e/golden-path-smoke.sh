@@ -26,9 +26,11 @@ psql "postgresql://${DATABASE_USER}:${DATABASE_PASSWORD}@${DATABASE_HOST}:${DATA
   || psql "postgresql://${DATABASE_USER}:${DATABASE_PASSWORD}@${DATABASE_HOST}:${DATABASE_PORT}/postgres" \
        -c "CREATE DATABASE \"${DATABASE_NAME}\""
 psql "$PSQL" -c "CREATE SCHEMA IF NOT EXISTS zenithjoy; CREATE EXTENSION IF NOT EXISTS pgcrypto;"
-MIG=$(ls "$API_DIR"/db/migrations/*cs_memory*.sql "$API_DIR"/db/migrations/*tenant_memory*.sql 2>/dev/null | head -1)
-[ -n "$MIG" ] || { echo "FAIL: 找不到三层记忆 migration"; exit 1; }
-psql "$PSQL" -f "$MIG"
+# 应用全部三层记忆相关 migration（按文件名排序：CREATE 表在前、后续 ALTER 加列在后，幂等 IF NOT EXISTS）。
+# 注：曾只 head -1 取建表那条 → 后加的 cs_wechat_id 列 ALTER 不被应用，appendTenantMessage INSERT 该列即 FAIL。
+MIGS=$(ls "$API_DIR"/db/migrations/*cs_memory*.sql "$API_DIR"/db/migrations/*tenant_memory*.sql 2>/dev/null | sort -u)
+[ -n "$MIGS" ] || { echo "FAIL: 找不到三层记忆 migration"; exit 1; }
+while IFS= read -r MIG; do [ -n "$MIG" ] && psql "$PSQL" -f "$MIG"; done <<< "$MIGS"
 
 # 1) 起服务
 ( cd "$API_DIR" && npm run dev >/tmp/line04-mem-e2e.log 2>&1 ) &
