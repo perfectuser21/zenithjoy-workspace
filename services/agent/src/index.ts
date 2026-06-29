@@ -44,6 +44,7 @@ import type { EventReporterConfig } from './shared/event-reporter';
 import { handleQrBindDouyin } from './handlers/qr-bind-douyin';
 // Path 2 Sprint B-1 — burner 小号绑定 handler（独立文件，与 Path 1 主号物理隔离）
 import { handleQrBindDouyinBurner } from './handlers/qr-bind-douyin-burner';
+import { writeEnvVar } from './utils/write-env-var';
 // Path 2 — 抖音私信主动触达 handler（burner 号驱动真机 chrome 发私信）
 import { handleDouyinDmOutreach } from './handlers/douyin-dm-outreach';
 // 运营中枢 — 8 平台主号统一 qr-bind handler（Line 00 Session Health Medium）
@@ -865,7 +866,19 @@ function startWs1HeartbeatLoop(cfg: AgentConfig): void {
         // 观测：qr-bind 失败必把 handler 的 error 原样上报中台（playwright 未安装 /
         // Edge 启动失败 / profile 锁等）—— 本 sprint 核心目的。
         if (res.ok) {
-          void reportTaskOk(eventCfg, { platform: task.platform, taskId: task.task_id, accountLabel: (task.payload as { account_label?: string }).account_label });
+          // 绑定成功：把 burner Chrome profile 路径写入 .env，让 keyword-search 走有头模式
+          const accountLabel = (task.payload as { account_label?: string }).account_label ?? 'default';
+          const burnerDataDir = process.platform === 'win32'
+            ? path.join('C:\\Temp', 'zj-douyin-burner-v1', accountLabel)
+            : path.join(os.homedir(), '.zenithjoy-agent', 'chrome-profile', 'douyin-burner', accountLabel);
+          try {
+            writeEnvVar(path.join(path.dirname(process.execPath), '.env'), 'ZJ_MAIN_DATA_DIR', burnerDataDir);
+            process.env.ZJ_MAIN_DATA_DIR = burnerDataDir;
+            console.log(`[p2-b1:qr_bind] 已写 ZJ_MAIN_DATA_DIR=${burnerDataDir}`);
+          } catch (e) {
+            console.warn('[p2-b1:qr_bind] 写 ZJ_MAIN_DATA_DIR 失败:', e);
+          }
+          void reportTaskOk(eventCfg, { platform: task.platform, taskId: task.task_id, accountLabel });
         } else {
           void reportTaskFail(eventCfg, { platform: task.platform, taskId: task.task_id, error: res.error ?? 'unknown', accountLabel: (task.payload as { account_label?: string }).account_label });
         }
