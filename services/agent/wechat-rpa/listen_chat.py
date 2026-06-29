@@ -414,10 +414,12 @@ def scan_unread(mw: Any, last_content: Optional[Dict[str, str]] = None) -> List[
     扫完再 _restore_tray SW_HIDE(0) 送回托盘（用户几乎无感知）。
     """
     orig_state = _ensure_tray_visible(mw)
-    # Qt 虚拟列表只渲染可视区。CRM scan_recent_contacts 会把列表滚到底，
-    # 导致下一轮 scan_unread 只能看到底部条目，顶部新未读被漏掉。
-    # 扫前强制回顶（切通讯录→切回微信），确保从顶部开始扫。
-    _reset_session_list_to_top(mw)
+    # ⚠️ 绝不在这里切 tab 回顶（回归 2026-06-29，对齐 74654efd「直接读列表」）。
+    # 曾经（#955）每轮扫描前 _reset_session_list_to_top（切通讯录→切回微信）回顶，但 rog 真机上
+    # 这个切 tab 会失败（找不到「微信」按钮）→ 切去通讯录回不来 → 微信卡在通讯录 tab、无会话列表 →
+    # sessions=0 → 之后全收不到 → 用户体感「回一次就不理」。为治"CRM 扫好友滚到底漏顶部"的偶发
+    # 问题（CRM 扫描每天/手动才一次），却把最核心的"连续回复"每轮都置于风险，得不偿失。
+    # 正确做法：列表始终保持在顶（CRM 扫描收尾自己回顶），scan_unread 直接读即可。
     out: List[Dict[str, Any]] = []
     seen_senders: set[str] = set()
     for it in mw.descendants(control_type="ListItem"):
@@ -1026,15 +1028,25 @@ def _reset_session_list_to_top(mw: Any) -> bool:
             except Exception:
                 continue
             buttons.append((nm, r))
-        ok = False
-        for tab in ("通讯录", "微信"):
-            pt = _find_left_nav_button_point(buttons, tab, left_max=90)
-            if pt is None:
-                _log(f"_reset_session_list_to_top: 左导航栏找不到「{tab}」按钮")
-                continue
-            if _click_screen_point(mw, pt):
-                ok = True
-                time.sleep(0.3)  # 等 tab 切换 + 列表重建
+        # 原子：先找齐「通讯录」+「微信」两个按钮再切。绝不"切去通讯录又找不到微信按钮回不来"——
+        # 那会把微信卡在通讯录 tab、会话列表消失（回归根因）。任一按钮缺失 → 直接跳过不切。
+        pt_contacts = _find_left_nav_button_point(buttons, "通讯录", left_max=90)
+        pt_wechat = _find_left_nav_button_point(buttons, "微信", left_max=90)
+        if pt_contacts is None or pt_wechat is None:
+            _log(
+                f"_reset_session_list_to_top: 导航按钮不全("
+                f"通讯录={pt_contacts is not None},微信={pt_wechat is not None})，跳过切tab(不卡死会话列表)"
+            )
+            return False
+        # 切通讯录 → 切回微信；务必收尾在微信 tab（点不回就再试一次，绝不留在通讯录）。
+        if not _click_screen_point(mw, pt_contacts):
+            return False
+        time.sleep(0.3)
+        ok = _click_screen_point(mw, pt_wechat)
+        time.sleep(0.3)
+        if not ok:
+            ok = _click_screen_point(mw, pt_wechat)  # 兜底重试，确保回到微信
+            time.sleep(0.3)
         return ok
     except Exception as exc:
         _log(f"_reset_session_list_to_top: 切 tab 回顶异常: {exc}")
@@ -1084,6 +1096,9 @@ def scan_recent_contacts(mw: Any, limit: int = 100) -> List[Dict[str, str]]:
             time.sleep(_SCROLL_SETTLE_SLEEP)
         return acc.contacts()
     finally:
+        # CRM 扫描把列表滚到了底；扫完回顶一次，让下一轮 scan_unread（已不再自己切 tab）从顶部读到。
+        # _reset 已原子化：找不齐导航按钮就不切，不会把微信卡在通讯录。
+        _reset_session_list_to_top(mw)
         _restore_window_state(mw, orig_state)
 
 
