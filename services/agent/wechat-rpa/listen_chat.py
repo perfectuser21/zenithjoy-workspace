@@ -414,6 +414,13 @@ def scan_unread(mw: Any, last_content: Optional[Dict[str, str]] = None) -> List[
     扫完再 _restore_tray SW_HIDE(0) 送回托盘（用户几乎无感知）。
     """
     orig_state = _ensure_tray_visible(mw)
+    # 记录【可见态】整树大小(窗口此刻已 ensure_visible，与 _is_uia_tree_collapsed 同口径)：主循环据此
+    # 更新 last_readable_scan_at——心跳块裸读处于隐藏态恒报塌缩假象，读到健康树=微信能读会话=没塌缩。
+    global _LAST_VISIBLE_TREE_SIZE
+    try:
+        _LAST_VISIBLE_TREE_SIZE = len(mw.descendants())
+    except Exception:
+        pass
     # ⚠️ 绝不在这里切 tab 回顶（回归 2026-06-29，对齐 74654efd「直接读列表」）。
     # 曾经（#955）每轮扫描前 _reset_session_list_to_top（切通讯录→切回微信）回顶，但 rog 真机上
     # 这个切 tab 会失败（找不到「微信」按钮）→ 切去通讯录回不来 → 微信卡在通讯录 tab、无会话列表 →
@@ -2497,6 +2504,11 @@ _COLLAPSED_SUSTAIN_SECONDS = 90         # 树持续塌缩 ≥ 此时长才重启
 _WECHAT_RESTART_COOLDOWN_SECONDS = 600  # 两次重启间隔 ≥ 10min(重启重而慢,防抖)
 _WECHAT_RESTART_MAX = 5                 # 单 listener 进程生命周期内最多重启 5 次(防无限重启 loop)
 
+# scan_unread 每轮在【可见态】(_ensure_tray_visible 后)量到的整树大小。心跳块裸读 mw.descendants()
+# 处于【隐藏态】会恒报塌缩假象(sessions=0/tree≤2)，而同一微信 scan_unread 正在连续 DELIVERED；
+# 塌缩自愈须以此【可见态】读为准，否则反复误重启正在工作的微信(rog 0629 铁证;decision 6fc13ca3)。
+_LAST_VISIBLE_TREE_SIZE: Optional[int] = None
+
 
 def _is_uia_tree_collapsed(descendants_count: int) -> bool:
     """纯函数(CI可测)：mmui::MainWindow 整树是否塌缩(无障碍树未构建)。
@@ -2511,12 +2523,21 @@ def _is_uia_tree_collapsed(descendants_count: int) -> bool:
 def _should_restart_for_collapsed_tree(
     now: float, last_restart_at: float, cooldown_s: float,
     restarts_done: int, max_restarts: int,
+    last_readable_scan_at: float = 0.0, readable_grace_s: float = 0.0,
 ) -> bool:
     """纯函数(CI可测)：塌缩已持续达阈值后，是否现在重启微信。
 
-    冷却(防抖：重启重而慢，别每轮都杀) + 单进程重启上限(防"重启也修不好"时无限 loop，
-    留给进程级/人工介入)。调用方负责"塌缩已持续 _COLLAPSED_SUSTAIN_SECONDS"的前置判断。
+    ⭐可读守卫(decision 6fc13ca3，xian-rog 0629 铁证)：心跳块裸读 mw.descendants() 处于【隐藏态】
+    会恒报塌缩假象，而 scan_unread【可见态】同时正在连续 DELIVERED。以 scan 的可见态读为准——
+    若 scan 在 readable_grace_s 窗口内读到过健康可见态树(微信能读会话=没塌缩)，绝不重启，避免
+    误重启正在工作的微信造成多分钟死区("回一次就不理"真因)。真持续塌缩(autologon 案例，可见态
+    仍 ≤2、scan 也读不到)时 readable 时刻不更新→守卫自动放行→仍能重启，保留 #950 对真塌缩的修复。
+
+    冷却(防抖：重启重而慢) + 单进程重启上限(防无限重启 loop)。调用方负责"塌缩已持续阈值"前置判断。
     """
+    # 可读守卫优先：微信能读会话就绝不重启(即便心跳裸读报塌缩、即便冷却已过)
+    if readable_grace_s > 0 and (now - last_readable_scan_at) < readable_grace_s:
+        return False
     if restarts_done >= max_restarts:
         return False
     if now - last_restart_at < cooldown_s:
@@ -2621,6 +2642,9 @@ def run_real_listen(args: argparse.Namespace) -> int:
     collapsed_tree_since: Optional[float] = None
     last_wechat_restart = 0.0
     wechat_restart_count = 0
+    # scan_unread 最近一次读到【健康可见态树】的时刻：塌缩自愈据此绝不重启正在能读会话的微信
+    # (心跳裸读隐藏态恒报塌缩假象，rog 0629 铁证；decision 6fc13ca3)。
+    last_readable_scan_at = 0.0
     # replied 过期清理：每 REPLIED_TTL 扫一次，确保过期条目在 TTL 后立即清除
     last_replied_purge = time.time()
     # 每客服配置：按 machine_id 周期性拉「自己那份」→ 缓存（断网用缓存继续判定，强制 dryrun）。
@@ -2755,6 +2779,8 @@ def run_real_listen(args: argparse.Namespace) -> int:
                     and _should_restart_for_collapsed_tree(
                         now, last_wechat_restart, _WECHAT_RESTART_COOLDOWN_SECONDS,
                         wechat_restart_count, _WECHAT_RESTART_MAX,
+                        last_readable_scan_at=last_readable_scan_at,
+                        readable_grace_s=_COLLAPSED_SUSTAIN_SECONDS,
                     )
                 ):
                     if _restart_wechat_for_uia():
@@ -2809,6 +2835,9 @@ def run_real_listen(args: argparse.Namespace) -> int:
                 time.sleep(args.interval)
                 continue
             last_unread_senders = [u["sender"] for u in unread]
+            # scan_unread 可见态读到健康树(非塌缩)=微信能读会话→记录时刻供塌缩自愈守卫(绝不误重启)
+            if _LAST_VISIBLE_TREE_SIZE is not None and not _is_uia_tree_collapsed(_LAST_VISIBLE_TREE_SIZE):
+                last_readable_scan_at = now
 
             # CRM 好友扫描上报（onboarding 必跑一次 + 每日一次低频，决策 3）：
             # machine_id 在册且已拉到自己 wechat_id → scan_recent_contacts → POST 中台 ingest。
