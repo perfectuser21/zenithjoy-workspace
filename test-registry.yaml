@@ -564,7 +564,7 @@ tests:
     ci: L2
     status: active
     product: AI员工
-    note: "hand-off B/F regression — start.bat 单实例守卫杀孤儿 listen_chat（Get-CimInstance 按命令行匹配）+ ZENITHJOY_ENV=staging 指向 staging-autopilot，默认仍 prod（core 2.0.41）"
+    note: "hand-off B/F/G regression — start.bat 单实例守卫杀孤儿 listen_chat（Get-CimInstance 按命令行匹配）+ ZENITHJOY_ENV=staging 指向 staging-autopilot，默认仍 prod + 清遗留 zj-start-listen.bat / 按签名清 Downloads 旧 agent 残留（core 2.0.43）"
 
   - id: agent-module-manager-cleanup
     path: services/agent/src/__tests__/module-manager-cleanup.test.ts
@@ -572,7 +572,7 @@ tests:
     ci: L2
     status: active
     product: AI员工
-    note: "hand-off B/C regression — OTA 升级 killModuleTree 杀整棵进程树（含 python listen_chat 孙进程）+ preflight 并发跳过保留上次状态不报假未安装（core 2.0.41）"
+    note: "hand-off B/C/D regression — OTA 升级 killModuleTree 杀整棵进程树（含 python listen_chat 孙进程）+ preflight 并发跳过保留上次状态不报假未安装 + OTA 切版后清旧版本目录只留 required_version（core 2.0.43）"
 
   - id: agent-listener-watchdog-crlf
     path: services/agent/src/__tests__/listener-watchdog-crlf.test.ts

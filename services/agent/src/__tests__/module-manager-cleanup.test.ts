@@ -81,9 +81,17 @@ describe('ModuleManager — agent 核心清理（hand-off 2）', () => {
       seedModule('1.0.0');
       seedModule('1.0.33');
 
-      const downloadImpl = vi.fn(async (_l: string, version: string) => {
-        seedModule(version);
-      });
+      // downloadImpl 必须写进传入的 staging 目录（ModuleManager 校验 staging 完整后原子 rename 落位）
+      const downloadImpl = vi.fn(
+        async (_l: string, version: string, _u: string, destDir: string) => {
+          fs.mkdirSync(destDir, { recursive: true });
+          fs.writeFileSync(
+            path.join(destDir, 'manifest.json'),
+            JSON.stringify({ lineId: 'line04-wechat-cs', version, entry: 'index.js' }),
+          );
+          fs.writeFileSync(path.join(destDir, 'index.js'), '');
+        },
+      );
       const forkImpl = vi.fn().mockReturnValue({
         pid: 0, kill: vi.fn(), on: vi.fn(), send: vi.fn(), connected: true,
       } as unknown as ChildProcess);
