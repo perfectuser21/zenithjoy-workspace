@@ -2,6 +2,9 @@
  * WS5 — DouyinBurnerBindPage.tsx (dashboard 绑小号 + 抓评论页) (CI 实跑落点)
  *
  * Path: apps/dashboard/tests/p2-sprint-b1-ws5/ (3 deep) → ../../src/pages/...
+ *
+ * 飞书门控已移除（PR #961），不再需要飞书 status fetch。
+ * fetch 顺序：① GET /api/agent/burner/sessions  ② GET /api/agent/burner/crawl-tasks/latest
  */
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
@@ -22,28 +25,18 @@ function renderPage() {
   );
 }
 
+function mockSessions(sessions: object[] = []) {
+  fetchMock.mockResolvedValueOnce({
+    ok: true,
+    json: async () => ({ success: true, data: { sessions } }),
+  } as any);
+  // crawl-tasks/latest → 404 / no data
+  fetchMock.mockRejectedValueOnce(new Error('404'));
+}
+
 describe('Workstream 5 — DouyinBurnerBindPage [BEHAVIOR]', () => {
-  it('飞书未绑（GET status bound=false）→ 表单 disabled + 提示「请先完成飞书绑定」', async () => {
-    fetchMock.mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({ success: true, data: { bound: false } }),
-    } as any);
-    renderPage();
-    await waitFor(() => {
-      expect(screen.getByText(/请先完成飞书绑定/)).toBeTruthy();
-    });
-  });
-
-  it('飞书已绑 + account_label=default → 校验报错 + 提交 disabled', async () => {
-    fetchMock.mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({ success: true, data: { bound: true } }),
-    } as any);
-    fetchMock.mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({ success: true, data: { sessions: [] } }),
-    } as any);
-
+  it('account_label=default → 校验报错 + 提交 disabled', async () => {
+    mockSessions([]);
     renderPage();
     await waitFor(() => {
       expect(screen.getByPlaceholderText(/account_label|小号名/i)).toBeTruthy();
@@ -54,27 +47,15 @@ describe('Workstream 5 — DouyinBurnerBindPage [BEHAVIOR]', () => {
   });
 
   it('GET sessions 返 burner 列表 → 渲染表格', async () => {
-    fetchMock.mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({ success: true, data: { bound: true } }),
-    } as any);
-    fetchMock.mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({
-        success: true,
-        data: {
-          sessions: [
-            {
-              account_label: '装修小号1',
-              role: 'burner',
-              status: 'active',
-              account_nickname: '小号A',
-              bound_at: '2026-05-10T10:00:00Z',
-            },
-          ],
-        },
-      }),
-    } as any);
+    mockSessions([
+      {
+        account_label: '装修小号1',
+        role: 'burner',
+        status: 'active',
+        account_nickname: '小号A',
+        bound_at: '2026-05-10T10:00:00Z',
+      },
+    ]);
     renderPage();
     await waitFor(() => {
       expect(screen.getByText('装修小号1')).toBeTruthy();
@@ -82,11 +63,8 @@ describe('Workstream 5 — DouyinBurnerBindPage [BEHAVIOR]', () => {
     });
   });
 
-  it('抓取完成（status=done + comment_count=5）→ 显示「抓取完成 5 条」+ Bitable URL', async () => {
-    fetchMock.mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({ success: true, data: { bound: true } }),
-    } as any);
+  it('抓取完成（status=done + comment_count=5）→ 显示「抓取完成 5 条」', async () => {
+    // sessions
     fetchMock.mockResolvedValueOnce({
       ok: true,
       json: async () => ({
@@ -94,40 +72,30 @@ describe('Workstream 5 — DouyinBurnerBindPage [BEHAVIOR]', () => {
         data: { sessions: [{ account_label: 'A', role: 'burner', status: 'active', account_nickname: 'A' }] },
       }),
     } as any);
+    // crawl-tasks/latest
     fetchMock.mockResolvedValueOnce({
       ok: true,
       json: async () => ({
         success: true,
-        data: {
-          status: 'done',
-          comment_count: 5,
-          lead_write_status: 'success',
-          feishu_bitable_url: 'https://feishu.cn/base/bascn_xxx',
-        },
+        data: { status: 'done', comment_count: 5, lead_write_status: 'success' },
       }),
     } as any);
     renderPage();
     await waitFor(() => {
       expect(screen.getByText(/抓取完成.*5/)).toBeTruthy();
     });
-    expect(screen.getByText(/feishu\.cn\/base/)).toBeTruthy();
   });
 
   it('comment_count=0 → 显示「该视频暂无评论」', async () => {
-    fetchMock.mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({ success: true, data: { bound: true } }),
-    } as any);
+    // sessions
     fetchMock.mockResolvedValueOnce({
       ok: true,
       json: async () => ({ success: true, data: { sessions: [{ account_label: 'A', role: 'burner', status: 'active' }] } }),
     } as any);
+    // crawl-tasks/latest
     fetchMock.mockResolvedValueOnce({
       ok: true,
-      json: async () => ({
-        success: true,
-        data: { status: 'done', comment_count: 0 },
-      }),
+      json: async () => ({ success: true, data: { status: 'done', comment_count: 0 } }),
     } as any);
     renderPage();
     await waitFor(() => {
