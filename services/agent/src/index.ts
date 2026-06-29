@@ -53,7 +53,7 @@ import { createFolderWatchManager } from './handlers/folder-watch';
 import { startHealthServer, setWsState } from './handlers/health-server';
 import { startVideoPipelineLoop } from './handlers/video-pipeline';
 import { searchDouyinVideosByKeyword } from './handlers/keyword-search-douyin';
-import { ensureChromeHeadlessShell } from './handlers/ensure-chrome';
+import { ensureChromeHeadlessShell, ensureChromiumHeadful } from './handlers/ensure-chrome';
 import { ensureFfmpeg } from './handlers/ensure-ffmpeg';
 import { ensureHyperframes } from './handlers/ensure-hyperframes';
 import { sanitizeApiBase } from './utils/sanitize-env';
@@ -1038,6 +1038,8 @@ function startWs1HeartbeatLoop(cfg: AgentConfig): void {
 
   // Chrome is non-critical for video pipeline startup — non-blocking
   ensureChromeHeadlessShell().catch((e) => console.warn('[chrome] ensure failed:', e));
+  // Full headful Chromium for QR-bind (downloads if no system Chrome installed)
+  ensureChromiumHeadful().catch((e) => console.warn('[chrome-headful] ensure failed:', e));
 }
 
 

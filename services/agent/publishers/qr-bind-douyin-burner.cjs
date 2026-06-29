@@ -54,6 +54,13 @@ function findSystemChrome() {
   return null;
 }
 
+// Agent 启动时后台下载并解压到此路径（ensureChromiumHeadful in ensure-chrome.ts）。
+// 路径与 index.ts / ensure-chrome.ts 保持一致，跨 OTA 不丢。
+function findBundledChromium() {
+  const exe = path.join(os.homedir(), '.zenithjoy-agent', 'chrome-win64', 'chrome.exe');
+  return fs.existsSync(exe) ? exe : null;
+}
+
 function getBurnerUserDataDir() {
   if (userDataDirRootArg) return path.join(userDataDirRootArg, accountLabel);
   if (process.platform === 'win32') {
@@ -92,30 +99,37 @@ async function main() {
     fs.mkdirSync(path.dirname(sessionPath), { recursive: true });
 
     // 多级浏览器 fallback（headful，用户可见扫码窗口）：
-    //   1. executablePath 文件系统探测（findSystemChrome，优先；覆盖任意安装路径）
-    //   2. bundled Chromium（pkg 内置，通常是 headless-shell，可能不支持 headful）
-    //   3. channel: 'msedge'（注册表查 Edge，最后兜底）
-    // 不再用 channel: 'chrome' —— Playwright 注册表路由在部分 Windows 机器上失效。
+    //   1. 系统 Chrome：findSystemChrome() 文件系统探测（LOCALAPPDATA / Program Files）
+    //   2. Agent 内置 Chromium：findBundledChromium()（agent 首次启动后台下载解压）
+    //   3. bundled headless-shell：通常 headful 会失败，兜底试一下
+    //   4. msedge channel：若客户装了 Edge
+    // 不用 channel:'chrome'——Playwright 注册表路由在部分客户机失效。
     const launchArgs = ['--no-sandbox', '--disable-setuid-sandbox'];
     const systemChrome = findSystemChrome();
+    const bundledChrome = findBundledChromium();
     if (systemChrome) {
-      process.stderr.write(`[qr-bind-douyin-burner] 探测到系统 Chrome: ${systemChrome}\n`);
+      process.stderr.write(`[qr-bind-douyin-burner] 系统 Chrome: ${systemChrome}\n`);
+    } else if (bundledChrome) {
+      process.stderr.write(`[qr-bind-douyin-burner] agent 内置 Chromium: ${bundledChrome}\n`);
+    } else {
+      process.stderr.write(`[qr-bind-douyin-burner] 未找到 Chrome/内置 Chromium（agent 仍在下载？），尝试 headless-shell / msedge\n`);
     }
     for (const opts of [
-      ...(systemChrome ? [{ headless: false, executablePath: systemChrome, args: launchArgs }] : []),
+      ...(systemChrome   ? [{ headless: false, executablePath: systemChrome,   args: launchArgs }] : []),
+      ...(bundledChrome  ? [{ headless: false, executablePath: bundledChrome,   args: launchArgs }] : []),
       { headless: false, args: launchArgs },
       { headless: false, channel: 'msedge', args: launchArgs },
     ]) {
       try {
         context = await chromium.launchPersistentContext(userDataDir, opts);
-        process.stderr.write(`[qr-bind-douyin-burner] 已 launch (${JSON.stringify(opts)})\n`);
+        process.stderr.write(`[qr-bind-douyin-burner] launched (${JSON.stringify(opts)})\n`);
         break;
       } catch (e) {
         process.stderr.write(`[qr-bind-douyin-burner] launch 失败 ${JSON.stringify(opts)}: ${e.message}\n`);
       }
     }
     if (!context) {
-      throw new Error('无法启动浏览器：system chrome / bundled chromium / msedge 均不可用');
+      throw new Error('无法启动浏览器：system Chrome / agent bundled Chromium / msedge 均不可用。请等 agent 完成 Chromium 下载后重试（~2分钟），或手动安装 Chrome。');
     }
 
     const existing = context.pages();

@@ -6,6 +6,51 @@ import os from 'os';
 
 const execAsync = promisify(exec);
 
+// ── 完整版 Chromium（headful，qr-bind 扫码窗口用）────────────────────────────
+// 存 ~/.zenithjoy-agent/chrome-win64/，跨 OTA 不丢。
+// qr-bind-douyin-burner.cjs 的 findBundledChromium() 读同一路径。
+export const HEADFUL_CHROME_EXE = path.join(
+  os.homedir(), '.zenithjoy-agent', 'chrome-win64', 'chrome.exe',
+);
+const HEADFUL_CHROME_ZIP_URL =
+  'https://zenithjoy-static-1333590468.cos.accelerate.myqcloud.com/install-pack/chromium-win64-1223.zip';
+
+export async function ensureChromiumHeadful(): Promise<void> {
+  if (process.platform !== 'win32') return;
+  if (fs.existsSync(HEADFUL_CHROME_EXE)) {
+    const size = fs.statSync(HEADFUL_CHROME_EXE).size;
+    if (size > 50 * 1024 * 1024) {
+      console.log('[chrome-headful] already installed');
+      return;
+    }
+    console.warn(`[chrome-headful] corrupt (${size} bytes), re-downloading`);
+    fs.rmSync(path.dirname(HEADFUL_CHROME_EXE), { recursive: true, force: true });
+  }
+
+  const parentDir = path.dirname(path.dirname(HEADFUL_CHROME_EXE)); // ~/.zenithjoy-agent/
+  const zipPath = path.join(os.tmpdir(), 'zj-chromium-win64.zip');
+
+  console.log('[chrome-headful] downloading full Chromium (~182MB) for QR-bind…');
+  fs.mkdirSync(parentDir, { recursive: true });
+
+  try {
+    await execAsync(
+      `powershell -NoProfile -Command "` +
+      `Invoke-WebRequest -Uri '${HEADFUL_CHROME_ZIP_URL}' -OutFile '${zipPath}'; ` +
+      `Expand-Archive -Force -Path '${zipPath}' -DestinationPath '${parentDir}'; ` +
+      `Remove-Item -Force '${zipPath}'"`,
+      { timeout: 900_000, windowsHide: true },
+    );
+    if (!fs.existsSync(HEADFUL_CHROME_EXE)) {
+      throw new Error('chrome.exe not found after extraction');
+    }
+    console.log('[chrome-headful] installed →', HEADFUL_CHROME_EXE);
+  } catch (err) {
+    console.error('[chrome-headful] install failed (QR-bind falls back to msedge):', (err as Error).message?.slice(0, 200));
+    try { fs.rmSync(zipPath, { force: true }); } catch { /* ignore */ }
+  }
+}
+
 const CHROME_VERSION = 'win64-131.0.6778.85';
 const CHROME_EXE = path.join(
   os.homedir(),
