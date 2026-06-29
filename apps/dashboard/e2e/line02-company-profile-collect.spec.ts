@@ -174,9 +174,13 @@ test.describe('Line02 公司信息页 + 采集任务 Table', () => {
   });
 
   test('采集页 — 账号状态块 + 推荐关键词 chips', async ({ page }) => {
-    await page.goto(`${BASE_URL}/dashboard/acquisition-config`, { waitUntil: 'networkidle' });
-
-    await page.screenshot({ path: 'sprints/06291030-line02-profile-tabs-integration/screenshots/04-acquisition-chips.png' });
+    // 使用 domcontentloaded（比 networkidle 更稳定），再显式等待 React 挂载
+    await page.goto(`${BASE_URL}/dashboard/acquisition-config`, { waitUntil: 'domcontentloaded' });
+    // 等待 React 根节点有子元素（即 React 已挂载）
+    await page.waitForFunction(() => {
+      const root = document.getElementById('root');
+      return root !== null && root.childElementCount > 0;
+    }, { timeout: 15000 });
 
     // 验证账号状态块区域存在（标题总是渲染，无论有无账号）
     await expect(page.getByText('主号状态').first()).toBeVisible({ timeout: 15000 });
