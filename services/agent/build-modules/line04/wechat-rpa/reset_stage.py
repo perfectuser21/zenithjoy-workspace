@@ -17,10 +17,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Optional
 
-from find_weixin import _parse_version
+from find_weixin import _parse_version, MIN_BLOCKED_VERSION, MIN_REQUIRED_VERSION
 
-# 与 config.WECHAT_MIN_VERSION / find_weixin 守卫同基线：>= 4.1.8 放行（含 4.1.10+，Qt UIA 可用）。
-WECHAT_MIN_VERSION = (4, 1, 8)
+# 与 config.WECHAT_MIN/MAX / find_weixin 守卫同基线：锁 4.1.8.x（2026-06-29 反转放开上界）。
+# 只认 head==[4,1,8]：< 4.1.8 控件不可用；>= 4.1.9（含 4.1.10）控件适配未做 + 锁不住更新 → 拒。
+WECHAT_MIN_VERSION = MIN_REQUIRED_VERSION  # (4, 1, 8) 下界
+WECHAT_MAX_BLOCKED_VERSION = MIN_BLOCKED_VERSION  # (4, 1, 9) 上界（含）阻断
 
 
 @dataclass
@@ -34,12 +36,14 @@ class ResetResult:
 
 
 def _version_in_range(ver_str: Optional[str]) -> bool:
-    """微信版本是否在允许范围（>= 4.1.8）。读不到 / 解析失败 → False（拿不准不放行）。"""
+    """微信版本是否在允许范围（只认 4.1.8.x）。读不到 / 解析失败 → False（拿不准不放行）。"""
     parsed = _parse_version(ver_str)
     if parsed is None:
         return False
-    # 元组比较：(4,1,8,107) >= (4,1,8) 为 True；(4,1,7,99) >= (4,1,8) 为 False
-    return parsed >= WECHAT_MIN_VERSION
+    # 只比 head（major.minor.patch）三段，与 find_weixin / preflight 同口径，杜绝放行一处拒一处裂缝。
+    head = tuple(parsed[:3]) + (0,) * (3 - len(parsed[:3]))
+    # 下界：< 4.1.8 拒；上界：>= 4.1.9（含 4.1.10）拒 → 只剩 4.1.8.x 放行。
+    return WECHAT_MIN_VERSION <= head < WECHAT_MAX_BLOCKED_VERSION
 
 
 def reset_stage(driver: Any, *, expected_account: str) -> ResetResult:

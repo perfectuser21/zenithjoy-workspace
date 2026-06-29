@@ -2,10 +2,12 @@
 //
 // line04 微信AI客服模块 — 真实环境预检（自包含，不依赖 core 源码，可独立打包）。
 // 三项检测，失败给客户看得懂的中文 fixGuide：
-//   1. 微信版本 >= 4.1.8（仅 <4.1.8 控件配方不一致/无 mmui::MainWindow 不可用；4.1.10+ Qt UIA 可用，放行）
+//   1. 微信版本锁 4.1.8.x（只认 head==[4,1,8]）：<4.1.8 控件配方不一致/无 mmui::MainWindow；
+//      >=4.1.9（含 4.1.10）控件适配未做 + 重启自升锁不住 → 一律不支持，触发 installWeChat 降级到 4.1.8。
 //   2. python -c "import pywinauto" 可成功（驱动微信自动化的底层库）
 //   3. 可用内存 ≥ 4GB
 //
+// 降级后强版关更新（wechat_update_lock.py）锁住，重启不自升回 4.1.10；没真锁死 → preflight 诚实报红。
 // 非 Windows 平台：所有检测跳过并视为通过（ok:true），不崩溃。
 
 import { execSync, spawn, spawnSync } from 'node:child_process';
@@ -18,10 +20,13 @@ import https from 'node:https';
 export const WECHAT_DOWNLOAD_URL =
   'https://zenithjoy-static-1333590468.cos.accelerate.myqcloud.com/install-pack/wechat/WeChatWin_4.1.8.exe';
 
-// 受支持微信版本：>= 4.1.8 一律放行（含 4.1.9 / 4.1.10+）。2026-06-24 放开上界：
+// 受支持微信版本：锁 4.1.8.x（decision 3bb16367，2026-06-29 反转 6-24「放开上界」）。
 //   < 4.1.8（含 3.x / 4.0.x / 4.1.0~4.1.7）：控件配方不一致 / 无 mmui::MainWindow，RPA 不可用；
-//   >= 4.1.8：6-21 真机验证 Qt51514QWindowIcon 窗口 UIA 照样能发，不再因上界 fail。
-// 与 wechat-rpa/find_weixin.py（MIN_REQUIRED_VERSION=(4,1,8)，仅卡下界）保持一致。
+//   >= 4.1.9（含 4.1.10+）：UIA 机制虽一样，但新版控件适配未做（登录检测误报 / 自愈不自动登录 /
+//     会话回顶找不到导航按钮）+ 重启自动升级锁不住。4.1.8 已全适配验证（rog 真发 DELIVERED），
+//     统一锁死 4.1.8.x + 关自动更新，全网同一标准态。
+// 与 wechat-rpa/find_weixin.py（MIN_REQUIRED=(4,1,8) 下界 + MIN_BLOCKED=(4,1,9) 上界 = 只认 4.1.8.x）、
+//   config.py（WECHAT_MIN=(4,1,8) / WECHAT_MAX=(4,1,8,999)）一致，杜绝「一处放行一处拒」裂缝。
 const SUPPORTED_VERSION: readonly number[] = [4, 1, 8];
 const MIN_MEMORY_BYTES = 4 * 1024 ** 3;
 
@@ -32,6 +37,8 @@ export interface ModulePreflightResult {
     pywinauto?: boolean;
     memory?: boolean;
     verify_silent?: boolean;
+    verify_delivery?: boolean;
+    update_lock?: boolean;
   };
   fixGuide?: string;
   // 上报中台 module_status 的 reason（透出微信版本号 + 静默状态，供车队看板）。
@@ -51,17 +58,15 @@ export function parseVersionParts(version: string): number[] {
     });
 }
 
-// >= 4.1.8 一律支持（含 4.1.9 / 4.1.10+）：按 major.minor.patch 三段做版本比较，>= 基线返回 true。
-// 2026-06-24 放开上界——旧实现要求前三段 == 4.1.8 把 4.1.10+ 误判为不支持，导致 line04 永不激活。
+// 锁 4.1.8.x（decision 3bb16367，2026-06-29 反转 6-24）：只认 head==[4,1,8]，patch 段后的 build 号不限。
+// >=4.1.9（含 4.1.10）一律不支持 → 触发 installWeChat 卸载降级到 4.1.8。理由：4.1.10 控件适配未做 +
+// 微信版本碎片化运维不可控，客户机统一锁死 4.1.8 + 关自动更新，全网同一标准态。
 export function isWechatVersionSupported(version: string): boolean {
   const parts = parseVersionParts(version);
   const head: [number, number, number] = [parts[0] ?? 0, parts[1] ?? 0, parts[2] ?? 0];
-  // 三段元组字典序比较：head >= SUPPORTED_VERSION([4,1,8]) 即放行。
-  for (let i = 0; i < 3; i++) {
-    if (head[i] > SUPPORTED_VERSION[i]) return true;
-    if (head[i] < SUPPORTED_VERSION[i]) return false;
-  }
-  return true; // 三段完全相等（== 4.1.8.x）
+  return head[0] === SUPPORTED_VERSION[0]
+    && head[1] === SUPPORTED_VERSION[1]
+    && head[2] === SUPPORTED_VERSION[2]; // == 4.1.8.x
 }
 
 // WeChat/Weixin DWORD 有两种编码：
@@ -103,7 +108,8 @@ export function parseWechatVersionFromRegOutput(output: string): string | null {
 // ---------- 中文修复指引 ----------
 
 export function wechatFixGuide(found: string): string {
-  return `微信版本 ${found} 过低（需 >= 4.1.8）。请从此处下载 4.1.8：${WECHAT_DOWNLOAD_URL}`;
+  return `微信版本 ${found} 不支持（只认 4.1.8.x；<4.1.8 控件不可用，>=4.1.9 含 4.1.10 适配未做 + 锁不住自动更新）。` +
+    `请安装 4.1.8：${WECHAT_DOWNLOAD_URL}`;
 }
 
 export function pywinautoFixGuide(errMessage: string): string {
@@ -211,7 +217,7 @@ export function checkWechatVersion(): CheckOutcome {
   return {
     ok: false,
     fixGuide:
-      `未检测到受支持的微信安装（需已安装微信桌面版且版本 >= 4.1.8）。` +
+      `未检测到受支持的微信安装（需已安装微信桌面版且版本 == 4.1.8.x）。` +
       `如需安装 4.1.8：${WECHAT_DOWNLOAD_URL}`,
   };
 }
@@ -477,9 +483,66 @@ export function downloadFile(url: string, dest: string): Promise<void> {
   });
 }
 
+// ---------- 强版关更新（wechat_update_lock.py 接线）----------
+
+// 解析 wechat_update_lock.py（run_update_lock）输出 → 是否真锁死（纯函数，CI 可测）。
+//   locked:true            → ok（LOCKED）
+//   locked:false           → 红（NOT_LOCKED，诚实，不假装锁死）
+//   status:skipped（非 Win）→ skip 不误判红
+//   解析不出（空/乱码/缺 python）→ skip 不误判红
+export function interpretUpdateLock(exitCode: number, stdout: string): CheckOutcome {
+  const parsed = parseLastJsonLine(stdout);
+  if (parsed && parsed.status === 'skipped') {
+    return { ok: true, skipped: true, found: typeof parsed.detail === 'string' ? parsed.detail : '非 Windows 跳过关更新' };
+  }
+  if (parsed && parsed.locked === true) {
+    return { ok: true, found: 'LOCKED' };
+  }
+  if (parsed && parsed.locked === false) {
+    const detail = typeof parsed.detail === 'string' ? parsed.detail : '';
+    return {
+      ok: false,
+      found: 'NOT_LOCKED',
+      fixGuide: `微信自动更新未锁死（重启可能自升回 4.1.10）：${detail}`,
+    };
+  }
+  void exitCode;
+  return { ok: true, skipped: true };
+}
+
+// 跑强版关更新：spawnSync python wechat_update_lock.py（real run，run_update_lock 杀更新进程 +
+// 改名 .disabled + icacls + hosts 屏蔽 + AutoUpdate=0，并 interpret_lock_verify 诚实判定）。
+// MOCK_UPDATE_LOCK env（locked/not_locked/skip）可在任何平台注入；非 Windows 无 MOCK 时 skip。
+export function lockWechatUpdate(moduleDir?: string): CheckOutcome {
+  const mock = process.env.MOCK_UPDATE_LOCK;
+  if (mock === 'locked') return { ok: true, found: 'LOCKED' };
+  if (mock === 'not_locked') {
+    return { ok: false, found: 'NOT_LOCKED', fixGuide: '微信自动更新未锁死（重启可能自升回 4.1.10）。' };
+  }
+  if (mock === 'skip') return { ok: true, skipped: true };
+  if (process.platform !== 'win32') return { ok: true, skipped: true };
+
+  const dir = moduleDir ?? __dirname;
+  const python = getModulePython(dir);
+  const script = path.join(dir, 'wechat-rpa', 'wechat_update_lock.py');
+  if (!fs.existsSync(script)) {
+    return { ok: true, skipped: true, found: 'wechat_update_lock.py 缺失，跳过关更新' };
+  }
+  try {
+    const r = spawnSync(python, [script], { encoding: 'utf-8', windowsHide: true, timeout: 120_000 });
+    const exitCode = typeof r.status === 'number' ? r.status : 1;
+    const stdout = `${r.stdout ?? ''}\n${r.stderr ?? ''}`;
+    return interpretUpdateLock(exitCode, stdout);
+  } catch (e) {
+    return { ok: true, skipped: true, found: `关更新无法运行：${(e as Error).message}` };
+  }
+}
+
 // ---------- 自动修复：安装微信 ----------
 
-export async function installWeChat(downloadDir: string): Promise<void> {
+// 装完 4.1.8 后返回「强版关更新」的诚实结论（CheckOutcome）。调用方（autoRepair → runPreflight）
+// 据此决定 preflight 红绿：没真锁死不假装锁死。moduleDir 用于定位 wechat-rpa/wechat_update_lock.py。
+export async function installWeChat(downloadDir: string, moduleDir?: string): Promise<CheckOutcome> {
   const installer = path.join(downloadDir, 'WeChatWin_4.1.8.exe');
   await downloadFile(WECHAT_DOWNLOAD_URL, installer);
 
@@ -516,8 +579,12 @@ export async function installWeChat(downloadDir: string): Promise<void> {
     { windowsHide: true, timeout: 300_000 },
   );
 
-  // 锁更新动作已删（2026-06-24）：实测锁不住（客户机重启微信自动升 4.1.10），且 4.1.10 UIA
-  // 客服照样能发，锁既无效又无必要。装完即可，不再改名 WeixinUpdate.exe / 不再禁自动更新。
+  // 刀2（2026-06-29 反转 6-24「锁不住所以不锁」）：装完 4.1.8 后立刻调强版关更新锁住。
+  // 顺序必须「先装 4.1.8 → 再锁」（wechat_update_lock.py 假设当前已是目标版本，只关更新不重装）。
+  // 关更新做：杀更新进程 + WeixinUpdate.exe 改名 .disabled + icacls + hosts 屏蔽腾讯更新域名 +
+  // AutoUpdate=0（install-dir 与 AppData xwechat 两处更新器全锁）。listen_chat 每 5 分钟重施维持。
+  // 经 _repairFuncs 调用以便测试替换；返回 interpret_lock_verify 的诚实结论（没锁死不假装锁死）。
+  return _repairFuncs.lockWechatUpdate(moduleDir);
 }
 
 // ---------- 自动修复：安装 pywinauto ----------
@@ -547,17 +614,28 @@ export interface RepairTargets {
 export const _repairFuncs = {
   installWeChat,
   installPywinauto,
+  lockWechatUpdate,
 };
 
+// 返回降级链路里产生的「关更新」诚实结论（仅 wechatFailed 时才会装 4.1.8 + 锁更新）。
 export async function autoRepair(
   targets: RepairTargets,
   pythonPath: string,
   downloadDir: string,
-): Promise<void> {
+  moduleDir?: string,
+): Promise<{ updateLock?: CheckOutcome }> {
+  let updateLock: CheckOutcome | undefined;
   const tasks: Promise<void>[] = [];
-  if (targets.wechatFailed) tasks.push(_repairFuncs.installWeChat(downloadDir));
+  if (targets.wechatFailed) {
+    tasks.push(
+      _repairFuncs.installWeChat(downloadDir, moduleDir).then((r) => {
+        updateLock = r;
+      }),
+    );
+  }
   if (targets.pywinautoFailed) tasks.push(_repairFuncs.installPywinauto(pythonPath, downloadDir));
   await Promise.all(tasks);
+  return { updateLock };
 }
 
 // 解析模块自带的 python-embedded/python.exe，否则回退系统 python（Windows 无 python3）。
@@ -587,15 +665,27 @@ export async function runPreflight(moduleDir?: string): Promise<ModulePreflightR
   let pyw = await checkPywinauto(python);
   const mem = checkMemory();
 
+  // 降级链路里产生的「强版关更新」诚实结论（仅 wechatFailed → 装 4.1.8 → 锁更新时才有）。
+  let updateLock: CheckOutcome | undefined;
+
   // 自动修复（仅 Windows，非 CI mock 模式）
   if (process.platform === 'win32' && !process.env.MOCK_WECHAT_VERSION) {
     const needRepair = !wechat.ok || !pyw.ok;
     if (needRepair) {
-      await autoRepair({ wechatFailed: !wechat.ok, pywinautoFailed: !pyw.ok }, python, downloadDir);
+      const repair = await autoRepair(
+        { wechatFailed: !wechat.ok, pywinautoFailed: !pyw.ok }, python, downloadDir, dir,
+      );
+      updateLock = repair.updateLock;
       // 修复后重检
       wechat = checkWechatVersion();
       pyw = await checkPywinauto(python);
     }
+  }
+
+  // 测试 / 跨平台 mock 注入：MOCK_UPDATE_LOCK 时直接用 lockWechatUpdate 结果作为关更新闸
+  // （真机不设此 env，真实关更新结论来自上面降级链路；非降级机由 listen_chat 每 5 分钟维持锁）。
+  if (process.env.MOCK_UPDATE_LOCK) {
+    updateLock = lockWechatUpdate(dir);
   }
 
   // 软检测：微信进程是否在跑（ok 始终 true）
@@ -606,15 +696,19 @@ export async function runPreflight(moduleDir?: string): Promise<ModulePreflightR
   // 带发送接缝自检（真发到「文件传输助手」，验真送达 + 焦点归还）。环境不就绪 skip 不误红。
   const delivery = checkVerifyDelivery(dir);
 
+  // 关更新闸：present（降级机 / MOCK）才计入，未 present 视为通过（非降级机由 listen_chat 维持）。
+  const updateLockOk = updateLock ? updateLock.ok : true;
+
   const checks = {
     wechat_version: wechat.ok,
     pywinauto: pyw.ok,
     memory: mem.ok,
     verify_silent: silent.ok,
     verify_delivery: delivery.ok,
+    ...(updateLock ? { update_lock: updateLock.ok } : {}),
   };
 
-  // 透出到 module_status.reason（车队看板可见）：微信版本号 + 静默 + 真送达状态。
+  // 透出到 module_status.reason（车队看板可见）：微信版本号 + 静默 + 真送达 + 关更新状态。
   const summaryParts: string[] = [];
   if (wechat.found) summaryParts.push(`微信 ${wechat.found}`);
   else if (wechat.skipped) summaryParts.push('微信版本未检(非Windows)');
@@ -625,9 +719,12 @@ export async function runPreflight(moduleDir?: string): Promise<ModulePreflightR
   else if (delivery.found === 'NOT_DELIVERED') summaryParts.push('送达 NOT-DELIVERED');
   else if (delivery.found === 'NOT_RESTORED') summaryParts.push('焦点 NOT-RESTORED');
   else if (delivery.skipped) summaryParts.push('送达 跳过');
+  if (updateLock?.found === 'LOCKED') summaryParts.push('更新 LOCKED');
+  else if (updateLock?.found === 'NOT_LOCKED') summaryParts.push('更新 NOT-LOCKED');
+  else if (updateLock?.skipped) summaryParts.push('更新 跳过');
   const summary = summaryParts.join(' / ');
 
-  if (wechat.ok && pyw.ok && mem.ok && silent.ok && delivery.ok) {
+  if (wechat.ok && pyw.ok && mem.ok && silent.ok && delivery.ok && updateLockOk) {
     const okReasonParts = [summary, running.fixGuide].filter(Boolean);
     const okReason = okReasonParts.join(' / ');
     return {
@@ -638,7 +735,7 @@ export async function runPreflight(moduleDir?: string): Promise<ModulePreflightR
     };
   }
 
-  const fixGuide = [wechat, pyw, mem, silent, delivery]
+  const fixGuide = [wechat, pyw, mem, silent, delivery, ...(updateLock ? [updateLock] : [])]
     .filter((c) => !c.ok && c.fixGuide)
     .map((c) => c.fixGuide)
     .join('\n');

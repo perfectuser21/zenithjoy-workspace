@@ -474,14 +474,18 @@ def check_wechat_version(dry_run: bool = False) -> Dict[str, str]:
     ver_show = ".".join(str(x) for x in parsed)
 
     if action == "ok":
-        return make_check(name, "ok", f"微信版本 {ver_show} >= 4.1.8（含 4.1.10+，Qt UIA 可用），RPA 可用。")
+        return make_check(name, "ok", f"微信版本 {ver_show} = 4.1.8.x（已全适配验证），RPA 可用。")
 
     if action == "install":  # 理论上 parsed 非 None 不会走到这
         return make_check(name, "failed", "微信未安装（应先过'微信安装'项）。")
 
-    # downgrade 只可能是 < 4.1.8（控件配方不一致 / 无 mmui::MainWindow），必须卸载后装 4.1.8。
-    # （>= 4.1.8 现一律 ok，不再 downgrade；6-21 放开上界。）
-    reason = "低于基线 <4.1.8（控件配方不一致 / 无 mmui::MainWindow）"
+    # downgrade（2026-06-29 锁回 4.1.8.x）：可能是 < 4.1.8（控件配方不一致 / 无 mmui::MainWindow）
+    # 或 >= 4.1.9（含 4.1.10+，控件适配未做）。两者都卸载后装 4.1.8.x，把机器拉回基线。
+    head3 = tuple(parsed[:3]) + (0,) * (3 - len(parsed[:3]))
+    if head3 < MIN_REQUIRED_VERSION:
+        reason = "低于基线 <4.1.8（控件配方不一致 / 无 mmui::MainWindow）"
+    else:
+        reason = "高于基线 >=4.1.9（含 4.1.10+，新版控件适配未做 + 锁不住自动更新）"
     if dry_run or not _is_windows():
         return make_check(
             name,

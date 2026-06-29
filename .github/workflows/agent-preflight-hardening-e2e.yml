@@ -51,7 +51,7 @@ jobs:
           print('OK: 8项检测，无 lock_update')
           "
 
-      - name: E2E-1b 版本闸逻辑（4.1.9 放行 / 4.1.7 降级，cross-platform）
+      - name: E2E-1b 版本闸逻辑（锁 4.1.8.x：4.1.9/4.1.10 降级 / 4.1.7 降级 / 4.1.8.x 放行，cross-platform）
         run: |
           cd services/agent/wechat-rpa
           python -c "
@@ -59,18 +59,25 @@ jobs:
           from unittest.mock import patch
           sys.path.insert(0, '.')
           from preflight import check_wechat_version
-          # 4.1.9（>=4.1.8）→ 放行（6-21 放开上界 #852）
-          with patch('preflight.get_weixin_version', return_value='4.1.9'), \
+          # 4.1.8.107（== 4.1.8.x）→ 放行 ok
+          with patch('preflight.get_weixin_version', return_value='4.1.8.107'), \
                patch('preflight._is_windows', return_value=True):
-              hi = check_wechat_version(dry_run=True)
-          assert hi['status'] == 'ok', f'FAIL: 4.1.9（>=4.1.8）应放行 ok，实际 {hi[\"status\"]}'
+              base = check_wechat_version(dry_run=True)
+          assert base['status'] == 'ok', f'FAIL: 4.1.8.107 应放行 ok，实际 {base[\"status\"]}'
+          # 4.1.9 / 4.1.10（>=4.1.9 上界）→ 降级 failed（2026-06-29 锁回 4.1.8.x，反转放开上界）
+          for v in ('4.1.9', '4.1.10'):
+              with patch('preflight.get_weixin_version', return_value=v), \
+                   patch('preflight._is_windows', return_value=True):
+                  hi = check_wechat_version(dry_run=True)
+              assert hi['status'] == 'failed', f'FAIL: {v}（>=4.1.9）应降级 failed，实际 {hi[\"status\"]}'
+              assert '4.1.8' in hi.get('detail', ''), f'FAIL: {v} detail 未提及 4.1.8'
           # 4.1.7（<4.1.8 下界）→ 降级
           with patch('preflight.get_weixin_version', return_value='4.1.7'), \
                patch('preflight._is_windows', return_value=True):
               lo = check_wechat_version(dry_run=True)
           assert lo['status'] == 'failed', f'FAIL: 4.1.7（<4.1.8）应 failed，实际 {lo[\"status\"]}'
           assert '4.1.8' in lo.get('detail', ''), 'FAIL: detail 未提及 4.1.8'
-          print('OK: 4.1.9 放行 / 4.1.7 降级')
+          print('OK: 4.1.8.x 放行 / 4.1.9/4.1.10 降级 / 4.1.7 降级')
           "
 
       - name: Set up Node.js

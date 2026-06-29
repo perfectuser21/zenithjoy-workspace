@@ -27,6 +27,8 @@ import {
   installWeChat,
   installPywinauto,
   autoRepair,
+  lockWechatUpdate,
+  interpretUpdateLock,
   _repairFuncs,
 } from '../preflight';
 // checkWechatRunning 使用 node:child_process execSync，用 vi.mock 提升 mock（ESM 限制）
@@ -41,24 +43,30 @@ vi.mock('node:child_process', async (importOriginal) => {
 import { execSync } from 'node:child_process';
 import * as childProcessModule from 'node:child_process';
 
-describe('微信版本比较（纯函数，>= 4.1.8 一律支持；6-21 放开上界，仅卡 < 4.1.8 下界）', () => {
+describe('微信版本比较（纯函数，锁 4.1.8.x：只认 head==[4,1,8]，>=4.1.9 含 4.1.10 一律不支持）', () => {
   it('4.1.8.107 = 基线 → 支持', () => {
     expect(isWechatVersionSupported('4.1.8.107')).toBe(true);
   });
   it('4.1.8 → 支持', () => {
     expect(isWechatVersionSupported('4.1.8')).toBe(true);
   });
+  it('4.1.8.0 → 支持（patch 段后的 build 号不限）', () => {
+    expect(isWechatVersionSupported('4.1.8.0')).toBe(true);
+  });
   it('【必须是 4.1.8 不是小】4.1.7.25 低于基线 4.1.8 → 不支持', () => {
     expect(isWechatVersionSupported('4.1.7.25')).toBe(false);
   });
-  it('4.1.9 → 支持（6-21 放开上界，Qt UIA 可用）', () => {
-    expect(isWechatVersionSupported('4.1.9')).toBe(true);
+  it('4.1.9 → 不支持（锁 4.1.8.x：>=4.1.9 控件适配未做，触发降级）', () => {
+    expect(isWechatVersionSupported('4.1.9')).toBe(false);
+    expect(isWechatVersionSupported('4.1.9.57')).toBe(false);
   });
-  it('4.1.10 → 支持（死闸误判的核心版本，现放行）', () => {
-    expect(isWechatVersionSupported('4.1.10.0')).toBe(true);
+  it('★4.1.10.x → 不支持（核心：旧 >= 实现放行此版 → 此条 RED；锁后触发自动降级到 4.1.8）', () => {
+    expect(isWechatVersionSupported('4.1.10.0')).toBe(false);
+    expect(isWechatVersionSupported('4.1.10.27')).toBe(false);
   });
-  it('4.2.0 → 支持（>= 4.1.8 一律放行）', () => {
-    expect(isWechatVersionSupported('4.2.0')).toBe(true);
+  it('4.2.0 / 5.0.0.0 → 不支持（>=4.1.9 一律拒，只认 4.1.8.x）', () => {
+    expect(isWechatVersionSupported('4.2.0')).toBe(false);
+    expect(isWechatVersionSupported('5.0.0.0')).toBe(false);
   });
   it('3.9.12.19 旧版 3.x → 不支持（无 mmui::MainWindow，RPA 不可用）', () => {
     expect(isWechatVersionSupported('3.9.12.19')).toBe(false);
@@ -95,6 +103,13 @@ describe('注册表输出解析（mock reg query stdout）', () => {
     // 新公式 nibble-packed: major=(num>>16)&0xF=4, minor=(num>>12)&0xF=1, patch=(num>>8)&0xF=8, build=0x6b=107
     const out = 'HKEY_CURRENT_USER\\SOFTWARE\\Tencent\\Weixin\r\n    Version    REG_DWORD    0xf254186b\r\n';
     expect(parseWechatVersionFromRegOutput(out)).toBe('4.1.8.107');
+  });
+  it('解析 Weixin 4.x nibble DWORD 4.1.10.27（0xf2541a1b）→ 解出 4.1.10.27 且不支持（锁 4.1.8.x）', () => {
+    // nibble-packed: major=(>>16)&0xF=4, minor=(>>12)&0xF=1, patch=(>>8)&0xF=0xA=10, build=0x1b=27
+    const out = 'HKEY_CURRENT_USER\\SOFTWARE\\Tencent\\Weixin\r\n    Version    REG_DWORD    0xf2541a1b\r\n';
+    const decoded = parseWechatVersionFromRegOutput(out);
+    expect(decoded).toBe('4.1.10.27');
+    expect(isWechatVersionSupported(decoded as string)).toBe(false);
   });
   it('无 Version 字段返回 null', () => {
     expect(parseWechatVersionFromRegOutput('一些无关输出')).toBeNull();
@@ -151,7 +166,7 @@ describe('checkWechatVersion — 4.x Weixin 目录回退检测（regression: 曾
   });
 });
 
-describe('installWeChat — 锁更新动作已删（2026-06-24，不再改名 WeixinUpdate.exe）', () => {
+describe('installWeChat — 关更新交给 wechat_update_lock.py（2026-06-29 锁回 4.1.8，preflight.ts 本身不 renameSync）', () => {
   afterEach(() => vi.restoreAllMocks());
 
   function mockDownload() {
@@ -169,7 +184,39 @@ describe('installWeChat — 锁更新动作已删（2026-06-24，不再改名 We
     } as any);
   }
 
-  it('即使版本子目录有 WeixinUpdate.exe，installWeChat 也不再 renameSync 锁更新', async () => {
+  it('★装完 4.1.8 后调强版关更新 _repairFuncs.lockWechatUpdate（新接线，旧实现没调 → RED）', async () => {
+    mockDownload();
+    vi.spyOn(childProcessModule, 'spawnSync').mockReturnValue({ status: 0 } as any);
+    vi.spyOn(fs, 'existsSync').mockReturnValue(false);
+    const lockMock = vi
+      .spyOn(_repairFuncs, 'lockWechatUpdate')
+      .mockReturnValue({ ok: true, found: 'LOCKED' });
+
+    const result = await installWeChat(os.tmpdir(), '/moduleDir');
+
+    // 装完必须接线调强版关更新（先装后锁）
+    expect(lockMock).toHaveBeenCalledOnce();
+    // installWeChat 把 interpret_lock_verify 真实结论原样返回（不假装锁死）
+    expect(result?.ok).toBe(true);
+    expect(result?.found).toBe('LOCKED');
+  });
+
+  it('关更新报「未锁死」时 installWeChat 把 ok:false 如实返回（诚实，不假装锁死）', async () => {
+    mockDownload();
+    vi.spyOn(childProcessModule, 'spawnSync').mockReturnValue({ status: 0 } as any);
+    vi.spyOn(fs, 'existsSync').mockReturnValue(false);
+    vi.spyOn(_repairFuncs, 'lockWechatUpdate').mockReturnValue({
+      ok: false,
+      found: 'NOT_LOCKED',
+      fixGuide: '微信自动更新未锁死。',
+    });
+
+    const result = await installWeChat(os.tmpdir(), '/moduleDir');
+    expect(result?.ok).toBe(false);
+    expect(result?.found).toBe('NOT_LOCKED');
+  });
+
+  it('即使版本子目录有 WeixinUpdate.exe，installWeChat 也不在 preflight.ts 里 renameSync 锁更新', async () => {
     mockDownload();
     vi.spyOn(childProcessModule, 'spawnSync').mockReturnValue({ status: 0 } as any);
     const subPath = 'C:\\Program Files\\Tencent\\Weixin\\4.1.8.107\\WeixinUpdate.exe';
@@ -664,12 +711,12 @@ describe('runPreflight — 非 Windows 不触发 autoRepair', () => {
   });
 });
 
-// ── 回归测试：>= 4.1.8 一律放行（6-21 放开上界，死闸不再误判 4.1.10+）──
-// 根因（旧死闸）：曾"只认 4.1.8.x，>=4.1.9 一律 fail"，导致新机（微信 4.1.10+）
-// preflight 第一关 wechat_version 就 fail → module-manager 不激活 line04 → listen_chat 永不跑。
-// 6-21 真机验证 Qt51514QWindowIcon 窗口 UIA 照样能发，故放开上界：>= 4.1.8 一律 ok:true。
-// 仅 < 4.1.8 仍 blocking（这部分由下界用例守卫，见 4.1.7 mock 路径）。
-describe('runPreflight — >= 4.1.8 放行 / < 4.1.8 仍 blocking', () => {
+// ── 回归测试：锁 4.1.8.x（2026-06-29 反转 6-24 放开上界）──
+// 根因：preflight 字典序 >= 4.1.8 放行 → 4.1.10 被当合格、压根没进降级分支，
+//   但 find_weixin/listen_chat 已锁回 4.1.8.x（拒 4.1.10）→ 模块激活后 listener 版本断言炸，
+//   且 4.1.10 重启自升（锁不住）。收紧闸只认 4.1.8.x → 4.1.10 走已有 installWeChat 降级 + 关更新。
+// < 4.1.8 仍 blocking（下界），>= 4.1.9（含 4.1.10）也 blocking（上界）。
+describe('runPreflight — 只认 4.1.8.x（< 4.1.8 与 >= 4.1.9 均 blocking）', () => {
   const origMock = process.env.MOCK_WECHAT_VERSION;
 
   afterEach(() => {
@@ -678,21 +725,21 @@ describe('runPreflight — >= 4.1.8 放行 / < 4.1.8 仍 blocking', () => {
     vi.restoreAllMocks();
   });
 
-  it('MOCK_WECHAT_VERSION=4.1.10.0 时 runPreflight 返回 ok:true（死闸误判版本现放行）', async () => {
+  it('★MOCK_WECHAT_VERSION=4.1.10.0 时 runPreflight 返回 ok:false（旧 >= 实现放行 → RED）', async () => {
     if (process.platform === 'win32') return;
     process.env.MOCK_WECHAT_VERSION = '4.1.10.0';
     const result = await runPreflight(os.tmpdir());
-    expect(result.ok).toBe(true);
-    expect(result.checks.wechat_version).toBe(true);
+    expect(result.ok).toBe(false);
+    expect(result.checks.wechat_version).toBe(false);
     expect(result.reason).toContain('4.1.10.0');
   });
 
-  it('MOCK_WECHAT_VERSION=5.0.0.0 時 runPreflight 返回 ok:true（>= 4.1.8 一律放行）', async () => {
+  it('MOCK_WECHAT_VERSION=5.0.0.0 时 runPreflight 返回 ok:false（>= 4.1.9 上界阻断）', async () => {
     if (process.platform === 'win32') return;
     process.env.MOCK_WECHAT_VERSION = '5.0.0.0';
     const result = await runPreflight(os.tmpdir());
-    expect(result.ok).toBe(true);
-    expect(result.checks.wechat_version).toBe(true);
+    expect(result.ok).toBe(false);
+    expect(result.checks.wechat_version).toBe(false);
   });
 
   it('MOCK_WECHAT_VERSION=4.1.7.25 时 runPreflight 返回 ok:false（< 4.1.8 下界仍阻断）', async () => {
@@ -920,5 +967,122 @@ describe('checkVerifyDelivery — MOCK_VERIFY_DELIVERY env 注入（跨平台可
       expect(r.ok).toBe(true);
       expect(r.skipped).toBe(true);
     }
+  });
+});
+
+// ── 刀2：装完 4.1.8 后强版关更新（wechat_update_lock.py 接线）─────────────────
+// 收紧闸只降级不够（实测锁不住：4.1.10 重启自升回去）。installWeChat 装完 4.1.8 后必须
+// 调强版关更新模块（python wechat_update_lock.py，run_update_lock 的 interpret_lock_verify
+// 诚实判定）。没真锁死 → preflight 报红（不假装锁死）。这里测「解析 python 输出」纯函数 +
+// lockWechatUpdate 的 MOCK/skip 分支（环境无关，CI 验得了）；真机锁死 proven-to-fire 在 rog。
+
+describe('interpretUpdateLock — 解析 wechat_update_lock.py 输出（纯函数）', () => {
+  it('locked:true → ok（LOCKED）', () => {
+    const out = '日志\n' + JSON.stringify({ status: 'ok', locked: true, detail: '已关死' });
+    const r = interpretUpdateLock(0, out);
+    expect(r.ok).toBe(true);
+    expect(r.found).toBe('LOCKED');
+  });
+  it('★locked:false → 红（NOT_LOCKED，诚实不假装锁死）', () => {
+    const out = JSON.stringify({ status: 'warn', locked: false, detail: '仍有 1 个启用的更新器未锁' });
+    const r = interpretUpdateLock(1, out);
+    expect(r.ok).toBe(false);
+    expect(r.found).toBe('NOT_LOCKED');
+    expect(r.fixGuide).toMatch(/未锁死|更新器/);
+  });
+  it('status:skipped（非 Windows）→ skip 不误判红', () => {
+    const out = JSON.stringify({ status: 'skipped', locked: false, detail: '非 Windows，跳过关更新' });
+    const r = interpretUpdateLock(1, out);
+    expect(r.ok).toBe(true);
+    expect(r.skipped).toBe(true);
+  });
+  it('解析不出 JSON（乱码）→ skip 不误判红', () => {
+    const r = interpretUpdateLock(1, '乱码乱码\n系统找不到 python');
+    expect(r.ok).toBe(true);
+    expect(r.skipped).toBe(true);
+  });
+});
+
+describe('lockWechatUpdate — MOCK / 非 Windows 分支', () => {
+  afterEach(() => {
+    delete process.env.MOCK_UPDATE_LOCK;
+  });
+  it('MOCK_UPDATE_LOCK=locked → ok', () => {
+    process.env.MOCK_UPDATE_LOCK = 'locked';
+    const r = lockWechatUpdate();
+    expect(r.ok).toBe(true);
+    expect(r.found).toBe('LOCKED');
+  });
+  it('MOCK_UPDATE_LOCK=not_locked → 红', () => {
+    process.env.MOCK_UPDATE_LOCK = 'not_locked';
+    const r = lockWechatUpdate();
+    expect(r.ok).toBe(false);
+    expect(r.found).toBe('NOT_LOCKED');
+  });
+  it('MOCK_UPDATE_LOCK=skip → skipped', () => {
+    process.env.MOCK_UPDATE_LOCK = 'skip';
+    const r = lockWechatUpdate();
+    expect(r.ok).toBe(true);
+    expect(r.skipped).toBe(true);
+  });
+  it('非 Windows 且无 MOCK → skip（不真 spawn python）', () => {
+    if (process.platform === 'win32') return;
+    const r = lockWechatUpdate();
+    expect(r.ok).toBe(true);
+    expect(r.skipped).toBe(true);
+  });
+});
+
+describe('autoRepair — 降级后把关更新结论一路带回（先装 4.1.8 → 再锁更新）', () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it('wechatFailed:true 时 autoRepair 返回 installWeChat 的关更新结论', async () => {
+    vi.spyOn(_repairFuncs, 'installWeChat').mockResolvedValue({ ok: false, found: 'NOT_LOCKED' } as any);
+    vi.spyOn(_repairFuncs, 'installPywinauto').mockResolvedValue(undefined);
+
+    const result = await autoRepair(
+      { wechatFailed: true, pywinautoFailed: false }, 'python.exe', os.tmpdir(), '/moduleDir',
+    );
+    expect(result.updateLock?.ok).toBe(false);
+    expect(result.updateLock?.found).toBe('NOT_LOCKED');
+  });
+
+  it('wechatFailed:false（只修 pywinauto）时不带关更新结论', async () => {
+    vi.spyOn(_repairFuncs, 'installWeChat').mockResolvedValue({ ok: true, found: 'LOCKED' } as any);
+    vi.spyOn(_repairFuncs, 'installPywinauto').mockResolvedValue(undefined);
+
+    const result = await autoRepair(
+      { wechatFailed: false, pywinautoFailed: true }, 'python.exe', os.tmpdir(), '/moduleDir',
+    );
+    expect(result.updateLock).toBeUndefined();
+  });
+});
+
+describe('runPreflight — 关更新没锁死 → 整体 ok:false（MOCK_UPDATE_LOCK 跨平台注入）', () => {
+  afterEach(() => {
+    delete process.env.MOCK_WECHAT_VERSION;
+    delete process.env.MOCK_UPDATE_LOCK;
+    delete process.env.MOCK_VERIFY_SILENT;
+    delete process.env.MOCK_VERIFY_DELIVERY;
+  });
+
+  it('★4.1.8 + 关更新 not_locked → ok:false + checks.update_lock:false + reason 含 更新 NOT-LOCKED', async () => {
+    process.env.MOCK_WECHAT_VERSION = '4.1.8.107';
+    process.env.MOCK_UPDATE_LOCK = 'not_locked';
+    const r = await runPreflight(os.tmpdir());
+    expect(r.checks.update_lock).toBe(false);
+    expect(r.ok).toBe(false);
+    expect(r.reason).toMatch(/更新 NOT-LOCKED/);
+  });
+
+  it('4.1.8 + 关更新 locked → 不因关更新报红（reason 含 更新 LOCKED）', async () => {
+    process.env.MOCK_WECHAT_VERSION = '4.1.8.107';
+    process.env.MOCK_UPDATE_LOCK = 'locked';
+    process.env.MOCK_VERIFY_SILENT = 'silent';
+    process.env.MOCK_VERIFY_DELIVERY = 'delivered';
+    const r = await runPreflight(os.tmpdir());
+    expect(r.checks.update_lock).toBe(true);
+    expect(r.ok).toBe(true);
+    expect(r.reason).toMatch(/更新 LOCKED/);
   });
 });

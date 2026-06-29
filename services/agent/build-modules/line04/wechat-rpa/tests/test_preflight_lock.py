@@ -24,7 +24,7 @@ from preflight import CHECK_NAMES, check_wechat_version
 
 
 class TestVersionDowngradePath(unittest.TestCase):
-    """< 4.1.8 仍降级；>= 4.1.8（含 4.1.10+）放行（6-21 放开上界，#852）。"""
+    """只认 4.1.8.x：< 4.1.8 降级；>= 4.1.9（含 4.1.10）也降级（2026-06-29 锁回 4.1.8.x）。"""
 
     def test_version_417_below_baseline_downgrade(self):
         """版本 4.1.7（< 4.1.8 下界）在 dry_run 模式下 → status=failed，detail 含 4.1.8。"""
@@ -36,13 +36,15 @@ class TestVersionDowngradePath(unittest.TestCase):
         self.assertIn("4.1.8", result.get("detail", ""),
             "detail 应包含 '4.1.8' 降级说明")
 
-    def test_version_4110_above_baseline_ok(self):
-        """版本 4.1.10（>= 4.1.8）→ status=ok（放开上界，不再降级）。"""
+    def test_version_4110_above_baseline_downgrade(self):
+        """版本 4.1.10（>= 4.1.9 上界）→ status=failed（锁 4.1.8.x，控件适配未做，降级回 4.1.8）。"""
         with patch("preflight.get_weixin_version", return_value="4.1.10"), \
              patch("preflight._is_windows", return_value=True):
             result = check_wechat_version(dry_run=True)
-        self.assertEqual(result["status"], "ok",
-            f"版本 4.1.10（>=4.1.8）应放行 ok，实际: {result['status']}")
+        self.assertEqual(result["status"], "failed",
+            f"版本 4.1.10（>=4.1.9）应降级 failed，实际: {result['status']}")
+        self.assertIn("4.1.8", result.get("detail", ""),
+            "detail 应包含 '4.1.8' 降级说明")
 
 
 class TestCheckNamesNoLockUpdate(unittest.TestCase):
