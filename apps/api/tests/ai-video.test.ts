@@ -12,7 +12,7 @@ const mockMethods = vi.hoisted(() => ({
 }));
 
 vi.mock('../src/services/ai-video.service', () => ({
-  AiVideoService: vi.fn().mockImplementation(() => mockMethods),
+  AiVideoService: vi.fn().mockImplementation(function() { return mockMethods; }),
 }));
 
 import app from '../src/app';

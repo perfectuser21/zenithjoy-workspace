@@ -1208,6 +1208,22 @@ tests:
     product: AI视频
     note: "Phase 1 技术债 — AI 视频生成路由（history/active/task/:id/generate/PUT/DELETE，vi.hoisted mock）"
 
+  - id: api-sse-service-unit
+    path: apps/api/src/services/__tests__/sse.service.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 平台基础
+    note: "SSE 连接管理器单元测试：headers/catch-up/emit/close/auto-cleanup（6 cases）"
+
+  - id: api-sse-endpoints-integration
+    path: apps/api/tests/sse-endpoints.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 平台基础
+    note: "SSE 端点集成测试：acquisition/ai-video/ai-video-pipeline 三条 SSE 路由存在性验证"
+
   - id: api-admin-users-routes
     path: apps/api/tests/admin-users.test.ts
     type: unit

@@ -36,11 +36,6 @@ async function createJob(
   return res.data.job;
 }
 
-async function pollStatus(id: string): Promise<JobState> {
-  const res = await axios.get(`${API_BASE}/ai-video/jobs/${id}`);
-  return { id, ...res.data };
-}
-
 function downloadUrl(jobId: string, file: '9_16.mp4' | '16_9.mp4'): string {
   return `${API_BASE}/ai-video/jobs/${jobId}/output/${file}`;
 }
@@ -65,7 +60,7 @@ export default function LocalVideoPipelinePage() {
   const [templateId, setTemplateId] = useState<string | null>(null);
   const [job, setJob] = useState<JobState | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const sseRef = useRef<EventSource | null>(null);
 
   const accountQuery = useQuery({
     queryKey: ['ws1', 'account-me'],
@@ -75,29 +70,35 @@ export default function LocalVideoPipelinePage() {
   });
   const licenseKey = accountQuery.data?.license?.license_key ?? '';
 
-  const stopPoll = useCallback(() => {
-    if (pollRef.current) {
-      clearInterval(pollRef.current);
-      pollRef.current = null;
+  const closeSse = useCallback(() => {
+    if (sseRef.current) {
+      sseRef.current.close();
+      sseRef.current = null;
     }
   }, []);
 
-  useEffect(() => () => stopPoll(), [stopPoll]);
+  useEffect(() => () => closeSse(), [closeSse]);
 
-  const startPoll = useCallback((id: string) => {
-    stopPoll();
-    pollRef.current = setInterval(async () => {
+  const startSse = useCallback((id: string) => {
+    closeSse();
+    const es = new EventSource(`${API_BASE}/ai-video/jobs/${id}/sse`);
+    sseRef.current = es;
+    es.onmessage = (event) => {
       try {
-        const state = await pollStatus(id);
-        setJob(state);
-        if (state.status === 'completed' || state.status === 'failed') {
-          stopPoll();
+        const raw = JSON.parse(event.data) as { id: string; status: string; progress: number; error?: string };
+        setJob({ id: raw.id, status: raw.status as JobStatus, progress: raw.progress, error: raw.error });
+        if (raw.status === 'completed' || raw.status === 'failed') {
+          es.close();
+          sseRef.current = null;
         }
-      } catch {
-        // silent — keep polling
+      } catch { /* ignore */ }
+    };
+    es.onerror = () => {
+      if (es.readyState === EventSource.CLOSED) {
+        sseRef.current = null;
       }
-    }, 3000);
-  }, [stopPoll]);
+    };
+  }, [closeSse]);
 
   const handleSubmit = async () => {
     if (!localPath.trim() || !licenseKey) return;
@@ -106,7 +107,7 @@ export default function LocalVideoPipelinePage() {
       const { id } = await createJob(localPath.trim(), topic, templateId, licenseKey, originalScript, targetAspect);
       const initial: JobState = { id, status: 'queued', progress: 0 };
       setJob(initial);
-      startPoll(id);
+      startSse(id);
     } catch (err: unknown) {
       const msg = axios.isAxiosError(err) ? err.response?.data?.error || err.message : String(err);
       setJob({ id: '', status: 'failed', progress: 0, error: msg });
@@ -116,7 +117,7 @@ export default function LocalVideoPipelinePage() {
   };
 
   const handleReset = () => {
-    stopPoll();
+    closeSse();
     setJob(null);
     setLocalPath('');
     setTopic('');
