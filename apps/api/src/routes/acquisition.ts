@@ -125,6 +125,50 @@ acquisitionRouter.get('/pending-keyword-tasks', async (_req: Request, res: Respo
   }
 });
 
+// 前端列表端点 — 返回租户的采集任务列表（最新 20 条）
+acquisitionRouter.get('/collect-tasks', tenantContextOptional, async (req: Request, res: Response) => {
+  if (process.env.VITEST) {
+    return res.status(200).json({ success: true, data: { tasks: [], total: 0 }, timestamp: new Date().toISOString() });
+  }
+
+  const tenantId = req.tenantId;
+  if (!tenantId) {
+    return res.status(401).json({ success: false, error: { code: 'NO_TENANT', message: '缺租户上下文（未登录或无 X-Tenant-Id）' }, timestamp: new Date().toISOString() });
+  }
+
+  try {
+    const { rows } = await pool.query<{
+      id: string;
+      keywords: string[];
+      status: string;
+      created_at: Date;
+      video_count: number;
+      lead_count_raw: number;
+    }>(
+      `SELECT id, keywords, status, created_at, video_count, lead_count_raw
+         FROM zenithjoy.acquisition_collect_tasks
+        WHERE tenant_id = $1
+        ORDER BY created_at DESC
+        LIMIT 20`,
+      [tenantId]
+    );
+
+    const tasks = rows.map((r) => ({
+      id: r.id,
+      keywords: Array.isArray(r.keywords) ? r.keywords : [],
+      status: r.status,
+      created_at: r.created_at ? new Date(r.created_at).toISOString() : null,
+      video_count: r.video_count ?? 0,
+      lead_count_raw: r.lead_count_raw ?? 0,
+    }));
+
+    return res.status(200).json({ success: true, data: { tasks, total: tasks.length }, timestamp: new Date().toISOString() });
+  } catch (err) {
+    console.error('[acquisition] collect-tasks error:', (err as Error).message);
+    return res.status(500).json({ success: false, error: { code: 'DB_ERROR', message: (err as Error).message }, timestamp: new Date().toISOString() });
+  }
+});
+
 // Agent 轮询端点 — 返回待处理的 collect 任务（来自 collect/start 写入的 acquisition_collect_tasks）
 acquisitionRouter.get('/pending-collect-tasks', async (_req: Request, res: Response) => {
   if (process.env.VITEST) {
