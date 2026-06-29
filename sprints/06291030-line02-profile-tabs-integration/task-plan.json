@@ -1,0 +1,39 @@
+{
+  "initiative_id": "8f6f6966",
+  "journey_type": "user_facing",
+  "journey_type_reason": "涉及 apps/dashboard/ 的 CompanyProfilePage.tsx 和 AcquisitionConfigPage.tsx 前端页面交互，需 Playwright 浏览器真实操作验收",
+  "tasks": [
+    {
+      "task_id": "ws1",
+      "title": "Line02 公司信息 3 Tab + onBlur 自动保存 + 推荐关键词 chips + 开场白 placeholder + Playwright E2E 去 stub",
+      "scope": "1. CompanyProfilePage.tsx 改 3 Tab 布局（基础信息/产品与价值/目标客群），关键输入框加 data-testid，每个字段 onBlur 触发 PUT /api/company-profile + 1.5s '已保存 ✓' toast；保存失败显示红色 toast。2. apps/dashboard/src/utils/keywords.ts 导出 buildRecommendedKeywords 纯函数（city+industry/product 组合，去重 slice(0,5)）。3. AcquisitionConfigPage（或 CollectTasksBlock）接入 getCompanyProfile() 推导 chips，开场白 placeholder 带公司名/产品占位文案。4. line02-company-profile-collect.spec.ts 删除所有 company-profile/acquisition API stubs，补 3 Tab / onBlur 保存 / 刷新持久化 / chips 出现 / placeholder 含公司信息 / 保存失败红色 toast 断言。5. line02-company-profile-collect-smoke.sh 补全 9 字段验证 + psql 时间窗 + keys==[] + 禁用字段反向检查。6. e2e-verify.ps1 已更新（无直接 psql，读 E2E_DATABASE_URL）。7. .github/workflows/e2e-windows.yml 已更新（E2E_DATABASE_URL/E2E_API_URL 注入 + ubuntu-latest smoke job）。",
+      "dod": [
+        "[BEHAVIOR] PUT /api/company-profile → success=true, data.updated=true",
+        "[BEHAVIOR] GET /api/company-profile → 全 9 字段 + keys==[] + 禁用字段不出现",
+        "[BEHAVIOR] POST /api/acquisition/collect/start → data.task_id string, data.status=pending，禁用字段不出现",
+        "[BEHAVIOR] PUT 空 company_name → 400",
+        "[BEHAVIOR] vitest run tests/line02-profile-tabs.test.ts 在实现前 ≥1 failure（TDD 红证据）",
+        "[BEHAVIOR] CompanyProfilePage.tsx 含 3 Tab 标识文字",
+        "[BEHAVIOR] 开场白 placeholder 含公司信息字段（company_name/products 引用）",
+        "[BEHAVIOR] Playwright spec 含保存失败 EP 断言（page.route 拦截 PUT → 500 + 红色 toast）",
+        "[ARTIFACT] line02-company-profile-collect.spec.ts 已无 company-profile/acquisition API stubs",
+        "[ARTIFACT] smoke.sh 含 NOW() - interval psql 时间窗验证 + keys==[] 检查",
+        "[ARTIFACT] e2e-verify.ps1 存在且含 Playwright 调用",
+        "[ARTIFACT] e2e-windows.yml 含 E2E_DATABASE_URL env 注入",
+        "[ARTIFACT] tests/line02-profile-tabs.test.ts 存在（TDD Red，7 failures 已实测）"
+      ],
+      "files": [
+        "apps/dashboard/src/pages/CompanyProfilePage.tsx",
+        "apps/dashboard/src/utils/keywords.ts",
+        "apps/dashboard/src/pages/AcquisitionConfigPage.tsx",
+        "apps/dashboard/e2e/line02-company-profile-collect.spec.ts",
+        ".github/workflows/scripts/smoke/line02-company-profile-collect-smoke.sh",
+        "sprints/06291030-line02-profile-tabs-integration/e2e-verify.ps1",
+        ".github/workflows/e2e-windows.yml"
+      ],
+      "depends_on": [],
+      "complexity": "M",
+      "estimated_minutes": 90
+    }
+  ]
+}
