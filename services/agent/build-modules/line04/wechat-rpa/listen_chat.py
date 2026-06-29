@@ -2214,6 +2214,50 @@ def fetch_friend_scan_pending(
     }
 
 
+def run_friend_scan(
+    mw: Any, middleware_url: str, cs_wechat_id: str
+) -> Dict[str, Any]:
+    """CRM 好友采集 job（Ability B，纯采集，不掺回复）。
+
+    做法二（拆两 Ability）：把"滚全会话列表 → 逐个开会话抓微信号/加好友时间 → POST 中台 ingest"
+    抽成独立采集体，与客服回复(Ability A)解耦。两者共用同一微信窗口/UIA/焦点，**不能并行**，
+    故本 job 只由中台显式「立即扫好友」触发（见 _should_run_friend_scan），未来受窗口锁保护(PR2)。
+
+    返回 {ok, count, ingested, error}。失败吞掉不抛（绝不拖垮监听）。
+    """
+    try:
+        contacts = scan_recent_contacts(mw, limit=100)
+        # A2：逐个补对方微信号 + 加好友时间（资料页 + 聊天记录最顶日期）。失败只跳过该字段。
+        contacts = enrich_contacts_with_details(mw, contacts)
+        res = post_friend_scan(middleware_url, cs_wechat_id, contacts)
+        if res.get("ok"):
+            return {"ok": True, "count": len(contacts), "ingested": res.get("ingested")}
+        return {"ok": False, "count": len(contacts), "error": res.get("error")}
+    except Exception as exc:
+        return {"ok": False, "error": f"{type(exc).__name__}: {exc}"}
+
+
+def _should_run_friend_scan(
+    force: bool,
+    done_once: bool = False,
+    now: float = 0.0,
+    last: float = 0.0,
+    interval: float = 0.0,
+) -> bool:
+    """CRM 好友采集(Ability B)本轮是否触发——【只认中台显式「立即扫好友」force】（纯函数）。
+
+    历史教训（xian-rog 0629 真机铁证）：B（滚全列表 + 逐个开会话）与客服回复(Ability A)共用
+    同一微信窗口 / 同一 UIA / 同一焦点，**不能并行**。B 自动跑（开机必跑 `not done_once` +
+    周期 `now-last>=interval`）会丢 SPI 屏幕阅读器标志 → UIA 树塌缩 → #950 误重启正在工作的
+    微信 → 多分钟死区（"回一次就不理"）。#811 无 CRM 扫好友故超级稳定。
+
+    故彻底删掉「开机必跑」+「周期」自动路径、**不留开关**：采集只由中台按钮(force)显式触发。
+    done_once/now/last/interval 仅为回归守卫保留入参——无论取何值都不得触发，**只有 force 决定**。
+    （把旧自动逻辑加回去 → tests/test_friend_scan_trigger.py 必红。）
+    """
+    return bool(force)
+
+
 # ─── 关键人出站任务（上下线播报 + 失败告警）：拉取 → 真机发送 → 回执 ──────────────────
 #
 # C1 尾巴接线：中台把「主动发给关键人」的出站任务入库（status=approved/system），
@@ -2839,14 +2883,14 @@ def run_real_listen(args: argparse.Namespace) -> int:
             if _LAST_VISIBLE_TREE_SIZE is not None and not _is_uia_tree_collapsed(_LAST_VISIBLE_TREE_SIZE):
                 last_readable_scan_at = now
 
-            # CRM 好友扫描上报（onboarding 必跑一次 + 每日一次低频，决策 3）：
-            # machine_id 在册且已拉到自己 wechat_id → scan_recent_contacts → POST 中台 ingest。
-            # 失败吞掉不拖垮监听（post_friend_scan 内部已处理）。
+            # CRM 好友采集（Ability B）：【只】由中台显式「立即扫好友」触发，绝不开机自动 / 周期自动。
+            # 决策 bug-fix 4062a5af（做法二 PR1）：B 与客服回复(Ability A)共用同一微信窗口/UIA/焦点，
+            # 不能并行；B 自动滚列表/开会话会丢 SPI 标志→UIA 树塌→#950 误重启正在工作的微信(rog 0629铁证)。
             _cs_wid = (cs_config or {}).get("wechat_id") if getattr(args, "machine_id", None) else None
 
             # 「立即扫好友」强制标志：运营在 Dashboard 点了按钮 → 中台 force_scan_requested_at。
-            # 节流拉 pending（复用现有拉指令模式，参考 process_outbound_once）；force=true 则本轮
-            # 无视 24h 间隔立刻扫一遍。失败保守 force=False（绝不误触发），绝不拖垮监听。
+            # 节流拉 pending（复用现有拉指令模式，参考 process_outbound_once）。
+            # 失败保守 force=False（绝不误触发），绝不拖垮监听。
             _force_scan = False
             if _cs_wid and now - last_force_scan_poll >= FORCE_SCAN_POLL_INTERVAL:
                 last_force_scan_poll = now
@@ -2854,31 +2898,22 @@ def run_real_listen(args: argparse.Namespace) -> int:
                     _pending = fetch_friend_scan_pending(args.middleware_url, _cs_wid)
                     _force_scan = bool(_pending.get("force"))
                     if _force_scan:
-                        _log(f"[CRM好友扫描] 收到「立即扫好友」指令(requested_at={_pending.get('requested_at')}) → 本轮强制扫描")
+                        _log(f"[CRM好友扫描] 收到「立即扫好友」指令(requested_at={_pending.get('requested_at')}) → 本轮采集")
                 except Exception as _fpexc:
                     _log(f"[CRM好友扫描] 拉强制标志异常: {_fpexc}")
 
-            if _cs_wid and (
-                _force_scan
-                or not friend_scan_done_once
-                or now - last_friend_scan >= FRIEND_SCAN_INTERVAL
+            # 触发判定走纯函数守卫：只认 force（自动路径已删，见 _should_run_friend_scan）。
+            if _cs_wid and _should_run_friend_scan(
+                _force_scan, friend_scan_done_once, now, last_friend_scan, FRIEND_SCAN_INTERVAL
             ):
-                try:
-                    _contacts = scan_recent_contacts(mw, limit=100)
-                    # A2：逐个补对方微信号 + 加好友时间（资料页 + 聊天记录最顶日期）。
-                    # 失败只跳过该字段，base 列表不受影响。
-                    _contacts = enrich_contacts_with_details(mw, _contacts)
-                    _res = post_friend_scan(args.middleware_url, _cs_wid, _contacts)
-                    if _res.get("ok"):
-                        friend_scan_done_once = True
-                        last_friend_scan = now
-                        # 强制扫已消费：后端在 ingest 成功后清 force_scan_requested_at（agent 不另调清除端点）。
-                        _trig = "强制" if _force_scan else "周期"
-                        _log(f"[CRM好友扫描] ({_trig})扫到 {len(_contacts)} 人 → 上报 ingested={_res.get('ingested')}")
-                    else:
-                        _log(f"[CRM好友扫描] 上报失败: {_res.get('error')}（下轮重试）")
-                except Exception as _fsexc:
-                    _log(f"[CRM好友扫描] 异常: {_fsexc}")
+                _r = run_friend_scan(mw, args.middleware_url, _cs_wid)
+                if _r.get("ok"):
+                    friend_scan_done_once = True
+                    last_friend_scan = now
+                    # 强制扫已消费：后端在 ingest 成功后清 force_scan_requested_at（agent 不另调清除端点）。
+                    _log(f"[CRM好友扫描] (中台触发)扫到 {_r.get('count')} 人 → 上报 ingested={_r.get('ingested')}")
+                elif _r.get("error"):
+                    _log(f"[CRM好友扫描] 失败: {_r.get('error')}（下次中台触发重试）")
 
             # 关键人出站任务（上下线播报 + 失败告警）：拉中台待发任务 → 真机 UIA 发送 → 回执。
             # 与「被动回名单内客户」同循环，但走 send_chat 真发配方（target=关键人）。失败吞掉不拖垮监听。
