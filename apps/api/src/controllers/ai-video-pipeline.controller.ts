@@ -1,10 +1,15 @@
 import { Request, Response, NextFunction } from 'express';
 import { AiVideoPipelineService } from '../services/ai-video-pipeline.service';
+import { sseService } from '../services/sse.service';
 import pool from '../db/connection';
 import { auth } from '../auth';
 import { fromNodeHeaders } from 'better-auth/node';
 
 const svc = new AiVideoPipelineService();
+
+export async function getJobRaw(id: string) {
+  return svc.getJob(id);
+}
 
 export async function createJob(req: Request, res: Response, next: NextFunction) {
   try {
@@ -134,6 +139,13 @@ export async function updateProgress(req: Request, res: Response, next: NextFunc
       progress: typeof progress === 'number' ? progress : job.progress,
       detectedAspect: detected_aspect,
     });
+    const emitData = { id: updated.id, status: updated.status, progress: updated.progress, error: (updated as { error_msg?: string }).error_msg ?? undefined };
+    const TERMINAL_PIPELINE = ['completed', 'failed'];
+    if (TERMINAL_PIPELINE.includes(updated.status)) {
+      sseService.close(updated.id, emitData);
+    } else {
+      sseService.emit(updated.id, emitData);
+    }
     res.json(updated);
   } catch (err) { next(err); }
 }
@@ -149,6 +161,7 @@ export async function completeJob(req: Request, res: Response, next: NextFunctio
       outputDir: output_dir,
       errorMsg: error_msg,
     });
+    sseService.close(updated.id, { id: updated.id, status: updated.status, progress: updated.progress, error: error_msg ?? undefined });
     res.json(updated);
   } catch (err) { next(err); }
 }

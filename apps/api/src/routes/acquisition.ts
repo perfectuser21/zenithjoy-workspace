@@ -727,18 +727,13 @@ acquisitionRouter.post('/collect/report', async (req: Request, res: Response) =>
     [taskId, newStatus, newErrorCode, batch.length, checkpoint ? JSON.stringify(checkpoint) : null, !!terminal]
   );
 
-  // SSE 推送状态变化
+  // SSE 推送状态变化（video_count+1 / lead_count_raw+batch.length 与 UPDATE 语句一致）
   const TERMINAL_ACQ = ['done', 'failed', 'cancelled', 'partial'];
-  const countRes = await pool.query(
-    `SELECT video_count, lead_count_raw FROM zenithjoy.acquisition_collect_tasks WHERE id = $1`,
-    [taskId]
-  );
-  const counts = countRes.rows[0] as { video_count: number; lead_count_raw: number } | undefined;
   const ssePayload = {
     task_id: taskId,
     status: newStatus,
-    video_count: counts?.video_count ?? task.video_count,
-    lead_count_raw: counts?.lead_count_raw ?? task.lead_count_raw,
+    video_count: task.video_count + 1,
+    lead_count_raw: task.lead_count_raw + batch.length,
   };
   if (TERMINAL_ACQ.includes(newStatus)) {
     sseService.close(taskId, ssePayload);
