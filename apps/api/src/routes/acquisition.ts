@@ -15,20 +15,11 @@ import {
   seedKeywordsFromDoc,
 } from '../services/acquisition-collect';
 import { tenantContextOptional } from '../middleware/tenant-context';
-import { getValidToken, TokenRefreshError } from '../services/feishu-token';
 
 export const acquisitionRouter = Router();
 
 const VALID_GRADES = ['感兴趣', '精准', '高意向'] as const;
 type Grade = (typeof VALID_GRADES)[number];
-
-const FEISHU_AUTH_ERROR_CODES = new Set([
-  99991661, 99991663, 99991672, 99991400, 99991668, 99991645,
-]);
-
-function isFeishuAuthError(code: number): boolean {
-  return FEISHU_AUTH_ERROR_CODES.has(code);
-}
 
 acquisitionRouter.get('/overview', (_req: Request, res: Response) => {
   res.json({
