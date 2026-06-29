@@ -9,7 +9,7 @@ const mockSvc = vi.hoisted(() => ({
 }));
 
 vi.mock('../src/services/ai-video-pipeline.service', () => ({
-  AiVideoPipelineService: vi.fn().mockImplementation(() => mockSvc),
+  AiVideoPipelineService: vi.fn().mockImplementation(function() { return mockSvc; }),
 }));
 
 import app from '../src/app';

@@ -7,10 +7,9 @@ vi.mock('../../db/connection', () => ({
 }));
 
 vi.mock('../../services/ai-video-upload.service', () => ({
-  AiVideoUploadService: vi.fn().mockImplementation(() => ({
-    createJob: vi.fn().mockResolvedValue('test-job'),
-    dispatch: vi.fn().mockResolvedValue(undefined),
-  })),
+  AiVideoUploadService: vi.fn().mockImplementation(function() {
+    return { createJob: vi.fn().mockResolvedValue('test-job'), dispatch: vi.fn().mockResolvedValue(undefined) };
+  }),
 }));
 
 describe('POST /api/ai-video/upload route', () => {

@@ -2,9 +2,9 @@ import { describe, it, expect, vi } from 'vitest';
 import * as controller from '../../src/controllers/ai-video-pipeline-ai.controller';
 
 vi.mock('../../src/services/ai-video-pipeline.service', () => ({
-  AiVideoPipelineService: vi.fn().mockImplementation(() => ({
-    getJob: vi.fn().mockResolvedValue({ id: 'test-job' }),
-  })),
+  AiVideoPipelineService: vi.fn().mockImplementation(function() {
+    return { getJob: vi.fn().mockResolvedValue({ id: 'test-job' }) };
+  }),
 }));
 
 describe('ai-video-pipeline-ai.controller exports', () => {
