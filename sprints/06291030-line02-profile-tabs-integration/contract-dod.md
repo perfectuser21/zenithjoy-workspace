@@ -32,6 +32,9 @@ journey_type: user_facing
 - [ ] [ARTIFACT] `.github/workflows/e2e-windows.yml` `Run E2E verification` step env 段含 `E2E_DATABASE_URL`
   Test: node -e "const c=require('fs').readFileSync('.github/workflows/e2e-windows.yml','utf8');if(!c.includes('E2E_DATABASE_URL'))process.exit(1)"
 
+- [ ] [ARTIFACT] `sprints/06291030-line02-profile-tabs-integration/tests/line02-profile-tabs.test.ts` 存在（TDD Red 测试文件，Generator 实现前失败 7/7）
+  Test: node -e "require('fs').accessSync('sprints/06291030-line02-profile-tabs-integration/tests/line02-profile-tabs.test.ts');console.log('OK')"
+
 ---
 
 ## BEHAVIOR 条目（内嵌 manual:bash，evaluator 直接执行）
@@ -82,11 +85,12 @@ echo OK'
   Test: manual:bash -c 'API="${API_URL:-http://localhost:3000}"; TENANT="${TENANT:-2ac0aa4a-99f4-470a-aed7-c3a9fe03149b}"; CODE=$(curl -s -o /tmp/dod_err.json -w "%{http_code}" -X PUT "$API/api/company-profile" -H "Content-Type: application/json" -H "X-Tenant-Id: $TENANT" -d "{\"company_name\":\"\"}"); [ "$CODE" = "400" ] || { echo "FAIL: 空 company_name 未返 400，实际=$CODE"; exit 1; }; cat /tmp/dod_err.json | jq -e ".success == false" || { echo "FAIL: success!=false"; exit 1; }; echo OK'
   期望: OK
 
-### [BEHAVIOR 6] collect/start error path — 空 keywords → 400
+### [BEHAVIOR 6] TDD 红证据 — tests/line02-profile-tabs.test.ts 在 Generator 实现前失败
 
-- [ ] [BEHAVIOR] POST /api/acquisition/collect/start 空 keywords 数组 → 400
-  Test: manual:bash -c 'API="${API_URL:-http://localhost:3000}"; TENANT="${TENANT:-2ac0aa4a-99f4-470a-aed7-c3a9fe03149b}"; CODE=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$API/api/acquisition/collect/start" -H "Content-Type: application/json" -H "X-Tenant-Id: $TENANT" -d "{\"keywords\":[]}"); [ "$CODE" = "400" ] || { echo "FAIL: 空 keywords 未返 400，实际=$CODE"; exit 1; }; echo OK'
-  期望: OK
+- [ ] [BEHAVIOR] vitest run tests/line02-profile-tabs.test.ts 在 Generator 实现前失败（≥1 failure），实现后转绿
+  Test: manual:bash -c 'OUT=$(npx vitest run sprints/06291030-line02-profile-tabs-integration/tests/line02-profile-tabs.test.ts --reporter=verbose 2>&1 || true); echo "$OUT" | grep -qE "failed|FAIL" && { echo "RED-confirmed: $(echo "$OUT" | grep -oE "[0-9]+ failed" | head -1)"; } || echo "GREEN（Generator 已实现）"; exit 0'
+  期望: RED-confirmed（Generator 实现前）/ GREEN（Generator 实现后）
+  红证据: 2026-06-29 03:10 实测 — 7 failed (7)，错误：buildRecommendedKeywords not implemented + Playwright spec 含 company-profile stub + CompanyProfilePage 相关断言
 
 ### [BEHAVIOR 7] 开场白 placeholder 含公司信息（FROM_PRD Step 7）
 

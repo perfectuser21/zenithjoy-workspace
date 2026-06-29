@@ -12,14 +12,15 @@
         "[BEHAVIOR] GET /api/company-profile → 全 9 字段 + keys==[] + 禁用字段不出现",
         "[BEHAVIOR] POST /api/acquisition/collect/start → data.task_id string, data.status=pending，禁用字段不出现",
         "[BEHAVIOR] PUT 空 company_name → 400",
-        "[BEHAVIOR] POST collect/start 空 keywords → 400",
+        "[BEHAVIOR] vitest run tests/line02-profile-tabs.test.ts 在实现前 ≥1 failure（TDD 红证据）",
         "[BEHAVIOR] CompanyProfilePage.tsx 含 3 Tab 标识文字",
         "[BEHAVIOR] 开场白 placeholder 含公司信息字段（company_name/products 引用）",
         "[BEHAVIOR] Playwright spec 含保存失败 EP 断言（page.route 拦截 PUT → 500 + 红色 toast）",
         "[ARTIFACT] line02-company-profile-collect.spec.ts 已无 company-profile/acquisition API stubs",
         "[ARTIFACT] smoke.sh 含 NOW() - interval psql 时间窗验证 + keys==[] 检查",
         "[ARTIFACT] e2e-verify.ps1 存在且含 Playwright 调用",
-        "[ARTIFACT] e2e-windows.yml 含 E2E_DATABASE_URL env 注入"
+        "[ARTIFACT] e2e-windows.yml 含 E2E_DATABASE_URL env 注入",
+        "[ARTIFACT] tests/line02-profile-tabs.test.ts 存在（TDD Red，7 failures 已实测）"
       ],
       "files": [
         "apps/dashboard/src/pages/CompanyProfilePage.tsx",
