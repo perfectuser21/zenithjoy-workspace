@@ -15,6 +15,7 @@ import {
   seedKeywordsFromDoc,
 } from '../services/acquisition-collect';
 import { tenantContextOptional } from '../middleware/tenant-context';
+import { getValidToken, TokenRefreshError } from '../services/feishu-token';
 
 export const acquisitionRouter = Router();
 
@@ -325,7 +326,7 @@ acquisitionRouter.get('/leads', async (req: Request, res: Response) => {
     const pool = (await import('../db/connection')).default;
 
     const bindResult = await pool.query(
-      `SELECT tenant_id, app_token, table_id_leads, tenant_access_token
+      `SELECT tenant_id, app_token, table_id_leads
          FROM zenithjoy.tenant_feishu_bindings
         WHERE app_token IS NOT NULL AND table_id_leads IS NOT NULL
         LIMIT 1`
@@ -339,12 +340,16 @@ acquisitionRouter.get('/leads', async (req: Request, res: Response) => {
       tenant_id: string;
       app_token: string;
       table_id_leads: string;
-      tenant_access_token: string | null;
     };
 
-    const token = binding.tenant_access_token;
-    if (!token) {
-      return res.status(200).json({ leads: [], total: 0 });
+    let token: string;
+    try {
+      token = await getValidToken(binding.tenant_id);
+    } catch (e) {
+      if (e instanceof TokenRefreshError) {
+        return res.status(503).json({ error: 'FEISHU_TOKEN_EXPIRED' });
+      }
+      throw e;
     }
 
     const FEISHU_BASE = process.env.FEISHU_API_BASE || 'https://open.feishu.cn';
