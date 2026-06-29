@@ -62,6 +62,47 @@ test.describe('Line02 公司信息页 + 采集任务 Table', () => {
       });
     });
 
+    // AcquisitionConfigPage 所需 stubs（无后端时快速响应，防止 networkidle 超时）
+    await page.route('**/api/acquisition/config', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          success: true,
+          data: {
+            collect_rounds_per_day: 2, keywords_per_round_min: 3, keywords_per_round_max: 8,
+            collect_active_start: '09:00', collect_active_end: '22:00',
+            burner_count: 3, dm_per_hour: 10, dm_per_day: 50,
+            dm_interval_min_sec: 30, dm_interval_max_sec: 120,
+            dm_active_start: '10:00', dm_active_end: '21:00',
+            nurture_per_day_min: 5, nurture_per_day_max: 15,
+            cookie_check_interval_hours: 24,
+          },
+          timestamp: new Date().toISOString(),
+        }),
+      });
+    });
+
+    await page.route('**/api/acquisition/dispatch/plan', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ success: true, data: [], timestamp: new Date().toISOString() }),
+      });
+    });
+
+    await page.route('**/api/acquisition/cookie-health', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          success: true,
+          data: { items: [], alert_count: 0 },
+          timestamp: new Date().toISOString(),
+        }),
+      });
+    });
+
     // 设置 auth cookie (E2E 模式跳过鉴权)
     await page.context().addCookies([
       { name: 'user', value: 'e2e-user', domain: 'localhost', path: '/' },
@@ -138,7 +179,7 @@ test.describe('Line02 公司信息页 + 采集任务 Table', () => {
     await page.screenshot({ path: 'sprints/06291030-line02-profile-tabs-integration/screenshots/04-acquisition-chips.png' });
 
     // 验证账号状态块区域存在（标题总是渲染，无论有无账号）
-    await expect(page.getByText('主号状态').first()).toBeVisible({ timeout: 5000 });
+    await expect(page.getByText('主号状态').first()).toBeVisible({ timeout: 15000 });
 
     // 验证推荐关键词 chips 出现（PrepPRD 核心要求：基于 company-profile stub 生成）
     // stub: city=西安, industry=餐饮, products=['测试产品A'] → 推荐词含"西安餐饮"/"餐饮推荐"/"西安美食推荐"
