@@ -558,6 +558,22 @@ tests:
     product: AI员工
     note: "单实例守卫 regression — start.bat 必须在启动前杀掉旧 zenithjoy-agent.exe，防双实例 WS 踢腿（'又掉了'）"
 
+  - id: agent-start-bat-listener-and-env
+    path: services/agent/src/__tests__/start-bat-listener-and-env.test.ts
+    type: unit
+    ci: L2
+    status: active
+    product: AI员工
+    note: "hand-off B/F regression — start.bat 单实例守卫杀孤儿 listen_chat（Get-CimInstance 按命令行匹配）+ ZENITHJOY_ENV=staging 指向 staging-autopilot，默认仍 prod（core 2.0.41）"
+
+  - id: agent-module-manager-cleanup
+    path: services/agent/src/__tests__/module-manager-cleanup.test.ts
+    type: unit
+    ci: L2
+    status: active
+    product: AI员工
+    note: "hand-off B/C regression — OTA 升级 killModuleTree 杀整棵进程树（含 python listen_chat 孙进程）+ preflight 并发跳过保留上次状态不报假未安装（core 2.0.41）"
+
   - id: agent-listener-watchdog-crlf
     path: services/agent/src/__tests__/listener-watchdog-crlf.test.ts
     type: unit
