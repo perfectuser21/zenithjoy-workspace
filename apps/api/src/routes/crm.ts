@@ -41,14 +41,32 @@ function bodyWechatIdToParam(req: Request, _res: Response, next: NextFunction): 
   next();
 }
 
-/** 优先取 tenantContext 解出的 req.tenantId；legacy/super-admin 通道无租户上下文时按 wechat_id 反查。 */
+/**
+ * 优先取 tenantContext 解出的 req.tenantId；legacy/super-admin 通道无租户上下文时按 wechat_id 反查。
+ * 修 D：service_agents 解不到时回退 machine→license 链（wechat_id 形如 cs-<machine_id 前缀> 时
+ * 经 license_machines→licenses 反查），与 cs-config-guard 同口径，避免"绑了但 service_agents 断链"→404。
+ */
 async function resolveTenantId(req: Request, csWechatId: string): Promise<string | null> {
   if (req.tenantId) return req.tenantId;
   const r = await pool.query(
     `SELECT tenant_id FROM zenithjoy.service_agents WHERE wechat_id = $1 AND deleted_at IS NULL LIMIT 1`,
     [csWechatId],
   );
-  return (r.rows?.[0]?.tenant_id as string | undefined) ?? null;
+  const direct = (r.rows?.[0]?.tenant_id as string | undefined) ?? null;
+  if (direct) return direct;
+  const m = /^cs-([0-9a-fA-F]{6,})$/.exec((csWechatId ?? '').trim());
+  if (m) {
+    const lm = await pool.query(
+      `SELECT l.tenant_id
+         FROM zenithjoy.license_machines lm
+         JOIN zenithjoy.licenses l ON l.id = lm.license_id
+        WHERE lm.machine_id LIKE $1 || '%'
+        ORDER BY lm.last_seen DESC LIMIT 1`,
+      [m[1].toLowerCase()],
+    );
+    return (lm.rows?.[0]?.tenant_id as string | undefined) ?? null;
+  }
+  return null;
 }
 
 /**

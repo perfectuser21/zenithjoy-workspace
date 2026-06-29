@@ -163,3 +163,39 @@ describe('Bug D — scoped 列表以 license_machines 为驱动，未绑定(待�
     expect(machines[0].machine_id).toBe('m-unbound');
   });
 });
+
+describe('Bug G — scoped 机器来源改成 license_machines ∪ service_agents 并集（绑了但没 license_machines 行也显示）', () => {
+  it('scoped SQL 含 UNION：第二来源是 service_agents 按 sa.tenant_id scope（绑了没 license_machines 行的机器也进 universe）', async () => {
+    mockQuery.mockResolvedValueOnce({ rows: [] } as any);
+    await listAllMachines('tenant-1');
+    const sql = String(mockQuery.mock.calls[0][0]);
+    // 两个 machine_id 来源 UNION
+    expect(sql).toContain('UNION');
+    // 第二来源：service_agents 按自身 tenant_id（绑定即落 sa.tenant_id），别名避开 'service_agents sa' 以免误判驱动
+    expect(sql).toMatch(/service_agents\s+svc/);
+    expect(sql).toContain('svc.tenant_id');
+    // 仍按 licenses.tenant_id scope license_machines 那一支
+    expect(sql).toContain('l.tenant_id');
+    // 参数仍是 [limit, tenantId]
+    expect(mockQuery.mock.calls[0][1]).toEqual([100, 'tenant-1']);
+  });
+
+  it('service_agents-only 机器（license_machines 无该行）由并集返回，能映射出行', async () => {
+    mockQuery.mockResolvedValueOnce({
+      rows: [
+        row({
+          machine_id: 'm-sa-only',
+          hostname: null, // license_machines 无行 → lm.hostname 为空
+          wechat_id: 'cs-d026489c',
+          configured: true,
+          agent_uuid: null,
+          online: true,
+        }),
+      ],
+    } as any);
+    const machines = await listAllMachines('tenant-1');
+    expect(machines).toHaveLength(1);
+    expect(machines[0].machine_id).toBe('m-sa-only');
+    expect(machines[0].wechat_id).toBe('cs-d026489c');
+  });
+});
