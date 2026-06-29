@@ -4018,6 +4018,14 @@ agent_suite:
     product: 智能获客
     note: "getLine02AccountStatus fetch wrapper 单元测试（test-pairing 配套 line02.api.ts，PR #949）。"
 
+  - id: dashboard-keywords-unit
+    path: apps/dashboard/src/utils/keywords.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 智能获客
+    note: "buildRecommendedKeywords 推荐关键词纯函数单测（test-pairing 配套 keywords.ts）。"
+
   - id: sprint-line02-profile-tabs-integration
     path: sprints/06291030-line02-profile-tabs-integration/tests/line02-profile-tabs.test.ts
     type: unit
