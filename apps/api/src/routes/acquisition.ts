@@ -15,20 +15,11 @@ import {
   seedKeywordsFromDoc,
 } from '../services/acquisition-collect';
 import { tenantContextOptional } from '../middleware/tenant-context';
-import { getValidToken, TokenRefreshError } from '../services/feishu-token';
 
 export const acquisitionRouter = Router();
 
 const VALID_GRADES = ['感兴趣', '精准', '高意向'] as const;
 type Grade = (typeof VALID_GRADES)[number];
-
-const FEISHU_AUTH_ERROR_CODES = new Set([
-  99991661, 99991663, 99991672, 99991400, 99991668, 99991645,
-]);
-
-function isFeishuAuthError(code: number): boolean {
-  return FEISHU_AUTH_ERROR_CODES.has(code);
-}
 
 acquisitionRouter.get('/overview', (_req: Request, res: Response) => {
   res.json({
@@ -325,80 +316,44 @@ acquisitionRouter.get('/leads', async (req: Request, res: Response) => {
   try {
     const pool = (await import('../db/connection')).default;
 
-    const bindResult = await pool.query(
-      `SELECT tenant_id, app_token, table_id_leads
-         FROM zenithjoy.tenant_feishu_bindings
-        WHERE app_token IS NOT NULL AND table_id_leads IS NOT NULL
-        LIMIT 1`
+    interface LeadRow {
+      sec_uid: string | null;
+      nickname: string;
+      comment_text: string | null;
+      source_video_ids: string[];
+      created_at: string;
+      grade: string | null;
+      keyword: string | null;
+      task_keywords: string[] | null;
+    }
+
+    const gradeClause = grade && typeof grade === 'string' ? `AND l.grade = $1` : '';
+    const params: string[] = grade && typeof grade === 'string' ? [grade] : [];
+
+    const result = await pool.query<LeadRow>(
+      `SELECT l.sec_uid, l.nickname, l.comment_text,
+              l.source_video_ids, l.created_at, l.grade, l.keyword,
+              t.keywords AS task_keywords
+         FROM zenithjoy.acquisition_leads l
+         LEFT JOIN zenithjoy.acquisition_collect_tasks t ON t.id = l.collect_task_id
+        ${gradeClause}
+        ORDER BY l.created_at DESC
+        LIMIT 500`,
+      params
     );
 
-    if (bindResult.rows.length === 0) {
-      return res.status(200).json({ leads: [], total: 0 });
-    }
-
-    const binding = bindResult.rows[0] as {
-      tenant_id: string;
-      app_token: string;
-      table_id_leads: string;
-    };
-
-    let token: string;
-    try {
-      token = await getValidToken(binding.tenant_id);
-    } catch (e) {
-      if (e instanceof TokenRefreshError) {
-        return res.status(503).json({ error: 'FEISHU_TOKEN_EXPIRED' });
-      }
-      throw e;
-    }
-
-    const FEISHU_BASE = process.env.FEISHU_API_BASE || 'https://open.feishu.cn';
-    const url = `${FEISHU_BASE}/open-apis/bitable/v1/apps/${binding.app_token}/tables/${binding.table_id_leads}/records`;
-
-    let feishuData: { code: number; data?: { items?: Array<{ fields: Record<string, unknown> }> } };
-    try {
-      const { default: axios } = await import('axios');
-      const resp = await axios.get(url, {
-        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-        timeout: 10000,
-      });
-      feishuData = resp.data as typeof feishuData;
-    } catch {
-      return res.status(503).json({ error: 'FEISHU_TOKEN_EXPIRED' });
-    }
-
-    if (isFeishuAuthError(feishuData.code)) {
-      return res.status(503).json({ error: 'FEISHU_TOKEN_EXPIRED' });
-    }
-
-    if (feishuData.code !== 0) {
-      return res.status(200).json({ leads: [], total: 0 });
-    }
-
-    const items = feishuData.data?.items || [];
-    interface LeadItem {
-      commenter_id: string;
-      comment_text: string;
-      source_video_url: string;
-      crawled_at: string;
-      grade: string;
-      keyword: string;
-    }
-    let leads: LeadItem[] = items.map((item) => {
-      const f = item.fields || {};
+    const leads = result.rows.map((r) => {
+      const videoIds: string[] = Array.isArray(r.source_video_ids) ? r.source_video_ids : [];
+      const taskKws: string[] = Array.isArray(r.task_keywords) ? r.task_keywords : [];
       return {
-        commenter_id: String(f['commenter_id'] ?? f['评论者抖音 ID'] ?? ''),
-        comment_text: String(f['comment_text'] ?? f['评论内容'] ?? ''),
-        source_video_url: String(f['source_video_url'] ?? f['来源视频 URL'] ?? ''),
-        crawled_at: String(f['crawled_at'] ?? f['抓取时间'] ?? ''),
-        grade: String(f['grade'] ?? f['等级'] ?? ''),
-        keyword: String(f['keyword'] ?? f['关键词'] ?? ''),
+        commenter_id: r.sec_uid ?? r.nickname,
+        comment_text: r.comment_text ?? '',
+        source_video_url: videoIds[0] ?? '',
+        crawled_at: r.created_at,
+        grade: r.grade ?? '',
+        keyword: r.keyword ?? taskKws[0] ?? '',
       };
     });
-
-    if (grade && typeof grade === 'string') {
-      leads = leads.filter((l) => l.grade === grade);
-    }
 
     return res.status(200).json({ leads, total: leads.length });
   } catch (err) {
@@ -613,7 +568,6 @@ acquisitionRouter.post('/collect/report', async (req: Request, res: Response) =>
     terminal,
     error_code: errorCode,
   } = req.body || {};
-  void keyword;
 
   if (!taskId) return fail(res, 400, 'MISSING_TASK_ID', '缺 task_id');
   if (!videoId) return fail(res, 400, 'MISSING_VIDEO_ID', '缺 video_id');
@@ -633,7 +587,7 @@ acquisitionRouter.post('/collect/report', async (req: Request, res: Response) =>
     lead_count_raw: number;
   };
   const tenantId = task.tenant_id;
-  const batch: Array<{ sec_uid?: string | null; nickname: string }> = Array.isArray(commenters)
+  const batch: Array<{ sec_uid?: string | null; nickname: string; comment_text?: string; grade?: string; keyword?: string }> = Array.isArray(commenters)
     ? commenters
     : [];
 
@@ -691,8 +645,9 @@ acquisitionRouter.post('/collect/report', async (req: Request, res: Response) =>
     else seenNick.add(c.nickname);
     await pool.query(
       `INSERT INTO zenithjoy.acquisition_leads
-         (tenant_id, collect_task_id, sec_uid, nickname, profile_url, partial, source_video_ids, feishu_write_status)
-       VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, 'pending')`,
+         (tenant_id, collect_task_id, sec_uid, nickname, profile_url, partial, source_video_ids,
+          comment_text, grade, keyword, feishu_write_status)
+       VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8, $9, $10, 'pending')`,
       [
         tenantId,
         taskId,
@@ -701,6 +656,9 @@ acquisitionRouter.post('/collect/report', async (req: Request, res: Response) =>
         profileUrlForSecUid(secUid),
         !secUid,
         JSON.stringify([videoId]),
+        c.comment_text ?? null,
+        c.grade ?? null,
+        c.keyword ?? keyword ?? null,
       ]
     );
     newLeads.push({ sec_uid: secUid, nickname: c.nickname });
