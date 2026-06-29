@@ -15,6 +15,7 @@ import {
   seedKeywordsFromDoc,
 } from '../services/acquisition-collect';
 import { tenantContextOptional } from '../middleware/tenant-context';
+import { sseService } from '../services/sse.service';
 
 export const acquisitionRouter = Router();
 
@@ -726,6 +727,25 @@ acquisitionRouter.post('/collect/report', async (req: Request, res: Response) =>
     [taskId, newStatus, newErrorCode, batch.length, checkpoint ? JSON.stringify(checkpoint) : null, !!terminal]
   );
 
+  // SSE 推送状态变化
+  const TERMINAL_ACQ = ['done', 'failed', 'cancelled', 'partial'];
+  const countRes = await pool.query(
+    `SELECT video_count, lead_count_raw FROM zenithjoy.acquisition_collect_tasks WHERE id = $1`,
+    [taskId]
+  );
+  const counts = countRes.rows[0] as { video_count: number; lead_count_raw: number } | undefined;
+  const ssePayload = {
+    task_id: taskId,
+    status: newStatus,
+    video_count: counts?.video_count ?? task.video_count,
+    lead_count_raw: counts?.lead_count_raw ?? task.lead_count_raw,
+  };
+  if (TERMINAL_ACQ.includes(newStatus)) {
+    sseService.close(taskId, ssePayload);
+  } else {
+    sseService.emit(taskId, ssePayload);
+  }
+
   return ok(res, {
     task_id: taskId,
     inserted,
@@ -772,6 +792,33 @@ acquisitionRouter.get('/collect/:task_id', async (req: Request, res: Response) =
   };
 
   return ok(res, {
+    task_id: t.id,
+    status: t.status,
+    video_count: t.video_count,
+    lead_count_raw: t.lead_count_raw,
+    created_at: t.created_at ? new Date(t.created_at).toISOString() : null,
+    ended_at: t.ended_at ? new Date(t.ended_at).toISOString() : null,
+  });
+});
+
+// GET /api/acquisition/collect/:task_id/sse — SSE 实时状态推送
+acquisitionRouter.get('/collect/:task_id/sse', async (req: Request, res: Response) => {
+  const taskId = req.params.task_id;
+  const taskRes = await pool.query(
+    `SELECT id, status, video_count, lead_count_raw, created_at, ended_at
+       FROM zenithjoy.acquisition_collect_tasks WHERE id = $1`,
+    [taskId]
+  );
+  if (taskRes.rows.length === 0) return fail(res, 404, 'TASK_NOT_FOUND', '采集任务不存在');
+  const t = taskRes.rows[0] as {
+    id: string;
+    status: string;
+    video_count: number;
+    lead_count_raw: number;
+    created_at: Date;
+    ended_at: Date | null;
+  };
+  sseService.subscribe(taskId, req, res, {
     task_id: t.id,
     status: t.status,
     video_count: t.video_count,
