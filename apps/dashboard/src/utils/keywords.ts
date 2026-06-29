@@ -6,6 +6,7 @@ export interface CompanyProfileForKeywords {
   key_advantages: string[];
 }
 
+// Tags: buildRecommendedKeywords|recommended keyword|keyword chip (max 5, deduped)
 export function buildRecommendedKeywords(profile: CompanyProfileForKeywords): string[] {
   const { city, industry, products } = profile;
 
