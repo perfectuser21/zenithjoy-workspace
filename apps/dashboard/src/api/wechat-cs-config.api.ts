@@ -70,6 +70,7 @@ export interface CSMachine {
   configured: boolean;
   wechat_id?: string; // 该号配置主 key（= 每号 persona/business_kb 读写 key）
   real_wechat_id?: string; // 真实微信号（perfect-xx）
+  internal_operator?: string; // 内部人员：这个号背后真正的人（苏彦卿/于瑾），对账防串台
   self_name?: string; // 该号人设名（快速标签）
   online?: boolean;
   // 健康 + 运营态（后端 listAllMachines 一并返回，供「客服号总览」/「单号工作台」状态条用）

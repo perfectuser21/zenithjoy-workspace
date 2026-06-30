@@ -37,9 +37,11 @@ describe('setupCSByMachine — 真实微信号(SSOT)落库', () => {
   it('运营手填 real_wechat_id → 写进 service_agents；合成 wechat_id 仍派生 cs-<前缀>', async () => {
     // 1) license join 解析租户
     mockQuery.mockResolvedValueOnce({ rows: [{ tenant_id: 'tenant-1', agent_id: 'a-1' }] } as any);
-    // 2) INSERT service_agents（断言带新列）
+    // 2) 同租户现有绑定检查（1:1 防串台）→ 无行（首次绑定）
     mockQuery.mockResolvedValueOnce({ rows: [] } as any);
-    // 3) saveCSConfig 的 INSERT wechat_cs_account_config
+    // 3) INSERT service_agents（断言带新列）
+    mockQuery.mockResolvedValueOnce({ rows: [] } as any);
+    // 4) saveCSConfig 的 INSERT wechat_cs_account_config
     mockQuery.mockResolvedValueOnce({ rows: [] } as any);
 
     const res = await setupCSByMachine('07c37bd4cf1cb6909488e926ee8fafd3', {
@@ -52,9 +54,9 @@ describe('setupCSByMachine — 真实微信号(SSOT)落库', () => {
     // 合成 wechat_id 不变（仍是配置主 key）
     expect(res.wechat_id).toBe('cs-07c37bd4');
 
-    // 第 2 条 SQL = INSERT service_agents，必须带上三个新列 + 真实值
-    const saSql = String(mockQuery.mock.calls[1][0]);
-    const saParams = mockQuery.mock.calls[1][1] as unknown[];
+    // 第 3 条 SQL = INSERT service_agents，必须带上三个新列 + 真实值
+    const saSql = String(mockQuery.mock.calls[2][0]);
+    const saParams = mockQuery.mock.calls[2][1] as unknown[];
     expect(saSql).toContain('service_agents');
     expect(saSql).toContain('real_wechat_id');
     expect(saSql).toContain('wechat_display_name');
@@ -66,12 +68,13 @@ describe('setupCSByMachine — 真实微信号(SSOT)落库', () => {
 
   it('不填 real_wechat_id → 新列写 NULL，不报错（存量/未填兼容）', async () => {
     mockQuery.mockResolvedValueOnce({ rows: [{ tenant_id: 'tenant-1', agent_id: null }] } as any);
-    mockQuery.mockResolvedValueOnce({ rows: [] } as any);
-    mockQuery.mockResolvedValueOnce({ rows: [] } as any);
+    mockQuery.mockResolvedValueOnce({ rows: [] } as any); // 现有绑定检查（1:1）
+    mockQuery.mockResolvedValueOnce({ rows: [] } as any); // INSERT
+    mockQuery.mockResolvedValueOnce({ rows: [] } as any); // saveCSConfig
 
     const res = await setupCSByMachine('abcd1234 effff', { persona: personaOf('x') } as any);
     expect(res.wechat_id).toBe('cs-abcd1234');
-    const saParams = mockQuery.mock.calls[1][1] as unknown[];
+    const saParams = mockQuery.mock.calls[2][1] as unknown[];
     // real_wechat_id 位置应为 null（不是 undefined / 不抛）
     expect(saParams).toContain(null);
   });

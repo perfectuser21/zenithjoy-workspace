@@ -17,6 +17,7 @@ interface CSMachine {
   configured: boolean;
   wechat_id?: string;
   self_name?: string;
+  internal_operator?: string;
   auto_agent_enabled?: boolean;
   online?: boolean;
   wechat_ok?: boolean;
@@ -57,6 +58,7 @@ export default function CsOneClickSetupPage({
   const [businessHoursStart, setBusinessHoursStart] = useState('09:00');
   const [businessHoursEnd, setBusinessHoursEnd] = useState('21:00');
   const [dailyLimit, setDailyLimit] = useState('50');
+  const [internalOperator, setInternalOperator] = useState('');
   const [saving, setSaving] = useState(false);
   const [done, setDone] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -72,6 +74,7 @@ export default function CsOneClickSetupPage({
       if (fixedMachineId) {
         const m = list.find((x) => x.machine_id === fixedMachineId);
         if (m?.configured) setAutoAgent(m.auto_agent_enabled ?? true);
+        if (m?.internal_operator) setInternalOperator(m.internal_operator);
       }
     } catch {
       setMachines([]);
@@ -93,6 +96,7 @@ export default function CsOneClickSetupPage({
     if (m.configured) {
       setAutoAgent(m.auto_agent_enabled ?? true);
     }
+    setInternalOperator(m.internal_operator ?? '');
   };
 
   const submit = async () => {
@@ -113,6 +117,8 @@ export default function CsOneClickSetupPage({
           business_hours_start: businessHoursStart,
           business_hours_end: businessHoursEnd,
           daily_limit: Number.parseInt(dailyLimit, 10) || 0,
+          // 内部人员（这个号背后真正的人，对账防串台）：空串发 undefined，避免清空已填值。
+          internal_operator: internalOperator.trim() || undefined,
         }),
       });
       const data = await res.json().catch(() => null);
@@ -226,6 +232,16 @@ export default function CsOneClickSetupPage({
                         {m.self_name}{m.online ? ' 在线' : ''}
                       </span>
                     )}
+                    {/* 内部人员（这个号背后真正的人）——对账防串台，一眼看清谁在用这个号 */}
+                    {m.internal_operator && (
+                      <span
+                        data-testid="cs-machine-internal-operator"
+                        className="text-xs px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300"
+                        title="内部人员（这个号背后真正的人）"
+                      >
+                        👤 {m.internal_operator}
+                      </span>
+                    )}
                   </div>
                   {/* 微信健康：好了显绿，坏了显精确原因（整合诊断，一处看到） */}
                   {m.online && (
@@ -285,6 +301,20 @@ export default function CsOneClickSetupPage({
             placeholder="50"
             className="w-full px-3 py-2 rounded border border-slate-300 dark:border-slate-600 dark:bg-slate-900 text-sm"
           />
+        </div>
+        <div>
+          <label className="block text-sm text-gray-600 dark:text-gray-300 mb-1">
+            内部人员（这个号背后真正的人，便于对账防串台）
+          </label>
+          <input
+            type="text"
+            data-testid="setup-internal-operator"
+            value={internalOperator}
+            onChange={(e) => setInternalOperator(e.target.value)}
+            placeholder="如：苏彦卿 / 于瑾"
+            className="w-full px-3 py-2 rounded border border-slate-300 dark:border-slate-600 dark:bg-slate-900 text-sm"
+          />
+          <p className="text-xs text-gray-400 mt-1">一个账号只能绑一个微信号；换人请先解绑旧微信，避免客户串台。</p>
         </div>
         <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-200">
           <input

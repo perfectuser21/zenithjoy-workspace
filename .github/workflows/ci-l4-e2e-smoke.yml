@@ -533,6 +533,18 @@ jobs:
           chmod +x .github/workflows/scripts/smoke/line04-per-operator-smoke.sh
           bash .github/workflows/scripts/smoke/line04-per-operator-smoke.sh
 
+      # ─── Line04 账号身份层：内部人员字段（中台可编辑可查）+ 1 email↔1 微信 1:1 绑定（防串台） ───
+      - name: Smoke — Line04 内部人员字段 + 1 email↔1 微信 1:1 绑定
+        env:
+          API_BASE: http://localhost:5200
+          PSQL_HOST: localhost
+          PSQL_USER: cecelia
+          PSQL_DB: cecelia
+          PSQL_PASS: cecelia
+        run: |
+          chmod +x .github/workflows/scripts/smoke/line04-internal-person-binding-smoke.sh
+          bash .github/workflows/scripts/smoke/line04-internal-person-binding-smoke.sh
+
       # ─── Line04 CRM 重做：blacklist 写 / friend-scan ingest+trigger+pending / onboarding 状态机 / 403 修法（含邮箱超管） ───
       # SMOKE_ADMIN_EMAIL 须 ∈ job-level ADMIN_EMAILS，邮箱超管旁路（修 403）smoke 才能 200。
       - name: Smoke — Line04 CRM 重做 blacklist+ingest+onboarding+trigger
