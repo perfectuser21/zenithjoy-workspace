@@ -110,24 +110,34 @@ export default function LeadsPage() {
   const [acqTaskId, setAcqTaskId] = useState<string | null>(null);
   const [acqStatus, setAcqStatus] = useState<CollectStatus | null>(null);
   const [acqError, setAcqError] = useState<string | null>(null);
+  const [manualInput, setManualInput] = useState('');
   const acqSseRef = useRef<EventSource | null>(null);
 
-  const handleCollect = async () => {
+  // 点"采集"直接展开关键词输入框（不走飞书扩词）
+  const handleCollect = () => {
+    setAcqError(null);
+    setAcqDegraded(true);
+    setAcqKeywords([]);
+    setAcqPhase('expanded');
+  };
+
+  const handleManualSubmit = async () => {
+    const words = manualInput.split(/[,，\s]+/).map(w => w.trim()).filter(Boolean);
+    if (words.length === 0) return;
     setAcqError(null);
     try {
       const res = await fetch('/api/acquisition/collect/expand', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({}),
+        body: JSON.stringify({ manual_keywords: words }),
       });
-      const body = await res.json();
-      if (!res.ok || !body.success) {
-        setAcqError(body?.error?.code || `HTTP ${res.status}`);
+      const resBody = await res.json();
+      if (!res.ok || !resBody.success) {
+        setAcqError(resBody?.error?.code || `HTTP ${res.status}`);
         return;
       }
-      setAcqKeywords(body.data.keywords as ExpandKeyword[]);
-      setAcqDegraded(Boolean(body.data.degraded));
-      setAcqPhase('expanded');
+      setAcqKeywords(resBody.data.keywords as ExpandKeyword[]);
+      setAcqDegraded(false);
     } catch (e) {
       setAcqError((e as Error).message);
     }
@@ -283,6 +293,30 @@ export default function LeadsPage() {
         {acqError && (
           <div className="mb-3 p-2 bg-red-900/30 text-red-400 rounded text-xs" data-testid="acq-expand-error">
             {acqError}
+          </div>
+        )}
+
+        {acqPhase === 'expanded' && acqDegraded && acqKeywords.length === 0 && (
+          <div className="mb-3" data-testid="acq-manual-input-area">
+            <div className="text-sm text-gray-400 mb-2">输入关键词（逗号或空格分隔），点确认后派单采集抖音评论</div>
+            <div className="flex gap-2">
+              <input
+                data-testid="acq-manual-input"
+                type="text"
+                value={manualInput}
+                onChange={e => setManualInput(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && handleManualSubmit()}
+                placeholder="例：装修，瓷砖，家装"
+                className="flex-1 bg-slate-700 border border-slate-600 rounded px-3 py-1.5 text-sm text-gray-200 placeholder-gray-500 focus:outline-none focus:border-yellow-500"
+              />
+              <button
+                data-testid="acq-manual-submit"
+                onClick={handleManualSubmit}
+                className="bg-yellow-500/20 text-yellow-300 border border-yellow-600/40 rounded px-4 py-1.5 text-sm hover:bg-yellow-500/30"
+              >
+                确认
+              </button>
+            </div>
           </div>
         )}
 
