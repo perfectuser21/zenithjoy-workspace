@@ -1257,7 +1257,9 @@ function startAcquisitionCollectLoop(cfg: AgentConfig): void {
         const allVideoIds: string[] = [];
 
         for (const kw of keywords) {
-          const result = await searchDouyinVideosByKeyword(kw);
+          // keywords 可能是 string 或 {word, source} 对象（collect/expand 返回格式）
+          const kwStr: string = typeof kw === 'string' ? kw : ((kw as { word?: string }).word ?? String(kw));
+          const result = await searchDouyinVideosByKeyword(kwStr);
           if (result.ok && result.video_urls.length > 0) {
             for (const url of result.video_urls) {
               const m = url.match(/\/video\/(\d+)/);
@@ -1265,7 +1267,7 @@ function startAcquisitionCollectLoop(cfg: AgentConfig): void {
             }
           } else if (!result.ok) {
             console.warn(
-              `[acquisition] collect 关键词「${kw}」失败: ${(result as { error?: string }).error ?? 'unknown'}`,
+              `[acquisition] collect 关键词「${kwStr}」失败: ${(result as { error?: string }).error ?? 'unknown'}`,
             );
           }
         }
