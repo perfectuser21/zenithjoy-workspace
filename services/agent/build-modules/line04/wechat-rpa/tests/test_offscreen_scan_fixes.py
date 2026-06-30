@@ -1,11 +1,14 @@
 # -*- coding: utf-8 -*-
 """
-逻辑层单测 — 离屏会话检测+切换双修（1.0.73）
+逻辑层单测 — 离屏会话检测+切换（1.0.73 Fix B；Fix A 已废）
 
-Fix A: scan_unread 扫前必须调 _reset_session_list_to_top，防止 CRM 扫描滚到底
-       后下轮 scan_unread 只看底部条目、漏掉顶部新未读。
+Fix A（已废，2026-06-29 #962 推翻 → 2026-07-01 新设计取代）：曾要求 scan_unread 扫前【每轮】调
+       _reset_session_list_to_top 回顶。rog 真机实证：每轮切 tab 偶发失败 → 卡通讯录 → 「回一次
+       就不理」（见 test_scan_no_tab_switch_regression）。现在的设计：scan_unread 只在【首屏渲染满、
+       真去滚动找视口外未读】之后才原子回顶一次（见 test_scan_unread_scroll），小账号绝不切 tab。
+       故原 Fix A 的两个「每轮必回顶/空未读也回顶」断言已删（与现行设计冲突，是过时回归）。
 
-Fix B: _open_chat 检测到离屏坐标(>20000)时，必须先 Select() 强制虚拟列表把
+Fix B（仍有效）：_open_chat 检测到离屏坐标(>20000)时，必须先 Select() 强制虚拟列表把
        目标项滚进可视区，再重扫 descendants 取有效坐标；否则 descendants 里
        根本找不到该 item（Qt 虚拟列表不渲染不可见项）。
 
@@ -47,67 +50,8 @@ if "listen_chat" in sys.modules:
 import listen_chat  # noqa: E402
 
 
-# ─── Fix A：scan_unread 扫前回顶 ──────────────────────────────────────────────
-
-
-def test_scan_unread_calls_reset_to_top_before_descendants():
-    """scan_unread 必须在 mw.descendants() 之前调用 _reset_session_list_to_top。
-
-    CRM scan_recent_contacts 会把列表滚到底，若 scan_unread 不先回顶，
-    Qt 虚拟列表只渲染底部条目，顶部新未读永远漏掉（RC-1 根因）。
-    """
-    call_order = []
-
-    mock_mw = MagicMock()
-    mock_mw.descendants.return_value = []
-
-    def fake_ensure_tray(mw):
-        call_order.append("ensure_tray")
-        return ""
-
-    def fake_reset_top(mw):
-        call_order.append("reset_top")
-        return True
-
-    def fake_restore(mw, state):
-        call_order.append("restore")
-
-    with patch.object(listen_chat, "_ensure_tray_visible", side_effect=fake_ensure_tray), \
-         patch.object(listen_chat, "_reset_session_list_to_top", side_effect=fake_reset_top), \
-         patch.object(listen_chat, "_restore_window_state", side_effect=fake_restore):
-
-        listen_chat.scan_unread(mock_mw)
-
-    assert "reset_top" in call_order, "scan_unread 未调用 _reset_session_list_to_top"
-
-    # reset_top 必须在 descendants 之前发生
-    reset_idx = call_order.index("reset_top")
-    # descendants 调用通过 mock_mw.descendants.call_count 验证（已被调用）
-    assert mock_mw.descendants.call_count >= 1, "scan_unread 未调用 mw.descendants()"
-
-    # 确认顺序：ensure_tray → reset_top（ensure_tray 先于 reset_top）
-    ensure_idx = call_order.index("ensure_tray")
-    assert ensure_idx < reset_idx, (
-        f"_reset_session_list_to_top 必须在 _ensure_tray_visible 之后调用，"
-        f"实际顺序: {call_order}"
-    )
-
-
-def test_scan_unread_reset_top_called_even_when_no_unread():
-    """无未读消息时 _reset_session_list_to_top 也必须被调用（不能条件跳过）。"""
-    mock_mw = MagicMock()
-    mock_mw.descendants.return_value = []
-
-    with patch.object(listen_chat, "_ensure_tray_visible", return_value=""), \
-         patch.object(listen_chat, "_reset_session_list_to_top") as mock_reset, \
-         patch.object(listen_chat, "_restore_window_state"):
-
-        result = listen_chat.scan_unread(mock_mw)
-
-    assert mock_reset.call_count == 1, (
-        f"_reset_session_list_to_top 必须恰好调用 1 次，实际: {mock_reset.call_count}"
-    )
-    assert result == [], "无未读时应返回空列表"
+# ─── Fix A 已废：见模块 docstring + test_scan_no_tab_switch_regression /
+#     test_scan_unread_scroll（现行设计：只在真滚动找视口外未读后才原子回顶一次，小账号不切 tab）。
 
 
 # ─── Fix B：_open_chat 离屏先 Select() 再重扫 ─────────────────────────────────

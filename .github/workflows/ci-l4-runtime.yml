@@ -135,7 +135,9 @@ jobs:
                            tests/test_friend_scan_ingest.py \
                            tests/test_friend_scan_pending.py \
                            tests/test_cs_config_gate.py \
-                           tests/test_scan_unread.py -q
+                           tests/test_scan_unread.py \
+                           tests/test_scan_unread_scroll.py \
+                           tests/test_reply_loop_purity.py -q
       - name: Check build-modules/line04/wechat-rpa in sync with source
         run: |
           diff -r services/agent/wechat-rpa/ \
