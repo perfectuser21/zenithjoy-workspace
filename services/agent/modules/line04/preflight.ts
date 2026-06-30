@@ -394,6 +394,56 @@ export function checkVerifySilent(moduleDir?: string): CheckOutcome {
   }
 }
 
+// ---------- 真送达自检节流：默认 1 小时一次（远程确认微信在线）----------
+// 背景：带发送自检（checkVerifyDelivery）会主动发一条到「文件传输助手」远程确认在线，
+// 但它随 runPreflight 触发，而 runPreflight 可能被频繁拉起（心跳门禁 / agent 重启 /
+// 升级重试 / 崩溃自愈 / 多进程），用户体感「几秒~几分钟就发一次文件传输助手」。
+// 故把这一条（且仅这一条主动发送）节流到默认 1 小时一次；只读静默自检（checkVerifySilent
+// --no-send，被动心跳）不受影响，仍每次跑保证及时。
+// 时间戳必须落盘（preflight.js 每次是新 spawn 进程 + agent 会重启，内存计数不管用）。
+export const DELIVERY_SELFCHECK_INTERVAL_SEC = 3600;
+const DELIVERY_SELFCHECK_INTERVAL_MS = DELIVERY_SELFCHECK_INTERVAL_SEC * 1000;
+
+// 纯函数（CI 单测锚点）：距上次真送达自检是否已到间隔（到点才 true）。
+// lastMs<=0 / 非法（从未跑过）→ true（首次必发）；now-last>=间隔 → true；否则 false。
+export function shouldRunDeliverySelfcheck(
+  nowMs: number,
+  lastMs: number,
+  intervalMs: number = DELIVERY_SELFCHECK_INTERVAL_MS,
+): boolean {
+  if (!Number.isFinite(lastMs) || lastMs <= 0) return true;
+  return nowMs - lastMs >= intervalMs;
+}
+
+// 节流时间戳落盘路径（Windows: C:\Users\Public；其它平台回退 os.tmpdir()）。
+export function deliverySelfcheckStampPath(): string {
+  const base = process.env.PUBLIC || os.tmpdir();
+  return path.join(base, 'zj-delivery-selfcheck.json');
+}
+
+// 读上次真送达自检时间戳（ms）。读不到 / 解析失败 / 非法 → 0（视为从未跑过）。
+export function readDeliveryLastRun(stampPath: string = deliverySelfcheckStampPath()): number {
+  try {
+    const raw = fs.readFileSync(stampPath, 'utf-8');
+    const v = (JSON.parse(raw) as { last_run_ms?: unknown }).last_run_ms;
+    return typeof v === 'number' && Number.isFinite(v) && v > 0 ? v : 0;
+  } catch {
+    return 0;
+  }
+}
+
+// 写本次真送达自检时间戳（ms）。失败吞掉（落盘失败不阻断自检）。
+export function writeDeliveryLastRun(
+  nowMs: number,
+  stampPath: string = deliverySelfcheckStampPath(),
+): void {
+  try {
+    fs.writeFileSync(stampPath, JSON.stringify({ last_run_ms: nowMs }), 'utf-8');
+  } catch {
+    // ignore — 落盘失败只是少一次节流记忆，不影响自检本身
+  }
+}
+
 // ---------- 带发送接缝自检：--verify-silent --target 文件传输助手（真发一条到自己）----------
 // 只读自检（--no-send）不覆盖真送达 + 切会话后焦点归还，必须带发送才触发那两条。给「文件传输助手」
 // 发（自己的会话，不打扰真人），读回确认原文真出现（真送达）+ 操作后焦点还回（不抢焦点）。
@@ -447,6 +497,20 @@ export function checkVerifyDelivery(moduleDir?: string): CheckOutcome {
   }
   if (mock === 'skip') return { ok: true, skipped: true };
   if (process.platform !== 'win32') return { ok: true, skipped: true };
+
+  // 节流：这一条会主动发到「文件传输助手」远程确认在线，默认 1 小时一次（别每几秒/几分钟就发）。
+  // 不到间隔 → skip（不发消息、不误红）；只读静默自检不受此节流影响仍每轮跑。
+  // 先写后发：即使下面 spawn 异常/挂起，时间戳也已推进，避免 retry-storm 把节流绕过。
+  // MOCK_DELIVERY_SELFCHECK_NOW（ms）供测试注入"当前时间"。
+  const nowMs = Number(process.env.MOCK_DELIVERY_SELFCHECK_NOW) || Date.now();
+  if (!shouldRunDeliverySelfcheck(nowMs, readDeliveryLastRun())) {
+    return {
+      ok: true,
+      skipped: true,
+      found: `真送达自检节流：距上次 < ${DELIVERY_SELFCHECK_INTERVAL_SEC}s（1h），本轮不发文件传输助手`,
+    };
+  }
+  writeDeliveryLastRun(nowMs);
 
   const dir = moduleDir ?? __dirname;
   const python = getModulePython(dir);
