@@ -132,15 +132,27 @@ async function spawnBurnerProcess(
       console.log('[qr-bind-douyin-burner]', d.toString().trimEnd());
     });
     proc.on('close', () => {
-      const lastLine = stdout.trim().split('\n').filter(Boolean).pop() ?? '';
-      try {
-        resolve(JSON.parse(lastLine) as QrBindDouyinBurnerResult);
-      } catch {
+      // Playwright 关闭时可能往 stdout 追写日志，取最后一行不可靠。
+      // 从所有行里找最后一个含 ok/qr_login 字段的 JSON 行。
+      const lines = stdout.trim().split('\n').filter(Boolean);
+      let result: QrBindDouyinBurnerResult | null = null;
+      for (let i = lines.length - 1; i >= 0; i--) {
+        try {
+          const parsed = JSON.parse(lines[i]) as QrBindDouyinBurnerResult;
+          if (typeof parsed.ok === 'boolean' && parsed.qr_login) {
+            result = parsed;
+            break;
+          }
+        } catch { /* 非 JSON 行跳过 */ }
+      }
+      if (result) {
+        resolve(result);
+      } else {
         resolve({
           ok: false,
           sessionPath: fallbackSessionPath,
           qr_login: 'failed',
-          error: `result parse failed: ${lastLine || '(no output)'}`,
+          error: `result parse failed: ${lines[lines.length - 1] || '(no output)'}`,
         });
       }
     });
