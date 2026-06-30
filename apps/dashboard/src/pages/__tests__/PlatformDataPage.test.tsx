@@ -67,25 +67,18 @@ describe('PlatformDataPage', () => {
   });
 
   it('加载状态应该显示 loading', async () => {
-    vi.useFakeTimers();
-
-    // Mock API 返回一个延迟的 Promise
-    vi.mocked(platformDataApi.fetchPlatformData).mockImplementation(
-      () => new Promise((resolve) => {
-        setTimeout(() => resolve({ success: true, platform: 'douyin', count: 0, data: [] }), 100);
-      })
-    );
+    // 用永不 resolve 的 Promise 让组件始终处于 loading 态。
+    // 不能用 setTimeout mock：测试退出时 Timer 仍挂起，jsdom 拆环境时 setLoading(false)
+    // 访问 window → ReferenceError: window is not defined（unhandled error → exit 1）。
+    // 永不 resolve 的 Promise 测试结束后无 pending setState，不触发上述问题。
+    vi.mocked(platformDataApi.fetchPlatformData).mockReturnValue(new Promise(() => {}));
 
     render(<PlatformDataPage />);
 
-    // 应该显示加载状态（setTimeout 尚未触发）
+    // 应该显示加载状态
     await waitFor(() => {
       expect(screen.getByText(/加载中.../)).toBeInTheDocument();
     });
-
-    // 让 setTimeout 在测试内触发，避免 jsdom 拆环境时产生 unhandled "window is not defined"
-    await vi.runAllTimersAsync();
-    vi.useRealTimers();
   });
 
   it('错误状态应该显示错误信息', async () => {
