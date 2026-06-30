@@ -434,6 +434,8 @@ const CSSetupBodySchema = z
     // 微信昵称 + 内部 wxid：一般由 agent 扫码/上报带入；前端若把扫码结果透传也接受。
     wechat_display_name: z.string().optional(),
     wxid_internal: z.string().optional(),
+    // 内部人员：这个号背后真正的人（苏彦卿/于瑾），运营手填，对账防串台。可编辑可查。
+    internal_operator: z.string().optional(),
   })
   .strict();
 

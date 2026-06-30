@@ -268,6 +268,7 @@ export interface CSMachine {
   wechat_id?: string; // 合成 id（cs-<前缀>）= 配置主 key，内部用
   real_wechat_id?: string; // 真实微信号（perfect-xx，SSOT，运营手填）
   wechat_display_name?: string; // 微信昵称（默忆，前端 display）
+  internal_operator?: string; // 内部人员：这个号背后真正的人（苏彦卿/于瑾），运营手填，对账防串台
   self_name?: string; // AI 人设名（小苏），≠ 微信昵称
   whitelist?: string[];
   auto_agent_enabled?: boolean;
@@ -332,6 +333,7 @@ export async function listAllMachines(tenantId?: string, limit = 100): Promise<C
               MAX(sa.wechat_id)       AS wechat_id,
               MAX(sa.real_wechat_id)      AS real_wechat_id,
               MAX(sa.wechat_display_name) AS wechat_display_name,
+              MAX(sa.internal_operator)   AS internal_operator,
               MAX(lm.agent_id)        AS agent_id,
               MAX(h.agent_uuid)       AS agent_uuid,
               MAX(c.persona->>'self_name')   AS self_name,
@@ -397,6 +399,7 @@ export async function listAllMachines(tenantId?: string, limit = 100): Promise<C
         wechat_id: r.wechat_id ? String(r.wechat_id) : undefined,
         real_wechat_id: r.real_wechat_id ? String(r.real_wechat_id) : undefined,
         wechat_display_name: r.wechat_display_name ? String(r.wechat_display_name) : undefined,
+        internal_operator: r.internal_operator ? String(r.internal_operator) : undefined,
         self_name: r.self_name ? String(r.self_name) : undefined,
         whitelist,
         auto_agent_enabled: r.auto_agent_enabled === null ? undefined : Boolean(r.auto_agent_enabled),
@@ -457,6 +460,8 @@ export async function setupCSByMachine(
     real_wechat_id?: string;
     wechat_display_name?: string;
     wxid_internal?: string;
+    // 内部人员：这个号背后真正的人（苏彦卿/于瑾），运营手填，对账防绑错号。COALESCE 幂等补填，本次没传不抹旧值。
+    internal_operator?: string;
   },
 ): Promise<{ wechat_id: string; agent_id: string | null }> {
   const ten = await pool.query(
@@ -473,6 +478,27 @@ export async function setupCSByMachine(
   if (!tenantId) {
     throw new Error(`machine ${machineId} 未注册到任何 license/租户，无法配置`);
   }
+  // 1 email↔1 微信 1:1 防串台（用户拍板）：一个 email/license 账号（= 一个租户）只能绑一个微信号。
+  // 写入前先查同租户是否已绑「另一台」机器（= 另一个微信号）；是 → 抛 TENANT_ALREADY_BOUND 友好告警，
+  // 绝不静默建第二行（否则将来接 CRM 串台）。同一台机器 re-setup（machine_id 相同）放行（幂等改配置）。
+  // DB 层另有 uq_service_agents_tenant_active 兜底（见 migration 20260630_120000）。
+  const existingBind = await pool.query(
+    `SELECT machine_id, wechat_id, real_wechat_id
+       FROM zenithjoy.service_agents
+      WHERE tenant_id = $1 AND deleted_at IS NULL
+      LIMIT 1`,
+    [tenantId],
+  );
+  const bound = existingBind.rows?.[0] as
+    | { machine_id?: string; wechat_id?: string; real_wechat_id?: string }
+    | undefined;
+  if (bound && bound.machine_id && bound.machine_id !== machineId) {
+    const boundLabel = bound.real_wechat_id || bound.wechat_id || '已绑微信';
+    throw new Error(
+      `TENANT_ALREADY_BOUND: 该账号已绑定微信「${boundLabel}」（机器 ${String(bound.machine_id).slice(0, 8)}…）。` +
+        `一个账号只能绑一个微信，防止 CRM 客户串台。如需换绑，请先解绑旧微信再绑新的。`,
+    );
+  }
   const wechatId =
     typeof patch.wechat_id === 'string' && patch.wechat_id.trim()
       ? patch.wechat_id.trim()
@@ -483,18 +509,20 @@ export async function setupCSByMachine(
   const realWechatId = trimOrNull(patch.real_wechat_id);
   const displayName = trimOrNull(patch.wechat_display_name);
   const wxidInternal = trimOrNull(patch.wxid_internal);
-  // COALESCE 保留既有非空值：本次没传(NULL)不抹掉上次填的真实微信号/昵称/wxid（幂等补填，不回退）。
+  const internalOperator = trimOrNull(patch.internal_operator);
+  // COALESCE 保留既有非空值：本次没传(NULL)不抹掉上次填的真实微信号/昵称/wxid/内部人员（幂等补填，不回退）。
   await pool.query(
     `INSERT INTO zenithjoy.service_agents
-       (tenant_id, machine_id, wechat_id, real_wechat_id, wechat_display_name, wxid_internal)
-     VALUES ($1, $2, $3, $4, $5, $6)
+       (tenant_id, machine_id, wechat_id, real_wechat_id, wechat_display_name, wxid_internal, internal_operator)
+     VALUES ($1, $2, $3, $4, $5, $6, $7)
      ON CONFLICT (machine_id) WHERE deleted_at IS NULL
        DO UPDATE SET wechat_id = EXCLUDED.wechat_id,
                      real_wechat_id = COALESCE(EXCLUDED.real_wechat_id, zenithjoy.service_agents.real_wechat_id),
                      wechat_display_name = COALESCE(EXCLUDED.wechat_display_name, zenithjoy.service_agents.wechat_display_name),
                      wxid_internal = COALESCE(EXCLUDED.wxid_internal, zenithjoy.service_agents.wxid_internal),
+                     internal_operator = COALESCE(EXCLUDED.internal_operator, zenithjoy.service_agents.internal_operator),
                      updated_at = now()`,
-    [tenantId, machineId, wechatId, realWechatId, displayName, wxidInternal],
+    [tenantId, machineId, wechatId, realWechatId, displayName, wxidInternal, internalOperator],
   );
   await saveCSConfig(wechatId, patch);
   return { wechat_id: wechatId, agent_id: agentId };

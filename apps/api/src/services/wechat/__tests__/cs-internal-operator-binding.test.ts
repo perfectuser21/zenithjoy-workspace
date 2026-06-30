@@ -103,8 +103,9 @@ describe('setupCSByMachine — 1 email↔1 微信 1:1 绑定（防串台）', ()
 
     const res = await setupCSByMachine('SAME_MACHINE_01', { internal_operator: '李四' } as any);
     expect(res.wechat_id).toBe('cs-SAME_MAC');
-    // 走到 INSERT 了（4 条 SQL）
-    expect(mockQuery.mock.calls.length).toBe(4);
+    // 没被 1:1 拦截 —— 走到了 service_agents 的 INSERT（第 3 条 SQL）
+    expect(mockQuery.mock.calls.length).toBeGreaterThanOrEqual(3);
+    expect(String(mockQuery.mock.calls[2][0])).toContain('INSERT INTO zenithjoy.service_agents');
   });
 });
 
