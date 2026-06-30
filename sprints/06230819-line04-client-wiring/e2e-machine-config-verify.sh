@@ -18,19 +18,22 @@ for i in $(seq 1 30); do
   sleep 1
 done
 
-echo "── 1. seed：两客服各自配置 + 一租户 + 四种绑定 ──"
-TEN=$(psql "$DB" -t -A -c "INSERT INTO zenithjoy.tenants(name,license_key) VALUES ('e2e-cw','e2e-cw-license-key') RETURNING id" | head -1 | tr -d '[:space:]')
+echo "── 1. seed：两客服各自配置 + 四租户各一机（1 email↔1 微信 1:1） + 四种绑定 ──"
+# #993 起 uq_service_agents_tenant_active：一个租户至多一行 active service_agent（1 email↔1 微信防串台）。
+# 故四台机各给独立租户（不再共用一个 e2e-cw 租户，否则触发 uq 唯一约束 duplicate key）。
+mktenant() { psql "$DB" -t -A -c "INSERT INTO zenithjoy.tenants(name,license_key) VALUES ('e2e-cw-$1','e2e-cw-license-key-$1') RETURNING id" | head -1 | tr -d '[:space:]'; }
+TEN_A=$(mktenant a); TEN_B=$(mktenant b); TEN_C=$(mktenant c); TEN_D=$(mktenant d)
 # 写接口已加管理员/服务闸（Sprint 06232248 Issue 96db53be）：服务级 e2e 用 internal token 走超管/服务通道
 CSAUTH="X-Internal-Token: ${ZENITHJOY_INTERNAL_TOKEN:-ci-only-internal-token}"
 curl -sf -X PUT "$API/api/wechat/cs/config/wxid_csa" -H 'Content-Type: application/json' -H "$CSAUTH" \
   -d '{"persona":{"self_name":"萌萌","address_style":"x","tone":"x","sentence_style":"x","use_emoji":"x","banned_phrases":[],"few_shot":[]},"whitelist":["客户甲"]}' >/dev/null
 curl -sf -X PUT "$API/api/wechat/cs/config/wxid_csb" -H 'Content-Type: application/json' -H "$CSAUTH" \
   -d '{"persona":{"self_name":"天下第一","address_style":"y","tone":"y","sentence_style":"y","use_emoji":"y","banned_phrases":[],"few_shot":[]},"auto_agent_enabled":true}' >/dev/null
-# 四种绑定：A→csa(已配)、B→csb(已配)、C→已绑没填号、D→填了号但该号没配过
+# 四种绑定（各自独立租户，满足 1:1）：A→csa(已配)、B→csb(已配)、C→已绑没填号、D→填了号但该号没配过
 psql "$DB" -q -c "INSERT INTO zenithjoy.service_agents(tenant_id,machine_id,wechat_id) VALUES
-  ('$TEN','machine-A','wxid_csa'),('$TEN','machine-B','wxid_csb'),
-  ('$TEN','machine-C',NULL),('$TEN','machine-D','wxid_unconfigured')"
-pass "seed 完成 tenant=$TEN"
+  ('$TEN_A','machine-A','wxid_csa'),('$TEN_B','machine-B','wxid_csb'),
+  ('$TEN_C','machine-C',NULL),('$TEN_D','machine-D','wxid_unconfigured')"
+pass "seed 完成 tenants=$TEN_A/$TEN_B/$TEN_C/$TEN_D"
 
 echo "── 2. 两机各拉各的，绝不串台（钉 defe1a42 客户机侧）──"
 A=$(curl -sf "$API/api/wechat/cs/agent-config?machine_id=machine-A")
