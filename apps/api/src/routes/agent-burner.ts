@@ -183,6 +183,29 @@ router.get('/sessions', tenantContextOptional, async (req: Request, res: Respons
   }
 });
 
+// ── 3b. POST /sessions/invalidate — Agent 上报 session 过期，标记 needs_rebind ──
+router.post('/sessions/invalidate', agentContext, async (req: Request, res: Response) => {
+  const agent_id = req.agentId;
+  if (!agent_id) {
+    return res.status(401).json(ERR('NO_AGENT', '缺 agent 上下文'));
+  }
+  const reason = req.body?.reason || 'UNKNOWN';
+  try {
+    const r = await pool.query(
+      `UPDATE zenithjoy.agent_platform_sessions
+          SET status = 'needs_rebind', updated_at = NOW()
+        WHERE agent_id = $1 AND platform = 'douyin' AND role = 'burner' AND status = 'active'
+        RETURNING account_label`,
+      [agent_id],
+    );
+    console.log(`[burner/sessions/invalidate] agent=${agent_id} reason=${reason} updated=${r.rows.length}`);
+    return res.json(OK({ invalidated: r.rows.length, reason }));
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'unknown';
+    return res.status(500).json(ERR('INVALIDATE_FAILED', msg));
+  }
+});
+
 // ── 4. POST /crawl-comments — 派抓评论 task ──
 // architecture（2026-05-10 hotfix）：同 qr-bind，tenantContext + agentContext 自动 resolve
 router.post('/crawl-comments', tenantContextOptional, agentContext, async (req: Request, res: Response) => {

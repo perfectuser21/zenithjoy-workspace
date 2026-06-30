@@ -166,6 +166,17 @@ export default function DouyinBurnerBindPage() {
       {/* 步骤 B：burner sessions 列表 */}
       <section className="rounded border p-4">
         <h2 className="mb-3 text-lg font-medium">已绑小号</h2>
+
+        {/* needs_rebind 警告 Banner */}
+        {sessions.some((s) => s.status === 'needs_rebind') && (
+          <div className="mb-3 rounded border border-red-300 bg-red-50 p-3">
+            <p className="font-medium text-red-800">⚠️ 抖音登录已过期</p>
+            <p className="mt-1 text-sm text-red-700">
+              小号的登录 session 已失效（Cookie 过期）。请在下方输入小号名后点"开始绑定"，在弹出的 Chrome 窗口里重新扫码登录。
+            </p>
+          </div>
+        )}
+
         {sessions.length === 0 ? (
           <div className="text-gray-500">暂无小号 — 用上面表单绑一个</div>
         ) : (
@@ -180,10 +191,12 @@ export default function DouyinBurnerBindPage() {
             </thead>
             <tbody>
               {sessions.map((s) => (
-                <tr key={s.account_label} className="border-b">
+                <tr key={s.account_label} className={`border-b ${s.status === 'needs_rebind' ? 'bg-red-50' : ''}`}>
                   <td className="py-2">{s.account_label}</td>
                   <td className="py-2">{s.account_nickname || '-'}</td>
-                  <td className="py-2">{s.status}</td>
+                  <td className={`py-2 font-medium ${s.status === 'needs_rebind' ? 'text-red-600' : s.status === 'active' ? 'text-green-600' : 'text-gray-500'}`}>
+                    {s.status === 'needs_rebind' ? '⚠️ 登录过期' : s.status === 'active' ? '✅ 正常' : s.status}
+                  </td>
                   <td className="py-2">{s.bound_at || '-'}</td>
                 </tr>
               ))}
