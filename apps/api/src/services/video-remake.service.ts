@@ -145,8 +145,7 @@ async function _runPipelineBackground(jobId: string): Promise<void> {
     // N07: select frame (CI auto)
     const n07 = job.nodes.find((n) => n.node_id === 'N07')!;
     n07.status = 'running';
-    const n07r = await selectN07Frame({ jobId, ciAuto: true });
-    const selectedFrame = n07r.selected_frame;
+    await selectN07Frame({ jobId, ciAuto: true });
 
     // N08: generate video with DashScope (attempt real; fall back to raw-video endpoint)
     const n08 = job.nodes.find((n) => n.node_id === 'N08')!;

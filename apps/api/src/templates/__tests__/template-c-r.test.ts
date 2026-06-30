@@ -1,4 +1,3 @@
-import path from 'path';
 import fs from 'fs';
 import { describe, it, expect } from 'vitest';
 import { getTemplate, readTemplateJsx } from '../registry';
