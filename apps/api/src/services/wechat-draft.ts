@@ -504,7 +504,7 @@ export async function generateChatDraft(
   const taskId = crypto.randomUUID();
   try {
     await pool.query(
-      `INSERT INTO wechat_publish_task
+      `INSERT INTO zenithjoy.wechat_publish_task
         (task_id, platform, type, target_user, content_draft, approval_status, approval_source, feishu_record_id)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
       [
@@ -618,7 +618,7 @@ export async function generateMomentDraft(
   // 2) 当日去重（CURRENT_DATE 比对 created_at::date）
   try {
     const dupResult = await pool.query(
-      `SELECT task_id FROM wechat_publish_task
+      `SELECT task_id FROM zenithjoy.wechat_publish_task
         WHERE type = $1
           AND target_user = $2
           AND created_at::date = CURRENT_DATE
@@ -675,7 +675,7 @@ export async function generateMomentDraft(
   const taskId = crypto.randomUUID();
   try {
     await pool.query(
-      `INSERT INTO wechat_publish_task
+      `INSERT INTO zenithjoy.wechat_publish_task
         (task_id, platform, type, target_user, content_draft, approval_status, approval_source, feishu_record_id)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
       [
