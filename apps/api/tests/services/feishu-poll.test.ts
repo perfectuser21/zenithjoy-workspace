@@ -121,7 +121,7 @@ describe('ws5 feishu-poll.ts — pollOnce 飞书 approved 触发派发 + A 路�
 
     // 校验 UPDATE 语句调用
     const updateCalls = mockQuery.mock.calls.filter((c) =>
-      String(c[0]).match(/UPDATE\s+wechat_publish_task/i),
+      String(c[0]).match(/UPDATE\s+(zenithjoy\.)?wechat_publish_task/i),
     );
     expect(updateCalls.length).toBeGreaterThanOrEqual(1);
     // 校验 UPDATE 参数中 approval_source='feishu_user'
@@ -210,7 +210,7 @@ describe('ws5 feishu-poll.ts — pollOnce 飞书 approved 触发派发 + A 路�
     await pollOnce();
 
     const updateCalls = mockQuery.mock.calls.filter((c) =>
-      String(c[0]).match(/UPDATE\s+wechat_publish_task/i),
+      String(c[0]).match(/UPDATE\s+(zenithjoy\.)?wechat_publish_task/i),
     );
     // 至少 2 次 UPDATE：一次 approval_source，一次 rate_limited
     expect(updateCalls.length).toBeGreaterThanOrEqual(1);
