@@ -510,8 +510,22 @@ export function interpretUpdateLock(exitCode: number, stdout: string): CheckOutc
   return { ok: true, skipped: true };
 }
 
-// 跑强版关更新：spawnSync python wechat_update_lock.py（real run，run_update_lock 杀更新进程 +
-// 改名 .disabled + icacls + hosts 屏蔽 + AutoUpdate=0，并 interpret_lock_verify 诚实判定）。
+// 构造「提权跑关更新」的 PowerShell 参数（纯函数，CI 可测，遗留① / decision b9f4f602）。
+// 关更新要改 Program Files 的 WeixinUpdate.exe / 写 hosts / 改注册表 —— 全需 admin。
+// agent 本体保持普通用户（保 UIA 不受 UIPI 隔离），故仅这一步子进程用 Start-Process -Verb RunAs 提权。
+// RunAs 起的提权进程 stdout 父进程收不到（且 -RedirectStandardOutput 与 -Verb RunAs 不兼容），
+// 故让 python 把 JSON 结果写到 --output <file>，提权进程 -Wait 退出后父进程读回该文件再 interpret。
+export function buildElevatedLockArgs(python: string, script: string, outFile: string): string[] {
+  const psCmd =
+    `Start-Process -FilePath '${python}' ` +
+    `-ArgumentList '${script}','--output','${outFile}' ` +
+    `-Verb RunAs -Wait`;
+  return ['-NoProfile', '-NonInteractive', '-Command', psCmd];
+}
+
+// 跑强版关更新：提权 spawnSync powershell Start-Process RunAs → python wechat_update_lock.py
+// （real run，run_update_lock 杀更新进程 + 改名 .disabled + icacls + hosts 屏蔽 + AutoUpdate=0，
+// 并 interpret_lock_verify 诚实判定）。提权进程结果经 --output 文件回传，父进程读回 interpret。
 // MOCK_UPDATE_LOCK env（locked/not_locked/skip）可在任何平台注入；非 Windows 无 MOCK 时 skip。
 export function lockWechatUpdate(moduleDir?: string): CheckOutcome {
   const mock = process.env.MOCK_UPDATE_LOCK;
@@ -528,13 +542,34 @@ export function lockWechatUpdate(moduleDir?: string): CheckOutcome {
   if (!fs.existsSync(script)) {
     return { ok: true, skipped: true, found: 'wechat_update_lock.py 缺失，跳过关更新' };
   }
+  // 提权进程把结果写到 outFile（RunAs stdout 父进程收不到）；父进程 -Wait 后读回。
+  const outFile = path.join(os.tmpdir(), `zj-update-lock-${process.pid}-${Date.now()}.json`);
   try {
-    const r = spawnSync(python, [script], { encoding: 'utf-8', windowsHide: true, timeout: 120_000 });
-    const exitCode = typeof r.status === 'number' ? r.status : 1;
-    const stdout = `${r.stdout ?? ''}\n${r.stderr ?? ''}`;
-    return interpretUpdateLock(exitCode, stdout);
+    if (fs.existsSync(outFile)) fs.unlinkSync(outFile);
+  } catch {
+    /* best-effort 清理旧文件 */
+  }
+  try {
+    // Start-Process -Verb RunAs 触发 UAC 弹窗提权（agent 本体不提权，保 UIA）。
+    spawnSync('powershell', buildElevatedLockArgs(python, script, outFile), {
+      encoding: 'utf-8',
+      windowsHide: true,
+      timeout: 120_000,
+    });
+    if (!fs.existsSync(outFile)) {
+      // 提权进程没产出结果文件（多为 UAC 被取消 / 提权失败）→ 不假装锁死，跳过不误判红。
+      return { ok: true, skipped: true, found: '关更新提权进程未产出结果（UAC 取消？），跳过' };
+    }
+    const stdout = fs.readFileSync(outFile, 'utf-8');
+    return interpretUpdateLock(0, stdout);
   } catch (e) {
     return { ok: true, skipped: true, found: `关更新无法运行：${(e as Error).message}` };
+  } finally {
+    try {
+      if (fs.existsSync(outFile)) fs.unlinkSync(outFile);
+    } catch {
+      /* best-effort 清理结果文件 */
+    }
   }
 }
 
