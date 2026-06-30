@@ -2,17 +2,12 @@ import { Router, Request, Response, NextFunction } from 'express';
 import { randomUUID } from 'crypto';
 import axios from 'axios';
 import { expandKeywords } from '../services/keyword-expander';
-import { writeLeadsFromComments } from '../services/lead-writer';
 import { gradeComment } from '../services/comment-grader';
 import pool from '../db/connection';
-import { readEnterpriseDocText } from '../services/feishu-docx';
-import { writeRecord } from '../services/feishu-bitable-multitenant';
 import {
-  EMPTY_DOC_MIN_CHARS,
   SWEEP_TIMEOUT_MS,
   profileUrlForSecUid,
   resolveTerminalStatus,
-  seedKeywordsFromDoc,
 } from '../services/acquisition-collect';
 import { tenantContextOptional } from '../middleware/tenant-context';
 import { sseService } from '../services/sse.service';
@@ -254,38 +249,41 @@ acquisitionRouter.post('/comment-score-result', async (req: Request, res: Respon
     });
   }
 
-  const tenant_id = process.env.FEISHU_TENANT_ID ?? 'default';
-  const table_id_leads = process.env.FEISHU_TABLE_ID_LEADS ?? 'leads';
-
   let written_count = 0;
   if (!process.env.VITEST) {
     try {
-      // Grade each comment via DeepSeek, filter out null (irrelevant)
-      const gradedComments = await Promise.all(
-        commentList.map(async (c: { commenter_id?: string; text?: string; publish_time?: string; keyword?: string; grade?: string }) => {
-          const grade = c.grade || await gradeComment(c.text ?? '');
-          if (!grade) return null;
-          return { ...c, grade };
-        })
-      );
-      const qualified = gradedComments
-        .filter((c): c is NonNullable<typeof c> => c !== null)
-        .map((c) => ({
-          commenter_id: c.commenter_id ?? '',
-          text: c.text ?? '',
-          publish_time: c.publish_time ?? '',
-          grade: c.grade as import('../services/lead-writer').LeadGrade,
-          keyword: c.keyword,
-        }));
+      // 取第一个可用租户（keyword 任务无租户绑定）
+      const tenantRes = await pool.query(`SELECT id FROM zenithjoy.tenants LIMIT 1`);
+      const tenant_id: string | null = tenantRes.rows.length > 0 ? tenantRes.rows[0].id : null;
 
-      if (qualified.length > 0) {
-        const result = await writeLeadsFromComments({
-          tenant_id,
-          table_id_leads,
-          video_url: video_url ?? '',
-          comments: qualified,
-        });
-        written_count = result.written_count;
+      if (tenant_id) {
+        const gradedComments = await Promise.all(
+          commentList.map(async (c: { commenter_id?: string; text?: string; publish_time?: string; keyword?: string; grade?: string }) => {
+            const grade = c.grade || await gradeComment(c.text ?? '');
+            if (!grade) return null;
+            return { ...c, grade };
+          })
+        );
+        for (const c of gradedComments) {
+          if (!c) continue;
+          const rawId = String(c.commenter_id || '').trim();
+          const secUidMatch = rawId.match(/\/user\/([^/?#]+)/);
+          const secUid = secUidMatch ? secUidMatch[1] : null;
+          const nickname = rawId || '未知';
+          try {
+            await pool.query(
+              `INSERT INTO zenithjoy.acquisition_leads
+                 (tenant_id, sec_uid, nickname, profile_url, source_video_ids,
+                  comment_text, grade, keyword, feishu_write_status)
+               VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7, $8, 'local_only')
+               ON CONFLICT DO NOTHING`,
+              [tenant_id, secUid, nickname, secUid ? `https://www.douyin.com/user/${secUid}` : null,
+               JSON.stringify([video_url ?? '']), String(c.text || '').trim() || null,
+               c.grade || null, c.keyword || null],
+            );
+            written_count++;
+          } catch { /* 单条失败不中断 */ }
+        }
       }
     } catch (err) {
       console.error('[acquisition] comment-score-result failed:', (err as Error).message);
@@ -400,20 +398,6 @@ function smokeOrAgentGate(req: Request, res: Response, next: NextFunction) {
   return fail(res, 403, 'FORBIDDEN', 'invalid X-Smoke-Token');
 }
 
-interface BindingLite {
-  enterprise_doc_token: string | null;
-  table_id_leads: string | null;
-}
-async function loadBindingLite(tenantId: string): Promise<BindingLite | null> {
-  const r = await pool.query(
-    `SELECT enterprise_doc_token, table_id_leads
-       FROM zenithjoy.tenant_feishu_bindings WHERE tenant_id = $1`,
-    [tenantId]
-  );
-  if (!r.rows || r.rows.length === 0) return null;
-  return r.rows[0] as BindingLite;
-}
-
 // DeepSeek 扩词（走 OPENROUTER_BASE_URL = FAKE_LLM_BASE；失败抛错 → 调用方种子兜底）。
 async function llmExpandKeywords(docText: string): Promise<string[]> {
   const base = process.env.OPENROUTER_BASE_URL;
@@ -467,32 +451,8 @@ acquisitionRouter.post('/collect/expand', tenantContextOptional, async (req: Req
       return ok(res, { degraded: false, keywords });
     }
 
-    // AI 扩词路径：需要飞书绑定 + 企业文档
-    const binding = await loadBindingLite(tenantId);
-    if (!binding) return fail(res, 400, 'FEISHU_NOT_BOUND', '未绑飞书，请先去绑定页绑定');
-    if (!binding.enterprise_doc_token)
-      return fail(res, 400, 'NO_ENTERPRISE_DOC', '无企业信息文档，请先在飞书填写企业信息');
-
-    // 读文档纯文本 + 空判定
-    let docText: string | null;
-    try {
-      docText = await readEnterpriseDocText(tenantId);
-    } catch (e) {
-      console.error('[acquisition/expand] 读文档失败:', (e as Error).message);
-      docText = null;
-    }
-    if (docText === null || docText.trim().length < EMPTY_DOC_MIN_CHARS)
-      return fail(res, 400, 'EMPTY_DOC', `企业信息文档需有文字（纯文本 < ${EMPTY_DOC_MIN_CHARS} 字判为空）`);
-
-    // DeepSeek 扩 3 词；失败有限重试后种子兜底（degraded=true）
-    try {
-      const words = await llmExpandKeywords(docText);
-      return ok(res, { degraded: false, keywords: words.map((word) => ({ word, source: 'ai' as const })) });
-    } catch (e) {
-      console.warn('[acquisition/expand] DeepSeek 降级，种子兜底:', (e as Error).message);
-      const seeds = seedKeywordsFromDoc(docText);
-      return ok(res, { degraded: true, keywords: seeds.map((word) => ({ word, source: 'seed' as const })) });
-    }
+    // 无手动关键词时降级返回空列表（飞书企业文档路径已移除）
+    return ok(res, { degraded: true, keywords: [] });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error('[acquisition/expand]', msg);
@@ -647,7 +607,7 @@ acquisitionRouter.post('/collect/report', async (req: Request, res: Response) =>
       `INSERT INTO zenithjoy.acquisition_leads
          (tenant_id, collect_task_id, sec_uid, nickname, profile_url, partial, source_video_ids,
           comment_text, grade, keyword, feishu_write_status)
-       VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8, $9, $10, 'pending')`,
+       VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8, $9, $10, 'local_only')`,
       [
         tenantId,
         taskId,
@@ -664,42 +624,8 @@ acquisitionRouter.post('/collect/report', async (req: Request, res: Response) =>
     newLeads.push({ sec_uid: secUid, nickname: c.nickname });
   }
 
-  // ── 写飞书 Leads（仅新落库的）：ok→success / 失败→pending(待补写飞书)，采集成功 ≠ 飞书成功 ──
-  let leadWriteStatus: 'success' | 'pending' = 'success';
-  const binding = await loadBindingLite(tenantId);
-  const tableIdLeads = binding?.table_id_leads || null;
-  for (const lead of newLeads) {
-    if (!tableIdLeads) {
-      leadWriteStatus = 'pending';
-      break;
-    }
-    let written = false;
-    for (let attempt = 1; attempt <= 2 && !written; attempt++) {
-      try {
-        await writeRecord(tenantId, tableIdLeads, {
-          抖音号: lead.sec_uid || '',
-          昵称: lead.nickname,
-          主页链接: profileUrlForSecUid(lead.sec_uid) || '',
-          来源视频: videoId,
-          采集时间: new Date().toISOString(),
-        });
-        written = true;
-      } catch {
-        // 重试
-      }
-    }
-    if (written) {
-      await pool.query(
-        `UPDATE zenithjoy.acquisition_leads
-            SET feishu_write_status = 'success', updated_at = NOW()
-          WHERE tenant_id = $1 AND collect_task_id = $2
-            AND ${lead.sec_uid ? 'sec_uid = $3' : 'sec_uid IS NULL AND nickname = $3'}`,
-        [tenantId, taskId, lead.sec_uid || lead.nickname]
-      );
-    } else {
-      leadWriteStatus = 'pending'; // 待补写飞书
-    }
-  }
+  // 数据已写本地 DB，不走飞书
+  const leadWriteStatus = 'local_only';
 
   // ── 终态 / 计数 / 断点 更新 ──
   let newStatus = task.status;

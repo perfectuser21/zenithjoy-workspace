@@ -222,14 +222,6 @@ router.post('/crawl-comments', tenantContextOptional, agentContext, async (req: 
       .json(ERR('MISSING_VIDEO_URL', 'tenant_id + agent_id + account_label 必填'));
   }
 
-  // 校验飞书 binding
-  const binding = await getFeishuBinding(tenant_id);
-  if (!binding) {
-    return res
-      .status(400)
-      .json(ERR('FEISHU_NOT_BOUND', 'tenant 未绑飞书，无法写入 Lead 表'));
-  }
-
   // 校验 burner session 存在 + active
   const s = await pool.query(
     `SELECT 1 FROM zenithjoy.agent_platform_sessions
@@ -282,54 +274,60 @@ router.post('/crawl-comments-result', async (req: Request, res: Response) => {
     return res.status(404).json(ERR('TASK_NOT_FOUND', 'task_id 未找到'));
   }
   const tenantId = t.rows[0].tenant_id;
-
-  const binding = await getFeishuBinding(tenantId);
-  if (!binding || !binding.table_id_leads) {
-    await pool.query(
-      `UPDATE zenithjoy.publish_tasks SET status='failed',
-         response = jsonb_build_object('lead_write_status', 'failed', 'error', 'FEISHU_NOT_BOUND'),
-         updated_at = NOW()
-       WHERE id=$1`,
-      [task_id],
-    );
-    return res.json(OK({ updated: true, lead_write_status: 'failed' }));
-  }
-
+  const payload = (t.rows[0].payload || {}) as Record<string, string | undefined>;
   const safeComments = Array.isArray(comments) ? comments : [];
-  const writeRes = await writeLeadsFromComments({
-    tenant_id: tenantId,
-    table_id_leads: binding.table_id_leads,
-    video_url: video_url || '',
-    comments: safeComments,
-  });
+  const safeVideoUrl = video_url || payload.video_url || '';
 
-  const feishuBitableUrl = `https://feishu.cn/base/${binding.app_token}`;
+  // 写本地 acquisition_leads（不走飞书）
+  let insertedCount = 0;
+  for (const c of safeComments) {
+    const rawId = String(c.commenter_id || '').trim();
+    // commenter_id 可能是 "/user/SEC_UID" 路径或昵称文本
+    const secUidMatch = rawId.match(/\/user\/([^/?#]+)/);
+    const secUid = secUidMatch ? secUidMatch[1] : null;
+    const nickname = rawId || '未知';
+    const profileUrl = secUid ? `https://www.douyin.com/user/${secUid}` : null;
+    try {
+      await pool.query(
+        `INSERT INTO zenithjoy.acquisition_leads
+           (tenant_id, sec_uid, nickname, profile_url, source_video_ids, comment_text, grade, keyword, feishu_write_status)
+         VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7, $8, 'local_only')
+         ON CONFLICT DO NOTHING`,
+        [
+          tenantId,
+          secUid,
+          nickname,
+          profileUrl,
+          JSON.stringify([safeVideoUrl]),
+          String(c.text || '').trim() || null,
+          c.grade || null,
+          c.keyword || null,
+        ],
+      );
+      insertedCount++;
+    } catch {
+      // 单条失败不中断
+    }
+  }
 
   await pool.query(
     `UPDATE zenithjoy.publish_tasks SET status='done',
        response = jsonb_build_object(
          'comment_count', $2::int,
-         'lead_write_status', $3::text,
-         'feishu_bitable_url', $4::text,
-         'video_url', $5::text
+         'lead_write_status', 'local_only',
+         'video_url', $3::text
        ),
        updated_at = NOW()
      WHERE id=$1`,
-    [
-      task_id,
-      safeComments.length,
-      writeRes.lead_write_status,
-      feishuBitableUrl,
-      video_url || '',
-    ],
+    [task_id, safeComments.length, safeVideoUrl],
   );
 
   return res.json(
     OK({
       task_id,
       comment_count: safeComments.length,
-      lead_write_status: writeRes.lead_write_status,
-      feishu_bitable_url: feishuBitableUrl,
+      inserted: insertedCount,
+      lead_write_status: 'local_only',
     }),
   );
 });
