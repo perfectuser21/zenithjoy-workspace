@@ -71,6 +71,14 @@ function agentApiUrlEnvLines(): string[] {
   const baseUrl = (process.env.AGENT_PUBLIC_BASE_URL || '').trim();
   if (wsUrl) lines.push(`ZENITHJOY_API_URL=${wsUrl}`);
   if (baseUrl) lines.push(`ZENITHJOY_API_BASE=${baseUrl}`);
+  // 遗留② 根治：从本实例对外地址推导 ZENITHJOY_ENV 一并烧进个人 .env，让 .env 自描述当前环境。
+  // 没有这行时，个人 .env 只带 staging URL 而缺 staging 标记，一旦用户没应用个人 .env、
+  // 回落到 COS 包 .env.template 写死的生产默认值，就会"从 staging 下载却连生产"（OTA 也拿回生产旧版）。
+  // staging slot 的 base URL 含 "staging" → staging；生产 slot（autopilot）→ prod；未配 → 不烧（行为同旧）。
+  if (baseUrl) {
+    const env = baseUrl.toLowerCase().includes('staging') ? 'staging' : 'prod';
+    lines.push(`ZENITHJOY_ENV=${env}`);
+  }
   return lines;
 }
 
