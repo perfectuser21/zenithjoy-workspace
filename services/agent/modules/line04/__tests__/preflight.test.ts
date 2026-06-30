@@ -1039,8 +1039,8 @@ describe('lockWechatUpdate — MOCK / 非 Windows 分支', () => {
 // 三项全失败、interpret_lock_verify 诚实报 locked=False。修法：关更新子进程也用 Start-Process -Verb RunAs
 // 提权（agent 本体仍普通用户保 UIA），结果经 --output 文件回传父进程。
 describe('buildElevatedLockArgs — 关更新提权调用参数（纯函数，CI 可测，遗留①）', () => {
-  const python = 'C:\\\\Users\\\\asus\\\\AppData\\\\Roaming\\\\zenithjoy\\\\modules\\\\line04-wechat-cs-1.0.80\\\\python-embedded\\\\python.exe';
-  const script = 'C:\\\\Users\\\\asus\\\\AppData\\\\Roaming\\\\zenithjoy\\\\modules\\\\line04-wechat-cs-1.0.80\\\\wechat-rpa\\\\wechat_update_lock.py';
+  const python = 'C:\\\\Users\\\\asus\\\\AppData\\\\Roaming\\\\zenithjoy\\\\modules\\\\line04-wechat-cs-1.0.81\\\\python-embedded\\\\python.exe';
+  const script = 'C:\\\\Users\\\\asus\\\\AppData\\\\Roaming\\\\zenithjoy\\\\modules\\\\line04-wechat-cs-1.0.81\\\\wechat-rpa\\\\wechat_update_lock.py';
   const outFile = 'C:\\\\Users\\\\asus\\\\AppData\\\\Local\\\\Temp\\\\zj-update-lock-123.json';
 
   it('★用 Start-Process -Verb RunAs -Wait 提权调 python（旧实现普通用户跑 → 改不了 Program Files → RED）', () => {
@@ -1119,5 +1119,40 @@ describe('runPreflight — 关更新没锁死 → 整体 ok:false（MOCK_UPDATE_
     expect(r.checks.update_lock).toBe(true);
     expect(r.ok).toBe(true);
     expect(r.reason).toMatch(/更新 LOCKED/);
+  });
+});
+
+// ─── Bug ① 独立关更新自检 — TDD RED ───────────────────────────────────────────
+// 旧实现：runPreflight 只在「降级安装」路径或 MOCK_UPDATE_LOCK 时跑关更新；
+//         WeChat 已是 4.1.8（无降级）+ 无 MOCK → _repairFuncs.lockWechatUpdate 从不被调。
+//         → 重启后微信悄悄自升 4.1.10，UIA 树塌缩，客服读不到会话（核心 bug）。
+// 修法：runPreflight 无论有无降级，都调 _repairFuncs.lockWechatUpdate 一次（独立步骤）。
+describe('runPreflight — bug①独立关更新自检（4.1.8已就绪无降级时仍跑 lockWechatUpdate）', () => {
+  afterEach(() => {
+    delete process.env.MOCK_WECHAT_VERSION;
+    delete process.env.MOCK_UPDATE_LOCK;
+    delete process.env.MOCK_VERIFY_SILENT;
+    delete process.env.MOCK_VERIFY_DELIVERY;
+    vi.restoreAllMocks();
+  });
+
+  it('★WeChat 4.1.8 已就绪（无降级）→ _repairFuncs.lockWechatUpdate 仍被调用一次（开机必锁）', async () => {
+    process.env.MOCK_WECHAT_VERSION = '4.1.8.107';
+    // 不设 MOCK_UPDATE_LOCK：模拟真机「非 mock 模式、WeChat 已是 4.1.8 不需降级」的路径
+    const spy = vi.spyOn(_repairFuncs, 'lockWechatUpdate').mockReturnValue({ ok: true, skipped: true });
+    await runPreflight(os.tmpdir());
+    // RED：旧代码此路径不经过 _repairFuncs.lockWechatUpdate → calledTimes=0 → 失败
+    expect(spy).toHaveBeenCalledTimes(1);
+  });
+
+  it('★WeChat 4.1.8 无降级 + _repairFuncs.lockWechatUpdate 返回 not_locked → runPreflight ok:false', async () => {
+    process.env.MOCK_WECHAT_VERSION = '4.1.8.107';
+    vi.spyOn(_repairFuncs, 'lockWechatUpdate').mockReturnValue({
+      ok: false, found: 'NOT_LOCKED', fixGuide: '微信自动更新未锁死（重启可能自升回 4.1.10）。',
+    });
+    const r = await runPreflight(os.tmpdir());
+    // RED：旧代码此路径 updateLock=undefined → updateLockOk=true → ok:true（bug！）
+    expect(r.checks.update_lock).toBe(false);
+    expect(r.ok).toBe(false);
   });
 });
