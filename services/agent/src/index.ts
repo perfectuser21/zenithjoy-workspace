@@ -1292,8 +1292,9 @@ function startAcquisitionCollectLoop(cfg: AgentConfig): void {
     console.log('[acquisition] 无法推导 apiBase，跳过采集监听');
     return;
   }
+  const base: string = apiBase;
 
-  const streamUrl = `${apiBase}/api/acquisition/agent/task-stream`;
+  const streamUrl = `${base}/api/acquisition/agent/task-stream`;
   let retryDelay = 5_000;
   const MAX_RETRY_DELAY = 60_000;
 
@@ -1336,7 +1337,7 @@ function startAcquisitionCollectLoop(cfg: AgentConfig): void {
             };
             if (payload.type === 'collect_task' && payload.task_id && payload.keywords) {
               console.log(`[acquisition] SSE 收到任务 ${payload.task_id}，立即处理`);
-              processCollectTask(apiBase, {
+              processCollectTask(base, {
                 task_id: payload.task_id,
                 keywords: payload.keywords,
               }).catch((e) => console.warn('[acquisition] 任务处理错误:', e.message));
