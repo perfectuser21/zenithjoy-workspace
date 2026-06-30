@@ -148,7 +148,7 @@ wechatRouter.post('/qr-bind', async (req: Request, res: Response) => {
   // ws2-5 加厚后真正派 wechat_qr_bind task；当前只验证表写得通
   try {
     await pool.query(
-      `INSERT INTO wechat_publish_task
+      `INSERT INTO zenithjoy.wechat_publish_task
         (task_id, platform, type, target_user, content_draft, approval_status)
        VALUES ($1, $2, $3, $4, $5, $6)`,
       [taskId, platform, 'chat', agent_id, '[ws1-thin] qr-bind dispatch placeholder', 'pending_review'],
@@ -194,7 +194,7 @@ async function handlePoll(req: Request, res: Response): Promise<Response> {
     // 单查模式
     try {
       const { rows } = await pool.query(
-        'SELECT task_id, approval_status, approval_source, content_draft, feishu_record_id FROM wechat_publish_task WHERE task_id = $1',
+        'SELECT task_id, approval_status, approval_source, content_draft, feishu_record_id FROM zenithjoy.wechat_publish_task WHERE task_id = $1',
         [taskIdQ],
       );
       if (!rows || rows.length === 0) {
@@ -269,7 +269,7 @@ wechatRouter.post('/scheduler-tick', async (req: Request, res: Response) => {
       // 桥接 agents.tenant_id 过滤当前租户，不改 schema 结构（agent_platform_sessions 无 tenant_id 列）。
       const { rows } = await pool.query<{ customer: string }>(
         `SELECT DISTINCT aps.customer
-           FROM agent_platform_sessions aps
+           FROM zenithjoy.agent_platform_sessions aps
            JOIN zenithjoy.agents a ON a.id = aps.agent_id
           WHERE aps.platform = $1
             AND aps.status = $2

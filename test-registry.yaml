@@ -3035,6 +3035,22 @@ agent_suite:
     product: 私域运营
     note: "遗留③回归 — wechat_publish_task 三处 SQL（chat INSERT / moment SELECT去重+INSERT）必须带 zenithjoy. schema 前缀，否则 staging(zenithjoy_test) relation does not exist 致审核台记录不落库"
 
+  - id: wechat-schema-prefix
+    path: apps/api/src/routes/__tests__/wechat-schema-prefix.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 私域运营
+    note: "回归 — routes/wechat.ts 三处裸表名 SQL（INSERT/SELECT wechat_publish_task + FROM agent_platform_sessions）补 zenithjoy. 前缀，decision 705e8443 同根因修复"
+
+  - id: feishu-poll-schema-prefix
+    path: apps/api/src/services/__tests__/feishu-poll-schema-prefix.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 私域运营
+    note: "回归 — feishu-poll.ts 三处裸表名 SQL（SELECT/UPDATE×2 wechat_publish_task）补 zenithjoy. 前缀，decision 705e8443 同根因修复"
+
   - id: wechat-cs-account-fullkb-migration
     path: apps/api/src/__tests__/wechat-cs-account-fullkb-migration.test.ts
     type: unit

@@ -222,7 +222,7 @@ export async function pollOnce(): Promise<PollOnceResult> {
     try {
       const sel = await pool.query(
         `SELECT task_id, type, target_user, approval_status, approval_source
-           FROM wechat_publish_task
+           FROM zenithjoy.wechat_publish_task
           WHERE feishu_record_id = $1
           LIMIT 1`,
         [recordId],
@@ -249,7 +249,7 @@ export async function pollOnce(): Promise<PollOnceResult> {
     // 2) 写 DB approval_source='feishu_user' approval_status='approved'（A 路线护栏 enforce）
     try {
       await pool.query(
-        `UPDATE wechat_publish_task
+        `UPDATE zenithjoy.wechat_publish_task
             SET approval_source = $1,
                 approval_status = $2,
                 updated_at = NOW()
@@ -271,7 +271,7 @@ export async function pollOnce(): Promise<PollOnceResult> {
       // 4) 频控拒：UPDATE rate_limit_status + next_allowed_at + approval_status='rate_limited'
       try {
         await pool.query(
-          `UPDATE wechat_publish_task
+          `UPDATE zenithjoy.wechat_publish_task
               SET approval_status = $1,
                   rate_limit_status = $2,
                   next_allowed_at = $3,
