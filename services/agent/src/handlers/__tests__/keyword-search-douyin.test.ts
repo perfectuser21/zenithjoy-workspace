@@ -88,21 +88,25 @@ describe('keyword-search-douyin — spawn 外部 .cjs（生产）[BEHAVIOR]', ()
   });
 });
 
-// ────── Bug C 回归：.cjs 有 Chrome launch 兜底，不再在 CDP 不可用时直接失败 ──────
-describe('keyword-search-douyin.cjs — CDP 不可用时走 launch 兜底 [REGRESSION]', () => {
+// ────── 有头模式守卫：无 Chrome 直接报错，绝不 fallback headless ──────
+// 用户决策：headless 模式走不过抖音验证码且行为错误，必须 headful 或直接失败。
+describe('keyword-search-douyin.cjs — 无 Chrome 直接报错，不 fallback headless [REGRESSION]', () => {
   const CJS_PATH = path.resolve(__dirname, '../../../publishers/keyword-search-douyin.cjs');
 
-  it('.cjs 源码包含 chromium.launch 兜底（CDP connectOverCDP 失败时不直接 ECONNRESET）', () => {
+  it('.cjs 源码不含 headless:true 兜底', () => {
     const src = fs.readFileSync(CJS_PATH, 'utf8');
-    expect(src).toMatch(/chromium\.launch/);
+    // headless:true 已被删除，只剩 spawnBurnerChrome 有头路径
+    expect(src).not.toMatch(/headless\s*:\s*true/);
   });
 
-  it('.cjs 源码在 connectOverCDP 的 catch 里调用 launch', () => {
+  it('.cjs 源码含 findBundledChromium（agent 内置 Chromium 检测）', () => {
     const src = fs.readFileSync(CJS_PATH, 'utf8');
-    // connectOverCDP 和 launch 都存在，且 launch 是兜底（在 try/catch 里）
-    expect(src).toMatch(/connectOverCDP/);
-    expect(src).toMatch(/launch/);
-    expect(src).toMatch(/catch|try/);
+    expect(src).toMatch(/findBundledChromium/);
+  });
+
+  it('.cjs 源码在缺 Chrome 时报 NO_HEADFUL_CHROME 错误', () => {
+    const src = fs.readFileSync(CJS_PATH, 'utf8');
+    expect(src).toMatch(/NO_HEADFUL_CHROME/);
   });
 });
 
