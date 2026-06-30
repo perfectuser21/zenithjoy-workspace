@@ -116,11 +116,7 @@ describe('agent-burner router [ARCH agentContext]', () => {
   });
 
   it('[ARCH] POST /crawl-comments 仅传 account_label + video_url → 200', async () => {
-    // getFeishuBinding (binding row)
-    vi.mocked(pool.query).mockResolvedValueOnce({
-      rows: [{ app_token: 'bascn_test', table_id_leads: 'tbl_l_test' }],
-    } as any);
-    // burner session check
+    // burner session check（飞书绑定门卫已移除，不再有第一次 Feishu DB 查询）
     vi.mocked(pool.query).mockResolvedValueOnce({ rows: [{ '?column?': 1 }] } as any);
     // INSERT crawl task
     vi.mocked(pool.query).mockResolvedValueOnce({
@@ -140,8 +136,8 @@ describe('agent-burner router [ARCH agentContext]', () => {
     expect(r.status).toBe(200);
     expect(r.body.data.task_id).toBe('88888888-8888-8888-8888-888888888888');
 
-    // 验证 burner session check 用 AGENT_UUID
-    const sessionCall = vi.mocked(pool.query).mock.calls[1];
+    // 验证 burner session check 用 AGENT_UUID（索引 0，飞书查询已删）
+    const sessionCall = vi.mocked(pool.query).mock.calls[0];
     expect(sessionCall[1]).toEqual([AGENT_UUID, '装修小号B1']);
   });
 
