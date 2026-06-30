@@ -73,6 +73,14 @@ tests:
     product: AI视频
     note: "AI 视频生成页面集成"
 
+  - id: video-remake-service
+    path: apps/api/src/services/__tests__/video-remake.service.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: AI视频
+    note: "video-remake 服务层单元测试（内存 jobStore 读写、getRawVideoBuffer、getVideoRemakeJob 404）"
+
   - id: ai-video-service
     path: apps/api/src/services/__tests__/ai-video.service.test.ts
     type: unit
