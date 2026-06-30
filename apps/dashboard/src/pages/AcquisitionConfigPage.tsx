@@ -524,7 +524,6 @@ function KeywordsAndOpeningBlock() {
 }
 
 // ============ 采集任务块 ============
-const TENANT_ID = '2ac0aa4a-99f4-470a-aed7-c3a9fe03149b';
 
 interface CollectTask {
   id: string;
@@ -557,9 +556,7 @@ function CollectTasksBlock() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch('/api/acquisition/collect-tasks', {
-        headers: { 'X-Tenant-Id': TENANT_ID },
-      });
+      const res = await fetch('/api/acquisition/collect-tasks');
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const json = (await res.json()) as { success: boolean; data?: { tasks: CollectTask[] }; tasks?: CollectTask[] };
       const list = json.data?.tasks ?? (json as unknown as { tasks: CollectTask[] }).tasks ?? [];
@@ -589,7 +586,7 @@ function CollectTasksBlock() {
     try {
       const res = await fetch('/api/acquisition/collect/start', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Tenant-Id': TENANT_ID },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ keywords: [kw] }),
       });
       const json = (await res.json()) as { success: boolean; data?: { task_id: string }; error?: { message: string } };
