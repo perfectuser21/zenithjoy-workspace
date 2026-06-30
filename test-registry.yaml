@@ -3019,6 +3019,14 @@ agent_suite:
     product: 私域运营
     note: "Sprint 06280210 IA重设计刀1 — 反转 PR#940：AI 回复读【每号完整 persona + 每号 business_kb】，csConfig 缺失/字段空时回落全局（每号独立人设+知识库）"
 
+  - id: wechat-draft-schema-prefix
+    path: apps/api/src/services/__tests__/wechat-draft-schema-prefix.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 私域运营
+    note: "遗留③回归 — wechat_publish_task 三处 SQL（chat INSERT / moment SELECT去重+INSERT）必须带 zenithjoy. schema 前缀，否则 staging(zenithjoy_test) relation does not exist 致审核台记录不落库"
+
   - id: wechat-cs-account-fullkb-migration
     path: apps/api/src/__tests__/wechat-cs-account-fullkb-migration.test.ts
     type: unit
