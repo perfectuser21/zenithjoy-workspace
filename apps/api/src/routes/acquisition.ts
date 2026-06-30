@@ -10,6 +10,7 @@ import {
   resolveTerminalStatus,
 } from '../services/acquisition-collect';
 import { tenantContextOptional } from '../middleware/tenant-context';
+import { licenseAuth } from '../middleware/license-auth';
 import { sseService } from '../services/sse.service';
 
 export const acquisitionRouter = Router();
@@ -483,6 +484,15 @@ acquisitionRouter.post('/collect/start', tenantContextOptional, async (req: Requ
       [tenantId, JSON.stringify(keywords)]
     );
     const taskId = r.rows[0].id as string;
+
+    // SSE 推给已连接的 agent（同租户），秒级触发而非 30s 轮询
+    sseService.emit(`agent-tasks:${tenantId}`, {
+      type: 'collect_task',
+      task_id: taskId,
+      tenant_id: tenantId,
+      keywords: keywords as string[],
+    });
+
     return ok(res, { task_id: taskId, status: 'pending' });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
@@ -746,4 +756,16 @@ acquisitionRouter.get('/collect/:task_id/sse', async (req: Request, res: Respons
     created_at: t.created_at ? new Date(t.created_at).toISOString() : null,
     ended_at: t.ended_at ? new Date(t.ended_at).toISOString() : null,
   });
+});
+
+// GET /api/acquisition/agent/task-stream — agent 长连 SSE，中台推新采集任务（秒级，替代 30s 轮询）
+// 鉴权：x-license-key（与心跳/事件上报相同）
+acquisitionRouter.get('/agent/task-stream', licenseAuth, (req: Request, res: Response) => {
+  const tenantId = req.license?.tenant_id;
+  if (!tenantId) {
+    res.status(401).json({ success: false, error: { code: 'NO_TENANT' } });
+    return;
+  }
+  const channel = `agent-tasks:${tenantId}`;
+  sseService.subscribe(channel, req, res, { type: 'connected', tenant_id: tenantId });
 });
