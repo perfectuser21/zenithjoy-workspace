@@ -15,7 +15,7 @@
  * 行为：
  *   1. 若 body.agent_id 显式传入（向后兼容 supertest / non-browser caller）→ 直接 req.agentId = body.agent_id, next()
  *   2. 否则：req.tenantId 必须 set（agentContext 应在 tenantContext 之后挂载）；缺 → 401 NO_TENANT_FOR_AGENT_CONTEXT
- *   3. SELECT id FROM zenithjoy.agents WHERE tenant_id=$1 AND status='online' ORDER BY created_at DESC LIMIT 1
+ *   3. SELECT id FROM zenithjoy.agents WHERE tenant_id=$1 AND status='online'，优先 pinned agent（5分钟内有心跳），否则取最近心跳行
  *      命中 → req.agentId = id；空 → 401 NO_AGENT_CONTEXT
  *   4. DB 异常 → 500 AGENT_LOOKUP_FAILED
  *
@@ -69,8 +69,9 @@ export async function agentContext(
     return;
   }
 
-  // 3. 查 agents 表 — 身份统一：优先取该 tenant 的 license.pinned_agent_id（与心跳/me/status 投递落到同一去重行），
-  //    避免 qr-bind 派单投到裂出的另一行 → 任务卡 queued。pinned 为空/已废时兜底取最新 online 行。
+  // 3. 查 agents 表 — 优先取该 tenant 的 license.pinned_agent_id，
+  //    但 pinned agent 须在最近 5 分钟内有心跳（防换机器后仍投旧机器 → 任务永远卡 queued）。
+  //    超时或 pinned 为空时，退化为最近心跳的 online agent。
   try {
     const { rows } = await pool.query<AgentRow>(
       `SELECT a.id
@@ -82,8 +83,9 @@ export async function agentContext(
              WHERE l.tenant_id = $1 AND l.pinned_agent_id IS NOT NULL
              ORDER BY l.updated_at DESC NULLS LAST
              LIMIT 1
-          ) THEN 0 ELSE 1 END ASC,
-          a.created_at DESC
+          ) AND a.last_heartbeat_at > NOW() - INTERVAL '5 minutes'
+          THEN 0 ELSE 1 END ASC,
+          a.last_heartbeat_at DESC NULLS LAST
         LIMIT 1`,
       [tenantId]
     );
