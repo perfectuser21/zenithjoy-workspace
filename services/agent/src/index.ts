@@ -473,7 +473,44 @@ process.on('uncaughtException', (err) => {
   console.warn('[agent] uncaughtException:', err);
 });
 
+// Node.js 级单实例守卫：写 PID lock 文件，若已有同路径进程在跑则退出。
+// start.bat Step 6.95 已杀旧进程，但多个 start.bat 并发启动时会出现竞态——
+// 这里作为第二道保险，防止 5 个 agent 同时跑导致一个 qr-bind task 被多进程抢到。
+function acquireSingleInstanceLock(): boolean {
+  try {
+    const lockDir = path.join(os.homedir(), '.zenithjoy-agent');
+    fs.mkdirSync(lockDir, { recursive: true });
+    const lockFile = path.join(lockDir, 'agent.lock');
+    if (fs.existsSync(lockFile)) {
+      const existingPid = parseInt(fs.readFileSync(lockFile, 'utf8').trim(), 10);
+      if (!isNaN(existingPid)) {
+        try {
+          // kill(pid, 0) 不发信号，只检测进程是否存在；不抛 = 进程在跑
+          process.kill(existingPid, 0);
+          console.log(`[agent] another instance already running (PID ${existingPid}), exiting`);
+          return false;
+        } catch {
+          // 进程已消失，可以接管 lock
+        }
+      }
+    }
+    fs.writeFileSync(lockFile, String(process.pid), 'utf8');
+    // 退出时删 lock（正常退出 + SIGTERM）
+    const cleanLock = () => { try { fs.unlinkSync(lockFile); } catch { /* ignore */ } };
+    process.on('exit', cleanLock);
+    process.on('SIGTERM', () => { cleanLock(); process.exit(0); });
+    return true;
+  } catch (e) {
+    // lock 机制本身失败不阻断 agent 启动
+    console.warn('[agent] single-instance lock failed (non-fatal):', e);
+    return true;
+  }
+}
+
 async function main(): Promise<void> {
+  if (!acquireSingleInstanceLock()) {
+    process.exit(0);
+  }
   const cfg = loadOrInitConfig();
   console.log(`[agent] starting agent ${cfg.agentId} (v${VERSION})`);
 

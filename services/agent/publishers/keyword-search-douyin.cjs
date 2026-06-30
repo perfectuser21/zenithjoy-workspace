@@ -55,11 +55,25 @@ function getBurnerDataDir() {
 
 function findSystemChrome() {
   if (process.platform !== 'win32') return null;
-  for (const p of [
+  const candidates = [
+    process.env.CHROME_EXECUTABLE_PATH || '',
+    process.env.LOCALAPPDATA
+      ? `${process.env.LOCALAPPDATA}\\Google\\Chrome\\Application\\chrome.exe`
+      : '',
     'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
     'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
-  ]) if (fs.existsSync(p)) return p;
+  ];
+  for (const p of candidates) if (p && fs.existsSync(p)) return p;
   return null;
+}
+
+// Agent 启动时后台下载至此路径（ensureChromiumHeadful），与 qr-bind-douyin-burner.cjs 一致。
+function findBundledChromium() {
+  if (process.platform !== 'win32') return null;
+  const userProfile = process.env.USERPROFILE || '';
+  if (!userProfile) return null;
+  const p = path.join(userProfile, '.zenithjoy-agent', 'chrome-win64', 'chrome.exe');
+  return fs.existsSync(p) ? p : null;
 }
 
 function findHeadlessShell() {
@@ -134,22 +148,27 @@ async function main() {
   }
 
   const burnerDataDir = getBurnerDataDir();
-  const systemChrome = findSystemChrome();
-  process.stderr.write(`[keyword-search-douyin] kw="${keyword}" burner=${burnerDataDir} chrome=${systemChrome ? 'ok' : 'null'}\n`);
+  const headfulChrome = findSystemChrome() || findBundledChromium();
+  process.stderr.write(`[keyword-search-douyin] kw="${keyword}" burner=${burnerDataDir} chrome=${headfulChrome || 'null'}\n`);
+
+  // 有头模式必须有 burner session + Chrome；缺一报错，不走无头（无头走不过验证码且行为不正常）
+  if (!burnerDataDir || !headfulChrome) {
+    const reason = !burnerDataDir
+      ? '缺 ZJ_MAIN_DATA_DIR（请先绑定抖音小号）'
+      : '找不到 Chrome 或 bundled Chromium（请等 agent 完成 Chromium 下载，约 2 分钟）';
+    emit({ ok: false, keyword, video_urls: [], error: `NO_HEADFUL_CHROME: ${reason}` });
+    process.exit(1);
+    return;
+  }
 
   let browser = null;
   let spawned = false;
   try {
-    if (burnerDataDir && systemChrome) {
-      // 路径 A: burner 真 Chrome（已登录 Douyin session）
-      const r = await spawnBurnerChrome(burnerDataDir, systemChrome);
+    {
+      // 有头真 Chrome（已登录 Douyin session）
+      const r = await spawnBurnerChrome(burnerDataDir, headfulChrome);
       browser = r.browser;
       spawned = r.spawned;
-    } else {
-      // 路径 B: 兜底 headless-shell（无 session，大概率验证码）
-      const executablePath = findHeadlessShell() || undefined;
-      process.stderr.write(`[keyword-search-douyin] 兜底 headless${executablePath ? `(${executablePath})` : ''}\n`);
-      browser = await chromium.launch({ executablePath, headless: true });
     }
 
     const contexts = browser.contexts();
