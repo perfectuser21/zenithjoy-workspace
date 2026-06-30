@@ -108,8 +108,9 @@ export interface RequiredAgentVersion {
 // 2.0.46：采集关键词兼容 {word,source} 对象格式（collect/expand 手动关键词路径）。
 // 2.0.47：burner session 过期检测（DOUYIN_SESSION_EXPIRED）+ 自动标记 needs_rebind + Dashboard 红色提醒。
 // 2.0.48：qr-bind-burner 清空旧 cookie 再拉起，防过期 session 导致 Chrome 秒退看不到二维码。
-// 核心包按约定 install-pack/zenithjoy-agent-v2.0.48.tar.gz 从 COS 下载（live 源是已发布 manifest，本常量仅兜底）。
-export const DEFAULT_REQUIRED_AGENT_VERSION = '2.0.48';
+// 2.0.49：采集任务改 SSE 长连推送（秒触发），替代 30s 轮询。
+// 核心包按约定 install-pack/zenithjoy-agent-v2.0.49.tar.gz 从 COS 下载（live 源是已发布 manifest，本常量仅兜底）。
+export const DEFAULT_REQUIRED_AGENT_VERSION = '2.0.49';
 
 /**
  * 返回心跳要下发的核心要求版本。

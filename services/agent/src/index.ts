@@ -1230,94 +1230,133 @@ function startAcquisitionKeywordLoop(cfg: AgentConfig): void {
 }
 
 // ────── 智能获客：collect 任务轮询（来自 /collect/start 写入的 acquisition_collect_tasks）──────
-function startAcquisitionCollectLoop(cfg: AgentConfig): void {
-  const apiBase = deriveHttpApiBase(cfg);
-  if (!apiBase) {
-    console.log('[acquisition] 无法推导 apiBase，跳过 collect 轮询');
-    return;
-  }
+// 处理单个采集任务（SSE 触发或降级轮询触发共用）
+async function processCollectTask(
+  apiBase: string,
+  task: { task_id: string; keywords: string[] },
+): Promise<void> {
+  const { task_id, keywords } = task;
+  const allVideoIds: string[] = [];
 
-  const POLL_INTERVAL_MS = 30_000;
-
-  async function pollAndProcess(): Promise<void> {
-    try {
-      const resp = await fetch(`${apiBase}/api/acquisition/pending-collect-tasks`);
-      if (!resp.ok) return;
-      const data = await resp.json() as {
-        tasks?: Array<{ task_id: string; tenant_id: string; keywords: string[] }>;
-        total?: number;
-      };
-      const tasks = data.tasks ?? [];
-      if (tasks.length === 0) return;
-
-      console.log(`[acquisition] 发现 ${tasks.length} 个 collect 采集任务`);
-
-      for (const task of tasks) {
-        const { task_id, keywords } = task;
-        const allVideoIds: string[] = [];
-
-        let sessionExpired = false;
-        for (const kw of keywords) {
-          // keywords 可能是 string 或 {word, source} 对象（collect/expand 返回格式）
-          const kwStr: string = typeof kw === 'string' ? kw : ((kw as { word?: string }).word ?? String(kw));
-          const result = await searchDouyinVideosByKeyword(kwStr);
-          if (result.ok && result.video_urls.length > 0) {
-            for (const url of result.video_urls) {
-              const m = url.match(/\/video\/(\d+)/);
-              if (m) allVideoIds.push(m[1]);
-            }
-          } else if (!result.ok) {
-            const errCode = (result as { error?: string }).error ?? 'unknown';
-            console.warn(`[acquisition] collect 关键词「${kwStr}」失败: ${errCode}`);
-            if (errCode === 'DOUYIN_SESSION_EXPIRED') {
-              sessionExpired = true;
-            }
-          }
-        }
-
-        // Douyin session 过期 → 标记 burner session needs_rebind，终止本批
-        if (sessionExpired) {
-          await fetch(`${apiBase}/api/agent/burner/sessions/invalidate`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ reason: 'DOUYIN_SESSION_EXPIRED' }),
-          }).catch(() => null);
-          console.warn('[acquisition] Douyin burner session 已过期，已标记 needs_rebind，跳过本批');
-          // 终态回报 failed
-          await fetch(`${apiBase}/api/acquisition/collect/report`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ task_id, video_id: 'no_videos', commenters: [], terminal: 'failed', error_code: 'DOUYIN_SESSION_EXPIRED' }),
-          }).catch(() => null);
-          continue;
-        }
-
-        // 每个视频上报一次（commenters 留空，此阶段只需视频 ID 落库）
-        for (const videoId of allVideoIds.slice(0, 10)) {
-          await fetch(`${apiBase}/api/acquisition/collect/report`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ task_id, video_id: videoId, commenters: [], terminal: false }),
-          }).catch((e) => console.warn('[acquisition] collect/report POST failed:', e.message));
-        }
-
-        // 终态回报
-        const finalVideoId = allVideoIds[0] ?? 'no_videos';
-        await fetch(`${apiBase}/api/acquisition/collect/report`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ task_id, video_id: finalVideoId, commenters: [], terminal: true }),
-        }).catch(() => null);
+  let sessionExpired = false;
+  for (const kw of keywords) {
+    const kwStr: string = typeof kw === 'string' ? kw : ((kw as { word?: string }).word ?? String(kw));
+    const result = await searchDouyinVideosByKeyword(kwStr);
+    if (result.ok && result.video_urls.length > 0) {
+      for (const url of result.video_urls) {
+        const m = url.match(/\/video\/(\d+)/);
+        if (m) allVideoIds.push(m[1]);
       }
-    } catch (err) {
-      console.warn('[acquisition] collect poll error:', (err as Error).message);
+    } else if (!result.ok) {
+      const errCode = (result as { error?: string }).error ?? 'unknown';
+      console.warn(`[acquisition] collect 关键词「${kwStr}」失败: ${errCode}`);
+      if (errCode === 'DOUYIN_SESSION_EXPIRED') sessionExpired = true;
     }
   }
 
-  pollAndProcess();
-  const timer = setInterval(pollAndProcess, POLL_INTERVAL_MS);
-  console.log(`[acquisition] collect 轮询已启动，间隔 ${POLL_INTERVAL_MS / 1000}s`);
-  if (timer.unref) timer.unref();
+  if (sessionExpired) {
+    await fetch(`${apiBase}/api/agent/burner/sessions/invalidate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reason: 'DOUYIN_SESSION_EXPIRED' }),
+    }).catch(() => null);
+    console.warn('[acquisition] Douyin burner session 已过期，已标记 needs_rebind，跳过本批');
+    await fetch(`${apiBase}/api/acquisition/collect/report`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ task_id, video_id: 'no_videos', commenters: [], terminal: 'failed', error_code: 'DOUYIN_SESSION_EXPIRED' }),
+    }).catch(() => null);
+    return;
+  }
+
+  for (const videoId of allVideoIds.slice(0, 10)) {
+    await fetch(`${apiBase}/api/acquisition/collect/report`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ task_id, video_id: videoId, commenters: [], terminal: false }),
+    }).catch((e) => console.warn('[acquisition] collect/report POST failed:', e.message));
+  }
+
+  const finalVideoId = allVideoIds[0] ?? 'no_videos';
+  await fetch(`${apiBase}/api/acquisition/collect/report`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ task_id, video_id: finalVideoId, commenters: [], terminal: true }),
+  }).catch(() => null);
+}
+
+// SSE 客户端：订阅中台推送的采集任务，断线指数退避重连
+function startAcquisitionCollectLoop(cfg: AgentConfig): void {
+  const apiBase = deriveHttpApiBase(cfg);
+  if (!apiBase) {
+    console.log('[acquisition] 无法推导 apiBase，跳过采集监听');
+    return;
+  }
+
+  const streamUrl = `${apiBase}/api/acquisition/agent/task-stream`;
+  let retryDelay = 5_000;
+  const MAX_RETRY_DELAY = 60_000;
+
+  async function connect(): Promise<void> {
+    try {
+      console.log('[acquisition] 连接任务推送 SSE...');
+      const resp = await fetch(streamUrl, {
+        headers: { 'x-license-key': cfg.licenseKey },
+      });
+
+      if (!resp.ok || !resp.body) {
+        throw new Error(`SSE 连接失败 ${resp.status}`);
+      }
+
+      retryDelay = 5_000; // 连上就重置退避
+      console.log('[acquisition] 采集任务 SSE 已连接，等待中台推送...');
+
+      const reader = resp.body.getReader();
+      const decoder = new TextDecoder();
+      let buf = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buf += decoder.decode(value, { stream: true });
+
+        // SSE 格式：每个事件以 \n\n 结束
+        const events = buf.split('\n\n');
+        buf = events.pop() ?? '';
+
+        for (const block of events) {
+          const dataLine = block.split('\n').find((l) => l.startsWith('data:'));
+          if (!dataLine) continue;
+          try {
+            const payload = JSON.parse(dataLine.slice(5).trim()) as {
+              type?: string;
+              task_id?: string;
+              tenant_id?: string;
+              keywords?: string[];
+            };
+            if (payload.type === 'collect_task' && payload.task_id && payload.keywords) {
+              console.log(`[acquisition] SSE 收到任务 ${payload.task_id}，立即处理`);
+              processCollectTask(apiBase, {
+                task_id: payload.task_id,
+                keywords: payload.keywords,
+              }).catch((e) => console.warn('[acquisition] 任务处理错误:', e.message));
+            }
+          } catch {
+            // 忽略心跳等非 JSON 行
+          }
+        }
+      }
+    } catch (err) {
+      console.warn(`[acquisition] SSE 断开: ${(err as Error).message}，${retryDelay / 1000}s 后重连`);
+    }
+
+    // 断线重连（指数退避，上限 60s）
+    await new Promise((r) => setTimeout(r, retryDelay));
+    retryDelay = Math.min(retryDelay * 2, MAX_RETRY_DELAY);
+    connect().catch(() => {});
+  }
+
+  connect().catch(() => {});
 }
 
 // H-2 Bug 9: 仅作为入口脚本时运行 main()。test import 不触发 main()，让 buildHelloPayload 等纯函数可单测。
