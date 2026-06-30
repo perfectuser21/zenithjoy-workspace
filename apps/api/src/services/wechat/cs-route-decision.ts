@@ -48,6 +48,41 @@ export function decideReplyRoute(
   return ROUTE_AUTO;
 }
 
+// ─── 去飞书 + 自动直发（第一刀，blacklist 主模型）路由 ──────────────────────────
+//
+// 决策（用户拍板 2026-06-30）：个人私聊默认全接管（blacklist 主模型）。
+//   - 群消息            → 不回（skip_group）
+//   - 个人 + CRM 标黑   → 不回（skip_blacklisted）
+//   - 个人 + 未标黑     → 自动直发（send，默认全回）
+// 与旧 decideReplyRoute（whitelist 真值表 + 营业时间 + daily_limit）解耦：本函数是
+// 「去飞书自动直发」唯一 gating，不查白名单、不卡营业时间（默认全回），纯函数便于单测全覆盖。
+
+export const ROUTE_SEND = 'send' as const;
+export const ROUTE_SKIP_GROUP = 'skip_group' as const;
+export const ROUTE_SKIP_BLACKLISTED = 'skip_blacklisted' as const;
+
+export type AutoSendRoute =
+  | typeof ROUTE_SEND
+  | typeof ROUTE_SKIP_GROUP
+  | typeof ROUTE_SKIP_BLACKLISTED;
+
+/**
+ * 决定一条私聊来消息是否自动直发（blacklist 主模型，默认全回）。
+ *
+ * 优先级（群优先于黑名单）：
+ *   1. 群消息            → skip_group（绝不回群）
+ *   2. CRM 标黑          → skip_blacklisted（黑名单不回）
+ *   3. 其余（个人未标黑）→ send（默认全接管，自动直发）
+ */
+export function decideAutoSendRoute(
+  isGroup: boolean,
+  isBlacklisted: boolean,
+): AutoSendRoute {
+  if (isGroup) return ROUTE_SKIP_GROUP;
+  if (isBlacklisted) return ROUTE_SKIP_BLACKLISTED;
+  return ROUTE_SEND;
+}
+
 /** 'HH:MM' → 当天分钟数；'24:00' → 1440。格式非法抛 Error。 */
 function hhmmToMinutes(hhmm: string): number {
   if (typeof hhmm !== 'string') throw new Error(`invalid time literal: ${hhmm}`);

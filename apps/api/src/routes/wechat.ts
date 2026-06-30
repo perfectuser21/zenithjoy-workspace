@@ -1,15 +1,13 @@
 /**
- * /api/wechat/* — Path 4 微信个人号端点（ws1 thin → ws3 加厚私聊草稿）
+ * /api/wechat/* — Path 4 微信个人号端点
  *
- * 4 个端点：
+ * 端点：
  *   - POST /api/wechat/qr-bind         {platform, agent_id} → {task_id, status}
- *   - POST /api/wechat/draft-review-poll  → {polled, dispatched}
- *   - GET  /api/wechat/draft-review-poll?task_id=X  → 单 task 状态 / 404
  *   - POST /api/wechat/scheduler-tick  {force?, customer?} → {generated, skipped}
- *   - POST /api/wechat/draft-generate  {sender, wechat_id, content} → {task_id, draft_id, status}（ws3）
+ *   - POST /api/wechat/draft-generate  {sender, wechat_id, content, is_group?} → {status, reply?}
  *
- * ws1 阶段端点行为是 thin（qr-bind / poll / tick）。
- * ws3 加厚 /draft-generate：DeepSeek 私聊草稿 + 写飞书互动记录 + DB pending_review。
+ * 去飞书（2026-06-30）：旧飞书审批轮询端点 draft-review-poll 已删（feishu-poll 整条删除）；
+ * draft-generate 现为去飞书 + 自动直发（个人未标黑 → 直接返回 reply，群/标黑 → skipped）。
  */
 
 import { Router, Request, Response } from 'express';
@@ -17,7 +15,6 @@ import { z } from 'zod';
 import crypto from 'node:crypto';
 import pool from '../db/connection';
 import { generateChatDraft, generateMomentDraft } from '../services/wechat-draft';
-import { pollOnce } from '../services/feishu-poll';
 import { recordHeartbeat, listHeartbeats } from '../services/wechat-heartbeat';
 import {
   enqueueFailureAlert,
@@ -74,6 +71,8 @@ const DraftGenerateSchema = z.object({
   content: z.string().min(1),
   // listen_chat.py 自动回模式传 mode='auto'；不声明会被 zod strip 掉 → auto 模式不返回 reply。
   mode: z.enum(['auto', 'review']).optional(),
+  // 群消息标志：agent 端读会话右上角标题 "(人数)" 判群后传 true → 中台 gating 直接不回（群不回）。
+  is_group: z.boolean().optional(),
   // 多租户隔离：写入必须归属当前租户的 agent（经 agents.tenant_id 校验）。
   // listen_chat 等非浏览器 caller 显式传 tenant_id；缺则拒绝、绝不写入任意 agent。
   tenant_id: z.string().optional(),
@@ -186,52 +185,7 @@ wechatRouter.get('/listener-heartbeat', (_req: Request, res: Response) => {
   return res.status(200).json({ listeners: listHeartbeats() });
 });
 
-// ─── POST /api/wechat/draft-review-poll & GET 单查 ─────────────────────────
-
-async function handlePoll(req: Request, res: Response): Promise<Response> {
-  const taskIdQ = (req.query.task_id ?? req.body?.task_id) as string | undefined;
-  if (taskIdQ) {
-    // 单查模式
-    try {
-      const { rows } = await pool.query(
-        'SELECT task_id, approval_status, approval_source, content_draft, feishu_record_id FROM zenithjoy.wechat_publish_task WHERE task_id = $1',
-        [taskIdQ],
-      );
-      if (!rows || rows.length === 0) {
-        return res.status(404).json({
-          error: 'TASK_NOT_FOUND',
-          task_id: taskIdQ,
-        });
-      }
-      return res.status(200).json({ task: rows[0] });
-    } catch {
-      // DB 不可用时 thin 返回 404
-      return res.status(404).json({
-        error: 'TASK_NOT_FOUND',
-        task_id: taskIdQ,
-      });
-    }
-  }
-
-  // ws5 真轮询：调 feishu-poll.pollOnce 拉飞书 approved 草稿，写 DB approval_source='feishu_user'
-  // + 频控校验 + dispatchTask
-  try {
-    const result = await pollOnce();
-    return res.status(200).json({
-      polled: result.polled ?? 0,
-      dispatched: result.dispatched ?? 0,
-    });
-  } catch (err) {
-    console.warn('[wechat/draft-review-poll] pollOnce 异常:', err);
-    return res.status(200).json({
-      polled: 0,
-      dispatched: 0,
-    });
-  }
-}
-
-wechatRouter.post('/draft-review-poll', handlePoll);
-wechatRouter.get('/draft-review-poll', handlePoll);
+// 去飞书（2026-06-30）：旧 draft-review-poll（飞书 approved 草稿轮询）端点 + handlePoll 已删除。
 
 // ─── POST /api/wechat/scheduler-tick ────────────────────────────────────────
 
