@@ -1039,8 +1039,8 @@ describe('lockWechatUpdate — MOCK / 非 Windows 分支', () => {
 // 三项全失败、interpret_lock_verify 诚实报 locked=False。修法：关更新子进程也用 Start-Process -Verb RunAs
 // 提权（agent 本体仍普通用户保 UIA），结果经 --output 文件回传父进程。
 describe('buildElevatedLockArgs — 关更新提权调用参数（纯函数，CI 可测，遗留①）', () => {
-  const python = 'C:\\\\Users\\\\asus\\\\AppData\\\\Roaming\\\\zenithjoy\\\\modules\\\\line04-wechat-cs-1.0.80\\\\python-embedded\\\\python.exe';
-  const script = 'C:\\\\Users\\\\asus\\\\AppData\\\\Roaming\\\\zenithjoy\\\\modules\\\\line04-wechat-cs-1.0.80\\\\wechat-rpa\\\\wechat_update_lock.py';
+  const python = 'C:\\\\Users\\\\asus\\\\AppData\\\\Roaming\\\\zenithjoy\\\\modules\\\\line04-wechat-cs-1.0.81\\\\python-embedded\\\\python.exe';
+  const script = 'C:\\\\Users\\\\asus\\\\AppData\\\\Roaming\\\\zenithjoy\\\\modules\\\\line04-wechat-cs-1.0.81\\\\wechat-rpa\\\\wechat_update_lock.py';
   const outFile = 'C:\\\\Users\\\\asus\\\\AppData\\\\Local\\\\Temp\\\\zj-update-lock-123.json';
 
   it('★用 Start-Process -Verb RunAs -Wait 提权调 python（旧实现普通用户跑 → 改不了 Program Files → RED）', () => {

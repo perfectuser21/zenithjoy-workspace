@@ -717,10 +717,12 @@ export async function runPreflight(moduleDir?: string): Promise<ModulePreflightR
     }
   }
 
-  // 测试 / 跨平台 mock 注入：MOCK_UPDATE_LOCK 时直接用 lockWechatUpdate 结果作为关更新闸
-  // （真机不设此 env，真实关更新结论来自上面降级链路；非降级机由 listen_chat 每 5 分钟维持锁）。
-  if (process.env.MOCK_UPDATE_LOCK) {
-    updateLock = lockWechatUpdate(dir);
+  // 独立关更新自检（bug① 修复）：不管微信是否刚装，每次开机自检都跑一次关更新 + 校验。
+  // 降级路径（installWeChat）已设 updateLock 时直接复用（不重复触发 UAC 弹窗）。
+  // MOCK_UPDATE_LOCK / 非 Windows → _repairFuncs.lockWechatUpdate 内部处理（skipped/mock）。
+  // 使用 _repairFuncs.lockWechatUpdate 而非直接调 lockWechatUpdate，使测试可 spy 计数验证。
+  if (!updateLock) {
+    updateLock = _repairFuncs.lockWechatUpdate(dir);
   }
 
   // 软检测：微信进程是否在跑（ok 始终 true）

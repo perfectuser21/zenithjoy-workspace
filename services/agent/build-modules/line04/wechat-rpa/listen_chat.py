@@ -193,6 +193,67 @@ def decide_reply_wait(human_intervened: bool,
 # ─── 纯逻辑：解析单个会话项的 element_info.name（CI 单测锚点，顶层零 pywinauto）──────
 
 
+def parse_unread_count(item_name: str) -> int:
+    """
+    从 ListItem name 解析 [N条] 未读数（纯函数，CI 可测，顶层零 pywinauto）。
+
+    返回 N（>= 1）；无未读角标或解析失败返回 0。
+    """
+    import re as _re
+    m = _re.search(r'\[(\d+)条]', item_name or "")
+    return int(m.group(1)) if m else 0
+
+
+def aggregate_messages(messages: List[str]) -> str:
+    """
+    把多条消息文本合并成 AI 回复上下文（纯函数，CI 可测，顶层零 pywinauto）。
+
+    设计：
+    - 空列表 → 空串
+    - 单条 → 原样返回（去掉首尾空白）
+    - 多条 → 按顺序（最早 index=0 在前）双换行拼接，AI 看到完整时间线
+    - 每条先去掉首尾空白，纯空白条目跳过
+    """
+    msgs = [m.strip() for m in messages if m and m.strip()]
+    if not msgs:
+        return ""
+    return "\n\n".join(msgs)
+
+
+def read_chat_panel_messages(mw: Any, n: int, x_min: int = 460) -> List[str]:
+    """
+    读取当前打开会话右侧消息面板的最新 n 条消息文本（需已调 _open_chat）。
+
+    原理：微信 UIA 树中右侧聊天气泡也暴露为 ListItem 控件，中心 x >= x_min（区别于
+    左列会话列表 center_x < 460）。遍历所有 ListItem，按坐标过滤出右侧条目，取其
+    element_info.name 作为消息文本，返回最新的 n 条（列表末尾 = 最新）。
+
+    非 Windows / UIA 不可用 / n <= 0 → 返回 []，不报错。
+    """
+    if n <= 0:
+        return []
+    out: List[str] = []
+    try:
+        for it in mw.descendants(control_type="ListItem"):
+            try:
+                r = it.rectangle()
+                cx = (r.left + r.right) // 2
+                if cx < x_min:
+                    continue  # 左列会话列表，跳过
+            except Exception:
+                continue  # 拿不到坐标的 item 跳过
+            try:
+                name = (it.element_info.name or "").strip()
+                if name:
+                    out.append(name)
+            except Exception:
+                continue
+    except Exception:
+        pass
+    # 返回最新 n 条（消息面板最底部 = 最新；若总数 <= n，全部返回）
+    return out[-n:] if len(out) > n else out
+
+
 def _parse_item_name(name: str, require_unread: bool = True) -> Optional[Dict[str, str]]:
     """
     解析微信 4.0 会话列表 ListItem 的 element_info.name 字符串。
@@ -434,27 +495,26 @@ def scan_unread(mw: Any, last_content: Optional[Dict[str, str]] = None) -> List[
             name = it.element_info.name or ""
         except Exception:
             continue
-        # 路径 1：有未读角标
+        # 只处理有 [N条] 红点的会话（bug② 修法(a)：移除全量内容变化检测，减延迟）。
+        # 旧 path-2（content change）在聊天窗口打开时有用，但需遍历所有 ListItem 做内容比较，
+        # 是 ~64s 延迟的主源；移除后 scan 只做最轻量的角标筛选。
         parsed = _parse_item_name(name)
-        if parsed:
-            seen_senders.add(parsed["sender"])
-            out.append({**parsed, "_item": it})
+        if not parsed:
             continue
-        # 路径 2：无角标但内容变化（聊天窗口当前打开时走这里）
-        if last_content is not None:
-            info = _parse_item_name(name, require_unread=False)
-            if info and info["sender"] not in seen_senders:
-                prev = last_content.get(info["sender"])
-                if prev is not None and prev != info["content"]:
-                    seen_senders.add(info["sender"])
-                    out.append({**info, "_item": it})
-                elif prev is None:
-                    # 首次见到这个会话，记录内容但不触发回复
-                    last_content[info["sender"]] = info["content"]
-    # 更新 last_content（供下轮比较）
-    if last_content is not None:
-        for m in out:
-            last_content[m["sender"]] = m["content"]
+        seen_senders.add(parsed["sender"])
+        # bug② 修法(b)：N>1 时打开会话读取全部 N 条消息，合并成一次 AI 回复的上下文。
+        # 一人连发 3 条 → AI 看到 3 条合并上下文，而不是只有最后 1 条预览。
+        n = parse_unread_count(name)
+        if n > 1:
+            try:
+                if _open_chat(mw, it, parsed["sender"]):
+                    msgs = read_chat_panel_messages(mw, n)
+                    if msgs:
+                        parsed = {**parsed, "content": aggregate_messages(msgs)}
+            except Exception:
+                pass  # 读取失败 → 回退到单条 content（会话仍进队，不丢失回复机会）
+        out.append({**parsed, "_item": it})
+    # last_content 参数保留（向后兼容调用方），但 path-2 已移除，不再更新
     _restore_window_state(mw, orig_state)
     return out
 
