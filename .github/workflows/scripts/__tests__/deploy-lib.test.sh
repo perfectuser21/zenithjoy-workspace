@@ -207,6 +207,8 @@ expect_eq "$(_lread env:BETTER_AUTH_TRUSTED_ORIGINS)" "https://staging-autopilot
 # staging-autopilot，否则从 staging 下载的 agent 连生产。
 expect_eq "$(_lread env:AGENT_PUBLIC_WS_URL)" "wss://staging-autopilot.zenjoymedia.media/agent-ws" "L AGENT_PUBLIC_WS_URL→staging（不漏生产 autopilot）"
 expect_eq "$(_lread env:AGENT_PUBLIC_BASE_URL)" "https://staging-autopilot.zenjoymedia.media" "L AGENT_PUBLIC_BASE_URL→staging（不漏生产 autopilot）"
+# 回归（2026-06-30）：staging 必须固定 WECHAT_CS_MODEL=gpt-5.4-mini，避免每次重生 plist 时被冲掉。
+expect_eq "$(_lread env:WECHAT_CS_MODEL)" "gpt-5.4-mini" "L WECHAT_CS_MODEL→gpt-5.4-mini（staging 专属，不被生产值覆盖）"
 expect_eq "$(_lread env:SOME_SECRET)" "super-secret-value-123" "L 密钥从生产继承"
 expect_eq "$(_lread program1)" "/fake/releases/staging/dist/index.js" "L Program→releases/staging/dist/index.js"
 expect_eq "$(_lread WorkingDirectory)" "/fake/releases/staging" "L WorkingDir→releases/staging"
@@ -281,6 +283,8 @@ expect_eq "$(_l2read env:BETTER_AUTH_URL)" "https://staging-autopilot.zenjoymedi
 expect_eq "$(_l2read env:BETTER_AUTH_TRUSTED_ORIGINS)" "https://staging-autopilot.zenjoymedia.media,http://localhost:5173" "L2 TRUSTED_ORIGINS→staging（不漏生产 autopilot）"
 expect_eq "$(_l2read env:AGENT_PUBLIC_WS_URL)" "wss://staging-autopilot.zenjoymedia.media/agent-ws" "L2 AGENT_PUBLIC_WS_URL→staging（不漏生产 autopilot）"
 expect_eq "$(_l2read env:AGENT_PUBLIC_BASE_URL)" "https://staging-autopilot.zenjoymedia.media" "L2 AGENT_PUBLIC_BASE_URL→staging（不漏生产 autopilot）"
+# 回归（2026-06-30）：模板路径同样必须固定 WECHAT_CS_MODEL=gpt-5.4-mini。
+expect_eq "$(_l2read env:WECHAT_CS_MODEL)" "gpt-5.4-mini" "L2 WECHAT_CS_MODEL→gpt-5.4-mini（模板路径同样收口）"
 
 rm -rf "$LBOX"
 

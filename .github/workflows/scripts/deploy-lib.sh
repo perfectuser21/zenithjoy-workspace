@@ -490,6 +490,9 @@ staging_overrides = {
     # 隔离失效（2026-06-25 真实事故：staging slot 一度被填成生产值）。生产 slot 在生产 plist 各配生产值。
     "AGENT_PUBLIC_WS_URL": "wss://staging-autopilot.zenjoymedia.media/agent-ws",
     "AGENT_PUBLIC_BASE_URL": "https://staging-autopilot.zenjoymedia.media",
+    # 微信客服模型：staging 固定 gpt-5.4-mini，避免每次 ensure_staging_plist 重生 plist 时被生产值冲掉。
+    # 生产 plist 无此 key（wechat-draft.ts 默认 deepseek-v3.2），仅 staging 专属（2026-06-30）。
+    "WECHAT_CS_MODEL": "gpt-5.4-mini",
 }
 
 if os.path.isfile(template):
