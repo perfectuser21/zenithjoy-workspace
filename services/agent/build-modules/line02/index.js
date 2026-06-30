@@ -95,7 +95,13 @@ async function pollAndDispatch() {
 }
 function spawnKeywordSearch(keyword, taskId, apiBase) {
     return new Promise((resolve) => {
-        const scriptPath = path.join(__dirname, '..', '..', 'publishers', 'keyword-search-douyin.cjs');
+        // ZENITHJOY_CORE_DIR is injected by module-manager (= dirname of agent exe).
+        // Publishers live alongside the exe, not relative to the installed module __dirname.
+        const coreDir = process.env.ZENITHJOY_CORE_DIR;
+        const publishersDir = coreDir
+            ? path.join(coreDir, 'publishers')
+            : path.join(__dirname, '..', '..', 'publishers');
+        const scriptPath = path.join(publishersDir, 'keyword-search-douyin.cjs');
         if (!fs.existsSync(scriptPath)) {
             process.stderr.write(`[line02] keyword-search script not found: ${scriptPath}\n`);
             return resolve();

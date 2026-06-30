@@ -73,7 +73,7 @@ export type ModuleStatusMap = Record<string, ModuleStatusEntry>;
 export const HEARTBEAT_MODULES: Record<string, ModuleDescriptor> = {
   'line04-wechat-cs': { status: 'active', required_version: '1.0.82' },
   'line01-publish': { status: 'active', required_version: '1.0.1' },
-  'line02-lead-gen': { status: 'active', required_version: '1.0.1' },
+  'line02-lead-gen': { status: 'active', required_version: '1.0.2' },
   'line05-video': { status: 'active', required_version: '1.0.1' },
 };
 
