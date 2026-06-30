@@ -6,6 +6,7 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import os from 'node:os';
 import fs from 'node:fs';
+import path from 'node:path';
 import https from 'node:https';
 import {
   isWechatVersionSupported,
@@ -23,6 +24,10 @@ import {
   interpretVerifySilent,
   checkVerifyDelivery,
   interpretVerifyDelivery,
+  DELIVERY_SELFCHECK_INTERVAL_SEC,
+  shouldRunDeliverySelfcheck,
+  readDeliveryLastRun,
+  writeDeliveryLastRun,
   downloadFile,
   installWeChat,
   installPywinauto,
@@ -967,6 +972,73 @@ describe('checkVerifyDelivery — MOCK_VERIFY_DELIVERY env 注入（跨平台可
     if (process.platform !== 'win32') {
       expect(r.ok).toBe(true);
       expect(r.skipped).toBe(true);
+    }
+  });
+});
+
+// ── 真送达自检节流：默认 1 小时一次（远程确认微信在线，别每几秒/几分钟就发文件传输助手）──
+describe('shouldRunDeliverySelfcheck — 真送达自检节流门（纯函数）', () => {
+  it('间隔常量 = 3600 秒（1 小时）', () => {
+    expect(DELIVERY_SELFCHECK_INTERVAL_SEC).toBe(3600);
+  });
+
+  it('距上次仅 10s（< 1h）→ false（不发）', () => {
+    const now = Date.now();
+    expect(shouldRunDeliverySelfcheck(now, now - 10 * 1000)).toBe(false);
+  });
+
+  it('距上次 3700s（> 1h）→ true（到点发）', () => {
+    const now = Date.now();
+    expect(shouldRunDeliverySelfcheck(now, now - 3700 * 1000)).toBe(true);
+  });
+
+  it('刚好到 3600s 边界 → true（到点发）', () => {
+    const now = Date.now();
+    expect(shouldRunDeliverySelfcheck(now, now - 3600 * 1000)).toBe(true);
+  });
+
+  it('last<=0 / 从未跑过 / 非法 → true（首次必发）', () => {
+    const now = Date.now();
+    expect(shouldRunDeliverySelfcheck(now, 0)).toBe(true);
+    expect(shouldRunDeliverySelfcheck(now, -1)).toBe(true);
+    expect(shouldRunDeliverySelfcheck(now, Number.NaN)).toBe(true);
+  });
+
+  it('自定义间隔参数生效（注入测试）', () => {
+    const now = Date.now();
+    expect(shouldRunDeliverySelfcheck(now, now - 5 * 1000, 10 * 1000)).toBe(false);
+    expect(shouldRunDeliverySelfcheck(now, now - 15 * 1000, 10 * 1000)).toBe(true);
+  });
+});
+
+describe('readDeliveryLastRun / writeDeliveryLastRun — 时间戳落盘往返（跨进程持久）', () => {
+  it('写后读回相同 ms；读不存在文件 → 0（视为从未跑过）', () => {
+    const tmp = path.join(os.tmpdir(), `zj-delivery-selfcheck-test-${Date.now()}.json`);
+    try {
+      expect(readDeliveryLastRun(tmp)).toBe(0);
+      const ts = 1_700_000_000_000;
+      writeDeliveryLastRun(ts, tmp);
+      expect(readDeliveryLastRun(tmp)).toBe(ts);
+    } finally {
+      try {
+        fs.unlinkSync(tmp);
+      } catch {
+        /* ignore */
+      }
+    }
+  });
+
+  it('文件内容损坏 → 读回 0（不崩）', () => {
+    const tmp = path.join(os.tmpdir(), `zj-delivery-selfcheck-bad-${Date.now()}.json`);
+    try {
+      fs.writeFileSync(tmp, '乱码 not json', 'utf-8');
+      expect(readDeliveryLastRun(tmp)).toBe(0);
+    } finally {
+      try {
+        fs.unlinkSync(tmp);
+      } catch {
+        /* ignore */
+      }
     }
   });
 });

@@ -29,7 +29,14 @@ a.strictEqual(p.interpretVerifyDelivery(1, JSON.stringify({error:'找不到目�
 process.env.MOCK_VERIFY_DELIVERY = 'delivered';     a.strictEqual(p.checkVerifyDelivery().ok, true,  'mock delivered→ok');
 process.env.MOCK_VERIFY_DELIVERY = 'not_delivered'; a.strictEqual(p.checkVerifyDelivery().ok, false, 'mock not_delivered→红');
 process.env.MOCK_VERIFY_DELIVERY = 'skip';          a.strictEqual(p.checkVerifyDelivery().skipped, true, 'mock skip→skip');
-console.log('  OK: 带发送自检 interpretVerifyDelivery/checkVerifyDelivery 逻辑链路（编译产物）');
+// 真送达自检节流：默认 1 小时一次（别每几秒/几分钟就发文件传输助手，远程确认在线）
+a.strictEqual(p.DELIVERY_SELFCHECK_INTERVAL_SEC, 3600, '真送达自检间隔常量=3600s（1小时）');
+const now = Date.now();
+a.strictEqual(p.shouldRunDeliverySelfcheck(now, now - 10 * 1000), false, '距10s<1h→不发');
+a.strictEqual(p.shouldRunDeliverySelfcheck(now, now - 3700 * 1000), true, '距3700s>1h→发');
+a.strictEqual(p.shouldRunDeliverySelfcheck(now, now - 3600 * 1000), true, '刚好1h边界→发');
+a.strictEqual(p.shouldRunDeliverySelfcheck(now, 0), true, '从未发→首次必发');
+console.log('  OK: 带发送自检 interpretVerifyDelivery/checkVerifyDelivery + 真送达自检节流门（编译产物）');
 " || { echo "FAIL: 带发送自检逻辑断言不通过"; exit 5; }
 
 V=$(node -e "process.stdout.write(require('$REPO_ROOT/services/agent/build-modules/line04/manifest.json').version)")
