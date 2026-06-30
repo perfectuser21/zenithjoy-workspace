@@ -4090,6 +4090,13 @@ agent_suite:
     status: active
     product: 智能获客
     note: "writeEnvVar 工具函数单测：新建/追加/替换/不存在文件 4 场景，保证 bind 后 ZJ_MAIN_DATA_DIR 正确写入 .env。"
+  - id: agent-acquisition-keyword-extract
+    path: services/agent/src/__tests__/acquisition-keyword-extract.test.ts
+    type: unit
+    ci: L1
+    status: active
+    product: 智能获客
+    note: "regression(2026-06-30): collect/expand 返回 {word,source} 对象格式的关键词必须提取 .word，否则搜索字符串变成 [object Object]。"
 
   - id: agent-burner-sessions-invalidate
     path: apps/api/src/routes/agent-burner-invalidate.test.ts
