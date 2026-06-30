@@ -106,12 +106,12 @@ describe('ws3 generateChatDraft — 名单内客户消息生成草稿', () => {
     // DB INSERT 调用时含 approval_source NULL（A 路线护栏起点）
     const dbCalls = mockQuery.mock.calls;
     const insertCall = dbCalls.find(
-      (c) => typeof c[0] === 'string' && c[0].includes('INSERT INTO wechat_publish_task'),
+      (c) => typeof c[0] === 'string' && c[0].includes('INSERT INTO zenithjoy.wechat_publish_task'),
     );
     expect(insertCall).toBeTruthy();
     const sql = insertCall![0] as string;
     const params = insertCall![1] as unknown[];
-    expect(sql).toMatch(/INSERT INTO wechat_publish_task/);
+    expect(sql).toMatch(/INSERT INTO zenithjoy\.wechat_publish_task/);
     // 第 1-N 个参数应包含 type='chat'，approval_status='pending_review'
     expect(params).toEqual(expect.arrayContaining(['chat']));
     expect(params).toEqual(expect.arrayContaining(['pending_review']));
@@ -222,7 +222,7 @@ describe('ws3 generateChatDraft — OpenRouter 5xx fallback 占位', () => {
     // DB INSERT 时 content_draft 也含"AI 生成失败"
     const dbCalls = mockQuery.mock.calls;
     const insertCall = dbCalls.find(
-      (c) => typeof c[0] === 'string' && c[0].includes('INSERT INTO wechat_publish_task'),
+      (c) => typeof c[0] === 'string' && c[0].includes('INSERT INTO zenithjoy.wechat_publish_task'),
     );
     expect(insertCall).toBeTruthy();
     const params = insertCall![1] as unknown[];
@@ -307,7 +307,7 @@ describe('ws4 generateMomentDraft — 画像齐全 → 飞书内容排期 +1 + D
     // DB INSERT 含 type='moment' + pending_review + approval_source=NULL
     const dbCalls = mockQuery.mock.calls;
     const insertCall = dbCalls.find(
-      (c) => typeof c[0] === 'string' && c[0].includes('INSERT INTO wechat_publish_task'),
+      (c) => typeof c[0] === 'string' && c[0].includes('INSERT INTO zenithjoy.wechat_publish_task'),
     );
     expect(insertCall).toBeTruthy();
     const params = insertCall![1] as unknown[];
@@ -444,7 +444,7 @@ describe('ws4 generateMomentDraft — 同日重复触发跳过', () => {
 
     // 不再 INSERT
     const insertCalls = mockQuery.mock.calls.filter(
-      (c) => typeof c[0] === 'string' && c[0].includes('INSERT INTO wechat_publish_task'),
+      (c) => typeof c[0] === 'string' && c[0].includes('INSERT INTO zenithjoy.wechat_publish_task'),
     );
     expect(insertCalls.length).toBe(0);
   });
@@ -508,7 +508,7 @@ describe('ws4 generateMomentDraft — OpenRouter 5xx fallback 占位', () => {
     expect(payload).toMatch(/AI 生成失败/);
 
     const insertCall = mockQuery.mock.calls.find(
-      (c) => typeof c[0] === 'string' && c[0].includes('INSERT INTO wechat_publish_task'),
+      (c) => typeof c[0] === 'string' && c[0].includes('INSERT INTO zenithjoy.wechat_publish_task'),
     );
     expect(insertCall).toBeTruthy();
     const params = insertCall![1] as unknown[];
