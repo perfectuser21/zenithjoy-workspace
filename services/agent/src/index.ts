@@ -1256,6 +1256,7 @@ function startAcquisitionCollectLoop(cfg: AgentConfig): void {
         const { task_id, keywords } = task;
         const allVideoIds: string[] = [];
 
+        let sessionExpired = false;
         for (const kw of keywords) {
           // keywords 可能是 string 或 {word, source} 对象（collect/expand 返回格式）
           const kwStr: string = typeof kw === 'string' ? kw : ((kw as { word?: string }).word ?? String(kw));
@@ -1266,10 +1267,29 @@ function startAcquisitionCollectLoop(cfg: AgentConfig): void {
               if (m) allVideoIds.push(m[1]);
             }
           } else if (!result.ok) {
-            console.warn(
-              `[acquisition] collect 关键词「${kwStr}」失败: ${(result as { error?: string }).error ?? 'unknown'}`,
-            );
+            const errCode = (result as { error?: string }).error ?? 'unknown';
+            console.warn(`[acquisition] collect 关键词「${kwStr}」失败: ${errCode}`);
+            if (errCode === 'DOUYIN_SESSION_EXPIRED') {
+              sessionExpired = true;
+            }
           }
+        }
+
+        // Douyin session 过期 → 标记 burner session needs_rebind，终止本批
+        if (sessionExpired) {
+          await fetch(`${apiBase}/api/agent/burner/sessions/invalidate`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ reason: 'DOUYIN_SESSION_EXPIRED' }),
+          }).catch(() => null);
+          console.warn('[acquisition] Douyin burner session 已过期，已标记 needs_rebind，跳过本批');
+          // 终态回报 failed
+          await fetch(`${apiBase}/api/acquisition/collect/report`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ task_id, video_id: 'no_videos', commenters: [], terminal: 'failed', error_code: 'DOUYIN_SESSION_EXPIRED' }),
+          }).catch(() => null);
+          continue;
         }
 
         // 每个视频上报一次（commenters 留空，此阶段只需视频 ID 落库）

@@ -176,6 +176,16 @@ async function main() {
     const cookies = await ctx.cookies(['https://www.douyin.com']);
     process.stderr.write(`[keyword-search-douyin] douyin cookies: ${cookies.length}\n`);
 
+    // 检查 Douyin 登录状态：sessionid 或 ttwid 必须存在
+    const SESSION_COOKIES = ['sessionid', 'ttwid', 'uid_tt'];
+    const hasSession = cookies.some(c => SESSION_COOKIES.includes(c.name) && c.value);
+    if (!hasSession) {
+      process.stderr.write(`[keyword-search-douyin] Douyin session 未登录或已过期（找不到 ${SESSION_COOKIES.join('/')}）\n`);
+      emit({ ok: false, keyword, video_urls: [], error: 'DOUYIN_SESSION_EXPIRED' });
+      process.exit(0);
+      return;
+    }
+
     const page = await ctx.newPage();
     try {
       await page.addInitScript(() => {

@@ -485,6 +485,13 @@ jobs:
           chmod +x .github/workflows/scripts/smoke/zj2-ws3-video-comment-smoke.sh
           bash .github/workflows/scripts/smoke/zj2-ws3-video-comment-smoke.sh
 
+      - name: Smoke — burner session health (POST /api/agent/burner/sessions/invalidate)
+        env:
+          SMOKE_API_BASE: "http://localhost:5200"
+        run: |
+          chmod +x .github/workflows/scripts/smoke/burner-session-health-smoke.sh
+          bash .github/workflows/scripts/smoke/burner-session-health-smoke.sh
+
       # ─── Line04 对话记忆三层后端 — 真链路 golden-path（自起服务 + psql 落库断言）──
       # 转调 sprints/06181529-line04-cs-memory-backend/e2e/golden-path-smoke.sh：
       # 起独立 apps/api（zenithjoy_test 库 / 端口 3999）→ curl|jq 验三层 schema + 跨租户隔离
