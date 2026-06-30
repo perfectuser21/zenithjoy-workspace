@@ -5,15 +5,14 @@
 #   1) wechat-draft.ts generateChatDraft + 调 openrouter
 #   2) listen_chat.py pywinauto 配方（_parse_item_name/chat_input_field，禁 wxauto4）
 #   3) routes/wechat.ts /draft-generate 端点
-#   4) 安全边界（auto-agent gating 模型；已取代旧 A 路线"一律人审"护栏）
+#   4) 安全边界（去飞书 + 自动直发 gating 模型）
 #   5) listen_chat.py def 黑名单（不许主动发起）
 #
-# ⚠️ Step 4 演进说明（Sprint 06220821，2026-06-22）：
-#   旧 A 路线护栏「AI 一律不自动发、禁 approval_source='system'/'auto'」已被
-#   **auto-agent gating 模型**取代（用户 2026-06-22 决策 + 登记表「工作开关与时段」：
-#   开启自动代理 = 纯 AI 自动回）。approval_source='system'（系统无人审自动发）现在是
-#   合法设计。新安全边界 = 「ON + 名单内 + 营业时间内 才自动发，其余一律不发」，
-#   由 decideReplyRoute 真值表 + getAutoAgentConfig 在 wechat-draft.ts 强制。
+# ⚠️ Step 4 演进说明（去飞书第一刀，2026-06-30）：
+#   旧 A 路线（飞书审核台 + whitelist 真值表 + 营业时间）已被**去飞书 + 自动直发**取代：
+#   个人未标黑 → 直接返回 reply（自动直发，agent 立即 UIA 发）；群 / CRM 标黑 → 不回；
+#   AI 失败 → 中台 console.error 报红、不返回占位。白名单/黑名单只查本地，不再查飞书。
+#   新安全边界由 decideAutoSendRoute（群/黑名单 gating）+ isContactBlacklisted（本地黑名单）强制。
 set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
 
@@ -47,36 +46,31 @@ grep -qE "generateChatDraft|wechat-draft" "$ROUTE" \
   || { echo "FAIL: routes/wechat.ts 未调 generateChatDraft"; exit 1; }
 echo "  PASS /draft-generate 路由 + service 调用"
 
-echo "=== ws3 Step 4: 安全边界 — auto-agent gating（ON+名单内+营业时间才自动发，其余不发）==="
-# 演进：A 路线"一律人审"护栏已被 auto-agent gating 取代（见文件头 ⚠️ 说明）。
-# approval_source='system' 现在合法（系统无人审自动发）→ 不再禁。改验新安全边界三条：
+echo "=== ws3 Step 4: 安全边界 — 去飞书 + 自动直发 gating（群/标黑不回，AI 失败报红）==="
+# 去飞书第一刀（2026-06-30，见文件头 ⚠️ 说明）：验证新安全边界四条。
 
-# ① auto 模式白名单仍生效：wechat-draft.ts 不再无条件跳过名单（旧 bug 形态复发即红），
-#    且按 decideReplyRoute 把名单外 → not_in_whitelist 不发。
-if grep -Eq "if \(mode !== 'auto'\) \{" "$DRAFT"; then
-  echo "FAIL: auto 分支又整段跳白名单 search（C1 安全边界被破）"; exit 1
+# ① gating 走 decideAutoSendRoute（群/黑名单），不再有 whitelist 真值表 decideReplyRoute。
+grep -q "decideAutoSendRoute" "$DRAFT" \
+  || { echo "FAIL: wechat-draft.ts 未按 decideAutoSendRoute 做群/黑名单 gating"; exit 1; }
+if grep -q "decideReplyRoute" "$DRAFT"; then
+  echo "FAIL: chat 路径仍残留旧 whitelist 真值表 decideReplyRoute（应去飞书后移除）"; exit 1
 fi
-grep -q "decideReplyRoute" "$DRAFT" \
-  || { echo "FAIL: wechat-draft.ts 未按 decideReplyRoute 真值表分流"; exit 1; }
-grep -q "not_in_whitelist" "$DRAFT" \
-  || { echo "FAIL: wechat-draft.ts 未对名单外返回 not_in_whitelist"; exit 1; }
 
-# ② 自动代理总开关 + 营业时间 gating：必须读 getAutoAgentConfig（OFF=监控态不返回 reply）。
-grep -q "getAutoAgentConfig" "$DRAFT" \
-  || { echo "FAIL: wechat-draft.ts 未读 getAutoAgentConfig（总开关/营业时间 gating 缺失）"; exit 1; }
-grep -q "withinBusinessHours" "$DRAFT" \
-  || { echo "FAIL: wechat-draft.ts 未做营业时间判定"; exit 1; }
+# ② 群消息 gating：必须读 is_group 标志（群不回）。
+grep -q "is_group" "$DRAFT" \
+  || { echo "FAIL: wechat-draft.ts 未处理 is_group（群消息 gating 缺失）"; exit 1; }
 
-# ③ 关键人出站任务只在 gated 路径产生：cs-outbound service 存在且播报由开关跳变触发。
-OUTBOUND=apps/api/src/services/wechat/cs-outbound.ts
-test -f "$OUTBOUND" || { echo "FAIL: cs-outbound.ts 缺（关键人出站任务无来源）"; exit 1; }
-grep -q "enqueueKeyContactBroadcast" "$OUTBOUND" \
-  || { echo "FAIL: cs-outbound.ts 缺 enqueueKeyContactBroadcast（开关跳变播报）"; exit 1; }
+# ③ 黑名单只查本地：必须有 isContactBlacklisted 本地查询，且不再查飞书"客户档案"。
+grep -q "isContactBlacklisted" "$DRAFT" \
+  || { echo "FAIL: wechat-draft.ts 未做本地黑名单查询 isContactBlacklisted"; exit 1; }
+if grep -qE "getCustomerTableId|getInteractionTableId" "$DRAFT"; then
+  echo "FAIL: chat 路径仍残留飞书客户档案/互动记录查询（应彻底去飞书）"; exit 1
+fi
 
-# 监控态仍出草稿入审核台：pending_review 状态保留（OFF 时出草稿不发）。
-grep -qE "pending_review" "$DRAFT" \
-  || { echo "FAIL: wechat-draft.ts 未写 pending_review 状态（监控态草稿）"; exit 1; }
-echo "  PASS auto-agent gating（白名单生效 + 总开关/营业时间 gating + 关键人出站 gated）"
+# ④ AI 生成失败立即报红：必须有 console.error ALARM（不静默、不发占位）。
+grep -q "ALARM" "$DRAFT" \
+  || { echo "FAIL: wechat-draft.ts AI 失败未报红（缺 console.error ALARM）"; exit 1; }
+echo "  PASS 去飞书 + 自动直发 gating（群/标黑不回 + 本地黑名单 + AI 失败报红）"
 
 echo "=== ws3 Step 5: listen_chat.py def 黑名单 ==="
 set +o pipefail

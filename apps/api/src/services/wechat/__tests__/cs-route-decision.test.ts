@@ -1,11 +1,15 @@
 import { describe, it, expect } from 'vitest';
 import {
   decideReplyRoute,
+  decideAutoSendRoute,
   withinBusinessHours,
   ROUTE_AUTO,
   ROUTE_REVIEW,
   ROUTE_PENDING_HUMAN,
   ROUTE_SKIP_OFFHOURS,
+  ROUTE_SEND,
+  ROUTE_SKIP_GROUP,
+  ROUTE_SKIP_BLACKLISTED,
 } from '../cs-route-decision';
 
 /**
@@ -50,6 +54,30 @@ describe('decideReplyRoute 真值表（镜像 auto_reply.decide_reply_route）',
           expect(allowed.has(r)).toBe(true);
           expect(banned.has(r)).toBe(false);
         }
+      }
+    }
+  });
+});
+
+describe('decideAutoSendRoute 去飞书自动直发 gating（blacklist 主模型，默认全回）', () => {
+  it('个人 + 未标黑 → send（默认全回，自动直发）', () => {
+    expect(decideAutoSendRoute(false, false)).toBe(ROUTE_SEND);
+  });
+
+  it('个人 + 标黑 → skip_blacklisted（黑名单不回）', () => {
+    expect(decideAutoSendRoute(false, true)).toBe(ROUTE_SKIP_BLACKLISTED);
+  });
+
+  it('群消息 → skip_group（绝不回群，群优先于黑名单判定）', () => {
+    expect(decideAutoSendRoute(true, false)).toBe(ROUTE_SKIP_GROUP);
+    expect(decideAutoSendRoute(true, true)).toBe(ROUTE_SKIP_GROUP);
+  });
+
+  it('返回值 ⊆ 3 字面量', () => {
+    const allowed = new Set([ROUTE_SEND, ROUTE_SKIP_GROUP, ROUTE_SKIP_BLACKLISTED]);
+    for (const g of [true, false]) {
+      for (const b of [true, false]) {
+        expect(allowed.has(decideAutoSendRoute(g, b))).toBe(true);
       }
     }
   });

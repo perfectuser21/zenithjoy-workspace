@@ -79,28 +79,7 @@ describe('ws1 POST /api/wechat/qr-bind — zod 校验', () => {
   });
 });
 
-describe('ws1 GET/POST /api/wechat/draft-review-poll', () => {
-  beforeEach(() => {
-    mockQuery.mockReset();
-  });
-
-  it('POST 空 body → 200 + {polled, dispatched}', async () => {
-    mockQuery.mockResolvedValue({ rows: [], rowCount: 0 });
-    const res = await request(app).post('/api/wechat/draft-review-poll').send({});
-    expect(res.status).toBe(200);
-    expect(typeof res.body.polled).toBe('number');
-    expect(typeof res.body.dispatched).toBe('number');
-  });
-
-  it('GET ?task_id=00000000-0000-0000-0000-000000000000 不存在 → 404', async () => {
-    // 第一次 query: SELECT WHERE task_id = ... → 空
-    mockQuery.mockResolvedValue({ rows: [], rowCount: 0 });
-    const res = await request(app).get(
-      '/api/wechat/draft-review-poll?task_id=00000000-0000-0000-0000-000000000000',
-    );
-    expect(res.status).toBe(404);
-  });
-});
+// 去飞书（2026-06-30）：draft-review-poll 端点已删，相关用例随之移除。
 
 describe('ws1 POST /api/wechat/scheduler-tick', () => {
   beforeEach(() => {
@@ -339,52 +318,4 @@ describe('ws4 POST /api/wechat/scheduler-tick — 真逻辑分发到 generateMom
   });
 });
 
-// ─── ws5 /api/wechat/draft-review-poll 触发 pollOnce ─────────────────────────
-
-vi.mock('../../src/services/feishu-poll', () => ({
-  pollOnce: vi.fn(),
-  startFeishuPoll: vi.fn(),
-  stopFeishuPoll: vi.fn(),
-}));
-
-import { pollOnce } from '../../src/services/feishu-poll';
-
-describe('ws5 POST /api/wechat/draft-review-poll — 触发 feishu-poll pollOnce', () => {
-  beforeEach(() => {
-    mockQuery.mockReset();
-    mockQuery.mockResolvedValue({ rows: [], rowCount: 0 });
-    (pollOnce as unknown as ReturnType<typeof vi.fn>).mockReset();
-    (pollOnce as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
-      polled: 1,
-      dispatched: 1,
-    });
-  });
-
-  it('POST 空 body 触发 pollOnce 一次（不带 task_id 走批量轮询）', async () => {
-    const res = await request(app).post('/api/wechat/draft-review-poll').send({});
-    expect(res.status).toBe(200);
-    expect(pollOnce).toHaveBeenCalledTimes(1);
-    expect(typeof res.body.polled).toBe('number');
-    expect(typeof res.body.dispatched).toBe('number');
-  });
-
-  it('GET ?task_id=<exists> 单查模式 → 不触发 pollOnce', async () => {
-    mockQuery.mockResolvedValue({
-      rows: [
-        {
-          task_id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
-          approval_status: 'pending_review',
-          approval_source: null,
-          content_draft: 'x',
-          feishu_record_id: 'rec_x',
-        },
-      ],
-      rowCount: 1,
-    });
-    const res = await request(app).get(
-      '/api/wechat/draft-review-poll?task_id=aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
-    );
-    expect(res.status).toBe(200);
-    expect(pollOnce).not.toHaveBeenCalled();
-  });
-});
+// 去飞书（2026-06-30）：draft-review-poll 端点 + feishu-poll pollOnce 已删，相关用例随之移除。

@@ -129,8 +129,10 @@ describe('generateChatDraft — 每号完整 persona + 每号 business_kb [BEHAV
 
     // 未带 agent_id → 根本不去解析每号配置（走全局回落路径）。
     expect(csConfigMock).not.toHaveBeenCalled();
-    // review 模式 + 飞书名单外（mock axios 无 items）→ 既有契约拒绝；关键是未读每号、未抛错。
-    expect(result.ok).toBe(false);
+    // 去飞书 + mode:review（监控态）→ status:monitor，不抛错、不返回 reply；关键是未读每号配置。
+    expect(result.ok).toBe(true);
+    expect(result.status).toBe('monitor');
+    expect(result.reply).toBeUndefined();
   });
 
   it('csConfig 命中但 business_kb 为空 → 知识库回落全局（不退化），人设仍用每号', async () => {

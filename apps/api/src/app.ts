@@ -180,7 +180,7 @@ app.use('/api/agent/burner', agentBurnerRouter);
 app.use('/api/_smoke', smokeFakeAgentBurnerRouter);
 // Path 2 Sprint B-1 architecture hotfix — DEV-only mock-agent helper（lead 自验用）
 app.use('/api/_smoke', smokeMockAgentRouter);
-// Path 4 Sprint 1 WS1 — wechat 3 endpoints (qr-bind / draft-review-poll / scheduler-tick)
+// Path 4 — wechat endpoints (qr-bind / scheduler-tick / draft-generate 去飞书自动直发)
 app.use('/api/wechat', wechatRouter);
 // Path 4 Sprint B — 微信客服配置 CRUD（/persona, /business-kb, /business-kb/suggest-audience）
 app.use('/api/wechat', wechatConfigRouter);

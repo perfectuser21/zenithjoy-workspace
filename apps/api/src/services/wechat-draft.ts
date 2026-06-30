@@ -1,18 +1,19 @@
 /**
- * apps/api/src/services/wechat-draft.ts — Path 4 Sprint 1 ws3
+ * apps/api/src/services/wechat-draft.ts — Line04 去飞书 + 个人私聊 AI 自动直发（第一刀）
  *
- * 私聊回复草稿生成器（A 路线护栏起点）：
- *   1) 校验 sender 在飞书"客户档案"表名单内（不在则拒）
- *   2) 拼对话历史（最近 10 轮，从飞书"互动记录"表读）+ 营销画像 prompt
- *   3) 调 OpenRouter DeepSeek 生成 AI 草稿
- *   4) 写飞书"互动记录"表：状态 pending_review，approval_source NULL（A 路线起点）
- *   5) 写 DB wechat_publish_task：type='chat'，approval_status='pending_review'
+ * 私聊回复（generateChatDraft，已彻底去飞书 / 自动直发）：
+ *   1) gating（本地，blacklist 主模型）：群消息 → 不回；CRM 标黑 → 不回；个人未标黑 → 自动直发
+ *   2) 三层记忆（DB wechat_messages）+ 每号人设/知识库 → 上下文装配
+ *   3) 调 gpt-5.4-mini（WECHAT_CS_MODEL）生成回复
+ *   4) route=send 且 AI 成功 → 直接返回 reply 文本（agent 立即 UIA 发送，不经任何审核）
  *
- * 失败处理：OpenRouter 5xx / timeout → 飞书写"AI 生成失败"占位 + pending_review
+ * 去飞书（用户拍板 2026-06-30）：白名单/黑名单只查本地（wechat_cs_account_config + crm_customers），
+ * 不再写飞书"互动记录"、不再落 DB pending_review、不再查飞书"客户档案"。
  *
- * 约束：
- *   - approval_status 严禁 'approved'（防作弊点 A 路线护栏）
- *   - approval_source 在 ws3 阶段必须 NULL（系统不能自批）
+ * 失败处理：AI 生成失败 → 中台 console.error 报红 + 结构化告警日志，**不返回 reply**
+ * （绝不把"AI 生成失败"占位文案发给客户）；关键人微信通知留第二刀。
+ *
+ * 朋友圈（generateMomentDraft）仍在飞书"营销画像/内容排期"路径（Path4 Step4-5，本刀不动）。
  */
 
 import crypto from 'node:crypto';
@@ -21,14 +22,12 @@ import pool from '../db/connection';
 import { callOpenRouter } from '../llm/openrouter';
 import type { BusinessKB, ChatMessage, ContactFact, ContactMemory, Persona } from './wechat/types';
 import { retrieveRelevantKB } from './wechat/business-kb';
-import { getPersona, getBusinessKB, getAutoAgentConfig } from './wechat/cs-config-store';
+import { getPersona, getBusinessKB } from './wechat/cs-config-store';
 import { getCSConfigByAgentId, resolveCsWechatIdByAgentId } from './wechat/cs-account-config-store';
 import {
-  decideReplyRoute,
-  withinBusinessHours,
-  nowMinutesLocal,
-  ROUTE_AUTO,
-  ROUTE_REVIEW,
+  decideAutoSendRoute,
+  ROUTE_SEND,
+  ROUTE_SKIP_GROUP,
 } from './wechat/cs-route-decision';
 import {
   appendMessage,
@@ -73,12 +72,6 @@ function getAppToken(): string {
     process.env.FEISHU_PATH4_APP_TOKEN ||
     ''
   );
-}
-function getCustomerTableId(): string {
-  return process.env.FEISHU_CUSTOMER_TABLE_ID || '';
-}
-function getInteractionTableId(): string {
-  return process.env.FEISHU_INTERACTION_TABLE_ID || '';
 }
 function getProfileTableId(): string {
   return process.env.FEISHU_PROFILE_TABLE_ID || '';
@@ -240,57 +233,96 @@ export interface GenerateChatDraftParams {
   content: string;
   /**
    * 多租户隔离 scope：当前请求归属的租户。路由层（POST /api/wechat/draft-generate）
-   * 在缺租户上下文时已 4xx 拒绝、绝不调到这里；带租户时透传进来，写入归属当前租户 agent。
+   * 在缺租户上下文时已 4xx 拒绝、绝不调到这里；带租户时透传进来用于本地黑名单查询。
    * 向后兼容既有非租户 caller（如服务级集成测试）→ optional，不破坏既有行为。
    */
   tenant_id?: string;
   /**
-   * 'review'（默认）= A 路线审核台：只写飞书/DB pending_review，不回 reply。
-   * 'auto' = 无审批自动回模式：受 getAutoAgentConfig 控制（C1 接线）——读总开关/营业时间/
-   *          daily_limit + 查飞书白名单 → 按 decideReplyRoute 真值表分流：
-   *            route=auto          → 生成 + 返回 reply（listener 真发）
-   *            route=review        → 总开关 OFF（监控态）：仍生成草稿写飞书 pending_review，不返回 reply
-   *            route=pending_human → 名单外 / 超 daily_limit：不生成不发，名单外返回 not_in_whitelist
-   *            route=skip_offhours → 营业时间外：不返回 reply
-   *          AI 失败时 reply 为 undefined（listener 跳过不发占位）。
+   * 'auto'（默认）= 自动直发：gating 通过 + AI 成功 → 直接返回 reply（agent 立即 UIA 发，不经审核）。
+   * 'review' = 监控态：仍跑 gating，但不生成 / 不返回 reply（去飞书后无审核台，仅留作不直发的开关）。
    */
   mode?: 'auto' | 'review';
   /**
-   * 测试 / 调用方可注入「当前分钟数」（当天 0–1439）做营业时间判定，避开真实时钟漂移。
-   * 缺省 → 用本地时钟（nowMinutesLocal）。
+   * 是否群聊消息。群聊 → 绝不自动回（decideAutoSendRoute → skip_group）。
+   * agent 端读会话右上角标题 "(人数)" 判群后传入；缺省 false（按个人私聊处理）。
    */
-  now_minutes?: number;
+  is_group?: boolean;
   /**
-   * 该联系人当天已自动回次数（daily_limit 判定用）。缺省 0。
-   * thin 阶段由调用方/上层统计传入；服务端不在此查 DB（保持纯函数式决策可测）。
-   */
-  daily_count?: number;
-  /**
-   * 客户机 agent 身份。带上时，中台优先按【该客服自己那份配置】(每客服 wechat_cs_account_config)
-   * 判白名单/人设/开关——每客户独立、改一个不动别人；解不到才回落旧的全局/飞书逻辑（向后兼容）。
+   * 客户机 agent 身份。带上时优先用【该客服自己那份配置】(每客服 wechat_cs_account_config)
+   * 的人设/知识库 + 解析该客服微信号查 per-cs 黑名单；解不到回落全局（向后兼容）。
    */
   agent_id?: string;
 }
 
-export interface GenerateChatDraftSuccess {
-  ok: true;
-  status: 'pending_review';
+export interface GenerateChatDraftResult {
+  ok: boolean;
+  /**
+   * sent     = route=send 且 AI 成功 → 带 reply（自动直发）
+   * skipped  = 群消息 / 标黑 → 不回（带 skip_reason）
+   * ai_failed= route=send 但 AI 生成失败 → 不带 reply（中台已报红）
+   * monitor  = mode:'review' 监控态 → 不带 reply
+   */
+  status: 'sent' | 'skipped' | 'ai_failed' | 'monitor';
   task_id: string;
+  /** 去飞书后恒为空串（保留字段形状，向后兼容既有 caller 读取）。 */
   draft_id: string;
-  /** mode:'auto' 且 AI 成功时为生成文案；mode:'review' 或 AI 失败时 undefined。 */
+  /** status:'skipped' 时说明跳过原因。 */
+  skip_reason?: 'group' | 'blacklisted';
+  /** 仅 status:'sent' 时为生成文案；其余一律 undefined（agent 检测到 undefined 即跳过不发）。 */
   reply?: string;
 }
 
-export interface GenerateChatDraftRejected {
-  ok: false;
-  reason: 'not_in_whitelist';
-}
-
-export type GenerateChatDraftResult =
-  | GenerateChatDraftSuccess
-  | GenerateChatDraftRejected;
-
 const FAIL_PLACEHOLDER = 'AI 生成失败（请人审决定是否重试）';
+
+/**
+ * 本地黑名单判定（去飞书，blacklist 主模型 SSOT）：
+ *   1) per-客服机 接管 gate：zenithjoy.wechat_cs_account_config.blacklist（jsonb 数组，按客服微信号分行）
+ *   2) 名册属性：zenithjoy.crm_customers.identity='blacklist'（与 config.blacklist 双向同步，多查一层防漏）
+ * 任一命中 → 标黑（不回）。读类失败一律 console.warn 后按"未标黑"处理（fail-open，绝不因 DB 抖动漏回客户）。
+ */
+async function isContactBlacklisted(
+  csWechatId: string | null,
+  tenantId: string | undefined,
+  sender: string,
+): Promise<boolean> {
+  if (csWechatId) {
+    try {
+      const { rows } = await pool.query(
+        `SELECT blacklist FROM zenithjoy.wechat_cs_account_config WHERE wechat_id = $1`,
+        [csWechatId],
+      );
+      const raw = rows?.[0]?.blacklist;
+      const list: string[] = Array.isArray(raw)
+        ? raw
+        : typeof raw === 'string'
+          ? (() => {
+              try {
+                return JSON.parse(raw);
+              } catch {
+                return [];
+              }
+            })()
+          : [];
+      if (list.includes(sender)) return true;
+    } catch (err) {
+      console.warn('[wechat-draft] 读 per-cs 黑名单失败，按未标黑处理:', err);
+    }
+  }
+  if (tenantId) {
+    try {
+      const { rows } = await pool.query(
+        `SELECT 1 FROM zenithjoy.crm_customers
+          WHERE tenant_id = $1 AND contact = $2 AND identity = 'blacklist' AND deleted_at IS NULL
+          LIMIT 1`,
+        [tenantId, sender],
+      );
+      if (rows && rows.length > 0) return true;
+    } catch (err) {
+      console.warn('[wechat-draft] 读 crm_customers 黑名单失败，按未标黑处理:', err);
+    }
+  }
+  return false;
+}
 
 /**
  * 把一条 in/out 消息盖客服身份章落到被 stats 聚合的 zenithjoy.cs_memory_messages。
@@ -315,100 +347,36 @@ async function stampCsMemory(
 export async function generateChatDraft(
   params: GenerateChatDraftParams,
 ): Promise<GenerateChatDraftResult> {
-  const { sender, wechat_id, content, mode = 'review', tenant_id, agent_id } = params;
+  const { sender, wechat_id, content, mode = 'auto', tenant_id, agent_id, is_group = false } =
+    params;
 
   // 每客服配置（本地 DB = 引擎，决策 dd320e56）：带 agent_id 时优先用【这台机自己那份配置】
-  // 判白名单/人设/开关——每客户独立、改一个不动别人。解不到 → null，回落旧的飞书/全局逻辑（向后兼容）。
+  // 的人设/知识库 + 解析客服微信号查 per-cs 黑名单。解不到 → null，回落全局（向后兼容）。
   const csConfig = agent_id ? await getCSConfigByAgentId(agent_id) : null;
-  // S3 客服工作汇总：解析「处理本消息的客服微信号」给 in/out 落库盖身份章。
-  // 优先用已配过的 csConfig.wechat_id；未配但已绑 PC → 经 service_agents 解出绑定的 wechat_id。
-  // 解不到（无 agent_id / 未绑定）→ null：消息照常落库，只是不计入任何客服统计、不串台。
+  // S3 客服工作汇总：解析「处理本消息的客服微信号」给 in/out 落库盖身份章 + 查 per-cs 黑名单。
   const csWechatId: string | null =
     csConfig?.wechat_id ?? (agent_id ? await resolveCsWechatIdByAgentId(agent_id) : null);
 
-  // 多租户隔离 scope：路由已保证带租户才会调到这里（缺租户在路由层 4xx 拦截）。
-  // 写入归属当前租户：以 tenant scope 留痕，确保草稿入库可追溯到租户，不串到其它租户。
   console.info(
-    `[wechat-draft] generateChatDraft tenant_scope=${tenant_id ?? '<none>'} sender=${sender}`,
+    `[wechat-draft] generateChatDraft tenant_scope=${tenant_id ?? '<none>'} sender=${sender} is_group=${is_group}`,
   );
 
-  // 1) 白名单校验 —— 两种模式都查飞书"客户档案"名单（C1 修复：auto 不再无条件跳过）。
-  //    名单成员关系是后续路由真值表的入参（名单外 → pending_human，绝不自动回陌生人）。
-  let inWhitelist = false;
-  if (csConfig) {
-    // 每客服白名单（一键配置/前台填，将来飞书 sync 进来）—— sender 在该客服自己名单内才算客户。
-    inWhitelist = Array.isArray(csConfig.whitelist) && csConfig.whitelist.includes(sender);
-  } else {
-    let customers: FeishuRecord[] = [];
-    try {
-      customers = await searchTable(getCustomerTableId(), sender);
-    } catch (err) {
-      console.warn('[wechat-draft] 飞书"客户档案"search 失败，按名单外处理:', err);
-      customers = [];
-    }
-    inWhitelist = Boolean(customers && customers.length > 0);
+  // 1) gating（去飞书 + blacklist 主模型，决策 2026-06-30）：群消息 → 不回；CRM 标黑 → 不回；
+  //    个人未标黑 → 自动直发（默认全回）。白名单/黑名单只查本地，不再查飞书"客户档案"。
+  const blacklisted = is_group ? false : await isContactBlacklisted(csWechatId, tenant_id, sender);
+  const route = decideAutoSendRoute(Boolean(is_group), blacklisted);
+  if (route !== ROUTE_SEND) {
+    const skip_reason = route === ROUTE_SKIP_GROUP ? 'group' : 'blacklisted';
+    console.info(`[wechat-draft] skip sender=${sender} reason=${skip_reason}（不自动回）`);
+    return { ok: true, status: 'skipped', task_id: crypto.randomUUID(), draft_id: '', skip_reason };
   }
 
-  // review 模式（A 路线审核台）保持原契约：名单外直接拒，不生成不入库。
-  if (mode !== 'auto' && !inWhitelist) {
-    return { ok: false, reason: 'not_in_whitelist' };
+  // 监控态（mode:'review'）：去飞书后无审核台，仅作"不直发"的开关——不生成、不返回 reply。
+  if (mode !== 'auto') {
+    return { ok: true, status: 'monitor', task_id: crypto.randomUUID(), draft_id: '' };
   }
 
-  // 1b) auto 模式（C1 接线核心）：读自动代理配置 → 按真值表分流。
-  //     决策真正生效点在此（不再让 listen_chat 无条件全员回）。
-  //     - route=pending_human 且名单外 → 立即拒（not_in_whitelist），不烧 LLM、不入库草稿。
-  //     - route=skip_offhours / 超额 pending_human → 不返回 reply，也不生成（省 LLM），仅返回监控态。
-  //     - route=review（总开关 OFF=监控态）→ 继续生成草稿写 pending_review，但不返回 reply。
-  //     - route=auto → 继续生成 + 返回 reply（真发）。
-  let autoShouldReturnReply = false;
-  if (mode === 'auto') {
-    // 每客服配置在册 → 用这台机自己那份的开关/营业时间/日上限；否则回落全局。
-    const cfg = csConfig
-      ? {
-          auto_agent_enabled: csConfig.auto_agent_enabled,
-          business_hours_start: csConfig.business_hours_start,
-          business_hours_end: csConfig.business_hours_end,
-          daily_limit: csConfig.daily_limit,
-        }
-      : await getAutoAgentConfig();
-    let businessHoursOk = true;
-    try {
-      const nowMin = params.now_minutes ?? nowMinutesLocal();
-      businessHoursOk = withinBusinessHours(
-        cfg.business_hours_start,
-        cfg.business_hours_end,
-        nowMin,
-      );
-    } catch (err) {
-      // 营业时间格式脏（UI 漏校验）→ 不崩主链路，按"营业中"处理但记日志（保守可回）。
-      console.warn('[wechat-draft] 营业时间格式非法，按营业中处理:', err);
-      businessHoursOk = true;
-    }
-    const route = decideReplyRoute(
-      inWhitelist,
-      businessHoursOk,
-      cfg.auto_agent_enabled,
-      params.daily_count ?? 0,
-      cfg.daily_limit,
-    );
-    console.info(
-      `[wechat-draft] auto route=${route} inWhitelist=${inWhitelist} ` +
-        `enabled=${cfg.auto_agent_enabled} businessHoursOk=${businessHoursOk}`,
-    );
-
-    if (!inWhitelist && cfg.auto_agent_enabled) {
-      // 名单外 + 开关 ON → pending_human：不生成不发，返回 not_in_whitelist（上层记 pending_human）。
-      return { ok: false, reason: 'not_in_whitelist' };
-    }
-    if (route !== ROUTE_AUTO && route !== ROUTE_REVIEW) {
-      // skip_offhours / 超 daily_limit 的 pending_human：不返回 reply，不生成草稿（省 LLM），监控态返回。
-      return { ok: true, status: 'pending_review', task_id: crypto.randomUUID(), draft_id: '' };
-    }
-    // route=auto → 真发；route=review（监控态）→ 生成草稿但不返回 reply。
-    autoShouldReturnReply = route === ROUTE_AUTO;
-  }
-
-  // 2) 三层记忆 + 人设 + 企业知识库 → 上下文装配（替代旧的"飞书取最近10轮+营销画像"）
+  // 2) 三层记忆（DB wechat_messages）+ 每号人设/知识库 → 上下文装配
   const contactKey = wechat_id || sender;
   try {
     await appendMessage(contactKey, sender, 'in', content, csWechatId);
@@ -419,9 +387,6 @@ export async function generateChatDraft(
   await stampCsMemory(tenant_id, sender, 'in', content, csWechatId);
 
   // IA 重设计刀1（反转 PR#940）：AI 回复读【每号完整 persona + 每号 business_kb】（每号独立人设+知识库）。
-  //   - 带 agent_id 解到该号配置(csConfig) → persona 全套 style + self_name + business_kb 全用【这个号自己的】。
-  //   - csConfig 缺失（无 agent_id / 未配）→ 回落全局 getPersona()/getBusinessKB()（向后兼容）。
-  //   - csConfig 命中但个别字段/整份 business_kb 为空（新号没填全）→ 该处回落全局，保证回复不退化。
   const globalPersona = await getPersona();
   const persona = mergePersonaPreferCs(csConfig?.persona, globalPersona);
   const kb: BusinessKB = csKbHasContent(csConfig?.business_kb)
@@ -447,7 +412,7 @@ export async function generateChatDraft(
     memory,
   });
 
-  // 3) 调 OpenRouter DeepSeek（带人设 system + temperature；回复已在 openrouter 内剥思考块）
+  // 3) 调 gpt-5.4-mini（WECHAT_CS_MODEL；回复已在 openrouter 内剥思考块）
   let aiContent = '';
   let aiError: string | null = null;
   const cs = csLlm();
@@ -465,79 +430,41 @@ export async function generateChatDraft(
     aiContent = sanitizeReply((result.content || '').trim(), persona);
     if (!aiContent) {
       aiError = `${cs.model} 返回空文本`;
-      aiContent = FAIL_PLACEHOLDER;
     }
   } catch (err) {
     aiError = err instanceof Error ? err.message : String(err);
-    aiContent = FAIL_PLACEHOLDER;
   }
 
-  // 成功生成才记入"我方回复"短期记忆 + 触发固化（失败不污染记忆）
-  if (!aiError) {
-    try {
-      await appendMessage(contactKey, sender, 'out', aiContent, csWechatId);
-      await consolidate(contactKey);
-    } catch (err) {
-      console.warn('[wechat-draft] 写出站消息/固化失败（不影响回复）:', err);
-    }
-    // 接缝 #1：同一条 out 盖客服身份章落到被 stats 聚合的 cs_memory_messages（LLM 成功才有 out）。
-    await stampCsMemory(tenant_id, sender, 'out', aiContent, csWechatId);
-  }
-
-  // 4) 写飞书"互动记录"表（pending_review，approval_source NULL — A 路线护栏起点）
-  const generatedAt = Date.now();
-  let draftId = '';
-  try {
-    draftId = await createRecord(getInteractionTableId(), {
-      客户名: sender,
-      客户原话: content,
-      'AI 草稿': aiContent,
-      生成时间: generatedAt,
-      状态: 'pending_review',
-    });
-  } catch (err) {
-    console.warn('[wechat-draft] 写飞书"互动记录"失败:', err);
-    // thin 阶段：飞书写失败仍保留 DB 入库（人审在 DB 看得到）
-  }
-
-  // 5) 写 DB wechat_publish_task：type='chat'，approval_status='pending_review'，approval_source NULL
   const taskId = crypto.randomUUID();
-  try {
-    await pool.query(
-      `INSERT INTO zenithjoy.wechat_publish_task
-        (task_id, platform, type, target_user, content_draft, approval_status, approval_source, feishu_record_id)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-      [
-        taskId,
-        'wechat_personal',
-        'chat',
-        wechat_id,
-        aiContent,
-        'pending_review',
-        null, // ws3 阶段 approval_source 必须 NULL
-        draftId || null,
-      ],
-    );
-  } catch (err) {
-    console.warn('[wechat-draft] DB INSERT wechat_publish_task 失败:', err);
-  }
 
+  // 4) AI 失败 → 立即报红 + 结构化告警日志，**不返回 reply**（绝不把占位文案发给客户）。
+  //    第一刀只做中台报红；微信通知关键人留第二刀（关键人身份层还没建）。
   if (aiError) {
-    console.warn('[wechat-draft] AI 草稿生成失败 fallback 占位:', aiError);
+    console.error(
+      `[wechat-draft][ALARM] AI 生成失败 不自动回复 | ` +
+        JSON.stringify({
+          event: 'wechat_cs_ai_failed',
+          tenant: tenant_id ?? null,
+          cs_wechat_id: csWechatId,
+          sender,
+          model: cs.model,
+          error: aiError,
+        }),
+    );
+    return { ok: true, status: 'ai_failed', task_id: taskId, draft_id: '' };
   }
 
-  // 无审批自动回 —— 仅 route=auto（autoShouldReturnReply）且 AI 成功才回 reply 文本；
-  // AI 失败（aiContent=FAIL_PLACEHOLDER）reply 留 undefined，listener 检测到 undefined 即跳过不发，
-  // 绝不把占位文案发给客户。route=review（监控态）/ mode:'review'（默认）永不带 reply。
-  const reply = autoShouldReturnReply && !aiError ? aiContent : undefined;
+  // AI 成功 → 记入"我方回复"短期记忆 + 触发固化（盖客服身份章），然后直接返回 reply（自动直发）。
+  try {
+    await appendMessage(contactKey, sender, 'out', aiContent, csWechatId);
+    await consolidate(contactKey);
+  } catch (err) {
+    console.warn('[wechat-draft] 写出站消息/固化失败（不影响回复）:', err);
+  }
+  await stampCsMemory(tenant_id, sender, 'out', aiContent, csWechatId);
 
-  return {
-    ok: true,
-    status: 'pending_review',
-    task_id: taskId,
-    draft_id: draftId,
-    ...(reply !== undefined ? { reply } : {}),
-  };
+  console.info(`[wechat-draft] auto-send sender=${sender} reply_len=${aiContent.length}`);
+  return { ok: true, status: 'sent', task_id: taskId, draft_id: '', reply: aiContent };
 }
 
 // ─── ws4: generateMomentDraft（朋友圈文案草稿）────────────────────────────────

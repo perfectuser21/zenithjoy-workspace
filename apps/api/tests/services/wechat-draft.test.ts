@@ -1,15 +1,16 @@
 /**
- * Path 4 Sprint 1 ws3 — wechat-draft.ts service 单元测试（RED）。
+ * Line04 去飞书 + 个人私聊 AI 自动直发（第一刀）— generateChatDraft 行为测试。
  *
- * 测试 generateChatDraft：
- *   1) 名单内客户消息 → 飞书互动记录 +1 + DB wechat_publish_task +1（status=pending_review, approval_source NULL）
- *   2) 名单外 sender → 返回 ok:false reason 'not_in_whitelist'，飞书表行数不变（mock 计数器）
- *   3) OPENROUTER_FORCE_5XX=1 + NODE_ENV=test → 飞书表写"AI 生成失败"占位，状态仍 pending_review
+ * 测试 generateChatDraft（去飞书 + 自动直发，blacklist 主模型）：
+ *   1) 个人未标黑 → 自动直发：status:'sent' 带 reply，**不写飞书** records.create、**不落** wechat_publish_task pending_review
+ *   2) 个人标黑（CRM identity='blacklist'）→ status:'skipped' skip_reason:'blacklisted'，不烧 LLM
+ *   3) 群消息（is_group=true）→ status:'skipped' skip_reason:'group'，不烧 LLM
+ *   4) AI 生成失败 → status:'ai_failed' 不带 reply + 中台 console.error 报红，**不落 pending_review**
  *
  * Mock 策略：
- *   - pg pool: vi.hoisted mockQuery，stub SELECT 名单 / INSERT publish_task
- *   - axios: stub 飞书 token + search + records.create
- *   - llm/openrouter: stub callOpenRouter 默认成功；--force-5xx 测试单独 reject
+ *   - pg pool: vi.hoisted mockQuery（blacklist 查询 + 记忆落库）
+ *   - axios: stub（去飞书后 chat 路径不再调飞书；保留 mock 断言其未被用于 /records 写入）
+ *   - llm/openrouter: stub callOpenRouter
  */
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 
@@ -44,192 +45,128 @@ import { generateChatDraft, _resetFeishuTokenCache } from '../../src/services/we
 
 const mockedAxios = vi.mocked(axios, true);
 
-describe('ws3 generateChatDraft — 名单内客户消息生成草稿', () => {
+describe('generateChatDraft — 个人未标黑 → 自动直发（去飞书）', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     _resetFeishuTokenCache();
     mockQuery.mockReset();
-    process.env.FEISHU_APP_ID = 'test_app_id';
-    process.env.FEISHU_APP_SECRET = 'test_secret';
-    process.env.FEISHU_TEST_APP_TOKEN = 'mock_app_token';
-    process.env.FEISHU_CUSTOMER_TABLE_ID = 'tbl_customer';
-    process.env.FEISHU_INTERACTION_TABLE_ID = 'tbl_interaction';
-    delete process.env.FEISHU_PROFILE_TABLE_ID;
-    delete process.env.OPENROUTER_FORCE_5XX;
+    mockQuery.mockResolvedValue({ rows: [], rowCount: 0 });
     process.env.NODE_ENV = 'test';
     mockCallOpenRouter.mockReset();
-    mockCallOpenRouter.mockResolvedValue({
-      content: '收到，您好。',
-      model: 'deepseek/deepseek-chat',
-      prompt_tokens: 10,
-      completion_tokens: 6,
-      cost: 0.000003,
-    });
+    mockCallOpenRouter.mockResolvedValue({ content: '收到，您好。' });
   });
 
-  it('名单内客户 → 飞书互动记录 records.create + DB wechat_publish_task INSERT，status=pending_review approval_source NULL', async () => {
-    // axios 调用顺序：
-    //   1) 飞书 tenant_access_token
-    //   2) 飞书"客户档案"表 search → 命中（has_more:false, items:[1 行]）
-    //   3) 飞书"互动记录"表 search 历史（最近 N 条对话）→ items:[]
-    //   4) 飞书"互动记录" records.create → 成功
-    (mockedAxios.post as ReturnType<typeof vi.fn>)
-      .mockResolvedValueOnce({ data: { code: 0, tenant_access_token: 'mock_token' } })
-      .mockResolvedValueOnce({
-        data: {
-          code: 0,
-          data: {
-            items: [{ record_id: 'rec_customer_a', fields: { 客户名: '客户A', 微信号: 'test_a' } }],
-          },
-        },
-      })
-      .mockResolvedValueOnce({
-        data: { code: 0, data: { record: { record_id: 'rec_interaction_1' } } },
-      });
-    // 注：新引擎不再读飞书"互动记录"历史（短期记忆改走 DB wechat_messages），
-    // 故 axios 顺序为：token → 客户档案 search → 互动记录 records.create（无历史 search）。
-
-    // DB INSERT wechat_publish_task → 成功
-    mockQuery.mockResolvedValue({ rows: [], rowCount: 1 });
-
-    const result = await generateChatDraft({
-      sender: '客户A',
-      wechat_id: 'test_a',
+  it('个人未标黑 → status:sent 带 reply；不写飞书 records、不落 wechat_publish_task pending_review', async () => {
+    const result: any = await generateChatDraft({
+      sender: '莫易',
+      wechat_id: 'wxid_moyi',
       content: '在吗',
+      mode: 'auto',
     });
 
     expect(result.ok).toBe(true);
-    expect(result.status).toBe('pending_review');
-    expect(typeof result.task_id).toBe('string');
-    expect(result.task_id).toMatch(/^[0-9a-f-]{36}$/i);
+    expect(result.status).toBe('sent');
+    expect(result.reply).toBe('收到，您好。');
 
-    // DB INSERT 调用时含 approval_source NULL（A 路线护栏起点）
-    const dbCalls = mockQuery.mock.calls;
-    const insertCall = dbCalls.find(
+    // 去飞书：绝不调飞书 /records 写入
+    const recordsCalls = (mockedAxios.post as ReturnType<typeof vi.fn>).mock.calls.filter(
+      (c) => typeof c[0] === 'string' && /\/records$/.test(c[0]),
+    );
+    expect(recordsCalls.length).toBe(0);
+
+    // 不落 wechat_publish_task pending_review（去飞书后 chat 不再写审核台）
+    const insertCall = mockQuery.mock.calls.find(
       (c) => typeof c[0] === 'string' && c[0].includes('INSERT INTO zenithjoy.wechat_publish_task'),
     );
-    expect(insertCall).toBeTruthy();
-    const sql = insertCall![0] as string;
-    const params = insertCall![1] as unknown[];
-    expect(sql).toMatch(/INSERT INTO zenithjoy\.wechat_publish_task/);
-    // 第 1-N 个参数应包含 type='chat'，approval_status='pending_review'
-    expect(params).toEqual(expect.arrayContaining(['chat']));
-    expect(params).toEqual(expect.arrayContaining(['pending_review']));
-    // approval_source 必须 NULL（不允许 system 自批）
-    expect(params).toEqual(expect.arrayContaining([null]));
-
-    // 飞书 records.create 至少调用 1 次（互动记录表）
-    const createCall = mockedAxios.post.mock.calls.find(
-      (c) => typeof c[0] === 'string' && c[0].includes('/records') && !c[0].includes('search'),
-    );
-    expect(createCall).toBeTruthy();
+    expect(insertCall).toBeUndefined();
   });
 });
 
-describe('ws3 generateChatDraft — 名单外 sender 拒绝', () => {
+describe('generateChatDraft — 标黑 / 群 → 不回（gating）', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     _resetFeishuTokenCache();
     mockQuery.mockReset();
-    process.env.FEISHU_APP_ID = 'test_app_id';
-    process.env.FEISHU_APP_SECRET = 'test_secret';
-    process.env.FEISHU_TEST_APP_TOKEN = 'mock_app_token';
-    process.env.FEISHU_CUSTOMER_TABLE_ID = 'tbl_customer';
-    process.env.FEISHU_INTERACTION_TABLE_ID = 'tbl_interaction';
-    delete process.env.FEISHU_PROFILE_TABLE_ID;
-    delete process.env.OPENROUTER_FORCE_5XX;
     process.env.NODE_ENV = 'test';
     mockCallOpenRouter.mockReset();
+    mockCallOpenRouter.mockResolvedValue({ content: '不该发出去的' });
   });
 
-  it('名单外 sender → 返回 {ok:false, reason:"not_in_whitelist"}，不写飞书互动表，不调 LLM', async () => {
-    (mockedAxios.post as ReturnType<typeof vi.fn>)
-      .mockResolvedValueOnce({ data: { code: 0, tenant_access_token: 'mock_token' } })
-      // 客户档案 search → 名单外 → items 空
-      .mockResolvedValueOnce({ data: { code: 0, data: { items: [] } } });
+  it('CRM 标黑 → status:skipped skip_reason:blacklisted，不烧 LLM', async () => {
+    // isContactBlacklisted 的 crm_customers 查询命中一行 → 标黑
+    mockQuery.mockResolvedValue({ rows: [{ x: 1 }], rowCount: 1 });
 
-    const result = await generateChatDraft({
-      sender: '陌生人',
-      wechat_id: 'unknown_x',
-      content: '嗨',
+    const result: any = await generateChatDraft({
+      sender: '黑名单客户',
+      wechat_id: 'wxid_bl',
+      content: '你好',
+      mode: 'auto',
+      tenant_id: 'tenant-a',
     });
 
-    expect(result.ok).toBe(false);
-    expect(result.reason).toBe('not_in_whitelist');
-
-    // 不调 OpenRouter
+    expect(result.ok).toBe(true);
+    expect(result.status).toBe('skipped');
+    expect(result.skip_reason).toBe('blacklisted');
+    expect(result.reply).toBeUndefined();
     expect(mockCallOpenRouter).not.toHaveBeenCalled();
+  });
 
-    // 不调 records.create（只有 token + search 两次）
-    const createCalls = mockedAxios.post.mock.calls.filter(
-      (c) => typeof c[0] === 'string' && /\/records$/.test(c[0]),
-    );
-    expect(createCalls.length).toBe(0);
+  it('群消息 is_group=true → status:skipped skip_reason:group，不查黑名单、不烧 LLM', async () => {
+    const result: any = await generateChatDraft({
+      sender: '某客户群',
+      wechat_id: 'wxid_group',
+      content: '群里随便聊',
+      mode: 'auto',
+      is_group: true,
+      tenant_id: 'tenant-a',
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.status).toBe('skipped');
+    expect(result.skip_reason).toBe('group');
+    expect(result.reply).toBeUndefined();
+    expect(mockCallOpenRouter).not.toHaveBeenCalled();
+    // 群短路：不应触发任何 DB 查询（黑名单都不查）
+    expect(mockQuery).not.toHaveBeenCalled();
   });
 });
 
-describe('ws3 generateChatDraft — OpenRouter 5xx fallback 占位', () => {
+describe('generateChatDraft — AI 生成失败 → 报红不返回 reply', () => {
+  const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
   beforeEach(() => {
     vi.clearAllMocks();
     _resetFeishuTokenCache();
     mockQuery.mockReset();
-    process.env.FEISHU_APP_ID = 'test_app_id';
-    process.env.FEISHU_APP_SECRET = 'test_secret';
-    process.env.FEISHU_TEST_APP_TOKEN = 'mock_app_token';
-    process.env.FEISHU_CUSTOMER_TABLE_ID = 'tbl_customer';
-    process.env.FEISHU_INTERACTION_TABLE_ID = 'tbl_interaction';
-    delete process.env.FEISHU_PROFILE_TABLE_ID;
+    mockQuery.mockResolvedValue({ rows: [], rowCount: 0 });
     process.env.NODE_ENV = 'test';
     mockCallOpenRouter.mockReset();
-    mockCallOpenRouter.mockRejectedValue(new Error('OpenRouter call failed: simulated 5xx'));
+    mockCallOpenRouter.mockRejectedValue(new Error('toapi 5xx simulated'));
+    errSpy.mockClear();
   });
 
-  it('OPENROUTER_FORCE_5XX 抛错时 → 飞书 records.create payload 含 "AI 生成失败"，status 仍 pending_review', async () => {
-    (mockedAxios.post as ReturnType<typeof vi.fn>)
-      .mockResolvedValueOnce({ data: { code: 0, tenant_access_token: 'mock_token' } })
-      .mockResolvedValueOnce({
-        data: {
-          code: 0,
-          data: {
-            items: [{ record_id: 'rec_customer_a', fields: { 客户名: '客户A', 微信号: 'test_a' } }],
-          },
-        },
-      })
-      .mockResolvedValueOnce({
-        data: { code: 0, data: { record: { record_id: 'rec_interaction_2' } } },
-      });
-
-    mockQuery.mockResolvedValue({ rows: [], rowCount: 1 });
-
-    const result = await generateChatDraft({
-      sender: '客户A',
-      wechat_id: 'test_a',
+  it('AI 失败 → status:ai_failed 不带 reply + console.error 报红 ALARM；不落 pending_review', async () => {
+    const result: any = await generateChatDraft({
+      sender: '莫易',
+      wechat_id: 'wxid_moyi',
       content: '测试故障',
+      mode: 'auto',
     });
 
-    // 失败也算"草稿生成"（人审决定要不要重试），状态仍 pending_review
     expect(result.ok).toBe(true);
-    expect(result.status).toBe('pending_review');
+    expect(result.status).toBe('ai_failed');
+    expect(result.reply).toBeUndefined();
 
-    // 飞书 records.create 调用 payload 含"AI 生成失败"
-    const createCall = mockedAxios.post.mock.calls.find(
-      (c) => typeof c[0] === 'string' && /\/records$/.test(c[0]),
+    // 中台报红（结构化告警日志，含 ALARM 标记）
+    const alarmCall = errSpy.mock.calls.find(
+      (c) => typeof c[0] === 'string' && c[0].includes('[wechat-draft][ALARM]'),
     );
-    expect(createCall).toBeTruthy();
-    const payload = JSON.stringify(createCall![1]);
-    expect(payload).toMatch(/AI 生成失败/);
+    expect(alarmCall).toBeTruthy();
 
-    // DB INSERT 时 content_draft 也含"AI 生成失败"
-    const dbCalls = mockQuery.mock.calls;
-    const insertCall = dbCalls.find(
+    // 不落 wechat_publish_task（去飞书 + 失败不写占位）
+    const insertCall = mockQuery.mock.calls.find(
       (c) => typeof c[0] === 'string' && c[0].includes('INSERT INTO zenithjoy.wechat_publish_task'),
     );
-    expect(insertCall).toBeTruthy();
-    const params = insertCall![1] as unknown[];
-    const hasFailMarker = params.some(
-      (p) => typeof p === 'string' && p.includes('AI 生成失败'),
-    );
-    expect(hasFailMarker).toBe(true);
+    expect(insertCall).toBeUndefined();
   });
 });
 

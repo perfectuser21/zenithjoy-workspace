@@ -95,23 +95,25 @@ describe('wechat-draft schema 前缀回归 [BEHAVIOR]', () => {
     process.env.FEISHU_PROFILE_TABLE_ID = 'tbl_profile';
   });
 
-  it('generateChatDraft 的 INSERT 必须落到 zenithjoy.wechat_publish_task（不是裸表名）', async () => {
+  it('generateChatDraft 去飞书后不再落 wechat_publish_task（个人私聊自动直发，无审核台）', async () => {
     setupFeishuMock();
     vi.mocked(callOpenRouter).mockResolvedValue({ content: '好的，已收到' } as any);
 
     const mod = await import('../wechat-draft');
-    await mod.generateChatDraft({
+    const result: any = await mod.generateChatDraft({
       sender: '于瑾',
       wechat_id: 'wxid_yujin',
       content: '你好',
       mode: 'auto',
     } as any);
 
+    expect(result.status).toBe('sent');
+    expect(result.reply).toBe('好的，已收到');
+
+    // 去飞书：chat 路径不再 INSERT wechat_publish_task（不落 pending_review）
     const sqls = await collectPublishTaskSql();
     const insertSql = sqls.find((s) => /INSERT\s+INTO/i.test(s));
-    expect(insertSql, 'chat INSERT 必须命中 wechat_publish_task').toBeDefined();
-    // 关键断言：必须带 zenithjoy. schema 限定，否则 staging(public) 找不到表
-    expect(insertSql).toMatch(/INSERT\s+INTO\s+zenithjoy\.wechat_publish_task/i);
+    expect(insertSql, 'chat 去飞书后不应再写 wechat_publish_task').toBeUndefined();
   });
 
   it('generateMomentDraft 的当日去重 SELECT 与 INSERT 均须带 zenithjoy. 前缀', async () => {
