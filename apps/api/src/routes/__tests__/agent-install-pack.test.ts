@@ -267,6 +267,105 @@ describe('agent→staging — /dotenv 含 AGENT_PUBLIC_* 烧的 ZENITHJOY_API_UR
   });
 });
 
+// 遗留② 根治 — "staging 下却连生产" 真因：个人 .env 只烧了 URL，缺 staging 环境标记，
+// 用户没应用个人 .env 时就回落到 COS 包 .env.template 里写死的生产 ZENITHJOY_ENV/URL。
+// 修法：agentApiUrlEnvLines 从本实例对外地址推导 ZENITHJOY_ENV 一并烧进个人 .env，
+// 让个人 .env 自描述环境（staging slot → staging / 生产 slot → prod），盖掉模板默认值。
+describe('agent→staging 隔离 — /dotenv + download 烧 ZENITHJOY_ENV 环境标记', () => {
+  let app: any;
+  afterEach(() => {
+    delete process.env.AGENT_PUBLIC_WS_URL;
+    delete process.env.AGENT_PUBLIC_BASE_URL;
+    delete process.env.INSTALL_PACK_FIXTURE_PATH;
+  });
+
+  async function loadApp() {
+    vi.clearAllMocks();
+    (manifestSvc.readInstallPackManifest as any).mockReturnValue({
+      version: '1.1.3', sha256: 'a'.repeat(64),
+      download_url: '/download/zenithjoy-agent-v1.1.3.tar.gz',
+      size: 169197376, build_time: '2026-05-20T00:00:00Z',
+    });
+    app = (await import('../../app')).default;
+  }
+
+  async function getDotenv(userId: string): Promise<string> {
+    const { auth } = await import('../../auth');
+    const pool = (await import('../../db/connection')).default;
+    vi.spyOn(auth.api, 'getSession').mockResolvedValue({
+      user: { id: userId, email: `${userId}@test`, name: userId },
+    } as any);
+    vi.spyOn(pool, 'query').mockResolvedValue({
+      rows: [{ license_key: 'ZJ-F-FBFYTLFR' }],
+    } as any);
+    const res = await request(app).get('/api/agent/install-pack/dotenv');
+    expect(res.status).toBe(200);
+    return res.text;
+  }
+
+  it('staging slot（AGENT_PUBLIC_BASE_URL=staging）→ /dotenv 含 ZENITHJOY_ENV=staging', async () => {
+    await loadApp();
+    process.env.AGENT_PUBLIC_WS_URL = 'wss://staging-autopilot.zenjoymedia.media/agent-ws';
+    process.env.AGENT_PUBLIC_BASE_URL = 'https://staging-autopilot.zenjoymedia.media';
+    const env = await getDotenv('user-envmark-staging');
+    expect(env).toContain('ZENITHJOY_ENV=staging');
+    expect(env).not.toContain('ZENITHJOY_ENV=prod');
+  });
+
+  it('生产 slot（AGENT_PUBLIC_BASE_URL=autopilot）→ /dotenv 含 ZENITHJOY_ENV=prod', async () => {
+    await loadApp();
+    process.env.AGENT_PUBLIC_WS_URL = 'wss://autopilot.zenjoymedia.media/agent-ws';
+    process.env.AGENT_PUBLIC_BASE_URL = 'https://autopilot.zenjoymedia.media';
+    const env = await getDotenv('user-envmark-prod');
+    expect(env).toContain('ZENITHJOY_ENV=prod');
+    expect(env).not.toContain('ZENITHJOY_ENV=staging');
+  });
+
+  it('AGENT_PUBLIC_* 未配（本地 dev）→ /dotenv 不烧 ZENITHJOY_ENV（no-op，行为同旧）', async () => {
+    await loadApp();
+    delete process.env.AGENT_PUBLIC_WS_URL;
+    delete process.env.AGENT_PUBLIC_BASE_URL;
+    const env = await getDotenv('user-envmark-dev');
+    expect(env).not.toContain('ZENITHJOY_ENV=');
+  });
+
+  it('staging slot 的 download → .env 烧 ZENITHJOY_ENV=staging（盖掉模板里的 prod）', async () => {
+    await loadApp();
+    process.env.AGENT_PUBLIC_WS_URL = 'wss://staging-autopilot.zenjoymedia.media/agent-ws';
+    process.env.AGENT_PUBLIC_BASE_URL = 'https://staging-autopilot.zenjoymedia.media';
+    // fixture .env 模拟 COS 包模板：写死生产 ENV + 生产 URL，断言被 staging 覆盖
+    const fixDir = path.join(os.tmpdir(), `install-pack-envmark-${Date.now()}`);
+    fs.mkdirSync(fixDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(fixDir, '.env'),
+      'ZENITHJOY_API_BASE=https://autopilot.zenjoymedia.media\nZENITHJOY_ENV=prod\nZENITHJOY_LICENSE=__PLACEHOLDER__\n'
+    );
+    const fixturePath = path.join(os.tmpdir(), `install-pack-envmark-${Date.now()}.tar.gz`);
+    spawnSync('tar', ['-czf', fixturePath, '-C', fixDir, '.'], { stdio: 'pipe' });
+    process.env.INSTALL_PACK_FIXTURE_PATH = fixturePath;
+
+    const { auth } = await import('../../auth');
+    const pool = (await import('../../db/connection')).default;
+    vi.spyOn(auth.api, 'getSession').mockResolvedValue({
+      user: { id: 'user-envmark-dl', email: 'dl@test', name: 'DL' },
+    } as any);
+    vi.spyOn(pool, 'query').mockResolvedValue({
+      rows: [{ license_key: 'ZJ-F-FBFYTLFR' }],
+    } as any);
+    const res = await request(app).get('/api/agent/install-pack/download');
+    expect(res.status).toBe(200);
+    const tmpOut = path.join(os.tmpdir(), `dl-envmark-${Date.now()}-${Math.random()}`);
+    fs.mkdirSync(tmpOut, { recursive: true });
+    const tarPath = path.join(tmpOut, 'pack.tar.gz');
+    fs.writeFileSync(tarPath, res.body);
+    spawnSync('tar', ['-xzf', tarPath, '-C', tmpOut], { stdio: 'pipe' });
+    const env = fs.readFileSync(path.join(tmpOut, '.env'), 'utf-8');
+    expect(env).toContain('ZENITHJOY_ENV=staging');
+    expect(env).not.toContain('ZENITHJOY_ENV=prod');
+    expect(env).toContain('ZENITHJOY_API_BASE=https://staging-autopilot.zenjoymedia.media');
+  });
+});
+
 // Gap3 — 大包别经服务器中转流式（经 CF tunnel 322MB 只回 19.5MB 就断、tar 解不开）：
 // manifest 有 cos_url → /download 直接 302 重定向到 COS 直链，客户端直连 COS 拉整包（rog 实测 7.6s OK）。
 // license 走独立 /dotenv 端点（不再夹在 tar 里），避免大包重打包/流式截断。

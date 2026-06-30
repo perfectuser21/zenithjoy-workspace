@@ -45,13 +45,22 @@ echo "$DOTENV" | grep -qE '^ZENITHJOY_LICENSE=ZJ-' || {
   echo "  FAIL: .env 未烧入 license"; echo "  body=$DOTENV"; exit 2; }
 echo "  OK: .env 含 ZENITHJOY_LICENSE"
 
-echo "▶ [3/3] AGENT_PUBLIC_* 配置时断言 .env 含本实例对外 URL"
+echo "▶ [3/3] AGENT_PUBLIC_* 配置时断言 .env 含本实例对外 URL + 环境标记"
 if [ -n "${AGENT_PUBLIC_BASE_URL:-}" ]; then
   echo "$DOTENV" | grep -qF "ZENITHJOY_API_BASE=${AGENT_PUBLIC_BASE_URL}" || {
     echo "  FAIL: 配了 AGENT_PUBLIC_BASE_URL=${AGENT_PUBLIC_BASE_URL} 但 .env 没烧"; exit 3; }
   echo "  OK: .env 含 ZENITHJOY_API_BASE=${AGENT_PUBLIC_BASE_URL}"
+  # 遗留② 根治：个人 .env 必须自带 staging/prod 环境标记（从本实例对外地址推导），
+  # 否则 agent 回落到 COS 包 .env.template 的生产默认值 → "staging 下却连生产"。
+  case "$AGENT_PUBLIC_BASE_URL" in
+    *staging*) EXPECT_ENV="staging" ;;
+    *)         EXPECT_ENV="prod" ;;
+  esac
+  echo "$DOTENV" | grep -qF "ZENITHJOY_ENV=${EXPECT_ENV}" || {
+    echo "  FAIL: .env 未烧 ZENITHJOY_ENV=${EXPECT_ENV}（缺 staging 标记会回落生产）"; exit 3; }
+  echo "  OK: .env 含 ZENITHJOY_ENV=${EXPECT_ENV}"
 else
-  echo "  SKIP: 本实例未配 AGENT_PUBLIC_*（CI clean 环境），URL-burn no-op（行为同旧）"
+  echo "  SKIP: 本实例未配 AGENT_PUBLIC_*（CI clean 环境），URL/env-burn no-op（行为同旧）"
 fi
 
 echo "✅ agent install-pack URL-burn smoke 全过"
