@@ -458,14 +458,7 @@ acquisitionRouter.post('/collect/expand', tenantContextOptional, async (req: Req
   const manualKeywords: unknown = req.body?.manual_keywords;
 
   try {
-    // 前置校验 1：未绑飞书
-    const binding = await loadBindingLite(tenantId);
-    if (!binding) return fail(res, 400, 'FEISHU_NOT_BOUND', '未绑飞书，请先去绑定页绑定');
-    // 前置校验 2：无企业信息文档
-    if (!binding.enterprise_doc_token)
-      return fail(res, 400, 'NO_ENTERPRISE_DOC', '无企业信息文档，请先在飞书填写企业信息');
-
-    // 手输优先：manual_keywords 非空 → 完全替代 AI 词（仍需通过前置校验）
+    // 手输优先：manual_keywords 非空 → 直接返回，无需飞书绑定
     if (Array.isArray(manualKeywords) && manualKeywords.length > 0) {
       const keywords = manualKeywords
         .map((w) => String(w).trim())
@@ -473,6 +466,12 @@ acquisitionRouter.post('/collect/expand', tenantContextOptional, async (req: Req
         .map((word) => ({ word, source: 'manual' as const }));
       return ok(res, { degraded: false, keywords });
     }
+
+    // AI 扩词路径：需要飞书绑定 + 企业文档
+    const binding = await loadBindingLite(tenantId);
+    if (!binding) return fail(res, 400, 'FEISHU_NOT_BOUND', '未绑飞书，请先去绑定页绑定');
+    if (!binding.enterprise_doc_token)
+      return fail(res, 400, 'NO_ENTERPRISE_DOC', '无企业信息文档，请先在飞书填写企业信息');
 
     // 读文档纯文本 + 空判定
     let docText: string | null;

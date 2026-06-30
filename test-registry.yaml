@@ -465,6 +465,14 @@ tests:
     product: AI员工
     note: "regression(2026-06-18) Sprint 06181315: Line04 客服层多租户隔离 — scheduler-tick 客户枚举 JOIN zenithjoy.agents 按 tenant_id 过滤+绑定参数、draft-generate 缺租户拒绝/带租户透传 scope；断言真实 SQL 文本+绑定参数。防客服读写跨租户越权。"
 
+  - id: line02-expand-manual-keywords-no-feishu
+    path: apps/api/tests/regression/line02-expand-manual-keywords-no-feishu.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: ZenithJoy
+    note: "regression(2026-06-30) decision 96f0ebd2: collect/expand 手动关键词无需飞书绑定 — manual_keywords 非空时直接返回跳过 FEISHU_NOT_BOUND 校验；无 manual_keywords 时仍需飞书（AI 扩词路径不变）。"
+
   - id: line04-cs-config-permission
     path: apps/api/tests/regression/line04-cs-config-permission.test.ts
     type: unit
