@@ -52,7 +52,7 @@ if [ "$DB_REACHABLE" -eq 1 ]; then
 fi
 
 echo "=== A) 群消息 is_group=true → status:skipped skip_reason:group（群不回）==="
-RA=$(curl -s -X POST -H 'Content-Type: application/json' \
+RA=$(curl -s --max-time 30 -X POST -H 'Content-Type: application/json' \
   -d "{\"sender\":\"某客户群\",\"wechat_id\":\"wxid_ci_group\",\"content\":\"群里随便聊\",\"mode\":\"auto\",\"is_group\":true,\"tenant_id\":\"$TENANT\"}" \
   "$API/api/wechat/draft-generate")
 echo "  resp: $RA"
@@ -67,7 +67,7 @@ if [ "$DB_REACHABLE" -eq 1 ]; then
         VALUES ('$TENANT', '$CSWX', '黑名单客户CI', 'blacklist', 'A1', 'manual')
         ON CONFLICT (tenant_id, cs_wechat_id, contact)
         DO UPDATE SET identity='blacklist', deleted_at=NULL;" 2>/dev/null || echo "  (warn) 插入黑名单行失败，继续"
-  RB=$(curl -s -X POST -H 'Content-Type: application/json' \
+  RB=$(curl -s --max-time 30 -X POST -H 'Content-Type: application/json' \
     -d "{\"sender\":\"黑名单客户CI\",\"wechat_id\":\"wxid_ci_bl\",\"content\":\"你好\",\"mode\":\"auto\",\"tenant_id\":\"$TENANT\"}" \
     "$API/api/wechat/draft-generate")
   echo "  resp: $RB"
@@ -78,7 +78,7 @@ else
 fi
 
 echo "=== C) 个人未标黑 → 去飞书直发链路，不落 pending_review ==="
-RC=$(curl -s -X POST -H 'Content-Type: application/json' \
+RC=$(curl -s --max-time 30 -X POST -H 'Content-Type: application/json' \
   -d "{\"sender\":\"莫易CI\",\"wechat_id\":\"wxid_ci_moyi\",\"content\":\"在吗\",\"mode\":\"auto\",\"tenant_id\":\"$TENANT\"}" \
   "$API/api/wechat/draft-generate")
 echo "  resp: $RC"
