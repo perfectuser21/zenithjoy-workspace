@@ -12,8 +12,8 @@ vi.mock('../db/connection', () => ({ default: { query: mockQuery } }));
 
 // mock agentContext middleware
 vi.mock('../middleware/agent-context', () => ({
-  agentContext: (req: any, _res: any, next: any) => {
-    req.agentId = req.headers['x-agent-id'] || null;
+  agentContext: (req: import('express').Request, _res: import('express').Response, next: import('express').NextFunction) => {
+    (req as import('express').Request & { agentId?: string | null }).agentId = (req.headers['x-agent-id'] as string) || null;
     next();
   },
 }));
