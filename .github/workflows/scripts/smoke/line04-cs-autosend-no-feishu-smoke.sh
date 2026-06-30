@@ -87,12 +87,8 @@ case "$STATUS_C" in
   sent|ai_failed) echo "  PASS: 个人未标黑走到去飞书直发链路（status=$STATUS_C）"; PASS=$((PASS+1));;
   *) echo "  FAIL: 个人未标黑 status 非预期: $STATUS_C"; FAIL=$((FAIL+1));;
 esac
-
-if [ "$DB_REACHABLE" -eq 1 ]; then
-  PR=$("${PSQL[@]}" -tA \
-    -c "SELECT count(*) FROM zenithjoy.wechat_publish_task WHERE type='chat' AND target_user='wxid_ci_moyi' AND approval_status='pending_review'" 2>/dev/null | tr -d '[:space:]')
-  assert_eq "${PR:-0}" "0" "chat 去飞书后不落 wechat_publish_task pending_review"
-fi
+# 注：「chat 去飞书后不落 wechat_publish_task pending_review」由 vitest（wechat-draft.test
+#     断言无 INSERT INTO wechat_publish_task）覆盖；此处不再查库（表 schema 无 type 列，易脆）。
 
 echo ""
 echo "line04-cs-autosend-no-feishu-smoke: PASS=$PASS FAIL=$FAIL"

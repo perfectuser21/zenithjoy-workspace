@@ -24,13 +24,15 @@ grep -qE "provider|model|cost" apps/api/db/migrations/2026*create_llm_audit*.sql
   || { echo "FAIL: llm_audit migration 缺核心字段"; exit 1; }
 echo "  PASS llm_audit migration"
 
-echo "=== ws1 Step 2: /api/wechat 3 端点 ==="
+echo "=== ws1 Step 2: /api/wechat 端点（去飞书后 draft-review-poll 已删）==="
 ROUTE=apps/api/src/routes/wechat.ts
 test -f "$ROUTE" || { echo "FAIL: wechat.ts 缺"; exit 1; }
 grep -q "/qr-bind" "$ROUTE" || { echo "FAIL: 缺 /qr-bind"; exit 1; }
-grep -q "/draft-review-poll" "$ROUTE" || { echo "FAIL: 缺 /draft-review-poll"; exit 1; }
+grep -q "/draft-generate" "$ROUTE" || { echo "FAIL: 缺 /draft-generate"; exit 1; }
 grep -q "/scheduler-tick" "$ROUTE" || { echo "FAIL: 缺 /scheduler-tick"; exit 1; }
-echo "  PASS 3 端点齐"
+# 去飞书（2026-06-30）：飞书审批轮询端点已删
+if grep -q "/draft-review-poll" "$ROUTE"; then echo "FAIL: routes/wechat.ts 仍残留 /draft-review-poll（去飞书应删）"; exit 1; fi
+echo "  PASS 端点齐（qr-bind / draft-generate / scheduler-tick）"
 
 echo "=== ws1 Step 3: wechat-rpa.ts spawn ==="
 HANDLER=services/agent/src/handlers/wechat-rpa.ts
