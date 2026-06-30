@@ -87,19 +87,18 @@ curl -fsS -X POST "$API_BASE/api/agent/burner/crawl-comments-result" \
 CRAWL_STATUS=$(psql "$DB" -t -A -c "SELECT status FROM zenithjoy.publish_tasks WHERE id='$CRAWL_TASK_ID' AND updated_at > NOW() - interval '60 seconds'" | tr -d ' ')
 [ "$CRAWL_STATUS" = "done" ] || { echo "FAIL Step 8: crawl task 未 done, got '$CRAWL_STATUS'"; exit 1; }
 
-echo "=== Step 9: 验证 fake-feishu-server 收到 5 次 records POST ==="
+echo "=== Step 9: 验证 acquisition_leads 写入 5 条（本地 DB，不走飞书）==="
 sleep 1
-SEEN=$(curl -fsS "${FEISHU_API_BASE}/__test/seen-records?table_id=tbl_b1_leads" | jq -r '.count')
-[ "$SEEN" -ge "5" ] || { echo "FAIL Step 9: 飞书 records 数 $SEEN < 5"; exit 1; }
+LEAD_COUNT=$(psql "$DB" -t -A -c "SELECT count(*) FROM zenithjoy.acquisition_leads WHERE tenant_id='$TENANT_ID' AND source_video_ids::text LIKE '%7000000000000000001%' AND created_at > NOW() - interval '60 seconds'")
+[ "$LEAD_COUNT" -ge "5" ] || { echo "FAIL Step 9: acquisition_leads 写入数 $LEAD_COUNT < 5"; exit 1; }
 
-# 验证写入字段含 5 列必需字段
-RECORDS=$(curl -fsS "${FEISHU_API_BASE}/__test/seen-records?table_id=tbl_b1_leads" | jq -c '.records')
-echo "$RECORDS" | jq -e '.[0] | has("评论者抖音 ID") and has("评论内容") and has("来源视频 URL") and has("抓取时间") and has("状态")' >/dev/null \
-  || { echo "FAIL Step 9: 飞书 record 字段缺失"; exit 1; }
+# 验证 feishu_write_status='local_only'
+STATUS_CHECK=$(psql "$DB" -t -A -c "SELECT count(*) FROM zenithjoy.acquisition_leads WHERE tenant_id='$TENANT_ID' AND feishu_write_status='local_only' AND created_at > NOW() - interval '60 seconds'")
+[ "$STATUS_CHECK" -ge "5" ] || { echo "FAIL Step 9: feishu_write_status 非 local_only (count=$STATUS_CHECK)"; exit 1; }
 
 echo "=== Step 10: 验证 dashboard 状态查询 ==="
 curl -fsS "$API_BASE/api/agent/burner/crawl-tasks/$CRAWL_TASK_ID" \
-  | jq -e '.data.status == "done" and .data.comment_count == 5 and .data.lead_write_status == "success"' >/dev/null \
+  | jq -e '.data.status == "done" and .data.comment_count == 5 and .data.lead_write_status == "local_only"' >/dev/null \
   || { echo "FAIL Step 10: crawl task 状态查询不匹配"; exit 1; }
 
 echo "✅ Path 2 Sprint B-1 Golden Path E2E 全 10 步通过"

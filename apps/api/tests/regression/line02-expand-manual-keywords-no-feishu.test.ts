@@ -50,23 +50,25 @@ describe('regression: collect/expand manual_keywords 无需飞书绑定', () => 
     ]);
   });
 
-  it('【保持不变】无 manual_keywords + 无飞书绑定 → 400 FEISHU_NOT_BOUND', async () => {
+  it('【已移除飞书】无 manual_keywords + 无飞书绑定 → 200 degraded=true + 空列表', async () => {
     const res = await request(app)
       .post('/api/acquisition/collect/expand')
       .set('X-Tenant-Id', TENANT)
       .send({});
 
-    expect(res.status).toBe(400);
-    expect(res.body.error.code).toBe('FEISHU_NOT_BOUND');
+    expect(res.status).toBe(200);
+    expect(res.body.data.degraded).toBe(true);
+    expect(res.body.data.keywords).toEqual([]);
   });
 
-  it('【保持不变】manual_keywords 空数组 + 无飞书绑定 → 400 FEISHU_NOT_BOUND', async () => {
+  it('【已移除飞书】manual_keywords 空数组 + 无飞书绑定 → 200 degraded=true + 空列表', async () => {
     const res = await request(app)
       .post('/api/acquisition/collect/expand')
       .set('X-Tenant-Id', TENANT)
       .send({ manual_keywords: [] });
 
-    expect(res.status).toBe(400);
-    expect(res.body.error.code).toBe('FEISHU_NOT_BOUND');
+    expect(res.status).toBe(200);
+    expect(res.body.data.degraded).toBe(true);
+    expect(res.body.data.keywords).toEqual([]);
   });
 });
