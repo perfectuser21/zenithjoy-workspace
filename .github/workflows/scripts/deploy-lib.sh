@@ -550,10 +550,10 @@ PY
 # promote 不真生效。要让 release 隔离的 promote/rollback 真生效，生产 plist 的 Program/WorkingDir
 # 必须指向 releases/current/dist/index.js（与 staging 指 releases/staging 对称）。
 #
-# 本函数（同 ensure_staging_plist 套路，plistlib 程序化、幂等、只改路径不碰 env/密钥）：
+# 本函数（同 ensure_staging_plist 套路，plistlib 程序化、幂等）：
 #   · 读生产 plist → ProgramArguments[1] 改 releases/current/dist/index.js、WorkingDirectory 改 releases/current
-#   · env / 密钥 / Label / 日志 / KeepAlive 等**原样保留**（只动这两处路径）
-#   · 已指向 current 则幂等（结果一致）
+#   · 注入 prod_overrides（固定必要 env，如 WECHAT_CS_MODEL）——仅补写，其余 env/密钥/Label/日志/KeepAlive 原样保留
+#   · 已指向 current 且 overrides 已写 则幂等（结果一致）
 # **安全纪律**：本函数只改 plist 文件本身（写到 ZJ_PROD_PLIST 指定路径），**不 unload/load/kickstart
 #   任何 launchd 服务**——重启副作用由调用方（staging_promote）显式控制，便于 dry-run 单测。
 #
@@ -589,10 +589,23 @@ args = list(data.get("ProgramArguments", []))
 node_bin = args[0] if args else node
 new_args = [node_bin, want_index]
 
-already = (data.get("ProgramArguments") == new_args and data.get("WorkingDirectory") == want_wd)
+# 生产必须固定的 env overrides（每次 ensure_prod_plist_points_to_current 都补写，
+# 避免 plist 重生时 key 丢失→回落代码默认值导致生产功能静默失效）。
+# 只 update 固定必要 key，其余 env/密钥/Label/日志/KeepAlive/RunAtLoad 全部原样保留。
+prod_overrides = {
+    "WECHAT_CS_MODEL": "gpt-5.4-mini",  # 防 plist 重生后回落 deepseek-v3.2（toapis 死渠道）（2026-06-30）
+}
+orig_env = dict(data.get("EnvironmentVariables", {}))
+
+# 幂等判断：在修改前检查当前 plist 是否已是期望状态
+already = (data.get("ProgramArguments") == new_args and data.get("WorkingDirectory") == want_wd
+           and all(orig_env.get(k) == v for k, v in prod_overrides.items()))
+
 data["ProgramArguments"] = new_args
 data["WorkingDirectory"] = want_wd
-# env / Label / 日志 / KeepAlive / RunAtLoad 等一概不动（只改这两处路径）。
+new_env = dict(orig_env)
+new_env.update(prod_overrides)
+data["EnvironmentVariables"] = new_env
 
 with open(prod, "wb") as f:
     plistlib.dump(data, f)
