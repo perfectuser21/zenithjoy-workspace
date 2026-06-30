@@ -83,7 +83,7 @@ describe('agentContext middleware [ARCH]', () => {
     expect(callArg).toMatch(/pinned_agent_id/i);
   });
 
-  it('pinned 为空时兜底取最新（ORDER BY created_at DESC LIMIT 1）', async () => {
+  it('pinned agent 超时时退化为最近心跳行（ORDER BY last_heartbeat_at DESC LIMIT 1）', async () => {
     (pool.query as any).mockResolvedValueOnce({
       rows: [{ id: '55555555-5555-5555-5555-555555555555' }],
     });
@@ -93,9 +93,9 @@ describe('agentContext middleware [ARCH]', () => {
       .set('X-Test-Tenant-Id', '22222222-2222-2222-2222-222222222222')
       .send({});
     expect(r.status).toBe(200);
-    // 兜底分支仍按 created_at DESC LIMIT 1 选行
+    // 兜底改为 last_heartbeat_at DESC（pinned agent 超 5 分钟无心跳时选最活跃行）
     const callArg = (pool.query as any).mock.calls[0][0] as string;
-    expect(callArg).toMatch(/ORDER\s+BY[\s\S]*created_at\s+DESC/i);
+    expect(callArg).toMatch(/ORDER\s+BY[\s\S]*last_heartbeat_at\s+DESC/i);
     expect(callArg).toMatch(/LIMIT\s+1/i);
   });
 
