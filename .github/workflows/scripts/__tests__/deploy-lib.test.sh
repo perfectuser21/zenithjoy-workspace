@@ -387,6 +387,9 @@ expect_eq "$(_nread program0)" "/opt/homebrew/bin/node" "N ProgramArguments[0] n
 expect_eq "$(_nread Label)" "com.zenithjoy.api" "N Label 不动"
 expect_eq "$(_nread env:SOME_SECRET)" "prod-secret-xyz" "N 密钥/env 原样保留（不碰）"
 expect_eq "$(_nread env:DATABASE_NAME)" "cecelia" "N 生产 DB 不动（不改成 staging）"
+# 回归（2026-06-30）：生产 plist 必须固定 WECHAT_CS_MODEL=gpt-5.4-mini，
+# 避免 plist 重生时此 key 丢失→回落 wechat-draft.ts 默认 deepseek-v3.2（toapis 死渠道）→客服静默不回复。
+expect_eq "$(_nread env:WECHAT_CS_MODEL)" "gpt-5.4-mini" "N WECHAT_CS_MODEL→gpt-5.4-mini（生产固定，防 plist 重生丢失）"
 # 幂等：再跑一次结果一致
 ZJ_PROD_PLIST="$NBOX/prod.plist" ZJ_RELEASES_DIR=/fake/releases ZJ_NODE=/opt/homebrew/bin/node \
   ensure_prod_plist_points_to_current >/dev/null 2>&1
