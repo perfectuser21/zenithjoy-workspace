@@ -132,6 +132,10 @@ async function main() {
       throw new Error('无法启动浏览器：system Chrome / agent bundled Chromium / msedge 均不可用。请等 agent 完成 Chromium 下载后重试（~2分钟），或手动安装 Chrome。');
     }
 
+    // 强制重新登录：清除旧 session cookie（旧 profile 有过期 cookie 会被误判为"已登录"，
+    // 导致 Chrome 开了就关、用户根本看不到二维码）
+    await context.clearCookies().catch(() => {});
+
     const existing = context.pages();
     const page = existing.length > 0 ? existing[0] : await context.newPage();
     await page.goto(loginUrl).catch(() => undefined);
