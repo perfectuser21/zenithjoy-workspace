@@ -67,6 +67,8 @@ describe('PlatformDataPage', () => {
   });
 
   it('加载状态应该显示 loading', async () => {
+    vi.useFakeTimers();
+
     // Mock API 返回一个延迟的 Promise
     vi.mocked(platformDataApi.fetchPlatformData).mockImplementation(
       () => new Promise((resolve) => {
@@ -76,10 +78,14 @@ describe('PlatformDataPage', () => {
 
     render(<PlatformDataPage />);
 
-    // 应该显示加载状态
+    // 应该显示加载状态（setTimeout 尚未触发）
     await waitFor(() => {
       expect(screen.getByText(/加载中.../)).toBeInTheDocument();
     });
+
+    // 让 setTimeout 在测试内触发，避免 jsdom 拆环境时产生 unhandled "window is not defined"
+    await vi.runAllTimersAsync();
+    vi.useRealTimers();
   });
 
   it('错误状态应该显示错误信息', async () => {
