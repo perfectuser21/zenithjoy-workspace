@@ -423,11 +423,25 @@ if __name__ == "__main__":
     ap = argparse.ArgumentParser(description="微信自动更新关死/还原")
     ap.add_argument("--dry-run", action="store_true", help="只探测不真改（CI / mac）")
     ap.add_argument("--unlock", action="store_true", help="一键还原（移除 hosts/防火墙/改回更新器）")
+    # 遗留①（decision b9f4f602）：关更新需 admin，被 Start-Process -Verb RunAs 提权调起；
+    # 提权进程的 stdout 父进程收不到，故把 JSON 结果同时写到 --output 文件供父进程读回 interpret。
+    ap.add_argument("--output", help="把 JSON 结果写到该文件（提权子进程回传父进程用）")
     args = ap.parse_args()
 
     if args.unlock:
-        print(_json.dumps(run_update_unlock(), ensure_ascii=False))
+        result = run_update_unlock()
     else:
         result = run_update_lock(dry_run=args.dry_run)
-        print(_json.dumps(result, ensure_ascii=False))
-        _sys.exit(0 if result.get("locked") or args.dry_run else 1)
+
+    payload = _json.dumps(result, ensure_ascii=False)
+    print(payload)
+    if args.output:
+        try:
+            with open(args.output, "w", encoding="utf-8") as _f:
+                _f.write(payload)
+        except OSError:
+            pass  # 写文件失败不影响 stdout 路径；父进程读不到文件会按"未产出"跳过
+
+    if args.unlock:
+        _sys.exit(0)
+    _sys.exit(0 if result.get("locked") or args.dry_run else 1)

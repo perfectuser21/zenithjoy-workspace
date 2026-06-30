@@ -29,6 +29,7 @@ import {
   autoRepair,
   lockWechatUpdate,
   interpretUpdateLock,
+  buildElevatedLockArgs,
   _repairFuncs,
 } from '../preflight';
 // checkWechatRunning 使用 node:child_process execSync，用 vi.mock 提升 mock（ESM 限制）
@@ -1030,6 +1031,40 @@ describe('lockWechatUpdate — MOCK / 非 Windows 分支', () => {
     const r = lockWechatUpdate();
     expect(r.ok).toBe(true);
     expect(r.skipped).toBe(true);
+  });
+});
+
+// 遗留①（decision b9f4f602）：关更新那步必须提权跑。装微信用 Start-Process -Verb RunAs 提权（装成功），
+// 但关更新（改 Program Files 的 WeixinUpdate.exe / 写 hosts / 改注册表）此前是【普通用户】子进程跑 →
+// 三项全失败、interpret_lock_verify 诚实报 locked=False。修法：关更新子进程也用 Start-Process -Verb RunAs
+// 提权（agent 本体仍普通用户保 UIA），结果经 --output 文件回传父进程。
+describe('buildElevatedLockArgs — 关更新提权调用参数（纯函数，CI 可测，遗留①）', () => {
+  const python = 'C:\\\\Users\\\\asus\\\\AppData\\\\Roaming\\\\zenithjoy\\\\modules\\\\line04-wechat-cs-1.0.80\\\\python-embedded\\\\python.exe';
+  const script = 'C:\\\\Users\\\\asus\\\\AppData\\\\Roaming\\\\zenithjoy\\\\modules\\\\line04-wechat-cs-1.0.80\\\\wechat-rpa\\\\wechat_update_lock.py';
+  const outFile = 'C:\\\\Users\\\\asus\\\\AppData\\\\Local\\\\Temp\\\\zj-update-lock-123.json';
+
+  it('★用 Start-Process -Verb RunAs -Wait 提权调 python（旧实现普通用户跑 → 改不了 Program Files → RED）', () => {
+    const args = buildElevatedLockArgs(python, script, outFile);
+    const joined = args.join(' ');
+    expect(joined).toContain('Start-Process');
+    expect(joined).toContain('-Verb RunAs');
+    expect(joined).toContain('-Wait');
+  });
+
+  it('★提权进程跑的是 wechat_update_lock.py 且 --output 回传结果文件（父进程读不到 RunAs stdout）', () => {
+    const args = buildElevatedLockArgs(python, script, outFile);
+    const joined = args.join(' ');
+    expect(joined).toContain(script);
+    expect(joined).toContain(python);
+    expect(joined).toContain('--output');
+    expect(joined).toContain(outFile);
+  });
+
+  it('返回的是 powershell -Command 参数数组（非交互、无 profile）', () => {
+    const args = buildElevatedLockArgs(python, script, outFile);
+    expect(args).toContain('-NoProfile');
+    expect(args).toContain('-NonInteractive');
+    expect(args).toContain('-Command');
   });
 });
 

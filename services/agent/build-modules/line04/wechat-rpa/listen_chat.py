@@ -2592,6 +2592,23 @@ _WECHAT_RESTART_MAX = 5                 # 单 listener 进程生命周期内最�
 _LAST_VISIBLE_TREE_SIZE: Optional[int] = None
 
 
+def interpret_logged_in(
+    main_window_found: bool, login_window_present: bool, sessions_seen: int
+) -> bool:
+    """纯函数(CI可测)：微信是否已登录(供心跳日志显示真实登录态，遗留④)。
+
+    已登录 = 主窗口就绪 + 无登录窗口 + 能读到会话(sessions>0)。
+    根因：微信 4.1.8 主窗口就绪后 login_window_present() 返回 False，原心跳日志 login= 项直接打
+    login_present(=登录窗口存在)，于是已登录态反而显示 login=False，与 sessions>0 矛盾、误导运营。
+    注意：login_present 诊断字段语义不动(dashboard/api 依赖它=需扫码标志)，这里只派生真实登录态。
+    """
+    if not main_window_found:
+        return False
+    if login_window_present:
+        return False
+    return sessions_seen > 0
+
+
 def _is_uia_tree_collapsed(descendants_count: int) -> bool:
     """纯函数(CI可测)：mmui::MainWindow 整树是否塌缩(无障碍树未构建)。
 
@@ -2816,9 +2833,13 @@ def run_real_listen(args: argparse.Namespace) -> int:
                         tree_size = len(mw.descendants())
                     except Exception as exc:
                         last_error = f"{type(exc).__name__}: {exc}"
+                # 遗留④：心跳 login= 项改打真实登录态(主窗口就绪+无登录窗口+sessions>0)，
+                # 消除"sessions>0 却 login=False"的矛盾；login_present 字段语义不动(dashboard 需扫码标志)。
+                logged_in = interpret_logged_in(mw is not None, login, sessions_seen)
                 diag = {
                     "main_window_found": mw is not None,
                     "login_present": login,
+                    "logged_in": logged_in,
                     "screen_locked": screen_locked,
                     "sessions_seen": sessions_seen,
                     "unread_count": len(last_unread_senders),
@@ -2828,7 +2849,7 @@ def run_real_listen(args: argparse.Namespace) -> int:
                 }
                 lock_suffix = " [隐私锁屏！请在微信设置里关闭隐私保护]" if screen_locked else ""
                 _log(
-                    f"心跳 found_window={diag['main_window_found']} login={login} "
+                    f"心跳 found_window={diag['main_window_found']} login={logged_in} "
                     f"locked={screen_locked} sessions={sessions_seen} unread={diag['unread_count']}"
                     f"{diag['unread_senders']} replied={diag['replied_count']} err={last_error}"
                     f"{lock_suffix}"
