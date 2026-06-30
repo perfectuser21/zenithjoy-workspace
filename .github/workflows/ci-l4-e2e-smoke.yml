@@ -425,6 +425,18 @@ jobs:
           chmod +x .github/workflows/scripts/smoke/line04-feishu-customer-list-smoke.sh
           bash .github/workflows/scripts/smoke/line04-feishu-customer-list-smoke.sh
 
+      # ─── Line04 去飞书 + 个人私聊 AI 自动直发（第一刀）smoke：群/标黑不回 + 去飞书不落 pending_review ──
+      - name: Smoke — Line04 去飞书自动直发 (Path 4 第一刀)
+        env:
+          API_BASE: http://localhost:5200
+          PGHOST: localhost
+          PGUSER: cecelia
+          PGDATABASE: cecelia
+          PGPASSWORD: cecelia
+        run: |
+          chmod +x .github/workflows/scripts/smoke/line04-cs-autosend-no-feishu-smoke.sh
+          bash .github/workflows/scripts/smoke/line04-cs-autosend-no-feishu-smoke.sh
+
       # ─── Line04 客服工作汇总（S3）smoke：真 DB 灌 in/out → /cs/stats 断言 4 数精确 ──
       # 复用本 job 的 cecelia 库（migration 已建 wechat_messages.cs_wechat_id）+ localhost:5200 API。
       - name: Smoke — Line04 客服工作汇总 (Path 4 S3)

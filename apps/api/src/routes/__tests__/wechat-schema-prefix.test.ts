@@ -28,10 +28,6 @@ vi.mock('../../services/wechat-draft', () => ({
   generateMomentDraft: vi.fn().mockResolvedValue({ ok: true }),
 }));
 
-vi.mock('../../services/feishu-poll', () => ({
-  pollOnce: vi.fn().mockResolvedValue({ polled: 0, dispatched: 0 }),
-}));
-
 vi.mock('../../services/wechat-heartbeat', () => ({
   recordHeartbeat: vi.fn().mockReturnValue({ ts: Date.now() }),
   listHeartbeats: vi.fn().mockReturnValue([]),
@@ -75,19 +71,6 @@ describe('routes/wechat.ts — SQL schema 前缀回归 [BEHAVIOR]', () => {
     for (const sql of insertSqls) {
       expect(sql, `INSERT 必须带 zenithjoy. 前缀: «${sql.slice(0, 80)}»`).toMatch(
         /INSERT\s+INTO\s+zenithjoy\.wechat_publish_task/i,
-      );
-    }
-  });
-
-  it('GET /api/wechat/draft-review-poll?task_id=X 的 SELECT 必须用 zenithjoy.wechat_publish_task', async () => {
-    await request(app).get('/api/wechat/draft-review-poll?task_id=test-task-uuid-123');
-
-    const sqls = capturedSqls();
-    const selectSqls = sqls.filter((s) => /SELECT/i.test(s) && /wechat_publish_task/i.test(s));
-    expect(selectSqls.length, '单查 task_id 应执行 SELECT FROM wechat_publish_task').toBeGreaterThan(0);
-    for (const sql of selectSqls) {
-      expect(sql, `SELECT 必须带 zenithjoy. 前缀: «${sql.slice(0, 80)}»`).toMatch(
-        /zenithjoy\.wechat_publish_task/i,
       );
     }
   });
