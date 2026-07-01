@@ -2622,7 +2622,7 @@ def build_diag(*, main_window_found, login_present, logged_in, screen_locked,
 
 def _log(msg: str) -> None:
     """同时打印 + 追加到公共日志文件，便于运营/支持 SSH 直接读监听到底干了啥（监听本身 stdio 被忽略）。"""
-    print("[listen_chat] " + str(msg), flush=True)
+    print(f"[{time.strftime('%H:%M:%S')}][listen_chat] " + str(msg), flush=True)
     try:
         with open(_LOG_PATH, "a", encoding="utf-8") as f:
             f.write(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] {msg}\n")
@@ -2826,6 +2826,7 @@ def run_real_listen(args: argparse.Namespace) -> int:
     REPLY_FAIL_COOLDOWN = _REPLY_FAIL_COOLDOWN
     sender_reply_cooldown: dict[str, float] = {}
     _skip_logged: set[tuple[str, str]] = set()  # 只对每个 key 打一次 skip log，避免刷屏
+    _skip_counter = _SkipCounter()  # Phase 0 观测：累计每条 skip reason → 心跳 diag（中台可见）
     # 内容变化检测：{sender: last_seen_content}，捕捉聊天面板打开时的新消息（无未读角标）
     last_content: dict[str, str] = {}
     deadline = time.time() + max(1, args.timeout)
@@ -2947,22 +2948,23 @@ def run_real_listen(args: argparse.Namespace) -> int:
                 # 遗留④：心跳 login= 项改打真实登录态(主窗口就绪+无登录窗口+sessions>0)，
                 # 消除"sessions>0 却 login=False"的矛盾；login_present 字段语义不动(dashboard 需扫码标志)。
                 logged_in = interpret_logged_in(mw is not None, login, sessions_seen)
-                diag = {
-                    "main_window_found": mw is not None,
-                    "login_present": login,
-                    "logged_in": logged_in,
-                    "screen_locked": screen_locked,
-                    "sessions_seen": sessions_seen,
-                    "unread_count": len(last_unread_senders),
-                    "unread_senders": last_unread_senders[:10],
-                    "replied_count": len(replied),
-                    "last_error": last_error,
-                }
+                diag = build_diag(
+                    main_window_found=mw is not None,
+                    login_present=login,
+                    logged_in=logged_in,
+                    screen_locked=screen_locked,
+                    sessions_seen=sessions_seen,
+                    unread_senders=last_unread_senders,
+                    replied_count=len(replied),
+                    last_error=last_error,
+                    skip_snapshot=_skip_counter.snapshot(),
+                )
                 lock_suffix = " [隐私锁屏！请在微信设置里关闭隐私保护]" if screen_locked else ""
                 _log(
-                    f"心跳 found_window={diag['main_window_found']} login={logged_in} "
+                    f"心跳 v={diag['module_version']} found_window={diag['main_window_found']} login={logged_in} "
                     f"locked={screen_locked} sessions={sessions_seen} unread={diag['unread_count']}"
-                    f"{diag['unread_senders']} replied={diag['replied_count']} err={last_error}"
+                    f"{diag['unread_senders']} replied={diag['replied_count']} "
+                    f"skip={diag['skip_reasons']['delta']} err={last_error}"
                     f"{lock_suffix}"
                 )
                 hb = post_heartbeat(
@@ -3164,6 +3166,7 @@ def run_real_listen(args: argparse.Namespace) -> int:
             for m in unread:
                 key = (m["sender"], m["content"])
                 if _roster_gate_on and not cs_config_gate.should_reply(_cs_cfg, m["sender"]):
+                    _skip_counter.record("roster_gate")
                     if key not in _skip_logged:
                         _reason = "黑名单内" if _cs_mode == "blacklist" else "不在该客服白名单"
                         _log(f"skip({_reason}) sender={m['sender']}")
@@ -3172,20 +3175,24 @@ def run_real_listen(args: argparse.Namespace) -> int:
                 # UIA 重复读防护：同 (联系人, 文本) 在去重时间窗内只回一次（auto_reply.is_duplicate
                 # 是 SSOT；pywinauto 轮询常把同一条未读重复读出来，这里挡掉防重复发）。
                 if auto_reply.is_duplicate(m["sender"], m["content"], now):
+                    _skip_counter.record("dup")
                     if key not in _skip_logged:
                         _log(f"skip(dup) sender={m['sender']} content={m['content'][:20]!r}")
                         _skip_logged.add(key)
                     continue
                 # per-sender 冷却：成功回复后 30s 内跳过同一 sender
                 if now - sender_reply_cooldown.get(m["sender"], 0) < SENDER_COOLDOWN:
+                    _skip_counter.record("sender_cooldown")
                     continue
                 if key in replied:
+                    _skip_counter.record("replied")
                     if key not in _skip_logged:
                         _log(f"skip(replied) sender={m['sender']} content={m['content'][:20]!r}")
                         _skip_logged.add(key)
                     continue
                 if key in reply_failed_at and now - reply_failed_at[key] < REPLY_FAIL_COOLDOWN:
                     left = int(REPLY_FAIL_COOLDOWN - (now - reply_failed_at[key]))
+                    _skip_counter.record("cooldown")
                     if key not in _skip_logged:
                         _log(f"skip(cooldown {left}s) sender={m['sender']} content={m['content'][:20]!r}")
                         _skip_logged.add(key)
@@ -3194,6 +3201,7 @@ def run_real_listen(args: argparse.Namespace) -> int:
                 if rate_limiter is not None:
                     ok_rl, _next_at = rate_limiter.can_send("chat", m["sender"])
                     if not ok_rl:
+                        _skip_counter.record("rate_limited")
                         _log(f"rate_limiter: {m['sender']} 24h限额已满，跳过回复（下次允许: {_next_at}）")
                         continue
                 eligible.append(m)
@@ -3223,6 +3231,7 @@ def run_real_listen(args: argparse.Namespace) -> int:
                         reply = (result or {}).get("reply")
                         # AI 失败时 reply 为空 / 占位文案 → 不发，绝不把"AI 生成失败"发给客户
                         if not reply or reply == FAIL_PLACEHOLDER:
+                            _skip_counter.record("no_reply")
                             _log(f"skip(no reply) sender={m['sender']} result_ok={(result or {}).get('ok')} err={(result or {}).get('error')}")
                             continue
                         drafts[id(m)] = reply
@@ -3244,6 +3253,7 @@ def run_real_listen(args: argparse.Namespace) -> int:
                     direction = _last_bubble_direction(mw)
                     human_intervened = direction == "outgoing"  # 操作者最右气泡=人工介入信号
                     if direction != "incoming":
+                        _skip_counter.record("direction")
                         _wait = decide_reply_wait(human_intervened=human_intervened)
                         _log(f"skip(direction={direction!r}) sender={m['sender']} "
                              f"human_intervened={human_intervened} (wait={_wait}s)")
