@@ -77,7 +77,7 @@ describe('POST /api/agent/heartbeat — 响应 modules 双向协议', () => {
     const EXPECTED_VERSIONS: Record<string, string> = {
       'line04-wechat-cs': '1.0.87',
       'line01-publish': '1.0.1',
-      'line02-lead-gen': '1.0.8',
+      'line02-lead-gen': '1.0.9',
       'line05-video': '1.0.1',
     };
     for (const line of EXPECTED_LINES) {
