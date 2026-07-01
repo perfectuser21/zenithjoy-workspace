@@ -171,6 +171,71 @@ describe('Line04 客服层多租户隔离 [BEHAVIOR]', () => {
     expect(generateChatDraftMock, '查不到租户绝不写入').not.toHaveBeenCalled();
   });
 
+  // ── 生产 P0② 根因（2026-07-01 rog 铁证）：listen_chat 用 env-id（agent-env-xxx）POST，
+  //    该 env-id 只在 license_machines.agent_id，从没进 agents.agent_id → 旧逻辑只查 agents
+  //    → NO_TENANT_CONTEXT → 客户永远不回。修：agents 查不到时退查 license_machines.agent_id
+  //    经 license 反查 tenant。 ──
+  it('draft-generate: agents 无该 env-id 行，但 license_machines.agent_id 命中 → 反查租户放行', async () => {
+    mockQuery.mockImplementation((sql: string) => {
+      const s = String(sql);
+      // agents 反查 env-id → 空（心跳建行用随机 ws1-<hex>，不含 env-id）
+      if (/from\s+zenithjoy\.agents\s+where\s+agent_id/i.test(s)) {
+        return Promise.resolve({ rows: [], rowCount: 0 });
+      }
+      // license_machines.agent_id 命中 env-id → 经 license 反查到租户A
+      if (/license_machines/i.test(s) && /agent_id/i.test(s)) {
+        return Promise.resolve({ rows: [{ tenant_id: TENANT_A }], rowCount: 1 });
+      }
+      return Promise.resolve({ rows: [{ customer: 'wxid_seed' }], rowCount: 1 });
+    });
+
+    const res = await request(app)
+      .post('/api/wechat/draft-generate')
+      .send({ sender: '客户X', wechat_id: 'wxid_x', content: '你好', agent_id: 'agent-env-mqz6komb' });
+    expect(res.status, 'env-id 经 license_machines 反查到租户应放行（不再 NO_TENANT_CONTEXT）').toBe(200);
+
+    const lmCall = mockQuery.mock.calls.find(
+      (c) => /license_machines/i.test(String(c[0])) && /agent_id/i.test(String(c[0])),
+    );
+    expect(lmCall, '应退查 license_machines.agent_id 反查 tenant').toBeTruthy();
+    expect((lmCall![1] ?? []) as unknown[], '反查必须绑定 env-id').toContain('agent-env-mqz6komb');
+    expect(generateChatDraftMock).toHaveBeenCalled();
+    const arg = generateChatDraftMock.mock.calls[0][0];
+    expect(arg, '写入必须归属反查到的租户A').toMatchObject({ tenant_id: TENANT_A });
+  });
+
+  // ── machine_id 反查（CS SSOT service_agents）：listen_chat 传 machine_id →
+  //    service_agents.machine_id 直连 tenant（决策 143f5d00 客服绑定 SSOT）。 ──
+  it('draft-generate: 传 machine_id 命中 service_agents → 反查租户放行', async () => {
+    mockQuery.mockImplementation((sql: string) => {
+      const s = String(sql);
+      if (/from\s+zenithjoy\.agents\s+where\s+agent_id/i.test(s)) {
+        return Promise.resolve({ rows: [], rowCount: 0 });
+      }
+      if (/service_agents/i.test(s) && /machine_id/i.test(s)) {
+        return Promise.resolve({ rows: [{ tenant_id: TENANT_B }], rowCount: 1 });
+      }
+      return Promise.resolve({ rows: [{ customer: 'wxid_seed' }], rowCount: 1 });
+    });
+
+    const res = await request(app)
+      .post('/api/wechat/draft-generate')
+      .send({
+        sender: '客户X',
+        wechat_id: 'wxid_x',
+        content: '你好',
+        machine_id: '425b144f077a667bb42666821220e06d',
+      });
+    expect(res.status, 'machine_id 命中 service_agents 应放行').toBe(200);
+    const saCall = mockQuery.mock.calls.find(
+      (c) => /service_agents/i.test(String(c[0])) && /machine_id/i.test(String(c[0])),
+    );
+    expect(saCall, '应查 service_agents.machine_id 反查 tenant').toBeTruthy();
+    expect((saCall![1] ?? []) as unknown[]).toContain('425b144f077a667bb42666821220e06d');
+    expect(generateChatDraftMock).toHaveBeenCalled();
+    expect(generateChatDraftMock.mock.calls[0][0]).toMatchObject({ tenant_id: TENANT_B });
+  });
+
   // ── 兼容：显式 tenant_id 与 agent_id 同传时，显式 tenant_id 优先（不触发反查）──
   it('draft-generate 显式 tenant_id 优先于 agent_id 反查', async () => {
     const res = await request(app)
