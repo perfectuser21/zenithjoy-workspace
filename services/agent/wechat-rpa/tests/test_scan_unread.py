@@ -72,6 +72,16 @@ def test_g6_pinned_indicator_only_returns_none():
     assert result is None, f"置顶会话只有 UI 标记时应返回 None，实际: {result}"
 
 
+def test_folded_chats_never_entered():
+    """折叠的聊天/折叠的群聊 绝对不进（进去会串多个被折叠的会话）→ 返回 None。
+
+    真机(2026-07-01)：SKIP_SENDERS 只有"折叠的群聊"，漏了"折叠的聊天"→ agent 进折叠会话。
+    改成"折叠的"前缀，把所有折叠变体一网打尽（正常人名不会以"折叠的"开头）。
+    """
+    assert _parse_item_name("折叠的聊天\n[2条] \n新消息\n10:00\n") is None
+    assert _parse_item_name("折叠的群聊\n[1条] \n在吗\n10:00\n") is None
+
+
 def test_g7_pinned_indicator_with_real_content_extracts_content():
     """G7 已置顶 + 真实消息 → 跳过"已置顶"，提取真实消息。
 
