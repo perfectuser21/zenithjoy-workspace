@@ -270,6 +270,16 @@ if exist "%~dp0create-shortcut.ps1" (
     echo [shortcut] create-shortcut.ps1 not found, skipping (old install pack)
 )
 
+REM === P1-5 keep-alive supervisor loop entry (Sprint 07011457) ===
+REM Every iteration re-runs: single-instance cleanup + re-read .active-core pointer (picks up the
+REM upgraded core) + relaunch the core. Root cause (2026-07-01 rog real machine): CoreUpgrader writes
+REM the .active-core pointer then process.exit(0), delegating "launch the new core" to start.bat. The
+REM old start.bat only ran zenithjoy-agent.exe ONCE (foreground) then fell off the end of the script,
+REM relying on the ONLOGON scheduled task to relaunch. But ONLOGON only fires at LOGON, not when the
+REM core exits mid-session -> after a self-upgrade/crash the core stayed dead until the next login
+REM (customer messages had no process to receive them -> no reply). This loop keeps the core alive.
+:AGENT_SUPERVISE_LOOP
+
 REM Step 6.95: Single-instance guard - kill any existing zenithjoy-agent.exe before starting
 REM Two agents with the same license kick each other off the server WS connection,
 REM causing repeated disconnects ("dropped again" / "out of gas" symptom when upgrading without closing old).
@@ -341,7 +351,10 @@ pushd "%CORE_RUN_DIR%"
 zenithjoy-agent.exe
 set "_AGENT_EXIT=%errorlevel%"
 popd
-if not "%_AGENT_EXIT%"=="0" (
-    echo [agent] agent.exe exited with error %_AGENT_EXIT%
-    pause
-)
+REM === P1-5 keep-alive: after ANY core exit (self-upgrade exit0 = swap to new core / crash exit!=0)
+REM auto-relaunch, never fall off the end. No pause on error (pause would freeze this loop forever,
+REM the exact reason a self-upgrade left the core dead until next login on 2026-07-01). Use ping for
+REM the 5s delay instead of timeout (wscript hidden launch has no stdin -> timeout errors out).
+echo [supervise] core exited code=%_AGENT_EXIT% - relaunching in 5s (keep-alive self-heal)...
+ping -n 6 127.0.0.1 >nul 2>&1
+goto :AGENT_SUPERVISE_LOOP

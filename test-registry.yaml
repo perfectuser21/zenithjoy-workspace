@@ -4153,3 +4153,11 @@ agent_suite:
     status: active
     product: 客户私域AI接管
     note: "regression(2026-07-01, P0②): NO_TENANT_CONTEXT 根治——按 agents/service_agents.machine_id/license_machines(machine_id|env-agent_id) 四源稳健反查租户，deny-by-default，DB 异常吞掉返空不回退全量。"
+
+  - id: agent-start-bat-supervise-relaunch
+    path: services/agent/src/__tests__/start-bat-supervise-relaunch.test.ts
+    type: unit
+    ci: L1
+    status: active
+    product: 客户私域AI接管
+    note: "regression(2026-07-01, P1⑤保活): start.bat 必须有 :AGENT_SUPERVISE_LOOP 监督循环——core 退出后自动重启(自升级/崩溃)，不用 pause 卡死。治自升级后核心死到下次登录。"
