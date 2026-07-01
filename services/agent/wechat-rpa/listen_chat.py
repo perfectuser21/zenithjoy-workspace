@@ -2575,6 +2575,27 @@ def _save_replied(s: set) -> None:
         pass
 
 
+class _SkipCounter:
+    """累计每种 skip reason 计数，供心跳 diag 上报（中台可见，同事无 SSH 也能看每条未读为何没回）。
+
+    total：进程启动以来累计；delta：自上次 snapshot 以来新增（snapshot 后清零）。
+    纯逻辑无副作用，顶层零 pywinauto，clean CI 可测。Phase 0 观测埋点。
+    """
+
+    def __init__(self) -> None:
+        self._total: dict[str, int] = {}
+        self._delta: dict[str, int] = {}
+
+    def record(self, reason: str) -> None:
+        self._total[reason] = self._total.get(reason, 0) + 1
+        self._delta[reason] = self._delta.get(reason, 0) + 1
+
+    def snapshot(self) -> dict:
+        snap = {"total": dict(self._total), "delta": dict(self._delta)}
+        self._delta = {}
+        return snap
+
+
 def _log(msg: str) -> None:
     """同时打印 + 追加到公共日志文件，便于运营/支持 SSH 直接读监听到底干了啥（监听本身 stdio 被忽略）。"""
     print("[listen_chat] " + str(msg), flush=True)
