@@ -13,8 +13,9 @@ const path = require('path');
 const https = require('https');
 const http = require('http');
 
-const [, , videoUrl = '', taskId = '', apiBase = 'http://localhost:3000', cdpPortStr = '19222'] = process.argv;
+const [, , videoUrl = '', taskId = '', apiBase = 'http://localhost:3000', cdpPortStr = '19222', mode = ''] = process.argv;
 const MAIN_CDP_PORT = parseInt(cdpPortStr, 10) || 19222;
+const STDOUT_ONLY = mode === '--stdout-only';
 const PAGE_TIMEOUT_MS = 30000;
 
 function emit(r) {
@@ -99,6 +100,11 @@ async function crawlVideoComments(browser, videoUrl, taskId, apiBase) {
       } catch {}
     }
 
+    // --stdout-only 模式：不 POST API，调用方自己处理（keyword 管道用）
+    if (STDOUT_ONLY) {
+      return { ok: true, commenters, inserted: commenters.length };
+    }
+
     // 上报给 API
     if (commenters.length > 0) {
       await postReport({
@@ -131,7 +137,11 @@ async function main() {
 
   try {
     const result = await crawlVideoComments(browser, videoUrl, taskId, apiBase);
-    emit({ ok: result.ok, task_id: taskId, video_url: videoUrl, inserted: result.inserted || 0, error: result.error });
+    if (STDOUT_ONLY) {
+      emit({ ok: result.ok, video_url: videoUrl, commenters: result.commenters || [], inserted: result.inserted || 0, error: result.error });
+    } else {
+      emit({ ok: result.ok, task_id: taskId, video_url: videoUrl, inserted: result.inserted || 0, error: result.error });
+    }
   } finally {
     await browser.disconnect().catch(() => {});
   }

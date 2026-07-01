@@ -736,35 +736,28 @@ async function handleCrawlCommentsBurner(payload: {
 }): Promise<{ ok: boolean; comments?: unknown[]; video_url?: string; error_code?: string; error?: string }> {
   const { spawn } = await import('node:child_process');
   const path = await import('node:path');
-  const os = await import('node:os');
-  const accountLabel = payload.account_label;
   const videoUrl = payload.video_url;
-  const maxComments = payload.max_comments ?? 5;
-  if (!accountLabel || !videoUrl) {
-    return { ok: false, error: 'missing account_label or video_url' };
+  if (!videoUrl) {
+    return { ok: false, error: 'missing video_url' };
   }
-  // burner profile path：account_label='main' 时优先用 ZJ_MAIN_DATA_DIR env（已登录 profile）
-  const userDataDir =
-    accountLabel === 'main' && process.env.ZJ_MAIN_DATA_DIR
-      ? process.env.ZJ_MAIN_DATA_DIR
-      : process.platform === 'win32'
-        ? path.join('C:\\Temp', 'zj-douyin-burner-v1', accountLabel)
-        : path.join(os.homedir(), '.zenithjoy-agent', 'chrome-profile', 'douyin-burner', accountLabel);
-  // crawl 脚本：用 process.execPath dirname（与 keyword-search-douyin.cjs 解析方式一致，pkg 打包后可靠）
+  // 用 publishers/crawl-comments-douyin.cjs 连已有 Chrome CDP（同 keyword-search 路线，不开新浏览器）
   const execDir = path.dirname(process.execPath);
-  const scriptPath = path.join(execDir, 'scripts', 'douyin-comment-crawl.cjs');
-  // node 可执行文件：优先 ZENITHJOY_NODE_BIN，再从 AppData/ZenithJoy/runtime 找，最后 fallback PATH
+  const scriptPath = path.join(execDir, 'publishers', 'crawl-comments-douyin.cjs');
+  const cdpPort = process.env.ZENITHJOY_CHROME_DEBUG_PORT || '19222';
   const nodeExe =
     process.env.ZENITHJOY_NODE_BIN ||
     (process.platform === 'win32'
       ? path.join(process.env.APPDATA || '', 'ZenithJoy', 'runtime', 'nodejs', 'node.exe')
       : 'node');
   return new Promise((resolve) => {
+    // 参数顺序：<video_url> <task_id=''> <apiBase=''> <cdpPort> <mode=--stdout-only>
     const proc = spawn(nodeExe, [
       scriptPath,
-      `--user-data-dir=${userDataDir}`,
-      `--video-url=${videoUrl}`,
-      `--max-comments=${maxComments}`,
+      videoUrl,
+      '',
+      '',
+      cdpPort,
+      '--stdout-only',
     ], { windowsHide: true });
     let stdout = '';
     let stderr = '';
@@ -1203,14 +1196,23 @@ function startAcquisitionKeywordLoop(cfg: AgentConfig): void {
               video_url: videoUrl,
               max_comments: 50,
             });
-            if (crawlResult.ok && Array.isArray(crawlResult.comments) && crawlResult.comments.length > 0) {
+            // crawl-comments-douyin.cjs --stdout-only 返回 {commenters:[{sec_uid,nickname}]}
+            // 映射成 comment-score-result 期望的 {commenter_id, text} 格式
+            const rawCommenters = Array.isArray((crawlResult as Record<string, unknown>).commenters)
+              ? (crawlResult as Record<string, unknown>).commenters as Array<{ sec_uid?: string; nickname?: string }>
+              : [];
+            if (crawlResult.ok && rawCommenters.length > 0) {
+              const comments = rawCommenters.map((c) => ({
+                commenter_id: c.sec_uid ? `/user/${c.sec_uid}` : c.nickname || '',
+                text: c.nickname || '',
+              }));
               await fetch(`${apiBase}/api/acquisition/comment-score-result`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                   keyword_task_id: task_id,
                   video_url: videoUrl,
-                  comments: crawlResult.comments,
+                  comments,
                 }),
               }).catch((e) => console.warn('[acquisition] comment-score-result POST failed:', e.message));
             }
