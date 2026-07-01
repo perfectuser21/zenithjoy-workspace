@@ -14,6 +14,17 @@ export function getModuleRoot(): string {
   return path.resolve(__dirname, '..');
 }
 
+// Phase 0 观测：读模块 manifest 版本，spawn 时经 env 传给 listen_chat → 上报心跳 diag，
+// 让同事机器无 SSH 也能在中台看板确认跑的是哪版 line04。读不到返回 'unknown'，绝不抛。
+export function getModuleVersion(): string {
+  try {
+    const p = path.join(getModuleRoot(), 'manifest.json');
+    return JSON.parse(fs.readFileSync(p, 'utf-8')).version || 'unknown';
+  } catch {
+    return 'unknown';
+  }
+}
+
 // 测试用导出：允许注入 baseDir；bundled 模块含 python-embedded/python.exe。
 // 若模块目录无 python-embedded，从 ZENITHJOY_CORE_DIR 找 core Agent 的 python-embedded。
 export function getPythonExeForTest(baseDir: string): string {
@@ -191,6 +202,7 @@ export function startWechatListener(apiBase: string, agentId?: string, machineId
     ...process.env,
     REAL_PUBLISH: realPublish,
     ZENITHJOY_AGENT_REAL_PUBLISH: realPublish,
+    ZENITHJOY_MODULE_VERSION: getModuleVersion(),
   };
 
   const spawnOnce = (): void => {
