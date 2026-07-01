@@ -85,7 +85,7 @@ async function pollAndDispatch() {
         for (const task of tasks) {
             const keywords = Array.isArray(task.keywords) ? task.keywords : [];
             for (const kw of keywords.slice(0, 3)) {
-                await spawnKeywordSearch(kw, task.id, apiBase);
+                await spawnKeywordSearch(kw, task.task_id, apiBase);
             }
         }
     }

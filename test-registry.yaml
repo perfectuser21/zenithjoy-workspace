@@ -590,6 +590,14 @@ tests:
     product: AI员工
     note: "line02 config 解析回归守卫：agent 通过顶层字段发 config（msg.apiBase），模块必须用 msg.config ?? {apiBase: msg.apiBase} 而非 msg.config || {}，否则 apiBase 丢失 → 轮询 localhost:3000 → 永不拿任务（1.0.4 修复）"
 
+  - id: agent-line02-task-id-regression
+    path: services/agent/src/__tests__/line02-task-id-regression.test.ts
+    type: unit
+    ci: L2
+    status: active
+    product: AI员工
+    note: "line02 task_id 字段名回归守卫：pending-collect-tasks 返回 task_id，模块必须用 task.task_id 而非 task.id，否则 spawnKeywordSearch 收到 undefined → collect/report 400 → 任务永久 running（1.0.6 修复）"
+
   - id: agent-module-manager-cleanup
     path: services/agent/src/__tests__/module-manager-cleanup.test.ts
     type: unit
