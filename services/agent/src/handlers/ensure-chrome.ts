@@ -17,14 +17,21 @@ const HEADFUL_CHROME_ZIP_URL =
 
 export async function ensureChromiumHeadful(): Promise<void> {
   if (process.platform !== 'win32') return;
+  // chrome.exe 是 ~4MB 启动器，真正体积在 chrome.dll（~280MB）。用 chrome.dll 判断完整性。
+  const chromeDllPath = path.join(path.dirname(HEADFUL_CHROME_EXE), 'chrome.dll');
+  if (fs.existsSync(chromeDllPath) && fs.statSync(chromeDllPath).size > 100 * 1024 * 1024) {
+    console.log('[chrome-headful] already installed');
+    return;
+  }
   if (fs.existsSync(HEADFUL_CHROME_EXE)) {
-    const size = fs.statSync(HEADFUL_CHROME_EXE).size;
-    if (size > 50 * 1024 * 1024) {
-      console.log('[chrome-headful] already installed');
+    console.warn('[chrome-headful] chrome.dll missing or too small, re-downloading');
+    try {
+      fs.rmSync(path.dirname(HEADFUL_CHROME_EXE), { recursive: true, force: true });
+    } catch (rmErr) {
+      // EBUSY: chrome 正在运行，无法删除 — 跳过本次重下，等下次空闲再修复
+      console.warn('[chrome-headful] cannot remove old dir (EBUSY?), skipping:', (rmErr as Error).message?.slice(0, 100));
       return;
     }
-    console.warn(`[chrome-headful] corrupt (${size} bytes), re-downloading`);
-    fs.rmSync(path.dirname(HEADFUL_CHROME_EXE), { recursive: true, force: true });
   }
 
   const parentDir = path.dirname(path.dirname(HEADFUL_CHROME_EXE)); // ~/.zenithjoy-agent/
