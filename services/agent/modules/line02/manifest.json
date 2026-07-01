@@ -1,8 +1,12 @@
 {
   "lineId": "line02-lead-gen",
-  "version": "1.0.7",
+  "version": "1.0.8",
   "displayName": "智能获客",
   "entry": "index.js",
-  "platform": ["win32", "darwin", "linux"],
+  "platform": [
+    "win32",
+    "darwin",
+    "linux"
+  ],
   "minMemoryGB": 2
 }

@@ -86,4 +86,28 @@ describe('line02 Stage 2 评论采集结构守卫', () => {
     expect(reports[0].video_id).toBe('7111111111111111111');
     expect(reports[1].video_id).toBe('7222222222222222222');
   });
+
+  it('spawnCommentCrawl 使用主号 Chrome CDP 端口 19222（非 burner 19225）', () => {
+    // 19225（burner Chrome）可能触发 Douyin CAPTCHA，导致 commenters 恒为 []
+    // 必须用主号 Chrome（19222），与 keyword-search 同一个已认证 session
+    const EXPECTED_CDP_PORT = "'19222'";
+    const FORBIDDEN_CDP_PORT = "'19225'";
+
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const fs = require('fs') as typeof import('fs');
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const path = require('path') as typeof import('path');
+    const indexPath = path.join(__dirname, '..', '..', 'build-modules', 'line02', 'index.js');
+    const src = fs.readFileSync(indexPath, 'utf8') as string;
+
+    // 取 spawnCommentCrawl 函数代码段
+    const crawlStart = src.indexOf('function spawnCommentCrawl');
+    const crawlEnd = src.indexOf('function spawnKeywordSearch');
+    const crawlBlock = crawlStart >= 0 && crawlEnd > crawlStart
+      ? src.slice(crawlStart, crawlEnd)
+      : src;
+
+    expect(crawlBlock).toContain(EXPECTED_CDP_PORT);
+    expect(crawlBlock).not.toContain(FORBIDDEN_CDP_PORT);
+  });
 });

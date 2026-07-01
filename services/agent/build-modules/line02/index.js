@@ -95,7 +95,7 @@ function spawnCommentCrawl(videoUrl, publishersDir, nodeExe) {
             process.stderr.write(`[line02] crawl-comments script not found: ${scriptPath}\n`);
             return resolve([]);
         }
-        const child = (0, child_process_1.spawn)(nodeExe, [scriptPath, videoUrl, 'unused', 'unused', '19225', '--stdout-only'], {
+        const child = (0, child_process_1.spawn)(nodeExe, [scriptPath, videoUrl, 'unused', 'unused', '19222', '--stdout-only'], {
             env: { ...process.env },
             stdio: ['ignore', 'pipe', 'pipe'],
         });

@@ -87,10 +87,10 @@ function spawnCommentCrawl(
       process.stderr.write(`[line02] crawl-comments script not found: ${scriptPath}\n`);
       return resolve([]);
     }
-    // 用 burner Chrome（19225）—— keyword-search 用同一个已登录 session
+    // 用主号 Chrome（19222）—— 与 keyword-search 同一个已认证 session，burner(19225) 可能触发 CAPTCHA
     const child = spawn(
       nodeExe,
-      [scriptPath, videoUrl, 'unused', 'unused', '19225', '--stdout-only'],
+      [scriptPath, videoUrl, 'unused', 'unused', '19222', '--stdout-only'],
       { env: { ...process.env }, stdio: ['ignore', 'pipe', 'pipe'] },
     );
     let lastLine = '';
