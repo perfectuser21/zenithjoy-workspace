@@ -55,13 +55,13 @@ async function pollAndDispatch() {
   const apiBase = config.apiBase || 'http://localhost:3000';
   try {
     const resp = (await apiRequest(`${apiBase}/api/acquisition/pending-collect-tasks`)) as {
-      tasks?: Array<{ id: string; keywords: string[]; tenant_id: string }>;
+      tasks?: Array<{ task_id: string; keywords: string[]; tenant_id: string }>;
     };
     const tasks = resp?.tasks ?? [];
     for (const task of tasks) {
       const keywords: string[] = Array.isArray(task.keywords) ? task.keywords : [];
       for (const kw of keywords.slice(0, 3)) {
-        await spawnKeywordSearch(kw, task.id, apiBase);
+        await spawnKeywordSearch(kw, task.task_id, apiBase);
       }
     }
   } catch (err) {
