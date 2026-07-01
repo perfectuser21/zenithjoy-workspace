@@ -584,18 +584,17 @@ function CollectTasksBlock() {
     setErr(null);
     setMsg(null);
     try {
-      const res = await fetch('/api/acquisition/collect/start', {
+      const res = await fetch('/api/acquisition/keyword-search', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ keywords: [kw] }),
+        body: JSON.stringify({ keyword: kw }),
       });
-      const json = (await res.json()) as { success: boolean; data?: { task_id: string }; error?: { message: string } };
-      if (!res.ok || !json.success) {
-        throw new Error(json.error?.message ?? `HTTP ${res.status}`);
+      const json = (await res.json()) as { task_id?: string; error?: string };
+      if (!res.ok) {
+        throw new Error(json.error ?? `HTTP ${res.status}`);
       }
-      setMsg(`采集任务已提交（task_id: ${json.data?.task_id ?? '?'}）`);
+      setMsg(`✓ 已派发给 Agent，正在进视频评论区抓评论者，约 1-2 分钟后到「名单」页刷新查看`);
       setKeyword('');
-      await load();
     } catch (e) {
       setErr(e instanceof Error ? e.message : '提交失败');
     } finally {
