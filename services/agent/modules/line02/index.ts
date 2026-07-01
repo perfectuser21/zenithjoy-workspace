@@ -109,7 +109,7 @@ function spawnKeywordSearch(keyword: string, taskId: string, apiBase: string): P
       try {
         if (lastLine) {
           const result = JSON.parse(lastLine) as { ok: boolean; video_urls?: string[]; error?: string };
-          if (result.ok && Array.isArray(result.video_urls)) {
+          if (result.ok && Array.isArray(result.video_urls) && result.video_urls.length > 0) {
             // 上报视频 URL 给 collect/report（每条视频空评论占位，标记 stage_1_done 在 resolveTerminalStatus 处理）
             for (const videoUrl of result.video_urls.slice(0, 5)) {
               await apiRequest(`${apiBase}/api/acquisition/collect/report`, 'POST', {
@@ -120,6 +120,16 @@ function spawnKeywordSearch(keyword: string, taskId: string, apiBase: string): P
                 terminal: result.video_urls.indexOf(videoUrl) === result.video_urls.length - 1 ? 'done' : undefined,
               }).catch(() => {});
             }
+          } else if (result.ok && Array.isArray(result.video_urls) && result.video_urls.length === 0) {
+            // 0 个视频（验证码/无结果）：上报 failed，防任务永久卡 running
+            await apiRequest(`${apiBase}/api/acquisition/collect/report`, 'POST', {
+              task_id: taskId,
+              keyword,
+              video_id: `no-result-${Date.now()}`,
+              commenters: [],
+              terminal: 'failed',
+              error_code: 'NO_VIDEOS_FOUND',
+            }).catch(() => {});
           } else if (!result.ok) {
             await apiRequest(`${apiBase}/api/acquisition/collect/report`, 'POST', {
               task_id: taskId,
