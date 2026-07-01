@@ -167,7 +167,8 @@ function schedulePoll() {
 }
 process.on('message', (msg) => {
     if (msg?.type === 'config') {
-        config = msg.config || {};
+        // agent 通过顶层字段发送 config（apiBase/agentId/machineId 在顶层，非嵌套 msg.config）
+        config = msg.config ?? { apiBase: msg.apiBase };
         schedulePoll();
         process.send?.({ type: 'ready' });
     }

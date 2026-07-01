@@ -147,9 +147,10 @@ function schedulePoll() {
   }, intervalMs);
 }
 
-process.on('message', (msg: { type: string; config?: Line02Config }) => {
+process.on('message', (msg: { type: string; config?: Line02Config; apiBase?: string; agentId?: string; machineId?: string }) => {
   if (msg?.type === 'config') {
-    config = msg.config || {};
+    // agent 通过顶层字段发送 config（apiBase/agentId/machineId 在顶层，非嵌套 msg.config），与 line04 保持一致
+    config = msg.config ?? { apiBase: msg.apiBase };
     schedulePoll();
     process.send?.({ type: 'ready' });
   }
