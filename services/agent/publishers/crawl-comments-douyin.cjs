@@ -1,17 +1,21 @@
 #!/usr/bin/env node
 'use strict';
 /**
- * crawl-comments-douyin.cjs — 抖音视频评论区抓取 → commenter 主页 → POST collect/report
+ * crawl-comments-douyin.cjs — 抖音视频评论区全量抓取 → commenter 主页 → POST collect/report
  *
  * Usage: node crawl-comments-douyin.cjs <video_url> <task_id> [apiBase] [cdpPort=19222]
  * Output: 末行 stdout JSON → { ok, task_id, video_url, inserted, error? }
+ *
+ * v1.0.10: 滚动加载全量评论（无上限），连续 3 轮无新评论才停
  */
 const { chromium } = require('playwright-core');
-const { spawn } = require('child_process');
-const fs = require('fs');
-const path = require('path');
 const https = require('https');
 const http = require('http');
+
+// 滚动参数
+const STABLE_ROUNDS = 3;   // 连续N轮无新评论 → 到底了
+const SCROLL_PAUSE_MS = 2000;
+const MAX_SCROLL_ROUNDS = 300; // 保底防死循环
 
 const [, , videoUrl = '', taskId = '', apiBase = 'http://localhost:3000', cdpPortStr = '19222', mode = ''] = process.argv;
 const MAIN_CDP_PORT = parseInt(cdpPortStr, 10) || 19222;
@@ -20,24 +24,6 @@ const PAGE_TIMEOUT_MS = 30000;
 
 function emit(r) {
   process.stdout.write(JSON.stringify(r) + '\n');
-}
-
-function readEnvFile() {
-  const candidates = [
-    path.join(__dirname, '..', '.env'),
-    'C:\\zj-agent\\extracted\\zenithjoy-agent-v2.0.39\\.env',
-  ];
-  for (const p of candidates) {
-    try {
-      const vars = {};
-      for (const line of fs.readFileSync(p, 'utf8').split('\n')) {
-        const m = line.trim().match(/^([A-Z_][A-Z0-9_]*)=(.*)$/);
-        if (m) vars[m[1]] = m[2].trim();
-      }
-      return vars;
-    } catch {}
-  }
-  return {};
 }
 
 function postReport(payload, base) {
@@ -63,31 +49,70 @@ function postReport(payload, base) {
 }
 
 async function findMainChrome() {
-  // 连接主号 Chrome（CDP）
   try {
-    const browser = await chromium.connectOverCDP(`http://localhost:${MAIN_CDP_PORT}`);
-    return browser;
+    return await chromium.connectOverCDP(`http://localhost:${MAIN_CDP_PORT}`);
   } catch {
     return null;
+  }
+}
+
+/**
+ * 滚动评论区直到稳定（连续 STABLE_ROUNDS 轮无新评论出现）
+ */
+async function scrollUntilStable(page) {
+  let stableCount = 0;
+  let prevCount = 0;
+
+  for (let round = 0; round < MAX_SCROLL_ROUNDS; round++) {
+    await page.evaluate(() => {
+      // 依次尝试已知抖音评论容器，找到可滚动的就滚到底
+      const selectors = [
+        '[data-e2e="comment-list"]',
+        '.comment-mainContainer',
+        '.DivCommentListContainer',
+      ];
+      for (const sel of selectors) {
+        const el = document.querySelector(sel);
+        if (el && el.scrollHeight > el.clientHeight + 10) {
+          el.scrollTop = el.scrollHeight;
+          return;
+        }
+      }
+      window.scrollTo(0, document.body.scrollHeight);
+    });
+
+    await new Promise(r => setTimeout(r, SCROLL_PAUSE_MS));
+
+    const count = await page.$$eval('[data-e2e="comment-item"]', els => els.length).catch(() => 0);
+
+    if (count > prevCount) {
+      stableCount = 0;
+      prevCount = count;
+    } else {
+      stableCount++;
+      if (stableCount >= STABLE_ROUNDS) break;
+    }
   }
 }
 
 async function crawlVideoComments(browser, videoUrl, taskId, apiBase) {
   const context = browser.contexts()[0] || await browser.newContext();
   const page = await context.newPage();
-
   const commenters = [];
 
   try {
     await page.goto(videoUrl, { waitUntil: 'load', timeout: PAGE_TIMEOUT_MS });
 
-    // Douyin 评论区由 JS 异步 XHR 加载，waitForSelector 最多等 40s
+    // 等第一批评论出现（最多 40s，抖音评论由 XHR 异步加载）
     await page.waitForSelector('[data-e2e="comment-item"]', { timeout: 40000 }).catch(() => {});
 
-    // 收集评论者
+    // 滚动加载全量评论（连续 3 轮无新评论才停）
+    await scrollUntilStable(page);
+
+    // 收集所有评论者（无上限）
     const commentItems = await page.$$('[data-e2e="comment-item"]').catch(() => []);
 
-    for (const item of commentItems.slice(0, 20)) {
+    for (const item of commentItems) {
       try {
         // data-e2e="comment-user-name" 已从 Douyin 移除，nickname 在 a[href*=/user/] 文本里
         const profileLink = await item.$eval('a[href*="/user/"]', el => el.getAttribute('href') || '').catch(() => '');
@@ -101,12 +126,10 @@ async function crawlVideoComments(browser, videoUrl, taskId, apiBase) {
       } catch {}
     }
 
-    // --stdout-only 模式：不 POST API，调用方自己处理（keyword 管道用）
     if (STDOUT_ONLY) {
       return { ok: true, commenters, inserted: commenters.length };
     }
 
-    // 上报给 API
     if (commenters.length > 0) {
       await postReport({
         task_id: taskId,
