@@ -361,3 +361,50 @@ describe('GET /sessions — tenant 从 session 解析，不信 query [BEHAVIOR]'
     expect(res.body?.success).toBe(false);
   });
 });
+
+// ── Regression: qr-bind-result agent_id=null crash (#1004) ──
+describe('agent-burner router [qr-bind-result agent_id fallback]', () => {
+  const TASK_UUID = 'cccccccc-cccc-cccc-cccc-cccccccccccc';
+
+  beforeEach(() => {
+    vi.mocked(pool.query).mockReset();
+  });
+
+  it('[REGRESSION] qr-bind-result body 无 agent_id → 从 task payload 兜底 → 200 不 crash', async () => {
+    vi.mocked(pool.query).mockResolvedValueOnce({
+      rows: [{ payload: { account_label: '测试1', agent_id: AGENT_UUID, tenant_id: TENANT_UUID } }],
+    } as any);
+    vi.mocked(pool.query).mockResolvedValueOnce({ rows: [] } as any);
+    vi.mocked(pool.query).mockResolvedValueOnce({ rows: [] } as any);
+
+    const app = buildApp();
+    const r = await request(app)
+      .post('/api/agent/burner/qr-bind-result')
+      .send({
+        task_id: TASK_UUID,
+        qr_login: 'success',
+        cookie_local_path: 'C:\\sessions\\测试1.json',
+        account_nickname: '测试账号',
+      });
+
+    expect(r.status).toBe(200);
+    expect(r.body.data.task_id).toBe(TASK_UUID);
+    const insertCall = vi.mocked(pool.query).mock.calls[1];
+    expect(insertCall[1]?.[0]).toBe(AGENT_UUID);
+  });
+
+  it('[REGRESSION] qr-bind-result body 无 agent_id 且 payload 也无 → 400 不 crash', async () => {
+    vi.mocked(pool.query).mockResolvedValueOnce({
+      rows: [{ payload: { account_label: '测试2' } }],
+    } as any);
+
+    const app = buildApp();
+    const r = await request(app)
+      .post('/api/agent/burner/qr-bind-result')
+      .send({ task_id: TASK_UUID, qr_login: 'success' });
+
+    expect(r.status).toBe(400);
+    expect(r.body.error.code).toBe('MISSING_AGENT_ID');
+    expect(vi.mocked(pool.query).mock.calls.length).toBe(1);
+  });
+});

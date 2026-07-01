@@ -126,6 +126,11 @@ router.post('/qr-bind-result', async (req: Request, res: Response) => {
   }
   const payload = t.rows[0].payload || {};
   const accountLabel = payload.account_label || 'default';
+  // agent_id 优先取 body，兜底取 task payload（agent 回调时可能未传 body.agent_id）
+  const resolvedAgentId = agent_id || payload.agent_id;
+  if (!resolvedAgentId) {
+    return res.status(400).json(ERR('MISSING_AGENT_ID', 'agent_id 不能为空'));
+  }
 
   // upsert agent_platform_sessions role='burner' status='active'
   await pool.query(
@@ -134,7 +139,7 @@ router.post('/qr-bind-result', async (req: Request, res: Response) => {
      VALUES ($1, 'douyin', $2, 'burner', 'active', NOW(), NOW())
      ON CONFLICT (agent_id, platform, account_label) DO UPDATE
        SET role='burner', status='active', bound_at=NOW()`,
-    [agent_id, accountLabel],
+    [resolvedAgentId, accountLabel],
   );
 
   // task done + response
