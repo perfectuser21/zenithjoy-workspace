@@ -186,25 +186,37 @@ async function main() {
       return;
     }
 
-    const page = await ctx.newPage();
+    // 优先复用已有 Douyin 页面（避免 newPage 被抖音 bot 检测），没有再开新标签
+    const existingPages = ctx.pages();
+    const existingDouyin = existingPages.find(p => p.url().includes('douyin.com'));
+    const page = existingDouyin || await ctx.newPage();
+    const pageIsNew = !existingDouyin;
+    process.stderr.write(`[keyword-search-douyin] 使用${pageIsNew ? '新' : '已有'} tab (${page.url().slice(0, 60)})\n`);
     try {
-      await page.addInitScript(() => {
-        Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
-        delete navigator.__proto__.webdriver;
-        window.chrome = window.chrome || { runtime: {}, loadTimes: function () {}, csi: function () {}, app: {} };
-      });
-
       const searchUrl = `https://www.douyin.com/search/${encodeURIComponent(keyword)}?type=video`;
-      process.stderr.write(`[keyword-search-douyin] 导航 ${searchUrl}\n`);
-      await page.goto(searchUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
+      const curUrl = page.url();
+      const alreadyThere = curUrl === searchUrl || curUrl.startsWith(searchUrl.split('?')[0]);
+      process.stderr.write(`[keyword-search-douyin] 导航 ${searchUrl} (alreadyThere=${alreadyThere})\n`);
+      if (!alreadyThere) {
+        await page.goto(searchUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
+      } else {
+        // 已在目标 URL，用 JS pushState 触发 SPA 路由刷新（不触发完整重载）
+        await page.evaluate((url) => {
+          window.history.pushState({}, '', url);
+          window.dispatchEvent(new PopStateEvent('popstate', { state: {} }));
+        }, searchUrl).catch(() => null);
+      }
+      // 等页面渲染（包括首次加载和 SPA 刷新）
+      await page.waitForFunction(() => document.title !== '', { timeout: 5000 }).catch(() => null);
+      // 固定 6s 等 React 渲染搜索结果
+      await new Promise(r => setTimeout(r, 6000));
 
       const title = await page.title();
-      const isCaptcha = title.includes('验证') || title.includes('captcha') || title === '';
+      // 空 title 不算验证码（SPA 加载中），只看关键词
+      const isCaptcha = title.includes('验证') || title.includes('captcha');
       process.stderr.write(`[keyword-search-douyin] title="${title}" isCaptcha=${isCaptcha}\n`);
 
-      if (!isCaptcha) {
-        await page.waitForSelector('a[href*="/video/"]', { timeout: 12000 }).catch(() => null);
-      }
+      // 已在 goto/pushState 后等了 6s，不需要额外等待
 
       const videoUrls = await page.evaluate((max) => {
         const seen = new Set(), results = [];
@@ -222,7 +234,8 @@ async function main() {
       process.stderr.write(`[keyword-search-douyin] 找到 ${videoUrls.length} 个视频\n`);
       emit({ ok: true, keyword, video_urls: videoUrls });
     } finally {
-      await page.close().catch(() => null);
+      // 复用已有 tab 不关闭（用户正在用）；只关自己新开的
+      if (pageIsNew) await page.close().catch(() => null);
     }
   } catch (err) {
     const msg = String(err?.message || err);
