@@ -35,8 +35,9 @@ var __importStar = (this && this.__importStar) || (function () {
 Object.defineProperty(exports, "__esModule", { value: true });
 /**
  * line02-lead-gen 模块入口
- * 被 core 通过 child_process.fork() 拉起，收到 config 即回 ready。
- * 轮询 /api/acquisition/pending-collect-tasks，派发采集任务给 keyword-search-douyin.cjs。
+ * 两阶段流程：
+ *   Stage 1: keyword-search-douyin.cjs → 找视频 URL → 上报（terminal=stage_1）
+ *   Stage 2: crawl-comments-douyin.cjs → 每条视频进评论区抓评论者 → 上报（末条 terminal=done）
  */
 const child_process_1 = require("child_process");
 const path = __importStar(require("path"));
@@ -77,39 +78,61 @@ function apiRequest(url, method = 'GET', body) {
         req.end();
     });
 }
-async function pollAndDispatch() {
-    const apiBase = config.apiBase || 'http://localhost:3000';
-    try {
-        const resp = (await apiRequest(`${apiBase}/api/acquisition/pending-collect-tasks`));
-        const tasks = resp?.tasks ?? [];
-        for (const task of tasks) {
-            const keywords = Array.isArray(task.keywords) ? task.keywords : [];
-            for (const kw of keywords.slice(0, 3)) {
-                await spawnKeywordSearch(kw, task.task_id, apiBase);
-            }
+function resolvePublishersDir() {
+    const coreDir = process.env.ZENITHJOY_CORE_DIR;
+    return coreDir
+        ? path.join(coreDir, 'publishers')
+        : path.join(__dirname, '..', '..', 'publishers');
+}
+function resolveNodeExe() {
+    return (process.env.ZENITHJOY_NODE_BIN ||
+        path.join(process.env.APPDATA || process.env.HOME || '', 'ZenithJoy', 'runtime', 'nodejs', 'node.exe'));
+}
+function spawnCommentCrawl(videoUrl, publishersDir, nodeExe) {
+    return new Promise((resolve) => {
+        const scriptPath = path.join(publishersDir, 'crawl-comments-douyin.cjs');
+        if (!fs.existsSync(scriptPath)) {
+            process.stderr.write(`[line02] crawl-comments script not found: ${scriptPath}\n`);
+            return resolve([]);
         }
-    }
-    catch (err) {
-        process.stderr.write(`[line02] poll error: ${err.message}\n`);
-    }
+        const child = (0, child_process_1.spawn)(nodeExe, [scriptPath, videoUrl, 'unused', 'unused', '19225', '--stdout-only'], {
+            env: { ...process.env },
+            stdio: ['ignore', 'pipe', 'pipe'],
+        });
+        let lastLine = '';
+        child.stdout?.on('data', (chunk) => {
+            const lines = chunk.toString().split('\n').filter(Boolean);
+            if (lines.length > 0)
+                lastLine = lines[lines.length - 1];
+        });
+        child.stderr?.on('data', (chunk) => {
+            process.stderr.write(`[line02/crawl-comments] ${chunk}`);
+        });
+        child.on('close', () => {
+            try {
+                if (lastLine) {
+                    const result = JSON.parse(lastLine);
+                    if (result.ok && Array.isArray(result.commenters)) {
+                        return resolve(result.commenters);
+                    }
+                }
+            }
+            catch {
+                // 忽略 JSON 解析错误
+            }
+            resolve([]);
+        });
+    });
 }
 function spawnKeywordSearch(keyword, taskId, apiBase) {
     return new Promise((resolve) => {
-        // ZENITHJOY_CORE_DIR is injected by module-manager (= dirname of agent exe).
-        // Publishers live alongside the exe, not relative to the installed module __dirname.
-        const coreDir = process.env.ZENITHJOY_CORE_DIR;
-        const publishersDir = coreDir
-            ? path.join(coreDir, 'publishers')
-            : path.join(__dirname, '..', '..', 'publishers');
+        const publishersDir = resolvePublishersDir();
+        const nodeExe = resolveNodeExe();
         const scriptPath = path.join(publishersDir, 'keyword-search-douyin.cjs');
         if (!fs.existsSync(scriptPath)) {
             process.stderr.write(`[line02] keyword-search script not found: ${scriptPath}\n`);
             return resolve();
         }
-        // process.execPath is the agent exe (pkg-packed), which exits immediately due to
-        // single-instance guard. Use the bundled node runtime extracted by start.bat instead.
-        const nodeExe = process.env.ZENITHJOY_NODE_BIN ||
-            path.join(process.env.APPDATA || process.env.HOME || '', 'ZenithJoy', 'runtime', 'nodejs', 'node.exe');
         const child = (0, child_process_1.spawn)(nodeExe, [scriptPath, keyword, '19222', '5'], {
             env: { ...process.env },
             stdio: ['ignore', 'pipe', 'pipe'],
@@ -128,19 +151,31 @@ function spawnKeywordSearch(keyword, taskId, apiBase) {
                 if (lastLine) {
                     const result = JSON.parse(lastLine);
                     if (result.ok && Array.isArray(result.video_urls) && result.video_urls.length > 0) {
-                        // 上报视频 URL 给 collect/report（每条视频空评论占位，标记 stage_1_done 在 resolveTerminalStatus 处理）
-                        for (const videoUrl of result.video_urls.slice(0, 5)) {
+                        const videos = result.video_urls.slice(0, 5);
+                        // Stage 1: 上报视频 URL，末条标 stage_1
+                        for (let i = 0; i < videos.length; i++) {
                             await apiRequest(`${apiBase}/api/acquisition/collect/report`, 'POST', {
                                 task_id: taskId,
                                 keyword,
-                                video_id: videoUrl,
+                                video_id: videos[i].split('/').pop() || videos[i],
                                 commenters: [],
-                                terminal: result.video_urls.indexOf(videoUrl) === result.video_urls.length - 1 ? 'done' : undefined,
+                                terminal: i === videos.length - 1 ? 'stage_1' : undefined,
+                            }).catch(() => { });
+                        }
+                        // Stage 2: 逐条进评论区抓评论者，末条标 done
+                        for (let i = 0; i < videos.length; i++) {
+                            const commenters = await spawnCommentCrawl(videos[i], publishersDir, nodeExe);
+                            process.stderr.write(`[line02] 视频 ${videos[i].split('/').pop()} 评论者: ${commenters.length} 条\n`);
+                            await apiRequest(`${apiBase}/api/acquisition/collect/report`, 'POST', {
+                                task_id: taskId,
+                                keyword,
+                                video_id: videos[i].split('/').pop() || videos[i],
+                                commenters,
+                                terminal: i === videos.length - 1 ? 'done' : undefined,
                             }).catch(() => { });
                         }
                     }
                     else if (result.ok && Array.isArray(result.video_urls) && result.video_urls.length === 0) {
-                        // 0 个视频（验证码/无结果）：上报 failed，防任务永久卡 running
                         await apiRequest(`${apiBase}/api/acquisition/collect/report`, 'POST', {
                             task_id: taskId,
                             keyword,
@@ -169,6 +204,22 @@ function spawnKeywordSearch(keyword, taskId, apiBase) {
         });
     });
 }
+async function pollAndDispatch() {
+    const apiBase = config.apiBase || 'http://localhost:3000';
+    try {
+        const resp = (await apiRequest(`${apiBase}/api/acquisition/pending-collect-tasks`));
+        const tasks = resp?.tasks ?? [];
+        for (const task of tasks) {
+            const keywords = Array.isArray(task.keywords) ? task.keywords : [];
+            for (const kw of keywords.slice(0, 3)) {
+                await spawnKeywordSearch(kw, task.task_id, apiBase);
+            }
+        }
+    }
+    catch (err) {
+        process.stderr.write(`[line02] poll error: ${err.message}\n`);
+    }
+}
 function schedulePoll() {
     const intervalMs = config.pollIntervalMs || 30000;
     pollTimer = setTimeout(async () => {
@@ -178,7 +229,6 @@ function schedulePoll() {
 }
 process.on('message', (msg) => {
     if (msg?.type === 'config') {
-        // agent 通过顶层字段发送 config（apiBase/agentId/machineId 在顶层，非嵌套 msg.config）
         config = msg.config ?? { apiBase: msg.apiBase };
         schedulePoll();
         process.send?.({ type: 'ready' });
