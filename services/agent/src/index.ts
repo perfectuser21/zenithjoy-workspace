@@ -743,15 +743,24 @@ async function handleCrawlCommentsBurner(payload: {
   if (!accountLabel || !videoUrl) {
     return { ok: false, error: 'missing account_label or video_url' };
   }
-  // burner profile path 跟 qr-bind handler 一致
+  // burner profile path：account_label='main' 时优先用 ZJ_MAIN_DATA_DIR env（已登录 profile）
   const userDataDir =
-    process.platform === 'win32'
-      ? path.join('C:\\Temp', 'zj-douyin-burner-v1', accountLabel)
-      : path.join(os.homedir(), '.zenithjoy-agent', 'chrome-profile', 'douyin-burner', accountLabel);
-  // crawl 脚本 (Sprint B-1 写的)
-  const scriptPath = path.resolve(__dirname, '..', 'scripts', 'douyin-comment-crawl.cjs');
+    accountLabel === 'main' && process.env.ZJ_MAIN_DATA_DIR
+      ? process.env.ZJ_MAIN_DATA_DIR
+      : process.platform === 'win32'
+        ? path.join('C:\\Temp', 'zj-douyin-burner-v1', accountLabel)
+        : path.join(os.homedir(), '.zenithjoy-agent', 'chrome-profile', 'douyin-burner', accountLabel);
+  // crawl 脚本：用 process.execPath dirname（与 keyword-search-douyin.cjs 解析方式一致，pkg 打包后可靠）
+  const execDir = path.dirname(process.execPath);
+  const scriptPath = path.join(execDir, 'scripts', 'douyin-comment-crawl.cjs');
+  // node 可执行文件：优先 ZENITHJOY_NODE_BIN，再从 AppData/ZenithJoy/runtime 找，最后 fallback PATH
+  const nodeExe =
+    process.env.ZENITHJOY_NODE_BIN ||
+    (process.platform === 'win32'
+      ? path.join(process.env.APPDATA || '', 'ZenithJoy', 'runtime', 'nodejs', 'node.exe')
+      : 'node');
   return new Promise((resolve) => {
-    const proc = spawn('node', [
+    const proc = spawn(nodeExe, [
       scriptPath,
       `--user-data-dir=${userDataDir}`,
       `--video-url=${videoUrl}`,

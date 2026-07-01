@@ -214,6 +214,11 @@ echo "[build] copying publishers/ (douyin-publisher et al)"
 cp -r publishers/ "$PACK_DIR/publishers/"
 echo "[build] publishers/ included in pack"
 
+echo "[build] copying scripts/ (douyin-comment-crawl.cjs et al)"
+mkdir -p "$PACK_DIR/scripts"
+cp scripts/*.cjs "$PACK_DIR/scripts/" 2>/dev/null || true
+echo "[build] scripts/ included in pack"
+
 echo "[build] copying playwright-core npm package (pure JS, required by publisher scripts)"
 # Publisher .cjs scripts run as external node processes — they cannot reach into the pkg
 # virtual FS. playwright-core must exist on the real filesystem at <agent-dir>/node_modules/.
