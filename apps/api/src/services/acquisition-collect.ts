@@ -136,6 +136,10 @@ export function resolveTerminalStatus(report: TerminalReport): TerminalResolutio
   if (report.terminal === 'partial') {
     return { status: 'partial', error_code: report.partial_reason ?? report.error_code ?? null };
   }
+  if (report.terminal === 'done') {
+    return { status: 'done', error_code: null };
+  }
+  // 'stage_1' 或其他非标准值 → stage_1_done（阶段性完成，等待 Stage 2 评论采集）
   return { status: 'stage_1_done', error_code: null };
 }
 

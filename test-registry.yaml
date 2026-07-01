@@ -4169,3 +4169,11 @@ agent_suite:
     status: active
     product: 客户私域AI接管
     note: "regression(2026-07-01, P1⑤保活): start.bat 必须有 :AGENT_SUPERVISE_LOOP 监督循环——core 退出后自动重启(自升级/崩溃)，不用 pause 卡死。治自升级后核心死到下次登录。"
+
+- id: agent-line02-stage2-comment-crawl
+  path: services/agent/src/__tests__/line02-stage2-comment-crawl.test.ts
+  type: unit
+  ci: L2
+  status: active
+  product: AI员工
+  note: "line02 Stage 2 评论采集结构守卫：验证 Stage 1 末尾用 terminal=stage_1（不是 done），Stage 2 末尾用 terminal=done；commenters 非空时写 acquisition_leads（1.0.7 新增 Stage 2）"
