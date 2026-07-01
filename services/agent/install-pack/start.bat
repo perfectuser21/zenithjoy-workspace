@@ -270,6 +270,13 @@ if exist "%~dp0create-shortcut.ps1" (
     echo [shortcut] create-shortcut.ps1 not found, skipping (old install pack)
 )
 
+REM === P1-5 keep-alive supervisor loop entry (Sprint 07011457) ===
+REM core 任何退出后都回到这里重跑：单实例清理 + 重读 .active-core 指针（自升级后拉起新核心）+ 重启。
+REM 根因(2026-07-01 rog 真机)：CoreUpgrader 写 .active-core 指针后 process.exit(0)，把"拉起新核心"
+REM 交给 start.bat；旧版只【前台跑一次】就落到脚本末尾结束，指望 ONLOGON 计划任务重启——但 ONLOGON
+REM 只在【登录】触发，会话中途自升级/崩溃后核心一直死到下次登录（客户发消息没进程接→不回）。
+:AGENT_SUPERVISE_LOOP
+
 REM Step 6.95: Single-instance guard - kill any existing zenithjoy-agent.exe before starting
 REM Two agents with the same license kick each other off the server WS connection,
 REM causing repeated disconnects ("dropped again" / "out of gas" symptom when upgrading without closing old).
@@ -341,7 +348,9 @@ pushd "%CORE_RUN_DIR%"
 zenithjoy-agent.exe
 set "_AGENT_EXIT=%errorlevel%"
 popd
-if not "%_AGENT_EXIT%"=="0" (
-    echo [agent] agent.exe exited with error %_AGENT_EXIT%
-    pause
-)
+REM === P1-5 keep-alive: core 退出后（自升级 exit0=换新核心 / 崩溃 exit!=0）都自动重启，绝不落幕 ===
+REM 不再 pause 阻塞（pause 会把重启循环卡死，正是 2026-07-01 自升级后死到下次登录的根）。
+REM 5s 间隔用 ping 代替 timeout（wscript 隐藏启动无 stdin，timeout 会报 input redirection 错）。
+echo [supervise] core exited code=%_AGENT_EXIT% - relaunching in 5s (keep-alive self-heal)...
+ping -n 6 127.0.0.1 >nul 2>&1
+goto :AGENT_SUPERVISE_LOOP
