@@ -17,6 +17,21 @@ describe('buildCustomerRoster — 名册合并 + 租户隔离 [BEHAVIOR]', () =>
     expect(contacts).toEqual(['周八', '张三', '李四']);
   });
 
+  it('每行带自己的 cs_wechat_id（scan/manual 用行自己的号，前端改身份才写对号）', async () => {
+    // 真机(2026-07-01)：多 cs / super-admin 名册里客户来自不同客服机，
+    // 前端改身份必须按【行自己的 cs_wechat_id】写，否则写进页面级号→幽灵行→"改不了"。
+    const roster = await buildCustomerRoster({
+      tenantId: 't-A',
+      csWechatId: 'wx_cs_A', // 页面级/scope 首号
+      scanContacts: [{ contact: '预警', cs_wechat_id: 'wx_cs_B', status: 'A1' }],
+      manualCustomers: [{ contact: '自然清', cs_wechat_id: 'wx_cs_C', status: 'A1' }],
+      messages: [{ contact: '张三' }], // 纯聊过、无行级号 → 回退页面级
+    });
+    expect(roster.find((r) => r.contact === '预警')?.cs_wechat_id).toBe('wx_cs_B');
+    expect(roster.find((r) => r.contact === '自然清')?.cs_wechat_id).toBe('wx_cs_C');
+    expect(roster.find((r) => r.contact === '张三')?.cs_wechat_id).toBe('wx_cs_A');
+  });
+
   it('managed 实时由 whitelist 决定（命中 true / 未命中 false）', async () => {
     const roster = await buildCustomerRoster({
       tenantId: 't-A',
