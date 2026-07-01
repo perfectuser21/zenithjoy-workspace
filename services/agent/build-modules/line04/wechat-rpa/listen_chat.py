@@ -463,24 +463,16 @@ def _restore_tray(mw: Any) -> None:
 
 
 def scan_unread(mw: Any, last_content: Optional[Dict[str, str]] = None) -> List[Dict[str, Any]]:
-    """扫主窗口会话列表，检测 [N条] 未读会话（含被自检刷屏顶到【视口外】的未读）。
+    """遍历主窗口会话列表 ListItem，检测未读消息。
 
-    视口外未读修法（rog 真机铁证 2026-07-01）：微信会话列表是 Qt 虚拟滚动，一次 descendants
-    只渲染可见 ~5-6 条 ListItem。频繁自检狂发「文件传输助手」把它顶满视口 → 客户未读会话被挤到
-    视口下面没渲染 → 旧 scan_unread 只读可见区角标 → unread=0 → 客户发消息永远不回。
-    现改：首屏渲染满（可能藏着视口外未读）时，复用已有滚动机制把整个会话列表滚一遍，
-    【只读】收集所有 [N条] 未读会话（绝不开会话/开群），滚完 _reset_session_list_to_top 原子归位
-    回顶 + _restore_window_state 还原窗口状态，再交给回复。
+    双路检测：
+    1) 角标路径：ListItem name 含 '[N条]' → 正常未读
+    2) 内容变化路径：无角标（聊天面板当前打开时消息被立即已读）但内容与上次不同 → 也触发回复
+    last_content: {sender: last_seen_content}，由调用方维护，检测内容变化。
 
-    与 CRM 采集(scan_recent_contacts)的关键区别（防重蹈「回一次就不理」/不破坏 SPI 树）：
-      - 本函数滚动只读收集未读的引用/名字，绝不在滚动里 _open_chat 去读群标题/开会话；
-      - 滚完原子回顶（找不齐导航按钮就安全跳过，绝不把微信卡在通讯录 tab）。
-
-    零回归：首屏未满（全部会话一屏可见）→ 不滚、不切 tab，走原轻量直读路径（对齐 #962/#965 后基线）。
-
-    托盘修复：微信在系统托盘时 IsWindowVisible=False，mmui 虚拟列表 UIA name 不实时更新。
-    扫描前 _ensure_tray_visible 短暂还原刷新 UIA，扫完 _restore_window_state 还原（用户几乎无感知）。
-    last_content 参数保留（向后兼容调用方），path-2 内容变化检测已移除（bug② 减延迟）。
+    托盘修复：微信在系统托盘时 IsWindowVisible=False，mmui 虚拟列表 UIA name 不实时更新，
+    新消息角标永远扫不到。扫描前 _ensure_tray_visible SW_SHOWNA(8) 短暂还原刷新 UIA，
+    扫完再 _restore_tray SW_HIDE(0) 送回托盘（用户几乎无感知）。
     """
     orig_state = _ensure_tray_visible(mw)
     # 记录【可见态】整树大小(窗口此刻已 ensure_visible，与 _is_uia_tree_collapsed 同口径)：主循环据此
@@ -490,64 +482,39 @@ def scan_unread(mw: Any, last_content: Optional[Dict[str, str]] = None) -> List[
         _LAST_VISIBLE_TREE_SIZE = len(mw.descendants())
     except Exception:
         pass
-
-    # ── 收集未读（只读）：首屏一屏；首屏满才滚整列表找视口外未读（绝不开会话/群）──────────
-    acc = _UnreadScrollAccumulator()
-    ref_by_sender: Dict[str, Any] = {}
-
-    def _absorb(pairs: List[tuple]) -> None:
-        acc.feed([nm for nm, _ in pairs])
-        for nm, it in pairs:
-            p = _parse_item_name(nm)
-            if p:  # 捕获每个未读会话【当前渲染】的最新鲜活引用（回复/聚合用）
-                ref_by_sender[p["sender"]] = it
-
-    page1 = _read_visible_item_pairs(mw)
-    _absorb(page1)
-
-    if len(page1) >= _SCROLL_PROBE_MIN_ITEMS:
-        # 首屏渲染满 ⇒ 列表更长、可能有视口外未读 ⇒ 滚整列表【只读】找全（自检刷屏顶掉客户未读的回归）。
-        last_item = page1[-1][0] if page1 else None
-        unchanged_streak = 0
-        for _ in range(_SCROLL_MAX_PAGES):
-            _scroll_session_list_wheel(mw)            # 只滚不开会话/群（与 CRM 采集严格区分）
-            time.sleep(_SCROLL_SETTLE_SLEEP)
-            pairs = _read_visible_item_pairs(mw)
-            _absorb(pairs)
-            cur_last = pairs[-1][0] if pairs else None
-            if cur_last is not None and cur_last == last_item:
-                unchanged_streak += 1
-            else:
-                unchanged_streak = 0
-            last_item = cur_last
-            if _bottom_reached_by_last_item(unchanged_streak, _SCROLL_LAST_ITEM_UNCHANGED_MAX):
-                break
-        # 归位（死约束1「滚完必须滚回顶部」）：滚完原子切 tab 回真顶——向上滚实测失效，切 tab 是唯一
-        # 有效回顶法；原子版找不齐「通讯录/微信」按钮就安全跳过，绝不把微信卡在通讯录（防 #962/#965）。
-        # 回顶让下一轮直读从顶部开始 + 刷新顶部可见未读的最新鲜活引用（覆盖滚动期可能失效的旧引用）。
-        _reset_session_list_to_top(mw)
-        time.sleep(_SCROLL_SETTLE_SLEEP)
-        for nm, it in _read_visible_item_pairs(mw):
-            p = _parse_item_name(nm)
-            if p:
-                ref_by_sender[p["sender"]] = it
-
-    # ── 组装 + bug② N>1 合并（在滚动结束后做，绝不与滚动并行；只对拿到活引用的会话串行开）──────
+    # ⚠️ 绝不在这里切 tab 回顶（回归 2026-06-29，对齐 74654efd「直接读列表」）。
+    # 曾经（#955）每轮扫描前 _reset_session_list_to_top（切通讯录→切回微信）回顶，但 rog 真机上
+    # 这个切 tab 会失败（找不到「微信」按钮）→ 切去通讯录回不来 → 微信卡在通讯录 tab、无会话列表 →
+    # sessions=0 → 之后全收不到 → 用户体感「回一次就不理」。为治"CRM 扫好友滚到底漏顶部"的偶发
+    # 问题（CRM 扫描每天/手动才一次），却把最核心的"连续回复"每轮都置于风险，得不偿失。
+    # 正确做法：列表始终保持在顶（CRM 扫描收尾自己回顶），scan_unread 直接读即可。
     out: List[Dict[str, Any]] = []
-    for u in acc.unread():
-        sender = u["sender"]
-        item = ref_by_sender.get(sender)
-        content = u["content"]
-        # bug② 修法(b)：N>1 时打开会话读全部 N 条合并成一次 AI 回复上下文（一人连发 3 条 → AI 看 3 条）。
-        if u["count"] > 1 and item is not None:
+    seen_senders: set[str] = set()
+    for it in mw.descendants(control_type="ListItem"):
+        try:
+            name = it.element_info.name or ""
+        except Exception:
+            continue
+        # 只处理有 [N条] 红点的会话（bug② 修法(a)：移除全量内容变化检测，减延迟）。
+        # 旧 path-2（content change）在聊天窗口打开时有用，但需遍历所有 ListItem 做内容比较，
+        # 是 ~64s 延迟的主源；移除后 scan 只做最轻量的角标筛选。
+        parsed = _parse_item_name(name)
+        if not parsed:
+            continue
+        seen_senders.add(parsed["sender"])
+        # bug② 修法(b)：N>1 时打开会话读取全部 N 条消息，合并成一次 AI 回复的上下文。
+        # 一人连发 3 条 → AI 看到 3 条合并上下文，而不是只有最后 1 条预览。
+        n = parse_unread_count(name)
+        if n > 1:
             try:
-                if _open_chat(mw, item, sender):
-                    msgs = read_chat_panel_messages(mw, u["count"])
+                if _open_chat(mw, it, parsed["sender"]):
+                    msgs = read_chat_panel_messages(mw, n)
                     if msgs:
-                        content = aggregate_messages(msgs)
+                        parsed = {**parsed, "content": aggregate_messages(msgs)}
             except Exception:
-                pass  # 读取失败 → 回退单条 content（会话仍进队，不丢失回复机会）
-        out.append({"sender": sender, "content": content, "_item": item})
+                pass  # 读取失败 → 回退到单条 content（会话仍进队，不丢失回复机会）
+        out.append({**parsed, "_item": it})
+    # last_content 参数保留（向后兼容调用方），但 path-2 已移除，不再更新
     _restore_window_state(mw, orig_state)
     return out
 
@@ -669,53 +636,6 @@ class _ScrollAccumulator:
         return list(self._contacts[: self._limit])
 
 
-class _UnreadScrollAccumulator:
-    """滚动扫会话列表【只挑 [N条] 未读】的累计器（纯逻辑，顶层零 pywinauto，CI clean 可跑）。
-
-    与 _ScrollAccumulator（CRM 列全部近期联系人）区别：本累计器只收带 [N条] 未读角标的会话，
-    复用 _parse_item_name(require_unread=True) 解析 + parse_unread_count 取 N。
-    给 scan_unread 滚动找【视口外未读】用（自检刷屏把客户未读顶出视口的回归）：
-
-    - 虚拟滚动多屏（相邻屏有重叠）喂入 feed(page) → 并入保序 distinct 集合，返回本屏新增几个未读。
-    - 保序：先见到的排前（列表顶部 = 最近会话）。
-    - distinct：跨屏同名未读只留首次。
-    - limit：累计满 limit 后不再增长，feed 返回 0。
-    - 系统号/公众号等由 _parse_item_name 同口径过滤（不收）。
-    """
-
-    def __init__(self, limit: int = 200) -> None:
-        self._limit = limit
-        self._seen: set[str] = set()
-        self._unread: List[Dict[str, Any]] = []
-
-    def feed(self, item_names: List[str]) -> int:
-        """喂一屏 ListItem 名字，返回本屏新增的 distinct 未读会话数。"""
-        if len(self._unread) >= self._limit:
-            return 0
-        added = 0
-        for name in item_names:
-            parsed = _parse_item_name(name)   # 只认 [N条] 未读（require_unread=True 默认）
-            if not parsed:
-                continue
-            sender = parsed["sender"]
-            if sender in self._seen:
-                continue
-            if len(self._unread) >= self._limit:
-                break
-            self._seen.add(sender)
-            self._unread.append({
-                "sender": sender,
-                "content": parsed["content"],
-                "count": parse_unread_count(name),
-            })
-            added += 1
-        return added
-
-    def unread(self) -> List[Dict[str, Any]]:
-        """已累计的 distinct 未读会话 [{sender, content, count}]（保序，截到 limit）。"""
-        return list(self._unread[: self._limit])
-
-
 def _should_stop_scroll(no_new_streak: int, max_streak: int) -> bool:
     """（旧）终止判定：连续 max_streak 屏无新增 → 停。已被 _bottom_reached_by_last_item 取代，保留兼容。"""
     return no_new_streak >= max_streak
@@ -790,9 +710,6 @@ _SCROLL_NO_NEW_MAX_STREAK = 2          # 旧无新增阈值（保留兼容，已
 _SCROLL_LAST_ITEM_UNCHANGED_MAX = 10   # 末项连续不变达此次数 → 判到底（鲁棒，扛滚动偶发 stall）
 _SCROLL_MAX_PAGES = 35                 # 硬上限（多滚到底无害，绝不少滚漏底部）
 _SESSION_LIST_X_MAX_FALLBACK = 460     # 左列会话中心 x 上限回退值（取不到 ChatSessionList rect.right 时）
-# scan_unread 触发滚动找视口外未读的「首屏渲染满」阈值：一屏会话列表约渲染 5-6 条 ListItem，
-# 首屏左列 >= 此数 ⇒ 列表更长、可能有视口外未读 ⇒ 滚整列表找全；< 此数 ⇒ 一屏全见 ⇒ 直读不滚不切 tab。
-_SCROLL_PROBE_MIN_ITEMS = 5
 
 
 def _session_list_x_max(mw: Any) -> int:
@@ -820,16 +737,14 @@ def _session_list_x_max(mw: Any) -> int:
     return _SESSION_LIST_X_MAX_FALLBACK
 
 
-def _read_visible_item_pairs(mw: Any) -> List[tuple]:
-    """读一屏当前渲染的「左列会话」(name, item) 对（虚拟列表只暴露可见项）。
+def _read_visible_item_names(mw: Any) -> List[str]:
+    """读一屏当前渲染的「左列会话」ListItem 名字（虚拟列表只暴露可见项）。
 
-    供 scan_unread 滚动收集视口外未读时【既拿名字】（喂 _UnreadScrollAccumulator）【又拿活引用】
-    （回复/聚合用 _item）。只保留会话列表所在左列（中心 x < 会话列表右边界）的 ListItem——开着聊天
-    时右侧聊天面板的消息气泡/时间戳也会被 descendants 读进来当噪音（"08:22"/"[preflight-selfcheck]"），
-    按 x 剔除。拿不到/非数字坐标 → 保守当左列收（不误剔真会话）。
+    只保留会话列表所在左列（中心 x < 会话列表右边界）的 ListItem——开着聊天时右侧聊天面板的
+    消息气泡/时间戳也会被 descendants 读进来当噪音（"08:22"/"[preflight-selfcheck]"），按 x 剔除。
     """
     x_max = _session_list_x_max(mw)
-    out: List[tuple] = []
+    items: List[tuple] = []
     for it in mw.descendants(control_type="ListItem"):
         try:
             nm = it.element_info.name or ""
@@ -841,23 +756,8 @@ def _read_visible_item_pairs(mw: Any) -> List[tuple]:
             cx = int((int(r.left) + int(r.right)) // 2)
         except Exception:
             cx = 0
-        try:
-            keep = cx < x_max
-        except TypeError:
-            keep = True  # x_max 非数字（异常环境）→ 保守收，不误剔
-        if keep:
-            out.append((nm, it))
-    return out
-
-
-def _read_visible_item_names(mw: Any) -> List[str]:
-    """读一屏当前渲染的「左列会话」ListItem 名字（虚拟列表只暴露可见项）。
-
-    只保留会话列表所在左列（中心 x < 会话列表右边界）的 ListItem——开着聊天时右侧聊天面板的
-    消息气泡/时间戳也会被 descendants 读进来当噪音（"08:22"/"[preflight-selfcheck]"），按 x 剔除。
-    （复用 _read_visible_item_pairs，只取名字部分。）
-    """
-    return [nm for nm, _ in _read_visible_item_pairs(mw)]
+        items.append((nm, cx))
+    return _filter_left_column_item_names(items, x_max=x_max)
 
 
 def _read_contact_wechat_id(mw: Any) -> Optional[str]:
