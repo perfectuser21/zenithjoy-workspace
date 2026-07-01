@@ -2596,6 +2596,30 @@ class _SkipCounter:
         return snap
 
 
+# Phase 0 观测：模块版本由 line04 spawn 时经 env ZENITHJOY_MODULE_VERSION 注入（缺=unknown，绝不抛）。
+_MODULE_VERSION = os.environ.get("ZENITHJOY_MODULE_VERSION", "unknown")
+
+
+def build_diag(*, main_window_found, login_present, logged_in, screen_locked,
+               sessions_seen, unread_senders, replied_count, last_error,
+               skip_snapshot) -> dict:
+    """组装心跳诊断 dict（纯函数，便于单测）。module_version + skip_reasons 是 Phase 0 新增，
+    让中台看板显示版本 + 每条未读为何没回，无需 SSH 进客户机。"""
+    return {
+        "main_window_found": main_window_found,
+        "login_present": login_present,
+        "logged_in": logged_in,
+        "screen_locked": screen_locked,
+        "sessions_seen": sessions_seen,
+        "unread_count": len(unread_senders),
+        "unread_senders": unread_senders[:10],
+        "replied_count": replied_count,
+        "last_error": last_error,
+        "module_version": _MODULE_VERSION,
+        "skip_reasons": skip_snapshot,
+    }
+
+
 def _log(msg: str) -> None:
     """同时打印 + 追加到公共日志文件，便于运营/支持 SSH 直接读监听到底干了啥（监听本身 stdio 被忽略）。"""
     print("[listen_chat] " + str(msg), flush=True)
