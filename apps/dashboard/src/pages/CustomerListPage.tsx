@@ -440,8 +440,10 @@ export default function CustomerListPage({
   }, [flash]);
 
   const onChangeStatus = useCallback(async (row: CustomerRow, status: CrmStatus) => {
+    // 按【该行自己的 cs_wechat_id】写（多 cs / super-admin 名册），回退页面级 csWechatId。
+    // 否则改动写进页面首号 → 幽灵行 → "改不了"（2026-07-01 修）。
     const out = await writeJson('/api/crm/customers/status', 'PUT', {
-      wechat_id: csWechatId, contact: row.contact, status,
+      wechat_id: row.cs_wechat_id || csWechatId, contact: row.contact, status,
     });
     if (!out) return;
     flash('保存成功');
@@ -449,8 +451,9 @@ export default function CustomerListPage({
   }, [csWechatId, writeJson, flash, loadCustomers]);
 
   const onChangeIdentity = useCallback(async (row: CustomerRow, identity: CrmIdentity) => {
+    // 按【该行自己的 cs_wechat_id】写（多 cs / super-admin 名册），回退页面级 csWechatId。
     const out = await writeJson('/api/crm/customers/identity', 'PUT', {
-      wechat_id: csWechatId, contact: row.contact, identity,
+      wechat_id: row.cs_wechat_id || csWechatId, contact: row.contact, identity,
     });
     if (!out) return;
     flash(identity === 'internal' ? '已标为内部人员（移出客户列表）' : '保存成功');
