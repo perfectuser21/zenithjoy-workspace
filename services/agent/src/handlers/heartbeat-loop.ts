@@ -61,6 +61,9 @@ export interface HeartbeatLoopOptions {
   // 身份统一（cp-06270030）：register 返的 agents.id (UUID)。
   // 随每次心跳上报，让中台按 (tenant, hostname) 复用同一行，不再生成新 ws1-<hash> 裂身份。
   agentUuid?: string;
+  // 稳定机器指纹（computeMachineId）。随每次心跳上报，让中台即便 agents 表暂缺该行，
+  // 也能经 license_machines/service_agents 按 machine_id 反查租户（修 Line04 P0② NO_TENANT_CONTEXT）。
+  machineId?: string;
   osType?: string;
   intervalMs?: number;
   fetchImpl?: typeof fetch;
@@ -78,6 +81,7 @@ export class HeartbeatLoop {
     Pick<HeartbeatLoopOptions, 'apiBase' | 'license' | 'version' | 'hostname'>
   > & {
     agentUuid?: string;
+    machineId?: string;
     osType?: string;
     intervalMs: number;
     fetchImpl: typeof fetch;
@@ -93,6 +97,7 @@ export class HeartbeatLoop {
       version: options.version,
       hostname: options.hostname,
       agentUuid: options.agentUuid,
+      machineId: options.machineId,
       osType: options.osType,
       intervalMs: options.intervalMs ?? 30_000,
       fetchImpl: options.fetchImpl ?? (globalThis.fetch as typeof fetch),
@@ -126,6 +131,8 @@ export class HeartbeatLoop {
     const agentIdToSend = this.agentId ?? this.opts.agentUuid;
     if (agentIdToSend) body.agent_id = agentIdToSend;
     if (this.opts.agentUuid) body.agent_uuid = this.opts.agentUuid;
+    // 稳定机器指纹：随心跳上报，供中台按 machine_id 反查租户（修 NO_TENANT_CONTEXT）
+    if (this.opts.machineId) body.machine_id = this.opts.machineId;
     if (this.moduleStatus) body.module_status = this.moduleStatus;
 
     let resp: Response;

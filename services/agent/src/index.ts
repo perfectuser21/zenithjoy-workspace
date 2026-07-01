@@ -1054,6 +1054,9 @@ function startWs1HeartbeatLoop(cfg: AgentConfig): void {
     hostname: os.hostname() || safeHostnameSlug(),
     // 身份统一（cp-06270030）：心跳带 register 返的 UUID → 中台复用同一行，不裂身份
     agentUuid: cfg.agentUuid,
+    // 稳定机器指纹：让中台按 machine_id 反查租户（修 Line04 P0② NO_TENANT_CONTEXT）。
+    // 用与注册同款 `cfg.machineId || computeMachineId()`，缓存配置启动 cfg.machineId 为空时也保真身份。
+    machineId: cfg.machineId || computeMachineId(),
     osType: process.platform,
     intervalMs: 30_000,
     onTask,

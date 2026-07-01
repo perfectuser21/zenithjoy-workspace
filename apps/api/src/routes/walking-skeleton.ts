@@ -104,6 +104,8 @@ heartbeatRouter.post(
         version: typeof version === 'string' ? version.slice(0, 50) : null,
         osType: typeof os_type === 'string' ? os_type.slice(0, 20) : null,
         agentUuid: resolvedAgentUuid,
+        // 稳定机器指纹（Agent v2.0.52+ 心跳携带）→ 刷新 license_machines 反查通路
+        machineId: typeof machine_id === 'string' ? machine_id.slice(0, 200) : undefined,
       });
       // 客户端上报的 module_status（per-Line preflight 结果）→ 持久化最新一份
       const normalized = normalizeModuleStatus(module_status);

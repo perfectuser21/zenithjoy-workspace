@@ -213,8 +213,28 @@ export async function upsertAgentByHeartbeat(args: {
    *  命中则跳过 (license_id, hostname) 去重逻辑，防止 hostname=null 时新建幽灵行。
    *  未传或未匹配时退化到原有逻辑（向后兼容）。*/
   agentUuid?: string;
+  /** 稳定机器指纹（心跳携带）。刷新 license_machines(license_id, machine_id) → 让中台按
+   *  machine_id 反查租户的通路始终新鲜，不必等 register 才建行（修 Line04 P0② NO_TENANT_CONTEXT）。*/
+  machineId?: string;
 }): Promise<AgentRow> {
-  const { licenseId, tenantId, hostname, version, osType, agentUuid } = args;
+  const { licenseId, tenantId, hostname, version, osType, agentUuid, machineId } = args;
+
+  // 防线1配套：心跳带 machine_id → 幂等刷新 license_machines（machine_id ↔ license ↔ tenant 通路），
+  // 即便 register 从没成功过，中台也能按 machine_id 反查到租户。best-effort：失败不阻塞心跳主流程。
+  if (machineId && machineId.trim()) {
+    try {
+      await pool.query(
+        `INSERT INTO zenithjoy.license_machines (license_id, machine_id, hostname)
+         VALUES ($1, $2, $3)
+         ON CONFLICT (license_id, machine_id)
+         DO UPDATE SET last_seen = now(),
+                       hostname = COALESCE(EXCLUDED.hostname, zenithjoy.license_machines.hostname)`,
+        [licenseId, machineId.trim(), hostname],
+      );
+    } catch (err) {
+      console.warn('[upsertAgentByHeartbeat] license_machines 刷新失败（best-effort 忽略）:', err);
+    }
+  }
 
   // ── 精确路径：按 agentUuid 直接 UPDATE（跳过 hostname 去重，防幽灵行） ──
   if (agentUuid) {
