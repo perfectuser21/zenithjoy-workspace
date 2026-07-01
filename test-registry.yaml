@@ -710,6 +710,14 @@ tests:
     product: AI员工
     note: "Sprint 06221906 自愈件2 — 真发开关一处传：startWechatListener spawn listen_chat 时把 agent 配置 ZENITHJOY_AGENT_REAL_PUBLISH 显式注入成 REAL_PUBLISH（配合 #821 兼容两名），长驻 listener 与按需 handler 一样能真发"
 
+  - id: agent-line04-listener-module-version-env
+    path: services/agent/modules/line04/__tests__/listener-module-version-env.test.ts
+    type: unit
+    ci: L2
+    status: active
+    product: AI员工
+    note: "Phase 0 观测埋点 — startWechatListener spawn listen_chat 时经 env ZENITHJOY_MODULE_VERSION 注入模块版本（getModuleVersion 读 manifest），供心跳 diag 上报中台，同事机器无 SSH 也能看跑的是哪版 line04"
+
   - id: agent-line04-listener-health-report
     path: services/agent/modules/line04/__tests__/listener-health-report.test.ts
     type: unit
