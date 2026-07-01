@@ -79,18 +79,19 @@ async function crawlVideoComments(browser, videoUrl, taskId, apiBase) {
   const commenters = [];
 
   try {
-    await page.goto(videoUrl, { waitUntil: 'domcontentloaded', timeout: PAGE_TIMEOUT_MS });
+    await page.goto(videoUrl, { waitUntil: 'load', timeout: PAGE_TIMEOUT_MS });
 
-    // 等待评论区加载
-    await page.waitForSelector('[data-e2e="comment-item"]', { timeout: PAGE_TIMEOUT_MS }).catch(() => {});
+    // Douyin 评论区由 JS 异步 XHR 加载，waitForSelector 最多等 40s
+    await page.waitForSelector('[data-e2e="comment-item"]', { timeout: 40000 }).catch(() => {});
 
     // 收集评论者
     const commentItems = await page.$$('[data-e2e="comment-item"]').catch(() => []);
 
     for (const item of commentItems.slice(0, 20)) {
       try {
-        const nickname = await item.$eval('[data-e2e="comment-user-name"]', el => el.textContent?.trim() || '').catch(() => '');
+        // data-e2e="comment-user-name" 已从 Douyin 移除，nickname 在 a[href*=/user/] 文本里
         const profileLink = await item.$eval('a[href*="/user/"]', el => el.getAttribute('href') || '').catch(() => '');
+        const nickname = await item.$eval('a[href*="/user/"]', el => el.textContent?.trim() || '').catch(() => '');
         const secUidMatch = profileLink.match(/\/user\/([^/?]+)/);
         const secUid = secUidMatch ? secUidMatch[1] : null;
 
@@ -143,7 +144,7 @@ async function main() {
       emit({ ok: result.ok, task_id: taskId, video_url: videoUrl, inserted: result.inserted || 0, error: result.error });
     }
   } finally {
-    await browser.disconnect().catch(() => {});
+    await browser.close().catch(() => {});
   }
 }
 
