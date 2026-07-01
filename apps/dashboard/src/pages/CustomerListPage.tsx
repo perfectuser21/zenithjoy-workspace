@@ -134,6 +134,8 @@ interface CustomerRow {
   last_message?: string | null;
   add_friend_time?: string | null;
   identity?: CrmIdentity | null;
+  /** 该客户所属客服机微信号（改身份/状态按此写对号；后端名册每行返回）。 */
+  cs_wechat_id?: string | null;
 }
 
 interface CustomerListResponse {
