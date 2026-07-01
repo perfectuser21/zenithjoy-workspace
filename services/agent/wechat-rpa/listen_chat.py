@@ -1850,6 +1850,12 @@ def reply_in_chat(mw: Any, item: Any, reply_text: str, sender: str = "") -> bool
             if not _open_chat(fmw, item, sender):
                 _log(f"reply_in_chat: 无法切到 {sender!r} 的会话，中止本轮（防串台，绝不发给错误的人）")
                 return False
+            # 群一律不回（用户拍板：只回一对一私聊）。开会话后读右上角标题，带"(人数)"=群 → 跳过。
+            # 根因(2026-07-01)：回复路径此前从不判群、也不给中台传 is_group → 中台默认 is_group=false
+            # → decideAutoSendRoute 落 send → 群被自动回。判群唯一可靠信号 = 标题人数（同 enrich 层）。
+            if _is_group_by_header(_read_chat_header_texts(fmw)) is not None:
+                _log(f"reply_in_chat: {sender!r} 是群聊（标题带人数）→ 跳过不回（skip_group）")
+                return False
         else:
             # 无 sender 信息：退回旧行为（仅 Invoke），不阻塞
             try:
