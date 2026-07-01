@@ -14,6 +14,7 @@ import { Router, Request, Response } from 'express';
 import { z } from 'zod';
 import crypto from 'node:crypto';
 import pool from '../db/connection';
+import { resolveTenantForAgent } from '../services/agent-tenant-resolver';
 import { generateChatDraft, generateMomentDraft } from '../services/wechat-draft';
 import { recordHeartbeat, listHeartbeats } from '../services/wechat-heartbeat';
 import {
@@ -41,6 +42,9 @@ const SchedulerTickSchema = z
     // 沿用 agent-context 既定的「body 显式 id 向后兼容」范式，显式传 tenant_id。
     // 缺租户上下文一律拒绝（见下方 resolveTenantId），绝不回退全量。
     tenant_id: z.string().optional(),
+    // 身份兜底：listen_chat 不知道 tenant_id 但知道自己的 agent_id / machine_id。
+    agent_id: z.string().optional(),
+    machine_id: z.string().optional(),
   })
   .strict();
 
@@ -77,21 +81,25 @@ const DraftGenerateSchema = z.object({
   // listen_chat 等非浏览器 caller 显式传 tenant_id；缺则拒绝、绝不写入任意 agent。
   tenant_id: z.string().optional(),
   // agent 身份兜底：listen_chat 不知道 tenant_id，但知道自己的 agent_id（绑定时已定）。
-  // 缺 tenant_id 时由中台从 agents.tenant_id 推导，符合「租户在绑定时已定」架构。
+  // 缺 tenant_id 时由中台从 agents/license_machines/service_agents 反查，符合「租户在绑定时已定」架构。
   agent_id: z.string().optional(),
+  // 机器指纹兜底：命中 service_agents(machine_id) / license_machines(machine_id) 即可反查租户。
+  machine_id: z.string().optional(),
 });
 
 /**
  * 解析当前请求的租户上下文（客服读写路径多租户隔离）。
  *
  * 沿用 agent-context.ts 既定的「body 显式 id 向后兼容」范式：cron / listen_chat
- * 等非浏览器 caller 显式传 body.tenant_id（或 X-Tenant-Id 头）= 当前租户。
+ * 等非浏览器 caller 显式传 body.tenant_id（或 X-Tenant-Id 头）= 当前租户，仍优先。
  *
- * 兜底：listen_chat 不知道 tenant_id，但知道自己的 agent_id（绑定时已定）。
- * 显式 tenant_id / X-Tenant-Id 皆无、但有 body.agent_id 时，从 agents 表反查
- * tenant_id（租户在绑定时已定，符合架构）。显式 tenant_id 仍优先。
+ * 兜底反查（防线 2，修 Line04 P0② NO_TENANT_CONTEXT，2026-07-01 rog 铁证）：
+ *   listen_chat 用 env 派生 agent_id（agent-env-xxx）POST，该 env-id 只在 license_machines.agent_id、
+ *   从没进 agents.agent_id（心跳建行用随机 ws1-<hex>）。旧逻辑只查 agents → 查不到 → NO_TENANT_CONTEXT。
+ *   现委托 resolveTenantForAgent 从 agents ∪ service_agents(machine_id) ∪ license_machines(machine_id/agent_id)
+ *   稳健反查（详见该模块）。
  *
- * 三者皆无 / agent_id 查不到 → 返回空串 → 调用方一律 4xx 拒绝，
+ * 三者皆无 / 全部查不到 → 返回空串 → 调用方一律 4xx 拒绝，
  * 绝不回退为不带 tenant 过滤的全量查（保持隔离）。
  */
 async function resolveTenantId(req: Request): Promise<string> {
@@ -101,23 +109,16 @@ async function resolveTenantId(req: Request): Promise<string> {
   const explicit = (headerVal || bodyVal || '').trim();
   if (explicit) return explicit;
 
-  // 兜底：从 agent_id 推导 tenant（agents.agent_id 是 text UNIQUE 列，非主键 id uuid）。
+  // 兜底：从 agent_id / machine_id 反查 tenant（租户在绑定时已定，符合架构）。
   const agentId =
     req.body && typeof req.body.agent_id === 'string' ? req.body.agent_id.trim() : '';
-  if (!agentId) return '';
-  try {
-    // listen_chat 的 agent_id 可能是 env-id（agents.agent_id 文本列）或 register 返的
-    // agents.id UUID（core setIdentity 传 agentUuid??agentId）。两种都认，否则 listener 传
-    // UUID 时按 agent_id 列查不到 → NO_TENANT_CONTEXT，名单内也静默不回（2026-06-23 实测根因）。
-    const { rows } = await pool.query(
-      'SELECT tenant_id FROM zenithjoy.agents WHERE agent_id = $1 OR id::text = $1 LIMIT 1',
-      [agentId],
-    );
-    if (rows[0] && rows[0].tenant_id) return String(rows[0].tenant_id).trim();
-  } catch (err) {
-    console.error('[wechat/resolveTenantId] 从 agent_id 推导 tenant 失败:', err);
-  }
-  return '';
+  const machineId = (
+    req.header('X-Machine-Id') ||
+    (req.body && typeof req.body.machine_id === 'string' ? req.body.machine_id : '') ||
+    ''
+  ).trim();
+  if (!agentId && !machineId) return '';
+  return resolveTenantForAgent(pool, { agentId, machineId });
 }
 
 // ─── POST /api/wechat/qr-bind ───────────────────────────────────────────────

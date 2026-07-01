@@ -49,6 +49,30 @@ describe('HeartbeatLoop', () => {
     expect(body.hostname).toBe('host-x');
   });
 
+  // 防线 1（Agent）：心跳必须携带稳定 machine_id，让中台即便 agents 表暂缺该行，
+  // 也能经 license_machines/service_agents 反查租户（修 Line04 P0② NO_TENANT_CONTEXT）。
+  it('heartbeat body includes machine_id when machineId option set', async () => {
+    const fetchImpl = vi.fn<typeof fetch>(async () =>
+      new Response(
+        JSON.stringify({ ok: true, agent_id: 'agent-1', queued_tasks: [] }),
+        { status: 200 },
+      ),
+    );
+    const loop = new HeartbeatLoop({
+      apiBase: 'https://api.example.com',
+      license: 'zj-test',
+      version: '0.1.0',
+      hostname: 'host-x',
+      machineId: '425b144f077a667bb42666821220e06d',
+      fetchImpl: fetchImpl as any,
+    });
+    await loop.sendOnce();
+    const body = JSON.parse(String(fetchImpl.mock.calls[0][1]?.body));
+    expect(body.machine_id, '心跳 body 必须带 machine_id').toBe(
+      '425b144f077a667bb42666821220e06d',
+    );
+  });
+
   it('subsequent heartbeats include agent_id once known', async () => {
     let call = 0;
     const fetchImpl = vi.fn<typeof fetch>(async () => {

@@ -4145,3 +4145,11 @@ agent_suite:
     status: active
     product: 智能获客
     note: "regression(2026-06-30): POST /burner/sessions/invalidate 端点——Douyin session 过期自动标记 needs_rebind + Dashboard 红色警告。"
+
+  - id: api-agent-tenant-resolver
+    path: apps/api/src/services/__tests__/agent-tenant-resolver.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 客户私域AI接管
+    note: "regression(2026-07-01, P0②): NO_TENANT_CONTEXT 根治——按 agents/service_agents.machine_id/license_machines(machine_id|env-agent_id) 四源稳健反查租户，deny-by-default，DB 异常吞掉返空不回退全量。"
