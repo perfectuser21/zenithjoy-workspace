@@ -281,7 +281,7 @@ router.get('/customers', requireCsReadAccess, async (req: Request, res: Response
     // identity='internal' = 内部人员（运营自己/同事，不是客户）→ 从客户名册排除。
     // SQL 层 WHERE 先排除；JS 层再兜一刀（防 SQL 误改 / 大小写漂移），双保险。
     const custRes = await pool.query(
-      `SELECT contact, wechat_id, status, source, last_message, last_seen_at, add_friend_time, identity
+      `SELECT contact, wechat_id, status, source, last_message, last_seen_at, add_friend_time, identity, cs_wechat_id
          FROM zenithjoy.crm_customers
         WHERE tenant_id = $1::uuid AND identity <> 'internal' AND deleted_at IS NULL${csWhere}`,
       custParams,
@@ -295,6 +295,7 @@ router.get('/customers', requireCsReadAccess, async (req: Request, res: Response
         status: r.status as string,
         add_friend_time: r.add_friend_time ? new Date(r.add_friend_time).toISOString() : null,
         identity: (r.identity as string | null) ?? 'customer',
+        cs_wechat_id: (r.cs_wechat_id as string | null) ?? null,
       }));
     const scanContacts: RosterScanRow[] = customerRows
       .filter((r) => r.source === 'scan')
@@ -306,6 +307,7 @@ router.get('/customers', requireCsReadAccess, async (req: Request, res: Response
         last_seen_at: r.last_seen_at ? new Date(r.last_seen_at).toISOString() : null,
         add_friend_time: r.add_friend_time ? new Date(r.add_friend_time).toISOString() : null,
         identity: (r.identity as string | null) ?? 'customer',
+        cs_wechat_id: (r.cs_wechat_id as string | null) ?? null,
       }));
 
     // 接管态：该 scope 内客服机配置（blacklist / whitelist / takeover_mode）

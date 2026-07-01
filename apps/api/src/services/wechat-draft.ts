@@ -277,8 +277,9 @@ const FAIL_PLACEHOLDER = 'AI 生成失败（请人审决定是否重试）';
 /**
  * 本地黑名单判定（去飞书，blacklist 主模型 SSOT）：
  *   1) per-客服机 接管 gate：zenithjoy.wechat_cs_account_config.blacklist（jsonb 数组，按客服微信号分行）
- *   2) 名册属性：zenithjoy.crm_customers.identity='blacklist'（与 config.blacklist 双向同步，多查一层防漏）
- * 任一命中 → 标黑（不回）。读类失败一律 console.warn 后按"未标黑"处理（fail-open，绝不因 DB 抖动漏回客户）。
+ *   2) 名册属性：zenithjoy.crm_customers.identity IN ('blacklist','internal')。blacklist=运营拉黑；
+ *      internal=内部人员/自己人（同事/运营自己），客服 AI 同样不该回（2026-07-01 修"标了内部人员还被回"）。
+ * 任一命中 → 不回。读类失败一律 console.warn 后按"未标黑"处理（fail-open，绝不因 DB 抖动漏回客户）。
  */
 async function isContactBlacklisted(
   csWechatId: string | null,
@@ -312,7 +313,7 @@ async function isContactBlacklisted(
     try {
       const { rows } = await pool.query(
         `SELECT 1 FROM zenithjoy.crm_customers
-          WHERE tenant_id = $1 AND contact = $2 AND identity = 'blacklist' AND deleted_at IS NULL
+          WHERE tenant_id = $1 AND contact = $2 AND identity IN ('blacklist', 'internal') AND deleted_at IS NULL
           LIMIT 1`,
         [tenantId, sender],
       );

@@ -115,4 +115,34 @@ describe('generateChatDraft 去飞书自动直发 [BEHAVIOR]', () => {
     expect(result.reply).toBeUndefined();
     expect(llm).not.toHaveBeenCalled();
   });
+
+  it('J6: identity=internal（内部人员）→ status:skipped，不回自己人（2026-07-01 打架修复）', async () => {
+    // 真机：运营把同事标 internal，但回复网关只认 blacklist、不认 internal → 照回。
+    // 修法：isContactBlacklisted 的 crm_customers 查询按 identity IN ('blacklist','internal')。
+    // mock 只在 SQL 真的问了 internal 时才命中——旧码(只问 blacklist)→不命中→仍回→RED。
+    mockQuery.mockImplementation((sql: string) => {
+      if (
+        typeof sql === 'string' &&
+        sql.includes('crm_customers') &&
+        sql.includes('internal')
+      ) {
+        return Promise.resolve({ rows: [{ x: 1 }], rowCount: 1 });
+      }
+      return Promise.resolve({ rows: [], rowCount: 0 });
+    });
+    const llm = vi.mocked(callOpenRouter).mockResolvedValue({ content: 'X' } as any);
+    const mod = await import('../wechat-draft');
+    const result: any = await mod.generateChatDraft({
+      sender: '内部同事',
+      wechat_id: 'wxid_internal',
+      content: '在吗',
+      mode: 'auto',
+      tenant_id: 'tenant-a',
+    } as any);
+
+    expect(result.ok).toBe(true);
+    expect(result.status).toBe('skipped');
+    expect(result.reply).toBeUndefined();
+    expect(llm).not.toHaveBeenCalled();
+  });
 });

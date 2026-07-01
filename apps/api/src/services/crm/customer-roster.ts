@@ -47,6 +47,8 @@ export interface RosterManualRow {
   add_friend_time?: string | null;
   /** 身份三态（缺省 customer）。 */
   identity?: string | null;
+  /** 该客户所属客服机微信号（前端改身份/状态按此写对号，缺省回退 params.csWechatId）。 */
+  cs_wechat_id?: string | null;
 }
 
 /** crm_customers source='scan' 扫描好友行（agent 扫客服机近期会话联系人上报落库）。 */
@@ -63,6 +65,8 @@ export interface RosterScanRow {
   add_friend_time?: string | null;
   /** 身份三态（缺省 customer）。 */
   identity?: string | null;
+  /** 该客户所属客服机微信号（前端改身份/状态按此写对号，缺省回退 params.csWechatId）。 */
+  cs_wechat_id?: string | null;
 }
 
 /** 接管模式：blacklist（主模型，默认全接管 + 黑名单排除）| whitelist（小众兼容，只接管名单内）。 */
@@ -84,6 +88,8 @@ export interface CustomerRosterRow {
   add_friend_time: string | null;
   /** 身份三态（customer/blacklist/internal；internal 已在 SQL 层排除，不会出现在此列表）。 */
   identity: CrmIdentity;
+  /** 该客户所属客服机微信号（前端改身份/状态按此写对号；多 cs / super-admin 名册必需）。 */
+  cs_wechat_id: string | null;
 }
 
 export interface BuildCustomerRosterParams {
@@ -151,6 +157,7 @@ export async function buildCustomerRoster(
       last_message: prev?.last_message ?? null,
       add_friend_time: prev?.add_friend_time ?? null,
       identity: prev?.identity ?? 'customer',
+      cs_wechat_id: prev?.cs_wechat_id ?? params.csWechatId ?? null,
     });
   }
 
@@ -171,6 +178,7 @@ export async function buildCustomerRoster(
       last_message: s.last_message ?? prev?.last_message ?? null,
       add_friend_time: s.add_friend_time ?? prev?.add_friend_time ?? null,
       identity: prev?.identity ?? normalizeIdentity(s.identity),
+      cs_wechat_id: s.cs_wechat_id ?? prev?.cs_wechat_id ?? params.csWechatId ?? null,
     });
   }
 
@@ -190,6 +198,7 @@ export async function buildCustomerRoster(
       last_message: prev?.last_message ?? null,
       add_friend_time: c.add_friend_time ?? prev?.add_friend_time ?? null,
       identity: normalizeIdentity(c.identity ?? prev?.identity),
+      cs_wechat_id: c.cs_wechat_id ?? prev?.cs_wechat_id ?? params.csWechatId ?? null,
     });
   }
 
@@ -209,6 +218,7 @@ export async function buildCustomerRoster(
           last_message: null,
           add_friend_time: null,
           identity: 'customer',
+          cs_wechat_id: params.csWechatId ?? null,
         });
       }
     }
@@ -244,6 +254,7 @@ export async function buildCustomerRoster(
         last_message: null,
         add_friend_time: null,
         identity: 'customer',
+        cs_wechat_id: params.csWechatId ?? null,
       },
     ];
   }
