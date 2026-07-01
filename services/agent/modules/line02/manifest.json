@@ -1,6 +1,6 @@
 {
   "lineId": "line02-lead-gen",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "displayName": "智能获客",
   "entry": "index.js",
   "platform": ["win32", "darwin", "linux"],
