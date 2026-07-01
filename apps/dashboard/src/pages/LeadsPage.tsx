@@ -1,6 +1,6 @@
 import 'ag-grid-community/styles/ag-grid.css';
 import 'ag-grid-community/styles/ag-theme-quartz.css';
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { RefreshCw, Search } from 'lucide-react';
 import { AgGridReact } from 'ag-grid-react';
 import type { ColDef, ICellRendererParams } from 'ag-grid-community';
@@ -18,22 +18,6 @@ interface Lead {
 interface ExpandKeyword {
   word: string;
   source: 'ai' | 'manual' | 'seed';
-}
-interface CollectLead {
-  sec_uid: string | null;
-  nickname: string;
-  profile_url: string | null;
-  partial: boolean;
-}
-interface CollectStatus {
-  task_id: string;
-  status: string;
-  video_count: number;
-  lead_count_raw: number;
-  lead_count_deduped: number;
-  error_code: string | null;
-  degraded: boolean;
-  leads: CollectLead[];
 }
 
 const VALID_GRADES = ['感兴趣', '精准', '高意向'] as const;
@@ -107,11 +91,8 @@ export default function LeadsPage() {
   const [acqPhase, setAcqPhase] = useState<'idle' | 'expanded' | 'dispatched'>('idle');
   const [acqKeywords, setAcqKeywords] = useState<ExpandKeyword[]>([]);
   const [acqDegraded, setAcqDegraded] = useState(false);
-  const [acqTaskId, setAcqTaskId] = useState<string | null>(null);
-  const [acqStatus, setAcqStatus] = useState<CollectStatus | null>(null);
   const [acqError, setAcqError] = useState<string | null>(null);
   const [manualInput, setManualInput] = useState('');
-  const acqSseRef = useRef<EventSource | null>(null);
 
   // 点"采集"直接展开关键词输入框（不走飞书扩词）
   const handleCollect = () => {
@@ -145,43 +126,28 @@ export default function LeadsPage() {
 
   const handleConfirm = async () => {
     setAcqError(null);
+    const words = acqKeywords.map((k) => k.word).filter(Boolean);
+    if (words.length === 0) return;
     try {
-      const res = await fetch('/api/acquisition/collect/start', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ keywords: acqKeywords.map((k) => k.word) }),
-      });
-      const body = await res.json();
-      if (!res.ok || !body.success) {
-        setAcqError(body?.error?.code || `HTTP ${res.status}`);
-        return;
+      // 走 Agent 核心完整管道：关键词搜索 → 进视频评论区 → 抓评论者 → 写本地 DB
+      for (const kw of words) {
+        const res = await fetch('/api/acquisition/keyword-search', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ keyword: kw }),
+        });
+        const body = await res.json();
+        if (!res.ok) {
+          setAcqError(body?.error || `HTTP ${res.status}`);
+          return;
+        }
       }
-      setAcqTaskId(body.data.task_id as string);
       setAcqPhase('dispatched');
     } catch (e) {
       setAcqError((e as Error).message);
     }
   };
 
-  useEffect(() => {
-    if (!acqTaskId) return;
-    const es = new EventSource(`/api/acquisition/collect/${acqTaskId}/sse`);
-    acqSseRef.current = es;
-    es.onmessage = (event) => {
-      try {
-        const data = JSON.parse(event.data) as CollectStatus;
-        setAcqStatus(data);
-        const terminal = ['done', 'failed', 'cancelled', 'partial'];
-        if (terminal.includes(data.status)) es.close();
-      } catch { /* ignore parse error */ }
-    };
-    es.onerror = () => {
-      if (es.readyState === EventSource.CLOSED) {
-        acqSseRef.current = null;
-      }
-    };
-    return () => { es.close(); acqSseRef.current = null; };
-  }, [acqTaskId]);
 
   const load = async (grade: Grade) => {
     setLoading(true);
@@ -341,31 +307,9 @@ export default function LeadsPage() {
           </div>
         )}
 
-        {acqPhase === 'dispatched' && acqStatus && (
+        {acqPhase === 'dispatched' && (
           <div data-testid="acq-task-status" className="mt-2 text-sm text-gray-300">
-            <div className="flex flex-wrap gap-4 items-center">
-              <span>状态：<b data-testid="acq-status-value" className="text-yellow-300">{acqStatus.status}</b></span>
-              <span data-testid="acq-video-count">视频：{acqStatus.video_count}</span>
-              <span data-testid="acq-lead-count-raw">原始：{acqStatus.lead_count_raw}</span>
-              <span data-testid="acq-lead-count-deduped">去重：{acqStatus.lead_count_deduped}</span>
-              {acqStatus.error_code && (
-                <span data-testid="acq-error-code" className="text-red-400">失败：{acqStatus.error_code}</span>
-              )}
-            </div>
-            <ul className="mt-2 space-y-1">
-              {acqStatus.leads.map((l, i) => (
-                <li key={i} className="flex items-center gap-2 text-gray-400">
-                  <span>{l.nickname}</span>
-                  {l.profile_url ? (
-                    <a data-testid="acq-lead-profile-link" href={l.profile_url}
-                       target="_blank" rel="noopener noreferrer"
-                       className="text-blue-400 hover:underline text-xs">抖音主页</a>
-                  ) : (
-                    <span data-testid="acq-lead-partial-badge" className="text-xs text-orange-400">残缺/待核</span>
-                  )}
-                </li>
-              ))}
-            </ul>
+            <span className="text-green-400">✓ 采集任务已派发给 Agent，正在进入视频评论区抓取评论者，约 1-2 分钟后点"刷新"查看名单。</span>
           </div>
         )}
       </div>
