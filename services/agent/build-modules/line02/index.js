@@ -106,7 +106,11 @@ function spawnKeywordSearch(keyword, taskId, apiBase) {
             process.stderr.write(`[line02] keyword-search script not found: ${scriptPath}\n`);
             return resolve();
         }
-        const child = (0, child_process_1.spawn)(process.execPath, [scriptPath, keyword, '19222', '5'], {
+        // process.execPath is the agent exe (pkg-packed), which exits immediately due to
+        // single-instance guard. Use the bundled node runtime extracted by start.bat instead.
+        const nodeExe = process.env.ZENITHJOY_NODE_BIN ||
+            path.join(process.env.APPDATA || process.env.HOME || '', 'ZenithJoy', 'runtime', 'nodejs', 'node.exe');
+        const child = (0, child_process_1.spawn)(nodeExe, [scriptPath, keyword, '19222', '5'], {
             env: { ...process.env },
             stdio: ['ignore', 'pipe', 'pipe'],
         });
