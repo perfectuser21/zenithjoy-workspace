@@ -136,6 +136,11 @@ jobs:
                            tests/test_friend_scan_pending.py \
                            tests/test_cs_config_gate.py \
                            tests/test_scan_unread.py \
+                           tests/test_scan_unread_n_msgs.py \
+                           tests/test_bubble_anchor.py \
+                           tests/test_read_chat_bubbles.py \
+                           tests/test_scan_trigger.py \
+                           tests/test_msg_direction.py \
                            tests/test_reply_loop_purity.py \
                            tests/test_phase0_observability.py -q
       - name: line04 Phase 0 观测 smoke（版本三面一致 + build_diag 含 module_version/skip_reasons）
