@@ -2,7 +2,7 @@
 skeleton: false
 journey_type: user_facing
 ---
-# Contract DoD — Sprint: Line02 获客工作台 IA 重设计（Round 2）
+# Contract DoD — Sprint: Line02 获客工作台 IA 重设计（Round 5）
 
 **范围**: AcquisitionHubPage 改4模块入口卡片 + AccountsPage（新建）+ TasksPage（改接新表+新建二级+失败态）+ LeadsPage（移除采集面板）+ DouyinBurnerBindPage废弃redirect + 新建2个GET端点 + acquisition_collect_videos DB表 + Agent选择器补 title/thumbnail/publish_date + e2e-windows.yml补2个secrets
 **大小**: L

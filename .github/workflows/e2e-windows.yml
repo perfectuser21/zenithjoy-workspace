@@ -46,6 +46,8 @@ jobs:
           DASHSCOPE_API_KEY: ${{ secrets.ALIYUN_API_KEY }}
           E2E_DATABASE_URL: ${{ secrets.E2E_DATABASE_URL }}
           E2E_API_URL: ${{ secrets.E2E_API_URL }}
+          E2E_TEST_TENANT_ID: ${{ secrets.E2E_TEST_TENANT_ID }}
+          E2E_OTHER_TENANT_ID: ${{ secrets.E2E_OTHER_TENANT_ID }}
         run: |
           $sprintDir = "${{ inputs.sprint_dir }}"
           $taskId = "${{ inputs.task_id }}"
