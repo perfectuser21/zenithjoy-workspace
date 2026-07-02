@@ -2367,6 +2367,48 @@ def _scan_deadline_exceeded(start_ts: float, now_ts: float, max_seconds: float) 
     return max_seconds > 0 and (now_ts - start_ts) >= max_seconds
 
 
+def classify_unread(
+    *,
+    roster_gate_on: bool,
+    roster_should_reply: bool,
+    in_sender_cooldown: bool,
+    already_replied: bool,
+    in_fail_cooldown: bool,
+    is_dup,
+    rate_check,
+) -> Tuple[str, Optional[str]]:
+    """一条未读消息的处置判定（纯函数）。返回 (原因, rate_next_at)。
+
+    原因 ∈ {'roster_gate','sender_cooldown','replied','cooldown','dup','rate_limited','eligible'}
+    （与 _SkipCounter.record 的原因串一致）。rate_next_at 仅在 'rate_limited' 时非空（日志用）。
+
+    ⚠️ 客户消息绝不静默丢弃（2026-07-02 根治）。两个【有副作用】的检查用 callable 惰性传入，
+    只在真正走到那一关时才调用，且顺序经过精心排布：
+    - `is_dup()`：调用即把该消息标记"见过"（去重 SSOT）。放在 sender_cooldown/replied/fail
+      【之后】→ 被这些前置关卡跳过的消息【不会被标记】→ 下轮条件解除后照常可回（能晚回、绝不丢）。
+      放在 rate【之前】→ 同一轮 UIA 重复读先被 dup 挡掉，不浪费频控额度。
+    - `rate_check()`：返回 (ok, next_at)，ok=True 时【消费一格额度（INSERT sends）】。放【最后】
+      → 只为"过了所有前置关卡、且非重复读"的真要发消息扣额度，绝不为被跳过的消息误扣。
+
+    对比旧 bug：is_dup 曾排在 sender_cooldown【之前】→ 撞 30s 冷却的消息先被标记"见过"再被
+    跳过 → 之后每轮 dup 永久丢弃永不回。本函数把 dup 挪到 cooldown 之后根治。
+    """
+    if roster_gate_on and not roster_should_reply:
+        return "roster_gate", None
+    if in_sender_cooldown:
+        return "sender_cooldown", None
+    if already_replied:
+        return "replied", None
+    if in_fail_cooldown:
+        return "cooldown", None
+    if is_dup():  # 标记型副作用；在 cooldown/replied/fail 之后、rate 之前
+        return "dup", None
+    ok_rl, next_at = rate_check()  # 消费型副作用；最后一关
+    if not ok_rl:
+        return "rate_limited", next_at
+    return "eligible", None
+
+
 # ─── 关键人出站任务（上下线播报 + 失败告警）：拉取 → 真机发送 → 回执 ──────────────────
 #
 # C1 尾巴接线：中台把「主动发给关键人」的出站任务入库（status=approved/system），
@@ -3170,46 +3212,54 @@ def run_real_listen(args: argparse.Namespace) -> int:
             eligible = []
             for m in unread:
                 key = (m["sender"], m["content"])
-                if _roster_gate_on and not cs_config_gate.should_reply(_cs_cfg, m["sender"]):
-                    _skip_counter.record("roster_gate")
-                    if key not in _skip_logged:
-                        _reason = "黑名单内" if _cs_mode == "blacklist" else "不在该客服白名单"
-                        _log(f"skip({_reason}) sender={m['sender']}")
-                        _skip_logged.add(key)
+                # 客户消息绝不静默丢弃：去重(is_dup)、频控(rate_check)都是有副作用的惰性 callable，
+                # 只在真正走到那一关才调用。被 cooldown/replied/fail 跳过的消息不被去重标记 →
+                # 下轮条件解除后照常可回（能晚回、绝不永久丢）。详见 classify_unread 文档。
+                _next_at: Optional[str] = None
+
+                def _rate_check(_s=m["sender"]):
+                    if rate_limiter is None:
+                        return True, None
+                    return rate_limiter.can_send("chat", _s)
+
+                _reason, _next_at = classify_unread(
+                    roster_gate_on=_roster_gate_on,
+                    roster_should_reply=(not _roster_gate_on)
+                    or cs_config_gate.should_reply(_cs_cfg, m["sender"]),
+                    in_sender_cooldown=(now - sender_reply_cooldown.get(m["sender"], 0) < SENDER_COOLDOWN),
+                    already_replied=(key in replied),
+                    in_fail_cooldown=(
+                        key in reply_failed_at and now - reply_failed_at[key] < REPLY_FAIL_COOLDOWN
+                    ),
+                    is_dup=lambda _s=m["sender"], _c=m["content"]: auto_reply.is_duplicate(_s, _c, now),
+                    rate_check=_rate_check,
+                )
+                if _reason == "eligible":
+                    eligible.append(m)
                     continue
-                # UIA 重复读防护：同 (联系人, 文本) 在去重时间窗内只回一次（auto_reply.is_duplicate
-                # 是 SSOT；pywinauto 轮询常把同一条未读重复读出来，这里挡掉防重复发）。
-                if auto_reply.is_duplicate(m["sender"], m["content"], now):
-                    _skip_counter.record("dup")
+                _skip_counter.record(_reason)
+                # per-reason 日志（保持原有可观测性）
+                if _reason == "roster_gate":
+                    if key not in _skip_logged:
+                        _rl = "黑名单内" if _cs_mode == "blacklist" else "不在该客服白名单"
+                        _log(f"skip({_rl}) sender={m['sender']}")
+                        _skip_logged.add(key)
+                elif _reason == "dup":
                     if key not in _skip_logged:
                         _log(f"skip(dup) sender={m['sender']} content={m['content'][:20]!r}")
                         _skip_logged.add(key)
-                    continue
-                # per-sender 冷却：成功回复后 30s 内跳过同一 sender
-                if now - sender_reply_cooldown.get(m["sender"], 0) < SENDER_COOLDOWN:
-                    _skip_counter.record("sender_cooldown")
-                    continue
-                if key in replied:
-                    _skip_counter.record("replied")
+                elif _reason == "replied":
                     if key not in _skip_logged:
                         _log(f"skip(replied) sender={m['sender']} content={m['content'][:20]!r}")
                         _skip_logged.add(key)
-                    continue
-                if key in reply_failed_at and now - reply_failed_at[key] < REPLY_FAIL_COOLDOWN:
+                elif _reason == "cooldown":
                     left = int(REPLY_FAIL_COOLDOWN - (now - reply_failed_at[key]))
-                    _skip_counter.record("cooldown")
                     if key not in _skip_logged:
                         _log(f"skip(cooldown {left}s) sender={m['sender']} content={m['content'][:20]!r}")
                         _skip_logged.add(key)
-                    continue
-                # 频控：≤2 私聊/分钟、≤50/天/号，操作间隔 ≥1s（rate_limiter 是 SSOT）
-                if rate_limiter is not None:
-                    ok_rl, _next_at = rate_limiter.can_send("chat", m["sender"])
-                    if not ok_rl:
-                        _skip_counter.record("rate_limited")
-                        _log(f"rate_limiter: {m['sender']} 24h限额已满，跳过回复（下次允许: {_next_at}）")
-                        continue
-                eligible.append(m)
+                elif _reason == "rate_limited":
+                    _log(f"rate_limiter: {m['sender']} 24h限额已满，跳过回复（下次允许: {_next_at}）")
+                # sender_cooldown 无日志（与原实现一致，避免每轮刷屏）
 
             # 并行向中台要草稿文本（最多 5 路同时，避免压垮中台）；按 id(m) 存回复
             drafts = {}
