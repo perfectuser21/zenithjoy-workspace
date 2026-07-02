@@ -624,6 +624,25 @@ def scan_unread(mw: Any, last_preview: Optional[Dict[str, str]] = None,
     return out
 
 
+
+def _commit_reply_success(msg: Dict[str, Any],
+                          last_preview: Optional[Dict[str, str]]) -> None:
+    """DELIVERED hook: scan_unread emit 已送达后调用，提交触发消费 + 停滞归零。
+
+    事务语义:
+      1. last_preview[sender] = _preview_name -- 下轮发现层不再视为变化，防重复触发。
+         _preview_name 缺失（回退路径 content-only msg）-> 不更新，触发态保留等下轮。
+      2. _ANCHOR_STALL[sender] 归零 -> DELIVERED = 停滞清除，心跳告警不误触发。
+    """
+    sender = (msg or {}).get("sender", "")
+    if not sender:
+        return
+    preview_name = (msg or {}).get("_preview_name")
+    if preview_name and last_preview is not None:
+        last_preview[sender] = preview_name
+    _ANCHOR_STALL.pop(sender, None)
+
+
 # ─── CRM 好友表行源：列出近期会话联系人（不要求未读）────────────────────────────
 #
 # 背景（PrepPRD §3.4 / 修正5）：把"客服白名单手填"换成"agent 扫客服机微信近期会话
@@ -3023,7 +3042,7 @@ def run_real_listen(args: argparse.Namespace) -> int:
     _skip_logged: set[tuple[str, str]] = set()  # 只对每个 key 打一次 skip log，避免刷屏
     _skip_counter = _SkipCounter()  # Phase 0 观测：累计每条 skip reason → 心跳 diag（中台可见）
     # 内容变化检测：{sender: last_seen_content}，捕捉聊天面板打开时的新消息（无未读角标）
-    last_content: dict[str, str] = {}
+    last_preview: dict[str, str] = {}
     deadline = time.time() + max(1, args.timeout)
     # 进程守护：向中台上报心跳（断 3 分钟无心跳中台飞书告警）+ 扫描诊断
     heartbeat_interval = _HEARTBEAT_INTERVAL
@@ -3240,7 +3259,7 @@ def run_real_listen(args: argparse.Namespace) -> int:
                     continue
 
             try:
-                unread = scan_unread(mw, last_content)
+                unread = scan_unread(mw, last_preview)
             except Exception as exc:
                 last_error = f"{type(exc).__name__}: {exc}"
                 time.sleep(args.interval)
@@ -3486,7 +3505,7 @@ def run_real_listen(args: argparse.Namespace) -> int:
                     _skip_logged.discard(key)
                     reply_failed_at.pop(key, None)
                     sender_reply_cooldown[m["sender"]] = time.time()  # per-sender 30s 冷却
-                    last_content.pop(m["sender"], None)  # 删除防自回复风暴（存 reply 反而触发 Path2 截断误判）
+                    _commit_reply_success(m, last_preview)  # DELIVERED
                     _log(f"auto-replied OK sender={m['sender']} receipt={receipt['status']}")
                 else:
                     reply_failed_at[key] = time.time()
