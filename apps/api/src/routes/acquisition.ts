@@ -309,6 +309,13 @@ acquisitionRouter.post('/video-search-result', async (req: Request, res: Respons
           [randomUUID(), keyword_task_id, keyword ?? '', v.video_url ?? '']
         );
       }
+      // 每次上报都标记 keyword_task 为 done（包括 agent 在所有关键词处理完后发的空 sentinel 调用）
+      await pool.query(
+        `UPDATE zenithjoy.acquisition_keyword_tasks
+            SET status = 'done', updated_at = NOW()
+          WHERE id = $1 AND status != 'done'`,
+        [keyword_task_id]
+      );
     } catch (err) {
       console.error('[acquisition] video-search-result DB insert failed:', (err as Error).message);
     }
