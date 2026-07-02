@@ -1,24 +1,27 @@
 #!/usr/bin/env node
 'use strict';
 /**
- * crawl-comments-douyin.cjs — 抖音视频评论区全量抓取 → commenter 主页 → POST collect/report
+ * crawl-comments-douyin.cjs — 抖音视频评论区抓取 → commenter 信息 → POST collect/report
  *
- * Usage: node crawl-comments-douyin.cjs <video_url> <task_id> [apiBase] [cdpPort=19222]
+ * Usage: node crawl-comments-douyin.cjs <video_url> <task_id> [apiBase] [unused] [--stdout-only]
  * Output: 末行 stdout JSON → { ok, task_id, video_url, inserted, error? }
  *
- * v1.0.10: 滚动加载全量评论（无上限），连续 3 轮无新评论才停
+ * v2.0.0: 改用 burner user-data-dir 自动启动 Edge（launchPersistentContext），
+ *         cookies 从绑定时保存的 profile 自动加载，不再依赖外部已运行的 Chrome CDP。
  */
 const { chromium } = require('playwright-core');
 const https = require('https');
 const http = require('http');
+const path = require('path');
+const os = require('os');
+const fs = require('fs');
 
 // 滚动参数
-const STABLE_ROUNDS = 3;   // 连续N轮无新评论 → 到底了
-const SCROLL_PAUSE_MS = 2000;
-const MAX_SCROLL_ROUNDS = 300; // 保底防死循环
+const STABLE_ROUNDS = 3;
+const SCROLL_PAUSE_MS = 1500;
+const MAX_SCROLL_ROUNDS = 15; // ~22 秒/视频，避免热门视频卡死
 
-const [, , videoUrl = '', taskId = '', apiBase = 'http://localhost:3000', cdpPortStr = '19222', mode = ''] = process.argv;
-const MAIN_CDP_PORT = parseInt(cdpPortStr, 10) || 19222;
+const [, , videoUrl = '', taskId = '', apiBase = 'http://localhost:3000', , mode = ''] = process.argv;
 const STDOUT_ONLY = mode === '--stdout-only';
 const PAGE_TIMEOUT_MS = 30000;
 
@@ -48,12 +51,22 @@ function postReport(payload, base) {
   });
 }
 
-async function findMainChrome() {
-  try {
-    return await chromium.connectOverCDP(`http://localhost:${MAIN_CDP_PORT}`);
-  } catch {
-    return null;
+/**
+ * 自动发现 burner Chrome profile 目录（由 qr-bind-douyin-burner 在绑定时创建）。
+ * Windows: C:\Temp\zj-douyin-burner-v1\<account_label>
+ * Mac/Linux: ~/.zenithjoy-agent/chrome-profile/douyin-burner/<account_label>
+ */
+function resolveBurnerProfileDir() {
+  let root;
+  if (process.platform === 'win32') {
+    root = path.join('C:\\Temp', 'zj-douyin-burner-v1');
+  } else {
+    root = path.join(os.homedir(), '.zenithjoy-agent', 'chrome-profile', 'douyin-burner');
   }
+  if (!fs.existsSync(root)) return null;
+  const entries = fs.readdirSync(root, { withFileTypes: true });
+  const dir = entries.find(e => e.isDirectory());
+  return dir ? path.join(root, dir.name) : null;
 }
 
 /**
@@ -65,7 +78,6 @@ async function scrollUntilStable(page) {
 
   for (let round = 0; round < MAX_SCROLL_ROUNDS; round++) {
     await page.evaluate(() => {
-      // 依次尝试已知抖音评论容器，找到可滚动的就滚到底
       const selectors = [
         '[data-e2e="comment-list"]',
         '.comment-mainContainer',
@@ -95,33 +107,35 @@ async function scrollUntilStable(page) {
   }
 }
 
-async function crawlVideoComments(browser, videoUrl, taskId, apiBase) {
-  const context = browser.contexts()[0] || await browser.newContext();
-  const page = await context.newPage();
+async function crawlVideoComments(context, videoUrl, taskId, apiBase) {
+  const page = (context.pages()[0]) || await context.newPage();
   const commenters = [];
 
   try {
     await page.goto(videoUrl, { waitUntil: 'load', timeout: PAGE_TIMEOUT_MS });
 
+    // 检测 burner cookie 失效 → 页面跳转到 /login 或 /passport
+    const currentUrl = page.url();
+    if (/\/login(\b|\/|$)|\/passport/.test(currentUrl)) {
+      return { ok: false, error: 'BURNER_SESSION_EXPIRED: cookie 失效，请重新扫码绑定小号' };
+    }
+
     // 等第一批评论出现（最多 40s，抖音评论由 XHR 异步加载）
     await page.waitForSelector('[data-e2e="comment-item"]', { timeout: 40000 }).catch(() => {});
 
-    // 滚动加载全量评论（连续 3 轮无新评论才停）
+    // 滚动加载更多评论
     await scrollUntilStable(page);
 
-    // 收集所有评论者（无上限）
+    // 收集评论者信息
     const commentItems = await page.$$('[data-e2e="comment-item"]').catch(() => []);
 
     for (const item of commentItems) {
       try {
-        // data-e2e="comment-user-name" 已从 Douyin 移除，nickname 在 a[href*=/user/] 文本里
         const profileLink = await item.$eval('a[href*="/user/"]', el => el.getAttribute('href') || '').catch(() => '');
         const nickname = await item.$eval('a[href*="/user/"]', el => el.textContent?.trim() || '').catch(() => '');
         const secUidMatch = profileLink.match(/\/user\/([^/?]+)/);
         const secUid = secUidMatch ? secUidMatch[1] : null;
 
-        // 抖音评论文本无稳定 data-e2e/class，用启发式过滤叶子节点：
-        // 排除 昵称所在 a[href*="/user/"] 内的 span / 时间"·"/ 纯数字 / 操作文字
         const commentText = await item.evaluate(el => {
           const spans = el.querySelectorAll('span');
           for (const span of spans) {
@@ -167,25 +181,35 @@ async function crawlVideoComments(browser, videoUrl, taskId, apiBase) {
 
 async function main() {
   if (!videoUrl || !taskId) {
-    emit({ ok: false, error: 'Usage: crawl-comments-douyin.cjs <video_url> <task_id> [apiBase] [cdpPort]' });
+    emit({ ok: false, error: 'Usage: crawl-comments-douyin.cjs <video_url> <task_id> [apiBase]' });
     process.exit(1);
   }
 
-  const browser = await findMainChrome();
-  if (!browser) {
-    emit({ ok: false, task_id: taskId, video_url: videoUrl, error: 'Cannot connect to main Chrome CDP' });
+  const userDataDir = resolveBurnerProfileDir();
+  if (!userDataDir) {
+    emit({
+      ok: false,
+      task_id: taskId,
+      video_url: videoUrl,
+      error: 'BURNER_PROFILE_NOT_FOUND: 未找到已绑定的抖音小号 profile，请先在客户端扫码绑定小号',
+    });
     process.exit(1);
   }
+
+  const context = await chromium.launchPersistentContext(userDataDir, {
+    channel: 'msedge',
+    headless: false,
+  });
 
   try {
-    const result = await crawlVideoComments(browser, videoUrl, taskId, apiBase);
+    const result = await crawlVideoComments(context, videoUrl, taskId, apiBase);
     if (STDOUT_ONLY) {
       emit({ ok: result.ok, video_url: videoUrl, commenters: result.commenters || [], inserted: result.inserted || 0, error: result.error });
     } else {
       emit({ ok: result.ok, task_id: taskId, video_url: videoUrl, inserted: result.inserted || 0, error: result.error });
     }
   } finally {
-    await browser.close().catch(() => {});
+    await context.close().catch(() => {});
   }
 }
 
