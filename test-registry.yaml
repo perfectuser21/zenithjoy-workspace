@@ -397,6 +397,14 @@ tests:
     product: 中台认证
     note: "Sprint A WS2/WS3 — navigation.config /license 与 /admin/license 入口存在性；整合(2026-06-25) 补断言私域客服区正好 5 卡 + 孤儿路由/lazy 已删。"
 
+  - id: line02-leads-page-grid-height-regression
+    path: apps/dashboard/src/pages/__tests__/LeadsPage.test.tsx
+    type: unit
+    ci: L3
+    status: active
+    product: 客户智能获客
+    note: "回归守卫(#1023)：ag-theme-quartz-dark 容器必须使用固定像素高度(≥400px)，禁止 height:100%（父链 height:auto 时 AG Grid 不可见）。"
+
   - id: line04-crm-customer-list-page-unit
     path: apps/dashboard/src/pages/__tests__/CustomerListPage.test.tsx
     type: unit

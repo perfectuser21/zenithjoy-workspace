@@ -33,7 +33,7 @@ const GRADE_STYLE: Record<string, string> = {
 // AG Grid quartz-dark CSS 变量（与 CustomerListPage 保持一致）
 const AG_THEME: React.CSSProperties = {
   width: '100%',
-  height: '100%',
+  height: 560,
   '--ag-background-color':              '#14161f',
   '--ag-foreground-color':              '#eef0f6',
   '--ag-header-background-color':       '#101218',
@@ -219,7 +219,7 @@ export default function LeadsPage() {
   ], []);
 
   return (
-    <div className="flex flex-col h-full p-4 gap-4" style={{ minHeight: 0 }}>
+    <div className="flex flex-col p-4 gap-4">
       {/* 顶栏 */}
       <div className="flex items-center justify-between flex-shrink-0">
         <h1 className="text-xl font-semibold text-white">获客 Leads</h1>
@@ -331,7 +331,7 @@ export default function LeadsPage() {
       <div className="flex-shrink-0 text-xs text-gray-500">共 {total} 条</div>
 
       {/* AG Grid 主表格 */}
-      <div className="flex-1 min-h-0" style={{ minHeight: '400px' }}>
+      <div>
         <div className="ag-theme-quartz-dark" style={AG_THEME}>
           <AgGridReact<Lead>
             rowData={leads}
