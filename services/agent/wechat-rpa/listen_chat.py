@@ -257,22 +257,102 @@ def strip_system_bubbles(bubbles: List[Dict[str, str]]) -> List[Dict[str, str]]:
     return [b for b in bubbles if not _is_system_bubble(b.get("text", ""))]
 
 
-def split_trailing_incoming(bubbles: List[Dict[str, str]], badge_n: int = 0) -> List[str]:
-    """锚点切分（纯函数）：返回"最后一条 outgoing 气泡之后"的全部 incoming 文本。
+# ─── 已发送文本历史 + 回复锚点（2026-07-02 真机重构 v1.0.94）──────────────────────
+# rog 探针实证：微信 4.1.8 聊天面板消息只在 List(name="消息") 的 ListItem 暴露
+# （name=消息文本，无子元素，外框横跨全宽，class 全同 mmui::ChatTextItemView）→
+# 几何/属性都判不了方向，唯一可靠信号 = "这条文本是不是我们自己发出去的"。
+# _SENT_TEXTS：真送达的回复文本历史（持久化，重启不丢方向锚点）。
+# _REPLY_ANCHOR：每会话"上次已回复到的最后一条 incoming 文本"（持久化）——trailing
+# 切分锚点。比"最后一条 outgoing"强：回复送达前又涌进来的消息（气泡序在 outgoing
+# 之上）按 outgoing 锚点永远丢，按 replied_anchor 锚点可捞回（22:59 实况 4/5 条丢失根因）。
+_SENT_TEXTS_FILE: str = os.path.join(
+    os.environ.get("PUBLIC", r"C:\Users\Public"), "zj-sent-texts.json")
+_REPLY_ANCHOR_FILE: str = os.path.join(
+    os.environ.get("PUBLIC", r"C:\Users\Public"), "zj-reply-anchor.json")
+_SENT_TEXTS: List[str] = []
+_SENT_TEXTS_CAP: int = 200
+_REPLY_ANCHOR: Dict[str, str] = {}
 
-    - bubbles 有序（上→下=旧→新），须已过 strip_system_bubbles。
-    - 锚点 = 最后一条 outgoing（我方/AI/人工回复都算；人工回过 → trailing 空 → 不回）。
-    - 无 outgoing（从未回过）：仅当 badge_n>0 才取最后 min(badge_n, 可见) 条 incoming；
+
+def _load_sent_texts() -> List[str]:
+    try:
+        with open(_SENT_TEXTS_FILE, "r", encoding="utf-8-sig") as _f:
+            data = json.load(_f)
+        return [str(x) for x in data if x][-_SENT_TEXTS_CAP:]
+    except Exception:
+        return []
+
+
+def _record_sent_text(text: str) -> None:
+    """记录一条已发送回复文本（方向判定锚点），best-effort 持久化。"""
+    t = (text or "").strip()
+    if not t:
+        return
+    _SENT_TEXTS.append(t)
+    del _SENT_TEXTS[:-_SENT_TEXTS_CAP]
+    try:
+        with open(_SENT_TEXTS_FILE, "w", encoding="utf-8") as _f:
+            json.dump(_SENT_TEXTS, _f, ensure_ascii=False)
+    except Exception:
+        pass
+
+
+def _load_reply_anchor() -> Dict[str, str]:
+    try:
+        with open(_REPLY_ANCHOR_FILE, "r", encoding="utf-8-sig") as _f:
+            data = json.load(_f)
+        return {str(k): str(v) for k, v in data.items() if k and v}
+    except Exception:
+        return {}
+
+
+def _save_reply_anchor() -> None:
+    try:
+        with open(_REPLY_ANCHOR_FILE, "w", encoding="utf-8") as _f:
+            json.dump(_REPLY_ANCHOR, _f, ensure_ascii=False)
+    except Exception:
+        pass
+
+
+def _matches_any_sent(text: str) -> bool:
+    """text 是否命中已发送文本历史（_delivery_confirmed 同款规范化，新→旧遍历）。"""
+    if not text:
+        return False
+    for s in reversed(_SENT_TEXTS):
+        if _delivery_confirmed(text, s):
+            return True
+    return False
+
+
+def split_trailing_incoming(bubbles: List[Dict[str, str]], badge_n: int = 0,
+                            replied_anchor: Optional[str] = None) -> List[str]:
+    """锚点切分（纯函数）：返回"锚点之后"的全部 incoming 文本。
+
+    - bubbles 有序（旧→新），须已过 strip_system_bubbles。
+    - 锚点优先级（v1.0.94）：
+      ① replied_anchor（上次 DELIVERED 时该 batch 最后一条 incoming 文本）在气泡里的
+        最后一次 incoming 出现位置——回复送达前又涌进来的消息在 outgoing 之上，按
+        outgoing 锚点会永久丢，按 replied_anchor 能捞回；
+      ② 找不到 → 最后一条 outgoing（我方/AI 回复；人工回过 → trailing 空 → 不回）。
+    - 无任何锚点（从未回过）：仅当 badge_n>0 才取最后 min(badge_n, 可见) 条 incoming；
       无角标 → 返回 []（防预览扰动翻出陈年消息）。
     - 自回复风暴天然免疫：只取 incoming，机器人 outgoing 即锚点。
     """
-    last_out = -1
-    for i, b in enumerate(bubbles):
-        if b.get("direction") == "outgoing":
-            last_out = i
-    tail = [b.get("text", "") for b in bubbles[last_out + 1:]
+    anchor_idx = -1
+    if replied_anchor:
+        _na = "".join(replied_anchor.split())
+        for i, b in enumerate(bubbles):
+            if b.get("direction") != "incoming":
+                continue
+            if "".join((b.get("text") or "").split()) == _na:
+                anchor_idx = i  # 取最后一次出现（同文本重发场景）
+    if anchor_idx < 0:
+        for i, b in enumerate(bubbles):
+            if b.get("direction") == "outgoing":
+                anchor_idx = i
+    tail = [b.get("text", "") for b in bubbles[anchor_idx + 1:]
             if b.get("direction") == "incoming" and b.get("text")]
-    if last_out >= 0:
+    if anchor_idx >= 0:
         return tail
     if badge_n > 0 and tail:
         return tail[-min(badge_n, len(tail)):]
@@ -516,6 +596,8 @@ SCAN_OPEN_BUDGET = 3              # 每轮最多开窗读气泡的会话数（#9
 _BUBBLE_READ_POLLS = 3            # 气泡读空重试轮数（同 _confirm_delivery 轮询模式）
 _BUBBLE_READ_POLL_SLEEP = 0.6
 ANCHOR_STALL_LIMIT = 3            # 连续 N 轮停滞 → 心跳告警（只告警不降级——绝不静默丢消息）
+_TRAILING_STALL: Dict[str, int] = {}  # sender → 触发保留但 trailing 无解的连续轮数
+TRAILING_STALL_LIMIT = 3          # 连续 N 轮无解 → 熔断走回退 emit 预览单条（防死循环开窗=闪屏）
 
 
 def _read_trailing_for(mw: Any, cand: Dict[str, Any],
@@ -563,7 +645,9 @@ def _read_trailing_for(mw: Any, cand: Dict[str, Any],
         return [], True
     stripped = strip_system_bubbles(bubbles)
     cand["_stale_ok"] = _stale_badge_confirmed(cand["content"], stripped)
-    return split_trailing_incoming(stripped, cand["badge"]), False
+    return split_trailing_incoming(
+        stripped, cand["badge"],
+        replied_anchor=_REPLY_ANCHOR.get(cand["sender"])), False
 
 
 def scan_unread(mw: Any, last_preview: Optional[Dict[str, str]] = None,
@@ -650,8 +734,10 @@ def scan_unread(mw: Any, last_preview: Optional[Dict[str, str]] = None,
         opened += 1
         msgs, empty_read = _read_trailing_for(mw, c, record_skip=record_skip)
         if msgs:
+            _TRAILING_STALL.pop(c["sender"], None)
             out.append({"sender": c["sender"], "content": aggregate_messages(msgs),
-                        "_item": c["_item"], "_preview_name": c["name"], "_anchor": True})
+                        "_item": c["_item"], "_preview_name": c["name"], "_anchor": True,
+                        "_last_incoming": msgs[-1]})
             _ANCHOR_STALL[c["sender"]] = _ANCHOR_STALL.get(c["sender"], 0) + 1
             if _ANCHOR_STALL[c["sender"]] >= ANCHOR_STALL_LIMIT:
                 if record_skip is not None:
@@ -665,6 +751,7 @@ def scan_unread(mw: Any, last_preview: Optional[Dict[str, str]] = None,
         elif c.get("_opened") and not empty_read and c.get("_stale_ok"):
             # 开窗成功、读到气泡、无新 trailing，且 _stale_badge_confirmed 命中
             # （预览显示的最新消息就是我方最后回复）= 真陈旧角标 → 提交触发消费，防重复回。
+            _TRAILING_STALL.pop(c["sender"], None)
             if last_preview is not None:
                 last_preview[c["sender"]] = c["name"]
         elif c["badge"] > 0 and c["content"]:
@@ -672,8 +759,25 @@ def scan_unread(mw: Any, last_preview: Optional[Dict[str, str]] = None,
             # （客户发[图片]/[语音]、或纯文本恰被 _is_system_bubble 剔除）且角标在
             # → 旧单条路径 emit（用预览 content），宁可上下文不全也不漏回，绝不静默提交。
             out.append({"sender": c["sender"], "content": c["content"],
-                        "_item": c["_item"], "_preview_name": c["name"]})
-        # 其余（开窗失败/读空/非陈旧 且无角标）：触发态保留，下轮重试
+                        "_item": c["_item"], "_preview_name": c["name"],
+                        "_last_incoming": c["content"]})
+        else:
+            # 开窗失败/读空/trailing 无解 且无角标：触发态保留，下轮重试——但必须有熔断
+            # （v1.0.94）：连续 TRAILING_STALL_LIMIT 轮无解 → 回退 emit 预览单条。
+            # 否则会话打开态的新消息（无角标、气泡切不出 trailing）陷入无限开窗死循环
+            # （2026-07-02 22:59 实况：每 6-10 秒反复 _open_chat = 用户看到的"闪屏"），
+            # 且该消息永久不回。宁可只回预览那条也不无限空转+静默丢。
+            _n = _TRAILING_STALL.get(c["sender"], 0) + 1
+            _TRAILING_STALL[c["sender"]] = _n
+            if _n >= TRAILING_STALL_LIMIT and c["content"]:
+                if record_skip is not None:
+                    record_skip("trailing_stall_fallback")
+                _log(f"trailing_stall sender={c['sender']} rounds={_n} → 熔断回退 emit "
+                     f"预览单条（防死循环开窗）")
+                out.append({"sender": c["sender"], "content": c["content"],
+                            "_item": c["_item"], "_preview_name": c["name"],
+                            "_last_incoming": c["content"]})
+                _TRAILING_STALL.pop(c["sender"], None)
     _restore_window_state(mw, orig_state)
     return out
 
@@ -687,6 +791,8 @@ def _commit_reply_success(msg: Dict[str, Any],
       1. last_preview[sender] = _preview_name -- 下轮发现层不再视为变化，防重复触发。
          _preview_name 缺失（回退路径 content-only msg）-> 不更新，触发态保留等下轮。
       2. _ANCHOR_STALL[sender] 归零 -> DELIVERED = 停滞清除，心跳告警不误触发。
+      3. _REPLY_ANCHOR[sender] = 该 batch 最后一条 incoming（v1.0.94）-> 下轮 trailing
+         从这条之后切（回复送达前涌进来的消息也能捞回），持久化防重启丢锚。
     """
     sender = (msg or {}).get("sender", "")
     if not sender:
@@ -695,6 +801,11 @@ def _commit_reply_success(msg: Dict[str, Any],
     if preview_name and last_preview is not None:
         last_preview[sender] = preview_name
     _ANCHOR_STALL.pop(sender, None)
+    _TRAILING_STALL.pop(sender, None)
+    last_incoming = (msg or {}).get("_last_incoming")
+    if last_incoming:
+        _REPLY_ANCHOR[sender] = last_incoming
+        _save_reply_anchor()
 
 
 # ─── CRM 好友表行源：列出近期会话联系人（不要求未读）────────────────────────────
@@ -1782,17 +1893,54 @@ def _last_bubble_direction(mw: Any) -> Optional[str]:
     return "outgoing" if center >= midline else "incoming"
 
 
-def read_chat_bubbles(mw: Any) -> List[Dict[str, str]]:
-    """读当前打开会话聊天面板全部可见消息气泡，上→下有序，每条 {"text","direction"}。
+def _read_msg_list_items(mw: Any) -> List[Any]:
+    """返回 List(name="消息") 的 ListItem 元素（微信 4.1.8 真机探针 2026-07-02 实证：
+    聊天面板消息只在这里暴露——整窗 Text 控件只有"发送"按钮和标题，一条消息都没有）。
+    无该 List / 读不到 → []（调用方走 legacy Text 几何路径，兼容其他微信版本）。"""
+    try:
+        for lst in mw.descendants(control_type="List"):
+            try:
+                if (lst.element_info.name or "") != "消息":
+                    continue
+            except Exception:
+                continue
+            try:
+                return list(lst.children())
+            except Exception:
+                return []
+    except Exception:
+        pass
+    return []
 
-    - 几何全部从窗口 rectangle 推导（chat_left = 左+宽//4，midline 同
-      _last_bubble_direction）——铁律禁止写死绝对坐标（旧 read_chat_panel_messages
-      的 x_min=460 之坑，该函数已随锚点扫描重构删除）。
-    - direction：气泡中心 x < midline → incoming；>= → outgoing（压线判我方，保守）。
-    - 幽灵坐标（|left|>20000，同 _open_chat 守卫）/ 读不到 → []（fail-closed，
-      调用方走回退路径）；正常扫描离屏位 OFFSCREEN_X≈-2600 不受影响。
-    - descendants 顺序不可信 → 显式按 r.top 排序。
-    顶层零-pywinauto 纯函数（Fake 注入可测，同 _last_bubble_direction 约定）。
+
+def _runtime_order_key(item: Any, idx: int) -> Any:
+    """消息 ListItem 排序键：runtime_id 末位（Qt 按创建序分配，真机实测=到达序，
+    树序/rect.top 都有虚拟列表回收造成的乱序）。取不到 → 保持树序（Fake/其他版本）。"""
+    try:
+        rid = getattr(item.element_info, "runtime_id", None)
+        if rid:
+            return (0, int(rid[-1]))
+    except Exception:
+        pass
+    return (1, idx)
+
+
+def read_chat_bubbles(mw: Any) -> List[Dict[str, str]]:
+    """读当前打开会话聊天面板全部可见消息气泡，旧→新有序，每条 {"text","direction"}。
+
+    主路径（v1.0.94，rog 真机探针实证）：List(name="消息") 的 ListItem——
+    name=消息文本；无子元素、外框横跨全宽、class 全同 → 几何/属性判不了方向，
+    direction = 匹配 _SENT_TEXTS（自己真送达过的文本）→ outgoing，其余 incoming。
+    人工客服插话不在历史里会被判 incoming（残余风险，replied 去重兜底防重复回）。
+
+    legacy 回退路径（无"消息"List 的微信版本）：Text 几何扫描——
+    - chat_left = 左+宽//4，midline 推导（禁止写死绝对坐标）；
+    - direction：气泡中心 x < midline → incoming；>= → outgoing；
+    - 剔除"发送"按钮文本（v1.0.94：它在面板右侧，曾被当 outgoing 假锚点）。
+
+    幽灵坐标（|left|>20000，同 _open_chat 守卫）/ 读不到 → []（fail-closed）；
+    正常扫描离屏位 OFFSCREEN_X≈-2600 不受影响。
+    顶层零-pywinauto 纯函数（Fake 注入可测）。
     """
     try:
         wr = mw.rectangle()
@@ -1800,6 +1948,23 @@ def read_chat_bubbles(mw: Any) -> List[Dict[str, str]]:
         return []
     if abs(wr.left) > 20000 or abs(wr.top) > 20000:
         return []
+    # ── 主路径：消息 List 的 ListItem ─────────────────────────────────────────
+    items = _read_msg_list_items(mw)
+    if items:
+        keyed: List[Any] = []
+        for i, it in enumerate(items):
+            try:
+                nm = (it.element_info.name or "").strip()
+            except Exception:
+                continue
+            if not nm:
+                continue
+            keyed.append((_runtime_order_key(it, i), nm))
+        keyed.sort(key=lambda x: x[0])
+        return [{"text": nm,
+                 "direction": "outgoing" if _matches_any_sent(nm) else "incoming"}
+                for _, nm in keyed]
+    # ── legacy 回退：Text 几何扫描 ────────────────────────────────────────────
     width = wr.right - wr.left
     if width <= 0:
         return []
@@ -1816,7 +1981,7 @@ def read_chat_bubbles(mw: Any) -> List[Dict[str, str]]:
             nm = (t.element_info.name or "").strip()
         except Exception:
             continue
-        if not nm or r.left <= chat_left or r.top < wr.top + 150:
+        if not nm or nm == "发送" or r.left <= chat_left or r.top < wr.top + 150:
             continue
         center = (r.left + r.right) // 2
         rows.append((r.top, {"text": nm,
@@ -2105,6 +2270,11 @@ def reply_in_chat(mw: Any, item: Any, reply_text: str, sender: str = "") -> bool
                 _log(f"reply_in_chat: 发送前复核会话标题≠{sender!r}，中止（防串台）")
                 return False
             if _uia_send(uia_edit, fmw, reply_text):
+                # 已发送文本入历史（v1.0.94 方向判定锚点：消息 ListItem 无几何/属性方向
+                # 信号，唯一判据=命中自己发过的文本）。_uia_send 自报成功即记（即使读回
+                # 未确认，文本大概率已出现在气泡里，漏记比多记危害大——漏记 → 自己的
+                # 回复被判 incoming → 假 trailing → 自回自话）。
+                _record_sent_text(reply_text)
                 # 真送达验证（替代 _uia_send 的 sent=True 自报，治假阳性）：读回目标会话预览，
                 # 确认发送原文真出现才算 DELIVERED；读不到 → 判未送达，本轮返回 False 下轮重试。
                 # sender 为空（fallback 路径，无目标会话可读）时保持旧行为不强验。
@@ -3090,6 +3260,10 @@ def run_real_listen(args: argparse.Namespace) -> int:
     # replied 持久化 + 冷却（_load_replied / _save_replied / _REPLIED_FILE / SENDER_COOLDOWN 在模块顶层）
     replied: set[tuple[str, str]] = _load_replied()
     _log(f"已加载 replied 历史: {len(replied)} 条")
+    # v1.0.94：已发送文本（方向判定）+ 回复锚点（trailing 切分）持久化加载
+    _SENT_TEXTS[:] = _load_sent_texts()
+    _REPLY_ANCHOR.update(_load_reply_anchor())
+    _log(f"已加载 sent_texts: {len(_SENT_TEXTS)} 条 / reply_anchor: {len(_REPLY_ANCHOR)} 会话")
     reply_failed_at: dict[tuple[str, str], float] = {}
     REPLY_FAIL_COOLDOWN = _REPLY_FAIL_COOLDOWN
     sender_reply_cooldown: dict[str, float] = {}
