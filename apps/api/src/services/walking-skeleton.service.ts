@@ -116,9 +116,9 @@ export interface RequiredAgentVersion {
 // 2.0.61：crawl-comments resolveBurnerProfileDir 优先读 ZJ_MAIN_DATA_DIR（修多账号选错目录）。
 // 2.0.62：keyword-search session check 改为只认 sessionid（ttwid 是访客 token，误判未登录为已登录）。
 // 2.0.63：keyword-search + crawl-comments 始终先读 .env 文件取 ZJ_MAIN_DATA_DIR（qr-bind 更新后子进程无需重启即可感知新账号）。
-// 2.0.64：keyword-search 复用 Chrome 前检查 profile lock file（避免 qr-bind 后新 profile 被旧 Chrome 抢占）；video-search-result 写 keyword_task status=done。
-// 核心包按约定 install-pack/zenithjoy-agent-v2.0.64.tar.gz 从 COS 下载（live 源是已发布 manifest，本常量仅兜底）。
-export const DEFAULT_REQUIRED_AGENT_VERSION = '2.0.64';
+// 2.0.65：handleCrawlCommentsBurner 传 'inline' 代替空串 task_id，修复评论抓取始终返回 Usage 错误（0 leads 根因）。
+// 核心包按约定 install-pack/zenithjoy-agent-v2.0.65.tar.gz 从 COS 下载（live 源是已发布 manifest，本常量仅兜底）。
+export const DEFAULT_REQUIRED_AGENT_VERSION = '2.0.65';
 
 /**
  * 返回心跳要下发的核心要求版本。
