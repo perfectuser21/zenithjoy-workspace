@@ -4193,3 +4193,11 @@ agent_suite:
   status: active
   product: AI员工
   note: "line02 Stage 2 评论采集结构守卫：验证 Stage 1 末尾用 terminal=stage_1（不是 done），Stage 2 末尾用 terminal=done；commenters 非空时写 acquisition_leads（1.0.7 新增 Stage 2）"
+
+- id: agent-line02-comment-mapping
+  path: services/agent/src/__tests__/comment-mapping.test.ts
+  type: unit
+  ci: L1
+  status: active
+  product: AI员工
+  note: "regression(2026-07-02, line02 Bug1): crawl 结果映射时 text 必须来自 comment_text，不能用 nickname；守卫 mapRawCommenters 生产路径（src/utils/comment-mapper.ts）"
