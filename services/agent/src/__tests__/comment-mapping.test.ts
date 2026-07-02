@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { mapRawCommenters } from '../utils/comment-mapper';
 
 /**
  * 评论文本映射 regression test
@@ -6,16 +7,6 @@ import { describe, it, expect } from 'vitest';
  * 守卫：crawl 结果映射成 comment-score-result 格式时，
  * text 字段必须来自 comment_text，不能用 nickname
  */
-
-// 内联映射函数（与 index.ts 1205-1208 行逻辑一致）
-function mapRawCommenters(
-  rawCommenters: Array<{ sec_uid?: string; nickname?: string; comment_text?: string }>,
-) {
-  return rawCommenters.map((c) => ({
-    commenter_id: c.sec_uid ? `/user/${c.sec_uid}` : c.nickname || '',
-    text: c.comment_text || '',
-  }));
-}
 
 describe('评论文本映射守卫', () => {
   it('comment_text 存在时 text 必须等于 comment_text，不能用 nickname', () => {

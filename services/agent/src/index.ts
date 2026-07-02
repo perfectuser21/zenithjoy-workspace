@@ -32,6 +32,7 @@ import {
 // Sprint 06081700 — Core 模块管理器（下载/解压/preflight/fork）。
 // Line 特有逻辑（wechat-rpa / preflight）下沉到按需下载的 Line 模块包，core 不再直接引用。
 import { ModuleManager } from './module-manager';
+import { mapRawCommenters } from './utils/comment-mapper';
 // Sprint 06222100 — 核心运行时本体自升级（下载新核心包→解压→写 .active-core 指针→优雅退出）。
 import { CoreUpgrader } from './core-upgrader';
 // Sprint cp-06262240 — 任务观测上报：把 handler 开始/失败/成功接进 reportEvent 管子
@@ -1199,13 +1200,10 @@ function startAcquisitionKeywordLoop(cfg: AgentConfig): void {
             // crawl-comments-douyin.cjs --stdout-only 返回 {commenters:[{sec_uid,nickname}]}
             // 映射成 comment-score-result 期望的 {commenter_id, text} 格式
             const rawCommenters = Array.isArray((crawlResult as Record<string, unknown>).commenters)
-              ? (crawlResult as Record<string, unknown>).commenters as Array<{ sec_uid?: string; nickname?: string; comment_text?: string }>
+              ? (crawlResult as Record<string, unknown>).commenters as Array<{ sec_uid?: string | null; nickname?: string; comment_text?: string }>
               : [];
             if (crawlResult.ok && rawCommenters.length > 0) {
-              const comments = rawCommenters.map((c) => ({
-                commenter_id: c.sec_uid ? `/user/${c.sec_uid}` : c.nickname || '',
-                text: c.comment_text || '',
-              }));
+              const comments = mapRawCommenters(rawCommenters);
               await fetch(`${apiBase}/api/acquisition/comment-score-result`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
