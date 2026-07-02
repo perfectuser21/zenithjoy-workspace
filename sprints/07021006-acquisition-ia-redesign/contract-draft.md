@@ -1,4 +1,4 @@
-# Sprint Contract Draft (Round 1)
+# Sprint Contract Draft (Round 2)
 
 ## Response Schema（推导来源: api_registry推导 + PRD字面）
 
@@ -94,7 +94,17 @@
 - [acquisition.test.ts] → POST /api/acquisition/collect/start：keywords 非空数组成功返 task_id + status=pending
 - [acquisition-collect.spec.ts] → LeadsPage 有 `[data-testid=acq-collect-button]`（本 Sprint 迁移后需保留或同步删除）
 
-> ⚠️ 注意：`acquisition-collect.spec.ts` 使用了 `page.route()` 全量 stub（历史问题）。本 Sprint 新增的 `acquisition-ia.spec.ts` 禁止使用 `page.route()`，须打真实后端。原有 spec 的 LeadsPage 采集面板 E2E 将随 LeadsPage 改动失效——LeadsPage 移除采集面板后，需同步删除或修改原有 spec 中相关断言（属 Generator 职责）。
+> ⚠️ 注意：`acquisition-collect.spec.ts` 使用了 `page.route()` 全量 stub（历史问题）。本 Sprint 新增的 `acquisition-ia.spec.ts` 禁止使用 `page.route()`，须打真实后端。原有 spec 的 LeadsPage 采集面板 E2E 将随 LeadsPage 改动失效——LeadsPage 移除采集面板后，需同步删除或修改原有 spec 中相关断言（属 Generator 职责，在同一 commit 完成）。
+
+---
+
+## Risks（R2 补充）
+
+| # | 风险 | 严重度 | Mitigation |
+|---|---|---|---|
+| 1 | **DouyinBurnerBindPage旧链接 404** | 中 | 路由层加 `redirect: /area/acquisition/accounts`（不删路由定义，防止旧书签/外部链接 404）。Generator 在路由文件验证 redirect 存在。 |
+| 2 | **acquisition-collect.spec.ts 断言破坏** | 中 | Generator 在同一 PR commit 修改 `acquisition-collect.spec.ts`：删除 `acq-collect-button` 相关 assertion，保留 LeadsPage 表格类断言；不允许 spec 残留红色 assertion。 |
+| 3 | **agent DOM 选择器 title/thumbnail/publish_date 在真实抖音 DOM 中不稳定** | 高 | thin 阶段降级处理（字段 null 时显示视频链接 URL）已在 PRD 明确；选择器稳定性属接缝断言，CI 无法验，标 `logic-done-pending`；上线后在 xian-rog 抓一条真实视频确认非 null 字段。 |
 
 ---
 
@@ -103,8 +113,8 @@
 ```
 [客户打开工作台] → [Hub 展示4模块入口卡片] → [点账号管理] → [AccountsPage 小号列表+绑定]
               → [点采集任务] → [TasksPage 任务列表] → [点任务行] → [视频卡片列表]
-              → [展开视频卡片] → [leads 列表]
-              → [失败态] → [展示原因+重新采集]
+              → [展开视频卡片] → [leads 列表或「暂无评论」]
+              → [失败态任务] → [展示原因+重新采集]
 ```
 
 ---
@@ -136,9 +146,9 @@ echo "✅ Step 1 Hub API 验证通过"
 
 ---
 
-### Step 2: 客户点「账号管理」→ AccountsPage 渲染小号列表（健康状态三色）
+### Step 2: 客户点「账号管理」→ AccountsPage 渲染小号列表（健康状态三色）；N=10上限时绑定按钮置灰
 
-**来源**: `[FROM_PRD]` — PRD Golden Path Step 2 "路由跳转 /area/acquisition/accounts → 看到本 tenant 已绑小号列表（昵称/绑定时间/健康状态 ok|expired|banned）"
+**来源**: `[FROM_PRD]` — PRD Golden Path Step 2 "路由跳转 /area/acquisition/accounts → 看到本 tenant 已绑小号列表（昵称/绑定时间/健康状态 ok|expired|banned）"；PRD Step 3 "已达 N=10 上限 → 按钮置灰"
 
 **可观测行为**:
 - URL 变为 `/area/acquisition/accounts`
@@ -146,6 +156,7 @@ echo "✅ Step 1 Hub API 验证通过"
 - 有小号时：显示表格行（account_nickname / bound_at / 健康状态徽章）
 - 健康状态映射：status=active → 绿色"ok"；status=needs_rebind → 黄色"expired"；status=banned → 红色"banned"
 - 无小号时：显示引导空态文案 + 「绑定新小号」按钮
+- sessions.length >= 10 时：「绑定新小号」按钮 disabled + tooltip 提示套餐
 
 **验证命令**:
 ```bash
@@ -164,32 +175,37 @@ echo "✅ Step 2 AccountsPage API 验证通过"
 
 **硬阈值**: data.sessions 是数组；每项含 account_label、status、bound_at
 
+**接缝备注**: N=10 置灰行为在 Playwright test `'AccountsPage N=10 上限时绑定按钮置灰'` 中验证（E2E 验收段）。
+
 ---
 
-### Step 3: 客户点「绑定新小号」→ 弹二维码；N=10 上限→ 按钮置灰
+### Step 3: 客户点「绑定新小号」→ 弹二维码；超时/失败 → toast 提示重试
 
-**来源**: `[FROM_PRD]` — PRD Golden Path Step 3 "已达 N=10 上限 → 按钮置灰+提示升级套餐；否则弹二维码 → 扫码成功 → 列表新增一行；超时/失败 → toast 提示重试"
+**来源**: `[FROM_PRD]` — PRD Golden Path Step 3 "否则弹二维码 → 扫码成功 → 列表新增一行；超时/失败 → toast 提示重试"
 
 **可观测行为**:
-- sessions.length < 10：按钮可点，点击触发 POST /api/agent/burner/qr-bind，弹出二维码
-- sessions.length >= 10：按钮 disabled，tooltip 显示套餐提示
+- sessions.length < 10：按钮可点，点击触发 POST /api/agent/burner/qr-bind，弹出二维码（返回 qr_url）
+- 无 agent 连接时返回 503，前端 toast 提示重试
 - 前端按 length 判断上限，API 侧不强制校验（PRD thin 阶段假设）
 
 **验证命令**:
 ```bash
-# 验证 qr-bind 端点可到达（不伪造完整绑定流程，仅确认路由注册）
-CODE=$(curl -s -o /dev/null -w "%{http_code}" -X POST \
+# qr-bind 端点：200（成功，返回 qr_url）或 503（无agent，正常）；其他 = FAIL
+RESP_BODY=$(curl -s -w "\n%{http_code}" -X POST \
   -H "Content-Type: application/json" \
   -H "X-Tenant-Id: $TEST_TENANT" \
-  -H "X-Agent-Id: $TEST_AGENT" \
   -d '{"account_label":"e2e-test-bind"}' \
   localhost:3000/api/agent/burner/qr-bind)
-# qr-bind 路由存在：期望 200 或 4xx（取决于 agent/task 是否预置），不允许 404（路由未注册）
-[ "$CODE" != "404" ] || { echo "FAIL: qr-bind 路由未注册 CODE=$CODE"; exit 1; }
-echo "✅ Step 3 qr-bind 路由验证通过 CODE=$CODE"
+QR_CODE=$(echo "$RESP_BODY" | tail -1)
+QR_JSON=$(echo "$RESP_BODY" | head -n -1)
+[ "$QR_CODE" = "200" ] || [ "$QR_CODE" = "503" ] || { echo "FAIL: qr-bind 非预期状态码 CODE=$QR_CODE"; exit 1; }
+if [ "$QR_CODE" = "200" ]; then
+  echo "$QR_JSON" | jq -e '.success == true and (.data.qr_url | type == "string")' || { echo "FAIL: qr-bind schema invalid—缺 qr_url"; exit 1; }
+fi
+echo "✅ Step 3 qr-bind 验证通过 CODE=$QR_CODE"
 ```
 
-**硬阈值**: POST /api/agent/burner/qr-bind 不返回 404（路由注册确认）
+**硬阈值**: POST /api/agent/burner/qr-bind → 200（含 data.qr_url:string）或 503（无agent）；400/404/500 = FAIL
 
 ---
 
@@ -279,6 +295,7 @@ fi
 # 禁用字段反向检查
 echo "$RESP" | jq -e '.data | has("videoList") | not' || { echo "FAIL: 禁用字段 videoList 出现"; exit 1; }
 echo "$RESP" | jq -e '.data | has("items") | not' || { echo "FAIL: 禁用字段 items 出现"; exit 1; }
+echo "$RESP" | jq -e '.data | has("results") | not' || { echo "FAIL: 禁用字段 results 出现"; exit 1; }
 echo "✅ Step 6 collect-tasks/:id/videos schema 验证通过"
 ```
 
@@ -312,7 +329,7 @@ echo "✅ Step 6b IDOR + 404 验证通过"
 
 ---
 
-### Step 7: 客户展开视频卡片 → leads 列表（新 API）；无评论 → 占位文案
+### Step 7: 客户展开视频卡片 → leads 列表（新 API）；无评论 → 「暂无评论」占位
 
 **来源**: `[FROM_PRD]` — PRD Golden Path Step 7 "看到该视频命中的 leads 列表（昵称/留言/AI分级占位/触达状态占位） → 数据来源 GET /api/acquisition/videos/:videoId/leads（新建，tenant过滤+IDOR校验）→ 评论为空 → 「暂无评论」占位文案"
 
@@ -323,32 +340,42 @@ echo "✅ Step 6b IDOR + 404 验证通过"
 
 **验证命令**:
 ```bash
-# 测试用 video_id（E2E 前预置或使用 seed video_id）
-TEST_VIDEO_ID="${E2E_TEST_VIDEO_ID:-e2e-video-001}"
+# 先 seed 一条测试视频记录（让 leads 端点能走 200 路径）
+TEST_TASK_ID=$(curl -sf -X POST -H "Content-Type: application/json" \
+  -H "X-Tenant-Id: $TEST_TENANT" \
+  -d '{"keywords":["e2e-leads-test"]}' \
+  localhost:3000/api/acquisition/collect/start | jq -r '.data.task_id')
+TEST_VIDEO_ID="e2e-video-leads-smoke"
+psql "$DATABASE_URL" -c "INSERT INTO zenithjoy.acquisition_collect_videos \
+  (video_id, task_id, tenant_id, title, thumbnail_url, publish_date, comment_count) \
+  VALUES ('$TEST_VIDEO_ID', '$TEST_TASK_ID', '$TEST_TENANT', 'E2E Test Video', NULL, NULL, 0) \
+  ON CONFLICT (video_id) DO UPDATE SET task_id='$TEST_TASK_ID', tenant_id='$TEST_TENANT'"
 
-# 新端点 schema 验证
-RESP=$(curl -sf -H "X-Tenant-Id: $TEST_TENANT" "localhost:3000/api/acquisition/videos/${TEST_VIDEO_ID}/leads")
+# 测试 leads 端点 200 路径（已知视频 ID）
+RESP=$(curl -sf -H "X-Tenant-Id: $TEST_TENANT" "localhost:3000/api/acquisition/videos/$TEST_VIDEO_ID/leads")
 echo "$RESP" | jq -e '.success == true' || { echo "FAIL: videos/:videoId/leads 未返回 success=true"; exit 1; }
 echo "$RESP" | jq -e '.data | (has("leads") and has("total"))' || { echo "FAIL: missing leads/total"; exit 1; }
 echo "$RESP" | jq -e '.data.leads | type == "array"' || { echo "FAIL: leads not array"; exit 1; }
 echo "$RESP" | jq -e '.data.total | type == "number"' || { echo "FAIL: total not number"; exit 1; }
 
-# 禁用字段反向检查
+# 禁用字段反向检查（含 items/results）
 echo "$RESP" | jq -e '.data | has("comments") | not' || { echo "FAIL: 禁用字段 comments 出现"; exit 1; }
+echo "$RESP" | jq -e '.data | has("items") | not' || { echo "FAIL: 禁用字段 items 出现"; exit 1; }
+echo "$RESP" | jq -e '.data | has("results") | not' || { echo "FAIL: 禁用字段 results 出现"; exit 1; }
 
-# IDOR 检查
+# IDOR 检查（用已知 video_id 验 other_tenant 被拒）
 IDOR_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
   -H "X-Tenant-Id: $OTHER_TENANT" \
-  "localhost:3000/api/acquisition/videos/${TEST_VIDEO_ID}/leads")
-[ "$IDOR_CODE" = "403" ] || [ "$IDOR_CODE" = "401" ] || [ "$IDOR_CODE" = "404" ] || { echo "FAIL: leads IDOR 未拦截 CODE=$IDOR_CODE"; exit 1; }
-echo "✅ Step 7 videos/:videoId/leads schema + IDOR 验证通过"
+  "localhost:3000/api/acquisition/videos/$TEST_VIDEO_ID/leads")
+[ "$IDOR_CODE" = "403" ] || [ "$IDOR_CODE" = "401" ] || { echo "FAIL: leads IDOR 未拦截 CODE=$IDOR_CODE"; exit 1; }
+echo "✅ Step 7 videos/:videoId/leads 200路径 schema + 禁用字段 + IDOR 验证通过"
 ```
 
-**硬阈值**: 200 + success=true + data.leads(array) + data.total(number)；跨 tenant 返回 403/401
+**硬阈值**: 200 + success=true + data.leads(array) + data.total(number)；无 comments/items/results；跨 tenant 返回 403/401
 
 ---
 
-### Step 8: 任务失败态 → 前端展示失败原因 + 「重新采集」按钮（复用 POST /collect/start）
+### Step 8: 任务失败态 → 前端展示失败原因 + 「重新采集」按钮
 
 **来源**: `[FROM_PRD]` — PRD Golden Path Step 8 "任务长时间无进展（sweep-timeouts 已转失败态）→ 前端展示失败原因 + 「重新采集」按钮（复用 POST /collect/start 同关键词）"
 
@@ -358,16 +385,20 @@ echo "✅ Step 7 videos/:videoId/leads schema + IDOR 验证通过"
 
 **验证命令**:
 ```bash
-# sweep-timeouts 将 running 任务超时转 failed（验证端点存在）
+# 8a. sweep-timeouts 路由已注册且返回合法状态码（200=成功；401/403=认证保护，均合法）
 CODE=$(curl -s -o /dev/null -w "%{http_code}" -X POST \
   -H "Authorization: Bearer $SMOKE_TOKEN" \
   localhost:3000/api/acquisition/collect/sweep-timeouts)
-# 期望 200（或 4xx 若无 smoke token 环境），不允许 404（路由未注册）
-[ "$CODE" != "404" ] || { echo "FAIL: sweep-timeouts 路由未注册 CODE=$CODE"; exit 1; }
-echo "✅ Step 8 sweep-timeouts 路由验证通过 CODE=$CODE"
+[ "$CODE" = "200" ] || [ "$CODE" = "401" ] || [ "$CODE" = "403" ] || { echo "FAIL: sweep-timeouts 非预期状态码 CODE=$CODE（404=路由未注册）"; exit 1; }
+echo "✅ Step 8a sweep-timeouts 路由验证通过 CODE=$CODE"
 ```
 
-**硬阈值**: POST /collect/sweep-timeouts 不返回 404
+**接缝断言（UI 显示）**：`[接缝] status='failed' 任务的 error_reason 文案 + 「重新采集」按钮`
+→ 真目标验证位置：Playwright test `'TasksPage 失败态任务展示失败原因 + 重新采集按钮'`（E2E 验收段）
+→ 前置条件：e2e-verify.ps1 在 DB 中 seed 一条 status='failed', error_code='agent_offline' 的任务
+→ 未在 windows_cloud E2E 验证前，UI 接缝部分标 `logic-done-pending`
+
+**硬阈值**: POST /collect/sweep-timeouts → 200/401/403（非 404/5xx）
 
 ---
 
@@ -381,7 +412,6 @@ echo "✅ Step 8 sweep-timeouts 路由验证通过 CODE=$CODE"
 
 **验证命令**:
 ```bash
-# 验证 LeadsPage.tsx 源文件中不包含 acq-collect-button（静态检查）
 node -e "
 const c = require('fs').readFileSync('apps/dashboard/src/pages/LeadsPage.tsx','utf8');
 if (c.includes('acq-collect-button')) process.exit(1);
@@ -397,13 +427,8 @@ console.log('✅ LeadsPage 无采集面板 DOM');
 
 **来源**: `[FROM_PRD]` — PRD "新建 acquisition_collect_videos 表（video_id/task_id/tenant_id/title/thumbnail_url/publish_date/comment_count）"
 
-**可观测行为**:
-- 有 migration SQL 文件建表
-- 表含 PRD 指定列；video_id 为主键；task_id FK → acquisition_collect_tasks
-
 **验证命令**:
 ```bash
-# migration 文件存在且含必要列名
 node -e "
 const {readdirSync, readFileSync} = require('fs');
 const dir = 'apps/api/src/db/migrations';
@@ -421,15 +446,56 @@ console.log('✅ migration 文件验证通过', files[0]);
 
 ---
 
-## 接缝清单（1-3 条）
+### Step 10b: DouyinBurnerBindPage 废弃 → redirect 到 /area/acquisition/accounts
+
+**来源**: `[FROM_PRD]` — PRD "范围限定: DouyinBurnerBindPage UI 层废弃（扫码逻辑迁入 AccountsPage）"；PRD ASSUMPTION "DouyinBurnerBindPage 废弃 = 删除页面组件 + 路由 redirect 到 /area/acquisition/accounts，防止旧链接404"
+
+**可观测行为**:
+- DouyinBurnerBindPage 组件废弃（文件删除或改为仅含 `<Navigate>` redirect）
+- 路由配置中原来指向 DouyinBurnerBindPage 的路径 → redirect to `/area/acquisition/accounts`
+- 旧链接不返回 404
+
+**验证命令**:
+```bash
+# 检查路由配置含 redirect（DouyinBurnerBindPage 相关路由已改 redirect）
+node -e "
+const {readdirSync, readFileSync, existsSync} = require('fs');
+// 路由文件可能是 navigation.config.ts 或 router/index.tsx
+const candidates = [
+  'apps/dashboard/src/config/navigation.config.ts',
+  'apps/dashboard/src/router/index.tsx',
+  'apps/dashboard/src/router/routes.tsx',
+].filter(f => existsSync(f));
+const hasRedirect = candidates.some(f => {
+  const c = readFileSync(f, 'utf8');
+  return c.includes('Navigate') || c.includes('redirect') || c.includes('Redirect');
+});
+// DouyinBurnerBindPage.tsx 要么不存在，要么只含 Navigate redirect
+const bindPagePath = 'apps/dashboard/src/pages/DouyinBurnerBindPage.tsx';
+if (existsSync(bindPagePath)) {
+  const c = readFileSync(bindPagePath, 'utf8');
+  if (!c.includes('Navigate') && !c.includes('redirect') && !c.includes('accounts')) {
+    console.error('FAIL: DouyinBurnerBindPage 未废弃（未改为 redirect）'); process.exit(1);
+  }
+}
+console.log('✅ DouyinBurnerBindPage 废弃验证通过');
+"
+```
+
+**硬阈值**: DouyinBurnerBindPage 不存在 OR 内容仅含 redirect 到 `/area/acquisition/accounts`
+
+---
+
+## 接缝清单
 
 | # | 接缝点 | 碰真实世界的位置 | 真目标验证方式 |
 |---|---|---|---|
 | 1 | DB 表 acquisition_collect_videos | 生产 hk-vps/mmv PostgreSQL | psql 在真实 DB 执行 migration，`\d zenithjoy.acquisition_collect_videos` 确认表结构 |
-| 2 | agent DOM 选择器（title/thumbnail/publish_date） | 抖音真实网页 DOM | 在 xian-rog 运行 agent 抓一个真实视频，DB 记录有非 null 的 title/thumbnail_url（手工验，非 CI）|
-| 3 | IDOR 多租户隔离 | 生产两 tenant 数据共存 | 用两组真实 E2E tenant 凭据互访，确认 403（windows_cloud E2E 用 E2E_SUPER_ADMIN 的两 tenant 账号）|
+| 2 | agent DOM 选择器（title/thumbnail/publish_date） | 抖音真实网页 DOM | 在 xian-rog 运行 agent 抓一个真实视频，DB 记录有非 null 的 title/thumbnail_url（手工验，非 CI，标 logic-done-pending） |
+| 3 | IDOR 多租户隔离 | 生产两 tenant 数据共存 | 用两组真实 E2E tenant 凭据互访，确认 403（windows_cloud E2E 用 E2E_TEST_TENANT_ID + E2E_OTHER_TENANT_ID 账号） |
+| 4 | Step 8 失败态 UI 显示（error_reason + retry 按钮） | 前端 DOM 渲染 seeded failed 任务 | Playwright test `TasksPage 失败态任务展示失败原因 + 重新采集按钮`（需 e2e-verify.ps1 seed 一条 failed 任务） |
 
-以上 #2 在 CI 无法验（真实抖音 DOM），标 `logic-done-pending`。#1 和 #3 在 E2E 验证中覆盖。
+接缝 #2 在 CI 无法验（真实抖音 DOM），标 `logic-done-pending`。其余在 windows_cloud E2E 覆盖。
 
 ---
 
@@ -438,7 +504,7 @@ console.log('✅ migration 文件验证通过', files[0]);
 **journey_type**: user_facing
 **target_environment**: windows_cloud
 
-> ⚠️ 本 Sprint E2E 使用 **变体C**（Dashboard Playwright）。所有 `page.route()` 禁止使用；Playwright spec 打真实后端（localhost:3000）。与旧 `acquisition-collect.spec.ts`（全量 stub）不同，本 spec 必须跑真实 API。
+> ⚠️ 变体C 死规则：禁止 `page.route()`；Playwright spec 打真实后端（localhost:3000）；e2e-verify.ps1 必须先启动 apps/api 再启动 Vite。
 
 <!-- GOLDEN_SMOKE_ABILITY_SLUG: acquisition-ia-redesign -->
 <!-- GOLDEN_SMOKE_TARGET_ENV: windows_cloud -->
@@ -451,7 +517,6 @@ console.log('✅ migration 文件验证通过', files[0]);
 ```bash
 #!/bin/bash
 set -e
-# 验证 Hub 相关 API 就绪（不依赖 Playwright，只验 API）
 BRAIN_URL="${BRAIN_URL:-http://localhost:3000}"
 TEST_TENANT="${E2E_TEST_TENANT_ID:-e2e-tenant-001}"
 
@@ -473,9 +538,7 @@ echo "✅ Scenario 1 通过"
 set -e
 BRAIN_URL="${BRAIN_URL:-http://localhost:3000}"
 TEST_TENANT="${E2E_TEST_TENANT_ID:-e2e-tenant-001}"
-DATABASE_URL="${DATABASE_URL:-$E2E_DATABASE_URL}"
 
-# 先建一个测试任务
 TASK_RESP=$(curl -sf -X POST \
   -H "Content-Type: application/json" \
   -H "X-Tenant-Id: $TEST_TENANT" \
@@ -484,12 +547,12 @@ TASK_RESP=$(curl -sf -X POST \
 echo "$TASK_RESP" | jq -e '.success == true' || { echo "FAIL: collect/start"; exit 1; }
 TASK_ID=$(echo "$TASK_RESP" | jq -r '.data.task_id')
 
-# 验新端点
 RESP=$(curl -sf -H "X-Tenant-Id: $TEST_TENANT" "$BRAIN_URL/api/acquisition/collect-tasks/$TASK_ID/videos")
 echo "$RESP" | jq -e '.success == true' || { echo "FAIL: collect-tasks/:id/videos"; exit 1; }
 echo "$RESP" | jq -e '.data | (has("videos") and has("total"))' || { echo "FAIL: missing videos/total"; exit 1; }
 echo "$RESP" | jq -e '.data.videos | type == "array"' || { echo "FAIL: videos not array"; exit 1; }
 echo "$RESP" | jq -e '.data | has("videoList") | not' || { echo "FAIL: 禁用字段 videoList"; exit 1; }
+echo "$RESP" | jq -e '.data | has("items") | not' || { echo "FAIL: 禁用字段 items"; exit 1; }
 
 echo "✅ Scenario 2 通过"
 ```
@@ -504,26 +567,25 @@ set -e
 BRAIN_URL="${BRAIN_URL:-http://localhost:3000}"
 TEST_TENANT="${E2E_TEST_TENANT_ID:-e2e-tenant-001}"
 OTHER_TENANT="${E2E_OTHER_TENANT_ID:-e2e-tenant-002}"
+DATABASE_URL="${DATABASE_URL:-$E2E_DATABASE_URL}"
 
-# 先拿一个已知 task_id（此处用 Scenario 2 创建的，但 golden-smoke 要自包含，需重建）
-TASK_RESP=$(curl -sf -X POST \
-  -H "Content-Type: application/json" \
+TASK_ID=$(curl -sf -X POST -H "Content-Type: application/json" \
   -H "X-Tenant-Id: $TEST_TENANT" \
-  -d '{"keywords":["e2e-idor-test"]}' \
-  "$BRAIN_URL/api/acquisition/collect/start")
-TASK_ID=$(echo "$TASK_RESP" | jq -r '.data.task_id')
+  -d '{"keywords":["e2e-leads-smoke"]}' \
+  "$BRAIN_URL/api/acquisition/collect/start" | jq -r '.data.task_id')
 
-# videos/:videoId/leads（空任务下无视频，用不存在视频 ID 测）
-RESP=$(curl -s -o /dev/null -w "%{http_code}" -H "X-Tenant-Id: $TEST_TENANT" \
-  "$BRAIN_URL/api/acquisition/videos/e2e-nonexistent/leads")
-# 空视频 → 404 或 200({leads:[]})，不允许 500
-[ "$RESP" != "500" ] || { echo "FAIL: videos/:id/leads 返 500"; exit 1; }
+TEST_VIDEO_ID="e2e-video-leads-smoke"
+psql "$DATABASE_URL" -c "INSERT INTO zenithjoy.acquisition_collect_videos \
+  (video_id, task_id, tenant_id, title, thumbnail_url, publish_date, comment_count) \
+  VALUES ('$TEST_VIDEO_ID', '$TASK_ID', '$TEST_TENANT', 'E2E Smoke Video', NULL, NULL, 0) \
+  ON CONFLICT (video_id) DO UPDATE SET task_id='$TASK_ID', tenant_id='$TEST_TENANT'"
 
-# IDOR：用 OTHER_TENANT 访问 TEST_TENANT 的任务 videos
-IDOR_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
-  -H "X-Tenant-Id: $OTHER_TENANT" \
-  "$BRAIN_URL/api/acquisition/collect-tasks/$TASK_ID/videos")
-[ "$IDOR_CODE" = "401" ] || [ "$IDOR_CODE" = "403" ] || { echo "FAIL: IDOR 未拦截 CODE=$IDOR_CODE"; exit 1; }
+RESP=$(curl -sf -H "X-Tenant-Id: $TEST_TENANT" "$BRAIN_URL/api/acquisition/videos/$TEST_VIDEO_ID/leads")
+echo "$RESP" | jq -e '.success == true and (.data.leads | type == "array") and (.data.total | type == "number")' || { echo "FAIL: leads schema"; exit 1; }
+echo "$RESP" | jq -e '.data | (has("comments") | not) and (has("items") | not) and (has("results") | not)' || { echo "FAIL: 禁用字段"; exit 1; }
+
+IDOR=$(curl -s -o /dev/null -w "%{http_code}" -H "X-Tenant-Id: $OTHER_TENANT" "$BRAIN_URL/api/acquisition/videos/$TEST_VIDEO_ID/leads")
+[ "$IDOR" = "401" ] || [ "$IDOR" = "403" ] || { echo "FAIL: IDOR CODE=$IDOR"; exit 1; }
 
 echo "✅ Scenario 3 通过"
 ```
@@ -534,18 +596,20 @@ echo "✅ Scenario 3 通过"
 
 ```typescript
 /**
- * Sprint 07021006 — AcquisitionHubPage IA 重设计 E2E
+ * Sprint 07021006 — AcquisitionHubPage IA 重设计 E2E (Round 2)
  *
  * 规则：禁止 page.route()。所有 API 调用打真实后端（localhost:3000）。
- * 前置：e2e-verify.ps1 已在 psql 中 seed 测试数据（test_tenant + burner session + collect task）
+ * 前置：e2e-verify.ps1 已 seed：
+ *   - TEST_TENANT: 1条 pending 采集任务 + 1条 seeded 视频 + 1条 failed 任务
+ *   - OTHER_TENANT: 10条 burner sessions（N=10 上限测试）
  */
 import { test, expect } from '@playwright/test';
 
 const BASE_URL = process.env.E2E_BASE_URL ?? 'http://localhost:5174';
 const TEST_TENANT = process.env.E2E_TEST_TENANT_ID ?? '';
+const OTHER_TENANT = process.env.E2E_OTHER_TENANT_ID ?? '';
 
 test.beforeEach(async ({ page }) => {
-  // 注入 tenant 上下文 cookie（不 stub auth，dashboard 用 VITE_SKIP_AUTH=true 跳过登录检查）
   await page.context().addCookies([
     { name: 'x-tenant-id', value: TEST_TENANT, url: BASE_URL },
   ]);
@@ -561,7 +625,6 @@ test('Hub页展示4个模块卡片', async ({ page }) => {
   await expect(page.getByTestId('hub-card-analytics')).toBeVisible({ timeout: 5_000 });
   await expect(page.getByTestId('hub-card-outreach')).toBeVisible({ timeout: 5_000 });
 
-  // 账号/采集卡片数字是数值（非 NaN/undefined）
   const accountsNum = await page.getByTestId('hub-card-accounts-count').textContent();
   expect(Number(accountsNum?.trim())).toBeGreaterThanOrEqual(0);
   const tasksNum = await page.getByTestId('hub-card-tasks-count').textContent();
@@ -573,12 +636,10 @@ test('AccountsPage 渲染小号列表或空态', async ({ page }) => {
   await page.waitForLoadState('networkidle');
   await page.screenshot({ path: 'e2e/screenshots/02-accounts.png', fullPage: true });
 
-  // 有数据时 or 空态 — 两者都合法，但容器必须可见
   const hasList = await page.getByTestId('accounts-list').isVisible().catch(() => false);
   const hasEmpty = await page.getByTestId('accounts-empty').isVisible().catch(() => false);
   expect(hasList || hasEmpty).toBe(true);
 
-  // 「绑定新小号」按钮必须存在（可能 disabled）
   await expect(page.getByTestId('bind-new-account-btn')).toBeVisible({ timeout: 5_000 });
 });
 
@@ -589,7 +650,6 @@ test('TasksPage 一级渲染关键词输入框 + 任务列表', async ({ page })
 
   await expect(page.getByTestId('keyword-input')).toBeVisible({ timeout: 10_000 });
   await expect(page.getByTestId('start-collect-btn')).toBeVisible({ timeout: 5_000 });
-  // 任务列表容器可见（空时也要渲染容器）
   await expect(page.getByTestId('tasks-list')).toBeVisible({ timeout: 5_000 });
 });
 
@@ -598,16 +658,87 @@ test('LeadsPage 不再含采集面板', async ({ page }) => {
   await page.waitForLoadState('networkidle');
   await page.screenshot({ path: 'e2e/screenshots/04-leads.png', fullPage: true });
 
-  // 采集面板按钮应不存在
   const collectBtn = page.getByTestId('acq-collect-button');
-  await expect(collectBtn).toBeHidden({ timeout: 5_000 }).catch(async () => {
-    // 如果 hidden 检查不支持，fallback 用 count
-    const count = await collectBtn.count();
-    expect(count).toBe(0);
-  });
+  const count = await collectBtn.count();
+  expect(count).toBe(0);
 
-  // leads 表格容器必须存在
   await expect(page.locator('.ag-root-wrapper, [data-testid="leads-table"]')).toBeVisible({ timeout: 10_000 });
+});
+
+// ── R2 新增：PRD Step 6 TasksPage 二级视频卡片 ──
+test('TasksPage 二级视频卡片容器渲染（/:taskId 路由）', async ({ page }) => {
+  await page.goto(`${BASE_URL}/area/acquisition/tasks`);
+  await page.waitForLoadState('networkidle');
+
+  const firstRow = page.getByTestId('task-row').first();
+  const hasTask = await firstRow.isVisible({ timeout: 5_000 }).catch(() => false);
+
+  if (hasTask) {
+    await firstRow.click();
+    await page.waitForLoadState('networkidle');
+    await page.screenshot({ path: 'e2e/screenshots/05-tasks-detail.png', fullPage: true });
+    await expect(page.getByTestId('video-cards-container')).toBeVisible({ timeout: 10_000 });
+  } else {
+    // 无任务时直接访问二级路由，验证不白屏（渲染空容器或 not-found）
+    await page.goto(`${BASE_URL}/area/acquisition/tasks/00000000-0000-0000-0000-000000000000`);
+    await page.waitForLoadState('networkidle');
+    await page.screenshot({ path: 'e2e/screenshots/05-tasks-detail-empty.png', fullPage: true });
+    const hasContainer = await page.getByTestId('video-cards-container').isVisible().catch(() => false);
+    const hasError = await page.locator('[data-testid*="not-found"], [data-testid*="error"]').isVisible().catch(() => false);
+    expect(hasContainer || hasError).toBe(true);
+  }
+});
+
+// ── R2 新增：PRD Step 7 leads 空态「暂无评论」 ──
+test('视频卡片展开后显示 leads 列表或「暂无评论」占位', async ({ page }) => {
+  await page.goto(`${BASE_URL}/area/acquisition/tasks`);
+  await page.waitForLoadState('networkidle');
+
+  const firstRow = page.getByTestId('task-row').first();
+  const hasTask = await firstRow.isVisible({ timeout: 5_000 }).catch(() => false);
+  if (!hasTask) { test.skip(); return; }
+
+  await firstRow.click();
+  await page.waitForLoadState('networkidle');
+
+  const firstCard = page.getByTestId('video-card').first();
+  const hasCard = await firstCard.isVisible({ timeout: 5_000 }).catch(() => false);
+  if (!hasCard) { test.skip(); return; }
+
+  await firstCard.click();
+  await page.screenshot({ path: 'e2e/screenshots/06-video-leads.png', fullPage: true });
+
+  const hasLeads = await page.getByTestId('leads-list').isVisible({ timeout: 5_000 }).catch(() => false);
+  const hasEmpty = await page.getByTestId('leads-empty-placeholder').isVisible({ timeout: 5_000 }).catch(() => false);
+  expect(hasLeads || hasEmpty).toBe(true);
+});
+
+// ── R2 新增：PRD Step 3 N=10 上限按钮置灰 ──
+test('AccountsPage N=10 上限时绑定按钮置灰', async ({ page }) => {
+  if (!OTHER_TENANT) { test.skip(); return; }
+  // 切换到 OTHER_TENANT（e2e-verify.ps1 已 seed 10 条 burner session）
+  await page.context().clearCookies();
+  await page.context().addCookies([
+    { name: 'x-tenant-id', value: OTHER_TENANT, url: BASE_URL },
+  ]);
+  await page.goto(`${BASE_URL}/area/acquisition/accounts`);
+  await page.waitForLoadState('networkidle');
+  await page.screenshot({ path: 'e2e/screenshots/07-accounts-n10-limit.png', fullPage: true });
+
+  const btn = page.getByTestId('bind-new-account-btn');
+  await expect(btn).toBeVisible({ timeout: 10_000 });
+  await expect(btn).toBeDisabled({ timeout: 5_000 });
+});
+
+// ── R2 新增：PRD Step 8 失败态 UI 展示 ──
+test('TasksPage 失败态任务展示失败原因 + 重新采集按钮', async ({ page }) => {
+  // e2e-verify.ps1 已 seed 一条 status='failed' 任务
+  await page.goto(`${BASE_URL}/area/acquisition/tasks`);
+  await page.waitForLoadState('networkidle');
+  await page.screenshot({ path: 'e2e/screenshots/08-tasks-failed.png', fullPage: true });
+
+  await expect(page.getByTestId('task-status-failed')).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByTestId('task-retry-btn')).toBeVisible({ timeout: 5_000 });
 });
 ```
 
@@ -616,14 +747,15 @@ test('LeadsPage 不再含采集面板', async ({ page }) => {
 ### e2e-verify.ps1（位于 `sprints/07021006-acquisition-ia-redesign/e2e-verify.ps1`）
 
 ```powershell
-# final-e2e 验证脚本 — ZenithJoy Dashboard Playwright（windows-latest）
+# final-e2e 验证脚本 — ZenithJoy Dashboard Playwright（windows-latest）Round 2
 # 变体C 死规则：禁止 page.route()，必须启动真实后端
 param(
   [string]$BaseUrl = "http://localhost:5174",
   [string]$SuperAdminEmail = $env:E2E_SUPER_ADMIN_EMAIL,
   [string]$SuperAdminPassword = $env:E2E_SUPER_ADMIN_PASSWORD,
   [string]$DatabaseUrl = $env:E2E_DATABASE_URL,
-  [string]$TestTenantId = $env:E2E_TEST_TENANT_ID
+  [string]$TestTenantId = $env:E2E_TEST_TENANT_ID,
+  [string]$OtherTenantId = $env:E2E_OTHER_TENANT_ID
 )
 
 Set-StrictMode -Version Latest
@@ -633,6 +765,15 @@ $VitePort = 5174
 $ApiPort = 3000
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $repoRoot = Resolve-Path "$scriptDir\..\.."
+
+# 0. 安装 psql（若不可用）— seed SQL 和 IDOR 验证需要
+if (-not (Get-Command psql -ErrorAction SilentlyContinue)) {
+  Write-Host "▶ Installing PostgreSQL client..."
+  choco install postgresql15 --no-progress -y 2>&1 | Select-Object -Last 3
+  $pgDir = Get-ChildItem "C:\Program Files\PostgreSQL" -ErrorAction SilentlyContinue |
+    Sort-Object Name | Select-Object -Last 1
+  if ($pgDir) { $env:PATH += ";$($pgDir.FullName)\bin" }
+}
 
 # 1. 安装依赖
 Write-Host "▶ npm ci..."
@@ -645,21 +786,53 @@ $r2 = Start-Process "cmd.exe" -ArgumentList "/c npx.cmd playwright install chrom
   -WorkingDirectory $repoRoot -Wait -PassThru -NoNewWindow
 if ($r2.ExitCode -ne 0) { throw "FAIL: playwright install failed" }
 
-# 3. Seed 测试数据（DB 预置 tenant + burner session + collect task）
+# 3. Seed 测试数据
 Write-Host "▶ Seeding E2E test data..."
 $seedSql = @"
 DO `$`$
 BEGIN
-  -- seed test tenant (幂等)
+  -- seed test tenant（幂等）
   INSERT INTO zenithjoy.tenants (id, name, created_at)
   VALUES ('$TestTenantId', 'E2E Test Tenant', NOW())
+  ON CONFLICT (id) DO NOTHING;
+
+  -- seed OTHER_TENANT（N=10 上限测试）
+  INSERT INTO zenithjoy.tenants (id, name, created_at)
+  VALUES ('$OtherTenantId', 'E2E Limit Tenant', NOW())
   ON CONFLICT (id) DO NOTHING;
 END
 `$`$;
 "@
 $seedSql | psql $DatabaseUrl 2>&1 | Write-Host
 
-# 4. 启动 API server
+# Seed 10 burner sessions for OTHER_TENANT（N=10 上限 UI 测试）
+$seedLimitSql = @"
+DO `$`$
+DECLARE i INT;
+BEGIN
+  FOR i IN 1..10 LOOP
+    INSERT INTO zenithjoy.agent_platform_sessions
+      (id, tenant_id, platform, role, status, account_label, created_at, updated_at)
+    VALUES (gen_random_uuid(), '$OtherTenantId', 'douyin', 'burner', 'active',
+            'limit-test-account-' || i, NOW(), NOW())
+    ON CONFLICT DO NOTHING;
+  END LOOP;
+END
+`$`$;
+"@
+$seedLimitSql | psql $DatabaseUrl 2>&1 | Write-Host
+
+# Seed failed task for TEST_TENANT（Step 8 UI 测试）
+$seedFailedSql = @"
+INSERT INTO zenithjoy.acquisition_collect_tasks
+  (id, tenant_id, keywords, status, error_code, created_at, updated_at)
+VALUES (gen_random_uuid(), '$TestTenantId', ARRAY['e2e-failed-keyword'],
+        'failed', 'agent_offline', NOW(), NOW())
+ON CONFLICT DO NOTHING;
+"@
+$seedFailedSql | psql $DatabaseUrl 2>&1 | Write-Host
+
+# 4. 启动 API server（E2E_API_URL secret 为外部 URL，不用于本 sprint — 本 sprint 自启 localhost:$ApiPort）
 Write-Host "▶ Starting API server port $ApiPort..."
 $env:DATABASE_URL = $DatabaseUrl
 $env:NODE_ENV = "test"
@@ -673,7 +846,7 @@ do {
 if (-not $conn.TcpTestSucceeded) { throw "FAIL: API server 未就绪 port=$ApiPort" }
 Write-Host "✅ API server port=$ApiPort"
 
-# 5. Build Dashboard（VITE_SKIP_AUTH=true 跳过登录，仍打真实 API）
+# 5. Build Dashboard
 Write-Host "▶ Building dashboard..."
 $buildEnv = @{ VITE_SKIP_AUTH = "true"; VITE_API_URL = "http://localhost:$ApiPort" }
 $r3 = Start-Process "cmd.exe" -ArgumentList "/c npm.cmd run build" `
@@ -698,16 +871,17 @@ if (-not $conn2.TcpTestSucceeded) {
 }
 Write-Host "✅ Vite port=$VitePort"
 
-# 7. 运行 Playwright（禁止 page.route()）
+# 7. 运行 Playwright（传入 OTHER_TENANT 供 N=10 测试使用）
 $e2eProc = Start-Process "cmd.exe" `
   -ArgumentList "/c npx.cmd playwright test e2e\acquisition-ia.spec.ts --reporter=list" `
   -WorkingDirectory "$repoRoot\apps\dashboard" -Wait -PassThru -NoNewWindow `
   -Environment @{
-    E2E_BASE_URL = $BaseUrl
-    E2E_TEST_TENANT_ID = $TestTenantId
+    E2E_BASE_URL        = $BaseUrl
+    E2E_TEST_TENANT_ID  = $TestTenantId
+    E2E_OTHER_TENANT_ID = $OtherTenantId
   }
 
-# 8. 归集截图
+# 8. 归集截图（01-08）
 $screenshotDest = "$scriptDir\screenshots"
 New-Item -ItemType Directory -Force -Path $screenshotDest | Out-Null
 Copy-Item "$repoRoot\apps\dashboard\e2e\screenshots\*.png" -Destination $screenshotDest -ErrorAction SilentlyContinue
@@ -720,11 +894,10 @@ Write-Host "✅ windows_cloud Dashboard E2E 验证通过（真实后端）"
 exit 0
 ```
 
-**PASS 标准**: e2eProc.ExitCode = 0 + API server 已启动（无 page.route()）+ 4 张截图归集
-
-**FAIL 标准**: 任何 step exit≠0 OR API 未就绪 OR Playwright 失败 OR page.route() 出现在 spec
-
-**GHA Secrets 必须**: `E2E_SUPER_ADMIN_EMAIL`、`E2E_SUPER_ADMIN_PASSWORD`、`E2E_DATABASE_URL`、`E2E_TEST_TENANT_ID`、`E2E_OTHER_TENANT_ID`
+**GHA Secrets 必须**（e2e-windows.yml 的 env block 需包含）：
+- `E2E_SUPER_ADMIN_EMAIL`、`E2E_SUPER_ADMIN_PASSWORD`、`E2E_DATABASE_URL`
+- `E2E_TEST_TENANT_ID: ${{ secrets.E2E_TEST_TENANT_ID }}`（R2 新增）
+- `E2E_OTHER_TENANT_ID: ${{ secrets.E2E_OTHER_TENANT_ID }}`（R2 新增）
 
 ---
 
@@ -732,6 +905,10 @@ exit 0
 
 | 功能 | Test File | BEHAVIOR 覆盖 | 预期红证据 |
 |---|---|---|---|
-| 新 API 端点 collect-tasks/:id/videos | `tests/acquisition-videos-api.test.ts` | schema/IDOR/404 | 端点未实现 → 路由 404 → ≥3 failures |
-| 新 API 端点 videos/:videoId/leads | `tests/acquisition-videos-api.test.ts` | schema/IDOR/empty | 端点未实现 → ≥2 failures |
-| acquisition_collect_videos DB migration | `tests/acquisition-videos-api.test.ts` | 表存在断言 | migration 未跑 → psql 查不到表 → 1 failure |
+| 新 API 端点 collect-tasks/:id/videos | `tests/acquisition-ia.test.ts` | schema/IDOR/404/禁用字段 | 端点未实现 → ≥3 failures |
+| 新 API 端点 videos/:videoId/leads | `tests/acquisition-ia.test.ts` | 200路径schema/IDOR/禁用字段 | 端点未实现 → ≥3 failures |
+| acquisition_collect_videos DB migration | `tests/acquisition-ia.test.ts` | 表存在/7列/schema前缀 | migration 未建 → 3 failures |
+| AccountsPage / TasksPage 新组件 | `tests/acquisition-ia.test.ts` | testId存在/路由/disable逻辑 | 文件不存在 → ≥4 failures |
+| DouyinBurnerBindPage 废弃 | `tests/acquisition-ia.test.ts` | redirect/Navigate存在 | 未改 → 1 failure |
+| LeadsPage 移除采集面板 | `tests/acquisition-ia.test.ts` | acq-collect-button 不存在 | 未改 → 1 failure |
+| Playwright spec 合规 | `tests/acquisition-ia.test.ts` | 无page.route/含新测试覆盖 | spec 不存在 → 2 failures |

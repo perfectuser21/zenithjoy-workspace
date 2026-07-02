@@ -1,23 +1,21 @@
 {
   "initiative_id": "afa6abca-53c0-4815-8594-b7fb81ca547f",
   "journey_type": "user_facing",
-  "journey_type_reason": "涉及 apps/dashboard/ 多个页面组件（AcquisitionHubPage/AccountsPage/TasksPage/LeadsPage）+ 新 API 端点 + DB migration",
+  "journey_type_reason": "涉及 apps/dashboard/ 多个页面组件（AcquisitionHubPage/AccountsPage/TasksPage/LeadsPage），E2E 走 windows_cloud GitHub Actions Playwright",
   "tasks": [
     {
       "task_id": "ws1",
-      "title": "获客工作台 IA 重设计：Hub 4卡片 + AccountsPage + TasksPage 两级 + LeadsPage 移采集面板 + 2新API + collect_videos 表 + Agent 选择器",
-      "scope": "1. AcquisitionHubPage 改4模块入口卡片（accounts/tasks/analytics占位/outreach占位），卡片含实时数字；2. 新建 AccountsPage（/area/acquisition/accounts），渲染 burner sessions 健康状态三色；3. 新建/重构 TasksPage（/area/acquisition/tasks）一级任务列表 + 二级（/:taskId）视频卡片+leads展开；4. LeadsPage 移除采集面板 DOM；5. DouyinBurnerBindPage redirect 到 /area/acquisition/accounts；6. 新建 GET /api/acquisition/collect-tasks/:id/videos（tenant过滤+IDOR）；7. 新建 GET /api/acquisition/videos/:videoId/leads（tenant过滤+IDOR）；8. DB migration 创建 zenithjoy.acquisition_collect_videos 表；9. services/agent keyword-search-douyin 补 title/thumbnail/publish_date 选择器；10. 注册新路由 + 更新 navigation.config.ts；11. 新建 apps/dashboard/e2e/acquisition-ia.spec.ts（禁 page.route()）；12. 新建 sprints/07021006-acquisition-ia-redesign/e2e-verify.ps1",
+      "title": "AcquisitionHub IA 重设计 — 4模块卡片 + AccountsPage + TasksPage两级(含失败态) + 2新端点 + collect_videos表 + DouyinBurnerBindPage废弃 + e2e-windows.yml补secrets",
+      "scope": "1. AcquisitionHubPage 改4模块入口卡片（accounts/tasks/analytics占位/outreach占位），卡片含实时数字；2. 新建 AccountsPage（/area/acquisition/accounts），渲染 burner sessions 健康状态三色 + N=10上限置灰逻辑；3. 新建/重构 TasksPage（/area/acquisition/tasks）一级任务列表 + 二级（/:taskId）视频卡片 + leads展开(空态占位) + 失败态(task-status-failed + task-retry-btn)；4. LeadsPage 移除采集面板 DOM；5. DouyinBurnerBindPage 废弃 → Navigate redirect 到 /area/acquisition/accounts；6. 新建 GET /api/acquisition/collect-tasks/:id/videos（tenant过滤+IDOR）；7. 新建 GET /api/acquisition/videos/:videoId/leads（tenant过滤+IDOR）；8. DB migration 创建 zenithjoy.acquisition_collect_videos 表（7列）；9. services/agent keyword-search-douyin 补 title/thumbnail/publish_date 选择器；10. 注册新路由；11. 新建 apps/dashboard/e2e/acquisition-ia.spec.ts（8个test，禁 page.route()）；12. 新建 sprints/07021006-acquisition-ia-redesign/e2e-verify.ps1（含psql安装+seed+启动真实后端）；13. .github/workflows/e2e-windows.yml 补 E2E_TEST_TENANT_ID/E2E_OTHER_TENANT_ID；14. acquisition-collect.spec.ts 同步移除 acq-collect-button 断言",
       "dod": [
-        "[BEHAVIOR] GET /api/acquisition/collect-tasks/:id/videos 返回 success=true + data.videos(array) + data.total(number)，跨tenant→403，非法UUID→404",
-        "[BEHAVIOR] GET /api/acquisition/videos/:videoId/leads 返回 success=true + data.leads(array) + data.total(number)，跨tenant→403",
-        "[BEHAVIOR] POST /api/acquisition/collect/start 新建任务 DB 记录在5分钟内（时间窗口防造假）",
+        "[BEHAVIOR] GET /api/acquisition/collect-tasks/:id/videos 返回 success=true + data.videos(array) + data.total(number)，禁用字段videoList/items/results不出现，跨tenant→403，非法UUID→404",
+        "[BEHAVIOR] GET /api/acquisition/videos/:videoId/leads（seed已知video_id，200路径验证）返回 success=true + data.leads(array) + data.total(number)，禁用字段comments/items/results不出现，跨tenant→403",
+        "[BEHAVIOR] POST /api/agent/burner/qr-bind → 200(含data.qr_url:string) 或 503（无agent）；非404/500",
+        "[BEHAVIOR] POST /collect/sweep-timeouts → 200/401/403，不返回 404",
+        "[BEHAVIOR] POST /api/acquisition/collect/start 新建任务 DB 记录在5分钟时间窗口内存在",
         "[BEHAVIOR] LeadsPage.tsx 不含 acq-collect-button（移除采集面板）",
         "[BEHAVIOR] acquisition_collect_videos migration 文件含 7 个 PRD 要求列名",
-        "[BEHAVIOR] AcquisitionHubPage 含 hub-card-accounts/tasks/analytics/outreach 4个 testId",
-        "[BEHAVIOR] AccountsPage 含 bind-new-account-btn testId + 健康状态三色映射",
-        "[BEHAVIOR] TasksPage 含 keyword-input + start-collect-btn + tasks-list testId",
-        "[BEHAVIOR:E2E] Playwright spec acquisition-ia.spec.ts 无 page.route()，4页面截图可视化验证通过",
-        "[ARTIFACT] e2e-verify.ps1 存在且启动真实后端"
+        "[BEHAVIOR:E2E] Playwright spec acquisition-ia.spec.ts（8个test）无 page.route()，截图01-08可视化验证通过"
       ],
       "files": [
         "apps/dashboard/src/pages/AcquisitionHubPage.tsx",
@@ -26,12 +24,14 @@
         "apps/dashboard/src/pages/LeadsPage.tsx",
         "apps/dashboard/src/pages/DouyinBurnerBindPage.tsx",
         "apps/dashboard/src/config/navigation.config.ts",
+        "apps/dashboard/e2e/acquisition-ia.spec.ts",
+        "apps/dashboard/e2e/acquisition-collect.spec.ts",
         "apps/api/src/routes/acquisition.ts",
-        "apps/api/src/db/migrations/<timestamp>-create-acquisition-collect-videos.ts",
+        "apps/api/src/db/migrations/<timestamp>_create_acquisition_collect_videos.ts",
         "services/agent/src/handlers/keyword-search-douyin.ts",
         "services/agent/src/handlers/keyword-search-douyin.cjs",
-        "apps/dashboard/e2e/acquisition-ia.spec.ts",
-        "sprints/07021006-acquisition-ia-redesign/e2e-verify.ps1"
+        "sprints/07021006-acquisition-ia-redesign/e2e-verify.ps1",
+        ".github/workflows/e2e-windows.yml"
       ],
       "depends_on": [],
       "complexity": "L",
