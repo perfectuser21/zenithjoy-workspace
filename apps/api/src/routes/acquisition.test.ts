@@ -197,6 +197,28 @@ describe('GET /api/acquisition/leads', () => {
   });
 });
 
+// ────── Bug 回归：leads 字段映射 — commenter_id=nickname，source_video_url=完整URL，有 profile_url ──────
+describe('GET /api/acquisition/leads 字段映射 [REGRESSION]', () => {
+  it('commenter_id 映射 nickname（优先），不再映射 sec_uid 乱码', () => {
+    const src = fs.readFileSync(path.resolve(__dirname, './acquisition.ts'), 'utf8');
+    // 必须是 nickname ?? sec_uid，不能是 sec_uid ?? nickname
+    expect(src).toMatch(/commenter_id:\s*r\.nickname\s*\?\?/);
+    expect(src).not.toMatch(/commenter_id:\s*r\.sec_uid\s*\?\?\s*r\.nickname/);
+  });
+
+  it('source_video_url 拼成完整抖音视频 URL，不是裸 ID', () => {
+    const src = fs.readFileSync(path.resolve(__dirname, './acquisition.ts'), 'utf8');
+    expect(src).toMatch(/https:\/\/www\.douyin\.com\/video\//);
+    // 不再直接返回裸 videoIds[0]
+    expect(src).not.toMatch(/source_video_url:\s*videoIds\[0\]/);
+  });
+
+  it('返回 profile_url 字段（抖音主页链接）', () => {
+    const src = fs.readFileSync(path.resolve(__dirname, './acquisition.ts'), 'utf8');
+    expect(src).toMatch(/profile_url:.*douyin\.com\/user\//);
+  });
+});
+
 // ────── Bug A 回归：keyword-search agent 门禁改用 agents 表 ──────
 describe('POST /api/acquisition/keyword-search — agent 门禁用 agents 表 [REGRESSION]', () => {
   it('源码不再检查 agent_platform_sessions role=main（只能用 burner 的 rog 不再被拦）', () => {

@@ -7,6 +7,7 @@ import type { ColDef, ICellRendererParams } from 'ag-grid-community';
 
 interface Lead {
   commenter_id: string;
+  profile_url?: string | null;
   comment_text: string;
   source_video_url: string;
   crawled_at: string;
@@ -168,9 +169,21 @@ export default function LeadsPage() {
   const columnDefs = useMemo<ColDef<Lead>[]>(() => [
     {
       field: 'commenter_id',
-      headerName: '抖音号',
+      headerName: '昵称',
       width: 160,
       pinned: 'left',
+      cellRenderer: (p: ICellRendererParams<Lead>) => {
+        const name = p.value as string;
+        const url = p.data?.profile_url;
+        if (!name) return <span className="text-gray-600">—</span>;
+        if (!url) return <span>{name}</span>;
+        return (
+          <a href={url} target="_blank" rel="noopener noreferrer"
+             className="text-yellow-400 hover:text-yellow-300 hover:underline">
+            {name}
+          </a>
+        );
+      },
     },
     {
       field: 'comment_text',
