@@ -371,16 +371,20 @@ def test_find_chat_input_excludes_search_bar():
     )
 
 
-def test_find_chat_input_fallback_when_filter_removes_all():
-    """若位置过滤后候选为空（所有 Edit 在上半区），应退化到旧逻辑返回面积最大者。"""
+def test_find_chat_input_aborts_when_filter_removes_all():
+    """所有 Edit 都在上半区（下半区无聊天输入框）→ 返回 None 中止，绝不回退到顶部搜索框。
+
+    修正 2026-07-02：旧行为"退化到全局最大 Edit"= 顶部搜索框 → _uia_send 的 SetValue
+    把回复写进搜索栏白发（用户症状"回复写进搜索框"）。详见 test_find_chat_input_no_search_fallback.py。
+    """
     win = _Rect(0, 0, 1200, 900)
-    edit_a = _FakeEdit("", _Rect(0, 10, 500, 50))   # 面积 20000
-    edit_b = _FakeEdit("", _Rect(0, 60, 800, 100))  # 面积 32000（更大）
+    edit_a = _FakeEdit("", _Rect(0, 10, 500, 50))   # 上半区
+    edit_b = _FakeEdit("", _Rect(0, 60, 800, 100))  # 上半区（更大=搜索栏类）
     mw = _FakeMW(win, [edit_a, edit_b])
 
     result = listen_chat._find_chat_input(mw)
-    assert result is edit_b, (
-        "所有 Edit 在上半区时，应退化到旧逻辑返回面积最大者"
+    assert result is None, (
+        "下半区无聊天输入框时必须中止（None），绝不回退到顶部最大 Edit（搜索框）"
     )
 
 

@@ -1201,11 +1201,16 @@ def _iter_all_controls(mw: Any, control_type: str):
 
 
 def _find_chat_input(mw: Any) -> Optional[Any]:
-    """定位回复输入框：先按 automation_id='chat_input_field'，再按位置+面积回退。
+    """定位回复输入框：先按 automation_id='chat_input_field'，再按窗口下半区面积回退。
 
-    WeChat 4.1.8 不在后台 UIA 树暴露 chat_input_field；回退策略：
-    1. 先过滤窗口下半区（聊天输入框在底部，搜索栏在顶部）取面积最大者；
-    2. 下半区为空时退化到全局面积最大者（兼容旧场景）。
+    定位策略：
+    1. automation_id=='chat_input_field' 命中即返回（暴露该 aid 的场景）；
+    2. 否则取窗口**下半区**（聊天输入框在底部，搜索栏在顶部）面积最大的 Edit；
+    3. 下半区为空 / 窗口几何读不到 → **返回 None 中止本轮，绝不回退到顶部搜索框**。
+
+    ⚠️ 绝不回退搜索框（2026-07-02 修）：_uia_send 对返回的 Edit 直接 iface_value.SetValue(reply)，
+    若回退顶部搜索框 → 回复被写进搜索栏（用户症状"回复写进搜索框"，白发不送达）。健康态下半区
+    必有真输入框，此中止不触发；脏态/树塌下半区空时中止，交由 reply_in_chat 下轮重试（已对 None 优雅处理）。
     """
     try:
         win_rect = mw.rectangle()
@@ -1241,10 +1246,10 @@ def _find_chat_input(mw: Any) -> Optional[Any]:
             _log(f"_find_chat_input: 下半区 Edit area={best[0]} aid={repr(best[1])}")
             return best[3]
 
-    candidates.sort(key=lambda x: x[0], reverse=True)
-    best = candidates[0]
-    _log(f"_find_chat_input: 回退到最大 Edit area={best[0]} aid={repr(best[1])}")
-    return best[3]
+    # 下半区无聊天输入框（脏态/树塌）或窗口几何读不到 → 中止本轮，绝不回退到顶部搜索框。
+    # 旧逻辑"回退全局最大 Edit"= 顶部搜索框 → _uia_send 的 SetValue 把回复写进搜索栏白发。
+    _log("_find_chat_input: 未找到下半区聊天输入框，中止本轮（不回退搜索框，下轮重试）")
+    return None
 
 
 def _find_send_button(mw: Any) -> Optional[Any]:
