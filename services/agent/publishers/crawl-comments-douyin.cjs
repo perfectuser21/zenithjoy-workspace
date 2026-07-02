@@ -51,6 +51,27 @@ function postReport(payload, base) {
   });
 }
 
+function findSystemChrome() {
+  if (process.platform !== 'win32') return null;
+  const candidates = [
+    process.env.CHROME_EXECUTABLE_PATH || '',
+    process.env.LOCALAPPDATA
+      ? `${process.env.LOCALAPPDATA}\\Google\\Chrome\\Application\\chrome.exe`
+      : '',
+    'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
+    'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
+  ];
+  for (const p of candidates) {
+    if (p && fs.existsSync(p)) return p;
+  }
+  return null;
+}
+
+function findBundledChromium() {
+  const exe = path.join(os.homedir(), '.zenithjoy-agent', 'chrome-win64', 'chrome.exe');
+  return fs.existsSync(exe) ? exe : null;
+}
+
 /**
  * 自动发现 burner Chrome profile 目录（由 qr-bind-douyin-burner 在绑定时创建）。
  * Windows: C:\Temp\zj-douyin-burner-v1\<account_label>
@@ -196,10 +217,29 @@ async function main() {
     process.exit(1);
   }
 
-  const context = await chromium.launchPersistentContext(userDataDir, {
-    channel: 'msedge',
-    headless: false,
-  });
+  // 与 qr-bind-douyin-burner 保持相同浏览器选择优先级，避免跨浏览器 DPAPI 加密不兼容（
+  // Chrome 绑 → Edge 读 = cookie 解密失败 → 强制扫码）
+  const launchArgs = ['--no-sandbox', '--disable-setuid-sandbox'];
+  const systemChrome = findSystemChrome();
+  const bundledChrome = findBundledChromium();
+  let context = null;
+  for (const opts of [
+    ...(systemChrome  ? [{ headless: false, executablePath: systemChrome,  args: launchArgs }] : []),
+    ...(bundledChrome ? [{ headless: false, executablePath: bundledChrome, args: launchArgs }] : []),
+    { headless: false, args: launchArgs },
+    { headless: false, channel: 'msedge', args: launchArgs },
+  ]) {
+    try {
+      context = await chromium.launchPersistentContext(userDataDir, opts);
+      break;
+    } catch (e) {
+      process.stderr.write(`[crawl-comments] launch 失败 ${JSON.stringify(opts)}: ${e.message}\n`);
+    }
+  }
+  if (!context) {
+    emit({ ok: false, task_id: taskId, video_url: videoUrl, error: '无法启动浏览器（Chrome/bundledChromium/msedge 均不可用）' });
+    process.exit(1);
+  }
 
   try {
     const result = await crawlVideoComments(context, videoUrl, taskId, apiBase);

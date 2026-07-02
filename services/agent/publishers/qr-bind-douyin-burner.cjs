@@ -11,7 +11,7 @@
  *   - user-data-dir：win32 C:\Temp\zj-douyin-burner-v1\<accountLabel>
  *                    其它    ~/.zenithjoy-agent/chrome-profile/douyin-burner/<accountLabel>
  *   - sessionPath ：含 /burner/ 子目录 → <sessionDir>/douyin/burner/<accountLabel>.json
- *   - loginUrl    ：https://creator.douyin.com/
+ *   - loginUrl    ：https://www.douyin.com（用户端抖音，与爬评论域一致）
  *
  * Usage:  node qr-bind-douyin-burner.cjs <account_label> [session_dir] [user_data_dir_root] [timeout_ms]
  * Output: 最后一行 stdout JSON → { ok, sessionPath, cookie_local_path, qr_login, account_nickname, error? }
@@ -36,7 +36,7 @@ const DEFAULT_SESSION_DIR = path.join(os.homedir(), '.zenithjoy-agent', 'session
 const sessionDir = sessionDirArg || DEFAULT_SESSION_DIR;
 // 关键：含 /burner/ 子目录，与 Path 1 main 隔离（与 handler getBurnerSessionPath 同约定）
 const sessionPath = path.join(sessionDir, 'douyin', 'burner', `${accountLabel}.json`);
-const loginUrl = 'https://creator.douyin.com/';
+const loginUrl = 'https://www.douyin.com';
 
 function findSystemChrome() {
   if (process.platform !== 'win32') return null;
