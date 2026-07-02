@@ -309,13 +309,14 @@ async function isContactBlacklisted(
       console.warn('[wechat-draft] 读 per-cs 黑名单失败，按未标黑处理:', err);
     }
   }
-  if (tenantId) {
+  // cs_wechat_id 已知时按账号精确查（防 cs-A 黑名单污染 cs-B）；未知时跳过（宁可放行，不乱拦）。
+  if (tenantId && csWechatId) {
     try {
       const { rows } = await pool.query(
         `SELECT 1 FROM zenithjoy.crm_customers
-          WHERE tenant_id = $1 AND contact = $2 AND identity IN ('blacklist', 'internal') AND deleted_at IS NULL
+          WHERE tenant_id = $1 AND cs_wechat_id = $2 AND contact = $3 AND identity IN ('blacklist', 'internal') AND deleted_at IS NULL
           LIMIT 1`,
-        [tenantId, sender],
+        [tenantId, csWechatId, sender],
       );
       if (rows && rows.length > 0) return true;
     } catch (err) {

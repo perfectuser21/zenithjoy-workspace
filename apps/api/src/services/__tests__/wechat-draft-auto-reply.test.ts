@@ -97,8 +97,21 @@ describe('generateChatDraft 去飞书自动直发 [BEHAVIOR]', () => {
   });
 
   it('J5: CRM 标黑 → status:skipped skip_reason:blacklisted，不烧 LLM', async () => {
-    // isContactBlacklisted 的 crm_customers 查询命中 → 标黑
-    mockQuery.mockResolvedValue({ rows: [{ x: 1 }], rowCount: 1 });
+    // isContactBlacklisted 的 crm_customers 查询（带 cs_wechat_id 精确过滤）命中 → 标黑
+    // 修后：crm_customers 检查必须有 csWechatId，用 agent_id 解出 csWechatId='cs-test-bl'
+    mockQuery.mockImplementation((sql: string) => {
+      const s = typeof sql === 'string' ? sql : '';
+      if (s.includes('license_machines') && s.includes('service_agents')) {
+        return Promise.resolve({ rows: [{ wechat_id: 'cs-test-bl' }], rowCount: 1 });
+      }
+      if (s.includes('wechat_cs_account_config')) {
+        return Promise.resolve({ rows: [{ blacklist: [] }], rowCount: 1 });
+      }
+      if (s.includes('crm_customers') && s.includes('identity')) {
+        return Promise.resolve({ rows: [{ x: 1 }], rowCount: 1 });
+      }
+      return Promise.resolve({ rows: [], rowCount: 0 });
+    });
     const llm = vi.mocked(callOpenRouter).mockResolvedValue({ content: 'X' } as any);
     const mod = await import('../wechat-draft');
     const result: any = await mod.generateChatDraft({
@@ -107,6 +120,7 @@ describe('generateChatDraft 去飞书自动直发 [BEHAVIOR]', () => {
       content: '你好',
       mode: 'auto',
       tenant_id: 'tenant-a',
+      agent_id: 'agent-env-bl-test',
     } as any);
 
     expect(result.ok).toBe(true);
@@ -119,13 +133,16 @@ describe('generateChatDraft 去飞书自动直发 [BEHAVIOR]', () => {
   it('J6: identity=internal（内部人员）→ status:skipped，不回自己人（2026-07-01 打架修复）', async () => {
     // 真机：运营把同事标 internal，但回复网关只认 blacklist、不认 internal → 照回。
     // 修法：isContactBlacklisted 的 crm_customers 查询按 identity IN ('blacklist','internal')。
-    // mock 只在 SQL 真的问了 internal 时才命中——旧码(只问 blacklist)→不命中→仍回→RED。
+    // 修后：crm_customers 检查必须有 csWechatId，用 agent_id 解出后才能命中该行。
     mockQuery.mockImplementation((sql: string) => {
-      if (
-        typeof sql === 'string' &&
-        sql.includes('crm_customers') &&
-        sql.includes('internal')
-      ) {
+      const s = typeof sql === 'string' ? sql : '';
+      if (s.includes('license_machines') && s.includes('service_agents')) {
+        return Promise.resolve({ rows: [{ wechat_id: 'cs-test-internal' }], rowCount: 1 });
+      }
+      if (s.includes('wechat_cs_account_config')) {
+        return Promise.resolve({ rows: [{ blacklist: [] }], rowCount: 1 });
+      }
+      if (s.includes('crm_customers') && s.includes('internal')) {
         return Promise.resolve({ rows: [{ x: 1 }], rowCount: 1 });
       }
       return Promise.resolve({ rows: [], rowCount: 0 });
@@ -138,6 +155,7 @@ describe('generateChatDraft 去飞书自动直发 [BEHAVIOR]', () => {
       content: '在吗',
       mode: 'auto',
       tenant_id: 'tenant-a',
+      agent_id: 'agent-env-internal-test',
     } as any);
 
     expect(result.ok).toBe(true);
