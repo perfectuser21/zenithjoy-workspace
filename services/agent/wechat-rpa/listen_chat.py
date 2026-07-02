@@ -279,40 +279,6 @@ def split_trailing_incoming(bubbles: List[Dict[str, str]], badge_n: int = 0) -> 
     return []
 
 
-def read_chat_panel_messages(mw: Any, n: int, x_min: int = 460) -> List[str]:
-    """
-    读取当前打开会话右侧消息面板的最新 n 条消息文本（需已调 _open_chat）。
-
-    原理：微信 UIA 树中右侧聊天气泡也暴露为 ListItem 控件，中心 x >= x_min（区别于
-    左列会话列表 center_x < 460）。遍历所有 ListItem，按坐标过滤出右侧条目，取其
-    element_info.name 作为消息文本，返回最新的 n 条（列表末尾 = 最新）。
-
-    非 Windows / UIA 不可用 / n <= 0 → 返回 []，不报错。
-    """
-    if n <= 0:
-        return []
-    out: List[str] = []
-    try:
-        for it in mw.descendants(control_type="ListItem"):
-            try:
-                r = it.rectangle()
-                cx = (r.left + r.right) // 2
-                if cx < x_min:
-                    continue  # 左列会话列表，跳过
-            except Exception:
-                continue  # 拿不到坐标的 item 跳过
-            try:
-                name = (it.element_info.name or "").strip()
-                if name:
-                    out.append(name)
-            except Exception:
-                continue
-    except Exception:
-        pass
-    # 返回最新 n 条（消息面板最底部 = 最新；若总数 <= n，全部返回）
-    return out[-n:] if len(out) > n else out
-
-
 def _parse_item_name(name: str, require_unread: bool = True) -> Optional[Dict[str, str]]:
     """
     解析微信 4.0 会话列表 ListItem 的 element_info.name 字符串。
@@ -521,17 +487,68 @@ def _restore_tray(mw: Any) -> None:
     _restore_window_state(mw, 'tray')
 
 
-def scan_unread(mw: Any, last_content: Optional[Dict[str, str]] = None) -> List[Dict[str, Any]]:
-    """遍历主窗口会话列表 ListItem，检测未读消息。
+# ─── 锚点气泡扫描：模块级状态 ─────────────────────────────────────────────────
+_KNOWN_GROUPS: set = set()        # _is_group_by_header 判过的群 sender：发现层直接跳过
+_ANCHOR_STALL: Dict[str, int] = {}  # sender → 连续 emit 未走到 DELIVERED 的轮数（熔断告警）
+SCAN_OPEN_BUDGET = 3              # 每轮最多开窗读气泡的会话数（#984 延迟教训机制化）
+_BUBBLE_READ_POLLS = 3            # 气泡读空重试轮数（同 _confirm_delivery 轮询模式）
+_BUBBLE_READ_POLL_SLEEP = 0.6
+ANCHOR_STALL_LIMIT = 3            # 连续 N 轮停滞 → 心跳告警（只告警不降级——绝不静默丢消息）
 
-    双路检测：
-    1) 角标路径：ListItem name 含 '[N条]' → 正常未读
-    2) 内容变化路径：无角标（聊天面板当前打开时消息被立即已读）但内容与上次不同 → 也触发回复
-    last_content: {sender: last_seen_content}，由调用方维护，检测内容变化。
+
+def _read_trailing_for(mw: Any, cand: Dict[str, Any],
+                       record_skip: Optional[Any] = None) -> Any:
+    """打开 cand 会话读 trailing incoming。返回 (msgs, bubble_read_empty)。
+
+    - 开窗失败 → ([], False)，触发态由调用方保留。
+    - 打开后判群（唯一可靠信号=标题"(人数)"）→ 记 _KNOWN_GROUPS，([], False) 不回。
+    - 气泡读空轮询 _BUBBLE_READ_POLLS 次；仍空 → ([], True) + record_skip 计数
+      （心跳 diag 可见：列表可读但气泡区空 = 树病信号）。
+    """
+    try:
+        if not _open_chat(mw, cand["_item"], cand["sender"]):
+            return [], False
+    except Exception:
+        return [], False
+    cand["_opened"] = True
+    try:
+        if _is_group_by_header(_read_chat_header_texts(mw)) is not None:
+            _KNOWN_GROUPS.add(cand["sender"])
+            return [], False
+    except Exception:
+        pass  # 判不出群 → 按私聊继续（reply_in_chat 发送前还有判群闸）
+    bubbles: List[Dict[str, str]] = []
+    for _ in range(_BUBBLE_READ_POLLS):
+        bubbles = read_chat_bubbles(mw)
+        if bubbles:
+            break
+        time.sleep(_BUBBLE_READ_POLL_SLEEP)
+    if not bubbles:
+        if record_skip is not None:
+            record_skip("bubble_read_empty")
+        return [], True
+    return split_trailing_incoming(strip_system_bubbles(bubbles), cand["badge"]), False
+
+
+def scan_unread(mw: Any, last_preview: Optional[Dict[str, str]] = None,
+                record_skip: Optional[Any] = None) -> List[Dict[str, Any]]:
+    """锚点气泡扫描（2026-07-02 重构，根治漏消息——替代旧 角标path-1/预览path-2 机制）。
+
+    发现层（便宜，不开会话）：触发 = 有 [N条] 角标 OR item name != last_preview[sender]。
+      - last_preview 只是触发信号（比较整个 item name，防长消息截断假阴性），永不 pop；
+        首见只记录不触发（防陈年消息/重启风暴）。
+    读取层（仅触发会话，角标优先，每轮 ≤SCAN_OPEN_BUDGET 个）：_open_chat → 判群（记
+      _KNOWN_GROUPS 缓存）→ read_chat_bubbles → strip_system_bubbles →
+      split_trailing_incoming（锚点=最后一条 outgoing）→ 合并成一条。
+    事务语义：触发信号在打开会话那刻就被微信消费（角标清零）→ last_preview 只在
+      ①确认无新 trailing（本函数内提交）或 ②DELIVERED（主循环 _commit_reply_success）
+      后更新；开窗失败/读空/后续草稿失败 → 触发态保留，下轮重读气泡重试，绝不静默丢。
+    回退保底：开窗失败或气泡读空 且有角标 → 回退旧单条路径（用预览 content），宁可
+      上下文不全也不漏回；无角标的触发读不出 → 保留触发态下轮再试（fail-closed）。
 
     托盘修复：微信在系统托盘时 IsWindowVisible=False，mmui 虚拟列表 UIA name 不实时更新，
     新消息角标永远扫不到。扫描前 _ensure_tray_visible SW_SHOWNA(8) 短暂还原刷新 UIA，
-    扫完再 _restore_tray SW_HIDE(0) 送回托盘（用户几乎无感知）。
+    扫完再 _restore_window_state 还原（用户几乎无感知）。
     """
     orig_state = _ensure_tray_visible(mw)
     # 记录【可见态】整树大小(窗口此刻已 ensure_visible，与 _is_uia_tree_collapsed 同口径)：主循环据此
@@ -547,49 +564,62 @@ def scan_unread(mw: Any, last_content: Optional[Dict[str, str]] = None) -> List[
     # sessions=0 → 之后全收不到 → 用户体感「回一次就不理」。为治"CRM 扫好友滚到底漏顶部"的偶发
     # 问题（CRM 扫描每天/手动才一次），却把最核心的"连续回复"每轮都置于风险，得不偿失。
     # 正确做法：列表始终保持在顶（CRM 扫描收尾自己回顶），scan_unread 直接读即可。
-    out: List[Dict[str, Any]] = []
-    seen_senders: set[str] = set()
+    candidates: List[Dict[str, Any]] = []
+    seen: set = set()
     for it in mw.descendants(control_type="ListItem"):
         try:
             name = it.element_info.name or ""
         except Exception:
             continue
-        # 路径 1：有 [N条] 未读角标 → 未读。
-        parsed = _parse_item_name(name)
-        if parsed:
-            seen_senders.add(parsed["sender"])
-            # N>1 时打开会话读取全部 N 条消息，合并成一次 AI 回复的上下文。
-            # 一人连发 3 条 → AI 看到 3 条合并上下文，而不是只有最后 1 条预览。
-            n = parse_unread_count(name)
-            if n > 1:
-                try:
-                    if _open_chat(mw, it, parsed["sender"]):
-                        msgs = read_chat_panel_messages(mw, n)
-                        if msgs:
-                            parsed = {**parsed, "content": aggregate_messages(msgs)}
-                except Exception:
-                    pass  # 读取失败 → 回退到单条 content（会话仍进队，不丢失回复机会）
-            out.append({**parsed, "_item": it})
+        info = _parse_item_name(name, require_unread=False)
+        if not info or info["sender"] in seen:
             continue
-        # 路径 2（2026-07-02 恢复；#984 为减延迟删除本路径 → 夹在别的回复冷却窗口里、角标被清的
-        # 消息永久漏读，用户实测发 5 条漏"什么价格"。基线 74654efd 靠本路径"问啥回啥"不丢）：
-        # 无角标但内容 != 上次见到（last_content）→ 也算未读要回。不依赖角标，专治"角标被清后失去
-        # 未读信号"。首次见到只记录不触发（防历史消息误当新消息）。自我回复风暴由主循环 reply 成功后
-        # last_content.pop(sender) 护栏挡（把 reply 存进 last_content 反而会误触发本路径）。
-        if last_content is not None:
-            info = _parse_item_name(name, require_unread=False)
-            if info and info["sender"] not in seen_senders:
-                prev = last_content.get(info["sender"])
-                if prev is not None and prev != info["content"]:
-                    seen_senders.add(info["sender"])
-                    out.append({**info, "_item": it})
-                elif prev is None:
-                    # 首次见到这个会话：记录内容但不触发回复
-                    last_content[info["sender"]] = info["content"]
-    # 更新 last_content（供下轮内容变化比较）
-    if last_content is not None:
-        for m in out:
-            last_content[m["sender"]] = m["content"]
+        sender = info["sender"]
+        if sender in _KNOWN_GROUPS:
+            continue
+        badge_n = parse_unread_count(name)
+        if badge_n > 0:
+            seen.add(sender)
+            candidates.append({"sender": sender, "content": info["content"],
+                               "name": name, "badge": badge_n, "_item": it})
+            continue
+        if last_preview is None:
+            continue
+        prev = last_preview.get(sender)
+        if prev is None:
+            last_preview[sender] = name  # 首见只记录不触发
+        elif prev != name:
+            seen.add(sender)
+            candidates.append({"sender": sender, "content": info["content"],
+                               "name": name, "badge": 0, "_item": it})
+    candidates.sort(key=lambda c: -c["badge"])  # 角标优先
+    out: List[Dict[str, Any]] = []
+    opened = 0
+    for c in candidates:
+        if opened >= SCAN_OPEN_BUDGET:
+            break  # 触发态保留（角标还在/last_preview 未更新），下轮继续
+        opened += 1
+        msgs, empty_read = _read_trailing_for(mw, c, record_skip=record_skip)
+        if msgs:
+            out.append({"sender": c["sender"], "content": aggregate_messages(msgs),
+                        "_item": c["_item"], "_preview_name": c["name"]})
+            _ANCHOR_STALL[c["sender"]] = _ANCHOR_STALL.get(c["sender"], 0) + 1
+            if _ANCHOR_STALL[c["sender"]] >= ANCHOR_STALL_LIMIT:
+                if record_skip is not None:
+                    record_skip("anchor_stall")
+                _log(f"anchor_stall sender={c['sender']} rounds={_ANCHOR_STALL[c['sender']]}"
+                     f"（连续 emit 未 DELIVERED——只告警不降级，继续重试）")
+        elif c["badge"] > 0 and c["content"] and (not c.get("_opened") or empty_read):
+            # 回退保底：开窗失败或气泡读空、但角标在 → 旧单条路径，宁可上下文不全也不漏回。
+            # 注意：开窗成功且读到气泡但 trailing 空（陈旧角标，其实已回过）不走这里——
+            # 走下面的提交分支，防重复回。
+            out.append({"sender": c["sender"], "content": c["content"],
+                        "_item": c["_item"], "_preview_name": c["name"]})
+        elif c.get("_opened") and not empty_read:
+            # 开窗成功、气泡读到了、但无新 trailing（最后一条是我方/陈旧角标）→ 提交触发消费
+            if last_preview is not None:
+                last_preview[c["sender"]] = c["name"]
+        # 其余（开窗失败/读空 且无角标）：触发态保留，下轮重试
     _restore_window_state(mw, orig_state)
     return out
 
@@ -1683,8 +1713,8 @@ def read_chat_bubbles(mw: Any) -> List[Dict[str, str]]:
     """读当前打开会话聊天面板全部可见消息气泡，上→下有序，每条 {"text","direction"}。
 
     - 几何全部从窗口 rectangle 推导（chat_left = 左+宽//4，midline 同
-      _last_bubble_direction）——铁律禁止写死绝对坐标（read_chat_panel_messages
-      的 x_min=460 之坑）。
+      _last_bubble_direction）——铁律禁止写死绝对坐标（旧 read_chat_panel_messages
+      的 x_min=460 之坑，该函数已随锚点扫描重构删除）。
     - direction：气泡中心 x < midline → incoming；>= → outgoing（压线判我方，保守）。
     - 幽灵坐标（|left|>20000，同 _open_chat 守卫）/ 读不到 → []（fail-closed，
       调用方走回退路径）；正常扫描离屏位 OFFSCREEN_X≈-2600 不受影响。
