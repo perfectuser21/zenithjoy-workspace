@@ -176,15 +176,17 @@ async function main() {
     const cookies = await ctx.cookies(['https://www.douyin.com']);
     process.stderr.write(`[keyword-search-douyin] douyin cookies: ${cookies.length}\n`);
 
-    // 检查 Douyin 登录状态：sessionid 或 ttwid 必须存在
-    const SESSION_COOKIES = ['sessionid', 'ttwid', 'uid_tt'];
-    const hasSession = cookies.some(c => SESSION_COOKIES.includes(c.name) && c.value);
-    if (!hasSession) {
-      process.stderr.write(`[keyword-search-douyin] Douyin session 未登录或已过期（找不到 ${SESSION_COOKIES.join('/')}）\n`);
+    // 检查 Douyin 登录状态：必须有 sessionid（登录凭证）。
+    // ttwid/uid_tt 是访客 token，未登录也会有，不能作为"已登录"判据。
+    const sessionidCookie = cookies.find(c => c.name === 'sessionid' && c.value);
+    if (!sessionidCookie) {
+      const cookieNames = cookies.map(c => c.name).join(',');
+      process.stderr.write(`[keyword-search-douyin] Douyin sessionid 不存在（当前 cookies: ${cookieNames}）\n`);
       emit({ ok: false, keyword, video_urls: [], error: 'DOUYIN_SESSION_EXPIRED' });
       process.exit(0);
       return;
     }
+    process.stderr.write(`[keyword-search-douyin] sessionid 存在，继续搜索\n`);
 
     // 优先复用已有 Douyin 页面（避免 newPage 被抖音 bot 检测），没有再开新标签
     const existingPages = ctx.pages();

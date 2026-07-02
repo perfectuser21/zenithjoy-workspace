@@ -114,8 +114,9 @@ export interface RequiredAgentVersion {
 // 2.0.59：qr-bind 域改 www.douyin.com + crawl 与 qr-bind 浏览器发现链统一（修 DPAPI 不兼容）。
 // 2.0.60：qr-bind 域回退 creator.douyin.com（避 www 风控验证）；去掉 sid_tt 误判（访客 cookie）。
 // 2.0.61：crawl-comments resolveBurnerProfileDir 优先读 ZJ_MAIN_DATA_DIR（修多账号选错目录）。
-// 核心包按约定 install-pack/zenithjoy-agent-v2.0.61.tar.gz 从 COS 下载（live 源是已发布 manifest，本常量仅兜底）。
-export const DEFAULT_REQUIRED_AGENT_VERSION = '2.0.61';
+// 2.0.62：keyword-search session check 改为只认 sessionid（ttwid 是访客 token，误判未登录为已登录）。
+// 核心包按约定 install-pack/zenithjoy-agent-v2.0.62.tar.gz 从 COS 下载（live 源是已发布 manifest，本常量仅兜底）。
+export const DEFAULT_REQUIRED_AGENT_VERSION = '2.0.62';
 
 /**
  * 返回心跳要下发的核心要求版本。
