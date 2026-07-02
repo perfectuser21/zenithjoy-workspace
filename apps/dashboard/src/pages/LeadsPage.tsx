@@ -1,7 +1,7 @@
 import 'ag-grid-community/styles/ag-grid.css';
 import 'ag-grid-community/styles/ag-theme-quartz.css';
 import { useState, useEffect, useMemo } from 'react';
-import { RefreshCw, Search } from 'lucide-react';
+import { RefreshCw } from 'lucide-react';
 import { AgGridReact } from 'ag-grid-react';
 import type { ColDef, ICellRendererParams } from 'ag-grid-community';
 
@@ -13,12 +13,6 @@ interface Lead {
   crawled_at: string;
   grade: string;
   keyword: string;
-}
-
-// ── Path 2 Step4 采集闭环 ──
-interface ExpandKeyword {
-  word: string;
-  source: 'ai' | 'manual' | 'seed';
 }
 
 const VALID_GRADES = ['感兴趣', '精准', '高意向'] as const;
@@ -87,68 +81,6 @@ export default function LeadsPage() {
   const [gradeFilter, setGradeFilter] = useState<Grade>('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  // ── 采集闭环状态 ──
-  const [acqPhase, setAcqPhase] = useState<'idle' | 'expanded' | 'dispatched'>('idle');
-  const [acqKeywords, setAcqKeywords] = useState<ExpandKeyword[]>([]);
-  const [acqDegraded, setAcqDegraded] = useState(false);
-  const [acqError, setAcqError] = useState<string | null>(null);
-  const [manualInput, setManualInput] = useState('');
-
-  // 点"采集"直接展开关键词输入框（不走飞书扩词）
-  const handleCollect = () => {
-    setAcqError(null);
-    setAcqDegraded(true);
-    setAcqKeywords([]);
-    setAcqPhase('expanded');
-  };
-
-  const handleManualSubmit = async () => {
-    const words = manualInput.split(/[,，\s]+/).map(w => w.trim()).filter(Boolean);
-    if (words.length === 0) return;
-    setAcqError(null);
-    try {
-      const res = await fetch('/api/acquisition/collect/expand', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ manual_keywords: words }),
-      });
-      const resBody = await res.json();
-      if (!res.ok || !resBody.success) {
-        setAcqError(resBody?.error?.code || `HTTP ${res.status}`);
-        return;
-      }
-      setAcqKeywords(resBody.data.keywords as ExpandKeyword[]);
-      setAcqDegraded(false);
-    } catch (e) {
-      setAcqError((e as Error).message);
-    }
-  };
-
-  const handleConfirm = async () => {
-    setAcqError(null);
-    const words = acqKeywords.map((k) => k.word).filter(Boolean);
-    if (words.length === 0) return;
-    try {
-      // 走 Agent 核心完整管道：关键词搜索 → 进视频评论区 → 抓评论者 → 写本地 DB
-      for (const kw of words) {
-        const res = await fetch('/api/acquisition/keyword-search', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ keyword: kw }),
-        });
-        const body = await res.json();
-        if (!res.ok) {
-          setAcqError(body?.error || `HTTP ${res.status}`);
-          return;
-        }
-      }
-      setAcqPhase('dispatched');
-    } catch (e) {
-      setAcqError((e as Error).message);
-    }
-  };
-
 
   const load = async (grade: Grade) => {
     setLoading(true);
@@ -254,78 +186,6 @@ export default function LeadsPage() {
       {error && (
         <div className="flex-shrink-0 p-3 bg-red-900/30 text-red-400 rounded text-sm">{error}</div>
       )}
-
-      {/* 采集闭环面板 */}
-      <div className="flex-shrink-0 p-4 rounded-xl border border-slate-700 bg-slate-800/60">
-        <div className="flex items-center gap-3 mb-3">
-          <button
-            data-testid="acq-collect-button"
-            onClick={handleCollect}
-            className="flex items-center gap-1 bg-yellow-500/20 text-yellow-300 border border-yellow-600/40 rounded px-4 py-1.5 text-sm hover:bg-yellow-500/30"
-          >
-            <Search size={14} />
-            采集
-          </button>
-          <span className="text-sm text-gray-500">公司画像 → AI 扩词 → 派客户机采集抖音评论</span>
-        </div>
-
-        {acqError && (
-          <div className="mb-3 p-2 bg-red-900/30 text-red-400 rounded text-xs" data-testid="acq-expand-error">
-            {acqError}
-          </div>
-        )}
-
-        {acqPhase === 'expanded' && acqDegraded && acqKeywords.length === 0 && (
-          <div className="mb-3" data-testid="acq-manual-input-area">
-            <div className="text-sm text-gray-400 mb-2">输入关键词（逗号或空格分隔），点确认后派单采集抖音评论</div>
-            <div className="flex gap-2">
-              <input
-                data-testid="acq-manual-input"
-                type="text"
-                value={manualInput}
-                onChange={e => setManualInput(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && handleManualSubmit()}
-                placeholder="例：装修，瓷砖，家装"
-                className="flex-1 bg-slate-700 border border-slate-600 rounded px-3 py-1.5 text-sm text-gray-200 placeholder-gray-500 focus:outline-none focus:border-yellow-500"
-              />
-              <button
-                data-testid="acq-manual-submit"
-                onClick={handleManualSubmit}
-                className="bg-yellow-500/20 text-yellow-300 border border-yellow-600/40 rounded px-4 py-1.5 text-sm hover:bg-yellow-500/30"
-              >
-                确认
-              </button>
-            </div>
-          </div>
-        )}
-
-        {acqPhase !== 'idle' && acqKeywords.length > 0 && (
-          <div data-testid="acq-expand-result" className="mb-3">
-            <div className="text-sm font-medium mb-1 text-gray-300">
-              扩词结果{acqDegraded && <span className="ml-2 text-orange-400 text-xs">降级</span>}
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              {acqKeywords.map((k, i) => (
-                <span key={i} data-testid="acq-expand-keyword"
-                  className="inline-flex items-center gap-1 px-2 py-0.5 bg-slate-700 rounded text-sm text-gray-300">
-                  {k.word}
-                  <span data-testid="acq-keyword-source" className="text-xs text-gray-500">{k.source}</span>
-                </span>
-              ))}
-              <button data-testid="acq-confirm-button" onClick={handleConfirm}
-                className="ml-2 bg-emerald-600/30 text-emerald-300 border border-emerald-600/40 rounded px-3 py-1 text-xs hover:bg-emerald-600/50">
-                确认派单
-              </button>
-            </div>
-          </div>
-        )}
-
-        {acqPhase === 'dispatched' && (
-          <div data-testid="acq-task-status" className="mt-2 text-sm text-gray-300">
-            <span className="text-green-400">✓ 采集任务已派发给 Agent，正在进入视频评论区抓取评论者，约 1-2 分钟后点"刷新"查看名单。</span>
-          </div>
-        )}
-      </div>
 
       {/* 数量 */}
       <div className="flex-shrink-0 text-xs text-gray-500">共 {total} 条</div>
