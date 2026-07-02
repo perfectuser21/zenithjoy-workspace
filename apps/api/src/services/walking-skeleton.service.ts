@@ -111,8 +111,9 @@ export interface RequiredAgentVersion {
 // 2.0.49：采集任务改 SSE 长连推送（秒触发），替代 30s 轮询。
 // 2.0.50：qr-bind-burner stdout 解析改为搜索含 ok/qr_login 的 JSON 行，防 Playwright 关闭日志干扰导致误报 failed。
 // 2.0.51：修复 SSE 闭包内 apiBase 类型收窄失效（string|null → string），消除 TS 编译报错。
-// 核心包按约定 install-pack/zenithjoy-agent-v2.0.51.tar.gz 从 COS 下载（live 源是已发布 manifest，本常量仅兜底）。
-export const DEFAULT_REQUIRED_AGENT_VERSION = '2.0.51';
+// 2.0.59：qr-bind 域改 www.douyin.com + crawl 与 qr-bind 浏览器发现链统一（修 DPAPI 不兼容）。
+// 核心包按约定 install-pack/zenithjoy-agent-v2.0.59.tar.gz 从 COS 下载（live 源是已发布 manifest，本常量仅兜底）。
+export const DEFAULT_REQUIRED_AGENT_VERSION = '2.0.59';
 
 /**
  * 返回心跳要下发的核心要求版本。
