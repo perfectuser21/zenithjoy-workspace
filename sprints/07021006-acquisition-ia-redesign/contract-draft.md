@@ -342,15 +342,18 @@ echo "✅ Step 6b IDOR + 404 验证通过"
 **验证命令**:
 ```bash
 # 先 seed 一条测试视频记录 + 1条 lead（让 leads 端点能走 200 路径且 entry 字段可验）
-TEST_TASK_ID=$(curl -sf -X POST -H "Content-Type: application/json" \
+START_RESP=$(curl -sf -X POST -H "Content-Type: application/json" \
   -H "X-Tenant-Id: $TEST_TENANT" \
   -d '{"keywords":["e2e-leads-test"]}' \
-  localhost:3000/api/acquisition/collect/start | jq -r '.data.task_id')
+  localhost:3000/api/acquisition/collect/start)
+echo "$START_RESP" | jq -e '.data.task_id | type == "string"' || { echo "FAIL: collect/start 未返回有效 data.task_id"; exit 1; }
+TEST_TASK_ID=$(echo "$START_RESP" | jq -r '.data.task_id')
 TEST_VIDEO_ID="e2e-video-leads-smoke"
 psql "$DATABASE_URL" -c "INSERT INTO zenithjoy.acquisition_collect_videos \
   (video_id, task_id, tenant_id, title, thumbnail_url, publish_date, comment_count) \
   VALUES ('$TEST_VIDEO_ID', '$TEST_TASK_ID', '$TEST_TENANT', 'E2E Test Video', NULL, NULL, 1) \
   ON CONFLICT (video_id) DO UPDATE SET task_id='$TEST_TASK_ID', tenant_id='$TEST_TENANT', comment_count=1"
+# gate-allow: cheat/or-true seed INSERT：ON CONFLICT DO NOTHING 已处理重复，2>/dev/null 消去 notice，此行是 seed 数据准备非 BEHAVIOR 断言
 psql "$DATABASE_URL" -c "INSERT INTO zenithjoy.leads \
   (commenter_id, comment_text, source_video_url, source_video_id, tenant_id, keyword, crawled_at) \
   VALUES ('e2e-uid-leads-smoke', 'E2E test comment', 'https://v.douyin.com/'||'$TEST_VIDEO_ID', '$TEST_VIDEO_ID', '$TEST_TENANT', 'e2e-leads-test', NOW()) \
@@ -580,10 +583,12 @@ TEST_TENANT="${E2E_TEST_TENANT_ID:-e2e-tenant-001}"
 OTHER_TENANT="${E2E_OTHER_TENANT_ID:-e2e-tenant-002}"
 DATABASE_URL="${DATABASE_URL:-$E2E_DATABASE_URL}"
 
-TASK_ID=$(curl -sf -X POST -H "Content-Type: application/json" \
+START_RESP=$(curl -sf -X POST -H "Content-Type: application/json" \
   -H "X-Tenant-Id: $TEST_TENANT" \
   -d '{"keywords":["e2e-leads-smoke"]}' \
-  "$BRAIN_URL/api/acquisition/collect/start" | jq -r '.data.task_id')
+  "$BRAIN_URL/api/acquisition/collect/start")
+echo "$START_RESP" | jq -e '.data.task_id | type == "string"' || { echo "FAIL: collect/start 未返回有效 data.task_id"; exit 1; }
+TASK_ID=$(echo "$START_RESP" | jq -r '.data.task_id')
 
 TEST_VIDEO_ID="e2e-video-leads-smoke"
 psql "$DATABASE_URL" -c "INSERT INTO zenithjoy.acquisition_collect_videos \
