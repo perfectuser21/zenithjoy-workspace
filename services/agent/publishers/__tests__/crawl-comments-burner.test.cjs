@@ -44,4 +44,16 @@ describe('crawl-comments-douyin.cjs — burner session 守卫', () => {
     expect(m).not.toBeNull();
     expect(parseInt(m[1], 10)).toBeLessThanOrEqual(20);
   });
+
+  it('[B6] resolveBurnerProfileDir 优先读 ZJ_MAIN_DATA_DIR env var（防止多账号时选错目录）', () => {
+    const src = fs.readFileSync(SCRIPT_PATH, 'utf8');
+    // ZJ_MAIN_DATA_DIR 必须在源码中出现
+    expect(src).toContain('ZJ_MAIN_DATA_DIR');
+    // ZJ_MAIN_DATA_DIR 检查必须在扫目录逻辑（let root）之前——env 优先
+    const envIdx = src.indexOf('ZJ_MAIN_DATA_DIR');
+    const rootIdx = src.indexOf('let root');
+    expect(envIdx).toBeGreaterThan(-1);
+    expect(rootIdx).toBeGreaterThan(-1);
+    expect(envIdx).toBeLessThan(rootIdx);
+  });
 });

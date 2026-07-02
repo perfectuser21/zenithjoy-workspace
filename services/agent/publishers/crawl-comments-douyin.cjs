@@ -74,10 +74,16 @@ function findBundledChromium() {
 
 /**
  * 自动发现 burner Chrome profile 目录（由 qr-bind-douyin-burner 在绑定时创建）。
+ * 优先级：1. ZJ_MAIN_DATA_DIR env var（agent .env 里已配置的具体账号目录）
+ *          2. 扫根目录取第一个子目录（单账号兜底）
  * Windows: C:\Temp\zj-douyin-burner-v1\<account_label>
  * Mac/Linux: ~/.zenithjoy-agent/chrome-profile/douyin-burner/<account_label>
  */
 function resolveBurnerProfileDir() {
+  // 优先读 agent .env 里明确配置的 burner profile 目录
+  if (process.env.ZJ_MAIN_DATA_DIR && fs.existsSync(process.env.ZJ_MAIN_DATA_DIR)) {
+    return process.env.ZJ_MAIN_DATA_DIR;
+  }
   let root;
   if (process.platform === 'win32') {
     root = path.join('C:\\Temp', 'zj-douyin-burner-v1');
