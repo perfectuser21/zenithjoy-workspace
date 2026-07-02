@@ -256,6 +256,28 @@ def strip_system_bubbles(bubbles: List[Dict[str, str]]) -> List[Dict[str, str]]:
     return [b for b in bubbles if not _is_system_bubble(b.get("text", ""))]
 
 
+def split_trailing_incoming(bubbles: List[Dict[str, str]], badge_n: int = 0) -> List[str]:
+    """锚点切分（纯函数）：返回"最后一条 outgoing 气泡之后"的全部 incoming 文本。
+
+    - bubbles 有序（上→下=旧→新），须已过 strip_system_bubbles。
+    - 锚点 = 最后一条 outgoing（我方/AI/人工回复都算；人工回过 → trailing 空 → 不回）。
+    - 无 outgoing（从未回过）：仅当 badge_n>0 才取最后 min(badge_n, 可见) 条 incoming；
+      无角标 → 返回 []（防预览扰动翻出陈年消息）。
+    - 自回复风暴天然免疫：只取 incoming，机器人 outgoing 即锚点。
+    """
+    last_out = -1
+    for i, b in enumerate(bubbles):
+        if b.get("direction") == "outgoing":
+            last_out = i
+    tail = [b.get("text", "") for b in bubbles[last_out + 1:]
+            if b.get("direction") == "incoming" and b.get("text")]
+    if last_out >= 0:
+        return tail
+    if badge_n > 0 and tail:
+        return tail[-min(badge_n, len(tail)):]
+    return []
+
+
 def read_chat_panel_messages(mw: Any, n: int, x_min: int = 460) -> List[str]:
     """
     读取当前打开会话右侧消息面板的最新 n 条消息文本（需已调 _open_chat）。
