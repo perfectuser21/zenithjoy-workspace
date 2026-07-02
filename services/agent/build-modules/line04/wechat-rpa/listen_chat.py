@@ -220,6 +220,42 @@ def aggregate_messages(messages: List[str]) -> str:
     return "\n\n".join(msgs)
 
 
+# ─── 锚点气泡扫描：系统气泡识别（纯函数，CI 可测）─────────────────────────────
+# 时间戳/撤回/拍一拍/新消息分隔线在聊天面板里是居中 Text，按几何会被判 outgoing，
+# 若参与锚点判定会把之前的 incoming 全切掉（锚点劫持）→ 必须从序列剔除。
+import re as _sysre
+
+_SYS_TIME_RE = _sysre.compile(
+    r"^(?:昨天|前天|星期[一二三四五六日天]|周[一二三四五六日天]|"
+    r"\d{4}年\d{1,2}月\d{1,2}日|\d{1,2}月\d{1,2}日)?\s*\d{1,2}:\d{2}$"
+)
+_SYS_PATTERNS = (
+    _sysre.compile(r"^.{0,30}撤回了一条消息$"),
+    _sysre.compile(r"^.{0,20}拍了拍.{0,20}$"),
+    _sysre.compile(r"^以下是新消息$"),
+)
+
+
+def _is_system_bubble(text: str) -> bool:
+    """判断气泡文本是否系统气泡（时间戳/撤回/拍一拍/分隔线）。
+
+    有界匹配（fullmatch）防误伤正常消息（"价格 14:32 前有效" 不剔）；
+    客户消息恰好整句命中（如原文只发"你撤回了一条消息"）会被误剔——代价是该条
+    不进合并上下文，不丢回复触发，可接受。
+    """
+    t = (text or "").strip()
+    if not t:
+        return True
+    if _SYS_TIME_RE.match(t):
+        return True
+    return any(p.match(t) for p in _SYS_PATTERNS)
+
+
+def strip_system_bubbles(bubbles: List[Dict[str, str]]) -> List[Dict[str, str]]:
+    """剔除系统气泡，保序。bubbles: [{"text","direction"}]。"""
+    return [b for b in bubbles if not _is_system_bubble(b.get("text", ""))]
+
+
 def read_chat_panel_messages(mw: Any, n: int, x_min: int = 460) -> List[str]:
     """
     读取当前打开会话右侧消息面板的最新 n 条消息文本（需已调 _open_chat）。
