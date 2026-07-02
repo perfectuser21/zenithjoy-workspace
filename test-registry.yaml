@@ -3601,6 +3601,14 @@ agent_suite:
 
   # ── Path2 Step4 客户智能获客：飞书企业信息文档 + 扩词 + 中台采集闭环 ──────────────
 
+  - id: acquisition-dispatch-service-unit
+    path: apps/api/src/services/acquisition-dispatch.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 客户智能获客
+    note: "PR #1032: dispatchDue 真派单到 publish_tasks — defaultConfig 含 dm_message/时段/频控字段契约验证。"
+
   - id: acquisition-collect-service-unit
     path: apps/api/src/services/acquisition-collect.test.ts
     type: unit

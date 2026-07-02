@@ -691,6 +691,21 @@ acquisitionRouter.post('/collect/report', async (req: Request, res: Response) =>
     sseService.emit(taskId, ssePayload);
   }
 
+  // 终态且有 leads 写入 → fire-and-forget dispatch 链（与 /comment-score-result 一致）
+  if (terminal && inserted > 0) {
+    const collectRes = await pool.query(
+      `SELECT tenant_id FROM zenithjoy.acquisition_collect_tasks WHERE id = $1`,
+      [taskId]
+    );
+    const tid = collectRes.rows[0]?.tenant_id ?? null;
+    if (tid) {
+      void scoreLeads(pool, tid)
+        .then(() => buildAssignments(pool, tid))
+        .then(() => dispatchDue(pool, tid))
+        .catch((e: Error) => console.error('[acquisition] collect/report dm-dispatch error:', e.message));
+    }
+  }
+
   return ok(res, {
     task_id: taskId,
     inserted,

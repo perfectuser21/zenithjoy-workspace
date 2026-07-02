@@ -35,6 +35,7 @@ export interface AcquisitionConfig {
   nurture_per_day_min: number;
   nurture_per_day_max: number;
   cookie_check_interval_hours: number;
+  dm_message: string;
 }
 
 export function defaultConfig(tenantId: string): AcquisitionConfig {
@@ -55,11 +56,12 @@ export function defaultConfig(tenantId: string): AcquisitionConfig {
     nurture_per_day_min: 1,
     nurture_per_day_max: 2,
     cookie_check_interval_hours: 6,
+    dm_message: '您好，看到您的评论，我们正在做相关品牌，有合作意向欢迎联系企微😊',
   };
 }
 
 // 配置数值字段范围校验规格（PUT 用；非法 → 400）
-export const CONFIG_RANGES: Record<keyof Omit<AcquisitionConfig, 'tenant_id' | 'collect_active_start' | 'collect_active_end' | 'dm_active_start' | 'dm_active_end'>, [number, number]> = {
+export const CONFIG_RANGES: Record<keyof Omit<AcquisitionConfig, 'tenant_id' | 'collect_active_start' | 'collect_active_end' | 'dm_active_start' | 'dm_active_end' | 'dm_message'>, [number, number]> = {
   collect_rounds_per_day: [1, 24],
   keywords_per_round_min: [1, 50],
   keywords_per_round_max: [1, 50],
@@ -131,8 +133,8 @@ export async function upsertConfig(
        tenant_id, collect_rounds_per_day, keywords_per_round_min, keywords_per_round_max,
        collect_active_start, collect_active_end, burner_count, dm_per_hour, dm_per_day,
        dm_interval_min_sec, dm_interval_max_sec, dm_active_start, dm_active_end,
-       nurture_per_day_min, nurture_per_day_max, cookie_check_interval_hours, updated_at
-     ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16, now())
+       nurture_per_day_min, nurture_per_day_max, cookie_check_interval_hours, dm_message, updated_at
+     ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17, now())
      ON CONFLICT (tenant_id) DO UPDATE SET
        collect_rounds_per_day = EXCLUDED.collect_rounds_per_day,
        keywords_per_round_min = EXCLUDED.keywords_per_round_min,
@@ -149,12 +151,13 @@ export async function upsertConfig(
        nurture_per_day_min    = EXCLUDED.nurture_per_day_min,
        nurture_per_day_max    = EXCLUDED.nurture_per_day_max,
        cookie_check_interval_hours = EXCLUDED.cookie_check_interval_hours,
+       dm_message             = EXCLUDED.dm_message,
        updated_at             = now()`,
     [
       tenantId, next.collect_rounds_per_day, next.keywords_per_round_min, next.keywords_per_round_max,
       next.collect_active_start, next.collect_active_end, next.burner_count, next.dm_per_hour, next.dm_per_day,
       next.dm_interval_min_sec, next.dm_interval_max_sec, next.dm_active_start, next.dm_active_end,
-      next.nurture_per_day_min, next.nurture_per_day_max, next.cookie_check_interval_hours,
+      next.nurture_per_day_min, next.nurture_per_day_max, next.cookie_check_interval_hours, next.dm_message,
     ]
   );
   return next;
@@ -429,22 +432,57 @@ export async function dispatchDue(
       continue;
     }
 
-    // 取 lead profile_url（写日志用）
+    // 取 lead profile_url 和 agent_id（burner session 为本号绑定的 agent）
     const leadRes = await pool.query(
-      `SELECT profile_url FROM zenithjoy.acquisition_leads WHERE id = $1`,
-      [row.lead_id]
+      `SELECT l.profile_url, s.agent_id
+         FROM zenithjoy.acquisition_leads l
+         LEFT JOIN zenithjoy.agent_platform_sessions s
+           ON s.account_label = $2 AND s.platform = 'douyin' AND s.role = 'burner' AND s.status = 'active'
+         WHERE l.id = $1
+         LIMIT 1`,
+      [row.lead_id, label]
     );
     const profileUrl = leadRes.rows[0]?.profile_url ?? null;
+    const agentId = leadRes.rows[0]?.agent_id ?? null;
 
-    // 派单：thin = 写 dm_outreach_log（真发由 ③ 小号 agent 消费 dispatched 指派执行）+ 标 dispatched
+    if (!profileUrl || !agentId) {
+      // profile_url 缺失（lead 无主页）或该号无 active agent → 跳过，标 limited
+      await pool.query(
+        `UPDATE zenithjoy.dm_assignments SET status = 'limited', updated_at = now() WHERE id = $1`,
+        [row.id]
+      );
+      skippedLimit += 1;
+      continue;
+    }
+
+    // 真派单：写 publish_tasks → agent 收到后执行 douyin-dm-outreach.cjs
+    await pool.query(
+      `INSERT INTO zenithjoy.publish_tasks
+         (agent_id, platform, status, task_type, payload, tenant_id, created_at, updated_at)
+       VALUES ($1, 'douyin', 'queued', 'dm_outreach', $2, $3, NOW(), NOW())`,
+      [
+        agentId,
+        JSON.stringify({
+          agent_id: agentId,
+          account_label: label,
+          profile_url: profileUrl,
+          message: cfg.dm_message,
+          tenant_id: tenantId,
+          task_type: 'dm_outreach',
+          dm_assignment_id: row.id,
+        }),
+        tenantId,
+      ]
+    );
+    // 记录日志（status=dispatched，等 agent 回报后再改 sent/failed）
     await pool.query(
       `INSERT INTO zenithjoy.dm_outreach_log (tenant_id, account_label, lead_id, profile_url, status)
-       VALUES ($1, $2, $3, $4, 'sent')`,
+       VALUES ($1, $2, $3, $4, 'dispatched')`,
       [tenantId, label, row.lead_id, profileUrl]
     );
     await pool.query(
-      `UPDATE zenithjoy.dm_assignments SET status = 'dispatched', updated_at = now() WHERE id = $1`,
-      [row.id]
+      `UPDATE zenithjoy.dm_assignments SET status = 'dispatched', agent_id = $2, updated_at = now() WHERE id = $1`,
+      [row.id, agentId]
     );
     hourUsed.set(label, (hourUsed.get(label) ?? 0) + 1);
     dayUsed.set(label, (dayUsed.get(label) ?? 0) + 1);
