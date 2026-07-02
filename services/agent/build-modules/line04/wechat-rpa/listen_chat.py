@@ -220,38 +220,83 @@ def aggregate_messages(messages: List[str]) -> str:
     return "\n\n".join(msgs)
 
 
-def read_chat_panel_messages(mw: Any, n: int, x_min: int = 460) -> List[str]:
-    """
-    读取当前打开会话右侧消息面板的最新 n 条消息文本（需已调 _open_chat）。
+# ─── 锚点气泡扫描：系统气泡识别（纯函数，CI 可测）─────────────────────────────
+# 时间戳/撤回/拍一拍/新消息分隔线在聊天面板里是居中 Text，按几何会被判 outgoing，
+# 若参与锚点判定会把之前的 incoming 全切掉（锚点劫持）→ 必须从序列剔除。
+import re as _sysre
 
-    原理：微信 UIA 树中右侧聊天气泡也暴露为 ListItem 控件，中心 x >= x_min（区别于
-    左列会话列表 center_x < 460）。遍历所有 ListItem，按坐标过滤出右侧条目，取其
-    element_info.name 作为消息文本，返回最新的 n 条（列表末尾 = 最新）。
+_SYS_TIME_RE = _sysre.compile(
+    r"^(?:昨天|前天|星期[一二三四五六日天]|周[一二三四五六日天]|"
+    r"\d{4}年\d{1,2}月\d{1,2}日|\d{1,2}月\d{1,2}日)?\s*"
+    r"(?:凌晨|早上|上午|中午|下午|晚上)?\s*\d{1,2}:\d{2}$"
+)
+_SYS_PATTERNS = (
+    _sysre.compile(r"^.{0,30}撤回了一条消息$"),
+    _sysre.compile(r"^.{0,20}拍了拍.{0,20}$"),
+    _sysre.compile(r"^以下是新消息$"),
+)
 
-    非 Windows / UIA 不可用 / n <= 0 → 返回 []，不报错。
+
+def _is_system_bubble(text: str) -> bool:
+    """判断气泡文本是否系统气泡（时间戳/撤回/拍一拍/分隔线）。
+
+    有界匹配（fullmatch）防误伤正常消息（"价格 14:32 前有效" 不剔）；
+    客户消息恰好整句命中（如原文只发"你撤回了一条消息"）会被误剔——代价是该条
+    不进合并上下文，不丢回复触发，可接受。
     """
-    if n <= 0:
-        return []
-    out: List[str] = []
-    try:
-        for it in mw.descendants(control_type="ListItem"):
-            try:
-                r = it.rectangle()
-                cx = (r.left + r.right) // 2
-                if cx < x_min:
-                    continue  # 左列会话列表，跳过
-            except Exception:
-                continue  # 拿不到坐标的 item 跳过
-            try:
-                name = (it.element_info.name or "").strip()
-                if name:
-                    out.append(name)
-            except Exception:
-                continue
-    except Exception:
-        pass
-    # 返回最新 n 条（消息面板最底部 = 最新；若总数 <= n，全部返回）
-    return out[-n:] if len(out) > n else out
+    t = (text or "").strip()
+    if not t:
+        return True
+    if _SYS_TIME_RE.match(t):
+        return True
+    return any(p.match(t) for p in _SYS_PATTERNS)
+
+
+def strip_system_bubbles(bubbles: List[Dict[str, str]]) -> List[Dict[str, str]]:
+    """剔除系统气泡，保序。bubbles: [{"text","direction"}]。"""
+    return [b for b in bubbles if not _is_system_bubble(b.get("text", ""))]
+
+
+def split_trailing_incoming(bubbles: List[Dict[str, str]], badge_n: int = 0) -> List[str]:
+    """锚点切分（纯函数）：返回"最后一条 outgoing 气泡之后"的全部 incoming 文本。
+
+    - bubbles 有序（上→下=旧→新），须已过 strip_system_bubbles。
+    - 锚点 = 最后一条 outgoing（我方/AI/人工回复都算；人工回过 → trailing 空 → 不回）。
+    - 无 outgoing（从未回过）：仅当 badge_n>0 才取最后 min(badge_n, 可见) 条 incoming；
+      无角标 → 返回 []（防预览扰动翻出陈年消息）。
+    - 自回复风暴天然免疫：只取 incoming，机器人 outgoing 即锚点。
+    """
+    last_out = -1
+    for i, b in enumerate(bubbles):
+        if b.get("direction") == "outgoing":
+            last_out = i
+    tail = [b.get("text", "") for b in bubbles[last_out + 1:]
+            if b.get("direction") == "incoming" and b.get("text")]
+    if last_out >= 0:
+        return tail
+    if badge_n > 0 and tail:
+        return tail[-min(badge_n, len(tail)):]
+    return []
+
+
+def _stale_badge_confirmed(preview_content: str, bubbles: List[Dict[str, str]]) -> bool:
+    """陈旧角标确认闸（纯函数，CI 可测）：仅当会话列表预览显示的最新消息就是我方
+    最后一条 outgoing 气泡（_delivery_confirmed 同款规范化前缀匹配）时，才允许把
+    "trailing 空"当成真·陈旧角标去提交消费触发。
+
+    不命中的典型场景（都必须走回退 emit / 保留触发态，绝不静默提交）：
+    - 客户发 [图片]/[语音] 等非文本消息 → read_chat_bubbles 只读 Text，气泡序列里
+      没有对应条目 → trailing 空但预览 ≠ 我方回复；
+    - 客户纯文本恰好整句命中 _is_system_bubble（如"下午3:30"）被剔除 → 同上。
+    bubbles 须已过 strip_system_bubbles；无 outgoing / 预览为空 → False（保守）。
+    """
+    last_out = ""
+    for b in bubbles:
+        if b.get("direction") == "outgoing" and b.get("text"):
+            last_out = b["text"]
+    if not preview_content or not last_out:
+        return False
+    return _delivery_confirmed(preview_content, last_out)
 
 
 def _parse_item_name(name: str, require_unread: bool = True) -> Optional[Dict[str, str]]:
@@ -462,17 +507,91 @@ def _restore_tray(mw: Any) -> None:
     _restore_window_state(mw, 'tray')
 
 
-def scan_unread(mw: Any, last_content: Optional[Dict[str, str]] = None) -> List[Dict[str, Any]]:
-    """遍历主窗口会话列表 ListItem，检测未读消息。
+# ─── 锚点气泡扫描：模块级状态 ─────────────────────────────────────────────────
+_KNOWN_GROUPS: set = set()        # _is_group_by_header 判过的群 sender：发现层直接跳过
+_ANCHOR_STALL: Dict[str, int] = {}  # sender → 连续 emit 未走到 DELIVERED 的轮数（熔断告警）
+SCAN_OPEN_BUDGET = 3              # 每轮最多开窗读气泡的会话数（#984 延迟教训机制化）
+_BUBBLE_READ_POLLS = 3            # 气泡读空重试轮数（同 _confirm_delivery 轮询模式）
+_BUBBLE_READ_POLL_SLEEP = 0.6
+ANCHOR_STALL_LIMIT = 3            # 连续 N 轮停滞 → 心跳告警（只告警不降级——绝不静默丢消息）
 
-    双路检测：
-    1) 角标路径：ListItem name 含 '[N条]' → 正常未读
-    2) 内容变化路径：无角标（聊天面板当前打开时消息被立即已读）但内容与上次不同 → 也触发回复
-    last_content: {sender: last_seen_content}，由调用方维护，检测内容变化。
+
+def _read_trailing_for(mw: Any, cand: Dict[str, Any],
+                       record_skip: Optional[Any] = None) -> Any:
+    """打开 cand 会话读 trailing incoming。返回 (msgs, bubble_read_empty)。
+
+    - 开窗失败 → ([], False)，触发态由调用方保留。
+    - 打开后判群（唯一可靠信号=标题"(人数)"）→ cand["_is_group"]=True 本轮不回；
+      仅当 _chat_title_matches 确认面板归属（防 selected 验证通过但面板还停在上一个
+      会话的异步瞬间，把真私聊客户误拉黑）才写 _KNOWN_GROUPS 缓存 + 留日志。
+    - 气泡读空轮询 _BUBBLE_READ_POLLS 次；仍空 → ([], True) + record_skip 计数
+      （心跳 diag 可见：列表可读但气泡区空 = 树病信号）。
+    - 读到气泡 → cand["_stale_ok"] = _stale_badge_confirmed(预览, 剔系统气泡后序列)，
+      供调用方判定"trailing 空"能否当真陈旧角标提交。
+    """
+    try:
+        if not _open_chat(mw, cand["_item"], cand["sender"]):
+            return [], False
+    except Exception:
+        return [], False
+    cand["_opened"] = True
+    # F3：判群前先验证面板标题归属（is True 才可信；False/None/异常都不写缓存）
+    try:
+        title_ok = _chat_title_matches(mw, cand["sender"]) is True
+    except Exception:
+        title_ok = False
+    try:
+        if _is_group_by_header(_read_chat_header_texts(mw)) is not None:
+            cand["_is_group"] = True
+            if title_ok:
+                _KNOWN_GROUPS.add(cand["sender"])
+                _log(f"known_group cached sender={cand['sender']}")
+            return [], False
+    except Exception:
+        pass  # 判不出群 → 按私聊继续（reply_in_chat 发送前还有判群闸）
+    bubbles: List[Dict[str, str]] = []
+    for _ in range(_BUBBLE_READ_POLLS):
+        bubbles = read_chat_bubbles(mw)
+        if bubbles:
+            break
+        time.sleep(_BUBBLE_READ_POLL_SLEEP)
+    if not bubbles:
+        if record_skip is not None:
+            record_skip("bubble_read_empty")
+        return [], True
+    stripped = strip_system_bubbles(bubbles)
+    cand["_stale_ok"] = _stale_badge_confirmed(cand["content"], stripped)
+    return split_trailing_incoming(stripped, cand["badge"]), False
+
+
+def scan_unread(mw: Any, last_preview: Optional[Dict[str, str]] = None,
+                record_skip: Optional[Any] = None,
+                should_open: Optional[Any] = None) -> List[Dict[str, Any]]:
+    """锚点气泡扫描（2026-07-02 重构，根治漏消息——替代旧 角标path-1/预览path-2 机制）。
+
+    发现层（便宜，不开会话）：触发 = 有 [N条] 角标 OR item name != last_preview[sender]。
+      - last_preview 只是触发信号（比较整个 item name，防长消息截断假阴性），永不 pop；
+        首见只记录不触发（防陈年消息/重启风暴）。
+      - 角标首见 seed：badge 会话若不在 last_preview 里，入队同时记下带角标的原始 name
+        ——emit 后主循环草稿失败不提交时，下轮去角标的 name 必不等 → 预览路径自动重试
+        （治"重启后角标首见 + 草稿失败 = 永久丢"）。
+      - should_open（callable sender->bool，默认 None 全放行）：谓词拦掉的 sender
+        （黑名单/操作者本人）连候选都不进——不开窗（保留其未读角标给操作者）、不烧预算。
+    读取层（仅触发会话，角标优先，每轮 ≤SCAN_OPEN_BUDGET 个）：_open_chat → 判群
+    （标题归属 _chat_title_matches 确认后才写 _KNOWN_GROUPS 缓存）→ read_chat_bubbles
+    → strip_system_bubbles → split_trailing_incoming（锚点=最后一条 outgoing）→ 合并成一条。
+    事务语义：触发信号在打开会话那刻就被微信消费（角标清零）→ last_preview 只在
+      ①trailing 空且 _stale_badge_confirmed 命中（预览=我方最后 outgoing = 真陈旧角标，
+      本函数内提交）或 ②DELIVERED（主循环 _commit_reply_success）后更新；
+      开窗失败/读空/后续草稿失败 → 触发态保留，下轮重读气泡重试，绝不静默丢。
+    回退保底：有角标时，开窗失败 / 气泡读空 / trailing 空但 _stale_badge_confirmed
+      不命中（客户发[图片]/[语音]或消息恰被系统气泡正则剔除）→ 回退旧单条路径
+      （用预览 content）emit，宁可上下文不全也不漏回；无角标的触发读不出/不命中
+      → 保留触发态下轮再试（fail-closed）。
 
     托盘修复：微信在系统托盘时 IsWindowVisible=False，mmui 虚拟列表 UIA name 不实时更新，
     新消息角标永远扫不到。扫描前 _ensure_tray_visible SW_SHOWNA(8) 短暂还原刷新 UIA，
-    扫完再 _restore_tray SW_HIDE(0) 送回托盘（用户几乎无感知）。
+    扫完再 _restore_window_state 还原（用户几乎无感知）。
     """
     orig_state = _ensure_tray_visible(mw)
     # 记录【可见态】整树大小(窗口此刻已 ensure_visible，与 _is_uia_tree_collapsed 同口径)：主循环据此
@@ -488,51 +607,92 @@ def scan_unread(mw: Any, last_content: Optional[Dict[str, str]] = None) -> List[
     # sessions=0 → 之后全收不到 → 用户体感「回一次就不理」。为治"CRM 扫好友滚到底漏顶部"的偶发
     # 问题（CRM 扫描每天/手动才一次），却把最核心的"连续回复"每轮都置于风险，得不偿失。
     # 正确做法：列表始终保持在顶（CRM 扫描收尾自己回顶），scan_unread 直接读即可。
-    out: List[Dict[str, Any]] = []
-    seen_senders: set[str] = set()
+    candidates: List[Dict[str, Any]] = []
+    seen: set = set()
     for it in mw.descendants(control_type="ListItem"):
         try:
             name = it.element_info.name or ""
         except Exception:
             continue
-        # 路径 1：有 [N条] 未读角标 → 未读。
-        parsed = _parse_item_name(name)
-        if parsed:
-            seen_senders.add(parsed["sender"])
-            # N>1 时打开会话读取全部 N 条消息，合并成一次 AI 回复的上下文。
-            # 一人连发 3 条 → AI 看到 3 条合并上下文，而不是只有最后 1 条预览。
-            n = parse_unread_count(name)
-            if n > 1:
-                try:
-                    if _open_chat(mw, it, parsed["sender"]):
-                        msgs = read_chat_panel_messages(mw, n)
-                        if msgs:
-                            parsed = {**parsed, "content": aggregate_messages(msgs)}
-                except Exception:
-                    pass  # 读取失败 → 回退到单条 content（会话仍进队，不丢失回复机会）
-            out.append({**parsed, "_item": it})
+        info = _parse_item_name(name, require_unread=False)
+        if not info or info["sender"] in seen:
             continue
-        # 路径 2（2026-07-02 恢复；#984 为减延迟删除本路径 → 夹在别的回复冷却窗口里、角标被清的
-        # 消息永久漏读，用户实测发 5 条漏"什么价格"。基线 74654efd 靠本路径"问啥回啥"不丢）：
-        # 无角标但内容 != 上次见到（last_content）→ 也算未读要回。不依赖角标，专治"角标被清后失去
-        # 未读信号"。首次见到只记录不触发（防历史消息误当新消息）。自我回复风暴由主循环 reply 成功后
-        # 哨兵 last_content[sender]="__replied__" 守卫（"__replied__" ≠ 真实内容 → path-2 必触发）。
-        if last_content is not None:
-            info = _parse_item_name(name, require_unread=False)
-            if info and info["sender"] not in seen_senders:
-                prev = last_content.get(info["sender"])
-                if prev is not None and prev != info["content"]:
-                    seen_senders.add(info["sender"])
-                    out.append({**info, "_item": it})
-                elif prev is None:
-                    # 首次见到这个会话：记录内容但不触发回复
-                    last_content[info["sender"]] = info["content"]
-    # 更新 last_content（供下轮内容变化比较）
-    if last_content is not None:
-        for m in out:
-            last_content[m["sender"]] = m["content"]
+        sender = info["sender"]
+        if sender in _KNOWN_GROUPS:
+            continue
+        if should_open is not None and not should_open(sender):
+            continue  # F4：黑名单/操作者会话连候选都不进（角标保留给操作者，不烧预算）
+        badge_n = parse_unread_count(name)
+        if badge_n > 0:
+            seen.add(sender)
+            if last_preview is not None and sender not in last_preview:
+                last_preview[sender] = name  # F2 seed：草稿失败后下轮预览路径可重试
+            candidates.append({"sender": sender, "content": info["content"],
+                               "name": name, "badge": badge_n, "_item": it})
+            continue
+        if last_preview is None:
+            continue
+        prev = last_preview.get(sender)
+        if prev is None:
+            last_preview[sender] = name  # 首见只记录不触发
+        elif prev != name:
+            seen.add(sender)
+            candidates.append({"sender": sender, "content": info["content"],
+                               "name": name, "badge": 0, "_item": it})
+    candidates.sort(key=lambda c: -c["badge"])  # 角标优先
+    out: List[Dict[str, Any]] = []
+    opened = 0
+    for c in candidates:
+        if opened >= SCAN_OPEN_BUDGET:
+            break  # 触发态保留（角标还在/last_preview 未更新），下轮继续
+        opened += 1
+        msgs, empty_read = _read_trailing_for(mw, c, record_skip=record_skip)
+        if msgs:
+            out.append({"sender": c["sender"], "content": aggregate_messages(msgs),
+                        "_item": c["_item"], "_preview_name": c["name"], "_anchor": True})
+            _ANCHOR_STALL[c["sender"]] = _ANCHOR_STALL.get(c["sender"], 0) + 1
+            if _ANCHOR_STALL[c["sender"]] >= ANCHOR_STALL_LIMIT:
+                if record_skip is not None:
+                    record_skip("anchor_stall")
+                _log(f"anchor_stall sender={c['sender']} rounds={_ANCHOR_STALL[c['sender']]}"
+                     f"（连续 emit 未 DELIVERED——只告警不降级，继续重试）")
+        elif c.get("_is_group"):
+            # 群：本轮不回。是否写 _KNOWN_GROUPS 已由 _read_trailing_for 按标题归属决定；
+            # 触发态保留不提交——若是 F3 误判的真私聊，下轮重开面板已落定即可正常回。
+            pass
+        elif c.get("_opened") and not empty_read and c.get("_stale_ok"):
+            # 开窗成功、读到气泡、无新 trailing，且 _stale_badge_confirmed 命中
+            # （预览显示的最新消息就是我方最后回复）= 真陈旧角标 → 提交触发消费，防重复回。
+            if last_preview is not None:
+                last_preview[c["sender"]] = c["name"]
+        elif c["badge"] > 0 and c["content"]:
+            # 回退保底（F1）：开窗失败 / 气泡读空 / trailing 空但预览≠我方回复
+            # （客户发[图片]/[语音]、或纯文本恰被 _is_system_bubble 剔除）且角标在
+            # → 旧单条路径 emit（用预览 content），宁可上下文不全也不漏回，绝不静默提交。
+            out.append({"sender": c["sender"], "content": c["content"],
+                        "_item": c["_item"], "_preview_name": c["name"]})
+        # 其余（开窗失败/读空/非陈旧 且无角标）：触发态保留，下轮重试
     _restore_window_state(mw, orig_state)
     return out
+
+
+
+def _commit_reply_success(msg: Dict[str, Any],
+                          last_preview: Optional[Dict[str, str]]) -> None:
+    """DELIVERED hook: scan_unread emit 已送达后调用，提交触发消费 + 停滞归零。
+
+    事务语义:
+      1. last_preview[sender] = _preview_name -- 下轮发现层不再视为变化，防重复触发。
+         _preview_name 缺失（回退路径 content-only msg）-> 不更新，触发态保留等下轮。
+      2. _ANCHOR_STALL[sender] 归零 -> DELIVERED = 停滞清除，心跳告警不误触发。
+    """
+    sender = (msg or {}).get("sender", "")
+    if not sender:
+        return
+    preview_name = (msg or {}).get("_preview_name")
+    if preview_name and last_preview is not None:
+        last_preview[sender] = preview_name
+    _ANCHOR_STALL.pop(sender, None)
 
 
 # ─── CRM 好友表行源：列出近期会话联系人（不要求未读）────────────────────────────
@@ -1620,80 +1780,47 @@ def _last_bubble_direction(mw: Any) -> Optional[str]:
     return "outgoing" if center >= midline else "incoming"
 
 
-def count_incoming_chat_bubbles(mw: Any) -> int:
-    """数聊天面板传入气泡（左对齐，对方发来）数量。
+def read_chat_bubbles(mw: Any) -> List[Dict[str, str]]:
+    """读当前打开会话聊天面板全部可见消息气泡，上→下有序，每条 {"text","direction"}。
 
-    复用 _last_bubble_direction 的坐标逻辑（chat_left / midline）。
-    纯逻辑，顶层零 pywinauto，CI clean 可测。
-    rectangle() 抛异常的控件跳过，不崩溃。
+    - 几何全部从窗口 rectangle 推导（chat_left = 左+宽//4，midline 同
+      _last_bubble_direction）——铁律禁止写死绝对坐标（旧 read_chat_panel_messages
+      的 x_min=460 之坑，该函数已随锚点扫描重构删除）。
+    - direction：气泡中心 x < midline → incoming；>= → outgoing（压线判我方，保守）。
+    - 幽灵坐标（|left|>20000，同 _open_chat 守卫）/ 读不到 → []（fail-closed，
+      调用方走回退路径）；正常扫描离屏位 OFFSCREEN_X≈-2600 不受影响。
+    - descendants 顺序不可信 → 显式按 r.top 排序。
+    顶层零-pywinauto 纯函数（Fake 注入可测，同 _last_bubble_direction 约定）。
     """
     try:
         wr = mw.rectangle()
     except Exception:
-        return 0
+        return []
+    if abs(wr.left) > 20000 or abs(wr.top) > 20000:
+        return []
     width = wr.right - wr.left
+    if width <= 0:
+        return []
     chat_left = wr.left + width // 4
     midline = (chat_left + wr.right) // 2
-    count = 0
-    for t in mw.descendants(control_type="Text"):
+    rows: List[Any] = []
+    try:
+        texts = mw.descendants(control_type="Text")
+    except Exception:
+        return []
+    for t in texts:
         try:
             r = t.rectangle()
             nm = (t.element_info.name or "").strip()
         except Exception:
             continue
-        if r.left > chat_left and r.top >= wr.top + 150 and nm:
-            center_x = (r.left + r.right) // 2
-            if center_x < midline:
-                count += 1
-    return count
-
-
-def scan_anchor_senders(
-    mw: Any,
-    bubble_anchors: Dict[str, int],
-    already_seen: Optional[set] = None,
-) -> List[Dict[str, Any]]:
-    """path-3：对有气泡锚点的 sender 开聊天，数传入气泡，count > anchor → 新消息。
-
-    - 只扫 bubble_anchors 中有记录的 sender（已回复过的）
-    - already_seen：path-1/path-2 已检出的 sender，跳过不重复入队
-    - 无论是否检出，都更新 bubble_anchors[sender] 为当前气泡数
-    """
-    if already_seen is None:
-        already_seen = set()
-
-    sender_to_item: Dict[str, Any] = {}
-    for it in mw.descendants(control_type="ListItem"):
-        try:
-            first_line = (it.element_info.name or "").split("\n")[0].strip()
-        except Exception:
+        if not nm or r.left <= chat_left or r.top < wr.top + 150:
             continue
-        if first_line and first_line not in sender_to_item:
-            sender_to_item[first_line] = it
-
-    out: List[Dict[str, Any]] = []
-    for sender, anchor in list(bubble_anchors.items()):
-        if sender in already_seen:
-            continue
-        item = sender_to_item.get(sender)
-        if item is None:
-            continue
-        try:
-            _open_chat(mw, item, sender)
-        except Exception:
-            pass
-        current_count = count_incoming_chat_bubbles(mw)
-        bubble_anchors[sender] = current_count
-        if current_count > anchor:
-            try:
-                name = item.element_info.name or ""
-            except Exception:
-                name = ""
-            info = _parse_item_name(name, require_unread=False)
-            if info is None:
-                info = {"sender": sender, "content": ""}
-            out.append({**info, "_item": item})
-    return out
+        center = (r.left + r.right) // 2
+        rows.append((r.top, {"text": nm,
+                             "direction": "outgoing" if center >= midline else "incoming"}))
+    rows.sort(key=lambda x: x[0])
+    return [b for _, b in rows]
 
 
 def _delivery_confirmed(readback_text: str, sent_text: str) -> bool:
@@ -2967,9 +3094,7 @@ def run_real_listen(args: argparse.Namespace) -> int:
     _skip_logged: set[tuple[str, str]] = set()  # 只对每个 key 打一次 skip log，避免刷屏
     _skip_counter = _SkipCounter()  # Phase 0 观测：累计每条 skip reason → 心跳 diag（中台可见）
     # 内容变化检测：{sender: last_seen_content}，捕捉聊天面板打开时的新消息（无未读角标）
-    last_content: dict[str, str] = {}
-    # path-3 锚点气泡扫描：{sender: 回复时传入气泡数}，气泡数增加 → 新消息（含重发同内容）
-    bubble_anchors: dict[str, int] = {}
+    last_preview: dict[str, str] = {}
     deadline = time.time() + max(1, args.timeout)
     # 进程守护：向中台上报心跳（断 3 分钟无心跳中台飞书告警）+ 扫描诊断
     heartbeat_interval = _HEARTBEAT_INTERVAL
@@ -3185,23 +3310,31 @@ def run_real_listen(args: argparse.Namespace) -> int:
                     time.sleep(args.interval)
                     continue
 
+            # 接管名单门（CRM 重做：黑名单主模型 + whitelist 兼容回退，见 cs_config_gate.should_reply）：
+            # - blacklist 模式（takeover_mode='blacklist'）：默认全接管，sender∈blacklist 才跳过。
+            # - whitelist 模式 / 无 takeover_mode 存量配置：配了 whitelist 则只回名单内；没配（空）→ 不限，保持现状。
+            # 是否启用名单门：machine_id 在册 且（blacklist 模式 或 配了非空 whitelist）。
+            # 每轮在 scan 之前刷新（cs_config 上面每 CS_PULL_INTERVAL 拉新）——
+            # scan_unread 的 should_open 谓词与下面 classify_unread 共用同一份 gate。
+            _cs_cfg = cs_config if getattr(args, "machine_id", None) else None
+            _cs_mode = (_cs_cfg or {}).get("takeover_mode")
+            _cs_whitelist = (_cs_cfg or {}).get("whitelist")
+            _roster_gate_on = bool(_cs_cfg) and (_cs_mode == "blacklist" or bool(_cs_whitelist))
+            # roster 谓词：gate 拒绝的 sender（黑名单内部人员等）连开窗都不开——
+            # 开窗会清掉操作者本人的未读角标 + 烧光 SCAN_OPEN_BUDGET（对抗审查 ISSUE-2）。
+            _should_open = (
+                (lambda s: cs_config_gate.should_reply(_cs_cfg, s))
+                if _roster_gate_on else None
+            )
             try:
-                unread = scan_unread(mw, last_content)
+                unread = scan_unread(mw, last_preview,
+                                     record_skip=_skip_counter.record,
+                                     should_open=_should_open)
             except Exception as exc:
                 last_error = f"{type(exc).__name__}: {exc}"
                 time.sleep(args.interval)
                 continue
             last_unread_senders = [u["sender"] for u in unread]
-            # path-3 锚点气泡扫描：对已回复过的 sender 补扫（重发同内容 path-2 漏检场景）
-            if bubble_anchors:
-                try:
-                    _anchor_seen = set(u["sender"] for u in unread)
-                    _anchor_out = scan_anchor_senders(mw, bubble_anchors, already_seen=_anchor_seen)
-                    if _anchor_out:
-                        unread = unread + _anchor_out
-                        last_unread_senders = [u["sender"] for u in unread]
-                except Exception:
-                    pass
             # scan_unread 可见态读到健康树(非塌缩)=微信能读会话→记录时刻供塌缩自愈守卫(绝不误重启)
             if _LAST_VISIBLE_TREE_SIZE is not None and not _is_uia_tree_collapsed(_LAST_VISIBLE_TREE_SIZE):
                 last_readable_scan_at = now
@@ -3305,14 +3438,8 @@ def run_real_listen(args: argparse.Namespace) -> int:
             # ── Phase 1: 过滤可回复的未读 + 并行生成草稿 ──────────────────────────────
             # 生成草稿是纯网络调用、不碰微信窗口，可并发；多人同时来时不再逐个排队等模型，
             # 把"生成"从串行链路里拿出来并行做，最后只串行做"切窗+发送"（单窗口物理限制）。
-            # 接管名单门（CRM 重做：黑名单主模型 + whitelist 兼容回退，见 cs_config_gate.should_reply）：
-            # - blacklist 模式（takeover_mode='blacklist'）：默认全接管，sender∈blacklist 才跳过。
-            # - whitelist 模式 / 无 takeover_mode 存量配置：配了 whitelist 则只回名单内；没配（空）→ 不限，保持现状。
-            # 是否启用名单门：machine_id 在册 且（blacklist 模式 或 配了非空 whitelist）。
-            _cs_cfg = cs_config if getattr(args, "machine_id", None) else None
-            _cs_mode = (_cs_cfg or {}).get("takeover_mode")
-            _cs_whitelist = (_cs_cfg or {}).get("whitelist")
-            _roster_gate_on = bool(_cs_cfg) and (_cs_mode == "blacklist" or bool(_cs_whitelist))
+            # 接管名单门：_cs_cfg/_cs_mode/_cs_whitelist/_roster_gate_on 已在本轮 scan 之前算好
+            # （见上方 scan_unread 调用前的块），classify_unread 与 should_open 谓词共用同一份 gate。
             eligible = []
             for m in unread:
                 key = (m["sender"], m["content"])
@@ -3331,7 +3458,7 @@ def run_real_listen(args: argparse.Namespace) -> int:
                     roster_should_reply=(not _roster_gate_on)
                     or cs_config_gate.should_reply(_cs_cfg, m["sender"]),
                     in_sender_cooldown=(now - sender_reply_cooldown.get(m["sender"], 0) < SENDER_COOLDOWN),
-                    already_replied=(key in replied),
+                    already_replied=(key in replied) and not m.get("_anchor"),
                     in_fail_cooldown=(
                         key in reply_failed_at and now - reply_failed_at[key] < REPLY_FAIL_COOLDOWN
                     ),
@@ -3342,6 +3469,10 @@ def run_real_listen(args: argparse.Namespace) -> int:
                     eligible.append(m)
                     continue
                 _skip_counter.record(_reason)
+                # 终态 skip（已回过/重复/名单拦截）→ 提交触发态防每轮重开白烧预算；
+                # 暂态 skip（sender_cooldown/cooldown/rate_limited）不提交，冷却结束自动重试。
+                if _reason in ("replied", "dup", "roster_gate"):
+                    _commit_reply_success(m, last_preview)
                 # per-reason 日志（保持原有可观测性）
                 if _reason == "roster_gate":
                     if key not in _skip_logged:
@@ -3442,11 +3573,7 @@ def run_real_listen(args: argparse.Namespace) -> int:
                     _skip_logged.discard(key)
                     reply_failed_at.pop(key, None)
                     sender_reply_cooldown[m["sender"]] = time.time()  # per-sender 30s 冷却
-                    last_content[m["sender"]] = "__replied__"  # 哨兵：不 pop，path-2 对后续消息必触发
-                    try:
-                        bubble_anchors[m["sender"]] = count_incoming_chat_bubbles(mw)
-                    except Exception:
-                        pass
+                    _commit_reply_success(m, last_preview)  # DELIVERED
                     _log(f"auto-replied OK sender={m['sender']} receipt={receipt['status']}")
                 else:
                     reply_failed_at[key] = time.time()

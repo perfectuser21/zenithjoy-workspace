@@ -67,7 +67,7 @@ class TestScanUnreadNoTabSwitch:
         with patch.object(listen_chat, "_ensure_tray_visible", return_value=""), \
              patch.object(listen_chat, "_restore_window_state"), \
              patch.object(listen_chat, "_reset_session_list_to_top") as mock_reset:
-            listen_chat.scan_unread(mw, last_content={})
+            listen_chat.scan_unread(mw, {})
         mock_reset.assert_not_called()
 
     def test_scan_unread_still_reads_unread(self):
@@ -76,7 +76,7 @@ class TestScanUnreadNoTabSwitch:
         with patch.object(listen_chat, "_ensure_tray_visible", return_value=""), \
              patch.object(listen_chat, "_restore_window_state"), \
              patch.object(listen_chat, "_reset_session_list_to_top"):
-            out = listen_chat.scan_unread(mw, last_content={})
+            out = listen_chat.scan_unread(mw, {})
         assert any(m["sender"] == "默忆" for m in out)
 
 

@@ -118,31 +118,36 @@ def test_sender_cooldown_check_exists_in_source():
 
 # ─────────────────────────────────────────────────────────────────────────────
 # ─────────────────────────────────────────────────────────────────────────────
-# C. last_content 哨兵防自回复风暴（1.0.91 升级：哨兵取代 pop）
+# C. 成功回复后的触发状态提交——reply 文本绝不进触发比较状态（防自回复风暴）
 #
-# 旧做法 pop：reply 后删除 last_content[sender]
-#   → 下次扫: prev=None → "首次见"不触发（漏消息根因：同内容重发永不触发）
-# 新做法 哨兵：last_content[sender] = "__replied__"
-#   → 下次扫: prev="__replied__" ≠ 任何真实内容 → path-2 必触发
-#   → 重发相同内容也能被 path-2 捕获（path-3 gas anchor 为备份）
-#   → 自回复风暴防护靠 auto_reply.is_duplicate 去重（replied+dedup 双层守护）
+# 背景：旧做法 last_content[sender]=reply 在 2026-06-10 引发自回复风暴：
+#   AI 回复存入 last_content → 下次 scan 读截断 preview → Path2 误判变化
+#   → 再调 DeepSeek → 再发一条 → 风暴每 30s 一条持续。
+# 演进（2026-07-02 锚点气泡扫描重构）：中间态修法 last_content.pop(sender) 已被
+#   _commit_reply_success(m, last_preview) 取代——DELIVERED 后把【读回的 item name
+#   （_preview_name）】提交进 last_preview 消费触发信号（pop 会让下条真消息被
+#   "首见只记录"分支吞掉，正是漏读旧 bug 根源）。
+#   自回复风暴免疫改为结构性：锚点切分只取最后一条 outgoing 之后的 incoming，
+#   机器人自己的回复就是锚点（见 test_scan_trigger.py / test_bubble_anchor.py）。
+# 本守卫的不变量：reply 全文绝不直接写进触发比较状态。
 # ─────────────────────────────────────────────────────────────────────────────
 
-def test_last_content_cleared_after_successful_send():
-    """成功回复后设哨兵 '__replied__' 而不是存 reply 完整文本，也不是 pop。
-
-    旧 pop 根因：下次扫 prev=None → 首次见不触发 → 重发相同内容漏读（2026-07-02 bug）。
-    新哨兵：'__replied__' ≠ 任何真实内容 → path-2 对后续消息必触发 → 不漏读。
-    自回复风暴防护：auto_reply.is_duplicate 去重（replied 集 + dup 双层守护）。
+def test_reply_success_commits_preview_not_reply_text():
+    """成功回复后必须走 _commit_reply_success（提交读回 _preview_name），
+    绝不把 reply 全文存进 last_preview/last_content（自回复风暴根因，2026-06-10 复现）。
     """
     with open(LISTEN_CHAT_PATH, "r", encoding="utf-8") as f:
         src = f.read()
 
-    assert 'last_content[m["sender"]] = "__replied__"' in src, (
-        "缺少哨兵 '__replied__' — 成功回复后应设哨兵确保 path-2 对后续消息触发"
+    assert "_commit_reply_success(m, last_preview)" in src, (
+        "缺少 _commit_reply_success(m, last_preview) — DELIVERED 后触发信号未消费，"
+        "每次回复后下轮必白开一次会话；或已退回 pop（下条真消息会被首见分支吞掉）"
+    )
+    assert 'last_preview[m["sender"]] = reply' not in src, (
+        "仍含 last_preview[...] = reply — reply 全文进触发状态是自回复风暴根因"
     )
     assert 'last_content[m["sender"]] = reply' not in src, (
-        "仍含 last_content[...] = reply — 此行是自回复风暴根因，必须改为哨兵"
+        "仍含 last_content[...] = reply — 此行是自回复风暴根因"
     )
 
 
