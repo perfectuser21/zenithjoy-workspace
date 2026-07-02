@@ -75,11 +75,17 @@ def _make_main_window(edit_controls, win_top=220, win_bottom=860):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Test 1: _find_chat_input 回退到最大 Edit（搜索框）
+# Test 1: _find_chat_input 只有搜索框时【中止返回 None】，绝不回退到搜索框
+#   （修正 2026-07-02：旧行为"回退最大 Edit=搜索框"是"回复写进搜索框"bug 的根因，
+#    详见 test_find_chat_input_no_search_fallback.py 的根因说明）
 # ─────────────────────────────────────────────────────────────────────────────
-def test_find_chat_input_returns_largest_edit_as_fallback():
-    """只有搜索框时，_find_chat_input 回退到最大面积 Edit（搜索框），不返回 None。"""
-    search_box = _make_edit_ctrl(aid="", name="搜索", area=2960, top=266)
+def test_find_chat_input_aborts_when_only_search_box():
+    """只有顶部搜索框（上半区、无下半区聊天输入框）→ 返回 None，绝不把搜索框当输入框。
+
+    根因：_uia_send 对返回的 Edit 直接 SetValue；若回退搜索框 → 回复被写进搜索栏白发。
+    健康态下半区必有真输入框，此中止路径不触发；脏态中止后 reply_in_chat 下轮重试。
+    """
+    search_box = _make_edit_ctrl(aid="", name="搜索", area=2960, top=266)  # top=266 上半区
     mw = _make_main_window([search_box], win_top=220, win_bottom=860)
 
     with _mock_windll():
@@ -92,9 +98,7 @@ def test_find_chat_input_returns_largest_edit_as_fallback():
 
         result = lc._find_chat_input(mw)
 
-    # 应该返回搜索框（fallback），而不是 None
-    assert result is not None, "_find_chat_input 必须回退到最大 Edit，不能返回 None"
-    assert result.element_info.name == "搜索", "回退应选中搜索框（唯一 Edit 且最大）"
+    assert result is None, "下半区无聊天输入框时必须中止（None），绝不回退到顶部搜索框"
 
 
 # ─────────────────────────────────────────────────────────────────────────────
