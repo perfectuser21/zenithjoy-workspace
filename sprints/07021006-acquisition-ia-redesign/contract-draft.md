@@ -292,8 +292,9 @@ if [ "$VIDEO_COUNT" -gt 0 ]; then
   echo "$RESP" | jq -e '.data.videos[0] | has("video_id") and has("task_id") and has("title") and has("thumbnail_url") and has("publish_date") and has("comment_count")' || { echo "FAIL: video entry missing fields"; exit 1; }
 fi
 
-# 禁用字段反向检查
+# 禁用字段反向检查（含 video_list 下划线版，与 contract-draft Response Schema 禁用列表一致）
 echo "$RESP" | jq -e '.data | has("videoList") | not' || { echo "FAIL: 禁用字段 videoList 出现"; exit 1; }
+echo "$RESP" | jq -e '.data | has("video_list") | not' || { echo "FAIL: 禁用字段 video_list 出现"; exit 1; }
 echo "$RESP" | jq -e '.data | has("items") | not' || { echo "FAIL: 禁用字段 items 出现"; exit 1; }
 echo "$RESP" | jq -e '.data | has("results") | not' || { echo "FAIL: 禁用字段 results 出现"; exit 1; }
 echo "✅ Step 6 collect-tasks/:id/videos schema 验证通过"
@@ -362,10 +363,10 @@ echo "$RESP" | jq -e '.data | (has("leads") and has("total"))' || { echo "FAIL: 
 echo "$RESP" | jq -e '.data.leads | type == "array"' || { echo "FAIL: leads not array"; exit 1; }
 echo "$RESP" | jq -e '.data.total | type == "number"' || { echo "FAIL: total not number"; exit 1; }
 
-# lead entry 字段检查（有 leads 时）
+# lead entry 字段检查（有 leads 时）— 含 grade(AI分级占位) + profile_url(触达状态占位)，来自 PRD Step7 + Response Schema
 LEADS_COUNT=$(echo "$RESP" | jq '.data.leads | length')
 if [ "$LEADS_COUNT" -gt 0 ]; then
-  echo "$RESP" | jq -e '.data.leads[0] | has("commenter_id") and has("comment_text") and has("source_video_url")' || { echo "FAIL: lead entry 缺少必填字段"; exit 1; }
+  echo "$RESP" | jq -e '.data.leads[0] | has("commenter_id") and has("comment_text") and has("source_video_url") and has("grade") and has("profile_url")' || { echo "FAIL: lead entry 缺少必填字段（commenter_id/comment_text/source_video_url/grade/profile_url）"; exit 1; }
 fi
 
 # 禁用字段反向检查（含 items/results）
