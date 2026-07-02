@@ -63,7 +63,7 @@
 - trailing 合并（`aggregate_messages`，扩展占位符保留）→ 走现有 classify_unread 门（roster/冷却/频控/replied）→ draft → `reply_in_chat`（自己重开会话，现有防串台三闸不动）→ `_confirm_delivery`。
 - **提交点 = DELIVERED**：replied 标记、`last_preview` 同步只在成功后做；草稿失败/no_reply/rate_limited/发送失败 → 一律不动触发态，下轮重读气泡重试（消息在气泡里，不依赖已被微信消费的角标——这是对"触发信号被消费"的根治）。
 - 重发前自愈：读最后 outgoing 气泡与本次 reply 前缀匹配 → 命中补记 DELIVERED 不重发（治读回假阴性重复回）。
-- 熔断：同一会话连续 3 轮"有触发但 trailing 判定回不了/锚点不推进" → 心跳 diag 计数告警 + 该会话降级 badge-only。
+- 熔断（修正 2026-07-02：只告警不降级）：同一会话连续 3 轮"emit 了消息但未走到 DELIVERED 提交" → 心跳 diag `anchor_stall` 计数 + 醒目日志，**不停止重试**——降级 badge-only 会静默丢消息，违反铁律「客户消息绝不静默丢弃」；重复回风暴已由锚点结构（只回最后 outgoing 之后的 incoming）+ reply_failed cooldown 限频结构性防住。
 - **删除**：`last_content.pop`（:3357）、path-2 旧逻辑（scan_unread :515-529）。`replied` 去重 key 维持 (sender, 合并content)，兜底靠"回复前查我方上条回复是否已在锚点后气泡里"+熔断。
 - `REPLY_DIRECTION_CHECK`（config.py:127，默认 False）**不动**：它管 Phase-2 发送前的单点方向检查，与新机制的 scan 侧气泡方向判定互相独立；新机制不受它控制（锚点切分本身就实现了"不回自己"铁律，且更强）。
 
