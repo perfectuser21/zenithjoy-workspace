@@ -372,13 +372,14 @@ def _ensure_tray_visible(mw: Any) -> str:
         _is_visible = bool(_ct.windll.user32.IsWindowVisible(_hwnd))
         _is_iconic = bool(_ct.windll.user32.IsIconic(_hwnd))
         if not _is_visible:
-            # 托盘：v1.0.33 先 DWM cloak 再 ShowWindow，compositor 层不渲染，用户不可见
-            if _OFFSCREEN_REPLY:
-                try:
-                    _cv = _ct.c_int(1)
-                    _ct.windll.dwmapi.DwmSetWindowAttribute(_hwnd, 13, _ct.byref(_cv), 4)
-                except Exception:
-                    pass
+            # 托盘：v1.0.93 无论 OFFSCREEN_REPLY=True/False 都先 DWM cloak 再 ShowWindow，
+            # compositor 层不渲染（用户不可见）。OFFSCREEN_REPLY 只控制"是否移出屏幕坐标"，
+            # 不控制"是否 cloak"——B方案跳过 cloak 导致每 3 秒扫描用户看到窗口闪一下。
+            try:
+                _cv = _ct.c_int(1)
+                _ct.windll.dwmapi.DwmSetWindowAttribute(_hwnd, 13, _ct.byref(_cv), 4)
+            except Exception:
+                pass
             _ct.windll.user32.ShowWindow(_hwnd, 8)  # SW_SHOWNA = 8：还原但不激活
             time.sleep(0.05)
             if _OFFSCREEN_REPLY:
@@ -491,8 +492,9 @@ def _restore_window_state(mw: Any, original_state: str) -> None:
                         _ct.windll.user32.SetWindowPos(_hwnd, 0, _orig[0], _orig[1], 0, 0, _SWP)
                     except Exception:
                         pass
-        # DWM uncloak（与 _ensure_tray_visible 中的 cloak 配对，v1.0.33）
-        if _OFFSCREEN_REPLY and original_state:
+        # DWM uncloak（与 _ensure_tray_visible 中的 cloak 配对，v1.0.93）
+        # tray 分支无论 OFFSCREEN_REPLY 都 cloak，其他分支仅 OFFSCREEN_REPLY=True cloak
+        if original_state == 'tray' or (original_state and _OFFSCREEN_REPLY):
             try:
                 _cv = _ct.c_int(0)
                 _ct.windll.dwmapi.DwmSetWindowAttribute(_hwnd, 13, _ct.byref(_cv), 4)
