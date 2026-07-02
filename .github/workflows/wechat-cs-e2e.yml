@@ -122,9 +122,12 @@ jobs:
       PYTHONIOENCODING: 'utf-8'
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '20'
+
+      # 不用 actions/setup-node：self-hosted runner 走国内 proxy 拉 codeload.github.com
+      # 100s 超时×3 必挂（2026-07-02 排查实锤，agent-module-e2e.yml 同款处理）。用本机 node。
+      - name: Verify Node.js (self-hosted, skip setup-node to avoid proxy timeout)
+        shell: bash
+        run: node --version
 
       - name: Install services/agent deps
         shell: bash
@@ -157,3 +160,48 @@ jobs:
         run: |
           python -m pip install --quiet pytest
           python -m pytest tests/ -q
+
+  # job3 — 真机行为 gate：在 rog 的真微信上验证"开会话→读气泡→判向"整链。
+  # 2026-07-02 事故（连发5条只回1条+闪屏死循环）的根因是 read_chat_bubbles 在真机上
+  # 一条气泡都读不到，而 Fake 注入 pytest 全绿带病合入——本 gate 堵这个洞：
+  # PR 改到 wechat-rpa 就真发一条 marker 到"文件传输助手"并断言气泡可读+方向正确。
+  # 必须 session 1（GUI）才能 UIA 操作微信，runner 服务在 session 0 → PsExec64 -i 1 包一层。
+  bubble-read-gate:
+    name: job3 — 真机气泡可读性 gate（xian-rog 真微信）
+    runs-on: [self-hosted, wechat-capable]
+    timeout-minutes: 10
+    env:
+      PYTHONUTF8: '1'
+      PYTHONIOENCODING: 'utf-8'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run bubble gate in session 1 via PsExec
+        shell: powershell
+        run: |
+          $py = 'C:\Users\asus\anaconda3\python.exe'
+          $script = Join-Path $env:GITHUB_WORKSPACE 'services\agent\tools\selfcheck_bubbles.py'
+          $outJson = 'C:\Users\Public\zj-bubble-gate.json'
+          $outLog = 'C:\Users\Public\zj-bubble-gate-stdout.txt'
+          Remove-Item $outJson, $outLog -ErrorAction SilentlyContinue
+          $bat = 'C:\Users\Public\zj-bubble-gate.bat'
+          $lines = @(
+            '@echo off',
+            'set PYTHONUTF8=1',
+            ('"' + $py + '" "' + $script + '" > "' + $outLog + '" 2>&1')
+          )
+          Set-Content -Path $bat -Value $lines -Encoding ascii
+          & C:\Users\asus\PSTools\PsExec64.exe -i 1 -accepteula -w C:\Users\Public $bat
+          if (-not (Test-Path $outJson)) {
+            if (Test-Path $outLog) { Get-Content $outLog }
+            Write-Error 'gate 没产出结果 JSON（脚本崩溃/PsExec 失败）'
+            exit 1
+          }
+          $j = Get-Content $outJson -Raw -Encoding utf8 | ConvertFrom-Json
+          Write-Host ("bubbles=" + $j.bubble_count + " marker_found=" + $j.marker_found + " marker_outgoing=" + $j.marker_outgoing)
+          if (-not $j.ok) {
+            if (Test-Path $outLog) { Get-Content $outLog }
+            Write-Error ("真机气泡 gate FAILED: " + $j.err)
+            exit 1
+          }
+          Write-Host "真机气泡 gate PASS"
