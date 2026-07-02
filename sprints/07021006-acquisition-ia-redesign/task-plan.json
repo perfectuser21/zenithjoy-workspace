@@ -5,13 +5,15 @@
   "tasks": [
     {
       "task_id": "ws1",
-      "title": "获客工作台 IA 重构 — Hub 4卡片 + AccountsPage + TasksPage两级 + acquisition_collect_videos 表 + 两个新 GET API + LeadsPage 采集面板移除",
+      "title": "获客工作台 IA 重构 — Hub 4卡片 + AccountsPage + TasksPage两级 + acquisition_collect_videos 表 + 两个新 GET API + LeadsPage 采集面板移除 + DouyinBurnerBindPage 废弃",
       "scope": "1. DB迁移：新建 acquisition_collect_videos 表（video_id/video_url/title/cover_url/published_at/task_id）；alter line02_account_sessions.health 加 banned 枚举值；alter line02_account_sessions 加 nickname/bound_at 列。2. API：新增 GET /api/acquisition/burner-accounts（tenant隔离+IDOR校验）和 GET /api/acquisition/collect-tasks/:taskId/videos（tenant隔离+404+403）；POST /collect/report 扩展接受 video_metadata 写 acquisition_collect_videos。3. 前端：重构 AcquisitionHubPage 为 4模块卡片（含 data-testid=hub-module-card）；新建 AccountsPage/TaskDetailPage；改写 TasksPage 接 acquisition_collect_tasks；LeadsPage 移除采集面板代码；navigation.config.ts 注册 /area/acquisition/accounts、/area/acquisition/tasks、/area/acquisition/tasks/:taskId 路由；navigation.config.ts 注册 AccountsPage/TaskDetailPage 懒加载。4. Agent：keyword-search-douyin.ts 抓取 DOM 补 title/cover/published_at 选择器，collect/report 时写 video_metadata。5. E2E：新建 apps/dashboard/e2e/acquisition-ia-redesign.spec.ts（禁 page.route()，打真实后端）；新建 sprints/07021006-acquisition-ia-redesign/e2e-verify.ps1（変体C，启 API server port 3000 + Vite preview port 5174）",
       "dod": [
-        "[BEHAVIOR] GET /api/acquisition/burner-accounts → 200 + {success:true, data:{accounts:array, total:number}, timestamp}，无禁用字段 sessions/burners",
-        "[BEHAVIOR] GET /api/acquisition/collect-tasks/:taskId/videos → 200 + {success:true, data:{videos:array, total:number}, timestamp}；非法 taskId → 404 TASK_NOT_FOUND；跨 tenant → 403 FORBIDDEN",
-        "[BEHAVIOR] acquisition_collect_videos 表存在且含 video_id/task_id/title/cover_url/published_at 列",
+        "[BEHAVIOR] GET /api/acquisition/burner-accounts → 200 + {success:true, data:{accounts:array, total:number}, timestamp}；data内层keys==['accounts','total']；无禁用字段 sessions/burners/items/count",
+        "[BEHAVIOR] GET /api/acquisition/collect-tasks/:taskId/videos → 200 + schema；data内层keys==['total','videos']；无禁用字段 items/results/count；非法 taskId → 404 TASK_NOT_FOUND；跨 tenant → 403 FORBIDDEN",
+        "[BEHAVIOR] acquisition_collect_videos 表存在且含 video_id/task_id/title/cover_url/published_at/video_url 列",
         "[BEHAVIOR] LeadsPage.tsx 不含 setAcqPhase/handleCollect/manualInput 采集面板代码",
+        "[BEHAVIOR] DouyinBurnerBindPage.tsx 文件已删除（废弃范围）",
+        "[BEHAVIOR] TaskDetailPage 含 video-url-fallback testid（降级路径）+ video-leads-list/no-leads-empty testid（leads 接缝）",
         "[ARTIFACT] apps/dashboard/src/pages/acquisition/AccountsPage.tsx 含 data-testid=bind-burner-btn",
         "[ARTIFACT] apps/dashboard/src/pages/acquisition/TaskDetailPage.tsx 含视频卡片渲染逻辑",
         "[ARTIFACT] AcquisitionHubPage 含 data-testid=hub-module-card（4 卡片）",

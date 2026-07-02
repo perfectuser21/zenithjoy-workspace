@@ -159,6 +159,54 @@ describe('[BEHAVIOR] LeadsPage 不含采集面板代码', () => {
   });
 });
 
+// ─── BEHAVIOR 5a: DouyinBurnerBindPage 已废弃（Step 12）───────────────────────
+
+describe('[BEHAVIOR] DouyinBurnerBindPage UI 废弃', () => {
+  it('DouyinBurnerBindPage.tsx 文件已删除（PRD 废弃范围内）', () => {
+    const candidates = [
+      'apps/dashboard/src/pages/acquisition/DouyinBurnerBindPage.tsx',
+      'apps/dashboard/src/pages/DouyinBurnerBindPage.tsx',
+    ];
+    const existing = candidates.filter(p => fileExists(p));
+    expect(existing, `以下文件仍存在应已删除: ${existing.join(',')}`).toHaveLength(0);
+  });
+});
+
+// ─── BEHAVIOR 5b: TaskDetailPage 降级路径 + leads 接缝 testid（Steps 6/7）────
+
+describe('[BEHAVIOR] TaskDetailPage 含降级 + leads testid', () => {
+  it('TaskDetailPage.tsx 含 video-url-fallback testid（cover_url=null 降级路径）', () => {
+    const src = readFile('apps/dashboard/src/pages/acquisition/TaskDetailPage.tsx');
+    expect(src).toContain('video-url-fallback');
+  });
+
+  it('TaskDetailPage.tsx 含 video-leads-list 或 no-leads-empty testid（Step 7 接缝）', () => {
+    const src = readFile('apps/dashboard/src/pages/acquisition/TaskDetailPage.tsx');
+    const hasLeadsList = src.includes('video-leads-list');
+    const hasEmpty = src.includes('no-leads-empty');
+    expect(hasLeadsList || hasEmpty, '缺少 video-leads-list 或 no-leads-empty testid').toBe(true);
+  });
+});
+
+// ─── BEHAVIOR 5c: 禁用字段 oracle 覆盖（items/count for burner-accounts; count for videos）──
+
+describe('[BEHAVIOR] acquisition.ts 响应不包含禁用字段名', () => {
+  it('acquisition.ts 响应构造不含 items 键赋值（burner-accounts 禁用字段）', () => {
+    const src = readFile('apps/api/src/routes/acquisition.ts');
+    expect(src).not.toMatch(/['"]\s*items\s*['"]\s*:/);
+  });
+
+  it('acquisition.ts 响应构造不含 count 键赋值（仅允许 total）', () => {
+    const src = readFile('apps/api/src/routes/acquisition.ts');
+    expect(src).not.toMatch(/['"]\s*count\s*['"]\s*:/);
+  });
+
+  it('acquisition.ts 响应构造不含 results 键赋值（videos 禁用字段）', () => {
+    const src = readFile('apps/api/src/routes/acquisition.ts');
+    expect(src).not.toMatch(/['"]\s*results\s*['"]\s*:/);
+  });
+});
+
 // ─── BEHAVIOR 5: navigation.config.ts 注册新路由 ──────────────────────────────
 
 describe('[BEHAVIOR] navigation.config.ts 含新页面路由', () => {
