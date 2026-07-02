@@ -120,10 +120,23 @@ async function crawlVideoComments(browser, videoUrl, taskId, apiBase) {
         const secUidMatch = profileLink.match(/\/user\/([^/?]+)/);
         const secUid = secUidMatch ? secUidMatch[1] : null;
 
-        const commentText = await item.$eval(
-          '[data-e2e="comment-item-content"], [class*="CommentContent"], [class*="comment-content"], [class*="commentItem"] span',
-          el => el.textContent?.trim() || ''
-        ).catch(() => '');
+        // 抖音评论文本无稳定 data-e2e/class，用启发式过滤叶子节点：
+        // 排除 昵称所在 a[href*="/user/"] 内的 span / 时间"·"/ 纯数字 / 操作文字
+        const commentText = await item.evaluate(el => {
+          const spans = el.querySelectorAll('span');
+          for (const span of spans) {
+            if (span.children.length > 0) continue;
+            const t = span.textContent?.trim() || '';
+            if (!t) continue;
+            if (span.closest('a[href*="/user/"]')) continue;
+            if (t.includes('·') || /^[\d]+[天月年小时前]/.test(t)) continue;
+            if (/^\d+$/.test(t)) continue;
+            if (['分享', '回复', '举报', '...', 'share', 'reply'].includes(t)) continue;
+            if (/^展开.+回复$/.test(t)) continue;
+            return t;
+          }
+          return '';
+        }).catch(() => '');
 
         if (nickname) {
           commenters.push({ sec_uid: secUid, nickname, comment_text: commentText });
