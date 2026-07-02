@@ -75,7 +75,9 @@ function resolveNodeExe(): string {
   );
 }
 
-/** Stage 2: 进入视频评论区，抓评论者，返回 commenters 数组 */
+const CRAWL_TIMEOUT_MS = 90_000;
+
+/** Stage 2: 进入视频评论区，抓评论者，返回 commenters 数组（90s 超时保护） */
 function spawnCommentCrawl(
   videoUrl: string,
   publishersDir: string,
@@ -87,13 +89,23 @@ function spawnCommentCrawl(
       process.stderr.write(`[line02] crawl-comments script not found: ${scriptPath}\n`);
       return resolve([]);
     }
-    // 用主号 Chrome（19222）—— 与 keyword-search 同一个已认证 session，burner(19225) 可能触发 CAPTCHA
     const child = spawn(
       nodeExe,
-      [scriptPath, videoUrl, 'unused', 'unused', '19222', '--stdout-only'],
+      [scriptPath, videoUrl, 'unused', 'unused', 'unused', '--stdout-only'],
       { env: { ...process.env }, stdio: ['ignore', 'pipe', 'pipe'] },
     );
     let lastLine = '';
+    let settled = false;
+    function finish(commenters: Array<{ sec_uid: string | null; nickname: string }>) {
+      if (settled) return;
+      settled = true;
+      resolve(commenters);
+    }
+    const timer = setTimeout(() => {
+      process.stderr.write(`[line02/crawl-comments] 超时 ${CRAWL_TIMEOUT_MS}ms，kill 子进程\n`);
+      child.kill('SIGKILL');
+      finish([]);
+    }, CRAWL_TIMEOUT_MS);
     child.stdout?.on('data', (chunk: Buffer) => {
       const lines = chunk.toString().split('\n').filter(Boolean);
       if (lines.length > 0) lastLine = lines[lines.length - 1];
@@ -102,6 +114,7 @@ function spawnCommentCrawl(
       process.stderr.write(`[line02/crawl-comments] ${chunk}`);
     });
     child.on('close', () => {
+      clearTimeout(timer);
       try {
         if (lastLine) {
           const result = JSON.parse(lastLine) as {
@@ -110,13 +123,13 @@ function spawnCommentCrawl(
             error?: string;
           };
           if (result.ok && Array.isArray(result.commenters)) {
-            return resolve(result.commenters);
+            return finish(result.commenters);
           }
         }
       } catch {
         // 忽略 JSON 解析错误
       }
-      resolve([]);
+      finish([]);
     });
   });
 }
