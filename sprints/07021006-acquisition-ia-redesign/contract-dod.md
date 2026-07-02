@@ -1,6 +1,3 @@
-contract_branch: cp-07021251-ws-4b921ddd-ws1
-sprint_dir: sprints/07021006-acquisition-ia-redesign
-
 ---
 skeleton: false
 journey_type: user_facing
