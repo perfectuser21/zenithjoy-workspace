@@ -4202,6 +4202,14 @@ agent_suite:
   product: AI员工
   note: "regression(2026-07-02, line02 Bug1): crawl 结果映射时 text 必须来自 comment_text，不能用 nickname；守卫 mapRawCommenters 生产路径（src/utils/comment-mapper.ts）"
 
+- id: sprint-07021006-migration-collect-videos
+  path: apps/api/src/db/migrations/20260702000000_create_acquisition_collect_videos.test.ts
+  type: unit
+  ci: L3
+  status: active
+  product: AI员工
+  note: "Sprint 07021006 migration 配对测试 — 静态验证 up/down 签名 + 7列 + zenithjoy schema 前缀（lint-test-pairing 要求）"
+
 - id: sprint-07021006-acquisition-ia-contract
   path: sprints/07021006-acquisition-ia-redesign/tests/acquisition-ia.test.ts
   type: integration
