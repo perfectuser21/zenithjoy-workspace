@@ -1,4 +1,4 @@
-# Sprint Contract Draft (Round 3)
+# Sprint Contract Draft (Round 4)
 
 ## Response Schema（推导来源: [NEW_PATTERN] — Brain API 不可达）
 
@@ -267,8 +267,10 @@ ON CONFLICT DO NOTHING;
 **可观测行为**: 点击/展开视频卡片后，渲染 leads 列表（`data-testid="video-leads-list"`）或空态（`data-testid="no-leads-empty"` 含"暂无评论"文字）；不得展示 500 错误或空白
 
 **验证命令（DB 层结构前提 + UI 接缝真验）**:
+gate-allow: domain/db-no-time-window information_schema.columns 是 DDL 元数据查询（schema 结构检查），非 domain 数据聚合/存在性探测，无时间窗需求
+
 ```bash
-# DB 层前提：acquisition_collect_videos 表关联列存在（Step 7 UI 依赖此 schema）
+# gate-allow: domain/db-no-time-window information_schema.columns 是 DDL 元数据查询，非 domain 数据聚合
 DB="${DATABASE_URL:-postgresql://localhost/zenithjoy_test}"
 COLS=$(psql "$DB" -t -c \
   "SELECT column_name FROM information_schema.columns WHERE table_schema='zenithjoy' AND table_name='acquisition_collect_videos'" \
@@ -324,8 +326,8 @@ CODE=$(curl -s -o /dev/null -w "%{http_code}" \
   -H "X-Tenant-Id: $TEST_TENANT_ID" \
   http://localhost:3000/api/acquisition/collect-tasks/00000000-0000-0000-0000-000000000000/videos)
 [ "$CODE" = "404" ] || { echo "FAIL: 非法 taskId 应返 404，实际=$CODE"; exit 1; }
-BODY=$(curl -sf -H "X-Tenant-Id: $TEST_TENANT_ID" \
-  http://localhost:3000/api/acquisition/collect-tasks/00000000-0000-0000-0000-000000000000/videos 2>/dev/null || echo '{}')
+BODY=$(curl -s -H "X-Tenant-Id: $TEST_TENANT_ID" \
+  "http://localhost:3000/api/acquisition/collect-tasks/00000000-0000-0000-0000-000000000000/videos")
 echo "$BODY" | jq -e '.error.code == "TASK_NOT_FOUND"' || { echo "FAIL: error.code 非 TASK_NOT_FOUND"; exit 1; }
 ```
 **硬阈值**: HTTP 404；`error.code == "TASK_NOT_FOUND"`
@@ -414,9 +416,12 @@ console.log('OK: DouyinBurnerBindPage 已废弃');
 <!-- GOLDEN_SMOKE_SKIP_IN_CI: true -->
 <!-- GOLDEN_SMOKE_TIMEOUT_MS: 30000 -->
 
+gate-allow: domain/db-no-time-window information_schema.columns 是 DDL 元数据查询（schema 结构检查），非 domain 数据聚合/存在性探测，无时间窗需求
+
 ```bash
 #!/bin/bash
 set -e
+# gate-allow: domain/db-no-time-window information_schema.columns 是 DDL 元数据查询，非 domain 数据聚合
 COLS=$(psql "$DATABASE_URL" -t -c \
   "SELECT column_name FROM information_schema.columns WHERE table_schema='zenithjoy' AND table_name='acquisition_collect_videos'" \
   2>/dev/null | tr -d ' ' | sort)
@@ -434,9 +439,12 @@ echo "✅ Scenario 1 通过：acquisition_collect_videos schema 正确"
 <!-- GOLDEN_SMOKE_SKIP_IN_CI: true -->
 <!-- GOLDEN_SMOKE_TIMEOUT_MS: 30000 -->
 
+gate-allow: domain/db-no-time-window SELECT id FROM tenants 是参考数据定点读（获取已有 tenant ID 用于后续 INSERT 操作），非 domain 数据聚合/存在性探测
+
 ```bash
 #!/bin/bash
 set -e
+# gate-allow: domain/db-no-time-window SELECT id FROM tenants 是参考数据定点读，非 domain 数据聚合
 # 验证 DB 约束允许 health=banned（与 N=10 disabled 是独立验证项）
 TEST_TID=$(psql "$DATABASE_URL" -t -c "SELECT id FROM zenithjoy.tenants LIMIT 1" | tr -d ' ')
 [ -n "$TEST_TID" ] || { echo "FAIL: 无 tenant，seed 未执行"; exit 1; }
@@ -473,9 +481,8 @@ set -e
 E2E_TENANT="e2e-tenant-00000000-0000-0000-0000-000000000001"
 RESP=$(curl -sf -H "X-Tenant-Id: $E2E_TENANT" http://localhost:3000/api/acquisition/burner-accounts) \
   || { echo "FAIL: burner-accounts 返回非 200"; exit 1; }
-TOTAL=$(echo "$RESP" | jq -r '.data.total')
-[ "$TOTAL" -ge 10 ] || { echo "FAIL: total=$TOTAL 未达到 10（seed 步骤是否执行？）"; exit 1; }
-echo "✅ Scenario 4 通过：API total=$TOTAL >= 10"
+echo "$RESP" | jq -e '.data.total >= 10' || { echo "FAIL: total 未达到 10（seed 步骤是否执行？actual=$(echo $RESP | jq .data.total)）"; exit 1; }
+echo "✅ Scenario 4 通过：API total >= 10"
 ```
 
 ---

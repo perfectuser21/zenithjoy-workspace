@@ -102,7 +102,7 @@ journey_type: user_facing
   Test: manual:bash -c '
     CODE=$(curl -s -o /dev/null -w "%{http_code}" -H "X-Tenant-Id: test-tenant-e2e" "http://localhost:3000/api/acquisition/collect-tasks/00000000-0000-0000-0000-000000000000/videos")
     [ "$CODE" = "404" ] || { echo "FAIL: 非法 taskId 应返 404，实际=$CODE"; exit 1; }
-    BODY=$(curl -sf -H "X-Tenant-Id: test-tenant-e2e" "http://localhost:3000/api/acquisition/collect-tasks/00000000-0000-0000-0000-000000000000/videos" 2>/dev/null || echo "{}")
+    BODY=$(curl -s -H "X-Tenant-Id: test-tenant-e2e" "http://localhost:3000/api/acquisition/collect-tasks/00000000-0000-0000-0000-000000000000/videos")
     echo "$BODY" | jq -e ".error.code == \"TASK_NOT_FOUND\"" || { echo "FAIL: error.code 非 TASK_NOT_FOUND"; exit 1; }
     echo OK'
   期望: OK
