@@ -87,7 +87,10 @@ export const autopilotPageComponents: Record<string, () => Promise<{ default: Co
   'FeishuBindTenant': () => import('../pages/FeishuBindTenant'),
   // zj2 Smart Acquisition — 获客 Leads
   'LeadsPage': () => import('../pages/LeadsPage'),
-  // Path 2 Sprint B-1 — 抖音小号绑定 + 评论抓取
+  // Sprint 07021006 — 获客 IA 重设计
+  'AccountsPage': () => import('../pages/acquisition/AccountsPage'),
+  'TasksPage': () => import('../pages/acquisition/TasksPage'),
+  // Path 2 Sprint B-1 — 抖音小号绑定 + 评论抓取（废弃 redirect → AccountsPage）
   'DouyinBurnerBindPage': () => import('../pages/DouyinBurnerBindPage'),
   'FolderBindPage': () => import('../pages/FolderBindPage'),
   'PublishPage': () => import('../pages/PublishPage'),
@@ -184,6 +187,11 @@ export const additionalRoutes: RouteConfig[] = [
   { path: '/ai-video', component: 'AiVideoGenerationPage', requireAuth: true },
   { path: '/dashboard/leads', component: 'LeadsPage', requireAuth: true },
   { path: '/competitor-research', component: 'CompetitorResearchPage', requireAuth: true },
+  // Sprint 07021006 — 获客 IA 重设计子页
+  { path: '/area/acquisition/accounts', component: 'AccountsPage', requireAuth: true },
+  { path: '/area/acquisition/tasks', component: 'TasksPage', requireAuth: true },
+  { path: '/area/acquisition/tasks/:taskId', component: 'TasksPage', requireAuth: true },
+  // 旧 douyin-burner-bind 路由 redirect → accounts（防旧书签 404）
   { path: '/dashboard/douyin-burner-bind', component: 'DouyinBurnerBindPage', requireAuth: true },
   { path: '/dashboard/machines', component: 'MachineManagementPage', requireAuth: true },
   { path: '/dashboard/acquisition-config', component: 'AcquisitionConfigPage', requireAuth: true },

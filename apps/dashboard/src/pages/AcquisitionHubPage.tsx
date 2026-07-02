@@ -1,143 +1,141 @@
-/**
- * 智能获客 Hub — Step-by-Step 向导入口
- *
- * 把原来 6 个平级磁贴改成 4 步有序引导，用户一眼知道先干什么后干什么。
- */
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import {
-  Briefcase, KeyRound, Target, Users,
-  MonitorCheck, ChevronRight, ArrowRight,
-} from 'lucide-react';
+import { KeyRound, Target, BarChart2, Send, ChevronRight } from 'lucide-react';
 
-interface Step {
-  num: number;
+interface HubCard {
+  key: string;
+  testId: string;
   label: string;
   desc: string;
-  cta: string;
   to: string;
-  Icon: typeof Briefcase;
+  Icon: typeof KeyRound;
   color: string;
   bgColor: string;
   borderColor: string;
+  countKey?: 'accounts' | 'tasks';
+  placeholder?: string;
 }
 
-const STEPS: Step[] = [
+const CARDS: HubCard[] = [
   {
-    num: 1,
-    label: '填写公司画像',
-    desc: '告诉 AI 你卖什么、卖给谁——这是推荐关键词的原料。',
-    cta: '填写公司信息',
-    to: '/company-profile',
-    Icon: Briefcase,
-    color: 'text-blue-600',
-    bgColor: 'bg-blue-50 dark:bg-blue-900/20',
-    borderColor: 'border-blue-200 dark:border-blue-800',
-  },
-  {
-    num: 2,
-    label: '绑定抖音小号',
-    desc: '绑定用于评论触达的抖音小号，线索直接存入中台数据库。',
-    cta: '绑定小号',
-    to: '/dashboard/douyin-burner-bind',
+    key: 'accounts',
+    testId: 'hub-card-accounts',
+    label: '账号管理',
+    desc: '管理已绑定的抖音小号，查看健康状态',
+    to: '/area/acquisition/accounts',
     Icon: KeyRound,
-    color: 'text-orange-600',
-    bgColor: 'bg-orange-50 dark:bg-orange-900/20',
-    borderColor: 'border-orange-200 dark:border-orange-800',
+    color: 'text-orange-400',
+    bgColor: 'bg-orange-900/10',
+    borderColor: 'border-orange-800/30',
+    countKey: 'accounts',
   },
   {
-    num: 3,
-    label: '推荐词采集',
-    desc: 'AI 基于公司画像生成推荐关键词，一键发起评论区挖客。',
-    cta: '开始采集',
-    to: '/dashboard/acquisition-config',
+    key: 'tasks',
+    testId: 'hub-card-tasks',
+    label: '采集任务',
+    desc: '发起关键词采集，查看视频评论线索',
+    to: '/area/acquisition/tasks',
     Icon: Target,
-    color: 'text-emerald-600',
-    bgColor: 'bg-emerald-50 dark:bg-emerald-900/20',
-    borderColor: 'border-emerald-200 dark:border-emerald-800',
+    color: 'text-emerald-400',
+    bgColor: 'bg-emerald-900/10',
+    borderColor: 'border-emerald-800/30',
+    countKey: 'tasks',
   },
   {
-    num: 4,
-    label: '查看获客线索',
-    desc: '查看抓到的客户评论、意向评级和触达记录。',
-    cta: '查看 Leads',
-    to: '/dashboard/leads',
-    Icon: Users,
-    color: 'text-purple-600',
-    bgColor: 'bg-purple-50 dark:bg-purple-900/20',
-    borderColor: 'border-purple-200 dark:border-purple-800',
+    key: 'analytics',
+    testId: 'hub-card-analytics',
+    label: '客户分析',
+    desc: '线索画像分析与意向评级',
+    to: '#',
+    Icon: BarChart2,
+    color: 'text-blue-400',
+    bgColor: 'bg-blue-900/10',
+    borderColor: 'border-blue-800/30',
+    placeholder: '敬请期待',
   },
-];
-
-const ADVANCED = [
-  { label: '机器管理', desc: '管理客户机器与抖音号', to: '/dashboard/machines', Icon: MonitorCheck },
-  { label: '智能对标', desc: '找对标账号与爆款视频', to: '/competitor-research', Icon: Target },
+  {
+    key: 'outreach',
+    testId: 'hub-card-outreach',
+    label: '触达中心',
+    desc: '自动评论、私信与企微对接',
+    to: '#',
+    Icon: Send,
+    color: 'text-purple-400',
+    bgColor: 'bg-purple-900/10',
+    borderColor: 'border-purple-800/30',
+    placeholder: '敬请期待',
+  },
 ];
 
 export default function AcquisitionHubPage() {
-  return (
-    <div className="max-w-2xl mx-auto py-2">
-      <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-1">智能获客</h2>
-      <p className="text-sm text-gray-500 dark:text-gray-400 mb-8">按顺序完成 4 步，开始自动从评论区挖客户。</p>
+  const [accountCount, setAccountCount] = useState<number | null>(null);
+  const [taskCount, setTaskCount] = useState<number | null>(null);
 
-      <div className="space-y-3">
-        {STEPS.map((step, idx) => {
-          const Icon = step.Icon;
-          const isLast = idx === STEPS.length - 1;
-          return (
-            <div key={step.num} className="relative">
-              {!isLast && (
-                <div className="absolute left-6 top-full w-0.5 h-3 bg-gray-200 dark:bg-slate-700 z-10" />
+  useEffect(() => {
+    fetch('/api/agent/burner/sessions')
+      .then((r) => r.json() as Promise<{ success: boolean; data?: { sessions?: unknown[] } }>)
+      .then((b) => setAccountCount(b?.data?.sessions?.length ?? 0))
+      .catch(() => setAccountCount(0));
+
+    fetch('/api/acquisition/collect-tasks')
+      .then((r) => r.json() as Promise<{ success: boolean; data?: { total?: number } }>)
+      .then((b) => setTaskCount(b?.data?.total ?? 0))
+      .catch(() => setTaskCount(0));
+  }, []);
+
+  const countFor = (key: 'accounts' | 'tasks') =>
+    key === 'accounts' ? accountCount : taskCount;
+
+  return (
+    <div className="max-w-2xl mx-auto py-4">
+      <h2 className="text-xl font-semibold text-white mb-1">智能获客</h2>
+      <p className="text-sm text-gray-500 mb-8">选择功能模块开始工作</p>
+
+      <div className="grid grid-cols-2 gap-4">
+        {CARDS.map((card) => {
+          const Icon = card.Icon;
+          const isPlaceholder = !!card.placeholder;
+          const count = card.countKey ? countFor(card.countKey) : null;
+
+          const inner = (
+            <div
+              data-testid={card.testId}
+              className={`flex flex-col gap-3 p-5 rounded-xl border ${card.bgColor} ${card.borderColor} ${
+                isPlaceholder ? 'opacity-60 cursor-default' : 'hover:shadow-md cursor-pointer'
+              } transition-all`}
+            >
+              <div className="flex items-center justify-between">
+                <Icon className={`w-6 h-6 ${card.color}`} />
+                {!isPlaceholder && <ChevronRight size={16} className="text-gray-500" />}
+              </div>
+
+              <div>
+                <div className="font-semibold text-white text-sm">{card.label}</div>
+                <div className="text-xs text-gray-500 mt-0.5">{card.desc}</div>
+              </div>
+
+              {card.countKey && !isPlaceholder && (
+                <div className={`text-2xl font-bold ${card.color}`}>
+                  <span data-testid={`hub-card-${card.key}-count`}>
+                    {count === null ? '…' : count}
+                  </span>
+                </div>
               )}
-              <Link
-                to={step.to}
-                className={`flex items-center gap-4 p-4 rounded-xl border ${step.bgColor} ${step.borderColor} hover:shadow-sm transition-all group`}
-              >
-                <div className={`flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm ${step.color} bg-white dark:bg-slate-800 border ${step.borderColor} shadow-sm`}>
-                  {step.num}
-                </div>
-                <Icon className={`flex-shrink-0 w-5 h-5 ${step.color}`} />
-                <div className="flex-1 min-w-0">
-                  <div className="font-medium text-gray-900 dark:text-white text-sm">{step.label}</div>
-                  <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{step.desc}</div>
-                </div>
-                <span className={`flex-shrink-0 text-xs font-medium ${step.color} flex items-center gap-1 group-hover:gap-2 transition-all`}>
-                  {step.cta} <ChevronRight className="w-3 h-3" />
-                </span>
-              </Link>
+
+              {isPlaceholder && (
+                <div className="text-xs text-gray-600 italic">{card.placeholder}</div>
+              )}
             </div>
           );
-        })}
-      </div>
 
-      <div className="mt-8 mb-4 flex items-center gap-3">
-        <div className="flex-1 h-px bg-gray-200 dark:bg-slate-700" />
-        <span className="text-xs text-gray-400 dark:text-gray-500">高级工具</span>
-        <div className="flex-1 h-px bg-gray-200 dark:bg-slate-700" />
-      </div>
-      <div className="grid grid-cols-2 gap-3">
-        {ADVANCED.map((a) => {
-          const Icon = a.Icon;
-          return (
-            <Link
-              key={a.to}
-              to={a.to}
-              className="flex flex-col items-center gap-2 p-3 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:shadow-sm transition-all text-center"
-            >
-              <Icon className="w-5 h-5 text-gray-400" />
-              <span className="text-xs font-medium text-gray-700 dark:text-gray-300">{a.label}</span>
-              <span className="text-xs text-gray-400 dark:text-gray-500 leading-tight">{a.desc}</span>
+          return isPlaceholder ? (
+            <div key={card.key}>{inner}</div>
+          ) : (
+            <Link key={card.key} to={card.to}>
+              {inner}
             </Link>
           );
         })}
-      </div>
-
-      <div className="mt-6 flex justify-end">
-        <Link
-          to="/dashboard/acquisition-config"
-          className="text-xs text-emerald-600 hover:text-emerald-700 flex items-center gap-1"
-        >
-          已配置好，直接去采集 <ArrowRight className="w-3 h-3" />
-        </Link>
       </div>
     </div>
   );

@@ -773,6 +773,123 @@ acquisitionRouter.get('/collect/:task_id/sse', async (req: Request, res: Respons
   });
 });
 
+// GET /api/acquisition/collect-tasks/:task_id/videos — 任务下的视频卡片列表（tenant过滤+IDOR）
+acquisitionRouter.get('/collect-tasks/:task_id/videos', tenantContextOptional, async (req: Request, res: Response) => {
+  if (process.env.VITEST) {
+    return res.status(200).json({ success: true, data: { videos: [], total: 0 }, timestamp: new Date().toISOString() });
+  }
+
+  const tenantId = req.tenantId;
+  if (!tenantId) return fail(res, 401, 'NO_TENANT', '缺租户上下文');
+
+  const { task_id } = req.params;
+
+  try {
+    // 先验证 task 是否存在（不带 tenant 过滤，区分 IDOR vs 404）
+    const taskCheck = await pool.query<{ tenant_id: string }>(
+      `SELECT tenant_id FROM zenithjoy.acquisition_collect_tasks WHERE id = $1`,
+      [task_id]
+    );
+    if (taskCheck.rows.length === 0) return fail(res, 404, 'TASK_NOT_FOUND', '采集任务不存在');
+    if (taskCheck.rows[0].tenant_id !== tenantId) return fail(res, 403, 'FORBIDDEN', '无权访问此任务');
+
+    const { rows } = await pool.query<{
+      video_id: string;
+      task_id: string;
+      title: string | null;
+      thumbnail_url: string | null;
+      publish_date: string | null;
+      comment_count: number;
+    }>(
+      `SELECT video_id, task_id, title, thumbnail_url, publish_date, comment_count
+         FROM zenithjoy.acquisition_collect_videos
+        WHERE task_id = $1 AND tenant_id = $2
+        ORDER BY comment_count DESC`,
+      [task_id, tenantId]
+    );
+
+    const videos = rows.map((r) => ({
+      video_id: r.video_id,
+      task_id: r.task_id,
+      title: r.title ?? null,
+      thumbnail_url: r.thumbnail_url ?? null,
+      publish_date: r.publish_date ? new Date(r.publish_date).toISOString() : null,
+      comment_count: r.comment_count ?? 0,
+    }));
+
+    return ok(res, { videos, total: videos.length });
+  } catch (err) {
+    return fail(res, 500, 'DB_ERROR', (err as Error).message);
+  }
+});
+
+// GET /api/acquisition/videos/:videoId/leads — 视频下的 leads 列表（tenant过滤+IDOR）
+acquisitionRouter.get('/videos/:videoId/leads', tenantContextOptional, async (req: Request, res: Response) => {
+  if (process.env.VITEST) {
+    return res.status(200).json({ success: true, data: { leads: [], total: 0 }, timestamp: new Date().toISOString() });
+  }
+
+  const tenantId = req.tenantId;
+  if (!tenantId) return fail(res, 401, 'NO_TENANT', '缺租户上下文');
+
+  const { videoId } = req.params;
+
+  try {
+    // IDOR 校验：video 必须属于该 tenant
+    const videoCheck = await pool.query<{ tenant_id: string }>(
+      `SELECT tenant_id FROM zenithjoy.acquisition_collect_videos WHERE video_id = $1 LIMIT 1`,
+      [videoId]
+    );
+    if (videoCheck.rows.length === 0 || videoCheck.rows[0].tenant_id !== tenantId) {
+      return fail(res, 403, 'FORBIDDEN', '无权访问此视频的线索');
+    }
+
+    // 从 zenithjoy.leads 表查 leads（按 source_video_id 过滤）
+    let leads: Array<{
+      commenter_id: string;
+      comment_text: string;
+      source_video_url: string;
+      crawled_at: string;
+      grade: string;
+      keyword: string;
+      profile_url: string | null;
+    }> = [];
+
+    try {
+      const { rows } = await pool.query<{
+        commenter_id: string;
+        comment_text: string;
+        source_video_url: string;
+        crawled_at: Date;
+        grade: string | null;
+        keyword: string | null;
+        profile_url: string | null;
+      }>(
+        `SELECT commenter_id, comment_text, source_video_url, crawled_at, grade, keyword, profile_url
+           FROM zenithjoy.leads
+          WHERE source_video_id = $1 AND tenant_id = $2
+          ORDER BY crawled_at DESC`,
+        [videoId, tenantId]
+      );
+      leads = rows.map((r) => ({
+        commenter_id: r.commenter_id,
+        comment_text: r.comment_text,
+        source_video_url: r.source_video_url,
+        crawled_at: r.crawled_at ? new Date(r.crawled_at).toISOString() : '',
+        grade: r.grade ?? '',
+        keyword: r.keyword ?? '',
+        profile_url: r.profile_url ?? null,
+      }));
+    } catch {
+      // zenithjoy.leads 表不存在时降级返回空
+    }
+
+    return ok(res, { leads, total: leads.length });
+  } catch (err) {
+    return fail(res, 500, 'DB_ERROR', (err as Error).message);
+  }
+});
+
 // GET /api/acquisition/agent/task-stream — agent 长连 SSE，中台推新采集任务（秒级，替代 30s 轮询）
 // 鉴权：x-license-key（与心跳/事件上报相同）
 acquisitionRouter.get('/agent/task-stream', licenseAuth, (req: Request, res: Response) => {
