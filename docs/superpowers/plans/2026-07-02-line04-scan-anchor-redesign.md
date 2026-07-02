@@ -797,10 +797,34 @@ def _commit_reply_success(last_preview: Dict[str, str], anchor_stall: Dict[str, 
     anchor_stall.pop(sender, None)
 ```
 
-主循环三处改动：
-1. **L2894**（初始化）：`last_content: dict[str, str] = {}` → `last_preview: dict[str, str] = {}`（连同注释更新为触发信号语义）。
-2. **L3111**：`unread = scan_unread(mw, last_content)` → `unread = scan_unread(mw, last_preview, record_skip=_skip_counter.record)`。
-3. **L3357**：删除 `last_content.pop(m["sender"], None)  # 删除防自回复风暴（存 reply 反而触发 Path2 截断误判）`，替换为：
+主循环改动（行号以函数名/内容定位，Task 1-4 后有漂移）：
+1. **初始化**：`last_content: dict[str, str] = {}` → `last_preview: dict[str, str] = {}`（连同注释更新为触发信号语义）。
+2. **scan 调用点**：`unread = scan_unread(mw, last_content)` → 传入 record_skip + roster 谓词（对抗审查 ISSUE-2 修复的接线）：
+
+```python
+            # roster 谓词：gate 拒绝的 sender（黑名单内部人员等）连开窗都不开——
+            # 开窗会清掉操作者本人的未读角标 + 烧光 SCAN_OPEN_BUDGET（对抗审查 ISSUE-2）。
+            _should_open = (
+                (lambda s: cs_config_gate.should_reply(_cs_cfg, s))
+                if _roster_gate_on else None
+            )
+            unread = scan_unread(mw, last_preview,
+                                 record_skip=_skip_counter.record,
+                                 should_open=_should_open)
+```
+
+   ⚠️ 前置核查：`_roster_gate_on` / `_cs_cfg` 必须在 scan 调用前已赋值（当前它们在 classify 循环附近计算）——若在 scan 之后才算，把计算段上移到 scan 调用前（保持每轮刷新语义），并确认无循环内依赖。
+3. **终态 skip 提交触发态**（ISSUE-2 的另一半：replied/dup 是终态，不提交会导致该会话每轮重开白烧预算）——在 `_skip_counter.record(_reason)` 之后加：
+
+```python
+                # 终态 skip（这批消息已回过/重复）→ 提交触发态，防每轮重开白烧预算；
+                # 暂态 skip（cooldown/rate_limited/sender_cooldown）不提交，冷却结束自动重试。
+                if _reason in ("replied", "dup", "roster_gate") and m.get("_preview_name"):
+                    last_preview[m["sender"]] = m["_preview_name"]
+                    _ANCHOR_STALL.pop(m["sender"], None)
+```
+
+4. **DELIVERED 提交**：删除 `last_content.pop(m["sender"], None)  # 删除防自回复风暴（存 reply 反而触发 Path2 截断误判）`，替换为：
 
 ```python
                     _commit_reply_success(
@@ -808,7 +832,7 @@ def _commit_reply_success(last_preview: Dict[str, str], anchor_stall: Dict[str, 
                         _read_session_preview(mw, m["sender"]))
 ```
 
-4. `grep -n "last_content" services/agent/wechat-rpa/listen_chat.py`——确认无残留引用（除注释更新）。
+5. `grep -n "last_content" services/agent/wechat-rpa/listen_chat.py`——确认无残留引用（除注释更新）。
 
 - [ ] **Step 4: 全量跑测试**（`python3 -m pytest tests/ -q`；`tests/test_reply_loop_purity.py` 若引用 last_content/pop 按新语义更新，不许削弱断言）
 - [ ] **Step 5: commit-2**（`feat(line04): 主循环事务提交——DELIVERED 后同步 last_preview，删 pop 护栏`；rsync 副本）
