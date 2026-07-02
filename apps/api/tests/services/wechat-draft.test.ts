@@ -93,8 +93,17 @@ describe('generateChatDraft — 标黑 / 群 → 不回（gating）', () => {
   });
 
   it('CRM 标黑 → status:skipped skip_reason:blacklisted，不烧 LLM', async () => {
-    // isContactBlacklisted 的 crm_customers 查询命中一行 → 标黑
-    mockQuery.mockResolvedValue({ rows: [{ x: 1 }], rowCount: 1 });
+    // 修后：isContactBlacklisted 的 crm_customers 检查需要 csWechatId 已知。
+    // cs_wechat_id 直传（优先于 agent_id 解析链），mock 的 wechat_cs_account_config 返回空 blacklist 数组，
+    // crm_customers 查询命中一行 → 标黑。
+    mockQuery.mockImplementation((sql: string) => {
+      const s = typeof sql === 'string' ? sql : '';
+      if (s.includes('wechat_cs_account_config')) {
+        return Promise.resolve({ rows: [{ blacklist: [] }], rowCount: 1 });
+      }
+      // crm_customers 命中 → 标黑
+      return Promise.resolve({ rows: [{ x: 1 }], rowCount: 1 });
+    });
 
     const result: any = await generateChatDraft({
       sender: '黑名单客户',
@@ -102,7 +111,8 @@ describe('generateChatDraft — 标黑 / 群 → 不回（gating）', () => {
       content: '你好',
       mode: 'auto',
       tenant_id: 'tenant-a',
-    });
+      cs_wechat_id: 'ci_cs_wx_bl',
+    } as any);
 
     expect(result.ok).toBe(true);
     expect(result.status).toBe('skipped');

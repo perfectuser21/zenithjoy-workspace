@@ -68,7 +68,7 @@ if [ "$DB_REACHABLE" -eq 1 ]; then
         ON CONFLICT (tenant_id, cs_wechat_id, contact)
         DO UPDATE SET identity='blacklist', deleted_at=NULL;" 2>/dev/null || echo "  (warn) 插入黑名单行失败，继续"
   RB=$(curl -s --max-time 30 -X POST -H 'Content-Type: application/json' \
-    -d "{\"sender\":\"黑名单客户CI\",\"wechat_id\":\"wxid_ci_bl\",\"content\":\"你好\",\"mode\":\"auto\",\"tenant_id\":\"$TENANT\"}" \
+    -d "{\"sender\":\"黑名单客户CI\",\"wechat_id\":\"wxid_ci_bl\",\"content\":\"你好\",\"mode\":\"auto\",\"tenant_id\":\"$TENANT\",\"cs_wechat_id\":\"$CSWX\"}" \
     "$API/api/wechat/draft-generate")
   echo "  resp: $RB"
   assert_eq "$(echo "$RB" | python3 -c 'import sys,json;print(json.load(sys.stdin).get("status",""))')" "skipped" "标黑 → status skipped"

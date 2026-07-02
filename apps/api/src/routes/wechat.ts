@@ -85,6 +85,8 @@ const DraftGenerateSchema = z.object({
   agent_id: z.string().optional(),
   // 机器指纹兜底：命中 service_agents(machine_id) / license_machines(machine_id) 即可反查租户。
   machine_id: z.string().optional(),
+  // 直接指定客服微信号（优先于 agent_id 解析链）。供 smoke/测试等已知 cs_wechat_id 的调用方直传。
+  cs_wechat_id: z.string().optional(),
 });
 
 /**

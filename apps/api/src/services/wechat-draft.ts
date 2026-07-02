@@ -252,6 +252,11 @@ export interface GenerateChatDraftParams {
    * 的人设/知识库 + 解析该客服微信号查 per-cs 黑名单；解不到回落全局（向后兼容）。
    */
   agent_id?: string;
+  /**
+   * 直接指定客服微信号（优先于 agent_id 解析链）。供测试/smoke 等已知 wechat_id 的调用方直传，
+   * 跳过 license_machines→service_agents 反查。普通 agent 调用传 agent_id 即可。
+   */
+  cs_wechat_id?: string;
 }
 
 export interface GenerateChatDraftResult {
@@ -309,13 +314,14 @@ async function isContactBlacklisted(
       console.warn('[wechat-draft] 读 per-cs 黑名单失败，按未标黑处理:', err);
     }
   }
-  if (tenantId) {
+  // cs_wechat_id 已知时按账号精确查（防 cs-A 黑名单污染 cs-B）；未知时跳过（宁可放行，不乱拦）。
+  if (tenantId && csWechatId) {
     try {
       const { rows } = await pool.query(
         `SELECT 1 FROM zenithjoy.crm_customers
-          WHERE tenant_id = $1 AND contact = $2 AND identity IN ('blacklist', 'internal') AND deleted_at IS NULL
+          WHERE tenant_id = $1 AND cs_wechat_id = $2 AND contact = $3 AND identity IN ('blacklist', 'internal') AND deleted_at IS NULL
           LIMIT 1`,
-        [tenantId, sender],
+        [tenantId, csWechatId, sender],
       );
       if (rows && rows.length > 0) return true;
     } catch (err) {
@@ -355,8 +361,9 @@ export async function generateChatDraft(
   // 的人设/知识库 + 解析客服微信号查 per-cs 黑名单。解不到 → null，回落全局（向后兼容）。
   const csConfig = agent_id ? await getCSConfigByAgentId(agent_id) : null;
   // S3 客服工作汇总：解析「处理本消息的客服微信号」给 in/out 落库盖身份章 + 查 per-cs 黑名单。
+  // 优先级：直传 cs_wechat_id（smoke 测试直传）> agent_id 解析链（普通 agent 调用）
   const csWechatId: string | null =
-    csConfig?.wechat_id ?? (agent_id ? await resolveCsWechatIdByAgentId(agent_id) : null);
+    params.cs_wechat_id ?? csConfig?.wechat_id ?? (agent_id ? await resolveCsWechatIdByAgentId(agent_id) : null);
 
   console.info(
     `[wechat-draft] generateChatDraft tenant_scope=${tenant_id ?? '<none>'} sender=${sender} is_group=${is_group}`,
