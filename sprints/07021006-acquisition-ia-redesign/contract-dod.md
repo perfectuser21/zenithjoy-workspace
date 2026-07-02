@@ -30,10 +30,13 @@ journey_type: user_facing
   Test: node -e "const c=require('fs').readFileSync('apps/api/src/routes/acquisition.ts','utf8');if(!c.includes('burner-accounts')||!c.includes('collect-tasks/:taskId/videos'))process.exit(1)"
 
 - [ ] [ARTIFACT] `apps/dashboard/src/pages/LeadsPage.tsx` 不含采集面板代码
-  Test: node -e "const c=require('fs').readFileSync('apps/dashboard/src/pages/LeadsPage.tsx','utf8');const forbidden=['setAcqPhase','handleCollect','manualInput','acqPhase'];const found=forbidden.filter(s=>c.includes(s));if(found.length>0){console.error('FAIL: 仍含采集面板代码',found);process.exit(1)}"
+  Test: node -e "const c=require('fs').readFileSync('apps/dashboard/src/pages/LeadsPage.tsx','utf8');const forbidden=['setAcqPhase','handleCollect','manualInput','acqPhase','collect/expand','collect/start'];const found=forbidden.filter(s=>c.includes(s));if(found.length>0){console.error('FAIL: 仍含采集面板代码',found);process.exit(1)}"
 
 - [ ] [ARTIFACT] `apps/dashboard/e2e/acquisition-ia-redesign.spec.ts` 存在且不含 `page.route(`
   Test: node -e "const c=require('fs').readFileSync('apps/dashboard/e2e/acquisition-ia-redesign.spec.ts','utf8');if(c.includes('page.route('))process.exit(1)"
+
+- [ ] [ARTIFACT] `.github/workflows/e2e-acquisition-ia-redesign.yml` 存在且符合规约（runs-on windows-latest；on.paths 含 acquisition pages + acquisition.ts；steps 调用 e2e-verify.ps1；不含 page.route(）
+  Test: node -e "const fs=require('fs');const c=fs.readFileSync('.github/workflows/e2e-acquisition-ia-redesign.yml','utf8');if(!c.includes('windows-latest')){console.error('FAIL: 缺 windows-latest');process.exit(1)}if(!c.includes('apps/dashboard/src/pages/acquisition')){console.error('FAIL: on.paths 缺 acquisition/**');process.exit(1)}if(!c.includes('apps/api/src/routes/acquisition.ts')){console.error('FAIL: on.paths 缺 acquisition.ts');process.exit(1)}if(!c.includes('e2e-verify.ps1')){console.error('FAIL: steps 未调用 e2e-verify.ps1');process.exit(1)}if(c.includes('page.route(')){console.error('FAIL: 含禁用 page.route(');process.exit(1)}console.log('OK')"
 
 - [ ] [ARTIFACT] DouyinBurnerBindPage 文件已删除（PRD 废弃范围）
   Test: node -e "const fs=require('fs');const p=['apps/dashboard/src/pages/acquisition/DouyinBurnerBindPage.tsx','apps/dashboard/src/pages/DouyinBurnerBindPage.tsx'];const ex=p.filter(f=>{try{fs.accessSync(f);return true;}catch{return false;}});if(ex.length>0){console.error('FAIL: 仍存在',ex);process.exit(1)}"
@@ -140,7 +143,7 @@ journey_type: user_facing
     node -e "
     const fs = require(\"fs\");
     const c = fs.readFileSync(\"apps/dashboard/src/pages/LeadsPage.tsx\", \"utf8\");
-    const forbidden = [\"setAcqPhase\", \"handleCollect\", \"manualInput\", \"collect/expand\", \"collect/start\"];
+    const forbidden = [\"setAcqPhase\", \"handleCollect\", \"manualInput\", \"acqPhase\", \"collect/expand\", \"collect/start\"];
     const found = forbidden.filter(s => c.includes(s));
     if (found.length > 0) { console.error(\"FAIL: 仍含采集面板代码:\", found); process.exit(1); }
     console.log(\"OK\");

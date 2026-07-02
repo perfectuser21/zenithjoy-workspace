@@ -1,4 +1,4 @@
-# Sprint Contract Draft (Round 4)
+# Sprint Contract Draft (Round 5)
 
 ## Response Schema（推导来源: [NEW_PATTERN] — Brain API 不可达）
 
@@ -363,6 +363,28 @@ if (found.length > 0) { console.error('FAIL: LeadsPage 仍含采集面板代码:
 " || exit 1
 ```
 **硬阈值**: LeadsPage.tsx 不含任何采集面板相关代码标识符
+
+---
+
+### Step 13: GHA workflow 文件规约满足（windows_cloud E2E 触发入口）
+**来源**: `[AI_ADDED]` — target_environment=windows_cloud 要求 GHA workflow 调用 e2e-verify.ps1；Reviewer Round 4 ci_workflow_alignment=6 明确要求补此约束
+
+**可观测行为**: `.github/workflows/e2e-acquisition-ia-redesign.yml` 存在，`runs-on: windows-latest`，`on.paths` 含 `apps/dashboard/src/pages/acquisition/**` 和 `apps/api/src/routes/acquisition.ts`，steps 调用 `e2e-verify.ps1`，不含 `page.route(`
+
+**验证命令**:
+```bash
+node -e "
+const fs = require('fs');
+const c = fs.readFileSync('.github/workflows/e2e-acquisition-ia-redesign.yml', 'utf8');
+if (!c.includes('windows-latest')) { console.error('FAIL: 缺 windows-latest'); process.exit(1); }
+if (!c.includes('apps/dashboard/src/pages/acquisition')) { console.error('FAIL: on.paths 缺 acquisition/**'); process.exit(1); }
+if (!c.includes('apps/api/src/routes/acquisition.ts')) { console.error('FAIL: on.paths 缺 acquisition.ts'); process.exit(1); }
+if (!c.includes('e2e-verify.ps1')) { console.error('FAIL: steps 未调用 e2e-verify.ps1'); process.exit(1); }
+if (c.includes('page.route(')) { console.error('FAIL: workflow 含禁用 page.route('); process.exit(1); }
+console.log('OK');
+" || exit 1
+```
+**硬阈值**: 文件存在且以上 5 项全通过
 
 ---
 
