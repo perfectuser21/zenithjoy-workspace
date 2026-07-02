@@ -97,15 +97,32 @@ function killPort(port) {
   } catch (_) {}
 }
 
+// 读取当前 Chrome 绑定的 user-data-dir（写在 profile lock file 里）
+function readActiveBurnerDir() {
+  const lockFile = require('os').tmpdir() + '/zj-burner-active-dir.txt';
+  try { return require('fs').readFileSync(lockFile, 'utf8').trim(); } catch (_) { return ''; }
+}
+function writeActiveBurnerDir(dir) {
+  const lockFile = require('os').tmpdir() + '/zj-burner-active-dir.txt';
+  try { require('fs').writeFileSync(lockFile, dir, 'utf8'); } catch (_) {}
+}
+
 async function spawnBurnerChrome(burnerDataDir, chromePath) {
-  // 复用已有 Chrome（若端口已在监听）
+  // 复用已有 Chrome（若端口已在监听且 profile 与当前期望一致）
   try {
     const b = await chromium.connectOverCDP(`http://localhost:${BURNER_CDP_PORT}`);
     if (b.contexts().length > 0) {
-      process.stderr.write(`[keyword-search-douyin] 复用已有 burner Chrome (${BURNER_CDP_PORT})\n`);
-      return { browser: b, spawned: false };
+      const activeDir = readActiveBurnerDir();
+      if (activeDir && activeDir === burnerDataDir) {
+        process.stderr.write(`[keyword-search-douyin] 复用已有 burner Chrome (${BURNER_CDP_PORT}, profile 匹配)\n`);
+        return { browser: b, spawned: false };
+      }
+      // profile 不匹配，关闭旧 Chrome 重开
+      process.stderr.write(`[keyword-search-douyin] profile 不匹配 (active="${activeDir}" want="${burnerDataDir}")，关闭旧 Chrome 重开\n`);
+      try { await b.close(); } catch (_) {}
+    } else {
+      await b.close();
     }
-    await b.close();
   } catch (_) {}
 
   killPort(BURNER_CDP_PORT);
@@ -128,6 +145,7 @@ async function spawnBurnerChrome(burnerDataDir, chromePath) {
   ], { detached: true, stdio: 'ignore' });
   child.unref();
 
+  writeActiveBurnerDir(burnerDataDir);
   process.stderr.write(`[keyword-search-douyin] Chrome PID=${child.pid}, 等待 CDP 就绪...\n`);
   for (let i = 0; i < 20; i++) {
     await sleep(750);
