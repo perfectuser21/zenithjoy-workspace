@@ -289,7 +289,7 @@ echo "$RESP" | jq -e '.data.total | type == "number"' || { echo "FAIL: total not
 # keys 完整性（有视频时）
 VIDEO_COUNT=$(echo "$RESP" | jq '.data.videos | length')
 if [ "$VIDEO_COUNT" -gt 0 ]; then
-  echo "$RESP" | jq -e '.data.videos[0] | has("video_id") and has("title") and has("thumbnail_url") and has("publish_date") and has("comment_count")' || { echo "FAIL: video entry missing fields"; exit 1; }
+  echo "$RESP" | jq -e '.data.videos[0] | has("video_id") and has("task_id") and has("title") and has("thumbnail_url") and has("publish_date") and has("comment_count")' || { echo "FAIL: video entry missing fields"; exit 1; }
 fi
 
 # 禁用字段反向检查
@@ -340,7 +340,7 @@ echo "✅ Step 6b IDOR + 404 验证通过"
 
 **验证命令**:
 ```bash
-# 先 seed 一条测试视频记录（让 leads 端点能走 200 路径）
+# 先 seed 一条测试视频记录 + 1条 lead（让 leads 端点能走 200 路径且 entry 字段可验）
 TEST_TASK_ID=$(curl -sf -X POST -H "Content-Type: application/json" \
   -H "X-Tenant-Id: $TEST_TENANT" \
   -d '{"keywords":["e2e-leads-test"]}' \
@@ -348,8 +348,12 @@ TEST_TASK_ID=$(curl -sf -X POST -H "Content-Type: application/json" \
 TEST_VIDEO_ID="e2e-video-leads-smoke"
 psql "$DATABASE_URL" -c "INSERT INTO zenithjoy.acquisition_collect_videos \
   (video_id, task_id, tenant_id, title, thumbnail_url, publish_date, comment_count) \
-  VALUES ('$TEST_VIDEO_ID', '$TEST_TASK_ID', '$TEST_TENANT', 'E2E Test Video', NULL, NULL, 0) \
-  ON CONFLICT (video_id) DO UPDATE SET task_id='$TEST_TASK_ID', tenant_id='$TEST_TENANT'"
+  VALUES ('$TEST_VIDEO_ID', '$TEST_TASK_ID', '$TEST_TENANT', 'E2E Test Video', NULL, NULL, 1) \
+  ON CONFLICT (video_id) DO UPDATE SET task_id='$TEST_TASK_ID', tenant_id='$TEST_TENANT', comment_count=1"
+psql "$DATABASE_URL" -c "INSERT INTO zenithjoy.leads \
+  (commenter_id, comment_text, source_video_url, source_video_id, tenant_id, keyword, crawled_at) \
+  VALUES ('e2e-uid-leads-smoke', 'E2E test comment', 'https://v.douyin.com/'||'$TEST_VIDEO_ID', '$TEST_VIDEO_ID', '$TEST_TENANT', 'e2e-leads-test', NOW()) \
+  ON CONFLICT DO NOTHING" 2>/dev/null || true
 
 # 测试 leads 端点 200 路径（已知视频 ID）
 RESP=$(curl -sf -H "X-Tenant-Id: $TEST_TENANT" "localhost:3000/api/acquisition/videos/$TEST_VIDEO_ID/leads")
@@ -357,6 +361,12 @@ echo "$RESP" | jq -e '.success == true' || { echo "FAIL: videos/:videoId/leads �
 echo "$RESP" | jq -e '.data | (has("leads") and has("total"))' || { echo "FAIL: missing leads/total"; exit 1; }
 echo "$RESP" | jq -e '.data.leads | type == "array"' || { echo "FAIL: leads not array"; exit 1; }
 echo "$RESP" | jq -e '.data.total | type == "number"' || { echo "FAIL: total not number"; exit 1; }
+
+# lead entry 字段检查（有 leads 时）
+LEADS_COUNT=$(echo "$RESP" | jq '.data.leads | length')
+if [ "$LEADS_COUNT" -gt 0 ]; then
+  echo "$RESP" | jq -e '.data.leads[0] | has("commenter_id") and has("comment_text") and has("source_video_url")' || { echo "FAIL: lead entry 缺少必填字段"; exit 1; }
+fi
 
 # 禁用字段反向检查（含 items/results）
 echo "$RESP" | jq -e '.data | has("comments") | not' || { echo "FAIL: 禁用字段 comments 出现"; exit 1; }
@@ -368,7 +378,7 @@ IDOR_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
   -H "X-Tenant-Id: $OTHER_TENANT" \
   "localhost:3000/api/acquisition/videos/$TEST_VIDEO_ID/leads")
 [ "$IDOR_CODE" = "403" ] || [ "$IDOR_CODE" = "401" ] || { echo "FAIL: leads IDOR 未拦截 CODE=$IDOR_CODE"; exit 1; }
-echo "✅ Step 7 videos/:videoId/leads 200路径 schema + 禁用字段 + IDOR 验证通过"
+echo "✅ Step 7 videos/:videoId/leads 200路径 schema + entry字段 + 禁用字段 + IDOR 验证通过"
 ```
 
 **硬阈值**: 200 + success=true + data.leads(array) + data.total(number)；无 comments/items/results；跨 tenant 返回 403/401
