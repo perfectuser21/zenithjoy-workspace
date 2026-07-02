@@ -207,6 +207,52 @@ describe('[BEHAVIOR] acquisition.ts 响应不包含禁用字段名', () => {
   });
 });
 
+// ─── BEHAVIOR R3-1: agent keyword-search-douyin 含视频元数据选择器（agent 范围补充）────
+
+describe('[BEHAVIOR] keyword-search-douyin 含视频元数据 CSS 选择器', () => {
+  it('keyword-search-douyin.ts 或 .cjs 含 title/cover/published 选择器逻辑', () => {
+    const candidates = [
+      'services/agent/src/handlers/keyword-search-douyin.ts',
+      'services/agent/src/handlers/keyword-search-douyin.cjs',
+    ];
+    const found = candidates.find(p => {
+      try {
+        const c = readFile(p);
+        return c.includes('title') || c.includes('cover') || c.includes('published');
+      } catch { return false; }
+    });
+    expect(found, '未找到含视频元数据选择器的 keyword-search-douyin 文件').toBeTruthy();
+  });
+});
+
+// ─── BEHAVIOR R3-2: Hub 实时数字 testid（accounts count + task count）────────
+
+describe('[BEHAVIOR] AcquisitionHubPage 前两张卡片含实时数字 testid', () => {
+  it('AcquisitionHubPage 含 hub-account-count testid（小号数显示）', () => {
+    const src = readFile('apps/dashboard/src/pages/acquisition/AcquisitionHubPage.tsx');
+    expect(src).toContain('hub-account-count');
+  });
+
+  it('AcquisitionHubPage 含 hub-task-count testid（任务数显示）', () => {
+    const src = readFile('apps/dashboard/src/pages/acquisition/AcquisitionHubPage.tsx');
+    expect(src).toContain('hub-task-count');
+  });
+});
+
+// ─── BEHAVIOR R3-3: TasksPage 失败任务 UI（error_code + 重新采集按钮）────────
+
+describe('[BEHAVIOR] TasksPage 失败任务行含 error_code + retry button testid', () => {
+  it('TasksPage.tsx 含 task-error-code testid（error_code 展示）', () => {
+    const src = readFile('apps/dashboard/src/pages/acquisition/TasksPage.tsx');
+    expect(src).toContain('task-error-code');
+  });
+
+  it('TasksPage.tsx 含 retry-collect-btn testid（重新采集按钮）', () => {
+    const src = readFile('apps/dashboard/src/pages/acquisition/TasksPage.tsx');
+    expect(src).toContain('retry-collect-btn');
+  });
+});
+
 // ─── BEHAVIOR 5: navigation.config.ts 注册新路由 ──────────────────────────────
 
 describe('[BEHAVIOR] navigation.config.ts 含新页面路由', () => {

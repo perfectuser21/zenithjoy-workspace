@@ -1,4 +1,4 @@
-# Sprint Contract Draft (Round 2)
+# Sprint Contract Draft (Round 3)
 
 ## Response Schema（推导来源: [NEW_PATTERN] — Brain API 不可达）
 
@@ -98,10 +98,13 @@ RESP1=$(curl -sf -H "X-Tenant-Id: $TEST_TENANT_ID" http://localhost:3000/api/acq
   || { echo "FAIL: burner-accounts 端点不可达"; exit 1; }
 echo "$RESP1" | jq -e '.success == true' || { echo "FAIL: success 非 true"; exit 1; }
 echo "$RESP1" | jq -e '.data.total | type == "number"' || { echo "FAIL: data.total 非数字"; exit 1; }
+RESP2=$(curl -sf -H "X-Tenant-Id: $TEST_TENANT_ID" http://localhost:3000/api/acquisition/collect-tasks) \
+  || { echo "FAIL: collect-tasks 端点不可达"; exit 1; }
+echo "$RESP2" | jq -e '.data.total | type == "number"' || { echo "FAIL: collect-tasks data.total 非数字"; exit 1; }
 END=$(date +%s)
 [ $((END-START)) -lt 5 ] || { echo "FAIL: 响应超时 $((END-START))s"; exit 1; }
 ```
-**硬阈值**: HTTP 200；`success:true`；`data.total` 为数字；耗时 < 5s
+**硬阈值**: HTTP 200；`success:true`；burner-accounts `data.total` 为数字；collect-tasks `data.total` 为数字；耗时 < 5s（两个并行 count 调用均通过）
 
 ---
 
@@ -121,8 +124,14 @@ echo "$RESP" | jq -e 'has("sessions") | not' || { echo "FAIL: 出现禁用字段
 echo "$RESP" | jq -e 'has("burners") | not' || { echo "FAIL: 出现禁用字段 burners"; exit 1; }
 echo "$RESP" | jq -e 'has("items") | not' || { echo "FAIL: 出现禁用字段 items"; exit 1; }
 echo "$RESP" | jq -e 'has("count") | not' || { echo "FAIL: 出现禁用字段 count"; exit 1; }
+# health 枚举值 oracle（PRD 明确 health: ok|expired|banned；unknown 为系统默认）
+ACCT_COUNT=$(echo "$RESP" | jq '.data.accounts | length')
+if [ "$ACCT_COUNT" -gt 0 ]; then
+  INVALID_HEALTH=$(echo "$RESP" | jq '[.data.accounts[].health] | map(select(. != "ok" and . != "expired" and . != "banned" and . != "unknown")) | length')
+  [ "$INVALID_HEALTH" = "0" ] || { echo "FAIL: accounts 含非法 health 枚举值（允许值: ok/expired/banned/unknown）"; exit 1; }
+fi
 ```
-**硬阈值**: HTTP 200；accounts 为 array；顶层 keys == `["data","success","timestamp"]`；data 内层 keys == `["accounts","total"]`；4个禁用字段均不存在
+**硬阈值**: HTTP 200；accounts 为 array；顶层 keys == `["data","success","timestamp"]`；data 内层 keys == `["accounts","total"]`；4个禁用字段均不存在；所有 account.health ∈ {ok, expired, banned, unknown}
 
 ---
 
@@ -215,8 +224,18 @@ echo "$RESP" | jq -e '.data | keys == ["total","videos"]' || { echo "FAIL: data 
 echo "$RESP" | jq -e 'has("results") | not' || { echo "FAIL: 出现禁用字段 results"; exit 1; }
 echo "$RESP" | jq -e 'has("items") | not' || { echo "FAIL: 出现禁用字段 items"; exit 1; }
 echo "$RESP" | jq -e 'has("count") | not' || { echo "FAIL: 出现禁用字段 count"; exit 1; }
+# video item 必填字段 oracle（PRD schema: video_id/video_url 必填，title/cover_url/published_at 可为 null）
+VID_COUNT=$(echo "$RESP" | jq '.data.videos | length')
+if [ "$VID_COUNT" -gt 0 ]; then
+  echo "$RESP" | jq -e '[.data.videos[] | has("video_id") and has("video_url")] | all' \
+    || { echo "FAIL: video item 缺少必填字段 video_id 或 video_url"; exit 1; }
+  echo "$RESP" | jq -e '[.data.videos[].video_id | type == "string"] | all' \
+    || { echo "FAIL: video_id 不全为 string"; exit 1; }
+  echo "$RESP" | jq -e '[.data.videos[].video_url | type == "string"] | all' \
+    || { echo "FAIL: video_url 不全为 string"; exit 1; }
+fi
 ```
-**硬阈值**: HTTP 200；videos 为 array；data 内层 keys == `["total","videos"]`；3个禁用字段均不存在；降级路径由 Playwright Test 5 接缝验证
+**硬阈值**: HTTP 200；videos 为 array；data 内层 keys == `["total","videos"]`；3个禁用字段均不存在；每个 video item 含 video_id(string) + video_url(string)；降级路径由 Playwright Test 5 接缝验证
 
 **Seed 步骤定义（e2e-verify.ps1 Step 2.6 执行的 SQL）**:
 ```sql
@@ -367,6 +386,16 @@ console.log('OK: DouyinBurnerBindPage 已废弃');
 " || exit 1
 ```
 **硬阈值**: 上述路径均不存在（文件已删除）
+
+---
+
+## Risks（已知风险 — Round 3 补充）
+
+| # | 风险描述 | 触发条件 | 缓解措施 |
+|---|---|---|---|
+| R1 | DB migration 冲突 | `acquisition_collect_videos` 表在 CI E2E DB 中已存在（上轮 sprint 残留）| migration 文件必须使用 `CREATE TABLE IF NOT EXISTS`；seed SQL 全部使用 `ON CONFLICT DO NOTHING` |
+| R2 | agent handler 回退 | `keyword-search-douyin.ts` 新视频元数据 CSS 选择器在抖音页面结构变化后失效 | 旧逻辑路径保留（fallback）；元数据失败时降级为 null（前端 `video-url-fallback` 处理，不中断主流程）|
+| R3 | windows-latest 无 psql 导致 seed 步骤失败 | GHA `windows-latest` 镜像未预装 psql（pg_client tools）| e2e-verify.ps1 Step 2.6 的 seed 失败已降级为 `Write-Warning`（非 throw），不阻断 E2E 主流程；同时 seed SQL 全部使用 `ON CONFLICT DO NOTHING` 确保重跑幂等 |
 
 ---
 
@@ -605,8 +634,8 @@ async function addSession(page: import('@playwright/test').Page) {
   ]);
 }
 
-// ── Test 1: Hub 4 卡片（Step 1）──
-test('Hub: 4 模块卡片结构可见', async ({ page }) => {
+// ── Test 1: Hub 4 卡片 + 实时数字（Step 1）──
+test('Hub: 4 模块卡片结构可见 + 前两卡片显示实时数字', async ({ page }) => {
   await addSession(page);
   await page.goto(`${BASE_URL}/area/acquisition`);
   await page.waitForLoadState('networkidle');
@@ -615,6 +644,14 @@ test('Hub: 4 模块卡片结构可见', async ({ page }) => {
   await expect(cards).toHaveCount(4, { timeout: 10000 });
   await expect(cards.nth(0)).toContainText('账号管理');
   await expect(cards.nth(1)).toContainText('采集任务');
+  // 实时数字断言（PRD：前两卡片显示本 tenant 实时数字——小号数/任务数）
+  const accountCount = page.locator('[data-testid="hub-account-count"]');
+  const taskCount = page.locator('[data-testid="hub-task-count"]');
+  await expect(accountCount).toBeVisible({ timeout: 10000 });
+  await expect(taskCount).toBeVisible({ timeout: 10000 });
+  // 数字内容为非空文本（数值，如 "0"/"10"）
+  await expect(accountCount).not.toBeEmpty();
+  await expect(taskCount).not.toBeEmpty();
 });
 
 // ── Test 2: AccountsPage 绑定按钮可见（Step 2）──
@@ -713,6 +750,26 @@ test('LeadsPage: 不含采集面板 UI', async ({ page }) => {
   await expect(
     page.locator('[data-testid="collection-panel"], [data-testid="keyword-input"]')
   ).toHaveCount(0, { timeout: 5000 });
+});
+
+// ── Test 9: 失败态任务 — error_code + 「重新采集」按钮（Step 8 接缝真验）──
+// Seed: e2e-verify.ps1 Step 2.6 已 INSERT e2e-task-00000000-0000-0000-0000-000000000002 (status='failed', error_code='SWEEP_TIMEOUT')
+test('TasksPage: 失败任务显示 error_code + 重新采集按钮', async ({ page }) => {
+  await addSession(page);
+  await page.goto(`${BASE_URL}/area/acquisition/tasks`);
+  await page.waitForLoadState('networkidle');
+  // 确认失败任务行可见（通过 error_code 或 failed 状态标记）
+  const failedRow = page.locator('[data-testid="task-row-failed"], [data-status="failed"]').first();
+  await expect(failedRow).toBeVisible({ timeout: 10000 });
+  await page.screenshot({ path: 'screenshots/12-tasks-failed-row.png' });
+  // error_code 文本可见（PRD: 展示 error_code）
+  const errorCode = page.locator('[data-testid="task-error-code"]').first();
+  await expect(errorCode).toBeVisible({ timeout: 5000 });
+  await expect(errorCode).not.toBeEmpty();
+  // 「重新采集」按钮可见（PRD: 「重新采集」复用 POST /collect/start）
+  const retryBtn = page.locator('[data-testid="retry-collect-btn"]').first();
+  await expect(retryBtn).toBeVisible({ timeout: 5000 });
+  await page.screenshot({ path: 'screenshots/13-tasks-retry-btn.png' });
 });
 ```
 

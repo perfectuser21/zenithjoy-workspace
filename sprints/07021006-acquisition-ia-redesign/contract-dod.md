@@ -38,6 +38,9 @@ journey_type: user_facing
 - [ ] [ARTIFACT] DouyinBurnerBindPage 文件已删除（PRD 废弃范围）
   Test: node -e "const fs=require('fs');const p=['apps/dashboard/src/pages/acquisition/DouyinBurnerBindPage.tsx','apps/dashboard/src/pages/DouyinBurnerBindPage.tsx'];const ex=p.filter(f=>{try{fs.accessSync(f);return true;}catch{return false;}});if(ex.length>0){console.error('FAIL: 仍存在',ex);process.exit(1)}"
 
+- [ ] [ARTIFACT] `services/agent/src/handlers/keyword-search-douyin.ts`（或 .cjs）含视频元数据 CSS 选择器（PRD 范围：agent 抓取补选择器）
+  Test: node -e "const fs=require('fs');const candidates=['services/agent/src/handlers/keyword-search-douyin.ts','services/agent/src/handlers/keyword-search-douyin.cjs'];const found=candidates.find(p=>{try{const c=fs.readFileSync(p,'utf8');return c.includes('title')||c.includes('cover')||c.includes('published');} catch{return false;}});if(!found){console.error('FAIL: keyword-search-douyin 无视频元数据选择器（title/cover/published）');process.exit(1)};console.log('OK: 选择器存在 in',found)"
+
 ---
 
 ## BEHAVIOR 条目（内嵌 manual:bash 命令，evaluator 直接执行）
@@ -165,13 +168,51 @@ journey_type: user_facing
     echo OK'
   期望: OK
 
+- [ ] [BEHAVIOR] account item health 枚举值 oracle — 所有 health 值 ∈ {ok, expired, banned, unknown}（PRD 明确 health: ok|expired|banned）
+  Test: manual:bash -c '
+    RESP=$(curl -sf -H "X-Tenant-Id: test-tenant-e2e" http://localhost:3000/api/acquisition/burner-accounts 2>/dev/null) || { echo "FAIL: 端点不可达"; exit 1; }
+    COUNT=$(echo "$RESP" | jq ".data.accounts | length")
+    if [ "$COUNT" -gt 0 ]; then
+      INVALID=$(echo "$RESP" | jq "[.data.accounts[].health] | map(select(. != \"ok\" and . != \"expired\" and . != \"banned\" and . != \"unknown\")) | length")
+      [ "$INVALID" = "0" ] || { echo "FAIL: 非法 health 枚举值数量=$INVALID（允许: ok/expired/banned/unknown）"; exit 1; }
+    fi
+    echo OK'
+  期望: OK
+
+- [ ] [BEHAVIOR] video item 必填字段 oracle — 每个 video 含 video_id(string) + video_url(string)（PRD schema）
+  Test: manual:bash -c '
+    DB="${DATABASE_URL:-postgresql://localhost/zenithjoy_test}"
+    TASK_ID=$(psql "$DB" -t -c "SELECT id FROM zenithjoy.acquisition_collect_tasks LIMIT 1" 2>/dev/null | tr -d " ") || TASK_ID=""
+    if [ -z "$TASK_ID" ]; then echo "SKIP: 无 collect_task seed"; exit 0; fi
+    TID=$(psql "$DB" -t -c "SELECT tenant_id FROM zenithjoy.acquisition_collect_tasks WHERE id='"'"'$TASK_ID'"'"'" 2>/dev/null | tr -d " ")
+    RESP=$(curl -sf -H "X-Tenant-Id: $TID" "http://localhost:3000/api/acquisition/collect-tasks/$TASK_ID/videos") || { echo "FAIL: 端点不可达"; exit 1; }
+    VID_COUNT=$(echo "$RESP" | jq ".data.videos | length")
+    if [ "$VID_COUNT" -gt 0 ]; then
+      echo "$RESP" | jq -e "[.data.videos[] | has(\"video_id\") and has(\"video_url\")] | all" || { echo "FAIL: video item 缺必填字段 video_id/video_url"; exit 1; }
+      echo "$RESP" | jq -e "[.data.videos[].video_id | type == \"string\"] | all" || { echo "FAIL: video_id 非 string"; exit 1; }
+      echo "$RESP" | jq -e "[.data.videos[].video_url | type == \"string\"] | all" || { echo "FAIL: video_url 非 string"; exit 1; }
+    fi
+    echo OK'
+  期望: OK
+
+- [ ] [BEHAVIOR] POST /api/acquisition/collect/start 响应含 task_id + status='pending'（PRD Step 5）
+  Test: manual:bash -c '
+    RESP=$(curl -sf -X POST http://localhost:3000/api/acquisition/collect/start \
+      -H "X-Tenant-Id: test-tenant-e2e" \
+      -H "Content-Type: application/json" \
+      -d '"'"'{"keywords":["behavior-oracle-test"]}'"'"' 2>/dev/null) || { echo "FAIL: collect/start 端点不可达"; exit 1; }
+    echo "$RESP" | jq -e ".data.task_id | type == \"string\"" || { echo "FAIL: data.task_id 非 string"; exit 1; }
+    echo "$RESP" | jq -e ".data.status == \"pending\"" || { echo "FAIL: data.status 非 pending"; exit 1; }
+    echo OK'
+  期望: OK
+
 ---
 
 ## BEHAVIOR:E2E 条目（user_facing Mode B — evaluator 跑 e2e-verify.ps1）
 
-- [ ] [BEHAVIOR:E2E] 完整 Golden Path UI 验证（Hub→账号管理→N=10 disabled→采集任务→视频卡片+降级→leads/空态→废弃页→LeadsPage无采集面板）
+- [ ] [BEHAVIOR:E2E] 完整 Golden Path UI 验证（Hub实时数字→账号管理→N=10 disabled→采集任务→视频卡片+降级→leads/空态→废弃页→LeadsPage无采集面板→失败任务UI）
   Screenshots:
-    - 01-hub-cards.png              期望：Hub 页面 4 张卡片（账号管理/采集任务/客户分析/触达中心）可见
+    - 01-hub-cards.png              期望：Hub 页面 4 张卡片（账号管理/采集任务/客户分析/触达中心）可见，前两张卡片有 hub-account-count / hub-task-count 数字元素
     - 02-accounts-page.png          期望：AccountsPage 加载，显示列表或空态+「绑定新小号」按钮
     - 03-tasks-page.png             期望：TasksPage 关键词输入框 + 「开始采集」按钮可见
     - 04-tasks-input-filled.png     期望：输入框已填「E2E测试关键词」
@@ -182,4 +223,6 @@ journey_type: user_facing
     - 09-video-leads-expanded.png   期望：展开卡片后显示 leads 列表或「暂无评论」空态（二者必显其一）
     - 10-bind-page-deprecated.png   期望：旧 DouyinBurnerBindPage 路由重定向或 404，旧 UI 不渲染
     - 11-leads-page.png             期望：LeadsPage 无「开始采集」/关键词输入等采集面板元素
+    - 12-tasks-failed-row.png       期望：TasksPage 失败任务行可见（status=failed 标记）
+    - 13-tasks-retry-btn.png        期望：失败任务行含 error_code 文本 + 「重新采集」按钮（非禁用）
   期望：所有截图与描述一致，Claude Read 图自验通过
