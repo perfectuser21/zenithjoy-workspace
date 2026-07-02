@@ -53,6 +53,17 @@ CM_SCRIPT="$AGENT_DIR/publishers/crawl-comments-douyin.cjs"
 [ -f "$CM_SCRIPT" ] || fail "缺少 crawl-comments-douyin.cjs: $CM_SCRIPT"
 ok "scripts 存在"
 
+# Windows 上 /dev/stdin 不存在，用临时文件传递 JSON 给 node -e
+TMP_JSON=$(mktemp)
+trap 'rm -f "$TMP_JSON"' EXIT
+
+# node_parse <json_string> <js_expr_returning_string>
+node_parse() {
+  local json="$1" expr="$2"
+  echo "$json" > "$TMP_JSON"
+  "$NODE_EXE" -e "const d=JSON.parse(require('fs').readFileSync(process.argv[1],'utf8')); process.stdout.write($expr)" "$TMP_JSON"
+}
+
 # ── 3. 关键词搜索 ─────────────────────────────────────────────────
 echo ""
 echo "=== Step 1: 关键词搜索 kw=$SMOKE_KW ==="
@@ -61,22 +72,18 @@ echo "$KW_OUT" | grep -v '^{' | head -20
 KW_JSON=$(echo "$KW_OUT" | grep '^{' | tail -1)
 [ -n "$KW_JSON" ] || fail "keyword-search 无 JSON 输出 — 完整输出: $KW_OUT"
 
-KW_OK=$(echo "$KW_JSON" | "$NODE_EXE" -e \
-  "const d=JSON.parse(require('fs').readFileSync('/dev/stdin','utf8')); process.stdout.write(String(d.ok))")
+KW_OK=$(node_parse "$KW_JSON" "String(d.ok)")
 [ "$KW_OK" = "true" ] || {
-  ERR=$(echo "$KW_JSON" | "$NODE_EXE" -e \
-    "const d=JSON.parse(require('fs').readFileSync('/dev/stdin','utf8')); process.stdout.write(d.error||'unknown')")
+  ERR=$(node_parse "$KW_JSON" "d.error||'unknown'")
   fail "keyword-search ok=false: $ERR"
 }
 
-VIDEO_COUNT=$(echo "$KW_JSON" | "$NODE_EXE" -e \
-  "const d=JSON.parse(require('fs').readFileSync('/dev/stdin','utf8')); process.stdout.write(String(d.video_urls.length))")
+VIDEO_COUNT=$(node_parse "$KW_JSON" "String(d.video_urls.length)")
 [ "$VIDEO_COUNT" -gt 0 ] 2>/dev/null \
   || fail "keyword-search 返回 0 个视频（可能触发验证码或 session 失效）"
 ok "关键词搜索: 找到 $VIDEO_COUNT 个视频"
 
-FIRST_VIDEO=$(echo "$KW_JSON" | "$NODE_EXE" -e \
-  "const d=JSON.parse(require('fs').readFileSync('/dev/stdin','utf8')); process.stdout.write(d.video_urls[0])")
+FIRST_VIDEO=$(node_parse "$KW_JSON" "d.video_urls[0]")
 echo "    第一个视频: $FIRST_VIDEO"
 
 # ── 4. 评论抓取 ───────────────────────────────────────────────────
@@ -89,16 +96,13 @@ echo "$CM_OUT" | grep -v '^{' | head -20
 CM_JSON=$(echo "$CM_OUT" | grep '^{' | tail -1)
 [ -n "$CM_JSON" ] || fail "crawl-comments 无 JSON 输出 — 完整输出: $CM_OUT"
 
-CM_OK=$(echo "$CM_JSON" | "$NODE_EXE" -e \
-  "const d=JSON.parse(require('fs').readFileSync('/dev/stdin','utf8')); process.stdout.write(String(d.ok))")
+CM_OK=$(node_parse "$CM_JSON" "String(d.ok)")
 [ "$CM_OK" = "true" ] || {
-  ERR=$(echo "$CM_JSON" | "$NODE_EXE" -e \
-    "const d=JSON.parse(require('fs').readFileSync('/dev/stdin','utf8')); process.stdout.write(d.error||'unknown')")
+  ERR=$(node_parse "$CM_JSON" "d.error||'unknown'")
   fail "crawl-comments ok=false: $ERR"
 }
 
-CM_COUNT=$(echo "$CM_JSON" | "$NODE_EXE" -e \
-  "const d=JSON.parse(require('fs').readFileSync('/dev/stdin','utf8')); process.stdout.write(String((d.commenters||[]).length))")
+CM_COUNT=$(node_parse "$CM_JSON" "String((d.commenters||[]).length)")
 [ "$CM_COUNT" -gt 0 ] 2>/dev/null \
   || fail "crawl-comments 返回 0 条评论（视频可能无评论或被限制）"
 ok "评论抓取: 找到 $CM_COUNT 条评论者"
@@ -106,15 +110,16 @@ ok "评论抓取: 找到 $CM_COUNT 条评论者"
 # ── 5. 评论者字段完整性校验 ───────────────────────────────────────
 echo ""
 echo "=== Step 3: 评论者字段完整性校验 ==="
+echo "$CM_JSON" > "$TMP_JSON"
 "$NODE_EXE" -e "
-const d = JSON.parse(process.argv[1]);
+const d = JSON.parse(require('fs').readFileSync(process.argv[1],'utf8'));
 const required = ['sec_uid','nickname','comment_text'];
 const first = d.commenters[0];
 for (const f of required) {
   if (!first[f]) { process.stderr.write('FAIL missing field: ' + f + '\n'); process.exit(1); }
 }
 process.stdout.write('ok\n');
-" "$CM_JSON" || fail "评论者缺少必要字段 (sec_uid / nickname / comment_text)"
+" "$TMP_JSON" || fail "评论者缺少必要字段 (sec_uid / nickname / comment_text)"
 ok "评论者字段完整: sec_uid / nickname / comment_text"
 
 echo ""
