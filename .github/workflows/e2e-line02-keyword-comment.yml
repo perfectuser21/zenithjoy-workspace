@@ -1,0 +1,73 @@
+name: E2E Line02 Keyword→Comment (ROG)
+
+# Line02 智能获客 — 关键词搜索 + 评论抓取 真机 smoke
+# 依赖 xian-rog self-hosted runner（含真实抖音 creator session）
+# 验证：keyword-search-douyin.cjs 找到视频 → crawl-comments-douyin.cjs 抓到评论者
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'services/agent/src/handlers/keyword-search-douyin.ts'
+      - 'services/agent/publishers/keyword-search-douyin.cjs'
+      - 'services/agent/publishers/crawl-comments-douyin.cjs'
+      - 'services/agent/src/index.ts'
+      - '.github/workflows/e2e-line02-keyword-comment.yml'
+      - '.github/workflows/scripts/smoke/line02-keyword-comment-smoke.sh'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'services/agent/src/handlers/keyword-search-douyin.ts'
+      - 'services/agent/publishers/keyword-search-douyin.cjs'
+      - 'services/agent/publishers/crawl-comments-douyin.cjs'
+      - 'services/agent/src/index.ts'
+      - '.github/workflows/e2e-line02-keyword-comment.yml'
+      - '.github/workflows/scripts/smoke/line02-keyword-comment-smoke.sh'
+  workflow_dispatch:
+    inputs:
+      smoke_kw:
+        description: '测试关键词'
+        default: '美甲'
+
+concurrency:
+  group: e2e-line02-keyword-comment-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  keyword-comment-smoke:
+    name: Line02 关键词→评论 smoke（xian-rog 真机）
+    runs-on: [self-hosted, wechat-capable]
+    timeout-minutes: 10
+
+    defaults:
+      run:
+        shell: bash
+
+    env:
+      SMOKE_KW: ${{ github.event.inputs.smoke_kw || '美甲' }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 确认 runner 环境
+        shell: pwsh
+        run: |
+          Write-Host "runner: $env:COMPUTERNAME"
+          Write-Host "USERPROFILE: $env:USERPROFILE"
+          Write-Host "APPDATA: $env:APPDATA"
+
+      - name: 定位最新 agent 安装目录
+        id: agent-dir
+        shell: bash
+        run: |
+          AGENT_DIR=$(ls -d "$USERPROFILE/Desktop/zenithjoy-agent-v"* 2>/dev/null \
+            | sort -t'v' -k2 -V | tail -1 || true)
+          echo "AGENT_DIR=$AGENT_DIR" >> "$GITHUB_ENV"
+          echo "agent_dir=$AGENT_DIR" >> "$GITHUB_OUTPUT"
+          echo "找到 agent 目录: $AGENT_DIR"
+          [ -n "$AGENT_DIR" ] && [ -d "$AGENT_DIR" ] || { echo "❌ 找不到 agent 目录"; exit 1; }
+
+      - name: Run line02 keyword→comment smoke
+        run: |
+          chmod +x .github/workflows/scripts/smoke/line02-keyword-comment-smoke.sh
+          bash .github/workflows/scripts/smoke/line02-keyword-comment-smoke.sh
