@@ -159,6 +159,92 @@ acquisitionRouter.get('/collect-tasks', tenantContextOptional, async (req: Reque
   }
 });
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+// GET /api/acquisition/collect-tasks/:id/videos — 该任务下的视频卡片列表（TasksPage 二级视图）
+acquisitionRouter.get('/collect-tasks/:id/videos', tenantContextOptional, async (req: Request, res: Response) => {
+  const tenantId = tenantOf(req, res);
+  if (!tenantId) return;
+  const taskId = req.params.id;
+  if (!UUID_RE.test(taskId)) return fail(res, 404, 'TASK_NOT_FOUND', '采集任务不存在');
+
+  try {
+    const taskRes = await pool.query(
+      `SELECT id FROM zenithjoy.acquisition_collect_tasks WHERE id = $1 AND tenant_id = $2`,
+      [taskId, tenantId]
+    );
+    if (taskRes.rows.length === 0) return fail(res, 404, 'TASK_NOT_FOUND', '采集任务不存在');
+
+    const { rows } = await pool.query<{
+      video_id: string;
+      task_id: string;
+      title: string | null;
+      thumbnail_url: string | null;
+      publish_date: Date | null;
+      comment_count: number;
+    }>(
+      `SELECT video_id, task_id, title, thumbnail_url, publish_date, comment_count
+         FROM zenithjoy.acquisition_collect_videos
+        WHERE task_id = $1 AND tenant_id = $2
+        ORDER BY created_at ASC`,
+      [taskId, tenantId]
+    );
+
+    const videos = rows.map((r) => ({
+      video_id: r.video_id,
+      task_id: r.task_id,
+      title: r.title,
+      thumbnail_url: r.thumbnail_url,
+      publish_date: r.publish_date ? new Date(r.publish_date).toISOString() : null,
+      comment_count: r.comment_count ?? 0,
+    }));
+
+    return ok(res, { videos, total: videos.length });
+  } catch (err) {
+    return fail(res, 500, 'DB_ERROR', (err as Error).message);
+  }
+});
+
+// GET /api/acquisition/videos/:videoId/leads — 某视频下命中的评论/leads（TasksPage 二级视图展开）
+acquisitionRouter.get('/videos/:videoId/leads', tenantContextOptional, async (req: Request, res: Response) => {
+  const tenantId = tenantOf(req, res);
+  if (!tenantId) return;
+  const videoId = req.params.videoId;
+
+  try {
+    const videoRes = await pool.query(
+      `SELECT video_id FROM zenithjoy.acquisition_collect_videos WHERE video_id = $1 AND tenant_id = $2`,
+      [videoId, tenantId]
+    );
+    if (videoRes.rows.length === 0) return fail(res, 404, 'VIDEO_NOT_FOUND', '视频不存在');
+
+    const { rows } = await pool.query<{
+      sec_uid: string | null;
+      nickname: string;
+      comment_text: string | null;
+      grade: string | null;
+    }>(
+      `SELECT sec_uid, nickname, comment_text, grade
+         FROM zenithjoy.acquisition_leads
+        WHERE tenant_id = $1 AND source_video_ids ? $2
+        ORDER BY created_at DESC`,
+      [tenantId, videoId]
+    );
+
+    const leads = rows.map((r) => ({
+      commenter_id: r.nickname ?? r.sec_uid ?? '',
+      comment_text: r.comment_text ?? '',
+      source_video_url: `https://www.douyin.com/video/${videoId}`,
+      grade: r.grade ?? '',
+      profile_url: r.sec_uid ? `https://www.douyin.com/user/${r.sec_uid}` : null,
+    }));
+
+    return ok(res, { leads, total: leads.length });
+  } catch (err) {
+    return fail(res, 500, 'DB_ERROR', (err as Error).message);
+  }
+});
+
 // Agent 轮询端点 — 返回待处理的 collect 任务（来自 collect/start 写入的 acquisition_collect_tasks）
 acquisitionRouter.get('/pending-collect-tasks', async (_req: Request, res: Response) => {
   if (process.env.VITEST) {
@@ -552,6 +638,9 @@ acquisitionRouter.post('/collect/report', async (req: Request, res: Response) =>
     partial_reason: partialReason,
     terminal,
     error_code: errorCode,
+    video_title: videoTitle,
+    thumbnail_url: thumbnailUrl,
+    publish_date: publishDate,
   } = req.body || {};
 
   if (!taskId) return fail(res, 400, 'MISSING_TASK_ID', '缺 task_id');
@@ -675,6 +764,20 @@ acquisitionRouter.post('/collect/report', async (req: Request, res: Response) =>
             updated_at     = NOW()
       WHERE id = $1`,
     [taskId, newStatus, newErrorCode, batch.length, checkpoint ? JSON.stringify(checkpoint) : null, !!terminal]
+  );
+
+  // 视频维度记录（video_title/thumbnail_url/publish_date 暂由 agent 端可选回填，未回填则留空占位）
+  await pool.query(
+    `INSERT INTO zenithjoy.acquisition_collect_videos
+       (video_id, task_id, tenant_id, title, thumbnail_url, publish_date, comment_count)
+     VALUES ($1, $2, $3, $4, $5, $6, $7)
+     ON CONFLICT (video_id) DO UPDATE
+       SET comment_count = zenithjoy.acquisition_collect_videos.comment_count + EXCLUDED.comment_count,
+           title          = COALESCE(EXCLUDED.title, zenithjoy.acquisition_collect_videos.title),
+           thumbnail_url  = COALESCE(EXCLUDED.thumbnail_url, zenithjoy.acquisition_collect_videos.thumbnail_url),
+           publish_date   = COALESCE(EXCLUDED.publish_date, zenithjoy.acquisition_collect_videos.publish_date),
+           updated_at     = NOW()`,
+    [videoId, taskId, tenantId, videoTitle ?? null, thumbnailUrl ?? null, publishDate ?? null, batch.length]
   );
 
   // SSE 推送状态变化（video_count+1 / lead_count_raw+batch.length 与 UPDATE 语句一致）

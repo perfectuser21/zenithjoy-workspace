@@ -117,6 +117,9 @@ export const autopilotPageComponents: Record<string, () => Promise<{ default: Co
   'AreaHubPage': () => import('../pages/AreaHubPage'),
   // 2026-06-29 — 智能获客 Step-by-Step 向导（替换 AreaHubPage 6 平级磁贴）
   'AcquisitionHubPage': () => import('../pages/AcquisitionHubPage'),
+  // Line02 IA 重设计 Track A — Hub 改 4 模块入口，账号管理 / 采集任务两级独立页
+  'AcquisitionAccountsPage': () => import('../pages/AcquisitionAccountsPage'),
+  'AcquisitionTasksPage': () => import('../pages/AcquisitionTasksPage'),
   // 2026-06-23 — 微信客服一键配置（选机器→填人设/白名单/开关→设置完毕，machine_id 自动）
   'CsOneClickSetupPage': () => import('../pages/CsOneClickSetupPage'),
   // 客服工作汇总（今天/昨天实时 + 历史任意一天日报含小结，已并入旧 S4 客服日报）
@@ -185,6 +188,10 @@ export const additionalRoutes: RouteConfig[] = [
   { path: '/dashboard/leads', component: 'LeadsPage', requireAuth: true },
   { path: '/competitor-research', component: 'CompetitorResearchPage', requireAuth: true },
   { path: '/dashboard/douyin-burner-bind', component: 'DouyinBurnerBindPage', requireAuth: true },
+  // Line02 IA 重设计 Track A — 账号管理 / 采集任务两级视图
+  { path: '/area/acquisition/accounts', component: 'AcquisitionAccountsPage', requireAuth: true },
+  { path: '/area/acquisition/tasks', component: 'AcquisitionTasksPage', requireAuth: true },
+  { path: '/area/acquisition/tasks/:taskId', component: 'AcquisitionTasksPage', requireAuth: true },
   { path: '/dashboard/machines', component: 'MachineManagementPage', requireAuth: true },
   { path: '/dashboard/acquisition-config', component: 'AcquisitionConfigPage', requireAuth: true },
   { path: '/company-profile', component: 'CompanyProfilePage', requireAuth: true },

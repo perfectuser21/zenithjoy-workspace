@@ -1,143 +1,125 @@
 /**
- * 智能获客 Hub — Step-by-Step 向导入口
+ * 智能获客 Hub — 4 模块入口（Line02 IA 重设计 Track A）
  *
- * 把原来 6 个平级磁贴改成 4 步有序引导，用户一眼知道先干什么后干什么。
+ * 把原来的 4 步向导改成 4 个并列模块卡片，账号管理/采集任务两个卡片显示
+ * 本 tenant 实时数字；客户分析/触达中心暂无内容实现，标注「即将上线」。
  */
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import {
-  Briefcase, KeyRound, Target, Users,
-  MonitorCheck, ChevronRight, ArrowRight,
-} from 'lucide-react';
+import { KeyRound, Target, BarChart2, Send } from 'lucide-react';
 
-interface Step {
-  num: number;
+interface Module {
   label: string;
   desc: string;
-  cta: string;
   to: string;
-  Icon: typeof Briefcase;
+  Icon: typeof KeyRound;
   color: string;
   bgColor: string;
   borderColor: string;
+  comingSoon?: boolean;
+  countKey?: 'accounts' | 'tasks';
 }
 
-const STEPS: Step[] = [
+const MODULES: Module[] = [
   {
-    num: 1,
-    label: '填写公司画像',
-    desc: '告诉 AI 你卖什么、卖给谁——这是推荐关键词的原料。',
-    cta: '填写公司信息',
-    to: '/company-profile',
-    Icon: Briefcase,
-    color: 'text-blue-600',
-    bgColor: 'bg-blue-50 dark:bg-blue-900/20',
-    borderColor: 'border-blue-200 dark:border-blue-800',
-  },
-  {
-    num: 2,
-    label: '绑定抖音小号',
-    desc: '绑定用于评论触达的抖音小号，线索直接存入中台数据库。',
-    cta: '绑定小号',
-    to: '/dashboard/douyin-burner-bind',
+    label: '账号管理',
+    desc: '管理用于评论触达的抖音小号。',
+    to: '/area/acquisition/accounts',
     Icon: KeyRound,
     color: 'text-orange-600',
     bgColor: 'bg-orange-50 dark:bg-orange-900/20',
     borderColor: 'border-orange-200 dark:border-orange-800',
+    countKey: 'accounts',
   },
   {
-    num: 3,
-    label: '推荐词采集',
-    desc: 'AI 基于公司画像生成推荐关键词，一键发起评论区挖客。',
-    cta: '开始采集',
-    to: '/dashboard/acquisition-config',
+    label: '采集任务',
+    desc: '发起关键词采集，查看视频+评论明细。',
+    to: '/area/acquisition/tasks',
     Icon: Target,
     color: 'text-emerald-600',
     bgColor: 'bg-emerald-50 dark:bg-emerald-900/20',
     borderColor: 'border-emerald-200 dark:border-emerald-800',
+    countKey: 'tasks',
   },
   {
-    num: 4,
-    label: '查看获客线索',
-    desc: '查看抓到的客户评论、意向评级和触达记录。',
-    cta: '查看 Leads',
-    to: '/dashboard/leads',
-    Icon: Users,
+    label: '客户分析',
+    desc: '对采集到的 leads 做画像与意向分析。',
+    to: '/dashboard/acquisition-config',
+    Icon: BarChart2,
     color: 'text-purple-600',
     bgColor: 'bg-purple-50 dark:bg-purple-900/20',
     borderColor: 'border-purple-200 dark:border-purple-800',
+    comingSoon: true,
+  },
+  {
+    label: '触达中心',
+    desc: '把 leads 指派给小号，按频控排期私信触达。',
+    to: '/dashboard/acquisition-config',
+    Icon: Send,
+    color: 'text-blue-600',
+    bgColor: 'bg-blue-50 dark:bg-blue-900/20',
+    borderColor: 'border-blue-200 dark:border-blue-800',
+    comingSoon: true,
   },
 ];
 
-const ADVANCED = [
-  { label: '机器管理', desc: '管理客户机器与抖音号', to: '/dashboard/machines', Icon: MonitorCheck },
-  { label: '智能对标', desc: '找对标账号与爆款视频', to: '/competitor-research', Icon: Target },
-];
-
 export default function AcquisitionHubPage() {
+  const [counts, setCounts] = useState<{ accounts: number | null; tasks: number | null }>({ accounts: null, tasks: null });
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const [sr, tr] = await Promise.all([
+          fetch('/api/agent/burner/sessions'),
+          fetch('/api/acquisition/collect-tasks'),
+        ]);
+        const [sj, tj] = await Promise.all([sr.json(), tr.json()]);
+        if (cancelled) return;
+        setCounts({
+          accounts: Array.isArray(sj?.data?.sessions) ? sj.data.sessions.length : null,
+          tasks: typeof tj?.data?.total === 'number' ? tj.data.total : null,
+        });
+      } catch {
+        // 计数拉取失败不影响卡片可用，静默降级为无数字
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
   return (
-    <div className="max-w-2xl mx-auto py-2">
+    <div className="max-w-3xl mx-auto py-2">
       <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-1">智能获客</h2>
-      <p className="text-sm text-gray-500 dark:text-gray-400 mb-8">按顺序完成 4 步，开始自动从评论区挖客户。</p>
+      <p className="text-sm text-gray-500 dark:text-gray-400 mb-8">对标找客、抓评论挖客、触达，把流量变成线索。</p>
 
-      <div className="space-y-3">
-        {STEPS.map((step, idx) => {
-          const Icon = step.Icon;
-          const isLast = idx === STEPS.length - 1;
-          return (
-            <div key={step.num} className="relative">
-              {!isLast && (
-                <div className="absolute left-6 top-full w-0.5 h-3 bg-gray-200 dark:bg-slate-700 z-10" />
-              )}
-              <Link
-                to={step.to}
-                className={`flex items-center gap-4 p-4 rounded-xl border ${step.bgColor} ${step.borderColor} hover:shadow-sm transition-all group`}
-              >
-                <div className={`flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm ${step.color} bg-white dark:bg-slate-800 border ${step.borderColor} shadow-sm`}>
-                  {step.num}
-                </div>
-                <Icon className={`flex-shrink-0 w-5 h-5 ${step.color}`} />
-                <div className="flex-1 min-w-0">
-                  <div className="font-medium text-gray-900 dark:text-white text-sm">{step.label}</div>
-                  <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{step.desc}</div>
-                </div>
-                <span className={`flex-shrink-0 text-xs font-medium ${step.color} flex items-center gap-1 group-hover:gap-2 transition-all`}>
-                  {step.cta} <ChevronRight className="w-3 h-3" />
-                </span>
-              </Link>
-            </div>
-          );
-        })}
-      </div>
-
-      <div className="mt-8 mb-4 flex items-center gap-3">
-        <div className="flex-1 h-px bg-gray-200 dark:bg-slate-700" />
-        <span className="text-xs text-gray-400 dark:text-gray-500">高级工具</span>
-        <div className="flex-1 h-px bg-gray-200 dark:bg-slate-700" />
-      </div>
-      <div className="grid grid-cols-2 gap-3">
-        {ADVANCED.map((a) => {
-          const Icon = a.Icon;
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        {MODULES.map((m) => {
+          const Icon = m.Icon;
+          const count = m.countKey ? counts[m.countKey] : null;
           return (
             <Link
-              key={a.to}
-              to={a.to}
-              className="flex flex-col items-center gap-2 p-3 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:shadow-sm transition-all text-center"
+              key={m.label}
+              to={m.to}
+              className={`relative flex flex-col gap-3 p-5 rounded-xl border ${m.bgColor} ${m.borderColor} hover:shadow-sm transition-all`}
             >
-              <Icon className="w-5 h-5 text-gray-400" />
-              <span className="text-xs font-medium text-gray-700 dark:text-gray-300">{a.label}</span>
-              <span className="text-xs text-gray-400 dark:text-gray-500 leading-tight">{a.desc}</span>
+              {m.comingSoon && (
+                <span className="absolute top-3 right-3 text-xs font-medium text-gray-400 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-full px-2 py-0.5">
+                  即将上线
+                </span>
+              )}
+              <div className="flex items-center gap-3">
+                <div className={`flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center ${m.color} bg-white dark:bg-slate-800 border ${m.borderColor} shadow-sm`}>
+                  <Icon className="w-5 h-5" />
+                </div>
+                <div className="font-medium text-gray-900 dark:text-white">{m.label}</div>
+              </div>
+              <p className="text-sm text-gray-500 dark:text-gray-400">{m.desc}</p>
+              {count !== null && (
+                <div className={`text-2xl font-semibold ${m.color}`}>{count}</div>
+              )}
             </Link>
           );
         })}
-      </div>
-
-      <div className="mt-6 flex justify-end">
-        <Link
-          to="/dashboard/acquisition-config"
-          className="text-xs text-emerald-600 hover:text-emerald-700 flex items-center gap-1"
-        >
-          已配置好，直接去采集 <ArrowRight className="w-3 h-3" />
-        </Link>
       </div>
     </div>
   );
