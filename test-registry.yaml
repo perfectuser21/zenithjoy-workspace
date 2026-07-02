@@ -4201,3 +4201,19 @@ agent_suite:
   status: active
   product: AI员工
   note: "regression(2026-07-02, line02 Bug1): crawl 结果映射时 text 必须来自 comment_text，不能用 nickname；守卫 mapRawCommenters 生产路径（src/utils/comment-mapper.ts）"
+
+- id: sprint-07021006-acquisition-ia-contract
+  path: sprints/07021006-acquisition-ia-redesign/tests/acquisition-ia.test.ts
+  type: integration
+  ci: L3
+  status: active
+  product: AI员工
+  note: "Sprint 07021006 合同 TDD Red/Green — 获客 IA 重设计（AcquisitionHubPage 4模块 + AccountsPage + TasksPage 两级 + 2新端点 + collect_videos表）"
+
+- id: sprint-07021006-acquisition-ia-e2e
+  path: apps/dashboard/e2e/acquisition-ia.spec.ts
+  type: e2e
+  ci: L4
+  status: active
+  product: AI员工
+  note: "Sprint 07021006 获客 IA 重设计 Playwright E2E（8个test，无 page.route()，windows_cloud Mode B）"
