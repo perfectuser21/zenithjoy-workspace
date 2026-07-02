@@ -336,3 +336,21 @@ def test_should_open_default_none_allows_all(monkeypatch):
     mw = _MW([_mk("老板\n[1条] \n盯一下\n14:40\n")])
     out = listen_chat.scan_unread(mw, {})
     assert [m["sender"] for m in out] == ["老板"]
+
+
+# ── _anchor flag：锚点 trailing 消息标记，绕过长期 replied 去重（同内容重发） ────────
+
+def test_anchor_emitted_message_has_anchor_flag(monkeypatch):
+    """锚点 trailing 产生的消息必须带 '_anchor': True 标记——用于 classify_unread
+    绕过长期 replied 去重，防止同内容重发（客户重发相同文本）被永久静默。"""
+    monkeypatch.setattr(listen_chat, "_open_chat", lambda mw, it, s, expect_content="": True)
+    monkeypatch.setattr(listen_chat, "read_chat_bubbles", lambda mw: [
+        {"text": "已回复过的内容", "direction": "outgoing"},
+        {"text": "客户重发相同内容", "direction": "incoming"},
+    ])
+    mw = _MW([_mk("客户A\n[1条] \n客户重发相同内容\n14:43\n")])
+    out = listen_chat.scan_unread(mw, {})
+    assert len(out) == 1
+    assert out[0].get("_anchor") is True, (
+        "锚点 trailing 消息缺 '_anchor': True —— 同内容重发会被 replied 永久静默"
+    )

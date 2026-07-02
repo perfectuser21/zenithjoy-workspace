@@ -72,3 +72,17 @@ def test_roster_gate_computed_before_scan():
         f"_roster_gate_on 赋值（index {gate_idx}）必须在 scan 调用（index {scan_idx}）之前，"
         "否则 should_open 谓词拿不到本轮 gate"
     )
+
+
+def test_classify_already_replied_bypasses_anchor():
+    """classify_unread 调用里 already_replied 必须带 'and not m.get(\"_anchor\")' 旁路。
+
+    若缺失：同内容重发（客户重发相同文本）在 replied set 里会被永久静默不回，
+    因为 (sender, content) key 已存在 → already_replied=True → 终态 skip → 触发态被消费。
+    锚点机制已保证只回最后 outgoing 之后的 incoming，_anchor 旁路是安全的。
+    """
+    src = _source()
+    assert 'and not m.get("_anchor")' in src, (
+        'classify_unread 调用缺 \'and not m.get("_anchor")\' 旁路 —— '
+        "同内容重发会被 replied 永久静默"
+    )

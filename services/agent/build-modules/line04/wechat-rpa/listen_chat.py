@@ -649,7 +649,7 @@ def scan_unread(mw: Any, last_preview: Optional[Dict[str, str]] = None,
         msgs, empty_read = _read_trailing_for(mw, c, record_skip=record_skip)
         if msgs:
             out.append({"sender": c["sender"], "content": aggregate_messages(msgs),
-                        "_item": c["_item"], "_preview_name": c["name"]})
+                        "_item": c["_item"], "_preview_name": c["name"], "_anchor": True})
             _ANCHOR_STALL[c["sender"]] = _ANCHOR_STALL.get(c["sender"], 0) + 1
             if _ANCHOR_STALL[c["sender"]] >= ANCHOR_STALL_LIMIT:
                 if record_skip is not None:
@@ -3458,7 +3458,7 @@ def run_real_listen(args: argparse.Namespace) -> int:
                     roster_should_reply=(not _roster_gate_on)
                     or cs_config_gate.should_reply(_cs_cfg, m["sender"]),
                     in_sender_cooldown=(now - sender_reply_cooldown.get(m["sender"], 0) < SENDER_COOLDOWN),
-                    already_replied=(key in replied),
+                    already_replied=(key in replied) and not m.get("_anchor"),
                     in_fail_cooldown=(
                         key in reply_failed_at and now - reply_failed_at[key] < REPLY_FAIL_COOLDOWN
                     ),
