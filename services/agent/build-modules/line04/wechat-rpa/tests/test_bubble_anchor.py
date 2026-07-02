@@ -25,7 +25,8 @@ def _b(text, direction):
 
 def test_pure_time_is_system():
     for t in ["14:32", "9:05", "昨天 14:32", "前天 08:00", "星期二 09:05",
-              "周三 21:00", "2026年7月1日 14:32", "7月1日 14:32"]:
+              "周三 21:00", "2026年7月1日 14:32", "7月1日 14:32",
+              "下午 2:32", "昨天 下午2:32", "上午 9:05"]:
         assert listen_chat._is_system_bubble(t), t
 
 
@@ -35,7 +36,8 @@ def test_recall_and_pat_are_system():
 
 
 def test_normal_messages_not_system():
-    for t in ["在吗", "什么价格", "价格 14:32 前有效", "我 7月1日 到货可以吗", "[图片]"]:
+    for t in ["在吗", "什么价格", "价格 14:32 前有效", "我 7月1日 到货可以吗", "[图片]",
+              "我下午 2:32 到"]:
         assert not listen_chat._is_system_bubble(t), t
 
 
