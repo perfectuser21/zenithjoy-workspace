@@ -176,6 +176,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # run 块必须全 ASCII：Windows PowerShell 5.1 按 GBK 解析 runner 写出的 UTF-8 临时
+      # .ps1，中文字符串会吞引号 → ParserError（2026-07-02 首跑实锤）。中文只放 YAML 注释。
       - name: Run bubble gate in session 1 via PsExec
         shell: powershell
         run: |
@@ -194,14 +196,14 @@ jobs:
           & C:\Users\asus\PSTools\PsExec64.exe -i 1 -accepteula -w C:\Users\Public $bat
           if (-not (Test-Path $outJson)) {
             if (Test-Path $outLog) { Get-Content $outLog }
-            Write-Error 'gate 没产出结果 JSON（脚本崩溃/PsExec 失败）'
+            Write-Error 'bubble gate produced no result JSON (script crash or PsExec failure)'
             exit 1
           }
           $j = Get-Content $outJson -Raw -Encoding utf8 | ConvertFrom-Json
           Write-Host ("bubbles=" + $j.bubble_count + " marker_found=" + $j.marker_found + " marker_outgoing=" + $j.marker_outgoing)
           if (-not $j.ok) {
             if (Test-Path $outLog) { Get-Content $outLog }
-            Write-Error ("真机气泡 gate FAILED: " + $j.err)
+            Write-Error ("bubble gate FAILED: " + $j.err)
             exit 1
           }
-          Write-Host "真机气泡 gate PASS"
+          Write-Host "bubble gate PASS"
