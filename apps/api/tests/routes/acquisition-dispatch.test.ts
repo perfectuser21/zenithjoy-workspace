@@ -28,7 +28,7 @@ import {
 // 内存 fake pool — 只支持 service 用到的几类查询，按 SQL 关键字派发
 // ─────────────────────────────────────────────────────────────────────────
 interface Lead { id: string; tenant_id: string; sec_uid: string | null; profile_url: string | null; partial: boolean; relevance_score: number | null; nickname: string; created_at: string }
-interface Session { account_label: string; role: string; platform: string; status: string; bound_at: string | null; tenant_id: string }
+interface Session { account_label: string; role: string; platform: string; status: string; bound_at: string | null; tenant_id: string; agent_id?: string }
 interface Assignment { id: string; tenant_id: string; lead_id: string; account_label: string; status: string; scheduled_for: string | null; created_at: string }
 interface OutreachLog { id: string; tenant_id: string; account_label: string; lead_id: string | null; profile_url: string | null; status: string; sent_at: string }
 
@@ -124,20 +124,27 @@ function makeFakePool(seed: {
         const day = logs.filter((x) => x.tenant_id === tenant && x.account_label === label && new Date(x.sent_at) >= dayStart).length;
         return { rows: [{ hour, day }] };
       }
-      // lead profile_url lookup
-      if (sql.includes('SELECT profile_url FROM zenithjoy.acquisition_leads WHERE id =')) {
-        const lead = leads.find((l) => l.id === params[0]);
-        return { rows: lead ? [{ profile_url: lead.profile_url }] : [] };
+      // dispatchDue: lead profile_url + agent_id via LEFT JOIN agent_platform_sessions
+      if (sql.includes('FROM zenithjoy.acquisition_leads l') && sql.includes('LEFT JOIN zenithjoy.agent_platform_sessions s')) {
+        const [leadId, label] = params as string[];
+        const l = leads.find((x) => x.id === leadId);
+        const s = sessions.find((x) => x.account_label === label && x.role === 'burner' && x.status === 'active');
+        return { rows: l ? [{ profile_url: l.profile_url, agent_id: s?.agent_id ?? null }] : [] };
+      }
+      // insert publish_tasks (真派单)
+      if (sql.startsWith('INSERT INTO zenithjoy.publish_tasks')) {
+        return { rows: [] };
       }
       // insert outreach log
       if (sql.startsWith('INSERT INTO zenithjoy.dm_outreach_log')) {
         const [tenant, label, leadId, profileUrl] = params as string[];
-        logs.push({ id: `l${idc++}`, tenant_id: tenant, account_label: label, lead_id: leadId, profile_url: profileUrl, status: 'sent', sent_at: new Date().toISOString() });
+        logs.push({ id: `l${idc++}`, tenant_id: tenant, account_label: label, lead_id: leadId, profile_url: profileUrl, status: 'dispatched', sent_at: new Date().toISOString() });
         return { rows: [] };
       }
-      // update assignment status
+      // update assignment status (含 agent_id 更新)
       if (sql.startsWith('UPDATE zenithjoy.dm_assignments SET status')) {
-        const a = assignments.find((x) => x.id === params[0]);
+        const [assignId] = params as string[];
+        const a = assignments.find((x) => x.id === assignId);
         if (a) a.status = sql.includes("'dispatched'") ? 'dispatched' : 'limited';
         return { rows: [] };
       }
@@ -295,9 +302,14 @@ describe('dispatchDue — 时段闸 + 上限闸', () => {
     expect(r.skipped_window).toBe(-1);
   });
 
-  it('到期指派 → 发出 + 写 dm_outreach_log + 标 dispatched', async () => {
+  it('到期指派 → 真派单到 publish_tasks + 写 dm_outreach_log + 标 dispatched', async () => {
     const cfg = { ...CFG_ROW, dm_active_start: '00:00', dm_active_end: '23:59', dm_per_hour: 5, dm_per_day: 30 };
-    const pool = makeFakePool({ configRow: cfg, assignments: [due('1', 'b1', '2026-06-26T09:00:00Z')], leads: [{ ...lead('lead_1', 90) }] });
+    const pool = makeFakePool({
+      configRow: cfg,
+      assignments: [due('1', 'b1', '2026-06-26T09:00:00Z')],
+      leads: [{ ...lead('lead_1', 90) }],
+      sessions: [{ account_label: 'b1', role: 'burner', platform: 'douyin', status: 'active', bound_at: new Date().toISOString(), tenant_id: 't1', agent_id: 'agent-uuid-b1' }],
+    });
     const r = await dispatchDue(pool, 't1', new Date('2026-06-26T10:00:00Z'));
     expect(r.dispatched).toBe(1);
     expect(pool._state.logs.length).toBe(1);
