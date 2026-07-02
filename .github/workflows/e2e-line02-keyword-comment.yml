@@ -50,11 +50,11 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: 确认 runner 环境
-        shell: pwsh
+        shell: bash
         run: |
-          Write-Host "runner: $env:COMPUTERNAME"
-          Write-Host "USERPROFILE: $env:USERPROFILE"
-          Write-Host "APPDATA: $env:APPDATA"
+          echo "runner: $COMPUTERNAME"
+          echo "USERPROFILE: $USERPROFILE"
+          echo "APPDATA: $APPDATA"
 
       - name: 定位最新 agent 安装目录
         id: agent-dir
