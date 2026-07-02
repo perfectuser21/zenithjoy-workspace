@@ -254,6 +254,39 @@ def read_chat_panel_messages(mw: Any, n: int, x_min: int = 460) -> List[str]:
     return out[-n:] if len(out) > n else out
 
 
+def count_incoming_chat_bubbles(mw: Any) -> int:
+    """计当前聊天面板内可见的传入（左对齐）气泡数。
+
+    用于锚点气泡扫描（path-3）：reply 后记录此数为锚点；下轮若数量增加 → 新消息。
+    区域约定复用 _last_bubble_direction：
+      chat_left = wr.left + width//4，midline = (chat_left + wr.right) // 2。
+    传入气泡 = Text 控件 left > chat_left 且 top >= wr.top+150 且 name 非空 且 center_x < midline。
+    顶层零 pywinauto，纯逻辑，CI 可测。
+    """
+    try:
+        wr = mw.rectangle()
+    except Exception:
+        return 0
+    width = wr.right - wr.left
+    chat_left = wr.left + width // 4
+    midline = (chat_left + wr.right) // 2
+    count = 0
+    try:
+        for t in mw.descendants(control_type="Text"):
+            try:
+                r = t.rectangle()
+                nm = (t.element_info.name or "").strip()
+            except Exception:
+                continue
+            if r.left > chat_left and r.top >= wr.top + 150 and nm:
+                center_x = (r.left + r.right) // 2
+                if center_x < midline:
+                    count += 1
+    except Exception:
+        pass
+    return count
+
+
 def _parse_item_name(name: str, require_unread: bool = True) -> Optional[Dict[str, str]]:
     """
     解析微信 4.0 会话列表 ListItem 的 element_info.name 字符串。
@@ -516,7 +549,7 @@ def scan_unread(mw: Any, last_content: Optional[Dict[str, str]] = None) -> List[
         # 消息永久漏读，用户实测发 5 条漏"什么价格"。基线 74654efd 靠本路径"问啥回啥"不丢）：
         # 无角标但内容 != 上次见到（last_content）→ 也算未读要回。不依赖角标，专治"角标被清后失去
         # 未读信号"。首次见到只记录不触发（防历史消息误当新消息）。自我回复风暴由主循环 reply 成功后
-        # last_content.pop(sender) 护栏挡（把 reply 存进 last_content 反而会误触发本路径）。
+        # 哨兵 last_content[sender]="__replied__" 守卫（"__replied__" ≠ 真实内容 → path-2 必触发）。
         if last_content is not None:
             info = _parse_item_name(name, require_unread=False)
             if info and info["sender"] not in seen_senders:
@@ -532,6 +565,95 @@ def scan_unread(mw: Any, last_content: Optional[Dict[str, str]] = None) -> List[
         for m in out:
             last_content[m["sender"]] = m["content"]
     _restore_window_state(mw, orig_state)
+    return out
+
+
+def count_incoming_chat_bubbles(mw):
+    """计聊天面板左对齐传入气泡数（纯逻辑，CI 可测，顶层零 pywinauto）。
+
+    传入气泡 = 满足以下条件的 Text 控件：
+      - left > chat_left（在聊天面板内，不在会话列表区域）
+      - center_x < midline（左对齐，非右对齐我方气泡）
+
+    几何：
+      chat_left = win_left + window_width // 4
+      midline   = (chat_left + win_right) // 2
+
+    用于 path-3 锚点扫描：reply 后记录气泡数为锚点，下轮若 count > anchor → 新消息。
+    rectangle() 抛异常的控件跳过，不崩溃。
+    """
+    try:
+        try:
+            win_rect = mw.rectangle()
+            win_left = int(win_rect.left)
+            win_right = int(win_rect.right)
+        except Exception:
+            win_left, win_right = 0, 1200
+
+        chat_left = win_left + (win_right - win_left) // 4
+        midline = (chat_left + win_right) // 2
+
+        count = 0
+        for c in mw.descendants(control_type="Text"):
+            try:
+                r = c.rectangle()
+                center_x = (int(r.left) + int(r.right)) // 2
+                if int(r.left) > chat_left and center_x < midline:
+                    count += 1
+            except Exception:
+                continue
+        return count
+    except Exception:
+        return 0
+
+
+def scan_anchor_senders(mw, bubble_anchors, already_seen):
+    """path-3 锚点气泡扫描：对 bubble_anchors 有锚点的 sender，气泡数 > 锚点 → 检出新消息。
+
+    根治场景：reply 后客户重发相同内容 → path-2 因 prev == content 不触发 →
+    path-3 靠气泡数差检出。
+
+    入参：
+      bubble_anchors: {sender → reply 时记录的气泡数基线}，调用方 reply 后更新。
+      already_seen:   path-1/path-2 已检出的 sender，跳过避免重复入队。
+
+    副作用：无论是否检出，都更新 bubble_anchors[sender] = 当前气泡数（供下轮比较）。
+    返回：新消息列表 [{"sender":..., "content":..., "_item":...}]。
+    """
+    if not bubble_anchors:
+        return []
+
+    orig_state = _ensure_tray_visible(mw)
+    out = []
+    try:
+        current_count = count_incoming_chat_bubbles(mw)
+
+        for it in mw.descendants(control_type="ListItem"):
+            try:
+                name = it.element_info.name or ""
+            except Exception:
+                continue
+
+            info = _parse_item_name(name, require_unread=False)
+            if info is None:
+                continue
+
+            sender = info["sender"]
+            if sender not in bubble_anchors:
+                continue
+            if sender in already_seen:
+                continue
+
+            anchor = bubble_anchors[sender]
+            bubble_anchors[sender] = current_count
+
+            if current_count > anchor:
+                out.append({**info, "_item": it})
+    except Exception:
+        pass
+    finally:
+        _restore_window_state(mw, orig_state)
+
     return out
 
 
@@ -586,6 +708,37 @@ def _collect_recent_contacts(item_names: List[str], limit: int = 100) -> List[Di
         out.append({"name": sender, "last_message": preview})
         if len(out) >= limit:
             break
+    return out
+
+
+def scan_anchor_senders(
+    mw: Any,
+    bubble_anchors: Dict[str, int],
+    already_seen: Optional[set] = None,
+) -> List[Dict[str, Any]]:
+    """path-3 锚点气泡扫描：对已回复过的 sender，比较当前传入气泡数与锚点。
+
+    count > anchor → 有新消息（包含重发同内容的情况）→ 入队。
+    无论是否触发，都更新 bubble_anchors[sender] 为当前气泡数（保持锚点新鲜）。
+    已被 path-1/path-2 检出的 sender（in already_seen）跳过，不重复入队。
+    顶层零 pywinauto，CI 可测。
+    """
+    if already_seen is None:
+        already_seen = set()
+    out: List[Dict[str, Any]] = []
+    for sender, anchor in list(bubble_anchors.items()):
+        if sender in already_seen:
+            continue
+        try:
+            item = _find_session_item(mw, sender)
+            if item is not None:
+                _open_chat(mw, item, sender)
+        except Exception:
+            pass
+        current = count_incoming_chat_bubbles(mw)
+        bubble_anchors[sender] = current
+        if current > anchor:
+            out.append({"sender": sender, "content": "", "source": "anchor"})
     return out
 
 
@@ -1618,6 +1771,82 @@ def _last_bubble_direction(mw: Any) -> Optional[str]:
     center = (last_rect.left + last_rect.right) // 2
     # 压线（center == midline）倾向判「我方」更安全 → >= 判 outgoing
     return "outgoing" if center >= midline else "incoming"
+
+
+def count_incoming_chat_bubbles(mw: Any) -> int:
+    """数聊天面板传入气泡（左对齐，对方发来）数量。
+
+    复用 _last_bubble_direction 的坐标逻辑（chat_left / midline）。
+    纯逻辑，顶层零 pywinauto，CI clean 可测。
+    rectangle() 抛异常的控件跳过，不崩溃。
+    """
+    try:
+        wr = mw.rectangle()
+    except Exception:
+        return 0
+    width = wr.right - wr.left
+    chat_left = wr.left + width // 4
+    midline = (chat_left + wr.right) // 2
+    count = 0
+    for t in mw.descendants(control_type="Text"):
+        try:
+            r = t.rectangle()
+            nm = (t.element_info.name or "").strip()
+        except Exception:
+            continue
+        if r.left > chat_left and r.top >= wr.top + 150 and nm:
+            center_x = (r.left + r.right) // 2
+            if center_x < midline:
+                count += 1
+    return count
+
+
+def scan_anchor_senders(
+    mw: Any,
+    bubble_anchors: Dict[str, int],
+    already_seen: Optional[set] = None,
+) -> List[Dict[str, Any]]:
+    """path-3：对有气泡锚点的 sender 开聊天，数传入气泡，count > anchor → 新消息。
+
+    - 只扫 bubble_anchors 中有记录的 sender（已回复过的）
+    - already_seen：path-1/path-2 已检出的 sender，跳过不重复入队
+    - 无论是否检出，都更新 bubble_anchors[sender] 为当前气泡数
+    """
+    if already_seen is None:
+        already_seen = set()
+
+    sender_to_item: Dict[str, Any] = {}
+    for it in mw.descendants(control_type="ListItem"):
+        try:
+            first_line = (it.element_info.name or "").split("\n")[0].strip()
+        except Exception:
+            continue
+        if first_line and first_line not in sender_to_item:
+            sender_to_item[first_line] = it
+
+    out: List[Dict[str, Any]] = []
+    for sender, anchor in list(bubble_anchors.items()):
+        if sender in already_seen:
+            continue
+        item = sender_to_item.get(sender)
+        if item is None:
+            continue
+        try:
+            _open_chat(mw, item, sender)
+        except Exception:
+            pass
+        current_count = count_incoming_chat_bubbles(mw)
+        bubble_anchors[sender] = current_count
+        if current_count > anchor:
+            try:
+                name = item.element_info.name or ""
+            except Exception:
+                name = ""
+            info = _parse_item_name(name, require_unread=False)
+            if info is None:
+                info = {"sender": sender, "content": ""}
+            out.append({**info, "_item": item})
+    return out
 
 
 def _delivery_confirmed(readback_text: str, sent_text: str) -> bool:
@@ -2892,6 +3121,8 @@ def run_real_listen(args: argparse.Namespace) -> int:
     _skip_counter = _SkipCounter()  # Phase 0 观测：累计每条 skip reason → 心跳 diag（中台可见）
     # 内容变化检测：{sender: last_seen_content}，捕捉聊天面板打开时的新消息（无未读角标）
     last_content: dict[str, str] = {}
+    # path-3 锚点气泡扫描：{sender: 回复时传入气泡数}，气泡数增加 → 新消息（含重发同内容）
+    bubble_anchors: dict[str, int] = {}
     deadline = time.time() + max(1, args.timeout)
     # 进程守护：向中台上报心跳（断 3 分钟无心跳中台飞书告警）+ 扫描诊断
     heartbeat_interval = _HEARTBEAT_INTERVAL
@@ -3114,6 +3345,16 @@ def run_real_listen(args: argparse.Namespace) -> int:
                 time.sleep(args.interval)
                 continue
             last_unread_senders = [u["sender"] for u in unread]
+            # path-3 锚点气泡扫描：对已回复过的 sender 补扫（重发同内容 path-2 漏检场景）
+            if bubble_anchors:
+                try:
+                    _anchor_seen = set(u["sender"] for u in unread)
+                    _anchor_out = scan_anchor_senders(mw, bubble_anchors, already_seen=_anchor_seen)
+                    if _anchor_out:
+                        unread = unread + _anchor_out
+                        last_unread_senders = [u["sender"] for u in unread]
+                except Exception:
+                    pass
             # scan_unread 可见态读到健康树(非塌缩)=微信能读会话→记录时刻供塌缩自愈守卫(绝不误重启)
             if _LAST_VISIBLE_TREE_SIZE is not None and not _is_uia_tree_collapsed(_LAST_VISIBLE_TREE_SIZE):
                 last_readable_scan_at = now
@@ -3354,7 +3595,11 @@ def run_real_listen(args: argparse.Namespace) -> int:
                     _skip_logged.discard(key)
                     reply_failed_at.pop(key, None)
                     sender_reply_cooldown[m["sender"]] = time.time()  # per-sender 30s 冷却
-                    last_content.pop(m["sender"], None)  # 删除防自回复风暴（存 reply 反而触发 Path2 截断误判）
+                    last_content[m["sender"]] = "__replied__"  # 哨兵：不 pop，path-2 对后续消息必触发
+                    try:
+                        bubble_anchors[m["sender"]] = count_incoming_chat_bubbles(mw)
+                    except Exception:
+                        pass
                     _log(f"auto-replied OK sender={m['sender']} receipt={receipt['status']}")
                 else:
                     reply_failed_at[key] = time.time()
