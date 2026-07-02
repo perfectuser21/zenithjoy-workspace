@@ -32,6 +32,10 @@ vi.mock('../services/comment-grader', () => ({
 vi.mock('../services/lead-writer', () => ({
   writeLeadsFromComments: vi.fn().mockResolvedValue({ written_count: 1, lead_write_status: 'success' }),
 }));
+vi.mock('../services/acquisition-dispatch', () => ({
+  buildAssignments: vi.fn().mockResolvedValue({ assigned: 1 }),
+  dispatchDue: vi.fn().mockResolvedValue({ dispatched: 1 }),
+}));
 
 const app = express();
 app.use(express.json());
@@ -142,6 +146,37 @@ describe('POST /api/acquisition/video-search-result', () => {
 });
 
 describe('POST /api/acquisition/comment-score-result', () => {
+  // regression(2026-07-02): 评论写库后必须自动触发 buildAssignments+dispatchDue
+  it('triggers dm dispatch after writing leads', async () => {
+    const { buildAssignments, dispatchDue } = await import('../services/acquisition-dispatch');
+    vi.mocked(buildAssignments).mockClear();
+    vi.mocked(dispatchDue).mockClear();
+
+    const comments = [{ commenter_id: '/user/uid1', text: '请问怎么联系您' }];
+    const res = await request(app)
+      .post('/api/acquisition/comment-score-result')
+      .send({ keyword_task_id: 'kw-001', video_url: 'https://douyin.com/v/1', comments });
+
+    expect(res.status).toBe(200);
+    expect(res.body.written_count).toBe(1);
+    // 等 fire-and-forget promise 完成
+    await new Promise(r => setTimeout(r, 20));
+    expect(buildAssignments).toHaveBeenCalledTimes(1);
+    expect(dispatchDue).toHaveBeenCalledTimes(1);
+  });
+
+  it('does NOT trigger dm dispatch when comments are empty', async () => {
+    const { buildAssignments } = await import('../services/acquisition-dispatch');
+    vi.mocked(buildAssignments).mockClear();
+
+    await request(app)
+      .post('/api/acquisition/comment-score-result')
+      .send({ keyword_task_id: 'kw-001', comments: [] });
+
+    await new Promise(r => setTimeout(r, 20));
+    expect(buildAssignments).not.toHaveBeenCalled();
+  });
+
   it('returns 400 when keyword_task_id is missing', async () => {
     const res = await request(app)
       .post('/api/acquisition/comment-score-result')

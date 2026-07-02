@@ -12,6 +12,7 @@ import {
 import { tenantContextOptional } from '../middleware/tenant-context';
 import { licenseAuth } from '../middleware/license-auth';
 import { sseService } from '../services/sse.service';
+import { buildAssignments, dispatchDue } from '../services/acquisition-dispatch';
 
 export const acquisitionRouter = Router();
 
@@ -251,13 +252,15 @@ acquisitionRouter.post('/comment-score-result', async (req: Request, res: Respon
   }
 
   let written_count = 0;
+  let resolved_tenant_id: string | null = null;
+
   if (!process.env.VITEST) {
     try {
       // 取第一个可用租户（keyword 任务无租户绑定）
       const tenantRes = await pool.query(`SELECT id FROM zenithjoy.tenants LIMIT 1`);
-      const tenant_id: string | null = tenantRes.rows.length > 0 ? tenantRes.rows[0].id : null;
+      resolved_tenant_id = tenantRes.rows.length > 0 ? tenantRes.rows[0].id : null;
 
-      if (tenant_id) {
+      if (resolved_tenant_id) {
         const gradedComments = await Promise.all(
           commentList.map(async (c: { commenter_id?: string; text?: string; publish_time?: string; keyword?: string; grade?: string }) => {
             const grade = c.grade || await gradeComment(c.text ?? '');
@@ -278,7 +281,7 @@ acquisitionRouter.post('/comment-score-result', async (req: Request, res: Respon
                   comment_text, grade, keyword, feishu_write_status)
                VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7, $8, 'local_only')
                ON CONFLICT DO NOTHING`,
-              [tenant_id, secUid, nickname, secUid ? `https://www.douyin.com/user/${secUid}` : null,
+              [resolved_tenant_id, secUid, nickname, secUid ? `https://www.douyin.com/user/${secUid}` : null,
                JSON.stringify([video_url ?? '']), String(c.text || '').trim() || null,
                c.grade || null, c.keyword || null],
             );
@@ -291,6 +294,15 @@ acquisitionRouter.post('/comment-score-result', async (req: Request, res: Respon
     }
   } else {
     written_count = commentList.length;
+    resolved_tenant_id = commentList.length > 0 ? 'vitest-tenant' : null;
+  }
+
+  // fire-and-forget：leads 写库后自动触发 DM 派发（buildAssignments 自带去重/频控，安全重入）
+  if (written_count > 0 && resolved_tenant_id) {
+    const tid = resolved_tenant_id;
+    void buildAssignments(pool, tid)
+      .then(() => dispatchDue(pool, tid))
+      .catch((e: Error) => console.error('[acquisition] dm-dispatch error:', e.message));
   }
 
   return res.status(200).json({
