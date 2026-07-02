@@ -99,3 +99,34 @@ def test_placeholder_bubbles_counted():
     """非文本消息占位符计入 incoming，绝不透明化（纯图片批也触发回复）。"""
     bubbles = [_b("好的", "outgoing"), _b("[图片]", "incoming"), _b("[语音]", "incoming")]
     assert listen_chat.split_trailing_incoming(bubbles, badge_n=0) == ["[图片]", "[语音]"]
+
+
+# -- _commit_reply_success ---------------------------------------------------
+
+def test_commit_reply_success_updates_preview():
+    """DELIVERED 后 last_preview 更新为 _preview_name（触发消费，下轮不重触发）。"""
+    listen_chat._ANCHOR_STALL.clear()
+    last_preview = {"默忆": "默忆\n在吗\n14:40\n"}
+    msg = {"sender": "默忆", "content": "在吗",
+           "_preview_name": "默忆\n在吗\n14:43\n", "_item": None}
+    listen_chat._commit_reply_success(msg, last_preview)
+    assert last_preview["默忆"] == "默忆\n在吗\n14:43\n"
+
+
+def test_commit_reply_success_resets_stall():
+    """DELIVERED 后 _ANCHOR_STALL[sender] 归零。"""
+    listen_chat._ANCHOR_STALL["默忆"] = 2
+    last_preview = {}
+    msg = {"sender": "默忆", "content": "x",
+           "_preview_name": "默忆\nx\n14:44\n", "_item": None}
+    listen_chat._commit_reply_success(msg, last_preview)
+    assert listen_chat._ANCHOR_STALL.get("默忆", 0) == 0
+
+
+def test_commit_reply_success_missing_preview_name_safe():
+    """_preview_name 缺失不抛（兼容回退路径 content-only 的 msg）。"""
+    listen_chat._ANCHOR_STALL.clear()
+    last_preview = {"默忆": "默忆\n在吗\n14:40\n"}
+    msg = {"sender": "默忆", "content": "在吗", "_item": None}
+    listen_chat._commit_reply_success(msg, last_preview)
+    assert last_preview["默忆"] == "默忆\n在吗\n14:40\n"
