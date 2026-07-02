@@ -279,6 +279,26 @@ def split_trailing_incoming(bubbles: List[Dict[str, str]], badge_n: int = 0) -> 
     return []
 
 
+def _stale_badge_confirmed(preview_content: str, bubbles: List[Dict[str, str]]) -> bool:
+    """陈旧角标确认闸（纯函数，CI 可测）：仅当会话列表预览显示的最新消息就是我方
+    最后一条 outgoing 气泡（_delivery_confirmed 同款规范化前缀匹配）时，才允许把
+    "trailing 空"当成真·陈旧角标去提交消费触发。
+
+    不命中的典型场景（都必须走回退 emit / 保留触发态，绝不静默提交）：
+    - 客户发 [图片]/[语音] 等非文本消息 → read_chat_bubbles 只读 Text，气泡序列里
+      没有对应条目 → trailing 空但预览 ≠ 我方回复；
+    - 客户纯文本恰好整句命中 _is_system_bubble（如"下午3:30"）被剔除 → 同上。
+    bubbles 须已过 strip_system_bubbles；无 outgoing / 预览为空 → False（保守）。
+    """
+    last_out = ""
+    for b in bubbles:
+        if b.get("direction") == "outgoing" and b.get("text"):
+            last_out = b["text"]
+    if not preview_content or not last_out:
+        return False
+    return _delivery_confirmed(preview_content, last_out)
+
+
 def _parse_item_name(name: str, require_unread: bool = True) -> Optional[Dict[str, str]]:
     """
     解析微信 4.0 会话列表 ListItem 的 element_info.name 字符串。
@@ -501,9 +521,13 @@ def _read_trailing_for(mw: Any, cand: Dict[str, Any],
     """打开 cand 会话读 trailing incoming。返回 (msgs, bubble_read_empty)。
 
     - 开窗失败 → ([], False)，触发态由调用方保留。
-    - 打开后判群（唯一可靠信号=标题"(人数)"）→ 记 _KNOWN_GROUPS，([], False) 不回。
+    - 打开后判群（唯一可靠信号=标题"(人数)"）→ cand["_is_group"]=True 本轮不回；
+      仅当 _chat_title_matches 确认面板归属（防 selected 验证通过但面板还停在上一个
+      会话的异步瞬间，把真私聊客户误拉黑）才写 _KNOWN_GROUPS 缓存 + 留日志。
     - 气泡读空轮询 _BUBBLE_READ_POLLS 次；仍空 → ([], True) + record_skip 计数
       （心跳 diag 可见：列表可读但气泡区空 = 树病信号）。
+    - 读到气泡 → cand["_stale_ok"] = _stale_badge_confirmed(预览, 剔系统气泡后序列)，
+      供调用方判定"trailing 空"能否当真陈旧角标提交。
     """
     try:
         if not _open_chat(mw, cand["_item"], cand["sender"]):
@@ -511,9 +535,17 @@ def _read_trailing_for(mw: Any, cand: Dict[str, Any],
     except Exception:
         return [], False
     cand["_opened"] = True
+    # F3：判群前先验证面板标题归属（is True 才可信；False/None/异常都不写缓存）
+    try:
+        title_ok = _chat_title_matches(mw, cand["sender"]) is True
+    except Exception:
+        title_ok = False
     try:
         if _is_group_by_header(_read_chat_header_texts(mw)) is not None:
-            _KNOWN_GROUPS.add(cand["sender"])
+            cand["_is_group"] = True
+            if title_ok:
+                _KNOWN_GROUPS.add(cand["sender"])
+                _log(f"known_group cached sender={cand['sender']}")
             return [], False
     except Exception:
         pass  # 判不出群 → 按私聊继续（reply_in_chat 发送前还有判群闸）
@@ -527,24 +559,35 @@ def _read_trailing_for(mw: Any, cand: Dict[str, Any],
         if record_skip is not None:
             record_skip("bubble_read_empty")
         return [], True
-    return split_trailing_incoming(strip_system_bubbles(bubbles), cand["badge"]), False
+    stripped = strip_system_bubbles(bubbles)
+    cand["_stale_ok"] = _stale_badge_confirmed(cand["content"], stripped)
+    return split_trailing_incoming(stripped, cand["badge"]), False
 
 
 def scan_unread(mw: Any, last_preview: Optional[Dict[str, str]] = None,
-                record_skip: Optional[Any] = None) -> List[Dict[str, Any]]:
+                record_skip: Optional[Any] = None,
+                should_open: Optional[Any] = None) -> List[Dict[str, Any]]:
     """锚点气泡扫描（2026-07-02 重构，根治漏消息——替代旧 角标path-1/预览path-2 机制）。
 
     发现层（便宜，不开会话）：触发 = 有 [N条] 角标 OR item name != last_preview[sender]。
       - last_preview 只是触发信号（比较整个 item name，防长消息截断假阴性），永不 pop；
         首见只记录不触发（防陈年消息/重启风暴）。
-    读取层（仅触发会话，角标优先，每轮 ≤SCAN_OPEN_BUDGET 个）：_open_chat → 判群（记
-      _KNOWN_GROUPS 缓存）→ read_chat_bubbles → strip_system_bubbles →
-      split_trailing_incoming（锚点=最后一条 outgoing）→ 合并成一条。
+      - 角标首见 seed：badge 会话若不在 last_preview 里，入队同时记下带角标的原始 name
+        ——emit 后主循环草稿失败不提交时，下轮去角标的 name 必不等 → 预览路径自动重试
+        （治"重启后角标首见 + 草稿失败 = 永久丢"）。
+      - should_open（callable sender->bool，默认 None 全放行）：谓词拦掉的 sender
+        （黑名单/操作者本人）连候选都不进——不开窗（保留其未读角标给操作者）、不烧预算。
+    读取层（仅触发会话，角标优先，每轮 ≤SCAN_OPEN_BUDGET 个）：_open_chat → 判群
+    （标题归属 _chat_title_matches 确认后才写 _KNOWN_GROUPS 缓存）→ read_chat_bubbles
+    → strip_system_bubbles → split_trailing_incoming（锚点=最后一条 outgoing）→ 合并成一条。
     事务语义：触发信号在打开会话那刻就被微信消费（角标清零）→ last_preview 只在
-      ①确认无新 trailing（本函数内提交）或 ②DELIVERED（主循环 _commit_reply_success）
-      后更新；开窗失败/读空/后续草稿失败 → 触发态保留，下轮重读气泡重试，绝不静默丢。
-    回退保底：开窗失败或气泡读空 且有角标 → 回退旧单条路径（用预览 content），宁可
-      上下文不全也不漏回；无角标的触发读不出 → 保留触发态下轮再试（fail-closed）。
+      ①trailing 空且 _stale_badge_confirmed 命中（预览=我方最后 outgoing = 真陈旧角标，
+      本函数内提交）或 ②DELIVERED（主循环 _commit_reply_success）后更新；
+      开窗失败/读空/后续草稿失败 → 触发态保留，下轮重读气泡重试，绝不静默丢。
+    回退保底：有角标时，开窗失败 / 气泡读空 / trailing 空但 _stale_badge_confirmed
+      不命中（客户发[图片]/[语音]或消息恰被系统气泡正则剔除）→ 回退旧单条路径
+      （用预览 content）emit，宁可上下文不全也不漏回；无角标的触发读不出/不命中
+      → 保留触发态下轮再试（fail-closed）。
 
     托盘修复：微信在系统托盘时 IsWindowVisible=False，mmui 虚拟列表 UIA name 不实时更新，
     新消息角标永远扫不到。扫描前 _ensure_tray_visible SW_SHOWNA(8) 短暂还原刷新 UIA，
@@ -577,9 +620,13 @@ def scan_unread(mw: Any, last_preview: Optional[Dict[str, str]] = None,
         sender = info["sender"]
         if sender in _KNOWN_GROUPS:
             continue
+        if should_open is not None and not should_open(sender):
+            continue  # F4：黑名单/操作者会话连候选都不进（角标保留给操作者，不烧预算）
         badge_n = parse_unread_count(name)
         if badge_n > 0:
             seen.add(sender)
+            if last_preview is not None and sender not in last_preview:
+                last_preview[sender] = name  # F2 seed：草稿失败后下轮预览路径可重试
             candidates.append({"sender": sender, "content": info["content"],
                                "name": name, "badge": badge_n, "_item": it})
             continue
@@ -609,17 +656,22 @@ def scan_unread(mw: Any, last_preview: Optional[Dict[str, str]] = None,
                     record_skip("anchor_stall")
                 _log(f"anchor_stall sender={c['sender']} rounds={_ANCHOR_STALL[c['sender']]}"
                      f"（连续 emit 未 DELIVERED——只告警不降级，继续重试）")
-        elif c["badge"] > 0 and c["content"] and (not c.get("_opened") or empty_read):
-            # 回退保底：开窗失败或气泡读空、但角标在 → 旧单条路径，宁可上下文不全也不漏回。
-            # 注意：开窗成功且读到气泡但 trailing 空（陈旧角标，其实已回过）不走这里——
-            # 走下面的提交分支，防重复回。
-            out.append({"sender": c["sender"], "content": c["content"],
-                        "_item": c["_item"], "_preview_name": c["name"]})
-        elif c.get("_opened") and not empty_read:
-            # 开窗成功、气泡读到了、但无新 trailing（最后一条是我方/陈旧角标）→ 提交触发消费
+        elif c.get("_is_group"):
+            # 群：本轮不回。是否写 _KNOWN_GROUPS 已由 _read_trailing_for 按标题归属决定；
+            # 触发态保留不提交——若是 F3 误判的真私聊，下轮重开面板已落定即可正常回。
+            pass
+        elif c.get("_opened") and not empty_read and c.get("_stale_ok"):
+            # 开窗成功、读到气泡、无新 trailing，且 _stale_badge_confirmed 命中
+            # （预览显示的最新消息就是我方最后回复）= 真陈旧角标 → 提交触发消费，防重复回。
             if last_preview is not None:
                 last_preview[c["sender"]] = c["name"]
-        # 其余（开窗失败/读空 且无角标）：触发态保留，下轮重试
+        elif c["badge"] > 0 and c["content"]:
+            # 回退保底（F1）：开窗失败 / 气泡读空 / trailing 空但预览≠我方回复
+            # （客户发[图片]/[语音]、或纯文本恰被 _is_system_bubble 剔除）且角标在
+            # → 旧单条路径 emit（用预览 content），宁可上下文不全也不漏回，绝不静默提交。
+            out.append({"sender": c["sender"], "content": c["content"],
+                        "_item": c["_item"], "_preview_name": c["name"]})
+        # 其余（开窗失败/读空/非陈旧 且无角标）：触发态保留，下轮重试
     _restore_window_state(mw, orig_state)
     return out
 
