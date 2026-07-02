@@ -33,6 +33,7 @@ vi.mock('../services/lead-writer', () => ({
   writeLeadsFromComments: vi.fn().mockResolvedValue({ written_count: 1, lead_write_status: 'success' }),
 }));
 vi.mock('../services/acquisition-dispatch', () => ({
+  scoreLeads: vi.fn().mockResolvedValue({ scored: 1 }),
   buildAssignments: vi.fn().mockResolvedValue({ assigned: 1 }),
   dispatchDue: vi.fn().mockResolvedValue({ dispatched: 1 }),
 }));
@@ -346,3 +347,22 @@ describe('collect/report — 无需 smoke token，agent 直接调用 [REGRESSION
     expect(res.status).not.toBe(403);
   });
 });
+
+  it('scoreLeads is called before buildAssignments so dm_assignments get created', async () => {
+    const { scoreLeads, buildAssignments, dispatchDue } = await import('../services/acquisition-dispatch');
+    vi.mocked(scoreLeads).mockClear();
+    vi.mocked(buildAssignments).mockClear();
+    vi.mocked(dispatchDue).mockClear();
+    const comments = [{ commenter_id: '/user/score_test_001', text: '怎么联系您' }];
+    const res = await request(app)
+      .post('/api/acquisition/comment-score-result')
+      .send({ keyword_task_id: 'kw-score-test', video_url: 'https://douyin.com/v/score1', comments });
+    expect(res.status).toBe(200);
+    await new Promise(r => setTimeout(r, 20));
+    // scoreLeads 必须先于 buildAssignments 被调用
+    expect(scoreLeads).toHaveBeenCalledTimes(1);
+    expect(buildAssignments).toHaveBeenCalledTimes(1);
+    const scoreOrder = vi.mocked(scoreLeads).mock.invocationCallOrder[0];
+    const buildOrder = vi.mocked(buildAssignments).mock.invocationCallOrder[0];
+    expect(scoreOrder).toBeLessThan(buildOrder);
+  });

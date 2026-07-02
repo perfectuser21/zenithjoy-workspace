@@ -12,7 +12,7 @@ import {
 import { tenantContextOptional } from '../middleware/tenant-context';
 import { licenseAuth } from '../middleware/license-auth';
 import { sseService } from '../services/sse.service';
-import { buildAssignments, dispatchDue } from '../services/acquisition-dispatch';
+import { scoreLeads, buildAssignments, dispatchDue } from '../services/acquisition-dispatch';
 
 export const acquisitionRouter = Router();
 
@@ -300,7 +300,8 @@ acquisitionRouter.post('/comment-score-result', async (req: Request, res: Respon
   // fire-and-forget：leads 写库后自动触发 DM 派发（buildAssignments 自带去重/频控，安全重入）
   if (written_count > 0 && resolved_tenant_id) {
     const tid = resolved_tenant_id;
-    void buildAssignments(pool, tid)
+    void scoreLeads(pool, tid)
+      .then(() => buildAssignments(pool, tid))
       .then(() => dispatchDue(pool, tid))
       .catch((e: Error) => console.error('[acquisition] dm-dispatch error:', e.message));
   }
