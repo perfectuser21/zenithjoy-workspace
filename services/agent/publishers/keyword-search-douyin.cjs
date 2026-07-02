@@ -25,7 +25,7 @@ function emit(r) {
   process.stdout.write(JSON.stringify(r) + '\n');
 }
 
-// 从 .env 文件读取变量（兜底：agent 进程启动时未加载该 key 时用）
+// 从 .env 文件读取变量
 function readEnvFile() {
   const candidates = [
     path.join(__dirname, '..', '.env'),
@@ -44,13 +44,13 @@ function readEnvFile() {
   return {};
 }
 
+// 始终先读 .env 文件（qr-bind 更新后子进程才能感知最新账号），process.env 仅作兜底
 function getBurnerDataDir() {
-  let v = process.env.ZJ_MAIN_DATA_DIR;
-  if (!v || v === 'null') {
-    const env = readEnvFile();
-    v = env['ZJ_MAIN_DATA_DIR'];
-  }
-  return v || null;
+  const env = readEnvFile();
+  const fromFile = env['ZJ_MAIN_DATA_DIR'];
+  if (fromFile && fromFile !== 'null') return fromFile;
+  const v = process.env.ZJ_MAIN_DATA_DIR;
+  return (v && v !== 'null') ? v : null;
 }
 
 function findSystemChrome() {

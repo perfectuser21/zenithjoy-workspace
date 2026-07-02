@@ -72,15 +72,40 @@ function findBundledChromium() {
   return fs.existsSync(exe) ? exe : null;
 }
 
+// 从 .env 文件读取变量（始终先读文件，拿到 qr-bind 写入的最新账号路径）
+function readEnvFile() {
+  const candidates = [
+    path.join(__dirname, '..', '.env'),
+  ];
+  for (const p of candidates) {
+    try {
+      const vars = {};
+      for (const line of fs.readFileSync(p, 'utf8').split('\n')) {
+        const m = line.trim().match(/^([A-Z_][A-Z0-9_]*)=(.*)$/);
+        if (m) vars[m[1]] = m[2].trim();
+      }
+      if (Object.keys(vars).length > 0) return vars;
+    } catch (_) {}
+  }
+  return {};
+}
+
 /**
  * 自动发现 burner Chrome profile 目录（由 qr-bind-douyin-burner 在绑定时创建）。
- * 优先级：1. ZJ_MAIN_DATA_DIR env var（agent .env 里已配置的具体账号目录）
- *          2. 扫根目录取第一个子目录（单账号兜底）
+ * 优先级：1. .env 文件里的 ZJ_MAIN_DATA_DIR（始终重读，保证 qr-bind 更新后立即生效）
+ *          2. process.env.ZJ_MAIN_DATA_DIR（兜底）
+ *          3. 扫根目录取第一个子目录（单账号兜底）
  * Windows: C:\Temp\zj-douyin-burner-v1\<account_label>
  * Mac/Linux: ~/.zenithjoy-agent/chrome-profile/douyin-burner/<account_label>
  */
 function resolveBurnerProfileDir() {
-  // 优先读 agent .env 里明确配置的 burner profile 目录
+  // 始终先读 .env 文件（qr-bind 更新后子进程才能感知最新账号）
+  const envFile = readEnvFile();
+  const fromFile = envFile['ZJ_MAIN_DATA_DIR'];
+  if (fromFile && fromFile !== 'null' && fs.existsSync(fromFile)) {
+    return fromFile;
+  }
+  // 兜底：process.env（agent 启动时的继承值）
   if (process.env.ZJ_MAIN_DATA_DIR && fs.existsSync(process.env.ZJ_MAIN_DATA_DIR)) {
     return process.env.ZJ_MAIN_DATA_DIR;
   }
