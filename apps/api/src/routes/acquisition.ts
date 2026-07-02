@@ -345,10 +345,12 @@ acquisitionRouter.get('/leads', async (req: Request, res: Response) => {
     const leads = result.rows.map((r) => {
       const videoIds: string[] = Array.isArray(r.source_video_ids) ? r.source_video_ids : [];
       const taskKws: string[] = Array.isArray(r.task_keywords) ? r.task_keywords : [];
+      const videoId = videoIds[0] ?? '';
       return {
-        commenter_id: r.sec_uid ?? r.nickname,
+        commenter_id: r.nickname ?? r.sec_uid ?? '',
+        profile_url: r.sec_uid ? `https://www.douyin.com/user/${r.sec_uid}` : null,
         comment_text: r.comment_text ?? '',
-        source_video_url: videoIds[0] ?? '',
+        source_video_url: videoId ? `https://www.douyin.com/video/${videoId}` : '',
         crawled_at: r.created_at,
         grade: r.grade ?? '',
         keyword: r.keyword ?? taskKws[0] ?? '',
