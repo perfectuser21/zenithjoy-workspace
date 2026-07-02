@@ -366,3 +366,126 @@ describe('collect/report — 无需 smoke token，agent 直接调用 [REGRESSION
     const buildOrder = vi.mocked(buildAssignments).mock.invocationCallOrder[0];
     expect(scoreOrder).toBeLessThan(buildOrder);
   });
+
+// ────── Line02 IA 重设计 Track A — collect-tasks/:id/videos + videos/:videoId/leads ──────
+describe('GET /api/acquisition/collect-tasks/:id/videos [BEHAVIOR]', () => {
+  beforeEach(() => { vi.clearAllMocks(); });
+
+  const VALID_TASK_ID = '11111111-1111-1111-1111-111111111111';
+
+  it('无 tenant 上下文 → 401 NO_TENANT', async () => {
+    const res = await request(app).get(`/api/acquisition/collect-tasks/${VALID_TASK_ID}/videos`);
+    expect(res.status).toBe(401);
+  });
+
+  it('非法 UUID → 404（不查库、不 500）', async () => {
+    const res = await request(app)
+      .get('/api/acquisition/collect-tasks/not-a-uuid/videos')
+      .set('x-test-tenant-id', 'tenant-a');
+    expect(res.status).toBe(404);
+    expect(res.body.error.code).toBe('TASK_NOT_FOUND');
+  });
+
+  it('任务不存在（或不属于本 tenant）→ 404', async () => {
+    const mod = await import('../db/connection');
+    (mod.default.query as any).mockResolvedValueOnce({ rows: [] }); // task 查询空
+    const res = await request(app)
+      .get(`/api/acquisition/collect-tasks/${VALID_TASK_ID}/videos`)
+      .set('x-test-tenant-id', 'tenant-a');
+    expect(res.status).toBe(404);
+    expect(res.body.error.code).toBe('TASK_NOT_FOUND');
+  });
+
+  it('跨 tenant 访问他人任务 → 404（IDOR，不泄露存在性）', async () => {
+    const mod = await import('../db/connection');
+    (mod.default.query as any).mockResolvedValueOnce({ rows: [] }); // WHERE tenant_id=$2 过滤掉别人的任务
+    const res = await request(app)
+      .get(`/api/acquisition/collect-tasks/${VALID_TASK_ID}/videos`)
+      .set('x-test-tenant-id', 'tenant-b');
+    expect(res.status).toBe(404);
+  });
+
+  it('本 tenant 任务下有视频 → 200 + videos 数组含 video_id/title/thumbnail_url/publish_date/comment_count', async () => {
+    const mod = await import('../db/connection');
+    (mod.default.query as any)
+      .mockResolvedValueOnce({ rows: [{ id: VALID_TASK_ID }] }) // task 归属校验
+      .mockResolvedValueOnce({
+        rows: [{
+          video_id: '7123456789',
+          task_id: VALID_TASK_ID,
+          title: null,
+          thumbnail_url: null,
+          publish_date: null,
+          comment_count: 3,
+        }],
+      });
+    const res = await request(app)
+      .get(`/api/acquisition/collect-tasks/${VALID_TASK_ID}/videos`)
+      .set('x-test-tenant-id', 'tenant-a');
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+    expect(res.body.data.videos).toHaveLength(1);
+    const v = res.body.data.videos[0];
+    expect(v).toHaveProperty('video_id', '7123456789');
+    expect(v).toHaveProperty('title');
+    expect(v).toHaveProperty('thumbnail_url');
+    expect(v).toHaveProperty('publish_date');
+    expect(v).toHaveProperty('comment_count', 3);
+    // 禁用字段
+    expect(res.body.data).not.toHaveProperty('videoList');
+    expect(res.body.data).not.toHaveProperty('items');
+  });
+});
+
+describe('GET /api/acquisition/videos/:videoId/leads [BEHAVIOR]', () => {
+  beforeEach(() => { vi.clearAllMocks(); });
+
+  it('无 tenant 上下文 → 401 NO_TENANT', async () => {
+    const res = await request(app).get('/api/acquisition/videos/7123456789/leads');
+    expect(res.status).toBe(401);
+  });
+
+  it('视频不存在（或不属于本 tenant）→ 404', async () => {
+    const mod = await import('../db/connection');
+    (mod.default.query as any).mockResolvedValueOnce({ rows: [] });
+    const res = await request(app)
+      .get('/api/acquisition/videos/no-such-video/leads')
+      .set('x-test-tenant-id', 'tenant-a');
+    expect(res.status).toBe(404);
+    expect(res.body.error.code).toBe('VIDEO_NOT_FOUND');
+  });
+
+  it('跨 tenant 访问他人视频 → 404（IDOR）', async () => {
+    const mod = await import('../db/connection');
+    (mod.default.query as any).mockResolvedValueOnce({ rows: [] });
+    const res = await request(app)
+      .get('/api/acquisition/videos/7123456789/leads')
+      .set('x-test-tenant-id', 'tenant-b');
+    expect(res.status).toBe(404);
+  });
+
+  it('本 tenant 视频命中 leads → 200 + schema(leads:array,total:number) + entry 字段 + 禁用字段不出现', async () => {
+    const mod = await import('../db/connection');
+    (mod.default.query as any)
+      .mockResolvedValueOnce({ rows: [{ video_id: '7123456789' }] }) // 视频归属校验
+      .mockResolvedValueOnce({
+        rows: [{ sec_uid: 'MS4wXYZ', nickname: '装修达人', comment_text: '怎么联系', grade: '感兴趣' }],
+      });
+    const res = await request(app)
+      .get('/api/acquisition/videos/7123456789/leads')
+      .set('x-test-tenant-id', 'tenant-a');
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+    expect(Array.isArray(res.body.data.leads)).toBe(true);
+    expect(typeof res.body.data.total).toBe('number');
+    const l = res.body.data.leads[0];
+    expect(l).toHaveProperty('commenter_id', '装修达人');
+    expect(l).toHaveProperty('comment_text', '怎么联系');
+    expect(l).toHaveProperty('source_video_url', 'https://www.douyin.com/video/7123456789');
+    expect(l).toHaveProperty('grade', '感兴趣');
+    expect(l).toHaveProperty('profile_url', 'https://www.douyin.com/user/MS4wXYZ');
+    expect(res.body.data).not.toHaveProperty('comments');
+    expect(res.body.data).not.toHaveProperty('items');
+    expect(res.body.data).not.toHaveProperty('results');
+  });
+});
