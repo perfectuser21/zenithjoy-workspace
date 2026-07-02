@@ -31,7 +31,8 @@ echo "━━━━━━━━━━━━━━━━━━━━━━━━�
 if [ -n "${AGENT_DIR:-}" ]; then
   echo "[smoke] 使用手动指定 AGENT_DIR=$AGENT_DIR"
 else
-  AGENT_DIR=$(ls -d "$USERPROFILE/Desktop/zenithjoy-agent-v"* 2>/dev/null \
+  # runner 可能以系统账号运行，USERPROFILE 不可靠，搜索所有用户 Desktop
+  AGENT_DIR=$(ls -d /c/Users/*/Desktop/zenithjoy-agent-v* 2>/dev/null \
     | sort -t'v' -k2 -V | tail -1 || true)
 fi
 
@@ -40,7 +41,8 @@ fi
 ok "agent 目录: $AGENT_DIR"
 
 # ── 2. 定位 Node.js ────────────────────────────────────────────────
-NODE_EXE="$APPDATA/ZenithJoy/runtime/nodejs/node.exe"
+# runner 以系统账号运行，搜索所有用户的 ZenithJoy runtime
+NODE_EXE=$(ls /c/Users/*/AppData/Roaming/ZenithJoy/runtime/nodejs/node.exe 2>/dev/null | head -1 || true)
 [ -f "$NODE_EXE" ] || NODE_EXE="$(which node 2>/dev/null || true)"
 [ -f "$NODE_EXE" ] || fail "找不到 node.exe。请确认 agent 已完成首次启动（node runtime 自动安装）"
 ok "node: $NODE_EXE"

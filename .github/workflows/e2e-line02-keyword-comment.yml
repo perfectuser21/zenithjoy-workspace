@@ -60,7 +60,8 @@ jobs:
         id: agent-dir
         shell: bash
         run: |
-          AGENT_DIR=$(ls -d "$USERPROFILE/Desktop/zenithjoy-agent-v"* 2>/dev/null \
+          # runner 以系统账号运行，USERPROFILE 指向 system32，需搜索所有用户的 Desktop
+          AGENT_DIR=$(ls -d /c/Users/*/Desktop/zenithjoy-agent-v* 2>/dev/null \
             | sort -t'v' -k2 -V | tail -1 || true)
           echo "AGENT_DIR=$AGENT_DIR" >> "$GITHUB_ENV"
           echo "agent_dir=$AGENT_DIR" >> "$GITHUB_OUTPUT"
