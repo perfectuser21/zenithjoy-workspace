@@ -10,7 +10,7 @@
 set -uo pipefail
 
 REPO_ROOT="$(cd "$(dirname "$0")/../../../.." && pwd)"
-EXPECTED="1.0.90"
+EXPECTED="1.0.91"
 PF="$REPO_ROOT/services/agent/build-modules/line04/preflight.js"
 
 command -v node >/dev/null 2>&1 || { echo "FAIL: 缺 node"; exit 6; }
