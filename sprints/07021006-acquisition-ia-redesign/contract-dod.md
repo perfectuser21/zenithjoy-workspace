@@ -35,13 +35,13 @@ journey_type: user_facing
 - [ ] [ARTIFACT] `apps/dashboard/e2e/acquisition-ia-redesign.spec.ts` 存在且不含 `page.route(`
   Test: node -e "const c=require('fs').readFileSync('apps/dashboard/e2e/acquisition-ia-redesign.spec.ts','utf8');if(c.includes('page.route('))process.exit(1)"
 
-- [ ] [ARTIFACT] `.github/workflows/e2e-acquisition-ia-redesign.yml` 存在且符合规约（runs-on windows-latest；on.paths 含 acquisition pages + acquisition.ts；steps 调用 e2e-verify.ps1；不含 page.route(）
+- [ ] [ARTIFACT] `.github/workflows/e2e-acquisition-ia-redesign.yml` 存在且符合规约
   Test: node -e "const fs=require('fs');const c=fs.readFileSync('.github/workflows/e2e-acquisition-ia-redesign.yml','utf8');if(!c.includes('windows-latest')){console.error('FAIL: 缺 windows-latest');process.exit(1)}if(!c.includes('apps/dashboard/src/pages/acquisition')){console.error('FAIL: on.paths 缺 acquisition/**');process.exit(1)}if(!c.includes('apps/api/src/routes/acquisition.ts')){console.error('FAIL: on.paths 缺 acquisition.ts');process.exit(1)}if(!c.includes('e2e-verify.ps1')){console.error('FAIL: steps 未调用 e2e-verify.ps1');process.exit(1)}if(c.includes('page.route(')){console.error('FAIL: 含禁用 page.route(');process.exit(1)}console.log('OK')"
 
 - [ ] [ARTIFACT] DouyinBurnerBindPage 文件已删除（PRD 废弃范围）
   Test: node -e "const fs=require('fs');const p=['apps/dashboard/src/pages/acquisition/DouyinBurnerBindPage.tsx','apps/dashboard/src/pages/DouyinBurnerBindPage.tsx'];const ex=p.filter(f=>{try{fs.accessSync(f);return true;}catch{return false;}});if(ex.length>0){console.error('FAIL: 仍存在',ex);process.exit(1)}"
 
-- [ ] [ARTIFACT] `services/agent/src/handlers/keyword-search-douyin.ts`（或 .cjs）含视频元数据 CSS 选择器（PRD 范围：agent 抓取补选择器）
+- [ ] [ARTIFACT] `services/agent/src/handlers/keyword-search-douyin.ts`（或 .cjs）含视频元数据 CSS 选择器
   Test: node -e "const fs=require('fs');const candidates=['services/agent/src/handlers/keyword-search-douyin.ts','services/agent/src/handlers/keyword-search-douyin.cjs'];const found=candidates.find(p=>{try{const c=fs.readFileSync(p,'utf8');return c.includes('title')||c.includes('cover')||c.includes('published');} catch{return false;}});if(!found){console.error('FAIL: keyword-search-douyin 无视频元数据选择器（title/cover/published）');process.exit(1)};console.log('OK: 选择器存在 in',found)"
 
 ---
@@ -74,13 +74,11 @@ journey_type: user_facing
     echo OK'
   期望: OK
 
-- [ ] [BEHAVIOR] GET /api/acquisition/collect-tasks/:taskId/videos 返回正确 schema（顶层keys + data内层keys）
+- [ ] [BEHAVIOR] GET /api/acquisition/collect-tasks/:taskId/videos 返回正确 schema — 使用固定 E2E seed UUID（不动态查询，消除 SKIP guard）
   Test: manual:bash -c '
-    DB="${DATABASE_URL:-postgresql://localhost/zenithjoy_test}"
-    TASK_ID=$(psql "$DB" -t -c "SELECT id FROM zenithjoy.acquisition_collect_tasks LIMIT 1" 2>/dev/null | tr -d " ") || TASK_ID=""
-    if [ -z "$TASK_ID" ]; then echo "SKIP: 无 collect_task seed"; exit 0; fi
-    TID=$(psql "$DB" -t -c "SELECT tenant_id FROM zenithjoy.acquisition_collect_tasks WHERE id='"'"'$TASK_ID'"'"'" 2>/dev/null | tr -d " ")
-    RESP=$(curl -sf -H "X-Tenant-Id: $TID" "http://localhost:3000/api/acquisition/collect-tasks/$TASK_ID/videos") || { echo "FAIL: 端点不可达"; exit 1; }
+    SEED_TASK_ID="e2e-task-00000000-0000-0000-0000-000000000001"
+    E2E_TENANT="e2e-tenant-00000000-0000-0000-0000-000000000001"
+    RESP=$(curl -sf -H "X-Tenant-Id: $E2E_TENANT" "http://localhost:3000/api/acquisition/collect-tasks/$SEED_TASK_ID/videos") || { echo "FAIL: 端点不可达（路由未注册返 404 = FAIL，seed 未执行则需先跑 e2e-verify.ps1 Step 2.6）"; exit 1; }
     echo "$RESP" | jq -e ".success == true" || { echo "FAIL: success 非 true"; exit 1; }
     echo "$RESP" | jq -e ".data.videos | type == \"array\"" || { echo "FAIL: data.videos 非 array"; exit 1; }
     echo "$RESP" | jq -e "keys == [\"data\",\"success\",\"timestamp\"]" || { echo "FAIL: 顶层 keys 不匹配"; exit 1; }
@@ -88,13 +86,11 @@ journey_type: user_facing
     echo OK'
   期望: OK
 
-- [ ] [BEHAVIOR] GET /api/acquisition/collect-tasks/:taskId/videos 所有3个禁用字段均不存在（items/results/count）
+- [ ] [BEHAVIOR] GET /api/acquisition/collect-tasks/:taskId/videos 所有3个禁用字段均不存在（items/results/count）— 固定 E2E seed UUID
   Test: manual:bash -c '
-    DB="${DATABASE_URL:-postgresql://localhost/zenithjoy_test}"
-    TASK_ID=$(psql "$DB" -t -c "SELECT id FROM zenithjoy.acquisition_collect_tasks LIMIT 1" 2>/dev/null | tr -d " ") || TASK_ID=""
-    if [ -z "$TASK_ID" ]; then echo "SKIP: 无 collect_task seed"; exit 0; fi
-    TID=$(psql "$DB" -t -c "SELECT tenant_id FROM zenithjoy.acquisition_collect_tasks WHERE id='"'"'$TASK_ID'"'"'" 2>/dev/null | tr -d " ")
-    RESP=$(curl -sf -H "X-Tenant-Id: $TID" "http://localhost:3000/api/acquisition/collect-tasks/$TASK_ID/videos") || { echo "FAIL: 端点不可达"; exit 1; }
+    SEED_TASK_ID="e2e-task-00000000-0000-0000-0000-000000000001"
+    E2E_TENANT="e2e-tenant-00000000-0000-0000-0000-000000000001"
+    RESP=$(curl -sf -H "X-Tenant-Id: $E2E_TENANT" "http://localhost:3000/api/acquisition/collect-tasks/$SEED_TASK_ID/videos") || { echo "FAIL: 端点不可达"; exit 1; }
     echo "$RESP" | jq -e "has(\"items\") | not" || { echo "FAIL: 禁用字段 items 出现"; exit 1; }
     echo "$RESP" | jq -e "has(\"results\") | not" || { echo "FAIL: 禁用字段 results 出现"; exit 1; }
     echo "$RESP" | jq -e "has(\"count\") | not" || { echo "FAIL: 禁用字段 count 出现"; exit 1; }
@@ -110,17 +106,12 @@ journey_type: user_facing
     echo OK'
   期望: OK
 
-- [ ] [BEHAVIOR] 跨 tenant 访问 collect-tasks/:taskId/videos → HTTP 403 或 401（IDOR 安全保证）
+- [ ] [BEHAVIOR] 跨 tenant 访问 collect-tasks/:taskId/videos → HTTP 403（IDOR 安全保证）— 使用固定 E2E seed UUID（TID_A 拥有 task，TID_B 越权访问）
   Test: manual:bash -c '
-    DB="${DATABASE_URL:-postgresql://localhost/zenithjoy_test}"
-    TID_A=$(psql "$DB" -t -c "SELECT id FROM zenithjoy.tenants ORDER BY created_at ASC LIMIT 1" 2>/dev/null | tr -d " ")
-    TID_B=$(psql "$DB" -t -c "SELECT id FROM zenithjoy.tenants ORDER BY created_at DESC LIMIT 1" 2>/dev/null | tr -d " ")
-    if [ -z "$TID_A" ] || [ -z "$TID_B" ] || [ "$TID_A" = "$TID_B" ]; then
-      echo "SKIP: 无法构造两个不同 tenant"; exit 0
-    fi
-    TASK_ID_A=$(psql "$DB" -t -c "SELECT id FROM zenithjoy.acquisition_collect_tasks WHERE tenant_id='"'"'$TID_A'"'"' LIMIT 1" 2>/dev/null | tr -d " ")
-    if [ -z "$TASK_ID_A" ]; then echo "SKIP: TID_A 无 task"; exit 0; fi
-    CODE=$(curl -s -o /dev/null -w "%{http_code}" -H "X-Tenant-Id: $TID_B" "http://localhost:3000/api/acquisition/collect-tasks/$TASK_ID_A/videos")
+    SEED_TASK_ID="e2e-task-00000000-0000-0000-0000-000000000001"
+    E2E_TENANT_A="e2e-tenant-00000000-0000-0000-0000-000000000001"
+    E2E_TENANT_B="e2e-tenant-00000000-0000-0000-0000-000000000099"
+    CODE=$(curl -s -o /dev/null -w "%{http_code}" -H "X-Tenant-Id: $E2E_TENANT_B" "http://localhost:3000/api/acquisition/collect-tasks/$SEED_TASK_ID/videos")
     [ "$CODE" = "403" ] || [ "$CODE" = "401" ] || { echo "FAIL: 跨 tenant 应返 401/403，实际=$CODE"; exit 1; }
     echo OK'
   期望: OK
@@ -182,13 +173,11 @@ journey_type: user_facing
     echo OK'
   期望: OK
 
-- [ ] [BEHAVIOR] video item 必填字段 oracle — 每个 video 含 video_id(string) + video_url(string)（PRD schema）
+- [ ] [BEHAVIOR] video item 必填字段 oracle — 每个 video 含 video_id(string) + video_url(string)（PRD schema）— 使用固定 E2E seed UUID
   Test: manual:bash -c '
-    DB="${DATABASE_URL:-postgresql://localhost/zenithjoy_test}"
-    TASK_ID=$(psql "$DB" -t -c "SELECT id FROM zenithjoy.acquisition_collect_tasks LIMIT 1" 2>/dev/null | tr -d " ") || TASK_ID=""
-    if [ -z "$TASK_ID" ]; then echo "SKIP: 无 collect_task seed"; exit 0; fi
-    TID=$(psql "$DB" -t -c "SELECT tenant_id FROM zenithjoy.acquisition_collect_tasks WHERE id='"'"'$TASK_ID'"'"'" 2>/dev/null | tr -d " ")
-    RESP=$(curl -sf -H "X-Tenant-Id: $TID" "http://localhost:3000/api/acquisition/collect-tasks/$TASK_ID/videos") || { echo "FAIL: 端点不可达"; exit 1; }
+    SEED_TASK_ID="e2e-task-00000000-0000-0000-0000-000000000001"
+    E2E_TENANT="e2e-tenant-00000000-0000-0000-0000-000000000001"
+    RESP=$(curl -sf -H "X-Tenant-Id: $E2E_TENANT" "http://localhost:3000/api/acquisition/collect-tasks/$SEED_TASK_ID/videos") || { echo "FAIL: 端点不可达"; exit 1; }
     VID_COUNT=$(echo "$RESP" | jq ".data.videos | length")
     if [ "$VID_COUNT" -gt 0 ]; then
       echo "$RESP" | jq -e "[.data.videos[] | has(\"video_id\") and has(\"video_url\")] | all" || { echo "FAIL: video item 缺必填字段 video_id/video_url"; exit 1; }
