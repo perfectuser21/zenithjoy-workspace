@@ -118,29 +118,31 @@ def test_sender_cooldown_check_exists_in_source():
 
 # ─────────────────────────────────────────────────────────────────────────────
 # ─────────────────────────────────────────────────────────────────────────────
-# C. last_content 清除防自回复风暴（Bug Fix v1.0.16）
+# C. last_content 哨兵防自回复风暴（1.0.91 升级：哨兵取代 pop）
 #
-# 背景：旧做法 last_content[sender]=reply 在 2026-06-10 引发自回复风暴：
-#   AI 回复存入 last_content → 下次 scan 读截断 preview → Path2 误判变化
-#   → 再调 DeepSeek → 再发一条 → 风暴每 30s 一条持续
-# 修法：ok=True 后 last_content.pop(sender, None)
-#   下次扫: prev=None → "首次见"不触发 → 风暴终止
+# 旧做法 pop：reply 后删除 last_content[sender]
+#   → 下次扫: prev=None → "首次见"不触发（漏消息根因：同内容重发永不触发）
+# 新做法 哨兵：last_content[sender] = "__replied__"
+#   → 下次扫: prev="__replied__" ≠ 任何真实内容 → path-2 必触发
+#   → 重发相同内容也能被 path-2 捕获（path-3 gas anchor 为备份）
+#   → 自回复风暴防护靠 auto_reply.is_duplicate 去重（replied+dedup 双层守护）
 # ─────────────────────────────────────────────────────────────────────────────
 
 def test_last_content_cleared_after_successful_send():
-    """成功回复后必须 pop(sender) 而不是存 reply 完整文本。
+    """成功回复后设哨兵 '__replied__' 而不是存 reply 完整文本，也不是 pop。
 
-    last_content[sender]=reply 是自回复风暴根因（2026-06-10 xian-pc 复现）。
+    旧 pop 根因：下次扫 prev=None → 首次见不触发 → 重发相同内容漏读（2026-07-02 bug）。
+    新哨兵：'__replied__' ≠ 任何真实内容 → path-2 对后续消息必触发 → 不漏读。
+    自回复风暴防护：auto_reply.is_duplicate 去重（replied 集 + dup 双层守护）。
     """
     with open(LISTEN_CHAT_PATH, "r", encoding="utf-8") as f:
         src = f.read()
 
-    assert 'last_content.pop(m["sender"], None)' in src, (
-        "缺少 last_content.pop() — 成功回复后仍存 reply 全文，"
-        "Path2 截断误判 → 自回复风暴"
+    assert 'last_content[m["sender"]] = "__replied__"' in src, (
+        "缺少哨兵 '__replied__' — 成功回复后应设哨兵确保 path-2 对后续消息触发"
     )
     assert 'last_content[m["sender"]] = reply' not in src, (
-        "仍含 last_content[...] = reply — 此行是自回复风暴根因，必须改为 pop"
+        "仍含 last_content[...] = reply — 此行是自回复风暴根因，必须改为哨兵"
     )
 
 
