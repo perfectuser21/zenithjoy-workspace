@@ -1151,7 +1151,7 @@ function startAcquisitionKeywordLoop(cfg: AgentConfig): void {
     try {
       const resp = await fetch(`${apiBase}/api/acquisition/pending-keyword-tasks`);
       if (!resp.ok) return;
-      const data = await resp.json() as { tasks?: Array<{ task_id: string; keyword: string; keywords: string[] }>; total?: number };
+      const data = await resp.json() as { tasks?: Array<{ task_id: string; keyword: string; keywords: string[]; max_videos_per_keyword?: number }>; total?: number };
       const tasks = data.tasks ?? [];
       if (tasks.length === 0) return;
 
@@ -1165,7 +1165,7 @@ function startAcquisitionKeywordLoop(cfg: AgentConfig): void {
 
         // 逐词搜索热门视频
         for (const kw of keywords) {
-          const result = await searchDouyinVideosByKeyword(kw);
+          const result = await searchDouyinVideosByKeyword(kw, { maxVideosPerKeyword: task.max_videos_per_keyword ?? 5 });
           if (result.ok && result.video_urls.length > 0) {
             allVideoUrls.push(...result.video_urls);
           } else if (!result.ok) {
@@ -1199,12 +1199,12 @@ function startAcquisitionKeywordLoop(cfg: AgentConfig): void {
             // crawl-comments-douyin.cjs --stdout-only 返回 {commenters:[{sec_uid,nickname}]}
             // 映射成 comment-score-result 期望的 {commenter_id, text} 格式
             const rawCommenters = Array.isArray((crawlResult as Record<string, unknown>).commenters)
-              ? (crawlResult as Record<string, unknown>).commenters as Array<{ sec_uid?: string; nickname?: string }>
+              ? (crawlResult as Record<string, unknown>).commenters as Array<{ sec_uid?: string; nickname?: string; comment_text?: string }>
               : [];
             if (crawlResult.ok && rawCommenters.length > 0) {
               const comments = rawCommenters.map((c) => ({
                 commenter_id: c.sec_uid ? `/user/${c.sec_uid}` : c.nickname || '',
-                text: c.nickname || '',
+                text: c.comment_text || '',
               }));
               await fetch(`${apiBase}/api/acquisition/comment-score-result`, {
                 method: 'POST',

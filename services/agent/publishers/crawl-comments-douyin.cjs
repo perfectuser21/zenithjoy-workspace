@@ -120,8 +120,13 @@ async function crawlVideoComments(browser, videoUrl, taskId, apiBase) {
         const secUidMatch = profileLink.match(/\/user\/([^/?]+)/);
         const secUid = secUidMatch ? secUidMatch[1] : null;
 
+        const commentText = await item.$eval(
+          '[data-e2e="comment-item-content"], [class*="CommentContent"], [class*="comment-content"], [class*="commentItem"] span',
+          el => el.textContent?.trim() || ''
+        ).catch(() => '');
+
         if (nickname) {
-          commenters.push({ sec_uid: secUid, nickname });
+          commenters.push({ sec_uid: secUid, nickname, comment_text: commentText });
         }
       } catch {}
     }
