@@ -3310,8 +3310,26 @@ def run_real_listen(args: argparse.Namespace) -> int:
                     time.sleep(args.interval)
                     continue
 
+            # 接管名单门（CRM 重做：黑名单主模型 + whitelist 兼容回退，见 cs_config_gate.should_reply）：
+            # - blacklist 模式（takeover_mode='blacklist'）：默认全接管，sender∈blacklist 才跳过。
+            # - whitelist 模式 / 无 takeover_mode 存量配置：配了 whitelist 则只回名单内；没配（空）→ 不限，保持现状。
+            # 是否启用名单门：machine_id 在册 且（blacklist 模式 或 配了非空 whitelist）。
+            # 每轮在 scan 之前刷新（cs_config 上面每 CS_PULL_INTERVAL 拉新）——
+            # scan_unread 的 should_open 谓词与下面 classify_unread 共用同一份 gate。
+            _cs_cfg = cs_config if getattr(args, "machine_id", None) else None
+            _cs_mode = (_cs_cfg or {}).get("takeover_mode")
+            _cs_whitelist = (_cs_cfg or {}).get("whitelist")
+            _roster_gate_on = bool(_cs_cfg) and (_cs_mode == "blacklist" or bool(_cs_whitelist))
+            # roster 谓词：gate 拒绝的 sender（黑名单内部人员等）连开窗都不开——
+            # 开窗会清掉操作者本人的未读角标 + 烧光 SCAN_OPEN_BUDGET（对抗审查 ISSUE-2）。
+            _should_open = (
+                (lambda s: cs_config_gate.should_reply(_cs_cfg, s))
+                if _roster_gate_on else None
+            )
             try:
-                unread = scan_unread(mw, last_preview)
+                unread = scan_unread(mw, last_preview,
+                                     record_skip=_skip_counter.record,
+                                     should_open=_should_open)
             except Exception as exc:
                 last_error = f"{type(exc).__name__}: {exc}"
                 time.sleep(args.interval)
@@ -3420,14 +3438,8 @@ def run_real_listen(args: argparse.Namespace) -> int:
             # ── Phase 1: 过滤可回复的未读 + 并行生成草稿 ──────────────────────────────
             # 生成草稿是纯网络调用、不碰微信窗口，可并发；多人同时来时不再逐个排队等模型，
             # 把"生成"从串行链路里拿出来并行做，最后只串行做"切窗+发送"（单窗口物理限制）。
-            # 接管名单门（CRM 重做：黑名单主模型 + whitelist 兼容回退，见 cs_config_gate.should_reply）：
-            # - blacklist 模式（takeover_mode='blacklist'）：默认全接管，sender∈blacklist 才跳过。
-            # - whitelist 模式 / 无 takeover_mode 存量配置：配了 whitelist 则只回名单内；没配（空）→ 不限，保持现状。
-            # 是否启用名单门：machine_id 在册 且（blacklist 模式 或 配了非空 whitelist）。
-            _cs_cfg = cs_config if getattr(args, "machine_id", None) else None
-            _cs_mode = (_cs_cfg or {}).get("takeover_mode")
-            _cs_whitelist = (_cs_cfg or {}).get("whitelist")
-            _roster_gate_on = bool(_cs_cfg) and (_cs_mode == "blacklist" or bool(_cs_whitelist))
+            # 接管名单门：_cs_cfg/_cs_mode/_cs_whitelist/_roster_gate_on 已在本轮 scan 之前算好
+            # （见上方 scan_unread 调用前的块），classify_unread 与 should_open 谓词共用同一份 gate。
             eligible = []
             for m in unread:
                 key = (m["sender"], m["content"])
@@ -3457,6 +3469,10 @@ def run_real_listen(args: argparse.Namespace) -> int:
                     eligible.append(m)
                     continue
                 _skip_counter.record(_reason)
+                # 终态 skip（已回过/重复/名单拦截）→ 提交触发态防每轮重开白烧预算；
+                # 暂态 skip（sender_cooldown/cooldown/rate_limited）不提交，冷却结束自动重试。
+                if _reason in ("replied", "dup", "roster_gate"):
+                    _commit_reply_success(m, last_preview)
                 # per-reason 日志（保持原有可观测性）
                 if _reason == "roster_gate":
                     if key not in _skip_logged:
