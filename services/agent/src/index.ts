@@ -751,11 +751,12 @@ async function handleCrawlCommentsBurner(payload: {
       ? path.join(process.env.APPDATA || '', 'ZenithJoy', 'runtime', 'nodejs', 'node.exe')
       : 'node');
   return new Promise((resolve) => {
-    // 参数顺序：<video_url> <task_id=''> <apiBase=''> <cdpPort> <mode=--stdout-only>
+    // 参数顺序：<video_url> <task_id> <apiBase=''> <cdpPort> <mode=--stdout-only>
+    // task_id 传 'inline' 而非空字符串 — 脚本 if(!taskId) 视空串为缺失直接 exit
     const proc = spawn(nodeExe, [
       scriptPath,
       videoUrl,
-      '',
+      'inline',
       '',
       cdpPort,
       '--stdout-only',
