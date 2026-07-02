@@ -11,7 +11,7 @@
  *   - user-data-dir：win32 C:\Temp\zj-douyin-burner-v1\<accountLabel>
  *                    其它    ~/.zenithjoy-agent/chrome-profile/douyin-burner/<accountLabel>
  *   - sessionPath ：含 /burner/ 子目录 → <sessionDir>/douyin/burner/<accountLabel>.json
- *   - loginUrl    ：https://www.douyin.com（用户端抖音，与爬评论域一致）
+ *   - loginUrl    ：https://creator.douyin.com/（创作者后台，无 www 风控，.douyin.com cookie 爬评论时通用）
  *
  * Usage:  node qr-bind-douyin-burner.cjs <account_label> [session_dir] [user_data_dir_root] [timeout_ms]
  * Output: 最后一行 stdout JSON → { ok, sessionPath, cookie_local_path, qr_login, account_nickname, error? }
@@ -36,7 +36,7 @@ const DEFAULT_SESSION_DIR = path.join(os.homedir(), '.zenithjoy-agent', 'session
 const sessionDir = sessionDirArg || DEFAULT_SESSION_DIR;
 // 关键：含 /burner/ 子目录，与 Path 1 main 隔离（与 handler getBurnerSessionPath 同约定）
 const sessionPath = path.join(sessionDir, 'douyin', 'burner', `${accountLabel}.json`);
-const loginUrl = 'https://www.douyin.com';
+const loginUrl = 'https://creator.douyin.com/';
 
 function findSystemChrome() {
   if (process.platform !== 'win32') return null;
@@ -75,12 +75,14 @@ function getBurnerUserDataDir() {
   );
 }
 
-const SESSION_COOKIE_NAMES = ['sessionid_ss', 'sessionid', 'sid_tt'];
+// sid_tt 是访客级 session tracker，www.douyin.com 首次加载就会种（未登录也有）→ 不能用于检测登录完成。
+// 只认 sessionid_ss / sessionid：这两个仅在扫码登录完成后才出现。
+const SESSION_COOKIE_NAMES = ['sessionid_ss', 'sessionid'];
 
 function isSessionCookie(c) {
   return (
     typeof c?.value === 'string' &&
-    c.value.length > 0 &&
+    c.value.length > 20 &&  // 登录 session token 至少 20 位，排除短占位值
     typeof c?.domain === 'string' &&
     (c.domain.endsWith('.douyin.com') || c.domain === 'douyin.com') &&
     SESSION_COOKIE_NAMES.includes(c.name)
