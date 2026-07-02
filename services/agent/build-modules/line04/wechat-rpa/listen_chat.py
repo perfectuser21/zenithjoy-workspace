@@ -495,26 +495,42 @@ def scan_unread(mw: Any, last_content: Optional[Dict[str, str]] = None) -> List[
             name = it.element_info.name or ""
         except Exception:
             continue
-        # 只处理有 [N条] 红点的会话（bug② 修法(a)：移除全量内容变化检测，减延迟）。
-        # 旧 path-2（content change）在聊天窗口打开时有用，但需遍历所有 ListItem 做内容比较，
-        # 是 ~64s 延迟的主源；移除后 scan 只做最轻量的角标筛选。
+        # 路径 1：有 [N条] 未读角标 → 未读。
         parsed = _parse_item_name(name)
-        if not parsed:
+        if parsed:
+            seen_senders.add(parsed["sender"])
+            # N>1 时打开会话读取全部 N 条消息，合并成一次 AI 回复的上下文。
+            # 一人连发 3 条 → AI 看到 3 条合并上下文，而不是只有最后 1 条预览。
+            n = parse_unread_count(name)
+            if n > 1:
+                try:
+                    if _open_chat(mw, it, parsed["sender"]):
+                        msgs = read_chat_panel_messages(mw, n)
+                        if msgs:
+                            parsed = {**parsed, "content": aggregate_messages(msgs)}
+                except Exception:
+                    pass  # 读取失败 → 回退到单条 content（会话仍进队，不丢失回复机会）
+            out.append({**parsed, "_item": it})
             continue
-        seen_senders.add(parsed["sender"])
-        # bug② 修法(b)：N>1 时打开会话读取全部 N 条消息，合并成一次 AI 回复的上下文。
-        # 一人连发 3 条 → AI 看到 3 条合并上下文，而不是只有最后 1 条预览。
-        n = parse_unread_count(name)
-        if n > 1:
-            try:
-                if _open_chat(mw, it, parsed["sender"]):
-                    msgs = read_chat_panel_messages(mw, n)
-                    if msgs:
-                        parsed = {**parsed, "content": aggregate_messages(msgs)}
-            except Exception:
-                pass  # 读取失败 → 回退到单条 content（会话仍进队，不丢失回复机会）
-        out.append({**parsed, "_item": it})
-    # last_content 参数保留（向后兼容调用方），但 path-2 已移除，不再更新
+        # 路径 2（2026-07-02 恢复；#984 为减延迟删除本路径 → 夹在别的回复冷却窗口里、角标被清的
+        # 消息永久漏读，用户实测发 5 条漏"什么价格"。基线 74654efd 靠本路径"问啥回啥"不丢）：
+        # 无角标但内容 != 上次见到（last_content）→ 也算未读要回。不依赖角标，专治"角标被清后失去
+        # 未读信号"。首次见到只记录不触发（防历史消息误当新消息）。自我回复风暴由主循环 reply 成功后
+        # last_content.pop(sender) 护栏挡（把 reply 存进 last_content 反而会误触发本路径）。
+        if last_content is not None:
+            info = _parse_item_name(name, require_unread=False)
+            if info and info["sender"] not in seen_senders:
+                prev = last_content.get(info["sender"])
+                if prev is not None and prev != info["content"]:
+                    seen_senders.add(info["sender"])
+                    out.append({**info, "_item": it})
+                elif prev is None:
+                    # 首次见到这个会话：记录内容但不触发回复
+                    last_content[info["sender"]] = info["content"]
+    # 更新 last_content（供下轮内容变化比较）
+    if last_content is not None:
+        for m in out:
+            last_content[m["sender"]] = m["content"]
     _restore_window_state(mw, orig_state)
     return out
 
