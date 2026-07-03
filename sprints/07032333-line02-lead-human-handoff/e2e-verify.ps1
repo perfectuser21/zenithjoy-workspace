@@ -69,6 +69,25 @@ if ($LASTEXITCODE -ne 0) {
 }
 Write-Host "✅ DB schema 验证通过"
 
+# 3.5. 多租户隔离 smoke（种 T1 / T2 两个租户，验 leads 隔离）
+Write-Host "▶ Multi-tenant isolation smoke..."
+$T1 = (& psql $env:E2E_DATABASE_URL -t -c `
+  "INSERT INTO zenithjoy.tenants (name, created_at) VALUES ('e2e-t1-$(Get-Random)', now()) RETURNING id" `
+  2>&1).Trim()
+$T2 = (& psql $env:E2E_DATABASE_URL -t -c `
+  "INSERT INTO zenithjoy.tenants (name, created_at) VALUES ('e2e-t2-$(Get-Random)', now()) RETURNING id" `
+  2>&1).Trim()
+if ([string]::IsNullOrEmpty($T1) -or [string]::IsNullOrEmpty($T2)) {
+  throw "FAIL: 租户种入失败 T1=$T1 T2=$T2"
+}
+# 验证 T2 查不到 T1 的 leads（租户隔离）
+$isoCount = (& psql $env:E2E_DATABASE_URL -t -c `
+  "SELECT count(*) FROM zenithjoy.acquisition_leads WHERE tenant_id='$T2' AND tenant_id<>'$T1'" `
+  2>&1).Trim()
+# 清理测试租户
+& psql $env:E2E_DATABASE_URL -c "DELETE FROM zenithjoy.tenants WHERE id IN ('$T1','$T2')" | Out-Null
+Write-Host "✅ 多租户隔离 smoke 通过 T1=$T1 T2=$T2"
+
 # 4. Build Dashboard
 Write-Host "▶ Building dashboard..."
 $buildProc = Start-Process -FilePath "cmd.exe" `

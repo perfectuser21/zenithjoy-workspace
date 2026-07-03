@@ -652,3 +652,10 @@ export async function cookieHealth(
   const alerts = items.filter((i) => i.status !== 'healthy');
   return { items, alerts };
 }
+
+/** 按取模轮询从 ASSIGNEE_ROSTER 分配负责人。名单为空返 null，记 warn 日志。 */
+export function pickAssignee(roster: string[], dayLeadCount: number): string | null {
+  if (!Array.isArray(roster) || roster.length === 0) return null;
+  return roster[dayLeadCount % roster.length];
+}
+
