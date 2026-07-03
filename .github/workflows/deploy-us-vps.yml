@@ -34,65 +34,79 @@ jobs:
           version: latest
 
       - name: Deploy via SSH (build release + 切常驻 staging :5201 + golden-path)
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.US_MAC_TAILSCALE_IP }}
-          username: ${{ secrets.US_MAC_USER }}
-          key: ${{ secrets.US_MAC_SSH_KEY }}
-          port: 22
-          script_stop: true
-          envs: DEPLOY_SHA
-          command_timeout: 20m
-          script: |
-            set -euo pipefail
-            REPO=/Users/administrator/perfect21/zenithjoy
-            DEPLOY_SHA="${{ github.sha }}"
+        env:
+          SSH_KEY: ${{ secrets.US_MAC_SSH_KEY }}
+          SSH_HOST: ${{ secrets.US_MAC_TAILSCALE_IP }}
+          SSH_USER: ${{ secrets.US_MAC_USER }}
+          DEPLOY_SHA: ${{ github.sha }}
+        timeout-minutes: 25
+        run: |
+          # 用宿主机 bash 直接 ssh（Tailscale daemon 装在宿主机，能到 Tailscale IP）。
+          # appleboy/ssh-action 在 Docker 里跑，容器走 bridge 网络，看不到宿主机 Tailscale 接口。
+          KEY_FILE=$(mktemp)
+          printf '%s\n' "$SSH_KEY" > "$KEY_FILE"
+          chmod 600 "$KEY_FILE"
 
-            echo "=== [1/3] git sync → ${DEPLOY_SHA} ==="
-            git -C "$REPO" fetch --force --prune origin main
-            git -C "$REPO" reset --hard "$DEPLOY_SHA"
+          # 用 bash -s -- "$DEPLOY_SHA" 把 SHA 作为 $1 传入，避免 heredoc 展开时注入
+          ssh -o StrictHostKeyChecking=no \
+              -o ConnectTimeout=30 \
+              -o ServerAliveInterval=60 \
+              -i "$KEY_FILE" \
+              -p 22 \
+              "${SSH_USER}@${SSH_HOST}" \
+              bash -s -- "$DEPLOY_SHA" << 'REMOTE_EOF'
+          set -euo pipefail
+          DEPLOY_SHA="$1"
+          REPO=/Users/administrator/perfect21/zenithjoy
 
-            echo "=== [2/3] install deps（build 在 build_release 内做，写进 releases/<sha>/）==="
-            cd "$REPO"
-            npm ci --workspace=apps/api --ignore-scripts 2>/dev/null || \
-              (cd "$REPO/apps/api" && npm ci --ignore-scripts)
+          echo "=== [1/3] git sync → ${DEPLOY_SHA} ==="
+          git -C "$REPO" fetch --force --prune origin main
+          git -C "$REPO" reset --hard "$DEPLOY_SHA"
 
-            echo "=== [3/3] 部署候选到【常驻 staging :5201】+ golden-path（绝不碰生产 :5200）==="
-            # shellcheck source=/dev/null
-            source "$REPO/.github/workflows/scripts/deploy-lib.sh"
+          echo "=== [2/3] install deps（build 在 build_release 内做，写进 releases/<sha>/）==="
+          cd "$REPO"
+          npm ci --workspace=apps/api --ignore-scripts 2>/dev/null || \
+            (cd "$REPO/apps/api" && npm ci --ignore-scripts)
 
-            # mmv 上下文（deploy-lib hook 实现读取）
-            export ZJ_REPO="$REPO"
-            export ZJ_API_DIR="$REPO/apps/api"
-            export ZJ_PROD_PORT=5200
-            export ZJ_STAGING_PORT=5201
-            export ZJ_PROD_LABEL=com.zenithjoy.api
-            export ZJ_STAGING_LABEL=com.zenithjoy.api.staging
-            export ZJ_STAGING_DB=zenithjoy_test
-            export ZJ_PROD_PLIST="$HOME/Library/LaunchAgents/com.zenithjoy.api.plist"
-            export ZJ_NODE=/opt/homebrew/bin/node
-            export ZJ_RELEASES_DIR="${ZJ_RELEASES_DIR:-/Users/administrator/zenithjoy-releases}"
-            export ZJ_KEEP_RELEASES="${ZJ_KEEP_RELEASES:-5}"
-            export BRAIN_URL="${BRAIN_URL:-http://localhost:5221}"
-            mkdir -p "$ZJ_RELEASES_DIR"
+          echo "=== [3/3] 部署候选到【常驻 staging :5201】+ golden-path（绝不碰生产 :5200）==="
+          # shellcheck source=/dev/null
+          source "$REPO/.github/workflows/scripts/deploy-lib.sh"
 
-            # 只跑「起常驻 staging + 验证」两步——绝不进 promote（promote 是独立人工 workflow）。
-            #   ① build release + 切常驻 staging :5201（连 test 库）
-            #   ② 在 :5201 跑部署验证（migration on test / health / 版本断言 / golden-path）
-            # 任一失败：报 P0，:5200 全程未触碰。
-            if ! staging_deploy_slot "$DEPLOY_SHA"; then
-              staging_alert_p0 "候选 ${DEPLOY_SHA} 起常驻 staging :5201 失败，:5200 未触碰" || true
-              exit 1
-            fi
-            if ! staging_verify "$DEPLOY_SHA"; then
-              staging_alert_p0 "候选 ${DEPLOY_SHA} staging :5201 验证红，:5200 未触碰，等待修复后重试" || true
-              exit 1
-            fi
-            # 部署成功后 prune 旧 release（current/staging 指向的绝不删）
-            prune_old_releases "$ZJ_RELEASES_DIR" "$ZJ_KEEP_RELEASES" || true
+          # mmv 上下文（deploy-lib hook 实现读取）
+          export ZJ_REPO="$REPO"
+          export ZJ_API_DIR="$REPO/apps/api"
+          export ZJ_PROD_PORT=5200
+          export ZJ_STAGING_PORT=5201
+          export ZJ_PROD_LABEL=com.zenithjoy.api
+          export ZJ_STAGING_LABEL=com.zenithjoy.api.staging
+          export ZJ_STAGING_DB=zenithjoy_test
+          export ZJ_PROD_PLIST="$HOME/Library/LaunchAgents/com.zenithjoy.api.plist"
+          export ZJ_NODE=/opt/homebrew/bin/node
+          export ZJ_RELEASES_DIR="${ZJ_RELEASES_DIR:-/Users/administrator/zenithjoy-releases}"
+          export ZJ_KEEP_RELEASES="${ZJ_KEEP_RELEASES:-5}"
+          export BRAIN_URL="${BRAIN_URL:-http://localhost:5221}"
+          mkdir -p "$ZJ_RELEASES_DIR"
 
-            echo "✅ 候选 ${DEPLOY_SHA} 已上常驻 staging :5201 并通过 golden-path。"
-            echo "   ▶ 人工打开 staging 看过后，去 Actions 手点 promote-prod.yml 放行到生产 :5200。"
+          # 只跑「起常驻 staging + 验证」两步——绝不进 promote（promote 是独立人工 workflow）。
+          #   ① build release + 切常驻 staging :5201（连 test 库）
+          #   ② 在 :5201 跑部署验证（migration on test / health / 版本断言 / golden-path）
+          # 任一失败：报 P0，:5200 全程未触碰。
+          if ! staging_deploy_slot "$DEPLOY_SHA"; then
+            staging_alert_p0 "候选 ${DEPLOY_SHA} 起常驻 staging :5201 失败，:5200 未触碰" || true
+            exit 1
+          fi
+          if ! staging_verify "$DEPLOY_SHA"; then
+            staging_alert_p0 "候选 ${DEPLOY_SHA} staging :5201 验证红，:5200 未触碰，等待修复后重试" || true
+            exit 1
+          fi
+          # 部署成功后 prune 旧 release（current/staging 指向的绝不删）
+          prune_old_releases "$ZJ_RELEASES_DIR" "$ZJ_KEEP_RELEASES" || true
+
+          echo "✅ 候选 ${DEPLOY_SHA} 已上常驻 staging :5201 并通过 golden-path。"
+          echo "   ▶ 人工打开 staging 看过后，去 Actions 手点 promote-prod.yml 放行到生产 :5200。"
+          REMOTE_EOF
+
+          rm -f "$KEY_FILE"
 
   notify-failure:
     name: Notify Brain on failure
