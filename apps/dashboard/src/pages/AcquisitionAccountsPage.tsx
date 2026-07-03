@@ -115,39 +115,40 @@ export default function AcquisitionAccountsPage() {
         {loading ? (
           <div className="text-sm text-gray-500 dark:text-gray-400">载入中…</div>
         ) : (
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-slate-200 dark:border-slate-700">
-                <th className="py-2 text-left text-gray-500 dark:text-gray-400 font-medium">小号名</th>
-                <th className="py-2 text-left text-gray-500 dark:text-gray-400 font-medium">抖音昵称</th>
-                <th className="py-2 text-left text-gray-500 dark:text-gray-400 font-medium">绑定机器</th>
-                <th className="py-2 text-left text-gray-500 dark:text-gray-400 font-medium">绑定时间</th>
-                <th className="py-2 text-left text-gray-500 dark:text-gray-400 font-medium">健康状态</th>
-              </tr>
-            </thead>
-            <tbody>
-              {sessions.length === 0 ? (
-                <tr>
-                  <td colSpan={5} className="py-6 text-center text-sm text-gray-500 dark:text-gray-400">
-                    暂无小号 — 在下方绑定第一个
-                  </td>
+          <>
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-slate-200 dark:border-slate-700">
+                  <th className="py-2 text-left text-gray-500 dark:text-gray-400 font-medium">小号名</th>
+                  <th className="py-2 text-left text-gray-500 dark:text-gray-400 font-medium">抖音昵称</th>
+                  <th className="py-2 text-left text-gray-500 dark:text-gray-400 font-medium">绑定机器</th>
+                  <th className="py-2 text-left text-gray-500 dark:text-gray-400 font-medium">绑定时间</th>
+                  <th className="py-2 text-left text-gray-500 dark:text-gray-400 font-medium">健康状态</th>
                 </tr>
-              ) : sessions.map((s) => (
-                <tr key={s.account_label} className={`border-b border-slate-100 dark:border-slate-800 ${s.status === 'needs_rebind' ? 'bg-red-50 dark:bg-red-900/10' : ''}`}>
-                  <td className="py-2 text-gray-900 dark:text-white">{s.account_label}</td>
-                  <td className="py-2 text-gray-700 dark:text-gray-300">{s.account_nickname || '—'}</td>
-                  <td className="py-2 text-gray-700 dark:text-gray-300" data-testid="machine-hostname-cell">
-                    {s.agent_hostname ?? '—'}
-                    {s.agent_status === 'offline' && (
-                      <span data-testid="machine-status-offline" className="ml-1 inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-gray-700 text-gray-300">离线</span>
-                    )}
-                  </td>
-                  <td className="py-2 text-gray-500 dark:text-gray-400">{s.bound_at || '—'}</td>
-                  <td className="py-2"><StatusBadge status={s.status} /></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {sessions.map((s) => (
+                  <tr key={s.account_label} className={`border-b border-slate-100 dark:border-slate-800 ${s.status === 'needs_rebind' ? 'bg-red-50 dark:bg-red-900/10' : ''}`}>
+                    <td className="py-2 text-gray-900 dark:text-white">{s.account_label}</td>
+                    <td className="py-2 text-gray-700 dark:text-gray-300">{s.account_nickname || '—'}</td>
+                    <td className="py-2 text-gray-700 dark:text-gray-300" data-testid="machine-hostname-cell">
+                      {s.agent_hostname ?? '—'}
+                      {s.agent_status === 'offline' && (
+                        <span data-testid="machine-status-offline" className="ml-1 inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-gray-700 text-gray-300">离线</span>
+                      )}
+                    </td>
+                    <td className="py-2 text-gray-500 dark:text-gray-400">{s.bound_at || '—'}</td>
+                    <td className="py-2"><StatusBadge status={s.status} /></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {sessions.length === 0 && (
+              <div className="py-6 text-center text-sm text-gray-500 dark:text-gray-400">
+                暂无小号 — 在下方绑定第一个
+              </div>
+            )}
+          </>
         )}
       </section>
 
