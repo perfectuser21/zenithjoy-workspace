@@ -190,7 +190,7 @@ def can_send(action: str, wechat_id: str) -> Tuple[bool, Optional[str]]:
         # 3) 通过 → INSERT
         conn.execute(
             "INSERT INTO sends (wechat_id, action, sent_at) VALUES (?, ?, ?)",
-            (wechat_id, action, now.strftime("%Y-%m-%d %H:%M:%S")),
+            (wechat_id, action, now.strftime("%Y-%m-%d %H:%M:%S.%f")),
         )
         conn.execute("COMMIT")
         return (True, None)
