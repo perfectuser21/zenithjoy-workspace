@@ -700,21 +700,32 @@ def _read_trailing_for(mw: Any, cand: Dict[str, Any],
             st, cand["badge"], replied_anchor=_REPLY_ANCHOR.get(cand["sender"]))
 
     stripped, msgs = _split(bubbles)
-    # 完整性校验（v1.0.97）：角标 N 条但 trailing 只捞到 M<N → 屏显气泡缺 UIA 节点
-    # （2026-07-03 08:18 探针实锤：消息显示在屏幕上、y 坐标留空洞、树里没节点）
-    # → 滚动 jiggle 强制 Qt 重建后重读一次，取更全的结果。
+    # 完整性双读（v1.0.99，替代 v1.0.97 的角标校验）：**无条件** jiggle 微滚后
+    # 重读一次，trailing 取更全的。角标数不可信——会话打开时进来的消息被微信
+    # 自动已读、不计入角标，其 UIA 节点又可能没挂出来（2026-07-03 09:15 实锤：
+    # "什么价格 现在"无角标+首读缺节点 → 角标校验假通过 → 锚点越过 → 永久丢）。
+    _jiggle_msg_list(mw)
+    time.sleep(_BUBBLE_READ_POLL_SLEEP)
+    bubbles2 = read_chat_bubbles(mw)
+    if bubbles2:
+        stripped2, msgs2 = _split(bubbles2)
+        if len(msgs2) > len(msgs):
+            if record_skip is not None:
+                record_skip("bubble_incomplete_reread")
+            _log(f"bubble_incomplete sender={cand['sender']} badge={cand['badge']} "
+                 f"首读={len(msgs)} 双读={len(msgs2)} → 用双读结果")
+            stripped, msgs = stripped2, msgs2
+    # 角标加严：双读后仍少于角标数 → 再滚一次重读（最后一搏，绝不静默）
     if cand["badge"] > 0 and len(msgs) < cand["badge"]:
         if record_skip is not None:
             record_skip("bubble_incomplete_reread")
         _jiggle_msg_list(mw)
         time.sleep(_BUBBLE_READ_POLL_SLEEP)
-        bubbles2 = read_chat_bubbles(mw)
-        if bubbles2:
-            stripped2, msgs2 = _split(bubbles2)
-            if len(msgs2) > len(msgs):
-                _log(f"bubble_incomplete sender={cand['sender']} badge={cand['badge']} "
-                     f"首读={len(msgs)} 重读={len(msgs2)} → 用重读结果")
-                stripped, msgs = stripped2, msgs2
+        bubbles3 = read_chat_bubbles(mw)
+        if bubbles3:
+            stripped3, msgs3 = _split(bubbles3)
+            if len(msgs3) > len(msgs):
+                stripped, msgs = stripped3, msgs3
     # v1.0.95 陈旧确认扩展：预览本身命中已发送历史 = 会话最新消息就是我方回复
     # → 无新客户消息（方向历史缺失时 _stale_badge_confirmed 永不命中导致无限重试）。
     cand["_stale_ok"] = (_stale_badge_confirmed(cand["content"], stripped)
