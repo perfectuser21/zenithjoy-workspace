@@ -1,0 +1,31 @@
+{
+  "initiative_id": "8594ef9a-a0",
+  "journey_type": "autonomous",
+  "journey_type_reason": "DesktopLeaseBroker 是后台守护层纯状态机，无 UI，agent core Node.js 进程托管",
+  "tasks": [
+    {
+      "task_id": "ws1",
+      "title": "实现 DesktopLeaseBroker 状态机 + wechat-rpa.ts IPC 转发 + listen_chat.py acquire/release 集成",
+      "scope": "新建 services/agent/src/desktop-lease-broker.ts（acquire/renew/release/watchdog状态机），修改 services/agent/src/handlers/wechat-rpa.ts（IPC 转发 desktop_lease_* 消息到 Broker），修改 services/agent/wechat-rpa/listen_chat.py（_set_foreground_window/_open_chat 前后 acquire/release 调用），新建 services/agent/wechat-rpa/tests/test_listen_chat_lease.py（Python 集成测试），更新 services/agent/vitest.config.ts（加入 sprint 测试路径）",
+      "dod": [
+        "[ARTIFACT] services/agent/src/desktop-lease-broker.ts 新建，导出 DesktopLeaseBroker 类含 TTL 看门狗",
+        "[ARTIFACT] services/agent/src/handlers/wechat-rpa.ts 含 desktop_lease_acquire / desktop_lease_release IPC 转发",
+        "[ARTIFACT] services/agent/wechat-rpa/listen_chat.py 在 _set_foreground_window/_open_chat 前后调用 acquire/release",
+        "[BEHAVIOR] vitest run desktop-lease-broker.test.ts 全绿（acquire/renew/release/watchdog/优先级/幂等 8 个测试）",
+        "[BEHAVIOR] listen_chat.py --dryrun --inject-message stderr 含 [desktop_lease] acquire granted + [desktop_lease] release，不含 acquire failed（接缝 1，xian-rog 真验）",
+        "[BEHAVIOR] Brain log watchdog_triggered 在 zenithjoy.agent_events 中有 3min 时间窗内记录（接缝 2，xian-rog 真验）"
+      ],
+      "files": [
+        "services/agent/src/desktop-lease-broker.ts",
+        "services/agent/src/handlers/wechat-rpa.ts",
+        "services/agent/wechat-rpa/listen_chat.py",
+        "services/agent/wechat-rpa/tests/test_listen_chat_lease.py",
+        "services/agent/vitest.config.ts",
+        "sprints/0703-line04-desktop-lease-broker/tests/desktop-lease-broker.test.ts"
+      ],
+      "depends_on": [],
+      "complexity": "M",
+      "estimated_minutes": 90
+    }
+  ]
+}
