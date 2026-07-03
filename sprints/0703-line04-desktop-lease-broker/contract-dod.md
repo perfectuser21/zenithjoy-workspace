@@ -77,7 +77,7 @@ target_environment: windows_wechat
 > **接缝 1 断言**（真机验证才算 done；未真验标 `logic-done-pending`）
 
 - [ ] [BEHAVIOR] listen_chat.py --dryrun --inject-message → stderr 含 [desktop_lease] acquire granted + [desktop_lease] release，不含 acquire failed
-  Test: manual:bash -c 'AGENT_DIR="${AGENT_DIR:-$LOCALAPPDATA/zenithjoy-agent}"; PYTHON="$AGENT_DIR/python-embedded/python.exe"; SCRIPT="$AGENT_DIR/wechat-rpa/listen_chat.py"; STDERR_OUT=$("$PYTHON" "$SCRIPT" --dryrun --inject-message '"'"'{"sender":"E2E测试客户","wechat_id":"wxid_e2etest","content":"测试"}'"'"' 2>&1 1>/dev/null) || true; echo "$STDERR_OUT" | grep -q "\[desktop_lease\] acquire granted" || { echo "FAIL: 缺 acquire granted"; exit 1; }; echo "$STDERR_OUT" | grep -q "\[desktop_lease\] release" || { echo "FAIL: 缺 release"; exit 1; }; echo "$STDERR_OUT" | grep -q "\[desktop_lease\] acquire failed" && { echo "FAIL: 出现 acquire failed"; exit 1; } || true; echo OK'
+  Test: manual:bash -c 'AGENT_DIR="${AGENT_DIR:-$LOCALAPPDATA/zenithjoy-agent}"; PYTHON="$AGENT_DIR/python-embedded/python.exe"; SCRIPT="$AGENT_DIR/wechat-rpa/listen_chat.py"; STDERR_OUT=$("$PYTHON" "$SCRIPT" --dryrun --inject-message '"'"'{"sender":"E2E测试客户","wechat_id":"wxid_e2etest","content":"测试"}'"'"' 2>&1 1>/dev/null || true); echo "$STDERR_OUT" | grep -q "\[desktop_lease\] acquire granted" || { echo "FAIL: 缺 acquire granted"; exit 1; }; echo "$STDERR_OUT" | grep -q "\[desktop_lease\] release" || { echo "FAIL: 缺 release"; exit 1; }; echo "$STDERR_OUT" | grep -q "\[desktop_lease\] acquire failed" && { echo "FAIL: 出现 acquire failed"; exit 1; } || true; echo OK'
   期望: OK
   接缝: 真机 xian-rog 验证（agent core 已启动）
 

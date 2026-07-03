@@ -1,4 +1,4 @@
-# Sprint Contract Draft (Round 2)
+# Sprint Contract Draft (Round 3)
 
 ## Response Schema（推导来源: N/A — 任务无 HTTP 响应）
 
@@ -270,7 +270,7 @@ curl -sf "$BRAIN_URL/api/brain/health" | jq -e '.ok == true' \
 
 STDERR_OUT=$("$PYTHON_EXE" "$LISTEN_CHAT" --dryrun \
   --inject-message '{"sender":"E2E测试客户","wechat_id":"wxid_e2e_test","content":"自动测试消息"}' \
-  2>&1 1>/dev/null) || true
+  2>&1 1>/dev/null || true)
 
 echo "$STDERR_OUT" | grep -q "\[desktop_lease\] acquire granted" \
   || { echo "FAIL: 缺 [desktop_lease] acquire granted 日志"; exit 1; }
