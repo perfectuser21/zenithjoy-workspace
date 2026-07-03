@@ -13,6 +13,7 @@
         "[BEHAVIOR] acquisition_leads 表含 latest_reply / latest_reply_at / assignee / comment_replied_at 列",
         "[BEHAVIOR] acquisition_orphan_replies 表存在（video_id / commenter_nickname / reply_text / captured_at / tenant_id）",
         "[BEHAVIOR] pickAssignee(['A','B'], n) 取模轮询返正确负责人；空名单返 null",
+        "[BEHAVIOR] pollReplies 逻辑层：注入 fake CommentFetcher + LeadWriter，验回复匹配/多条取最新/无回复不写 DB/孤儿写 acquisition_orphan_replies（4 vitest tests pass）",
         "[BEHAVIOR] LeadsTable 组件渲染'最新回复'和'负责人'列头，不渲染'触达状态'",
         "[BEHAVIOR] GET /api/acquisition/leads 不含禁用字段 reply_text / last_reply",
         "[BEHAVIOR] 多租户隔离：GET /api/acquisition/leads 只返本租户数据",
@@ -29,7 +30,8 @@
         "apps/dashboard/src/components/LeadsTable.tsx",
         "apps/dashboard/src/pages/LeadsPage.tsx",
         "apps/dashboard/src/pages/AcquisitionTasksPage.tsx",
-        "apps/dashboard/e2e/leads-unified-table.spec.ts"
+        "apps/dashboard/e2e/leads-unified-table.spec.ts",
+        "sprints/07032333-line02-lead-human-handoff/tests/reply-poll-logic.test.ts"
       ],
       "depends_on": [],
       "complexity": "L",

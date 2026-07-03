@@ -61,6 +61,10 @@ journey_type: user_facing
   Test: manual:bash -c 'node -e "const {pickAssignee}=require(\"./apps/api/src/services/acquisition-dispatch.js\");const r=[\"客服A\",\"客服B\"];if(pickAssignee(r,0)!==\"客服A\")process.exit(1);if(pickAssignee(r,1)!==\"客服B\")process.exit(1);if(pickAssignee(r,2)!==\"客服A\")process.exit(1);if(pickAssignee([],0)!==null)process.exit(1);console.log(\"OK\")"'
   期望: OK
 
+- [ ] [BEHAVIOR] pollReplies 逻辑层 — mock Douyin API 返回含回复的评论列表，handler 调用后 lead.latest_reply / latest_reply_at 被写入，多条回复取时间最新，无回复不触发 DB 写入，孤儿场景写 acquisition_orphan_replies（PRD E2E点3 逻辑层覆盖）
+  Test: manual:bash -c 'npx vitest run sprints/07032333-line02-lead-human-handoff/tests/reply-poll-logic.test.ts --reporter=verbose 2>&1; exit $?'
+  期望: 4 tests pass（当前 TDD Red — Generator 实现 services/agent/src/line02/reply-poller.ts pollReplies 后变绿）
+
 - [ ] [BEHAVIOR] GET /api/acquisition/leads 响应 total 字段为 number 类型
   Test: manual:bash -c 'RESP=$(curl -sf -H "X-Tenant-Id: test-tenant" http://localhost:3000/api/acquisition/leads); echo "$RESP" | jq -e ".total | type == \"number\"" || { echo "FAIL: total 非 number"; exit 1; }; echo OK'
   期望: OK

@@ -1,4 +1,4 @@
-# Sprint Contract Draft (Round 2)
+# Sprint Contract Draft (Round 3)
 
 ## Response Schema（推导来源: api_registry 推导 + PRD 字面）
 
@@ -85,7 +85,14 @@
 - 找到对方回复后 `acquisition_leads.latest_reply` 更新为最新一条回复文本（多条取时间最新）
 - `latest_reply_at` 同步更新为该回复时间戳
 
-**验证命令**:
+**验证命令（逻辑层 — mock Douyin API，PRD E2E点3）**:
+```bash
+# 逻辑层单测：注入 fake CommentFetcher + LeadWriter，验证回复匹配/排序/DB写入参数
+# Generator 实现前 → 4 tests FAIL（TDD Red 已确认）
+npx vitest run sprints/07032333-line02-lead-human-handoff/tests/reply-poll-logic.test.ts --reporter=verbose
+```
+
+**验证命令（E2E 层 — 带时间窗口，真实轮询后 DB 状态）**:
 ```bash
 # 带时间窗口：确认是本次轮询的写入，不是历史数据
 COUNT=$(psql "$DATABASE_URL" -t -c "
@@ -96,7 +103,9 @@ COUNT=$(psql "$DATABASE_URL" -t -c "
 echo OK
 ```
 
-**硬阈值**: latest_reply IS NOT NULL，latest_reply_at 在 5 分钟时间窗口内
+**硬阈值**: （逻辑层）4 vitest tests pass；（E2E 层）latest_reply IS NOT NULL，latest_reply_at 在 5 分钟时间窗口内
+
+> **接缝说明**：逻辑层单测（vitest + fake）是 PRD "模拟"关键词要求的 CI 覆盖，标逻辑断言。E2E 层（真实 Douyin session）标接缝 #2 logic-done-pending，真机验后方可标 done。
 
 ---
 
