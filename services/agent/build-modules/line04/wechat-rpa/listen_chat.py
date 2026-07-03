@@ -603,6 +603,43 @@ _TRAILING_STALL: Dict[str, int] = {}  # sender → 触发保留但 trailing 无�
 TRAILING_STALL_LIMIT = 3          # 连续 N 轮无解 → 熔断走回退 emit 预览单条（防死循环开窗=闪屏）
 
 
+def _jiggle_msg_list(mw: Any) -> None:
+    """在消息面板上发一次微滚轮（下滚+回滚），强制 Qt 虚拟列表重建可见 item。
+
+    背景（2026-07-03 08:18 探针实锤）：屏幕上显示着的气泡可以**不在** UIA 树里
+    （y 坐标留着 198px 空洞=两条消息的位置）——角标说 4 条、children() 只给 2 条。
+    滚轮会触发 Qt 重新 materialize 可见区 item。Qt 按悬停路由滚轮 →
+    必须先 WM_MOUSEMOVE 建悬停再 WM_MOUSEWHEEL（1.0.66 CRM 扫描同款教训）。
+    fail-open：任何异常静默返回（调用方拿首读结果继续，宁可少不崩）。
+    """
+    import ctypes as _ct
+    try:
+        hwnd = mw.element_info.handle
+        wr = mw.rectangle()
+        lrect, _items = _read_msg_list_items(mw)
+        r = lrect if lrect is not None else wr
+        x = (r.left + r.right) // 2
+        y = (r.top + r.bottom) // 2
+        client = _wheel_client_coords(wr, x, y)
+        lparam = (client[1] << 16) | (client[0] & 0xFFFF)
+        WM_MOUSEMOVE, WM_MOUSEWHEEL = 0x0200, 0x020A
+        _u32 = _ct.windll.user32
+        _u32.PostMessageW(hwnd, WM_MOUSEMOVE, 0, lparam)
+        time.sleep(0.05)
+        wheel_lparam = (y << 16) | (x & 0xFFFF)  # WHEEL 用屏幕坐标
+        _u32.PostMessageW(hwnd, WM_MOUSEWHEEL, (120 & 0xFFFF) << 16, wheel_lparam)
+        time.sleep(0.15)
+        _u32.PostMessageW(hwnd, WM_MOUSEWHEEL, ((-120) & 0xFFFF) << 16, wheel_lparam)
+        time.sleep(0.15)
+    except Exception:
+        pass
+
+
+def _wheel_client_coords(wr: Any, x: int, y: int) -> Any:
+    """屏幕坐标 → 窗口 client 坐标（WM_MOUSEMOVE lParam 用）。纯函数。"""
+    return (max(0, x - wr.left), max(0, y - wr.top))
+
+
 def _read_trailing_for(mw: Any, cand: Dict[str, Any],
                        record_skip: Optional[Any] = None) -> Any:
     """打开 cand 会话读 trailing incoming。返回 (msgs, bubble_read_empty)。
@@ -615,6 +652,8 @@ def _read_trailing_for(mw: Any, cand: Dict[str, Any],
       （心跳 diag 可见：列表可读但气泡区空 = 树病信号）。
     - 读到气泡 → cand["_stale_ok"] = _stale_badge_confirmed(预览, 剔系统气泡后序列)，
       供调用方判定"trailing 空"能否当真陈旧角标提交。
+    - 完整性校验（v1.0.97）：badge=N 但 trailing<N → 屏显气泡缺 UIA 节点（探针
+      实锤）→ _jiggle_msg_list 滚动重建后重读，取更全的一次。绝不带残缺结果回。
     """
     try:
         if not _open_chat(mw, cand["_item"], cand["sender"]):
@@ -646,14 +685,31 @@ def _read_trailing_for(mw: Any, cand: Dict[str, Any],
         if record_skip is not None:
             record_skip("bubble_read_empty")
         return [], True
-    stripped = strip_system_bubbles(bubbles)
+    def _split(bbl: List[Dict[str, str]]) -> Any:
+        st = strip_system_bubbles(bbl)
+        return st, split_trailing_incoming(
+            st, cand["badge"], replied_anchor=_REPLY_ANCHOR.get(cand["sender"]))
+
+    stripped, msgs = _split(bubbles)
+    # 完整性校验（v1.0.97）：角标 N 条但 trailing 只捞到 M<N → 屏显气泡缺 UIA 节点
+    # （2026-07-03 08:18 探针实锤：消息显示在屏幕上、y 坐标留空洞、树里没节点）
+    # → 滚动 jiggle 强制 Qt 重建后重读一次，取更全的结果。
+    if cand["badge"] > 0 and len(msgs) < cand["badge"]:
+        if record_skip is not None:
+            record_skip("bubble_incomplete_reread")
+        _jiggle_msg_list(mw)
+        time.sleep(_BUBBLE_READ_POLL_SLEEP)
+        bubbles2 = read_chat_bubbles(mw)
+        if bubbles2:
+            stripped2, msgs2 = _split(bubbles2)
+            if len(msgs2) > len(msgs):
+                _log(f"bubble_incomplete sender={cand['sender']} badge={cand['badge']} "
+                     f"首读={len(msgs)} 重读={len(msgs2)} → 用重读结果")
+                stripped, msgs = stripped2, msgs2
     # v1.0.95 陈旧确认扩展：预览本身命中已发送历史 = 会话最新消息就是我方回复
     # → 无新客户消息（方向历史缺失时 _stale_badge_confirmed 永不命中导致无限重试）。
     cand["_stale_ok"] = (_stale_badge_confirmed(cand["content"], stripped)
                          or _matches_any_sent(cand["content"]))
-    msgs = split_trailing_incoming(
-        stripped, cand["badge"],
-        replied_anchor=_REPLY_ANCHOR.get(cand["sender"]))
     # v1.0.95 自回声护栏（emit 层终极过滤）：自己发过的文本即使被判向层误判成
     # incoming 进了 trailing，也绝不进 emit（2026-07-03 01:51 自回自话实锤）。
     kept = [m for m in msgs if not _matches_any_sent(m)]
