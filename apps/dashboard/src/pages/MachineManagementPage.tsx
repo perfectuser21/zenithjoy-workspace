@@ -92,16 +92,11 @@ function MachineList({
             <tr
               key={m.id}
               className="cursor-pointer hover:bg-blue-50"
+              onClick={() => onSelect(m.id)}
             >
               <td className="border border-gray-200 px-4 py-3">
-                <button
-                  type="button"
-                  className="w-full text-left"
-                  onClick={() => onSelect(m.id)}
-                >
-                  <div className="font-medium">{m.nickname || m.hostname}</div>
-                  <div className="text-xs text-gray-400">{m.hostname}</div>
-                </button>
+                <div className="font-medium">{m.nickname || m.hostname}</div>
+                <div className="text-xs text-gray-400">{m.hostname}</div>
               </td>
               <td className="border border-gray-200 px-4 py-3">
                 <StatusBadge status={m.status} />
