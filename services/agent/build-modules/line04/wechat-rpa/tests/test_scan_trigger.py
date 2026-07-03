@@ -279,7 +279,10 @@ def test_badge_first_seen_seeds_preview_for_retry(monkeypatch):
     lp = {}
     out1 = listen_chat.scan_unread(_MW([_mk("默忆\n[1条] \n在吗\n14:40\n")]), lp)
     assert [m["content"] for m in out1] == ["在吗"]
-    # 模拟主循环草稿失败：不调 _commit_reply_success → lp 不提交
+    # 模拟主循环草稿失败：不调 _commit_reply_success → lp 不提交。
+    # v1.0.106 起主循环轮尾对未 DELIVERED 的 sender 调 _release_inflight
+    # （清处理中标记+同内容闸，允许重试同内容）——测试补上这一步。
+    listen_chat._release_inflight("默忆")
     out2 = listen_chat.scan_unread(_MW([_mk("默忆\n在吗\n14:40\n")]), lp)
     assert [m["content"] for m in out2] == ["在吗"], "角标被消费后必须靠 seed 的预览触发重试"
 

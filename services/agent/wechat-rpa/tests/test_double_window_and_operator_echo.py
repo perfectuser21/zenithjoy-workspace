@@ -113,28 +113,27 @@ def test_finish_scan_window_idempotent(monkeypatch):
 
 # ── Bug2：操作者前台 = 人工接管 ────────────────────────────────────────────────
 
-def test_operator_foreground_suppresses_preview_trigger(monkeypatch):
-    """前台=微信（操作者在打字）→ 预览变化不 emit、提交触发、锚点推进过操作者文本。"""
+def test_operator_foreground_no_longer_suppresses(monkeypatch):
+    """v1.0.106 语义反转：前台=微信**不再压制**客户消息处理——同事盯屏验收时
+    压制造成 35s 卡顿/漏回（17:48 生产实录）。操作者自话防误回完全交给像素
+    判向（绿泡=outgoing，1.0.104），不再靠前台猜。"""
     monkeypatch.setattr(listen_chat, "_wechat_is_foreground", lambda mw: True)
-    opened = []
-    monkeypatch.setattr(listen_chat, "_open_chat",
-                        lambda mw, it, s, expect_content="": opened.append(1) or True)
     monkeypatch.setattr(listen_chat, "_restore_window_state", lambda mw, s: None)
+    monkeypatch.setattr(listen_chat, "read_chat_bubbles", lambda mw: [
+        {"text": "旧回复", "direction": "outgoing"},
+        {"text": "客户消息", "direction": "incoming"},
+    ])
     listen_chat._REPLY_ANCHOR.clear()
-    listen_chat._REPLY_ANCHOR["默忆"] = "老问题"
-    mw = _MW([_Item("默忆\n我是操作者手动打的话\n15:01\n")])
-    last_preview = {"默忆": "默忆\n老问题\n14:59\n"}
+    mw = _MW([_Item("默忆\n客户消息\n15:01\n")])
+    last_preview = {"默忆": "默忆\n旧回复\n14:59\n"}
     out = listen_chat.scan_unread(mw, last_preview)
-    assert not out, "操作者在前台打字，绝不能把他的话当客户消息回（人工优先）"
-    assert not opened, "人工接管时连窗都不该开"
-    assert last_preview["默忆"] == "默忆\n我是操作者手动打的话\n15:01\n", "触发须提交"
-    assert listen_chat._REPLY_ANCHOR["默忆"] == "我是操作者手动打的话", (
-        "锚点须推进过操作者文本，否则之后客户消息的 trailing 会把它带回来"
+    assert out and "客户消息" in out[0]["content"], (
+        "前台=微信（有人盯屏）也必须照常回客户消息（1.0.103 的压制已删）"
     )
 
 
 def test_operator_foreground_does_not_block_badge_messages(monkeypatch):
-    """角标路径（真未读客户消息）不受前台判定影响，照常回。"""
+    """角标路径同样不受前台影响（v1.0.106 起全部路径都不受前台影响）。"""
     monkeypatch.setattr(listen_chat, "_wechat_is_foreground", lambda mw: True)
     monkeypatch.setattr(listen_chat, "_restore_window_state", lambda mw, s: None)
     monkeypatch.setattr(listen_chat, "read_chat_bubbles", lambda mw: [

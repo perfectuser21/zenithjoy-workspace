@@ -26,13 +26,37 @@ if _WECHAT not in sys.path:
     sys.path.insert(0, _WECHAT)
 
 
+_MUTABLE_STATE = ("_SENT_TEXTS", "_REPLY_ANCHOR", "_INFLIGHT", "_LAST_EMIT",
+                  "_TRAILING_STALL", "_ANCHOR_STALL", "_KNOWN_GROUPS")
+
+
+def _clear_state(mod) -> None:
+    for name in _MUTABLE_STATE:
+        obj = getattr(mod, name, None)
+        if obj is not None:
+            try:
+                obj.clear()
+            except Exception:
+                pass
+
+
 @pytest.fixture(autouse=True)
-def _isolate_memory_state():
-    """内存态隔离：测试之间绝不共享已发送历史/锚点。"""
-    import listen_chat
-    listen_chat._SENT_TEXTS.clear()
-    listen_chat._REPLY_ANCHOR.clear()
+def _isolate_memory_state(request):
+    """内存态隔离：测试之间绝不共享可变全局。
+
+    关键（2026-07-03 教训）：16 个历史测试文件在导入时 `del sys.modules`
+    重导入 listen_chat → 同一进程里存在**多份模块副本**，只清 sys.modules
+    里的那份会让用旧副本的测试文件状态跨测试残留（一次 19 红）。
+    必须清"当前测试文件实际绑定的那份"（request.module.listen_chat）
+    ＋ sys.modules 里的那份，双保险。
+    """
+    import listen_chat as _current
+    mods = {id(_current): _current}
+    _bound = getattr(request.module, "listen_chat", None)
+    if _bound is not None:
+        mods[id(_bound)] = _bound
+    for m in mods.values():
+        _clear_state(m)
     yield
-    import listen_chat as _lc
-    _lc._SENT_TEXTS.clear()
-    _lc._REPLY_ANCHOR.clear()
+    for m in mods.values():
+        _clear_state(m)

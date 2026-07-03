@@ -625,6 +625,18 @@ _BUBBLE_READ_POLL_SLEEP = 0.3  # 0.6→0.3（延迟收紧：jiggle 后 Qt 重建
 ANCHOR_STALL_LIMIT = 3            # 连续 N 轮停滞 → 心跳告警（只告警不降级——绝不静默丢消息）
 _TRAILING_STALL: Dict[str, int] = {}  # sender → 触发保留但 trailing 无解的连续轮数
 TRAILING_STALL_LIMIT = 3          # 连续 N 轮无解 → 熔断走回退 emit 预览单条（防死循环开窗=闪屏）
+# v1.0.106 复读双闸（17:47 生产实录：1s 扫描 × 5-10s 发送窗口竞态，同一条消息连回 3 遍）：
+_INFLIGHT: set = set()            # 处理中 sender（emit→DELIVERED/失败之间），扫描跳过不重复 emit
+_LAST_EMIT: Dict[str, Any] = {}   # sender → (规范化内容, ts)：同内容 60s 内绝不二次 emit
+EMIT_DEDUP_TTL = 60.0
+
+
+def _release_inflight(sender: str) -> None:
+    """处理**失败**（发送失败/草稿失败/跳过）后释放：清处理中标记 + 清同内容闸，
+    允许下轮重试同一条消息（宁可迟到不可丢）。DELIVERED 走 _commit_reply_success
+    （只清 inflight、保留同内容闸 60s 防复读）。"""
+    _INFLIGHT.discard(sender)
+    _LAST_EMIT.pop(sender, None)
 
 
 def _jiggle_msg_list(mw: Any) -> None:
@@ -886,6 +898,8 @@ def scan_unread(mw: Any, last_preview: Optional[Dict[str, str]] = None,
         sender = info["sender"]
         if sender in _KNOWN_GROUPS:
             continue
+        if sender in _INFLIGHT:
+            continue  # v1.0.106：上一条还在草稿/发送中，绝不重复 emit（复读根源）
         if should_open is not None and not should_open(sender):
             continue  # F4：黑名单/操作者会话连候选都不进（角标保留给操作者，不烧预算）
         badge_n = parse_unread_count(name)
@@ -911,23 +925,16 @@ def scan_unread(mw: Any, last_preview: Optional[Dict[str, str]] = None,
             if (_anchor and _content
                     and not _matches_any_sent(_content)
                     and "".join(_content.split()) != "".join(_anchor.split())):
-                if operator_fg:
-                    _operator_takeover(sender, _content, name, last_preview,
-                                       record_skip)
-                    continue
                 seen.add(sender)
                 candidates.append({"sender": sender, "content": _content,
                                    "name": name, "badge": 0, "_item": it})
             else:
                 last_preview[sender] = name  # 静默 seed
         elif prev != name:
-            if operator_fg:
-                # v1.0.103 人工优先：操作者正在前台亲自操作微信——预览变化
-                # 极可能是他自己打的字（打字必然前台），绝不当客户消息回。
-                # 提交触发+锚点推进过该文本；客户后续消息照常触发（角标/新预览变化）。
-                _operator_takeover(sender, info["content"] or "", name,
-                                   last_preview, record_skip)
-                continue
+            # v1.0.106 删除 1.0.103 的前台压制（operator_takeover）：同事盯屏
+            # 验收时把客户消息也压住 → 35s 卡顿/漏回（17:48 生产实录）。
+            # 操作者自话防误回已由像素判向全覆盖（绿泡=outgoing，1.0.104），
+            # 前台信号只保留给 1.0.105 的解除隐身用。
             seen.add(sender)
             candidates.append({"sender": sender, "content": info["content"],
                                "name": name, "badge": 0, "_item": it})
@@ -994,6 +1001,25 @@ def scan_unread(mw: Any, last_preview: Optional[Dict[str, str]] = None,
                             "_item": c["_item"], "_preview_name": c["name"],
                             "_last_incoming": c["content"]})
                 _TRAILING_STALL.pop(c["sender"], None)
+    # v1.0.106 复读双闸：①同内容 60s 内二次 emit → 丢弃（提交触发止空转）
+    # ②存活 emit 标记处理中（本轮草稿/发送期间扫描不再碰该会话）。
+    # 17:47 生产实录：同一条"我想买30w"被连回 3 遍——逐轮重扫出同一 trailing。
+    _now_ts = time.time()
+    _deduped: List[Dict[str, Any]] = []
+    for _m in out:
+        _norm = "".join((_m.get("content") or "").split())
+        _last = _LAST_EMIT.get(_m["sender"])
+        if _last and _last[0] == _norm and _now_ts - _last[1] < EMIT_DEDUP_TTL:
+            if record_skip is not None:
+                record_skip("duplicate_emit")
+            if last_preview is not None and _m.get("_preview_name"):
+                last_preview[_m["sender"]] = _m["_preview_name"]
+            _log(f"duplicate_emit sender={_m['sender']}（同内容 {EMIT_DEDUP_TTL:.0f}s 内二次上报，丢弃）")
+            continue
+        _LAST_EMIT[_m["sender"]] = (_norm, _now_ts)
+        _INFLIGHT.add(_m["sender"])
+        _deduped.append(_m)
+    out = _deduped
     # v1.0.103 双弹窗修复：有 emit → 不收窗（回复接着用这次弹出），orig_state
     # 暂存给主循环回复完调 _finish_scan_window 统一收；无 emit → 立即收。
     # v1.0.105：托盘态持有常驻隐身（_CLOAK_OWNED）→ 无 emit 也不收（cloak+shown
@@ -1028,6 +1054,7 @@ def _commit_reply_success(msg: Dict[str, Any],
         last_preview[sender] = preview_name
     _ANCHOR_STALL.pop(sender, None)
     _TRAILING_STALL.pop(sender, None)
+    _INFLIGHT.discard(sender)  # v1.0.106：DELIVERED=终结；_LAST_EMIT 保留 60s 防复读
     last_incoming = (msg or {}).get("_last_incoming")
     if last_incoming:
         _REPLY_ANCHOR[sender] = last_incoming
@@ -4140,6 +4167,12 @@ def run_real_listen(args: argparse.Namespace) -> int:
                         _log(f"[告警上报] 异常: {_hbexc}")
                 time.sleep(1)  # 操作间隔 ≥1s
 
+            # v1.0.106：轮尾兜底——仍在处理中（=未 DELIVERED，失败/跳过）的释放并
+            # 允许重试同内容；DELIVERED 的已在 _commit 清 inflight、同内容闸保留 60s。
+            for _m_rel in unread:
+                _s_rel = _m_rel.get("sender", "")
+                if _s_rel in _INFLIGHT:
+                    _release_inflight(_s_rel)
             # v1.0.103 双弹窗修复的另一半：本轮回复全部处理完，统一收窗一次
             # （scan_unread 有 emit 时不收，orig_state 暂存在 _SCAN_WINDOW_STATE）。
             _finish_scan_window(mw)
