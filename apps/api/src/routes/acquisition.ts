@@ -633,13 +633,36 @@ acquisitionRouter.post('/collect/start', tenantContextOptional, async (req: Requ
   const tenantId = tenantOf(req, res);
   if (!tenantId) return;
   const keywords: unknown = req.body?.keywords;
-  const agentId = typeof req.body?.agent_id === 'string' && req.body.agent_id.trim()
+  let agentId = typeof req.body?.agent_id === 'string' && req.body.agent_id.trim()
     ? req.body.agent_id.trim()
+    : null;
+  const accountLabel = typeof req.body?.account_label === 'string' && req.body.account_label.trim()
+    ? req.body.account_label.trim()
     : null;
 
   try {
     if (!Array.isArray(keywords) || keywords.length === 0)
       return fail(res, 400, 'MISSING_KEYWORDS', 'keywords 不能为空');
+
+    // 方案 D：选了抖音小号 → 任务必须派到持有该 session 的机器（物理约束，覆盖手选的 agent_id）
+    if (accountLabel) {
+      const sessionRes = await pool.query<{ agent_id: string }>(
+        `SELECT a.agent_id AS agent_id
+           FROM zenithjoy.agent_platform_sessions s
+           JOIN zenithjoy.agents a ON a.id = s.agent_id
+          WHERE a.tenant_id = $1
+            AND s.account_label = $2
+            AND s.role = 'burner'
+            AND s.status = 'active'
+          LIMIT 1`,
+        [tenantId, accountLabel]
+      );
+      const boundAgentId = sessionRes.rows[0]?.agent_id;
+      if (!boundAgentId) {
+        return fail(res, 400, 'BURNER_SESSION_NOT_FOUND', '该小号未绑定或 session 已过期，请重新扫码绑定');
+      }
+      agentId = boundAgentId;
+    }
 
     // 异步检查主号 session（不阻塞采集任务创建）
     pool.query(

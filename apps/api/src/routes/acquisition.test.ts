@@ -379,6 +379,67 @@ describe('POST /api/acquisition/collect/start — agent_id 写入 [REGRESSION]',
   });
 });
 
+// ────── 方案 D：burner 账号自动路由 ──────
+// 采集任务本质要用某个抖音小号的 cookie session 登录去抓，所以任务必须派到
+// 持有该 session 的机器上；account_label 解析出的 agent_id 覆盖客户端直传的 agent_id
+// （物理约束优先于用户手选的机器）。
+describe('POST /api/acquisition/collect/start — burner account_label 自动路由 [REGRESSION]', () => {
+  beforeEach(() => { vi.clearAllMocks(); });
+
+  it('account_label 查不到 active burner session → 400 BURNER_SESSION_NOT_FOUND', async () => {
+    const mod = await import('../db/connection');
+    (mod.default.query as any).mockResolvedValueOnce({ rows: [] }); // session 查询查不到
+
+    const res = await request(app)
+      .post('/api/acquisition/collect/start')
+      .set('x-test-tenant-id', '4807edc7-da2a-4e8d-9223-31f4d25c12c6')
+      .send({ keywords: ['装修'], account_label: 'burner-not-bound' });
+
+    expect(res.status).toBe(400);
+    expect(res.body?.error?.code).toBe('BURNER_SESSION_NOT_FOUND');
+  });
+
+  it('account_label 命中 active burner session → INSERT 用该 session 的 agent_id（覆盖 body.agent_id）', async () => {
+    const mod = await import('../db/connection');
+    (mod.default.query as any)
+      .mockResolvedValueOnce({ rows: [{ agent_id: 'agent-burner-machine' }] }) // session 查询命中
+      .mockResolvedValueOnce({ rows: [] }) // 异步 session 探测（fire-and-forget）
+      .mockResolvedValueOnce({ rows: [{ id: 'task-new' }] }); // INSERT
+
+    await request(app)
+      .post('/api/acquisition/collect/start')
+      .set('x-test-tenant-id', '4807edc7-da2a-4e8d-9223-31f4d25c12c6')
+      .send({ keywords: ['装修'], account_label: 'burner-1', agent_id: 'agent-manually-picked' });
+
+    const calls = (mod.default.query as any).mock.calls;
+    const insertCall = calls.find((c: any[]) => /acquisition_collect_tasks/.test(c[0]));
+    expect(insertCall).toBeTruthy();
+    const [, params] = insertCall;
+    expect(params).toContain('agent-burner-machine');
+    expect(params).not.toContain('agent-manually-picked');
+  });
+
+  it('查 session 时必须限定 role=burner + status=active + 本租户', async () => {
+    const mod = await import('../db/connection');
+    (mod.default.query as any)
+      .mockResolvedValueOnce({ rows: [{ agent_id: 'agent-x' }] })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [{ id: 'task-new' }] });
+
+    await request(app)
+      .post('/api/acquisition/collect/start')
+      .set('x-test-tenant-id', '4807edc7-da2a-4e8d-9223-31f4d25c12c6')
+      .send({ keywords: ['装修'], account_label: 'burner-1' });
+
+    const sessionCall = (mod.default.query as any).mock.calls[0];
+    const [sql, sqlParams] = sessionCall;
+    expect(sql).toMatch(/role\s*=\s*'burner'/);
+    expect(sql).toMatch(/status\s*=\s*'active'/);
+    expect(sqlParams).toContain('4807edc7-da2a-4e8d-9223-31f4d25c12c6');
+    expect(sqlParams).toContain('burner-1');
+  });
+});
+
 describe('collect/start — tenant 从 session，不信前端占位 [BEHAVIOR]', () => {
   beforeEach(() => { vi.clearAllMocks(); });
 

@@ -17,6 +17,8 @@ import { ThemeProvider, useTheme } from './contexts/ThemeContext';
 import { InstanceProvider, useInstance } from './contexts/InstanceContext';
 // 环境角标（staging/dev 显示，生产不显示）
 import EnvBadge from './components/EnvBadge';
+// 方案C：顶栏常驻机器感知（任务默认绑定选中机器，多机时才弹选）
+import MachineSelector from './components/MachineSelector';
 // Path 2 Sprint A: FeishuBindTenant 通过 navigation.config 'feishu-bind' 路径懒加载（DynamicRouter 注册）
 // 静态引用避免 tree-shake 误删懒加载入口
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -296,8 +298,9 @@ function AppContent() {
               </h2>
             </div>
 
-            {/* 右侧：主题切换 */}
-            <div className="flex items-center">
+            {/* 右侧：机器选择器 + 主题切换 */}
+            <div className="flex items-center gap-3">
+              <MachineSelector />
               <button
                 onClick={cycleTheme}
                 className={`relative p-2 rounded-lg transition-colors ${

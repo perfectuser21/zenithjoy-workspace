@@ -360,6 +360,26 @@ describe('GET /sessions — tenant 从 session 解析，不信 query [BEHAVIOR]'
     expect(res.status).toBe(500);
     expect(res.body?.success).toBe(false);
   });
+
+  // 方案 D：Dashboard 采集任务弹窗要能显示"绑定机器名"，返回结构须带 hostname/nickname
+  it('返回结构带 hostname + nickname（Dashboard 显示绑定机器名要用）', async () => {
+    vi.mocked(pool.query).mockResolvedValueOnce({
+      rows: [{
+        account_label: 'live101942', role: 'burner', status: 'active',
+        bound_at: null, created_at: null, account_nickname: null,
+        hostname: 'ROG-PC', nickname: '西安ROG',
+      }],
+    } as any);
+    const app = buildApp();
+    const res = await request(app)
+      .get('/api/agent/burner/sessions')
+      .set('x-test-tenant-id', '4807edc7-da2a-4e8d-9223-31f4d25c12c6');
+    expect(res.body?.data?.sessions?.[0]?.hostname).toBe('ROG-PC');
+    expect(res.body?.data?.sessions?.[0]?.nickname).toBe('西安ROG');
+    const sql = vi.mocked(pool.query).mock.calls[0][0] as string;
+    expect(sql).toMatch(/a\.hostname/);
+    expect(sql).toMatch(/a\.nickname/);
+  });
 });
 
 // ── Regression: qr-bind-result agent_id=null crash (#1004) ──

@@ -51,6 +51,18 @@ export interface MachineSession {
   bound_at?: string;
 }
 
+/** 一个租户下的 burner（小号）session，含它绑定的机器信息（采集任务派单要用） */
+export interface BurnerSession {
+  account_label: string;
+  role: string;
+  status: string;
+  bound_at: string | null;
+  created_at: string | null;
+  account_nickname: string | null;
+  hostname: string | null;
+  nickname: string | null;
+}
+
 export interface MachineDetail {
   machine: Machine;
   sessions: MachineSession[];
@@ -116,4 +128,11 @@ export async function dispatchQrBind(params: {
     body: JSON.stringify(params),
   });
   return parseEnvelope<{ task_id?: string }>(r);
+}
+
+/** 列出本租户下所有 burner 抖音号 session（含绑定机器名，采集任务弹窗"使用账号"下拉要用） */
+export async function fetchBurnerSessions(): Promise<BurnerSession[]> {
+  const r = await fetch(`${API_BASE}/agent/burner/sessions`, { headers: authHeaders(), credentials: 'include' });
+  const data = await parseEnvelope<{ sessions: BurnerSession[] }>(r);
+  return data.sessions ?? [];
 }

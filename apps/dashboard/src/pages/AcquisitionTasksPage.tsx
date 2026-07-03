@@ -7,7 +7,8 @@
  */
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { ChevronLeft, ChevronDown, ChevronRight, Search } from 'lucide-react';
+import { ChevronLeft, ChevronDown, ChevronRight, Search, AlertTriangle } from 'lucide-react';
+import { fetchMachines, fetchBurnerSessions, type Machine, type BurnerSession } from '../api/machines.api';
 
 const STATUS_LABEL: Record<string, string> = {
   pending: '排队中',
@@ -70,6 +71,9 @@ function TaskListView() {
   const [error, setError] = useState('');
   const [keyword, setKeyword] = useState('');
   const [starting, setStarting] = useState(false);
+  const [machines, setMachines] = useState<Machine[] | null>(null);
+  const [burnerSessions, setBurnerSessions] = useState<BurnerSession[]>([]);
+  const [selectedAccount, setSelectedAccount] = useState('');
 
   const load = async () => {
     setLoading(true);
@@ -89,7 +93,16 @@ function TaskListView() {
     }
   };
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    load();
+    fetchMachines().then(setMachines).catch(() => setMachines([]));
+    fetchBurnerSessions().then(setBurnerSessions).catch(() => setBurnerSessions([]));
+  }, []);
+
+  const onlineMachines = (machines ?? []).filter((m) => m.status === 'online');
+  const activeBurnerSessions = burnerSessions.filter((s) => s.status === 'active');
+  const selectedSession = activeBurnerSessions.find((s) => s.account_label === selectedAccount);
+  const noOnlineMachine = machines !== null && onlineMachines.length === 0;
 
   async function handleStart() {
     const words = keyword.split(/[,，\s]+/).map((w) => w.trim()).filter(Boolean);
@@ -97,10 +110,15 @@ function TaskListView() {
     setStarting(true);
     setError('');
     try {
+      const preferredAgentId = localStorage.getItem('preferred_agent_id') || undefined;
       const r = await fetch('/api/acquisition/collect/start', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ keywords: words }),
+        body: JSON.stringify({
+          keywords: words,
+          ...(selectedAccount ? { account_label: selectedAccount } : {}),
+          ...(preferredAgentId ? { agent_id: preferredAgentId } : {}),
+        }),
       });
       const j = await r.json();
       if (!j?.success) {
@@ -127,7 +145,14 @@ function TaskListView() {
         <div className="rounded border border-red-300 bg-red-50 dark:bg-red-900/20 p-3 text-red-700 dark:text-red-300 text-sm">{error}</div>
       ) : null}
 
-      <section className="rounded-xl border border-slate-200 dark:border-slate-700 p-4">
+      {noOnlineMachine ? (
+        <div className="flex items-center gap-1.5 rounded border border-red-300 bg-red-50 dark:bg-red-900/20 p-3 text-red-700 dark:text-red-300 text-sm">
+          <AlertTriangle className="w-4 h-4" />
+          无在线机器，无法创建采集任务 — 请先确认客户端在线
+        </div>
+      ) : null}
+
+      <section className="rounded-xl border border-slate-200 dark:border-slate-700 p-4 space-y-2">
         <div className="flex gap-2">
           <input
             type="text"
@@ -137,9 +162,22 @@ function TaskListView() {
             onChange={(e) => setKeyword(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleStart()}
           />
+          <select
+            aria-label="使用账号"
+            className="rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-2 py-2 text-sm"
+            value={selectedAccount}
+            onChange={(e) => setSelectedAccount(e.target.value)}
+          >
+            <option value="">不指定账号</option>
+            {activeBurnerSessions.map((s) => (
+              <option key={s.account_label} value={s.account_label}>
+                {s.account_nickname || s.account_label}
+              </option>
+            ))}
+          </select>
           <button
             type="button"
-            disabled={!keyword.trim() || starting}
+            disabled={!keyword.trim() || starting || noOnlineMachine}
             onClick={handleStart}
             className="flex items-center gap-1 rounded bg-emerald-600 px-4 py-2 text-white text-sm disabled:bg-gray-300 dark:disabled:bg-slate-700"
           >
@@ -147,6 +185,11 @@ function TaskListView() {
             开始采集
           </button>
         </div>
+        {selectedSession ? (
+          <p className="text-xs text-gray-500 dark:text-gray-400">
+            将在 {selectedSession.nickname || selectedSession.hostname} 上运行
+          </p>
+        ) : null}
       </section>
 
       <section className="rounded-xl border border-slate-200 dark:border-slate-700 p-4">

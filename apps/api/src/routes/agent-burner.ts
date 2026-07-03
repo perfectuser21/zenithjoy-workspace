@@ -165,7 +165,7 @@ router.get('/sessions', tenantContextOptional, async (req: Request, res: Respons
   try {
     const r = await pool.query(
       `SELECT s.account_label, s.role, s.status, s.bound_at,
-              s.created_at,
+              s.created_at, a.hostname, a.nickname,
               (SELECT response->>'account_nickname'
                  FROM zenithjoy.publish_tasks
                 WHERE agent_id=s.agent_id
