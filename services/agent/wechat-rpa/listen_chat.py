@@ -2789,6 +2789,28 @@ def _scan_deadline_exceeded(start_ts: float, now_ts: float, max_seconds: float) 
     return max_seconds > 0 and (now_ts - start_ts) >= max_seconds
 
 
+def _build_should_open(*, roster_pred: Optional[Any],
+                       cooldown_map: Dict[str, float],
+                       cooldown_seconds: float,
+                       now_fn: Any = time.time) -> Any:
+    """组合 scan_unread 的 should_open 谓词（纯函数，CI 可测）。
+
+    v1.0.96 冷却前置：撞 SENDER_COOLDOWN 的 sender 连窗都不开——旧行为是开窗
+    读完气泡 emit 后才在 classify 层被 skip，冷却期内每轮白开窗白闪
+    （2026-07-03 07:36:58-07:37:28 实录 5 次无效开窗）。触发态保留（角标/
+    last_preview 不消费），冷却过后下一轮照常开窗回复，绝不丢消息。
+    roster_pred（黑名单/名单门）与冷却任一拒绝即不开窗。
+    """
+    def _pred(sender: str) -> bool:
+        ts = cooldown_map.get(sender)
+        if ts is not None and now_fn() - ts < cooldown_seconds:
+            return False
+        if roster_pred is not None and not roster_pred(sender):
+            return False
+        return True
+    return _pred
+
+
 def classify_unread(
     *,
     roster_gate_on: bool,
@@ -3529,9 +3551,12 @@ def run_real_listen(args: argparse.Namespace) -> int:
             _roster_gate_on = bool(_cs_cfg) and (_cs_mode == "blacklist" or bool(_cs_whitelist))
             # roster 谓词：gate 拒绝的 sender（黑名单内部人员等）连开窗都不开——
             # 开窗会清掉操作者本人的未读角标 + 烧光 SCAN_OPEN_BUDGET（对抗审查 ISSUE-2）。
-            _should_open = (
-                (lambda s: cs_config_gate.should_reply(_cs_cfg, s))
-                if _roster_gate_on else None
+            # v1.0.96：冷却也前置到这里（撞冷却不开窗，触发态保留冷却后重试）。
+            _should_open = _build_should_open(
+                roster_pred=((lambda s: cs_config_gate.should_reply(_cs_cfg, s))
+                             if _roster_gate_on else None),
+                cooldown_map=sender_reply_cooldown,
+                cooldown_seconds=SENDER_COOLDOWN,
             )
             try:
                 unread = scan_unread(mw, last_preview,

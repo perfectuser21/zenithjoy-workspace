@@ -88,14 +88,17 @@ def test_save_replied_idempotent(tmp_path, monkeypatch):
 # B. per-sender 30s 冷却（根因 A 的防护）
 # ─────────────────────────────────────────────────────────────────────────────
 
-def test_sender_cooldown_constant_is_30s():
-    """SENDER_COOLDOWN 必须 >= 30 秒。
+def test_sender_cooldown_constant_is_15s():
+    """SENDER_COOLDOWN 必须 >= 15 秒。
 
-    10s 冷却不够（已有案例：第二次触发在 19s）。降到 10s 以下本测试即红。
+    历史：曾要求 >=30s（旧机制下 19s 出现过二次触发——预览路径重复 emit 同一条）。
+    2026-07-03 降到 15s（用户决策）：如今重复回复由两道独立闸兜住——
+    ① replied 去重（(sender,content) TTL 120s）② DELIVERED 后 last_preview/锚点
+    提交（同一触发不会再 emit）。冷却只剩"防连发刷屏"职责，15s 足够。
+    降到 15s 以下本测试即红。
     """
-    assert listen_chat.SENDER_COOLDOWN >= 30.0, (
-        f"SENDER_COOLDOWN={listen_chat.SENDER_COOLDOWN} 太短，"
-        f"xian-rog 实测第二次触发在 19s，需 >= 30s"
+    assert listen_chat.SENDER_COOLDOWN >= 15.0, (
+        f"SENDER_COOLDOWN={listen_chat.SENDER_COOLDOWN} 太短，防刷屏下限 15s"
     )
 
 
