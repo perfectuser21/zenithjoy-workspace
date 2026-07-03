@@ -43,7 +43,7 @@ def test_build_should_open_composes_roster_gate():
     assert pred("客户") is True
 
 
-def test_sender_cooldown_config_is_15s():
-    """SENDER_COOLDOWN 30→15（用户决策 2026-07-03，测试体感提速）。"""
+def test_sender_cooldown_config_is_2s():
+    """SENDER_COOLDOWN 30→15→2（用户决策 2026-07-03：响应速度优先）。"""
     import config
-    assert config.SENDER_COOLDOWN_SECONDS == 15.0
+    assert config.SENDER_COOLDOWN_SECONDS == 2.0

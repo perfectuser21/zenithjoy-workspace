@@ -42,7 +42,7 @@ def test_default_values_are_safe():
         assert config.OFFSCREEN_X == config.OFFSCREEN_X_FALLBACK, "非 Windows 须回退兜底值"
     assert config.CHAT_PER_MINUTE_LIMIT >= 0  # 0 = 不限私聊每分钟条数（客服不设硬上限）
     assert config.MOMENT_PER_24H_LIMIT >= 1
-    assert config.SENDER_COOLDOWN_SECONDS >= 10
+    assert config.SENDER_COOLDOWN_SECONDS >= 2  # 2026-07-03 用户决策降到 2s（只防同瞬重复）
     assert config.WECHAT_MAX_VERSION < (4, 1, 9), "不能支持 4.1.9+（UIA 被砍）"
 
 

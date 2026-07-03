@@ -30,8 +30,8 @@ from typing import Any, Dict, Optional
 # ── 常量 ─────────────────────────────────────────────────────────────────────
 
 # 拟人回复延迟区间（秒）。名单内消息确认要回之后、实际发送之前随机等待。
-REPLY_DELAY_MIN_SECONDS = 1.0
-REPLY_DELAY_MAX_SECONDS = 5.0
+REPLY_DELAY_MIN_SECONDS = 0.0
+REPLY_DELAY_MAX_SECONDS = 0.0  # 拟人等待已删（2026-07-03 用户决策：响应速度优先）
 
 # LLM（DeepSeek via ToAPI）生成超时阈值（毫秒）。超时即跳过不发占位。
 LLM_TIMEOUT_MS = 20000
@@ -126,8 +126,8 @@ def within_business_hours(
 
 
 def pick_reply_delay() -> float:
-    """返回 [1.0, 5.0] 秒区间内的随机拟人延迟（每次不同，非常量）。"""
-    return random.uniform(REPLY_DELAY_MIN_SECONDS, REPLY_DELAY_MAX_SECONDS)
+    """拟人延迟已删（2026-07-03 用户决策）：恒返回 0，确认即发。"""
+    return 0.0
 
 
 # ── ④ 去重幂等（进程内缓存，线程安全）────────────────────────────────────────────

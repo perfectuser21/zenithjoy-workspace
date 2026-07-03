@@ -83,10 +83,10 @@ def test_business_hours_cross_midnight():
 
 
 # ── 拟人延迟 1~5s ───────────────────────────────────────────────────────────
-def test_reply_delay_in_range_and_random():
-    ds = [m.pick_reply_delay() for _ in range(50)]
-    assert all(1.0 <= d <= 5.0 for d in ds)
-    assert len(set(ds)) > 1  # 必须随机，不能是常量
+def test_reply_delay_removed_is_zero():
+    """拟人延迟已删（2026-07-03 用户决策：响应速度优先）：恒 0，确认即发。"""
+    ds = [m.pick_reply_delay() for _ in range(10)]
+    assert all(d == 0.0 for d in ds)
 
 
 # ── 去重幂等 ─────────────────────────────────────────────────────────────────
