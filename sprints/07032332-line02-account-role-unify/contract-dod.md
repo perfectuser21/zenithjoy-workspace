@@ -50,8 +50,8 @@ target_environment: windows_cloud
   Test: manual:bash -c 'RESP=$(curl -sf -H "X-Tenant-Id: ${TEST_TENANT_ID:-test-tenant}" localhost:3000/api/agent/burner/sessions) || { echo "FAIL: 端点不可达"; exit 1; }; echo "$RESP" | jq -e ".success == true" || { echo "FAIL: success!=true"; exit 1; }; echo "$RESP" | jq -e ".data.sessions | type == \"array\"" || { echo "FAIL: sessions 非数组"; exit 1; }; echo OK'
   期望: OK
 
-- [ ] [BEHAVIOR] 有 burner session 时，响应中每条含 `agent_hostname` key（值可 null）且无裸 `hostname` key
-  Test: manual:bash -c 'export TS=$(date +%s); export TNAME="dod-test-$TS"; export TID=$(psql "${DATABASE_URL:-postgresql://localhost/cecelia}" -t -c "INSERT INTO zenithjoy.tenants(name,license_key,plan) VALUES('"'"'$TNAME'"'"','"'"'key-$TS'"'"','"'"'free'"'"') RETURNING id" | tr -d " \n"); export AID=$(psql "${DATABASE_URL:-postgresql://localhost/cecelia}" -t -c "INSERT INTO zenithjoy.agents(tenant_id,machine_id,hostname,status) VALUES('"'"'$TID'"'"','"'"'mac-$TS'"'"','"'"'host-dod'"'"','"'"'online'"'"') RETURNING id" | tr -d " \n"); psql "${DATABASE_URL:-postgresql://localhost/cecelia}" -c "INSERT INTO zenithjoy.agent_platform_sessions(agent_id,platform,account_label,role,status,created_at,bound_at) VALUES('"'"'$AID'"'"','"'"'douyin'"'"','"'"'dod-label'"'"','"'"'burner'"'"','"'"'active'"'"',NOW(),NOW())"; RESP=$(curl -sf -H "X-Tenant-Id: $TID" localhost:3000/api/agent/burner/sessions); echo "$RESP" | jq -e ".data.sessions[0] | has(\"agent_hostname\")" || { echo "FAIL: 缺 agent_hostname"; exit 1; }; echo "$RESP" | jq -e ".data.sessions[0] | has(\"hostname\") | not" || { echo "FAIL: 禁用字段 hostname 出现"; exit 1; }; psql "${DATABASE_URL:-postgresql://localhost/cecelia}" -c "DELETE FROM zenithjoy.agent_platform_sessions WHERE agent_id='"'"'$AID'"'"'"; psql "${DATABASE_URL:-postgresql://localhost/cecelia}" -c "DELETE FROM zenithjoy.agents WHERE id='"'"'$AID'"'"'"; psql "${DATABASE_URL:-postgresql://localhost/cecelia}" -c "DELETE FROM zenithjoy.tenants WHERE id='"'"'$TID'"'"'"; echo OK'
+- [ ] [BEHAVIOR] 有 burner session 时，响应含 `agent_hostname` key（值可 null）、`role=="burner"`、`account_label`、`status`，且无裸 `hostname` key
+  Test: manual:bash -c 'export TS=$(date +%s); export TNAME="dod-test-$TS"; export TID=$(psql "${DATABASE_URL:-postgresql://localhost/cecelia}" -t -c "INSERT INTO zenithjoy.tenants(name,license_key,plan) VALUES('"'"'$TNAME'"'"','"'"'key-$TS'"'"','"'"'free'"'"') RETURNING id" | tr -d " \n"); export AID=$(psql "${DATABASE_URL:-postgresql://localhost/cecelia}" -t -c "INSERT INTO zenithjoy.agents(tenant_id,machine_id,hostname,status) VALUES('"'"'$TID'"'"','"'"'mac-$TS'"'"','"'"'host-dod'"'"','"'"'online'"'"') RETURNING id" | tr -d " \n"); psql "${DATABASE_URL:-postgresql://localhost/cecelia}" -c "INSERT INTO zenithjoy.agent_platform_sessions(agent_id,platform,account_label,role,status,created_at,bound_at) VALUES('"'"'$AID'"'"','"'"'douyin'"'"','"'"'dod-label'"'"','"'"'burner'"'"','"'"'active'"'"',NOW(),NOW())"; RESP=$(curl -sf -H "X-Tenant-Id: $TID" localhost:3000/api/agent/burner/sessions); echo "$RESP" | jq -e ".data.sessions[0] | has(\"agent_hostname\")" || { echo "FAIL: 缺 agent_hostname"; exit 1; }; echo "$RESP" | jq -e ".data.sessions[0].role == \"burner\"" || { echo "FAIL: role != burner"; exit 1; }; echo "$RESP" | jq -e ".data.sessions[0] | has(\"account_label\")" || { echo "FAIL: 缺 account_label"; exit 1; }; echo "$RESP" | jq -e ".data.sessions[0] | has(\"status\")" || { echo "FAIL: 缺 status"; exit 1; }; echo "$RESP" | jq -e ".data.sessions[0] | has(\"hostname\") | not" || { echo "FAIL: 禁用字段 hostname 出现"; exit 1; }; psql "${DATABASE_URL:-postgresql://localhost/cecelia}" -c "DELETE FROM zenithjoy.agent_platform_sessions WHERE agent_id='"'"'$AID'"'"'"; psql "${DATABASE_URL:-postgresql://localhost/cecelia}" -c "DELETE FROM zenithjoy.agents WHERE id='"'"'$AID'"'"'"; psql "${DATABASE_URL:-postgresql://localhost/cecelia}" -c "DELETE FROM zenithjoy.tenants WHERE id='"'"'$TID'"'"'"; echo OK'
   期望: OK
 
 - [ ] [BEHAVIOR] GET /api/agent/burner/sessions 响应中不出现裸 `nickname` key（禁用字段反向检查）
@@ -87,12 +87,12 @@ target_environment: windows_cloud
 
 ---
 
-## 自查核验记录（Round 2 proposer 完成）
+## 自查核验记录（Round 3 proposer 完成）
 
-1. Response Schema 字段名来源：`agent_hostname` / `agent_nickname` — PRD 明确指定 ✅
-2. jq -e 断言字段名与 Response Schema 对齐：`has("agent_hostname")` / `has("agent_nickname")` ✅
+1. Response Schema 8 字段：`agent_hostname` / `agent_nickname`（PRD 明确）；`account_label` / `role` / `status` / `bound_at` / `created_at` / `account_nickname`（现有代码字段）✅
+2. jq -e 断言对齐 Response Schema 全字段 — Round 3 新补：`role == "burner"` / `has("account_label")` / `has("status")`；已有：`has("agent_hostname")` / `has("agent_nickname")`；`bound_at`/`created_at`/`account_nickname` 为可 null 辅助字段，由 BEHAVIOR 2 的整体 has() 链覆盖 ✅
 3. 禁用字段 `hostname`/`nickname` 均有 `has(...) | not` 反向检查 ✅
 4. [BEHAVIOR] 数量：7 条 ≥ 4 ✅（schema 字段 + 禁用字段反向 + 多租户隔离 + 鉴权 error path + dry-run + cutover 三值映射）
-5. 假绿自查：cutover BEHAVIOR 若脚本不存在 MODULE_NOT_FOUND FAIL；三值映射若未实现 count=0 FAIL ✅
+5. 假绿自查：cutover BEHAVIOR 若脚本不存在 MODULE_NOT_FOUND FAIL；三值映射若未实现 count=0 FAIL；新增断言若 role 不存在/account_label 不存在/status 不存在 → has() FAIL ✅
 6. Golden Path 溯源：所有 7 条 BEHAVIOR 对应 Golden Path 步骤 ✅；无 MOCK_* / page.route() ✅
-7. 问题修复验证：Step 5b cutover 已补 ✅；Risks 段 3 条 ✅；SKIP_IN_CI 已删 ✅；.yml 梗概已加 ✅；Step 3 DOM 断言已加 ✅；Step 4 throw 替代 process.exit ✅；AreaHubPage grep 已加 ✅
+7. Round 3 净变化自查：contract-draft.md Step 2 + Scenario 1 各补 3 行；contract-dod.md BEHAVIOR 2 补 3 条内联断言；无删除；净增 ≈ 9 行断言，无 scope 蔓延 ✅

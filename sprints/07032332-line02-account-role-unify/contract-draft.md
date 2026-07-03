@@ -1,4 +1,4 @@
-# Sprint Contract Draft (Round 2)
+# Sprint Contract Draft (Round 3)
 
 ## Response Schema（推导来源: 当前代码 agent-burner.ts:161-186 + PRD 明确字段名）
 
@@ -95,6 +95,9 @@ COUNT=$(echo "$RESP" | jq '.data.sessions | length')
 if [ "$COUNT" -gt 0 ]; then
   echo "$RESP" | jq -e '.data.sessions[0] | has("agent_hostname")' || { echo "FAIL: 缺 agent_hostname"; exit 1; }
   echo "$RESP" | jq -e '.data.sessions[0] | has("agent_nickname")' || { echo "FAIL: 缺 agent_nickname"; exit 1; }
+  echo "$RESP" | jq -e '.data.sessions[0].role == "burner"' || { echo "FAIL: role != burner"; exit 1; }
+  echo "$RESP" | jq -e '.data.sessions[0] | has("account_label")' || { echo "FAIL: 缺 account_label"; exit 1; }
+  echo "$RESP" | jq -e '.data.sessions[0] | has("status")' || { echo "FAIL: 缺 status"; exit 1; }
   echo "$RESP" | jq -e '.data.sessions[0] | has("hostname") | not' || { echo "FAIL: 禁用字段 hostname 出现"; exit 1; }
   echo "$RESP" | jq -e '.data.sessions[0] | has("nickname") | not' || { echo "FAIL: 禁用字段 nickname 出现"; exit 1; }
 fi
@@ -106,6 +109,9 @@ echo "✅ Step 2 通过 count=$COUNT"
 - `data.sessions` 为数组
 - 每条 session 含 `agent_hostname` key（值允许为 null）
 - 每条 session 含 `agent_nickname` key（值允许为 null）
+- `role == "burner"`（小号专用 role 值）
+- 含 `account_label` key
+- 含 `status` key
 - 禁止输出裸 `hostname` / `nickname` key
 
 ---
@@ -355,6 +361,9 @@ COUNT=$(echo "$RESP" | jq '.data.sessions | length')
 if [ "$COUNT" -gt 0 ]; then
   echo "$RESP" | jq -e '.data.sessions[0] | has("agent_hostname")' || { echo "FAIL: 缺 agent_hostname"; exit 1; }
   echo "$RESP" | jq -e '.data.sessions[0] | has("agent_nickname")' || { echo "FAIL: 缺 agent_nickname"; exit 1; }
+  echo "$RESP" | jq -e '.data.sessions[0].role == "burner"' || { echo "FAIL: role != burner"; exit 1; }
+  echo "$RESP" | jq -e '.data.sessions[0] | has("account_label")' || { echo "FAIL: 缺 account_label"; exit 1; }
+  echo "$RESP" | jq -e '.data.sessions[0] | has("status")' || { echo "FAIL: 缺 status"; exit 1; }
   echo "$RESP" | jq -e '.data.sessions[0] | has("hostname") | not' || { echo "FAIL: 禁用字段 hostname 出现"; exit 1; }
 fi
 
