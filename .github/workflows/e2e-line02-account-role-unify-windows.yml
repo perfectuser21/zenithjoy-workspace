@@ -10,9 +10,20 @@ on:
       - 'sprints/07032332-line02-account-role-unify/**'
   workflow_dispatch:
 
+concurrency:
+  group: e2e-line02-account-role-unify-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   e2e:
-    runs-on: windows-latest
+    name: Playwright — Line02 绑定机器列（ubuntu chromium）
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    defaults:
+      run:
+        shell: bash
+
     steps:
       - uses: actions/checkout@v4
 
@@ -23,15 +34,39 @@ jobs:
       - name: Install deps
         run: npm ci
 
-      - name: Install Windows rollup binding
-        run: npm install @rollup/rollup-win32-x64-msvc --no-save
+      - name: Install Playwright Chromium
+        working-directory: apps/dashboard
+        run: npx playwright install chromium --with-deps
 
-      - name: Run E2E
-        shell: pwsh
+      - name: Start Vite dev server (VITE_SKIP_AUTH=true)
+        working-directory: apps/dashboard
         env:
-          E2E_DATABASE_URL: ${{ secrets.E2E_DATABASE_URL }}
-          E2E_SUPER_ADMIN_EMAIL: ${{ secrets.E2E_SUPER_ADMIN_EMAIL }}
-          E2E_SUPER_ADMIN_PASSWORD: ${{ secrets.E2E_SUPER_ADMIN_PASSWORD }}
+          VITE_SKIP_AUTH: 'true'
+          VITE_MOCK_USER_ID: 'ci-e2e-user'
+          VITE_MOCK_USER_NAME: 'CI E2E User'
         run: |
-          & sprints/07032332-line02-account-role-unify/e2e-verify.ps1
-          exit $LASTEXITCODE
+          npx vite --port 5174 &
+          for i in $(seq 1 30); do
+            if curl -fs http://localhost:5174 > /dev/null 2>&1; then
+              echo "Vite ready after ${i}s"
+              break
+            fi
+            sleep 1
+          done
+          curl -fs http://localhost:5174 || (echo "Vite failed to start"; exit 1)
+
+      - name: Run Playwright E2E
+        working-directory: apps/dashboard
+        env:
+          E2E_BASE_URL: 'http://localhost:5174'
+        run: npx playwright test e2e/line02-account-role-unify.spec.ts --reporter=list
+
+      - name: Upload artifacts on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-line02-account-role-unify-artifacts
+          path: |
+            apps/dashboard/test-results/
+            apps/dashboard/screenshots/
+          retention-days: 7

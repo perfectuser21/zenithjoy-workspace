@@ -114,10 +114,6 @@ export default function AcquisitionAccountsPage() {
 
         {loading ? (
           <div className="text-sm text-gray-500 dark:text-gray-400">载入中…</div>
-        ) : sessions.length === 0 ? (
-          <div className="text-sm text-gray-500 dark:text-gray-400 py-6 text-center">
-            暂无小号 — 在下方绑定第一个
-          </div>
         ) : (
           <table className="w-full text-sm">
             <thead>
@@ -130,7 +126,13 @@ export default function AcquisitionAccountsPage() {
               </tr>
             </thead>
             <tbody>
-              {sessions.map((s) => (
+              {sessions.length === 0 ? (
+                <tr>
+                  <td colSpan={5} className="py-6 text-center text-sm text-gray-500 dark:text-gray-400">
+                    暂无小号 — 在下方绑定第一个
+                  </td>
+                </tr>
+              ) : sessions.map((s) => (
                 <tr key={s.account_label} className={`border-b border-slate-100 dark:border-slate-800 ${s.status === 'needs_rebind' ? 'bg-red-50 dark:bg-red-900/10' : ''}`}>
                   <td className="py-2 text-gray-900 dark:text-white">{s.account_label}</td>
                   <td className="py-2 text-gray-700 dark:text-gray-300">{s.account_nickname || '—'}</td>
