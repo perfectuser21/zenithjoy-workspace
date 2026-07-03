@@ -327,11 +327,21 @@ def _save_reply_anchor() -> None:
 
 
 def _matches_any_sent(text: str) -> bool:
-    """text 是否命中已发送文本历史（_delivery_confirmed 同款规范化，新→旧遍历）。"""
+    """text 是否命中已发送文本历史（_delivery_confirmed 同款规范化，新→旧遍历）。
+
+    v1.0.102 反向前缀：机器人多行回复在会话列表 item name 里被按行切分，
+    _parse_item_name 只取第一行 → 正向 16 字前缀跨换行永不命中 → 自己的
+    回复被当客户消息（重启后重答一遍，10:34 实锤）。补：text（规范化 ≥10
+    字）是某条已发送文本的**前缀** → 也算命中。<10 字不做反向匹配防误判
+    客户短消息（如客户恰好发"在的"）。
+    """
     if not text:
         return False
+    t_norm = "".join(text.split())
     for s in reversed(_SENT_TEXTS):
         if _delivery_confirmed(text, s):
+            return True
+        if len(t_norm) >= 10 and "".join(s.split()).startswith(t_norm):
             return True
     return False
 
