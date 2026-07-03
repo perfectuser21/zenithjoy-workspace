@@ -121,8 +121,9 @@ def test_restore_tray_calls_sw_hide():
     user32.ShowWindow.assert_called_with(77, 0)
 
 
-def test_scan_unread_tray_hidden_showna_then_hide():
-    """托盘场景：scan_unread 须先 SW_SHOWNA 再扫、扫完再 SW_HIDE。"""
+def test_scan_unread_tray_hidden_showna_then_stay_cloaked():
+    """托盘场景（v1.0.105 更新）：scan_unread 先 SW_SHOWNA 弹出扫描，扫完
+    **不再 SW_HIDE**——保持 cloak+shown 常驻（每轮弹/收在 1s 周期下漏帧=频闪）。"""
     mw = _make_mock_mw(hwnd=55)
     user32 = MagicMock()
     user32.IsWindowVisible.return_value = False
@@ -133,12 +134,17 @@ def test_scan_unread_tray_hidden_showna_then_hide():
 
     user32.ShowWindow.side_effect = record_show
 
-    with _mock_windll(user32), patch("time.sleep"):
-        listen_chat.scan_unread(mw)
-
-    assert 8 in call_order, "scan_unread 须调 SW_SHOWNA=8"
-    assert 0 in call_order, "scan_unread 须调 SW_HIDE=0"
-    assert call_order.index(8) < call_order.index(0), "SW_SHOWNA 须在 SW_HIDE 之前"
+    listen_chat._CLOAK_OWNED = False
+    try:
+        with _mock_windll(user32), patch("time.sleep"):
+            listen_chat.scan_unread(mw)
+        assert 8 in call_order, "scan_unread 须调 SW_SHOWNA=8"
+        assert 0 not in call_order, (
+            "v1.0.105 托盘常驻隐身：扫完绝不 SW_HIDE（每轮弹收=1Hz 频闪根源）"
+        )
+        assert listen_chat._CLOAK_OWNED is True
+    finally:
+        listen_chat._CLOAK_OWNED = False
 
 
 def test_scan_unread_visible_no_showna():

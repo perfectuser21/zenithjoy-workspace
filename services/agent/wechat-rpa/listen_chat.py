@@ -491,6 +491,11 @@ def _ensure_tray_visible(mw: Any) -> str:
                     _SWP = 0x0001 | 0x0004 | 0x0010  # NOSIZE | NOZORDER | NOACTIVATE
                     _ct.windll.user32.SetWindowPos(_hwnd, 0, _OFFSCREEN_X, _OFFSCREEN_Y, 0, 0, _SWP)
             time.sleep(_TRAY_RESTORE_SLEEP)  # 等 Qt 重建 UIA 虚拟列表渲染
+            # v1.0.105 常驻隐身：托盘弹出后保持 cloak+shown 跨轮常驻（调用方看到
+            # _CLOAK_OWNED=True 就不再收窗）——1s 扫描周期下每轮弹/收的漏帧会聚合成
+            # 肉眼频闪。操作者激活微信时 scan_unread 开头会 _uncloak_window 归还。
+            global _CLOAK_OWNED
+            _CLOAK_OWNED = True
             return 'tray'
         elif _is_iconic:
             # 最小化：v1.0.33 先 DWM cloak（防 WeChat 自身 activate 时移回可视区域被用户看到）
@@ -784,13 +789,30 @@ def _operator_takeover(sender: str, content: str, name: str,
 
 
 _SCAN_WINDOW_STATE: str = ""  # 有 emit 时暂存 orig_state，主循环回复完统一收窗
+_CLOAK_OWNED: bool = False  # v1.0.105：托盘常驻隐身中（弹出后不再每轮收窗，防 1Hz 频闪）
+
+
+def _uncloak_window(mw: Any) -> None:
+    """解除 DWM 隐身（v1.0.105：操作者激活微信时归还可见窗口）。fail-open。"""
+    import ctypes as _ct
+    try:
+        _hwnd = mw.element_info.handle
+        if _hwnd:
+            _cv = _ct.c_int(0)
+            _ct.windll.dwmapi.DwmSetWindowAttribute(_hwnd, 13, _ct.byref(_cv), 4)
+    except Exception:
+        pass
 
 
 def _finish_scan_window(mw: Any) -> None:
-    """回复完成后统一收窗（v1.0.103 双弹窗修复的另一半）。空状态 no-op，幂等。"""
+    """回复完成后统一收窗（v1.0.103 双弹窗修复的另一半）。空状态 no-op，幂等。
+    v1.0.105：托盘态持有常驻隐身（_CLOAK_OWNED）→ 不收窗（保持 cloak+shown，
+    零弹收零频闪），只清暂存状态。"""
     global _SCAN_WINDOW_STATE
     st = _SCAN_WINDOW_STATE
     _SCAN_WINDOW_STATE = ""
+    if st == "tray" and _CLOAK_OWNED:
+        return
     if st:
         _restore_window_state(mw, st)
 
@@ -832,6 +854,11 @@ def scan_unread(mw: Any, last_preview: Optional[Dict[str, str]] = None,
     reply_in_chat 结束即焦点归还）。角标路径（真未读客户消息）不受影响。
     """
     operator_fg = _wechat_is_foreground(mw)
+    # v1.0.105：操作者激活了被我们常驻隐身的窗口 → 立即解除隐身归还（他要用微信）
+    global _CLOAK_OWNED
+    if operator_fg and _CLOAK_OWNED:
+        _uncloak_window(mw)
+        _CLOAK_OWNED = False
     orig_state = _ensure_tray_visible(mw)
     # 记录【可见态】整树大小(窗口此刻已 ensure_visible，与 _is_uia_tree_collapsed 同口径)：主循环据此
     # 更新 last_readable_scan_at——心跳块裸读处于隐藏态恒报塌缩假象，读到健康树=微信能读会话=没塌缩。
@@ -968,10 +995,14 @@ def scan_unread(mw: Any, last_preview: Optional[Dict[str, str]] = None,
                             "_last_incoming": c["content"]})
                 _TRAILING_STALL.pop(c["sender"], None)
     # v1.0.103 双弹窗修复：有 emit → 不收窗（回复接着用这次弹出），orig_state
-    # 暂存给主循环回复完调 _finish_scan_window 统一收；无 emit → 立即收（旧行为）。
+    # 暂存给主循环回复完调 _finish_scan_window 统一收；无 emit → 立即收。
+    # v1.0.105：托盘态持有常驻隐身（_CLOAK_OWNED）→ 无 emit 也不收（cloak+shown
+    # 跨轮常驻，1Hz 扫描下每轮弹/收的漏帧会聚合成肉眼频闪）。
     global _SCAN_WINDOW_STATE
     if out:
         _SCAN_WINDOW_STATE = orig_state
+    elif orig_state == "tray" and _CLOAK_OWNED:
+        pass  # 常驻隐身：不 SW_HIDE 不 uncloak，下一轮 ensure 直接 no-op
     else:
         _restore_window_state(mw, orig_state)
     return out
