@@ -87,8 +87,7 @@ export const autopilotPageComponents: Record<string, () => Promise<{ default: Co
   'FeishuBindTenant': () => import('../pages/FeishuBindTenant'),
   // zj2 Smart Acquisition — 获客 Leads
   'LeadsPage': () => import('../pages/LeadsPage'),
-  // Path 2 Sprint B-1 — 抖音小号绑定 + 评论抓取
-  'DouyinBurnerBindPage': () => import('../pages/DouyinBurnerBindPage'),
+  // Path 2 Sprint B-1 — 评论抓取（绑号功能已并入 AcquisitionAccountsPage）
   'FolderBindPage': () => import('../pages/FolderBindPage'),
   'PublishPage': () => import('../pages/PublishPage'),
   'LocalVideoPipelinePage': () => import('../pages/LocalVideoPipelinePage'),
@@ -187,7 +186,6 @@ export const additionalRoutes: RouteConfig[] = [
   { path: '/ai-video', component: 'AiVideoGenerationPage', requireAuth: true },
   { path: '/dashboard/leads', component: 'LeadsPage', requireAuth: true },
   { path: '/competitor-research', component: 'CompetitorResearchPage', requireAuth: true },
-  { path: '/dashboard/douyin-burner-bind', component: 'DouyinBurnerBindPage', requireAuth: true },
   // Line02 IA 重设计 Track A — 账号管理 / 采集任务两级视图
   { path: '/area/acquisition/accounts', component: 'AcquisitionAccountsPage', requireAuth: true },
   { path: '/area/acquisition/tasks', component: 'AcquisitionTasksPage', requireAuth: true },

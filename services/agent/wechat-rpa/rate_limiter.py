@@ -187,10 +187,10 @@ def can_send(action: str, wechat_id: str) -> Tuple[bool, Optional[str]]:
                     conn.execute("ROLLBACK")
                     return (False, _iso(next_allowed))
 
-        # 3) 通过 → INSERT
+        # 3) 通过 → INSERT（微秒精度，防止截断到秒后跨秒边界误判间隔）
         conn.execute(
             "INSERT INTO sends (wechat_id, action, sent_at) VALUES (?, ?, ?)",
-            (wechat_id, action, now.strftime("%Y-%m-%d %H:%M:%S")),
+            (wechat_id, action, now.strftime("%Y-%m-%d %H:%M:%S.%f")),
         )
         conn.execute("COMMIT")
         return (True, None)
