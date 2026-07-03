@@ -5,39 +5,42 @@ target_environment: windows_cloud
 ---
 # Contract DoD — Sprint: 角色数据模型统一 & 账号管理页加绑定机器列
 
-**范围**: GET /api/agent/burner/sessions 加 agent_hostname/agent_nickname；AcquisitionAccountsPage 加"绑定机器"列；删除 DouyinBurnerBindPage；DB migration + 迁移脚本
+**范围**: GET /api/agent/burner/sessions 加 agent_hostname/agent_nickname（LEFT JOIN）；AcquisitionAccountsPage 加"绑定机器"列（含单元格值断言）；删除 DouyinBurnerBindPage + AreaHubPage 链接清理；DB migration + 迁移脚本（dry-run + cutover 三值映射）
 **大小**: M
 
 ---
 
 ## ARTIFACT 条目
 
-- [ ] [ARTIFACT] `apps/api/src/routes/agent-burner.ts` GET /sessions SQL 查询别名 `a.hostname AS agent_hostname, a.nickname AS agent_nickname`（不再输出裸 hostname/nickname）
-  Test: node -e "const c=require('fs').readFileSync('apps/api/src/routes/agent-burner.ts','utf8');if(!c.includes('agent_hostname'))process.exit(1);if(!c.includes('agent_nickname'))process.exit(1)"
+- [ ] [ARTIFACT] `apps/api/src/routes/agent-burner.ts` GET /sessions SQL 使用 LEFT JOIN 查询别名 `a.hostname AS agent_hostname, a.nickname AS agent_nickname`（不再输出裸 hostname/nickname）
+  Test: node -e "const c=require('fs').readFileSync('apps/api/src/routes/agent-burner.ts','utf8');if(!c.includes('agent_hostname'))process.exit(1);if(!c.includes('agent_nickname'))process.exit(1);if(!c.toUpperCase().includes('LEFT JOIN'))process.exit(1)"
 
-- [ ] [ARTIFACT] `apps/dashboard/src/pages/AcquisitionAccountsPage.tsx` BurnerSession 接口含 `agent_hostname?: string | null` + `agent_nickname?: string | null`，表格含"绑定机器"列
-  Test: node -e "const c=require('fs').readFileSync('apps/dashboard/src/pages/AcquisitionAccountsPage.tsx','utf8');if(!c.includes('agent_hostname'))process.exit(1);if(!c.includes('绑定机器'))process.exit(1)"
+- [ ] [ARTIFACT] `apps/dashboard/src/pages/AcquisitionAccountsPage.tsx` BurnerSession 接口含 `agent_hostname?: string | null` + `agent_nickname?: string | null`，表格含"绑定机器"列，单元格含 `data-testid="machine-hostname-cell"`
+  Test: node -e "const c=require('fs').readFileSync('apps/dashboard/src/pages/AcquisitionAccountsPage.tsx','utf8');if(!c.includes('agent_hostname'))process.exit(1);if(!c.includes('绑定机器'))process.exit(1);if(!c.includes('machine-hostname-cell'))process.exit(1)"
 
 - [ ] [ARTIFACT] `apps/dashboard/src/pages/DouyinBurnerBindPage.tsx` 文件已物理删除
-  Test: node -e "const fs=require('fs');if(fs.existsSync('apps/dashboard/src/pages/DouyinBurnerBindPage.tsx'))process.exit(1);console.log('OK file deleted')"
+  Test: node -e "const fs=require('fs');if(fs.existsSync('apps/dashboard/src/pages/DouyinBurnerBindPage.tsx'))process.exit(1);console.log('OK')"
 
 - [ ] [ARTIFACT] `apps/dashboard/src/config/navigation.config.ts` 无 `DouyinBurnerBind` + 无 `douyin-burner-bind` 路径引用
   Test: node -e "const c=require('fs').readFileSync('apps/dashboard/src/config/navigation.config.ts','utf8');if(c.includes('DouyinBurnerBind'))process.exit(1);if(c.includes('douyin-burner-bind'))process.exit(1);console.log('OK')"
 
-- [ ] [ARTIFACT] `apps/dashboard/src/pages/AreaHubPage.tsx` 移除 `/dashboard/douyin-burner-bind` 链接
+- [ ] [ARTIFACT] `apps/dashboard/src/pages/AreaHubPage.tsx` 移除 `/dashboard/douyin-burner-bind` 链接（问题5修复：已列入受影响文件）
   Test: node -e "const c=require('fs').readFileSync('apps/dashboard/src/pages/AreaHubPage.tsx','utf8');if(c.includes('douyin-burner-bind'))process.exit(1);console.log('OK')"
 
 - [ ] [ARTIFACT] `apps/dashboard/tests/p2-sprint-b1-ws5/douyin-burner-bind-page.test.tsx` 文件已物理删除
   Test: node -e "const fs=require('fs');if(fs.existsSync('apps/dashboard/tests/p2-sprint-b1-ws5/douyin-burner-bind-page.test.tsx'))process.exit(1);console.log('OK')"
 
-- [ ] [ARTIFACT] DB migration 文件 `apps/api/db/migrations/*_account_role_unify.sql` 存在，含 health→status 映射 SQL
+- [ ] [ARTIFACT] DB migration 文件 `apps/api/db/migrations/*_account_role_unify.sql` 存在，含 health→status 映射 SQL + 停写标记
   Test: node -e "const fs=require('fs'),g=require('glob');const f=g.sync('apps/api/db/migrations/*account_role_unify*');if(f.length===0)process.exit(1);const c=fs.readFileSync(f[0],'utf8');if(!c.includes('line02_account_sessions'))process.exit(1)"
 
-- [ ] [ARTIFACT] `apps/api/scripts/account-role-migrate.js` 迁移脚本存在，支持 `--dry-run` 参数
-  Test: node -e "const c=require('fs').readFileSync('apps/api/scripts/account-role-migrate.js','utf8');if(!c.includes('dry-run')&&!c.includes('dryRun'))process.exit(1)"
+- [ ] [ARTIFACT] `apps/api/scripts/account-role-migrate.js` 迁移脚本存在，支持 `--dry-run` 参数，含三值映射逻辑（ok→active/expired→expired/unknown→pending）
+  Test: node -e "const c=require('fs').readFileSync('apps/api/scripts/account-role-migrate.js','utf8');if(!c.includes('dry-run')&&!c.includes('dryRun'))process.exit(1);if(!c.includes('active'))process.exit(1);if(!c.includes('pending'))process.exit(1)"
 
-- [ ] [ARTIFACT] `apps/dashboard/e2e/line02-account-role-unify.spec.ts` Playwright 测试存在，不含 `page.route(`
-  Test: node -e "const c=require('fs').readFileSync('apps/dashboard/e2e/line02-account-role-unify.spec.ts','utf8');if(c.includes('page.route('))process.exit(1);if(!c.includes('绑定机器'))process.exit(1)"
+- [ ] [ARTIFACT] `apps/dashboard/e2e/line02-account-role-unify.spec.ts` Playwright 测试存在，不含 `page.route(`，含 `machine-hostname-cell` 断言
+  Test: node -e "const c=require('fs').readFileSync('apps/dashboard/e2e/line02-account-role-unify.spec.ts','utf8');if(c.includes('page.route('))process.exit(1);if(!c.includes('绑定机器'))process.exit(1);if(!c.includes('machine-hostname-cell'))process.exit(1)"
+
+- [ ] [ARTIFACT] `.github/workflows/e2e-line02-account-role-unify-windows.yml` workflow 文件存在，含 `windows-latest` runner
+  Test: node -e "const c=require('fs').readFileSync('.github/workflows/e2e-line02-account-role-unify-windows.yml','utf8');if(!c.includes('windows-latest'))process.exit(1);console.log('OK')"
 
 ---
 
@@ -67,24 +70,29 @@ target_environment: windows_cloud
   Test: manual:bash -c 'DATABASE_URL="${DATABASE_URL:-postgresql://localhost/cecelia}" node apps/api/scripts/account-role-migrate.js --dry-run > /tmp/migrate-dod.log 2>&1; EC=$?; [ $EC -eq 0 ] || { echo "FAIL: dry-run exit=$EC"; cat /tmp/migrate-dod.log; exit 1; }; grep -qE "dry.run|conflict|ok|complete|0 row|完成" /tmp/migrate-dod.log || { echo "FAIL: 日志无可识别内容"; cat /tmp/migrate-dod.log; exit 1; }; echo OK'
   期望: OK
 
+- [ ] [BEHAVIOR] cutover 正式执行后，三值 health→status 映射写入 agent_platform_sessions（带时间窗防造假）
+  Test: manual:bash -c 'TS=$(date +%s); CTID=$(psql "${DATABASE_URL:-postgresql://localhost/cecelia}" -t -c "INSERT INTO zenithjoy.tenants(name,license_key,plan) VALUES('"'"'cut-dod-$TS'"'"','"'"'ck-$TS'"'"','"'"'free'"'"') RETURNING id" | tr -d " \n"); CAID=$(psql "${DATABASE_URL:-postgresql://localhost/cecelia}" -t -c "INSERT INTO zenithjoy.agents(tenant_id,machine_id,hostname,status) VALUES('"'"'$CTID'"'"','"'"'mac-c-$TS'"'"','"'"'ch'"'"','"'"'online'"'"') RETURNING id" | tr -d " \n"); psql "${DATABASE_URL:-postgresql://localhost/cecelia}" -c "INSERT INTO zenithjoy.line02_account_sessions(agent_id,platform,account_label,health,tenant_id) VALUES('"'"'$CAID'"'"','"'"'douyin'"'"','"'"'ok-$TS'"'"','"'"'ok'"'"','"'"'$CTID'"'"'),('"'"'$CAID'"'"','"'"'douyin'"'"','"'"'ex-$TS'"'"','"'"'expired'"'"','"'"'$CTID'"'"'),('"'"'$CAID'"'"','"'"'douyin'"'"','"'"'un-$TS'"'"','"'"'unknown'"'"','"'"'$CTID'"'"')"; DATABASE_URL="${DATABASE_URL:-postgresql://localhost/cecelia}" node apps/api/scripts/account-role-migrate.js > /tmp/cut-dod.log 2>&1 || { echo "FAIL: cutover exit non-zero"; cat /tmp/cut-dod.log; exit 1; }; C_OK=$(psql "${DATABASE_URL:-postgresql://localhost/cecelia}" -t -c "SELECT count(*) FROM zenithjoy.agent_platform_sessions WHERE agent_id='"'"'$CAID'"'"' AND account_label='"'"'ok-$TS'"'"' AND status='"'"'active'"'"' AND created_at > NOW() - interval '"'"'5 minutes'"'"'" | tr -d " "); [ "$C_OK" -eq 1 ] || { echo "FAIL: ok→active count=$C_OK"; exit 1; }; C_EXP=$(psql "${DATABASE_URL:-postgresql://localhost/cecelia}" -t -c "SELECT count(*) FROM zenithjoy.agent_platform_sessions WHERE agent_id='"'"'$CAID'"'"' AND account_label='"'"'ex-$TS'"'"' AND status='"'"'expired'"'"' AND created_at > NOW() - interval '"'"'5 minutes'"'"'" | tr -d " "); [ "$C_EXP" -eq 1 ] || { echo "FAIL: expired→expired count=$C_EXP"; exit 1; }; C_UNK=$(psql "${DATABASE_URL:-postgresql://localhost/cecelia}" -t -c "SELECT count(*) FROM zenithjoy.agent_platform_sessions WHERE agent_id='"'"'$CAID'"'"' AND account_label='"'"'un-$TS'"'"' AND status='"'"'pending'"'"' AND created_at > NOW() - interval '"'"'5 minutes'"'"'" | tr -d " "); [ "$C_UNK" -eq 1 ] || { echo "FAIL: unknown→pending count=$C_UNK"; exit 1; }; psql "${DATABASE_URL:-postgresql://localhost/cecelia}" -c "DELETE FROM zenithjoy.agent_platform_sessions WHERE agent_id='"'"'$CAID'"'"'" 2>/dev/null; psql "${DATABASE_URL:-postgresql://localhost/cecelia}" -c "DELETE FROM zenithjoy.line02_account_sessions WHERE agent_id='"'"'$CAID'"'"'" 2>/dev/null; psql "${DATABASE_URL:-postgresql://localhost/cecelia}" -c "DELETE FROM zenithjoy.agents WHERE id='"'"'$CAID'"'"'" 2>/dev/null; psql "${DATABASE_URL:-postgresql://localhost/cecelia}" -c "DELETE FROM zenithjoy.tenants WHERE id='"'"'$CTID'"'"'" 2>/dev/null; echo OK'
+  期望: OK
+
 ---
 
 ## BEHAVIOR:E2E 条目（user_facing — Mode B final-e2e，windows-latest Playwright）
 
-- [ ] [BEHAVIOR:E2E] 管理员打开账号管理页，"绑定机器"列头可见（真实后端，无 stub）
+- [ ] [BEHAVIOR:E2E] 管理员打开账号管理页，"绑定机器"列头可见，单元格渲染 hostname 或"—"（真实后端，无 stub）
   Screenshots:
-    - 01-initial.png       期望：账号管理页加载完成，顶部有账号列表区域，表头可见
-    - 02-accounts-table.png  期望："绑定机器"列头文字可见于表格区域
-    - 03-old-route-gone.png  期望：访问旧路由后不再显示 DouyinBurnerBindPage 内容
+    - 01-initial.png         期望：账号管理页加载完成，顶部有账号列表区域，表头可见
+    - 02-accounts-table.png  期望："绑定机器"列头文字可见，表格行单元格显示 hostname 文字或"—"，非空
+    - 03-old-route-gone.png  期望：访问旧路由后不再显示 DouyinBurnerBindPage 内容，URL 已离开
   期望：所有截图与描述一致，evaluator 完成后截图复制到 screenshots/
 
 ---
 
-## 自查核验记录（proposer 完成）
+## 自查核验记录（Round 2 proposer 完成）
 
 1. Response Schema 字段名来源：`agent_hostname` / `agent_nickname` — PRD 明确指定 ✅
 2. jq -e 断言字段名与 Response Schema 对齐：`has("agent_hostname")` / `has("agent_nickname")` ✅
 3. 禁用字段 `hostname`/`nickname` 均有 `has(...) | not` 反向检查 ✅
-4. [BEHAVIOR] 数量：6 条 ≥ 4 ✅（schema 字段 + keys 禁用反向 + 多租户隔离 + 鉴权 error path + dry-run）
-5. 假绿自查：每条 BEHAVIOR 若对应代码一行未写均会 FAIL — dry-run 脚本不存在时 `node apps/api/scripts/account-role-migrate.js` 会 MODULE_NOT_FOUND；agent_hostname 未加时 `has("agent_hostname")` 为 false ✅
-6. Golden Path 溯源：每条 BEHAVIOR 均对应 Golden Path 步骤 ✅；无 MOCK_* / page.route() ✅
+4. [BEHAVIOR] 数量：7 条 ≥ 4 ✅（schema 字段 + 禁用字段反向 + 多租户隔离 + 鉴权 error path + dry-run + cutover 三值映射）
+5. 假绿自查：cutover BEHAVIOR 若脚本不存在 MODULE_NOT_FOUND FAIL；三值映射若未实现 count=0 FAIL ✅
+6. Golden Path 溯源：所有 7 条 BEHAVIOR 对应 Golden Path 步骤 ✅；无 MOCK_* / page.route() ✅
+7. 问题修复验证：Step 5b cutover 已补 ✅；Risks 段 3 条 ✅；SKIP_IN_CI 已删 ✅；.yml 梗概已加 ✅；Step 3 DOM 断言已加 ✅；Step 4 throw 替代 process.exit ✅；AreaHubPage grep 已加 ✅
