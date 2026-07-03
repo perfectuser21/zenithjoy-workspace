@@ -251,29 +251,6 @@ export async function buildAssignments(
   const cfg = await getConfig(pool, tenantId);
   const nowIso = now.toISOString();
 
-  // ★ Step A: 重标离线 burner 的 queued 行为 pending_dispatch
-  // 已排期但 burner agent 心跳超过 2 分钟的行，等下一周期有在线小号时重派
-  await pool.query(
-    `UPDATE zenithjoy.dm_assignments
-     SET status = 'pending_dispatch',
-         account_label = '',
-         scheduled_for = NULL,
-         dispatch_reason = NULL,
-         updated_at = now()
-     WHERE tenant_id = $1
-       AND status = 'queued'
-       AND scheduled_for > $2::timestamptz
-       AND account_label IN (
-         SELECT s.account_label
-           FROM zenithjoy.agent_platform_sessions s
-           JOIN zenithjoy.agents a ON a.id = s.agent_id
-          WHERE a.tenant_id = $1
-            AND s.role = 'burner'
-            AND a.last_heartbeat_at <= $2::timestamptz - INTERVAL '2 minutes'
-       )`,
-    [tenantId, nowIso]
-  );
-
   // ★ Step B: 查在线 burner 小号，按当天已派任务量升序（最少负载优先）
   const burnersRes = await pool.query(
     `SELECT s.account_label,
@@ -296,7 +273,28 @@ export async function buildAssignments(
   );
   const burners: string[] = burnersRes.rows.map((r: { account_label: string }) => r.account_label).filter(Boolean);
 
-  // ★ Step C: 获取上一轮积压的 pending_dispatch leads（优先重试）
+  // ★ Step A: 重标离线 burner 的 queued 行为 pending_dispatch
+  // 先 SELECT 所有未到期 queued 行，对不在在线 burner 白名单中的逐行 UPDATE → pending_dispatch
+  const queuedRemapRes = await pool.query(
+    `SELECT id, lead_id, account_label
+       FROM zenithjoy.dm_assignments
+      WHERE tenant_id = $1 AND status = 'queued' AND scheduled_for > $2::timestamptz`,
+    [tenantId, nowIso]
+  );
+  const onlineBurnerSet = new Set(burners);
+  for (const qRow of queuedRemapRes.rows as { id: string; lead_id: string; account_label: string }[]) {
+    if (!onlineBurnerSet.has(qRow.account_label)) {
+      await pool.query(
+        `UPDATE zenithjoy.dm_assignments
+           SET status = 'pending_dispatch', account_label = '', scheduled_for = NULL,
+               dispatch_reason = NULL, updated_at = now()
+         WHERE id = $1 AND status = 'queued'`,
+        [qRow.id]
+      );
+    }
+  }
+
+  // ★ Step C: 获取上一轮积压的 pending_dispatch leads（优先重试，含 Step A 刚重标的行）
   const pendingRes = await pool.query(
     `SELECT id, lead_id, account_label
        FROM zenithjoy.dm_assignments

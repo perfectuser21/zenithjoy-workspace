@@ -153,6 +153,17 @@ function makeDispatchPool(seed: {
         return { rows };
       }
 
+      // queued_remap SELECT — find future-scheduled queued assignments for offline-burner remap
+      if (sql.includes('FROM zenithjoy.dm_assignments') && sql.includes("status = 'queued'") && !sql.includes('UNION') && !sql.includes('dm_outreach_log') && !sql.includes('AS used')) {
+        const [tenant, sinceIso] = params as string[];
+        const rows = assignments.filter((a) => {
+          if (a.tenant_id !== tenant || a.status !== 'queued') return false;
+          if (sinceIso && a.scheduled_for && new Date(a.scheduled_for) <= new Date(sinceIso)) return false;
+          return true;
+        }).map((a) => ({ id: a.id, lead_id: a.lead_id, account_label: a.account_label }));
+        return { rows };
+      }
+
       // pending_dispatch leads for retry (NEW — upgraded buildAssignments fetches these first)
       if (sql.includes('FROM zenithjoy.dm_assignments') && sql.includes("status = 'pending_dispatch'")) {
         const rows = assignments.filter(
@@ -209,15 +220,15 @@ function makeDispatchPool(seed: {
         return { rows: [] };
       }
 
-      // update pending_dispatch → queued (retry)
-      if (sql.startsWith('UPDATE zenithjoy.dm_assignments SET status') && sql.includes("'queued'")) {
+      // update assignment status — handles both retry (pending_dispatch→queued) and remap (queued→pending_dispatch)
+      if (sql.startsWith('UPDATE zenithjoy.dm_assignments SET status') && (sql.includes("'queued'") || sql.includes("'pending_dispatch'"))) {
         const [assignId, label, scheduled, dispatchReason] = params as string[];
         const a = assignments.find((x) => x.id === assignId);
         if (a) {
-          a.status = 'queued';
-          a.account_label = label;
-          a.scheduled_for = scheduled;
-          a.dispatch_reason = dispatchReason;
+          a.status = sql.match(/SET status = '([^']+)'/)?.[1] ?? 'queued';
+          a.account_label = label ?? '';
+          a.scheduled_for = scheduled ?? null;
+          a.dispatch_reason = dispatchReason ?? null;
           a.updated_at = new Date().toISOString();
         }
         return { rows: [] };
