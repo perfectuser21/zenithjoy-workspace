@@ -1,6 +1,6 @@
 {
   "name": "@zenithjoy/agent",
-  "version": "2.0.67",
+  "version": "2.0.68",
   "description": "ZenithJoy Agent — 后台进程，把 Windows 主机变成 ZenithJoy 中台的发布端",
   "main": "dist/index.js",
   "bin": "dist/index.js",

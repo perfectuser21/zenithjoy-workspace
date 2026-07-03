@@ -96,6 +96,7 @@ function emit(result) {
 async function main() {
   const userDataDir = getBurnerUserDataDir();
   let context = null;
+  let exitCode = 0;
   try {
     fs.mkdirSync(userDataDir, { recursive: true });
     fs.mkdirSync(path.dirname(sessionPath), { recursive: true });
@@ -161,7 +162,7 @@ async function main() {
         qr_login: 'timeout',
         error: `qr-bind-burner timeout after ${timeoutMs}ms — 用户未完成扫码登录`,
       });
-      process.exit(1);
+      exitCode = 1;
       return;
     }
 
@@ -182,7 +183,9 @@ async function main() {
       qr_login: 'success',
       account_nickname: accountNickname,
     });
-    process.exit(0);
+    // exitCode = 0（默认），不在此处 exit——让 finally 先正常关闭 Chrome
+    // 确保 Playwright context.close() 完成后 Chrome 的 Cookies SQLite 已完整落盘，
+    // 下次 keyword-search-douyin 启 Chrome 时 profile 不带锁、cookies 可被加载。
   } catch (err) {
     const msg = String(err && err.message ? err.message : err);
     const isTimeout = /timeout|timed out/i.test(msg);
@@ -192,12 +195,15 @@ async function main() {
       qr_login: isTimeout ? 'timeout' : 'failed',
       error: msg,
     });
-    process.exit(1);
+    exitCode = 1;
   } finally {
     if (context) {
+      process.stderr.write('[qr-bind-douyin-burner] 关闭 Chrome，等待 cookies 落盘...\n');
       await context.close().catch(() => {});
+      process.stderr.write('[qr-bind-douyin-burner] Chrome 已关闭，profile 解锁\n');
     }
   }
+  process.exit(exitCode);
 }
 
 main().catch((e) => {
