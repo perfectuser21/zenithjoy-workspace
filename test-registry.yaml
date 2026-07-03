@@ -4241,3 +4241,10 @@ agent_suite:
   status: active
   product: AI员工
   note: "Sprint 07032332: GET /sessions LEFT JOIN + agent_hostname/agent_nickname/agent_status 字段；DouyinBurnerBindPage 下线；account-role-migrate.js cutover 三值映射验证"
+- id: line02-account-role-unify-e2e
+  path: apps/dashboard/e2e/line02-account-role-unify.spec.ts
+  type: e2e
+  ci: L4
+  status: active
+  product: AI员工
+  note: "Sprint 07032332: Playwright E2E — 账号管理页绑定机器列 + 旧路由下线验证（windows_cloud）"
