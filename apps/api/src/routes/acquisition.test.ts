@@ -510,6 +510,22 @@ describe('GET /api/acquisition/pending-keyword-tasks — tenant 隔离', () => {
     expect(res.body.total).toBe(0);
   });
 
+  // regression(2026-07-03): license 无效时不能把别人的任务返回出去
+  it('license 无效（licenses 表无此 key）→ 返回空任务，不查 acquisition_keyword_tasks', async () => {
+    const { default: db } = await import('../db/connection');
+    (db.query as any).mockResolvedValueOnce({ rows: [] }); // licenses 表无记录
+
+    const res = await request(app)
+      .get('/api/acquisition/pending-keyword-tasks')
+      .set('x-agent-license', 'ZJ-INVALID-KEY');
+
+    expect(res.status).toBe(200);
+    expect(res.body.tasks).toEqual([]);
+    expect(res.body.total).toBe(0);
+    // 只查过 licenses 表一次，没有继续查 acquisition_keyword_tasks
+    expect((db.query as any).mock.calls).toHaveLength(1);
+  });
+
   it('只返回本租户任务，不返回其他租户任务', async () => {
     const { default: db } = await import('../db/connection');
     const TENANT_A = 'aaaaaaaa-0000-0000-0000-000000000001';
@@ -528,5 +544,73 @@ describe('GET /api/acquisition/pending-keyword-tasks — tenant 隔离', () => {
     expect(res.body.tasks).toHaveLength(1);
     expect(res.body.tasks[0].task_id).toBe('task-a1');
     expect(res.body.tasks[0].keyword).toBe('美甲');
+  });
+
+  // regression(2026-07-03): SELECT 和 UPDATE 必须都过 tenant_id，防 TOCTOU 越权抢占
+  it('SELECT 和 UPDATE 都用 tenant_id 过滤（防跨租户任务抢占）', async () => {
+    const { default: db } = await import('../db/connection');
+    const TENANT_B = 'bbbbbbbb-0000-0000-0000-000000000002';
+
+    (db.query as any).mockResolvedValueOnce({ rows: [{ tenant_id: TENANT_B }] });
+    (db.query as any).mockResolvedValueOnce({
+      rows: [{ id: 'task-b1', keyword: '装修', expanded_keywords: ['装修'] }],
+    });
+    (db.query as any).mockResolvedValueOnce({ rows: [] }); // UPDATE
+
+    await request(app)
+      .get('/api/acquisition/pending-keyword-tasks')
+      .set('x-agent-license', 'ZJ-B-TESTTEST');
+
+    const calls = (db.query as any).mock.calls;
+    // SELECT tasks 必须带 tenant_id
+    expect(JSON.stringify(calls[1][1])).toContain(TENANT_B);
+    // UPDATE to processing 也必须带 tenant_id（防 TOCTOU 越权更新）
+    expect(JSON.stringify(calls[2][1])).toContain(TENANT_B);
+  });
+});
+
+// regression(2026-07-03): keyword-search 必须把 tenant_id 写进任务行
+describe('POST /api/acquisition/keyword-search — tenant_id 写库', () => {
+  beforeEach(() => {
+    vi.stubEnv('VITEST', '');
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.resetAllMocks();
+  });
+
+  it('带 X-Tenant-Id header 时 tenant_id 作为 $4 写入 INSERT', async () => {
+    const { default: db } = await import('../db/connection');
+    const TENANT_C = 'cccccccc-0000-0000-0000-000000000003';
+
+    (db.query as any)
+      .mockResolvedValueOnce({ rows: [{ id: 'agent-1' }] }) // agents online 检查
+      .mockResolvedValueOnce({ rows: [] });                  // INSERT
+
+    await request(app)
+      .post('/api/acquisition/keyword-search')
+      .set('X-Tenant-Id', TENANT_C)
+      .send({ keyword: '美甲' });
+
+    const insertCall = (db.query as any).mock.calls[1];
+    // $4 = tenant_id
+    expect(insertCall[1][3]).toBe(TENANT_C);
+  });
+
+  it('无 tenant header 时 tenant_id 写 null，不返回 500', async () => {
+    const { default: db } = await import('../db/connection');
+
+    (db.query as any)
+      .mockResolvedValueOnce({ rows: [{ id: 'agent-1' }] })
+      .mockResolvedValueOnce({ rows: [] });
+
+    const res = await request(app)
+      .post('/api/acquisition/keyword-search')
+      .send({ keyword: '装修' });
+
+    expect(res.status).toBe(200);
+    const insertCall = (db.query as any).mock.calls[1];
+    expect(insertCall[1][3]).toBeNull();
   });
 });
