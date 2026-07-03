@@ -9,7 +9,7 @@ const BURNER_SESSIONS = [
 ];
 
 function mockFetchByUrl(handlers: Record<string, unknown>) {
-  return vi.fn((url: string) => {
+  return vi.fn((url: string, _init?: RequestInit) => {
     for (const [pattern, body] of Object.entries(handlers)) {
       if (url.includes(pattern)) {
         return Promise.resolve({ ok: true, json: () => Promise.resolve(body) } as Response);
@@ -35,7 +35,7 @@ describe('AcquisitionTasksPage — 方案D burner 账号选择 [BEHAVIOR]', () =
       '/api/acquisition/collect-tasks': { success: true, data: { tasks: [] } },
       '/api/agent/burner/sessions': { success: true, data: { sessions: BURNER_SESSIONS } },
       '/api/agent/machines': { success: true, data: [{ id: 'm-a', agent_id: 'agent-a', hostname: 'ROG-PC', nickname: '西安ROG', machine_role: 'main', status: 'online', version: '1.0', last_seen: '', session_count: 0 }] },
-    }) as any;
+    }) as unknown as typeof fetch;
 
     render(<MemoryRouter><AcquisitionTasksPage /></MemoryRouter>);
 
@@ -50,7 +50,7 @@ describe('AcquisitionTasksPage — 方案D burner 账号选择 [BEHAVIOR]', () =
       '/api/acquisition/collect-tasks': { success: true, data: { tasks: [] } },
       '/api/agent/burner/sessions': { success: true, data: { sessions: BURNER_SESSIONS } },
       '/api/agent/machines': { success: true, data: [{ id: 'm-a', agent_id: 'agent-a', hostname: 'ROG-PC', nickname: '西安ROG', machine_role: 'main', status: 'online', version: '1.0', last_seen: '', session_count: 0 }] },
-    }) as any;
+    }) as unknown as typeof fetch;
 
     render(<MemoryRouter><AcquisitionTasksPage /></MemoryRouter>);
     const select = await screen.findByLabelText(/使用账号/);
@@ -68,7 +68,7 @@ describe('AcquisitionTasksPage — 方案D burner 账号选择 [BEHAVIOR]', () =
       '/api/agent/machines': { success: true, data: [{ id: 'm-a', agent_id: 'agent-a', hostname: 'ROG-PC', nickname: '西安ROG', machine_role: 'main', status: 'online', version: '1.0', last_seen: '', session_count: 0 }] },
       '/api/acquisition/collect/start': { success: true, data: { task_id: 't-1' } },
     });
-    global.fetch = fetchMock as any;
+    global.fetch = fetchMock as unknown as typeof fetch;
 
     render(<MemoryRouter><AcquisitionTasksPage /></MemoryRouter>);
     const select = await screen.findByLabelText(/使用账号/);
@@ -80,7 +80,7 @@ describe('AcquisitionTasksPage — 方案D burner 账号选择 [BEHAVIOR]', () =
     fireEvent.click(btn);
 
     await waitFor(() => {
-      const startCall = fetchMock.mock.calls.find((c: any[]) => String(c[0]).includes('/collect/start')) as any[] | undefined;
+      const startCall = fetchMock.mock.calls.find((c) => String(c[0]).includes('/collect/start'));
       expect(startCall).toBeTruthy();
       const body = JSON.parse((startCall![1] as RequestInit).body as string);
       expect(body.account_label).toBe('burner-1');
@@ -92,7 +92,7 @@ describe('AcquisitionTasksPage — 方案D burner 账号选择 [BEHAVIOR]', () =
       '/api/acquisition/collect-tasks': { success: true, data: { tasks: [] } },
       '/api/agent/burner/sessions': { success: true, data: { sessions: [] } },
       '/api/agent/machines': { success: true, data: [{ id: 'm-c', agent_id: 'agent-c', hostname: 'MAC-M4', nickname: null, machine_role: 'sub', status: 'offline', version: '1.0', last_seen: '', session_count: 0 }] },
-    }) as any;
+    }) as unknown as typeof fetch;
 
     render(<MemoryRouter><AcquisitionTasksPage /></MemoryRouter>);
 
