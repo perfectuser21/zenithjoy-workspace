@@ -125,24 +125,31 @@ export interface LeaseBrokerIpcRequest {
 
 export async function handleDesktopLeaseIpc(req: LeaseBrokerIpcRequest): Promise<Record<string, unknown>> {
   switch (req.type) {
-    case 'desktop_lease_acquire':
-      return leaseBroker.acquire({
+
+    case 'desktop_lease_acquire': {
+      const r = await leaseBroker.acquire({
         clientId: String(req.payload.clientId ?? 'unknown'),
         priority: Number(req.payload.priority ?? 50),
         ttlMs: Number(req.payload.ttlMs ?? 10000),
       });
-    case 'desktop_lease_renew':
-      return leaseBroker.renew({
+      return r as unknown as Record<string, unknown>;
+    }
+    case 'desktop_lease_renew': {
+      const r = await leaseBroker.renew({
         leaseId: String(req.payload.leaseId ?? ''),
         clientId: String(req.payload.clientId ?? ''),
       });
-    case 'desktop_lease_release':
-      return leaseBroker.release({
+      return r as unknown as Record<string, unknown>;
+    }
+    case 'desktop_lease_release': {
+      const r = await leaseBroker.release({
         leaseId: String(req.payload.leaseId ?? ''),
         clientId: String(req.payload.clientId ?? ''),
       });
+      return r as unknown as Record<string, unknown>;
+    }
     default:
-      return { ok: false, reason: 'unknown_type' };
+      return Promise.resolve({ ok: false, reason: 'unknown_type' });
   }
 }
 
