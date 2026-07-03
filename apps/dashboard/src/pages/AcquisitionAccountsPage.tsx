@@ -15,6 +15,9 @@ interface BurnerSession {
   status: string;
   account_nickname?: string;
   bound_at?: string;
+  agent_hostname?: string | null;
+  agent_nickname?: string | null;
+  agent_status?: string | null;
 }
 
 async function fetchSessions(): Promise<BurnerSession[]> {
@@ -121,6 +124,7 @@ export default function AcquisitionAccountsPage() {
               <tr className="border-b border-slate-200 dark:border-slate-700">
                 <th className="py-2 text-left text-gray-500 dark:text-gray-400 font-medium">小号名</th>
                 <th className="py-2 text-left text-gray-500 dark:text-gray-400 font-medium">抖音昵称</th>
+                <th className="py-2 text-left text-gray-500 dark:text-gray-400 font-medium">绑定机器</th>
                 <th className="py-2 text-left text-gray-500 dark:text-gray-400 font-medium">绑定时间</th>
                 <th className="py-2 text-left text-gray-500 dark:text-gray-400 font-medium">健康状态</th>
               </tr>
@@ -130,6 +134,12 @@ export default function AcquisitionAccountsPage() {
                 <tr key={s.account_label} className={`border-b border-slate-100 dark:border-slate-800 ${s.status === 'needs_rebind' ? 'bg-red-50 dark:bg-red-900/10' : ''}`}>
                   <td className="py-2 text-gray-900 dark:text-white">{s.account_label}</td>
                   <td className="py-2 text-gray-700 dark:text-gray-300">{s.account_nickname || '—'}</td>
+                  <td className="py-2 text-gray-700 dark:text-gray-300" data-testid="machine-hostname-cell">
+                    {s.agent_hostname ?? '—'}
+                    {s.agent_status === 'offline' && (
+                      <span data-testid="machine-status-offline" className="ml-1 inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-gray-700 text-gray-300">离线</span>
+                    )}
+                  </td>
                   <td className="py-2 text-gray-500 dark:text-gray-400">{s.bound_at || '—'}</td>
                   <td className="py-2"><StatusBadge status={s.status} /></td>
                 </tr>

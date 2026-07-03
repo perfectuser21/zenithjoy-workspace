@@ -1,0 +1,37 @@
+name: E2E — Line02 账号角色统一 & 绑定机器列
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'apps/api/src/routes/agent-burner.ts'
+      - 'apps/dashboard/src/pages/AcquisitionAccountsPage.tsx'
+      - 'apps/dashboard/e2e/line02-account-role-unify.spec.ts'
+      - 'sprints/07032332-line02-account-role-unify/**'
+  workflow_dispatch:
+
+jobs:
+  e2e:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install deps
+        run: npm ci
+
+      - name: Install Windows rollup binding
+        run: npm install @rollup/rollup-win32-x64-msvc --no-save
+
+      - name: Run E2E
+        shell: pwsh
+        env:
+          E2E_DATABASE_URL: ${{ secrets.E2E_DATABASE_URL }}
+          E2E_SUPER_ADMIN_EMAIL: ${{ secrets.E2E_SUPER_ADMIN_EMAIL }}
+          E2E_SUPER_ADMIN_PASSWORD: ${{ secrets.E2E_SUPER_ADMIN_PASSWORD }}
+        run: |
+          & sprints/07032332-line02-account-role-unify/e2e-verify.ps1
+          exit $LASTEXITCODE
