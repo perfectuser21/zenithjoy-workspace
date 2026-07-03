@@ -1,4 +1,4 @@
-# Sprint Contract Draft (Round 4)
+# Sprint Contract Draft (Round 5)
 
 ## Response Schema（推导来源: api_registry 推导 + PRD 字面）
 
@@ -335,13 +335,24 @@ T2=$(psql "$DATABASE_URL" -t -c \
   | tr -d ' \n')
 [ -n "$T1" ] && [ -n "$T2" ] || { echo "FAIL: 租户种入失败"; exit 1; }
 
-# 调 API 触发真实 lead 落库（ASSIGNEE_ROSTER 由 e2e-verify.ps1 Step 2.5 注入 API server 进程 env）
-curl -sf -X POST "http://localhost:3000/api/acquisition/collect/report" \
+# 预种采集任务（collect/report 按 task_id 查 DB 获取 tenant_id，不读 X-Tenant-Id header）
+TASK_ID=$(psql "$DATABASE_URL" -t -c \
+  "INSERT INTO zenithjoy.acquisition_collect_tasks (tenant_id, status, keyword, created_at, updated_at)
+   VALUES ('$T1', 'running', 'smoke-kw-$$', now(), now()) RETURNING id" \
+  | tr -d ' \n')
+[ -n "$TASK_ID" ] || { echo "FAIL: 采集任务种入失败"; exit 1; }
+
+# 调 API 触发真实 lead 落库（正确格式：commenters + video_id；ASSIGNEE_ROSTER 由 e2e-verify.ps1 注入 API server env）
+COLLECT_RESP=$(curl -sf -X POST "http://localhost:3000/api/acquisition/collect/report" \
   -H "Content-Type: application/json" \
-  -H "X-Tenant-Id: $T1" \
-  -d "{\"task_id\":\"00000000-0000-0000-0000-$(printf '%012d' $$)\",
-       \"comments\":[{\"commenter_id\":\"smoke-user-$$\",\"text\":\"测试评论\",\"publish_time\":\"2026-07-03T00:00:00Z\",\"grade\":\"感兴趣\"}]}" \
+  -d "{\"task_id\":\"$TASK_ID\",
+       \"video_id\":\"smoke-vid-$$\",
+       \"commenters\":[{\"nickname\":\"smoke-user-$$\",\"comment_text\":\"测试评论\",\"grade\":\"感兴趣\"}]}") \
   || { echo "FAIL: collect/report API 调用失败"; exit 1; }
+echo "$COLLECT_RESP" | jq -e '.data.task_id | type == "string"' \
+  || { echo "FAIL: collect/report 响应缺 data.task_id body=$COLLECT_RESP"; exit 1; }
+echo "$COLLECT_RESP" | jq -e '.data.inserted | type == "number"' \
+  || { echo "FAIL: collect/report 响应缺 data.inserted"; exit 1; }
 
 # 验证新 lead 落库（带时间窗口）
 NEW_LEAD_ID=$(psql "$DATABASE_URL" -t -c "
@@ -366,6 +377,7 @@ T2_COUNT=$(psql "$DATABASE_URL" -t -c \
 
 # 清理
 psql "$DATABASE_URL" -c "DELETE FROM zenithjoy.acquisition_leads WHERE id='$NEW_LEAD_ID'" > /dev/null
+psql "$DATABASE_URL" -c "DELETE FROM zenithjoy.acquisition_collect_tasks WHERE id='$TASK_ID'" > /dev/null
 psql "$DATABASE_URL" -c "DELETE FROM zenithjoy.tenants WHERE id IN ('$T1','$T2')" > /dev/null
 
 echo "✅ Scenario 2 通过"
