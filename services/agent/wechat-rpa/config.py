@@ -173,7 +173,7 @@ WECHAT_STARTUP_WAIT_SECONDS: int = 5
 """拉起微信后等待窗口出现的时间（秒）"""
 
 # ── 主循环 ────────────────────────────────────────────────
-MAIN_LOOP_POLL_INTERVAL_SECONDS: int = 3
+MAIN_LOOP_POLL_INTERVAL_SECONDS: int = 1  # 3→1（2026-07-03 延迟收紧：发现延迟均值 1.5s→0.5s）
 """监听主循环的轮询间隔（秒）"""
 
 INTER_SEND_MIN_INTERVAL_SECONDS: float = 1.0
@@ -202,9 +202,9 @@ UIA_SETVALUE_SLEEP: float = 0.3
 KEYDOWN_KEYUP_SLEEP: float = 0.05
 SEND_VERIFY_SLEEP: float = 0.4
 BUTTON_CLICK_SLEEP: float = 0.5
-OPEN_CHAT_POLL_INTERVAL: float = 0.4
+OPEN_CHAT_POLL_INTERVAL: float = 0.15  # 0.4→0.15（延迟收紧：单 attempt 验证 2s→0.6s，闸门逻辑不动）
 OPEN_CHAT_MAX_ATTEMPTS: int = 3
-OPEN_CHAT_VERIFY_POLLS: int = 5
+OPEN_CHAT_VERIFY_POLLS: int = 4  # 5→4（延迟收紧）
 FIND_INPUT_RETRIES: int = 3
 FIND_INPUT_RETRY_SLEEP: float = 1.0
 TITLE_MIN_MATCH_LENGTH: int = 4

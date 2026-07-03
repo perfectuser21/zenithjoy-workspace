@@ -111,12 +111,12 @@ except ImportError:
     _UPDATE_LOCK_INTERVAL = 300
     _WECHAT_LAUNCH_COOLDOWN = 120
     _WECHAT_STARTUP_WAIT = 5
-    _MAIN_LOOP_POLL = 3
+    _MAIN_LOOP_POLL = 1
     _INTER_SEND_MIN_INTERVAL = 1.0
     _TITLE_MIN_MATCH_LENGTH = 4
     _OPEN_CHAT_MAX_ATTEMPTS = 3
-    _OPEN_CHAT_VERIFY_POLLS = 5
-    _OPEN_CHAT_POLL_INTERVAL = 0.4
+    _OPEN_CHAT_VERIFY_POLLS = 4
+    _OPEN_CHAT_POLL_INTERVAL = 0.15
     _FIND_INPUT_RETRIES = 3
     _FIND_INPUT_RETRY_SLEEP = 1.0
     _TRAY_RESTORE_SLEEP = 0.30
@@ -606,7 +606,7 @@ _KNOWN_GROUPS: set = set()        # _is_group_by_header 判过的群 sender：�
 _ANCHOR_STALL: Dict[str, int] = {}  # sender → 连续 emit 未走到 DELIVERED 的轮数（熔断告警）
 SCAN_OPEN_BUDGET = 3              # 每轮最多开窗读气泡的会话数（#984 延迟教训机制化）
 _BUBBLE_READ_POLLS = 3            # 气泡读空重试轮数（同 _confirm_delivery 轮询模式）
-_BUBBLE_READ_POLL_SLEEP = 0.6
+_BUBBLE_READ_POLL_SLEEP = 0.3  # 0.6→0.3（延迟收紧：jiggle 后 Qt 重建很快落定）
 ANCHOR_STALL_LIMIT = 3            # 连续 N 轮停滞 → 心跳告警（只告警不降级——绝不静默丢消息）
 _TRAILING_STALL: Dict[str, int] = {}  # sender → 触发保留但 trailing 无解的连续轮数
 TRAILING_STALL_LIMIT = 3          # 连续 N 轮无解 → 熔断走回退 emit 预览单条（防死循环开窗=闪屏）
@@ -2124,7 +2124,7 @@ def _delivery_confirmed(readback_text: str, sent_text: str) -> bool:
 # 送达读回【轮询】参数（decision/rog E2E 2026-06-29）：微信会话列表预览异步更新 + 刚 _open_chat
 # 切完会话那刻 UIA 读偶发空 → 单次 _read_session_preview 读空 ≠ 未送达。轮询几轮给预览更新留时间。
 _DELIVERY_READBACK_POLLS = 5            # 最多读回 5 轮
-_DELIVERY_READBACK_POLL_SLEEP = 0.6     # 每轮间隔(约 3s 总窗口,够预览异步落定)
+_DELIVERY_READBACK_POLL_SLEEP = 0.3     # 0.6→0.3（延迟收紧：成功通常 1-2 轮命中；失败窗口 3s→1.5s）
 
 
 def _confirm_delivery(read_preview_fn, sent_text, polls, sleep_fn):
