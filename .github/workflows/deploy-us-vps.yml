@@ -27,13 +27,19 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      - name: 接入 Tailscale（走内网，绕公网防火墙）
+        uses: tailscale/github-action@v3
+        with:
+          authkey: ${{ secrets.TAILSCALE_AUTHKEY }}
+          version: latest
+
       - name: Deploy via SSH (build release + 切常驻 staging :5201 + golden-path)
         uses: appleboy/ssh-action@v1.0.3
         with:
-          host: ${{ secrets.US_MAC_HOST }}
+          host: ${{ secrets.US_MAC_TAILSCALE_IP }}
           username: ${{ secrets.US_MAC_USER }}
           key: ${{ secrets.US_MAC_SSH_KEY }}
-          port: ${{ secrets.US_MAC_PORT }}
+          port: 22
           script_stop: true
           envs: DEPLOY_SHA
           command_timeout: 20m
