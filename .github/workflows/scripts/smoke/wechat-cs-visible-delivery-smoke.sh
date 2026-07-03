@@ -17,7 +17,7 @@
 set -uo pipefail
 
 REPO_ROOT="$(cd "$(dirname "$0")/../../../.." && pwd)"
-EXPECTED="1.0.99"
+EXPECTED="1.0.100"
 echo "wechat-cs-visible-delivery-smoke: 期望 line04 版本 = $EXPECTED (repo=$REPO_ROOT)"
 
 command -v node >/dev/null 2>&1    || { echo "FAIL: 缺 node"; exit 6; }
