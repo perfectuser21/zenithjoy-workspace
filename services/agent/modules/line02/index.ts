@@ -19,6 +19,7 @@ interface Line02Config {
 }
 
 let config: Line02Config = {};
+let agentId = '';
 let pollTimer: ReturnType<typeof setTimeout> | null = null;
 
 function apiRequest(url: string, method = 'GET', body?: unknown): Promise<unknown> {
@@ -35,6 +36,7 @@ function apiRequest(url: string, method = 'GET', body?: unknown): Promise<unknow
         headers: {
           'Content-Type': 'application/json',
           ...(bodyStr ? { 'Content-Length': Buffer.byteLength(bodyStr) } : {}),
+          ...(agentId ? { 'x-agent-id': agentId } : {}),
         },
       },
       (res) => {
@@ -273,6 +275,7 @@ function schedulePoll() {
 process.on('message', (msg: { type: string; config?: Line02Config; apiBase?: string; agentId?: string; machineId?: string }) => {
   if (msg?.type === 'config') {
     config = msg.config ?? { apiBase: msg.apiBase };
+    if (msg.agentId) agentId = msg.agentId;
     schedulePoll();
     process.send?.({ type: 'ready' });
   }

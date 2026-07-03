@@ -268,24 +268,44 @@ acquisitionRouter.get('/videos/:videoId/leads', tenantContextOptional, async (re
 
 // Agent 轮询端点 — 返回待处理的 collect 任务（来自 collect/start 写入的 acquisition_collect_tasks）
 // stage_1_done 任务也返回（Stage 2 重试，含视频 URL 列表）
-acquisitionRouter.get('/pending-collect-tasks', async (_req: Request, res: Response) => {
+acquisitionRouter.get('/pending-collect-tasks', async (req: Request, res: Response) => {
   if (process.env.VITEST) {
     return res.status(200).json({ tasks: [], total: 0 });
   }
 
   try {
     const pool = (await import('../db/connection')).default;
+
+    // 用 x-agent-id 查 tenant_id，确保每台机器只拿自己租户的任务（防多机抢占）
+    let tenantFilter: string | null = null;
+    const xAgentId = req.header('x-agent-id') ?? '';
+    if (xAgentId) {
+      const agentRes = await pool.query<{ tenant_id: string }>(
+        `SELECT tenant_id FROM zenithjoy.agents WHERE agent_id = $1 LIMIT 1`,
+        [xAgentId]
+      );
+      tenantFilter = agentRes.rows[0]?.tenant_id ?? null;
+    }
+
     const { rows } = await pool.query<{
       id: string;
       keywords: string[];
       tenant_id: string;
       status: string;
     }>(
-      `SELECT id, keywords, tenant_id, status
-         FROM zenithjoy.acquisition_collect_tasks
-        WHERE status IN ('pending', 'stage_1_done')
-        ORDER BY created_at ASC
-        LIMIT 5`
+      tenantFilter
+        ? `SELECT id, keywords, tenant_id, status
+             FROM zenithjoy.acquisition_collect_tasks
+            WHERE status IN ('pending', 'stage_1_done')
+              AND tenant_id = $1
+            ORDER BY created_at ASC
+            LIMIT 5`
+        : `SELECT id, keywords, tenant_id, status
+             FROM zenithjoy.acquisition_collect_tasks
+            WHERE status IN ('pending', 'stage_1_done')
+            ORDER BY created_at ASC
+            LIMIT 5`,
+      tenantFilter ? [tenantFilter] : []
     );
 
     // 只把 pending 任务标为 running；stage_1_done 保持不动（等 Stage 2 回报 terminal=done 后才转 done）
