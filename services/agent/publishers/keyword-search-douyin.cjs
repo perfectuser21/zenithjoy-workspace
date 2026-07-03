@@ -16,6 +16,7 @@ const { chromium } = require('playwright-core');
 const { spawn, execSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
+const os = require('os');
 
 const [, , keyword = '', , maxVideosStr = '5'] = process.argv;
 const maxVideos = parseInt(maxVideosStr, 10) || 5;
@@ -158,6 +159,52 @@ async function spawnBurnerChrome(burnerDataDir, chromePath) {
   throw new Error('Burner Chrome 启动超时 (15s)');
 }
 
+// 从 burner user-data-dir 路径推导 session JSON 文件路径
+// 约定：~/.zenithjoy-agent/sessions/douyin/burner/<accountLabel>.json
+// accountLabel = path.basename(burnerDataDir)（与 qr-bind-douyin-burner.cjs 保持一致）
+function getSessionJsonPath(burnerDataDir) {
+  const accountLabel = path.basename(burnerDataDir);
+  return path.join(os.homedir(), '.zenithjoy-agent', 'sessions', 'douyin', 'burner', `${accountLabel}.json`);
+}
+
+// 从 session JSON 注入 Douyin cookies 到 Playwright context。
+// 用于 Chrome profile 里 sessionid 已过期时的 fallback：读 qr-bind 落盘的 JSON 重注入。
+// 返回 true 代表注入成功（JSON 存在且含 sessionid 类 cookie），false 代表跳过。
+async function injectSessionFromJson(ctx, burnerDataDir) {
+  const sessionPath = getSessionJsonPath(burnerDataDir);
+  if (!fs.existsSync(sessionPath)) {
+    process.stderr.write(`[keyword-search-douyin] session JSON 不存在: ${sessionPath}\n`);
+    return false;
+  }
+  let raw;
+  try {
+    raw = JSON.parse(fs.readFileSync(sessionPath, 'utf8'));
+  } catch (e) {
+    process.stderr.write(`[keyword-search-douyin] 读取 session JSON 失败: ${e.message}\n`);
+    return false;
+  }
+  const douyinCookies = (raw.cookies || []).filter(
+    c => c.domain && (c.domain.endsWith('.douyin.com') || c.domain === 'douyin.com'),
+  );
+  const hasSession = douyinCookies.some(c => ['sessionid', 'sessionid_ss'].includes(c.name) && c.value && c.value.length > 20);
+  if (!hasSession) {
+    process.stderr.write(`[keyword-search-douyin] session JSON 中无有效 sessionid cookie\n`);
+    return false;
+  }
+  await ctx.addCookies(douyinCookies.map(c => ({
+    name: c.name,
+    value: c.value,
+    domain: c.domain,
+    path: c.path || '/',
+    httpOnly: !!c.httpOnly,
+    secure: !!c.secure,
+    expires: (c.expires && c.expires > 0) ? c.expires : -1,
+    sameSite: c.sameSite || 'None',
+  })));
+  process.stderr.write(`[keyword-search-douyin] 已从 session JSON 注入 ${douyinCookies.length} 个 cookies (${sessionPath})\n`);
+  return true;
+}
+
 async function main() {
   if (!keyword) {
     emit({ ok: false, keyword, video_urls: [], error: 'MISSING_KEYWORD' });
@@ -196,10 +243,25 @@ async function main() {
 
     // 检查 Douyin 登录状态：必须有 sessionid（登录凭证）。
     // ttwid/uid_tt 是访客 token，未登录也会有，不能作为"已登录"判据。
-    const sessionidCookie = cookies.find(c => c.name === 'sessionid' && c.value);
+    let sessionidCookie = cookies.find(c => c.name === 'sessionid' && c.value);
     if (!sessionidCookie) {
       const cookieNames = cookies.map(c => c.name).join(',');
-      process.stderr.write(`[keyword-search-douyin] Douyin sessionid 不存在（当前 cookies: ${cookieNames}）\n`);
+      process.stderr.write(`[keyword-search-douyin] Douyin sessionid 不存在（当前 cookies: ${cookieNames}），尝试从 session JSON 注入\n`);
+      // Fallback：从 qr-bind 落盘的 session JSON 重注入 cookies。
+      // 发生场景：Chrome profile 的 Cookies SQLite 未及时落盘（qr-bind 进程 exit 顺序 bug 或首次冷启动），
+      // 但 JSON 文件已正确写入 → 重注入后 sessionid 即可被识别，无需用户重新扫码。
+      const injected = await injectSessionFromJson(ctx, burnerDataDir);
+      if (injected) {
+        const newCookies = await ctx.cookies(['https://www.douyin.com']);
+        sessionidCookie = newCookies.find(c => c.name === 'sessionid' && c.value);
+        if (sessionidCookie) {
+          process.stderr.write(`[keyword-search-douyin] session JSON 注入成功，sessionid 已确认\n`);
+        } else {
+          process.stderr.write(`[keyword-search-douyin] 注入后仍无 sessionid，session JSON 可能已过期\n`);
+        }
+      }
+    }
+    if (!sessionidCookie) {
       emit({ ok: false, keyword, video_urls: [], error: 'DOUYIN_SESSION_EXPIRED' });
       process.exit(0);
       return;

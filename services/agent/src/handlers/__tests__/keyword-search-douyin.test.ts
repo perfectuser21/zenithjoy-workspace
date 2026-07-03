@@ -143,3 +143,50 @@ describe('keyword-search-douyin — spawn 路径 argv [BEHAVIOR]', () => {
     expect(result).toMatchObject({ ok: true, keyword: '装修', video_urls: ['https://www.douyin.com/video/9'] });
   });
 });
+
+// ────── session JSON fallback 注入守卫 ──────
+// 根因：Chrome profile 的 Cookies SQLite 可能未及时落盘（qr-bind process.exit 顺序 bug），
+// 导致 Chrome 打开抖音但无 sessionid → 接着从 qr-bind 落盘的 JSON 重注入 → 无需重新扫码。
+// 决策：keyword-search-douyin.cjs 必须含 injectSessionFromJson 逻辑，避免"需要重新绑定"误报。
+describe('keyword-search-douyin.cjs — session JSON fallback 注入 [REGRESSION]', () => {
+  const CJS_PATH = path.resolve(__dirname, '../../../publishers/keyword-search-douyin.cjs');
+
+  it('.cjs 源码含 injectSessionFromJson 函数', () => {
+    const src = fs.readFileSync(CJS_PATH, 'utf8');
+    expect(src).toMatch(/injectSessionFromJson/);
+  });
+
+  it('.cjs 源码含 getSessionJsonPath 函数（路径从 burnerDataDir 派生）', () => {
+    const src = fs.readFileSync(CJS_PATH, 'utf8');
+    expect(src).toMatch(/getSessionJsonPath/);
+    // 约定路径：~/.zenithjoy-agent/sessions/douyin/burner/<accountLabel>.json
+    expect(src).toMatch(/sessions[\s\S]*?douyin[\s\S]*?burner/);
+  });
+
+  it('.cjs 源码无 sessionid 时先调用 injectSessionFromJson 再 emit DOUYIN_SESSION_EXPIRED', () => {
+    const src = fs.readFileSync(CJS_PATH, 'utf8');
+    const injectIdx = src.indexOf('injectSessionFromJson(ctx');
+    const expiredIdx = src.indexOf("'DOUYIN_SESSION_EXPIRED'");
+    expect(injectIdx).toBeGreaterThan(-1);
+    expect(expiredIdx).toBeGreaterThan(-1);
+    expect(injectIdx).toBeLessThan(expiredIdx);
+  });
+
+  it('.cjs 源码注入后重新查 ctx.cookies 确认 sessionid', () => {
+    const src = fs.readFileSync(CJS_PATH, 'utf8');
+    const injectedBlock = src.slice(src.indexOf('injectSessionFromJson(ctx'));
+    expect(injectedBlock).toMatch(/ctx\.cookies/);
+  });
+
+  it('.cjs 源码使用 ctx.addCookies 注入（Playwright context API）', () => {
+    const src = fs.readFileSync(CJS_PATH, 'utf8');
+    expect(src).toMatch(/ctx\.addCookies/);
+  });
+
+  it('.cjs 源码注入逻辑过滤 douyin.com 域名的 cookies', () => {
+    const src = fs.readFileSync(CJS_PATH, 'utf8');
+    const fnBody = src.slice(src.indexOf('function injectSessionFromJson'));
+    expect(fnBody).toMatch(/douyin\.com/);
+    expect(fnBody).toMatch(/filter/);
+  });
+});
