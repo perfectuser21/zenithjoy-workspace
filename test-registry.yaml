@@ -2339,6 +2339,30 @@ tests:
     product: 运营中台
     note: "环境角标 — staging/dev/production 各分支判定 + 生产不渲染 + pointer-events 单测"
 
+  - id: dashboard-machine-selector
+    path: apps/dashboard/src/components/MachineSelector.test.tsx
+    type: unit
+    ci: L4
+    status: active
+    product: Line02智能获客
+    note: "方案C 机器选择器 — 0/1/N台online分支 + 选中机器掉线重新可选 + localStorage写入"
+
+  - id: dashboard-acquisition-tasks-page
+    path: apps/dashboard/src/pages/AcquisitionTasksPage.test.tsx
+    type: unit
+    ci: L4
+    status: active
+    product: Line02智能获客
+    note: "采集任务页 — 方案D burner账号下拉(过滤expired)+派单机器展示+account_label提交 / 方案C无在线机器闸门"
+
+  - id: dashboard-test-setup-localstorage-polyfill
+    path: apps/dashboard/src/test/setup.test.ts
+    type: unit
+    ci: L4
+    status: active
+    product: 运营中台
+    note: "vitest setup — localStorage polyfill兜底不变量（部分沙箱环境Node原生localStorage是空对象桩）"
+
   - id: agent-video-pipeline-template-branch
     path: services/agent/src/handlers/__tests__/video-pipeline-template.test.ts
     type: unit
