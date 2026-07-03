@@ -1,4 +1,4 @@
-# Sprint Contract Draft (Round 3)
+# Sprint Contract Draft (Round 4)
 
 ## Response Schema（推导来源: 当前代码 agent-burner.ts:161-186 + PRD 明确字段名）
 
@@ -243,11 +243,11 @@ C_EXP=$(psql "$DATABASE_URL" -t -c "SELECT count(*) FROM zenithjoy.agent_platfor
 C_UNK=$(psql "$DATABASE_URL" -t -c "SELECT count(*) FROM zenithjoy.agent_platform_sessions WHERE agent_id='$CAID' AND account_label='unk-lbl-$TS' AND status='pending' AND created_at > NOW() - interval '5 minutes'" | tr -d ' ')
 [ "$C_UNK" -eq 1 ] || { echo "FAIL: unknown→pending 映射失败 count=$C_UNK"; exit 1; }
 
-# 清理
-psql "$DATABASE_URL" -c "DELETE FROM zenithjoy.agent_platform_sessions WHERE agent_id='$CAID'" 2>/dev/null || true
-psql "$DATABASE_URL" -c "DELETE FROM zenithjoy.line02_account_sessions WHERE agent_id='$CAID'" 2>/dev/null || true
-psql "$DATABASE_URL" -c "DELETE FROM zenithjoy.agents WHERE id='$CAID'" 2>/dev/null || true
-psql "$DATABASE_URL" -c "DELETE FROM zenithjoy.tenants WHERE id='$CTID'" 2>/dev/null || true
+# 清理（FK 顺序：ap_sessions → l02_sessions → agents → tenants，DELETE 0 rows 返回 exit 0）
+psql "$DATABASE_URL" -c "DELETE FROM zenithjoy.agent_platform_sessions WHERE agent_id='$CAID'"
+psql "$DATABASE_URL" -c "DELETE FROM zenithjoy.line02_account_sessions WHERE agent_id='$CAID'"
+psql "$DATABASE_URL" -c "DELETE FROM zenithjoy.agents WHERE id='$CAID'"
+psql "$DATABASE_URL" -c "DELETE FROM zenithjoy.tenants WHERE id='$CTID'"
 echo "✅ Step 5b cutover 三值映射通过"
 ```
 
@@ -367,7 +367,7 @@ if [ "$COUNT" -gt 0 ]; then
   echo "$RESP" | jq -e '.data.sessions[0] | has("hostname") | not' || { echo "FAIL: 禁用字段 hostname 出现"; exit 1; }
 fi
 
-psql "$DATABASE_URL" -c "DELETE FROM zenithjoy.tenants WHERE id='$TENANT_ID'" 2>/dev/null || true
+psql "$DATABASE_URL" -c "DELETE FROM zenithjoy.tenants WHERE id='$TENANT_ID'"
 echo "✅ Scenario 1 通过 sessions_count=$COUNT"
 ```
 
@@ -418,9 +418,9 @@ RESP_B=$(curl -sf -H "X-Tenant-Id: $TB" "$API_URL/api/agent/burner/sessions") ||
 CNT=$(echo "$RESP_B" | jq '.data.sessions | length')
 [ "$CNT" -eq 0 ] || { echo "FAIL: 跨租户泄露，B 看到 $CNT 条 A 的 sessions"; exit 1; }
 
-psql "$DATABASE_URL" -c "DELETE FROM zenithjoy.agent_platform_sessions WHERE agent_id='$AID'" 2>/dev/null || true
-psql "$DATABASE_URL" -c "DELETE FROM zenithjoy.agents WHERE id='$AID'" 2>/dev/null || true
-psql "$DATABASE_URL" -c "DELETE FROM zenithjoy.tenants WHERE id IN ('$TA','$TB')" 2>/dev/null || true
+psql "$DATABASE_URL" -c "DELETE FROM zenithjoy.agent_platform_sessions WHERE agent_id='$AID'"
+psql "$DATABASE_URL" -c "DELETE FROM zenithjoy.agents WHERE id='$AID'"
+psql "$DATABASE_URL" -c "DELETE FROM zenithjoy.tenants WHERE id IN ('$TA','$TB')"
 echo "✅ Scenario 4 通过 — 多租户隔离正常"
 ```
 
@@ -447,9 +447,9 @@ C_EXP=$(psql "$DATABASE_URL" -t -c "SELECT count(*) FROM zenithjoy.agent_platfor
 C_UNK=$(psql "$DATABASE_URL" -t -c "SELECT count(*) FROM zenithjoy.agent_platform_sessions WHERE agent_id='$CAID' AND account_label='unk-$TS' AND status='pending' AND created_at > NOW() - interval '5 minutes'" | tr -d ' ')
 [ "$C_UNK" -eq 1 ] || { echo "FAIL: unknown→pending count=$C_UNK"; exit 1; }
 
-psql "$DATABASE_URL" -c "DELETE FROM zenithjoy.agent_platform_sessions WHERE agent_id='$CAID'" 2>/dev/null || true
-psql "$DATABASE_URL" -c "DELETE FROM zenithjoy.line02_account_sessions WHERE agent_id='$CAID'" 2>/dev/null || true
-psql "$DATABASE_URL" -c "DELETE FROM zenithjoy.agents WHERE id='$CAID'" 2>/dev/null || true
-psql "$DATABASE_URL" -c "DELETE FROM zenithjoy.tenants WHERE id='$CTID'" 2>/dev/null || true
+psql "$DATABASE_URL" -c "DELETE FROM zenithjoy.agent_platform_sessions WHERE agent_id='$CAID'"
+psql "$DATABASE_URL" -c "DELETE FROM zenithjoy.line02_account_sessions WHERE agent_id='$CAID'"
+psql "$DATABASE_URL" -c "DELETE FROM zenithjoy.agents WHERE id='$CAID'"
+psql "$DATABASE_URL" -c "DELETE FROM zenithjoy.tenants WHERE id='$CTID'"
 echo "✅ Scenario 5 cutover 三值映射通过"
 ```
