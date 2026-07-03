@@ -408,9 +408,12 @@ acquisitionRouter.post('/comment-score-result', async (req: Request, res: Respon
 
   if (!process.env.VITEST) {
     try {
-      // 取第一个可用租户（keyword 任务无租户绑定）
-      const tenantRes = await pool.query(`SELECT id FROM zenithjoy.tenants LIMIT 1`);
-      resolved_tenant_id = tenantRes.rows.length > 0 ? tenantRes.rows[0].id : null;
+      // 按 keyword_task_id 反查该采集任务真实归属的租户，禁止用 LIMIT 1 猜任意租户
+      const tenantRes = await pool.query(
+        `SELECT tenant_id FROM zenithjoy.acquisition_keyword_tasks WHERE id = $1`,
+        [keyword_task_id]
+      );
+      resolved_tenant_id = tenantRes.rows.length > 0 ? tenantRes.rows[0].tenant_id : null;
 
       if (resolved_tenant_id) {
         const gradedComments = await Promise.all(
@@ -465,7 +468,7 @@ acquisitionRouter.post('/comment-score-result', async (req: Request, res: Respon
   });
 });
 
-acquisitionRouter.get('/leads', async (req: Request, res: Response) => {
+acquisitionRouter.get('/leads', tenantContextOptional, async (req: Request, res: Response) => {
   const { grade } = req.query;
 
   if (grade !== undefined && grade !== '') {
@@ -476,6 +479,11 @@ acquisitionRouter.get('/leads', async (req: Request, res: Response) => {
 
   if (process.env.VITEST) {
     return res.status(200).json({ leads: [], total: 0 });
+  }
+
+  const tenantId = req.tenantId;
+  if (!tenantId) {
+    return res.status(401).json({ error: 'NO_TENANT', message: '缺租户上下文（未登录或无 X-Tenant-Id）' });
   }
 
   try {
@@ -492,8 +500,8 @@ acquisitionRouter.get('/leads', async (req: Request, res: Response) => {
       task_keywords: string[] | null;
     }
 
-    const gradeClause = grade && typeof grade === 'string' ? `AND l.grade = $1` : '';
-    const params: string[] = grade && typeof grade === 'string' ? [grade] : [];
+    const gradeClause = grade && typeof grade === 'string' ? `AND l.grade = $2` : '';
+    const params: string[] = grade && typeof grade === 'string' ? [tenantId, grade] : [tenantId];
 
     const result = await pool.query<LeadRow>(
       `SELECT l.sec_uid, l.nickname, l.comment_text,
@@ -501,6 +509,7 @@ acquisitionRouter.get('/leads', async (req: Request, res: Response) => {
               t.keywords AS task_keywords
          FROM zenithjoy.acquisition_leads l
          LEFT JOIN zenithjoy.acquisition_collect_tasks t ON t.id = l.collect_task_id
+        WHERE l.tenant_id = $1
         ${gradeClause}
         ORDER BY l.created_at DESC
         LIMIT 500`,
