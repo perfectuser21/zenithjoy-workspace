@@ -1,4 +1,4 @@
-# Sprint Contract Draft (Round 3)
+# Sprint Contract Draft (Round 4)
 
 ## Response Schema（推导来源: 代码现状推导 + PRD 隐含字段）
 
@@ -211,6 +211,8 @@ echo "retried=$RETRIED still_pending=$STILL_PENDING OK"
 
 **硬阈值**: `status='pending_dispatch'` 行数变为 0，`status='queued'` 行 `updated_at` 在 2 分钟内
 
+gate-allow: domain/db-no-time-window 负向断言（STILL_PENDING=0）：验该测试租户所有 pending_dispatch 已清零，加时间窗会遗漏时间窗外残留行，语义错误；测试租户 ID 含 date+%s 时间戳唯一隔离，无历史污染
+
 ---
 
 ### Step 6: 边界情况 — 已派 queued 行所属 burner 掉线后，buildAssignments 将其重标为 pending_dispatch
@@ -369,6 +371,8 @@ psql "$DB" -c "DELETE FROM zenithjoy.agents WHERE agent_id LIKE '%-$TENANT'"
 echo "✅ Scenario 2 通过: 全部离线时 lead→pending_dispatch，assigned=0"
 ```
 
+gate-allow: domain/db-no-time-window 负向断言（QUEUED=0）：验离线 burner 无任何 queued 行，加时间窗会让时间窗外的 queued 行逃脱检测；account_label='burner-c-$TENANT' 精确匹配且租户含时间戳唯一隔离
+
 ### Scenario 3: pending-dispatch-retry-on-next-cycle
 <!-- GOLDEN_SMOKE_SCENARIO: pending-dispatch-retry-on-next-cycle -->
 <!-- GOLDEN_SMOKE_TIMEOUT_MS: 90000 -->
@@ -421,6 +425,8 @@ psql "$DB" -c "DELETE FROM zenithjoy.agent_platform_sessions WHERE account_label
 psql "$DB" -c "DELETE FROM zenithjoy.agents WHERE agent_id LIKE '%-$TENANT'"
 echo "✅ Scenario 3 通过: pending_dispatch → 上线后下周期补派为 queued"
 ```
+
+gate-allow: domain/db-no-time-window 负向断言（STILL_PENDING=0）：验该测试租户所有 pending_dispatch 已通过重试清零，加时间窗会遗漏时间窗外残留行；租户 ID='e2e-retry-$(date +%s)' 含时间戳唯一隔离
 
 ### Scenario 4: tenant-isolation-pending-backlog
 <!-- GOLDEN_SMOKE_SCENARIO: tenant-isolation-pending-backlog -->
