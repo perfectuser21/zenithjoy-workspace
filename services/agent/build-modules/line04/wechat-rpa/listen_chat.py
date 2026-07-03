@@ -810,7 +810,22 @@ def scan_unread(mw: Any, last_preview: Optional[Dict[str, str]] = None,
             continue
         prev = last_preview.get(sender)
         if prev is None:
-            last_preview[sender] = name  # 首见只记录不触发
+            # 首见 seed。v1.0.101 重启盲区修复（2026-07-03 10:19 实锤：监听重启
+            # 清空 last_preview，重启前后进来的客户消息被当基线永不触发=用户
+            # 体感"不理我了"）：**活跃会话**（有持久化锚点=聊过且回过）若预览
+            # ①不是我方回复（不命中已发送历史）②不是已回过的那条（≠锚点文本）
+            # → 有未处理客户消息，直接触发。非活跃会话保持静默 seed（防重启
+            # 翻陈年消息风暴）。
+            _anchor = _REPLY_ANCHOR.get(sender)
+            _content = info["content"] or ""
+            if (_anchor and _content
+                    and not _matches_any_sent(_content)
+                    and "".join(_content.split()) != "".join(_anchor.split())):
+                seen.add(sender)
+                candidates.append({"sender": sender, "content": _content,
+                                   "name": name, "badge": 0, "_item": it})
+            else:
+                last_preview[sender] = name  # 静默 seed
         elif prev != name:
             seen.add(sender)
             candidates.append({"sender": sender, "content": info["content"],
