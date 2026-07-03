@@ -9,9 +9,9 @@ export interface Lead {
   profile_url?: string | null;
   comment_text: string;
   source_video_url: string;
-  crawled_at: string;
+  crawled_at?: string;
   grade: string;
-  keyword: string;
+  keyword?: string;
   latest_reply?: string | null;
   latest_reply_at?: string | null;
   assignee?: string | null;
