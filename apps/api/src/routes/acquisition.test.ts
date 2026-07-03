@@ -292,6 +292,92 @@ describe('GET /api/acquisition/pending-collect-tasks — Bug B regression [BEHAV
   });
 });
 
+// ────── 跨租户/跨机器采集任务隔离 [REGRESSION] ──────
+// 根因：/pending-collect-tasks 之前完全不按 tenant_id 过滤，任意 agent 用任意
+// license 轮询都能拿到全平台所有租户的 pending 采集任务；acquisition_collect_tasks
+// 已有的 agent_id 列（20260618 迁移）也从未被写入/过滤，导致同租户多机也会互抢。
+describe('GET /api/acquisition/pending-collect-tasks — tenant + agent 隔离 [REGRESSION]', () => {
+  beforeEach(() => { vi.clearAllMocks(); });
+
+  it('无 x-agent-license → 200 空列表，不查 DB', async () => {
+    const mod = await import('../db/connection');
+    const res = await request(app).get('/api/acquisition/pending-collect-tasks');
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ tasks: [], total: 0 });
+    expect(mod.default.query).not.toHaveBeenCalled();
+  });
+
+  it('license 查不到对应 agent → 200 空列表，不继续查任务表', async () => {
+    const mod = await import('../db/connection');
+    (mod.default.query as any).mockResolvedValueOnce({ rows: [] }); // agent/license join 查不到
+    const res = await request(app)
+      .get('/api/acquisition/pending-collect-tasks')
+      .set('x-agent-license', 'lic-unknown');
+    expect(res.body).toEqual({ tasks: [], total: 0 });
+    expect(mod.default.query).toHaveBeenCalledTimes(1);
+  });
+
+  it('查任务表时必须带自己的 tenant_id + agent_id 条件（防跨租户/跨机器抢占）', async () => {
+    const mod = await import('../db/connection');
+    (mod.default.query as any)
+      .mockResolvedValueOnce({ rows: [{ tenant_id: 'tenant-A', agent_id: 'agent-A' }] }) // license → agent 解析
+      .mockResolvedValueOnce({ rows: [] }); // SELECT pending tasks（本例返回空，只校验 SQL 条件）
+    await request(app)
+      .get('/api/acquisition/pending-collect-tasks')
+      .set('x-agent-license', 'lic-A');
+
+    const selectCall = (mod.default.query as any).mock.calls[1];
+    const [sql, params] = selectCall;
+    expect(sql).toMatch(/tenant_id\s*=\s*\$1/);
+    expect(sql).toMatch(/agent_id/);
+    expect(params).toEqual(['tenant-A', 'agent-A']);
+  });
+
+  it('tenant-A 的 agent 轮询时，只能捞到 tenant-A 自己的任务（不是全平台任务）', async () => {
+    const mod = await import('../db/connection');
+    (mod.default.query as any)
+      .mockResolvedValueOnce({ rows: [{ tenant_id: 'tenant-A', agent_id: 'agent-A' }] })
+      .mockResolvedValueOnce({
+        rows: [{ id: 'task-a1', keywords: ['装修'], tenant_id: 'tenant-A' }],
+      })
+      .mockResolvedValueOnce({ rows: [] }); // UPDATE running
+
+    const res = await request(app)
+      .get('/api/acquisition/pending-collect-tasks')
+      .set('x-agent-license', 'lic-A');
+
+    expect(res.body.tasks).toEqual([
+      { task_id: 'task-a1', tenant_id: 'tenant-A', keywords: ['装修'] },
+    ]);
+    // UPDATE 抢占任务时必须把 agent_id 写回该任务，避免同租户下一台机再抢
+    const updateCall = (mod.default.query as any).mock.calls[2];
+    expect(updateCall[0]).toMatch(/agent_id/);
+  });
+});
+
+describe('POST /api/acquisition/collect/start — agent_id 写入 [REGRESSION]', () => {
+  beforeEach(() => { vi.clearAllMocks(); });
+
+  it('body 带 agent_id → INSERT 时写入 acquisition_collect_tasks.agent_id', async () => {
+    const mod = await import('../db/connection');
+    (mod.default.query as any)
+      .mockResolvedValueOnce({ rows: [] }) // 异步 session 探测（fire-and-forget）
+      .mockResolvedValueOnce({ rows: [{ id: 'task-new' }] }); // INSERT
+
+    await request(app)
+      .post('/api/acquisition/collect/start')
+      .set('x-test-tenant-id', '4807edc7-da2a-4e8d-9223-31f4d25c12c6')
+      .send({ keywords: ['装修'], agent_id: 'agent-A' });
+
+    const calls = (mod.default.query as any).mock.calls;
+    const insertCall = calls.find((c: any[]) => /acquisition_collect_tasks/.test(c[0]));
+    expect(insertCall).toBeTruthy();
+    const [sql, params] = insertCall;
+    expect(sql).toMatch(/agent_id/);
+    expect(params).toContain('agent-A');
+  });
+});
+
 describe('collect/start — tenant 从 session，不信前端占位 [BEHAVIOR]', () => {
   beforeEach(() => { vi.clearAllMocks(); });
 
