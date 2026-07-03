@@ -1,4 +1,4 @@
-# Sprint Contract Draft (Round 6)
+# Sprint Contract Draft (Round 7)
 
 ## Response Schema（推导来源: 当前代码 agent-burner.ts:161-186 + PRD 明确字段名）
 
@@ -17,6 +17,7 @@
         "created_at": "<ISO8601>",
         "agent_hostname": "<string|null>",
         "agent_nickname": "<string|null>",
+        "agent_status": "<online|offline|unknown|null>",
         "account_nickname": "<string|null>"
       }
     ]
@@ -26,6 +27,7 @@
 ```
 - `agent_hostname` (string|null, 必填): agents.hostname 的别名；无绑定机器时为 null（来源——PRD 明确）
 - `agent_nickname` (string|null, 必填): agents.nickname 的别名；无绑定机器时为 null（来源——PRD 明确）
+- `agent_status` (string|null, 必填): agents.status LEFT JOIN 结果；无绑定机器时为 null；值为 'offline' 时前端"绑定机器"列显示"离线"标记（来源——PRD 边界情况"小号agent已离线:标记离线"）
 - `account_nickname`: 从 publish_tasks 子查询读取，可为 null
 **禁用字段名**: [`hostname`, `nickname`] — 不带 `agent_` 前缀的旧字段名，generator 不得在 sessions 数组里输出这两个裸名
 
@@ -95,6 +97,7 @@ COUNT=$(echo "$RESP" | jq '.data.sessions | length')
 if [ "$COUNT" -gt 0 ]; then
   echo "$RESP" | jq -e '.data.sessions[0] | has("agent_hostname")' || { echo "FAIL: 缺 agent_hostname"; exit 1; }
   echo "$RESP" | jq -e '.data.sessions[0] | has("agent_nickname")' || { echo "FAIL: 缺 agent_nickname"; exit 1; }
+  echo "$RESP" | jq -e '.data.sessions[0] | has("agent_status")' || { echo "FAIL: 缺 agent_status"; exit 1; }
   echo "$RESP" | jq -e '.data.sessions[0].role == "burner"' || { echo "FAIL: role != burner"; exit 1; }
   echo "$RESP" | jq -e '.data.sessions[0] | has("account_label")' || { echo "FAIL: 缺 account_label"; exit 1; }
   echo "$RESP" | jq -e '.data.sessions[0] | has("status")' || { echo "FAIL: 缺 status"; exit 1; }
@@ -109,6 +112,7 @@ echo "✅ Step 2 通过 count=$COUNT"
 - `data.sessions` 为数组
 - 每条 session 含 `agent_hostname` key（值允许为 null）
 - 每条 session 含 `agent_nickname` key（值允许为 null）
+- 每条 session 含 `agent_status` key（值允许为 null；offline 时前端显"离线"）
 - `role == "burner"`（小号专用 role 值）
 - 含 `account_label` key
 - 含 `status` key
@@ -139,12 +143,22 @@ if (rowCount > 0) {
   const cellText = (await machineCell.textContent() ?? '').trim();
   // 值必须是"—"（无绑定）或非空 hostname 字符串，不允许空字符串/undefined
   expect(cellText).toMatch(/^—$|^\S+/);
+
+  // 离线标记断言：若有 agent_status='offline' 的行，单元格需含"离线"标记元素
+  const offlineBadge = page.locator('[data-testid="machine-status-offline"]');
+  const offlineCount = await offlineBadge.count();
+  if (offlineCount > 0) {
+    await expect(offlineBadge.first()).toBeVisible({ timeout: 5000 });
+    await expect(offlineBadge.first()).toHaveText('离线');
+  }
+  await page.screenshot({ path: 'screenshots/02-accounts-table.png' });
 }
 ```
 
 **硬阈值**: 
 - tbody 有行时，`[data-testid="machine-hostname-cell"]` 可见
 - 单元格文字匹配 `/^—$|^\S+/`（"—" 或非空）
+- 若存在 `agent_status='offline'` 的行，`[data-testid="machine-status-offline"]` 可见且文字为"离线"
 
 ---
 
@@ -362,6 +376,7 @@ COUNT=$(echo "$RESP" | jq '.data.sessions | length')
 if [ "$COUNT" -gt 0 ]; then
   echo "$RESP" | jq -e '.data.sessions[0] | has("agent_hostname")' || { echo "FAIL: 缺 agent_hostname"; exit 1; }
   echo "$RESP" | jq -e '.data.sessions[0] | has("agent_nickname")' || { echo "FAIL: 缺 agent_nickname"; exit 1; }
+  echo "$RESP" | jq -e '.data.sessions[0] | has("agent_status")' || { echo "FAIL: 缺 agent_status"; exit 1; }
   echo "$RESP" | jq -e '.data.sessions[0].role == "burner"' || { echo "FAIL: role != burner"; exit 1; }
   echo "$RESP" | jq -e '.data.sessions[0] | has("account_label")' || { echo "FAIL: 缺 account_label"; exit 1; }
   echo "$RESP" | jq -e '.data.sessions[0] | has("status")' || { echo "FAIL: 缺 status"; exit 1; }

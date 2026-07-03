@@ -78,6 +78,17 @@ describe('GET /api/agent/burner/sessions — 角色统一字段 [BEHAVIOR]', () 
     expect(sessions[0]).not.toHaveProperty('nickname');
   });
 
+  it('响应含 agent_status 字段（agents.status LEFT JOIN，离线时前端显"离线"）', async () => {
+    const r = await request(app)
+      .get('/api/agent/burner/sessions')
+      .set('X-Tenant-Id', tenantId);
+    expect(r.status).toBe(200);
+    const sessions = r.body.data?.sessions ?? [];
+    expect(sessions.length).toBeGreaterThan(0);
+    expect(sessions[0]).toHaveProperty('agent_status');
+    expect(sessions[0].agent_status).toBe('online');
+  });
+
   it('LEFT JOIN：无绑定机器的 session 仍出现，agent_hostname=null（不被 INNER JOIN 过滤）', async () => {
     const ts = Date.now();
     const t2 = await pool.query(

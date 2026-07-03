@@ -6,9 +6,9 @@
     {
       "task_id": "ws1",
       "title": "角色数据模型统一 & 账号管理页加绑定机器列",
-      "scope": "1) GET /api/agent/burner/sessions SQL 改 LEFT JOIN + 别名 agent_hostname/agent_nickname；2) AcquisitionAccountsPage 接口 + 表格'绑定机器'列（含 data-testid=machine-hostname-cell）；3) 物理删除 DouyinBurnerBindPage.tsx + navigation.config.ts + AreaHubPage 链接 + 测试文件；4) DB migration SQL + 迁移脚本（--dry-run + cutover 三值映射，单事务）；5) 新建 .github/workflows/e2e-line02-account-role-unify-windows.yml",
+      "scope": "1) GET /api/agent/burner/sessions SQL 改 LEFT JOIN + 别名 agent_hostname/agent_nickname/agent_status（agents.status）；2) AcquisitionAccountsPage 接口加 agent_status 字段 + 表格'绑定机器'列（data-testid=machine-hostname-cell + 离线时 data-testid=machine-status-offline 显'离线'）；3) 物理删除 DouyinBurnerBindPage.tsx + navigation.config.ts + AreaHubPage 链接 + 测试文件；4) DB migration SQL + 迁移脚本（--dry-run + cutover 三值映射，单事务）；5) 新建 .github/workflows/e2e-line02-account-role-unify-windows.yml",
       "dod": [
-        "[BEHAVIOR] GET /api/agent/burner/sessions 响应 sessions[0] 含 agent_hostname key，不含裸 hostname key",
+        "[BEHAVIOR] GET /api/agent/burner/sessions 响应 sessions[0] 含 agent_hostname/agent_nickname/agent_status key，不含裸 hostname key",
         "[BEHAVIOR] LEFT JOIN：无绑定机器 session 仍出现，agent_hostname=null（不被 INNER JOIN 过滤）",
         "[BEHAVIOR] 多租户隔离：租户 B GET /sessions 不返回租户 A 的数据",
         "[BEHAVIOR] 无鉴权返回 401",
@@ -21,7 +21,7 @@
         "[ARTIFACT] apps/dashboard/e2e/line02-account-role-unify.spec.ts 存在且无 page.route() 且含 machine-hostname-cell",
         "[ARTIFACT] .github/workflows/e2e-line02-account-role-unify-windows.yml 存在且含 windows-latest runner",
         "[ARTIFACT] sprints/07032332-line02-account-role-unify/e2e-verify.ps1 存在且含 API server 启动（port 3000）+ Playwright 调用",
-        "[BEHAVIOR:E2E] Playwright 访问 /area/acquisition/accounts，'绑定机器'列头 toBeVisible，单元格含 hostname 或'—'"
+        "[BEHAVIOR:E2E] Playwright 访问 /area/acquisition/accounts，'绑定机器'列头 toBeVisible，单元格含 hostname 或'—'；agent 离线时 machine-status-offline 可见且含'离线'"
       ],
       "files": [
         "apps/api/src/routes/agent-burner.ts",
