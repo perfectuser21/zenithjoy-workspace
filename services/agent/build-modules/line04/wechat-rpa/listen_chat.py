@@ -2113,13 +2113,103 @@ def _read_msg_list_items(mw: Any) -> Any:
     return None, []
 
 
+def _is_wechat_green(r: int, g: int, b: int) -> bool:
+    """像素是否是微信"我方"绿泡色（#95EC69 及近似，v1.0.104 像素判向核心）。
+    判据：绿分量显著高于红蓝且够亮（防背景灰/白泡/头像误中）。纯函数可测。"""
+    return g >= 190 and r <= 200 and b <= 180 and (g - r) >= 40 and (g - b) >= 60
+
+
+def _capture_window_pixels(mw: Any) -> Any:
+    """PrintWindow 内存取微信窗口自身画面（被遮挡也能取到），返回带
+    .pixel(x, y)->(r,g,b) 的对象（x/y 为屏幕坐标，内部换算窗口内坐标）。
+    失败（最小化/非 Windows/API 异常）→ None（调用方回退已发送历史判向）。
+    v1.0.104：气泡左右位置被微信从所有 UIA 接口藏死（raw view 实锤零子元素），
+    位置信息只存在于渲染像素——这是唯一读取通道。开销 ~30ms/次。"""
+    import ctypes as _ct
+    try:
+        hwnd = mw.element_info.handle
+        wr = mw.rectangle()
+        w, h = wr.right - wr.left, wr.bottom - wr.top
+        if not hwnd or w <= 0 or h <= 0 or w > 10000 or h > 10000:
+            return None
+        u32, g32 = _ct.windll.user32, _ct.windll.gdi32
+        hdc_win = u32.GetDC(hwnd)
+        hdc_mem = g32.CreateCompatibleDC(hdc_win)
+        hbmp = g32.CreateCompatibleBitmap(hdc_win, w, h)
+        g32.SelectObject(hdc_mem, hbmp)
+        PW_RENDERFULLCONTENT = 2
+        ok = u32.PrintWindow(hwnd, hdc_mem, PW_RENDERFULLCONTENT)
+        if not ok:
+            g32.DeleteObject(hbmp); g32.DeleteDC(hdc_mem); u32.ReleaseDC(hwnd, hdc_win)
+            return None
+
+        class BITMAPINFOHEADER(_ct.Structure):
+            _fields_ = [("biSize", _ct.c_uint32), ("biWidth", _ct.c_int32),
+                        ("biHeight", _ct.c_int32), ("biPlanes", _ct.c_uint16),
+                        ("biBitCount", _ct.c_uint16), ("biCompression", _ct.c_uint32),
+                        ("biSizeImage", _ct.c_uint32), ("biXPelsPerMeter", _ct.c_int32),
+                        ("biYPelsPerMeter", _ct.c_int32), ("biClrUsed", _ct.c_uint32),
+                        ("biClrImportant", _ct.c_uint32)]
+
+        bih = BITMAPINFOHEADER()
+        bih.biSize = _ct.sizeof(BITMAPINFOHEADER)
+        bih.biWidth, bih.biHeight = w, -h  # top-down
+        bih.biPlanes, bih.biBitCount = 1, 32
+        buf = (_ct.c_ubyte * (w * h * 4))()
+        got = g32.GetDIBits(hdc_mem, hbmp, 0, h, buf, _ct.byref(bih), 0)
+        g32.DeleteObject(hbmp); g32.DeleteDC(hdc_mem); u32.ReleaseDC(hwnd, hdc_win)
+        if not got:
+            return None
+
+        class _Cap:
+            def __init__(self, data, width, height, left, top):
+                self._d, self._w, self._h = data, width, height
+                self._l, self._t = left, top
+
+            def pixel(self, x: int, y: int):
+                cx, cy = int(x - self._l), int(y - self._t)
+                if not (0 <= cx < self._w and 0 <= cy < self._h):
+                    return None
+                i = (cy * self._w + cx) * 4  # BGRA
+                return (self._d[i + 2], self._d[i + 1], self._d[i])
+
+        return _Cap(buf, w, h, wr.left, wr.top)
+    except Exception:
+        return None
+
+
+def _row_is_outgoing_by_pixels(cap: Any, row_top: int, row_bottom: int,
+                               panel_left: int, panel_right: int) -> Optional[bool]:
+    """一行消息是否为我方绿泡（v1.0.104）：在该行右侧 40% 采样带按网格取点，
+    命中微信绿 → True（outgoing）；采样全无绿 → False；cap 无效 → None。"""
+    if cap is None:
+        return None
+    try:
+        y0 = row_top + max(6, (row_bottom - row_top) // 4)
+        y1 = row_bottom - max(6, (row_bottom - row_top) // 4)
+        x0 = panel_left + int((panel_right - panel_left) * 0.55)
+        x1 = panel_right - 12
+        if y1 <= y0 or x1 <= x0:
+            return None
+        for y in range(y0, y1 + 1, max(4, (y1 - y0) // 4 or 4)):
+            for x in range(x0, x1 + 1, max(8, (x1 - x0) // 14 or 8)):
+                px = cap.pixel(x, y)
+                if px and _is_wechat_green(*px):
+                    return True
+        return False
+    except Exception:
+        return None
+
+
 def read_chat_bubbles(mw: Any) -> List[Dict[str, str]]:
     """读当前打开会话聊天面板全部可见消息气泡，旧→新有序，每条 {"text","direction"}。
 
     主路径（v1.0.94，rog 真机探针实证）：List(name="消息") 的 ListItem——
-    name=消息文本；无子元素、外框横跨全宽、class 全同 → 几何/属性判不了方向，
-    direction = 匹配 _SENT_TEXTS（自己真送达过的文本）→ outgoing，其余 incoming。
-    人工客服插话不在历史里会被判 incoming（残余风险，replied 去重兜底防重复回）。
+    name=消息文本；无子元素、外框横跨全宽、class 全同 → 几何/属性判不了方向。
+    判向（v1.0.104 像素判向为主）：PrintWindow 取窗口画面，每行右侧采样带找
+    微信绿泡（我方消息永远绿色靠右）→ 有绿=outgoing；取画面失败 → 回退
+    匹配 _SENT_TEXTS（自己真送达过的文本）。像素判向覆盖"操作者用手机以
+    B 身份发消息"的场景（前台判定/已发送历史都抓不到的最后漏洞）。
 
     排序（v1.0.95 修正）：按 rect.top 显示序（微信里显示序=时序），并丢弃与消息
     List 视口不相交的 item（虚拟列表回收槽的 stale rect）。v1.0.94 用 runtime_id
@@ -2161,11 +2251,24 @@ def read_chat_bubbles(mw: Any) -> List[Dict[str, str]]:
                 if r.bottom <= lrect.top or r.top >= lrect.bottom:
                     continue
             # 显示序 = 时序；rect 取不到的 item 保持树序垫底
-            keyed.append(((0, top) if top is not None else (1, i), nm))
+            keyed.append(((0, top) if top is not None else (1, i), nm, r))
         keyed.sort(key=lambda x: x[0])
-        return [{"text": nm,
-                 "direction": "outgoing" if _matches_any_sent(nm) else "incoming"}
-                for _, nm in keyed]
+        # v1.0.104 像素判向为主：右侧采样带有微信绿 = outgoing（我方绿泡永远
+        # 靠右）；取画面失败/行 rect 缺失 → 回退已发送历史匹配。
+        cap = _capture_window_pixels(mw)
+        p_left = lrect.left if lrect is not None else wr.left
+        p_right = lrect.right if lrect is not None else wr.right
+        out_bubbles: List[Dict[str, str]] = []
+        for _, nm, r in keyed:
+            verdict = (_row_is_outgoing_by_pixels(cap, r.top, r.bottom,
+                                                  p_left, p_right)
+                       if r is not None else None)
+            if verdict is None:
+                direction = "outgoing" if _matches_any_sent(nm) else "incoming"
+            else:
+                direction = "outgoing" if verdict else "incoming"
+            out_bubbles.append({"text": nm, "direction": direction})
+        return out_bubbles
     # ── legacy 回退：Text 几何扫描 ────────────────────────────────────────────
     width = wr.right - wr.left
     if width <= 0:
