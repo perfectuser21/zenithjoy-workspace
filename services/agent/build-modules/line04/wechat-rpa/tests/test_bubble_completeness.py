@@ -108,7 +108,9 @@ def test_complete_read_does_not_jiggle(monkeypatch):
             "name": "默忆\n[1条] \n在吗\n08:18\n", "_item": _Item("x")}
     msgs, empty = listen_chat._read_trailing_for(_MW(), cand)
     assert msgs == ["在吗"]
-    assert not jiggled
+    # v1.0.99：双读无条件 jiggle 一次（角标数不可信——自动已读消息不计入），
+    # 但读全后不再第三次加严重读。
+    assert len(jiggled) == 1
 
 
 def test_reply_delay_removed():
