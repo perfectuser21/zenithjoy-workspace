@@ -141,7 +141,7 @@ async function spawnBurnerChrome(burnerDataDir, chromePath) {
     '--no-first-run',
     '--no-default-browser-check',
     '--no-sandbox',
-    'about:blank',
+    'https://www.douyin.com',
   ], { detached: true, stdio: 'ignore' });
   child.unref();
 
