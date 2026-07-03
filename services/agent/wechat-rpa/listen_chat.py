@@ -750,6 +750,51 @@ def _read_trailing_for(mw: Any, cand: Dict[str, Any],
     return kept, False
 
 
+def _wechat_is_foreground(mw: Any) -> bool:
+    """当前前台窗口是否就是微信主窗口（v1.0.103 人工优先信号）。
+
+    操作者手动打字必然把微信置于前台；机器人自身操作从不留前台
+    （reply_in_chat 结束即把焦点归还操作前窗口）。fail-closed：任何异常返 False
+    （宁可正常回复流程照跑，不误判人工接管漏回客户）。
+    """
+    import ctypes as _ct
+    try:
+        hwnd = mw.element_info.handle
+        if not hwnd:
+            return False
+        return int(_ct.windll.user32.GetForegroundWindow()) == int(hwnd)
+    except Exception:
+        return False
+
+
+def _operator_takeover(sender: str, content: str, name: str,
+                       last_preview: Optional[Dict[str, str]],
+                       record_skip: Optional[Any]) -> None:
+    """人工接管提交（v1.0.103）：操作者前台打字触发的预览变化——
+    提交触发（下轮不再视为变化）+ 锚点推进过该文本（防之后客户消息的
+    trailing 把操作者的话带回来当客户消息）。"""
+    if last_preview is not None:
+        last_preview[sender] = name
+    if content:
+        _REPLY_ANCHOR[sender] = content
+        _save_reply_anchor()
+    if record_skip is not None:
+        record_skip("operator_takeover")
+    _log(f"operator_takeover sender={sender}（前台=微信，人工优先，本轮不回）")
+
+
+_SCAN_WINDOW_STATE: str = ""  # 有 emit 时暂存 orig_state，主循环回复完统一收窗
+
+
+def _finish_scan_window(mw: Any) -> None:
+    """回复完成后统一收窗（v1.0.103 双弹窗修复的另一半）。空状态 no-op，幂等。"""
+    global _SCAN_WINDOW_STATE
+    st = _SCAN_WINDOW_STATE
+    _SCAN_WINDOW_STATE = ""
+    if st:
+        _restore_window_state(mw, st)
+
+
 def scan_unread(mw: Any, last_preview: Optional[Dict[str, str]] = None,
                 record_skip: Optional[Any] = None,
                 should_open: Optional[Any] = None) -> List[Dict[str, Any]]:
@@ -776,9 +821,17 @@ def scan_unread(mw: Any, last_preview: Optional[Dict[str, str]] = None,
       → 保留触发态下轮再试（fail-closed）。
 
     托盘修复：微信在系统托盘时 IsWindowVisible=False，mmui 虚拟列表 UIA name 不实时更新，
-    新消息角标永远扫不到。扫描前 _ensure_tray_visible SW_SHOWNA(8) 短暂还原刷新 UIA，
-    扫完再 _restore_window_state 还原（用户几乎无感知）。
+    新消息角标永远扫不到。扫描前 _ensure_tray_visible SW_SHOWNA(8) 短暂还原刷新 UIA。
+    收窗（v1.0.103 双弹窗修复）：无 emit → 本函数内立即还原；有 emit → orig_state
+    暂存 _SCAN_WINDOW_STATE，主循环回复完调 _finish_scan_window 统一收一次
+    （旧行为扫完收→回复再弹→再收，一轮两次弹收，慢且晃眼）。
+
+    人工优先（v1.0.103 操作者自话修复）：扫描开始采样前台——前台=微信主窗口
+    说明操作者正在亲自操作（打字必然前台），本轮**预览变化触发**一律视为人工
+    接管：不 emit、提交触发、锚点推进过该文本（机器人自身操作从不留前台——
+    reply_in_chat 结束即焦点归还）。角标路径（真未读客户消息）不受影响。
     """
+    operator_fg = _wechat_is_foreground(mw)
     orig_state = _ensure_tray_visible(mw)
     # 记录【可见态】整树大小(窗口此刻已 ensure_visible，与 _is_uia_tree_collapsed 同口径)：主循环据此
     # 更新 last_readable_scan_at——心跳块裸读处于隐藏态恒报塌缩假象，读到健康树=微信能读会话=没塌缩。
@@ -831,12 +884,23 @@ def scan_unread(mw: Any, last_preview: Optional[Dict[str, str]] = None,
             if (_anchor and _content
                     and not _matches_any_sent(_content)
                     and "".join(_content.split()) != "".join(_anchor.split())):
+                if operator_fg:
+                    _operator_takeover(sender, _content, name, last_preview,
+                                       record_skip)
+                    continue
                 seen.add(sender)
                 candidates.append({"sender": sender, "content": _content,
                                    "name": name, "badge": 0, "_item": it})
             else:
                 last_preview[sender] = name  # 静默 seed
         elif prev != name:
+            if operator_fg:
+                # v1.0.103 人工优先：操作者正在前台亲自操作微信——预览变化
+                # 极可能是他自己打的字（打字必然前台），绝不当客户消息回。
+                # 提交触发+锚点推进过该文本；客户后续消息照常触发（角标/新预览变化）。
+                _operator_takeover(sender, info["content"] or "", name,
+                                   last_preview, record_skip)
+                continue
             seen.add(sender)
             candidates.append({"sender": sender, "content": info["content"],
                                "name": name, "badge": 0, "_item": it})
@@ -903,7 +967,13 @@ def scan_unread(mw: Any, last_preview: Optional[Dict[str, str]] = None,
                             "_item": c["_item"], "_preview_name": c["name"],
                             "_last_incoming": c["content"]})
                 _TRAILING_STALL.pop(c["sender"], None)
-    _restore_window_state(mw, orig_state)
+    # v1.0.103 双弹窗修复：有 emit → 不收窗（回复接着用这次弹出），orig_state
+    # 暂存给主循环回复完调 _finish_scan_window 统一收；无 emit → 立即收（旧行为）。
+    global _SCAN_WINDOW_STATE
+    if out:
+        _SCAN_WINDOW_STATE = orig_state
+    else:
+        _restore_window_state(mw, orig_state)
     return out
 
 
@@ -3936,6 +4006,9 @@ def run_real_listen(args: argparse.Namespace) -> int:
                         _log(f"[告警上报] 异常: {_hbexc}")
                 time.sleep(1)  # 操作间隔 ≥1s
 
+            # v1.0.103 双弹窗修复的另一半：本轮回复全部处理完，统一收窗一次
+            # （scan_unread 有 emit 时不收，orig_state 暂存在 _SCAN_WINDOW_STATE）。
+            _finish_scan_window(mw)
             time.sleep(args.interval)
     except KeyboardInterrupt:
         pass
