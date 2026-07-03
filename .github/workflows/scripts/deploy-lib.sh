@@ -842,15 +842,22 @@ staging_promote() {
     echo "❌ 生产 plist 改指 current 失败，放弃 promote（不重启，生产仍跑旧进程不受影响）"; return 1
   fi
 
-  echo "promote：干净重启 ${ZJ_PROD_LABEL}（生产 launchd 从 current 跑，先杀占 :${ZJ_PROD_PORT} 进程）..."
-  # plist 文件已变（Program/WorkingDir 指 current），必须 bootout+bootstrap 让 launchd 重读定义，
-  # 否则 kickstart 重启的还是旧定义。bootstrap 不支持回退 unload/load 兜底。
-  local _gui; _gui="gui/$(id -u)"
-  launchctl bootout "${_gui}/${ZJ_PROD_LABEL}" 2>/dev/null || launchctl unload "${ZJ_PROD_PLIST}" 2>/dev/null || true
-  sleep 2
+  echo "promote：干净重启生产进程（kill + nohup node，launchctl 在 mmv 不可用）..."
+  # mmv 上 launchctl bootstrap/kickstart 失败→触发 rollback，改用 kill+nohup 直启（与手动 promote 一致）。
   kill_port "${ZJ_PROD_PORT}"
-  launchctl bootstrap "${_gui}" "${ZJ_PROD_PLIST}" 2>/dev/null || launchctl load "${ZJ_PROD_PLIST}" 2>/dev/null || true
-  launchctl kickstart -k "${_gui}/${ZJ_PROD_LABEL}" 2>/dev/null || launchctl start "${ZJ_PROD_LABEL}" 2>/dev/null || true
+  local _pw=0
+  while lsof -i ":${ZJ_PROD_PORT}" -t >/dev/null 2>&1 && [ $_pw -lt 5 ]; do
+    sleep 1; _pw=$((_pw+1))
+  done
+  # source 持久 env（HOME/ 优先 /tmp/ 兜底；source 仅补凭据，ZJ_* 变量由调用方已 export）
+  local _penv="${HOME}/zenithjoy-prod-env.sh"
+  [ -f "$_penv" ] || _penv="/tmp/prod-env.sh"
+  if [ -f "$_penv" ]; then
+    set -a; source "$_penv" 2>/dev/null || true; set +a
+  fi
+  local _node="${ZJ_NODE:-/opt/homebrew/bin/node}"
+  nohup "$_node" "${ZJ_RELEASES_DIR}/current/dist/index.js" >> /tmp/prod-main.log 2>&1 &
+  echo "promote：新进程 PID=$! 已启动，等待 :${ZJ_PROD_PORT} 健康..."
   local up=0
   for _ in $(seq 1 12); do
     if curl -sf "http://localhost:${ZJ_PROD_PORT}/health" >/dev/null 2>&1; then up=1; break; fi
@@ -885,14 +892,20 @@ staging_rollback() {
       echo "⚠️ 锚点 release 目录不存在（${reldir}），current 保持现状，仅重启兜底确保不停在半死"
     fi
   fi
-  # 生产 plist 已指 releases/current（promote 改过），回滚只需把 current 重指回锚点即生效；
-  # 重启用 bootout+bootstrap+kickstart（与 promote 对称：让 launchd 重读定义、强制重启）。
-  local _gui; _gui="gui/$(id -u)"
-  launchctl bootout "${_gui}/${ZJ_PROD_LABEL}" 2>/dev/null || launchctl unload "${ZJ_PROD_PLIST}" 2>/dev/null || true
-  sleep 2
+  # 回滚 = current 重指到锚点 + 用同样的 kill+nohup 方式重启（launchctl 在 mmv 不可用）。
   kill_port "${ZJ_PROD_PORT}"
-  launchctl bootstrap "${_gui}" "${ZJ_PROD_PLIST}" 2>/dev/null || launchctl load "${ZJ_PROD_PLIST}" 2>/dev/null || true
-  launchctl kickstart -k "${_gui}/${ZJ_PROD_LABEL}" 2>/dev/null || launchctl start "${ZJ_PROD_LABEL}" 2>/dev/null || true
+  local _rw=0
+  while lsof -i ":${ZJ_PROD_PORT}" -t >/dev/null 2>&1 && [ $_rw -lt 5 ]; do
+    sleep 1; _rw=$((_rw+1))
+  done
+  local _rpenv="${HOME}/zenithjoy-prod-env.sh"
+  [ -f "$_rpenv" ] || _rpenv="/tmp/prod-env.sh"
+  if [ -f "$_rpenv" ]; then
+    set -a; source "$_rpenv" 2>/dev/null || true; set +a
+  fi
+  local _rnode="${ZJ_NODE:-/opt/homebrew/bin/node}"
+  nohup "$_rnode" "${ZJ_RELEASES_DIR}/current/dist/index.js" >> /tmp/prod-main.log 2>&1 &
+  echo "rollback：新进程 PID=$! 已启动，等待 :${ZJ_PROD_PORT} 健康..."
   local up=0
   for _ in $(seq 1 12); do
     if curl -sf "http://localhost:${ZJ_PROD_PORT}/health" >/dev/null 2>&1; then up=1; break; fi
