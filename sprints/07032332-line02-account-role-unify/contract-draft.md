@@ -1,4 +1,4 @@
-# Sprint Contract Draft (Round 4)
+# Sprint Contract Draft (Round 5)
 
 ## Response Schema（推导来源: 当前代码 agent-burner.ts:161-186 + PRD 明确字段名）
 
@@ -351,7 +351,7 @@ TENANT_ID=$(psql "$DATABASE_URL" -t -c "INSERT INTO zenithjoy.tenants (name, lic
 [ -n "$TENANT_ID" ] || { echo "FAIL: 无法创建测试租户"; exit 1; }
 
 RESP=$(curl -sf -H "X-Tenant-Id: $TENANT_ID" "$API_URL/api/agent/burner/sessions") || {
-  psql "$DATABASE_URL" -c "DELETE FROM zenithjoy.tenants WHERE id='$TENANT_ID'" 2>/dev/null || true
+  psql "$DATABASE_URL" -c "DELETE FROM zenithjoy.tenants WHERE id='$TENANT_ID'"
   echo "FAIL: GET /sessions 未返回 200"; exit 1; }
 
 echo "$RESP" | jq -e '.success == true' || { echo "FAIL: success != true"; exit 1; }
@@ -393,6 +393,8 @@ echo "✅ Scenario 2 通过 — 旧页面已物理删除，导航配置及 AreaH
 #!/bin/bash
 set -e
 test -f "apps/api/scripts/account-role-migrate.js" || { echo "FAIL: 迁移脚本不存在"; exit 1; }
+grep -q "dry-run\|dryRun" "apps/api/scripts/account-role-migrate.js" || { echo "FAIL: 迁移脚本缺 dry-run 参数处理"; exit 1; }
+grep -q "active\|pending" "apps/api/scripts/account-role-migrate.js" || { echo "FAIL: 迁移脚本缺三值映射逻辑"; exit 1; }
 DATABASE_URL="${DATABASE_URL}" node apps/api/scripts/account-role-migrate.js --dry-run > /tmp/dry-run.log 2>&1
 [ $? -eq 0 ] || { echo "FAIL: dry-run 退出非零"; cat /tmp/dry-run.log; exit 1; }
 grep -qE "dry.run|conflict|ok|完成|0 row" /tmp/dry-run.log || { echo "FAIL: 日志无可识别输出"; cat /tmp/dry-run.log; exit 1; }
@@ -415,6 +417,7 @@ AID=$(psql "$DATABASE_URL" -t -c "INSERT INTO zenithjoy.agents (tenant_id, machi
 psql "$DATABASE_URL" -c "INSERT INTO zenithjoy.agent_platform_sessions (agent_id, platform, account_label, role, status, created_at, bound_at) VALUES ('$AID', 'douyin', 'iso-label', 'burner', 'active', NOW(), NOW())"
 
 RESP_B=$(curl -sf -H "X-Tenant-Id: $TB" "$API_URL/api/agent/burner/sessions") || { echo "FAIL: B GET /sessions 失败"; exit 1; }
+echo "$RESP_B" | jq -e '.success == true' || { echo "FAIL: B GET /sessions success!=true"; exit 1; }
 CNT=$(echo "$RESP_B" | jq '.data.sessions | length')
 [ "$CNT" -eq 0 ] || { echo "FAIL: 跨租户泄露，B 看到 $CNT 条 A 的 sessions"; exit 1; }
 

@@ -87,12 +87,12 @@ target_environment: windows_cloud
 
 ---
 
-## 自查核验记录（Round 3 proposer 完成）
+## 自查核验记录（Round 5 proposer 完成）
 
 1. Response Schema 8 字段：`agent_hostname` / `agent_nickname`（PRD 明确）；`account_label` / `role` / `status` / `bound_at` / `created_at` / `account_nickname`（现有代码字段）✅
-2. jq -e 断言对齐 Response Schema 全字段 — Round 3 新补：`role == "burner"` / `has("account_label")` / `has("status")`；已有：`has("agent_hostname")` / `has("agent_nickname")`；`bound_at`/`created_at`/`account_nickname` 为可 null 辅助字段，由 BEHAVIOR 2 的整体 has() 链覆盖 ✅
+2. jq -e 断言对齐 Response Schema 全字段 — `role == "burner"` / `has("account_label")` / `has("status")` / `has("agent_hostname")` / `has("agent_nickname")` ✅；`bound_at`/`created_at`/`account_nickname` 可 null 辅助字段由 BEHAVIOR 2 整体 has() 链覆盖 ✅
 3. 禁用字段 `hostname`/`nickname` 均有 `has(...) | not` 反向检查 ✅
 4. [BEHAVIOR] 数量：7 条 ≥ 4 ✅（schema 字段 + 禁用字段反向 + 多租户隔离 + 鉴权 error path + dry-run + cutover 三值映射）
 5. 假绿自查：cutover BEHAVIOR 若脚本不存在 MODULE_NOT_FOUND FAIL；三值映射若未实现 count=0 FAIL；新增断言若 role 不存在/account_label 不存在/status 不存在 → has() FAIL ✅
 6. Golden Path 溯源：所有 7 条 BEHAVIOR 对应 Golden Path 步骤 ✅；无 MOCK_* / page.route() ✅
-7. Round 3 净变化自查：contract-draft.md Step 2 + Scenario 1 各补 3 行；contract-dod.md BEHAVIOR 2 补 3 条内联断言；无删除；净增 ≈ 9 行断言，无 scope 蔓延 ✅
+7. Round 5 Gate 修复：(a) Scenario 1 cleanup DELETE 移除 `|| true`（非断言操作，set -e 已托管）；(b) Scenario 3 迁移脚本存在性检查后补两条 `grep -q` 内容断言（dry-run 参数 + 三值映射逻辑）；(c) Scenario 4 RESP_B curl 后补 `jq -e '.success == true'` 满足 gate weak-oracle/curl-no-jq 规则。净增 3 行断言，0 行删除 ✅
