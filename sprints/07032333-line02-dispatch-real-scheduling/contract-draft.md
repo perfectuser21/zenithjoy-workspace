@@ -1,4 +1,4 @@
-# Sprint Contract Draft (Round 2)
+# Sprint Contract Draft (Round 3)
 
 ## Response Schema（推导来源: 代码现状推导 + PRD 隐含字段）
 
@@ -64,7 +64,7 @@
 | 风险 | 影响 | 缓解 |
 |---|---|---|
 | **并发竞态** — 同一租户两次 buildAssignments 同时运行，可能双选同一"最少负载"小号 | 同一 lead 被派两次（违反 dedup invariant）| DB 层 UNIQUE constraint on (tenant_id, lead_id, account_label) + ON CONFLICT DO NOTHING 已覆盖；concurrent dispatch 会有一条静默跳过 |
-| **pending_dispatch 去重完整性** — 全离线时两次快速调用，对同一 lead 两次 INSERT pending_dispatch | pending_dispatch 队列中出现重复行，下一周期发两次 DM | PRD 明确"(tenant, lead, label) 不重复插入"；Generator 必须用 INSERT ON CONFLICT DO NOTHING 或先查再插；BEHAVIOR B9 验收 |
+| **pending_dispatch 去重完整性** — 全离线时两次快速调用，对同一 lead 两次 INSERT pending_dispatch | pending_dispatch 队列中出现重复行，下一周期发两次 DM | PRD 明确"(tenant, lead, label) 不重复插入"；Generator 必须用 INSERT ON CONFLICT DO NOTHING 或先查再插；Scenario 2 Step 4（time-windowed DB count）+ DoD BEHAVIOR B9（双次调用去重，count=1 验证）验收 |
 
 ---
 
@@ -295,6 +295,15 @@ RESP=$(curl -sf -X POST "$API_URL/api/acquisition/dispatch/build" \
   -H "X-Tenant-Id: $TENANT" -H "Content-Type: application/json")
 echo "$RESP" | jq -e '.success == true' || { echo "FAIL: not success"; exit 1; }
 echo "$RESP" | jq -e '.data.assigned >= 1' || { echo "FAIL: assigned=0 unexpectedly"; exit 1; }
+
+# 4b. 补全 6 字段类型断言（修复 R2 verification_oracle_completeness：scored/skipped_dedup/skipped_budget/burners 未验）
+echo "$RESP" | jq -e '.data.scored | type == "number"' || { echo "FAIL: scored not number"; exit 1; }
+echo "$RESP" | jq -e '.data.skipped_dedup | type == "number"' || { echo "FAIL: skipped_dedup not number"; exit 1; }
+echo "$RESP" | jq -e '.data.skipped_budget | type == "number"' || { echo "FAIL: skipped_budget not number"; exit 1; }
+echo "$RESP" | jq -e '.data.burners | type == "array"' || { echo "FAIL: burners not array"; exit 1; }
+echo "$RESP" | jq -e '.data.pending | type == "number"' || { echo "FAIL: pending not number"; exit 1; }
+# schema completeness 卡：data 恰好含这 6 个字段，不多不少
+echo "$RESP" | jq -e '.data | keys | sort == ["assigned","burners","pending","scored","skipped_budget","skipped_dedup"]' || { echo "FAIL: data schema keys 不完整或含多余字段"; exit 1; }
 
 # 5. 验证新 lead 被派给 B（负载最少），dispatch_reason='least_load'
 ASSIGNED_LABEL=$(psql "$DB" -t -c \
