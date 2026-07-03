@@ -5,23 +5,28 @@
   "tasks": [
     {
       "task_id": "ws1",
-      "title": "buildAssignments 升级：在线感知调度 + dispatch_reason + pending_dispatch 重试 + DB migration",
-      "scope": "扩展 buildAssignments 函数：JOIN agents.last_heartbeat_at 过滤在线小号、按当天负载排序、写 dispatch_reason 字段；全离线时写 pending_dispatch；下一轮自动重试 pending_dispatch；新增 DB migration 加 dispatch_reason 列和 pending_dispatch status",
+      "title": "buildAssignments 升级：在线感知 + 最少负载 + pending_dispatch + queued→pending 重标 + DB migration",
+      "scope": "扩展 buildAssignments 函数：JOIN agents.last_heartbeat_at 过滤在线小号（2 分钟阈值）+ 按当天已派任务量升序排序 + 写 dispatch_reason 字段；全离线时写 pending_dispatch（含去重）；下一轮优先重试 pending_dispatch；queued 行所属 burner 离线时自动重标 pending_dispatch；新增 DB migration 加 dispatch_reason 列和 pending_dispatch status；新增单测到 apps/api/tests/routes/acquisition-dispatch.test.ts",
       "dod": [
         "[BEHAVIOR] POST /dispatch/build 响应 data.pending 字段存在且类型为 number",
-        "[BEHAVIOR] 在线小号存在时 dm_assignments 新行 dispatch_reason='least_load'",
+        "[BEHAVIOR] 在线小号存在时 dm_assignments 新行 dispatch_reason='least_load' AND status='queued'（时间窗 2min）",
         "[BEHAVIOR] 全离线时 data.assigned=0, data.pending≥1, DB 有 pending_dispatch 行（时间窗口 2 分钟内）",
         "[BEHAVIOR] 离线小号 account_label 不出现在 status='queued' 行",
-        "[BEHAVIOR] pending_dispatch 下一轮在线时升级为 queued",
-        "[BEHAVIOR] 无 X-Tenant-Id → 401",
+        "[BEHAVIOR] pending_dispatch 下一轮在线时升级为 queued，pending 清零",
+        "[BEHAVIOR] 无 X-Tenant-Id → 401 + error.code='NO_TENANT'",
+        "[BEHAVIOR] data 所有必填字段类型正确（number/number/number/array/number）",
+        "[BEHAVIOR] 租户 A pending 积压不导致租户 B 有 pending_dispatch",
+        "[BEHAVIOR] 同 (tenant,lead) pending_dispatch 不重复插入",
+        "[BEHAVIOR] burner 掉线后已排队 queued 行自动重标 pending_dispatch（queued_remap）",
         "[ARTIFACT] DB migration 含 dispatch_reason 列 + pending_dispatch 到 check constraint",
-        "[ARTIFACT] buildAssignments burner 查询 JOIN agents.last_heartbeat_at 并过滤 2 分钟阈值"
+        "[ARTIFACT] buildAssignments 源码含 last_heartbeat_at + INTERVAL + dispatch_reason + pending_dispatch",
+        "[ARTIFACT] apps/api/tests/routes/acquisition-dispatch.test.ts 含 dispatch_reason/least_load/pending_dispatch/queued_remap"
       ],
       "files": [
         "apps/api/src/services/acquisition-dispatch.ts",
         "apps/api/src/routes/acquisition-dispatch.ts",
         "apps/api/tests/routes/acquisition-dispatch.test.ts",
-        "apps/api/db/migrations/20260703_NNNNNN_dm_assignments_dispatch_reason.sql"
+        "apps/api/db/migrations/20260703_dm_assignments_dispatch_reason.sql"
       ],
       "depends_on": [],
       "complexity": "M",

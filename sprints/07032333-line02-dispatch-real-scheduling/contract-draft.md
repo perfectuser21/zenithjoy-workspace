@@ -1,4 +1,4 @@
-# Sprint Contract Draft (Round 1)
+# Sprint Contract Draft (Round 2)
 
 ## Response Schema（推导来源: 代码现状推导 + PRD 隐含字段）
 
@@ -59,9 +59,18 @@
 
 ---
 
+## Risks
+
+| 风险 | 影响 | 缓解 |
+|---|---|---|
+| **并发竞态** — 同一租户两次 buildAssignments 同时运行，可能双选同一"最少负载"小号 | 同一 lead 被派两次（违反 dedup invariant）| DB 层 UNIQUE constraint on (tenant_id, lead_id, account_label) + ON CONFLICT DO NOTHING 已覆盖；concurrent dispatch 会有一条静默跳过 |
+| **pending_dispatch 去重完整性** — 全离线时两次快速调用，对同一 lead 两次 INSERT pending_dispatch | pending_dispatch 队列中出现重复行，下一周期发两次 DM | PRD 明确"(tenant, lead, label) 不重复插入"；Generator 必须用 INSERT ON CONFLICT DO NOTHING 或先查再插；BEHAVIOR B9 验收 |
+
+---
+
 ## Golden Path
 
-[触发] → [查询在线小号+负载] → [选最优小号 + 记原因] → [无可用小号→pending_dispatch] → [下周期重试]
+[触发] → [查询在线小号+负载] → [选最优小号 + 记原因] → [无可用小号→pending_dispatch] → [下周期重试] → [edge: 掉线后 queued→pending_dispatch]
 
 ---
 
@@ -106,18 +115,13 @@ CHOSEN=$(psql "$DATABASE_URL" -t -c \
   "SELECT account_label FROM zenithjoy.dm_assignments \
    WHERE tenant_id='$TEST_TENANT' AND status='queued' \
    AND created_at > NOW() - interval '2 minutes' LIMIT 1" | tr -d ' ')
-DAY_COUNT=$(psql "$DATABASE_URL" -t -c \
-  "SELECT count(*) FROM zenithjoy.dm_assignments \
-   WHERE tenant_id='$TEST_TENANT' AND account_label='$CHOSEN' \
-   AND status IN ('queued','dispatched','sent') \
-   AND scheduled_for >= date_trunc('day', now())" | tr -d ' ')
 # 离线小号 $OFFLINE_LABEL 不应出现
 OFFLINE_IN=$(psql "$DATABASE_URL" -t -c \
   "SELECT count(*) FROM zenithjoy.dm_assignments \
    WHERE tenant_id='$TEST_TENANT' AND account_label='$OFFLINE_LABEL' \
    AND created_at > NOW() - interval '2 minutes'" | tr -d ' ')
 [ "$OFFLINE_IN" = "0" ] || { echo "FAIL: offline burner was selected"; exit 1; }
-echo "chosen=$CHOSEN day_count=$DAY_COUNT OK"
+echo "chosen=$CHOSEN OK"
 ```
 
 **硬阈值**: 离线小号条数 = 0，在线最少负载小号被选中
@@ -154,16 +158,7 @@ STATUS=$(psql "$DATABASE_URL" -t -c \
 echo "least_load_count=$COUNT OK"
 ```
 
-**硬阈值**: `dispatch_reason='least_load'` 且 `status='queued'`，count ≥ 1（在线小号存在时）
-
-**可执行硬阈值验证**:
-```bash
-C=$(psql "$DATABASE_URL" -t -c \
-  "SELECT count(*) FROM zenithjoy.dm_assignments \
-   WHERE tenant_id='$TEST_TENANT' AND dispatch_reason='least_load' \
-   AND created_at > NOW() - interval '2 minutes'" | tr -d ' ')
-[ "$C" -ge 1 ] || { echo "FAIL: least_load_count=$C < 1"; exit 1; }
-```
+**硬阈值**: `dispatch_reason='least_load'` 且 `status='queued'`，count ≥ 1（在线小号存在时），写入时间窗 2 分钟内
 
 ---
 
@@ -187,16 +182,7 @@ PCOUNT=$(psql "$DATABASE_URL" -t -c \
 echo "pending_count=$PCOUNT OK"
 ```
 
-**硬阈值**: `assigned=0`, `pending≥1`, DB 中存在 `status='pending_dispatch'` 行，count ≥ 1，写入时间窗口 2 分钟内
-
-**可执行硬阈值验证**:
-```bash
-PC=$(psql "$DATABASE_URL" -t -c \
-  "SELECT count(*) FROM zenithjoy.dm_assignments \
-   WHERE tenant_id='$TEST_OFFLINE_TENANT' AND status='pending_dispatch' \
-   AND created_at > NOW() - interval '2 minutes'" | tr -d ' ')
-[ "$PC" -ge 1 ] || { echo "FAIL: pending_dispatch_count=$PC < 1"; exit 1; }
-```
+**硬阈值**: `assigned=0`, `pending≥1`, DB 中存在 `status='pending_dispatch'` 行，count ≥ 1，写入时间窗 2 分钟内
 
 ---
 
@@ -208,8 +194,6 @@ PC=$(psql "$DATABASE_URL" -t -c \
 
 **验证命令**:
 ```bash
-# 前提：DB 中存在 pending_dispatch 行，agent 心跳已更新为 now()
-# 触发下一个周期
 RESP=$(curl -sf -X POST http://localhost:3000/api/acquisition/dispatch/build \
   -H "X-Tenant-Id: $TEST_RETRY_TENANT" -H "Content-Type: application/json")
 echo "$RESP" | jq -e '.data.assigned >= 1' || { echo "FAIL: retry assigned < 1"; exit 1; }
@@ -227,12 +211,38 @@ echo "retried=$RETRIED still_pending=$STILL_PENDING OK"
 
 **硬阈值**: `status='pending_dispatch'` 行数变为 0，`status='queued'` 行 `updated_at` 在 2 分钟内
 
+---
+
+### Step 6: 边界情况 — 已派 queued 行所属 burner 掉线后，buildAssignments 将其重标为 pending_dispatch
+
+**来源**: `[FROM_PRD]` — PRD 边界情况段"机器在待派发等待期间掉线（心跳 > 2 分钟）：已插入 queued 但 scheduled_for 未到期的 dm_assignments 重新标 pending_dispatch，等下一周期重新派给其他在线小号"
+
+**可观测行为**: burner B 心跳在线时，lead 已以 `status='queued'` 指派给 B。B 心跳随后超过 2 分钟，下一次 buildAssignments 调用将 B 的 queued 行（scheduled_for 未到期）重标为 `pending_dispatch`。
+
+**验证命令**:
+```bash
+# 前提：$BURNER_B_LABEL 对应 agent last_heartbeat_at 已更新为 now() - 10 min
+# 且存在一条该 label 的 queued 行，scheduled_for 未到期
+RESP=$(curl -sf -X POST http://localhost:3000/api/acquisition/dispatch/build \
+  -H "X-Tenant-Id: $TEST_REMAP_TENANT" -H "Content-Type: application/json")
+echo "$RESP" | jq -e '.success == true' || { echo "FAIL: not success"; exit 1; }
+C=$(psql "$DATABASE_URL" -t -c \
+  "SELECT count(*) FROM zenithjoy.dm_assignments \
+   WHERE tenant_id='$TEST_REMAP_TENANT' AND account_label='$BURNER_B_LABEL' \
+   AND status='pending_dispatch' AND updated_at > NOW() - interval '5 minutes'" | tr -d ' ')
+[ "$C" -ge 1 ] || { echo "FAIL: queued→pending_dispatch re-label count=$C"; exit 1; }
+echo "remap_count=$C OK"
+```
+
+**硬阈值**: count ≥ 1，re-labeled 行 `updated_at` 在 5 分钟内
+
 **可执行硬阈值验证**:
 ```bash
-STILL=$(psql "$DATABASE_URL" -t -c \
+C=$(psql "$DATABASE_URL" -t -c \
   "SELECT count(*) FROM zenithjoy.dm_assignments \
-   WHERE tenant_id='$TEST_RETRY_TENANT' AND status='pending_dispatch'" | tr -d ' ')
-[ "$STILL" = "0" ] || { echo "FAIL: still pending_dispatch=$STILL"; exit 1; }
+   WHERE tenant_id='$TEST_REMAP_TENANT' AND account_label='$BURNER_B_LABEL' \
+   AND status='pending_dispatch' AND updated_at > NOW() - interval '5 minutes'" | tr -d ' ')
+[ "$C" -ge 1 ] || { echo "FAIL: queued→pending_dispatch re-label count=$C < 1"; exit 1; }
 ```
 
 ---
@@ -252,43 +262,41 @@ STILL=$(psql "$DATABASE_URL" -t -c \
 ```bash
 #!/bin/bash
 set -e
-# 前提: API server 在 $API_URL（默认 http://localhost:3000），DB 在 $DATABASE_URL
 API_URL="${API_URL:-http://localhost:3000}"
 DB="${DATABASE_URL:-postgresql://localhost/zenithjoy}"
 TENANT="e2e-dispatch-online-$(date +%s)"
 
-# 1. 创建 agents（模拟2个在线小号，B 的负载更少）
+# 1. 创建 agents（2个在线小号，B 负载更少）
 AGENT_A_ID=$(psql "$DB" -t -c \
-  "INSERT INTO zenithjoy.agents (tenant_id, agent_id, hostname, status, last_heartbeat_at) \
-   VALUES ((SELECT id FROM zenithjoy.tenants LIMIT 1), 'e2e-agent-a-$TENANT', 'host-a', 'online', now()) RETURNING id" | tr -d ' ')
+  "INSERT INTO zenithjoy.agents (tenant_id,agent_id,hostname,status,last_heartbeat_at) \
+   VALUES ('$TENANT','e2e-agent-a-$TENANT','host-a','online',now()) RETURNING id" | tr -d ' ')
 AGENT_B_ID=$(psql "$DB" -t -c \
-  "INSERT INTO zenithjoy.agents (tenant_id, agent_id, hostname, status, last_heartbeat_at) \
-   VALUES ((SELECT id FROM zenithjoy.tenants LIMIT 1), 'e2e-agent-b-$TENANT', 'host-b', 'online', now()) RETURNING id" | tr -d ' ')
+  "INSERT INTO zenithjoy.agents (tenant_id,agent_id,hostname,status,last_heartbeat_at) \
+   VALUES ('$TENANT','e2e-agent-b-$TENANT','host-b','online',now()) RETURNING id" | tr -d ' ')
+psql "$DB" -c "INSERT INTO zenithjoy.agent_platform_sessions (agent_id,platform,account_label,role,status) VALUES ('$AGENT_A_ID','douyin','burner-a-$TENANT','burner','active')"
+psql "$DB" -c "INSERT INTO zenithjoy.agent_platform_sessions (agent_id,platform,account_label,role,status) VALUES ('$AGENT_B_ID','douyin','burner-b-$TENANT','burner','active')"
 
-# 2. 创建 sessions (burner)
-psql "$DB" -c "INSERT INTO zenithjoy.agent_platform_sessions (agent_id, platform, account_label, role, status) VALUES ('$AGENT_A_ID', 'douyin', 'burner-a-$TENANT', 'burner', 'active')"
-psql "$DB" -c "INSERT INTO zenithjoy.agent_platform_sessions (agent_id, platform, account_label, role, status) VALUES ('$AGENT_B_ID', 'douyin', 'burner-b-$TENANT', 'burner', 'active')"
-
-# 3. 给 A 号预插 5 条历史任务（负载更高），B 号 0 条
+# 2. 给 A 号预插 5 条历史任务（负载更高），B 号 0 条
 LEAD_PRE=$(psql "$DB" -t -c \
-  "INSERT INTO zenithjoy.acquisition_leads (tenant_id, sec_uid, profile_url, relevance_score) \
-   VALUES ('$TENANT', 'pre-sec', 'https://d/pre', 70) RETURNING id" | tr -d ' ')
+  "INSERT INTO zenithjoy.acquisition_leads (tenant_id,sec_uid,profile_url,relevance_score) \
+   VALUES ('$TENANT','pre-sec','https://d/pre',70) RETURNING id" | tr -d ' ')
 for i in 1 2 3 4 5; do
-  psql "$DB" -c "INSERT INTO zenithjoy.dm_assignments (tenant_id, lead_id, account_label, status, scheduled_for) VALUES ('$TENANT', '$LEAD_PRE', 'burner-a-$TENANT', 'queued', now() + interval '${i} minutes') ON CONFLICT DO NOTHING"
+  psql "$DB" -c "INSERT INTO zenithjoy.dm_assignments (tenant_id,lead_id,account_label,status,scheduled_for) \
+    VALUES ('$TENANT','$LEAD_PRE','burner-a-$TENANT','queued',now()+interval '${i} minutes') ON CONFLICT DO NOTHING"
 done
 
-# 4. 创建新 lead（供本轮派发）
+# 3. 创建新 lead（供本轮派发）
 LEAD_ID=$(psql "$DB" -t -c \
-  "INSERT INTO zenithjoy.acquisition_leads (tenant_id, sec_uid, profile_url, relevance_score) \
-   VALUES ('$TENANT', 'new-sec-$TENANT', 'https://d/new-$TENANT', 90) RETURNING id" | tr -d ' ')
+  "INSERT INTO zenithjoy.acquisition_leads (tenant_id,sec_uid,profile_url,relevance_score) \
+   VALUES ('$TENANT','new-sec-$TENANT','https://d/new-$TENANT',90) RETURNING id" | tr -d ' ')
 
-# 5. 触发 buildAssignments
+# 4. 触发 buildAssignments
 RESP=$(curl -sf -X POST "$API_URL/api/acquisition/dispatch/build" \
   -H "X-Tenant-Id: $TENANT" -H "Content-Type: application/json")
 echo "$RESP" | jq -e '.success == true' || { echo "FAIL: not success"; exit 1; }
 echo "$RESP" | jq -e '.data.assigned >= 1' || { echo "FAIL: assigned=0 unexpectedly"; exit 1; }
 
-# 6. 验证新 lead 被派给 B（负载最少），dispatch_reason='least_load'
+# 5. 验证新 lead 被派给 B（负载最少），dispatch_reason='least_load'
 ASSIGNED_LABEL=$(psql "$DB" -t -c \
   "SELECT account_label FROM zenithjoy.dm_assignments \
    WHERE tenant_id='$TENANT' AND lead_id='$LEAD_ID' AND dispatch_reason='least_load'" | tr -d ' ')
@@ -299,7 +307,6 @@ psql "$DB" -c "DELETE FROM zenithjoy.dm_assignments WHERE tenant_id='$TENANT'"
 psql "$DB" -c "DELETE FROM zenithjoy.acquisition_leads WHERE tenant_id='$TENANT'"
 psql "$DB" -c "DELETE FROM zenithjoy.agent_platform_sessions WHERE account_label LIKE '%-$TENANT'"
 psql "$DB" -c "DELETE FROM zenithjoy.agents WHERE agent_id LIKE '%-$TENANT'"
-
 echo "✅ Scenario 1 通过: 在线小号负载最少优先选择 dispatch_reason=least_load"
 ```
 
@@ -316,14 +323,14 @@ TENANT="e2e-offline-$(date +%s)"
 
 # 1. 创建离线 agent（heartbeat 超过 2 分钟前）
 AGENT_ID=$(psql "$DB" -t -c \
-  "INSERT INTO zenithjoy.agents (tenant_id, agent_id, hostname, status, last_heartbeat_at) \
-   VALUES ((SELECT id FROM zenithjoy.tenants LIMIT 1), 'e2e-offline-$TENANT', 'host-c', 'offline', now() - interval '10 minutes') RETURNING id" | tr -d ' ')
-psql "$DB" -c "INSERT INTO zenithjoy.agent_platform_sessions (agent_id, platform, account_label, role, status) VALUES ('$AGENT_ID', 'douyin', 'burner-c-$TENANT', 'burner', 'active')"
+  "INSERT INTO zenithjoy.agents (tenant_id,agent_id,hostname,status,last_heartbeat_at) \
+   VALUES ('$TENANT','e2e-offline-$TENANT','host-c','offline',now()-interval '10 minutes') RETURNING id" | tr -d ' ')
+psql "$DB" -c "INSERT INTO zenithjoy.agent_platform_sessions (agent_id,platform,account_label,role,status) VALUES ('$AGENT_ID','douyin','burner-c-$TENANT','burner','active')"
 
-# 2. 创建 lead（有 relevance_score）
+# 2. 创建 lead
 LEAD_ID=$(psql "$DB" -t -c \
-  "INSERT INTO zenithjoy.acquisition_leads (tenant_id, sec_uid, profile_url, relevance_score) \
-   VALUES ('$TENANT', 'offline-sec-$TENANT', 'https://d/offline-$TENANT', 80) RETURNING id" | tr -d ' ')
+  "INSERT INTO zenithjoy.acquisition_leads (tenant_id,sec_uid,profile_url,relevance_score) \
+   VALUES ('$TENANT','offline-sec-$TENANT','https://d/offline-$TENANT',80) RETURNING id" | tr -d ' ')
 
 # 3. 触发 buildAssignments
 RESP=$(curl -sf -X POST "$API_URL/api/acquisition/dispatch/build" \
@@ -350,7 +357,6 @@ psql "$DB" -c "DELETE FROM zenithjoy.dm_assignments WHERE tenant_id='$TENANT'"
 psql "$DB" -c "DELETE FROM zenithjoy.acquisition_leads WHERE tenant_id='$TENANT'"
 psql "$DB" -c "DELETE FROM zenithjoy.agent_platform_sessions WHERE account_label LIKE '%-$TENANT'"
 psql "$DB" -c "DELETE FROM zenithjoy.agents WHERE agent_id LIKE '%-$TENANT'"
-
 echo "✅ Scenario 2 通过: 全部离线时 lead→pending_dispatch，assigned=0"
 ```
 
@@ -367,20 +373,20 @@ TENANT="e2e-retry-$(date +%s)"
 
 # 1. 创建 agent（先设为离线）
 AGENT_ID=$(psql "$DB" -t -c \
-  "INSERT INTO zenithjoy.agents (tenant_id, agent_id, hostname, status, last_heartbeat_at) \
-   VALUES ((SELECT id FROM zenithjoy.tenants LIMIT 1), 'e2e-retry-$TENANT', 'host-r', 'offline', now() - interval '10 minutes') RETURNING id" | tr -d ' ')
-psql "$DB" -c "INSERT INTO zenithjoy.agent_platform_sessions (agent_id, platform, account_label, role, status) VALUES ('$AGENT_ID', 'douyin', 'burner-r-$TENANT', 'burner', 'active')"
+  "INSERT INTO zenithjoy.agents (tenant_id,agent_id,hostname,status,last_heartbeat_at) \
+   VALUES ('$TENANT','e2e-retry-$TENANT','host-r','offline',now()-interval '10 minutes') RETURNING id" | tr -d ' ')
+psql "$DB" -c "INSERT INTO zenithjoy.agent_platform_sessions (agent_id,platform,account_label,role,status) VALUES ('$AGENT_ID','douyin','burner-r-$TENANT','burner','active')"
 
 # 2. 创建 lead + 第一轮（离线）→ pending_dispatch
 LEAD_ID=$(psql "$DB" -t -c \
-  "INSERT INTO zenithjoy.acquisition_leads (tenant_id, sec_uid, profile_url, relevance_score) \
-   VALUES ('$TENANT', 'retry-sec-$TENANT', 'https://d/retry-$TENANT', 85) RETURNING id" | tr -d ' ')
+  "INSERT INTO zenithjoy.acquisition_leads (tenant_id,sec_uid,profile_url,relevance_score) \
+   VALUES ('$TENANT','retry-sec-$TENANT','https://d/retry-$TENANT',85) RETURNING id" | tr -d ' ')
 curl -sf -X POST "$API_URL/api/acquisition/dispatch/build" \
   -H "X-Tenant-Id: $TENANT" -H "Content-Type: application/json" | jq -e '.data.pending >= 1' || \
   { echo "FAIL: first round did not produce pending_dispatch"; exit 1; }
 
-# 3. 模拟小号上线（更新 heartbeat 为 now()）
-psql "$DB" -c "UPDATE zenithjoy.agents SET last_heartbeat_at = now(), status = 'online' WHERE id='$AGENT_ID'"
+# 3. 模拟小号上线
+psql "$DB" -c "UPDATE zenithjoy.agents SET last_heartbeat_at=now(), status='online' WHERE id='$AGENT_ID'"
 
 # 4. 第二轮 buildAssignments → pending_dispatch 被重试
 RESP=$(curl -sf -X POST "$API_URL/api/acquisition/dispatch/build" \
@@ -404,7 +410,6 @@ psql "$DB" -c "DELETE FROM zenithjoy.dm_assignments WHERE tenant_id='$TENANT'"
 psql "$DB" -c "DELETE FROM zenithjoy.acquisition_leads WHERE tenant_id='$TENANT'"
 psql "$DB" -c "DELETE FROM zenithjoy.agent_platform_sessions WHERE account_label LIKE '%-$TENANT'"
 psql "$DB" -c "DELETE FROM zenithjoy.agents WHERE agent_id LIKE '%-$TENANT'"
-
 echo "✅ Scenario 3 通过: pending_dispatch → 上线后下周期补派为 queued"
 ```
 
@@ -421,35 +426,35 @@ TS="$(date +%s)"
 TENANT_A="e2e-iso-a-$TS"
 TENANT_B="e2e-iso-b-$TS"
 
-# 租户 A: 离线 burner → 会有 pending_dispatch 积压
+# 租户 A: 离线 burner
 AGENT_A=$(psql "$DB" -t -c \
-  "INSERT INTO zenithjoy.agents (tenant_id, agent_id, hostname, status, last_heartbeat_at) \
-   VALUES ((SELECT id FROM zenithjoy.tenants LIMIT 1), 'e2e-agent-a-$TS', 'host-a', 'offline', now() - interval '10 minutes') RETURNING id" | tr -d ' ')
-psql "$DB" -c "INSERT INTO zenithjoy.agent_platform_sessions (agent_id, platform, account_label, role, status) VALUES ('$AGENT_A', 'douyin', 'burner-a-$TS', 'burner', 'active')"
-psql "$DB" -c "INSERT INTO zenithjoy.acquisition_leads (tenant_id, sec_uid, profile_url, relevance_score) VALUES ('$TENANT_A', 'sec-a-$TS', 'https://d/a', 70)"
+  "INSERT INTO zenithjoy.agents (tenant_id,agent_id,hostname,status,last_heartbeat_at) \
+   VALUES ('$TENANT_A','e2e-agent-a-$TS','host-a','offline',now()-interval '10 minutes') RETURNING id" | tr -d ' ')
+psql "$DB" -c "INSERT INTO zenithjoy.agent_platform_sessions (agent_id,platform,account_label,role,status) VALUES ('$AGENT_A','douyin','burner-a-$TS','burner','active')"
+psql "$DB" -c "INSERT INTO zenithjoy.acquisition_leads (tenant_id,sec_uid,profile_url,relevance_score) VALUES ('$TENANT_A','sec-a-$TS','https://d/a',70)"
 
 # 租户 B: 在线 burner
 AGENT_B=$(psql "$DB" -t -c \
-  "INSERT INTO zenithjoy.agents (tenant_id, agent_id, hostname, status, last_heartbeat_at) \
-   VALUES ((SELECT id FROM zenithjoy.tenants LIMIT 1), 'e2e-agent-b-$TS', 'host-b', 'online', now()) RETURNING id" | tr -d ' ')
-psql "$DB" -c "INSERT INTO zenithjoy.agent_platform_sessions (agent_id, platform, account_label, role, status) VALUES ('$AGENT_B', 'douyin', 'burner-b-$TS', 'burner', 'active')"
-psql "$DB" -c "INSERT INTO zenithjoy.acquisition_leads (tenant_id, sec_uid, profile_url, relevance_score) VALUES ('$TENANT_B', 'sec-b-$TS', 'https://d/b', 70)"
+  "INSERT INTO zenithjoy.agents (tenant_id,agent_id,hostname,status,last_heartbeat_at) \
+   VALUES ('$TENANT_B','e2e-agent-b-$TS','host-b','online',now()) RETURNING id" | tr -d ' ')
+psql "$DB" -c "INSERT INTO zenithjoy.agent_platform_sessions (agent_id,platform,account_label,role,status) VALUES ('$AGENT_B','douyin','burner-b-$TS','burner','active')"
+psql "$DB" -c "INSERT INTO zenithjoy.acquisition_leads (tenant_id,sec_uid,profile_url,relevance_score) VALUES ('$TENANT_B','sec-b-$TS','https://d/b',70)"
 
 # 触发租户 A（产生 pending_dispatch 积压）
 curl -sf -X POST "$API_URL/api/acquisition/dispatch/build" \
-  -H "X-Tenant-Id: $TENANT_A" -H "Content-Type: application/json" > /dev/null
+  -H "X-Tenant-Id: $TENANT_A" -H "Content-Type: application/json" | jq -e '.success == true' > /dev/null
 
 # 触发租户 B（应正常完成，不受 A 积压影响）
 RESP_B=$(curl -sf -X POST "$API_URL/api/acquisition/dispatch/build" \
   -H "X-Tenant-Id: $TENANT_B" -H "Content-Type: application/json")
 echo "$RESP_B" | jq -e '.success == true' || { echo "FAIL: tenant B dispatch failed"; exit 1; }
-echo "$RESP_B" | jq -e '.data.assigned >= 1' || { echo "FAIL: tenant B assigned=0 (should be ≥1)"; exit 1; }
+echo "$RESP_B" | jq -e '.data.assigned >= 1' || { echo "FAIL: tenant B assigned=0"; exit 1; }
 
-# 验证 pending_dispatch 只在租户 A 的行中，租户 B 没有
+# 验证租户 B 无 pending_dispatch
 PENDING_B=$(psql "$DB" -t -c \
   "SELECT count(*) FROM zenithjoy.dm_assignments \
    WHERE tenant_id='$TENANT_B' AND status='pending_dispatch'" | tr -d ' ')
-[ "$PENDING_B" = "0" ] || { echo "FAIL: tenant B has pending_dispatch=$PENDING_B (cross-tenant contamination)"; exit 1; }
+[ "$PENDING_B" = "0" ] || { echo "FAIL: tenant B has pending_dispatch=$PENDING_B"; exit 1; }
 
 # 清理
 for T in "$TENANT_A" "$TENANT_B"; do
@@ -458,8 +463,57 @@ for T in "$TENANT_A" "$TENANT_B"; do
 done
 psql "$DB" -c "DELETE FROM zenithjoy.agent_platform_sessions WHERE account_label LIKE '%-$TS'"
 psql "$DB" -c "DELETE FROM zenithjoy.agents WHERE agent_id LIKE '%-$TS'"
-
 echo "✅ Scenario 4 通过: 租户 A pending 积压不阻塞租户 B 正常派发"
+```
+
+### Scenario 5: queued-to-pending-on-burner-offline
+<!-- GOLDEN_SMOKE_SCENARIO: queued-to-pending-on-burner-offline -->
+<!-- GOLDEN_SMOKE_TIMEOUT_MS: 60000 -->
+
+```bash
+#!/bin/bash
+set -e
+# 验收 PRD 边界情况：已派 queued 行所属 burner 心跳超时后，buildAssignments 将其重标为 pending_dispatch
+API_URL="${API_URL:-http://localhost:3000}"
+DB="${DATABASE_URL:-postgresql://localhost/zenithjoy}"
+TENANT="e2e-remap-$(date +%s)"
+
+# 1. 创建在线 agent A + session + lead
+AGENT_A=$(psql "$DB" -t -c \
+  "INSERT INTO zenithjoy.agents (tenant_id,agent_id,hostname,status,last_heartbeat_at) \
+   VALUES ('$TENANT','e2e-remap-a-$TENANT','host-ra','online',now()) RETURNING id" | tr -d ' ')
+psql "$DB" -c "INSERT INTO zenithjoy.agent_platform_sessions (agent_id,platform,account_label,role,status) VALUES ('$AGENT_A','douyin','burner-ra-$TENANT','burner','active')"
+LEAD_ID=$(psql "$DB" -t -c \
+  "INSERT INTO zenithjoy.acquisition_leads (tenant_id,sec_uid,profile_url,relevance_score) \
+   VALUES ('$TENANT','remap-sec-$TENANT','https://d/remap-$TENANT',80) RETURNING id" | tr -d ' ')
+
+# 2. 第一轮 buildAssignments → lead 被派给 A (status=queued)
+R1=$(curl -sf -X POST "$API_URL/api/acquisition/dispatch/build" \
+  -H "X-Tenant-Id: $TENANT" -H "Content-Type: application/json")
+echo "$R1" | jq -e '.data.assigned >= 1' || { echo "FAIL: first round did not assign lead"; exit 1; }
+ASSIGN_ID=$(psql "$DB" -t -c \
+  "SELECT id FROM zenithjoy.dm_assignments WHERE tenant_id='$TENANT' AND lead_id='$LEAD_ID' AND status='queued'" | tr -d ' ')
+[ -n "$ASSIGN_ID" ] || { echo "FAIL: no queued assignment created in round 1"; exit 1; }
+
+# 3. 模拟 A 掉线（心跳超过 2 分钟）
+psql "$DB" -c "UPDATE zenithjoy.agents SET last_heartbeat_at=now()-interval '10 minutes', status='offline' WHERE id='$AGENT_A'"
+
+# 4. 第二轮 buildAssignments（无其他在线 burner）
+R2=$(curl -sf -X POST "$API_URL/api/acquisition/dispatch/build" \
+  -H "X-Tenant-Id: $TENANT" -H "Content-Type: application/json")
+echo "$R2" | jq -e '.success == true' || { echo "FAIL: second round error"; exit 1; }
+
+# 5. 验证 A 的 queued 行已重标为 pending_dispatch
+STATUS=$(psql "$DB" -t -c \
+  "SELECT status FROM zenithjoy.dm_assignments WHERE id='$ASSIGN_ID'" | tr -d ' ')
+[ "$STATUS" = "pending_dispatch" ] || { echo "FAIL: A queued row status=$STATUS (expected pending_dispatch)"; exit 1; }
+
+# 清理
+psql "$DB" -c "DELETE FROM zenithjoy.dm_assignments WHERE tenant_id='$TENANT'"
+psql "$DB" -c "DELETE FROM zenithjoy.acquisition_leads WHERE tenant_id='$TENANT'"
+psql "$DB" -c "DELETE FROM zenithjoy.agent_platform_sessions WHERE account_label LIKE '%-$TENANT'"
+psql "$DB" -c "DELETE FROM zenithjoy.agents WHERE agent_id LIKE '%-$TENANT'"
+echo "✅ Scenario 5 通过: burner 掉线后已排队行自动重标 pending_dispatch"
 ```
 
 ---
@@ -468,8 +522,9 @@ echo "✅ Scenario 4 通过: 租户 A pending 积压不阻塞租户 B 正常派�
 
 | 功能 | Test File | BEHAVIOR 覆盖 | 预期红证据 |
 |---|---|---|---|
-| 在线感知排序 | `tests/buildAssignments-dispatch.test.ts` | 心跳2分钟内=在线，超时=离线，不被选 | → "pending field missing / online sensing" failures |
-| dispatch_reason | `tests/buildAssignments-dispatch.test.ts` | dispatch_reason='least_load' 写入 INSERT | → "dispatch_reason not in INSERT" failure |
-| pending_dispatch | `tests/buildAssignments-dispatch.test.ts` | 全离线→status=pending_dispatch | → "status pending_dispatch" failure |
-| pending 重试 | `tests/buildAssignments-dispatch.test.ts` | 上轮 pending→下轮有可用时补派 | → "pending leads not retried" failure |
-| 租户隔离 | `tests/buildAssignments-dispatch.test.ts` | ≥2 租户，pending_dispatch 不跨租户 | → "tenant isolation" existing test passes (regression guard) |
+| 在线感知排序 + dispatch_reason | `apps/api/tests/routes/acquisition-dispatch.test.ts` | 心跳2分钟内=在线，超时=离线；dispatch_reason='least_load' 写入 | → "dispatch_reason / least_load" failures |
+| pending_dispatch 状态 | `apps/api/tests/routes/acquisition-dispatch.test.ts` | 全离线→status=pending_dispatch，assigned=0 | → "pending_dispatch" failure |
+| pending 重试 | `apps/api/tests/routes/acquisition-dispatch.test.ts` | 上轮 pending→下轮有可用时补派 | → "pending leads not retried" failure |
+| pending_dispatch 去重 | `apps/api/tests/routes/acquisition-dispatch.test.ts` | 已有 pending → 二次调用不重复插入 | → "dedup violation" failure |
+| queued→pending 重标 | `apps/api/tests/routes/acquisition-dispatch.test.ts` | burner 掉线后 queued 行重标 pending_dispatch | → "queued_remap" failure |
+| 租户隔离 | `apps/api/tests/routes/acquisition-dispatch.test.ts` | ≥2 租户，pending 不跨租户 | → regression guard |

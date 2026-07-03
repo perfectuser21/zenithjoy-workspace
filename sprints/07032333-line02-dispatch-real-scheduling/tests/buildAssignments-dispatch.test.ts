@@ -409,6 +409,34 @@ describe('buildAssignments 在线感知调度 — TDD Red', () => {
     expect(dupCount).toBe(1);
   });
 
+  it('queued_remap — burner 掉线后已排队行重标为 pending_dispatch', async () => {
+    // 预置：agent 在线时 lead 已被派 queued
+    const queuedRow: Assignment = {
+      id: 'qr-001', tenant_id: 't1', lead_id: 'L-remap', account_label: 'b-remap',
+      status: 'queued',
+      scheduled_for: new Date(NOW.getTime() + 300_000).toISOString(), // 5 min future, not yet due
+      dispatch_reason: 'least_load',
+      created_at: new Date(NOW.getTime() - 30_000).toISOString(),
+      updated_at: new Date(NOW.getTime() - 30_000).toISOString(),
+    };
+
+    // agent b-remap has gone offline (heartbeat 10 min ago)
+    const pool = makeDispatchPool({
+      configRow: BASE_CFG,
+      leads: [{ id: 'L-remap', tenant_id: 't1', sec_uid: 'sr', profile_url: 'https://d/r', partial: false, relevance_score: 75, nickname: 'r', created_at: '2026-07-03T09:00:00Z' }],
+      agents: [agent('a-remap', OFFLINE_HB)],
+      sessions: [session('b-remap', 'a-remap')],
+      assignments: [queuedRow],
+    });
+
+    await buildAssignments(pool, 't1', NOW);
+
+    // 当前 FAIL: 旧代码不重标 queued→pending_dispatch
+    const remapped = pool._state.assignments.find((a) => a.id === 'qr-001');
+    expect(remapped).toBeDefined();
+    expect(remapped!.status).toBe('pending_dispatch');
+  });
+
   it('租户隔离 — 租户 A 的 pending_dispatch 不影响租户 B 的正常派发', async () => {
     // 租户 A: 离线，有 pending_dispatch 积压
     const pendingA: Assignment = {
