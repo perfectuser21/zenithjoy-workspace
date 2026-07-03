@@ -38,18 +38,20 @@ import {
 import { appendTenantMessage } from './wechat/tenant-memory';
 import { assembleChatContext } from './wechat/context-assembler';
 
-// ─── 客服回复 LLM 配置：走 ToAPI deepseek-v3.2（OpenAI 兼容 /chat/completions）──
+// ─── 客服回复 LLM 配置：走 ToAPI deepseek-v4-flash（OpenAI 兼容 /chat/completions）──
 //
-// 默认 deepseek-v3.2：非推理模型，~1.5s 出答案，比推理版 deepseek-v4-flash 快 4-8 倍且不烧
-// reasoning token（v4-flash 思考走 reasoning_content、会先吃光 max_tokens 致 content 空+慢）。
-// openrouter.ts 仍丢弃 reasoning_content 作防御：万一 ENV 切回推理模型也不会把思考漏给客户。
+// 默认 deepseek-v4-flash（2026-07-03 实测换回，用户拍板）：生产同规模 prompt 下
+// 3.2-3.4s / completion ~220 tokens，比 gpt-5.4-mini（5-7s / ~400 tokens，隐藏思考照计费）
+// 快一倍、单条成本约 1/5。旧默认 deepseek-v3.2 上游渠道死了（no available channel，
+// 昨日请求数 0）。v4-flash 思考走 reasoning_content——openrouter.ts 已剥离，
+// 绝不把思考漏给客户；max_tokens=2000 实测足够（content 不为空）。
 //
 // 端点/模型可被 ENV 覆盖（WECHAT_CS_MODEL）；apiKey 走 TOAPI_API_KEY（1Password「ToAPI」条目，部署机 ENV 必须有）。
 // 惰性读 env（调用时而非模块加载时）：保证测试 beforeAll 设的 env / 部署后改的 env 都生效，
 // 不被 import 时机锁死。
 function csLlm() {
   return {
-    model: process.env.WECHAT_CS_MODEL || 'deepseek-v3.2',
+    model: process.env.WECHAT_CS_MODEL || 'deepseek-v4-flash',
     baseUrl: process.env.TOAPI_BASE_URL || 'https://toapis.com/v1/chat/completions',
     apiKey: process.env.TOAPI_API_KEY,
     maxTokens: Number(process.env.WECHAT_CS_MAX_TOKENS) || 2000,
