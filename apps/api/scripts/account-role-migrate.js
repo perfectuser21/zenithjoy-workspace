@@ -36,7 +36,7 @@ async function run() {
   try {
     client = await pool.connect();
 
-    // 查询所有 line02_account_sessions 未停写的记录
+    // 查询所有 line02_account_sessions 未停写且有 agent_id 关联的记录
     const { rows: l02Rows } = await client.query(
       `SELECT l.agent_id, l.platform, l.account_label, l.health, l.tenant_id,
               aps.status AS existing_status
@@ -45,7 +45,8 @@ async function run() {
            ON aps.agent_id = l.agent_id
           AND aps.platform = l.platform
           AND aps.account_label = l.account_label
-        WHERE COALESCE(l.write_disabled, false) = false`,
+        WHERE l.agent_id IS NOT NULL
+          AND COALESCE(l.write_disabled, false) = false`,
     );
 
     console.log(`[account-role-migrate] 共 ${l02Rows.length} 条待处理记录`);
