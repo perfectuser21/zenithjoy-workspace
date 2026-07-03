@@ -4233,3 +4233,11 @@ agent_suite:
   status: active
   product: AI员工
   note: "regression(2026-07-02, line02 Bug1): crawl 结果映射时 text 必须来自 comment_text，不能用 nickname；守卫 mapRawCommenters 生产路径（src/utils/comment-mapper.ts）"
+
+- id: line02-account-role-unify
+  path: sprints/07032332-line02-account-role-unify/tests/account-role-unify.test.ts
+  type: integration
+  ci: L4
+  status: active
+  product: AI员工
+  note: "Sprint 07032332: GET /sessions LEFT JOIN + agent_hostname/agent_nickname/agent_status 字段；DouyinBurnerBindPage 下线；account-role-migrate.js cutover 三值映射验证"
