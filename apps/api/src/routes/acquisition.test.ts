@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import request from 'supertest';
 import express from 'express';
 import * as fs from 'node:fs';
@@ -487,5 +487,46 @@ describe('GET /api/acquisition/videos/:videoId/leads [BEHAVIOR]', () => {
     expect(res.body.data).not.toHaveProperty('comments');
     expect(res.body.data).not.toHaveProperty('items');
     expect(res.body.data).not.toHaveProperty('results');
+  });
+});
+
+describe('GET /api/acquisition/pending-keyword-tasks — tenant 隔离', () => {
+  beforeEach(() => {
+    vi.stubEnv('VITEST', '');
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.resetAllMocks();
+  });
+
+  it('无 x-agent-license header 时返回空任务列表（不泄漏任何租户数据）', async () => {
+    // 无 license header → handler 提前返回，不会查 DB，无需设置 mock
+    const res = await request(app)
+      .get('/api/acquisition/pending-keyword-tasks');
+
+    expect(res.status).toBe(200);
+    expect(res.body.tasks).toEqual([]);
+    expect(res.body.total).toBe(0);
+  });
+
+  it('只返回本租户任务，不返回其他租户任务', async () => {
+    const { default: db } = await import('../db/connection');
+    const TENANT_A = 'aaaaaaaa-0000-0000-0000-000000000001';
+
+    (db.query as any).mockResolvedValueOnce({ rows: [{ tenant_id: TENANT_A }] });
+    (db.query as any).mockResolvedValueOnce({
+      rows: [{ id: 'task-a1', keyword: '美甲', expanded_keywords: ['美甲', '指甲'] }],
+    });
+    (db.query as any).mockResolvedValueOnce({ rows: [] });
+
+    const res = await request(app)
+      .get('/api/acquisition/pending-keyword-tasks')
+      .set('x-agent-license', 'ZJ-A-TESTTEST');
+
+    expect(res.status).toBe(200);
+    expect(res.body.tasks).toHaveLength(1);
+    expect(res.body.tasks[0].task_id).toBe('task-a1');
+    expect(res.body.tasks[0].keyword).toBe('美甲');
   });
 });

@@ -1151,7 +1151,9 @@ function startAcquisitionKeywordLoop(cfg: AgentConfig): void {
 
   async function pollAndProcess(): Promise<void> {
     try {
-      const resp = await fetch(`${apiBase}/api/acquisition/pending-keyword-tasks`);
+      const resp = await fetch(`${apiBase}/api/acquisition/pending-keyword-tasks`, {
+        headers: { 'x-agent-license': cfg.licenseKey },
+      });
       if (!resp.ok) return;
       const data = await resp.json() as { tasks?: Array<{ task_id: string; keyword: string; keywords: string[]; max_videos_per_keyword?: number }>; total?: number };
       const tasks = data.tasks ?? [];
