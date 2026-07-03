@@ -63,9 +63,9 @@ def _mock_windll(user32):
                 pass
 
 
-if "listen_chat" in sys.modules:
-    del sys.modules["listen_chat"]
-
+# 禁止 del sys.modules 重导入（2026-07-03 教训）：会造出两份模块副本，
+# conftest 只清 sys.modules 里的新副本，字母序在本文件前的测试全用旧副本
+# → _INFLIGHT/_LAST_EMIT 等状态跨测试残留 → 19 个测试全红。
 import listen_chat  # noqa: E402
 
 
