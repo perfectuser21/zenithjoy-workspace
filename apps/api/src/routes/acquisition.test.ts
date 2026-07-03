@@ -233,6 +233,112 @@ describe('GET /api/acquisition/leads', () => {
   });
 });
 
+// ────── Bug：GET /leads 无租户隔离，返回全平台数据 [REGRESSION] ──────
+describe('GET /api/acquisition/leads — tenant 隔离 [REGRESSION]', () => {
+  beforeEach(async () => {
+    vi.stubEnv('VITEST', '');
+    vi.clearAllMocks();
+    const { default: db } = await import('../db/connection');
+    (db.query as any).mockReset();
+  });
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it('无 tenant 上下文 → 401 NO_TENANT，不查库', async () => {
+    const { default: db } = await import('../db/connection');
+    const res = await request(app).get('/api/acquisition/leads');
+    expect(res.status).toBe(401);
+    expect(db.query).not.toHaveBeenCalled();
+  });
+
+  it('查询必须带 tenant_id 过滤，不能返回全平台数据', async () => {
+    const { default: db } = await import('../db/connection');
+    const TENANT_A = 'eeeeeeee-0000-0000-0000-000000000005';
+    (db.query as any).mockResolvedValueOnce({ rows: [] });
+
+    await request(app)
+      .get('/api/acquisition/leads')
+      .set('x-test-tenant-id', TENANT_A);
+
+    const calls = (db.query as any).mock.calls;
+    const [sql, params] = calls[0];
+    expect(sql).toMatch(/l\.tenant_id\s*=\s*\$/);
+    expect(params).toContain(TENANT_A);
+  });
+
+  it('grade + tenant 同时过滤时两个条件都要带上', async () => {
+    const { default: db } = await import('../db/connection');
+    const TENANT_B = 'ffffffff-0000-0000-0000-000000000006';
+    (db.query as any).mockResolvedValueOnce({ rows: [] });
+
+    await request(app)
+      .get('/api/acquisition/leads?grade=%E7%B2%BE%E5%87%86')
+      .set('x-test-tenant-id', TENANT_B);
+
+    const calls = (db.query as any).mock.calls;
+    const [sql, params] = calls[0];
+    expect(sql).toMatch(/l\.grade\s*=\s*\$/);
+    expect(sql).toMatch(/l\.tenant_id\s*=\s*\$/);
+    expect(params).toContain(TENANT_B);
+    expect(params).toContain('精准');
+  });
+});
+
+// ────── Bug：comment-score-result 用 SELECT ... LIMIT 1 猜租户，写错客户账号 [REGRESSION] ──────
+describe('POST /api/acquisition/comment-score-result — tenant 从 keyword_task_id 反查 [REGRESSION]', () => {
+  beforeEach(async () => {
+    vi.stubEnv('VITEST', '');
+    vi.clearAllMocks();
+    const { default: db } = await import('../db/connection');
+    (db.query as any).mockReset();
+  });
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it('按 keyword_task_id 反查真实 tenant_id 写入 lead，不是 SELECT tenants LIMIT 1', async () => {
+    const { default: db } = await import('../db/connection');
+    const REAL_TENANT = 'dddddddd-0000-0000-0000-000000000004';
+
+    (db.query as any)
+      .mockResolvedValueOnce({ rows: [{ tenant_id: REAL_TENANT }] }) // 反查 keyword_task 归属
+      .mockResolvedValueOnce({ rows: [] }); // INSERT acquisition_leads
+
+    const comments = [{ commenter_id: '/user/uid-x', text: '怎么联系' }];
+    const res = await request(app)
+      .post('/api/acquisition/comment-score-result')
+      .send({ keyword_task_id: 'kw-real-001', video_url: 'https://douyin.com/v/1', comments });
+
+    expect(res.status).toBe(200);
+    expect(res.body.written_count).toBe(1);
+
+    const calls = (db.query as any).mock.calls;
+    expect(calls[0][0]).not.toMatch(/tenants\s+LIMIT\s+1/i);
+    expect(calls[0][0]).toMatch(/acquisition_keyword_tasks/);
+    expect(calls[0][1]).toEqual(['kw-real-001']);
+
+    const insertCall = calls.find((c: any[]) => /INSERT INTO zenithjoy\.acquisition_leads/.test(c[0]));
+    expect(insertCall).toBeTruthy();
+    expect(insertCall![1][0]).toBe(REAL_TENANT);
+  });
+
+  it('keyword_task_id 查不到归属租户 → 不写入任何 lead（不再兜底猜任意租户）', async () => {
+    const { default: db } = await import('../db/connection');
+    (db.query as any).mockResolvedValueOnce({ rows: [] }); // 查不到归属
+
+    const comments = [{ commenter_id: '/user/uid-y', text: '价格多少' }];
+    const res = await request(app)
+      .post('/api/acquisition/comment-score-result')
+      .send({ keyword_task_id: 'kw-orphan', video_url: 'https://douyin.com/v/1', comments });
+
+    expect(res.status).toBe(200);
+    expect(res.body.written_count).toBe(0);
+    const calls = (db.query as any).mock.calls;
+    expect(calls.find((c: any[]) => /INSERT INTO zenithjoy\.acquisition_leads/.test(c[0]))).toBeUndefined();
+  });
+});
+
 // ────── Bug 回归：leads 字段映射 — commenter_id=nickname，source_video_url=完整URL，有 profile_url ──────
 describe('GET /api/acquisition/leads 字段映射 [REGRESSION]', () => {
   it('commenter_id 映射 nickname（优先），不再映射 sec_uid 乱码', () => {
