@@ -497,13 +497,11 @@ describe('GET /api/acquisition/pending-keyword-tasks — tenant 隔离', () => {
 
   afterEach(() => {
     vi.unstubAllEnvs();
-    vi.clearAllMocks();
+    vi.resetAllMocks();
   });
 
   it('无 x-agent-license header 时返回空任务列表（不泄漏任何租户数据）', async () => {
-    const { default: db } = await import('../db/connection');
-    (db.query as any).mockResolvedValueOnce({ rows: [] }); // SELECT tenant_id FROM licenses
-
+    // 无 license header → handler 提前返回，不会查 DB，无需设置 mock
     const res = await request(app)
       .get('/api/acquisition/pending-keyword-tasks');
 

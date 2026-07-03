@@ -28,7 +28,7 @@ acquisitionRouter.get('/overview', (_req: Request, res: Response) => {
   });
 });
 
-acquisitionRouter.post('/keyword-search', async (req: Request, res: Response) => {
+acquisitionRouter.post('/keyword-search', tenantContextOptional, async (req: Request, res: Response) => {
   const { keyword } = req.body ?? {};
 
   if (!keyword || typeof keyword !== 'string' || keyword.trim() === '') {
@@ -59,9 +59,9 @@ acquisitionRouter.post('/keyword-search', async (req: Request, res: Response) =>
       const pool = (await import('../db/connection')).default;
       await pool.query(
         `INSERT INTO zenithjoy.acquisition_keyword_tasks
-           (id, keyword, expanded_keywords, status, created_at, updated_at)
-         VALUES ($1, $2, $3::jsonb, 'dispatched', NOW(), NOW())`,
-        [task_id, kw, JSON.stringify(keywords)]
+           (id, keyword, expanded_keywords, status, tenant_id, created_at, updated_at)
+         VALUES ($1, $2, $3::jsonb, 'dispatched', $4, NOW(), NOW())`,
+        [task_id, kw, JSON.stringify(keywords), req.tenantId ?? null]
       );
     } catch (err) {
       console.error('[acquisition] DB insert failed:', (err as Error).message);
@@ -72,13 +72,28 @@ acquisitionRouter.post('/keyword-search', async (req: Request, res: Response) =>
 });
 
 // Agent 轮询端点 — 返回待处理的关键词任务
-acquisitionRouter.get('/pending-keyword-tasks', async (_req: Request, res: Response) => {
+acquisitionRouter.get('/pending-keyword-tasks', async (req: Request, res: Response) => {
   if (process.env.VITEST) {
     return res.status(200).json({ tasks: [], total: 0 });
   }
 
   try {
     const pool = (await import('../db/connection')).default;
+
+    const licenseKey = req.header('x-agent-license') ?? '';
+    if (!licenseKey) {
+      return res.status(200).json({ tasks: [], total: 0 });
+    }
+
+    const licenseRes = await pool.query<{ tenant_id: string }>(
+      `SELECT tenant_id FROM zenithjoy.licenses WHERE license_key = $1 LIMIT 1`,
+      [licenseKey]
+    );
+    const tenantId = licenseRes.rows[0]?.tenant_id;
+    if (!tenantId) {
+      return res.status(200).json({ tasks: [], total: 0 });
+    }
+
     const { rows } = await pool.query<{
       id: string;
       keyword: string;
@@ -86,19 +101,21 @@ acquisitionRouter.get('/pending-keyword-tasks', async (_req: Request, res: Respo
     }>(
       `SELECT id, keyword, expanded_keywords
          FROM zenithjoy.acquisition_keyword_tasks
-        WHERE status = 'dispatched'
+        WHERE tenant_id = $1
+          AND status = 'dispatched'
         ORDER BY created_at ASC
-        LIMIT 10`
+        LIMIT 10`,
+      [tenantId]
     );
 
-    // Mark picked-up tasks as processing
     if (rows.length > 0) {
       const ids = rows.map((r) => r.id);
       await pool.query(
         `UPDATE zenithjoy.acquisition_keyword_tasks
             SET status = 'processing', updated_at = NOW()
-          WHERE id = ANY($1::uuid[])`,
-        [ids]
+          WHERE id = ANY($1::uuid[])
+            AND tenant_id = $2`,
+        [ids, tenantId]
       );
     }
 
