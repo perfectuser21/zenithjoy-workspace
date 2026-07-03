@@ -9,12 +9,17 @@ on:
       - 'apps/dashboard/e2e/line02-account-role-unify.spec.ts'
       - 'sprints/07032332-line02-account-role-unify/**'
   workflow_dispatch:
+    inputs:
+      e2e_database_url:
+        description: 'E2E_DATABASE_URL (evaluator manual dispatch only)'
+        required: false
 
 concurrency:
   group: e2e-line02-account-role-unify-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
+  # PR CI job: ubuntu-latest + Vite dev server，无需 DB secrets
   e2e:
     name: Playwright — Line02 绑定机器列（ubuntu chromium）
     runs-on: ubuntu-latest
@@ -66,6 +71,47 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: playwright-line02-account-role-unify-artifacts
+          path: |
+            apps/dashboard/test-results/
+            apps/dashboard/screenshots/
+          retention-days: 7
+
+  # Evaluator job: windows-latest + 真实后端（仅 workflow_dispatch 手动触发）
+  e2e-windows:
+    name: Playwright — Line02 绑定机器列（windows-latest evaluator）
+    runs-on: windows-latest
+    if: github.event_name == 'workflow_dispatch'
+    timeout-minutes: 30
+
+    defaults:
+      run:
+        shell: pwsh
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install deps
+        run: npm ci
+
+      - name: Install Playwright Chromium
+        working-directory: apps/dashboard
+        run: npx playwright install chromium --with-deps
+
+      - name: Run E2E verify script
+        working-directory: sprints/07032332-line02-account-role-unify
+        env:
+          E2E_DATABASE_URL: ${{ secrets.E2E_DATABASE_URL || inputs.e2e_database_url }}
+        run: ./e2e-verify.ps1
+
+      - name: Upload artifacts on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-line02-windows-artifacts
           path: |
             apps/dashboard/test-results/
             apps/dashboard/screenshots/
