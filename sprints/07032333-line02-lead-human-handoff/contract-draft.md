@@ -1,4 +1,4 @@
-# Sprint Contract Draft (Round 3)
+# Sprint Contract Draft (Round 4)
 
 ## Response Schema（推导来源: api_registry 推导 + PRD 字面）
 
@@ -311,6 +311,8 @@ psql "$DATABASE_URL" -c \
   || { echo "FAIL: acquisition_orphan_replies 表不存在"; exit 1; }
 echo "✅ Scenario 1 通过"
 ```
+
+gate-allow: domain/db-no-time-window Scenario 1 三条 SELECT LIMIT 0 是 DDL 级 schema 存在性探测（返回 0 行），非聚合/计数，无数据涉及，不可能被历史数据冒充，不需要时间窗
 
 ### Scenario 2: acquisition_leads assignee 字段可读写 + 多租户隔离
 <!-- GOLDEN_SMOKE_SCENARIO: lead-assignee-field-and-isolation -->

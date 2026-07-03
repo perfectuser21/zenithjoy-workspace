@@ -53,6 +53,16 @@ journey_type: user_facing
   Test: manual:bash -c 'psql "$DATABASE_URL" -c "SELECT latest_reply, latest_reply_at, assignee, comment_replied_at FROM zenithjoy.acquisition_leads LIMIT 0" || { echo "FAIL: DB schema 缺新列"; exit 1; }; echo OK'
   期望: OK
 
+gate-allow: domain/db-no-time-window 此 BEHAVIOR 的 SELECT LIMIT 0 是 DDL schema 存在性探测（返回 0 行），非聚合/计数，无历史数据冒充风险
+
+- [ ] [BEHAVIOR] feishu_write_status 在 latest_reply 更新后为 success 或 failed（PRD Invariant: 防假成功）
+  Test: manual:bash -c 'STATUS=$(psql "$DATABASE_URL" -t -c "SELECT feishu_write_status FROM zenithjoy.acquisition_leads WHERE latest_reply IS NOT NULL AND updated_at > NOW() - interval '"'"'5 minutes'"'"' ORDER BY updated_at DESC LIMIT 1" | tr -d " \n"); [ "$STATUS" = "success" ] || [ "$STATUS" = "failed" ] || { echo "FAIL: feishu_write_status=$STATUS（不应为 pending 或 null）"; exit 1; }; echo OK'
+  期望: OK（Invariant [防假成功]：飞书写入结果必须落字段，不得维持 pending）
+
+- [ ] [BEHAVIOR] GET /api/acquisition/leads 无 X-Tenant-Id 头时返 401 + error=NO_TENANT（error path）
+  Test: manual:bash -c 'CODE=$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:3000/api/acquisition/leads"); [ "$CODE" = "401" ] || { echo "FAIL: 无租户头未返 401 (got $CODE)"; exit 1; }; BODY=$(curl -s "http://localhost:3000/api/acquisition/leads"); echo "$BODY" | jq -e ".error == \"NO_TENANT\"" || { echo "FAIL: error 字段非 NO_TENANT body=$BODY"; exit 1; }; echo OK'
+  期望: OK（PRD Response Schema Error HTTP 401 定义 + Invariant [租户隔离]）
+
 - [ ] [BEHAVIOR] acquisition_orphan_replies 孤儿回复可写入且带时间窗口可查（Invariant：孤儿不丢失）
   Test: manual:bash -c 'T=$(psql "$DATABASE_URL" -t -c "INSERT INTO zenithjoy.tenants (name,created_at) VALUES ('"'"'dod-orp-'$$''"'"',now()) RETURNING id" | tr -d " \n"); psql "$DATABASE_URL" -c "INSERT INTO zenithjoy.acquisition_orphan_replies (video_id,commenter_nickname,reply_text,captured_at,tenant_id) VALUES ('"'"'dod-vid'"'"','"'"'dod-nick'"'"','"'"'dod-text'"'"',NOW(),'"'"'$T'"'"')" || { echo "FAIL: 写入失败"; exit 1; }; C=$(psql "$DATABASE_URL" -t -c "SELECT count(*) FROM zenithjoy.acquisition_orphan_replies WHERE tenant_id='"'"'$T'"'"' AND captured_at > NOW() - interval '"'"'5 minutes'"'"'" | tr -d " "); [ "$C" -ge 1 ] || { echo "FAIL: count=$C"; exit 1; }; psql "$DATABASE_URL" -c "DELETE FROM zenithjoy.acquisition_orphan_replies WHERE tenant_id='"'"'$T'"'"'" > /dev/null; psql "$DATABASE_URL" -c "DELETE FROM zenithjoy.tenants WHERE id='"'"'$T'"'"'" > /dev/null; echo OK'
   期望: OK
