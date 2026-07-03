@@ -97,6 +97,14 @@ function makeFakePool(seed: {
           .map((a) => ({ id: a.id, lead_id: a.lead_id, account_label: a.account_label }));
         return { rows };
       }
+      // queued_remap SELECT (Step A: find unexpired queued rows to detect offline burners)
+      if (sql.includes('FROM zenithjoy.dm_assignments') && sql.includes("status = 'queued'") && sql.includes('scheduled_for >')) {
+        const nowIso = params[1] as string;
+        const rows = assignments
+          .filter((a) => a.tenant_id === params[0] && a.status === 'queued' && a.scheduled_for !== null && a.scheduled_for > nowIso)
+          .map((a) => ({ id: a.id, lead_id: a.lead_id, account_label: a.account_label }));
+        return { rows };
+      }
       // dedup check
       if (sql.includes('FROM zenithjoy.dm_assignments') && sql.includes('UNION ALL') && sql.includes('dm_outreach_log')) {
         const [tenant, leadId, label] = params as string[];
@@ -156,11 +164,24 @@ function makeFakePool(seed: {
         logs.push({ id: `l${idc++}`, tenant_id: tenant, account_label: label, lead_id: leadId, profile_url: profileUrl, status: 'dispatched', sent_at: new Date().toISOString() });
         return { rows: [] };
       }
-      // update assignment status (含 agent_id 更新)
+      // update assignment status (dispatched/limited/pending_dispatch/queued upgrade)
       if (sql.startsWith('UPDATE zenithjoy.dm_assignments SET status')) {
         const [assignId] = params as string[];
         const a = assignments.find((x) => x.id === assignId);
-        if (a) a.status = sql.includes("'dispatched'") ? 'dispatched' : 'limited';
+        if (a) {
+          if (sql.includes("'pending_dispatch'")) {
+            a.status = 'pending_dispatch';
+            a.account_label = '';
+            a.scheduled_for = null;
+          } else if (sql.includes("'queued'") && params.length >= 3) {
+            // Step D upgrade: pending_dispatch → queued (params: [id, label, scheduled, reason])
+            a.status = 'queued';
+            a.account_label = params[1] as string;
+            a.scheduled_for = params[2] as string;
+          } else {
+            a.status = sql.includes("'dispatched'") ? 'dispatched' : 'limited';
+          }
+        }
         return { rows: [] };
       }
       // cookieHealth sessions
