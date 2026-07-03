@@ -161,6 +161,66 @@ describe('DesktopLeaseBroker — 状态机（acquire / renew / release / watchdo
     b2.destroy();
   });
 
+  // ── preemption ─────────────────────────────────────────────────────────────
+
+  it('高优先级抢占（priority=10 抢占 priority=50）→ onYield 回调 + 2000ms 内强制授予', async () => {
+    const onYield = vi.fn();
+    const b4 = new DesktopLeaseBroker({
+      ttlMs: 10000,
+      watchdogIntervalMs: 5000,
+      onYield,
+      yieldWaitMs: 2000,
+    });
+
+    // priority=50 持有
+    const holding = await b4.acquire({ clientId: 'line04/listen_chat', priority: 50, ttlMs: 10000 });
+    expect(holding.granted).toBe(true);
+
+    // priority=10 发起抢占（promise 进入 yield 等待状态）
+    const preemptPromise = b4.acquire({ clientId: 'urgent_op', priority: 10, ttlMs: 10000 });
+
+    // Broker 在同步/微任务内立即调用 onYield 通知持有方
+    await Promise.resolve();
+    expect(onYield).toHaveBeenCalledWith(
+      expect.objectContaining({ clientId: 'line04/listen_chat' })
+    );
+
+    // 推进时钟超过 yield 等待上限（2000ms）→ Broker 强制清除持有方 lease，授予 priority=10
+    vi.advanceTimersByTime(2100);
+    const preemptResult = await preemptPromise;
+
+    expect(preemptResult.granted).toBe(true);
+    expect(typeof preemptResult.lease_id).toBe('string');
+    expect(preemptResult.lease_id!.length).toBeGreaterThan(0);
+
+    b4.destroy();
+  });
+
+  it('高优先级抢占（priority=10）持有方主动 release → 立即授予（不等满 2s）', async () => {
+    const onYield = vi.fn();
+    const b5 = new DesktopLeaseBroker({
+      ttlMs: 10000,
+      watchdogIntervalMs: 5000,
+      onYield,
+      yieldWaitMs: 2000,
+    });
+
+    // priority=50 持有
+    const holding = await b5.acquire({ clientId: 'line04/listen_chat', priority: 50, ttlMs: 10000 });
+    expect(holding.granted).toBe(true);
+
+    // priority=10 发起抢占
+    const preemptPromise = b5.acquire({ clientId: 'urgent_op', priority: 10, ttlMs: 10000 });
+    await Promise.resolve(); // 等 onYield 触发
+
+    // 持有方在 yield 等待内主动 release → priority=10 应立即得到授予
+    await b5.release({ leaseId: holding.lease_id!, clientId: 'line04/listen_chat' });
+    const preemptResult = await preemptPromise;
+    expect(preemptResult.granted).toBe(true);
+
+    b5.destroy();
+  });
+
   it('看门狗触发时调用 onBrainLog 回调（tenant_id 非空，符合租户隔离 invariant）', async () => {
     const onBrainLog = vi.fn();
     const b3 = new DesktopLeaseBroker({

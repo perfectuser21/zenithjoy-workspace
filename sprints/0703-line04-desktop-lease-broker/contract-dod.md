@@ -18,6 +18,9 @@ target_environment: windows_wechat
 - [ ] [ARTIFACT] `services/agent/src/desktop-lease-broker.ts` 含 TTL 看门狗（setInterval）逻辑
   Test: node -e "const c=require('fs').readFileSync('services/agent/src/desktop-lease-broker.ts','utf8');if(!c.includes('setInterval')&&!c.includes('watchdog'))process.exit(1);console.log('OK')"
 
+- [ ] [ARTIFACT] `services/agent/src/handlers/wechat-rpa.ts` 注册 HTTP 路由 `POST /api/agent/desktop-lease-broker/e2e-watchdog-probe`，返回 `{ok:true, lease_id}`（对应 Risks R1）
+  Test: node -e "const c=require('fs').readFileSync('services/agent/src/handlers/wechat-rpa.ts','utf8');if(!c.includes('e2e-watchdog-probe'))process.exit(1);console.log('OK')"
+
 - [ ] [ARTIFACT] `services/agent/src/handlers/wechat-rpa.ts` 含 `desktop_lease_*` IPC 转发代码
   Test: node -e "const c=require('fs').readFileSync('services/agent/src/handlers/wechat-rpa.ts','utf8');if(!c.includes('desktop_lease_acquire')||!c.includes('desktop_lease_release'))process.exit(1);console.log('OK')"
 
@@ -61,6 +64,14 @@ target_environment: windows_wechat
   Test: manual:bash -c 'cd /workspace/services/agent && npx vitest run ../../sprints/0703-line04-desktop-lease-broker/tests/desktop-lease-broker.test.ts --reporter=json 2>/dev/null | python3 -c "import sys,json;d=json.load(sys.stdin);passed=[t[\"fullName\"] for s in d[\"testResults\"] for t in s[\"testResults\"] if t[\"status\"]==\"passed\"];assert any(\"幂等\" in n or \"idempotent\" in n for n in passed),\"FAIL: release 幂等测试未通过 passed=\"+str(passed);print(\"OK idempotent release test passed\")"'
   期望: OK idempotent release test passed
 
+### B8 — 高优先级抢占（preemption — PRD Golden Path #2 覆盖）
+
+- [ ] [BEHAVIOR] priority=50 持有时 priority=10 到来 → onYield 被调用 + ≤2200ms 强制授予 granted:true
+  Test: manual:bash -c 'cd /workspace/services/agent && npx vitest run ../../sprints/0703-line04-desktop-lease-broker/tests/desktop-lease-broker.test.ts --reporter=json 2>/dev/null | python3 -c "import sys,json;d=json.load(sys.stdin);passed=[t[\"fullName\"] for s in d[\"testResults\"] for t in s[\"testResults\"] if t[\"status\"]==\"passed\"];assert any((\"高优先级抢占\" in n or \"preemption\" in n) for n in passed),\"FAIL: preemption 测试未通过 passed=\"+str(passed);print(\"OK preemption test passed\")"'
+  期望: OK preemption test passed
+
+---
+
 ### B6 — listen_chat dryrun IPC 集成（接缝断言，xian-rog 真验）
 
 > **接缝 1 断言**（真机验证才算 done；未真验标 `logic-done-pending`）
@@ -74,10 +85,10 @@ target_environment: windows_wechat
 
 > **接缝 2 断言**（需 Brain 在线 + xian-rog；未真验标 `logic-done-pending`）
 
-- [ ] [BEHAVIOR] acquire 后不 renew，≤15s Brain log 出现 desktop_lease_watchdog_triggered（带 3min 时间窗）
-  Test: manual:bash -c 'sleep 20; COUNT=$(PGPASSWORD="$PGPASSWORD" psql -h "${DB_HOST:-localhost}" -U "${DB_USER:-cecelia}" -d "${DB_NAME:-cecelia}" -t -c "SELECT count(*) FROM zenithjoy.agent_events WHERE module='"'"'desktop_lease'"'"' AND message='"'"'desktop_lease_watchdog_triggered'"'"' AND created_at > NOW() - interval '"'"'3 minutes'"'"'" 2>/dev/null | tr -d " "); [ "${COUNT:-0}" -ge 1 ] || { echo "FAIL: Brain log 无 watchdog_triggered（time window 3min）count=${COUNT:-0}"; exit 1; }; echo "OK count=$COUNT"'
+- [ ] [BEHAVIOR] watchdog probe 触发后 ≤10s Brain log 出现 desktop_lease_watchdog_triggered（tenant_id 非空 + 3min 时间窗）
+  Test: manual:bash -c 'BRAIN_URL="${BRAIN_URL:-http://localhost:5221}"; curl -sf "$BRAIN_URL/api/brain/health" | jq -e ".ok == true" || { echo "FAIL: Brain API 不可达"; exit 1; }; PROBE=$(curl -sf -X POST "$BRAIN_URL/api/agent/desktop-lease-broker/e2e-watchdog-probe" -H "Content-Type: application/json" -d '"'"'{"ttl_ms":2000}'"'"'); echo "$PROBE" | jq -e ".ok == true" || { echo "FAIL: probe ok=false resp=$PROBE"; exit 1; }; sleep 10; COUNT=$(PGPASSWORD="$PGPASSWORD" psql -h "${DB_HOST:-localhost}" -U "${DB_USER:-cecelia}" -d "${DB_NAME:-cecelia}" -t -c "SELECT count(*) FROM zenithjoy.agent_events WHERE module='"'"'desktop_lease'"'"' AND message='"'"'desktop_lease_watchdog_triggered'"'"' AND context->>'"'"'tenant_id'"'"' IS NOT NULL AND created_at > NOW() - interval '"'"'3 minutes'"'"'" 2>/dev/null | tr -d " "); [ "${COUNT:-0}" -ge 1 ] || { echo "FAIL: Brain log 无 watchdog_triggered（tenant_id 非空，time window 3min）count=${COUNT:-0}"; exit 1; }; echo "OK count=$COUNT"'
   期望: OK count=<N≥1>
-  接缝: 真机 xian-rog 验证（Brain API 在线）
+  接缝: 真机 xian-rog 验证（Brain API 在线，e2e-watchdog-probe 端点已实现）
 
 ---
 

@@ -1,4 +1,4 @@
-# Sprint Contract Draft (Round 1)
+# Sprint Contract Draft (Round 2)
 
 ## Response Schema（推导来源: N/A — 任务无 HTTP 响应）
 
@@ -12,7 +12,15 @@
 | listen_chat → Broker | `desktop_lease_renew` | `{ok:boolean, reason?:string}` |
 | listen_chat → Broker | `desktop_lease_release` | `{ok:boolean}` |
 
-Brain log 写入（watchdog 触发时）：`POST /api/agent/events` → `zenithjoy.agent_events`，字段 `module='desktop_lease'`，`message='desktop_lease_watchdog_triggered'`，`kind='log'`，`level='warn'`，`context.tenant_id=<tenant_id>`
+Brain log 写入（watchdog 触发时）：`POST /api/agent/events` → `zenithjoy.agent_events`，字段 `module='desktop_lease'`，`message='desktop_lease_watchdog_triggered'`，`kind='log'`，`level='warn'`，`context.tenant_id=<tenant_id>`（**非空**，租户隔离 invariant）
+
+**E2E 测试专用 HTTP 端点**（Generator 必须实现，仅用于 E2E watchdog 触发）：
+
+| 端点 | 方法 | 请求 | 响应 | 说明 |
+|---|---|---|---|---|
+| `/api/agent/desktop-lease-broker/e2e-watchdog-probe` | POST | `{"ttl_ms": 2000}` | `{"ok":true, "lease_id":"<uuid>"}` | 内部 acquire 一个短 TTL probe lease，不 renew，让看门狗 ≤7s 内自然触发；禁止在生产主流程中调用 |
+
+> **`[AI_ADDED]`** — 原因：消除 Reviewer 指出的"Scenario 3 触发命令是注释占位符"，评估侧需要真实 HTTP curl，不允许注释代替触发动作。
 
 ---
 
@@ -57,6 +65,38 @@ cd /workspace/services/agent && npx vitest run ../../sprints/0703-line04-desktop
 ```
 
 **硬阈值**: `granted === true`，`lease_id` 为非空字符串，`expires_at > Date.now()`，响应时间 ≤200ms（本地进程内，无网络）
+
+---
+
+### Step 1.5: 高优先级抢占——priority=10 到来 → Broker 发 yield → ≤2200ms 强制授予
+
+**来源**: `[FROM_PRD]` — PRD Golden Path #2：「高优先级抢占 → 向持有方发 yield，等待≤2s 后强制授予」
+
+**可观测行为**:
+- priority=50（listen_chat）正在持有时，priority=10（紧急操作）发 acquire
+- Broker 立即通过 `onYield` 回调通知持有方（priority=50）让位
+- 等待最多 2000ms（`yieldWaitMs`）：
+  - **持有方在 2000ms 内 release** → Broker 立即授予 priority=10
+  - **2000ms 超时持有方未 release** → Broker 强制清除 lease，授予 priority=10
+- priority=10 最终收到 `{granted:true, lease_id:..., expires_at:...}`
+- priority=50 的持有方收到 yield 通知后应停止操作（listen_chat 行为约束，不在本 Sprint 断言，仅确保 Broker 侧 onYield 被调用）
+
+**验证命令**:
+```bash
+cd /workspace/services/agent && npx vitest run ../../sprints/0703-line04-desktop-lease-broker/tests/desktop-lease-broker.test.ts --reporter=verbose 2>&1 | grep -E "✓.*高优先级抢占|✓.*preemption|✗|FAIL" | head -20
+# 期望：出现 "✓ 高优先级抢占（priority=10 抢占 priority=50）→ onYield 回调 + 2000ms 内强制授予" 行，无 ✗ 或 FAIL
+```
+
+**硬阈值**:
+- `onYield` 回调被调用（入参含 `clientId: 'line04/listen_chat'`）
+- priority=10 acquire 响应时间：超时分支 **2000ms ≤ elapsed ≤ 2200ms**（fake timers 推进 2100ms 后 resolve）
+- priority=10 `granted === true`，`lease_id` 非空
+
+**可执行时间断言**:
+```bash
+# 在 vitest 内用 fake timers 推进 2100ms，断言 resolve 时 vi.getFakeTimerCount() 推进了 ≥2000ms
+# （见 tests/desktop-lease-broker.test.ts preemption 测试段）
+```
 
 ---
 
@@ -106,14 +146,30 @@ cd /workspace/services/agent && npx vitest run ../../sprints/0703-line04-desktop
 
 **验证命令（接缝断言，xian-rog 真机 — Brain 在线时）**:
 ```bash
-# 接缝 2 验证：psql 带时间窗口
-COUNT=$(PGPASSWORD=$PGPASSWORD psql -h $DB_HOST -U $DB_USER -d $DB_NAME -t -c \
-  "SELECT count(*) FROM zenithjoy.agent_events WHERE module='desktop_lease' AND message='desktop_lease_watchdog_triggered' AND created_at > NOW() - interval '3 minutes'" | tr -d ' ')
-[ "$COUNT" -ge 1 ] || { echo "FAIL: Brain log 无 watchdog_triggered 记录（time window 3min）count=$COUNT"; exit 1; }
+# 接缝 2 验证：先调 e2e-watchdog-probe 触发（ttl_ms=2000），再等 ≤10s，最后 psql 带时间窗口+tenant_id 断言
+BRAIN_URL="${BRAIN_URL:-http://localhost:5221}"
+
+# Step A: 真实触发（不是注释，不是 sleep 占位）
+PROBE_RESP=$(curl -sf -X POST "$BRAIN_URL/api/agent/desktop-lease-broker/e2e-watchdog-probe" \
+  -H "Content-Type: application/json" \
+  -d '{"ttl_ms":2000}')
+echo "$PROBE_RESP" | jq -e '.ok == true' || { echo "FAIL: probe 未返回 ok:true resp=$PROBE_RESP"; exit 1; }
+echo "watchdog probe 已触发，等待 ≤10s..."
+sleep 10
+
+# Step B: 断言 Brain log（时间窗口 + tenant_id 非空）
+COUNT=$(PGPASSWORD="$PGPASSWORD" psql -h "${DB_HOST:-localhost}" -U "${DB_USER:-cecelia}" \
+  -d "${DB_NAME:-cecelia}" -t -c \
+  "SELECT count(*) FROM zenithjoy.agent_events \
+   WHERE module='desktop_lease' \
+   AND message='desktop_lease_watchdog_triggered' \
+   AND context->>'tenant_id' IS NOT NULL \
+   AND created_at > NOW() - interval '3 minutes'" | tr -d ' ')
+[ "${COUNT:-0}" -ge 1 ] || { echo "FAIL: Brain log 无 watchdog_triggered（含 tenant_id，time window 3min）count=${COUNT:-0}"; exit 1; }
 echo "OK watchdog brain log count=$COUNT"
 ```
 
-**硬阈值**: 看门狗触发时间 ≤15s，Brain log `count ≥ 1`（3 分钟时间窗口内），log 中 `tenant_id` 非空（租户隔离 invariant）
+**硬阈值**: 看门狗触发时间 ≤15s（probe ttl_ms=2000 + watchdog interval 5s ≤ 7s），Brain log `count ≥ 1`（3 分钟时间窗口内），log 中 `context.tenant_id` 非空（租户隔离 invariant）
 
 ---
 
@@ -155,6 +211,16 @@ cd /workspace/services/agent && npx vitest run ../../sprints/0703-line04-desktop
 
 ---
 
+## Risks（风险与 Mitigation）
+
+| # | 风险 | 影响 | Mitigation（合同要求） |
+|---|---|---|---|
+| R1 | **e2e-watchdog-probe 端点未实现**：Generator 未在 wechat-rpa.ts 注册此 HTTP 路由，Scenario 3 curl 直接 404 → evaluator FAIL | E2E Step 4 完全不可验证 | DoD `[ARTIFACT]` 明确要求此端点存在且返回 `{ok:true}`；Generator 必须实现，缺失则 ARTIFACT FAIL |
+| R2 | **agent core 未启动时 Scenario 2 IPC 不可达**：xian-rog runner 启动 E2E 脚本时 Broker 进程尚未拉起，listen_chat.py dryrun IPC 连不上 → 超时假绿或异常退出 | 接缝 1 断言被环境问题遮蔽，不是代码问题 | Scenario 2 脚本前置 `curl -sf $BRAIN_URL/api/brain/health` 健康检查；失败则 `echo "FAIL: agent core 未就绪"; exit 1`（不静默跳过） |
+| R3 | **`zenithjoy.agent_events` 表 `context` 字段兼容性**：若 Generator 写 `context.tenant_id` 时用 JSON 字符串而非 JSONB，`context->>'tenant_id'` 返回 NULL → Scenario 3 psql 断言 count=0 | 看门狗功能正确但 DB 写法不合格 | 合同明确要求：`context` 字段类型为 JSONB，Generator 写入必须用 `context = $1::jsonb`；BEHAVIOR B7 包含 `context->>'tenant_id' IS NOT NULL` 断言，Generator 必须确保非空 |
+
+---
+
 ## E2E 验收（final-e2e — target_environment: windows_wechat，xian-rog self-hosted runner）
 
 **journey_type**: autonomous
@@ -193,9 +259,14 @@ echo "✅ Scenario 1 broker-unit-tests 通过"
 set -e
 # 接缝 1：listen_chat.py dryrun 注入消息，验证 acquire/release 日志（需 agent core 已启动）
 # 在 xian-rog 执行，AGENT_DIR 由 xian-rog 环境提供
+BRAIN_URL="${BRAIN_URL:-http://localhost:5221}"
 AGENT_DIR="${AGENT_DIR:-$LOCALAPPDATA\\zenithjoy-agent}"
 PYTHON_EXE="$AGENT_DIR/python-embedded/python.exe"
 LISTEN_CHAT="$AGENT_DIR/wechat-rpa/listen_chat.py"
+
+# 前置：agent core 健康检查（对应 Risk R2，IPC 不可达时快速 FAIL 而非超时假绿）
+curl -sf "$BRAIN_URL/api/brain/health" | jq -e '.ok == true' \
+  || { echo "FAIL: agent core 未就绪，IPC Broker 不可达（$BRAIN_URL）"; exit 1; }
 
 STDERR_OUT=$("$PYTHON_EXE" "$LISTEN_CHAT" --dryrun \
   --inject-message '{"sender":"E2E测试客户","wechat_id":"wxid_e2e_test","content":"自动测试消息"}' \
@@ -218,32 +289,35 @@ echo "✅ Scenario 2 dryrun-acquire-release 通过"
 ```bash
 #!/bin/bash
 set -e
-# 接缝 2：看门狗 Brain log（带时间窗口防历史数据造假）
-# 前提：Brain API 在 xian-rog 上可达（$BRAIN_URL），并且 agent core 已启动 Broker
-# 触发：通过 Brain API POST 一个 acquire_no_renew 测试任务（Broker 内部 watchdog 等超期）
+# 接缝 2：看门狗 Brain log（带时间窗口 + tenant_id 断言，防历史数据造假）
+# 前提：Brain API 在 xian-rog 上可达（$BRAIN_URL），agent core 已启动 Broker
 
-START_TS=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-echo "脚本启动时间: $START_TS"
+BRAIN_URL="${BRAIN_URL:-http://localhost:5221}"
 
-# 触发 watchdog：通过测试端点让 Broker acquire 一个 lease 且不 renew
-# （Generator 需实现 Broker 的 __e2e_watchdog_probe 测试入口，或通过 IPC 发 acquire 后等 TTL 超期）
-# 实际命令由 Generator 根据实现细节填写；此处为参考模板：
-# curl -sf -X POST "${BRAIN_URL}/api/agent/desktop-lease-broker/e2e-watchdog-probe" \
-#   -H "x-license-key: $TEST_LICENSE_KEY" | jq -e '.triggered == true' || true
+# Step 1: 前置健康检查（对应 Risk R2）
+curl -sf "$BRAIN_URL/api/brain/health" | jq -e '.ok == true' \
+  || { echo "FAIL: Brain API 不可达 $BRAIN_URL"; exit 1; }
 
-# 等待看门狗触发（TTL=10s + 轮询=5s，≤15s 内触发）
-echo "等待看门狗触发（≤20s）..."
-sleep 20
+# Step 2: 真实触发 watchdog probe（ttl_ms=2000，Broker 不 renew，看门狗 ≤7s 内触发）
+PROBE_RESP=$(curl -sf -X POST "$BRAIN_URL/api/agent/desktop-lease-broker/e2e-watchdog-probe" \
+  -H "Content-Type: application/json" \
+  -d '{"ttl_ms":2000}')
+echo "$PROBE_RESP" | jq -e '.ok == true' \
+  || { echo "FAIL: watchdog probe 未返回 ok:true resp=$PROBE_RESP"; exit 1; }
+echo "watchdog probe 触发成功，等待 ≤10s 看门狗轮询..."
+sleep 10
 
-# 查 Brain log（带时间窗口防历史数据冒充）
+# Step 3: 断言 Brain log（时间窗口 3min + tenant_id 非空，对应 Risk R3）
 COUNT=$(PGPASSWORD="$PGPASSWORD" psql -h "${DB_HOST:-localhost}" -U "${DB_USER:-cecelia}" \
   -d "${DB_NAME:-cecelia}" -t -c \
   "SELECT count(*) FROM zenithjoy.agent_events \
    WHERE module='desktop_lease' \
    AND message='desktop_lease_watchdog_triggered' \
+   AND context->>'tenant_id' IS NOT NULL \
    AND created_at > NOW() - interval '3 minutes'" 2>/dev/null | tr -d ' ')
 
-[ "$COUNT" -ge 1 ] || { echo "FAIL: Brain log 无 watchdog_triggered 记录（time window 3min）count=${COUNT:-0}"; exit 1; }
+[ "${COUNT:-0}" -ge 1 ] \
+  || { echo "FAIL: Brain log 无 watchdog_triggered（tenant_id 非空，time window 3min）count=${COUNT:-0}"; exit 1; }
 echo "✅ Scenario 3 watchdog-brain-log 通过（count=$COUNT）"
 ```
 
@@ -301,10 +375,15 @@ if ($stderrLines -match "\[desktop_lease\] acquire failed") {
 Write-Host "✅ Step 3 dryrun IPC 集成验证通过"
 
 # 4. 看门狗 Brain log — 接缝 2 验证（TTL 超期后自动释放写 log）
-Write-Host "▶ Step 4: 等待看门狗触发并验证 Brain log..."
-# 触发 watchdog probe（Generator 实现 /api/agent/desktop-lease-broker/e2e-watchdog-probe 端点，
-# 或通过 IPC 发 acquire 不 renew 等超期；此处等待 20s TTL+watchdog 轮询完成）
-Start-Sleep -Seconds 20
+Write-Host "▶ Step 4: 触发 watchdog probe 并验证 Brain log..."
+
+# Step 4a: 真实触发 watchdog probe（对应 Risks R1 — 端点必须存在）
+$probeBody = '{"ttl_ms":2000}'
+$probeResp = Invoke-RestMethod -Uri "$BrainUrl/api/agent/desktop-lease-broker/e2e-watchdog-probe" `
+  -Method POST -ContentType "application/json" -Body $probeBody -TimeoutSec 10
+if (-not $probeResp.ok) { throw "FAIL: watchdog probe 返回 ok=false resp=$($probeResp | ConvertTo-Json)" }
+Write-Host "watchdog probe 已触发 lease_id=$($probeResp.lease_id)，等待 ≤10s 看门狗触发..."
+Start-Sleep -Seconds 10
 
 # 查 Brain log（psql 带时间窗口）
 $pgEnv = @{
@@ -313,7 +392,7 @@ $pgEnv = @{
   PGUSER     = if ($env:DB_USER) { $env:DB_USER } else { "cecelia" }
   PGDATABASE = if ($env:DB_NAME) { $env:DB_NAME } else { "cecelia" }
 }
-$query = "SELECT count(*) FROM zenithjoy.agent_events WHERE module='desktop_lease' AND message='desktop_lease_watchdog_triggered' AND created_at > NOW() - interval '3 minutes'"
+$query = "SELECT count(*) FROM zenithjoy.agent_events WHERE module='desktop_lease' AND message='desktop_lease_watchdog_triggered' AND context->>'tenant_id' IS NOT NULL AND created_at > NOW() - interval '3 minutes'"
 $countStr = (psql -t -c $query 2>/dev/null).Trim()
 
 if ([int]$countStr -lt 1) {
