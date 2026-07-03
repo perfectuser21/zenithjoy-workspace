@@ -42,6 +42,9 @@ target_environment: windows_cloud
 - [ ] [ARTIFACT] `.github/workflows/e2e-line02-account-role-unify-windows.yml` workflow 文件存在，含 `windows-latest` runner
   Test: node -e "const c=require('fs').readFileSync('.github/workflows/e2e-line02-account-role-unify-windows.yml','utf8');if(!c.includes('windows-latest'))process.exit(1);console.log('OK')"
 
+- [ ] [ARTIFACT] `sprints/07032332-line02-account-role-unify/e2e-verify.ps1` 存在，含 API server 启动（port 3000）+ Playwright 调用
+  Test: node -e "const c=require('fs').readFileSync('sprints/07032332-line02-account-role-unify/e2e-verify.ps1','utf8');if(!c.includes('ApiPort'))process.exit(1);if(!c.includes('playwright'))process.exit(1);if(!c.includes('3000'))process.exit(1);console.log('OK')"
+
 ---
 
 ## BEHAVIOR 条目（内嵌 manual:bash，evaluator 直接跑）
@@ -87,7 +90,7 @@ target_environment: windows_cloud
 
 ---
 
-## 自查核验记录（Round 5 proposer 完成）
+## 自查核验记录（Round 6 proposer 完成）
 
 1. Response Schema 8 字段：`agent_hostname` / `agent_nickname`（PRD 明确）；`account_label` / `role` / `status` / `bound_at` / `created_at` / `account_nickname`（现有代码字段）✅
 2. jq -e 断言对齐 Response Schema 全字段 — `role == "burner"` / `has("account_label")` / `has("status")` / `has("agent_hostname")` / `has("agent_nickname")` ✅；`bound_at`/`created_at`/`account_nickname` 可 null 辅助字段由 BEHAVIOR 2 整体 has() 链覆盖 ✅

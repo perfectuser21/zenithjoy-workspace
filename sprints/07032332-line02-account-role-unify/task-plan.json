@@ -20,6 +20,7 @@
         "[ARTIFACT] apps/api/scripts/account-role-migrate.js 存在且含 dry-run + 三值映射逻辑",
         "[ARTIFACT] apps/dashboard/e2e/line02-account-role-unify.spec.ts 存在且无 page.route() 且含 machine-hostname-cell",
         "[ARTIFACT] .github/workflows/e2e-line02-account-role-unify-windows.yml 存在且含 windows-latest runner",
+        "[ARTIFACT] sprints/07032332-line02-account-role-unify/e2e-verify.ps1 存在且含 API server 启动（port 3000）+ Playwright 调用",
         "[BEHAVIOR:E2E] Playwright 访问 /area/acquisition/accounts，'绑定机器'列头 toBeVisible，单元格含 hostname 或'—'"
       ],
       "files": [

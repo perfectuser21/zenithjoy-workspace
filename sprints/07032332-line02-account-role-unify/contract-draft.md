@@ -1,4 +1,4 @@
-# Sprint Contract Draft (Round 5)
+# Sprint Contract Draft (Round 6)
 
 ## Response Schema（推导来源: 当前代码 agent-burner.ts:161-186 + PRD 明确字段名）
 
@@ -334,6 +334,7 @@ jobs:
 
 <!-- GOLDEN_SMOKE_ABILITY_SLUG: line02-account-role-unify -->
 <!-- GOLDEN_SMOKE_TARGET_ENV: local_api -->
+<!-- NOTE: smoke scenarios only (local_api curl+psql); full E2E target=windows_cloud (see e2e-verify.ps1) -->
 
 ### Scenario 1: api-sessions-has-agent-hostname
 <!-- GOLDEN_SMOKE_SCENARIO: api-sessions-has-agent-hostname -->
