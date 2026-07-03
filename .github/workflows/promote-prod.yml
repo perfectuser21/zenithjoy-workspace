@@ -52,62 +52,75 @@ jobs:
           version: latest
 
       - name: Promote via SSH (blue_green_deploy：验 staging → 原子切 current → 重启 :5200 → 失败自动回滚)
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.US_MAC_TAILSCALE_IP }}
-          username: ${{ secrets.US_MAC_USER }}
-          key: ${{ secrets.US_MAC_SSH_KEY }}
-          port: 22
-          script_stop: true
-          command_timeout: 20m
-          script: |
-            set -euo pipefail
-            REPO=/Users/administrator/perfect21/zenithjoy
-            INPUT_SHA="${{ github.event.inputs.sha }}"
+        env:
+          SSH_KEY: ${{ secrets.US_MAC_SSH_KEY }}
+          SSH_HOST: ${{ secrets.US_MAC_TAILSCALE_IP }}
+          SSH_USER: ${{ secrets.US_MAC_USER }}
+          INPUT_SHA: ${{ github.event.inputs.sha }}
+        timeout-minutes: 25
+        run: |
+          # 用宿主机 bash 直接 ssh（appleboy/ssh-action 在 Docker，看不到 Tailscale 网络）
+          KEY_FILE=$(mktemp)
+          printf '%s\n' "$SSH_KEY" > "$KEY_FILE"
+          chmod 600 "$KEY_FILE"
 
-            # shellcheck source=/dev/null
-            source "$REPO/.github/workflows/scripts/deploy-lib.sh"
+          ssh -o StrictHostKeyChecking=no \
+              -o ConnectTimeout=30 \
+              -o ServerAliveInterval=60 \
+              -i "$KEY_FILE" \
+              -p 22 \
+              "${SSH_USER}@${SSH_HOST}" \
+              bash -s -- "$INPUT_SHA" << 'REMOTE_EOF'
+          set -euo pipefail
+          INPUT_SHA="$1"
+          REPO=/Users/administrator/perfect21/zenithjoy
 
-            export ZJ_REPO="$REPO"
-            export ZJ_API_DIR="$REPO/apps/api"
-            export ZJ_PROD_PORT=5200
-            export ZJ_STAGING_PORT=5201
-            export ZJ_PROD_LABEL=com.zenithjoy.api
-            export ZJ_STAGING_LABEL=com.zenithjoy.api.staging
-            export ZJ_STAGING_DB=zenithjoy_test
-            export ZJ_PROD_PLIST="$HOME/Library/LaunchAgents/com.zenithjoy.api.plist"
-            export ZJ_NODE=/opt/homebrew/bin/node
-            export ZJ_RELEASES_DIR="${ZJ_RELEASES_DIR:-/Users/administrator/zenithjoy-releases}"
-            export ZJ_KEEP_RELEASES="${ZJ_KEEP_RELEASES:-5}"
-            export BRAIN_URL="${BRAIN_URL:-http://localhost:5221}"
-            mkdir -p "$ZJ_RELEASES_DIR"
+          # shellcheck source=/dev/null
+          source "$REPO/.github/workflows/scripts/deploy-lib.sh"
 
-            # 目标 sha：输入为空 → 用常驻 staging 当前指向的 release sha（即刚验过的候选）
-            TARGET_SHA="$INPUT_SHA"
-            if [ -z "$TARGET_SHA" ]; then
-              STAGING_LINK="$ZJ_RELEASES_DIR/staging"
-              if [ -L "$STAGING_LINK" ]; then
-                TARGET_SHA="$(basename "$(readlink "$STAGING_LINK")")"
-              fi
+          export ZJ_REPO="$REPO"
+          export ZJ_API_DIR="$REPO/apps/api"
+          export ZJ_PROD_PORT=5200
+          export ZJ_STAGING_PORT=5201
+          export ZJ_PROD_LABEL=com.zenithjoy.api
+          export ZJ_STAGING_LABEL=com.zenithjoy.api.staging
+          export ZJ_STAGING_DB=zenithjoy_test
+          export ZJ_PROD_PLIST="$HOME/Library/LaunchAgents/com.zenithjoy.api.plist"
+          export ZJ_NODE=/opt/homebrew/bin/node
+          export ZJ_RELEASES_DIR="${ZJ_RELEASES_DIR:-/Users/administrator/zenithjoy-releases}"
+          export ZJ_KEEP_RELEASES="${ZJ_KEEP_RELEASES:-5}"
+          export BRAIN_URL="${BRAIN_URL:-http://localhost:5221}"
+          mkdir -p "$ZJ_RELEASES_DIR"
+
+          # 目标 sha：输入为空 → 用常驻 staging 当前指向的 release sha（即刚验过的候选）
+          TARGET_SHA="$INPUT_SHA"
+          if [ -z "$TARGET_SHA" ]; then
+            STAGING_LINK="$ZJ_RELEASES_DIR/staging"
+            if [ -L "$STAGING_LINK" ]; then
+              TARGET_SHA="$(basename "$(readlink "$STAGING_LINK")")"
             fi
-            if [ -z "$TARGET_SHA" ]; then
-              echo "❌ 取不到 promote 目标 sha（输入为空且 releases/staging 软链不存在）"; exit 1
-            fi
-            echo "promote 目标 sha=${TARGET_SHA}"
+          fi
+          if [ -z "$TARGET_SHA" ]; then
+            echo "❌ 取不到 promote 目标 sha（输入为空且 releases/staging 软链不存在）"; exit 1
+          fi
+          echo "promote 目标 sha=${TARGET_SHA}"
 
-            # blue_green_deploy 的 hook 指向 mmv 真实实现：
-            #   - staging 复验仍走 staging_deploy_slot+staging_verify（再验一遍刚验过的，便宜保险）
-            #   - promote/rollback 走 release 隔离版（原子切 current / 软链回上一 release）
-            export BG_DEPLOY_STAGING_FN=staging_deploy_slot
-            export BG_VERIFY_STAGING_FN=staging_verify
-            export BG_RECORD_ANCHOR_FN=staging_record_anchor
-            export BG_PROMOTE_FN=staging_promote
-            export BG_VERIFY_PROD_FN=staging_verify_prod
-            export BG_ROLLBACK_FN=staging_rollback
-            export BG_DESTROY_STAGING_FN=staging_destroy_slot
-            export BG_ALERT_P0_FN=staging_alert_p0
+          # blue_green_deploy 的 hook 指向 mmv 真实实现：
+          #   - staging 复验仍走 staging_deploy_slot+staging_verify（再验一遍刚验过的，便宜保险）
+          #   - promote/rollback 走 release 隔离版（原子切 current / 软链回上一 release）
+          export BG_DEPLOY_STAGING_FN=staging_deploy_slot
+          export BG_VERIFY_STAGING_FN=staging_verify
+          export BG_RECORD_ANCHOR_FN=staging_record_anchor
+          export BG_PROMOTE_FN=staging_promote
+          export BG_VERIFY_PROD_FN=staging_verify_prod
+          export BG_ROLLBACK_FN=staging_rollback
+          export BG_DESTROY_STAGING_FN=staging_destroy_slot
+          export BG_ALERT_P0_FN=staging_alert_p0
 
-            blue_green_deploy "$TARGET_SHA"
+          blue_green_deploy "$TARGET_SHA"
+          REMOTE_EOF
+
+          rm -f "$KEY_FILE"
 
   notify-failure:
     name: Notify Brain on promote failure
