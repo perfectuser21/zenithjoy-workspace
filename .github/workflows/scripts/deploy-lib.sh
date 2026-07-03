@@ -853,7 +853,8 @@ staging_promote() {
   local _penv="${HOME}/zenithjoy-prod-env.sh"
   [ -f "$_penv" ] || _penv="/tmp/prod-env.sh"
   if [ -f "$_penv" ]; then
-    set -a; source "$_penv" 2>/dev/null || true; set +a  # shellcheck disable=SC1090
+    # shellcheck disable=SC1090
+    set -a; source "$_penv" 2>/dev/null || true; set +a
   fi
   local _node="${ZJ_NODE:-/opt/homebrew/bin/node}"
   nohup "$_node" "${ZJ_RELEASES_DIR}/current/dist/index.js" >> /tmp/prod-main.log 2>&1 &
@@ -901,7 +902,8 @@ staging_rollback() {
   local _rpenv="${HOME}/zenithjoy-prod-env.sh"
   [ -f "$_rpenv" ] || _rpenv="/tmp/prod-env.sh"
   if [ -f "$_rpenv" ]; then
-    set -a; source "$_rpenv" 2>/dev/null || true; set +a  # shellcheck disable=SC1090
+    # shellcheck disable=SC1090
+    set -a; source "$_rpenv" 2>/dev/null || true; set +a
   fi
   local _rnode="${ZJ_NODE:-/opt/homebrew/bin/node}"
   nohup "$_rnode" "${ZJ_RELEASES_DIR}/current/dist/index.js" >> /tmp/prod-main.log 2>&1 &
