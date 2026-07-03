@@ -267,6 +267,7 @@ acquisitionRouter.get('/videos/:videoId/leads', tenantContextOptional, async (re
 });
 
 // Agent 轮询端点 — 返回待处理的 collect 任务（来自 collect/start 写入的 acquisition_collect_tasks）
+// stage_1_done 任务也返回（Stage 2 重试，含视频 URL 列表）
 acquisitionRouter.get('/pending-collect-tasks', async (_req: Request, res: Response) => {
   if (process.env.VITEST) {
     return res.status(200).json({ tasks: [], total: 0 });
@@ -278,28 +279,49 @@ acquisitionRouter.get('/pending-collect-tasks', async (_req: Request, res: Respo
       id: string;
       keywords: string[];
       tenant_id: string;
+      status: string;
     }>(
-      `SELECT id, keywords, tenant_id
+      `SELECT id, keywords, tenant_id, status
          FROM zenithjoy.acquisition_collect_tasks
-        WHERE status = 'pending'
+        WHERE status IN ('pending', 'stage_1_done')
         ORDER BY created_at ASC
         LIMIT 5`
     );
 
-    if (rows.length > 0) {
-      const ids = rows.map((r) => r.id);
+    // 只把 pending 任务标为 running；stage_1_done 保持不动（等 Stage 2 回报 terminal=done 后才转 done）
+    const pendingIds = rows.filter((r) => r.status === 'pending').map((r) => r.id);
+    if (pendingIds.length > 0) {
       await pool.query(
         `UPDATE zenithjoy.acquisition_collect_tasks
             SET status = 'running', updated_at = NOW()
           WHERE id = ANY($1::uuid[])`,
-        [ids]
+        [pendingIds]
       );
+    }
+
+    // 对 stage_1_done 的任务，补充已存视频 URL（agent 直接跑 Stage 2）
+    const stage1DoneIds = rows.filter((r) => r.status === 'stage_1_done').map((r) => r.id);
+    const videoMap: Record<string, string[]> = {};
+    if (stage1DoneIds.length > 0) {
+      const vRes = await pool.query<{ task_id: string; video_id: string }>(
+        `SELECT task_id, video_id FROM zenithjoy.acquisition_collect_videos
+          WHERE task_id = ANY($1::uuid[])
+          ORDER BY created_at ASC`,
+        [stage1DoneIds]
+      );
+      for (const v of vRes.rows) {
+        const url = `https://www.douyin.com/video/${v.video_id}`;
+        if (!videoMap[v.task_id]) videoMap[v.task_id] = [];
+        videoMap[v.task_id].push(url);
+      }
     }
 
     const tasks = rows.map((r) => ({
       task_id: r.id,
       tenant_id: r.tenant_id,
       keywords: Array.isArray(r.keywords) ? r.keywords : [],
+      stage: r.status === 'stage_1_done' ? ('stage_2' as const) : ('stage_1' as const),
+      video_urls: r.status === 'stage_1_done' ? (videoMap[r.id] ?? []) : undefined,
     }));
 
     return res.status(200).json({ tasks, total: tasks.length });
