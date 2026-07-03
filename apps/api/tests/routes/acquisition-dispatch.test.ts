@@ -68,14 +68,14 @@ function makeFakePool(seed: {
         if (lead) lead.relevance_score = Number(params[1]);
         return { rows: [] };
       }
-      // burners
+      // burners (upgraded: params[2]=nowIso for heartbeat filter — old fake ignores heartbeat)
       if (sql.includes('FROM zenithjoy.agent_platform_sessions s') && sql.includes("s.role = 'burner'")) {
         const limit = Number(params[1]);
         const labels = Array.from(new Set(
           sessions.filter((s) => s.tenant_id === params[0] && s.role === 'burner' && s.status === 'active')
             .map((s) => s.account_label)
         )).sort().slice(0, limit);
-        return { rows: labels.map((account_label) => ({ account_label })) };
+        return { rows: labels.map((account_label) => ({ account_label, day_count: 0 })) };
       }
       // scored leads desc
       if (sql.includes('FROM zenithjoy.acquisition_leads') && sql.includes('relevance_score IS NOT NULL')) {
@@ -91,6 +91,12 @@ function makeFakePool(seed: {
         const l = logs.filter((x) => x.tenant_id === tenant && x.account_label === label).length;
         return { rows: [{ used: a + l }] };
       }
+      // pending_dispatch SELECT (Step C of upgraded buildAssignments)
+      if (sql.includes('FROM zenithjoy.dm_assignments') && sql.includes("status = 'pending_dispatch'")) {
+        const rows = assignments.filter((a) => a.tenant_id === params[0] && a.status === 'pending_dispatch')
+          .map((a) => ({ id: a.id, lead_id: a.lead_id, account_label: a.account_label }));
+        return { rows };
+      }
       // dedup check
       if (sql.includes('FROM zenithjoy.dm_assignments') && sql.includes('UNION ALL') && sql.includes('dm_outreach_log')) {
         const [tenant, leadId, label] = params as string[];
@@ -98,12 +104,21 @@ function makeFakePool(seed: {
         const inL = logs.some((x) => x.tenant_id === tenant && x.lead_id === leadId && x.account_label === label);
         return { rows: inA || inL ? [{ '?column?': 1 }] : [] };
       }
-      // insert assignment
+      // insert assignment (pending_dispatch path: 2 params; queued path: 5 params with dispatch_reason)
       if (sql.startsWith('INSERT INTO zenithjoy.dm_assignments')) {
-        const [tenant, leadId, label, scheduled] = params as string[];
-        const exists = assignments.some((x) => x.tenant_id === tenant && x.lead_id === leadId && x.account_label === label);
-        if (!exists) {
-          assignments.push({ id: `a${idc++}`, tenant_id: tenant, lead_id: leadId, account_label: label, status: 'queued', scheduled_for: scheduled, created_at: new Date().toISOString() });
+        const isPending = sql.includes("'pending_dispatch'");
+        if (isPending) {
+          const [tenant, leadId] = params as string[];
+          const exists = assignments.some((x) => x.tenant_id === tenant && x.lead_id === leadId && x.status === 'pending_dispatch');
+          if (!exists) {
+            assignments.push({ id: `a${idc++}`, tenant_id: tenant, lead_id: leadId, account_label: '', status: 'pending_dispatch', scheduled_for: null, created_at: new Date().toISOString() });
+          }
+        } else {
+          const [tenant, leadId, label, scheduled] = params as string[];
+          const exists = assignments.some((x) => x.tenant_id === tenant && x.lead_id === leadId && x.account_label === label);
+          if (!exists) {
+            assignments.push({ id: `a${idc++}`, tenant_id: tenant, lead_id: leadId, account_label: label, status: 'queued', scheduled_for: scheduled, created_at: new Date().toISOString() });
+          }
         }
         return { rows: [] };
       }
