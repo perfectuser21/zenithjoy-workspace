@@ -215,17 +215,46 @@ function spawnKeywordSearch(keyword: string, taskId: string, apiBase: string): P
   });
 }
 
+/** Stage 2 独立入口：直接用已存视频 URL 跑评论采集（stage_1_done 重试用） */
+async function runStage2(taskId: string, keyword: string, videoUrls: string[], apiBase: string) {
+  const publishersDir = resolvePublishersDir();
+  const nodeExe = resolveNodeExe();
+  for (let i = 0; i < videoUrls.length; i++) {
+    const commenters = await spawnCommentCrawl(videoUrls[i], publishersDir, nodeExe);
+    process.stderr.write(
+      `[line02/stage2-retry] 视频 ${videoUrls[i].split('/').pop()} 评论者: ${commenters.length} 条\n`,
+    );
+    await apiRequest(`${apiBase}/api/acquisition/collect/report`, 'POST', {
+      task_id: taskId,
+      keyword,
+      video_id: videoUrls[i].split('/').pop() || videoUrls[i],
+      commenters,
+      terminal: i === videoUrls.length - 1 ? 'done' : undefined,
+    }).catch(() => {});
+  }
+}
+
 async function pollAndDispatch() {
   const apiBase = config.apiBase || 'http://localhost:3000';
   try {
     const resp = (await apiRequest(`${apiBase}/api/acquisition/pending-collect-tasks`)) as {
-      tasks?: Array<{ task_id: string; keywords: string[]; tenant_id: string }>;
+      tasks?: Array<{ task_id: string; keywords: string[]; tenant_id: string; stage?: string; video_urls?: string[] }>;
     };
     const tasks = resp?.tasks ?? [];
     for (const task of tasks) {
       const keywords: string[] = Array.isArray(task.keywords) ? task.keywords : [];
-      for (const kw of keywords.slice(0, 3)) {
-        await spawnKeywordSearch(kw, task.task_id, apiBase);
+      if (task.stage === 'stage_2') {
+        // stage_1 已完成（stage_1_done），直接跑 Stage 2 评论采集
+        const videoUrls = Array.isArray(task.video_urls) ? task.video_urls : [];
+        if (videoUrls.length > 0) {
+          const kw = keywords[0] ?? '';
+          process.stderr.write(`[line02] 重试 Stage 2：task=${task.task_id} videos=${videoUrls.length}\n`);
+          await runStage2(task.task_id, kw, videoUrls, apiBase);
+        }
+      } else {
+        for (const kw of keywords.slice(0, 3)) {
+          await spawnKeywordSearch(kw, task.task_id, apiBase);
+        }
       }
     }
   } catch (err) {
