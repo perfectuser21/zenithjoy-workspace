@@ -51,6 +51,10 @@ def main() -> int:
         import listen_chat
         from pywinauto import Desktop
 
+        # 先加载已发送历史（v1.0.98 防御）：本进程 reply_in_chat 会 _record_sent_text，
+        # 不加载会把监听进程的历史文件覆盖成一条（2026-07-03 08:49 事故）。
+        listen_chat._SENT_TEXTS[:] = listen_chat._load_sent_texts()
+
         mw = None
         for w in Desktop(backend="uia").windows():
             try:

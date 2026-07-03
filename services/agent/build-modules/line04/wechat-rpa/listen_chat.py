@@ -287,15 +287,24 @@ def _load_sent_texts() -> List[str]:
 
 
 def _record_sent_text(text: str) -> None:
-    """记录一条已发送回复文本（方向判定锚点），best-effort 持久化。"""
+    """记录一条已发送回复文本（方向判定锚点），best-effort 持久化。
+
+    写盘必须"读盘→合并→写盘"（v1.0.98）：磁盘是跨进程 union。dump 本进程内存
+    列表会让**新进程**（job3 gate/verify-silent 等，内存为空）把监听进程积累的
+    全部历史覆盖成一条 → 旧回复判向失灵混进 AI 上下文（2026-07-03 08:49 实锤）。
+    """
     t = (text or "").strip()
     if not t:
         return
     _SENT_TEXTS.append(t)
     del _SENT_TEXTS[:-_SENT_TEXTS_CAP]
     try:
+        disk = _load_sent_texts()
+        if not disk or disk[-1] != t:
+            disk.append(t)
+        del disk[:-_SENT_TEXTS_CAP]
         with open(_SENT_TEXTS_FILE, "w", encoding="utf-8") as _f:
-            json.dump(_SENT_TEXTS, _f, ensure_ascii=False)
+            json.dump(disk, _f, ensure_ascii=False)
     except Exception:
         pass
 
