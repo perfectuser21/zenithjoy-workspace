@@ -53,12 +53,24 @@ journey_type: user_facing
   Test: manual:bash -c 'psql "$DATABASE_URL" -c "SELECT latest_reply, latest_reply_at, assignee, comment_replied_at FROM zenithjoy.acquisition_leads LIMIT 0" || { echo "FAIL: DB schema 缺新列"; exit 1; }; echo OK'
   期望: OK
 
-- [ ] [BEHAVIOR] acquisition_orphan_replies 表存在且含必要列
-  Test: manual:bash -c 'psql "$DATABASE_URL" -c "SELECT video_id, commenter_nickname, reply_text, captured_at, tenant_id FROM zenithjoy.acquisition_orphan_replies LIMIT 0" || { echo "FAIL: acquisition_orphan_replies 表不存在"; exit 1; }; echo OK'
+- [ ] [BEHAVIOR] acquisition_orphan_replies 孤儿回复可写入且带时间窗口可查（Invariant：孤儿不丢失）
+  Test: manual:bash -c 'T=$(psql "$DATABASE_URL" -t -c "INSERT INTO zenithjoy.tenants (name,created_at) VALUES ('"'"'dod-orp-'$$''"'"',now()) RETURNING id" | tr -d " \n"); psql "$DATABASE_URL" -c "INSERT INTO zenithjoy.acquisition_orphan_replies (video_id,commenter_nickname,reply_text,captured_at,tenant_id) VALUES ('"'"'dod-vid'"'"','"'"'dod-nick'"'"','"'"'dod-text'"'"',NOW(),'"'"'$T'"'"')" || { echo "FAIL: 写入失败"; exit 1; }; C=$(psql "$DATABASE_URL" -t -c "SELECT count(*) FROM zenithjoy.acquisition_orphan_replies WHERE tenant_id='"'"'$T'"'"' AND captured_at > NOW() - interval '"'"'5 minutes'"'"'" | tr -d " "); [ "$C" -ge 1 ] || { echo "FAIL: count=$C"; exit 1; }; psql "$DATABASE_URL" -c "DELETE FROM zenithjoy.acquisition_orphan_replies WHERE tenant_id='"'"'$T'"'"'" > /dev/null; psql "$DATABASE_URL" -c "DELETE FROM zenithjoy.tenants WHERE id='"'"'$T'"'"'" > /dev/null; echo OK'
   期望: OK
 
 - [ ] [BEHAVIOR] pickAssignee 函数存在且按取模轮询返回负责人
   Test: manual:bash -c 'node -e "const {pickAssignee}=require(\"./apps/api/src/services/acquisition-dispatch.js\");const r=[\"客服A\",\"客服B\"];if(pickAssignee(r,0)!==\"客服A\")process.exit(1);if(pickAssignee(r,1)!==\"客服B\")process.exit(1);if(pickAssignee(r,2)!==\"客服A\")process.exit(1);if(pickAssignee([],0)!==null)process.exit(1);console.log(\"OK\")"'
+  期望: OK
+
+- [ ] [BEHAVIOR] GET /api/acquisition/leads 响应 total 字段为 number 类型
+  Test: manual:bash -c 'RESP=$(curl -sf -H "X-Tenant-Id: test-tenant" http://localhost:3000/api/acquisition/leads); echo "$RESP" | jq -e ".total | type == \"number\"" || { echo "FAIL: total 非 number"; exit 1; }; echo OK'
+  期望: OK
+
+- [ ] [BEHAVIOR] GET /api/acquisition/leads 不含禁用字段 responder / owner（防字段名漂移）
+  Test: manual:bash -c 'RESP=$(curl -sf -H "X-Tenant-Id: test-tenant" http://localhost:3000/api/acquisition/leads); echo "$RESP" | jq -e "if .leads | length > 0 then (.leads[0] | has(\"responder\") | not) else true end" || { echo "FAIL: 禁用字段 responder 存在"; exit 1; }; echo "$RESP" | jq -e "if .leads | length > 0 then (.leads[0] | has(\"owner\") | not) else true end" || { echo "FAIL: 禁用字段 owner 存在"; exit 1; }; echo OK'
+  期望: OK
+
+- [ ] [BEHAVIOR] GET /api/acquisition/leads 已有字段健全（commenter_id / comment_text / grade 不回退）
+  Test: manual:bash -c 'RESP=$(curl -sf -H "X-Tenant-Id: test-tenant" http://localhost:3000/api/acquisition/leads); echo "$RESP" | jq -e "if .leads | length > 0 then .leads[0] | has(\"commenter_id\") else true end" || { echo "FAIL: commenter_id 回退"; exit 1; }; echo "$RESP" | jq -e "if .leads | length > 0 then .leads[0] | has(\"comment_text\") else true end" || { echo "FAIL: comment_text 回退"; exit 1; }; echo "$RESP" | jq -e "if .leads | length > 0 then .leads[0] | has(\"grade\") else true end" || { echo "FAIL: grade 回退"; exit 1; }; echo OK'
   期望: OK
 
 - [ ] [BEHAVIOR] 租户隔离 — GET /api/acquisition/leads 只返回本租户数据（多租户）

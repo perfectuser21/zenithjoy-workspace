@@ -46,6 +46,8 @@ jobs:
           DASHSCOPE_API_KEY: ${{ secrets.ALIYUN_API_KEY }}
           E2E_DATABASE_URL: ${{ secrets.E2E_DATABASE_URL }}
           E2E_API_URL: ${{ secrets.E2E_API_URL }}
+          # 负责人轮询名单（默认占位；生产可用 secret ASSIGNEE_ROSTER 覆盖）
+          ASSIGNEE_ROSTER: ${{ secrets.ASSIGNEE_ROSTER || '["客服A","客服B"]' }}
         run: |
           $sprintDir = "${{ inputs.sprint_dir }}"
           $taskId = "${{ inputs.task_id }}"

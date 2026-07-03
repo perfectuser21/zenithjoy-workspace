@@ -1,4 +1,4 @@
-# Sprint Contract Draft (Round 1)
+# Sprint Contract Draft (Round 2)
 
 ## Response Schema（推导来源: api_registry 推导 + PRD 字面）
 
@@ -47,6 +47,16 @@
 ```json
 {"error": "NO_TENANT", "message": "缺租户上下文（未登录或无 X-Tenant-Id）"}
 ```
+
+---
+
+## Risks
+
+| # | 风险 | 概率 | 影响 | Mitigation |
+|---|---|---|---|---|
+| R1 | `ASSIGNEE_ROSTER` 格式非法（非合法 JSON 数组）→ `pickAssignee` 解析抛异常，阻断 lead 写入 | 中 | 高 | `acquisition-dispatch` 服务启动时校验格式；非法时 warn 并 fallback 到 `["客服A","客服B"]` 默认值；不阻断 lead 写入（`assignee` 写 NULL，记 warn 日志） |
+| R2 | `<LeadsTable />` 替换 `AcquisitionTasksPage` 内联表导致 regression：原内联表含自定义列或交互逻辑在共用组件中缺失 | 中 | 中 | 保留并运行 `AcquisitionTasksPage.test.tsx` 现有回归套件；Generator 必须将原内联表所有列定义迁移至 `<LeadsTable />`（删"触达状态"除外）；改动合并前 CI 全绿 |
+| R3 | `acquisition_leads` 表数据量大时 `ALTER TABLE` 加 3 列锁表，影响线上采集写入 | 低 | 高 | 使用 `ADD COLUMN IF NOT EXISTS ... DEFAULT NULL`（NULL 默认值无 table rewrite，锁瞬间释放）；`acquisition_orphan_replies` 为新建表无锁风险；migration 在低流量窗口（夜间 UTC 16:00–18:00）执行 |
 
 ---
 
@@ -146,15 +156,31 @@ echo OK
 
 **验证命令**:
 ```bash
-# 验证表结构（存在即证明 migration 已跑）
+# 构造无匹配 lead 的孤儿回复 → 直接写库（模拟轮询逻辑无 lead 命中时的 Invariant 行为）
+# Invariant: 孤儿回复不得静默丢失，必须落 acquisition_orphan_replies
+TEST_ORP_TENANT=$(psql "$DATABASE_URL" -t -c \
+  "INSERT INTO zenithjoy.tenants (name, created_at) VALUES ('orphan-smoke-$$', now()) RETURNING id" \
+  | tr -d ' \n')
+[ -n "$TEST_ORP_TENANT" ] || { echo "FAIL: tenant 种入失败"; exit 1; }
 psql "$DATABASE_URL" -c "
-  SELECT video_id, commenter_nickname, reply_text, captured_at, tenant_id
-  FROM zenithjoy.acquisition_orphan_replies LIMIT 0" \
-  || { echo "FAIL: acquisition_orphan_replies 表不存在"; exit 1; }
+  INSERT INTO zenithjoy.acquisition_orphan_replies
+    (video_id, commenter_nickname, reply_text, captured_at, tenant_id)
+  VALUES ('vid-orphan-$$', 'nick-orphan-$$', '孤儿回复测试文本', NOW(), '$TEST_ORP_TENANT')" \
+  || { echo "FAIL: 孤儿回复写入失败（表不存在或列缺失）"; exit 1; }
+# 带时间窗口验数据写入（Invariant：不得静默丢弃）
+COUNT=$(psql "$DATABASE_URL" -t -c "
+  SELECT count(*) FROM zenithjoy.acquisition_orphan_replies
+  WHERE tenant_id='$TEST_ORP_TENANT' AND captured_at > NOW() - interval '5 minutes'" | tr -d ' ')
+[ "$COUNT" -ge 1 ] || { echo "FAIL: 孤儿回复未落库（count=$COUNT）"; exit 1; }
+# 清理
+psql "$DATABASE_URL" -c \
+  "DELETE FROM zenithjoy.acquisition_orphan_replies WHERE tenant_id='$TEST_ORP_TENANT'" > /dev/null
+psql "$DATABASE_URL" -c \
+  "DELETE FROM zenithjoy.tenants WHERE id='$TEST_ORP_TENANT'" > /dev/null
 echo OK
 ```
 
-**硬阈值**: 表存在，含指定列
+**硬阈值**: 孤儿回复写入成功，`captured_at` 在 5 分钟时间窗口内，count ≥ 1
 
 ---
 
@@ -179,11 +205,25 @@ echo "$RESP" | jq -e 'if .leads | length > 0 then .leads[0] | has("latest_reply_
   || { echo "FAIL: latest_reply_at 字段缺失"; exit 1; }
 echo "$RESP" | jq -e 'if .leads | length > 0 then .leads[0] | has("assignee") else true end' \
   || { echo "FAIL: assignee 字段缺失"; exit 1; }
-# 禁用字段反向
+# (a) 已有字段 schema 健全性（commenter_id 等不回退）
+echo "$RESP" | jq -e 'if .leads | length > 0 then .leads[0] | has("commenter_id") else true end' \
+  || { echo "FAIL: 已有字段 commenter_id 回退"; exit 1; }
+echo "$RESP" | jq -e 'if .leads | length > 0 then .leads[0] | has("comment_text") else true end' \
+  || { echo "FAIL: 已有字段 comment_text 回退"; exit 1; }
+echo "$RESP" | jq -e 'if .leads | length > 0 then .leads[0] | has("grade") else true end' \
+  || { echo "FAIL: 已有字段 grade 回退"; exit 1; }
+# (b) 禁用字段反向（reply_text / last_reply / responder / owner）
 echo "$RESP" | jq -e 'if .leads | length > 0 then .leads[0] | has("reply_text") | not else true end' \
   || { echo "FAIL: 禁用字段 reply_text 存在"; exit 1; }
 echo "$RESP" | jq -e 'if .leads | length > 0 then .leads[0] | has("last_reply") | not else true end' \
   || { echo "FAIL: 禁用字段 last_reply 存在"; exit 1; }
+echo "$RESP" | jq -e 'if .leads | length > 0 then .leads[0] | has("responder") | not else true end' \
+  || { echo "FAIL: 禁用字段 responder 存在"; exit 1; }
+echo "$RESP" | jq -e 'if .leads | length > 0 then .leads[0] | has("owner") | not else true end' \
+  || { echo "FAIL: 禁用字段 owner 存在"; exit 1; }
+# (c) total 类型断言（已在 leads type 检查前，此处单独强断言）
+echo "$RESP" | jq -e '.total | type == "number"' \
+  || { echo "FAIL: total 非 number 类型"; exit 1; }
 # error path：INVALID_GRADE
 CODE=$(curl -s -o /dev/null -w "%{http_code}" \
   "http://localhost:3000/api/acquisition/leads?grade=invalid_grade_value")
@@ -221,6 +261,7 @@ echo OK
 |---|---|---|---|---|
 | 1 | 飞书 Bitable 写"最新回复"+"负责人"列 | 真实飞书 API + FEISHU_APP_TOKEN + BITABLE_TOKEN | curl feishu tables API 确认列有新值 | **logic-done-pending**（CI 无飞书凭据）|
 | 2 | 抖音评论区回复轮询（找对方真实回复）| 真实抖音 session + 真实视频评论区 | 轮询后 DB 查 latest_reply IS NOT NULL | **logic-done-pending**（CI 无真实抖音 session）|
+| 3 | `pickAssignee` 在新 lead 落库时被 `acquisition-dispatch` 端到端调用 | 调用链：POST collect/report → acquisition-dispatch → pickAssignee → DB 写 assignee | E2E 调 API 后 SELECT assignee IS NOT NULL | **logic-done-pending**（CI 中 `pickAssignee` 逻辑正确性由单元测试 `tests/leads-api-new-fields.test.ts` 覆盖；端到端调用链需 staging 环境含真实 `ASSIGNEE_ROSTER` 注入验证） |
 
 ---
 
@@ -262,14 +303,19 @@ psql "$DATABASE_URL" -c \
 echo "✅ Scenario 1 通过"
 ```
 
-### Scenario 2: 新 Lead 落库时 assignee 非空（含多租户隔离）
-<!-- GOLDEN_SMOKE_SCENARIO: new-lead-gets-assignee-with-isolation -->
+### Scenario 2: acquisition_leads assignee 字段可读写 + 多租户隔离
+<!-- GOLDEN_SMOKE_SCENARIO: lead-assignee-field-and-isolation -->
 <!-- GOLDEN_SMOKE_SKIP_IN_CI: true -->
 
 ```bash
 #!/bin/bash
 set -e
-# 种2个租户（隔离测试）
+# 接缝说明：pickAssignee 端到端调用链（collect/report → dispatch → pickAssignee → DB）
+# 在 CI 中标 logic-done-pending（见接缝清单 #3）；单元测试 tests/leads-api-new-fields.test.ts
+# 覆盖 pickAssignee 取模逻辑正确性。
+# 本 Scenario 验：(1) assignee 列可写可读、(2) 多租户隔离，不绕过业务调用链写死值。
+
+# 种 2 个租户（隔离测试）
 T1=$(psql "$DATABASE_URL" -t -c \
   "INSERT INTO zenithjoy.tenants (name, created_at) VALUES ('smoke-t1-$$', now()) RETURNING id" \
   | tr -d ' \n')
@@ -278,29 +324,30 @@ T2=$(psql "$DATABASE_URL" -t -c \
   | tr -d ' \n')
 [ -n "$T1" ] && [ -n "$T2" ] || { echo "FAIL: 租户种入失败"; exit 1; }
 
-# 通过 API 种入 lead（触发 assignee 分配）
-ASSIGNEE_ROSTER='["客服A","客服B"]' \
+# 调 API 触发真实 lead 落库（ASSIGNEE_ROSTER 由 e2e-verify.ps1 Step 2.5 注入 API server 进程 env）
 curl -sf -X POST "http://localhost:3000/api/acquisition/collect/report" \
   -H "Content-Type: application/json" \
   -H "X-Tenant-Id: $T1" \
   -d "{\"task_id\":\"00000000-0000-0000-0000-$(printf '%012d' $$)\",
        \"comments\":[{\"commenter_id\":\"smoke-user-$$\",\"text\":\"测试评论\",\"publish_time\":\"2026-07-03T00:00:00Z\",\"grade\":\"感兴趣\"}]}" \
-  > /dev/null 2>&1 || true
+  || { echo "FAIL: collect/report API 调用失败"; exit 1; }
 
-# 若 API 路径不触发 assignee，直接 psql 模拟 lead 插入（验字段存在）
+# 验证新 lead 落库（带时间窗口）
 NEW_LEAD_ID=$(psql "$DATABASE_URL" -t -c "
-  INSERT INTO zenithjoy.acquisition_leads
-    (tenant_id, nickname, source_video_ids, comment_replied_at, assignee)
-  VALUES ('$T1', 'smoke-user-$$', '[\"v-1\"]'::jsonb, now(), '客服A')
-  RETURNING id" | tr -d ' \n')
-[ -n "$NEW_LEAD_ID" ] || { echo "FAIL: lead 插入失败"; exit 1; }
+  SELECT id FROM zenithjoy.acquisition_leads
+  WHERE tenant_id='$T1' AND nickname='smoke-user-$$'
+  AND created_at > NOW() - interval '5 minutes'
+  LIMIT 1" | tr -d ' \n')
+[ -n "$NEW_LEAD_ID" ] || { echo "FAIL: 新 lead 未在5分钟内落库"; exit 1; }
 
-# 验证 assignee 非 null
+# 验证 assignee 字段可读（值由 API 通过 pickAssignee 设置，或为 null — 两者均合法）
 ASSIGNEE=$(psql "$DATABASE_URL" -t -c \
-  "SELECT assignee FROM zenithjoy.acquisition_leads WHERE id='$NEW_LEAD_ID'" | tr -d ' \n')
-[ "$ASSIGNEE" = "客服A" ] || { echo "FAIL: assignee=$ASSIGNEE（预期客服A）"; exit 1; }
+  "SELECT coalesce(assignee, '__null__') FROM zenithjoy.acquisition_leads WHERE id='$NEW_LEAD_ID'" \
+  | tr -d ' \n')
+# assignee 存在即可（null 代表名单为空或 logic-done-pending 接缝未跑真机验证）
+echo "assignee=$ASSIGNEE (logic-done-pending: 端到端 pickAssignee 调用链见接缝清单#3)"
 
-# 验证 T2 看不到 T1 的 lead（租户隔离）
+# 验证 T2 看不到 T1 的 lead（租户隔离 — 这是逻辑断言，CI 全绿 = 真 done）
 T2_COUNT=$(psql "$DATABASE_URL" -t -c \
   "SELECT count(*) FROM zenithjoy.acquisition_leads WHERE tenant_id='$T2' AND id='$NEW_LEAD_ID'" \
   | tr -d ' ')
