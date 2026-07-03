@@ -90,7 +90,7 @@ target_environment: windows_cloud
 
 ---
 
-## 自查核验记录（Round 7 proposer 完成）
+## 自查核验记录（Round 8 proposer 完成）
 
 1. Response Schema 9 字段：`agent_hostname` / `agent_nickname` / `agent_status`（PRD 明确）；`account_label` / `role` / `status` / `bound_at` / `created_at` / `account_nickname`（现有代码字段）✅
 2. jq -e 断言对齐 Response Schema 全字段 — `has("agent_hostname")` / `has("agent_nickname")` / `has("agent_status")` / `role == "burner"` / `has("account_label")` / `has("status")` 全部在 BEHAVIOR 2 manual:bash 中 ✅（Round 6 问题2修复：BEHAVIOR 2 已补 `has("agent_nickname")` 和 `has("agent_status")`）
@@ -98,4 +98,4 @@ target_environment: windows_cloud
 4. [BEHAVIOR] 数量：7 条 ≥ 4 ✅（schema 字段含三新字段 + 禁用字段反向 + 多租户隔离 + 鉴权 error path + dry-run + cutover 三值映射）
 5. 假绿自查：BEHAVIOR 2 若 generator 未实现 agent_status 字段 → has("agent_status") FAIL；若 agent_nickname 未实现 → has("agent_nickname") FAIL；cutover 若脚本不存在 → MODULE_NOT_FOUND FAIL ✅
 6. Golden Path 溯源：所有 7 条 BEHAVIOR 对应 Golden Path 步骤 ✅；无 MOCK_* / page.route() ✅
-7. Round 7 修复核验：(a) BEHAVIOR 2 title 更新包含 agent_nickname/agent_status；(b) BEHAVIOR 2 manual:bash 补 `has("agent_nickname")` + `has("agent_status")` 两行（Round 6 问题2修复）；(c) Response Schema 加 `agent_status` 字段 + 描述；(d) ARTIFACT 两处（agent-burner.ts + AcquisitionAccountsPage.tsx）检查均已加 agent_status；(e) Step 3 Playwright 加离线标记断言 data-testid="machine-status-offline"；(f) Scenario 1 smoke 加 `has("agent_status")`。净增：断言 ≈ 6 行，0 行删除 ✅
+7. Round 8 修复核验：Contract Gate `weak-oracle/file-existence-only` 命中 Scenario 3 第 411 行 `test -f "apps/api/scripts/account-role-migrate.js"`。修复：移除该独立存在性检查行，改以注释说明（`grep -q` 在文件不存在时同样 exit 1，`test -f` 为冗余守卫）。净变化：删 1 行 + 增 1 行注释，Gate 红线清除，其余内容与 Round 7 APPROVED 版本完全一致 ✅

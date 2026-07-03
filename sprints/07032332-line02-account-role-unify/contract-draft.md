@@ -1,4 +1,4 @@
-# Sprint Contract Draft (Round 7)
+# Sprint Contract Draft (Round 8)
 
 ## Response Schema（推导来源: 当前代码 agent-burner.ts:161-186 + PRD 明确字段名）
 
@@ -408,7 +408,7 @@ echo "✅ Scenario 2 通过 — 旧页面已物理删除，导航配置及 AreaH
 ```bash
 #!/bin/bash
 set -e
-test -f "apps/api/scripts/account-role-migrate.js" || { echo "FAIL: 迁移脚本不存在"; exit 1; }
+# 注：不单独 test -f 存在性，grep -q 在文件不存在时同样 exit 1（set -e 传播）
 grep -q "dry-run\|dryRun" "apps/api/scripts/account-role-migrate.js" || { echo "FAIL: 迁移脚本缺 dry-run 参数处理"; exit 1; }
 grep -q "active\|pending" "apps/api/scripts/account-role-migrate.js" || { echo "FAIL: 迁移脚本缺三值映射逻辑"; exit 1; }
 DATABASE_URL="${DATABASE_URL}" node apps/api/scripts/account-role-migrate.js --dry-run > /tmp/dry-run.log 2>&1
