@@ -28,7 +28,7 @@ acquisitionRouter.get('/overview', (_req: Request, res: Response) => {
   });
 });
 
-acquisitionRouter.post('/keyword-search', tenantContextOptional, async (req: Request, res: Response) => {
+acquisitionRouter.post('/keyword-search', async (req: Request, res: Response) => {
   const { keyword } = req.body ?? {};
 
   if (!keyword || typeof keyword !== 'string' || keyword.trim() === '') {
@@ -36,6 +36,10 @@ acquisitionRouter.post('/keyword-search', tenantContextOptional, async (req: Req
   }
 
   const kw = keyword.trim();
+
+  // 从 header 或 body 取 tenant_id（不强制要求 session，兼容 CI smoke + agent 直调）
+  const tenantId: string | null =
+    (req.header('X-Tenant-Id') ?? (req.body?.tenant_id ? String(req.body.tenant_id) : null)) || null;
 
   if (!process.env.VITEST) {
     try {
@@ -61,7 +65,7 @@ acquisitionRouter.post('/keyword-search', tenantContextOptional, async (req: Req
         `INSERT INTO zenithjoy.acquisition_keyword_tasks
            (id, keyword, expanded_keywords, status, tenant_id, created_at, updated_at)
          VALUES ($1, $2, $3::jsonb, 'dispatched', $4, NOW(), NOW())`,
-        [task_id, kw, JSON.stringify(keywords), req.tenantId ?? null]
+        [task_id, kw, JSON.stringify(keywords), tenantId]
       );
     } catch (err) {
       console.error('[acquisition] DB insert failed:', (err as Error).message);
