@@ -12,10 +12,10 @@ function mockFetchByUrl(handlers: Record<string, unknown>) {
   return vi.fn((url: string) => {
     for (const [pattern, body] of Object.entries(handlers)) {
       if (url.includes(pattern)) {
-        return Promise.resolve({ json: () => Promise.resolve(body) } as Response);
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(body) } as Response);
       }
     }
-    return Promise.resolve({ json: () => Promise.resolve({ success: true, data: {} }) } as Response);
+    return Promise.resolve({ ok: true, json: () => Promise.resolve({ success: true, data: {} }) } as Response);
   });
 }
 
@@ -80,7 +80,7 @@ describe('AcquisitionTasksPage — 方案D burner 账号选择 [BEHAVIOR]', () =
     fireEvent.click(btn);
 
     await waitFor(() => {
-      const startCall = fetchMock.mock.calls.find((c: any[]) => String(c[0]).includes('/collect/start'));
+      const startCall = fetchMock.mock.calls.find((c: any[]) => String(c[0]).includes('/collect/start')) as any[] | undefined;
       expect(startCall).toBeTruthy();
       const body = JSON.parse((startCall![1] as RequestInit).body as string);
       expect(body.account_label).toBe('burner-1');
