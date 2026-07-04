@@ -46,6 +46,7 @@ class AgentService : Service() {
     private lateinit var config: AgentConfig
     private var wsClient: WsClient? = null
     private var heartbeatLoop: HttpHeartbeatLoop? = null
+    private var keywordPollLoop: AcquisitionKeywordPollLoop? = null
 
     private val collectResultReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
@@ -89,6 +90,7 @@ class AgentService : Service() {
     override fun onDestroy() {
         wsClient?.stop()
         heartbeatLoop?.stop()
+        keywordPollLoop?.stop()
         serviceJob.cancel()
         unregisterReceiver(collectResultReceiver)
         super.onDestroy()
@@ -159,6 +161,20 @@ class AgentService : Service() {
             },
         )
         heartbeatLoop?.start()
+
+        // 关键词采集任务轮询（真实任务源 — 见 AcquisitionKeywordPollLoop 头部注释）
+        keywordPollLoop = AcquisitionKeywordPollLoop(
+            params = AcquisitionKeywordPollLoop.Params(
+                httpBase = config.deriveHttpBase(),
+                licenseKey = config.licenseKey,
+            ),
+            scope = scope,
+            onTask = { task ->
+                android.util.Log.i(TAG, "keyword task: id=${task.task_id} keyword=${task.keyword}")
+                DouyinCollectService.dispatchTask(this@AgentService, task.keyword, task.task_id)
+            },
+        )
+        keywordPollLoop?.start()
 
         android.util.Log.i(TAG, "agent started — agentId=${config.agentId} machineId=${config.machineId}")
     }
