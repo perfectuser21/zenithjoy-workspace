@@ -707,6 +707,51 @@ build_release() {
   return 0
 }
 
+# _staging_spawn_direct <plist> <port>：SSH fallback——从 plist 提取 env + nohup node 直起进程。
+# 治根（2026-07-04）：launchctl bootstrap gui/<uid> 在 GitHub Actions SSH runner（非 GUI 会话）
+# 报 125(ENOTSUP)；load 兜底也静默失败。此函数绕过 launchd 直接 spawn，与 launchd 自启等价
+# （同一 plist 里的 EnvironmentVariables / ProgramArguments / WorkingDirectory / 日志路径）。
+# 幂等：先 kill_port，再 nohup spawn，PID 写 /tmp/zenithjoy-<port>.pid。
+_staging_spawn_direct() {
+  local plist="$1" port="$2"
+  kill_port "$port" 2>/dev/null || true
+  sleep 1
+
+  # 从 plist 用 python3 生成 env exports + cd + nohup 启动脚本（shlex.quote 安全转义）
+  local spawn_sh
+  spawn_sh="$(/usr/bin/python3 - "$plist" <<'PY'
+import plistlib, sys, shlex, os
+with open(sys.argv[1], 'rb') as f:
+    data = plistlib.load(f)
+env  = data.get('EnvironmentVariables', {})
+args = data.get('ProgramArguments', [])
+wd   = data.get('WorkingDirectory', '.')
+out  = data.get('StandardOutPath', '/dev/null')
+err  = data.get('StandardErrorPath', '/dev/null')
+
+lines = []
+for k, v in env.items():
+    lines.append(f'export {k}={shlex.quote(str(v))}')
+lines.append(f'mkdir -p {shlex.quote(os.path.dirname(out))} {shlex.quote(os.path.dirname(err))} 2>/dev/null || true')
+lines.append(f'cd {shlex.quote(wd)}')
+arg_str = ' '.join(shlex.quote(a) for a in args)
+plist_base = os.path.basename(sys.argv[1])
+pid_file = '/tmp/zenithjoy-' + plist_base + '.pid'
+lines.append('nohup ' + arg_str + ' >> ' + shlex.quote(out) + ' 2>> ' + shlex.quote(err) + ' & echo "$!" > ' + shlex.quote(pid_file))
+lines.append('echo "  spawn PID=$(cat ' + shlex.quote(pid_file) + ' 2>/dev/null)"')
+print('\n'.join(lines))
+PY
+  )"
+
+  if [ -z "$spawn_sh" ]; then
+    echo "❌ _staging_spawn_direct：plist 解析失败（${plist}）" >&2
+    return 1
+  fi
+
+  eval "$spawn_sh" 2>&1 || { echo "❌ _staging_spawn_direct：spawn 执行失败" >&2; return 1; }
+  return 0
+}
+
 # staging_deploy_slot <sha>：build release + 把【常驻 staging 实例】(:5201) 切到该 release。
 # 治根（B）：main 合并只动常驻 staging，绝不碰生产 :5200。
 # 常驻 staging launchd（com.zenithjoy.api.staging）从 releases/staging 软链跑——这里：
@@ -751,6 +796,17 @@ staging_deploy_slot() {
   launchctl kickstart -k "${svc_target}" 2>/dev/null \
     || launchctl start "${staging_label}" 2>/dev/null || true
 
+  # SSH fallback（治根 2026-07-04）：launchctl bootstrap gui/<uid> 在非 GUI SSH 会话里报
+  # 125(ENOTSUP)——GitHub Actions SSH runner 没有 GUI session，无法写入 GUI launchd domain。
+  # load/unload 兜底在 macOS 新版也可能静默失败。快速检查 2s 后若端口还没起来，
+  # 直接从 plist 读 env + nohup node 起进程（与机器 boot 时 launchd 自启等价）。
+  # PID 写 /tmp/zenithjoy-staging.pid，供后续部署轮次 kill 复用。
+  sleep 2
+  if ! curl -sf "http://localhost:${ZJ_STAGING_PORT}/health" >/dev/null 2>&1; then
+    echo "ℹ️  launchd 路径 2s 内未起来（SSH GUI 域限制），SSH direct-spawn fallback..."
+    _staging_spawn_direct "${staging_plist}" "${ZJ_STAGING_PORT}"
+  fi
+
   # 等 staging health
   local up=0
   for _ in $(seq 1 20); do
@@ -759,7 +815,7 @@ staging_deploy_slot() {
   done
   if [ "$up" -ne 1 ]; then
     echo "❌ 常驻 staging 20s 内没起来"
-    tail -20 /Users/administrator/Library/Logs/zenithjoy-api.staging.error.log 2>/dev/null || true
+    tail -20 "${ZJ_STAGING_LOG_DIR:-$HOME/Library/Logs}/zenithjoy-api.staging.error.log" 2>/dev/null || true
     return 1
   fi
   echo "✅ 常驻 staging :${ZJ_STAGING_PORT} 已起（release ${sha}）"

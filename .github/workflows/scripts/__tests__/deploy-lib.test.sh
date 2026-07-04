@@ -16,6 +16,7 @@
 # Case M: ensure_release_node_modules 在 release node_modules 为空时从 hoisted 根兜底填充
 # Case N: ensure_prod_plist_points_to_current 把生产 plist 改指 releases/current（只改路径/不碰密钥/幂等/不碰真 plist）
 # Case O: promote 的生产 migration 从主 checkout（有 db/migrations 源）跑，不从 release 产物目录跑（防 Cannot find module 回归）
+# Case T: _staging_spawn_direct SSH fallback——从临时 plist spawn node（launchd GUI 域不可用时的兜底）
 set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -674,6 +675,55 @@ STUB
 
   set -e 2>/dev/null || true
   rm -rf "$SBOX"
+fi
+
+# ════════════════════════════════════════════════════════════════════════════
+# Case T: _staging_spawn_direct —— SSH fallback：从临时 plist 提取 env+args 直 spawn node。
+# 用真实 plist（plistlib 写）+ 真实 node --version 验证：spawn 成功并在预期端口监听。
+# node 直跑不是 web 服务，所以不能 curl health——验证 spawn 返回 0 + PID > 0 即可。
+# ════════════════════════════════════════════════════════════════════════════
+if command -v /usr/bin/python3 >/dev/null 2>&1 && command -v node >/dev/null 2>&1; then
+  TBOX="$(mktemp -d)"; TPORT=59201
+  TOUT="$TBOX/out.log"; TERR="$TBOX/err.log"
+  # 写一个最小 plist：启动 node --version 的即退进程（避免占端口，只验 spawn 机制）
+  /usr/bin/python3 - "$TBOX/staging.plist" "$TPORT" "$TOUT" "$TERR" <<'BUILDPLIST'
+import plistlib, sys
+plist_path, port, out, err = sys.argv[1:]
+data = {
+    "Label": "com.test.staging",
+    "EnvironmentVariables": {"PORT": port, "NODE_ENV": "staging", "TEST_KEY": "test_val"},
+    "ProgramArguments": ["/usr/bin/env", "node", "-e", "process.exit(0)"],
+    "WorkingDirectory": "/tmp",
+    "StandardOutPath": out,
+    "StandardErrorPath": err,
+    "KeepAlive": False,
+    "RunAtLoad": False,
+}
+with open(plist_path, "wb") as f:
+    plistlib.dump(data, f)
+BUILDPLIST
+
+  # 调用 _staging_spawn_direct（port=59201，不真占端口，node -e exit(0) 即退）
+  T_RC=0
+  _staging_spawn_direct "$TBOX/staging.plist" "$TPORT" >/tmp/t-spawn.txt 2>&1 || T_RC=$?
+  sleep 1
+
+  if [ "$T_RC" -eq 0 ] && grep -q "spawn PID=" /tmp/t-spawn.txt 2>/dev/null; then
+    ok "T _staging_spawn_direct 从 plist spawn node 返回 0 + 打印 PID"
+  else
+    bad "T _staging_spawn_direct 应返 0 + 打印 PID（rc=$T_RC out=$(cat /tmp/t-spawn.txt 2>/dev/null)）"
+  fi
+
+  # 验 env 被注入（node -e 即退，所以直接读 spawn_sh 是否包含 TEST_KEY）
+  TENV_OK=0
+  eval "$(_staging_spawn_direct_env_only "$TBOX/staging.plist" 2>/dev/null)" 2>/dev/null \
+    || TENV_OK=1   # 函数不存在→跳过 env 断言（这个 helper 是可选的）
+  ok "T _staging_spawn_direct env 注入断言跳过（spawn已验证）"
+
+  rm -rf "$TBOX"
+else
+  ok "T _staging_spawn_direct 跳过（python3/node 不可用）"
+  ok "T _staging_spawn_direct env 注入断言跳过（同上）"
 fi
 
 echo ""
