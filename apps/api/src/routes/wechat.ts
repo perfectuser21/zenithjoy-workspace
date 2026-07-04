@@ -127,6 +127,8 @@ async function resolveTenantId(req: Request): Promise<string> {
     agentId,
     machineId,
     // 同机多租户冲突 → 写身份告警表（诊断页可见），resolver 侧同时 deny。
+    // 注意：multi_tenant_machine 场景下 wechat_id 列存的是 machine_id——租户解析
+    // 阶段还没有 wechat 身份可用，靠 reason='multi_tenant_machine' 区分这类告警。
     onMultiTenantConflict: (mid) => recordIdentityAlert(mid, 'multi_tenant_machine'),
   });
 }

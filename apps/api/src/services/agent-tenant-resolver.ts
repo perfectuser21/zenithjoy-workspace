@@ -98,7 +98,7 @@ export async function resolveTenantForAgent(
       const tenants = [...new Set(c.rows.map((r) => r.tenant_id).filter((t): t is string => typeof t === 'string' && t.trim().length > 0))];
       if (tenants.length > 1) {
         try { await opts.onMultiTenantConflict?.(machineId, tenants); } catch { /* 告警旁路失败不影响 deny */ }
-        console.error(`[agent-tenant-resolver] 机器 ${machineId} 近7天命中 ${tenants.length} 个 active 租户，deny（multi_tenant_machine）`);
+        console.error(`[agent-tenant-resolver] 机器 ${machineId} 近7天命中 ${tenants.length} 个 active 租户 [${tenants.join(',')}]，deny（multi_tenant_machine）`);
         return '';
       }
     }
