@@ -1,0 +1,63 @@
+name: Android Agent CI
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'services/agent-android/**'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'services/agent-android/**'
+  workflow_dispatch:
+
+jobs:
+  test-and-build:
+    name: Unit Tests + Release Build
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: services/agent-android
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Install Android SDK platform 34
+        run: |
+          echo "y" | $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager \
+            "platforms;android-34" \
+            "build-tools;34.0.0"
+
+      - name: Set up Gradle 8.6
+        uses: gradle/actions/setup-gradle@v3
+        with:
+          gradle-version: '8.6'
+
+      - name: Run unit tests
+        run: gradle :app:test --no-daemon --stacktrace
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: unit-test-results
+          path: services/agent-android/app/build/reports/tests/
+          retention-days: 7
+
+      - name: Assemble release APK
+        run: gradle :app:assembleRelease --no-daemon
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: zenithjoy-agent-apk-${{ github.run_number }}
+          path: services/agent-android/app/build/outputs/apk/release/*.apk
+          retention-days: 30
