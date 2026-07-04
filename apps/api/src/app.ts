@@ -30,6 +30,7 @@ import { tasksRouter } from './routes/tasks';
 import { tenantsRouter } from './routes/tenants';
 import { skillsRouter } from './routes/skills';
 import { creditsRouter } from './routes/credits';
+import { agentCreditRouter } from './routes/agent-credit';
 import feishuOauthRouter from './routes/feishu-oauth';
 import feishuCustomerListRouter from './routes/feishu-customer-list';
 import leadConfigRouter from './routes/lead-config';
@@ -136,6 +137,8 @@ app.use('/api/pipelines', pipelinesWorkerRouter);
 app.use('/api/competitor-research', competitorResearchRouter);
 // /api/agent/tasks must be registered before /api/agent to avoid route conflict
 app.use('/api/agent/tasks', tasksRouter);
+// /api/agent/credit 必须在 /api/agent 之前注册（路径精确匹配，避免被 agentRouter 吞）
+app.use('/api/agent/credit', agentCreditRouter);
 // /api/agent/machines 同样必须在 /api/agent(agentRouter) 之前注册（按顺序匹配，避免被吞）
 app.use('/api/agent/machines', agentMachinesRouter);
 // 观测事件路由：POST /api/agent/events + GET /api/agent/machines/:id/events
