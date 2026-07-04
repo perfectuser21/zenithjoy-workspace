@@ -201,7 +201,8 @@ def parse_unread_count(item_name: str) -> int:
     返回 N（>= 1）；无未读角标或解析失败返回 0。
     """
     import re as _re
-    m = _re.search(r'\[(\d+)条]', item_name or "")
+    # v1.0.108 Bug5修复：支持 [N+条] 格式（WeChat 消息多时显示 99+条）
+    m = _re.search(r'\[(\d+)\+?条]', item_name or "")
     return int(m.group(1)) if m else 0
 
 
@@ -276,6 +277,27 @@ _REPLY_ANCHOR_FILE: str = os.path.join(_STATE_DIR, "zj-reply-anchor.json")
 _SENT_TEXTS: List[str] = []
 _SENT_TEXTS_CAP: int = 200
 _REPLY_ANCHOR: Dict[str, str] = {}
+
+
+def get_state_file_path(base_dir: str, kind: str, wechat_id: Optional[str]) -> str:
+    """v1.0.108 Bug7修复：返回隔离的状态文件路径（纯函数，CI 可测）。
+
+    wechat_id 非空 → zj-{kind}-{wechat_id}.json（每账号独立文件，防同机多账号互污染）。
+    wechat_id 为 None/空 → zj-{kind}.json（向后兼容单账号部署）。
+
+    Args:
+        base_dir: 状态目录（_STATE_DIR 或测试临时目录）
+        kind: 文件种类（"sent-texts" / "reply-anchor"）
+        wechat_id: 微信账号 ID（None/空时不加后缀）
+
+    Returns:
+        完整文件路径字符串
+    """
+    if wechat_id:
+        filename = f"zj-{kind}-{wechat_id}.json"
+    else:
+        filename = f"zj-{kind}.json"
+    return os.path.join(base_dir, filename)
 
 
 def _init_state_paths(machine_id: Optional[str] = None) -> None:
@@ -645,7 +667,11 @@ def _restore_tray(mw: Any) -> None:
 
 
 # ─── 锚点气泡扫描：模块级状态 ─────────────────────────────────────────────────
-_KNOWN_GROUPS: set = set()        # _is_group_by_header 判过的群 sender：发现层直接跳过
+# v1.0.108 Bug4修复：_KNOWN_GROUPS 改为 Dict[str, float] 存时间戳（TTL=3600s）。
+# 旧 set 无 TTL → 误判入库后永久屏蔽真实私聊；过期后重新开窗判断。
+KNOWN_GROUPS_TTL = 3600              # 群缓存有效期（秒）
+KNOWN_GROUPS_MIN_SIZE = 2            # 人数 >= 该值才缓存为群（防止 (1) 误缓存）
+_KNOWN_GROUPS: Dict[str, float] = {}  # sender → 写入时间戳；TTL 过期后重判
 _ANCHOR_STALL: Dict[str, int] = {}  # sender → 连续 emit 未走到 DELIVERED 的轮数（熔断告警）
 SCAN_OPEN_BUDGET = 3              # 每轮最多开窗读气泡的会话数（#984 延迟教训机制化）
 _BUBBLE_READ_POLLS = 3            # 气泡读空重试轮数（同 _confirm_delivery 轮询模式）
@@ -731,11 +757,14 @@ def _read_trailing_for(mw: Any, cand: Dict[str, Any],
     except Exception:
         title_ok = False
     try:
-        if _is_group_by_header(_read_chat_header_texts(mw)) is not None:
+        _group_size = _is_group_by_header(_read_chat_header_texts(mw))
+        if _group_size is not None:
             cand["_is_group"] = True
-            if title_ok:
-                _KNOWN_GROUPS.add(cand["sender"])
-                _log(f"known_group cached sender={cand['sender']}")
+            # v1.0.108 Bug4修复：人数 >= KNOWN_GROUPS_MIN_SIZE 才缓存（防 (1) 误缓存）
+            # 且改为 dict 存时间戳（TTL=3600s），避免误判后永久屏蔽真实私聊
+            if title_ok and _group_size >= KNOWN_GROUPS_MIN_SIZE:
+                _KNOWN_GROUPS[cand["sender"]] = time.time()
+                _log(f"known_group cached sender={cand['sender']} size={_group_size}")
             return [], False
     except Exception:
         pass  # 判不出群 → 按私聊继续（reply_in_chat 发送前还有判群闸）
@@ -924,8 +953,13 @@ def scan_unread(mw: Any, last_preview: Optional[Dict[str, str]] = None,
         if not info or info["sender"] in seen:
             continue
         sender = info["sender"]
+        # v1.0.108 Bug4修复：_KNOWN_GROUPS 含 TTL，过期后移除允许重判
         if sender in _KNOWN_GROUPS:
-            continue
+            _kg_ts = _KNOWN_GROUPS[sender]
+            if time.time() - _kg_ts < KNOWN_GROUPS_TTL:
+                continue  # TTL 未过期，仍为已知群，跳过
+            else:
+                del _KNOWN_GROUPS[sender]  # TTL 过期，移除缓存，重新开窗判断
         if sender in _INFLIGHT:
             continue  # v1.0.106：上一条还在草稿/发送中，绝不重复 emit（复读根源）
         if should_open is not None and not should_open(sender):
