@@ -35,4 +35,13 @@ fi
 echo "[test] 5: autostart 以登录用户身份运行"
 grep -qiE 'USERNAME|User ' "$AUTOSTART" || fail "缺 以当前登录用户身份运行"
 
-echo "[test] OK — 进程守护脚本契约满足（v1.1.109 架构）"
+echo "[test] 6: autostart 清理残留的旧版本残留计划任务（root cause 2026-07-04 rog 多循环打架）"
+# 根因：过去调试在客户机上留下了自定义命名的计划任务（ZJAgent/ZJClean/restart_agent 等），
+# 各自指向不同旧版本目录。旧版本 start.bat 没有 launcher 互斥锁（decision 72740815），
+# 只要任一次触发（重启/StartWhenAvailable 追赶）就会同时唤起多个互不知情的永生 supervise
+# 循环，互相 taskkill+relaunch 打架、狂开窗口。register 前必须先枚举并清掉这些同类残留。
+grep -q 'Get-ScheduledTask' "$AUTOSTART" || fail "缺 枚举现有计划任务（清理残留的前提）"
+grep -qiE 'zenithjoy-agent-v' "$AUTOSTART" || fail "缺 匹配旧版本安装路径的清理逻辑"
+grep -qiE '\$_\.TaskName -ne \$TaskName' "$AUTOSTART" || fail "缺 排除自身任务名的清理条件（否则会清掉正牌任务）"
+
+echo "[test] OK — 进程守护脚本契约满足（v1.1.109 架构 + 残留任务清理）"
