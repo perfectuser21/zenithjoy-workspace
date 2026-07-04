@@ -2467,6 +2467,14 @@ tests:
     product: 新媒体运营
     note: "ZJ1 Smart Acquisition — acquisition 路由单元测试（test-pairing 配对）"
 
+  - id: agent-credit-route-unit
+    path: apps/api/src/routes/agent-credit.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 新媒体运营
+    note: "获客 Agent 安卓设备接入 Initiative — agent-credit 积分扣费/查询路由单元测试（test-pairing 配对）"
+
   - id: zj1-smart-acquisition-smoke
     path: .github/workflows/scripts/smoke/acquisition-smoke.sh
     type: e2e
