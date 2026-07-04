@@ -120,7 +120,6 @@ export default function AcquisitionAccountsPage() {
               <thead>
                 <tr className="border-b border-slate-200 dark:border-slate-700">
                   <th className="py-2 text-left text-gray-500 dark:text-gray-400 font-medium">小号名</th>
-                  <th className="py-2 text-left text-gray-500 dark:text-gray-400 font-medium">抖音昵称</th>
                   <th className="py-2 text-left text-gray-500 dark:text-gray-400 font-medium">绑定机器</th>
                   <th className="py-2 text-left text-gray-500 dark:text-gray-400 font-medium">绑定时间</th>
                   <th className="py-2 text-left text-gray-500 dark:text-gray-400 font-medium">健康状态</th>
@@ -130,7 +129,6 @@ export default function AcquisitionAccountsPage() {
                 {sessions.map((s) => (
                   <tr key={s.account_label} className={`border-b border-slate-100 dark:border-slate-800 ${s.status === 'needs_rebind' ? 'bg-red-50 dark:bg-red-900/10' : ''}`}>
                     <td className="py-2 text-gray-900 dark:text-white">{s.account_label}</td>
-                    <td className="py-2 text-gray-700 dark:text-gray-300">{s.account_nickname || '—'}</td>
                     <td className="py-2 text-gray-700 dark:text-gray-300" data-testid="machine-hostname-cell">
                       {s.agent_hostname ?? '—'}
                       {s.agent_status === 'offline' && (

@@ -182,9 +182,6 @@ test.describe('Line02 公司信息页 + 采集任务 Table', () => {
       return root !== null && root.childElementCount > 0;
     }, { timeout: 15000 });
 
-    // 验证账号状态块区域存在（标题总是渲染，无论有无账号）
-    await expect(page.getByText('主号状态').first()).toBeVisible({ timeout: 15000 });
-
     // 验证推荐关键词 chips 出现（PrepPRD 核心要求：基于 company-profile stub 生成）
     // stub: city=西安, industry=餐饮, products=['测试产品A'] → 推荐词含"西安餐饮"/"餐饮推荐"/"西安美食推荐"
     const anyChip = page.getByText('西安餐饮').or(

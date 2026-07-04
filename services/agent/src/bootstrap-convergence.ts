@@ -22,6 +22,10 @@ export interface ScheduledTaskState {
 }
 export interface EnvState {
   selfPid: number;
+  // 自己的祖先进程链 PID（父/祖父/…）。拉起本核心的启动循环必然在这条链上——
+  // 它路径版本再旧也不是僵尸，杀它 = taskkill /t 连树带自己杀（2.0.75 生产自杀实锤）。
+  // 采集失败 → []，此时保守不杀任何循环（宁可漏杀不可自杀）。
+  selfAncestorPids: number[];
   agentProcesses: AgentProc[];
   launcherLoops: LauncherLoop[];
   // .active-core 指针内容（如 zenithjoy-agent-v2.0.75）；无指针 = null
@@ -47,10 +51,15 @@ export function planConvergence(state: EnvState): ConvergenceAction[] {
     }
   }
 
-  // ① 僵尸启动循环：bat 路径所属版本目录 ≠ 活跃核心 → 杀
-  //（无指针时不杀任何循环——无法判定谁是正统，宁可保守）
-  if (state.activeCoreName) {
+  // ① 僵尸启动循环：bat 路径所属版本目录 ≠ 活跃核心 且 不在自己祖先链上 → 杀。
+  //   - 祖先链上的循环（把本核心拉起来的那个）路径再旧也不是僵尸——旧 bat 每轮重读
+  //     .active-core 指针照样能供养新核心；杀它 = /t 连树带自己杀（2.0.75 自杀实锤）。
+  //   - 祖先链采集失败（空数组）→ 保守：一个循环都不杀（宁可漏杀不可自杀）。
+  //   - 无指针时同样不杀（无法判定谁是正统）。
+  if (state.activeCoreName && state.selfAncestorPids.length > 0) {
+    const ancestors = new Set(state.selfAncestorPids);
     for (const l of state.launcherLoops) {
+      if (ancestors.has(l.pid)) continue;
       if (!l.batPath.toLowerCase().includes(state.activeCoreName.toLowerCase())) {
         actions.push({ type: 'kill_stale_launcher', pid: l.pid, batPath: l.batPath });
       }
@@ -87,6 +96,7 @@ export function gatherEnvState(opts: {
   const taskName = opts.taskName ?? 'ZenithJoyAgent';
   const state: EnvState = {
     selfPid: opts.selfPid,
+    selfAncestorPids: [],
     agentProcesses: [],
     launcherLoops: [],
     activeCoreName: null,
@@ -94,6 +104,28 @@ export function gatherEnvState(opts: {
     licensePresent: opts.licensePresent,
   };
   if (process.platform !== 'win32') return { ...state, scheduledTask: { exists: true, targetPath: null, targetExists: true } };
+
+  // 祖先进程链：沿 ParentProcessId 一路向上（拉起本核心的启动循环必在链上，绝不能杀）。
+  // 采集失败留空 [] → planConvergence 保守不杀任何循环。防父子环/PID 复用死循环：上限 32 层。
+  try {
+    const parentOf = new Map<number, number>();
+    const out = psList(
+      'Get-CimInstance Win32_Process | ForEach-Object { "$($_.ProcessId),$($_.ParentProcessId)" }',
+    );
+    for (const line of out.split(/\r?\n/)) {
+      const [pidStr, ppidStr] = line.trim().split(',');
+      const pid = parseInt(pidStr, 10);
+      const ppid = parseInt(ppidStr, 10);
+      if (!isNaN(pid) && !isNaN(ppid)) parentOf.set(pid, ppid);
+    }
+    const chain: number[] = [];
+    let cur = parentOf.get(opts.selfPid);
+    for (let depth = 0; depth < 32 && cur !== undefined && cur > 0 && !chain.includes(cur); depth++) {
+      chain.push(cur);
+      cur = parentOf.get(cur);
+    }
+    state.selfAncestorPids = chain;
+  } catch { /* ignore → 保守不杀 */ }
 
   try {
     const raw = fs.readFileSync(opts.activeCorePointerPath, 'utf8').trim().split(/\r?\n/)[0];
