@@ -98,6 +98,16 @@ acquisitionRouter.get('/pending-keyword-tasks', async (req: Request, res: Respon
       return res.status(200).json({ tasks: [], total: 0 });
     }
 
+    // 余额校验：积分耗尽时不派发任务（防止无积分 agent 消耗平台资源）
+    const creditRes = await pool.query<{ balance: number }>(
+      `SELECT balance FROM zenithjoy.tenant_credits WHERE tenant_id = $1 LIMIT 1`,
+      [tenantId]
+    );
+    const balance = creditRes.rows[0] ? Number(creditRes.rows[0].balance) : 0;
+    if (balance <= 0) {
+      return res.status(200).json({ tasks: [], total: 0 });
+    }
+
     const { rows } = await pool.query<{
       id: string;
       keyword: string;
