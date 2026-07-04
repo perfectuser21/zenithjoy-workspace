@@ -14,6 +14,7 @@ import { planConvergence, type EnvState } from '../bootstrap-convergence';
 
 const CLEAN: EnvState = {
   selfPid: 100,
+  selfAncestorPids: [999],
   agentProcesses: [{ pid: 100, imageName: 'zenithjoy-agent.exe' }],
   launcherLoops: [{ pid: 200, batPath: 'C:\\u\\Desktop\\zenithjoy-agent-v2.0.75\\start.bat' }],
   activeCoreName: 'zenithjoy-agent-v2.0.75',
@@ -83,6 +84,7 @@ describe('planConvergence — 幂等环境收敛计划（纯函数）', () => {
   it('多类脏状态并存 → 动作齐全且互不吞并', () => {
     const state: EnvState = {
       selfPid: 100,
+      selfAncestorPids: [999],
       agentProcesses: [
         { pid: 100, imageName: 'zenithjoy-agent.exe' },
         { pid: 333, imageName: 'zenithjoy-agent.exe' },
