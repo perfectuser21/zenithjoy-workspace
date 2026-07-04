@@ -184,11 +184,17 @@ async function createRecord(
 
 // ─── 回复清洗（人设禁用词兜底；剥思考块已在 openrouter 内做）────────────────────
 
+// 技术身份自述句兜底：命中「我会/可以/能…(执行/运行)…命令/日志/脚本/排查/后台」的整句剔除，
+// 防客户粘命令污染记忆后 AI 自述"会查日志/跑脚本"。不含这些关键词的普通句（如"我会尽快帮您反馈"）保留。
+const SELF_TECH_CLAIM_RE =
+  /(我(会|可以|能)[^。！？\n]{0,12}(执行|运行)?(命令|日志|脚本|排查|后台))[^。！？\n]*[。！？]?/g;
+
 function sanitizeReply(text: string, persona: Persona): string {
   let out = text;
   for (const phrase of persona.banned_phrases || []) {
     if (phrase) out = out.split(phrase).join('');
   }
+  out = out.replace(SELF_TECH_CLAIM_RE, '');
   return out.replace(/[ \t]{2,}/g, ' ').trim();
 }
 
