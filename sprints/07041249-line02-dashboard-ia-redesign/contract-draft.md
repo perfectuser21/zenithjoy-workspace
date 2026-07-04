@@ -1,9 +1,9 @@
-# Sprint Contract Draft (Round 2)
+# Sprint Contract Draft (Round 3)
 
 **Sprint**: Line02 Dashboard IA 重做 — Hub GP 顺序 + 触达记录视图
 **journey_type**: user_facing
 **target_environment**: windows_cloud（GitHub Actions windows-latest，变体C：Dashboard Playwright）
-**propose_round**: 2
+**propose_round**: 3
 
 ---
 
@@ -236,7 +236,6 @@ console.log('OK: 端点已注册，含租户过滤');
 "
 
 # B. 运行时鉴权检查（需 API server 就绪）
-RESP=$(curl -sf "http://localhost:3000/api/acquisition/outreach-history" 2>/dev/null || echo '')
 CODE=$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:3000/api/acquisition/outreach-history" 2>/dev/null || echo "000")
 [ "$CODE" != "404" ] || { echo "FAIL: 端点返 404（路由未注册）"; exit 1; }
 [ "$CODE" != "500" ] || { echo "FAIL: 端点崩溃 500"; exit 1; }
@@ -331,9 +330,11 @@ echo "✅ Scenario 3 通过"
 set -e
 BRAIN_URL="${BRAIN_URL:-http://localhost:3000}"
 
-# 调用端点（无 session → 预期 401，不是 404）
-RESP=$(curl -s "$BRAIN_URL/api/acquisition/outreach-history")
-CODE=$(curl -s -o /dev/null -w "%{http_code}" "$BRAIN_URL/api/acquisition/outreach-history")
+# 一次请求同时拿 body + HTTP 状态码（禁止两次请求状态不一致）
+HTTP_RESP=$(curl -s -w "\n%{http_code}" "$BRAIN_URL/api/acquisition/outreach-history")
+CODE=$(printf '%s' "$HTTP_RESP" | tail -1)
+RESP=$(printf '%s' "$HTTP_RESP" | sed '$d')
+echo "$RESP" | jq -e 'type == "object"' || { echo "FAIL: 响应非 JSON object"; exit 1; }
 
 # 404 = 路由未注册 → FAIL（明确断言，不接受 404）
 [ "$CODE" = "404" ] && { echo "FAIL: 端点返 404（路由未注册）"; exit 1; }
