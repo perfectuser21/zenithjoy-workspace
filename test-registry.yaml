@@ -4343,3 +4343,11 @@ agent_suite:
   status: active
   product: AI员工
   note: "sprint(07032333): Playwright E2E — LeadsPage 最新回复/负责人列头可见，无触达状态，AcquisitionTasksPage 无触达状态"
+
+- id: agent-credit-routes
+  path: apps/api/src/routes/agent-credit.test.ts
+  type: unit
+  ci: L3
+  status: active
+  product: Agent 管理
+  note: "Agent Credit 路由单测 — GET /balance 和 POST /deduct 正常/错误路径（agent-credit-api sprint）"
