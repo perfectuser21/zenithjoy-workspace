@@ -89,7 +89,7 @@ export class DesktopLeaseBroker {
     this.onBrainLog = opts.onBrainLog;
     this.onYield = opts.onYield;
 
-    this.watchdogTimer = setInterval(() => this._runWatchdog(), this.watchdogIntervalMs);
+    this.watchdogTimer = setTimeout(() => this._runWatchdog(), this.watchdogIntervalMs);
   }
 
   async acquire(params: AcquireParams): Promise<AcquireResult> {
@@ -184,7 +184,14 @@ export class DesktopLeaseBroker {
   }
 
   private _runWatchdog(): void {
-    if (!this.currentLease) return;
+    this.watchdogTimer = null;
+
+    if (!this.currentLease) {
+      // 无租约：重新调度，继续巡检
+      this.watchdogTimer = setTimeout(() => this._runWatchdog(), this.watchdogIntervalMs);
+      return;
+    }
+
     const now = Date.now();
     if (this.currentLease.expiresAt <= now) {
       const expired = this.currentLease;
@@ -208,6 +215,9 @@ export class DesktopLeaseBroker {
       // 立即授予（复用 release() 同款逻辑），绝不留野 timeout。
       // 旧行为：pendingPreempt 的超时回调在 yieldWaitMs 后仍触发
       // `this.currentLease = null`，可能清掉第三方刚获取的合法新租约。
+      //
+      // 颁出新租约后 watchdog 不再自动续调度——新持有方靠 renew() 维持
+      // （或下一次无租约时 watchdog 自己补调度）。
       if (this.pendingPreempt) {
         const pending = this.pendingPreempt;
         this.pendingPreempt = null;
@@ -221,13 +231,21 @@ export class DesktopLeaseBroker {
         };
         this.currentLease = newLease;
         pending.resolve({ granted: true, lease_id: newLease.leaseId, expires_at: newLease.expiresAt });
+        // 不在此处重调度：新租约的存活由持有方 renew 控制
+        return;
       }
+
+      // 无 pendingPreempt：lease 已清，重调度巡检
+      this.watchdogTimer = setTimeout(() => this._runWatchdog(), this.watchdogIntervalMs);
+    } else {
+      // 当前 lease 未过期：重调度
+      this.watchdogTimer = setTimeout(() => this._runWatchdog(), this.watchdogIntervalMs);
     }
   }
 
   destroy(): void {
     if (this.watchdogTimer !== null) {
-      clearInterval(this.watchdogTimer);
+      clearTimeout(this.watchdogTimer);
       this.watchdogTimer = null;
     }
     if (this.pendingPreempt) {
