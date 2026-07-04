@@ -33,4 +33,15 @@ data class CollectResult(
         "comments" to comments.map { it.toMap() },
         "error" to error.ifEmpty { null },
     )
+
+    /**
+     * 服务端唯一能接住评论数据的端点是 POST /api/acquisition/comment-score-result
+     * （/api/agent/task-result 不存在）。keywordTaskId 对应 acquisition_keyword_tasks.id，
+     * 由派发 android_douyin 任务的一侧传入（ws0 collect_task / ws1 task.task_id）。
+     */
+    fun toCommentScoreResultPayload(keywordTaskId: String): Map<String, Any?> = mapOf(
+        "keyword_task_id" to keywordTaskId,
+        "video_url" to videoUrl,
+        "comments" to comments.map { it.toMap() },
+    )
 }

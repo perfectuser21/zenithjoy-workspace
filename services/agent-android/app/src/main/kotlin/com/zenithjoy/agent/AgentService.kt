@@ -189,24 +189,23 @@ class AgentService : Service() {
         DouyinCollectService.dispatchTask(this, keyword, taskId)
     }
 
+    // taskId 对应 acquisition_keyword_tasks.id（由 ws0/ws1 派发 android_douyin 任务时下发）。
+    // /api/agent/task-result 端点不存在——服务端唯一能接住评论数据的是已有的
+    // /api/acquisition/comment-score-result（Windows Agent 已在用同一端点，字段一致）。
     private fun reportCollectResult(taskId: String, result: CollectResult) {
         if (taskId.isEmpty()) return
-        val url = "${config.deriveHttpBase()}/api/agent/task-result"
-        val body = gson.toJson(mapOf(
-            "task_id" to taskId,
-            "platform" to "android_douyin",
-            "result" to result.toMap(),
-        ))
+        val url = "${config.deriveHttpBase()}/api/acquisition/comment-score-result"
+        val body = gson.toJson(result.toCommentScoreResultPayload(taskId))
         try {
             val request = Request.Builder()
                 .url(url)
                 .post(body.toRequestBody("application/json".toMediaType()))
                 .build()
             httpClient.newCall(request).execute().use { resp ->
-                android.util.Log.i(TAG, "task-result reported: ${resp.code} task=$taskId")
+                android.util.Log.i(TAG, "comment-score-result reported: ${resp.code} task=$taskId")
             }
         } catch (e: Exception) {
-            android.util.Log.w(TAG, "task-result report failed: ${e.message}")
+            android.util.Log.w(TAG, "comment-score-result report failed: ${e.message}")
         }
     }
 
