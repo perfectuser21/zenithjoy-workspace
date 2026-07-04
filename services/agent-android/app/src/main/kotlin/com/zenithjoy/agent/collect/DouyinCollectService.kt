@@ -1,13 +1,10 @@
 package com.zenithjoy.agent.collect
 
 import android.accessibilityservice.AccessibilityService
-import android.accessibilityservice.GestureDescription
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
-import android.graphics.Path
-import android.graphics.Rect
 import android.os.Bundle
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
@@ -23,7 +20,11 @@ import kotlinx.coroutines.withTimeoutOrNull
  * 抖音无障碍采集服务。
  *
  * 功能：接收 COLLECT_TASK Intent → 驱动状态机完成
- *   关键词搜索 → 点第一条视频 → 进作者主页 → 提取昵称/抖音号/粉丝数/简介 → 回调结果
+ *   关键词搜索 → 点第一条视频（爆款视频，作为参照/竞品账号定位入口）
+ *   → 打开评论区 → 抓取每条留言的「留言人 + 留言内容」→ 回调结果
+ *
+ * 采集目标是评论区的留言人，不是视频作者本人——作者只是搜索关键词定位到的参照账号，
+ * 主动在这条视频下留言的人才是对该话题有真实需求的精准获客线索。
  *
  * 不依赖 adb/开发者模式；仅需用户在「设置→无障碍」中开启本服务。
  * 操作间隔均由 [RandomDelay] 提供随机区间，禁止固定常量。
@@ -43,8 +44,8 @@ class DouyinCollectService : AccessibilityService() {
         TYPING_KEYWORD,
         WAITING_SEARCH_RESULTS,
         OPENING_FIRST_VIDEO,
-        GOING_TO_PROFILE,
-        EXTRACTING_PROFILE,
+        OPENING_COMMENTS,
+        EXTRACTING_COMMENTS,
     }
 
     private val taskReceiver = object : BroadcastReceiver() {
@@ -81,8 +82,8 @@ class DouyinCollectService : AccessibilityService() {
             State.TYPING_KEYWORD -> handleTypingKeyword(event)
             State.WAITING_SEARCH_RESULTS -> handleSearchResults(event)
             State.OPENING_FIRST_VIDEO -> handleVideoOpened(event)
-            State.GOING_TO_PROFILE -> handleProfileNavigation(event)
-            State.EXTRACTING_PROFILE -> handleProfileExtraction(event)
+            State.OPENING_COMMENTS -> handleCommentsOpened(event)
+            State.EXTRACTING_COMMENTS -> Unit // 已在 attemptExtractComments 里同步处理
             else -> Unit
         }
     }
@@ -205,7 +206,7 @@ class DouyinCollectService : AccessibilityService() {
         }
     }
 
-    // ── 5. 点第一条视频 ───────────────────────────────────────────────────────
+    // ── 5. 点第一条视频（爆款/参照账号定位入口） ─────────────────────────────
 
     private fun handleSearchResults(event: AccessibilityEvent) {
         if (event.eventType != AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED) return
@@ -233,7 +234,9 @@ class DouyinCollectService : AccessibilityService() {
         }
     }
 
-    // ── 6. 进入作者主页 ───────────────────────────────────────────────────────
+    // ── 6. 打开评论区 ─────────────────────────────────────────────────────────
+    //
+    // 不进作者主页——直接点评论按钮/评论数，进评论列表。
 
     private fun handleVideoOpened(event: AccessibilityEvent) {
         if (event.eventType != AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED &&
@@ -243,82 +246,75 @@ class DouyinCollectService : AccessibilityService() {
         if (event.packageName != DOUYIN_PKG) return
 
         val root = rootInActiveWindow ?: return
-        val avatar = findNodeByIds(root,
-            "com.ss.android.ugc.aweme:id/iv_avatar",
-            "com.ss.android.ugc.aweme:id/user_avatar",
-            "com.ss.android.ugc.aweme:id/author_avatar",
+        val commentBtn = findNodeByIds(root,
+            "com.ss.android.ugc.aweme:id/iv_comment",
+            "com.ss.android.ugc.aweme:id/comment_icon",
+            "com.ss.android.ugc.aweme:id/tv_comment_count",
+            "com.ss.android.ugc.aweme:id/comment_count",
         )
-        if (avatar == null) return
+        if (commentBtn == null) return
 
-        state = State.GOING_TO_PROFILE
-        avatar.performAction(AccessibilityNodeInfo.ACTION_CLICK)
-        startProfileTimeout()
+        state = State.OPENING_COMMENTS
+        commentBtn.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+        startCommentsTimeout()
     }
 
-    private fun startProfileTimeout() {
+    private fun startCommentsTimeout() {
         scope.launch {
             delay(RandomDelay.sample(RandomDelay.PROFILE_MS))
-            if (state == State.GOING_TO_PROFILE) {
-                // 尝试从当前 window 直接提取
-                attemptExtract()
+            if (state == State.OPENING_COMMENTS) {
+                attemptExtractComments()
             }
         }
     }
 
-    // ── 7. 提取主页字段 ───────────────────────────────────────────────────────
+    // ── 7. 提取评论区留言人+留言内容 ─────────────────────────────────────────
 
-    private fun handleProfileNavigation(event: AccessibilityEvent) {
-        if (state != State.GOING_TO_PROFILE) return
+    private fun handleCommentsOpened(event: AccessibilityEvent) {
+        if (state != State.OPENING_COMMENTS) return
         if (event.packageName != DOUYIN_PKG) return
         if (event.eventType != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED &&
             event.eventType != AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED
         ) return
         scope.launch {
             delay(RandomDelay.sample(RandomDelay.PROFILE_MS))
-            attemptExtract()
+            attemptExtractComments()
         }
     }
 
-    private fun handleProfileExtraction(event: AccessibilityEvent) {
-        // 已在 attemptExtract 里同步处理，此处仅兜底
-    }
-
-    private fun attemptExtract() {
-        state = State.EXTRACTING_PROFILE
+    private fun attemptExtractComments() {
+        state = State.EXTRACTING_COMMENTS
         val root = rootInActiveWindow
         if (root == null) {
-            finishWithError("NO_PROFILE_WINDOW")
+            finishWithError("NO_COMMENTS_WINDOW")
             return
         }
 
         val nodes = flattenNodes(root)
-        val fields = NodeExtractor.extract(nodes)
+        val comments = NodeExtractor.extractComments(nodes)
 
-        if (fields.nickname.isEmpty() && fields.douyinId.isEmpty()) {
-            // 还未渲染完，稍候重试一次
+        if (comments.isEmpty()) {
+            // 评论面板可能还未渲染完，稍候重试一次
             scope.launch {
                 delay(RandomDelay.sample(RandomDelay.CLICK_MS))
                 val retryRoot = rootInActiveWindow ?: run {
                     finishWithError("RETRY_NO_WINDOW"); return@launch
                 }
-                val retryFields = NodeExtractor.extract(flattenNodes(retryRoot))
-                reportResult(retryFields)
+                val retryComments = NodeExtractor.extractComments(flattenNodes(retryRoot))
+                reportResult(retryComments)
             }
         } else {
-            reportResult(fields)
+            reportResult(comments)
         }
     }
 
-    private fun reportResult(fields: NodeExtractor.ProfileFields) {
+    private fun reportResult(comments: List<CommentEntry>) {
         val result = CollectResult(
-            ok = fields.nickname.isNotEmpty() || fields.douyinId.isNotEmpty(),
+            ok = comments.isNotEmpty(),
             keyword = currentKeyword,
-            nickname = fields.nickname,
-            douyinId = fields.douyinId,
-            followersCount = fields.followersCount,
-            bio = fields.bio,
+            comments = comments,
         )
-        android.util.Log.i(TAG, "extracted: nickname=${result.nickname} id=${result.douyinId} fans=${result.followersCount}")
+        android.util.Log.i(TAG, "extracted ${comments.size} comments for keyword=$currentKeyword")
         state = State.IDLE
         onResult?.invoke(result)
         sendResultBroadcast(result)
@@ -336,10 +332,8 @@ class DouyinCollectService : AccessibilityService() {
         val intent = Intent(ACTION_COLLECT_RESULT).apply {
             putExtra(EXTRA_TASK_ID, currentTaskId)
             putExtra(EXTRA_RESULT_OK, result.ok)
-            putExtra(EXTRA_RESULT_NICKNAME, result.nickname)
-            putExtra(EXTRA_RESULT_DOUYIN_ID, result.douyinId)
-            putExtra(EXTRA_RESULT_FOLLOWERS, result.followersCount)
-            putExtra(EXTRA_RESULT_BIO, result.bio)
+            putExtra(EXTRA_RESULT_COMMENT_IDS, result.comments.map { it.commenterId }.toTypedArray())
+            putExtra(EXTRA_RESULT_COMMENT_TEXTS, result.comments.map { it.text }.toTypedArray())
             putExtra(EXTRA_RESULT_ERROR, result.error)
         }
         sendBroadcast(intent)
@@ -413,10 +407,8 @@ class DouyinCollectService : AccessibilityService() {
         const val EXTRA_KEYWORD = "keyword"
         const val EXTRA_TASK_ID = "task_id"
         const val EXTRA_RESULT_OK = "ok"
-        const val EXTRA_RESULT_NICKNAME = "nickname"
-        const val EXTRA_RESULT_DOUYIN_ID = "douyin_id"
-        const val EXTRA_RESULT_FOLLOWERS = "followers_count"
-        const val EXTRA_RESULT_BIO = "bio"
+        const val EXTRA_RESULT_COMMENT_IDS = "comment_ids"
+        const val EXTRA_RESULT_COMMENT_TEXTS = "comment_texts"
         const val EXTRA_RESULT_ERROR = "error"
 
         fun dispatchTask(context: Context, keyword: String, taskId: String) {
