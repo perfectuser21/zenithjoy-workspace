@@ -121,6 +121,20 @@ export interface RunResult {
   dispatched: number;
 }
 
+export interface OutreachHistoryItem {
+  id: string;
+  lead_nickname: string | null;
+  account_label: string;
+  status: 'queued' | 'dispatched' | 'sent' | 'limited' | 'failed';
+  scheduled_for: string | null;
+  sent_at: string | null;
+}
+
+export interface OutreachHistoryResult {
+  items: OutreachHistoryItem[];
+  total: number;
+}
+
 // ============ 端点封装 ============
 
 /** 读取本租户获客配置（无则后端返默认） */
@@ -179,6 +193,15 @@ export async function fetchDispatchPlan(
   // 后端返回信封 {plan: DispatchPlanItem[], total: number}，需提取 .plan 数组
   const result = await parseEnvelope<{ plan: DispatchPlanItem[]; total: number }>(r);
   return result.plan ?? [];
+}
+
+/** 读触达历史 */
+export async function fetchOutreachHistory(): Promise<OutreachHistoryResult> {
+  const r = await fetch(`${API_BASE}/acquisition/outreach-history`, {
+    headers: authHeaders(),
+    credentials: 'include',
+  });
+  return parseEnvelope<OutreachHistoryResult>(r);
 }
 
 /** 读 Cookie 健康 */

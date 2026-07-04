@@ -1,0 +1,94 @@
+name: E2E Line02 Dashboard IA 重做 (Windows)
+
+# Line02 Dashboard IA 重做 — Hub GP 顺序 + 触达记录视图
+# VITE_SKIP_AUTH=true 跳过前端路由鉴权；禁 page.route() — spec 只测 DOM 结构
+# AcquisitionOutreachPage 在 API 失败时须显示"暂无触达记录"空状态（不依赖真后端）
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'apps/dashboard/src/pages/AcquisitionHubPage.tsx'
+      - 'apps/dashboard/src/pages/AcquisitionAccountsPage.tsx'
+      - 'apps/dashboard/src/pages/AcquisitionOutreachPage.tsx'
+      - 'apps/dashboard/src/config/navigation.config.ts'
+      - 'apps/dashboard/e2e/acquisition-ia-redesign.spec.ts'
+      - '.github/workflows/e2e-line02-dashboard-ia-redesign.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'apps/dashboard/src/pages/AcquisitionHubPage.tsx'
+      - 'apps/dashboard/src/pages/AcquisitionAccountsPage.tsx'
+      - 'apps/dashboard/src/pages/AcquisitionOutreachPage.tsx'
+      - 'apps/dashboard/src/config/navigation.config.ts'
+      - 'apps/dashboard/e2e/acquisition-ia-redesign.spec.ts'
+      - '.github/workflows/e2e-line02-dashboard-ia-redesign.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: e2e-line02-ia-redesign-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  playwright-windows:
+    name: Playwright — Line02 Dashboard IA 重做 (Windows Chrome)
+    runs-on: windows-latest
+    timeout-minutes: 25
+
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          # 不缓存：npm cache 是 macOS 生成的，缺 Windows optional deps（@rollup/rollup-win32-x64-msvc）
+
+      - name: Install deps
+        run: npm ci
+
+      - name: Install Windows rollup native binding
+        # package-lock.json 由 macOS 生成，不含 @rollup/rollup-win32-x64-msvc
+        # Vite dev server 启动时无条件加载 rollup native，不装就 crash
+        run: npm install @rollup/rollup-win32-x64-msvc --no-save
+
+      - name: Install Playwright Chromium
+        working-directory: apps/dashboard
+        run: npx playwright install chromium --with-deps
+
+      - name: Start Vite dev server (VITE_SKIP_AUTH=true)
+        working-directory: apps/dashboard
+        env:
+          VITE_SKIP_AUTH: 'true'
+          VITE_MOCK_USER_ID: 'e2e-test-user'
+          VITE_MOCK_USER_NAME: 'E2E 测试用户'
+        run: |
+          npx vite --port 5174 &
+          echo $! > /tmp/vite.pid
+          for i in $(seq 1 30); do
+            if curl -fs http://localhost:5174 >/dev/null 2>&1; then
+              echo "Vite ready after ${i}s"
+              break
+            fi
+            sleep 1
+          done
+          curl -fs http://localhost:5174 || (echo "FAIL: Vite 未在 30s 内就绪"; exit 1)
+
+      - name: Run Playwright E2E — Line02 Dashboard IA 重做
+        working-directory: apps/dashboard
+        env:
+          E2E_BASE_URL: 'http://localhost:5174'
+        run: npx playwright test e2e/acquisition-ia-redesign.spec.ts --reporter=list
+
+      - name: Upload Playwright artifacts on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-line02-ia-redesign-artifacts
+          path: |
+            apps/dashboard/test-results/
+            apps/dashboard/playwright-report/
+          retention-days: 7
