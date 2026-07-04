@@ -628,6 +628,9 @@ _TRAILING_STALL: Dict[str, int] = {}  # sender → 触发保留但 trailing 无�
 TRAILING_STALL_LIMIT = 3          # 连续 N 轮无解 → 熔断走回退 emit 预览单条（防死循环开窗=闪屏）
 # v1.0.106 复读双闸（17:47 生产实录：1s 扫描 × 5-10s 发送窗口竞态，同一条消息连回 3 遍）：
 _INFLIGHT: set = set()            # 处理中 sender（emit→DELIVERED/失败之间），扫描跳过不重复 emit
+# v1.0.107 INFLIGHT TTL：记录加入时间，防异常路径泄漏永不释放（TTL=300s 自恢复）。
+_INFLIGHT_ADDED_AT: Dict[str, float] = {}  # sender → 加入 _INFLIGHT 的时间戳
+INFLIGHT_TTL = 300.0              # 超过 5 分钟仍 INFLIGHT → 视为异常泄漏，强制释放
 _LAST_EMIT: Dict[str, Any] = {}   # sender → (规范化内容, ts)：同内容 60s 内绝不二次 emit
 EMIT_DEDUP_TTL = 60.0
 
@@ -637,7 +640,20 @@ def _release_inflight(sender: str) -> None:
     允许下轮重试同一条消息（宁可迟到不可丢）。DELIVERED 走 _commit_reply_success
     （只清 inflight、保留同内容闸 60s 防复读）。"""
     _INFLIGHT.discard(sender)
+    _INFLIGHT_ADDED_AT.pop(sender, None)
     _LAST_EMIT.pop(sender, None)
+
+
+def _expire_inflight_ttl() -> None:
+    """扫描 _INFLIGHT 里超过 INFLIGHT_TTL 秒的 sender，自动强制释放（防异常路径泄漏）。
+    v1.0.107：每轮扫描开始前调用，保障 TTL=300s 自恢复。
+    """
+    import time as _time
+    now = _time.time()
+    expired = [s for s, t in list(_INFLIGHT_ADDED_AT.items()) if now - t > INFLIGHT_TTL]
+    for s in expired:
+        _log(f"[INFLIGHT TTL] sender={s!r} 超过 {INFLIGHT_TTL:.0f}s 未释放，强制清除（防泄漏）")
+        _release_inflight(s)
 
 
 def _jiggle_msg_list(mw: Any) -> None:
@@ -899,6 +915,12 @@ def scan_unread(mw: Any, last_preview: Optional[Dict[str, str]] = None,
         sender = info["sender"]
         if sender in _KNOWN_GROUPS:
             continue
+        # v1.0.107 Bug4: 列表 item name 含 "(N)" 数字 → 直接判群并缓存，不必开窗
+        import re as _re_scan
+        if _re_scan.search(r'[（(]\s*\d+\s*[)）]', sender):
+            _KNOWN_GROUPS.add(sender)
+            _log(f"known_group(name-pattern) cached sender={sender!r}")
+            continue
         if sender in _INFLIGHT:
             continue  # v1.0.106：上一条还在草稿/发送中，绝不重复 emit（复读根源）
         if should_open is not None and not should_open(sender):
@@ -1019,6 +1041,7 @@ def scan_unread(mw: Any, last_preview: Optional[Dict[str, str]] = None,
             continue
         _LAST_EMIT[_m["sender"]] = (_norm, _now_ts)
         _INFLIGHT.add(_m["sender"])
+        _INFLIGHT_ADDED_AT[_m["sender"]] = _now_ts
         _deduped.append(_m)
     out = _deduped
     # v1.0.103 双弹窗修复：有 emit → 不收窗（回复接着用这次弹出），orig_state
@@ -2908,6 +2931,32 @@ def post_draft_generate(
         return {"ok": False, "error": f"bad json: {type(exc).__name__}: {exc}"}
 
 
+
+def post_draft_delivered(
+    middleware_url: str,
+    sender: str,
+    wechat_id: str,
+    reply: str,
+    agent_id: Optional[str] = None,
+) -> None:
+    """v1.0.107 Bug2修复：真机 UIA 发送成功（DELIVERED）后异步回调中台写 out 行。
+    fail-open：任何异常只 _log 不抛，绝不影响主链路。
+    """
+    if os.environ.get("WECHAT_DRAFT_API_DRYRUN") == "1":
+        _log(f"post_draft_delivered DRYRUN sender={sender!r}")
+        return
+    try:
+        url = middleware_url.rstrip("/") + "/api/wechat/draft-delivered"
+        body: Dict[str, Any] = {"sender": sender, "wechat_id": wechat_id, "reply": reply}
+        if agent_id:
+            body["agent_id"] = agent_id
+        resp, error = _post_with_retry(url, body, timeout=10, retries=2, backoff_base=1.0)
+        if error:
+            _log(f"post_draft_delivered 失败 sender={sender!r}: {error}")
+    except Exception as exc:
+        _log(f"post_draft_delivered 异常 sender={sender!r}: {exc}")
+
+
 # ─── DesktopLeaseBroker IPC 接缝（Sprint 0703-line04-desktop-lease-broker）─────
 # listen_chat 在窗口切换前通过 IPC 申请桌面租约，完成后归还，防多 agent 并发抢占。
 # 所有失败均为软失败：acquire 失败 → 跳过本轮（[防假成功] invariant），release 失败忽略。
@@ -4000,6 +4049,7 @@ def run_real_listen(args: argparse.Namespace) -> int:
                 cooldown_map=sender_reply_cooldown,
                 cooldown_seconds=SENDER_COOLDOWN,
             )
+            _expire_inflight_ttl()  # v1.0.107：每轮开始前清超时 INFLIGHT（TTL=300s 防泄漏）
             try:
                 unread = scan_unread(mw, last_preview,
                                      record_skip=_skip_counter.record,
@@ -4252,6 +4302,14 @@ def run_real_listen(args: argparse.Namespace) -> int:
                     sender_reply_cooldown[m["sender"]] = time.time()  # per-sender 30s 冷却
                     _commit_reply_success(m, last_preview)  # DELIVERED
                     _log(f"auto-replied OK sender={m['sender']} receipt={receipt['status']}")
+                    # v1.0.107 Bug2: 真机 DELIVERED 后异步回调中台落 out 行（防假账）
+                    post_draft_delivered(
+                        getattr(args, "middleware_url", "") or "",
+                        m["sender"],
+                        m.get("wxid") or m.get("sender_wxid") or m.get("sender", ""),
+                        reply,
+                        agent_id=getattr(args, "agent_id", None),
+                    )
                 else:
                     reply_failed_at[key] = time.time()
                     # 读回失败/掉线告警：auto_reply.alert_on_failure 产出关键人告警 payload（决策 SSOT）。
@@ -4480,5 +4538,11 @@ def main() -> int:
     return run_real_listen(args)
 
 
-if __name__ == "__main__":
+# v1.0.107 Bug6: freeze_support + __mp_main__ 双重保护
+# Windows embedded Python 在 spawn 方式 fork 子进程时会以 __mp_main__ 身份重新 import 模块。
+# freeze_support() 确保打包后 ProcessPoolExecutor 等不会死循环重启。
+# 两个条件任满其一才跑 main()，防 module fork 时重复执行顶层副作用。
+if __name__ in ("__main__", "__mp_main__"):
+    import multiprocessing as _mp
+    _mp.freeze_support()  # noqa: required for Windows frozen / spawn mode
     sys.exit(main())

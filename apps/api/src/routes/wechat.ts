@@ -15,7 +15,7 @@ import { z } from 'zod';
 import crypto from 'node:crypto';
 import pool from '../db/connection';
 import { resolveTenantForAgent } from '../services/agent-tenant-resolver';
-import { generateChatDraft, generateMomentDraft } from '../services/wechat-draft';
+import { generateChatDraft, generateMomentDraft, commitDelivered } from '../services/wechat-draft';
 import { recordHeartbeat, listHeartbeats } from '../services/wechat-heartbeat';
 import {
   enqueueFailureAlert,
@@ -303,6 +303,31 @@ wechatRouter.post('/draft-generate', async (req: Request, res: Response) => {
       error: 'DRAFT_GENERATE_FAILED',
       message: errMsg,
     });
+  }
+});
+
+// ─── POST /api/wechat/draft-delivered（v1.0.107 Bug2修复）──────────────────────────
+// 真机 UIA 发送成功（DELIVERED）后，listen_chat 回调此端点，落 out 行到记忆库，防假账。
+const DraftDeliveredSchema = z.object({
+  sender: z.string().min(1),
+  wechat_id: z.string().optional(),
+  reply: z.string().min(1),
+  agent_id: z.string().optional(),
+  tenant_id: z.string().optional(),
+});
+wechatRouter.post('/draft-delivered', async (req: Request, res: Response) => {
+  const parsed = DraftDeliveredSchema.safeParse(req.body ?? {});
+  if (!parsed.success) {
+    return res.status(400).json({ error: 'INVALID_BODY', message: '缺必要字段' });
+  }
+  const tenantId = parsed.data.tenant_id || await resolveTenantId(req);
+  try {
+    await commitDelivered({ ...parsed.data, tenant_id: tenantId });
+    return res.status(200).json({ ok: true });
+  } catch (err) {
+    const errMsg = err instanceof Error ? err.message : String(err);
+    console.error('[wechat/draft-delivered] 失败:', errMsg);
+    return res.status(500).json({ error: 'DRAFT_DELIVERED_FAILED', message: errMsg });
   }
 });
 

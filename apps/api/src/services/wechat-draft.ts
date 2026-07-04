@@ -464,17 +464,67 @@ export async function generateChatDraft(
     return { ok: true, status: 'ai_failed', task_id: taskId, draft_id: '' };
   }
 
-  // AI 成功 → 记入"我方回复"短期记忆 + 触发固化（盖客服身份章），然后直接返回 reply（自动直发）。
-  try {
-    await appendMessage(contactKey, sender, 'out', aiContent, csWechatId);
-    await consolidate(contactKey);
-  } catch (err) {
-    console.warn('[wechat-draft] 写出站消息/固化失败（不影响回复）:', err);
-  }
-  await stampCsMemory(tenant_id, sender, 'out', aiContent, csWechatId);
+  // v1.0.107 Bug2修复: out 行不在此处写入，等真机 UIA 发送成功（DELIVERED）后，
+  // listen_chat 调 POST /api/wechat/draft-delivered 才落库，防假账。
+  // 此前在此写 out 行会导致 UIA 发送失败时 wechat_messages 有虚假 out 记录。
 
   console.info(`[wechat-draft] auto-send sender=${sender} reply_len=${aiContent.length}`);
-  return { ok: true, status: 'sent', task_id: taskId, draft_id: '', reply: aiContent };
+  return { ok: true, status: 'sent', task_id: taskId, draft_id: '', reply: aiContent,
+           _contact_key: contactKey, _cs_wechat_id: csWechatId };
+}
+
+/**
+ * commitDelivered — 真机 UIA 发送成功（DELIVERED）后落 out 行到记忆库。
+ * v1.0.107 Bug2修复: 之前 generateChatDraft 在 AI 生成时就写 out 行，
+ * 实际 UIA 可能从未发成功 → 假账。现改为真机确认后才写。
+ */
+/**
+ * v1.0.107 Bug7: 记忆写入内容过滤
+ * 过滤掉明显是 AI 自述技术能力/命令/代码块的回复，防止污染记忆上下文。
+ */
+function shouldSkipMemory(reply: string): boolean {
+  const r = reply.trim();
+  // 代码块（```开头）
+  if (r.startsWith('```')) return true;
+  // 纯命令（以 $ / # / > 开头）
+  if (/^[$#>]\s/.test(r)) return true;
+  // AI 自述技术能力关键词（如"我是AI""我是人工智能""作为语言模型"）
+  const selfDescKeywords = [
+    '我是AI', '我是人工智能', '作为语言模型', '作为AI助手',
+    '作为人工智能', '我是一个AI', 'I am an AI', 'as an AI',
+    '我没有情感', '我无法感受', '我是机器人',
+  ];
+  if (selfDescKeywords.some(kw => r.includes(kw))) return true;
+  return false;
+}
+
+export async function commitDelivered(params: {
+  sender: string;
+  wechat_id?: string | null;
+  reply: string;
+  tenant_id?: string | null;
+  agent_id?: string | null;
+}): Promise<void> {
+  const { sender, wechat_id, reply, tenant_id, agent_id } = params;
+  const contactKey = wechat_id || sender;
+  // v1.0.107 Bug7: 过滤技术/自述内容，防上下文污染
+  if (shouldSkipMemory(reply)) {
+    console.info(`[wechat-draft] commitDelivered skip memory (技术/自述内容) sender=${sender}`);
+    return;
+  }
+  // 反查 csWechatId（同 generateChatDraft 路径）
+  let csWechatId: string | null = null;
+  try {
+    csWechatId = agent_id ? await resolveCsWechatIdByAgentId(pool, agent_id) : null;
+  } catch (_e) { /* 反查失败不阻塞 */ }
+  try {
+    await appendMessage(contactKey, sender, 'out', reply, csWechatId);
+    await consolidate(contactKey);
+  } catch (err) {
+    console.warn('[wechat-draft] commitDelivered 写 out 行失败:', err);
+  }
+  await stampCsMemory(tenant_id ?? undefined, sender, 'out', reply, csWechatId);
+  console.info(`[wechat-draft] commitDelivered sender=${sender} reply_len=${reply.length}`);
 }
 
 // ─── ws4: generateMomentDraft（朋友圈文案草稿）────────────────────────────────
