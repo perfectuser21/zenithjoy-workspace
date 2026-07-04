@@ -4383,11 +4383,10 @@ def run_real_listen(args: argparse.Namespace) -> int:
                         _log(f"auto-replied OK sender={m['sender']} receipt={receipt['status']}")
                     else:
                         reply_failed_at[key] = time.time()
-                        # 发送终态失败（读回失败/异常放弃本轮）→ 回执中台 ok=False，让中台知道这条没送达。
-                        post_message_receipt(
-                            args.middleware_url, draft_message_ids.get(id(m)), False,
-                            getattr(args, "agent_id", None),
-                        )
+                        # 发送失败 = 冷却后下轮重试同一条（非终态）。中台 markMessageReceipt 只翻
+                        # status='draft'，一旦记 failed 即终态，冷却重试后真送达也永久钉死 failed。
+                        # 故这里绝不调 post_message_receipt(ok=False)——保持 draft="尚未确认送达"
+                        # 语义准确，只打日志；真送达时由成功分支 ok=True 销账。
                         # 读回失败/掉线告警：auto_reply.alert_on_failure 产出关键人告警 payload（决策 SSOT）。
                         # 关键人由中台配置（auto_agent.key_contact_wechat）下发；agent 侧拿不到则 target 留空。
                         key_contact = getattr(args, "key_contact", "") or os.environ.get("ZJ_KEY_CONTACT", "")
