@@ -4343,3 +4343,19 @@ agent_suite:
   status: active
   product: AI员工
   note: "sprint(07032333): Playwright E2E — LeadsPage 最新回复/负责人列头可见，无触达状态，AcquisitionTasksPage 无触达状态"
+
+- id: line02-dashboard-ia-redesign-outreach-api
+  path: sprints/07041249-line02-dashboard-ia-redesign/tests/line02-outreach-api.test.ts
+  type: unit
+  ci: L3
+  status: active
+  product: AI员工
+  note: "sprint(07041249): Hub GP 顺序 + 触达记录视图 — outreach-history 端点注册+tenant_id过滤+items/total schema，fetchOutreachHistory API 函数，AcquisitionOutreachPage 存在+空状态，Hub MODULES 无 comingSoon，accounts 无昵称列，navigation 新路由注册"
+
+- id: line02-dashboard-ia-redesign-e2e
+  path: apps/dashboard/e2e/acquisition-ia-redesign.spec.ts
+  type: e2e
+  ci: L4
+  status: active
+  product: AI员工
+  note: "sprint(07041249): Playwright E2E — Hub 4 卡片可见/无即将上线，账号页无昵称列/有绑定机器列，Leads 路由正确，触达记录页空状态，设置页无指派计划"

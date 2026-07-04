@@ -112,6 +112,37 @@ acquisitionDispatchRouter.get('/dispatch/plan', tenantContextOptional, async (re
   return res.json(OK({ plan, total: plan.length }));
 });
 
+// ── GET /outreach-history — 触达历史（dm_assignments JOIN dm_outreach_log JOIN acquisition_leads）──
+acquisitionDispatchRouter.get('/outreach-history', tenantContextOptional, async (req: Request, res: Response) => {
+  const tenantId = tenantOf(req, res);
+  if (!tenantId) return;
+  try {
+    const r = await pool.query(
+      `SELECT a.id, a.account_label, a.status, a.scheduled_for,
+              l.nickname AS lead_nickname,
+              ol.sent_at
+         FROM zenithjoy.dm_assignments a
+         LEFT JOIN zenithjoy.acquisition_leads l ON l.id = a.lead_id AND l.tenant_id = $1
+         LEFT JOIN zenithjoy.dm_outreach_log ol ON ol.assignment_id = a.id
+        WHERE a.tenant_id = $1
+        ORDER BY a.scheduled_for DESC NULLS LAST, a.created_at DESC
+        LIMIT 500`,
+      [tenantId]
+    );
+    const items = r.rows.map((row) => ({
+      id: row.id,
+      lead_nickname: row.lead_nickname ?? null,
+      account_label: row.account_label,
+      status: row.status,
+      scheduled_for: row.scheduled_for ?? null,
+      sent_at: row.sent_at ?? null,
+    }));
+    return res.json(OK({ items, total: items.length }));
+  } catch {
+    return res.json(OK({ items: [], total: 0 }));
+  }
+});
+
 // ── GET /cookie-health — 各号健康分类 + 需重扫项 ──
 acquisitionDispatchRouter.get('/cookie-health', tenantContextOptional, async (req: Request, res: Response) => {
   const tenantId = tenantOf(req, res);
