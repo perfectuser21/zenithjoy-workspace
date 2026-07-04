@@ -35,6 +35,22 @@ if (-not (Test-Path $Target)) {
     throw "找不到 $Target — 请在安装包根目录运行本脚本"
 }
 
+# 清理残留的旧版本计划任务（root cause 2026-07-04, rog）：历次调试曾在客户机上手工创建过
+# 自定义命名的计划任务（如 ZJAgent / ZJClean / ZJStart52 / restart_agent），各自指向不同的
+# 旧版本安装目录。这些任务名不是 $TaskName，靠下面 Register-ScheduledTask 的 -Force 覆盖注册
+# 完全清不到它们。旧版本 start.bat 没有 launcher 互斥锁（decision 72740815），一旦触发（重启 /
+# StartWhenAvailable 追赶）就会同时唤起多个互不知情的永生 supervise 循环：每个循环都无脑
+# taskkill 全部 zenithjoy-agent.exe 再拉起自己版本，彼此打架、疯狂弹窗。这里在注册前枚举所有
+# 引用 zenithjoy-agent-v* 安装路径、但任务名不是 $TaskName 的计划任务，全部清掉。
+Get-ScheduledTask -ErrorAction SilentlyContinue | Where-Object {
+    $_.TaskName -ne $TaskName -and (
+        ($_.Actions | ForEach-Object { "$($_.Execute) $($_.Arguments)" }) -join ' ' -match 'zenithjoy-agent-v'
+    )
+} | ForEach-Object {
+    Write-Host "[autostart] 清理残留任务: $($_.TaskName)（指向旧版本安装路径，非当前 $TaskName）"
+    Unregister-ScheduledTask -TaskName $_.TaskName -Confirm:$false -ErrorAction SilentlyContinue
+}
+
 # 以当前登录用户身份、登录时（ONLOGON）触发；交互式以便 listen_chat 能操作微信桌面 UI
 # 显式用 wscript.exe 拉起 .vbs，不依赖系统把 .vbs 关联到 wscript（企业组策略/杀软可能改掉关联，
 # 导致任务"成功"却没真拉起 Agent 且无日志）。$Target 用引号包裹，路径带空格也安全。

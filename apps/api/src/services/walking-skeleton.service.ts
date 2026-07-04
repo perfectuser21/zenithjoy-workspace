@@ -228,15 +228,49 @@ export async function upsertAgentByHeartbeat(args: {
   // 防线1配套：心跳带 machine_id → 幂等刷新 license_machines（machine_id ↔ license ↔ tenant 通路），
   // 即便 register 从没成功过，中台也能按 machine_id 反查到租户。best-effort：失败不阻塞心跳主流程。
   if (machineId && machineId.trim()) {
+    const mid = machineId.trim();
     try {
-      await pool.query(
-        `INSERT INTO zenithjoy.license_machines (license_id, machine_id, hostname)
-         VALUES ($1, $2, $3)
-         ON CONFLICT (license_id, machine_id)
-         DO UPDATE SET last_seen = now(),
-                       hostname = COALESCE(EXCLUDED.hostname, zenithjoy.license_machines.hostname)`,
-        [licenseId, machineId.trim(), hostname],
+      // 配额门：与 registerAgent 完全一致的判据（license_machines active 数 vs licenses.max_machines）。
+      // 心跳旁路此前无门，导致 max=1 的 license 被绑多台（生产实锤）。
+      // 已绑定机器（已有行）→ 照旧续心跳 upsert，不受配额影响；
+      // 新机器（无行）→ active 数 >= max_machines 时跳过 INSERT（agents 心跳照常，不影响在线展示）。
+      const existing = await pool.query(
+        `SELECT 1 FROM zenithjoy.license_machines
+          WHERE license_id = $1 AND machine_id = $2 LIMIT 1`,
+        [licenseId, mid],
       );
+      const alreadyBound = (existing.rows?.length ?? 0) > 0;
+
+      let quotaFull = false;
+      if (!alreadyBound) {
+        const quota = await pool.query<{ max: number; cnt: number }>(
+          `SELECT l.max_machines AS max,
+                  (SELECT COUNT(*)::int FROM zenithjoy.license_machines
+                    WHERE license_id = $1 AND status = 'active') AS cnt
+             FROM zenithjoy.licenses l
+            WHERE l.id = $1`,
+          [licenseId],
+        );
+        const max = Number(quota.rows[0]?.max ?? 0);
+        const cnt = Number(quota.rows[0]?.cnt ?? 0);
+        if (cnt >= max) {
+          quotaFull = true;
+          console.warn(
+            `[heartbeat] license 配额已满(${cnt}/${max})，拒绝新机器 machine_id=${mid}`,
+          );
+        }
+      }
+
+      if (!quotaFull) {
+        await pool.query(
+          `INSERT INTO zenithjoy.license_machines (license_id, machine_id, hostname)
+           VALUES ($1, $2, $3)
+           ON CONFLICT (license_id, machine_id)
+           DO UPDATE SET last_seen = now(),
+                         hostname = COALESCE(EXCLUDED.hostname, zenithjoy.license_machines.hostname)`,
+          [licenseId, mid, hostname],
+        );
+      }
     } catch (err) {
       console.warn('[upsertAgentByHeartbeat] license_machines 刷新失败（best-effort 忽略）:', err);
     }

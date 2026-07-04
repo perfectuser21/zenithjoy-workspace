@@ -24,6 +24,9 @@ import {
 } from '../services/wechat/cs-outbound';
 import { getCsWorkStats, type StatsDate } from '../services/wechat/cs-work-stats';
 import { runDailyReportSettlement, getDailyReports } from '../services/wechat/cs-daily-report';
+import { markMessageReceipt } from '../services/wechat/contact-memory';
+import { resolveCsWechatIdentity } from '../services/wechat/cs-identity-resolve';
+import { recordIdentityAlert } from '../services/wechat/cs-account-config-store';
 
 export const wechatRouter = Router();
 
@@ -120,7 +123,14 @@ async function resolveTenantId(req: Request): Promise<string> {
     ''
   ).trim();
   if (!agentId && !machineId) return '';
-  return resolveTenantForAgent(pool, { agentId, machineId });
+  return resolveTenantForAgent(pool, {
+    agentId,
+    machineId,
+    // 同机多租户冲突 → 写身份告警表（诊断页可见），resolver 侧同时 deny。
+    // 注意：multi_tenant_machine 场景下 wechat_id 列存的是 machine_id——租户解析
+    // 阶段还没有 wechat 身份可用，靠 reason='multi_tenant_machine' 区分这类告警。
+    onMultiTenantConflict: (mid) => recordIdentityAlert(mid, 'multi_tenant_machine'),
+  });
 }
 
 // ─── POST /api/wechat/qr-bind ───────────────────────────────────────────────
@@ -342,6 +352,30 @@ wechatRouter.post('/cs/outbound/:id/receipt', async (req: Request, res: Response
     console.error('[wechat/cs/outbound/receipt] 失败:', errMsg);
     return res.status(500).json({ error: 'OUTBOUND_RECEIPT_FAILED', message: errMsg });
   }
+});
+
+// ─── POST /api/wechat/messages/:id/receipt  {ok, cs_wechat_id?/agent_id?} ───────
+// 假账修复第二段：draft-generate 落 out 行以 status='draft'（AI 已生成、真机未确认送达）。
+// agent 真机 UIA 发送后回报这里，把该 draft 行翻 delivered/failed，杜绝「中台记了但没真发」的假账。
+// 身份解析链与 draft-generate 逐字一致（共用 resolveCsWechatIdentity 三段链）：
+// body.cs_wechat_id 直传 > csConfig?.wechat_id > resolveCsWechatIdByAgentId(agent_id)。
+// 中间 csConfig 段不可省：手填 SSOT 场景 csConfig.wechat_id 可能与反查值不一致，draft 写行盖的
+// 是 csConfig 值，回执归属必须用同一值，否则 UPDATE 0 行、out 行卡 draft → 假账反向复发。
+wechatRouter.post('/messages/:id/receipt', async (req: Request, res: Response) => {
+  const messageId = Number(req.params.id);
+  if (!Number.isInteger(messageId) || messageId <= 0) {
+    return res.status(400).json({ error: 'BAD_MESSAGE_ID', message: 'id 必须为正整数' });
+  }
+  const ok = req.body?.ok === true;
+  const directCs =
+    typeof req.body?.cs_wechat_id === 'string' ? req.body.cs_wechat_id : undefined;
+  const agentId = typeof req.body?.agent_id === 'string' ? req.body.agent_id : undefined;
+  const csWechatId = await resolveCsWechatIdentity({ directCsWechatId: directCs, agentId });
+  if (!csWechatId) {
+    return res.status(403).json({ error: 'NO_CS_IDENTITY', message: '无法解析客服身份' });
+  }
+  const updated = await markMessageReceipt(messageId, ok, csWechatId);
+  return res.status(200).json({ ok: true, updated });
 });
 
 // POST /api/wechat/cs/alert  {agent_id, key_contact, reason}  → 失败/掉线 → 入告警出站任务（去重）

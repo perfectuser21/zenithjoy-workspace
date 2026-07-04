@@ -7,6 +7,7 @@ import {
   getShortTerm,
   getContactMemory,
   consolidate,
+  markMessageReceipt,
 } from '../contact-memory';
 
 /**
@@ -42,28 +43,81 @@ beforeEach(() => {
 // ─── appendMessage ─────────────────────────────────────────────────────────────
 
 describe('appendMessage', () => {
-  it('发一条 INSERT 到 wechat_messages，带正确参数（缺客服身份 → cs_wechat_id=null）', async () => {
-    await appendMessage('wxid_1', '于瑾', 'in', '你好');
+  it('发一条 INSERT 到 wechat_messages，带正确参数（缺客服身份 → cs_wechat_id=null；不传 opts → status=delivered）', async () => {
+    // BIGSERIAL：node-postgres 返回字符串，appendMessage 必须转成 number
+    mockedQuery.mockResolvedValueOnce({ rows: [{ id: '7' }] });
+    const id = await appendMessage('wxid_1', '于瑾', 'in', '你好');
 
     expect(mockedQuery).toHaveBeenCalledTimes(1);
     const [sql, params] = mockedQuery.mock.calls[0];
     expect(String(sql)).toMatch(/INSERT INTO zenithjoy\.wechat_messages/);
     expect(String(sql)).toMatch(/cs_wechat_id/);
-    // 不传 csWechatId → 第 5 个参数为 null（向后兼容老数据，统计时不计入）
-    expect(params).toEqual(['wxid_1', '于瑾', 'in', '你好', null]);
+    expect(String(sql)).toMatch(/RETURNING id/);
+    // 不传 csWechatId → 第 5 个参数为 null；不传 opts → 第 6 个参数为 'delivered'
+    expect(params).toEqual(['wxid_1', '于瑾', 'in', '你好', null, 'delivered']);
+    expect(id).toBe(7);
   });
 
   it('带 csWechatId → 盖客服身份章（第 5 个参数 = 该客服微信号）', async () => {
     await appendMessage('wxid_1', '于瑾', 'in', '你好', 'wxid_cs_a');
     const [, params] = mockedQuery.mock.calls[0];
-    expect(params).toEqual(['wxid_1', '于瑾', 'in', '你好', 'wxid_cs_a']);
+    expect(params).toEqual(['wxid_1', '于瑾', 'in', '你好', 'wxid_cs_a', 'delivered']);
   });
 
-  it('DB 失败时 console.warn 不抛', async () => {
+  it('out + {status:"draft"} → 返回 INSERT ... RETURNING 的 id，参数第 6 个为 draft', async () => {
+    // BIGSERIAL 返回字符串 '42' → 断言仍期望 number 42（守住 string→number 契约）
+    mockedQuery.mockResolvedValueOnce({ rows: [{ id: '42' }] });
+    const id = await appendMessage('wxid_1', '于瑾', 'out', 'AI草稿', 'wxid_cs_a', {
+      status: 'draft',
+    });
+    const [sql, params] = mockedQuery.mock.calls[0];
+    expect(String(sql)).toMatch(/RETURNING id/);
+    expect(params).toEqual(['wxid_1', '于瑾', 'out', 'AI草稿', 'wxid_cs_a', 'draft']);
+    expect(id).toBe(42);
+    expect(typeof id).toBe('number');
+  });
+
+  it('DB 失败时 console.warn 不抛，返回 null', async () => {
     mockedQuery.mockRejectedValueOnce(new Error('db down'));
     await expect(
       appendMessage('wxid_1', '于瑾', 'out', '收到'),
-    ).resolves.toBeUndefined();
+    ).resolves.toBeNull();
+  });
+});
+
+// ─── markMessageReceipt ─────────────────────────────────────────────────────────
+
+describe('markMessageReceipt', () => {
+  it('ok=true → UPDATE 把 draft out 行翻 delivered，归属+幂等条件齐全，命中返回 true', async () => {
+    mockedQuery.mockResolvedValueOnce({ rows: [{ id: 42 }] });
+    const ok = await markMessageReceipt(42, true, 'cs-x');
+
+    expect(mockedQuery).toHaveBeenCalledTimes(1);
+    const [sql, params] = mockedQuery.mock.calls[0];
+    // 目标状态由 $2 决定（delivered）；归属校验用 cs_wechat_id=$3；幂等靠 status='draft'
+    expect(String(sql)).toMatch(/UPDATE zenithjoy\.wechat_messages/);
+    expect(String(sql)).toMatch(/SET status = \$2/);
+    expect(String(sql)).toMatch(/cs_wechat_id = \$3/);
+    expect(String(sql)).toMatch(/direction = 'out'/);
+    expect(String(sql)).toMatch(/status = 'draft'/);
+    expect(params).toEqual([42, 'delivered', 'cs-x']);
+    expect(ok).toBe(true);
+  });
+
+  it('ok=false → 目标状态 failed（第 2 个参数）', async () => {
+    mockedQuery.mockResolvedValueOnce({ rows: [{ id: 42 }] });
+    await markMessageReceipt(42, false, 'cs-x');
+    expect(mockedQuery.mock.calls[0][1]).toEqual([42, 'failed', 'cs-x']);
+  });
+
+  it('rows 空（不归属 / 已翻过 → 幂等 no-op）返回 false', async () => {
+    mockedQuery.mockResolvedValueOnce({ rows: [] });
+    await expect(markMessageReceipt(42, true, 'cs-other')).resolves.toBe(false);
+  });
+
+  it('query reject → console.warn 不抛，返回 false', async () => {
+    mockedQuery.mockRejectedValueOnce(new Error('db down'));
+    await expect(markMessageReceipt(42, true, 'cs-x')).resolves.toBe(false);
   });
 });
 

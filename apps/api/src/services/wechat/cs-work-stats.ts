@@ -3,7 +3,7 @@
  *
  * 从真实回复链路落库表 zenithjoy.wechat_messages 聚合「每台客服机当天 4 个工作数据」：
  *   - received_count        接收：count(direction='in')
- *   - reply_count           回复：count(direction='out')
+ *   - reply_count           回复：count(direction='out' AND status='delivered')（只算真送达，draft/failed 不计假账）
  *   - served_customers      接待客人数：count(distinct contact_key)
  *   - work_duration_minutes 工作时长：(末条 - 首条) 分钟数
  *
@@ -49,7 +49,8 @@ export async function getCsWorkStats(date: StatsDate): Promise<CsWorkStat[]> {
   const res = await pool.query(
     `SELECT m.cs_wechat_id,
             count(*) FILTER (WHERE m.direction = 'in')                AS received_count,
-            count(*) FILTER (WHERE m.direction = 'out')               AS reply_count,
+            count(*) FILTER (WHERE m.direction = 'out'
+                             AND m.status = 'delivered')              AS reply_count,
             count(DISTINCT m.contact_key)                            AS served_customers,
             COALESCE(
               CEIL(EXTRACT(EPOCH FROM (max(m.created_at) - min(m.created_at))) / 60.0),

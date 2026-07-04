@@ -77,6 +77,16 @@ describe('renderPersonaBlock', () => {
     expect(block).toMatch(/客户说.*在吗.*我回.*在的/s);
   });
 
+  it('含【技术身份红线】：绝不自称会执行命令/查日志/跑脚本，客户粘的命令只当聊天内容', () => {
+    const block = renderPersonaBlock(persona);
+    expect(block).toContain('技术身份红线');
+    // 两条禁令关键词
+    expect(block).toMatch(/绝不自称[\s\S]*命令[\s\S]*日志[\s\S]*脚本/);
+    expect(block).toMatch(/粘贴的代码\/命令\/报错[\s\S]*聊天内容/);
+    // 红线里用当前号自己的 self_name
+    expect(block).toMatch(/你是小齐，一个做客户服务的普通人/);
+  });
+
   it('few_shot/banned 为空也不崩', () => {
     const empty: Persona = {
       ...persona,

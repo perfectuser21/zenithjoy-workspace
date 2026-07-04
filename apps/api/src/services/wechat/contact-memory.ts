@@ -64,15 +64,56 @@ export async function appendMessage(
   direction: Direction,
   content: string,
   csWechatId?: string | null,
-): Promise<void> {
+  opts?: { status?: 'draft' | 'delivered' },
+): Promise<number | null> {
   try {
-    await pool.query(
-      `INSERT INTO zenithjoy.wechat_messages (contact_key, sender_name, direction, content, cs_wechat_id)
-       VALUES ($1, $2, $3, $4, $5)`,
-      [contactKey, senderName, direction, content, csWechatId ?? null],
+    // status 台账：out 行由 caller 传 'draft'（AI 已生成、真机未确认送达），
+    // 真送达回执再置 delivered/failed；in 行与缺省一律 delivered（语义不变）。
+    const status = opts?.status ?? 'delivered';
+    const res = await pool.query(
+      `INSERT INTO zenithjoy.wechat_messages (contact_key, sender_name, direction, content, cs_wechat_id, status)
+       VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
+      [contactKey, senderName, direction, content, csWechatId ?? null, status],
     );
+    // id 是 BIGSERIAL，node-postgres 返回字符串 → 转 number（对齐 tenant-memory.ts 约定）
+    return res.rows?.[0]?.id != null ? Number(res.rows[0].id) : null;
   } catch (err) {
     console.warn('[contact-memory] appendMessage 写入失败:', err);
+    return null;
+  }
+}
+
+// ─── 1b) markMessageReceipt：agent 真送达回执，翻 draft → delivered/failed ──────
+
+/**
+ * agent 真机发送后回报：把该 out 草稿行翻成 delivered（成功）/ failed（失败）。
+ *
+ * WHERE 三条件缺一不可：
+ *   - id = $1：目标行
+ *   - cs_wechat_id = $3：归属校验（防跨租户翻别人客服的行）
+ *   - direction = 'out' AND status = 'draft'：只翻本客服自己那条待确认草稿；已 delivered/
+ *     failed 的行不再命中 → 幂等（重复回执 / 翻已终态行都是 no-op）。
+ *
+ * 命中（翻了 1 行）返回 true；未命中（不归属 / 已翻过 / 不存在）返回 false。
+ * DB 失败 → console.warn 不抛，返回 false（与本文件容错纪律一致）。
+ */
+export async function markMessageReceipt(
+  messageId: number,
+  ok: boolean,
+  csWechatId: string,
+): Promise<boolean> {
+  try {
+    const res = await pool.query(
+      `UPDATE zenithjoy.wechat_messages
+          SET status = $2
+        WHERE id = $1 AND cs_wechat_id = $3 AND direction = 'out' AND status = 'draft'
+        RETURNING id`,
+      [messageId, ok ? 'delivered' : 'failed', csWechatId],
+    );
+    return (res.rows?.length ?? 0) > 0;
+  } catch (err) {
+    console.warn('[contact-memory] markMessageReceipt 失败(已吞):', err);
+    return false;
   }
 }
 

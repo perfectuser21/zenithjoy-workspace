@@ -26,7 +26,7 @@ describe('wechat.ts — router export', () => {
     expect(paths).not.toContain('/draft-review-poll');
   });
 
-  it('registers exactly 10 unique endpoints (去飞书删 draft-review-poll：4 原有 + 3 关键人出站 + S3 汇总 + S4 日报×2)', () => {
+  it('registers exactly 11 unique endpoints (10 原有 + 消息回执 /messages/:id/receipt)', () => {
     const stack = (wechatRouter as any).stack;
     const paths = [...new Set(stack.filter((l: any) => l.route).map((l: any) => l.route.path))];
     // 原有 4：qr-bind / scheduler-tick / draft-generate / listener-heartbeat（draft-review-poll 已删）
@@ -44,6 +44,8 @@ describe('wechat.ts — router export', () => {
     // S4：客服日报（结算 + 回看）
     expect(paths).toContain('/cs/daily-report/settle');
     expect(paths).toContain('/cs/daily-report');
-    expect(paths.length).toBe(10);
+    // 假账修复第二段：draft out 行真送达回执（翻 delivered/failed）
+    expect(paths).toContain('/messages/:id/receipt');
+    expect(paths.length).toBe(11);
   });
 });

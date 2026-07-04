@@ -164,6 +164,43 @@ describe('generateChatDraft 去飞书自动直发 [BEHAVIOR]', () => {
     expect(llm).not.toHaveBeenCalled();
   });
 
+  it('J8: sent 路径把 out 行以 status:draft 落库，并把 INSERT 的 id 作为 message_id 返回（送达回执台账地基）', async () => {
+    vi.mocked(callOpenRouter).mockResolvedValue({ content: 'AI 草稿回复' } as any);
+
+    // out 行 INSERT ... RETURNING id → 回 id=42；其余 query 走默认空。
+    mockQuery.mockImplementation((sql: string, params?: any[]) => {
+      const s = typeof sql === 'string' ? sql : '';
+      if (s.includes('INSERT INTO zenithjoy.wechat_messages') && params?.[2] === 'out') {
+        // BIGSERIAL：node-postgres 返回字符串，message_id 断言仍期望 number
+        return Promise.resolve({ rows: [{ id: '42' }], rowCount: 1 });
+      }
+      return Promise.resolve({ rows: [], rowCount: 0 });
+    });
+
+    const mod = await import('../wechat-draft');
+    const result: any = await mod.generateChatDraft({
+      sender: '于瑾',
+      wechat_id: 'wxid_yujin',
+      content: '你好',
+      mode: 'auto',
+    } as any);
+
+    expect(result.status).toBe('sent');
+    expect(result.message_id).toBe(42);
+    expect(typeof result.message_id).toBe('number');
+
+    // out 行 INSERT 的第 6 个参数（status）必须是 'draft'
+    const outInsert = mockQuery.mock.calls.find(
+      (c) =>
+        typeof c[0] === 'string' &&
+        c[0].includes('INSERT INTO zenithjoy.wechat_messages') &&
+        Array.isArray(c[1]) &&
+        c[1][2] === 'out',
+    );
+    expect(outInsert).toBeTruthy();
+    expect(outInsert![1][5]).toBe('draft');
+  });
+
   it('J7: 不同 CS 账号黑名单完全隔离 — cs-A 标黑的联系人，cs-B 账号调用必须放行（防跨账号污染）', async () => {
     // 复现 staging 测试问题：xian-pc 某账号把"默忆"标了 internal，
     // rog 账号调用 draft-generate 时也被误拦截，出现"一会儿黑名单一会儿 auto-send"。
