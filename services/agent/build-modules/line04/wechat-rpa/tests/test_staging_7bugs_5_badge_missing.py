@@ -1,10 +1,10 @@
 # -*- coding: utf-8 -*-
 """Bug 5 — 角标缺失：99+ 格式不被识别（staging 7bugs / 1.0.108）
 
-根因：parse_unread_count 正则 r'\[(\d+)条]' 只匹配精确数字，不匹配
+根因：parse_unread_count 正则 r'\\[(\\d+)条]' 只匹配精确数字，不匹配
 WeChat 在消息很多时显示的 "[99+条]" 格式（staging 测试群发消息后出现）。
 
-修法：更新正则为 r'\[(\d+)\+?条]'，对 N+ 格式返回 N（至少有 N 条未读）。
+修法：更新正则为 r'\\[(\\d+)\\+?条]'，对 N+ 格式返回 N（至少有 N 条未读）。
 本文件是永久 regression test。
 """
 import os
