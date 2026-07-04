@@ -4312,6 +4312,13 @@ agent_suite:
   status: active
   product: 客户私域AI接管
   note: "listen_chat stderr 落盘可观测性：写入/轮转/写入失败静默降级三条 [BEHAVIOR] 单测"
+- id: desktop-lease-broker-module-deploy-fix
+  path: services/agent/modules/line04/__tests__/wechat-rpa-desktop-lease-log.test.ts
+  type: unit
+  ci: L2
+  status: active
+  product: 客户私域AI接管
+  note: "部署缺口修复：日志落盘补进真实被编译进客户机安装包的 modules/line04/handlers/wechat-rpa.ts（此前误改了 @deprecated 的 core 文件），含 stderr 接线 ARTIFACT 防回归测试"
 - id: line02-account-role-unify
   path: sprints/07032332-line02-account-role-unify/tests/account-role-unify.test.ts
   type: integration
