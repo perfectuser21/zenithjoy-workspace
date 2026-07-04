@@ -23,11 +23,37 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # PR CI job: ubuntu-latest + Vite dev server，无需 DB secrets
+  # PR CI job: ubuntu-latest + Postgres + apps/api + Vite dev server（第3条测试打真实 API，需要真后端）
   e2e:
     name: Playwright — Line02 LeadsTable 统一（ubuntu chromium）
     runs-on: ubuntu-latest
     timeout-minutes: 15
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: cecelia
+          POSTGRES_PASSWORD: cecelia
+          POSTGRES_DB: cecelia
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DATABASE_HOST: localhost
+      DATABASE_PORT: 5432
+      DATABASE_USER: cecelia
+      DATABASE_PASSWORD: cecelia
+      DATABASE_NAME: cecelia
+      PORT: 5200
+      NODE_ENV: test
+      BETTER_AUTH_SECRET: ci-only-secret-32-chars-min-not-prod-123
+      BETTER_AUTH_URL: http://localhost:5200
+      ASSIGNEE_ROSTER: '["客服A","客服B"]'
 
     defaults:
       run:
@@ -42,6 +68,39 @@ jobs:
 
       - name: Install deps
         run: npm ci
+
+      - name: Create zenithjoy schema + pgcrypto
+        env:
+          PGPASSWORD: cecelia
+        run: |
+          psql -h localhost -U cecelia -d cecelia -c "CREATE SCHEMA IF NOT EXISTS zenithjoy;"
+          psql -h localhost -U cecelia -d cecelia -c "CREATE EXTENSION IF NOT EXISTS \"pgcrypto\";"
+
+      - name: Run apps/api/db migrations
+        env:
+          PGPASSWORD: cecelia
+        run: |
+          for f in apps/api/db/migrations/*.sql; do
+            echo "→ $f"
+            psql -h localhost -U cecelia -d cecelia -v ON_ERROR_STOP=1 -f "$f"
+          done
+
+      - name: Build apps/api
+        working-directory: apps/api
+        run: npm run build
+
+      - name: Start apps/api
+        working-directory: apps/api
+        run: |
+          node dist/index.js > /tmp/apps-api.log 2>&1 &
+          for i in $(seq 1 30); do
+            if curl -fs http://localhost:5200/health >/dev/null 2>&1; then
+              echo "apps/api ready after ${i}s"
+              break
+            fi
+            sleep 1
+          done
+          curl -fs http://localhost:5200/health || (cat /tmp/apps-api.log && exit 1)
 
       - name: Install Playwright Chromium
         working-directory: apps/dashboard
@@ -69,6 +128,10 @@ jobs:
         env:
           E2E_BASE_URL: 'http://localhost:5174'
         run: npx playwright test e2e/leads-unified-table.spec.ts --reporter=list
+
+      - name: Dump apps/api log on failure
+        if: failure()
+        run: cat /tmp/apps-api.log || true
 
       - name: Upload artifacts on failure
         if: failure()
