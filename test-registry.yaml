@@ -4389,3 +4389,19 @@ agent_suite:
   status: active
   product: Agent 管理
   note: "Agent Credit 路由单测 — GET /balance 和 POST /deduct 正常/错误路径（agent-credit-api sprint）"
+
+- id: line04-watchdog-bom-health
+  path: services/agent/modules/line04/__tests__/watchdog-bom-health.test.ts
+  type: unit
+  ci: L3
+  status: active
+  product: AI员工
+  note: "fix(line04 1.0.108): watchdog 读 health JSON 时剥 BOM+CRLF regression — Python 写 utf-8-sig BOM 导致 JSON.parse 失败，fix: collectListenerHealth 先 stripBOM 再 parse"
+
+- id: line04-desktop-lease-broker-watchdog
+  path: services/agent/src/__tests__/desktop-lease-broker-watchdog.test.ts
+  type: unit
+  ci: L3
+  status: active
+  product: AI员工
+  note: "fix(line04 1.0.108): DesktopLeaseBroker pendingPreempt 野超时泄漏 regression — clearExpiredLeases 时若有 pendingPreempt 必须 resolve+clearTimeout"
