@@ -42,28 +42,42 @@ beforeEach(() => {
 // ─── appendMessage ─────────────────────────────────────────────────────────────
 
 describe('appendMessage', () => {
-  it('发一条 INSERT 到 wechat_messages，带正确参数（缺客服身份 → cs_wechat_id=null）', async () => {
-    await appendMessage('wxid_1', '于瑾', 'in', '你好');
+  it('发一条 INSERT 到 wechat_messages，带正确参数（缺客服身份 → cs_wechat_id=null；不传 opts → status=delivered）', async () => {
+    mockedQuery.mockResolvedValueOnce({ rows: [{ id: 7 }] });
+    const id = await appendMessage('wxid_1', '于瑾', 'in', '你好');
 
     expect(mockedQuery).toHaveBeenCalledTimes(1);
     const [sql, params] = mockedQuery.mock.calls[0];
     expect(String(sql)).toMatch(/INSERT INTO zenithjoy\.wechat_messages/);
     expect(String(sql)).toMatch(/cs_wechat_id/);
-    // 不传 csWechatId → 第 5 个参数为 null（向后兼容老数据，统计时不计入）
-    expect(params).toEqual(['wxid_1', '于瑾', 'in', '你好', null]);
+    expect(String(sql)).toMatch(/RETURNING id/);
+    // 不传 csWechatId → 第 5 个参数为 null；不传 opts → 第 6 个参数为 'delivered'
+    expect(params).toEqual(['wxid_1', '于瑾', 'in', '你好', null, 'delivered']);
+    expect(id).toBe(7);
   });
 
   it('带 csWechatId → 盖客服身份章（第 5 个参数 = 该客服微信号）', async () => {
     await appendMessage('wxid_1', '于瑾', 'in', '你好', 'wxid_cs_a');
     const [, params] = mockedQuery.mock.calls[0];
-    expect(params).toEqual(['wxid_1', '于瑾', 'in', '你好', 'wxid_cs_a']);
+    expect(params).toEqual(['wxid_1', '于瑾', 'in', '你好', 'wxid_cs_a', 'delivered']);
   });
 
-  it('DB 失败时 console.warn 不抛', async () => {
+  it('out + {status:"draft"} → 返回 INSERT ... RETURNING 的 id，参数第 6 个为 draft', async () => {
+    mockedQuery.mockResolvedValueOnce({ rows: [{ id: 42 }] });
+    const id = await appendMessage('wxid_1', '于瑾', 'out', 'AI草稿', 'wxid_cs_a', {
+      status: 'draft',
+    });
+    const [sql, params] = mockedQuery.mock.calls[0];
+    expect(String(sql)).toMatch(/RETURNING id/);
+    expect(params).toEqual(['wxid_1', '于瑾', 'out', 'AI草稿', 'wxid_cs_a', 'draft']);
+    expect(id).toBe(42);
+  });
+
+  it('DB 失败时 console.warn 不抛，返回 null', async () => {
     mockedQuery.mockRejectedValueOnce(new Error('db down'));
     await expect(
       appendMessage('wxid_1', '于瑾', 'out', '收到'),
-    ).resolves.toBeUndefined();
+    ).resolves.toBeNull();
   });
 });
 
