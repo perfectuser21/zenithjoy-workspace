@@ -4235,6 +4235,38 @@ agent_suite:
     product: 客户私域AI接管
     note: "regression(2026-07-01, P1⑤保活): start.bat 必须有 :AGENT_SUPERVISE_LOOP 监督循环——core 退出后自动重启(自升级/崩溃)，不用 pause 卡死。治自升级后核心死到下次登录。"
 
+  - id: agent-single-instance-lock-liveness
+    path: services/agent/src/__tests__/single-instance-lock-liveness.test.ts
+    type: unit
+    ci: L1
+    status: active
+    product: 客户私域AI接管
+    note: "regression(2026-07-04, decision 72740815 根因④): agent.lock 存 PID+镜像名，PID 存活且镜像名=zenithjoy-agent 才判已运行——治 PID 被系统复用后新实例集体秒退（07-03/07-04 两晚停机实锤）。"
+
+  - id: agent-start-bat-launcher-mutex
+    path: services/agent/src/__tests__/start-bat-launcher-mutex.test.ts
+    type: unit
+    ci: L1
+    status: active
+    product: 客户私域AI接管
+    note: "regression(2026-07-04, decision 72740815 根因③): start.bat launcher 级 .launcher.lock last-writer-wins 互斥+每轮 owner 重验+ZJ_SUPERVISED=1——治多版本 supervise 循环并存互杀 core（v2.0.52/v2.0.69×3 僵尸实锤）。"
+
+  - id: agent-core-upgrader-unsupervised-handoff
+    path: services/agent/src/__tests__/core-upgrader-unsupervised-handoff.test.ts
+    type: unit
+    ci: L1
+    status: active
+    product: 客户私域AI接管
+    note: "regression(2026-07-04, decision 72740815 根因①): 非 supervise 环境核心升级先立后破——退出前自 spawn 新核心，spawn 失败回滚 .active-core 指针且不退出。治裸启动升级后退出无人拉起（07-04 08:46 停机 3.5h 实锤）。"
+
+  - id: agent-bootstrap-convergence
+    path: services/agent/src/__tests__/bootstrap-convergence.test.ts
+    type: unit
+    ci: L1
+    status: active
+    product: 客户私域AI接管
+    note: "启动纪律(2026-07-04, decision 72740815): 启动第零阶段幂等环境收敛 planConvergence 纯函数——杀重复实例(绝不杀自己)/杀非活跃版本僵尸启动循环/计划任务缺失或指向已删目录重注册/缺 license 上报缺口；干净状态空动作。"
+
 - id: agent-line02-stage2-comment-crawl
   path: services/agent/src/__tests__/line02-stage2-comment-crawl.test.ts
   type: unit
