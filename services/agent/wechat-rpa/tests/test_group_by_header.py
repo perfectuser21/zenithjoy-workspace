@@ -76,3 +76,48 @@ def test_private_chat_name_with_unrelated_parens_text_not_misjudged():
 def test_empty_or_none_texts_safe():
     assert listen_chat._is_group_by_header([]) is None
     assert listen_chat._is_group_by_header(["", None]) is None
+
+
+# ── _should_cache_known_group（v1.0.107 大群缓存永不生效根治）─────────────
+# 根因：原逻辑要求 _chat_title_matches is True 才缓存，但 469 人大群标题是成员名长串
+# 结尾 "(469)"，nm==want / want.startswith(nm) 永假 → 永不缓存 → 每轮反复开窗（闪屏）。
+# 放宽：标题带 (N) 且 N>=3 的两种明确群形态也缓存（短标题形态 / 成员列表长串形态）。
+
+
+def test_cache_relaxed_member_list_long_string():
+    """成员列表长串形态：含 (469) 的文本远长于 sender → 缓存（长度分支）。"""
+    header = ["张一、李二、王三、赵四、钱五、孙六(469)"]
+    assert listen_chat._should_cache_known_group(
+        "DJI益田交流1️⃣群", header, title_ok=False) is True
+
+
+def test_cache_relaxed_short_group_title():
+    """短标题形态：去掉末尾 (469) 后 strip == sender → 缓存。"""
+    header = ["DJI益田交流1️⃣群(469)"]
+    assert listen_chat._should_cache_known_group(
+        "DJI益田交流1️⃣群", header, title_ok=False) is True
+
+
+def test_cache_relaxed_short_group_title_five_members():
+    """短标题形态：产品咨询群(5) → 缓存（N=5>=3，去后缀==sender）。"""
+    assert listen_chat._should_cache_known_group(
+        "产品咨询群", ["产品咨询群(5)"], title_ok=False) is True
+
+
+def test_cache_below_group_size_floor_not_cached():
+    """N=2 < 3 下限 → 不缓存（挡掉 "张三(2)" 这类备注含小数字的误判）。"""
+    assert listen_chat._should_cache_known_group(
+        "张三", ["张三(2)"], title_ok=False) is False
+
+
+def test_cache_title_ok_always_true():
+    """title_ok=True → 永远缓存（原逻辑不变，即便 header 不带人数也放行）。"""
+    assert listen_chat._should_cache_known_group(
+        "客户A", ["客户A"], title_ok=True) is True
+
+
+def test_cache_no_group_header_not_cached():
+    """标题无 (N) 且 title_ok=False → 不缓存（私聊）。"""
+    assert listen_chat._should_cache_known_group(
+        "中瑞家具 冯涛18192241985",
+        ["中瑞家具 冯涛18192241985"], title_ok=False) is False

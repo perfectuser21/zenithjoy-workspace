@@ -4413,3 +4413,11 @@ agent_suite:
   status: active
   product: AI员工
   note: "sprint(07041957): sanitizeReply 技术自述句清洗 — 剔除'我会查日志/执行命令'类自述且不误伤正常'我会尽快'句（Line04 记忆污染兜底）"
+
+- id: line04-listener-respawn-backoff
+  path: services/agent/modules/line04/__tests__/listener-respawn-backoff.test.ts
+  type: unit
+  ci: L3
+  status: active
+  product: AI员工
+  note: "sprint(07041958): 监听 watchdog error 重拉+退避+双事件防重入 guard（Line04 bug6 修复守卫）"
