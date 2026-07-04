@@ -4389,3 +4389,27 @@ agent_suite:
   status: active
   product: Agent 管理
   note: "Agent Credit 路由单测 — GET /balance 和 POST /deduct 正常/错误路径（agent-credit-api sprint）"
+
+- id: line04-wechat-message-receipt-route
+  path: apps/api/src/routes/__tests__/wechat-message-receipt.test.ts
+  type: unit
+  ci: L3
+  status: active
+  product: AI员工
+  note: "sprint(07041957): 送达回执路由 POST /api/wechat/messages/:id/receipt — 身份直传/agent_id 解析/403/400 分支（Line04 假账修复）"
+
+- id: line04-cs-identity-resolve
+  path: apps/api/src/services/wechat/__tests__/cs-identity-resolve.test.ts
+  type: unit
+  ci: L3
+  status: active
+  product: AI员工
+  note: "sprint(07041957): 客服身份三段链共用函数 — 直传>csConfig>反查短路，draft 写行与回执翻行同链防反向假账"
+
+- id: line04-wechat-draft-sanitize-tech-claim
+  path: apps/api/src/services/__tests__/wechat-draft-sanitize-tech-claim.test.ts
+  type: unit
+  ci: L3
+  status: active
+  product: AI员工
+  note: "sprint(07041957): sanitizeReply 技术自述句清洗 — 剔除'我会查日志/执行命令'类自述且不误伤正常'我会尽快'句（Line04 记忆污染兜底）"
