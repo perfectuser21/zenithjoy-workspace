@@ -498,6 +498,9 @@ acquisitionRouter.get('/leads', tenantContextOptional, async (req: Request, res:
       grade: string | null;
       keyword: string | null;
       task_keywords: string[] | null;
+      latest_reply: string | null;
+      latest_reply_at: string | null;
+      assignee: string | null;
     }
 
     const gradeClause = grade && typeof grade === 'string' ? `AND l.grade = $2` : '';
@@ -506,6 +509,7 @@ acquisitionRouter.get('/leads', tenantContextOptional, async (req: Request, res:
     const result = await pool.query<LeadRow>(
       `SELECT l.sec_uid, l.nickname, l.comment_text,
               l.source_video_ids, l.created_at, l.grade, l.keyword,
+              l.latest_reply, l.latest_reply_at, l.assignee,
               t.keywords AS task_keywords
          FROM zenithjoy.acquisition_leads l
          LEFT JOIN zenithjoy.acquisition_collect_tasks t ON t.id = l.collect_task_id
@@ -528,6 +532,9 @@ acquisitionRouter.get('/leads', tenantContextOptional, async (req: Request, res:
         crawled_at: r.created_at,
         grade: r.grade ?? '',
         keyword: r.keyword ?? taskKws[0] ?? '',
+        latest_reply: r.latest_reply ?? null,
+        latest_reply_at: r.latest_reply_at ?? null,
+        assignee: r.assignee ?? null,
       };
     });
 

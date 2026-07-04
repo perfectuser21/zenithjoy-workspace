@@ -123,6 +123,11 @@ export default defineConfig({
         target: 'http://localhost:5200',
         changeOrigin: true,
       },
+      // Line02 智能获客 — leads / acquisition tasks
+      '/api/acquisition': {
+        target: 'http://localhost:5200',
+        changeOrigin: true,
+      },
       // Brain API — 内容工厂配置（content-types）等
       '/api/brain': {
         target: 'http://localhost:5221',

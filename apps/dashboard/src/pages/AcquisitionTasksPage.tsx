@@ -9,6 +9,7 @@ import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { ChevronLeft, ChevronDown, ChevronRight, Search, AlertTriangle } from 'lucide-react';
 import { fetchMachines, fetchBurnerSessions, type Machine, type BurnerSession } from '../api/machines.api';
+import LeadsTable from '../components/LeadsTable';
 
 const STATUS_LABEL: Record<string, string> = {
   pending: '排队中',
@@ -309,30 +310,7 @@ function VideoCard({ video }: { video: Video }) {
           ) : !leads || leads.length === 0 ? (
             <div className="text-sm text-gray-500 dark:text-gray-400">暂无评论</div>
           ) : (
-            <table className="w-full text-xs">
-              <thead>
-                <tr className="border-b border-slate-200 dark:border-slate-700">
-                  <th className="py-1.5 text-left text-gray-500 dark:text-gray-400 font-medium">昵称</th>
-                  <th className="py-1.5 text-left text-gray-500 dark:text-gray-400 font-medium">留言内容</th>
-                  <th className="py-1.5 text-left text-gray-500 dark:text-gray-400 font-medium">AI 分级</th>
-                  <th className="py-1.5 text-left text-gray-500 dark:text-gray-400 font-medium">触达状态</th>
-                </tr>
-              </thead>
-              <tbody>
-                {leads.map((l, i) => (
-                  <tr key={i} className="border-b border-slate-100 dark:border-slate-800">
-                    <td className="py-1.5 text-gray-900 dark:text-white">
-                      {l.profile_url ? (
-                        <a href={l.profile_url} target="_blank" rel="noopener noreferrer" className="text-yellow-500 hover:underline">{l.commenter_id || '—'}</a>
-                      ) : (l.commenter_id || '—')}
-                    </td>
-                    <td className="py-1.5 text-gray-700 dark:text-gray-300">{l.comment_text || '—'}</td>
-                    <td className="py-1.5 text-gray-400">{l.grade || '—'}</td>
-                    <td className="py-1.5 text-gray-400">—</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <LeadsTable leads={leads} loading={loading} />
           )}
         </div>
       )}

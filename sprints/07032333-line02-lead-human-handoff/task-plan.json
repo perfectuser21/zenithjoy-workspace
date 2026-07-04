@@ -1,0 +1,41 @@
+{
+  "initiative_id": "07032333-line02-lead-human-handoff",
+  "journey_type": "user_facing",
+  "journey_type_reason": "涉及 apps/dashboard/ LeadsPage + AcquisitionTasksPage 前端 UI 合并，属于用户可见的 Dashboard 变更",
+  "tasks": [
+    {
+      "task_id": "ws1",
+      "title": "Line02 留言→人工跟进闭环：回复捕获 + assignee 分配 + Dashboard LeadsTable 统一",
+      "scope": "DB migration 加 latest_reply/latest_reply_at/assignee/comment_replied_at + acquisition_orphan_replies 表；acquisition-dispatch 加 pickAssignee；acquisition route GET /leads 返回新字段；agent line02 加回复轮询逻辑；飞书 lead writer 写新两列；新建 LeadsTable 共用组件；LeadsPage + AcquisitionTasksPage 改用 LeadsTable；删 AcquisitionTasksPage 触达状态列",
+      "dod": [
+        "[BEHAVIOR] GET /api/acquisition/leads 响应含 latest_reply / latest_reply_at / assignee 字段",
+        "[BEHAVIOR] GET /api/acquisition/leads?grade=invalid 返 400 INVALID_GRADE",
+        "[BEHAVIOR] acquisition_leads 表含 latest_reply / latest_reply_at / assignee / comment_replied_at 列",
+        "[BEHAVIOR] acquisition_orphan_replies 表存在（video_id / commenter_nickname / reply_text / captured_at / tenant_id）",
+        "[BEHAVIOR] pickAssignee(['A','B'], n) 取模轮询返正确负责人；空名单返 null",
+        "[BEHAVIOR] pollReplies 逻辑层：注入 fake CommentFetcher + LeadWriter，验回复匹配/多条取最新/无回复不写 DB/孤儿写 acquisition_orphan_replies（4 vitest tests pass）",
+        "[BEHAVIOR] LeadsTable 组件渲染'最新回复'和'负责人'列头，不渲染'触达状态'",
+        "[BEHAVIOR] GET /api/acquisition/leads 不含禁用字段 reply_text / last_reply",
+        "[BEHAVIOR] 多租户隔离：GET /api/acquisition/leads 只返本租户数据",
+        "[ARTIFACT] apps/dashboard/src/components/LeadsTable.tsx 存在",
+        "[ARTIFACT] apps/api/db/migrations/*_leads_reply_assignee.sql 存在",
+        "[ARTIFACT] apps/dashboard/e2e/leads-unified-table.spec.ts 存在"
+      ],
+      "files": [
+        "apps/api/db/migrations/<timestamp>_leads_reply_assignee.sql",
+        "apps/api/src/routes/acquisition.ts",
+        "apps/api/src/services/acquisition-dispatch.ts",
+        "services/agent/src/line02/reply-poller.ts",
+        "apps/api/src/services/feishu-bitable-multitenant.ts",
+        "apps/dashboard/src/components/LeadsTable.tsx",
+        "apps/dashboard/src/pages/LeadsPage.tsx",
+        "apps/dashboard/src/pages/AcquisitionTasksPage.tsx",
+        "apps/dashboard/e2e/leads-unified-table.spec.ts",
+        "sprints/07032333-line02-lead-human-handoff/tests/reply-poll-logic.test.ts"
+      ],
+      "depends_on": [],
+      "complexity": "L",
+      "estimated_minutes": 120
+    }
+  ]
+}

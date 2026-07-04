@@ -4272,3 +4272,35 @@ agent_suite:
   status: active
   product: AI员工
   note: "Sprint 07032332: Playwright E2E — 账号管理页绑定机器列 + 旧路由下线验证（windows_cloud）"
+
+- id: line02-leads-api-new-fields
+  path: sprints/07032333-line02-lead-human-handoff/tests/leads-api-new-fields.test.ts
+  type: unit
+  ci: L3
+  status: active
+  product: AI员工
+  note: "sprint(07032333): pickAssignee 取模轮询 + acquisition.ts 新字段 latest_reply/latest_reply_at/assignee + migration 存在性"
+
+- id: line02-leads-table-component
+  path: sprints/07032333-line02-lead-human-handoff/tests/leads-table-component.test.ts
+  type: unit
+  ci: L3
+  status: active
+  product: AI员工
+  note: "sprint(07032333): LeadsTable 共用组件 + LeadsPage/AcquisitionTasksPage 改造验收 + e2e spec 存在性"
+
+- id: line02-reply-poll-logic
+  path: sprints/07032333-line02-lead-human-handoff/tests/reply-poll-logic.test.ts
+  type: unit
+  ci: L3
+  status: active
+  product: AI员工
+  note: "sprint(07032333): pollReplies 逻辑层 — mock CommentFetcher + LeadWriter，验回复匹配/排序/孤儿路径（PRD E2E点3 逻辑覆盖）"
+
+- id: line02-leads-unified-table-e2e
+  path: apps/dashboard/e2e/leads-unified-table.spec.ts
+  type: e2e
+  ci: L4
+  status: active
+  product: AI员工
+  note: "sprint(07032333): Playwright E2E — LeadsPage 最新回复/负责人列头可见，无触达状态，AcquisitionTasksPage 无触达状态"
