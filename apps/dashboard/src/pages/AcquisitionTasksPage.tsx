@@ -33,6 +33,36 @@ const STATUS_STYLE: Record<string, string> = {
   stage_1_done: 'bg-blue-900/40 text-blue-300',
 };
 
+// regression(2026-07-04): 空视频列表的文案必须按任务真实状态区分，不能无条件说"采集中"
+const IN_PROGRESS_STATUSES = new Set(['pending', 'running', 'cancelling']);
+
+const ERROR_CODE_LABEL: Record<string, string> = {
+  DOUYIN_SESSION_EXPIRED: '账号登录状态过期',
+  DOUYIN_CAPTCHA: '触发抖音验证码',
+  DOUYIN_NOT_LOGGED_IN: '账号未登录',
+  DOUYIN_RISK: '账号触发风控',
+  NO_VIDEOS_FOUND: '没有搜到相关视频',
+  video_insufficient: '搜到的视频数量不足',
+  comments_closed: '视频评论区已关闭',
+  zero_comment: '视频没有任何评论',
+};
+
+interface TaskStatusInfo {
+  status: string;
+  error_code: string | null;
+  video_count: number;
+}
+
+function emptyStateMessage(task: TaskStatusInfo | null): string {
+  if (!task) return '采集中，稍后刷新查看视频结果';
+  if (IN_PROGRESS_STATUSES.has(task.status)) return '采集中，稍后刷新查看视频结果';
+  if (task.status === 'failed') {
+    const reason = task.error_code ? ERROR_CODE_LABEL[task.error_code] || task.error_code : '未知原因';
+    return `采集失败：${reason}`;
+  }
+  return '未抓到任何视频';
+}
+
 interface Task {
   id: string;
   keywords: string[];
@@ -320,6 +350,7 @@ function VideoCard({ video }: { video: Video }) {
 
 function TaskDetailView({ taskId }: { taskId: string }) {
   const [videos, setVideos] = useState<Video[] | null>(null);
+  const [taskStatus, setTaskStatus] = useState<TaskStatusInfo | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -337,6 +368,7 @@ function TaskDetailView({ taskId }: { taskId: string }) {
           return;
         }
         setVideos(j.data.videos ?? []);
+        setTaskStatus(j.data.task ?? null);
       } catch (e) {
         if (!cancelled) setError(String((e as Error).message || e));
       } finally {
@@ -361,7 +393,7 @@ function TaskDetailView({ taskId }: { taskId: string }) {
         <div className="text-sm text-gray-500 dark:text-gray-400">载入中…</div>
       ) : !videos || videos.length === 0 ? (
         <div className="text-sm text-gray-500 dark:text-gray-400 py-10 text-center rounded-xl border border-slate-200 dark:border-slate-700">
-          采集中，稍后刷新查看视频结果
+          {emptyStateMessage(taskStatus)}
         </div>
       ) : (
         <div className="space-y-2">

@@ -200,11 +200,17 @@ acquisitionRouter.get('/collect-tasks/:id/videos', tenantContextOptional, async 
   if (!UUID_RE.test(taskId)) return fail(res, 404, 'TASK_NOT_FOUND', '采集任务不存在');
 
   try {
-    const taskRes = await pool.query(
-      `SELECT id FROM zenithjoy.acquisition_collect_tasks WHERE id = $1 AND tenant_id = $2`,
+    const taskRes = await pool.query<{
+      id: string;
+      status: string;
+      error_code: string | null;
+      video_count: number;
+    }>(
+      `SELECT id, status, error_code, video_count FROM zenithjoy.acquisition_collect_tasks WHERE id = $1 AND tenant_id = $2`,
       [taskId, tenantId]
     );
     if (taskRes.rows.length === 0) return fail(res, 404, 'TASK_NOT_FOUND', '采集任务不存在');
+    const taskRow = taskRes.rows[0];
 
     const { rows } = await pool.query<{
       video_id: string;
@@ -230,7 +236,15 @@ acquisitionRouter.get('/collect-tasks/:id/videos', tenantContextOptional, async 
       comment_count: r.comment_count ?? 0,
     }));
 
-    return ok(res, { videos, total: videos.length });
+    return ok(res, {
+      videos,
+      total: videos.length,
+      task: {
+        status: taskRow.status,
+        error_code: taskRow.error_code,
+        video_count: taskRow.video_count ?? 0,
+      },
+    });
   } catch (err) {
     return fail(res, 500, 'DB_ERROR', (err as Error).message);
   }
