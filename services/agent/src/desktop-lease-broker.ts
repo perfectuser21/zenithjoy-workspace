@@ -72,14 +72,17 @@ export class DesktopLeaseBroker {
   private readonly watchdogIntervalMs: number;
   private readonly yieldWaitMs: number;
   private readonly tenantId: string;
-  private readonly onWatchdogTrigger?: DesktopLeaseBrokerOptions['onWatchdogTrigger'];
+  // public：允许测试（及运行时注入者）在构造后替换回调（如 `broker.onWatchdogTrigger = spy`）
+  public onWatchdogTrigger?: DesktopLeaseBrokerOptions['onWatchdogTrigger'];
   private readonly onBrainLog?: DesktopLeaseBrokerOptions['onBrainLog'];
   private readonly onYield?: DesktopLeaseBrokerOptions['onYield'];
   private watchdogTimer: ReturnType<typeof setInterval> | null = null;
 
   constructor(opts: DesktopLeaseBrokerOptions = {}) {
     this.ttlMs = opts.ttlMs ?? 10000;
-    this.watchdogIntervalMs = opts.watchdogIntervalMs ?? 5000;
+    // watchdog 间隔默认与 TTL 对齐（上限 5000ms），确保租约在 1 个周期内被检测到过期。
+    // 若调用方显式传入 watchdogIntervalMs，以调用方为准。
+    this.watchdogIntervalMs = opts.watchdogIntervalMs ?? Math.min(5000, this.ttlMs);
     this.yieldWaitMs = opts.yieldWaitMs ?? 2000;
     this.tenantId = opts.tenantId ?? '';
     this.onWatchdogTrigger = opts.onWatchdogTrigger;
