@@ -261,10 +261,12 @@ export function startWechatListener(apiBase: string, agentId?: string, machineId
       console.warn(
         `[wechat-rpa] listen_chat.py 退出(code=${code})，${LISTENER_RESTART_DELAY_MS / 1000}s 后自动重启（崩溃自愈）`,
       );
+      // v1.0.108 Bug6修复：.unref?.() 会让 Node 在无其他任务时自动退出，
+      // 导致崩溃后 30s 重启定时器被取消，listen_chat 永不自愈。去掉 unref。
       setTimeout(() => {
         _listenerKillFuncs.killExistingListeners();
         spawnOnce();
-      }, LISTENER_RESTART_DELAY_MS).unref?.();
+      }, LISTENER_RESTART_DELAY_MS);
     });
     child.on('error', (err) => {
       _listenerAlive = false;

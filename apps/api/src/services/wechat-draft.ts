@@ -464,14 +464,15 @@ export async function generateChatDraft(
     return { ok: true, status: 'ai_failed', task_id: taskId, draft_id: '' };
   }
 
-  // AI 成功 → 记入"我方回复"短期记忆 + 触发固化（盖客服身份章），然后直接返回 reply（自动直发）。
+  // v1.0.108 Bug2修复：出站记忆盖章从"草稿生成时"挪到"UIA 真送达后"（见 confirm-delivery 端点）。
+  // 此处只写旧 wechat_messages 系统（用于短期上下文，未依赖三层画像链路，影响可控）；
+  // cs_memory_messages('out') 仅在 listen_chat 回调 confirm-delivery 时落库，防假账污染长期画像。
   try {
     await appendMessage(contactKey, sender, 'out', aiContent, csWechatId);
     await consolidate(contactKey);
   } catch (err) {
     console.warn('[wechat-draft] 写出站消息/固化失败（不影响回复）:', err);
   }
-  await stampCsMemory(tenant_id, sender, 'out', aiContent, csWechatId);
 
   console.info(`[wechat-draft] auto-send sender=${sender} reply_len=${aiContent.length}`);
   return { ok: true, status: 'sent', task_id: taskId, draft_id: '', reply: aiContent };

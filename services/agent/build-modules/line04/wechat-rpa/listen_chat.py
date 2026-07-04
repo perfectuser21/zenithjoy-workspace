@@ -704,11 +704,24 @@ def _read_trailing_for(mw: Any, cand: Dict[str, Any],
     except Exception:
         title_ok = False
     try:
-        if _is_group_by_header(_read_chat_header_texts(mw)) is not None:
+        _hdr_texts = _read_chat_header_texts(mw)
+        if _is_group_by_header(_hdr_texts) is not None:
             cand["_is_group"] = True
-            if title_ok:
+            # v1.0.108 Bug4修复：大群（人数≥100）WeChat 标题栏只显 "(469)"，无群名 →
+            # title_ok 恒 False → _KNOWN_GROUPS 永不写 → 每轮反复开群。
+            # 纯数字+括号的标题是大群独有格式（私聊绝不产生），可安全写缓存。
+            hdr_only_count = (
+                _hdr_texts
+                and len(_hdr_texts) == 1
+                and not any(
+                    c.isalpha() or '一' <= c <= '鿿'
+                    for c in _hdr_texts[0]
+                )
+            )
+            if title_ok or hdr_only_count:
                 _KNOWN_GROUPS.add(cand["sender"])
-                _log(f"known_group cached sender={cand['sender']}")
+                _log(f"known_group cached sender={cand['sender']}"
+                     f"{' (count-only header)' if hdr_only_count else ''}")
             return [], False
     except Exception:
         pass  # 判不出群 → 按私聊继续（reply_in_chat 发送前还有判群闸）
@@ -937,8 +950,10 @@ def scan_unread(mw: Any, last_preview: Optional[Dict[str, str]] = None,
             # 操作者自话防误回已由像素判向全覆盖（绿泡=outgoing，1.0.104），
             # 前台信号只保留给 1.0.105 的解除隐身用。
             seen.add(sender)
+            # v1.0.108 Bug5修复：badge=0 时 split_trailing 无锚点取 0 条 → 消息丢。
+            # prev != name 已确认内容变化，至少 1 条新消息，badge 保底设 1。
             candidates.append({"sender": sender, "content": info["content"],
-                               "name": name, "badge": 0, "_item": it})
+                               "name": name, "badge": 1, "_item": it})
     candidates.sort(key=lambda c: -c["badge"])  # 角标优先
     out: List[Dict[str, Any]] = []
     opened = 0
@@ -2908,6 +2923,26 @@ def post_draft_generate(
         return {"ok": False, "error": f"bad json: {type(exc).__name__}: {exc}"}
 
 
+# ─── v1.0.108 Bug2修复：DELIVERED 后回调中台写出站记忆（防草稿阶段假账）─────────
+def post_delivery_confirm(
+    middleware_url: str,
+    sender: str,
+    reply_text: str,
+    agent_id: Optional[str] = None,
+) -> None:
+    """UIA 真送达后通知中台：把 AI 回复写入 cs_memory_messages('out')。
+    失败只 warn，不阻塞主链路——记忆轻微延迟比因回调失败阻止下一轮更好。
+    """
+    if not middleware_url or not agent_id:
+        return
+    url = middleware_url.rstrip("/") + "/api/wechat/cs/confirm-delivery"
+    body = {"agent_id": agent_id, "sender": sender, "reply_text": reply_text}
+    try:
+        _post_with_retry(url, body, timeout=10, retries=2, backoff_base=0.5)
+    except Exception as exc:
+        _log(f"[confirm-delivery] 回调失败（不影响主链路）: {exc}")
+
+
 # ─── DesktopLeaseBroker IPC 接缝（Sprint 0703-line04-desktop-lease-broker）─────
 # listen_chat 在窗口切换前通过 IPC 申请桌面租约，完成后归还，防多 agent 并发抢占。
 # 所有失败均为软失败：acquire 失败 → 跳过本轮（[防假成功] invariant），release 失败忽略。
@@ -3818,7 +3853,11 @@ def run_real_listen(args: argparse.Namespace) -> int:
             # 不在册 → 回落旧 env 真发判定（向后兼容）。拉失败 resolve_send_mode 强制 dryrun，绝不误真发。
             _machine_id = getattr(args, "machine_id", None)
             if _machine_id and now - last_cs_pull >= CS_PULL_INTERVAL:
-                _fresh, _ok = cs_config_gate.fetch_cs_config(args.middleware_url, _machine_id)
+                # v1.0.108 Bug3修复：传 agent_id 让服务端精确解析，避免同机双租户取错配置
+                _fresh, _ok = cs_config_gate.fetch_cs_config(
+                    args.middleware_url, _machine_id,
+                    agent_id=getattr(args, "agent_id", None)
+                )
                 cs_config = cs_config_gate.resolve_active_config(_fresh, cs_config, _ok)
                 cs_pull_ok = _ok
                 last_cs_pull = now
@@ -4106,6 +4145,10 @@ def run_real_listen(args: argparse.Namespace) -> int:
             if getattr(args, "machine_id", None) and not _real_publish:
                 if unread:
                     _log(f"[每客服] auto_agent OFF/拉配置失败 → 本轮跳过 {len(unread)} 条自动回复(dryrun)")
+                    # v1.0.108 Bug1修复：dryrun continue 跳过轮尾清理，_INFLIGHT 永不释放
+                    # → 下轮 scan 把这些 sender 全挡住（永久僵死）。提前在此释放。
+                    for _m_dryrun in unread:
+                        _release_inflight(_m_dryrun.get("sender", ""))
                 time.sleep(args.interval)
                 continue
 
@@ -4251,6 +4294,13 @@ def run_real_listen(args: argparse.Namespace) -> int:
                     reply_failed_at.pop(key, None)
                     sender_reply_cooldown[m["sender"]] = time.time()  # per-sender 30s 冷却
                     _commit_reply_success(m, last_preview)  # DELIVERED
+                    # v1.0.108 Bug2修复：真送达后回调中台写出站记忆（不在草稿阶段提前写防假账）
+                    post_delivery_confirm(
+                        getattr(args, "middleware_url", "") or "",
+                        sender=m["sender"],
+                        reply_text=reply,
+                        agent_id=getattr(args, "agent_id", None),
+                    )
                     _log(f"auto-replied OK sender={m['sender']} receipt={receipt['status']}")
                 else:
                     reply_failed_at[key] = time.time()

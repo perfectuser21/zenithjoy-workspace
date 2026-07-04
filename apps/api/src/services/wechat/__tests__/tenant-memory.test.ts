@@ -50,6 +50,42 @@ describe('appendTenantMessage', () => {
     expect(params).toContain('tenantA');
     expect(r.message_id).toBe(42);
   });
+
+  // ── Bug7 回归（1.0.108）：技术指令不写入记忆，防AI人设污染 ─────────────────
+  it.each([
+    ['$ sudo apt-get install curl', 'shell 命令（$前缀）'],
+    ['```\ncurl https://example.com\n```', 'code block'],
+    ['curl https://api.example.com/data', 'curl 命令'],
+    ['sudo npm install -g pnpm', 'sudo 命令'],
+    ['pip install requests', 'pip install'],
+    ['npm run build', 'npm run'],
+    ['python3 -c "import sys; print(sys.version)"', 'python3 -c'],
+    ['{"key": "value", "nested": true}', 'JSON 对象'],
+  ])('Bug7：技术指令 "%s" 不写入 cs_memory_messages（%s）', async (text) => {
+    const r = await appendTenantMessage({
+      tenantId: 'tenantA', contact: 'c', role: 'in', text,
+    });
+    expect(mockedQuery).not.toHaveBeenCalled();
+    expect(r.message_id).toBe(0);
+  });
+
+  it('Bug7：普通客户消息不受过滤影响（正常写库）', async () => {
+    mockedQuery.mockResolvedValueOnce({ rows: [{ id: 99 }] });
+    const r = await appendTenantMessage({
+      tenantId: 'tenantA', contact: 'c', role: 'in', text: '你好，我想咨询一下价格',
+    });
+    expect(mockedQuery).toHaveBeenCalled();
+    expect(r.message_id).toBe(99);
+  });
+
+  it('Bug7：out 角色（AI 回复）不受技术指令过滤（即使含 curl 也写库）', async () => {
+    mockedQuery.mockResolvedValueOnce({ rows: [{ id: 101 }] });
+    const r = await appendTenantMessage({
+      tenantId: 'tenantA', contact: 'c', role: 'out', text: 'curl https://example.com',
+    });
+    expect(mockedQuery).toHaveBeenCalled();
+    expect(r.message_id).toBe(101);
+  });
 });
 
 describe('getReplyContext', () => {

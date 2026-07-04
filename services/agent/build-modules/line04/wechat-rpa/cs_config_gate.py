@@ -66,8 +66,11 @@ def should_reply(config, sender_name):
     return sender_name in wl
 
 
-def fetch_cs_config(middleware_url, machine_id, timeout=10):
-    """按 machine_id 拉该客服那一份配置 → (config|None, pull_ok)。
+def fetch_cs_config(middleware_url, machine_id, timeout=10, agent_id=None):
+    """按 machine_id（+ 可选 agent_id）拉该客服那一份配置 → (config|None, pull_ok)。
+
+    v1.0.108 Bug3修复：同机双租户时 machine_id 可能绑定多个 agent，LIMIT 1 取到错误的那份。
+    传入 agent_id 时服务端优先按 agent_id 精确解析（license_machines 联查），消除歧义。
 
     200 → (config, True)；403（未绑/未配）/ 其它码 / 网络异常 / 坏 JSON → (None, False)。
     pull_ok=False 让 resolve_send_mode 强制 dryrun，绝不误真发；不抛，不拖垮监听主链路。
@@ -77,8 +80,11 @@ def fetch_cs_config(middleware_url, machine_id, timeout=10):
     if requests is None:  # 没装 requests 的纯函数环境不该走到真拉配置；强制 dryrun 兜底
         return None, False
     url = middleware_url.rstrip("/") + "/api/wechat/cs/agent-config"
+    params = {"machine_id": machine_id}
+    if agent_id:
+        params["agent_id"] = agent_id
     try:
-        resp = requests.get(url, params={"machine_id": machine_id}, timeout=timeout)
+        resp = requests.get(url, params=params, timeout=timeout)
     except Exception:
         return None, False
     if resp.status_code != 200:

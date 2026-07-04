@@ -34,6 +34,7 @@ import { enqueueKeyContactBroadcast, enqueueSetupSuccess } from '../services/wec
 import {
   getCSConfig,
   getCSConfigByMachine,
+  getCSConfigByAgentId,
   saveCSConfig,
   recordIdentityAlert,
   listIdentityAlerts,
@@ -370,13 +371,18 @@ wechatConfigRouter.get('/cs/config/:wechatId', async (req: Request, res: Respons
 //   命中 → 返回该客服那份（含 wechat_id 供客户机软校验）；未绑定/未注册/无行 → 403 且响应体
 //   不含任何 persona + 写诊断异常（不泄漏，不串台）。
 wechatConfigRouter.get('/cs/agent-config', async (req: Request, res: Response) => {
+  const agentId = typeof req.query.agent_id === 'string' ? req.query.agent_id : '';
   const machineId = typeof req.query.machine_id === 'string' ? req.query.machine_id : '';
   const wechatId = typeof req.query.wechat_id === 'string' ? req.query.wechat_id : '';
-  const config = machineId
-    ? await getCSConfigByMachine(machineId)
-    : wechatId
-      ? await getCSConfig(wechatId)
-      : null;
+  // v1.0.108 Bug3修复：同机双租户时 machine_id LIMIT 1 取到错误租户的配置。
+  // 优先按 agent_id 精确解析（license_machines 联查，唯一标识单个 agent）。
+  const config = agentId
+    ? await getCSConfigByAgentId(agentId)
+    : machineId
+      ? await getCSConfigByMachine(machineId)
+      : wechatId
+        ? await getCSConfig(wechatId)
+        : null;
   if (!config) {
     // 诊断留痕：machine_id 路径记 machine 未绑定/未配；wechat_id 路径记未注册号
     if (machineId) {

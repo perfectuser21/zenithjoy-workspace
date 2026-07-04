@@ -122,6 +122,28 @@ function assembleContext(longterm: string, mid: string, short: ChatLine[]): stri
   ].join('\n\n');
 }
 
+// ─── 记忆污染过滤（v1.0.108 Bug7修复）─────────────────────────────────────────
+// 客户偶发性粘贴技术指令（curl/sudo/shell/JSON）进对话框 → 进入 cs_memory_messages
+// → 日收尾 LLM 摘要把"客户是个运维工程师"写进长期画像 → AI 角色人设被污染。
+// 检测逻辑：仅对 'in' 角色（客户消息）过滤；匹配任一技术特征则跳过写库。
+// 保守策略：宁可漏过一条技术噪音也不误删真实客户消息（阈值故意不过于激进）。
+
+function isTechnicalCommand(text: string): boolean {
+  const t = text.trim();
+  return (
+    /^[$#]\s+\S/.test(t) ||                         // $ command / # root-shell
+    /```/.test(t) ||                                 // code block
+    /\bcurl\s+https?:\/\//i.test(t) ||
+    /\bsudo\s+\w/i.test(t) ||
+    /\bpip\s+install\b/i.test(t) ||
+    /\bnpm\s+(install|run|start|build)\b/i.test(t) ||
+    /\bapt(?:-get)?\s+install\b/i.test(t) ||
+    /\bpython3?\s+-[cm]\b/i.test(t) ||
+    /\bchmod\s+[0-7]{3,4}\b/i.test(t) ||
+    /^\s*\{[\s\S]{0,500}"[^"]+"\s*:/.test(t)        // JSON object
+  );
+}
+
 // ─── 1) appendTenantMessage：写一条消息进短期 ─────────────────────────────────
 
 export async function appendTenantMessage(input: {
@@ -138,6 +160,10 @@ export async function appendTenantMessage(input: {
 }): Promise<{ message_id: number }> {
   const tenantId = (input.tenantId || '').trim();
   if (!tenantId) throw new MissingTenantError();
+
+  if (input.role === 'in' && isTechnicalCommand(input.text)) {
+    return { message_id: 0 }; // 技术指令噪音：跳过写库，不污染记忆
+  }
 
   const res = await pool.query(
     `INSERT INTO zenithjoy.cs_memory_messages (tenant_id, contact, role, text, cs_wechat_id)

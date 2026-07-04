@@ -24,6 +24,7 @@ import {
 } from '../services/wechat/cs-outbound';
 import { getCsWorkStats, type StatsDate } from '../services/wechat/cs-work-stats';
 import { runDailyReportSettlement, getDailyReports } from '../services/wechat/cs-daily-report';
+import { appendTenantMessage } from '../services/wechat/tenant-memory';
 
 export const wechatRouter = Router();
 
@@ -416,5 +417,34 @@ wechatRouter.get('/cs/daily-report', async (req: Request, res: Response) => {
     const errMsg = err instanceof Error ? err.message : String(err);
     console.error('[wechat/cs/daily-report] 查询失败:', errMsg);
     return res.status(500).json({ error: 'DAILY_REPORT_QUERY_FAILED', message: errMsg });
+  }
+});
+
+// ─── POST /api/wechat/cs/confirm-delivery（v1.0.108 Bug2修复：UIA 真送达后落出站记忆）──
+// listen_chat.py 在 DELIVERED 确认后调此接口，把 AI 回复写入三层记忆 out 记录。
+// 草稿生成时不再写 out 记录，防止 UIA 失败时中台出现"假账"（AI 以为发了实则没发）。
+const ConfirmDeliverySchema = z.object({
+  agent_id: z.string().min(1),
+  sender: z.string().min(1),
+  reply_text: z.string().min(1),
+});
+wechatRouter.post('/cs/confirm-delivery', async (req: Request, res: Response) => {
+  const parsed = ConfirmDeliverySchema.safeParse(req.body ?? {});
+  if (!parsed.success) {
+    return res.status(400).json({ error: 'BAD_REQUEST', details: parsed.error.issues });
+  }
+  const { agent_id, sender, reply_text } = parsed.data;
+  try {
+    const tenantId = await resolveTenantForAgent(pool, { agentId: agent_id });
+    if (!tenantId) {
+      console.warn(`[wechat/cs/confirm-delivery] 无法解析租户 agent_id=${agent_id}，跳过写库`);
+      return res.status(200).json({ ok: true, skipped: true, reason: 'tenant_unresolved' });
+    }
+    await appendTenantMessage({ tenantId, contact: sender, role: 'out', text: reply_text });
+    return res.status(200).json({ ok: true });
+  } catch (err) {
+    const errMsg = err instanceof Error ? err.message : String(err);
+    console.error('[wechat/cs/confirm-delivery] 落库失败:', errMsg);
+    return res.status(500).json({ error: 'CONFIRM_DELIVERY_FAILED', message: errMsg });
   }
 });
