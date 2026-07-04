@@ -264,7 +264,8 @@ export function startWechatListener(apiBase: string, agentId?: string, machineId
       setTimeout(() => {
         _listenerKillFuncs.killExistingListeners();
         spawnOnce();
-      }, LISTENER_RESTART_DELAY_MS).unref?.();
+      }, LISTENER_RESTART_DELAY_MS);
+      // 不调 .unref()：会议室机器无其他活跃句柄时 event loop 会退出，重启定时器被 GC 回收
     });
     child.on('error', (err) => {
       _listenerAlive = false;

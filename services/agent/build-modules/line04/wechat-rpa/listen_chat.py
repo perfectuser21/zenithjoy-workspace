@@ -201,8 +201,15 @@ def parse_unread_count(item_name: str) -> int:
     返回 N（>= 1）；无未读角标或解析失败返回 0。
     """
     import re as _re
+    # 普通 [N条] 格式
     m = _re.search(r'\[(\d+)条]', item_name or "")
-    return int(m.group(1)) if m else 0
+    if m:
+        return int(m.group(1))
+    # WeChat 4.x 99+ 条时显示 [99+条] 或 [N+条]
+    m2 = _re.search(r'\[(\d+)\+条]', item_name or "")
+    if m2:
+        return int(m2.group(1)) + 1  # 至少 N+1 条，触发开会话读完整数量
+    return 0
 
 
 def aggregate_messages(messages: List[str]) -> str:
@@ -219,6 +226,23 @@ def aggregate_messages(messages: List[str]) -> str:
     if not msgs:
         return ""
     return "\n\n".join(msgs)
+
+
+import re as _cmd_re_module
+_TECH_CMD_RE = _cmd_re_module.compile(
+    r'(?:^|\n)\s*(?:[$#>]\s*\S|(?:cat|ls|ps|grep|docker|kubectl|git|sudo|chmod|'
+    r'tail|curl|wget|pip|npm|python|node|java|./|bash|sh)\s)',
+    _cmd_re_module.MULTILINE,
+)
+
+
+def _sanitize_for_ai(content: str) -> str:
+    """过滤技术命令/代码片段，防客户粘贴内容污染 cs_memory AI 人设。
+    匹配到 shell 命令特征 → 替换为通用占位，AI 不会吸收'会运维'的自述。
+    """
+    if _TECH_CMD_RE.search(content or ""):
+        return "[用户发送了包含技术命令/代码的内容，已屏蔽以保护AI角色扮演]"
+    return content
 
 
 # ─── 锚点气泡扫描：系统气泡识别（纯函数，CI 可测）─────────────────────────────
@@ -2096,7 +2120,7 @@ def _chat_title_matches(mw: Any, sender: str) -> Optional[bool]:
             saw_any_title = True
             found_texts.append(nm)
             # WeChat 4.x 有时在标题栏截断长名：nm 是 want 的前缀且 ≥4 字也算命中
-            if nm == want or (len(nm) >= 4 and want.startswith(nm)):
+            if nm == want or (len(nm) >= 4 and want.startswith(nm)) or (len(want) >= 4 and nm.startswith(want)):
                 return True
     if saw_any_title:
         _log(f"_chat_title_matches: 找到标题 {found_texts!r} 但均不匹配 {want!r}")
@@ -2898,6 +2922,9 @@ def post_draft_generate(
     body = {"sender": sender, "wechat_id": wechat_id, "content": content, "mode": mode}
     if agent_id:
         body["agent_id"] = agent_id
+    _machine_id = os.environ.get("ZENITHJOY_MACHINE_ID", "").strip()
+    if _machine_id:
+        body["machine_id"] = _machine_id  # 供中台多租户冲突探测
     # 回复关键路径 → 重试最重要：3 次（1s,2s,4s 退避），扛跨境抖动
     resp, error = _post_with_retry(url, body, timeout=30, retries=3, backoff_base=1.0)
     if error is not None:
@@ -2906,6 +2933,23 @@ def post_draft_generate(
         return resp.json()
     except Exception as exc:
         return {"ok": False, "error": f"bad json: {type(exc).__name__}: {exc}"}
+
+
+def post_message_receipt(middleware_url: str, message_id: int, ok: bool,
+                          agent_id: Optional[str] = None) -> None:
+    """UIA 发送后回报中台，翻 wechat_messages 行 draft→delivered/failed（杜绝假账）。
+    失败静默——回执旁路不影响主链路。
+    """
+    if not message_id or not middleware_url:
+        return
+    url = middleware_url.rstrip("/") + f"/api/wechat/messages/{message_id}/receipt"
+    body: Dict[str, Any] = {"ok": ok}
+    if agent_id:
+        body["agent_id"] = agent_id
+    try:
+        _post_with_retry(url, body, timeout=10, retries=1, backoff_base=0.0)
+    except Exception:
+        pass  # 回执旁路：失败忽略，不影响发送链路
 
 
 # ─── DesktopLeaseBroker IPC 接缝（Sprint 0703-line04-desktop-lease-broker）─────
@@ -4006,6 +4050,7 @@ def run_real_listen(args: argparse.Namespace) -> int:
                                      should_open=_should_open)
             except Exception as exc:
                 last_error = f"{type(exc).__name__}: {exc}"
+                _INFLIGHT.clear()  # 扫描异常路径兜底释放，防永久泄漏
                 time.sleep(args.interval)
                 continue
             last_unread_senders = [u["sender"] for u in unread]
@@ -4179,7 +4224,7 @@ def run_real_listen(args: argparse.Namespace) -> int:
                     return post_draft_generate(
                         args.middleware_url, mm["sender"],
                         mm.get("wxid") or mm.get("sender_wxid") or mm.get("sender", ""),
-                        mm["content"], mode="auto",
+                        _sanitize_for_ai(mm["content"]), mode="auto",
                         agent_id=getattr(args, "agent_id", None),
                     )
 
@@ -4198,11 +4243,15 @@ def run_real_listen(args: argparse.Namespace) -> int:
                             _skip_counter.record("no_reply")
                             _log(f"skip(no reply) sender={m['sender']} result_ok={(result or {}).get('ok')} err={(result or {}).get('error')}")
                             continue
-                        drafts[id(m)] = reply
+                        _mid = (result or {}).get("message_id")
+                        drafts[id(m)] = (reply, _mid)
 
             # ── Phase 2: 串行发送（单微信窗口，切窗+发送只能逐个；_open_chat 身份闸门防串台）──
             for m in eligible:
-                reply = drafts.get(id(m))
+                _draft_entry = drafts.get(id(m))
+                if not _draft_entry:
+                    continue
+                reply, _msg_id = _draft_entry if isinstance(_draft_entry, tuple) else (_draft_entry, None)
                 if not reply:
                     continue
                 key = (m["sender"], m["content"])
@@ -4251,9 +4300,13 @@ def run_real_listen(args: argparse.Namespace) -> int:
                     reply_failed_at.pop(key, None)
                     sender_reply_cooldown[m["sender"]] = time.time()  # per-sender 30s 冷却
                     _commit_reply_success(m, last_preview)  # DELIVERED
+                    post_message_receipt(args.middleware_url, _msg_id, True,
+                                         getattr(args, "agent_id", None))
                     _log(f"auto-replied OK sender={m['sender']} receipt={receipt['status']}")
                 else:
                     reply_failed_at[key] = time.time()
+                    post_message_receipt(args.middleware_url, _msg_id, False,
+                                         getattr(args, "agent_id", None))
                     # 读回失败/掉线告警：auto_reply.alert_on_failure 产出关键人告警 payload（决策 SSOT）。
                     # 关键人由中台配置（auto_agent.key_contact_wechat）下发；agent 侧拿不到则 target 留空。
                     key_contact = getattr(args, "key_contact", "") or os.environ.get("ZJ_KEY_CONTACT", "")

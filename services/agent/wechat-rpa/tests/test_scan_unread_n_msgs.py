@@ -99,3 +99,14 @@ def test_aggregate_messages_order_preserved():
     parts = result.split("\n\n")
     assert parts[0] == "8点说的第一句"
     assert parts[2] == "9点说的第三句"
+
+# ─── 修复 5：99+ 角标格式 ────────────────────────────────────────────────────
+
+def test_parse_unread_count_99plus():
+    """[99+条] → 100（触发开会话读取完整消息数）"""
+    assert parse_unread_count("群名\n[99+条] \n消息\n10:00\n") == 100
+
+
+def test_parse_unread_count_large_plus():
+    """[9+条] → 10"""
+    assert parse_unread_count("联系人\n[9+条] \n内容\n08:00\n") == 10
