@@ -2674,6 +2674,30 @@ def reply_in_chat(mw: Any, item: Any, reply_text: str, sender: str = "") -> bool
     return False
 
 
+def reply_in_chat_with_lease(
+    mw: Any, item: Any, reply_text: str, sender: str, middleware_url: str
+) -> bool:
+    """reply_in_chat 的桌面仲裁层封装（Sprint 0703-line04-desktop-lease-broker 补线）。
+
+    真实回复主循环（run_real_listen）经此函数发消息，而不是直接调 reply_in_chat——
+    否则真实客户消息不会经过 DesktopLeaseBroker，多 agent 抢桌面前台无法被仲裁。
+
+    - middleware_url 为空 → 直接透传 reply_in_chat（兼容无中台场景，行为不变）。
+    - acquire 失败 → 跳过本轮不发送（[防假成功] invariant），返回 False，下轮重试。
+    - acquire 成功 → 调 reply_in_chat；无论成功/异常都 release（finally 保证，
+      不会因 UIA 崩溃而永久占着租约不还）。
+    """
+    if not middleware_url:
+        return reply_in_chat(mw, item, reply_text, sender=sender)
+    if not desktop_lease_acquire(middleware_url):
+        _log(f"reply_in_chat_with_lease: 桌面租约申请失败，本轮跳过 sender={sender!r}（下轮重试）")
+        return False
+    try:
+        return reply_in_chat(mw, item, reply_text, sender=sender)
+    finally:
+        desktop_lease_release(middleware_url)
+
+
 def _pywinauto_available() -> bool:
     try:
         import pywinauto  # noqa: F401  仅检测可用性
@@ -4210,7 +4234,10 @@ def run_real_listen(args: argparse.Namespace) -> int:
                 _log(f"尝试回复 sender={m['sender']} reply_len={len(reply)} (等待 {_wait}s)")
                 ok = False
                 try:
-                    ok = reply_in_chat(mw, m["_item"], reply, sender=m["sender"])
+                    ok = reply_in_chat_with_lease(
+                        mw, m["_item"], reply, m["sender"],
+                        getattr(args, "middleware_url", "") or "",
+                    )
                 except Exception as exc:
                     _log(f"reply_in_chat exception sender={m['sender']}: {exc}")
                     ok = False

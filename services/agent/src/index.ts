@@ -22,6 +22,7 @@ import { handleToutiaoPublish } from './handlers/toutiao-publish';
 import { handleWeiboPublish } from './handlers/weibo-publish';
 import { handleShipinhaoPublish } from './handlers/shipinhao-publish';
 import { handleZhihuPublish } from './handlers/zhihu-publish';
+import { registerLeaseBrokerRoutes } from './handlers/wechat-rpa';
 import { startTray, updateTrayStatus, updateTrayModules, showModuleError, destroyTray } from './tray';
 // Walking Skeleton #1 — HTTP heartbeat 链路（与上面 WS 链路并存）
 import {
@@ -1121,6 +1122,10 @@ function startLocalDiscoveryServer(loop: HeartbeatLoop): void {
     res.writeHead(404);
     res.end();
   });
+
+  // Sprint 0703-line04-desktop-lease-broker（补线）：挂载 /api/agent/desktop-lease-broker/*
+  // 到 agent 本地唯一的 http.Server 上——listen_chat.py 经此 IPC 通道申请/续租/归还桌面租约。
+  registerLeaseBrokerRoutes(server);
 
   server.on('error', (err: NodeJS.ErrnoException) => {
     if (err.code === 'EADDRINUSE') {

@@ -148,3 +148,73 @@ def test_dryrun_inject_calls_release_after_draft(capsys):
         lc.run_dryrun_inject(args)
 
     mock_release.assert_called_once_with("http://localhost:5221")
+
+
+# ─── [ARTIFACT 防回归] reply_in_chat_with_lease — 真实回复主循环接线 ─────────
+# PR#1082 只把 acquire/release 接进了 run_dryrun_inject（CLI 测试注入路径），
+# 没接进 run_real_listen 真实调用的 reply_in_chat（见 4213 行）——真实客户消息
+# 进来完全不会触发这套仲裁机制。补线：reply_in_chat_with_lease 包装 reply_in_chat，
+# acquire 失败 → 跳过不发（[防假成功] invariant）；无论成功/异常都 release（finally）。
+
+
+def test_reply_with_lease_acquire_denied_skips_send():
+    """acquire 返回 False → 不调 reply_in_chat，直接返回 False。"""
+    with patch.object(lc, "desktop_lease_acquire", return_value=False), \
+         patch.object(lc, "reply_in_chat") as mock_reply:
+        result = lc.reply_in_chat_with_lease(
+            MagicMock(), MagicMock(), "你好", "客户A", "http://localhost:5221"
+        )
+    assert result is False
+    mock_reply.assert_not_called()
+
+
+def test_reply_with_lease_acquire_granted_sends_and_releases():
+    """acquire 成功 → 调 reply_in_chat 发送 → 无论结果都 release。"""
+    with patch.object(lc, "desktop_lease_acquire", return_value=True), \
+         patch.object(lc, "desktop_lease_release") as mock_release, \
+         patch.object(lc, "reply_in_chat", return_value=True) as mock_reply:
+        result = lc.reply_in_chat_with_lease(
+            MagicMock(), MagicMock(), "你好", "客户B", "http://localhost:5221"
+        )
+    assert result is True
+    mock_reply.assert_called_once()
+    mock_release.assert_called_once_with("http://localhost:5221")
+
+
+def test_reply_with_lease_releases_even_on_exception():
+    """reply_in_chat 抛异常 → release 仍必须被调用（finally 保证），异常继续往外抛。"""
+    with patch.object(lc, "desktop_lease_acquire", return_value=True), \
+         patch.object(lc, "desktop_lease_release") as mock_release, \
+         patch.object(lc, "reply_in_chat", side_effect=RuntimeError("uia crash")):
+        with pytest.raises(RuntimeError):
+            lc.reply_in_chat_with_lease(
+                MagicMock(), MagicMock(), "你好", "客户C", "http://localhost:5221"
+            )
+    mock_release.assert_called_once_with("http://localhost:5221")
+
+
+def test_reply_with_lease_noop_when_no_middleware_url():
+    """middleware_url 为空 → 不调 acquire/release，直接透传 reply_in_chat（本地/测试场景兼容）。"""
+    with patch.object(lc, "desktop_lease_acquire") as mock_acquire, \
+         patch.object(lc, "desktop_lease_release") as mock_release, \
+         patch.object(lc, "reply_in_chat", return_value=True) as mock_reply:
+        result = lc.reply_in_chat_with_lease(MagicMock(), MagicMock(), "你好", "客户D", "")
+    assert result is True
+    mock_acquire.assert_not_called()
+    mock_release.assert_not_called()
+    mock_reply.assert_called_once()
+
+
+def test_run_real_listen_uses_reply_in_chat_with_lease():
+    """[ARTIFACT 防回归] run_real_listen 源码里真实回复调用点必须走 reply_in_chat_with_lease
+    包装函数，而不是裸调 reply_in_chat——否则真实客户消息不会经过桌面仲裁层。
+    """
+    src_path = Path(__file__).resolve().parents[1] / "listen_chat.py"
+    src = src_path.read_text(encoding="utf-8")
+    fn_start = src.index("def run_real_listen(")
+    fn_end = src.index("\ndef ", fn_start + 1)
+    fn_body = src[fn_start:fn_end]
+    assert "reply_in_chat_with_lease(" in fn_body, (
+        "run_real_listen 必须调用 reply_in_chat_with_lease 包装函数（接入桌面仲裁层），"
+        "不能直接裸调 reply_in_chat"
+    )

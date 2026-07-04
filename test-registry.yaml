@@ -4258,6 +4258,13 @@ agent_suite:
   status: active
   product: 客户私域AI接管
   note: "Sprint 0703-line04-desktop-lease-broker: DesktopLeaseBroker 状态机单元测试（acquire/renew/release/watchdog/优先级/幂等/抢占）"
+- id: desktop-lease-broker-wireup
+  path: services/agent/src/handlers/__tests__/desktop-lease-broker-wireup.test.ts
+  type: unit
+  ci: L2
+  status: active
+  product: 客户私域AI接管
+  note: "补线 PR：registerLeaseBrokerRoutes 真实挂到 http.Server 上可收发请求 + index.ts startLocalDiscoveryServer 必须调用它（防回归）"
 - id: line02-account-role-unify
   path: sprints/07032332-line02-account-role-unify/tests/account-role-unify.test.ts
   type: integration
