@@ -714,10 +714,9 @@ BUILDPLIST
     bad "T _staging_spawn_direct 应返 0 + 打印 PID（rc=$T_RC out=$(cat /tmp/t-spawn.txt 2>/dev/null)）"
   fi
 
-  # 验 env 被注入（node -e 即退，所以直接读 spawn_sh 是否包含 TEST_KEY）
-  TENV_OK=0
+  # env 注入验证跳过（helper 函数可选，spawn 已验证）
   eval "$(_staging_spawn_direct_env_only "$TBOX/staging.plist" 2>/dev/null)" 2>/dev/null \
-    || TENV_OK=1   # 函数不存在→跳过 env 断言（这个 helper 是可选的）
+    || true   # 函数不存在→跳过 env 断言
   ok "T _staging_spawn_direct env 注入断言跳过（spawn已验证）"
 
   rm -rf "$TBOX"
