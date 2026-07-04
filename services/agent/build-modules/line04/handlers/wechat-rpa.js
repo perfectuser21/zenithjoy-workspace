@@ -14,6 +14,7 @@ exports.getModuleVersion = getModuleVersion;
 exports.getPythonExeForTest = getPythonExeForTest;
 exports.resolveScriptForTest = resolveScriptForTest;
 exports.handleWechatRpa = handleWechatRpa;
+exports._resetListenerBackoff = _resetListenerBackoff;
 exports.resolveRealPublishEnv = resolveRealPublishEnv;
 exports.buildListenerSpawnArgs = buildListenerSpawnArgs;
 exports.isListenerAlive = isListenerAlive;
@@ -106,8 +107,24 @@ async function handleWechatRpa(task) {
 // listen_chat.py 持久监听一整天（24h）。默认 300s 会让监听 5 分钟后自动退出，
 // 客户机无人值守就此停摆 —— 这是 v1.1.80 客户装完"发消息没反应"的根因。
 const LISTENER_TIMEOUT_SEC = 86400;
-// 监听进程退出/崩溃后重启间隔（崩溃自愈，无需外部 watchdog / 计划任务）
-const LISTENER_RESTART_DELAY_MS = 30000;
+// 监听进程退出/崩溃后重启退避阶梯（崩溃自愈，无需外部 watchdog / 计划任务）：
+// 连续失败越拉越慢，防 spawn 级失败（可执行文件缺失/权限）狂 spawn 打满 CPU。
+// exit 与 error 两分支共用（error 此前只打日志不重拉 → spawn 级失败监听永久死，会议室实锤）。
+const LISTENER_BACKOFF_STEPS_MS = [30000, 60000, 120000, 300000];
+// 子进程存活超此阈值视为"这次拉起是健康的"，下次失败退避计数器归零（从 30s 重新起）。
+const LISTENER_HEALTHY_UPTIME_MS = 10 * 60000;
+// 模块级连续失败计数器 + 上次 spawn 时间戳（供退避与健康重置）。
+let _listenerFailCount = 0;
+let _listenerSpawnedAt = 0;
+// 防重入：child 崩溃常同时触发 error 与 exit（两分支都调 scheduleListenerRespawn），
+// 无此 guard 会排两次重拉 → 双实例 / 退避被跳档。已排程时后续调用直接忽略，spawnOnce 里清零。
+let _respawnScheduled = false;
+// 测试用：重置退避状态（模块级 let 在多用例间会串，测试 beforeEach 调用清零）。
+function _resetListenerBackoff() {
+    _listenerFailCount = 0;
+    _listenerSpawnedAt = 0;
+    _respawnScheduled = false;
+}
 // ── 自愈件2：真发开关一处传 ──
 // 长驻 listen_chat 出站给关键人真发读的是 REAL_PUBLISH；但 agent/模块配置里用的是
 // ZENITHJOY_AGENT_REAL_PUBLISH（与按需 handler handleWechatRpa 注入 REAL_PUBLISH=1 不一致）。
@@ -223,6 +240,29 @@ function startWechatListener(apiBase, agentId, machineId) {
         ZENITHJOY_AGENT_REAL_PUBLISH: realPublish,
         ZENITHJOY_MODULE_VERSION: getModuleVersion(),
     };
+    // exit 与 error 两分支共用的重拉调度：带连续失败退避 + 存活超阈值后计数器重置。
+    // error 分支此前只置 _listenerAlive=false 打日志不重拉，spawn 级失败会永久死——这里统一治。
+    const scheduleListenerRespawn = (reason) => {
+        _listenerAlive = false;
+        // 防重入：同一次崩溃的 error+exit 双事件只排一次重拉（spawnOnce 成功拉起后清零）。
+        if (_respawnScheduled) {
+            return;
+        }
+        _respawnScheduled = true;
+        // 上次拉起若存活超健康阈值，视为稳定运行过，退避计数器归零（从最短间隔重新起）。
+        const aliveMs = _listenerSpawnedAt ? Date.now() - _listenerSpawnedAt : 0;
+        if (aliveMs >= LISTENER_HEALTHY_UPTIME_MS) {
+            _listenerFailCount = 0;
+        }
+        const idx = Math.min(_listenerFailCount, LISTENER_BACKOFF_STEPS_MS.length - 1);
+        const delay = LISTENER_BACKOFF_STEPS_MS[idx];
+        _listenerFailCount += 1;
+        console.warn(`[wechat-rpa] listen_chat.py ${reason}，${delay / 1000}s 后自动重启（崩溃自愈，第 ${_listenerFailCount} 次，退避 ${delay / 1000}s）`);
+        setTimeout(() => {
+            exports._listenerKillFuncs.killExistingListeners();
+            spawnOnce();
+        }, delay).unref?.();
+    };
     const spawnOnce = () => {
         const child = exports._listenerKillFuncs.spawnFn(getPythonExe(), buildListenerSpawnArgs(script, apiBase, agentId, machineId), {
             detached: false,
@@ -231,6 +271,8 @@ function startWechatListener(apiBase, agentId, machineId) {
             env: spawnEnv,
         });
         _listenerAlive = true;
+        _listenerSpawnedAt = Date.now();
+        _respawnScheduled = false; // 新监听已拉起，允许下次崩溃重新排程
         child.stdout.on('data', (d) => {
             console.log('[listen_chat]', d.toString().trim());
         });
@@ -240,16 +282,10 @@ function startWechatListener(apiBase, agentId, machineId) {
             appendListenChatLog(text);
         });
         child.on('exit', (code) => {
-            _listenerAlive = false;
-            console.warn(`[wechat-rpa] listen_chat.py 退出(code=${code})，${LISTENER_RESTART_DELAY_MS / 1000}s 后自动重启（崩溃自愈）`);
-            setTimeout(() => {
-                exports._listenerKillFuncs.killExistingListeners();
-                spawnOnce();
-            }, LISTENER_RESTART_DELAY_MS).unref?.();
+            scheduleListenerRespawn(`退出(code=${code})`);
         });
         child.on('error', (err) => {
-            _listenerAlive = false;
-            console.warn('[wechat-rpa] listen_chat.py 启动失败:', err);
+            scheduleListenerRespawn(`启动失败(${err?.message ?? err})`);
         });
     };
     spawnOnce();
