@@ -626,18 +626,36 @@ _BUBBLE_READ_POLL_SLEEP = 0.3  # 0.6→0.3（延迟收紧：jiggle 后 Qt 重建
 ANCHOR_STALL_LIMIT = 3            # 连续 N 轮停滞 → 心跳告警（只告警不降级——绝不静默丢消息）
 _TRAILING_STALL: Dict[str, int] = {}  # sender → 触发保留但 trailing 无解的连续轮数
 TRAILING_STALL_LIMIT = 3          # 连续 N 轮无解 → 熔断走回退 emit 预览单条（防死循环开窗=闪屏）
-# v1.0.106 复读双闸（17:47 生产实录：1s 扫描 × 5-10s 发送窗口竞态，同一条消息连回 3 遍）：
-_INFLIGHT: set = set()            # 处理中 sender（emit→DELIVERED/失败之间），扫描跳过不重复 emit
+# v1.0.107+ 复读双闸（17:47 生产实录：1s 扫描 × 5-10s 发送窗口竞态，同一条消息连回 3 遍）：
+# _INFLIGHT 从 set 改 dict[sender→加入时间戳]：加时间戳后可做 TTL 兜底——发送链路中途
+# 失败若绕过轮尾 sweep（dryrun continue / 异常），条目会永久残留 → 该联系人被 scan 静默
+# 跳过永不回。TTL 到点强制释放，配合主循环 try/finally 双保险，绝不永久静默丢消息。
+_INFLIGHT: Dict[str, float] = {}  # 处理中 sender → 加入时间戳（emit→DELIVERED/失败之间），扫描跳过不重复 emit
 _LAST_EMIT: Dict[str, Any] = {}   # sender → (规范化内容, ts)：同内容 60s 内绝不二次 emit
 EMIT_DEDUP_TTL = 60.0
+INFLIGHT_TTL = 180.0              # 处理中标记最长存活；超时视为卡死强制释放（防泄漏永久静默）
 
 
 def _release_inflight(sender: str) -> None:
     """处理**失败**（发送失败/草稿失败/跳过）后释放：清处理中标记 + 清同内容闸，
     允许下轮重试同一条消息（宁可迟到不可丢）。DELIVERED 走 _commit_reply_success
     （只清 inflight、保留同内容闸 60s 防复读）。"""
-    _INFLIGHT.discard(sender)
+    _INFLIGHT.pop(sender, None)
     _LAST_EMIT.pop(sender, None)
+
+
+def _inflight_should_skip(sender: str) -> bool:
+    """扫描发现层判定：该 sender 是否仍在处理中而应本轮跳过。
+    条目超过 INFLIGHT_TTL 视为卡死（发送链路中途失败绕过了轮尾 sweep）→ 强制释放并放行，
+    绝不让泄漏的处理中标记把一个联系人永久静默。"""
+    ts = _INFLIGHT.get(sender)
+    if ts is None:
+        return False
+    if time.time() - ts > INFLIGHT_TTL:
+        _release_inflight(sender)
+        _log("[inflight-ttl-recover] %s 卡死 %.0fs 已强制释放" % (sender, time.time() - ts))
+        return False
+    return True
 
 
 def _jiggle_msg_list(mw: Any) -> None:
@@ -888,6 +906,7 @@ def scan_unread(mw: Any, last_preview: Optional[Dict[str, str]] = None,
     # 正确做法：列表始终保持在顶（CRM 扫描收尾自己回顶），scan_unread 直接读即可。
     candidates: List[Dict[str, Any]] = []
     seen: set = set()
+    _inflight_skipped = 0  # 本轮因处理中被跳过的人数（汇总打一行，不逐条刷屏）
     for it in mw.descendants(control_type="ListItem"):
         try:
             name = it.element_info.name or ""
@@ -899,8 +918,9 @@ def scan_unread(mw: Any, last_preview: Optional[Dict[str, str]] = None,
         sender = info["sender"]
         if sender in _KNOWN_GROUPS:
             continue
-        if sender in _INFLIGHT:
-            continue  # v1.0.106：上一条还在草稿/发送中，绝不重复 emit（复读根源）
+        if _inflight_should_skip(sender):
+            _inflight_skipped += 1
+            continue  # v1.0.107+：上一条还在草稿/发送中，绝不重复 emit（复读根源）；TTL 卡死已在判定里强制释放
         if should_open is not None and not should_open(sender):
             continue  # F4：黑名单/操作者会话连候选都不进（角标保留给操作者，不烧预算）
         badge_n = parse_unread_count(name)
@@ -939,6 +959,8 @@ def scan_unread(mw: Any, last_preview: Optional[Dict[str, str]] = None,
             seen.add(sender)
             candidates.append({"sender": sender, "content": info["content"],
                                "name": name, "badge": 0, "_item": it})
+    if _inflight_skipped > 0:
+        _log(f"inflight_skip 本轮跳过 {_inflight_skipped} 人（仍在草稿/发送中，处理完自动放行）")
     candidates.sort(key=lambda c: -c["badge"])  # 角标优先
     out: List[Dict[str, Any]] = []
     opened = 0
@@ -1002,8 +1024,8 @@ def scan_unread(mw: Any, last_preview: Optional[Dict[str, str]] = None,
                             "_item": c["_item"], "_preview_name": c["name"],
                             "_last_incoming": c["content"]})
                 _TRAILING_STALL.pop(c["sender"], None)
-    # v1.0.106 复读双闸：①同内容 60s 内二次 emit → 丢弃（提交触发止空转）
-    # ②存活 emit 标记处理中（本轮草稿/发送期间扫描不再碰该会话）。
+    # v1.0.107+ 复读双闸：①同内容 60s 内二次 emit → 丢弃（提交触发止空转）
+    # ②存活 emit 标记处理中（记加入时刻，本轮草稿/发送期间扫描不再碰该会话；TTL 兜底防泄漏）。
     # 17:47 生产实录：同一条"我想买30w"被连回 3 遍——逐轮重扫出同一 trailing。
     _now_ts = time.time()
     _deduped: List[Dict[str, Any]] = []
@@ -1018,7 +1040,7 @@ def scan_unread(mw: Any, last_preview: Optional[Dict[str, str]] = None,
             _log(f"duplicate_emit sender={_m['sender']}（同内容 {EMIT_DEDUP_TTL:.0f}s 内二次上报，丢弃）")
             continue
         _LAST_EMIT[_m["sender"]] = (_norm, _now_ts)
-        _INFLIGHT.add(_m["sender"])
+        _INFLIGHT[_m["sender"]] = _now_ts  # 记加入时刻，供 INFLIGHT_TTL 兜底
         _deduped.append(_m)
     out = _deduped
     # v1.0.103 双弹窗修复：有 emit → 不收窗（回复接着用这次弹出），orig_state
@@ -1055,7 +1077,7 @@ def _commit_reply_success(msg: Dict[str, Any],
         last_preview[sender] = preview_name
     _ANCHOR_STALL.pop(sender, None)
     _TRAILING_STALL.pop(sender, None)
-    _INFLIGHT.discard(sender)  # v1.0.106：DELIVERED=终结；_LAST_EMIT 保留 60s 防复读
+    _INFLIGHT.pop(sender, None)  # v1.0.107+：DELIVERED=终结；_LAST_EMIT 保留 60s 防复读
     last_incoming = (msg or {}).get("_last_incoming")
     if last_incoming:
         _REPLY_ANCHOR[sender] = last_incoming
@@ -4000,6 +4022,7 @@ def run_real_listen(args: argparse.Namespace) -> int:
                 cooldown_map=sender_reply_cooldown,
                 cooldown_seconds=SENDER_COOLDOWN,
             )
+            unread = []  # try 前初始化：异常/任何 continue 路径 finally 都能安全 sweep
             try:
                 unread = scan_unread(mw, last_preview,
                                      record_skip=_skip_counter.record,
@@ -4008,284 +4031,286 @@ def run_real_listen(args: argparse.Namespace) -> int:
                 last_error = f"{type(exc).__name__}: {exc}"
                 time.sleep(args.interval)
                 continue
-            last_unread_senders = [u["sender"] for u in unread]
-            # scan_unread 可见态读到健康树(非塌缩)=微信能读会话→记录时刻供塌缩自愈守卫(绝不误重启)
-            if _LAST_VISIBLE_TREE_SIZE is not None and not _is_uia_tree_collapsed(_LAST_VISIBLE_TREE_SIZE):
-                last_readable_scan_at = now
-
-            # CRM 好友采集（Ability B）：【只】由中台显式「立即扫好友」触发，绝不开机自动 / 周期自动。
-            # 决策 bug-fix 4062a5af（做法二 PR1）：B 与客服回复(Ability A)共用同一微信窗口/UIA/焦点，
-            # 不能并行；B 自动滚列表/开会话会丢 SPI 标志→UIA 树塌→#950 误重启正在工作的微信(rog 0629铁证)。
-            _cs_wid = (cs_config or {}).get("wechat_id") if getattr(args, "machine_id", None) else None
-
-            # 「立即扫好友」强制标志：运营在 Dashboard 点了按钮 → 中台 force_scan_requested_at。
-            # 节流拉 pending（复用现有拉指令模式，参考 process_outbound_once）。
-            # 失败保守 force=False（绝不误触发），绝不拖垮监听。
-            _force_scan = False
-            if _cs_wid and now - last_force_scan_poll >= FORCE_SCAN_POLL_INTERVAL:
-                last_force_scan_poll = now
-                try:
-                    _pending = fetch_friend_scan_pending(args.middleware_url, _cs_wid)
-                    _force_scan = bool(_pending.get("force"))
-                    if _force_scan:
-                        _log(f"[CRM好友扫描] 收到「立即扫好友」指令(requested_at={_pending.get('requested_at')}) → 本轮采集")
-                except Exception as _fpexc:
-                    _log(f"[CRM好友扫描] 拉强制标志异常: {_fpexc}")
-
-            # 窗口锁调度：回复优先——本轮有 pending 未读则 B 让位（force 标志留到下轮无未读再采集）。
-            # _should_run_friend_scan 仍由 test_friend_scan_trigger 守卫"只认 force"；这里再叠回复优先。
-            _has_pending_unread = bool(last_unread_senders)
-            if _cs_wid and _should_insert_scan(_force_scan, _has_pending_unread):
-                _r = run_friend_scan(mw, args.middleware_url, _cs_wid)  # 内含 ≤120s 软超时 + 跑完重建可读态
-                if _r.get("ok"):
-                    friend_scan_done_once = True
-                    last_friend_scan = now
-                    # 强制扫已消费：后端在 ingest 成功后清 force_scan_requested_at（agent 不另调清除端点）。
-                    _log(f"[CRM好友扫描] (中台触发)扫到 {_r.get('count')} 人 → 上报 ingested={_r.get('ingested')}")
-                elif _r.get("error"):
-                    _log(f"[CRM好友扫描] 失败: {_r.get('error')}（下次中台触发重试）")
-            elif _cs_wid and _force_scan and _has_pending_unread:
-                _log("[CRM好友扫描] 收到指令但本轮有未读，回复优先——先回复，下轮无未读再采集")
-
-            # 关键人出站任务（上下线播报 + 失败告警）：拉中台待发任务 → 真机 UIA 发送 → 回执。
-            # 与「被动回名单内客户」同循环，但走 send_chat 真发配方（target=关键人）。失败吞掉不拖垮监听。
             try:
-                _ob = process_outbound_once(
-                    args.middleware_url,
-                    getattr(args, "agent_id", None),
-                    _real_publish,
-                )
-                if _ob:
-                    _log(f"[关键人出站] 发送 {_ob} 条")
-                    # 自愈件4：记录最近一次成功送达时间（写进健康文件给中台看模块真实健康）
-                    last_delivery_ts = int(time.time() * 1000)
-            except Exception as _obexc:
-                _log(f"[关键人出站] 处理异常: {_obexc}")
+                last_unread_senders = [u["sender"] for u in unread]
+                # scan_unread 可见态读到健康树(非塌缩)=微信能读会话→记录时刻供塌缩自愈守卫(绝不误重启)
+                if _LAST_VISIBLE_TREE_SIZE is not None and not _is_uia_tree_collapsed(_LAST_VISIBLE_TREE_SIZE):
+                    last_readable_scan_at = now
 
-            # 主动发送指令：写 %PUBLIC%\zj-proactive-send.json → {target:..., message:...}
-            _public = os.environ.get("PUBLIC", r"C:\Users\Public")
-            _psc = os.path.join(_public, "zj-proactive-send.json")
-            if os.path.exists(_psc):
-                try:
-                    with open(_psc, "r", encoding="utf-8-sig") as _f:
-                        _raw = _f.read()
-                    os.remove(_psc)  # 先删除再解析，防格式错误导致无限重试
-                    _cmd = json.loads(_raw)
-                    _tgt, _msg = _cmd.get("target", ""), _cmd.get("message", "")
-                    if _tgt and _msg:
-                        _log(f"[主动发送] target={_tgt!r}")
-                        _psi = None
-                        for _it in mw.descendants(control_type="ListItem"):
-                            try:
-                                if _tgt in (_it.element_info.name or "").split("\n")[0]:
-                                    _psi = _it
-                                    break
-                            except Exception:
-                                continue
-                        if _psi is not None:
-                            try:
-                                _psi.iface_invoke.Invoke()
-                                time.sleep(2.0)  # UIA 树更新需要 ≥2s，少了找不到 chat_input_field
-                                _fmw = get_main_window() or mw
-                                _ue = _find_chat_input(_fmw)
-                                if _ue is not None:
-                                    _ok = _uia_send(_ue, _fmw, _msg)
-                                    _log(f"[主动发送] ok={_ok}")
-                                else:
-                                    _log("[主动发送] chat_input_field 未找到")
-                            except Exception as _pe:
-                                import traceback as _tb
-                                _log(f"[主动发送] 异常: {_pe}\n{_tb.format_exc()}")
-                        else:
-                            _log(f"[主动发送] 找不到会话 {_tgt!r}")
-                except Exception as _exc:
-                    _log(f"[主动发送] 指令处理异常: {_exc}")
+                # CRM 好友采集（Ability B）：【只】由中台显式「立即扫好友」触发，绝不开机自动 / 周期自动。
+                # 决策 bug-fix 4062a5af（做法二 PR1）：B 与客服回复(Ability A)共用同一微信窗口/UIA/焦点，
+                # 不能并行；B 自动滚列表/开会话会丢 SPI 标志→UIA 树塌→#950 误重启正在工作的微信(rog 0629铁证)。
+                _cs_wid = (cs_config or {}).get("wechat_id") if getattr(args, "machine_id", None) else None
 
-            # 每客服 gate（入站自动回复）：machine_id 在册且本轮非真发（中台该客服 auto_agent
-            # OFF / 拉配置失败）→ 整轮不自动回复（演练），绝不在开关关着时真回客户。
-            if getattr(args, "machine_id", None) and not _real_publish:
-                if unread:
-                    _log(f"[每客服] auto_agent OFF/拉配置失败 → 本轮跳过 {len(unread)} 条自动回复(dryrun)")
-                time.sleep(args.interval)
-                continue
-
-            # ── Phase 1: 过滤可回复的未读 + 并行生成草稿 ──────────────────────────────
-            # 生成草稿是纯网络调用、不碰微信窗口，可并发；多人同时来时不再逐个排队等模型，
-            # 把"生成"从串行链路里拿出来并行做，最后只串行做"切窗+发送"（单窗口物理限制）。
-            # 接管名单门：_cs_cfg/_cs_mode/_cs_whitelist/_roster_gate_on 已在本轮 scan 之前算好
-            # （见上方 scan_unread 调用前的块），classify_unread 与 should_open 谓词共用同一份 gate。
-            eligible = []
-            for m in unread:
-                key = (m["sender"], m["content"])
-                # 客户消息绝不静默丢弃：去重(is_dup)、频控(rate_check)都是有副作用的惰性 callable，
-                # 只在真正走到那一关才调用。被 cooldown/replied/fail 跳过的消息不被去重标记 →
-                # 下轮条件解除后照常可回（能晚回、绝不永久丢）。详见 classify_unread 文档。
-                _next_at: Optional[str] = None
-
-                def _rate_check(_s=m["sender"]):
-                    if rate_limiter is None:
-                        return True, None
-                    return rate_limiter.can_send("chat", _s)
-
-                _reason, _next_at = classify_unread(
-                    roster_gate_on=_roster_gate_on,
-                    roster_should_reply=(not _roster_gate_on)
-                    or cs_config_gate.should_reply(_cs_cfg, m["sender"]),
-                    in_sender_cooldown=(now - sender_reply_cooldown.get(m["sender"], 0) < SENDER_COOLDOWN),
-                    already_replied=(key in replied) and not m.get("_anchor"),
-                    in_fail_cooldown=(
-                        key in reply_failed_at and now - reply_failed_at[key] < REPLY_FAIL_COOLDOWN
-                    ),
-                    is_dup=lambda _s=m["sender"], _c=m["content"]: auto_reply.is_duplicate(_s, _c, now),
-                    rate_check=_rate_check,
-                )
-                if _reason == "eligible":
-                    eligible.append(m)
-                    continue
-                _skip_counter.record(_reason)
-                # 终态 skip（已回过/重复/名单拦截）→ 提交触发态防每轮重开白烧预算；
-                # 暂态 skip（sender_cooldown/cooldown/rate_limited）不提交，冷却结束自动重试。
-                if _reason in ("replied", "dup", "roster_gate"):
-                    _commit_reply_success(m, last_preview)
-                # per-reason 日志（保持原有可观测性）
-                if _reason == "roster_gate":
-                    if key not in _skip_logged:
-                        _rl = "黑名单内" if _cs_mode == "blacklist" else "不在该客服白名单"
-                        _log(f"skip({_rl}) sender={m['sender']}")
-                        _skip_logged.add(key)
-                elif _reason == "dup":
-                    if key not in _skip_logged:
-                        _log(f"skip(dup) sender={m['sender']} content={m['content'][:20]!r}")
-                        _skip_logged.add(key)
-                elif _reason == "replied":
-                    if key not in _skip_logged:
-                        _log(f"skip(replied) sender={m['sender']} content={m['content'][:20]!r}")
-                        _skip_logged.add(key)
-                elif _reason == "cooldown":
-                    left = int(REPLY_FAIL_COOLDOWN - (now - reply_failed_at[key]))
-                    if key not in _skip_logged:
-                        _log(f"skip(cooldown {left}s) sender={m['sender']} content={m['content'][:20]!r}")
-                        _skip_logged.add(key)
-                elif _reason == "rate_limited":
-                    _log(f"rate_limiter: {m['sender']} 24h限额已满，跳过回复（下次允许: {_next_at}）")
-                # sender_cooldown 无日志（与原实现一致，避免每轮刷屏）
-
-            # 并行向中台要草稿文本（最多 5 路同时，避免压垮中台）；按 id(m) 存回复
-            drafts = {}
-            if eligible:
-                import concurrent.futures
-
-                def _gen_draft(mm):
-                    return post_draft_generate(
-                        args.middleware_url, mm["sender"],
-                        mm.get("wxid") or mm.get("sender_wxid") or mm.get("sender", ""),
-                        mm["content"], mode="auto",
-                        agent_id=getattr(args, "agent_id", None),
-                    )
-
-                with concurrent.futures.ThreadPoolExecutor(max_workers=min(5, len(eligible))) as _ex:
-                    _futs = {_ex.submit(_gen_draft, m): m for m in eligible}
-                    for _fut in concurrent.futures.as_completed(_futs):
-                        m = _futs[_fut]
-                        try:
-                            result = _fut.result()
-                        except Exception as exc:
-                            _log(f"draft-generate 异常 sender={m['sender']}: {exc}")
-                            continue
-                        reply = (result or {}).get("reply")
-                        # AI 失败时 reply 为空 / 占位文案 → 不发，绝不把"AI 生成失败"发给客户
-                        if not reply or reply == FAIL_PLACEHOLDER:
-                            _skip_counter.record("no_reply")
-                            _log(f"skip(no reply) sender={m['sender']} result_ok={(result or {}).get('ok')} err={(result or {}).get('error')}")
-                            continue
-                        drafts[id(m)] = reply
-
-            # ── Phase 2: 串行发送（单微信窗口，切窗+发送只能逐个；_open_chat 身份闸门防串台）──
-            for m in eligible:
-                reply = drafts.get(id(m))
-                if not reply:
-                    continue
-                key = (m["sender"], m["content"])
-                # 不回自己/不回操作者：读聊天面板最底部气泡方向，仅「对方发来(incoming)」才回。
-                #   incoming  → 对方发来 → 进入发送（human_intervened=False，拟人延迟约 2s）
-                #   outgoing  → 我方/AI/操作者最右气泡 → 跳过本条（human_intervened=True，人工优先）
-                #   None      → 读不到气泡 → 跳过（安全，宁可漏回不可回错）
-                # REPLY_DIRECTION_CHECK=False（默认）→ 完全跳过方向判断：真机气泡阈值未校准前，
-                #   方向检测会把收到的消息误判成 outgoing 而永不回，关掉后对所有未读消息正常回。
-                human_intervened = False
-                if REPLY_DIRECTION_CHECK:
-                    direction = _last_bubble_direction(mw)
-                    human_intervened = direction == "outgoing"  # 操作者最右气泡=人工介入信号
-                    if direction != "incoming":
-                        _skip_counter.record("direction")
-                        _wait = decide_reply_wait(human_intervened=human_intervened)
-                        _log(f"skip(direction={direction!r}) sender={m['sender']} "
-                             f"human_intervened={human_intervened} (wait={_wait}s)")
-                        continue
-                # 拟人回复延迟：确认要回这条之后、实际发送之前等待。
-                #   - 名单内自动回（human_intervened=False）→ auto_reply.pick_reply_delay() 随机 1~5s（拟人，防机械等距）
-                #   - 人工介入（outgoing）→ decide_reply_wait 给人工优先的长等待
-                _wait = (
-                    auto_reply.pick_reply_delay()
-                    if not human_intervened
-                    else decide_reply_wait(human_intervened=human_intervened)
-                )
-                time.sleep(_wait)
-                _log(f"尝试回复 sender={m['sender']} reply_len={len(reply)} (等待 {_wait}s)")
-                ok = False
-                try:
-                    ok = reply_in_chat_with_lease(
-                        mw, m["_item"], reply, m["sender"],
-                        getattr(args, "middleware_url", "") or "",
-                    )
-                except Exception as exc:
-                    _log(f"reply_in_chat exception sender={m['sender']}: {exc}")
-                    ok = False
-                # 回执（auto_reply.build_receipt 是 SSOT）：成功 auto_sent / 失败 send_failed 不重发。
-                receipt = auto_reply.build_receipt("auto", ok=ok, reason=None if ok else "send_failed")
-                if ok:
-                    _replied_ts[key] = time.time()  # 记录时间戳，_save_replied 持久化用
-                    replied.add(key)
-                    _save_replied(replied)  # 持久化，防重启重复回复
-                    _skip_logged.discard(key)
-                    reply_failed_at.pop(key, None)
-                    sender_reply_cooldown[m["sender"]] = time.time()  # per-sender 30s 冷却
-                    _commit_reply_success(m, last_preview)  # DELIVERED
-                    _log(f"auto-replied OK sender={m['sender']} receipt={receipt['status']}")
-                else:
-                    reply_failed_at[key] = time.time()
-                    # 读回失败/掉线告警：auto_reply.alert_on_failure 产出关键人告警 payload（决策 SSOT）。
-                    # 关键人由中台配置（auto_agent.key_contact_wechat）下发；agent 侧拿不到则 target 留空。
-                    key_contact = getattr(args, "key_contact", "") or os.environ.get("ZJ_KEY_CONTACT", "")
-                    alert = auto_reply.alert_on_failure("reply_in_chat_failed", key_contact)
-                    _log(
-                        f"reply_in_chat FAILED sender={m['sender']} receipt={receipt['status']} "
-                        f"alert_target={alert['target']!r} (冷却 {REPLY_FAIL_COOLDOWN}s 再试)"
-                    )
-                    # 真机主动告警接线：让中台入一条关键人告警出站任务（中台去重）→ 下一轮
-                    # process_outbound_once 真机 UIA 发给关键人。同时随心跳 diag 上报留痕。
+                # 「立即扫好友」强制标志：运营在 Dashboard 点了按钮 → 中台 force_scan_requested_at。
+                # 节流拉 pending（复用现有拉指令模式，参考 process_outbound_once）。
+                # 失败保守 force=False（绝不误触发），绝不拖垮监听。
+                _force_scan = False
+                if _cs_wid and now - last_force_scan_poll >= FORCE_SCAN_POLL_INTERVAL:
+                    last_force_scan_poll = now
                     try:
-                        post_failure_alert(
-                            args.middleware_url,
-                            getattr(args, "agent_id", None),
-                            key_contact,
-                            "reply_in_chat_failed",
-                        )
-                        post_heartbeat(
-                            args.middleware_url,
-                            agent_id=getattr(args, "agent_id", None),
-                            diag={"alert": alert, "receipt": receipt},
-                        )
-                    except Exception as _hbexc:
-                        _log(f"[告警上报] 异常: {_hbexc}")
-                time.sleep(1)  # 操作间隔 ≥1s
+                        _pending = fetch_friend_scan_pending(args.middleware_url, _cs_wid)
+                        _force_scan = bool(_pending.get("force"))
+                        if _force_scan:
+                            _log(f"[CRM好友扫描] 收到「立即扫好友」指令(requested_at={_pending.get('requested_at')}) → 本轮采集")
+                    except Exception as _fpexc:
+                        _log(f"[CRM好友扫描] 拉强制标志异常: {_fpexc}")
 
-            # v1.0.106：轮尾兜底——仍在处理中（=未 DELIVERED，失败/跳过）的释放并
-            # 允许重试同内容；DELIVERED 的已在 _commit 清 inflight、同内容闸保留 60s。
-            for _m_rel in unread:
-                _s_rel = _m_rel.get("sender", "")
-                if _s_rel in _INFLIGHT:
-                    _release_inflight(_s_rel)
+                # 窗口锁调度：回复优先——本轮有 pending 未读则 B 让位（force 标志留到下轮无未读再采集）。
+                # _should_run_friend_scan 仍由 test_friend_scan_trigger 守卫"只认 force"；这里再叠回复优先。
+                _has_pending_unread = bool(last_unread_senders)
+                if _cs_wid and _should_insert_scan(_force_scan, _has_pending_unread):
+                    _r = run_friend_scan(mw, args.middleware_url, _cs_wid)  # 内含 ≤120s 软超时 + 跑完重建可读态
+                    if _r.get("ok"):
+                        friend_scan_done_once = True
+                        last_friend_scan = now
+                        # 强制扫已消费：后端在 ingest 成功后清 force_scan_requested_at（agent 不另调清除端点）。
+                        _log(f"[CRM好友扫描] (中台触发)扫到 {_r.get('count')} 人 → 上报 ingested={_r.get('ingested')}")
+                    elif _r.get("error"):
+                        _log(f"[CRM好友扫描] 失败: {_r.get('error')}（下次中台触发重试）")
+                elif _cs_wid and _force_scan and _has_pending_unread:
+                    _log("[CRM好友扫描] 收到指令但本轮有未读，回复优先——先回复，下轮无未读再采集")
+
+                # 关键人出站任务（上下线播报 + 失败告警）：拉中台待发任务 → 真机 UIA 发送 → 回执。
+                # 与「被动回名单内客户」同循环，但走 send_chat 真发配方（target=关键人）。失败吞掉不拖垮监听。
+                try:
+                    _ob = process_outbound_once(
+                        args.middleware_url,
+                        getattr(args, "agent_id", None),
+                        _real_publish,
+                    )
+                    if _ob:
+                        _log(f"[关键人出站] 发送 {_ob} 条")
+                        # 自愈件4：记录最近一次成功送达时间（写进健康文件给中台看模块真实健康）
+                        last_delivery_ts = int(time.time() * 1000)
+                except Exception as _obexc:
+                    _log(f"[关键人出站] 处理异常: {_obexc}")
+
+                # 主动发送指令：写 %PUBLIC%\zj-proactive-send.json → {target:..., message:...}
+                _public = os.environ.get("PUBLIC", r"C:\Users\Public")
+                _psc = os.path.join(_public, "zj-proactive-send.json")
+                if os.path.exists(_psc):
+                    try:
+                        with open(_psc, "r", encoding="utf-8-sig") as _f:
+                            _raw = _f.read()
+                        os.remove(_psc)  # 先删除再解析，防格式错误导致无限重试
+                        _cmd = json.loads(_raw)
+                        _tgt, _msg = _cmd.get("target", ""), _cmd.get("message", "")
+                        if _tgt and _msg:
+                            _log(f"[主动发送] target={_tgt!r}")
+                            _psi = None
+                            for _it in mw.descendants(control_type="ListItem"):
+                                try:
+                                    if _tgt in (_it.element_info.name or "").split("\n")[0]:
+                                        _psi = _it
+                                        break
+                                except Exception:
+                                    continue
+                            if _psi is not None:
+                                try:
+                                    _psi.iface_invoke.Invoke()
+                                    time.sleep(2.0)  # UIA 树更新需要 ≥2s，少了找不到 chat_input_field
+                                    _fmw = get_main_window() or mw
+                                    _ue = _find_chat_input(_fmw)
+                                    if _ue is not None:
+                                        _ok = _uia_send(_ue, _fmw, _msg)
+                                        _log(f"[主动发送] ok={_ok}")
+                                    else:
+                                        _log("[主动发送] chat_input_field 未找到")
+                                except Exception as _pe:
+                                    import traceback as _tb
+                                    _log(f"[主动发送] 异常: {_pe}\n{_tb.format_exc()}")
+                            else:
+                                _log(f"[主动发送] 找不到会话 {_tgt!r}")
+                    except Exception as _exc:
+                        _log(f"[主动发送] 指令处理异常: {_exc}")
+
+                # 每客服 gate（入站自动回复）：machine_id 在册且本轮非真发（中台该客服 auto_agent
+                # OFF / 拉配置失败）→ 整轮不自动回复（演练），绝不在开关关着时真回客户。
+                if getattr(args, "machine_id", None) and not _real_publish:
+                    if unread:
+                        _log(f"[每客服] auto_agent OFF/拉配置失败 → 本轮跳过 {len(unread)} 条自动回复(dryrun)")
+                    time.sleep(args.interval)
+                    continue
+
+                # ── Phase 1: 过滤可回复的未读 + 并行生成草稿 ──────────────────────────────
+                # 生成草稿是纯网络调用、不碰微信窗口，可并发；多人同时来时不再逐个排队等模型，
+                # 把"生成"从串行链路里拿出来并行做，最后只串行做"切窗+发送"（单窗口物理限制）。
+                # 接管名单门：_cs_cfg/_cs_mode/_cs_whitelist/_roster_gate_on 已在本轮 scan 之前算好
+                # （见上方 scan_unread 调用前的块），classify_unread 与 should_open 谓词共用同一份 gate。
+                eligible = []
+                for m in unread:
+                    key = (m["sender"], m["content"])
+                    # 客户消息绝不静默丢弃：去重(is_dup)、频控(rate_check)都是有副作用的惰性 callable，
+                    # 只在真正走到那一关才调用。被 cooldown/replied/fail 跳过的消息不被去重标记 →
+                    # 下轮条件解除后照常可回（能晚回、绝不永久丢）。详见 classify_unread 文档。
+                    _next_at: Optional[str] = None
+
+                    def _rate_check(_s=m["sender"]):
+                        if rate_limiter is None:
+                            return True, None
+                        return rate_limiter.can_send("chat", _s)
+
+                    _reason, _next_at = classify_unread(
+                        roster_gate_on=_roster_gate_on,
+                        roster_should_reply=(not _roster_gate_on)
+                        or cs_config_gate.should_reply(_cs_cfg, m["sender"]),
+                        in_sender_cooldown=(now - sender_reply_cooldown.get(m["sender"], 0) < SENDER_COOLDOWN),
+                        already_replied=(key in replied) and not m.get("_anchor"),
+                        in_fail_cooldown=(
+                            key in reply_failed_at and now - reply_failed_at[key] < REPLY_FAIL_COOLDOWN
+                        ),
+                        is_dup=lambda _s=m["sender"], _c=m["content"]: auto_reply.is_duplicate(_s, _c, now),
+                        rate_check=_rate_check,
+                    )
+                    if _reason == "eligible":
+                        eligible.append(m)
+                        continue
+                    _skip_counter.record(_reason)
+                    # 终态 skip（已回过/重复/名单拦截）→ 提交触发态防每轮重开白烧预算；
+                    # 暂态 skip（sender_cooldown/cooldown/rate_limited）不提交，冷却结束自动重试。
+                    if _reason in ("replied", "dup", "roster_gate"):
+                        _commit_reply_success(m, last_preview)
+                    # per-reason 日志（保持原有可观测性）
+                    if _reason == "roster_gate":
+                        if key not in _skip_logged:
+                            _rl = "黑名单内" if _cs_mode == "blacklist" else "不在该客服白名单"
+                            _log(f"skip({_rl}) sender={m['sender']}")
+                            _skip_logged.add(key)
+                    elif _reason == "dup":
+                        if key not in _skip_logged:
+                            _log(f"skip(dup) sender={m['sender']} content={m['content'][:20]!r}")
+                            _skip_logged.add(key)
+                    elif _reason == "replied":
+                        if key not in _skip_logged:
+                            _log(f"skip(replied) sender={m['sender']} content={m['content'][:20]!r}")
+                            _skip_logged.add(key)
+                    elif _reason == "cooldown":
+                        left = int(REPLY_FAIL_COOLDOWN - (now - reply_failed_at[key]))
+                        if key not in _skip_logged:
+                            _log(f"skip(cooldown {left}s) sender={m['sender']} content={m['content'][:20]!r}")
+                            _skip_logged.add(key)
+                    elif _reason == "rate_limited":
+                        _log(f"rate_limiter: {m['sender']} 24h限额已满，跳过回复（下次允许: {_next_at}）")
+                    # sender_cooldown 无日志（与原实现一致，避免每轮刷屏）
+
+                # 并行向中台要草稿文本（最多 5 路同时，避免压垮中台）；按 id(m) 存回复
+                drafts = {}
+                if eligible:
+                    import concurrent.futures
+
+                    def _gen_draft(mm):
+                        return post_draft_generate(
+                            args.middleware_url, mm["sender"],
+                            mm.get("wxid") or mm.get("sender_wxid") or mm.get("sender", ""),
+                            mm["content"], mode="auto",
+                            agent_id=getattr(args, "agent_id", None),
+                        )
+
+                    with concurrent.futures.ThreadPoolExecutor(max_workers=min(5, len(eligible))) as _ex:
+                        _futs = {_ex.submit(_gen_draft, m): m for m in eligible}
+                        for _fut in concurrent.futures.as_completed(_futs):
+                            m = _futs[_fut]
+                            try:
+                                result = _fut.result()
+                            except Exception as exc:
+                                _log(f"draft-generate 异常 sender={m['sender']}: {exc}")
+                                continue
+                            reply = (result or {}).get("reply")
+                            # AI 失败时 reply 为空 / 占位文案 → 不发，绝不把"AI 生成失败"发给客户
+                            if not reply or reply == FAIL_PLACEHOLDER:
+                                _skip_counter.record("no_reply")
+                                _log(f"skip(no reply) sender={m['sender']} result_ok={(result or {}).get('ok')} err={(result or {}).get('error')}")
+                                continue
+                            drafts[id(m)] = reply
+
+                # ── Phase 2: 串行发送（单微信窗口，切窗+发送只能逐个；_open_chat 身份闸门防串台）──
+                for m in eligible:
+                    reply = drafts.get(id(m))
+                    if not reply:
+                        continue
+                    key = (m["sender"], m["content"])
+                    # 不回自己/不回操作者：读聊天面板最底部气泡方向，仅「对方发来(incoming)」才回。
+                    #   incoming  → 对方发来 → 进入发送（human_intervened=False，拟人延迟约 2s）
+                    #   outgoing  → 我方/AI/操作者最右气泡 → 跳过本条（human_intervened=True，人工优先）
+                    #   None      → 读不到气泡 → 跳过（安全，宁可漏回不可回错）
+                    # REPLY_DIRECTION_CHECK=False（默认）→ 完全跳过方向判断：真机气泡阈值未校准前，
+                    #   方向检测会把收到的消息误判成 outgoing 而永不回，关掉后对所有未读消息正常回。
+                    human_intervened = False
+                    if REPLY_DIRECTION_CHECK:
+                        direction = _last_bubble_direction(mw)
+                        human_intervened = direction == "outgoing"  # 操作者最右气泡=人工介入信号
+                        if direction != "incoming":
+                            _skip_counter.record("direction")
+                            _wait = decide_reply_wait(human_intervened=human_intervened)
+                            _log(f"skip(direction={direction!r}) sender={m['sender']} "
+                                 f"human_intervened={human_intervened} (wait={_wait}s)")
+                            continue
+                    # 拟人回复延迟：确认要回这条之后、实际发送之前等待。
+                    #   - 名单内自动回（human_intervened=False）→ auto_reply.pick_reply_delay() 随机 1~5s（拟人，防机械等距）
+                    #   - 人工介入（outgoing）→ decide_reply_wait 给人工优先的长等待
+                    _wait = (
+                        auto_reply.pick_reply_delay()
+                        if not human_intervened
+                        else decide_reply_wait(human_intervened=human_intervened)
+                    )
+                    time.sleep(_wait)
+                    _log(f"尝试回复 sender={m['sender']} reply_len={len(reply)} (等待 {_wait}s)")
+                    ok = False
+                    try:
+                        ok = reply_in_chat_with_lease(
+                            mw, m["_item"], reply, m["sender"],
+                            getattr(args, "middleware_url", "") or "",
+                        )
+                    except Exception as exc:
+                        _log(f"reply_in_chat exception sender={m['sender']}: {exc}")
+                        ok = False
+                    # 回执（auto_reply.build_receipt 是 SSOT）：成功 auto_sent / 失败 send_failed 不重发。
+                    receipt = auto_reply.build_receipt("auto", ok=ok, reason=None if ok else "send_failed")
+                    if ok:
+                        _replied_ts[key] = time.time()  # 记录时间戳，_save_replied 持久化用
+                        replied.add(key)
+                        _save_replied(replied)  # 持久化，防重启重复回复
+                        _skip_logged.discard(key)
+                        reply_failed_at.pop(key, None)
+                        sender_reply_cooldown[m["sender"]] = time.time()  # per-sender 30s 冷却
+                        _commit_reply_success(m, last_preview)  # DELIVERED
+                        _log(f"auto-replied OK sender={m['sender']} receipt={receipt['status']}")
+                    else:
+                        reply_failed_at[key] = time.time()
+                        # 读回失败/掉线告警：auto_reply.alert_on_failure 产出关键人告警 payload（决策 SSOT）。
+                        # 关键人由中台配置（auto_agent.key_contact_wechat）下发；agent 侧拿不到则 target 留空。
+                        key_contact = getattr(args, "key_contact", "") or os.environ.get("ZJ_KEY_CONTACT", "")
+                        alert = auto_reply.alert_on_failure("reply_in_chat_failed", key_contact)
+                        _log(
+                            f"reply_in_chat FAILED sender={m['sender']} receipt={receipt['status']} "
+                            f"alert_target={alert['target']!r} (冷却 {REPLY_FAIL_COOLDOWN}s 再试)"
+                        )
+                        # 真机主动告警接线：让中台入一条关键人告警出站任务（中台去重）→ 下一轮
+                        # process_outbound_once 真机 UIA 发给关键人。同时随心跳 diag 上报留痕。
+                        try:
+                            post_failure_alert(
+                                args.middleware_url,
+                                getattr(args, "agent_id", None),
+                                key_contact,
+                                "reply_in_chat_failed",
+                            )
+                            post_heartbeat(
+                                args.middleware_url,
+                                agent_id=getattr(args, "agent_id", None),
+                                diag={"alert": alert, "receipt": receipt},
+                            )
+                        except Exception as _hbexc:
+                            _log(f"[告警上报] 异常: {_hbexc}")
+                    time.sleep(1)  # 操作间隔 ≥1s
+
+            finally:
+                # v1.0.107+：轮尾兜底 sweep——异常/任何 continue（dryrun/rate/cooldown/direction）路径
+                #   都释放 INFLIGHT，防发送链路中途失败泄漏处理中标记把该联系人被 scan 永久静默。
+                for _m_rel in unread:
+                    _s_rel = _m_rel.get("sender", "")
+                    if _s_rel in _INFLIGHT:
+                        _release_inflight(_s_rel)
             # v1.0.103 双弹窗修复的另一半：本轮回复全部处理完，统一收窗一次
             # （scan_unread 有 emit 时不收，orig_state 暂存在 _SCAN_WINDOW_STATE）。
             _finish_scan_window(mw)
