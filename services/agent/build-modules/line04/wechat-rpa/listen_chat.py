@@ -633,6 +633,7 @@ TRAILING_STALL_LIMIT = 3          # 连续 N 轮无解 → 熔断走回退 emit 
 _INFLIGHT: Dict[str, float] = {}  # 处理中 sender → 加入时间戳（emit→DELIVERED/失败之间），扫描跳过不重复 emit
 _LAST_EMIT: Dict[str, Any] = {}   # sender → (规范化内容, ts)：同内容 60s 内绝不二次 emit
 _LAST_INFLIGHT_SKIP_COUNT = -1    # 上轮 inflight_skip 汇总打印的人数；仅当变化时才打，防泄漏期每秒刷屏
+_LAST_BADGE_MISS_COUNT = -1       # 上轮 badge-miss 汇总打印的人数（bug5 观测 issue 30c9ce74）；同上节流
 EMIT_DEDUP_TTL = 60.0
 # INFLIGHT_TTL 安全性依赖单线程 finally 不变量：正常发送每轮都会走轮尾 _sweep_inflight 释放，
 # 永远到不了 TTL，TTL 分支只在异常/泄漏时兜底。注意 TTL 分支走 _release_inflight 会连
@@ -925,6 +926,7 @@ def scan_unread(mw: Any, last_preview: Optional[Dict[str, str]] = None,
     candidates: List[Dict[str, Any]] = []
     seen: set = set()
     _inflight_skipped = 0  # 本轮因处理中被跳过的人数（汇总打一行，不逐条刷屏）
+    _badge_miss = 0        # 本轮"预览变化触发但无 [N条] 角标"人数（bug5 观测，issue 30c9ce74）
     for it in mw.descendants(control_type="ListItem"):
         try:
             name = it.element_info.name or ""
@@ -974,6 +976,7 @@ def scan_unread(mw: Any, last_preview: Optional[Dict[str, str]] = None,
             # 验收时把客户消息也压住 → 35s 卡顿/漏回（17:48 生产实录）。
             # 操作者自话防误回已由像素判向全覆盖（绿泡=outgoing，1.0.104），
             # 前台信号只保留给 1.0.105 的解除隐身用。
+            _badge_miss += 1  # bug5 观测：靠预览兜底才发现（角标没解析出），计一次
             seen.add(sender)
             candidates.append({"sender": sender, "content": info["content"],
                                "name": name, "badge": 0, "_item": it})
@@ -983,6 +986,12 @@ def scan_unread(mw: Any, last_preview: Optional[Dict[str, str]] = None,
         if _inflight_skipped > 0:
             _log(f"inflight_skip 本轮跳过 {_inflight_skipped} 人（仍在草稿/发送中，处理完自动放行）")
         _LAST_INFLIGHT_SKIP_COUNT = _inflight_skipped
+    # bug5 观测：角标解析不出、靠预览变化才兜底发现的人数（issue 30c9ce74 深查用），同样节流
+    global _LAST_BADGE_MISS_COUNT
+    if _badge_miss != _LAST_BADGE_MISS_COUNT:
+        if _badge_miss > 0:
+            _log(f"[scan] badge-miss 本轮 {_badge_miss} 人")
+        _LAST_BADGE_MISS_COUNT = _badge_miss
     candidates.sort(key=lambda c: -c["badge"])  # 角标优先
     out: List[Dict[str, Any]] = []
     opened = 0
