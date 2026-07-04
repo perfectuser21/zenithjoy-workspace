@@ -8,6 +8,7 @@ import { spawn, spawnSync } from 'node:child_process';
 import type { SpawnSyncReturns } from 'node:child_process';
 import path from 'node:path';
 import fs from 'node:fs';
+import os from 'node:os';
 
 // 模块根目录：编译后本文件位于 <moduleDir>/handlers/wechat-rpa.js，上一级即模块根。
 export function getModuleRoot(): string {
@@ -182,6 +183,40 @@ export function isListenerAlive(): boolean {
   return _listenerAlive;
 }
 
+// Sprint 0703-line04-desktop-lease-broker（部署缺口修复）：
+// listen_chat.py stderr（含 desktop-lease-broker 的 [desktop_lease] 诊断行）此前只
+// console.warn，没有任何地方落盘，无法观测。本函数把同一份内容旁路落盘到
+// <AppData>/zenithjoy-agent/logs/listen-chat.log。不 import core 的 config-loader.ts
+// （build-line-module.sh 只编译 modules/line04 下的文件，没有到 core src 的模块解析
+// 路径），内联一份自包含的最小实现，跟本文件"模块目录/客户机路径自解析"的既有约定一致。
+const DEFAULT_LOG_MAX_BYTES = 5 * 1024 * 1024; // 5MB
+
+function getAgentLogDir(): string {
+  const base = process.env.APPDATA
+    ? path.join(process.env.APPDATA, 'zenithjoy-agent')
+    : path.join(os.homedir(), 'AppData', 'Roaming', 'zenithjoy-agent');
+  return path.join(base, 'logs');
+}
+
+export function appendListenChatLog(
+  chunk: string,
+  opts?: { maxBytes?: number },
+): void {
+  try {
+    const logDir = getAgentLogDir();
+    fs.mkdirSync(logDir, { recursive: true });
+    const logFile = path.join(logDir, 'listen-chat.log');
+    const maxBytes = opts?.maxBytes ?? DEFAULT_LOG_MAX_BYTES;
+
+    if (fs.existsSync(logFile) && fs.statSync(logFile).size > maxBytes) {
+      fs.renameSync(logFile, path.join(logDir, 'listen-chat.log.old'));
+    }
+    fs.appendFileSync(logFile, chunk);
+  } catch {
+    // 磁盘满/权限问题绝不能让 listen_chat 崩溃——console.warn 已有兜底可见性。
+  }
+}
+
 // Windows only：模块激活时自动拉起 listen_chat.py 持续监听微信消息。
 // 先查杀所有旧 listen_chat.py 实例（防多条心跳/Dashboard 重复客户端），再 spawn 新进程。
 // 持久（timeout 86400）+ 崩溃自愈（退出后 30s 自动重启），随模块生命周期常驻。
@@ -217,7 +252,9 @@ export function startWechatListener(apiBase: string, agentId?: string, machineId
       console.log('[listen_chat]', d.toString().trim());
     });
     child.stderr!.on('data', (d: Buffer) => {
-      console.warn('[listen_chat stderr]', d.toString().trim());
+      const text = d.toString();
+      console.warn('[listen_chat stderr]', text.trim());
+      appendListenChatLog(text);
     });
     child.on('exit', (code) => {
       _listenerAlive = false;
