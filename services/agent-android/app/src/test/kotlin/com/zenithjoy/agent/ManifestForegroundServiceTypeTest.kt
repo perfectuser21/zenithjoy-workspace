@@ -7,7 +7,7 @@ import java.io.File
 
 /**
  * 守卫：AgentService 曾声明 foregroundServiceType="connectedDevice"，但该 App 不持有
- * BLUETOOTH_*/USB 等相关权限——在 targetSdk 34（Android 14+）真机上，startForeground()
+ * 蓝牙、USB 等相关权限——在 targetSdk 34（Android 14+）真机上，startForeground()
  * 必然抛 SecurityException 崩溃（真机验证时实测复现）。connectedDevice 类型要求的权限
  * 这个 App 根本不需要也不该申请，正确类型是 dataSync（周期性网络同步/心跳）。
  */
