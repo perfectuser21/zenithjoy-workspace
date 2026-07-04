@@ -4085,6 +4085,10 @@ def run_real_listen(args: argparse.Namespace) -> int:
                                      should_open=_should_open)
             except Exception as exc:
                 last_error = f"{type(exc).__name__}: {exc}"
+                # v1.0.108 Bug1修复：scan 异常 continue 前释放上一轮可能留在 _INFLIGHT
+                # 的 sender，否则永久卡死不重试（泄漏导致后续扫描永远跳过这些会话）
+                for _s_exc in list(_INFLIGHT):
+                    _release_inflight(_s_exc)
                 time.sleep(args.interval)
                 continue
             last_unread_senders = [u["sender"] for u in unread]
