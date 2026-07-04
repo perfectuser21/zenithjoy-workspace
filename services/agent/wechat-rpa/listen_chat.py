@@ -1029,14 +1029,11 @@ def scan_unread(mw: Any, last_preview: Optional[Dict[str, str]] = None,
             _TRAILING_STALL.pop(c["sender"], None)
             if last_preview is not None:
                 last_preview[c["sender"]] = c["name"]
-        elif c["content"] and not _matches_any_sent(c["content"]):
-            # 回退保底（F1）：开窗失败 / 气泡读空 / trailing 空但预览≠我方回复
-            # （客户发[图片]/[语音]、或纯文本恰被 _is_system_bubble 剔除）
-            # → 旧单条路径 emit（用预览 content），宁可上下文不全也不漏回，绝不静默提交。
-            # v1.0.95：预览命中已发送历史 → 掉入下方 else 走提交（自回自话护栏）。
-            # v1.0.108 Bug5修复：去掉 badge > 0 的门禁——WeChat 打开会话后立即清零 badge，
-            # 旧要求导致开窗后同一轮 badge 已归零的消息走 TRAILING_STALL 等 3 轮，
-            # 期间若预览文本变为我方回复则被自回声护栏静默消费，消息永久丢失。
+        elif c.get("badge", 0) > 0 and c["content"] and not _matches_any_sent(c["content"]):
+            # 回退保底（F1）：badge 触发 + 开窗失败/气泡读空/trailing 空且预览≠我方回复
+            # → 旧单条路径 emit（用预览 content），宁可上下文不全也不漏回。
+            # badge=0（预览触发）不走此路径：触发态由 else 分支 TRAILING_STALL 熔断兜底，
+            # 前几轮保留触发下轮重试（绝不静默消费）；超限才熔断回退 emit。
             out.append({"sender": c["sender"], "content": c["content"],
                         "_item": c["_item"], "_preview_name": c["name"],
                         "_last_incoming": c["content"]})

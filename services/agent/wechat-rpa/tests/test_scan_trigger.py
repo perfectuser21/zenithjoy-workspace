@@ -58,6 +58,9 @@ def _no_window_ops(monkeypatch):
     monkeypatch.setattr(listen_chat.time, "sleep", lambda s: None)
     listen_chat._KNOWN_GROUPS.clear()
     listen_chat._ANCHOR_STALL.clear()
+    listen_chat._TRAILING_STALL.clear()
+    listen_chat._INFLIGHT.clear()
+    listen_chat._LAST_EMIT.clear()
 
 
 def _mk(name):
