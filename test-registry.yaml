@@ -4319,6 +4319,20 @@ agent_suite:
   status: active
   product: 客户私域AI接管
   note: "部署缺口修复：日志落盘补进真实被编译进客户机安装包的 modules/line04/handlers/wechat-rpa.ts（此前误改了 @deprecated 的 core 文件），含 stderr 接线 ARTIFACT 防回归测试"
+- id: watchdog-bom-health
+  path: services/agent/modules/line04/__tests__/watchdog-bom-health.test.ts
+  type: unit
+  ci: L2
+  status: active
+  product: 客户私域AI接管
+  note: "Bug 6 (watchdog) regression — 健康文件 BOM 字符导致 watchdog 误判存活；修复：写入时去 BOM，读取时剥 BOM"
+- id: desktop-lease-broker-watchdog
+  path: services/agent/src/__tests__/desktop-lease-broker-watchdog.test.ts
+  type: unit
+  ci: L2
+  status: active
+  product: 客户私域AI接管
+  note: "Bug 6 (watchdog pendingPreempt 泄漏) regression — watchdog 清除过期 lease 后立即授予 pendingPreempt，绝不留野 timeout"
 - id: line02-account-role-unify
   path: sprints/07032332-line02-account-role-unify/tests/account-role-unify.test.ts
   type: integration

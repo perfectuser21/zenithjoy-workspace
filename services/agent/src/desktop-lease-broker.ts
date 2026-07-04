@@ -72,25 +72,34 @@ export class DesktopLeaseBroker {
   private readonly watchdogIntervalMs: number;
   private readonly yieldWaitMs: number;
   private readonly tenantId: string;
-  private readonly onWatchdogTrigger?: DesktopLeaseBrokerOptions['onWatchdogTrigger'];
-  private readonly onBrainLog?: DesktopLeaseBrokerOptions['onBrainLog'];
-  private readonly onYield?: DesktopLeaseBrokerOptions['onYield'];
+  // public + assignable so tests can wire onWatchdogTrigger after construction
+  public onWatchdogTrigger?: DesktopLeaseBrokerOptions['onWatchdogTrigger'];
+  private onBrainLog?: DesktopLeaseBrokerOptions['onBrainLog'];
+  private onYield?: DesktopLeaseBrokerOptions['onYield'];
   private watchdogTimer: ReturnType<typeof setInterval> | null = null;
 
   constructor(opts: DesktopLeaseBrokerOptions = {}) {
     this.ttlMs = opts.ttlMs ?? 10000;
-    this.watchdogIntervalMs = opts.watchdogIntervalMs ?? 5000;
+    // 0 = disabled (default); provide a positive value to enable background polling
+    this.watchdogIntervalMs = opts.watchdogIntervalMs ?? 0;
     this.yieldWaitMs = opts.yieldWaitMs ?? 2000;
     this.tenantId = opts.tenantId ?? '';
     this.onWatchdogTrigger = opts.onWatchdogTrigger;
     this.onBrainLog = opts.onBrainLog;
     this.onYield = opts.onYield;
 
-    this.watchdogTimer = setInterval(() => this._runWatchdog(), this.watchdogIntervalMs);
+    if (this.watchdogIntervalMs > 0) {
+      this.watchdogTimer = setInterval(() => this._runWatchdog(), this.watchdogIntervalMs);
+    }
   }
 
   async acquire(params: AcquireParams): Promise<AcquireResult> {
     const now = Date.now();
+
+    // Lazy expiry: if current lease has expired and no one released it, clean up now
+    if (this.currentLease && this.currentLease.expiresAt <= now) {
+      this._runWatchdog();
+    }
 
     if (!this.currentLease) {
       const lease: Lease = {
@@ -100,6 +109,9 @@ export class DesktopLeaseBroker {
         expiresAt: now + params.ttlMs,
       };
       this.currentLease = lease;
+      // Schedule a one-shot watchdog at the exact moment this lease expires so
+      // high-priority preempters are unblocked promptly without relying on polling.
+      setTimeout(() => this._runWatchdog(), params.ttlMs);
       return { granted: true, lease_id: lease.leaseId, expires_at: lease.expiresAt };
     }
 
@@ -183,7 +195,7 @@ export class DesktopLeaseBroker {
   private _runWatchdog(): void {
     if (!this.currentLease) return;
     const now = Date.now();
-    if (this.currentLease.expiresAt < now) {
+    if (this.currentLease.expiresAt <= now) {
       const expired = this.currentLease;
       this.currentLease = null;
 
