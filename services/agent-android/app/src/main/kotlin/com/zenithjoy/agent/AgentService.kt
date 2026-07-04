@@ -11,6 +11,7 @@ import android.content.IntentFilter
 import android.os.IBinder
 import com.google.gson.Gson
 import com.zenithjoy.agent.collect.CollectResult
+import com.zenithjoy.agent.collect.CommentEntry
 import com.zenithjoy.agent.collect.DouyinCollectService
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -51,13 +52,15 @@ class AgentService : Service() {
             if (intent?.action != DouyinCollectService.ACTION_COLLECT_RESULT) return
             val taskId = intent.getStringExtra(DouyinCollectService.EXTRA_TASK_ID) ?: ""
             val ok = intent.getBooleanExtra(DouyinCollectService.EXTRA_RESULT_OK, false)
+            val commenterIds = intent.getStringArrayExtra(DouyinCollectService.EXTRA_RESULT_COMMENT_IDS) ?: emptyArray()
+            val commentTexts = intent.getStringArrayExtra(DouyinCollectService.EXTRA_RESULT_COMMENT_TEXTS) ?: emptyArray()
+            val comments = commenterIds.indices.map { i ->
+                CommentEntry(commenterId = commenterIds[i], text = commentTexts.getOrElse(i) { "" })
+            }
             val result = CollectResult(
                 ok = ok,
                 keyword = "",
-                nickname = intent.getStringExtra(DouyinCollectService.EXTRA_RESULT_NICKNAME) ?: "",
-                douyinId = intent.getStringExtra(DouyinCollectService.EXTRA_RESULT_DOUYIN_ID) ?: "",
-                followersCount = intent.getStringExtra(DouyinCollectService.EXTRA_RESULT_FOLLOWERS) ?: "",
-                bio = intent.getStringExtra(DouyinCollectService.EXTRA_RESULT_BIO) ?: "",
+                comments = comments,
                 error = intent.getStringExtra(DouyinCollectService.EXTRA_RESULT_ERROR) ?: "",
             )
             scope.launch { reportCollectResult(taskId, result) }
