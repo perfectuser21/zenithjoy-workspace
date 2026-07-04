@@ -7,6 +7,7 @@ import {
   getShortTerm,
   getContactMemory,
   consolidate,
+  markMessageReceipt,
 } from '../contact-memory';
 
 /**
@@ -81,6 +82,42 @@ describe('appendMessage', () => {
     await expect(
       appendMessage('wxid_1', '于瑾', 'out', '收到'),
     ).resolves.toBeNull();
+  });
+});
+
+// ─── markMessageReceipt ─────────────────────────────────────────────────────────
+
+describe('markMessageReceipt', () => {
+  it('ok=true → UPDATE 把 draft out 行翻 delivered，归属+幂等条件齐全，命中返回 true', async () => {
+    mockedQuery.mockResolvedValueOnce({ rows: [{ id: 42 }] });
+    const ok = await markMessageReceipt(42, true, 'cs-x');
+
+    expect(mockedQuery).toHaveBeenCalledTimes(1);
+    const [sql, params] = mockedQuery.mock.calls[0];
+    // 目标状态由 $2 决定（delivered）；归属校验用 cs_wechat_id=$3；幂等靠 status='draft'
+    expect(String(sql)).toMatch(/UPDATE zenithjoy\.wechat_messages/);
+    expect(String(sql)).toMatch(/SET status = \$2/);
+    expect(String(sql)).toMatch(/cs_wechat_id = \$3/);
+    expect(String(sql)).toMatch(/direction = 'out'/);
+    expect(String(sql)).toMatch(/status = 'draft'/);
+    expect(params).toEqual([42, 'delivered', 'cs-x']);
+    expect(ok).toBe(true);
+  });
+
+  it('ok=false → 目标状态 failed（第 2 个参数）', async () => {
+    mockedQuery.mockResolvedValueOnce({ rows: [{ id: 42 }] });
+    await markMessageReceipt(42, false, 'cs-x');
+    expect(mockedQuery.mock.calls[0][1]).toEqual([42, 'failed', 'cs-x']);
+  });
+
+  it('rows 空（不归属 / 已翻过 → 幂等 no-op）返回 false', async () => {
+    mockedQuery.mockResolvedValueOnce({ rows: [] });
+    await expect(markMessageReceipt(42, true, 'cs-other')).resolves.toBe(false);
+  });
+
+  it('query reject → console.warn 不抛，返回 false', async () => {
+    mockedQuery.mockRejectedValueOnce(new Error('db down'));
+    await expect(markMessageReceipt(42, true, 'cs-x')).resolves.toBe(false);
   });
 });
 
