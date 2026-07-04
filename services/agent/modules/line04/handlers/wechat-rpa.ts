@@ -321,7 +321,13 @@ export function collectListenerHealth(input: ListenerHealthInput): ListenerHealt
   const file = input.healthFile ?? defaultListenerHealthFile();
   try {
     if (fs.existsSync(file)) {
-      const raw = JSON.parse(fs.readFileSync(file, 'utf-8')) as {
+      // v1.0.108 Bug6修复：Python(Windows) 以 utf-8-sig 写入时文件含 BOM（﻿）。
+      // 直接 JSON.parse 含 BOM 的内容会失败 → watchdog 误判监听器不健康。
+      // 先去除 BOM（U+FEFF）和 CRLF，再解析。
+      const rawStr = fs.readFileSync(file, 'utf-8')
+        .replace(/^﻿/, '')   // 去除 UTF-8 BOM
+        .replace(/\r\n/g, '\n'); // 统一 CRLF → LF
+      const raw = JSON.parse(rawStr) as {
         found_window?: boolean;
         last_delivery_ts?: number;
         login_present?: boolean;
