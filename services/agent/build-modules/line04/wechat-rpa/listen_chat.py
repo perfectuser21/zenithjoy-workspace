@@ -736,11 +736,15 @@ def _read_trailing_for(mw: Any, cand: Dict[str, Any],
     except Exception:
         title_ok = False
     try:
-        if _is_group_by_header(_read_chat_header_texts(mw)) is not None:
+        header_texts = _read_chat_header_texts(mw)
+        if _is_group_by_header(header_texts) is not None:
             cand["_is_group"] = True
-            if title_ok:
+            if _should_cache_known_group(cand["sender"], header_texts, title_ok):
                 _KNOWN_GROUPS.add(cand["sender"])
-                _log(f"known_group cached sender={cand['sender']}")
+                if title_ok:
+                    _log(f"known_group cached sender={cand['sender']}")
+                else:
+                    _log(f"known_group cached (relaxed) sender={cand['sender']}")
             return [], False
     except Exception:
         pass  # 判不出群 → 按私聊继续（reply_in_chat 发送前还有判群闸）
@@ -1177,6 +1181,38 @@ def _is_group_by_header(texts: List[Optional[str]]) -> Optional[int]:
             except ValueError:
                 continue
     return None
+
+
+def _should_cache_known_group(sender: str,
+                              header_texts: List[Optional[str]],
+                              title_ok: bool) -> bool:
+    """纯函数（CI 可测）：判定是否把 sender 写入 _KNOWN_GROUPS 缓存。
+
+    v1.0.107 大群缓存永不生效根治。原逻辑要求 title_ok（_chat_title_matches is True）
+    才缓存，但 469 人大群右上角标题是成员名长串结尾 "(469)"，_chat_title_matches 的
+    nm==want / want.startswith(nm) 对长串永假 → title_ok=False → 永不缓存 → 每轮反复
+    开窗（闪屏 + 烧预算）。放宽：标题带 (N) 且 N>=3 的两种明确群形态也缓存：
+      ①短标题形态：去掉末尾 (N) 后 strip == sender（如 "产品咨询群(5)"）
+      ②成员列表长串形态：含 (N) 的文本长度 > len(sender)+8（如 "张三、李四…(469)"）
+    这两种都是聊天窗右上标题区（_read_chat_header_texts）读到的真会话人数；私聊标题不带
+    人数后缀，(1)(2) 由 N>=3 下限挡掉，残余风险由调用方打 relaxed 日志留查。
+    """
+    if title_ok:
+        return True
+    n = _is_group_by_header(header_texts)
+    if n is None or n < 3:
+        return False
+    import re as _re
+    contains_re = _re.compile(r'[（(]\s*' + str(n) + r'\s*[)）]')
+    suffix_re = _re.compile(r'[（(]\s*' + str(n) + r'\s*[)）]\s*$')
+    for t in header_texts:
+        if not t or not contains_re.search(t):
+            continue
+        if suffix_re.sub('', t).strip() == sender:
+            return True  # 短标题形态
+        if len(t) > len(sender) + 8:
+            return True  # 成员列表长串形态
+    return False
 
 
 class _ScrollAccumulator:
