@@ -30,10 +30,12 @@ def test_real_group_with_count_at_end_detected():
     assert listen_chat._is_group_by_header(["某某客户群（50）"]) == 50
 
 
-def test_group_count_lower_bound_3():
-    """群成员数必须 ≥ 3（WeChat 群最少 3 人）；(2) 在末尾也不当群。"""
-    # (2) at end → NOT a group (too small)
-    assert listen_chat._is_group_by_header(["私聊备注(2)"]) is None
+def test_group_count_lower_bound_2():
+    """群成员数下界 ≥ 2（对齐 KNOWN_GROUPS_MIN_SIZE=2）；(1) 在末尾不当群。"""
+    # (2) at end → IS a group (2人群是有效微信群)
+    assert listen_chat._is_group_by_header(["私聊备注(2)"]) == 2
+    # (1) at end → NOT a group (单人不成群)
+    assert listen_chat._is_group_by_header(["私聊备注(1)"]) is None
 
 
 # ─── Bug 4：名字中间含数字括号，不应误判为群 ──────────────────────────────────

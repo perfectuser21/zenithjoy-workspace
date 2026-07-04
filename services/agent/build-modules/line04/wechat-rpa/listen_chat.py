@@ -1191,9 +1191,10 @@ def _is_group_by_header(texts: List[Optional[str]]) -> Optional[int]:
     命中 "(纯数字)"（半角或全角括号）→ 返回人数（int，是群）；否则 → None（私聊）。
     """
     import re as _re
-    # v1.0.108 Bug4修复：正则锚到末尾（群人数只出现在名称结尾）+ 合理边界（3-500人）。
+    # v1.0.108 Bug4修复：正则锚到末尾（群人数只出现在名称结尾）+ 合理边界（2-500人）。
     # 旧正则 r'[（(]\s*(\d+)\s*[)）]' 匹配任意位置，导致名字中间含 (数字) 的私聊
     # 被误判为群写入 _KNOWN_GROUPS，此后永久不回该客户。
+    # 下界 2（与 KNOWN_GROUPS_MIN_SIZE 对齐）：2人及以上才是群聊，(1) 不缓存。
     for t in texts:
         if not t:
             continue
@@ -1201,7 +1202,7 @@ def _is_group_by_header(texts: List[Optional[str]]) -> Optional[int]:
         if m:
             try:
                 count = int(m.group(1))
-                if 3 <= count <= 500:
+                if 2 <= count <= 500:
                     return count
             except ValueError:
                 continue
