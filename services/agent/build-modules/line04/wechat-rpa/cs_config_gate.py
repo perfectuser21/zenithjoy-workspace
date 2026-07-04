@@ -66,19 +66,65 @@ def should_reply(config, sender_name):
     return sender_name in wl
 
 
-def fetch_cs_config(middleware_url, machine_id, timeout=10):
-    """按 machine_id 拉该客服那一份配置 → (config|None, pull_ok)。
+def validate_config_wechat_id(config, local_wechat_id):
+    """中台配账校验（Bug2修复，宽松版）：config.wechat_id 必须与本机 agent 微信号一致。
+
+    宽松语义（用于存量兼容场景）：
+    - config=None 或无 wechat_id 字段（老版本中台）→ 宽松放行（向后兼容）
+    - local_wechat_id 未配置（None/空串）→ 无法校验，宽松放行
+    - 字段存在且不匹配 → 返回 False，调用方应强制 dryrun
+    """
+    if not config or not isinstance(config, dict):
+        return True
+    cfg_wid = config.get("wechat_id")
+    if not cfg_wid:
+        return True
+    if not local_wechat_id:
+        return True
+    return cfg_wid == local_wechat_id
+
+
+def validate_config_account(config, expected_wechat_id):
+    """中台假账校验（Bug2修复，严格版）：config.wechat_id 必须与 expected_wechat_id 精确匹配。
+
+    严格语义（用于同机多账号防假账场景）：
+    - config=None → False（拉配置失败，保守兜底）
+    - config 中缺 wechat_id 字段 → False（配置不完整，无法信任）
+    - expected_wechat_id 为 None/空 → False（当前账号未知，无法验证）
+    - config.wechat_id == expected_wechat_id → True（账号匹配）
+    - config.wechat_id != expected_wechat_id → False（假账，降级 dryrun）
+
+    调用方收到 False 后，应将 pull_ok 置为 False 传给 resolve_send_mode，绝不误真发。
+    """
+    if not config or not isinstance(config, dict):
+        return False
+    cfg_wid = config.get("wechat_id")
+    if not cfg_wid:
+        return False
+    if not expected_wechat_id:
+        return False
+    return cfg_wid == expected_wechat_id
+
+
+def fetch_cs_config(middleware_url, machine_id, timeout=10, wechat_id=None):
+    """按 machine_id（+ wechat_id）拉该客服那一份配置 → (config|None, pull_ok)。
 
     200 → (config, True)；403（未绑/未配）/ 其它码 / 网络异常 / 坏 JSON → (None, False)。
     pull_ok=False 让 resolve_send_mode 强制 dryrun，绝不误真发；不抛，不拖垮监听主链路。
+
+    v1.0.108 Bug3修复：wechat_id 参数加入请求 params，供中台按 wechat_id 二次定位，
+    解决同机双租户共享 machine_id 时拉到错误租户配置的问题。
     """
     if not middleware_url or not machine_id:
         return None, False
     if requests is None:  # 没装 requests 的纯函数环境不该走到真拉配置；强制 dryrun 兜底
         return None, False
     url = middleware_url.rstrip("/") + "/api/wechat/cs/agent-config"
+    params = {"machine_id": machine_id}
+    if wechat_id:
+        params["wechat_id"] = wechat_id
     try:
-        resp = requests.get(url, params={"machine_id": machine_id}, timeout=timeout)
+        resp = requests.get(url, params=params, timeout=timeout)
     except Exception:
         return None, False
     if resp.status_code != 200:

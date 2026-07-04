@@ -200,6 +200,25 @@ export class DesktopLeaseBroker {
         },
       };
       this.onBrainLog?.(logPayload);
+
+      // v1.0.108 Bug6修复：watchdog 清除过期 lease 后，若有 pendingPreempt，
+      // 立即授予（复用 release() 同款逻辑），绝不留野 timeout。
+      // 旧行为：pendingPreempt 的超时回调在 yieldWaitMs 后仍触发
+      // `this.currentLease = null`，可能清掉第三方刚获取的合法新租约。
+      if (this.pendingPreempt) {
+        const pending = this.pendingPreempt;
+        this.pendingPreempt = null;
+        clearTimeout(pending.timeoutHandle);
+
+        const newLease: Lease = {
+          leaseId: randomUUID(),
+          clientId: pending.clientId,
+          priority: pending.priority,
+          expiresAt: Date.now() + pending.ttlMs,
+        };
+        this.currentLease = newLease;
+        pending.resolve({ granted: true, lease_id: newLease.leaseId, expires_at: newLease.expiresAt });
+      }
     }
   }
 

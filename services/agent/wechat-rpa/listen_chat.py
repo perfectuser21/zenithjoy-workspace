@@ -278,6 +278,24 @@ _SENT_TEXTS_CAP: int = 200
 _REPLY_ANCHOR: Dict[str, str] = {}
 
 
+def _init_state_paths(machine_id: Optional[str] = None) -> None:
+    """v1.0.108 Bug3修复：按 machine_id 隔离状态目录，防止同机多租户互相污染。
+
+    无 machine_id → 用基础 _STATE_DIR（向后兼容单租户部署）。
+    有 machine_id → 用 _STATE_DIR/zj-tenant-{machine_id}/（每租户独立目录）。
+    """
+    global _SENT_TEXTS_FILE, _REPLY_ANCHOR_FILE
+    base = _STATE_DIR
+    if machine_id:
+        base = os.path.join(_STATE_DIR, f"zj-tenant-{machine_id}")
+        try:
+            os.makedirs(base, exist_ok=True)
+        except Exception:
+            pass
+    _SENT_TEXTS_FILE = os.path.join(base, "zj-sent-texts.json")
+    _REPLY_ANCHOR_FILE = os.path.join(base, "zj-reply-anchor.json")
+
+
 def _load_sent_texts() -> List[str]:
     try:
         with open(_SENT_TEXTS_FILE, "r", encoding="utf-8-sig") as _f:
@@ -320,9 +338,18 @@ def _load_reply_anchor() -> Dict[str, str]:
 
 
 def _save_reply_anchor() -> None:
+    # v1.0.108 Bug7修复：读盘→合并→写盘（与 _record_sent_text v1.0.98 同款跨进程 union 语义）。
+    # 旧行为直接 dump 内存，新进程（内存空）覆写监听进程积累的锚点 → 判向失灵。
     try:
+        try:
+            with open(_REPLY_ANCHOR_FILE, "r", encoding="utf-8-sig") as _rf:
+                _disk: Dict[str, str] = json.load(_rf)
+        except Exception:
+            _disk = {}
+        merged = {str(k): str(v) for k, v in _disk.items() if k and v}
+        merged.update({str(k): str(v) for k, v in _REPLY_ANCHOR.items() if k and v})
         with open(_REPLY_ANCHOR_FILE, "w", encoding="utf-8") as _f:
-            json.dump(_REPLY_ANCHOR, _f, ensure_ascii=False)
+            json.dump(merged, _f, ensure_ascii=False)
     except Exception:
         pass
 
@@ -968,11 +995,14 @@ def scan_unread(mw: Any, last_preview: Optional[Dict[str, str]] = None,
             _TRAILING_STALL.pop(c["sender"], None)
             if last_preview is not None:
                 last_preview[c["sender"]] = c["name"]
-        elif c["badge"] > 0 and c["content"] and not _matches_any_sent(c["content"]):
+        elif c["content"] and not _matches_any_sent(c["content"]):
             # 回退保底（F1）：开窗失败 / 气泡读空 / trailing 空但预览≠我方回复
-            # （客户发[图片]/[语音]、或纯文本恰被 _is_system_bubble 剔除）且角标在
+            # （客户发[图片]/[语音]、或纯文本恰被 _is_system_bubble 剔除）
             # → 旧单条路径 emit（用预览 content），宁可上下文不全也不漏回，绝不静默提交。
             # v1.0.95：预览命中已发送历史 → 掉入下方 else 走提交（自回自话护栏）。
+            # v1.0.108 Bug5修复：去掉 badge > 0 的门禁——WeChat 打开会话后立即清零 badge，
+            # 旧要求导致开窗后同一轮 badge 已归零的消息走 TRAILING_STALL 等 3 轮，
+            # 期间若预览文本变为我方回复则被自回声护栏静默消费，消息永久丢失。
             out.append({"sender": c["sender"], "content": c["content"],
                         "_item": c["_item"], "_preview_name": c["name"],
                         "_last_incoming": c["content"]})
@@ -1127,13 +1157,18 @@ def _is_group_by_header(texts: List[Optional[str]]) -> Optional[int]:
     命中 "(纯数字)"（半角或全角括号）→ 返回人数（int，是群）；否则 → None（私聊）。
     """
     import re as _re
+    # v1.0.108 Bug4修复：正则锚到末尾（群人数只出现在名称结尾）+ 合理边界（3-500人）。
+    # 旧正则 r'[（(]\s*(\d+)\s*[)）]' 匹配任意位置，导致名字中间含 (数字) 的私聊
+    # 被误判为群写入 _KNOWN_GROUPS，此后永久不回该客户。
     for t in texts:
         if not t:
             continue
-        m = _re.search(r'[（(]\s*(\d+)\s*[)）]', t)
+        m = _re.search(r'[（(]\s*(\d+)\s*[)）]\s*$', t)
         if m:
             try:
-                return int(m.group(1))
+                count = int(m.group(1))
+                if 3 <= count <= 500:
+                    return count
             except ValueError:
                 continue
     return None
@@ -3752,6 +3787,9 @@ def run_real_listen(args: argparse.Namespace) -> int:
         flush=True,
     )
 
+    # v1.0.108 Bug3修复：按 machine_id 隔离状态路径，必须在加载持久化文件之前完成
+    _init_state_paths(getattr(args, "machine_id", None))
+
     # replied 持久化 + 冷却（_load_replied / _save_replied / _REPLIED_FILE / SENDER_COOLDOWN 在模块顶层）
     replied: set[tuple[str, str]] = _load_replied()
     _log(f"已加载 replied 历史: {len(replied)} 条")
@@ -3819,6 +3857,13 @@ def run_real_listen(args: argparse.Namespace) -> int:
             _machine_id = getattr(args, "machine_id", None)
             if _machine_id and now - last_cs_pull >= CS_PULL_INTERVAL:
                 _fresh, _ok = cs_config_gate.fetch_cs_config(args.middleware_url, _machine_id)
+                # v1.0.108 Bug2修复：校验拉到的配置 wechat_id 是否匹配本机 agent 微信号，
+                # 防止 machine_id 在中台错误绑到别的租户时用假账配置真发。
+                _local_wid = getattr(args, "wechat_id", None) or os.environ.get("ZENITHJOY_AGENT_WECHAT_ID")
+                if _ok and not cs_config_gate.validate_config_wechat_id(_fresh, _local_wid):
+                    _log(f"[每客服] 告警：配置 wechat_id={_fresh.get('wechat_id')!r} ≠ 本机 {_local_wid!r}"
+                         f"，中台绑账错误 → 强制 dryrun，拒绝用假账配置真发")
+                    _ok = False
                 cs_config = cs_config_gate.resolve_active_config(_fresh, cs_config, _ok)
                 cs_pull_ok = _ok
                 last_cs_pull = now
@@ -4106,6 +4151,11 @@ def run_real_listen(args: argparse.Namespace) -> int:
             if getattr(args, "machine_id", None) and not _real_publish:
                 if unread:
                     _log(f"[每客服] auto_agent OFF/拉配置失败 → 本轮跳过 {len(unread)} 条自动回复(dryrun)")
+                # v1.0.108 Bug1修复：dryrun 跳过前必须释放 INFLIGHT，否则 sender 永久卡死
+                for _m_dryrun in unread:
+                    _s_dryrun = _m_dryrun.get("sender", "")
+                    if _s_dryrun in _INFLIGHT:
+                        _release_inflight(_s_dryrun)
                 time.sleep(args.interval)
                 continue
 
