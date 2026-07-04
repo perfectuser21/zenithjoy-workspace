@@ -292,6 +292,11 @@ REM old start.bat only ran zenithjoy-agent.exe ONCE (foreground) then fell off t
 REM relying on the ONLOGON scheduled task to relaunch. But ONLOGON only fires at LOGON, not when the
 REM core exits mid-session -> after a self-upgrade/crash the core stayed dead until the next login
 REM (customer messages had no process to receive them -> no reply). This loop keeps the core alive.
+
+REM 关 QuickEdit：防黑窗口被点一下冻结整个 supervise 循环（会议室实锤）
+reg add HKCU\Console /v QuickEdit /t REG_DWORD /d 0 /f >nul 2>&1
+powershell -NoProfile -Command "$sig='[DllImport(\"kernel32.dll\")]public static extern IntPtr GetStdHandle(int h);[DllImport(\"kernel32.dll\")]public static extern bool GetConsoleMode(IntPtr h,out uint m);[DllImport(\"kernel32.dll\")]public static extern bool SetConsoleMode(IntPtr h,uint m);';$k=Add-Type -MemberDefinition $sig -Name K -PassThru;$h=$k::GetStdHandle(-10);$m=0;[void]$k::GetConsoleMode($h,[ref]$m);[void]$k::SetConsoleMode($h,($m -band (-bnot 0x40)) -bor 0x80)" >nul 2>&1
+
 :AGENT_SUPERVISE_LOOP
 
 REM Step 6.94: Re-verify launcher ownership EVERY iteration. A newer launcher overwrites
