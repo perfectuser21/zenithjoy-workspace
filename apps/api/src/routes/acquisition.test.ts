@@ -36,6 +36,7 @@ vi.mock('../services/acquisition-dispatch', () => ({
   scoreLeads: vi.fn().mockResolvedValue({ scored: 1 }),
   buildAssignments: vi.fn().mockResolvedValue({ assigned: 1 }),
   dispatchDue: vi.fn().mockResolvedValue({ dispatched: 1 }),
+  rescoreLead: vi.fn().mockResolvedValue({ score: 55, comment_count: 1 }),
 }));
 
 const app = express();
@@ -303,7 +304,9 @@ describe('POST /api/acquisition/comment-score-result — tenant 从 keyword_task
 
     (db.query as any)
       .mockResolvedValueOnce({ rows: [{ tenant_id: REAL_TENANT }] }) // 反查 keyword_task 归属
-      .mockResolvedValueOnce({ rows: [] }); // INSERT acquisition_leads
+      .mockResolvedValueOnce({ rows: [] })                           // SELECT 既有 lead → 无
+      .mockResolvedValueOnce({ rows: [{ id: 'lead-x' }] })           // INSERT lead RETURNING id
+      .mockResolvedValueOnce({ rows: [] });                          // INSERT 评论历史
 
     const comments = [{ commenter_id: '/user/uid-x', text: '怎么联系' }];
     const res = await request(app)
@@ -336,6 +339,81 @@ describe('POST /api/acquisition/comment-score-result — tenant 从 keyword_task
     expect(res.body.written_count).toBe(0);
     const calls = (db.query as any).mock.calls;
     expect(calls.find((c: any[]) => /INSERT INTO zenithjoy\.acquisition_leads/.test(c[0]))).toBeUndefined();
+  });
+});
+
+// ────── 每次留言都写进 acquisition_lead_comments 历史表 + rescore [REGRESSION] ──────
+// 根因：旧逻辑同一人第二次留言时只把 video_id 追加进 source_video_ids，评论内容与 grade
+// 全被丢弃（只保留首条）。现在不管新老用户，每条评论都进历史表并触发 rescoreLead 重算相关性分。
+describe('POST /api/acquisition/comment-score-result — 评论历史 + rescore [REGRESSION]', () => {
+  beforeEach(async () => {
+    vi.stubEnv('VITEST', '');
+    vi.clearAllMocks();
+    const { default: db } = await import('../db/connection');
+    (db.query as any).mockReset();
+  });
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it('全新 sec_uid 首次留言 → 建新 lead + 也写一条评论历史 + rescore', async () => {
+    const { default: db } = await import('../db/connection');
+    const { rescoreLead } = await import('../services/acquisition-dispatch');
+    const TENANT = 'a1111111-0000-0000-0000-000000000001';
+
+    (db.query as any)
+      .mockResolvedValueOnce({ rows: [{ tenant_id: TENANT }] }) // keyword_task 反查
+      .mockResolvedValueOnce({ rows: [] })                      // SELECT 既有 lead → 无
+      .mockResolvedValueOnce({ rows: [{ id: 'lead-new' }] })    // INSERT lead RETURNING id
+      .mockResolvedValueOnce({ rows: [] });                     // INSERT 评论历史
+
+    const comments = [{ commenter_id: '/user/uid-new', text: '怎么加盟' }];
+    const res = await request(app)
+      .post('/api/acquisition/comment-score-result')
+      .send({ keyword_task_id: 'kw-hist-1', video_url: 'https://douyin.com/v/1', comments });
+
+    expect(res.status).toBe(200);
+    expect(res.body.written_count).toBe(1);
+
+    const calls = (db.query as any).mock.calls;
+    // 建了新 lead
+    expect(calls.find((c: any[]) => /INSERT INTO zenithjoy\.acquisition_leads/.test(c[0]))).toBeTruthy();
+    // 首条留言也进历史表
+    const histInsert = calls.find((c: any[]) => /INSERT INTO zenithjoy\.acquisition_lead_comments/.test(c[0]));
+    expect(histInsert).toBeTruthy();
+    // grade 由 gradeComment mock 返回 '感兴趣'
+    expect(histInsert![1]).toEqual(['lead-new', 'https://douyin.com/v/1', '怎么加盟', '感兴趣']);
+    expect(rescoreLead).toHaveBeenCalledWith(expect.anything(), TENANT, 'lead-new');
+  });
+
+  it('同一 sec_uid 第二次上报不同评论 → 不建新 lead，但写入新评论历史 + rescore（不是只更新 source_video_ids）', async () => {
+    const { default: db } = await import('../db/connection');
+    const { rescoreLead } = await import('../services/acquisition-dispatch');
+    const TENANT = 'b2222222-0000-0000-0000-000000000002';
+
+    (db.query as any)
+      .mockResolvedValueOnce({ rows: [{ tenant_id: TENANT }] }) // keyword_task 反查
+      .mockResolvedValueOnce({ rows: [{ id: 'lead-old' }] })    // SELECT 既有 lead → 命中
+      .mockResolvedValueOnce({ rows: [] })                      // UPDATE source_video_ids 累加
+      .mockResolvedValueOnce({ rows: [] });                     // INSERT 评论历史
+
+    const comments = [{ commenter_id: '/user/uid-old', text: '第二条留言：价格多少', grade: '精准' }];
+    const res = await request(app)
+      .post('/api/acquisition/comment-score-result')
+      .send({ keyword_task_id: 'kw-hist-2', video_url: 'https://douyin.com/v/2', comments });
+
+    expect(res.status).toBe(200);
+    expect(res.body.written_count).toBe(1);
+
+    const calls = (db.query as any).mock.calls;
+    // 命中老 lead → 不再 INSERT 新 lead 行
+    expect(calls.find((c: any[]) => /INSERT INTO zenithjoy\.acquisition_leads/.test(c[0]))).toBeUndefined();
+    // 但一定写了这条评论的历史（内容 + grade 不丢）
+    const histInsert = calls.find((c: any[]) => /INSERT INTO zenithjoy\.acquisition_lead_comments/.test(c[0]));
+    expect(histInsert).toBeTruthy();
+    expect(histInsert![1]).toEqual(['lead-old', 'https://douyin.com/v/2', '第二条留言：价格多少', '精准']);
+    // 命中老 lead 也要重算相关性分
+    expect(rescoreLead).toHaveBeenCalledWith(expect.anything(), TENANT, 'lead-old');
   });
 });
 
@@ -620,6 +698,70 @@ describe('collect/report — 无需 smoke token，agent 直接调用 [REGRESSION
     const buildOrder = vi.mocked(buildAssignments).mock.invocationCallOrder[0];
     expect(scoreOrder).toBeLessThan(buildOrder);
   });
+
+// ────── collect/report 也把每条评论写进历史表 + rescore [REGRESSION] ──────
+describe('POST /api/acquisition/collect/report — 评论历史 + rescore [REGRESSION]', () => {
+  beforeEach(() => { vi.clearAllMocks(); });
+
+  it('新 commenter → 建 lead + 写评论历史 + rescore', async () => {
+    const mod = await import('../db/connection');
+    const { rescoreLead } = await import('../services/acquisition-dispatch');
+    (mod.default.query as any)
+      .mockResolvedValueOnce({ rows: [{ id: 'task-r', tenant_id: 't-r', status: 'running', error_code: null, video_count: 0, lead_count_raw: 0 }] }) // SELECT task
+      .mockResolvedValueOnce({ rows: [] })                       // SELECT lead by sec_uid → 无
+      .mockResolvedValueOnce({ rows: [{ id: 'lead-r1' }] })      // INSERT lead RETURNING id
+      .mockResolvedValueOnce({ rows: [] })                       // INSERT 评论历史
+      .mockResolvedValueOnce({ rows: [] })                       // UPDATE task 计数/状态
+      .mockResolvedValueOnce({ rows: [] });                      // INSERT video 维度
+
+    const res = await request(app)
+      .post('/api/acquisition/collect/report')
+      .send({
+        task_id: 'task-r',
+        video_id: '7123456789',
+        commenters: [{ sec_uid: 'MS4wABC', nickname: '装修客', comment_text: '想了解报价', grade: '精准' }],
+      });
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.inserted).toBe(1);
+
+    const calls = (mod.default.query as any).mock.calls;
+    const histInsert = calls.find((c: any[]) => /INSERT INTO zenithjoy\.acquisition_lead_comments/.test(c[0]));
+    expect(histInsert).toBeTruthy();
+    expect(histInsert![1]).toEqual(['lead-r1', '7123456789', '想了解报价', '精准']);
+    expect(rescoreLead).toHaveBeenCalledWith(expect.anything(), 't-r', 'lead-r1');
+  });
+
+  it('命中已有 lead（同 sec_uid 二次留言）→ 不建新 lead 但写新评论历史 + rescore', async () => {
+    const mod = await import('../db/connection');
+    const { rescoreLead } = await import('../services/acquisition-dispatch');
+    (mod.default.query as any)
+      .mockResolvedValueOnce({ rows: [{ id: 'task-r2', tenant_id: 't-r2', status: 'running', error_code: null, video_count: 1, lead_count_raw: 1 }] }) // SELECT task
+      .mockResolvedValueOnce({ rows: [{ id: 'lead-existing' }] }) // SELECT lead by sec_uid → 命中
+      .mockResolvedValueOnce({ rows: [] })                        // UPDATE source_video_ids 累加
+      .mockResolvedValueOnce({ rows: [] })                        // INSERT 评论历史
+      .mockResolvedValueOnce({ rows: [] })                        // UPDATE task 计数/状态
+      .mockResolvedValueOnce({ rows: [] });                       // INSERT video 维度
+
+    const res = await request(app)
+      .post('/api/acquisition/collect/report')
+      .send({
+        task_id: 'task-r2',
+        video_id: '7999999999',
+        commenters: [{ sec_uid: 'MS4wABC', nickname: '装修客', comment_text: '第二次：什么时候能上门', grade: '高意向' }],
+      });
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.deduped).toBe(1);
+
+    const calls = (mod.default.query as any).mock.calls;
+    expect(calls.find((c: any[]) => /INSERT INTO zenithjoy\.acquisition_leads/.test(c[0]))).toBeUndefined();
+    const histInsert = calls.find((c: any[]) => /INSERT INTO zenithjoy\.acquisition_lead_comments/.test(c[0]));
+    expect(histInsert).toBeTruthy();
+    expect(histInsert![1]).toEqual(['lead-existing', '7999999999', '第二次：什么时候能上门', '高意向']);
+    expect(rescoreLead).toHaveBeenCalledWith(expect.anything(), 't-r2', 'lead-existing');
+  });
+});
 
 // ────── Line02 IA 重设计 Track A — collect-tasks/:id/videos + videos/:videoId/leads ──────
 describe('GET /api/acquisition/collect-tasks/:id/videos [BEHAVIOR]', () => {

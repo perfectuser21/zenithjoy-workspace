@@ -12,7 +12,7 @@ import {
 import { tenantContextOptional } from '../middleware/tenant-context';
 import { licenseAuth } from '../middleware/license-auth';
 import { sseService } from '../services/sse.service';
-import { scoreLeads, buildAssignments, dispatchDue } from '../services/acquisition-dispatch';
+import { scoreLeads, buildAssignments, dispatchDue, rescoreLead } from '../services/acquisition-dispatch';
 
 export const acquisitionRouter = Router();
 
@@ -429,17 +429,57 @@ acquisitionRouter.post('/comment-score-result', async (req: Request, res: Respon
           const secUidMatch = rawId.match(/\/user\/([^/?#]+)/);
           const secUid = secUidMatch ? secUidMatch[1] : null;
           const nickname = rawId || '未知';
+          const commentText = String(c.text || '').trim() || null;
+          const grade = c.grade || null;
+          const videoRef = video_url ?? '';
           try {
+            // 找既有 lead（有 sec_uid 按 sec_uid，否则 nickname 弱匹配）——命中就复用同一行，
+            // 后续每次留言仍写进历史表，不再像旧逻辑那样丢掉第二条评论的内容/grade。
+            const existing = secUid
+              ? await pool.query(
+                  `SELECT id FROM zenithjoy.acquisition_leads WHERE tenant_id = $1 AND sec_uid = $2 LIMIT 1`,
+                  [resolved_tenant_id, secUid]
+                )
+              : await pool.query(
+                  `SELECT id FROM zenithjoy.acquisition_leads WHERE tenant_id = $1 AND sec_uid IS NULL AND nickname = $2 LIMIT 1`,
+                  [resolved_tenant_id, nickname]
+                );
+
+            let leadId: string;
+            if (existing.rows.length > 0) {
+              leadId = existing.rows[0].id as string;
+              await pool.query(
+                `UPDATE zenithjoy.acquisition_leads
+                    SET source_video_ids = CASE
+                          WHEN source_video_ids ? $2 THEN source_video_ids
+                          ELSE source_video_ids || to_jsonb($2::text)
+                        END,
+                        updated_at = NOW()
+                  WHERE id = $1`,
+                [leadId, videoRef]
+              );
+            } else {
+              const ins = await pool.query(
+                `INSERT INTO zenithjoy.acquisition_leads
+                   (tenant_id, sec_uid, nickname, profile_url, source_video_ids,
+                    comment_text, grade, keyword, feishu_write_status)
+                 VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7, $8, 'local_only')
+                 RETURNING id`,
+                [resolved_tenant_id, secUid, nickname, secUid ? `https://www.douyin.com/user/${secUid}` : null,
+                 JSON.stringify([videoRef]), commentText, grade, c.keyword || null],
+              );
+              leadId = ins.rows[0].id as string;
+            }
+
+            // 每一条评论都进历史表（命中老 lead 也不例外）——这是本次修复的核心
             await pool.query(
-              `INSERT INTO zenithjoy.acquisition_leads
-                 (tenant_id, sec_uid, nickname, profile_url, source_video_ids,
-                  comment_text, grade, keyword, feishu_write_status)
-               VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7, $8, 'local_only')
-               ON CONFLICT DO NOTHING`,
-              [resolved_tenant_id, secUid, nickname, secUid ? `https://www.douyin.com/user/${secUid}` : null,
-               JSON.stringify([video_url ?? '']), String(c.text || '').trim() || null,
-               c.grade || null, c.keyword || null],
+              `INSERT INTO zenithjoy.acquisition_lead_comments
+                 (lead_id, video_id, comment_text, grade, commented_at)
+               VALUES ($1, $2, $3, $4, NOW())`,
+              [leadId, videoRef || null, commentText, grade]
             );
+            // rescoreLead 从历史表全量重算 relevance_score + comment_count + last_commented_at
+            await rescoreLead(pool, resolved_tenant_id, leadId);
             written_count++;
           } catch { /* 单条失败不中断 */ }
         }
@@ -807,7 +847,7 @@ acquisitionRouter.post('/collect/report', async (req: Request, res: Response) =>
     if (matchId) {
       deduped += 1;
       if (matchId !== 'batch') {
-        // 重复仅累加来源 video_id（不重复落库）
+        // 重复仅累加来源 video_id（不重复建 lead 行）——但评论内容/grade 仍进历史表，不再丢
         await pool.query(
           `UPDATE zenithjoy.acquisition_leads
               SET source_video_ids = CASE
@@ -818,6 +858,13 @@ acquisitionRouter.post('/collect/report', async (req: Request, res: Response) =>
             WHERE id = $1`,
           [matchId, videoId]
         );
+        await pool.query(
+          `INSERT INTO zenithjoy.acquisition_lead_comments
+             (lead_id, video_id, comment_text, grade, commented_at)
+           VALUES ($1, $2, $3, $4, NOW())`,
+          [matchId, videoId, c.comment_text ?? null, c.grade ?? null]
+        );
+        await rescoreLead(pool, tenantId, matchId);
       }
       continue;
     }
@@ -825,11 +872,12 @@ acquisitionRouter.post('/collect/report', async (req: Request, res: Response) =>
     inserted += 1;
     if (secUid) seenSec.add(secUid);
     else seenNick.add(c.nickname);
-    await pool.query(
+    const insRes = await pool.query(
       `INSERT INTO zenithjoy.acquisition_leads
          (tenant_id, collect_task_id, sec_uid, nickname, profile_url, partial, source_video_ids,
           comment_text, grade, keyword, feishu_write_status)
-       VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8, $9, $10, 'local_only')`,
+       VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8, $9, $10, 'local_only')
+       RETURNING id`,
       [
         tenantId,
         taskId,
@@ -843,6 +891,15 @@ acquisitionRouter.post('/collect/report', async (req: Request, res: Response) =>
         c.keyword ?? keyword ?? null,
       ]
     );
+    const newLeadId = insRes.rows[0].id as string;
+    // 首条留言也进历史表（不只老用户才进），再 rescore 汇总
+    await pool.query(
+      `INSERT INTO zenithjoy.acquisition_lead_comments
+         (lead_id, video_id, comment_text, grade, commented_at)
+       VALUES ($1, $2, $3, $4, NOW())`,
+      [newLeadId, videoId, c.comment_text ?? null, c.grade ?? null]
+    );
+    await rescoreLead(pool, tenantId, newLeadId);
     newLeads.push({ sec_uid: secUid, nickname: c.nickname });
   }
 
