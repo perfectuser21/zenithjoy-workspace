@@ -186,7 +186,7 @@ export class DesktopLeaseBroker {
   private _runWatchdog(): void {
     if (!this.currentLease) return;
     const now = Date.now();
-    if (this.currentLease.expiresAt < now) {
+    if (this.currentLease.expiresAt <= now) {
       const expired = this.currentLease;
       this.currentLease = null;
 
