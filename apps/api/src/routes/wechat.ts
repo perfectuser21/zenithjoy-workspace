@@ -26,6 +26,7 @@ import { getCsWorkStats, type StatsDate } from '../services/wechat/cs-work-stats
 import { runDailyReportSettlement, getDailyReports } from '../services/wechat/cs-daily-report';
 import { markMessageReceipt } from '../services/wechat/contact-memory';
 import { resolveCsWechatIdentity } from '../services/wechat/cs-identity-resolve';
+import { recordIdentityAlert } from '../services/wechat/cs-account-config-store';
 
 export const wechatRouter = Router();
 
@@ -122,7 +123,12 @@ async function resolveTenantId(req: Request): Promise<string> {
     ''
   ).trim();
   if (!agentId && !machineId) return '';
-  return resolveTenantForAgent(pool, { agentId, machineId });
+  return resolveTenantForAgent(pool, {
+    agentId,
+    machineId,
+    // 同机多租户冲突 → 写身份告警表（诊断页可见），resolver 侧同时 deny。
+    onMultiTenantConflict: (mid) => recordIdentityAlert(mid, 'multi_tenant_machine'),
+  });
 }
 
 // ─── POST /api/wechat/qr-bind ───────────────────────────────────────────────

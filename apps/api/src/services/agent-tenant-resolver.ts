@@ -42,7 +42,15 @@ function firstTenant(rows: TenantRow[]): string {
  */
 export async function resolveTenantForAgent(
   db: TenantResolverDb,
-  opts: { agentId?: string | null; machineId?: string | null },
+  opts: {
+    agentId?: string | null;
+    machineId?: string | null;
+    /**
+     * 多租户冲突告警回调（可选注入，避免 resolver 直接 import 全局 pool 的
+     * cs-account-config-store 造成耦合）。探测到同机多租户时调用；抛异常不影响 deny。
+     */
+    onMultiTenantConflict?: (machineId: string, tenants: string[]) => Promise<void>;
+  },
 ): Promise<string> {
   const agentId = (opts.agentId ?? '').trim();
   const machineId = (opts.machineId ?? '').trim();
@@ -72,6 +80,27 @@ export async function resolveTenantForAgent(
       );
       const t = firstTenant(r.rows);
       if (t) return t;
+    }
+
+    // 2.5) 多租户冲突探测：同一台机器近7天在多个 active license 下心跳 → 告警 + deny，
+    //      绝不靠 last_seen 静默二选一（0704 会议室实锤：旧租户行比新租户更活跃，选"最新"必错）。
+    if (machineId) {
+      const c = await db.query<TenantRow>(
+        `SELECT DISTINCT l.tenant_id
+           FROM zenithjoy.license_machines lm
+           JOIN zenithjoy.licenses l ON l.id = lm.license_id
+          WHERE lm.machine_id = $1
+            AND l.tenant_id IS NOT NULL
+            AND l.status = 'active'
+            AND lm.last_seen > now() - interval '7 days'`,
+        [machineId],
+      );
+      const tenants = [...new Set(c.rows.map((r) => r.tenant_id).filter((t): t is string => typeof t === 'string' && t.trim().length > 0))];
+      if (tenants.length > 1) {
+        try { await opts.onMultiTenantConflict?.(machineId, tenants); } catch { /* 告警旁路失败不影响 deny */ }
+        console.error(`[agent-tenant-resolver] 机器 ${machineId} 近7天命中 ${tenants.length} 个 active 租户，deny（multi_tenant_machine）`);
+        return '';
+      }
     }
 
     // 3) license_machines → licenses：按 machine_id

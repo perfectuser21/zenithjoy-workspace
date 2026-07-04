@@ -103,7 +103,7 @@ describe('resolveTenantForAgent 多租户冲突探测 [BEHAVIOR]', () => {
       { match: /status\s*=\s*'active'/i, rows: [{ tenant_id: TENANT_A }, { tenant_id: TENANT_B }] },
     ]);
     const onMultiTenantConflict = vi.fn(async () => {});
-    const t = await resolveTenantForAgent(db, { agentId: 'ax', machineId: 'mx' }, { onMultiTenantConflict });
+    const t = await resolveTenantForAgent(db, { agentId: 'ax', machineId: 'mx', onMultiTenantConflict });
     expect(t, '探测到多租户冲突必须 deny').toBe('');
     expect(onMultiTenantConflict, '必须触发告警回调').toHaveBeenCalledTimes(1);
     const [mid, tenants] = onMultiTenantConflict.mock.calls[0];
@@ -116,7 +116,7 @@ describe('resolveTenantForAgent 多租户冲突探测 [BEHAVIOR]', () => {
       { match: /from\s+zenithjoy\.service_agents[\s\S]*machine_id/i, rows: [{ tenant_id: TENANT_B }] },
     ]);
     const onMultiTenantConflict = vi.fn(async () => {});
-    const t = await resolveTenantForAgent(db, { machineId: 'mx' }, { onMultiTenantConflict });
+    const t = await resolveTenantForAgent(db, { machineId: 'mx', onMultiTenantConflict });
     expect(t).toBe(TENANT_B);
     const probeCall = query.mock.calls.find((c) => /status\s*=\s*'active'/i.test(String(c[0])));
     expect(probeCall, 'SSOT 命中后不得再跑冲突探测').toBeFalsy();
@@ -131,7 +131,7 @@ describe('resolveTenantForAgent 多租户冲突探测 [BEHAVIOR]', () => {
       { match: /license_machines[\s\S]*order\s+by\s+lm\.last_seen/i, rows: [{ tenant_id: TENANT_A }] },
     ]);
     const onMultiTenantConflict = vi.fn(async () => {});
-    const t = await resolveTenantForAgent(db, { agentId: 'ax', machineId: 'mx' }, { onMultiTenantConflict });
+    const t = await resolveTenantForAgent(db, { agentId: 'ax', machineId: 'mx', onMultiTenantConflict });
     expect(t).toBe(TENANT_A);
     expect(onMultiTenantConflict).not.toHaveBeenCalled();
   });
@@ -142,7 +142,7 @@ describe('resolveTenantForAgent 多租户冲突探测 [BEHAVIOR]', () => {
       { match: /from\s+zenithjoy\.service_agents/i, rows: [] },
       { match: /status\s*=\s*'active'/i, rows: [{ tenant_id: TENANT_A }, { tenant_id: TENANT_B }] },
     ]);
-    await resolveTenantForAgent(db, { agentId: 'ax', machineId: 'mx' }, { onMultiTenantConflict: async () => {} });
+    await resolveTenantForAgent(db, { agentId: 'ax', machineId: 'mx', onMultiTenantConflict: async () => {} });
     const probeCall = query.mock.calls.find((c) => /status\s*=\s*'active'/i.test(String(c[0])));
     expect(probeCall, '必须执行冲突探测 SQL').toBeTruthy();
     const sql = String(probeCall![0]);
@@ -158,7 +158,7 @@ describe('resolveTenantForAgent 多租户冲突探测 [BEHAVIOR]', () => {
       { match: /status\s*=\s*'active'/i, rows: [{ tenant_id: TENANT_A }, { tenant_id: TENANT_B }] },
     ]);
     const onMultiTenantConflict = vi.fn(async () => { throw new Error('alert sink down'); });
-    const t = await resolveTenantForAgent(db, { agentId: 'ax', machineId: 'mx' }, { onMultiTenantConflict });
+    const t = await resolveTenantForAgent(db, { agentId: 'ax', machineId: 'mx', onMultiTenantConflict });
     expect(t, '告警回调抛错不得吞掉 deny').toBe('');
   });
 });
