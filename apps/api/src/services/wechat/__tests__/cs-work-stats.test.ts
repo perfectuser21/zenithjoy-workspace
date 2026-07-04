@@ -38,6 +38,15 @@ describe('getCsWorkStats 聚合口径', () => {
     expect(sql).toMatch(/max\(\s*\w*\.?created_at\s*\)[\s\S]*min\(\s*\w*\.?created_at\s*\)/i);
   });
 
+  it('回复口径只算真送达：count(out) FILTER 必须含 status=\'delivered\'（draft/failed 不计假账）', async () => {
+    await getCsWorkStats('today');
+    const sql = String(mockedQuery.mock.calls[0][0]);
+    // reply_count 的 FILTER 里必须同时约束 direction='out' 且 status='delivered'
+    expect(sql).toMatch(
+      /count\([\s\S]*?\)\s*FILTER\s*\(\s*WHERE\s+[^)]*direction\s*=\s*'out'[^)]*status\s*=\s*'delivered'/i,
+    );
+  });
+
   it('时区：按 Asia/Shanghai 当天分组（防美区日界坑）', async () => {
     await getCsWorkStats('today');
     const sql = String(mockedQuery.mock.calls[0][0]);

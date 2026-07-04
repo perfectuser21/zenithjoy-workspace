@@ -23,7 +23,8 @@ import { callOpenRouter } from '../llm/openrouter';
 import type { BusinessKB, ChatMessage, ContactFact, ContactMemory, Persona } from './wechat/types';
 import { retrieveRelevantKB } from './wechat/business-kb';
 import { getPersona, getBusinessKB } from './wechat/cs-config-store';
-import { getCSConfigByAgentId, resolveCsWechatIdByAgentId } from './wechat/cs-account-config-store';
+import { getCSConfigByAgentId } from './wechat/cs-account-config-store';
+import { resolveCsWechatIdentity } from './wechat/cs-identity-resolve';
 import {
   decideAutoSendRoute,
   ROUTE_SEND,
@@ -183,11 +184,17 @@ async function createRecord(
 
 // ─── 回复清洗（人设禁用词兜底；剥思考块已在 openrouter 内做）────────────────────
 
+// 技术身份自述句兜底：命中「我会/可以/能…(执行/运行)…命令/日志/脚本/排查/后台」的整句剔除，
+// 防客户粘命令污染记忆后 AI 自述"会查日志/跑脚本"。不含这些关键词的普通句（如"我会尽快帮您反馈"）保留。
+const SELF_TECH_CLAIM_RE =
+  /(我(会|可以|能)[^。！？\n]{0,12}(执行|运行)?(命令|日志|脚本|排查|后台))[^。！？\n]*[。！？]?/g;
+
 function sanitizeReply(text: string, persona: Persona): string {
   let out = text;
   for (const phrase of persona.banned_phrases || []) {
     if (phrase) out = out.split(phrase).join('');
   }
+  out = out.replace(SELF_TECH_CLAIM_RE, '');
   return out.replace(/[ \t]{2,}/g, ' ').trim();
 }
 
@@ -277,6 +284,12 @@ export interface GenerateChatDraftResult {
   skip_reason?: 'group' | 'blacklisted';
   /** 仅 status:'sent' 时为生成文案；其余一律 undefined（agent 检测到 undefined 即跳过不发）。 */
   reply?: string;
+  /**
+   * 仅 status:'sent' 时为 out 行落库返回的 wechat_messages.id（status='draft'）。
+   * agent 真机发出后带此 id 回 POST /api/wechat/messages/:id/receipt（待建，Task 3）置 delivered/failed，
+   * 治"中台假账"（写了 out 行却没真发出去也记已回复）。落库失败时为 null。
+   */
+  message_id?: number | null;
 }
 
 const FAIL_PLACEHOLDER = 'AI 生成失败（请人审决定是否重试）';
@@ -363,9 +376,14 @@ export async function generateChatDraft(
   // 的人设/知识库 + 解析客服微信号查 per-cs 黑名单。解不到 → null，回落全局（向后兼容）。
   const csConfig = agent_id ? await getCSConfigByAgentId(agent_id) : null;
   // S3 客服工作汇总：解析「处理本消息的客服微信号」给 in/out 落库盖身份章 + 查 per-cs 黑名单。
-  // 优先级：直传 cs_wechat_id（smoke 测试直传）> agent_id 解析链（普通 agent 调用）
-  const csWechatId: string | null =
-    params.cs_wechat_id ?? csConfig?.wechat_id ?? (agent_id ? await resolveCsWechatIdByAgentId(agent_id) : null);
+  // 三段链抽到 resolveCsWechatIdentity（回执路由共用，保证写行/回执归属逐字一致）：
+  // 直传 cs_wechat_id > csConfig?.wechat_id > resolveCsWechatIdByAgentId(agent_id)。csConfig 已为
+  // persona 加载，直接透传复用不重复查库。
+  const csWechatId: string | null = await resolveCsWechatIdentity({
+    directCsWechatId: params.cs_wechat_id,
+    agentId: agent_id,
+    csConfig,
+  });
 
   console.info(
     `[wechat-draft] generateChatDraft tenant_scope=${tenant_id ?? '<none>'} sender=${sender} is_group=${is_group}`,
@@ -464,9 +482,13 @@ export async function generateChatDraft(
     return { ok: true, status: 'ai_failed', task_id: taskId, draft_id: '' };
   }
 
-  // AI 成功 → 记入"我方回复"短期记忆 + 触发固化（盖客服身份章），然后直接返回 reply（自动直发）。
+  // AI 成功 → 记入"我方回复"短期记忆（status='draft'，真送达前不算已回复）+ 触发固化（盖客服身份章），
+  // 然后返回 reply（自动直发）+ message_id 供 agent 真发后回执置 delivered/failed。
+  let messageId: number | null = null;
   try {
-    await appendMessage(contactKey, sender, 'out', aiContent, csWechatId);
+    messageId = await appendMessage(contactKey, sender, 'out', aiContent, csWechatId, {
+      status: 'draft',
+    });
     await consolidate(contactKey);
   } catch (err) {
     console.warn('[wechat-draft] 写出站消息/固化失败（不影响回复）:', err);
@@ -474,7 +496,14 @@ export async function generateChatDraft(
   await stampCsMemory(tenant_id, sender, 'out', aiContent, csWechatId);
 
   console.info(`[wechat-draft] auto-send sender=${sender} reply_len=${aiContent.length}`);
-  return { ok: true, status: 'sent', task_id: taskId, draft_id: '', reply: aiContent };
+  return {
+    ok: true,
+    status: 'sent',
+    task_id: taskId,
+    draft_id: '',
+    reply: aiContent,
+    message_id: messageId,
+  };
 }
 
 // ─── ws4: generateMomentDraft（朋友圈文案草稿）────────────────────────────────
