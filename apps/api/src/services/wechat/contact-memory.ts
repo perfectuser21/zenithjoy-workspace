@@ -64,15 +64,21 @@ export async function appendMessage(
   direction: Direction,
   content: string,
   csWechatId?: string | null,
-): Promise<void> {
+  opts?: { status?: 'draft' | 'delivered' },
+): Promise<number | null> {
   try {
-    await pool.query(
-      `INSERT INTO zenithjoy.wechat_messages (contact_key, sender_name, direction, content, cs_wechat_id)
-       VALUES ($1, $2, $3, $4, $5)`,
-      [contactKey, senderName, direction, content, csWechatId ?? null],
+    // status 台账：out 行由 caller 传 'draft'（AI 已生成、真机未确认送达），
+    // 真送达回执再置 delivered/failed；in 行与缺省一律 delivered（语义不变）。
+    const status = opts?.status ?? 'delivered';
+    const res = await pool.query(
+      `INSERT INTO zenithjoy.wechat_messages (contact_key, sender_name, direction, content, cs_wechat_id, status)
+       VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
+      [contactKey, senderName, direction, content, csWechatId ?? null, status],
     );
+    return res.rows?.[0]?.id ?? null;
   } catch (err) {
     console.warn('[contact-memory] appendMessage 写入失败:', err);
+    return null;
   }
 }
 
