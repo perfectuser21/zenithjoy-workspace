@@ -103,7 +103,9 @@ Unit test（Vitest，模块级测试目录 `services/agent/modules/line04/__test
 
 关键防回归测试：读源码文本断言 `startWechatListener` 函数体内含 `appendListenChatLog(` 调用（跟 PR#1085 里"run_real_listen 必须调用 reply_in_chat_with_lease"用的是完全一样的 ARTIFACT 型防回归手法）。
 
-**已有的 CI 闸门会覆盖"三面版本一致"和"build-modules 与源同步"**，不需要为这两条新写测试，这次改动跑过这两条闸门本身就是验证。
+**已有的 CI 闸门会覆盖"三面版本一致"**，不需要为这条新写测试，这次改动跑过这条闸门本身就是验证。
+
+> 更正（代码质量审查发现）：CI 里"build-modules/line04/wechat-rpa in sync with source"那条闸门**只 diff Python 的 `wechat-rpa/` 目录**，不覆盖 `modules/line04/handlers/*.ts` 与编译产物 `build-modules/line04/handlers/*.js` 的一致性——也就是说 TS 侧"改了源没重新编译"这类 bug（正是本次要修的这一类）目前没有等价的 CI 闸门拦截，全靠本次新加的 ARTIFACT 型防回归测试撑着。这是一个真实的覆盖缺口，值得后续开一个 sprint 补一条"modules/line04 TS 与 build-modules JS 编译产物一致"的 CI 检查，本次不做（保持范围收敛）。
 
 ## 不做的事
 
