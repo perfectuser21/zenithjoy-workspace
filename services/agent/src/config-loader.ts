@@ -24,7 +24,7 @@ export interface AgentConfig {
   agentUuid?: string; // H-2 Bug 9: register 返的 agents.id (UUID), WS hello 携带复用 row
 }
 
-function getConfigDir(): string {
+export function getConfigDir(): string {
   // Always honour APPDATA if set — allows test isolation on any platform
   // (tests set process.env.APPDATA = tmpdir to avoid polluting real config)
   if (process.env.APPDATA) {
