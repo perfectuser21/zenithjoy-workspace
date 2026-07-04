@@ -93,3 +93,72 @@ describe('resolveTenantForAgent [BEHAVIOR]', () => {
     expect(t).toBe('');
   });
 });
+
+describe('resolveTenantForAgent 多租户冲突探测 [BEHAVIOR]', () => {
+  it('源1/2 miss、同机近7天命中 2 个 active 租户 → deny 返回 ""，onMultiTenantConflict 被调用且含两租户', async () => {
+    const { db } = makeDb([
+      { match: /from\s+zenithjoy\.agents\s+where\s+agent_id/i, rows: [] },
+      { match: /from\s+zenithjoy\.service_agents/i, rows: [] },
+      // 冲突探测 SQL：带 l.status = 'active' 过滤，返回两个不同租户
+      { match: /status\s*=\s*'active'/i, rows: [{ tenant_id: TENANT_A }, { tenant_id: TENANT_B }] },
+    ]);
+    const onMultiTenantConflict = vi.fn(async () => {});
+    const t = await resolveTenantForAgent(db, { agentId: 'ax', machineId: 'mx' }, { onMultiTenantConflict });
+    expect(t, '探测到多租户冲突必须 deny').toBe('');
+    expect(onMultiTenantConflict, '必须触发告警回调').toHaveBeenCalledTimes(1);
+    const [mid, tenants] = onMultiTenantConflict.mock.calls[0];
+    expect(mid).toBe('mx');
+    expect(tenants).toEqual(expect.arrayContaining([TENANT_A, TENANT_B]));
+  });
+
+  it('source2（service_agents）命中 → 直接返回该租户，冲突探测 SQL 根本没执行', async () => {
+    const { db, query } = makeDb([
+      { match: /from\s+zenithjoy\.service_agents[\s\S]*machine_id/i, rows: [{ tenant_id: TENANT_B }] },
+    ]);
+    const onMultiTenantConflict = vi.fn(async () => {});
+    const t = await resolveTenantForAgent(db, { machineId: 'mx' }, { onMultiTenantConflict });
+    expect(t).toBe(TENANT_B);
+    const probeCall = query.mock.calls.find((c) => /status\s*=\s*'active'/i.test(String(c[0])));
+    expect(probeCall, 'SSOT 命中后不得再跑冲突探测').toBeFalsy();
+    expect(onMultiTenantConflict).not.toHaveBeenCalled();
+  });
+
+  it('探测只返回 1 个租户 → 正常继续走 source3 返回该租户，无告警', async () => {
+    const { db } = makeDb([
+      { match: /from\s+zenithjoy\.agents\s+where\s+agent_id/i, rows: [] },
+      { match: /from\s+zenithjoy\.service_agents/i, rows: [] },
+      { match: /status\s*=\s*'active'/i, rows: [{ tenant_id: TENANT_A }] },
+      { match: /license_machines[\s\S]*order\s+by\s+lm\.last_seen/i, rows: [{ tenant_id: TENANT_A }] },
+    ]);
+    const onMultiTenantConflict = vi.fn(async () => {});
+    const t = await resolveTenantForAgent(db, { agentId: 'ax', machineId: 'mx' }, { onMultiTenantConflict });
+    expect(t).toBe(TENANT_A);
+    expect(onMultiTenantConflict).not.toHaveBeenCalled();
+  });
+
+  it('冲突探测 SQL 必须含 l.status = \'active\' 与 interval \'7 days\'（revoke 解锁复测的生命线，防误删）', async () => {
+    const { db, query } = makeDb([
+      { match: /from\s+zenithjoy\.agents\s+where\s+agent_id/i, rows: [] },
+      { match: /from\s+zenithjoy\.service_agents/i, rows: [] },
+      { match: /status\s*=\s*'active'/i, rows: [{ tenant_id: TENANT_A }, { tenant_id: TENANT_B }] },
+    ]);
+    await resolveTenantForAgent(db, { agentId: 'ax', machineId: 'mx' }, { onMultiTenantConflict: async () => {} });
+    const probeCall = query.mock.calls.find((c) => /status\s*=\s*'active'/i.test(String(c[0])));
+    expect(probeCall, '必须执行冲突探测 SQL').toBeTruthy();
+    const sql = String(probeCall![0]);
+    expect(sql).toMatch(/l\.status\s*=\s*'active'/i);
+    expect(sql).toMatch(/interval\s*'7 days'/i);
+    expect((probeCall![1] ?? []) as unknown[]).toContain('mx');
+  });
+
+  it('onMultiTenantConflict 抛异常 → 告警旁路失败不影响 deny，仍返回 ""', async () => {
+    const { db } = makeDb([
+      { match: /from\s+zenithjoy\.agents\s+where\s+agent_id/i, rows: [] },
+      { match: /from\s+zenithjoy\.service_agents/i, rows: [] },
+      { match: /status\s*=\s*'active'/i, rows: [{ tenant_id: TENANT_A }, { tenant_id: TENANT_B }] },
+    ]);
+    const onMultiTenantConflict = vi.fn(async () => { throw new Error('alert sink down'); });
+    const t = await resolveTenantForAgent(db, { agentId: 'ax', machineId: 'mx' }, { onMultiTenantConflict });
+    expect(t, '告警回调抛错不得吞掉 deny').toBe('');
+  });
+});
