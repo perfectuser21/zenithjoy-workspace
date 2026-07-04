@@ -82,14 +82,14 @@ const dl = (ver,url,dest)=>{ fs.mkdirSync(dest,{recursive:true}); fs.writeFileSy
 (async()=>{
   // B1 sha 不符 → 回滚：不写指针、不退出（防把客户机切到坏核心）
   let exited1=false;
-  const up1 = new CoreUpgrader({ currentVersion:'2.0.21', coreDir, downloadImpl:dl, verifyImpl: async()=>false, exitImpl:()=>{exited1=true;} });
+  const up1 = new CoreUpgrader({ currentVersion:'2.0.21', coreDir, supervised:true, downloadImpl:dl, verifyImpl: async()=>false, exitImpl:()=>{exited1=true;} });
   const r1 = await up1.upgradeIfNeeded('2.0.22', { sha256:'bad', size:1 });
   if (r1.upgraded !== false) { console.error('B1 sha 不符竟升级:', r1); process.exit(1); }
   if (fs.existsSync(path.join(root,'.active-core'))) { console.error('B1 sha 不符竟写了指针'); process.exit(1); }
   if (exited1) { console.error('B1 sha 不符竟退出'); process.exit(1); }
   // B2 sha 一致 → 真升级：解压 extracted/zenithjoy-agent-v2.0.22 + 拷 .env + 写 .active-core 指针 + 优雅退出
   let exited2=false;
-  const up2 = new CoreUpgrader({ currentVersion:'2.0.21', coreDir, downloadImpl:dl, exitImpl:()=>{exited2=true;} });
+  const up2 = new CoreUpgrader({ currentVersion:'2.0.21', coreDir, supervised:true, downloadImpl:dl, exitImpl:()=>{exited2=true;} });
   const r2 = await up2.upgradeIfNeeded('2.0.22');
   const newDir = path.join(root,'extracted','zenithjoy-agent-v2.0.22');
   if (r2.upgraded !== true) { console.error('B2 未升级:', r2); process.exit(1); }
