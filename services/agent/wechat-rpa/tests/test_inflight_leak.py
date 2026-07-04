@@ -76,16 +76,31 @@ def test_inflight_is_dict_with_timestamp():
     assert isinstance(listen_chat._INFLIGHT["x"], float)
 
 
+def test_sweep_inflight_releases_all_in_unread():
+    """_sweep_inflight(unread)：本轮 unread 里仍在处理中的人全部释放（宁可迟到不可丢）。"""
+    listen_chat._INFLIGHT["甲"] = listen_chat.time.time()
+    listen_chat._INFLIGHT["乙"] = listen_chat.time.time()
+    listen_chat._sweep_inflight([{"sender": "甲"}, {"sender": "乙"}])
+    assert "甲" not in listen_chat._INFLIGHT
+    assert "乙" not in listen_chat._INFLIGHT
+
+
+def test_sweep_inflight_noop_on_already_released():
+    """DELIVERED 已 pop 的人再 sweep = no-op 不抛；缺/空 sender 也不抛。"""
+    listen_chat._INFLIGHT["乙"] = listen_chat.time.time()
+    listen_chat._sweep_inflight([{"sender": "甲"}, {"sender": "乙"}])  # 甲 不在册
+    assert "乙" not in listen_chat._INFLIGHT
+    listen_chat._sweep_inflight([{}, {"sender": ""}])  # 缺键/空 sender 不抛
+
+
 def test_main_loop_sweep_in_try_finally():
-    """结构守卫（防将来退化）：主循环里 sweep（遍历 unread 释放 INFLIGHT）
-    必须处于 finally 块内，否则异常/continue 路径又会泄漏处理中标记。"""
+    """结构守卫（防将来退化）：主循环轮尾 sweep 必须走 finally 块调用 _sweep_inflight，
+    否则异常/continue 路径又会泄漏处理中标记。锁函数名而非内部变量名，降脆性。"""
     src = open(os.path.join(_WECHAT, "listen_chat.py"), encoding="utf-8").read()
-    # finally: 之后紧跟着 sweep 循环与 _release_inflight，中间只隔注释/空白
+    # finally: 之后（隔注释/空白）调用 _sweep_inflight(unread)
     pat = re.compile(
         r"\n\s*finally:\s*\n"
         r"(?:\s*#.*\n|\s*\n)*"
-        r"\s*for _m_rel in unread:\s*\n"
-        r"(?:.*\n)*?"
-        r"\s*_release_inflight\(_s_rel\)",
+        r"\s*_sweep_inflight\(unread\)",
     )
-    assert pat.search(src), "主循环轮尾 sweep 必须在 finally 块内（异常/continue 都能释放 INFLIGHT）"
+    assert pat.search(src), "主循环轮尾 sweep 必须在 finally 块内调用 _sweep_inflight(unread)"

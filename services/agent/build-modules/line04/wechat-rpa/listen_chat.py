@@ -632,7 +632,11 @@ TRAILING_STALL_LIMIT = 3          # 连续 N 轮无解 → 熔断走回退 emit 
 # 跳过永不回。TTL 到点强制释放，配合主循环 try/finally 双保险，绝不永久静默丢消息。
 _INFLIGHT: Dict[str, float] = {}  # 处理中 sender → 加入时间戳（emit→DELIVERED/失败之间），扫描跳过不重复 emit
 _LAST_EMIT: Dict[str, Any] = {}   # sender → (规范化内容, ts)：同内容 60s 内绝不二次 emit
+_LAST_INFLIGHT_SKIP_COUNT = -1    # 上轮 inflight_skip 汇总打印的人数；仅当变化时才打，防泄漏期每秒刷屏
 EMIT_DEDUP_TTL = 60.0
+# INFLIGHT_TTL 安全性依赖单线程 finally 不变量：正常发送每轮都会走轮尾 _sweep_inflight 释放，
+# 永远到不了 TTL，TTL 分支只在异常/泄漏时兜底。注意 TTL 分支走 _release_inflight 会连
+# _LAST_EMIT 的 60s 去重闸一起清——若将来改成并发发送 / 轮内二次扫描，这两个不变量都会破，须重审。
 INFLIGHT_TTL = 180.0              # 处理中标记最长存活；超时视为卡死强制释放（防泄漏永久静默）
 
 
@@ -642,6 +646,16 @@ def _release_inflight(sender: str) -> None:
     （只清 inflight、保留同内容闸 60s 防复读）。"""
     _INFLIGHT.pop(sender, None)
     _LAST_EMIT.pop(sender, None)
+
+
+def _sweep_inflight(unread: List[Dict[str, Any]]) -> None:
+    """轮尾兜底：本轮 unread 里仍在处理中（=未 DELIVERED，失败/跳过）的 sender 全部释放，
+    允许下轮重试同内容。DELIVERED 的已在 _commit_reply_success 清 inflight、同内容闸保留 60s。
+    在主循环 finally 里调用——异常/任何 continue 路径都能走到，防处理中标记泄漏。"""
+    for _m_rel in unread:
+        _s_rel = _m_rel.get("sender", "")
+        if _s_rel in _INFLIGHT:
+            _release_inflight(_s_rel)
 
 
 def _inflight_should_skip(sender: str) -> bool:
@@ -959,8 +973,12 @@ def scan_unread(mw: Any, last_preview: Optional[Dict[str, str]] = None,
             seen.add(sender)
             candidates.append({"sender": sender, "content": info["content"],
                                "name": name, "badge": 0, "_item": it})
-    if _inflight_skipped > 0:
-        _log(f"inflight_skip 本轮跳过 {_inflight_skipped} 人（仍在草稿/发送中，处理完自动放行）")
+    # 只在跳过人数变化时打——泄漏未触发 TTL 前，同一批人会被稳定跳过，逐轮打会每秒刷屏
+    global _LAST_INFLIGHT_SKIP_COUNT
+    if _inflight_skipped != _LAST_INFLIGHT_SKIP_COUNT:
+        if _inflight_skipped > 0:
+            _log(f"inflight_skip 本轮跳过 {_inflight_skipped} 人（仍在草稿/发送中，处理完自动放行）")
+        _LAST_INFLIGHT_SKIP_COUNT = _inflight_skipped
     candidates.sort(key=lambda c: -c["badge"])  # 角标优先
     out: List[Dict[str, Any]] = []
     opened = 0
@@ -4307,10 +4325,7 @@ def run_real_listen(args: argparse.Namespace) -> int:
             finally:
                 # v1.0.107+：轮尾兜底 sweep——异常/任何 continue（dryrun/rate/cooldown/direction）路径
                 #   都释放 INFLIGHT，防发送链路中途失败泄漏处理中标记把该联系人被 scan 永久静默。
-                for _m_rel in unread:
-                    _s_rel = _m_rel.get("sender", "")
-                    if _s_rel in _INFLIGHT:
-                        _release_inflight(_s_rel)
+                _sweep_inflight(unread)
             # v1.0.103 双弹窗修复的另一半：本轮回复全部处理完，统一收窗一次
             # （scan_unread 有 emit 时不收，orig_state 暂存在 _SCAN_WINDOW_STATE）。
             _finish_scan_window(mw)
