@@ -270,6 +270,20 @@ if exist "%~dp0create-shortcut.ps1" (
     echo [shortcut] create-shortcut.ps1 not found, skipping (old install pack)
 )
 
+REM === Launcher single-instance mutex (Sprint 07041301, decision 72740815) ===
+REM Root cause (2026-07-04, rog): every version dir's start.bat is an immortal supervise loop and
+REM Step 6.95 kills ALL agents each iteration -> multiple concurrent loops (v2.0.52 / v2.0.69 x3
+REM zombies observed) fight each other forever: kill each other's core, agents mutually exit on
+REM "another instance". Fix = last-writer-wins launcher lock: each launcher writes a unique token
+REM into .launcher.lock at startup; every loop iteration re-reads the lock and exits quietly the
+REM moment the token no longer matches (a newer launcher has taken ownership). Newest always wins,
+REM stale loops drain themselves -> exactly ONE supervise loop per machine.
+if not exist "%APPDATA%\zenithjoy-agent" mkdir "%APPDATA%\zenithjoy-agent" >nul 2>&1
+set "LAUNCHER_LOCK=%APPDATA%\zenithjoy-agent\.launcher.lock"
+set "LAUNCHER_TOKEN=%RANDOM%-%RANDOM%-%DATE%-%TIME%"
+>"%LAUNCHER_LOCK%" echo %LAUNCHER_TOKEN%
+echo [launcher] mutex acquired (token %LAUNCHER_TOKEN%)
+
 REM === P1-5 keep-alive supervisor loop entry (Sprint 07011457) ===
 REM Every iteration re-runs: single-instance cleanup + re-read .active-core pointer (picks up the
 REM upgraded core) + relaunch the core. Root cause (2026-07-01 rog real machine): CoreUpgrader writes
@@ -279,6 +293,15 @@ REM relying on the ONLOGON scheduled task to relaunch. But ONLOGON only fires at
 REM core exits mid-session -> after a self-upgrade/crash the core stayed dead until the next login
 REM (customer messages had no process to receive them -> no reply). This loop keeps the core alive.
 :AGENT_SUPERVISE_LOOP
+
+REM Step 6.94: Re-verify launcher ownership EVERY iteration. A newer launcher overwrites
+REM .launcher.lock with its own token; the moment ours no longer matches we are a stale loop and
+REM MUST drain (no more killing / relaunching) - this is what ends the zombie-loop fights.
+set "CURRENT_LOCK_TOKEN="
+if exist "%LAUNCHER_LOCK%" (
+    for /f "usebackq delims=" %%t in ("%LAUNCHER_LOCK%") do if not defined CURRENT_LOCK_TOKEN set "CURRENT_LOCK_TOKEN=%%t"
+)
+if not "%CURRENT_LOCK_TOKEN%"=="%LAUNCHER_TOKEN%" goto :LAUNCHER_LOST_OWNERSHIP
 
 REM Step 6.95: Single-instance guard - kill any existing zenithjoy-agent.exe before starting
 REM Two agents with the same license kick each other off the server WS connection,
@@ -345,7 +368,11 @@ if exist "%ACTIVE_CORE_FILE%" (
 )
 
 REM Step 7: Spawn agent.exe (foreground) - run the pointer-selected newest core (local if no pointer)
+REM ZJ_SUPERVISED=1 tells CoreUpgrader it runs under this supervise loop, so after a self-upgrade it
+REM may exit(0) and rely on this loop to relaunch the new core. Cores started WITHOUT this loop
+REM (debug / broken task) see no flag and must spawn the new core themselves before exiting.
 mkdir "%USERPROFILE%\.zj" 2>nul
+set "ZJ_SUPERVISED=1"
 echo [agent] starting zenithjoy-agent.exe (dir=%CORE_RUN_DIR%) ...
 pushd "%CORE_RUN_DIR%"
 zenithjoy-agent.exe
@@ -358,3 +385,7 @@ REM the 5s delay instead of timeout (wscript hidden launch has no stdin -> timeo
 echo [supervise] core exited code=%_AGENT_EXIT% - relaunching in 5s (keep-alive self-heal)...
 ping -n 6 127.0.0.1 >nul 2>&1
 goto :AGENT_SUPERVISE_LOOP
+
+:LAUNCHER_LOST_OWNERSHIP
+echo [launcher] a newer launcher took over the mutex - draining this stale loop (no kill, no relaunch)
+exit /b 0

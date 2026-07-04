@@ -77,6 +77,7 @@ describe('CoreUpgrader', () => {
     const exitImpl = vi.fn();
     const up = new CoreUpgrader({
       currentVersion: '2.0.21',
+      supervised: true, // 旧用例语义：被 supervise 循环拉起（07041301 交接改造后显式声明）
       coreDir,
       downloadImpl,
       exitImpl,
@@ -99,6 +100,7 @@ describe('CoreUpgrader', () => {
     const exitImpl = vi.fn();
     const up = new CoreUpgrader({
       currentVersion: '2.0.21',
+      supervised: true, // 旧用例语义：被 supervise 循环拉起（07041301 交接改造后显式声明）
       coreDir,
       downloadImpl,
       exitImpl,
@@ -147,6 +149,7 @@ describe('CoreUpgrader', () => {
     const exitImpl = vi.fn();
     const up = new CoreUpgrader({
       currentVersion: '2.0.21',
+      supervised: true, // 旧用例语义：被 supervise 循环拉起（07041301 交接改造后显式声明）
       coreDir,
       configDir: cfgDir, // 注入测试用 config 目录
       downloadImpl,
@@ -173,6 +176,7 @@ describe('CoreUpgrader', () => {
     const exitImpl = vi.fn();
     const up = new CoreUpgrader({
       currentVersion: '2.0.21',
+      supervised: true, // 旧用例语义：被 supervise 循环拉起（07041301 交接改造后显式声明）
       coreDir,
       downloadImpl,
       // verifyImpl 返回 false 模拟 sha 不符
@@ -194,6 +198,7 @@ describe('CoreUpgrader', () => {
     const exitImpl = vi.fn();
     const up = new CoreUpgrader({
       currentVersion: '2.0.21',
+      supervised: true, // 旧用例语义：被 supervise 循环拉起（07041301 交接改造后显式声明）
       coreDir,
       downloadImpl,
       exitImpl,
@@ -212,6 +217,7 @@ describe('CoreUpgrader', () => {
     const exitImpl = vi.fn();
     const up = new CoreUpgrader({
       currentVersion: '2.0.21',
+      supervised: true, // 旧用例语义：被 supervise 循环拉起（07041301 交接改造后显式声明）
       coreDir,
       downloadImpl,
       exitImpl,
@@ -243,6 +249,7 @@ describe('CoreUpgrader', () => {
     const reportImpl = vi.fn(async (_cfg: any, _event: any) => undefined);
     const up = new CoreUpgrader({
       currentVersion: '2.0.21',
+      supervised: true, // 旧用例语义：被 supervise 循环拉起（07041301 交接改造后显式声明）
       coreDir,
       downloadImpl,
       exitImpl,
@@ -271,6 +278,7 @@ describe('CoreUpgrader', () => {
     const reportImpl = vi.fn(async (_cfg: any, _event: any) => undefined);
     const up = new CoreUpgrader({
       currentVersion: '2.0.21',
+      supervised: true, // 旧用例语义：被 supervise 循环拉起（07041301 交接改造后显式声明）
       coreDir,
       downloadImpl,
       exitImpl,
@@ -297,6 +305,7 @@ describe('CoreUpgrader', () => {
     });
     const up = new CoreUpgrader({
       currentVersion: '2.0.21',
+      supervised: true, // 旧用例语义：被 supervise 循环拉起（07041301 交接改造后显式声明）
       coreDir,
       downloadImpl,
       exitImpl,
@@ -316,6 +325,7 @@ describe('CoreUpgrader', () => {
     const reportImpl = vi.fn(async (_cfg: any, _event: any) => undefined);
     const up = new CoreUpgrader({
       currentVersion: '2.0.21',
+      supervised: true, // 旧用例语义：被 supervise 循环拉起（07041301 交接改造后显式声明）
       coreDir,
       downloadImpl,
       exitImpl: vi.fn(),

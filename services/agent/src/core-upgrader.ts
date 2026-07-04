@@ -16,7 +16,7 @@
 //   - 自换+重启接缝：本类只写 .active-core 指针 + 退出；真"拉起新核心"是 start.bat（读指针）
 //     + 计划任务 ONLOGON 始终拉启动器 → 这部分是接缝，列入接缝清单真机验。
 
-import { execFile, type ChildProcess } from 'node:child_process';
+import { execFile, spawn, type ChildProcess } from 'node:child_process';
 import https from 'node:https';
 import http from 'node:http';
 import fs from 'node:fs';
@@ -57,6 +57,13 @@ export interface CoreUpgraderOptions {
   verifyImpl?: (filePath: string, info: CoreVerifyInfo) => Promise<boolean>;
   // 优雅退出（真实实现：process.exit(0)，由启动器拉起新核心）
   exitImpl?: () => void;
+  // 是否运行在 supervise 循环之下（start.bat 拉起核心前设 ZJ_SUPERVISED=1）。
+  // 不传按 process.env.ZJ_SUPERVISED === '1' 推。supervised=false 时升级"先立后破"：
+  // 退出前自己 spawn 新核心；spawn 失败 → 回滚指针 + 不退出，绝不留真空
+  // （2026-07-04 08:46 裸启动核心升级后退出、3.5h 无人拉起，生产实锤）。
+  supervised?: boolean;
+  // 拉起新核心实现（真实实现：detached spawn 新核心目录 start.vbs）
+  spawnNewCoreImpl?: (newCoreDir: string) => void;
   // 观测上报配置（apiBase+license+agentId）；不传则不上报（旁路，绝不影响升级主流程）。
   reporter?: EventReporterConfig;
   // 上报实现注入点（单测断言上报调用；不传走真实 reportEvent）。
@@ -260,7 +267,26 @@ export class CoreUpgrader {
         context: { to: requiredVersion },
       });
 
-      // 5. 优雅退出 → 计划任务/启动器读指针拉起新核心（自换+重启接缝，真机验）
+      // 5. 交接（先立后破，decision 72740815）：
+      //    - supervised（start.bat 循环拉起，ZJ_SUPERVISED=1）→ 直接退出，循环重读指针拉起新核心；
+      //    - 非 supervised（计划任务指死目录后人工拉起 / 调试直启 / 循环被杀）→ 退出前必须
+      //      自己 spawn 新核心；spawn 失败 → 回滚指针 + 不退出（旧核心继续跑，绝不留真空）。
+      const supervised = this.opts.supervised ?? process.env.ZJ_SUPERVISED === '1';
+      if (!supervised) {
+        try {
+          const spawnImpl = this.opts.spawnNewCoreImpl ?? CoreUpgrader.defaultSpawnNewCore;
+          spawnImpl(destDir);
+          this.log(`非 supervise 环境：已自行拉起新核心 ${requiredVersion}（先立后破）`);
+        } catch (err) {
+          const reason = `非 supervise 环境拉起（spawn）新核心失败：${(err as Error).message}（回滚指针，旧核心继续跑）`;
+          this.log(reason);
+          try {
+            fs.writeFileSync(this.pointerPath(), `${CORE_DIR_PREFIX}${this.currentVersion}\n`, 'utf-8');
+          } catch { /* 指针回滚失败也不退出，启动器兜底 fallback 本地核心 */ }
+          await this.report({ kind: 'upgrade', phase: 'failed', message: reason, context: { to: requiredVersion } });
+          return { upgraded: false, reason };
+        }
+      }
       this.log(`核心 ${requiredVersion} 已就位，优雅退出由启动器拉起新核心`);
       await this.report({
         kind: 'upgrade',
@@ -274,6 +300,23 @@ export class CoreUpgrader {
     } finally {
       this.upgrading = false;
     }
+  }
+
+  // 真实 spawn：detached 拉起新核心目录的 start.vbs（无窗口，经启动器带 supervise 循环）；
+  // 无 start.vbs（异常包）→ 抛错走回滚。
+  private static defaultSpawnNewCore(newCoreDir: string): void {
+    const vbs = path.join(newCoreDir, 'start.vbs');
+    if (!fs.existsSync(vbs)) {
+      throw new Error(`新核心缺 start.vbs：${vbs}`);
+    }
+    const child = spawn('wscript.exe', [vbs], {
+      detached: true,
+      stdio: 'ignore',
+      windowsHide: true,
+      // 新核心不继承本进程的 ZJ_SUPERVISED（它经 start.bat 自己设）
+      env: { ...process.env, ZJ_SUPERVISED: '' },
+    });
+    child.unref();
   }
 
   // 下载实现分派：注入优先，否则走真实 https 下载 + verifyFile 校验 + tar 解压

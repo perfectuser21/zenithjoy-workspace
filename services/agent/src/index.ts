@@ -36,6 +36,8 @@ import { ModuleManager } from './module-manager';
 import { mapRawCommenters } from './utils/comment-mapper';
 // Sprint 06222100 — 核心运行时本体自升级（下载新核心包→解压→写 .active-core 指针→优雅退出）。
 import { CoreUpgrader } from './core-upgrader';
+import { acquireSingleInstanceLock } from './single-instance-lock';
+import { gatherEnvState, planConvergence, executeConvergence } from './bootstrap-convergence';
 // Sprint cp-06262240 — 任务观测上报：把 handler 开始/失败/成功接进 reportEvent 管子
 import {
   reportTaskStart,
@@ -475,39 +477,8 @@ process.on('uncaughtException', (err) => {
   console.warn('[agent] uncaughtException:', err);
 });
 
-// Node.js 级单实例守卫：写 PID lock 文件，若已有同路径进程在跑则退出。
-// start.bat Step 6.95 已杀旧进程，但多个 start.bat 并发启动时会出现竞态——
-// 这里作为第二道保险，防止 5 个 agent 同时跑导致一个 qr-bind task 被多进程抢到。
-function acquireSingleInstanceLock(): boolean {
-  try {
-    const lockDir = path.join(os.homedir(), '.zenithjoy-agent');
-    fs.mkdirSync(lockDir, { recursive: true });
-    const lockFile = path.join(lockDir, 'agent.lock');
-    if (fs.existsSync(lockFile)) {
-      const existingPid = parseInt(fs.readFileSync(lockFile, 'utf8').trim(), 10);
-      if (!isNaN(existingPid)) {
-        try {
-          // kill(pid, 0) 不发信号，只检测进程是否存在；不抛 = 进程在跑
-          process.kill(existingPid, 0);
-          console.log(`[agent] another instance already running (PID ${existingPid}), exiting`);
-          return false;
-        } catch {
-          // 进程已消失，可以接管 lock
-        }
-      }
-    }
-    fs.writeFileSync(lockFile, String(process.pid), 'utf8');
-    // 退出时删 lock（正常退出 + SIGTERM）
-    const cleanLock = () => { try { fs.unlinkSync(lockFile); } catch { /* ignore */ } };
-    process.on('exit', cleanLock);
-    process.on('SIGTERM', () => { cleanLock(); process.exit(0); });
-    return true;
-  } catch (e) {
-    // lock 机制本身失败不阻断 agent 启动
-    console.warn('[agent] single-instance lock failed (non-fatal):', e);
-    return true;
-  }
-}
+// 单实例守卫（PID 复用免疫版）挪进 single-instance-lock.ts：锁存 PID+镜像名，
+// 判"已在运行"要求 PID 存活且镜像名是 zenithjoy-agent（07-03/07-04 陈旧锁停机根治）。
 
 async function main(): Promise<void> {
   if (!acquireSingleInstanceLock()) {
@@ -515,6 +486,27 @@ async function main(): Promise<void> {
   }
   const cfg = loadOrInitConfig();
   console.log(`[agent] starting agent ${cfg.agentId} (v${VERSION})`);
+
+  // === 启动第零阶段：幂等环境收敛（decision 72740815）===
+  // 在连中台/下载/拉模块之前先把机器收敛回干净状态：杀重复实例与僵尸启动循环、
+  // 修计划任务指向、报配置缺口。全 best-effort，收敛失败绝不阻断启动。
+  try {
+    const rootDir = path.dirname(path.dirname(path.dirname(process.execPath)));
+    const envState = gatherEnvState({
+      selfPid: process.pid,
+      activeCorePointerPath: path.join(rootDir, '.active-core'),
+      licensePresent: Boolean(cfg.licenseKey || process.env.ZENITHJOY_LICENSE),
+    });
+    const actions = planConvergence(envState);
+    if (actions.length) {
+      console.log(`[bootstrap] 环境收敛：${actions.length} 项脏状态待处理`);
+      executeConvergence(actions);
+    } else {
+      console.log('[bootstrap] 环境收敛：干净，无需处理');
+    }
+  } catch (e) {
+    console.warn('[bootstrap] 环境收敛失败（non-fatal，继续启动）:', e);
+  }
 
   // v1.2 Day 1-2: License 注册流程
   //   - 旧 v1.1 config 已有连上的 ws，没 wsToken 也能跑（兼容路径）：
