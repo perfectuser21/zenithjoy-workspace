@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """Bug 7 — 记忆污染：同机多账号共享状态文件（staging 7bugs / 1.0.108）
 
-根因：_STATE_DIR 默认为 C:\Users\Public，所有账号共享同一个
+根因：_STATE_DIR 默认为 C:/Users/Public，所有账号共享同一个
 zj-sent-texts.json 和 zj-reply-anchor.json。
 同机两个微信账号（两个 listen_chat 进程）互相覆写状态文件，
 导致发送历史和回复锚点混乱。
