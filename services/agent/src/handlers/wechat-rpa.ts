@@ -10,6 +10,7 @@ import path from 'node:path';
 import fs from 'node:fs';
 import http from 'node:http';
 import { DesktopLeaseBroker } from '../desktop-lease-broker.js';
+import { getConfigDir } from '../config-loader.js';
 
 // 测试用导出：允许注入 baseDir；bundled install pack 含 python-embedded/python.exe
 export function getPythonExeForTest(baseDir: string): string {
@@ -236,6 +237,32 @@ export function buildListenerSpawnArgs(script: string, apiBase: string, agentId?
   return argv;
 }
 
+// Sprint 0703-line04-desktop-lease-broker（可观测性补线）：
+// listen_chat.py stderr（含 desktop-lease-broker 的 [desktop_lease] 诊断行）此前只
+// console.warn，module-manager fork 子进程时不监听其 stdout/stderr，这些输出写进了
+// 没人读的 pipe，不落盘、不进 Brain，无法观测。本函数把同一份内容旁路落盘，供排障翻查。
+const DEFAULT_LOG_MAX_BYTES = 5 * 1024 * 1024; // 5MB
+
+export function appendListenChatLog(
+  chunk: string,
+  opts?: { maxBytes?: number },
+): void {
+  try {
+    const logDir = path.join(getConfigDir(), 'logs');
+    fs.mkdirSync(logDir, { recursive: true });
+    const logFile = path.join(logDir, 'listen-chat.log');
+    const maxBytes = opts?.maxBytes ?? DEFAULT_LOG_MAX_BYTES;
+
+    if (fs.existsSync(logFile) && fs.statSync(logFile).size > maxBytes) {
+      const oldFile = path.join(logDir, 'listen-chat.log.old');
+      fs.renameSync(logFile, oldFile);
+    }
+    fs.appendFileSync(logFile, chunk);
+  } catch {
+    // 磁盘满/权限问题绝不能让 listen_chat 崩溃——console.warn 已有兜底可见性。
+  }
+}
+
 // Windows only：Agent 启动时自动拉起 listen_chat.py 持续监听微信消息。
 // 持久（timeout 86400）+ 崩溃自愈（退出后 30s 自动重启），随 Agent 生命周期常驻，
 // 客户只需双击 start.bat 一次，无需任何手动操作 / 计划任务。
@@ -255,7 +282,9 @@ export function startWechatListener(apiBase: string, agentId?: string): void {
       windowsHide: true,
     });
     child.stderr!.on('data', (d: Buffer) => {
-      console.warn('[listen_chat stderr]', d.toString().trim());
+      const text = d.toString();
+      console.warn('[listen_chat stderr]', text.trim());
+      appendListenChatLog(text);
     });
     child.on('exit', (code) => {
       console.warn(
