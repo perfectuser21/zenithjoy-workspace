@@ -1,12 +1,14 @@
 package com.zenithjoy.agent.collect
 
 /**
- * 从 AccessibilityNodeInfo 扁平化的节点列表中提取抖音主页字段。
+ * 从 AccessibilityNodeInfo 扁平化的节点列表中提取抖音评论区字段。
  *
  * 设计原则：
  *   - 纯函数，不持有 Android 框架依赖，可在 JVM 单测中覆盖。
  *   - 对齐 uiautomator dump 文本提取方案：dump 节点同样暴露 text / contentDescription / resourceId。
- *   - 优先用 resourceId 精确匹配；fallback 用文本启发。
+ *   - 优先用 resourceId 精确匹配；resourceId 候选值未经真机验证（今天调试时系统权限弹窗
+ *     挡住了评论区节点树的现场抓取），上线前必须用真机 uiautomator dump 核实实际 id，
+ *     这里同时保留结构启发式 fallback（昵称节点后紧跟的正文节点）兜底。
  *
  * 节点模型抽象为 [NodeInfo]，生产侧由 DouyinCollectService 从真实 AccessibilityNodeInfo 适配。
  */
@@ -18,117 +20,73 @@ object NodeExtractor {
         val resourceId: String,
     )
 
-    data class ProfileFields(
-        val nickname: String,
-        val douyinId: String,
-        val followersCount: String,
-        val bio: String,
-    )
-
-    private val DOUYIN_PKG = "com.ss.android.ugc.aweme"
-
-    fun extract(nodes: List<NodeInfo>): ProfileFields {
-        val nickname = extractNickname(nodes)
-        val douyinId = extractDouyinId(nodes)
-        val followersCount = extractFollowers(nodes)
-        val bio = extractBio(nodes)
-        return ProfileFields(nickname, douyinId, followersCount, bio)
+    fun extractComments(nodes: List<NodeInfo>): List<CommentEntry> {
+        val byId = extractByResourceId(nodes)
+        if (byId.isNotEmpty()) return byId
+        return extractByStructure(nodes)
     }
 
-    // ── 昵称 ─────────────────────────────────────────────────────────────────
+    // ── 方案一：resourceId 精确匹配（候选值待真机核实） ─────────────────────────
 
-    private fun extractNickname(nodes: List<NodeInfo>): String {
-        // resource-id 精确匹配（不同版本 resource-id 可能变化，多候选）
-        val byId = nodes.firstOrNull { n ->
-            n.resourceId.endsWith(":id/tv_user_nickname") ||
-                n.resourceId.endsWith(":id/nickname") ||
-                n.resourceId.endsWith(":id/user_name")
-        }
-        if (byId != null && byId.text.isNotBlank()) return byId.text.trim()
+    private fun extractByResourceId(nodes: List<NodeInfo>): List<CommentEntry> {
+        val nicknameIds = setOf(
+            "tv_username", "tv_user_name", "comment_user_name", "nick_name",
+        )
+        val contentIds = setOf(
+            "tv_comment_content", "comment_content", "tv_content", "content",
+        )
 
-        // contentDescription 启发：主页头部有 "xxx的主页" 模式
-        val byDesc = nodes.firstOrNull { n ->
-            n.contentDescription.endsWith("的主页") && n.contentDescription.length in 3..40
-        }
-        if (byDesc != null) return byDesc.contentDescription.removeSuffix("的主页").trim()
-
-        return ""
-    }
-
-    // ── 抖音号 ───────────────────────────────────────────────────────────────
-
-    private val DOUYIN_ID_PREFIX_RE = Regex("""(?:抖音号[：:]\s*)(\S+)""")
-
-    private fun extractDouyinId(nodes: List<NodeInfo>): String {
-        // 专用 resource-id
-        val byId = nodes.firstOrNull { n ->
-            n.resourceId.endsWith(":id/tv_user_uniqueid") ||
-                n.resourceId.endsWith(":id/unique_id") ||
-                n.resourceId.endsWith(":id/user_uniqueid")
-        }
-        if (byId != null && byId.text.isNotBlank()) return byId.text.trim()
-
-        // 文本启发："抖音号：xxx"
+        val entries = mutableListOf<CommentEntry>()
+        var pendingNickname: String? = null
         for (n in nodes) {
-            val src = n.text.ifBlank { n.contentDescription }
-            val m = DOUYIN_ID_PREFIX_RE.find(src) ?: continue
-            val id = m.groupValues[1].trim()
-            if (id.isNotBlank()) return id
+            val idTail = n.resourceId.substringAfterLast("/")
+            if (idTail in nicknameIds && n.text.isNotBlank()) {
+                pendingNickname = n.text.trim()
+                continue
+            }
+            if (idTail in contentIds && n.text.isNotBlank() && pendingNickname != null) {
+                entries.add(CommentEntry(commenterId = pendingNickname, text = n.text.trim()))
+                pendingNickname = null
+            }
         }
-        return ""
+        return entries
     }
 
-    // ── 粉丝数 ───────────────────────────────────────────────────────────────
+    // ── 方案二：结构启发式 fallback（没有可靠 resourceId 时） ───────────────────
+    //
+    // 抖音评论列表项通常渲染顺序为：头像(无文字) → 昵称(短文本,常以数字/字母/中文名开头,
+    // 不含标点) → 正文(较长文本) → 元信息(如 "3天前"/"回复"/点赞数)。
+    // 用"短文本后紧跟一个较长文本"的相邻关系配对，比强行猜 resourceId 更稳。
 
-    private fun extractFollowers(nodes: List<NodeInfo>): String {
-        // resource-id 精确
-        val byId = nodes.firstOrNull { n ->
-            n.resourceId.endsWith(":id/tv_fans_count") ||
-                n.resourceId.endsWith(":id/follower_count") ||
-                n.resourceId.endsWith(":id/fans_count")
+    private val META_WORDS = setOf("回复", "赞", "展开", "点赞", "更多回复")
+    private val NICKNAME_LEN_RANGE = 1..20
+    private val CONTENT_MIN_LEN = 1
+
+    private fun extractByStructure(nodes: List<NodeInfo>): List<CommentEntry> {
+        val entries = mutableListOf<CommentEntry>()
+        var i = 0
+        while (i < nodes.size - 1) {
+            val candidate = nodes[i]
+            val nextText = nodes[i + 1]
+            val nickname = candidate.text.trim()
+            val content = nextText.text.trim()
+
+            val looksLikeNickname = nickname.isNotBlank() &&
+                nickname.length in NICKNAME_LEN_RANGE &&
+                !nickname.contains("：") && !nickname.contains(":") &&
+                nickname !in META_WORDS
+
+            val looksLikeContent = content.length >= CONTENT_MIN_LEN &&
+                content !in META_WORDS &&
+                !content.matches(Regex("""^\d+[天小时分钟秒]前$"""))
+
+            if (looksLikeNickname && looksLikeContent) {
+                entries.add(CommentEntry(commenterId = nickname, text = content))
+                i += 2
+            } else {
+                i += 1
+            }
         }
-        if (byId != null && byId.text.isNotBlank()) return byId.text.trim()
-
-        // contentDescription 启发："xxx 粉丝" 或 "粉丝 xxx"
-        val fansDescRe = Regex("""^([\d.万千亿kKwW,]+)\s*粉丝$""")
-        for (n in nodes) {
-            val src = n.contentDescription.ifBlank { n.text }
-            val m = fansDescRe.matchEntire(src.trim()) ?: continue
-            return m.groupValues[1]
-        }
-
-        // 相邻节点法：找到文本为"粉丝"的节点，取其前一个兄弟的数字
-        val fansLabelIdx = nodes.indexOfFirst { n ->
-            n.text.trim() == "粉丝" || n.contentDescription.trim() == "粉丝"
-        }
-        if (fansLabelIdx > 0) {
-            val prev = nodes[fansLabelIdx - 1]
-            val countText = prev.text.ifBlank { prev.contentDescription }
-            if (countText.isNotBlank()) return countText.trim()
-        }
-
-        return ""
-    }
-
-    // ── 简介 ─────────────────────────────────────────────────────────────────
-
-    private fun extractBio(nodes: List<NodeInfo>): String {
-        val byId = nodes.firstOrNull { n ->
-            n.resourceId.endsWith(":id/tv_user_desc") ||
-                n.resourceId.endsWith(":id/user_desc") ||
-                n.resourceId.endsWith(":id/user_bio") ||
-                n.resourceId.endsWith(":id/desc")
-        }
-        if (byId != null && byId.text.isNotBlank()) return byId.text.trim()
-
-        // 无 resourceId 时：text ≥ 10 字且不含 @ 的段落（常见简介特征）
-        return nodes.filter { n ->
-            n.resourceId.isEmpty() &&
-                n.text.length >= 10 &&
-                !n.text.startsWith("@") &&
-                !n.text.contains("粉丝") &&
-                !n.text.contains("关注") &&
-                !n.text.contains("获赞")
-        }.maxByOrNull { it.text.length }?.text?.trim() ?: ""
+        return entries
     }
 }

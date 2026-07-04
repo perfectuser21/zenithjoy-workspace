@@ -1,27 +1,36 @@
 package com.zenithjoy.agent.collect
 
 /**
- * 抖音主页采集结果。
- * 字段对齐服务端 keyword_collect_results 表：nickname / douyin_id / followers / bio。
+ * 抖音评论区采集结果。
+ *
+ * 采集目标不是视频作者本人，是评论区里给这条爆款视频留言的人——
+ * 这些人主动对该话题表达兴趣，是精准获客线索；作者本人只是搜索关键词定位到的参照账号。
+ *
+ * 字段对齐服务端已有接口 POST /api/acquisition/comment-score-result
+ * （commenter_id / text），复用同一份 keyword_task_id 语义。
  */
+data class CommentEntry(
+    val commenterId: String,
+    val text: String,
+) {
+    fun toMap(): Map<String, Any?> = mapOf(
+        "commenter_id" to commenterId,
+        "text" to text,
+    )
+}
+
 data class CollectResult(
     val ok: Boolean,
     val keyword: String,
-    val nickname: String = "",
-    val douyinId: String = "",
-    val followersCount: String = "",
-    val bio: String = "",
-    val profileUrl: String = "",
+    val videoUrl: String = "",
+    val comments: List<CommentEntry> = emptyList(),
     val error: String = "",
 ) {
     fun toMap(): Map<String, Any?> = mapOf(
         "ok" to ok,
         "keyword" to keyword,
-        "nickname" to nickname,
-        "douyin_id" to douyinId,
-        "followers_count" to followersCount,
-        "bio" to bio,
-        "profile_url" to profileUrl,
+        "video_url" to videoUrl,
+        "comments" to comments.map { it.toMap() },
         "error" to error.ifEmpty { null },
     )
 }
