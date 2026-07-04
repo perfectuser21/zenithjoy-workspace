@@ -804,7 +804,7 @@ describe('GET /api/acquisition/collect-tasks/:id/videos [BEHAVIOR]', () => {
   it('本 tenant 任务下有视频 → 200 + videos 数组含 video_id/title/thumbnail_url/publish_date/comment_count', async () => {
     const mod = await import('../db/connection');
     (mod.default.query as any)
-      .mockResolvedValueOnce({ rows: [{ id: VALID_TASK_ID }] }) // task 归属校验
+      .mockResolvedValueOnce({ rows: [{ id: VALID_TASK_ID, status: 'done', error_code: null, video_count: 1 }] }) // task 归属校验
       .mockResolvedValueOnce({
         rows: [{
           video_id: '7123456789',
@@ -830,6 +830,33 @@ describe('GET /api/acquisition/collect-tasks/:id/videos [BEHAVIOR]', () => {
     // 禁用字段
     expect(res.body.data).not.toHaveProperty('videoList');
     expect(res.body.data).not.toHaveProperty('items');
+  });
+
+  // regression(2026-07-04): 空状态需按任务真实状态判断，不能无条件显示"采集中"
+  it('响应含 task.status/error_code/video_count，供前端区分进行中/失败/真的没抓到 [REGRESSION]', async () => {
+    const mod = await import('../db/connection');
+    (mod.default.query as any)
+      .mockResolvedValueOnce({ rows: [{ id: VALID_TASK_ID, status: 'failed', error_code: 'NO_VIDEOS_FOUND', video_count: 0 }] })
+      .mockResolvedValueOnce({ rows: [] }); // 无视频记录
+    const res = await request(app)
+      .get(`/api/acquisition/collect-tasks/${VALID_TASK_ID}/videos`)
+      .set('x-test-tenant-id', 'tenant-a');
+    expect(res.status).toBe(200);
+    expect(res.body.data.task).toEqual({ status: 'failed', error_code: 'NO_VIDEOS_FOUND', video_count: 0 });
+    expect(res.body.data.videos).toEqual([]);
+  });
+
+  it('任务终态(done)但视频列表为空 → task.status=done 而不是伪装成进行中 [REGRESSION]', async () => {
+    const mod = await import('../db/connection');
+    (mod.default.query as any)
+      .mockResolvedValueOnce({ rows: [{ id: VALID_TASK_ID, status: 'stage_1_done', error_code: null, video_count: 2 }] })
+      .mockResolvedValueOnce({ rows: [] }); // acquisition_collect_videos 历史缺口（该表比部分任务晚上线）
+    const res = await request(app)
+      .get(`/api/acquisition/collect-tasks/${VALID_TASK_ID}/videos`)
+      .set('x-test-tenant-id', 'tenant-a');
+    expect(res.status).toBe(200);
+    expect(res.body.data.task.status).toBe('stage_1_done');
+    expect(res.body.data.videos).toEqual([]);
   });
 });
 
