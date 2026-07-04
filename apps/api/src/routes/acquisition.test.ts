@@ -926,12 +926,12 @@ describe('GET /api/acquisition/pending-keyword-tasks — tenant 隔离', () => {
     const { default: db } = await import('../db/connection');
     const TENANT_A = 'aaaaaaaa-0000-0000-0000-000000000001';
 
-    (db.query as any).mockResolvedValueOnce({ rows: [{ tenant_id: TENANT_A }] });
-    (db.query as any).mockResolvedValueOnce({ rows: [{ balance: 100 }] }); // 积分余额校验
+    (db.query as any).mockResolvedValueOnce({ rows: [{ tenant_id: TENANT_A }] }); // license lookup
+    (db.query as any).mockResolvedValueOnce({ rows: [{ balance: 100 }] });         // credit balance check
     (db.query as any).mockResolvedValueOnce({
       rows: [{ id: 'task-a1', keyword: '美甲', expanded_keywords: ['美甲', '指甲'] }],
     });
-    (db.query as any).mockResolvedValueOnce({ rows: [] });
+    (db.query as any).mockResolvedValueOnce({ rows: [] }); // UPDATE to processing
 
     const res = await request(app)
       .get('/api/acquisition/pending-keyword-tasks')
@@ -948,7 +948,8 @@ describe('GET /api/acquisition/pending-keyword-tasks — tenant 隔离', () => {
     const { default: db } = await import('../db/connection');
     const TENANT_B = 'bbbbbbbb-0000-0000-0000-000000000002';
 
-    (db.query as any).mockResolvedValueOnce({ rows: [{ tenant_id: TENANT_B }] });
+    (db.query as any).mockResolvedValueOnce({ rows: [{ tenant_id: TENANT_B }] });  // license lookup
+    (db.query as any).mockResolvedValueOnce({ rows: [{ balance: 100 }] });          // credit balance check
     (db.query as any).mockResolvedValueOnce({
       rows: [{ id: 'task-b1', keyword: '装修', expanded_keywords: ['装修'] }],
     });
@@ -959,10 +960,10 @@ describe('GET /api/acquisition/pending-keyword-tasks — tenant 隔离', () => {
       .set('x-agent-license', 'ZJ-B-TESTTEST');
 
     const calls = (db.query as any).mock.calls;
-    // SELECT tasks 必须带 tenant_id
-    expect(JSON.stringify(calls[1][1])).toContain(TENANT_B);
-    // UPDATE to processing 也必须带 tenant_id（防 TOCTOU 越权更新）
+    // SELECT tasks 必须带 tenant_id（calls[2] 因为 calls[1] 是余额校验）
     expect(JSON.stringify(calls[2][1])).toContain(TENANT_B);
+    // UPDATE to processing 也必须带 tenant_id（防 TOCTOU 越权更新）
+    expect(JSON.stringify(calls[3][1])).toContain(TENANT_B);
   });
 });
 
