@@ -205,6 +205,71 @@ export async function scoreLeads(pool: QueryablePool, tenantId: string): Promise
   return { scored };
 }
 
+// ── computeRelevanceScore：综合评论意向档位 + 频次 + 时效的真实相关性打分 ─────
+// 三信号公式（替代只看资料完整度的 heuristicScore）：
+//   grade 权重：高意向=100 / 精准=70 / 感兴趣=40 / null 或其他=20（取历史里最高档）
+//   频次加成：每多 1 条 +10，封顶 +50（5 条）
+//   时效衰减：取最新评论距 now 的天数，衰减系数 = max(0.3, 1 - 0.05*天数)（24h 内=1.0）
+//   最终 = min(100, round(最高档权重 × 衰减系数 + 频次加成))
+//   空数组 → 回落 heuristicScore（老数据只有资料完整度可判）
+export interface LeadComment {
+  grade: string | null;
+  commented_at: Date | string;
+}
+
+function gradeWeight(grade: string | null): number {
+  switch (grade) {
+    case '高意向': return 100;
+    case '精准': return 70;
+    case '感兴趣': return 40;
+    default: return 20;
+  }
+}
+
+export function computeRelevanceScore(comments: LeadComment[], now: Date = new Date()): number {
+  if (!comments || comments.length === 0) {
+    return heuristicScore({});
+  }
+  const maxWeight = Math.max(...comments.map((c) => gradeWeight(c.grade)));
+  const freqBonus = Math.min(50, comments.length * 10);
+  const latestMs = Math.max(...comments.map((c) => new Date(c.commented_at).getTime()));
+  const days = Math.max(0, Math.floor((now.getTime() - latestMs) / 86_400_000));
+  const decay = Math.max(0.3, 1 - 0.05 * days);
+  return Math.min(100, Math.round(maxWeight * decay + freqBonus));
+}
+
+// ── rescoreLead：查某 lead 全部评论历史 → 重算 relevance_score + 汇总字段 ────
+// 从 acquisition_lead_comments 拉全量记录（用 COUNT/MAX 语义直接从真实行算，
+// 不依赖调用方维护的冗余 comment_count/last_commented_at，防竞态）。
+export async function rescoreLead(
+  pool: QueryablePool,
+  tenantId: string,
+  leadId: string,
+  now: Date = new Date()
+): Promise<{ score: number; comment_count: number }> {
+  const r = await pool.query(
+    `SELECT c.grade, c.commented_at
+       FROM zenithjoy.acquisition_lead_comments c
+       JOIN zenithjoy.acquisition_leads l ON l.id = c.lead_id AND l.tenant_id = $1
+      WHERE c.lead_id = $2
+      ORDER BY c.commented_at ASC`,
+    [tenantId, leadId]
+  );
+  const comments: LeadComment[] = r.rows.map((row) => ({ grade: row.grade, commented_at: row.commented_at }));
+  const score = computeRelevanceScore(comments, now);
+  const commentCount = comments.length;
+  const lastCommentedAt = commentCount > 0
+    ? new Date(Math.max(...comments.map((c) => new Date(c.commented_at).getTime()))).toISOString()
+    : null;
+  await pool.query(
+    `UPDATE zenithjoy.acquisition_leads
+        SET relevance_score = $3, comment_count = $4, last_commented_at = $5, updated_at = now()
+      WHERE tenant_id = $1 AND id = $2`,
+    [tenantId, leadId, score, commentCount, lastCommentedAt]
+  );
+  return { score, comment_count: commentCount };
+}
+
 // ── 时段工具：now 是否在 [start,end] HH:MM 区间内（按 now 的本地小时分钟）──
 export function parseHHMM(s: string): number {
   const m = HHMM_RE.exec(s);
