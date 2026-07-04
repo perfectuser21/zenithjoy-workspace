@@ -7,10 +7,10 @@ test.describe('Line02 Dashboard IA 重做 — Hub GP 顺序 + 触达记录视图
     await page.goto(`${BASE_URL}/area/acquisition`);
     await page.screenshot({ path: 'sprints/07041249-line02-dashboard-ia-redesign/screenshots/01-hub-page.png', fullPage: true });
 
-    await expect(page.getByText('绑抖音小号')).toBeVisible();
-    await expect(page.getByText('采集')).toBeVisible();
-    await expect(page.getByText('看线索')).toBeVisible();
-    await expect(page.getByText('触达记录')).toBeVisible();
+    await expect(page.getByText('绑抖音小号').first()).toBeVisible();
+    await expect(page.getByText('采集').first()).toBeVisible();
+    await expect(page.getByText('看线索').first()).toBeVisible();
+    await expect(page.getByText('触达记录').first()).toBeVisible();
     await expect(page.getByText('即将上线')).not.toBeVisible();
   });
 
