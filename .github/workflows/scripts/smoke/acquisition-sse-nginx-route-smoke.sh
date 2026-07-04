@@ -32,23 +32,34 @@ check_config() {
     const conf = fs.readFileSync('$conf_file', 'utf-8');
     const targetPath = '/api/acquisition/agent/task-stream';
 
-    const blocks = [];
-    const re = /location\s*~\s*(\S+)\s*\{([^}]*)\}/g;
-    let m;
-    while ((m = re.exec(conf)) !== null) {
-      blocks.push({ pattern: m[1], body: m[2] });
+    // nginx location 匹配优先级：精确匹配(=) > 最长前缀 > 正则(~)。
+    // 这里只需要判断是否有一条 location 命中 targetPath——先查精确匹配，再查正则。
+    const exactBlocks = [];
+    const exactRe = /location\s*=\s*(\S+)\s*\{([^}]*)\}/g;
+    let em;
+    while ((em = exactRe.exec(conf)) !== null) {
+      exactBlocks.push({ pattern: em[1], body: em[2] });
     }
 
-    let matched = null;
-    for (const b of blocks) {
-      try {
-        const regex = new RegExp(b.pattern);
-        if (regex.test(targetPath)) {
-          matched = b;
-          break;
+    const regexBlocks = [];
+    const regexRe = /location\s*~\s*(\S+)\s*\{([^}]*)\}/g;
+    let m;
+    while ((m = regexRe.exec(conf)) !== null) {
+      regexBlocks.push({ pattern: m[1], body: m[2] });
+    }
+
+    let matched = exactBlocks.find((b) => b.pattern === targetPath) || null;
+    if (!matched) {
+      for (const b of regexBlocks) {
+        try {
+          const regex = new RegExp(b.pattern);
+          if (regex.test(targetPath)) {
+            matched = b;
+            break;
+          }
+        } catch (e) {
+          // 忽略无法解析的正则
         }
-      } catch (e) {
-        // 忽略无法解析的正则
       }
     }
 
