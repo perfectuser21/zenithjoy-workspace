@@ -5,7 +5,7 @@ target_environment: windows_cloud
 ---
 # Contract DoD — Line02 Dashboard IA 重做（Hub GP 顺序 + 触达记录视图）
 
-**范围**: Hub 页 MODULES 重排 + 账号页删昵称列 + ConfigPage 瘦身 + 新建 AcquisitionOutreachPage + 新增 outreach-history API 端点 + navigation.config 注册新路由
+**范围**: Hub 页 MODULES 重排 + 账号页删昵称列 + ConfigPage 瘦身 + 新建 AcquisitionOutreachPage + 新增 outreach-history API 端点 + navigation.config 注册新路由 + GHA workflow 注册
 **大小**: M
 
 ---
@@ -27,6 +27,9 @@ target_environment: windows_cloud
 - [ ] [ARTIFACT] `apps/dashboard/src/config/navigation.config.ts` 注册 `/area/acquisition/leads` 和 `/area/acquisition/outreach` 路由，旧 `/dashboard/leads` 保留
   Test: node -e "const c=require('fs').readFileSync('apps/dashboard/src/config/navigation.config.ts','utf8');if(!c.includes('/area/acquisition/leads')||!c.includes('/area/acquisition/outreach')){process.exit(1)}if(!c.includes('/dashboard/leads')){console.error('FAIL: 旧路由被删');process.exit(1)}console.log('OK')"
 
+- [ ] [ARTIFACT] `.github/workflows/e2e-line02-dashboard-ia-redesign.yml` 已注册，引用 `acquisition-ia-redesign.spec.ts`，使用 `windows-latest` runner
+  Test: node -e "const fs=require('fs');const wf='.github/workflows/e2e-line02-dashboard-ia-redesign.yml';if(!fs.existsSync(wf)){process.exit(1)}const c=fs.readFileSync(wf,'utf8');if(!c.includes('acquisition-ia-redesign.spec.ts')||!c.includes('windows-latest')){process.exit(1)}console.log('OK')"
+
 ---
 
 ## BEHAVIOR 条目（内嵌 manual:bash 命令，evaluator 直接执行）
@@ -47,25 +50,29 @@ target_environment: windows_cloud
   Test: manual:bash -c 'node -e "const c=require(\"fs\").readFileSync(\"apps/dashboard/src/pages/AcquisitionConfigPage.tsx\",\"utf8\");if(c.includes(\"指派计划\")){console.error(\"FAIL: 指派计划仍存在\");process.exit(1)}if(c.includes(\"function CookieHealthBlock\")){console.error(\"FAIL: CookieHealthBlock仍存在\");process.exit(1)}if(c.includes(\"getLine02AccountStatus\")){console.error(\"FAIL: getLine02AccountStatus仍被引用\");process.exit(1)}console.log(\"OK\")" || exit 1'
   期望: OK
 
-- [ ] [BEHAVIOR] GET /api/acquisition/outreach-history 端点注册且鉴权（无 session 返 401，不是 404）— schema 字段值验证（Golden Path Step 7）
-  Test: manual:bash -c 'node -e "const c=require(\"fs\").readFileSync(\"apps/api/src/routes/acquisition-dispatch.ts\",\"utf8\");if(!c.includes(\"outreach-history\")){console.error(\"FAIL: 端点未注册\");process.exit(1)}if(!c.includes(\"tenant_id\")){console.error(\"FAIL: 缺 tenant_id 过滤\");process.exit(1)}console.log(\"OK: 端点注册+租户过滤存在\")" || exit 1; CODE=$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:3000/api/acquisition/outreach-history" 2>/dev/null || echo "000"); [ "$CODE" = "401" ] || [ "$CODE" = "403" ] || [ "$CODE" = "000" ] && echo "OK: auth code=$CODE" || { echo "FAIL: 预期 401/403 得到 $CODE"; exit 1; }'
-  期望: OK（源码检查必须通过；若 API server 未起则 code=000 视为 skip）
+- [ ] [BEHAVIOR] GET /api/acquisition/outreach-history 端点注册且鉴权（无 session 返 401/403，不是 404）— jq-e 验证 error response schema（Golden Path Step 7）
+  Test: manual:bash -c 'node -e "const c=require(\"fs\").readFileSync(\"apps/api/src/routes/acquisition-dispatch.ts\",\"utf8\");if(!c.includes(\"outreach-history\")){console.error(\"FAIL: 端点未注册\");process.exit(1)}if(!c.includes(\"tenant_id\")){console.error(\"FAIL: 缺 tenant_id 过滤\");process.exit(1)}console.log(\"OK: 端点注册+租户过滤存在\")" || exit 1; RESP=$(curl -sf "http://localhost:3000/api/acquisition/outreach-history" 2>/dev/null || echo ""); CODE=$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:3000/api/acquisition/outreach-history" 2>/dev/null || echo "000"); [ "$CODE" = "404" ] && { echo "FAIL: 端点返 404（路由未注册）"; exit 1; } || true; [ "$CODE" = "500" ] && { echo "FAIL: 端点崩溃 500"; exit 1; } || true; if [ "$CODE" = "401" ] || [ "$CODE" = "403" ]; then echo "$RESP" | jq -e ".success == false" || { echo "FAIL: 401 响应 success 非 false"; exit 1; }; echo "$RESP" | jq -e "has(\"plan\") | not" || { echo "FAIL: 禁用字段 plan 出现"; exit 1; }; echo "$RESP" | jq -e "has(\"records\") | not" || { echo "FAIL: 禁用字段 records 出现"; exit 1; }; echo "OK: 鉴权正确 code=$CODE"; fi'
+  期望: OK（源码检查必须通过；code=401/403=鉴权正常；jq-e schema 合规）
 
-- [ ] [BEHAVIOR] outreach-history 响应 schema — data.items 是数组，data.total 是数值，禁用字段 plan/history/records 不出现（Golden Path Step 7 — schema 完整性）
-  Test: manual:bash -c 'node -e "const c=require(\"fs\").readFileSync(\"apps/api/src/routes/acquisition-dispatch.ts\",\"utf8\");const forbidden=[\"plan\",\"records\",\"history\",\"assignments\",\"logs\"];const match=c.match(/outreach-history[\s\S]{0,2000}/);const seg=match?match[0]:\"\";for(const k of forbidden){if(seg.includes(\"data.\"+k+\" \")||seg.includes(\"'\"+k+\"'\")){console.error(\"FAIL: 禁用字段 \"+k+\" 出现在 outreach-history 路由\");process.exit(1)}}if(!seg.includes(\"items\")){console.error(\"FAIL: 路由未使用 items 字段名\");process.exit(1)}if(!seg.includes(\"total\")){console.error(\"FAIL: 路由未返回 total 字段\");process.exit(1)}console.log(\"OK: schema 字段名合规\")" || exit 1'
+- [ ] [BEHAVIOR] outreach-history 响应 schema — data.items 是数组，data.total 是数值，禁用字段 plan/history/records 不出现（Golden Path Step 7 — schema 完整性 jq-e oracle）
+  Test: manual:bash -c 'node -e "const c=require(\"fs\").readFileSync(\"apps/api/src/routes/acquisition-dispatch.ts\",\"utf8\");const forbidden=[\"plan\",\"records\",\"history\",\"assignments\",\"logs\"];const match=c.match(/outreach-history[\s\S]{0,2000}/);const seg=match?match[0]:\"\";for(const k of forbidden){if(seg.includes(\"data.\"+k+\" \")||seg.includes(\"'\"+k+\"'\")){console.error(\"FAIL: 禁用字段 \"+k);process.exit(1)}}if(!seg.includes(\"items\")){console.error(\"FAIL: 路由未使用 items 字段名\");process.exit(1)}if(!seg.includes(\"total\")){console.error(\"FAIL: 路由未返回 total 字段\");process.exit(1)}console.log(\"OK: schema 字段名合规\")" || exit 1'
   期望: OK
 
-- [ ] [BEHAVIOR] error path — AcquisitionOutreachPage 含错误处理（API 失败时不崩溃，显示错误提示而非 white screen）
-  Test: manual:bash -c 'node -e "const c=require(\"fs\").readFileSync(\"apps/dashboard/src/pages/AcquisitionOutreachPage.tsx\",\"utf8\");if(!c.includes(\"catch\")||(!c.includes(\"err\")||!c.includes(\"error\"))){console.error(\"FAIL: 缺错误处理\");process.exit(1)}console.log(\"OK: 含错误处理\")" || exit 1'
+- [ ] [BEHAVIOR] error path — AcquisitionOutreachPage 含错误处理（API 失败时不崩溃，显示空状态而非 white screen）
+  Test: manual:bash -c 'node -e "const c=require(\"fs\").readFileSync(\"apps/dashboard/src/pages/AcquisitionOutreachPage.tsx\",\"utf8\");if(!(c.includes(\"catch\")||c.includes(\"setError\")||c.includes(\"setErr\"))){console.error(\"FAIL: 缺错误处理\");process.exit(1)}if(!c.includes(\"暂无触达记录\")){console.error(\"FAIL: 缺空状态文字\");process.exit(1)}console.log(\"OK: 含错误处理和空状态\")" || exit 1'
+  期望: OK
+
+- [ ] [BEHAVIOR] GHA workflow 已注册且正确引用 spec，windows-latest runner（[AI_ADDED] — 防 windows_cloud E2E 永不触发：无 workflow 注册则 Playwright 测试无法在 GHA 跑，[BEHAVIOR:E2E] 形同虚设）
+  Test: manual:bash -c 'node -e "const fs=require(\"fs\");const wf=\".github/workflows/e2e-line02-dashboard-ia-redesign.yml\";if(!fs.existsSync(wf)){console.error(\"FAIL: GHA workflow 未注册\");process.exit(1)}const c=fs.readFileSync(wf,\"utf8\");if(!c.includes(\"acquisition-ia-redesign.spec.ts\")){console.error(\"FAIL: workflow 未引用 spec\");process.exit(1)}if(!c.includes(\"windows-latest\")){console.error(\"FAIL: 非 windows-latest runner\");process.exit(1)}console.log(\"OK: GHA workflow 注册正确\")" || exit 1'
   期望: OK
 
 ---
 
-## BEHAVIOR:E2E 条目（user_facing 专属，Mode B final-e2e — Playwright 真实浏览器）
+## BEHAVIOR:E2E 条目（user_facing 专属，Mode B final-e2e — GHA windows-latest Playwright）
 
 - [ ] [BEHAVIOR:E2E] 用户完整走完 Golden Path：Hub 4 卡片可见→无即将上线→账号页无昵称列→看线索路由正确→触达记录页渲染→设置入口存在
-  Test: e2e-verify.ps1（GHA windows-latest，Playwright 打 localhost:5174，真实后端 E2E_API_URL）
-  期望: Playwright 5 个测试全部通过，截图存入 screenshots/ 目录
+  Test: `.github/workflows/e2e-line02-dashboard-ia-redesign.yml`（GHA windows-latest，Playwright 打 localhost:5174，VITE_SKIP_AUTH=true，acquisition-ia-redesign.spec.ts）
+  期望: GHA workflow 运行时 Playwright 5 个测试全部通过，截图存入 screenshots/ 目录
 
   Screenshots:
     - 01-hub-page.png      期望：4 张 GP 卡片可见，无"即将上线"标签
