@@ -26,12 +26,14 @@ describe('wechat.ts — router export', () => {
     expect(paths).not.toContain('/draft-review-poll');
   });
 
-  it('registers exactly 10 unique endpoints (去飞书删 draft-review-poll：4 原有 + 3 关键人出站 + S3 汇总 + S4 日报×2)', () => {
+  it('registers exactly 11 unique endpoints (去飞书删 draft-review-poll：4 原有 + 1 draft-delivered(v1.0.107) + 3 关键人出站 + S3 汇总 + S4 日报×2)', () => {
     const stack = (wechatRouter as any).stack;
     const paths = [...new Set(stack.filter((l: any) => l.route).map((l: any) => l.route.path))];
     // 原有 4：qr-bind / scheduler-tick / draft-generate / listener-heartbeat（draft-review-poll 已删）
     expect(paths).toContain('/draft-generate');
     expect(paths).toContain('/listener-heartbeat');
+    // v1.0.107 Bug2修复：真机 DELIVERED 后落 out 行
+    expect(paths).toContain('/draft-delivered');
     // iLink 个人号通道已彻底删除（用户否决，决策 9d2234ba）—— 不应再注册任何 ilink-* 端点
     expect(paths).not.toContain('/ilink-login-start');
     expect(paths).not.toContain('/ilink-poller-start');
@@ -44,6 +46,6 @@ describe('wechat.ts — router export', () => {
     // S4：客服日报（结算 + 回看）
     expect(paths).toContain('/cs/daily-report/settle');
     expect(paths).toContain('/cs/daily-report');
-    expect(paths.length).toBe(10);
+    expect(paths.length).toBe(11);
   });
 });

@@ -469,8 +469,7 @@ export async function generateChatDraft(
   // 此前在此写 out 行会导致 UIA 发送失败时 wechat_messages 有虚假 out 记录。
 
   console.info(`[wechat-draft] auto-send sender=${sender} reply_len=${aiContent.length}`);
-  return { ok: true, status: 'sent', task_id: taskId, draft_id: '', reply: aiContent,
-           _contact_key: contactKey, _cs_wechat_id: csWechatId };
+  return { ok: true, status: 'sent', task_id: taskId, draft_id: '', reply: aiContent };
 }
 
 /**
@@ -515,8 +514,8 @@ export async function commitDelivered(params: {
   // 反查 csWechatId（同 generateChatDraft 路径）
   let csWechatId: string | null = null;
   try {
-    csWechatId = agent_id ? await resolveCsWechatIdByAgentId(pool, agent_id) : null;
-  } catch (_e) { /* 反查失败不阻塞 */ }
+    csWechatId = agent_id ? await resolveCsWechatIdByAgentId(agent_id) : null;
+  } catch { /* 反查失败不阻塞 */ }
   try {
     await appendMessage(contactKey, sender, 'out', reply, csWechatId);
     await consolidate(contactKey);

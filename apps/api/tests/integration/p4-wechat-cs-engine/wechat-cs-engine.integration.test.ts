@@ -23,6 +23,7 @@ const mockedAxios = vi.mocked(axios, true);
 import pool from '../../../src/db/connection';
 import {
   generateChatDraft,
+  commitDelivered,
   _resetFeishuTokenCache,
 } from '../../../src/services/wechat-draft';
 import {
@@ -147,12 +148,16 @@ describe('微信客服引擎 — 端到端 mock', () => {
 
   it('② 跨轮长期记忆 + ③ 三层落库 + ④ 三口井', async () => {
     // 第 1 轮：客户说对花生过敏
-    await generateChatDraft({
+    const res1 = await generateChatDraft({
       sender: SENDER,
       wechat_id: WECHAT_ID,
       content: '我对花生过敏，你们套餐里有花生吗',
       mode: 'auto',
     });
+    // v1.0.107 Bug2修复：out 行不在 generateChatDraft 写，需模拟 DELIVERED 回调
+    if (res1.reply) {
+      await commitDelivered({ sender: SENDER, wechat_id: WECHAT_ID, reply: res1.reply });
+    }
     // 强制固化，把"对花生过敏"抽进长期记忆（真 DB）
     await consolidate(CONTACT_KEY, { force: true });
 
