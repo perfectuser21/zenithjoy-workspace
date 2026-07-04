@@ -1,6 +1,6 @@
 import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest';
 import { render, screen, cleanup, waitFor, fireEvent } from '@testing-library/react';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import AcquisitionTasksPage from './AcquisitionTasksPage';
 
 const BURNER_SESSIONS = [
@@ -106,5 +106,65 @@ describe('AcquisitionTasksPage — 方案D burner 账号选择 [BEHAVIOR]', () =
     fireEvent.change(input, { target: { value: '美甲' } });
     const btn = screen.getByText('开始采集') as HTMLButtonElement;
     expect(btn.disabled).toBe(true);
+  });
+});
+
+// regression(2026-07-04): 任务详情页空状态提示必须按任务真实状态区分，不能无条件说"采集中"
+describe('AcquisitionTasksPage — 任务详情空状态按真实状态区分 [REGRESSION]', () => {
+  function renderTaskDetail(taskId: string) {
+    return render(
+      <MemoryRouter initialEntries={[`/area/acquisition/tasks/${taskId}`]}>
+        <Routes>
+          <Route path="/area/acquisition/tasks/:taskId" element={<AcquisitionTasksPage />} />
+        </Routes>
+      </MemoryRouter>
+    );
+  }
+
+  it('任务 status=failed → 显示失败原因，不显示"采集中"', async () => {
+    global.fetch = mockFetchByUrl({
+      '/api/acquisition/collect-tasks/task-failed/videos': {
+        success: true,
+        data: { videos: [], total: 0, task: { status: 'failed', error_code: 'NO_VIDEOS_FOUND', video_count: 0 } },
+      },
+    }) as unknown as typeof fetch;
+
+    renderTaskDetail('task-failed');
+
+    await waitFor(() => {
+      expect(screen.getByText(/采集失败.*没有搜到相关视频/)).toBeTruthy();
+    });
+    expect(screen.queryByText('采集中，稍后刷新查看视频结果')).toBeNull();
+  });
+
+  it('任务终态(stage_1_done)但无视频记录 → 显示"未抓到任何视频"，不显示"采集中"', async () => {
+    global.fetch = mockFetchByUrl({
+      '/api/acquisition/collect-tasks/task-done-empty/videos': {
+        success: true,
+        data: { videos: [], total: 0, task: { status: 'stage_1_done', error_code: null, video_count: 2 } },
+      },
+    }) as unknown as typeof fetch;
+
+    renderTaskDetail('task-done-empty');
+
+    await waitFor(() => {
+      expect(screen.getByText('未抓到任何视频')).toBeTruthy();
+    });
+    expect(screen.queryByText('采集中，稍后刷新查看视频结果')).toBeNull();
+  });
+
+  it('任务真的在跑(status=running)且无视频 → 仍显示"采集中，稍后刷新"', async () => {
+    global.fetch = mockFetchByUrl({
+      '/api/acquisition/collect-tasks/task-running/videos': {
+        success: true,
+        data: { videos: [], total: 0, task: { status: 'running', error_code: null, video_count: 0 } },
+      },
+    }) as unknown as typeof fetch;
+
+    renderTaskDetail('task-running');
+
+    await waitFor(() => {
+      expect(screen.getByText('采集中，稍后刷新查看视频结果')).toBeTruthy();
+    });
   });
 });
