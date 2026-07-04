@@ -4082,6 +4082,23 @@ agent_suite:
 
   - id: line02-acquisition-dispatch-smoke
     path: .github/workflows/scripts/smoke/acquisition-dispatch-smoke.sh
+
+  - id: line02-dispatch-real-scheduling-tdd
+    path: sprints/07032333-line02-dispatch-real-scheduling/tests/buildAssignments-dispatch.test.ts
+    type: unit
+    ci: L4
+    status: active
+    product: 私域运营
+    note: "Line02 真调度升级 TDD — buildAssignments 在线感知(last_heartbeat_at 2min阈值)+最少负载排序+dispatch_reason+pending_dispatch+queued_remap+重试+租户隔离。10例合同测试。"
+
+  - id: line02-dispatch-real-scheduling-smoke
+    path: .github/workflows/scripts/smoke/acquisition-dispatch-real-scheduling-smoke.sh
+    type: smoke
+    ci: L4
+    status: active
+    product: 私域运营
+    note: "Line02 真调度 smoke(:5200+postgres)：无认证401+NO_TENANT → 在线build验dispatch_reason=least_load+data.pending=number → 模拟掉线验queued_remap(queued→pending_dispatch) → 恢复在线验重试清零。"
+
   - id: line02-acquisition-config-ui-smoke
     path: .github/workflows/scripts/smoke/acquisition-config-ui-smoke.sh
     type: smoke

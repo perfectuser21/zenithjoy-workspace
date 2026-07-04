@@ -240,6 +240,7 @@ export interface BuildResult {
   skipped_dedup: number;
   skipped_budget: number;
   burners: string[];
+  pending: number;
 }
 
 export async function buildAssignments(
@@ -248,35 +249,64 @@ export async function buildAssignments(
   now: Date = new Date()
 ): Promise<BuildResult> {
   const cfg = await getConfig(pool, tenantId);
+  const nowIso = now.toISOString();
 
-  // ① 活跃 burner 小号（role=burner status=active，最多 burner_count 个，account_label 去重）
+  // ★ Step B: 查在线 burner 小号，按当天已派任务量升序（最少负载优先）
   const burnersRes = await pool.query(
-    `SELECT DISTINCT s.account_label
+    `SELECT s.account_label,
+       COALESCE((
+         SELECT count(*) FROM zenithjoy.dm_assignments da2
+          WHERE da2.tenant_id = $1
+            AND da2.account_label = s.account_label
+            AND da2.status IN ('queued','dispatched','sent')
+            AND date_trunc('day', da2.scheduled_for) = date_trunc('day', $3::timestamptz)
+       ), 0) AS day_count
        FROM zenithjoy.agent_platform_sessions s
-       JOIN zenithjoy.agents a ON a.id = s.agent_id
-      WHERE a.tenant_id = $1 AND s.role = 'burner' AND s.status = 'active'
-      ORDER BY s.account_label ASC
+       JOIN zenithjoy.agents a ON a.id = s.agent_id AND a.tenant_id = $1
+      WHERE s.role = 'burner'
+        AND s.status = 'active'
+        AND a.last_heartbeat_at > $3::timestamptz - INTERVAL '2 minutes'
+      GROUP BY s.account_label
+      ORDER BY day_count ASC
       LIMIT $2`,
-    [tenantId, cfg.burner_count]
+    [tenantId, cfg.burner_count, nowIso]
   );
-  const burners: string[] = burnersRes.rows.map((r) => r.account_label).filter(Boolean);
-  if (burners.length === 0) {
-    return { assigned: 0, skipped_dedup: 0, skipped_budget: 0, burners: [] };
+  const burners: string[] = burnersRes.rows.map((r: { account_label: string }) => r.account_label).filter(Boolean);
+
+  // ★ Step A: 重标离线 burner 的 queued 行为 pending_dispatch
+  // 先 SELECT 所有未到期 queued 行，对不在在线 burner 白名单中的逐行 UPDATE → pending_dispatch
+  const queuedRemapRes = await pool.query(
+    `SELECT id, lead_id, account_label
+       FROM zenithjoy.dm_assignments
+      WHERE tenant_id = $1 AND status = 'queued' AND scheduled_for > $2::timestamptz`,
+    [tenantId, nowIso]
+  );
+  const onlineBurnerSet = new Set(burners);
+  for (const qRow of queuedRemapRes.rows as { id: string; lead_id: string; account_label: string }[]) {
+    if (!onlineBurnerSet.has(qRow.account_label)) {
+      await pool.query(
+        `UPDATE zenithjoy.dm_assignments
+           SET status = 'pending_dispatch', account_label = '', scheduled_for = NULL,
+               dispatch_reason = NULL, updated_at = now()
+         WHERE id = $1 AND status = 'queued'`,
+        [qRow.id]
+      );
+    }
   }
 
-  // ② 已评分 leads 按 relevance_score 降序
-  const leadsRes = await pool.query(
-    `SELECT id, profile_url, COALESCE(relevance_score, 0) AS relevance_score
-       FROM zenithjoy.acquisition_leads
-      WHERE tenant_id = $1 AND relevance_score IS NOT NULL
-      ORDER BY relevance_score DESC, created_at ASC`,
+  // ★ Step C: 获取上一轮积压的 pending_dispatch leads（优先重试，含 Step A 刚重标的行）
+  const pendingRes = await pool.query(
+    `SELECT id, lead_id, account_label
+       FROM zenithjoy.dm_assignments
+      WHERE tenant_id = $1 AND status = 'pending_dispatch'
+      ORDER BY created_at ASC`,
     [tenantId]
   );
+  const pendingRows = pendingRes.rows as { id: string; lead_id: string; account_label: string }[];
+  const pendingLeadIds = new Set(pendingRows.map((r) => r.lead_id));
 
-  // ⑤ 频控预算：每号当天/当前小时已用量（已 queued/dispatched 的指派 + 24h 真发日志 合并计已占用）
-  // 这里以"今天已派 + 今天已发"为天预算消耗，"本小时已派 + 本小时已发"为小时预算消耗。
+  // 频控预算（天）
   const perDayUsed = new Map<string, number>();
-  const perHourUsed = new Map<string, number>();
   for (const label of burners) {
     const dayRes = await pool.query(
       `SELECT
@@ -289,13 +319,12 @@ export async function buildAssignments(
             WHERE tenant_id = $1 AND account_label = $2
               AND sent_at >= date_trunc('day', $3::timestamptz)
               AND sent_at <  date_trunc('day', $3::timestamptz) + interval '1 day') AS used`,
-      [tenantId, label, now.toISOString()]
+      [tenantId, label, nowIso]
     );
     perDayUsed.set(label, Number(dayRes.rows[0]?.used ?? 0));
-    perHourUsed.set(label, 0); // 排期分布在时段内，简化为按 day 预算闸 + 排期间隔控小时节奏
   }
 
-  // 排期游标：每号下一条可排时间（从活跃时段起点 / now 起，按随机间隔递增）
+  // 排期游标
   const cursor = new Map<string, Date>();
   const startCursor = clampToWindowStart(now, cfg.dm_active_start);
   for (const label of burners) cursor.set(label, new Date(startCursor));
@@ -303,21 +332,100 @@ export async function buildAssignments(
   let assigned = 0;
   let skippedDedup = 0;
   let skippedBudget = 0;
-  let rr = 0; // round-robin 指针，轮换分摊各号负载
+  let pending = 0;
+  let rr = 0;
+
+  // ★ Step D: 有在线小号时，优先重试 pending_dispatch leads
+  if (burners.length > 0) {
+    for (const pendingRow of pendingRows) {
+      let placed = false;
+      for (let attempt = 0; attempt < burners.length; attempt++) {
+        const label = burners[(rr + attempt) % burners.length];
+
+        if ((perDayUsed.get(label) ?? 0) >= cfg.dm_per_day) {
+          skippedBudget += 1;
+          continue;
+        }
+
+        const dup = await pool.query(
+          `SELECT 1 FROM zenithjoy.dm_assignments
+             WHERE tenant_id = $1 AND lead_id = $2 AND account_label = $3
+           UNION ALL
+           SELECT 1 FROM zenithjoy.dm_outreach_log
+             WHERE tenant_id = $1 AND lead_id = $2 AND account_label = $3
+               AND sent_at >= $4::timestamptz - interval '24 hours'
+           LIMIT 1`,
+          [tenantId, pendingRow.lead_id, label, nowIso]
+        );
+        if (dup.rows.length > 0) {
+          skippedDedup += 1;
+          continue;
+        }
+
+        const gap = randInt(cfg.dm_interval_min_sec, cfg.dm_interval_max_sec);
+        let when = new Date(cursor.get(label)!.getTime() + gap * 1000);
+        if (!withinActiveWindow(when, cfg.dm_active_start, cfg.dm_active_end)) {
+          const nextDay = new Date(when);
+          nextDay.setDate(nextDay.getDate() + 1);
+          when = clampToWindowStart(nextDay, cfg.dm_active_start);
+        }
+        cursor.set(label, when);
+
+        // 将 pending_dispatch 行升级为 queued
+        await pool.query(
+          `UPDATE zenithjoy.dm_assignments
+           SET status = 'queued', account_label = $2, scheduled_for = $3,
+               dispatch_reason = $4, updated_at = now()
+           WHERE id = $1`,
+          [pendingRow.id, label, when.toISOString(), 'least_load']
+        );
+        perDayUsed.set(label, (perDayUsed.get(label) ?? 0) + 1);
+        assigned += 1;
+        rr = (rr + attempt + 1) % burners.length;
+        placed = true;
+        break;
+      }
+      if (!placed) {
+        pending += 1; // 本轮仍无法派发，保持 pending 计数
+      }
+    }
+  }
+
+  // ★ Step E: 处理已评分 leads（按分降序）
+  const leadsRes = await pool.query(
+    `SELECT id, profile_url, COALESCE(relevance_score, 0) AS relevance_score
+       FROM zenithjoy.acquisition_leads
+      WHERE tenant_id = $1 AND relevance_score IS NOT NULL
+      ORDER BY relevance_score DESC, created_at ASC`,
+    [tenantId]
+  );
 
   for (const lead of leadsRes.rows) {
-    // 轮换：从 rr 起找一个"预算未满 + 未重复指派"的号
+    if (burners.length === 0) {
+      // 全离线：写入 pending_dispatch（去重：同 (tenant,lead) 已有 pending 则跳过）
+      if (!pendingLeadIds.has(lead.id)) {
+        await pool.query(
+          `INSERT INTO zenithjoy.dm_assignments (tenant_id, lead_id, account_label, status)
+           VALUES ($1, $2, '', 'pending_dispatch')
+           ON CONFLICT (tenant_id, lead_id, account_label) DO NOTHING`,
+          [tenantId, lead.id]
+        );
+        pending += 1;
+        pendingLeadIds.add(lead.id);
+      }
+      continue;
+    }
+
+    // 有在线小号：轮换选最少负载号
     let placed = false;
     for (let attempt = 0; attempt < burners.length; attempt++) {
       const label = burners[(rr + attempt) % burners.length];
 
-      // ⑤ 天预算闸
       if ((perDayUsed.get(label) ?? 0) >= cfg.dm_per_day) {
         skippedBudget += 1;
         continue;
       }
 
-      // ④ 去重：(tenant,lead,label) 已在 dm_assignments 或 24h 内 dm_outreach_log
       const dup = await pool.query(
         `SELECT 1 FROM zenithjoy.dm_assignments
            WHERE tenant_id = $1 AND lead_id = $2 AND account_label = $3
@@ -326,18 +434,16 @@ export async function buildAssignments(
            WHERE tenant_id = $1 AND lead_id = $2 AND account_label = $3
              AND sent_at >= $4::timestamptz - interval '24 hours'
          LIMIT 1`,
-        [tenantId, lead.id, label, now.toISOString()]
+        [tenantId, lead.id, label, nowIso]
       );
       if (dup.rows.length > 0) {
         skippedDedup += 1;
         continue;
       }
 
-      // ⑥ scheduled_for：在 dm_active 时段内、随机间隔递增排期
       const gap = randInt(cfg.dm_interval_min_sec, cfg.dm_interval_max_sec);
       let when = new Date(cursor.get(label)!.getTime() + gap * 1000);
       if (!withinActiveWindow(when, cfg.dm_active_start, cfg.dm_active_end)) {
-        // 越过时段尾 → 顺延到次日时段起点
         const nextDay = new Date(when);
         nextDay.setDate(nextDay.getDate() + 1);
         when = clampToWindowStart(nextDay, cfg.dm_active_start);
@@ -345,23 +451,24 @@ export async function buildAssignments(
       cursor.set(label, when);
 
       await pool.query(
-        `INSERT INTO zenithjoy.dm_assignments (tenant_id, lead_id, account_label, status, scheduled_for)
-         VALUES ($1, $2, $3, 'queued', $4)
+        `INSERT INTO zenithjoy.dm_assignments
+           (tenant_id, lead_id, account_label, status, scheduled_for, dispatch_reason)
+         VALUES ($1, $2, $3, 'queued', $4, $5)
          ON CONFLICT (tenant_id, lead_id, account_label) DO NOTHING`,
-        [tenantId, lead.id, label, when.toISOString()]
+        [tenantId, lead.id, label, when.toISOString(), 'least_load']
       );
       perDayUsed.set(label, (perDayUsed.get(label) ?? 0) + 1);
       assigned += 1;
-      rr = (rr + attempt + 1) % burners.length; // 下一个 lead 从下一号开始
+      rr = (rr + attempt + 1) % burners.length;
       placed = true;
       break;
     }
     if (!placed) {
-      // 所有号都被预算/去重挡住，跳过此 lead
+      // 所有号都被预算/去重挡住（非离线导致），仍算 skipped
     }
   }
 
-  return { assigned, skipped_dedup: skippedDedup, skipped_budget: skippedBudget, burners };
+  return { assigned, skipped_dedup: skippedDedup, skipped_budget: skippedBudget, burners, pending };
 }
 
 function randInt(lo: number, hi: number): number {
