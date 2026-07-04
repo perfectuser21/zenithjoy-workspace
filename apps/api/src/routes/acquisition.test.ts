@@ -927,6 +927,7 @@ describe('GET /api/acquisition/pending-keyword-tasks — tenant 隔离', () => {
     const TENANT_A = 'aaaaaaaa-0000-0000-0000-000000000001';
 
     (db.query as any).mockResolvedValueOnce({ rows: [{ tenant_id: TENANT_A }] });
+    (db.query as any).mockResolvedValueOnce({ rows: [{ balance: 100 }] }); // 积分余额校验
     (db.query as any).mockResolvedValueOnce({
       rows: [{ id: 'task-a1', keyword: '美甲', expanded_keywords: ['美甲', '指甲'] }],
     });
