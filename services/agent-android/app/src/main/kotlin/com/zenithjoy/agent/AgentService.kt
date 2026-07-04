@@ -4,13 +4,24 @@ import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.Service
+import android.content.BroadcastReceiver
+import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.os.IBinder
+import com.google.gson.Gson
+import com.zenithjoy.agent.collect.CollectResult
+import com.zenithjoy.agent.collect.DouyinCollectService
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
+import java.util.concurrent.TimeUnit
 
 /**
  * Android 前台服务：Agent 核心运行时。
@@ -25,15 +36,41 @@ class AgentService : Service() {
 
     private val serviceJob = SupervisorJob()
     private val scope = CoroutineScope(Dispatchers.IO + serviceJob)
+    private val gson = Gson()
+    private val httpClient = OkHttpClient.Builder()
+        .connectTimeout(15, TimeUnit.SECONDS)
+        .readTimeout(15, TimeUnit.SECONDS)
+        .build()
 
     private lateinit var config: AgentConfig
     private var wsClient: WsClient? = null
     private var heartbeatLoop: HttpHeartbeatLoop? = null
 
+    private val collectResultReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            if (intent?.action != DouyinCollectService.ACTION_COLLECT_RESULT) return
+            val taskId = intent.getStringExtra(DouyinCollectService.EXTRA_TASK_ID) ?: ""
+            val ok = intent.getBooleanExtra(DouyinCollectService.EXTRA_RESULT_OK, false)
+            val result = CollectResult(
+                ok = ok,
+                keyword = "",
+                nickname = intent.getStringExtra(DouyinCollectService.EXTRA_RESULT_NICKNAME) ?: "",
+                douyinId = intent.getStringExtra(DouyinCollectService.EXTRA_RESULT_DOUYIN_ID) ?: "",
+                followersCount = intent.getStringExtra(DouyinCollectService.EXTRA_RESULT_FOLLOWERS) ?: "",
+                bio = intent.getStringExtra(DouyinCollectService.EXTRA_RESULT_BIO) ?: "",
+                error = intent.getStringExtra(DouyinCollectService.EXTRA_RESULT_ERROR) ?: "",
+            )
+            scope.launch { reportCollectResult(taskId, result) }
+        }
+    }
+
     override fun onCreate() {
         super.onCreate()
         config = AgentConfig(this)
         startForeground(NOTIFICATION_ID, buildNotification())
+        registerReceiver(collectResultReceiver,
+            IntentFilter(DouyinCollectService.ACTION_COLLECT_RESULT),
+            RECEIVER_NOT_EXPORTED)
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -50,6 +87,7 @@ class AgentService : Service() {
         wsClient?.stop()
         heartbeatLoop?.stop()
         serviceJob.cancel()
+        unregisterReceiver(collectResultReceiver)
         super.onDestroy()
     }
 
@@ -90,7 +128,7 @@ class AgentService : Service() {
             scope = scope,
             onMessage = { type, payload ->
                 android.util.Log.d(TAG, "ws0 message: $type")
-                // 无障碍服务采集逻辑留给下一个 task，此处只记录
+                if (type == "collect_task") routeCollectTask(payload)
             },
         )
         wsClient?.start()
@@ -101,7 +139,12 @@ class AgentService : Service() {
             scope = scope,
             onTask = { task ->
                 android.util.Log.i(TAG, "ws1 task: ${task.platform} id=${task.task_id}")
-                // 无障碍服务采集逻辑留给下一个 task，此处只记录
+                if (task.platform == "android_douyin") {
+                    val keyword = task.payload["keyword"] as? String ?: ""
+                    if (keyword.isNotBlank()) {
+                        DouyinCollectService.dispatchTask(this@AgentService, keyword, task.task_id)
+                    }
+                }
             },
             onHeartbeat = { resp ->
                 android.util.Log.d(TAG, "ws1 heartbeat ok, agent_id=${resp.agent_id}")
@@ -133,6 +176,35 @@ class AgentService : Service() {
             .setContentText(getString(R.string.notification_text))
             .setSmallIcon(android.R.drawable.ic_dialog_info)
             .build()
+    }
+
+    private fun routeCollectTask(payload: Map<*, *>) {
+        val keyword = payload["keyword"] as? String ?: return
+        val taskId = payload["task_id"] as? String ?: ""
+        if (keyword.isBlank()) return
+        android.util.Log.i(TAG, "ws0 collect_task keyword=$keyword id=$taskId")
+        DouyinCollectService.dispatchTask(this, keyword, taskId)
+    }
+
+    private fun reportCollectResult(taskId: String, result: CollectResult) {
+        if (taskId.isEmpty()) return
+        val url = "${config.deriveHttpBase()}/api/agent/task-result"
+        val body = gson.toJson(mapOf(
+            "task_id" to taskId,
+            "platform" to "android_douyin",
+            "result" to result.toMap(),
+        ))
+        try {
+            val request = Request.Builder()
+                .url(url)
+                .post(body.toRequestBody("application/json".toMediaType()))
+                .build()
+            httpClient.newCall(request).execute().use { resp ->
+                android.util.Log.i(TAG, "task-result reported: ${resp.code} task=$taskId")
+            }
+        } catch (e: Exception) {
+            android.util.Log.w(TAG, "task-result report failed: ${e.message}")
+        }
     }
 
     companion object {
