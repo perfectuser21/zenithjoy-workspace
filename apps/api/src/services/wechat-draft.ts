@@ -23,7 +23,8 @@ import { callOpenRouter } from '../llm/openrouter';
 import type { BusinessKB, ChatMessage, ContactFact, ContactMemory, Persona } from './wechat/types';
 import { retrieveRelevantKB } from './wechat/business-kb';
 import { getPersona, getBusinessKB } from './wechat/cs-config-store';
-import { getCSConfigByAgentId, resolveCsWechatIdByAgentId } from './wechat/cs-account-config-store';
+import { getCSConfigByAgentId } from './wechat/cs-account-config-store';
+import { resolveCsWechatIdentity } from './wechat/cs-identity-resolve';
 import {
   decideAutoSendRoute,
   ROUTE_SEND,
@@ -369,9 +370,14 @@ export async function generateChatDraft(
   // 的人设/知识库 + 解析客服微信号查 per-cs 黑名单。解不到 → null，回落全局（向后兼容）。
   const csConfig = agent_id ? await getCSConfigByAgentId(agent_id) : null;
   // S3 客服工作汇总：解析「处理本消息的客服微信号」给 in/out 落库盖身份章 + 查 per-cs 黑名单。
-  // 优先级：直传 cs_wechat_id（smoke 测试直传）> agent_id 解析链（普通 agent 调用）
-  const csWechatId: string | null =
-    params.cs_wechat_id ?? csConfig?.wechat_id ?? (agent_id ? await resolveCsWechatIdByAgentId(agent_id) : null);
+  // 三段链抽到 resolveCsWechatIdentity（回执路由共用，保证写行/回执归属逐字一致）：
+  // 直传 cs_wechat_id > csConfig?.wechat_id > resolveCsWechatIdByAgentId(agent_id)。csConfig 已为
+  // persona 加载，直接透传复用不重复查库。
+  const csWechatId: string | null = await resolveCsWechatIdentity({
+    directCsWechatId: params.cs_wechat_id,
+    agentId: agent_id,
+    csConfig,
+  });
 
   console.info(
     `[wechat-draft] generateChatDraft tenant_scope=${tenant_id ?? '<none>'} sender=${sender} is_group=${is_group}`,

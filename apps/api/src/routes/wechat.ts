@@ -25,7 +25,7 @@ import {
 import { getCsWorkStats, type StatsDate } from '../services/wechat/cs-work-stats';
 import { runDailyReportSettlement, getDailyReports } from '../services/wechat/cs-daily-report';
 import { markMessageReceipt } from '../services/wechat/contact-memory';
-import { resolveCsWechatIdByAgentId } from '../services/wechat/cs-account-config-store';
+import { resolveCsWechatIdentity } from '../services/wechat/cs-identity-resolve';
 
 export const wechatRouter = Router();
 
@@ -349,9 +349,10 @@ wechatRouter.post('/cs/outbound/:id/receipt', async (req: Request, res: Response
 // ─── POST /api/wechat/messages/:id/receipt  {ok, cs_wechat_id?/agent_id?} ───────
 // 假账修复第二段：draft-generate 落 out 行以 status='draft'（AI 已生成、真机未确认送达）。
 // agent 真机 UIA 发送后回报这里，把该 draft 行翻 delivered/failed，杜绝「中台记了但没真发」的假账。
-// 身份解析链与 draft-generate 一致：body.cs_wechat_id 直传优先，否则 body.agent_id 走反查
-// （resolveCsWechatIdByAgentId 与 draft 里 params.cs_wechat_id ?? … ?? resolveCsWechatIdByAgentId
-//  同源，中间 csConfig?.wechat_id 项被反查覆盖，此处不重复加载配置）。
+// 身份解析链与 draft-generate 逐字一致（共用 resolveCsWechatIdentity 三段链）：
+// body.cs_wechat_id 直传 > csConfig?.wechat_id > resolveCsWechatIdByAgentId(agent_id)。
+// 中间 csConfig 段不可省：手填 SSOT 场景 csConfig.wechat_id 可能与反查值不一致，draft 写行盖的
+// 是 csConfig 值，回执归属必须用同一值，否则 UPDATE 0 行、out 行卡 draft → 假账反向复发。
 wechatRouter.post('/messages/:id/receipt', async (req: Request, res: Response) => {
   const messageId = Number(req.params.id);
   if (!Number.isInteger(messageId) || messageId <= 0) {
@@ -361,8 +362,7 @@ wechatRouter.post('/messages/:id/receipt', async (req: Request, res: Response) =
   const directCs =
     typeof req.body?.cs_wechat_id === 'string' ? req.body.cs_wechat_id : undefined;
   const agentId = typeof req.body?.agent_id === 'string' ? req.body.agent_id : undefined;
-  const csWechatId: string | null =
-    directCs ?? (agentId ? await resolveCsWechatIdByAgentId(agentId) : null);
+  const csWechatId = await resolveCsWechatIdentity({ directCsWechatId: directCs, agentId });
   if (!csWechatId) {
     return res.status(403).json({ error: 'NO_CS_IDENTITY', message: '无法解析客服身份' });
   }
