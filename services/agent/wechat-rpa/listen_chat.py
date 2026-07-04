@@ -3408,6 +3408,37 @@ def post_outbound_receipt(
         print(f"[listen_chat] outbound receipt 失败 task={task_id}: {error}", file=sys.stderr)
 
 
+def post_message_receipt(
+    middleware_url: str,
+    message_id: Any,
+    ok: bool,
+    agent_id: Optional[str] = None,
+    timeout: int = 10,
+) -> None:
+    """回写单条客户消息的送达回执（bug2 下半：让中台不再记假账）。
+
+    message_id 来自 draft-generate 响应（number|null）。为 None/空 → 静默跳过（无 id 可回执）。
+    POST {middleware}/api/wechat/messages/{message_id}/receipt，body {ok, agent_id}
+    （身份字段名与 draft-generate 请求体一致，中台同链反查租户）。
+    失败重试一次；旧 API 404 / 任何非 2xx / 网络异常 → 只打一行日志，绝不抛、绝不阻塞发送主流程。
+    """
+    if message_id is None or message_id == "":
+        return
+    url = middleware_url.rstrip("/") + f"/api/wechat/messages/{message_id}/receipt"
+    body: Dict[str, Any] = {"ok": ok}
+    if agent_id:
+        body["agent_id"] = agent_id
+    # 回执非关键路径：失败重试一次即可（retries=2 = 1 次重试），别拖垮监听主循环。
+    _resp, error = _post_with_retry(
+        url, body, timeout=timeout, retries=2, backoff_base=0.5, max_total=5
+    )
+    if error is not None:
+        print(
+            f"[listen_chat] message receipt 失败 message_id={message_id} ok={ok}: {error}",
+            file=sys.stderr,
+        )
+
+
 def post_failure_alert(
     middleware_url: str,
     agent_id: Optional[str],
@@ -4259,6 +4290,9 @@ def run_real_listen(args: argparse.Namespace) -> int:
 
                 # 并行向中台要草稿文本（最多 5 路同时，避免压垮中台）；按 id(m) 存回复
                 drafts = {}
+                # 并行 dict：按 id(m) 存 draft-generate 返回的 message_id（送达回执用，bug2 下半）。
+                # 与 drafts 分开存，取用点少改动；message_id 缺省 None → post_message_receipt 自动跳过。
+                draft_message_ids = {}
                 if eligible:
                     import concurrent.futures
 
@@ -4286,6 +4320,7 @@ def run_real_listen(args: argparse.Namespace) -> int:
                                 _log(f"skip(no reply) sender={m['sender']} result_ok={(result or {}).get('ok')} err={(result or {}).get('error')}")
                                 continue
                             drafts[id(m)] = reply
+                            draft_message_ids[id(m)] = (result or {}).get("message_id")
 
                 # ── Phase 2: 串行发送（单微信窗口，切窗+发送只能逐个；_open_chat 身份闸门防串台）──
                 for m in eligible:
@@ -4338,9 +4373,21 @@ def run_real_listen(args: argparse.Namespace) -> int:
                         reply_failed_at.pop(key, None)
                         sender_reply_cooldown[m["sender"]] = time.time()  # per-sender 30s 冷却
                         _commit_reply_success(m, last_preview)  # DELIVERED
+                        # 真送达确认 → 回执中台 ok=True（bug2 下半：中台据此销账，不再记假账）。
+                        # 不进 _commit_reply_success 本体——它还被 replied/dup/roster_gate 终态复用，
+                        # 那些场景无 message_id。message_id 缺省时 post_message_receipt 自动跳过。
+                        post_message_receipt(
+                            args.middleware_url, draft_message_ids.get(id(m)), True,
+                            getattr(args, "agent_id", None),
+                        )
                         _log(f"auto-replied OK sender={m['sender']} receipt={receipt['status']}")
                     else:
                         reply_failed_at[key] = time.time()
+                        # 发送终态失败（读回失败/异常放弃本轮）→ 回执中台 ok=False，让中台知道这条没送达。
+                        post_message_receipt(
+                            args.middleware_url, draft_message_ids.get(id(m)), False,
+                            getattr(args, "agent_id", None),
+                        )
                         # 读回失败/掉线告警：auto_reply.alert_on_failure 产出关键人告警 payload（决策 SSOT）。
                         # 关键人由中台配置（auto_agent.key_contact_wechat）下发；agent 侧拿不到则 target 留空。
                         key_contact = getattr(args, "key_contact", "") or os.environ.get("ZJ_KEY_CONTACT", "")
