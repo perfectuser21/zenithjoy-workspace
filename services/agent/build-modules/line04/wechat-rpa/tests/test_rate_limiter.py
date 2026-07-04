@@ -19,6 +19,8 @@ import os
 import sys
 import time
 import uuid
+from datetime import datetime, timezone
+from unittest.mock import patch
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 WECHAT_RPA_DIR = os.path.abspath(os.path.join(HERE, ".."))
@@ -61,3 +63,30 @@ def test_chat_per_minute_limit():
     finally:
         rate_limiter.CHAT_PER_MINUTE = _saved
         reset(wid)
+
+
+def test_interval_check_uses_microsecond_precision():
+    """
+    回归测试：sent_at 存微秒精度，防止跨秒边界误判间隔。
+
+    场景：T1=43.999999s, T2=44.001000s（实际间隔 1.001ms < 1s），
+    若存秒精度 '43'，delta=T2-43.000=1.001s >= 1s → 误判通过。
+    若存微秒精度 '43.999999'，delta=T2-43.999999=0.001001s < 1s → 正确拒绝。
+    """
+    wid = _unique_id()
+    reset(wid)
+
+    T1 = datetime(2026, 7, 3, 18, 27, 43, 999000, tzinfo=timezone.utc)
+    T2 = datetime(2026, 7, 3, 18, 27, 44, 1000, tzinfo=timezone.utc)  # 仅 1.001ms 后
+
+    times = iter([T1, T2])
+
+    with patch("rate_limiter._now_utc", side_effect=lambda: next(times)):
+        ok1, _ = can_send("chat", wid)
+        ok2, next_at = can_send("chat", wid)
+
+    assert ok1 is True, "第 1 次应通过"
+    assert ok2 is False, "T1→T2 仅 1.001ms，应被 1s 间隔拒绝（微秒精度存储才能检测到）"
+    assert next_at is not None
+
+    reset(wid)

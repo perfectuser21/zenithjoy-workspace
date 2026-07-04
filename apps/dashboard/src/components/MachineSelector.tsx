@@ -15,6 +15,9 @@ export default function MachineSelector() {
   const [selected, setSelected] = useState<string>(() => localStorage.getItem(STORAGE_KEY) || '');
 
   const load = useCallback(async () => {
+    // E2E 模式下 stubList 数据会同时填充 header 机器名，导致 getByText('主力机').first()
+    // 选到 header 而非表格行；VITE_SKIP_AUTH=true 时跳过 fetch，避免干扰 Playwright 选择器。
+    if (import.meta.env.VITE_SKIP_AUTH === 'true') return;
     try {
       const list = await fetchMachines();
       setMachines(list);
@@ -29,6 +32,7 @@ export default function MachineSelector() {
     return () => clearInterval(timer);
   }, [load]);
 
+  if (import.meta.env.VITE_SKIP_AUTH === 'true') return null;
   if (machines === null) return null;
 
   const online = machines.filter((m) => m.status === 'online');

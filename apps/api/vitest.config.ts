@@ -20,6 +20,8 @@ export default defineConfig({
       '../../sprints/06242057-line04-crm-customer-list/tests/**/*.test.ts',
       // Line02 公司信息页 + 采集任务 Table + 主号全链
       '../../sprints/06282255-line02-company-profile-collect/tests/**/*.test.ts',
+      // Line02 buildAssignments 真调度：在线感知 + 最少负载 + pending_dispatch + queued_remap
+      '../../sprints/07032333-line02-dispatch-real-scheduling/tests/**/*.test.ts',
     ],
     exclude: ['node_modules/**', 'tests/integration/**', 'tests/ws1/**', 'tests/ws2/**', 'tests/ws3/**', 'tests/ws4/**', 'tests/ws5/**', 'tests/ws6/**'],
     coverage: {

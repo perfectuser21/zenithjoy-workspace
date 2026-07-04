@@ -165,7 +165,10 @@ router.get('/sessions', tenantContextOptional, async (req: Request, res: Respons
   try {
     const r = await pool.query(
       `SELECT s.account_label, s.role, s.status, s.bound_at,
-              s.created_at, a.hostname, a.nickname,
+              s.created_at,
+              a.hostname AS agent_hostname,
+              a.nickname AS agent_nickname,
+              a.status AS agent_status,
               (SELECT response->>'account_nickname'
                  FROM zenithjoy.publish_tasks
                 WHERE agent_id=s.agent_id
@@ -173,8 +176,10 @@ router.get('/sessions', tenantContextOptional, async (req: Request, res: Respons
                   AND payload->>'account_label' = s.account_label
                 ORDER BY created_at DESC LIMIT 1) AS account_nickname
          FROM zenithjoy.agent_platform_sessions s
-         JOIN zenithjoy.agents a ON a.id = s.agent_id
-        WHERE a.tenant_id=$1
+         LEFT JOIN zenithjoy.agents a ON a.id = s.agent_id
+        WHERE s.agent_id IN (
+              SELECT id FROM zenithjoy.agents WHERE tenant_id=$1
+            )
           AND s.role='burner'
           AND s.platform='douyin'
         ORDER BY s.created_at DESC`,
