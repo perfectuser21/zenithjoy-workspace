@@ -4305,6 +4305,13 @@ agent_suite:
   status: active
   product: 客户私域AI接管
   note: "补线 PR：registerLeaseBrokerRoutes 真实挂到 http.Server 上可收发请求 + index.ts startLocalDiscoveryServer 必须调用它（防回归）"
+- id: desktop-lease-broker-log-observability
+  path: services/agent/src/handlers/__tests__/wechat-rpa-log.test.ts
+  type: unit
+  ci: L2
+  status: active
+  product: 客户私域AI接管
+  note: "listen_chat stderr 落盘可观测性：写入/轮转/写入失败静默降级三条 [BEHAVIOR] 单测"
 - id: line02-account-role-unify
   path: sprints/07032332-line02-account-role-unify/tests/account-role-unify.test.ts
   type: integration
