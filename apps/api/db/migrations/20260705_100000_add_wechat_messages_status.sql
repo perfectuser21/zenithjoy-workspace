@@ -1,6 +1,6 @@
 -- Line04 假账根治①：wechat_messages 加 status（draft→delivered/failed）
 -- 默认 delivered：存量行与 in 行语义不变；新写 out 行由代码显式 status='draft'，
--- 真送达回执(POST /api/wechat/messages/:id/receipt)置 delivered/failed。
+-- 真送达回执(POST /api/wechat/messages/:id/receipt，待建 Task 3)置 delivered/failed。
 ALTER TABLE zenithjoy.wechat_messages
   ADD COLUMN IF NOT EXISTS status text NOT NULL DEFAULT 'delivered'
   CHECK (status IN ('draft','delivered','failed'));

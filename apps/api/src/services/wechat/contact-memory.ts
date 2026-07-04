@@ -75,7 +75,8 @@ export async function appendMessage(
        VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
       [contactKey, senderName, direction, content, csWechatId ?? null, status],
     );
-    return res.rows?.[0]?.id ?? null;
+    // id 是 BIGSERIAL，node-postgres 返回字符串 → 转 number（对齐 tenant-memory.ts 约定）
+    return res.rows?.[0]?.id != null ? Number(res.rows[0].id) : null;
   } catch (err) {
     console.warn('[contact-memory] appendMessage 写入失败:', err);
     return null;

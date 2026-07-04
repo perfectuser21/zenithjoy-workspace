@@ -279,7 +279,7 @@ export interface GenerateChatDraftResult {
   reply?: string;
   /**
    * 仅 status:'sent' 时为 out 行落库返回的 wechat_messages.id（status='draft'）。
-   * agent 真机发出后带此 id 回 POST /api/wechat/messages/:id/receipt 置 delivered/failed，
+   * agent 真机发出后带此 id 回 POST /api/wechat/messages/:id/receipt（待建，Task 3）置 delivered/failed，
    * 治"中台假账"（写了 out 行却没真发出去也记已回复）。落库失败时为 null。
    */
   message_id?: number | null;

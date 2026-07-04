@@ -171,7 +171,8 @@ describe('generateChatDraft 去飞书自动直发 [BEHAVIOR]', () => {
     mockQuery.mockImplementation((sql: string, params?: any[]) => {
       const s = typeof sql === 'string' ? sql : '';
       if (s.includes('INSERT INTO zenithjoy.wechat_messages') && params?.[2] === 'out') {
-        return Promise.resolve({ rows: [{ id: 42 }], rowCount: 1 });
+        // BIGSERIAL：node-postgres 返回字符串，message_id 断言仍期望 number
+        return Promise.resolve({ rows: [{ id: '42' }], rowCount: 1 });
       }
       return Promise.resolve({ rows: [], rowCount: 0 });
     });
@@ -186,6 +187,7 @@ describe('generateChatDraft 去飞书自动直发 [BEHAVIOR]', () => {
 
     expect(result.status).toBe('sent');
     expect(result.message_id).toBe(42);
+    expect(typeof result.message_id).toBe('number');
 
     // out 行 INSERT 的第 6 个参数（status）必须是 'draft'
     const outInsert = mockQuery.mock.calls.find(

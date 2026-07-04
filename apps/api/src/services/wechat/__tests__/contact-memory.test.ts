@@ -43,7 +43,8 @@ beforeEach(() => {
 
 describe('appendMessage', () => {
   it('发一条 INSERT 到 wechat_messages，带正确参数（缺客服身份 → cs_wechat_id=null；不传 opts → status=delivered）', async () => {
-    mockedQuery.mockResolvedValueOnce({ rows: [{ id: 7 }] });
+    // BIGSERIAL：node-postgres 返回字符串，appendMessage 必须转成 number
+    mockedQuery.mockResolvedValueOnce({ rows: [{ id: '7' }] });
     const id = await appendMessage('wxid_1', '于瑾', 'in', '你好');
 
     expect(mockedQuery).toHaveBeenCalledTimes(1);
@@ -63,7 +64,8 @@ describe('appendMessage', () => {
   });
 
   it('out + {status:"draft"} → 返回 INSERT ... RETURNING 的 id，参数第 6 个为 draft', async () => {
-    mockedQuery.mockResolvedValueOnce({ rows: [{ id: 42 }] });
+    // BIGSERIAL 返回字符串 '42' → 断言仍期望 number 42（守住 string→number 契约）
+    mockedQuery.mockResolvedValueOnce({ rows: [{ id: '42' }] });
     const id = await appendMessage('wxid_1', '于瑾', 'out', 'AI草稿', 'wxid_cs_a', {
       status: 'draft',
     });
@@ -71,6 +73,7 @@ describe('appendMessage', () => {
     expect(String(sql)).toMatch(/RETURNING id/);
     expect(params).toEqual(['wxid_1', '于瑾', 'out', 'AI草稿', 'wxid_cs_a', 'draft']);
     expect(id).toBe(42);
+    expect(typeof id).toBe('number');
   });
 
   it('DB 失败时 console.warn 不抛，返回 null', async () => {
