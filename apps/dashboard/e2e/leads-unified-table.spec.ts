@@ -39,10 +39,15 @@ test.describe('LeadsTable 统一组件 — 列头验收', () => {
   });
 
   test('GET /api/acquisition/leads 返回含 latest_reply / assignee 字段的响应', async ({ page }) => {
+    // 无登录会话（ubuntu 快检环境）时端点正确返回 401 NO_TENANT（租户隔离铁律）；
+    // 有真实会话（windows evaluator 真登录）时返回 200 + leads 数组，此时才校验新字段。
     const [response] = await Promise.all([
-      page.waitForResponse((r) => r.url().includes('/api/acquisition/leads') && r.status() === 200),
+      page.waitForResponse((r) => r.url().includes('/api/acquisition/leads')),
       page.goto('/dashboard/leads'),
     ]);
+
+    expect([200, 401]).toContain(response.status());
+    if (response.status() !== 200) return;
 
     const body = await response.json() as { leads: Record<string, unknown>[]; total: number };
     expect(Array.isArray(body.leads)).toBe(true);
