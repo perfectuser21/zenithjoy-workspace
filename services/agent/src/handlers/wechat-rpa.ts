@@ -8,6 +8,8 @@
 import { spawn } from 'node:child_process';
 import path from 'node:path';
 import fs from 'node:fs';
+import http from 'node:http';
+import { DesktopLeaseBroker } from '../desktop-lease-broker.js';
 
 // 测试用导出：允许注入 baseDir；bundled install pack 含 python-embedded/python.exe
 export function getPythonExeForTest(baseDir: string): string {
@@ -80,6 +82,142 @@ export async function handleWechatRpa(task: WechatRpaTask): Promise<WechatRpaRes
     py.on('error', e => {
       resolve({ ok: false, error: `spawn fail: ${e.message}` });
     });
+  });
+}
+
+// ── DesktopLeaseBroker 单例 + IPC 转发 ───────────────────────────────────────
+// Sprint 0703-line04-desktop-lease-broker: Broker 以单例运行于 agent core 进程，
+// listen_chat.py 经 HTTP IPC 通道（POST /api/agent/desktop-lease-broker/*）交互。
+
+const BRAIN_URL = process.env.BRAIN_URL ?? 'http://localhost:5221';
+const DEFAULT_TENANT_ID = process.env.TENANT_ID ?? '';
+
+export const leaseBroker = new DesktopLeaseBroker({
+  ttlMs: 10000,
+  watchdogIntervalMs: 5000,
+  tenantId: DEFAULT_TENANT_ID,
+  onWatchdogTrigger: (lease) => {
+    console.warn(`[desktop-lease-broker] watchdog triggered: clientId=${lease.clientId} leaseId=${lease.leaseId}`);
+  },
+  onBrainLog: async (payload) => {
+    try {
+      await fetch(`${BRAIN_URL}/api/agent/events`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          kind: payload.module,
+          message: payload.message,
+          level: payload.level,
+          context: payload.context,
+          module: payload.module,
+        }),
+      });
+    } catch {
+      // best-effort: watchdog log failure must not crash the broker
+    }
+  },
+});
+
+export interface LeaseBrokerIpcRequest {
+  type: 'desktop_lease_acquire' | 'desktop_lease_renew' | 'desktop_lease_release';
+  payload: Record<string, unknown>;
+}
+
+export async function handleDesktopLeaseIpc(req: LeaseBrokerIpcRequest): Promise<Record<string, unknown>> {
+  switch (req.type) {
+
+    case 'desktop_lease_acquire': {
+      const r = await leaseBroker.acquire({
+        clientId: String(req.payload.clientId ?? 'unknown'),
+        priority: Number(req.payload.priority ?? 50),
+        ttlMs: Number(req.payload.ttlMs ?? 10000),
+      });
+      return r as unknown as Record<string, unknown>;
+    }
+    case 'desktop_lease_renew': {
+      const r = await leaseBroker.renew({
+        leaseId: String(req.payload.leaseId ?? ''),
+        clientId: String(req.payload.clientId ?? ''),
+      });
+      return r as unknown as Record<string, unknown>;
+    }
+    case 'desktop_lease_release': {
+      const r = await leaseBroker.release({
+        leaseId: String(req.payload.leaseId ?? ''),
+        clientId: String(req.payload.clientId ?? ''),
+      });
+      return r as unknown as Record<string, unknown>;
+    }
+    default:
+      return Promise.resolve({ ok: false, reason: 'unknown_type' });
+  }
+}
+
+// registerLeaseBrokerRoutes 将 /api/agent/desktop-lease-broker/* 路由注入到现有 http.Server。
+// 包含 e2e-watchdog-probe 端点（测试专用，内部 acquire 短 TTL probe lease 触发看门狗）。
+export function registerLeaseBrokerRoutes(server: http.Server, tenantId?: string): void {
+  if (tenantId) {
+    (leaseBroker as unknown as { tenantId: string }).tenantId = tenantId;
+  }
+
+  const originalListeners = server.listeners('request');
+  server.removeAllListeners('request');
+
+  server.on('request', async (req, res) => {
+    const url = req.url ?? '';
+
+    if (req.method === 'POST' && url.startsWith('/api/agent/desktop-lease-broker/')) {
+      let body = '';
+      req.on('data', (d: Buffer) => { body += d.toString(); });
+      req.on('end', async () => {
+        try {
+          const parsed = body ? JSON.parse(body) : {};
+
+          if (url === '/api/agent/desktop-lease-broker/e2e-watchdog-probe') {
+            // 内部 acquire 一个短 TTL probe lease，让看门狗自然触发（测试专用）
+            const ttlMs = Number(parsed.ttl_ms ?? 2000);
+            const result = await leaseBroker.acquire({
+              clientId: 'e2e-watchdog-probe',
+              priority: 99,
+              ttlMs,
+            });
+            if (result.granted) {
+              res.writeHead(200, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify({ ok: true, lease_id: result.lease_id }));
+            } else {
+              res.writeHead(409, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify({ ok: false, reason: 'lease_busy' }));
+            }
+            return;
+          }
+
+          const typeMap: Record<string, LeaseBrokerIpcRequest['type']> = {
+            '/api/agent/desktop-lease-broker/acquire': 'desktop_lease_acquire',
+            '/api/agent/desktop-lease-broker/renew': 'desktop_lease_renew',
+            '/api/agent/desktop-lease-broker/release': 'desktop_lease_release',
+          };
+          const ipcType = typeMap[url];
+          if (ipcType) {
+            const result = await handleDesktopLeaseIpc({ type: ipcType, payload: parsed });
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify(result));
+            return;
+          }
+        } catch (e) {
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ ok: false, error: String(e) }));
+          return;
+        }
+        res.writeHead(404);
+        res.end('not found');
+      });
+      return;
+    }
+
+    // 其余路由交给原有 listeners
+    for (const listener of originalListeners) {
+      (listener as (req: http.IncomingMessage, res: http.ServerResponse) => void)(req, res);
+    }
   });
 }
 

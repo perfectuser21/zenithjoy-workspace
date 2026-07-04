@@ -37,6 +37,7 @@ import subprocess
 import sys
 import threading
 import time
+import urllib.request
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -2883,6 +2884,76 @@ def post_draft_generate(
         return {"ok": False, "error": f"bad json: {type(exc).__name__}: {exc}"}
 
 
+# ─── DesktopLeaseBroker IPC 接缝（Sprint 0703-line04-desktop-lease-broker）─────
+# listen_chat 在窗口切换前通过 IPC 申请桌面租约，完成后归还，防多 agent 并发抢占。
+# 所有失败均为软失败：acquire 失败 → 跳过本轮（[防假成功] invariant），release 失败忽略。
+
+_DESKTOP_LEASE_CLIENT_ID = "line04/listen_chat"
+_DESKTOP_LEASE_PRIORITY = 50
+_DESKTOP_LEASE_TTL_MS = 10000
+
+# 当前持有的租约 ID（线程安全：Python GIL 保护单变量赋值）
+_current_lease_id: Optional[str] = None
+
+
+def desktop_lease_acquire(middleware_url: str) -> bool:
+    """向 Broker IPC 申请桌面租约。返回 True=已授予，False=拒绝（调用方应跳过本轮）。
+
+    日志写到 stderr（DoD B6 验收锚点）：
+      成功 → [desktop_lease] acquire granted
+      失败 → [desktop_lease] acquire failed
+    """
+    global _current_lease_id
+    url = middleware_url.rstrip("/") + "/api/agent/desktop-lease-broker/acquire"
+    payload = json.dumps({
+        "clientId": _DESKTOP_LEASE_CLIENT_ID,
+        "priority": _DESKTOP_LEASE_PRIORITY,
+        "ttlMs": _DESKTOP_LEASE_TTL_MS,
+    }).encode("utf-8")
+    try:
+        req = urllib.request.Request(url, data=payload,
+                                     headers={"Content-Type": "application/json"},
+                                     method="POST")
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            result = json.loads(resp.read().decode("utf-8"))
+        if result.get("granted"):
+            _current_lease_id = result.get("lease_id")
+            print(f"[desktop_lease] acquire granted lease_id={_current_lease_id}", file=sys.stderr)
+            return True
+        else:
+            print(f"[desktop_lease] acquire failed reason=not_granted retry_after_ms={result.get('retry_after_ms')}", file=sys.stderr)
+            return False
+    except Exception as exc:
+        print(f"[desktop_lease] acquire failed error={exc}", file=sys.stderr)
+        return False
+
+
+def desktop_lease_release(middleware_url: str) -> None:
+    """归还桌面租约（best-effort，失败静默忽略）。
+
+    日志写到 stderr：[desktop_lease] release
+    """
+    global _current_lease_id
+    lease_id = _current_lease_id
+    if not lease_id:
+        return
+    _current_lease_id = None
+    url = middleware_url.rstrip("/") + "/api/agent/desktop-lease-broker/release"
+    payload = json.dumps({
+        "leaseId": lease_id,
+        "clientId": _DESKTOP_LEASE_CLIENT_ID,
+    }).encode("utf-8")
+    try:
+        req = urllib.request.Request(url, data=payload,
+                                     headers={"Content-Type": "application/json"},
+                                     method="POST")
+        with urllib.request.urlopen(req, timeout=5) as _:
+            pass
+        print(f"[desktop_lease] release lease_id={lease_id}", file=sys.stderr)
+    except Exception as exc:
+        print(f"[desktop_lease] release error={exc} (ignored)", file=sys.stderr)
+
+
 # ─── 进程守护：监听心跳上报（每分钟一次，失败不影响监听）────────────────────────
 
 
@@ -3312,19 +3383,34 @@ def run_dryrun_inject(args: argparse.Namespace) -> int:
         )
         return 0
 
-    result = post_draft_generate(
-        args.middleware_url, sender, wechat_id, content,
-        agent_id=getattr(args, "agent_id", None),
-    )
-    emit_json(
-        {
-            "ok": True,
-            "dryRun": True,
-            "draft_generated": True,
-            "sender": sender,
-            "result": result,
-        }
-    )
+    # 桌面租约 acquire（[防假成功] invariant：失败时跳过，不假装发送成功）
+    middleware_url = getattr(args, "middleware_url", "") or ""
+    if middleware_url:
+        granted = desktop_lease_acquire(middleware_url)
+        if not granted:
+            emit_json({"ok": False, "dryRun": True,
+                       "error": "[desktop_lease] acquire failed — 跳过本轮（防假成功 invariant）"})
+            return 0
+
+    try:
+        result = post_draft_generate(
+            args.middleware_url, sender, wechat_id, content,
+            agent_id=getattr(args, "agent_id", None),
+        )
+        emit_json(
+            {
+                "ok": True,
+                "dryRun": True,
+                "draft_generated": True,
+                "sender": sender,
+                "result": result,
+            }
+        )
+    finally:
+        # 归还租约（best-effort，失败静默忽略）
+        if middleware_url:
+            desktop_lease_release(middleware_url)
+
     return 0
 
 

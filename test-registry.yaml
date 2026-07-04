@@ -4251,6 +4251,13 @@ agent_suite:
   product: AI员工
   note: "regression(2026-07-02, line02 Bug1): crawl 结果映射时 text 必须来自 comment_text，不能用 nickname；守卫 mapRawCommenters 生产路径（src/utils/comment-mapper.ts）"
 
+- id: desktop-lease-broker-unit
+  path: sprints/0703-line04-desktop-lease-broker/tests/desktop-lease-broker.test.ts
+  type: unit
+  ci: L3
+  status: active
+  product: 客户私域AI接管
+  note: "Sprint 0703-line04-desktop-lease-broker: DesktopLeaseBroker 状态机单元测试（acquire/renew/release/watchdog/优先级/幂等/抢占）"
 - id: line02-account-role-unify
   path: sprints/07032332-line02-account-role-unify/tests/account-role-unify.test.ts
   type: integration

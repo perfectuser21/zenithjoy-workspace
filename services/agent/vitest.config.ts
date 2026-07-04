@@ -22,6 +22,8 @@ export default defineConfig({
       '../../sprints/06131229-path2-douyin-dm-outreach/tests/**/*.test.ts',
       // Agent 客户端封装（去黑窗 + 托盘静默通知）sprint 合约测试
       '../../sprints/06220836-agent-client-encapsulation/tests/**/*.test.ts',
+      // Line04 DesktopLeaseBroker 状态机 sprint 合约测试
+      '../../sprints/0703-line04-desktop-lease-broker/tests/**/*.test.ts',
     ],
     exclude: ['node_modules/**', 'dist/**', 'dist-pkg/**'],
   },
