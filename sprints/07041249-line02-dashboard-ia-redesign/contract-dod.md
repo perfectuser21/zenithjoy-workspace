@@ -1,6 +1,3 @@
-contract_branch: cp-07041344-ws-f567f7b0-ws1
-sprint_dir: sprints/07041249-line02-dashboard-ia-redesign
-
 ---
 skeleton: false
 journey_type: user_facing
@@ -16,11 +13,22 @@ target_environment: windows_cloud
 ## ARTIFACT 条目
 
 - [ ] [ARTIFACT] `apps/dashboard/src/pages/AcquisitionHubPage.tsx` 已更新，MODULES 数组含 4 张 GP 顺序卡片（绑抖音小号/采集/看线索/触达记录）
+  Test: node -e "const c=require('fs').readFileSync('apps/dashboard/src/pages/AcquisitionHubPage.tsx','utf8');if(c.includes('comingSoon: true')){process.exit(1)}if(!c.includes('绑抖音小号')||!c.includes('看线索')||!c.includes('触达记录')){process.exit(1)}console.log('OK')"
+
 - [ ] [ARTIFACT] `apps/dashboard/src/pages/AcquisitionOutreachPage.tsx` 已新建，含"暂无触达记录"空状态文字和触达记录列表渲染
+  Test: node -e "const fs=require('fs');if(!fs.existsSync('apps/dashboard/src/pages/AcquisitionOutreachPage.tsx')){process.exit(1)}const c=fs.readFileSync('apps/dashboard/src/pages/AcquisitionOutreachPage.tsx','utf8');if(!c.includes('暂无触达记录')){process.exit(1)}console.log('OK')"
+
 - [ ] [ARTIFACT] `apps/dashboard/src/api/acquisition-dispatch.api.ts` 新增 `fetchOutreachHistory()` 函数，调用 `/api/acquisition/outreach-history`
+  Test: node -e "const c=require('fs').readFileSync('apps/dashboard/src/api/acquisition-dispatch.api.ts','utf8');if(!c.includes('outreach-history')){process.exit(1)}console.log('OK')"
+
 - [ ] [ARTIFACT] `apps/api/src/routes/acquisition-dispatch.ts` 新增 `GET /outreach-history` 路由，含 `tenant_id` 过滤，JOIN dm_assignments + dm_outreach_log + acquisition_leads
+  Test: node -e "const c=require('fs').readFileSync('apps/api/src/routes/acquisition-dispatch.ts','utf8');if(!c.includes('outreach-history')||!c.includes('tenant_id')){process.exit(1)}console.log('OK')"
+
 - [ ] [ARTIFACT] `apps/dashboard/src/config/navigation.config.ts` 注册 `/area/acquisition/leads` 和 `/area/acquisition/outreach` 路由，旧 `/dashboard/leads` 保留
+  Test: node -e "const c=require('fs').readFileSync('apps/dashboard/src/config/navigation.config.ts','utf8');if(!c.includes('/area/acquisition/leads')||!c.includes('/area/acquisition/outreach')){process.exit(1)}if(!c.includes('/dashboard/leads')){console.error('FAIL: 旧路由被删');process.exit(1)}console.log('OK')"
+
 - [ ] [ARTIFACT] `.github/workflows/e2e-line02-dashboard-ia-redesign.yml` 已注册，引用 `acquisition-ia-redesign.spec.ts`，使用 `windows-latest` runner
+  Test: node -e "const fs=require('fs');const wf='.github/workflows/e2e-line02-dashboard-ia-redesign.yml';if(!fs.existsSync(wf)){process.exit(1)}const c=fs.readFileSync(wf,'utf8');if(!c.includes('acquisition-ia-redesign.spec.ts')||!c.includes('windows-latest')){process.exit(1)}console.log('OK')"
 
 ---
 
@@ -54,6 +62,22 @@ target_environment: windows_cloud
   Test: manual:bash -c 'node -e "const c=require(\"fs\").readFileSync(\"apps/dashboard/src/pages/AcquisitionOutreachPage.tsx\",\"utf8\");if(!(c.includes(\"catch\")||c.includes(\"setError\")||c.includes(\"setErr\"))){console.error(\"FAIL: 缺错误处理\");process.exit(1)}if(!c.includes(\"暂无触达记录\")){console.error(\"FAIL: 缺空状态文字\");process.exit(1)}console.log(\"OK: 含错误处理和空状态\")" || exit 1'
   期望: OK
 
-- [ ] [BEHAVIOR] GHA workflow 已注册且正确引用 spec，windows-latest runner（[AI_ADDED] — 防 windows_cloud E2E 永不触发）
+- [ ] [BEHAVIOR] GHA workflow 已注册且正确引用 spec，windows-latest runner（[AI_ADDED] — 防 windows_cloud E2E 永不触发：无 workflow 注册则 Playwright 测试无法在 GHA 跑，[BEHAVIOR:E2E] 形同虚设）
   Test: manual:bash -c 'node -e "const fs=require(\"fs\");const wf=\".github/workflows/e2e-line02-dashboard-ia-redesign.yml\";if(!fs.existsSync(wf)){console.error(\"FAIL: GHA workflow 未注册\");process.exit(1)}const c=fs.readFileSync(wf,\"utf8\");if(!c.includes(\"acquisition-ia-redesign.spec.ts\")){console.error(\"FAIL: workflow 未引用 spec\");process.exit(1)}if(!c.includes(\"windows-latest\")){console.error(\"FAIL: 非 windows-latest runner\");process.exit(1)}console.log(\"OK: GHA workflow 注册正确\")" || exit 1'
   期望: OK
+
+---
+
+## BEHAVIOR:E2E 条目（user_facing 专属，Mode B final-e2e — GHA windows-latest Playwright）
+
+- [ ] [BEHAVIOR:E2E] 用户完整走完 Golden Path：Hub 4 卡片可见→无即将上线→账号页无昵称列→看线索路由正确→触达记录页渲染→设置入口存在
+  Test: `.github/workflows/e2e-line02-dashboard-ia-redesign.yml`（GHA windows-latest，Playwright 打 localhost:5174，VITE_SKIP_AUTH=true，acquisition-ia-redesign.spec.ts）
+  期望: GHA workflow 运行时 Playwright 5 个测试全部通过，截图存入 screenshots/ 目录
+
+  Screenshots:
+    - 01-hub-page.png      期望：4 张 GP 卡片可见，无"即将上线"标签
+    - 02-accounts-page.png 期望：表头行无"抖音昵称"，含"绑定机器"列
+    - 03-leads-page.png    期望：Leads 页加载（URL 含 /leads），显示列表或空状态
+    - 04-outreach-page.png 期望：触达记录页加载（URL 含 /outreach），显示列表或"暂无触达记录"
+    - 05-config-page.png   期望：设置页加载，无"指派计划"区块
+  路径格式: sprints/07041249-line02-dashboard-ia-redesign/screenshots/<step>.png
