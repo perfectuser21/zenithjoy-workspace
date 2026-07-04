@@ -4259,6 +4259,14 @@ agent_suite:
     product: 客户私域AI接管
     note: "regression(2026-07-04, decision 72740815 根因①): 非 supervise 环境核心升级先立后破——退出前自 spawn 新核心，spawn 失败回滚 .active-core 指针且不退出。治裸启动升级后退出无人拉起（07-04 08:46 停机 3.5h 实锤）。"
 
+  - id: agent-bootstrap-convergence-no-selfkill
+    path: services/agent/src/__tests__/bootstrap-convergence-no-selfkill.test.ts
+    type: unit
+    ci: L1
+    status: active
+    product: 客户私域AI接管
+    note: "regression(2026-07-04 14:00, 2.0.75 生产自杀): 收敛绝不杀 selfAncestorPids 祖先启动链——旧版 bat 循环重读指针供养新核心不是僵尸，taskkill /t 杀它=连树带自己杀（rog 13:31 停机 45min 实锤）；祖先链采集失败保守不杀。"
+
   - id: agent-bootstrap-convergence
     path: services/agent/src/__tests__/bootstrap-convergence.test.ts
     type: unit
