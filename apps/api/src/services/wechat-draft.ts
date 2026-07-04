@@ -277,6 +277,12 @@ export interface GenerateChatDraftResult {
   skip_reason?: 'group' | 'blacklisted';
   /** 仅 status:'sent' 时为生成文案；其余一律 undefined（agent 检测到 undefined 即跳过不发）。 */
   reply?: string;
+  /**
+   * 仅 status:'sent' 时为 out 行落库返回的 wechat_messages.id（status='draft'）。
+   * agent 真机发出后带此 id 回 POST /api/wechat/messages/:id/receipt 置 delivered/failed，
+   * 治"中台假账"（写了 out 行却没真发出去也记已回复）。落库失败时为 null。
+   */
+  message_id?: number | null;
 }
 
 const FAIL_PLACEHOLDER = 'AI 生成失败（请人审决定是否重试）';
@@ -464,9 +470,13 @@ export async function generateChatDraft(
     return { ok: true, status: 'ai_failed', task_id: taskId, draft_id: '' };
   }
 
-  // AI 成功 → 记入"我方回复"短期记忆 + 触发固化（盖客服身份章），然后直接返回 reply（自动直发）。
+  // AI 成功 → 记入"我方回复"短期记忆（status='draft'，真送达前不算已回复）+ 触发固化（盖客服身份章），
+  // 然后返回 reply（自动直发）+ message_id 供 agent 真发后回执置 delivered/failed。
+  let messageId: number | null = null;
   try {
-    await appendMessage(contactKey, sender, 'out', aiContent, csWechatId);
+    messageId = await appendMessage(contactKey, sender, 'out', aiContent, csWechatId, {
+      status: 'draft',
+    });
     await consolidate(contactKey);
   } catch (err) {
     console.warn('[wechat-draft] 写出站消息/固化失败（不影响回复）:', err);
@@ -474,7 +484,14 @@ export async function generateChatDraft(
   await stampCsMemory(tenant_id, sender, 'out', aiContent, csWechatId);
 
   console.info(`[wechat-draft] auto-send sender=${sender} reply_len=${aiContent.length}`);
-  return { ok: true, status: 'sent', task_id: taskId, draft_id: '', reply: aiContent };
+  return {
+    ok: true,
+    status: 'sent',
+    task_id: taskId,
+    draft_id: '',
+    reply: aiContent,
+    message_id: messageId,
+  };
 }
 
 // ─── ws4: generateMomentDraft（朋友圈文案草稿）────────────────────────────────
