@@ -97,3 +97,78 @@ describe('upsertAgentByHeartbeat — 精确 UPDATE + license_id fall-through', (
     expect(hasSecondUpdate).toBe(true);
   });
 });
+
+/** 判定某条调用是否为 license_machines 的写入（INSERT）。 */
+function isLicenseMachineInsert(c: unknown[]): boolean {
+  return typeof c[0] === 'string' && /INSERT INTO zenithjoy\.license_machines/i.test(c[0] as string);
+}
+
+describe('upsertAgentByHeartbeat — license_machines 配额门（心跳旁路补齐）', () => {
+  const QUOTA_ARGS = { ...BASE_ARGS, machineId: 'mid-xyz' };
+
+  beforeEach(() => {
+    vi.mocked(pool.query).mockReset();
+  });
+
+  it('新机器 + 配额已满 → 跳过 license_machines INSERT（agents 心跳照常更新）+ warn', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    // call 1: SELECT 该 (license_id, machine_id) 是否已有行 → 无（新机器）
+    vi.mocked(pool.query).mockResolvedValueOnce({ rows: [] } as any);
+    // call 2: SELECT max_machines + active count → 已满（1/1）
+    vi.mocked(pool.query).mockResolvedValueOnce({ rows: [{ max: 1, cnt: 1 }] } as any);
+    // call 3: 精确 UPDATE agents（心跳照常）
+    vi.mocked(pool.query).mockResolvedValueOnce({ rows: [AGENT_ROW] } as any);
+    // call 4: pinned_agent UPDATE
+    vi.mocked(pool.query).mockResolvedValueOnce({ rows: [] } as any);
+
+    const result = await upsertAgentByHeartbeat(QUOTA_ARGS);
+    expect(result.id).toBe('uuid-agent-001');
+
+    const calls = vi.mocked(pool.query).mock.calls;
+    // 全链路不得出现 license_machines INSERT（配额门拦下新机器）
+    expect(calls.some(isLicenseMachineInsert)).toBe(false);
+    // agents 精确 UPDATE 仍然发生（在线状态展示不受影响）
+    expect(calls.some((c) => typeof c[0] === 'string' && /UPDATE zenithjoy\.agents/i.test(c[0] as string))).toBe(true);
+    // 有配额已满告警
+    expect(warnSpy).toHaveBeenCalled();
+    expect(String(warnSpy.mock.calls.map((c) => c.join(' ')).join('\n'))).toMatch(/配额已满/);
+    warnSpy.mockRestore();
+  });
+
+  it('已绑定机器 + 配额已满 → 照旧 upsert（续命不受配额影响）', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    // call 1: SELECT 该 (license_id, machine_id) → 已有行（老机器续心跳）
+    vi.mocked(pool.query).mockResolvedValueOnce({ rows: [{ exists: 1 }] } as any);
+    // call 2: license_machines upsert（照旧）
+    vi.mocked(pool.query).mockResolvedValueOnce({ rows: [] } as any);
+    // call 3: 精确 UPDATE agents
+    vi.mocked(pool.query).mockResolvedValueOnce({ rows: [AGENT_ROW] } as any);
+    // call 4: pinned_agent UPDATE
+    vi.mocked(pool.query).mockResolvedValueOnce({ rows: [] } as any);
+
+    await upsertAgentByHeartbeat(QUOTA_ARGS);
+
+    const calls = vi.mocked(pool.query).mock.calls;
+    // 已绑定机器必须照旧 upsert license_machines（不能把续命也拦了）
+    expect(calls.some(isLicenseMachineInsert)).toBe(true);
+  });
+
+  it('新机器 + 配额未满 → 照旧 INSERT license_machines', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    // call 1: SELECT 该 (license_id, machine_id) → 无（新机器）
+    vi.mocked(pool.query).mockResolvedValueOnce({ rows: [] } as any);
+    // call 2: SELECT max_machines + active count → 未满（2/5）
+    vi.mocked(pool.query).mockResolvedValueOnce({ rows: [{ max: 5, cnt: 2 }] } as any);
+    // call 3: license_machines INSERT
+    vi.mocked(pool.query).mockResolvedValueOnce({ rows: [] } as any);
+    // call 4: 精确 UPDATE agents
+    vi.mocked(pool.query).mockResolvedValueOnce({ rows: [AGENT_ROW] } as any);
+    // call 5: pinned_agent UPDATE
+    vi.mocked(pool.query).mockResolvedValueOnce({ rows: [] } as any);
+
+    await upsertAgentByHeartbeat(QUOTA_ARGS);
+
+    const calls = vi.mocked(pool.query).mock.calls;
+    expect(calls.some(isLicenseMachineInsert)).toBe(true);
+  });
+});
