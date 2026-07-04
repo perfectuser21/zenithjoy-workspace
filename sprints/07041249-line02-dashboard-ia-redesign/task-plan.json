@@ -1,0 +1,36 @@
+{
+  "initiative_id": "07041249-line02-dashboard-ia-redesign",
+  "journey_type": "user_facing",
+  "journey_type_reason": "涉及 apps/dashboard/ 前端页面 IA 改动（Hub/Accounts/Config/Outreach 四页）+ 新 API 端点，用户通过浏览器操作 Dashboard",
+  "tasks": [
+    {
+      "task_id": "ws1",
+      "title": "Line02 Dashboard IA 重做 — Hub GP 顺序 + 触达记录视图",
+      "scope": "1) AcquisitionHubPage: 替换 MODULES 为 4 张 GP 顺序卡片（绑抖音小号/采集/看线索/触达记录）+ 设置入口；2) AcquisitionAccountsPage: 删除抖音昵称列（行 123/133）；3) AcquisitionConfigPage: 删除 DispatchPlanSection、CookieHealthBlock、getLine02AccountStatus 相关代码；4) 新建 AcquisitionOutreachPage（只读触达历史列表 + 空状态）；5) acquisition-dispatch.api.ts 新增 fetchOutreachHistory()；6) navigation.config.ts 新增 /area/acquisition/leads 和 /area/acquisition/outreach 路由；7) apps/api/src/routes/acquisition-dispatch.ts 新增 GET /api/acquisition/outreach-history 端点（dm_assignments JOIN dm_outreach_log JOIN acquisition_leads，tenant 隔离）",
+      "dod": [
+        "[BEHAVIOR] Hub MODULES 无 comingSoon: true，含 4 张 GP 卡片（绑抖音小号/采集/看线索/触达记录）",
+        "[BEHAVIOR] AcquisitionAccountsPage 不含'抖音昵称'，保留 machine-hostname-cell",
+        "[BEHAVIOR] navigation.config 注册 /area/acquisition/leads + /area/acquisition/outreach，旧 /dashboard/leads 保留",
+        "[BEHAVIOR] AcquisitionConfigPage 不含'指派计划'文字 + function CookieHealthBlock + getLine02AccountStatus",
+        "[BEHAVIOR] acquisition-dispatch.ts 含 outreach-history 端点 + tenant_id 过滤 + items/total 字段名",
+        "[BEHAVIOR] acquisition-dispatch.api.ts 含 fetchOutreachHistory + outreach-history 路径",
+        "[BEHAVIOR] AcquisitionOutreachPage.tsx 存在，含'暂无触达记录'空状态，含错误处理",
+        "[ARTIFACT] apps/dashboard/e2e/acquisition-ia-redesign.spec.ts Playwright 5 个测试全部通过"
+      ],
+      "files": [
+        "apps/dashboard/src/pages/AcquisitionHubPage.tsx",
+        "apps/dashboard/src/pages/AcquisitionAccountsPage.tsx",
+        "apps/dashboard/src/pages/AcquisitionConfigPage.tsx",
+        "apps/dashboard/src/pages/AcquisitionOutreachPage.tsx",
+        "apps/dashboard/src/api/acquisition-dispatch.api.ts",
+        "apps/dashboard/src/config/navigation.config.ts",
+        "apps/api/src/routes/acquisition-dispatch.ts",
+        "apps/dashboard/e2e/acquisition-ia-redesign.spec.ts",
+        "sprints/07041249-line02-dashboard-ia-redesign/e2e-verify.ps1"
+      ],
+      "depends_on": [],
+      "complexity": "M",
+      "estimated_minutes": 80
+    }
+  ]
+}
