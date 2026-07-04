@@ -53,7 +53,9 @@ describe('AcquisitionTasksPage — 方案D burner 账号选择 [BEHAVIOR]', () =
     }) as unknown as typeof fetch;
 
     render(<MemoryRouter><AcquisitionTasksPage /></MemoryRouter>);
-    const select = await screen.findByLabelText(/使用账号/);
+    // 等待 burner session 选项渲染完毕再 select，避免 sessions 未加载时 selectedSession 为空
+    await screen.findByText(/小号A/);
+    const select = screen.getByLabelText(/使用账号/);
     fireEvent.change(select, { target: { value: 'burner-1' } });
 
     await waitFor(() => {
@@ -71,7 +73,8 @@ describe('AcquisitionTasksPage — 方案D burner 账号选择 [BEHAVIOR]', () =
     global.fetch = fetchMock as unknown as typeof fetch;
 
     render(<MemoryRouter><AcquisitionTasksPage /></MemoryRouter>);
-    const select = await screen.findByLabelText(/使用账号/);
+    await screen.findByText(/小号A/);
+    const select = screen.getByLabelText(/使用账号/);
     fireEvent.change(select, { target: { value: 'burner-1' } });
 
     const input = screen.getByPlaceholderText(/关键词/);

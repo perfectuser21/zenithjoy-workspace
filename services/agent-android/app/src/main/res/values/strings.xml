@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">ZenithJoy Agent</string>
+    <string name="notification_channel_name">Agent Service</string>
+    <string name="notification_title">ZenithJoy Agent</string>
+    <string name="notification_text">Agent is running</string>
+    <string name="accessibility_service_description">ZenithJoy 自动采集服务：通过无障碍接口完成抖音关键词搜索与主页信息提取</string>
+</resources>
