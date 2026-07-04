@@ -1,0 +1,122 @@
+name: E2E — Line02 留言人工跟进 & LeadsTable 统一
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'apps/api/src/routes/acquisition.ts'
+      - 'apps/api/src/services/acquisition-dispatch.ts'
+      - 'apps/dashboard/src/components/LeadsTable.tsx'
+      - 'apps/dashboard/src/pages/LeadsPage.tsx'
+      - 'apps/dashboard/src/pages/AcquisitionTasksPage.tsx'
+      - 'apps/dashboard/e2e/leads-unified-table.spec.ts'
+      - 'services/agent/src/line02/reply-poller.ts'
+      - 'sprints/07032333-line02-lead-human-handoff/**'
+  workflow_dispatch:
+    inputs:
+      e2e_database_url:
+        description: 'E2E_DATABASE_URL (evaluator manual dispatch only)'
+        required: false
+
+concurrency:
+  group: e2e-line02-lead-human-handoff-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # PR CI job: ubuntu-latest + Vite dev server，无需 DB secrets
+  e2e:
+    name: Playwright — Line02 LeadsTable 统一（ubuntu chromium）
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install deps
+        run: npm ci
+
+      - name: Install Playwright Chromium
+        working-directory: apps/dashboard
+        run: npx playwright install chromium --with-deps
+
+      - name: Start Vite dev server (VITE_SKIP_AUTH=true)
+        working-directory: apps/dashboard
+        env:
+          VITE_SKIP_AUTH: 'true'
+          VITE_MOCK_USER_ID: 'ci-e2e-user'
+          VITE_MOCK_USER_NAME: 'CI E2E User'
+        run: |
+          npx vite --port 5174 &
+          for i in $(seq 1 30); do
+            if curl -fs http://localhost:5174 > /dev/null 2>&1; then
+              echo "Vite ready after ${i}s"
+              break
+            fi
+            sleep 1
+          done
+          curl -fs http://localhost:5174 || (echo "Vite failed to start"; exit 1)
+
+      - name: Run Playwright E2E
+        working-directory: apps/dashboard
+        env:
+          E2E_BASE_URL: 'http://localhost:5174'
+        run: npx playwright test e2e/leads-unified-table.spec.ts --reporter=list
+
+      - name: Upload artifacts on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-line02-lead-human-handoff-artifacts
+          path: |
+            apps/dashboard/test-results/
+            apps/dashboard/screenshots/
+          retention-days: 7
+
+  # Evaluator job: windows-latest + 真实后端（仅 workflow_dispatch 手动触发）
+  e2e-windows:
+    name: Playwright — Line02 LeadsTable 统一（windows-latest evaluator）
+    runs-on: windows-latest
+    if: github.event_name == 'workflow_dispatch'
+    timeout-minutes: 30
+
+    defaults:
+      run:
+        shell: pwsh
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install deps
+        run: npm ci
+
+      - name: Install Playwright Chromium
+        working-directory: apps/dashboard
+        run: npx playwright install chromium --with-deps
+
+      - name: Run E2E verify script
+        working-directory: sprints/07032333-line02-lead-human-handoff
+        env:
+          E2E_DATABASE_URL: ${{ secrets.E2E_DATABASE_URL || inputs.e2e_database_url }}
+        run: ./e2e-verify.ps1
+
+      - name: Upload artifacts on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-line02-lead-human-handoff-windows-artifacts
+          path: |
+            apps/dashboard/test-results/
+            apps/dashboard/screenshots/
+          retention-days: 7

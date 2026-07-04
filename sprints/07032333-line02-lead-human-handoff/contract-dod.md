@@ -94,8 +94,8 @@ gate-allow: domain/db-no-time-window 此 BEHAVIOR 的 SELECT LIMIT 0 是 DDL sch
 ## BEHAVIOR:E2E 条目（user_facing 专属，Mode B final-e2e Playwright 跑）
 
 - [ ] [BEHAVIOR:E2E] Dashboard LeadsPage 显示"最新回复"和"负责人"列，无"触达状态"列
-  Test: manual:bash -c 'npx playwright test apps/dashboard/e2e/leads-unified-table.spec.ts --reporter=list'
-  期望: 所有 spec 通过，截图已存入 sprints/07032333-line02-lead-human-handoff/screenshots/
+  CI: .github/workflows/e2e-line02-lead-human-handoff-windows.yml — Playwright — Line02 LeadsTable 统一（ubuntu chromium）job 跑 apps/dashboard/e2e/leads-unified-table.spec.ts
+  期望: CI job 通过（非 manual 执行，evaluator 环境不装 playwright，改走 CI 真机验证）
 
 - [ ] [BEHAVIOR:E2E] AcquisitionTasksPage 内嵌 leads 子表无"触达状态"列（用 LeadsTable 共用组件）
   Screenshots:
