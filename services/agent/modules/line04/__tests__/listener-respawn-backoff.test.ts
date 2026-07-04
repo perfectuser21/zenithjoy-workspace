@@ -117,6 +117,19 @@ describe('startWechatListener — watchdog 重拉 + 退避（error 分支不再�
     expect(spawnCalls()).toBe(2);
   });
 
+  it('同一 child 先 error 再 exit → 只调度一次重拉（防重入）', () => {
+    startWechatListener('http://localhost:3000', 'test-agent');
+    expect(spawnCalls()).toBe(1);
+
+    // 一个 child 崩溃时常同时触发 error 和 exit（先 error 后 exit）。无防重入会排两次重拉。
+    children[0].fire('error', new Error('boom'));
+    children[0].fire('exit', 1);
+
+    // 推进足够长（覆盖两档退避 30s + 60s），若重复调度会多 spawn 一次。
+    vi.advanceTimersByTime(300_000);
+    expect(spawnCalls()).toBe(2); // 只多拉起一次，不是两次
+  });
+
   it('子进程存活超 10 分钟后退避计数器重置（下次失败回到 30s）', () => {
     startWechatListener('http://localhost:3000', 'test-agent');
 

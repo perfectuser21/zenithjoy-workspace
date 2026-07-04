@@ -117,11 +117,15 @@ const LISTENER_HEALTHY_UPTIME_MS = 10 * 60_000;
 // 模块级连续失败计数器 + 上次 spawn 时间戳（供退避与健康重置）。
 let _listenerFailCount = 0;
 let _listenerSpawnedAt = 0;
+// 防重入：child 崩溃常同时触发 error 与 exit（两分支都调 scheduleListenerRespawn），
+// 无此 guard 会排两次重拉 → 双实例 / 退避被跳档。已排程时后续调用直接忽略，spawnOnce 里清零。
+let _respawnScheduled = false;
 
 // 测试用：重置退避状态（模块级 let 在多用例间会串，测试 beforeEach 调用清零）。
 export function _resetListenerBackoff(): void {
   _listenerFailCount = 0;
   _listenerSpawnedAt = 0;
+  _respawnScheduled = false;
 }
 
 // ── 自愈件2：真发开关一处传 ──
@@ -257,6 +261,11 @@ export function startWechatListener(apiBase: string, agentId?: string, machineId
   // error 分支此前只置 _listenerAlive=false 打日志不重拉，spawn 级失败会永久死——这里统一治。
   const scheduleListenerRespawn = (reason: string): void => {
     _listenerAlive = false;
+    // 防重入：同一次崩溃的 error+exit 双事件只排一次重拉（spawnOnce 成功拉起后清零）。
+    if (_respawnScheduled) {
+      return;
+    }
+    _respawnScheduled = true;
     // 上次拉起若存活超健康阈值，视为稳定运行过，退避计数器归零（从最短间隔重新起）。
     const aliveMs = _listenerSpawnedAt ? Date.now() - _listenerSpawnedAt : 0;
     if (aliveMs >= LISTENER_HEALTHY_UPTIME_MS) {
@@ -283,6 +292,7 @@ export function startWechatListener(apiBase: string, agentId?: string, machineId
     });
     _listenerAlive = true;
     _listenerSpawnedAt = Date.now();
+    _respawnScheduled = false; // 新监听已拉起，允许下次崩溃重新排程
     child.stdout!.on('data', (d: Buffer) => {
       console.log('[listen_chat]', d.toString().trim());
     });

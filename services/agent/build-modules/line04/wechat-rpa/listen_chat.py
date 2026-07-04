@@ -3413,7 +3413,7 @@ def post_message_receipt(
     message_id: Any,
     ok: bool,
     agent_id: Optional[str] = None,
-    timeout: int = 10,
+    timeout: int = 5,
 ) -> None:
     """回写单条客户消息的送达回执（bug2 下半：让中台不再记假账）。
 
@@ -3428,7 +3428,8 @@ def post_message_receipt(
     body: Dict[str, Any] = {"ok": ok}
     if agent_id:
         body["agent_id"] = agent_id
-    # 回执非关键路径：失败重试一次即可（retries=2 = 1 次重试），别拖垮监听主循环。
+    # 回执非关键路径：失败重试一次即可（retries=2 = 1 次重试）。timeout 默认 5s——本函数在
+    # 热路径串行发送内同步调用，中台不可达时别拖 10-20s/条堵住后续消息回复。
     _resp, error = _post_with_retry(
         url, body, timeout=timeout, retries=2, backoff_base=0.5, max_total=5
     )
