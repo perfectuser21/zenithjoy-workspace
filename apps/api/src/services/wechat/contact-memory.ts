@@ -83,6 +83,40 @@ export async function appendMessage(
   }
 }
 
+// ─── 1b) markMessageReceipt：agent 真送达回执，翻 draft → delivered/failed ──────
+
+/**
+ * agent 真机发送后回报：把该 out 草稿行翻成 delivered（成功）/ failed（失败）。
+ *
+ * WHERE 三条件缺一不可：
+ *   - id = $1：目标行
+ *   - cs_wechat_id = $3：归属校验（防跨租户翻别人客服的行）
+ *   - direction = 'out' AND status = 'draft'：只翻本客服自己那条待确认草稿；已 delivered/
+ *     failed 的行不再命中 → 幂等（重复回执 / 翻已终态行都是 no-op）。
+ *
+ * 命中（翻了 1 行）返回 true；未命中（不归属 / 已翻过 / 不存在）返回 false。
+ * DB 失败 → console.warn 不抛，返回 false（与本文件容错纪律一致）。
+ */
+export async function markMessageReceipt(
+  messageId: number,
+  ok: boolean,
+  csWechatId: string,
+): Promise<boolean> {
+  try {
+    const res = await pool.query(
+      `UPDATE zenithjoy.wechat_messages
+          SET status = $2
+        WHERE id = $1 AND cs_wechat_id = $3 AND direction = 'out' AND status = 'draft'
+        RETURNING id`,
+      [messageId, ok ? 'delivered' : 'failed', csWechatId],
+    );
+    return (res.rows?.length ?? 0) > 0;
+  } catch (err) {
+    console.warn('[contact-memory] markMessageReceipt 失败(已吞):', err);
+    return false;
+  }
+}
+
 // ─── 2) getShortTerm：取最近 N 条，最终按 created_at ASC ────────────────────────
 
 /**
