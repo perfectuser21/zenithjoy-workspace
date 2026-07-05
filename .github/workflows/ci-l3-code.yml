@@ -78,7 +78,8 @@ jobs:
           cache-dependency-path: apps/dashboard/package-lock.json
       - run: npm ci
         working-directory: apps/dashboard
-      - run: npx eslint . --max-warnings 79
+      # 棘轮制：78 = 2026-07-05 实测警告数，只许降不许涨；目标 ≤20（消警告另立 sprint）
+      - run: npx eslint . --max-warnings 78
         working-directory: apps/dashboard
 
   dashboard-typecheck:
@@ -144,6 +145,7 @@ jobs:
           cache: 'npm'
           cache-dependency-path: package-lock.json
       - run: npm ci --workspace=apps/api
+      # 棘轮制：40 = 2026-07-05 实测警告数（贴线），只许降不许涨；目标 ≤20（消警告另立 sprint）
       - run: npx eslint src/ --max-warnings 40
         working-directory: apps/api
 
@@ -200,10 +202,12 @@ jobs:
           node-version: '20'
           cache: 'npm'
           cache-dependency-path: apps/dashboard/package-lock.json
-      - run: npm ci
-        working-directory: apps/dashboard
-      - run: npm audit --audit-level=moderate --omit=dev
-        working-directory: apps/dashboard
+      # audit-gate 含 devDependencies（旧 --omit=dev 藏住过 6 个 high，2026-07-05 repo-audit 抓出）
+      # npm audit 只读 lockfile，无需 npm ci
+      - name: 根目录依赖漏洞门禁（含 dev）
+        run: bash .github/workflows/scripts/audit-gate.sh .
+      - name: dashboard 依赖漏洞门禁（含 dev）
+        run: bash .github/workflows/scripts/audit-gate.sh apps/dashboard
 
   # ─── L3 Gate ──────────────────────────────────────────────────────────
   l3-passed:
