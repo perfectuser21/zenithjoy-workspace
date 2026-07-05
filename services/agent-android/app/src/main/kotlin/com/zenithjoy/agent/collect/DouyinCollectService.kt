@@ -439,12 +439,21 @@ class DouyinCollectService : AccessibilityService() {
         )
         if (byId != null) return byId
 
-        // fallback：找第一个 clickable 的 ImageView（视频封面）
+        // 真机 uiautomator dump 验证：搜索结果页的视频卡片根节点是
+        // android.view.View（不是 ImageView），resource-id 混淆成短乱码
+        // （如 "q7k"），且左右两栏网格布局重复同一个混淆 id——不能硬编码
+        // 这类会随构建变化的短乱码，改按"卡片大小的可点击节点"结构匹配：
+        // 搜索结果网格卡片宽/高都远大于普通按钮（网格双列，每张卡约占
+        // 屏宽一半、屏高四分之一左右），用尺寸阈值排除顶部工具栏的小按钮。
         val queue = ArrayDeque<AccessibilityNodeInfo>()
         queue.add(root)
+        val bounds = android.graphics.Rect()
         while (queue.isNotEmpty()) {
             val node = queue.removeFirst()
-            if (node.isClickable && node.className?.contains("ImageView") == true) return node
+            if (node.isClickable) {
+                node.getBoundsInScreen(bounds)
+                if (bounds.width() > 400 && bounds.height() > 400) return node
+            }
             for (i in 0 until node.childCount) node.getChild(i)?.let { queue.add(it) }
         }
         return null
