@@ -38,10 +38,11 @@ class DouyinCollectService : AccessibilityService() {
     private var currentKeyword = ""
     private var currentTaskId = ""
 
-    private enum class State {
+    internal enum class State {
         IDLE,
         OPENING_DOUYIN,
         TYPING_KEYWORD,
+        SUBMITTING_SEARCH,
         WAITING_SEARCH_RESULTS,
         OPENING_FIRST_VIDEO,
         OPENING_COMMENTS,
@@ -471,6 +472,19 @@ class DouyinCollectService : AccessibilityService() {
         const val EXTRA_RESULT_COMMENT_IDS = "comment_ids"
         const val EXTRA_RESULT_COMMENT_TEXTS = "comment_texts"
         const val EXTRA_RESULT_ERROR = "error"
+
+        /**
+         * 触发搜索后短时间内的结果事件多半是过渡态渲染（联想词/历史列表刷新），
+         * 不是真正的搜索结果页，需丢弃防止误点击。
+         */
+        internal fun isResultEventDebounced(triggeredAtMs: Long, nowMs: Long, settleMs: Long): Boolean {
+            return nowMs - triggeredAtMs <= settleMs
+        }
+
+        /** 只有从 TYPING_KEYWORD 才允许进入 SUBMITTING_SEARCH，防止重复触发搜索。 */
+        internal fun shouldEnterSubmitting(currentState: State): Boolean {
+            return currentState == State.TYPING_KEYWORD
+        }
 
         fun dispatchTask(context: Context, keyword: String, taskId: String) {
             val intent = Intent(ACTION_COLLECT_TASK).apply {
