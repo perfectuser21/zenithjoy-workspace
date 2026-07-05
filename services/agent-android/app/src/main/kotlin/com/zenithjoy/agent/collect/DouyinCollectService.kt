@@ -50,6 +50,10 @@ class DouyinCollectService : AccessibilityService() {
 
     private val taskReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
+            // 诊断守卫：曾经发生过"任务已下发但这里从没打过一行日志"的真机 bug，
+            // 无条件在最开头打一行，用来分清"onReceive 完全没被触发"还是
+            // "触发了但被某个早退分支吃掉"这两种情况。
+            android.util.Log.i(TAG, "onReceive fired: action=${intent?.action}")
             if (intent?.action != ACTION_COLLECT_TASK) return
             val keyword = intent.getStringExtra(EXTRA_KEYWORD) ?: return
             val taskId = intent.getStringExtra(EXTRA_TASK_ID) ?: ""
@@ -413,10 +417,15 @@ class DouyinCollectService : AccessibilityService() {
 
         fun dispatchTask(context: Context, keyword: String, taskId: String) {
             val intent = Intent(ACTION_COLLECT_TASK).apply {
+                // 显式指定目标包名——隐式应用内广播在部分厂商 ROM 上的分发行为
+                // 不完全可靠，显式 setPackage 让系统按包名精确路由，不依赖
+                // "同进程/同 UID 就一定能投递"这个假设。
+                setPackage(context.packageName)
                 putExtra(EXTRA_KEYWORD, keyword)
                 putExtra(EXTRA_TASK_ID, taskId)
             }
             context.sendBroadcast(intent)
+            android.util.Log.i(TAG, "dispatchTask sendBroadcast called: keyword=$keyword taskId=$taskId")
         }
     }
 }
