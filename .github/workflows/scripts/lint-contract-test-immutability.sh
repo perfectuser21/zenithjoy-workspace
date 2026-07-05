@@ -60,7 +60,7 @@ while IFS= read -r FILE; do
     echo ""
     FAILED=true
   else
-    echo "✅ OK: $FILE（首次引入后未再修改）"
+    echo "✅ OK: ${FILE}（首次引入后未再修改）"
   fi
 done <<< "$TEST_FILES"
 
