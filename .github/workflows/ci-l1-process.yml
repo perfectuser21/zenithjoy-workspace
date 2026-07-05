@@ -351,13 +351,25 @@ jobs:
       - name: Run lint-wechat-rpa-runner
         run: bash .github/workflows/scripts/lint-wechat-rpa-runner.sh
 
+  lint-contract-test-immutability:
+    if: github.event_name == 'pull_request'
+    name: Lint — Contract Test Immutability
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Run lint-contract-test-immutability
+        run: bash .github/workflows/scripts/lint-contract-test-immutability.sh origin/main
+
   # ─── Gate job ─────────────────────────────────────────────────────────────
 
   l1-passed:
     name: L1 Process Gate Passed
     needs: [verify-dev-workflow, pr-title, ci-config-audit, secrets-scan, frontend-browser-dod-check,
             lint-test-pairing, lint-test-quality, lint-tdd-commit-order, lint-no-fake-test, lint-feature-has-smoke,
-            lint-agent-version-bump, lint-wechat-rpa-runner]
+            lint-agent-version-bump, lint-wechat-rpa-runner, lint-contract-test-immutability]
     if: always() && github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -427,6 +439,11 @@ jobs:
 
           if [ "${{ needs.lint-wechat-rpa-runner.result }}" != "success" ]; then
             echo "FAIL: Lint WeChat RPA Runner (${{ needs.lint-wechat-rpa-runner.result }})"
+            FAILED=true
+          fi
+
+          if [ "${{ needs.lint-contract-test-immutability.result }}" != "success" ]; then
+            echo "FAIL: Lint Contract Test Immutability (${{ needs.lint-contract-test-immutability.result }})"
             FAILED=true
           fi
 
