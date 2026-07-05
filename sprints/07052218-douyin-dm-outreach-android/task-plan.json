@@ -1,0 +1,34 @@
+{
+  "initiative_id": "368c40c2-ba63-8120-86a9-c8739cde0d2a",
+  "journey_type": "autonomous",
+  "journey_type_reason": "Android 设备在后台自动执行私信触达（无障碍服务驱动），非用户在 Dashboard 上直接操作的界面交互，属系统自动跑的执行面",
+  "tasks": [
+    {
+      "task_id": "ws1",
+      "title": "抖音私信主动触达 · Android 无障碍服务执行路径",
+      "scope": "给 Android 端新增私信发送能力：本地频控计数器（10分钟窗口≤3条）、点击后重抓快照纪律、按 acquisition_config.dm_message 发送话术、送达回执确认、按 dm_assignment_id 幂等回传 /dm-outreach-result（带 device_platform=android）；中台侧派单按 agent capabilities 标记 device_platform；修复 dm_outreach_log 缺 assignment_id 列导致 outreach-history 长期返回空列表的既有断点。仅新增 Android 执行通道，不替换/不回退 Windows 路径。",
+      "dod": [
+        "[BEHAVIOR] 频控计数器：10 分钟窗口内已发 >=3 条判定拒绝，窗口外历史不计入",
+        "[BEHAVIOR] 点击后必须重新抓取快照，不得复用旧引用",
+        "[BEHAVIOR] 派单按 agent 能力标记 device_platform=android",
+        "[BEHAVIOR] /dm-outreach-result 按 dm_assignment_id 幂等，重复回传不重复计数",
+        "[BEHAVIOR] outreach-history 联表修复后可见记录 status=sent",
+        "[BEHAVIOR] error path：无 android capability 的 agent 不被误标 device_platform=android",
+        "[ARTIFACT] DmOutreachRateLimiter / SnapshotDiscipline Kotlin 模块存在",
+        "[ARTIFACT] dm_outreach_log 新增 assignment_id 列迁移文件存在"
+      ],
+      "files": [
+        "services/agent-android/app/src/main/kotlin/com/zenithjoy/agent/collect/DmOutreachRateLimiter.kt",
+        "services/agent-android/app/src/main/kotlin/com/zenithjoy/agent/collect/SnapshotDiscipline.kt",
+        "services/agent-android/app/src/main/kotlin/com/zenithjoy/agent/collect/DouyinDmOutreachService.kt",
+        "apps/api/src/services/device-platform.ts",
+        "apps/api/src/services/acquisition-dispatch.ts",
+        "apps/api/src/routes/agent-burner.ts",
+        "apps/api/db/migrations/20260705_dm_outreach_log_assignment_id.sql"
+      ],
+      "depends_on": [],
+      "complexity": "M",
+      "estimated_minutes": 100
+    }
+  ]
+}

@@ -11,6 +11,8 @@
  *   - cookieHealth    按 status + 陈旧度算 healthy|stale|expired（真 cookie 校验留刀2）
  */
 
+import { resolveDevicePlatform } from './device-platform';
+
 // 最小 pool 抽象（只用到 query），便于注入 mock
 export interface QueryablePool {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- pg 行结果动态形状，下游各函数自行收窄
@@ -604,18 +606,22 @@ export async function dispatchDue(
       continue;
     }
 
-    // 取 lead profile_url 和 agent_id（burner session 为本号绑定的 agent）
+    // 取 lead profile_url、agent_id（burner session 为本号绑定的 agent）、agent capabilities
+    // （用于判定 device_platform——按 agents.capabilities 独立判定，不派生自 agents.os_type，
+    //  见 contract-draft.md "device_platform 与既有 agents.os_type 关系澄清" 段）
     const leadRes = await pool.query(
-      `SELECT l.profile_url, s.agent_id
+      `SELECT l.profile_url, s.agent_id, ag.capabilities
          FROM zenithjoy.acquisition_leads l
          LEFT JOIN zenithjoy.agent_platform_sessions s
            ON s.account_label = $2 AND s.platform = 'douyin' AND s.role = 'burner' AND s.status = 'active'
+         LEFT JOIN zenithjoy.agents ag ON ag.id = s.agent_id
          WHERE l.id = $1
          LIMIT 1`,
       [row.lead_id, label]
     );
     const profileUrl = leadRes.rows[0]?.profile_url ?? null;
     const agentId = leadRes.rows[0]?.agent_id ?? null;
+    const devicePlatform = resolveDevicePlatform(leadRes.rows[0]?.capabilities ?? null);
 
     if (!profileUrl || !agentId) {
       // profile_url 缺失（lead 无主页）或该号无 active agent → 跳过，标 limited
@@ -642,15 +648,17 @@ export async function dispatchDue(
           tenant_id: tenantId,
           task_type: 'dm_outreach',
           dm_assignment_id: row.id,
+          device_platform: devicePlatform,
         }),
         tenantId,
       ]
     );
-    // 记录日志（status=dispatched，等 agent 回报后再改 sent/failed）
+    // 记录日志（status=dispatched，等 agent 回报后再改 sent/failed；带 assignment_id 供
+    // outreach-history 联表 + /dm-outreach-result 幂等判定使用）
     await pool.query(
-      `INSERT INTO zenithjoy.dm_outreach_log (tenant_id, account_label, lead_id, profile_url, status)
-       VALUES ($1, $2, $3, $4, 'dispatched')`,
-      [tenantId, label, row.lead_id, profileUrl]
+      `INSERT INTO zenithjoy.dm_outreach_log (tenant_id, account_label, lead_id, profile_url, status, assignment_id)
+       VALUES ($1, $2, $3, $4, 'dispatched', $5)`,
+      [tenantId, label, row.lead_id, profileUrl, row.id]
     );
     await pool.query(
       `UPDATE zenithjoy.dm_assignments SET status = 'dispatched', agent_id = $2, updated_at = now() WHERE id = $1`,

@@ -1,6 +1,3 @@
-contract_branch: cp-0705221924-douyin-dm-outreach-android
-sprint_dir: sprints/07052218-douyin-dm-outreach-android
-
 ---
 skeleton: false
 journey_type: autonomous
