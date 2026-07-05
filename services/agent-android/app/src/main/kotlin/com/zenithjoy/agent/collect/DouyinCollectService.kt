@@ -37,11 +37,13 @@ class DouyinCollectService : AccessibilityService() {
     private var state = State.IDLE
     private var currentKeyword = ""
     private var currentTaskId = ""
+    private var searchTriggeredAtMs = 0L
 
-    private enum class State {
+    internal enum class State {
         IDLE,
         OPENING_DOUYIN,
         TYPING_KEYWORD,
+        SUBMITTING_SEARCH,
         WAITING_SEARCH_RESULTS,
         OPENING_FIRST_VIDEO,
         OPENING_COMMENTS,
@@ -198,7 +200,17 @@ class DouyinCollectService : AccessibilityService() {
             delay(RandomDelay.sample(RandomDelay.SEARCH_MS))
             performGlobalAction(GLOBAL_ACTION_BACK) // dismiss keyboard if shown
             delay(RandomDelay.sample(RandomDelay.CLICK_MS))
-            triggerSearch(rootInActiveWindow ?: return@launch)
+            // 之前这里拿不到根节点就静默 return@launch：triggerSearch() 从未被调用，
+            // 唯一的看门狗 startSearchResultTimeout() 只在 triggerSearch() 内部启动，
+            // 导致服务永久卡死在 SUBMITTING_SEARCH，后续任务全被 busy-guard 拒绝，
+            // 只能重启进程恢复。改为显式判空并调用 finishWithError 上报错误、把
+            // state 复位回 IDLE。
+            val submitRoot = rootInActiveWindow
+            if (submitRoot == null) {
+                finishWithError("NO_WINDOW_BEFORE_SUBMIT")
+                return@launch
+            }
+            triggerSearch(submitRoot)
         }
     }
 
@@ -212,10 +224,13 @@ class DouyinCollectService : AccessibilityService() {
         if (confirmBtn != null) {
             confirmBtn.performAction(AccessibilityNodeInfo.ACTION_CLICK)
         } else {
-            // IME_ACTION_SEARCH
+            // 找不到确认按钮时，用 ACTION_IME_ENTER 确认 IME 的搜索/回车动作——
+            // 之前误用 ACTION_NEXT_AT_MOVEMENT_GRANULARITY（按粒度移动光标），
+            // 那不是提交搜索的动作，是这个 bug 的根因之一。
             val input = findFirstEditText(root)
-            input?.performAction(AccessibilityNodeInfo.ACTION_NEXT_AT_MOVEMENT_GRANULARITY)
+            input?.performAction(AccessibilityNodeInfo.AccessibilityAction.ACTION_IME_ENTER.id)
         }
+        searchTriggeredAtMs = android.os.SystemClock.elapsedRealtime()
         state = State.WAITING_SEARCH_RESULTS
         startSearchResultTimeout()
     }
@@ -237,6 +252,7 @@ class DouyinCollectService : AccessibilityService() {
     private fun handleSearchResults(event: AccessibilityEvent) {
         if (event.eventType != AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED) return
         if (state != State.WAITING_SEARCH_RESULTS) return
+        if (isResultEventDebounced(searchTriggeredAtMs, android.os.SystemClock.elapsedRealtime(), RESULTS_SETTLE_MS)) return
 
         val root = rootInActiveWindow ?: return
         val videoCard = findFirstVideoCard(root) ?: return
@@ -252,10 +268,14 @@ class DouyinCollectService : AccessibilityService() {
         ) {
             val root = rootInActiveWindow ?: return
             val input = findFirstEditText(root) ?: return
-            if (state == State.TYPING_KEYWORD) {
+            if (shouldEnterSubmitting(state)) {
+                // 切到 SUBMITTING_SEARCH（不是 WAITING_SEARCH_RESULTS）：这个过渡态在
+                // onAccessibilityEvent 分发表里没有对应 handler，既防止 typeKeyword
+                // 被重复调用，又不会让联想词/历史列表刷新事件被误路由到
+                // handleSearchResults() 造成误点击。真正的 WAITING_SEARCH_RESULTS
+                // 要等 triggerSearch() 真正发出搜索动作之后才切换。
+                state = State.SUBMITTING_SEARCH
                 typeKeyword(root)
-                // 只触发一次
-                state = State.WAITING_SEARCH_RESULTS
             }
         }
     }
@@ -462,6 +482,7 @@ class DouyinCollectService : AccessibilityService() {
     companion object {
         private const val TAG = "DouyinCollectService"
         private const val DOUYIN_PKG = "com.ss.android.ugc.aweme"
+        private const val RESULTS_SETTLE_MS = 400L
 
         const val ACTION_COLLECT_TASK = "com.zenithjoy.agent.COLLECT_TASK"
         const val ACTION_COLLECT_RESULT = "com.zenithjoy.agent.COLLECT_RESULT"
@@ -471,6 +492,19 @@ class DouyinCollectService : AccessibilityService() {
         const val EXTRA_RESULT_COMMENT_IDS = "comment_ids"
         const val EXTRA_RESULT_COMMENT_TEXTS = "comment_texts"
         const val EXTRA_RESULT_ERROR = "error"
+
+        /**
+         * 触发搜索后短时间内的结果事件多半是过渡态渲染（联想词/历史列表刷新），
+         * 不是真正的搜索结果页，需丢弃防止误点击。
+         */
+        internal fun isResultEventDebounced(triggeredAtMs: Long, nowMs: Long, settleMs: Long): Boolean {
+            return nowMs - triggeredAtMs <= settleMs
+        }
+
+        /** 只有从 TYPING_KEYWORD 才允许进入 SUBMITTING_SEARCH，防止重复触发搜索。 */
+        internal fun shouldEnterSubmitting(currentState: State): Boolean {
+            return currentState == State.TYPING_KEYWORD
+        }
 
         fun dispatchTask(context: Context, keyword: String, taskId: String) {
             val intent = Intent(ACTION_COLLECT_TASK).apply {
