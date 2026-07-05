@@ -200,7 +200,17 @@ class DouyinCollectService : AccessibilityService() {
             delay(RandomDelay.sample(RandomDelay.SEARCH_MS))
             performGlobalAction(GLOBAL_ACTION_BACK) // dismiss keyboard if shown
             delay(RandomDelay.sample(RandomDelay.CLICK_MS))
-            triggerSearch(rootInActiveWindow ?: return@launch)
+            // 之前这里拿不到根节点就静默 return@launch：triggerSearch() 从未被调用，
+            // 唯一的看门狗 startSearchResultTimeout() 只在 triggerSearch() 内部启动，
+            // 导致服务永久卡死在 SUBMITTING_SEARCH，后续任务全被 busy-guard 拒绝，
+            // 只能重启进程恢复。改为显式判空并调用 finishWithError 上报错误、把
+            // state 复位回 IDLE。
+            val submitRoot = rootInActiveWindow
+            if (submitRoot == null) {
+                finishWithError("NO_WINDOW_BEFORE_SUBMIT")
+                return@launch
+            }
+            triggerSearch(submitRoot)
         }
     }
 
