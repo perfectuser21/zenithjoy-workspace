@@ -144,7 +144,11 @@ class DouyinCollectService : AccessibilityService() {
                 finishWithError("NO_WINDOW")
                 return@launch
             }
-            val searchBtn = findNodeByIds(root,
+            // 真机验证发现：抖音的 resource-id 是混淆过的短乱码（如 "0fs"/"6ia"），
+            // 猜测式的人类可读 id（search_btn/iv_search 等）在真实包里根本不存在。
+            // content-description（无障碍朗读用的文案，如"搜索"）不受混淆影响，
+            // 真机 dump 验证过存在，改为优先按 content-desc 匹配。
+            val searchBtn = findNodeByContentDesc(root, "搜索") ?: findNodeByIds(root,
                 "com.ss.android.ugc.aweme:id/search_btn",
                 "com.ss.android.ugc.aweme:id/iv_search",
                 "com.ss.android.ugc.aweme:id/action_search",
@@ -268,7 +272,9 @@ class DouyinCollectService : AccessibilityService() {
         if (event.packageName != DOUYIN_PKG) return
 
         val root = rootInActiveWindow ?: return
-        val commentBtn = findNodeByIds(root,
+        // resource-id 混淆同上——评论按钮改为优先按 content-desc 匹配（"评论"/带数字的
+        // "评论 N" 朗读文案），resource-id 候选值保留兜底但大概率命中不了。
+        val commentBtn = findNodeByContentDescPrefix(root, "评论") ?: findNodeByIds(root,
             "com.ss.android.ugc.aweme:id/iv_comment",
             "com.ss.android.ugc.aweme:id/comment_icon",
             "com.ss.android.ugc.aweme:id/tv_comment_count",
@@ -385,6 +391,30 @@ class DouyinCollectService : AccessibilityService() {
         for (id in ids) {
             val list = root.findAccessibilityNodeInfosByViewId(id)
             if (list.isNotEmpty()) return list[0]
+        }
+        return null
+    }
+
+    /** 按 content-description 精确匹配（不受 resource-id 混淆影响）。 */
+    private fun findNodeByContentDesc(root: AccessibilityNodeInfo, desc: String): AccessibilityNodeInfo? {
+        val queue = ArrayDeque<AccessibilityNodeInfo>()
+        queue.add(root)
+        while (queue.isNotEmpty()) {
+            val node = queue.removeFirst()
+            if (node.contentDescription?.toString() == desc) return node
+            for (i in 0 until node.childCount) node.getChild(i)?.let { queue.add(it) }
+        }
+        return null
+    }
+
+    /** 按 content-description 前缀匹配（如"评论 123"这种带数字后缀的朗读文案）。 */
+    private fun findNodeByContentDescPrefix(root: AccessibilityNodeInfo, prefix: String): AccessibilityNodeInfo? {
+        val queue = ArrayDeque<AccessibilityNodeInfo>()
+        queue.add(root)
+        while (queue.isNotEmpty()) {
+            val node = queue.removeFirst()
+            if (node.contentDescription?.toString()?.startsWith(prefix) == true) return node
+            for (i in 0 until node.childCount) node.getChild(i)?.let { queue.add(it) }
         }
         return null
     }
