@@ -6,6 +6,16 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
+    <!--
+      Android 11+ 包可见性限制：targetSdk 30+ 查询其他包信息前必须声明 <queries>，
+      否则 PackageManager.getLaunchIntentForPackage() 对未声明的包直接返回 null——
+      真机验证复现：抖音包明明装着（monkey 能拉起），但代码里拿到的 launch intent
+      是 null，症状是"合法失败"而不是抛异常，很容易被误判成别的原因。
+    -->
+    <queries>
+        <package android:name="com.ss.android.ugc.aweme" />
+    </queries>
+
     <application
         android:name=".AgentApplication"
         android:allowBackup="true"
