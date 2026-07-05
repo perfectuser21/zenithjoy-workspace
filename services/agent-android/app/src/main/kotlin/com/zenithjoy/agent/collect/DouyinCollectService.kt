@@ -130,12 +130,17 @@ class DouyinCollectService : AccessibilityService() {
     }
 
     // ── 2. 打开搜索框 ─────────────────────────────────────────────────────────
+    //
+    // 真机验证发现：固定延时一次性抓 rootInActiveWindow 不可靠——荣耀设备在
+    // 拉起目标 App 前会插一屏厂商自己的启动提示（AppSplashAdvertiseActivity），
+    // 导致抖音真正进入前台窗口的时间点比固定延时更晚、且不固定。原来"抓不到
+    // 就直接判死"的写法，会把这种正常的启动抖动误判成致命错误。改成有限次
+    // 轮询重试，只有整个重试窗口内都拿不到根节点才真正判失败。
 
     private fun openSearchBar() {
         state = State.TYPING_KEYWORD
         scope.launch {
-            delay(RandomDelay.sample(RandomDelay.NAV_MS))
-            val root = rootInActiveWindow ?: run {
+            val root = awaitRootInActiveWindow() ?: run {
                 finishWithError("NO_WINDOW")
                 return@launch
             }
@@ -150,6 +155,19 @@ class DouyinCollectService : AccessibilityService() {
             }
             typeKeyword(root)
         }
+    }
+
+    /** 有限次轮询等待窗口根节点就绪，替代"一次固定延时后抓不到就判死"。 */
+    private suspend fun awaitRootInActiveWindow(
+        attempts: Int = 8,
+        intervalMs: Long = 500L,
+    ): AccessibilityNodeInfo? {
+        repeat(attempts) { attempt ->
+            delay(intervalMs)
+            rootInActiveWindow?.let { return it }
+            android.util.Log.d(TAG, "awaitRootInActiveWindow: attempt ${attempt + 1}/$attempts still null")
+        }
+        return rootInActiveWindow
     }
 
     // ── 3. 输入关键词 ─────────────────────────────────────────────────────────
