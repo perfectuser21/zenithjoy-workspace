@@ -113,18 +113,24 @@ acquisitionDispatchRouter.get('/dispatch/plan', tenantContextOptional, async (re
 });
 
 // ── GET /outreach-history — 触达历史（dm_assignments JOIN dm_outreach_log JOIN acquisition_leads）──
-acquisitionDispatchRouter.get('/outreach-history', tenantContextOptional, async (req: Request, res: Response) => {
+// 注册在两个路径下：/outreach-history（既有 Dashboard 前端调用路径，不改）+
+// /dispatch/outreach-history（sprint 07052218 contract-draft.md 验证命令指定路径，两者同一 handler）。
+async function outreachHistoryHandler(req: Request, res: Response) {
   const tenantId = tenantOf(req, res);
   if (!tenantId) return;
   try {
+    // 显式 cast $1：dm_assignments.tenant_id 是 text，acquisition_leads.tenant_id 是 uuid，
+    // 同一个占位符在两处类型不同，pg 会按首次出现处推断类型导致另一处 "operator does not
+    // exist: text = uuid"（此前正是这个类型不匹配错误被 catch 分支静默吞掉，跟缺
+    // assignment_id 列是两个独立断点，本 sprint 一并修，理由同 Step 7 scope 边界声明）。
     const r = await pool.query(
       `SELECT a.id, a.account_label, a.status, a.scheduled_for,
               l.nickname AS lead_nickname,
               ol.sent_at
          FROM zenithjoy.dm_assignments a
-         LEFT JOIN zenithjoy.acquisition_leads l ON l.id = a.lead_id AND l.tenant_id = $1
+         LEFT JOIN zenithjoy.acquisition_leads l ON l.id = a.lead_id AND l.tenant_id = $1::uuid
          LEFT JOIN zenithjoy.dm_outreach_log ol ON ol.assignment_id = a.id
-        WHERE a.tenant_id = $1
+        WHERE a.tenant_id = $1::text
         ORDER BY a.scheduled_for DESC NULLS LAST, a.created_at DESC
         LIMIT 500`,
       [tenantId]
@@ -141,7 +147,9 @@ acquisitionDispatchRouter.get('/outreach-history', tenantContextOptional, async 
   } catch {
     return res.json(OK({ items: [], total: 0 }));
   }
-});
+}
+acquisitionDispatchRouter.get('/outreach-history', tenantContextOptional, outreachHistoryHandler);
+acquisitionDispatchRouter.get('/dispatch/outreach-history', tenantContextOptional, outreachHistoryHandler);
 
 // ── GET /cookie-health — 各号健康分类 + 需重扫项 ──
 acquisitionDispatchRouter.get('/cookie-health', tenantContextOptional, async (req: Request, res: Response) => {

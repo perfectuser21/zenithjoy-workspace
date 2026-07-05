@@ -18,6 +18,7 @@ import pool from '../db/connection';
 import { writeLeadsFromComments, writeDmOutreachStatus, type DmStatus } from '../services/lead-writer';
 import { tenantContextOptional } from '../middleware/tenant-context';
 import { agentContext } from '../middleware/agent-context';
+import { isDuplicateDmOutreachResult } from '../services/device-platform';
 
 const router = Router();
 
@@ -467,8 +468,17 @@ router.post('/dm-outreach', tenantContextOptional, agentContext, async (req: Req
 
 // ── 8. POST /dm-outreach-result — Agent 回报触达结果 → 写飞书 + 单号停用不连坐 ──
 router.post('/dm-outreach-result', async (req: Request, res: Response) => {
-  const { task_id, agent_id, account_label, status, error_code, profile_url, screenshot_path } =
-    req.body || {};
+  const {
+    task_id,
+    agent_id,
+    account_label,
+    status,
+    error_code,
+    profile_url,
+    screenshot_path,
+    device_platform,
+    dm_assignment_id,
+  } = req.body || {};
   if (!task_id) return res.status(400).json(ERR('MISSING_TASK_ID', 'task_id 必填'));
 
   const t = await pool.query(
@@ -483,15 +493,28 @@ router.post('/dm-outreach-result', async (req: Request, res: Response) => {
   const acctLabel = account_label || payload.account_label || '';
   const agentId = agent_id || payload.agent_id || '';
   const profileUrl = profile_url || payload.profile_url || '';
+  const assignmentId: string | null = dm_assignment_id || payload.dm_assignment_id || null;
   const dmStatus: DmStatus =
     status === 'sent' || status === 'limited' || status === 'failed' ? status : 'failed';
+
+  // 幂等判定（Reviewer 幂等断言加固）：按 dm_assignment_id 查 dm_assignments 当前状态，
+  // 已是终态(sent/limited/failed) → 本次视为重复回传，不再计数/不再触发飞书写入/不再改状态。
+  let isDuplicate = false;
+  if (assignmentId) {
+    const assignRes = await pool.query(
+      `SELECT status FROM zenithjoy.dm_assignments WHERE id=$1`,
+      [assignmentId],
+    );
+    const currentAssignmentStatus: string | null = assignRes.rows[0]?.status ?? null;
+    isDuplicate = isDuplicateDmOutreachResult(currentAssignmentStatus);
+  }
 
   const binding = await getFeishuBinding(tenantId);
   const feishuBitableUrl = binding?.app_token ? `https://feishu.cn/base/${binding.app_token}` : '';
 
   // failed + SESSION_EXPIRED/RISK → 仅停用「被触达的那个号」（不连坐同 agent 其他号）
   let sessionDisabled = false;
-  if (dmStatus === 'failed' && error_code && DM_SESSION_KILLERS.includes(error_code)) {
+  if (!isDuplicate && dmStatus === 'failed' && error_code && DM_SESSION_KILLERS.includes(error_code)) {
     const upd = await pool.query(
       // agent_platform_sessions 无 updated_at 列（只 bound_at/created_at）— 不可写 updated_at
       `UPDATE zenithjoy.agent_platform_sessions SET status='expired'
@@ -501,9 +524,9 @@ router.post('/dm-outreach-result', async (req: Request, res: Response) => {
     sessionDisabled = (upd.rowCount ?? 0) > 0;
   }
 
-  // 飞书 Lead 表回写触达状态
+  // 飞书 Lead 表回写触达状态（重复回传不再写，避免飞书写入计数翻倍）
   let leadWriteStatus: 'success' | 'failed' = 'failed';
-  if (binding?.table_id_leads) {
+  if (!isDuplicate && binding?.table_id_leads) {
     const w = await writeDmOutreachStatus({
       tenant_id: tenantId,
       table_id_leads: binding.table_id_leads,
@@ -515,33 +538,49 @@ router.post('/dm-outreach-result', async (req: Request, res: Response) => {
     leadWriteStatus = w.lead_write_status;
   }
 
-  // 更新 task 终态：sent/limited→done，failed→failed
-  const taskStatus = dmStatus === 'failed' ? 'failed' : 'done';
-  await pool.query(
-    `UPDATE zenithjoy.publish_tasks SET status=$2,
-       response = jsonb_build_object(
-         'dm_status', $3::text,
-         'error_code', $4::text,
-         'feishu_bitable_url', $5::text,
-         'profile_url', $6::text,
-         'account_label', $7::text,
-         'lead_write_status', $8::text,
-         'screenshot_path', $9::text
-       ),
-       updated_at = NOW()
-     WHERE id=$1`,
-    [
-      task_id,
-      taskStatus,
-      dmStatus,
-      error_code || null,
-      feishuBitableUrl,
-      profileUrl,
-      acctLabel,
-      leadWriteStatus,
-      screenshot_path || '',
-    ],
-  );
+  if (!isDuplicate) {
+    // 更新 task 终态：sent/limited→done，failed→failed
+    const taskStatus = dmStatus === 'failed' ? 'failed' : 'done';
+    await pool.query(
+      `UPDATE zenithjoy.publish_tasks SET status=$2,
+         response = jsonb_build_object(
+           'dm_status', $3::text,
+           'error_code', $4::text,
+           'feishu_bitable_url', $5::text,
+           'profile_url', $6::text,
+           'account_label', $7::text,
+           'lead_write_status', $8::text,
+           'screenshot_path', $9::text
+         ),
+         updated_at = NOW()
+       WHERE id=$1`,
+      [
+        task_id,
+        taskStatus,
+        dmStatus,
+        error_code || null,
+        feishuBitableUrl,
+        profileUrl,
+        acctLabel,
+        leadWriteStatus,
+        screenshot_path || '',
+      ],
+    );
+
+    // dm_assignment_id 存在时：把 dm_outreach_log 的对应行(assignment_id 关联)从 dispatched
+    // 推进到真实终态 + 同步 dm_assignments.status（幂等去重键，重复回传被上面 isDuplicate 短路）
+    if (assignmentId) {
+      await pool.query(
+        `UPDATE zenithjoy.dm_outreach_log SET status=$2
+           WHERE assignment_id=$1`,
+        [assignmentId, dmStatus],
+      );
+      await pool.query(
+        `UPDATE zenithjoy.dm_assignments SET status=$2, updated_at=now() WHERE id=$1`,
+        [assignmentId, dmStatus],
+      );
+    }
+  }
 
   const data: Record<string, unknown> = {
     task_id,
@@ -552,6 +591,10 @@ router.post('/dm-outreach-result', async (req: Request, res: Response) => {
   // session_disabled 仅 failed 分支附带（sent/limited schema 不含此字段）
   if (dmStatus === 'failed') {
     data.session_disabled = sessionDisabled;
+  }
+  // device_platform 仅当请求带了该字段才回显（保持与既有 sent/limited/failed 三态 schema 向后兼容）
+  if (device_platform !== undefined) {
+    data.device_platform = device_platform;
   }
 
   return res.json(OK(data));
