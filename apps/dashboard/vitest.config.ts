@@ -38,6 +38,17 @@ export default defineConfig({
       '../../sprints/06291030-line02-profile-tabs-integration/tests/**/*.test.ts',
     ],
     exclude: ['node_modules', 'dist', 'e2e/**'],
+    // 棘轮门禁：2026-07-05 实测 st 54.91 / br 48.34 / fn 44.71 / ln 57.52 取 floor，
+    // 只许升不许降（api 侧已有 65 门禁，dashboard 逐步向 65 收敛）
+    coverage: {
+      thresholds: {
+        statements: 54,
+        branches: 48,
+        functions: 44,
+        lines: 57,
+      },
+      reporter: ['text', 'lcov'],
+    },
   },
   // 合同 ws4 测试文件名 .ts 但含 JSX；让 esbuild 按 tsx 解析所有 ts/jsx 文件
   esbuild: {

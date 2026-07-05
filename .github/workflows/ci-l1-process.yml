@@ -6,6 +6,10 @@ name: L1 Process Gate
 on:
   pull_request:
     branches: [main]
+  # push 覆盖：merge 进 main 后仍跑安全类检查（secrets-scan 等）；
+  # PR 专属检查（标题/分支名/diff 类 lint）用 if 条件限定在 pull_request 事件
+  push:
+    branches: [main]
   workflow_dispatch:
 
 concurrency:
@@ -16,6 +20,7 @@ jobs:
   # ─── /dev 分支命名验证 ─────────────────────────────────────────────────────
 
   verify-dev-workflow:
+    if: github.event_name == 'pull_request'
     name: Verify /dev Workflow (Branch Name Check)
     runs-on: ubuntu-latest
     timeout-minutes: 2
@@ -40,6 +45,7 @@ jobs:
   # ─── PR 标题格式（Conventional Commits）─────────────────────────────────
 
   pr-title:
+    if: github.event_name == 'pull_request'
     name: PR Title Format
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -70,6 +76,7 @@ jobs:
   # ─── CI Config Audit ──────────────────────────────────────────────────────
 
   ci-config-audit:
+    if: github.event_name == 'pull_request'
     name: CI Config Audit
     runs-on: ubuntu-latest
     timeout-minutes: 3
@@ -155,6 +162,7 @@ jobs:
   # ─── Frontend Browser DoD Check ──────────────────────────────────────────
 
   frontend-browser-dod-check:
+    if: github.event_name == 'pull_request'
     name: Frontend Browser DoD Check
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -219,6 +227,7 @@ jobs:
   # ─── 测试质量 lint 门禁（5 gates）────────────────────────────────────────
 
   lint-test-pairing:
+    if: github.event_name == 'pull_request'
     name: Lint — Test Pairing
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -230,6 +239,7 @@ jobs:
         run: bash .github/workflows/scripts/lint-test-pairing.sh origin/main
 
   lint-test-quality:
+    if: github.event_name == 'pull_request'
     name: Lint — Test Quality
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -241,6 +251,7 @@ jobs:
         run: bash .github/workflows/scripts/lint-test-quality.sh origin/main
 
   lint-tdd-commit-order:
+    if: github.event_name == 'pull_request'
     name: Lint — TDD Commit Order
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -252,6 +263,7 @@ jobs:
         run: bash .github/workflows/scripts/lint-tdd-commit-order.sh origin/main
 
   lint-no-fake-test:
+    if: github.event_name == 'pull_request'
     name: Lint — No Fake Test
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -304,6 +316,7 @@ jobs:
         run: bash services/agent/install-pack/__tests__/install-pack-ascii.test.sh
 
   lint-feature-has-smoke:
+    if: github.event_name == 'pull_request'
     name: Lint — Feature Has Smoke
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -317,6 +330,7 @@ jobs:
         run: bash .github/workflows/scripts/lint-feature-has-smoke.sh origin/main
 
   lint-agent-version-bump:
+    if: github.event_name == 'pull_request'
     name: Lint — Agent Version Bump
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -328,6 +342,7 @@ jobs:
         run: bash .github/workflows/scripts/lint-agent-version-bump.sh origin/main
 
   lint-wechat-rpa-runner:
+    if: github.event_name == 'pull_request'
     name: Lint — WeChat RPA Runner
     runs-on: ubuntu-latest
     timeout-minutes: 3
@@ -343,7 +358,7 @@ jobs:
     needs: [verify-dev-workflow, pr-title, ci-config-audit, secrets-scan, frontend-browser-dod-check,
             lint-test-pairing, lint-test-quality, lint-tdd-commit-order, lint-no-fake-test, lint-feature-has-smoke,
             lint-agent-version-bump, lint-wechat-rpa-runner]
-    if: always()
+    if: always() && github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
