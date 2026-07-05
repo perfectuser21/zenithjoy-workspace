@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Agent 的 API URL 由用户在 MainActivity 里自行填写（企业内网部署、Tailscale IP
+  直连、本地测试机等场景都合法），无法预先枚举域名白名单，所以在 base-config
+  统一放开明文流量。生产走 wss://真域名 走 TLS，这个配置不影响；真正需要收紧的
+  是"这个 App 该不该被安装在客户设备上"这一层业务判断，不是传输层加密与否。
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true" />
+</network-security-config>
