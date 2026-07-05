@@ -155,11 +155,18 @@ class DouyinCollectService : AccessibilityService() {
                 "com.ss.android.ugc.aweme:id/iv_search",
                 "com.ss.android.ugc.aweme:id/action_search",
             )
-            if (searchBtn != null) {
+            // 真机验证发现：点击搜索按钮后页面已经跳转到搜索输入页，但如果这里
+            // 继续用点击前的 root 快照调 typeKeyword，那个快照里根本没有输入框，
+            // 必然报 NO_SEARCH_INPUT——从没进过搜索页。点击后必须重新抓一次
+            // root，才能看到跳转后的真实界面。
+            val postClickRoot = if (searchBtn != null) {
                 searchBtn.performAction(AccessibilityNodeInfo.ACTION_CLICK)
                 delay(RandomDelay.sample(RandomDelay.CLICK_MS))
+                awaitRootInActiveWindow(attempts = 4) ?: root
+            } else {
+                root
             }
-            typeKeyword(root)
+            typeKeyword(postClickRoot)
         }
     }
 
