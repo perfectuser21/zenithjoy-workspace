@@ -83,6 +83,37 @@ class HttpHeartbeatLoopTest {
     }
 
     @Test
+    fun `queued_tasks type field is passed through for dm_outreach routing`() = runTest {
+        // Sprint 07052218 followup — AgentService 需要按 task.type=="dm_outreach" 区分
+        // 私信触达任务和 android_douyin 采集任务，此前 HeartbeatTask 完全丢弃了服务端
+        // 已下发的 `type` 字段（walking-skeleton.ts queued_tasks.map 里 type: t.type），
+        // 导致 dm_outreach 任务下发后 Android 端无法识别、永远不会被路由。
+        server.enqueue(MockResponse().setBody("""
+            {"ok":true,"agent_id":"uuid-1","queued_tasks":[
+              {"task_id":"t2","platform":"douyin","type":"dm_outreach",
+               "payload":{"profile_url":"https://www.douyin.com/user/abc","message":"你好"}}
+            ]}
+        """.trimIndent()))
+
+        var receivedTask: HttpHeartbeatLoop.HeartbeatTask? = null
+        val loop = HttpHeartbeatLoop(
+            params = makeParams(server.url("/").toString().trimEnd('/')),
+            scope = this,
+            intervalMs = Long.MAX_VALUE,
+            onTask = { receivedTask = it },
+            httpClient = OkHttpClient(),
+        )
+        loop.start()
+        advanceTimeBy(100)
+        loop.stop()
+
+        assertNotNull(receivedTask)
+        assertEquals("douyin", receivedTask?.platform)
+        assertEquals("dm_outreach", receivedTask?.type)
+        assertEquals("https://www.douyin.com/user/abc", receivedTask?.payload?.get("profile_url"))
+    }
+
+    @Test
     fun `agent_id from response triggers onAgentIdReceived`() = runTest {
         server.enqueue(MockResponse().setBody("""{"ok":true,"agent_id":"server-assigned-uuid"}"""))
 
