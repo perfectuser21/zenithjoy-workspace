@@ -12,7 +12,9 @@ import android.os.IBinder
 import com.google.gson.Gson
 import com.zenithjoy.agent.collect.CollectResult
 import com.zenithjoy.agent.collect.CommentEntry
+import com.zenithjoy.agent.collect.DmOutreachRateLimiter
 import com.zenithjoy.agent.collect.DouyinCollectService
+import com.zenithjoy.agent.collect.DouyinDmOutreachService
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -48,6 +50,26 @@ class AgentService : Service() {
     private var heartbeatLoop: HttpHeartbeatLoop? = null
     private var keywordPollLoop: AcquisitionKeywordPollLoop? = null
 
+    // Sprint 07052218 followup — dm_outreach 本地频控历史（发送时间戳，毫秒）。
+    // 进程内存态，随 Agent 重启清零；本 sprint 先用最简单的内存实现推进真实执行路径，
+    // 跨进程重启持久化频控窗口留作后续加厚项（不影响 10 分钟窗口本身的正确性判定）。
+    private val dmSentTimestamps = java.util.Collections.synchronizedList(mutableListOf<Long>())
+
+    private val dmOutreachResultReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            if (intent?.action != DouyinDmOutreachService.ACTION_DM_OUTREACH_RESULT) return
+            val taskId = intent.getStringExtra(DouyinDmOutreachService.EXTRA_TASK_ID) ?: ""
+            val status = intent.getStringExtra(DouyinDmOutreachService.EXTRA_STATUS) ?: "failed"
+            val dmAssignmentId = intent.getStringExtra(DouyinDmOutreachService.EXTRA_DM_ASSIGNMENT_ID) ?: ""
+            val accountLabel = intent.getStringExtra(DouyinDmOutreachService.EXTRA_ACCOUNT_LABEL) ?: ""
+            val profileUrl = intent.getStringExtra(DouyinDmOutreachService.EXTRA_PROFILE_URL) ?: ""
+            val errorCode = intent.getStringExtra(DouyinDmOutreachService.EXTRA_ERROR) ?: ""
+            scope.launch {
+                reportDmOutreachResult(taskId, status, dmAssignmentId, accountLabel, profileUrl, errorCode)
+            }
+        }
+    }
+
     private val collectResultReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
             if (intent?.action != DouyinCollectService.ACTION_COLLECT_RESULT) return
@@ -75,6 +97,9 @@ class AgentService : Service() {
         registerReceiver(collectResultReceiver,
             IntentFilter(DouyinCollectService.ACTION_COLLECT_RESULT),
             RECEIVER_NOT_EXPORTED)
+        registerReceiver(dmOutreachResultReceiver,
+            IntentFilter(DouyinDmOutreachService.ACTION_DM_OUTREACH_RESULT),
+            RECEIVER_NOT_EXPORTED)
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -93,6 +118,7 @@ class AgentService : Service() {
         keywordPollLoop?.stop()
         serviceJob.cancel()
         unregisterReceiver(collectResultReceiver)
+        unregisterReceiver(dmOutreachResultReceiver)
         super.onDestroy()
     }
 
@@ -143,12 +169,14 @@ class AgentService : Service() {
             params = config.toHeartbeatParams(android.os.Build.MODEL),
             scope = scope,
             onTask = { task ->
-                android.util.Log.i(TAG, "ws1 task: ${task.platform} id=${task.task_id}")
+                android.util.Log.i(TAG, "ws1 task: ${task.platform} id=${task.task_id} type=${task.type}")
                 if (task.platform == "android_douyin") {
                     val keyword = task.payload["keyword"] as? String ?: ""
                     if (keyword.isNotBlank()) {
                         DouyinCollectService.dispatchTask(this@AgentService, keyword, task.task_id)
                     }
+                } else if (task.type == "dm_outreach") {
+                    routeDmOutreachTask(task)
                 }
             },
             onHeartbeat = { resp ->
@@ -203,6 +231,69 @@ class AgentService : Service() {
         if (keyword.isBlank()) return
         android.util.Log.i(TAG, "ws0 collect_task keyword=$keyword id=$taskId")
         DouyinCollectService.dispatchTask(this, keyword, taskId)
+    }
+
+    // Sprint 07052218 followup — dm_outreach 任务路由：先本地频控自检（DmOutreachRateLimiter,
+    // 10 分钟窗口 ≤3 条），超限直接构造 limited 结果广播上报，不启动无障碍执行流程；
+    // 未超限才真正 dispatchTask 给 DouyinDmOutreachService 走无障碍打开主页→点私信→发送流程。
+    private fun routeDmOutreachTask(task: HttpHeartbeatLoop.HeartbeatTask) {
+        val profileUrl = task.payload["profile_url"] as? String ?: ""
+        val message = task.payload["message"] as? String ?: ""
+        val accountLabel = task.payload["account_label"] as? String ?: ""
+        val dmAssignmentId = task.payload["dm_assignment_id"] as? String ?: ""
+        if (profileUrl.isBlank() || message.isBlank()) {
+            android.util.Log.w(TAG, "dm_outreach task ${task.task_id} missing profile_url/message — skip")
+            return
+        }
+
+        val now = System.currentTimeMillis()
+        val withinLimit = DmOutreachRateLimiter.isWithinLimit(dmSentTimestamps.toList(), now)
+        if (!withinLimit) {
+            android.util.Log.w(TAG, "dm_outreach task ${task.task_id} rate-limited — reporting limited without dispatch")
+            DouyinDmOutreachService.dispatchRateLimited(
+                this, task.task_id, dmAssignmentId, accountLabel, profileUrl,
+            )
+            return
+        }
+        dmSentTimestamps.add(now)
+        DouyinDmOutreachService.dispatchTask(
+            this, profileUrl, message, task.task_id, dmAssignmentId, accountLabel,
+        )
+    }
+
+    // dm_outreach 结果上报（扩展现有 /api/agent/burner/dm-outreach-result 端点，
+    // 新增 device_platform="android" — sprints/07052218-douyin-dm-outreach-android/contract-draft.md）。
+    private fun reportDmOutreachResult(
+        taskId: String,
+        status: String,
+        dmAssignmentId: String,
+        accountLabel: String,
+        profileUrl: String,
+        errorCode: String,
+    ) {
+        if (taskId.isEmpty()) return
+        val url = "${config.deriveHttpBase()}/api/agent/burner/dm-outreach-result"
+        val body = buildMap<String, Any?> {
+            put("task_id", taskId)
+            put("agent_id", config.agentId)
+            put("account_label", accountLabel)
+            put("status", status)
+            put("profile_url", profileUrl)
+            put("device_platform", "android")
+            if (dmAssignmentId.isNotBlank()) put("dm_assignment_id", dmAssignmentId)
+            if (errorCode.isNotBlank()) put("error_code", errorCode)
+        }
+        try {
+            val request = Request.Builder()
+                .url(url)
+                .post(gson.toJson(body).toRequestBody("application/json".toMediaType()))
+                .build()
+            httpClient.newCall(request).execute().use { resp ->
+                android.util.Log.i(TAG, "dm-outreach-result reported: ${resp.code} task=$taskId status=$status")
+            }
+        } catch (e: Exception) {
+            android.util.Log.w(TAG, "dm-outreach-result report failed: ${e.message}")
+        }
     }
 
     // taskId 对应 acquisition_keyword_tasks.id（由 ws0/ws1 派发 android_douyin 任务时下发）。

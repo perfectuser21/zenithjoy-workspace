@@ -48,6 +48,11 @@ class HttpHeartbeatLoop(
         val task_id: String,
         val platform: String,
         val payload: Map<String, Any?> = emptyMap(),
+        // Sprint 07052218 followup — 服务端 queued_tasks.map 同时下发 platform 和 type
+        // （walking-skeleton.ts: `type: t.type`，对 dm_outreach 任务 platform='douyin'/
+        // type='dm_outreach'）。此前完全没有解析，AgentService 无法区分 android_douyin
+        // 采集任务和 dm_outreach 私信触达任务。
+        val type: String = "",
     )
 
     data class HeartbeatResponse(
@@ -110,9 +115,10 @@ class HttpHeartbeatLoop(
                 try {
                     val taskId = rawTask["task_id"] as? String ?: return@forEach
                     val platform = rawTask["platform"] as? String ?: return@forEach
+                    val type = rawTask["type"] as? String ?: ""
                     @Suppress("UNCHECKED_CAST")
                     val payload = (rawTask["payload"] as? Map<String, Any?>) ?: emptyMap()
-                    onTask?.invoke(HeartbeatTask(taskId, platform, payload))
+                    onTask?.invoke(HeartbeatTask(taskId, platform, payload, type))
                 } catch (e: Exception) {
                     android.util.Log.w(TAG, "task parse error: ${e.message}")
                 }
