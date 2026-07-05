@@ -4,7 +4,7 @@
 
 - `services/agent-android/app/src/test/kotlin/com/zenithjoy/agent/collect/DouyinCollectServiceStateTest.kt` → `debounced when event arrives within settle window` / `not debounced when event arrives after settle window` / `boundary at exactly settle window is still debounced` / `allows entering submitting only from TYPING_KEYWORD` / `rejects entering submitting from any other state` — 状态机去抖/防重复触发纪律，本 sprint 新代码不得破坏
 - `services/agent-android/app/src/main/kotlin/com/zenithjoy/agent/collect/DouyinCollectService.kt`（真机注释，PR #1119/#1120 教训）→ "点击后必须重新抓取 root，不能用点击前的旧快照" 是本 line 已验证过的真机根因修复模式，本 sprint 的私信发送流程必须复用同一纪律（对应 Golden Path Step 4）
-- `services/agent/src/handlers/__tests__/douyin-dm-outreach.test.ts` → Windows 路径三态判定（sent/limited/failed，气泡出现才算 sent，不可点私信按钮=limited 不可假 sent）— Android 判定送达真相的标准必须与此一致，不得对 Android 单独放宽
+- `services/agent/src/handlers/__tests__/douyin-dm-outreach.test.ts`（路径为 `services/agent`，非 `apps/api`）→ Windows 路径三态判定（sent/limited/failed，气泡出现才算 sent，不可点私信按钮=limited 不可假 sent）— Android 判定送达真相的标准必须与此一致，不得对 Android 单独放宽
 - `sprints/06131229-path2-douyin-dm-outreach/contract-dod.md` → dm-outreach-result 已有响应 schema 约定（`data` 顶层 keys 严格匹配、禁止 `id`/`ok`/`negation` 等混入字段），本 sprint 新增 `device_platform` 字段须遵循同一 schema 纪律，不得引入禁用字段名
 
 ## Response Schema（推导来源: api_registry 推导 — apps/api/src/routes/agent-burner.ts 现有 `/dm-outreach-result` 端点扩展）
@@ -29,6 +29,14 @@
 **Error (HTTP 4xx)**: 沿用现有 `{"success":false,"error":{"code":"...","message":"..."}}` 结构，不变。
 
 若 Generator 现状核查后发现需要新增独立端点而非扩展现有端点，须在 PR 描述中说明理由；本合同按"扩展现有端点"给出验证命令，Generator 如采用新端点须保持字段名/幂等语义一致。
+
+**`device_platform` 与既有 `agents.os_type` 关系澄清**（Reviewer 问题 3 第 2 点）：`device_platform` 是本次派单时写入 `publish_tasks.payload` 的**执行通道标记**，取值来自派单当下对 `agents.capabilities` 的判定（含 `"android"` → `"android"`，否则 `"windows"`）；`agents.os_type`（`20260529_100000_add_os_type_to_agents.sql`）是**设备操作系统上报**，由 Android agent 心跳时上报（见 `AgentRegistrar.kt:40`）。两者是两条独立信号线，当前语义大概率一致但不保证——未来同一台 Android 设备的 capability 也可能被运营侧临时关闭/切换为非 `android` 执行通道（如设备转做纯采集不做触达），此时 `os_type='android'` 但 `device_platform` 不应为 `android`。因此**不派生、不合并**，Generator 按 `agents.capabilities` 独立判定 `device_platform`，不得直接 `SELECT os_type AS device_platform` 偷懒复用。
+
+## Risk
+
+1. **`dm_outreach_log.assignment_id` 迁移对既有 Windows 触达记录的影响**：迁移用 `ALTER TABLE ... ADD COLUMN IF NOT EXISTS assignment_id uuid`，幂等、不改动已有行的既有列值；新增列对历史行默认 `NULL`，不影响历史行既有查询路径（Windows 路径回归测试 `services/agent/src/handlers/__tests__/douyin-dm-outreach.test.ts` 不依赖该列）。Mitigation：Generator 迁移文件必须用 `IF NOT EXISTS` + 不设 `NOT NULL` 约束，避免对已有行触发迁移失败。
+2. **outreach-history 从"永远空列表"变"有数据"后，前端可能有未处理过的非空分支**：`AcquisitionOutreachPage`（Dashboard）此前该查询长期因 catch 吞异常返回空列表，其"有数据"渲染分支（表格行/状态徽标）在生产环境从未被真实数据触发过，存在未验证的风险（如渲染 `sent`/`limited`/`failed` 状态徽标的映射是否完整、空字段兜底是否健壮）。Mitigation：本 sprint 不改动前端代码；Generator 需在 PR 描述中显式标注"该端点修复后 Dashboard 前端首次收到非空数据，前端渲染分支未在此 sprint 验证，建议 staging 人工过一遍该页面"，若发现前端报错需登记独立 Issue 而非在本 sprint 顺手改前端。
+3. **`device_platform` 与既有 `agents.os_type` 语义重复的技术债**：见上方"关系澄清"段——两者独立维护存在字段语义漂移风险（未来可能出现不一致但无人发现）。Mitigation：不在本 sprint 合并两字段（会扩大 scope 且违反 Windows 兼容性），仅在合同与代码注释中明确记录两者关系与差异场景，留给后续技术债清理 sprint 处理；本 sprint 验收命令（Step 2）显式断言 `device_platform` 取自 `capabilities` 判定而非 `os_type`，防止 Generator 图省事直接复用 `os_type`。
 
 ---
 
@@ -143,15 +151,20 @@ curl -sf -X POST "$API_BASE/api/agent/burner/dm-outreach-result" -H "Content-Typ
   -d "{\"task_id\":\"$ID\",\"agent_id\":\"$ANDROID_AGENT_ID\",\"account_label\":\"$LABEL\",\"status\":\"sent\",\"profile_url\":\"$URL\",\"device_platform\":\"android\",\"dm_assignment_id\":\"$ASSIGN_ID\"}" >/dev/null
 AFTER=$(psql "$DB" -At -c "SELECT count(*) FROM zenithjoy.dm_outreach_log WHERE tenant_id='$T' AND account_label='$LABEL' AND status='sent'")
 [ "$AFTER" = "$((BEFORE + 1))" ] || { echo "FAIL: 重复回传多计数了 before=$BEFORE after=$AFTER"; exit 1; }
+# 硬断言（次要建议：补 dm_assignments.status 未被第二次调用重置的 psql 断言，替换原模糊文字表述）
+FINAL_STATUS=$(psql "$DB" -At -c "SELECT status FROM zenithjoy.dm_assignments WHERE id='$ASSIGN_ID'")
+[ "$FINAL_STATUS" = "sent" ] || { echo "FAIL: dm_assignments.status 被第二次回传重置，当前=$FINAL_STATUS 期望=sent"; exit 1; }
 ```
 
-**硬阈值**: `AFTER == BEFORE + 1`（只计一次，不因重复回传翻倍）
+**硬阈值**: `AFTER == BEFORE + 1`（只计一次，不因重复回传翻倍）；`dm_assignments.status == 'sent'`（两次回传都成功后，第二次调用不把状态重置回非终态，用 psql 直接查最终值断言，不用模糊文字描述）
 
 ---
 
 ### Step 7: Dashboard 触达记录页正确显示 `sent`（修复既有 `dm_outreach_log.assignment_id` 缺列断点）
 
 **来源**: `[AI_ADDED]` — GAN 阶段核查发现 `apps/api/src/routes/acquisition-dispatch.ts` 的 `GET /outreach-history` 查询已经在 JOIN `ol.assignment_id = a.id`（`acquisition-dispatch.ts:124`），但所有既有迁移文件（`20260626_214500_acquisition_dispatch.sql` 等）里 `dm_outreach_log` 表**从未建过 `assignment_id` 列**，该查询命中 catch 分支静默吞掉异常返回空列表（`acquisition-dispatch.ts:138-140`）。这是所有平台（含 Windows）触达记录页面长期返回空列表的既有断点，不修复 PRD 定义的 Step 7 无法被验证为真，因此纳入本 sprint 一并补齐（迁移文件 `ALTER TABLE ... ADD COLUMN IF NOT EXISTS assignment_id uuid` 幂等安全，不影响其他 sprint）。
+
+**⚠️ scope 边界声明（Reviewer 问题 2，采用方案 a）**：本 Step 是为了让 PRD Step 7（"用户在 Dashboard 触达记录页看到该记录状态变为 `sent`"）可被验证而做的**必要前置修复**，不是"Android 私信发送"主线 feature 的一部分——它是跨平台（含 Windows）的既有生产断点，本可独立成一个 bugfix task，只是因为不修就无法验证 PRD Step 7 才纳入本 sprint。**Generator 在 PR 描述中必须显式声明**："本 PR 除 Android 私信发送主线功能外，额外修复既有断点：`dm_outreach_log` 缺 `assignment_id` 列导致 outreach-history 长期返回空列表（跨平台既有 bug，非 Android 专属），理由：不修复无法验证 PRD Step 7"，并与主线功能改动在 commit 粒度上尽量分开，方便未来单独 revert。
 
 **可观测行为**: 派单 → 回传 sent 后，`GET /api/acquisition/dispatch/outreach-history` 返回的 `items` 中能找到该条记录且 `status='sent'`。
 
@@ -246,7 +259,9 @@ curl -sf -X POST "$API_BASE/api/agent/burner/dm-outreach-result" -H "Content-Typ
   -d "{\"task_id\":\"$TASK_ID\",\"agent_id\":\"$ANDROID_AGENT_ID\",\"account_label\":\"$LABEL_A\",\"status\":\"sent\",\"profile_url\":\"https://www.douyin.com/user/sec_and\",\"device_platform\":\"android\",\"dm_assignment_id\":\"$ASSIGN_ID\"}" >/dev/null
 AFTER=$(psql "$DB" -At -c "SELECT count(*) FROM zenithjoy.dm_outreach_log WHERE tenant_id='$TENANT_ID' AND account_label='$LABEL_A' AND status='sent'")
 [ "$AFTER" = "$((BEFORE + 1))" ] || fail "Step6: 幂等失败 before=$BEFORE after=$AFTER"
-ok "Step6: 重复回传不重复计数 (before=$BEFORE after=$AFTER)"
+FINAL_STATUS=$(psql "$DB" -At -c "SELECT status FROM zenithjoy.dm_assignments WHERE id='$ASSIGN_ID'")
+[ "$FINAL_STATUS" = "sent" ] || fail "Step6: dm_assignments.status 被第二次回传重置，当前=$FINAL_STATUS"
+ok "Step6: 重复回传不重复计数 (before=$BEFORE after=$AFTER)，dm_assignments.status 未被重置=$FINAL_STATUS"
 
 # Step 7: outreach-history 联表可见 sent（修复 assignment_id 缺列断点后）
 COL=$(psql "$DB" -At -c "SELECT column_name FROM information_schema.columns WHERE table_schema='zenithjoy' AND table_name='dm_outreach_log' AND column_name='assignment_id'")
