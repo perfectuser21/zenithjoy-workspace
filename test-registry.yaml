@@ -4421,3 +4421,19 @@ agent_suite:
   status: active
   product: AI员工
   note: "sprint(07041958): 监听 watchdog error 重拉+退避+双事件防重入 guard（Line04 bug6 修复守卫）"
+
+- id: douyin-dm-outreach-android-device-platform
+  path: sprints/07052218-douyin-dm-outreach-android/tests/device-platform.test.ts
+  type: unit
+  ci: L3
+  status: active
+  product: AI员工
+  note: "sprint(07052218): resolveDevicePlatform 按 capabilities 判定派单执行通道 + isDuplicateDmOutreachResult 按 dm_assignments 终态判定 /dm-outreach-result 幂等（Android 私信触达执行路径合同断言）"
+
+- id: douyin-dm-outreach-android-device-platform-pairing
+  path: apps/api/src/services/__tests__/device-platform.test.ts
+  type: unit
+  ci: L3
+  status: active
+  product: AI员工
+  note: "sprint(07052218): device-platform.ts 配套单测（同 douyin-dm-outreach-android-device-platform 断言，满足 CI lint-test-pairing 配对要求）"
