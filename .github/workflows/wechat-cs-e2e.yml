@@ -42,11 +42,11 @@ jobs:
           fi
           BASE="${{ github.event.pull_request.base.sha }}"
           HEAD="${{ github.event.pull_request.head.sha }}"
-          FILES=$(git diff --name-only "$BASE" "$HEAD")
+          FILES=$(git diff --name-only "$BASE...$HEAD")
           echo "$FILES"
           AGENT=false; AGENT_OR_API=false
-          if echo "$FILES" | grep -qE '^(services/agent/|\.github/workflows/wechat-cs-e2e\.yml)'; then AGENT=true; fi
-          if echo "$FILES" | grep -qE '^(services/agent/|apps/api/|\.github/workflows/wechat-cs-e2e\.yml)'; then AGENT_OR_API=true; fi
+          if echo "$FILES" | grep -qE '^(services/agent/|\.github/workflows/wechat-cs-e2e\.yml$)'; then AGENT=true; fi
+          if echo "$FILES" | grep -qE '^(services/agent/|apps/api/|\.github/workflows/wechat-cs-e2e\.yml$)'; then AGENT_OR_API=true; fi
           echo "agent=$AGENT" >> "$GITHUB_OUTPUT"
           echo "agent_or_api=$AGENT_OR_API" >> "$GITHUB_OUTPUT"
 
