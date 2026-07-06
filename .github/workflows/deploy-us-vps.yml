@@ -33,6 +33,22 @@ jobs:
           authkey: ${{ secrets.TAILSCALE_AUTHKEY }}
           version: latest
 
+      # 2026-07-06 诊断步（SSH 连续超时排查）：SSH 前先打 tailnet 视角——
+      # 本节点状态 / 目标是否在 tailnet peers 里 / tailscale ping / TCP 22 可达性。
+      # 定位是「authkey 加错网」「目标不在线」还是「ACL 不放行 22」。
+      - name: Tailnet 诊断（status/ping/port22）
+        env:
+          SSH_HOST: ${{ secrets.US_MAC_TAILSCALE_IP }}
+        run: |
+          echo "── tailscale status（本节点+peers 摘要）"
+          sudo tailscale status | head -20 || true
+          echo "── 目标 $SSH_HOST 是否在 peers"
+          sudo tailscale status | grep -F "$SSH_HOST" || echo "⚠️ 目标 IP 不在 peers 列表"
+          echo "── tailscale ping"
+          sudo tailscale ping -c 3 --timeout 5s "$SSH_HOST" || echo "⚠️ tailscale ping 不通"
+          echo "── TCP 22 探测"
+          timeout 10 bash -c "cat < /dev/null > /dev/tcp/$SSH_HOST/22" && echo "✅ 22 可达" || echo "⚠️ 22 不可达"
+
       - name: Deploy via SSH (build release + 切常驻 staging :5201 + golden-path)
         env:
           SSH_KEY: ${{ secrets.US_MAC_SSH_KEY }}
