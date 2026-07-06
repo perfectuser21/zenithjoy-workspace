@@ -86,13 +86,15 @@ jobs:
           node-version: '20'
 
       - name: E2E-4 navigation.config.ts 无 requireSuperAdmin
+        # 2026-07-06：原 200 字符窗口断言会把下一条路由（/admin/license 的 requireSuperAdmin）
+        # 扫进来误报 → 改为只检查 /module-health 自己那一行。
         run: |
           node -e "
           const fs = require('fs');
           const src = fs.readFileSync('apps/dashboard/src/config/navigation.config.ts', 'utf8');
-          const i = src.indexOf(\"path: '/module-health'\");
-          const seg = src.slice(i, i + 200);
-          if (seg.includes('requireSuperAdmin: true')) {
+          const line = src.split('\n').find(l => l.includes(\"path: '/module-health'\"));
+          if (!line) { console.error('FAIL: 未找到 /module-health 路由'); process.exit(1); }
+          if (line.includes('requireSuperAdmin')) {
             console.error('FAIL: /module-health 仍有 requireSuperAdmin');
             process.exit(1);
           }
@@ -117,7 +119,7 @@ jobs:
           python -m pytest tests/test_preflight_lock.py -v
 
   preflight-e2e-windows:
-    name: Start.bat Blocking + Preflight (Windows)
+    name: Preflight Checks (Windows)
     runs-on: windows-latest
     timeout-minutes: 20
     env:
@@ -153,62 +155,10 @@ jobs:
           "@
           if ($LASTEXITCODE -ne 0) { throw "E2E-1 FAIL" }
 
-      - name: E2E-3 start.bat preflight-failed → blocking（真实运行验证）
-        shell: pwsh
-        timeout-minutes: 5
-        run: |
-          # 真实运行 start.bat，验证 preflight 返回非零时 bat 以 exit /b 1 退出
-          # 构造最小测试环境：.env + mock python-embedded/python.exe + mock preflight.py
-          $tmpDir = New-Item -ItemType Directory -Path "$env:TEMP\e2e3-$(New-Guid)" -Force
-          try {
-              # .env：license 非 placeholder（跳过 Step 3 交互）；API_BASE 打无人端口→curl 000→proceeding anyway
-              Set-Content "$tmpDir\.env" "ZENITHJOY_LICENSE=ZJ-TEST-DUMMY`nZENITHJOY_API_BASE=http://localhost:19999"
-
-              # python-embedded\python.exe（复制系统 Python，%~dp0 路径能找到）
-              $pyPath = (Get-Command python -ErrorAction SilentlyContinue).Source
-              if (-not $pyPath) { throw "SETUP: 未找到系统 python.exe" }
-              New-Item -ItemType Directory -Path "$tmpDir\python-embedded" -Force | Out-Null
-              Copy-Item $pyPath "$tmpDir\python-embedded\python.exe" -ErrorAction Stop
-
-              # mock preflight.py（总是失败，打印 [preflight] FAIL）
-              New-Item -ItemType Directory -Path "$tmpDir\wechat-rpa" -Force | Out-Null
-              Set-Content "$tmpDir\wechat-rpa\preflight.py" @"
-          import sys
-          print('[preflight] FAIL: mock failure - testing blocking behavior')
-          sys.exit(1)
-          "@
-
-              # 复制真实 start.bat（测真实行为，不重写逻辑）
-              if (-not (Test-Path "services\agent\install-pack\start.bat")) {
-                  throw "SETUP: services\agent\install-pack\start.bat 不存在"
-              }
-              Copy-Item "services\agent\install-pack\start.bat" "$tmpDir\start.bat"
-
-              # 运行，最多等 30 秒
-              $p = Start-Process cmd.exe `
-                  -ArgumentList "/c start.bat" `
-                  -WorkingDirectory $tmpDir `
-                  -PassThru -NoNewWindow `
-                  -RedirectStandardOutput "$tmpDir\out.txt" `
-                  -RedirectStandardError  "$tmpDir\err.txt"
-              $ok = $p.WaitForExit(30000)
-              if (-not $ok) { $p.Kill(); throw "FAIL: E2E-3 start.bat 运行超时 30s" }
-
-              $out = Get-Content "$tmpDir\out.txt" -Raw -ErrorAction SilentlyContinue
-              $err = Get-Content "$tmpDir\err.txt" -Raw -ErrorAction SilentlyContinue
-              Write-Host "=== stdout ===" ; Write-Host $out
-              if ($err) { Write-Host "=== stderr ===" ; Write-Host $err }
-
-              if ($p.ExitCode -ne 1) {
-                  throw "FAIL: E2E-3 start.bat exit=$($p.ExitCode)，期望 1（preflight blocking 未生效）"
-              }
-              if ($out -notmatch '\[preflight\]\s*FAIL') {
-                  throw "FAIL: E2E-3 stdout 中未见 [preflight] FAIL 输出（出现太早的其他 exit 路径？）"
-              }
-              Write-Host "OK: E2E-3 start.bat preflight blocking 真实验证通过（exit=1，stdout 含 [preflight] FAIL）"
-          } finally {
-              Remove-Item -Recurse -Force $tmpDir -ErrorAction SilentlyContinue
-          }
+      # 2026-07-06：原 E2E-3「start.bat preflight-failed → blocking」已删除。
+      # 它守卫的行为已被产品有意移除：preflight 不再由 start.bat 阻塞执行，
+      # 改为 agent core module-manager 启动后非阻塞自跑 + 自愈（见 start.bat Step 6.9 注释）。
+      # 守卫一个不存在的行为只会永远红。preflight 本身的正确性由本 job 其余步骤覆盖。
 
       - name: Python pytest 版本降级路径（Windows全套）
         shell: pwsh
