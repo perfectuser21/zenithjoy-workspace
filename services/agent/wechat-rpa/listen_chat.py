@@ -2325,7 +2325,13 @@ def _capture_window_pixels(mw: Any) -> Any:
 def _row_is_outgoing_by_pixels(cap: Any, row_top: int, row_bottom: int,
                                panel_left: int, panel_right: int) -> Optional[bool]:
     """一行消息是否为我方绿泡（v1.0.104）：在该行右侧 40% 采样带按网格取点，
-    命中微信绿 → True（outgoing）；采样全无绿 → False；cap 无效 → None。"""
+    命中微信绿 → True（outgoing）；采样有效像素但全无绿 → False（incoming）；
+    cap 无效/全采样点越界 → None（触发调用方 _matches_any_sent 已发历史回退）。
+
+    v1.0.109 修正：虚拟列表最新气泡 rect 底部可超出窗口截图边界（r.bottom >
+    wr.bottom），旧代码全越界时仍返回 False，跳过已发送历史判向回退，导致刚发
+    的绿泡被判 incoming（bubble gate marker_outgoing=False 根因）。
+    修正：any_valid 跟踪有效采样，全越界时返回 None。"""
     if cap is None:
         return None
     try:
@@ -2335,12 +2341,16 @@ def _row_is_outgoing_by_pixels(cap: Any, row_top: int, row_bottom: int,
         x1 = panel_right - 12
         if y1 <= y0 or x1 <= x0:
             return None
+        any_valid = False
         for y in range(y0, y1 + 1, max(4, (y1 - y0) // 4 or 4)):
             for x in range(x0, x1 + 1, max(8, (x1 - x0) // 14 or 8)):
                 px = cap.pixel(x, y)
-                if px and _is_wechat_green(*px):
+                if px is None:
+                    continue
+                any_valid = True
+                if _is_wechat_green(*px):
                     return True
-        return False
+        return False if any_valid else None
     except Exception:
         return None
 
