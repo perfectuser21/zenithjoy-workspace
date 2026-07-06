@@ -1,6 +1,3 @@
-contract_branch: cp-07061203-android-device-account-model
-sprint_dir: sprints/07061204-android-device-account-model
-
 ---
 skeleton: false
 journey_type: autonomous
@@ -23,7 +20,7 @@ journey_type: autonomous
   期望: OK
 
 - [ ] [ARTIFACT] `agent_platform_sessions` schema 扩展迁移文件存在（新增 `device_type` 字段）
-  Test: manual:bash -c 'grep -rl "device_type" apps/api/db/migrations/*.sql | grep -q agent_platform_sessions.*device_type -e device_type && grep -rl "device_type" apps/api/db/migrations/*.sql | xargs grep -lq "agent_platform_sessions" || { echo FAIL; exit 1; }; echo OK'
+  Test: manual:bash -c 'grep -l "device_type" apps/api/db/migrations/*.sql | xargs grep -lq "agent_platform_sessions" && echo OK || { echo FAIL; exit 1; }'
   期望: OK
 
 ## BEHAVIOR 条目（manual:bash，Android gradle 单测 + psql schema 真跑，非 mock）
