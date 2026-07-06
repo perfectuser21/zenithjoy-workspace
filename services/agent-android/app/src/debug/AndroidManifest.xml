@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!--
+      仅 debug 变体：真机 E2E 触发器。合并进 debug 包，release 包不含（src/debug 源集不参与 release 构建）。
+      exported=true 才能被 adb shell 的 am broadcast 触发；生产任务入口仍是 NOT_EXPORTED 的内部接收器。
+    -->
+    <application>
+        <receiver
+            android:name="com.zenithjoy.agent.debug.DebugE2ETriggerReceiver"
+            android:enabled="true"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="com.zenithjoy.agent.DEBUG_E2E" />
+            </intent-filter>
+        </receiver>
+    </application>
+
+</manifest>
