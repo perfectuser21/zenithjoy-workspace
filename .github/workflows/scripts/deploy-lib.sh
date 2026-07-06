@@ -709,9 +709,10 @@ build_release() {
 
 # staging_deploy_slot <sha>：build release + 把【常驻 staging 实例】(:5201) 切到该 release。
 # 治根（B）：main 合并只动常驻 staging，绝不碰生产 :5200。
-# 常驻 staging launchd（com.zenithjoy.api.staging）从 releases/staging 软链跑——这里：
-#   ① build release  ② 原子重指 releases/staging 软链 → 新 release  ③ kunload/load 重启常驻 staging
-# staging 进程 env（PORT=5201 / DATABASE_NAME=zenithjoy_test / NODE_ENV=staging）在 plist 里定义。
+# 常驻 staging 从 releases/staging 软链跑——这里：
+#   ① build release  ② 原子重指 releases/staging 软链 → 新 release  ③ kill+nohup 直启（promote 同款）
+# staging 进程 env 从 plist EnvironmentVariables 读取（PORT=5201/DB=zenithjoy_test/NODE_ENV=staging+密钥）。
+# macOS 15 Sequoia：launchctl bootstrap gui/<uid> 在 SSH 会话中失败（error 125）→ 改用 kill+nohup。
 staging_deploy_slot() {
   local sha="$1"
   echo "起常驻 staging :${ZJ_STAGING_PORT}（DB=${ZJ_STAGING_DB}）→ release ${sha} ..."
@@ -736,20 +737,33 @@ staging_deploy_slot() {
     echo "❌ 确保常驻 staging plist 失败（生产 plist 缺失？）"; return 1
   fi
 
-  # 注册 + 重启 staging launchd。先杀占端口残留；用 bootout/bootstrap（新 launchctl 语法，
-  # load/unload 已 deprecated）把 plist 注册进 GUI domain，再用 kickstart -k 强制（重）启动——
-  # -k 对已存在的服务强制重启，比 launchctl start 可靠（start 对没注册的 label 静默空操作正是病根）。
+  # macOS 15 Sequoia：launchctl bootstrap gui/<uid> 在 SSH 会话中被系统拦截（error 125）。
+  # 与 promote 保持一致：kill + nohup 直启（promote 已采用相同模式，治根 2026-07-06）。
+  # 治根（2026-07-06 真实事故）：staging_deploy_slot 尝试 gui/<uid> bootstrap → 失败 → load 兜底
+  # 也静默失败 → :5201 永不起 → 蓝绿护栏误报"候选失败"、实为部署基础设施问题。
   kill_port "${ZJ_STAGING_PORT}"
-  local gui_domain; gui_domain="gui/$(id -u)"
-  local svc_target="${gui_domain}/${staging_label}"
-  launchctl bootout "${svc_target}" 2>/dev/null || true   # 幂等：没注册也无妨
-  if ! launchctl bootstrap "${gui_domain}" "${staging_plist}" 2>/dev/null; then
-    echo "ℹ️  bootstrap 失败/不支持，回退 launchctl load 兜底"
-    launchctl unload "${staging_plist}" 2>/dev/null || true
-    launchctl load "${staging_plist}" 2>/dev/null || true
-  fi
-  launchctl kickstart -k "${svc_target}" 2>/dev/null \
-    || launchctl start "${staging_label}" 2>/dev/null || true
+  local _sw=0
+  while lsof -i ":${ZJ_STAGING_PORT}" -t >/dev/null 2>&1 && [ $_sw -lt 5 ]; do
+    sleep 1; _sw=$((_sw+1))
+  done
+  # 从 staging plist 提取 env 写进临时 env 文件（密钥不落日志）
+  local _senv="${HOME}/zenithjoy-staging-env.sh"
+  python3 - "${staging_plist}" > "$_senv" 2>/dev/null <<'PYEOF'
+import plistlib, shlex, sys
+with open(sys.argv[1], 'rb') as f:
+    data = plistlib.load(f)
+for k, v in data.get('EnvironmentVariables', {}).items():
+    print(f'export {k}={shlex.quote(str(v))}')
+PYEOF
+  chmod 600 "$_senv"
+  set -a
+  # shellcheck disable=SC1090
+  source "$_senv" 2>/dev/null || true
+  set +a
+  local _node="${ZJ_NODE:-/opt/homebrew/bin/node}"
+  local _slog="${HOME}/Library/Logs/zenithjoy-api.staging.log"
+  nohup "$_node" "${ZJ_RELEASES_DIR}/staging/dist/index.js" >> "$_slog" 2>&1 &
+  echo "staging: 新进程 PID=$! 已启动，等待 :${ZJ_STAGING_PORT} 健康..."
 
   # 等 staging health
   local up=0
@@ -758,8 +772,8 @@ staging_deploy_slot() {
     sleep 2
   done
   if [ "$up" -ne 1 ]; then
-    echo "❌ 常驻 staging 20s 内没起来"
-    tail -20 /Users/administrator/Library/Logs/zenithjoy-api.staging.error.log 2>/dev/null || true
+    echo "❌ 常驻 staging 40s 内没起来"
+    tail -20 "${HOME}/Library/Logs/zenithjoy-api.staging.error.log" 2>/dev/null || true
     return 1
   fi
   echo "✅ 常驻 staging :${ZJ_STAGING_PORT} 已起（release ${sha}）"
