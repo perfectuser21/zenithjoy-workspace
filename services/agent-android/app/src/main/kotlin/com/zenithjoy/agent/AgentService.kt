@@ -290,13 +290,16 @@ class AgentService : Service() {
             return
         }
 
-        // Golden Path Step 7：派发前一致性核对。任务派发即隐含"假设目标抖音号在线"，
-        // 若本机最近一次账号扫描（DeviceAccountRegistry）显示它已下线，说明账号状态跟
+        // Golden Path Step 7：派发前一致性核对。核对的对象是"本机准备用来发送的登录抖音号"
+        // （account_label，对应 DeviceAccountRegistry 里以扫描时读到的本机登录账号 douyinId 为
+        // key 写入的记录），不是 profileUrl（DM 目标收件人主页 URL，跟 registry 完全是两套命名
+        // 空间——用 profileUrl 去查永远查不到记录，guard 会恒放行，永不触发重扫）。
+        // 若本机最近一次账号扫描（DeviceAccountRegistry）显示该发送账号已下线，说明账号状态跟
         // 中台记录不一致——立即触发一次实时重扫更新状态，本次任务按未登录处理转失败，
         // 不再启动无障碍执行流程去点一个已经登不上的账号。
-        val dispatchDecision = DeviceAccountScanService.checkDispatchConsistency(profileUrl)
+        val dispatchDecision = DeviceAccountScanService.checkDispatchConsistency(resolveDispatchGuardAccountId(task.payload))
         if (dispatchDecision == DeviceAccountModel.DispatchAccountDecision.TRIGGER_RESCAN_AND_FAIL) {
-            android.util.Log.w(TAG, "dm_outreach task ${task.task_id} target=$profileUrl recorded offline at dispatch — triggering rescan, failing task")
+            android.util.Log.w(TAG, "dm_outreach task ${task.task_id} account=$accountLabel recorded offline at dispatch — triggering rescan, failing task")
             DeviceAccountScanService.dispatchTask(this, "rescan-${task.task_id}", tenantId = "", thisDeviceId = config.machineId)
             reportDmOutreachResult(task.task_id, "failed", dmAssignmentId, accountLabel, profileUrl, "ACCOUNT_OFFLINE_AT_DISPATCH")
             return
@@ -401,5 +404,13 @@ class AgentService : Service() {
     companion object {
         private const val TAG = "AgentService"
         private const val NOTIFICATION_ID = 1001
+
+        // Golden Path Step 7 派发前一致性核对用的标识符解析：DeviceAccountRegistry 的 key 是
+        // "本机登录的抖音号"（扫描时从切换账号面板读到的 douyinId，写入时也是以它为 key），
+        // 跟 profile_url（DM 目标收件人主页 URL）是完全不同的命名空间——用 profile_url 去查
+        // 永远查不到记录，checkDispatchConsistency 会因为"未扫描到过的账号默认放行"而恒返回
+        // PROCEED，守卫永久空转。抽成纯函数（不依赖 Android Service 生命周期）方便单测覆盖。
+        internal fun resolveDispatchGuardAccountId(payload: Map<String, Any?>): String =
+            payload["account_label"] as? String ?: ""
     }
 }

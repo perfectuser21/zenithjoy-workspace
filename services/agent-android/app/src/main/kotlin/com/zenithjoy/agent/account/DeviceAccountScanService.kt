@@ -91,18 +91,24 @@ class DeviceAccountScanService : AccessibilityService() {
         ScanMutex.busy = true
 
         scope.launch {
-            // 无论成功/失败/超时，都必须确保退出"切换账号"界面，不留半开状态——用超时兜底
-            // 强制返回。整段扫描（打开面板→读取→关闭面板）给一个总超时窗口。
-            val readOutcome = withTimeoutOrNull(SCAN_TOTAL_TIMEOUT_MS) {
-                runScanSequence(requestId, tenantId, thisDeviceId)
-            }
-            if (readOutcome == null) {
-                android.util.Log.w(TAG, "account scan timed out — forcing exit from switch-account panel")
-                forceCloseSwitchAccountPanel()
-                sendScanResultBroadcast(requestId, ok = false, stale = true, accountIds = DeviceAccountRegistry.snapshot().keys.toList(), errorCode = "SCAN_TIMEOUT")
-            }
-            state = State.IDLE
-            ScanMutex.busy = false
+            runScanWithCleanup(
+                timeoutMs = SCAN_TOTAL_TIMEOUT_MS,
+                block = { runScanSequence(requestId, tenantId, thisDeviceId) },
+                onAbnormalExit = { errorCode ->
+                    forceCloseSwitchAccountPanel()
+                    sendScanResultBroadcast(
+                        requestId,
+                        ok = false,
+                        stale = true,
+                        accountIds = DeviceAccountRegistry.snapshot().keys.toList(),
+                        errorCode = errorCode,
+                    )
+                },
+                setIdle = {
+                    state = State.IDLE
+                    ScanMutex.busy = false
+                },
+            )
         }
     }
 
@@ -369,6 +375,42 @@ class DeviceAccountScanService : AccessibilityService() {
         internal fun checkDispatchConsistency(douyinId: String): DeviceAccountModel.DispatchAccountDecision {
             val actualLoggedIn = DeviceAccountRegistry.isRecordedOnline(douyinId)
             return DeviceAccountModel.evaluateDispatchAccountStatus(recordedOnline = true, actualLoggedInAtDispatch = actualLoggedIn)
+        }
+
+        // ── 扫描协程的超时/异常兜底清理（供 startScan 调用）────────────────────────
+
+        /**
+         * 无论 [block]（打开面板→读取→写回注册表→关闭面板整段扫描序列）正常完成、超时、
+         * 还是抛出任意非超时异常（真机 UIA 操作常见 IllegalStateException/DeadObjectException
+         * 等），[setIdle]（复位 state=IDLE + ScanMutex.busy=false）都必须执行——用 try/finally
+         * 兜底，不能只处理 withTimeoutOrNull 返回 null 这一种路径（旧版本的 bug：其他异常会
+         * 直接穿透，导致 ScanMutex 永久卡 busy=true、state 永久非 IDLE，切换账号面板可能停留
+         * 半开状态）。异常/超时两种异常退出都视为"半开状态"，尝试强制关闭面板 + 广播失败。
+         */
+        internal suspend fun runScanWithCleanup(
+            timeoutMs: Long,
+            block: suspend () -> Unit,
+            onAbnormalExit: (errorCode: String) -> Unit,
+            setIdle: () -> Unit,
+            logWarn: (String) -> Unit = { android.util.Log.w(TAG, it) },
+            logError: (String) -> Unit = { android.util.Log.e(TAG, it) },
+        ) {
+            try {
+                val outcome = withTimeoutOrNull(timeoutMs) { block() }
+                if (outcome == null) {
+                    logWarn("account scan timed out — forcing exit from switch-account panel")
+                    onAbnormalExit("SCAN_TIMEOUT")
+                }
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                // 结构化并发的取消信号（例如 onDestroy 里 scope.cancel()）不能当成"扫描失败"吞掉，
+                // 必须重新抛出让协程正常完成取消——否则会破坏父协程的取消传播语义。
+                throw e
+            } catch (e: Exception) {
+                logError("account scan failed with unexpected exception — forcing exit from switch-account panel: ${e.message}")
+                onAbnormalExit("SCAN_EXCEPTION")
+            } finally {
+                setIdle()
+            }
         }
     }
 }
