@@ -332,14 +332,16 @@ function collectListenerHealth(input) {
             sessions_seen,
         };
     }
-    // 进程在但微信主窗口没找到 → 不健康。按 login_present 给【精确】reason，中台直接看出是哪种：
-    //  - 没登录 → 让客户扫码登录
-    //  - 登录了但窗口找不到 → UIA 屏幕阅读器标志失效 / agent 与微信会话隔离(权限/Administrator) / 窗口最小化
+    // 进程在但微信主窗口没找到 → 不健康。按 login_present 给【精确】reason，中台直接看出是哪种。
+    // ⚠️ 语义铁律（issue bf0cf4c4，listen_chat.py:3763）：login_present = 「登录窗口存在 = 需扫码标志」——
+    //  - true  = 微信停在扫码/登录窗口 → 真未登录，让客户扫码；
+    //  - false = 没有登录窗口 → 可能已登录但 UIA 死区（rog 0704→0706 实锤：登录着被误报"未登录"40h），
+    //            也可能微信没跑 → 等待自愈（listen_chat UIA 死区自愈）或重启微信。
     if (found_window === false) {
         const reason = login_present === true
-            ? '微信已登录但 UIA 找不到主窗口（屏幕阅读器标志失效 / agent 与微信不在同一会话权限 / 窗口最小化）'
+            ? '微信未登录（停在登录窗口，需在该机扫码登录）'
             : login_present === false
-                ? '微信未登录（需在该机扫码登录）'
+                ? '微信进程在但 UIA 找不到主窗口（UIA 死区/未就绪，可能已登录）——等待自愈或重启微信'
                 : '微信主窗口未找到（未登录或 UIA 未就绪）';
         return {
             ok: false,
