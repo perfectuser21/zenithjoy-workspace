@@ -49,7 +49,7 @@ def test_acquire_granted_returns_true_and_logs(capsys):
     with patch("urllib.request.urlopen", return_value=_make_http_response(
         {"granted": True, "lease_id": "test-lease-001", "expires_at": 9999999999999}
     )):
-        result = lc.desktop_lease_acquire("http://localhost:5221")
+        result = lc.desktop_lease_acquire()
 
     assert result is True
     captured = capsys.readouterr()
@@ -61,7 +61,7 @@ def test_acquire_not_granted_returns_false_and_logs(capsys):
     with patch("urllib.request.urlopen", return_value=_make_http_response(
         {"granted": False, "retry_after_ms": 5000}
     )):
-        result = lc.desktop_lease_acquire("http://localhost:5221")
+        result = lc.desktop_lease_acquire()
 
     assert result is False
     captured = capsys.readouterr()
@@ -71,7 +71,7 @@ def test_acquire_not_granted_returns_false_and_logs(capsys):
 def test_acquire_http_error_returns_false_and_logs(capsys):
     """HTTP 异常 → acquire 返回 False，stderr 含 'acquire failed'（fail-safe，不抛异常）。"""
     with patch("urllib.request.urlopen", side_effect=Exception("connection refused")):
-        result = lc.desktop_lease_acquire("http://localhost:5221")
+        result = lc.desktop_lease_acquire()
 
     assert result is False
     captured = capsys.readouterr()
@@ -85,7 +85,7 @@ def test_release_logs_on_success(capsys):
     """release 成功 → stderr 含 '[desktop_lease] release'。"""
     lc._current_lease_id = "test-lease-release-001"
     with patch("urllib.request.urlopen", return_value=_make_http_response({"ok": True})):
-        lc.desktop_lease_release("http://localhost:5221")
+        lc.desktop_lease_release()
 
     captured = capsys.readouterr()
     assert "[desktop_lease] release" in captured.err
@@ -95,7 +95,7 @@ def test_release_noop_when_no_lease_id(capsys):
     """无持有租约时 release 静默 noop，不发 HTTP 请求。"""
     lc._current_lease_id = None
     with patch("urllib.request.urlopen") as mock_open:
-        lc.desktop_lease_release("http://localhost:5221")
+        lc.desktop_lease_release()
     mock_open.assert_not_called()
 
 
@@ -103,14 +103,14 @@ def test_release_silences_http_error(capsys):
     """HTTP 异常 → release 静默忽略（best-effort），不抛异常，不 crash。"""
     lc._current_lease_id = "test-lease-err"
     with patch("urllib.request.urlopen", side_effect=Exception("timeout")):
-        lc.desktop_lease_release("http://localhost:5221")  # 不应抛出
+        lc.desktop_lease_release()  # 不应抛出
 
 
 def test_release_clears_lease_id():
     """release 后 _current_lease_id 被清除（防止重复 release 发 HTTP）。"""
     lc._current_lease_id = "test-clear-001"
     with patch("urllib.request.urlopen", return_value=_make_http_response({"ok": True})):
-        lc.desktop_lease_release("http://localhost:5221")
+        lc.desktop_lease_release()
     assert lc._current_lease_id is None
 
 
@@ -147,7 +147,7 @@ def test_dryrun_inject_calls_release_after_draft(capsys):
          patch.object(lc, "emit_json"):
         lc.run_dryrun_inject(args)
 
-    mock_release.assert_called_once_with("http://localhost:5221")
+    mock_release.assert_called_once_with()
 
 
 # ─── [ARTIFACT 防回归] reply_in_chat_with_lease — 真实回复主循环接线 ─────────
@@ -178,7 +178,7 @@ def test_reply_with_lease_acquire_granted_sends_and_releases():
         )
     assert result is True
     mock_reply.assert_called_once()
-    mock_release.assert_called_once_with("http://localhost:5221")
+    mock_release.assert_called_once_with()
 
 
 def test_reply_with_lease_releases_even_on_exception():
@@ -190,7 +190,7 @@ def test_reply_with_lease_releases_even_on_exception():
             lc.reply_in_chat_with_lease(
                 MagicMock(), MagicMock(), "你好", "客户C", "http://localhost:5221"
             )
-    mock_release.assert_called_once_with("http://localhost:5221")
+    mock_release.assert_called_once_with()
 
 
 def test_reply_with_lease_noop_when_no_middleware_url():

@@ -2774,13 +2774,13 @@ def reply_in_chat_with_lease(
     """
     if not middleware_url:
         return reply_in_chat(mw, item, reply_text, sender=sender)
-    if not desktop_lease_acquire(middleware_url):
+    if not desktop_lease_acquire():
         _log(f"reply_in_chat_with_lease: 桌面租约申请失败，本轮跳过 sender={sender!r}（下轮重试）")
         return False
     try:
         return reply_in_chat(mw, item, reply_text, sender=sender)
     finally:
-        desktop_lease_release(middleware_url)
+        desktop_lease_release()
 
 
 def _pywinauto_available() -> bool:
@@ -2996,6 +2996,8 @@ def post_draft_generate(
 # ─── DesktopLeaseBroker IPC 接缝（Sprint 0703-line04-desktop-lease-broker）─────
 # listen_chat 在窗口切换前通过 IPC 申请桌面租约，完成后归还，防多 agent 并发抢占。
 # 所有失败均为软失败：acquire 失败 → 跳过本轮（[防假成功] invariant），release 失败忽略。
+# 1.0.109: Broker 运行在同一桌面机的 local-discovery（127.0.0.1:ZENITHJOY_LOCAL_PORT），
+#          不走远程 middleware_url——容器内 localhost 无法连通宿主 RPA 桌面进程。
 
 _DESKTOP_LEASE_CLIENT_ID = "line04/listen_chat"
 _DESKTOP_LEASE_PRIORITY = 50
@@ -3005,15 +3007,22 @@ _DESKTOP_LEASE_TTL_MS = 10000
 _current_lease_id: Optional[str] = None
 
 
-def desktop_lease_acquire(middleware_url: str) -> bool:
-    """向 Broker IPC 申请桌面租约。返回 True=已授予，False=拒绝（调用方应跳过本轮）。
+def _desktop_lease_local_base() -> str:
+    """返回 local-discovery IPC 基址（每次调用时读 env，支持测试 patch）。"""
+    port = int(os.environ.get("ZENITHJOY_LOCAL_PORT", "58432"))
+    return f"http://127.0.0.1:{port}"
+
+
+def desktop_lease_acquire() -> bool:
+    """向本机 Broker IPC（local-discovery 127.0.0.1:ZENITHJOY_LOCAL_PORT）申请桌面租约。
+    返回 True=已授予，False=拒绝（调用方应跳过本轮）。
 
     日志写到 stderr（DoD B6 验收锚点）：
       成功 → [desktop_lease] acquire granted
       失败 → [desktop_lease] acquire failed
     """
     global _current_lease_id
-    url = middleware_url.rstrip("/") + "/api/agent/desktop-lease-broker/acquire"
+    url = _desktop_lease_local_base() + "/api/agent/desktop-lease-broker/acquire"
     payload = json.dumps({
         "clientId": _DESKTOP_LEASE_CLIENT_ID,
         "priority": _DESKTOP_LEASE_PRIORITY,
@@ -3037,8 +3046,8 @@ def desktop_lease_acquire(middleware_url: str) -> bool:
         return False
 
 
-def desktop_lease_release(middleware_url: str) -> None:
-    """归还桌面租约（best-effort，失败静默忽略）。
+def desktop_lease_release() -> None:
+    """归还本机 Broker 桌面租约（best-effort，失败静默忽略）。
 
     日志写到 stderr：[desktop_lease] release
     """
@@ -3047,7 +3056,7 @@ def desktop_lease_release(middleware_url: str) -> None:
     if not lease_id:
         return
     _current_lease_id = None
-    url = middleware_url.rstrip("/") + "/api/agent/desktop-lease-broker/release"
+    url = _desktop_lease_local_base() + "/api/agent/desktop-lease-broker/release"
     payload = json.dumps({
         "leaseId": lease_id,
         "clientId": _DESKTOP_LEASE_CLIENT_ID,
@@ -3527,7 +3536,7 @@ def run_dryrun_inject(args: argparse.Namespace) -> int:
     # 桌面租约 acquire（[防假成功] invariant：失败时跳过，不假装发送成功）
     middleware_url = getattr(args, "middleware_url", "") or ""
     if middleware_url:
-        granted = desktop_lease_acquire(middleware_url)
+        granted = desktop_lease_acquire()
         if not granted:
             emit_json({"ok": False, "dryRun": True,
                        "error": "[desktop_lease] acquire failed — 跳过本轮（防假成功 invariant）"})
@@ -3550,7 +3559,7 @@ def run_dryrun_inject(args: argparse.Namespace) -> int:
     finally:
         # 归还租约（best-effort，失败静默忽略）
         if middleware_url:
-            desktop_lease_release(middleware_url)
+            desktop_lease_release()
 
     return 0
 
