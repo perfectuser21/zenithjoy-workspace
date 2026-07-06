@@ -15,6 +15,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
+import com.zenithjoy.agent.account.ScanMutex
 
 /**
  * 抖音无障碍采集服务。
@@ -104,6 +105,9 @@ class DouyinCollectService : AccessibilityService() {
         currentKeyword = keyword
         currentTaskId = taskId
         state = State.OPENING_DOUYIN
+        // 与账号扫描服务共享的全局互斥标记（Sprint 07061301-device-account-scan-wiring）：
+        // 采集任务运行期间置 busy=true，扫描服务据此在本轮跳过，避免共用微信/抖音窗口冲突。
+        ScanMutex.busy = true
 
         scope.launch {
             val launched = launchDouyin()
@@ -371,6 +375,7 @@ class DouyinCollectService : AccessibilityService() {
         )
         android.util.Log.i(TAG, "extracted ${comments.size} comments for keyword=$currentKeyword")
         state = State.IDLE
+        ScanMutex.busy = false
         onResult?.invoke(result)
         sendResultBroadcast(result)
     }
@@ -379,6 +384,7 @@ class DouyinCollectService : AccessibilityService() {
         android.util.Log.w(TAG, "collect error: $code keyword=$currentKeyword")
         val result = CollectResult(ok = false, keyword = currentKeyword, error = code)
         state = State.IDLE
+        ScanMutex.busy = false
         onResult?.invoke(result)
         sendResultBroadcast(result)
     }

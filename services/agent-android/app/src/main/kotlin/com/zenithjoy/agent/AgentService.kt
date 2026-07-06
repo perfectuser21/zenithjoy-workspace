@@ -10,6 +10,9 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.os.IBinder
 import com.google.gson.Gson
+import com.zenithjoy.agent.account.DeviceAccountModel
+import com.zenithjoy.agent.account.DeviceAccountRegistry
+import com.zenithjoy.agent.account.DeviceAccountScanService
 import com.zenithjoy.agent.collect.CollectResult
 import com.zenithjoy.agent.collect.CommentEntry
 import com.zenithjoy.agent.collect.DmOutreachRateLimiter
@@ -18,6 +21,8 @@ import com.zenithjoy.agent.collect.DouyinDmOutreachService
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
@@ -25,6 +30,7 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import java.util.concurrent.TimeUnit
+import kotlin.random.Random
 
 /**
  * Android 前台服务：Agent 核心运行时。
@@ -49,6 +55,7 @@ class AgentService : Service() {
     private var wsClient: WsClient? = null
     private var heartbeatLoop: HttpHeartbeatLoop? = null
     private var keywordPollLoop: AcquisitionKeywordPollLoop? = null
+    private var accountScanLoopJob: kotlinx.coroutines.Job? = null
 
     // Sprint 07052218 followup — dm_outreach 本地频控历史（发送时间戳，毫秒）。
     // 进程内存态，随 Agent 重启清零；本 sprint 先用最简单的内存实现推进真实执行路径，
@@ -67,6 +74,21 @@ class AgentService : Service() {
             scope.launch {
                 reportDmOutreachResult(taskId, status, dmAssignmentId, accountLabel, profileUrl, errorCode)
             }
+        }
+    }
+
+    // Sprint 07061301-device-account-scan-wiring — 账号扫描结果广播接收，收到后调用
+    // reportAccountScanResult 上报中台（本 sprint 只接线到"清晰的上报调用点"，中台写接口
+    // agent_platform_sessions 的字段/端点细节不在本次合同范围内，见方法内 TODO）。
+    private val accountScanResultReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            if (intent?.action != DeviceAccountScanService.ACTION_ACCOUNT_SCAN_RESULT) return
+            val requestId = intent.getStringExtra(DeviceAccountScanService.EXTRA_REQUEST_ID) ?: ""
+            val ok = intent.getBooleanExtra(DeviceAccountScanService.EXTRA_RESULT_OK, false)
+            val stale = intent.getBooleanExtra(DeviceAccountScanService.EXTRA_RESULT_STALE, false)
+            val accountIds = intent.getStringArrayExtra(DeviceAccountScanService.EXTRA_RESULT_ACCOUNT_IDS)?.toList() ?: emptyList()
+            val errorCode = intent.getStringExtra(DeviceAccountScanService.EXTRA_ERROR) ?: ""
+            reportAccountScanResult(requestId, ok, stale, accountIds, errorCode)
         }
     }
 
@@ -100,6 +122,9 @@ class AgentService : Service() {
         registerReceiver(dmOutreachResultReceiver,
             IntentFilter(DouyinDmOutreachService.ACTION_DM_OUTREACH_RESULT),
             RECEIVER_NOT_EXPORTED)
+        registerReceiver(accountScanResultReceiver,
+            IntentFilter(DeviceAccountScanService.ACTION_ACCOUNT_SCAN_RESULT),
+            RECEIVER_NOT_EXPORTED)
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -116,9 +141,11 @@ class AgentService : Service() {
         wsClient?.stop()
         heartbeatLoop?.stop()
         keywordPollLoop?.stop()
+        accountScanLoopJob?.cancel()
         serviceJob.cancel()
         unregisterReceiver(collectResultReceiver)
         unregisterReceiver(dmOutreachResultReceiver)
+        unregisterReceiver(accountScanResultReceiver)
         super.onDestroy()
     }
 
@@ -204,8 +231,25 @@ class AgentService : Service() {
         )
         keywordPollLoop?.start()
 
+        // Sprint 07061301-device-account-scan-wiring — 定时触发设备账号扫描（30-60 分钟随机间隔，
+        // 与 RandomDelay 一样禁止用固定常量），扫描服务自身会先判互斥锁再决定是否真的执行。
+        accountScanLoopJob = scope.launch { runAccountScanLoop() }
+
         android.util.Log.i(TAG, "agent started — agentId=${config.agentId} machineId=${config.machineId}")
     }
+
+    private suspend fun runAccountScanLoop() {
+        while (scope.isActive) {
+            delay(sampleAccountScanIntervalMs())
+            val requestId = "scan-${System.currentTimeMillis().toString(36)}"
+            // tenantId 本地未持有真实值（接缝清单第 4 条：tenantId 不得信任设备上报，
+            // 必须服务端按 agent_id 反查）——这里只作为扫描内部临时上下文占位符，
+            // reportAccountScanResult 上报中台时禁止使用此字段冒充真实 tenantId。
+            DeviceAccountScanService.dispatchTask(this@AgentService, requestId, tenantId = "", thisDeviceId = config.machineId)
+        }
+    }
+
+    private fun sampleAccountScanIntervalMs(): Long = Random.nextLong(30 * 60_000L, 60 * 60_000L + 1)
 
     private fun buildNotification(): Notification {
         val channelId = "agent_service"
@@ -246,6 +290,18 @@ class AgentService : Service() {
             return
         }
 
+        // Golden Path Step 7：派发前一致性核对。任务派发即隐含"假设目标抖音号在线"，
+        // 若本机最近一次账号扫描（DeviceAccountRegistry）显示它已下线，说明账号状态跟
+        // 中台记录不一致——立即触发一次实时重扫更新状态，本次任务按未登录处理转失败，
+        // 不再启动无障碍执行流程去点一个已经登不上的账号。
+        val dispatchDecision = DeviceAccountScanService.checkDispatchConsistency(profileUrl)
+        if (dispatchDecision == DeviceAccountModel.DispatchAccountDecision.TRIGGER_RESCAN_AND_FAIL) {
+            android.util.Log.w(TAG, "dm_outreach task ${task.task_id} target=$profileUrl recorded offline at dispatch — triggering rescan, failing task")
+            DeviceAccountScanService.dispatchTask(this, "rescan-${task.task_id}", tenantId = "", thisDeviceId = config.machineId)
+            reportDmOutreachResult(task.task_id, "failed", dmAssignmentId, accountLabel, profileUrl, "ACCOUNT_OFFLINE_AT_DISPATCH")
+            return
+        }
+
         val now = System.currentTimeMillis()
         val withinLimit = DmOutreachRateLimiter.isWithinLimit(dmSentTimestamps.toList(), now)
         if (!withinLimit) {
@@ -258,6 +314,32 @@ class AgentService : Service() {
         dmSentTimestamps.add(now)
         DouyinDmOutreachService.dispatchTask(
             this, profileUrl, message, task.task_id, dmAssignmentId, accountLabel,
+        )
+    }
+
+    // Sprint 07061301-device-account-scan-wiring — 账号扫描结果上报调用点。
+    //
+    // TODO(中台对接，超出本 sprint 合同范围): 目前只打印日志，未真实调用中台接口写回
+    // `agent_platform_sessions`（`device_type='android'` + 账号列表相关字段）。真实实现时：
+    //   1. 必须新增/复用一个 `/api/agent/...` 端点（未在本 sprint contract-draft.md 定义）。
+    //   2. tenantId 绝不能用本地 dispatchTask 传的占位值——必须由服务端按 agent_id 反查
+    //      （见 sprints/07061204-android-device-account-model/contract-draft.md 接缝清单第 4 条，
+    //      对齐"同机双租户 deny"修复的严格程度）。
+    //   3. `shouldInvalidateOldDeviceRecord`/`shouldLogConflictAlert` 为 true 的账号，服务端
+    //      落库时要真正执行"标失效"写操作和"写日志告警"动作（本 sprint 只在扫描服务本地做
+    //      了判定与 Log.w 级别的告警打印，DB 落地是中台职责）。
+    private fun reportAccountScanResult(
+        requestId: String,
+        ok: Boolean,
+        stale: Boolean,
+        accountIds: List<String>,
+        errorCode: String,
+    ) {
+        android.util.Log.i(
+            TAG,
+            "account scan result ready to report to mid-tier: requestId=$requestId ok=$ok stale=$stale " +
+                "accountCount=${accountIds.size} error=$errorCode agentId=${config.agentId} " +
+                "(TODO: wire real agent_platform_sessions write-back endpoint)",
         )
     }
 

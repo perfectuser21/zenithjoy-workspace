@@ -14,6 +14,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import com.zenithjoy.agent.account.ScanMutex
 
 /**
  * 抖音私信触达执行服务（Sprint 07052218 followup）。
@@ -154,6 +155,9 @@ class DouyinDmOutreachService : AccessibilityService() {
         currentAccountLabel = accountLabel
         leadStartedAtMs = android.os.SystemClock.elapsedRealtime()
         state = State.OPENING_PROFILE
+        // 与账号扫描服务共享的全局互斥标记（Sprint 07061301-device-account-scan-wiring）：
+        // 触达任务运行期间置 busy=true，扫描服务据此在本轮跳过，避免共用微信/抖音窗口冲突。
+        ScanMutex.busy = true
 
         scope.launch {
             if (!launchDouyinApp()) {
@@ -500,6 +504,7 @@ class DouyinDmOutreachService : AccessibilityService() {
         val outcome = classifyOutcome(rateLimited = false, dmEntryFound = dmEntryFound, sendConfirmed = sendConfirmed)
         android.util.Log.i(TAG, "dm_outreach outcome=$outcome taskId=$currentTaskId error=$errorCode")
         state = State.IDLE
+        ScanMutex.busy = false
         sendResultBroadcast(outcome, errorCode)
     }
 
