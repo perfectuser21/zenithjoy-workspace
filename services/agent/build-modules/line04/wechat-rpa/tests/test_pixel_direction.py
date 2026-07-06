@@ -134,3 +134,77 @@ def test_pixel_direction_overrides_missing_history(monkeypatch):
     mw = _MW([_MsgItem("操作者手机插话", 200)])
     bubbles = listen_chat.read_chat_bubbles(mw)
     assert bubbles[0]["direction"] == "outgoing"
+
+
+class _AllOutOfBoundsCapture:
+    """像素全越界（返回 None）——模拟气泡 rect 超出窗口截图范围。"""
+
+    def pixel(self, x, y):
+        return None
+
+
+def test_row_is_outgoing_all_pixels_oob_returns_none():
+    """[RED→v1.0.109] 像素全越界时 _row_is_outgoing_by_pixels 必须返回 None（非 False）。
+
+    根因（2026-07-06 bubble gate 连续 2 次 fail）：虚拟列表最新气泡 rect 底部可超出
+    窗口截图边界（r.bottom > wr.bottom），导致右侧采样带全部 cap.pixel 返回 None，
+    旧代码直接 return False → read_chat_bubbles 走 else 分支判 incoming，跳过
+    _matches_any_sent 已发送历史回退 → marker_outgoing=False gate 报红。
+    修正：全越界（any_valid=False）时返回 None，让调用方走回退路径。
+    """
+    cap = _AllOutOfBoundsCapture()
+    result = listen_chat._row_is_outgoing_by_pixels(cap, 900, 940, 100, 800)
+    assert result is None, (
+        f"全像素越界时应返回 None（触发 _matches_any_sent 回退），实际返回 {result!r}"
+    )
+
+
+def test_row_is_outgoing_all_pixels_oob_falls_back_to_sent_history(monkeypatch):
+    """[RED→v1.0.109] 全越界时 read_chat_bubbles 必须回退 _matches_any_sent 判向。
+
+    场景：气泡 rect 底部超出窗口截图边界（全采样点 out-of-bounds），历史里有该文本
+    → 必须判 outgoing（而非 incoming）。
+    """
+    listen_chat._SENT_TEXTS.clear()
+    listen_chat._record_sent_text("刚发的最新消息")
+
+    cap = _AllOutOfBoundsCapture()
+    monkeypatch.setattr(listen_chat, "_capture_window_pixels", lambda mw: cap)
+
+    mw = _MW([_MsgItem("刚发的最新消息", 200)])
+    bubbles = listen_chat.read_chat_bubbles(mw)
+    assert bubbles[0]["direction"] == "outgoing", (
+        "全像素越界时必须回退已发送历史判向 outgoing，"
+        f"实际 {bubbles[0]['direction']!r}"
+    )
+
+
+class _PartialValidGrayCapture:
+    """像素在窗口内但全为灰色背景（非绿）。模拟刚发的气泡渲染未就绪或颜色采样打在边框/背景上的场景。"""
+
+    def pixel(self, x, y):
+        return (245, 245, 245)  # 背景灰（非绿）——any_valid=True 但无绿
+
+
+def test_pixel_false_but_in_sent_history_should_be_outgoing(monkeypatch):
+    """[RED→v1.0.109+] 像素有效但全非绿（verdict=False）且文本在已发送历史，
+    必须判 outgoing——不能因 verdict=False 直接跳过 _matches_any_sent 回退。
+
+    根因：_row_is_outgoing_by_pixels 返回 False（有效像素全为灰色背景）时，
+    read_chat_bubbles 直接 direction='incoming'，没走 _matches_any_sent 兜底。
+    场景：刚发的气泡渲染未就绪（像素颜色还是背景灰），但 _SENT_TEXTS 里有该文本——
+    应判 outgoing，当前代码错判 incoming 导致 bubble gate marker_outgoing=False。
+    """
+    listen_chat._SENT_TEXTS.clear()
+    listen_chat._record_sent_text("[bubble-gate] 1752227479")
+
+    cap = _PartialValidGrayCapture()
+    monkeypatch.setattr(listen_chat, "_capture_window_pixels", lambda mw: cap)
+
+    # top=680 在视口内（199-748），像素在界内但全灰
+    mw = _MW([_MsgItem("[bubble-gate] 1752227479", 680)])
+    bubbles = listen_chat.read_chat_bubbles(mw)
+    assert bubbles[0]["direction"] == "outgoing", (
+        "像素在界内但非绿时，若文本在 _SENT_TEXTS 历史里，必须判 outgoing，"
+        f"实际 {bubbles[0]['direction']!r}"
+    )

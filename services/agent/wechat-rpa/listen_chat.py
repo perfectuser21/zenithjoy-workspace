@@ -2325,7 +2325,13 @@ def _capture_window_pixels(mw: Any) -> Any:
 def _row_is_outgoing_by_pixels(cap: Any, row_top: int, row_bottom: int,
                                panel_left: int, panel_right: int) -> Optional[bool]:
     """一行消息是否为我方绿泡（v1.0.104）：在该行右侧 40% 采样带按网格取点，
-    命中微信绿 → True（outgoing）；采样全无绿 → False；cap 无效 → None。"""
+    命中微信绿 → True（outgoing）；采样有效像素但全无绿 → False（incoming）；
+    cap 无效/全采样点越界 → None（触发调用方 _matches_any_sent 已发历史回退）。
+
+    v1.0.109 修正：虚拟列表最新气泡 rect 底部可超出窗口截图边界（r.bottom >
+    wr.bottom），旧代码全越界时仍返回 False，跳过已发送历史判向回退，导致刚发
+    的绿泡被判 incoming（bubble gate marker_outgoing=False 根因）。
+    修正：any_valid 跟踪有效采样，全越界时返回 None。"""
     if cap is None:
         return None
     try:
@@ -2335,12 +2341,16 @@ def _row_is_outgoing_by_pixels(cap: Any, row_top: int, row_bottom: int,
         x1 = panel_right - 12
         if y1 <= y0 or x1 <= x0:
             return None
+        any_valid = False
         for y in range(y0, y1 + 1, max(4, (y1 - y0) // 4 or 4)):
             for x in range(x0, x1 + 1, max(8, (x1 - x0) // 14 or 8)):
                 px = cap.pixel(x, y)
-                if px and _is_wechat_green(*px):
+                if px is None:
+                    continue
+                any_valid = True
+                if _is_wechat_green(*px):
                     return True
-        return False
+        return False if any_valid else None
     except Exception:
         return None
 
@@ -2407,10 +2417,9 @@ def read_chat_bubbles(mw: Any) -> List[Dict[str, str]]:
             verdict = (_row_is_outgoing_by_pixels(cap, r.top, r.bottom,
                                                   p_left, p_right)
                        if r is not None else None)
-            if verdict is None:
-                direction = "outgoing" if _matches_any_sent(nm) else "incoming"
-            else:
-                direction = "outgoing" if verdict else "incoming"
+            # v1.0.109 兜底：verdict=False（有效像素但非绿，如渲染未就绪）时仍查
+            # 已发送历史——刚 DELIVERED 的气泡像素可能还是背景色，但文本在 _SENT_TEXTS。
+            direction = "outgoing" if (verdict or _matches_any_sent(nm)) else "incoming"
             out_bubbles.append({"text": nm, "direction": direction})
         return out_bubbles
     # ── legacy 回退：Text 几何扫描 ────────────────────────────────────────────
@@ -2996,6 +3005,8 @@ def post_draft_generate(
 # ─── DesktopLeaseBroker IPC 接缝（Sprint 0703-line04-desktop-lease-broker）─────
 # listen_chat 在窗口切换前通过 IPC 申请桌面租约，完成后归还，防多 agent 并发抢占。
 # 所有失败均为软失败：acquire 失败 → 跳过本轮（[防假成功] invariant），release 失败忽略。
+# v1.0.109：IPC 基址改为 127.0.0.1:ZENITHJOY_LOCAL_PORT（local-discovery，本机可达）。
+#   middleware_url 参数保留但不再用作 URL 基址（仍作"是否启用仲裁"的开关信号）。
 
 _DESKTOP_LEASE_CLIENT_ID = "line04/listen_chat"
 _DESKTOP_LEASE_PRIORITY = 50
@@ -3005,15 +3016,22 @@ _DESKTOP_LEASE_TTL_MS = 10000
 _current_lease_id: Optional[str] = None
 
 
+def _get_local_discovery_base() -> str:
+    """租约 IPC 基址：本机 local-discovery（127.0.0.1:ZENITHJOY_LOCAL_PORT，默认 58432）。"""
+    port = int(os.environ.get("ZENITHJOY_LOCAL_PORT", "58432"))
+    return f"http://127.0.0.1:{port}"
+
+
 def desktop_lease_acquire(middleware_url: str) -> bool:
     """向 Broker IPC 申请桌面租约。返回 True=已授予，False=拒绝（调用方应跳过本轮）。
 
+    URL 基址走 local-discovery（127.0.0.1:ZENITHJOY_LOCAL_PORT），不走 middleware_url。
     日志写到 stderr（DoD B6 验收锚点）：
       成功 → [desktop_lease] acquire granted
       失败 → [desktop_lease] acquire failed
     """
     global _current_lease_id
-    url = middleware_url.rstrip("/") + "/api/agent/desktop-lease-broker/acquire"
+    url = _get_local_discovery_base() + "/api/agent/desktop-lease-broker/acquire"
     payload = json.dumps({
         "clientId": _DESKTOP_LEASE_CLIENT_ID,
         "priority": _DESKTOP_LEASE_PRIORITY,
@@ -3040,6 +3058,7 @@ def desktop_lease_acquire(middleware_url: str) -> bool:
 def desktop_lease_release(middleware_url: str) -> None:
     """归还桌面租约（best-effort，失败静默忽略）。
 
+    URL 基址走 local-discovery（127.0.0.1:ZENITHJOY_LOCAL_PORT），不走 middleware_url。
     日志写到 stderr：[desktop_lease] release
     """
     global _current_lease_id
@@ -3047,7 +3066,7 @@ def desktop_lease_release(middleware_url: str) -> None:
     if not lease_id:
         return
     _current_lease_id = None
-    url = middleware_url.rstrip("/") + "/api/agent/desktop-lease-broker/release"
+    url = _get_local_discovery_base() + "/api/agent/desktop-lease-broker/release"
     payload = json.dumps({
         "leaseId": lease_id,
         "clientId": _DESKTOP_LEASE_CLIENT_ID,
@@ -3061,6 +3080,39 @@ def desktop_lease_release(middleware_url: str) -> None:
         print(f"[desktop_lease] release lease_id={lease_id}", file=sys.stderr)
     except Exception as exc:
         print(f"[desktop_lease] release error={exc} (ignored)", file=sys.stderr)
+
+
+def desktop_lease_renew(middleware_url: str) -> bool:
+    """续期当前桌面租约（best-effort，失败返回 False，不抛）。
+
+    URL 基址走 local-discovery（127.0.0.1:ZENITHJOY_LOCAL_PORT），不走 middleware_url。
+    日志写到 stderr：[desktop_lease] renew
+    """
+    global _current_lease_id
+    lease_id = _current_lease_id
+    if not lease_id:
+        return False
+    url = _get_local_discovery_base() + "/api/agent/desktop-lease-broker/renew"
+    payload = json.dumps({
+        "leaseId": lease_id,
+        "clientId": _DESKTOP_LEASE_CLIENT_ID,
+        "ttlMs": _DESKTOP_LEASE_TTL_MS,
+    }).encode("utf-8")
+    try:
+        req = urllib.request.Request(url, data=payload,
+                                     headers={"Content-Type": "application/json"},
+                                     method="POST")
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            result = json.loads(resp.read().decode("utf-8"))
+        if result.get("renewed"):
+            print(f"[desktop_lease] renew lease_id={lease_id}", file=sys.stderr)
+            return True
+        else:
+            print(f"[desktop_lease] renew failed reason=not_renewed lease_id={lease_id}", file=sys.stderr)
+            return False
+    except Exception as exc:
+        print(f"[desktop_lease] renew error={exc} (ignored)", file=sys.stderr)
+        return False
 
 
 # ─── 进程守护：监听心跳上报（每分钟一次，失败不影响监听）────────────────────────
