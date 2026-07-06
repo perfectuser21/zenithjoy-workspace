@@ -14,8 +14,10 @@ import org.junit.Test
  * 1. `matchProfileByDouyinId` — 抖音号精确搜索定位主页（唯一匹配/零匹配/多匹配歧义）
  * 2. `needsFollowClick` / `needsLikeClick` — 关注/点赞按钮态判断（找不到按钮尽力而为跳过）
  * 3. `isLeadTimedOut` — 单 lead 90 秒超时熔断（区别于 failed）
+ * 4. `isFollowRateLimited` / `isLikeRateLimited` — 关注/点赞每小时频控（1 小时滑动窗口，
+ *    独立于既有 `classifyOutcome` 的私信频控——PRD NFR"关注 ≤10 次/小时，点赞 ≤15 次/小时"）
  *
- * DouyinDmOutreachService 尚未提供这三块函数（TDD Red）— Generator 需要在
+ * DouyinDmOutreachService 尚未提供这些函数（TDD Red）— Generator 需要在
  * services/agent-android/app/src/main/kotlin/com/zenithjoy/agent/collect/DouyinDmOutreachService.kt
  * 的 companion object 里新增：
  *   - `internal enum class ProfileMatchResult { UNIQUE, NO_MATCH, AMBIGUOUS }`
@@ -23,6 +25,12 @@ import org.junit.Test
  *   - `internal fun needsFollowClick(buttonText: String?): Boolean`
  *   - `internal fun needsLikeClick(buttonText: String?): Boolean`
  *   - `internal fun isLeadTimedOut(elapsedMs: Long, limitMs: Long = 90_000L): Boolean`
+ *   - `internal fun isFollowRateLimited(followTimestampsMs: List<Long>, nowMs: Long, limit: Int = 10, windowMs: Long = 3_600_000L): Boolean`
+ *   - `internal fun isLikeRateLimited(likeTimestampsMs: List<Long>, nowMs: Long, limit: Int = 15, windowMs: Long = 3_600_000L): Boolean`
+ *
+ * 频控判定标准：统计 `(nowMs - windowMs, nowMs]` 滑动窗口内的历史动作时间戳数量，
+ * 数量 >= limit 时判定为限流（本次动作应跳过，不阻塞主流程，不做重试/排队）；
+ * 窗口外（超过 1 小时前）的历史时间戳不计入本次判定。
  */
 class DouyinDmWarmupSearchLogicTest {
 
@@ -125,5 +133,70 @@ class DouyinDmWarmupSearchLogicTest {
     @Test
     fun `elapsed time under 90 seconds is not timed out`() {
         assertFalse(DouyinDmOutreachService.isLeadTimedOut(elapsedMs = 45_000L))
+    }
+
+    // ── isFollowRateLimited（关注 ≤10 次/小时，1 小时滑动窗口）───────────────────
+
+    @Test
+    fun `follow count under hourly limit is not rate limited`() {
+        val now = 10_000_000L
+        // 9 次关注时间戳，均在窗口内（过去 1 小时以内）
+        val timestamps = (1..9).map { now - it * 60_000L }
+        assertFalse(DouyinDmOutreachService.isFollowRateLimited(timestamps, now))
+    }
+
+    @Test
+    fun `follow count exactly at hourly limit is rate limited`() {
+        val now = 10_000_000L
+        // 恰好 10 次关注时间戳，均在窗口内 -> 达到上限即判定限流
+        val timestamps = (1..10).map { now - it * 60_000L }
+        assertTrue(DouyinDmOutreachService.isFollowRateLimited(timestamps, now))
+    }
+
+    @Test
+    fun `follow count over hourly limit is rate limited`() {
+        val now = 10_000_000L
+        val timestamps = (1..11).map { now - it * 60_000L }
+        assertTrue(DouyinDmOutreachService.isFollowRateLimited(timestamps, now))
+    }
+
+    @Test
+    fun `follow timestamps outside 1 hour window are not counted`() {
+        val now = 10_000_000L
+        // 9 条窗口外（超过 1 小时前）历史 + 9 条窗口内 -> 窗口内计数仅 9，未达上限
+        val outsideWindow = (1..9).map { now - 3_600_000L - it * 60_000L }
+        val insideWindow = (1..9).map { now - it * 60_000L }
+        assertFalse(DouyinDmOutreachService.isFollowRateLimited(outsideWindow + insideWindow, now))
+    }
+
+    // ── isLikeRateLimited（点赞 ≤15 次/小时，1 小时滑动窗口）─────────────────────
+
+    @Test
+    fun `like count under hourly limit is not rate limited`() {
+        val now = 10_000_000L
+        val timestamps = (1..14).map { now - it * 60_000L }
+        assertFalse(DouyinDmOutreachService.isLikeRateLimited(timestamps, now))
+    }
+
+    @Test
+    fun `like count exactly at hourly limit is rate limited`() {
+        val now = 10_000_000L
+        val timestamps = (1..15).map { now - it * 60_000L }
+        assertTrue(DouyinDmOutreachService.isLikeRateLimited(timestamps, now))
+    }
+
+    @Test
+    fun `like count over hourly limit is rate limited`() {
+        val now = 10_000_000L
+        val timestamps = (1..16).map { now - it * 60_000L }
+        assertTrue(DouyinDmOutreachService.isLikeRateLimited(timestamps, now))
+    }
+
+    @Test
+    fun `like timestamps outside 1 hour window are not counted`() {
+        val now = 10_000_000L
+        val outsideWindow = (1..14).map { now - 3_600_000L - it * 60_000L }
+        val insideWindow = (1..14).map { now - it * 60_000L }
+        assertFalse(DouyinDmOutreachService.isLikeRateLimited(outsideWindow + insideWindow, now))
     }
 }

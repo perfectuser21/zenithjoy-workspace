@@ -1,4 +1,4 @@
-# Sprint Contract Draft (Round 1)
+# Sprint Contract Draft (Round 2)
 
 ## Response Schema（推导来源: N/A — 任务无 HTTP 响应）
 
@@ -19,6 +19,11 @@
 - 输出：是否超时（`elapsedMs > limitMs` → true）
 - 来源：PRD"熔断规则"段字面定义（90 秒，区别于 failed）
 
+### `isFollowRateLimited(followTimestampsMs: List<Long>, nowMs: Long, limit: Int = 10, windowMs: Long = 3_600_000L): Boolean` / `isLikeRateLimited(likeTimestampsMs: List<Long>, nowMs: Long, limit: Int = 15, windowMs: Long = 3_600_000L): Boolean`
+- 输入：本机/本号历史关注（或点赞）动作的时间戳列表（毫秒）+ 当前时间 + 上限次数 + 窗口长度（默认 1 小时）
+- 输出：统计 `(nowMs - windowMs, nowMs]` 滑动窗口内的历史时间戳数量，`count >= limit` → true（本次动作应跳过，尽力而为，不阻塞、不重试、不排队）；窗口外的历史时间戳不计入
+- 来源：PRD NFR 段字面定义（"频控：关注 ≤10 次/小时，点赞 ≤15 次/小时"）——与 `已知约束` 段提到的 `classifyOutcome` 私信频控是**两套独立机制**（私信频控判定送达结果，本频控判定"是否执行关注/点赞热身动作"），互不覆盖、互不替代
+
 **禁用命名**：不得把 `ProfileMatchResult` 枚举值改名为 `FOUND`/`MISS`/`DUPLICATE` 等同义词——PRD 用词是"唯一匹配/零匹配/多匹配"，枚举值固定 `UNIQUE`/`NO_MATCH`/`AMBIGUOUS`。
 
 ---
@@ -32,7 +37,7 @@
 
 ## Golden Path
 
-[中台派发 dm_assignments 任务] → [搜索定位主页] → [关注热身] → [点赞热身] → [私信发送(复用既有链路)] → [Dashboard 触达记录变为 sent]
+[中台派发 dm_assignments 任务] → [搜索定位主页] → [关注热身(受频控约束)] → [点赞热身(受频控约束)] → [私信发送(复用既有链路)] → [Dashboard 触达记录变为 sent]
 
 ### Step 1: 中台派 `dm_assignments` 任务，Android agent 收到任务
 **来源**: `[FROM_PRD]` — Golden Path 具体步骤 1（"中台派 dm_assignments 任务（payload 含 lead 的抖音号）→ Android agent 收到任务"）
@@ -73,7 +78,7 @@ gradle :app:testDebugUnitTest --tests "*DouyinDmWarmupSearchLogicTest*" --rerun
 grep -q 'failures="0" errors="0"' app/build/test-results/testDebugUnitTest/TEST-com.zenithjoy.agent.collect.DouyinDmWarmupSearchLogicTest.xml
 ```
 
-**硬阈值**: 单测全绿，对应 test case `zero matches -> NO_MATCH` 和 `multiple identical matches -> AMBIGUOUS`
+**硬阈值**: 单测全绿，对应 test case `zero matches -> NO_MATCH`、`empty search results -> NO_MATCH` 和 `multiple identical matches -> AMBIGUOUS`
 
 ---
 
@@ -109,7 +114,23 @@ grep -q 'failures="0" errors="0"' app/build/test-results/testDebugUnitTest/TEST-
 
 ---
 
-### Step 6: 90 秒超时熔断
+### Step 6: 关注/点赞每小时频控（独立于私信频控，独立于按钮态判断）
+**来源**: `[FROM_PRD]` — NFR 段字面定义（"频控：关注 ≤10 次/小时，点赞 ≤15 次/小时"）
+
+**可观测行为**: 关注动作前统计过去 1 小时内本号已执行的关注次数，`isFollowRateLimited` 达到 10 次（含）即返回 `true`（本次跳过关注，不阻塞、不重试、不排队等到下一小时）；点赞动作前统计过去 1 小时内已执行点赞次数，`isLikeRateLimited` 达到 15 次（含）即返回 `true`（本次跳过点赞）。窗口外（1 小时前）的历史时间戳不计入统计。**该频控与 Step 4/5 的按钮态判断（是否已关注/已点赞）相互独立、都要过**——按钮态判断"要不要点"，本步频控判断"能不能点"，两者都为 true 才实际执行点击。
+
+**验证命令**:
+```bash
+cd services/agent-android
+gradle :app:testDebugUnitTest --tests "*DouyinDmWarmupSearchLogicTest*" --rerun
+grep -q 'failures="0" errors="0"' app/build/test-results/testDebugUnitTest/TEST-com.zenithjoy.agent.collect.DouyinDmWarmupSearchLogicTest.xml
+```
+
+**硬阈值**: 单测全绿，对应 test case `follow count under hourly limit is not rate limited` / `follow count exactly at hourly limit is rate limited` / `follow count over hourly limit is rate limited` / `follow timestamps outside 1 hour window are not counted` / `like count under hourly limit is not rate limited` / `like count exactly at hourly limit is rate limited` / `like count over hourly limit is rate limited` / `like timestamps outside 1 hour window are not counted`
+
+---
+
+### Step 7: 90 秒超时熔断
 **来源**: `[FROM_PRD]` — "熔断规则"段字面定义（"单个 lead 从 Step 2 到 Step 6 总耗时超过 90 秒 → 中止当前 lead，标记 timeout"）
 
 **可观测行为**: `elapsedMs` 超过 `90_000L` → `isLeadTimedOut` 返回 `true`（标记 `timeout`）；未超过（含恰好 90000ms 边界，PRD 用词"超过"= 严格大于，边界值不算超时）→ 返回 `false`（正常继续）
@@ -125,7 +146,7 @@ grep -q 'failures="0" errors="0"' app/build/test-results/testDebugUnitTest/TEST-
 
 ---
 
-### Step 7（出口）: 私信发送 + Dashboard 触达记录变为 sent
+### Step 8（出口）: 私信发送 + Dashboard 触达记录变为 sent
 **来源**: `[FROM_PRD]` — Golden Path 具体步骤 6/7（"随机延时→返回主页→点私信→输入话术→发送→确认送达"→"Dashboard 触达记录页看到该条记录状态变成 sent"）
 
 **可观测行为**: 复用累积 FR 已验收的私信发送 + `/dm-outreach-result` 回执链路（`classifyOutcome`/`finishWithOutcome`），本 sprint 不改动该判定标准。
@@ -145,6 +166,15 @@ grep -q 'failures="0" errors="0"' app/build/test-results/testDebugUnitTest/TEST-
 | 3 | 搜索定位→关注→点赞→私信发送全链路真机跑通 | 无障碍服务真实点击 + 真送达确认 | 人工在 Honor 真机对一个真实测试账号跑通全链路，Dashboard 触达记录页确认状态变 `sent`（PRD E2E 验收段已声明"人工补验，不计入本次 Harness E2E"） |
 
 **本 sprint `target_environment=local_api`，Harness 自动裁决只覆盖上述 3 个纯函数的单测级验收；接缝清单 3 条在人工真机补验之前，Sprint 整体只能标 `logic-done-pending`。**
+
+---
+
+## 产品风险登记（Risks）
+
+| # | 风险 | 影响 | Mitigation | 状态 |
+|---|---|---|---|---|
+| 1 | 关注/点赞超出 PRD NFR 频控上限（关注 >10/h、点赞 >15/h）触发抖音风控判定小号为营销机器人 | 小号被限流/封禁，影响整条私信触达链路可用性 | 本轮已修复：新增 `isFollowRateLimited`/`isLikeRateLimited` 纯函数，Step 6 强制在关注/点赞动作执行前判定滑动窗口内次数，达到上限即跳过本次动作（不阻塞、不重试、不排队），随单测覆盖 under/exactly-at/over-limit/窗口外历史不计入四类场景 | 本 sprint 内已处理（见 Step 6 + Test Contract） |
+| 2 | 误关注不可逆——PRD"关于关注的产品决策"段明确"关注是不可逆的社交动作（对方会收到通知），本次决策为不做取消关注机制"，即使后续判定该 lead 低价值也不回滚 | 用户/小号可能对不合适的 lead 产生不可撤销的关注动作，被关注方会收到系统通知 | **无 mitigation，仅存档说明**：这是 PRD 层面已拍板的产品决策（用户已确认接受），本 sprint 不实现取消关注机制、不做补偿性回滚逻辑。此处登记目的是让该风险在合同里显式可见，而非遗漏未提及；如未来该风险被验证为业务问题，需走新的 PRD 决策而非本 sprint 隐式处理 | 已知且用户已确认接受，不需要修复，仅记录存档 |
 
 ---
 
@@ -173,14 +203,14 @@ RESULT_XML="app/build/test-results/testDebugUnitTest/TEST-com.zenithjoy.agent.co
 [ -f "$RESULT_XML" ] || { echo "FAIL: 测试结果文件不存在 $RESULT_XML"; exit 1; }
 grep -q 'failures="0" errors="0"' "$RESULT_XML" || { echo "FAIL: Android 单测未全绿"; exit 1; }
 
-# 断言测试数量 ≥ 覆盖三块纯函数所需的最小用例数（防止 Generator 删测试假绿）
+# 断言测试数量 ≥ 覆盖五块纯函数所需的最小用例数（防止 Generator 删测试假绿）
 TEST_COUNT=$(grep -o 'tests="[0-9]*"' "$RESULT_XML" | head -1 | grep -o '[0-9]*')
-[ "$TEST_COUNT" -ge 9 ] || { echo "FAIL: 测试用例数 $TEST_COUNT < 9，疑似删测试"; exit 1; }
+[ "$TEST_COUNT" -ge 22 ] || { echo "FAIL: 测试用例数 $TEST_COUNT < 22，疑似删测试"; exit 1; }
 
-echo "✅ Golden Path 验证通过（抖音号精确匹配 + 按钮态判断 + 90秒超时熔断，共 $TEST_COUNT 条用例全绿）"
+echo "✅ Golden Path 验证通过（抖音号精确匹配 + 按钮态判断 + 90秒超时熔断 + 关注/点赞每小时频控，共 $TEST_COUNT 条用例全绿）"
 ```
 
-**PASS 标准**：脚本 exit 0 + `TEST-...DouyinDmWarmupSearchLogicTest.xml` 内 `failures="0" errors="0"` + 用例数 ≥ 9
+**PASS 标准**：脚本 exit 0 + `TEST-...DouyinDmWarmupSearchLogicTest.xml` 内 `failures="0" errors="0"` + 用例数 ≥ 22
 **FAIL 标准**：任意 gradle 步骤非 0 exit / 结果文件缺失 / 有 failures 或 errors / 用例数被删减
 **人工真机补验**（不计入本次 Harness E2E，见接缝清单）：Honor 真机（Tailscale 100.91.227.1）对一个真实测试账号跑通"搜索定位到主页→关注→点赞第一个作品→私信发送→确认送达"，Dashboard 触达记录页确认状态变 `sent`
 
@@ -190,6 +220,7 @@ echo "✅ Golden Path 验证通过（抖音号精确匹配 + 按钮态判断 + 9
 
 | 功能 | Test File | BEHAVIOR 覆盖 | 预期红证据 |
 |---|---|---|---|
-| 抖音号精确匹配纯函数 | `tests/DouyinDmWarmupSearchLogicTest.kt` | `matches exactly one profile by exact douyin id -> UNIQUE`, `zero matches -> NO_MATCH`, `multiple identical matches -> AMBIGUOUS` | → 编译失败（`matchProfileByDouyinId`/`ProfileMatchResult` 未定义）3 failures |
-| 按钮态判断纯函数（关注/点赞）| `tests/DouyinDmWarmupSearchLogicTest.kt` | `follow button text "关注" needs click`, `"已关注" does not need click`, `null button (not found) does not need click`, `like button text "点赞" needs click`, `"已赞" does not need click`, `null button (no artwork or follow-only profile) does not need click` | → 编译失败（`needsFollowClick`/`needsLikeClick` 未定义）6 failures |
+| 抖音号精确匹配纯函数 | `tests/DouyinDmWarmupSearchLogicTest.kt` | `matches exactly one profile by exact douyin id -> UNIQUE`, `zero matches -> NO_MATCH`, `empty search results -> NO_MATCH`, `multiple identical matches -> AMBIGUOUS`, `partial substring match does not count as exact match` | → 编译失败（`matchProfileByDouyinId`/`ProfileMatchResult` 未定义）5 failures |
+| 按钮态判断纯函数（关注/点赞）| `tests/DouyinDmWarmupSearchLogicTest.kt` | `follow button text 关注 needs click`, `follow button text 已关注 does not need click`, `null follow button (not found) does not need click`, `like button text 点赞 needs click`, `like button text 已赞 does not need click`, `null like button (no artwork or follow-only profile) does not need click` | → 编译失败（`needsFollowClick`/`needsLikeClick` 未定义）6 failures |
 | 90 秒超时熔断纯函数 | `tests/DouyinDmWarmupSearchLogicTest.kt` | `elapsed time over 90 seconds is timed out`, `elapsed time exactly at 90 second boundary is not timed out`, `elapsed time under 90 seconds is not timed out` | → 编译失败（`isLeadTimedOut`未定义）3 failures |
+| 关注/点赞每小时频控纯函数 | `tests/DouyinDmWarmupSearchLogicTest.kt` | `follow count under hourly limit is not rate limited`, `follow count exactly at hourly limit is rate limited`, `follow count over hourly limit is rate limited`, `follow timestamps outside 1 hour window are not counted`, `like count under hourly limit is not rate limited`, `like count exactly at hourly limit is rate limited`, `like count over hourly limit is rate limited`, `like timestamps outside 1 hour window are not counted` | → 编译失败（`isFollowRateLimited`/`isLikeRateLimited` 未定义）8 failures |

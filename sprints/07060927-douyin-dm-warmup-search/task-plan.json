@@ -5,8 +5,8 @@
   "tasks": [
     {
       "task_id": "ws1",
-      "title": "抖音号精确搜索定位 + 关注点赞热身互动纯函数落地并接入 DouyinDmOutreachService",
-      "scope": "在 DouyinDmOutreachService 中新增 ProfileMatchResult 枚举 + matchProfileByDouyinId/needsFollowClick/needsLikeClick/isLeadTimedOut 四个纯函数（无 Android 框架依赖，可脱离真机用 JUnit 直接测），并把 openProfile() 替换为搜索定位+关注/点赞热身互动两段真实动作，90 秒超时熔断标记 timeout（区别于 failed），不改动既有 classifyOutcome 私信发送判定标准",
+      "title": "抖音号精确搜索定位 + 关注点赞热身互动(含每小时频控)纯函数落地并接入 DouyinDmOutreachService",
+      "scope": "在 DouyinDmOutreachService 中新增 ProfileMatchResult 枚举 + matchProfileByDouyinId/needsFollowClick/needsLikeClick/isLeadTimedOut/isFollowRateLimited/isLikeRateLimited 六个纯函数（无 Android 框架依赖，可脱离真机用 JUnit 直接测），并把 openProfile() 替换为搜索定位+关注/点赞热身互动两段真实动作，关注/点赞动作前先过每小时频控（关注≤10/h、点赞≤15/h，1小时滑动窗口，独立于既有私信频控），90 秒超时熔断标记 timeout（区别于 failed），不改动既有 classifyOutcome 私信发送判定标准",
       "dod": [
         "[BEHAVIOR] 抖音号精确匹配——唯一匹配返回 UNIQUE",
         "[BEHAVIOR] 抖音号精确匹配——零匹配返回 NO_MATCH，不重试转人工核实",
@@ -14,8 +14,10 @@
         "[BEHAVIOR] 关注按钮态判断——\"关注\"点击/\"已关注\"跳过/找不到按钮尽力而为跳过",
         "[BEHAVIOR] 点赞按钮态判断——\"点赞\"点击/\"已赞\"跳过/无作品可点赞尽力而为跳过",
         "[BEHAVIOR] 90 秒超时熔断——超过 90 秒标记 timeout，边界值/未超过正常继续",
+        "[BEHAVIOR] 关注每小时频控——低于/恰好/超过10次上限判定，窗口外历史不计入",
+        "[BEHAVIOR] 点赞每小时频控——低于/恰好/超过15次上限判定，窗口外历史不计入",
         "[BEHAVIOR] error path — 部分子串匹配不算精确命中",
-        "[ARTIFACT] ProfileMatchResult 枚举 + matchProfileByDouyinId/needsFollowClick/needsLikeClick/isLeadTimedOut 四个纯函数在 companion object 中定义",
+        "[ARTIFACT] ProfileMatchResult 枚举 + matchProfileByDouyinId/needsFollowClick/needsLikeClick/isLeadTimedOut/isFollowRateLimited/isLikeRateLimited 六个纯函数在 companion object 中定义",
         "[ARTIFACT] 合同测试文件原样复制进真实 Android 单测源码树"
       ],
       "files": [
