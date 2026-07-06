@@ -143,14 +143,22 @@ class DouyinDmOutreachService : AccessibilityService() {
             }
             fetchToken = SnapshotDiscipline.nextFetchToken(beforeOpenToken)
 
-            val dmEntry = findNodeByContentDesc(root, "私信") ?: findNodeByIds(
+            val dmEntryRaw = findNodeByContentDesc(root, "私信") ?: findNodeByIds(
                 root,
                 "com.ss.android.ugc.aweme:id/iv_im",
                 "com.ss.android.ugc.aweme:id/btn_im",
                 "com.ss.android.ugc.aweme:id/tv_send_msg",
             )
-            if (dmEntry == null) {
+            if (dmEntryRaw == null) {
                 finishWithOutcome(dmEntryFound = false, sendConfirmed = false, errorCode = "NO_DM_ENTRY")
+                return@launch
+            }
+            // 真机验证发现：content-desc="私信" 命中的往往是图标叶子节点，isClickable=false，
+            // 真正的点击处理挂在它的父容器上——对叶子节点 performAction(ACTION_CLICK) 会静默
+            // 无效（页面不跳转），最终在下一步误判成 NO_MESSAGE_INPUT。往上找最近的可点击祖先。
+            val dmEntry = findClickableSelfOrAncestor(dmEntryRaw)
+            if (dmEntry == null) {
+                finishWithOutcome(dmEntryFound = false, sendConfirmed = false, errorCode = "NO_CLICKABLE_DM_ENTRY")
                 return@launch
             }
 
@@ -198,7 +206,7 @@ class DouyinDmOutreachService : AccessibilityService() {
             // 读回执：发送成功后输入框会被清空（消息已提交进气泡列表），与 Windows 路径
             // "气泡出现才算 sent"同一标准的 Android 等价信号——避免"点了发送按钮就假 sent"。
             val receiptRoot = awaitRootInActiveWindow()
-            val sendConfirmed = receiptRoot != null && isInputCleared(receiptRoot)
+            val sendConfirmed = receiptRoot != null && isInputCleared(receiptRoot, message)
             finishWithOutcome(dmEntryFound = true, sendConfirmed = sendConfirmed,
                 errorCode = if (sendConfirmed) "" else "NO_RECEIPT_CONFIRMED")
         }
@@ -223,9 +231,16 @@ class DouyinDmOutreachService : AccessibilityService() {
         }
     }
 
-    private fun isInputCleared(root: AccessibilityNodeInfo): Boolean {
+    /**
+     * 真机验证发现：抖音输入框空状态下用 hint 占位符（如"发消息"），部分自定义输入组件会
+     * 把 hint 当成 node.getText() 的返回值而不是真正区分 hint/text——用 isNullOrEmpty()
+     * 判断"是否已清空"会被非空的 hint 文案误判成"没清空"，导致明明发送成功也报
+     * NO_RECEIPT_CONFIRMED。改为直接比对当前文本是否还等于刚发送的消息内容：不等于（无论
+     * 是真空还是 hint 占位符）都视为已提交，只有原样残留在输入框里才算没发出去。
+     */
+    private fun isInputCleared(root: AccessibilityNodeInfo, sentMessage: String): Boolean {
         val input = findFirstEditText(root) ?: return true // 输入框已不在树上，视为已提交
-        return input.text.isNullOrEmpty()
+        return input.text?.toString() != sentMessage
     }
 
     private suspend fun awaitRootInActiveWindow(
@@ -244,6 +259,23 @@ class DouyinDmOutreachService : AccessibilityService() {
         for (id in ids) {
             val list = root.findAccessibilityNodeInfosByViewId(id)
             if (list.isNotEmpty()) return list[0]
+        }
+        return null
+    }
+
+    /**
+     * content-desc/resource-id 命中的往往是图标叶子节点（isClickable=false），真正的点击
+     * 处理挂在某个祖先容器上。从命中节点起沿 parent 链上溯，返回第一个 isClickable=true 的
+     * 节点；命中节点自身可点击则直接返回自身。找不到可点击祖先时返回 null（真机验证发现，
+     * 对 clickable=false 的叶子节点 performAction(ACTION_CLICK) 会静默无效，页面不跳转）。
+     */
+    private fun findClickableSelfOrAncestor(node: AccessibilityNodeInfo): AccessibilityNodeInfo? {
+        var current: AccessibilityNodeInfo? = node
+        var depth = 0
+        while (current != null && depth < 10) {
+            if (current.isClickable) return current
+            current = current.parent
+            depth++
         }
         return null
     }
