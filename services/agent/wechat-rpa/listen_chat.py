@@ -3072,6 +3072,38 @@ def desktop_lease_release() -> None:
         print(f"[desktop_lease] release error={exc} (ignored)", file=sys.stderr)
 
 
+def desktop_lease_renew() -> bool:
+    """续期当前桌面租约（best-effort，无租约时静默 noop）。
+
+    日志写到 stderr：[desktop_lease] renew
+    URL 固定走本机 local-discovery（127.0.0.1:ZENITHJOY_LOCAL_PORT）。
+    """
+    lease_id = _current_lease_id
+    if not lease_id:
+        return False
+    url = _desktop_lease_local_base() + "/api/agent/desktop-lease-broker/renew"
+    payload = json.dumps({
+        "leaseId": lease_id,
+        "clientId": _DESKTOP_LEASE_CLIENT_ID,
+        "ttlMs": _DESKTOP_LEASE_TTL_MS,
+    }).encode("utf-8")
+    try:
+        req = urllib.request.Request(url, data=payload,
+                                     headers={"Content-Type": "application/json"},
+                                     method="POST")
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            result = json.loads(resp.read().decode("utf-8"))
+        if result.get("renewed"):
+            print(f"[desktop_lease] renew ok lease_id={lease_id}", file=sys.stderr)
+            return True
+        else:
+            print(f"[desktop_lease] renew failed reason={result.get('reason', 'unknown')}", file=sys.stderr)
+            return False
+    except Exception as exc:
+        print(f"[desktop_lease] renew error={exc} (ignored)", file=sys.stderr)
+        return False
+
+
 # ─── 进程守护：监听心跳上报（每分钟一次，失败不影响监听）────────────────────────
 
 
