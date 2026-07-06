@@ -6,26 +6,19 @@ import com.zenithjoy.agent.account.DeviceAccountScanService
 import com.zenithjoy.agent.account.ScanMutex
 import org.junit.After
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNotEquals
 import org.junit.Test
 
 /**
- * Judge 复核发现的缺陷 A（阻塞）：`routeDmOutreachTask` 派发前一致性核对
- * （Golden Path Step 7）此前直接把 `profile_url`（DM 目标收件人主页 URL）传给
- * `DeviceAccountScanService.checkDispatchConsistency`，但 `DeviceAccountRegistry`
- * 的 key 是"本机登录发送账号"的 douyinId（`account_label`），两者是完全不同的命名
- * 空间——用 profile_url 去查，`isRecordedOnline` 永远命中"未扫描到过，默认放行"分支，
- * 守卫永久空转，即使发送账号已下线也恒为 PROCEED。
+ * 2026-07-06 复查更新：此前的测试循环论证——手工把 `DeviceAccountRegistry` 的 key 和
+ * `payload["account_label"]` 设成同一个人为编造的字符串，"验证"两者相等，但这两个字符串
+ * 在真实数据流里完全没有任何东西保证它们相等（account_label 是中台绑定小号时用户自己起的
+ * 任意字符串，见 apps/api/src/routes/agent-burner.ts `initiate-bind`；registry 的 key 是
+ * 扫描面板读到的真实抖音号 douyinId）。测试通过不代表"派发前一致性核对"真的生效。
  *
- * 本测试针对被抽出的纯函数 [AgentService.resolveDispatchGuardAccountId]（`routeDmOutreachTask`
- * 内部用它来决定"该拿哪个 payload 字段去核对派发一致性"，不依赖 Android Service 生命周期，
- * 因此可以脱离 Robolectric 直接单测）：
- *   1. 验证该函数解析出的必须是 account_label，不是 profile_url。
- *   2. 端到端串联 DeviceAccountRegistry + checkDispatchConsistency，证明：
- *      - 用修复前的错误标识符（profile_url）核对，即使发送账号在 registry 里已被标记下线，
- *        依然恒为 PROCEED（复现问题）。
- *      - 用修复后的正确标识符（account_label）核对，同样的下线状态能正确触发
- *        TRIGGER_RESCAN_AND_FAIL。
+ * 现改为验证真实调用契约：`DeviceAccountScanService.checkDispatchConsistency` 现在接收的是
+ * "本机 deviceId"（不是任何账号标识符），做的是按设备维度的近似判定——
+ * "本机本轮扫描到的账号是否全部下线"。本测试直接驱动这个真实签名/真实判定，
+ * 不再依赖任何"两个字符串恰好相等"的编造前提。
  */
 class AgentServiceDispatchGuardTest {
 
@@ -35,44 +28,39 @@ class AgentServiceDispatchGuardTest {
     }
 
     @Test
-    fun `resolveDispatchGuardAccountId picks account_label not profile_url`() {
-        val payload = mapOf(
-            "profile_url" to "https://www.douyin.com/user/some-target-profile",
-            "account_label" to "douyin_sender_burner_1",
-            "message" to "hi",
+    fun `dispatch guard fails and triggers rescan when this device's only known account went offline`() {
+        val deviceId = "device-guard-test-all-offline"
+        DeviceAccountRegistry.update(
+            "douyin_sender_burner_1",
+            DeviceAccountRegistry.Entry(deviceId = deviceId, tenantId = "tenant-1", scanAtMs = 1L, online = false),
         )
 
-        val resolved = AgentService.resolveDispatchGuardAccountId(payload)
+        val decision = DeviceAccountScanService.checkDispatchConsistency(deviceId)
 
-        assertEquals("douyin_sender_burner_1", resolved)
-        assertNotEquals("https://www.douyin.com/user/some-target-profile", resolved)
+        assertEquals(DeviceAccountModel.DispatchAccountDecision.TRIGGER_RESCAN_AND_FAIL, decision)
     }
 
     @Test
-    fun `dispatch guard using the fixed account_label identifier catches an offline sending account`() {
-        // 发送账号（本机登录的抖音号）在最近一次设备扫描中被标记为已下线。
+    fun `dispatch guard proceeds when this device still has at least one online account`() {
+        val deviceId = "device-guard-test-mixed"
         DeviceAccountRegistry.update(
-            "douyin_sender_burner_1",
-            DeviceAccountRegistry.Entry(deviceId = "device-A", tenantId = "tenant-1", scanAtMs = 1L, online = false),
+            "douyin_sender_burner_offline",
+            DeviceAccountRegistry.Entry(deviceId = deviceId, tenantId = "tenant-1", scanAtMs = 1L, online = false),
+        )
+        DeviceAccountRegistry.update(
+            "douyin_sender_burner_online",
+            DeviceAccountRegistry.Entry(deviceId = deviceId, tenantId = "tenant-1", scanAtMs = 2L, online = true),
         )
 
-        val payload = mapOf(
-            "profile_url" to "https://www.douyin.com/user/some-target-profile",
-            "account_label" to "douyin_sender_burner_1",
-            "message" to "hi",
-        )
+        val decision = DeviceAccountScanService.checkDispatchConsistency(deviceId)
 
-        // 修复后：guard 用 resolveDispatchGuardAccountId 解析出的 account_label 去核对。
-        val fixedDecision = DeviceAccountScanService.checkDispatchConsistency(
-            AgentService.resolveDispatchGuardAccountId(payload),
-        )
-        assertEquals(DeviceAccountModel.DispatchAccountDecision.TRIGGER_RESCAN_AND_FAIL, fixedDecision)
+        assertEquals(DeviceAccountModel.DispatchAccountDecision.PROCEED, decision)
+    }
 
-        // 复现修复前的缺陷：直接用 profile_url（从未写进 registry 的命名空间）核对，
-        // 即使同一个发送账号已经下线，也恒为 PROCEED —— 守卫空转。
-        val buggyDecision = DeviceAccountScanService.checkDispatchConsistency(
-            payload["profile_url"] as String,
-        )
-        assertEquals(DeviceAccountModel.DispatchAccountDecision.PROCEED, buggyDecision)
+    @Test
+    fun `dispatch guard proceeds when this device has never reported a scan (unknown, do not block)`() {
+        val decision = DeviceAccountScanService.checkDispatchConsistency("device-guard-test-never-scanned")
+
+        assertEquals(DeviceAccountModel.DispatchAccountDecision.PROCEED, decision)
     }
 }

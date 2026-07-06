@@ -290,14 +290,22 @@ class AgentService : Service() {
             return
         }
 
-        // Golden Path Step 7：派发前一致性核对。核对的对象是"本机准备用来发送的登录抖音号"
-        // （account_label，对应 DeviceAccountRegistry 里以扫描时读到的本机登录账号 douyinId 为
-        // key 写入的记录），不是 profileUrl（DM 目标收件人主页 URL，跟 registry 完全是两套命名
-        // 空间——用 profileUrl 去查永远查不到记录，guard 会恒放行，永不触发重扫）。
-        // 若本机最近一次账号扫描（DeviceAccountRegistry）显示该发送账号已下线，说明账号状态跟
-        // 中台记录不一致——立即触发一次实时重扫更新状态，本次任务按未登录处理转失败，
-        // 不再启动无障碍执行流程去点一个已经登不上的账号。
-        val dispatchDecision = DeviceAccountScanService.checkDispatchConsistency(resolveDispatchGuardAccountId(task.payload))
+        // Golden Path Step 7：派发前一致性核对。
+        //
+        // 2026-07-06 复查结论（放弃"按account_label精确核对"）：task.payload["account_label"]
+        // 是中台绑定小号时用户自己起的任意字符串（apps/api/src/routes/agent-burner.ts
+        // initiate-bind），跟 DeviceAccountRegistry 的 key（扫描面板读到的真实抖音号 douyinId）
+        // 是两套完全独立的命名空间——绑定链路和 agent_platform_sessions 表都没有任何字段把
+        // 两者关联起来，按 account_label 去 registry 里查永远查不到记录，guard 会因为
+        // "未扫描到过默认放行"而恒为 PROCEED，一致性核对形同虚设。
+        //
+        // 降级为诚实的近似判定：核对对象改成"本机（config.machineId）本轮扫描是否至少还有
+        // 一个账号在线"——本机所有已知账号全部下线才触发重扫+本次任务转失败；只要有一个在线
+        // （或本机从未扫描到过账号）就放行。这不能保证"本次派发要用的那一个账号"精确在线，
+        // 只能保证"这台设备不是已知全灭"，是已知的架构空白（详见
+        // DeviceAccountScanService.checkDispatchConsistency 函数注释）；真正的精确核对要等
+        // 账号绑定链路补上 account_label → douyinId 映射后才能升级。
+        val dispatchDecision = DeviceAccountScanService.checkDispatchConsistency(config.machineId)
         if (dispatchDecision == DeviceAccountModel.DispatchAccountDecision.TRIGGER_RESCAN_AND_FAIL) {
             android.util.Log.w(TAG, "dm_outreach task ${task.task_id} account=$accountLabel recorded offline at dispatch — triggering rescan, failing task")
             DeviceAccountScanService.dispatchTask(this, "rescan-${task.task_id}", tenantId = "", thisDeviceId = config.machineId)
@@ -404,13 +412,5 @@ class AgentService : Service() {
     companion object {
         private const val TAG = "AgentService"
         private const val NOTIFICATION_ID = 1001
-
-        // Golden Path Step 7 派发前一致性核对用的标识符解析：DeviceAccountRegistry 的 key 是
-        // "本机登录的抖音号"（扫描时从切换账号面板读到的 douyinId，写入时也是以它为 key），
-        // 跟 profile_url（DM 目标收件人主页 URL）是完全不同的命名空间——用 profile_url 去查
-        // 永远查不到记录，checkDispatchConsistency 会因为"未扫描到过的账号默认放行"而恒返回
-        // PROCEED，守卫永久空转。抽成纯函数（不依赖 Android Service 生命周期）方便单测覆盖。
-        internal fun resolveDispatchGuardAccountId(payload: Map<String, Any?>): String =
-            payload["account_label"] as? String ?: ""
     }
 }

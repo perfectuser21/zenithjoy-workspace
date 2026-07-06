@@ -368,12 +368,26 @@ class DeviceAccountScanService : AccessibilityService() {
         // ── Step 7：派发前一致性核对（供 AgentService 在派发采集/触达任务前调用）──
 
         /**
-         * 派发前核对：任务派发即隐含"假设账号在线"（recordedOnline=true）；
-         * 若注册表（本机最近一次扫描结果）显示该账号已下线，判定不一致 → 触发重扫+本次任务
-         * 按未登录处理转失败。注册表里从未出现过的账号（未扫描到过）默认放行，不阻断合法派发。
+         * 已知架构空白（2026-07-06 复查结论，见 AgentService.routeDmOutreachTask 调用点注释）：
+         * 任务 payload 里的 `account_label` 是用户在中台绑定小号时自己起的任意字符串
+         * （apps/api/src/routes/agent-burner.ts `initiate-bind`），跟 `DeviceAccountRegistry`
+         * 的 key（扫描面板读到的真实抖音号 douyinId）不是同一套命名空间，且目前绑定链路/
+         * `agent_platform_sessions` 表都没有任何字段把两者关联起来——按 account_label 去查
+         * registry 永远查不到记录，"按具体账号精确核对"在当前数据基础上做不到诚实实现。
+         *
+         * 因此本函数做的是降级后的**近似判定**：核对对象从"这一个具体账号"改成"本机
+         * （thisDeviceId）本轮扫描是否至少还有一个账号在线"——
+         *   - 本机从未扫描到过任何账号（registry 里没有该 deviceId 的记录）→ 默认放行
+         *     （不能因为"从没扫描过"就阻断合法派发）。
+         *   - 本机扫描到过账号、且至少一个仍标记在线 → 放行（数据滞后也不视为失败性不一致）。
+         *   - 本机扫描到过账号、但全部标记下线 → 触发重扫 + 本次任务转失败。
+         * 这不能保证"派发用的那一个账号"精确在线，只能保证"这台设备不是已知全灭"。
+         * 真正的精确核对需要账号绑定链路补上 douyinId 映射（例如 initiate-bind 时同步真实
+         * 登录态 uid，或扫描上报时把 account_label 一起写进 agent_platform_sessions）之后才能升级。
          */
-        internal fun checkDispatchConsistency(douyinId: String): DeviceAccountModel.DispatchAccountDecision {
-            val actualLoggedIn = DeviceAccountRegistry.isRecordedOnline(douyinId)
+        internal fun checkDispatchConsistency(thisDeviceId: String): DeviceAccountModel.DispatchAccountDecision {
+            val knownAccountsOnThisDevice = DeviceAccountRegistry.snapshot().values.filter { it.deviceId == thisDeviceId }
+            val actualLoggedIn = knownAccountsOnThisDevice.isEmpty() || knownAccountsOnThisDevice.any { it.online }
             return DeviceAccountModel.evaluateDispatchAccountStatus(recordedOnline = true, actualLoggedInAtDispatch = actualLoggedIn)
         }
 

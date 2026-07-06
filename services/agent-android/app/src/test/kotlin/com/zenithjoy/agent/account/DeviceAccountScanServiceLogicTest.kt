@@ -23,7 +23,13 @@ import org.junit.Test
  *     `internal data class AccountScanDecision(val douyinId: String, val conflict: DeviceAccountModel.ConflictResolution, val invalidateOld: Boolean, val logAlert: Boolean)`
  *     `internal fun buildScanDecisions(dedupedIds: List<String>, thisDeviceId: String, tenantId: String, scanAtMs: Long, knownRecords: Map<String, DeviceAccountRegistry.Entry>): List<AccountScanDecision>`
  *     `internal fun applyOfflineDetection(knownDouyinIds: List<String>, currentlyLoggedInIds: List<String>): Map<String, DeviceAccountModel.AccountOfflineStatus>`
- *     `internal fun checkDispatchConsistency(douyinId: String): DeviceAccountModel.DispatchAccountDecision`
+ *     `internal fun checkDispatchConsistency(thisDeviceId: String): DeviceAccountModel.DispatchAccountDecision`
+ *
+ * 2026-07-06 复查更新：`checkDispatchConsistency` 的参数从"精确账号 douyinId"改成
+ * "本机 deviceId"——account_label（中台绑定小号时用户自起的字符串）与 registry key
+ * （扫描面板读到的真实 douyinId）之间没有任何映射通道，按账号精确核对在现有数据基础上
+ * 做不到诚实实现，改为按设备维度的近似判定（见 DeviceAccountScanService.checkDispatchConsistency
+ * 函数注释）。
  */
 class DeviceAccountScanServiceLogicTest {
 
@@ -163,18 +169,35 @@ class DeviceAccountScanServiceLogicTest {
         assertEquals(DeviceAccountModel.AccountOfflineStatus.WENT_OFFLINE, statuses["douyin_gone"])
     }
 
-    // ── evaluateDispatchAccountStatus 接线（Step 7：派发前一致性核对）───────────
+    // ── evaluateDispatchAccountStatus 接线（Step 7：派发前一致性核对，按设备维度近似判定）───
 
     @Test
-    fun `dispatch guard triggers rescan and fail when registry shows account went offline`() {
-        DeviceAccountRegistry.update("douyin_dispatch_target", DeviceAccountRegistry.Entry("device-A", "tenant-1", 1L, online = false))
-        val decision = DeviceAccountScanService.checkDispatchConsistency("douyin_dispatch_target")
+    fun `dispatch guard triggers rescan and fail when every known account on this device is offline`() {
+        DeviceAccountRegistry.update(
+            "douyin_dispatch_target_only_account",
+            DeviceAccountRegistry.Entry("device-dispatch-all-offline", "tenant-1", 1L, online = false),
+        )
+        val decision = DeviceAccountScanService.checkDispatchConsistency("device-dispatch-all-offline")
         assertEquals(DeviceAccountModel.DispatchAccountDecision.TRIGGER_RESCAN_AND_FAIL, decision)
     }
 
     @Test
-    fun `dispatch guard proceeds when registry has no record for the account (unknown, do not block)`() {
-        val decision = DeviceAccountScanService.checkDispatchConsistency("douyin_never_scanned")
+    fun `dispatch guard proceeds when at least one account on this device is still online`() {
+        DeviceAccountRegistry.update(
+            "douyin_dispatch_offline_sibling",
+            DeviceAccountRegistry.Entry("device-dispatch-mixed", "tenant-1", 1L, online = false),
+        )
+        DeviceAccountRegistry.update(
+            "douyin_dispatch_online_sibling",
+            DeviceAccountRegistry.Entry("device-dispatch-mixed", "tenant-1", 2L, online = true),
+        )
+        val decision = DeviceAccountScanService.checkDispatchConsistency("device-dispatch-mixed")
+        assertEquals(DeviceAccountModel.DispatchAccountDecision.PROCEED, decision)
+    }
+
+    @Test
+    fun `dispatch guard proceeds when this device has no known scanned accounts (unknown, do not block)`() {
+        val decision = DeviceAccountScanService.checkDispatchConsistency("device-never-scanned")
         assertEquals(DeviceAccountModel.DispatchAccountDecision.PROCEED, decision)
     }
 }

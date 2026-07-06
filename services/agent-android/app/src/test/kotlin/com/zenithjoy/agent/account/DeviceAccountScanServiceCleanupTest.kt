@@ -1,10 +1,12 @@
 package com.zenithjoy.agent.account
 
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
+import org.junit.Assert.fail
 import org.junit.Test
 
 /**
@@ -78,6 +80,32 @@ class DeviceAccountScanServiceCleanupTest {
         // ScanMutex/state 永久卡死。
         assertTrue("setIdle must run even when block throws a non-timeout exception", idleCalled)
         assertEquals("SCAN_EXCEPTION", abnormalExitCode)
+    }
+
+    @Test
+    fun `CancellationException is rethrown, not swallowed as a scan failure, but setIdle still runs`() = runTest {
+        var idleCalled = false
+        var abnormalExitCode: String? = null
+
+        try {
+            DeviceAccountScanService.runScanWithCleanup(
+                timeoutMs = 1_000L,
+                block = { throw CancellationException("scope cancelled — e.g. onDestroy") },
+                onAbnormalExit = { abnormalExitCode = it },
+                setIdle = { idleCalled = true },
+                logWarn = {},
+                logError = {},
+            )
+            fail("CancellationException must propagate out of runScanWithCleanup, not be swallowed")
+        } catch (e: CancellationException) {
+            // 预期：结构化并发的取消信号必须重新抛出，不能被当成 SCAN_EXCEPTION 吞掉，
+            // 否则会破坏父协程的取消传播语义。
+        }
+
+        // finally 块必须仍然执行，清理 ScanMutex/state，不因为异常类型而跳过。
+        assertTrue("setIdle must still run even when the block is cancelled", idleCalled)
+        // 取消不是"扫描失败"，不应触发 onAbnormalExit（不强制关闭面板/不广播失败结果）。
+        assertEquals(null, abnormalExitCode)
     }
 
     @Test
