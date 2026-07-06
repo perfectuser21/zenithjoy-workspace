@@ -281,3 +281,43 @@ def test_acquire_respects_zenithjoy_local_port_env(capsys):
     assert "127.0.0.1:59999" in captured_urls[0], (
         f"ZENITHJOY_LOCAL_PORT=59999 时 URL 应含 127.0.0.1:59999，实际: {captured_urls[0]}"
     )
+
+
+# ─── desktop_lease_renew ────────────────────────────────────────────────────
+
+
+def test_renew_uses_local_discovery_url():
+    """renew() 必须向 127.0.0.1:58432 发请求（local-discovery）。"""
+    captured_urls: list = []
+    lc._current_lease_id = "renew-lease-001"
+
+    def _capture(req, timeout=None):
+        captured_urls.append(req.full_url)
+        return _make_http_response({"renewed": True})
+
+    with patch("urllib.request.urlopen", side_effect=_capture):
+        result = lc.desktop_lease_renew()
+
+    assert result is True
+    assert len(captured_urls) == 1
+    assert "127.0.0.1:58432" in captured_urls[0], (
+        f"renew URL 必须走 127.0.0.1:58432，实际: {captured_urls[0]}"
+    )
+    assert "renew" in captured_urls[0]
+
+
+def test_renew_noop_when_no_lease():
+    """无持有租约时 renew 静默 noop，返回 False，不发 HTTP。"""
+    lc._current_lease_id = None
+    with patch("urllib.request.urlopen") as mock_open:
+        result = lc.desktop_lease_renew()
+    assert result is False
+    mock_open.assert_not_called()
+
+
+def test_renew_silences_http_error():
+    """HTTP 异常 → renew 静默忽略（best-effort），返回 False，不抛。"""
+    lc._current_lease_id = "renew-err-lease"
+    with patch("urllib.request.urlopen", side_effect=Exception("timeout")):
+        result = lc.desktop_lease_renew()
+    assert result is False
