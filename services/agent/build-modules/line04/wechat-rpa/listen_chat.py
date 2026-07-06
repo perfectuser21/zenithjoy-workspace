@@ -2996,6 +2996,8 @@ def post_draft_generate(
 # ─── DesktopLeaseBroker IPC 接缝（Sprint 0703-line04-desktop-lease-broker）─────
 # listen_chat 在窗口切换前通过 IPC 申请桌面租约，完成后归还，防多 agent 并发抢占。
 # 所有失败均为软失败：acquire 失败 → 跳过本轮（[防假成功] invariant），release 失败忽略。
+# v1.0.109：IPC 基址改为 127.0.0.1:ZENITHJOY_LOCAL_PORT（local-discovery，本机可达）。
+#   middleware_url 参数保留但不再用作 URL 基址（仍作"是否启用仲裁"的开关信号）。
 
 _DESKTOP_LEASE_CLIENT_ID = "line04/listen_chat"
 _DESKTOP_LEASE_PRIORITY = 50
@@ -3005,15 +3007,22 @@ _DESKTOP_LEASE_TTL_MS = 10000
 _current_lease_id: Optional[str] = None
 
 
+def _get_local_discovery_base() -> str:
+    """租约 IPC 基址：本机 local-discovery（127.0.0.1:ZENITHJOY_LOCAL_PORT，默认 58432）。"""
+    port = int(os.environ.get("ZENITHJOY_LOCAL_PORT", "58432"))
+    return f"http://127.0.0.1:{port}"
+
+
 def desktop_lease_acquire(middleware_url: str) -> bool:
     """向 Broker IPC 申请桌面租约。返回 True=已授予，False=拒绝（调用方应跳过本轮）。
 
+    URL 基址走 local-discovery（127.0.0.1:ZENITHJOY_LOCAL_PORT），不走 middleware_url。
     日志写到 stderr（DoD B6 验收锚点）：
       成功 → [desktop_lease] acquire granted
       失败 → [desktop_lease] acquire failed
     """
     global _current_lease_id
-    url = middleware_url.rstrip("/") + "/api/agent/desktop-lease-broker/acquire"
+    url = _get_local_discovery_base() + "/api/agent/desktop-lease-broker/acquire"
     payload = json.dumps({
         "clientId": _DESKTOP_LEASE_CLIENT_ID,
         "priority": _DESKTOP_LEASE_PRIORITY,
@@ -3040,6 +3049,7 @@ def desktop_lease_acquire(middleware_url: str) -> bool:
 def desktop_lease_release(middleware_url: str) -> None:
     """归还桌面租约（best-effort，失败静默忽略）。
 
+    URL 基址走 local-discovery（127.0.0.1:ZENITHJOY_LOCAL_PORT），不走 middleware_url。
     日志写到 stderr：[desktop_lease] release
     """
     global _current_lease_id
@@ -3047,7 +3057,7 @@ def desktop_lease_release(middleware_url: str) -> None:
     if not lease_id:
         return
     _current_lease_id = None
-    url = middleware_url.rstrip("/") + "/api/agent/desktop-lease-broker/release"
+    url = _get_local_discovery_base() + "/api/agent/desktop-lease-broker/release"
     payload = json.dumps({
         "leaseId": lease_id,
         "clientId": _DESKTOP_LEASE_CLIENT_ID,
@@ -3061,6 +3071,39 @@ def desktop_lease_release(middleware_url: str) -> None:
         print(f"[desktop_lease] release lease_id={lease_id}", file=sys.stderr)
     except Exception as exc:
         print(f"[desktop_lease] release error={exc} (ignored)", file=sys.stderr)
+
+
+def desktop_lease_renew(middleware_url: str) -> bool:
+    """续期当前桌面租约（best-effort，失败返回 False，不抛）。
+
+    URL 基址走 local-discovery（127.0.0.1:ZENITHJOY_LOCAL_PORT），不走 middleware_url。
+    日志写到 stderr：[desktop_lease] renew
+    """
+    global _current_lease_id
+    lease_id = _current_lease_id
+    if not lease_id:
+        return False
+    url = _get_local_discovery_base() + "/api/agent/desktop-lease-broker/renew"
+    payload = json.dumps({
+        "leaseId": lease_id,
+        "clientId": _DESKTOP_LEASE_CLIENT_ID,
+        "ttlMs": _DESKTOP_LEASE_TTL_MS,
+    }).encode("utf-8")
+    try:
+        req = urllib.request.Request(url, data=payload,
+                                     headers={"Content-Type": "application/json"},
+                                     method="POST")
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            result = json.loads(resp.read().decode("utf-8"))
+        if result.get("renewed"):
+            print(f"[desktop_lease] renew lease_id={lease_id}", file=sys.stderr)
+            return True
+        else:
+            print(f"[desktop_lease] renew failed reason=not_renewed lease_id={lease_id}", file=sys.stderr)
+            return False
+    except Exception as exc:
+        print(f"[desktop_lease] renew error={exc} (ignored)", file=sys.stderr)
+        return False
 
 
 # ─── 进程守护：监听心跳上报（每分钟一次，失败不影响监听）────────────────────────
