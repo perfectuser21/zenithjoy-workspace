@@ -37,7 +37,7 @@ class DouyinDmWarmupSearchLogicTest {
     // ── matchProfileByDouyinId ───────────────────────────────────────────────
 
     @Test
-    fun `matches exactly one profile by exact douyin id -> UNIQUE`() {
+    fun `matches exactly one profile by exact douyin id yields UNIQUE`() {
         val results = listOf("douyin_other_1", "douyin_target_123", "douyin_other_2")
         assertEquals(
             DouyinDmOutreachService.ProfileMatchResult.UNIQUE,
@@ -46,7 +46,7 @@ class DouyinDmWarmupSearchLogicTest {
     }
 
     @Test
-    fun `zero matches -> NO_MATCH`() {
+    fun `zero matches yields NO_MATCH`() {
         val results = listOf("douyin_other_1", "douyin_other_2")
         assertEquals(
             DouyinDmOutreachService.ProfileMatchResult.NO_MATCH,
@@ -55,7 +55,7 @@ class DouyinDmWarmupSearchLogicTest {
     }
 
     @Test
-    fun `empty search results -> NO_MATCH`() {
+    fun `empty search results yields NO_MATCH`() {
         assertEquals(
             DouyinDmOutreachService.ProfileMatchResult.NO_MATCH,
             DouyinDmOutreachService.matchProfileByDouyinId(emptyList(), "douyin_target_123"),
@@ -63,7 +63,7 @@ class DouyinDmWarmupSearchLogicTest {
     }
 
     @Test
-    fun `multiple identical matches -> AMBIGUOUS`() {
+    fun `multiple identical matches yields AMBIGUOUS`() {
         val results = listOf("douyin_target_123", "douyin_other_1", "douyin_target_123")
         assertEquals(
             DouyinDmOutreachService.ProfileMatchResult.AMBIGUOUS,
