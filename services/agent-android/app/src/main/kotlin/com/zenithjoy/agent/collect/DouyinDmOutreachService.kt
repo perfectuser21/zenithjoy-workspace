@@ -166,7 +166,10 @@ class DouyinDmOutreachService : AccessibilityService() {
                 finishWithOutcome(dmEntryFound = false, sendConfirmed = false, errorCode = "OPEN_PROFILE_FAILED")
                 return@launch
             }
-            delay(RandomDelay.sample(RandomDelay.NAV_MS))
+            if (!awaitDouyinForeground()) {
+                finishWithOutcome(dmEntryFound = false, sendConfirmed = false, errorCode = "DOUYIN_NOT_FOREGROUND")
+                return@launch
+            }
             if (checkLeadTimeout()) return@launch
 
             // ── Step 2/3：抖音号精确搜索定位主页 ──────────────────────────────
@@ -235,10 +238,7 @@ class DouyinDmOutreachService : AccessibilityService() {
                 return@launch
             }
             input.performAction(AccessibilityNodeInfo.ACTION_CLICK)
-            val args = Bundle().apply {
-                putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, message)
-            }
-            input.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, args)
+            commitTextRobust(input, message)
             delay(RandomDelay.sample(RandomDelay.CLICK_MS))
 
             state = State.SENDING
@@ -278,6 +278,40 @@ class DouyinDmOutreachService : AccessibilityService() {
             android.util.Log.e(TAG, "launchDouyinApp failed: ${e.message}")
             false
         }
+    }
+
+    /**
+     * 拉起抖音后等它【真正】到前台再继续。荣耀等厂商在 app 启动时注入系统开屏广告
+     * (com.hihonor.systemmanager AppSplashAdvertiseActivity)/系统更新/兼容提醒等 interstitial，
+     * 盖在抖音上——原来固定 delay 后直接 awaitRootInActiveWindow 抓到的是厂商弹窗而非抖音，
+     * 整条 flow 误判 NO_SEARCH_INPUT(上一份 handoff 误当"启动失败"的真凶之一)。改为轮询前台包名
+     * ==抖音；期间前台是非抖音弹窗则先点"跳过/关闭/稍后/取消/我知道了"、找不到再按返回键消掉；
+     * 超时(尽力而为)返回是否已到抖音前台。只在前台非抖音时按返回，绝不在抖音内部误退。
+     */
+    private suspend fun awaitDouyinForeground(maxAttempts: Int = 24, delayMs: Long = 500): Boolean {
+        repeat(maxAttempts) {
+            val root = rootInActiveWindow
+            val pkg = root?.packageName?.toString()
+            if (pkg == DOUYIN_PKG) return true
+            if (root != null && pkg != null) {
+                // 荣耀"ZenithJoyAgent 想要打开 抖音，是否允许" auto-jump 拦截框 → 仅此上下文点"允许"
+                // (避免误点其它弹窗的"允许")；随后抖音才会真正铺到前台。
+                val isAutoJump = collectAllNodeTexts(root).any { it.contains("想要打开") || it.contains("是否允许") }
+                val allow = if (isAutoJump) (findNodeByText(root, "允许") ?: findNodeByContentDesc(root, "允许")) else null
+                val dismiss = allow ?: findNodeByText(root, "跳过") ?: findNodeByText(root, "关闭")
+                    ?: findNodeByText(root, "稍后") ?: findNodeByText(root, "取消")
+                    ?: findNodeByText(root, "我知道了") ?: findNodeByContentDesc(root, "跳过")
+                    ?: findNodeByContentDesc(root, "关闭")
+                if (dismiss != null) {
+                    (findClickableSelfOrAncestor(dismiss) ?: dismiss).performAction(AccessibilityNodeInfo.ACTION_CLICK)
+                } else {
+                    performGlobalAction(GLOBAL_ACTION_BACK)
+                }
+                android.util.Log.i(TAG, "awaitDouyinForeground: 非抖音前台 pkg=$pkg dismiss=${dismiss != null}")
+            }
+            delay(delayMs)
+        }
+        return rootInActiveWindow?.packageName?.toString() == DOUYIN_PKG
     }
 
     /** 90 秒超时熔断检查：命中即上报 timeout 结果并结束本次 lead 处理。 */
@@ -324,6 +358,7 @@ class DouyinDmOutreachService : AccessibilityService() {
             "com.ss.android.ugc.aweme:id/et_search_kw",
         ) ?: findFirstEditText(searchPageRoot)
         if (searchInput == null) {
+            android.util.Log.w(TAG, "A3-diag: NO_SEARCH_INPUT searchBtnFound=${searchBtn != null}")
             finishWithOutcome(dmEntryFound = false, sendConfirmed = false, errorCode = "NO_SEARCH_INPUT")
             return false
         }
@@ -410,37 +445,140 @@ class DouyinDmOutreachService : AccessibilityService() {
     /**
      * Golden Path Step 4/5：关注/点赞热身互动。按钮态判断（要不要点）与每小时频控（能不能点）
      * 相互独立、都要过才实际点击；找不到按钮/触发频控都尽力而为跳过，不阻塞主流程。
+     *
+     * 真机(抖音39.4.0)修正：
+     * - 关注按钮文案有"关注"(陌生人)/"回关"(对方已关注你、你未关注她)两态，且可能是
+     *   content-desc="回关"的 Button 或 text="回关" content-desc=""的 TextView——content-desc+text
+     *   两路都找，命中后点最近可点击祖先(叶子可能 clickable=false)。
+     * - 点赞：作品网格页【没有点赞按钮】(只有"点赞数N"展示标签，clickable=false)，红心只在
+     *   视频详情页 UltraDetailActivity。故打开第一个作品→在视频页点红心→退回主页(供后续私信步骤)。
      */
     private suspend fun performWarmup() {
-        val root = awaitRootInActiveWindow() ?: return
-
-        val followBtn = findNodeByContentDesc(root, "关注") ?: findNodeByIds(
-            root,
-            "com.ss.android.ugc.aweme:id/follow_btn",
-            "com.ss.android.ugc.aweme:id/tv_follow",
-        )
-        val followText = followBtn?.text?.toString() ?: followBtn?.contentDescription?.toString()
+        // ── 关注/回关（在主页）─────────────────────────────────────────────
+        // 主页关注按钮/作品网格是异步加载的，locateProfileBySearch 落地后可能尚未进无障碍树，
+        // 故用 awaitNode 轮询重试等其出现(尽力而为，超时仍找不到就跳过，不阻塞主流程)。
+        val followBtn = awaitNode { root ->
+            findNodeByContentDesc(root, "关注")
+                ?: findNodeByContentDesc(root, "回关")
+                ?: findNodeByText(root, "关注")
+                ?: findNodeByText(root, "回关")
+                // 真机(抖音39.4.0)：真正的关注按钮是 clickable TextView，文案被包成
+                // "PLACEHOLDER1<关系词>PLACEHOLDER2"(互相关注/关注/回关)，精确 text 匹配抓不到——
+                // 按 clickable 节点 text 含"关注"/"回关"补一路(排除 text 为空的"她关注了你"管理横幅)。
+                ?: findClickableNodeByTextContains(root, "关注", "回关")
+                ?: findNodeByIds(
+                    root,
+                    "com.ss.android.ugc.aweme:id/follow_btn",
+                    "com.ss.android.ugc.aweme:id/tv_follow",
+                )
+        }
+        val followText = followBtn?.text?.toString()?.takeIf { it.isNotBlank() }
+            ?: followBtn?.contentDescription?.toString()
         val nowForFollow = System.currentTimeMillis()
-        if (needsFollowClick(followText) && !isFollowRateLimited(followTimestampsMs, nowForFollow)) {
-            followBtn?.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+        val followRateLimited = isFollowRateLimited(followTimestampsMs, nowForFollow)
+        val doFollow = needsFollowClick(followText) && !followRateLimited && followBtn != null
+        android.util.Log.i(TAG, "warmup follow: btnText=$followText needsClick=${needsFollowClick(followText)} rateLimited=$followRateLimited -> click=$doFollow")
+        if (doFollow) {
+            (findClickableSelfOrAncestor(followBtn!!) ?: followBtn).performAction(AccessibilityNodeInfo.ACTION_CLICK)
             followTimestampsMs.add(nowForFollow)
             delay(RandomDelay.sample(RandomDelay.CLICK_MS))
         }
 
-        val postFollowRoot = awaitRootInActiveWindow() ?: root
-        val likeBtn = findNodeByContentDesc(postFollowRoot, "点赞") ?: findNodeByIds(
-            postFollowRoot,
-            "com.ss.android.ugc.aweme:id/like_btn",
-            "com.ss.android.ugc.aweme:id/digg_view",
-        )
-        val likeText = likeBtn?.text?.toString() ?: likeBtn?.contentDescription?.toString()
+        // ── 点赞（进作品视频页点红心，非主页）────────────────────────────────
+        performVideoLikeWarmup()
+    }
+
+    /**
+     * 打开主页第一个/置顶作品进视频详情页点红心，完成后退回主页。全程尽力而为，任一步失败都不阻塞私信主流程。
+     */
+    private suspend fun performVideoLikeWarmup() {
+        // 诊断实证：locateProfile 落地时主页树里只有 header(抖音号/发私信/关注/"作品50"tab)，
+        // 作品网格在折叠线以下、未进无障碍树。先向下滚把作品网格滚进视口再找第一个作品(缩略图
+        // content-desc 形如"点赞数14"，其可点击祖先=作品cell)；滚动+重试若干次仍找不到才尽力而为跳过。
+        // 搜索落地的主页作品网格需数秒才渲染进无障碍树，且过早/过度滚动会滚进虚拟化区域反而丢失。
+        // 策略：先在初始位置长等(~10s)；仍无则轻滑一次再等一小会；滚过才需滚回顶部。
+        var firstWork = awaitNode(maxAttempts = 14, delayMs = 700) { root -> findNodeByContentDescContains(root, "点赞数") }
+        var scrolled = false
+        if (firstWork == null) {
+            swipeContentUp()
+            scrolled = true
+            delay(RandomDelay.sample(RandomDelay.NAV_MS))
+            firstWork = awaitNode(maxAttempts = 6, delayMs = 700) { root -> findNodeByContentDescContains(root, "点赞数") }
+        }
+        if (firstWork == null) {
+            val diagRoot = awaitRootInActiveWindow()
+            val texts = diagRoot?.let { collectAllNodeTexts(it).take(40) } ?: emptyList()
+            android.util.Log.i(TAG, "warmup like: 未找到作品(点赞数*)，跳过点赞。当前页文本=$texts")
+            if (scrolled) restoreProfileTop()
+            return
+        }
+        val workCell = findClickableSelfOrAncestor(firstWork) ?: firstWork
+        android.util.Log.i(TAG, "warmup like: 找到作品(scrolled=$scrolled)，打开 desc=${firstWork.contentDescription}")
+        tapNodeCenter(workCell)
+        delay(RandomDelay.sample(RandomDelay.NAV_MS))
+
+        // 视频页红心 content-desc="未点赞/已点赞，喜欢N，按钮"，含"点赞"即命中(含匹配，非精确等于)；
+        // awaitNode 轮询等视频详情页红心渲染出来。
+        val likeBtn = awaitNode { root -> findNodeByContentDescContains(root, "点赞") }
+        val likeDesc = likeBtn?.contentDescription?.toString()
         val nowForLike = System.currentTimeMillis()
-        if (needsLikeClick(likeText) && !isLikeRateLimited(likeTimestampsMs, nowForLike)) {
-            likeBtn?.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+        val likeRateLimited = isLikeRateLimited(likeTimestampsMs, nowForLike)
+        val doLike = needsVideoLikeClick(likeDesc) && !likeRateLimited && likeBtn != null
+        android.util.Log.i(TAG, "warmup like: heartDesc=$likeDesc needsClick=${needsVideoLikeClick(likeDesc)} rateLimited=$likeRateLimited -> click=$doLike")
+        if (doLike) {
+            (findClickableSelfOrAncestor(likeBtn!!) ?: likeBtn).performAction(AccessibilityNodeInfo.ACTION_CLICK)
             likeTimestampsMs.add(nowForLike)
             delay(RandomDelay.sample(RandomDelay.CLICK_MS))
         }
+        // 退回主页，供后续私信步骤(在主页 header 找"发私信")。仅当为找网格滚动过才需滚回顶部。
+        performGlobalAction(GLOBAL_ACTION_BACK)
+        delay(RandomDelay.sample(RandomDelay.NAV_MS))
+        if (scrolled) restoreProfileTop()
     }
+
+    /** 屏幕中部由下向上滑：内容上移，露出折叠线以下的作品网格。坐标按屏幕尺寸自适应。 */
+    private fun swipeContentUp() {
+        val dm = resources.displayMetrics
+        val x = dm.widthPixels / 2f
+        swipe(x, dm.heightPixels * 0.72f, x, dm.heightPixels * 0.28f, 300L)
+    }
+
+    /** 连续下滑滚回主页顶部(露出 header 的"发私信"，供后续私信步骤)。 */
+    private suspend fun restoreProfileTop() {
+        val dm = resources.displayMetrics
+        val x = dm.widthPixels / 2f
+        repeat(3) {
+            swipe(x, dm.heightPixels * 0.28f, x, dm.heightPixels * 0.80f, 250L)
+            delay(RandomDelay.sample(RandomDelay.CLICK_MS))
+        }
+    }
+
+    private fun swipe(x1: Float, y1: Float, x2: Float, y2: Float, durationMs: Long) {
+        val path = Path().apply { moveTo(x1, y1); lineTo(x2, y2) }
+        dispatchGesture(
+            GestureDescription.Builder()
+                .addStroke(GestureDescription.StrokeDescription(path, 0L, durationMs))
+                .build(),
+            null, null,
+        )
+    }
+
+    /**
+     * 轮询等待某节点出现(应对主页/视频页异步加载——内容未必在 locateProfile 落地瞬间就进无障碍树)。
+     * 最多 [maxAttempts] 次、每次间隔 [delayMs]；找到即返回，超时返回 null(尽力而为，调用方跳过不阻塞)。
+     */
+    private suspend fun awaitNode(
+        maxAttempts: Int = 6,
+        delayMs: Long = 500,
+        finder: (AccessibilityNodeInfo) -> AccessibilityNodeInfo?,
+    ): AccessibilityNodeInfo? {
+        repeat(maxAttempts) {
+            awaitRootInActiveWindow()?.let { root -> finder(root)?.let { return it } }
+            delay(delayMs)
+        }
+        return null
+    }
+
 
     private fun collectAllNodeTexts(root: AccessibilityNodeInfo): List<String> {
         val texts = mutableListOf<String>()
@@ -523,6 +661,57 @@ class DouyinDmOutreachService : AccessibilityService() {
             for (i in 0 until node.childCount) node.getChild(i)?.let { queue.add(it) }
         }
         return null
+    }
+
+    /** 按 content-desc【包含子串】查找(BFS)。用于视频页红心("未点赞，喜欢N，按钮")和作品缩略图("点赞数N")等整句 content-desc。 */
+    private fun findNodeByContentDescContains(root: AccessibilityNodeInfo, substr: String): AccessibilityNodeInfo? {
+        val queue = ArrayDeque<AccessibilityNodeInfo>()
+        queue.add(root)
+        while (queue.isNotEmpty()) {
+            val node = queue.removeFirst()
+            if (node.contentDescription?.toString()?.contains(substr) == true) return node
+            for (i in 0 until node.childCount) node.getChild(i)?.let { queue.add(it) }
+        }
+        return null
+    }
+
+    /**
+     * 找【可点击且 text 含指定子串之一】的节点(BFS)。用于抖音真正的关注按钮——它是 clickable
+     * TextView，文案被包成 "PLACEHOLDER1<关系词>PLACEHOLDER2"(互相关注/关注/回关)，精确 text 匹配
+     * 抓不到；同名的"她关注了你"是 clickable=false 的横幅标签(不匹配 clickable 条件天然被排除)。
+     */
+    private fun findClickableNodeByTextContains(root: AccessibilityNodeInfo, vararg substrs: String): AccessibilityNodeInfo? {
+        val queue = ArrayDeque<AccessibilityNodeInfo>()
+        queue.add(root)
+        while (queue.isNotEmpty()) {
+            val node = queue.removeFirst()
+            val t = node.text?.toString()
+            if (node.isClickable && t != null && substrs.any { t.contains(it) }) return node
+            for (i in 0 until node.childCount) node.getChild(i)?.let { queue.add(it) }
+        }
+        return null
+    }
+
+    /**
+     * B1 话术截断修复：整条一次性写入输入框。
+     * 真机(抖音39.4.0)实测 ACTION_SET_TEXT 对含空格/长中文会截断(只写入空格前几字，
+     * 私信历史里"你好，这是"就是截断现场)。改用【剪贴板整条粘贴】——对任意输入法一次性
+     * 提交、不截断(等价输入法 commitText)；仅当节点不支持粘贴时回退 SET_TEXT 兜底。
+     */
+    private fun commitTextRobust(input: AccessibilityNodeInfo, text: CharSequence) {
+        val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager
+        val pasteSupported = input.actionList.any { it.id == AccessibilityNodeInfo.ACTION_PASTE }
+        if (clipboard != null && pasteSupported) {
+            clipboard.setPrimaryClip(android.content.ClipData.newPlainText("zj_dm", text))
+            input.performAction(AccessibilityNodeInfo.ACTION_PASTE)
+            android.util.Log.i(TAG, "commitText via clipboard paste, len=${text.length}")
+        } else {
+            val args = Bundle().apply {
+                putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, text)
+            }
+            input.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, args)
+            android.util.Log.i(TAG, "commitText via SET_TEXT fallback (paste unsupported), len=${text.length}")
+        }
     }
 
     private fun findFirstEditText(root: AccessibilityNodeInfo): AccessibilityNodeInfo? {
@@ -618,14 +807,35 @@ class DouyinDmOutreachService : AccessibilityService() {
         }
 
         /**
-         * 关注按钮态判断：文本为"关注"才需要点击；"已关注"/找不到按钮（null，尽力而为跳过，不阻塞）一律不点击。
+         * 关注按钮态判断：文本为"关注"或"回关"才需要点击。
+         * - "关注"：陌生人主页，未关注 → 点关注。
+         * - "回关"：对方已关注你、你尚未关注对方（真机39.4.0实测按钮文案是"回关"不是"关注"），
+         *   仍是"未关注→需关注"的动作态，必须点，否则整类回关场景永远漏点。
+         * - "已关注"/"相互关注"（已是关注态）/找不到按钮（null，尽力而为跳过，不阻塞）一律不点击。
          */
-        internal fun needsFollowClick(buttonText: String?): Boolean = buttonText == "关注"
+        internal fun needsFollowClick(buttonText: String?): Boolean {
+            // 真机(抖音39.4.0)：真正的关注按钮文案被包成 "PLACEHOLDER1<关系词>PLACEHOLDER2"
+            // (占位符=图标/箭头 span)、末尾可能带 TalkBack 角色后缀 ",按钮"——先去壳再判定。
+            val s = (buttonText ?: return false)
+                .replace(Regex("PLACEHOLDER\\d*"), "")
+                .replace("，按钮", "").replace(",按钮", "").replace("按钮", "").trim()
+            if (s.isEmpty()) return false
+            // 不是关注按钮/已是关注态 → 不点：
+            //  - "(她/他/TA)关注了你" 是状态横幅/管理入口(点它弹 举报/拉黑/取消关注 菜单)，非关注按钮
+            //  - 已关注/相互关注/互相关注/已互关/取消关注 = 已经关注了
+            if (s.contains("关注了你") || s.contains("已关注") || s.contains("相互关注") ||
+                s.contains("互相关注") || s.contains("已互关") || s.contains("取消关注")) return false
+            // 需关注态：陌生人"关注"、对方已关注你的回关"回关"
+            return s == "关注" || s == "回关"
+        }
 
         /**
-         * 点赞按钮态判断：文本为"点赞"才需要点击；"已赞"/找不到按钮（null，无作品/仅关注可见/尽力而为跳过）一律不点击。
+         * 视频详情页(UltraDetailActivity)红心点赞态判断。真机(抖音39.4.0)红心 content-desc 是整句：
+         * 未赞态="未点赞，喜欢N，按钮"，已赞态="已点赞，喜欢N，按钮"。故【content-desc 含"未点赞"才点】；
+         * 含"已点赞"(已赞)/找不到(null，尽力而为跳过)/其它(如作品网格"点赞数N"展示标签)一律不点。
          */
-        internal fun needsLikeClick(buttonText: String?): Boolean = buttonText == "点赞"
+        internal fun needsVideoLikeClick(likeButtonDesc: String?): Boolean =
+            likeButtonDesc?.contains("未点赞") == true
 
         /**
          * 单个 lead 从 Step 2 起总耗时超过 [limitMs]（默认 90 秒）判定为超时熔断，标记 timeout（区别于 failed）。
