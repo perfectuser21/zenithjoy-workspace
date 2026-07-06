@@ -82,6 +82,25 @@ describe('cs-account-config-store — 按 wechat_id 隔离', () => {
     expect(c?.daily_limit).toBe(0);
   });
 
+  it('agent-config 响应必须含 takeover_mode（默认 blacklist）和 blacklist（默认空数组）', async () => {
+    await saveCSConfig('wxid_takeover', { persona: personaOf('测试') });
+    const c = await getCSConfig('wxid_takeover');
+    // agent 拉到的配置必须带这两个字段，blacklist 全接管模式才能真正生效
+    expect(c?.takeover_mode).toBe('blacklist');
+    expect(c?.blacklist).toEqual([]);
+  });
+
+  it('saveCSConfig 可持久化 takeover_mode=whitelist 和 blacklist 名单', async () => {
+    await saveCSConfig('wxid_bl', {
+      persona: personaOf('测试'),
+      takeover_mode: 'whitelist',
+      blacklist: ['张三', '李四'],
+    });
+    const c = await getCSConfig('wxid_bl');
+    expect(c?.takeover_mode).toBe('whitelist');
+    expect(c?.blacklist).toEqual(['张三', '李四']);
+  });
+
   it('写一行不覆盖另一行', async () => {
     await saveCSConfig('wxid_a', { persona: personaOf('萌萌'), whitelist: ['客户甲'] });
     await saveCSConfig('wxid_b', { persona: personaOf('天下第一'), auto_agent_enabled: true });
