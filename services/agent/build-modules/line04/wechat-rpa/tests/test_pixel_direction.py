@@ -134,3 +134,25 @@ def test_pixel_direction_overrides_missing_history(monkeypatch):
     mw = _MW([_MsgItem("操作者手机插话", 200)])
     bubbles = listen_chat.read_chat_bubbles(mw)
     assert bubbles[0]["direction"] == "outgoing"
+
+
+def test_pixel_no_green_falls_back_to_sent_history(monkeypatch):
+    """[防回归 1.0.109] 像素无绿（截图未渲染竞态）但文本命中已发送历史 → 判 outgoing。
+
+    selfcheck_bubbles bubble-gate 实锤：reply_in_chat DELIVERED 后截图取不到绿泡
+    → verdict=False → 旧逻辑硬判 incoming，gate 报红。
+    修：verdict=False 时也回退 _matches_any_sent，和 verdict=None 同等对待。
+    """
+    listen_chat._SENT_TEXTS.clear()
+    listen_chat._record_sent_text("[bubble-gate] 1720272291")
+    # 有效 capture 但全无绿像素（消息尚未渲染到正确行）
+    cap = _FakeCapture(green_rows=[])
+    monkeypatch.setattr(listen_chat, "_capture_window_pixels", lambda mw: cap)
+    mw = _MW([
+        _MsgItem("客户来的问题", 220),
+        _MsgItem("[bubble-gate] 1720272291", 300),
+    ])
+    bubbles = listen_chat.read_chat_bubbles(mw)
+    assert [b["direction"] for b in bubbles] == ["incoming", "outgoing"], (
+        f"无绿像素但文本命中已发送历史 → 必须判 outgoing，实际 {bubbles!r}"
+    )
