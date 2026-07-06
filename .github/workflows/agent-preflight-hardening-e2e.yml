@@ -206,7 +206,7 @@ jobs:
               result = preflight.check_wechat_login(dry_run=True)
 
           print('wechat_login status:', result['status'])
-          assert result['status'] == 'warn', f'FAIL: 期望 warn，实际 {result[\"status\"]} — 员工机首次安装会闪退！'
+          assert result['status'] == 'warn', f"FAIL: 期望 warn，实际 {result['status']} — 员工机首次安装会闪退！"
           print('OK: check_wechat_login 未登录 → warn（start.bat 不会因此闪退）')
           "@
           if ($LASTEXITCODE -ne 0) { throw "E2E-7 FAIL: check_wechat_login 未登录仍返回 failed" }
