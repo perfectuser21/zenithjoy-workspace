@@ -6,16 +6,13 @@ name: WeChat CS Hardening — E2E
 #   job1 (ubuntu)  — 中台链路模拟用户：curl 真打 /listener-heartbeat + /draft-generate(mode:auto)
 #                    + schema mode 透传单测（mock 飞书/DeepSeek）
 #   job2 (windows) — Agent 启动路径解析 + listen_chat.py dryrun 退出码 0（python-embedded getPythonExe 逻辑）
+# required context = "WeChat CS Gate Passed"（path-aware：不相关 PR 三个 job skip、gate 秒绿不占 rog）
 
 on:
   push:
     branches: [main]
   pull_request:
     branches: [main]
-    paths:
-      - 'services/agent/**'
-      - 'apps/api/**'
-      - '.github/workflows/wechat-cs-e2e.yml'
   workflow_dispatch:
 
 concurrency:
@@ -23,8 +20,40 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  changes:
+    name: changes — 变更路径检测
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      agent_or_api: ${{ steps.filter.outputs.agent_or_api }}
+      agent: ${{ steps.filter.outputs.agent }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: filter
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" != "pull_request" ]; then
+            echo "agent_or_api=true" >> "$GITHUB_OUTPUT"
+            echo "agent=true" >> "$GITHUB_OUTPUT"
+            echo "non-PR event: run all"
+            exit 0
+          fi
+          BASE="${{ github.event.pull_request.base.sha }}"
+          HEAD="${{ github.event.pull_request.head.sha }}"
+          FILES=$(git diff --name-only "$BASE" "$HEAD")
+          echo "$FILES"
+          AGENT=false; AGENT_OR_API=false
+          if echo "$FILES" | grep -qE '^(services/agent/|\.github/workflows/wechat-cs-e2e\.yml)'; then AGENT=true; fi
+          if echo "$FILES" | grep -qE '^(services/agent/|apps/api/|\.github/workflows/wechat-cs-e2e\.yml)'; then AGENT_OR_API=true; fi
+          echo "agent=$AGENT" >> "$GITHUB_OUTPUT"
+          echo "agent_or_api=$AGENT_OR_API" >> "$GITHUB_OUTPUT"
+
   middleware-chain:
     name: job1 — 中台链路模拟用户（curl + mode 透传）
+    needs: changes
+    if: needs.changes.outputs.agent_or_api == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
@@ -113,6 +142,8 @@ jobs:
 
   agent-windows:
     name: job2 — Agent 启动路径 + listen_chat dryrun（self-hosted xian-rog）
+    needs: changes
+    if: needs.changes.outputs.agent == 'true'
     runs-on: [self-hosted, wechat-capable]
     timeout-minutes: 12
     # Windows self-hosted runner 默认 locale=GBK，python 读含中文的 .py/文件会 UnicodeDecodeError，
@@ -168,6 +199,8 @@ jobs:
   # 必须 session 1（GUI）才能 UIA 操作微信，runner 服务在 session 0 → PsExec64 -i 1 包一层。
   bubble-read-gate:
     name: job3 — 真机气泡可读性 gate（xian-rog 真微信）
+    needs: changes
+    if: needs.changes.outputs.agent == 'true'
     runs-on: [self-hosted, wechat-capable]
     timeout-minutes: 10
     env:
@@ -207,3 +240,25 @@ jobs:
             exit 1
           }
           Write-Host "bubble gate PASS"
+
+  # ─── Gate job（required context，与 L1/L2 Gate Passed 同款）─────────────────
+  wechat-cs-gate:
+    name: WeChat CS Gate Passed
+    needs: [changes, middleware-chain, agent-windows, bubble-read-gate]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: WeChat CS Gate
+        run: |
+          echo "changes=${{ needs.changes.result }} job1=${{ needs.middleware-chain.result }} job2=${{ needs.agent-windows.result }} job3=${{ needs.bubble-read-gate.result }}"
+          if [ "${{ needs.changes.result }}" != "success" ]; then
+            echo "FAIL: changes 检测未成功"; exit 1
+          fi
+          for r in "${{ needs.middleware-chain.result }}" "${{ needs.agent-windows.result }}" "${{ needs.bubble-read-gate.result }}"; do
+            case "$r" in
+              success|skipped) ;;
+              *) echo "FAIL: 有 job 结果为 $r"; exit 1 ;;
+            esac
+          done
+          echo "WeChat CS Gate Passed"

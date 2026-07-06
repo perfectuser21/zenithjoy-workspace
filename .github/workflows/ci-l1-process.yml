@@ -371,7 +371,7 @@ jobs:
       - uses: actions/checkout@v4
       - name: All workflow files must parse as YAML
         run: |
-          python3 -m pip install --quiet pyyaml
+          python3 -c "import yaml" 2>/dev/null || python3 -m pip install --quiet pyyaml
           python3 .github/workflows/scripts/lint-workflow-yaml-parse.py
 
   # ─── Gate job ─────────────────────────────────────────────────────────────
@@ -459,7 +459,7 @@ jobs:
           fi
 
           if [ "${{ needs.lint-workflow-yaml-parse.result }}" != "success" ]; then
-            echo "FAIL: Workflow YAML Parse (${{ needs.lint-workflow-yaml-parse.result }})"
+            echo "FAIL: Lint Workflow YAML Parse (${{ needs.lint-workflow-yaml-parse.result }})"
             FAILED=true
           fi
 

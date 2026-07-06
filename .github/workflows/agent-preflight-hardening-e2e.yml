@@ -173,10 +173,10 @@ jobs:
               # mock preflight.py（总是失败，打印 [preflight] FAIL）
               New-Item -ItemType Directory -Path "$tmpDir\wechat-rpa" -Force | Out-Null
               Set-Content "$tmpDir\wechat-rpa\preflight.py" @"
-import sys
-print('[preflight] FAIL: mock failure — testing blocking behavior')
-sys.exit(1)
-"@
+          import sys
+          print('[preflight] FAIL: mock failure - testing blocking behavior')
+          sys.exit(1)
+          "@
 
               # 复制真实 start.bat（测真实行为，不重写逻辑）
               if (-not (Test-Path "services\agent\install-pack\start.bat")) {

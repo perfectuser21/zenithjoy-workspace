@@ -7,7 +7,9 @@
 import os
 import sys
 
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "tools")))
+_TOOLS = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "tools"))
+if _TOOLS not in sys.path:
+    sys.path.insert(0, _TOOLS)
 
 from selfcheck_bubbles import (  # noqa: E402
     FIND_WINDOW_RETRIES,
