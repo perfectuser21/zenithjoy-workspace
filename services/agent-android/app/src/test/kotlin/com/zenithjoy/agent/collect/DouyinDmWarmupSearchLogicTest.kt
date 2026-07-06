@@ -134,22 +134,46 @@ class DouyinDmWarmupSearchLogicTest {
         assertFalse(DouyinDmOutreachService.needsFollowClick(null))
     }
 
-    // ── needsLikeClick ────────────────────────────────────────────────────────
-
     @Test
-    fun `like button text 点赞 needs click`() {
-        assertTrue(DouyinDmOutreachService.needsLikeClick("点赞"))
+    fun `follow button text 回关 needs click`() {
+        // 真机(抖音39.4.0)实测：当"对方已关注你、你尚未关注对方"时，主页关注按钮文案是"回关"
+        // (content-desc="回关" class=Button clickable=true)，不是"关注"。这也是"未关注→需关注"的
+        // 动作态，必须点击，否则 warmup 关注在整类回关场景永远漏点(只认"关注"二字会漏掉)。
+        assertTrue(DouyinDmOutreachService.needsFollowClick("回关"))
     }
 
     @Test
-    fun `like button text 已赞 does not need click`() {
-        assertFalse(DouyinDmOutreachService.needsLikeClick("已赞"))
+    fun `follow button text 相互关注 does not need click`() {
+        // 已互关(对方关注你、你也关注了对方)→按钮文案"相互关注"，已是关注态，不再点击
+        assertFalse(DouyinDmOutreachService.needsFollowClick("相互关注"))
+    }
+
+    // ── needsVideoLikeClick ──────────────────────────────────────────────────
+    // 真机(抖音39.4.0)实测：作品网格页【没有】点赞按钮(只有"点赞数N"展示标签，clickable=false)，
+    // 红心点赞只存在于【视频详情页 UltraDetailActivity】。红心按钮的 content-desc 是整句：
+    //   未赞态 = "未点赞，喜欢13，按钮"    已赞态 = "已点赞，喜欢13，按钮"
+    // 因此判定不是精确等于"点赞"，而是【content-desc 含"未点赞"才点】(含"已点赞"/找不到→跳过)。
+
+    @Test
+    fun `video like button 未点赞 desc needs click`() {
+        assertTrue(DouyinDmOutreachService.needsVideoLikeClick("未点赞，喜欢13，按钮"))
     }
 
     @Test
-    fun `null like button (no artwork or follow-only profile) does not need click`() {
-        // 已点赞/无作品可点赞/主页仅关注可见 → 尽力而为跳过，不阻塞
-        assertFalse(DouyinDmOutreachService.needsLikeClick(null))
+    fun `video like button 已点赞 desc does not need click`() {
+        assertFalse(DouyinDmOutreachService.needsVideoLikeClick("已点赞，喜欢14，按钮"))
+    }
+
+    @Test
+    fun `null video like button (not found) does not need click`() {
+        // 找不到红心/视频页未加载出来 → 尽力而为跳过，不阻塞
+        assertFalse(DouyinDmOutreachService.needsVideoLikeClick(null))
+    }
+
+    @Test
+    fun `grid 点赞数 label is not a like button and does not need click`() {
+        // 作品网格的"点赞数14"是展示标签(clickable=false)，绝不能被当成未赞态误点
+        assertFalse(DouyinDmOutreachService.needsVideoLikeClick("点赞数14"))
     }
 
     // ── isLeadTimedOut ────────────────────────────────────────────────────────
