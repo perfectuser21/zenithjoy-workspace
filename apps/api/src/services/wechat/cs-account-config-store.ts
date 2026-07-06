@@ -36,6 +36,14 @@ export interface CSAccountConfig {
   business_hours_end: string;
   key_contact_wechat: string;
   whitelist: string[];
+  /**
+   * 接管模式（issue 3eaa7fe6）：'blacklist'=默认全接管+黑名单排除（主模型，CRM 接管开关写入）；
+   * 'whitelist'=只回名单内（小众）；缺省=存量旧配置，agent 端回退白名单兼容逻辑。
+   * 必须透传给 /cs/agent-config——漏发时 agent 永远退回白名单，全接管形同虚设。
+   */
+  takeover_mode?: 'blacklist' | 'whitelist';
+  /** 黑名单（blacklist 模式下 sender ∈ blacklist 才不回）。缺省=没拉黑过任何人。 */
+  blacklist?: string[];
   daily_limit: number;
   updated_at?: string;
 }
@@ -94,6 +102,13 @@ function normalizeRow(row: Record<string, unknown>): CSAccountConfig {
         ? row.key_contact_wechat
         : CS_ACCOUNT_DEFAULTS.key_contact_wechat,
     whitelist: asObject<string[]>(row.whitelist, []),
+    // issue 3eaa7fe6：这两个字段必须透传（缺省不伪造——takeover_mode 只认合法枚举值，
+    // 其余按存量旧配置处理，agent 端 should_reply 自带白名单兼容回退）。
+    takeover_mode:
+      row.takeover_mode === 'blacklist' || row.takeover_mode === 'whitelist'
+        ? row.takeover_mode
+        : undefined,
+    blacklist: row.blacklist == null ? undefined : asObject<string[]>(row.blacklist, []),
     daily_limit:
       typeof row.daily_limit === 'number' ? row.daily_limit : Number(row.daily_limit ?? 0) || 0,
     updated_at:
@@ -110,7 +125,7 @@ export async function getCSConfig(wechatId: string): Promise<CSAccountConfig | n
   try {
     const res = await pool.query(
       `SELECT wechat_id, persona, business_kb, auto_agent_enabled, business_hours_start, business_hours_end,
-              key_contact_wechat, whitelist, daily_limit, updated_at
+              key_contact_wechat, whitelist, takeover_mode, blacklist, daily_limit, updated_at
          FROM zenithjoy.wechat_cs_account_config
         WHERE wechat_id = $1`,
       [wechatId],
