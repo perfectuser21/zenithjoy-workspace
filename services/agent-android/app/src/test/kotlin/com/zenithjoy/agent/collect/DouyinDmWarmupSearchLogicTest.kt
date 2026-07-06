@@ -81,6 +81,41 @@ class DouyinDmWarmupSearchLogicTest {
         )
     }
 
+    // ── verifyProfileMatchesDouyinId ─────────────────────────────────────────
+    // 真机实测(抖音 39.4.0)：SearchResultActivity 的搜索结果列表【不进无障碍树】
+    // (自定义/Lynx 渲染，dump 只见搜索框+tab)，所以老的 matchProfileByDouyinId(搜索结果文本)
+    // 永远匹配不到人、反被搜索框回显的裸 id 骗成假 UNIQUE。新方案：坐标盲点顶部结果进主页，
+    // 主页页面【进树】(含 "抖音号：<id>")，落地后用本函数验证点对了人——点错就中止，保证不误发。
+
+    @Test
+    fun `profile page containing 抖音号 prefix line matching target verifies true`() {
+        val profileTexts = listOf("伯都呀伯都 ", "抖音号：133643315", "获赞", "发私信")
+        assertTrue(DouyinDmOutreachService.verifyProfileMatchesDouyinId(profileTexts, "133643315"))
+    }
+
+    @Test
+    fun `profile page with halfwidth colon also verifies`() {
+        val profileTexts = listOf("某人", "抖音号:Zenithjoyai", "关注")
+        assertTrue(DouyinDmOutreachService.verifyProfileMatchesDouyinId(profileTexts, "Zenithjoyai"))
+    }
+
+    @Test
+    fun `wrong profile (different douyin id) fails verification`() {
+        val profileTexts = listOf("别人", "抖音号：999999999", "发私信")
+        assertFalse(DouyinDmOutreachService.verifyProfileMatchesDouyinId(profileTexts, "133643315"))
+    }
+
+    @Test
+    fun `bare id echo without 抖音号 prefix does not verify (search box trap)`() {
+        // 搜索框回显是裸 id "133643315"（无"抖音号"前缀），绝不能被当成主页验证通过
+        assertFalse(DouyinDmOutreachService.verifyProfileMatchesDouyinId(listOf("133643315", "搜索"), "133643315"))
+    }
+
+    @Test
+    fun `empty profile texts fail verification`() {
+        assertFalse(DouyinDmOutreachService.verifyProfileMatchesDouyinId(emptyList(), "133643315"))
+    }
+
     // ── needsFollowClick ──────────────────────────────────────────────────────
 
     @Test
