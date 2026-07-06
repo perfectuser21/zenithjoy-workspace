@@ -51,7 +51,7 @@ def test_acquire_granted_returns_true_and_logs(capsys):
     with patch("urllib.request.urlopen", return_value=_make_http_response(
         {"granted": True, "lease_id": "test-lease-001", "expires_at": 9999999999999}
     )):
-        result = lc.desktop_lease_acquire("http://localhost:5221")
+        result = lc.desktop_lease_acquire()
 
     assert result is True
     captured = capsys.readouterr()
@@ -63,21 +63,25 @@ def test_acquire_not_granted_returns_false_and_logs(capsys):
     with patch("urllib.request.urlopen", return_value=_make_http_response(
         {"granted": False, "retry_after_ms": 5000}
     )):
-        result = lc.desktop_lease_acquire("http://localhost:5221")
+        result = lc.desktop_lease_acquire()
 
     assert result is False
     captured = capsys.readouterr()
     assert "[desktop_lease] acquire failed" in captured.err
 
 
-def test_acquire_http_error_returns_false_and_logs(capsys):
-    """HTTP 异常 → acquire 返回 False，stderr 含 'acquire failed'（fail-safe，不抛异常）。"""
+def test_acquire_http_error_degrades_to_allow(capsys):
+    """HTTP 异常（Broker 联系不上/老 core 无路由）→ 降级放行返回 True，stderr 含 'degrade-allow'。
+
+    决策 f26e099c：回复是核心价值，仲裁只是辅助，绝不因 Broker 缺席阻断发送。
+    详见 test_desktop_lease_ipc.py。"""
     with patch("urllib.request.urlopen", side_effect=Exception("connection refused")):
-        result = lc.desktop_lease_acquire("http://localhost:5221")
+        result = lc.desktop_lease_acquire()
 
-    assert result is False
+    assert result is True
+    assert lc._current_lease_id is None
     captured = capsys.readouterr()
-    assert "[desktop_lease] acquire failed" in captured.err
+    assert "degrade-allow" in captured.err
 
 
 # ─── desktop_lease_release ──────────────────────────────────────────────────
@@ -87,7 +91,7 @@ def test_release_logs_on_success(capsys):
     """release 成功 → stderr 含 '[desktop_lease] release'。"""
     lc._current_lease_id = "test-lease-release-001"
     with patch("urllib.request.urlopen", return_value=_make_http_response({"ok": True})):
-        lc.desktop_lease_release("http://localhost:5221")
+        lc.desktop_lease_release()
 
     captured = capsys.readouterr()
     assert "[desktop_lease] release" in captured.err
@@ -97,7 +101,7 @@ def test_release_noop_when_no_lease_id(capsys):
     """无持有租约时 release 静默 noop，不发 HTTP 请求。"""
     lc._current_lease_id = None
     with patch("urllib.request.urlopen") as mock_open:
-        lc.desktop_lease_release("http://localhost:5221")
+        lc.desktop_lease_release()
     mock_open.assert_not_called()
 
 
@@ -105,14 +109,14 @@ def test_release_silences_http_error(capsys):
     """HTTP 异常 → release 静默忽略（best-effort），不抛异常，不 crash。"""
     lc._current_lease_id = "test-lease-err"
     with patch("urllib.request.urlopen", side_effect=Exception("timeout")):
-        lc.desktop_lease_release("http://localhost:5221")  # 不应抛出
+        lc.desktop_lease_release()  # 不应抛出
 
 
 def test_release_clears_lease_id():
     """release 后 _current_lease_id 被清除（防止重复 release 发 HTTP）。"""
     lc._current_lease_id = "test-clear-001"
     with patch("urllib.request.urlopen", return_value=_make_http_response({"ok": True})):
-        lc.desktop_lease_release("http://localhost:5221")
+        lc.desktop_lease_release()
     assert lc._current_lease_id is None
 
 
@@ -149,7 +153,7 @@ def test_dryrun_inject_calls_release_after_draft(capsys):
          patch.object(lc, "emit_json"):
         lc.run_dryrun_inject(args)
 
-    mock_release.assert_called_once_with("http://localhost:5221")
+    mock_release.assert_called_once_with()
 
 
 # ─── [ARTIFACT 防回归] reply_in_chat_with_lease — 真实回复主循环接线 ─────────
@@ -180,7 +184,7 @@ def test_reply_with_lease_acquire_granted_sends_and_releases():
         )
     assert result is True
     mock_reply.assert_called_once()
-    mock_release.assert_called_once_with("http://localhost:5221")
+    mock_release.assert_called_once_with()
 
 
 def test_reply_with_lease_releases_even_on_exception():
@@ -192,7 +196,7 @@ def test_reply_with_lease_releases_even_on_exception():
             lc.reply_in_chat_with_lease(
                 MagicMock(), MagicMock(), "你好", "客户C", "http://localhost:5221"
             )
-    mock_release.assert_called_once_with("http://localhost:5221")
+    mock_release.assert_called_once_with()
 
 
 def test_reply_with_lease_noop_when_no_middleware_url():
@@ -248,7 +252,7 @@ def test_acquire_url_is_local_discovery_not_middleware(capsys):
     """[RED] desktop_lease_acquire 的 HTTP 目标必须含 127.0.0.1，不能含 middleware_url 的域。"""
     ctx, captured = _capture_urlopen_url({"granted": True, "lease_id": "x"})
     with ctx:
-        lc.desktop_lease_acquire("http://external-middleware:5000")
+        lc.desktop_lease_acquire()
     assert "127.0.0.1" in captured["url"], \
         f"acquire URL 应为 127.0.0.1:58432 local IPC，实际 {captured.get('url')!r}"
     assert "external-middleware" not in captured["url"], \
@@ -260,7 +264,7 @@ def test_release_url_is_local_discovery_not_middleware(capsys):
     lc._current_lease_id = "url-check-release"
     ctx, captured = _capture_urlopen_url({"ok": True})
     with ctx:
-        lc.desktop_lease_release("http://external-middleware:5000")
+        lc.desktop_lease_release()
     assert "127.0.0.1" in captured["url"], \
         f"release URL 应为 127.0.0.1:58432 local IPC，实际 {captured.get('url')!r}"
     assert "external-middleware" not in captured["url"], \
@@ -272,7 +276,7 @@ def test_acquire_url_uses_zenithjoy_local_port_env(monkeypatch, capsys):
     monkeypatch.setenv("ZENITHJOY_LOCAL_PORT", "19999")
     ctx, captured = _capture_urlopen_url({"granted": True, "lease_id": "z"})
     with ctx:
-        lc.desktop_lease_acquire("http://mw:5000")
+        lc.desktop_lease_acquire()
     assert "19999" in captured["url"], \
         f"acquire URL 端口应为 env ZENITHJOY_LOCAL_PORT=19999，实际 {captured.get('url')!r}"
 
@@ -283,7 +287,7 @@ def test_release_url_uses_zenithjoy_local_port_env(monkeypatch):
     lc._current_lease_id = "port-env-check"
     ctx, captured = _capture_urlopen_url({"ok": True})
     with ctx:
-        lc.desktop_lease_release("http://mw:5000")
+        lc.desktop_lease_release()
     assert "19999" in captured["url"], \
         f"release URL 端口应为 env ZENITHJOY_LOCAL_PORT=19999，实际 {captured.get('url')!r}"
 
@@ -295,7 +299,7 @@ def test_renew_exists_and_uses_local_discovery():
     lc._current_lease_id = "renew-url-check"
     ctx, captured = _capture_urlopen_url({"renewed": True, "expires_at": 9999999})
     with ctx:
-        result = lc.desktop_lease_renew("http://external-middleware:5000")
+        result = lc.desktop_lease_renew()
     assert "127.0.0.1" in captured.get("url", ""), \
         f"renew URL 应为 127.0.0.1:58432 local IPC，实际 {captured.get('url')!r}"
     assert "external-middleware" not in captured.get("url", ""), \
@@ -308,7 +312,7 @@ def test_renew_returns_false_when_no_lease_id():
     assert hasattr(lc, "desktop_lease_renew"), "desktop_lease_renew 函数不存在"
     lc._current_lease_id = None
     with patch("urllib.request.urlopen") as mock_open:
-        result = lc.desktop_lease_renew("http://mw:5000")
+        result = lc.desktop_lease_renew()
     assert result is False
     mock_open.assert_not_called()
 
@@ -318,5 +322,5 @@ def test_renew_silences_http_error():
     assert hasattr(lc, "desktop_lease_renew"), "desktop_lease_renew 函数不存在"
     lc._current_lease_id = "renew-err"
     with patch("urllib.request.urlopen", side_effect=Exception("timeout")):
-        result = lc.desktop_lease_renew("http://mw:5000")
+        result = lc.desktop_lease_renew()
     assert result is False

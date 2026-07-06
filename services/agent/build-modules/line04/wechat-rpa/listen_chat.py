@@ -2783,13 +2783,13 @@ def reply_in_chat_with_lease(
     """
     if not middleware_url:
         return reply_in_chat(mw, item, reply_text, sender=sender)
-    if not desktop_lease_acquire(middleware_url):
+    if not desktop_lease_acquire():
         _log(f"reply_in_chat_with_lease: 桌面租约申请失败，本轮跳过 sender={sender!r}（下轮重试）")
         return False
     try:
         return reply_in_chat(mw, item, reply_text, sender=sender)
     finally:
-        desktop_lease_release(middleware_url)
+        desktop_lease_release()
 
 
 def _pywinauto_available() -> bool:
@@ -3022,13 +3022,16 @@ def _get_local_discovery_base() -> str:
     return f"http://127.0.0.1:{port}"
 
 
-def desktop_lease_acquire(middleware_url: str) -> bool:
-    """向 Broker IPC 申请桌面租约。返回 True=已授予，False=拒绝（调用方应跳过本轮）。
+def desktop_lease_acquire() -> bool:
+    """向本机 Broker IPC 申请桌面租约。返回 True=可发送，False=跳过本轮。
 
-    URL 基址走 local-discovery（127.0.0.1:ZENITHJOY_LOCAL_PORT），不走 middleware_url。
+    URL 基址走 local-discovery（127.0.0.1:ZENITHJOY_LOCAL_PORT）。
     日志写到 stderr（DoD B6 验收锚点）：
       成功 → [desktop_lease] acquire granted
-      失败 → [desktop_lease] acquire failed
+      Broker 在岗但拒绝 → [desktop_lease] acquire failed reason=not_granted
+      Broker 联系不上 → [desktop_lease] broker unreachable -> degrade-allow
+        （决策 f26e099c：老 core 无此路由/core 未起时降级放行——回复是核心价值，
+        仲裁只是辅助，绝不因 Broker 缺席阻断发送）
     """
     global _current_lease_id
     url = _get_local_discovery_base() + "/api/agent/desktop-lease-broker/acquire"
@@ -3043,22 +3046,22 @@ def desktop_lease_acquire(middleware_url: str) -> bool:
                                      method="POST")
         with urllib.request.urlopen(req, timeout=5) as resp:
             result = json.loads(resp.read().decode("utf-8"))
-        if result.get("granted"):
-            _current_lease_id = result.get("lease_id")
-            print(f"[desktop_lease] acquire granted lease_id={_current_lease_id}", file=sys.stderr)
-            return True
-        else:
-            print(f"[desktop_lease] acquire failed reason=not_granted retry_after_ms={result.get('retry_after_ms')}", file=sys.stderr)
-            return False
     except Exception as exc:
-        print(f"[desktop_lease] acquire failed error={exc}", file=sys.stderr)
-        return False
+        _current_lease_id = None
+        print(f"[desktop_lease] broker unreachable -> degrade-allow（无仲裁模式，照常发送） error={exc}", file=sys.stderr)
+        return True
+    if result.get("granted"):
+        _current_lease_id = result.get("lease_id")
+        print(f"[desktop_lease] acquire granted lease_id={_current_lease_id}", file=sys.stderr)
+        return True
+    print(f"[desktop_lease] acquire failed reason=not_granted retry_after_ms={result.get('retry_after_ms')}", file=sys.stderr)
+    return False
 
 
-def desktop_lease_release(middleware_url: str) -> None:
-    """归还桌面租约（best-effort，失败静默忽略）。
+def desktop_lease_release() -> None:
+    """归还桌面租约到本机 Broker（best-effort，失败静默忽略；降级放行时无租约可还，no-op）。
 
-    URL 基址走 local-discovery（127.0.0.1:ZENITHJOY_LOCAL_PORT），不走 middleware_url。
+    URL 基址走 local-discovery（127.0.0.1:ZENITHJOY_LOCAL_PORT）。
     日志写到 stderr：[desktop_lease] release
     """
     global _current_lease_id
@@ -3082,10 +3085,10 @@ def desktop_lease_release(middleware_url: str) -> None:
         print(f"[desktop_lease] release error={exc} (ignored)", file=sys.stderr)
 
 
-def desktop_lease_renew(middleware_url: str) -> bool:
+def desktop_lease_renew() -> bool:
     """续期当前桌面租约（best-effort，失败返回 False，不抛）。
 
-    URL 基址走 local-discovery（127.0.0.1:ZENITHJOY_LOCAL_PORT），不走 middleware_url。
+    URL 基址走 local-discovery（127.0.0.1:ZENITHJOY_LOCAL_PORT）。
     日志写到 stderr：[desktop_lease] renew
     """
     global _current_lease_id
@@ -3579,7 +3582,7 @@ def run_dryrun_inject(args: argparse.Namespace) -> int:
     # 桌面租约 acquire（[防假成功] invariant：失败时跳过，不假装发送成功）
     middleware_url = getattr(args, "middleware_url", "") or ""
     if middleware_url:
-        granted = desktop_lease_acquire(middleware_url)
+        granted = desktop_lease_acquire()
         if not granted:
             emit_json({"ok": False, "dryRun": True,
                        "error": "[desktop_lease] acquire failed — 跳过本轮（防假成功 invariant）"})
@@ -3602,7 +3605,7 @@ def run_dryrun_inject(args: argparse.Namespace) -> int:
     finally:
         # 归还租约（best-effort，失败静默忽略）
         if middleware_url:
-            desktop_lease_release(middleware_url)
+            desktop_lease_release()
 
     return 0
 
