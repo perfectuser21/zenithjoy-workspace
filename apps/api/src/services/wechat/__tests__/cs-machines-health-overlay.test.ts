@@ -84,7 +84,7 @@ describe('Bug C — listAllMachines 用 listen_chat 心跳 diag 覆盖恒空 pre
     expect(machines[0].found_window).toBe(true);
   });
 
-  it('心跳 main_window_found=false → found_window 假、wechat_ok 假、给出原因', async () => {
+  it('心跳 main_window_found=false + login_present=true（停在登录窗口）→ 原因指向"未登录需扫码"', async () => {
     recordHeartbeat({
       agent_id: 'uuid-agent-2',
       diag: { main_window_found: false, login_present: true },
@@ -95,7 +95,24 @@ describe('Bug C — listAllMachines 用 listen_chat 心跳 diag 覆盖恒空 pre
     const machines = await listAllMachines('tenant-1');
     expect(machines[0].found_window).toBe(false);
     expect(machines[0].wechat_ok).toBe(false);
-    expect(machines[0].wechat_reason).toBeTruthy();
+    expect(machines[0].wechat_reason).toMatch(/未登录/);
+    expect(machines[0].wechat_reason).toMatch(/扫码/);
+  });
+
+  it('心跳 main_window_found=false + login_present=false（无登录窗口）→ 原因提 UIA 死区/可能已登录，不误报"未登录"（issue bf0cf4c4 同语义）', async () => {
+    recordHeartbeat({
+      agent_id: 'uuid-agent-3',
+      diag: { main_window_found: false, login_present: false },
+    });
+    mockQuery.mockResolvedValueOnce({
+      rows: [row({ agent_uuid: 'uuid-agent-3', agent_id: 'env-3', wechat_ok: 'true' })],
+    } as any);
+    const machines = await listAllMachines('tenant-1');
+    expect(machines[0].found_window).toBe(false);
+    expect(machines[0].wechat_ok).toBe(false);
+    expect(machines[0].wechat_reason).toMatch(/UIA 死区|未就绪/);
+    expect(machines[0].wechat_reason).toMatch(/可能已登录/);
+    expect(machines[0].wechat_reason).not.toMatch(/微信未登录/);
   });
 
   it('无匹配心跳 → 保留 preflight 原值（不乱改）', async () => {

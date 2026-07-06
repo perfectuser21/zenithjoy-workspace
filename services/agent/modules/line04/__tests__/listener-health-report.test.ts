@@ -50,20 +50,33 @@ describe('collectListenerHealth — 合成 listen_chat 真实健康', () => {
     expect(h.ok).toBe(false);
   });
 
-  it('found_window=false + 没登录 → reason 精确指向"未登录"，并上报 login_present', () => {
-    const p = mkHealthFile({ found_window: false, login_present: false });
-    const h = collectListenerHealth({ healthFile: p, listenerAlive: true });
-    expect(h.login_present).toBe(false);
-    expect(h.reason).toMatch(/未登录/);
-  });
-
-  it('found_window=false + 已登录 → reason 精确指向"登录了但 UIA 找不到窗口"（中台直接看出，不用问人）', () => {
-    const p = mkHealthFile({ found_window: false, login_present: true, sessions_seen: 9 });
+  // ── 语义铁律（issue bf0cf4c4，listen_chat.py:3763）：login_present = 「登录窗口存在 = 需扫码标志」。
+  //    true  = 微信停在扫码/登录窗口 → 真未登录，需扫码；
+  //    false = 没有登录窗口 → 可能已登录但 UIA 死区（rog 0704→0706 实锤：登录着被误报"未登录"40h）。
+  it('found_window=false + login_present=true（停在登录窗口）→ reason 指向"未登录需扫码"，绝不说"已登录"', () => {
+    const p = mkHealthFile({ found_window: false, login_present: true });
     const h = collectListenerHealth({ healthFile: p, listenerAlive: true });
     expect(h.login_present).toBe(true);
+    expect(h.reason).toMatch(/未登录/);
+    expect(h.reason).toMatch(/扫码/);
+    expect(h.reason).not.toMatch(/已登录/);
+  });
+
+  it('found_window=false + login_present=false（无登录窗口=可能已登录但 UIA 死区）→ reason 指向 UIA 死区，绝不误报"未登录"（rog 0706 实锤）', () => {
+    const p = mkHealthFile({ found_window: false, login_present: false, sessions_seen: 9 });
+    const h = collectListenerHealth({ healthFile: p, listenerAlive: true });
+    expect(h.login_present).toBe(false);
     expect(h.sessions_seen).toBe(9);
-    expect(h.reason).toMatch(/已登录但.*UIA|会话/);
-    expect(h.reason).not.toMatch(/未登录/);
+    expect(h.reason).toMatch(/UIA 死区|找不到主窗口/);
+    expect(h.reason).toMatch(/可能已登录/);
+    expect(h.reason).not.toMatch(/微信未登录（/);
+  });
+
+  it('found_window=false + login_present 缺失（undefined）→ 中性文案（未登录或 UIA 未就绪），不武断二选一', () => {
+    const p = mkHealthFile({ found_window: false });
+    const h = collectListenerHealth({ healthFile: p, listenerAlive: true });
+    expect(h.login_present).toBeUndefined();
+    expect(h.reason).toMatch(/未登录或 UIA 未就绪/);
   });
 
   it('健康文件不存在 → 不抛，按进程存活态给保守结论', () => {
