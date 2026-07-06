@@ -75,6 +75,20 @@
                 android:resource="@xml/douyin_dm_outreach_config" />
         </service>
 
+        <!-- Sprint 07061301-device-account-scan-wiring — 设备账号扫描，独立于采集/触达服务的无障碍服务实例 -->
+        <service
+            android:name=".account.DeviceAccountScanService"
+            android:enabled="true"
+            android:exported="false"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/douyin_account_scan_config" />
+        </service>
+
     </application>
 
 </manifest>
