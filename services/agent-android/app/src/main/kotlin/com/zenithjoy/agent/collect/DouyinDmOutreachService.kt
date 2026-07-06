@@ -52,11 +52,20 @@ class DouyinDmOutreachService : AccessibilityService() {
     internal enum class State {
         IDLE,
         OPENING_PROFILE,
+        SEARCHING,
+        WARMING_UP,
         CLICKING_DM_ENTRY,
         TYPING_MESSAGE,
         SENDING,
         AWAITING_RECEIPT,
     }
+
+    /** 本次 lead 处理起始时间（Golden Path Step 2 开始计时，用于 90 秒超时熔断判定）。 */
+    private var leadStartedAtMs = 0L
+
+    /** 本机/本号历史关注/点赞动作时间戳（内存态，供每小时频控滑动窗口判定）。 */
+    private val followTimestampsMs = mutableListOf<Long>()
+    private val likeTimestampsMs = mutableListOf<Long>()
 
     /**
      * 三态送达判定结果，字符串取值必须与 Windows 路径
@@ -75,6 +84,19 @@ class DouyinDmOutreachService : AccessibilityService() {
             LIMITED -> "limited"
             FAILED -> "failed"
         }
+    }
+
+    /**
+     * 抖音号精确搜索定位主页判定结果。声明在类体（而非 companion object）内，与 [Outcome]
+     * 同理，使其可以按 `DouyinDmOutreachService.ProfileMatchResult` 从外部（含单测）直接引用
+     * ——嵌套在 companion object 内的类型需要 `Outer.Companion.Type` 才能限定访问，
+     * 不满足合同测试文件里 `DouyinDmOutreachService.ProfileMatchResult` 的直接引用写法。
+     * 禁止改名为 FOUND/MISS/DUPLICATE 等同义词——PRD 用词是"唯一匹配/零匹配/多匹配"。
+     */
+    internal enum class ProfileMatchResult {
+        UNIQUE,
+        NO_MATCH,
+        AMBIGUOUS,
     }
 
     private val taskReceiver = object : BroadcastReceiver() {
@@ -123,19 +145,39 @@ class DouyinDmOutreachService : AccessibilityService() {
         dmAssignmentId: String,
         accountLabel: String,
     ) {
+        // 本 sprint 起该字段承载 lead 的精确抖音号（供 Step 2 搜索定位使用），不再是跳转 URL——
+        // dm_assignments 派单 payload 字面定义就是"lead 的抖音号"（见 Golden Path Step 1）。
+        val targetDouyinId = profileUrl
         currentProfileUrl = profileUrl
         currentTaskId = taskId
         currentDmAssignmentId = dmAssignmentId
         currentAccountLabel = accountLabel
+        leadStartedAtMs = android.os.SystemClock.elapsedRealtime()
         state = State.OPENING_PROFILE
 
         scope.launch {
-            if (!openProfile(profileUrl)) {
+            if (!launchDouyinApp()) {
                 finishWithOutcome(dmEntryFound = false, sendConfirmed = false, errorCode = "OPEN_PROFILE_FAILED")
                 return@launch
             }
             delay(RandomDelay.sample(RandomDelay.NAV_MS))
+            if (checkLeadTimeout()) return@launch
 
+            // ── Step 2/3：抖音号精确搜索定位主页 ──────────────────────────────
+            state = State.SEARCHING
+            if (!locateProfileBySearch(targetDouyinId)) {
+                // locateProfileBySearch 内部已在 NO_MATCH/AMBIGUOUS/搜索失败时上报结果，
+                // 这里直接结束本次 lead 处理（不重试，转人工核实）。
+                return@launch
+            }
+            if (checkLeadTimeout()) return@launch
+
+            // ── Step 4/5：关注/点赞热身互动（受每小时频控约束） ─────────────────
+            state = State.WARMING_UP
+            performWarmup()
+            if (checkLeadTimeout()) return@launch
+
+            // ── Step 6 起：私信发送（复用既有已验收链路，不改动 classifyOutcome 判定标准）──
             val beforeOpenToken = fetchToken
             val root = awaitRootInActiveWindow() ?: run {
                 finishWithOutcome(dmEntryFound = false, sendConfirmed = false, errorCode = "NO_WINDOW")
@@ -214,21 +256,171 @@ class DouyinDmOutreachService : AccessibilityService() {
 
     // ── 步骤实现 ──────────────────────────────────────────────────────────────
 
-    private fun openProfile(profileUrl: String): Boolean {
+    private fun launchDouyinApp(): Boolean {
         return try {
             val pm = applicationContext.packageManager
             val launchIntent = pm.getLaunchIntentForPackage(DOUYIN_PKG) ?: return false
             launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            // profile_url 携带具体留言人主页地址；抖音 App 内跳转真机实现依赖 deep-link
-            // scheme（本 sprint 先用启动 App 兜底 + 无障碍树内搜索主页元素的方式推进，
-            // deep-link 精确跳转留给后续 sprint 按真机验证结果加厚）。
-            launchIntent.putExtra(EXTRA_PROFILE_URL, profileUrl)
             applicationContext.startActivity(launchIntent)
             true
         } catch (e: Exception) {
-            android.util.Log.e(TAG, "openProfile failed: ${e.message}")
+            android.util.Log.e(TAG, "launchDouyinApp failed: ${e.message}")
             false
         }
+    }
+
+    /** 90 秒超时熔断检查：命中即上报 timeout 结果并结束本次 lead 处理。 */
+    private fun checkLeadTimeout(): Boolean {
+        val elapsedMs = android.os.SystemClock.elapsedRealtime() - leadStartedAtMs
+        if (isLeadTimedOut(elapsedMs)) {
+            android.util.Log.w(TAG, "dm_outreach lead timed out taskId=$currentTaskId elapsedMs=$elapsedMs")
+            finishWithOutcome(dmEntryFound = false, sendConfirmed = false, errorCode = "LEAD_TIMEOUT")
+            return true
+        }
+        return false
+    }
+
+    /**
+     * Golden Path Step 2/3：输入目标抖音号（精确字符串）→ 精确匹配搜索结果 → 点击唯一匹配项。
+     * 复用 [DouyinCollectService] 已验证过的搜索框交互模式（content-desc "搜索" 优先，
+     * 找不到再退回猜测式 resource-id）。0/多个匹配都不重试，直接上报结果转人工核实。
+     * @return true = 已唯一定位到主页（点击后可继续后续流程）；false = 已上报结果，调用方应终止本次 lead。
+     */
+    private suspend fun locateProfileBySearch(targetDouyinId: String): Boolean {
+        val root = awaitRootInActiveWindow() ?: run {
+            finishWithOutcome(dmEntryFound = false, sendConfirmed = false, errorCode = "NO_WINDOW_BEFORE_SEARCH")
+            return false
+        }
+
+        val searchBtn = findNodeByContentDesc(root, "搜索") ?: findNodeByIds(
+            root,
+            "com.ss.android.ugc.aweme:id/search_btn",
+            "com.ss.android.ugc.aweme:id/iv_search",
+            "com.ss.android.ugc.aweme:id/action_search",
+        )
+        val searchPageRoot = if (searchBtn != null) {
+            searchBtn.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+            delay(RandomDelay.sample(RandomDelay.CLICK_MS))
+            awaitRootInActiveWindow(attempts = 4) ?: root
+        } else {
+            root
+        }
+
+        val searchInput = findNodeByIds(
+            searchPageRoot,
+            "com.ss.android.ugc.aweme:id/search_input",
+            "com.ss.android.ugc.aweme:id/search_edit_text",
+            "com.ss.android.ugc.aweme:id/et_search_kw",
+        ) ?: findFirstEditText(searchPageRoot)
+        if (searchInput == null) {
+            finishWithOutcome(dmEntryFound = false, sendConfirmed = false, errorCode = "NO_SEARCH_INPUT")
+            return false
+        }
+        searchInput.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+        val args = Bundle().apply {
+            putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, targetDouyinId)
+        }
+        searchInput.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, args)
+        delay(RandomDelay.sample(RandomDelay.CLICK_MS))
+
+        val submitRoot = awaitRootInActiveWindow(attempts = 4) ?: searchPageRoot
+        val confirmBtn = findNodeByIds(
+            submitRoot,
+            "com.ss.android.ugc.aweme:id/search_confirm",
+            "com.ss.android.ugc.aweme:id/btn_search",
+        )
+        if (confirmBtn != null) {
+            confirmBtn.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+        } else {
+            findFirstEditText(submitRoot)?.performAction(AccessibilityNodeInfo.AccessibilityAction.ACTION_IME_ENTER.id)
+        }
+        delay(RandomDelay.sample(RandomDelay.SEARCH_MS))
+
+        val resultsRoot = awaitRootInActiveWindow() ?: run {
+            finishWithOutcome(dmEntryFound = false, sendConfirmed = false, errorCode = "NO_SEARCH_RESULTS_WINDOW")
+            return false
+        }
+        val candidateTexts = collectAllNodeTexts(resultsRoot)
+        when (matchProfileByDouyinId(candidateTexts, targetDouyinId)) {
+            ProfileMatchResult.NO_MATCH -> {
+                finishWithOutcome(dmEntryFound = false, sendConfirmed = false, errorCode = "NO_MATCH")
+                return false
+            }
+            ProfileMatchResult.AMBIGUOUS -> {
+                finishWithOutcome(dmEntryFound = false, sendConfirmed = false, errorCode = "AMBIGUOUS")
+                return false
+            }
+            ProfileMatchResult.UNIQUE -> {
+                val matchNode = findNodeByText(resultsRoot, targetDouyinId) ?: run {
+                    finishWithOutcome(dmEntryFound = false, sendConfirmed = false, errorCode = "NO_MATCH")
+                    return false
+                }
+                val beforeClickToken = fetchToken
+                matchNode.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+                delay(RandomDelay.sample(RandomDelay.NAV_MS))
+                fetchToken = SnapshotDiscipline.nextFetchToken(beforeClickToken)
+                SnapshotDiscipline.requireFresh(beforeClickToken, fetchToken)
+                return true
+            }
+        }
+    }
+
+    /**
+     * Golden Path Step 4/5：关注/点赞热身互动。按钮态判断（要不要点）与每小时频控（能不能点）
+     * 相互独立、都要过才实际点击；找不到按钮/触发频控都尽力而为跳过，不阻塞主流程。
+     */
+    private suspend fun performWarmup() {
+        val root = awaitRootInActiveWindow() ?: return
+
+        val followBtn = findNodeByContentDesc(root, "关注") ?: findNodeByIds(
+            root,
+            "com.ss.android.ugc.aweme:id/follow_btn",
+            "com.ss.android.ugc.aweme:id/tv_follow",
+        )
+        val followText = followBtn?.text?.toString() ?: followBtn?.contentDescription?.toString()
+        val nowForFollow = System.currentTimeMillis()
+        if (needsFollowClick(followText) && !isFollowRateLimited(followTimestampsMs, nowForFollow)) {
+            followBtn?.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+            followTimestampsMs.add(nowForFollow)
+            delay(RandomDelay.sample(RandomDelay.CLICK_MS))
+        }
+
+        val postFollowRoot = awaitRootInActiveWindow() ?: root
+        val likeBtn = findNodeByContentDesc(postFollowRoot, "点赞") ?: findNodeByIds(
+            postFollowRoot,
+            "com.ss.android.ugc.aweme:id/like_btn",
+            "com.ss.android.ugc.aweme:id/digg_view",
+        )
+        val likeText = likeBtn?.text?.toString() ?: likeBtn?.contentDescription?.toString()
+        val nowForLike = System.currentTimeMillis()
+        if (needsLikeClick(likeText) && !isLikeRateLimited(likeTimestampsMs, nowForLike)) {
+            likeBtn?.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+            likeTimestampsMs.add(nowForLike)
+            delay(RandomDelay.sample(RandomDelay.CLICK_MS))
+        }
+    }
+
+    private fun collectAllNodeTexts(root: AccessibilityNodeInfo): List<String> {
+        val texts = mutableListOf<String>()
+        val queue = ArrayDeque<AccessibilityNodeInfo>()
+        queue.add(root)
+        while (queue.isNotEmpty()) {
+            val node = queue.removeFirst()
+            node.text?.toString()?.let { if (it.isNotBlank()) texts.add(it) }
+            for (i in 0 until node.childCount) node.getChild(i)?.let { queue.add(it) }
+        }
+        return texts
+    }
+
+    private fun findNodeByText(root: AccessibilityNodeInfo, text: String): AccessibilityNodeInfo? {
+        val queue = ArrayDeque<AccessibilityNodeInfo>()
+        queue.add(root)
+        while (queue.isNotEmpty()) {
+            val node = queue.removeFirst()
+            if (node.text?.toString() == text) return node
+            for (i in 0 until node.childCount) node.getChild(i)?.let { queue.add(it) }
+        }
+        return null
     }
 
     /**
@@ -352,6 +544,69 @@ class DouyinDmOutreachService : AccessibilityService() {
                 !sendConfirmed -> Outcome.FAILED
                 else -> Outcome.SENT
             }
+        }
+
+        // ── Sprint 07060927 — 抖音号搜索定位 + 关注点赞热身互动纯函数 ─────────────
+
+        /**
+         * 抖音号精确匹配：搜索结果列表里必须与目标抖音号完整字符串相等（禁止用 contains/子串匹配）。
+         * 0 个匹配 -> NO_MATCH；恰好 1 个匹配 -> UNIQUE；>=2 个匹配（同名歧义） -> AMBIGUOUS。
+         * 两种非 UNIQUE 情况都不重试，交由上层转人工核实（本函数是纯判定，不含重试逻辑）。
+         */
+        internal fun matchProfileByDouyinId(searchResults: List<String>, targetDouyinId: String): ProfileMatchResult {
+            val matchCount = searchResults.count { it == targetDouyinId }
+            return when {
+                matchCount == 0 -> ProfileMatchResult.NO_MATCH
+                matchCount == 1 -> ProfileMatchResult.UNIQUE
+                else -> ProfileMatchResult.AMBIGUOUS
+            }
+        }
+
+        /**
+         * 关注按钮态判断：文本为"关注"才需要点击；"已关注"/找不到按钮（null，尽力而为跳过，不阻塞）一律不点击。
+         */
+        internal fun needsFollowClick(buttonText: String?): Boolean = buttonText == "关注"
+
+        /**
+         * 点赞按钮态判断：文本为"点赞"才需要点击；"已赞"/找不到按钮（null，无作品/仅关注可见/尽力而为跳过）一律不点击。
+         */
+        internal fun needsLikeClick(buttonText: String?): Boolean = buttonText == "点赞"
+
+        /**
+         * 单个 lead 从 Step 2 起总耗时超过 [limitMs]（默认 90 秒）判定为超时熔断，标记 timeout（区别于 failed）。
+         * PRD 用词"超过"= 严格大于，恰好等于阈值的边界值不算超时。
+         */
+        internal fun isLeadTimedOut(elapsedMs: Long, limitMs: Long = 90_000L): Boolean = elapsedMs > limitMs
+
+        /**
+         * 关注每小时频控（PRD NFR：关注 <=10 次/小时，1 小时滑动窗口，独立于既有私信频控）。
+         * 统计 (nowMs - windowMs, nowMs] 窗口内历史关注时间戳数量，达到/超过 [limit] 即判定限流
+         * （本次动作应跳过，不阻塞、不重试、不排队）；窗口外的历史时间戳不计入。
+         */
+        internal fun isFollowRateLimited(
+            followTimestampsMs: List<Long>,
+            nowMs: Long,
+            limit: Int = 10,
+            windowMs: Long = 3_600_000L,
+        ): Boolean {
+            val windowStart = nowMs - windowMs
+            val countInWindow = followTimestampsMs.count { it > windowStart && it <= nowMs }
+            return countInWindow >= limit
+        }
+
+        /**
+         * 点赞每小时频控（PRD NFR：点赞 <=15 次/小时，1 小时滑动窗口，独立于既有私信频控）。
+         * 统计规则同 [isFollowRateLimited]，窗口外历史时间戳不计入。
+         */
+        internal fun isLikeRateLimited(
+            likeTimestampsMs: List<Long>,
+            nowMs: Long,
+            limit: Int = 15,
+            windowMs: Long = 3_600_000L,
+        ): Boolean {
+            val windowStart = nowMs - windowMs
+            val countInWindow = likeTimestampsMs.count { it > windowStart && it <= nowMs }
+            return countInWindow >= limit
         }
 
         fun dispatchTask(

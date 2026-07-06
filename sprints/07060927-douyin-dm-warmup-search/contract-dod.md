@@ -1,6 +1,3 @@
-contract_branch: cp-07060926-douyin-dm-warmup-search
-sprint_dir: sprints/07060927-douyin-dm-warmup-search
-
 ---
 skeleton: false
 journey_type: agent_remote
@@ -37,15 +34,15 @@ journey_type: agent_remote
 ## BEHAVIOR 条目（manual:bash，Android gradle 单测真跑，非 mock）
 
 - [ ] [BEHAVIOR] 抖音号精确匹配——唯一匹配返回 UNIQUE（Golden Path Step 2）
-  Test: manual:bash -c 'set -e; cd services/agent-android; [ -n "${ANDROID_HOME:-}" ] || { echo "SKIP(no ANDROID_HOME) — logic-done-pending"; exit 0; }; gradle :app:testDebugUnitTest --tests "*DouyinDmWarmupSearchLogicTest*" --rerun; XML=app/build/test-results/testDebugUnitTest/TEST-com.zenithjoy.agent.collect.DouyinDmWarmupSearchLogicTest.xml; grep -q "failures=\"0\" errors=\"0\"" "$XML" || { echo FAIL; exit 1; }; grep -qF "matches exactly one profile by exact douyin id -&gt; UNIQUE" "$XML" || grep -qF "matches exactly one profile by exact douyin id -> UNIQUE" "$XML" || { echo "FAIL: testcase missing"; exit 1; }; echo OK'
+  Test: manual:bash -c 'set -e; cd services/agent-android; [ -n "${ANDROID_HOME:-}" ] || { echo "SKIP(no ANDROID_HOME) — logic-done-pending"; exit 0; }; gradle :app:testDebugUnitTest --tests "*DouyinDmWarmupSearchLogicTest*" --rerun; XML=app/build/test-results/testDebugUnitTest/TEST-com.zenithjoy.agent.collect.DouyinDmWarmupSearchLogicTest.xml; grep -q "failures=\"0\" errors=\"0\"" "$XML" || { echo FAIL; exit 1; }; grep -qF "matches exactly one profile by exact douyin id yields UNIQUE" "$XML" || { echo "FAIL: testcase missing"; exit 1; }; echo OK'
   期望: OK
 
 - [ ] [BEHAVIOR] 抖音号精确匹配——零匹配返回 NO_MATCH，不重试转人工核实（Golden Path Step 3）
-  Test: manual:bash -c 'set -e; cd services/agent-android; [ -n "${ANDROID_HOME:-}" ] || { echo "SKIP(no ANDROID_HOME) — logic-done-pending"; exit 0; }; gradle :app:testDebugUnitTest --tests "*DouyinDmWarmupSearchLogicTest*" --rerun; XML=app/build/test-results/testDebugUnitTest/TEST-com.zenithjoy.agent.collect.DouyinDmWarmupSearchLogicTest.xml; grep -q "failures=\"0\" errors=\"0\"" "$XML" || { echo FAIL; exit 1; }; grep -qF "zero matches -&gt; NO_MATCH" "$XML" || grep -qF "zero matches -> NO_MATCH" "$XML" || { echo "FAIL: testcase missing"; exit 1; }; grep -qF "empty search results -&gt; NO_MATCH" "$XML" || grep -qF "empty search results -> NO_MATCH" "$XML" || { echo "FAIL: testcase missing"; exit 1; }; echo OK'
+  Test: manual:bash -c 'set -e; cd services/agent-android; [ -n "${ANDROID_HOME:-}" ] || { echo "SKIP(no ANDROID_HOME) — logic-done-pending"; exit 0; }; gradle :app:testDebugUnitTest --tests "*DouyinDmWarmupSearchLogicTest*" --rerun; XML=app/build/test-results/testDebugUnitTest/TEST-com.zenithjoy.agent.collect.DouyinDmWarmupSearchLogicTest.xml; grep -q "failures=\"0\" errors=\"0\"" "$XML" || { echo FAIL; exit 1; }; grep -qF "zero matches yields NO_MATCH" "$XML" || { echo "FAIL: testcase missing"; exit 1; }; grep -qF "empty search results yields NO_MATCH" "$XML" || { echo "FAIL: testcase missing"; exit 1; }; echo OK'
   期望: OK
 
 - [ ] [BEHAVIOR] 抖音号精确匹配——多个同名结果返回 AMBIGUOUS，不重试转人工核实（Golden Path Step 3）
-  Test: manual:bash -c 'set -e; cd services/agent-android; [ -n "${ANDROID_HOME:-}" ] || { echo "SKIP(no ANDROID_HOME) — logic-done-pending"; exit 0; }; gradle :app:testDebugUnitTest --tests "*DouyinDmWarmupSearchLogicTest*" --rerun; XML=app/build/test-results/testDebugUnitTest/TEST-com.zenithjoy.agent.collect.DouyinDmWarmupSearchLogicTest.xml; grep -q "failures=\"0\" errors=\"0\"" "$XML" || { echo FAIL; exit 1; }; grep -qF "multiple identical matches -&gt; AMBIGUOUS" "$XML" || grep -qF "multiple identical matches -> AMBIGUOUS" "$XML" || { echo "FAIL: testcase missing"; exit 1; }; echo OK'
+  Test: manual:bash -c 'set -e; cd services/agent-android; [ -n "${ANDROID_HOME:-}" ] || { echo "SKIP(no ANDROID_HOME) — logic-done-pending"; exit 0; }; gradle :app:testDebugUnitTest --tests "*DouyinDmWarmupSearchLogicTest*" --rerun; XML=app/build/test-results/testDebugUnitTest/TEST-com.zenithjoy.agent.collect.DouyinDmWarmupSearchLogicTest.xml; grep -q "failures=\"0\" errors=\"0\"" "$XML" || { echo FAIL; exit 1; }; grep -qF "multiple identical matches yields AMBIGUOUS" "$XML" || { echo "FAIL: testcase missing"; exit 1; }; echo OK'
   期望: OK
 
 - [ ] [BEHAVIOR] 关注按钮态判断——"关注"点击/"已关注"跳过/找不到按钮尽力而为跳过（Golden Path Step 4）
