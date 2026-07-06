@@ -2417,10 +2417,9 @@ def read_chat_bubbles(mw: Any) -> List[Dict[str, str]]:
             verdict = (_row_is_outgoing_by_pixels(cap, r.top, r.bottom,
                                                   p_left, p_right)
                        if r is not None else None)
-            if verdict is None:
-                direction = "outgoing" if _matches_any_sent(nm) else "incoming"
-            else:
-                direction = "outgoing" if verdict else "incoming"
+            # v1.0.109 兜底：verdict=False（有效像素但非绿，如渲染未就绪）时仍查
+            # 已发送历史——刚 DELIVERED 的气泡像素可能还是背景色，但文本在 _SENT_TEXTS。
+            direction = "outgoing" if (verdict or _matches_any_sent(nm)) else "incoming"
             out_bubbles.append({"text": nm, "direction": direction})
         return out_bubbles
     # ── legacy 回退：Text 几何扫描 ────────────────────────────────────────────
