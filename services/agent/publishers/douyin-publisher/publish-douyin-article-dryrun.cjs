@@ -93,7 +93,11 @@ async function publishDouyinArticleDryRun(queueFilePath) {
 
   if (cookiesJson) {
     _log('\n[DY-ARTICLE-DRY] Cookie 注入模式（CI/GitHub Actions）');
-    const cookies = JSON.parse(cookiesJson);
+    // 兼容两种格式（对齐 publish-douyin-article.cjs 等兄弟脚本）：
+    //   裸 cookie 数组（旧 DOUYIN_COOKIES）/ Playwright storageState 对象（DOUYIN_OPERATOR_SESSION，#728 起）。
+    // 只认数组会在 addCookies 抛 "expected array, got object"（0610 起静默红的根因）。
+    const _parsed = JSON.parse(cookiesJson);
+    const cookies = Array.isArray(_parsed) ? _parsed : (_parsed.cookies ?? []);
     const executablePath = getPwChromium();
     if (executablePath) _log('[DY-ARTICLE-DRY] Chromium:', executablePath);
     browser = await chromium.launch({
@@ -320,5 +324,10 @@ if (require.main === module) {
   }
   publishDouyinArticleDryRun(queueFilePath)
     .then(() => process.exit(0))
-    .catch(() => process.exit(1));
+    .catch((err) => {
+      // 吞错静默 exit 会让 CI 无从排查（0610-0706 静默红一个月的教训）——必须打 stack
+      console.error('[DY-ARTICLE-DRY] 未捕获异常:', (err && err.stack) || err);
+      console.log(JSON.stringify({ ok: false, error: String((err && err.message) || err) }));
+      process.exit(1);
+    });
 }
