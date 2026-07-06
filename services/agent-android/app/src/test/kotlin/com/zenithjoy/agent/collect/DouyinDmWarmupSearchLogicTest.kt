@@ -12,7 +12,7 @@ import org.junit.Test
  * 可直接用 JUnit 在 JVM 上跑，替换 `DouyinDmOutreachService.openProfile()` 前先落地判定标准：
  *
  * 1. `matchProfileByDouyinId` — 抖音号精确搜索定位主页（唯一匹配/零匹配/多匹配歧义）
- * 2. `needsFollowClick` / `needsLikeClick` — 关注/点赞按钮态判断（找不到按钮尽力而为跳过）
+ * 2. `needsFollowClick`(认"关注"/"回关") / `needsVideoLikeClick`(视频页红心 content-desc 含"未点赞"才点) — 关注/点赞按钮态判断（找不到按钮尽力而为跳过）
  * 3. `isLeadTimedOut` — 单 lead 90 秒超时熔断（区别于 failed）
  * 4. `isFollowRateLimited` / `isLikeRateLimited` — 关注/点赞每小时频控（1 小时滑动窗口，
  *    独立于既有 `classifyOutcome` 的私信频控——PRD NFR"关注 ≤10 次/小时，点赞 ≤15 次/小时"）
@@ -23,7 +23,7 @@ import org.junit.Test
  *   - `internal enum class ProfileMatchResult { UNIQUE, NO_MATCH, AMBIGUOUS }`
  *   - `internal fun matchProfileByDouyinId(searchResults: List<String>, targetDouyinId: String): ProfileMatchResult`
  *   - `internal fun needsFollowClick(buttonText: String?): Boolean`
- *   - `internal fun needsLikeClick(buttonText: String?): Boolean`
+ *   - `internal fun needsVideoLikeClick(likeButtonDesc: String?): Boolean`
  *   - `internal fun isLeadTimedOut(elapsedMs: Long, limitMs: Long = 90_000L): Boolean`
  *   - `internal fun isFollowRateLimited(followTimestampsMs: List<Long>, nowMs: Long, limit: Int = 10, windowMs: Long = 3_600_000L): Boolean`
  *   - `internal fun isLikeRateLimited(likeTimestampsMs: List<Long>, nowMs: Long, limit: Int = 15, windowMs: Long = 3_600_000L): Boolean`
@@ -140,6 +140,39 @@ class DouyinDmWarmupSearchLogicTest {
         // (content-desc="回关" class=Button clickable=true)，不是"关注"。这也是"未关注→需关注"的
         // 动作态，必须点击，否则 warmup 关注在整类回关场景永远漏点(只认"关注"二字会漏掉)。
         assertTrue(DouyinDmOutreachService.needsFollowClick("回关"))
+    }
+
+    @Test
+    fun `status banner 她关注了你 is NOT a follow button and does not need click`() {
+        // 真机(抖音39.4.0 w9/v1)ground truth 纠偏：content-desc="她关注了你,按钮" 的 clickable
+        // FrameLayout 是"更多/管理"横幅(点它弹 分享名片/举报/拉黑/取消关注 菜单)，【不是】关注按钮；
+        // 真正的关注按钮是另一个 clickable TextView(文案被包成 PLACEHOLDER1<关系词>PLACEHOLDER2)。
+        // 故"(她/他/TA)关注了你"这种状态横幅文案绝不能判成需点击。
+        assertFalse(DouyinDmOutreachService.needsFollowClick("她关注了你,按钮"))
+        assertFalse(DouyinDmOutreachService.needsFollowClick("他关注了你,按钮"))
+    }
+
+    @Test
+    fun `placeholder-wrapped 关注 (stranger real button) needs click`() {
+        // 真机实测：抖音把关注按钮文案包成 "PLACEHOLDER1关注PLACEHOLDER2"(占位符=图标/箭头 span)，
+        // 精确匹配"关注"会漏——去壳后应识别为需关注。
+        assertTrue(DouyinDmOutreachService.needsFollowClick("PLACEHOLDER1关注PLACEHOLDER2"))
+    }
+
+    @Test
+    fun `placeholder-wrapped 回关 (follow-back real button) needs click`() {
+        assertTrue(DouyinDmOutreachService.needsFollowClick("PLACEHOLDER1回关PLACEHOLDER2"))
+    }
+
+    @Test
+    fun `placeholder-wrapped 互相关注 (already mutual) does not need click`() {
+        // 真机 w9/v1：两个测试号真正的关注按钮都显示"PLACEHOLDER1互相关注PLACEHOLDER2"=已互关，不点
+        assertFalse(DouyinDmOutreachService.needsFollowClick("PLACEHOLDER1互相关注PLACEHOLDER2"))
+    }
+
+    @Test
+    fun `follow button text 互相关注 does not need click`() {
+        assertFalse(DouyinDmOutreachService.needsFollowClick("互相关注"))
     }
 
     @Test

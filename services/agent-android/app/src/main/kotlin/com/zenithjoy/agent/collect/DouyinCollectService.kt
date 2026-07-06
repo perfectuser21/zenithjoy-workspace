@@ -39,6 +39,9 @@ class DouyinCollectService : AccessibilityService() {
     private var currentKeyword = ""
     private var currentTaskId = ""
     private var searchTriggeredAtMs = 0L
+    // A2 重入闸：评论面板每个无障碍事件都会 launch 一个提取协程，state 切走前已排队多个，
+    // 导致 reportResult 被调 7~12 次、onResult 重复上报。用一次性闩保证一个任务只上报一次。
+    @Volatile private var resultReported = false
 
     internal enum class State {
         IDLE,
@@ -104,6 +107,7 @@ class DouyinCollectService : AccessibilityService() {
     private fun startCollect(keyword: String, taskId: String) {
         currentKeyword = keyword
         currentTaskId = taskId
+        resultReported = false
         state = State.OPENING_DOUYIN
         // 与账号扫描服务共享的全局互斥标记（Sprint 07061301-device-account-scan-wiring）：
         // 采集任务运行期间置 busy=true，扫描服务据此在本轮跳过，避免共用微信/抖音窗口冲突。
@@ -342,6 +346,7 @@ class DouyinCollectService : AccessibilityService() {
     }
 
     private fun attemptExtractComments() {
+        if (resultReported) return // A2：已上报则不再重复提取/上报
         state = State.EXTRACTING_COMMENTS
         val root = rootInActiveWindow
         if (root == null) {
@@ -368,6 +373,8 @@ class DouyinCollectService : AccessibilityService() {
     }
 
     private fun reportResult(comments: List<CommentEntry>) {
+        if (resultReported) return // A2：一个任务只上报一次
+        resultReported = true
         val result = CollectResult(
             ok = comments.isNotEmpty(),
             keyword = currentKeyword,
@@ -381,6 +388,8 @@ class DouyinCollectService : AccessibilityService() {
     }
 
     private fun finishWithError(code: String) {
+        if (resultReported) return // A2：已上报(成功或失败)则不再重复
+        resultReported = true
         android.util.Log.w(TAG, "collect error: $code keyword=$currentKeyword")
         val result = CollectResult(ok = false, keyword = currentKeyword, error = code)
         state = State.IDLE
