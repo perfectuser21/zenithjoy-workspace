@@ -132,10 +132,20 @@ def main() -> int:
 
         marker = f"[bubble-gate] {int(time.time())}"
         result["marker"] = marker
+        # DEBUG v1.0.109: 发送前快照，确认 sent_texts 加载
+        print(f"[bubble-gate-dbg] sent_texts_before={len(listen_chat._SENT_TEXTS)}", flush=True)
         if not listen_chat.reply_in_chat(mw, item, marker, sender=TARGET):
             result["err"] = "reply_in_chat 发送 marker 失败（未 DELIVERED）"
             _write(result)
             return 1
+
+        # DEBUG v1.0.109: 发送后确认 marker 进入 _SENT_TEXTS
+        sent_after = len(listen_chat._SENT_TEXTS)
+        matches_after = listen_chat._matches_any_sent(marker)
+        print(f"[bubble-gate-dbg] sent_texts_after={sent_after} matches_sent={matches_after}", flush=True)
+        # DEBUG v1.0.109: 像素捕获是否可用
+        cap_test = listen_chat._capture_window_pixels(mw)
+        print(f"[bubble-gate-dbg] cap_available={cap_test is not None}", flush=True)
 
         # 发送把已发送文本记入 _SENT_TEXTS（判向锚点）；重新打开会话读气泡
         if not listen_chat._open_chat(mw, item, TARGET):
@@ -154,6 +164,8 @@ def main() -> int:
             {"text": b["text"][:40], "direction": b["direction"]}
             for b in bubbles[-5:]
         ]
+        # DEBUG v1.0.109: 打印尾部气泡方向，诊断判向失灵
+        print(f"[bubble-gate-dbg] bubbles_tail={json.dumps(result['bubbles_tail'], ensure_ascii=False)}", flush=True)
         if not bubbles:
             result["err"] = ("read_chat_bubbles 在真微信上读到 0 条气泡"
                              "（= 2026-07-02 连发5条只回1条事故的根因回归）")
@@ -163,6 +175,39 @@ def main() -> int:
             if marker in (b.get("text") or ""):
                 result["marker_found"] = True
                 result["marker_outgoing"] = b.get("direction") == "outgoing"
+                # DEBUG v1.0.109: 打印 marker 气泡的像素判向原始结果
+                from pywinauto import Desktop
+                _mw2 = _find_mmui_window(Desktop)
+                if _mw2 is not None:
+                    from pywinauto.application import Application
+                    try:
+                        from pywinauto.base_wrapper import BaseWrapper
+                        pass
+                    except Exception:
+                        pass
+                    try:
+                        _lrect_dbg, _items_dbg = listen_chat._read_msg_list_items(_mw2)
+                        _cap_dbg = listen_chat._capture_window_pixels(_mw2)
+                        for _it in _items_dbg:
+                            try:
+                                _nm = (_it.element_info.name or "").strip()
+                                if marker in _nm:
+                                    _r = _it.rectangle()
+                                    _p_left = _lrect_dbg.left if _lrect_dbg else _mw2.rectangle().left
+                                    _p_right = _lrect_dbg.right if _lrect_dbg else _mw2.rectangle().right
+                                    _px_verdict = listen_chat._row_is_outgoing_by_pixels(_cap_dbg, _r.top, _r.bottom, _p_left, _p_right)
+                                    _sent_match = listen_chat._matches_any_sent(_nm)
+                                    print(f"[bubble-gate-dbg] marker_bubble rect=({_r.left},{_r.top},{_r.right},{_r.bottom}) px_verdict={_px_verdict} sent_match={_sent_match}", flush=True)
+                                    if _lrect_dbg:
+                                        print(f"[bubble-gate-dbg] lrect=({_lrect_dbg.left},{_lrect_dbg.top},{_lrect_dbg.right},{_lrect_dbg.bottom})", flush=True)
+                                    _wr = _mw2.rectangle()
+                                    print(f"[bubble-gate-dbg] wr=({_wr.left},{_wr.top},{_wr.right},{_wr.bottom})", flush=True)
+                                    if _cap_dbg:
+                                        print(f"[bubble-gate-dbg] cap_size=({_cap_dbg._w},{_cap_dbg._h})", flush=True)
+                            except Exception as _de:
+                                print(f"[bubble-gate-dbg] diag_err={_de}", flush=True)
+                    except Exception as _de2:
+                        print(f"[bubble-gate-dbg] diag_outer_err={_de2}", flush=True)
                 break
         if not result["marker_found"]:
             result["err"] = "刚发送的 marker 没出现在气泡里（读取不含最新消息）"
