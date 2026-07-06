@@ -335,13 +335,16 @@ class DouyinDmOutreachService : AccessibilityService() {
         delay(RandomDelay.sample(RandomDelay.CLICK_MS))
 
         val submitRoot = awaitRootInActiveWindow(attempts = 4) ?: searchPageRoot
-        val confirmBtn = findNodeByIds(
+        // 真机(39.4.0)实测：IME_ENTER 提交常常不触发搜索(结果页空、连结果 tab 都不出)，必须点
+        // 右上角"搜索"按钮才真正执行。而该按钮是 clickable=false 的 TextView(content-desc="搜索")——
+        // 无障碍 ACTION_CLICK 对它静默无效，只有坐标点它的 bounds 中心才生效(同抖音大量不可点 TextView)。
+        val searchConfirm = findNodeByIds(
             submitRoot,
             "com.ss.android.ugc.aweme:id/search_confirm",
             "com.ss.android.ugc.aweme:id/btn_search",
-        )
-        if (confirmBtn != null) {
-            confirmBtn.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+        ) ?: findNodeByContentDesc(submitRoot, "搜索") ?: findNodeByText(submitRoot, "搜索")
+        if (searchConfirm != null) {
+            tapNodeCenter(searchConfirm)
         } else {
             findFirstEditText(submitRoot)?.performAction(AccessibilityNodeInfo.AccessibilityAction.ACTION_IME_ENTER.id)
         }
@@ -356,10 +359,14 @@ class DouyinDmOutreachService : AccessibilityService() {
         // 恒失败，还会被搜索框回显的裸 id 骗成假 UNIQUE。改为人手操作路径：
         //   ① 切"用户"tab(标签在树里可点) → ② 坐标盲点顶部结果(精确抖音号匹配永远排第一)
         //   → ③ 进主页后页面【进树】，用 verifyProfileMatchesDouyinId 验证点对了人(点错=中止，不误发)。
+        // "用户"tab 同样是 clickable=false 的 Button——坐标点它的 bounds 中心才生效。
         findNodeByText(resultsRoot, "用户")?.let { tab ->
-            (findClickableSelfOrAncestor(tab) ?: tab).performAction(AccessibilityNodeInfo.ACTION_CLICK)
+            tapNodeCenter(tab)
             delay(RandomDelay.sample(RandomDelay.CLICK_MS))
         }
+        // 坐标盲点前等结果列表渲染完(用户 tab 结果不在树里，但页面绘制需要时间；点太早会点到空白)。
+        awaitRootInActiveWindow(attempts = 6)
+        delay(RandomDelay.sample(RandomDelay.SEARCH_MS))
         val beforeProfileToken = fetchToken
         tapTopUserResult()
         delay(RandomDelay.sample(RandomDelay.NAV_MS))
@@ -383,6 +390,13 @@ class DouyinDmOutreachService : AccessibilityService() {
     private fun tapTopUserResult() {
         val m = resources.displayMetrics
         tapAtCoordinate(m.widthPixels * 0.44f, m.heightPixels * 0.21f)
+    }
+
+    /** 坐标点节点 bounds 中心。用于抖音那些 clickable=false 的 TextView/Button(ACTION_CLICK 无效)。 */
+    private fun tapNodeCenter(node: AccessibilityNodeInfo) {
+        val r = android.graphics.Rect()
+        node.getBoundsInScreen(r)
+        tapAtCoordinate(r.exactCenterX(), r.exactCenterY())
     }
 
     private fun tapAtCoordinate(x: Float, y: Float) {
