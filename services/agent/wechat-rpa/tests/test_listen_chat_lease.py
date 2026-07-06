@@ -218,3 +218,66 @@ def test_run_real_listen_uses_reply_in_chat_with_lease():
         "run_real_listen 必须调用 reply_in_chat_with_lease 包装函数（接入桌面仲裁层），"
         "不能直接裸调 reply_in_chat"
     )
+
+
+# ─── 1.0.109: 租约 IPC 地址改指本机 local-discovery（ZENITHJOY_LOCAL_PORT）────────
+# 桌面租约 Broker 运行在同一 Win 桌面机的 local-discovery 进程（127.0.0.1:58432）。
+# 原实现误把 middleware_url（远程中台地址）当 IPC 基址；容器内 localhost 不通宿主。
+# 以下测试在修复前必须失败：acquire/release 无参数调用会抛 TypeError。
+
+
+import os as _os  # noqa: E402  (已在顶层 import，这里是避免名字冲突的局部引用)
+
+
+def test_acquire_uses_local_discovery_default_port(capsys):
+    """acquire() 无参调用，必须向 127.0.0.1:58432 发请求（默认端口）。"""
+    captured_urls: list = []
+
+    def _capture(req, timeout=None):
+        captured_urls.append(req.full_url)
+        return _make_http_response({"granted": True, "lease_id": "ld-001"})
+
+    with patch("urllib.request.urlopen", side_effect=_capture):
+        result = lc.desktop_lease_acquire()
+
+    assert result is True
+    assert len(captured_urls) == 1
+    assert "127.0.0.1:58432" in captured_urls[0], (
+        f"acquire URL 必须走 127.0.0.1:58432（local-discovery），实际: {captured_urls[0]}"
+    )
+
+
+def test_release_uses_local_discovery_default_port():
+    """release() 无参调用，必须向 127.0.0.1:58432 发请求（默认端口）。"""
+    captured_urls: list = []
+    lc._current_lease_id = "lease-for-url-check"
+
+    def _capture(req, timeout=None):
+        captured_urls.append(req.full_url)
+        return _make_http_response({})
+
+    with patch("urllib.request.urlopen", side_effect=_capture):
+        lc.desktop_lease_release()
+
+    assert len(captured_urls) == 1
+    assert "127.0.0.1:58432" in captured_urls[0], (
+        f"release URL 必须走 127.0.0.1:58432（local-discovery），实际: {captured_urls[0]}"
+    )
+
+
+def test_acquire_respects_zenithjoy_local_port_env(capsys):
+    """ZENITHJOY_LOCAL_PORT 环境变量可改写端口（优先于默认 58432）。"""
+    captured_urls: list = []
+
+    def _capture(req, timeout=None):
+        captured_urls.append(req.full_url)
+        return _make_http_response({"granted": True, "lease_id": "ld-002"})
+
+    with patch.dict(_os.environ, {"ZENITHJOY_LOCAL_PORT": "59999"}), \
+         patch("urllib.request.urlopen", side_effect=_capture):
+        lc.desktop_lease_acquire()
+
+    assert len(captured_urls) == 1
+    assert "127.0.0.1:59999" in captured_urls[0], (
+        f"ZENITHJOY_LOCAL_PORT=59999 时 URL 应含 127.0.0.1:59999，实际: {captured_urls[0]}"
+    )
