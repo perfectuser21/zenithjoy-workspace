@@ -82,6 +82,35 @@ describe('cs-account-config-store — 按 wechat_id 隔离', () => {
     expect(c?.daily_limit).toBe(0);
   });
 
+  it('getCSConfig 响应含 takeover_mode/blacklist（agent-config 端点必须透传这两字段）', async () => {
+    await saveCSConfig('wxid_takeover', { persona: personaOf('小苏') });
+    const c = await getCSConfig('wxid_takeover');
+    // takeover_mode 默认 'blacklist'（新行无配时全接管）
+    expect(c?.takeover_mode).toBe('blacklist');
+    // blacklist 默认空数组
+    expect(c?.blacklist).toEqual([]);
+  });
+
+  it('saveCSConfig 可写入并读回 takeover_mode/blacklist', async () => {
+    await saveCSConfig('wxid_bl', {
+      persona: personaOf('天下第一'),
+      takeover_mode: 'whitelist',
+      blacklist: ['坏客户A', '坏客户B'],
+    });
+    const c = await getCSConfig('wxid_bl');
+    expect(c?.takeover_mode).toBe('whitelist');
+    expect(c?.blacklist).toEqual(['坏客户A', '坏客户B']);
+  });
+
+  it('blacklist 主模型：行级 merge —— 只改 blacklist 不影响其他字段', async () => {
+    await saveCSConfig('wxid_m', { persona: personaOf('萌萌'), takeover_mode: 'blacklist', blacklist: [] });
+    await saveCSConfig('wxid_m', { blacklist: ['新客户X'] });
+    const c = await getCSConfig('wxid_m');
+    expect(c?.persona.self_name).toBe('萌萌');
+    expect(c?.takeover_mode).toBe('blacklist');
+    expect(c?.blacklist).toEqual(['新客户X']);
+  });
+
   it('写一行不覆盖另一行', async () => {
     await saveCSConfig('wxid_a', { persona: personaOf('萌萌'), whitelist: ['客户甲'] });
     await saveCSConfig('wxid_b', { persona: personaOf('天下第一'), auto_agent_enabled: true });

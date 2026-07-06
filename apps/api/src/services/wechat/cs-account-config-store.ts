@@ -36,6 +36,14 @@ export interface CSAccountConfig {
   business_hours_end: string;
   key_contact_wechat: string;
   whitelist: string[];
+  /**
+   * 接管模式（migration 20260625_100000）：
+   *   'blacklist'  = 默认全接管，仅排除 blacklist 内的人（新接入客服机默认）
+   *   'whitelist'  = 仅接管 whitelist 内的人（存量客服机兼容迁移默认）
+   */
+  takeover_mode: 'blacklist' | 'whitelist';
+  /** 黑名单昵称数组（blacklist 模式下 should_reply = sender∉blacklist）。 */
+  blacklist: string[];
   daily_limit: number;
   updated_at?: string;
 }
@@ -47,6 +55,8 @@ const CS_ACCOUNT_DEFAULTS: Omit<CSAccountConfig, 'wechat_id' | 'persona' | 'busi
   business_hours_end: '24:00',
   key_contact_wechat: '',
   whitelist: [],
+  takeover_mode: 'blacklist',
+  blacklist: [],
   daily_limit: 0,
 };
 
@@ -76,6 +86,9 @@ function asObject<T>(raw: unknown, fallback: T): T {
 
 /** 把一行 DB row（真实多列 或 mock 的整份对象）规整成完整 CSAccountConfig（补默认值）。 */
 function normalizeRow(row: Record<string, unknown>): CSAccountConfig {
+  const rawMode = row.takeover_mode;
+  const takeover_mode: 'blacklist' | 'whitelist' =
+    rawMode === 'whitelist' ? 'whitelist' : 'blacklist';
   return {
     wechat_id: String(row.wechat_id),
     persona: asObject<Persona>(row.persona, {} as Persona),
@@ -94,6 +107,8 @@ function normalizeRow(row: Record<string, unknown>): CSAccountConfig {
         ? row.key_contact_wechat
         : CS_ACCOUNT_DEFAULTS.key_contact_wechat,
     whitelist: asObject<string[]>(row.whitelist, []),
+    takeover_mode,
+    blacklist: asObject<string[]>(row.blacklist, []),
     daily_limit:
       typeof row.daily_limit === 'number' ? row.daily_limit : Number(row.daily_limit ?? 0) || 0,
     updated_at:
@@ -110,7 +125,7 @@ export async function getCSConfig(wechatId: string): Promise<CSAccountConfig | n
   try {
     const res = await pool.query(
       `SELECT wechat_id, persona, business_kb, auto_agent_enabled, business_hours_start, business_hours_end,
-              key_contact_wechat, whitelist, daily_limit, updated_at
+              key_contact_wechat, whitelist, takeover_mode, blacklist, daily_limit, updated_at
          FROM zenithjoy.wechat_cs_account_config
         WHERE wechat_id = $1`,
       [wechatId],
@@ -557,6 +572,8 @@ export async function saveCSConfig(
         business_hours_end: existing.business_hours_end,
         key_contact_wechat: existing.key_contact_wechat,
         whitelist: existing.whitelist,
+        takeover_mode: existing.takeover_mode,
+        blacklist: existing.blacklist,
         daily_limit: existing.daily_limit,
       }
     : { persona: EMPTY_PERSONA, business_kb: EMPTY_KB, ...CS_ACCOUNT_DEFAULTS };
@@ -570,13 +587,15 @@ export async function saveCSConfig(
     business_hours_end: patch.business_hours_end ?? base.business_hours_end,
     key_contact_wechat: patch.key_contact_wechat ?? base.key_contact_wechat,
     whitelist: patch.whitelist ?? base.whitelist,
+    takeover_mode: patch.takeover_mode ?? base.takeover_mode,
+    blacklist: patch.blacklist ?? base.blacklist,
     daily_limit: patch.daily_limit ?? base.daily_limit,
   };
   try {
     await pool.query(
       `INSERT INTO zenithjoy.wechat_cs_account_config
          (wechat_id, persona, business_kb, auto_agent_enabled, business_hours_start, business_hours_end,
-          key_contact_wechat, whitelist, daily_limit, updated_at)
+          key_contact_wechat, whitelist, takeover_mode, blacklist, daily_limit, updated_at)
        SELECT $1,
               ($2::jsonb)->'persona',
               COALESCE(($2::jsonb)->'business_kb', '{}'::jsonb),
@@ -585,6 +604,8 @@ export async function saveCSConfig(
               ($2::jsonb)->>'business_hours_end',
               ($2::jsonb)->>'key_contact_wechat',
               ($2::jsonb)->'whitelist',
+              COALESCE(($2::jsonb)->>'takeover_mode', 'blacklist'),
+              COALESCE(($2::jsonb)->'blacklist', '[]'::jsonb),
               COALESCE((($2::jsonb)->>'daily_limit')::int, 0),
               now()
        ON CONFLICT (wechat_id) DO UPDATE
@@ -595,6 +616,8 @@ export async function saveCSConfig(
              business_hours_end = EXCLUDED.business_hours_end,
              key_contact_wechat = EXCLUDED.key_contact_wechat,
              whitelist = EXCLUDED.whitelist,
+             takeover_mode = EXCLUDED.takeover_mode,
+             blacklist = EXCLUDED.blacklist,
              daily_limit = EXCLUDED.daily_limit,
              updated_at = now()`,
       [wechatId, JSON.stringify(full)],
