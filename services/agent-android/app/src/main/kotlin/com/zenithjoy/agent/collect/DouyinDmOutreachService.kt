@@ -1,6 +1,8 @@
 package com.zenithjoy.agent.collect
 
 import android.accessibilityservice.AccessibilityService
+import android.accessibilityservice.GestureDescription
+import android.graphics.Path
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -189,12 +191,17 @@ class DouyinDmOutreachService : AccessibilityService() {
             }
             fetchToken = SnapshotDiscipline.nextFetchToken(beforeOpenToken)
 
-            val dmEntryRaw = findNodeByContentDesc(root, "私信") ?: findNodeByIds(
-                root,
-                "com.ss.android.ugc.aweme:id/iv_im",
-                "com.ss.android.ugc.aweme:id/btn_im",
-                "com.ss.android.ugc.aweme:id/tv_send_msg",
-            )
+            // 真机(39.4.0)主页私信按钮是文本"发私信"(content-desc 未必是"私信")——补按文本查找，
+            // 否则点进主页也会误报 NO_DM_ENTRY。
+            val dmEntryRaw = findNodeByContentDesc(root, "私信")
+                ?: findNodeByText(root, "发私信")
+                ?: findNodeByText(root, "私信")
+                ?: findNodeByIds(
+                    root,
+                    "com.ss.android.ugc.aweme:id/iv_im",
+                    "com.ss.android.ugc.aweme:id/btn_im",
+                    "com.ss.android.ugc.aweme:id/tv_send_msg",
+                )
             if (dmEntryRaw == null) {
                 finishWithOutcome(dmEntryFound = false, sendConfirmed = false, errorCode = "NO_DM_ENTRY")
                 return@launch
@@ -344,29 +351,46 @@ class DouyinDmOutreachService : AccessibilityService() {
             finishWithOutcome(dmEntryFound = false, sendConfirmed = false, errorCode = "NO_SEARCH_RESULTS_WINDOW")
             return false
         }
-        val candidateTexts = collectAllNodeTexts(resultsRoot)
-        when (matchProfileByDouyinId(candidateTexts, targetDouyinId)) {
-            ProfileMatchResult.NO_MATCH -> {
-                finishWithOutcome(dmEntryFound = false, sendConfirmed = false, errorCode = "NO_MATCH")
-                return false
-            }
-            ProfileMatchResult.AMBIGUOUS -> {
-                finishWithOutcome(dmEntryFound = false, sendConfirmed = false, errorCode = "AMBIGUOUS")
-                return false
-            }
-            ProfileMatchResult.UNIQUE -> {
-                val matchNode = findNodeByText(resultsRoot, targetDouyinId) ?: run {
-                    finishWithOutcome(dmEntryFound = false, sendConfirmed = false, errorCode = "NO_MATCH")
-                    return false
-                }
-                val beforeClickToken = fetchToken
-                matchNode.performAction(AccessibilityNodeInfo.ACTION_CLICK)
-                delay(RandomDelay.sample(RandomDelay.NAV_MS))
-                fetchToken = SnapshotDiscipline.nextFetchToken(beforeClickToken)
-                SnapshotDiscipline.requireFresh(beforeClickToken, fetchToken)
-                return true
-            }
+        // 抖音 39.4.0 真机实测：SearchResultActivity 的搜索结果列表【不进无障碍树】(自定义/Lynx
+        // 渲染，dump 只见搜索框+tab)，无法按文本定位结果行——老 matchProfileByDouyinId(搜索结果)
+        // 恒失败，还会被搜索框回显的裸 id 骗成假 UNIQUE。改为人手操作路径：
+        //   ① 切"用户"tab(标签在树里可点) → ② 坐标盲点顶部结果(精确抖音号匹配永远排第一)
+        //   → ③ 进主页后页面【进树】，用 verifyProfileMatchesDouyinId 验证点对了人(点错=中止，不误发)。
+        findNodeByText(resultsRoot, "用户")?.let { tab ->
+            (findClickableSelfOrAncestor(tab) ?: tab).performAction(AccessibilityNodeInfo.ACTION_CLICK)
+            delay(RandomDelay.sample(RandomDelay.CLICK_MS))
         }
+        val beforeProfileToken = fetchToken
+        tapTopUserResult()
+        delay(RandomDelay.sample(RandomDelay.NAV_MS))
+        fetchToken = SnapshotDiscipline.nextFetchToken(beforeProfileToken)
+        SnapshotDiscipline.requireFresh(beforeProfileToken, fetchToken)
+        val profileRoot = awaitRootInActiveWindow() ?: run {
+            finishWithOutcome(dmEntryFound = false, sendConfirmed = false, errorCode = "NO_PROFILE_WINDOW")
+            return false
+        }
+        if (!verifyProfileMatchesDouyinId(collectAllNodeTexts(profileRoot), targetDouyinId)) {
+            finishWithOutcome(dmEntryFound = false, sendConfirmed = false, errorCode = "NO_MATCH")
+            return false
+        }
+        return true
+    }
+
+    /**
+     * 坐标盲点搜索"用户"tab 下顶部结果行。结果列表不在无障碍树里，只能按屏幕相对位置点击：
+     * tab 条下方第一行。真机(1200x2664)实测命中点约 (0.44w, 0.21h)。
+     */
+    private fun tapTopUserResult() {
+        val m = resources.displayMetrics
+        tapAtCoordinate(m.widthPixels * 0.44f, m.heightPixels * 0.21f)
+    }
+
+    private fun tapAtCoordinate(x: Float, y: Float) {
+        val path = Path().apply { moveTo(x, y) }
+        val gesture = GestureDescription.Builder()
+            .addStroke(GestureDescription.StrokeDescription(path, 0L, 60L))
+            .build()
+        dispatchGesture(gesture, null, null)
     }
 
     /**
@@ -565,6 +589,18 @@ class DouyinDmOutreachService : AccessibilityService() {
                 matchCount == 1 -> ProfileMatchResult.UNIQUE
                 else -> ProfileMatchResult.AMBIGUOUS
             }
+        }
+
+        /**
+         * 点进主页后验证"确实点对了人"。真机实测(抖音 39.4.0)：搜索结果列表不进无障碍树，
+         * 只能坐标盲点顶部结果进主页；主页页面【进树】且含 "抖音号：<id>" 行。本函数在主页
+         * 文本里找带"抖音号"前缀、id 精确等于目标的行——命中=点对了人可继续；不命中=点错了
+         * (或裸 id 回显)必须中止，绝不误发。前缀是关键判别：搜索框回显是裸 id(无前缀)，
+         * 真实主页 id 行永远带"抖音号："前缀，据此天然排除搜索框陷阱。全角/半角冒号都认。
+         */
+        internal fun verifyProfileMatchesDouyinId(profileTexts: List<String>, targetDouyinId: String): Boolean {
+            val regex = Regex("""^抖音号[:：]\s*${Regex.escape(targetDouyinId)}$""")
+            return profileTexts.any { regex.matches(it.trim()) }
         }
 
         /**
