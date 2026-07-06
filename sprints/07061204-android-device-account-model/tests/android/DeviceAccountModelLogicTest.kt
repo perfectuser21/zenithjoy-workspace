@@ -25,6 +25,8 @@ import org.junit.Test
  *   - `fun dedupeSameDeviceAccounts(scannedDouyinIds: List<String>): List<String>`
  *   - `internal enum class ConflictResolution { NO_CONFLICT, OVERWRITE_EXISTING, KEEP_EXISTING_STALE_REPORT }`
  *   - `fun resolveDeviceConflict(existingDeviceId: String?, existingScanAtMs: Long?, newDeviceId: String, newScanAtMs: Long): ConflictResolution`
+ *   - `fun shouldInvalidateOldDeviceRecord(resolution: ConflictResolution): Boolean`（Round 2 新增：落地"旧设备记录标为失效"，仅 OVERWRITE_EXISTING 为 true）
+ *   - `fun shouldLogConflictAlert(resolution: ConflictResolution): Boolean`（Round 2 新增：落地"写日志告警"，仅 OVERWRITE_EXISTING 为 true）
  *   - `data class ScannedAccount(val douyinId: String, val deviceId: String, val tenantId: String, val scanAtMs: Long)`
  *   - `fun filterAccountsByTenant(all: List<ScannedAccount>, tenantId: String): List<ScannedAccount>`
  *   - `internal enum class ScanReadOutcome { UPDATE_ACTIVE_LIST, KEEP_PREVIOUS_MARK_STALE }`
@@ -129,6 +131,50 @@ class DeviceAccountModelLogicTest {
                 newDeviceId = "device-B",
                 newScanAtMs = 1_000_000L,
             ),
+        )
+    }
+
+    // ── shouldInvalidateOldDeviceRecord / shouldLogConflictAlert（Round 2 新增：Step 5 后半句"标失效+写日志告警"）──
+
+    @Test
+    fun `OVERWRITE_EXISTING resolution should invalidate old device record`() {
+        assertTrue(
+            DeviceAccountModel.shouldInvalidateOldDeviceRecord(DeviceAccountModel.ConflictResolution.OVERWRITE_EXISTING),
+        )
+    }
+
+    @Test
+    fun `NO_CONFLICT resolution should not invalidate old device record`() {
+        assertFalse(
+            DeviceAccountModel.shouldInvalidateOldDeviceRecord(DeviceAccountModel.ConflictResolution.NO_CONFLICT),
+        )
+    }
+
+    @Test
+    fun `KEEP_EXISTING_STALE_REPORT resolution should not invalidate old device record`() {
+        assertFalse(
+            DeviceAccountModel.shouldInvalidateOldDeviceRecord(DeviceAccountModel.ConflictResolution.KEEP_EXISTING_STALE_REPORT),
+        )
+    }
+
+    @Test
+    fun `OVERWRITE_EXISTING resolution should log conflict alert`() {
+        assertTrue(
+            DeviceAccountModel.shouldLogConflictAlert(DeviceAccountModel.ConflictResolution.OVERWRITE_EXISTING),
+        )
+    }
+
+    @Test
+    fun `NO_CONFLICT resolution should not log conflict alert`() {
+        assertFalse(
+            DeviceAccountModel.shouldLogConflictAlert(DeviceAccountModel.ConflictResolution.NO_CONFLICT),
+        )
+    }
+
+    @Test
+    fun `KEEP_EXISTING_STALE_REPORT resolution should not log conflict alert`() {
+        assertFalse(
+            DeviceAccountModel.shouldLogConflictAlert(DeviceAccountModel.ConflictResolution.KEEP_EXISTING_STALE_REPORT),
         )
     }
 
