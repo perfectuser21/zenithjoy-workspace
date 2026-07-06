@@ -62,7 +62,7 @@ gradle :app:testDebugUnitTest --tests "*DouyinDmWarmupSearchLogicTest*" --rerun
 grep -q 'failures="0" errors="0"' app/build/test-results/testDebugUnitTest/TEST-com.zenithjoy.agent.collect.DouyinDmWarmupSearchLogicTest.xml
 ```
 
-**硬阈值**: 单测全绿（`failures="0" errors="0"`），对应 test case `matches exactly one profile by exact douyin id -> UNIQUE`
+**硬阈值**: 单测全绿（`failures="0" errors="0"`），对应 test case `matches exactly one profile by exact douyin id yields UNIQUE`
 
 ---
 
@@ -78,7 +78,7 @@ gradle :app:testDebugUnitTest --tests "*DouyinDmWarmupSearchLogicTest*" --rerun
 grep -q 'failures="0" errors="0"' app/build/test-results/testDebugUnitTest/TEST-com.zenithjoy.agent.collect.DouyinDmWarmupSearchLogicTest.xml
 ```
 
-**硬阈值**: 单测全绿，对应 test case `zero matches -> NO_MATCH`、`empty search results -> NO_MATCH` 和 `multiple identical matches -> AMBIGUOUS`
+**硬阈值**: 单测全绿，对应 test case `zero matches yields NO_MATCH`、`empty search results yields NO_MATCH` 和 `multiple identical matches yields AMBIGUOUS`
 
 ---
 
@@ -220,7 +220,7 @@ echo "✅ Golden Path 验证通过（抖音号精确匹配 + 按钮态判断 + 9
 
 | 功能 | Test File | BEHAVIOR 覆盖 | 预期红证据 |
 |---|---|---|---|
-| 抖音号精确匹配纯函数 | `tests/DouyinDmWarmupSearchLogicTest.kt` | `matches exactly one profile by exact douyin id -> UNIQUE`, `zero matches -> NO_MATCH`, `empty search results -> NO_MATCH`, `multiple identical matches -> AMBIGUOUS`, `partial substring match does not count as exact match` | → 编译失败（`matchProfileByDouyinId`/`ProfileMatchResult` 未定义）5 failures |
+| 抖音号精确匹配纯函数 | `tests/DouyinDmWarmupSearchLogicTest.kt` | `matches exactly one profile by exact douyin id yields UNIQUE`, `zero matches yields NO_MATCH`, `empty search results yields NO_MATCH`, `multiple identical matches yields AMBIGUOUS`, `partial substring match does not count as exact match` | → 编译失败（`matchProfileByDouyinId`/`ProfileMatchResult` 未定义）5 failures |
 | 按钮态判断纯函数（关注/点赞）| `tests/DouyinDmWarmupSearchLogicTest.kt` | `follow button text 关注 needs click`, `follow button text 已关注 does not need click`, `null follow button (not found) does not need click`, `like button text 点赞 needs click`, `like button text 已赞 does not need click`, `null like button (no artwork or follow-only profile) does not need click` | → 编译失败（`needsFollowClick`/`needsLikeClick` 未定义）6 failures |
 | 90 秒超时熔断纯函数 | `tests/DouyinDmWarmupSearchLogicTest.kt` | `elapsed time over 90 seconds is timed out`, `elapsed time exactly at 90 second boundary is not timed out`, `elapsed time under 90 seconds is not timed out` | → 编译失败（`isLeadTimedOut`未定义）3 failures |
 | 关注/点赞每小时频控纯函数 | `tests/DouyinDmWarmupSearchLogicTest.kt` | `follow count under hourly limit is not rate limited`, `follow count exactly at hourly limit is rate limited`, `follow count over hourly limit is rate limited`, `follow timestamps outside 1 hour window are not counted`, `like count under hourly limit is not rate limited`, `like count exactly at hourly limit is rate limited`, `like count over hourly limit is rate limited`, `like timestamps outside 1 hour window are not counted` | → 编译失败（`isFollowRateLimited`/`isLikeRateLimited` 未定义）8 failures |
