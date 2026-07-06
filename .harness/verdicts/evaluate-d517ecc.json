@@ -1,0 +1,1 @@
+{"verdict":"PASS","task_id":"07060927-douyin-dm-warmup-search","failed_step":null,"log_excerpt":null,"unverifiable":[{"item":"接缝清单 3 项：抖音搜索结果页无障碍树读取完整抖音号字符串 / 按钮文本在当前抖音版本下的稳定性 / 搜索定位→关注→点赞→私信发送全链路真机跑通","reason":"PRD target_environment_reason 显式声明本 sprint 只做纯函数级 Harness 验收，真机全链路需人工在 Honor 真机（Tailscale 100.91.227.1）补验，非本次 evaluator 可验证范围"}]}
