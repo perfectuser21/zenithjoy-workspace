@@ -826,8 +826,7 @@ export async function runPreflight(moduleDir?: string): Promise<ModulePreflightR
   const summary = summaryParts.join(' / ');
 
   if (wechat.ok && pyw.ok && mem.ok && silent.ok && delivery.ok && updateLockOk) {
-    const okReasonParts = [summary, running.fixGuide].filter(Boolean);
-    const okReason = okReasonParts.join(' / ');
+    const okReason = buildOkReason(summary, running.fixGuide);
     return {
       ok: true,
       checks,
@@ -842,6 +841,14 @@ export async function runPreflight(moduleDir?: string): Promise<ModulePreflightR
     .join('\n');
   const reason = summary ? `${summary}\n${fixGuide}` : fixGuide;
   return { ok: false, checks, fixGuide, reason };
+}
+
+// ok=true 的 module_status.reason 拼接（纯函数，issue 5d9f996c）：只保留状态型摘要（版本/静默/
+// 送达/更新），绝不拼入 failed/warn 级行动指令文案（如「微信未运行，请打开微信并登录」）——
+// 生产实锤（0706 09:58）ok:true 的 reason 带「微信未运行请打开」自相矛盾误导运营。
+// 行动指令走独立的 fixGuide 字段，不进 ok=true 的 reason。
+export function buildOkReason(summary: string, _runningFixGuide?: string): string | undefined {
+  return summary || undefined;
 }
 
 // 作为脚本直接执行时（core ModuleManager 用 `node preflight.js`，cwd=moduleDir，不传 argv）：

@@ -3805,6 +3805,44 @@ def _should_restart_for_collapsed_tree(
     return True
 
 
+# ─── UIA 死区（进程在但主窗口丢失）自愈（issue e6203ac4，xian-rog 0704→0706 40h 实锤）──
+# 现象：微信进程在、get_main_window() 返回 None，主循环每 ~4s 打「微信进程已在运行但 UIA
+# 找不到主窗口（UIA 未就绪），跳过重复启动，等待下次激活」永不自愈；listener 进程重启后走
+# 「微信未运行→带 SPI 标志自动启动」路径 3 分钟痊愈。根因：#950 树塌自愈判定要求 mw 已找到
+# 且 descendants≤2（_is_uia_tree_collapsed），mw=None 分支完全没有自愈路径。
+# 修法：该状态连续持续 > _WINDOW_LOST_SUSTAIN_SECONDS → 触发重启微信自愈，冷却/单进程上限
+# 完全复用 #950 的 _should_restart_for_collapsed_tree + _restart_wechat_for_uia，不另造一套。
+_WINDOW_LOST_SUSTAIN_SECONDS = 180  # 进程在+mw=None 连续持续超此时长才自愈（避开启动过渡）
+
+
+def should_heal_window_lost(
+    lost_since_monotonic: Optional[float], now_monotonic: float,
+    threshold_s: float = _WINDOW_LOST_SUSTAIN_SECONDS,
+) -> bool:
+    """纯函数(CI可测)：「微信进程在但主窗口丢失(mw=None)」是否已持续 > 阈值该触发重启自愈。
+
+    lost_since_monotonic=None（尚未进入丢失态）→ False。恰好等于阈值不触发（要求严格超过）。
+    冷却/上限判定不在这里——调用方复用 _should_restart_for_collapsed_tree（同树塌自愈）。
+    """
+    if lost_since_monotonic is None:
+        return False
+    return (now_monotonic - lost_since_monotonic) > threshold_s
+
+
+def track_window_lost_since(
+    window_found: bool, weixin_running: bool,
+    lost_since: Optional[float], now: float,
+) -> Optional[float]:
+    """纯函数(CI可测)：维护「进程在+主窗口丢失」起始时刻。
+
+    窗口找到 / 进程不在 → 清零复位（进程不在走「未运行→自动启动」路径，不属于 UIA 死区）；
+    持续丢失 → 保留最早起始时刻（不重置，否则永远到不了阈值）。
+    """
+    if window_found or not weixin_running:
+        return None
+    return lost_since if lost_since is not None else now
+
+
 def _restart_wechat_for_uia() -> bool:
     """微信进程在跑但 mmui 无障碍树塌缩(UIA 读不到会话)时，重启微信以重建 a11y 树。
 
@@ -3907,6 +3945,9 @@ def run_real_listen(args: argparse.Namespace) -> int:
     collapsed_tree_since: Optional[float] = None
     last_wechat_restart = 0.0
     wechat_restart_count = 0
+    # UIA 死区自愈（issue e6203ac4）：「进程在+mw=None」状态的起始时刻；mw 找到/进程不在即清零。
+    # 持续 > _WINDOW_LOST_SUSTAIN_SECONDS → 重启微信（冷却/上限与树塌自愈共用同一套计数）。
+    window_lost_since: Optional[float] = None
     # scan_unread 最近一次读到【健康可见态树】的时刻：塌缩自愈据此绝不重启正在能读会话的微信
     # (心跳裸读隐藏态恒报塌缩假象，rog 0629 铁证；decision 6fc13ca3)。
     last_readable_scan_at = 0.0
@@ -3988,6 +4029,10 @@ def run_real_listen(args: argparse.Namespace) -> int:
                             _log(f"自动关闭登录窗口失败: {_ce}")
             except Exception as exc:
                 last_error = f"{type(exc).__name__}: {exc}"
+
+            # UIA 死区自愈计时复位：主窗口找到 → 立即清零（issue e6203ac4）
+            if mw is not None:
+                window_lost_since = None
 
             # 心跳 + 扫描诊断上报中台（运营在 Dashboard「监听健康」看板一眼定位卡在哪）
             if now - last_heartbeat >= heartbeat_interval:
@@ -4071,8 +4116,35 @@ def run_real_listen(args: argparse.Namespace) -> int:
                 if not login and now - last_wechat_launch >= wechat_launch_cooldown:
                     from find_weixin import launch_weixin, is_weixin_running  # noqa: PLC0415
                     if is_weixin_running():
-                        _log("微信进程已在运行但 UIA 找不到主窗口（UIA 未就绪），跳过重复启动，等待下次激活")
+                        # UIA 死区自愈（issue e6203ac4，rog 0704→0706 40h 实锤）：#950 树塌自愈只覆盖
+                        # mw 已找到的分支，此态（进程在+mw=None）原先永不自愈。连续持续 >
+                        # _WINDOW_LOST_SUSTAIN_SECONDS → 复用树塌自愈的重启函数与冷却(600s)/
+                        # 单进程上限(5次)判定，重启微信让 mmui 在 SPI 标志置位态下重建 UIA 树。
+                        window_lost_since = track_window_lost_since(
+                            window_found=False, weixin_running=True,
+                            lost_since=window_lost_since, now=now,
+                        )
+                        if should_heal_window_lost(window_lost_since, now) and (
+                            _should_restart_for_collapsed_tree(
+                                now, last_wechat_restart, _WECHAT_RESTART_COOLDOWN_SECONDS,
+                                wechat_restart_count, _WECHAT_RESTART_MAX,
+                                last_readable_scan_at=last_readable_scan_at,
+                                readable_grace_s=_COLLAPSED_SUSTAIN_SECONDS,
+                            )
+                        ):
+                            _log(
+                                f"UIA 死区自愈：进程在但主窗口丢失已 {int(now - window_lost_since)}s，"
+                                f"重启微信（冷却/上限同树塌自愈）"
+                            )
+                            if _restart_wechat_for_uia():
+                                last_wechat_restart = now
+                                last_wechat_launch = now  # 防紧接重复拉起
+                                wechat_restart_count += 1
+                            window_lost_since = None  # 重启后重新计时（失败也别每轮狂杀，等冷却）
+                        else:
+                            _log("微信进程已在运行但 UIA 找不到主窗口（UIA 未就绪），跳过重复启动，等待下次激活")
                     else:
+                        window_lost_since = None  # 进程不在 → 走自动启动路径，非 UIA 死区
                         launched = launch_weixin()
                         last_wechat_launch = time.time()
                         if launched:

@@ -17,6 +17,7 @@ import {
   memoryFixGuide,
   WECHAT_DOWNLOAD_URL,
   runPreflight,
+  buildOkReason,
   getModulePython,
   checkWechatVersion,
   checkWechatRunning,
@@ -897,6 +898,26 @@ describe('runPreflight 透出微信版本 + 静默状态到 reason（薄上报�
     const r = await runPreflight(os.tmpdir());
     expect(r.checks.verify_silent).toBe(false);
     expect(r.ok).toBe(false);
+  });
+});
+
+describe('buildOkReason — ok:true 的 module_status.reason 不得拼入行动指令（issue 5d9f996c）', () => {
+  // 生产实锤（0706 09:58）：module_status = {ok:true, reason:"微信 4.1.8.107 / … / 更新 LOCKED /
+  // 微信未运行，请打开微信并登录，Agent 将在 30 秒内自动连接。"} —— ok=true 却带「微信未运行请打开」，
+  // 自相矛盾误导运营。ok=true 的 reason 只保留状态型摘要（版本/静默/送达/更新），行动指令留在 fixGuide 字段。
+  it('summary + 微信未运行 fixGuide → reason 只留状态摘要，不含"微信未运行/请打开微信"', () => {
+    const summary = '微信 4.1.8.107 / 静默 跳过 / 送达 跳过 / 更新 LOCKED';
+    const r = buildOkReason(summary, '微信未运行，请打开微信并登录，Agent 将在 30 秒内自动连接。');
+    expect(r).toBe(summary);
+    expect(r).not.toMatch(/微信未运行|请打开微信/);
+  });
+
+  it('无 fixGuide → reason = summary 原样', () => {
+    expect(buildOkReason('微信 4.1.8.107 / 更新 LOCKED', undefined)).toBe('微信 4.1.8.107 / 更新 LOCKED');
+  });
+
+  it('summary 空 → undefined（不产出空 reason，也绝不拿 fixGuide 顶上）', () => {
+    expect(buildOkReason('', '微信未运行，请打开微信并登录，Agent 将在 30 秒内自动连接。')).toBeUndefined();
   });
 });
 

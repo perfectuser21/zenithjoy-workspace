@@ -426,9 +426,11 @@ export async function listAllMachines(tenantId?: string, limit = 100): Promise<C
           m.wechat_reason = undefined;
         } else {
           m.wechat_ok = false;
+          // login_present = 「登录窗口存在 = 需扫码标志」（issue bf0cf4c4）：
+          // true → 真未登录；false/缺失 → 无登录窗口，可能已登录但 UIA 死区，不得误报"未登录"。
           m.wechat_reason = hb.diag.login_present
             ? '微信未登录（需在该机扫码登录）'
-            : '未找到微信窗口';
+            : '未找到微信窗口（UIA 死区/未就绪，可能已登录）';
         }
       }
       return m;

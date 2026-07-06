@@ -42,6 +42,7 @@ exports.installPywinauto = installPywinauto;
 exports.autoRepair = autoRepair;
 exports.getModulePython = getModulePython;
 exports.runPreflight = runPreflight;
+exports.buildOkReason = buildOkReason;
 const node_child_process_1 = require("node:child_process");
 const node_os_1 = __importDefault(require("node:os"));
 const node_path_1 = __importDefault(require("node:path"));
@@ -776,8 +777,7 @@ async function runPreflight(moduleDir) {
         summaryParts.push('更新 跳过');
     const summary = summaryParts.join(' / ');
     if (wechat.ok && pyw.ok && mem.ok && silent.ok && delivery.ok && updateLockOk) {
-        const okReasonParts = [summary, running.fixGuide].filter(Boolean);
-        const okReason = okReasonParts.join(' / ');
+        const okReason = buildOkReason(summary, running.fixGuide);
         return {
             ok: true,
             checks,
@@ -791,6 +791,13 @@ async function runPreflight(moduleDir) {
         .join('\n');
     const reason = summary ? `${summary}\n${fixGuide}` : fixGuide;
     return { ok: false, checks, fixGuide, reason };
+}
+// ok=true 的 module_status.reason 拼接（纯函数，issue 5d9f996c）：只保留状态型摘要（版本/静默/
+// 送达/更新），绝不拼入 failed/warn 级行动指令文案（如「微信未运行，请打开微信并登录」）——
+// 生产实锤（0706 09:58）ok:true 的 reason 带「微信未运行请打开」自相矛盾误导运营。
+// 行动指令走独立的 fixGuide 字段，不进 ok=true 的 reason。
+function buildOkReason(summary, _runningFixGuide) {
+    return summary || undefined;
 }
 // 作为脚本直接执行时（core ModuleManager 用 `node preflight.js`，cwd=moduleDir，不传 argv）：
 // 把结果以 JSON 打印为 stdout 最后一行，退出码与 ok 对应。moduleDir 默认取本文件所在目录。
