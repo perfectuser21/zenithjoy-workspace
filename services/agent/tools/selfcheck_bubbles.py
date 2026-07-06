@@ -33,6 +33,48 @@ OUT_PATH = os.path.join(os.environ.get("PUBLIC", r"C:\Users\Public"),
                         "zj-bubble-gate.json")
 TARGET = "文件传输助手"
 
+# 找窗口有界重试：覆盖微信启动/树重建瞬态（≥60s），但别无限等（≤180s）
+FIND_WINDOW_RETRIES = 6
+FIND_WINDOW_RETRY_DELAY_S = 12.0
+
+
+def classify_no_window(process_running: bool) -> tuple:
+    """重试耗尽仍找不到 mmui 主窗口时，把「微信没跑」和「UIA 死区」分开报。
+
+    2026-07-06 实证：rog UIA 死区 ~40h（微信启动时 SPI 标志未置位→树不构建），
+    期间 gate 笼统报「微信没跑或没登录」误导运营（微信明明登录着）。
+    """
+    if not process_running:
+        return ("NO_PROCESS", "Weixin.exe 未运行 - 请在 runner 机启动并登录微信")
+    return (
+        "UIA_DEAD",
+        "微信进程在但 UIA 找不到主窗口(mmui) - UIA 死区(启动时无障碍标志未置位)，"
+        "需重启微信/等待 listener 自愈(issue e6203ac4)",
+    )
+
+
+def _weixin_process_running() -> bool:
+    import subprocess
+    try:
+        out = subprocess.run(
+            ["tasklist", "/FI", "IMAGENAME eq Weixin.exe"],
+            capture_output=True, text=True, timeout=15,
+        ).stdout or ""
+        return "Weixin.exe" in out
+    except Exception:
+        return True  # 查不出进程时保守当作在跑 → 走 UIA_DEAD 分支（宁可报死区不误报没跑）
+
+
+def _find_mmui_window(desktop_cls):
+    for w in desktop_cls(backend="uia").windows():
+        try:
+            cls = w.element_info.class_name or ""
+        except Exception:
+            continue
+        if "mmui" in cls.lower():
+            return w
+    return None
+
 
 def _write(result: dict) -> None:
     try:
@@ -55,17 +97,22 @@ def main() -> int:
         # 不加载会把监听进程的历史文件覆盖成一条（2026-07-03 08:49 事故）。
         listen_chat._SENT_TEXTS[:] = listen_chat._load_sent_texts()
 
-        mw = None
-        for w in Desktop(backend="uia").windows():
-            try:
-                cls = w.element_info.class_name or ""
-            except Exception:
-                continue
-            if "mmui" in cls.lower():
-                mw = w
-                break
+        mw = _find_mmui_window(Desktop)
         if mw is None:
-            result["err"] = "no wechat window (mmui) — 微信没跑或没登录"
+            # 有界重试：先设 SPI 屏幕阅读器标志（幂等），再等树/窗口就绪
+            try:
+                listen_chat._activate_uia()
+            except Exception:
+                pass
+            for i in range(FIND_WINDOW_RETRIES):
+                time.sleep(FIND_WINDOW_RETRY_DELAY_S)
+                mw = _find_mmui_window(Desktop)
+                if mw is not None:
+                    print(f"[bubble-gate] window found after retry {i + 1}")
+                    break
+        if mw is None:
+            code, msg = classify_no_window(_weixin_process_running())
+            result["err"] = f"no wechat window (mmui) [{code}] {msg}"
             _write(result)
             return 1
 
