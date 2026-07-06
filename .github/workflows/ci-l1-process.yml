@@ -363,13 +363,24 @@ jobs:
       - name: Run lint-contract-test-immutability
         run: bash .github/workflows/scripts/lint-contract-test-immutability.sh origin/main
 
+  lint-workflow-yaml-parse:
+    name: Lint — Workflow YAML Parse
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: All workflow files must parse as YAML
+        run: |
+          python3 -m pip install --quiet pyyaml
+          python3 .github/workflows/scripts/lint-workflow-yaml-parse.py
+
   # ─── Gate job ─────────────────────────────────────────────────────────────
 
   l1-passed:
     name: L1 Process Gate Passed
     needs: [verify-dev-workflow, pr-title, ci-config-audit, secrets-scan, frontend-browser-dod-check,
             lint-test-pairing, lint-test-quality, lint-tdd-commit-order, lint-no-fake-test, lint-feature-has-smoke,
-            lint-agent-version-bump, lint-wechat-rpa-runner, lint-contract-test-immutability]
+            lint-agent-version-bump, lint-wechat-rpa-runner, lint-contract-test-immutability, lint-workflow-yaml-parse]
     if: always() && github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -444,6 +455,11 @@ jobs:
 
           if [ "${{ needs.lint-contract-test-immutability.result }}" != "success" ]; then
             echo "FAIL: Lint Contract Test Immutability (${{ needs.lint-contract-test-immutability.result }})"
+            FAILED=true
+          fi
+
+          if [ "${{ needs.lint-workflow-yaml-parse.result }}" != "success" ]; then
+            echo "FAIL: Workflow YAML Parse (${{ needs.lint-workflow-yaml-parse.result }})"
             FAILED=true
           fi
 
