@@ -200,9 +200,9 @@ jobs:
           mock_mw_module.get_main_window.return_value = None
           mock_mw_module.login_window_present.return_value = False
 
+          # 注：不 patch preflight.subprocess——subprocess 现为函数内局部 import 且 dry_run=True 不会走到
           with patch.dict(sys.modules, {'find_weixin': mock_mw_module}), \
-               patch('preflight._is_windows', return_value=True), \
-               patch('preflight.subprocess', MagicMock()):
+               patch('preflight._is_windows', return_value=True):
               result = preflight.check_wechat_login(dry_run=True)
 
           print('wechat_login status:', result['status'])
