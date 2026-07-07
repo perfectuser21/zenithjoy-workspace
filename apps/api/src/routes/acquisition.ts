@@ -146,6 +146,39 @@ acquisitionRouter.get('/pending-keyword-tasks', async (req: Request, res: Respon
   }
 });
 
+// 前端列表端点 — 返回本租户的 keyword 采集任务（最新 20 条，只读不 mutate）
+acquisitionRouter.get('/keyword-tasks', tenantContextOptional, async (req: Request, res: Response) => {
+  if (process.env.VITEST) {
+    return res.status(200).json({ success: true, data: { tasks: [], total: 0 }, timestamp: new Date().toISOString() });
+  }
+  const tenantId = req.tenantId;
+  if (!tenantId) {
+    return res.status(401).json({ success: false, error: { code: 'NO_TENANT', message: '缺租户上下文（未登录或无 X-Tenant-Id）' }, timestamp: new Date().toISOString() });
+  }
+  try {
+    const { rows } = await pool.query<{
+      id: string;
+      keyword: string;
+      status: string;
+      created_at: Date;
+    }>(
+      `SELECT id, keyword, status, created_at
+         FROM zenithjoy.acquisition_keyword_tasks
+        WHERE tenant_id = $1
+        ORDER BY created_at DESC
+        LIMIT 20`,
+      [tenantId]
+    );
+    const tasks = rows.map((r) => ({
+      id: r.id, keyword: r.keyword, status: r.status, created_at: r.created_at,
+    }));
+    return res.status(200).json({ success: true, data: { tasks, total: tasks.length }, timestamp: new Date().toISOString() });
+  } catch (err) {
+    console.error('[acquisition] keyword-tasks error:', (err as Error).message);
+    return res.status(500).json({ success: false, error: { code: 'DB_ERROR', message: '查询失败' }, timestamp: new Date().toISOString() });
+  }
+});
+
 // 前端列表端点 — 返回租户的采集任务列表（最新 20 条）
 acquisitionRouter.get('/collect-tasks', tenantContextOptional, async (req: Request, res: Response) => {
   if (process.env.VITEST) {

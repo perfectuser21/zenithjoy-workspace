@@ -1054,3 +1054,34 @@ describe('POST /api/acquisition/keyword-search — tenant_id 写库', () => {
     expect(insertCalls.length).toBe(0);
   });
 });
+
+describe('GET /api/acquisition/keyword-tasks — 前端列表（租户隔离/只读）', () => {
+  beforeEach(() => { vi.stubEnv('VITEST', ''); });
+  afterEach(() => { vi.unstubAllEnvs(); vi.resetAllMocks(); });
+
+  it('无租户上下文 → 401 NO_TENANT，不查库', async () => {
+    const { default: db } = await import('../db/connection');
+    const res = await request(app).get('/api/acquisition/keyword-tasks');
+    expect(res.status).toBe(401);
+    expect((db.query as any).mock.calls.length).toBe(0);
+  });
+
+  it('带 tenant 上下文 → 只 SELECT 本租户任务，不 UPDATE status', async () => {
+    const { default: db } = await import('../db/connection');
+    const TENANT_K = 'kkkkkkkk-0000-0000-0000-000000000001';
+    (db.query as any).mockResolvedValueOnce({
+      rows: [{ id: 't1', keyword: '麻婆豆腐', status: 'dispatched', created_at: '2026-07-07T00:00:00Z' }],
+    });
+    const res = await request(app)
+      .get('/api/acquisition/keyword-tasks')
+      .set('x-test-tenant-id', TENANT_K);
+    expect(res.status).toBe(200);
+    expect(res.body.data.tasks[0].keyword).toBe('麻婆豆腐');
+    const calls = (db.query as any).mock.calls;
+    // 唯一一次查询，且带 tenant_id、是 SELECT 不含 UPDATE
+    expect(calls.length).toBe(1);
+    expect(calls[0][0]).toContain('SELECT');
+    expect(calls[0][0]).not.toContain('UPDATE');
+    expect(JSON.stringify(calls[0][1])).toContain(TENANT_K);
+  });
+});
