@@ -200,4 +200,36 @@ class DeviceAccountScanServiceLogicTest {
         val decision = DeviceAccountScanService.checkDispatchConsistency("device-never-scanned")
         assertEquals(DeviceAccountModel.DispatchAccountDecision.PROCEED, decision)
     }
+
+    // ── filterAccountNicknames（真机面板 tv_nickname 行过滤，Sprint 07070801 修）──
+    // 抖音39.4.0"切换账号"面板只暴露昵称，无抖音号；末行"添加或注册新账号"是入口非账号。
+
+    @Test
+    fun `nickname filter drops the add-account entry row and keeps real accounts`() {
+        val result = DeviceAccountScanService.filterAccountNicknames(
+            listOf("秦军餐饮", "伯都呀伯都", "添加或注册新账号"),
+        )
+        assertEquals(listOf("秦军餐饮", "伯都呀伯都"), result)
+    }
+
+    @Test
+    fun `nickname filter trims whitespace and drops null and blank rows`() {
+        val result = DeviceAccountScanService.filterAccountNicknames(
+            listOf("  秦军餐饮  ", null, "", "   "),
+        )
+        assertEquals(listOf("秦军餐饮"), result)
+    }
+
+    @Test
+    fun `nickname filter dedupes repeated rows preserving order`() {
+        val result = DeviceAccountScanService.filterAccountNicknames(
+            listOf("于瑾的", "秦军餐饮", "于瑾的"),
+        )
+        assertEquals(listOf("于瑾的", "秦军餐饮"), result)
+    }
+
+    @Test
+    fun `nickname filter on an empty panel yields empty list`() {
+        assertEquals(emptyList<String>(), DeviceAccountScanService.filterAccountNicknames(emptyList()))
+    }
 }
