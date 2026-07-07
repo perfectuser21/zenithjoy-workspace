@@ -166,7 +166,7 @@ router.get('/sessions', tenantContextOptional, async (req: Request, res: Respons
   try {
     const r = await pool.query(
       `SELECT s.account_label, s.role, s.status, s.bound_at,
-              s.created_at,
+              s.created_at, s.agent_id,
               a.hostname AS agent_hostname,
               a.nickname AS agent_nickname,
               a.status AS agent_status,
@@ -627,6 +627,69 @@ router.get('/dm-tasks/:task_id', async (req: Request, res: Response) => {
       updated_at: row.updated_at,
     }),
   );
+});
+
+// ── warmup 验活结果回传（Line02 每日养号）——tenant 服务端按 task_id 反查，幂等按 publish_tasks 状态 ──
+router.post('/warmup-result', async (req: Request, res: Response) => {
+  const { task_id, device_id, total, alive, offline, results, error_code } = req.body || {};
+  if (!task_id) return res.status(400).json(ERR('MISSING_TASK_ID', 'task_id 必填'));
+  const t = await pool.query(
+    `SELECT tenant_id, status, agent_id FROM zenithjoy.publish_tasks WHERE id=$1`,
+    [task_id],
+  );
+  if (t.rows.length === 0) return res.status(404).json(ERR('TASK_NOT_FOUND', 'task_id 未找到'));
+  const curStatus: string = t.rows[0].status;
+  const agentId: string = t.rows[0].agent_id;
+  // 幂等：已终态 → 短路（防重复回传重复写库）
+  if (curStatus === 'done' || curStatus === 'failed') return res.json(OK({ idempotent: true }));
+
+  const errCode: string = typeof error_code === 'string' ? error_code : '';
+  const report = { total, alive, offline, results, error_code: errCode };
+  const taskStatus = errCode ? 'failed' : 'done';
+  // 先写 liveness 再置 task 终态（非事务，但顺序保证可恢复）：若某条 upsert 失败抛错，
+  // task 仍为 queued（未 done）→ 幂等不短路，agent 重传可补齐（upsert ON CONFLICT 幂等）。
+  // error_code 非空（MUTEX_BUSY/超时/…）→ 保留各号上次状态，不 upsert（不误判掉线）。
+  let written = 0;
+  if (!errCode && Array.isArray(results)) {
+    for (const r of results) {
+      if (!r || typeof r.nickname !== 'string' || !r.nickname) continue;
+      // followers 强制整数或 null——防脏数据（非数字）触发 integer 列写入报错、破坏本次回传。
+      const followers =
+        typeof r.followers === 'number' && Number.isFinite(r.followers) ? Math.trunc(r.followers) : null;
+      await pool.query(
+        `INSERT INTO zenithjoy.agent_warmup_liveness (agent_id, device_id, nickname, alive, followers, reason, checked_at)
+         VALUES ($1,$2,$3,$4,$5,$6, now())
+         ON CONFLICT (agent_id, nickname) DO UPDATE
+           SET alive=EXCLUDED.alive, followers=EXCLUDED.followers, reason=EXCLUDED.reason,
+               device_id=EXCLUDED.device_id, checked_at=now()`,
+        [agentId, device_id ?? null, r.nickname, !!r.alive,
+         followers, (typeof r.reason === 'string' ? r.reason : null)],
+      );
+      written += 1;
+    }
+  }
+  await pool.query(
+    `UPDATE zenithjoy.publish_tasks SET status=$2, response=$3::jsonb, updated_at=NOW() WHERE id=$1`,
+    [task_id, taskStatus, JSON.stringify(report)],
+  );
+  return res.json(OK({ task_status: taskStatus, written }));
+});
+
+// ── warmup 验活状态查询（dashboard）——某 agent 最近每号活/掉线 ──
+// 租户隔离：只能查本租户名下 agent（JOIN agents 校验归属，防跨租户读小号昵称/粉丝）。
+router.get('/warmup-liveness', tenantContextOptional, async (req: Request, res: Response) => {
+  const tenantId = tenantOf(req, res);
+  if (!tenantId) return;
+  const agentId = String(req.query.agent_id || '');
+  if (!agentId) return res.status(400).json(ERR('MISSING_AGENT_ID', 'agent_id 必填'));
+  const r = await pool.query(
+    `SELECT l.nickname, l.alive, l.followers, l.reason, l.checked_at
+       FROM zenithjoy.agent_warmup_liveness l
+       JOIN zenithjoy.agents a ON a.id = l.agent_id AND a.tenant_id = $2
+      WHERE l.agent_id = $1 ORDER BY l.checked_at DESC`,
+    [agentId, tenantId],
+  );
+  return res.json(OK({ liveness: r.rows }));
 });
 
 export default router;

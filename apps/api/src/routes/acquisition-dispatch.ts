@@ -14,6 +14,7 @@
 import { Router, Request, Response } from 'express';
 import pool from '../db/connection';
 import { tenantContextOptional } from '../middleware/tenant-context';
+import { enqueueWarmupTasks } from '../services/warmup-dispatch';
 import {
   getConfig,
   upsertConfig,
@@ -75,6 +76,16 @@ acquisitionDispatchRouter.post('/dispatch/run', tenantContextOptional, async (re
   const tenantId = tenantOf(req, res);
   if (!tenantId) return;
   const result = await dispatchDue(pool, tenantId, new Date());
+  return res.json(OK(result));
+});
+
+// ── POST /warmup/run — 手动触发 enqueueWarmupTasks（staging 真机 + smoke 用；每日自动走 scheduler cron）──
+acquisitionDispatchRouter.post('/warmup/run', tenantContextOptional, async (req: Request, res: Response) => {
+  const tenantId = tenantOf(req, res);
+  if (!tenantId) return;
+  // 手动触发可显式指定收尾要切回的操作号昵称（staging 真机验证切号用）；不传则空串=不切。
+  const operatorNickname = typeof req.body?.operator_nickname === 'string' ? req.body.operator_nickname : '';
+  const result = await enqueueWarmupTasks(tenantId, operatorNickname);
   return res.json(OK(result));
 });
 

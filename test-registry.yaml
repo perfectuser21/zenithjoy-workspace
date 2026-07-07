@@ -4437,3 +4437,28 @@ agent_suite:
   status: active
   product: AI员工
   note: "sprint(07052218): device-platform.ts 配套单测（同 douyin-dm-outreach-android-device-platform 断言，满足 CI lint-test-pairing 配对要求）"
+
+# ── Line02 warmup 中台调度接线（Path2 Step7）──────────────────────────────────
+- id: line02-warmup-result-api
+  path: apps/api/src/routes/agent-burner-warmup.test.ts
+  type: unit
+  ci: L3
+  status: active
+  product: 客户智能获客
+  note: "sprint(07071043): POST /warmup-result 回传端点（tenant 按 task_id 反查/幂等短路/error_code 保留上次不 upsert）+ GET /warmup-liveness 租户隔离断言"
+
+- id: line02-warmup-dispatch
+  path: apps/api/src/services/warmup-dispatch.test.ts
+  type: unit
+  ci: L3
+  status: active
+  product: 客户智能获客
+  note: "sprint(07071043): enqueueWarmupTasks 候选(在线 android burner)+24h/pending 去重+payload operator_nickname 断言"
+
+- id: line02-warmup-liveness-panel
+  path: apps/dashboard/src/pages/AcquisitionAccountsPage.warmup.test.tsx
+  type: unit
+  ci: L3
+  status: active
+  product: 客户智能获客
+  note: "sprint(07071043): WarmupLivenessPanel 每号活/掉线标红(data-alive)+粉丝展示+无记录不渲染"

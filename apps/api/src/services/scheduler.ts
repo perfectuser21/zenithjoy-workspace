@@ -19,6 +19,8 @@
  * 内部 fetch self-call：用 PORT env 或默认 5200。
  */
 
+import { enqueueWarmupTasks } from './warmup-dispatch';
+
 const CRON_EXPRESSION = '0 9 * * *'; // cron: '0 9 * * *' — 每日 09:00（server 时区）
 const POLL_INTERVAL_MS = 60_000; // 每分钟检查一次
 const SCHEDULER_TICK_PATH = '/api/wechat/scheduler-tick';
@@ -29,10 +31,16 @@ const DAILY_REPORT_SETTLE_PATH = '/api/wechat/cs/daily-report/settle';
 const DAILY_REPORT_HOUR_BJ = 23;
 const DAILY_REPORT_MINUTE_BJ = 55;
 
+// Line02 warmup：每天北京 10:00 给所有在线 android burner agent 下发一次养号验活任务
+// （enqueueWarmupTasks 直接调服务函数，全租户；24h 去重在函数内做）。
+const WARMUP_HOUR_BJ = 10;
+const WARMUP_MINUTE_BJ = 0;
+
 export interface SchedulerHandle {
   timer: NodeJS.Timeout;
   lastFiredYmd: string | null;
   lastReportYmd: string | null;
+  lastWarmupYmd: string | null;
 }
 
 /** 取「北京当前时刻」的 {hour, minute, ymd}（不依赖 server 本地时区）。 */
@@ -113,6 +121,19 @@ export async function triggerDailyReportSettlement(): Promise<void> {
 }
 
 /**
+ * Line02 warmup 每日下发：直接调 enqueueWarmupTasks()（全租户，同进程服务函数，无需 HTTP 自调）。
+ * 全程容错：出错只 warn 不抛（不拖垮 scheduler 主循环）。24h 去重在 enqueueWarmupTasks 内。
+ */
+export async function triggerWarmupEnqueue(): Promise<void> {
+  try {
+    const r = await enqueueWarmupTasks();
+    console.log(`[scheduler] warmup enqueue fired: enqueued=${r.enqueued}`);
+  } catch (err) {
+    console.warn('[scheduler] warmup enqueue 失败:', err);
+  }
+}
+
+/**
  * 启动 cron 轮询：每分钟检查 server 时间是否进入 09:00 那一分钟，进入则 fire。
  * 同一日同一 09:00 分钟只 fire 一次（lastFiredYmd 防抖）。
  * 同一 interval 内还检查「北京 23:55」→ 触发 S4 客服日报结算（lastReportYmd 防抖，按北京自然日去重）。
@@ -146,9 +167,19 @@ export function startScheduler(): SchedulerHandle {
           });
         }
       }
+      // Line02 warmup：北京 10:00 → 给在线 android burner agent 下发养号验活（按北京自然日去重）
+      if (bj.hour === WARMUP_HOUR_BJ && bj.minute === WARMUP_MINUTE_BJ) {
+        if (handle.lastWarmupYmd !== bj.ymd) {
+          handle.lastWarmupYmd = bj.ymd;
+          triggerWarmupEnqueue().catch((err) => {
+            console.warn('[scheduler] interval-fired warmup 异常:', err);
+          });
+        }
+      }
     }, POLL_INTERVAL_MS),
     lastFiredYmd: null,
     lastReportYmd: null,
+    lastWarmupYmd: null,
   };
   return handle;
 }
