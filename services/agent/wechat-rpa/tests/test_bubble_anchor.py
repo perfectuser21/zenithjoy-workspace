@@ -130,3 +130,38 @@ def test_commit_reply_success_missing_preview_name_safe():
     msg = {"sender": "默忆", "content": "在吗", "_item": None}
     listen_chat._commit_reply_success(msg, last_preview)
     assert last_preview["默忆"] == "默忆\n在吗\n14:40\n"
+
+
+def test_image_fallback_commit_does_not_poison_anchor_and_lose_next_text():
+    """P0 生产 bug 复现（issue 4024c90b，2026-07-07 客户实测）：
+    客户发图片（不产生 bubble）后紧跟一句文字问题（在 bot 回完图片兜底话术之前就到达），
+    bot 对图片走 F1 回退保底路径 emit（用预览 content="[图片]"，scan_unread ~1029行），
+    DELIVERED 后 _commit_reply_success 若把 _REPLY_ANCHOR 设成这个"[图片]"幻影文本——
+    它在真实 bubbles 里永远匹配不到（图片从不产生 bubble 条目）——下一轮 split_trailing_incoming
+    锚点回退成"最后一条 outgoing"（bot 自己刚发的兜底回复），而客户那句问题在时序上正好排在
+    这条 outgoing 之前，于是被判定为"锚点之前的旧消息"永久丢弃、再也不回复。
+
+    正确行为：非文本回退路径的 commit 不能用不可复现的预览文本毒化 _REPLY_ANCHOR；
+    下一轮 split_trailing_incoming 必须仍能捞到客户那句"这个多少钱"。
+    """
+    listen_chat._REPLY_ANCHOR.clear()
+
+    # 图片轮：F1 回退保底 emit（scan_unread 里 c["content"]="[图片]"，_last_incoming 同源）
+    image_round_msg = {
+        "sender": "默忆", "content": "[图片]",
+        "_preview_name": "默忆\n[1条] \n[图片]\n11:00\n",
+        "_last_incoming": "[图片]", "_item": None,
+    }
+    listen_chat._commit_reply_success(image_round_msg, last_preview={})
+
+    # 客户实际聊天面板时序（旧→新）：老回复 -> 客户紧跟图片发的新问题 -> bot 对图片的兜底回复
+    bubbles = [
+        {"text": "旧回复内容", "direction": "outgoing"},
+        {"text": "这个多少钱", "direction": "incoming"},
+        {"text": "能看，直接发内容或者截图过来", "direction": "outgoing"},
+    ]
+    tail = listen_chat.split_trailing_incoming(
+        bubbles, badge_n=1, replied_anchor=listen_chat._REPLY_ANCHOR.get("默忆"))
+    assert tail == ["这个多少钱"], (
+        f"图片后紧跟的客户消息不应被永久丢弃，实际 tail={tail!r}"
+    )
