@@ -1,6 +1,10 @@
 package com.zenithjoy.agent.account
 
 import android.accessibilityservice.AccessibilityService
+import android.accessibilityservice.GestureDescription
+import android.graphics.Path
+import android.graphics.Rect
+import android.os.Build
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -177,33 +181,152 @@ class DeviceAccountScanService : AccessibilityService() {
 
     // ── 无障碍界面操作 ────────────────────────────────────────────────────────
 
-    /** 打开抖音"切换账号"界面（进入我-头像-切换账号，真机版式待人工核实，见接缝清单）。 */
+    /**
+     * 打开抖音"切换账号"面板。真机(抖音39.4.0)实测路径：底部 我 tab → 个人页顶部
+     * content-desc="切换账号"(clickable) → 弹出 recycler_view 账号面板。
+     * 原实现只在"当前屏"找"切换账号"——若触发时在主页 feed 则永远找不到(OPEN_PANEL_FAILED)，
+     * 故先点 我 tab(content-desc"我，按钮")导航到个人页，"切换账号"节点这时才进树。
+     */
     private suspend fun openSwitchAccountPanel(): Boolean {
-        val root = awaitRootInActiveWindow() ?: return false
-        val switchEntry = findNodeByContentDesc(root, "切换账号") ?: findNodeByIds(
-            root,
-            "com.ss.android.ugc.aweme:id/switch_account_entry",
-            "com.ss.android.ugc.aweme:id/tv_switch_account",
-        )
-        if (switchEntry == null) {
-            android.util.Log.w(TAG, "switch-account entry not found on current screen")
+        // 先把抖音拉到已知前台(扫描触发时它可能后台/停在任意子页)。
+        launchDouyinApp()
+        if (!awaitDouyinForeground()) {
+            android.util.Log.w(TAG, "抖音未到前台，OPEN_PANEL_FAILED")
             return false
         }
-        switchEntry.performAction(AccessibilityNodeInfo.ACTION_CLICK)
-        delay(400L)
-        return awaitRootInActiveWindow(attempts = 4) != null
+        // CLEAR_TOP relaunch 后抖音本已前台(awaitDouyinForeground 秒返回)，但"顶掉子页→落主页feed"的
+        // 导航还没完成，必须等它沉降再点，否则坐标点打在旧页上(实测 OPEN_PANEL_FAILED 真凶)。
+        delay(2200L)
+        // 【关键】必须用【物理】分辨率算底部导航坐标：resources.displayMetrics 是 app 可用区(不含
+        // 系统导航栏，实测 2543<2664)，*0.975 会落在真"我"tab 上方 ~130px 打到视频点赞区(诊断实证)。
+        val (sw, sh) = realScreenSize()
+        val meX = sw * 0.90f  // 我 tab 在最右列: 1084/1200≈0.90
+        val meY = sh * 0.979f // 最底行: 2610/2664≈0.979
+        android.util.Log.i(TAG, "realScreen=${sw}x${sh} 我tap=($meX,$meY)")
+        // 真机(抖音39.4.0)实测：主页 feed 底部导航"我"tab 是 Lynx 渲染【不进无障碍树】，只能坐标点。
+        repeat(3) { attempt ->
+            if (attempt > 0) {
+                launchDouyinApp(); awaitDouyinForeground(maxAttempts = 8); delay(2000L)
+            }
+            tapAtCoordinate(meX, meY) // 我 tab
+            delay(1500L)
+            val profileRoot = awaitRootInActiveWindow()
+            val switchEntry = profileRoot?.let {
+                // 真 content-desc 带后缀(如"切换账号，用户名有6条未读消息")且位置随账号态变，必须 contains 匹配。
+                findNodeByContentDescContains(it, "切换账号") ?: findNodeByText(it, "切换账号")
+            }
+            if (switchEntry != null) {
+                // "切换账号"是 clickable ImageView，坐标点其中心最稳(ACTION_CLICK 对抖音部分节点无效)。
+                tapNodeCenter(switchEntry)
+                delay(800L)
+                val panel = awaitRootInActiveWindow(attempts = 6)
+                if (panel != null && findNodeByIds(panel, "com.ss.android.ugc.aweme:id/recycler_view") != null) {
+                    return true
+                }
+                android.util.Log.w(TAG, "点了切换账号但面板未出现(第${attempt + 1}次)")
+            } else {
+                android.util.Log.w(TAG, "点我tab后未见切换账号(第${attempt + 1}次)，CLEAR_TOP重试")
+            }
+        }
+        android.util.Log.w(TAG, "switch-account panel 打不开 (OPEN_PANEL_FAILED)")
+        return false
     }
 
-    /** 读取"切换账号"面板里当前登录的抖音号列表；读取异常（无障碍超时/崩溃）返回 null。 */
+    /**
+     * 拉起抖音并【顶回主页 feed】。真机实测：抖音常恢复到上次的搜索/视频子页(SearchResultActivity 等)，
+     * 那些页没有底部导航 → 坐标点"我"tab 落空。用 NEW_TASK|CLEAR_TOP(=0x14000000) relaunch 启动
+     * activity(SplashActivity)，把它之上的子 activity 全 finish 掉，落到主页 feed(实测有效)。
+     */
+    private fun launchDouyinApp(): Boolean = try {
+        val launchIntent = applicationContext.packageManager.getLaunchIntentForPackage(DOUYIN_PKG)
+        if (launchIntent == null) false
+        else {
+            launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+            applicationContext.startActivity(launchIntent)
+            true
+        }
+    } catch (e: Exception) {
+        android.util.Log.e(TAG, "launchDouyinApp failed: ${e.message}"); false
+    }
+
+    /** 拉起抖音后等它真正到前台；期间前台是厂商弹窗(荣耀开屏广告/auto-jump/更新)则消掉。尽力而为。 */
+    private suspend fun awaitDouyinForeground(maxAttempts: Int = 24, delayMs: Long = 500L): Boolean {
+        repeat(maxAttempts) {
+            val root = rootInActiveWindow
+            val pkg = root?.packageName?.toString()
+            if (pkg == DOUYIN_PKG) return true
+            if (root != null && pkg != null) {
+                val isAutoJump = collectAllNodeTexts(root).any { it.contains("想要打开") || it.contains("是否允许") }
+                val allow = if (isAutoJump) (findNodeByText(root, "允许") ?: findNodeByContentDesc(root, "允许")) else null
+                val dismiss = allow ?: findNodeByText(root, "跳过") ?: findNodeByText(root, "关闭")
+                    ?: findNodeByText(root, "稍后") ?: findNodeByText(root, "取消") ?: findNodeByText(root, "我知道了")
+                    ?: findNodeByContentDesc(root, "跳过") ?: findNodeByContentDesc(root, "关闭")
+                if (dismiss != null) {
+                    (findClickableSelfOrAncestor(dismiss) ?: dismiss).performAction(AccessibilityNodeInfo.ACTION_CLICK)
+                } else {
+                    performGlobalAction(GLOBAL_ACTION_BACK)
+                }
+            }
+            delay(delayMs)
+        }
+        return rootInActiveWindow?.packageName?.toString() == DOUYIN_PKG
+    }
+
+    private fun collectAllNodeTexts(root: AccessibilityNodeInfo): List<String> {
+        val out = mutableListOf<String>()
+        val queue = ArrayDeque<AccessibilityNodeInfo>()
+        queue.add(root)
+        while (queue.isNotEmpty()) {
+            val node = queue.removeFirst()
+            node.text?.toString()?.let { if (it.isNotBlank()) out.add(it) }
+            node.contentDescription?.toString()?.let { if (it.isNotBlank()) out.add(it) }
+            for (i in 0 until node.childCount) node.getChild(i)?.let { queue.add(it) }
+        }
+        return out
+    }
+
+    /** 坐标点节点 bounds 中心（抖音部分 clickable=false/ACTION_CLICK 无效节点用手势点）。 */
+    private fun tapNodeCenter(node: AccessibilityNodeInfo) {
+        val r = Rect(); node.getBoundsInScreen(r)
+        tapAtCoordinate(r.exactCenterX(), r.exactCenterY())
+    }
+
+    private fun tapAtCoordinate(x: Float, y: Float) {
+        val path = Path().apply { moveTo(x, y) }
+        val gesture = GestureDescription.Builder()
+            .addStroke(GestureDescription.StrokeDescription(path, 0L, 60L))
+            .build()
+        dispatchGesture(gesture, null, null)
+    }
+
+    /** 物理屏幕尺寸(含系统栏)——底部导航坐标点必须用它，不能用 app 可用区的 displayMetrics。 */
+    private fun realScreenSize(): Pair<Int, Int> {
+        val wm = getSystemService(Context.WINDOW_SERVICE) as android.view.WindowManager
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            val b = wm.currentWindowMetrics.bounds
+            b.width() to b.height()
+        } else {
+            val dm = android.util.DisplayMetrics()
+            @Suppress("DEPRECATION") wm.defaultDisplay.getRealMetrics(dm)
+            dm.widthPixels to dm.heightPixels
+        }
+    }
+
+    /**
+     * 读取"切换账号"面板里当前登录的账号列表；读取异常（无障碍超时/崩溃）返回 null。
+     * 真机(抖音39.4.0)实测：面板 recycler_view 里每个账号行只有 tv_nickname(昵称)，
+     * 【没有】抖音号字段——原实现读 tv_douyin_id/account_item 恒空。故按昵称检测
+     * "这台机上登录了哪些号"；末行"添加或注册新账号"无 tv_nickname 天然被排除。
+     * 注意：昵称仅代表"在切换列表里"，不等于"真登着"——真活性由逐号点进核实(见 verifyAccountLiveness)判定。
+     */
     private suspend fun readAccountListFromPanel(): List<String>? {
         return try {
             val root = awaitRootInActiveWindow() ?: return null
-            val panelNodes = findNodesByIds(
-                root,
-                "com.ss.android.ugc.aweme:id/account_item",
-                "com.ss.android.ugc.aweme:id/tv_douyin_id",
+            val nicknames = filterAccountNicknames(
+                findNodesByIds(root, "com.ss.android.ugc.aweme:id/tv_nickname").map { it.text?.toString() }
             )
-            panelNodes.mapNotNull { it.text?.toString() }.filter { it.isNotBlank() }
+            android.util.Log.i(TAG, "readAccountListFromPanel: 读到 ${nicknames.size} 个账号(昵称)=$nicknames")
+            nicknames
         } catch (e: Exception) {
             android.util.Log.e(TAG, "readAccountListFromPanel failed: ${e.message}")
             null
@@ -245,6 +368,17 @@ class DeviceAccountScanService : AccessibilityService() {
         return null
     }
 
+    private fun findNodeByContentDescContains(root: AccessibilityNodeInfo, substr: String): AccessibilityNodeInfo? {
+        val queue = ArrayDeque<AccessibilityNodeInfo>()
+        queue.add(root)
+        while (queue.isNotEmpty()) {
+            val node = queue.removeFirst()
+            if (node.contentDescription?.toString()?.contains(substr) == true) return node
+            for (i in 0 until node.childCount) node.getChild(i)?.let { queue.add(it) }
+        }
+        return null
+    }
+
     private fun findNodeByIds(root: AccessibilityNodeInfo, vararg ids: String): AccessibilityNodeInfo? {
         for (id in ids) {
             val list = root.findAccessibilityNodeInfosByViewId(id)
@@ -259,6 +393,30 @@ class DeviceAccountScanService : AccessibilityService() {
             results.addAll(root.findAccessibilityNodeInfosByViewId(id))
         }
         return results
+    }
+
+    private fun findNodeByText(root: AccessibilityNodeInfo, text: String): AccessibilityNodeInfo? {
+        val queue = ArrayDeque<AccessibilityNodeInfo>()
+        queue.add(root)
+        while (queue.isNotEmpty()) {
+            val node = queue.removeFirst()
+            if (node.text?.toString() == text) return node
+            for (i in 0 until node.childCount) node.getChild(i)?.let { queue.add(it) }
+        }
+        return null
+    }
+
+
+    /** 节点自身或最近可点祖先（抖音很多可点项 text/desc 挂在不可点子节点上）。 */
+    private fun findClickableSelfOrAncestor(node: AccessibilityNodeInfo): AccessibilityNodeInfo? {
+        var cur: AccessibilityNodeInfo? = node
+        var hops = 0
+        while (cur != null && hops < 8) {
+            if (cur.isClickable) return cur
+            cur = cur.parent
+            hops++
+        }
+        return null
     }
 
     // ── 结果上报 ──────────────────────────────────────────────────────────────
@@ -278,6 +436,7 @@ class DeviceAccountScanService : AccessibilityService() {
 
     companion object {
         private const val TAG = "DeviceAccountScanSvc"
+        private const val DOUYIN_PKG = "com.ss.android.ugc.aweme"
         private const val SCAN_TOTAL_TIMEOUT_MS = 30_000L
 
         const val ACTION_ACCOUNT_SCAN_TASK = "com.zenithjoy.agent.ACCOUNT_SCAN_TASK"
@@ -304,6 +463,16 @@ class DeviceAccountScanService : AccessibilityService() {
 
         /** 采集/触达任务运行中本轮扫描应跳过；空闲时应正常扫描。 */
         internal fun shouldRunScan(): Boolean = !DeviceAccountModel.shouldSkipScanDueToMutex(ScanMutex.busy)
+
+        // ── 面板昵称行过滤（真机读到的原始 tv_nickname 文本 → 干净账号列表）───────
+        // 抖音39.4.0"切换账号"面板每行只暴露 tv_nickname（昵称），末行"添加或注册新账号"
+        // 是入口不是账号。规则：去空白 → 去空串 → 剔除"添加或注册新账号"入口 → 去重保序。
+        internal fun filterAccountNicknames(raw: List<String?>): List<String> =
+            raw.asSequence()
+                .mapNotNull { it?.trim() }
+                .filter { it.isNotEmpty() && it != "添加或注册新账号" }
+                .distinct()
+                .toList()
 
         // ── Step 2：扫描数据保鲜（读取失败保留旧列表标记 stale）────────────────
 
