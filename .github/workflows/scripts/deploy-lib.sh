@@ -736,20 +736,31 @@ staging_deploy_slot() {
     echo "❌ 确保常驻 staging plist 失败（生产 plist 缺失？）"; return 1
   fi
 
-  # 注册 + 重启 staging launchd。先杀占端口残留；用 bootout/bootstrap（新 launchctl 语法，
-  # load/unload 已 deprecated）把 plist 注册进 GUI domain，再用 kickstart -k 强制（重）启动——
-  # -k 对已存在的服务强制重启，比 launchctl start 可靠（start 对没注册的 label 静默空操作正是病根）。
+  # mmv: launchctl bootstrap gui/UID 在 SSH 会话里访问不到 GUI domain（与 production promote 同根因）。
+  # fix: kill + python3 读 plist EnvironmentVariables + start_new_session，不依赖 launchctl。
   kill_port "${ZJ_STAGING_PORT}"
-  local gui_domain; gui_domain="gui/$(id -u)"
-  local svc_target="${gui_domain}/${staging_label}"
-  launchctl bootout "${svc_target}" 2>/dev/null || true   # 幂等：没注册也无妨
-  if ! launchctl bootstrap "${gui_domain}" "${staging_plist}" 2>/dev/null; then
-    echo "ℹ️  bootstrap 失败/不支持，回退 launchctl load 兜底"
-    launchctl unload "${staging_plist}" 2>/dev/null || true
-    launchctl load "${staging_plist}" 2>/dev/null || true
+  local _stg_log="${ZJ_STAGING_LOG_DIR:-$HOME/Library/Logs}"
+  local _stg_out="${_stg_log}/zenithjoy-api.staging.log"
+  local _stg_err="${_stg_log}/zenithjoy-api.staging.error.log"
+  local _stg_py; _stg_py="$(mktemp /tmp/zj-staging-start.XXXXXX.py)"
+  cat > "${_stg_py}" << 'ZJ_START_PY'
+import plistlib, subprocess, os, sys
+plist_path, log_out, log_err = sys.argv[1], sys.argv[2], sys.argv[3]
+with open(plist_path, "rb") as f:
+    d = plistlib.load(f)
+env = dict(os.environ)
+env.update(d.get("EnvironmentVariables", {}))
+prog = d["ProgramArguments"]
+work = d.get("WorkingDirectory", os.path.dirname(prog[-1]))
+with open(log_out, "a") as fo, open(log_err, "a") as fe:
+    proc = subprocess.Popen(prog, env=env, cwd=work, stdout=fo, stderr=fe, start_new_session=True)
+    print(f"staging PID={proc.pid}")
+ZJ_START_PY
+  if ! python3 "${_stg_py}" "${staging_plist}" "${_stg_out}" "${_stg_err}"; then
+    rm -f "${_stg_py}"
+    echo "❌ 启动 staging 进程失败（python3 plist-env）"; return 1
   fi
-  launchctl kickstart -k "${svc_target}" 2>/dev/null \
-    || launchctl start "${staging_label}" 2>/dev/null || true
+  rm -f "${_stg_py}"
 
   # 等 staging health
   local up=0
