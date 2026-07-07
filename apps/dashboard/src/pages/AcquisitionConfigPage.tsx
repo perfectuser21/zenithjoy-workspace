@@ -271,11 +271,9 @@ function KeywordsAndOpeningBlock() {
 
 interface CollectTask {
   id: string;
-  keywords: string[];
+  keyword: string;
   status: string;
   created_at: string;
-  video_count: number;
-  lead_count_raw: number;
 }
 
 const COLLECT_STATUS_LABEL: Record<string, string> = {
@@ -300,7 +298,7 @@ function CollectTasksBlock() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch('/api/acquisition/collect-tasks');
+      const res = await fetch('/api/acquisition/keyword-tasks');
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const json = (await res.json()) as { success: boolean; data?: { tasks: CollectTask[] }; tasks?: CollectTask[] };
       const list = json.data?.tasks ?? (json as unknown as { tasks: CollectTask[] }).tasks ?? [];
@@ -385,22 +383,18 @@ function CollectTasksBlock() {
                 <th className="py-2 pr-4">关键词</th>
                 <th className="py-2 pr-4">状态</th>
                 <th className="py-2 pr-4">创建时间</th>
-                <th className="py-2 pr-4">视频数</th>
-                <th className="py-2 pr-4">Lead 数</th>
               </tr>
             </thead>
             <tbody>
               {tasks.map((t) => (
                 <tr key={t.id} className="border-b border-slate-100 dark:border-slate-700/50">
                   <td className="py-2 pr-4 text-gray-900 dark:text-white max-w-[200px] truncate">
-                    {Array.isArray(t.keywords) ? t.keywords.join('、') : String(t.keywords)}
+                    {t.keyword}
                   </td>
                   <td className="py-2 pr-4">{COLLECT_STATUS_LABEL[t.status] ?? t.status}</td>
                   <td className="py-2 pr-4 text-gray-500 dark:text-gray-400 whitespace-nowrap">
                     {t.created_at ? new Date(t.created_at).toLocaleString('zh-CN', { hour12: false }) : '—'}
                   </td>
-                  <td className="py-2 pr-4">{t.video_count ?? 0}</td>
-                  <td className="py-2 pr-4">{t.lead_count_raw ?? 0}</td>
                 </tr>
               ))}
             </tbody>
