@@ -44,6 +44,7 @@ export const OPTIONAL_ENV: { name: string; reason: string }[] = [
   { name: 'DASHSCOPE_API_KEY', reason: '阿里灵积凭据，缺则不走 dashscope 路径' },
   { name: 'PIAPI_API_KEY', reason: 'PiAPI 凭据，缺则对应能力不可用' },
   { name: 'OCR_RELAY_URL', reason: 'OCR 中继地址，缺则跳过 OCR 中继' },
+  { name: 'ANDROID_APK_COS_URL', reason: '安卓 APK COS 直链，缺则用默认 COS 固定路径（CI assembleRelease 后 --force 覆盖上传该固定 path）' },
 
   // —— 微信客服（Path 4，可调参数 + 路径，均有默认）——
   { name: 'WECHAT_CS_MODEL', reason: '微信客服模型名，缺则用默认模型' },
