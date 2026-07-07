@@ -59,6 +59,7 @@ HTTP=$(curl -s -o "$TMP" -w "%{http_code}" --max-time 15 \
   -X POST "${API_BASE}/api/acquisition/keyword-search" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer ${TEST_TOKEN}" \
+  -H "X-Tenant-Id: ${SEEDED_TENANT_ID}" \
   -d '{"keyword":"装修"}')
 [ "$HTTP" = "200" ] || { cat "$TMP"; fail "POST keyword-search expected 200, got $HTTP"; }
 ok "POST /api/acquisition/keyword-search → 200"
@@ -89,6 +90,7 @@ HTTP=$(curl -s -o "$TMP" -w "%{http_code}" --max-time 10 \
   -X POST "${API_BASE}/api/acquisition/keyword-search" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer ${TEST_TOKEN}" \
+  -H "X-Tenant-Id: ${SEEDED_TENANT_ID}" \
   -d '{}')
 [ "$HTTP" = "400" ] || { cat "$TMP"; fail "missing keyword: expected 400, got $HTTP"; }
 ERR=$(node -e "const d=JSON.parse(require('fs').readFileSync('$TMP','utf8'));process.stdout.write(d.error||'')")
