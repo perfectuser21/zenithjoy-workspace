@@ -154,4 +154,62 @@ class DeviceAccountModelWarmupTest {
         assertEquals(0, report.aliveCount)
         assertEquals(0, report.offlineCount)
     }
+
+    // ── 我页几何定位（真机 Honor100/抖音39.4.0 dump 实测 bounds，标签分离结构）─────
+    // 我页粉丝数不是"4768粉丝"合并文本，而是 数值 TextView + "粉丝"label 上下两个节点；
+    // 昵称在"抖音号：xxx"锚点正上方。混淆 resource-id(thp/5pm)随版本变，必须靠几何+稳定中文锚点。
+
+    private fun profileNodes() = listOf(
+        DeviceAccountModel.TextNode("秦军餐饮", 445, 350, 733, 447),
+        DeviceAccountModel.TextNode("抖音号：perfect21xx", 445, 455, 820, 507),
+        DeviceAccountModel.TextNode("创建 AI 形象", 465, 543, 701, 600),
+        DeviceAccountModel.TextNode("5.3万", 52, 756, 193, 833),
+        DeviceAccountModel.TextNode("获赞", 77, 833, 167, 895),
+        DeviceAccountModel.TextNode("12", 297, 756, 355, 833),
+        DeviceAccountModel.TextNode("互关", 281, 833, 371, 895),
+        DeviceAccountModel.TextNode("167", 459, 756, 548, 833),
+        DeviceAccountModel.TextNode("关注", 459, 833, 549, 895),
+        DeviceAccountModel.TextNode("4768", 637, 756, 768, 833),
+        DeviceAccountModel.TextNode("粉丝", 657, 833, 747, 895),
+    )
+
+    @Test
+    fun `follower value is the node directly above the 粉丝 label`() {
+        assertEquals("4768", DeviceAccountModel.findValueAboveLabel(profileNodes(), "粉丝"))
+    }
+
+    @Test
+    fun `like count value sits above 获赞 label`() {
+        assertEquals("5.3万", DeviceAccountModel.findValueAboveLabel(profileNodes(), "获赞"))
+    }
+
+    @Test
+    fun `following count value sits above 关注 label, not confused with adjacent columns`() {
+        assertEquals("167", DeviceAccountModel.findValueAboveLabel(profileNodes(), "关注"))
+    }
+
+    @Test
+    fun `missing label yields null`() {
+        assertNull(DeviceAccountModel.findValueAboveLabel(profileNodes(), "不存在"))
+    }
+
+    @Test
+    fun `nickname is the node directly above the 抖音号 anchor`() {
+        assertEquals("秦军餐饮", DeviceAccountModel.findTextAboveAnchor(profileNodes(), "抖音号"))
+    }
+
+    @Test
+    fun `no 抖音号 anchor (e g logged out page) yields null nickname`() {
+        val loginPage = listOf(
+            DeviceAccountModel.TextNode("手机号登录", 100, 400, 500, 460),
+            DeviceAccountModel.TextNode("获取验证码", 100, 600, 500, 660),
+        )
+        assertNull(DeviceAccountModel.findTextAboveAnchor(loginPage, "抖音号"))
+    }
+
+    @Test
+    fun `follower text parsed from profile geometry yields numeric count`() {
+        val followerText = DeviceAccountModel.findValueAboveLabel(profileNodes(), "粉丝")
+        assertEquals(4768L, DeviceAccountModel.parseFollowerCount(followerText))
+    }
 }
