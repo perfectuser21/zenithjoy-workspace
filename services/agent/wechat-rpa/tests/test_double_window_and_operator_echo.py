@@ -158,3 +158,49 @@ def test_background_preview_trigger_still_works(monkeypatch):
     last_preview = {"默忆": "默忆\n旧回复\n15:02\n"}
     out = listen_chat.scan_unread(mw, last_preview)
     assert out and "客户又说了话" in out[0]["content"]
+
+
+# ── issue 4024c90b：图片/语音回退保底 emit 不能毒化 _REPLY_ANCHOR ──────────────
+
+def test_image_fallback_emit_omits_last_incoming(monkeypatch):
+    """P0 生产 bug（2026-07-07 客户实测，issue 4024c90b）：客户发图片——不产生
+    bubble、read_chat_bubbles 只读到旧的 outgoing——badge=1 触发 F1 回退保底路径
+    （scan_unread ~1024行），用预览 content="[图片]" emit。
+
+    这条 emit DELIVERED 后若把 _last_incoming 设成"[图片]"，会被 _commit_reply_success
+    写进 _REPLY_ANCHOR——这个文本在真实 bubbles 里永远匹配不到（图片从不产生 bubble
+    条目）——下一轮 split_trailing_incoming 找不到锚点会回退成"最后一条 outgoing"，
+    把排在 bot 这条兜底回复之前、客户紧跟图片发的真实文字问题误判成"锚点之前的
+    旧消息"永久丢弃。
+
+    守卫：F1 回退保底 emit 出的 msg 字典禁止携带 _last_incoming。
+    """
+    monkeypatch.setattr(listen_chat, "read_chat_bubbles", lambda mw: [
+        {"text": "旧回复", "direction": "outgoing"},
+    ])
+    listen_chat._REPLY_ANCHOR.clear()
+    mw = _MW([_Item("默忆\n[1条] \n[图片]\n11:00\n")])
+    out = listen_chat.scan_unread(mw, {})
+    assert out, "badge=1 的图片消息必须走回退保底 emit，不能静默不回"
+    assert out[0]["content"] == "[图片]"
+    assert "_last_incoming" not in out[0], (
+        "回退保底 emit 禁止携带 _last_incoming（不可复现的预览兜底文本会毒化 "
+        f"_REPLY_ANCHOR），实际 msg={out[0]!r}"
+    )
+
+    # DELIVERED 后提交：_REPLY_ANCHOR 不应被这条幻影文本改写
+    listen_chat._REPLY_ANCHOR["默忆"] = "上一句真实文字"
+    listen_chat._commit_reply_success(out[0], last_preview={})
+    assert listen_chat._REPLY_ANCHOR.get("默忆") == "上一句真实文字"
+
+    # 客户紧跟图片发的新问题在时序上排在 bot 兜底回复之前 —— 用保留下来的真实
+    # 锚点切分，必须仍能捞到它，不能被误判成"锚点之前的旧消息"丢弃。
+    bubbles = [
+        {"text": "上一句真实文字", "direction": "incoming"},
+        {"text": "旧回复", "direction": "outgoing"},
+        {"text": "这个多少钱", "direction": "incoming"},
+        {"text": "能看，直接发内容或者截图过来", "direction": "outgoing"},
+    ]
+    tail = listen_chat.split_trailing_incoming(
+        bubbles, badge_n=1, replied_anchor=listen_chat._REPLY_ANCHOR.get("默忆"))
+    assert tail == ["这个多少钱"]
