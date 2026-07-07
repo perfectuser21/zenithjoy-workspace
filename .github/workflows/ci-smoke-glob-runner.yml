@@ -1,20 +1,14 @@
-name: Smoke Glob Runner (report-only)
+name: Smoke Glob Gate
 
 # ───────────────────────────────────────────────────────────────────────────
-# smoke glob-runner —— report-only 守卫地基（Issue a4699d21）
+# smoke glob-gate —— PASS 基线棘轮闸（前身 report-only，Issue a4699d21 的"下一步"）
 #
-# 背景：.github/workflows/scripts/smoke/ 下有 146 个 *-smoke.sh，但只有 ~48 个
-# 被现有 workflow 逐个点名跑进 CI。剩下 ~98 个里大多数是纯 DB/API（curl + psql）
-# 冒烟脚本，本可在 clean CI 跑，却从没跑过 → 长期 drift 无人发现。
-#
-# 本 job 起标准 postgres + apps/api，自动发现 smoke 目录下全部 *-smoke.sh，
-# 跳过 DENYLIST（真机/RPA：pywinauto 真执行、真微信、扫码——CI 跑不了）后全跑，
-# 出一份"现在真能过几个 / 几个 drift 失败"的报告。
-#
-# ⚠️ report-only：本 job **不阻塞合并**。
-#   - 整个 job continue-on-error: true（job 失败不让 PR 变红）
-#   - 不在分支保护的 required checks 里
-#   - 这是测试守卫地基的第一刀；稳定后再单独 ratchet 成必跑闸（下一步，非本 PR）
+# 规则：
+#   - smoke-baseline.txt 内的脚本 = 必绿（FAIL 重试 1 次后仍败 → job 红）
+#   - 基线外脚本 FAIL = 存量债，仅 ::warning:: 报告（见 docs/smoke-debt-report.md）
+#   - 基线条目在磁盘缺失 / 落入 DENYLIST → job 红（防删/挪脚本绕闸）
+#   - PR 级规则见 baseline-lint job（新脚本必进基线 / 删基线行须 BASELINE-REMOVE:）
+#   - 聚合 required check：Smoke Glob Gate Passed（仅 pull_request 事件）
 # ───────────────────────────────────────────────────────────────────────────
 
 on:
@@ -32,11 +26,9 @@ concurrency:
 
 jobs:
   smoke-glob-runner:
-    name: Smoke Glob Runner (report-only)
+    name: Smoke Glob Runner
     runs-on: ubuntu-latest
     timeout-minutes: 25
-    # report-only：本 job 失败绝不阻塞合并
-    continue-on-error: true
 
     services:
       postgres:
@@ -144,16 +136,14 @@ jobs:
           done
           curl -fs http://localhost:5200/health || (cat /tmp/apps-api.log && exit 1)
 
-      - name: Discover + run all CI-capable smoke scripts (report-only)
+      - name: Discover + run all CI-capable smoke scripts (ratchet gate)
         id: glob
         run: |
           set -uo pipefail
           DIR=".github/workflows/scripts/smoke"
+          BASELINE=".github/workflows/scripts/smoke-baseline.txt"
 
-          # ── DENYLIST：真机/RPA smoke，CI 跑不了（真实执行 pywinauto / 真微信 /
-          #    扫码 / 浏览器自动化）。只列"真去执行真机动作"的；纯 grep 源码做静态
-          #    结构校验的 wechat-*-smoke.sh / path4-*-smoke.sh 不在此列（CI 能跑）。
-          #    依据：report-only 首轮本地实跑结果（见 PR body）。
+          # ── DENYLIST：真机/RPA smoke，CI 跑不了（原样保留） ──
           DENYLIST="
           wechat-auto-launch-smoke.sh
           wechat-rpa-auto-reply-smoke.sh
@@ -167,11 +157,27 @@ jobs:
             return 1
           }
 
+          in_baseline() { grep -qxF "$1" "$BASELINE"; }
+
+          # wechat-rpa-real-agent 内含 npm install + build，90s 偶发超时，单独放宽
+          script_timeout() {
+            case "$1" in
+              wechat-rpa-real-agent-smoke.sh) echo 240 ;;
+              *) echo 90 ;;
+            esac
+          }
+
+          run_one() { timeout "$(script_timeout "$1")" bash "$DIR/$1"; }
+
           RESULTS=$(mktemp)
-          PASS=0; FAIL=0; SKIP=0
+          PASS=0; DEBT_FAIL=0; GATE_FAIL=0; SKIP=0
           for f in "$DIR"/*.sh; do
             name=$(basename "$f")
             if is_denied "$name"; then
+              if in_baseline "$name"; then
+                echo "::error::基线脚本 $name 同时在 DENYLIST（绕闸状态），二选一：移出基线（BASELINE-REMOVE）或移出 DENYLIST"
+                GATE_FAIL=$((GATE_FAIL+1))
+              fi
               echo "::group::SKIP (denylist 真机/RPA) $name"; echo "skipped"; echo "::endgroup::"
               printf '%s\tSKIP\t-\n' "$name" >> "$RESULTS"
               SKIP=$((SKIP+1))
@@ -179,35 +185,99 @@ jobs:
             fi
             echo "::group::RUN $name"
             chmod +x "$f"
-            if timeout 90 bash "$f"; then
+            if run_one "$name"; then
               echo "→ PASS $name"
               printf '%s\tPASS\t0\n' "$name" >> "$RESULTS"
               PASS=$((PASS+1))
             else
               rc=$?
-              echo "→ FAIL ($rc) $name"
-              printf '%s\tFAIL\t%s\n' "$name" "$rc" >> "$RESULTS"
-              FAIL=$((FAIL+1))
+              if in_baseline "$name"; then
+                echo "→ FAIL ($rc) $name [基线内，重试 1 次]"
+                sleep 5
+                if run_one "$name"; then
+                  echo "→ PASS (retry) $name"
+                  printf '%s\tPASS-RETRY\t0\n' "$name" >> "$RESULTS"
+                  PASS=$((PASS+1))
+                else
+                  rc2=$?
+                  echo "::error::基线内 smoke $name FAIL (exit $rc2，含重试)——棘轮闸阻断"
+                  printf '%s\tGATE-FAIL\t%s\n' "$name" "$rc2" >> "$RESULTS"
+                  GATE_FAIL=$((GATE_FAIL+1))
+                fi
+              else
+                echo "::warning::存量债 smoke $name FAIL (exit $rc)（不阻塞，清偿见 docs/smoke-debt-report.md）"
+                printf '%s\tDEBT-FAIL\t%s\n' "$name" "$rc" >> "$RESULTS"
+                DEBT_FAIL=$((DEBT_FAIL+1))
+              fi
             fi
             echo "::endgroup::"
           done
 
-          TOTAL=$((PASS+FAIL))
+          # 防删/挪脚本绕闸：基线条目必须在磁盘存在
+          BASELINE_TOTAL=0
+          while IFS= read -r b; do
+            [ -z "$b" ] && continue
+            BASELINE_TOTAL=$((BASELINE_TOTAL+1))
+            if [ ! -f "$DIR/$b" ]; then
+              echo "::error::基线条目 $b 在 $DIR 不存在（删/挪脚本必须走 BASELINE-REMOVE 流程）"
+              GATE_FAIL=$((GATE_FAIL+1))
+            fi
+          done < "$BASELINE"
+
+          TOTAL=$((PASS+DEBT_FAIL+GATE_FAIL))
           {
-            echo "# Smoke Glob Runner 报告（report-only）"
+            echo "# Smoke Glob Gate 报告（棘轮闸）"
             echo ""
             echo "- 候选执行（非 denylist）: **$TOTAL**"
             echo "- ✅ PASS: **$PASS**"
-            echo "- ❌ FAIL: **$FAIL**"
+            echo "- 🔴 基线内 FAIL（阻断）: **$GATE_FAIL** / 基线共 $BASELINE_TOTAL"
+            echo "- ⚠️ 存量债 FAIL（不阻断）: **$DEBT_FAIL**"
             echo "- ⏭️ SKIP（denylist 真机/RPA）: **$SKIP**"
             echo ""
-            echo "## 失败清单"
+            echo "## 阻断清单（基线内 FAIL）"
+            awk -F'\t' '$2=="GATE-FAIL"{print "- 🔴 `"$1"` (exit "$3")"}' "$RESULTS" || true
             echo ""
-            awk -F'\t' '$2=="FAIL"{print "- `"$1"` (exit "$3")"}' "$RESULTS" || true
+            echo "## 存量债清单（不阻断）"
+            awk -F'\t' '$2=="DEBT-FAIL"{print "- `"$1"` (exit "$3")"}' "$RESULTS" || true
             echo ""
-            echo "> ⚠️ report-only：本 job 不阻塞合并。失败=drift 信号，逐个根治后再 ratchet 成必跑闸。"
+            echo "> 棘轮规则：基线内必绿；存量债转绿后请把脚本名加进 smoke-baseline.txt（棘轮只进不退）。"
           } >> "$GITHUB_STEP_SUMMARY"
 
-          echo "TOTAL=$TOTAL PASS=$PASS FAIL=$FAIL SKIP=$SKIP"
-          # report-only：永远 exit 0，不让本步骤红
+          echo "TOTAL=$TOTAL PASS=$PASS GATE_FAIL=$GATE_FAIL DEBT_FAIL=$DEBT_FAIL SKIP=$SKIP"
+          if [ "$GATE_FAIL" -gt 0 ]; then
+            echo "::error::Smoke Glob Gate 阻断：$GATE_FAIL 个基线内脚本 FAIL"
+            exit 1
+          fi
           exit 0
+
+  baseline-lint:
+    name: Smoke Baseline Lint
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      PR_BODY: ${{ github.event.pull_request.body }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Run lint-smoke-baseline
+        run: bash .github/workflows/scripts/lint-smoke-baseline.sh origin/main
+
+  # 聚合 required check（照抄 ci-l1-process.yml l1-passed 模式：PR-only，
+  # 不裸比 != success 以免把 push/schedule 下 skipped 的 baseline-lint 判红）
+  gate:
+    name: Smoke Glob Gate Passed
+    needs: [smoke-glob-runner, baseline-lint]
+    if: always() && github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check gates
+        run: |
+          check() {
+            if [ "$2" != "success" ]; then echo "❌ $1: $2"; exit 1; fi
+            echo "✅ $1"
+          }
+          check "smoke-glob-runner" "${{ needs.smoke-glob-runner.result }}"
+          check "baseline-lint"     "${{ needs.baseline-lint.result }}"
