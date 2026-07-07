@@ -1,4 +1,3 @@
-account-me-smoke.sh
 acq-sse-smoke.sh
 acquisition-sse-nginx-route-smoke.sh
 admin-platform-sessions-pages-smoke.sh
