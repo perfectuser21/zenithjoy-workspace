@@ -200,3 +200,14 @@ export async function getInstallPackDotenv(): Promise<string> {
   }
   return res.text();
 }
+
+// Line02 Path2 Step3 — 安卓客户端自助装机绑定（下载页 API：APK 直链 + 深链二维码 + 激活码）
+export interface AndroidInstallPack {
+  apk_url: string;
+  deeplink: string;
+  license_key: string;
+  version: string;
+}
+export function getAndroidInstallPack(): Promise<AndroidInstallPack> {
+  return request<AndroidInstallPack>('/agent/install-pack/android');
+}

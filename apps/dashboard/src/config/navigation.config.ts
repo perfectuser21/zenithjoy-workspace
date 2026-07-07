@@ -83,6 +83,8 @@ export const autopilotPageComponents: Record<string, () => Promise<{ default: Co
   // Walking Skeleton #1 — 客户首次成功路径（抖音版）
   'AgentDownloadPage': () => import('../pages/AgentDownloadPage'),
   'DouyinBindPage': () => import('../pages/DouyinBindPage'),
+  // Line02 Path2 Step3 — 安卓客户端自助装机绑定（下载页 + 深链二维码）
+  'AndroidDownloadPage': () => import('../pages/AndroidDownloadPage'),
   // Path 2 Sprint A — 飞书集成
   'FeishuBindTenant': () => import('../pages/FeishuBindTenant'),
   // zj2 Smart Acquisition — 获客 Leads
@@ -222,6 +224,7 @@ export const additionalRoutes: RouteConfig[] = [
   { path: '/clips', component: 'ContentClipperPage', requireAuth: true },
   { path: '/video-remake', component: 'VideoRemakePipelinePage', requireAuth: true },
   { path: '/dashboard/agent', component: 'AgentDownloadPage', requireAuth: true },
+  { path: '/dashboard/android', component: 'AndroidDownloadPage', requireAuth: true },
   { path: '/license', component: 'LicensePage', requireAuth: true },
   { path: '/admin/customers', component: 'AdminCustomersPage', requireAuth: true, requireSuperAdmin: true },
   { path: '/operator', component: 'OperatorPage', requireAuth: true, requireSuperAdmin: true },
