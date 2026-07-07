@@ -772,6 +772,7 @@ def _read_trailing_for(mw: Any, cand: Dict[str, Any],
     _jiggle_msg_list(mw)
     time.sleep(_BUBBLE_READ_POLL_SLEEP)
     bubbles2 = read_chat_bubbles(mw)
+    _double_improved = False  # 双读是否有改善（UIA 节点仍在加载的信号）
     if bubbles2:
         stripped2, msgs2 = _split(bubbles2)
         if len(msgs2) > len(msgs):
@@ -780,8 +781,13 @@ def _read_trailing_for(mw: Any, cand: Dict[str, Any],
             _log(f"bubble_incomplete sender={cand['sender']} badge={cand['badge']} "
                  f"首读={len(msgs)} 双读={len(msgs2)} → 用双读结果")
             stripped, msgs = stripped2, msgs2
-    # 角标加严：双读后仍少于角标数 → 再滚一次重读（最后一搏，绝不静默）
-    if cand["badge"] > 0 and len(msgs) < cand["badge"]:
+            _double_improved = True
+    # 角标加严：双读后仍少于角标数 **且** 双读有改善（UIA 节点仍在加载）→ 再滚一次重读
+    # v1.0.110（Issue 4024c90b）：badge 计图片/语音等非文本消息，read_chat_bubbles 只能
+    # 读到文字（非文本 ListItem name 为空被过滤），故 badge > len(msgs) 在图片场景下永远
+    # 成立——但此时节点已稳定（双读无改善），第三次 jiggle 属误触发，可能把新到文字
+    # 消息滚出视口丢失。仅当双读确实有改善（进一步加载的信号）时才执行第三次 jiggle。
+    if cand["badge"] > 0 and len(msgs) < cand["badge"] and _double_improved:
         if record_skip is not None:
             record_skip("bubble_incomplete_reread")
         _jiggle_msg_list(mw)
