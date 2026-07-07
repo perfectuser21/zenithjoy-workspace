@@ -54,6 +54,10 @@ class DebugE2ETriggerReceiver : BroadcastReceiver() {
                 Log.i(TAG, "DEBUG_E2E scan: requestId=${route.requestId} deviceId=${route.deviceId}")
                 DeviceAccountScanService.dispatchTask(ctx, route.requestId, route.tenantId, route.deviceId)
             }
+            is DebugE2ERouter.Route.Warmup -> {
+                Log.i(TAG, "DEBUG_E2E warmup: requestId=${route.requestId} operator=${route.operatorNickname}")
+                DeviceAccountScanService.dispatchWarmupTask(ctx, route.requestId, route.deviceId, route.operatorNickname)
+            }
             DebugE2ERouter.Route.Unknown ->
                 Log.w(TAG, "DEBUG_E2E unknown flow: ${intent.getStringExtra("flow")}")
         }
