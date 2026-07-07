@@ -18,16 +18,19 @@
 | Path 2 客户智能获客 | user_facing | not_started | [Notion](https://www.notion.so/35ac40c2ba6381ed8df4f3fa0b64f5bf) |
 | Path 4 客户私域 AI 接管 | user_facing | not_started | [Notion](https://www.notion.so/AI-35ac40c2ba6381afaf97e3bc8e3b0fb4) |
 
-**Path 2 的 6 步**（smoke 文件待建：`.github/workflows/scripts/smoke/golden-path-2-smoke.sh`）：
-1. 注册自动登录（复用 Path 1）✅ done
-2. 装客户端 + Agent 自动连中台（复用 Path 1）✅ done
-3. 绑客户飞书企业（多租户 OAuth）+ 系统自动建 Bitable 3 张表（获客画像 / 对标视频 / Lead）
-4. 客户在飞书 Bitable 填获客画像（行业/关键词/钩子文案）+ 手填对标视频 URL 清单（thin 手填，加厚后接「对标账号→自动拉视频」复用 `competitor-research.ts`）
-5. 绑 1 个抖音**小号**（与 Path 1 主号 session 物理隔离 — 不同 Chrome user-data-dir + cookie 容器 + `agent_platform_sessions` 加 `role` 字段 `main`/`burner`）
-6. 评论区挖客闭环：读飞书对标视频 → 抓 5 条评论 → 抖音号公开回评+私信带**企微号** → 企微 webhook 收加好友事件 → AI 首答 → 写飞书 Lead 表
+**Path 2 的步骤**（2026-07-07 用户更正：整条**去飞书、改本地**；decision 431acd2c）：
+1. 注册客户端自动 ✅ done
+2. 装客户端 ✅ done
+3. **Android 端 Agent 连中台**（安卓独立一条，**不复用 Path 1**——Path 1 是另一套；需单独确认）
+4. ~~绑客户飞书企业~~ **已删除（过时）**
+5. 系统自动建 **3 张本地表**（获客画像 / 对标视频 / Lead）落**本地中台 DB**（不再是飞书 Bitable）
+6. 客户在**我们本地界面/dashboard** 填获客画像（行业/关键词/钩子）+ 手填对标视频 URL（不再是飞书）
+7. 手机端登录 **2-3 个抖音小号**（`agent_platform_sessions` 加 `role` `main`/`burner` 物理隔离）+ 中台**检测登录态**（`DeviceAccountScanService` 读抖音「切换账号」面板，真机待调通）
+8. 评论区挖客闭环：读对标视频 → 抓 5 条评论 → 抖音号公开回评+私信带**企微号** → 企微 webhook 收加好友 → AI 首答 → 写**本地 Lead 表**
 
-> **微信通道分工**：Path 2 走**企微**（官方 API，处理陌生流量首答 + Lead 写飞书）；Path 4 走**个人微信**（PoC `wechat_bot.py`/`wechat_rpa.py` 已在 xian-pc 桌面验证 wxauto4+pyautogui 跑通，Lead 自验扫码绑普通号）。两条通道互不冲突，不要混用。
-> **第一刀只 1 个抖音小号 + 1 个对标视频 URL + 1 条评论触达**。加厚到 3-5 小号 + 多视频矩阵 + 自动选词必须有真实封号/限流证据驱动。
+> **微信通道分工**：Path 2 走**企微**（官方 API，处理陌生流量首答 + 写本地 Lead 表）；Path 4 走**个人微信**（PoC `wechat_bot.py`/`wechat_rpa.py` 已在 xian-pc 桌面验证 wxauto4+pyautogui 跑通，Lead 自验扫码绑普通号）。两条通道互不冲突，不要混用。
+> **第一刀只 1-3 个抖音小号 + 1 个对标视频 URL + 1 条评论触达**。加厚到多视频矩阵 + 自动选词必须有真实封号/限流证据驱动。
+> **已验证**：第 7 步 warmup 关注 + 私信触达（Android agent）真机跑通（PR #1147）；账号登录检测（第 7 步）代码在但真机未验。
 
 **Path 1 的 6 步**（在 `.github/workflows/scripts/smoke/golden-path-1-smoke.sh`）：
 1. 注册自动登录（含 free license）
