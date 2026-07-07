@@ -15,15 +15,80 @@ interface BurnerSession {
   status: string;
   account_nickname?: string;
   bound_at?: string;
+  agent_id?: string | null;
   agent_hostname?: string | null;
   agent_nickname?: string | null;
   agent_status?: string | null;
+}
+
+interface WarmupLiveness {
+  nickname: string;
+  alive: boolean;
+  followers: number | null;
+  reason?: string | null;
+  checked_at?: string | null;
 }
 
 async function fetchSessions(): Promise<BurnerSession[]> {
   const r = await fetch('/api/agent/burner/sessions');
   const j = await r.json();
   return j?.data?.sessions ?? [];
+}
+
+/**
+ * Line02 养号验活面板：某 agent（设备）最近一次每号活/掉线（掉线标红）+ 粉丝 + 验活时间。
+ * 设备级按真实抖音昵称展示（account_label↔昵称无映射，故按 warmup 读到的真实昵称）。
+ * 无验活记录 → 返回 null（不占位）。
+ */
+export function WarmupLivenessPanel({ agentId, hostname }: { agentId: string; hostname?: string | null }) {
+  const [rows, setRows] = useState<WarmupLiveness[]>([]);
+  const [loaded, setLoaded] = useState(false);
+
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const r = await fetch(`/api/agent/burner/warmup-liveness?agent_id=${encodeURIComponent(agentId)}`);
+        const j = await r.json();
+        if (alive) setRows(j?.data?.liveness ?? []);
+      } catch {
+        if (alive) setRows([]);
+      } finally {
+        if (alive) setLoaded(true);
+      }
+    })();
+    return () => { alive = false; };
+  }, [agentId]);
+
+  if (!loaded || rows.length === 0) return null;
+
+  return (
+    <div className="mt-3 rounded-lg border border-slate-200 dark:border-slate-700 p-3">
+      <div className="mb-2 text-xs font-medium text-gray-500 dark:text-gray-400">
+        养号验活 · {hostname ?? agentId}
+      </div>
+      <ul className="space-y-1">
+        {rows.map((r) => (
+          <li
+            key={r.nickname}
+            data-alive={r.alive ? 'true' : 'false'}
+            className={`flex items-center justify-between rounded px-2 py-1 text-sm ${
+              r.alive ? '' : 'bg-red-50 dark:bg-red-900/20'
+            }`}
+          >
+            <span className={r.alive ? 'text-gray-900 dark:text-white' : 'text-red-700 dark:text-red-300 font-medium'}>
+              {r.alive ? '✅' : '🔴'} {r.nickname}
+            </span>
+            <span className="text-xs text-gray-500 dark:text-gray-400">
+              {r.followers != null ? `${r.followers} 粉` : '粉丝未知'}
+              {r.checked_at ? ` · ${new Date(r.checked_at).toLocaleString()}` : ''}
+              {!r.alive ? ' · 掉线，去手机重登' : ''}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
 }
 
 function StatusBadge({ status }: { status: string }) {
@@ -146,6 +211,16 @@ export default function AcquisitionAccountsPage() {
                 暂无小号 — 在下方绑定第一个
               </div>
             )}
+            {/* 每个绑定设备一个养号验活面板（有验活记录才显示，掉线号标红）*/}
+            {Array.from(
+              new Map(
+                sessions
+                  .filter((s) => s.agent_id)
+                  .map((s) => [s.agent_id as string, s.agent_hostname ?? null] as const),
+              ).entries(),
+            ).map(([agentId, hostname]) => (
+              <WarmupLivenessPanel key={agentId} agentId={agentId} hostname={hostname} />
+            ))}
           </>
         )}
       </section>
