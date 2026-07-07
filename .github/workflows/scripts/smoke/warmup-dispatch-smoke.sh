@@ -14,7 +14,7 @@
 
 set -uo pipefail
 
-API_BASE="${API_BASE:-http://localhost:5200}"
+API_BASE="${API_BASE:-http://localhost:5201}"  # 默认 staging(5201) 而非 prod(5200)，防本地误打生产；CI 用 API_BASE 覆盖
 DB="${DB_URL:-${DATABASE_URL:-postgresql://postgres:postgres@localhost:5432/zenithjoy_test}}"
 
 ok()   { echo "✅ $1"; }

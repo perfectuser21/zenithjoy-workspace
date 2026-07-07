@@ -646,15 +646,16 @@ router.post('/warmup-result', async (req: Request, res: Response) => {
   const errCode: string = typeof error_code === 'string' ? error_code : '';
   const report = { total, alive, offline, results, error_code: errCode };
   const taskStatus = errCode ? 'failed' : 'done';
-  await pool.query(
-    `UPDATE zenithjoy.publish_tasks SET status=$2, response=$3::jsonb, updated_at=NOW() WHERE id=$1`,
-    [task_id, taskStatus, JSON.stringify(report)],
-  );
-  // error_code 非空（MUTEX_BUSY/超时/…）→ 保留各号上次状态，不 upsert（不误判掉线）
+  // 先写 liveness 再置 task 终态（非事务，但顺序保证可恢复）：若某条 upsert 失败抛错，
+  // task 仍为 queued（未 done）→ 幂等不短路，agent 重传可补齐（upsert ON CONFLICT 幂等）。
+  // error_code 非空（MUTEX_BUSY/超时/…）→ 保留各号上次状态，不 upsert（不误判掉线）。
   let written = 0;
   if (!errCode && Array.isArray(results)) {
     for (const r of results) {
       if (!r || typeof r.nickname !== 'string' || !r.nickname) continue;
+      // followers 强制整数或 null——防脏数据（非数字）触发 integer 列写入报错、破坏本次回传。
+      const followers =
+        typeof r.followers === 'number' && Number.isFinite(r.followers) ? Math.trunc(r.followers) : null;
       await pool.query(
         `INSERT INTO zenithjoy.agent_warmup_liveness (agent_id, device_id, nickname, alive, followers, reason, checked_at)
          VALUES ($1,$2,$3,$4,$5,$6, now())
@@ -662,22 +663,31 @@ router.post('/warmup-result', async (req: Request, res: Response) => {
            SET alive=EXCLUDED.alive, followers=EXCLUDED.followers, reason=EXCLUDED.reason,
                device_id=EXCLUDED.device_id, checked_at=now()`,
         [agentId, device_id ?? null, r.nickname, !!r.alive,
-         (r.followers ?? null), (typeof r.reason === 'string' ? r.reason : null)],
+         followers, (typeof r.reason === 'string' ? r.reason : null)],
       );
       written += 1;
     }
   }
+  await pool.query(
+    `UPDATE zenithjoy.publish_tasks SET status=$2, response=$3::jsonb, updated_at=NOW() WHERE id=$1`,
+    [task_id, taskStatus, JSON.stringify(report)],
+  );
   return res.json(OK({ task_status: taskStatus, written }));
 });
 
 // ── warmup 验活状态查询（dashboard）——某 agent 最近每号活/掉线 ──
-router.get('/warmup-liveness', async (req: Request, res: Response) => {
+// 租户隔离：只能查本租户名下 agent（JOIN agents 校验归属，防跨租户读小号昵称/粉丝）。
+router.get('/warmup-liveness', tenantContextOptional, async (req: Request, res: Response) => {
+  const tenantId = tenantOf(req, res);
+  if (!tenantId) return;
   const agentId = String(req.query.agent_id || '');
   if (!agentId) return res.status(400).json(ERR('MISSING_AGENT_ID', 'agent_id 必填'));
   const r = await pool.query(
-    `SELECT nickname, alive, followers, reason, checked_at
-       FROM zenithjoy.agent_warmup_liveness WHERE agent_id=$1 ORDER BY checked_at DESC`,
-    [agentId],
+    `SELECT l.nickname, l.alive, l.followers, l.reason, l.checked_at
+       FROM zenithjoy.agent_warmup_liveness l
+       JOIN zenithjoy.agents a ON a.id = l.agent_id AND a.tenant_id = $2
+      WHERE l.agent_id = $1 ORDER BY l.checked_at DESC`,
+    [agentId, tenantId],
   );
   return res.json(OK({ liveness: r.rows }));
 });

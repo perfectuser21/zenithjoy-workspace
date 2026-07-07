@@ -9,24 +9,16 @@
  * 判别符走 payload.task_type（agent 侧照此判别）——getQueuedTasks 只 select publish 类型列
  * `type`，无 task_type 列，故不能靠 heartbeat 的 type 字段区分，必须走 payload。
  *
- * operator_nickname = 该 agent role='main' douyin session 最近 account_nickname（收尾切回的
- * 操作号，取自 publish_tasks.response）；无 main 号则空串（agent 侧空串=不切收尾号）。
+ * operator_nickname = 养号收尾要切回的操作号昵称。中台侧暂无可靠主号昵称源
+ * （agent_platform_sessions 无 nickname 列，抖音主号昵称只在设备本地），故自动路径默认空串
+ * = agent 不做收尾切号（切到错号比不切更糟）。手动 /warmup/run 可显式传 operator_nickname
+ * （staging 真机验证收尾切号用）。待补：主号昵称映射进中台后，这里按 agent 解析真实操作号。
  */
 import pool from '../db/connection';
 
-// $1 = tenantId 过滤（null=全租户，供每日 cron）。operator_nickname 子查询取该 agent 主号昵称。
+// $1 = tenantId 过滤（null=全租户，供每日 cron）。
 const CANDIDATE_SQL = `
-  SELECT DISTINCT a.id AS agent_id, a.tenant_id,
-    COALESCE((
-      SELECT pt.response->>'account_nickname'
-        FROM zenithjoy.publish_tasks pt
-        JOIN zenithjoy.agent_platform_sessions ms
-          ON ms.agent_id = a.id AND ms.role = 'main' AND ms.platform = 'douyin'
-       WHERE pt.agent_id = a.id
-         AND pt.task_type = 'qr_bind/douyin_burner'
-         AND pt.response->>'account_nickname' IS NOT NULL
-       ORDER BY pt.created_at DESC LIMIT 1
-    ), '') AS operator_nickname
+  SELECT DISTINCT a.id AS agent_id, a.tenant_id
   FROM zenithjoy.agents a
   JOIN zenithjoy.agent_platform_sessions s
     ON s.agent_id = a.id AND s.role = 'burner' AND s.platform = 'douyin'
@@ -34,7 +26,10 @@ const CANDIDATE_SQL = `
   WHERE a.last_heartbeat_at > now() - interval '2 minutes'
     AND ($1::uuid IS NULL OR a.tenant_id = $1::uuid)`;
 
-export async function enqueueWarmupTasks(tenantId?: string): Promise<{ enqueued: number }> {
+export async function enqueueWarmupTasks(
+  tenantId?: string,
+  operatorNickname = '',
+): Promise<{ enqueued: number }> {
   const cands = await pool.query(CANDIDATE_SQL, [tenantId ?? null]);
   let enqueued = 0;
   for (const c of cands.rows) {
@@ -48,7 +43,7 @@ export async function enqueueWarmupTasks(tenantId?: string): Promise<{ enqueued:
     await pool.query(
       `INSERT INTO zenithjoy.publish_tasks (agent_id, platform, status, task_type, payload, tenant_id, created_at, updated_at)
        VALUES ($1, 'douyin', 'queued', 'warmup', $2::jsonb, $3, now(), now())`,
-      [c.agent_id, JSON.stringify({ task_type: 'warmup', operator_nickname: c.operator_nickname || '' }), c.tenant_id],
+      [c.agent_id, JSON.stringify({ task_type: 'warmup', operator_nickname: operatorNickname || '' }), c.tenant_id],
     );
     enqueued += 1;
   }

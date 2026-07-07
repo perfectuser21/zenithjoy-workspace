@@ -14,7 +14,7 @@
 把已真机跑通的"养号验活"能力从"只能 adb 手动广播触发"接成"中台每天自动下发一次、结果回传中台写库、dashboard 能看到每个小号活/掉线"。照抄现有 dm_outreach 的完整往返模板（publish_tasks 下发 + POST 结果端点回传）。
 
 ## Golden Path（用户操作流程，单线性）
-1. 中台每日定时（北京 09:00，可调）→ 对每个有 burner 小号的**在线** android agent，若该 agent 24h 内无 pending/queued warmup 任务 → INSERT `zenithjoy.publish_tasks(agent_id, platform='android_douyin', status='queued', task_type='warmup', payload={operator_nickname})` → 系统队列出现一条 warmup 待派单
+1. 中台每日定时（北京 10:00，可调）→ 对每个有 burner 小号的**在线** android agent，若该 agent 24h 内无 pending/queued warmup 任务 → INSERT `zenithjoy.publish_tasks(agent_id, platform='douyin', status='queued', task_type='warmup', payload={task_type,operator_nickname})` → 系统队列出现一条 warmup 待派单
 2. agent 下次心跳 `POST /api/agent/heartbeat` → `getQueuedTasks` 拉到该行 → `HttpHeartbeatLoop.onTask` 识别 `type='warmup'` → 调 `DeviceAccountScanService.dispatchWarmupTask(this, task_id, machineId, operator_nickname)` → 系统开始逐号养号
 3. agent 逐号切进抖音刷 2-3 视频保活 + 读我页昵称/粉丝判活（已真机跑通）→ 收尾切回 operator 号 → 广播 `ACCOUNT_WARMUP_RESULT`(total/alive/offline + `[{nickname,alive,followers,reason}]`)
 4. `AgentService.warmupResultReceiver` 收广播 → 解析 → `POST /api/agent/burner/warmup-result {task_id, agent_id, device_id, total, alive, offline, results:[...], error_code}`（照抄 reportDmOutreachResult）

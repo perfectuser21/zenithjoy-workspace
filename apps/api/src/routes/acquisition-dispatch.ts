@@ -83,7 +83,9 @@ acquisitionDispatchRouter.post('/dispatch/run', tenantContextOptional, async (re
 acquisitionDispatchRouter.post('/warmup/run', tenantContextOptional, async (req: Request, res: Response) => {
   const tenantId = tenantOf(req, res);
   if (!tenantId) return;
-  const result = await enqueueWarmupTasks(tenantId);
+  // 手动触发可显式指定收尾要切回的操作号昵称（staging 真机验证切号用）；不传则空串=不切。
+  const operatorNickname = typeof req.body?.operator_nickname === 'string' ? req.body.operator_nickname : '';
+  const result = await enqueueWarmupTasks(tenantId, operatorNickname);
   return res.json(OK(result));
 });
 
