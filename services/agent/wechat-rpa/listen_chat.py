@@ -3938,7 +3938,9 @@ def _restart_wechat_for_uia() -> bool:
     """微信进程在跑但 mmui 无障碍树塌缩(UIA 读不到会话)时，重启微信以重建 a11y 树。
 
     步骤：① _activate_uia() 确保 screenreader 标志已置位(这样微信重启时就能读到 → mmui 构建完整树)
-         ② taskkill /F Weixin.exe(微信吞 WM_CLOSE，优雅退无效，只能强杀；实测 /F + 等待 + 重启不崩)
+         ② taskkill /F WeChatAppEx.exe + Weixin.exe（两个都必须杀：
+            WeChatAppEx.exe 是真正常驻进程；Weixin.exe 是 launcher。
+            只杀 Weixin.exe → WeChatAppEx.exe 残留叠加 → 死区永不修复，Issue 05630ae5）
          ③ launch_weixin() 重启。返回是否成功发起重启。非 Windows 直接 False。
     """
     if platform.system() != "Windows":
@@ -3946,6 +3948,10 @@ def _restart_wechat_for_uia() -> bool:
     try:
         _activate_uia()  # 杀之前先置标志：微信重启时读到 screenreader=on → mmui 构建完整 a11y 树
         import subprocess
+        subprocess.run(
+            ["taskkill", "/F", "/IM", "WeChatAppEx.exe", "/T"],
+            capture_output=True, timeout=20,
+        )
         subprocess.run(
             ["taskkill", "/F", "/IM", "Weixin.exe", "/T"],
             capture_output=True, timeout=20,
