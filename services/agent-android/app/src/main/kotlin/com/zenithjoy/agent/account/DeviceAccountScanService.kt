@@ -36,7 +36,7 @@ import kotlinx.coroutines.withTimeoutOrNull
  *   - 扫描流程无论成功/失败/超时都必须退出"切换账号"界面，用 [withTimeoutOrNull] 兜底强制返回，
  *     不留半开状态污染后续采集/触达操作
  */
-class DeviceAccountScanService : AccessibilityService() {
+class DeviceAccountScanService : AccessibilityService(), DouyinUiaOps {
 
     private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
 
@@ -70,15 +70,38 @@ class DeviceAccountScanService : AccessibilityService() {
         }
     }
 
+    private val warmupTriggerReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            if (intent?.action != ACTION_ACCOUNT_WARMUP_TASK) return
+            val requestId = intent.getStringExtra(EXTRA_REQUEST_ID) ?: ""
+            val thisDeviceId = intent.getStringExtra(EXTRA_DEVICE_ID) ?: ""
+            val operatorNickname = intent.getStringExtra(EXTRA_OPERATOR_NICKNAME) ?: ""
+            if (state != State.IDLE) {
+                android.util.Log.w(TAG, "busy — ignoring warmup request $requestId")
+                return
+            }
+            // 与扫描/采集/触达共用全局互斥锁：切号有副作用，占用时本轮养号跳过等下个周期。
+            if (!shouldRunScan()) {
+                android.util.Log.i(TAG, "warmup skipped this cycle — collect/outreach mutex is held")
+                sendWarmupResultBroadcast(requestId, thisDeviceId, DeviceAccountModel.aggregateWarmupReport(emptyList()), errorCode = "MUTEX_BUSY")
+                return
+            }
+            android.util.Log.i(TAG, "account warmup task received: requestId=$requestId operator=$operatorNickname")
+            startWarmup(requestId, thisDeviceId, operatorNickname)
+        }
+    }
+
     override fun onServiceConnected() {
         super.onServiceConnected()
         registerReceiver(scanTriggerReceiver, IntentFilter(ACTION_ACCOUNT_SCAN_TASK), RECEIVER_NOT_EXPORTED)
+        registerReceiver(warmupTriggerReceiver, IntentFilter(ACTION_ACCOUNT_WARMUP_TASK), RECEIVER_NOT_EXPORTED)
         android.util.Log.i(TAG, "account scan accessibility service connected")
     }
 
     override fun onDestroy() {
         scope.cancel()
         unregisterReceiver(scanTriggerReceiver)
+        unregisterReceiver(warmupTriggerReceiver)
         super.onDestroy()
     }
 
@@ -187,7 +210,7 @@ class DeviceAccountScanService : AccessibilityService() {
      * 原实现只在"当前屏"找"切换账号"——若触发时在主页 feed 则永远找不到(OPEN_PANEL_FAILED)，
      * 故先点 我 tab(content-desc"我，按钮")导航到个人页，"切换账号"节点这时才进树。
      */
-    private suspend fun openSwitchAccountPanel(): Boolean {
+    override suspend fun openSwitchAccountPanel(): Boolean {
         // 先把抖音拉到已知前台(扫描触发时它可能后台/停在任意子页)。
         launchDouyinApp()
         if (!awaitDouyinForeground()) {
@@ -419,6 +442,142 @@ class DeviceAccountScanService : AccessibilityService() {
         return null
     }
 
+    // ── 养号+验活合一 pass（Sprint 07070917，decision ba59f8b7）──────────────────
+    // DeviceAccountWarmupPass 的真机 UIA 实现。复用扫描已验证的 helper（launchDouyinApp/
+    // awaitDouyinForeground/realScreenSize/tapAtCoordinate/findNode* 等），新增刷视频/切号/读我页。
+
+    private fun startWarmup(requestId: String, thisDeviceId: String, operatorNickname: String) {
+        state = State.OPENING_SWITCH_ACCOUNT_PANEL
+        ScanMutex.busy = true
+        scope.launch {
+            var report = DeviceAccountModel.aggregateWarmupReport(emptyList())
+            runScanWithCleanup(
+                timeoutMs = WARMUP_TOTAL_TIMEOUT_MS,
+                block = {
+                    report = DeviceAccountWarmupPass(this@DeviceAccountScanService).run(operatorNickname)
+                    sendWarmupResultBroadcast(requestId, thisDeviceId, report, errorCode = "")
+                },
+                onAbnormalExit = { errorCode ->
+                    forceCloseToHome()
+                    sendWarmupResultBroadcast(requestId, thisDeviceId, report, errorCode = errorCode)
+                },
+                setIdle = {
+                    state = State.IDLE
+                    ScanMutex.busy = false
+                },
+            )
+        }
+    }
+
+    override suspend fun launchAndSettle(): Boolean {
+        launchDouyinApp()
+        val fg = awaitDouyinForeground()
+        // CLEAR_TOP relaunch 后"顶回主页 feed"未完成，必须沉降再操作（同扫描 openSwitchAccountPanel 的坑）。
+        delay(2200L)
+        return fg
+    }
+
+    override suspend fun readAccountNicknames(): List<String>? = readAccountListFromPanel()
+
+    /** 从当前态开面板→点该昵称行→回主页 feed。面板行只有 tv_nickname，按昵称精确匹配。 */
+    override suspend fun switchToAccountByNickname(nickname: String): Boolean {
+        if (!openSwitchAccountPanel()) return false
+        val panel = awaitRootInActiveWindow() ?: return false
+        val row = findNodesByIds(panel, "com.ss.android.ugc.aweme:id/tv_nickname")
+            .firstOrNull { it.text?.toString()?.trim() == nickname } ?: run {
+                android.util.Log.w(TAG, "切换账号面板里找不到昵称=$nickname")
+                return false
+            }
+        val clickable = findClickableSelfOrAncestor(row)
+        if (clickable != null) clickable.performAction(AccessibilityNodeInfo.ACTION_CLICK) else tapNodeCenter(row)
+        delay(2500L) // 切号后回主页 feed 沉降
+        return true
+    }
+
+    /** 主页 feed 刷 videoCount 个视频：每个先停留看 3.5s 再上滑（纯浏览，不点赞不关注不评论）。 */
+    override suspend fun browseFeed(videoCount: Int) {
+        repeat(videoCount) {
+            delay(3500L)
+            swipeUpFeed()
+        }
+        delay(1000L)
+    }
+
+    /** 切"我"页读 昵称 + "N粉丝"文本；读不到昵称（我页没起来/掉线）返回 null。 */
+    override suspend fun readMyProfile(): MyProfile? {
+        tapMyTab()
+        delay(1800L)
+        val root = awaitRootInActiveWindow() ?: return null
+        val nickname = findNodeByIds(
+            root,
+            "com.ss.android.ugc.aweme:id/title",
+            "com.ss.android.ugc.aweme:id/user_name",
+            "com.ss.android.ugc.aweme:id/tv_nickname",
+        )?.text?.toString()?.trim()
+        if (nickname.isNullOrEmpty()) {
+            android.util.Log.w(TAG, "我页读不到昵称")
+            return null
+        }
+        val followerText = collectAllNodeTexts(root).firstOrNull { it.contains("粉丝") }
+        android.util.Log.i(TAG, "我页 昵称=$nickname 粉丝文本=$followerText")
+        return MyProfile(nickname, followerText)
+    }
+
+    /** 当前树出现登录/注册页文本 = 掉线铁证之一。 */
+    override suspend fun sawLoginPage(): Boolean {
+        val root = rootInActiveWindow ?: return false
+        return collectAllNodeTexts(root).any {
+            it.contains("验证码") || it.contains("手机号登录") || it.contains("注册/登录") || it.contains("新用户注册")
+        }
+    }
+
+    override suspend fun switchToOperator(nickname: String): Boolean = switchToAccountByNickname(nickname)
+
+    override fun forceCloseToHome() {
+        launchDouyinApp()
+    }
+
+    /** 主页 feed 上滑到下一个视频。 */
+    private fun swipeUpFeed() {
+        val (w, h) = realScreenSize()
+        val path = Path().apply { moveTo(w / 2f, h * 0.72f); lineTo(w / 2f, h * 0.28f) }
+        val gesture = GestureDescription.Builder()
+            .addStroke(GestureDescription.StrokeDescription(path, 0L, 300L))
+            .build()
+        dispatchGesture(gesture, null, null)
+    }
+
+    /** 点底部"我"tab（物理分辨率坐标，同 openSwitchAccountPanel 的几何）。 */
+    private fun tapMyTab() {
+        val (sw, sh) = realScreenSize()
+        tapAtCoordinate(sw * 0.90f, sh * 0.979f)
+    }
+
+    private fun sendWarmupResultBroadcast(requestId: String, thisDeviceId: String, report: DeviceAccountModel.WarmupReport, errorCode: String) {
+        val arr = org.json.JSONArray()
+        report.results.forEach { r ->
+            arr.put(
+                org.json.JSONObject()
+                    .put("nickname", r.nickname)
+                    .put("alive", r.alive)
+                    .put("followers", r.followers ?: org.json.JSONObject.NULL)
+                    .put("reason", r.reason),
+            )
+        }
+        val intent = Intent(ACTION_ACCOUNT_WARMUP_RESULT).apply {
+            setPackage(applicationContext.packageName)
+            putExtra(EXTRA_REQUEST_ID, requestId)
+            putExtra(EXTRA_DEVICE_ID, thisDeviceId)
+            putExtra(EXTRA_WARMUP_TOTAL, report.total)
+            putExtra(EXTRA_WARMUP_ALIVE, report.aliveCount)
+            putExtra(EXTRA_WARMUP_OFFLINE, report.offlineCount)
+            putExtra(EXTRA_WARMUP_RESULTS, arr.toString())
+            putExtra(EXTRA_ERROR, errorCode)
+        }
+        sendBroadcast(intent)
+        android.util.Log.i(TAG, "warmup result: req=$requestId total=${report.total} alive=${report.aliveCount} offline=${report.offlineCount} err=$errorCode results=$arr")
+    }
+
     // ── 结果上报 ──────────────────────────────────────────────────────────────
 
     private fun sendScanResultBroadcast(requestId: String, ok: Boolean, stale: Boolean, accountIds: List<String>, errorCode: String) {
@@ -438,6 +597,8 @@ class DeviceAccountScanService : AccessibilityService() {
         private const val TAG = "DeviceAccountScanSvc"
         private const val DOUYIN_PKG = "com.ss.android.ugc.aweme"
         private const val SCAN_TOTAL_TIMEOUT_MS = 30_000L
+        // 逐号刷2-3视频(每个~3.5s)+切号，多号累计需更长；3min 兜底。
+        private const val WARMUP_TOTAL_TIMEOUT_MS = 180_000L
 
         const val ACTION_ACCOUNT_SCAN_TASK = "com.zenithjoy.agent.ACCOUNT_SCAN_TASK"
         const val ACTION_ACCOUNT_SCAN_RESULT = "com.zenithjoy.agent.ACCOUNT_SCAN_RESULT"
@@ -448,6 +609,13 @@ class DeviceAccountScanService : AccessibilityService() {
         const val EXTRA_RESULT_STALE = "result_stale"
         const val EXTRA_RESULT_ACCOUNT_IDS = "result_account_ids"
         const val EXTRA_ERROR = "error"
+        const val ACTION_ACCOUNT_WARMUP_TASK = "com.zenithjoy.agent.ACCOUNT_WARMUP_TASK"
+        const val ACTION_ACCOUNT_WARMUP_RESULT = "com.zenithjoy.agent.ACCOUNT_WARMUP_RESULT"
+        const val EXTRA_OPERATOR_NICKNAME = "operator_nickname"
+        const val EXTRA_WARMUP_TOTAL = "warmup_total"
+        const val EXTRA_WARMUP_ALIVE = "warmup_alive"
+        const val EXTRA_WARMUP_OFFLINE = "warmup_offline"
+        const val EXTRA_WARMUP_RESULTS = "warmup_results"
 
         fun dispatchTask(context: Context, requestId: String, tenantId: String, thisDeviceId: String) {
             val intent = Intent(ACTION_ACCOUNT_SCAN_TASK).apply {
@@ -455,6 +623,16 @@ class DeviceAccountScanService : AccessibilityService() {
                 putExtra(EXTRA_REQUEST_ID, requestId)
                 putExtra(EXTRA_TENANT_ID, tenantId)
                 putExtra(EXTRA_DEVICE_ID, thisDeviceId)
+            }
+            context.sendBroadcast(intent)
+        }
+
+        fun dispatchWarmupTask(context: Context, requestId: String, thisDeviceId: String, operatorNickname: String) {
+            val intent = Intent(ACTION_ACCOUNT_WARMUP_TASK).apply {
+                setPackage(context.packageName)
+                putExtra(EXTRA_REQUEST_ID, requestId)
+                putExtra(EXTRA_DEVICE_ID, thisDeviceId)
+                putExtra(EXTRA_OPERATOR_NICKNAME, operatorNickname)
             }
             context.sendBroadcast(intent)
         }

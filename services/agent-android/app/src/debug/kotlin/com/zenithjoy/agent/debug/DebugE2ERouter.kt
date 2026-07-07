@@ -15,6 +15,7 @@ object DebugE2ERouter {
             val accountLabel: String,
         ) : Route
         data class Scan(val requestId: String, val tenantId: String, val deviceId: String) : Route
+        data class Warmup(val requestId: String, val deviceId: String, val operatorNickname: String) : Route
         object Unknown : Route
     }
 
@@ -35,6 +36,11 @@ object DebugE2ERouter {
             requestId = extra("request_id").orEmpty(),
             tenantId = extra("tenant_id").orEmpty(),
             deviceId = extra("device_id").orEmpty(),
+        )
+        "warmup" -> Route.Warmup(
+            requestId = extra("request_id").orEmpty(),
+            deviceId = extra("device_id").orEmpty(),
+            operatorNickname = extra("operator_nickname").orEmpty(),
         )
         else -> Route.Unknown
     }

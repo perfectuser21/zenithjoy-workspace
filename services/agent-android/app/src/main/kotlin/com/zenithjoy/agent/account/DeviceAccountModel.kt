@@ -147,4 +147,51 @@ object DeviceAccountModel {
     fun shouldSkipScanDueToMutex(isCollectOrOutreachRunning: Boolean): Boolean {
         return isCollectOrOutreachRunning
     }
+
+    // ── 养号+验活合一 pass（Sprint 07070917，decision ba59f8b7）──────────────────
+    // 小号掉线特征 = 切进去就没了/进不去，不是弹重登页。故验活用"切进去+读只有真登着
+    // 才读得到的东西（我页昵称+粉丝数）"反证；读不到/还原成别号/撞登录页 = 掉线。
+
+    /**
+     * 解析抖音"我"页"N粉丝"文本为数值。支持纯数字("4768粉丝")、带空格("1196 粉丝")、
+     * "万"后缀("1.2万粉丝"→12000、"3万"→30000)；无数字("粉丝")/空/null 返回 null（= 读不到粉丝数，判掉线信号之一）。
+     */
+    fun parseFollowerCount(text: String?): Long? {
+        if (text.isNullOrBlank()) return null
+        val m = Regex("([0-9]+(?:\\.[0-9]+)?)\\s*(万)?").find(text) ?: return null
+        val num = m.groupValues[1].toDoubleOrNull() ?: return null
+        val mult = if (m.groupValues[2] == "万") 10_000.0 else 1.0
+        return (num * mult).toLong()
+    }
+
+    /** 逐号验活裁决（alive + 稳定 reason key，供上报与告警）。 */
+    data class LivenessVerdict(val alive: Boolean, val reason: String)
+
+    /**
+     * 综合判活：切进该号后读我页所得。任一"干净在线信号"不满足 = 掉线。
+     * 优先级：撞登录注册页 > 我页读不到(昵称 null) > 读不到粉丝数 > 昵称还原成别号 > 在线。
+     */
+    fun judgeAccountLiveness(
+        readNickname: String?,
+        targetNickname: String,
+        followerCount: Long?,
+        sawLoginPage: Boolean,
+    ): LivenessVerdict {
+        if (sawLoginPage) return LivenessVerdict(false, "login_page")
+        if (readNickname == null) return LivenessVerdict(false, "profile_unreadable")
+        if (followerCount == null) return LivenessVerdict(false, "no_follower_count")
+        if (readNickname != targetNickname) return LivenessVerdict(false, "account_reverted")
+        return LivenessVerdict(true, "alive")
+    }
+
+    /** 单号养号 pass 结果。 */
+    data class WarmupAccountResult(val nickname: String, val alive: Boolean, val followers: Long?, val reason: String)
+
+    /** 整轮养号 pass 汇总（上报中台用）。 */
+    data class WarmupReport(val total: Int, val aliveCount: Int, val offlineCount: Int, val results: List<WarmupAccountResult>)
+
+    fun aggregateWarmupReport(results: List<WarmupAccountResult>): WarmupReport {
+        val alive = results.count { it.alive }
+        return WarmupReport(total = results.size, aliveCount = alive, offlineCount = results.size - alive, results = results)
+    }
 }
