@@ -1,6 +1,6 @@
 {
   "lineId": "line04-wechat-cs",
-  "version": "1.0.110",
+  "version": "1.0.111",
   "displayName": "微信AI客服",
   "entry": "index.js",
   "platform": [
