@@ -74,6 +74,21 @@ jobs:
       - name: Build release APK
         run: gradle assembleRelease
 
+      - name: Upload APK to COS
+        if: github.ref == 'refs/heads/main'
+        env:
+          COS_SECRET_ID: ${{ secrets.COS_SECRET_ID }}
+          COS_SECRET_KEY: ${{ secrets.COS_SECRET_KEY }}
+        run: |
+          pip install coscmd -q
+          BUCKET="zenithjoy-static-1333590468"
+          ENDPOINT="cos.accelerate.myqcloud.com"
+          COS_PATH="/install-pack/android/zenithjoy-agent.apk"
+          APK=$(ls app/build/outputs/apk/release/*.apk | head -1)
+          coscmd config -a "$COS_SECRET_ID" -s "$COS_SECRET_KEY" -b "$BUCKET" -e "$ENDPOINT"
+          coscmd upload "$APK" "$COS_PATH" --force
+          echo "Uploaded: https://${BUCKET}.${ENDPOINT}${COS_PATH}"
+
       - name: Upload release APK
         uses: actions/upload-artifact@v4
         with:
