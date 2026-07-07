@@ -1,20 +1,16 @@
-name: Smoke Glob Runner (report-only)
+name: Smoke Glob Runner
 
 # ───────────────────────────────────────────────────────────────────────────
-# smoke glob-runner —— report-only 守卫地基（Issue a4699d21）
+# smoke glob-runner —— 棘轮闸（Ratchet Gate）
 #
-# 背景：.github/workflows/scripts/smoke/ 下有 146 个 *-smoke.sh，但只有 ~48 个
-# 被现有 workflow 逐个点名跑进 CI。剩下 ~98 个里大多数是纯 DB/API（curl + psql）
-# 冒烟脚本，本可在 clean CI 跑，却从没跑过 → 长期 drift 无人发现。
+# 设计原则：
+#   PASS 基线（smoke-baseline.txt）= 当前确认能过的 56 个脚本
+#   · 基线内任一脚本失败 → job 红灯，阻断合并（去掉 continue-on-error）
+#   · 基线外存量脚本失败 → 仅报告，不阻塞（144 个历史债）
+#   · PR 新增脚本未入基线且不在 denylist → job 红灯（新债不许欠）
+#   · 基线随修复逐步扩张（棘轮只进不退）
 #
-# 本 job 起标准 postgres + apps/api，自动发现 smoke 目录下全部 *-smoke.sh，
-# 跳过 DENYLIST（真机/RPA：pywinauto 真执行、真微信、扫码——CI 跑不了）后全跑，
-# 出一份"现在真能过几个 / 几个 drift 失败"的报告。
-#
-# ⚠️ report-only：本 job **不阻塞合并**。
-#   - 整个 job continue-on-error: true（job 失败不让 PR 变红）
-#   - 不在分支保护的 required checks 里
-#   - 这是测试守卫地基的第一刀；稳定后再单独 ratchet 成必跑闸（下一步，非本 PR）
+# 首建基线日期：2026-07-07（TOTAL=200 PASS=56 FAIL=144 SKIP=4）
 # ───────────────────────────────────────────────────────────────────────────
 
 on:
@@ -23,7 +19,7 @@ on:
   pull_request:
     branches: [main]
   schedule:
-    - cron: '0 19 * * *'   # 每天 03:00 UTC+8 跑一次，盯 drift
+    - cron: '0 19 * * *'   # 每天 03:00 UTC+8
   workflow_dispatch:
 
 concurrency:
@@ -32,11 +28,10 @@ concurrency:
 
 jobs:
   smoke-glob-runner:
-    name: Smoke Glob Runner (report-only)
+    name: Smoke Glob Runner
     runs-on: ubuntu-latest
-    timeout-minutes: 25
-    # report-only：本 job 失败绝不阻塞合并
-    continue-on-error: true
+    timeout-minutes: 30
+    # ⚠️ continue-on-error 已去除 → 基线失败会让 job 红灯
 
     services:
       postgres:
@@ -53,7 +48,6 @@ jobs:
           --health-retries 5
 
     env:
-      # 与 ci-l4-e2e-smoke.yml 的 smoke-api-contract job 保持一致
       DATABASE_HOST: localhost
       DATABASE_PORT: 5432
       DATABASE_USER: cecelia
@@ -75,21 +69,20 @@ jobs:
       FEISHU_STATE_SECRET: ci-only-state-secret-2026
       DASHBOARD_BASE_URL: http://localhost:5173
       SMOKE_TOKEN: smoke-secret-2026
-      # smoke 脚本用到的多种 base-url 别名，全部指向本 job 的 apps/api
       API_BASE: http://localhost:5200
       API_URL: http://localhost:5200
-      API_PORT: '5200'                       # 少数脚本用 API_PORT 默认 3001，强制 5200
+      API_PORT: '5200'
       BASE_URL: http://localhost:5200
       ZENITHJOY_API_BASE: http://localhost:5200
       API_BASE_URL: http://localhost:5200
-      # 少数脚本直接读 $DB 连接串
       DB: postgres://cecelia:cecelia@localhost:5432/cecelia
-      # fake executor base：本 repo 在 apps/api 里挂了 _smoke-fake-* 路由，指回自身
       FAKE_LLM_BASE: http://localhost:5200
       FAKE_AGENT_BASE: http://localhost:5200
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # 需要完整历史来检测 PR 新增脚本
 
       - uses: actions/setup-node@v4
         with:
@@ -116,7 +109,7 @@ jobs:
         working-directory: apps/api
         run: npm run build
 
-      - name: Start fake-feishu-server (部分 smoke 依赖)
+      - name: Start fake-feishu-server
         working-directory: apps/api
         run: |
           if [ -f test-utils/fake-feishu-server.ts ]; then
@@ -130,7 +123,7 @@ jobs:
               sleep 1
             done
           else
-            echo "fake-feishu-server.ts 不存在，跳过（依赖它的 smoke 会失败，report-only 接受）"
+            echo "fake-feishu-server.ts 不存在，跳过"
           fi
 
       - name: Start apps/api
@@ -144,70 +137,187 @@ jobs:
           done
           curl -fs http://localhost:5200/health || (cat /tmp/apps-api.log && exit 1)
 
-      - name: Discover + run all CI-capable smoke scripts (report-only)
+      - name: Smoke Glob Runner（棘轮模式）
         id: glob
         run: |
           set -uo pipefail
           DIR=".github/workflows/scripts/smoke"
+          BASELINE_FILE=".github/workflows/scripts/smoke-baseline.txt"
 
-          # ── DENYLIST：真机/RPA smoke，CI 跑不了（真实执行 pywinauto / 真微信 /
-          #    扫码 / 浏览器自动化）。只列"真去执行真机动作"的；纯 grep 源码做静态
-          #    结构校验的 wechat-*-smoke.sh / path4-*-smoke.sh 不在此列（CI 能跑）。
-          #    依据：report-only 首轮本地实跑结果（见 PR body）。
-          DENYLIST="
-          wechat-auto-launch-smoke.sh
-          wechat-rpa-auto-reply-smoke.sh
-          wechat-cs-visible-delivery-smoke.sh
-          line04-preflight-smoke.sh
-          "
+          # ── 校验基线文件存在 ────────────────────────────────────────────
+          if [ ! -f "$BASELINE_FILE" ]; then
+            echo "::error::$BASELINE_FILE 不存在，请先建立基线文件"
+            exit 1
+          fi
 
-          is_denied() {
-            local n="$1"
-            for d in $DENYLIST; do [ "$n" = "$d" ] && return 0; done
-            return 1
-          }
+          # ── 加载基线集合 ────────────────────────────────────────────────
+          declare -A BASELINE
+          while IFS= read -r line; do
+            [[ "$line" =~ ^#|^[[:space:]]*$ ]] && continue
+            BASELINE["$line"]=1
+          done < "$BASELINE_FILE"
+          echo "基线脚本数: ${#BASELINE[@]}"
 
+          # ── DENYLIST：真机/RPA，CI 不可运行 ────────────────────────────
+          declare -A DENYLIST
+          DENYLIST["wechat-auto-launch-smoke.sh"]=1
+          DENYLIST["wechat-rpa-auto-reply-smoke.sh"]=1
+          DENYLIST["wechat-cs-visible-delivery-smoke.sh"]=1
+          DENYLIST["line04-preflight-smoke.sh"]=1
+
+          # ── 检测 PR 新增脚本 ─────────────────────────────────────────────
+          declare -A NEW_IN_PR
+          if [ "${GITHUB_EVENT_NAME:-}" = "pull_request" ]; then
+            BASE_REF="${GITHUB_BASE_REF:-main}"
+            while IFS= read -r f; do
+              [ -z "$f" ] && continue
+              name=$(basename "$f")
+              NEW_IN_PR["$name"]=1
+            done < <(git diff --name-only --diff-filter=A "origin/$BASE_REF" HEAD \
+                       -- "$DIR/*.sh" 2>/dev/null || true)
+            echo "PR 新增 smoke 脚本: ${!NEW_IN_PR[*]:-（无）}"
+          fi
+
+          # ── 运行所有 smoke 脚本 ─────────────────────────────────────────
           RESULTS=$(mktemp)
-          PASS=0; FAIL=0; SKIP=0
+          PASS=0; FAIL_BASELINE=0; FAIL_LEGACY=0; SKIP=0; ERROR_NEW=0
+
           for f in "$DIR"/*.sh; do
+            [ -f "$f" ] || continue
             name=$(basename "$f")
-            if is_denied "$name"; then
-              echo "::group::SKIP (denylist 真机/RPA) $name"; echo "skipped"; echo "::endgroup::"
-              printf '%s\tSKIP\t-\n' "$name" >> "$RESULTS"
+
+            # Denylist → skip
+            if [ -n "${DENYLIST[$name]+x}" ]; then
+              echo "::group::SKIP (denylist 真机/RPA) $name"
+              echo "跳过（denylist）"
+              echo "::endgroup::"
+              printf '%s\tSKIP_DENYLIST\t-\n' "$name" >> "$RESULTS"
               SKIP=$((SKIP+1))
               continue
             fi
+
+            # 新增脚本未入基线且未入 denylist → 强制报错
+            if [ -n "${NEW_IN_PR[$name]+x}" ] && [ -z "${BASELINE[$name]+x}" ]; then
+              echo "::error::file=$DIR/$name::新增 smoke 脚本「$name」未在 smoke-baseline.txt 或 denylist 登记。请在同一 PR 中将其加入基线（能跑通）或加入 denylist（真机/RPA 不可 CI）。"
+              printf '%s\tERROR_NEW_UNREGISTERED\t-\n' "$name" >> "$RESULTS"
+              ERROR_NEW=$((ERROR_NEW+1))
+              continue
+            fi
+
+            # 运行脚本
             echo "::group::RUN $name"
             chmod +x "$f"
-            if timeout 90 bash "$f"; then
+            if timeout 90 bash "$f" 2>&1; then
               echo "→ PASS $name"
               printf '%s\tPASS\t0\n' "$name" >> "$RESULTS"
               PASS=$((PASS+1))
             else
               rc=$?
               echo "→ FAIL ($rc) $name"
-              printf '%s\tFAIL\t%s\n' "$name" "$rc" >> "$RESULTS"
-              FAIL=$((FAIL+1))
+              if [ -n "${BASELINE[$name]+x}" ]; then
+                printf '%s\tBASELINE_FAIL\t%s\n' "$name" "$rc" >> "$RESULTS"
+                FAIL_BASELINE=$((FAIL_BASELINE+1))
+                echo "::error::file=$DIR/$name::基线脚本失败（exit $rc）——CI 红灯"
+              else
+                printf '%s\tLEGACY_FAIL\t%s\n' "$name" "$rc" >> "$RESULTS"
+                FAIL_LEGACY=$((FAIL_LEGACY+1))
+                echo "::warning::file=$DIR/$name::存量债失败（exit $rc）——仅报告，不阻塞"
+              fi
             fi
             echo "::endgroup::"
           done
 
-          TOTAL=$((PASS+FAIL))
+          TOTAL=$((PASS + FAIL_BASELINE + FAIL_LEGACY))
+
+          # ── Step Summary ─────────────────────────────────────────────────
           {
-            echo "# Smoke Glob Runner 报告（report-only）"
+            echo "# Smoke Glob Runner 报告（棘轮模式）"
             echo ""
-            echo "- 候选执行（非 denylist）: **$TOTAL**"
-            echo "- ✅ PASS: **$PASS**"
-            echo "- ❌ FAIL: **$FAIL**"
-            echo "- ⏭️ SKIP（denylist 真机/RPA）: **$SKIP**"
+            echo "| 状态 | 数量 | 说明 |"
+            echo "|------|------|------|"
+            echo "| ✅ PASS（基线） | $PASS | 基线脚本通过 |"
+            echo "| ❌ BASELINE_FAIL | $FAIL_BASELINE | 基线脚本失败，**CI 红灯** |"
+            echo "| ⚠️ LEGACY_FAIL | $FAIL_LEGACY | 存量债失败，仅报告 |"
+            echo "| 🚫 SKIP | $SKIP | denylist 真机/RPA |"
+            echo "| 🆕 ERROR_NEW | $ERROR_NEW | 新增脚本未入基线，**CI 红灯** |"
             echo ""
-            echo "## 失败清单"
+            echo "> 棘轮基线：${#BASELINE[@]} 个脚本 | 本次候选执行：$TOTAL 个"
             echo ""
-            awk -F'\t' '$2=="FAIL"{print "- `"$1"` (exit "$3")"}' "$RESULTS" || true
-            echo ""
-            echo "> ⚠️ report-only：本 job 不阻塞合并。失败=drift 信号，逐个根治后再 ratchet 成必跑闸。"
+
+            if [ "$FAIL_BASELINE" -gt 0 ]; then
+              echo "## ❌ 基线失败（必须修复后才能合并）"
+              echo ""
+              awk -F'\t' '$2=="BASELINE_FAIL"{print "- \`"$1"\` (exit "$3")"}' "$RESULTS" || true
+              echo ""
+            fi
+
+            if [ "$ERROR_NEW" -gt 0 ]; then
+              echo "## 🆕 新增脚本未登记（必须处理后才能合并）"
+              echo ""
+              awk -F'\t' '$2=="ERROR_NEW_UNREGISTERED"{print "- \`"$1"\`"}' "$RESULTS" || true
+              echo ""
+              echo "> 处理方式：① 修复脚本并加入 smoke-baseline.txt；② 若是真机/RPA 脚本则加入 smoke-denylist（在 ci-smoke-glob-runner.yml DENYLIST）"
+              echo ""
+            fi
+
+            if [ "$FAIL_LEGACY" -gt 0 ]; then
+              echo "## ⚠️ 存量债 FAIL 清单（不阻塞，待逐步清偿）"
+              echo ""
+              echo "<details>"
+              echo "<summary>展开 $FAIL_LEGACY 个存量失败</summary>"
+              echo ""
+
+              # 按退出码分类
+              echo "### exit 7（DB/API 端点缺失，推测 schema 未迁移）"
+              awk -F'\t' '$2=="LEGACY_FAIL" && $3=="7"{print "- \`"$1"\`"}' "$RESULTS" || true
+              echo ""
+
+              echo "### exit 1（通用 API/断言失败，真 drift）"
+              awk -F'\t' '$2=="LEGACY_FAIL" && $3=="1"{print "- \`"$1"\`"}' "$RESULTS" || true
+              echo ""
+
+              echo "### exit 2（bash 逻辑错误 / 环境缺失）"
+              awk -F'\t' '$2=="LEGACY_FAIL" && $3=="2"{print "- \`"$1"\`"}' "$RESULTS" || true
+              echo ""
+
+              echo "### exit 4（外部依赖不可达，疑似真机/环境不兼容）"
+              awk -F'\t' '$2=="LEGACY_FAIL" && $3=="4"{print "- \`"$1"\`"}' "$RESULTS" || true
+              echo ""
+
+              echo "### exit 6（自定义错误）"
+              awk -F'\t' '$2=="LEGACY_FAIL" && $3=="6"{print "- \`"$1"\`"}' "$RESULTS" || true
+              echo ""
+
+              echo "### exit 99（超时或特殊条件）"
+              awk -F'\t' '$2=="LEGACY_FAIL" && $3=="99"{print "- \`"$1"\`"}' "$RESULTS" || true
+              echo ""
+
+              echo "### exit 124（超时 90s，疑似需要真实外部服务）"
+              awk -F'\t' '$2=="LEGACY_FAIL" && $3=="124"{print "- \`"$1"\`"}' "$RESULTS" || true
+              echo ""
+
+              echo "### 其他退出码"
+              awk -F'\t' '$2=="LEGACY_FAIL" && $3!="1" && $3!="2" && $3!="4" && $3!="6" && $3!="7" && $3!="99" && $3!="124"{print "- \`"$1"\` (exit "$3")"}' "$RESULTS" || true
+              echo ""
+
+              echo "</details>"
+              echo ""
+              echo "> **分类建议**："
+              echo "> - exit 7 / exit 4 / exit 124 → 排查是否需加入 denylist（环境不兼容）"
+              echo "> - exit 1 / exit 2 → 多为真 drift，需逐步修复后升入基线"
+            fi
           } >> "$GITHUB_STEP_SUMMARY"
 
-          echo "TOTAL=$TOTAL PASS=$PASS FAIL=$FAIL SKIP=$SKIP"
-          # report-only：永远 exit 0，不让本步骤红
-          exit 0
+          echo "TOTAL=$TOTAL PASS=$PASS FAIL_BASELINE=$FAIL_BASELINE FAIL_LEGACY=$FAIL_LEGACY SKIP=$SKIP ERROR_NEW=$ERROR_NEW"
+
+          # ── 棘轮判断：基线失败或新增脚本未登记 → 红灯 ──────────────────
+          FINAL_RC=0
+          if [ "$FAIL_BASELINE" -gt 0 ]; then
+            echo "❌ $FAIL_BASELINE 个基线脚本失败 → job 失败"
+            FINAL_RC=1
+          fi
+          if [ "$ERROR_NEW" -gt 0 ]; then
+            echo "❌ $ERROR_NEW 个新增脚本未入基线 → job 失败"
+            FINAL_RC=1
+          fi
+          exit $FINAL_RC

@@ -1,0 +1,66 @@
+# smoke-baseline.txt — 棘轮闸 PASS 基线（2026-07-07 首建）
+#
+# 规则：
+#   - 本文件列出的脚本「必须通过」；任意一个在 CI 失败 → job 红灯，阻断合并
+#   - 新增 smoke 脚本必须同时在本文件或 smoke-denylist.txt 登记，否则 CI 失败
+#   - 从基线移除脚本需要 PR 说明根因（不允许静默降级）
+#
+# 修改方式：PR 里同时修改脚本和本文件，CI 会验证基线完整性
+# 上次固化日期：2026-07-07（TOTAL=200 PASS=56 FAIL=144 SKIP=4）
+
+account-me-smoke.sh
+acq-sse-smoke.sh
+acquisition-sse-nginx-route-smoke.sh
+admin-platform-sessions-pages-smoke.sh
+agent-client-encapsulation-smoke.sh
+agent-core-self-upgrade-smoke.sh
+agent-form-smoke.sh
+agent-module-e2e-smoke.sh
+agent-self-heal-smoke.sh
+clips-smoke.sh
+cs-oneclick-setup-smoke.sh
+dashboard-walking-skeleton-1-smoke.sh
+deploy-version-selfcheck-smoke.sh
+golden-path-4-smoke.sh
+heartbeat-modules-smoke.sh
+line02-dm-dispatch-smoke.sh
+line04-client-wiring-smoke.sh
+line04-cs-autosend-no-feishu-smoke.sh
+line04-cs-memory-smoke.sh
+line04-cs-tenant-isolation-smoke.sh
+line04-delivery-selfcheck-throttle-smoke.sh
+line04-group-by-header-source-smoke.sh
+line04-per-cs-config-smoke.sh
+line04-phase0-observability-smoke.sh
+line04-real-wheel-source-smoke.sh
+line04-scan-from-top-source-smoke.sh
+line04-scroll-wheel-source-smoke.sh
+line04-ship-version-sync-smoke.sh
+line04-version-lock-closure-smoke.sh
+line04-wheel-mousemove-source-smoke.sh
+manual-verify-douyin.sh
+notion-sync-smoke.sh
+offscreen-version-gate-smoke.sh
+operator-page-medium-smoke.sh
+p4-ws2-feishu-bitable-smoke.sh
+path4-sprint-1-ws1-smoke.sh
+path4-sprint-1-ws2-smoke.sh
+path4-sprint-1-ws3-smoke.sh
+path4-sprint-1-ws4-smoke.sh
+path4-sprint-1-ws5-smoke.sh
+preflight-delivery-selfcheck-smoke.sh
+release-selfcontained-smoke.sh
+require-core-2023-smoke.sh
+rotation-normalize-smoke.sh
+session-health-smoke.sh
+sprint-2-1d-agent-uptime-smoke.sh
+sprint-2-1e-install-pack-smoke.sh
+staging-promote-smoke.sh
+staging-promote-workflow-smoke.sh
+staging-smoke.sh
+wechat-cs-config-smoke.sh
+wechat-cs-engine-smoke.sh
+wechat-cs-hardening-smoke.sh
+wechat-cs-per-account-ia-redesign-smoke.sh
+wechat-rpa-real-agent-smoke.sh
+ws2-three-template-builders-smoke.sh
