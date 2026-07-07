@@ -629,5 +629,58 @@ router.get('/dm-tasks/:task_id', async (req: Request, res: Response) => {
   );
 });
 
+// ── warmup 验活结果回传（Line02 每日养号）——tenant 服务端按 task_id 反查，幂等按 publish_tasks 状态 ──
+router.post('/warmup-result', async (req: Request, res: Response) => {
+  const { task_id, device_id, total, alive, offline, results, error_code } = req.body || {};
+  if (!task_id) return res.status(400).json(ERR('MISSING_TASK_ID', 'task_id 必填'));
+  const t = await pool.query(
+    `SELECT tenant_id, status, agent_id FROM zenithjoy.publish_tasks WHERE id=$1`,
+    [task_id],
+  );
+  if (t.rows.length === 0) return res.status(404).json(ERR('TASK_NOT_FOUND', 'task_id 未找到'));
+  const curStatus: string = t.rows[0].status;
+  const agentId: string = t.rows[0].agent_id;
+  // 幂等：已终态 → 短路（防重复回传重复写库）
+  if (curStatus === 'done' || curStatus === 'failed') return res.json(OK({ idempotent: true }));
+
+  const errCode: string = typeof error_code === 'string' ? error_code : '';
+  const report = { total, alive, offline, results, error_code: errCode };
+  const taskStatus = errCode ? 'failed' : 'done';
+  await pool.query(
+    `UPDATE zenithjoy.publish_tasks SET status=$2, response=$3::jsonb, updated_at=NOW() WHERE id=$1`,
+    [task_id, taskStatus, JSON.stringify(report)],
+  );
+  // error_code 非空（MUTEX_BUSY/超时/…）→ 保留各号上次状态，不 upsert（不误判掉线）
+  let written = 0;
+  if (!errCode && Array.isArray(results)) {
+    for (const r of results) {
+      if (!r || typeof r.nickname !== 'string' || !r.nickname) continue;
+      await pool.query(
+        `INSERT INTO zenithjoy.agent_warmup_liveness (agent_id, device_id, nickname, alive, followers, reason, checked_at)
+         VALUES ($1,$2,$3,$4,$5,$6, now())
+         ON CONFLICT (agent_id, nickname) DO UPDATE
+           SET alive=EXCLUDED.alive, followers=EXCLUDED.followers, reason=EXCLUDED.reason,
+               device_id=EXCLUDED.device_id, checked_at=now()`,
+        [agentId, device_id ?? null, r.nickname, !!r.alive,
+         (r.followers ?? null), (typeof r.reason === 'string' ? r.reason : null)],
+      );
+      written += 1;
+    }
+  }
+  return res.json(OK({ task_status: taskStatus, written }));
+});
+
+// ── warmup 验活状态查询（dashboard）——某 agent 最近每号活/掉线 ──
+router.get('/warmup-liveness', async (req: Request, res: Response) => {
+  const agentId = String(req.query.agent_id || '');
+  if (!agentId) return res.status(400).json(ERR('MISSING_AGENT_ID', 'agent_id 必填'));
+  const r = await pool.query(
+    `SELECT nickname, alive, followers, reason, checked_at
+       FROM zenithjoy.agent_warmup_liveness WHERE agent_id=$1 ORDER BY checked_at DESC`,
+    [agentId],
+  );
+  return res.json(OK({ liveness: r.rows }));
+});
+
 export default router;
 export { router as agentBurnerRouter };
