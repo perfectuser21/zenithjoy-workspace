@@ -123,3 +123,40 @@ def test_sender_cooldown_is_2s():
     """SENDER_COOLDOWN 15→2（用户决策 2026-07-03）：只防同秒重复，不再压响应。"""
     import config
     assert config.SENDER_COOLDOWN_SECONDS == 2.0
+
+
+def test_image_badge_not_counted_as_missing_text(monkeypatch):
+    """badge=2 含 1 图片 + 1 文字，图片在 UIA 树里无文本节点（media=True）→ 不触发第三次 jiggle。
+    回归：修复前图片场景 badge 加严 jiggle 恒触发，_jiggle_msg_list 把新到文字消息
+    滚出视口导致下条文字消息永久丢失（Issue 4024c90b）。
+    """
+    monkeypatch.setattr(listen_chat, "_open_chat",
+                        lambda mw, it, s, expect_content="": True)
+    monkeypatch.setattr(listen_chat, "_chat_title_matches", lambda mw, s: True)
+    monkeypatch.setattr(listen_chat, "_read_chat_header_texts", lambda mw: ["默忆"])
+    monkeypatch.setattr(listen_chat.time, "sleep", lambda s: None)
+    listen_chat._REPLY_ANCHOR.clear()
+
+    # 图片消息在 UIA 树无文本节点，由 read_chat_bubbles 以 media=True 标记；
+    # 文字消息正常带 text。badge=2 包含图片+文字两条计数。
+    bubbles_with_image = [
+        {"text": "旧回复", "direction": "outgoing"},
+        {"text": "", "direction": "incoming", "media": True},   # 图片消息
+        {"text": "你好", "direction": "incoming"},               # 文字消息
+    ]
+    jiggled = []
+    monkeypatch.setattr(listen_chat, "read_chat_bubbles",
+                        lambda mw: bubbles_with_image)
+    monkeypatch.setattr(listen_chat, "_jiggle_msg_list", lambda mw: jiggled.append(1))
+
+    cand = {"sender": "默忆", "content": "你好", "badge": 2,
+            "name": "默忆\n[2条] \n你好\n08:18\n", "_item": _Item("x")}
+    msgs, empty = listen_chat._read_trailing_for(_MW(), cand)
+
+    assert msgs == ["你好"], f"文字消息必须被读到，实际 {msgs!r}"
+    # v1.0.99 无条件双读只 jiggle 一次；图片条目已计入 badge 但不产生文本 msgs
+    # → 不应再触发第三次 badge 加严 jiggle（否则恒触发，可把下条文字消息滚出视口）
+    assert len(jiggled) == 1, (
+        f"图片场景不应触发 badge 加严第三次 jiggle（实际 jiggle {len(jiggled)} 次）；"
+        "badge 含图片计数，须扣除非文本气泡后再与 len(msgs) 比较"
+    )

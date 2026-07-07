@@ -254,8 +254,9 @@ def _is_system_bubble(text: str) -> bool:
 
 
 def strip_system_bubbles(bubbles: List[Dict[str, str]]) -> List[Dict[str, str]]:
-    """剔除系统气泡，保序。bubbles: [{"text","direction"}]。"""
-    return [b for b in bubbles if not _is_system_bubble(b.get("text", ""))]
+    """剔除系统气泡，保序。media=True 的非文本气泡（图片/语音）不剔。"""
+    return [b for b in bubbles
+            if b.get("media") or not _is_system_bubble(b.get("text", ""))]
 
 
 # ─── 已发送文本历史 + 回复锚点（2026-07-02 真机重构 v1.0.94）──────────────────────
@@ -380,6 +381,27 @@ def split_trailing_incoming(bubbles: List[Dict[str, str]], badge_n: int = 0,
     if badge_n > 0 and tail:
         return tail[-min(badge_n, len(tail)):]
     return []
+
+
+def _count_non_text_trailing(bubbles: List[Dict[str, str]],
+                             replied_anchor: Optional[str] = None) -> int:
+    """Trailing 区间内 media（图片/语音）incoming 气泡数（纯函数）。
+    锚点逻辑与 split_trailing_incoming 一致，仅计 media=True 的 incoming 条目。
+    """
+    anchor_idx = -1
+    if replied_anchor:
+        _na = "".join(replied_anchor.split())
+        for i, b in enumerate(bubbles):
+            if b.get("direction") != "incoming":
+                continue
+            if "".join((b.get("text") or "").split()) == _na:
+                anchor_idx = i
+    if anchor_idx < 0:
+        for i, b in enumerate(bubbles):
+            if b.get("direction") == "outgoing":
+                anchor_idx = i
+    return sum(1 for b in bubbles[anchor_idx + 1:]
+               if b.get("direction") == "incoming" and b.get("media"))
 
 
 def _stale_badge_confirmed(preview_content: str, bubbles: List[Dict[str, str]]) -> bool:
@@ -780,8 +802,11 @@ def _read_trailing_for(mw: Any, cand: Dict[str, Any],
             _log(f"bubble_incomplete sender={cand['sender']} badge={cand['badge']} "
                  f"首读={len(msgs)} 双读={len(msgs2)} → 用双读结果")
             stripped, msgs = stripped2, msgs2
-    # 角标加严：双读后仍少于角标数 → 再滚一次重读（最后一搏，绝不静默）
-    if cand["badge"] > 0 and len(msgs) < cand["badge"]:
+    # 角标加严：双读后仍少于文本消息期望数 → 再滚一次重读（最后一搏，绝不静默）
+    # badge 含图片/语音计数，须扣除已知非文本气泡数再比较，防图片场景恒判不完整
+    # （Issue 4024c90b：图片到达后下条文字消息被 jiggle 滚出视口永久丢失）
+    _non_text = _count_non_text_trailing(stripped, _REPLY_ANCHOR.get(cand["sender"]))
+    if cand["badge"] > 0 and len(msgs) < max(0, cand["badge"] - _non_text):
         if record_skip is not None:
             record_skip("bubble_incomplete_reread")
         _jiggle_msg_list(mw)
@@ -2401,8 +2426,6 @@ def read_chat_bubbles(mw: Any) -> List[Dict[str, str]]:
                 nm = (it.element_info.name or "").strip()
             except Exception:
                 continue
-            if not nm:
-                continue
             try:
                 r = it.rectangle()
                 top = r.top
@@ -2413,6 +2436,7 @@ def read_chat_bubbles(mw: Any) -> List[Dict[str, str]]:
                 if r.bottom <= lrect.top or r.top >= lrect.bottom:
                     continue
             # 显示序 = 时序；rect 取不到的 item 保持树序垫底
+            # nm 为空 = 图片/语音等非文本消息节点，以空字符串保留（供 badge 扣除计数）
             keyed.append(((0, top) if top is not None else (1, i), nm, r))
         keyed.sort(key=lambda x: x[0])
         # v1.0.104 像素判向为主：右侧采样带有微信绿 = outgoing（我方绿泡永远
@@ -2428,7 +2452,11 @@ def read_chat_bubbles(mw: Any) -> List[Dict[str, str]]:
             # v1.0.109 兜底：verdict=False（有效像素但非绿，如渲染未就绪）时仍查
             # 已发送历史——刚 DELIVERED 的气泡像素可能还是背景色，但文本在 _SENT_TEXTS。
             direction = "outgoing" if (verdict or _matches_any_sent(nm)) else "incoming"
-            out_bubbles.append({"text": nm, "direction": direction})
+            if nm:
+                out_bubbles.append({"text": nm, "direction": direction})
+            else:
+                # 非文本消息（图片/语音等）：以 media=True 标记，供 badge 扣除用
+                out_bubbles.append({"text": "", "direction": direction, "media": True})
         return out_bubbles
     # ── legacy 回退：Text 几何扫描 ────────────────────────────────────────────
     width = wr.right - wr.left
