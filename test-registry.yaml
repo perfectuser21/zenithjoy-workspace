@@ -4462,3 +4462,28 @@ agent_suite:
   status: active
   product: 客户智能获客
   note: "sprint(07071043): WarmupLivenessPanel 每号活/掉线标红(data-alive)+粉丝展示+无记录不渲染"
+
+# ── Line02 采集主链 P0 断链修复（网页关键词搜索→安卓 agent 拉取）───────────────
+- id: keyword-collect-mainline-smoke
+  path: .github/workflows/scripts/smoke/keyword-collect-mainline-smoke.sh
+  type: smoke
+  ci: L4
+  status: active
+  product: 客户智能获客
+  note: "sprint(07070707): keyword 采集主链真库端到端 smoke——带 X-Tenant-Id 建任务→tenant_id 写库正确→同租户 agent(pending-keyword-tasks)拉得到→前端列表(/keyword-tasks)看得到→清理"
+
+- id: line02-keyword-search-tenant
+  path: apps/api/src/routes/acquisition.test.ts
+  type: unit
+  ci: L3
+  status: active
+  product: 客户智能获客
+  note: "sprint(07070707): POST /keyword-search 挂 tenantContextOptional 修租户断链——无租户且无 session→401 NO_TENANT 不写库；带 X-Tenant-Id/session→200 且 tenant_id 写真值"
+
+- id: line02-keyword-tasks-list
+  path: apps/api/src/routes/acquisition.test.ts
+  type: unit
+  ci: L3
+  status: active
+  product: 客户智能获客
+  note: "sprint(07070707): 新增 GET /keyword-tasks 前端列表端点——无租户上下文→401 不查库；带 X-Tenant-Id→只 SELECT 本租户任务且不 UPDATE status"
