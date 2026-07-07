@@ -67,25 +67,37 @@ describe('GET /api/acquisition/overview', () => {
 
 describe('POST /api/acquisition/keyword-search', () => {
   it('returns 400 when keyword is missing', async () => {
-    const res = await request(app).post('/api/acquisition/keyword-search').send({});
+    const res = await request(app)
+      .post('/api/acquisition/keyword-search')
+      .set('x-test-tenant-id', '11111111-1111-1111-1111-111111111111')
+      .send({});
     expect(res.status).toBe(400);
     expect(res.body.error).toBe('MISSING_KEYWORD');
   });
 
   it('returns 400 when keyword is empty string', async () => {
-    const res = await request(app).post('/api/acquisition/keyword-search').send({ keyword: '  ' });
+    const res = await request(app)
+      .post('/api/acquisition/keyword-search')
+      .set('x-test-tenant-id', '11111111-1111-1111-1111-111111111111')
+      .send({ keyword: '  ' });
     expect(res.status).toBe(400);
     expect(res.body.error).toBe('MISSING_KEYWORD');
   });
 
   it('returns 400 when keyword is not a string', async () => {
-    const res = await request(app).post('/api/acquisition/keyword-search').send({ keyword: 123 });
+    const res = await request(app)
+      .post('/api/acquisition/keyword-search')
+      .set('x-test-tenant-id', '11111111-1111-1111-1111-111111111111')
+      .send({ keyword: 123 });
     expect(res.status).toBe(400);
     expect(res.body.error).toBe('MISSING_KEYWORD');
   });
 
   it('returns 200 with task_id and keywords (VITEST mode)', async () => {
-    const res = await request(app).post('/api/acquisition/keyword-search').send({ keyword: '装修' });
+    const res = await request(app)
+      .post('/api/acquisition/keyword-search')
+      .set('x-test-tenant-id', '11111111-1111-1111-1111-111111111111')
+      .send({ keyword: '装修' });
     expect(res.status).toBe(200);
     expect(res.body).toHaveProperty('task_id');
     expect(res.body).toHaveProperty('keywords');
@@ -94,7 +106,10 @@ describe('POST /api/acquisition/keyword-search', () => {
   });
 
   it('task_id is UUID format', async () => {
-    const res = await request(app).post('/api/acquisition/keyword-search').send({ keyword: '家装' });
+    const res = await request(app)
+      .post('/api/acquisition/keyword-search')
+      .set('x-test-tenant-id', '11111111-1111-1111-1111-111111111111')
+      .send({ keyword: '家装' });
     expect(res.body.task_id).toMatch(/^[0-9a-f-]{36}$/);
   });
 });
@@ -1015,7 +1030,7 @@ describe('POST /api/acquisition/keyword-search — tenant_id 写库', () => {
 
     await request(app)
       .post('/api/acquisition/keyword-search')
-      .set('X-Tenant-Id', TENANT_C)
+      .set('x-test-tenant-id', TENANT_C)
       .send({ keyword: '美甲' });
 
     const insertCall = (db.query as any).mock.calls[1];
@@ -1023,19 +1038,19 @@ describe('POST /api/acquisition/keyword-search — tenant_id 写库', () => {
     expect(insertCall[1][3]).toBe(TENANT_C);
   });
 
-  it('无 tenant header 时 tenant_id 写 null，不返回 500', async () => {
+  it('无 tenant header 且无 session → 401 NO_TENANT（不写库）', async () => {
     const { default: db } = await import('../db/connection');
-
-    (db.query as any)
-      .mockResolvedValueOnce({ rows: [{ id: 'agent-1' }] })
-      .mockResolvedValueOnce({ rows: [] });
+    (db.query as any).mockResolvedValue({ rows: [] });
 
     const res = await request(app)
       .post('/api/acquisition/keyword-search')
       .send({ keyword: '装修' });
 
-    expect(res.status).toBe(200);
-    const insertCall = (db.query as any).mock.calls[1];
-    expect(insertCall[1][3]).toBeNull();
+    expect(res.status).toBe(401);
+    // 未触达 INSERT（中间件在 handler 前拦截）
+    const insertCalls = (db.query as any).mock.calls.filter(
+      (c: any[]) => typeof c[0] === 'string' && c[0].includes('INSERT INTO zenithjoy.acquisition_keyword_tasks')
+    );
+    expect(insertCalls.length).toBe(0);
   });
 });

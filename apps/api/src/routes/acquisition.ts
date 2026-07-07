@@ -28,7 +28,11 @@ acquisitionRouter.get('/overview', (_req: Request, res: Response) => {
   });
 });
 
-acquisitionRouter.post('/keyword-search', async (req: Request, res: Response) => {
+acquisitionRouter.post('/keyword-search', tenantContextOptional, async (req: Request, res: Response) => {
+  // 租户来自 tenantContextOptional（X-Tenant-Id 头 / body.tenant_id / session cookie），门槛优先于 keyword 校验
+  const tenantId = tenantOf(req, res);
+  if (!tenantId) return;
+
   const { keyword } = req.body ?? {};
 
   if (!keyword || typeof keyword !== 'string' || keyword.trim() === '') {
@@ -36,10 +40,6 @@ acquisitionRouter.post('/keyword-search', async (req: Request, res: Response) =>
   }
 
   const kw = keyword.trim();
-
-  // 从 header 或 body 取 tenant_id（不强制要求 session，兼容 CI smoke + agent 直调）
-  const tenantId: string | null =
-    (req.header('X-Tenant-Id') ?? (req.body?.tenant_id ? String(req.body.tenant_id) : null)) || null;
 
   if (!process.env.VITEST) {
     try {
