@@ -28,7 +28,11 @@ acquisitionRouter.get('/overview', (_req: Request, res: Response) => {
   });
 });
 
-acquisitionRouter.post('/keyword-search', async (req: Request, res: Response) => {
+acquisitionRouter.post('/keyword-search', tenantContextOptional, async (req: Request, res: Response) => {
+  // 租户来自 tenantContextOptional（X-Tenant-Id 头 / body.tenant_id / session cookie），门槛优先于 keyword 校验
+  const tenantId = tenantOf(req, res);
+  if (!tenantId) return;
+
   const { keyword } = req.body ?? {};
 
   if (!keyword || typeof keyword !== 'string' || keyword.trim() === '') {
@@ -36,10 +40,6 @@ acquisitionRouter.post('/keyword-search', async (req: Request, res: Response) =>
   }
 
   const kw = keyword.trim();
-
-  // 从 header 或 body 取 tenant_id（不强制要求 session，兼容 CI smoke + agent 直调）
-  const tenantId: string | null =
-    (req.header('X-Tenant-Id') ?? (req.body?.tenant_id ? String(req.body.tenant_id) : null)) || null;
 
   if (!process.env.VITEST) {
     try {
@@ -143,6 +143,39 @@ acquisitionRouter.get('/pending-keyword-tasks', async (req: Request, res: Respon
   } catch (err) {
     console.error('[acquisition] pending-keyword-tasks error:', (err as Error).message);
     return res.status(200).json({ tasks: [], total: 0 });
+  }
+});
+
+// 前端列表端点 — 返回本租户的 keyword 采集任务（最新 20 条，只读不 mutate）
+acquisitionRouter.get('/keyword-tasks', tenantContextOptional, async (req: Request, res: Response) => {
+  if (process.env.VITEST) {
+    return res.status(200).json({ success: true, data: { tasks: [], total: 0 }, timestamp: new Date().toISOString() });
+  }
+  const tenantId = req.tenantId;
+  if (!tenantId) {
+    return res.status(401).json({ success: false, error: { code: 'NO_TENANT', message: '缺租户上下文（未登录或无 X-Tenant-Id）' }, timestamp: new Date().toISOString() });
+  }
+  try {
+    const { rows } = await pool.query<{
+      id: string;
+      keyword: string;
+      status: string;
+      created_at: Date;
+    }>(
+      `SELECT id, keyword, status, created_at
+         FROM zenithjoy.acquisition_keyword_tasks
+        WHERE tenant_id = $1
+        ORDER BY created_at DESC
+        LIMIT 20`,
+      [tenantId]
+    );
+    const tasks = rows.map((r) => ({
+      id: r.id, keyword: r.keyword, status: r.status, created_at: r.created_at,
+    }));
+    return res.status(200).json({ success: true, data: { tasks, total: tasks.length }, timestamp: new Date().toISOString() });
+  } catch (err) {
+    console.error('[acquisition] keyword-tasks error:', (err as Error).message);
+    return res.status(500).json({ success: false, error: { code: 'DB_ERROR', message: '查询失败' }, timestamp: new Date().toISOString() });
   }
 });
 
