@@ -510,18 +510,30 @@ class DeviceAccountScanService : AccessibilityService(), DouyinUiaOps {
      * 读不到"抖音号"锚点（我页没起来/掉线到登录页）返回 null。
      */
     override suspend fun readMyProfile(): MyProfile? {
-        tapMyTab()
-        delay(1800L)
-        val root = awaitRootInActiveWindow() ?: return null
-        val nodes = collectTextNodes(root)
-        val nickname = DeviceAccountModel.findTextAboveAnchor(nodes, "抖音号")
-        if (nickname.isNullOrEmpty()) {
-            android.util.Log.w(TAG, "我页读不到昵称(无抖音号锚点)")
-            return null
+        repeat(3) { attempt ->
+            if (attempt > 0) {
+                // 上一轮没落到我页（切号残留态/停在视频子页/底部导航被全屏视频挡）——CLEAR_TOP 回主页 feed 重来。
+                launchDouyinApp()
+                awaitDouyinForeground(maxAttempts = 8)
+                delay(1800L)
+            }
+            tapMyTab()
+            // 我页 Lynx/原生混排，树构建有延迟且时机波动，多轮等"抖音号"锚点出现再读（真机实测第一个号偶发慢）。
+            repeat(4) {
+                delay(800L)
+                val root = rootInActiveWindow ?: return@repeat
+                val nodes = collectTextNodes(root)
+                val nickname = DeviceAccountModel.findTextAboveAnchor(nodes, "抖音号")
+                if (!nickname.isNullOrEmpty()) {
+                    val followerText = DeviceAccountModel.findValueAboveLabel(nodes, "粉丝")
+                    android.util.Log.i(TAG, "我页 昵称=$nickname 粉丝=$followerText")
+                    return MyProfile(nickname, followerText)
+                }
+            }
+            android.util.Log.w(TAG, "我页读不到抖音号锚点(第${attempt + 1}次)")
         }
-        val followerText = DeviceAccountModel.findValueAboveLabel(nodes, "粉丝")
-        android.util.Log.i(TAG, "我页 昵称=$nickname 粉丝=$followerText")
-        return MyProfile(nickname, followerText)
+        android.util.Log.w(TAG, "我页读不到昵称(无抖音号锚点，重试耗尽)")
+        return null
     }
 
     /** 收集当前树所有非空文本节点的 text + 屏幕 bounds（供几何定位）。 */
