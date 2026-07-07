@@ -27,14 +27,15 @@ describe('WarmupLivenessPanel — Line02 养号验活展示', () => {
 
     render(<WarmupLivenessPanel agentId="a1" hostname="honor-100" />);
 
-    await waitFor(() => expect(screen.getByText('大湖成长')).toBeTruthy());
+    // 昵称与 ✅/🔴 emoji 同一 span（"✅ 大湖成长"），故用 regex 子串匹配
+    await waitFor(() => expect(screen.getByText(/大湖成长/)).toBeTruthy());
     // 粉丝数展示
     expect(screen.getByText(/1196/)).toBeTruthy();
     // 掉线号 data-alive=false
-    const offlineRow = screen.getByText('秦军').closest('[data-alive]');
+    const offlineRow = screen.getByText(/秦军/).closest('[data-alive]');
     expect(offlineRow?.getAttribute('data-alive')).toBe('false');
     // 在线号 data-alive=true
-    const aliveRow = screen.getByText('大湖成长').closest('[data-alive]');
+    const aliveRow = screen.getByText(/大湖成长/).closest('[data-alive]');
     expect(aliveRow?.getAttribute('data-alive')).toBe('true');
   });
 
