@@ -73,3 +73,5 @@ echo "  PASS Node.js 内置守护 + autostart 指向 start.bat"
 
 echo ""
 echo "wechat-cs-hardening-smoke: ALL PASS"
+
+exit 1  # fire-1 proven-to-fire 测试
