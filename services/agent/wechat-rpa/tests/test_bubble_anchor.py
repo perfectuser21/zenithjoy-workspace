@@ -145,17 +145,24 @@ def test_image_fallback_commit_does_not_poison_anchor_and_lose_next_text():
     下一轮 split_trailing_incoming 必须仍能捞到客户那句"这个多少钱"。
     """
     listen_chat._REPLY_ANCHOR.clear()
+    listen_chat._REPLY_ANCHOR["默忆"] = "上一句真实文字"  # 之前一轮真实存在过的锚点
 
-    # 图片轮：F1 回退保底 emit（scan_unread 里 c["content"]="[图片]"，_last_incoming 同源）
+    # 图片轮：F1 回退保底 emit（scan_unread 产出的 msg 不应带 _last_incoming ——
+    # 这正是本次修复的契约：F1/trailing_stall_fallback 都不再传这个字段）。
     image_round_msg = {
         "sender": "默忆", "content": "[图片]",
         "_preview_name": "默忆\n[1条] \n[图片]\n11:00\n",
-        "_last_incoming": "[图片]", "_item": None,
+        "_item": None,
     }
     listen_chat._commit_reply_success(image_round_msg, last_preview={})
+    assert listen_chat._REPLY_ANCHOR.get("默忆") == "上一句真实文字", (
+        "非文本回退 emit 不应携带 _last_incoming，_REPLY_ANCHOR 不该被改写"
+    )
 
-    # 客户实际聊天面板时序（旧→新）：老回复 -> 客户紧跟图片发的新问题 -> bot 对图片的兜底回复
+    # 客户实际聊天面板时序（旧→新）：上次真实锚点 -> 老回复 -> （图片，无bubble）
+    # -> 客户紧跟图片发的新问题 -> bot 对图片的兜底回复
     bubbles = [
+        {"text": "上一句真实文字", "direction": "incoming"},
         {"text": "旧回复内容", "direction": "outgoing"},
         {"text": "这个多少钱", "direction": "incoming"},
         {"text": "能看，直接发内容或者截图过来", "direction": "outgoing"},

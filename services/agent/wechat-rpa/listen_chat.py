@@ -1026,9 +1026,15 @@ def scan_unread(mw: Any, last_preview: Optional[Dict[str, str]] = None,
             # （客户发[图片]/[语音]、或纯文本恰被 _is_system_bubble 剔除）且角标在
             # → 旧单条路径 emit（用预览 content），宁可上下文不全也不漏回，绝不静默提交。
             # v1.0.95：预览命中已发送历史 → 掉入下方 else 走提交（自回自话护栏）。
+            # ⚠️ 不传 _last_incoming（issue 4024c90b）：c["content"] 是预览兜底文本
+            # （如"[图片]"），图片/语音从不产生 bubble 条目，这个文本在真实 bubbles 里
+            # 永远匹配不到 —— 若拿它毒化 _REPLY_ANCHOR，下一轮 split_trailing_incoming
+            # 找不到锚点会回退成"最后一条 outgoing"，把排在 bot 这条兜底回复之前、
+            # 客户紧跟图片发的真实文字问题误判成"锚点之前的旧消息"永久丢弃。
+            # 不传 _last_incoming → _commit_reply_success 保留原 _REPLY_ANCHOR 不动，
+            # 下一轮仍按上一个真实文本锚点切分，能正常捞到该文字。
             out.append({"sender": c["sender"], "content": c["content"],
-                        "_item": c["_item"], "_preview_name": c["name"],
-                        "_last_incoming": c["content"]})
+                        "_item": c["_item"], "_preview_name": c["name"]})
         else:
             # 开窗失败/读空/trailing 无解 且无角标：触发态保留，下轮重试——但必须有熔断
             # （v1.0.94）：连续 TRAILING_STALL_LIMIT 轮无解 → 回退 emit 预览单条。
@@ -1051,9 +1057,11 @@ def scan_unread(mw: Any, last_preview: Optional[Dict[str, str]] = None,
                     record_skip("trailing_stall_fallback")
                 _log(f"trailing_stall sender={c['sender']} rounds={_n} → 熔断回退 emit "
                      f"预览单条（防死循环开窗）")
+                # 同 F1（issue 4024c90b）：不传 _last_incoming，避免用不可复现的预览
+                # 兜底文本毒化 _REPLY_ANCHOR，导致下一轮把图片/语音后紧跟的真实文字
+                # 消息误判成"锚点之前的旧消息"永久丢弃。
                 out.append({"sender": c["sender"], "content": c["content"],
-                            "_item": c["_item"], "_preview_name": c["name"],
-                            "_last_incoming": c["content"]})
+                            "_item": c["_item"], "_preview_name": c["name"]})
                 _TRAILING_STALL.pop(c["sender"], None)
     # v1.0.107+ 复读双闸：①同内容 60s 内二次 emit → 丢弃（提交触发止空转）
     # ②存活 emit 标记处理中（记加入时刻，本轮草稿/发送期间扫描不再碰该会话；TTL 兜底防泄漏）。
