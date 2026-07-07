@@ -194,4 +194,32 @@ object DeviceAccountModel {
         val alive = results.count { it.alive }
         return WarmupReport(total = results.size, aliveCount = alive, offlineCount = results.size - alive, results = results)
     }
+
+    // ── 我页几何定位（标签分离结构，混淆 id 不可靠，靠稳定中文锚点+bounds）──────────
+    /** 无障碍节点文本 + 屏幕 bounds（纯数据，供几何判定脱离 Android 单测）。 */
+    data class TextNode(val text: String, val left: Int, val top: Int, val right: Int, val bottom: Int)
+
+    private const val ABOVE_GAP_MAX = 120  // 上方节点与锚点/label 的最大垂直间隙（px）
+
+    /** 取 label（如"粉丝"）正上方（水平重叠 + 垂直紧邻上方）的数值节点文本。找不到返回 null。 */
+    fun findValueAboveLabel(nodes: List<TextNode>, label: String): String? {
+        val lbl = nodes.firstOrNull { it.text.trim() == label } ?: return null
+        return nodes.asSequence()
+            .filter { it !== lbl }
+            .filter { it.bottom <= lbl.top + 8 && (lbl.top - it.bottom) < ABOVE_GAP_MAX }
+            .filter { it.left < lbl.right && it.right > lbl.left } // 水平重叠（同列）
+            .minByOrNull { lbl.top - it.bottom }
+            ?.text?.trim()
+    }
+
+    /** 取锚点（text 以 anchorPrefix 开头，如"抖音号"）正上方（左对齐 + 垂直紧邻）的节点文本。 */
+    fun findTextAboveAnchor(nodes: List<TextNode>, anchorPrefix: String): String? {
+        val anchor = nodes.firstOrNull { it.text.startsWith(anchorPrefix) } ?: return null
+        return nodes.asSequence()
+            .filter { it !== anchor }
+            .filter { it.bottom <= anchor.top + 8 && (anchor.top - it.bottom) < ABOVE_GAP_MAX }
+            .filter { kotlin.math.abs(it.left - anchor.left) < 80 } // 左对齐
+            .minByOrNull { anchor.top - it.bottom }
+            ?.text?.trim()
+    }
 }
