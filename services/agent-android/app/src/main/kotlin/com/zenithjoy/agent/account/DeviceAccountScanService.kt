@@ -503,24 +503,42 @@ class DeviceAccountScanService : AccessibilityService(), DouyinUiaOps {
         delay(1000L)
     }
 
-    /** 切"我"页读 昵称 + "N粉丝"文本；读不到昵称（我页没起来/掉线）返回 null。 */
+    /**
+     * 切"我"页读 昵称 + 粉丝数。真机(抖音39.4.0)我页混淆 id(thp/5pm)随版本变，粉丝数是
+     * 数值+"粉丝"label 分离的两个节点——故靠稳定中文锚点 + 几何定位（见 DeviceAccountModel）：
+     * 昵称 = "抖音号：xxx"锚点正上方；粉丝数 = "粉丝"label 正上方数值。
+     * 读不到"抖音号"锚点（我页没起来/掉线到登录页）返回 null。
+     */
     override suspend fun readMyProfile(): MyProfile? {
         tapMyTab()
         delay(1800L)
         val root = awaitRootInActiveWindow() ?: return null
-        val nickname = findNodeByIds(
-            root,
-            "com.ss.android.ugc.aweme:id/title",
-            "com.ss.android.ugc.aweme:id/user_name",
-            "com.ss.android.ugc.aweme:id/tv_nickname",
-        )?.text?.toString()?.trim()
+        val nodes = collectTextNodes(root)
+        val nickname = DeviceAccountModel.findTextAboveAnchor(nodes, "抖音号")
         if (nickname.isNullOrEmpty()) {
-            android.util.Log.w(TAG, "我页读不到昵称")
+            android.util.Log.w(TAG, "我页读不到昵称(无抖音号锚点)")
             return null
         }
-        val followerText = collectAllNodeTexts(root).firstOrNull { it.contains("粉丝") }
-        android.util.Log.i(TAG, "我页 昵称=$nickname 粉丝文本=$followerText")
+        val followerText = DeviceAccountModel.findValueAboveLabel(nodes, "粉丝")
+        android.util.Log.i(TAG, "我页 昵称=$nickname 粉丝=$followerText")
         return MyProfile(nickname, followerText)
+    }
+
+    /** 收集当前树所有非空文本节点的 text + 屏幕 bounds（供几何定位）。 */
+    private fun collectTextNodes(root: AccessibilityNodeInfo): List<DeviceAccountModel.TextNode> {
+        val out = mutableListOf<DeviceAccountModel.TextNode>()
+        val queue = ArrayDeque<AccessibilityNodeInfo>()
+        queue.add(root)
+        while (queue.isNotEmpty()) {
+            val node = queue.removeFirst()
+            val t = node.text?.toString()?.trim()
+            if (!t.isNullOrEmpty()) {
+                val r = Rect(); node.getBoundsInScreen(r)
+                out.add(DeviceAccountModel.TextNode(t, r.left, r.top, r.right, r.bottom))
+            }
+            for (i in 0 until node.childCount) node.getChild(i)?.let { queue.add(it) }
+        }
+        return out
     }
 
     /** 当前树出现登录/注册页文本 = 掉线铁证之一。 */
