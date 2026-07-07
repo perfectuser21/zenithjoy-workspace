@@ -92,6 +92,21 @@ class AgentService : Service() {
         }
     }
 
+    // Line02 warmup — 养号验活结果广播接收，收到后 POST /api/agent/burner/warmup-result 上报中台。
+    private val warmupResultReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            if (intent?.action != DeviceAccountScanService.ACTION_ACCOUNT_WARMUP_RESULT) return
+            val requestId = intent.getStringExtra(DeviceAccountScanService.EXTRA_REQUEST_ID) ?: ""
+            val deviceId = intent.getStringExtra(DeviceAccountScanService.EXTRA_DEVICE_ID) ?: ""
+            val total = intent.getIntExtra(DeviceAccountScanService.EXTRA_WARMUP_TOTAL, 0)
+            val alive = intent.getIntExtra(DeviceAccountScanService.EXTRA_WARMUP_ALIVE, 0)
+            val offline = intent.getIntExtra(DeviceAccountScanService.EXTRA_WARMUP_OFFLINE, 0)
+            val resultsJson = intent.getStringExtra(DeviceAccountScanService.EXTRA_WARMUP_RESULTS) ?: "[]"
+            val errorCode = intent.getStringExtra(DeviceAccountScanService.EXTRA_ERROR) ?: ""
+            scope.launch { reportWarmupResult(requestId, deviceId, total, alive, offline, resultsJson, errorCode) }
+        }
+    }
+
     private val collectResultReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
             if (intent?.action != DouyinCollectService.ACTION_COLLECT_RESULT) return
@@ -125,6 +140,9 @@ class AgentService : Service() {
         registerReceiver(accountScanResultReceiver,
             IntentFilter(DeviceAccountScanService.ACTION_ACCOUNT_SCAN_RESULT),
             RECEIVER_NOT_EXPORTED)
+        registerReceiver(warmupResultReceiver,
+            IntentFilter(DeviceAccountScanService.ACTION_ACCOUNT_WARMUP_RESULT),
+            RECEIVER_NOT_EXPORTED)
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -146,6 +164,7 @@ class AgentService : Service() {
         unregisterReceiver(collectResultReceiver)
         unregisterReceiver(dmOutreachResultReceiver)
         unregisterReceiver(accountScanResultReceiver)
+        unregisterReceiver(warmupResultReceiver)
         super.onDestroy()
     }
 
@@ -197,7 +216,15 @@ class AgentService : Service() {
             scope = scope,
             onTask = { task ->
                 android.util.Log.i(TAG, "ws1 task: ${task.platform} id=${task.task_id} type=${task.type}")
-                if (task.platform == "android_douyin") {
+                val payloadTaskType = task.payload["task_type"] as? String
+                if (shouldRouteWarmup(payloadTaskType)) {
+                    // Line02 warmup：中台每日下发的养号验活任务（判别符走 payload.task_type）。
+                    val operatorNickname = task.payload["operator_nickname"] as? String ?: ""
+                    android.util.Log.i(TAG, "ws1 warmup task: id=${task.task_id} operator=$operatorNickname")
+                    DeviceAccountScanService.dispatchWarmupTask(
+                        this@AgentService, task.task_id, config.machineId, operatorNickname,
+                    )
+                } else if (task.platform == "android_douyin") {
                     val keyword = task.payload["keyword"] as? String ?: ""
                     if (keyword.isNotBlank()) {
                         DouyinCollectService.dispatchTask(this@AgentService, keyword, task.task_id)
@@ -389,6 +416,33 @@ class AgentService : Service() {
         }
     }
 
+    // Line02 warmup 结果上报（新端点 /api/agent/burner/warmup-result，中台设备级按真实昵称写库）。
+    // agentId 用 config.agentId（服务端仍按 task_id 反查 tenant，不信设备上报的 tenant）。
+    private fun reportWarmupResult(
+        requestId: String,
+        deviceId: String,
+        total: Int,
+        alive: Int,
+        offline: Int,
+        resultsJson: String,
+        errorCode: String,
+    ) {
+        if (requestId.isEmpty()) return
+        val url = "${config.deriveHttpBase()}/api/agent/burner/warmup-result"
+        val body = buildWarmupResultBody(requestId, deviceId, config.agentId, total, alive, offline, resultsJson, errorCode)
+        try {
+            val request = Request.Builder()
+                .url(url)
+                .post(body.toRequestBody("application/json".toMediaType()))
+                .build()
+            httpClient.newCall(request).execute().use { resp ->
+                android.util.Log.i(TAG, "warmup-result reported: ${resp.code} req=$requestId total=$total alive=$alive offline=$offline err=$errorCode")
+            }
+        } catch (e: Exception) {
+            android.util.Log.w(TAG, "warmup-result report failed: ${e.message}")
+        }
+    }
+
     // taskId 对应 acquisition_keyword_tasks.id（由 ws0/ws1 派发 android_douyin 任务时下发）。
     // /api/agent/task-result 端点不存在——服务端唯一能接住评论数据的是已有的
     // /api/acquisition/comment-score-result（Windows Agent 已在用同一端点，字段一致）。
@@ -412,5 +466,32 @@ class AgentService : Service() {
     companion object {
         private const val TAG = "AgentService"
         private const val NOTIFICATION_ID = 1001
+
+        // Line02 warmup 判别符：中台 INSERT publish_tasks 时把 task_type 放进 payload，
+        // 经心跳 ...realPayload 透传到 agent。不能靠 task.type（getQueuedTasks 只 select
+        // publish 类型列 type，无 task_type 列），必须走 payload.task_type。
+        fun shouldRouteWarmup(payloadTaskType: String?): Boolean = payloadTaskType == "warmup"
+
+        // 组 POST /api/agent/burner/warmup-result 的 JSON body。纯字符串拼避开 org.json 的
+        // JVM 单测 "not mocked" 陷阱；resultsJson 已是设备端 org.json 生成的合法数组串，原样嵌入。
+        fun buildWarmupResultBody(
+            taskId: String,
+            deviceId: String,
+            agentId: String,
+            total: Int,
+            alive: Int,
+            offline: Int,
+            resultsJson: String,
+            errorCode: String,
+        ): String {
+            fun esc(s: String): String = s.replace("\\", "\\\\").replace("\"", "\\\"")
+            val results = if (resultsJson.isBlank()) "[]" else resultsJson
+            return "{\"task_id\":\"${esc(taskId)}\"," +
+                "\"agent_id\":\"${esc(agentId)}\"," +
+                "\"device_id\":\"${esc(deviceId)}\"," +
+                "\"total\":$total,\"alive\":$alive,\"offline\":$offline," +
+                "\"results\":$results," +
+                "\"error_code\":\"${esc(errorCode)}\"}"
+        }
     }
 }
