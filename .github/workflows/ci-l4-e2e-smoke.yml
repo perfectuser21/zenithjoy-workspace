@@ -793,6 +793,15 @@ jobs:
             exit 1
           fi
 
+      # ─── Android onboarding（Line02 自助装机绑定）smoke：无 session → 401；
+      # 有 seeded TEST_SESSION_COOKIE 时额外校验 200 + apk_url/deeplink schema ──
+      - name: Smoke — Android onboarding install-pack (GET /api/agent/install-pack/android)
+        env:
+          API_PORT: "5200"
+        run: |
+          chmod +x .github/workflows/scripts/smoke/android-onboarding-smoke.sh
+          bash .github/workflows/scripts/smoke/android-onboarding-smoke.sh
+
       - name: Stop apps/api
         if: always()
         run: |

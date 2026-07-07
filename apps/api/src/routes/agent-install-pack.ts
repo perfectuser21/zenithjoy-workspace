@@ -352,3 +352,51 @@ agentInstallPackRouter.get('/dotenv', async (req: Request, res: Response) => {
   res.setHeader('Content-Length', String(Buffer.byteLength(content)));
   return res.status(200).send(content);
 });
+
+// 安卓 APK 分发 + 深链绑定信息（Line02 客户自助装机绑定第一刀）
+// 复用 /download 同款 session 鉴权 + active license 查询；不改桌面 manifest。
+agentInstallPackRouter.get('/android', async (req: Request, res: Response) => {
+  // 1. 鉴权（同 /download）
+  let userId: string | null = null;
+  try {
+    const session = await auth.api.getSession({ headers: fromNodeHeaders(req.headers) });
+    const u = session?.user;
+    if (u && typeof u.id === 'string' && u.id.length > 0) userId = u.id;
+  } catch (err) {
+    console.warn('[install-pack/android] session 解析失败:', err);
+  }
+  if (!userId) {
+    return res.status(401).json({ ok: false, code: 'UNAUTHORIZED' });
+  }
+
+  // 2. 查 active license（无则空串，仍返 apk_url 让客户先下包）
+  let licenseKey = '';
+  try {
+    const { rows } = await pool.query<{ license_key: string }>(
+      `SELECT license_key FROM zenithjoy.licenses
+        WHERE customer_id = $1 AND status = 'active'
+        ORDER BY created_at DESC LIMIT 1`,
+      [userId]
+    );
+    if (rows.length > 0) licenseKey = rows[0].license_key;
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'unknown';
+    return res.status(500).json({ ok: false, code: 'DB_ERROR', message: msg });
+  }
+
+  // 3. apk_url（COS 常量）+ deeplink（api=ws url，安卓 deriveHttpBase 会 wss→https 做 register）
+  const apkUrl =
+    process.env.ANDROID_APK_COS_URL ||
+    'https://zenithjoy-static-1333590468.cos.accelerate.myqcloud.com/install-pack/android/zenithjoy-agent.apk';
+  const wsUrl = process.env.AGENT_PUBLIC_WS_URL || 'wss://api.zenithjoy.com/agent-ws';
+  const parts = [`api=${encodeURIComponent(wsUrl)}`];
+  if (licenseKey) parts.unshift(`license=${encodeURIComponent(licenseKey)}`);
+  const deeplink = `zenithjoy://bind?${parts.join('&')}`;
+
+  return res.status(200).json({
+    apk_url: apkUrl,
+    deeplink,
+    license_key: licenseKey,
+    version: '1.0.1',
+  });
+});

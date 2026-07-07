@@ -4487,3 +4487,19 @@ agent_suite:
   status: active
   product: 客户智能获客
   note: "sprint(07070707): 新增 GET /keyword-tasks 前端列表端点——无租户上下文→401 不查库；带 X-Tenant-Id→只 SELECT 本租户任务且不 UPDATE status"
+
+- id: line02-android-download-page
+  path: apps/dashboard/src/pages/__tests__/AndroidDownloadPage.test.tsx
+  type: unit
+  ci: L3
+  status: active
+  product: 客户智能获客
+  note: "sprint(07071713): 安卓自助装机绑定——安卓下载页渲染测试，mock getAndroidInstallPack 返样例→断言下载按钮 href=apk_url + 二维码 svg 存在 + 激活码文本出现"
+
+- id: line02-android-onboarding-smoke
+  path: .github/workflows/scripts/smoke/android-onboarding-smoke.sh
+  type: smoke
+  ci: L4
+  status: active
+  product: 客户智能获客
+  note: "sprint(07071713): 安卓自助装机绑定 smoke——GET /api/agent/install-pack/android 无 session→401；有 seeded session→200 校验 apk_url(COS 直链)+deeplink(zenithjoy://bind 前缀)。已接进 ci-l4-e2e-smoke.yml smoke-api-contract(required gate)"

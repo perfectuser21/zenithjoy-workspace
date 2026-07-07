@@ -718,3 +718,56 @@ describe('PUT /api/agent/install-pack/manifest', () => {
     expect(res.body.code).toBe('INVALID_MANIFEST');
   });
 });
+
+// Path2 Step2 — 安卓 APK 分发 + 深链绑定信息（客户自助装机绑定第一刀）
+// 复用 /download 同款 session 鉴权 + active license 查询；不改桌面 manifest。
+describe('GET /api/agent/install-pack/android', () => {
+  let app: any;
+
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    app = (await import('../../app')).default;
+  });
+
+  it('无 session → 401 UNAUTHORIZED', async () => {
+    const { auth } = await import('../../auth');
+    vi.spyOn(auth.api, 'getSession').mockResolvedValue(null as any);
+
+    const res = await request(app).get('/api/agent/install-pack/android');
+    expect(res.status).toBe(401);
+    expect(res.body.code).toBe('UNAUTHORIZED');
+  });
+
+  it('有 session + active license → 200，apk_url 是 COS 直链，deeplink 带 license', async () => {
+    const { auth } = await import('../../auth');
+    const pool = (await import('../../db/connection')).default;
+    vi.spyOn(auth.api, 'getSession').mockResolvedValue({
+      user: { id: 'user-android-1' },
+    } as any);
+    vi.spyOn(pool, 'query').mockResolvedValue({
+      rows: [{ license_key: 'ZJ-F-A1B2C3D4' }],
+    } as any);
+
+    const res = await request(app).get('/api/agent/install-pack/android');
+    expect(res.status).toBe(200);
+    expect(res.body.apk_url).toMatch(/^https:\/\/.*\.myqcloud\.com\/install-pack\/android\/zenithjoy-agent\.apk$/);
+    expect(res.body.deeplink).toMatch(/^zenithjoy:\/\/bind\?/);
+    expect(res.body.deeplink).toContain('license=ZJ-F-A1B2C3D4');
+    expect(res.body.license_key).toBe('ZJ-F-A1B2C3D4');
+  });
+
+  it('有 session 无 license → 200，deeplink 不含 license 参数', async () => {
+    const { auth } = await import('../../auth');
+    const pool = (await import('../../db/connection')).default;
+    vi.spyOn(auth.api, 'getSession').mockResolvedValue({
+      user: { id: 'user-android-2' },
+    } as any);
+    vi.spyOn(pool, 'query').mockResolvedValue({ rows: [] } as any);
+
+    const res = await request(app).get('/api/agent/install-pack/android');
+    expect(res.status).toBe(200);
+    expect(res.body.license_key).toBe('');
+    expect(res.body.deeplink).not.toContain('license=');
+    expect(res.body.deeplink).toContain('api=');
+  });
+});
