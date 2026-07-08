@@ -453,6 +453,22 @@ acquisitionRouter.post('/comment-score-result', async (req: Request, res: Respon
   const commentList = Array.isArray(comments) ? comments : [];
 
   if (commentList.length === 0) {
+    // 空评论(合法抓到0条 或 agent 端超时/报错兜底) 一律标 failed，
+    // 不能静默 return——否则 acquisition_keyword_tasks 会永久卡在 processing
+    // (真机复现：DouyinCollectService 卡死超时后即使报错，任务也从未收到终态)。
+    if (!process.env.VITEST) {
+      try {
+        const pool = (await import('../db/connection')).default;
+        await pool.query(
+          `UPDATE zenithjoy.acquisition_keyword_tasks
+              SET status = 'failed', updated_at = NOW()
+            WHERE id = $1 AND status != 'done'`,
+          [keyword_task_id]
+        );
+      } catch (err) {
+        console.error('[acquisition] comment-score-result empty-comments UPDATE failed:', (err as Error).message);
+      }
+    }
     return res.status(200).json({
       received: true,
       written_count: 0,

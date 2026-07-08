@@ -81,27 +81,47 @@ class TestScanUnreadNoTabSwitch:
 
 
 class TestResetAtomic:
+    """2026-07-08 根治（issue 8e163d87）：按钮定位改窗口相对坐标 + 拉前台 + PostMessage→click_input
+    升级梯，用 _on_contacts_tab 确认切换是否生效。这里 mock 掉前台/坐标/确认三件套，
+    只验证"原子：找不齐两个按钮就不切"与"两个都找到就先通讯录后微信"两条不变量仍成立。"""
+
+    def _patch_common(self):
+        mw = MagicMock()
+        mw.rectangle.return_value.left = 0
+        return mw
+
     def test_reset_skips_when_wechat_button_missing(self):
         """找不到「微信」按钮 → 绝不点「通讯录」（不切去通讯录卡死），返回 False。"""
-        mw = MagicMock()
-        def fake_find(buttons, tab, left_max=90):
+        mw = self._patch_common()
+        def fake_find(buttons, tab, left_max=90, win_left=0):
             return (10, 20) if tab == "通讯录" else None   # 微信按钮找不到
         with patch.object(listen_chat, "_iter_all_controls", return_value=[]), \
              patch.object(listen_chat, "_find_left_nav_button_point", side_effect=fake_find), \
-             patch.object(listen_chat, "_click_screen_point") as mock_click:
+             patch.object(listen_chat, "_click_screen_point") as mock_click, \
+             patch.object(listen_chat, "_safe_hwnd", return_value=1), \
+             patch.object(listen_chat, "_get_foreground_window", return_value=1), \
+             patch.object(listen_chat, "_set_foreground_window"), \
+             patch.object(listen_chat, "_should_restore_foreground", return_value=False):
             result = listen_chat._reset_session_list_to_top(mw)
         assert result is False
         mock_click.assert_not_called()   # 关键：没点任何按钮，绝不把微信留在通讯录
 
     def test_reset_switches_when_both_found(self):
-        """两个按钮都找到 → 点「通讯录」再点「微信」，收尾在微信 tab。"""
-        mw = MagicMock()
-        def fake_find(buttons, tab, left_max=90):
+        """两个按钮都找到 → 点「通讯录」再点「微信」，_on_contacts_tab 确认后收尾在微信 tab。"""
+        mw = self._patch_common()
+        def fake_find(buttons, tab, left_max=90, win_left=0):
             return (10, 20) if tab == "通讯录" else (10, 50)
         clicked = []
+        # 依次报告：切通讯录后 on_contacts_tab=True（生效），切微信后 on_contacts_tab=False（生效）
+        on_contacts_sequence = iter([True, False])
         with patch.object(listen_chat, "_iter_all_controls", return_value=[]), \
              patch.object(listen_chat, "_find_left_nav_button_point", side_effect=fake_find), \
              patch.object(listen_chat, "_click_screen_point", side_effect=lambda mw, pt: clicked.append(pt) or True), \
+             patch.object(listen_chat, "_on_contacts_tab", side_effect=lambda mw: next(on_contacts_sequence)), \
+             patch.object(listen_chat, "_safe_hwnd", return_value=1), \
+             patch.object(listen_chat, "_get_foreground_window", return_value=1), \
+             patch.object(listen_chat, "_set_foreground_window"), \
+             patch.object(listen_chat, "_should_restore_foreground", return_value=False), \
              patch("time.sleep"):
             result = listen_chat._reset_session_list_to_top(mw)
         assert result is True

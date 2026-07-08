@@ -55,4 +55,5 @@ wechat-rpa-real-agent-smoke.sh
 ws2-three-template-builders-smoke.sh
 crm-status-history-smoke.sh
 account-scan-result-smoke.sh
+line04-selfheal-observability-smoke.sh
 wechat-cs-reply-smoke.sh

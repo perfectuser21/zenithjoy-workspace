@@ -212,6 +212,31 @@ describe('POST /api/acquisition/comment-score-result', () => {
     expect(res.body.comment_count).toBe(0);
   });
 
+  // regression: 空评论一直静默 200 不更新任务状态，acquisition_keyword_tasks 永久卡 processing
+  it('[REGRESSION] 空评论 → acquisition_keyword_tasks 状态更新为 failed，不再永久卡 processing', async () => {
+    vi.stubEnv('VITEST', '');
+    try {
+      const { default: db } = await import('../db/connection');
+      vi.mocked(db.query).mockReset();
+      vi.mocked(db.query).mockResolvedValue({ rows: [] } as any);
+
+      const res = await request(app)
+        .post('/api/acquisition/comment-score-result')
+        .send({ keyword_task_id: 'kw-empty-1', comments: [] });
+
+      expect(res.status).toBe(200);
+      expect(res.body.written_count).toBe(0);
+      const updateCall = vi.mocked(db.query).mock.calls.find((c) =>
+        String(c[0]).includes('UPDATE') && String(c[0]).includes('acquisition_keyword_tasks'),
+      );
+      expect(updateCall).toBeDefined();
+      expect(updateCall?.[1]).toContain('kw-empty-1');
+      expect(String(updateCall?.[0])).toMatch(/status\s*=\s*'failed'/);
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
   it('VITEST mode: written_count equals comment count', async () => {
     const comments = [
       { commenter_id: 'u1', text: '请问怎么联系', publish_time: '2026-05-25T00:00:00Z' },
