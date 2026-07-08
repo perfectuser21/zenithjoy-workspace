@@ -673,6 +673,36 @@ describe('[B-5] cs-reply 内核接入：reply 含编造词 → ai_failed，不�
     );
     expect(insertCall).toBeUndefined();
   });
+
+  it('cs-reply 内核接入：拒绝承诺（否定语境提及退款/保成交）+ escalate=true → 正常发送安抚回复并写入 cs_escalate（回归：2026-07-08 生产实测 escalate 被编造词过滤器误拦截）', async () => {
+    // reply 里出现"全额退款/保成交"等词，但语境是拒绝承诺，不是做出承诺——不该被当编造拦截
+    mockCallOpenRouter.mockResolvedValue({
+      content:
+        '```json\n{"reply":"这个我没法保证全额退款，也不能承诺保成交，需要跟内部确认一下再给您答复。","tags":{"stage":null,"signal":null,"inquiry":null,"risk":"complaint","gap":null,"escalate":true}}\n```',
+    });
+
+    const result: any = await generateChatDraft({
+      sender: '投诉客户',
+      wechat_id: 'wxid_test005b',
+      content: '你们必须保证一个月内成交，不然我要求全额退款',
+      mode: 'auto',
+      tenant_id: 'tenant-test',
+      cs_wechat_id: 'cs_wx_test',
+    } as any);
+
+    expect(result.ok).toBe(true);
+    expect(result.status).toBe('sent');
+    expect(typeof result.reply).toBe('string');
+    expect(result.reply.length).toBeGreaterThan(0);
+
+    const insertCall = mockQuery.mock.calls.find(
+      (c: unknown[]) =>
+        typeof c[0] === 'string' &&
+        c[0].includes('INSERT INTO zenithjoy.wechat_publish_task'),
+    );
+    expect(insertCall).toBeDefined();
+    expect(insertCall![1]).toEqual(expect.arrayContaining(['cs_escalate']));
+  });
 });
 
 // ─── [BEHAVIOR] B-6 escalate 旁路不阻塞（Invariant I-2）────────────────────
