@@ -196,12 +196,24 @@ const CS_REPLY_RULES = `你是专业客服，只回复客户问题，不编造�
 【阶段定义】A1=初识, A2=意向确认, A3=报价谈判, A4=成单跟进
 【escalate=true 条件】客户明显愤怒/投诉/提退款/威胁，需转人工`;
 
-// 编造词（命中 → sanitizeReply 清空 → ai_failed）
+// 编造词（命中且非否定语境 → sanitizeReply 清空 → ai_failed）
 const FABRICATION_KEYWORDS = ['全额退款', '保证退款', '100%退款', '保成交', '对赌', '全额退'];
+// 否定/拒绝语境词：命中编造词的同一句里若含这些词，说明 AI 在"拒绝客户的过度要求"
+// 而非"做出承诺"（如"没法保证全额退款"），不算编造——否则会把 escalate 场景的
+// 安抚回复也一并拦下（2026-07-08 生产实测发现：escalate=true 却 status=ai_failed）。
+const NEGATION_CONTEXT_RE = /(不|别|无法|没法|不能|不会|不要|不得|禁止|放弃|避免|拒绝|坚决不|没办法)/;
 
-/** 检测 reply 是否含编造词（命中 → ai_failed，不发给客户）。 */
+/**
+ * 检测 reply 是否含编造词（命中且非否定语境 → ai_failed，不发给客户）。
+ * 按句拆分逐句判断，只有编造词命中且同句无否定/拒绝语境才判编造。
+ */
 function containsFabricationKeywords(text: string): boolean {
-  return FABRICATION_KEYWORDS.some((kw) => text.includes(kw));
+  const sentences = text.split(/[。！？\n]/);
+  return sentences.some((s) => {
+    const hit = FABRICATION_KEYWORDS.some((kw) => s.includes(kw));
+    if (!hit) return false;
+    return !NEGATION_CONTEXT_RE.test(s);
+  });
 }
 
 // JSON 解析 helper
