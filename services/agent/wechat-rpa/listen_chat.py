@@ -2510,7 +2510,9 @@ def _delivery_confirmed(readback_text: str, sent_text: str) -> bool:
 
 # 送达读回【轮询】参数（decision/rog E2E 2026-06-29）：微信会话列表预览异步更新 + 刚 _open_chat
 # 切完会话那刻 UIA 读偶发空 → 单次 _read_session_preview 读空 ≠ 未送达。轮询几轮给预览更新留时间。
-_DELIVERY_READBACK_POLLS = 5            # 最多读回 5 轮
+_DELIVERY_READBACK_POLLS = 10           # 5→10（issue，2026-07-08：图片较多的对话预览刷新更慢，
+                                         # 1.5s 窗口读回假阴性；配合 record_reply_failure 重试队列，
+                                         # 恢复到收紧前的 3s 总窗口，降低假阴性概率）
 _DELIVERY_READBACK_POLL_SLEEP = 0.3     # 0.6→0.3（延迟收紧：成功通常 1-2 轮命中；失败窗口 3s→1.5s）
 
 
@@ -3414,6 +3416,53 @@ def _build_should_open(*, roster_pred: Optional[Any],
     return _pred
 
 
+# ── 发送失败重试队列（issue，2026-07-08：切窗清角标导致冷却重试永不触发根治）──
+#
+# 根因：_open_chat（打开会话尝试回复）本身会让微信清掉原生未读角标。旧逻辑的冷却重试
+# （reply_failed_at + REPLY_FAIL_COOLDOWN）只在这条消息还出现在本轮 scan_unread 探测到
+# 的 unread 列表里才会被求值——一旦角标被清掉，消息永远不会再出现在 unread 里，冷却重试
+# 条件永远没机会被求值，消息被永久静默丢弃。
+#
+# 修法：_PENDING_RETRY 独立于 unread 角标检测，按 sender 记住"发送失败、还欠一个回复"，
+# 主循环每轮独立检查这个队列（不依赖角标重新出现），冷却到期后主动按名字重新找会话重发。
+MAX_REPLY_RETRY_ATTEMPTS = 3  # 连续失败达此值放弃（防无限重试卡死），交由关键人告警兜底
+
+
+def select_due_retries(pending: Dict[str, Dict[str, Any]], now: float, cooldown_seconds: float) -> list:
+    """纯函数：待重试队列里哪些 sender 冷却已到期，该被重新尝试。
+
+    不依赖 unread/scan_unread——这是本次修复要证明的核心：即使微信原生角标已经被
+    _open_chat 清掉、下轮 scan_unread 完全探测不到这条消息，这个队列依然记得它欠回复。
+    """
+    due = []
+    for sender, info in pending.items():
+        if now - info.get("failed_at", 0) >= cooldown_seconds:
+            due.append(sender)
+    return due
+
+
+def record_reply_failure(
+    pending: Dict[str, Dict[str, Any]], *, sender: str, content: str, reply: str, now: float,
+) -> None:
+    """发送失败时调用：记进待重试队列（或续期已有条目）。达到最大重试次数则放弃。"""
+    existing = pending.get(sender)
+    attempts = (existing["attempts"] + 1) if existing else 1
+    if attempts >= MAX_REPLY_RETRY_ATTEMPTS:
+        pending.pop(sender, None)
+        return
+    pending[sender] = {
+        "content": content,
+        "reply": reply,
+        "failed_at": now,
+        "attempts": attempts,
+    }
+
+
+def clear_pending_retry(pending: Dict[str, Dict[str, Any]], *, sender: str) -> None:
+    """发送最终成功（或客户又发了新消息走了正常路径）时调用：清掉待重试记录。"""
+    pending.pop(sender, None)
+
+
 def classify_unread(
     *,
     roster_gate_on: bool,
@@ -4017,6 +4066,9 @@ def run_real_listen(args: argparse.Namespace) -> int:
     _log(f"已加载 sent_texts: {len(_SENT_TEXTS)} 条 / reply_anchor: {len(_REPLY_ANCHOR)} 会话")
     reply_failed_at: dict[tuple[str, str], float] = {}
     REPLY_FAIL_COOLDOWN = _REPLY_FAIL_COOLDOWN
+    # issue（2026-07-08）：独立于 unread 角标检测的待重试队列——见 record_reply_failure/
+    # select_due_retries/clear_pending_retry 文档（切窗清角标导致冷却重试永不触发根治）。
+    pending_retry: dict[str, dict] = {}
     sender_reply_cooldown: dict[str, float] = {}
     _skip_logged: set[tuple[str, str]] = set()  # 只对每个 key 打一次 skip log，避免刷屏
     _skip_counter = _SkipCounter()  # Phase 0 观测：累计每条 skip reason → 心跳 diag（中台可见）
@@ -4545,6 +4597,7 @@ def run_real_listen(args: argparse.Namespace) -> int:
                         _save_replied(replied)  # 持久化，防重启重复回复
                         _skip_logged.discard(key)
                         reply_failed_at.pop(key, None)
+                        clear_pending_retry(pending_retry, sender=m["sender"])
                         sender_reply_cooldown[m["sender"]] = time.time()  # per-sender 30s 冷却
                         _commit_reply_success(m, last_preview)  # DELIVERED
                         # 真送达确认 → 回执中台 ok=True（bug2 下半：中台据此销账，不再记假账）。
@@ -4557,6 +4610,13 @@ def run_real_listen(args: argparse.Namespace) -> int:
                         _log(f"auto-replied OK sender={m['sender']} receipt={receipt['status']}")
                     else:
                         reply_failed_at[key] = time.time()
+                        # issue（2026-07-08）：_open_chat 已经清掉了微信原生角标，reply_failed_at
+                        # 单独存在不够——它只在这条消息还出现在 unread 里才会被求值，角标一清就
+                        # 永远没机会重试。record_reply_failure 记进独立队列，主循环每轮单独检查。
+                        record_reply_failure(
+                            pending_retry, sender=m["sender"], content=m["content"], reply=reply,
+                            now=time.time(),
+                        )
                         # 发送失败 = 冷却后下轮重试同一条（非终态）。中台 markMessageReceipt 只翻
                         # status='draft'，一旦记 failed 即终态，冷却重试后真送达也永久钉死 failed。
                         # 故这里绝不调 post_message_receipt(ok=False)——保持 draft="尚未确认送达"
@@ -4594,6 +4654,52 @@ def run_real_listen(args: argparse.Namespace) -> int:
             # v1.0.103 双弹窗修复的另一半：本轮回复全部处理完，统一收窗一次
             # （scan_unread 有 emit 时不收，orig_state 暂存在 _SCAN_WINDOW_STATE）。
             _finish_scan_window(mw)
+
+            # issue（2026-07-08）：独立于 unread 角标检测的待重试队列——_open_chat 已经清掉了
+            # 微信原生角标，靠"这条消息重新出现在 unread 里"触发重试永远不会发生。这里每轮单独
+            # 检查 pending_retry，不依赖角标，冷却到期就主动按名字重新找会话重发已缓存的回复文本
+            # （不重新生成草稿——发送失败不代表内容有问题，原样重发）。
+            for _retry_sender in select_due_retries(pending_retry, time.time(), REPLY_FAIL_COOLDOWN):
+                _retry_info = pending_retry.get(_retry_sender)
+                if _retry_info is None:
+                    continue
+                _retry_item = None
+                try:
+                    for _it in mw.descendants(control_type="ListItem"):
+                        _first_line = (_it.element_info.name or "").split("\n")[0].strip()
+                        if _first_line == _retry_sender:
+                            _retry_item = _it
+                            break
+                except Exception as exc:
+                    _log(f"[重试队列] 扫会话列表找 {_retry_sender!r} 异常: {exc}")
+                if _retry_item is None:
+                    _log(f"[重试队列] {_retry_sender!r} 当前不在会话列表可视范围，本轮跳过，下次再试")
+                    continue
+                _log(f"[重试队列] 重发 sender={_retry_sender!r} attempts={_retry_info['attempts']}")
+                try:
+                    _retry_ok = reply_in_chat_with_lease(
+                        mw, _retry_item, _retry_info["reply"], _retry_sender,
+                        getattr(args, "middleware_url", "") or "",
+                    )
+                except Exception as exc:
+                    _log(f"[重试队列] reply_in_chat 异常 sender={_retry_sender!r}: {exc}")
+                    _retry_ok = False
+                if _retry_ok:
+                    clear_pending_retry(pending_retry, sender=_retry_sender)
+                    _retry_key = (_retry_sender, _retry_info["content"])
+                    replied.add(_retry_key)
+                    _save_replied(replied)
+                    reply_failed_at.pop(_retry_key, None)
+                    sender_reply_cooldown[_retry_sender] = time.time()
+                    _log(f"[重试队列] 重发成功 DELIVERED sender={_retry_sender!r}")
+                else:
+                    record_reply_failure(
+                        pending_retry, sender=_retry_sender, content=_retry_info["content"],
+                        reply=_retry_info["reply"], now=time.time(),
+                    )
+                    _log(f"[重试队列] 重发仍失败 sender={_retry_sender!r}，继续冷却重试或达上限放弃")
+                time.sleep(1)  # 操作间隔 ≥1s
+
             time.sleep(args.interval)
     except KeyboardInterrupt:
         pass
