@@ -274,6 +274,19 @@ class DouyinCollectService : AccessibilityService() {
 
         state = State.OPENING_FIRST_VIDEO
         videoCard.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+        startVideoOpenTimeout()
+    }
+
+    // 真机复现两次：评论按钮(content-desc/resource-id)一旦在当前抖音版本/视频页找不到，
+    // handleVideoOpened() 会直接 return，state 永久停在 OPENING_FIRST_VIDEO——跟
+    // WAITING_SEARCH_RESULTS 同样需要有界超时兜底，否则任务永久挂起、mutex 不释放。
+    private fun startVideoOpenTimeout() {
+        scope.launch {
+            delay(VIDEO_OPEN_TIMEOUT_MS)
+            if (state == State.OPENING_FIRST_VIDEO) {
+                finishWithError("COMMENT_BUTTON_NOT_FOUND")
+            }
+        }
     }
 
     private fun handleTypingKeyword(event: AccessibilityEvent) {
@@ -505,6 +518,7 @@ class DouyinCollectService : AccessibilityService() {
         private const val TAG = "DouyinCollectService"
         private const val DOUYIN_PKG = "com.ss.android.ugc.aweme"
         private const val RESULTS_SETTLE_MS = 400L
+        private const val VIDEO_OPEN_TIMEOUT_MS = 15_000L
 
         const val ACTION_COLLECT_TASK = "com.zenithjoy.agent.COLLECT_TASK"
         const val ACTION_COLLECT_RESULT = "com.zenithjoy.agent.COLLECT_RESULT"
