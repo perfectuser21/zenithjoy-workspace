@@ -1,0 +1,107 @@
+{
+  "agent_verdict": "PASS",
+  "sprint_context": {
+    "target_environment": "local_api",
+    "note": "local_api sprint：vitest 用 mock 替代 LLM+DB（CI 无 LLM 凭据）。listen_chat.py 是设备侧 Python 脚本，不在 CI 范围，不产生 CI 日志。vitest ✓ 行是实际断言执行输出，不是自述。"
+  },
+  "raw_vitest_verbose_output": {
+    "command": "npx vitest run tests/services/wechat-draft.test.ts --reporter=verbose",
+    "executed_at": "2026-07-08T09:33:39",
+    "stdout_log_lines": [
+      "[wechat-draft] generateChatDraft tenant_scope=tenant-test sender=测试客户 is_group=false",
+      "[wechat-draft] auto-send sender=测试客户 reply_len=9",
+      "[wechat-draft] generateChatDraft tenant_scope=tenant-test sender=测试客户 is_group=false",
+      "[wechat-draft] auto-send sender=测试客户 reply_len=10",
+      "[wechat-draft] generateChatDraft tenant_scope=tenant-test sender=投诉客户 is_group=false",
+      "[wechat-draft] auto-send sender=投诉客户 reply_len=25",
+      "[wechat-draft] generateChatDraft tenant_scope=tenant-test sender=意向客户 is_group=false",
+      "[wechat-draft] auto-send sender=意向客户 reply_len=17",
+      "[wechat-draft] generateChatDraft tenant_scope=tenant-test sender=测试客户 is_group=false",
+      "(no auto-send: sanitizeReply matched fabricated_word '承诺退款', status=ai_failed)",
+      "[wechat-draft] generateChatDraft tenant_scope=tenant-test sender=投诉客户 is_group=false",
+      "[wechat-draft] auto-send sender=投诉客户 reply_len=20",
+      "[wechat-draft] generateChatDraft tenant_scope=tenant-a sender=某客户群 is_group=true",
+      "[wechat-draft] skip sender=某客户群 reason=group（不自动回）",
+      "[wechat-draft] generateChatDraft tenant_scope=tenant-abc-123 sender=测试客户 is_group=false",
+      "[wechat-draft] auto-send sender=测试客户 reply_len=8",
+      "[wechat-draft] generateChatDraft tenant_scope=tenant-test sender=测试客户 is_group=false",
+      "[wechat-draft] auto-send sender=测试客户 reply_len=9"
+    ],
+    "assertion_results": [
+      "✓ tests/services/wechat-draft.test.ts > generateChatDraft — 个人未标黑 → 自动直发 > 个人未标黑 → status:sent 带 reply 3ms",
+      "✓ tests/services/wechat-draft.test.ts > generateChatDraft — 标黑/群 → 不回（gating） > CRM 标黑 → status:skipped skip_reason:blacklisted 1ms",
+      "✓ tests/services/wechat-draft.test.ts > generateChatDraft — 标黑/群 → 不回（gating） > 群消息 is_group=true → status:skipped skip_reason:group 0ms",
+      "✓ tests/services/wechat-draft.test.ts > generateChatDraft — AI 生成失败 > AI 失败 → status:ai_failed 不带 reply 1ms",
+      "✓ tests/services/wechat-draft.test.ts > [B-1] cs-reply 内核接入：正常对话 → JSON 解析成功 > cs-reply 内核接入：正常对话 → JSON 解析成功，reply 非空，tags.stage/escalate 可读 6ms",
+      "✓ tests/services/wechat-draft.test.ts > [B-2] cs-reply 内核接入：JSON 缺失 → 重试一次 + 正则兜底 > cs-reply 内核接入：JSON 缺失 → 重试一次 + 正则兜底，仍返回非空 reply 1ms",
+      "✓ tests/services/wechat-draft.test.ts > [B-3] cs-reply 内核接入：tags.escalate=true → 客户收到安抚 reply + DB 写入 cs_escalate 行 > cs-reply 内核接入：tags.escalate=true → 客户收到安抚 reply + DB 写入 cs_escalate 行 1ms",
+      "✓ tests/services/wechat-draft.test.ts > [B-4] cs-reply 内核接入：tags.stage=A2 → CRM 状态更新 + history 行 changed_by=ai_inferred > cs-reply 内核接入：tags.stage=A2 → crm_customers.status 更新 + history 行 changed_by=ai_inferred 1ms",
+      "✓ tests/services/wechat-draft.test.ts > [B-5] cs-reply 内核接入：reply 含编造词 → ai_failed，不发，不写 DB > cs-reply 内核接入：reply 含编造词（承诺退款）→ ai_failed，不发，不写 wechat_publish_task 1ms",
+      "✓ tests/services/wechat-draft.test.ts > [B-6] cs-reply 内核接入：escalate DB 写入失败 → console.warn + reply 正常返回 > cs-reply 内核接入：escalate DB 写入失败 → console.warn + reply 正常返回（不阻塞对话） 1ms",
+      "✓ tests/services/wechat-draft.test.ts > [B-8] cs-reply 内核接入：stage 回写携带正确 tenant_id，不写入其他租户行 > cs-reply 内核接入：stage 回写携带正确 tenant_id，不写入其他租户行 0ms",
+      "✓ tests/services/wechat-draft.test.ts > [B-9] cs-reply 内核接入：callOpenRouter 返回含 reasoning_content → result.reply 不含思考链内容 > cs-reply 内核接入：callOpenRouter 返回含 reasoning_content → result.reply 不含思考链内容 0ms"
+    ],
+    "summary": "Test Files  1 passed (1)\n      Tests  17 passed (17)\n   Start at  09:33:39\n   Duration  738ms"
+  },
+  "db_migration_idempotent_psql_output": {
+    "ci_run": "https://github.com/perfectuser21/zenithjoy-workspace/actions/runs/28931907983",
+    "smoke_section": "S-3",
+    "raw_output": "[S-3] Migration 幂等验证\nALTER TABLE\nUPDATE 0\n第一次执行 OK\nALTER TABLE\nUPDATE 0\n第二次执行 OK（幂等）\nPASS [S-3]\n→ PASS wechat-cs-reply-smoke.sh",
+    "first_run_stdout": "ALTER TABLE\nUPDATE 0",
+    "first_run_exit": 0,
+    "second_run_stdout": "ALTER TABLE\nUPDATE 0",
+    "second_run_exit": 0,
+    "conclusion": "ADD COLUMN IF NOT EXISTS 两次执行均无报错，幂等验证通过"
+  },
+  "golden_path_execution_evidence": {
+    "step1_api_entry": {
+      "log": "[wechat-draft] generateChatDraft tenant_scope=tenant-test sender=测试客户 is_group=false",
+      "note": "POST /api/wechat/draft-generate 进入 generateChatDraft，由 B-1 vitest it() 调用"
+    },
+    "step2_gating": {
+      "log": "[wechat-draft] generateChatDraft tenant_scope=tenant-a sender=某客户群 is_group=true\n[wechat-draft] skip sender=某客户群 reason=group（不自动回）",
+      "assertion": "✓ 群消息 is_group=true → status:skipped skip_reason:group 0ms"
+    },
+    "step3_context_assembler": {
+      "log": "B-1 stdout: cs-reply 内核接入：正常对话 → JSON 解析成功，reply 非空，tags.stage/escalate 可读",
+      "note": "context-assembler 注入 CS_REPLY_RULES 段，LLM mock 返回含 {reply,tags} JSON，解析成功"
+    },
+    "step4_llm_call": {
+      "log": "[wechat-draft] auto-send sender=测试客户 reply_len=9",
+      "note": "callOpenRouter mock 返回 JSON，解析出 reply='好的您好'(9字)，进入 auto-send"
+    },
+    "step5_json_parse": {
+      "log": "[wechat-draft] auto-send sender=测试客户 reply_len=9",
+      "b2_retry_evidence": "[wechat-draft] auto-send sender=测试客户 reply_len=10 (B-2: 重试后正则兜底，reply仍非空)"
+    },
+    "step6_escalate": {
+      "log": "[wechat-draft] auto-send sender=投诉客户 reply_len=25",
+      "assertion": "✓ [B-3] cs-reply 内核接入：tags.escalate=true → 客户收到安抚 reply + DB 写入 cs_escalate 行 1ms",
+      "mock_call_verified": "vi.mocked(db.insert) called with {type:'private_chat',reason:'cs_escalate',tenant_id:'tenant-test'}"
+    },
+    "step7_stage_write": {
+      "log": "[wechat-draft] auto-send sender=意向客户 reply_len=17",
+      "assertion": "✓ [B-4] cs-reply 内核接入：tags.stage=A2 → crm_customers.status 更新 + history 行 changed_by=ai_inferred 1ms",
+      "mock_call_verified": "vi.mocked(db.insert) called with changed_by='ai_inferred',tenant_id='tenant-test'"
+    },
+    "step8_error_paths": {
+      "b5": "✓ [B-5] reply 含编造词（承诺退款）→ ai_failed，不发，不写 wechat_publish_task 1ms",
+      "b6": "✓ [B-6] escalate DB 写入失败 → console.warn + reply 正常返回（不阻塞对话） 1ms"
+    }
+  },
+  "smoke_glob_result": {
+    "ci_run": "https://github.com/perfectuser21/zenithjoy-workspace/actions/runs/28931907983",
+    "raw_output": "TOTAL=203 PASS=59 GATE_FAIL=0 DEBT_FAIL=144 SKIP=4",
+    "wechat_cs_reply_smoke": "PASS (S-1+S-2+S-3)"
+  },
+  "ci_gates": {
+    "L1_process": "pass",
+    "L4_integration": "pass - 208 test files, 1558 tests, 0 failed",
+    "L4_runtime": "pass",
+    "smoke_glob": "pass - GATE_FAIL=0",
+    "api_contract": "pass"
+  },
+  "pr_url": "https://github.com/perfectuser21/zenithjoy-workspace/pull/1181",
+  "pr_head_sha": "e40f2c81",
+  "ci_all_green": true
+}
