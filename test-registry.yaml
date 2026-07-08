@@ -4511,3 +4511,27 @@ agent_suite:
   status: active
   product: 客户私域AI接管
   note: "Sprint 07081012 CRM 客户状态历史追踪合同测试（B1-B6）：新客户首次写 old_status=NULL / 状态变化新增历史行 / 重复提交不写入 / upsert 失败回滚无残留 / 多租户隔离 / migration 幂等占位。vi.mock pool/auth/resolveTenantId，supertest 驱动。"
+
+- id: crm-status-history-pool-unit
+  path: apps/api/src/db/pool.test.ts
+  type: unit
+  ci: L3
+  status: active
+  product: 客户私域AI接管
+  note: "sprint(07081012): pool 命名导出存在且与 connection 同引用，具有 query/connect 方法"
+
+- id: crm-status-history-auth-unit
+  path: apps/api/src/middleware/auth.test.ts
+  type: unit
+  ci: L3
+  status: active
+  product: 客户私域AI接管
+  note: "sprint(07081012): requireCsWriteAccess 导出存在 + bodyWechatIdToParam 7 个行为断言"
+
+- id: crm-status-history-resolve-tenant-unit
+  path: apps/api/src/utils/resolveTenantId.test.ts
+  type: unit
+  ci: L3
+  status: active
+  product: 客户私域AI接管
+  note: "sprint(07081012): resolveTenantId 4 条路径覆盖：req.tenantId 短路 / service_agents 命中 / cs-hex 格式 license_machines 回退 / 两路皆无返回 null"
