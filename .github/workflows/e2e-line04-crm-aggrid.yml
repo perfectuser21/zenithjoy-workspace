@@ -1,18 +1,17 @@
 name: "[CONFIG] E2E Line04 CRM AG Grid 运营台（DOM 行内编辑 AI 客户管理台）"
 
 # Line04 CRM AG Grid 运营台 Playwright E2E
-# ZenithJoy UI 死规则 → windows-latest runner。
-# AG Grid DOM 渲染，直接断言单元格文字 + 行内编辑 + 点姓名导航。
+# 纯 dashboard UI 脚本（Vite dev server + Playwright headless chromium，VITE_SKIP_AUTH mock），
+# 不涉及 RPA → 按"非 RPA = 纯脚本"规则跑 ubuntu headless（原 windows-latest 无必要，已下线）。
+#
+# 可 required 设计：去掉原生 on.pull_request.paths 门（否则不相关 PR 整条 workflow 不跑、
+# required check 永远等不到会锁死全仓 PR）。改为 workflow 每 PR 都跑，内部 changes job
+# 用 git diff 判定是否跑真 Playwright job；always() 聚合 gate「Line04 CRM Gate Passed」
+# 在真 job 跳过时照样报绿。required 挂聚合 gate，不挂原始 job。
 
 on:
   pull_request:
     branches: [main]
-    paths:
-      - 'apps/dashboard/src/pages/CustomerListPage.tsx'
-      - 'apps/dashboard/src/pages/CustomerProfilePage.tsx'
-      - 'apps/dashboard/e2e/crm-aggrid.spec.ts'
-      - 'apps/dashboard/e2e/crm-customer-list.spec.ts'
-      - '.github/workflows/e2e-line04-crm-aggrid.yml'
   workflow_dispatch:
 
 concurrency:
@@ -20,10 +19,40 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  playwright-windows:
-    name: Playwright — CRM AG Grid 运营台 (Windows Chrome)
-    runs-on: windows-latest
-    timeout-minutes: 25
+  changes:
+    name: changes — 变更路径检测
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      crm: ${{ steps.filter.outputs.crm }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: filter
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" != "pull_request" ]; then
+            echo "crm=true" >> "$GITHUB_OUTPUT"
+            echo "non-PR event: run all"
+            exit 0
+          fi
+          BASE="${{ github.event.pull_request.base.sha }}"
+          HEAD="${{ github.event.pull_request.head.sha }}"
+          FILES=$(git diff --name-only "$BASE...$HEAD")
+          echo "$FILES"
+          CRM=false
+          if echo "$FILES" | grep -qE '^(apps/dashboard/src/pages/CustomerListPage\.tsx|apps/dashboard/src/pages/CustomerProfilePage\.tsx|apps/dashboard/e2e/crm-aggrid\.spec\.ts|apps/dashboard/e2e/crm-customer-list\.spec\.ts|\.github/workflows/e2e-line04-crm-aggrid\.yml)$'; then
+            CRM=true
+          fi
+          echo "crm=$CRM" >> "$GITHUB_OUTPUT"
+
+  playwright:
+    name: Playwright — CRM AG Grid 运营台 (ubuntu chromium)
+    needs: changes
+    if: needs.changes.outputs.crm == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
 
     defaults:
       run:
@@ -35,14 +64,10 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
-          # 不缓存：macOS lock 缺 Windows optional deps（@rollup/rollup-win32-x64-msvc）
+          cache: 'npm'
 
       - name: Install deps
         run: npm ci
-
-      - name: Install Windows rollup native binding
-        # package-lock.json 由 macOS 生成，缺 @rollup/rollup-win32-x64-msvc
-        run: npm install @rollup/rollup-win32-x64-msvc --no-save
 
       - name: Install Playwright Chromium
         working-directory: apps/dashboard
@@ -82,3 +107,24 @@ jobs:
             apps/dashboard/playwright-report/
             apps/dashboard/screenshots/
           retention-days: 7
+
+  # ─── 聚合 gate（required context）───────────────────────────────────────────
+  # 每 PR 都跑；真 job 跳过（不相关 PR）视为通过，失败才红。required 挂这个。
+  crm-gate:
+    name: Line04 CRM Gate Passed
+    needs: [changes, playwright]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Line04 CRM Gate
+        run: |
+          echo "changes=${{ needs.changes.result }} playwright=${{ needs.playwright.result }}"
+          if [ "${{ needs.changes.result }}" != "success" ]; then
+            echo "FAIL: changes 检测未成功"; exit 1
+          fi
+          case "${{ needs.playwright.result }}" in
+            success|skipped) ;;
+            *) echo "FAIL: playwright 结果为 ${{ needs.playwright.result }}"; exit 1 ;;
+          esac
+          echo "Line04 CRM Gate Passed"

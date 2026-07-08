@@ -1,17 +1,12 @@
 name: E2E — Line02 留言人工跟进 & LeadsTable 统一
 
+# 可 required 设计：去掉原生 on.pull_request.paths 门（否则不相关 PR 整条 workflow 不跑、
+# required check 永远等不到会锁死全仓 PR）。改为 workflow 每 PR 都跑，内部 changes job
+# 用 git diff 判定是否跑真 job；always() 聚合 gate「Line02 Lead Gate Passed」在真 job
+# 跳过时照样报绿。required 挂聚合 gate，不挂原始 job。
 on:
   pull_request:
     branches: [main]
-    paths:
-      - 'apps/api/src/routes/acquisition.ts'
-      - 'apps/api/src/services/acquisition-dispatch.ts'
-      - 'apps/dashboard/src/components/LeadsTable.tsx'
-      - 'apps/dashboard/src/pages/LeadsPage.tsx'
-      - 'apps/dashboard/src/pages/AcquisitionTasksPage.tsx'
-      - 'apps/dashboard/e2e/leads-unified-table.spec.ts'
-      - 'services/agent/src/line02/reply-poller.ts'
-      - 'sprints/07032333-line02-lead-human-handoff/**'
   workflow_dispatch:
     inputs:
       e2e_database_url:
@@ -23,9 +18,39 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  changes:
+    name: changes — 变更路径检测
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      lead: ${{ steps.filter.outputs.lead }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: filter
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" != "pull_request" ]; then
+            echo "lead=true" >> "$GITHUB_OUTPUT"
+            echo "non-PR event: run all"
+            exit 0
+          fi
+          BASE="${{ github.event.pull_request.base.sha }}"
+          HEAD="${{ github.event.pull_request.head.sha }}"
+          FILES=$(git diff --name-only "$BASE...$HEAD")
+          echo "$FILES"
+          LEAD=false
+          if echo "$FILES" | grep -qE '^(apps/api/src/routes/acquisition\.ts|apps/api/src/services/acquisition-dispatch\.ts|apps/dashboard/src/components/LeadsTable\.tsx|apps/dashboard/src/pages/LeadsPage\.tsx|apps/dashboard/src/pages/AcquisitionTasksPage\.tsx|apps/dashboard/e2e/leads-unified-table\.spec\.ts|services/agent/src/line02/reply-poller\.ts|sprints/07032333-line02-lead-human-handoff/|\.github/workflows/e2e-line02-lead-human-handoff-windows\.yml$)'; then
+            LEAD=true
+          fi
+          echo "lead=$LEAD" >> "$GITHUB_OUTPUT"
+
   # PR CI job: ubuntu-latest + Postgres + apps/api + Vite dev server（第3条测试打真实 API，需要真后端）
   e2e:
     name: Playwright — Line02 LeadsTable 统一（ubuntu chromium）
+    needs: changes
+    if: needs.changes.outputs.lead == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
@@ -183,3 +208,25 @@ jobs:
             apps/dashboard/test-results/
             apps/dashboard/screenshots/
           retention-days: 7
+
+  # ─── 聚合 gate（required context）───────────────────────────────────────────
+  # 每 PR 都跑；真 e2e job 跳过（不相关 PR）视为通过，失败才红。required 挂这个。
+  # e2e-windows 是 dispatch-only evaluator，不纳入 gate。
+  lead-gate:
+    name: Line02 Lead Gate Passed
+    needs: [changes, e2e]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Line02 Lead Gate
+        run: |
+          echo "changes=${{ needs.changes.result }} e2e=${{ needs.e2e.result }}"
+          if [ "${{ needs.changes.result }}" != "success" ]; then
+            echo "FAIL: changes 检测未成功"; exit 1
+          fi
+          case "${{ needs.e2e.result }}" in
+            success|skipped) ;;
+            *) echo "FAIL: e2e 结果为 ${{ needs.e2e.result }}"; exit 1 ;;
+          esac
+          echo "Line02 Lead Gate Passed"
