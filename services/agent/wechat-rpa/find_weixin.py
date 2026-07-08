@@ -470,6 +470,87 @@ def is_privacy_locked() -> bool:
     return False
 
 
+def is_welcome_back_screen() -> bool:
+    """检测微信是否处于"欢迎回来"确认屏（mmui::LoginWindow + 含"进入微信"按钮，不需密码）。
+
+    与 is_privacy_locked() 的区别：两者均为 mmui::LoginWindow title='微信'，
+    但欢迎回来屏有"进入微信"按钮（系统重启后微信自动启动时出现），而隐私锁屏有密码输入框。
+    本函数查找"进入微信"按钮作为区分依据。
+    非 Windows 或 UIA 未就绪时返回 False（不阻断调用方）。
+    """
+    from pywinauto import Desktop
+
+    try:
+        for w in Desktop(backend="uia").windows():
+            try:
+                cls = w.element_info.class_name
+                title = w.element_info.name or ""
+                if cls != LOGIN_WINDOW_CLASS or title not in ("微信", "Weixin", "WeChat"):
+                    continue
+                for c in w.descendants(control_type="Button"):
+                    try:
+                        nm = c.element_info.name or ""
+                        if nm in ("进入微信", "Enter WeChat"):
+                            return True
+                    except Exception:
+                        continue
+            except Exception:
+                continue
+    except Exception:
+        pass
+    return False
+
+
+def click_welcome_back_enter() -> bool:
+    """点击欢迎回来屏的"进入微信"按钮（AttachThreadInput 拉前台 + click_input）。
+
+    返回 True 表示点击动作已发出（不等待微信主窗口出现，调用方自行 15s 验证）。
+    返回 False 表示找不到按钮或点击异常。非 Windows 直接返回 False。
+    """
+    import platform as _plat
+    if _plat.system() != "Windows":
+        return False
+    from pywinauto import Desktop
+    import ctypes as _ctw
+    try:
+        for w in Desktop(backend="uia").windows():
+            try:
+                cls = w.element_info.class_name
+                title = w.element_info.name or ""
+                if cls != LOGIN_WINDOW_CLASS or title not in ("微信", "Weixin", "WeChat"):
+                    continue
+                for c in w.descendants(control_type="Button"):
+                    try:
+                        nm = c.element_info.name or ""
+                        if nm not in ("进入微信", "Enter WeChat"):
+                            continue
+                        hwnd = w.element_info.handle
+                        if hwnd:
+                            # AttachThreadInput 拉前台：把我方线程输入态附到微信 UI 线程，
+                            # 再 SetForegroundWindow，使 click_input 在无 desktop 访问权的 session-1
+                            # 计划任务中也能触达真实控件。
+                            my_tid = _ctw.windll.kernel32.GetCurrentThreadId()
+                            tgt_tid = _ctw.windll.user32.GetWindowThreadProcessId(hwnd, None)
+                            attached = _ctw.windll.user32.AttachThreadInput(my_tid, tgt_tid, True)
+                            try:
+                                _ctw.windll.user32.SetForegroundWindow(hwnd)
+                                _ctw.windll.user32.BringWindowToTop(hwnd)
+                                c.click_input()
+                            finally:
+                                if attached:
+                                    _ctw.windll.user32.AttachThreadInput(my_tid, tgt_tid, False)
+                        else:
+                            c.click_input()
+                        return True
+                    except Exception:
+                        continue
+            except Exception:
+                continue
+    except Exception:
+        pass
+    return False
+
+
 if __name__ == "__main__":
     import argparse
     import sys as _sys
