@@ -8,8 +8,8 @@
 #   - Release: 跑 trigger 包含 Release 的条目
 # ============================================================================
 
-version: "1.0.0"
-updated: "2026-02-04"
+version: "1.0.1"
+updated: "2026-07-08"
 
 # ============================================================================
 # 核心功能回归契约（待补充）
@@ -17,6 +17,24 @@ updated: "2026-02-04"
 core: []
 
 # ============================================================================
-# Golden Paths（E2E 链路，待补充）
+# Golden Paths（E2E 链路）—— 自包含 must-never-break 种子
 # ============================================================================
-golden_paths: []
+golden_paths:
+  - id: SENTINEL-001
+    trigger: [PR, Release]
+    method: auto
+    must_never_break: true
+    priority: P0
+    test_command: "bash -n .github/workflows/scripts/smoke/golden-path-1-smoke.sh"
+  - id: SENTINEL-002
+    trigger: [PR, Release]
+    method: auto
+    must_never_break: true
+    priority: P0
+    test_command: "bash -n .github/workflows/scripts/smoke/golden-path-2-smoke.sh"
+  - id: SENTINEL-003
+    trigger: [PR, Release]
+    method: auto
+    must_never_break: true
+    priority: P0
+    test_command: "bash -n scripts/ci/run-core-regression.sh"
