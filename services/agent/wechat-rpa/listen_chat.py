@@ -2027,7 +2027,7 @@ def _ensure_window_maximized(mw: Any) -> None:
         return
     try:
         hwnd = mw.element_info.handle
-        if not hwnd:
+        if not hwnd or not isinstance(hwnd, int):
             return
         if not wd.user32.IsZoomed(hwnd):
             rect = mw.rectangle()
