@@ -811,6 +811,41 @@ staging_verify() {
   return 0
 }
 
+# resolve_promote_target_sha [sha]：解析 promote-prod.yml 要 promote 到生产的目标 sha。
+#
+# 根因（issue，2026-07-08）：promote-prod.yml 通过 SSH 把 $INPUT_SHA 作为位置参数传给远端
+# `bash -s --`；当 $INPUT_SHA 为空字符串（workflow_dispatch 默认/文档写明的正常用法：
+# "留空=用常驻 staging 当前 sha"）时，SSH 把本地 argv 拼接成远端命令行，空参数在拼接过程
+# 中被吞掉，远端 `bash -s --` 实际收到零个位置参数。原来的内联逻辑写 `INPUT_SHA="$1"`，
+# 在 `set -u` 下对未传参数直接报 "unbound variable" 崩溃——外层 GH Actions 脚本又没
+# `set -e`，SSH 失败后仍跑到最后一行 `rm -f "$KEY_FILE"`（成功），导致整个 job 误报 success，
+# 生产从未真正 promote 过。
+#
+# 用 `${1:-}` 而非 `$1`：不管调用方到底传没传参数，这里都不会崩，从行为上根治这一类问题
+# （不依赖"预测 SSH 到底会不会丢空参数"这个环境细节）。
+#
+# 输入为空 → 读 $ZJ_RELEASES_DIR/staging 软链的 basename 当目标 sha；
+# 输入非空 → 直接用；两者都拿不到 → 报错返回 1，绝不悄悄用空字符串当 sha。
+resolve_promote_target_sha() {
+  local input_sha="${1:-}"
+  local target_sha="$input_sha"
+
+  if [ -z "$target_sha" ]; then
+    local staging_link="${ZJ_RELEASES_DIR:-}/staging"
+    if [ -L "$staging_link" ]; then
+      target_sha="$(basename "$(readlink "$staging_link")")"
+    fi
+  fi
+
+  if [ -z "$target_sha" ]; then
+    echo "❌ 取不到 promote 目标 sha（输入为空且 releases/staging 软链不存在）" >&2
+    return 1
+  fi
+
+  echo "$target_sha"
+  return 0
+}
+
 # staging_record_anchor：打印当前生产 :5200 的 sha（promote 前的回滚锚点）。
 staging_record_anchor() {
   curl -sf "http://localhost:${ZJ_PROD_PORT}/version" 2>/dev/null \

@@ -16,6 +16,9 @@
 # Case M: ensure_release_node_modules 在 release node_modules 为空时从 hoisted 根兜底填充
 # Case N: ensure_prod_plist_points_to_current 把生产 plist 改指 releases/current（只改路径/不碰密钥/幂等/不碰真 plist）
 # Case O: promote 的生产 migration 从主 checkout（有 db/migrations 源）跑，不从 release 产物目录跑（防 Cannot find module 回归）
+# Case P: resolve_promote_target_sha 零参数调用（模拟 SSH 拼接空参数丢失）+ 有效 staging 软链 → 回退到软链 sha，不因 set -u 崩溃
+# Case Q: resolve_promote_target_sha 传入显式 sha → 直接返回该 sha，忽略 staging 软链
+# Case R: resolve_promote_target_sha 零参数 + 无 staging 软链 → 返回非 0（报错，不能悄悄用空字符串当 sha）
 set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -675,6 +678,39 @@ STUB
   set -e 2>/dev/null || true
   rm -rf "$SBOX"
 fi
+
+# --- resolve_promote_target_sha（issue 根因：promote-prod.yml 空 sha 经 SSH 传递会被吞掉，
+#     远端 "$1" 在 set -u 下变成 unbound variable，脚本直接崩，外层又没 set -e，被误报 success）---
+PBOX="$(mktemp -d)"
+mkdir -p "$PBOX/releases/stagingtargetsha"
+ln -sfn "$PBOX/releases/stagingtargetsha" "$PBOX/releases/staging"
+
+set +e   # 允许函数返回非 0 而不杀测试脚本
+
+# Case P: 零参数调用（模拟 SSH 吞空参数），有效 staging 软链 → 回退到软链 sha
+P_OUT="$(ZJ_RELEASES_DIR="$PBOX/releases" resolve_promote_target_sha 2>/tmp/dlib-resolve-p.err)"
+P_RC=$?
+expect_eq "$P_RC" "0" "P resolve_promote_target_sha 零参数不因 set -u 崩溃（rc=${P_RC}）"
+expect_eq "$P_OUT" "stagingtargetsha" "P 零参数回退到 staging 软链指向的 sha"
+
+# Case Q: 显式传入 sha → 直接返回，忽略 staging 软链
+Q_OUT="$(ZJ_RELEASES_DIR="$PBOX/releases" resolve_promote_target_sha "explicitsha123" 2>/tmp/dlib-resolve-q.err)"
+Q_RC=$?
+expect_eq "$Q_RC" "0" "Q resolve_promote_target_sha 显式 sha 正常返回（rc=${Q_RC}）"
+expect_eq "$Q_OUT" "explicitsha123" "Q 显式 sha 优先于 staging 软链"
+
+# Case R: 零参数 + 无 staging 软链 → 报错退出，不能悄悄返回空字符串
+rm -f "$PBOX/releases/staging"
+R_OUT="$(ZJ_RELEASES_DIR="$PBOX/releases" resolve_promote_target_sha 2>/tmp/dlib-resolve-r.err)"
+R_RC=$?
+if [ "$R_RC" -ne 0 ] && [ -z "$R_OUT" ]; then
+  ok "R 零参数+无软链→报错退出，不悄悄用空 sha"
+else
+  bad "R 零参数+无软链应报错（rc=$R_RC out='$R_OUT'）"
+fi
+
+set -e 2>/dev/null || true
+rm -rf "$PBOX"
 
 echo ""
 echo "deploy-lib.test.sh: PASSED=$PASSED FAILED=$FAILED"
