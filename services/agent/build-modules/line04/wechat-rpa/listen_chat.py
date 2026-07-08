@@ -3938,7 +3938,13 @@ def _restart_wechat_for_uia() -> bool:
     """微信进程在跑但 mmui 无障碍树塌缩(UIA 读不到会话)时，重启微信以重建 a11y 树。
 
     步骤：① _activate_uia() 确保 screenreader 标志已置位(这样微信重启时就能读到 → mmui 构建完整树)
-         ② taskkill /F Weixin.exe(微信吞 WM_CLOSE，优雅退无效，只能强杀；实测 /F + 等待 + 重启不崩)
+         ② taskkill /F Weixin.exe + WeChatAppEx.exe（微信吞 WM_CLOSE，优雅退无效，只能强杀；
+            实测 /F + 等待 + 重启不崩）—— Weixin.exe 只是启动器，正常几秒就自然退出（见
+            is_weixin_running() 注释）；真正常驻、扛着 UIA 状态的是 WeChatAppEx.exe。只杀
+            Weixin.exe（issue 05630ae5，2026-07-07 客户实测）等于每次自愈都杀一个早已退出
+            的空壳、再叠加启动一个新 Weixin.exe，真正卡死的 WeChatAppEx.exe 从未被杀过，
+            UIA 死区从未真正修复——客户机实测残留 5 个 Weixin.exe，与 _WECHAT_RESTART_MAX=5
+            精确对应，自愈配额耗尽而问题从未解决。
          ③ launch_weixin() 重启。返回是否成功发起重启。非 Windows 直接 False。
     """
     if platform.system() != "Windows":
@@ -3948,6 +3954,10 @@ def _restart_wechat_for_uia() -> bool:
         import subprocess
         subprocess.run(
             ["taskkill", "/F", "/IM", "Weixin.exe", "/T"],
+            capture_output=True, timeout=20,
+        )
+        subprocess.run(
+            ["taskkill", "/F", "/IM", "WeChatAppEx.exe", "/T"],
             capture_output=True, timeout=20,
         )
         time.sleep(6)  # 等进程真正退出 + 文件锁释放(防紧接重启崩 crashpad)

@@ -121,6 +121,45 @@ class TestRestartWechatForUia:
             "必须 taskkill 微信"
         fake_launch.assert_called_once()  # 必须 launch_weixin 重启
         assert result is True
+
+    def test_restart_kills_wechatappex_not_just_weixin_launcher(self):
+        """P0 生产 bug 复现（issue 05630ae5，2026-07-07 客户实测）：
+        WeChat 4.x 启动后 Weixin.exe（启动器）很快退出，真正常驻、扛着微信窗口
+        UIA 状态的进程是 WeChatAppEx.exe（is_weixin_running() 自己的注释就是这么
+        写的）。旧代码 _restart_wechat_for_uia() 只 taskkill Weixin.exe，从未杀过
+        WeChatAppEx.exe —— 等于每次"自愈重启"都在杀一个早已退出的空壳、再叠加
+        启动一个新 Weixin.exe，真正卡死的 WeChatAppEx.exe 永远没被杀过，UIA 死区
+        从未真正修复。_WECHAT_RESTART_MAX=5 与客户机实测残留 5 个 Weixin.exe
+        （从未清理）精确对应。
+
+        守卫：_restart_wechat_for_uia() 必须同时 taskkill WeChatAppEx.exe。
+        （用 patch platform.system 强制走 Windows 分支，不依赖跑在什么系统上。）
+        """
+        fake_launch = MagicMock(return_value=True)
+        fake_fw = types.ModuleType("find_weixin")
+        fake_fw.launch_weixin = fake_launch
+        with patch.object(listen_chat, "_activate_uia") as mock_act, \
+             patch.object(listen_chat.platform, "system", return_value="Windows"), \
+             patch.dict(sys.modules, {"find_weixin": fake_fw}), \
+             patch("subprocess.run") as mock_run, \
+             patch("time.sleep"):
+            result = listen_chat._restart_wechat_for_uia()
+        mock_act.assert_called_once()
+        killed_images = set()
+        for call in mock_run.call_args_list:
+            args = call.args[0] if call.args else call.kwargs.get("args", [])
+            if "taskkill" in [str(a).lower() for a in args]:
+                for i, a in enumerate(args):
+                    if str(a).upper() == "/IM" and i + 1 < len(args):
+                        killed_images.add(args[i + 1])
+        assert "Weixin.exe" in killed_images, killed_images
+        assert "WeChatAppEx.exe" in killed_images, (
+            f"必须同时 taskkill WeChatAppEx.exe（真正常驻进程），实际只杀了 {killed_images!r}"
+        )
+        fake_launch.assert_called_once()
+        assert result is True
+
+
 class TestRestartGuardedByRecentScan:
     """回归（#950 误重启真因，xian-rog 0629 实地铁证坐实）：
 
