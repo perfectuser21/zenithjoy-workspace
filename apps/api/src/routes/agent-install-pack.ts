@@ -387,7 +387,8 @@ agentInstallPackRouter.get('/android', async (req: Request, res: Response) => {
   // 3. apk_url（COS 常量）+ deeplink（api=ws url，安卓 deriveHttpBase 会 wss→https 做 register）
   const apkUrl =
     process.env.ANDROID_APK_COS_URL ||
-    'https://zenithjoy-static-1333590468.cos.accelerate.myqcloud.com/install-pack/android/zenithjoy-agent.apk';
+    // TODO: 自定义域名 HTTPS 证书申请中(COS 免费证书需走腾讯云 SSL 证书流程,非即时生效)，暂用 HTTP
+    'http://apk.zenjoymedia.media/install-pack/android/zenithjoy-agent.apk';
   const wsUrl = process.env.AGENT_PUBLIC_WS_URL || 'wss://api.zenithjoy.com/agent-ws';
   const parts = [`api=${encodeURIComponent(wsUrl)}`];
   if (licenseKey) parts.unshift(`license=${encodeURIComponent(licenseKey)}`);
