@@ -470,6 +470,45 @@ def is_privacy_locked() -> bool:
     return False
 
 
+def classify_login_window(button_names: list) -> str:
+    """纯函数(CI可测)：mmui::LoginWindow title='微信' 的两种真身分类（issue e78d98bc）。
+
+    实测该窗口常是重启后的"欢迎回来"确认屏（Button 进入微信/切换账号/仅传输文件，
+    不需要密码，可自动点击自愈），而非真隐私锁（需密码，只能人工）。
+    按钮名含"进入微信" → 'welcome_screen'；否则保守判 'privacy_lock'。
+    """
+    for nm in button_names:
+        if "进入微信" in (nm or ""):
+            return "welcome_screen"
+    return "privacy_lock"
+
+
+def find_welcome_enter_button():
+    """枚举欢迎回来确认屏，返回 (login_hwnd, "进入微信"按钮 wrapper)；找不到返回 None。
+
+    2026-07-08 控制性复现坐实的树结构：mmui::LoginWindow title='微信'，
+    Button "进入微信"/"切换账号"/"仅传输文件" UIA name 全暴露。
+    枚举失败（UIA 未就绪）保守返回 None，不阻断监听主循环。
+    """
+    from pywinauto import Desktop  # 仅 Windows 运行时需要，顶层不 import
+
+    try:
+        for w in Desktop(backend="uia").windows():
+            try:
+                cls = w.element_info.class_name
+                title = w.element_info.name or ""
+                if cls != LOGIN_WINDOW_CLASS or title != "微信":
+                    continue
+                for b in w.descendants(control_type="Button"):
+                    if "进入微信" in (b.element_info.name or ""):
+                        return (w.element_info.handle, b)
+            except Exception:
+                continue
+    except Exception:
+        pass
+    return None
+
+
 if __name__ == "__main__":
     import argparse
     import sys as _sys

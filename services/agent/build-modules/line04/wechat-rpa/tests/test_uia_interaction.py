@@ -14,6 +14,12 @@
   仅限滚动用、扫前后存还原光标、无桌面输入权时回退 PostMessage。故 SetCursorPos 不在黑名单里；
   发送/回复层仍永久禁止任何 click_input/send_keys/type_keys。
 
+【click_input 例外（2026-07-08 真机两次截图坐实，issue e78d98bc / 8e163d87）】欢迎回来屏
+  自动点击（_attempt_welcome_screen_heal）与回顶切 tab 升级梯（_reset_session_list_to_top）
+  是"窗口管理自愈"而非"发送/回复交互层"：UIA Invoke / 不抢前台的 PostMessage 对这两处 mmui
+  按钮均无效，click_input（已用 AttachThreadInput 主动拉前台）是唯一验证有效的兜底。
+  黑名单仍严格挡在 send_chat.py 与 listen_chat.py 的回复/发送路径上，仅这两个自愈函数体开例外。
+
 本测试用「源码字符串断言 + dryrun mock」两条防线，CI 无微信环境也能跑过：
   1) 源码不得含任何物理输入 API（防回退）。
   2) 源码必须含 iface_invoke / iface_value（证明走 UIA pattern）。
@@ -41,17 +47,47 @@ FORBIDDEN_PHYSICAL_INPUT = ("click_input", "send_keys", "type_keys")
 # UIA pattern 白名单：证明交互走的是 InvokePattern / ValuePattern。
 REQUIRED_UIA_PATTERNS = ("iface_invoke", "iface_value")
 
+# 窗口管理自愈例外（见文件头 2026-07-08 说明）：只对这两个函数体的 click_input 开例外口子，
+# 发送/回复层（reply_in_chat 等）仍在黑名单严格覆盖范围内。
+_PHYSICAL_INPUT_EXCEPTION_FUNCS = ("_attempt_welcome_screen_heal", "_reset_session_list_to_top")
+
 
 def _read_source(path: str) -> str:
     with open(path, "r", encoding="utf-8") as f:
         return f.read()
 
 
+def _strip_exception_functions(src: str, func_names: tuple) -> str:
+    """把指定顶层函数体从源码里挖掉，供黑名单扫描排除窗口管理自愈例外用。
+
+    从 `def <name>(` 挖到下一个顶层 `def `/`class `（或文件尾）为止。
+    """
+    import re
+    out = src
+    for name in func_names:
+        m = re.search(rf"^def {re.escape(name)}\(.*$", out, flags=re.MULTILINE)
+        if not m:
+            continue
+        rest = out[m.end():]
+        end_m = re.search(r"^(def |class )", rest, flags=re.MULTILINE)
+        end = m.end() + end_m.start() if end_m else len(out)
+        out = out[:m.start()] + out[end:]
+    return out
+
+
 def test_listen_chat_no_physical_input():
-    """listen_chat.py 不得出现物理鼠标键盘 API（防回退到抢前台的输入方式）。"""
+    """listen_chat.py 发送/回复交互层不得出现物理鼠标键盘 API（防回退到抢前台的输入方式）。
+
+    窗口管理自愈函数（欢迎屏自动点击 / 回顶切 tab 升级梯）是已文档化的例外，见文件头说明。
+    """
     src = _read_source(LISTEN_CHAT_PATH)
+    src_without_exceptions = _strip_exception_functions(src, _PHYSICAL_INPUT_EXCEPTION_FUNCS)
     for banned in FORBIDDEN_PHYSICAL_INPUT:
-        assert banned not in src, f"listen_chat.py 不应出现物理输入 API: {banned}"
+        assert banned not in src_without_exceptions, (
+            f"listen_chat.py 发送/回复交互层不应出现物理输入 API: {banned}"
+        )
+    # 例外函数体内确实按设计使用了 click_input（否则例外常量该删了，说明设计已变）
+    assert "click_input" in src, "预期的窗口管理自愈例外函数应仍在使用 click_input"
 
 
 def test_send_chat_no_physical_input():
