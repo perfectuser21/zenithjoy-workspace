@@ -53,3 +53,4 @@ wechat-cs-hardening-smoke.sh
 wechat-cs-per-account-ia-redesign-smoke.sh
 wechat-rpa-real-agent-smoke.sh
 ws2-three-template-builders-smoke.sh
+crm-status-history-smoke.sh

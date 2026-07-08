@@ -467,7 +467,7 @@ router.put(
   },
 );
 
-// PUT /api/crm/customers/status — 状态 A1-A5 持久化
+// PUT /api/crm/customers/status — 状态 A1-A5 持久化（事务写历史）
 router.put(
   '/customers/status',
   bodyWechatIdToParam,
@@ -485,16 +485,43 @@ router.put(
     if (!VALID_STATUS.has(st)) return res.status(400).json({ error: 'status 必须是 A1-A5' });
     const tenantId = await resolveTenantId(req, csWechatId);
     if (!tenantId) return fail(res, 404, 'TARGET_NOT_FOUND', '解析不到所属租户');
+    const client = await pool.connect();
     try {
-      await pool.query(
+      await client.query('BEGIN');
+
+      // 1. 取旧 status（用于判断是否真实变化）
+      const { rows } = await client.query<{ status: string | null }>(
+        `SELECT status FROM zenithjoy.crm_customers
+         WHERE tenant_id = $1::uuid AND cs_wechat_id = $2 AND contact = $3`,
+        [tenantId, csWechatId, name],
+      );
+      const oldStatus: string | null = rows.length > 0 ? (rows[0].status ?? null) : null;
+
+      // 2. Upsert crm_customers
+      await client.query(
         `INSERT INTO zenithjoy.crm_customers (tenant_id, cs_wechat_id, contact, status, source, updated_at)
          VALUES ($1::uuid, $2, $3, $4, 'manual', now())
          ON CONFLICT (tenant_id, cs_wechat_id, contact) DO UPDATE SET status = $4, updated_at = now()`,
         [tenantId, csWechatId, name, st],
       );
+
+      // 3. 只有 status 真实变化时才写历史（old_status IS NULL 表示新客户，也算变化）
+      if (oldStatus === null || oldStatus !== st) {
+        await client.query(
+          `INSERT INTO zenithjoy.crm_customer_status_history
+             (tenant_id, cs_wechat_id, contact, old_status, new_status, changed_at)
+           VALUES ($1::uuid, $2, $3, $4, $5, now())`,
+          [tenantId, csWechatId, name, oldStatus, st],
+        );
+      }
+
+      await client.query('COMMIT');
       return res.json({ success: true, status: st });
     } catch (err) {
+      await client.query('ROLLBACK');
       return fail(res, 500, 'STATUS_FAILED', err instanceof Error ? err.message : 'unknown');
+    } finally {
+      client.release();
     }
   },
 );
