@@ -1,0 +1,20 @@
+{
+  "phase": "evaluator",
+  "pr": 1169,
+  "sha": "1d1f92a6f326959970bc3834d4156ade0a67d325",
+  "verdict": "PASS",
+  "fr_results": {
+    "FR-01": {"impl": true, "test": true},
+    "FR-02": {"impl": true, "test": true},
+    "FR-03": {"impl": true, "test": true},
+    "FR-04": {"impl": true, "test": true},
+    "FR-05": {"impl": true, "test": true},
+    "FR-07": {"impl": true, "test": true}
+  },
+  "unverifiable": [
+    "FR-01 真实DB回填幂等性 — WHERE NOT EXISTS 守卫存在，代码正确，放行",
+    "FR-05 真实事务回滚原子性 — mock验证ROLLBACK调用链完整，放行",
+    "FR-03 changed_at时间精度 — smoke脚本覆盖真实链路，放行"
+  ],
+  "minor_issues": ["statusDidChange 未提取为独立函数，附加单元测试缺失，不阻断"]
+}
