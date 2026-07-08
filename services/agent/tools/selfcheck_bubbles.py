@@ -37,6 +37,31 @@ TARGET = "文件传输助手"
 FIND_WINDOW_RETRIES = 6
 FIND_WINDOW_RETRY_DELAY_S = 12.0
 
+# 找会话列表 item 有界重试（2026-07-08 rog 实证）：mmui 主窗口对象本身找到不代表会话
+# 列表已经渲染完 —— 窗口刚可见/刚前台切回那一刻，虚拟列表 ListItem 还没挂出来，此时枚举
+# descendants 可能拿到 0 条或缺目标项。旧代码只对"找窗口"做了有界重试，对"在已找到的
+# 窗口里找目标会话项"是一次性枚举、找不到就直接判死——这天然会把"树还没渲染完"的瞬态
+# 误判成"真找不到"（rog 用户上机核实：微信明明登录着、也真收发过消息，gate 却报
+# "session list 里找不到 文件传输助手"）。有界重试覆盖渲染瞬态，别无限等。
+FIND_ITEM_RETRIES = 5
+FIND_ITEM_RETRY_DELAY_S = 2.0
+
+
+def find_target_item(descendants, target):
+    """纯函数（CI 可测）：在一批 ListItem 里找 name 以 target 开头的那个。
+
+    descendants：ListItem 对象序列，每个须有 element_info.name（缺失/异常时跳过该项）。
+    找不到返回 None。
+    """
+    for it in descendants:
+        try:
+            nm = it.element_info.name or ""
+        except Exception:
+            continue
+        if nm.startswith(target):
+            return it
+    return None
+
 
 def classify_no_window(process_running: bool) -> tuple:
     """重试耗尽仍找不到 mmui 主窗口时，把「微信没跑」和「UIA 死区」分开报。
@@ -116,15 +141,15 @@ def main() -> int:
             _write(result)
             return 1
 
-        item = None
-        for it in mw.descendants(control_type="ListItem"):
-            try:
-                nm = it.element_info.name or ""
-            except Exception:
-                continue
-            if nm.startswith(TARGET):
-                item = it
-                break
+        item = find_target_item(mw.descendants(control_type="ListItem"), TARGET)
+        if item is None:
+            # 有界重试：窗口刚可见时会话列表虚拟列表可能还没渲染完，别一次枚举不到就判死
+            for i in range(FIND_ITEM_RETRIES):
+                time.sleep(FIND_ITEM_RETRY_DELAY_S)
+                item = find_target_item(mw.descendants(control_type="ListItem"), TARGET)
+                if item is not None:
+                    print(f"[bubble-gate] {TARGET} found after retry {i + 1}")
+                    break
         if item is None:
             result["err"] = f"session list 里找不到 {TARGET}"
             _write(result)
