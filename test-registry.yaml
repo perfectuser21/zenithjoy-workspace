@@ -4503,3 +4503,19 @@ agent_suite:
   status: active
   product: 客户智能获客
   note: "sprint(07071713): 安卓自助装机绑定 smoke——GET /api/agent/install-pack/android 无 session→401；有 seeded session→200 校验 apk_url(COS 直链)+deeplink(zenithjoy://bind 前缀)。已接进 ci-l4-e2e-smoke.yml smoke-api-contract(required gate)"
+
+- id: line04-crm-status-history
+  path: apps/api/tests/routes/crm-status-history.test.ts
+  type: integration
+  ci: L3
+  status: active
+  product: 客户私域AI接管
+  note: "sprint(07081012): CRM 状态历史追踪——FR-01幂等回填/FR-02新客户old_status=NULL/FR-03状态变化写历史/FR-04无变化不写/FR-05事务回滚"
+
+- id: line04-crm-status-history-smoke
+  path: .github/workflows/scripts/smoke/crm-status-history-smoke.sh
+  type: smoke
+  ci: L4
+  status: active
+  product: 客户私域AI接管
+  note: "sprint(07081012): CRM 状态历史 smoke——curl写新客户→psql验历史行/改status→验old_status/重复提交→行数不变"
