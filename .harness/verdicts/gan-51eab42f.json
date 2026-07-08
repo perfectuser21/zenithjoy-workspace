@@ -1,0 +1,21 @@
+{
+  "phase": "gan",
+  "verdict": "APPROVED",
+  "rounds": 1,
+  "rubric": {
+    "completeness": 5,
+    "verifiability": 4,
+    "invariant_coverage": 5,
+    "test_quality": 4,
+    "scope_alignment": 5,
+    "total": "23/25"
+  },
+  "ironlaw_coverage": {
+    "tenant_isolation": "B1/B2/B3/B5",
+    "transaction_atomicity": "B4",
+    "migration_idempotent": "B6",
+    "endpoint_auth": "auth describe block",
+    "append_only": "B3"
+  },
+  "should_feedback": "B4 应补覆盖 upsert 成功但 history INSERT 抛错 → ROLLBACK 场景"
+}

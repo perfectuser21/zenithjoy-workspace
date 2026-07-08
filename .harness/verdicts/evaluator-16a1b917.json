@@ -1,0 +1,31 @@
+{
+  "phase": "evaluator",
+  "verdict": "PASS",
+  "commit": "16a1b917",
+  "ci_checks": "70/70",
+  "behaviors": {
+    "B1": {"status": "PASS", "evidence": "vitest contract test B1 + CI smoke step[4] 200"},
+    "B2": {"status": "PASS", "evidence": "vitest B2 + old_status/new_status 字段断言"},
+    "B3": {"status": "PASS", "evidence": "vitest B3 + 条件 oldStatus !== st 逻辑"},
+    "B4": {"status": "PASS", "evidence": "vitest B4 + BEGIN/ROLLBACK 原子性"},
+    "B5": {"status": "PASS", "evidence": "vitest B5 + tenant_id 多租户隔离断言"},
+    "B6": {"status": "PASS", "evidence": "migration CI INSERT 0 0 幂等通过"},
+    "auth": {"status": "PASS", "evidence": "requireCsWriteAccess 全链路 smoke 通过"}
+  },
+  "nfr": {
+    "migration_idempotent": "PASS",
+    "transaction_atomic": "PASS",
+    "tenant_isolation": "PASS",
+    "pg_type_consistency": "PASS - 修 $1 uuid vs text 冲突"
+  },
+  "critical_bugs_fixed": [
+    "customer_id UUID->BIGINT FK 修复 (3b69b1d2)",
+    "vitest vi.hoisted mock hoisting (3b69b1d2)",
+    "lint auth.test unused param (3b69b1d2)",
+    "test-registry orphan check 4 entries (c795fd5d)",
+    "lint-test-pairing 3 unit test files (d34eddf5)",
+    "PostgreSQL inconsistent types $1 uuid vs text (16a1b917)",
+    "e2e-verify.sh Smoke Glob Runner skip API curl without VALID_TOKEN (16a1b917)"
+  ],
+  "score": "28/30"
+}
