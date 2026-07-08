@@ -3796,6 +3796,21 @@ _MODULE_VERSION = os.environ.get("ZENITHJOY_MODULE_VERSION", "unknown")
 # 窗口自愈冷却（issue 99741ff9）：可见非最大化 → SW_MAXIMIZE，300s 冷却防与操作者拉锯
 _WINDOW_MAXIMIZE_COOLDOWN = 300
 
+# 欢迎屏自愈节流（issue e78d98bc）：最多 3 次、每次间隔 120s；超限转人工告警绝不无限点击
+_WELCOME_CLICK_MAX_ATTEMPTS = 3
+_WELCOME_CLICK_COOLDOWN = 120.0
+
+
+def should_attempt_welcome_click(
+    attempts: int, last_attempt_at: float, now: float,
+    max_attempts: int = _WELCOME_CLICK_MAX_ATTEMPTS,
+    cooldown: float = _WELCOME_CLICK_COOLDOWN,
+) -> bool:
+    """纯函数(CI可测)：本轮是否允许尝试欢迎屏自动点击（重试上限 + 冷却节流）。"""
+    if attempts >= max_attempts:
+        return False
+    return (now - last_attempt_at) >= cooldown
+
 
 def window_needs_maximize(is_zoomed: bool, is_iconic: bool) -> bool:
     """纯函数(CI可测)：主窗口是否需要最大化自愈（issue 99741ff9，2026-07-08 真机坐实）。
