@@ -182,6 +182,55 @@ async function createRecord(
   return resp.data.data?.record?.record_id ?? '';
 }
 
+// ─── wechat-cs-reply 内核系统 prompt 段 ───────────────────────────────────────
+// 合同约束：LLM 必须返回 JSON { reply, tags }，tags 含 stage/escalate 等字段。
+// 编造词规则通过 sanitizeReply 的 banned_phrases 兜底（人设层已配置）。
+
+const CS_REPLY_RULES = `你是专业客服，只回复客户问题，不编造承诺（退款/保成交/对赌）。
+
+【输出格式（严格 JSON，禁止换行前输出其他内容）】
+\`\`\`json
+{"reply":"<你的回复>","tags":{"stage":"<A1|A2|A3|A4|null>","signal":"<interested|neutral|frustrated|null>","inquiry":"<price|product|after_sale|null>","risk":"<complaint|churn|null>","gap":null,"escalate":<true|false>}}
+\`\`\`
+
+【阶段定义】A1=初识, A2=意向确认, A3=报价谈判, A4=成单跟进
+【escalate=true 条件】客户明显愤怒/投诉/提退款/威胁，需转人工`;
+
+// 编造词（命中 → sanitizeReply 清空 → ai_failed）
+const FABRICATION_KEYWORDS = ['全额退款', '保证退款', '100%退款', '保成交', '对赌', '全额退'];
+
+/** 检测 reply 是否含编造词（命中 → ai_failed，不发给客户）。 */
+function containsFabricationKeywords(text: string): boolean {
+  return FABRICATION_KEYWORDS.some((kw) => text.includes(kw));
+}
+
+// JSON 解析 helper
+function extractJsonFromContent(content: string): { reply: string; tags: Record<string, unknown> } | null {
+  // 先尝试提取 ```json ... ``` 代码块
+  const codeBlockMatch = content.match(/```json\s*([\s\S]*?)```/);
+  const jsonStr = codeBlockMatch ? codeBlockMatch[1].trim() : content.trim();
+
+  // 找第一个 { ... } JSON 对象
+  const braceMatch = jsonStr.match(/\{[\s\S]*\}/);
+  if (!braceMatch) return null;
+
+  try {
+    const parsed = JSON.parse(braceMatch[0]);
+    if (parsed && typeof parsed.reply === 'string') {
+      return { reply: parsed.reply, tags: parsed.tags ?? {} };
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+function extractReplyFallback(content: string): string {
+  // 正则兜底：取首个非空行
+  const lines = content.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+  return lines[0] ?? '';
+}
+
 // ─── 回复清洗（人设禁用词兜底；剥思考块已在 openrouter 内做）────────────────────
 
 // 技术身份自述句兜底：命中「我会/可以/能…(执行/运行)…命令/日志/脚本/排查/后台」的整句剔除，
@@ -431,6 +480,14 @@ export async function generateChatDraft(
     console.warn('[wechat-draft] 读取客户记忆失败，降级为无记忆:', err);
   }
   const kbHits = retrieveRelevantKB(content, kb);
+
+  // 3) 调 LLM（wechat-cs-reply 内核，WECHAT_CS_MODEL）
+  let aiReply = '';
+  let aiTags: Record<string, unknown> = {};
+  let aiError: string | null = null;
+  const cs = csLlm();
+
+  // system prompt 注入 cs-reply 规则段
   const { system, user } = assembleChatContext({
     message: content,
     persona,
@@ -438,12 +495,9 @@ export async function generateChatDraft(
     kbHits,
     shortTerm,
     memory,
+    csReplyRules: CS_REPLY_RULES,
   });
 
-  // 3) 调 gpt-5.4-mini（WECHAT_CS_MODEL；回复已在 openrouter 内剥思考块）
-  let aiContent = '';
-  let aiError: string | null = null;
-  const cs = csLlm();
   try {
     const result = await callOpenRouter({
       system,
@@ -455,9 +509,47 @@ export async function generateChatDraft(
       maxTokens: cs.maxTokens,
       purpose: 'wechat_chat_draft',
     });
-    aiContent = sanitizeReply((result.content || '').trim(), persona);
-    if (!aiContent) {
-      aiError = `${cs.model} 返回空文本`;
+    // reasoning_content 已在 callOpenRouter 层剥离，result.content 只含用户可见内容
+    const rawContent = (result.content || '').trim();
+
+    let parsed = extractJsonFromContent(rawContent);
+    if (!parsed) {
+      // 首次无 JSON → 重试一次，追加提示
+      const retryResult = await callOpenRouter({
+        system,
+        prompt: user + '\n\n上次漏了 JSON，这次必须补上',
+        temperature: 0.8,
+        model: cs.model,
+        baseUrl: cs.baseUrl,
+        apiKey: cs.apiKey,
+        maxTokens: cs.maxTokens,
+        purpose: 'wechat_chat_draft',
+      });
+      const retryContent = (retryResult.content || '').trim();
+      parsed = extractJsonFromContent(retryContent);
+      if (!parsed) {
+        // 正则兜底：取首行作为 reply
+        const fallbackReply = extractReplyFallback(retryContent) || extractReplyFallback(rawContent);
+        parsed = { reply: fallbackReply, tags: { stage: null, escalate: false } };
+      }
+    }
+
+    const sanitized = sanitizeReply(parsed.reply, persona);
+
+    // 编造词检测（Invariant I-1）
+    if (containsFabricationKeywords(sanitized) || containsFabricationKeywords(parsed.reply)) {
+      console.error(
+        `[wechat-draft][ALARM] 编造词命中 不自动回复 | ` +
+          JSON.stringify({ event: 'wechat_cs_fabrication', tenant: tenant_id ?? null, sender }),
+      );
+      return { ok: true, status: 'ai_failed', task_id: crypto.randomUUID(), draft_id: '' };
+    }
+
+    if (!sanitized) {
+      aiError = `${cs.model} 返回空文本（清洗后）`;
+    } else {
+      aiReply = sanitized;
+      aiTags = (parsed.tags as Record<string, unknown>) ?? {};
     }
   } catch (err) {
     aiError = err instanceof Error ? err.message : String(err);
@@ -486,22 +578,58 @@ export async function generateChatDraft(
   // 然后返回 reply（自动直发）+ message_id 供 agent 真发后回执置 delivered/failed。
   let messageId: number | null = null;
   try {
-    messageId = await appendMessage(contactKey, sender, 'out', aiContent, csWechatId, {
+    messageId = await appendMessage(contactKey, sender, 'out', aiReply, csWechatId, {
       status: 'draft',
     });
     await consolidate(contactKey);
   } catch (err) {
     console.warn('[wechat-draft] 写出站消息/固化失败（不影响回复）:', err);
   }
-  await stampCsMemory(tenant_id, sender, 'out', aiContent, csWechatId);
+  await stampCsMemory(tenant_id, sender, 'out', aiReply, csWechatId);
 
-  console.info(`[wechat-draft] auto-send sender=${sender} reply_len=${aiContent.length}`);
+  // escalate=true → 写 wechat_publish_task(cs_escalate)，失败 console.warn 不阻塞
+  if (aiTags.escalate === true) {
+    pool.query(
+      `INSERT INTO zenithjoy.wechat_publish_task
+         (task_id, platform, type, target_user, content_draft, approval_status, approval_source, reason, tenant_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+      [
+        crypto.randomUUID(),
+        'wechat_personal',
+        'private_chat',
+        sender,
+        aiReply,
+        'pending_review',
+        'system',
+        'cs_escalate',
+        tenant_id ?? null,
+      ],
+    ).catch((err: unknown) => {
+      console.warn('[wechat-draft] escalate 入队失败（不阻塞对话）:', err);
+    });
+  }
+
+  // stage 回写 CRM（A1-A4 → INSERT crm_customer_status_history, changed_by='ai_inferred'）
+  const VALID_STAGES = new Set(['A1', 'A2', 'A3', 'A4']);
+  const stage = typeof aiTags.stage === 'string' ? aiTags.stage : null;
+  if (stage && VALID_STAGES.has(stage) && tenant_id && csWechatId) {
+    pool.query(
+      `INSERT INTO zenithjoy.crm_customer_status_history
+         (tenant_id, cs_wechat_id, contact, old_status, new_status, changed_at, changed_by)
+       VALUES ($1::uuid, $2, $3, NULL, $4, now(), $5)`,
+      [tenant_id, csWechatId, sender, stage, 'ai_inferred'],
+    ).catch((err: unknown) => {
+      console.warn('[wechat-draft] stage 回写 CRM 失败（不阻塞对话）:', err);
+    });
+  }
+
+  console.info(`[wechat-draft] auto-send sender=${sender} reply_len=${aiReply.length}`);
   return {
     ok: true,
     status: 'sent',
     task_id: taskId,
     draft_id: '',
-    reply: aiContent,
+    reply: aiReply,
     message_id: messageId,
   };
 }
