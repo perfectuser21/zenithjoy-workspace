@@ -63,8 +63,8 @@ fi
 # ── API 真实链路验证（需 API_BASE_URL + 有效 tenant token）──────────────────
 echo ""
 echo "--- 步骤 3: API curl 真实链路验证 (B1-B3) ---"
-if [ -z "${API_BASE_URL:-}" ]; then
-  echo "SKIP: 无 API_BASE_URL，跳过 API curl 验证"
+if [ -z "${API_BASE_URL:-}" ] || [ -z "${VALID_TOKEN:-}" ]; then
+  echo "SKIP: 无 API_BASE_URL 或 VALID_TOKEN，跳过 API curl 验证"
   echo "  设置 API_BASE_URL=http://localhost:3000 和 VALID_TOKEN=Bearer valid_<tenant_id> 可启用"
 else
   TOKEN="${VALID_TOKEN:-Bearer smoke_test_token}"

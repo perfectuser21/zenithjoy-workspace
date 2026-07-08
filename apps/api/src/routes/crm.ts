@@ -515,15 +515,17 @@ router.put(
 
       // 3. 条件写历史：新客户（old=NULL）或状态真正变化（old !== new）
       if (oldStatus === null || oldStatus !== st) {
-        // 用子查询取 customer_id，避免额外 round-trip；params 顺序:
-        // $1=tenant_id $2=customer_id(subquery) $3=cs_wechat_id $4=old_status $5=new_status
+        // $1=tenant_id(TEXT→history.tenant_id) $2=contact $3=cs_wechat_id
+        // $4=old_status $5=new_status $6=tenant_id(::uuid→WHERE 比对)
+        // $1 和 $6 是同一值的两个参数槽，避免 PostgreSQL 因 $1 同时出现在 SELECT(TEXT) 和 WHERE(::uuid)
+        // 而报 "inconsistent types deduced for parameter $1: uuid versus text"
         await client.query(
           `INSERT INTO zenithjoy.crm_customer_status_history
              (tenant_id, customer_id, old_status, new_status)
            SELECT $1, id, $4, $5
              FROM zenithjoy.crm_customers
-            WHERE tenant_id = $1::uuid AND cs_wechat_id = $3 AND contact = $2 LIMIT 1`,
-          [tenantId, name, csWechatId, oldStatus, st],
+            WHERE tenant_id = $6::uuid AND cs_wechat_id = $3 AND contact = $2 LIMIT 1`,
+          [tenantId, name, csWechatId, oldStatus, st, tenantId],
         );
       }
 
