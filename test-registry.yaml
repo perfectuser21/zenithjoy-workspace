@@ -4503,3 +4503,11 @@ agent_suite:
   status: active
   product: 客户智能获客
   note: "sprint(07071713): 安卓自助装机绑定 smoke——GET /api/agent/install-pack/android 无 session→401；有 seeded session→200 校验 apk_url(COS 直链)+deeplink(zenithjoy://bind 前缀)。已接进 ci-l4-e2e-smoke.yml smoke-api-contract(required gate)"
+
+- id: crm-status-history-contract
+  path: sprints/07081012-crm-status-history/tests/crm-status-history.test.ts
+  type: unit
+  ci: L3
+  status: active
+  product: 客户私域AI接管
+  note: "Sprint 07081012 CRM 客户状态历史追踪合同测试（B1-B6）：新客户首次写 old_status=NULL / 状态变化新增历史行 / 重复提交不写入 / upsert 失败回滚无残留 / 多租户隔离 / migration 幂等占位。vi.mock pool/auth/resolveTenantId，supertest 驱动。"
