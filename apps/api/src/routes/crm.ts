@@ -485,16 +485,40 @@ router.put(
     if (!VALID_STATUS.has(st)) return res.status(400).json({ error: 'status 必须是 A1-A5' });
     const tenantId = await resolveTenantId(req, csWechatId);
     if (!tenantId) return fail(res, 404, 'TARGET_NOT_FOUND', '解析不到所属租户');
+    const client = await pool.connect();
     try {
-      await pool.query(
+      await client.query('BEGIN');
+      // 查询现有状态
+      const selectResult = await client.query(
+        `SELECT status FROM zenithjoy.crm_customers
+         WHERE tenant_id=$1::uuid AND cs_wechat_id=$2 AND contact=$3`,
+        [tenantId, csWechatId, name],
+      );
+      const oldStatus: string | null =
+        selectResult.rows.length > 0 ? (selectResult.rows[0].status as string) : null;
+      // upsert crm_customers
+      await client.query(
         `INSERT INTO zenithjoy.crm_customers (tenant_id, cs_wechat_id, contact, status, source, updated_at)
          VALUES ($1::uuid, $2, $3, $4, 'manual', now())
          ON CONFLICT (tenant_id, cs_wechat_id, contact) DO UPDATE SET status = $4, updated_at = now()`,
         [tenantId, csWechatId, name, st],
       );
+      // 仅当状态实际变化时写历史（IS DISTINCT FROM 语义：NULL != 'A1'）
+      if (oldStatus !== st) {
+        await client.query(
+          `INSERT INTO zenithjoy.crm_customer_status_history
+             (tenant_id, cs_wechat_id, contact, old_status, new_status, changed_at)
+           VALUES ($1::uuid, $2, $3, $4, $5, now())`,
+          [tenantId, csWechatId, name, oldStatus, st],
+        );
+      }
+      await client.query('COMMIT');
       return res.json({ success: true, status: st });
     } catch (err) {
+      await client.query('ROLLBACK');
       return fail(res, 500, 'STATUS_FAILED', err instanceof Error ? err.message : 'unknown');
+    } finally {
+      client.release();
     }
   },
 );
