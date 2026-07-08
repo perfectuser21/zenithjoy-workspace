@@ -5,55 +5,75 @@
  * 这是 Red 阶段测试文件：在实现完成之前所有用例应当 FAIL。
  * 每个 it() 对应一条 [BEHAVIOR] 合同条目。
  *
- * 测试模式：vitest + supertest + vi.mock(pool)
+ * 测试模式：vitest + supertest + vi.hoisted(pool mock)
  * mock pool.connect() 返回模拟事务客户端，验证事务顺序与历史写入条件。
+ *
+ * Auth bypass：删除 ZENITHJOY_INTERNAL_TOKEN（dev 放行模式，superAdminGuard 路径 2 直接 next()）
  */
 
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, beforeAll, afterAll } from 'vitest';
 import express, { type Express } from 'express';
 import request from 'supertest';
 
 // ---------------------------------------------------------------------------
-// Mock DB pool（含事务客户端）
+// Mock DB pool（vi.hoisted 避免 hoisting 问题）
 // ---------------------------------------------------------------------------
 
-const mockClientQuery = vi.fn();
-const mockClientRelease = vi.fn();
+const { mockPoolQuery, mockPoolConnect, mockClientQuery, mockClientRelease } = vi.hoisted(() => ({
+  mockPoolQuery: vi.fn(),
+  mockPoolConnect: vi.fn(),
+  mockClientQuery: vi.fn(),
+  mockClientRelease: vi.fn(),
+}));
+
 const mockClient = {
   query: mockClientQuery,
   release: mockClientRelease,
 };
 
-const mockPoolQuery = vi.fn();
-const mockPoolConnect = vi.fn().mockResolvedValue(mockClient);
-
-vi.mock('../../../apps/api/src/db/connection', () => ({
+vi.mock('../../src/db/connection', () => ({
   default: {
     query: mockPoolQuery,
     connect: mockPoolConnect,
+    end: vi.fn(),
   },
 }));
 
-// Mock resolveTenantId — 返回固定租户 UUID
-vi.mock('../../../apps/api/src/routes/crm', async (importOriginal) => {
-  // 不 mock 整个路由，只 mock pool；路由本身 import 原始实现以触发真实逻辑
-  return importOriginal();
+// ---------------------------------------------------------------------------
+// 保存并恢复 env（auth bypass：dev 模式放行）
+// ---------------------------------------------------------------------------
+
+const OLD_TOKEN = process.env.ZENITHJOY_INTERNAL_TOKEN;
+
+let app: Express;
+
+beforeAll(async () => {
+  // 删除 ZENITHJOY_INTERNAL_TOKEN → superAdminGuard 路径 2：env 未设置 → dev 放行
+  delete process.env.ZENITHJOY_INTERNAL_TOKEN;
+
+  const { default: crmRouter } = await import('../../src/routes/crm');
+  app = express();
+  app.use(express.json());
+  app.use('/api/crm', crmRouter);
+});
+
+afterAll(() => {
+  if (OLD_TOKEN === undefined) delete process.env.ZENITHJOY_INTERNAL_TOKEN;
+  else process.env.ZENITHJOY_INTERNAL_TOKEN = OLD_TOKEN;
 });
 
 // ---------------------------------------------------------------------------
-// 辅助：构建最简 express app，仅挂 crm 路由
+// 每次测试重置 mock 状态 + 重设事务客户端
 // ---------------------------------------------------------------------------
 
-async function buildApp(): Promise<Express> {
-  const app = express();
-  app.use(express.json());
-
-  // 动态 import 路由（在 vi.mock 之后）
-  const { default: crmRouter } = await import('../../../apps/api/src/routes/crm');
-  app.use('/api/crm', crmRouter);
-
-  return app;
-}
+beforeEach(() => {
+  mockPoolQuery.mockReset();
+  mockPoolConnect.mockReset();
+  mockClientQuery.mockReset();
+  mockClientRelease.mockReset();
+  // pool.connect() 返回模拟事务客户端
+  mockPoolConnect.mockResolvedValue(mockClient);
+});
 
 // ---------------------------------------------------------------------------
 // 请求体工厂
@@ -73,24 +93,13 @@ function statusBody(overrides: Record<string, string> = {}) {
 // ---------------------------------------------------------------------------
 
 describe('CRM Status History — Contract Tests', () => {
-  let app: Express;
-
-  beforeEach(async () => {
-    vi.clearAllMocks();
-    app = await buildApp();
-  });
-
-  afterEach(() => {
-    vi.restoreAllMocks();
-  });
-
   // -------------------------------------------------------------------------
   // [BEHAVIOR-02] 新客户首次写 status → 历史表出现 old_status=NULL 记录
   // -------------------------------------------------------------------------
   it('[BEHAVIOR-02] 新客户首次写 status：历史表写入 old_status=NULL 记录', async () => {
-    // resolveTenantId 内部用 pool.query（读），返回租户
+    // resolveTenantId 内部用 pool.query 查 service_agents，返回租户
     mockPoolQuery.mockResolvedValueOnce({
-      rows: [{ id: 'tenant-uuid-001' }],
+      rows: [{ tenant_id: 'tenant-uuid-001' }],
     });
 
     // 事务：BEGIN
@@ -120,7 +129,7 @@ describe('CRM Status History — Contract Tests', () => {
         sql.toLowerCase().includes('insert'),
     );
     expect(historyInsert).toBeDefined();
-    // 参数中第4个应为 NULL（old_status）
+    // 参数中应含 NULL（old_status）
     const params = historyInsert?.[1] as unknown[];
     const oldStatusIdx = params?.findIndex((p) => p === null);
     expect(oldStatusIdx).toBeGreaterThanOrEqual(0);
@@ -131,7 +140,7 @@ describe('CRM Status History — Contract Tests', () => {
   // -------------------------------------------------------------------------
   it('[BEHAVIOR-03] 已有客户 status 从 A2 → A3：历史表写入 old_status=A2 记录', async () => {
     mockPoolQuery.mockResolvedValueOnce({
-      rows: [{ id: 'tenant-uuid-001' }],
+      rows: [{ tenant_id: 'tenant-uuid-001' }],
     });
 
     // BEGIN
@@ -171,7 +180,7 @@ describe('CRM Status History — Contract Tests', () => {
   // -------------------------------------------------------------------------
   it('[BEHAVIOR-04] 重复提交相同 status A3：历史表不写入新记录', async () => {
     mockPoolQuery.mockResolvedValueOnce({
-      rows: [{ id: 'tenant-uuid-001' }],
+      rows: [{ tenant_id: 'tenant-uuid-001' }],
     });
 
     // BEGIN
@@ -207,7 +216,7 @@ describe('CRM Status History — Contract Tests', () => {
   // -------------------------------------------------------------------------
   it('[BEHAVIOR-05] upsert 抛异常：执行 ROLLBACK，接口返回 500，历史表不残留', async () => {
     mockPoolQuery.mockResolvedValueOnce({
-      rows: [{ id: 'tenant-uuid-001' }],
+      rows: [{ tenant_id: 'tenant-uuid-001' }],
     });
 
     // BEGIN
@@ -251,7 +260,7 @@ describe('CRM Status History — Contract Tests', () => {
   // -------------------------------------------------------------------------
   it('[BEHAVIOR-06] 事务调用顺序：BEGIN → SELECT → upsert → INSERT history → COMMIT', async () => {
     mockPoolQuery.mockResolvedValueOnce({
-      rows: [{ id: 'tenant-uuid-001' }],
+      rows: [{ tenant_id: 'tenant-uuid-001' }],
     });
 
     mockClientQuery
