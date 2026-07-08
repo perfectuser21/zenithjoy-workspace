@@ -428,3 +428,65 @@ describe('agent-burner router [qr-bind-result agent_id fallback]', () => {
     expect(vi.mocked(pool.query).mock.calls.length).toBe(1);
   });
 });
+
+// ── account-scan-result — Line02 Step7 账号扫描结果写回 agent_platform_sessions ──
+describe('POST /account-scan-result — 账号扫描结果写回', () => {
+  beforeEach(() => {
+    vi.mocked(pool.query).mockReset();
+  });
+
+  it('ok=true + account_ids 非空 → 每个昵称 upsert 一行 agent_platform_sessions', async () => {
+    vi.mocked(pool.query).mockResolvedValue({ rows: [] } as any);
+
+    const app = buildApp();
+    const r = await request(app)
+      .post('/api/agent/burner/account-scan-result')
+      .send({
+        agent_id: AGENT_UUID,
+        request_id: 'req-1',
+        ok: true,
+        stale: false,
+        account_ids: ['大湖', '秦军餐饮'],
+      });
+
+    expect(r.status).toBe(200);
+    expect(r.body.data.written).toBe(2);
+    const calls = vi.mocked(pool.query).mock.calls;
+    expect(calls.length).toBe(2);
+    expect(calls[0][0]).toMatch(/agent_platform_sessions/);
+    expect(calls[0][1]).toEqual([AGENT_UUID, '大湖']);
+    expect(calls[1][1]).toEqual([AGENT_UUID, '秦军餐饮']);
+  });
+
+  it('ok=false → 不写库，200 返回 written=0', async () => {
+    const app = buildApp();
+    const r = await request(app)
+      .post('/api/agent/burner/account-scan-result')
+      .send({ agent_id: AGENT_UUID, request_id: 'req-2', ok: false, account_ids: [] });
+
+    expect(r.status).toBe(200);
+    expect(r.body.data.written).toBe(0);
+    expect(vi.mocked(pool.query).mock.calls.length).toBe(0);
+  });
+
+  it('account_ids 为空数组 → 不写库，200 返回 written=0', async () => {
+    const app = buildApp();
+    const r = await request(app)
+      .post('/api/agent/burner/account-scan-result')
+      .send({ agent_id: AGENT_UUID, request_id: 'req-3', ok: true, account_ids: [] });
+
+    expect(r.status).toBe(200);
+    expect(r.body.data.written).toBe(0);
+    expect(vi.mocked(pool.query).mock.calls.length).toBe(0);
+  });
+
+  it('缺 agent_id → 400 MISSING_AGENT_ID', async () => {
+    const app = buildApp();
+    const r = await request(app)
+      .post('/api/agent/burner/account-scan-result')
+      .send({ request_id: 'req-4', ok: true, account_ids: ['大湖'] });
+
+    expect(r.status).toBe(400);
+    expect(r.body.error.code).toBe('MISSING_AGENT_ID');
+  });
+});
