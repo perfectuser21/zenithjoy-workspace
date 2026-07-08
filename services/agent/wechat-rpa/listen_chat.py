@@ -1328,18 +1328,22 @@ def _filter_left_column_item_names(items: List[tuple], x_max: int = 460) -> List
 
 
 def _find_left_nav_button_point(
-    buttons: List[tuple], name: str, left_max: int = 90
+    buttons: List[tuple], name: str, left_max: int = 90, win_left: int = 0
 ) -> Optional[tuple]:
-    """在最左导航栏（rect.left < left_max）按 name 找按钮，返回其中心屏幕坐标点（纯函数）。
+    """在最左导航栏（相对窗口左缘 rect.left - win_left < left_max）按 name 找按钮，
+    返回其中心屏幕坐标点（纯函数）。
 
     入参 buttons = [(name, rect), ...]，rect 有 .left/.top/.right/.bottom。
-    用于切 tab 回顶：定位「通讯录」「微信」导航按钮（不写死坐标）。右侧同名控件（x>=left_max）不选。
+    win_left = 主窗口 rect.left。2026-07-08 真机实锤（issue 8e163d87）：旧版判
+    屏幕绝对坐标 r.left < 90，窗口不贴屏幕左边缘（如 left=964）时导航按钮永远
+    "不全" → 回顶失败。改窗口相对坐标后与窗口位置无关；win_left=0 兼容旧调用。
+    右侧同名控件（相对 x >= left_max）不选。
     """
     for nm, r in buttons:
         if nm != name:
             continue
         try:
-            if r.left < left_max:
+            if r.left - win_left < left_max:
                 return ((r.left + r.right) // 2, (r.top + r.bottom) // 2)
         except AttributeError:
             continue
