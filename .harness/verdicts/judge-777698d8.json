@@ -1,0 +1,8 @@
+{
+  "verdict": "PASS",
+  "feedback": null,
+  "judged": true,
+  "sha": "777698d8",
+  "transcript_bytes": 904,
+  "steps_verified": ["FR-02","FR-03","FR-04","FR-05","FR-01"]
+}
