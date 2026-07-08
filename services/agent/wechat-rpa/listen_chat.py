@@ -1328,18 +1328,18 @@ def _filter_left_column_item_names(items: List[tuple], x_max: int = 460) -> List
 
 
 def _find_left_nav_button_point(
-    buttons: List[tuple], name: str, left_max: int = 90
+    buttons: List[tuple], name: str, left_max: int = 90, window_left: int = 0
 ) -> Optional[tuple]:
-    """在最左导航栏（rect.left < left_max）按 name 找按钮，返回其中心屏幕坐标点（纯函数）。
+    """在最左导航栏按 name 找按钮，返回其中心屏幕坐标点（纯函数）。
 
-    入参 buttons = [(name, rect), ...]，rect 有 .left/.top/.right/.bottom。
-    用于切 tab 回顶：定位「通讯录」「微信」导航按钮（不写死坐标）。右侧同名控件（x>=left_max）不选。
+    入参 buttons = [(name, rect), ...]，rect 有 .left/.top/.right/.bottom（屏幕绝对坐标）。
+    window_left: 主窗口左边缘绝对坐标，用于转换窗口相对坐标（Fix-C: 非左贴屏时绝对坐标>90会误判）。
     """
     for nm, r in buttons:
         if nm != name:
             continue
         try:
-            if r.left < left_max:
+            if (r.left - window_left) < left_max:
                 return ((r.left + r.right) // 2, (r.top + r.bottom) // 2)
         except AttributeError:
             continue
@@ -1748,6 +1748,15 @@ def _reset_session_list_to_top(mw: Any) -> bool:
     动态定位（不写死坐标），render 子窗口 client 坐标点击。失败吞掉返回 False（不拖垮扫描）。
     """
     try:
+        main_hwnd = 0
+        window_left = 0
+        try:
+            main_hwnd = mw.element_info.handle or 0
+            window_left = mw.rectangle().left
+        except Exception:
+            pass
+        if main_hwnd:
+            _force_foreground(main_hwnd)
         buttons: List[tuple] = []
         for b in _iter_all_controls(mw, "Button"):
             try:
@@ -1758,8 +1767,8 @@ def _reset_session_list_to_top(mw: Any) -> bool:
             buttons.append((nm, r))
         # 原子：先找齐「通讯录」+「微信」两个按钮再切。绝不"切去通讯录又找不到微信按钮回不来"——
         # 那会把微信卡在通讯录 tab、会话列表消失（回归根因）。任一按钮缺失 → 直接跳过不切。
-        pt_contacts = _find_left_nav_button_point(buttons, "通讯录", left_max=90)
-        pt_wechat = _find_left_nav_button_point(buttons, "微信", left_max=90)
+        pt_contacts = _find_left_nav_button_point(buttons, "通讯录", left_max=90, window_left=window_left)
+        pt_wechat = _find_left_nav_button_point(buttons, "微信", left_max=90, window_left=window_left)
         if pt_contacts is None or pt_wechat is None:
             _log(
                 f"_reset_session_list_to_top: 导航按钮不全("
@@ -3886,6 +3895,7 @@ _COLLAPSED_TREE_MAX_DESCENDANTS = 2      # 整树 descendants ≤ 此值 = 塌�
 _COLLAPSED_SUSTAIN_SECONDS = 90         # 树持续塌缩 ≥ 此时长才重启(避开启动过渡/瞬时态)
 _WECHAT_RESTART_COOLDOWN_SECONDS = 600  # 两次重启间隔 ≥ 10min(重启重而慢,防抖)
 _WECHAT_RESTART_MAX = 5                 # 单 listener 进程生命周期内最多重启 5 次(防无限重启 loop)
+_WECHAT_MIN_WIDTH = 800                  # 心跳检测：窗口宽度低于此值(单栏模式)→ SW_MAXIMIZE 自愈
 
 # scan_unread 每轮在【可见态】(_ensure_tray_visible 后)量到的整树大小。心跳块裸读 mw.descendants()
 # 处于【隐藏态】会恒报塌缩假象(sessions=0/tree≤2)，而同一微信 scan_unread 正在连续 DELIVERED；
@@ -4049,7 +4059,7 @@ def run_real_listen(args: argparse.Namespace) -> int:
         return 0
 
     # 函数体内 import，避免顶层触发 pywinauto
-    from find_weixin import get_main_window, login_window_present, is_privacy_locked
+    from find_weixin import get_main_window, login_window_present, is_privacy_locked, is_welcome_back_screen, get_welcome_back_hwnd  # noqa: E501
 
     print(
         f"[listen_chat] start polling (pywinauto), middleware={args.middleware_url}, "
@@ -4197,6 +4207,23 @@ def run_real_listen(args: argparse.Namespace) -> int:
                         tree_size = len(mw.descendants())
                     except Exception as exc:
                         last_error = f"{type(exc).__name__}: {exc}"
+                    # Fix-A: 心跳检测窗口尺寸——单栏模式(宽<_WECHAT_MIN_WIDTH)漏会话→ SW_MAXIMIZE 自愈
+                    try:
+                        import ctypes as _ct_hb
+                        _hwnd_hb = mw.element_info.handle
+                        if _hwnd_hb:
+                            class _RECT_HB(_ct_hb.Structure):
+                                _fields_ = [("left", _ct_hb.c_long), ("top", _ct_hb.c_long),
+                                            ("right", _ct_hb.c_long), ("bottom", _ct_hb.c_long)]
+                            _rc_hb = _RECT_HB()
+                            _ct_hb.windll.user32.GetWindowRect(_hwnd_hb, _ct_hb.byref(_rc_hb))
+                            _w_hb = _rc_hb.right - _rc_hb.left
+                            _zoomed = bool(_ct_hb.windll.user32.IsZoomed(_hwnd_hb))
+                            if not _zoomed and _w_hb < _WECHAT_MIN_WIDTH:
+                                _ct_hb.windll.user32.ShowWindow(_hwnd_hb, 3)  # SW_MAXIMIZE
+                                _log(f"[自愈A] 微信窗口过小({_w_hb}px)，已 SW_MAXIMIZE 自愈 [告警]")
+                    except Exception as _ea:
+                        _log(f"[自愈A] 心跳窗口尺寸检测异常: {_ea}")
                 # 遗留④：心跳 login= 项改打真实登录态(主窗口就绪+无登录窗口+sessions>0)，
                 # 消除"sessions>0 却 login=False"的矛盾；login_present 字段语义不动(dashboard 需扫码标志)。
                 logged_in = interpret_logged_in(mw is not None, login, sessions_seen)
@@ -4260,8 +4287,54 @@ def run_real_listen(args: argparse.Namespace) -> int:
                     continue
 
             if mw is None:
-                # 隐私锁屏：账号已登录但微信屏幕被锁，无法操作 → 等待用户手动解锁，不做 UIA 激活
+                # 隐私锁屏 or 欢迎回来屏：mw=None 且 is_privacy_locked()=True
                 if screen_locked:
+                    # Fix-B: 欢迎回来屏（重启后一键进入，无需密码）自动点击自愈
+                    try:
+                        if is_welcome_back_screen():
+                            _wb_hwnd = get_welcome_back_hwnd()
+                            if _wb_hwnd:
+                                import ctypes as _ct_wb
+                                _ct_wb.windll.user32.SetProcessDPIAware()
+                                _force_foreground(_wb_hwnd)
+                                import time as _time_wb
+                                _time_wb.sleep(0.5)
+                            # 用 pywinauto 点击"进入微信"按钮
+                            from pywinauto import Desktop as _Desktop_wb  # noqa: PLC0415
+                            _wb_clicked = False
+                            for _wb_w in _Desktop_wb(backend="uia").windows():
+                                try:
+                                    _wb_cls = _wb_w.element_info.class_name
+                                    _wb_ttl = _wb_w.element_info.name or ""
+                                    if _wb_cls not in ("mmui::LoginWindow",) and "Weixin" not in _wb_cls:
+                                        continue
+                                    if _wb_ttl not in ("微信", "欢迎回来", "Weixin"):
+                                        continue
+                                    for _wb_c in _wb_w.descendants(control_type="Button"):
+                                        try:
+                                            _wb_nm = (_wb_c.element_info.name or "").strip()
+                                            if _wb_nm in ("进入微信", "Enter WeChat", "进入"):
+                                                _wb_c.click_input()
+                                                _wb_clicked = True
+                                                _log("[自愈B] 欢迎回来屏：已点击进入微信 [告警]")
+                                                break
+                                        except Exception:
+                                            continue
+                                    if _wb_clicked:
+                                        break
+                                except Exception:
+                                    continue
+                            if _wb_clicked:
+                                import time as _time_wb2
+                                _time_wb2.sleep(15)
+                                # 验证是否恢复主窗口
+                                _mw_verify = get_main_window()
+                                if _mw_verify is None:
+                                    _log("[自愈B] 欢迎回来屏点击后15s仍无主窗口，恢复失败 [告警]")
+                            else:
+                                _log("[自愈B] 欢迎回来屏检出但未找到进入微信按钮 [告警]")
+                    except Exception as _eb:
+                        _log(f"[自愈B] 欢迎回来屏自愈异常: {_eb}")
                     time.sleep(args.interval)
                     continue
 

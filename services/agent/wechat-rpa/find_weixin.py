@@ -470,6 +470,72 @@ def is_privacy_locked() -> bool:
     return False
 
 
+
+
+def is_welcome_back_screen() -> bool:
+    """检测微信是否处于欢迎回来确认屏。
+
+    重启后一键进入屏，无需密码，只需点进入微信按钮即可恢复。
+    与 is_privacy_locked() 区别：
+    - is_privacy_locked 泛检测 mmui::LoginWindow title=微信（含欢迎回来屏+真隐私锁）
+    - is_welcome_back_screen 进一步找到进入微信按钮子控件，确认是欢迎回来屏
+
+    枚举失败时保守返回 False，不阻断监听主循环。
+    """
+    from pywinauto import Desktop  # noqa: PLC0415
+
+    try:
+        for w in Desktop(backend="uia").windows():
+            try:
+                cls = w.element_info.class_name
+                title = w.element_info.name or ""
+                if cls not in ("mmui::LoginWindow",) and "Weixin" not in cls:
+                    continue
+                if title not in ("微信", "欢迎回来", "Weixin"):
+                    continue
+                for c in w.descendants(control_type="Button"):
+                    try:
+                        nm = (c.element_info.name or "").strip()
+                        if nm in ("进入微信", "Enter WeChat", "进入"):
+                            return True
+                    except Exception:
+                        continue
+            except Exception:
+                continue
+    except Exception:
+        pass
+    return False
+
+
+def get_welcome_back_hwnd() -> int:
+    """返回欢迎回来登录窗口的 hwnd，0 表示未找到。用于 _force_foreground 和点击。"""
+    from pywinauto import Desktop  # noqa: PLC0415
+
+    try:
+        for w in Desktop(backend="uia").windows():
+            try:
+                cls = w.element_info.class_name
+                title = w.element_info.name or ""
+                if cls not in ("mmui::LoginWindow",) and "Weixin" not in cls:
+                    continue
+                if title not in ("微信", "欢迎回来", "Weixin"):
+                    continue
+                for c in w.descendants(control_type="Button"):
+                    try:
+                        nm = (c.element_info.name or "").strip()
+                        if nm in ("进入微信", "Enter WeChat", "进入"):
+                            try:
+                                hwnd = w.element_info.handle
+                                return hwnd or 0
+                            except Exception:
+                                return 0
+                    except Exception:
+                        continue
+            except Exception:
+                continue
+    except Exception:
+        pass
+    return 0
 if __name__ == "__main__":
     import argparse
     import sys as _sys
