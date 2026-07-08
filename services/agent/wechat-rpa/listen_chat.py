@@ -1744,15 +1744,79 @@ def _click_screen_point(mw: Any, pt: tuple) -> bool:
         return False
 
 
-def _reset_session_list_to_top(mw: Any) -> bool:
-    """把会话列表弹回真顶 = 切 tab：点左侧导航「通讯录」→ 再点「微信」（rog 真机唯一验证有效的回顶法）。
+def _on_contacts_tab(mw: Any) -> bool:
+    """当前是否在通讯录 tab：以"通讯录管理"Button 是否在树里判定。
 
-    真因：会话列表向上滚彻底失效（正 delta wheel / Home / Ctrl+Home / WM_VSCROLL SB_TOP / 拖滚动条
-    全试过不动）。切到通讯录再切回微信，会话列表重建并停在真顶。按钮用 UIA Button name + 左列 x<90
-    动态定位（不写死坐标），render 子窗口 client 坐标点击。失败吞掉返回 False（不拖垮扫描）。
+    ⚠️ 只在【刚切完 tab、列表在顶部】时可靠——该按钮在列表顶部，用户/滚动把列表
+    滚下去后会被虚拟列表滚出 UIA 树（2026-07-08 真机踩坑实录，skill §3 铁律）。
+    本函数仅供 _reset_session_list_to_top 切换后的即时验证，别用作全局状态判定。
     """
     try:
+        for b in mw.descendants(control_type="Button"):
+            if "通讯录管理" in (b.element_info.name or ""):
+                return True
+    except Exception:
+        pass
+    return False
+
+
+def _attempt_welcome_screen_heal() -> bool:
+    """欢迎回来确认屏自动点击自愈（issue e78d98bc，2026-07-08 控制性复现实证）。
+
+    实证有效路径：AttachThreadInput 拉前台（_set_foreground_window 同款）+ click_input
+    真实鼠标注入。UIA Invoke / 不抢前台的 PostMessage 对 mmui 按钮均无效（真机两次
+    截图坐实）；DPI 假设已推翻（pywinauto import 即置 per-monitor aware）。
+    点击后主窗口 ~10s 才出现 → 轮询最长 20s。任何异常吞掉返回 False。
+    """
+    try:
+        from find_weixin import find_welcome_enter_button, get_main_window
+        found = find_welcome_enter_button()
+        if not found:
+            return False  # 真隐私锁或树未就绪，交回人工提示路径
+        login_hwnd, enter_btn = found
+        prev_fg = _get_foreground_window()
+        _set_foreground_window(login_hwnd)
+        time.sleep(0.5)
+        try:
+            enter_btn.click_input()
+        except Exception as exc:
+            _log(f"[欢迎屏自愈] click_input 异常: {exc}")
+            return False
+        deadline = time.time() + 20
+        while time.time() < deadline:
+            time.sleep(2)
+            try:
+                if get_main_window() is not None:
+                    _log("[欢迎屏自愈] 已自动点『进入微信』，主窗口恢复")
+                    if _should_restore_foreground(prev_fg, login_hwnd):
+                        _set_foreground_window(prev_fg)
+                    return True
+            except Exception:
+                pass
+        _log("[欢迎屏自愈] 点击后 20s 主窗口未出现，本次自愈失败")
+        return False
+    except Exception as exc:
+        _log(f"[欢迎屏自愈] 异常（已吞，不拖垮监听）: {exc}")
+        return False
+
+
+def _reset_session_list_to_top(mw: Any) -> bool:
+    """把会话列表弹回真顶 = 切 tab：点左侧导航「通讯录」→ 再点「微信」。
+
+    2026-07-08 真机实锤两处根治（issue 8e163d87 / skill §2.I §2.J）：
+    ① 按钮定位改窗口相对坐标（win_left）——旧绝对坐标窗口不贴屏幕左边缘必"不全"；
+    ② 点击前必须拉前台（AttachThreadInput），mmui 按钮对后台 PostMessage 无响应；
+       PostMessage 未生效时升级 click_input（真实鼠标注入，实证有效兜底）。
+    原子不变量保持：先找齐「通讯录」+「微信」再动手；任一步失败绝不留在通讯录 tab。
+    操作完按 _should_restore_foreground 归还焦点。失败吞掉返回 False（不拖垮扫描）。
+    """
+    try:
+        try:
+            win_left = mw.rectangle().left
+        except Exception:
+            win_left = 0
         buttons: List[tuple] = []
+        wrappers: dict = {}
         for b in _iter_all_controls(mw, "Button"):
             try:
                 nm = (b.element_info.name or "").strip()
@@ -1760,25 +1824,51 @@ def _reset_session_list_to_top(mw: Any) -> bool:
             except Exception:
                 continue
             buttons.append((nm, r))
-        # 原子：先找齐「通讯录」+「微信」两个按钮再切。绝不"切去通讯录又找不到微信按钮回不来"——
-        # 那会把微信卡在通讯录 tab、会话列表消失（回归根因）。任一按钮缺失 → 直接跳过不切。
-        pt_contacts = _find_left_nav_button_point(buttons, "通讯录", left_max=90)
-        pt_wechat = _find_left_nav_button_point(buttons, "微信", left_max=90)
+            if nm in ("通讯录", "微信") and r.left - win_left < 90 and nm not in wrappers:
+                wrappers[nm] = b
+        pt_contacts = _find_left_nav_button_point(buttons, "通讯录", win_left=win_left)
+        pt_wechat = _find_left_nav_button_point(buttons, "微信", win_left=win_left)
         if pt_contacts is None or pt_wechat is None:
             _log(
                 f"_reset_session_list_to_top: 导航按钮不全("
                 f"通讯录={pt_contacts is not None},微信={pt_wechat is not None})，跳过切tab(不卡死会话列表)"
             )
             return False
-        # 切通讯录 → 切回微信；务必收尾在微信 tab（点不回就再试一次，绝不留在通讯录）。
-        if not _click_screen_point(mw, pt_contacts):
-            return False
+
+        main_hwnd = _safe_hwnd(mw)
+        prev_fg = _get_foreground_window()
+        _set_foreground_window(main_hwnd)
         time.sleep(0.3)
-        ok = _click_screen_point(mw, pt_wechat)
-        time.sleep(0.3)
-        if not ok:
-            ok = _click_screen_point(mw, pt_wechat)  # 兜底重试，确保回到微信
+
+        def _click_with_ladder(pt: tuple, nm: str, want_contacts: bool) -> bool:
+            """PostMessage → 验证 → click_input 升级梯；返回切换是否生效。"""
+            _click_screen_point(mw, pt)
+            time.sleep(0.5)
+            if _on_contacts_tab(mw) == want_contacts:
+                return True
+            w = wrappers.get(nm)
+            if w is not None:
+                try:
+                    w.click_input()
+                except Exception as exc:
+                    _log(f"_reset_session_list_to_top: click_input({nm}) 异常: {exc}")
+            time.sleep(0.5)
+            return _on_contacts_tab(mw) == want_contacts
+
+        ok = False
+        try:
+            if not _click_with_ladder(pt_contacts, "通讯录", want_contacts=True):
+                _log("_reset_session_list_to_top: 切通讯录未生效（升级梯用尽），放弃本轮回顶")
+                return False
             time.sleep(0.3)
+            ok = _click_with_ladder(pt_wechat, "微信", want_contacts=False)
+            if not ok:
+                ok = _click_with_ladder(pt_wechat, "微信", want_contacts=False)  # 兜底重试，绝不留在通讯录
+            if not ok:
+                _log("_reset_session_list_to_top: ⚠️ 切回微信 tab 未确认，会话列表可能不可见（下轮自愈重试）")
+        finally:
+            if _should_restore_foreground(prev_fg, main_hwnd):
+                _set_foreground_window(prev_fg)
         return ok
     except Exception as exc:
         _log(f"_reset_session_list_to_top: 切 tab 回顶异常: {exc}")
@@ -4140,6 +4230,14 @@ def run_real_listen(args: argparse.Namespace) -> int:
     # scan_unread 最近一次读到【健康可见态树】的时刻：塌缩自愈据此绝不重启正在能读会话的微信
     # (心跳裸读隐藏态恒报塌缩假象，rog 0629 铁证；decision 6fc13ca3)。
     last_readable_scan_at = 0.0
+    # 窗口最大化自愈（issue 99741ff9）：可见非最大化=单栏布局漏检测 → SW_MAXIMIZE（300s 冷却）
+    last_window_maximize = 0.0
+    maximize_heals = 0
+    window_state: Dict[str, Any] = {}
+    # 欢迎屏点击自愈（issue e78d98bc）：3 次上限 + 120s 冷却，超限转人工告警
+    welcome_click_attempts = 0
+    last_welcome_click_at = 0.0
+    welcome_click_fails = 0
     # replied 过期清理：每 REPLIED_TTL 扫一次，确保过期条目在 TTL 后立即清除
     last_replied_purge = time.time()
     # 每客服配置：按 machine_id 周期性拉「自己那份」→ 缓存（断网用缓存继续判定，强制 dryrun）。
@@ -4223,6 +4321,30 @@ def run_real_listen(args: argparse.Namespace) -> int:
             if mw is not None:
                 window_lost_since = None
 
+            # 欢迎回来确认屏自动点击自愈（issue e78d98bc）：locked 常是"欢迎回来"屏而非真隐私锁
+            if mw is None and screen_locked:
+                if should_attempt_welcome_click(
+                    welcome_click_attempts, last_welcome_click_at, now
+                ):
+                    welcome_click_attempts += 1
+                    last_welcome_click_at = now
+                    if _attempt_welcome_screen_heal():
+                        welcome_click_attempts = 0
+                        try:
+                            mw = get_main_window()
+                            screen_locked = False
+                        except Exception:
+                            pass
+                    else:
+                        welcome_click_fails += 1
+                        if welcome_click_attempts >= _WELCOME_CLICK_MAX_ATTEMPTS:
+                            _log(
+                                "⚠️ 告警：欢迎回来屏自动点击已达 3 次上限仍未恢复，"
+                                "需人工点击『进入微信』（sessions=0 生产中断中）"
+                            )
+            elif mw is not None:
+                welcome_click_attempts = 0
+
             # 心跳 + 扫描诊断上报中台（运营在 Dashboard「监听健康」看板一眼定位卡在哪）
             if now - last_heartbeat >= heartbeat_interval:
                 sessions_seen = 0
@@ -4236,6 +4358,32 @@ def run_real_listen(args: argparse.Namespace) -> int:
                 # 遗留④：心跳 login= 项改打真实登录态(主窗口就绪+无登录窗口+sessions>0)，
                 # 消除"sessions>0 却 login=False"的矛盾；login_present 字段语义不动(dashboard 需扫码标志)。
                 logged_in = interpret_logged_in(mw is not None, login, sessions_seen)
+
+                # 窗口最大化自愈（issue 99741ff9）：可见非最大化=单栏布局，会话列表不在 UIA 树
+                window_state = {}
+                if mw is not None and platform.system() == "Windows":
+                    try:
+                        import ctypes as _ctm
+                        _mh = _safe_hwnd(mw)
+                        _zoomed = bool(_ctm.windll.user32.IsZoomed(_mh))
+                        _iconic = bool(_ctm.windll.user32.IsIconic(_mh))
+                        try:
+                            _wr = mw.rectangle()
+                            _w, _h = _wr.right - _wr.left, _wr.bottom - _wr.top
+                        except Exception:
+                            _w, _h = 0, 0
+                        window_state = {"zoomed": _zoomed, "iconic": _iconic,
+                                        "w": _w, "h": _h, "maximize_heals": maximize_heals}
+                        if (window_needs_maximize(_zoomed, _iconic)
+                                and now - last_window_maximize >= _WINDOW_MAXIMIZE_COOLDOWN):
+                            _ctm.windll.user32.ShowWindow(_mh, 3)  # SW_MAXIMIZE
+                            last_window_maximize = now
+                            maximize_heals += 1
+                            window_state["maximize_heals"] = maximize_heals
+                            _log(f"[窗口自愈] 主窗口非最大化({_w}x{_h}，单栏布局漏检测风险)→已 SW_MAXIMIZE")
+                    except Exception as exc:
+                        _log(f"[窗口自愈] 检测/最大化异常（已吞）: {exc}")
+
                 diag = build_diag(
                     main_window_found=mw is not None,
                     login_present=login,
@@ -4246,6 +4394,7 @@ def run_real_listen(args: argparse.Namespace) -> int:
                     replied_count=len(replied),
                     last_error=last_error,
                     skip_snapshot=_skip_counter.snapshot(),
+                    window_state=window_state, welcome_click_fails=welcome_click_fails,
                 )
                 lock_suffix = " [隐私锁屏！请在微信设置里关闭隐私保护]" if screen_locked else ""
                 _log(
