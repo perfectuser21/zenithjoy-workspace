@@ -341,6 +341,18 @@ jobs:
       - name: Run lint-agent-version-bump
         run: bash .github/workflows/scripts/lint-agent-version-bump.sh origin/main
 
+  lint-line04-manifest-version-bump:
+    if: github.event_name == 'pull_request'
+    name: Lint — Line04 Manifest Version Bump
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Run lint-line04-manifest-version-bump
+        run: bash .github/workflows/scripts/lint-line04-manifest-version-bump.sh origin/main
+
   lint-wechat-rpa-runner:
     if: github.event_name == 'pull_request'
     name: Lint — WeChat RPA Runner
@@ -380,7 +392,8 @@ jobs:
     name: L1 Process Gate Passed
     needs: [verify-dev-workflow, pr-title, ci-config-audit, secrets-scan, frontend-browser-dod-check,
             lint-test-pairing, lint-test-quality, lint-tdd-commit-order, lint-no-fake-test, lint-feature-has-smoke,
-            lint-agent-version-bump, lint-wechat-rpa-runner, lint-contract-test-immutability, lint-workflow-yaml-parse]
+            lint-agent-version-bump, lint-line04-manifest-version-bump, lint-wechat-rpa-runner,
+            lint-contract-test-immutability, lint-workflow-yaml-parse]
     if: always() && github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -445,6 +458,11 @@ jobs:
 
           if [ "${{ needs.lint-agent-version-bump.result }}" != "success" ]; then
             echo "FAIL: Lint Agent Version Bump (${{ needs.lint-agent-version-bump.result }})"
+            FAILED=true
+          fi
+
+          if [ "${{ needs.lint-line04-manifest-version-bump.result }}" != "success" ]; then
+            echo "FAIL: Lint Line04 Manifest Version Bump (${{ needs.lint-line04-manifest-version-bump.result }})"
             FAILED=true
           fi
 
