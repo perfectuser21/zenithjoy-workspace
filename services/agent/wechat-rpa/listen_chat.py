@@ -4053,7 +4053,7 @@ def _maximize_main_window_if_needed(mw: Any) -> bool:
     try:
         import ctypes as _ctm
         _hwnd_m = mw.element_info.handle
-        if not _hwnd_m:
+        if not _hwnd_m or not isinstance(_hwnd_m, int):
             return False
         wr = mw.rectangle()
         width = wr.right - wr.left
