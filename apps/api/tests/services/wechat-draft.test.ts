@@ -145,13 +145,14 @@ describe('generateChatDraft — AI 生成失败 → 报红不返回 reply', () =
   const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
   beforeEach(() => {
     vi.clearAllMocks();
+    // vi.clearAllMocks() 会重置 spy 的 mockImplementation，需要重新设置
+    errSpy.mockImplementation(() => {});
     _resetFeishuTokenCache();
     mockQuery.mockReset();
     mockQuery.mockResolvedValue({ rows: [], rowCount: 0 });
     process.env.NODE_ENV = 'test';
     mockCallOpenRouter.mockReset();
     mockCallOpenRouter.mockRejectedValue(new Error('toapi 5xx simulated'));
-    errSpy.mockClear();
   });
 
   it('AI 失败 → status:ai_failed 不带 reply + console.error 报红 ALARM；不落 pending_review', async () => {
@@ -633,16 +634,16 @@ describe('[B-4] cs-reply 内核接入：tags.stage=A2 → CRM 状态更新 + his
 // ─── [BEHAVIOR] B-5 编造词拦截（Invariant I-1）──────────────────────────────
 
 describe('[B-5] cs-reply 内核接入：reply 含编造词 → ai_failed，不发，不写 DB', () => {
-  const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+  let errSpy: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
     vi.clearAllMocks();
+    errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
     _resetFeishuTokenCache();
     mockQuery.mockReset();
     mockQuery.mockResolvedValue({ rows: [], rowCount: 0 });
     process.env.NODE_ENV = 'test';
     mockCallOpenRouter.mockReset();
-    errSpy.mockClear();
   });
 
   it('cs-reply 内核接入：reply 含编造词（承诺退款）→ ai_failed，不发，不写 wechat_publish_task', async () => {
@@ -677,15 +678,15 @@ describe('[B-5] cs-reply 内核接入：reply 含编造词 → ai_failed，不�
 // ─── [BEHAVIOR] B-6 escalate 旁路不阻塞（Invariant I-2）────────────────────
 
 describe('[B-6] cs-reply 内核接入：escalate DB 写入失败 → console.warn + reply 正常返回', () => {
-  const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+  let warnSpy: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
     vi.clearAllMocks();
+    warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
     _resetFeishuTokenCache();
     mockQuery.mockReset();
     process.env.NODE_ENV = 'test';
     mockCallOpenRouter.mockReset();
-    warnSpy.mockClear();
   });
 
   it('cs-reply 内核接入：escalate DB 写入失败 → console.warn + reply 正常返回（不阻塞对话）', async () => {
