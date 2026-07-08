@@ -4511,3 +4511,11 @@ agent_suite:
   status: active
   product: 客户私域AI接管
   note: "sprint(07081012): CRM客户状态历史追踪——合同测试：migration幂等、新客户old_status=NULL、status变化写历史、重复提交不写历史、事务回滚、BEGIN→COMMIT顺序"
+
+- id: line04-crm-status-history-contract-sprint
+  path: sprints/07081012-crm-status-history/tests/crm-status-history.test.ts
+  type: unit
+  ci: L3
+  status: active
+  product: 客户私域AI接管
+  note: "sprint(07081012): CRM客户状态历史追踪——合同测试原始文件（sprint目录），正式位置在 apps/api/tests/routes/crm-status-history.test.ts"
