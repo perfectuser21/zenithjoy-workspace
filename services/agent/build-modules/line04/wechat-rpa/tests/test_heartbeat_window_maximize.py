@@ -80,8 +80,7 @@ class TestMaximizeMainWindowIfNeeded:
 
     def test_non_windows_returns_false(self):
         mw_mock = MagicMock()
-        with patch("listen_chat.platform") as mock_platform:
-            mock_platform.system.return_value = "Darwin"
+        with patch("listen_chat.platform.system", return_value="Darwin"):
             result = listen_chat._maximize_main_window_if_needed(mw_mock)
         assert result is False, "非 Windows 平台应直接返回 False，不做任何操作"
 
@@ -90,8 +89,7 @@ class TestMaximizeMainWindowIfNeeded:
         mw_mock = MagicMock()
         mw_mock.element_info.handle = 12345
         mw_mock.rectangle.side_effect = RuntimeError("UIA 树未就绪")
-        with patch("listen_chat.platform") as mock_platform:
-            mock_platform.system.return_value = "Windows"
+        with patch("listen_chat.platform.system", return_value="Windows"):
             result = listen_chat._maximize_main_window_if_needed(mw_mock)
         assert result is False, "rectangle 异常应吞掉返回 False，不拖垮心跳"
 

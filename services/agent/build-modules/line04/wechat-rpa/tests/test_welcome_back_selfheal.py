@@ -21,7 +21,7 @@ import os
 import re
 import sys
 import types
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 
 def _stub_heavy_deps():
@@ -93,14 +93,11 @@ class TestIsWelcomeBackScreen:
     """find_weixin.is_welcome_back_screen() 逻辑测试（stub pywinauto Desktop）。"""
 
     def _run(self, windows):
-        fake_desktop = MagicMock()
-        fake_desktop.windows.return_value = windows
-        import pywinauto
-        pywinauto.Desktop.return_value = fake_desktop
-        if "find_weixin" in sys.modules:
-            del sys.modules["find_weixin"]
-        import find_weixin as fw
-        return fw.is_welcome_back_screen()
+        fake_desktop_instance = MagicMock()
+        fake_desktop_instance.windows.return_value = windows
+        with patch("pywinauto.Desktop") as mock_desktop_cls:
+            mock_desktop_cls.return_value = fake_desktop_instance
+            return find_weixin.is_welcome_back_screen()
 
     def test_no_login_window_returns_false(self):
         # 没有任何登录窗口 → False
