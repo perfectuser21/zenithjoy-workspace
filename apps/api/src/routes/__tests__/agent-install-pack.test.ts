@@ -751,8 +751,9 @@ describe('GET /api/agent/install-pack/android', () => {
     const res = await request(app).get('/api/agent/install-pack/android');
     expect(res.status).toBe(200);
     // COS 默认域名(*.myqcloud.com)禁止分发 apk/ipa(DownloadForbidden)，必须是自定义域名
+    // 暂用 http(自定义域名 HTTPS 证书申请中，非即时生效)
     expect(res.body.apk_url).not.toMatch(/\.myqcloud\.com\//);
-    expect(res.body.apk_url).toMatch(/^https:\/\/apk\.zenjoymedia\.media\/install-pack\/android\/zenithjoy-agent\.apk$/);
+    expect(res.body.apk_url).toMatch(/^https?:\/\/apk\.zenjoymedia\.media\/install-pack\/android\/zenithjoy-agent\.apk$/);
     expect(res.body.deeplink).toMatch(/^zenithjoy:\/\/bind\?/);
     expect(res.body.deeplink).toContain('license=ZJ-F-A1B2C3D4');
     expect(res.body.license_key).toBe('ZJ-F-A1B2C3D4');
