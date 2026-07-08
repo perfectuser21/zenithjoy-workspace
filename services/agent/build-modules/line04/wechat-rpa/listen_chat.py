@@ -1766,13 +1766,10 @@ def _reset_session_list_to_top(mw: Any) -> bool:
                 f"通讯录={pt_contacts is not None},微信={pt_wechat is not None})，跳过切tab(不卡死会话列表)"
             )
             return False
-        try:
-            main_hwnd = mw.element_info.handle
-            if main_hwnd:
-                _set_foreground_window(main_hwnd)
-                time.sleep(0.1)
-        except Exception:
-            pass
+        main_hwnd = _safe_hwnd(mw)
+        if main_hwnd:
+            _set_foreground_window(main_hwnd)
+            time.sleep(0.1)
         # 点通讯录
         contacts_ctrl = nav_ctrls.get("通讯录")
         if contacts_ctrl is not None:
