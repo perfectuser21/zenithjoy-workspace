@@ -88,7 +88,8 @@ class AgentService : Service() {
             val stale = intent.getBooleanExtra(DeviceAccountScanService.EXTRA_RESULT_STALE, false)
             val accountIds = intent.getStringArrayExtra(DeviceAccountScanService.EXTRA_RESULT_ACCOUNT_IDS)?.toList() ?: emptyList()
             val errorCode = intent.getStringExtra(DeviceAccountScanService.EXTRA_ERROR) ?: ""
-            reportAccountScanResult(requestId, ok, stale, accountIds, errorCode)
+            // 网络请求不能跑主线程(NetworkOnMainThreadException)，跟 warmupResultReceiver 同套路。
+            scope.launch(Dispatchers.IO) { reportAccountScanResult(requestId, ok, stale, accountIds, errorCode) }
         }
     }
 
@@ -373,12 +374,22 @@ class AgentService : Service() {
         accountIds: List<String>,
         errorCode: String,
     ) {
-        android.util.Log.i(
-            TAG,
-            "account scan result ready to report to mid-tier: requestId=$requestId ok=$ok stale=$stale " +
-                "accountCount=${accountIds.size} error=$errorCode agentId=${config.agentId} " +
-                "(TODO: wire real agent_platform_sessions write-back endpoint)",
-        )
+        val url = "${config.deriveHttpBase()}/api/agent/burner/account-scan-result"
+        val body = buildAccountScanResultBody(requestId, config.agentId, ok, stale, accountIds, errorCode)
+        try {
+            val request = Request.Builder()
+                .url(url)
+                .post(body.toRequestBody("application/json".toMediaType()))
+                .build()
+            httpClient.newCall(request).execute().use { resp ->
+                android.util.Log.i(
+                    TAG,
+                    "account-scan-result reported: ${resp.code} requestId=$requestId accountCount=${accountIds.size}",
+                )
+            }
+        } catch (e: Exception) {
+            android.util.Log.w(TAG, "account-scan-result report failed: ${e.message}")
+        }
     }
 
     // dm_outreach 结果上报（扩展现有 /api/agent/burner/dm-outreach-result 端点，
@@ -491,6 +502,25 @@ class AgentService : Service() {
                 "\"device_id\":\"${esc(deviceId)}\"," +
                 "\"total\":$total,\"alive\":$alive,\"offline\":$offline," +
                 "\"results\":$results," +
+                "\"error_code\":\"${esc(errorCode)}\"}"
+        }
+
+        // 组 POST /api/agent/burner/account-scan-result 的 JSON body。纯字符串拼避开
+        // org.json 的 JVM 单测"not mocked"陷阱（同 buildWarmupResultBody 套路）。
+        fun buildAccountScanResultBody(
+            requestId: String,
+            agentId: String,
+            ok: Boolean,
+            stale: Boolean,
+            accountIds: List<String>,
+            errorCode: String,
+        ): String {
+            fun esc(s: String): String = s.replace("\\", "\\\\").replace("\"", "\\\"")
+            val ids = accountIds.joinToString(",") { "\"${esc(it)}\"" }
+            return "{\"request_id\":\"${esc(requestId)}\"," +
+                "\"agent_id\":\"${esc(agentId)}\"," +
+                "\"ok\":$ok,\"stale\":$stale," +
+                "\"account_ids\":[$ids]," +
                 "\"error_code\":\"${esc(errorCode)}\"}"
         }
     }

@@ -629,6 +629,32 @@ router.get('/dm-tasks/:task_id', async (req: Request, res: Response) => {
   );
 });
 
+// ── account-scan-result — Line02 Step7 账号扫描结果写回（手机端 DeviceAccountScanService）──
+// 扫描到的抖音账号昵称 upsert 进 agent_platform_sessions(role='burner')，让"账号管理"页
+// (GET /sessions 同表)能看到手机上已登录的小号，跟 qr-bind-result 写同一张表。
+router.post('/account-scan-result', async (req: Request, res: Response) => {
+  const { agent_id, ok, account_ids } = req.body || {};
+  if (!agent_id || typeof agent_id !== 'string') {
+    return res.status(400).json(ERR('MISSING_AGENT_ID', 'agent_id 必填'));
+  }
+  const ids = Array.isArray(account_ids) ? account_ids.filter((x) => typeof x === 'string' && x) : [];
+  let written = 0;
+  if (ok === true && ids.length > 0) {
+    for (const nickname of ids) {
+      await pool.query(
+        `INSERT INTO zenithjoy.agent_platform_sessions
+           (agent_id, platform, account_label, role, status, bound_at, created_at)
+         VALUES ($1, 'douyin', $2, 'burner', 'active', NOW(), NOW())
+         ON CONFLICT (agent_id, platform, account_label) DO UPDATE
+           SET role='burner', status='active', bound_at=NOW()`,
+        [agent_id, nickname],
+      );
+      written += 1;
+    }
+  }
+  return res.json(OK({ written }));
+});
+
 // ── warmup 验活结果回传（Line02 每日养号）——tenant 服务端按 task_id 反查，幂等按 publish_tasks 状态 ──
 router.post('/warmup-result', async (req: Request, res: Response) => {
   const { task_id, device_id, total, alive, offline, results, error_code } = req.body || {};
