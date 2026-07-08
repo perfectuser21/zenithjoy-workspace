@@ -47,13 +47,27 @@ def _read_source(path: str) -> str:
         return f.read()
 
 
+def _strip_nav_reset_functions(src: str) -> str:
+    """nav-reset 导航函数例外：从源码移除 _reset_session_list_to_top / _click_welcome_back_screen 的函数体。
+    这两个导航辅助函数对 mmui 导航按鈕必须用 click_input()（PostMessage 对 mmui 导航无效，§2.I 07-08）。
+    不属于发送/回复交互层禁止范围。
+    """
+    import re as _re
+    # 移除这两个函数体（从 def 开始到下一个 def 之前）
+    for func_name in ("_reset_session_list_to_top", "_click_welcome_back_screen"):
+        pattern = r"(def " + func_name + r"\b[\s\S]*?)(?=\ndef [^\s])"
+        src = _re.sub(pattern, "# [" + func_name + " stripped for nav-reset exception]\n", src)
+    return src
+
+
 def test_listen_chat_no_physical_input():
-    """listen_chat.py 不得出现物理鼠标键盘 API（防回退到抢前台的输入方式）。"""
-    src = _read_source(LISTEN_CHAT_PATH)
+    """listen_chat.py 不得出现物理鼠标键盘 API（发送/回复交互层防回退）。
+    例外：_reset_session_list_to_top / _click_welcome_back_screen 导航辅助函数
+    对 mmui 导航按鈕必须用 click_input()（PostMessage 无效，§2.I 07-08 三修自愈C）。
+    """
+    src = _strip_nav_reset_functions(_read_source(LISTEN_CHAT_PATH))
     for banned in FORBIDDEN_PHYSICAL_INPUT:
         assert banned not in src, f"listen_chat.py 不应出现物理输入 API: {banned}"
-
-
 def test_send_chat_no_physical_input():
     """send_chat.py 不得出现物理鼠标键盘 API。"""
     src = _read_source(SEND_CHAT_PATH)
