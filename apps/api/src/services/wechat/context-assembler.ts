@@ -37,6 +37,8 @@ export interface AssembleChatContextInput {
   shortTerm: ChatMessage[];
   memory: ContactMemory;
   maxChars?: number;
+  /** wechat-cs-reply 内核：注入客服回复规则段到 system prompt */
+  csReplyRules?: string;
 }
 
 // ─── 段渲染 helper ───────────────────────────────────────────────────────────
@@ -67,9 +69,11 @@ export function assembleChatContext(input: AssembleChatContextInput): AssembledC
     shortTerm,
     memory,
     maxChars = DEFAULT_MAX_CHARS,
+    csReplyRules,
   } = input;
 
-  const system = `${renderPersonaBlock(persona)}\n${renderKBBlock(kb, kbHits)}`;
+  const csRulesBlock = csReplyRules ? `\n\n[客服回复规则]\n${csReplyRules}` : '';
+  const system = `${renderPersonaBlock(persona)}\n${renderKBBlock(kb, kbHits)}${csRulesBlock}`;
 
   const factsBlock = renderFactsBlock(memory?.facts ?? []);
   const latestBlock = `[客户最新消息: ${message}]`;

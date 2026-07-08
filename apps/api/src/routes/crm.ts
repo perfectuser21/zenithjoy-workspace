@@ -473,16 +473,19 @@ router.put(
   bodyWechatIdToParam,
   requireCsWriteAccess('wechatId'),
   async (req: Request, res: Response) => {
-    const { wechat_id, contact, status } = req.body as {
+    const { wechat_id, contact, status, changed_by } = req.body as {
       wechat_id?: string;
       contact?: string;
       status?: string;
+      changed_by?: string;
     };
     const csWechatId = (wechat_id ?? '').trim();
     const name = (contact ?? '').trim();
     const st = (status ?? '').trim();
     if (!csWechatId || !name) return res.status(400).json({ error: 'wechat_id 和 contact 必填' });
     if (!VALID_STATUS.has(st)) return res.status(400).json({ error: 'status 必须是 A1-A5' });
+    const VALID_CHANGED_BY = new Set(['ai_inferred', 'manual']);
+    const changedBy = VALID_CHANGED_BY.has(changed_by ?? '') ? changed_by! : 'manual';
     const tenantId = await resolveTenantId(req, csWechatId);
     if (!tenantId) return fail(res, 404, 'TARGET_NOT_FOUND', '解析不到所属租户');
     const client = await pool.connect();
@@ -507,9 +510,9 @@ router.put(
       if (oldStatus !== st) {
         await client.query(
           `INSERT INTO zenithjoy.crm_customer_status_history
-             (tenant_id, cs_wechat_id, contact, old_status, new_status, changed_at)
-           VALUES ($1::uuid, $2, $3, $4, $5, now())`,
-          [tenantId, csWechatId, name, oldStatus, st],
+             (tenant_id, cs_wechat_id, contact, old_status, new_status, changed_at, changed_by)
+           VALUES ($1::uuid, $2, $3, $4, $5, now(), $6)`,
+          [tenantId, csWechatId, name, oldStatus, st, changedBy],
         );
       }
       await client.query('COMMIT');

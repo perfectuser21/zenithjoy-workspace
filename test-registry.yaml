@@ -4519,3 +4519,11 @@ agent_suite:
   status: active
   product: 客户私域AI接管
   note: "sprint(07081012): CRM客户状态历史追踪——合同测试原始文件（sprint目录），正式位置在 apps/api/tests/routes/crm-status-history.test.ts"
+
+- id: wechat-cs-reply-integration
+  path: sprints/07081557-wechat-cs-reply-integration/tests/wechat-cs-reply-integration.test.ts
+  type: integration
+  ci: L4
+  status: active
+  product: 私域运营
+  note: "wechat-cs-reply 判断内核接入合同测试（B-1~B-9）"

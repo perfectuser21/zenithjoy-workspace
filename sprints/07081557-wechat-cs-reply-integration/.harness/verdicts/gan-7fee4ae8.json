@@ -1,0 +1,17 @@
+{
+  "phase": "gan",
+  "sha7": "7fee4ae8",
+  "rounds": 2,
+  "final_verdict": "APPROVED",
+  "total_score": "57/60",
+  "iron_rule_coverage": "5/5",
+  "behavior_count": 9,
+  "invariant_coverage": "I-1~I-6 全覆盖",
+  "files": [
+    "contract-draft.md",
+    "contract-dod.md",
+    "tests/wechat-cs-reply-integration.test.ts",
+    "tests/e2e-verify.sh",
+    "tests/wechat-cs-reply-smoke-skeleton.sh"
+  ]
+}
