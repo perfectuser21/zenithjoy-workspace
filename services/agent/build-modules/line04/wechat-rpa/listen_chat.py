@@ -1330,10 +1330,12 @@ def _filter_left_column_item_names(items: List[tuple], x_max: int = 460) -> List
 def _find_left_nav_button_point(
     buttons: List[tuple], name: str, left_max: int = 90, win_left: int = 0
 ) -> Optional[tuple]:
-    """在最左导航栏（rect.left < left_max）按 name 找按钮，返回其中心屏幕坐标点（纯函数）。
+    """在最左导航栏（窗口相对 x < left_max）按 name 找按钮，返回其中心屏幕坐标点（纯函数）。
 
     入参 buttons = [(name, rect), ...]，rect 有 .left/.top/.right/.bottom。
-    用于切 tab 回顶：定位「通讯录」「微信」导航按钮（不写死坐标）。右侧同名控件（x>=left_max）不选。
+    win_left: 主窗口 rectangle().left，把屏幕绝对坐标转成窗口相对坐标再判 left_max
+    （修法C §2.I 07-08：窗口不在屏幕左边缘时，绝对坐标 r.left 永远 ≥ 90 导致按钮找不到）。
+    用于切 tab 回顶：定位「通讯录」「微信」导航按钮（不写死坐标）。右侧同名控件（相对x>=left_max）不选。
     """
     for nm, r in buttons:
         if nm != name:
@@ -1741,7 +1743,14 @@ def _click_screen_point(mw: Any, pt: tuple) -> bool:
 
 
 def _reset_session_list_to_top(mw: Any) -> bool:
-    """把会话列表弹回真顶 = 切 tab（修法C §2.I 07-08 win_left 窗口相对坐标 + click_input 导航）。"""
+    """把会话列表弹回真顶 = 切 tab：点左侧导航「通讯录」→ 再点「微信」（rog 真机唯一验证有效的回顶法）。
+
+    修法C §2.I 07-08：
+    1. 读取 win_left = mw.rectangle().left，把绝对坐标转窗口相对坐标再判 left_max（修复窗口不贴屏左边缘时按钮找不到）。
+    2. 收集 nav_ctrls dict（窗口相对 x<90 的按钮），点击优先用 ctrl.click_input()（PostMessage 对 mmui 导航无效）。
+    3. 点击前调 _set_foreground_window 拉前台（焦点不在微信时 click_input 可能被吃掉）。
+    4. 失败吞掉返回 False（不拖垮扫描）。
+    """
     try:
         try:
             win_left = mw.rectangle().left
@@ -1807,6 +1816,8 @@ def _reset_session_list_to_top(mw: Any) -> bool:
     except Exception as exc:
         _log(f"_reset_session_list_to_top: 切 tab 回顶异常: {exc}")
         return False
+
+
 def scan_recent_contacts(mw: Any, limit: int = 100, max_seconds: float = 0) -> List[Dict[str, str]]:
     """滚动遍历主窗口会话列表 ListItem，列出全部近期会话联系人（CRM 好友表行源）。
 
@@ -2006,7 +2017,10 @@ _SW_MAXIMIZE = 3
 
 
 def _ensure_window_maximized(mw: Any) -> None:
-    """A-自愈：心跳检测主窗口非最大化 → SW_MAXIMIZE（§2.K 07-08 单栏模式根治）。"""
+    """心跳自愈：检测主窗口非最大化 → SW_MAXIMIZE（§2.K 07-08 单栏模式根治）。
+    窗口宽 <~700px 时微信进入单栏模式，会话列表不在 UIA 树里，scan_unread 静默失效。
+    每次重启自愈后主窗口默认非最大化，故每轮心跳都需检测。
+    """
     import ctypes as _ct
     wd = getattr(_ct, "windll", None)
     if wd is None:
@@ -2032,7 +2046,13 @@ _WELCOME_BACK_CLICK_COOLDOWN = 30.0  # 最多每 30s 自动点击一次
 
 
 def _click_welcome_back_screen() -> bool:
-    """B-自愈：识别欢迎回来确认屏并自动点击"进入微信"（§2.J 07-08 实锤）。"""
+    """B-自愈：识别欢迎回来确认屏并自动点击"进入微信"（§2.J 07-08 实锤）。
+
+    UIA 自愈重启微信后常触发 mmui::LoginWindow title='微信'（欢迎回来屏，非真隐私锁）。
+    含"进入微信"/"切换账号"/"仅传输文件"三按钮——无需密码，直接 fg+click_input 恢复。
+    真隐私锁（无"进入微信"按钮）→ 保守不点。
+    返回 True = 已发出点击（无论是否恢复成功），False = 非欢迎回来屏不点。
+    """
     try:
         from pywinauto import Desktop
         from find_weixin import get_main_window as _get_main_window
@@ -2051,6 +2071,7 @@ def _click_welcome_back_screen() -> bool:
                 continue
         if login_win is None:
             return False
+        # 有"进入微信"按钮 = 欢迎回来屏；无该按钮 = 真隐私锁 → 不动
         enter_btn = None
         for b in login_win.descendants(control_type="Button"):
             try:
@@ -2061,6 +2082,7 @@ def _click_welcome_back_screen() -> bool:
                 continue
         if enter_btn is None:
             return False
+        # 拉前台 + click_input
         try:
             hwnd = login_win.element_info.handle
             if hwnd:
@@ -2074,6 +2096,7 @@ def _click_welcome_back_screen() -> bool:
         except Exception as exc:
             _log(f"[B-自愈] click_input 异常: {exc}")
             return False
+        # 等待最长 15s 验证主窗口出现
         for _ in range(30):
             time.sleep(0.5)
             if _get_main_window() is not None:
