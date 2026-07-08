@@ -12,7 +12,7 @@
 
 ---
 
-### [BEHAVIOR-01] migration 回填幂等——重跑不重复插入
+### [BEHAVIOR] 01 — migration 回填幂等——重跑不重复插入
 
 **技术断言**：migration 文件连续执行两次，`crm_customer_status_history` 中每个 `(tenant_id, cs_wechat_id, contact)` 组合最多只有 1 条 `old_status IS NULL` 的回填行；无报错退出。
 
@@ -34,7 +34,7 @@ DUPES=$(psql "$DATABASE_URL" -tAc "
 
 ---
 
-### [BEHAVIOR-02] 新客户首次写 status → 历史表出现 old_status=NULL 记录
+### [BEHAVIOR] 02 — 新客户首次写 status → 历史表出现 old_status=NULL 记录
 
 **技术断言**：对 `crm_customers` 中**不存在**的 `(wechat_id, contact)` 发起 `PUT /api/crm/customers/status`，历史表新增恰好 1 条记录，且 `old_status IS NULL`、`new_status = 请求值`。
 
@@ -55,7 +55,7 @@ COUNT=$(psql "$DATABASE_URL" -tAc "
 
 ---
 
-### [BEHAVIOR-03] 已有客户 status 变化 → 历史表新增对应记录
+### [BEHAVIOR] 03 — 已有客户 status 变化 → 历史表新增对应记录
 
 **技术断言**：`crm_customers` 中已存在 `status='A2'` 的客户，发起 `PUT /api/crm/customers/status` 将其改为 `A3`，历史表新增恰好 1 条 `old_status='A2', new_status='A3'` 记录。
 
@@ -92,7 +92,7 @@ LATEST=$(psql "$DATABASE_URL" -tAc "
 
 ---
 
-### [BEHAVIOR-04] 重复提交相同 status → 历史表不新增记录
+### [BEHAVIOR] 04 — 重复提交相同 status → 历史表不新增记录
 
 **技术断言**：对已存在 `status='A3'` 的客户再次 `PUT status='A3'`，历史表行数不增加，接口仍返回 `{success:true, status:'A3'}`。
 
@@ -121,7 +121,7 @@ COUNT_AFTER=$(psql "$DATABASE_URL" -tAc "
 
 ---
 
-### [BEHAVIOR-05] upsert 失败时历史表不残留记录（事务回滚）
+### [BEHAVIOR] 05 — upsert 失败时历史表不残留记录（事务回滚）
 
 **技术断言**：在 upsert 执行阶段抛出 DB 异常（mock），历史表行数与调用前相同，接口返回 HTTP 500。此条在 unit test（mock pool）层验证。
 
