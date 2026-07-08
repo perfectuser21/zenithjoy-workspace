@@ -9,7 +9,7 @@
 
 ## Done 定义（全部通过才算 DONE）
 
-### [BEHAVIOR-1] 新客户首次写 status → 历史表写入 old_status=NULL 记录
+### [BEHAVIOR] BEHAVIOR-1: 新客户首次写 status → 历史表写入 old_status=NULL 记录
 
 **描述**：当 `(tenant_id, cs_wechat_id, contact)` 组合在 `crm_customers` 中不存在时，调用 `PUT /api/crm/customers/status` 会在历史表写入一条 `old_status IS NULL, new_status = <status>` 的记录。
 
@@ -36,7 +36,7 @@ echo "历史记录数（期望=1）: $COUNT"
 
 ---
 
-### [BEHAVIOR-2] 状态真实变化（old != new）→ 历史表新增一条带旧值的记录
+### [BEHAVIOR] BEHAVIOR-2: 状态真实变化（old != new）→ 历史表新增一条带旧值的记录
 
 **描述**：客户已有 `status=A1`，再次调用 `PUT /api/crm/customers/status` 写入 `status=A3`，历史表新增一条 `old_status='A1', new_status='A3'` 的记录。
 
@@ -67,7 +67,7 @@ echo "变化历史行数（期望=1）: $ROWS"
 
 ---
 
-### [BEHAVIOR-3] 重复提交相同 status（old = new）→ 历史表行数不增加
+### [BEHAVIOR] BEHAVIOR-3: 重复提交相同 status（old = new）→ 历史表行数不增加
 
 **描述**：客户当前 `status=A3`，再次提交 `status=A3`，历史表行数不变，API 仍返回 `{"success":true,"status":"A3"}`。
 
@@ -103,7 +103,7 @@ echo "写前行数: $BEFORE，写后行数: $AFTER（期望相等）"
 
 ---
 
-### [BEHAVIOR-4] 事务原子性：upsert 失败时历史表无残留记录
+### [BEHAVIOR] BEHAVIOR-4: 事务原子性：upsert 失败时历史表无残留记录
 
 **描述**：若 `crm_customers` 的 upsert 操作失败（DB 级错误），事务回滚，`crm_customer_status_history` 不留下任何孤立记录。
 
@@ -133,7 +133,7 @@ echo "写前: $BEFORE，写后: $AFTER（期望相等，均为 0）"
 
 ---
 
-### [BEHAVIOR-5] Migration 回填幂等：重跑后历史表行数不增加
+### [BEHAVIOR] BEHAVIOR-5: Migration 回填幂等：重跑后历史表行数不增加
 
 **描述**：执行 migration 后，再次执行相同 migration（或其回填部分），`crm_customer_status_history` 行数不变（`ON CONFLICT DO NOTHING`）。
 
