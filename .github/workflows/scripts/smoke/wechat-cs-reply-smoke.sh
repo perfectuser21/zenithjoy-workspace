@@ -86,7 +86,7 @@ echo "PASS [S-2]"
 
 echo ""
 echo "[S-3] Migration 幂等验证"
-MIGRATION_FILE="$(cd "$(dirname "$0")/../../.." && pwd)/apps/api/db/migrations/20260708_130000_crm_status_history_changed_by.sql"
+MIGRATION_FILE="$(cd "$(dirname "$0")/../../../.." && pwd)/apps/api/db/migrations/20260708_130000_crm_status_history_changed_by.sql"
 if [ -f "$MIGRATION_FILE" ]; then
   psql "$DB" -f "$MIGRATION_FILE" 2>/dev/null && echo "第一次执行 OK" || echo "第一次执行警告（可能已应用）"
   psql "$DB" -f "$MIGRATION_FILE" 2>/dev/null && echo "第二次执行 OK（幂等）" || echo "第二次执行警告"
