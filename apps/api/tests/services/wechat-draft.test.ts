@@ -518,10 +518,10 @@ describe('[B-2] cs-reply 内核接入：JSON 缺失 → 重试一次 + 正则兜
   });
 
   it('cs-reply 内核接入：JSON 缺失 → 重试一次 + 正则兜底，仍返回非空 reply', async () => {
-    // 首次返回：纯文本，无 JSON
-    // 第二次返回：仍无 JSON（最坏情况，触发正则兜底）
+    // 首次返回：含 JSON 意图（有 { 标志）但格式不完整，触发重试
+    // 第二次返回：仍无合法 JSON（最坏情况，触发正则兜底）
     mockCallOpenRouter
-      .mockResolvedValueOnce({ content: '您好，我是客服，很高兴为您服务。' })
+      .mockResolvedValueOnce({ content: '{"reply":"您好，我是客服，很高兴为您服务。" 格式截断了' })
       .mockResolvedValueOnce({ content: '好的，稍后为您处理。' });
 
     const result: any = await generateChatDraft({

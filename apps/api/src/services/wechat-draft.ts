@@ -514,22 +514,32 @@ export async function generateChatDraft(
 
     let parsed = extractJsonFromContent(rawContent);
     if (!parsed) {
-      // 首次无 JSON → 重试一次，追加提示
-      const retryResult = await callOpenRouter({
-        system,
-        prompt: user + '\n\n上次漏了 JSON，这次必须补上',
-        temperature: 0.8,
-        model: cs.model,
-        baseUrl: cs.baseUrl,
-        apiKey: cs.apiKey,
-        maxTokens: cs.maxTokens,
-        purpose: 'wechat_chat_draft',
-      });
-      const retryContent = (retryResult.content || '').trim();
-      parsed = extractJsonFromContent(retryContent);
-      if (!parsed) {
-        // 正则兜底：取首行作为 reply
-        const fallbackReply = extractReplyFallback(retryContent) || extractReplyFallback(rawContent);
+      // 判断是否有 JSON 意图（含 ```json、{ 或 TAGS: 等标志）：
+      // 有意图但解析失败 → 说明模型尝试了 JSON 但格式有误，值得重试；
+      // 无意图（纯文本回复）→ 模型根本没尝试 JSON，直接正则兜底，不发第 2 次 LLM call。
+      const hasJsonIntent = /```json|TAGS:|{/.test(rawContent);
+      if (hasJsonIntent) {
+        // 首次有 JSON 意图但格式不对 → 重试一次，追加提示
+        const retryResult = await callOpenRouter({
+          system,
+          prompt: user + '\n\n上次漏了 JSON，这次必须补上',
+          temperature: 0.8,
+          model: cs.model,
+          baseUrl: cs.baseUrl,
+          apiKey: cs.apiKey,
+          maxTokens: cs.maxTokens,
+          purpose: 'wechat_chat_draft',
+        });
+        const retryContent = (retryResult.content || '').trim();
+        parsed = extractJsonFromContent(retryContent);
+        if (!parsed) {
+          // 重试后仍无 JSON → 正则兜底：取首行作为 reply
+          const fallbackReply = extractReplyFallback(retryContent) || extractReplyFallback(rawContent);
+          parsed = { reply: fallbackReply, tags: { stage: null, escalate: false } };
+        }
+      } else {
+        // 纯文本回复（无 JSON 意图）→ 直接正则兜底，不重试
+        const fallbackReply = extractReplyFallback(rawContent);
         parsed = { reply: fallbackReply, tags: { stage: null, escalate: false } };
       }
     }
