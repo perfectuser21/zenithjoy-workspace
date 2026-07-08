@@ -115,6 +115,7 @@ describe('CRM Status History — Contract Tests', () => {
 
     const res = await request(app)
       .put('/api/crm/customers/status')
+      .set('Authorization', 'Bearer dev-bypass-test')
       .send(statusBody({ status: 'A2' }));
 
     expect(res.status).toBe(200);
@@ -156,6 +157,7 @@ describe('CRM Status History — Contract Tests', () => {
 
     const res = await request(app)
       .put('/api/crm/customers/status')
+      .set('Authorization', 'Bearer dev-bypass-test')
       .send(statusBody({ status: 'A3' }));
 
     expect(res.status).toBe(200);
@@ -195,6 +197,7 @@ describe('CRM Status History — Contract Tests', () => {
 
     const res = await request(app)
       .put('/api/crm/customers/status')
+      .set('Authorization', 'Bearer dev-bypass-test')
       .send(statusBody({ status: 'A3' }));
 
     expect(res.status).toBe(200);
@@ -230,6 +233,7 @@ describe('CRM Status History — Contract Tests', () => {
 
     const res = await request(app)
       .put('/api/crm/customers/status')
+      .set('Authorization', 'Bearer dev-bypass-test')
       .send(statusBody({ status: 'A2' }));
 
     expect(res.status).toBe(500);
@@ -272,6 +276,7 @@ describe('CRM Status History — Contract Tests', () => {
 
     await request(app)
       .put('/api/crm/customers/status')
+      .set('Authorization', 'Bearer dev-bypass-test')
       .send(statusBody({ status: 'A1' }));
 
     const sqls = mockClientQuery.mock.calls.map(([sql]: [string]) =>
@@ -314,7 +319,7 @@ describe('CRM Status History — Contract Tests', () => {
 
     const migrationPath = path.resolve(
       __dirname,
-      '../../../apps/api/db/migrations/20260708_120000_crm_status_history.sql',
+      '../../db/migrations/20260708_120000_crm_status_history.sql',
     );
 
     expect(fs.existsSync(migrationPath)).toBe(true);
