@@ -98,6 +98,42 @@ def test_find_left_nav_button_point_missing_returns_none():
     assert listen_chat._find_left_nav_button_point(buttons, "通讯录", left_max=90) is None
 
 
+def test_find_left_nav_button_point_win_left_default_zero_backward_compat():
+    """win_left 默认 0 → 现有调用不变（向后兼容）。"""
+    # 窗口从 x=0 开始，left=20 → (20-0)=20 < 90 → 命中
+    buttons = [("微信", _Rect(20, 100, 60, 140))]
+    pt = listen_chat._find_left_nav_button_point(buttons, "微信")  # win_left 缺省 0
+    assert pt == (40, 120)
+
+
+def test_find_left_nav_button_point_second_monitor_relative():
+    """多显示器：窗口在第二块屏（x=1920），导航按钮 x=1940 → 相对坐标 (1940-1920)=20 < 90 → 命中。
+
+    旧实现 r.left < 90 → 1940 < 90 = False → 按钮找不到（issue 8e163d87 根因）。
+    新实现 (r.left - win_left) < 90 → 20 < 90 = True → 正确命中。
+    """
+    WIN_LEFT = 1920
+    buttons = [
+        ("微信", _Rect(WIN_LEFT + 20, 100, WIN_LEFT + 60, 140)),   # 导航按钮 → 应命中
+        ("微信", _Rect(WIN_LEFT + 500, 100, WIN_LEFT + 560, 140)),  # 右侧同名 → 不选
+    ]
+    # 新参数 win_left=WIN_LEFT
+    pt = listen_chat._find_left_nav_button_point(buttons, "微信", left_max=90, win_left=WIN_LEFT)
+    assert pt == (WIN_LEFT + 40, 120), (
+        "多显示器场景：导航按钮应用窗口相对坐标定位（旧绝对坐标过滤 1940 < 90 = False 会误判为找不到）"
+    )
+
+
+def test_find_left_nav_button_point_second_monitor_right_side_excluded():
+    """多显示器：右侧同名控件相对坐标 ≥ 90 → 正确排除。"""
+    WIN_LEFT = 1920
+    buttons = [
+        ("微信", _Rect(WIN_LEFT + 500, 100, WIN_LEFT + 560, 140)),  # 相对 x=500 >= 90 → 不选
+    ]
+    pt = listen_chat._find_left_nav_button_point(buttons, "微信", left_max=90, win_left=WIN_LEFT)
+    assert pt is None
+
+
 # ─── 3. 鲁棒到底：末项连续 N 次不变才停 ──────────────────────────────────────────
 
 
