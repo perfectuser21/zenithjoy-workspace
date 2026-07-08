@@ -18,7 +18,7 @@ import type { Request, Response, NextFunction } from 'express';
 
 // mock cs-config-guard，避免拉取其复杂依赖（pg/walking-skeleton.service/super-admin 等）
 vi.mock('./cs-config-guard', () => ({
-  requireCsWriteAccess: vi.fn((_kind: string) => vi.fn()),
+  requireCsWriteAccess: vi.fn(() => vi.fn()),
 }));
 
 import { requireCsWriteAccess, bodyWechatIdToParam } from './auth';

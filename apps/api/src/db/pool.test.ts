@@ -11,13 +11,15 @@
  */
 import { describe, it, expect, vi } from 'vitest';
 
-// mock pg Pool 以避免真实数据库连接
-const mockConnection = {
-  query: vi.fn(),
-  connect: vi.fn(),
-  end: vi.fn(),
-  on: vi.fn(),
-};
+// vi.hoisted 确保 mockConnection 在 vi.mock 提升后仍可访问
+const { mockConnection } = vi.hoisted(() => ({
+  mockConnection: {
+    query: vi.fn(),
+    connect: vi.fn(),
+    end: vi.fn(),
+    on: vi.fn(),
+  },
+}));
 
 vi.mock('./connection', () => ({
   default: mockConnection,

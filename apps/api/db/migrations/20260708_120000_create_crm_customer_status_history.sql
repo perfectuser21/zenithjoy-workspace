@@ -7,7 +7,7 @@
 CREATE TABLE IF NOT EXISTS zenithjoy.crm_customer_status_history (
   id          UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
   tenant_id   TEXT        NOT NULL,
-  customer_id UUID        NOT NULL REFERENCES zenithjoy.crm_customers(id) ON DELETE CASCADE,
+  customer_id BIGINT      NOT NULL REFERENCES zenithjoy.crm_customers(id) ON DELETE CASCADE,
   old_status  TEXT,
   new_status  TEXT        NOT NULL,
   changed_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
