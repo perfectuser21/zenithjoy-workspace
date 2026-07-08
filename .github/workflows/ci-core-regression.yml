@@ -1,0 +1,48 @@
+name: Core Regression
+
+# ───────────────────────────────────────────────────────────────────────────
+# core-regression —— regression-contract.yaml 值班表通电闸
+#
+# 规则：
+#   - 读 regression-contract.yaml，按 tier(PR/Release) 选出 trigger 匹配的
+#     golden_paths 条目，逐条跑 test_command
+#   - 选出0条（空契约）或任一条目失败 → job 红（防假绿灯）
+#   - PR/非 main 分支跑 --tier pr；main 分支（push）跑 --tier release
+#   - 聚合 required check：Core Regression Gate Passed
+# ───────────────────────────────────────────────────────────────────────────
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  merge_group:
+
+concurrency:
+  group: core-regression-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  core-regression:
+    name: Core Regression Gate Passed
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 安装 yq
+        run: |
+          sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+          sudo chmod +x /usr/local/bin/yq
+          yq --version
+
+      - name: 跑 runner 单测
+        run: bash scripts/ci/__tests__/run-core-regression.test.sh
+
+      - name: Core Regression (tier=pr)
+        if: github.ref != 'refs/heads/main'
+        run: bash scripts/ci/run-core-regression.sh --tier pr
+
+      - name: Core Regression (tier=release)
+        if: github.ref == 'refs/heads/main'
+        run: bash scripts/ci/run-core-regression.sh --tier release
