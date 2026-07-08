@@ -3793,12 +3793,27 @@ class _SkipCounter:
 # Phase 0 观测：模块版本由 line04 spawn 时经 env ZENITHJOY_MODULE_VERSION 注入（缺=unknown，绝不抛）。
 _MODULE_VERSION = os.environ.get("ZENITHJOY_MODULE_VERSION", "unknown")
 
+# 窗口自愈冷却（issue 99741ff9）：可见非最大化 → SW_MAXIMIZE，300s 冷却防与操作者拉锯
+_WINDOW_MAXIMIZE_COOLDOWN = 300
+
+
+def window_needs_maximize(is_zoomed: bool, is_iconic: bool) -> bool:
+    """纯函数(CI可测)：主窗口是否需要最大化自愈（issue 99741ff9，2026-07-08 真机坐实）。
+
+    窗口宽 <~700px 时微信进单栏布局，会话列表整个不在 UIA 树（scan 读到聊天气泡），
+    新消息永远检测不到且心跳"一切正常"极隐蔽；微信重启后默认非最大化必掉坑。
+    只救【可见+非最大化】；iconic（托盘/最小化）是合法运行态（"微信最小化也能跑"），
+    强行弹最大化窗口会打扰客户机操作者，绝不动。
+    """
+    return (not is_iconic) and (not is_zoomed)
+
 
 def build_diag(*, main_window_found, login_present, logged_in, screen_locked,
                sessions_seen, unread_senders, replied_count, last_error,
-               skip_snapshot) -> dict:
+               skip_snapshot, window_state=None, welcome_click_fails=0) -> dict:
     """组装心跳诊断 dict（纯函数，便于单测）。module_version + skip_reasons 是 Phase 0 新增，
-    让中台看板显示版本 + 每条未读为何没回，无需 SSH 进客户机。"""
+    让中台看板显示版本 + 每条未读为何没回，无需 SSH 进客户机。
+    window_state / welcome_click_fails（2026-07-08）：窗口最大化自愈 + 欢迎屏点击自愈观测。"""
     return {
         "main_window_found": main_window_found,
         "login_present": login_present,
@@ -3811,6 +3826,8 @@ def build_diag(*, main_window_found, login_present, logged_in, screen_locked,
         "last_error": last_error,
         "module_version": _MODULE_VERSION,
         "skip_reasons": skip_snapshot,
+        "window_state": window_state or {},
+        "welcome_click_fails": welcome_click_fails,
     }
 
 
