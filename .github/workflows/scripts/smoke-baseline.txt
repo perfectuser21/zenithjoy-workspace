@@ -8,6 +8,7 @@ agent-form-smoke.sh
 agent-module-e2e-smoke.sh
 agent-self-heal-smoke.sh
 clips-smoke.sh
+crm-status-history-smoke.sh
 cs-oneclick-setup-smoke.sh
 dashboard-walking-skeleton-1-smoke.sh
 deploy-version-selfcheck-smoke.sh

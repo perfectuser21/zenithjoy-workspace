@@ -14,11 +14,17 @@
  */
 import { Router, Request, Response, NextFunction } from 'express';
 import pool from '../db/connection';
+import { pool as namedPool } from '../db/pool';
 import {
   requireCsWriteAccess,
   requireCsReadAccess,
   requireServiceCredential,
 } from '../middleware/cs-config-guard';
+import {
+  requireCsWriteAccess as authRequireCsWriteAccess,
+  bodyWechatIdToParam as authBodyWechatIdToParam,
+} from '../middleware/auth';
+import { resolveTenantId as resolveTenantIdUtil } from '../utils/resolveTenantId';
 import { buildCustomerRoster } from '../services/crm/customer-roster';
 import type { RosterScanRow, TakeoverMode } from '../services/crm/customer-roster';
 
@@ -467,11 +473,12 @@ router.put(
   },
 );
 
-// PUT /api/crm/customers/status — 状态 A1-A5 持久化
+// PUT /api/crm/customers/status — 状态 A1-A5 持久化（事务模式 + 历史追踪）
+// 使用可 vi.mock 的 auth/pool 导入，以支持合同测试（crm-status-history B1-B6）。
 router.put(
   '/customers/status',
-  bodyWechatIdToParam,
-  requireCsWriteAccess('wechatId'),
+  authBodyWechatIdToParam,
+  authRequireCsWriteAccess('wechatId'),
   async (req: Request, res: Response) => {
     const { wechat_id, contact, status } = req.body as {
       wechat_id?: string;
@@ -483,18 +490,50 @@ router.put(
     const st = (status ?? '').trim();
     if (!csWechatId || !name) return res.status(400).json({ error: 'wechat_id 和 contact 必填' });
     if (!VALID_STATUS.has(st)) return res.status(400).json({ error: 'status 必须是 A1-A5' });
-    const tenantId = await resolveTenantId(req, csWechatId);
+    const tenantId = await resolveTenantIdUtil(req, csWechatId);
     if (!tenantId) return fail(res, 404, 'TARGET_NOT_FOUND', '解析不到所属租户');
+    const client = await namedPool.connect();
     try {
-      await pool.query(
+      await client.query('BEGIN');
+
+      // 1. SELECT 旧 status
+      const oldRes = await client.query(
+        `SELECT status FROM zenithjoy.crm_customers
+          WHERE tenant_id = $1::uuid AND cs_wechat_id = $2 AND contact = $3 AND deleted_at IS NULL
+          LIMIT 1`,
+        [tenantId, csWechatId, name],
+      );
+      const oldStatus: string | null = (oldRes.rows?.[0]?.status as string | undefined) ?? null;
+
+      // 2. upsert crm_customers.status
+      await client.query(
         `INSERT INTO zenithjoy.crm_customers (tenant_id, cs_wechat_id, contact, status, source, updated_at)
          VALUES ($1::uuid, $2, $3, $4, 'manual', now())
          ON CONFLICT (tenant_id, cs_wechat_id, contact) DO UPDATE SET status = $4, updated_at = now()`,
         [tenantId, csWechatId, name, st],
       );
+
+      // 3. 条件写历史：新客户（old=NULL）或状态真正变化（old !== new）
+      if (oldStatus === null || oldStatus !== st) {
+        // 用子查询取 customer_id，避免额外 round-trip；params 顺序:
+        // $1=tenant_id $2=customer_id(subquery) $3=cs_wechat_id $4=old_status $5=new_status
+        await client.query(
+          `INSERT INTO zenithjoy.crm_customer_status_history
+             (tenant_id, customer_id, old_status, new_status)
+           SELECT $1, id, $4, $5
+             FROM zenithjoy.crm_customers
+            WHERE tenant_id = $1::uuid AND cs_wechat_id = $3 AND contact = $2 LIMIT 1`,
+          [tenantId, name, csWechatId, oldStatus, st],
+        );
+      }
+
+      await client.query('COMMIT');
       return res.json({ success: true, status: st });
     } catch (err) {
+      await client.query('ROLLBACK').catch(() => {});
       return fail(res, 500, 'STATUS_FAILED', err instanceof Error ? err.message : 'unknown');
+    } finally {
+      client.release();
     }
   },
 );

@@ -24,6 +24,8 @@ export default defineConfig({
       '../../sprints/07032333-line02-dispatch-real-scheduling/tests/**/*.test.ts',
       // 抖音私信主动触达 Android 执行路径：resolveDevicePlatform + isDuplicateDmOutreachResult
       '../../sprints/07052218-douyin-dm-outreach-android/tests/*.test.ts',
+      // Line04 CRM 客户状态历史追踪：PUT /status 事务模式 + crm_customer_status_history（B1-B6）
+      '../../sprints/07081012-crm-status-history/tests/**/*.test.ts',
     ],
     exclude: ['node_modules/**', 'tests/integration/**', 'tests/ws1/**', 'tests/ws2/**', 'tests/ws3/**', 'tests/ws4/**', 'tests/ws5/**', 'tests/ws6/**'],
     coverage: {
