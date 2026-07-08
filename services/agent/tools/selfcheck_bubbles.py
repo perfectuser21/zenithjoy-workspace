@@ -37,6 +37,60 @@ TARGET = "文件传输助手"
 FIND_WINDOW_RETRIES = 6
 FIND_WINDOW_RETRY_DELAY_S = 12.0
 
+# 找会话列表 item 有界重试：先做几次廉价重试，覆盖极端情况下虚拟列表还没挂出来的瞬态。
+FIND_ITEM_RETRIES = 5
+FIND_ITEM_RETRY_DELAY_S = 2.0
+
+
+def find_target_item(descendants, target):
+    """纯函数（CI 可测）：在一批 ListItem 里找 name 以 target 开头的那个。
+
+    descendants：ListItem 对象序列，每个须有 element_info.name（缺失/异常时跳过该项）。
+    找不到返回 None。
+    """
+    for it in descendants:
+        try:
+            nm = it.element_info.name or ""
+        except Exception:
+            continue
+        if nm.startswith(target):
+            return it
+    return None
+
+
+def find_item_with_recovery(mw, target, retries, retry_delay_s, sleep_fn, reset_fn):
+    """真根因修法（2026-07-08 rog 实证，session-1 诊断亲眼确认）：先做几轮廉价重试
+    （覆盖极端渲染瞬态），仍找不到就调用 reset_fn（真机上是
+    listen_chat._reset_session_list_to_top）尝试恢复后再补查一次。
+
+    真根因不是渲染时序：上一轮 reply_in_chat 若发送成功但送达确认超时会
+    return False，跳过收尾的 _navigate_away，把窗口留在已打开的目标聊天面板；
+    这时 mw.descendants(ListItem) 枚举到的是聊天气泡（"[bubble-gate] <ts>"/
+    时间戳），不是会话列表条目，目标联系人自然永远"找不到"——纯重试没用，
+    等的是压根不会变化的错误视图，必须主动切 tab 强制视图重建。
+
+    纯逻辑（CI 可测，mw/sleep_fn/reset_fn 全部注入）：mw 只需支持
+    `descendants(control_type=...)`；reset_fn(mw) -> bool 模拟
+    _reset_session_list_to_top 的返回。
+    """
+    item = find_target_item(mw.descendants(control_type="ListItem"), target)
+    if item is not None:
+        return item, "first_try"
+    for i in range(retries):
+        sleep_fn(retry_delay_s)
+        item = find_target_item(mw.descendants(control_type="ListItem"), target)
+        if item is not None:
+            return item, f"retry_{i + 1}"
+    try:
+        if reset_fn(mw):
+            sleep_fn(1.0)
+            item = find_target_item(mw.descendants(control_type="ListItem"), target)
+            if item is not None:
+                return item, "reset_recovery"
+    except Exception:
+        pass
+    return None, "not_found"
+
 
 def classify_no_window(process_running: bool) -> tuple:
     """重试耗尽仍找不到 mmui 主窗口时，把「微信没跑」和「UIA 死区」分开报。
@@ -65,17 +119,6 @@ def _weixin_process_running() -> bool:
         return True  # 查不出进程时保守当作在跑 → 走 UIA_DEAD 分支（宁可报死区不误报没跑）
 
 
-def _find_mmui_window(desktop_cls):
-    for w in desktop_cls(backend="uia").windows():
-        try:
-            cls = w.element_info.class_name or ""
-        except Exception:
-            continue
-        if "mmui" in cls.lower():
-            return w
-    return None
-
-
 def _write(result: dict) -> None:
     try:
         with open(OUT_PATH, "w", encoding="utf-8") as f:
@@ -91,13 +134,19 @@ def main() -> int:
     }
     try:
         import listen_chat
-        from pywinauto import Desktop
+        import find_weixin
 
         # 先加载已发送历史（v1.0.98 防御）：本进程 reply_in_chat 会 _record_sent_text，
         # 不加载会把监听进程的历史文件覆盖成一条（2026-07-03 08:49 事故）。
         listen_chat._SENT_TEXTS[:] = listen_chat._load_sent_texts()
 
-        mw = _find_mmui_window(Desktop)
+        # 找主窗口必须用 find_weixin.get_main_window()（精确匹配 mmui::MainWindow /
+        # Qt5 frame class），不能自己重写一套宽松匹配。2026-07-08 rog 实证：旧代码
+        # 这里曾经是 `"mmui" in cls.lower()` 子串匹配，微信支持把某个聊天双击弹出成
+        # 独立小窗口，这类弹窗的 class name 里同样带"mmui"字样——宽松匹配把它错认成
+        # 主窗口，抓到的自然只有那个聊天的气泡（没有联系人列表/左侧导航），
+        # 会话列表永远"找不到"。get_main_window() 精确匹配主窗口 class，不会认错。
+        mw = find_weixin.get_main_window()
         if mw is None:
             # 有界重试：先设 SPI 屏幕阅读器标志（幂等），再等树/窗口就绪
             try:
@@ -106,7 +155,7 @@ def main() -> int:
                 pass
             for i in range(FIND_WINDOW_RETRIES):
                 time.sleep(FIND_WINDOW_RETRY_DELAY_S)
-                mw = _find_mmui_window(Desktop)
+                mw = find_weixin.get_main_window()
                 if mw is not None:
                     print(f"[bubble-gate] window found after retry {i + 1}")
                     break
@@ -116,15 +165,12 @@ def main() -> int:
             _write(result)
             return 1
 
-        item = None
-        for it in mw.descendants(control_type="ListItem"):
-            try:
-                nm = it.element_info.name or ""
-            except Exception:
-                continue
-            if nm.startswith(TARGET):
-                item = it
-                break
+        item, how = find_item_with_recovery(
+            mw, TARGET, FIND_ITEM_RETRIES, FIND_ITEM_RETRY_DELAY_S,
+            time.sleep, listen_chat._reset_session_list_to_top,
+        )
+        if item is not None and how != "first_try":
+            print(f"[bubble-gate] {TARGET} found via {how}")
         if item is None:
             result["err"] = f"session list 里找不到 {TARGET}"
             _write(result)
