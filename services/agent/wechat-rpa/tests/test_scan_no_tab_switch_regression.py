@@ -84,10 +84,12 @@ class TestResetAtomic:
     def test_reset_skips_when_wechat_button_missing(self):
         """找不到「微信」按钮 → 绝不点「通讯录」（不切去通讯录卡死），返回 False。"""
         mw = MagicMock()
-        def fake_find(buttons, tab, left_max=90):
+        # fix §2.I：fake_find 增加 win_left 参数（函数签名更新后需要）
+        def fake_find(buttons, tab, left_max=90, win_left=0):
             return (10, 20) if tab == "通讯录" else None   # 微信按钮找不到
         with patch.object(listen_chat, "_iter_all_controls", return_value=[]), \
              patch.object(listen_chat, "_find_left_nav_button_point", side_effect=fake_find), \
+             patch.object(listen_chat, "_force_foreground"), \
              patch.object(listen_chat, "_click_screen_point") as mock_click:
             result = listen_chat._reset_session_list_to_top(mw)
         assert result is False
@@ -96,11 +98,13 @@ class TestResetAtomic:
     def test_reset_switches_when_both_found(self):
         """两个按钮都找到 → 点「通讯录」再点「微信」，收尾在微信 tab。"""
         mw = MagicMock()
-        def fake_find(buttons, tab, left_max=90):
+        # fix §2.I：fake_find 增加 win_left 参数（函数签名更新后需要）
+        def fake_find(buttons, tab, left_max=90, win_left=0):
             return (10, 20) if tab == "通讯录" else (10, 50)
         clicked = []
         with patch.object(listen_chat, "_iter_all_controls", return_value=[]), \
              patch.object(listen_chat, "_find_left_nav_button_point", side_effect=fake_find), \
+             patch.object(listen_chat, "_force_foreground"), \
              patch.object(listen_chat, "_click_screen_point", side_effect=lambda mw, pt: clicked.append(pt) or True), \
              patch("time.sleep"):
             result = listen_chat._reset_session_list_to_top(mw)

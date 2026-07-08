@@ -1328,18 +1328,21 @@ def _filter_left_column_item_names(items: List[tuple], x_max: int = 460) -> List
 
 
 def _find_left_nav_button_point(
-    buttons: List[tuple], name: str, left_max: int = 90
+    buttons: List[tuple], name: str, left_max: int = 90, win_left: int = 0
 ) -> Optional[tuple]:
-    """在最左导航栏（rect.left < left_max）按 name 找按钮，返回其中心屏幕坐标点（纯函数）。
+    """在最左导航栏按 name 找按钮，返回其中心屏幕坐标点（纯函数）。
 
     入参 buttons = [(name, rect), ...]，rect 有 .left/.top/.right/.bottom。
-    用于切 tab 回顶：定位「通讯录」「微信」导航按钮（不写死坐标）。右侧同名控件（x>=left_max）不选。
+    用于切 tab 回顶：定位「通讯录」「微信」导航按钮（不写死坐标）。右侧同名控件不选。
+
+    win_left：主窗口左边界屏幕坐标（fix §2.I：r.left 是屏幕绝对坐标；窗口在屏幕中间时
+    r.left 永远 >= 90 导致永远找不到按钮。改为窗口相对坐标 r.left - win_left < left_max）。
     """
     for nm, r in buttons:
         if nm != name:
             continue
         try:
-            if r.left < left_max:
+            if r.left - win_left < left_max:
                 return ((r.left + r.right) // 2, (r.top + r.bottom) // 2)
         except AttributeError:
             continue
@@ -1744,36 +1747,77 @@ def _reset_session_list_to_top(mw: Any) -> bool:
     """把会话列表弹回真顶 = 切 tab：点左侧导航「通讯录」→ 再点「微信」（rog 真机唯一验证有效的回顶法）。
 
     真因：会话列表向上滚彻底失效（正 delta wheel / Home / Ctrl+Home / WM_VSCROLL SB_TOP / 拖滚动条
-    全试过不动）。切到通讯录再切回微信，会话列表重建并停在真顶。按钮用 UIA Button name + 左列 x<90
-    动态定位（不写死坐标），render 子窗口 client 坐标点击。失败吞掉返回 False（不拖垮扫描）。
+    全试过不动）。切到通讯录再切回微信，会话列表重建并停在真顶。按钮用 UIA Button name +
+    左列窗口相对 x<90 动态定位（不写死坐标）。失败吞掉返回 False（不拖垮扫描）。
+
+    fix §2.I：
+    1. 坐标改窗口相对（r.left - win_left < 90）——窗口在屏幕中间时绝对坐标永远 >=90。
+    2. 点击前 _force_foreground 拉前台——PostMessage 对 mmui 导航按钮不抢前台无效（两次截图实证）；
+       同时用 click_input() 真实鼠标注入，PostMessage 作兜底。
     """
     try:
-        buttons: List[tuple] = []
+        # 取窗口左边界 + hwnd（窗口相对坐标 + 拉前台用）
+        try:
+            win_left: int = mw.rectangle().left
+            main_hwnd = mw.element_info.handle
+        except Exception:
+            win_left = 0
+            main_hwnd = None
+
+        buttons_with_objs: List[Any] = []  # [(nm, rect, button_obj)]
         for b in _iter_all_controls(mw, "Button"):
             try:
                 nm = (b.element_info.name or "").strip()
                 r = b.rectangle()
             except Exception:
                 continue
-            buttons.append((nm, r))
+            buttons_with_objs.append((nm, r, b))
+
+        buttons: List[tuple] = [(nm, r) for nm, r, _ in buttons_with_objs]
+
         # 原子：先找齐「通讯录」+「微信」两个按钮再切。绝不"切去通讯录又找不到微信按钮回不来"——
         # 那会把微信卡在通讯录 tab、会话列表消失（回归根因）。任一按钮缺失 → 直接跳过不切。
-        pt_contacts = _find_left_nav_button_point(buttons, "通讯录", left_max=90)
-        pt_wechat = _find_left_nav_button_point(buttons, "微信", left_max=90)
+        pt_contacts = _find_left_nav_button_point(buttons, "通讯录", left_max=90, win_left=win_left)
+        pt_wechat = _find_left_nav_button_point(buttons, "微信", left_max=90, win_left=win_left)
         if pt_contacts is None or pt_wechat is None:
             _log(
                 f"_reset_session_list_to_top: 导航按钮不全("
                 f"通讯录={pt_contacts is not None},微信={pt_wechat is not None})，跳过切tab(不卡死会话列表)"
             )
             return False
+
+        # 找到按钮对象（用于 click_input 真实注入）
+        def _find_btn_obj(name: str) -> Any:
+            for nm, r, obj in buttons_with_objs:
+                if nm == name and r.left - win_left < 90:
+                    return obj
+            return None
+
+        btn_contacts = _find_btn_obj("通讯录")
+        btn_wechat = _find_btn_obj("微信")
+
+        # 拉前台（click_input 依赖前台；PostMessage 对 mmui 导航按钮不拉前台无效）
+        if main_hwnd:
+            _force_foreground(main_hwnd)
+
+        def _nav_click(btn_obj: Any, pt: tuple) -> bool:
+            """先 click_input，失败回退 PostMessage。"""
+            if btn_obj is not None:
+                try:
+                    btn_obj.click_input()
+                    return True
+                except Exception:
+                    pass
+            return _click_screen_point(mw, pt)
+
         # 切通讯录 → 切回微信；务必收尾在微信 tab（点不回就再试一次，绝不留在通讯录）。
-        if not _click_screen_point(mw, pt_contacts):
+        if not _nav_click(btn_contacts, pt_contacts):
             return False
         time.sleep(0.3)
-        ok = _click_screen_point(mw, pt_wechat)
+        ok = _nav_click(btn_wechat, pt_wechat)
         time.sleep(0.3)
         if not ok:
-            ok = _click_screen_point(mw, pt_wechat)  # 兜底重试，确保回到微信
+            ok = _nav_click(btn_wechat, pt_wechat)  # 兜底重试，确保回到微信
             time.sleep(0.3)
         return ok
     except Exception as exc:
@@ -2070,6 +2114,48 @@ def _force_foreground(hwnd: int) -> None:
             _u32.SetForegroundWindow(hwnd)
         except Exception:
             pass
+
+
+# 欢迎回来屏自愈参数（§2.J）
+_WELCOME_BACK_COOLDOWN = 30.0   # 两次自愈尝试的最小间隔（秒）
+_WELCOME_BACK_WAIT_SEC = 15     # 点击"进入微信"后等主窗口出现的最大秒数
+
+
+def _try_welcome_back_click() -> bool:
+    """欢迎回来屏自愈（§2.J）：识别 mmui::LoginWindow title='微信' 含「进入微信」按钮
+    → 拉前台 + click_input 真实注入。
+
+    返回 True = 成功发出点击；False = 不是欢迎回来屏 / 找不到按钮 / 异常。
+    调用方负责随后等待主窗口出现（≤_WELCOME_BACK_WAIT_SEC）。
+
+    exp8 实证：_force_foreground → button.click_input() → ~10s 后 MainWindow 出现。
+    PostMessage 和 InvokePattern 对 mmui 自绘控件无效（见 §2.J 踩坑三条）。
+    """
+    try:
+        from pywinauto import Desktop
+        for w in Desktop(backend="uia").windows():
+            try:
+                if w.element_info.class_name != "mmui::LoginWindow":
+                    continue
+                if (w.element_info.name or "") != "微信":
+                    continue
+                # 查"进入微信"按钮（欢迎回来屏才有；真正隐私锁/扫码屏没有此按钮）
+                for child in w.descendants(control_type="Button"):
+                    try:
+                        if (child.element_info.name or "").strip() == "进入微信":
+                            _hwnd_login = w.element_info.handle
+                            if _hwnd_login:
+                                _force_foreground(_hwnd_login)
+                            child.click_input()
+                            _log("[自愈B] 欢迎回来屏已找到「进入微信」按钮，已拉前台+click_input")
+                            return True
+                    except Exception:
+                        continue
+            except Exception:
+                continue
+    except Exception as exc:
+        _log(f"_try_welcome_back_click: 异常: {exc}")
+    return False
 
 
 def _uia_send(uia_edit: Any, mw: Any, reply_text: str) -> bool:
@@ -4082,6 +4168,8 @@ def run_real_listen(args: argparse.Namespace) -> int:
     last_error: Optional[str] = None
     # 自愈件4：最近一次出站/回复成功送达的时间戳（ms），写进健康文件供模块/中台看模块真实健康
     last_delivery_ts: Optional[int] = None
+    # 自愈B：欢迎回来屏最近一次自动点击时刻（冷却 _WELCOME_BACK_COOLDOWN s，避免每轮重试）
+    last_welcome_back_click: float = 0.0
     # 微信4.0 mmui 控件树需设屏幕阅读器标志激活 UIAutomation 后才暴露、且会失效：启动先激活一次，失效再按冷却补激活
     uia_reactivate_interval = _UIA_REACTIVATE_INTERVAL
     _activate_uia()
@@ -4192,6 +4280,20 @@ def run_real_listen(args: argparse.Namespace) -> int:
                 sessions_seen = 0
                 tree_size: Optional[int] = None  # mmui::MainWindow 整树控件数（塌缩自愈判定用）
                 if mw is not None:
+                    # [自愈K §2.K] 非最大化检测 → 单栏模式（宽<~700px 会话列表整个不在 UIA 树里
+                    # sessions 永远 0 或读到聊天气泡假数）→ SW_MAXIMIZE 自愈+告警。
+                    # 微信重启/OTA 后主窗口默认非最大化，每次自愈重启后此检测自动兜底。
+                    try:
+                        import ctypes as _ct_k
+                        _hwnd_k = mw.element_info.handle
+                        if _hwnd_k and not _ct_k.windll.user32.IsZoomed(_hwnd_k):
+                            _ct_k.windll.user32.ShowWindow(_hwnd_k, 3)  # SW_MAXIMIZE=3
+                            _log(
+                                "[自愈K] ⚠️ 检测到微信非最大化（单栏模式：会话列表不在 UIA 树，"
+                                "sessions 读数失真），已 SW_MAXIMIZE 自愈，下轮扫描生效"
+                            )
+                    except Exception as _ke:
+                        _log(f"[自愈K] IsZoomed 检测异常: {_ke}")
                     try:
                         sessions_seen = len(mw.descendants(control_type="ListItem"))
                         tree_size = len(mw.descendants())
@@ -4260,10 +4362,42 @@ def run_real_listen(args: argparse.Namespace) -> int:
                     continue
 
             if mw is None:
-                # 隐私锁屏：账号已登录但微信屏幕被锁，无法操作 → 等待用户手动解锁，不做 UIA 激活
+                # is_privacy_locked() 覆盖两种 mmui::LoginWindow title='微信' 状态：
+                # ① 真正隐私锁屏（需密码）；② 欢迎回来屏（含「进入微信」按钮，不需密码）。
+                # [自愈B §2.J] 先检测欢迎回来屏并自动点击，再等待主窗口；真隐私锁按钮不存在则继续等。
                 if screen_locked:
-                    time.sleep(args.interval)
-                    continue
+                    if now - last_welcome_back_click >= _WELCOME_BACK_COOLDOWN:
+                        _wb_clicked = _try_welcome_back_click()
+                        if _wb_clicked:
+                            last_welcome_back_click = now
+                            _log(f"[自愈B] 欢迎回来屏：已点击「进入微信」，等待主窗口（最多{_WELCOME_BACK_WAIT_SEC}s）…")
+                            for _ in range(_WELCOME_BACK_WAIT_SEC):
+                                time.sleep(1)
+                                try:
+                                    mw = get_main_window()
+                                except Exception:
+                                    mw = None
+                                if mw is not None:
+                                    _log("[自愈B] ✅ 欢迎回来屏自愈成功，主窗口已出现")
+                                    # 补 SW_MAXIMIZE（重启后主窗口默认非最大化，接 §2.K）
+                                    try:
+                                        import ctypes as _ct_b
+                                        _hwnd_b = mw.element_info.handle
+                                        if _hwnd_b:
+                                            _ct_b.windll.user32.ShowWindow(_hwnd_b, 3)  # SW_MAXIMIZE=3
+                                    except Exception:
+                                        pass
+                                    break
+                            else:
+                                _log(
+                                    f"[自愈B] ⚠️ 点击「进入微信」后 {_WELCOME_BACK_WAIT_SEC}s 主窗口未出现，"
+                                    "可能是真隐私锁/点击未生效，请检查客服机状态"
+                                )
+                                mw = None
+                    if mw is None:
+                        # 真隐私锁屏或自愈失败：等待用户手动解锁
+                        time.sleep(args.interval)
+                        continue
 
                 # 微信既没有主窗口也没有登录窗口 → 进程未启动 → 自动拉起 Weixin.exe（冷却 120s）
                 if not login and now - last_wechat_launch >= wechat_launch_cooldown:
