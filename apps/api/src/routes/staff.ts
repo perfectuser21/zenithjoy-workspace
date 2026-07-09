@@ -41,11 +41,16 @@ router.post('/skill-eval/upload', upload.single('file'), async (req, res): Promi
   }
 
   const submitter = typeof req.headers['x-user-email'] === 'string' ? req.headers['x-user-email'] : '';
+  // 来源平台 + 归属线：前端下拉选择传来的字段（multer 把非 file 字段放进 req.body）
+  const platform = typeof req.body?.platform === 'string' ? req.body.platform : '';
+  const journeyId = typeof req.body?.journey_id === 'string' ? req.body.journey_id : '';
 
   const fd = new globalThis.FormData();
   fd.append('file', new Blob([req.file.buffer], { type: req.file.mimetype }), req.file.originalname);
   fd.append('skill_name', deriveSkillName(req.file.originalname));
   fd.append('submitter', submitter);
+  fd.append('platform', platform);
+  fd.append('journey_id', journeyId);
 
   try {
     const upstream = await axios.post(`${SKILL_EVAL_BASE()}/upload`, fd, {

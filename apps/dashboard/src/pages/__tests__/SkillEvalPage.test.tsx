@@ -32,6 +32,14 @@ function makeFile(name = 'skill.zip') {
   return new File(['zip-bytes'], name, { type: 'application/zip' });
 }
 
+// 原始独立页面（packages/brain/src/skill-eval-page/index.html）来源平台+归属线
+// 是两个必填下拉选择，ZenithJoy 版本上线时漏掉了——这里选好这两项再提交，
+// 跟真实用户操作顺序一致
+function selectPlatformAndJourney() {
+  fireEvent.change(screen.getByTestId('skill-eval-platform'), { target: { value: 'Claude' } });
+  fireEvent.change(screen.getByTestId('skill-eval-journey'), { target: { value: 'line00' } });
+}
+
 describe('SkillEvalPage — X-User-Email 鉴权头', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
@@ -55,6 +63,7 @@ describe('SkillEvalPage — X-User-Email 鉴权头', () => {
 
     const input = screen.getByTestId('skill-eval-upload') as HTMLInputElement;
     fireEvent.change(input, { target: { files: [makeFile()] } });
+    selectPlatformAndJourney();
     fireEvent.click(screen.getByTestId('skill-eval-submit'));
 
     await waitFor(() => expect(fetchSpy).toHaveBeenCalled());
@@ -87,6 +96,7 @@ describe('SkillEvalPage — X-User-Email 鉴权头', () => {
 
     const input = screen.getByTestId('skill-eval-upload') as HTMLInputElement;
     fireEvent.change(input, { target: { files: [makeFile()] } });
+    selectPlatformAndJourney();
     fireEvent.click(screen.getByTestId('skill-eval-submit'));
 
     await waitFor(() => expect(fetchSpy).toHaveBeenCalledTimes(2), { timeout: 5000 });
@@ -120,6 +130,7 @@ describe('SkillEvalPage — X-User-Email 鉴权头', () => {
 
     const input = screen.getByTestId('skill-eval-upload') as HTMLInputElement;
     fireEvent.change(input, { target: { files: [makeFile()] } });
+    selectPlatformAndJourney();
     fireEvent.click(screen.getByTestId('skill-eval-submit'));
 
     await waitFor(() => expect(fetchSpy).toHaveBeenCalledTimes(3), { timeout: 5000 });
@@ -153,6 +164,7 @@ describe('SkillEvalPage — X-User-Email 鉴权头', () => {
     render(<SkillEvalPage />);
     const input = screen.getByTestId('skill-eval-upload') as HTMLInputElement;
     fireEvent.change(input, { target: { files: [makeFile()] } });
+    selectPlatformAndJourney();
     fireEvent.click(screen.getByTestId('skill-eval-submit'));
 
     // 70 秒 elapsed 检查发生在第二次真实轮询（POLL_INTERVAL_MS=3s 后），等它跑完
@@ -166,4 +178,60 @@ describe('SkillEvalPage — X-User-Email 鉴权头', () => {
 
     dateNowSpy.mockRestore();
   }, 25000);
+
+  // Bug: 用户反馈"点不了全图，里面东西也移不了"——报告 iframe 的 sandbox="" 是
+  // 最严格设置，把下游报告里 ⛶全图/拖拽/缩放用的 <script> 全部禁用了（含
+  // <dialog>.showModal()，需要 allow-modals 才不抛异常）。
+  it('[BEHAVIOR] 报告 iframe 允许脚本执行（全图/拖拽/缩放交互恢复，不再用最严格 sandbox=""）', async () => {
+    vi.spyOn(global, 'fetch')
+      .mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({ data: { job_id: 'job-4' } }) } as Response)
+      .mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({ data: { job_id: 'job-4', status: 'completed' } }) } as Response)
+      .mockResolvedValueOnce({ ok: true, status: 200, text: async () => '<html><body>ok</body></html>' } as Response);
+
+    render(<SkillEvalPage />);
+    const input = screen.getByTestId('skill-eval-upload') as HTMLInputElement;
+    fireEvent.change(input, { target: { files: [makeFile()] } });
+    selectPlatformAndJourney();
+    fireEvent.click(screen.getByTestId('skill-eval-submit'));
+
+    await waitFor(() => expect(screen.getByTestId('skill-eval-report')).toBeTruthy(), { timeout: 5000 });
+    const iframe = screen.getByTestId('skill-eval-report-frame') as HTMLIFrameElement;
+    expect(iframe.getAttribute('sandbox')).toBe('allow-scripts allow-modals');
+  });
+
+  // Bug: 原始独立页面（packages/brain/src/skill-eval-page/index.html）"来源平台"+
+  // "归属线"是两个必填下拉选择，ZenithJoy 版本上线时漏掉了，用户反馈"上传也是一个
+  // 地方要选东西的"
+  it('[BEHAVIOR] 未选来源平台/归属线时提交显示校验错误，不发起上传请求', async () => {
+    const fetchSpy = vi.spyOn(global, 'fetch');
+    render(<SkillEvalPage />);
+    const input = screen.getByTestId('skill-eval-upload') as HTMLInputElement;
+    fireEvent.change(input, { target: { files: [makeFile()] } });
+    // 不选平台/归属线，直接提交
+    fireEvent.click(screen.getByTestId('skill-eval-submit'));
+
+    await waitFor(() => expect(screen.getByTestId('skill-eval-error')).toBeTruthy());
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it('[BEHAVIOR] 上传请求携带用户选择的 platform + journey_id 字段', async () => {
+    const fetchSpy = vi.spyOn(global, 'fetch').mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ data: { job_id: 'job-5' } }),
+    } as Response);
+
+    render(<SkillEvalPage />);
+    const input = screen.getByTestId('skill-eval-upload') as HTMLInputElement;
+    fireEvent.change(input, { target: { files: [makeFile()] } });
+    fireEvent.change(screen.getByTestId('skill-eval-platform'), { target: { value: 'Codex' } });
+    fireEvent.change(screen.getByTestId('skill-eval-journey'), { target: { value: 'line04' } });
+    fireEvent.click(screen.getByTestId('skill-eval-submit'));
+
+    await waitFor(() => expect(fetchSpy).toHaveBeenCalled());
+    const [, init] = fetchSpy.mock.calls[0];
+    const body = (init as RequestInit)?.body as FormData;
+    expect(body.get('platform')).toBe('Codex');
+    expect(body.get('journey_id')).toBe('line04');
+  });
 });

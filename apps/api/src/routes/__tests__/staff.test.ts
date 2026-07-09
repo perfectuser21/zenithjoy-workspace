@@ -87,6 +87,24 @@ describe('staff routes — 下游 Cecelia skill-eval 契约转发', () => {
     expect((formData as FormData).get('submitter')).toBe('staff@test.com');
   });
 
+  // Bug: 原始独立页面（packages/brain/src/skill-eval-page/index.html）有"来源平台"+
+  // "归属线"两个必填下拉选择，ZenithJoy 版本此前完全没转发这两个字段
+  it('[BEHAVIOR] 上传请求转发给下游时携带前端选择的 platform + journey_id 字段', async () => {
+    axiosPostMock.mockResolvedValue({ status: 200, data: { task_id: 'real-task-6', queue_position: 0 } });
+
+    await request(app)
+      .post('/api/staff/skill-eval/upload')
+      .set('X-User-Email', 'staff@test.com')
+      .field('platform', 'Codex')
+      .field('journey_id', 'line04')
+      .attach('file', Buffer.from('zip-bytes'), 'my-skill.zip');
+
+    expect(axiosPostMock).toHaveBeenCalledTimes(1);
+    const [, formData] = axiosPostMock.mock.calls[0];
+    expect((formData as FormData).get('platform')).toBe('Codex');
+    expect((formData as FormData).get('journey_id')).toBe('line04');
+  });
+
   it('[BEHAVIOR] 上传响应把下游的 task_id 映射成前端期望的 data.job_id', async () => {
     axiosPostMock.mockResolvedValue({ status: 200, data: { task_id: 'real-task-2', queue_position: 1 } });
 
