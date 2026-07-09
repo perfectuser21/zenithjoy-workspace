@@ -14,11 +14,19 @@ import axios from 'axios';
 import { randomUUID } from 'crypto';
 import { staffGuard } from '../middleware/staff';
 import { transition, type SkillDraftStatus } from '../services/skillDraftStateMachine';
+import pool from '../db/connection';
 
 const router = Router();
 router.use(staffGuard);
 
-// 内存存储（thin 阶段——DB 连接在测试中被 mock）
+// 草稿数据结构。真实持久化在 zenithjoy.skill_drafts 表（见
+// apps/api/db/migrations/20260710_070000_create_skill_drafts.sql）。
+//
+// 同时维护一份进程内 Map 作读写缓存：单个 API 进程处理同一草稿的连续请求
+// （创建 → 发消息 → 读取历史）时优先读本地缓存，DB 写入是"写穿透"（write-through）
+// 且失败不阻塞请求——SSE 转发场景下 mmv 网络本就不稳定，DB 短暂故障不该让整条
+// 对话链路跟着挂掉。真实 DB 记录可通过 `psql ... SELECT * FROM zenithjoy.skill_drafts`
+// 独立核对（不依赖 API 进程内缓存）。
 interface SkillDraft {
   id: string;
   status: SkillDraftStatus;
@@ -44,10 +52,88 @@ function createDraft(): SkillDraft {
   };
 }
 
+async function insertDraftRow(draft: SkillDraft): Promise<void> {
+  try {
+    await pool.query(
+      `INSERT INTO zenithjoy.skill_drafts (id, session_id, messages_json, status, job_id, created_at, updated_at)
+       VALUES ($1, $2, $3::jsonb, $4, $5, $6, $7)
+       ON CONFLICT (id) DO NOTHING`,
+      [
+        draft.id,
+        draft.session_id,
+        JSON.stringify(draft.messages_json),
+        draft.status,
+        draft.job_id,
+        draft.created_at,
+        draft.updated_at,
+      ]
+    );
+  } catch (err) {
+    console.error('[skill-drafts] DB insert 失败（进程内缓存仍可用）:', err);
+  }
+}
+
+async function updateDraftRow(draft: SkillDraft): Promise<void> {
+  try {
+    await pool.query(
+      `UPDATE zenithjoy.skill_drafts
+       SET session_id = $2, messages_json = $3::jsonb, status = $4, job_id = $5, updated_at = $6
+       WHERE id = $1`,
+      [
+        draft.id,
+        draft.session_id,
+        JSON.stringify(draft.messages_json),
+        draft.status,
+        draft.job_id,
+        draft.updated_at,
+      ]
+    );
+  } catch (err) {
+    console.error('[skill-drafts] DB update 失败（进程内缓存仍可用）:', err);
+  }
+}
+
+interface SkillDraftRow {
+  id: string;
+  session_id: string | null;
+  messages_json: SkillDraft['messages_json'];
+  status: SkillDraftStatus;
+  job_id: string | null;
+  created_at: string | Date;
+  updated_at: string | Date;
+}
+
+async function fetchDraftRow(id: string): Promise<SkillDraft | null> {
+  try {
+    const result = await pool.query<SkillDraftRow>(
+      `SELECT id, session_id, messages_json, status, job_id, created_at, updated_at
+       FROM zenithjoy.skill_drafts WHERE id = $1`,
+      [id]
+    );
+    const row = result?.rows?.[0];
+    if (!row) return null;
+    return {
+      id: row.id,
+      status: row.status,
+      session_id: row.session_id,
+      messages_json: row.messages_json ?? [],
+      job_id: row.job_id,
+      created_at:
+        row.created_at instanceof Date ? row.created_at.toISOString() : String(row.created_at),
+      updated_at:
+        row.updated_at instanceof Date ? row.updated_at.toISOString() : String(row.updated_at),
+    };
+  } catch (err) {
+    console.error('[skill-drafts] DB 读取失败（回退进程内缓存）:', err);
+    return null;
+  }
+}
+
 // POST / — 创建草稿
 router.post('/', (req, res): void => {
   const draft = createDraft();
   drafts.set(draft.id, draft);
+  void insertDraftRow(draft);
   res.status(201).json({
     success: true,
     data: {
@@ -60,10 +146,19 @@ router.post('/', (req, res): void => {
 });
 
 // GET /:id — 读取草稿
-router.get('/:id', (req, res): void => {
-  const draft = drafts.get(req.params.id);
+router.get('/:id', async (req, res): Promise<void> => {
+  let draft = drafts.get(req.params.id);
   if (!draft) {
-    // 返回空草稿（thin 阶段，不查真实 DB）
+    // 进程内缓存未命中（跨进程/重启后）→ 回退查真实 DB
+    const dbDraft = await fetchDraftRow(req.params.id);
+    if (dbDraft) {
+      draft = dbDraft;
+      drafts.set(draft.id, draft);
+    }
+  }
+
+  if (!draft) {
+    // 草稿确实不存在（前端首次打开、localStorage 里还没有 draft_id）
     res.status(200).json({
       success: true,
       data: {
@@ -95,6 +190,7 @@ router.post('/:id/chat', (req, res): void => {
   if (draft && message) {
     draft.messages_json.push({ role: 'user', content: message });
     draft.updated_at = new Date().toISOString();
+    void updateDraftRow(draft);
   }
 
   // 设置 SSE 响应头
@@ -104,6 +200,9 @@ router.post('/:id/chat', (req, res): void => {
   res.flushHeaders();
 
   const sessionId = draft?.session_id ?? randomUUID();
+  if (draft && !draft.session_id) {
+    draft.session_id = sessionId;
+  }
 
   // spawn SSH 转发到 mmv
   const child = spawn('ssh', [
@@ -132,6 +231,7 @@ router.post('/:id/chat', (req, res): void => {
       if (draft && aiReply) {
         draft.messages_json.push({ role: 'assistant', content: aiReply });
         draft.updated_at = new Date().toISOString();
+        void updateDraftRow(draft);
       }
       res.write('event: done\n');
       res.write('data: {}\n\n');
@@ -187,6 +287,7 @@ router.post('/:id/generate', async (req, res): Promise<void> => {
   if (draft) {
     draft.status = transition(draft.status, 'GENERATE');
     draft.updated_at = new Date().toISOString();
+    void updateDraftRow(draft);
   }
 
   try {
@@ -204,6 +305,7 @@ router.post('/:id/generate', async (req, res): Promise<void> => {
       draft.status = transition(draft.status, 'DONE');
       draft.job_id = jobId;
       draft.updated_at = new Date().toISOString();
+      void updateDraftRow(draft);
     }
 
     res.status(200).json({
@@ -215,6 +317,7 @@ router.post('/:id/generate', async (req, res): Promise<void> => {
     if (draft) {
       draft.status = transition(draft.status, 'ERROR');
       draft.updated_at = new Date().toISOString();
+      void updateDraftRow(draft);
     }
 
     res.status(500).json({
