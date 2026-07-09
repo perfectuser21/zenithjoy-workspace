@@ -4,10 +4,14 @@ name: Golden Path 4 — Private AI Wechat Smoke
 # Notion Journey: https://www.notion.so/35ac40c2ba6381af-af97-e3bc8e3b0fb4
 # Sprint:         sprints/sprint-d-path4-private-ai-thin/contract-dod.md
 #
+# ⚠️ 本 workflow 全部 job 在 ubuntu-latest 云机上跑，REAL_PUBLISH=0（dryrun）。
+#    不接触真实微信账号 / 真实 RPA 窗口 / 真实发布。
+#    真机验收（REAL_PUBLISH=1 真扫码 + 真发）须由 Lead 手动在 xian-rog 执行，
+#    证据归档至 .agent-knowledge/ 后由 lead-evidence-format-check workflow 校验格式。
+#
 # 6 个 ws-level job (ws1..ws6) 独立跑各自短 smoke；
 # 最终 job golden-path-4-smoke 用 needs:[ws1..ws5] enforce 依赖（合同 r1 #14），
 # 跑完整 6-step golden-path-4-smoke.sh（CI 默认 REAL_PUBLISH=0 dryrun）。
-# Lead 自验在 rog-xian REAL_PUBLISH=1 真扫码 + 真发，由 lead-acceptance-check workflow 跑。
 
 on:
   push:
@@ -70,7 +74,8 @@ jobs:
         run: bash .github/workflows/scripts/smoke/path4-sprint-1-ws4-smoke.sh
 
   ws5:
-    name: ws5 — 飞书审批 + Python wechat_rpa 真发 + 频控
+    # ⚠️ 名称曾含"真发"——已更正：本 job 仅跑 REAL_PUBLISH=0 dryrun + 频控静态验证，无真实 RPA 发布。
+    name: ws5 — wechat_rpa dryrun 频控（REAL_PUBLISH=0，非真发）
     runs-on: ubuntu-latest
     timeout-minutes: 8
     steps:
@@ -79,7 +84,7 @@ jobs:
         with: { node-version: '20' }
       - uses: actions/setup-python@v5
         with: { python-version: '3.11' }
-      - name: Run ws5 smoke
+      - name: Run ws5 smoke (REAL_PUBLISH=0 dryrun)
         run: bash .github/workflows/scripts/smoke/path4-sprint-1-ws5-smoke.sh
 
   agent-real-script:
@@ -96,7 +101,9 @@ jobs:
         run: bash .github/workflows/scripts/smoke/wechat-rpa-real-agent-smoke.sh
 
   golden-path-4-smoke:
-    name: Golden Path 4 — Full 6-step E2E Smoke
+    # ⚠️ 云机 dryrun：DB/API 不可达时脚本静默 SKIP，不等同于真实端到端验收。
+    #    真机 E2E（REAL_PUBLISH=1）须 Lead 在 xian-rog 手动跑并归档证据。
+    name: Golden Path 4 — Full 6-step Dryrun Smoke（ubuntu 云机，REAL_PUBLISH=0）
     runs-on: ubuntu-latest
     timeout-minutes: 10
     # 合同 r1 #14：ws1..ws5 全绿才跑完整端到端
@@ -107,6 +114,9 @@ jobs:
         with: { node-version: '20' }
       - uses: actions/setup-python@v5
         with: { python-version: '3.11' }
+      - name: "[WARNING] 本步骤为 dryrun，不验证真实发布"
+        run: |
+          echo "::warning::本 job 在 ubuntu 云机跑 REAL_PUBLISH=0 dryrun；DB/API 不可达时部分断言被 SKIP。真实发布验收须 Lead 在 xian-rog 执行并归档证据。"
       - name: Run full golden-path-4-smoke (REAL_PUBLISH=0 dryrun)
         env:
           REAL_PUBLISH: '0'

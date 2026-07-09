@@ -1,4 +1,10 @@
-name: lead-acceptance-check
+name: lead-evidence-format-check
+
+# ⚠️ 本 workflow 仅做「证据文件格式校验」，在 ubuntu 云机上跑 grep 检查。
+#    它不等于真机验收，不证明 Lead 真的在 xian-rog 上走过 REAL_PUBLISH=1 的完整流程。
+#    真机验收本身须 Lead 手动执行（RPA 真扫码 + 真发 + 截图/URL 存档），
+#    证据归档后本 workflow 才能校验其格式完整性。
+#    原名 lead-acceptance-check 易误读为"验收已完成"，故更名为 lead-evidence-format-check。
 
 on:
   pull_request:
@@ -8,11 +14,15 @@ on:
       - '.github/workflows/lead-acceptance-check.yml'
 
 jobs:
-  check:
+  format-check:
+    name: Lead 证据格式校验（ubuntu grep，非真机验收）
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Validate lead acceptance evidence files
+      - name: "[WARNING] 仅校验证据文件格式，不验证真机行为"
+        run: |
+          echo "::warning::本步骤只做 grep 格式检查（URL 存在 / 扫码字眼 / 无预置 cookie）。真机 RPA 行为须 Lead 在 xian-rog 手动验证后归档证据，本 CI 无法替代。"
+      - name: Validate lead acceptance evidence file format
         run: |
           for f in .agent-knowledge/golden-path-1/lead-acceptance-sprint-*.md; do
             [ -f "$f" ] || continue

@@ -35,11 +35,12 @@ concurrency:
 
 jobs:
   keyword-comment-smoke:
-    name: Line02 关键词→评论 smoke（xian-rog 真机）
+    # ⚠️ continue-on-error: true — runner 以 SYSTEM 账号跑时 DPAPI 无法解密抖音 cookies，
+    #    smoke 必然失败但结果被吞成绿灯。这不等于测试通过，只是「已知阻塞，暂不卡门」。
+    #    根因修复：需 PsExec -i 1 以交互式用户身份启动 runner（见 TODO #dpapi-fix）。
+    name: Line02 关键词→评论 smoke（xian-rog 真机，DPAPI 待修 → continue-on-error）
     runs-on: [self-hosted, wechat-capable]
     timeout-minutes: 10
-    # CI runner 以 SYSTEM 账号运行，Douyin cookies 用 asus DPAPI 加密无法解密
-    # 会话不可用时 skip 而不阻塞 PR（需 PsExec -i 1 解决，见 TODO 注释）
     continue-on-error: true
 
     defaults:
@@ -51,6 +52,11 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+
+      - name: "[WARNING] DPAPI 已知阻塞 — 本 job 结果不可信"
+        shell: bash
+        run: |
+          echo "::warning::runner 以 SYSTEM 账号运行，asus DPAPI 无法解密抖音 cookies。本 job 预计失败并被 continue-on-error 吞掉，CI 绿灯≠smoke 通过。根因修复见 TODO #dpapi-fix（PsExec -i 1）。"
 
       - name: 确认 runner 环境
         shell: bash
