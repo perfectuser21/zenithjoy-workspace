@@ -9,12 +9,21 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { staffGuard } from './staff';
 
-function makeReq(headers: Record<string, string> = {}): any {
+interface FakeReq {
+  headers: Record<string, string>;
+}
+
+interface FakeRes {
+  status: ReturnType<typeof vi.fn>;
+  json: ReturnType<typeof vi.fn>;
+}
+
+function makeReq(headers: Record<string, string> = {}): FakeReq {
   return { headers };
 }
 
-function makeRes(): any {
-  const res: any = {};
+function makeRes(): FakeRes {
+  const res = {} as FakeRes;
   res.status = vi.fn(() => res);
   res.json = vi.fn(() => res);
   return res;
