@@ -11,6 +11,7 @@ import { LogOut, PanelLeftClose, PanelLeft, Sun, Moon, Monitor } from 'lucide-re
 // 配置驱动
 import { getAutopilotNavGroups, filterNavGroups, additionalRoutes } from './config/navigation.config';
 import DynamicRouter from './components/DynamicRouter';
+import { isFullBleedPath } from './lib/full-bleed-routes';
 // Context
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { ThemeProvider, useTheme } from './contexts/ThemeContext';
@@ -84,7 +85,7 @@ function AppContent() {
   });
 
   // 全宽独立页面（不渲染 sidebar / header / p-8）
-  const isFullBleed = /^\/content-factory\/[^/]+\/output\/?$/.test(location.pathname);
+  const isFullBleed = isFullBleedPath(location.pathname);
 
   // 配置或认证加载中时显示加载状态
   if (instanceLoading || authLoading) {
