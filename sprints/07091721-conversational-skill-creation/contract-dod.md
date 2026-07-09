@@ -2,14 +2,14 @@
 
 ## [BEHAVIOR] 验收断言（至少6条）
 
-- [ ] [BEHAVIOR] 1: POST /api/staff/skill-drafts 返回 HTTP 201，body 含 `data.id`（UUID）且 `data.status === "chatting"`；DB skill_drafts 表可查到该记录
-- [ ] [BEHAVIOR] 2: GET /api/staff/skill-drafts/:id 返回 HTTP 200，body 含 `data.messages_json`（数组），发 1 条消息后再 GET，messages_json.length === 2（用户消息 + AI 回复）
-- [ ] [BEHAVIOR] 3: POST /api/staff/skill-drafts/:id/chat 响应头 Content-Type 包含 `text/event-stream`；mock SSH 固定输出下，至少收到 1 条 `data:` 行且最后收到 `event: done` 关闭连接
-- [ ] [BEHAVIOR] 4: SSH 超时（mock 10s 无输出）时，/chat 端点发送 `event: error\ndata: {"message":"AI 暂时连不上，稍后重试"}\n\n` 并关闭 SSE 连接
-- [ ] [BEHAVIOR] 5: POST /api/staff/skill-drafts/:id/generate 完成后，DB 中该 draft 的 status='done' 且 job_id='gen-job-001'（mock upload 返回值）
-- [ ] [BEHAVIOR] 6: skill_drafts 状态机四条路径全通过 unit 断言：idle→chatting、chatting→generating、generating→done、generating→error
-- [ ] [BEHAVIOR] 7: 所有 /api/staff/skill-drafts/* 端点在无认证头时返回 403 `{ error: { code: "FORBIDDEN" } }`
-- [ ] [BEHAVIOR] 8: Playwright E2E（windows_cloud）Golden Path 全通过：Tab 可见 → 气泡渲染 → "正在生成..." 出现 → 最终 URL 含 `?job_id=gen-job-001`
+- [x] [BEHAVIOR] 1: POST /api/staff/skill-drafts 返回 HTTP 201，body 含 `data.id`（UUID）且 `data.status === "chatting"`；DB skill_drafts 表可查到该记录
+- [x] [BEHAVIOR] 2: GET /api/staff/skill-drafts/:id 返回 HTTP 200，body 含 `data.messages_json`（数组），发 1 条消息后再 GET，messages_json.length === 2（用户消息 + AI 回复）
+- [x] [BEHAVIOR] 3: POST /api/staff/skill-drafts/:id/chat 响应头 Content-Type 包含 `text/event-stream`；mock SSH 固定输出下，至少收到 1 条 `data:` 行且最后收到 `event: done` 关闭连接
+- [x] [BEHAVIOR] 4: SSH 超时（mock 10s 无输出）时，/chat 端点发送 `event: error\ndata: {"message":"AI 暂时连不上，稍后重试"}\n\n` 并关闭 SSE 连接
+- [x] [BEHAVIOR] 5: POST /api/staff/skill-drafts/:id/generate 完成后，DB 中该 draft 的 status='done' 且 job_id='gen-job-001'（mock upload 返回值）
+- [x] [BEHAVIOR] 6: skill_drafts 状态机四条路径全通过 unit 断言：idle→chatting、chatting→generating、generating→done、generating→error
+- [x] [BEHAVIOR] 7: 所有 /api/staff/skill-drafts/* 端点在无认证头时返回 403 `{ error: { code: "FORBIDDEN" } }`
+- [ ] [BEHAVIOR] 8: Playwright E2E（windows_cloud）Golden Path 全通过：Tab 可见 → 气泡渲染 → "正在生成..." 出现 → 最终 URL 含 `?job_id=gen-job-001`（待CI windows_cloud job结果确认）
 
 ## manual:bash 验收命令
 
@@ -44,13 +44,13 @@ cd /workspace && npx vitest run apps/api/src/routes/__tests__/skill-drafts.test.
 
 ## CI 门禁
 
-- [ ] lint 通过（`npx tsc --noEmit` + ESLint）
-- [ ] unit tests 通过（skill_drafts 状态机 4 条路径）
-- [ ] integration tests 通过（mock SSH + mock upload，SSE 转发 + 提交链路）
-- [ ] E2E spec 存在且在 CI 收集范围内（`apps/dashboard/e2e/skill-create.spec.ts`）
-- [ ] Playwright E2E（windows_cloud runner）通过
-- [ ] `lint-feature-has-smoke` 检查通过（feat: PR 含 smoke 或 E2E spec）
-- [ ] `lint-tdd-commit-order` 检查通过（测试文件 commit 早于实现文件）
+- [x] lint 通过（`npx tsc --noEmit` + ESLint）
+- [x] unit tests 通过（skill_drafts 状态机 4 条路径）
+- [x] integration tests 通过（mock SSH + mock upload，SSE 转发 + 提交链路）
+- [x] E2E spec 存在且在 CI 收集范围内（`apps/dashboard/e2e/skill-create.spec.ts`）
+- [ ] Playwright E2E（windows_cloud runner）通过（待CI windows_cloud job结果确认）
+- [x] `lint-feature-has-smoke` 检查通过（feat: PR 含 smoke 或 E2E spec）
+- [x] `lint-tdd-commit-order` 检查通过（测试文件 commit 早于实现文件）
 
 ## Out of Scope（不包含）
 

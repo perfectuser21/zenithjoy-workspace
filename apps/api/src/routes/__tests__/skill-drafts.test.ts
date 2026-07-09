@@ -125,9 +125,43 @@ describe('[BEHAVIOR] 2 — GET /api/staff/skill-drafts/:id 返回历史 messages
   it(
     '断点续聊：创建草稿 → 发消息等 SSE done → GET → messages_json.length === 2',
     async () => {
-      // 这个测试在 integration 层需要真实 DB 或 mock DB；Red 阶段直接失败
-      // TODO: 实现时需要 mock DB 查询返回 messages_json
-      expect(true).toBe(false); // Red：强制失败，等实现后删除这行
+      const { EventEmitter } = await import('events');
+      const fakeStdout = new EventEmitter() as NodeJS.ReadableStream & { destroy?: () => void };
+      const fakeProcess = {
+        stdout: fakeStdout,
+        stderr: new EventEmitter(),
+        on: vi.fn(),
+        kill: vi.fn(),
+      };
+      spawnMock.mockReturnValue(fakeProcess);
+
+      const createRes = await request(app)
+        .post('/api/staff/skill-drafts')
+        .set('X-User-Email', 'staff@test.com')
+        .send({});
+      const draftId: string = createRes.body.data.id;
+
+      setTimeout(() => {
+        (fakeStdout as NodeJS.EventEmitter).emit(
+          'data',
+          Buffer.from('{"type":"text","text":"好的，收到"}\n')
+        );
+        (fakeStdout as NodeJS.EventEmitter).emit('end');
+      }, 10);
+
+      await request(app)
+        .post(`/api/staff/skill-drafts/${draftId}/chat`)
+        .set('X-User-Email', 'staff@test.com')
+        .send({ message: '帮我做一个日报skill' });
+
+      const getRes = await request(app)
+        .get(`/api/staff/skill-drafts/${draftId}`)
+        .set('X-User-Email', 'staff@test.com');
+
+      expect(getRes.status).toBe(200);
+      expect(getRes.body.data.messages_json.length).toBe(2);
+      expect(getRes.body.data.messages_json[0].role).toBe('user');
+      expect(getRes.body.data.messages_json[1].role).toBe('assistant');
     }
   );
 });
@@ -170,8 +204,31 @@ describe('[BEHAVIOR] 3 — POST /api/staff/skill-drafts/:id/chat SSE 流', () =>
   });
 
   it('至少收到 1 条 data: 行且最后收到 event: done', async () => {
-    // Red：待实现后补充完整 SSE 响应断言
-    expect(true).toBe(false); // Red
+    const { EventEmitter } = await import('events');
+    const fakeStdout = new EventEmitter() as NodeJS.ReadableStream & { destroy?: () => void };
+    const fakeProcess = {
+      stdout: fakeStdout,
+      stderr: new EventEmitter(),
+      on: vi.fn(),
+      kill: vi.fn(),
+    };
+    spawnMock.mockReturnValue(fakeProcess);
+
+    setTimeout(() => {
+      (fakeStdout as NodeJS.EventEmitter).emit(
+        'data',
+        Buffer.from('{"type":"text","text":"hello"}\n')
+      );
+      (fakeStdout as NodeJS.EventEmitter).emit('end');
+    }, 10);
+
+    const res = await request(app)
+      .post('/api/staff/skill-drafts/test-draft-id-002/chat')
+      .set('X-User-Email', 'staff@test.com')
+      .send({ message: '你好' });
+
+    expect(res.text).toContain('data:');
+    expect(res.text).toContain('event: done');
   });
 });
 
@@ -196,8 +253,13 @@ describe('[BEHAVIOR] 4 — SSH 超时时 /chat 发送 event: error', () => {
     };
     spawnMock.mockReturnValue(fakeProcess);
 
-    // Red：端点未实现，此测试失败
-    expect(true).toBe(false); // Red
+    const res = await request(app)
+      .post('/api/staff/skill-drafts/test-draft-id-003/chat')
+      .set('X-User-Email', 'staff@test.com')
+      .send({ message: '你好' });
+
+    expect(res.text).toContain('event: error');
+    expect(res.text).toContain('AI 暂时连不上，稍后重试');
   });
 });
 
@@ -245,28 +307,24 @@ describe('[BEHAVIOR] 5 — POST /api/staff/skill-drafts/:id/generate 生成 + �
 // ─── [BEHAVIOR] 6：skill_drafts 状态机 ────────────────────────────────────────
 
 describe('[BEHAVIOR] 6 — skill_drafts 状态机四条路径（unit）', () => {
-  // 注意：状态机逻辑应抽取为独立函数/类，便于 unit 测试（不依赖 HTTP）
-  // Green 阶段：import { transitionStatus } from '../../services/skillDraftStateMachine'
-  // 并用纯函数断言状态转移
-
-  it('idle → chatting：创建草稿时 status 设为 chatting', () => {
-    // Red：服务层模块尚未创建
-    expect(true).toBe(false); // Red
+  it('idle → chatting：创建草稿时 status 设为 chatting', async () => {
+    const { transition } = await import('../../services/skillDraftStateMachine');
+    expect(transition('idle', 'CREATE')).toBe('chatting');
   });
 
-  it('chatting → generating：触发生成时 status 变为 generating', () => {
-    // Red
-    expect(true).toBe(false); // Red
+  it('chatting → generating：触发生成时 status 变为 generating', async () => {
+    const { transition } = await import('../../services/skillDraftStateMachine');
+    expect(transition('chatting', 'GENERATE')).toBe('generating');
   });
 
-  it('generating → done：生成完成 + 提交成功时 status 变为 done', () => {
-    // Red
-    expect(true).toBe(false); // Red
+  it('generating → done：生成完成 + 提交成功时 status 变为 done', async () => {
+    const { transition } = await import('../../services/skillDraftStateMachine');
+    expect(transition('generating', 'DONE')).toBe('done');
   });
 
-  it('generating → error：生成失败或 SSH 错误时 status 变为 error', () => {
-    // Red
-    expect(true).toBe(false); // Red
+  it('generating → error：生成失败或 SSH 错误时 status 变为 error', async () => {
+    const { transition } = await import('../../services/skillDraftStateMachine');
+    expect(transition('generating', 'ERROR')).toBe('error');
   });
 });
 
@@ -278,7 +336,40 @@ describe('[BEHAVIOR] 9（=E2E-3）— 断点续聊集成', () => {
   });
 
   it('POST 建草稿 → POST chat（1 条消息）→ GET → messages_json.length === 2', async () => {
-    // Red：完整链路需要真实 DB mock，实现时补全
-    expect(true).toBe(false); // Red
+    const { EventEmitter } = await import('events');
+    const fakeStdout = new EventEmitter() as NodeJS.ReadableStream & { destroy?: () => void };
+    const fakeProcess = {
+      stdout: fakeStdout,
+      stderr: new EventEmitter(),
+      on: vi.fn(),
+      kill: vi.fn(),
+    };
+    spawnMock.mockReturnValue(fakeProcess);
+
+    const createRes = await request(app)
+      .post('/api/staff/skill-drafts')
+      .set('X-User-Email', 'staff@test.com')
+      .send({});
+    const draftId: string = createRes.body.data.id;
+
+    setTimeout(() => {
+      (fakeStdout as NodeJS.EventEmitter).emit(
+        'data',
+        Buffer.from('{"type":"text","text":"没问题，我来帮你"}\n')
+      );
+      (fakeStdout as NodeJS.EventEmitter).emit('end');
+    }, 10);
+
+    await request(app)
+      .post(`/api/staff/skill-drafts/${draftId}/chat`)
+      .set('X-User-Email', 'staff@test.com')
+      .send({ message: '我想做一个日报skill' });
+
+    const getRes = await request(app)
+      .get(`/api/staff/skill-drafts/${draftId}`)
+      .set('X-User-Email', 'staff@test.com');
+
+    expect(getRes.status).toBe(200);
+    expect(getRes.body.data.messages_json.length).toBe(2);
   });
 });
