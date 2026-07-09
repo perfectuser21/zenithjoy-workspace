@@ -64,6 +64,7 @@ import { operatorSessionsRouter } from './routes/operator-sessions';
 // Line 07 — AI 爆款视频翻拍 9节点流水线
 import videoRemakeRouter from './routes/video-remake';
 import staffRouter from './routes/staff';
+import { skillDraftsRouter } from './routes/skill-drafts';
 import { errorHandler, notFoundHandler } from './middleware/error';
 import { verifyStartupConfig } from './startup-check';
 import { getBuildInfo } from './build-info';
@@ -199,6 +200,9 @@ app.use('/api/acquisition', acquisitionRouter);
 app.use('/api/brain', brainSprintStateRouter);
 // Line 07 — AI 爆款视频翻拍 9节点流水线
 app.use('/api/video-remake', videoRemakeRouter);
+// Line 00 运营中枢 — 对话式创建 Skill（staff only，受 staffGuard 保护）
+// 必须在 staffRouter 之前注册，否则 Express 先匹配 /api/staff 统一前缀 router
+app.use('/api/staff/skill-drafts', skillDraftsRouter);
 // Line 00 运营中枢 — 员工工具（staff only，受 staffGuard 保护）
 app.use('/api/staff', staffRouter);
 // Line 02 — 公司信息页 + 账号状态
