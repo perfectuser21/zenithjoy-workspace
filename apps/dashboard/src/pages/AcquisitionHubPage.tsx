@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { KeyRound, Target, Users, Send, Settings } from 'lucide-react';
+import { KeyRound, Target, Users, Send, Settings, Smartphone } from 'lucide-react';
 
 interface Module {
   label: string;
@@ -47,6 +47,15 @@ const MODULES: Module[] = [
     color: 'text-blue-600',
     bgColor: 'bg-blue-50 dark:bg-blue-900/20',
     borderColor: 'border-blue-200 dark:border-blue-800',
+  },
+  {
+    label: '下载安卓客户端',
+    desc: '手机装 Agent，扫码自动绑定，手机端采集。',
+    to: '/dashboard/android',
+    Icon: Smartphone,
+    color: 'text-lime-600',
+    bgColor: 'bg-lime-50 dark:bg-lime-900/20',
+    borderColor: 'border-lime-200 dark:border-lime-800',
   },
 ];
 

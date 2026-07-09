@@ -4567,3 +4567,11 @@ agent_suite:
   status: active
   product: 员工工具
   note: "sprint(07091516): /staff/skill-eval 全宽独立页面判定回归测试——报告页改成跟 content-factory 输出页同款全屏模式，不再挤在侧边栏旁边"
+
+- id: line02-acquisition-hub-android-entry-e2e
+  path: apps/dashboard/e2e/acquisition-android-entry.spec.ts
+  type: e2e
+  ci: L4
+  status: active
+  product: AI员工
+  note: "sprint(07091703): 智能获客Hub补下载安卓客户端入口——Playwright E2E 断言 /area/acquisition 页面可见「下载安卓客户端」卡片、点击跳转 /dashboard/android"
