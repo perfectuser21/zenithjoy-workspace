@@ -1,0 +1,146 @@
+# [CONFIG] 刀B：跨 Line 接缝云端真后端 E2E（nightly 云轨，6站2轨④站云轨 full check）
+#
+# 诚实声明：本 workflow 全程 ubuntu 云机。接缝步为 SIMULATED-JOIN（psql 模拟人工加微入册），
+# 非真机 RPA——守的是两 Line 后端合跑 / migrations 组合 / 租户链贯通三样（此前零覆盖）。
+# 真机接缝属后续刀（见 0709 handoff 真机 full check 缺口清单）。
+name: "[CLOUD] integration-cross-line — 跨Line接缝云端真后端E2E（接缝步SIMULATED-JOIN，非真机RPA）"
+
+on:
+  schedule:
+    - cron: '30 20 * * *'   # UTC 20:30 = 北京 04:30，错开刀A 真机 nightly（北京 03:00）
+  workflow_dispatch:
+    inputs:
+      fire_test:
+        description: '传 1 = 故意断言失败（proven-to-fire 验证）'
+        required: false
+        default: '0'
+
+permissions:
+  issues: write
+
+concurrency:
+  group: integration-cross-line
+  cancel-in-progress: false
+
+jobs:
+  cross-line-e2e:
+    name: 跨Line接缝 — 云真后端 E2E
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: cecelia
+          POSTGRES_PASSWORD: cecelia
+          POSTGRES_DB: cecelia
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DATABASE_HOST: localhost
+      DATABASE_PORT: 5432
+      DATABASE_USER: cecelia
+      DATABASE_PASSWORD: cecelia
+      DATABASE_NAME: cecelia
+      PORT: 5200
+      NODE_ENV: test
+      BETTER_AUTH_SECRET: ci-only-secret-32-chars-min-not-prod-123
+      BETTER_AUTH_URL: http://localhost:5200
+
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install deps
+        run: npm ci
+
+      - name: Create zenithjoy schema + pgcrypto
+        env:
+          PGPASSWORD: cecelia
+        run: |
+          psql -h localhost -U cecelia -d cecelia -c "CREATE SCHEMA IF NOT EXISTS zenithjoy;"
+          psql -h localhost -U cecelia -d cecelia -c "CREATE EXTENSION IF NOT EXISTS \"pgcrypto\";"
+
+      - name: Run apps/api/db migrations
+        env:
+          PGPASSWORD: cecelia
+        run: |
+          for f in apps/api/db/migrations/*.sql; do
+            echo "→ $f"
+            psql -h localhost -U cecelia -d cecelia -v ON_ERROR_STOP=1 -f "$f"
+          done
+
+      - name: Build apps/api
+        working-directory: apps/api
+        run: npm run build
+
+      - name: Start apps/api
+        working-directory: apps/api
+        run: |
+          node dist/index.js > /tmp/apps-api.log 2>&1 &
+          for i in $(seq 1 30); do
+            if curl -fs http://localhost:5200/health >/dev/null 2>&1; then
+              echo "apps/api ready after ${i}s"
+              break
+            fi
+            sleep 1
+          done
+          curl -fs http://localhost:5200/health || (cat /tmp/apps-api.log && exit 1)
+
+      - name: Run cross-line seam smoke
+        env:
+          FIRE_TEST: ${{ github.event.inputs.fire_test || '0' }}
+        run: bash .github/workflows/scripts/smoke/cross-line-seam-smoke.sh
+
+      - name: Dump apps/api log on failure
+        if: failure()
+        run: cat /tmp/apps-api.log || true
+
+      - name: Upload api log on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cross-line-apps-api-log
+          path: /tmp/apps-api.log
+          retention-days: 7
+
+  nightly-report:
+    name: 汇总（红→开 Issue）
+    needs: [cross-line-e2e]
+    if: always()
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: 红了开 Issue（同日去重，前缀 [cross-line-red]）
+        run: |
+          RESULT="${{ needs.cross-line-e2e.result }}"
+          echo "cross-line-e2e = $RESULT"
+          if [ "$RESULT" = "success" ] || [ "$RESULT" = "skipped" ]; then
+            echo "绿，无需开 Issue"
+            exit 0
+          fi
+          TODAY=$(TZ=Asia/Shanghai date +%Y-%m-%d)
+          EXIST=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open \
+            --search "in:title [cross-line-red] $TODAY" --json number --jq 'length')
+          if [ "$EXIST" = "0" ]; then
+            gh issue create --repo "$GITHUB_REPOSITORY" \
+              --title "[cross-line-red] 跨Line接缝夜班失败 $TODAY (e2e=$RESULT)" \
+              --body "$(printf '## 跨Line接缝 nightly 失败\n\n| job | 结果 |\n|---|---|\n| cross-line-e2e | %s |\n\nRun: %s/%s/actions/runs/%s\n\n### 处理约定\n- flaky 嫌疑：先 rerun 一次\n- 连续 2 晚红 = 真 bug，走 /dev 立案修复\n- 本 workflow 接缝步为 SIMULATED-JOIN（非真机 RPA），红通常意味着 migrations/后端合跑/租户链坏了\n' "$RESULT" "$GITHUB_SERVER_URL" "$GITHUB_REPOSITORY" "$GITHUB_RUN_ID")"
+          else
+            echo "今日已有 open 的 [cross-line-red] Issue，去重跳过"
+          fi
+          exit 1
