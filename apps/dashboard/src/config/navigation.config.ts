@@ -139,6 +139,7 @@ export const autopilotPageComponents: Record<string, () => Promise<{ default: Co
   'CsAccountWorkbenchPage': () => import('../pages/CsAccountWorkbenchPage'),
   // Line 00 运营中枢 — 员工工具中心（staff only）
   'SkillEvalPage': () => import('../pages/SkillEvalPage'),
+  'SkillLibraryPage': () => import('../pages/SkillLibraryPage'),
 };
 
 export const pageComponents = autopilotPageComponents;
@@ -185,7 +186,7 @@ export const autopilotNavGroups: NavGroup[] = [
   {
     title: '员工工具',
     items: [
-      { path: '/staff/skill-eval', icon: Wrench, label: 'Skill 评测上传', featureKey: 'staff-skill-eval', requireStaff: true, component: 'SkillEvalPage' },
+      { path: '/staff/skill-eval', icon: Wrench, label: 'Skill 评测', featureKey: 'staff-skill-eval', requireStaff: true, component: 'SkillEvalPage' },
     ]
   },
 ];
@@ -301,6 +302,7 @@ export const additionalRoutes: RouteConfig[] = [
 
   // === 员工工具（staff only）===
   { path: '/staff/skill-eval', component: 'SkillEvalPage', requireAuth: true, requireStaff: true },
+  { path: '/staff/skill-library', component: 'SkillLibraryPage', requireAuth: true, requireStaff: true },
 
 ];
 
