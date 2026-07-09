@@ -26,13 +26,13 @@ export default function DynamicSidebar({
   onLogout,
 }: DynamicSidebarProps) {
   const location = useLocation();
-  const { user, isSuperAdmin } = useAuth();
+  const { user, isSuperAdmin, isStaff } = useAuth();
   const { config, isFeatureEnabled } = useInstance();
 
   const baseNavGroups = useMemo(() => {
     return getAutopilotNavGroups();
   }, []);
-  const navGroups = filterNavGroups(baseNavGroups, isFeatureEnabled, isSuperAdmin);
+  const navGroups = filterNavGroups(baseNavGroups, isFeatureEnabled, isSuperAdmin, isStaff);
 
   return (
     <aside

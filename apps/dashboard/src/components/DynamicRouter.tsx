@@ -62,7 +62,7 @@ interface DynamicRouterProps {
 }
 
 export default function DynamicRouter({ children }: DynamicRouterProps) {
-  const { isSuperAdmin } = useAuth();
+  const { isSuperAdmin, isStaff } = useAuth();
 
   const navGroups = useMemo(() => {
     return getAutopilotNavGroups();
@@ -130,6 +130,12 @@ export default function DynamicRouter({ children }: DynamicRouterProps) {
       element = (
         <PrivateRoute>
           {isSuperAdmin ? element : <Navigate to="/" replace />}
+        </PrivateRoute>
+      );
+    } else if (route.requireStaff) {
+      element = (
+        <PrivateRoute>
+          {isStaff ? element : <Navigate to="/" replace />}
         </PrivateRoute>
       );
     } else if (route.requireAuth) {

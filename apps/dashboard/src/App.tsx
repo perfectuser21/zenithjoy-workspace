@@ -38,7 +38,7 @@ function isAuthPath(pathname: string): boolean {
 
 function AppContent() {
   const location = useLocation();
-  const { user, logout, isAuthenticated, isSuperAdmin, authLoading } = useAuth();
+  const { user, logout, isAuthenticated, isSuperAdmin, isStaff, authLoading } = useAuth();
   const { theme, setTheme } = useTheme();
   const { config, loading: instanceLoading, isFeatureEnabled } = useInstance();
   const [collapsed, setCollapsed] = useState(false);
@@ -65,7 +65,7 @@ function AppContent() {
   const baseNavGroups = useMemo(() => {
     return getAutopilotNavGroups();
   }, []);
-  const navGroups = filterNavGroups(baseNavGroups, isFeatureEnabled, isSuperAdmin);
+  const navGroups = filterNavGroups(baseNavGroups, isFeatureEnabled, isSuperAdmin, isStaff);
 
   // 兼容旧代码
   const navItems = navGroups.flatMap(g => g.items);
