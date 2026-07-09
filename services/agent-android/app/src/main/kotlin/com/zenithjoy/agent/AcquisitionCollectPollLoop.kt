@@ -55,6 +55,10 @@ class AcquisitionCollectPollLoop(
     )
 
     fun start() {
+        // 首次 poll 同步执行（不等协程调度），保证 start() 返回时第一轮回调已触发，
+        // 与 AcquisitionKeywordPollLoop 在真实 TestScope 下的确定性行为对齐；
+        // GlobalScope 场景下（生产用）不依赖协程调度器真跑一轮才能验证副作用。
+        pollOnce()
         job = scope.launch { loop() }
     }
 
@@ -64,8 +68,8 @@ class AcquisitionCollectPollLoop(
 
     private suspend fun loop() {
         while (scope.isActive) {
-            pollOnce()
             delay(intervalMs)
+            pollOnce()
         }
     }
 
@@ -80,7 +84,7 @@ class AcquisitionCollectPollLoop(
             .get()
             .build()
 
-        val response = executeWithRetry(request) ?: return
+        val response = executeOnce(request) ?: return
         val parsed = gson.fromJson(response, PendingCollectTasksResponse::class.java) ?: return
 
         parsed.tasks?.forEach { task ->
@@ -115,36 +119,36 @@ class AcquisitionCollectPollLoop(
     }
 
     /**
-     * 带单次重试的 HTTP 执行（退避 5s）。
+     * 单次 HTTP 执行，不重试（与 AcquisitionKeywordPollLoop.pollOnce() 一致：
+     * 失败/非 2xx 只记日志返回 null，下一轮 30s 轮询自然重试，不在单次 poll 内阻塞重试）。
      * @return 响应体字符串，或 null（失败/HTTP 错误）
      */
-    private fun executeWithRetry(request: Request, retryLeft: Int = 1): String? {
+    private fun executeOnce(request: Request): String? {
         return try {
             httpClient.newCall(request).execute().use { response ->
                 if (!response.isSuccessful) {
-                    android.util.Log.w(TAG, "pending-collect-tasks http ${response.code}")
-                    if (retryLeft > 0) {
-                        Thread.sleep(RETRY_BACKOFF_MS)
-                        return executeWithRetry(request, retryLeft - 1)
-                    }
+                    logW("pending-collect-tasks http ${response.code}")
                     return null
                 }
                 response.body?.string()
             }
         } catch (e: IOException) {
-            android.util.Log.w(TAG, "pending-collect-tasks error: ${e.message}")
-            if (retryLeft > 0) {
-                Thread.sleep(RETRY_BACKOFF_MS)
-                return executeWithRetry(request, retryLeft - 1)
-            }
+            logW("pending-collect-tasks error: ${e.message}")
             null
+        }
+    }
+
+    /** android.util.Log 在纯 JVM 单元测试下未 mock 会抛 RuntimeException，这里吞掉保证 pollOnce() 不因日志而崩。 */
+    private fun logW(message: String) {
+        try {
+            android.util.Log.w(TAG, message)
+        } catch (_: RuntimeException) {
         }
     }
 
     companion object {
         private const val TAG = "AcquisitionCollectPollLoop"
         const val MAX_VIDEOS_PER_KEYWORD = 3
-        private const val RETRY_BACKOFF_MS = 5_000L
 
         private fun defaultClient() = OkHttpClient.Builder()
             .connectTimeout(15, TimeUnit.SECONDS)
