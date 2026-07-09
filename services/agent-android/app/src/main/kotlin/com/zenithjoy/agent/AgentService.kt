@@ -55,6 +55,7 @@ class AgentService : Service() {
     private var wsClient: WsClient? = null
     private var heartbeatLoop: HttpHeartbeatLoop? = null
     private var keywordPollLoop: AcquisitionKeywordPollLoop? = null
+    private var collectPollLoop: AcquisitionCollectPollLoop? = null
     private var accountScanLoopJob: kotlinx.coroutines.Job? = null
 
     // Sprint 07052218 followup — dm_outreach 本地频控历史（发送时间戳，毫秒）。
@@ -173,6 +174,7 @@ class AgentService : Service() {
         wsClient?.stop()
         heartbeatLoop?.stop()
         keywordPollLoop?.stop()
+        collectPollLoop?.stop()
         accountScanLoopJob?.cancel()
         serviceJob.cancel()
         unregisterReceiver(collectResultReceiver)
@@ -272,6 +274,34 @@ class AgentService : Service() {
             },
         )
         keywordPollLoop?.start()
+
+        // 两阶段采集任务轮询（Path 2 Step 5）
+        // 与 keywordPollLoop 并行双跑，通过 collectTaskIds Set 在 onCollectResult 中区分路由
+        collectPollLoop = AcquisitionCollectPollLoop(
+            agentId = config.agentId,
+            httpBase = config.deriveHttpBase(),
+            scope = scope,
+            onStage1Task = { taskId, keywords ->
+                android.util.Log.i(TAG, "collect stage_1 task: id=$taskId keywords=${keywords.size}")
+                // 对每个关键词触发 Douyin 搜索采集，任务 ID 走新协议
+                keywords.forEach { keyword ->
+                    DouyinCollectService.dispatchTask(this@AgentService, keyword, taskId)
+                }
+            },
+            onStage2Task = { taskId, videoUrls, checkpoint ->
+                android.util.Log.i(TAG, "collect stage_2 task: id=$taskId videos=${videoUrls.size} checkpoint=${checkpoint != null}")
+                // 对每个视频 URL 触发评论抓取
+                videoUrls.forEach { videoUrl ->
+                    DouyinCollectService.dispatchTask(this@AgentService, videoUrl, taskId)
+                }
+            },
+            onCancel = { taskId ->
+                android.util.Log.i(TAG, "collect task cancelled: id=$taskId")
+                // 取消上报：terminal=true, partial_reason=user_cancelled
+                scope.launch { reportCollectCancel(taskId) }
+            },
+        )
+        collectPollLoop?.start()
 
         // Sprint 07061301-device-account-scan-wiring — 定时触发设备账号扫描（30-60 分钟随机间隔，
         // 与 RandomDelay 一样禁止用固定常量），扫描服务自身会先判互斥锁再决定是否真的执行。
@@ -471,21 +501,88 @@ class AgentService : Service() {
     // taskId 对应 acquisition_keyword_tasks.id（由 ws0/ws1 派发 android_douyin 任务时下发）。
     // /api/agent/task-result 端点不存在——服务端唯一能接住评论数据的是已有的
     // /api/acquisition/comment-score-result（Windows Agent 已在用同一端点，字段一致）。
+    // 路由判断：collectPollLoop.collectTaskIds 命中 → 新协议 /collect/report，否则旧协议。
     private fun reportCollectResult(taskId: String, result: CollectResult) {
         android.util.Log.i(TAG, "DEBUG reportCollectResult called: taskId=$taskId")
         if (taskId.isEmpty()) return
-        val url = "${config.deriveHttpBase()}/api/acquisition/comment-score-result"
-        val body = gson.toJson(result.toCommentScoreResultPayload(taskId))
+
+        val isCollectTask = collectPollLoop?.collectTaskIds?.contains(taskId) == true
+        if (isCollectTask) {
+            // 新协议：/api/acquisition/collect/report
+            reportCollectReportNew(taskId, result)
+        } else {
+            // 旧协议：/api/acquisition/comment-score-result
+            val url = "${config.deriveHttpBase()}/api/acquisition/comment-score-result"
+            val body = gson.toJson(result.toCommentScoreResultPayload(taskId))
+            try {
+                val request = Request.Builder()
+                    .url(url)
+                    .post(body.toRequestBody("application/json".toMediaType()))
+                    .build()
+                httpClient.newCall(request).execute().use { resp ->
+                    android.util.Log.i(TAG, "comment-score-result reported: ${resp.code} task=$taskId")
+                }
+            } catch (e: Exception) {
+                android.util.Log.w(TAG, "comment-score-result report failed: ${e.message}")
+            }
+        }
+    }
+
+    // 新协议上报：POST /api/acquisition/collect/report
+    private fun reportCollectReportNew(taskId: String, result: CollectResult, terminal: Boolean = false, partialReason: String? = null) {
+        if (taskId.isEmpty()) return
+        val url = "${config.deriveHttpBase()}/api/acquisition/collect/report"
+        val commenters = result.comments.map { c ->
+            buildMap<String, Any?> {
+                put("nickname", c.commenterId)
+                put("comment_text", c.text)
+            }
+        }
+        val bodyMap = buildMap<String, Any?> {
+            put("task_id", taskId)
+            put("video_id", taskId + "_" + System.currentTimeMillis().toString(36))
+            put("commenters", commenters)
+            put("checkpoint", null)
+            put("terminal", terminal)
+            if (!partialReason.isNullOrEmpty()) put("partial_reason", partialReason)
+        }
+        val body = gson.toJson(bodyMap)
         try {
             val request = Request.Builder()
                 .url(url)
                 .post(body.toRequestBody("application/json".toMediaType()))
                 .build()
             httpClient.newCall(request).execute().use { resp ->
-                android.util.Log.i(TAG, "comment-score-result reported: ${resp.code} task=$taskId")
+                android.util.Log.i(TAG, "collect/report reported: ${resp.code} task=$taskId terminal=$terminal")
             }
         } catch (e: Exception) {
-            android.util.Log.w(TAG, "comment-score-result report failed: ${e.message}")
+            android.util.Log.w(TAG, "collect/report failed: ${e.message}")
+        }
+    }
+
+    // 采集任务取消上报：terminal=true + partial_reason=user_cancelled
+    private fun reportCollectCancel(taskId: String) {
+        if (taskId.isEmpty()) return
+        val url = "${config.deriveHttpBase()}/api/acquisition/collect/report"
+        val bodyMap = mapOf(
+            "task_id" to taskId,
+            "video_id" to "cancelled_${System.currentTimeMillis().toString(36)}",
+            "commenters" to emptyList<Any>(),
+            "checkpoint" to mapOf("last_video_id" to null, "processed_video_ids" to emptyList<String>()),
+            "terminal" to true,
+            "partial_reason" to "user_cancelled",
+        )
+        val body = gson.toJson(bodyMap)
+        try {
+            val request = Request.Builder()
+                .url(url)
+                .post(body.toRequestBody("application/json".toMediaType()))
+                .build()
+            httpClient.newCall(request).execute().use { resp ->
+                android.util.Log.i(TAG, "collect/cancel reported: ${resp.code} task=$taskId")
+            }
+        } catch (e: Exception) {
+            android.util.Log.w(TAG, "collect/cancel report failed: ${e.message}")
         }
     }
 
