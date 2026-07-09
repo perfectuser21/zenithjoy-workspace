@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { adminFetch } from '../lib/admin-fetch';
 
@@ -6,7 +6,10 @@ const API_UPLOAD = '/api/staff/skill-eval/upload';
 const API_STATUS = (jobId: string) => `/api/staff/skill-eval/status/${jobId}`;
 const API_REPORT = (jobId: string) => `/api/staff/skill-eval/report/${jobId}`;
 const POLL_INTERVAL_MS = 3000;
-const POLL_TIMEOUT_MS = 60000;
+// 真实 skill 评测（claude 真实调用）耗时可达数分钟——worker 侧 STUCK_TIMEOUT_MINUTES
+// 默认 15 分钟才算真正卡死，60 秒的旧值只在近乎空壳的测试 skill 上凑巧没超时，
+// 真实用户上传后端已 completed 却被前端提前误报"轮询超时"（真实复现）。
+const POLL_TIMEOUT_MS = 5 * 60 * 1000;
 
 // 报告结构对齐 skill-eval-formb-assets/eval-prompt.txt 的真实输出 schema
 // （不是臆造字段——曾经的 { score, summary, details } 从未匹配过下游真实响应）
@@ -40,6 +43,9 @@ export default function SkillEvalPage() {
       pollTimerRef.current = null;
     }
   }, []);
+
+  // 组件卸载（用户离开这个页面）时停止轮询，避免残留的 setTimeout 在后台继续跑
+  useEffect(() => stopPolling, [stopPolling]);
 
   const fetchReport = useCallback(async (jobId: string) => {
     try {
