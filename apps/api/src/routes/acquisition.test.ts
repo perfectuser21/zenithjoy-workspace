@@ -237,6 +237,48 @@ describe('POST /api/acquisition/comment-score-result', () => {
     }
   });
 
+  // regression: 抓到评论、写库成功(HTTP 200)，但 acquisition_keyword_tasks.status
+  // 从未被标记为 done——真机复现:任务永久卡 processing，即使 leads 已经写库成功。
+  it('[REGRESSION] 抓到评论写库成功 → acquisition_keyword_tasks 状态更新为 done', async () => {
+    vi.stubEnv('VITEST', '');
+    try {
+      const { default: db } = await import('../db/connection');
+      vi.mocked(db.query).mockReset();
+      vi.mocked(db.query).mockImplementation(async (sql: unknown) => {
+        const s = String(sql);
+        if (s.includes('SELECT tenant_id FROM zenithjoy.acquisition_keyword_tasks')) {
+          return { rows: [{ tenant_id: 'tenant-done-1' }] } as any;
+        }
+        if (s.includes('SELECT id FROM zenithjoy.acquisition_leads')) {
+          return { rows: [] } as any;
+        }
+        if (s.includes('INSERT INTO zenithjoy.acquisition_leads')) {
+          return { rows: [{ id: 'lead-done-1' }] } as any;
+        }
+        return { rows: [] } as any;
+      });
+
+      const res = await request(app)
+        .post('/api/acquisition/comment-score-result')
+        .send({
+          keyword_task_id: 'kw-done-1',
+          video_url: 'https://douyin.com/v/1',
+          comments: [{ commenter_id: 'u1', text: '请问怎么联系', grade: '高意向' }],
+        });
+
+      expect(res.status).toBe(200);
+      const updateCall = vi.mocked(db.query).mock.calls.find((c) =>
+        String(c[0]).includes('UPDATE') &&
+        String(c[0]).includes('acquisition_keyword_tasks'),
+      );
+      expect(updateCall).toBeDefined();
+      expect(updateCall?.[1]).toContain('kw-done-1');
+      expect(String(updateCall?.[0])).toMatch(/status\s*=\s*'done'/);
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
   it('VITEST mode: written_count equals comment count', async () => {
     const comments = [
       { commenter_id: 'u1', text: '请问怎么联系', publish_time: '2026-05-25T00:00:00Z' },

@@ -557,6 +557,23 @@ acquisitionRouter.post('/comment-score-result', async (req: Request, res: Respon
           } catch { /* 单条失败不中断 */ }
         }
       }
+      // 真机复现：leads 写库成功、HTTP 200 返回，但 acquisition_keyword_tasks.status
+      // 从未被标记为 done——只有"空评论"分支(PR#1186)会更新状态，这条成功路径漏了，
+      // 导致任务永久卡 processing。这里补上：只要真的按 keyword_task_id 反查到了
+      // 归属租户（说明流程走到底了），就标 done，不管 written_count 是不是 0
+      // (0 条可能是所有评论都没过 grade 门槛，属于合法结果，同样该有终态)。
+      if (resolved_tenant_id) {
+        try {
+          await pool.query(
+            `UPDATE zenithjoy.acquisition_keyword_tasks
+                SET status = 'done', updated_at = NOW()
+              WHERE id = $1 AND status != 'done'`,
+            [keyword_task_id]
+          );
+        } catch (err) {
+          console.error('[acquisition] comment-score-result status UPDATE failed:', (err as Error).message);
+        }
+      }
     } catch (err) {
       console.error('[acquisition] comment-score-result failed:', (err as Error).message);
     }

@@ -216,8 +216,11 @@ class DouyinCollectService : AccessibilityService() {
 
         scope.launch {
             delay(RandomDelay.sample(RandomDelay.SEARCH_MS))
-            performGlobalAction(GLOBAL_ACTION_BACK) // dismiss keyboard if shown
-            delay(RandomDelay.sample(RandomDelay.CLICK_MS))
+            // 真机实测确认(2026-07-09)：这里之前有 performGlobalAction(GLOBAL_ACTION_BACK)
+            // 想收起键盘，但抖音搜索输入页把"返回"当成"清空/退出搜索"处理——手动复现过，
+            // 打字确认输入框有内容后按一次返回，输入框会清空回到占位文案，导致后面提交的
+            // 是首页热搜占位词而不是真实关键词。键盘不收起不影响后续点"搜索"按钮（按钮在
+            // 输入框同一行，不会被键盘遮挡），故直接去掉这步，不再按返回。
             // 之前这里拿不到根节点就静默 return@launch：triggerSearch() 从未被调用，
             // 唯一的看门狗 startSearchResultTimeout() 只在 triggerSearch() 内部启动，
             // 导致服务永久卡死在 SUBMITTING_SEARCH，后续任务全被 busy-guard 拒绝，
@@ -343,6 +346,7 @@ class DouyinCollectService : AccessibilityService() {
         state = State.OPENING_COMMENTS
         commentBtn.performAction(AccessibilityNodeInfo.ACTION_CLICK)
         startCommentsTimeout()
+        startExtractionWatchdog()
     }
 
     private fun startCommentsTimeout() {
@@ -350,6 +354,21 @@ class DouyinCollectService : AccessibilityService() {
             delay(RandomDelay.sample(RandomDelay.PROFILE_MS))
             if (state == State.OPENING_COMMENTS) {
                 attemptExtractComments()
+            }
+        }
+    }
+
+    // 真机复现：评论数很多的热门视频(1.1万条评论)会让 attemptExtractComments()
+    // 卡住不返回(疑似节点树遍历在这类大型评论列表上耗时异常)，跟
+    // startVideoOpenTimeout() 同样的坑——EXTRACTING_COMMENTS 阶段本身没有
+    // 兜底，一旦卡住就永久挂起。这个看门狗独立于 attemptExtractComments 的
+    // 调用路径，到点了发现还没上报就强制报错收尾（resultReported 一次性闩
+    // 保证跟原调用不会重复上报）。
+    private fun startExtractionWatchdog() {
+        scope.launch {
+            delay(EXTRACTION_TIMEOUT_MS)
+            if (!resultReported) {
+                finishWithError("EXTRACTION_TIMEOUT")
             }
         }
     }
@@ -422,7 +441,18 @@ class DouyinCollectService : AccessibilityService() {
     }
 
     private fun sendResultBroadcast(result: CollectResult) {
+        // 主路径：同进程直接回调，不依赖系统广播（见 companion.onCollectResult 注释——
+        // 真机实测过 sendBroadcast 在这台荣耀设备上不可靠，回调是唯一确认有效的路径）。
+        onCollectResult?.invoke(
+            currentTaskId,
+            result.ok,
+            result.comments.map { it.commenterId },
+            result.comments.map { it.text },
+            result.error,
+        )
+        // 广播保留作为兜底/其他潜在监听方兼容，不作为主投递路径。
         val intent = Intent(ACTION_COLLECT_RESULT).apply {
+            setPackage(packageName)
             putExtra(EXTRA_TASK_ID, currentTaskId)
             putExtra(EXTRA_RESULT_OK, result.ok)
             putExtra(EXTRA_RESULT_COMMENT_IDS, result.comments.map { it.commenterId }.toTypedArray())
@@ -435,11 +465,16 @@ class DouyinCollectService : AccessibilityService() {
     // ── 节点树工具 ────────────────────────────────────────────────────────────
 
     private fun flattenNodes(root: AccessibilityNodeInfo): List<NodeExtractor.NodeInfo> {
+        // 真机复现：热门视频(1.1万条评论)的评论区节点树遍历会异常耗时/疑似卡死，
+        // 加节点数上限防止在这类大树上无限期占用主线程(与 startExtractionWatchdog
+        // 互为兜底：这里防真卡死，watchdog 防"卡住但没完全死"这类情况)。
         val result = mutableListOf<NodeExtractor.NodeInfo>()
         val queue = ArrayDeque<AccessibilityNodeInfo>()
         queue.add(root)
-        while (queue.isNotEmpty()) {
+        var visited = 0
+        while (queue.isNotEmpty() && visited < MAX_FLATTEN_NODES) {
             val node = queue.removeFirst()
+            visited++
             result.add(NodeExtractor.NodeInfo(
                 text = node.text?.toString() ?: "",
                 contentDescription = node.contentDescription?.toString() ?: "",
@@ -553,9 +588,19 @@ class DouyinCollectService : AccessibilityService() {
         private const val DOUYIN_PKG = "com.ss.android.ugc.aweme"
         private const val RESULTS_SETTLE_MS = 400L
         private const val VIDEO_OPEN_TIMEOUT_MS = 15_000L
+        private const val EXTRACTION_TIMEOUT_MS = 20_000L
+        private const val MAX_FLATTEN_NODES = 3_000
 
         const val ACTION_COLLECT_TASK = "com.zenithjoy.agent.COLLECT_TASK"
         const val ACTION_COLLECT_RESULT = "com.zenithjoy.agent.COLLECT_RESULT"
+
+        // 真机实测确认(2026-07-09)：sendBroadcast(ACTION_COLLECT_RESULT) 稳定发得出去
+        // (dumpsys activity broadcasts 能看到 AgentService 的接收者注册在)，但
+        // collectResultReceiver.onReceive 从未触发——同进程广播在这台荣耀真机上
+        // 不可靠，原因未查清(疑似 MagicOS 后台广播限流)。改成同进程直接回调，
+        // 不再依赖系统广播这条不可靠的路。AgentService 在 onCreate 里设置这个回调。
+        @Volatile
+        var onCollectResult: ((taskId: String, ok: Boolean, commentIds: List<String>, commentTexts: List<String>, error: String) -> Unit)? = null
         const val EXTRA_KEYWORD = "keyword"
         const val EXTRA_TASK_ID = "task_id"
         const val EXTRA_RESULT_OK = "ok"
