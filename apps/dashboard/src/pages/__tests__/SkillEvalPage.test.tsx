@@ -94,7 +94,8 @@ describe('SkillEvalPage — X-User-Email 鉴权头', () => {
     expect(headers.get('X-User-Email')).toBe('xuxiao21xx@icloud.com');
   });
 
-  it('评测完成后拉取报告（GET /api/staff/skill-eval/report/:jobId）携带 X-User-Email 头，并按真实 schema 渲染', async () => {
+  it('评测完成后拉取报告（GET /api/staff/skill-eval/report/:jobId）携带 X-User-Email 头，并内嵌下游真实可视化 HTML 报告（不再自拼简陋卡片）', async () => {
+    const fakeReportHtml = '<html><body><div id="marker">test-diagnostic-skill 可视化报告</div></body></html>';
     const fetchSpy = vi.spyOn(global, 'fetch')
       .mockResolvedValueOnce({
         ok: true,
@@ -109,13 +110,7 @@ describe('SkillEvalPage — X-User-Email 鉴权头', () => {
       .mockResolvedValueOnce({
         ok: true,
         status: 200,
-        json: async () => ({
-          data: {
-            skill: { name: 'test-diagnostic-skill' },
-            verdict: { level: 'pass', text: '一句话裁决' },
-            summary: '能上生产用',
-          },
-        }),
+        text: async () => fakeReportHtml,
       } as Response);
 
     render(<SkillEvalPage />);
@@ -132,7 +127,8 @@ describe('SkillEvalPage — X-User-Email 鉴权头', () => {
     expect(headers.get('X-User-Email')).toBe('xuxiao21xx@icloud.com');
 
     await waitFor(() => expect(screen.getByTestId('skill-eval-report')).toBeTruthy(), { timeout: 5000 });
-    expect(screen.getAllByText(/能上生产用/).length).toBeGreaterThan(0);
+    const iframe = screen.getByTestId('skill-eval-report-frame') as HTMLIFrameElement;
+    expect(iframe.getAttribute('srcDoc') ?? iframe.srcdoc).toBe(fakeReportHtml);
   });
 
   it('[BEHAVIOR] 真实评测耗时超过60秒仍继续轮询（不提前误报"轮询超时"）——bug: 真实用户上传 朋友圈skill-v1.0.zip 后端已 completed，前端却因 60秒硬超时抢先报错', async () => {
@@ -144,11 +140,12 @@ describe('SkillEvalPage — X-User-Email 鉴权头', () => {
       .mockReturnValueOnce(t0)
       .mockReturnValueOnce(t0 + 70_000);
 
+    const fakeReportHtml = '<html><body>真实耗时评测也能跑通</body></html>';
     const fetchSpy = vi.spyOn(global, 'fetch')
       .mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({ data: { job_id: 'job-slow' } }) } as Response)
       .mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({ data: { job_id: 'job-slow', status: 'running' } }) } as Response)
       .mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({ data: { job_id: 'job-slow', status: 'completed' } }) } as Response)
-      .mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({ data: { summary: '真实耗时评测也能跑通' } }) } as Response);
+      .mockResolvedValueOnce({ ok: true, status: 200, text: async () => fakeReportHtml } as Response);
 
     render(<SkillEvalPage />);
     const input = screen.getByTestId('skill-eval-upload') as HTMLInputElement;
@@ -161,7 +158,8 @@ describe('SkillEvalPage — X-User-Email 鉴权头', () => {
     // 不应出现"轮询超时"错误，应该正常展示报告
     expect(screen.queryByTestId('skill-eval-error')).toBeNull();
     await waitFor(() => expect(screen.getByTestId('skill-eval-report')).toBeTruthy(), { timeout: 5000 });
-    expect(screen.getAllByText(/真实耗时评测也能跑通/).length).toBeGreaterThan(0);
+    const iframe = screen.getByTestId('skill-eval-report-frame') as HTMLIFrameElement;
+    expect(iframe.getAttribute('srcDoc') ?? iframe.srcdoc).toBe(fakeReportHtml);
 
     dateNowSpy.mockRestore();
   }, 25000);

@@ -11,22 +11,11 @@ const POLL_INTERVAL_MS = 3000;
 // 真实用户上传后端已 completed 却被前端提前误报"轮询超时"（真实复现）。
 const POLL_TIMEOUT_MS = 5 * 60 * 1000;
 
-// 报告结构对齐 skill-eval-formb-assets/eval-prompt.txt 的真实输出 schema
-// （不是臆造字段——曾经的 { score, summary, details } 从未匹配过下游真实响应）
-interface EvalReport {
-  skill?: { name?: string; type?: string; submitter?: string; evaluatedAt?: string };
-  verdict?: { level?: 'pass' | 'partial' | 'fail'; text?: string };
-  stats?: Record<string, string>;
-  summary?: string;
-  nextSteps?: { issue?: string; fix?: string; severity?: 'high' | 'mid' | 'low' }[];
-  health?: { dim?: string; state?: string }[];
-}
-
 type PageState =
   | { phase: 'idle' }
   | { phase: 'uploading' }
   | { phase: 'polling'; jobId: string; startedAt: number }
-  | { phase: 'done'; jobId: string; report: EvalReport }
+  | { phase: 'done'; jobId: string; reportHtml: string }
   | { phase: 'failed'; jobId: string; reason: string }
   | { phase: 'error'; message: string };
 
@@ -49,14 +38,15 @@ export default function SkillEvalPage() {
 
   const fetchReport = useCallback(async (jobId: string) => {
     try {
+      // 默认拿下游团队做好的完整可视化 HTML 报告（skill-eval-report-render.js），
+      // 不再自己拼一张简陋卡片重新发明展示层
       const res = await adminFetch(API_REPORT(jobId), user?.email);
       if (!res.ok) {
         setState({ phase: 'error', message: `报告获取失败（${res.status}）` });
         return;
       }
-      const json = await res.json();
-      const report: EvalReport = json.data ?? json;
-      setState({ phase: 'done', jobId, report });
+      const reportHtml = await res.text();
+      setState({ phase: 'done', jobId, reportHtml });
     } catch {
       setState({ phase: 'error', message: '报告获取失败（网络错误，请检查连接）' });
     }
@@ -215,45 +205,16 @@ export default function SkillEvalPage() {
         )}
 
         {state.phase === 'done' && (
-          <div data-testid="skill-eval-report" className="p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-xl space-y-3">
-            <div className="flex items-center justify-between">
-              <h3 className="font-semibold text-green-800 dark:text-green-300">
-                评测报告{state.report.skill?.name ? `：${state.report.skill.name}` : ''}
-              </h3>
-              {state.report.verdict?.level && (
-                <span
-                  className={
-                    'text-sm font-bold px-2 py-0.5 rounded ' +
-                    (state.report.verdict.level === 'pass'
-                      ? 'text-green-700 dark:text-green-400'
-                      : state.report.verdict.level === 'partial'
-                        ? 'text-amber-700 dark:text-amber-400'
-                        : 'text-red-700 dark:text-red-400')
-                  }
-                >
-                  {state.report.verdict.level.toUpperCase()}
-                </span>
-              )}
-            </div>
-            {state.report.verdict?.text && (
-              <p className="text-sm text-green-700 dark:text-green-400">{state.report.verdict.text}</p>
-            )}
-            {state.report.summary && (
-              <p className="text-sm text-gray-700 dark:text-gray-300">{state.report.summary}</p>
-            )}
-            {state.report.nextSteps && state.report.nextSteps.length > 0 && (
-              <div className="text-xs text-gray-600 dark:text-gray-400 space-y-1">
-                <p className="font-medium">下一步：</p>
-                {state.report.nextSteps.map((s, i) => (
-                  <p key={i}>- {s.issue}{s.fix ? `（${s.fix}）` : ''}</p>
-                ))}
-              </div>
-            )}
-            <details className="text-xs text-gray-500 dark:text-gray-400">
-              <summary className="cursor-pointer hover:text-gray-800 dark:hover:text-gray-200">查看完整报告 JSON</summary>
-              <pre className="mt-2 whitespace-pre-wrap break-all">{JSON.stringify(state.report, null, 2)}</pre>
-            </details>
-            <button onClick={handleReset} className="text-xs text-green-700 dark:text-green-400 underline hover:no-underline">
+          <div data-testid="skill-eval-report" className="space-y-2">
+            <iframe
+              title="评测报告"
+              data-testid="skill-eval-report-frame"
+              srcDoc={state.reportHtml}
+              sandbox=""
+              className="w-full rounded-xl border border-gray-200 dark:border-slate-700"
+              style={{ height: '80vh' }}
+            />
+            <button onClick={handleReset} className="text-xs text-blue-700 dark:text-blue-400 underline hover:no-underline">
               重新上传
             </button>
           </div>

@@ -3,7 +3,7 @@
  *
  * POST /api/staff/skill-eval/upload         — 上传 skill zip，转发到 Cecelia skill-eval 服务
  * GET  /api/staff/skill-eval/status/:jobId  — 查询评测状态，转发到同一服务
- * GET  /api/staff/skill-eval/report/:jobId  — 拉取评测报告（report_data JSON），转发到同一服务
+ * GET  /api/staff/skill-eval/report/:jobId  — 拉取评测报告，转发到同一服务
  *
  * 所有路由受 staffGuard 保护（STAFF_EMAILS 白名单）
  *
@@ -13,6 +13,9 @@
  *   （没有内联的 result.score/summary/details——那是本路由早期实现的臆造字段，从未匹配过真实下游）
  * - report_url 是下游 Brain 自己的 localhost 地址，浏览器不可达；报告内容改走本路由的
  *   /report/:jobId 转发（复用 SKILL_EVAL_BASE 通用反代前缀，不依赖 report_url 字面值）
+ * - report 默认返回下游团队做好的完整可视化 HTML 报告（skill-eval-report-render.js，
+ *   SVG 输入盒→圆核→输出盒图 + 折叠详解表），原样透传，不再重新臆造一个更差的展示层；
+ *   ?format=json 时改拉原始 report_data JSON（调试/兼容用）
  */
 import { Router } from 'express';
 import multer from 'multer';
@@ -92,12 +95,18 @@ router.get('/skill-eval/status/:jobId', async (req, res): Promise<void> => {
 
 router.get('/skill-eval/report/:jobId', async (req, res): Promise<void> => {
   const { jobId } = req.params;
+  const wantsJson = req.query.format === 'json';
   try {
     const upstream = await axios.get(`${SKILL_EVAL_BASE()}/report/${jobId}`, {
-      params: { format: 'json' },
+      params: wantsJson ? { format: 'json' } : undefined,
       timeout: 30000,
+      responseType: wantsJson ? 'json' : 'text',
     });
-    res.status(upstream.status).json({ success: true, data: upstream.data });
+    if (wantsJson) {
+      res.status(upstream.status).json({ success: true, data: upstream.data });
+      return;
+    }
+    res.status(upstream.status).set('Content-Type', 'text/html; charset=utf-8').send(upstream.data);
   } catch (err) {
     if (axios.isAxiosError(err)) {
       const status = err.response?.status ?? 504;
