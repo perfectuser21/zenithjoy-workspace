@@ -35,11 +35,14 @@ concurrency:
 
 jobs:
   keyword-comment-smoke:
-    name: Line02 关键词→评论 smoke（xian-rog 真机）
+    # [CI-HONESTY] xian-rog 真机 self-hosted runner，但 CI 以 SYSTEM 账号运行。
+    # DPAPI cookie 解密失败时，smoke 脚本会发 ::warning:: 并显式跳过（非静默绿）。
+    # continue-on-error: true 仅保留对"runner 离线/连不上"场景的容忍，
+    # DPAPI 跳过本身已通过 ::warning:: 在 GHA UI 上可见。
+    # 根治方案：PsExec -i 1 让 runner 以登录用户身份运行，留第二刀实施。
+    name: Line02 关键词→评论 smoke（xian-rog 真机，DPAPI 跳过时显式 warning）
     runs-on: [self-hosted, wechat-capable]
     timeout-minutes: 10
-    # CI runner 以 SYSTEM 账号运行，Douyin cookies 用 asus DPAPI 加密无法解密
-    # 会话不可用时 skip 而不阻塞 PR（需 PsExec -i 1 解决，见 TODO 注释）
     continue-on-error: true
 
     defaults:

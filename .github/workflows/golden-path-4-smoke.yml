@@ -70,7 +70,10 @@ jobs:
         run: bash .github/workflows/scripts/smoke/path4-sprint-1-ws4-smoke.sh
 
   ws5:
-    name: ws5 — 飞书审批 + Python wechat_rpa 真发 + 频控
+    # [CI-HONESTY] ubuntu/REAL_PUBLISH=0 dryrun 校验——非真发。
+    # 真发验收（REAL_PUBLISH=1 + 真微信 GUI）只能在 rog-xian 自托管机器上跑，
+    # 留第二刀接真机实现。
+    name: ws5 — 去飞书断言 + wechat_rpa dryrun + 频控（ubuntu / REAL_PUBLISH=0，非真发）
     runs-on: ubuntu-latest
     timeout-minutes: 8
     steps:
@@ -79,11 +82,14 @@ jobs:
         with: { node-version: '20' }
       - uses: actions/setup-python@v5
         with: { python-version: '3.11' }
-      - name: Run ws5 smoke
+      - name: Run ws5 smoke（dryrun-only，无真机 WeChat）
         run: bash .github/workflows/scripts/smoke/path4-sprint-1-ws5-smoke.sh
 
   agent-real-script:
-    name: Agent wechat-rpa 真实脚本接入（v1.1.77）
+    # [CI-HONESTY] 仅做 build + grep 静态校验——无 WeChat GUI、无 REAL_PUBLISH。
+    # ubuntu 上不存在微信客户端，无法验证 PyAutoGUI 真实 RPA 行为。
+    # 真机 RPA 行为由 lead-acceptance 在 rog-xian 机器手工验收。
+    name: Agent wechat-rpa 脚本静态校验（build+grep，ubuntu 无 WeChat / 非真发）
     runs-on: ubuntu-latest
     timeout-minutes: 8
     steps:
@@ -92,7 +98,7 @@ jobs:
         with: { node-version: '20' }
       - uses: actions/setup-python@v5
         with: { python-version: '3.11' }
-      - name: Run wechat-rpa-real-agent smoke
+      - name: Run wechat-rpa 脚本静态校验（非真发，仅 build+grep）
         run: bash .github/workflows/scripts/smoke/wechat-rpa-real-agent-smoke.sh
 
   golden-path-4-smoke:

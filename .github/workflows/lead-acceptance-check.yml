@@ -1,4 +1,11 @@
-name: lead-acceptance-check
+name: lead-acceptance-doc-check（格式/防作弊，非真机验收）
+
+# [CI-HONESTY] 本 workflow 仅校验 evidence 文档格式 + 防作弊关键字，
+# 运行在 ubuntu-latest（云机），不能也不会验证真机上是否真发生过 REAL_PUBLISH。
+# 真机验收（rog-xian 扫码 + 真发）是人工交付物；本 workflow 只做文档完整性保障：
+#   1. 不含 'preset cookie' / '预置 cookie' 字眼（防作弊）
+#   2. 含真实平台 URL
+#   3. 含扫码字眼
 
 on:
   pull_request:
@@ -9,10 +16,11 @@ on:
 
 jobs:
   check:
+    name: 校验 evidence 文档格式（防作弊 grep，非真机验收）
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Validate lead acceptance evidence files
+      - name: Validate lead acceptance evidence 文档格式（非真机验收）
         run: |
           for f in .agent-knowledge/golden-path-1/lead-acceptance-sprint-*.md; do
             [ -f "$f" ] || continue

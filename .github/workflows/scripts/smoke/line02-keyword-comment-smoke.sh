@@ -78,8 +78,12 @@ KW_OK=$(node_parse "$KW_JSON" "String(d.ok)")
   # DPAPI 限制：CI runner 以 SYSTEM 运行无法解密 asus 账号的 Chrome cookies
   # 此时 skip（exit 0）而不是 fail — 需要 PsExec -i 1 才能根治
   if [ "$ERR" = "DOUYIN_SESSION_EXPIRED" ]; then
+    # [CI-HONESTY] DPAPI 限制：CI 以 SYSTEM 账号运行，无法解密 asus Chrome cookies。
+    # 显式发 GHA warning annotation，不静默绿。根治：PsExec -i 1（第二刀）。
+    echo "::warning::keyword-comment smoke 跳过：DPAPI cookie 解密失败（CI 以 SYSTEM 运行，非真机验收）— 根治需 PsExec -i 1 让 runner 以登录用户身份运行"
     echo "⚠️  SKIP: Douyin session 不可用（DPAPI cookie 解密失败 — CI 以 SYSTEM 运行）"
-    echo "    手动运行方式: bash .github/workflows/scripts/smoke/line02-keyword-comment-smoke.sh"
+    echo "    根治方案: PsExec -i 1 让 runner 以登录用户身份运行（不是 SYSTEM）"
+    echo "    手动运行: bash .github/workflows/scripts/smoke/line02-keyword-comment-smoke.sh"
     exit 0
   fi
   fail "keyword-search ok=false: $ERR"
