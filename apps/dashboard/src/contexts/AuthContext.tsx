@@ -42,6 +42,7 @@ interface AuthContextType {
   logout: () => void;
   isAuthenticated: boolean;
   isSuperAdmin: boolean;
+  isStaff: boolean;
   authLoading: boolean;
 }
 
@@ -172,6 +173,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const superAdminEmails = (import.meta.env.VITE_SUPER_ADMIN_EMAILS || '').split(',').filter(Boolean);
   const isSuperAdmin = !!user?.email && superAdminEmails.includes(user.email);
 
+  const staffEmails = (import.meta.env.VITE_STAFF_EMAILS || '').split(',').filter(Boolean);
+  const isStaff = !!user?.email && staffEmails.includes(user.email);
+
   const value = {
     user,
     token,
@@ -179,6 +183,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     logout,
     isAuthenticated: !!user && !!token,
     isSuperAdmin,
+    isStaff,
     authLoading,
   };
 

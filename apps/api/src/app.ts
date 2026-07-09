@@ -63,6 +63,7 @@ import { brainSprintStateRouter } from './routes/brain-sprint-state';
 import { operatorSessionsRouter } from './routes/operator-sessions';
 // Line 07 — AI 爆款视频翻拍 9节点流水线
 import videoRemakeRouter from './routes/video-remake';
+import staffRouter from './routes/staff';
 import { errorHandler, notFoundHandler } from './middleware/error';
 import { verifyStartupConfig } from './startup-check';
 import { getBuildInfo } from './build-info';
@@ -198,6 +199,8 @@ app.use('/api/acquisition', acquisitionRouter);
 app.use('/api/brain', brainSprintStateRouter);
 // Line 07 — AI 爆款视频翻拍 9节点流水线
 app.use('/api/video-remake', videoRemakeRouter);
+// Line 00 运营中枢 — 员工工具（staff only，受 staffGuard 保护）
+app.use('/api/staff', staffRouter);
 // Line 02 — 公司信息页 + 账号状态
 app.use('/api/company-profile', companyProfileRouter);
 app.use('/api/line02', line02Router);

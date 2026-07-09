@@ -4527,3 +4527,27 @@ agent_suite:
   status: active
   product: 私域运营
   note: "wechat-cs-reply 判断内核接入合同测试（B-1~B-9）"
+
+- id: staff-tools-middleware-unit
+  path: apps/api/src/middleware/staff.test.ts
+  type: unit
+  ci: L3
+  status: active
+  product: 员工工具
+  note: "sprint(07090821): staffGuard 中间件单元测试——白名单验证/大小写/STAFF_EMAILS 未设置 403/N4 铁律"
+
+- id: staff-tools-routes-unit
+  path: apps/api/src/routes/__tests__/staff.test.ts
+  type: unit
+  ci: L3
+  status: active
+  product: 员工工具
+  note: "sprint(07090821): staff 路由集成测试——staffGuard HTTP 层 403 验证（FR9/FR10/FR11）"
+
+- id: staff-tools-skill-eval-e2e
+  path: apps/dashboard/e2e/staff-skill-eval.spec.ts
+  type: e2e
+  ci: windows_cloud
+  status: active
+  product: 员工工具
+  note: "sprint(07090821): 员工工具中心 + Skill Evaluator E2E Playwright——staff 账号侧边栏可见、路由守卫、上传轮询报告、错误处理"

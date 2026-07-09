@@ -18,6 +18,7 @@ import {
   Building2,
   Briefcase,
   MessageCircle,
+  Wrench,
 } from 'lucide-react';
 
 // ============ 类型定义 ============
@@ -29,6 +30,7 @@ export interface NavItem {
   featureKey: string;
   // 权限控制
   requireSuperAdmin?: boolean;
+  requireStaff?: boolean;
   // 路由配置
   component?: string;  // 组件路径，用于懒加载
   redirect?: string;   // 重定向目标
@@ -45,6 +47,7 @@ export interface RouteConfig {
   redirect?: string;
   requireAuth?: boolean;
   requireSuperAdmin?: boolean;
+  requireStaff?: boolean;
 }
 
 // ============ 页面组件懒加载映射 ============
@@ -134,6 +137,8 @@ export const autopilotPageComponents: Record<string, () => Promise<{ default: Co
   'CsAreaEntryPage': () => import('../pages/CsAreaEntryPage'),
   'CsAccountOverviewPage': () => import('../pages/CsAccountOverviewPage'),
   'CsAccountWorkbenchPage': () => import('../pages/CsAccountWorkbenchPage'),
+  // Line 00 运营中枢 — 员工工具中心（staff only）
+  'SkillEvalPage': () => import('../pages/SkillEvalPage'),
 };
 
 export const pageComponents = autopilotPageComponents;
@@ -173,6 +178,14 @@ export const autopilotNavGroups: NavGroup[] = [
     title: '管理',
     items: [
       { path: '/area/admin', icon: Building2, label: '管理后台', featureKey: 'customers-admin', requireSuperAdmin: true, component: 'AreaHubPage' },
+    ]
+  },
+
+  // ─── 员工工具（Line 00 运营中枢内部工具，仅 staff 白名单账号可见）─
+  {
+    title: '员工工具',
+    items: [
+      { path: '/staff/skill-eval', icon: Wrench, label: 'Skill 评测上传', featureKey: 'staff-skill-eval', requireStaff: true, component: 'SkillEvalPage' },
     ]
   },
 ];
@@ -286,6 +299,9 @@ export const additionalRoutes: RouteConfig[] = [
   { path: '/admin/customers/platform-sessions', component: 'AdminPlatformSessionsPage', requireAuth: true, requireSuperAdmin: true },
   { path: '/admin/customers/publish-logs', component: 'AdminPublishLogsPage', requireAuth: true, requireSuperAdmin: true },
 
+  // === 员工工具（staff only）===
+  { path: '/staff/skill-eval', component: 'SkillEvalPage', requireAuth: true, requireStaff: true },
+
 ];
 
 // ============ 辅助函数 ============
@@ -303,16 +319,19 @@ export function getAutopilotNavGroups(): NavGroup[] {
 export function filterNavGroups(
   groups: NavGroup[],
   isFeatureEnabled: (key: string) => boolean,
-  isSuperAdmin: boolean
+  isSuperAdmin: boolean,
+  isStaff = false
 ): NavGroup[] {
   return groups
     .map(group => ({
       ...group,
       items: group.items.filter(item => {
-        // 检查 feature flag
-        if (!isFeatureEnabled(item.featureKey)) return false;
+        // 检查 feature flag（staff-skill-eval 视为恒启用，无需 instanceConfig）
+        if (item.featureKey !== 'staff-skill-eval' && !isFeatureEnabled(item.featureKey)) return false;
         // 检查超级管理员权限
         if (item.requireSuperAdmin && !isSuperAdmin) return false;
+        // 检查员工权限
+        if (item.requireStaff && !isStaff) return false;
         return true;
       })
     }))
