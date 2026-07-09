@@ -1,0 +1,147 @@
+name: Nightly Real-Machine Regression (staging)
+
+# ═══════════════════════════════════════════════════════════════════
+# 6站2轨 CI/CD 模型第④站 · 真机轨（2026-07-09 定稿，见 Notion CI 指南 v3）
+#
+# 每晚在 xian-rog（agent 已指向 staging 中台）把「已交付的真机能力」
+# 用 full check 回归一遍：
+#   - 真微信：气泡门（真发 marker 到文件传输助手 → 验气泡可读+方向）
+#   - 真抖音·读侧：关键词搜索 + 评论抓取（DPAPI 真 session）
+#
+# 定位：
+#   - 真机能力的常态回归主防线（抓「无关改动误伤 + 微信/抖音升级」）
+#   - 同时充当 RPA 的 staging 真机验证（替掉出版本时的人肉复测）
+#   - promote 生产前查「最近 2 晚 nightly 绿」（Release Gate 证据源，刀C）
+#
+# 红 → 自动开 Issue（[nightly-red] 前缀），不阻塞任何 PR。
+# 真安卓（Honor100）接入后（刀D）在此加 job。
+# ═══════════════════════════════════════════════════════════════════
+
+on:
+  schedule:
+    - cron: '0 19 * * *'   # UTC 19:00 = 北京 03:00，避开白天真机占用
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: nightly-real-machine
+  cancel-in-progress: false
+
+jobs:
+  # ─── 真微信 full check：复用 wechat-cs-e2e job3 的气泡门（PsExec -i 1 进 session 1）───
+  wechat-bubble:
+    name: 真微信 — 气泡门 full check（真发文件传输助手）
+    runs-on: [self-hosted, wechat-capable]
+    timeout-minutes: 10
+    env:
+      PYTHONUTF8: '1'
+      PYTHONIOENCODING: 'utf-8'
+    steps:
+      - uses: actions/checkout@v4
+
+      # run 块必须全 ASCII：PowerShell 5.1 按 GBK 解析 UTF-8 临时 .ps1 会吞引号（0702 实锤）
+      - name: Run bubble gate in session 1 via PsExec
+        shell: powershell
+        run: |
+          $py = 'C:\Users\asus\anaconda3\python.exe'
+          $script = Join-Path $env:GITHUB_WORKSPACE 'services\agent\tools\selfcheck_bubbles.py'
+          $outJson = 'C:\Users\Public\zj-bubble-gate.json'
+          $outLog = 'C:\Users\Public\zj-bubble-gate-stdout.txt'
+          Remove-Item $outJson, $outLog -ErrorAction SilentlyContinue
+          $bat = 'C:\Users\Public\zj-bubble-gate.bat'
+          $lines = @(
+            '@echo off',
+            'set PYTHONUTF8=1',
+            ('"' + $py + '" "' + $script + '" > "' + $outLog + '" 2>&1')
+          )
+          Set-Content -Path $bat -Value $lines -Encoding ascii
+          & C:\Users\asus\PSTools\PsExec64.exe -i 1 -accepteula -w C:\Users\Public $bat
+          if (-not (Test-Path $outJson)) {
+            if (Test-Path $outLog) { Get-Content $outLog }
+            Write-Error 'bubble gate produced no result JSON (script crash or PsExec failure)'
+            exit 1
+          }
+          $j = Get-Content $outJson -Raw -Encoding utf8 | ConvertFrom-Json
+          Write-Host ("bubbles=" + $j.bubble_count + " marker_found=" + $j.marker_found + " marker_outgoing=" + $j.marker_outgoing)
+          if (-not $j.ok) {
+            if (Test-Path $outLog) { Get-Content $outLog }
+            Write-Error ("bubble gate FAILED: " + $j.err)
+            exit 1
+          }
+          Write-Host "bubble gate PASS"
+
+  # ─── 真抖音·读侧 full check：复用 line02 keyword→comment smoke（DPAPI 真 session）───
+  # 同一台 ROG，串行跑（needs）避免桌面/窗口争用；前一个红了也照跑（if always）。
+  douyin-read:
+    name: 真抖音 — keyword→comment 读侧 full check
+    needs: [wechat-bubble]
+    if: always()
+    runs-on: [self-hosted, wechat-capable]
+    timeout-minutes: 15
+    defaults:
+      run:
+        shell: bash
+    env:
+      SMOKE_KW: '美甲'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 定位最新 agent 安装目录
+        run: |
+          AGENT_DIR=$(ls -d /c/Users/*/Desktop/zenithjoy-agent-v* 2>/dev/null \
+            | sort -t'v' -k2 -V | tail -1 || true)
+          echo "AGENT_DIR=$AGENT_DIR" >> "$GITHUB_ENV"
+          echo "agent dir: $AGENT_DIR"
+          [ -n "$AGENT_DIR" ] && [ -d "$AGENT_DIR" ] || { echo "no agent dir found"; exit 1; }
+
+      # 注意：smoke 脚本内 DPAPI 解不开 session 时会 exit 0 并写 SKIPPED 到
+      # GITHUB_STEP_SUMMARY（诚实自报，PR#1193）。nightly 沿用该行为：
+      # skip 不算红，但 summary 会明示「本晚抖音读侧未验」。根治=PsExec -i 1（TODO）。
+      - name: Run keyword→comment smoke
+        run: |
+          chmod +x .github/workflows/scripts/smoke/line02-keyword-comment-smoke.sh
+          bash .github/workflows/scripts/smoke/line02-keyword-comment-smoke.sh
+
+  # ─── 汇总 + 红→自动开 Issue（值班闭环最小版）───
+  nightly-report:
+    name: Nightly 真机回归汇总（红→开 Issue）
+    needs: [wechat-bubble, douyin-read]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Summarize and open issue on failure
+        run: |
+          WECHAT="${{ needs.wechat-bubble.result }}"
+          DOUYIN="${{ needs.douyin-read.result }}"
+          TODAY=$(TZ=Asia/Shanghai date +%F)
+          echo "wechat-bubble=$WECHAT douyin-read=$DOUYIN"
+          {
+            echo "## Nightly 真机回归 $TODAY"
+            echo ""
+            echo "| 真机能力 | 结果 |"
+            echo "|---|---|"
+            echo "| 真微信 气泡门 | $WECHAT |"
+            echo "| 真抖音 keyword→comment 读侧 | $DOUYIN |"
+          } >> "$GITHUB_STEP_SUMMARY"
+          if [ "$WECHAT" = "failure" ] || [ "$DOUYIN" = "failure" ]; then
+            TITLE="[nightly-red] 真机回归失败 $TODAY (微信=$WECHAT 抖音=$DOUYIN)"
+            # 同日去重：已有同标题 open issue 则不重复开
+            EXIST=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open \
+              --search "in:title [nightly-red] $TODAY" --json number --jq 'length')
+            if [ "$EXIST" = "0" ]; then
+              gh issue create --repo "$GITHUB_REPOSITORY" \
+                --title "$TITLE" \
+                --body "$(printf 'Nightly 真机回归（staging）失败。\n\n| job | 结果 |\n|---|---|\n| wechat-bubble | %s |\n| douyin-read | %s |\n\nRun: %s/%s/actions/runs/%s\n\n处理约定：真机 flaky 先 rerun 一次；连续 2 晚红=真 bug，走 /dev 修。' "$WECHAT" "$DOUYIN" "$GITHUB_SERVER_URL" "$GITHUB_REPOSITORY" "$GITHUB_RUN_ID")"
+              echo "issue created"
+            else
+              echo "same-day nightly-red issue already open, skip"
+            fi
+            exit 1
+          fi
+          echo "nightly ALL GREEN"
