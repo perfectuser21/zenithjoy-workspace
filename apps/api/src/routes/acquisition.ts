@@ -885,7 +885,7 @@ acquisitionRouter.post('/collect/report', async (req: Request, res: Response) =>
   if (!videoId) return fail(res, 400, 'MISSING_VIDEO_ID', '缺 video_id');
 
   const taskRes = await pool.query(
-    `SELECT id, tenant_id, status, error_code, video_count, lead_count_raw
+    `SELECT id, tenant_id, status, error_code, video_count, lead_count_raw, keywords
        FROM zenithjoy.acquisition_collect_tasks WHERE id = $1`,
     [taskId]
   );
@@ -897,6 +897,7 @@ acquisitionRouter.post('/collect/report', async (req: Request, res: Response) =>
     error_code: string | null;
     video_count: number;
     lead_count_raw: number;
+    keywords: string[] | null;
   };
   const tenantId = task.tenant_id;
   const batch: Array<{ sec_uid?: string | null; nickname: string; comment_text?: string; grade?: string; keyword?: string }> = Array.isArray(commenters)
@@ -997,6 +998,7 @@ acquisitionRouter.post('/collect/report', async (req: Request, res: Response) =>
   const leadWriteStatus = 'local_only';
 
   // ── 终态 / 计数 / 断点 更新 ──
+  const MAX_VIDEOS_PER_KEYWORD = 3;
   let newStatus = task.status;
   let newErrorCode = task.error_code;
   if (terminal) {
@@ -1005,6 +1007,15 @@ acquisitionRouter.post('/collect/report', async (req: Request, res: Response) =>
     newErrorCode = t.error_code;
   } else if (task.status === 'pending') {
     newStatus = 'running';
+  } else if (!terminal && task.status === 'running') {
+    // Stage1 完成判断：视频计数已达 keywords.length × MAX_VIDEOS_PER_KEYWORD 时，推进为 stage_1_done
+    // （含本次新插入：video_count 当前值 + 1）
+    const keywordsLen = Array.isArray(task.keywords) ? task.keywords.length : 0;
+    const expectedCount = keywordsLen * MAX_VIDEOS_PER_KEYWORD;
+    const newVideoCount = task.video_count + 1;
+    if (keywordsLen > 0 && newVideoCount >= expectedCount) {
+      newStatus = 'stage_1_done';
+    }
   }
 
   await pool.query(
