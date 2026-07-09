@@ -65,7 +65,12 @@ describe('SkillEvalPage — X-User-Email 鉴权头', () => {
       .mockResolvedValueOnce({
         ok: true,
         status: 200,
-        json: async () => ({ data: { job_id: 'job-2', status: 'completed', result: { score: 90, summary: 'ok', details: '' } } }),
+        json: async () => ({ data: { job_id: 'job-2', status: 'completed' } }),
+      } as Response)
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ data: { verdict: { level: 'pass', text: 'ok' }, summary: '能用' } }),
       } as Response);
 
     render(<SkillEvalPage />);
@@ -80,5 +85,46 @@ describe('SkillEvalPage — X-User-Email 鉴权头', () => {
     expect(statusUrl).toBe('/api/staff/skill-eval/status/job-2');
     const headers = new Headers((statusInit as RequestInit)?.headers);
     expect(headers.get('X-User-Email')).toBe('xuxiao21xx@icloud.com');
+  });
+
+  it('评测完成后拉取报告（GET /api/staff/skill-eval/report/:jobId）携带 X-User-Email 头，并按真实 schema 渲染', async () => {
+    const fetchSpy = vi.spyOn(global, 'fetch')
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ data: { job_id: 'job-3' } }),
+      } as Response)
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ data: { job_id: 'job-3', status: 'completed' } }),
+      } as Response)
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          data: {
+            skill: { name: 'test-diagnostic-skill' },
+            verdict: { level: 'pass', text: '一句话裁决' },
+            summary: '能上生产用',
+          },
+        }),
+      } as Response);
+
+    render(<SkillEvalPage />);
+
+    const input = screen.getByTestId('skill-eval-upload') as HTMLInputElement;
+    fireEvent.change(input, { target: { files: [makeFile()] } });
+    fireEvent.click(screen.getByTestId('skill-eval-submit'));
+
+    await waitFor(() => expect(fetchSpy).toHaveBeenCalledTimes(3), { timeout: 5000 });
+
+    const [reportUrl, reportInit] = fetchSpy.mock.calls[2];
+    expect(reportUrl).toBe('/api/staff/skill-eval/report/job-3');
+    const headers = new Headers((reportInit as RequestInit)?.headers);
+    expect(headers.get('X-User-Email')).toBe('xuxiao21xx@icloud.com');
+
+    await waitFor(() => expect(screen.getByTestId('skill-eval-report')).toBeTruthy());
+    expect(screen.getAllByText(/能上生产用/).length).toBeGreaterThan(0);
   });
 });
