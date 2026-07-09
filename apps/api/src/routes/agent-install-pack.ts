@@ -8,7 +8,6 @@ import os from 'node:os';
 import path from 'node:path';
 import { promisify } from 'node:util';
 // 使用动态 require 避免 vitest mock child_process 时的 execFile export 检查失败
-// eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-explicit-any
 const execFileAsync: (file: string, args?: readonly string[] | null) => Promise<{ stdout: string; stderr: string }> =
   // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-explicit-any
   promisify((require('child_process') as any).execFile);
