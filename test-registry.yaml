@@ -4586,6 +4586,14 @@ agent_suite:
   product: 员工工具
   note: "sprint(07091721): 对话式创建Skill——skillDraftStateMachine 纯函数单测（idle/chatting/generating/done/error 全路径转移）"
 
+- id: skill-create-tab-frontend-unit
+  path: apps/dashboard/src/pages/__tests__/SkillCreateTab.test.tsx
+  type: unit
+  ci: L3
+  status: active
+  product: 员工工具
+  note: "sprint(07091721): 对话式创建Skill——SkillCreateTab 前端单测（创建草稿/断点续聊/SSE流式渲染/生成吧触发/错误提示/发送按钮disabled）"
+
 - id: skill-create-e2e
   path: apps/dashboard/e2e/skill-create.spec.ts
   type: e2e
