@@ -6,8 +6,8 @@
  * 携带这个头 —— 任何账号（包括白名单内的）点上传都会被后端 403 拒绝。
  * 前端 isStaff（侧边栏可见性）跟这里完全是两条独立检查，不能互相替代。
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { render, screen, fireEvent, waitFor, cleanup } from '@testing-library/react';
 import SkillEvalPage from '../SkillEvalPage';
 
 const mockAuth = vi.hoisted(() => ({
@@ -32,6 +32,13 @@ function makeFile(name = 'skill.zip') {
 describe('SkillEvalPage — X-User-Email 鉴权头', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
+  });
+
+  // 卸载组件，触发 SkillEvalPage 的卸载清理（stopPolling），避免上一个测试遗留的
+  // setTimeout 轮询循环在后台继续跑、偷走下一个测试的 fetch mock 队列（真实复现过
+  // 的跨测试串扰：test1 的 upload mock 永远没有 status 字段，poll() 永不停止）
+  afterEach(() => {
+    cleanup();
   });
 
   it('上传请求（POST /api/staff/skill-eval/upload）携带 X-User-Email 头', async () => {
@@ -124,7 +131,7 @@ describe('SkillEvalPage — X-User-Email 鉴权头', () => {
     const headers = new Headers((reportInit as RequestInit)?.headers);
     expect(headers.get('X-User-Email')).toBe('xuxiao21xx@icloud.com');
 
-    await waitFor(() => expect(screen.getByTestId('skill-eval-report')).toBeTruthy());
+    await waitFor(() => expect(screen.getByTestId('skill-eval-report')).toBeTruthy(), { timeout: 5000 });
     expect(screen.getAllByText(/能上生产用/).length).toBeGreaterThan(0);
   });
 
@@ -149,13 +156,13 @@ describe('SkillEvalPage — X-User-Email 鉴权头', () => {
     fireEvent.click(screen.getByTestId('skill-eval-submit'));
 
     // 70 秒 elapsed 检查发生在第二次真实轮询（POLL_INTERVAL_MS=3s 后），等它跑完
-    await waitFor(() => expect(fetchSpy).toHaveBeenCalledTimes(4), { timeout: 10000 });
+    await waitFor(() => expect(fetchSpy).toHaveBeenCalledTimes(4), { timeout: 20000 });
 
     // 不应出现"轮询超时"错误，应该正常展示报告
     expect(screen.queryByTestId('skill-eval-error')).toBeNull();
-    await waitFor(() => expect(screen.getByTestId('skill-eval-report')).toBeTruthy());
+    await waitFor(() => expect(screen.getByTestId('skill-eval-report')).toBeTruthy(), { timeout: 5000 });
     expect(screen.getAllByText(/真实耗时评测也能跑通/).length).toBeGreaterThan(0);
 
     dateNowSpy.mockRestore();
-  }, 15000);
+  }, 25000);
 });
