@@ -49,18 +49,13 @@ function stubSkillEvalApi(page: import('@playwright/test').Page) {
 
   // 报告 schema 对齐下游 Cecelia 真实响应（skill/verdict/summary/...），
   // 不是早期臆造的 { score, summary, details }
+  // 默认返回下游真实的可视化 HTML 报告（skill-eval-report-render.js 原样产出），
+  // 前端直接内嵌显示，不再自己拼一张简陋卡片
   page.route('**/api/staff/skill-eval/report/test-job-001', async (route) => {
     await route.fulfill({
       status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify({
-        success: true,
-        data: {
-          skill: { name: 'test-skill' },
-          verdict: { level: 'pass', text: '技能评测通过，质量优秀。' },
-          summary: '所有合同行为均通过验收。',
-        },
-      }),
+      contentType: 'text/html; charset=utf-8',
+      body: '<html><body><h1>test-skill</h1><p>技能评测通过，质量优秀。所有合同行为均通过验收。</p></body></html>',
     });
   });
 }

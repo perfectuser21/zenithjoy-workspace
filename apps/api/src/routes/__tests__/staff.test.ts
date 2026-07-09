@@ -114,17 +114,39 @@ describe('staff routes — 下游 Cecelia skill-eval 契约转发', () => {
     expect(res.body.data.status).toBe('completed');
   });
 
-  it('[BEHAVIOR] GET /api/staff/skill-eval/report/:jobId 转发下游 report（?format=json）', async () => {
-    axiosGetMock.mockResolvedValue({ status: 200, data: { verdict: { level: 'pass', text: 'ok' }, summary: '能用' } });
+  // Bug（用户真实吐槽）：下游 renderReportHtml 是团队专门做的一套完整可视化报告
+  // （skill-eval-report-render.js，381行，SVG输入盒→圆核→输出盒图 + 折叠详解表）。
+  // 本路由此前默认拉 ?format=json 再由前端自己拼一张简陋卡片，等于把这套已经做好
+  // 的可视化报告完全丢掉。改成默认拉下游的 HTML（不传 format，下游默认就是 HTML），
+  // 原样透传，前端直接内嵌显示，不再自己臆造展示层。
+  it('[BEHAVIOR] GET /api/staff/skill-eval/report/:jobId 默认转发下游真实 HTML 可视化报告（不再重新拼简陋卡片）', async () => {
+    const fakeHtml = '<html><body><div class="head"><h1>wechat-moments-planner</h1></div></body></html>';
+    axiosGetMock.mockResolvedValue({ status: 200, data: fakeHtml });
 
     const res = await request(app)
       .get('/api/staff/skill-eval/report/real-task-4')
       .set('X-User-Email', 'staff@test.com');
 
     expect(res.status).toBe(200);
-    expect(res.body.data.verdict.level).toBe('pass');
+    expect(res.headers['content-type']).toContain('text/html');
+    expect(res.text).toBe(fakeHtml);
     expect(axiosGetMock).toHaveBeenCalledWith(
       expect.stringContaining('/report/real-task-4'),
+      expect.objectContaining({ params: undefined, responseType: 'text' })
+    );
+  });
+
+  it('[BEHAVIOR] ?format=json 时仍可拉原始 report_data JSON（调试/兼容用）', async () => {
+    axiosGetMock.mockResolvedValue({ status: 200, data: { verdict: { level: 'pass', text: 'ok' }, summary: '能用' } });
+
+    const res = await request(app)
+      .get('/api/staff/skill-eval/report/real-task-5?format=json')
+      .set('X-User-Email', 'staff@test.com');
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.verdict.level).toBe('pass');
+    expect(axiosGetMock).toHaveBeenCalledWith(
+      expect.stringContaining('/report/real-task-5'),
       expect.objectContaining({ params: { format: 'json' } })
     );
   });
