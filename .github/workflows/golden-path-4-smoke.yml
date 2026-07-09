@@ -6,8 +6,13 @@ name: Golden Path 4 — Private AI Wechat Smoke
 #
 # 6 个 ws-level job (ws1..ws6) 独立跑各自短 smoke；
 # 最终 job golden-path-4-smoke 用 needs:[ws1..ws5] enforce 依赖（合同 r1 #14），
-# 跑完整 6-step golden-path-4-smoke.sh（CI 默认 REAL_PUBLISH=0 dryrun）。
-# Lead 自验在 rog-xian REAL_PUBLISH=1 真扫码 + 真发，由 lead-acceptance-check workflow 跑。
+# 跑完整 6-step golden-path-4-smoke.sh。
+#
+# ⚠️ 诚实声明（假绿灯治理第一刀）：本 workflow 全部 job 跑 ubuntu-latest，无任何真机成分——
+#    仅验管道拼接/路由/schema/草稿生成，全程 REAL_PUBLISH=0 dryrun，不碰真微信、不真发。
+#    Path4 私域微信「真扫码 + 真发」真机闸【尚未接入 CI】（待建，见治理第二刀）。
+#    注：lead-acceptance-check workflow 只在 ubuntu 上 grep 校验 markdown 证据文件存在性，
+#    并非「rog-xian 真扫码真发」——旧注释系误述，已更正，勿再据此以为 Path4 真机已被验证。
 
 on:
   push:
@@ -70,7 +75,7 @@ jobs:
         run: bash .github/workflows/scripts/smoke/path4-sprint-1-ws4-smoke.sh
 
   ws5:
-    name: ws5 — 飞书审批 + Python wechat_rpa 真发 + 频控
+    name: "[DRYRUN] ws5 — 飞书审批 + wechat_rpa 管道拼接（ubuntu 无微信，非真发）"
     runs-on: ubuntu-latest
     timeout-minutes: 8
     steps:

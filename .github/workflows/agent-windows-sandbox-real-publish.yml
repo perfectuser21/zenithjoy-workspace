@@ -1,4 +1,8 @@
-name: Agent Windows Sandbox -- Real Publish (v3 scripts)
+name: Agent Windows Sandbox -- Douyin Publish on CLOUD Windows (dispatch-only)
+
+# ⚠️ 诚实声明（假绿灯治理第一刀）：本 workflow 跑 GitHub 云 windows-latest（数据中心 IP），
+#    注入 cookie 跑发布脚本。它【不是】真客户机验收：云 IP 有风控/封号风险，
+#    且「云 Windows 上脚本 exit OK」≠「真客户机上真发成功」。dispatch-only，非常态闸。
 on:
   workflow_dispatch:
     inputs:
@@ -9,7 +13,7 @@ on:
 
 jobs:
   windows-real-publish:
-    name: Windows -- Douyin video + image + article real publish
+    name: 云 Windows -- Douyin 发布脚本验证（数据中心 IP，非真客户机）
     runs-on: windows-latest
     timeout-minutes: 30
     steps:
@@ -193,9 +197,9 @@ jobs:
         run: |
           Write-Host ""
           Write-Host "============================================"
-          Write-Host "  ALL REAL PUBLISH PASSED: v${{ github.event.inputs.version }}"
-          Write-Host "  video real publish:   PASS"
-          Write-Host "  image real publish:   PASS"
-          Write-Host "  article real publish: PASS"
-          Write-Host "  Douyin 3 scripts CONFIRMED on Windows"
+          Write-Host "  Douyin publish scripts ran on CLOUD Windows: v${{ github.event.inputs.version }}"
+          Write-Host "  video:   script exit OK"
+          Write-Host "  image:   script exit OK"
+          Write-Host "  article: script exit OK"
+          Write-Host "  WARNING: 云 Windows 数据中心 IP，非真客户机；此结果 != 真机验收，有风控/封号风险"
           Write-Host "============================================"

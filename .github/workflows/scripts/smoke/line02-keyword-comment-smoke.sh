@@ -80,6 +80,15 @@ KW_OK=$(node_parse "$KW_JSON" "String(d.ok)")
   if [ "$ERR" = "DOUYIN_SESSION_EXPIRED" ]; then
     echo "⚠️  SKIP: Douyin session 不可用（DPAPI cookie 解密失败 — CI 以 SYSTEM 运行）"
     echo "    手动运行方式: bash .github/workflows/scripts/smoke/line02-keyword-comment-smoke.sh"
+    # 让绿灯不撒谎：把 SKIPPED 冒到 Actions run 页面顶部 summary，而不是埋在日志里没人看
+    if [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then
+      {
+        echo "## ⚠️ 抖音真机闸未执行（SKIPPED，非通过）"
+        echo ""
+        echo "本次 **未验证** keyword→comment 真机链路：DPAPI 解不开 Douyin cookie（CI 以 SYSTEM 运行）。"
+        echo "job 显示绿（continue-on-error）**不代表真机跑过**。根治需 PsExec -i 1 进 session 1。"
+      } >> "$GITHUB_STEP_SUMMARY"
+    fi
     exit 0
   fi
   fail "keyword-search ok=false: $ERR"

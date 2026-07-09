@@ -1,5 +1,10 @@
 name: lead-acceptance-check
 
+# ⚠️ 诚实声明（假绿灯治理第一刀）：本 workflow 只在 ubuntu-latest 上 grep 校验
+#    lead-acceptance markdown 证据文件是否存在，非真机执行、不 REAL_PUBLISH、
+#    不碰真微信/真抖音。它【不是】Path4/Path1 真机验收闸，绿≠真机跑过。
+#    （golden-path-4-smoke.yml 旧注释曾称本 workflow 做「rog-xian 真扫码真发」，系误述，已更正。）
+
 on:
   pull_request:
     paths:
