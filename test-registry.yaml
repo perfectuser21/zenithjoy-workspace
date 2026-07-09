@@ -4551,3 +4551,11 @@ agent_suite:
   status: active
   product: 员工工具
   note: "sprint(07090821): 员工工具中心 + Skill Evaluator E2E Playwright——staff 账号侧边栏可见、路由守卫、上传轮询报告、错误处理"
+
+- id: staff-tools-skill-eval-page-unit
+  path: apps/dashboard/src/pages/__tests__/SkillEvalPage.test.tsx
+  type: unit
+  ci: L3
+  status: active
+  product: 员工工具
+  note: "sprint(07091140,bugfix): SkillEvalPage 上传/轮询请求携带 X-User-Email 头回归测试——修复真实用户白名单内仍403的问题"
