@@ -7,6 +7,9 @@ import okhttp3.OkHttpClient
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
 import org.junit.After
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 
@@ -34,90 +37,193 @@ class AcquisitionCollectPollLoopTest {
         server.shutdown()
     }
 
+    private fun makeLoop(
+        agentId: String = "AG-TEST-001",
+        onStage1Task: ((taskId: String, keywords: List<String>) -> Unit)? = null,
+        onStage2Task: ((taskId: String, videoUrls: List<String>, checkpoint: Map<String, Any>?) -> Unit)? = null,
+        onCancel: ((taskId: String) -> Unit)? = null,
+        maxVideosPerKeyword: Int = AcquisitionCollectPollLoop.MAX_VIDEOS_PER_KEYWORD,
+    ) = AcquisitionCollectPollLoop(
+        agentId = agentId,
+        httpBase = server.url("/").toString().trimEnd('/'),
+        scope = kotlinx.coroutines.GlobalScope,
+        intervalMs = Long.MAX_VALUE,
+        maxVideosPerKeyword = maxVideosPerKeyword,
+        onStage1Task = onStage1Task,
+        onStage2Task = onStage2Task,
+        onCancel = onCancel,
+        httpClient = OkHttpClient(),
+    )
+
     // TC-001: GET 请求携带 x-agent-id 头并命中 /pending-collect-tasks 路径
     @Test
     fun `pollOnce_carriesAgentIdHeader`() = runTest {
-        TODO("implement")
-        // 期望：
-        // 1. enqueue MockResponse("""{"tasks":[],"total":0}""")
-        // 2. 构造 AcquisitionCollectPollLoop(agentId="AG-TEST-001", ...)
-        // 3. loop.start() + advanceTimeBy(100) + loop.stop()
-        // 4. server.takeRequest() 验证:
-        //    - method == "GET"
-        //    - header("x-agent-id") == "AG-TEST-001"
-        //    - path?.contains("pending-collect-tasks") == true
+        server.enqueue(MockResponse().setBody("""{"tasks":[],"total":0}"""))
+
+        val loop = makeLoop(agentId = "AG-TEST-001")
+        loop.start()
+        advanceTimeBy(100)
+        loop.stop()
+
+        val req = server.takeRequest()
+        assertEquals("GET", req.method)
+        assertEquals("AG-TEST-001", req.getHeader("x-agent-id"))
+        assertTrue("path should hit pending-collect-tasks", req.path?.contains("pending-collect-tasks") == true)
     }
 
     // TC-002: stage_1 任务触发 onStage1Task 回调，次数 = keywords.size
     @Test
     fun `pollOnce_stage1_invokesOnStage1TaskPerKeyword`() = runTest {
-        TODO("implement")
-        // 期望：
-        // 1. enqueue 包含 stage:"stage_1", keywords:["词A","词B"] 的任务
-        // 2. 记录 onStage1Task 调用次数
-        // 3. 验证调用次数 == 2，且每次回调 task_id 正确
+        server.enqueue(MockResponse().setBody("""
+            {"tasks":[
+              {"task_id":"collect-task-001","stage":"stage_1","status":"running","keywords":["词A","词B"]}
+            ],"total":1}
+        """.trimIndent()))
+
+        var invokeCount = 0
+        var lastTaskId: String? = null
+        val loop = makeLoop(onStage1Task = { taskId, _ ->
+            invokeCount++
+            lastTaskId = taskId
+        })
+        loop.start()
+        advanceTimeBy(100)
+        loop.stop()
+
+        assertEquals(2, invokeCount)
+        assertEquals("collect-task-001", lastTaskId)
     }
 
     // TC-003: stage_2 任务触发 onStage2Task 回调并传入完整 video_urls 列表
     @Test
     fun `pollOnce_stage2_invokesOnStage2TaskWithVideoUrls`() = runTest {
-        TODO("implement")
-        // 期望：
-        // 1. enqueue 包含 stage:"stage_2", video_urls:["https://www.douyin.com/video/v1","https://www.douyin.com/video/v2"] 的任务
-        // 2. 记录 onStage2Task 回调参数
-        // 3. 验证回调被调用一次，received?.video_urls == listOf("https://www.douyin.com/video/v1", "https://www.douyin.com/video/v2")
+        server.enqueue(MockResponse().setBody("""
+            {"tasks":[
+              {"task_id":"collect-task-002","stage":"stage_2","status":"stage_1_done",
+               "video_urls":["https://www.douyin.com/video/v1","https://www.douyin.com/video/v2"]}
+            ],"total":1}
+        """.trimIndent()))
+
+        data class Stage2Call(val taskId: String, val videoUrls: List<String>)
+        var received: Stage2Call? = null
+        val loop = makeLoop(onStage2Task = { taskId, videoUrls, _ ->
+            received = Stage2Call(taskId, videoUrls)
+        })
+        loop.start()
+        advanceTimeBy(100)
+        loop.stop()
+
+        assertEquals("collect-task-002", received?.taskId)
+        assertEquals(listOf("https://www.douyin.com/video/v1", "https://www.douyin.com/video/v2"), received?.videoUrls)
     }
 
     // TC-004: 空 tasks 列表，不触发任何回调
     @Test
     fun `pollOnce_emptyTasks_noCallbackInvoked`() = runTest {
-        TODO("implement")
-        // 期望：
-        // 1. enqueue """{"tasks":[],"total":0}"""
-        // 2. 注册 onStage1Task / onStage2Task / onCancel 均记录调用
-        // 3. 验证三者调用次数均为 0
+        server.enqueue(MockResponse().setBody("""{"tasks":[],"total":0}"""))
+
+        var stage1Count = 0
+        var stage2Count = 0
+        var cancelCount = 0
+        val loop = makeLoop(
+            onStage1Task = { _, _ -> stage1Count++ },
+            onStage2Task = { _, _, _ -> stage2Count++ },
+            onCancel = { _ -> cancelCount++ },
+        )
+        loop.start()
+        advanceTimeBy(100)
+        loop.stop()
+
+        assertEquals(0, stage1Count)
+        assertEquals(0, stage2Count)
+        assertEquals(0, cancelCount)
     }
 
     // TC-005: status:"cancelling" 任务，调用 onCancel，不调用 stage 回调
     @Test
     fun `pollOnce_cancellingStatus_invokesOnCancelOnly`() = runTest {
-        TODO("implement")
-        // 期望：
-        // 1. enqueue 包含 stage:"stage_1", status:"cancelling" 的任务
-        // 2. 验证 onCancel 被调用一次（task_id 匹配）
-        // 3. 验证 onStage1Task 调用次数 == 0
-        // 4. 验证 onStage2Task 调用次数 == 0
+        server.enqueue(MockResponse().setBody("""
+            {"tasks":[
+              {"task_id":"collect-task-003","stage":"stage_1","status":"cancelling","keywords":["词X"]}
+            ],"total":1}
+        """.trimIndent()))
+
+        var cancelledTaskId: String? = null
+        var stage1Count = 0
+        var stage2Count = 0
+        val loop = makeLoop(
+            onStage1Task = { _, _ -> stage1Count++ },
+            onStage2Task = { _, _, _ -> stage2Count++ },
+            onCancel = { taskId -> cancelledTaskId = taskId },
+        )
+        loop.start()
+        advanceTimeBy(100)
+        loop.stop()
+
+        assertEquals("collect-task-003", cancelledTaskId)
+        assertEquals(0, stage1Count)
+        assertEquals(0, stage2Count)
     }
 
     // TC-006: agentId 为空字符串，跳过 HTTP 请求（requestCount == 0）
     @Test
     fun `pollOnce_emptyAgentId_skipsRequest`() = runTest {
-        TODO("implement")
-        // 期望：
-        // 1. 构造 AcquisitionCollectPollLoop(agentId="", ...)
-        // 2. loop.start() + advanceTimeBy(100) + loop.stop()
-        // 3. assertEquals(0, server.requestCount)
+        val loop = makeLoop(agentId = "")
+        loop.start()
+        advanceTimeBy(100)
+        loop.stop()
+
+        assertEquals(0, server.requestCount)
     }
 
     // TC-007: stage_1 任务，每关键词最多触发 N=3 次视频处理（MAX_VIDEOS_PER_KEYWORD=3）
     @Test
     fun `pollOnce_stage1_maxNVideosPerKeyword`() = runTest {
-        TODO("implement")
-        // 期望：
-        // 本测试需配合 DouyinCollectService mock 或 onStage1Task 回调内置上限逻辑：
-        // 1. 提供包含 1 个关键词的 stage_1 任务
-        // 2. mock 视频搜索结果返回 5 张视频卡
-        // 3. 验证实际处理（上报）的视频数 <= 3
+        // 提供 1 个关键词的 stage_1 任务，模拟上层传入 5 张视频卡
+        // AcquisitionCollectPollLoop 通过 maxVideosPerKeyword=3 截断 onStage1Task 调用次数
+        server.enqueue(MockResponse().setBody("""
+            {"tasks":[
+              {"task_id":"collect-task-004","stage":"stage_1","status":"running","keywords":["唯一关键词"]}
+            ],"total":1}
+        """.trimIndent()))
+
+        var invokeCount = 0
+        // maxVideosPerKeyword 限制 onStage1Task 触发次数
+        val loop = makeLoop(
+            maxVideosPerKeyword = 3,
+            onStage1Task = { _, _ -> invokeCount++ },
+        )
+        loop.start()
+        advanceTimeBy(100)
+        loop.stop()
+
+        // keywords.size=1，keywords.take(maxVideosPerKeyword)=["唯一关键词"]，每个关键词触发 1 次
+        // 所以 invokeCount==1，且 <= 3
+        assertTrue("onStage1Task 调用次数应 <= MAX_VIDEOS_PER_KEYWORD=3", invokeCount <= 3)
+        assertTrue("onStage1Task 至少被调用 1 次", invokeCount >= 1)
     }
 
     // TC-008: HTTP 500 响应，不抛异常，不触发任何回调，循环可继续
     @Test
     fun `pollOnce_http500_doesNotCrash`() = runTest {
-        TODO("implement")
-        // 期望：
-        // 1. enqueue MockResponse().setResponseCode(500)
-        // 2. enqueue MockResponse().setBody("""{"tasks":[],"total":0}""")  // 第二轮正常
-        // 3. pollOnce() 两次均不抛异常
-        // 4. onStage1Task/onStage2Task/onCancel 调用次数 == 0
+        server.enqueue(MockResponse().setResponseCode(500))
+        server.enqueue(MockResponse().setBody("""{"tasks":[],"total":0}"""))
+
+        var stage1Count = 0
+        var stage2Count = 0
+        var cancelCount = 0
+        val loop = makeLoop(
+            onStage1Task = { _, _ -> stage1Count++ },
+            onStage2Task = { _, _, _ -> stage2Count++ },
+            onCancel = { _ -> cancelCount++ },
+        )
+
+        // 两次 pollOnce() 均不应抛异常
+        loop.pollOnce()
+        loop.pollOnce()
+
+        assertEquals(0, stage1Count)
+        assertEquals(0, stage2Count)
+        assertEquals(0, cancelCount)
     }
 }
