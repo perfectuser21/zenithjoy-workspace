@@ -43,6 +43,9 @@ check_403() {
   local desc="$1"; shift
   local CODE
   CODE=$(curl -s -o /dev/null -w "%{http_code}" "$@" 2>/dev/null || echo "000")
+  # 本环境 curl 连接失败时偶发把 %{http_code} 写两遍成 "000000"（同批既存 debt
+  # 脚本同一现象，如 sse-smoke.sh），统一只取前 3 位规避
+  CODE="${CODE:0:3}"
   if [ "$CODE" = "000" ]; then
     echo "  SKIP: $desc — API 不可达 (${API_BASE} 未启动)"
     SKIP=$((SKIP+1))
