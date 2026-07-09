@@ -23,8 +23,8 @@ function buildUrl(path: string) {
 
 // ─── mock 辅助：stub skill-drafts API ─────────────────────────────────────────
 
-function stubSkillDraftsApi(page: import('@playwright/test').Page) {
-  let messageCount = 0;
+function stubSkillDraftsApi(page: import('@playwright/test').Page, initialMessageCount = 0) {
+  let messageCount = initialMessageCount;
 
   // POST /api/staff/skill-drafts → 创建草稿
   page.route('**/api/staff/skill-drafts', async (route) => {
@@ -205,7 +205,9 @@ test(
 test(
   '[BEHAVIOR] 断点续聊：刷新页面后从 localStorage 恢复 draft_id，历史消息可见',
   async ({ page }) => {
-    stubSkillDraftsApi(page);
+    // initialMessageCount=1：模拟"上次已经聊过一轮"，本测试验证的是刷新后
+    // 历史可见，不是发消息这个动作本身（发消息由 BEHAVIOR 8 覆盖）
+    stubSkillDraftsApi(page, 1);
     await page.goto(buildUrl('/staff/skill-eval'));
 
     // 模拟已有 draft_id 在 localStorage
