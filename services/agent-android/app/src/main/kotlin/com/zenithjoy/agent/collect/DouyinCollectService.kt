@@ -1,10 +1,13 @@
 package com.zenithjoy.agent.collect
 
 import android.accessibilityservice.AccessibilityService
+import android.accessibilityservice.GestureDescription
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.graphics.Path
+import android.graphics.Rect
 import android.os.Bundle
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
@@ -236,14 +239,21 @@ class DouyinCollectService : AccessibilityService() {
             "com.ss.android.ugc.aweme:id/search_confirm",
             "com.ss.android.ugc.aweme:id/btn_search",
         )
-        if (confirmBtn != null) {
-            confirmBtn.performAction(AccessibilityNodeInfo.ACTION_CLICK)
-        } else {
-            // 找不到确认按钮时，用 ACTION_IME_ENTER 确认 IME 的搜索/回车动作——
-            // 之前误用 ACTION_NEXT_AT_MOVEMENT_GRANULARITY（按粒度移动光标），
-            // 那不是提交搜索的动作，是这个 bug 的根因之一。
-            val input = findFirstEditText(root)
-            input?.performAction(AccessibilityNodeInfo.AccessibilityAction.ACTION_IME_ENTER.id)
+        val searchTextNode = findNodeByText(root, "搜索")
+        // 真机 adb + uiautomator dump 实测确认（Douyin 39.5.0）：确认按钮 resource-id
+        // 被混淆成随机短串(如 "4ty")，且该节点及所有祖先 clickable=false——
+        // performAction(ACTION_CLICK) 点不到，必须用手势坐标模拟真实触摸（已用
+        // `input tap` 原始坐标验证能成功提交搜索）。
+        when {
+            confirmBtn != null -> confirmBtn.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+            searchTextNode != null -> tapNodeCenter(searchTextNode)
+            else -> {
+                // 找不到确认按钮时，用 ACTION_IME_ENTER 确认 IME 的搜索/回车动作兜底——
+                // 之前误用 ACTION_NEXT_AT_MOVEMENT_GRANULARITY（按粒度移动光标），
+                // 那不是提交搜索的动作，是这个 bug 的根因之一。
+                val input = findFirstEditText(root)
+                input?.performAction(AccessibilityNodeInfo.AccessibilityAction.ACTION_IME_ENTER.id)
+            }
         }
         searchTriggeredAtMs = android.os.SystemClock.elapsedRealtime()
         state = State.WAITING_SEARCH_RESULTS
@@ -472,6 +482,30 @@ class DouyinCollectService : AccessibilityService() {
             for (i in 0 until node.childCount) node.getChild(i)?.let { queue.add(it) }
         }
         return null
+    }
+
+    /** 按精确文本匹配（用于 resource-id 混淆、且节点 clickable=false 不支持无障碍点击的按钮）。 */
+    private fun findNodeByText(root: AccessibilityNodeInfo, text: String): AccessibilityNodeInfo? {
+        val queue = ArrayDeque<AccessibilityNodeInfo>()
+        queue.add(root)
+        while (queue.isNotEmpty()) {
+            val node = queue.removeFirst()
+            if (node.text?.toString() == text) return node
+            for (i in 0 until node.childCount) node.getChild(i)?.let { queue.add(it) }
+        }
+        return null
+    }
+
+    /** 用 dispatchGesture 在节点 bounds 中心模拟一次真实触摸点击（绕开 clickable=false 的无障碍点击限制）。 */
+    private fun tapNodeCenter(node: AccessibilityNodeInfo) {
+        val bounds = Rect()
+        node.getBoundsInScreen(bounds)
+        if (bounds.isEmpty) return
+        val path = Path().apply { moveTo(bounds.centerX().toFloat(), bounds.centerY().toFloat()) }
+        val gesture = GestureDescription.Builder()
+            .addStroke(GestureDescription.StrokeDescription(path, 0, 80))
+            .build()
+        dispatchGesture(gesture, null, null)
     }
 
     private fun findFirstEditText(root: AccessibilityNodeInfo): AccessibilityNodeInfo? {
