@@ -4578,6 +4578,14 @@ agent_suite:
   product: 员工工具
   note: "sprint(07091721): 对话式创建Skill——skill_drafts 路由集成测试（创建/读取/SSE转发/生成提交/状态机/staffGuard）"
 
+- id: skill-create-state-machine-unit
+  path: apps/api/src/services/__tests__/skillDraftStateMachine.test.ts
+  type: unit
+  ci: L3
+  status: active
+  product: 员工工具
+  note: "sprint(07091721): 对话式创建Skill——skillDraftStateMachine 纯函数单测（idle/chatting/generating/done/error 全路径转移）"
+
 - id: skill-create-e2e
   path: apps/dashboard/e2e/skill-create.spec.ts
   type: e2e
