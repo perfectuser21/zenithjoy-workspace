@@ -59,3 +59,4 @@ line04-selfheal-observability-smoke.sh
 wechat-cs-reply-smoke.sh
 staff-skill-eval-smoke.sh
 android-collect-protocol-v2-smoke.sh
+cross-line-seam-smoke.sh

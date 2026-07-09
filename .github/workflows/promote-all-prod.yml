@@ -11,6 +11,13 @@ name: Promote ALL to Production (一键放行闸：后端+前端整体)
 #
 #   ★只能人手点★（workflow_dispatch + confirm=PROMOTE）。绝无 push/schedule 自动触发；AI 不自行 promote。
 #   原 promote-prod.yml / promote-dashboard-prod.yml 保留，供只切单边的场景。
+#
+# Release Gate（2026-07-09 刀C，6站2轨模型第⑤站）：
+#   人工放行保持不变，但机器先查证据——没绿不让点：
+#     ① staging 部署最近一次绿（deploy-us-vps + deploy-dashboard-staging）
+#     ② 真机 nightly 最近 2 晚绿且最新一次 <36h（nightly-real-machine-staging）
+#   nightly 可豁免（waive_nightly 填理由，纯云轨改动/引导期用），豁免会大字记录在 run summary——
+#   谁豁免谁负责。promote 成功后自动打 release-YYYYMMDD-N tag + GitHub Release（回滚锚+记录）。
 # ───────────────────────────────────────────────────────────────────────────
 
 on:
@@ -24,6 +31,14 @@ on:
         description: '输入 PROMOTE 确认整体放行到生产（后端 :5200 + 前端 autopilot）'
         required: true
         default: ''
+      waive_nightly:
+        description: '豁免 nightly 检查的理由（纯云轨改动/引导期才填；留空=必须查 nightly 绿）'
+        required: false
+        default: ''
+
+permissions:
+  contents: write   # release-tag：打 tag + 建 GitHub Release
+  actions: read     # release-gate：查 staging/nightly run 结论
 
 # 与单独 promote-prod 共用串行组，防并发切生产 :5200
 concurrency:
@@ -31,9 +46,77 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # ─── 第⑤站 Release Gate：机器查证据，没绿不让点（人工放行仍是 confirm=PROMOTE）───
+  release-gate:
+    name: 0/2 Release Gate（查 staging 绿 + nightly 最近2晚绿）
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: 二次确认闸（必须输入 PROMOTE）
+        run: |
+          if [ "${{ github.event.inputs.confirm }}" != "PROMOTE" ]; then
+            echo "❌ confirm 不是 PROMOTE（实际='${{ github.event.inputs.confirm }}'）——拒绝 promote。"
+            echo "   人工卡点：请确认已打开常驻 staging（:5201 / staging-autopilot）看过、确认 OK，再在 confirm 框输入 PROMOTE。"
+            exit 1
+          fi
+          echo "✅ 人工二次确认通过，开始查放行证据。"
+
+      - name: 证据① staging 部署最近一次必须绿
+        run: |
+          FAIL=0
+          for WF in deploy-us-vps.yml deploy-dashboard-staging.yml; do
+            C=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow "$WF" \
+                  --status completed --limit 1 --json conclusion --jq '.[0].conclusion // "none"')
+            echo "staging 部署 $WF 最近结论: $C"
+            if [ "$C" != "success" ]; then
+              echo "::error::$WF 最近一次不是绿（$C）——staging 本身没部署好，不能 promote"
+              FAIL=1
+            fi
+          done
+          [ "$FAIL" = "0" ] || exit 1
+
+      - name: 证据② 真机 nightly 最近 2 晚绿且最新 <36h（可 waive）
+        run: |
+          WAIVE="${{ github.event.inputs.waive_nightly }}"
+          if [ -n "$WAIVE" ]; then
+            echo "⚠️ nightly 检查被人工豁免，理由：$WAIVE"
+            {
+              echo "## ⚠️ Release Gate：nightly 检查被豁免"
+              echo ""
+              echo "理由：**$WAIVE**（豁免人=触发者 ${{ github.actor }}，谁豁免谁负责）"
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          RUNS=$(gh run list --repo "$GITHUB_REPOSITORY" \
+                   --workflow nightly-real-machine-staging.yml \
+                   --status completed --limit 2 --json conclusion,createdAt \
+                   --jq '[.[] | {c:.conclusion, t:.createdAt}]')
+          COUNT=$(echo "$RUNS" | jq 'length')
+          echo "nightly 最近完成记录: $RUNS"
+          if [ "$COUNT" = "0" ]; then
+            echo "::error::nightly 一次都没跑过——没有真机证据，不能 promote（或填 waive_nightly）"
+            exit 1
+          fi
+          BAD=$(echo "$RUNS" | jq '[.[] | select(.c != "success")] | length')
+          if [ "$BAD" != "0" ]; then
+            echo "::error::nightly 最近 $COUNT 次中有非绿——真机回归没过，不能 promote（先修红或填 waive_nightly）"
+            exit 1
+          fi
+          LATEST=$(echo "$RUNS" | jq -r '.[0].t')
+          AGE_H=$(( ( $(date +%s) - $(date -d "$LATEST" +%s) ) / 3600 ))
+          echo "最新 nightly: $LATEST（${AGE_H}h 前）"
+          if [ "$AGE_H" -gt 36 ]; then
+            echo "::error::最新 nightly 已 ${AGE_H}h（>36h）——证据过期（nightly 可能停摆），不能 promote"
+            exit 1
+          fi
+          echo "✅ nightly 证据齐：最近 ${COUNT} 次全绿，最新 ${AGE_H}h 前。"
+
   promote-backend:
     name: 1/2 后端 → 生产 :5200（蓝绿+迁移+失败自动回滚）
     runs-on: ubuntu-latest
+    needs: [release-gate]
     steps:
       - name: 二次确认闸（必须输入 PROMOTE）
         run: |
@@ -162,6 +245,40 @@ jobs:
               exit 1
             fi
             echo "✅ 整体 promote 完成：后端 :5200 + 前端 autopilot 都已切到生产，公网验证 200。"
+
+  # ─── Release 落章：promote 成功 → 打 tag + GitHub Release（回滚锚 + 自动 release notes）───
+  release-tag:
+    name: 3/3 打 release tag + Release notes
+    runs-on: ubuntu-latest
+    needs: [promote-backend, promote-dashboard]
+    timeout-minutes: 5
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Create release tag (release-YYYYMMDD-N)
+        run: |
+          # 目标 sha：输入 sha 优先；否则用 origin/main HEAD（dashboard promote 的就是它；
+          # 后端用 staging 软链 sha，正常流程二者一致——不一致时以 release notes 里的 PR 清单为准复核）
+          SHA="${{ github.event.inputs.sha }}"
+          [ -n "$SHA" ] || SHA=$(git rev-parse origin/main)
+          BASE="release-$(TZ=Asia/Shanghai date +%Y%m%d)"
+          N=1
+          while git ls-remote --tags origin "refs/tags/$BASE-$N" | grep -q .; do N=$((N+1)); done
+          TAG="$BASE-$N"
+          echo "打 tag: $TAG @ $SHA"
+          gh release create "$TAG" --repo "$GITHUB_REPOSITORY" \
+            --target "$SHA" --title "$TAG" --generate-notes
+          {
+            echo "## 🏷️ Release 已落章：$TAG"
+            echo ""
+            echo "- sha: \`$SHA\`"
+            echo "- 回滚：rollback-prod.yml 回到上一个 release tag"
+            echo "- Release notes（含本次上线 PR 清单）见 Releases 页"
+          } >> "$GITHUB_STEP_SUMMARY"
 
   notify-failure:
     name: Notify Brain on promote failure
