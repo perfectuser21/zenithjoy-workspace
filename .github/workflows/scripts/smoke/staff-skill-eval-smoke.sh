@@ -5,7 +5,6 @@
 set -e
 
 API_BASE="${API_BASE:-http://localhost:3000}"
-INTERNAL_TOKEN="${ZENITHJOY_INTERNAL_TOKEN:-}"
 PASS=0
 FAIL=0
 
