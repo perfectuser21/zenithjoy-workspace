@@ -103,7 +103,7 @@ function stubSkillDraftsApi(page: import('@playwright/test').Page) {
 
 // ─── [BEHAVIOR] 8：Golden Path ────────────────────────────────────────────────
 
-test.fixme(
+test(
   '[BEHAVIOR] 8 — Golden Path：staff 登录 → 创建 Skill tab → 聊天 → 生成 → 跳转报告页',
   async ({ page }) => {
     stubSkillDraftsApi(page);
@@ -151,7 +151,7 @@ test.fixme(
 
 // ─── [BEHAVIOR] 10：mmv 不可达错误 ────────────────────────────────────────────
 
-test.fixme(
+test(
   '[BEHAVIOR] 10 — mmv 不可达：前端显示"AI 暂时连不上，稍后重试"，不出现无限 loading',
   async ({ page }) => {
     // mock /chat 返回 event: error
@@ -202,7 +202,7 @@ test.fixme(
 
 // ─── [BEHAVIOR] 8 辅助：断点续聊（Tab 重开后历史可见）─────────────────────────
 
-test.fixme(
+test(
   '[BEHAVIOR] 断点续聊：刷新页面后从 localStorage 恢复 draft_id，历史消息可见',
   async ({ page }) => {
     stubSkillDraftsApi(page);

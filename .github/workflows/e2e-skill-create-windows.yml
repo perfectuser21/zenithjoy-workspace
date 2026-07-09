@@ -1,0 +1,187 @@
+name: E2E — 对话式创建 Skill（Staff Tools Hub）
+
+# 结构照抄 e2e-line02-lead-human-handoff-windows.yml：changes 路径过滤 + ubuntu-latest
+# 真跑（page.route mock 全系 skill-drafts API，不依赖真实 mmv/SSH）+ windows-latest
+# 手动 dispatch evaluator。聚合 gate 保证不相关 PR 不被这条 workflow 卡住。
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch: {}
+
+concurrency:
+  group: e2e-skill-create-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  changes:
+    name: changes — 变更路径检测
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      skill_create: ${{ steps.filter.outputs.skill_create }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: filter
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" != "pull_request" ]; then
+            echo "skill_create=true" >> "$GITHUB_OUTPUT"
+            echo "non-PR event: run all"
+            exit 0
+          fi
+          BASE="${{ github.event.pull_request.base.sha }}"
+          HEAD="${{ github.event.pull_request.head.sha }}"
+          FILES=$(git diff --name-only "$BASE...$HEAD")
+          echo "$FILES"
+          MATCH=false
+          if echo "$FILES" | grep -qE '^(apps/api/src/routes/skill-drafts\.ts|apps/api/src/services/skillDraftStateMachine\.ts|apps/api/db/migrations/.*skill_drafts.*\.sql|apps/dashboard/src/pages/SkillEvalPage\.tsx|apps/dashboard/src/pages/SkillCreateTab\.tsx|apps/dashboard/e2e/skill-create\.spec\.ts|sprints/07091721-conversational-skill-creation/|\.github/workflows/e2e-skill-create-windows\.yml$)'; then
+            MATCH=true
+          fi
+          echo "skill_create=$MATCH" >> "$GITHUB_OUTPUT"
+
+  # PR CI job: ubuntu-latest + Postgres + apps/api + Vite dev server
+  # 全系 skill-drafts API 在 spec 里用 page.route mock（不打真实后端），
+  # 但仍起真实 apps/api，避免页面其它初始化请求（导航/鉴权等）打到真网络出乱子。
+  e2e:
+    name: Playwright — 对话式创建 Skill（ubuntu chromium）
+    needs: changes
+    if: needs.changes.outputs.skill_create == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: cecelia
+          POSTGRES_PASSWORD: cecelia
+          POSTGRES_DB: cecelia
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DATABASE_HOST: localhost
+      DATABASE_PORT: 5432
+      DATABASE_USER: cecelia
+      DATABASE_PASSWORD: cecelia
+      DATABASE_NAME: cecelia
+      PORT: 5200
+      NODE_ENV: test
+      BETTER_AUTH_SECRET: ci-only-secret-32-chars-min-not-prod-123
+      BETTER_AUTH_URL: http://localhost:5200
+      STAFF_EMAILS: 'staff@test.com'
+      TOAPI_API_KEY: ci-only-dummy-key-not-real
+
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install deps
+        run: npm ci
+
+      - name: Create zenithjoy schema + pgcrypto
+        env:
+          PGPASSWORD: cecelia
+        run: |
+          psql -h localhost -U cecelia -d cecelia -c "CREATE SCHEMA IF NOT EXISTS zenithjoy;"
+          psql -h localhost -U cecelia -d cecelia -c "CREATE EXTENSION IF NOT EXISTS \"pgcrypto\";"
+
+      - name: Run apps/api/db migrations
+        env:
+          PGPASSWORD: cecelia
+        run: |
+          for f in apps/api/db/migrations/*.sql; do
+            echo "→ $f"
+            psql -h localhost -U cecelia -d cecelia -v ON_ERROR_STOP=1 -f "$f"
+          done
+
+      - name: Build apps/api
+        working-directory: apps/api
+        run: npm run build
+
+      - name: Start apps/api
+        working-directory: apps/api
+        run: |
+          node dist/index.js > /tmp/apps-api.log 2>&1 &
+          for i in $(seq 1 30); do
+            if curl -fs http://localhost:5200/health >/dev/null 2>&1; then
+              echo "apps/api ready after ${i}s"
+              break
+            fi
+            sleep 1
+          done
+          curl -fs http://localhost:5200/health || (cat /tmp/apps-api.log && exit 1)
+
+      - name: Install Playwright Chromium
+        working-directory: apps/dashboard
+        run: npx playwright install chromium --with-deps
+
+      - name: Start Vite dev server (VITE_SKIP_AUTH=true)
+        working-directory: apps/dashboard
+        env:
+          VITE_SKIP_AUTH: 'true'
+          VITE_MOCK_USER_ID: 'ci-e2e-user'
+          VITE_MOCK_USER_NAME: 'CI E2E User'
+        run: |
+          npx vite --port 5174 &
+          for i in $(seq 1 30); do
+            if curl -fs http://localhost:5174 > /dev/null 2>&1; then
+              echo "Vite ready after ${i}s"
+              break
+            fi
+            sleep 1
+          done
+          curl -fs http://localhost:5174 || (echo "Vite failed to start"; exit 1)
+
+      - name: Run Playwright E2E
+        working-directory: apps/dashboard
+        env:
+          E2E_BASE_URL: 'http://localhost:5174'
+        run: npx playwright test e2e/skill-create.spec.ts --reporter=list
+
+      - name: Dump apps/api log on failure
+        if: failure()
+        run: cat /tmp/apps-api.log || true
+
+      - name: Upload artifacts on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-skill-create-artifacts
+          path: |
+            apps/dashboard/test-results/
+            apps/dashboard/screenshots/
+          retention-days: 7
+
+  # ─── 聚合 gate（required context）───────────────────────────────────────────
+  skill-create-gate:
+    name: Skill Create Gate Passed
+    needs: [changes, e2e]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Skill Create Gate
+        run: |
+          echo "changes=${{ needs.changes.result }} e2e=${{ needs.e2e.result }}"
+          if [ "${{ needs.changes.result }}" != "success" ]; then
+            echo "FAIL: changes 检测未成功"; exit 1
+          fi
+          case "${{ needs.e2e.result }}" in
+            success|skipped) ;;
+            *) echo "FAIL: e2e 结果为 ${{ needs.e2e.result }}"; exit 1 ;;
+          esac
+          echo "Skill Create Gate Passed"
