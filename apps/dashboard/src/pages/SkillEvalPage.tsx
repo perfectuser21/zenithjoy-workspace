@@ -1,4 +1,6 @@
 import { useState, useRef, useCallback } from 'react';
+import { useAuth } from '../contexts/AuthContext';
+import { adminFetch } from '../lib/admin-fetch';
 
 const API_UPLOAD = '/api/staff/skill-eval/upload';
 const API_STATUS = (jobId: string) => `/api/staff/skill-eval/status/${jobId}`;
@@ -26,6 +28,7 @@ type PageState =
   | { phase: 'error'; message: string };
 
 export default function SkillEvalPage() {
+  const { user } = useAuth();
   const [state, setState] = useState<PageState>({ phase: 'idle' });
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -47,7 +50,7 @@ export default function SkillEvalPage() {
     }
 
     try {
-      const res = await fetch(API_STATUS(jobId));
+      const res = await adminFetch(API_STATUS(jobId), user?.email);
       if (res.status === 504) {
         stopPolling();
         setState({ phase: 'error', message: '评测服务暂不可用（网关超时 504）' });
@@ -70,7 +73,7 @@ export default function SkillEvalPage() {
     }
 
     pollTimerRef.current = setTimeout(() => poll(jobId, startedAt), POLL_INTERVAL_MS);
-  }, [stopPolling]);
+  }, [stopPolling, user?.email]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0] ?? null;
@@ -86,7 +89,7 @@ export default function SkillEvalPage() {
     formData.append('file', selectedFile);
 
     try {
-      const res = await fetch(API_UPLOAD, { method: 'POST', body: formData });
+      const res = await adminFetch(API_UPLOAD, user?.email, { method: 'POST', body: formData });
       if (res.status === 504) {
         setState({ phase: 'error', message: '评测服务暂不可用（网关超时 504）' });
         return;
@@ -108,7 +111,7 @@ export default function SkillEvalPage() {
     } catch {
       setState({ phase: 'error', message: '上传失败（网络错误，请检查连接）' });
     }
-  }, [selectedFile, poll]);
+  }, [selectedFile, poll, user?.email]);
 
   const handleReset = () => {
     stopPolling();
