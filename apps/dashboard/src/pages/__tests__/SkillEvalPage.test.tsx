@@ -24,6 +24,9 @@ vi.mock('../../contexts/AuthContext', () => ({
   useAuth: () => mockAuth,
   AuthProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));
+vi.mock('react-router-dom', () => ({
+  useNavigate: () => vi.fn(),
+}));
 
 function makeFile(name = 'skill.zip') {
   return new File(['zip-bytes'], name, { type: 'application/zip' });

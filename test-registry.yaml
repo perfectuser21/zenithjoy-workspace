@@ -4559,3 +4559,11 @@ agent_suite:
   status: active
   product: 员工工具
   note: "sprint(07091140,bugfix): SkillEvalPage 上传/轮询请求携带 X-User-Email 头回归测试——修复真实用户白名单内仍403的问题"
+
+- id: staff-tools-full-bleed-routes-unit
+  path: apps/dashboard/src/lib/__tests__/full-bleed-routes.test.ts
+  type: unit
+  ci: L3
+  status: active
+  product: 员工工具
+  note: "sprint(07091516): /staff/skill-eval 全宽独立页面判定回归测试——报告页改成跟 content-factory 输出页同款全屏模式，不再挤在侧边栏旁边"
