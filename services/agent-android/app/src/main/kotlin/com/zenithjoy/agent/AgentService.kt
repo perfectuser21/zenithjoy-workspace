@@ -110,6 +110,7 @@ class AgentService : Service() {
 
     private val collectResultReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
+            android.util.Log.i(TAG, "DEBUG collectResultReceiver.onReceive fired: action=${intent?.action}")
             if (intent?.action != DouyinCollectService.ACTION_COLLECT_RESULT) return
             val taskId = intent.getStringExtra(DouyinCollectService.EXTRA_TASK_ID) ?: ""
             val ok = intent.getBooleanExtra(DouyinCollectService.EXTRA_RESULT_OK, false)
@@ -144,6 +145,18 @@ class AgentService : Service() {
         registerReceiver(warmupResultReceiver,
             IntentFilter(DeviceAccountScanService.ACTION_ACCOUNT_WARMUP_RESULT),
             RECEIVER_NOT_EXPORTED)
+
+        // 真机实测确认(2026-07-09)：DouyinCollectService 的 ACTION_COLLECT_RESULT
+        // 广播在这台荣耀真机上发得出去(sendBroadcast 正常返回)，但 collectResultReceiver
+        // 从未收到——广播这条路不可靠，原因未查清(疑似 MagicOS 后台广播限流)。改用
+        // 同进程直接回调作为主路径，broadcast 只留兜底。
+        DouyinCollectService.onCollectResult = { taskId, ok, commentIds, commentTexts, error ->
+            val comments = commentIds.indices.map { i ->
+                CommentEntry(commenterId = commentIds[i], text = commentTexts.getOrElse(i) { "" })
+            }
+            val result = CollectResult(ok = ok, keyword = "", comments = comments, error = error)
+            scope.launch { reportCollectResult(taskId, result) }
+        }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -166,6 +179,7 @@ class AgentService : Service() {
         unregisterReceiver(dmOutreachResultReceiver)
         unregisterReceiver(accountScanResultReceiver)
         unregisterReceiver(warmupResultReceiver)
+        DouyinCollectService.onCollectResult = null
         super.onDestroy()
     }
 
@@ -458,6 +472,7 @@ class AgentService : Service() {
     // /api/agent/task-result 端点不存在——服务端唯一能接住评论数据的是已有的
     // /api/acquisition/comment-score-result（Windows Agent 已在用同一端点，字段一致）。
     private fun reportCollectResult(taskId: String, result: CollectResult) {
+        android.util.Log.i(TAG, "DEBUG reportCollectResult called: taskId=$taskId")
         if (taskId.isEmpty()) return
         val url = "${config.deriveHttpBase()}/api/acquisition/comment-score-result"
         val body = gson.toJson(result.toCommentScoreResultPayload(taskId))
