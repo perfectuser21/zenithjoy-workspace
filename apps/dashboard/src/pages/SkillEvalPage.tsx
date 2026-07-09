@@ -13,6 +13,20 @@ const POLL_INTERVAL_MS = 3000;
 // 真实用户上传后端已 completed 却被前端提前误报"轮询超时"（真实复现）。
 const POLL_TIMEOUT_MS = 5 * 60 * 1000;
 
+// 照抄原始独立页面（packages/brain/src/skill-eval-page/index.html）的选项列表
+const PLATFORM_OPTIONS = ['Claude', 'Codex', 'ChatGPT', 'Other'];
+const JOURNEY_OPTIONS = [
+  { value: 'line00', label: 'Line 00 — ZenithJoy 运营中枢' },
+  { value: 'line01', label: 'Line 01 — 智能发布' },
+  { value: 'line02', label: 'Line 02 — 客户智能获客路径' },
+  { value: 'line03', label: 'Line 03 — GEO' },
+  { value: 'line04', label: 'Line 04 — 客户私域 AI 接管' },
+  { value: 'line05', label: 'Line 05 — 视频剪辑' },
+  { value: 'line06', label: 'Line 06 — 小龙虾' },
+  { value: 'line07', label: 'Line 07 — AI 爆款视频翻拍' },
+  { value: 'line10', label: 'Line 10 — ZenithJoy 客户管理' },
+];
+
 type PageState =
   | { phase: 'idle' }
   | { phase: 'uploading' }
@@ -26,6 +40,8 @@ export default function SkillEvalPage() {
   const navigate = useNavigate();
   const [state, setState] = useState<PageState>({ phase: 'idle' });
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [platform, setPlatform] = useState('');
+  const [journeyId, setJourneyId] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const pollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -102,10 +118,20 @@ export default function SkillEvalPage() {
 
   const handleSubmit = useCallback(async () => {
     if (!selectedFile) return;
+    if (!platform) {
+      setState({ phase: 'error', message: '请选择来源平台' });
+      return;
+    }
+    if (!journeyId) {
+      setState({ phase: 'error', message: '请选择归属线' });
+      return;
+    }
     setState({ phase: 'uploading' });
 
     const formData = new FormData();
     formData.append('file', selectedFile);
+    formData.append('platform', platform);
+    formData.append('journey_id', journeyId);
 
     try {
       const res = await adminFetch(API_UPLOAD, user?.email, { method: 'POST', body: formData });
@@ -130,7 +156,7 @@ export default function SkillEvalPage() {
     } catch {
       setState({ phase: 'error', message: '上传失败（网络错误，请检查连接）' });
     }
-  }, [selectedFile, poll, user?.email]);
+  }, [selectedFile, platform, journeyId, poll, user?.email]);
 
   const handleReset = () => {
     stopPolling();
@@ -160,7 +186,10 @@ export default function SkillEvalPage() {
             title="评测报告"
             data-testid="skill-eval-report-frame"
             srcDoc={state.reportHtml}
-            sandbox=""
+            // 下游报告的 ⛶全图/拖拽/缩放靠内联 <script>（含 <dialog>.showModal()）驱动，
+            // sandbox="" 会把这些全部禁用——allow-scripts 放行脚本，allow-modals 放行
+            // showModal()/close()（不含 allow-same-origin，脚本本身不需要跨域访问）
+            sandbox="allow-scripts allow-modals"
             className="flex-1 w-full border-0"
           />
           <div className="flex-none p-2 text-center border-t border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800">
@@ -177,6 +206,43 @@ export default function SkillEvalPage() {
             </p>
 
             <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-gray-200 dark:border-slate-700 p-6 space-y-4">
+              {/* 来源平台 + 归属线（照抄原始独立页面，之前 ZenithJoy 版本漏掉了这两个必填选择） */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  来源平台
+                </label>
+                <select
+                  data-testid="skill-eval-platform"
+                  value={platform}
+                  onChange={(e) => setPlatform(e.target.value)}
+                  disabled={state.phase === 'uploading' || state.phase === 'polling'}
+                  className="block w-full text-sm rounded-lg border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-gray-900 dark:text-white px-3 py-2 disabled:opacity-50"
+                >
+                  <option value="">请选择平台</option>
+                  {PLATFORM_OPTIONS.map((p) => (
+                    <option key={p} value={p}>{p}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  归属线
+                </label>
+                <select
+                  data-testid="skill-eval-journey"
+                  value={journeyId}
+                  onChange={(e) => setJourneyId(e.target.value)}
+                  disabled={state.phase === 'uploading' || state.phase === 'polling'}
+                  className="block w-full text-sm rounded-lg border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-gray-900 dark:text-white px-3 py-2 disabled:opacity-50"
+                >
+                  <option value="">请选择归属线</option>
+                  {JOURNEY_OPTIONS.map((j) => (
+                    <option key={j.value} value={j.value}>{j.label}</option>
+                  ))}
+                </select>
+              </div>
+
               {/* 文件选择 */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
