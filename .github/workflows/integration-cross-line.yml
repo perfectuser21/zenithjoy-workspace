@@ -104,6 +104,7 @@ jobs:
       - name: Run cross-line seam smoke
         env:
           FIRE_TEST: ${{ github.event.inputs.fire_test || '0' }}
+          REQUIRE_API: '1'   # nightly 真闸：API 不可达=红，禁止走脚本的诚实 SKIP 分支
         run: bash .github/workflows/scripts/smoke/cross-line-seam-smoke.sh
 
       - name: Dump apps/api log on failure

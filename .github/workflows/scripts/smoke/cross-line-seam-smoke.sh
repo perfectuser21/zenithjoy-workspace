@@ -21,6 +21,20 @@ psql_q() { PGPASSWORD="$DB_PASS" psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" 
 fail() { echo "❌ $1"; exit 1; }
 ok()   { echo "✅ $1"; }
 
+# 环境探测：本闸需要运行中的 apps/api。Smoke Glob Runner 只起 postgres 不起 API——
+# 该环境下诚实 SKIP（同 PR#1193 DPAPI skip 范式），真验证只在 integration-cross-line.yml
+# nightly 跑（那里 REQUIRE_API=1，API 不可达=红，不许跳过，防真闸静默变绿）。
+if ! curl -fs "$API_BASE/health" >/dev/null 2>&1; then
+  if [ "${REQUIRE_API:-0}" = "1" ]; then
+    fail "apps/api ($API_BASE) 不可达，且 REQUIRE_API=1 不许跳过——nightly 真闸红"
+  fi
+  echo "⚠️ SKIPPED: apps/api ($API_BASE) 不可达——本环境无真后端，跨Line接缝真验证只在 integration-cross-line nightly 跑，本次绿灯不代表接缝通过"
+  if [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then
+    echo "⚠️ cross-line-seam-smoke SKIPPED：apps/api 不可达（本环境无真后端），绿灯不代表跨Line接缝验证通过；真闸 = integration-cross-line nightly（REQUIRE_API=1）" >> "$GITHUB_STEP_SUMMARY"
+  fi
+  exit 0
+fi
+
 echo "== [1/5] 种子：租户 A/B + 成员 + 客服机 + 关键词任务 =="
 TENANT_A=$(psql_q "INSERT INTO zenithjoy.tenants (name, license_key) VALUES ('ci-cross-a-$RUN_ID','lk_cross_a_$RUN_ID') RETURNING id")
 TENANT_B=$(psql_q "INSERT INTO zenithjoy.tenants (name, license_key) VALUES ('ci-cross-b-$RUN_ID','lk_cross_b_$RUN_ID') RETURNING id")
