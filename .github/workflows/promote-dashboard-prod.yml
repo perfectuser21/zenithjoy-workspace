@@ -81,6 +81,7 @@ jobs:
             export VITE_FEISHU_APP_ID='cli_a937a808ca395bd6'
             export VITE_SKIP_AUTH='false'
             export VITE_SUPER_ADMIN_EMAILS='xuxiao21xx@icloud.com,alexperfectapi01@gmail.com'
+            export VITE_STAFF_EMAILS='408080793@qq.com,121406646@qq.com,Zenithjoy21xx@gmail.com,xuxiao21xx@icloud.com'
             # 环境角标：生产 build 注入 production → 前端不显示任何角标（staging build 注入 staging 才显示橙旗）。
             export VITE_DEPLOY_ENV='production'
             npm run build --workspace=apps/dashboard
