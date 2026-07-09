@@ -4,27 +4,27 @@ import { adminFetch } from '../lib/admin-fetch';
 
 const API_UPLOAD = '/api/staff/skill-eval/upload';
 const API_STATUS = (jobId: string) => `/api/staff/skill-eval/status/${jobId}`;
+const API_REPORT = (jobId: string) => `/api/staff/skill-eval/report/${jobId}`;
 const POLL_INTERVAL_MS = 3000;
 const POLL_TIMEOUT_MS = 60000;
 
-interface EvalResult {
-  score: number;
-  summary: string;
-  details: string;
-}
-
-interface EvalJob {
-  job_id: string;
-  status: 'pending' | 'running' | 'completed' | 'failed';
-  result?: EvalResult;
-  error?: string;
+// 报告结构对齐 skill-eval-formb-assets/eval-prompt.txt 的真实输出 schema
+// （不是臆造字段——曾经的 { score, summary, details } 从未匹配过下游真实响应）
+interface EvalReport {
+  skill?: { name?: string; type?: string; submitter?: string; evaluatedAt?: string };
+  verdict?: { level?: 'pass' | 'partial' | 'fail'; text?: string };
+  stats?: Record<string, string>;
+  summary?: string;
+  nextSteps?: { issue?: string; fix?: string; severity?: 'high' | 'mid' | 'low' }[];
+  health?: { dim?: string; state?: string }[];
 }
 
 type PageState =
   | { phase: 'idle' }
   | { phase: 'uploading' }
   | { phase: 'polling'; jobId: string; startedAt: number }
-  | { phase: 'done'; job: EvalJob }
+  | { phase: 'done'; jobId: string; report: EvalReport }
+  | { phase: 'failed'; jobId: string; reason: string }
   | { phase: 'error'; message: string };
 
 export default function SkillEvalPage() {
@@ -40,6 +40,21 @@ export default function SkillEvalPage() {
       pollTimerRef.current = null;
     }
   }, []);
+
+  const fetchReport = useCallback(async (jobId: string) => {
+    try {
+      const res = await adminFetch(API_REPORT(jobId), user?.email);
+      if (!res.ok) {
+        setState({ phase: 'error', message: `报告获取失败（${res.status}）` });
+        return;
+      }
+      const json = await res.json();
+      const report: EvalReport = json.data ?? json;
+      setState({ phase: 'done', jobId, report });
+    } catch {
+      setState({ phase: 'error', message: '报告获取失败（网络错误，请检查连接）' });
+    }
+  }, [user?.email]);
 
   const poll = useCallback(async (jobId: string, startedAt: number) => {
     const elapsed = Date.now() - startedAt;
@@ -62,10 +77,15 @@ export default function SkillEvalPage() {
         return;
       }
       const json = await res.json();
-      const job: EvalJob = json.data ?? json;
-      if (job.status === 'completed' || job.status === 'failed') {
+      const job = json.data ?? json;
+      if (job.status === 'completed') {
         stopPolling();
-        setState({ phase: 'done', job });
+        await fetchReport(jobId);
+        return;
+      }
+      if (job.status === 'failed') {
+        stopPolling();
+        setState({ phase: 'failed', jobId, reason: job.failure_reason ?? '未知错误' });
         return;
       }
     } catch {
@@ -73,7 +93,7 @@ export default function SkillEvalPage() {
     }
 
     pollTimerRef.current = setTimeout(() => poll(jobId, startedAt), POLL_INTERVAL_MS);
-  }, [stopPolling, user?.email]);
+  }, [stopPolling, user?.email, fetchReport]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0] ?? null;
@@ -188,31 +208,55 @@ export default function SkillEvalPage() {
           </div>
         )}
 
-        {state.phase === 'done' && state.job.status === 'completed' && state.job.result && (
+        {state.phase === 'done' && (
           <div data-testid="skill-eval-report" className="p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-xl space-y-3">
             <div className="flex items-center justify-between">
-              <h3 className="font-semibold text-green-800 dark:text-green-300">评测报告</h3>
-              <span className="text-2xl font-bold text-green-700 dark:text-green-400">
-                {state.job.result.score} 分
-              </span>
+              <h3 className="font-semibold text-green-800 dark:text-green-300">
+                评测报告{state.report.skill?.name ? `：${state.report.skill.name}` : ''}
+              </h3>
+              {state.report.verdict?.level && (
+                <span
+                  className={
+                    'text-sm font-bold px-2 py-0.5 rounded ' +
+                    (state.report.verdict.level === 'pass'
+                      ? 'text-green-700 dark:text-green-400'
+                      : state.report.verdict.level === 'partial'
+                        ? 'text-amber-700 dark:text-amber-400'
+                        : 'text-red-700 dark:text-red-400')
+                  }
+                >
+                  {state.report.verdict.level.toUpperCase()}
+                </span>
+              )}
             </div>
-            <p className="text-sm text-green-700 dark:text-green-400">{state.job.result.summary}</p>
-            {state.job.result.details && (
-              <details className="text-xs text-gray-600 dark:text-gray-400">
-                <summary className="cursor-pointer hover:text-gray-800 dark:hover:text-gray-200">查看详情</summary>
-                <p className="mt-2 whitespace-pre-wrap">{state.job.result.details}</p>
-              </details>
+            {state.report.verdict?.text && (
+              <p className="text-sm text-green-700 dark:text-green-400">{state.report.verdict.text}</p>
             )}
+            {state.report.summary && (
+              <p className="text-sm text-gray-700 dark:text-gray-300">{state.report.summary}</p>
+            )}
+            {state.report.nextSteps && state.report.nextSteps.length > 0 && (
+              <div className="text-xs text-gray-600 dark:text-gray-400 space-y-1">
+                <p className="font-medium">下一步：</p>
+                {state.report.nextSteps.map((s, i) => (
+                  <p key={i}>- {s.issue}{s.fix ? `（${s.fix}）` : ''}</p>
+                ))}
+              </div>
+            )}
+            <details className="text-xs text-gray-500 dark:text-gray-400">
+              <summary className="cursor-pointer hover:text-gray-800 dark:hover:text-gray-200">查看完整报告 JSON</summary>
+              <pre className="mt-2 whitespace-pre-wrap break-all">{JSON.stringify(state.report, null, 2)}</pre>
+            </details>
             <button onClick={handleReset} className="text-xs text-green-700 dark:text-green-400 underline hover:no-underline">
               重新上传
             </button>
           </div>
         )}
 
-        {state.phase === 'done' && state.job.status === 'failed' && (
+        {state.phase === 'failed' && (
           <div data-testid="skill-eval-error" className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
             <p className="text-sm text-red-700 dark:text-red-400">
-              评测失败：{state.job.error ?? '未知错误'}
+              评测失败：{state.reason}
             </p>
             <button onClick={handleReset} className="mt-2 text-xs text-red-600 dark:text-red-400 underline hover:no-underline">
               重新上传

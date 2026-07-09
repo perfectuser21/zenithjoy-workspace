@@ -42,10 +42,23 @@ function stubSkillEvalApi(page: import('@playwright/test').Page) {
       contentType: 'application/json',
       body: JSON.stringify({
         success: true,
+        data: { job_id: 'test-job-001', status: 'completed', report_url: null, failure_reason: null },
+      }),
+    });
+  });
+
+  // 报告 schema 对齐下游 Cecelia 真实响应（skill/verdict/summary/...），
+  // 不是早期臆造的 { score, summary, details }
+  page.route('**/api/staff/skill-eval/report/test-job-001', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        success: true,
         data: {
-          job_id: 'test-job-001',
-          status: 'completed',
-          result: { score: 92, summary: '技能评测通过，质量优秀。', details: '所有合同行为均通过验收。' },
+          skill: { name: 'test-skill' },
+          verdict: { level: 'pass', text: '技能评测通过，质量优秀。' },
+          summary: '所有合同行为均通过验收。',
         },
       }),
     });
