@@ -6,6 +6,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { acquisitionRouter } from './acquisition';
 import db from '../db/connection';
+import { scoreLeads } from '../services/acquisition-dispatch';
 
 const mockClientQuery = vi.fn();
 const mockClientRelease = vi.fn();
@@ -1255,5 +1256,89 @@ describe('POST /api/acquisition/collect/report-videos — Stage1 清单回报 [B
     expect(res.body.data.status).toBe('cancelled');
     const upd = mockClientQuery.mock.calls.map((c) => String(c[0])).find((s) => s.includes("'cancelled'") || s.includes('cancelled'));
     expect(upd).toBeTruthy();
+  });
+});
+
+describe('POST /api/acquisition/collect/report — 终态守卫 + settle 结算 [BEHAVIOR]', () => {
+  const TASK_ID = '00000000-0000-0000-0000-00000000c002';
+  const TENANT = '00000000-0000-0000-0000-0000000000aa';
+
+  const taskRow = (over: Record<string, unknown> = {}) => ({
+    id: TASK_ID, tenant_id: TENANT, status: 'running', error_code: null,
+    video_count: 0, lead_count_raw: 0, keywords: ['k1'], ...over,
+  });
+
+  beforeEach(() => {
+    vi.mocked(db.query).mockReset();
+    vi.mocked(db.query).mockResolvedValue({ rows: [] } as any);
+    mockClientQuery.mockReset();
+    mockClientRelease.mockReset();
+    vi.mocked(scoreLeads).mockClear();
+  });
+
+  const clientImpl = (row: Record<string, unknown>, videoStats = { total: 1, done: 1 }) =>
+    async (sql: unknown) => {
+      const s = String(sql);
+      if (s.includes('FOR UPDATE')) return { rows: [row] };
+      if (s.includes('count(*)')) return { rows: [{ total: videoStats.total, done: videoStats.done }] };
+      if (s.includes('INSERT INTO zenithjoy.acquisition_leads') && s.includes('RETURNING')) return { rows: [{ id: 'lead-1' }] };
+      return { rows: [] };
+    };
+
+  it('终态任务回报 → 200 ignored:true，零写库', async () => {
+    mockClientQuery.mockImplementation(clientImpl(taskRow({ status: 'done' })));
+    const res = await request(app).post('/api/acquisition/collect/report')
+      .send({ task_id: TASK_ID, video_id: 'v1', commenters: [{ nickname: 'n1' }] });
+    expect(res.status).toBe(200);
+    expect(res.body.data.ignored).toBe(true);
+    expect(res.body.data.status).toBe('done');
+    const writes = mockClientQuery.mock.calls.map((c) => String(c[0]))
+      .filter((s) => s.startsWith('INSERT') || s.startsWith('UPDATE'));
+    expect(writes).toHaveLength(0);
+  });
+
+  it('cancelling 任务回报 → 落章 cancelled，不写 leads', async () => {
+    mockClientQuery.mockImplementation(clientImpl(taskRow({ status: 'cancelling' })));
+    const res = await request(app).post('/api/acquisition/collect/report')
+      .send({ task_id: TASK_ID, video_id: 'v1', commenters: [{ nickname: 'n1' }] });
+    expect(res.status).toBe(200);
+    expect(res.body.data.status).toBe('cancelled');
+    const leadWrites = mockClientQuery.mock.calls.map((c) => String(c[0]))
+      .filter((s) => s.includes('acquisition_leads'));
+    expect(leadWrites).toHaveLength(0);
+  });
+
+  it('回报 upsert 用 (task_id, video_id) 并打 comments_reported_at', async () => {
+    mockClientQuery.mockImplementation(clientImpl(taskRow()));
+    await request(app).post('/api/acquisition/collect/report')
+      .send({ task_id: TASK_ID, video_id: 'v1', commenters: [] });
+    const calls = mockClientQuery.mock.calls.map((c) => String(c[0]));
+    const upsert = calls.find((s) => s.includes('acquisition_collect_videos'));
+    expect(upsert).toMatch(/ON CONFLICT \(task_id, video_id\)/);
+    expect(upsert).toMatch(/comments_reported_at/);
+  });
+
+  it('倒推逻辑已删：running 任务非终态回报不再因计数推进 stage_1_done', async () => {
+    mockClientQuery.mockImplementation(clientImpl(taskRow({ video_count: 2, keywords: ['k1'] }), { total: 3, done: 3 }));
+    const res = await request(app).post('/api/acquisition/collect/report')
+      .send({ task_id: TASK_ID, video_id: 'v3', commenters: [] });
+    expect(res.body.data.status).toBe('running');
+  });
+
+  it('stage_1_done 最后一个视频回完（无 terminal）→ 服务端自动 done + dispatch 点火一次', async () => {
+    mockClientQuery.mockImplementation(clientImpl(taskRow({ status: 'stage_1_done', lead_count_raw: 4 }), { total: 2, done: 2 }));
+    const res = await request(app).post('/api/acquisition/collect/report')
+      .send({ task_id: TASK_ID, video_id: 'v2', commenters: [{ nickname: 'n9' }] });
+    expect(res.body.data.status).toBe('done');
+    await new Promise((r) => setTimeout(r, 20));
+    expect(vi.mocked(scoreLeads)).toHaveBeenCalledTimes(1);
+  });
+
+  it('未进终态的回报不点火 dispatch', async () => {
+    mockClientQuery.mockImplementation(clientImpl(taskRow({ status: 'stage_1_done' }), { total: 3, done: 1 }));
+    await request(app).post('/api/acquisition/collect/report')
+      .send({ task_id: TASK_ID, video_id: 'v1', commenters: [{ nickname: 'n1' }] });
+    await new Promise((r) => setTimeout(r, 20));
+    expect(vi.mocked(scoreLeads)).not.toHaveBeenCalled();
   });
 });
