@@ -45,7 +45,19 @@ if [ "$CANCEL_RESP" != "400" ]; then
 fi
 echo "[smoke] PASS: collect/cancel param validation 400"
 
-# 4. 验证 Kotlin 单元测试通过（AcquisitionCollectPollLoopTest）
+# 4. 验证 collect/report-videos 端点 — 缺 x-agent-id 返回 401（端点存在且鉴权生效）
+RV_RESP=$(curl -sf -o /dev/null -w "%{http_code}" \
+  -X POST "$BASE_URL/api/acquisition/collect/report-videos" \
+  -H "Content-Type: application/json" \
+  -d '{"task_id":"00000000-0000-0000-0000-000000000000","videos":[{"video_id":"smoke_vid"}]}' 2>/dev/null || true)
+echo "[smoke] collect/report-videos (no x-agent-id) status=$RV_RESP"
+if [ "$RV_RESP" != "401" ]; then
+  echo "[smoke] FAIL: collect/report-videos without x-agent-id returned $RV_RESP (expected 401)"
+  exit 1
+fi
+echo "[smoke] PASS: collect/report-videos auth gate 401"
+
+# 5. 验证 Kotlin 单元测试通过（AcquisitionCollectPollLoopTest）
 if command -v gradle &>/dev/null || [ -f services/agent-android/gradlew ]; then
   echo "[smoke] running Kotlin unit tests..."
   cd services/agent-android && ./gradlew :app:testDebugUnitTest \
