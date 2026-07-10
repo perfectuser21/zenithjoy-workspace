@@ -5,8 +5,6 @@
  *   - dedupCommenters       — 按 (sec_uid) 去重 + sec_uid 缺失按 nickname 弱去重，重复仅累加 source_video_ids
  *   - profileUrlForSecUid   — sec_uid → 抖音主页链接；残缺号(null) → null
  *   - EMPTY_DOC_MIN_CHARS   — 企业信息文档「空」判定纯文本字数下限
- *   - resolveTerminalStatus — report 终态回报 → {status, error_code}（区分 failed/partial 原因）
- *   - shouldSweepToTerminal — sweep-timeouts 判定：stale running 转终态，pending(离线 agent) 永不转
  *
  * 端到端行为（建文档 / 扩词 / 派单 / 落库 / 写飞书 / 查状态）由 routes/acquisition.ts 编排，
  * 以 contract-dod.md 的 [BEHAVIOR] manual:bash 为 evaluator oracle。
@@ -118,48 +116,6 @@ export interface TerminalReport {
   partial_reason?: string | null;
 }
 
-export interface TerminalResolution {
-  status: CollectStatus;
-  error_code: string | null;
-}
-
-/**
- * 终态回报 → {status, error_code}：
- *  - failed  → status=failed，error_code=入参 error_code（DOUYIN_RISK/DOUYIN_CAPTCHA/... 字面落库区分原因）
- *  - partial → status=partial，error_code=partial_reason（video_insufficient/comments_closed/zero_comment）
- *  - done    → status=done，error_code=null
- */
-export function resolveTerminalStatus(report: TerminalReport): TerminalResolution {
-  if (report.terminal === 'failed') {
-    return { status: 'failed', error_code: report.error_code ?? null };
-  }
-  if (report.terminal === 'partial') {
-    return { status: 'partial', error_code: report.partial_reason ?? report.error_code ?? null };
-  }
-  if (report.terminal === 'done') {
-    return { status: 'done', error_code: null };
-  }
-  // 'stage_1' 或其他非标准值 → stage_1_done（阶段性完成，等待 Stage 2 评论采集）
-  return { status: 'stage_1_done', error_code: null };
-}
-
-export interface SweepCandidate {
-  status: string;
-  /** 任务「年龄」毫秒（NOW - started_at|created_at）。 */
-  ageMs: number;
-}
-
-/**
- * sweep-timeouts 判定（纯函数）：
- *  - running 且 ageMs > 10min → true（stale running 转终态，修「假死在 running」）
- *  - pending → 永远 false（离线 agent 未领取，保留不丢，等上线续抓）
- *  - 其它态（已终态 / cancelling）→ false
- */
-export function shouldSweepToTerminal(c: SweepCandidate): boolean {
-  if (c.status !== 'running') return false;
-  return c.ageMs > SWEEP_TIMEOUT_MS;
-}
-
 /**
  * 从企业信息文档纯文本兜底抽 3 个关键词（DeepSeek 降级时用）。
  * 取中文/英数词片段，去重，不足 3 个用文档整体兜底，保证恰好 3 个。
@@ -231,7 +187,7 @@ export function settleCollectTask(input: SettleInput): SettleResult {
     return { status: 'partial', error_code: t.partial_reason ?? t.error_code ?? null, changed: true };
   }
   if (t?.terminal) {
-    // 非标准值（旧 agent 'stage_1'）→ stage_1_done，与 resolveTerminalStatus 兜底一致
+    // 非标准值（旧 agent 'stage_1'）→ stage_1_done（向后兼容）
     return { status: 'stage_1_done', error_code: null, changed: cur !== 'stage_1_done' };
   }
   if (cur === 'stage_1_done' && allDone) {

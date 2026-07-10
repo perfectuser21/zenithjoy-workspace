@@ -97,6 +97,8 @@ design.md 是设计意图，本文档是实现落地后的契约。
 
 `video_count` 在这三种分支里都不变（空清单分支不写 `acquisition_collect_videos`）。
 
+注意：任务已 `stage_1_done` 后不应再发空清单+`reason`——那会把整张清单作废并直接结算终态；Stage2 中断应走断点重跑，不是重发空清单。
+
 ---
 
 ## 2. `settleCollectTask()` 纯函数
