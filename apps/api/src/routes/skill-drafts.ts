@@ -12,6 +12,8 @@ import { Router } from 'express';
 import { spawn } from 'child_process';
 import axios from 'axios';
 import { randomUUID } from 'crypto';
+import { readFile } from 'node:fs/promises';
+import { basename } from 'node:path';
 import { staffGuard } from '../middleware/staff';
 import { transition, type SkillDraftStatus } from '../services/skillDraftStateMachine';
 import pool from '../db/connection';
@@ -25,6 +27,113 @@ const SKILL_CREATE_SYSTEM_PROMPT =
   '规则：第一，先通过提问搞清楚这个 skill 要解决什么场景、输入输出是什么、触发条件和边界是什么，一次问一两个具体问题，不要问"你想创建什么"这种通用问题，用户已经说了要做 skill，直接进入需求细化；' +
   '第二，每轮追问聚焦在这个 skill 的设计细节上；第三，当员工说"生成吧"时，调用 skill-creator 这个 skill 工具，用已经澄清的需求走完整创建流程，产出一个完整的 skill 目录并打包成 zip，最后输出 zip 的绝对路径。' +
   '注意：你的回复内容里不要出现英文圆括号、方括号、星号、反引号这类 shell 特殊符号，一律用中文全角标点或直接不用括号。';
+
+// bug（生产实测，用户复测发现）：之前 /generate 端点从没真的调用 skill-creator，
+// 只是往下游评测接口发了个空表单——"生成吧"看起来在跑，实际不产出任何真实
+// skill，更别提给员工一个可下载的东西。补上真实调用：复用聊天时已经建立的
+// claude session（--resume），让 claude 调用 skill-creator skill 走完整创建
+// 流程，完成后自己把 skill 目录打包成 zip，在最后一行按约定格式报路径，
+// 这边解析出来读文件、真实提交进评测流水线。
+const GENERATE_TIMEOUT_MS = 5 * 60 * 1000; // 真实skill创建比单轮聊天慢得多，给5分钟预算
+
+function shellQuoteArg(s: string): string {
+  return "'" + s.split("'").join("'\\''") + "'";
+}
+
+function runSkillCreatorAndPackage(sessionId: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const genInstruction =
+      '请调用 skill-creator 这个 skill 工具，完成我们刚才这段对话里已经聊清楚的 skill 创建。' +
+      '创建完成后，把生成的 skill 目录用 zip 命令打包成一个 zip 文件，放在 /tmp 目录下，' +
+      '文件名用这个 skill 的英文短横线命名（比如 smart-cs.zip）。' +
+      '最后单独一行输出：SKILL_ZIP_PATH: 后面跟这个压缩包的绝对路径，这一行不要有任何多余文字包裹，方便程序解析。';
+
+    const claudeAccountDir = process.env.MMV_CLAUDE_ACCOUNT_DIR ?? '/Users/administrator/.claude-account1';
+    const remoteCommand = [
+      `CLAUDE_CONFIG_DIR=${claudeAccountDir}`,
+      'claude',
+      '-p',
+      '--output-format',
+      'stream-json',
+      '--verbose',
+      '--append-system-prompt',
+      shellQuoteArg(SKILL_CREATE_SYSTEM_PROMPT),
+      '--resume',
+      sessionId,
+      shellQuoteArg(genInstruction),
+    ].join(' ');
+
+    const child = spawn('ssh', ['mmv', remoteCommand]);
+    child.stdin?.end();
+
+    let fullText = '';
+    let sawError = false;
+    let errMsg = '';
+    let settled = false;
+
+    const timeout = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      child.kill();
+      reject(new Error('生成超时（超过5分钟未完成，稍后可在技能库里查看是否已经跑完）'));
+    }, GENERATE_TIMEOUT_MS);
+
+    child.stdout.on('data', (chunk: Buffer) => {
+      const lines = chunk.toString().split('\n').filter(Boolean);
+      for (const line of lines) {
+        let parsed: {
+          type?: string;
+          is_error?: boolean;
+          errors?: string[];
+          result?: string;
+          message?: { content?: Array<{ type?: string; text?: string }> };
+        };
+        try {
+          parsed = JSON.parse(line);
+        } catch {
+          continue;
+        }
+        if (parsed.type === 'assistant' && Array.isArray(parsed.message?.content)) {
+          for (const block of parsed.message.content) {
+            if (block.type === 'text' && block.text) fullText += block.text;
+          }
+        }
+        if (parsed.type === 'result' && parsed.is_error) {
+          sawError = true;
+          errMsg = parsed.errors?.[0] ?? parsed.result ?? '生成失败';
+        }
+      }
+    });
+
+    function finish() {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeout);
+      if (sawError) {
+        reject(new Error(errMsg));
+        return;
+      }
+      const match = fullText.match(/SKILL_ZIP_PATH:\s*(\S+)/);
+      if (!match) {
+        reject(new Error('生成完成但未能解析出zip路径，请检查生成过程'));
+        return;
+      }
+      resolve(match[1]);
+    }
+
+    child.stdout.on('end', finish);
+    child.on('close', (code: number | null) => {
+      if (settled) return;
+      if (code !== 0 && !fullText) {
+        settled = true;
+        clearTimeout(timeout);
+        reject(new Error('生成进程异常退出'));
+      } else {
+        finish();
+      }
+    });
+  });
+}
 
 const router = Router();
 router.use(staffGuard);
@@ -400,8 +509,24 @@ router.post('/:id/generate', async (req, res): Promise<void> => {
   }
 
   try {
+    if (!draft?.session_id) {
+      throw new Error('还没有跟AI聊过需求，无法生成——先在对话里说清楚要做什么skill');
+    }
+
+    // 真实调用 skill-creator（复用聊天时已建立的 session，claude 已经知道
+    // 员工要做什么skill），产出 zip 后本地读取（API 进程和 mmv 是同一台机器，
+    // 不需要额外传输），再走真实multipart提交进评测流水线
+    const zipPath = await runSkillCreatorAndPackage(draft.session_id);
+    const fileBuffer = await readFile(zipPath);
+    const skillName = basename(zipPath).replace(/\.zip$/i, '');
+
     const SKILL_EVAL_BASE = process.env.CECELIA_SKILL_EVAL_URL ?? 'http://hk-vps:9100';
-    const uploadRes = await axios.post(`${SKILL_EVAL_BASE}/upload`, new FormData(), {
+    const fd = new FormData();
+    fd.append('file', new Blob([fileBuffer]), basename(zipPath));
+    fd.append('skill_name', skillName);
+    fd.append('submitter', typeof req.headers['x-user-email'] === 'string' ? req.headers['x-user-email'] : '');
+
+    const uploadRes = await axios.post(`${SKILL_EVAL_BASE}/upload`, fd, {
       timeout: 30000,
     });
 
@@ -422,7 +547,7 @@ router.post('/:id/generate', async (req, res): Promise<void> => {
       data: { status: 'done', job_id: jobId },
       timestamp: new Date().toISOString(),
     });
-  } catch {
+  } catch (err) {
     if (draft) {
       draft.status = transition(draft.status, 'ERROR');
       draft.updated_at = new Date().toISOString();
@@ -431,7 +556,7 @@ router.post('/:id/generate', async (req, res): Promise<void> => {
 
     res.status(500).json({
       success: false,
-      error: { code: 'GENERATE_FAILED', message: '生成失败' },
+      error: { code: 'GENERATE_FAILED', message: err instanceof Error ? err.message : '生成失败' },
       timestamp: new Date().toISOString(),
     });
   }

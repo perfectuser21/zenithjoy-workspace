@@ -39,6 +39,12 @@ vi.mock('axios', () => ({
   },
 }));
 
+// Mock fs/promises.readFile（/generate 端点读取真实生成的zip文件用）
+const readFileMock = vi.hoisted(() => vi.fn());
+vi.mock('node:fs/promises', () => ({
+  readFile: readFileMock,
+}));
+
 // Mock child_process.spawn（用于 SSH 转发）
 const spawnMock = vi.hoisted(() => vi.fn());
 vi.mock('child_process', () => ({
@@ -533,38 +539,84 @@ describe('[BEHAVIOR] 5 — POST /api/staff/skill-drafts/:id/generate 生成 + �
   beforeEach(() => {
     vi.stubEnv('STAFF_EMAILS', 'staff@test.com');
     axiosPostMock.mockReset();
+    readFileMock.mockReset();
+    spawnMock.mockReset();
   });
 
-  it('mock SSH skill-creator + mock upload → status=done + job_id 写入 DB', async () => {
-    // mock: SSH skill-creator 成功（exit 0，stdout 返回 zip 路径）
-    // mock: POST /api/staff/skill-eval/upload → { job_id: "gen-job-001" }
+  it('真实调用skill-creator（resume已有session）→ 解析zip路径 → 读文件 → 真实multipart提交 → status=done + job_id 写入 DB', async () => {
+    // 先创建草稿 + 走一轮聊天，建立真实 session_id（/generate 依赖它 --resume）
+    const { EventEmitter } = await import('events');
+    const chatStdout = new EventEmitter() as NodeJS.ReadableStream & { destroy?: () => void };
+    spawnMock.mockReturnValueOnce({
+      stdout: chatStdout,
+      stderr: new EventEmitter(),
+      on: vi.fn(),
+      kill: vi.fn(),
+    });
+    const createRes = await request(app)
+      .post('/api/staff/skill-drafts')
+      .set('X-User-Email', 'staff@test.com')
+      .send({});
+    const draftId: string = createRes.body.data.id;
+    setTimeout(() => {
+      (chatStdout as NodeJS.EventEmitter).emit(
+        'data',
+        Buffer.from(
+          '{"type":"assistant","session_id":"gen-session-1","message":{"content":[{"type":"text","text":"好的"}]}}\n'
+        )
+      );
+      (chatStdout as NodeJS.EventEmitter).emit('end');
+    }, 10);
+    await request(app)
+      .post(`/api/staff/skill-drafts/${draftId}/chat`)
+      .set('X-User-Email', 'staff@test.com')
+      .send({ message: '我想做一个日报skill' });
+
+    // mock: 真实调用 --resume gen-session-1 走 skill-creator，最后一行报zip路径
     axiosPostMock.mockResolvedValue({
       status: 200,
       data: { success: true, data: { job_id: 'gen-job-001' } },
     });
+    readFileMock.mockResolvedValue(Buffer.from('fake-zip-bytes'));
 
-    const { EventEmitter } = await import('events');
-    const fakeProcess = {
-      stdout: new EventEmitter(),
+    const genStdout = new EventEmitter() as NodeJS.ReadableStream & { destroy?: () => void };
+    let genCloseHandler: ((code: number | null) => void) | undefined;
+    spawnMock.mockReturnValueOnce({
+      stdout: genStdout,
       stderr: new EventEmitter(),
       on: vi.fn((event: string, cb: (...args: unknown[]) => void) => {
-        if (event === 'close') {
-          // mock: skill-creator 成功并在 /tmp/test-skill.zip 产出 zip
-          setTimeout(() => cb(0), 10);
-        }
+        if (event === 'close') genCloseHandler = cb as (code: number | null) => void;
       }),
       kill: vi.fn(),
-    };
-    spawnMock.mockReturnValue(fakeProcess);
+    });
+    setTimeout(() => {
+      (genStdout as NodeJS.EventEmitter).emit(
+        'data',
+        Buffer.from(
+          '{"type":"assistant","message":{"content":[{"type":"text","text":"SKILL_ZIP_PATH: /tmp/test-skill.zip"}]}}\n'
+        )
+      );
+      (genStdout as NodeJS.EventEmitter).emit('end');
+      genCloseHandler?.(0);
+    }, 10);
 
     const res = await request(app)
-      .post('/api/staff/skill-drafts/test-draft-id-001/generate')
+      .post(`/api/staff/skill-drafts/${draftId}/generate`)
       .set('X-User-Email', 'staff@test.com');
 
-    // Red：端点未实现
     expect(res.status).toBe(200);
     expect(res.body.data.status).toBe('done');
     expect(res.body.data.job_id).toBe('gen-job-001');
+
+    // 真实读了那个zip文件，且真实multipart提交带了skill_name
+    expect(readFileMock).toHaveBeenCalledWith('/tmp/test-skill.zip');
+    const [, uploadedForm] = axiosPostMock.mock.calls[0] as [string, FormData];
+    expect(uploadedForm.get('skill_name')).toBe('test-skill');
+
+    // 第二次spawn（生成那次）真的传了 --resume gen-session-1
+    const genSpawnArgs = spawnMock.mock.calls[1][1] as string[];
+    expect(genSpawnArgs[1]).toContain('--resume');
+    expect(genSpawnArgs[1]).toContain('gen-session-1');
   });
 });
 
