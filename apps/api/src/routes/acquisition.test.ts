@@ -629,6 +629,26 @@ describe('GET /api/acquisition/pending-collect-tasks — tenant + agent 隔离 [
   });
 });
 
+describe('GET /api/acquisition/pending-collect-tasks — Stage2 只发未完成视频 [BEHAVIOR]', () => {
+  it('stage_1_done 视频查询带 comments_reported_at IS NULL 过滤', async () => {
+    vi.mocked(db.query).mockReset();
+    vi.mocked(db.query).mockImplementation(async (sql: unknown) => {
+      const s = String(sql);
+      if (s.includes('FROM zenithjoy.agents')) return { rows: [{ tenant_id: 't-1' }] } as any;
+      if (s.includes('FROM zenithjoy.acquisition_collect_tasks')) {
+        return { rows: [{ id: '00000000-0000-0000-0000-00000000c003', keywords: ['k'], tenant_id: 't-1', status: 'stage_1_done' }] } as any;
+      }
+      if (s.includes('FROM zenithjoy.acquisition_collect_videos')) return { rows: [{ task_id: '00000000-0000-0000-0000-00000000c003', video_id: 'v-pending' }] } as any;
+      return { rows: [] } as any;
+    });
+    const res = await request(app).get('/api/acquisition/pending-collect-tasks').set('x-agent-id', 'agent-1');
+    expect(res.status).toBe(200);
+    const videoSql = vi.mocked(db.query).mock.calls.map((c) => String(c[0]))
+      .find((s) => s.includes('FROM zenithjoy.acquisition_collect_videos'));
+    expect(videoSql).toMatch(/comments_reported_at IS NULL/);
+  });
+});
+
 describe('POST /api/acquisition/collect/start — agent_id 写入 [REGRESSION]', () => {
   beforeEach(() => { vi.clearAllMocks(); });
 
