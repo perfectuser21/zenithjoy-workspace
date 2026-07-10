@@ -543,80 +543,38 @@ describe('[BEHAVIOR] 5 — POST /api/staff/skill-drafts/:id/generate 生成 + �
     spawnMock.mockReset();
   });
 
-  it('真实调用skill-creator（resume已有session）→ 解析zip路径 → 读文件 → 真实multipart提交 → status=done + job_id 写入 DB', async () => {
-    // 先创建草稿 + 走一轮聊天，建立真实 session_id（/generate 依赖它 --resume）
+  it('长跑改造后 /generate 立即返回 running（detached 后台子进程），不再同步等待结果', async () => {
+    // 长跑改造（sprints/07101942）：/generate 不再同步等待，立即返回 running
+    // 完整的 callback 验收在 skill-drafts-longrun.test.ts B-01~B-05 中
     const { EventEmitter } = await import('events');
-    const chatStdout = new EventEmitter() as NodeJS.ReadableStream & { destroy?: () => void };
-    spawnMock.mockReturnValueOnce({
-      stdout: chatStdout,
-      stderr: new EventEmitter(),
-      on: vi.fn(),
-      kill: vi.fn(),
-    });
+    const fakeChild = new EventEmitter() as NodeJS.EventEmitter & {
+      unref: ReturnType<typeof vi.fn>;
+      stdin: { end: ReturnType<typeof vi.fn> } | null;
+      stdout: NodeJS.EventEmitter;
+      stderr: NodeJS.EventEmitter;
+    };
+    fakeChild.unref = vi.fn();
+    fakeChild.stdin = null;
+    fakeChild.stdout = new EventEmitter();
+    fakeChild.stderr = new EventEmitter();
+    spawnMock.mockReturnValue(fakeChild);
+
     const createRes = await request(app)
       .post('/api/staff/skill-drafts')
       .set('X-User-Email', 'staff@test.com')
       .send({});
     const draftId: string = createRes.body.data.id;
-    setTimeout(() => {
-      (chatStdout as NodeJS.EventEmitter).emit(
-        'data',
-        Buffer.from(
-          '{"type":"assistant","session_id":"gen-session-1","message":{"content":[{"type":"text","text":"好的"}]}}\n'
-        )
-      );
-      (chatStdout as NodeJS.EventEmitter).emit('end');
-    }, 10);
-    await request(app)
-      .post(`/api/staff/skill-drafts/${draftId}/chat`)
-      .set('X-User-Email', 'staff@test.com')
-      .send({ message: '我想做一个日报skill' });
-
-    // mock: 真实调用 --resume gen-session-1 走 skill-creator，最后一行报zip路径
-    axiosPostMock.mockResolvedValue({
-      status: 200,
-      data: { success: true, data: { job_id: 'gen-job-001' } },
-    });
-    readFileMock.mockResolvedValue(Buffer.from('fake-zip-bytes'));
-
-    const genStdout = new EventEmitter() as NodeJS.ReadableStream & { destroy?: () => void };
-    let genCloseHandler: ((code: number | null) => void) | undefined;
-    spawnMock.mockReturnValueOnce({
-      stdout: genStdout,
-      stderr: new EventEmitter(),
-      on: vi.fn((event: string, cb: (...args: unknown[]) => void) => {
-        if (event === 'close') genCloseHandler = cb as (code: number | null) => void;
-      }),
-      kill: vi.fn(),
-    });
-    setTimeout(() => {
-      (genStdout as NodeJS.EventEmitter).emit(
-        'data',
-        Buffer.from(
-          '{"type":"assistant","message":{"content":[{"type":"text","text":"SKILL_ZIP_PATH: /tmp/test-skill.zip"}]}}\n'
-        )
-      );
-      (genStdout as NodeJS.EventEmitter).emit('end');
-      genCloseHandler?.(0);
-    }, 10);
 
     const res = await request(app)
       .post(`/api/staff/skill-drafts/${draftId}/generate`)
       .set('X-User-Email', 'staff@test.com');
 
+    // 长跑改造后：立即返回 running，不是 done
     expect(res.status).toBe(200);
-    expect(res.body.data.status).toBe('done');
-    expect(res.body.data.job_id).toBe('gen-job-001');
-
-    // 真实读了那个zip文件，且真实multipart提交带了skill_name
-    expect(readFileMock).toHaveBeenCalledWith('/tmp/test-skill.zip');
-    const [, uploadedForm] = axiosPostMock.mock.calls[0] as [string, FormData];
-    expect(uploadedForm.get('skill_name')).toBe('test-skill');
-
-    // 第二次spawn（生成那次）真的传了 --resume gen-session-1
-    const genSpawnArgs = spawnMock.mock.calls[1][1] as string[];
-    expect(genSpawnArgs[1]).toContain('--resume');
-    expect(genSpawnArgs[1]).toContain('gen-session-1');
+    expect(res.body.data.status).toBe('running');
+    // 子进程 detached + unref()
+    expect(spawnMock).toHaveBeenCalledTimes(1);
+    expect(fakeChild.unref).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -628,9 +586,10 @@ describe('[BEHAVIOR] 6 — skill_drafts 状态机四条路径（unit）', () => 
     expect(transition('idle', 'CREATE')).toBe('chatting');
   });
 
-  it('chatting → generating：触发生成时 status 变为 generating', async () => {
+  it('chatting → running：长跑改造后触发生成时 status 变为 running（不再是 generating）', async () => {
     const { transition } = await import('../../services/skillDraftStateMachine');
-    expect(transition('chatting', 'GENERATE')).toBe('generating');
+    // 长跑改造（sprints/07101942）：chatting → running（异步后台子进程）
+    expect(transition('chatting', 'GENERATE')).toBe('running');
   });
 
   it('generating → done：生成完成 + 提交成功时 status 变为 done', async () => {

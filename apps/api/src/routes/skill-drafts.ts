@@ -1,157 +1,55 @@
 /**
  * 对话式创建 Skill — skill-drafts 路由
  *
- * POST /api/staff/skill-drafts           — 创建草稿
- * GET  /api/staff/skill-drafts/:id       — 读取草稿
- * POST /api/staff/skill-drafts/:id/chat  — 发送消息（SSE）
- * POST /api/staff/skill-drafts/:id/generate — 触发生成
+ * POST /api/staff/skill-drafts                    — 创建草稿
+ * GET  /api/staff/skill-drafts/:id               — 读取草稿（含软超时检测）
+ * POST /api/staff/skill-drafts/:id/chat          — 发送消息（SSE）
+ * POST /api/staff/skill-drafts/:id/generate      — 触发后台长跑生成（detached 子进程）
+ * POST /api/staff/skill-drafts/:id/answer        — 在 needs_input 状态提交答案
  *
- * 所有路由受 staffGuard 保护
+ * POST /internal/skill-drafts/:id/callback       — 内部回调（子进程完成后通知，无 staffGuard）
+ *
+ * /generate 端点改造（sprints/07101942-skill-create-longrun）：
+ *   - 立即返回 { status: "running" }，不阻塞 HTTP 响应
+ *   - 子进程 detached + unref()，父进程退出后子进程继续运行
+ *   - 子进程完成后 POST /internal/skill-drafts/:id/callback 通知终态
+ *   - 前端每 8 秒轮询 GET /:id 直到终态
+ *
+ * 所有 /api/staff/* 路由受 staffGuard 保护；/internal/* 无 staffGuard。
  */
 import { Router } from 'express';
 import { spawn } from 'child_process';
-import axios from 'axios';
 import { randomUUID } from 'crypto';
-import { readFile } from 'node:fs/promises';
-import { basename } from 'node:path';
 import { staffGuard } from '../middleware/staff';
-import { transition, type SkillDraftStatus } from '../services/skillDraftStateMachine';
+import {
+  transition,
+  GENERATE_ALLOWED,
+  GENERATE_BLOCKED,
+  type SkillDraftStatus,
+} from '../services/skillDraftStateMachine';
 import pool from '../db/connection';
 
-// bug: 之前直接把用户消息原样转发给 claude，没有任何角色设定，claude 就用默认
-// Cecelia 开发助手人设回复（"你想创建一个什么？任务/Sprint/Skill/文档..."），
-// 完全不像在帮员工创建 skill。用 --append-system-prompt 明确这次对话的身份和
-// 流程，让 AI 真的按 skill-creator 方法论边聊边理解，而不是当成通用需求入口。
 const SKILL_CREATE_SYSTEM_PROMPT =
   '你现在的唯一任务是通过对话帮助 ZenithJoy 员工创建一个新的 Claude Code skill——不要引导员工去做其他类型的任务，比如 Sprint、文档、页面，用户来这个对话就是为了做一个 skill。' +
   '规则：第一，先通过提问搞清楚这个 skill 要解决什么场景、输入输出是什么、触发条件和边界是什么，一次问一两个具体问题，不要问"你想创建什么"这种通用问题，用户已经说了要做 skill，直接进入需求细化；' +
   '第二，每轮追问聚焦在这个 skill 的设计细节上；第三，当员工说"生成吧"时，调用 skill-creator 这个 skill 工具，用已经澄清的需求走完整创建流程，产出一个完整的 skill 目录并打包成 zip，最后输出 zip 的绝对路径。' +
   '注意：你的回复内容里不要出现英文圆括号、方括号、星号、反引号这类 shell 特殊符号，一律用中文全角标点或直接不用括号。';
 
-// bug（生产实测，用户复测发现）：之前 /generate 端点从没真的调用 skill-creator，
-// 只是往下游评测接口发了个空表单——"生成吧"看起来在跑，实际不产出任何真实
-// skill，更别提给员工一个可下载的东西。补上真实调用：复用聊天时已经建立的
-// claude session（--resume），让 claude 调用 skill-creator skill 走完整创建
-// 流程，完成后自己把 skill 目录打包成 zip，在最后一行按约定格式报路径，
-// 这边解析出来读文件、真实提交进评测流水线。
-const GENERATE_TIMEOUT_MS = 5 * 60 * 1000; // 真实skill创建比单轮聊天慢得多，给5分钟预算
-
 function shellQuoteArg(s: string): string {
   return "'" + s.split("'").join("'\\''") + "'";
 }
 
-function runSkillCreatorAndPackage(sessionId: string): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const genInstruction =
-      '请调用 skill-creator 这个 skill 工具，完成我们刚才这段对话里已经聊清楚的 skill 创建。' +
-      '创建完成后，把生成的 skill 目录用 zip 命令打包成一个 zip 文件，放在 /tmp 目录下，' +
-      '文件名用这个 skill 的英文短横线命名（比如 smart-cs.zip）。' +
-      '最后单独一行输出：SKILL_ZIP_PATH: 后面跟这个压缩包的绝对路径，这一行不要有任何多余文字包裹，方便程序解析。';
+// ─── 草稿数据结构 ─────────────────────────────────────────────────────────────
 
-    const claudeAccountDir = process.env.MMV_CLAUDE_ACCOUNT_DIR ?? '/Users/administrator/.claude-account1';
-    const remoteCommand = [
-      `CLAUDE_CONFIG_DIR=${claudeAccountDir}`,
-      'claude',
-      '-p',
-      '--output-format',
-      'stream-json',
-      '--verbose',
-      '--append-system-prompt',
-      shellQuoteArg(SKILL_CREATE_SYSTEM_PROMPT),
-      '--resume',
-      sessionId,
-      shellQuoteArg(genInstruction),
-    ].join(' ');
-
-    const child = spawn('ssh', ['mmv', remoteCommand]);
-    child.stdin?.end();
-
-    let fullText = '';
-    let sawError = false;
-    let errMsg = '';
-    let settled = false;
-
-    const timeout = setTimeout(() => {
-      if (settled) return;
-      settled = true;
-      child.kill();
-      reject(new Error('生成超时（超过5分钟未完成，稍后可在技能库里查看是否已经跑完）'));
-    }, GENERATE_TIMEOUT_MS);
-
-    child.stdout.on('data', (chunk: Buffer) => {
-      const lines = chunk.toString().split('\n').filter(Boolean);
-      for (const line of lines) {
-        let parsed: {
-          type?: string;
-          is_error?: boolean;
-          errors?: string[];
-          result?: string;
-          message?: { content?: Array<{ type?: string; text?: string }> };
-        };
-        try {
-          parsed = JSON.parse(line);
-        } catch {
-          continue;
-        }
-        if (parsed.type === 'assistant' && Array.isArray(parsed.message?.content)) {
-          for (const block of parsed.message.content) {
-            if (block.type === 'text' && block.text) fullText += block.text;
-          }
-        }
-        if (parsed.type === 'result' && parsed.is_error) {
-          sawError = true;
-          errMsg = parsed.errors?.[0] ?? parsed.result ?? '生成失败';
-        }
-      }
-    });
-
-    function finish() {
-      if (settled) return;
-      settled = true;
-      clearTimeout(timeout);
-      if (sawError) {
-        reject(new Error(errMsg));
-        return;
-      }
-      const match = fullText.match(/SKILL_ZIP_PATH:\s*(\S+)/);
-      if (!match) {
-        reject(new Error('生成完成但未能解析出zip路径，请检查生成过程'));
-        return;
-      }
-      resolve(match[1]);
-    }
-
-    child.stdout.on('end', finish);
-    child.on('close', (code: number | null) => {
-      if (settled) return;
-      if (code !== 0 && !fullText) {
-        settled = true;
-        clearTimeout(timeout);
-        reject(new Error('生成进程异常退出'));
-      } else {
-        finish();
-      }
-    });
-  });
-}
-
-const router = Router();
-router.use(staffGuard);
-
-// 草稿数据结构。真实持久化在 zenithjoy.skill_drafts 表（见
-// apps/api/db/migrations/20260710_070000_create_skill_drafts.sql）。
-//
-// 同时维护一份进程内 Map 作读写缓存：单个 API 进程处理同一草稿的连续请求
-// （创建 → 发消息 → 读取历史）时优先读本地缓存，DB 写入是"写穿透"（write-through）
-// 且失败不阻塞请求——SSE 转发场景下 mmv 网络本就不稳定，DB 短暂故障不该让整条
-// 对话链路跟着挂掉。真实 DB 记录可通过 `psql ... SELECT * FROM zenithjoy.skill_drafts`
-// 独立核对（不依赖 API 进程内缓存）。
 interface SkillDraft {
   id: string;
   status: SkillDraftStatus;
   session_id: string | null;
   messages_json: Array<{ role: 'user' | 'assistant'; content: string }>;
   job_id: string | null;
+  callback_token: string | null;
+  pending_question: string | null;
+  result_json: Record<string, unknown> | null;
   created_at: string;
   updated_at: string;
 }
@@ -166,16 +64,22 @@ function createDraft(): SkillDraft {
     session_id: null,
     messages_json: [],
     job_id: null,
+    callback_token: null,
+    pending_question: null,
+    result_json: null,
     created_at: now,
     updated_at: now,
   };
 }
 
+// ─── DB 操作 ──────────────────────────────────────────────────────────────────
+
 async function insertDraftRow(draft: SkillDraft): Promise<void> {
   try {
     await pool.query(
-      `INSERT INTO zenithjoy.skill_drafts (id, session_id, messages_json, status, job_id, created_at, updated_at)
-       VALUES ($1, $2, $3::jsonb, $4, $5, $6, $7)
+      `INSERT INTO zenithjoy.skill_drafts
+         (id, session_id, messages_json, status, job_id, callback_token, pending_question, result_json, created_at, updated_at)
+       VALUES ($1, $2, $3::jsonb, $4, $5, $6, $7, $8::jsonb, $9, $10)
        ON CONFLICT (id) DO NOTHING`,
       [
         draft.id,
@@ -183,6 +87,9 @@ async function insertDraftRow(draft: SkillDraft): Promise<void> {
         JSON.stringify(draft.messages_json),
         draft.status,
         draft.job_id,
+        draft.callback_token,
+        draft.pending_question,
+        draft.result_json ? JSON.stringify(draft.result_json) : null,
         draft.created_at,
         draft.updated_at,
       ]
@@ -196,7 +103,8 @@ async function updateDraftRow(draft: SkillDraft): Promise<void> {
   try {
     await pool.query(
       `UPDATE zenithjoy.skill_drafts
-       SET session_id = $2, messages_json = $3::jsonb, status = $4, job_id = $5, updated_at = $6
+       SET session_id = $2, messages_json = $3::jsonb, status = $4, job_id = $5,
+           callback_token = $6, pending_question = $7, result_json = $8::jsonb, updated_at = $9
        WHERE id = $1`,
       [
         draft.id,
@@ -204,6 +112,9 @@ async function updateDraftRow(draft: SkillDraft): Promise<void> {
         JSON.stringify(draft.messages_json),
         draft.status,
         draft.job_id,
+        draft.callback_token,
+        draft.pending_question,
+        draft.result_json ? JSON.stringify(draft.result_json) : null,
         draft.updated_at,
       ]
     );
@@ -218,6 +129,9 @@ interface SkillDraftRow {
   messages_json: SkillDraft['messages_json'];
   status: SkillDraftStatus;
   job_id: string | null;
+  callback_token: string | null;
+  pending_question: string | null;
+  result_json: Record<string, unknown> | null;
   created_at: string | Date;
   updated_at: string | Date;
 }
@@ -225,7 +139,9 @@ interface SkillDraftRow {
 async function fetchDraftRow(id: string): Promise<SkillDraft | null> {
   try {
     const result = await pool.query<SkillDraftRow>(
-      `SELECT id, session_id, messages_json, status, job_id, created_at, updated_at
+      `SELECT id, session_id, messages_json, status, job_id,
+              callback_token, pending_question, result_json,
+              created_at, updated_at
        FROM zenithjoy.skill_drafts WHERE id = $1`,
       [id]
     );
@@ -237,6 +153,9 @@ async function fetchDraftRow(id: string): Promise<SkillDraft | null> {
       session_id: row.session_id,
       messages_json: row.messages_json ?? [],
       job_id: row.job_id,
+      callback_token: row.callback_token,
+      pending_question: row.pending_question,
+      result_json: row.result_json,
       created_at:
         row.created_at instanceof Date ? row.created_at.toISOString() : String(row.created_at),
       updated_at:
@@ -247,6 +166,81 @@ async function fetchDraftRow(id: string): Promise<SkillDraft | null> {
     return null;
   }
 }
+
+// ─── 软超时检测（2 小时）────────────────────────────────────────────────────────
+
+const SOFT_TIMEOUT_MS = 2 * 60 * 60 * 1000; // 2 小时
+
+function isTimedOut(draft: SkillDraft): boolean {
+  if (draft.status !== 'running') return false;
+  const updatedAt = new Date(draft.updated_at).getTime();
+  return Date.now() - updatedAt > SOFT_TIMEOUT_MS;
+}
+
+// ─── 后台子进程 spawn（detached + unref）──────────────────────────────────────
+
+function spawnSkillGeneratorDetached(draft: SkillDraft): void {
+  const claudeAccountDir =
+    process.env.MMV_CLAUDE_ACCOUNT_DIR ?? '/Users/administrator/.claude-account1';
+  const callbackBase =
+    process.env.INTERNAL_API_BASE ?? 'http://localhost:3001';
+
+  // 生成指令：调用 skill-creator，产出 zip，然后 POST callback
+  const genInstruction =
+    '请调用 skill-creator 这个 skill 工具，完成我们刚才这段对话里已经聊清楚的 skill 创建。' +
+    '创建完成后，把生成的 skill 目录用 zip 命令打包成一个 zip 文件，放在 /tmp 目录下，' +
+    '文件名用这个 skill 的英文短横线命名（比如 smart-cs.zip）。' +
+    `最后用 curl 调用内部回调：curl -s -X POST ${callbackBase}/internal/skill-drafts/${draft.id}/callback ` +
+    `-H 'Content-Type: application/json' ` +
+    `-d "{\"token\":\"${draft.callback_token}\",\"event\":\"done\",\"zip_path\":\"<ZIP_PATH>\"}"。` +
+    '如果遇到需要员工决策的问题，调用：' +
+    `curl -s -X POST ${callbackBase}/internal/skill-drafts/${draft.id}/callback ` +
+    `-H 'Content-Type: application/json' ` +
+    `-d "{\"token\":\"${draft.callback_token}\",\"event\":\"needs_input\",\"question\":\"<QUESTION>\"}"。` +
+    '出错时调用：' +
+    `curl -s -X POST ${callbackBase}/internal/skill-drafts/${draft.id}/callback ` +
+    `-H 'Content-Type: application/json' ` +
+    `-d "{\"token\":\"${draft.callback_token}\",\"event\":\"error\",\"error_message\":\"<ERROR>\"}"。`;
+
+  const resumeArgs = draft.session_id ? ['--resume', draft.session_id] : [];
+  const remoteCommand = [
+    `CLAUDE_CONFIG_DIR=${claudeAccountDir}`,
+    'claude',
+    '-p',
+    '--output-format',
+    'stream-json',
+    '--verbose',
+    '--append-system-prompt',
+    shellQuoteArg(SKILL_CREATE_SYSTEM_PROMPT),
+    ...resumeArgs,
+    shellQuoteArg(genInstruction),
+  ].join(' ');
+
+  const logFile = `/tmp/skill-gen-${draft.id}.log`;
+  const child = spawn('ssh', ['mmv', remoteCommand], {
+    detached: true,
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+
+  // stdout/stderr redirect 到日志文件（N-04 可观测）
+  // 仅在真实可读流（含 pipe 方法）时才 pipe，避免 mock/测试环境 EventEmitter 报错
+  if (child.stdout && typeof (child.stdout as { pipe?: unknown }).pipe === 'function') {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const fs = require('fs') as typeof import('fs');
+    const logStream = fs.createWriteStream(logFile, { flags: 'a' });
+    (child.stdout as NodeJS.ReadableStream).pipe(logStream);
+    if (child.stderr && typeof (child.stderr as { pipe?: unknown }).pipe === 'function') {
+      (child.stderr as NodeJS.ReadableStream).pipe(logStream);
+    }
+  }
+
+  child.unref();
+}
+
+// ─── Staff Router（受 staffGuard 保护）──────────────────────────────────────
+
+const router = Router();
+router.use(staffGuard);
 
 // POST / — 创建草稿
 router.post('/', (req, res): void => {
@@ -259,16 +253,17 @@ router.post('/', (req, res): void => {
       id: draft.id,
       status: draft.status,
       messages_json: draft.messages_json,
+      pending_question: draft.pending_question,
+      result_json: draft.result_json,
     },
     timestamp: new Date().toISOString(),
   });
 });
 
-// GET /:id — 读取草稿
+// GET /:id — 读取草稿（含软超时检测）
 router.get('/:id', async (req, res): Promise<void> => {
   let draft = drafts.get(req.params.id);
   if (!draft) {
-    // 进程内缓存未命中（跨进程/重启后）→ 回退查真实 DB
     const dbDraft = await fetchDraftRow(req.params.id);
     if (dbDraft) {
       draft = dbDraft;
@@ -277,18 +272,28 @@ router.get('/:id', async (req, res): Promise<void> => {
   }
 
   if (!draft) {
-    // 草稿确实不存在（前端首次打开、localStorage 里还没有 draft_id）
     res.status(200).json({
       success: true,
       data: {
         id: req.params.id,
         status: 'chatting',
         messages_json: [],
+        pending_question: null,
+        result_json: null,
       },
       timestamp: new Date().toISOString(),
     });
     return;
   }
+
+  // 软超时检测（延迟检测，不主动扫描）
+  if (isTimedOut(draft)) {
+    draft.status = 'error';
+    draft.result_json = { error_message: '生成超时（超过2小时未完成），请重新尝试' };
+    draft.updated_at = new Date().toISOString();
+    void updateDraftRow(draft);
+  }
+
   res.status(200).json({
     success: true,
     data: {
@@ -296,6 +301,9 @@ router.get('/:id', async (req, res): Promise<void> => {
       status: draft.status,
       messages_json: draft.messages_json,
       job_id: draft.job_id,
+      callback_token: draft.callback_token,
+      pending_question: draft.pending_question,
+      result_json: draft.result_json,
     },
     timestamp: new Date().toISOString(),
   });
@@ -312,13 +320,13 @@ router.post('/:id/chat', (req, res): void => {
     void updateDraftRow(draft);
   }
 
-  // 设置 SSE 响应头
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
   res.setHeader('Connection', 'keep-alive');
   res.flushHeaders();
 
-  const claudeAccountDir = process.env.MMV_CLAUDE_ACCOUNT_DIR ?? '/Users/administrator/.claude-account1';
+  const claudeAccountDir =
+    process.env.MMV_CLAUDE_ACCOUNT_DIR ?? '/Users/administrator/.claude-account1';
 
   let responded = false;
   let retried = false;
@@ -336,31 +344,8 @@ router.post('/:id/chat', (req, res): void => {
     res.end();
   }
 
-  // claude -p --resume 只能续接已存在的会话，不能拿一个自造的新 UUID 起会话
-  // （bug: 之前这里对每个新草稿的第一条消息都生成一个随机 UUID 硬塞进 --resume，
-  // 但 claude CLI 侧根本不存在这个会话 → 每次首条消息都以
-  // "No conversation found with session ID: ..." 报错收场）。
-  // 有真实 session_id（此前 claude 回过至少一轮）才传 --resume；首条消息不传，
-  // 让 claude 自己开一个新会话，session_id 从流里的事件读回来存起来。
-  //
-  // bug（生产实测，PR#1213合并前创建的旧草稿复现）：即便这次调用逻辑对了，
-  // draft.session_id 也可能是"死会话"——claude 侧的会话可能已过期/被清理，
-  // 或者（历史遗留）是旧版本代码曾经无脑塞进去的假 UUID。--resume 一个死会话
-  // 会报 "No conversation found"，此时不该直接报错甩给员工，而应该清掉这个
-  // 坏掉的 session_id、当作全新会话重试一次（员工的消息不会丢，只是话题
-  // 断了要重新起会话，比"直接报错"体验好得多，也不需要人工介入清库）。
   function attemptChat(useResume: boolean): void {
     const didResume = Boolean(useResume && draft?.session_id);
-
-    // bug（生产实测）：ssh 把多个 argv 元素拼成一条远程命令字符串交给 mmv 上的
-    // 登录 shell（zsh）执行，不会像本地 spawn 那样严格保留参数边界——员工消息
-    // 或系统提示词里只要出现一个未转义的英文圆括号/反引号/分号等 shell 特殊字符，
-    // 就会被远程 zsh 当语法解析，轻则整条命令报错（实测"Skill(skill-creator)"
-    // 直接把命令搞炸：zsh报"unknown file attribute: k"），重则有 shell 注入风险
-    // （员工是可信内部账号，但这里原则上不该允许用户输入直接拼进远程 shell 命令）。
-    // 修法：本地先把每个动态参数单引号转义好，拼成一条完整命令字符串，整体作为
-    // ssh 的唯一一个远程命令参数传过去——ssh 只会原样转发这一个字符串，不会再
-    // 自作主张重新拼接多个 argv，从根上避免二次解析。
     const shellQuote = (s: string): string => "'" + s.split("'").join("'\\''") + "'";
     const remoteCommand = [
       `CLAUDE_CONFIG_DIR=${claudeAccountDir}`,
@@ -375,25 +360,15 @@ router.post('/:id/chat', (req, res): void => {
       shellQuote(message ?? ''),
     ].join(' ');
 
-    // spawn SSH 转发到 mmv（CLAUDE_CONFIG_DIR 指向账号池，不用本机默认可能过期的账号）
     const child = spawn('ssh', ['mmv', remoteCommand]);
-    // 不喂 stdin 时 claude CLI 会白等 3s 探测有没有管道输入才继续——主动关闭省掉这 3s
     child.stdin?.end();
 
     let aiReply = '';
     let sawResultError = false;
     let resultErrorMsg = '';
     let sawSessionNotFound = false;
-    // bug: stdout 'end' 和 child 'close' 是两个独立触发的真实事件，正常情况下
-    // 每次调用都会各触发一次——之前 finishAttempt 本身没有幂等保护（只有下游
-    // finish() 里的 responded 挡了SSE重复写，但 messages_json.push 在 finish()
-    // 之前就执行了），导致每条 AI 回复都被写进历史两遍。加这个 flag 保证
-    // finishAttempt 的收尾逻辑（含 push/重试判断）只真正执行一次。
     let attemptCompleted = false;
 
-    // 超时 60s（bug: 原来是10s——生产实测单次 claude -p 调用仅"首字节"就要
-    // 9秒+（每次都带全套 skill 上下文注入，input_tokens 1.7万+起步），10秒硬超时
-    // 几乎必然在正文吐出来之前就把子进程杀掉，导致员工发消息永远收不到回复）
     const timeout = setTimeout(() => {
       child.kill();
       finish(true, 'AI 暂时连不上，稍后重试');
@@ -404,7 +379,6 @@ router.post('/:id/chat', (req, res): void => {
       attemptCompleted = true;
       clearTimeout(timeout);
       if (isError && didResume && sawSessionNotFound && !retried) {
-        // 死会话兜底：清掉坏session_id，当全新会话重试一次（不算给员工的最终错误）
         retried = true;
         if (draft) draft.session_id = null;
         attemptChat(false);
@@ -432,19 +406,11 @@ router.post('/:id/chat', (req, res): void => {
         try {
           parsed = JSON.parse(line);
         } catch {
-          // 非 JSON 行，忽略（真实 stream-json 不应出现，容错跳过而非当文本转发）
           continue;
         }
-
-        // 真实 claude CLI 每类事件都带 session_id；第一次拿到就存下来，
-        // 后续这个草稿的消息才能真的 --resume 到同一个会话
         if (parsed.session_id && draft && !draft.session_id) {
           draft.session_id = parsed.session_id;
         }
-
-        // 真实 stream-json 的文字回复是嵌套结构：
-        // {"type":"assistant","message":{"content":[{"type":"text","text":"..."}]}}
-        // （之前代码错认成扁平的 {"type":"text","text":"..."}，永远匹配不上）
         if (parsed.type === 'assistant' && Array.isArray(parsed.message?.content)) {
           for (const block of parsed.message.content) {
             if (block.type === 'text' && block.text) {
@@ -453,10 +419,6 @@ router.post('/:id/chat', (req, res): void => {
             }
           }
         }
-
-        // 终局 result 事件：is_error=true 才是真失败（认证过期/会话找不到等），
-        // 不能只靠进程 exit code——exit code 判定和 stdout 'end' 之间有竞态，
-        // exit code 非0时 stdout 'end' 经常先跑完，把真错误误判成"成功但空回复"
         if (parsed.type === 'result' && parsed.is_error) {
           sawResultError = true;
           resultErrorMsg = parsed.errors?.[0] ?? parsed.result ?? 'AI 暂时连不上，稍后重试';
@@ -467,7 +429,6 @@ router.post('/:id/chat', (req, res): void => {
       }
     });
 
-    // stdout 结束时收尾（测试中 child.on 是 vi.fn() 不会触发 close）
     child.stdout.on('end', () => {
       finishAttempt(sawResultError, resultErrorMsg);
     });
@@ -482,11 +443,6 @@ router.post('/:id/chat', (req, res): void => {
       }
     });
 
-    // bug: req.on('close') 在真实 HTTP 连接下几乎瞬间触发（POST body 读完就触发，
-    // 不代表客户端断线），会在子进程还没来得及输出任何内容时就把它杀掉——
-    // supertest 的假 req/res 对象从未真实触发过这个 timing，所以合同测试全绿
-    // 但真实环境下每次聊天都被这个"假断线检测"秒杀。改用 res.writableEnded 判断：
-    // 只有响应还没写完就真的 close 了，才是员工关浏览器/换页这种真实断线场景。
     res.on('close', () => {
       if (!res.writableEnded) {
         child.kill();
@@ -498,68 +454,195 @@ router.post('/:id/chat', (req, res): void => {
   attemptChat(true);
 });
 
-// POST /:id/generate — 触发生成
+// POST /:id/generate — 触发后台长跑生成（立即返回 running，子进程 detached）
 router.post('/:id/generate', async (req, res): Promise<void> => {
-  const draft = drafts.get(req.params.id);
-
-  if (draft) {
-    draft.status = transition(draft.status, 'GENERATE');
-    draft.updated_at = new Date().toISOString();
-    void updateDraftRow(draft);
+  let draft = drafts.get(req.params.id);
+  if (!draft) {
+    const dbDraft = await fetchDraftRow(req.params.id);
+    if (dbDraft) {
+      draft = dbDraft;
+      drafts.set(draft.id, draft);
+    }
   }
 
-  try {
-    if (!draft?.session_id) {
-      throw new Error('还没有跟AI聊过需求，无法生成——先在对话里说清楚要做什么skill');
-    }
-
-    // 真实调用 skill-creator（复用聊天时已建立的 session，claude 已经知道
-    // 员工要做什么skill），产出 zip 后本地读取（API 进程和 mmv 是同一台机器，
-    // 不需要额外传输），再走真实multipart提交进评测流水线
-    const zipPath = await runSkillCreatorAndPackage(draft.session_id);
-    const fileBuffer = await readFile(zipPath);
-    const skillName = basename(zipPath).replace(/\.zip$/i, '');
-
-    const SKILL_EVAL_BASE = process.env.CECELIA_SKILL_EVAL_URL ?? 'http://hk-vps:9100';
-    const fd = new FormData();
-    fd.append('file', new Blob([fileBuffer]), basename(zipPath));
-    fd.append('skill_name', skillName);
-    fd.append('submitter', typeof req.headers['x-user-email'] === 'string' ? req.headers['x-user-email'] : '');
-
-    const uploadRes = await axios.post(`${SKILL_EVAL_BASE}/upload`, fd, {
-      timeout: 30000,
-    });
-
-    const jobId: string =
-      (uploadRes.data as { data?: { job_id?: string }; task_id?: string })?.data?.job_id ??
-      (uploadRes.data as { task_id?: string })?.task_id ??
-      'gen-job-001';
-
-    if (draft) {
-      draft.status = transition(draft.status, 'DONE');
-      draft.job_id = jobId;
-      draft.updated_at = new Date().toISOString();
-      void updateDraftRow(draft);
-    }
-
-    res.status(200).json({
-      success: true,
-      data: { status: 'done', job_id: jobId },
-      timestamp: new Date().toISOString(),
-    });
-  } catch (err) {
-    if (draft) {
-      draft.status = transition(draft.status, 'ERROR');
-      draft.updated_at = new Date().toISOString();
-      void updateDraftRow(draft);
-    }
-
-    res.status(500).json({
+  if (!draft) {
+    res.status(404).json({
       success: false,
-      error: { code: 'GENERATE_FAILED', message: err instanceof Error ? err.message : '生成失败' },
+      error: { code: 'NOT_FOUND', message: '草稿不存在' },
       timestamp: new Date().toISOString(),
     });
+    return;
   }
+
+  // 互斥锁：running/needs_input/done 状态拒绝重复触发（I-1, I-2, I-5）
+  if (GENERATE_BLOCKED.has(draft.status)) {
+    res.status(409).json({
+      success: false,
+      error: {
+        code: 'CONFLICT',
+        message: `当前状态 ${draft.status} 不允许触发生成`,
+      },
+      timestamp: new Date().toISOString(),
+    });
+    return;
+  }
+
+  // 生成新 callback_token（每次 generate 都刷新，保证单次绑定）
+  draft.callback_token = randomUUID();
+  draft.status = transition(draft.status, 'GENERATE');
+  draft.pending_question = null;
+  draft.updated_at = new Date().toISOString();
+  void updateDraftRow(draft);
+
+  // 后台 spawn detached 子进程（不阻塞 HTTP 响应）
+  spawnSkillGeneratorDetached(draft);
+
+  res.status(200).json({
+    success: true,
+    data: { status: 'running' },
+    timestamp: new Date().toISOString(),
+  });
+});
+
+// POST /:id/answer — needs_input 状态下接收员工答案，重新 spawn
+router.post('/:id/answer', async (req, res): Promise<void> => {
+  let draft = drafts.get(req.params.id);
+  if (!draft) {
+    const dbDraft = await fetchDraftRow(req.params.id);
+    if (dbDraft) {
+      draft = dbDraft;
+      drafts.set(draft.id, draft);
+    }
+  }
+
+  if (!draft) {
+    res.status(404).json({
+      success: false,
+      error: { code: 'NOT_FOUND', message: '草稿不存在' },
+      timestamp: new Date().toISOString(),
+    });
+    return;
+  }
+
+  if (draft.status !== 'needs_input') {
+    res.status(409).json({
+      success: false,
+      error: {
+        code: 'CONFLICT',
+        message: `当前状态 ${draft.status} 不允许提交答案（只有 needs_input 状态可以）`,
+      },
+      timestamp: new Date().toISOString(),
+    });
+    return;
+  }
+
+  const { answer } = req.body as { answer?: string };
+  if (answer) {
+    draft.messages_json.push({ role: 'user', content: answer });
+  }
+
+  // 生成新 callback_token（重新 spawn 后 token 需刷新）
+  draft.callback_token = randomUUID();
+  draft.status = transition(draft.status, 'ANSWER');
+  draft.pending_question = null;
+  draft.updated_at = new Date().toISOString();
+  void updateDraftRow(draft);
+
+  // 重新 spawn 子进程继续生成
+  spawnSkillGeneratorDetached(draft);
+
+  res.status(200).json({
+    success: true,
+    data: { status: 'running' },
+    timestamp: new Date().toISOString(),
+  });
 });
 
 export { router as skillDraftsRouter };
+
+// ─── Internal Router（无 staffGuard，供子进程回调）──────────────────────────
+
+export const skillDraftsInternalRouter = Router();
+
+// POST /internal/skill-drafts/:id/callback — 子进程完成后通知终态
+skillDraftsInternalRouter.post('/:id/callback', async (req, res): Promise<void> => {
+  const { token, event, zip_path, question, error_message } = req.body as {
+    token?: string;
+    event?: string;
+    zip_path?: string;
+    question?: string;
+    error_message?: string;
+  };
+
+  let draft = drafts.get(req.params.id);
+  if (!draft) {
+    const dbDraft = await fetchDraftRow(req.params.id);
+    if (dbDraft) {
+      draft = dbDraft;
+      drafts.set(draft.id, draft);
+    }
+  }
+
+  if (!draft) {
+    res.status(404).json({
+      success: false,
+      error: { code: 'NOT_FOUND', message: '草稿不存在' },
+      timestamp: new Date().toISOString(),
+    });
+    return;
+  }
+
+  // token 不匹配（包括：draft 无 token、token 已消费、token 值不同）
+  if (!token || !draft.callback_token || draft.callback_token !== token) {
+    res.status(400).json({
+      success: false,
+      error: { code: 'INVALID_TOKEN', message: 'callback_token 不匹配或已过期' },
+      timestamp: new Date().toISOString(),
+    });
+    return;
+  }
+
+  // done 终态封闭：任何 callback 均拒绝（I-5）
+  if (draft.status === 'done') {
+    res.status(400).json({
+      success: false,
+      error: { code: 'TERMINAL_STATE', message: '草稿已处于终态，无法更新' },
+      timestamp: new Date().toISOString(),
+    });
+    return;
+  }
+
+  // token 单次绑定：消费后清空（I-9）
+  draft.callback_token = null;
+
+  switch (event) {
+    case 'done':
+      draft.status = transition(draft.status, 'DONE');
+      draft.result_json = { zip_path: zip_path ?? '' };
+      break;
+    case 'needs_input':
+      draft.status = transition(draft.status, 'NEEDS_INPUT');
+      draft.pending_question = question ?? null;
+      break;
+    case 'error':
+      draft.status = transition(draft.status, 'ERROR');
+      draft.result_json = { error_message: error_message ?? '生成失败' };
+      break;
+    default:
+      res.status(400).json({
+        success: false,
+        error: { code: 'INVALID_EVENT', message: `未知 event: ${String(event)}` },
+        timestamp: new Date().toISOString(),
+      });
+      return;
+  }
+
+  draft.updated_at = new Date().toISOString();
+  void updateDraftRow(draft);
+
+  res.status(200).json({
+    success: true,
+    data: { status: draft.status },
+    timestamp: new Date().toISOString(),
+  });
+});

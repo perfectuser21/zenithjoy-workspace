@@ -168,16 +168,29 @@ describe('[BEHAVIOR] B-02 — error→running 重试合法', () => {
       .send({});
     const draftId: string = createRes.body.data.id;
 
-    // 通过内部 callback 模拟 error 状态
     // 先触发 generate（进入 running）
-    const poolMock = pool as { query: ReturnType<typeof vi.fn> };
-    poolMock.query.mockResolvedValue({ rows: [] });
     await request(app)
       .post(`/api/staff/skill-drafts/${draftId}/generate`)
       .set('X-User-Email', 'staff@test.com');
 
-    // 模拟 DB 返回 error 状态（重试场景）
-    mockDbDraft({ id: draftId, status: 'error' });
+    // 拿 callback_token，用 error callback 让 draft 进入 error 状态（内存内）
+    const getRes = await request(app)
+      .get(`/api/staff/skill-drafts/${draftId}`)
+      .set('X-User-Email', 'staff@test.com');
+    const callbackToken: string = getRes.body.data.callback_token;
+    expect(callbackToken).toBeTruthy();
+
+    await request(app)
+      .post(`/internal/skill-drafts/${draftId}/callback`)
+      .send({ token: callbackToken, event: 'error', error_message: '生成失败' });
+
+    // 确认 draft 已进入 error 状态
+    const afterError = await request(app)
+      .get(`/api/staff/skill-drafts/${draftId}`)
+      .set('X-User-Email', 'staff@test.com');
+    expect(afterError.body.data.status).toBe('error');
+
+    // 准备第二次 generate 的 mock
     vi.clearAllMocks();
     const child2 = makeFakeDetachedChild();
     spawnMock.mockReturnValue(child2);
@@ -787,13 +800,16 @@ describe('[BEHAVIOR] B-15 — 子进程 detached + unref()', () => {
 // ─── [BEHAVIOR] B-16：DB migration 字段存在（单测）────────────────────────────
 
 describe('[BEHAVIOR] B-16 — DB migration 字段存在', () => {
-  it('migration SQL 文件存在且包含 pending_question、result_json、callback_token 三个字段定义', async () => {
-    const fs = await import('node:fs/promises');
+  it('migration SQL 文件存在且包含 pending_question、result_json、callback_token 三个字段定义', () => {
+    // 注意：node:fs/promises 在模块级被 vi.mock mock 了，这里直接用同步 fs
+    // 避开 mock 来真实读取文件系统（migration 文件是静态 artifact，不需要异步 IO）
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const fs = require('fs') as typeof import('fs');
     const migrationPath =
       '/workspace/apps/api/db/migrations/20260710_194200_skill_drafts_longrun.sql';
     let content: string;
     try {
-      content = await fs.readFile(migrationPath, 'utf8');
+      content = fs.readFileSync(migrationPath, 'utf8');
     } catch {
       throw new Error(`migration 文件不存在: ${migrationPath}`);
     }
