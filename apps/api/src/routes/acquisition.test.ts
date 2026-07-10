@@ -1328,6 +1328,7 @@ describe('POST /api/acquisition/collect/report — 终态守卫 + settle 结算 
       const s = String(sql);
       if (s.includes('FOR UPDATE')) return { rows: [row] };
       if (s.includes('count(*)')) return { rows: [{ total: videoStats.total, done: videoStats.done }] };
+      if (s.includes('SELECT 1 FROM zenithjoy.acquisition_collect_videos')) return { rows: [{ ok: 1 }] }; // 视频已登记
       if (s.includes('INSERT INTO zenithjoy.acquisition_leads') && s.includes('RETURNING')) return { rows: [{ id: 'lead-1' }] };
       return { rows: [] };
     };
@@ -1360,7 +1361,7 @@ describe('POST /api/acquisition/collect/report — 终态守卫 + settle 结算 
     await request(app).post('/api/acquisition/collect/report')
       .send({ task_id: TASK_ID, video_id: 'v1', commenters: [] });
     const calls = mockClientQuery.mock.calls.map((c) => String(c[0]));
-    const upsert = calls.find((s) => s.includes('acquisition_collect_videos'));
+    const upsert = calls.find((s) => s.includes('INSERT INTO zenithjoy.acquisition_collect_videos'));
     expect(upsert).toMatch(/ON CONFLICT \(task_id, video_id\)/);
     expect(upsert).toMatch(/comments_reported_at/);
   });
