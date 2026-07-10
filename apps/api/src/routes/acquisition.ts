@@ -380,6 +380,7 @@ acquisitionRouter.get('/pending-collect-tasks', async (req: Request, res: Respon
       const vRes = await pool.query<{ task_id: string; video_id: string }>(
         `SELECT task_id, video_id FROM zenithjoy.acquisition_collect_videos
           WHERE task_id = ANY($1::uuid[])
+            AND comments_reported_at IS NULL
           ORDER BY created_at ASC`,
         [stage1DoneIds]
       );
