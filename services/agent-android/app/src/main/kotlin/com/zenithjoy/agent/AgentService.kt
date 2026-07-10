@@ -334,7 +334,9 @@ class AgentService : Service() {
             onStage1Task = { taskId, keyword ->
                 android.util.Log.i(TAG, "collect stage_1 task: id=$taskId keyword=$keyword")
                 // 追踪该 taskId 的关键词，入队 Stage1 Job
-                synchronized(stage1PendingKeywords) {
+                // 锁对象统一用 stage1Accumulator（与 onVideoCardResult / reportCollectResult 一致），
+                // 两把锁保护同一组 map 等于没锁。
+                synchronized(stage1Accumulator) {
                     stage1PendingKeywords.getOrPut(taskId) { mutableSetOf() }.add(keyword)
                     stage1Accumulator.getOrPut(taskId) { mutableListOf() }
                 }

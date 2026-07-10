@@ -451,7 +451,10 @@ class DouyinCollectService : AccessibilityService() {
         state = State.IDLE
         ScanMutex.busy = false
         onVideoCardResult?.invoke(currentTaskId, currentKeyword, videos, "")
-        // 广播兜底
+        // AgentService 的队列状态机对同一结果不幂等：回调+广播双投递会把下一个
+        // 在跑的 job 提前 markCurrentDone，重新引入 busy 静默丢任务。
+        // 兜底广播只在回调缺席时才发。
+        if (!shouldSendFallbackBroadcast(onVideoCardResult != null)) return
         val intent = Intent(ACTION_COLLECT_RESULT).apply {
             setPackage(packageName)
             putExtra(EXTRA_TASK_ID, currentTaskId)
@@ -621,7 +624,9 @@ class DouyinCollectService : AccessibilityService() {
             result.comments.map { it.text },
             result.error,
         )
-        // 广播保留作为兜底/其他潜在监听方兼容，不作为主投递路径。
+        // 兜底广播只在回调缺席时才发：AgentService 引入队列状态机后（CollectTaskQueue），
+        // 双投递会导致 reportCollectResult 对下一个在跑的 job 提前 markCurrentDone。
+        if (!shouldSendFallbackBroadcast(onCollectResult != null)) return
         val intent = Intent(ACTION_COLLECT_RESULT).apply {
             setPackage(packageName)
             putExtra(EXTRA_TASK_ID, currentTaskId)
@@ -811,6 +816,12 @@ class DouyinCollectService : AccessibilityService() {
 
         internal fun shouldRetryWithTabSwitch(alreadyTriedTabSwitch: Boolean): Boolean {
             return !alreadyTriedTabSwitch
+        }
+
+        // 回调（同进程直接调用）是主投递路径；兜底广播只在回调缺席时才发，
+        // 否则回调+广播双投递会把队列里下一个在跑的 job 提前 markCurrentDone。
+        internal fun shouldSendFallbackBroadcast(callbackRegistered: Boolean): Boolean {
+            return !callbackRegistered
         }
 
         // Stage1 派发（关键词搜索+收集视频卡）
