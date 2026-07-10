@@ -1215,8 +1215,8 @@ acquisitionRouter.post('/collect/report', async (req: Request, res: Response) =>
 //（Stage2 每次 report 都 touch updated_at，用 started_at 会误杀正在跑 Stage2 的任务）
 acquisitionRouter.post('/collect/sweep-timeouts', smokeOrAgentGate, async (_req: Request, res: Response) => {
   const cutoffMs = SWEEP_TIMEOUT_MS;
-  const { rows } = await pool.query<{ id: string; status: string; lead_count: number }>(
-    `SELECT t.id, t.status,
+  const { rows } = await pool.query<{ id: string; tenant_id: string; status: string; lead_count: number }>(
+    `SELECT t.id, t.tenant_id, t.status,
             (SELECT count(*) FROM zenithjoy.acquisition_leads l WHERE l.collect_task_id = t.id)::int AS lead_count
        FROM zenithjoy.acquisition_collect_tasks t
       WHERE (t.status = 'running'
@@ -1226,6 +1226,7 @@ acquisitionRouter.post('/collect/sweep-timeouts', smokeOrAgentGate, async (_req:
     [cutoffMs]
   );
   let swept = 0;
+  const dispatchTenants = new Set<string>();
   for (const t of rows) {
     const s = settleCollectTask({
       currentStatus: t.status,
@@ -1246,6 +1247,16 @@ acquisitionRouter.post('/collect/sweep-timeouts', smokeOrAgentGate, async (_req:
       [t.id, s.status, s.error_code, t.status]
     );
     swept += r.rows.length;
+    if (r.rows.length > 0 && s.status === 'partial' && t.lead_count > 0 && t.tenant_id) {
+      dispatchTenants.add(t.tenant_id);
+    }
+  }
+  // sweep 收尸为 partial 且有 leads 的任务，补一次 dm-dispatch 链（同租户去重只触发一次）
+  for (const tenantId of dispatchTenants) {
+    void scoreLeads(pool, tenantId)
+      .then(() => buildAssignments(pool, tenantId))
+      .then(() => dispatchDue(pool, tenantId))
+      .catch((e: Error) => console.error('[acquisition] sweep-timeouts dm-dispatch error:', e.message));
   }
   return ok(res, { swept });
 });
