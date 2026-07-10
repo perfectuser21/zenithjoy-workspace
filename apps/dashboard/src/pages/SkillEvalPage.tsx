@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { adminFetch } from '../lib/admin-fetch';
+import SkillCreateTab from './SkillCreateTab';
 
 const API_UPLOAD = '/api/staff/skill-eval/upload';
 const API_STATUS = (jobId: string) => `/api/staff/skill-eval/status/${jobId}`;
@@ -38,6 +39,7 @@ type PageState =
 export default function SkillEvalPage() {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const [activeTab, setActiveTab] = useState<'upload' | 'create'>('upload');
   const [state, setState] = useState<PageState>({ phase: 'idle' });
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [platform, setPlatform] = useState('');
@@ -199,6 +201,35 @@ export default function SkillEvalPage() {
           </div>
         </div>
       ) : (
+        <>
+          <div className="flex-none flex gap-1 px-4 pt-3 bg-white dark:bg-slate-800 border-b border-gray-200 dark:border-slate-700">
+            <button
+              onClick={() => setActiveTab('upload')}
+              className={`px-4 py-2 text-sm font-medium rounded-t-lg transition-colors ${
+                activeTab === 'upload'
+                  ? 'bg-gray-50 dark:bg-slate-900 text-blue-700 dark:text-blue-400 border border-b-0 border-gray-200 dark:border-slate-700'
+                  : 'text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200'
+              }`}
+            >
+              评测上传
+            </button>
+            <button
+              onClick={() => setActiveTab('create')}
+              className={`px-4 py-2 text-sm font-medium rounded-t-lg transition-colors ${
+                activeTab === 'create'
+                  ? 'bg-gray-50 dark:bg-slate-900 text-blue-700 dark:text-blue-400 border border-b-0 border-gray-200 dark:border-slate-700'
+                  : 'text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200'
+              }`}
+            >
+              创建 Skill
+            </button>
+          </div>
+
+          {activeTab === 'create' ? (
+            <div className="flex-1 overflow-auto flex items-start justify-center py-10 px-4">
+              <SkillCreateTab />
+            </div>
+          ) : (
         <div className="flex-1 overflow-auto flex items-start justify-center py-10 px-4">
           <div className="w-full max-w-2xl">
             <p className="text-gray-500 dark:text-gray-400 mb-6 text-sm">
@@ -316,6 +347,8 @@ export default function SkillEvalPage() {
             </div>
           </div>
         </div>
+          )}
+        </>
       )}
     </div>
   );

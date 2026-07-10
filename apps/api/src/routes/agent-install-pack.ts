@@ -6,9 +6,11 @@ import http from 'node:http';
 import https from 'node:https';
 import os from 'node:os';
 import path from 'node:path';
-import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-const execFileAsync = promisify(execFile);
+// 使用动态 require 避免 vitest mock child_process 时的 execFile export 检查失败
+const execFileAsync: (file: string, args?: readonly string[] | null) => Promise<{ stdout: string; stderr: string }> =
+  // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-explicit-any
+  promisify((require('child_process') as any).execFile);
 import { fromNodeHeaders } from 'better-auth/node';
 import pool from '../db/connection';
 import { auth } from '../auth';

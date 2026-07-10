@@ -4568,6 +4568,40 @@ agent_suite:
   product: 员工工具
   note: "sprint(07091516): /staff/skill-eval 全宽独立页面判定回归测试——报告页改成跟 content-factory 输出页同款全屏模式，不再挤在侧边栏旁边"
 
+  # ── 对话式创建 Skill ────────────────────────────────────────────────────────────
+
+- id: skill-create-routes-integration
+  path: apps/api/src/routes/__tests__/skill-drafts.test.ts
+  type: integration
+  ci: L3
+  status: active
+  product: 员工工具
+  note: "sprint(07091721): 对话式创建Skill——skill_drafts 路由集成测试（创建/读取/SSE转发/生成提交/状态机/staffGuard）"
+
+- id: skill-create-state-machine-unit
+  path: apps/api/src/services/__tests__/skillDraftStateMachine.test.ts
+  type: unit
+  ci: L3
+  status: active
+  product: 员工工具
+  note: "sprint(07091721): 对话式创建Skill——skillDraftStateMachine 纯函数单测（idle/chatting/generating/done/error 全路径转移）"
+
+- id: skill-create-tab-frontend-unit
+  path: apps/dashboard/src/pages/__tests__/SkillCreateTab.test.tsx
+  type: unit
+  ci: L3
+  status: active
+  product: 员工工具
+  note: "sprint(07091721): 对话式创建Skill——SkillCreateTab 前端单测（创建草稿/断点续聊/SSE流式渲染/生成吧触发/错误提示/发送按钮disabled）"
+
+- id: skill-create-e2e
+  path: apps/dashboard/e2e/skill-create.spec.ts
+  type: e2e
+  ci: windows_cloud
+  status: active
+  product: 员工工具
+  note: "sprint(07091721): 对话式创建Skill E2E Playwright——Golden Path（Tab→聊天→生成吧→报告页）+ 断点续聊"
+
 - id: line02-acquisition-hub-android-entry-e2e
   path: apps/dashboard/e2e/acquisition-android-entry.spec.ts
   type: e2e
