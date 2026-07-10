@@ -103,19 +103,21 @@ router.post('/:id/chat', (req, res): void => {
   res.setHeader('Connection', 'keep-alive');
   res.flushHeaders();
 
-  const sessionId = draft?.session_id ?? randomUUID();
+  const sessionId = draft?.session_id;
 
-  // spawn SSH 转发到 mmv
-  const child = spawn('ssh', [
+  // spawn SSH 转发到 mmv，通过 env 命令显式指定 account1（默认账号 OAuth 已过期）
+  const sshArgs = [
     'mmv',
+    'env',
+    'CLAUDE_CONFIG_DIR=/home/administrator/.claude-account1',
     'claude',
     '-p',
-    '--resume',
-    sessionId,
+    ...(sessionId ? ['--resume', sessionId] : []),
     '--output-format',
     'stream-json',
     message ?? '',
-  ]);
+  ];
+  const child = spawn('ssh', sshArgs);
 
   let aiReply = '';
   let responded = false;
@@ -149,14 +151,27 @@ router.post('/:id/chat', (req, res): void => {
     const lines = chunk.toString().split('\n').filter(Boolean);
     for (const line of lines) {
       try {
-        const parsed = JSON.parse(line) as { type?: string; text?: string };
-        if (parsed.type === 'text' && parsed.text) {
-          aiReply += parsed.text;
-          res.write(`data: ${JSON.stringify({ type: 'text', text: parsed.text })}\n\n`);
+        const parsed = JSON.parse(line) as {
+          type?: string;
+          message?: { content?: Array<{ type?: string; text?: string }> };
+          session_id?: string;
+        };
+        // 真实 claude CLI stream-json 格式：{ type:'assistant', message:{ content:[{ type:'text', text }] } }
+        if (parsed.type === 'assistant' && Array.isArray(parsed.message?.content)) {
+          for (const block of parsed.message!.content!) {
+            if (block.type === 'text' && block.text) {
+              aiReply += block.text;
+              res.write(`data: ${JSON.stringify({ type: 'text', text: block.text })}\n\n`);
+            }
+          }
+        }
+        // result 事件携带 session_id，保存供后续断点续聊
+        if (parsed.type === 'result' && parsed.session_id && draft) {
+          draft.session_id = parsed.session_id;
+          draft.updated_at = new Date().toISOString();
         }
       } catch {
-        // 忽略非 JSON 行，直接透传
-        res.write(`data: ${JSON.stringify({ type: 'text', text: line })}\n\n`);
+        // 忽略非 JSON 行
       }
     }
   });
