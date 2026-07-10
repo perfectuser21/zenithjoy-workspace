@@ -252,7 +252,7 @@ router.post('/:id/chat', (req, res): void => {
     // 修法：本地先把每个动态参数单引号转义好，拼成一条完整命令字符串，整体作为
     // ssh 的唯一一个远程命令参数传过去——ssh 只会原样转发这一个字符串，不会再
     // 自作主张重新拼接多个 argv，从根上避免二次解析。
-    const shellQuote = (s: string) => `'${s.replace(/'/g, `'\''`)}'`;
+    const shellQuote = (s: string): string => "'" + s.split("'").join("'\\''") + "'";
     const remoteCommand = [
       `CLAUDE_CONFIG_DIR=${claudeAccountDir}`,
       'claude',
