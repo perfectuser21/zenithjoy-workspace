@@ -108,8 +108,8 @@ fi
 check_code "POST /generate 无认证头 → 403" "403" \
   -X POST "${API_BASE}/api/staff/skill-drafts/fake-id/generate"
 
-# B-08：callback token 不匹配 → 400（不需要认证，内部端点）
-check_code "POST /internal/callback 错误 token → 400" "400" \
+# B-08：callback 内部端点可达（draft 不存在 → 404，token 不匹配详细校验在单测）
+check_code "POST /internal/callback 不存在的 draft → 404" "404" \
   -X POST "${API_BASE}/internal/skill-drafts/fake-id-nonexist/callback" \
   -H "Content-Type: application/json" \
   -d '{"token":"00000000-0000-0000-0000-000000000000","event":"done","zip_path":"/tmp/x.zip"}'
