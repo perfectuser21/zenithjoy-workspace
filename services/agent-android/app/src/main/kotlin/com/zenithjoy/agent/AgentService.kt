@@ -13,7 +13,10 @@ import com.google.gson.Gson
 import com.zenithjoy.agent.account.DeviceAccountModel
 import com.zenithjoy.agent.account.DeviceAccountRegistry
 import com.zenithjoy.agent.account.DeviceAccountScanService
+import com.zenithjoy.agent.collect.CollectJob
+import com.zenithjoy.agent.collect.CollectReporter
 import com.zenithjoy.agent.collect.CollectResult
+import com.zenithjoy.agent.collect.CollectTaskQueue
 import com.zenithjoy.agent.collect.CommentEntry
 import com.zenithjoy.agent.collect.DmOutreachRateLimiter
 import com.zenithjoy.agent.collect.DouyinCollectService
@@ -54,9 +57,18 @@ class AgentService : Service() {
     private lateinit var config: AgentConfig
     private var wsClient: WsClient? = null
     private var heartbeatLoop: HttpHeartbeatLoop? = null
+    // initAgent 只允许执行一次（真机复现 2026-07-10：多次 onStartCommand 泄漏多套轮询 loop）
+    @Volatile private var agentInitialized = false
     private var keywordPollLoop: AcquisitionKeywordPollLoop? = null
     private var collectPollLoop: AcquisitionCollectPollLoop? = null
     private var accountScanLoopJob: kotlinx.coroutines.Job? = null
+
+    private val collectTaskQueue = CollectTaskQueue()
+    private var reporter: CollectReporter? = null
+    // 跨关键词聚合视频（taskId → 视频列表）
+    private val stage1Accumulator = mutableMapOf<String, MutableList<CollectReporter.VideoInfo>>()
+    // 跟踪每个 taskId 待完成的关键词数量（taskId → 剩余关键词 Set）
+    private val stage1PendingKeywords = mutableMapOf<String, MutableSet<String>>()
 
     // Sprint 07052218 followup — dm_outreach 本地频控历史（发送时间戳，毫秒）。
     // 进程内存态，随 Agent 重启清零；本 sprint 先用最简单的内存实现推进真实执行路径，
@@ -133,6 +145,10 @@ class AgentService : Service() {
     override fun onCreate() {
         super.onCreate()
         config = AgentConfig(this)
+        reporter = CollectReporter(
+            httpBase = config.deriveHttpBase(),
+            agentId = config.agentId,
+        )
         startForeground(NOTIFICATION_ID, buildNotification())
         registerReceiver(collectResultReceiver,
             IntentFilter(DouyinCollectService.ACTION_COLLECT_RESULT),
@@ -158,6 +174,48 @@ class AgentService : Service() {
             val result = CollectResult(ok = ok, keyword = "", comments = comments, error = error)
             scope.launch { reportCollectResult(taskId, result) }
         }
+
+        // Stage1 视频卡回调：聚合视频，全部关键词完成后 POST /collect/report-videos
+        DouyinCollectService.onVideoCardResult = { taskId, keyword, videos, error ->
+            val videoInfos = videos.map { v ->
+                CollectReporter.VideoInfo(video_id = v.videoId, keyword = v.keyword, title = v.title)
+            }
+            synchronized(stage1Accumulator) {
+                stage1Accumulator.getOrPut(taskId) { mutableListOf() }.addAll(videoInfos)
+                stage1PendingKeywords[taskId]?.remove(keyword)
+                val remaining = stage1PendingKeywords[taskId]?.size ?: 0
+                if (remaining == 0) {
+                    val allVideos = stage1Accumulator.remove(taskId) ?: emptyList()
+                    stage1PendingKeywords.remove(taskId)
+                    scope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                        reporter?.reportVideos(
+                            taskId = taskId,
+                            videos = allVideos,
+                            searchResultEmpty = allVideos.isEmpty() && error.isEmpty(),
+                            errorCode = if (error.isNotEmpty()) error else null,
+                        )
+                        collectTaskQueue.markCurrentDone()
+                        processNextQueuedTask()
+                    }
+                } else {
+                    collectTaskQueue.markCurrentDone()
+                    processNextQueuedTask()
+                }
+            }
+        }
+
+        // dispatch 投递保障（真机复现 2026-07-10 两种死锁）：
+        // ① busy 拒绝——服务在忙，任务被丢；② 广播进虚空——无障碍服务未 connected，
+        // receiver 未注册，连拒绝都没有。两种都靠"超时未 ack → 看门狗重试"统一自愈
+        // （见 dispatchJob 的 startDispatchAckWatchdog），拒绝回执只留日志观测。
+        DouyinCollectService.onTaskAccepted = { acceptedTaskId ->
+            if (collectTaskQueue.currentJob?.taskId == acceptedTaskId) {
+                collectTaskQueue.markCurrentAccepted()
+            }
+        }
+        DouyinCollectService.onTaskRejected = { rejectedTaskId ->
+            android.util.Log.w(TAG, "queue: dispatch rejected(busy) taskId=$rejectedTaskId — ack watchdog will retry")
+        }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -166,7 +224,12 @@ class AgentService : Service() {
             stopSelf()
             return START_NOT_STICKY
         }
-        scope.launch { initAgent() }
+        // 真机复现(2026-07-10)：lastStartId=3 → initAgent 跑了 3 次，泄漏 3 套轮询
+        // loop（旧 loop 只在 onDestroy 停），同一任务每周期被投递 N 次。只初始化一次。
+        if (shouldRunInitAgent(agentInitialized)) {
+            agentInitialized = true
+            scope.launch { initAgent() }
+        }
         return START_STICKY
     }
 
@@ -182,6 +245,7 @@ class AgentService : Service() {
         unregisterReceiver(accountScanResultReceiver)
         unregisterReceiver(warmupResultReceiver)
         DouyinCollectService.onCollectResult = null
+        DouyinCollectService.onVideoCardResult = null
         super.onDestroy()
     }
 
@@ -275,30 +339,43 @@ class AgentService : Service() {
         )
         keywordPollLoop?.start()
 
+        // reporter 使用最新 agentId（initAgent 之后才确定）
+        reporter = CollectReporter(
+            httpBase = config.deriveHttpBase(),
+            agentId = config.agentId,
+        )
+
         // 两阶段采集任务轮询（Path 2 Step 5）
         // 与 keywordPollLoop 并行双跑，通过 collectTaskIds Set 在 onCollectResult 中区分路由
         collectPollLoop = AcquisitionCollectPollLoop(
             agentId = config.agentId,
             httpBase = config.deriveHttpBase(),
             scope = scope,
-            onStage1Task = { taskId, keywords ->
-                android.util.Log.i(TAG, "collect stage_1 task: id=$taskId keywords=${keywords.size}")
-                // 对每个关键词触发 Douyin 搜索采集，任务 ID 走新协议
-                keywords.forEach { keyword ->
-                    DouyinCollectService.dispatchTask(this@AgentService, keyword, taskId)
+            onStage1Task = { taskId, keyword ->
+                android.util.Log.i(TAG, "collect stage_1 task: id=$taskId keyword=$keyword")
+                // 追踪该 taskId 的关键词，入队 Stage1 Job
+                // 锁对象统一用 stage1Accumulator（与 onVideoCardResult / reportCollectResult 一致），
+                // 两把锁保护同一组 map 等于没锁。
+                synchronized(stage1Accumulator) {
+                    stage1PendingKeywords.getOrPut(taskId) { mutableSetOf() }.add(keyword)
+                    stage1Accumulator.getOrPut(taskId) { mutableListOf() }
                 }
+                collectTaskQueue.enqueue(CollectJob.Stage1(taskId, keyword))
+                processNextQueuedTask()
             },
-            onStage2Task = { taskId, videoUrls, checkpoint ->
-                android.util.Log.i(TAG, "collect stage_2 task: id=$taskId videos=${videoUrls.size} checkpoint=${checkpoint != null}")
-                // 对每个视频 URL 触发评论抓取
+            onStage2Task = { taskId, videoUrls, _ ->
+                android.util.Log.i(TAG, "collect stage_2 task: id=$taskId videos=${videoUrls.size}")
+                // 对每个视频 URL 入队 Stage2 Job
                 videoUrls.forEach { videoUrl ->
-                    DouyinCollectService.dispatchTask(this@AgentService, videoUrl, taskId)
+                    val videoId = extractVideoId(videoUrl)
+                    collectTaskQueue.enqueue(CollectJob.Stage2(taskId, videoUrl, videoId))
                 }
+                processNextQueuedTask()
             },
             onCancel = { taskId ->
                 android.util.Log.i(TAG, "collect task cancelled: id=$taskId")
-                // 取消上报：terminal=true, partial_reason=user_cancelled
-                scope.launch { reportCollectCancel(taskId) }
+                collectTaskQueue.enqueue(CollectJob.Cancel(taskId))
+                processNextQueuedTask()
             },
         )
         collectPollLoop?.start()
@@ -308,6 +385,62 @@ class AgentService : Service() {
         accountScanLoopJob = scope.launch { runAccountScanLoop() }
 
         android.util.Log.i(TAG, "agent started — agentId=${config.agentId} machineId=${config.machineId}")
+    }
+
+    /** 从 Job 队列取下一个任务并派发执行（顺序执行，当前任务完成后才取下一个）。 */
+    private fun processNextQueuedTask() {
+        if (collectTaskQueue.currentJob != null) return // 已有任务在跑
+        val next = collectTaskQueue.pollNext() ?: return
+        dispatchJob(next)
+    }
+
+    private fun dispatchJob(next: CollectJob) {
+        when (next) {
+            is CollectJob.Stage1 -> {
+                android.util.Log.i(TAG, "queue: dispatching Stage1 taskId=${next.taskId} keyword=${next.keyword}")
+                DouyinCollectService.dispatchTask(this@AgentService, next.keyword, next.taskId)
+                startDispatchAckWatchdog(next)
+            }
+            is CollectJob.Stage2 -> {
+                android.util.Log.i(TAG, "queue: dispatching Stage2 taskId=${next.taskId} videoId=${next.videoId}")
+                DouyinCollectService.dispatchStage2Task(this@AgentService, next.videoUrl, next.videoId, next.taskId)
+                startDispatchAckWatchdog(next)
+            }
+            is CollectJob.Cancel -> {
+                android.util.Log.i(TAG, "queue: dispatching Cancel taskId=${next.taskId}")
+                scope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                    reporter?.reportCancel(next.taskId)
+                    collectTaskQueue.markCurrentDone()
+                    processNextQueuedTask()
+                }
+            }
+        }
+    }
+
+    /**
+     * dispatch ack 看门狗：广播派发后若超时仍未收到接受方 ack（无障碍服务未
+     * connected 时广播进虚空，或 busy 拒绝），重发 dispatch；重试超限后放弃该
+     * job 让队列继续推进，避免 currentJob 永久卡死。
+     */
+    private fun startDispatchAckWatchdog(job: CollectJob) {
+        scope.launch {
+            delay(DISPATCH_RETRY_DELAY_MS)
+            if (collectTaskQueue.currentJob != job || collectTaskQueue.currentAccepted) return@launch
+            if (collectTaskQueue.retryCurrent(MAX_DISPATCH_RETRIES)) {
+                android.util.Log.w(TAG, "queue: dispatch not acked in ${DISPATCH_RETRY_DELAY_MS}ms, retrying taskId=${job.taskId}")
+                dispatchJob(job)
+            } else {
+                android.util.Log.w(TAG, "queue: dispatch retries exhausted — dropping job taskId=${job.taskId}")
+                collectTaskQueue.markCurrentDone()
+                processNextQueuedTask()
+            }
+        }
+    }
+
+    /** 从 Douyin 视频 URL 提取视频 ID（数字串）。如 "https://www.douyin.com/video/7123456789" → "7123456789" */
+    private fun extractVideoId(videoUrl: String): String {
+        val match = Regex("/video/(\\d+)").find(videoUrl)
+        return match?.groupValues?.get(1) ?: "video_${videoUrl.hashCode().toString(36)}"
     }
 
     private suspend fun runAccountScanLoop() {
@@ -508,8 +641,51 @@ class AgentService : Service() {
 
         val isCollectTask = collectPollLoop?.collectTaskIds?.contains(taskId) == true
         if (isCollectTask) {
-            // 新协议：/api/acquisition/collect/report
-            reportCollectReportNew(taskId, result)
+            val currentJob = collectTaskQueue.currentJob
+            if (currentJob is CollectJob.Stage1) {
+                // Stage1 结果走 DouyinCollectService.onVideoCardResult 回调，不走此路径
+                // 此分支是 DouyinCollectService 搜索失败（finishWithError）时的兜底上报
+                val errorCode = if (result.error.isNotEmpty()) result.error else "SEARCH_FAILED"
+                synchronized(stage1Accumulator) {
+                    stage1PendingKeywords[taskId]?.remove(currentJob.keyword)
+                    val remaining = stage1PendingKeywords[taskId]?.size ?: 0
+                    if (remaining == 0) {
+                        val videos = stage1Accumulator.remove(taskId) ?: emptyList()
+                        stage1PendingKeywords.remove(taskId)
+                        scope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                            reporter?.reportVideos(taskId, videos, errorCode = if (videos.isEmpty()) errorCode else null)
+                            collectTaskQueue.markCurrentDone()
+                            processNextQueuedTask()
+                        }
+                    } else {
+                        collectTaskQueue.markCurrentDone()
+                        processNextQueuedTask()
+                    }
+                }
+            } else if (currentJob is CollectJob.Stage2) {
+                // Stage2：评论抓取完成，上报 report
+                val commenters = result.comments.map { c ->
+                    buildMap<String, Any?> {
+                        put("nickname", c.commenterId)
+                        put("comment_text", c.text)
+                    }
+                }
+                scope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                    reporter?.reportCollect(
+                        taskId = taskId,
+                        videoId = currentJob.videoId,
+                        commenters = commenters,
+                        terminal = collectTaskQueue.isEmpty(),
+                    )
+                    collectTaskQueue.markCurrentDone()
+                    processNextQueuedTask()
+                }
+            } else {
+                // 兼容旧路径（无队列任务时）
+                reportCollectReportNew(taskId, result)
+                collectTaskQueue.markCurrentDone()
+                processNextQueuedTask()
+            }
         } else {
             // 旧协议：/api/acquisition/comment-score-result
             val url = "${config.deriveHttpBase()}/api/acquisition/comment-score-result"
@@ -528,61 +704,24 @@ class AgentService : Service() {
         }
     }
 
-    // 新协议上报：POST /api/acquisition/collect/report
+    // 新协议上报（兼容旧调用路径，不带 reporter）：POST /api/acquisition/collect/report
     private fun reportCollectReportNew(taskId: String, result: CollectResult, terminal: Boolean = false, partialReason: String? = null) {
         if (taskId.isEmpty()) return
-        val url = "${config.deriveHttpBase()}/api/acquisition/collect/report"
         val commenters = result.comments.map { c ->
             buildMap<String, Any?> {
                 put("nickname", c.commenterId)
                 put("comment_text", c.text)
             }
         }
-        val bodyMap = buildMap<String, Any?> {
-            put("task_id", taskId)
-            put("video_id", taskId + "_" + System.currentTimeMillis().toString(36))
-            put("commenters", commenters)
-            put("checkpoint", null)
-            put("terminal", terminal)
-            if (!partialReason.isNullOrEmpty()) put("partial_reason", partialReason)
-        }
-        val body = gson.toJson(bodyMap)
-        try {
-            val request = Request.Builder()
-                .url(url)
-                .post(body.toRequestBody("application/json".toMediaType()))
-                .build()
-            httpClient.newCall(request).execute().use { resp ->
-                android.util.Log.i(TAG, "collect/report reported: ${resp.code} task=$taskId terminal=$terminal")
-            }
-        } catch (e: Exception) {
-            android.util.Log.w(TAG, "collect/report failed: ${e.message}")
-        }
-    }
-
-    // 采集任务取消上报：terminal=true + partial_reason=user_cancelled
-    private fun reportCollectCancel(taskId: String) {
-        if (taskId.isEmpty()) return
-        val url = "${config.deriveHttpBase()}/api/acquisition/collect/report"
-        val bodyMap = mapOf(
-            "task_id" to taskId,
-            "video_id" to "cancelled_${System.currentTimeMillis().toString(36)}",
-            "commenters" to emptyList<Any>(),
-            "checkpoint" to mapOf("last_video_id" to null, "processed_video_ids" to emptyList<String>()),
-            "terminal" to true,
-            "partial_reason" to "user_cancelled",
-        )
-        val body = gson.toJson(bodyMap)
-        try {
-            val request = Request.Builder()
-                .url(url)
-                .post(body.toRequestBody("application/json".toMediaType()))
-                .build()
-            httpClient.newCall(request).execute().use { resp ->
-                android.util.Log.i(TAG, "collect/cancel reported: ${resp.code} task=$taskId")
-            }
-        } catch (e: Exception) {
-            android.util.Log.w(TAG, "collect/cancel report failed: ${e.message}")
+        val videoId = taskId + "_" + System.currentTimeMillis().toString(36)
+        scope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            reporter?.reportCollect(
+                taskId = taskId,
+                videoId = videoId,
+                commenters = commenters,
+                terminal = terminal,
+                partialReason = partialReason,
+            )
         }
     }
 
@@ -594,6 +733,14 @@ class AgentService : Service() {
         // 经心跳 ...realPayload 透传到 agent。不能靠 task.type（getQueuedTasks 只 select
         // publish 类型列 type，无 task_type 列），必须走 payload.task_type。
         fun shouldRouteWarmup(payloadTaskType: String?): Boolean = payloadTaskType == "warmup"
+
+        // initAgent 单次守卫：onStartCommand 会被多次调用（开机广播 + MainActivity +
+        // START_STICKY 重启），每次都 initAgent 会泄漏多套并行轮询 loop。
+        internal fun shouldRunInitAgent(alreadyInitialized: Boolean): Boolean = !alreadyInitialized
+
+        // busy 拒绝后的 dispatch 重试参数：覆盖一个最长 Stage 任务的执行时间窗
+        private const val DISPATCH_RETRY_DELAY_MS = 30_000L
+        private const val MAX_DISPATCH_RETRIES = 10
 
         // 组 POST /api/agent/burner/warmup-result 的 JSON body。纯字符串拼避开 org.json 的
         // JVM 单测 "not mocked" 陷阱；resultsJson 已是设备端 org.json 生成的合法数组串，原样嵌入。
