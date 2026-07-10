@@ -57,6 +57,8 @@ class AgentService : Service() {
     private lateinit var config: AgentConfig
     private var wsClient: WsClient? = null
     private var heartbeatLoop: HttpHeartbeatLoop? = null
+    // initAgent 只允许执行一次（真机复现 2026-07-10：多次 onStartCommand 泄漏多套轮询 loop）
+    @Volatile private var agentInitialized = false
     private var keywordPollLoop: AcquisitionKeywordPollLoop? = null
     private var collectPollLoop: AcquisitionCollectPollLoop? = null
     private var accountScanLoopJob: kotlinx.coroutines.Job? = null
@@ -201,6 +203,25 @@ class AgentService : Service() {
                 }
             }
         }
+
+        // busy 拒绝回执：延迟后重发 dispatch（上限内），超限放弃该 job 让队列继续推进。
+        // 真机复现(2026-07-10)：静默丢弃会让 currentJob 永不清除 → 队列永久死锁。
+        DouyinCollectService.onTaskRejected = { rejectedTaskId ->
+            scope.launch {
+                delay(DISPATCH_RETRY_DELAY_MS)
+                val job = collectTaskQueue.currentJob
+                if (job != null && job.taskId == rejectedTaskId) {
+                    if (collectTaskQueue.retryCurrent(MAX_DISPATCH_RETRIES)) {
+                        android.util.Log.w(TAG, "queue: dispatch rejected(busy), retrying taskId=$rejectedTaskId")
+                        dispatchJob(job)
+                    } else {
+                        android.util.Log.w(TAG, "queue: dispatch retries exhausted — dropping job taskId=$rejectedTaskId")
+                        collectTaskQueue.markCurrentDone()
+                        processNextQueuedTask()
+                    }
+                }
+            }
+        }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -209,7 +230,12 @@ class AgentService : Service() {
             stopSelf()
             return START_NOT_STICKY
         }
-        scope.launch { initAgent() }
+        // 真机复现(2026-07-10)：lastStartId=3 → initAgent 跑了 3 次，泄漏 3 套轮询
+        // loop（旧 loop 只在 onDestroy 停），同一任务每周期被投递 N 次。只初始化一次。
+        if (shouldRunInitAgent(agentInitialized)) {
+            agentInitialized = true
+            scope.launch { initAgent() }
+        }
         return START_STICKY
     }
 
@@ -371,6 +397,10 @@ class AgentService : Service() {
     private fun processNextQueuedTask() {
         if (collectTaskQueue.currentJob != null) return // 已有任务在跑
         val next = collectTaskQueue.pollNext() ?: return
+        dispatchJob(next)
+    }
+
+    private fun dispatchJob(next: CollectJob) {
         when (next) {
             is CollectJob.Stage1 -> {
                 android.util.Log.i(TAG, "queue: dispatching Stage1 taskId=${next.taskId} keyword=${next.keyword}")
@@ -687,6 +717,14 @@ class AgentService : Service() {
         // 经心跳 ...realPayload 透传到 agent。不能靠 task.type（getQueuedTasks 只 select
         // publish 类型列 type，无 task_type 列），必须走 payload.task_type。
         fun shouldRouteWarmup(payloadTaskType: String?): Boolean = payloadTaskType == "warmup"
+
+        // initAgent 单次守卫：onStartCommand 会被多次调用（开机广播 + MainActivity +
+        // START_STICKY 重启），每次都 initAgent 会泄漏多套并行轮询 loop。
+        internal fun shouldRunInitAgent(alreadyInitialized: Boolean): Boolean = !alreadyInitialized
+
+        // busy 拒绝后的 dispatch 重试参数：覆盖一个最长 Stage 任务的执行时间窗
+        private const val DISPATCH_RETRY_DELAY_MS = 30_000L
+        private const val MAX_DISPATCH_RETRIES = 10
 
         // 组 POST /api/agent/burner/warmup-result 的 JSON body。纯字符串拼避开 org.json 的
         // JVM 单测 "not mocked" 陷阱；resultsJson 已是设备端 org.json 生成的合法数组串，原样嵌入。

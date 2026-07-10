@@ -39,7 +39,14 @@ class DouyinCollectService : AccessibilityService() {
     private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
     private var onResult: ((CollectResult) -> Unit)? = null
 
+    // 每次状态变化刷新时间戳：busy-guard 用它判断"非 IDLE 是真忙还是流程已死"
+    // （真机复现 2026-07-10：state 卡非 IDLE 且无看门狗覆盖时新任务被永久拒绝）。
+    @Volatile private var stateChangedAtMs = 0L
     private var state = State.IDLE
+        set(value) {
+            field = value
+            stateChangedAtMs = android.os.SystemClock.elapsedRealtime()
+        }
     private var currentKeyword = ""
     private var currentTaskId = ""
     private var searchTriggeredAtMs = 0L
@@ -74,8 +81,17 @@ class DouyinCollectService : AccessibilityService() {
             if (intent?.action != ACTION_COLLECT_TASK) return
             val taskId = intent.getStringExtra(EXTRA_TASK_ID) ?: ""
             if (state != State.IDLE) {
-                android.util.Log.w(TAG, "busy — ignoring task $taskId")
-                return
+                val now = android.os.SystemClock.elapsedRealtime()
+                if (isBusyStateStale(stateChangedAtMs, now, STUCK_STATE_RESET_MS)) {
+                    // 流程已死（state 停留超阈值），强制复位后照常接受本次任务
+                    android.util.Log.w(TAG, "stale state=$state (${now - stateChangedAtMs}ms) — force reset, accepting task $taskId")
+                    state = State.IDLE
+                    ScanMutex.busy = false
+                } else {
+                    android.util.Log.w(TAG, "busy — rejecting task $taskId")
+                    onTaskRejected?.invoke(taskId)
+                    return
+                }
             }
             val mode = intent.getStringExtra(EXTRA_MODE) ?: MODE_STAGE1
             if (mode == MODE_STAGE2) {
@@ -778,6 +794,8 @@ class DouyinCollectService : AccessibilityService() {
         private const val TAG = "DouyinCollectService"
         private const val DOUYIN_PKG = "com.ss.android.ugc.aweme"
         private const val RESULTS_SETTLE_MS = 400L
+        // state 停留超过该阈值视为流程已死：busy-guard 强制复位而不是拒绝新任务
+        private const val STUCK_STATE_RESET_MS = 180_000L
         private const val VIDEO_OPEN_TIMEOUT_MS = 15_000L
         private const val EXTRACTION_TIMEOUT_MS = 20_000L
         private const val MAX_FLATTEN_NODES = 3_000
@@ -799,6 +817,11 @@ class DouyinCollectService : AccessibilityService() {
 
         @Volatile
         var onCollectResult: ((taskId: String, ok: Boolean, commentIds: List<String>, commentTexts: List<String>, error: String) -> Unit)? = null
+
+        // busy 拒绝回执（同进程直接调用）：真机复现(2026-07-10) busy 静默丢广播会让
+        // AgentService 队列的 currentJob 永不清除 → 永久死锁。拒绝必须显式通知派发方重试。
+        @Volatile
+        var onTaskRejected: ((taskId: String) -> Unit)? = null
         const val EXTRA_KEYWORD = "keyword"
         const val EXTRA_TASK_ID = "task_id"
         const val EXTRA_RESULT_OK = "ok"
@@ -822,6 +845,12 @@ class DouyinCollectService : AccessibilityService() {
         // 否则回调+广播双投递会把队列里下一个在跑的 job 提前 markCurrentDone。
         internal fun shouldSendFallbackBroadcast(callbackRegistered: Boolean): Boolean {
             return !callbackRegistered
+        }
+
+        // 非 IDLE 状态停留超过阈值 = 流程已死（协程死亡/事件流断），busy-guard 应
+        // 强制复位接受新任务而不是拒绝。
+        internal fun isBusyStateStale(stateChangedAtMs: Long, nowMs: Long, thresholdMs: Long): Boolean {
+            return nowMs - stateChangedAtMs > thresholdMs
         }
 
         // Stage1 派发（关键词搜索+收集视频卡）
