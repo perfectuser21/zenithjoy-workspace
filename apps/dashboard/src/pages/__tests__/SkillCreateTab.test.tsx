@@ -127,7 +127,7 @@ describe('SkillCreateTab', () => {
     await waitFor(() => expect(screen.getByText('好的，请描述需求')).toBeTruthy());
   });
 
-  it('输入含"生成吧" → 直接调用 /generate，成功后跳转带 job_id 的 URL', async () => {
+  it('输入含"生成吧" → 直接调用 /generate，成功后显示 running 状态（长跑改造：不再立即跳转）', async () => {
     const fetchSpy = vi.spyOn(global, 'fetch');
     fetchSpy.mockResolvedValueOnce({
       ok: true,
@@ -141,17 +141,19 @@ describe('SkillCreateTab', () => {
     fetchSpy.mockResolvedValueOnce({
       ok: true,
       status: 200,
-      json: async () => ({ success: true, data: { status: 'done', job_id: 'gen-job-9' } }),
+      json: async () => ({ success: true, data: { status: 'running' } }),
     } as Response);
 
     fireEvent.change(screen.getByTestId('skill-create-input'), { target: { value: '生成吧' } });
     fireEvent.click(screen.getByTestId('skill-create-send'));
 
-    await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith('/staff/skill-eval?job_id=gen-job-9', { replace: true }));
+    await waitFor(() => expect(fetchSpy).toHaveBeenCalledTimes(2));
 
     const [url, init] = fetchSpy.mock.calls[1];
     expect(url).toBe('/api/staff/skill-drafts/draft-2/generate');
     expect((init as RequestInit).method).toBe('POST');
+    // 长跑改造：立即返回 running，不跳转——UI 保持在当前页显示"生成中"
+    expect(mockNavigate).not.toHaveBeenCalledWith(expect.stringContaining('skill-eval'), expect.anything());
   });
 
   it('chat 请求失败 → 展示"AI 暂时连不上，稍后重试"', async () => {

@@ -807,7 +807,7 @@ describe('[BEHAVIOR] B-16 — DB migration 字段存在', () => {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const fs = require('fs') as typeof import('fs');
     const migrationPath = new URL(
-      '../../../../db/migrations/20260710_194200_skill_drafts_longrun.sql',
+      '../../../db/migrations/20260710_194200_skill_drafts_longrun.sql',
       import.meta.url
     ).pathname;
     let content: string;
