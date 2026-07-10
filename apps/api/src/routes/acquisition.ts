@@ -1210,22 +1210,44 @@ acquisitionRouter.post('/collect/report', async (req: Request, res: Response) =>
   }
 });
 
-// POST /api/acquisition/collect/sweep-timeouts — 只转 stale running，pending(离线) 保留不丢
+// POST /api/acquisition/collect/sweep-timeouts — stale running + stage_1_done 收尸；pending(离线) 保留不丢
+// running 基准 COALESCE(started_at, updated_at, created_at)；stage_1_done 基准 updated_at
+//（Stage2 每次 report 都 touch updated_at，用 started_at 会误杀正在跑 Stage2 的任务）
 acquisitionRouter.post('/collect/sweep-timeouts', smokeOrAgentGate, async (_req: Request, res: Response) => {
   const cutoffMs = SWEEP_TIMEOUT_MS;
-  const r = await pool.query(
-    `UPDATE zenithjoy.acquisition_collect_tasks t
-        SET status = CASE
-              WHEN (SELECT count(*) FROM zenithjoy.acquisition_leads l WHERE l.collect_task_id = t.id) > 0
-                THEN 'partial' ELSE 'failed' END,
-            error_code = COALESCE(error_code, 'COLLECT_TIMEOUT'),
-            updated_at = NOW()
-      WHERE status = 'running'
-        AND COALESCE(started_at, updated_at, created_at) < NOW() - ($1::int || ' milliseconds')::interval
-      RETURNING id`,
+  const { rows } = await pool.query<{ id: string; status: string; lead_count: number }>(
+    `SELECT t.id, t.status,
+            (SELECT count(*) FROM zenithjoy.acquisition_leads l WHERE l.collect_task_id = t.id)::int AS lead_count
+       FROM zenithjoy.acquisition_collect_tasks t
+      WHERE (t.status = 'running'
+             AND COALESCE(t.started_at, t.updated_at, t.created_at) < NOW() - ($1::int || ' milliseconds')::interval)
+         OR (t.status = 'stage_1_done'
+             AND t.updated_at < NOW() - ($1::int || ' milliseconds')::interval)`,
     [cutoffMs]
   );
-  return ok(res, { swept: r.rows.length });
+  let swept = 0;
+  for (const t of rows) {
+    const s = settleCollectTask({
+      currentStatus: t.status,
+      agentTerminal: t.lead_count > 0
+        ? { terminal: 'partial', partial_reason: 'COLLECT_TIMEOUT' }
+        : { terminal: 'failed', error_code: 'COLLECT_TIMEOUT' },
+      videoTotal: 0,
+      videoDone: 0,
+      leadCount: t.lead_count,
+    });
+    if (!s.changed) continue;
+    const r = await pool.query(
+      `UPDATE zenithjoy.acquisition_collect_tasks
+          SET status = $2, error_code = COALESCE(error_code, $3),
+              ended_at = COALESCE(ended_at, NOW()), updated_at = NOW()
+        WHERE id = $1 AND status = $4
+        RETURNING id`,
+      [t.id, s.status, s.error_code, t.status]
+    );
+    swept += r.rows.length;
+  }
+  return ok(res, { swept });
 });
 
 // GET /api/acquisition/collect/:task_id — 获客页查状态（精确 6 字段：task_id/status/video_count/lead_count_raw/created_at/ended_at）
