@@ -69,4 +69,19 @@ class DouyinCollectServiceStateTest {
     fun `does not retry again after tab switch already tried once`() {
         assertFalse(DouyinCollectService.shouldRetryWithTabSwitch(alreadyTriedTabSwitch = true))
     }
+
+    // ── shouldSendFallbackBroadcast ──────────────────────────────────────────
+    // 队列状态机（CollectTaskQueue）对同一结果不幂等：回调+广播双投递会让
+    // AgentService.reportCollectResult 把下一个在跑的 job 提前 markCurrentDone，
+    // 重新引入 busy 静默丢任务。回调已注册时禁止再发兜底广播。
+
+    @Test
+    fun `does not send fallback broadcast when callback is registered`() {
+        assertFalse(DouyinCollectService.shouldSendFallbackBroadcast(callbackRegistered = true))
+    }
+
+    @Test
+    fun `sends fallback broadcast only when no callback registered`() {
+        assertTrue(DouyinCollectService.shouldSendFallbackBroadcast(callbackRegistered = false))
+    }
 }
