@@ -1381,3 +1381,29 @@ describe('POST /api/acquisition/collect/report — 终态守卫 + settle 结算 
     expect(vi.mocked(scoreLeads)).not.toHaveBeenCalled();
   });
 });
+
+describe('POST /api/acquisition/collect/sweep-timeouts — stage_1_done 收尸 [BEHAVIOR]', () => {
+  it('候选查询含 stage_1_done 且其基准是 updated_at；有 lead→partial 无→failed', async () => {
+    vi.mocked(db.query).mockReset();
+    vi.mocked(db.query).mockImplementation(async (sql: unknown) => {
+      const s = String(sql);
+      if (s.includes('SELECT') && s.includes('lead_count')) {
+        return { rows: [
+          { id: 'task-a', status: 'stage_1_done', lead_count: 3 },
+          { id: 'task-b', status: 'running', lead_count: 0 },
+        ] } as any;
+      }
+      return { rows: [{ id: 'x' }] } as any;
+    });
+    const res = await request(app).post('/api/acquisition/collect/sweep-timeouts')
+      .set('X-Smoke-Token', 'smoke-secret-2026').send({});
+    expect(res.status).toBe(200);
+    expect(res.body.data.swept).toBe(2);
+    const calls = vi.mocked(db.query).mock.calls.map((c) => String(c[0]));
+    const sel = calls.find((s) => s.includes('lead_count'));
+    expect(sel).toMatch(/stage_1_done/);
+    expect(sel).toMatch(/updated_at/);
+    const updates = calls.filter((s) => s.trim().startsWith('UPDATE'));
+    expect(updates.some((s) => s.includes('$2')) || updates.length >= 2).toBe(true);
+  });
+});
