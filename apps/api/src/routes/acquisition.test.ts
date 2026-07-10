@@ -1448,3 +1448,131 @@ describe('POST /api/acquisition/collect/sweep-timeouts — stage_1_done 收尸 [
     expect(vi.mocked(scoreLeads)).toHaveBeenCalledWith(expect.anything(), 'tenant-1');
   });
 });
+
+// ────── bug D 回归：Stage2 失败重发风暴（2026-07-10 Honor 真机实锤）──────
+// 根因链：/pending-collect-tasks 只发 video_urls 不带 video_id → agent 对非数字 ID
+// 用 hash fallback 反推 → /collect/report 收到未登记 video_id 盲插新行并落章，
+// 原登记行永不落章 → 每次轮询重发同一批视频，无限风暴 + 视频表污染。
+// 服务端两层防御：①report 拒绝未登记 video_id 的视频行写入 ②派发计数超上限强制落章。
+describe('POST /api/acquisition/collect/report — 未登记 video_id 不建视频行 [REGRESSION]', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockClientQuery.mockReset();
+    mockClientRelease.mockReset();
+  });
+
+  it('video_id 未在 Stage1 登记 → 不写 acquisition_collect_videos（防 hash fallback ID 污染），leads 照常入库', async () => {
+    mockClientQuery.mockImplementation(async (sql: unknown) => {
+      const s = String(sql);
+      if (s.includes('FOR UPDATE')) {
+        return { rows: [{ id: 'task-d1', tenant_id: 't-d', status: 'stage_1_done', error_code: null, video_count: 3, lead_count_raw: 0, keywords: ['k'] }] };
+      }
+      // 登记校验：该 (task_id, video_id) 不存在
+      if (s.includes('FROM zenithjoy.acquisition_collect_videos') && s.includes('video_id')) return { rows: [] };
+      if (s.includes('SELECT id FROM zenithjoy.acquisition_leads')) return { rows: [] };
+      if (s.includes('INSERT INTO zenithjoy.acquisition_leads') && s.includes('RETURNING')) return { rows: [{ id: 'lead-d1' }] };
+      if (s.includes('count(*)')) return { rows: [{ total: 3, done: 0 }] };
+      return { rows: [] };
+    });
+
+    const res = await request(app)
+      .post('/api/acquisition/collect/report')
+      .send({
+        task_id: 'task-d1',
+        video_id: 'video_e33nwu',
+        commenters: [{ nickname: '路人甲', comment_text: '多少钱' }],
+      });
+
+    expect(res.status).toBe(200);
+    const calls = mockClientQuery.mock.calls;
+    const videoWrite = calls.find((c: any[]) =>
+      /(INSERT INTO|UPDATE) zenithjoy\.acquisition_collect_videos/.test(String(c[0])));
+    expect(videoWrite).toBeUndefined();
+    // leads 数据不因视频行拒写而丢
+    const leadInsert = calls.find((c: any[]) => /INSERT INTO zenithjoy\.acquisition_leads/.test(String(c[0])));
+    expect(leadInsert).toBeTruthy();
+  });
+
+  it('已登记 video_id → 照常落章 comments_reported_at（守卫不破坏正常路径）', async () => {
+    mockClientQuery.mockImplementation(async (sql: unknown) => {
+      const s = String(sql);
+      if (s.includes('FOR UPDATE')) {
+        return { rows: [{ id: 'task-d2', tenant_id: 't-d', status: 'stage_1_done', error_code: null, video_count: 1, lead_count_raw: 0, keywords: ['k'] }] };
+      }
+      if (s.includes('FROM zenithjoy.acquisition_collect_videos') && s.includes('video_id') && s.trimStart().startsWith('SELECT')) {
+        return { rows: [{ video_id: '7123456789' }] }; // 已登记
+      }
+      if (s.includes('count(*)')) return { rows: [{ total: 1, done: 1 }] };
+      return { rows: [] };
+    });
+
+    const res = await request(app)
+      .post('/api/acquisition/collect/report')
+      .send({ task_id: 'task-d2', video_id: '7123456789', commenters: [] });
+
+    expect(res.status).toBe(200);
+    const videoWrite = mockClientQuery.mock.calls.find((c: any[]) =>
+      /(INSERT INTO|UPDATE) zenithjoy\.acquisition_collect_videos/.test(String(c[0])));
+    expect(videoWrite).toBeTruthy();
+    expect(String(videoWrite![0])).toMatch(/comments_reported_at/);
+  });
+});
+
+describe('GET /api/acquisition/pending-collect-tasks — Stage2 派发上限 [REGRESSION]', () => {
+  beforeEach(() => { vi.clearAllMocks(); });
+
+  const mockAgentAndTask = (checkpoint: Record<string, unknown>, videos: Array<{ task_id: string; video_id: string }>) => {
+    vi.mocked(db.query).mockReset();
+    vi.mocked(db.query).mockImplementation(async (sql: unknown) => {
+      const s = String(sql);
+      if (s.includes('FROM zenithjoy.agents')) return { rows: [{ tenant_id: 't-1' }] } as any;
+      if (s.includes('FROM zenithjoy.acquisition_collect_tasks')) {
+        return { rows: [{ id: 'task-cap', keywords: ['k'], tenant_id: 't-1', status: 'stage_1_done', checkpoint }] } as any;
+      }
+      if (s.includes('FROM zenithjoy.acquisition_collect_videos')) return { rows: videos } as any;
+      return { rows: [] } as any;
+    });
+  };
+
+  it('视频派发次数达上限 → 强制落章、不再下发、任务结算 partial/STAGE2_DISPATCH_EXHAUSTED', async () => {
+    mockAgentAndTask(
+      { stage2_dispatch_counts: { 'card_0_dead': 10 } },
+      [{ task_id: 'task-cap', video_id: 'card_0_dead' }]
+    );
+
+    const res = await request(app).get('/api/acquisition/pending-collect-tasks').set('x-agent-id', 'agent-1');
+    expect(res.status).toBe(200);
+
+    // 耗尽视频不再出现在下发列表
+    const dispatched = (res.body.tasks as Array<{ task_id: string; video_urls?: string[] }>)
+      .find((t) => t.task_id === 'task-cap');
+    expect(dispatched?.video_urls ?? []).toEqual([]);
+
+    const calls = vi.mocked(db.query).mock.calls.map((c) => [String(c[0]), c[1]] as const);
+    // 强制落章耗尽视频
+    const settleVideo = calls.find(([s]) => /UPDATE zenithjoy\.acquisition_collect_videos/.test(s) && /comments_reported_at/.test(s));
+    expect(settleVideo).toBeTruthy();
+    // 无视频可派 → 任务结算 partial + STAGE2_DISPATCH_EXHAUSTED
+    const settleTask = calls.find(([s]) => /UPDATE zenithjoy\.acquisition_collect_tasks/.test(s) && /STAGE2_DISPATCH_EXHAUSTED|partial/.test(s + ''));
+    expect(settleTask).toBeTruthy();
+  });
+
+  it('未达上限 → 正常下发，且派发计数写回 checkpoint', async () => {
+    mockAgentAndTask(
+      { stage2_dispatch_counts: { 'card_0_live': 2 } },
+      [{ task_id: 'task-cap', video_id: 'card_0_live' }]
+    );
+
+    const res = await request(app).get('/api/acquisition/pending-collect-tasks').set('x-agent-id', 'agent-1');
+    expect(res.status).toBe(200);
+    const dispatched = (res.body.tasks as Array<{ task_id: string; video_urls?: string[] }>)
+      .find((t) => t.task_id === 'task-cap');
+    expect(dispatched?.video_urls).toEqual(['https://www.douyin.com/video/card_0_live']);
+
+    // 计数 +1 写回 checkpoint
+    const checkpointWrite = vi.mocked(db.query).mock.calls
+      .find((c) => /UPDATE zenithjoy\.acquisition_collect_tasks/.test(String(c[0])) && /checkpoint/.test(String(c[0])));
+    expect(checkpointWrite).toBeTruthy();
+    expect(JSON.stringify(checkpointWrite![1])).toContain('"card_0_live":3');
+  });
+});
