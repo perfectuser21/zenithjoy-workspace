@@ -1391,6 +1391,11 @@ describe('POST /api/acquisition/collect/report — 终态守卫 + settle 结算 
 });
 
 describe('POST /api/acquisition/collect/sweep-timeouts — stage_1_done 收尸 [BEHAVIOR]', () => {
+  beforeEach(() => {
+    // 先前 describe 可能 vi.resetAllMocks() 清空了 scoreLeads/buildAssignments/dispatchDue 的默认 resolvedValue，这里重新钉住
+    vi.mocked(scoreLeads).mockReset().mockResolvedValue({ scored: 1 } as any);
+  });
+
   it('候选查询含 stage_1_done 且其基准是 updated_at；有 lead→partial 无→failed', async () => {
     vi.mocked(db.query).mockReset();
     vi.mocked(db.query).mockImplementation(async (sql: unknown) => {
@@ -1411,7 +1416,35 @@ describe('POST /api/acquisition/collect/sweep-timeouts — stage_1_done 收尸 [
     const sel = calls.find((s) => s.includes('lead_count'));
     expect(sel).toMatch(/stage_1_done/);
     expect(sel).toMatch(/updated_at/);
-    const updates = calls.filter((s) => s.trim().startsWith('UPDATE'));
-    expect(updates.some((s) => s.includes('$2')) || updates.length >= 2).toBe(true);
+    const updateCalls = vi.mocked(db.query).mock.calls.filter((c) => String(c[0]).trim().startsWith('UPDATE'));
+    expect(updateCalls).toHaveLength(2);
+    // 各条 UPDATE 都带乐观守卫 AND status = $4，且参数里分别带各自结算后的状态值
+    for (const c of updateCalls) {
+      expect(String(c[0])).toMatch(/AND status = \$4/);
+    }
+    const statuses = updateCalls.map((c) => (c[1] as unknown[])[1]);
+    expect(statuses).toContain('partial');
+    expect(statuses).toContain('failed');
+  });
+
+  it('sweep 收尸 partial 且有 leads → 补点火 dm-dispatch 链（同租户只触发一次）', async () => {
+    vi.mocked(db.query).mockReset();
+    vi.mocked(db.query).mockImplementation(async (sql: unknown) => {
+      const s = String(sql);
+      if (s.includes('SELECT') && s.includes('lead_count')) {
+        return { rows: [
+          { id: 'task-a', tenant_id: 'tenant-1', status: 'stage_1_done', lead_count: 3 },
+          { id: 'task-b', tenant_id: 'tenant-1', status: 'running', lead_count: 0 },
+        ] } as any;
+      }
+      return { rows: [{ id: 'x' }] } as any;
+    });
+    const res = await request(app).post('/api/acquisition/collect/sweep-timeouts')
+      .set('X-Smoke-Token', 'smoke-secret-2026').send({});
+    expect(res.status).toBe(200);
+    await new Promise((r) => setTimeout(r, 20));
+    // task-a 结算为 partial 且 lead_count=3>0 → 点火一次；task-b 结算为 failed → 不点火
+    expect(vi.mocked(scoreLeads)).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(scoreLeads)).toHaveBeenCalledWith(expect.anything(), 'tenant-1');
   });
 });
