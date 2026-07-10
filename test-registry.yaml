@@ -590,6 +590,14 @@ tests:
     product: AI员工
     note: "hand-off B/F/G regression — start.bat 单实例守卫杀孤儿 listen_chat（Get-CimInstance 按命令行匹配）+ ZENITHJOY_ENV=staging 指向 staging-autopilot，默认仍 prod + 清遗留 zj-start-listen.bat / 按签名清 Downloads 旧 agent 残留（core 2.0.43）"
 
+  - id: line02-report-videos-protocol
+    path: services/agent/modules/line02/__tests__/report-videos-protocol.test.ts
+    type: unit
+    ci: L2
+    status: active
+    product: AI员工
+    note: "node agent 两阶段协议 PR2a：report-videos payload 三分支/video_id 正则提取/retry 分级/爬失败跳过/collect-loop 回归守卫"
+
   - id: agent-line02-config-parse
     path: services/agent/src/__tests__/line02-config-parse.test.ts
     type: unit
