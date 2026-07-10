@@ -55,4 +55,18 @@ class DouyinCollectServiceStateTest {
             DouyinCollectService.shouldEnterSubmitting(DouyinCollectService.State.IDLE)
         )
     }
+
+    // ── shouldRetryWithTabSwitch ─────────────────────────────────────────────
+    // 真机复现(2026-07-10)：抖音搜索默认落在"主页"标签（空，找账号用），视频内容在
+    // "综合"/"视频"标签。第一次搜索结果超时应该先切标签重试一次，不能直接判失败。
+
+    @Test
+    fun `retries with tab switch on first timeout`() {
+        assertTrue(DouyinCollectService.shouldRetryWithTabSwitch(alreadyTriedTabSwitch = false))
+    }
+
+    @Test
+    fun `does not retry again after tab switch already tried once`() {
+        assertFalse(DouyinCollectService.shouldRetryWithTabSwitch(alreadyTriedTabSwitch = true))
+    }
 }
