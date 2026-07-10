@@ -742,14 +742,21 @@ describe('collect/start — tenant 从 session，不信前端占位 [BEHAVIOR]',
 });
 
 describe('collect/report — 无需 smoke token，agent 直接调用 [REGRESSION: Bug-D]', () => {
-  beforeEach(() => { vi.clearAllMocks(); });
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockClientQuery.mockReset();
+    mockClientRelease.mockReset();
+  });
 
   it('无 X-Smoke-Token 也能调用（不返回 403）', async () => {
-    const mod = await import('../db/connection');
-    (mod.default.query as any)
-      .mockResolvedValueOnce({ rows: [{ id: 'task-1', tenant_id: 't1', status: 'running', error_code: null, video_count: 0, lead_count_raw: 0 }] }) // SELECT task
-      .mockResolvedValueOnce({ rows: [] }) // SELECT for sec_uid dedup (empty commenters batch, won't hit)
-      .mockResolvedValueOnce({ rows: [] }); // UPDATE status
+    mockClientQuery.mockImplementation(async (sql: unknown) => {
+      const s = String(sql);
+      if (s.includes('FOR UPDATE')) {
+        return { rows: [{ id: 'task-1', tenant_id: 't1', status: 'running', error_code: null, video_count: 0, lead_count_raw: 0, keywords: ['k1'] }] };
+      }
+      if (s.includes('count(*)')) return { rows: [{ total: 1, done: 1 }] };
+      return { rows: [] };
+    });
     const res = await request(app)
       .post('/api/acquisition/collect/report')
       .send({ task_id: 'task-1', video_id: 'no_videos', commenters: [], terminal: true });
@@ -758,10 +765,14 @@ describe('collect/report — 无需 smoke token，agent 直接调用 [REGRESSION
   });
 
   it('有 task_id + video_id → 终态回报可达（不返回 403 Forbidden）', async () => {
-    const mod = await import('../db/connection');
-    (mod.default.query as any)
-      .mockResolvedValueOnce({ rows: [{ id: 'task-2', tenant_id: 't2', status: 'running', error_code: null, video_count: 0, lead_count_raw: 0 }] })
-      .mockResolvedValueOnce({ rows: [] }); // UPDATE
+    mockClientQuery.mockImplementation(async (sql: unknown) => {
+      const s = String(sql);
+      if (s.includes('FOR UPDATE')) {
+        return { rows: [{ id: 'task-2', tenant_id: 't2', status: 'running', error_code: null, video_count: 0, lead_count_raw: 0, keywords: ['k1'] }] };
+      }
+      if (s.includes('count(*)')) return { rows: [{ total: 1, done: 1 }] };
+      return { rows: [] };
+    });
     const res = await request(app)
       .post('/api/acquisition/collect/report')
       .send({ task_id: 'task-2', video_id: '7123456789', commenters: [], terminal: true });
@@ -790,18 +801,24 @@ describe('collect/report — 无需 smoke token，agent 直接调用 [REGRESSION
 
 // ────── collect/report 也把每条评论写进历史表 + rescore [REGRESSION] ──────
 describe('POST /api/acquisition/collect/report — 评论历史 + rescore [REGRESSION]', () => {
-  beforeEach(() => { vi.clearAllMocks(); });
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockClientQuery.mockReset();
+    mockClientRelease.mockReset();
+  });
 
   it('新 commenter → 建 lead + 写评论历史 + rescore', async () => {
-    const mod = await import('../db/connection');
     const { rescoreLead } = await import('../services/acquisition-dispatch');
-    (mod.default.query as any)
-      .mockResolvedValueOnce({ rows: [{ id: 'task-r', tenant_id: 't-r', status: 'running', error_code: null, video_count: 0, lead_count_raw: 0 }] }) // SELECT task
-      .mockResolvedValueOnce({ rows: [] })                       // SELECT lead by sec_uid → 无
-      .mockResolvedValueOnce({ rows: [{ id: 'lead-r1' }] })      // INSERT lead RETURNING id
-      .mockResolvedValueOnce({ rows: [] })                       // INSERT 评论历史
-      .mockResolvedValueOnce({ rows: [] })                       // UPDATE task 计数/状态
-      .mockResolvedValueOnce({ rows: [] });                      // INSERT video 维度
+    mockClientQuery.mockImplementation(async (sql: unknown) => {
+      const s = String(sql);
+      if (s.includes('FOR UPDATE')) {
+        return { rows: [{ id: 'task-r', tenant_id: 't-r', status: 'running', error_code: null, video_count: 0, lead_count_raw: 0, keywords: ['k1'] }] };
+      }
+      if (s.includes('SELECT id FROM zenithjoy.acquisition_leads')) return { rows: [] }; // 无既有 lead
+      if (s.includes('INSERT INTO zenithjoy.acquisition_leads') && s.includes('RETURNING')) return { rows: [{ id: 'lead-r1' }] };
+      if (s.includes('count(*)')) return { rows: [{ total: 1, done: 1 }] };
+      return { rows: [] };
+    });
 
     const res = await request(app)
       .post('/api/acquisition/collect/report')
@@ -814,23 +831,24 @@ describe('POST /api/acquisition/collect/report — 评论历史 + rescore [REGRE
     expect(res.status).toBe(200);
     expect(res.body.data.inserted).toBe(1);
 
-    const calls = (mod.default.query as any).mock.calls;
-    const histInsert = calls.find((c: any[]) => /INSERT INTO zenithjoy\.acquisition_lead_comments/.test(c[0]));
+    const calls = mockClientQuery.mock.calls;
+    const histInsert = calls.find((c: any[]) => /INSERT INTO zenithjoy\.acquisition_lead_comments/.test(String(c[0])));
     expect(histInsert).toBeTruthy();
     expect(histInsert![1]).toEqual(['lead-r1', '7123456789', '想了解报价', '精准']);
     expect(rescoreLead).toHaveBeenCalledWith(expect.anything(), 't-r', 'lead-r1');
   });
 
   it('命中已有 lead（同 sec_uid 二次留言）→ 不建新 lead 但写新评论历史 + rescore', async () => {
-    const mod = await import('../db/connection');
     const { rescoreLead } = await import('../services/acquisition-dispatch');
-    (mod.default.query as any)
-      .mockResolvedValueOnce({ rows: [{ id: 'task-r2', tenant_id: 't-r2', status: 'running', error_code: null, video_count: 1, lead_count_raw: 1 }] }) // SELECT task
-      .mockResolvedValueOnce({ rows: [{ id: 'lead-existing' }] }) // SELECT lead by sec_uid → 命中
-      .mockResolvedValueOnce({ rows: [] })                        // UPDATE source_video_ids 累加
-      .mockResolvedValueOnce({ rows: [] })                        // INSERT 评论历史
-      .mockResolvedValueOnce({ rows: [] })                        // UPDATE task 计数/状态
-      .mockResolvedValueOnce({ rows: [] });                       // INSERT video 维度
+    mockClientQuery.mockImplementation(async (sql: unknown) => {
+      const s = String(sql);
+      if (s.includes('FOR UPDATE')) {
+        return { rows: [{ id: 'task-r2', tenant_id: 't-r2', status: 'running', error_code: null, video_count: 1, lead_count_raw: 1, keywords: ['k1'] }] };
+      }
+      if (s.includes('SELECT id FROM zenithjoy.acquisition_leads')) return { rows: [{ id: 'lead-existing' }] }; // 命中既有 lead
+      if (s.includes('count(*)')) return { rows: [{ total: 1, done: 1 }] };
+      return { rows: [] };
+    });
 
     const res = await request(app)
       .post('/api/acquisition/collect/report')
@@ -843,7 +861,7 @@ describe('POST /api/acquisition/collect/report — 评论历史 + rescore [REGRE
     expect(res.status).toBe(200);
     expect(res.body.data.deduped).toBe(1);
 
-    const calls = (mod.default.query as any).mock.calls;
+    const calls = mockClientQuery.mock.calls;
     expect(calls.find((c: any[]) => /INSERT INTO zenithjoy\.acquisition_leads/.test(c[0]))).toBeUndefined();
     const histInsert = calls.find((c: any[]) => /INSERT INTO zenithjoy\.acquisition_lead_comments/.test(c[0]));
     expect(histInsert).toBeTruthy();
@@ -1273,7 +1291,8 @@ describe('POST /api/acquisition/collect/report — 终态守卫 + settle 结算 
     vi.mocked(db.query).mockResolvedValue({ rows: [] } as any);
     mockClientQuery.mockReset();
     mockClientRelease.mockReset();
-    vi.mocked(scoreLeads).mockClear();
+    // 先前 describe 可能 vi.resetAllMocks() 清空了 scoreLeads 的默认 resolvedValue，这里重新钉住
+    vi.mocked(scoreLeads).mockReset().mockResolvedValue({ scored: 1 } as any);
   });
 
   const clientImpl = (row: Record<string, unknown>, videoStats = { total: 1, done: 1 }) =>
