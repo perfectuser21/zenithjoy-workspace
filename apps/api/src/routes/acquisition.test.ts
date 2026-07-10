@@ -868,3 +868,115 @@ describe('POST /api/acquisition/keyword-search — tenant_id 写库', () => {
     expect(insertCall[1][3]).toBeNull();
   });
 });
+
+// ────── Stage1 视频清单回报 ──────
+describe('POST /api/acquisition/collect/stage1-report [BEHAVIOR]', () => {
+  const TASK_ID = '22222222-2222-2222-2222-222222222222';
+  const TENANT_ID = 'tenant-stage1';
+
+  beforeEach(() => { vi.clearAllMocks(); });
+
+  it('缺 task_id → 400 MISSING_TASK_ID', async () => {
+    const res = await request(app)
+      .post('/api/acquisition/collect/stage1-report')
+      .send({ videos: [] });
+    expect(res.status).toBe(400);
+    expect(res.body.error.code).toBe('MISSING_TASK_ID');
+  });
+
+  it('task_id 不存在 → 404 NO_COLLECT_TASK', async () => {
+    const mod = await import('../db/connection');
+    (mod.default.query as any).mockResolvedValueOnce({ rows: [] }); // task 查询返空
+    const res = await request(app)
+      .post('/api/acquisition/collect/stage1-report')
+      .send({ task_id: TASK_ID, videos: [] });
+    expect(res.status).toBe(404);
+    expect(res.body.error.code).toBe('NO_COLLECT_TASK');
+  });
+
+  it('上报 3 个视频 + 1 个关键词 → 达阈 → status=stage_1_done', async () => {
+    const mod = await import('../db/connection');
+    (mod.default.query as any)
+      .mockResolvedValueOnce({ rows: [{ id: TASK_ID, tenant_id: TENANT_ID, status: 'running', keywords: ['装修'] }] }) // SELECT task
+      .mockResolvedValueOnce({ rowCount: 1, rows: [] }) // INSERT v1
+      .mockResolvedValueOnce({ rowCount: 1, rows: [] }) // INSERT v2
+      .mockResolvedValueOnce({ rowCount: 1, rows: [] }) // INSERT v3
+      .mockResolvedValueOnce({ rows: [{ cnt: 3 }] })   // COUNT
+      .mockResolvedValueOnce({ rows: [] });             // UPDATE status
+    const res = await request(app)
+      .post('/api/acquisition/collect/stage1-report')
+      .send({
+        task_id: TASK_ID,
+        videos: [
+          { video_id: 'v001' },
+          { video_id: 'v002' },
+          { video_id: 'v003' },
+        ],
+      });
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+    expect(res.body.data.status).toBe('stage_1_done');
+    expect(res.body.data.inserted).toBe(3);
+    expect(res.body.data.total_videos).toBe(3);
+    expect(res.body.data.threshold).toBe(3);
+  });
+
+  it('terminal=true + 有视频但不足阈值 → stage_1_done（以现有视频进 Stage2）', async () => {
+    const mod = await import('../db/connection');
+    (mod.default.query as any)
+      .mockResolvedValueOnce({ rows: [{ id: TASK_ID, tenant_id: TENANT_ID, status: 'running', keywords: ['装修', '设计'] }] })
+      .mockResolvedValueOnce({ rowCount: 1, rows: [] }) // INSERT v1
+      .mockResolvedValueOnce({ rows: [{ cnt: 1 }] })   // COUNT → 1（不足 6）
+      .mockResolvedValueOnce({ rows: [] });             // UPDATE status
+    const res = await request(app)
+      .post('/api/acquisition/collect/stage1-report')
+      .send({ task_id: TASK_ID, videos: [{ video_id: 'v_partial' }], terminal: true });
+    expect(res.status).toBe(200);
+    expect(res.body.data.status).toBe('stage_1_done');
+  });
+
+  it('terminal=true + 0 个视频 → failed + STAGE1_NO_VIDEOS', async () => {
+    const mod = await import('../db/connection');
+    (mod.default.query as any)
+      .mockResolvedValueOnce({ rows: [{ id: TASK_ID, tenant_id: TENANT_ID, status: 'running', keywords: ['装修'] }] })
+      .mockResolvedValueOnce({ rows: [{ cnt: 0 }] })   // COUNT 0
+      .mockResolvedValueOnce({ rows: [] });             // UPDATE status → failed
+    const res = await request(app)
+      .post('/api/acquisition/collect/stage1-report')
+      .send({ task_id: TASK_ID, videos: [], terminal: true });
+    expect(res.status).toBe(200);
+    expect(res.body.data.status).toBe('failed');
+  });
+
+  it('重复回报同一视频 → rowCount=0（ON CONFLICT DO NOTHING）→ inserted=0，count 不变', async () => {
+    const mod = await import('../db/connection');
+    (mod.default.query as any)
+      .mockResolvedValueOnce({ rows: [{ id: TASK_ID, tenant_id: TENANT_ID, status: 'running', keywords: ['装修'] }] })
+      .mockResolvedValueOnce({ rowCount: 0, rows: [] }) // INSERT → conflict, skipped
+      .mockResolvedValueOnce({ rows: [{ cnt: 3 }] })   // COUNT → 3（已达阈，来自之前的插入）
+      .mockResolvedValueOnce({ rows: [] });             // UPDATE status
+    const res = await request(app)
+      .post('/api/acquisition/collect/stage1-report')
+      .send({ task_id: TASK_ID, videos: [{ video_id: 'v001' }] }); // v001 已存在
+    expect(res.status).toBe(200);
+    expect(res.body.data.inserted).toBe(0);   // 重复不计数
+    expect(res.body.data.total_videos).toBe(3); // count 来自库，不变
+    expect(res.body.data.status).toBe('stage_1_done'); // 已达阈
+  });
+
+  it('terminal=false + count < threshold → status 不变，不更新库', async () => {
+    const mod = await import('../db/connection');
+    (mod.default.query as any)
+      .mockResolvedValueOnce({ rows: [{ id: TASK_ID, tenant_id: TENANT_ID, status: 'running', keywords: ['装修', '设计'] }] })
+      .mockResolvedValueOnce({ rowCount: 1, rows: [] }) // INSERT v1
+      .mockResolvedValueOnce({ rows: [{ cnt: 1 }] }); // COUNT → 1（不足 6），no UPDATE
+    const res = await request(app)
+      .post('/api/acquisition/collect/stage1-report')
+      .send({ task_id: TASK_ID, videos: [{ video_id: 'v_new' }], terminal: false });
+    expect(res.status).toBe(200);
+    expect(res.body.data.status).toBe('running'); // 不变
+    // mock 不应该有 UPDATE 调用（第 4 次 query）
+    const mod2 = await import('../db/connection');
+    expect((mod2.default.query as any).mock.calls.length).toBe(3);
+  });
+});

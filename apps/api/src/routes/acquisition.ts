@@ -543,6 +543,7 @@ acquisitionRouter.get('/leads', tenantContextOptional, async (req: Request, res:
 //   POST /collect/expand           前置校验 + 读文档扩 3 词（手输覆盖 / 降级种子兜底）
 //   POST /collect/start            确认派单 → 返 task_id（pending）
 //   POST /collect/cancel           取消 → cancelling（已抓先落库不丢）
+//   POST /collect/stage1-report    安卓端 Stage1 视频清单回报 → 去重落库 → 达阈进 stage_1_done
 //   POST /collect/report           客户机 Agent 增量回报 → 去重落 DB + 写飞书（X-Smoke-Token 门禁）
 //   POST /collect/sweep-timeouts   只把 stale running(>10min) 转终态，pending(离线) 保留不丢
 //   GET  /collect/:task_id         获客页查状态（7 态 + 计数 + error_code + 抖音号）
@@ -726,6 +727,84 @@ acquisitionRouter.post('/collect/cancel', async (req: Request, res: Response) =>
     if (exists.rows.length === 0) return fail(res, 404, 'NO_COLLECT_TASK', '采集任务不存在');
   }
   return ok(res, { task_id: taskId, status: 'cancelling' });
+});
+
+// POST /api/acquisition/collect/stage1-report
+// 安卓端 Stage1 视频搜索完成后回报视频清单。
+// 幂等：ON CONFLICT(video_id) DO NOTHING，重复回报不重复计数。
+// 状态推进规则（MAX_VIDEOS_PER_KEYWORD=3，threshold=3×keywords.length）：
+//   count >= threshold          → stage_1_done（立即）
+//   terminal=true, count > 0   → stage_1_done（以现有视频进 Stage2）
+//   terminal=true, count = 0   → failed（STAGE1_NO_VIDEOS）
+//   terminal=false, count<threshold → status 不变（继续等）
+const MAX_VIDEOS_PER_KEYWORD = 3;
+
+acquisitionRouter.post('/collect/stage1-report', async (req: Request, res: Response) => {
+  const { task_id: taskId, videos, terminal = false } = req.body || {};
+  if (!taskId) return fail(res, 400, 'MISSING_TASK_ID', '缺 task_id');
+  const videoList: Array<{ video_id?: string; title?: string | null; thumbnail_url?: string | null; publish_date?: string | null }> =
+    Array.isArray(videos) ? videos : [];
+
+  const taskRes = await pool.query<{ id: string; tenant_id: string; status: string; keywords: string[] }>(
+    `SELECT id, tenant_id, status, keywords FROM zenithjoy.acquisition_collect_tasks WHERE id = $1`,
+    [taskId]
+  );
+  if (taskRes.rows.length === 0) return fail(res, 404, 'NO_COLLECT_TASK', '采集任务不存在');
+  const task = taskRes.rows[0];
+  const tenantId = task.tenant_id;
+  const keywords: string[] = Array.isArray(task.keywords) ? task.keywords : [];
+  const threshold = Math.max(1, keywords.length) * MAX_VIDEOS_PER_KEYWORD;
+
+  // 去重落库（video_id 冲突则忽略，幂等）
+  let inserted = 0;
+  for (const v of videoList) {
+    const videoId = v?.video_id;
+    if (!videoId || typeof videoId !== 'string') continue;
+    const r = await pool.query(
+      `INSERT INTO zenithjoy.acquisition_collect_videos
+         (video_id, task_id, tenant_id, title, thumbnail_url, publish_date, comment_count)
+       VALUES ($1, $2, $3, $4, $5, $6, 0)
+       ON CONFLICT (video_id) DO NOTHING`,
+      [videoId, taskId, tenantId, v.title ?? null, v.thumbnail_url ?? null, v.publish_date ?? null]
+    );
+    if ((r.rowCount ?? 0) > 0) inserted++;
+  }
+
+  // 计当前任务下总视频数
+  const countRes = await pool.query<{ cnt: number }>(
+    `SELECT count(*)::int AS cnt FROM zenithjoy.acquisition_collect_videos WHERE task_id = $1`,
+    [taskId]
+  );
+  const totalVideos = countRes.rows[0].cnt;
+
+  // 状态机推进
+  let newStatus = task.status;
+  let errorCode: string | null = null;
+  if (totalVideos >= threshold) {
+    newStatus = 'stage_1_done';
+  } else if (terminal) {
+    if (totalVideos > 0) {
+      newStatus = 'stage_1_done';
+    } else {
+      newStatus = 'failed';
+      errorCode = 'STAGE1_NO_VIDEOS';
+    }
+  }
+
+  if (newStatus !== task.status || errorCode !== null) {
+    const isTerminal = newStatus === 'failed' || newStatus === 'stage_1_done';
+    await pool.query(
+      `UPDATE zenithjoy.acquisition_collect_tasks
+          SET status     = $2,
+              error_code = COALESCE($3, error_code),
+              ended_at   = CASE WHEN $4 THEN NOW() ELSE ended_at END,
+              updated_at = NOW()
+        WHERE id = $1`,
+      [taskId, newStatus, errorCode, isTerminal]
+    );
+  }
+
+  return ok(res, { task_id: taskId, inserted, total_videos: totalVideos, threshold, status: newStatus });
 });
 
 // POST /api/acquisition/collect/report — 客户机 Agent 增量回报（无需 smoke token，agent 直接调用）
