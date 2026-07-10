@@ -153,4 +153,23 @@ class CollectReporterTest {
         assertTrue("body should contain video_id", body.contains("video7890"))
         assertTrue("body should contain commenters", body.contains("user1"))
     }
+
+    // TC-R07: Bug C —— VideoInfo 带 shareUrl 时 body 含 share_url 短链（服务端据此解析真实 ID）
+    @Test
+    fun `reportVideos_includes_share_url_when_VideoInfo_has_shareUrl`() {
+        server.enqueue(MockResponse().setResponseCode(200).setBody("""{"ok":true}"""))
+
+        val reporter = makeReporter()
+        val videos = listOf(
+            CollectReporter.VideoInfo(video_id = "", keyword = "装修", shareUrl = "https://v.douyin.com/iRNBho6G/"),
+        )
+        val result = reporter.reportVideos("task-share", videos)
+
+        assertTrue(result.success)
+
+        val req = server.takeRequest()
+        val body = req.body.readUtf8()
+        assertTrue("body should contain share_url key", body.contains("share_url"))
+        assertTrue("body should contain the short link", body.contains("https://v.douyin.com/iRNBho6G/"))
+    }
 }
