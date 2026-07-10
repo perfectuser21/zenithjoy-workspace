@@ -14,6 +14,7 @@ import { tenantContextOptional } from '../middleware/tenant-context';
 import { licenseAuth } from '../middleware/license-auth';
 import { sseService } from '../services/sse.service';
 import { scoreLeads, buildAssignments, dispatchDue, rescoreLead } from '../services/acquisition-dispatch';
+import { resolveShareToMedia, type MediaKind } from '../services/douyin-share-resolver';
 
 export const acquisitionRouter = Router();
 
@@ -354,7 +355,10 @@ acquisitionRouter.get('/pending-collect-tasks', async (req: Request, res: Respon
       keywords: string[];
       tenant_id: string;
       status: string;
-      checkpoint: { stage2_dispatch_counts?: Record<string, number> } | null;
+      checkpoint: {
+        stage2_dispatch_counts?: Record<string, number>;
+        media_kinds?: Record<string, string>;
+      } | null;
     }>(
       `SELECT id, keywords, tenant_id, status, checkpoint
          FROM zenithjoy.acquisition_collect_tasks
@@ -429,7 +433,13 @@ acquisitionRouter.get('/pending-collect-tasks', async (req: Request, res: Respon
             WHERE id = $1`,
           [r.id, counts]
         );
-        videoMap[r.id] = dispatchable.map((vid) => `https://www.douyin.com/video/${vid}`);
+        // Bug C：note 图文类型走 /note/ 深链，其余默认 /video/
+        const mediaKinds = r.checkpoint?.media_kinds ?? {};
+        videoMap[r.id] = dispatchable.map((vid) =>
+          mediaKinds[vid] === 'note'
+            ? `https://www.douyin.com/note/${vid}`
+            : `https://www.douyin.com/video/${vid}`,
+        );
       }
     }
 
@@ -925,12 +935,28 @@ acquisitionRouter.post('/collect/report-videos', async (req: Request, res: Respo
   const tenantId = agentRes.rows[0]?.tenant_id;
   if (!tenantId) return fail(res, 403, 'UNKNOWN_AGENT', 'agent 未注册');
 
-  const list: Array<{ video_id: string; title?: string; thumbnail_url?: string; publish_date?: string }> =
-    Array.isArray(videos) ? videos.filter((v) => v && v.video_id) : [];
+  // 原始上报：保留带 video_id（旧 agent 直传）或 share_url（新 agent 经 share-intent 拿短链）的项
+  const rawList: Array<{ video_id?: string; share_url?: string; title?: string; thumbnail_url?: string; publish_date?: string }> =
+    Array.isArray(videos) ? videos.filter((v) => v && (v.video_id || v.share_url)) : [];
   const searchEmpty = reason?.search_result === 'empty';
   const reasonErrorCode: string | null = reason?.error_code ?? null;
-  if (list.length === 0 && !searchEmpty && !reasonErrorCode) {
+  if (rawList.length === 0 && !searchEmpty && !reasonErrorCode) {
     return fail(res, 400, 'MISSING_REASON', '空清单必须带 reason（search_result=empty 或 error_code）');
+  }
+
+  // Bug C：video_id 非空 → 直接信任旧 agent；否则用 share_url 经服务端跟随 302 解析真实 (kind,id)，
+  // 解析失败的卡片跳过不造假。note 图文类型记入 media_kinds，供 Stage2 深链按类型分流。
+  const list: Array<{ video_id: string; title?: string; thumbnail_url?: string; publish_date?: string }> = [];
+  const mediaKinds: Record<string, MediaKind> = {};
+  for (const v of rawList) {
+    if (v.video_id) {
+      list.push({ video_id: v.video_id, title: v.title, thumbnail_url: v.thumbnail_url, publish_date: v.publish_date });
+    } else if (v.share_url) {
+      const media = await resolveShareToMedia(v.share_url);
+      if (!media) continue; // 死链/登录页/非抖音域名 → 跳过不造假
+      list.push({ video_id: media.id, title: v.title, thumbnail_url: v.thumbnail_url, publish_date: v.publish_date });
+      if (media.kind === 'note') mediaKinds[media.id] = 'note';
+    }
   }
 
   const client = await pool.connect();
@@ -972,12 +998,13 @@ acquisitionRouter.post('/collect/report-videos', async (req: Request, res: Respo
     }
 
     if (list.length === 0) {
-      // 空清单终态：empty → partial(stage1_empty)；error_code → failed（checkpoint 保留可重试）
+      // 空清单终态：empty → partial(stage1_empty)；error_code / 卡片全解析失败 → failed（checkpoint 保留可重试）
+      const failCode = reasonErrorCode ?? (rawList.length > 0 ? 'ALL_RESOLVE_FAILED' : null);
       const s = settleCollectTask({
         currentStatus: task.status === 'pending' ? 'running' : task.status,
         agentTerminal: searchEmpty
           ? { terminal: 'partial', partial_reason: 'stage1_empty' }
-          : { terminal: 'failed', error_code: reasonErrorCode },
+          : { terminal: 'failed', error_code: failCode },
         videoTotal: 0,
         videoDone: 0,
         leadCount: task.lead_count_raw,
@@ -1012,13 +1039,27 @@ acquisitionRouter.post('/collect/report-videos', async (req: Request, res: Respo
       [taskId]
     );
     const total = vcRes.rows[0]?.total ?? list.length;
-    await client.query(
-      `UPDATE zenithjoy.acquisition_collect_tasks
-          SET status = 'stage_1_done', agent_id = COALESCE(agent_id, $2), video_count = $3,
-              started_at = COALESCE(started_at, NOW()), updated_at = NOW()
-        WHERE id = $1`,
-      [taskId, xAgentId, total]
-    );
+    if (Object.keys(mediaKinds).length > 0) {
+      // note 图文类型合并进 checkpoint.media_kinds，供 pending-collect-tasks 分流 Stage2 深链
+      await client.query(
+        `UPDATE zenithjoy.acquisition_collect_tasks
+            SET status = 'stage_1_done', agent_id = COALESCE(agent_id, $2), video_count = $3,
+                checkpoint = COALESCE(checkpoint, '{}'::jsonb)
+                  || jsonb_build_object('media_kinds',
+                       COALESCE(checkpoint->'media_kinds', '{}'::jsonb) || $4::jsonb),
+                started_at = COALESCE(started_at, NOW()), updated_at = NOW()
+          WHERE id = $1`,
+        [taskId, xAgentId, total, JSON.stringify(mediaKinds)]
+      );
+    } else {
+      await client.query(
+        `UPDATE zenithjoy.acquisition_collect_tasks
+            SET status = 'stage_1_done', agent_id = COALESCE(agent_id, $2), video_count = $3,
+                started_at = COALESCE(started_at, NOW()), updated_at = NOW()
+          WHERE id = $1`,
+        [taskId, xAgentId, total]
+      );
+    }
     await client.query('COMMIT');
     sseEvent = { terminal: false, payload: { task_id: taskId, status: 'stage_1_done', video_count: total } };
     return ok(res, { task_id: taskId, status: 'stage_1_done', video_count: total, accepted: list.length });
