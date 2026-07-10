@@ -7,6 +7,12 @@ class CollectTaskQueue {
     @Volatile var currentJob: CollectJob? = null
     @Volatile private var currentRetryCount = 0
 
+    // dispatch 正向确认：广播可能进虚空（真机实录 2026-07-10 21:32——无障碍服务
+    // 未 connected 时 receiver 未注册，没有 onReceive 也没有 busy 拒绝）。
+    // 接受方开工时回 ack，超时未 ack 由派发方看门狗重试。
+    @Volatile var currentAccepted = false
+        private set
+
     // 去重：同一 taskId+keyword/videoUrl 不重复入队
     fun enqueue(job: CollectJob): Boolean {
         val isDuplicate = currentJob == job || queue.any { it == job }
@@ -18,7 +24,10 @@ class CollectTaskQueue {
     fun pollNext(): CollectJob? = queue.pollFirst()?.also {
         currentJob = it
         currentRetryCount = 0
+        currentAccepted = false
     }
+
+    fun markCurrentAccepted() { currentAccepted = true }
 
     fun markCurrentDone() { currentJob = null }
 

@@ -204,23 +204,17 @@ class AgentService : Service() {
             }
         }
 
-        // busy 拒绝回执：延迟后重发 dispatch（上限内），超限放弃该 job 让队列继续推进。
-        // 真机复现(2026-07-10)：静默丢弃会让 currentJob 永不清除 → 队列永久死锁。
-        DouyinCollectService.onTaskRejected = { rejectedTaskId ->
-            scope.launch {
-                delay(DISPATCH_RETRY_DELAY_MS)
-                val job = collectTaskQueue.currentJob
-                if (job != null && job.taskId == rejectedTaskId) {
-                    if (collectTaskQueue.retryCurrent(MAX_DISPATCH_RETRIES)) {
-                        android.util.Log.w(TAG, "queue: dispatch rejected(busy), retrying taskId=$rejectedTaskId")
-                        dispatchJob(job)
-                    } else {
-                        android.util.Log.w(TAG, "queue: dispatch retries exhausted — dropping job taskId=$rejectedTaskId")
-                        collectTaskQueue.markCurrentDone()
-                        processNextQueuedTask()
-                    }
-                }
+        // dispatch 投递保障（真机复现 2026-07-10 两种死锁）：
+        // ① busy 拒绝——服务在忙，任务被丢；② 广播进虚空——无障碍服务未 connected，
+        // receiver 未注册，连拒绝都没有。两种都靠"超时未 ack → 看门狗重试"统一自愈
+        // （见 dispatchJob 的 startDispatchAckWatchdog），拒绝回执只留日志观测。
+        DouyinCollectService.onTaskAccepted = { acceptedTaskId ->
+            if (collectTaskQueue.currentJob?.taskId == acceptedTaskId) {
+                collectTaskQueue.markCurrentAccepted()
             }
+        }
+        DouyinCollectService.onTaskRejected = { rejectedTaskId ->
+            android.util.Log.w(TAG, "queue: dispatch rejected(busy) taskId=$rejectedTaskId — ack watchdog will retry")
         }
     }
 
@@ -405,10 +399,12 @@ class AgentService : Service() {
             is CollectJob.Stage1 -> {
                 android.util.Log.i(TAG, "queue: dispatching Stage1 taskId=${next.taskId} keyword=${next.keyword}")
                 DouyinCollectService.dispatchTask(this@AgentService, next.keyword, next.taskId)
+                startDispatchAckWatchdog(next)
             }
             is CollectJob.Stage2 -> {
                 android.util.Log.i(TAG, "queue: dispatching Stage2 taskId=${next.taskId} videoId=${next.videoId}")
                 DouyinCollectService.dispatchStage2Task(this@AgentService, next.videoUrl, next.videoId, next.taskId)
+                startDispatchAckWatchdog(next)
             }
             is CollectJob.Cancel -> {
                 android.util.Log.i(TAG, "queue: dispatching Cancel taskId=${next.taskId}")
@@ -417,6 +413,26 @@ class AgentService : Service() {
                     collectTaskQueue.markCurrentDone()
                     processNextQueuedTask()
                 }
+            }
+        }
+    }
+
+    /**
+     * dispatch ack 看门狗：广播派发后若超时仍未收到接受方 ack（无障碍服务未
+     * connected 时广播进虚空，或 busy 拒绝），重发 dispatch；重试超限后放弃该
+     * job 让队列继续推进，避免 currentJob 永久卡死。
+     */
+    private fun startDispatchAckWatchdog(job: CollectJob) {
+        scope.launch {
+            delay(DISPATCH_RETRY_DELAY_MS)
+            if (collectTaskQueue.currentJob != job || collectTaskQueue.currentAccepted) return@launch
+            if (collectTaskQueue.retryCurrent(MAX_DISPATCH_RETRIES)) {
+                android.util.Log.w(TAG, "queue: dispatch not acked in ${DISPATCH_RETRY_DELAY_MS}ms, retrying taskId=${job.taskId}")
+                dispatchJob(job)
+            } else {
+                android.util.Log.w(TAG, "queue: dispatch retries exhausted — dropping job taskId=${job.taskId}")
+                collectTaskQueue.markCurrentDone()
+                processNextQueuedTask()
             }
         }
     }

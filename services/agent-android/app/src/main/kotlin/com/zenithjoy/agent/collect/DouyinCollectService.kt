@@ -98,10 +98,12 @@ class DouyinCollectService : AccessibilityService() {
                 val videoUrl = intent.getStringExtra(EXTRA_VIDEO_URL) ?: return
                 val videoId = intent.getStringExtra(EXTRA_VIDEO_ID) ?: ""
                 android.util.Log.i(TAG, "stage2 task received: videoId=$videoId id=$taskId")
+                onTaskAccepted?.invoke(taskId)
                 startStage2Collect(videoUrl, videoId, taskId)
             } else {
                 val keyword = intent.getStringExtra(EXTRA_KEYWORD) ?: return
                 android.util.Log.i(TAG, "stage1 task received: keyword=$keyword id=$taskId")
+                onTaskAccepted?.invoke(taskId)
                 startCollect(keyword, taskId)
             }
         }
@@ -822,6 +824,12 @@ class DouyinCollectService : AccessibilityService() {
         // AgentService 队列的 currentJob 永不清除 → 永久死锁。拒绝必须显式通知派发方重试。
         @Volatile
         var onTaskRejected: ((taskId: String) -> Unit)? = null
+
+        // dispatch 正向确认（同进程直接调用）：广播可能进虚空（无障碍服务未 connected
+        // 时 receiver 未注册），届时既无 onReceive 也无拒绝回执，派发方看门狗只能靠
+        // "超时未 ack"判定投递失败并重试。
+        @Volatile
+        var onTaskAccepted: ((taskId: String) -> Unit)? = null
         const val EXTRA_KEYWORD = "keyword"
         const val EXTRA_TASK_ID = "task_id"
         const val EXTRA_RESULT_OK = "ok"
