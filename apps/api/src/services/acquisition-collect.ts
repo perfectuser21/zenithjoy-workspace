@@ -5,8 +5,6 @@
  *   - dedupCommenters       — 按 (sec_uid) 去重 + sec_uid 缺失按 nickname 弱去重，重复仅累加 source_video_ids
  *   - profileUrlForSecUid   — sec_uid → 抖音主页链接；残缺号(null) → null
  *   - EMPTY_DOC_MIN_CHARS   — 企业信息文档「空」判定纯文本字数下限
- *   - resolveTerminalStatus — report 终态回报 → {status, error_code}（区分 failed/partial 原因）
- *   - shouldSweepToTerminal — sweep-timeouts 判定：stale running 转终态，pending(离线 agent) 永不转
  *
  * 端到端行为（建文档 / 扩词 / 派单 / 落库 / 写飞书 / 查状态）由 routes/acquisition.ts 编排，
  * 以 contract-dod.md 的 [BEHAVIOR] manual:bash 为 evaluator oracle。
@@ -118,48 +116,6 @@ export interface TerminalReport {
   partial_reason?: string | null;
 }
 
-export interface TerminalResolution {
-  status: CollectStatus;
-  error_code: string | null;
-}
-
-/**
- * 终态回报 → {status, error_code}：
- *  - failed  → status=failed，error_code=入参 error_code（DOUYIN_RISK/DOUYIN_CAPTCHA/... 字面落库区分原因）
- *  - partial → status=partial，error_code=partial_reason（video_insufficient/comments_closed/zero_comment）
- *  - done    → status=done，error_code=null
- */
-export function resolveTerminalStatus(report: TerminalReport): TerminalResolution {
-  if (report.terminal === 'failed') {
-    return { status: 'failed', error_code: report.error_code ?? null };
-  }
-  if (report.terminal === 'partial') {
-    return { status: 'partial', error_code: report.partial_reason ?? report.error_code ?? null };
-  }
-  if (report.terminal === 'done') {
-    return { status: 'done', error_code: null };
-  }
-  // 'stage_1' 或其他非标准值 → stage_1_done（阶段性完成，等待 Stage 2 评论采集）
-  return { status: 'stage_1_done', error_code: null };
-}
-
-export interface SweepCandidate {
-  status: string;
-  /** 任务「年龄」毫秒（NOW - started_at|created_at）。 */
-  ageMs: number;
-}
-
-/**
- * sweep-timeouts 判定（纯函数）：
- *  - running 且 ageMs > 10min → true（stale running 转终态，修「假死在 running」）
- *  - pending → 永远 false（离线 agent 未领取，保留不丢，等上线续抓）
- *  - 其它态（已终态 / cancelling）→ false
- */
-export function shouldSweepToTerminal(c: SweepCandidate): boolean {
-  if (c.status !== 'running') return false;
-  return c.ageMs > SWEEP_TIMEOUT_MS;
-}
-
 /**
  * 从企业信息文档纯文本兜底抽 3 个关键词（DeepSeek 降级时用）。
  * 取中文/英数词片段，去重，不足 3 个用文档整体兜底，保证恰好 3 个。
@@ -179,4 +135,63 @@ export function seedKeywordsFromDoc(text: string): string[] {
     uniq.push(cleaned.slice(0, 6) || `获客${uniq.length + 1}`);
   }
   return uniq.slice(0, 3);
+}
+
+/** 终态集合（cancelling 不是终态，是待落章）。 */
+export const TERMINAL_COLLECT_STATUSES = ['done', 'partial', 'failed', 'cancelled'] as const;
+
+export interface SettleInput {
+  currentStatus: string;
+  agentTerminal?: TerminalReport | null;
+  videoTotal: number;
+  videoDone: number;
+  leadCount: number;
+}
+
+export interface SettleResult {
+  status: CollectStatus;
+  error_code: string | null;
+  changed: boolean;
+}
+
+/**
+ * 服务端终态结算（纯函数，report / report-videos / sweep-timeouts 三处共用）：
+ *  - 已终态 → changed=false（终态守卫，杜绝二次结算/二次点火）
+ *  - cancelling → cancelled（唯一落章路径，修「全 repo 无人写 cancelled」bug）
+ *  - agent 报 failed → failed + error_code 字面落库
+ *  - agent 报 done：视频全完成 → done；未收全 → 诚实结算 partial(videos_incomplete)
+ *  - agent 报 partial → partial（partial_reason 优先）
+ *  - 无 terminal：仅当 stage_1_done 且清单全完成才自动 done（running 阶段 total==done 是
+ *    逐视频回报的自然态，不能据此结算）
+ *  - 其他非标准 terminal（如旧 agent 的 'stage_1'）→ stage_1_done（向后兼容）
+ */
+export function settleCollectTask(input: SettleInput): SettleResult {
+  const cur = input.currentStatus as CollectStatus;
+  if ((TERMINAL_COLLECT_STATUSES as readonly string[]).includes(cur)) {
+    return { status: cur, error_code: null, changed: false };
+  }
+  if (cur === 'cancelling') {
+    return { status: 'cancelled', error_code: null, changed: true };
+  }
+  const t = input.agentTerminal;
+  const allDone = input.videoTotal > 0 && input.videoDone >= input.videoTotal;
+  if (t?.terminal === 'failed') {
+    return { status: 'failed', error_code: t.error_code ?? null, changed: true };
+  }
+  if (t?.terminal === 'done') {
+    return allDone
+      ? { status: 'done', error_code: null, changed: true }
+      : { status: 'partial', error_code: t.partial_reason ?? 'videos_incomplete', changed: true };
+  }
+  if (t?.terminal === 'partial') {
+    return { status: 'partial', error_code: t.partial_reason ?? t.error_code ?? null, changed: true };
+  }
+  if (t?.terminal) {
+    // 非标准值（旧 agent 'stage_1'）→ stage_1_done（向后兼容）
+    return { status: 'stage_1_done', error_code: null, changed: cur !== 'stage_1_done' };
+  }
+  if (cur === 'stage_1_done' && allDone) {
+    return { status: 'done', error_code: null, changed: true };
+  }
+  return { status: cur, error_code: null, changed: false };
 }

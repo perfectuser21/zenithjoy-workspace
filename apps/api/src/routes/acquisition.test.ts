@@ -5,9 +5,16 @@ import express from 'express';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { acquisitionRouter } from './acquisition';
+import db from '../db/connection';
+import { scoreLeads } from '../services/acquisition-dispatch';
 
+const mockClientQuery = vi.fn();
+const mockClientRelease = vi.fn();
 vi.mock('../db/connection', () => ({
-  default: { query: vi.fn() },
+  default: {
+    query: vi.fn(),
+    connect: vi.fn(async () => ({ query: mockClientQuery, release: mockClientRelease })),
+  },
 }));
 
 vi.mock('../middleware/tenant-context', () => ({
@@ -622,6 +629,26 @@ describe('GET /api/acquisition/pending-collect-tasks — tenant + agent 隔离 [
   });
 });
 
+describe('GET /api/acquisition/pending-collect-tasks — Stage2 只发未完成视频 [BEHAVIOR]', () => {
+  it('stage_1_done 视频查询带 comments_reported_at IS NULL 过滤', async () => {
+    vi.mocked(db.query).mockReset();
+    vi.mocked(db.query).mockImplementation(async (sql: unknown) => {
+      const s = String(sql);
+      if (s.includes('FROM zenithjoy.agents')) return { rows: [{ tenant_id: 't-1' }] } as any;
+      if (s.includes('FROM zenithjoy.acquisition_collect_tasks')) {
+        return { rows: [{ id: '00000000-0000-0000-0000-00000000c003', keywords: ['k'], tenant_id: 't-1', status: 'stage_1_done' }] } as any;
+      }
+      if (s.includes('FROM zenithjoy.acquisition_collect_videos')) return { rows: [{ task_id: '00000000-0000-0000-0000-00000000c003', video_id: 'v-pending' }] } as any;
+      return { rows: [] } as any;
+    });
+    const res = await request(app).get('/api/acquisition/pending-collect-tasks').set('x-agent-id', 'agent-1');
+    expect(res.status).toBe(200);
+    const videoSql = vi.mocked(db.query).mock.calls.map((c) => String(c[0]))
+      .find((s) => s.includes('FROM zenithjoy.acquisition_collect_videos'));
+    expect(videoSql).toMatch(/comments_reported_at IS NULL/);
+  });
+});
+
 describe('POST /api/acquisition/collect/start — agent_id 写入 [REGRESSION]', () => {
   beforeEach(() => { vi.clearAllMocks(); });
 
@@ -735,14 +762,21 @@ describe('collect/start — tenant 从 session，不信前端占位 [BEHAVIOR]',
 });
 
 describe('collect/report — 无需 smoke token，agent 直接调用 [REGRESSION: Bug-D]', () => {
-  beforeEach(() => { vi.clearAllMocks(); });
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockClientQuery.mockReset();
+    mockClientRelease.mockReset();
+  });
 
   it('无 X-Smoke-Token 也能调用（不返回 403）', async () => {
-    const mod = await import('../db/connection');
-    (mod.default.query as any)
-      .mockResolvedValueOnce({ rows: [{ id: 'task-1', tenant_id: 't1', status: 'running', error_code: null, video_count: 0, lead_count_raw: 0 }] }) // SELECT task
-      .mockResolvedValueOnce({ rows: [] }) // SELECT for sec_uid dedup (empty commenters batch, won't hit)
-      .mockResolvedValueOnce({ rows: [] }); // UPDATE status
+    mockClientQuery.mockImplementation(async (sql: unknown) => {
+      const s = String(sql);
+      if (s.includes('FOR UPDATE')) {
+        return { rows: [{ id: 'task-1', tenant_id: 't1', status: 'running', error_code: null, video_count: 0, lead_count_raw: 0, keywords: ['k1'] }] };
+      }
+      if (s.includes('count(*)')) return { rows: [{ total: 1, done: 1 }] };
+      return { rows: [] };
+    });
     const res = await request(app)
       .post('/api/acquisition/collect/report')
       .send({ task_id: 'task-1', video_id: 'no_videos', commenters: [], terminal: true });
@@ -751,10 +785,14 @@ describe('collect/report — 无需 smoke token，agent 直接调用 [REGRESSION
   });
 
   it('有 task_id + video_id → 终态回报可达（不返回 403 Forbidden）', async () => {
-    const mod = await import('../db/connection');
-    (mod.default.query as any)
-      .mockResolvedValueOnce({ rows: [{ id: 'task-2', tenant_id: 't2', status: 'running', error_code: null, video_count: 0, lead_count_raw: 0 }] })
-      .mockResolvedValueOnce({ rows: [] }); // UPDATE
+    mockClientQuery.mockImplementation(async (sql: unknown) => {
+      const s = String(sql);
+      if (s.includes('FOR UPDATE')) {
+        return { rows: [{ id: 'task-2', tenant_id: 't2', status: 'running', error_code: null, video_count: 0, lead_count_raw: 0, keywords: ['k1'] }] };
+      }
+      if (s.includes('count(*)')) return { rows: [{ total: 1, done: 1 }] };
+      return { rows: [] };
+    });
     const res = await request(app)
       .post('/api/acquisition/collect/report')
       .send({ task_id: 'task-2', video_id: '7123456789', commenters: [], terminal: true });
@@ -783,18 +821,24 @@ describe('collect/report — 无需 smoke token，agent 直接调用 [REGRESSION
 
 // ────── collect/report 也把每条评论写进历史表 + rescore [REGRESSION] ──────
 describe('POST /api/acquisition/collect/report — 评论历史 + rescore [REGRESSION]', () => {
-  beforeEach(() => { vi.clearAllMocks(); });
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockClientQuery.mockReset();
+    mockClientRelease.mockReset();
+  });
 
   it('新 commenter → 建 lead + 写评论历史 + rescore', async () => {
-    const mod = await import('../db/connection');
     const { rescoreLead } = await import('../services/acquisition-dispatch');
-    (mod.default.query as any)
-      .mockResolvedValueOnce({ rows: [{ id: 'task-r', tenant_id: 't-r', status: 'running', error_code: null, video_count: 0, lead_count_raw: 0 }] }) // SELECT task
-      .mockResolvedValueOnce({ rows: [] })                       // SELECT lead by sec_uid → 无
-      .mockResolvedValueOnce({ rows: [{ id: 'lead-r1' }] })      // INSERT lead RETURNING id
-      .mockResolvedValueOnce({ rows: [] })                       // INSERT 评论历史
-      .mockResolvedValueOnce({ rows: [] })                       // UPDATE task 计数/状态
-      .mockResolvedValueOnce({ rows: [] });                      // INSERT video 维度
+    mockClientQuery.mockImplementation(async (sql: unknown) => {
+      const s = String(sql);
+      if (s.includes('FOR UPDATE')) {
+        return { rows: [{ id: 'task-r', tenant_id: 't-r', status: 'running', error_code: null, video_count: 0, lead_count_raw: 0, keywords: ['k1'] }] };
+      }
+      if (s.includes('SELECT id FROM zenithjoy.acquisition_leads')) return { rows: [] }; // 无既有 lead
+      if (s.includes('INSERT INTO zenithjoy.acquisition_leads') && s.includes('RETURNING')) return { rows: [{ id: 'lead-r1' }] };
+      if (s.includes('count(*)')) return { rows: [{ total: 1, done: 1 }] };
+      return { rows: [] };
+    });
 
     const res = await request(app)
       .post('/api/acquisition/collect/report')
@@ -807,23 +851,24 @@ describe('POST /api/acquisition/collect/report — 评论历史 + rescore [REGRE
     expect(res.status).toBe(200);
     expect(res.body.data.inserted).toBe(1);
 
-    const calls = (mod.default.query as any).mock.calls;
-    const histInsert = calls.find((c: any[]) => /INSERT INTO zenithjoy\.acquisition_lead_comments/.test(c[0]));
+    const calls = mockClientQuery.mock.calls;
+    const histInsert = calls.find((c: any[]) => /INSERT INTO zenithjoy\.acquisition_lead_comments/.test(String(c[0])));
     expect(histInsert).toBeTruthy();
     expect(histInsert![1]).toEqual(['lead-r1', '7123456789', '想了解报价', '精准']);
     expect(rescoreLead).toHaveBeenCalledWith(expect.anything(), 't-r', 'lead-r1');
   });
 
   it('命中已有 lead（同 sec_uid 二次留言）→ 不建新 lead 但写新评论历史 + rescore', async () => {
-    const mod = await import('../db/connection');
     const { rescoreLead } = await import('../services/acquisition-dispatch');
-    (mod.default.query as any)
-      .mockResolvedValueOnce({ rows: [{ id: 'task-r2', tenant_id: 't-r2', status: 'running', error_code: null, video_count: 1, lead_count_raw: 1 }] }) // SELECT task
-      .mockResolvedValueOnce({ rows: [{ id: 'lead-existing' }] }) // SELECT lead by sec_uid → 命中
-      .mockResolvedValueOnce({ rows: [] })                        // UPDATE source_video_ids 累加
-      .mockResolvedValueOnce({ rows: [] })                        // INSERT 评论历史
-      .mockResolvedValueOnce({ rows: [] })                        // UPDATE task 计数/状态
-      .mockResolvedValueOnce({ rows: [] });                       // INSERT video 维度
+    mockClientQuery.mockImplementation(async (sql: unknown) => {
+      const s = String(sql);
+      if (s.includes('FOR UPDATE')) {
+        return { rows: [{ id: 'task-r2', tenant_id: 't-r2', status: 'running', error_code: null, video_count: 1, lead_count_raw: 1, keywords: ['k1'] }] };
+      }
+      if (s.includes('SELECT id FROM zenithjoy.acquisition_leads')) return { rows: [{ id: 'lead-existing' }] }; // 命中既有 lead
+      if (s.includes('count(*)')) return { rows: [{ total: 1, done: 1 }] };
+      return { rows: [] };
+    });
 
     const res = await request(app)
       .post('/api/acquisition/collect/report')
@@ -836,7 +881,7 @@ describe('POST /api/acquisition/collect/report — 评论历史 + rescore [REGRE
     expect(res.status).toBe(200);
     expect(res.body.data.deduped).toBe(1);
 
-    const calls = (mod.default.query as any).mock.calls;
+    const calls = mockClientQuery.mock.calls;
     expect(calls.find((c: any[]) => /INSERT INTO zenithjoy\.acquisition_leads/.test(c[0]))).toBeUndefined();
     const histInsert = calls.find((c: any[]) => /INSERT INTO zenithjoy\.acquisition_lead_comments/.test(c[0]));
     expect(histInsert).toBeTruthy();
@@ -1150,5 +1195,256 @@ describe('GET /api/acquisition/keyword-tasks — 前端列表（租户隔离/只
     expect(calls[0][0]).toContain('SELECT');
     expect(calls[0][0]).not.toContain('UPDATE');
     expect(JSON.stringify(calls[0][1])).toContain(TENANT_K);
+  });
+});
+
+describe('POST /api/acquisition/collect/report-videos — Stage1 清单回报 [BEHAVIOR]', () => {
+  const TASK_ID = '00000000-0000-0000-0000-00000000c001';
+  const TENANT = '00000000-0000-0000-0000-0000000000aa';
+
+  beforeEach(() => {
+    vi.mocked(db.query).mockReset();
+    mockClientQuery.mockReset();
+    mockClientRelease.mockReset();
+    // pool.query 第一击：agents 反查 tenant
+    vi.mocked(db.query).mockResolvedValue({ rows: [{ tenant_id: TENANT }] } as any);
+    // client 默认行为：BEGIN/COMMIT/UPSERT 成功；FOR UPDATE 返回 running 任务；count 返回 2
+    mockClientQuery.mockImplementation(async (sql: unknown) => {
+      const s = String(sql);
+      if (s.includes('FOR UPDATE')) {
+        return { rows: [{ id: TASK_ID, tenant_id: TENANT, status: 'running', agent_id: 'agent-1', lead_count_raw: 0 }] };
+      }
+      if (s.includes('count(*)')) return { rows: [{ total: 2 }] };
+      return { rows: [] };
+    });
+  });
+
+  it('缺 x-agent-id → 401', async () => {
+    const res = await request(app).post('/api/acquisition/collect/report-videos').send({ task_id: TASK_ID, videos: [{ video_id: 'v1' }] });
+    expect(res.status).toBe(401);
+  });
+
+  it('agent 与任务绑定不符 → 403', async () => {
+    mockClientQuery.mockImplementation(async (sql: unknown) => {
+      const s = String(sql);
+      if (s.includes('FOR UPDATE')) return { rows: [{ id: TASK_ID, tenant_id: TENANT, status: 'running', agent_id: 'agent-OTHER', lead_count_raw: 0 }] };
+      return { rows: [] };
+    });
+    const res = await request(app).post('/api/acquisition/collect/report-videos')
+      .set('x-agent-id', 'agent-1').send({ task_id: TASK_ID, videos: [{ video_id: 'v1' }] });
+    expect(res.status).toBe(403);
+  });
+
+  it('空清单无 reason → 400', async () => {
+    const res = await request(app).post('/api/acquisition/collect/report-videos')
+      .set('x-agent-id', 'agent-1').send({ task_id: TASK_ID, videos: [] });
+    expect(res.status).toBe(400);
+  });
+
+  it('清单回报 → upsert (task_id,video_id) + status=stage_1_done + video_count 重算', async () => {
+    const res = await request(app).post('/api/acquisition/collect/report-videos')
+      .set('x-agent-id', 'agent-1')
+      .send({ task_id: TASK_ID, videos: [{ video_id: 'v1' }, { video_id: 'v2', title: 't2' }] });
+    expect(res.status).toBe(200);
+    expect(res.body.data.status).toBe('stage_1_done');
+    expect(res.body.data.video_count).toBe(2);
+    const calls = mockClientQuery.mock.calls.map((c) => String(c[0]));
+    expect(calls.some((s) => s.includes('ON CONFLICT (task_id, video_id)'))).toBe(true);
+    const upd = calls.find((s) => s.includes('UPDATE zenithjoy.acquisition_collect_tasks'));
+    expect(upd).toMatch(/stage_1_done/);
+    expect(calls.some((s) => s === 'COMMIT')).toBe(true);
+  });
+
+  it('空清单 + search_result=empty → partial 终态', async () => {
+    const res = await request(app).post('/api/acquisition/collect/report-videos')
+      .set('x-agent-id', 'agent-1')
+      .send({ task_id: TASK_ID, videos: [], reason: { search_result: 'empty' } });
+    expect(res.status).toBe(200);
+    expect(res.body.data.status).toBe('partial');
+  });
+
+  it('空清单 + search_result=empty 与 error_code 共存 → search_result 优先，partial', async () => {
+    const res = await request(app).post('/api/acquisition/collect/report-videos')
+      .set('x-agent-id', 'agent-1')
+      .send({ task_id: TASK_ID, videos: [], reason: { search_result: 'empty', error_code: 'DOUYIN_RISK' } });
+    expect(res.status).toBe(200);
+    expect(res.body.data.status).toBe('partial');
+  });
+
+  it('空清单 + error_code → failed 终态', async () => {
+    const res = await request(app).post('/api/acquisition/collect/report-videos')
+      .set('x-agent-id', 'agent-1')
+      .send({ task_id: TASK_ID, videos: [], reason: { error_code: 'DOUYIN_RISK' } });
+    expect(res.status).toBe(200);
+    expect(res.body.data.status).toBe('failed');
+  });
+
+  it('任务已终态 → 409', async () => {
+    mockClientQuery.mockImplementation(async (sql: unknown) => {
+      const s = String(sql);
+      if (s.includes('FOR UPDATE')) return { rows: [{ id: TASK_ID, tenant_id: TENANT, status: 'done', agent_id: 'agent-1', lead_count_raw: 3 }] };
+      return { rows: [] };
+    });
+    const res = await request(app).post('/api/acquisition/collect/report-videos')
+      .set('x-agent-id', 'agent-1').send({ task_id: TASK_ID, videos: [{ video_id: 'v1' }] });
+    expect(res.status).toBe(409);
+  });
+
+  it('cancelling 任务回报 → 落章 cancelled', async () => {
+    mockClientQuery.mockImplementation(async (sql: unknown) => {
+      const s = String(sql);
+      if (s.includes('FOR UPDATE')) return { rows: [{ id: TASK_ID, tenant_id: TENANT, status: 'cancelling', agent_id: 'agent-1', lead_count_raw: 3 }] };
+      return { rows: [] };
+    });
+    const res = await request(app).post('/api/acquisition/collect/report-videos')
+      .set('x-agent-id', 'agent-1').send({ task_id: TASK_ID, videos: [{ video_id: 'v1' }] });
+    expect(res.status).toBe(200);
+    expect(res.body.data.status).toBe('cancelled');
+    const upd = mockClientQuery.mock.calls.map((c) => String(c[0])).find((s) => s.includes("'cancelled'") || s.includes('cancelled'));
+    expect(upd).toBeTruthy();
+  });
+});
+
+describe('POST /api/acquisition/collect/report — 终态守卫 + settle 结算 [BEHAVIOR]', () => {
+  const TASK_ID = '00000000-0000-0000-0000-00000000c002';
+  const TENANT = '00000000-0000-0000-0000-0000000000aa';
+
+  const taskRow = (over: Record<string, unknown> = {}) => ({
+    id: TASK_ID, tenant_id: TENANT, status: 'running', error_code: null,
+    video_count: 0, lead_count_raw: 0, keywords: ['k1'], ...over,
+  });
+
+  beforeEach(() => {
+    vi.mocked(db.query).mockReset();
+    vi.mocked(db.query).mockResolvedValue({ rows: [] } as any);
+    mockClientQuery.mockReset();
+    mockClientRelease.mockReset();
+    // 先前 describe 可能 vi.resetAllMocks() 清空了 scoreLeads 的默认 resolvedValue，这里重新钉住
+    vi.mocked(scoreLeads).mockReset().mockResolvedValue({ scored: 1 } as any);
+  });
+
+  const clientImpl = (row: Record<string, unknown>, videoStats = { total: 1, done: 1 }) =>
+    async (sql: unknown) => {
+      const s = String(sql);
+      if (s.includes('FOR UPDATE')) return { rows: [row] };
+      if (s.includes('count(*)')) return { rows: [{ total: videoStats.total, done: videoStats.done }] };
+      if (s.includes('INSERT INTO zenithjoy.acquisition_leads') && s.includes('RETURNING')) return { rows: [{ id: 'lead-1' }] };
+      return { rows: [] };
+    };
+
+  it('终态任务回报 → 200 ignored:true，零写库', async () => {
+    mockClientQuery.mockImplementation(clientImpl(taskRow({ status: 'done' })));
+    const res = await request(app).post('/api/acquisition/collect/report')
+      .send({ task_id: TASK_ID, video_id: 'v1', commenters: [{ nickname: 'n1' }] });
+    expect(res.status).toBe(200);
+    expect(res.body.data.ignored).toBe(true);
+    expect(res.body.data.status).toBe('done');
+    const writes = mockClientQuery.mock.calls.map((c) => String(c[0]))
+      .filter((s) => s.startsWith('INSERT') || s.startsWith('UPDATE'));
+    expect(writes).toHaveLength(0);
+  });
+
+  it('cancelling 任务回报 → 落章 cancelled，不写 leads', async () => {
+    mockClientQuery.mockImplementation(clientImpl(taskRow({ status: 'cancelling' })));
+    const res = await request(app).post('/api/acquisition/collect/report')
+      .send({ task_id: TASK_ID, video_id: 'v1', commenters: [{ nickname: 'n1' }] });
+    expect(res.status).toBe(200);
+    expect(res.body.data.status).toBe('cancelled');
+    const leadWrites = mockClientQuery.mock.calls.map((c) => String(c[0]))
+      .filter((s) => s.includes('acquisition_leads'));
+    expect(leadWrites).toHaveLength(0);
+  });
+
+  it('回报 upsert 用 (task_id, video_id) 并打 comments_reported_at', async () => {
+    mockClientQuery.mockImplementation(clientImpl(taskRow()));
+    await request(app).post('/api/acquisition/collect/report')
+      .send({ task_id: TASK_ID, video_id: 'v1', commenters: [] });
+    const calls = mockClientQuery.mock.calls.map((c) => String(c[0]));
+    const upsert = calls.find((s) => s.includes('acquisition_collect_videos'));
+    expect(upsert).toMatch(/ON CONFLICT \(task_id, video_id\)/);
+    expect(upsert).toMatch(/comments_reported_at/);
+  });
+
+  it('倒推逻辑已删：running 任务非终态回报不再因计数推进 stage_1_done', async () => {
+    mockClientQuery.mockImplementation(clientImpl(taskRow({ video_count: 2, keywords: ['k1'] }), { total: 3, done: 3 }));
+    const res = await request(app).post('/api/acquisition/collect/report')
+      .send({ task_id: TASK_ID, video_id: 'v3', commenters: [] });
+    expect(res.body.data.status).toBe('running');
+  });
+
+  it('stage_1_done 最后一个视频回完（无 terminal）→ 服务端自动 done + dispatch 点火一次', async () => {
+    mockClientQuery.mockImplementation(clientImpl(taskRow({ status: 'stage_1_done', lead_count_raw: 4 }), { total: 2, done: 2 }));
+    const res = await request(app).post('/api/acquisition/collect/report')
+      .send({ task_id: TASK_ID, video_id: 'v2', commenters: [{ nickname: 'n9' }] });
+    expect(res.body.data.status).toBe('done');
+    await new Promise((r) => setTimeout(r, 20));
+    expect(vi.mocked(scoreLeads)).toHaveBeenCalledTimes(1);
+  });
+
+  it('未进终态的回报不点火 dispatch', async () => {
+    mockClientQuery.mockImplementation(clientImpl(taskRow({ status: 'stage_1_done' }), { total: 3, done: 1 }));
+    await request(app).post('/api/acquisition/collect/report')
+      .send({ task_id: TASK_ID, video_id: 'v1', commenters: [{ nickname: 'n1' }] });
+    await new Promise((r) => setTimeout(r, 20));
+    expect(vi.mocked(scoreLeads)).not.toHaveBeenCalled();
+  });
+});
+
+describe('POST /api/acquisition/collect/sweep-timeouts — stage_1_done 收尸 [BEHAVIOR]', () => {
+  beforeEach(() => {
+    // 先前 describe 可能 vi.resetAllMocks() 清空了 scoreLeads/buildAssignments/dispatchDue 的默认 resolvedValue，这里重新钉住
+    vi.mocked(scoreLeads).mockReset().mockResolvedValue({ scored: 1 } as any);
+  });
+
+  it('候选查询含 stage_1_done 且其基准是 updated_at；有 lead→partial 无→failed', async () => {
+    vi.mocked(db.query).mockReset();
+    vi.mocked(db.query).mockImplementation(async (sql: unknown) => {
+      const s = String(sql);
+      if (s.includes('SELECT') && s.includes('lead_count')) {
+        return { rows: [
+          { id: 'task-a', status: 'stage_1_done', lead_count: 3 },
+          { id: 'task-b', status: 'running', lead_count: 0 },
+        ] } as any;
+      }
+      return { rows: [{ id: 'x' }] } as any;
+    });
+    const res = await request(app).post('/api/acquisition/collect/sweep-timeouts')
+      .set('X-Smoke-Token', 'smoke-secret-2026').send({});
+    expect(res.status).toBe(200);
+    expect(res.body.data.swept).toBe(2);
+    const calls = vi.mocked(db.query).mock.calls.map((c) => String(c[0]));
+    const sel = calls.find((s) => s.includes('lead_count'));
+    expect(sel).toMatch(/stage_1_done/);
+    expect(sel).toMatch(/updated_at/);
+    const updateCalls = vi.mocked(db.query).mock.calls.filter((c) => String(c[0]).trim().startsWith('UPDATE'));
+    expect(updateCalls).toHaveLength(2);
+    // 各条 UPDATE 都带乐观守卫 AND status = $4，且参数里分别带各自结算后的状态值
+    for (const c of updateCalls) {
+      expect(String(c[0])).toMatch(/AND status = \$4/);
+    }
+    const statuses = updateCalls.map((c) => (c[1] as unknown[])[1]);
+    expect(statuses).toContain('partial');
+    expect(statuses).toContain('failed');
+  });
+
+  it('sweep 收尸 partial 且有 leads → 补点火 dm-dispatch 链（同租户只触发一次）', async () => {
+    vi.mocked(db.query).mockReset();
+    vi.mocked(db.query).mockImplementation(async (sql: unknown) => {
+      const s = String(sql);
+      if (s.includes('SELECT') && s.includes('lead_count')) {
+        return { rows: [
+          { id: 'task-a', tenant_id: 'tenant-1', status: 'stage_1_done', lead_count: 3 },
+          { id: 'task-b', tenant_id: 'tenant-1', status: 'running', lead_count: 0 },
+        ] } as any;
+      }
+      return { rows: [{ id: 'x' }] } as any;
+    });
+    const res = await request(app).post('/api/acquisition/collect/sweep-timeouts')
+      .set('X-Smoke-Token', 'smoke-secret-2026').send({});
+    expect(res.status).toBe(200);
+    await new Promise((r) => setTimeout(r, 20));
+    // task-a 结算为 partial 且 lead_count=3>0 → 点火一次；task-b 结算为 failed → 不点火
+    expect(vi.mocked(scoreLeads)).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(scoreLeads)).toHaveBeenCalledWith(expect.anything(), 'tenant-1');
   });
 });

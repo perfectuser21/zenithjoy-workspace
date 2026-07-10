@@ -7,7 +7,8 @@ import pool from '../db/connection';
 import {
   SWEEP_TIMEOUT_MS,
   profileUrlForSecUid,
-  resolveTerminalStatus,
+  settleCollectTask,
+  TERMINAL_COLLECT_STATUSES,
 } from '../services/acquisition-collect';
 import { tenantContextOptional } from '../middleware/tenant-context';
 import { licenseAuth } from '../middleware/license-auth';
@@ -379,6 +380,7 @@ acquisitionRouter.get('/pending-collect-tasks', async (req: Request, res: Respon
       const vRes = await pool.query<{ task_id: string; video_id: string }>(
         `SELECT task_id, video_id FROM zenithjoy.acquisition_collect_videos
           WHERE task_id = ANY($1::uuid[])
+            AND comments_reported_at IS NULL
           ORDER BY created_at ASC`,
         [stage1DoneIds]
       );
@@ -865,7 +867,130 @@ acquisitionRouter.post('/collect/cancel', async (req: Request, res: Response) =>
   return ok(res, { task_id: taskId, status: 'cancelling' });
 });
 
-// POST /api/acquisition/collect/report — 客户机 Agent 增量回报（无需 smoke token，agent 直接调用）
+// POST /api/acquisition/collect/report-videos — Stage1 视频清单回报（幂等可重入）
+// 鉴权：x-agent-id 反查 tenant → 任务按 (id, tenant_id) 查 → agent 绑定校验。
+// 幂等：ON CONFLICT (task_id, video_id) + video_count 按 distinct 重算，重复回报同结果不重计数。
+acquisitionRouter.post('/collect/report-videos', async (req: Request, res: Response) => {
+  const { task_id: taskId, videos, reason } = req.body || {};
+  if (!taskId) return fail(res, 400, 'MISSING_TASK_ID', '缺 task_id');
+
+  const xAgentId = req.header('x-agent-id') ?? '';
+  if (!xAgentId) return fail(res, 401, 'MISSING_AGENT_ID', '缺 x-agent-id');
+  const agentRes = await pool.query<{ tenant_id: string }>(
+    `SELECT tenant_id FROM zenithjoy.agents WHERE agent_id = $1 LIMIT 1`,
+    [xAgentId]
+  );
+  const tenantId = agentRes.rows[0]?.tenant_id;
+  if (!tenantId) return fail(res, 403, 'UNKNOWN_AGENT', 'agent 未注册');
+
+  const list: Array<{ video_id: string; title?: string; thumbnail_url?: string; publish_date?: string }> =
+    Array.isArray(videos) ? videos.filter((v) => v && v.video_id) : [];
+  const searchEmpty = reason?.search_result === 'empty';
+  const reasonErrorCode: string | null = reason?.error_code ?? null;
+  if (list.length === 0 && !searchEmpty && !reasonErrorCode) {
+    return fail(res, 400, 'MISSING_REASON', '空清单必须带 reason（search_result=empty 或 error_code）');
+  }
+
+  const client = await pool.connect();
+  let sseEvent: { terminal: boolean; payload: Record<string, unknown> } | null = null;
+  try {
+    await client.query('BEGIN');
+    const taskRes = await client.query(
+      `SELECT id, tenant_id, status, agent_id, lead_count_raw
+         FROM zenithjoy.acquisition_collect_tasks
+        WHERE id = $1 AND tenant_id = $2
+        FOR UPDATE`,
+      [taskId, tenantId]
+    );
+    if (taskRes.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return fail(res, 404, 'NO_COLLECT_TASK', '采集任务不存在');
+    }
+    const task = taskRes.rows[0] as { id: string; status: string; agent_id: string | null; lead_count_raw: number };
+    if (task.agent_id && task.agent_id !== xAgentId) {
+      await client.query('ROLLBACK');
+      return fail(res, 403, 'AGENT_MISMATCH', '任务已绑定其他 agent');
+    }
+    if ((TERMINAL_COLLECT_STATUSES as readonly string[]).includes(task.status)) {
+      await client.query('ROLLBACK');
+      return fail(res, 409, 'TASK_TERMINAL', `任务已终态 ${task.status}`);
+    }
+    if (task.status === 'cancelling') {
+      // 唯一落章路径：cancelling → cancelled（settleCollectTask 语义）
+      const s = settleCollectTask({ currentStatus: 'cancelling', videoTotal: 0, videoDone: 0, leadCount: task.lead_count_raw });
+      await client.query(
+        `UPDATE zenithjoy.acquisition_collect_tasks
+            SET status = 'cancelled', ended_at = COALESCE(ended_at, NOW()), updated_at = NOW()
+          WHERE id = $1`,
+        [taskId]
+      );
+      await client.query('COMMIT');
+      sseService.close(taskId, { task_id: taskId, status: s.status });
+      return ok(res, { task_id: taskId, status: s.status, video_count: 0, accepted: 0 });
+    }
+
+    if (list.length === 0) {
+      // 空清单终态：empty → partial(stage1_empty)；error_code → failed（checkpoint 保留可重试）
+      const s = settleCollectTask({
+        currentStatus: task.status === 'pending' ? 'running' : task.status,
+        agentTerminal: searchEmpty
+          ? { terminal: 'partial', partial_reason: 'stage1_empty' }
+          : { terminal: 'failed', error_code: reasonErrorCode },
+        videoTotal: 0,
+        videoDone: 0,
+        leadCount: task.lead_count_raw,
+      });
+      await client.query(
+        `UPDATE zenithjoy.acquisition_collect_tasks
+            SET status = $2, error_code = $3, started_at = COALESCE(started_at, NOW()),
+                ended_at = NOW(), updated_at = NOW()
+          WHERE id = $1`,
+        [taskId, s.status, s.error_code]
+      );
+      await client.query('COMMIT');
+      sseService.close(taskId, { task_id: taskId, status: s.status, video_count: 0 });
+      return ok(res, { task_id: taskId, status: s.status, video_count: 0, accepted: 0 });
+    }
+
+    for (const v of list) {
+      await client.query(
+        `INSERT INTO zenithjoy.acquisition_collect_videos
+           (video_id, task_id, tenant_id, title, thumbnail_url, publish_date, comment_count)
+         VALUES ($1, $2, $3, $4, $5, $6, 0)
+         ON CONFLICT (task_id, video_id) DO UPDATE
+           SET title         = COALESCE(EXCLUDED.title, zenithjoy.acquisition_collect_videos.title),
+               thumbnail_url = COALESCE(EXCLUDED.thumbnail_url, zenithjoy.acquisition_collect_videos.thumbnail_url),
+               publish_date  = COALESCE(EXCLUDED.publish_date, zenithjoy.acquisition_collect_videos.publish_date),
+               updated_at    = NOW()`,
+        [v.video_id, taskId, tenantId, v.title ?? null, v.thumbnail_url ?? null, v.publish_date ?? null]
+      );
+    }
+    const vcRes = await client.query<{ total: number }>(
+      `SELECT count(*)::int AS total FROM zenithjoy.acquisition_collect_videos WHERE task_id = $1`,
+      [taskId]
+    );
+    const total = vcRes.rows[0]?.total ?? list.length;
+    await client.query(
+      `UPDATE zenithjoy.acquisition_collect_tasks
+          SET status = 'stage_1_done', agent_id = COALESCE(agent_id, $2), video_count = $3,
+              started_at = COALESCE(started_at, NOW()), updated_at = NOW()
+        WHERE id = $1`,
+      [taskId, xAgentId, total]
+    );
+    await client.query('COMMIT');
+    sseEvent = { terminal: false, payload: { task_id: taskId, status: 'stage_1_done', video_count: total } };
+    return ok(res, { task_id: taskId, status: 'stage_1_done', video_count: total, accepted: list.length });
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
+    return fail(res, 500, 'DB_ERROR', (err as Error).message);
+  } finally {
+    client.release();
+    if (sseEvent) sseService.emit(taskId, sseEvent.payload);
+  }
+});
+
+// POST /api/acquisition/collect/report — 客户机 Agent 增量回报（无需 smoke token，agent 直接调用；
+// 不加鉴权：在网旧 agent 会断。终态守卫返回 200+ignored（非 409，防旧 agent 对非 200 死循环重试）。
 acquisitionRouter.post('/collect/report', async (req: Request, res: Response) => {
   const {
     task_id: taskId,
@@ -884,222 +1009,256 @@ acquisitionRouter.post('/collect/report', async (req: Request, res: Response) =>
   if (!taskId) return fail(res, 400, 'MISSING_TASK_ID', '缺 task_id');
   if (!videoId) return fail(res, 400, 'MISSING_VIDEO_ID', '缺 video_id');
 
-  const taskRes = await pool.query(
-    `SELECT id, tenant_id, status, error_code, video_count, lead_count_raw, keywords
-       FROM zenithjoy.acquisition_collect_tasks WHERE id = $1`,
-    [taskId]
-  );
-  if (taskRes.rows.length === 0) return fail(res, 404, 'NO_COLLECT_TASK', '采集任务不存在');
-  const task = taskRes.rows[0] as {
-    id: string;
-    tenant_id: string;
-    status: string;
-    error_code: string | null;
-    video_count: number;
-    lead_count_raw: number;
-    keywords: string[] | null;
-  };
-  const tenantId = task.tenant_id;
-  const batch: Array<{ sec_uid?: string | null; nickname: string; comment_text?: string; grade?: string; keyword?: string }> = Array.isArray(commenters)
-    ? commenters
-    : [];
+  const batch: Array<{ sec_uid?: string | null; nickname: string; comment_text?: string; grade?: string; keyword?: string }> =
+    Array.isArray(commenters) ? commenters : [];
 
-  // ── 去重落库：先处理 commenters（已抓先落库不丢，即使本次是终态回报）──
-  let inserted = 0;
-  let deduped = 0;
-  const newLeads: Array<{ sec_uid: string | null; nickname: string }> = [];
-  const seenSec = new Set<string>();
-  const seenNick = new Set<string>();
-
-  for (const c of batch) {
-    const secUid = c.sec_uid ?? null;
-    let matchId: string | null = null;
-    if (secUid) {
-      if (seenSec.has(secUid)) matchId = 'batch';
-      else {
-        const found = await pool.query(
-          `SELECT id FROM zenithjoy.acquisition_leads WHERE tenant_id = $1 AND sec_uid = $2 LIMIT 1`,
-          [tenantId, secUid]
-        );
-        if (found.rows.length > 0) matchId = found.rows[0].id;
-      }
-    } else {
-      if (seenNick.has(c.nickname)) matchId = 'batch';
-      else {
-        const found = await pool.query(
-          `SELECT id FROM zenithjoy.acquisition_leads
-             WHERE tenant_id = $1 AND sec_uid IS NULL AND nickname = $2 LIMIT 1`,
-          [tenantId, c.nickname]
-        );
-        if (found.rows.length > 0) matchId = found.rows[0].id;
-      }
-    }
-
-    if (matchId) {
-      deduped += 1;
-      if (matchId !== 'batch') {
-        // 重复仅累加来源 video_id（不重复建 lead 行）——但评论内容/grade 仍进历史表，不再丢
-        await pool.query(
-          `UPDATE zenithjoy.acquisition_leads
-              SET source_video_ids = CASE
-                    WHEN source_video_ids ? $2 THEN source_video_ids
-                    ELSE source_video_ids || to_jsonb($2::text)
-                  END,
-                  updated_at = NOW()
-            WHERE id = $1`,
-          [matchId, videoId]
-        );
-        await pool.query(
-          `INSERT INTO zenithjoy.acquisition_lead_comments
-             (lead_id, video_id, comment_text, grade, commented_at)
-           VALUES ($1, $2, $3, $4, NOW())`,
-          [matchId, videoId, c.comment_text ?? null, c.grade ?? null]
-        );
-        await rescoreLead(pool, tenantId, matchId);
-      }
-      continue;
-    }
-
-    inserted += 1;
-    if (secUid) seenSec.add(secUid);
-    else seenNick.add(c.nickname);
-    const insRes = await pool.query(
-      `INSERT INTO zenithjoy.acquisition_leads
-         (tenant_id, collect_task_id, sec_uid, nickname, profile_url, partial, source_video_ids,
-          comment_text, grade, keyword, feishu_write_status)
-       VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8, $9, $10, 'local_only')
-       RETURNING id`,
-      [
-        tenantId,
-        taskId,
-        secUid,
-        c.nickname,
-        profileUrlForSecUid(secUid),
-        !secUid,
-        JSON.stringify([videoId]),
-        c.comment_text ?? null,
-        c.grade ?? null,
-        c.keyword ?? keyword ?? null,
-      ]
-    );
-    const newLeadId = insRes.rows[0].id as string;
-    // 首条留言也进历史表（不只老用户才进），再 rescore 汇总
-    await pool.query(
-      `INSERT INTO zenithjoy.acquisition_lead_comments
-         (lead_id, video_id, comment_text, grade, commented_at)
-       VALUES ($1, $2, $3, $4, NOW())`,
-      [newLeadId, videoId, c.comment_text ?? null, c.grade ?? null]
-    );
-    await rescoreLead(pool, tenantId, newLeadId);
-    newLeads.push({ sec_uid: secUid, nickname: c.nickname });
-  }
-
-  // 数据已写本地 DB，不走飞书
-  const leadWriteStatus = 'local_only';
-
-  // ── 终态 / 计数 / 断点 更新 ──
-  const MAX_VIDEOS_PER_KEYWORD = 3;
-  let newStatus = task.status;
-  let newErrorCode = task.error_code;
-  if (terminal) {
-    const t = resolveTerminalStatus({ terminal, error_code: errorCode, partial_reason: partialReason });
-    newStatus = t.status;
-    newErrorCode = t.error_code;
-  } else if (task.status === 'pending') {
-    newStatus = 'running';
-  } else if (!terminal && task.status === 'running') {
-    // Stage1 完成判断：视频计数已达 keywords.length × MAX_VIDEOS_PER_KEYWORD 时，推进为 stage_1_done
-    // （含本次新插入：video_count 当前值 + 1）
-    const keywordsLen = Array.isArray(task.keywords) ? task.keywords.length : 0;
-    const expectedCount = keywordsLen * MAX_VIDEOS_PER_KEYWORD;
-    const newVideoCount = task.video_count + 1;
-    if (keywordsLen > 0 && newVideoCount >= expectedCount) {
-      newStatus = 'stage_1_done';
-    }
-  }
-
-  await pool.query(
-    `UPDATE zenithjoy.acquisition_collect_tasks
-        SET status         = $2,
-            error_code     = $3,
-            video_count    = video_count + 1,
-            lead_count_raw = lead_count_raw + $4,
-            checkpoint     = COALESCE($5::jsonb, checkpoint),
-            started_at     = COALESCE(started_at, NOW()),
-            ended_at       = CASE WHEN $6 THEN NOW() ELSE ended_at END,
-            updated_at     = NOW()
-      WHERE id = $1`,
-    [taskId, newStatus, newErrorCode, batch.length, checkpoint ? JSON.stringify(checkpoint) : null, !!terminal]
-  );
-
-  // 视频维度记录（video_title/thumbnail_url/publish_date 暂由 agent 端可选回填，未回填则留空占位）
-  await pool.query(
-    `INSERT INTO zenithjoy.acquisition_collect_videos
-       (video_id, task_id, tenant_id, title, thumbnail_url, publish_date, comment_count)
-     VALUES ($1, $2, $3, $4, $5, $6, $7)
-     ON CONFLICT (video_id) DO UPDATE
-       SET comment_count = zenithjoy.acquisition_collect_videos.comment_count + EXCLUDED.comment_count,
-           title          = COALESCE(EXCLUDED.title, zenithjoy.acquisition_collect_videos.title),
-           thumbnail_url  = COALESCE(EXCLUDED.thumbnail_url, zenithjoy.acquisition_collect_videos.thumbnail_url),
-           publish_date   = COALESCE(EXCLUDED.publish_date, zenithjoy.acquisition_collect_videos.publish_date),
-           updated_at     = NOW()`,
-    [videoId, taskId, tenantId, videoTitle ?? null, thumbnailUrl ?? null, publishDate ?? null, batch.length]
-  );
-
-  // SSE 推送状态变化（video_count+1 / lead_count_raw+batch.length 与 UPDATE 语句一致）
-  const TERMINAL_ACQ = ['done', 'failed', 'cancelled', 'partial'];
-  const ssePayload = {
-    task_id: taskId,
-    status: newStatus,
-    video_count: task.video_count + 1,
-    lead_count_raw: task.lead_count_raw + batch.length,
-  };
-  if (TERMINAL_ACQ.includes(newStatus)) {
-    sseService.close(taskId, ssePayload);
-  } else {
-    sseService.emit(taskId, ssePayload);
-  }
-
-  // 终态且有 leads 写入 → fire-and-forget dispatch 链（与 /comment-score-result 一致）
-  if (terminal && inserted > 0) {
-    const collectRes = await pool.query(
-      `SELECT tenant_id FROM zenithjoy.acquisition_collect_tasks WHERE id = $1`,
+  const client = await pool.connect();
+  // COMMIT 后才发的副作用（SSE / dispatch），事务内只记录不执行
+  let afterCommit: (() => void) | null = null;
+  try {
+    await client.query('BEGIN');
+    const taskRes = await client.query(
+      `SELECT id, tenant_id, status, error_code, video_count, lead_count_raw, keywords
+         FROM zenithjoy.acquisition_collect_tasks WHERE id = $1
+         FOR UPDATE`,
       [taskId]
     );
-    const tid = collectRes.rows[0]?.tenant_id ?? null;
-    if (tid) {
-      void scoreLeads(pool, tid)
-        .then(() => buildAssignments(pool, tid))
-        .then(() => dispatchDue(pool, tid))
-        .catch((e: Error) => console.error('[acquisition] collect/report dm-dispatch error:', e.message));
+    if (taskRes.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return fail(res, 404, 'NO_COLLECT_TASK', '采集任务不存在');
     }
-  }
+    const task = taskRes.rows[0] as {
+      id: string; tenant_id: string; status: string; error_code: string | null;
+      video_count: number; lead_count_raw: number; keywords: string[] | null;
+    };
+    const tenantId = task.tenant_id;
 
-  return ok(res, {
-    task_id: taskId,
-    inserted,
-    deduped,
-    lead_write_status: leadWriteStatus,
-    status: newStatus,
-  });
+    // ── 终态守卫：终态任务回报 → 200 + ignored，零写库 ──
+    if ((TERMINAL_COLLECT_STATUSES as readonly string[]).includes(task.status)) {
+      await client.query('ROLLBACK');
+      return ok(res, { task_id: taskId, ignored: true, status: task.status });
+    }
+    // ── cancelling → 落章 cancelled（唯一落章路径），不再写数据 ──
+    if (task.status === 'cancelling') {
+      const s = settleCollectTask({ currentStatus: 'cancelling', videoTotal: 0, videoDone: 0, leadCount: task.lead_count_raw });
+      await client.query(
+        `UPDATE zenithjoy.acquisition_collect_tasks
+            SET status = $2, ended_at = COALESCE(ended_at, NOW()), updated_at = NOW()
+          WHERE id = $1`,
+        [taskId, s.status]
+      );
+      await client.query('COMMIT');
+      sseService.close(taskId, { task_id: taskId, status: s.status });
+      return ok(res, { task_id: taskId, ignored: true, status: s.status });
+    }
+
+    // ── 去重落库：先处理 commenters（已抓先落库不丢，即使本次是终态回报）──
+    let inserted = 0;
+    let deduped = 0;
+    const seenSec = new Set<string>();
+    const seenNick = new Set<string>();
+
+    for (const c of batch) {
+      const secUid = c.sec_uid ?? null;
+      let matchId: string | null = null;
+      if (secUid) {
+        if (seenSec.has(secUid)) matchId = 'batch';
+        else {
+          const found = await client.query(
+            `SELECT id FROM zenithjoy.acquisition_leads WHERE tenant_id = $1 AND sec_uid = $2 LIMIT 1`,
+            [tenantId, secUid]
+          );
+          if (found.rows.length > 0) matchId = found.rows[0].id;
+        }
+      } else {
+        if (seenNick.has(c.nickname)) matchId = 'batch';
+        else {
+          const found = await client.query(
+            `SELECT id FROM zenithjoy.acquisition_leads
+               WHERE tenant_id = $1 AND sec_uid IS NULL AND nickname = $2 LIMIT 1`,
+            [tenantId, c.nickname]
+          );
+          if (found.rows.length > 0) matchId = found.rows[0].id;
+        }
+      }
+
+      if (matchId) {
+        deduped += 1;
+        if (matchId !== 'batch') {
+          // 重复仅累加来源 video_id（不重复建 lead 行）——但评论内容/grade 仍进历史表，不再丢
+          await client.query(
+            `UPDATE zenithjoy.acquisition_leads
+                SET source_video_ids = CASE
+                      WHEN source_video_ids ? $2 THEN source_video_ids
+                      ELSE source_video_ids || to_jsonb($2::text)
+                    END,
+                    updated_at = NOW()
+              WHERE id = $1`,
+            [matchId, videoId]
+          );
+          await client.query(
+            `INSERT INTO zenithjoy.acquisition_lead_comments
+               (lead_id, video_id, comment_text, grade, commented_at)
+             VALUES ($1, $2, $3, $4, NOW())`,
+            [matchId, videoId, c.comment_text ?? null, c.grade ?? null]
+          );
+          await rescoreLead(client, tenantId, matchId); // 事务内传 client，别传 pool（读不到未提交数据）
+        }
+        continue;
+      }
+
+      inserted += 1;
+      if (secUid) seenSec.add(secUid);
+      else seenNick.add(c.nickname);
+      const insRes = await client.query(
+        `INSERT INTO zenithjoy.acquisition_leads
+           (tenant_id, collect_task_id, sec_uid, nickname, profile_url, partial, source_video_ids,
+            comment_text, grade, keyword, feishu_write_status)
+         VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8, $9, $10, 'local_only')
+         RETURNING id`,
+        [tenantId, taskId, secUid, c.nickname, profileUrlForSecUid(secUid), !secUid,
+         JSON.stringify([videoId]), c.comment_text ?? null, c.grade ?? null, c.keyword ?? keyword ?? null]
+      );
+      const newLeadId = insRes.rows[0].id as string;
+      // 首条留言也进历史表（不只老用户才进），再 rescore 汇总
+      await client.query(
+        `INSERT INTO zenithjoy.acquisition_lead_comments
+           (lead_id, video_id, comment_text, grade, commented_at)
+         VALUES ($1, $2, $3, $4, NOW())`,
+        [newLeadId, videoId, c.comment_text ?? null, c.grade ?? null]
+      );
+      await rescoreLead(client, tenantId, newLeadId);
+    }
+
+    // ── 视频维度：upsert (task_id, video_id) + 打 Stage2 完成标记 ──
+    await client.query(
+      `INSERT INTO zenithjoy.acquisition_collect_videos
+         (video_id, task_id, tenant_id, title, thumbnail_url, publish_date, comment_count, comments_reported_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
+       ON CONFLICT (task_id, video_id) DO UPDATE
+         SET comment_count        = zenithjoy.acquisition_collect_videos.comment_count + EXCLUDED.comment_count,
+             title                = COALESCE(EXCLUDED.title, zenithjoy.acquisition_collect_videos.title),
+             thumbnail_url        = COALESCE(EXCLUDED.thumbnail_url, zenithjoy.acquisition_collect_videos.thumbnail_url),
+             publish_date         = COALESCE(EXCLUDED.publish_date, zenithjoy.acquisition_collect_videos.publish_date),
+             comments_reported_at = NOW(),
+             updated_at           = NOW()`,
+      [videoId, taskId, tenantId, videoTitle ?? null, thumbnailUrl ?? null, publishDate ?? null, batch.length]
+    );
+
+    // ── 计数重算 + settle 结算（倒推逻辑已删，Stage1 推进只走 report-videos）──
+    const vcRes = await client.query<{ total: number; done: number }>(
+      `SELECT count(*)::int AS total, count(comments_reported_at)::int AS done
+         FROM zenithjoy.acquisition_collect_videos WHERE task_id = $1`,
+      [taskId]
+    );
+    const videoTotal = vcRes.rows[0]?.total ?? 0;
+    const videoDone = vcRes.rows[0]?.done ?? 0;
+    const leadCountAfter = task.lead_count_raw + batch.length;
+    const s = settleCollectTask({
+      currentStatus: task.status === 'pending' ? 'running' : task.status,
+      agentTerminal: terminal ? { terminal, error_code: errorCode, partial_reason: partialReason } : null,
+      videoTotal,
+      videoDone,
+      leadCount: leadCountAfter,
+    });
+    const newStatus = s.changed ? s.status : (task.status === 'pending' ? 'running' : task.status);
+    const newErrorCode = s.changed ? s.error_code : task.error_code;
+    const isTerminal = (TERMINAL_COLLECT_STATUSES as readonly string[]).includes(newStatus);
+
+    await client.query(
+      `UPDATE zenithjoy.acquisition_collect_tasks
+          SET status         = $2,
+              error_code     = $3,
+              video_count    = $4,
+              lead_count_raw = lead_count_raw + $5,
+              checkpoint     = COALESCE($6::jsonb, checkpoint),
+              started_at     = COALESCE(started_at, NOW()),
+              ended_at       = CASE WHEN $7 THEN COALESCE(ended_at, NOW()) ELSE ended_at END,
+              updated_at     = NOW()
+        WHERE id = $1`,
+      [taskId, newStatus, newErrorCode, videoTotal, batch.length,
+       checkpoint ? JSON.stringify(checkpoint) : null, isTerminal]
+    );
+    await client.query('COMMIT');
+
+    // ── COMMIT 之后：SSE + dispatch（只在本次真进终态且任务有 leads 时点火一次）──
+    afterCommit = () => {
+      const ssePayload = { task_id: taskId, status: newStatus, video_count: videoTotal, lead_count_raw: leadCountAfter };
+      if (isTerminal) sseService.close(taskId, ssePayload);
+      else sseService.emit(taskId, ssePayload);
+      if (s.changed && isTerminal && leadCountAfter > 0) {
+        void scoreLeads(pool, tenantId)
+          .then(() => buildAssignments(pool, tenantId))
+          .then(() => dispatchDue(pool, tenantId))
+          .catch((e: Error) => console.error('[acquisition] collect/report dm-dispatch error:', e.message));
+      }
+    };
+
+    return ok(res, {
+      task_id: taskId,
+      inserted,
+      deduped,
+      lead_write_status: 'local_only',
+      status: newStatus,
+    });
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
+    return fail(res, 500, 'DB_ERROR', (err as Error).message);
+  } finally {
+    client.release();
+    if (afterCommit) afterCommit();
+  }
 });
 
-// POST /api/acquisition/collect/sweep-timeouts — 只转 stale running，pending(离线) 保留不丢
+// POST /api/acquisition/collect/sweep-timeouts — stale running + stage_1_done 收尸；pending(离线) 保留不丢
+// running 基准 COALESCE(started_at, updated_at, created_at)；stage_1_done 基准 updated_at
+//（Stage2 每次 report 都 touch updated_at，用 started_at 会误杀正在跑 Stage2 的任务）
 acquisitionRouter.post('/collect/sweep-timeouts', smokeOrAgentGate, async (_req: Request, res: Response) => {
   const cutoffMs = SWEEP_TIMEOUT_MS;
-  const r = await pool.query(
-    `UPDATE zenithjoy.acquisition_collect_tasks t
-        SET status = CASE
-              WHEN (SELECT count(*) FROM zenithjoy.acquisition_leads l WHERE l.collect_task_id = t.id) > 0
-                THEN 'partial' ELSE 'failed' END,
-            error_code = COALESCE(error_code, 'COLLECT_TIMEOUT'),
-            updated_at = NOW()
-      WHERE status = 'running'
-        AND COALESCE(started_at, updated_at, created_at) < NOW() - ($1::int || ' milliseconds')::interval
-      RETURNING id`,
+  const { rows } = await pool.query<{ id: string; tenant_id: string; status: string; lead_count: number }>(
+    `SELECT t.id, t.tenant_id, t.status,
+            (SELECT count(*) FROM zenithjoy.acquisition_leads l WHERE l.collect_task_id = t.id)::int AS lead_count
+       FROM zenithjoy.acquisition_collect_tasks t
+      WHERE (t.status = 'running'
+             AND COALESCE(t.started_at, t.updated_at, t.created_at) < NOW() - ($1::int || ' milliseconds')::interval)
+         OR (t.status = 'stage_1_done'
+             AND t.updated_at < NOW() - ($1::int || ' milliseconds')::interval)`,
     [cutoffMs]
   );
-  return ok(res, { swept: r.rows.length });
+  let swept = 0;
+  const dispatchTenants = new Set<string>();
+  for (const t of rows) {
+    const s = settleCollectTask({
+      currentStatus: t.status,
+      agentTerminal: t.lead_count > 0
+        ? { terminal: 'partial', partial_reason: 'COLLECT_TIMEOUT' }
+        : { terminal: 'failed', error_code: 'COLLECT_TIMEOUT' },
+      videoTotal: 0,
+      videoDone: 0,
+      leadCount: t.lead_count,
+    });
+    if (!s.changed) continue;
+    const r = await pool.query(
+      `UPDATE zenithjoy.acquisition_collect_tasks
+          SET status = $2, error_code = COALESCE(error_code, $3),
+              ended_at = COALESCE(ended_at, NOW()), updated_at = NOW()
+        WHERE id = $1 AND status = $4
+        RETURNING id`,
+      [t.id, s.status, s.error_code, t.status]
+    );
+    swept += r.rows.length;
+    if (r.rows.length > 0 && s.status === 'partial' && t.lead_count > 0 && t.tenant_id) {
+      dispatchTenants.add(t.tenant_id);
+    }
+  }
+  // sweep 收尸为 partial 且有 leads 的任务，补一次 dm-dispatch 链（同租户去重只触发一次）
+  for (const tenantId of dispatchTenants) {
+    void scoreLeads(pool, tenantId)
+      .then(() => buildAssignments(pool, tenantId))
+      .then(() => dispatchDue(pool, tenantId))
+      .catch((e: Error) => console.error('[acquisition] sweep-timeouts dm-dispatch error:', e.message));
+  }
+  return ok(res, { swept });
 });
 
 // GET /api/acquisition/collect/:task_id — 获客页查状态（精确 6 字段：task_id/status/video_count/lead_count_raw/created_at/ended_at）
