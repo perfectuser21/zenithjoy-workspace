@@ -140,13 +140,9 @@ test(
       .or(page.locator('button:has-text("发送")'))
       .click();
 
+    // Step 4+5：长跑改造后 → /generate 立即返回 running，UI 显示"正在后台生成"状态（不跳转 URL）
     await expect(
-      page.locator('text=正在生成').or(page.locator('[data-testid="skill-create-generating"]'))
-    ).toBeVisible({ timeout: 5000 });
-
-    // Step 5：长跑改造后 → /generate 立即返回 running，UI 显示"生成中"状态（不跳转 URL）
-    await expect(
-      page.locator('[data-testid="skill-create-running"]').or(page.locator('text=生成中'))
+      page.locator('[data-testid="skill-create-running"]')
     ).toBeVisible({ timeout: 10000 });
   }
 );
