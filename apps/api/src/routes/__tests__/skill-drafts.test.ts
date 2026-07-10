@@ -282,3 +282,103 @@ describe('[BEHAVIOR] 9（=E2E-3）— 断点续聊集成', () => {
     expect(true).toBe(false); // Red
   });
 });
+
+// ─── [REGRESSION] Bug-2：真实 stream-json 嵌套格式必须正确解析 ────────────────
+//
+// 根因：claude CLI --output-format stream-json 真实输出格式是嵌套的：
+//   { type:'assistant', message:{ content:[{ type:'text', text:'...' }] } }
+// 原代码只检查 parsed.type === 'text'，永远不匹配，SSE 无内容直接 event:done。
+
+describe('[REGRESSION] Bug-2 — 真实 stream-json 嵌套格式必须正确解析转发 SSE', () => {
+  beforeEach(() => {
+    vi.stubEnv('STAFF_EMAILS', 'staff@test.com');
+    spawnMock.mockReset();
+  });
+
+  it('收到嵌套 assistant 事件时，SSE body 应包含文本内容且以 event:done 结束', async () => {
+    const { EventEmitter } = await import('events');
+    const fakeStdout = new EventEmitter();
+    const fakeProcess = {
+      stdout: fakeStdout,
+      stderr: new EventEmitter(),
+      on: vi.fn((event: string, cb: (...args: unknown[]) => void) => {
+        if (event === 'close') setTimeout(() => cb(0), 60);
+      }),
+      kill: vi.fn(),
+    };
+    spawnMock.mockReturnValue(fakeProcess);
+
+    setTimeout(() => {
+      // 真实 claude CLI stream-json 嵌套格式（两行合并在同一 chunk）
+      (fakeStdout as NodeJS.EventEmitter).emit(
+        'data',
+        Buffer.from(
+          JSON.stringify({
+            type: 'assistant',
+            message: { content: [{ type: 'text', text: '你好，我是AI助手' }] },
+          }) + '\n' +
+          JSON.stringify({
+            type: 'result',
+            subtype: 'success',
+            result: '你好，我是AI助手',
+            session_id: 'test-session-abc123',
+          }) + '\n'
+        )
+      );
+      (fakeStdout as NodeJS.EventEmitter).emit('end');
+    }, 10);
+
+    const res = await request(app)
+      .post('/api/staff/skill-drafts/nonexistent-for-regression/chat')
+      .set('X-User-Email', 'staff@test.com')
+      .send({ message: '你好' });
+
+    expect(res.headers['content-type']).toContain('text/event-stream');
+    // Bug-2 修复前：SSE body 不含任何文本（直接 event:done）——此断言 FAIL
+    expect(res.text).toContain('你好，我是AI助手');
+    expect(res.text).toContain('event: done');
+  });
+});
+
+// ─── [REGRESSION] Bug-1：SSH 必须使用 account1 而非过期默认账号 ─────────────────
+//
+// 根因：spawn SSH 时未指定 CLAUDE_CONFIG_DIR，使用了 mmv 上已过期的默认 OAuth 账号。
+// 必须通过 env 命令传入 CLAUDE_CONFIG_DIR=/home/administrator/.claude-account1。
+
+describe('[REGRESSION] Bug-1 — SSH 必须通过 CLAUDE_CONFIG_DIR 使用 account1', () => {
+  beforeEach(() => {
+    vi.stubEnv('STAFF_EMAILS', 'staff@test.com');
+    spawnMock.mockReset();
+  });
+
+  it('spawn SSH 参数应包含 CLAUDE_CONFIG_DIR=/home/administrator/.claude-account1', async () => {
+    const { EventEmitter } = await import('events');
+    const fakeStdout = new EventEmitter();
+    const fakeProcess = {
+      stdout: fakeStdout,
+      stderr: new EventEmitter(),
+      on: vi.fn((event: string, cb: (...args: unknown[]) => void) => {
+        if (event === 'close') setTimeout(() => cb(0), 20);
+      }),
+      kill: vi.fn(),
+    };
+    spawnMock.mockReturnValue(fakeProcess);
+
+    setTimeout(() => {
+      (fakeStdout as NodeJS.EventEmitter).emit('end');
+    }, 5);
+
+    await request(app)
+      .post('/api/staff/skill-drafts/nonexistent-for-regression/chat')
+      .set('X-User-Email', 'staff@test.com')
+      .send({ message: '测试' });
+
+    // Bug-1 修复前：spawn args 不含 CLAUDE_CONFIG_DIR——此断言 FAIL
+    expect(spawnMock).toHaveBeenCalledWith(
+      'ssh',
+      expect.arrayContaining([
+        expect.stringContaining('CLAUDE_CONFIG_DIR=/home/administrator/.claude-account1'),
+      ])
+    );
+  });
+});
