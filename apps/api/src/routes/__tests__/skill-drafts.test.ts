@@ -335,6 +335,87 @@ describe('[BEHAVIOR] 11 — 真实 claude CLI 会话生命周期', () => {
     expect(secondCallArgs).toContain('established-session-1');
   });
 
+  it('死会话（--resume 时 is_error 且报"会话不存在"）自动清session_id重试一次，员工看不到报错', async () => {
+    const { EventEmitter } = await import('events');
+
+    // 第一次带 session_id 起会话
+    const fakeStdout0 = new EventEmitter() as NodeJS.ReadableStream & { destroy?: () => void };
+    spawnMock.mockReturnValueOnce({
+      stdout: fakeStdout0,
+      stderr: new EventEmitter(),
+      on: vi.fn(),
+      kill: vi.fn(),
+    });
+    const createRes = await request(app)
+      .post('/api/staff/skill-drafts')
+      .set('X-User-Email', 'staff@test.com')
+      .send({});
+    const draftId: string = createRes.body.data.id;
+    setTimeout(() => {
+      (fakeStdout0 as NodeJS.EventEmitter).emit(
+        'data',
+        Buffer.from(
+          '{"type":"assistant","session_id":"dead-session-abc","message":{"content":[{"type":"text","text":"好的"}]}}\n'
+        )
+      );
+      (fakeStdout0 as NodeJS.EventEmitter).emit('end');
+    }, 10);
+    await request(app)
+      .post(`/api/staff/skill-drafts/${draftId}/chat`)
+      .set('X-User-Email', 'staff@test.com')
+      .send({ message: '第一条消息' });
+
+    // 第二条消息：--resume dead-session-abc 失败（会话已死），应自动清session_id重试
+    const fakeStdout1 = new EventEmitter() as NodeJS.ReadableStream & { destroy?: () => void };
+    spawnMock.mockReturnValueOnce({
+      stdout: fakeStdout1,
+      stderr: new EventEmitter(),
+      on: vi.fn(),
+      kill: vi.fn(),
+    });
+    setTimeout(() => {
+      (fakeStdout1 as NodeJS.EventEmitter).emit(
+        'data',
+        Buffer.from(
+          '{"type":"result","is_error":true,"errors":["No conversation found with session ID: dead-session-abc"]}\n'
+        )
+      );
+      (fakeStdout1 as NodeJS.EventEmitter).emit('end');
+    }, 10);
+
+    // 重试的第二次 spawn（不带 --resume）真的回复了
+    const fakeStdout2 = new EventEmitter() as NodeJS.ReadableStream & { destroy?: () => void };
+    spawnMock.mockReturnValueOnce({
+      stdout: fakeStdout2,
+      stderr: new EventEmitter(),
+      on: vi.fn(),
+      kill: vi.fn(),
+    });
+    setTimeout(() => {
+      (fakeStdout2 as NodeJS.EventEmitter).emit(
+        'data',
+        Buffer.from(
+          '{"type":"assistant","session_id":"fresh-session-xyz","message":{"content":[{"type":"text","text":"重新开始"}]}}\n'
+        )
+      );
+      (fakeStdout2 as NodeJS.EventEmitter).emit('end');
+    }, 30);
+
+    const res = await request(app)
+      .post(`/api/staff/skill-drafts/${draftId}/chat`)
+      .set('X-User-Email', 'staff@test.com')
+      .send({ message: '第二条消息' });
+
+    // 员工看不到任何报错，只看到重试后的真实回复
+    expect(res.text).not.toContain('event: error');
+    expect(res.text).toContain('重新开始');
+    expect(res.text).toContain('event: done');
+
+    // 第三次 spawn（重试那次）确实没传 --resume
+    const retrySpawnArgs = spawnMock.mock.calls[2][1] as string[];
+    expect(retrySpawnArgs).not.toContain('--resume');
+  });
+
   it('真实 result 事件 is_error=true（如"会话不存在"/认证过期）→ event: error，不当成功空回复处理', async () => {
     const { EventEmitter } = await import('events');
     const fakeStdout = new EventEmitter() as NodeJS.ReadableStream & { destroy?: () => void };
