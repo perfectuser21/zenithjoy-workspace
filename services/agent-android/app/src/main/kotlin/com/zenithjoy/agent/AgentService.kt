@@ -21,6 +21,7 @@ import com.zenithjoy.agent.collect.DouyinDmOutreachService
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -62,6 +63,20 @@ class AgentService : Service() {
     // 进程内存态，随 Agent 重启清零；本 sprint 先用最简单的内存实现推进真实执行路径，
     // 跨进程重启持久化频控窗口留作后续加厚项（不影响 10 分钟窗口本身的正确性判定）。
     private val dmSentTimestamps = java.util.Collections.synchronizedList(mutableListOf<Long>())
+
+    // Stage2 串行队列：避免 DouyinCollectService 被同时 dispatch 多个视频任务（ScanMutex 只接受
+    // 第一个，其余全被 busy-guard 忽略）。队列 capacity=UNLIMITED 不阻塞写入方，
+    // processStage2Queue 协程负责串行取出并逐一 dispatch。
+    private val stage2VideoQueue = Channel<Stage2VideoTask>(capacity = Channel.UNLIMITED)
+    // Stage2 每视频完成信号：DouyinCollectService.onCollectResult 成功上报后发信号，
+    // processStage2Queue 收到后才 dispatch 下一条。
+    private val stage2VideoCompletionSignal = Channel<Unit>(capacity = 1)
+
+    private data class Stage2VideoTask(
+        val taskId: String,
+        val videoUrl: String,
+        val isLast: Boolean,
+    )
 
     private val dmOutreachResultReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
@@ -151,11 +166,11 @@ class AgentService : Service() {
         // 广播在这台荣耀真机上发得出去(sendBroadcast 正常返回)，但 collectResultReceiver
         // 从未收到——广播这条路不可靠，原因未查清(疑似 MagicOS 后台广播限流)。改用
         // 同进程直接回调作为主路径，broadcast 只留兜底。
-        DouyinCollectService.onCollectResult = { taskId, ok, commentIds, commentTexts, error ->
+        DouyinCollectService.onCollectResult = { taskId, keyword, ok, commentIds, commentTexts, error ->
             val comments = commentIds.indices.map { i ->
                 CommentEntry(commenterId = commentIds[i], text = commentTexts.getOrElse(i) { "" })
             }
-            val result = CollectResult(ok = ok, keyword = "", comments = comments, error = error)
+            val result = CollectResult(ok = ok, keyword = keyword, comments = comments, error = error)
             scope.launch { reportCollectResult(taskId, result) }
         }
     }
@@ -176,6 +191,8 @@ class AgentService : Service() {
         keywordPollLoop?.stop()
         collectPollLoop?.stop()
         accountScanLoopJob?.cancel()
+        stage2VideoQueue.close()
+        stage2VideoCompletionSignal.close()
         serviceJob.cancel()
         unregisterReceiver(collectResultReceiver)
         unregisterReceiver(dmOutreachResultReceiver)
@@ -276,32 +293,33 @@ class AgentService : Service() {
         keywordPollLoop?.start()
 
         // 两阶段采集任务轮询（Path 2 Step 5）
-        // 与 keywordPollLoop 并行双跑，通过 collectTaskIds Set 在 onCollectResult 中区分路由
+        // Stage1：每关键词 onStage1Task 调一次（单关键词），搜索完调 /collect/report-videos 回报清单
+        // Stage2：所有视频入队 stage2VideoQueue，processStage2Queue 串行逐一 dispatch + 上报
         collectPollLoop = AcquisitionCollectPollLoop(
             agentId = config.agentId,
             httpBase = config.deriveHttpBase(),
             scope = scope,
             onStage1Task = { taskId, keywords ->
-                android.util.Log.i(TAG, "collect stage_1 task: id=$taskId keywords=${keywords.size}")
-                // 对每个关键词触发 Douyin 搜索采集，任务 ID 走新协议
-                keywords.forEach { keyword ->
-                    DouyinCollectService.dispatchTask(this@AgentService, keyword, taskId)
-                }
+                // keywords 此处是单元素列表（poll loop 已拆分）
+                val keyword = keywords.firstOrNull() ?: return@AcquisitionCollectPollLoop
+                android.util.Log.i(TAG, "collect stage_1 keyword: id=$taskId keyword=$keyword")
+                DouyinCollectService.dispatchTask(this@AgentService, keyword, taskId)
             },
-            onStage2Task = { taskId, videoUrls, checkpoint ->
-                android.util.Log.i(TAG, "collect stage_2 task: id=$taskId videos=${videoUrls.size} checkpoint=${checkpoint != null}")
-                // 对每个视频 URL 触发评论抓取
-                videoUrls.forEach { videoUrl ->
-                    DouyinCollectService.dispatchTask(this@AgentService, videoUrl, taskId)
+            onStage2Task = { taskId, videoUrls, _ ->
+                android.util.Log.i(TAG, "collect stage_2 task: id=$taskId videos=${videoUrls.size}")
+                videoUrls.forEachIndexed { idx, videoUrl ->
+                    stage2VideoQueue.trySend(
+                        Stage2VideoTask(taskId, videoUrl, isLast = idx == videoUrls.size - 1)
+                    )
                 }
             },
             onCancel = { taskId ->
                 android.util.Log.i(TAG, "collect task cancelled: id=$taskId")
-                // 取消上报：terminal=true, partial_reason=user_cancelled
                 scope.launch { reportCollectCancel(taskId) }
             },
         )
         collectPollLoop?.start()
+        scope.launch { processStage2Queue() }
 
         // Sprint 07061301-device-account-scan-wiring — 定时触发设备账号扫描（30-60 分钟随机间隔，
         // 与 RandomDelay 一样禁止用固定常量），扫描服务自身会先判互斥锁再决定是否真的执行。
@@ -498,33 +516,95 @@ class AgentService : Service() {
         }
     }
 
-    // taskId 对应 acquisition_keyword_tasks.id（由 ws0/ws1 派发 android_douyin 任务时下发）。
-    // /api/agent/task-result 端点不存在——服务端唯一能接住评论数据的是已有的
-    // /api/acquisition/comment-score-result（Windows Agent 已在用同一端点，字段一致）。
-    // 路由判断：collectPollLoop.collectTaskIds 命中 → 新协议 /collect/report，否则旧协议。
+    // 路由判断：
+    //   Stage1（stage1TaskIds 命中）→ POST /collect/report-videos（回报视频清单）
+    //   Stage2（collectTaskIds 命中，非 Stage1）→ POST /collect/report（评论数据）
+    //   旧协议（均不命中）→ POST /comment-score-result
     private fun reportCollectResult(taskId: String, result: CollectResult) {
-        android.util.Log.i(TAG, "DEBUG reportCollectResult called: taskId=$taskId")
         if (taskId.isEmpty()) return
 
+        val isStage1Task = collectPollLoop?.stage1TaskIds?.contains(taskId) == true
         val isCollectTask = collectPollLoop?.collectTaskIds?.contains(taskId) == true
-        if (isCollectTask) {
-            // 新协议：/api/acquisition/collect/report
-            reportCollectReportNew(taskId, result)
-        } else {
-            // 旧协议：/api/acquisition/comment-score-result
-            val url = "${config.deriveHttpBase()}/api/acquisition/comment-score-result"
-            val body = gson.toJson(result.toCommentScoreResultPayload(taskId))
+
+        when {
+            isStage1Task -> {
+                // Stage1：回报视频清单，调 /collect/report-videos
+                reportStage1Videos(taskId, result)
+            }
+            isCollectTask -> {
+                // Stage2：评论数据，调 /collect/report；完成后通知队列处理器继续
+                reportCollectReportNew(taskId, result)
+                stage2VideoCompletionSignal.trySend(Unit)
+            }
+            else -> {
+                // 旧协议：/api/acquisition/comment-score-result
+                val url = "${config.deriveHttpBase()}/api/acquisition/comment-score-result"
+                val body = gson.toJson(result.toCommentScoreResultPayload(taskId))
+                try {
+                    val request = Request.Builder()
+                        .url(url)
+                        .post(body.toRequestBody("application/json".toMediaType()))
+                        .build()
+                    httpClient.newCall(request).execute().use { resp ->
+                        android.util.Log.i(TAG, "comment-score-result reported: ${resp.code} task=$taskId")
+                    }
+                } catch (e: Exception) {
+                    android.util.Log.w(TAG, "comment-score-result report failed: ${e.message}")
+                }
+            }
+        }
+    }
+
+    // Stage2 串行队列处理器：逐一取视频任务、dispatch 给 DouyinCollectService、等结果信号、
+    // 再取下一条。超时（300s/视频）后跳过当前视频继续，不因单视频失败中止整个任务。
+    private suspend fun processStage2Queue() {
+        for (task in stage2VideoQueue) {
+            android.util.Log.i(TAG, "stage2 dispatch: taskId=${task.taskId} url=${task.videoUrl} isLast=${task.isLast}")
+            DouyinCollectService.dispatchTask(this@AgentService, task.videoUrl, task.taskId)
+            // 等待 DouyinCollectService 上报结果（最多 300s，超时跳过）
+            var signalled = false
+            val deadline = System.currentTimeMillis() + 300_000L
+            while (!signalled && System.currentTimeMillis() < deadline) {
+                val recv = stage2VideoCompletionSignal.tryReceive()
+                if (recv.isSuccess) {
+                    signalled = true
+                } else {
+                    delay(500L)
+                }
+            }
+            if (!signalled) {
+                android.util.Log.w(TAG, "stage2 video timeout, skipping: taskId=${task.taskId} url=${task.videoUrl}")
+            }
+        }
+    }
+
+    // Stage1 视频清单上报：POST /api/acquisition/collect/report-videos（含 x-agent-id 鉴权头）。
+    // video_id 用关键词本身（keyword），与 Stage2 pending-collect-tasks 返回的 video_urls 对齐，
+    // 使 Stage2 能复用同一关键词搜索路径重定位视频。
+    // 空结果：ok=false 且无注释→ error_code；ok=false 且 error="" → search_result='empty'。
+    // 失败时重试一次（退避 5s），避免因单次网络抖动丢失清单。
+    private fun reportStage1Videos(taskId: String, result: CollectResult) {
+        if (taskId.isEmpty()) return
+        val url = "${config.deriveHttpBase()}/api/acquisition/collect/report-videos"
+        val body = buildStage1VideosBody(taskId, result.keyword, result.ok, result.error)
+        var attempt = 0
+        while (attempt < 2) {
             try {
                 val request = Request.Builder()
                     .url(url)
+                    .header("x-agent-id", config.agentId)
                     .post(body.toRequestBody("application/json".toMediaType()))
                     .build()
                 httpClient.newCall(request).execute().use { resp ->
-                    android.util.Log.i(TAG, "comment-score-result reported: ${resp.code} task=$taskId")
+                    android.util.Log.i(TAG, "collect/report-videos: ${resp.code} task=$taskId ok=${result.ok}")
+                    if (resp.isSuccessful || resp.code == 409) return
+                    android.util.Log.w(TAG, "collect/report-videos non-2xx: ${resp.code} attempt=${attempt + 1}")
                 }
             } catch (e: Exception) {
-                android.util.Log.w(TAG, "comment-score-result report failed: ${e.message}")
+                android.util.Log.w(TAG, "collect/report-videos failed attempt=${attempt + 1}: ${e.message}")
             }
+            attempt++
+            if (attempt < 2) Thread.sleep(5_000L)
         }
     }
 
@@ -594,6 +674,29 @@ class AgentService : Service() {
         // 经心跳 ...realPayload 透传到 agent。不能靠 task.type（getQueuedTasks 只 select
         // publish 类型列 type，无 task_type 列），必须走 payload.task_type。
         fun shouldRouteWarmup(payloadTaskType: String?): Boolean = payloadTaskType == "warmup"
+
+        /**
+         * 构造 POST /collect/report-videos 的请求体 JSON（纯字符串，不依赖 Android org.json，
+         * 供 JVM 单元测试验证 Stage1 视频清单上报格式）。
+         *
+         * ok=true  → videos=[{video_id:keyword, keyword:keyword}]
+         * ok=false, error=""        → videos=[], reason={search_result:"empty"}
+         * ok=false, error="ERR_CODE" → videos=[], reason={error_code:"ERR_CODE"}
+         */
+        fun buildStage1VideosBody(taskId: String, keyword: String, ok: Boolean, error: String): String {
+            fun esc(s: String): String = s.replace("\\", "\\\\").replace("\"", "\\\"")
+            return if (ok) {
+                val kw = keyword.ifEmpty { "keyword_fallback" }
+                "{\"task_id\":\"${esc(taskId)}\",\"videos\":[{\"video_id\":\"${esc(kw)}\",\"keyword\":\"${esc(kw)}\"}]}"
+            } else {
+                val reason = if (error.isEmpty()) {
+                    "{\"search_result\":\"empty\"}"
+                } else {
+                    "{\"error_code\":\"${esc(error)}\"}"
+                }
+                "{\"task_id\":\"${esc(taskId)}\",\"videos\":[],\"reason\":$reason}"
+            }
+        }
 
         // 组 POST /api/agent/burner/warmup-result 的 JSON body。纯字符串拼避开 org.json 的
         // JVM 单测 "not mocked" 陷阱；resultsJson 已是设备端 org.json 生成的合法数组串，原样嵌入。

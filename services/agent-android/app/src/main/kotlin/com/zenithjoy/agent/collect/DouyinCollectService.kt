@@ -465,6 +465,7 @@ class DouyinCollectService : AccessibilityService() {
         // 真机实测过 sendBroadcast 在这台荣耀设备上不可靠，回调是唯一确认有效的路径）。
         onCollectResult?.invoke(
             currentTaskId,
+            result.keyword,
             result.ok,
             result.comments.map { it.commenterId },
             result.comments.map { it.text },
@@ -620,7 +621,7 @@ class DouyinCollectService : AccessibilityService() {
         // 不可靠，原因未查清(疑似 MagicOS 后台广播限流)。改成同进程直接回调，
         // 不再依赖系统广播这条不可靠的路。AgentService 在 onCreate 里设置这个回调。
         @Volatile
-        var onCollectResult: ((taskId: String, ok: Boolean, commentIds: List<String>, commentTexts: List<String>, error: String) -> Unit)? = null
+        var onCollectResult: ((taskId: String, keyword: String, ok: Boolean, commentIds: List<String>, commentTexts: List<String>, error: String) -> Unit)? = null
         const val EXTRA_KEYWORD = "keyword"
         const val EXTRA_TASK_ID = "task_id"
         const val EXTRA_RESULT_OK = "ok"

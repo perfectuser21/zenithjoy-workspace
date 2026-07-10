@@ -226,4 +226,46 @@ class AcquisitionCollectPollLoopTest {
         assertEquals(0, stage2Count)
         assertEquals(0, cancelCount)
     }
+
+    // TC-009: stage_1 任务 task_id 加入 stage1TaskIds，而非仅 collectTaskIds
+    @Test
+    fun `pollOnce_stage1_populatesStage1TaskIds`() = runTest {
+        server.enqueue(MockResponse().setBody("""
+            {"tasks":[
+              {"task_id":"collect-task-s1","stage":"stage_1","status":"running","keywords":["词A"]}
+            ],"total":1}
+        """.trimIndent()))
+
+        val loop = makeLoop()
+        loop.start()
+        advanceTimeBy(100)
+        loop.stop()
+
+        assertTrue("stage1TaskIds 应包含 collect-task-s1", loop.stage1TaskIds.contains("collect-task-s1"))
+        assertTrue("collectTaskIds 也应包含 collect-task-s1", loop.collectTaskIds.contains("collect-task-s1"))
+    }
+
+    // TC-010: stage_1 回调每次只传单一关键词（非完整列表），便于 AgentService 逐词分发
+    @Test
+    fun `pollOnce_stage1_eachCallbackReceivesSingleKeyword`() = runTest {
+        server.enqueue(MockResponse().setBody("""
+            {"tasks":[
+              {"task_id":"collect-task-010","stage":"stage_1","status":"running","keywords":["词X","词Y"]}
+            ],"total":1}
+        """.trimIndent()))
+
+        val receivedKeywordsPerCall = mutableListOf<List<String>>()
+        val loop = makeLoop(onStage1Task = { _, keywords ->
+            receivedKeywordsPerCall.add(keywords.toList())
+        })
+        loop.start()
+        advanceTimeBy(100)
+        loop.stop()
+
+        assertEquals("应触发 2 次（每关键词一次）", 2, receivedKeywordsPerCall.size)
+        assertEquals("第 1 次回调只含 1 个关键词", 1, receivedKeywordsPerCall[0].size)
+        assertEquals("第 2 次回调只含 1 个关键词", 1, receivedKeywordsPerCall[1].size)
+        val allKeywords = receivedKeywordsPerCall.map { it.first() }.toSet()
+        assertEquals(setOf("词X", "词Y"), allKeywords)
+    }
 }

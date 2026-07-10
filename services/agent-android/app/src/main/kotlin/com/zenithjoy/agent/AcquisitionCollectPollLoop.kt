@@ -16,12 +16,13 @@ import java.util.concurrent.TimeUnit
  *
  * 每 30s 轮询 GET /api/acquisition/pending-collect-tasks（鉴权头 x-agent-id），
  * 按任务 stage 分发：
- *   - stage_1 → 对每个 keyword 调 onStage1Task（关键词搜索 + 视频卡上报，每关键词 ≤ N=3 张）
- *   - stage_2 → 调 onStage2Task（评论抓取 + checkpoint 上报）
+ *   - stage_1 → 对每个 keyword 独立调 onStage1Task（单个关键词，关键词搜索后调 /collect/report-videos）
+ *   - stage_2 → 调 onStage2Task（评论抓取 + 每视频 /collect/report 上报，逐视频串行）
  *   - status=cancelling → 调 onCancel（agent 端上报 terminal=true + partial_reason=user_cancelled）
  *
- * 与 AcquisitionKeywordPollLoop 并行双跑，通过 collectTaskIds Set 在
- * AgentService.onCollectResult 中区分路由：命中 → /collect/report，否则 → /comment-score-result。
+ * 路由集合：
+ *   - stage1TaskIds：Stage1 任务 ID，AgentService 据此走 /collect/report-videos
+ *   - collectTaskIds：全部两阶段任务 ID（含 Stage1+Stage2），旧协议 /comment-score-result 判断用
  */
 class AcquisitionCollectPollLoop(
     private val agentId: String,
@@ -37,8 +38,11 @@ class AcquisitionCollectPollLoop(
     private val gson = Gson()
     private var job: Job? = null
 
-    /** 内存 Set：新协议任务 ID，供 AgentService.onCollectResult 路由判断用 */
+    /** 全部两阶段任务 ID（Stage1+Stage2），用于旧协议路由判断 */
     val collectTaskIds: MutableSet<String> = java.util.Collections.synchronizedSet(mutableSetOf())
+
+    /** Stage1 任务 ID，AgentService.onCollectResult 据此走 POST /collect/report-videos */
+    val stage1TaskIds: MutableSet<String> = java.util.Collections.synchronizedSet(mutableSetOf())
 
     private data class CollectTask(
         val task_id: String = "",
@@ -102,11 +106,12 @@ class AcquisitionCollectPollLoop(
                     val keywords = task.keywords ?: emptyList()
                     if (keywords.isEmpty()) return@forEach
                     collectTaskIds.add(task.task_id)
-                    // 每关键词触发一次回调，回调内上限由 maxVideosPerKeyword 控制
-                    keywords.take(maxVideosPerKeyword).forEach { _ ->
-                        onStage1Task?.invoke(task.task_id, keywords)
+                    stage1TaskIds.add(task.task_id)
+                    // 每关键词独立触发一次回调（单个 keyword），回调次数 = keywords.size，
+                    // 与合同 TC-002 对齐；每次传单元素列表便于 AgentService 逐词分发
+                    keywords.take(maxVideosPerKeyword).forEach { keyword ->
+                        onStage1Task?.invoke(task.task_id, listOf(keyword))
                     }
-                    // 实际触发次数等于 keywords.size（每个关键词调一次，与合同 TC-002 对齐）
                 }
                 "stage_2" -> {
                     val videoUrls = task.video_urls ?: emptyList()
