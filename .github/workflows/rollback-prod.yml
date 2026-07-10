@@ -66,7 +66,8 @@ jobs:
             export ZJ_REPO="$REPO"
             export ZJ_API_DIR="$REPO/apps/api"
             export ZJ_PROD_PORT=5200
-            export ZJ_PROD_DB=cecelia
+            # 拆库刀1（决策 0710）：与 promote 同源——repo variable ZJ_PROD_DB，未设=cecelia
+            export ZJ_PROD_DB="${{ vars.ZJ_PROD_DB || 'cecelia' }}"
             export ZJ_PROD_LABEL=com.zenithjoy.api
             export ZJ_PROD_PLIST="$HOME/Library/LaunchAgents/com.zenithjoy.api.plist"
             export ZJ_NODE=/opt/homebrew/bin/node

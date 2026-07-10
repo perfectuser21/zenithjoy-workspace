@@ -151,6 +151,8 @@ jobs:
             export ZJ_PROD_LABEL=com.zenithjoy.api
             export ZJ_STAGING_LABEL=com.zenithjoy.api.staging
             export ZJ_STAGING_DB=zenithjoy_test
+            # 拆库刀1（决策 0710）：生产库名由 repo variable ZJ_PROD_DB 控制，未设=cecelia（现状），切换日翻 zenithjoy
+            export ZJ_PROD_DB="${{ vars.ZJ_PROD_DB || 'cecelia' }}"
             export ZJ_PROD_PLIST="$HOME/Library/LaunchAgents/com.zenithjoy.api.plist"
             export ZJ_NODE=/opt/homebrew/bin/node
             export ZJ_RELEASES_DIR="${ZJ_RELEASES_DIR:-/Users/administrator/zenithjoy-releases}"
