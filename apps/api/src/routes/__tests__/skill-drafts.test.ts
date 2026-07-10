@@ -271,9 +271,12 @@ describe('[BEHAVIOR] 11 — 真实 claude CLI 会话生命周期', () => {
       .set('X-User-Email', 'staff@test.com')
       .send({ message: '第一条消息' });
 
+    // ssh 远程命令现在拼成一条字符串传（防 shell 元字符解析问题），
+    // 断言改成在这条字符串里找子串
     const sshArgs = spawnMock.mock.calls[0][1] as string[];
-    expect(sshArgs).not.toContain('--resume');
-    expect(sshArgs).toContain('--verbose');
+    const remoteCmd = sshArgs[1];
+    expect(remoteCmd).not.toContain('--resume');
+    expect(remoteCmd).toContain('--verbose');
   });
 
   it('第二条消息（草稿已有 session_id）传 --resume 续接同一会话', async () => {
@@ -331,8 +334,9 @@ describe('[BEHAVIOR] 11 — 真实 claude CLI 会话生命周期', () => {
       .send({ message: '第二条消息' });
 
     const secondCallArgs = spawnMock.mock.calls[1][1] as string[];
-    expect(secondCallArgs).toContain('--resume');
-    expect(secondCallArgs).toContain('established-session-1');
+    const secondRemoteCmd = secondCallArgs[1];
+    expect(secondRemoteCmd).toContain('--resume');
+    expect(secondRemoteCmd).toContain('established-session-1');
   });
 
   it('死会话（--resume 时 is_error 且报"会话不存在"）自动清session_id重试一次，员工看不到报错', async () => {
@@ -413,7 +417,53 @@ describe('[BEHAVIOR] 11 — 真实 claude CLI 会话生命周期', () => {
 
     // 第三次 spawn（重试那次）确实没传 --resume
     const retrySpawnArgs = spawnMock.mock.calls[2][1] as string[];
-    expect(retrySpawnArgs).not.toContain('--resume');
+    expect(retrySpawnArgs[1]).not.toContain('--resume');
+  });
+
+  it('回归：stdout end 和 process close 都真实触发时，assistant 回复只写入 messages_json 一次（不重复）', async () => {
+    const { EventEmitter } = await import('events');
+    const fakeStdout = new EventEmitter() as NodeJS.ReadableStream & { destroy?: () => void };
+    let closeHandler: ((code: number | null) => void) | undefined;
+    spawnMock.mockReturnValue({
+      stdout: fakeStdout,
+      stderr: new EventEmitter(),
+      on: vi.fn((event: string, cb: (...args: unknown[]) => void) => {
+        if (event === 'close') closeHandler = cb as (code: number | null) => void;
+      }),
+      kill: vi.fn(),
+    });
+
+    const createRes = await request(app)
+      .post('/api/staff/skill-drafts')
+      .set('X-User-Email', 'staff@test.com')
+      .send({});
+    const draftId: string = createRes.body.data.id;
+
+    setTimeout(() => {
+      (fakeStdout as NodeJS.EventEmitter).emit(
+        'data',
+        Buffer.from(
+          '{"type":"assistant","session_id":"dup-check-session","message":{"content":[{"type":"text","text":"只应该出现一次"}]}}\n'
+        )
+      );
+      // 真实场景里 stdout 'end' 和 child 'close' 都会各自触发一次——都手动模拟
+      (fakeStdout as NodeJS.EventEmitter).emit('end');
+      closeHandler?.(0);
+    }, 10);
+
+    await request(app)
+      .post(`/api/staff/skill-drafts/${draftId}/chat`)
+      .set('X-User-Email', 'staff@test.com')
+      .send({ message: '你好' });
+
+    const getRes = await request(app)
+      .get(`/api/staff/skill-drafts/${draftId}`)
+      .set('X-User-Email', 'staff@test.com');
+
+    const assistantMessages = (getRes.body.data.messages_json as Array<{ role: string }>).filter(
+      (m) => m.role === 'assistant'
+    );
+    expect(assistantMessages.length).toBe(1);
   });
 
   it('真实 result 事件 is_error=true（如"会话不存在"/认证过期）→ event: error，不当成功空回复处理', async () => {

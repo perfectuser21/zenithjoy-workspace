@@ -16,6 +16,16 @@ import { staffGuard } from '../middleware/staff';
 import { transition, type SkillDraftStatus } from '../services/skillDraftStateMachine';
 import pool from '../db/connection';
 
+// bug: 之前直接把用户消息原样转发给 claude，没有任何角色设定，claude 就用默认
+// Cecelia 开发助手人设回复（"你想创建一个什么？任务/Sprint/Skill/文档..."），
+// 完全不像在帮员工创建 skill。用 --append-system-prompt 明确这次对话的身份和
+// 流程，让 AI 真的按 skill-creator 方法论边聊边理解，而不是当成通用需求入口。
+const SKILL_CREATE_SYSTEM_PROMPT =
+  '你现在的唯一任务是通过对话帮助 ZenithJoy 员工创建一个新的 Claude Code skill——不要引导员工去做其他类型的任务，比如 Sprint、文档、页面，用户来这个对话就是为了做一个 skill。' +
+  '规则：第一，先通过提问搞清楚这个 skill 要解决什么场景、输入输出是什么、触发条件和边界是什么，一次问一两个具体问题，不要问"你想创建什么"这种通用问题，用户已经说了要做 skill，直接进入需求细化；' +
+  '第二，每轮追问聚焦在这个 skill 的设计细节上；第三，当员工说"生成吧"时，调用 skill-creator 这个 skill 工具，用已经澄清的需求走完整创建流程，产出一个完整的 skill 目录并打包成 zip，最后输出 zip 的绝对路径。' +
+  '注意：你的回复内容里不要出现英文圆括号、方括号、星号、反引号这类 shell 特殊符号，一律用中文全角标点或直接不用括号。';
+
 const router = Router();
 router.use(staffGuard);
 
@@ -232,14 +242,32 @@ router.post('/:id/chat', (req, res): void => {
   // 断了要重新起会话，比"直接报错"体验好得多，也不需要人工介入清库）。
   function attemptChat(useResume: boolean): void {
     const didResume = Boolean(useResume && draft?.session_id);
-    const claudeArgs = ['claude', '-p', '--output-format', 'stream-json', '--verbose'];
-    if (didResume) {
-      claudeArgs.push('--resume', draft!.session_id!);
-    }
-    claudeArgs.push(message ?? '');
+
+    // bug（生产实测）：ssh 把多个 argv 元素拼成一条远程命令字符串交给 mmv 上的
+    // 登录 shell（zsh）执行，不会像本地 spawn 那样严格保留参数边界——员工消息
+    // 或系统提示词里只要出现一个未转义的英文圆括号/反引号/分号等 shell 特殊字符，
+    // 就会被远程 zsh 当语法解析，轻则整条命令报错（实测"Skill(skill-creator)"
+    // 直接把命令搞炸：zsh报"unknown file attribute: k"），重则有 shell 注入风险
+    // （员工是可信内部账号，但这里原则上不该允许用户输入直接拼进远程 shell 命令）。
+    // 修法：本地先把每个动态参数单引号转义好，拼成一条完整命令字符串，整体作为
+    // ssh 的唯一一个远程命令参数传过去——ssh 只会原样转发这一个字符串，不会再
+    // 自作主张重新拼接多个 argv，从根上避免二次解析。
+    const shellQuote = (s: string) => `'${s.replace(/'/g, `'\''`)}'`;
+    const remoteCommand = [
+      `CLAUDE_CONFIG_DIR=${claudeAccountDir}`,
+      'claude',
+      '-p',
+      '--output-format',
+      'stream-json',
+      '--verbose',
+      '--append-system-prompt',
+      shellQuote(SKILL_CREATE_SYSTEM_PROMPT),
+      ...(didResume ? ['--resume', draft!.session_id!] : []),
+      shellQuote(message ?? ''),
+    ].join(' ');
 
     // spawn SSH 转发到 mmv（CLAUDE_CONFIG_DIR 指向账号池，不用本机默认可能过期的账号）
-    const child = spawn('ssh', ['mmv', `CLAUDE_CONFIG_DIR=${claudeAccountDir}`, ...claudeArgs]);
+    const child = spawn('ssh', ['mmv', remoteCommand]);
     // 不喂 stdin 时 claude CLI 会白等 3s 探测有没有管道输入才继续——主动关闭省掉这 3s
     child.stdin?.end();
 
@@ -247,6 +275,12 @@ router.post('/:id/chat', (req, res): void => {
     let sawResultError = false;
     let resultErrorMsg = '';
     let sawSessionNotFound = false;
+    // bug: stdout 'end' 和 child 'close' 是两个独立触发的真实事件，正常情况下
+    // 每次调用都会各触发一次——之前 finishAttempt 本身没有幂等保护（只有下游
+    // finish() 里的 responded 挡了SSE重复写，但 messages_json.push 在 finish()
+    // 之前就执行了），导致每条 AI 回复都被写进历史两遍。加这个 flag 保证
+    // finishAttempt 的收尾逻辑（含 push/重试判断）只真正执行一次。
+    let attemptCompleted = false;
 
     // 超时 60s（bug: 原来是10s——生产实测单次 claude -p 调用仅"首字节"就要
     // 9秒+（每次都带全套 skill 上下文注入，input_tokens 1.7万+起步），10秒硬超时
@@ -257,6 +291,8 @@ router.post('/:id/chat', (req, res): void => {
     }, 60000);
 
     function finishAttempt(isError: boolean, errorMsg?: string) {
+      if (attemptCompleted) return;
+      attemptCompleted = true;
       clearTimeout(timeout);
       if (isError && didResume && sawSessionNotFound && !retried) {
         // 死会话兜底：清掉坏session_id，当全新会话重试一次（不算给员工的最终错误）
