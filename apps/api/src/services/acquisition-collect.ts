@@ -180,3 +180,62 @@ export function seedKeywordsFromDoc(text: string): string[] {
   }
   return uniq.slice(0, 3);
 }
+
+/** 终态集合（cancelling 不是终态，是待落章）。 */
+export const TERMINAL_COLLECT_STATUSES = ['done', 'partial', 'failed', 'cancelled'] as const;
+
+export interface SettleInput {
+  currentStatus: string;
+  agentTerminal?: TerminalReport | null;
+  videoTotal: number;
+  videoDone: number;
+  leadCount: number;
+}
+
+export interface SettleResult {
+  status: CollectStatus;
+  error_code: string | null;
+  changed: boolean;
+}
+
+/**
+ * 服务端终态结算（纯函数，report / report-videos / sweep-timeouts 三处共用）：
+ *  - 已终态 → changed=false（终态守卫，杜绝二次结算/二次点火）
+ *  - cancelling → cancelled（唯一落章路径，修「全 repo 无人写 cancelled」bug）
+ *  - agent 报 failed → failed + error_code 字面落库
+ *  - agent 报 done：视频全完成 → done；未收全 → 诚实结算 partial(videos_incomplete)
+ *  - agent 报 partial → partial（partial_reason 优先）
+ *  - 无 terminal：仅当 stage_1_done 且清单全完成才自动 done（running 阶段 total==done 是
+ *    逐视频回报的自然态，不能据此结算）
+ *  - 其他非标准 terminal（如旧 agent 的 'stage_1'）→ stage_1_done（向后兼容）
+ */
+export function settleCollectTask(input: SettleInput): SettleResult {
+  const cur = input.currentStatus as CollectStatus;
+  if ((TERMINAL_COLLECT_STATUSES as readonly string[]).includes(cur)) {
+    return { status: cur, error_code: null, changed: false };
+  }
+  if (cur === 'cancelling') {
+    return { status: 'cancelled', error_code: null, changed: true };
+  }
+  const t = input.agentTerminal;
+  const allDone = input.videoTotal > 0 && input.videoDone >= input.videoTotal;
+  if (t?.terminal === 'failed') {
+    return { status: 'failed', error_code: t.error_code ?? null, changed: true };
+  }
+  if (t?.terminal === 'done') {
+    return allDone
+      ? { status: 'done', error_code: null, changed: true }
+      : { status: 'partial', error_code: t.partial_reason ?? 'videos_incomplete', changed: true };
+  }
+  if (t?.terminal === 'partial') {
+    return { status: 'partial', error_code: t.partial_reason ?? t.error_code ?? null, changed: true };
+  }
+  if (t?.terminal) {
+    // 非标准值（旧 agent 'stage_1'）→ stage_1_done，与 resolveTerminalStatus 兜底一致
+    return { status: 'stage_1_done', error_code: null, changed: cur !== 'stage_1_done' };
+  }
+  if (cur === 'stage_1_done' && allDone) {
+    return { status: 'done', error_code: null, changed: true };
+  }
+  return { status: cur, error_code: null, changed: false };
+}
