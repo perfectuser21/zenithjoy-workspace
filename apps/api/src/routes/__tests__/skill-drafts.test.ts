@@ -144,7 +144,7 @@ describe('[BEHAVIOR] 2 — GET /api/staff/skill-drafts/:id 返回历史 messages
       setTimeout(() => {
         (fakeStdout as NodeJS.EventEmitter).emit(
           'data',
-          Buffer.from('{"type":"text","text":"好的，收到"}\n')
+          Buffer.from('{"type":"assistant","session_id":"real-session-1","message":{"content":[{"type":"text","text":"好的，收到"}]}}\n')
         );
         (fakeStdout as NodeJS.EventEmitter).emit('end');
       }, 10);
@@ -189,7 +189,7 @@ describe('[BEHAVIOR] 3 — POST /api/staff/skill-drafts/:id/chat SSE 流', () =>
     setTimeout(() => {
       (fakeStdout as NodeJS.EventEmitter).emit(
         'data',
-        Buffer.from('{"type":"text","text":"hello"}\n')
+        Buffer.from('{"type":"assistant","session_id":"real-session-hello","message":{"content":[{"type":"text","text":"hello"}]}}\n')
       );
       (fakeStdout as NodeJS.EventEmitter).emit('end');
     }, 10);
@@ -217,7 +217,7 @@ describe('[BEHAVIOR] 3 — POST /api/staff/skill-drafts/:id/chat SSE 流', () =>
     setTimeout(() => {
       (fakeStdout as NodeJS.EventEmitter).emit(
         'data',
-        Buffer.from('{"type":"text","text":"hello"}\n')
+        Buffer.from('{"type":"assistant","session_id":"real-session-hello","message":{"content":[{"type":"text","text":"hello"}]}}\n')
       );
       (fakeStdout as NodeJS.EventEmitter).emit('end');
     }, 10);
@@ -229,6 +229,139 @@ describe('[BEHAVIOR] 3 — POST /api/staff/skill-drafts/:id/chat SSE 流', () =>
 
     expect(res.text).toContain('data:');
     expect(res.text).toContain('event: done');
+  });
+});
+
+// ─── [BEHAVIOR] 11：真实会话生命周期（首条消息不传 --resume，避免"会话不存在"）───
+
+describe('[BEHAVIOR] 11 — 真实 claude CLI 会话生命周期', () => {
+  beforeEach(() => {
+    vi.stubEnv('STAFF_EMAILS', 'staff@test.com');
+    spawnMock.mockReset();
+  });
+
+  it('首条消息（草稿无 session_id）不传 --resume，让 claude 自己开新会话', async () => {
+    const { EventEmitter } = await import('events');
+    const fakeStdout = new EventEmitter() as NodeJS.ReadableStream & { destroy?: () => void };
+    spawnMock.mockReturnValue({
+      stdout: fakeStdout,
+      stderr: new EventEmitter(),
+      on: vi.fn(),
+      kill: vi.fn(),
+    });
+
+    const createRes = await request(app)
+      .post('/api/staff/skill-drafts')
+      .set('X-User-Email', 'staff@test.com')
+      .send({});
+    const draftId: string = createRes.body.data.id;
+
+    setTimeout(() => {
+      (fakeStdout as NodeJS.EventEmitter).emit(
+        'data',
+        Buffer.from(
+          '{"type":"assistant","session_id":"new-real-session-xyz","message":{"content":[{"type":"text","text":"你好"}]}}\n'
+        )
+      );
+      (fakeStdout as NodeJS.EventEmitter).emit('end');
+    }, 10);
+
+    await request(app)
+      .post(`/api/staff/skill-drafts/${draftId}/chat`)
+      .set('X-User-Email', 'staff@test.com')
+      .send({ message: '第一条消息' });
+
+    const sshArgs = spawnMock.mock.calls[0][1] as string[];
+    expect(sshArgs).not.toContain('--resume');
+    expect(sshArgs).toContain('--verbose');
+  });
+
+  it('第二条消息（草稿已有 session_id）传 --resume 续接同一会话', async () => {
+    const { EventEmitter } = await import('events');
+    const fakeStdout1 = new EventEmitter() as NodeJS.ReadableStream & { destroy?: () => void };
+    spawnMock.mockReturnValueOnce({
+      stdout: fakeStdout1,
+      stderr: new EventEmitter(),
+      on: vi.fn(),
+      kill: vi.fn(),
+    });
+
+    const createRes = await request(app)
+      .post('/api/staff/skill-drafts')
+      .set('X-User-Email', 'staff@test.com')
+      .send({});
+    const draftId: string = createRes.body.data.id;
+
+    setTimeout(() => {
+      (fakeStdout1 as NodeJS.EventEmitter).emit(
+        'data',
+        Buffer.from(
+          '{"type":"assistant","session_id":"established-session-1","message":{"content":[{"type":"text","text":"好的"}]}}\n'
+        )
+      );
+      (fakeStdout1 as NodeJS.EventEmitter).emit('end');
+    }, 10);
+
+    await request(app)
+      .post(`/api/staff/skill-drafts/${draftId}/chat`)
+      .set('X-User-Email', 'staff@test.com')
+      .send({ message: '第一条消息' });
+
+    const fakeStdout2 = new EventEmitter() as NodeJS.ReadableStream & { destroy?: () => void };
+    spawnMock.mockReturnValueOnce({
+      stdout: fakeStdout2,
+      stderr: new EventEmitter(),
+      on: vi.fn(),
+      kill: vi.fn(),
+    });
+
+    setTimeout(() => {
+      (fakeStdout2 as NodeJS.EventEmitter).emit(
+        'data',
+        Buffer.from(
+          '{"type":"assistant","session_id":"established-session-1","message":{"content":[{"type":"text","text":"继续说"}]}}\n'
+        )
+      );
+      (fakeStdout2 as NodeJS.EventEmitter).emit('end');
+    }, 10);
+
+    await request(app)
+      .post(`/api/staff/skill-drafts/${draftId}/chat`)
+      .set('X-User-Email', 'staff@test.com')
+      .send({ message: '第二条消息' });
+
+    const secondCallArgs = spawnMock.mock.calls[1][1] as string[];
+    expect(secondCallArgs).toContain('--resume');
+    expect(secondCallArgs).toContain('established-session-1');
+  });
+
+  it('真实 result 事件 is_error=true（如"会话不存在"/认证过期）→ event: error，不当成功空回复处理', async () => {
+    const { EventEmitter } = await import('events');
+    const fakeStdout = new EventEmitter() as NodeJS.ReadableStream & { destroy?: () => void };
+    spawnMock.mockReturnValue({
+      stdout: fakeStdout,
+      stderr: new EventEmitter(),
+      on: vi.fn(),
+      kill: vi.fn(),
+    });
+
+    setTimeout(() => {
+      (fakeStdout as NodeJS.EventEmitter).emit(
+        'data',
+        Buffer.from(
+          '{"type":"result","is_error":true,"errors":["No conversation found with session ID: xxx"]}\n'
+        )
+      );
+      (fakeStdout as NodeJS.EventEmitter).emit('end');
+    }, 10);
+
+    const res = await request(app)
+      .post('/api/staff/skill-drafts/test-draft-error/chat')
+      .set('X-User-Email', 'staff@test.com')
+      .send({ message: '你好' });
+
+    expect(res.text).toContain('event: error');
+    expect(res.text).not.toContain('event: done');
   });
 });
 
@@ -355,7 +488,7 @@ describe('[BEHAVIOR] 9（=E2E-3）— 断点续聊集成', () => {
     setTimeout(() => {
       (fakeStdout as NodeJS.EventEmitter).emit(
         'data',
-        Buffer.from('{"type":"text","text":"没问题，我来帮你"}\n')
+        Buffer.from('{"type":"assistant","session_id":"real-session-2","message":{"content":[{"type":"text","text":"没问题，我来帮你"}]}}\n')
       );
       (fakeStdout as NodeJS.EventEmitter).emit('end');
     }, 10);
