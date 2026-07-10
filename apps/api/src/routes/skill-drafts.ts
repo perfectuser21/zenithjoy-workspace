@@ -199,134 +199,158 @@ router.post('/:id/chat', (req, res): void => {
   res.setHeader('Connection', 'keep-alive');
   res.flushHeaders();
 
-  // claude -p --resume 只能续接已存在的会话，不能拿一个自造的新 UUID 起会话
-  // （bug: 之前这里对每个新草稿的第一条消息都生成一个随机 UUID 硬塞进 --resume，
-  // 但 claude CLI 侧根本不存在这个会话 → 每次首条消息都以
-  // "No conversation found with session ID: ..." 报错收场，只是这个报错从未
-  // 被下面的解析逻辑识别出来，被 stdout 'end' 抢先判定成"成功但空回复"）。
-  // 有真实 session_id（此前 claude 回过至少一轮）才传 --resume；首条消息不传，
-  // 让 claude 自己开一个新会话，session_id 从流里的事件读回来存起来。
   const claudeAccountDir = process.env.MMV_CLAUDE_ACCOUNT_DIR ?? '/Users/administrator/.claude-account1';
-  const claudeArgs = ['claude', '-p', '--output-format', 'stream-json', '--verbose'];
-  if (draft?.session_id) {
-    claudeArgs.push('--resume', draft.session_id);
-  }
-  claudeArgs.push(message ?? '');
 
-  // spawn SSH 转发到 mmv（CLAUDE_CONFIG_DIR 指向账号池，不用本机默认可能过期的账号）
-  const child = spawn('ssh', ['mmv', `CLAUDE_CONFIG_DIR=${claudeAccountDir}`, ...claudeArgs]);
-  // 不喂 stdin 时 claude CLI 会白等 3s 探测有没有管道输入才继续——主动关闭省掉这 3s
-  child.stdin?.end();
-
-  let aiReply = '';
   let responded = false;
-  let sawResultError = false;
-  let resultErrorMsg = '';
+  let retried = false;
 
   function finish(isError: boolean, errorMsg?: string) {
     if (responded) return;
     responded = true;
-    clearTimeout(timeout);
-
     if (isError) {
       res.write('event: error\n');
       res.write(`data: ${JSON.stringify({ message: errorMsg ?? 'AI 暂时连不上，稍后重试' })}\n\n`);
     } else {
-      if (draft && aiReply) {
-        draft.messages_json.push({ role: 'assistant', content: aiReply });
-        draft.updated_at = new Date().toISOString();
-        void updateDraftRow(draft);
-      }
       res.write('event: done\n');
       res.write('data: {}\n\n');
     }
     res.end();
   }
 
-  // 超时 60s（bug: 原来是10s——生产实测单次 claude -p 调用仅"首字节"就要
-  // 9秒+（每次都带全套 skill 上下文注入，input_tokens 1.7万+起步），10秒硬超时
-  // 几乎必然在正文吐出来之前就把子进程杀掉，导致员工发消息永远收不到回复）
-  const timeout = setTimeout(() => {
-    child.kill();
-    finish(true, 'AI 暂时连不上，稍后重试');
-  }, 60000);
+  // claude -p --resume 只能续接已存在的会话，不能拿一个自造的新 UUID 起会话
+  // （bug: 之前这里对每个新草稿的第一条消息都生成一个随机 UUID 硬塞进 --resume，
+  // 但 claude CLI 侧根本不存在这个会话 → 每次首条消息都以
+  // "No conversation found with session ID: ..." 报错收场）。
+  // 有真实 session_id（此前 claude 回过至少一轮）才传 --resume；首条消息不传，
+  // 让 claude 自己开一个新会话，session_id 从流里的事件读回来存起来。
+  //
+  // bug（生产实测，PR#1213合并前创建的旧草稿复现）：即便这次调用逻辑对了，
+  // draft.session_id 也可能是"死会话"——claude 侧的会话可能已过期/被清理，
+  // 或者（历史遗留）是旧版本代码曾经无脑塞进去的假 UUID。--resume 一个死会话
+  // 会报 "No conversation found"，此时不该直接报错甩给员工，而应该清掉这个
+  // 坏掉的 session_id、当作全新会话重试一次（员工的消息不会丢，只是话题
+  // 断了要重新起会话，比"直接报错"体验好得多，也不需要人工介入清库）。
+  function attemptChat(useResume: boolean): void {
+    const didResume = Boolean(useResume && draft?.session_id);
+    const claudeArgs = ['claude', '-p', '--output-format', 'stream-json', '--verbose'];
+    if (didResume) {
+      claudeArgs.push('--resume', draft!.session_id!);
+    }
+    claudeArgs.push(message ?? '');
 
-  child.stdout.on('data', (chunk: Buffer) => {
-    const lines = chunk.toString().split('\n').filter(Boolean);
-    for (const line of lines) {
-      let parsed: {
-        type?: string;
-        session_id?: string;
-        is_error?: boolean;
-        errors?: string[];
-        result?: string;
-        message?: { content?: Array<{ type?: string; text?: string }> };
-      };
-      try {
-        parsed = JSON.parse(line);
-      } catch {
-        // 非 JSON 行，忽略（真实 stream-json 不应出现，容错跳过而非当文本转发）
-        continue;
+    // spawn SSH 转发到 mmv（CLAUDE_CONFIG_DIR 指向账号池，不用本机默认可能过期的账号）
+    const child = spawn('ssh', ['mmv', `CLAUDE_CONFIG_DIR=${claudeAccountDir}`, ...claudeArgs]);
+    // 不喂 stdin 时 claude CLI 会白等 3s 探测有没有管道输入才继续——主动关闭省掉这 3s
+    child.stdin?.end();
+
+    let aiReply = '';
+    let sawResultError = false;
+    let resultErrorMsg = '';
+    let sawSessionNotFound = false;
+
+    // 超时 60s（bug: 原来是10s——生产实测单次 claude -p 调用仅"首字节"就要
+    // 9秒+（每次都带全套 skill 上下文注入，input_tokens 1.7万+起步），10秒硬超时
+    // 几乎必然在正文吐出来之前就把子进程杀掉，导致员工发消息永远收不到回复）
+    const timeout = setTimeout(() => {
+      child.kill();
+      finish(true, 'AI 暂时连不上，稍后重试');
+    }, 60000);
+
+    function finishAttempt(isError: boolean, errorMsg?: string) {
+      clearTimeout(timeout);
+      if (isError && didResume && sawSessionNotFound && !retried) {
+        // 死会话兜底：清掉坏session_id，当全新会话重试一次（不算给员工的最终错误）
+        retried = true;
+        if (draft) draft.session_id = null;
+        attemptChat(false);
+        return;
       }
-
-      // 真实 claude CLI 每类事件都带 session_id；第一次拿到就存下来，
-      // 后续这个草稿的消息才能真的 --resume 到同一个会话
-      if (parsed.session_id && draft && !draft.session_id) {
-        draft.session_id = parsed.session_id;
+      if (!isError && draft && aiReply) {
+        draft.messages_json.push({ role: 'assistant', content: aiReply });
+        draft.updated_at = new Date().toISOString();
+        void updateDraftRow(draft);
       }
+      finish(isError, errorMsg);
+    }
 
-      // 真实 stream-json 的文字回复是嵌套结构：
-      // {"type":"assistant","message":{"content":[{"type":"text","text":"..."}]}}
-      // （之前代码错认成扁平的 {"type":"text","text":"..."}，永远匹配不上）
-      if (parsed.type === 'assistant' && Array.isArray(parsed.message?.content)) {
-        for (const block of parsed.message.content) {
-          if (block.type === 'text' && block.text) {
-            aiReply += block.text;
-            res.write(`data: ${JSON.stringify({ type: 'text', text: block.text })}\n\n`);
+    child.stdout.on('data', (chunk: Buffer) => {
+      const lines = chunk.toString().split('\n').filter(Boolean);
+      for (const line of lines) {
+        let parsed: {
+          type?: string;
+          session_id?: string;
+          is_error?: boolean;
+          errors?: string[];
+          result?: string;
+          message?: { content?: Array<{ type?: string; text?: string }> };
+        };
+        try {
+          parsed = JSON.parse(line);
+        } catch {
+          // 非 JSON 行，忽略（真实 stream-json 不应出现，容错跳过而非当文本转发）
+          continue;
+        }
+
+        // 真实 claude CLI 每类事件都带 session_id；第一次拿到就存下来，
+        // 后续这个草稿的消息才能真的 --resume 到同一个会话
+        if (parsed.session_id && draft && !draft.session_id) {
+          draft.session_id = parsed.session_id;
+        }
+
+        // 真实 stream-json 的文字回复是嵌套结构：
+        // {"type":"assistant","message":{"content":[{"type":"text","text":"..."}]}}
+        // （之前代码错认成扁平的 {"type":"text","text":"..."}，永远匹配不上）
+        if (parsed.type === 'assistant' && Array.isArray(parsed.message?.content)) {
+          for (const block of parsed.message.content) {
+            if (block.type === 'text' && block.text) {
+              aiReply += block.text;
+              res.write(`data: ${JSON.stringify({ type: 'text', text: block.text })}\n\n`);
+            }
+          }
+        }
+
+        // 终局 result 事件：is_error=true 才是真失败（认证过期/会话找不到等），
+        // 不能只靠进程 exit code——exit code 判定和 stdout 'end' 之间有竞态，
+        // exit code 非0时 stdout 'end' 经常先跑完，把真错误误判成"成功但空回复"
+        if (parsed.type === 'result' && parsed.is_error) {
+          sawResultError = true;
+          resultErrorMsg = parsed.errors?.[0] ?? parsed.result ?? 'AI 暂时连不上，稍后重试';
+          if (/No conversation found/i.test(resultErrorMsg)) {
+            sawSessionNotFound = true;
           }
         }
       }
+    });
 
-      // 终局 result 事件：is_error=true 才是真失败（认证过期/会话找不到等），
-      // 不能只靠进程 exit code——exit code 判定和 stdout 'end' 之间有竞态，
-      // exit code 非0时 stdout 'end' 经常先跑完，把真错误误判成"成功但空回复"
-      if (parsed.type === 'result' && parsed.is_error) {
-        sawResultError = true;
-        resultErrorMsg = parsed.errors?.[0] ?? parsed.result ?? 'AI 暂时连不上，稍后重试';
+    // stdout 结束时收尾（测试中 child.on 是 vi.fn() 不会触发 close）
+    child.stdout.on('end', () => {
+      finishAttempt(sawResultError, resultErrorMsg);
+    });
+
+    child.on('close', (code: number | null) => {
+      if (sawResultError) {
+        finishAttempt(true, resultErrorMsg);
+      } else if (code !== 0 && !aiReply) {
+        finishAttempt(true, 'AI 暂时连不上，稍后重试');
+      } else {
+        finishAttempt(false);
       }
-    }
-  });
+    });
 
-  // stdout 结束时收尾（测试中 child.on 是 vi.fn() 不会触发 close）
-  child.stdout.on('end', () => {
-    if (sawResultError) {
-      finish(true, resultErrorMsg);
-    } else {
-      finish(false);
-    }
-  });
+    // bug: req.on('close') 在真实 HTTP 连接下几乎瞬间触发（POST body 读完就触发，
+    // 不代表客户端断线），会在子进程还没来得及输出任何内容时就把它杀掉——
+    // supertest 的假 req/res 对象从未真实触发过这个 timing，所以合同测试全绿
+    // 但真实环境下每次聊天都被这个"假断线检测"秒杀。改用 res.writableEnded 判断：
+    // 只有响应还没写完就真的 close 了，才是员工关浏览器/换页这种真实断线场景。
+    res.on('close', () => {
+      if (!res.writableEnded) {
+        child.kill();
+        clearTimeout(timeout);
+      }
+    });
+  }
 
-  child.on('close', (code: number | null) => {
-    if (sawResultError) {
-      finish(true, resultErrorMsg);
-    } else if (code !== 0 && !aiReply) {
-      finish(true, 'AI 暂时连不上，稍后重试');
-    } else {
-      finish(false);
-    }
-  });
-
-  // bug: req.on('close') 在真实 HTTP 连接下几乎瞬间触发（POST body 读完就触发，
-  // 不代表客户端断线），会在子进程还没来得及输出任何内容时就把它杀掉——
-  // supertest 的假 req/res 对象从未真实触发过这个 timing，所以合同测试全绿
-  // 但真实环境下每次聊天都被这个"假断线检测"秒杀。改用 res.writableEnded 判断：
-  // 只有响应还没写完就真的 close 了，才是员工关浏览器/换页这种真实断线场景。
-  res.on('close', () => {
-    if (!res.writableEnded) {
-      child.kill();
-      clearTimeout(timeout);
-    }
-  });
+  attemptChat(true);
 });
 
 // POST /:id/generate — 触发生成
