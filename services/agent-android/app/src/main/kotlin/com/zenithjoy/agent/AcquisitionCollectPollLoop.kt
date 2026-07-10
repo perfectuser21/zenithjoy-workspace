@@ -29,7 +29,7 @@ class AcquisitionCollectPollLoop(
     private val scope: CoroutineScope,
     private val intervalMs: Long = 30_000L,
     private val maxVideosPerKeyword: Int = MAX_VIDEOS_PER_KEYWORD,
-    private val onStage1Task: ((taskId: String, keywords: List<String>) -> Unit)? = null,
+    private val onStage1Task: ((taskId: String, keyword: String) -> Unit)? = null,
     private val onStage2Task: ((taskId: String, videoUrls: List<String>, checkpoint: Map<String, Any>?) -> Unit)? = null,
     private val onCancel: ((taskId: String) -> Unit)? = null,
     private val httpClient: OkHttpClient = defaultClient(),
@@ -102,11 +102,10 @@ class AcquisitionCollectPollLoop(
                     val keywords = task.keywords ?: emptyList()
                     if (keywords.isEmpty()) return@forEach
                     collectTaskIds.add(task.task_id)
-                    // 每关键词触发一次回调，回调内上限由 maxVideosPerKeyword 控制
-                    keywords.take(maxVideosPerKeyword).forEach { _ ->
-                        onStage1Task?.invoke(task.task_id, keywords)
+                    // 每关键词触发一次回调（每关键词单独一次，与合同 TC-002 对齐）
+                    keywords.forEach { keyword ->
+                        onStage1Task?.invoke(task.task_id, keyword)
                     }
-                    // 实际触发次数等于 keywords.size（每个关键词调一次，与合同 TC-002 对齐）
                 }
                 "stage_2" -> {
                     val videoUrls = task.video_urls ?: emptyList()

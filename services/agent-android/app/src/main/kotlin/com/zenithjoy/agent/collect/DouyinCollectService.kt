@@ -8,6 +8,7 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.graphics.Path
 import android.graphics.Rect
+import android.net.Uri
 import android.os.Bundle
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
@@ -55,26 +56,38 @@ class DouyinCollectService : AccessibilityService() {
         TYPING_KEYWORD,
         SUBMITTING_SEARCH,
         WAITING_SEARCH_RESULTS,
+        COLLECTING_VIDEO_CARDS,  // Stage1：从搜索结果收集多张视频卡
         OPENING_FIRST_VIDEO,
         OPENING_COMMENTS,
         EXTRACTING_COMMENTS,
+        OPENING_VIDEO_URL,       // Stage2：通过深链打开指定视频
     }
+
+    // 任务模式：Stage1 搜索收集视频卡 / Stage2 按 URL 收集评论
+    private enum class Mode { STAGE1_SEARCH, STAGE2_VIDEO_URL }
+    private var currentMode = Mode.STAGE1_SEARCH
+    private var currentVideoId = ""  // Stage2 当前处理的 video_id
 
     private val taskReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
-            // 诊断守卫：曾经发生过"任务已下发但这里从没打过一行日志"的真机 bug，
-            // 无条件在最开头打一行，用来分清"onReceive 完全没被触发"还是
-            // "触发了但被某个早退分支吃掉"这两种情况。
             android.util.Log.i(TAG, "onReceive fired: action=${intent?.action}")
             if (intent?.action != ACTION_COLLECT_TASK) return
-            val keyword = intent.getStringExtra(EXTRA_KEYWORD) ?: return
             val taskId = intent.getStringExtra(EXTRA_TASK_ID) ?: ""
             if (state != State.IDLE) {
                 android.util.Log.w(TAG, "busy — ignoring task $taskId")
                 return
             }
-            android.util.Log.i(TAG, "task received: keyword=$keyword id=$taskId")
-            startCollect(keyword, taskId)
+            val mode = intent.getStringExtra(EXTRA_MODE) ?: MODE_STAGE1
+            if (mode == MODE_STAGE2) {
+                val videoUrl = intent.getStringExtra(EXTRA_VIDEO_URL) ?: return
+                val videoId = intent.getStringExtra(EXTRA_VIDEO_ID) ?: ""
+                android.util.Log.i(TAG, "stage2 task received: videoId=$videoId id=$taskId")
+                startStage2Collect(videoUrl, videoId, taskId)
+            } else {
+                val keyword = intent.getStringExtra(EXTRA_KEYWORD) ?: return
+                android.util.Log.i(TAG, "stage1 task received: keyword=$keyword id=$taskId")
+                startCollect(keyword, taskId)
+            }
         }
     }
 
@@ -92,14 +105,15 @@ class DouyinCollectService : AccessibilityService() {
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
-        // 事件分发给当前状态的处理器
         event ?: return
         when (state) {
             State.TYPING_KEYWORD -> handleTypingKeyword(event)
             State.WAITING_SEARCH_RESULTS -> handleSearchResults(event)
+            State.COLLECTING_VIDEO_CARDS -> Unit  // 在 collectVideoCards() 协程中处理
             State.OPENING_FIRST_VIDEO -> handleVideoOpened(event)
             State.OPENING_COMMENTS -> handleCommentsOpened(event)
-            State.EXTRACTING_COMMENTS -> Unit // 已在 attemptExtractComments 里同步处理
+            State.EXTRACTING_COMMENTS -> Unit
+            State.OPENING_VIDEO_URL -> handleVideoUrlOpened(event)
             else -> Unit
         }
     }
@@ -113,11 +127,11 @@ class DouyinCollectService : AccessibilityService() {
     private fun startCollect(keyword: String, taskId: String) {
         currentKeyword = keyword
         currentTaskId = taskId
+        currentMode = Mode.STAGE1_SEARCH
+        currentVideoId = ""
         resultReported = false
         triedTabSwitch = false
         state = State.OPENING_DOUYIN
-        // 与账号扫描服务共享的全局互斥标记（Sprint 07061301-device-account-scan-wiring）：
-        // 采集任务运行期间置 busy=true，扫描服务据此在本轮跳过，避免共用微信/抖音窗口冲突。
         ScanMutex.busy = true
 
         scope.launch {
@@ -129,6 +143,74 @@ class DouyinCollectService : AccessibilityService() {
             delay(RandomDelay.sample(RandomDelay.NAV_MS))
             openSearchBar()
         }
+    }
+
+    // Stage2 入口：通过深链打开指定视频，进评论区抓评论
+    private fun startStage2Collect(videoUrl: String, videoId: String, taskId: String) {
+        currentKeyword = videoUrl
+        currentTaskId = taskId
+        currentMode = Mode.STAGE2_VIDEO_URL
+        currentVideoId = videoId
+        resultReported = false
+        triedTabSwitch = false
+        state = State.OPENING_VIDEO_URL
+        ScanMutex.busy = true
+
+        scope.launch {
+            val launched = launchVideoByDeepLink(videoId)
+            if (!launched) {
+                finishWithError("DEEPLINK_LAUNCH_FAILED")
+                return@launch
+            }
+            startVideoUrlOpenTimeout()
+        }
+    }
+
+    // 深链打开抖音视频：snssdk1128://aweme/detail/<videoId>
+    private fun launchVideoByDeepLink(videoId: String): Boolean {
+        return try {
+            val uri = Uri.parse("snssdk1128://aweme/detail/$videoId")
+            val intent = Intent(Intent.ACTION_VIEW, uri).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            applicationContext.startActivity(intent)
+            true
+        } catch (e: Exception) {
+            android.util.Log.e(TAG, "deeplink launch failed videoId=$videoId: ${e.message}")
+            false
+        }
+    }
+
+    private fun startVideoUrlOpenTimeout() {
+        scope.launch {
+            delay(VIDEO_OPEN_TIMEOUT_MS)
+            if (state == State.OPENING_VIDEO_URL) {
+                finishWithError("VIDEO_URL_OPEN_TIMEOUT")
+            }
+        }
+    }
+
+    // Stage2：等待视频页面加载后点评论按钮（与 handleVideoOpened 逻辑相同）
+    private fun handleVideoUrlOpened(event: AccessibilityEvent) {
+        if (event.eventType != AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED &&
+            event.eventType != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED
+        ) return
+        if (state != State.OPENING_VIDEO_URL) return
+        if (event.packageName != DOUYIN_PKG) return
+
+        val root = rootInActiveWindow ?: return
+        val commentBtn = findNodeByContentDescPrefix(root, "评论") ?: findNodeByIds(root,
+            "com.ss.android.ugc.aweme:id/iv_comment",
+            "com.ss.android.ugc.aweme:id/comment_icon",
+            "com.ss.android.ugc.aweme:id/tv_comment_count",
+            "com.ss.android.ugc.aweme:id/comment_count",
+        )
+        if (commentBtn == null) return
+
+        state = State.OPENING_COMMENTS
+        commentBtn.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+        startCommentsTimeout()
+        startExtractionWatchdog()
     }
 
     // ── 1. 启动抖音 ───────────────────────────────────────────────────────────
@@ -295,7 +377,7 @@ class DouyinCollectService : AccessibilityService() {
         return true
     }
 
-    // ── 5. 点第一条视频（爆款/参照账号定位入口） ─────────────────────────────
+    // ── 5. 搜索结果页：Stage1 收集多视频卡 / 旧协议点第一条视频 ─────────────
 
     private fun handleSearchResults(event: AccessibilityEvent) {
         if (event.eventType != AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED) return
@@ -303,11 +385,80 @@ class DouyinCollectService : AccessibilityService() {
         if (isResultEventDebounced(searchTriggeredAtMs, android.os.SystemClock.elapsedRealtime(), RESULTS_SETTLE_MS)) return
 
         val root = rootInActiveWindow ?: return
-        val videoCard = findFirstVideoCard(root) ?: return
 
-        state = State.OPENING_FIRST_VIDEO
-        videoCard.performAction(AccessibilityNodeInfo.ACTION_CLICK)
-        startVideoOpenTimeout()
+        if (currentMode == Mode.STAGE1_SEARCH) {
+            // Stage1：收集多张视频卡的 video_id，不进评论区
+            val videoCards = findVideoCards(root, MAX_VIDEOS_PER_SEARCH)
+            if (videoCards.isEmpty()) return
+            state = State.COLLECTING_VIDEO_CARDS
+            scope.launch { collectVideoCards(videoCards) }
+        } else {
+            // 旧协议/默认：点第一条视频进评论区
+            val videoCard = findFirstVideoCard(root) ?: return
+            state = State.OPENING_FIRST_VIDEO
+            videoCard.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+            startVideoOpenTimeout()
+        }
+    }
+
+    // Stage1：从视频卡节点列表提取 video_id，报告后完成本关键词
+    private suspend fun collectVideoCards(videoCards: List<AccessibilityNodeInfo>) {
+        if (resultReported) return
+        val videos = videoCards.mapIndexed { index, card ->
+            val videoId = extractVideoIdFromNode(card) ?: "card_${index}_${currentTaskId.take(8)}"
+            val title = extractTitleFromNode(card)
+            VideoCardInfo(videoId = videoId, keyword = currentKeyword, title = title)
+        }
+        android.util.Log.i(TAG, "Stage1 collected ${videos.size} video cards for keyword=$currentKeyword")
+        reportVideoCards(videos)
+    }
+
+    // 从节点树尝试提取视频 ID（数字串，通常 ≥10 位）
+    private fun extractVideoIdFromNode(node: AccessibilityNodeInfo): String? {
+        val queue = ArrayDeque<AccessibilityNodeInfo>()
+        queue.add(node)
+        while (queue.isNotEmpty()) {
+            val n = queue.removeFirst()
+            val text = n.text?.toString() ?: ""
+            val desc = n.contentDescription?.toString() ?: ""
+            // 视频 ID 通常是 ≥10 位纯数字
+            val match = Regex("(\\d{10,})").find(text) ?: Regex("(\\d{10,})").find(desc)
+            if (match != null) return match.groupValues[1]
+            // 检查 resource-id 或 URL 中的 video_id
+            val rid = n.viewIdResourceName ?: ""
+            if (rid.contains("video") && rid.contains("id")) return null
+            for (i in 0 until n.childCount) n.getChild(i)?.let { queue.add(it) }
+        }
+        return null
+    }
+
+    // 从节点尝试提取标题文本
+    private fun extractTitleFromNode(node: AccessibilityNodeInfo): String? {
+        val queue = ArrayDeque<AccessibilityNodeInfo>()
+        queue.add(node)
+        while (queue.isNotEmpty()) {
+            val n = queue.removeFirst()
+            val text = n.text?.toString() ?: ""
+            if (text.length in 5..100 && !text.all { it.isDigit() }) return text
+            for (i in 0 until n.childCount) n.getChild(i)?.let { queue.add(it) }
+        }
+        return null
+    }
+
+    private fun reportVideoCards(videos: List<VideoCardInfo>) {
+        if (resultReported) return
+        resultReported = true
+        state = State.IDLE
+        ScanMutex.busy = false
+        onVideoCardResult?.invoke(currentTaskId, currentKeyword, videos, "")
+        // 广播兜底
+        val intent = Intent(ACTION_COLLECT_RESULT).apply {
+            setPackage(packageName)
+            putExtra(EXTRA_TASK_ID, currentTaskId)
+            putExtra(EXTRA_RESULT_OK, videos.isNotEmpty())
+            putExtra(EXTRA_RESULT_ERROR, "")
+        }
+        sendBroadcast(intent)
     }
 
     // 真机复现两次：评论按钮(content-desc/resource-id)一旦在当前抖音版本/视频页找不到，
@@ -583,12 +734,6 @@ class DouyinCollectService : AccessibilityService() {
         )
         if (byId != null) return byId
 
-        // 真机 uiautomator dump 验证：搜索结果页的视频卡片根节点是
-        // android.view.View（不是 ImageView），resource-id 混淆成短乱码
-        // （如 "q7k"），且左右两栏网格布局重复同一个混淆 id——不能硬编码
-        // 这类会随构建变化的短乱码，改按"卡片大小的可点击节点"结构匹配：
-        // 搜索结果网格卡片宽/高都远大于普通按钮（网格双列，每张卡约占
-        // 屏宽一半、屏高四分之一左右），用尺寸阈值排除顶部工具栏的小按钮。
         val queue = ArrayDeque<AccessibilityNodeInfo>()
         queue.add(root)
         val bounds = android.graphics.Rect()
@@ -603,6 +748,27 @@ class DouyinCollectService : AccessibilityService() {
         return null
     }
 
+    // Stage1：收集多张视频卡（最多 maxCount 张），按尺寸阈值匹配
+    private fun findVideoCards(root: AccessibilityNodeInfo, maxCount: Int): List<AccessibilityNodeInfo> {
+        val result = mutableListOf<AccessibilityNodeInfo>()
+        val queue = ArrayDeque<AccessibilityNodeInfo>()
+        queue.add(root)
+        val bounds = android.graphics.Rect()
+        while (queue.isNotEmpty() && result.size < maxCount) {
+            val node = queue.removeFirst()
+            if (node.isClickable) {
+                node.getBoundsInScreen(bounds)
+                if (bounds.width() > 400 && bounds.height() > 400) {
+                    result.add(node)
+                    // 不递归已匹配节点的子树，避免把同一卡片的子节点也加进来
+                    continue
+                }
+            }
+            for (i in 0 until node.childCount) node.getChild(i)?.let { queue.add(it) }
+        }
+        return result
+    }
+
     companion object {
         private const val TAG = "DouyinCollectService"
         private const val DOUYIN_PKG = "com.ss.android.ugc.aweme"
@@ -610,15 +776,22 @@ class DouyinCollectService : AccessibilityService() {
         private const val VIDEO_OPEN_TIMEOUT_MS = 15_000L
         private const val EXTRACTION_TIMEOUT_MS = 20_000L
         private const val MAX_FLATTEN_NODES = 3_000
+        const val MAX_VIDEOS_PER_SEARCH = 3  // Stage1 每关键词最多收集视频卡数量
 
         const val ACTION_COLLECT_TASK = "com.zenithjoy.agent.COLLECT_TASK"
         const val ACTION_COLLECT_RESULT = "com.zenithjoy.agent.COLLECT_RESULT"
 
-        // 真机实测确认(2026-07-09)：sendBroadcast(ACTION_COLLECT_RESULT) 稳定发得出去
-        // (dumpsys activity broadcasts 能看到 AgentService 的接收者注册在)，但
-        // collectResultReceiver.onReceive 从未触发——同进程广播在这台荣耀真机上
-        // 不可靠，原因未查清(疑似 MagicOS 后台广播限流)。改成同进程直接回调，
-        // 不再依赖系统广播这条不可靠的路。AgentService 在 onCreate 里设置这个回调。
+        // 任务模式 extra
+        const val EXTRA_MODE = "mode"
+        const val MODE_STAGE1 = "stage1"
+        const val MODE_STAGE2 = "stage2"
+        const val EXTRA_VIDEO_URL = "video_url"
+        const val EXTRA_VIDEO_ID = "video_id"
+
+        // Stage1 视频卡回调（同进程，不走广播）
+        @Volatile
+        var onVideoCardResult: ((taskId: String, keyword: String, videos: List<VideoCardInfo>, error: String) -> Unit)? = null
+
         @Volatile
         var onCollectResult: ((taskId: String, ok: Boolean, commentIds: List<String>, commentTexts: List<String>, error: String) -> Unit)? = null
         const val EXTRA_KEYWORD = "keyword"
@@ -628,39 +801,44 @@ class DouyinCollectService : AccessibilityService() {
         const val EXTRA_RESULT_COMMENT_TEXTS = "comment_texts"
         const val EXTRA_RESULT_ERROR = "error"
 
-        /**
-         * 触发搜索后短时间内的结果事件多半是过渡态渲染（联想词/历史列表刷新），
-         * 不是真正的搜索结果页，需丢弃防止误点击。
-         */
         internal fun isResultEventDebounced(triggeredAtMs: Long, nowMs: Long, settleMs: Long): Boolean {
             return nowMs - triggeredAtMs <= settleMs
         }
 
-        /** 只有从 TYPING_KEYWORD 才允许进入 SUBMITTING_SEARCH，防止重复触发搜索。 */
         internal fun shouldEnterSubmitting(currentState: State): Boolean {
             return currentState == State.TYPING_KEYWORD
         }
 
-        /**
-         * 搜索结果超时时，是否应该先尝试切"综合/视频"标签重试一次，而不是直接判失败。
-         * 只重试一次：抖音搜索默认落在"主页"标签（空，找账号用）时，切一次标签就够；
-         * 切完还是超时说明是真的没结果/别的问题，不再无限重试。
-         */
         internal fun shouldRetryWithTabSwitch(alreadyTriedTabSwitch: Boolean): Boolean {
             return !alreadyTriedTabSwitch
         }
 
+        // Stage1 派发（关键词搜索+收集视频卡）
         fun dispatchTask(context: Context, keyword: String, taskId: String) {
             val intent = Intent(ACTION_COLLECT_TASK).apply {
-                // 显式指定目标包名——隐式应用内广播在部分厂商 ROM 上的分发行为
-                // 不完全可靠，显式 setPackage 让系统按包名精确路由，不依赖
-                // "同进程/同 UID 就一定能投递"这个假设。
                 setPackage(context.packageName)
+                putExtra(EXTRA_MODE, MODE_STAGE1)
                 putExtra(EXTRA_KEYWORD, keyword)
                 putExtra(EXTRA_TASK_ID, taskId)
             }
             context.sendBroadcast(intent)
-            android.util.Log.i(TAG, "dispatchTask sendBroadcast called: keyword=$keyword taskId=$taskId")
+            android.util.Log.i(TAG, "dispatchTask(stage1) keyword=$keyword taskId=$taskId")
+        }
+
+        // Stage2 派发（按视频 URL 进评论区抓评论）
+        fun dispatchStage2Task(context: Context, videoUrl: String, videoId: String, taskId: String) {
+            val intent = Intent(ACTION_COLLECT_TASK).apply {
+                setPackage(context.packageName)
+                putExtra(EXTRA_MODE, MODE_STAGE2)
+                putExtra(EXTRA_VIDEO_URL, videoUrl)
+                putExtra(EXTRA_VIDEO_ID, videoId)
+                putExtra(EXTRA_TASK_ID, taskId)
+            }
+            context.sendBroadcast(intent)
+            android.util.Log.i(TAG, "dispatchTask(stage2) videoId=$videoId taskId=$taskId")
         }
     }
+
+    // Stage1 视频卡信息（用于 onVideoCardResult 回调）
+    data class VideoCardInfo(val videoId: String, val keyword: String, val title: String? = null)
 }
