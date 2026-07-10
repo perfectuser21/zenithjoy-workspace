@@ -5,6 +5,7 @@ import {
   resolveTerminalStatus,
   shouldSweepToTerminal,
   seedKeywordsFromDoc,
+  settleCollectTask,
   EMPTY_DOC_MIN_CHARS,
   SWEEP_TIMEOUT_MS,
 } from './acquisition-collect';
@@ -68,5 +69,57 @@ describe('acquisition-collect 扩词种子兜底 + 空文档阈值', () => {
   it('EMPTY_DOC_MIN_CHARS 为正整数', () => {
     expect(EMPTY_DOC_MIN_CHARS).toBeGreaterThan(0);
     expect(Number.isInteger(EMPTY_DOC_MIN_CHARS)).toBe(true);
+  });
+});
+
+describe('settleCollectTask — 服务端终态结算 [BEHAVIOR]', () => {
+  it('已终态 → changed=false 原样返回（终态守卫）', () => {
+    for (const s of ['done', 'partial', 'failed', 'cancelled']) {
+      const r = settleCollectTask({ currentStatus: s, videoTotal: 3, videoDone: 3, leadCount: 5 });
+      expect(r).toEqual({ status: s, error_code: null, changed: false });
+    }
+  });
+
+  it('cancelling → cancelled 落章（修 cancelled 永不落章 bug）', () => {
+    const r = settleCollectTask({ currentStatus: 'cancelling', agentTerminal: { terminal: 'done' }, videoTotal: 3, videoDone: 3, leadCount: 5 });
+    expect(r).toEqual({ status: 'cancelled', error_code: null, changed: true });
+  });
+
+  it('agent 报 failed → failed + error_code 字面落库', () => {
+    const r = settleCollectTask({ currentStatus: 'running', agentTerminal: { terminal: 'failed', error_code: 'DOUYIN_RISK' }, videoTotal: 3, videoDone: 1, leadCount: 0 });
+    expect(r).toEqual({ status: 'failed', error_code: 'DOUYIN_RISK', changed: true });
+  });
+
+  it('agent 报 done 且全部视频完成 → done', () => {
+    const r = settleCollectTask({ currentStatus: 'stage_1_done', agentTerminal: { terminal: 'done' }, videoTotal: 3, videoDone: 3, leadCount: 5 });
+    expect(r).toEqual({ status: 'done', error_code: null, changed: true });
+  });
+
+  it('agent 报 done 但视频未收全 → 诚实结算 partial', () => {
+    const r = settleCollectTask({ currentStatus: 'stage_1_done', agentTerminal: { terminal: 'done' }, videoTotal: 3, videoDone: 1, leadCount: 5 });
+    expect(r.status).toBe('partial');
+    expect(r.error_code).toBe('videos_incomplete');
+    expect(r.changed).toBe(true);
+  });
+
+  it('agent 报 partial → partial + partial_reason 优先', () => {
+    const r = settleCollectTask({ currentStatus: 'running', agentTerminal: { terminal: 'partial', partial_reason: 'comments_closed' }, videoTotal: 3, videoDone: 3, leadCount: 5 });
+    expect(r).toEqual({ status: 'partial', error_code: 'comments_closed', changed: true });
+  });
+
+  it('无 terminal 且 stage_1_done 全部视频完成 → 服务端自动 done', () => {
+    const r = settleCollectTask({ currentStatus: 'stage_1_done', videoTotal: 3, videoDone: 3, leadCount: 5 });
+    expect(r).toEqual({ status: 'done', error_code: null, changed: true });
+  });
+
+  it('无 terminal 且 running（Stage1 清单未报，逐视频自然 total==done）→ 不自动结算', () => {
+    const r = settleCollectTask({ currentStatus: 'running', videoTotal: 1, videoDone: 1, leadCount: 2 });
+    expect(r.changed).toBe(false);
+    expect(r.status).toBe('running');
+  });
+
+  it("旧 agent 报 terminal:'stage_1'（非标准值）→ stage_1_done（向后兼容）", () => {
+    const r = settleCollectTask({ currentStatus: 'running', agentTerminal: { terminal: 'stage_1' }, videoTotal: 1, videoDone: 0, leadCount: 0 });
+    expect(r).toEqual({ status: 'stage_1_done', error_code: null, changed: true });
   });
 });
