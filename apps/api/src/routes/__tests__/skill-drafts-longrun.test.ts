@@ -81,7 +81,8 @@ function makeFakeDetachedChild() {
 
 // ─── 辅助：构造 DB mock 返回特定 draft ─────────────────────────────────────────
 
-function mockDbDraft(overrides: {
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+function _mockDbDraft(overrides: {
   id?: string;
   status?: string;
   session_id?: string | null;
