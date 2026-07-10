@@ -178,7 +178,12 @@ class AgentService : Service() {
         // Stage1 视频卡回调：聚合视频，全部关键词完成后 POST /collect/report-videos
         DouyinCollectService.onVideoCardResult = { taskId, keyword, videos, error ->
             val videoInfos = videos.map { v ->
-                CollectReporter.VideoInfo(video_id = v.videoId, keyword = v.keyword, title = v.title)
+                CollectReporter.VideoInfo(
+                    video_id = v.videoId,
+                    keyword = v.keyword,
+                    title = v.title,
+                    shareUrl = v.shareUrl,
+                )
             }
             synchronized(stage1Accumulator) {
                 stage1Accumulator.getOrPut(taskId) { mutableListOf() }.addAll(videoInfos)
@@ -368,7 +373,13 @@ class AgentService : Service() {
                 // 对每个视频 URL 入队 Stage2 Job
                 videoUrls.forEach { videoUrl ->
                     val videoId = extractVideoId(videoUrl)
-                    collectTaskQueue.enqueue(CollectJob.Stage2(taskId, videoUrl, videoId))
+                    if (videoId == null) {
+                        // Bug C：服务端解析失败的 URL 不会有真实数字 id，绝不用 hash 造假 id
+                        // （造假 id 深链必打不开），直接跳过。
+                        android.util.Log.w(TAG, "stage2: skip URL without numeric id: $videoUrl")
+                    } else {
+                        collectTaskQueue.enqueue(CollectJob.Stage2(taskId, videoUrl, videoId))
+                    }
                 }
                 processNextQueuedTask()
             },
@@ -437,10 +448,14 @@ class AgentService : Service() {
         }
     }
 
-    /** 从 Douyin 视频 URL 提取视频 ID（数字串）。如 "https://www.douyin.com/video/7123456789" → "7123456789" */
-    private fun extractVideoId(videoUrl: String): String {
-        val match = Regex("/video/(\\d+)").find(videoUrl)
-        return match?.groupValues?.get(1) ?: "video_${videoUrl.hashCode().toString(36)}"
+    /**
+     * 从 Douyin 深链 URL 提取真实视频/图文 ID（纯数字）。
+     * 如 ".../video/7123456789" 或 ".../note/7123456789" → "7123456789"。
+     * Bug C：提取不到就返回 null（调用方跳过该 URL），绝不用 hash 造假 id。
+     */
+    private fun extractVideoId(videoUrl: String): String? {
+        val match = Regex("/(?:video|note)/(\\d+)").find(videoUrl)
+        return match?.groupValues?.get(1)
     }
 
     private suspend fun runAccountScanLoop() {

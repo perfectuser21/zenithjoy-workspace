@@ -17,6 +17,12 @@ vi.mock('../db/connection', () => ({
   },
 }));
 
+const mockResolveShareToMedia = vi.fn();
+vi.mock('../services/douyin-share-resolver', () => ({
+  resolveShareToMedia: (...a: any[]) => mockResolveShareToMedia(...a),
+  isLikelyRealVideoId: (id: string) => /^\d{10,}$/.test(id ?? ''),
+}));
+
 vi.mock('../middleware/tenant-context', () => ({
   tenantContext: (req: any, _res: any, next: any) => {
     const t = req.headers['x-test-tenant-id'];
@@ -1305,6 +1311,82 @@ describe('POST /api/acquisition/collect/report-videos — Stage1 清单回报 [B
   });
 });
 
+// ────── Bug C 回归：share_url → 服务端解析真实 video_id ──────
+// 根因：抖音搜索结果节点树无 ≥10 位真实 ID，agent 造假 card_N_<taskId8> → Stage2 深链打不开。
+// 修法：agent 上报每张卡片的 v.douyin.com 短链 share_url，服务端 resolveShareToMedia 跟随 302
+// 拿真实 (kind,id) 才登记；解析失败的卡片跳过不造假；note 类型写入 checkpoint.media_kinds。
+describe('POST /api/acquisition/collect/report-videos — share_url 解析真实 video_id [REGRESSION: Bug-C]', () => {
+  const TASK_ID = '00000000-0000-0000-0000-00000000c001';
+  const TENANT = '00000000-0000-0000-0000-0000000000aa';
+
+  beforeEach(() => {
+    vi.mocked(db.query).mockReset();
+    mockClientQuery.mockReset();
+    mockClientRelease.mockReset();
+    mockResolveShareToMedia.mockReset();
+    vi.mocked(db.query).mockResolvedValue({ rows: [{ tenant_id: TENANT }] } as any);
+    mockClientQuery.mockImplementation(async (sql: unknown) => {
+      const s = String(sql);
+      if (s.includes('FOR UPDATE')) {
+        return { rows: [{ id: TASK_ID, tenant_id: TENANT, status: 'running', agent_id: 'agent-1', lead_count_raw: 0, checkpoint: {} }] };
+      }
+      if (s.includes('count(*)')) return { rows: [{ total: 1 }] };
+      return { rows: [] };
+    });
+  });
+
+  it('share_url 解析成功 → upsert 用真实数字 id（不是 card_N 假 id）', async () => {
+    mockResolveShareToMedia.mockImplementation(async (url: string) =>
+      url.includes('good') ? { kind: 'video', id: '7412345678901234567' } : null,
+    );
+    const res = await request(app).post('/api/acquisition/collect/report-videos')
+      .set('x-agent-id', 'agent-1')
+      .send({ task_id: TASK_ID, videos: [{ share_url: 'https://v.douyin.com/good/' }] });
+    expect(res.status).toBe(200);
+    expect(res.body.data.status).toBe('stage_1_done');
+    expect(mockResolveShareToMedia).toHaveBeenCalledWith('https://v.douyin.com/good/');
+    const upsertCall = mockClientQuery.mock.calls.find((c) => String(c[0]).includes('ON CONFLICT (task_id, video_id)'));
+    expect(upsertCall).toBeTruthy();
+    expect(JSON.stringify(upsertCall![1])).toContain('7412345678901234567');
+    // 绝不出现 card_ 假 id
+    expect(JSON.stringify(mockClientQuery.mock.calls)).not.toMatch(/card_\d+_/);
+  });
+
+  it('share_url 解析失败（死链/登录页）→ 该卡片跳过不登记，不造假 id', async () => {
+    mockResolveShareToMedia.mockResolvedValue(null);
+    const res = await request(app).post('/api/acquisition/collect/report-videos')
+      .set('x-agent-id', 'agent-1')
+      .send({ task_id: TASK_ID, videos: [{ share_url: 'https://v.douyin.com/dead/' }, { share_url: 'https://v.douyin.com/dead2/' }] });
+    expect(res.status).toBe(200);
+    const upsertCall = mockClientQuery.mock.calls.find((c) => String(c[0]).includes('ON CONFLICT (task_id, video_id)'));
+    expect(upsertCall).toBeFalsy();
+  });
+
+  it('note 图文类型 → 登记 id 且 checkpoint.media_kinds 记 note', async () => {
+    mockResolveShareToMedia.mockResolvedValue({ kind: 'note', id: '7499999999999999999' });
+    const res = await request(app).post('/api/acquisition/collect/report-videos')
+      .set('x-agent-id', 'agent-1')
+      .send({ task_id: TASK_ID, videos: [{ share_url: 'https://v.douyin.com/note/' }] });
+    expect(res.status).toBe(200);
+    const checkpointWrite = mockClientQuery.mock.calls
+      .find((c) => /UPDATE zenithjoy\.acquisition_collect_tasks/.test(String(c[0])) && /media_kinds|checkpoint/.test(String(c[0])));
+    expect(checkpointWrite).toBeTruthy();
+    expect(JSON.stringify(checkpointWrite![1])).toContain('note');
+  });
+
+  it('兼容旧路径：直接带真实数字 video_id（无 share_url）仍登记且不调 resolver', async () => {
+    const res = await request(app).post('/api/acquisition/collect/report-videos')
+      .set('x-agent-id', 'agent-1')
+      .send({ task_id: TASK_ID, videos: [{ video_id: '7400000000000000000' }] });
+    expect(res.status).toBe(200);
+    expect(res.body.data.status).toBe('stage_1_done');
+    const upsertCall = mockClientQuery.mock.calls.find((c) => String(c[0]).includes('ON CONFLICT (task_id, video_id)'));
+    expect(upsertCall).toBeTruthy();
+    expect(JSON.stringify(upsertCall![1])).toContain('7400000000000000000');
+    expect(mockResolveShareToMedia).not.toHaveBeenCalled();
+  });
+});
+
 describe('POST /api/acquisition/collect/report — 终态守卫 + settle 结算 [BEHAVIOR]', () => {
   const TASK_ID = '00000000-0000-0000-0000-00000000c002';
   const TENANT = '00000000-0000-0000-0000-0000000000aa';
@@ -1575,5 +1657,41 @@ describe('GET /api/acquisition/pending-collect-tasks — Stage2 派发上限 [RE
       .find((c) => /UPDATE zenithjoy\.acquisition_collect_tasks/.test(String(c[0])) && /checkpoint/.test(String(c[0])));
     expect(checkpointWrite).toBeTruthy();
     expect(JSON.stringify(checkpointWrite![1])).toContain('"card_0_live":3');
+  });
+});
+
+// ────── Bug C 回归：note 图文类型 Stage2 URL 分流 ──────
+// checkpoint.media_kinds 标记为 note 的视频，下发 URL 用 /note/ 而非 /video/，
+// 使 agent Stage2 深链能按类型正确打开图文详情页。
+describe('GET /api/acquisition/pending-collect-tasks — note 类型 URL 分流 [BEHAVIOR]', () => {
+  beforeEach(() => { vi.clearAllMocks(); });
+
+  const mockAgentAndTask = (checkpoint: Record<string, unknown>, videos: Array<{ task_id: string; video_id: string }>) => {
+    vi.mocked(db.query).mockReset();
+    vi.mocked(db.query).mockImplementation(async (sql: unknown) => {
+      const s = String(sql);
+      if (s.includes('FROM zenithjoy.agents')) return { rows: [{ tenant_id: 't-1' }] } as any;
+      if (s.includes('FROM zenithjoy.acquisition_collect_tasks')) {
+        return { rows: [{ id: 'task-note', keywords: ['k'], tenant_id: 't-1', status: 'stage_1_done', checkpoint }] } as any;
+      }
+      if (s.includes('FROM zenithjoy.acquisition_collect_videos')) return { rows: videos } as any;
+      return { rows: [] } as any;
+    });
+  };
+
+  it('media_kinds 标 note → 下发 /note/ URL；未标记默认 /video/', async () => {
+    mockAgentAndTask(
+      { media_kinds: { '7411111111111111111': 'note' } },
+      [
+        { task_id: 'task-note', video_id: '7411111111111111111' },
+        { task_id: 'task-note', video_id: '7422222222222222222' },
+      ],
+    );
+    const res = await request(app).get('/api/acquisition/pending-collect-tasks').set('x-agent-id', 'agent-1');
+    expect(res.status).toBe(200);
+    const dispatched = (res.body.tasks as Array<{ task_id: string; video_urls?: string[] }>)
+      .find((t) => t.task_id === 'task-note');
+    expect(dispatched?.video_urls).toContain('https://www.douyin.com/note/7411111111111111111');
+    expect(dispatched?.video_urls).toContain('https://www.douyin.com/video/7422222222222222222');
   });
 });

@@ -18,6 +18,8 @@ class CollectReporter(
         val video_id: String,
         val keyword: String? = null,
         val title: String? = null,
+        // Bug C：share-intent 拿到的 v.douyin.com 短链，服务端据此解析真实 video_id
+        val shareUrl: String? = null,
     )
 
     data class ReportResult(val success: Boolean, val code: String?)
@@ -79,6 +81,7 @@ class CollectReporter(
                 put("video_id", v.video_id)
                 v.keyword?.let { put("keyword", it) }
                 v.title?.let { put("title", it) }
+                v.shareUrl?.let { put("share_url", it) }
             }
         }
         val bodyMap = buildMap<String, Any?> {
