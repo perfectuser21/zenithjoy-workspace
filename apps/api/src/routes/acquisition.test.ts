@@ -1207,8 +1207,8 @@ describe('POST /api/acquisition/collect/report-videos — Stage1 清单回报 [B
       .set('x-agent-id', 'agent-1')
       .send({ task_id: TASK_ID, videos: [{ video_id: 'v1' }, { video_id: 'v2', title: 't2' }] });
     expect(res.status).toBe(200);
-    expect(res.body.status).toBe('stage_1_done');
-    expect(res.body.video_count).toBe(2);
+    expect(res.body.data.status).toBe('stage_1_done');
+    expect(res.body.data.video_count).toBe(2);
     const calls = mockClientQuery.mock.calls.map((c) => String(c[0]));
     expect(calls.some((s) => s.includes('ON CONFLICT (task_id, video_id)'))).toBe(true);
     const upd = calls.find((s) => s.includes('UPDATE zenithjoy.acquisition_collect_tasks'));
@@ -1221,7 +1221,7 @@ describe('POST /api/acquisition/collect/report-videos — Stage1 清单回报 [B
       .set('x-agent-id', 'agent-1')
       .send({ task_id: TASK_ID, videos: [], reason: { search_result: 'empty' } });
     expect(res.status).toBe(200);
-    expect(res.body.status).toBe('partial');
+    expect(res.body.data.status).toBe('partial');
   });
 
   it('空清单 + error_code → failed 终态', async () => {
@@ -1229,7 +1229,7 @@ describe('POST /api/acquisition/collect/report-videos — Stage1 清单回报 [B
       .set('x-agent-id', 'agent-1')
       .send({ task_id: TASK_ID, videos: [], reason: { error_code: 'DOUYIN_RISK' } });
     expect(res.status).toBe(200);
-    expect(res.body.status).toBe('failed');
+    expect(res.body.data.status).toBe('failed');
   });
 
   it('任务已终态 → 409', async () => {
@@ -1252,7 +1252,7 @@ describe('POST /api/acquisition/collect/report-videos — Stage1 清单回报 [B
     const res = await request(app).post('/api/acquisition/collect/report-videos')
       .set('x-agent-id', 'agent-1').send({ task_id: TASK_ID, videos: [{ video_id: 'v1' }] });
     expect(res.status).toBe(200);
-    expect(res.body.status).toBe('cancelled');
+    expect(res.body.data.status).toBe('cancelled');
     const upd = mockClientQuery.mock.calls.map((c) => String(c[0])).find((s) => s.includes("'cancelled'") || s.includes('cancelled'));
     expect(upd).toBeTruthy();
   });

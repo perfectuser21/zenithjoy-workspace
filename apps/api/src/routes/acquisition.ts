@@ -8,6 +8,8 @@ import {
   SWEEP_TIMEOUT_MS,
   profileUrlForSecUid,
   resolveTerminalStatus,
+  settleCollectTask,
+  TERMINAL_COLLECT_STATUSES,
 } from '../services/acquisition-collect';
 import { tenantContextOptional } from '../middleware/tenant-context';
 import { licenseAuth } from '../middleware/license-auth';
@@ -863,6 +865,128 @@ acquisitionRouter.post('/collect/cancel', async (req: Request, res: Response) =>
     if (exists.rows.length === 0) return fail(res, 404, 'NO_COLLECT_TASK', '采集任务不存在');
   }
   return ok(res, { task_id: taskId, status: 'cancelling' });
+});
+
+// POST /api/acquisition/collect/report-videos — Stage1 视频清单回报（幂等可重入）
+// 鉴权：x-agent-id 反查 tenant → 任务按 (id, tenant_id) 查 → agent 绑定校验。
+// 幂等：ON CONFLICT (task_id, video_id) + video_count 按 distinct 重算，重复回报同结果不重计数。
+acquisitionRouter.post('/collect/report-videos', async (req: Request, res: Response) => {
+  const { task_id: taskId, videos, reason } = req.body || {};
+  if (!taskId) return fail(res, 400, 'MISSING_TASK_ID', '缺 task_id');
+
+  const xAgentId = req.header('x-agent-id') ?? '';
+  if (!xAgentId) return fail(res, 401, 'MISSING_AGENT_ID', '缺 x-agent-id');
+  const agentRes = await pool.query<{ tenant_id: string }>(
+    `SELECT tenant_id FROM zenithjoy.agents WHERE agent_id = $1 LIMIT 1`,
+    [xAgentId]
+  );
+  const tenantId = agentRes.rows[0]?.tenant_id;
+  if (!tenantId) return fail(res, 403, 'UNKNOWN_AGENT', 'agent 未注册');
+
+  const list: Array<{ video_id: string; title?: string; thumbnail_url?: string; publish_date?: string }> =
+    Array.isArray(videos) ? videos.filter((v) => v && v.video_id) : [];
+  const searchEmpty = reason?.search_result === 'empty';
+  const reasonErrorCode: string | null = reason?.error_code ?? null;
+  if (list.length === 0 && !searchEmpty && !reasonErrorCode) {
+    return fail(res, 400, 'MISSING_REASON', '空清单必须带 reason（search_result=empty 或 error_code）');
+  }
+
+  const client = await pool.connect();
+  let sseEvent: { terminal: boolean; payload: Record<string, unknown> } | null = null;
+  try {
+    await client.query('BEGIN');
+    const taskRes = await client.query(
+      `SELECT id, tenant_id, status, agent_id, lead_count_raw
+         FROM zenithjoy.acquisition_collect_tasks
+        WHERE id = $1 AND tenant_id = $2
+        FOR UPDATE`,
+      [taskId, tenantId]
+    );
+    if (taskRes.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return fail(res, 404, 'NO_COLLECT_TASK', '采集任务不存在');
+    }
+    const task = taskRes.rows[0] as { id: string; status: string; agent_id: string | null; lead_count_raw: number };
+    if (task.agent_id && task.agent_id !== xAgentId) {
+      await client.query('ROLLBACK');
+      return fail(res, 403, 'AGENT_MISMATCH', '任务已绑定其他 agent');
+    }
+    if ((TERMINAL_COLLECT_STATUSES as readonly string[]).includes(task.status)) {
+      await client.query('ROLLBACK');
+      return fail(res, 409, 'TASK_TERMINAL', `任务已终态 ${task.status}`);
+    }
+    if (task.status === 'cancelling') {
+      // 唯一落章路径：cancelling → cancelled（settleCollectTask 语义）
+      const s = settleCollectTask({ currentStatus: 'cancelling', videoTotal: 0, videoDone: 0, leadCount: task.lead_count_raw });
+      await client.query(
+        `UPDATE zenithjoy.acquisition_collect_tasks
+            SET status = 'cancelled', ended_at = COALESCE(ended_at, NOW()), updated_at = NOW()
+          WHERE id = $1`,
+        [taskId]
+      );
+      await client.query('COMMIT');
+      sseService.close(taskId, { task_id: taskId, status: s.status });
+      return ok(res, { task_id: taskId, status: s.status, video_count: 0, accepted: 0 });
+    }
+
+    if (list.length === 0) {
+      // 空清单终态：empty → partial(stage1_empty)；error_code → failed（checkpoint 保留可重试）
+      const s = settleCollectTask({
+        currentStatus: task.status === 'pending' ? 'running' : task.status,
+        agentTerminal: searchEmpty
+          ? { terminal: 'partial', partial_reason: 'stage1_empty' }
+          : { terminal: 'failed', error_code: reasonErrorCode },
+        videoTotal: 0,
+        videoDone: 0,
+        leadCount: task.lead_count_raw,
+      });
+      await client.query(
+        `UPDATE zenithjoy.acquisition_collect_tasks
+            SET status = $2, error_code = $3, started_at = COALESCE(started_at, NOW()),
+                ended_at = NOW(), updated_at = NOW()
+          WHERE id = $1`,
+        [taskId, s.status, s.error_code]
+      );
+      await client.query('COMMIT');
+      sseService.close(taskId, { task_id: taskId, status: s.status, video_count: 0 });
+      return ok(res, { task_id: taskId, status: s.status, video_count: 0, accepted: 0 });
+    }
+
+    for (const v of list) {
+      await client.query(
+        `INSERT INTO zenithjoy.acquisition_collect_videos
+           (video_id, task_id, tenant_id, title, thumbnail_url, publish_date, comment_count)
+         VALUES ($1, $2, $3, $4, $5, $6, 0)
+         ON CONFLICT (task_id, video_id) DO UPDATE
+           SET title         = COALESCE(EXCLUDED.title, zenithjoy.acquisition_collect_videos.title),
+               thumbnail_url = COALESCE(EXCLUDED.thumbnail_url, zenithjoy.acquisition_collect_videos.thumbnail_url),
+               publish_date  = COALESCE(EXCLUDED.publish_date, zenithjoy.acquisition_collect_videos.publish_date),
+               updated_at    = NOW()`,
+        [v.video_id, taskId, tenantId, v.title ?? null, v.thumbnail_url ?? null, v.publish_date ?? null]
+      );
+    }
+    const vcRes = await client.query<{ total: number }>(
+      `SELECT count(*)::int AS total FROM zenithjoy.acquisition_collect_videos WHERE task_id = $1`,
+      [taskId]
+    );
+    const total = vcRes.rows[0]?.total ?? list.length;
+    await client.query(
+      `UPDATE zenithjoy.acquisition_collect_tasks
+          SET status = 'stage_1_done', agent_id = COALESCE(agent_id, $2), video_count = $3,
+              started_at = COALESCE(started_at, NOW()), updated_at = NOW()
+        WHERE id = $1`,
+      [taskId, xAgentId, total]
+    );
+    await client.query('COMMIT');
+    sseEvent = { terminal: false, payload: { task_id: taskId, status: 'stage_1_done', video_count: total } };
+    return ok(res, { task_id: taskId, status: 'stage_1_done', video_count: total, accepted: list.length });
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
+    return fail(res, 500, 'DB_ERROR', (err as Error).message);
+  } finally {
+    client.release();
+    if (sseEvent) sseService.emit(taskId, sseEvent.payload);
+  }
 });
 
 // POST /api/acquisition/collect/report — 客户机 Agent 增量回报（无需 smoke token，agent 直接调用）
