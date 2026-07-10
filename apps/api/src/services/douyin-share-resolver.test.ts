@@ -58,7 +58,7 @@ describe('parseMediaFromUrl — 从最终 URL 抽 kind+id', () => {
 // 注入式 httpGet：不真发网络，模拟每一跳的 status + Location
 function fakeHops(hops: Array<{ status: number; location?: string }>): HttpHead {
   let i = 0;
-  return async (_url: string) => {
+  return async () => {
     const h = hops[i] ?? { status: 200 };
     i += 1;
     return { status: h.status, location: h.location ?? null };
