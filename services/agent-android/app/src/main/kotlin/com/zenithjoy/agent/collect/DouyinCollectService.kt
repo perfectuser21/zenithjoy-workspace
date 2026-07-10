@@ -45,6 +45,9 @@ class DouyinCollectService : AccessibilityService() {
     // A2 重入闸：评论面板每个无障碍事件都会 launch 一个提取协程，state 切走前已排队多个，
     // 导致 reportResult 被调 7~12 次、onResult 重复上报。用一次性闩保证一个任务只上报一次。
     @Volatile private var resultReported = false
+    // 真机复现(2026-07-10)：抖音搜索默认落在"主页"标签（找账号主页用的，天然没有视频卡片），
+    // 真实视频内容在"综合"/"视频"标签。首次超时先尝试切标签重试一次，避免误判 SEARCH_TIMEOUT。
+    private var triedTabSwitch = false
 
     internal enum class State {
         IDLE,
@@ -111,6 +114,7 @@ class DouyinCollectService : AccessibilityService() {
         currentKeyword = keyword
         currentTaskId = taskId
         resultReported = false
+        triedTabSwitch = false
         state = State.OPENING_DOUYIN
         // 与账号扫描服务共享的全局互斥标记（Sprint 07061301-device-account-scan-wiring）：
         // 采集任务运行期间置 busy=true，扫描服务据此在本轮跳过，避免共用微信/抖音窗口冲突。
@@ -270,9 +274,25 @@ class DouyinCollectService : AccessibilityService() {
                 true
             }
             if (found == null && state == State.WAITING_SEARCH_RESULTS) {
-                finishWithError("SEARCH_TIMEOUT")
+                // 真机复现：抖音搜索默认落在"主页"标签（空，找账号用），视频内容在"综合"/
+                // "视频"标签。先尝试切标签重试一次，不是每次超时都直接判失败。
+                if (shouldRetryWithTabSwitch(triedTabSwitch) && trySwitchToVideoTab()) {
+                    triedTabSwitch = true
+                    searchTriggeredAtMs = android.os.SystemClock.elapsedRealtime()
+                    startSearchResultTimeout()
+                } else {
+                    finishWithError("SEARCH_TIMEOUT")
+                }
             }
         }
+    }
+
+    /** 找"综合"或"视频"标签并点击切换，返回是否成功找到并点击。 */
+    private fun trySwitchToVideoTab(): Boolean {
+        val root = rootInActiveWindow ?: return false
+        val tab = findNodeByText(root, "综合") ?: findNodeByText(root, "视频") ?: return false
+        tab.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+        return true
     }
 
     // ── 5. 点第一条视频（爆款/参照账号定位入口） ─────────────────────────────
@@ -619,6 +639,15 @@ class DouyinCollectService : AccessibilityService() {
         /** 只有从 TYPING_KEYWORD 才允许进入 SUBMITTING_SEARCH，防止重复触发搜索。 */
         internal fun shouldEnterSubmitting(currentState: State): Boolean {
             return currentState == State.TYPING_KEYWORD
+        }
+
+        /**
+         * 搜索结果超时时，是否应该先尝试切"综合/视频"标签重试一次，而不是直接判失败。
+         * 只重试一次：抖音搜索默认落在"主页"标签（空，找账号用）时，切一次标签就够；
+         * 切完还是超时说明是真的没结果/别的问题，不再无限重试。
+         */
+        internal fun shouldRetryWithTabSwitch(alreadyTriedTabSwitch: Boolean): Boolean {
+            return !alreadyTriedTabSwitch
         }
 
         fun dispatchTask(context: Context, keyword: String, taskId: String) {
