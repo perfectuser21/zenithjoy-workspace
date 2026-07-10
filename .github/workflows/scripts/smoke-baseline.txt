@@ -62,3 +62,4 @@ skill-create-smoke.sh
 android-collect-protocol-v2-smoke.sh
 cross-line-seam-smoke.sh
 stage1-report-videos-smoke.sh
+node-agent-report-videos-smoke.sh
