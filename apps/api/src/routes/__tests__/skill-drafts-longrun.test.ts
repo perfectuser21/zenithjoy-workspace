@@ -803,10 +803,12 @@ describe('[BEHAVIOR] B-16 — DB migration 字段存在', () => {
   it('migration SQL 文件存在且包含 pending_question、result_json、callback_token 三个字段定义', () => {
     // 注意：node:fs/promises 在模块级被 vi.mock mock 了，这里直接用同步 fs
     // 避开 mock 来真实读取文件系统（migration 文件是静态 artifact，不需要异步 IO）
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
     const fs = require('fs') as typeof import('fs');
-    const migrationPath =
-      '/workspace/apps/api/db/migrations/20260710_194200_skill_drafts_longrun.sql';
+    const migrationPath = new URL(
+      '../../../../db/migrations/20260710_194200_skill_drafts_longrun.sql',
+      import.meta.url
+    ).pathname;
     let content: string;
     try {
       content = fs.readFileSync(migrationPath, 'utf8');

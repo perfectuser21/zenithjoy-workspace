@@ -23,7 +23,6 @@ import { randomUUID } from 'crypto';
 import { staffGuard } from '../middleware/staff';
 import {
   transition,
-  GENERATE_ALLOWED,
   GENERATE_BLOCKED,
   type SkillDraftStatus,
 } from '../services/skillDraftStateMachine';
@@ -192,15 +191,15 @@ function spawnSkillGeneratorDetached(draft: SkillDraft): void {
     '文件名用这个 skill 的英文短横线命名（比如 smart-cs.zip）。' +
     `最后用 curl 调用内部回调：curl -s -X POST ${callbackBase}/internal/skill-drafts/${draft.id}/callback ` +
     `-H 'Content-Type: application/json' ` +
-    `-d "{\"token\":\"${draft.callback_token}\",\"event\":\"done\",\"zip_path\":\"<ZIP_PATH>\"}"。` +
+    `-d '{"token":"${draft.callback_token}","event":"done","zip_path":"<ZIP_PATH>"}'。` +
     '如果遇到需要员工决策的问题，调用：' +
     `curl -s -X POST ${callbackBase}/internal/skill-drafts/${draft.id}/callback ` +
     `-H 'Content-Type: application/json' ` +
-    `-d "{\"token\":\"${draft.callback_token}\",\"event\":\"needs_input\",\"question\":\"<QUESTION>\"}"。` +
+    `-d '{"token":"${draft.callback_token}","event":"needs_input","question":"<QUESTION>"}'。` +
     '出错时调用：' +
     `curl -s -X POST ${callbackBase}/internal/skill-drafts/${draft.id}/callback ` +
     `-H 'Content-Type: application/json' ` +
-    `-d "{\"token\":\"${draft.callback_token}\",\"event\":\"error\",\"error_message\":\"<ERROR>\"}"。`;
+    `-d '{"token":"${draft.callback_token}","event":"error","error_message":"<ERROR>"}'。`;
 
   const resumeArgs = draft.session_id ? ['--resume', draft.session_id] : [];
   const remoteCommand = [
@@ -225,7 +224,7 @@ function spawnSkillGeneratorDetached(draft: SkillDraft): void {
   // stdout/stderr redirect 到日志文件（N-04 可观测）
   // 仅在真实可读流（含 pipe 方法）时才 pipe，避免 mock/测试环境 EventEmitter 报错
   if (child.stdout && typeof (child.stdout as { pipe?: unknown }).pipe === 'function') {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
     const fs = require('fs') as typeof import('fs');
     const logStream = fs.createWriteStream(logFile, { flags: 'a' });
     (child.stdout as NodeJS.ReadableStream).pipe(logStream);
