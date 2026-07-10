@@ -84,4 +84,30 @@ class DouyinCollectServiceStateTest {
     fun `sends fallback broadcast only when no callback registered`() {
         assertTrue(DouyinCollectService.shouldSendFallbackBroadcast(callbackRegistered = false))
     }
+
+    // ── isBusyStateStale ─────────────────────────────────────────────────────
+    // 真机复现(2026-07-10)：state 卡在非 IDLE 且没有任何看门狗覆盖时（例如
+    // COLLECTING_VIDEO_CARDS 协程死亡），busy-guard 会永远拒绝新任务。
+    // state 停留超过阈值 = 流程已死，busy-guard 应强制复位接受新任务而不是拒绝。
+
+    @Test
+    fun `state stuck longer than threshold is stale`() {
+        assertTrue(
+            DouyinCollectService.isBusyStateStale(stateChangedAtMs = 1_000L, nowMs = 181_001L, thresholdMs = 180_000L)
+        )
+    }
+
+    @Test
+    fun `fresh state within threshold is not stale`() {
+        assertFalse(
+            DouyinCollectService.isBusyStateStale(stateChangedAtMs = 1_000L, nowMs = 91_000L, thresholdMs = 180_000L)
+        )
+    }
+
+    @Test
+    fun `state at exactly threshold is not stale`() {
+        assertFalse(
+            DouyinCollectService.isBusyStateStale(stateChangedAtMs = 1_000L, nowMs = 181_000L, thresholdMs = 180_000L)
+        )
+    }
 }

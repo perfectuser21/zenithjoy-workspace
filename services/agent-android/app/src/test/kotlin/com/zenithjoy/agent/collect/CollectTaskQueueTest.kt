@@ -91,4 +91,42 @@ class CollectTaskQueueTest {
 
         assertFalse("还有 job2 在队列，isEmpty 应为 false", queue.isEmpty())
     }
+
+    // ── dispatch 重试（真机复现 2026-07-10：DouyinCollectService busy 静默丢
+    // 广播后 currentJob 永不清除 → 去重挡住重入队 → 整条队列永久死锁）───────────
+
+    // TC-Q04: retryCurrent 在上限内返回 true，超过上限返回 false
+    @Test
+    fun `retryCurrent_allows_up_to_max_then_gives_up`() {
+        val job = CollectJob.Stage2(taskId = "task-R", videoUrl = "https://douyin.com/video/123", videoId = "123")
+        queue.enqueue(job)
+        queue.pollNext()
+
+        assertTrue("第 1 次重试应允许", queue.retryCurrent(maxRetries = 2))
+        assertTrue("第 2 次重试应允许", queue.retryCurrent(maxRetries = 2))
+        assertFalse("超过上限应放弃", queue.retryCurrent(maxRetries = 2))
+    }
+
+    // TC-Q04b: 没有 currentJob 时 retryCurrent 返回 false
+    @Test
+    fun `retryCurrent_without_currentJob_returns_false`() {
+        assertFalse(queue.retryCurrent(maxRetries = 2))
+    }
+
+    // TC-Q04c: pollNext 取到新 job 时重试计数归零
+    @Test
+    fun `retry_counter_resets_when_next_job_polled`() {
+        val job1 = CollectJob.Stage1(taskId = "task-R1", keyword = "词1")
+        val job2 = CollectJob.Stage1(taskId = "task-R2", keyword = "词2")
+        queue.enqueue(job1)
+        queue.enqueue(job2)
+
+        queue.pollNext() // currentJob = job1
+        queue.retryCurrent(maxRetries = 1)
+        assertFalse("job1 重试已用尽", queue.retryCurrent(maxRetries = 1))
+
+        queue.markCurrentDone()
+        queue.pollNext() // currentJob = job2，计数应重置
+        assertTrue("新 job 的重试计数应从 0 开始", queue.retryCurrent(maxRetries = 1))
+    }
 }
