@@ -45,6 +45,7 @@ design.md 是设计意图，本文档是实现落地后的契约。
 ```
 
 - `task_id` 缺失 → **400 MISSING_TASK_ID**。
+- 校验顺序：先 `task_id`（缺 → 400）后 `x-agent-id`（缺 → 401）；两者都缺返回 400。
 - `videos` 数组里没有 `video_id` 的项会被过滤丢弃（`videos.filter(v => v && v.video_id)`），不报错。
 - `videos` 有效项为空（即传空数组，或全被过滤掉）且 `reason.search_result !== 'empty'` 且 `reason.error_code` 未给 → **400 MISSING_REASON**（空清单必须带 reason）。
 
@@ -73,7 +74,7 @@ design.md 是设计意图，本文档是实现落地后的契约。
 | 任务处于 `cancelling` | 200 | — | `{task_id, status:'cancelled', video_count:0, accepted:0}`（落章路径，见 §3） |
 | 清单非空，正常回报 | 200 | — | `{task_id, status:'stage_1_done', video_count:<distinct总数>, accepted:<本次提交条数>}` |
 | 清单为空 + `search_result='empty'` | 200 | — | `{task_id, status:'partial', video_count:0, accepted:0}`，`error_code='stage1_empty'` 落库（不出现在响应体） |
-| 清单为空 + `reason.error_code` | 200 | — | `{task_id, status:'failed', video_count:0, accepted:0}`，`error_code=<reason.error_code>` 落库 |
+| 清单为空 + `reason.error_code`（且无 `search_result='empty'`，共存时 empty 优先走上一行） | 200 | — | `{task_id, status:'failed', video_count:0, accepted:0}`，`error_code=<reason.error_code>` 落库 |
 | DB 异常 | 500 | `DB_ERROR` | message = 异常原文 |
 
 注：终态判定用 **409**（新端点、新 agent 代码，可安全处理非 200），与旧 `/collect/report` 端点的「200+ignored」策略不同（旧 agent 在网，避免对非 200 死循环重试）。
@@ -90,7 +91,9 @@ design.md 是设计意图，本文档是实现落地后的契约。
 |---|---|---|
 | `videos:[]` 且无 `reason` | 400 拒绝，不落库 | — |
 | `videos:[]` + `reason.search_result='empty'` | `partial` | `stage1_empty` |
-| `videos:[]` + `reason.error_code=X`（X 优先于 search_result） | `failed` | `X` |
+| `videos:[]` + `reason.error_code=X`（且无 `search_result='empty'`） | `failed` | `X` |
+
+**二者同时出现时 `search_result='empty'` 优先 → `partial(stage1_empty)`**（代码为 `searchEmpty ? {terminal:'partial', partial_reason:'stage1_empty'} : {terminal:'failed', error_code}`，`error_code` 只在非 empty 分支生效）。
 
 `video_count` 在这三种分支里都不变（空清单分支不写 `acquisition_collect_videos`）。
 

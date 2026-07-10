@@ -1263,6 +1263,14 @@ describe('POST /api/acquisition/collect/report-videos — Stage1 清单回报 [B
     expect(res.body.data.status).toBe('partial');
   });
 
+  it('空清单 + search_result=empty 与 error_code 共存 → search_result 优先，partial', async () => {
+    const res = await request(app).post('/api/acquisition/collect/report-videos')
+      .set('x-agent-id', 'agent-1')
+      .send({ task_id: TASK_ID, videos: [], reason: { search_result: 'empty', error_code: 'DOUYIN_RISK' } });
+    expect(res.status).toBe(200);
+    expect(res.body.data.status).toBe('partial');
+  });
+
   it('空清单 + error_code → failed 终态', async () => {
     const res = await request(app).post('/api/acquisition/collect/report-videos')
       .set('x-agent-id', 'agent-1')
