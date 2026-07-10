@@ -127,6 +127,7 @@ export const OPTIONAL_ENV: { name: string; reason: string }[] = [
   // —— 员工工具（Line 00 运营中枢，staff only）——
   { name: 'STAFF_EMAILS', reason: '员工邮箱白名单，逗号分隔，缺则 staffGuard 一律 403（无 dev 放行）' },
   { name: 'CECELIA_SKILL_EVAL_URL', reason: 'Cecelia skill-eval 服务地址，缺则用默认 http://hk-vps:9100' },
+  { name: 'MMV_CLAUDE_ACCOUNT_DIR', reason: '对话式创建Skill在mmv上跑claude -p时用哪个账号池目录，缺则默认 /Users/administrator/.claude-account1' },
 
   // —— 测试 / 故障注入钩子（仅测试与冒烟读取，生产不设）——
   { name: 'TEST_MODE', reason: '测试模式开关，仅测试/冒烟读取' },
