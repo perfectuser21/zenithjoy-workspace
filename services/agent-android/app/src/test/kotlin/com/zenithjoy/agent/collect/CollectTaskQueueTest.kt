@@ -129,4 +129,46 @@ class CollectTaskQueueTest {
         queue.pollNext() // currentJob = job2，计数应重置
         assertTrue("新 job 的重试计数应从 0 开始", queue.retryCurrent(maxRetries = 1))
     }
+
+    // ── dispatch ack（真机复现 2026-07-10 21:32：dispatch 发出时无障碍服务尚未
+    // connected，receiver 未注册，广播进虚空——没有 onReceive 也没有 busy 拒绝，
+    // currentJob 永远卡死。必须正向确认：接受方回 ack，超时未 ack 由看门狗重试）──
+
+    // TC-Q05: 新 job poll 出来时 ack 标志为未确认
+    @Test
+    fun `polled_job_starts_unaccepted`() {
+        val job = CollectJob.Stage1(taskId = "task-ack", keyword = "词A")
+        queue.enqueue(job)
+        queue.pollNext()
+
+        assertFalse("刚派发的 job 应处于未确认状态", queue.currentAccepted)
+    }
+
+    // TC-Q05b: markCurrentAccepted 后 ack 标志为已确认
+    @Test
+    fun `markCurrentAccepted_sets_accepted`() {
+        val job = CollectJob.Stage1(taskId = "task-ack2", keyword = "词B")
+        queue.enqueue(job)
+        queue.pollNext()
+
+        queue.markCurrentAccepted()
+
+        assertTrue(queue.currentAccepted)
+    }
+
+    // TC-Q05c: 下一个 job poll 出来时 ack 标志重置
+    @Test
+    fun `ack_flag_resets_on_next_poll`() {
+        val job1 = CollectJob.Stage1(taskId = "task-ack3", keyword = "词C")
+        val job2 = CollectJob.Stage1(taskId = "task-ack4", keyword = "词D")
+        queue.enqueue(job1)
+        queue.enqueue(job2)
+
+        queue.pollNext()
+        queue.markCurrentAccepted()
+        queue.markCurrentDone()
+        queue.pollNext() // job2
+
+        assertFalse("新 job 的 ack 标志应重置", queue.currentAccepted)
+    }
 }
