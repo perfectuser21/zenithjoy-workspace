@@ -18,6 +18,9 @@ import { scoreLeads, buildAssignments, dispatchDue, rescoreLead } from '../servi
 export const acquisitionRouter = Router();
 
 const VALID_GRADES = ['感兴趣', '精准', '高意向'] as const;
+
+// Stage2 每个视频最多派发次数：超限视为该视频不可采（下架/打不开），强制落章跳过
+const MAX_STAGE2_DISPATCHES_PER_VIDEO = 10;
 type Grade = (typeof VALID_GRADES)[number];
 
 acquisitionRouter.get('/overview', (_req: Request, res: Response) => {
@@ -351,8 +354,9 @@ acquisitionRouter.get('/pending-collect-tasks', async (req: Request, res: Respon
       keywords: string[];
       tenant_id: string;
       status: string;
+      checkpoint: { stage2_dispatch_counts?: Record<string, number> } | null;
     }>(
-      `SELECT id, keywords, tenant_id, status
+      `SELECT id, keywords, tenant_id, status, checkpoint
          FROM zenithjoy.acquisition_collect_tasks
         WHERE status IN ('pending', 'stage_1_done')
           AND tenant_id = $1
@@ -373,25 +377,63 @@ acquisitionRouter.get('/pending-collect-tasks', async (req: Request, res: Respon
       );
     }
 
-    // 对 stage_1_done 的任务，补充已存视频 URL（agent 直接跑 Stage 2）
-    const stage1DoneIds = rows.filter((r) => r.status === 'stage_1_done').map((r) => r.id);
+    // 对 stage_1_done 的任务，补充已存视频 URL（agent 直接跑 Stage 2）。
+    // 每视频派发计数存 checkpoint.stage2_dispatch_counts：超上限强制落章不再下发，
+    // 全部耗尽 → 任务诚实结算 partial（防单个打不开的视频把任务拖进无限重发风暴）。
+    const stage1DoneRows = rows.filter((r) => r.status === 'stage_1_done');
     const videoMap: Record<string, string[]> = {};
-    if (stage1DoneIds.length > 0) {
+    const exhaustedTaskIds = new Set<string>();
+    if (stage1DoneRows.length > 0) {
       const vRes = await pool.query<{ task_id: string; video_id: string }>(
         `SELECT task_id, video_id FROM zenithjoy.acquisition_collect_videos
           WHERE task_id = ANY($1::uuid[])
             AND comments_reported_at IS NULL
           ORDER BY created_at ASC`,
-        [stage1DoneIds]
+        [stage1DoneRows.map((r) => r.id)]
       );
+      const pendingByTask: Record<string, string[]> = {};
       for (const v of vRes.rows) {
-        const url = `https://www.douyin.com/video/${v.video_id}`;
-        if (!videoMap[v.task_id]) videoMap[v.task_id] = [];
-        videoMap[v.task_id].push(url);
+        (pendingByTask[v.task_id] ??= []).push(v.video_id);
+      }
+      for (const r of stage1DoneRows) {
+        const pending = pendingByTask[r.id] ?? [];
+        const counts: Record<string, number> = { ...(r.checkpoint?.stage2_dispatch_counts ?? {}) };
+        const dispatchable = pending.filter((vid) => (counts[vid] ?? 0) < MAX_STAGE2_DISPATCHES_PER_VIDEO);
+        const exhausted = pending.filter((vid) => (counts[vid] ?? 0) >= MAX_STAGE2_DISPATCHES_PER_VIDEO);
+        if (exhausted.length > 0) {
+          await pool.query(
+            `UPDATE zenithjoy.acquisition_collect_videos
+                SET comments_reported_at = NOW(), updated_at = NOW()
+              WHERE task_id = $1 AND video_id = ANY($2::text[])`,
+            [r.id, exhausted]
+          );
+        }
+        if (dispatchable.length === 0) {
+          if (exhausted.length > 0) {
+            await pool.query(
+              `UPDATE zenithjoy.acquisition_collect_tasks
+                  SET status = 'partial', error_code = 'STAGE2_DISPATCH_EXHAUSTED',
+                      ended_at = COALESCE(ended_at, NOW()), updated_at = NOW()
+                WHERE id = $1`,
+              [r.id]
+            );
+            exhaustedTaskIds.add(r.id);
+          }
+          continue;
+        }
+        for (const vid of dispatchable) counts[vid] = (counts[vid] ?? 0) + 1;
+        await pool.query(
+          `UPDATE zenithjoy.acquisition_collect_tasks
+              SET checkpoint = jsonb_set(COALESCE(checkpoint, '{}'::jsonb), '{stage2_dispatch_counts}', $2::jsonb),
+                  updated_at = NOW()
+            WHERE id = $1`,
+          [r.id, counts]
+        );
+        videoMap[r.id] = dispatchable.map((vid) => `https://www.douyin.com/video/${vid}`);
       }
     }
 
-    const tasks = rows.map((r) => ({
+    const tasks = rows.filter((r) => !exhaustedTaskIds.has(r.id)).map((r) => ({
       task_id: r.id,
       tenant_id: r.tenant_id,
       keywords: Array.isArray(r.keywords) ? r.keywords : [],
@@ -1130,20 +1172,30 @@ acquisitionRouter.post('/collect/report', async (req: Request, res: Response) =>
       await rescoreLead(client, tenantId, newLeadId);
     }
 
-    // ── 视频维度：upsert (task_id, video_id) + 打 Stage2 完成标记 ──
-    await client.query(
-      `INSERT INTO zenithjoy.acquisition_collect_videos
-         (video_id, task_id, tenant_id, title, thumbnail_url, publish_date, comment_count, comments_reported_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
-       ON CONFLICT (task_id, video_id) DO UPDATE
-         SET comment_count        = zenithjoy.acquisition_collect_videos.comment_count + EXCLUDED.comment_count,
-             title                = COALESCE(EXCLUDED.title, zenithjoy.acquisition_collect_videos.title),
-             thumbnail_url        = COALESCE(EXCLUDED.thumbnail_url, zenithjoy.acquisition_collect_videos.thumbnail_url),
-             publish_date         = COALESCE(EXCLUDED.publish_date, zenithjoy.acquisition_collect_videos.publish_date),
-             comments_reported_at = NOW(),
-             updated_at           = NOW()`,
-      [videoId, taskId, tenantId, videoTitle ?? null, thumbnailUrl ?? null, publishDate ?? null, batch.length]
+    // ── 视频维度：只接受 Stage1 登记过的 (task_id, video_id)。agent 对非数字 ID 会
+    // hash fallback 出假 video_id，盲 upsert 会污染视频表且原登记行永不落章 → 重发风暴 ──
+    const regRes = await client.query(
+      `SELECT 1 FROM zenithjoy.acquisition_collect_videos
+        WHERE task_id = $1 AND video_id = $2 LIMIT 1`,
+      [taskId, videoId]
     );
+    if (regRes.rows.length === 0) {
+      console.warn(`[acquisition] collect/report 拒绝未登记 video_id：task=${taskId} video=${videoId}（视频行不写，leads 照常）`);
+    } else {
+      await client.query(
+        `INSERT INTO zenithjoy.acquisition_collect_videos
+           (video_id, task_id, tenant_id, title, thumbnail_url, publish_date, comment_count, comments_reported_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
+         ON CONFLICT (task_id, video_id) DO UPDATE
+           SET comment_count        = zenithjoy.acquisition_collect_videos.comment_count + EXCLUDED.comment_count,
+               title                = COALESCE(EXCLUDED.title, zenithjoy.acquisition_collect_videos.title),
+               thumbnail_url        = COALESCE(EXCLUDED.thumbnail_url, zenithjoy.acquisition_collect_videos.thumbnail_url),
+               publish_date         = COALESCE(EXCLUDED.publish_date, zenithjoy.acquisition_collect_videos.publish_date),
+               comments_reported_at = NOW(),
+               updated_at           = NOW()`,
+        [videoId, taskId, tenantId, videoTitle ?? null, thumbnailUrl ?? null, publishDate ?? null, batch.length]
+      );
+    }
 
     // ── 计数重算 + settle 结算（倒推逻辑已删，Stage1 推进只走 report-videos）──
     const vcRes = await client.query<{ total: number; done: number }>(
