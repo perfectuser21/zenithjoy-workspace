@@ -489,13 +489,22 @@ class DouyinCollectService : AccessibilityService() {
             delay(RandomDelay.sample(RandomDelay.CLICK_MS))
 
             // 3. 等分享面板出现（内容锚点，不用裸 root）
-            val sheetRoot = awaitSharePanel() ?: return@withTimeoutOrNull null
+            awaitSharePanel() ?: return@withTimeoutOrNull null
 
             // 4. 清剪贴板基线（透明 Activity clear 模式）
             if (!clearClipboardBaseline()) return@withTimeoutOrNull null
 
+            // 4.5 clear 透明 Activity 两次焦点切换后，step3 抓的旧节点快照已失效
+            //（AccessibilityNodeInfo 跨窗口 stale，遍历为空 → 整任务假失败）。
+            // 必须重抓 root 并确认仍在分享面板，用新 root 找按钮；不在面板则该卡跳过。
+            val panelRoot = rootInActiveWindow ?: return@withTimeoutOrNull null
+            if (!ClipboardCaptureGate.isSharePanel(collectNodeTexts(panelRoot))) {
+                android.util.Log.w(TAG, "share panel gone after clear baseline — skip card#$index")
+                return@withTimeoutOrNull null
+            }
+
             // 5. 面板里找"分享链接"（别名表 + 面板子树 + 滚动 ≤3）
-            val linkBtn = findShareLinkButton(sheetRoot) ?: return@withTimeoutOrNull null
+            val linkBtn = findShareLinkButton(panelRoot) ?: return@withTimeoutOrNull null
 
             // 6. 点"分享链接" → 拉起透明 Activity 读剪贴板
             val token = ++shareTokenSeq

@@ -31,12 +31,16 @@ class ShareIngestActivity : Activity() {
 
     override fun onNewIntent(intent: Intent?) {
         super.onNewIntent(intent)
-        handled = false
-        pollCount = 0
         route(intent)
     }
 
     private fun route(intent: Intent?) {
+        // singleTask 复用（onNewIntent）时上一轮的自杀定时器/poll 回调还挂在队列里，
+        // handled 复位后会复活并按旧时限提前 finishRead(null) 截短新一轮预算——
+        // 进任何分支前先清空 handler 队列，再重置本轮状态。
+        handler.removeCallbacksAndMessages(null)
+        handled = false
+        pollCount = 0
         if (intent?.action == Intent.ACTION_SEND) {
             val text = intent.getStringExtra(Intent.EXTRA_TEXT)
             android.util.Log.i(TAG, "ACTION_SEND len=${text?.length ?: 0}")
@@ -48,8 +52,23 @@ class ShareIngestActivity : Activity() {
         token = intent?.getLongExtra(EXTRA_INGEST_TOKEN, DouyinCollectService.LEGACY_ACTION_SEND_TOKEN)
             ?: DouyinCollectService.LEGACY_ACTION_SEND_TOKEN
         DouyinCollectService.noteIngestLaunched(token)
-        // 3s 自杀超时兜底（焦点始终不来时不泄漏）
-        handler.postDelayed({ if (!handled) finishRead(null) }, SELF_KILL_MS)
+        // 3s 自杀超时兜底（焦点始终不来时不泄漏）。按 mode 分流：
+        // clear 模式超时绝不走读通道回投（服务侧由 CLEAR_WAIT_MS 超时判败收尾），
+        // 只有 read 模式才 finishRead(null)。
+        handler.postDelayed({ if (!handled) onSelfKillTimeout() }, SELF_KILL_MS)
+    }
+
+    private fun onSelfKillTimeout() {
+        when (mode) {
+            MODE_CLEAR_CLIPBOARD -> {
+                // 不回投任何结果：基线未清成功，服务侧 CLEAR_WAIT 超时会判败跳过该卡。
+                android.util.Log.w(TAG, "clear mode self-kill timeout, no deliver token=$token")
+                handled = true
+                handler.removeCallbacksAndMessages(null)
+                finish()
+            }
+            else -> finishRead(null)
+        }
     }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
@@ -57,9 +76,16 @@ class ShareIngestActivity : Activity() {
         if (!hasFocus || handled) return
         when (mode) {
             MODE_CLEAR_CLIPBOARD -> {
-                clearClipboard()
+                // 只有清空真正成功才回投 CLEAR_DONE；失败（如荣耀策略静默拒绝
+                // setPrimaryClip 抛异常）不回投，让服务侧 CLEAR_WAIT_MS 超时判败、
+                // 该卡跳过——绝不让残留旧短链被误当新链上报（防串号造假）。
+                val cleared = clearClipboard()
                 handled = true
-                DouyinCollectService.deliverClearDone(token)
+                if (cleared) {
+                    DouyinCollectService.deliverClearDone(token)
+                } else {
+                    android.util.Log.w(TAG, "clearClipboard failed, NOT delivering CLEAR_DONE token=$token")
+                }
                 finish()
             }
             else -> tryReadClipboard()
@@ -98,12 +124,15 @@ class ShareIngestActivity : Activity() {
         }
     }
 
-    private fun clearClipboard() {
-        try {
+    /** 清空剪贴板基线。返回是否成功——失败时调用方不得回投 CLEAR_DONE。 */
+    private fun clearClipboard(): Boolean {
+        return try {
             val cm = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
             cm.setPrimaryClip(android.content.ClipData.newPlainText("", ""))
+            true
         } catch (e: Exception) {
             android.util.Log.w(TAG, "clearClipboard failed: ${e.message}")
+            false
         }
     }
 
