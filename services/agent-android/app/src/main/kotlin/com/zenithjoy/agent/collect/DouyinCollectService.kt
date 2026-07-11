@@ -286,8 +286,13 @@ class DouyinCollectService : AccessibilityService() {
             // 继续用点击前的 root 快照调 typeKeyword，那个快照里根本没有输入框，
             // 必然报 NO_SEARCH_INPUT——从没进过搜索页。点击后必须重新抓一次
             // root，才能看到跳转后的真实界面。
+            //
+            // 真机 uiautomator dump 实测（Douyin 39.5.0）：搜索 "搜索" TextView(id 4ty)
+            // 整条无障碍祖先链 clickable=false，performAction(ACTION_CLICK) 是空操作、
+            // 点不动，页面根本不跳转 → 之前恒报 NO_SEARCH_INPUT。改用 clickNodeRobustly
+            // （链上无可点击节点时退回坐标手势），对齐 triggerSearch 早已采用的 tapNodeCenter。
             val postClickRoot = if (searchBtn != null) {
-                searchBtn.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+                clickNodeRobustly(searchBtn)
                 delay(RandomDelay.sample(RandomDelay.CLICK_MS))
                 awaitRootInActiveWindow(attempts = 4) ?: root
             } else {
@@ -965,6 +970,26 @@ class DouyinCollectService : AccessibilityService() {
     }
 
     /** 用 dispatchGesture 在节点 bounds 中心模拟一次真实触摸点击（绕开 clickable=false 的无障碍点击限制）。 */
+    /**
+     * 稳健点击：优先在祖先链（含节点自身）找可点击节点 performAction(ACTION_CLICK)；
+     * 整条链都 clickable=false 时（抖音混淆节点，ACTION_CLICK 空操作）退回坐标手势点击。
+     * 见 [mustGestureTap] 的真机根因说明。
+     */
+    private fun clickNodeRobustly(node: AccessibilityNodeInfo) {
+        val chain = ArrayList<AccessibilityNodeInfo>()
+        var cur: AccessibilityNodeInfo? = node
+        while (cur != null) {
+            chain.add(cur)
+            cur = cur.parent
+        }
+        val clickable = chain.firstOrNull { it.isClickable }
+        if (mustGestureTap(chain.map { it.isClickable }) || clickable == null) {
+            tapNodeCenter(node)
+        } else {
+            clickable.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+        }
+    }
+
     private fun tapNodeCenter(node: AccessibilityNodeInfo) {
         val bounds = Rect()
         node.getBoundsInScreen(bounds)
@@ -1148,6 +1173,19 @@ class DouyinCollectService : AccessibilityService() {
         internal fun isBusyStateStale(stateChangedAtMs: Long, nowMs: Long, thresholdMs: Long): Boolean {
             return nowMs - stateChangedAtMs > thresholdMs
         }
+
+        /**
+         * 判定是否必须退回坐标手势点击（dispatchGesture）而非 performAction(ACTION_CLICK)。
+         *
+         * 真机实测（Douyin 39.5.0）：搜索入口 "搜索" TextView（resource-id 混淆为 4ty）
+         * 整条无障碍祖先链 clickable 全为 false。Android 的 performAction(ACTION_CLICK)
+         * 只作用于被调用的节点、不冒泡到祖先，对这种链是空操作——点不动、页面不跳转。
+         *
+         * @param clickableChain 目标节点到根，每一级的 isClickable 值（index 0 = 节点自身）。
+         * @return true = 链上无任何可点击节点，ACTION_CLICK 点不动，必须用坐标手势模拟真实触摸。
+         */
+        internal fun mustGestureTap(clickableChain: List<Boolean>): Boolean =
+            clickableChain.none { it }
 
         // Stage1 派发（关键词搜索+收集视频卡）
         fun dispatchTask(context: Context, keyword: String, taskId: String) {
