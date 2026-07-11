@@ -38,7 +38,7 @@ class AcquisitionCollectPollLoopTest {
     }
 
     private fun makeLoop(
-        agentId: String = "AG-TEST-001",
+        agentId: () -> String = { "AG-TEST-001" },
         onStage1Task: ((taskId: String, keyword: String) -> Unit)? = null,
         onStage2Task: ((taskId: String, videoUrls: List<String>, checkpoint: Map<String, Any>?) -> Unit)? = null,
         onCancel: ((taskId: String) -> Unit)? = null,
@@ -60,7 +60,7 @@ class AcquisitionCollectPollLoopTest {
     fun `pollOnce_carriesAgentIdHeader`() = runTest {
         server.enqueue(MockResponse().setBody("""{"tasks":[],"total":0}"""))
 
-        val loop = makeLoop(agentId = "AG-TEST-001")
+        val loop = makeLoop(agentId = { "AG-TEST-001" })
         loop.start()
         advanceTimeBy(100)
         loop.stop()
@@ -168,7 +168,7 @@ class AcquisitionCollectPollLoopTest {
     // TC-006: agentId 为空字符串，跳过 HTTP 请求（requestCount == 0）
     @Test
     fun `pollOnce_emptyAgentId_skipsRequest`() = runTest {
-        val loop = makeLoop(agentId = "")
+        val loop = makeLoop(agentId = { "" })
         loop.start()
         advanceTimeBy(100)
         loop.stop()
@@ -225,5 +225,29 @@ class AcquisitionCollectPollLoopTest {
         assertEquals(0, stage1Count)
         assertEquals(0, stage2Count)
         assertEquals(0, cancelCount)
+    }
+
+    // TC-009: agent_id 漂移守卫 —— agentId 在 loop 构造之后被覆写（如 heartbeat 心跳返回
+    // 服务端规范 id），poll 请求必须用最新值，不能停在构造时的旧快照上。
+    @Test
+    fun `pollOnce_usesLiveAgentId_afterConstructionTimeOverride`() = runTest {
+        server.enqueue(MockResponse().setBody("""{"tasks":[],"total":0}"""))
+
+        var currentAgentId = "AG-OLD-LOCAL"
+        val loop = makeLoop(agentId = { currentAgentId })
+
+        // 模拟 heartbeat 的 onAgentIdReceived 覆写（构造完成之后才发生）
+        currentAgentId = "AG-NEW-FROM-SERVER"
+
+        loop.start()
+        advanceTimeBy(100)
+        loop.stop()
+
+        val req = server.takeRequest()
+        assertEquals(
+            "poll 请求必须携带覆写后的最新 agentId，不能停在构造时快照",
+            "AG-NEW-FROM-SERVER",
+            req.getHeader("x-agent-id"),
+        )
     }
 }
