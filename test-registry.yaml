@@ -2475,6 +2475,14 @@ tests:
     product: 新媒体运营
     note: "ZJ1 Smart Acquisition — acquisition 路由单元测试（test-pairing 配对）"
 
+  - id: douyin-share-resolver-unit
+    path: apps/api/src/services/douyin-share-resolver.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 新媒体运营
+    note: "Bug C — 抖音分享短链解析：extractShareUrl/parseMediaFromUrl/resolveShareUrl 跟随302+SSRF白名单+真实video_id提取"
+
   - id: zj1-smart-acquisition-smoke
     path: .github/workflows/scripts/smoke/acquisition-smoke.sh
     type: e2e

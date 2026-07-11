@@ -8,9 +8,11 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.graphics.Path
 import android.graphics.Rect
+import android.net.Uri
 import android.os.Bundle
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -38,7 +40,14 @@ class DouyinCollectService : AccessibilityService() {
     private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
     private var onResult: ((CollectResult) -> Unit)? = null
 
+    // 每次状态变化刷新时间戳：busy-guard 用它判断"非 IDLE 是真忙还是流程已死"
+    // （真机复现 2026-07-10：state 卡非 IDLE 且无看门狗覆盖时新任务被永久拒绝）。
+    @Volatile private var stateChangedAtMs = 0L
     private var state = State.IDLE
+        set(value) {
+            field = value
+            stateChangedAtMs = android.os.SystemClock.elapsedRealtime()
+        }
     private var currentKeyword = ""
     private var currentTaskId = ""
     private var searchTriggeredAtMs = 0L
@@ -49,57 +58,92 @@ class DouyinCollectService : AccessibilityService() {
     // 真实视频内容在"综合"/"视频"标签。首次超时先尝试切标签重试一次，避免误判 SEARCH_TIMEOUT。
     private var triedTabSwitch = false
 
+    // Bug C 剪贴板路线：等待 ShareIngestActivity 读回的短链，带 token 防跨卡串号。
+    // 载荷携带 (短链文案, clip 写入时间戳)——时间戳供服务侧新鲜度闸判残留旧短链串号。
+    @Volatile private var pendingShareCapture: Pair<Long, CompletableDeferred<ShareCapturePayload?>>? = null
+    @Volatile private var pendingClearDone: Pair<Long, CompletableDeferred<Boolean>>? = null
+    // 拉起回执：Activity onCreate 时置为其 token，服务侧 consume 判定拉起成功
+    @Volatile private var ingestLaunchedToken: Long = Long.MIN_VALUE
+    private var shareTokenSeq = 0L
+    private val seenShareUrls = mutableSetOf<String>()
+
     internal enum class State {
         IDLE,
         OPENING_DOUYIN,
         TYPING_KEYWORD,
         SUBMITTING_SEARCH,
         WAITING_SEARCH_RESULTS,
+        COLLECTING_VIDEO_CARDS,  // Stage1：从搜索结果收集多张视频卡
         OPENING_FIRST_VIDEO,
         OPENING_COMMENTS,
         EXTRACTING_COMMENTS,
+        OPENING_VIDEO_URL,       // Stage2：通过深链打开指定视频
     }
+
+    // 任务模式：Stage1 搜索收集视频卡 / Stage2 按 URL 收集评论
+    private enum class Mode { STAGE1_SEARCH, STAGE2_VIDEO_URL }
+    private var currentMode = Mode.STAGE1_SEARCH
+    private var currentVideoId = ""  // Stage2 当前处理的 video_id
 
     private val taskReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
-            // 诊断守卫：曾经发生过"任务已下发但这里从没打过一行日志"的真机 bug，
-            // 无条件在最开头打一行，用来分清"onReceive 完全没被触发"还是
-            // "触发了但被某个早退分支吃掉"这两种情况。
             android.util.Log.i(TAG, "onReceive fired: action=${intent?.action}")
             if (intent?.action != ACTION_COLLECT_TASK) return
-            val keyword = intent.getStringExtra(EXTRA_KEYWORD) ?: return
             val taskId = intent.getStringExtra(EXTRA_TASK_ID) ?: ""
             if (state != State.IDLE) {
-                android.util.Log.w(TAG, "busy — ignoring task $taskId")
-                return
+                val now = android.os.SystemClock.elapsedRealtime()
+                if (isBusyStateStale(stateChangedAtMs, now, STUCK_STATE_RESET_MS)) {
+                    // 流程已死（state 停留超阈值），强制复位后照常接受本次任务
+                    android.util.Log.w(TAG, "stale state=$state (${now - stateChangedAtMs}ms) — force reset, accepting task $taskId")
+                    state = State.IDLE
+                    ScanMutex.busy = false
+                } else {
+                    android.util.Log.w(TAG, "busy — rejecting task $taskId")
+                    onTaskRejected?.invoke(taskId)
+                    return
+                }
             }
-            android.util.Log.i(TAG, "task received: keyword=$keyword id=$taskId")
-            startCollect(keyword, taskId)
+            val mode = intent.getStringExtra(EXTRA_MODE) ?: MODE_STAGE1
+            if (mode == MODE_STAGE2) {
+                val videoUrl = intent.getStringExtra(EXTRA_VIDEO_URL) ?: return
+                val videoId = intent.getStringExtra(EXTRA_VIDEO_ID) ?: ""
+                android.util.Log.i(TAG, "stage2 task received: videoId=$videoId id=$taskId")
+                onTaskAccepted?.invoke(taskId)
+                startStage2Collect(videoUrl, videoId, taskId)
+            } else {
+                val keyword = intent.getStringExtra(EXTRA_KEYWORD) ?: return
+                android.util.Log.i(TAG, "stage1 task received: keyword=$keyword id=$taskId")
+                onTaskAccepted?.invoke(taskId)
+                startCollect(keyword, taskId)
+            }
         }
     }
 
     override fun onServiceConnected() {
         super.onServiceConnected()
+        activeInstance = this
         registerReceiver(taskReceiver, IntentFilter(ACTION_COLLECT_TASK),
             RECEIVER_NOT_EXPORTED)
         android.util.Log.i(TAG, "accessibility service connected")
     }
 
     override fun onDestroy() {
+        if (activeInstance === this) activeInstance = null
         scope.cancel()
         unregisterReceiver(taskReceiver)
         super.onDestroy()
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
-        // 事件分发给当前状态的处理器
         event ?: return
         when (state) {
             State.TYPING_KEYWORD -> handleTypingKeyword(event)
             State.WAITING_SEARCH_RESULTS -> handleSearchResults(event)
+            State.COLLECTING_VIDEO_CARDS -> Unit  // 在 collectVideoCards() 协程中处理
             State.OPENING_FIRST_VIDEO -> handleVideoOpened(event)
             State.OPENING_COMMENTS -> handleCommentsOpened(event)
-            State.EXTRACTING_COMMENTS -> Unit // 已在 attemptExtractComments 里同步处理
+            State.EXTRACTING_COMMENTS -> Unit
+            State.OPENING_VIDEO_URL -> handleVideoUrlOpened(event)
             else -> Unit
         }
     }
@@ -113,11 +157,11 @@ class DouyinCollectService : AccessibilityService() {
     private fun startCollect(keyword: String, taskId: String) {
         currentKeyword = keyword
         currentTaskId = taskId
+        currentMode = Mode.STAGE1_SEARCH
+        currentVideoId = ""
         resultReported = false
         triedTabSwitch = false
         state = State.OPENING_DOUYIN
-        // 与账号扫描服务共享的全局互斥标记（Sprint 07061301-device-account-scan-wiring）：
-        // 采集任务运行期间置 busy=true，扫描服务据此在本轮跳过，避免共用微信/抖音窗口冲突。
         ScanMutex.busy = true
 
         scope.launch {
@@ -129,6 +173,74 @@ class DouyinCollectService : AccessibilityService() {
             delay(RandomDelay.sample(RandomDelay.NAV_MS))
             openSearchBar()
         }
+    }
+
+    // Stage2 入口：通过深链打开指定视频，进评论区抓评论
+    private fun startStage2Collect(videoUrl: String, videoId: String, taskId: String) {
+        currentKeyword = videoUrl
+        currentTaskId = taskId
+        currentMode = Mode.STAGE2_VIDEO_URL
+        currentVideoId = videoId
+        resultReported = false
+        triedTabSwitch = false
+        state = State.OPENING_VIDEO_URL
+        ScanMutex.busy = true
+
+        scope.launch {
+            val launched = launchVideoByDeepLink(videoId)
+            if (!launched) {
+                finishWithError("DEEPLINK_LAUNCH_FAILED")
+                return@launch
+            }
+            startVideoUrlOpenTimeout()
+        }
+    }
+
+    // 深链打开抖音视频：snssdk1128://aweme/detail/<videoId>
+    private fun launchVideoByDeepLink(videoId: String): Boolean {
+        return try {
+            val uri = Uri.parse("snssdk1128://aweme/detail/$videoId")
+            val intent = Intent(Intent.ACTION_VIEW, uri).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            applicationContext.startActivity(intent)
+            true
+        } catch (e: Exception) {
+            android.util.Log.e(TAG, "deeplink launch failed videoId=$videoId: ${e.message}")
+            false
+        }
+    }
+
+    private fun startVideoUrlOpenTimeout() {
+        scope.launch {
+            delay(VIDEO_OPEN_TIMEOUT_MS)
+            if (state == State.OPENING_VIDEO_URL) {
+                finishWithError("VIDEO_URL_OPEN_TIMEOUT")
+            }
+        }
+    }
+
+    // Stage2：等待视频页面加载后点评论按钮（与 handleVideoOpened 逻辑相同）
+    private fun handleVideoUrlOpened(event: AccessibilityEvent) {
+        if (event.eventType != AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED &&
+            event.eventType != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED
+        ) return
+        if (state != State.OPENING_VIDEO_URL) return
+        if (event.packageName != DOUYIN_PKG) return
+
+        val root = rootInActiveWindow ?: return
+        val commentBtn = findNodeByContentDescPrefix(root, "评论") ?: findNodeByIds(root,
+            "com.ss.android.ugc.aweme:id/iv_comment",
+            "com.ss.android.ugc.aweme:id/comment_icon",
+            "com.ss.android.ugc.aweme:id/tv_comment_count",
+            "com.ss.android.ugc.aweme:id/comment_count",
+        )
+        if (commentBtn == null) return
+
+        state = State.OPENING_COMMENTS
+        commentBtn.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+        startCommentsTimeout()
+        startExtractionWatchdog()
     }
 
     // ── 1. 启动抖音 ───────────────────────────────────────────────────────────
@@ -295,7 +407,7 @@ class DouyinCollectService : AccessibilityService() {
         return true
     }
 
-    // ── 5. 点第一条视频（爆款/参照账号定位入口） ─────────────────────────────
+    // ── 5. 搜索结果页：Stage1 收集多视频卡 / 旧协议点第一条视频 ─────────────
 
     private fun handleSearchResults(event: AccessibilityEvent) {
         if (event.eventType != AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED) return
@@ -303,11 +415,252 @@ class DouyinCollectService : AccessibilityService() {
         if (isResultEventDebounced(searchTriggeredAtMs, android.os.SystemClock.elapsedRealtime(), RESULTS_SETTLE_MS)) return
 
         val root = rootInActiveWindow ?: return
-        val videoCard = findFirstVideoCard(root) ?: return
 
-        state = State.OPENING_FIRST_VIDEO
-        videoCard.performAction(AccessibilityNodeInfo.ACTION_CLICK)
-        startVideoOpenTimeout()
+        if (currentMode == Mode.STAGE1_SEARCH) {
+            // Stage1：收集多张视频卡的 video_id，不进评论区
+            val videoCards = findVideoCards(root, MAX_VIDEOS_PER_SEARCH)
+            if (videoCards.isEmpty()) return
+            state = State.COLLECTING_VIDEO_CARDS
+            scope.launch { collectVideoCards(videoCards) }
+        } else {
+            // 旧协议/默认：点第一条视频进评论区
+            val videoCard = findFirstVideoCard(root) ?: return
+            state = State.OPENING_FIRST_VIDEO
+            videoCard.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+            startVideoOpenTimeout()
+        }
+    }
+
+    // Stage1（Bug C 修复）：不再从节点树猜 video_id（搜索结果整棵树无真实 ≥10 位数字 id，
+    // 只能造假，导致 Stage2 深链打不开）。改为逐张卡片走剪贴板取链：点开视频 → 点分享 →
+    // 分享面板点「分享链接」→ 口令进剪贴板 → 透明 Activity 前台获焦读回 → 抽 v.douyin.com
+    // 短链上报 shareUrl，真实 id 由服务端跟随 302 解析。
+    // 拿不到短链的卡片直接跳过（绝不造假 id）；全部失败上报空清单带 ALL_SHARE_FAILED。
+    private suspend fun collectVideoCards(videoCards: List<AccessibilityNodeInfo>) {
+        if (resultReported) return
+        seenShareUrls.clear()
+        val targetCount = minOf(videoCards.size, MAX_VIDEOS_PER_SEARCH)
+        val collected = mutableListOf<VideoCardInfo>()
+        var consecutiveFailures = 0
+        for (index in 0 until targetCount) {
+            val shareUrl = captureShareUrlForCard(index)
+            pendingShareCapture = null
+            pendingClearDone = null
+            if (shareUrl != null) {
+                collected.add(VideoCardInfo(videoId = "", keyword = currentKeyword, shareUrl = shareUrl))
+                seenShareUrls.add(shareUrl)
+                consecutiveFailures = 0
+                android.util.Log.i(TAG, "Stage1 card#$index share_url captured: $shareUrl")
+            } else {
+                consecutiveFailures++
+                android.util.Log.w(TAG, "Stage1 card#$index share_url capture failed — skip ($consecutiveFailures)")
+                if (consecutiveFailures >= 2) {
+                    android.util.Log.w(TAG, "Stage1 aborting: 2 consecutive failures")
+                    break
+                }
+            }
+            navigateBackToResults()
+            delay(RandomDelay.sample(RandomDelay.NAV_MS))
+        }
+        android.util.Log.i(TAG, "Stage1 collected ${collected.size}/$targetCount for keyword=$currentKeyword")
+        if (collected.isEmpty()) {
+            reportVideoCards(emptyList(), error = "ALL_SHARE_FAILED")
+        } else {
+            reportVideoCards(collected, error = "")
+        }
+    }
+
+    // 单张卡片的剪贴板取链：点开视频 → 点分享 → 面板点「分享链接」→ 透明 Activity 读剪贴板。
+    // 全程硬超时 PER_CARD_TIMEOUT_MS，任何一步失败返回 null（该卡片跳过，不造假）。
+    private suspend fun captureShareUrlForCard(index: Int): String? {
+        return withTimeoutOrNull(PER_CARD_TIMEOUT_MS) {
+            // 1. 重抓卡并点开详情
+            val listRoot = rootInActiveWindow ?: return@withTimeoutOrNull null
+            val card = findVideoCards(listRoot, MAX_VIDEOS_PER_SEARCH).getOrNull(index)
+                ?: return@withTimeoutOrNull null
+            tapNodeCenter(card)
+            delay(RandomDelay.sample(RandomDelay.NAV_MS))
+            val detailRoot = awaitRootInActiveWindow(attempts = 6) ?: return@withTimeoutOrNull null
+
+            // 2. 点分享
+            val shareBtn = findNodeByContentDescPrefix(detailRoot, "分享")
+                ?: findNodeByContentDescPrefix(detailRoot, "转发")
+                ?: return@withTimeoutOrNull null
+            tapNodeCenter(shareBtn)
+            delay(RandomDelay.sample(RandomDelay.CLICK_MS))
+
+            // 3. 等分享面板出现（内容锚点，不用裸 root）
+            awaitSharePanel() ?: return@withTimeoutOrNull null
+
+            // 4. 清剪贴板基线（透明 Activity clear 模式）
+            if (!clearClipboardBaseline()) return@withTimeoutOrNull null
+
+            // 4.5 clear 透明 Activity 两次焦点切换后，step3 抓的旧节点快照已失效
+            //（AccessibilityNodeInfo 跨窗口 stale，遍历为空 → 整任务假失败）。
+            // 必须重抓 root 并确认仍在分享面板，用新 root 找按钮；不在面板则该卡跳过。
+            val panelRoot = rootInActiveWindow ?: return@withTimeoutOrNull null
+            if (!ClipboardCaptureGate.isSharePanel(collectNodeTexts(panelRoot))) {
+                android.util.Log.w(TAG, "share panel gone after clear baseline — skip card#$index")
+                return@withTimeoutOrNull null
+            }
+
+            // 5. 面板里找"分享链接"（别名表 + 面板子树 + 滚动 ≤3）
+            val linkBtn = findShareLinkButton(panelRoot) ?: return@withTimeoutOrNull null
+
+            // 6. 点"分享链接" → 拉起透明 Activity 读剪贴板
+            val token = ++shareTokenSeq
+            val deferred = CompletableDeferred<ShareCapturePayload?>()
+            pendingShareCapture = token to deferred
+            // 必须用 uptimeMillis()：要与 ClipDescription.getTimestamp() 同一时间基做 isFresh 比较。
+            // 绝不能用 elapsedRealtime()（含深睡时间、绝对值偏大，会把新鲜短链误判陈旧→漏采）。
+            val clickAtMs = android.os.SystemClock.uptimeMillis()
+            tapNodeCenter(linkBtn)
+            delay(RandomDelay.sample(RandomDelay.CLICK_MS))
+            startActivity(ShareIngestActivity.launchReadIntent(this@DouyinCollectService, token))
+
+            // 7. 拉起回执（区分环境阻断）
+            if (!awaitLaunchEcho(token)) {
+                android.util.Log.w(TAG, "ACTIVITY_LAUNCH_BLOCKED token=$token")
+                return@withTimeoutOrNull null
+            }
+
+            // 8. 等读回短链 + clip 写入时间戳
+            val payload = withTimeoutOrNull(READ_DELIVER_MS) { deferred.await() } ?: return@withTimeoutOrNull null
+            val link = payload.link ?: return@withTimeoutOrNull null
+
+            // 9. 准入双闸：新鲜度（clip 写入晚于点击=非残留旧短链）+ 去重。
+            // 残留旧短链 clipTs ≤ clickAtMs 会被时间戳闸拦下——堵死"剪贴板残留短链串号造假"。
+            if (!ClipboardCaptureGate.admitShareUrl(link, payload.clipTimestampMs, clickAtMs, seenShareUrls)) {
+                android.util.Log.w(TAG,
+                    "share_url rejected (stale/duplicate) link=$link clipTs=${payload.clipTimestampMs} clickAt=$clickAtMs — skip")
+                return@withTimeoutOrNull null
+            }
+            android.util.Log.i(TAG, "card#$index fresh link=$link (clipTs=${payload.clipTimestampMs} clickAt=$clickAtMs)")
+            link
+        }
+    }
+
+    // 分享面板出现判定：内容锚点（含取消/发送给朋友或 ≥2 别名命中）
+    private suspend fun awaitSharePanel(): AccessibilityNodeInfo? {
+        repeat(PANEL_MAX_ATTEMPTS) {
+            val root = rootInActiveWindow
+            if (root != null && ClipboardCaptureGate.isSharePanel(collectNodeTexts(root))) return root
+            delay(PANEL_SETTLE_MS)
+        }
+        return null
+    }
+
+    // 清剪贴板基线：拉起 clear 模式 Activity，等 CLEAR_DONE
+    private suspend fun clearClipboardBaseline(): Boolean {
+        val token = ++shareTokenSeq
+        val done = CompletableDeferred<Boolean>()
+        pendingClearDone = token to done
+        startActivity(ShareIngestActivity.launchClearIntent(this@DouyinCollectService, token))
+        if (!awaitLaunchEcho(token)) return false
+        val ok = withTimeoutOrNull(CLEAR_WAIT_MS) { done.await() } ?: false
+        // clear Activity finish 后回到分享面板需要一瞬
+        delay(RandomDelay.sample(RandomDelay.CLICK_MS))
+        return ok
+    }
+
+    private suspend fun awaitLaunchEcho(token: Long): Boolean {
+        val deadline = android.os.SystemClock.elapsedRealtime() + LAUNCH_ECHO_TIMEOUT_MS
+        while (android.os.SystemClock.elapsedRealtime() < deadline) {
+            if (consumeIngestLaunched(token)) return true
+            delay(LAUNCH_ECHO_POLL_MS)
+        }
+        return false
+    }
+
+    // 面板子树里找"分享链接"，找不到滚功能排 ≤3 次
+    private suspend fun findShareLinkButton(root: AccessibilityNodeInfo): AccessibilityNodeInfo? {
+        matchLinkNode(root)?.let { return it }
+        val scrollable = findScrollableNode(root) ?: return null
+        repeat(3) {
+            if (!scrollable.performAction(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD)) return null
+            delay(RandomDelay.sample(RandomDelay.CLICK_MS))
+            val fresh = rootInActiveWindow ?: return null
+            matchLinkNode(fresh)?.let { return it }
+        }
+        return null
+    }
+
+    private fun matchLinkNode(root: AccessibilityNodeInfo): AccessibilityNodeInfo? {
+        val queue = ArrayDeque<AccessibilityNodeInfo>()
+        queue.add(root)
+        while (queue.isNotEmpty()) {
+            val node = queue.removeFirst()
+            if (ClipboardCaptureGate.matchShareLinkLabel(
+                    node.text?.toString(), node.contentDescription?.toString())) {
+                return node
+            }
+            for (i in 0 until node.childCount) node.getChild(i)?.let { queue.add(it) }
+        }
+        return null
+    }
+
+    private fun collectNodeTexts(root: AccessibilityNodeInfo): List<String> {
+        val out = mutableListOf<String>()
+        val queue = ArrayDeque<AccessibilityNodeInfo>()
+        queue.add(root)
+        var n = 0
+        while (queue.isNotEmpty() && n++ < MAX_FLATTEN_NODES) {
+            val node = queue.removeFirst()
+            node.text?.toString()?.takeIf { it.isNotEmpty() }?.let { out.add(it) }
+            node.contentDescription?.toString()?.takeIf { it.isNotEmpty() }?.let { out.add(it) }
+            for (i in 0 until node.childCount) node.getChild(i)?.let { queue.add(it) }
+        }
+        return out
+    }
+
+    /** 服务侧查 startActivity 后 Activity 是否已 onCreate（回执 token 匹配），查后清。 */
+    private fun consumeIngestLaunched(token: Long): Boolean {
+        val ok = ingestLaunchedToken == token
+        if (ok) ingestLaunchedToken = Long.MIN_VALUE
+        return ok
+    }
+
+    private fun findScrollableNode(root: AccessibilityNodeInfo): AccessibilityNodeInfo? {
+        val queue = ArrayDeque<AccessibilityNodeInfo>()
+        queue.add(root)
+        while (queue.isNotEmpty()) {
+            val node = queue.removeFirst()
+            if (node.isScrollable) return node
+            for (i in 0 until node.childCount) node.getChild(i)?.let { queue.add(it) }
+        }
+        return null
+    }
+
+    // 从视频详情/分享面板 BACK 回搜索结果页，锚点 = 抖音包内能再找到视频卡。最多按 3 次。
+    private suspend fun navigateBackToResults() {
+        repeat(3) {
+            val root = rootInActiveWindow
+            if (root != null && root.packageName == DOUYIN_PKG &&
+                findVideoCards(root, 1).isNotEmpty()) {
+                return
+            }
+            performGlobalAction(GLOBAL_ACTION_BACK)
+            delay(RandomDelay.sample(RandomDelay.NAV_MS))
+        }
+    }
+
+    private fun reportVideoCards(videos: List<VideoCardInfo>, error: String) {
+        if (resultReported) return
+        resultReported = true
+        state = State.IDLE
+        ScanMutex.busy = false
+        onVideoCardResult?.invoke(currentTaskId, currentKeyword, videos, error)
+        // AgentService 的队列状态机对同一结果不幂等：回调+广播双投递会把下一个
+        // 在跑的 job 提前 markCurrentDone，重新引入 busy 静默丢任务。
+        // 兜底广播只在回调缺席时才发。
+        if (!shouldSendFallbackBroadcast(onVideoCardResult != null)) return
+        val intent = Intent(ACTION_COLLECT_RESULT).apply {
+            setPackage(packageName)
+            putExtra(EXTRA_TASK_ID, currentTaskId)
+            putExtra(EXTRA_RESULT_OK, videos.isNotEmpty())
+            putExtra(EXTRA_RESULT_ERROR, "")
+        }
+        sendBroadcast(intent)
     }
 
     // 真机复现两次：评论按钮(content-desc/resource-id)一旦在当前抖音版本/视频页找不到，
@@ -470,7 +823,9 @@ class DouyinCollectService : AccessibilityService() {
             result.comments.map { it.text },
             result.error,
         )
-        // 广播保留作为兜底/其他潜在监听方兼容，不作为主投递路径。
+        // 兜底广播只在回调缺席时才发：AgentService 引入队列状态机后（CollectTaskQueue），
+        // 双投递会导致 reportCollectResult 对下一个在跑的 job 提前 markCurrentDone。
+        if (!shouldSendFallbackBroadcast(onCollectResult != null)) return
         val intent = Intent(ACTION_COLLECT_RESULT).apply {
             setPackage(packageName)
             putExtra(EXTRA_TASK_ID, currentTaskId)
@@ -583,12 +938,6 @@ class DouyinCollectService : AccessibilityService() {
         )
         if (byId != null) return byId
 
-        // 真机 uiautomator dump 验证：搜索结果页的视频卡片根节点是
-        // android.view.View（不是 ImageView），resource-id 混淆成短乱码
-        // （如 "q7k"），且左右两栏网格布局重复同一个混淆 id——不能硬编码
-        // 这类会随构建变化的短乱码，改按"卡片大小的可点击节点"结构匹配：
-        // 搜索结果网格卡片宽/高都远大于普通按钮（网格双列，每张卡约占
-        // 屏宽一半、屏高四分之一左右），用尺寸阈值排除顶部工具栏的小按钮。
         val queue = ArrayDeque<AccessibilityNodeInfo>()
         queue.add(root)
         val bounds = android.graphics.Rect()
@@ -603,24 +952,114 @@ class DouyinCollectService : AccessibilityService() {
         return null
     }
 
+    // Stage1：收集多张视频卡（最多 maxCount 张），按尺寸阈值匹配
+    private fun findVideoCards(root: AccessibilityNodeInfo, maxCount: Int): List<AccessibilityNodeInfo> {
+        val result = mutableListOf<AccessibilityNodeInfo>()
+        val queue = ArrayDeque<AccessibilityNodeInfo>()
+        queue.add(root)
+        val bounds = android.graphics.Rect()
+        while (queue.isNotEmpty() && result.size < maxCount) {
+            val node = queue.removeFirst()
+            if (node.isClickable) {
+                node.getBoundsInScreen(bounds)
+                if (bounds.width() > 400 && bounds.height() > 400) {
+                    result.add(node)
+                    // 不递归已匹配节点的子树，避免把同一卡片的子节点也加进来
+                    continue
+                }
+            }
+            for (i in 0 until node.childCount) node.getChild(i)?.let { queue.add(it) }
+        }
+        return result
+    }
+
     companion object {
         private const val TAG = "DouyinCollectService"
         private const val DOUYIN_PKG = "com.ss.android.ugc.aweme"
         private const val RESULTS_SETTLE_MS = 400L
+        // state 停留超过该阈值视为流程已死：busy-guard 强制复位而不是拒绝新任务
+        private const val STUCK_STATE_RESET_MS = 180_000L
         private const val VIDEO_OPEN_TIMEOUT_MS = 15_000L
         private const val EXTRACTION_TIMEOUT_MS = 20_000L
         private const val MAX_FLATTEN_NODES = 3_000
+        const val MAX_VIDEOS_PER_SEARCH = 3  // Stage1 每关键词最多收集视频卡数量
+        // Bug C 剪贴板取链：单张卡片全程硬超时 + 各阶段等待预算
+        private const val PER_CARD_TIMEOUT_MS = 25_000L
+        private const val CLEAR_WAIT_MS = 2_000L
+        private const val READ_DELIVER_MS = 4_000L
+        private const val LAUNCH_ECHO_TIMEOUT_MS = 1_000L
+        private const val LAUNCH_ECHO_POLL_MS = 100L
+        private const val PANEL_SETTLE_MS = 300L
+        private const val PANEL_MAX_ATTEMPTS = 7
+
+        // Bug C：ShareIngestActivity 收到抖音分享面板的 ACTION_SEND 文案后，经此静态入口投递给
+        // 当前采集中的服务实例（同进程，照 onCollectResult 的回调模式，不走系统广播）。
+        @Volatile
+        private var activeInstance: DouyinCollectService? = null
+
+        /**
+         * ShareIngestActivity 读回剪贴板文案后投递；token 校验通过才 complete，防跨卡串号。
+         * clipTimestampMs：剪贴板写入时刻（uptimeMillis 时间基），随文案一起带上供服务侧
+         * 新鲜度闸判残留旧短链；legacy(ACTION_SEND) 路径用 LEGACY_CLIP_TIMESTAMP_MS 豁免。
+         */
+        fun deliverShareText(rawText: String?, deliveryToken: Long, clipTimestampMs: Long) {
+            val link = ShareLinkExtractor.extract(rawText)
+            val inst = activeInstance ?: run {
+                android.util.Log.w(TAG, "deliverShareText: no active instance, drop"); return
+            }
+            val pending = inst.pendingShareCapture ?: run {
+                android.util.Log.w(TAG, "deliverShareText: no pending capture, drop link=$link"); return
+            }
+            if (!ClipboardCaptureGate.acceptDelivery(deliveryToken, pending.first)) {
+                android.util.Log.w(TAG, "deliverShareText: token mismatch d=$deliveryToken e=${pending.first}, drop"); return
+            }
+            android.util.Log.i(TAG, "deliverShareText: delivering link=$link token=$deliveryToken clipTs=$clipTimestampMs")
+            pending.second.complete(ShareCapturePayload(link, clipTimestampMs))
+        }
+
+        /** clear_clipboard 模式完成回投。 */
+        fun deliverClearDone(deliveryToken: Long) {
+            val inst = activeInstance ?: return
+            val pending = inst.pendingClearDone ?: return
+            if (!ClipboardCaptureGate.acceptDelivery(deliveryToken, pending.first)) return
+            pending.second.complete(true)
+        }
+
+        /** Activity onCreate 时记回执。 */
+        fun noteIngestLaunched(token: Long) {
+            activeInstance?.ingestLaunchedToken = token
+        }
 
         const val ACTION_COLLECT_TASK = "com.zenithjoy.agent.COLLECT_TASK"
         const val ACTION_COLLECT_RESULT = "com.zenithjoy.agent.COLLECT_RESULT"
 
-        // 真机实测确认(2026-07-09)：sendBroadcast(ACTION_COLLECT_RESULT) 稳定发得出去
-        // (dumpsys activity broadcasts 能看到 AgentService 的接收者注册在)，但
-        // collectResultReceiver.onReceive 从未触发——同进程广播在这台荣耀真机上
-        // 不可靠，原因未查清(疑似 MagicOS 后台广播限流)。改成同进程直接回调，
-        // 不再依赖系统广播这条不可靠的路。AgentService 在 onCreate 里设置这个回调。
+        // Bug C：旧 ACTION_SEND 路径的 token 豁免值，单一来源 ClipboardCaptureGate，此处仅转发供 Activity 引用
+        const val LEGACY_ACTION_SEND_TOKEN = ClipboardCaptureGate.LEGACY_ACTION_SEND_TOKEN
+
+        // 任务模式 extra
+        const val EXTRA_MODE = "mode"
+        const val MODE_STAGE1 = "stage1"
+        const val MODE_STAGE2 = "stage2"
+        const val EXTRA_VIDEO_URL = "video_url"
+        const val EXTRA_VIDEO_ID = "video_id"
+
+        // Stage1 视频卡回调（同进程，不走广播）
+        @Volatile
+        var onVideoCardResult: ((taskId: String, keyword: String, videos: List<VideoCardInfo>, error: String) -> Unit)? = null
+
         @Volatile
         var onCollectResult: ((taskId: String, ok: Boolean, commentIds: List<String>, commentTexts: List<String>, error: String) -> Unit)? = null
+
+        // busy 拒绝回执（同进程直接调用）：真机复现(2026-07-10) busy 静默丢广播会让
+        // AgentService 队列的 currentJob 永不清除 → 永久死锁。拒绝必须显式通知派发方重试。
+        @Volatile
+        var onTaskRejected: ((taskId: String) -> Unit)? = null
+
+        // dispatch 正向确认（同进程直接调用）：广播可能进虚空（无障碍服务未 connected
+        // 时 receiver 未注册），届时既无 onReceive 也无拒绝回执，派发方看门狗只能靠
+        // "超时未 ack"判定投递失败并重试。
+        @Volatile
+        var onTaskAccepted: ((taskId: String) -> Unit)? = null
         const val EXTRA_KEYWORD = "keyword"
         const val EXTRA_TASK_ID = "task_id"
         const val EXTRA_RESULT_OK = "ok"
@@ -628,39 +1067,69 @@ class DouyinCollectService : AccessibilityService() {
         const val EXTRA_RESULT_COMMENT_TEXTS = "comment_texts"
         const val EXTRA_RESULT_ERROR = "error"
 
-        /**
-         * 触发搜索后短时间内的结果事件多半是过渡态渲染（联想词/历史列表刷新），
-         * 不是真正的搜索结果页，需丢弃防止误点击。
-         */
         internal fun isResultEventDebounced(triggeredAtMs: Long, nowMs: Long, settleMs: Long): Boolean {
             return nowMs - triggeredAtMs <= settleMs
         }
 
-        /** 只有从 TYPING_KEYWORD 才允许进入 SUBMITTING_SEARCH，防止重复触发搜索。 */
         internal fun shouldEnterSubmitting(currentState: State): Boolean {
             return currentState == State.TYPING_KEYWORD
         }
 
-        /**
-         * 搜索结果超时时，是否应该先尝试切"综合/视频"标签重试一次，而不是直接判失败。
-         * 只重试一次：抖音搜索默认落在"主页"标签（空，找账号用）时，切一次标签就够；
-         * 切完还是超时说明是真的没结果/别的问题，不再无限重试。
-         */
         internal fun shouldRetryWithTabSwitch(alreadyTriedTabSwitch: Boolean): Boolean {
             return !alreadyTriedTabSwitch
         }
 
+        // 回调（同进程直接调用）是主投递路径；兜底广播只在回调缺席时才发，
+        // 否则回调+广播双投递会把队列里下一个在跑的 job 提前 markCurrentDone。
+        internal fun shouldSendFallbackBroadcast(callbackRegistered: Boolean): Boolean {
+            return !callbackRegistered
+        }
+
+        // 非 IDLE 状态停留超过阈值 = 流程已死（协程死亡/事件流断），busy-guard 应
+        // 强制复位接受新任务而不是拒绝。
+        internal fun isBusyStateStale(stateChangedAtMs: Long, nowMs: Long, thresholdMs: Long): Boolean {
+            return nowMs - stateChangedAtMs > thresholdMs
+        }
+
+        // Stage1 派发（关键词搜索+收集视频卡）
         fun dispatchTask(context: Context, keyword: String, taskId: String) {
             val intent = Intent(ACTION_COLLECT_TASK).apply {
-                // 显式指定目标包名——隐式应用内广播在部分厂商 ROM 上的分发行为
-                // 不完全可靠，显式 setPackage 让系统按包名精确路由，不依赖
-                // "同进程/同 UID 就一定能投递"这个假设。
                 setPackage(context.packageName)
+                putExtra(EXTRA_MODE, MODE_STAGE1)
                 putExtra(EXTRA_KEYWORD, keyword)
                 putExtra(EXTRA_TASK_ID, taskId)
             }
             context.sendBroadcast(intent)
-            android.util.Log.i(TAG, "dispatchTask sendBroadcast called: keyword=$keyword taskId=$taskId")
+            android.util.Log.i(TAG, "dispatchTask(stage1) keyword=$keyword taskId=$taskId")
+        }
+
+        // Stage2 派发（按视频 URL 进评论区抓评论）
+        fun dispatchStage2Task(context: Context, videoUrl: String, videoId: String, taskId: String) {
+            val intent = Intent(ACTION_COLLECT_TASK).apply {
+                setPackage(context.packageName)
+                putExtra(EXTRA_MODE, MODE_STAGE2)
+                putExtra(EXTRA_VIDEO_URL, videoUrl)
+                putExtra(EXTRA_VIDEO_ID, videoId)
+                putExtra(EXTRA_TASK_ID, taskId)
+            }
+            context.sendBroadcast(intent)
+            android.util.Log.i(TAG, "dispatchTask(stage2) videoId=$videoId taskId=$taskId")
         }
     }
+
+    // Stage1 视频卡信息（用于 onVideoCardResult 回调）。
+    // Bug C 修复后 videoId 恒为空——真实 video_id 由服务端从 shareUrl 跟随 302 解析；
+    // 本地只负责经 share-intent 拿到 v.douyin.com 短链填 shareUrl。
+    data class VideoCardInfo(
+        val videoId: String,
+        val keyword: String,
+        val title: String? = null,
+        val shareUrl: String? = null,
+    )
+
+    // 剪贴板读回载荷：短链文案 + clip 写入时间戳（uptimeMillis 时间基，供新鲜度闸判残留串号）。
+    data class ShareCapturePayload(
+        val link: String?,
+        val clipTimestampMs: Long,
+    )
 }

@@ -39,7 +39,7 @@ class AcquisitionCollectPollLoopTest {
 
     private fun makeLoop(
         agentId: String = "AG-TEST-001",
-        onStage1Task: ((taskId: String, keywords: List<String>) -> Unit)? = null,
+        onStage1Task: ((taskId: String, keyword: String) -> Unit)? = null,
         onStage2Task: ((taskId: String, videoUrls: List<String>, checkpoint: Map<String, Any>?) -> Unit)? = null,
         onCancel: ((taskId: String) -> Unit)? = null,
         maxVideosPerKeyword: Int = AcquisitionCollectPollLoop.MAX_VIDEOS_PER_KEYWORD,

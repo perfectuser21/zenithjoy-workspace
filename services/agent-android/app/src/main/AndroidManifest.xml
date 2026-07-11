@@ -39,6 +39,23 @@
             </intent-filter>
         </activity>
 
+        <!-- Bug C：share-intent 接收器。抖音分享面板选本 app 后系统以 ACTION_SEND 拉起，
+             无 UI（透明主题 + noHistory + excludeFromRecents），取文案投递后立即 finish。 -->
+        <activity
+            android:name=".collect.ShareIngestActivity"
+            android:launchMode="singleTask"
+            android:exported="true"
+            android:excludeFromRecents="true"
+            android:noHistory="true"
+            android:taskAffinity=""
+            android:theme="@android:style/Theme.Translucent.NoTitleBar">
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
+        </activity>
+
         <service
             android:name=".AgentService"
             android:enabled="true"
