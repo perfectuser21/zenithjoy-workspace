@@ -43,6 +43,7 @@
              无 UI（透明主题 + noHistory + excludeFromRecents），取文案投递后立即 finish。 -->
         <activity
             android:name=".collect.ShareIngestActivity"
+            android:launchMode="singleTask"
             android:exported="true"
             android:excludeFromRecents="true"
             android:noHistory="true"

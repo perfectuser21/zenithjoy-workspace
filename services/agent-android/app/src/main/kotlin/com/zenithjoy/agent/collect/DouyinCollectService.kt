@@ -58,9 +58,11 @@ class DouyinCollectService : AccessibilityService() {
     // 真实视频内容在"综合"/"视频"标签。首次超时先尝试切标签重试一次，避免误判 SEARCH_TIMEOUT。
     private var triedTabSwitch = false
 
-    // Bug C：share-intent 采集期间，等待 ShareIngestActivity 把抖音分享面板产生的
-    // ACTION_SEND 文案短链投递回来。每张卡片开始等待前置为一个新 Deferred，拿到即 complete。
-    @Volatile private var pendingShareCapture: CompletableDeferred<String?>? = null
+    // Bug C 剪贴板路线：等待 ShareIngestActivity 读回的短链，带 token 防跨卡串号。
+    @Volatile private var pendingShareCapture: Pair<Long, CompletableDeferred<String?>>? = null
+    @Volatile private var pendingClearDone: Pair<Long, CompletableDeferred<Boolean>>? = null
+    // 拉起回执：Activity onCreate 时置为其 token，服务侧 consume 判定拉起成功
+    @Volatile private var ingestLaunchedToken: Long = Long.MIN_VALUE
 
     internal enum class State {
         IDLE,
@@ -489,6 +491,13 @@ class DouyinCollectService : AccessibilityService() {
         }
     }
 
+    /** 服务侧查 startActivity 后 Activity 是否已 onCreate（回执 token 匹配），查后清。 */
+    private fun consumeIngestLaunched(token: Long): Boolean {
+        val ok = ingestLaunchedToken == token
+        if (ok) ingestLaunchedToken = Long.MIN_VALUE
+        return ok
+    }
+
     // 分享面板里定位本 app 的分享目标：先按 app 名文本/desc 直接找，找不到则横向滚动重试
     // （自定义 app 常排在系统面板 app 行末尾，需滚动才露出）。
     private suspend fun findShareTargetForThisApp(root: AccessibilityNodeInfo): AccessibilityNodeInfo? {
@@ -888,25 +897,40 @@ class DouyinCollectService : AccessibilityService() {
         @Volatile
         private var activeInstance: DouyinCollectService? = null
 
-        /** ShareIngestActivity 调用：抽出短链投递给正在等待的卡片；无实例/无等待则丢弃。 */
-        fun deliverShareText(rawText: String?) {
+        /** ShareIngestActivity 读回剪贴板文案后投递；token 校验通过才 complete，防跨卡串号。 */
+        fun deliverShareText(rawText: String?, deliveryToken: Long) {
             val link = ShareLinkExtractor.extract(rawText)
-            val inst = activeInstance
-            if (inst == null) {
-                android.util.Log.w(TAG, "deliverShareText: no active instance, drop")
-                return
+            val inst = activeInstance ?: run {
+                android.util.Log.w(TAG, "deliverShareText: no active instance, drop"); return
             }
-            val pending = inst.pendingShareCapture
-            if (pending == null) {
-                android.util.Log.w(TAG, "deliverShareText: no pending capture, drop link=$link")
-                return
+            val pending = inst.pendingShareCapture ?: run {
+                android.util.Log.w(TAG, "deliverShareText: no pending capture, drop link=$link"); return
             }
-            android.util.Log.i(TAG, "deliverShareText: delivering link=$link")
-            pending.complete(link)
+            if (!ClipboardCaptureGate.acceptDelivery(deliveryToken, pending.first)) {
+                android.util.Log.w(TAG, "deliverShareText: token mismatch d=$deliveryToken e=${pending.first}, drop"); return
+            }
+            android.util.Log.i(TAG, "deliverShareText: delivering link=$link token=$deliveryToken")
+            pending.second.complete(link)
+        }
+
+        /** clear_clipboard 模式完成回投。 */
+        fun deliverClearDone(deliveryToken: Long) {
+            val inst = activeInstance ?: return
+            val pending = inst.pendingClearDone ?: return
+            if (!ClipboardCaptureGate.acceptDelivery(deliveryToken, pending.first)) return
+            pending.second.complete(true)
+        }
+
+        /** Activity onCreate 时记回执。 */
+        fun noteIngestLaunched(token: Long) {
+            activeInstance?.ingestLaunchedToken = token
         }
 
         const val ACTION_COLLECT_TASK = "com.zenithjoy.agent.COLLECT_TASK"
         const val ACTION_COLLECT_RESULT = "com.zenithjoy.agent.COLLECT_RESULT"
+
+        // Bug C：旧 ACTION_SEND 路径的 token 豁免值，单一来源 ClipboardCaptureGate，此处仅转发供 Activity 引用
+        const val LEGACY_ACTION_SEND_TOKEN = ClipboardCaptureGate.LEGACY_ACTION_SEND_TOKEN
 
         // 任务模式 extra
         const val EXTRA_MODE = "mode"
