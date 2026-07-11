@@ -475,25 +475,49 @@ class DouyinCollectService : AccessibilityService() {
     private suspend fun captureShareUrlForCard(index: Int): String? {
         return withTimeoutOrNull(PER_CARD_TIMEOUT_MS) {
             // 1. 重抓卡并点开详情
-            val listRoot = rootInActiveWindow ?: return@withTimeoutOrNull null
-            val card = findVideoCards(listRoot, MAX_VIDEOS_PER_SEARCH).getOrNull(index)
-                ?: return@withTimeoutOrNull null
+            val listRoot = rootInActiveWindow ?: run {
+                android.util.Log.w(TAG, "capture abort card#$index: STEP1_listRoot_null")
+                return@withTimeoutOrNull null
+            }
+            val cards = findVideoCards(listRoot, MAX_VIDEOS_PER_SEARCH)
+            val card = cards.getOrNull(index) ?: run {
+                android.util.Log.w(TAG,
+                    "capture abort card#$index: STEP1_no_card (found=${cards.size} listChild=${listRoot.childCount})")
+                dumpNodeDescs(listRoot, "list")
+                return@withTimeoutOrNull null
+            }
             tapNodeCenter(card)
             delay(RandomDelay.sample(RandomDelay.NAV_MS))
-            val detailRoot = awaitRootInActiveWindow(attempts = 6) ?: return@withTimeoutOrNull null
+            val detailRoot = awaitRootInActiveWindow(attempts = 6) ?: run {
+                android.util.Log.w(TAG, "capture abort card#$index: STEP1_detailRoot_null (tap didn't yield a window)")
+                return@withTimeoutOrNull null
+            }
+            // 详情页树全景：定位分享按钮实际 desc / 是否折叠
+            dumpNodeDescs(detailRoot, "detail")
 
             // 2. 点分享
             val shareBtn = findNodeByContentDescPrefix(detailRoot, "分享")
                 ?: findNodeByContentDescPrefix(detailRoot, "转发")
-                ?: return@withTimeoutOrNull null
+                ?: run {
+                    android.util.Log.w(TAG,
+                        "capture abort card#$index: STEP2_no_share_btn (detailChild=${detailRoot.childCount})")
+                    return@withTimeoutOrNull null
+                }
             tapNodeCenter(shareBtn)
             delay(RandomDelay.sample(RandomDelay.CLICK_MS))
 
             // 3. 等分享面板出现（内容锚点，不用裸 root）
-            awaitSharePanel() ?: return@withTimeoutOrNull null
+            awaitSharePanel() ?: run {
+                android.util.Log.w(TAG, "capture abort card#$index: STEP3_share_panel_not_shown")
+                dumpNodeDescs(rootInActiveWindow, "panel-miss")
+                return@withTimeoutOrNull null
+            }
 
             // 4. 清剪贴板基线（透明 Activity clear 模式）
-            if (!clearClipboardBaseline()) return@withTimeoutOrNull null
+            if (!clearClipboardBaseline()) {
+                android.util.Log.w(TAG, "capture abort card#$index: STEP4_clear_baseline_failed")
+                return@withTimeoutOrNull null
+            }
 
             // 4.5 clear 透明 Activity 两次焦点切换后，step3 抓的旧节点快照已失效
             //（AccessibilityNodeInfo 跨窗口 stale，遍历为空 → 整任务假失败）。
@@ -505,7 +529,11 @@ class DouyinCollectService : AccessibilityService() {
             }
 
             // 5. 面板里找"分享链接"（别名表 + 面板子树 + 滚动 ≤3）
-            val linkBtn = findShareLinkButton(panelRoot) ?: return@withTimeoutOrNull null
+            val linkBtn = findShareLinkButton(panelRoot) ?: run {
+                android.util.Log.w(TAG, "capture abort card#$index: STEP5_no_share_link_btn")
+                dumpNodeDescs(panelRoot, "panel")
+                return@withTimeoutOrNull null
+            }
 
             // 6. 点"分享链接" → 拉起透明 Activity 读剪贴板
             val token = ++shareTokenSeq
@@ -892,6 +920,36 @@ class DouyinCollectService : AccessibilityService() {
             for (i in 0 until node.childCount) node.getChild(i)?.let { queue.add(it) }
         }
         return null
+    }
+
+    /**
+     * 诊断用：把节点树前 limit 个节点的 (className / clickable / desc / text / bounds) 打印到 logcat。
+     * 用于现场定位抖音无障碍树是否被折叠、分享按钮 contentDescription 实际文案是什么。
+     * tag 标注是哪个阶段（如 "detail" / "panel"），便于 grep。
+     */
+    private fun dumpNodeDescs(root: AccessibilityNodeInfo?, tag: String, limit: Int = 80) {
+        if (root == null) {
+            android.util.Log.w(TAG, "DUMP[$tag] root=null")
+            return
+        }
+        val queue = ArrayDeque<AccessibilityNodeInfo>()
+        queue.add(root)
+        val bounds = Rect()
+        var n = 0
+        while (queue.isNotEmpty() && n < limit) {
+            val node = queue.removeFirst()
+            node.getBoundsInScreen(bounds)
+            val desc = node.contentDescription?.toString()?.take(40)
+            val txt = node.text?.toString()?.take(40)
+            if (!desc.isNullOrBlank() || !txt.isNullOrBlank() || node.isClickable) {
+                android.util.Log.i(TAG,
+                    "DUMP[$tag] #$n cls=${node.className} click=${node.isClickable} " +
+                        "b=${bounds.width()}x${bounds.height()} desc=$desc txt=$txt")
+                n++
+            }
+            for (i in 0 until node.childCount) node.getChild(i)?.let { queue.add(it) }
+        }
+        android.util.Log.i(TAG, "DUMP[$tag] end printed=$n childCount(root)=${root.childCount}")
     }
 
     /** 按精确文本匹配（用于 resource-id 混淆、且节点 clickable=false 不支持无障碍点击的按钮）。 */
