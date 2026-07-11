@@ -54,6 +54,10 @@ class DouyinCollectService : AccessibilityService() {
     // A2 重入闸：评论面板每个无障碍事件都会 launch 一个提取协程，state 切走前已排队多个，
     // 导致 reportResult 被调 7~12 次、onResult 重复上报。用一次性闩保证一个任务只上报一次。
     @Volatile private var resultReported = false
+    // Stage1 单飞闩：collectVideoCards 一旦启动即置位，禁止同一 task 内再启动第二个采集协程
+    // 或再触发搜索（triggerSearch 二次触发会重置 state → 并发采集 → UIA 树互相 recycle 塌缩 →
+    // ALL_SHARE_FAILED）。仅在 startCollect（新 task）复位。判据见 [mayStartStage1Work]。
+    @Volatile private var collectionLaunched = false
     // 真机复现(2026-07-10)：抖音搜索默认落在"主页"标签（找账号主页用的，天然没有视频卡片），
     // 真实视频内容在"综合"/"视频"标签。首次超时先尝试切标签重试一次，避免误判 SEARCH_TIMEOUT。
     private var triedTabSwitch = false
@@ -160,6 +164,7 @@ class DouyinCollectService : AccessibilityService() {
         currentMode = Mode.STAGE1_SEARCH
         currentVideoId = ""
         resultReported = false
+        collectionLaunched = false
         triedTabSwitch = false
         state = State.OPENING_DOUYIN
         ScanMutex.busy = true
@@ -363,6 +368,13 @@ class DouyinCollectService : AccessibilityService() {
     // ── 4. 触发搜索 ───────────────────────────────────────────────────────────
 
     private fun triggerSearch(root: AccessibilityNodeInfo) {
+        // 单飞闩：采集已启动后禁止再触发搜索。二次 triggerSearch 会把 state 重置回
+        // WAITING_SEARCH_RESULTS，放行第二个搜索结果事件并发启动 collectVideoCards（真机
+        // e8597732 ALL_SHARE_FAILED 根因）。从源头堵住重置，与 handleSearchResults 同一闩。
+        if (!mayStartStage1Work(collectionLaunched)) {
+            android.util.Log.w(TAG, "triggerSearch 忽略：采集已在飞行中，不再重置 state 重复搜索")
+            return
+        }
         val confirmBtn = findNodeByIds(root,
             "com.ss.android.ugc.aweme:id/search_confirm",
             "com.ss.android.ugc.aweme:id/btn_search",
@@ -449,6 +461,15 @@ class DouyinCollectService : AccessibilityService() {
             val videoCards = findVideoCards(root, MAX_VIDEOS_PER_SEARCH)
             android.util.Log.i(TAG, "handleSearchResults: pkg=${root.packageName} cards=${videoCards.size}")
             if (videoCards.isEmpty()) return
+            // 单飞闩：triggerSearch 二次触发会把 state 重置回 WAITING_SEARCH_RESULTS，让第二个
+            // 搜索结果事件再次走到这里并发启动第二个 collectVideoCards → 两协程互相 recycle 抖音
+            // UIA 树 → ALL_SHARE_FAILED。state 守卫挡不住(已被重置)，用单调闩确保一 task 只采集一次。
+            if (!mayStartStage1Work(collectionLaunched)) {
+                android.util.Log.w(TAG,
+                    "collectVideoCards 已在飞行中，忽略重复搜索结果事件（防并发采集 recycle UIA 树）")
+                return
+            }
+            collectionLaunched = true
             state = State.COLLECTING_VIDEO_CARDS
             scope.launch { collectVideoCards(videoCards) }
         } else {
@@ -1183,6 +1204,23 @@ class DouyinCollectService : AccessibilityService() {
 
         internal fun shouldRetryWithTabSwitch(alreadyTriedTabSwitch: Boolean): Boolean {
             return !alreadyTriedTabSwitch
+        }
+
+        /**
+         * Stage1 单飞闩判据。真机复现(2026-07-11, e8597732 考研 ALL_SHARE_FAILED 0/3)：
+         * 单个 task 只派发一次，但 triggerSearch 在 collectVideoCards 已启动后二次触发，把 state
+         * 从 COLLECTING_VIDEO_CARDS 重置回 WAITING_SEARCH_RESULTS，第二个 cards=3 搜索结果事件
+         * 再次进入 handleSearchResults → 并发启动第二个 collectVideoCards 协程。两个协程同时驱动
+         * 抖音 UI，互相 recycle 对方的 AccessibilityNodeInfo 树 → 详情页树塌缩(childCount>0 但
+         * getChild 全 null，分享按钮找不到 STEP2)/分享面板抓不到(STEP3)/卡数掉到 1(STEP1) →
+         * 全卡片取链失败 ALL_SHARE_FAILED。仅靠 state 守卫不够（state 会被 triggerSearch 重置）；
+         * 必须用单调闩：一个 task 只允许启动一次采集 / 一次搜索触发，收到新 task 才在 startCollect 复位。
+         *
+         * @param collectionAlreadyLaunched 本 task 是否已启动过采集（或已触发过搜索并进入采集）。
+         * @return true = 允许启动；false = 已在飞行中，忽略本次重复触发。
+         */
+        internal fun mayStartStage1Work(collectionAlreadyLaunched: Boolean): Boolean {
+            return !collectionAlreadyLaunched
         }
 
         // 回调（同进程直接调用）是主投递路径；兜底广播只在回调缺席时才发，
