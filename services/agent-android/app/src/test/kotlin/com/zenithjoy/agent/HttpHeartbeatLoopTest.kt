@@ -31,7 +31,7 @@ class HttpHeartbeatLoopTest {
         machineId = "machine-abc",
         hostname = "test-device",
         osType = "android",
-        version = AgentConfig.AGENT_VERSION,
+        version = "test-version",
     )
 
     @Test

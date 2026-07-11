@@ -16,6 +16,10 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    buildFeatures {
+        buildConfig = true
+    }
+
     val keystorePath = System.getenv("ANDROID_KEYSTORE_PATH")
     if (keystorePath != null) {
         signingConfigs {

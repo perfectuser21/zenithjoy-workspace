@@ -41,7 +41,7 @@ class HttpHeartbeatLoop(
         val machineId: String,
         val hostname: String,
         val osType: String = "android",
-        val version: String = AgentConfig.AGENT_VERSION,
+        val version: String = BuildConfig.VERSION_NAME,
     )
 
     data class HeartbeatTask(
