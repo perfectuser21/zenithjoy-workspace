@@ -144,7 +144,7 @@ class WsClient(
     private fun buildHelloPayload(): Map<String, Any?> {
         val p = mutableMapOf<String, Any?>(
             "agentId" to config.agentId,
-            "version" to AgentConfig.AGENT_VERSION,
+            "version" to BuildConfig.VERSION_NAME,
             "capabilities" to listOf("android"),
         )
         if (config.agentUuid.isNotEmpty()) p["agentUuid"] = config.agentUuid

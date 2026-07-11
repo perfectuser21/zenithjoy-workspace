@@ -36,7 +36,7 @@ class AgentRegistrar(private val httpClient: OkHttpClient = defaultClient()) {
             "machine_id" to config.machineId,
             "hostname" to android.os.Build.MODEL,
             "agent_id" to config.agentId,
-            "version" to AgentConfig.AGENT_VERSION,
+            "version" to BuildConfig.VERSION_NAME,
             "os_type" to "android",
         ))
 

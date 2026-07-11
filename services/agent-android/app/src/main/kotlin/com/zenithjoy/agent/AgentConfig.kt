@@ -73,6 +73,5 @@ class AgentConfig(context: Context) {
         private const val KEY_REGISTER_API_URL = "register_api_url"
 
         const val DEFAULT_WS_URL = "wss://api.zenithjoy.com/agent-ws"
-        const val AGENT_VERSION = "2.0.0-android"
     }
 }
