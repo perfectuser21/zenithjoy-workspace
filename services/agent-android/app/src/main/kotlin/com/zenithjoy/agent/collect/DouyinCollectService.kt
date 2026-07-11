@@ -408,7 +408,9 @@ class DouyinCollectService : AccessibilityService() {
     private fun trySwitchToVideoTab(): Boolean {
         val root = rootInActiveWindow ?: return false
         val tab = findNodeByText(root, "综合") ?: findNodeByText(root, "视频") ?: return false
-        tab.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+        // 真机实测(Douyin 39.5.0)：命中的"综合"Button clickable=false，对其祖先 ActionBar$Tab
+        // performAction(ACTION_CLICK) 不切标签，只有坐标手势有效。走 clickNodeRobustly 统一判据。
+        clickNodeRobustly(tab)
         return true
     }
 
@@ -971,9 +973,9 @@ class DouyinCollectService : AccessibilityService() {
 
     /** 用 dispatchGesture 在节点 bounds 中心模拟一次真实触摸点击（绕开 clickable=false 的无障碍点击限制）。 */
     /**
-     * 稳健点击：优先在祖先链（含节点自身）找可点击节点 performAction(ACTION_CLICK)；
-     * 整条链都 clickable=false 时（抖音混淆节点，ACTION_CLICK 空操作）退回坐标手势点击。
-     * 见 [mustGestureTap] 的真机根因说明。
+     * 稳健点击：命中节点自身可点击时直接 performAction(ACTION_CLICK)；自身不可点击时
+     * （抖音混淆节点，ACTION_CLICK 空操作、且对可点击祖先 performAction 实测也不生效）
+     * 退回坐标手势点击命中节点中心。判据见 [mustGestureTap] 的真机根因说明。
      */
     private fun clickNodeRobustly(node: AccessibilityNodeInfo) {
         val chain = ArrayList<AccessibilityNodeInfo>()
@@ -982,11 +984,10 @@ class DouyinCollectService : AccessibilityService() {
             chain.add(cur)
             cur = cur.parent
         }
-        val clickable = chain.firstOrNull { it.isClickable }
-        if (mustGestureTap(chain.map { it.isClickable }) || clickable == null) {
+        if (mustGestureTap(chain.map { it.isClickable })) {
             tapNodeCenter(node)
         } else {
-            clickable.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+            node.performAction(AccessibilityNodeInfo.ACTION_CLICK)
         }
     }
 
@@ -1177,15 +1178,21 @@ class DouyinCollectService : AccessibilityService() {
         /**
          * 判定是否必须退回坐标手势点击（dispatchGesture）而非 performAction(ACTION_CLICK)。
          *
-         * 真机实测（Douyin 39.5.0）：搜索入口 "搜索" TextView（resource-id 混淆为 4ty）
-         * 整条无障碍祖先链 clickable 全为 false。Android 的 performAction(ACTION_CLICK)
-         * 只作用于被调用的节点、不冒泡到祖先，对这种链是空操作——点不动、页面不跳转。
+         * 真机实测（Douyin 39.5.0）两处实证：
+         *   ① 搜索入口 "搜索" TextView（id 混淆 4ty）：整条祖先链 clickable 全 false → NO_SEARCH_INPUT。
+         *   ② 搜索结果 "综合"/"视频" 标签：命中的 Button 自身 clickable=false，祖先 ActionBar$Tab
+         *      clickable=true，但对该祖先 performAction(ACTION_CLICK) 实测【不切标签】，只有对命中
+         *      节点中心坐标手势才生效（uiautomator dump + input tap 实证）→ 否则停在空"主页" → SEARCH_TIMEOUT。
          *
-         * @param clickableChain 目标节点到根，每一级的 isClickable 值（index 0 = 节点自身）。
-         * @return true = 链上无任何可点击节点，ACTION_CLICK 点不动，必须用坐标手势模拟真实触摸。
+         * Android performAction(ACTION_CLICK) 只作用于被调用的节点、不冒泡到祖先；findNodeByText/Id
+         * 命中的往往是内层不可点击元素。②证明"链上有可点击祖先"不足以让 ACTION_CLICK 生效，
+         * 故判据取【命中节点自身是否可点击】：自身不可点击就必须坐标手势模拟真实触摸。
+         *
+         * @param clickableChain 目标节点到根，每一级的 isClickable 值（index 0 = 命中节点自身）。
+         * @return true = 命中节点自身不可点击（或空链），ACTION_CLICK 点不动，必须坐标手势。
          */
         internal fun mustGestureTap(clickableChain: List<Boolean>): Boolean =
-            clickableChain.none { it }
+            clickableChain.firstOrNull() != true
 
         // Stage1 派发（关键词搜索+收集视频卡）
         fun dispatchTask(context: Context, keyword: String, taskId: String) {
