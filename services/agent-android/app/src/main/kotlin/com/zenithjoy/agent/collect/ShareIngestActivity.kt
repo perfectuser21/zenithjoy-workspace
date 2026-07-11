@@ -44,7 +44,12 @@ class ShareIngestActivity : Activity() {
         if (intent?.action == Intent.ACTION_SEND) {
             val text = intent.getStringExtra(Intent.EXTRA_TEXT)
             android.util.Log.i(TAG, "ACTION_SEND len=${text?.length ?: 0}")
-            DouyinCollectService.deliverShareText(text, DouyinCollectService.LEGACY_ACTION_SEND_TOKEN)
+            // 旧路径无真实 clip 时间戳，用 legacy sentinel 让服务侧时间戳闸豁免（不被误杀）。
+            DouyinCollectService.deliverShareText(
+                text,
+                DouyinCollectService.LEGACY_ACTION_SEND_TOKEN,
+                ClipboardCaptureGate.LEGACY_CLIP_TIMESTAMP_MS,
+            )
             finish()
             return
         }
@@ -67,7 +72,7 @@ class ShareIngestActivity : Activity() {
                 handler.removeCallbacksAndMessages(null)
                 finish()
             }
-            else -> finishRead(null)
+            else -> finishRead(null, 0L)
         }
     }
 
@@ -93,31 +98,39 @@ class ShareIngestActivity : Activity() {
     }
 
     private fun tryReadClipboard() {
-        val text = readClipboardText()
-        if (text != null) {
-            finishRead(text)
+        val read = readClipboard()
+        if (read != null) {
+            finishRead(read.first, read.second)
             return
         }
         if (pollCount++ < MAX_POLL) {
             handler.postDelayed({ if (!handled) tryReadClipboard() }, POLL_INTERVAL_MS)
         }
-        // 达上限后交给 SELF_KILL_MS 兜底 finishRead(null)
+        // 达上限后交给 SELF_KILL_MS 兜底 finishRead(null, 0L)
     }
 
-    private fun finishRead(text: String?) {
+    // clipTimestampMs：剪贴板写入时刻（ClipDescription.getTimestamp()，SystemClock.uptimeMillis 时间基）。
+    // 读不到文案时用 0L 保守值——服务侧时间戳闸会因 0 ≤ clickAt 判不新鲜、跳过该卡（绝不造假）。
+    private fun finishRead(text: String?, clipTimestampMs: Long) {
         if (handled) return
         handled = true
         handler.removeCallbacksAndMessages(null)
-        DouyinCollectService.deliverShareText(text, token)
+        DouyinCollectService.deliverShareText(text, token, clipTimestampMs)
         finish()
     }
 
-    private fun readClipboardText(): String? {
+    /** 读剪贴板文案 + 写入时间戳；读不到返回 null。 */
+    private fun readClipboard(): Pair<String, Long>? {
         return try {
             val cm = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
             val clip = cm.primaryClip ?: return null
             if (clip.itemCount == 0) return null
-            clip.getItemAt(0).coerceToText(this)?.toString()?.takeIf { it.isNotEmpty() }
+            val text = clip.getItemAt(0).coerceToText(this)?.toString()?.takeIf { it.isNotEmpty() }
+                ?: return null
+            // ClipDescription.getTimestamp() 自 API 26 起可用（minSdk=26）；无时间戳返回 0L →
+            // 服务侧判不新鲜跳过（存疑时宁可漏采不可造假）。
+            val ts = clip.description?.timestamp ?: 0L
+            text to ts
         } catch (e: Exception) {
             android.util.Log.w(TAG, "readClipboard failed: ${e.message}")
             null

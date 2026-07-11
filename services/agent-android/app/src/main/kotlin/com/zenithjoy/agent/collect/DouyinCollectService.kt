@@ -59,7 +59,8 @@ class DouyinCollectService : AccessibilityService() {
     private var triedTabSwitch = false
 
     // Bug C 剪贴板路线：等待 ShareIngestActivity 读回的短链，带 token 防跨卡串号。
-    @Volatile private var pendingShareCapture: Pair<Long, CompletableDeferred<String?>>? = null
+    // 载荷携带 (短链文案, clip 写入时间戳)——时间戳供服务侧新鲜度闸判残留旧短链串号。
+    @Volatile private var pendingShareCapture: Pair<Long, CompletableDeferred<ShareCapturePayload?>>? = null
     @Volatile private var pendingClearDone: Pair<Long, CompletableDeferred<Boolean>>? = null
     // 拉起回执：Activity onCreate 时置为其 token，服务侧 consume 判定拉起成功
     @Volatile private var ingestLaunchedToken: Long = Long.MIN_VALUE
@@ -508,9 +509,11 @@ class DouyinCollectService : AccessibilityService() {
 
             // 6. 点"分享链接" → 拉起透明 Activity 读剪贴板
             val token = ++shareTokenSeq
-            val deferred = CompletableDeferred<String?>()
+            val deferred = CompletableDeferred<ShareCapturePayload?>()
             pendingShareCapture = token to deferred
-            val clickAtMs = android.os.SystemClock.elapsedRealtime()
+            // 必须用 uptimeMillis()：要与 ClipDescription.getTimestamp() 同一时间基做 isFresh 比较。
+            // 绝不能用 elapsedRealtime()（含深睡时间、绝对值偏大，会把新鲜短链误判陈旧→漏采）。
+            val clickAtMs = android.os.SystemClock.uptimeMillis()
             tapNodeCenter(linkBtn)
             delay(RandomDelay.sample(RandomDelay.CLICK_MS))
             startActivity(ShareIngestActivity.launchReadIntent(this@DouyinCollectService, token))
@@ -521,15 +524,18 @@ class DouyinCollectService : AccessibilityService() {
                 return@withTimeoutOrNull null
             }
 
-            // 8. 等读回短链
-            val link = withTimeoutOrNull(READ_DELIVER_MS) { deferred.await() } ?: return@withTimeoutOrNull null
+            // 8. 等读回短链 + clip 写入时间戳
+            val payload = withTimeoutOrNull(READ_DELIVER_MS) { deferred.await() } ?: return@withTimeoutOrNull null
+            val link = payload.link ?: return@withTimeoutOrNull null
 
-            // 9. 三层新鲜度：去重（时间戳新鲜度已由 clear 基线保证；此处 clickAtMs 供日志/未来扩展）
-            if (ClipboardCaptureGate.isDuplicate(link, seenShareUrls)) {
-                android.util.Log.w(TAG, "duplicate share_url (stale clip?) link=$link — skip")
+            // 9. 准入双闸：新鲜度（clip 写入晚于点击=非残留旧短链）+ 去重。
+            // 残留旧短链 clipTs ≤ clickAtMs 会被时间戳闸拦下——堵死"剪贴板残留短链串号造假"。
+            if (!ClipboardCaptureGate.admitShareUrl(link, payload.clipTimestampMs, clickAtMs, seenShareUrls)) {
+                android.util.Log.w(TAG,
+                    "share_url rejected (stale/duplicate) link=$link clipTs=${payload.clipTimestampMs} clickAt=$clickAtMs — skip")
                 return@withTimeoutOrNull null
             }
-            android.util.Log.i(TAG, "card#$index fresh link=$link (clickAt=$clickAtMs)")
+            android.util.Log.i(TAG, "card#$index fresh link=$link (clipTs=${payload.clipTimestampMs} clickAt=$clickAtMs)")
             link
         }
     }
@@ -991,8 +997,12 @@ class DouyinCollectService : AccessibilityService() {
         @Volatile
         private var activeInstance: DouyinCollectService? = null
 
-        /** ShareIngestActivity 读回剪贴板文案后投递；token 校验通过才 complete，防跨卡串号。 */
-        fun deliverShareText(rawText: String?, deliveryToken: Long) {
+        /**
+         * ShareIngestActivity 读回剪贴板文案后投递；token 校验通过才 complete，防跨卡串号。
+         * clipTimestampMs：剪贴板写入时刻（uptimeMillis 时间基），随文案一起带上供服务侧
+         * 新鲜度闸判残留旧短链；legacy(ACTION_SEND) 路径用 LEGACY_CLIP_TIMESTAMP_MS 豁免。
+         */
+        fun deliverShareText(rawText: String?, deliveryToken: Long, clipTimestampMs: Long) {
             val link = ShareLinkExtractor.extract(rawText)
             val inst = activeInstance ?: run {
                 android.util.Log.w(TAG, "deliverShareText: no active instance, drop"); return
@@ -1003,8 +1013,8 @@ class DouyinCollectService : AccessibilityService() {
             if (!ClipboardCaptureGate.acceptDelivery(deliveryToken, pending.first)) {
                 android.util.Log.w(TAG, "deliverShareText: token mismatch d=$deliveryToken e=${pending.first}, drop"); return
             }
-            android.util.Log.i(TAG, "deliverShareText: delivering link=$link token=$deliveryToken")
-            pending.second.complete(link)
+            android.util.Log.i(TAG, "deliverShareText: delivering link=$link token=$deliveryToken clipTs=$clipTimestampMs")
+            pending.second.complete(ShareCapturePayload(link, clipTimestampMs))
         }
 
         /** clear_clipboard 模式完成回投。 */
@@ -1115,5 +1125,11 @@ class DouyinCollectService : AccessibilityService() {
         val keyword: String,
         val title: String? = null,
         val shareUrl: String? = null,
+    )
+
+    // 剪贴板读回载荷：短链文案 + clip 写入时间戳（uptimeMillis 时间基，供新鲜度闸判残留串号）。
+    data class ShareCapturePayload(
+        val link: String?,
+        val clipTimestampMs: Long,
     )
 }
