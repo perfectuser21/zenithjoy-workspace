@@ -291,6 +291,7 @@ class DouyinCollectService : AccessibilityService() {
             // 整条无障碍祖先链 clickable=false，performAction(ACTION_CLICK) 是空操作、
             // 点不动，页面根本不跳转 → 之前恒报 NO_SEARCH_INPUT。改用 clickNodeRobustly
             // （链上无可点击节点时退回坐标手势），对齐 triggerSearch 早已采用的 tapNodeCenter。
+            android.util.Log.i(TAG, "openSearchBar: searchBtn=${searchBtn != null}")
             val postClickRoot = if (searchBtn != null) {
                 clickNodeRobustly(searchBtn)
                 delay(RandomDelay.sample(RandomDelay.CLICK_MS))
@@ -369,9 +370,16 @@ class DouyinCollectService : AccessibilityService() {
         // performAction(ACTION_CLICK) 点不到，必须用手势坐标模拟真实触摸（已用
         // `input tap` 原始坐标验证能成功提交搜索）。
         when {
-            confirmBtn != null -> confirmBtn.performAction(AccessibilityNodeInfo.ACTION_CLICK)
-            searchTextNode != null -> tapNodeCenter(searchTextNode)
+            confirmBtn != null -> {
+                android.util.Log.i(TAG, "triggerSearch: branch=confirmBtn(ACTION_CLICK)")
+                confirmBtn.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+            }
+            searchTextNode != null -> {
+                android.util.Log.i(TAG, "triggerSearch: branch=searchTextNode(tapCenter)")
+                tapNodeCenter(searchTextNode)
+            }
             else -> {
+                android.util.Log.i(TAG, "triggerSearch: branch=ime_enter_fallback")
                 // 找不到确认按钮时，用 ACTION_IME_ENTER 确认 IME 的搜索/回车动作兜底——
                 // 之前误用 ACTION_NEXT_AT_MOVEMENT_GRANULARITY（按粒度移动光标），
                 // 那不是提交搜索的动作，是这个 bug 的根因之一。
@@ -393,6 +401,11 @@ class DouyinCollectService : AccessibilityService() {
             if (found == null && state == State.WAITING_SEARCH_RESULTS) {
                 // 真机复现：抖音搜索默认落在"主页"标签（空，找账号用），视频内容在"综合"/
                 // "视频"标签。先尝试切标签重试一次，不是每次超时都直接判失败。
+                val diagRoot = rootInActiveWindow
+                android.util.Log.i(TAG, "timeout fired: triedTab=$triedTabSwitch pkg=${diagRoot?.packageName}" +
+                    " 综合=${diagRoot?.let { findNodeByText(it, "综合") != null }}" +
+                    " 视频=${diagRoot?.let { findNodeByText(it, "视频") != null }}" +
+                    " editText=${diagRoot?.let { findFirstEditText(it) != null }}")
                 if (shouldRetryWithTabSwitch(triedTabSwitch) && trySwitchToVideoTab()) {
                     triedTabSwitch = true
                     searchTriggeredAtMs = android.os.SystemClock.elapsedRealtime()
@@ -407,9 +420,14 @@ class DouyinCollectService : AccessibilityService() {
     /** 找"综合"或"视频"标签并点击切换，返回是否成功找到并点击。 */
     private fun trySwitchToVideoTab(): Boolean {
         val root = rootInActiveWindow ?: return false
-        val tab = findNodeByText(root, "综合") ?: findNodeByText(root, "视频") ?: return false
+        val tab = findNodeByText(root, "综合") ?: findNodeByText(root, "视频") ?: run {
+            android.util.Log.i(TAG, "trySwitchToVideoTab: no 综合/视频 tab node found")
+            return false
+        }
         // 真机实测(Douyin 39.5.0)：命中的"综合"Button clickable=false，对其祖先 ActionBar$Tab
         // performAction(ACTION_CLICK) 不切标签，只有坐标手势有效。走 clickNodeRobustly 统一判据。
+        val b = android.graphics.Rect().also { tab.getBoundsInScreen(it) }
+        android.util.Log.i(TAG, "trySwitchToVideoTab: tapping tab bounds=$b clickable=${tab.isClickable}")
         clickNodeRobustly(tab)
         return true
     }
@@ -426,6 +444,7 @@ class DouyinCollectService : AccessibilityService() {
         if (currentMode == Mode.STAGE1_SEARCH) {
             // Stage1：收集多张视频卡的 video_id，不进评论区
             val videoCards = findVideoCards(root, MAX_VIDEOS_PER_SEARCH)
+            android.util.Log.i(TAG, "handleSearchResults: pkg=${root.packageName} cards=${videoCards.size}")
             if (videoCards.isEmpty()) return
             state = State.COLLECTING_VIDEO_CARDS
             scope.launch { collectVideoCards(videoCards) }
