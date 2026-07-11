@@ -54,6 +54,10 @@ class DouyinCollectService : AccessibilityService() {
     // A2 重入闸：评论面板每个无障碍事件都会 launch 一个提取协程，state 切走前已排队多个，
     // 导致 reportResult 被调 7~12 次、onResult 重复上报。用一次性闩保证一个任务只上报一次。
     @Volatile private var resultReported = false
+    // Stage1 单飞闩：collectVideoCards 一旦启动即置位，禁止同一 task 内再启动第二个采集协程
+    // 或再触发搜索（triggerSearch 二次触发会重置 state → 并发采集 → UIA 树互相 recycle 塌缩 →
+    // ALL_SHARE_FAILED）。仅在 startCollect（新 task）复位。判据见 [mayStartStage1Work]。
+    @Volatile private var collectionLaunched = false
     // 真机复现(2026-07-10)：抖音搜索默认落在"主页"标签（找账号主页用的，天然没有视频卡片），
     // 真实视频内容在"综合"/"视频"标签。首次超时先尝试切标签重试一次，避免误判 SEARCH_TIMEOUT。
     private var triedTabSwitch = false
@@ -160,6 +164,7 @@ class DouyinCollectService : AccessibilityService() {
         currentMode = Mode.STAGE1_SEARCH
         currentVideoId = ""
         resultReported = false
+        collectionLaunched = false
         triedTabSwitch = false
         state = State.OPENING_DOUYIN
         ScanMutex.busy = true
@@ -249,7 +254,10 @@ class DouyinCollectService : AccessibilityService() {
         return try {
             val pm = applicationContext.packageManager
             val launchIntent = pm.getLaunchIntentForPackage(DOUYIN_PKG) ?: return false
-            launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            // 必须叠加 CLEAR_TASK：仅 NEW_TASK 会 resume 到上次采集残留的 DetailActivity
+            // （取分享链会点进视频详情页，任务中途死留栈）→ 在详情页跑搜索 → SEARCH_TIMEOUT。
+            // CLEAR_TASK 强制清栈从 launcher 全新启动回干净首页 feed（不动登录态，真机实证）。
+            launchIntent.flags = stage1LaunchFlags(launchIntent.flags)
             applicationContext.startActivity(launchIntent)
             true
         } catch (e: Exception) {
@@ -286,8 +294,14 @@ class DouyinCollectService : AccessibilityService() {
             // 继续用点击前的 root 快照调 typeKeyword，那个快照里根本没有输入框，
             // 必然报 NO_SEARCH_INPUT——从没进过搜索页。点击后必须重新抓一次
             // root，才能看到跳转后的真实界面。
+            //
+            // 真机 uiautomator dump 实测（Douyin 39.5.0）：搜索 "搜索" TextView(id 4ty)
+            // 整条无障碍祖先链 clickable=false，performAction(ACTION_CLICK) 是空操作、
+            // 点不动，页面根本不跳转 → 之前恒报 NO_SEARCH_INPUT。改用 clickNodeRobustly
+            // （链上无可点击节点时退回坐标手势），对齐 triggerSearch 早已采用的 tapNodeCenter。
+            android.util.Log.i(TAG, "openSearchBar: searchBtn=${searchBtn != null}")
             val postClickRoot = if (searchBtn != null) {
-                searchBtn.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+                clickNodeRobustly(searchBtn)
                 delay(RandomDelay.sample(RandomDelay.CLICK_MS))
                 awaitRootInActiveWindow(attempts = 4) ?: root
             } else {
@@ -354,6 +368,13 @@ class DouyinCollectService : AccessibilityService() {
     // ── 4. 触发搜索 ───────────────────────────────────────────────────────────
 
     private fun triggerSearch(root: AccessibilityNodeInfo) {
+        // 单飞闩：采集已启动后禁止再触发搜索。二次 triggerSearch 会把 state 重置回
+        // WAITING_SEARCH_RESULTS，放行第二个搜索结果事件并发启动 collectVideoCards（真机
+        // e8597732 ALL_SHARE_FAILED 根因）。从源头堵住重置，与 handleSearchResults 同一闩。
+        if (!mayStartStage1Work(collectionLaunched)) {
+            android.util.Log.w(TAG, "triggerSearch 忽略：采集已在飞行中，不再重置 state 重复搜索")
+            return
+        }
         val confirmBtn = findNodeByIds(root,
             "com.ss.android.ugc.aweme:id/search_confirm",
             "com.ss.android.ugc.aweme:id/btn_search",
@@ -364,9 +385,16 @@ class DouyinCollectService : AccessibilityService() {
         // performAction(ACTION_CLICK) 点不到，必须用手势坐标模拟真实触摸（已用
         // `input tap` 原始坐标验证能成功提交搜索）。
         when {
-            confirmBtn != null -> confirmBtn.performAction(AccessibilityNodeInfo.ACTION_CLICK)
-            searchTextNode != null -> tapNodeCenter(searchTextNode)
+            confirmBtn != null -> {
+                android.util.Log.i(TAG, "triggerSearch: branch=confirmBtn(ACTION_CLICK)")
+                confirmBtn.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+            }
+            searchTextNode != null -> {
+                android.util.Log.i(TAG, "triggerSearch: branch=searchTextNode(tapCenter)")
+                tapNodeCenter(searchTextNode)
+            }
             else -> {
+                android.util.Log.i(TAG, "triggerSearch: branch=ime_enter_fallback")
                 // 找不到确认按钮时，用 ACTION_IME_ENTER 确认 IME 的搜索/回车动作兜底——
                 // 之前误用 ACTION_NEXT_AT_MOVEMENT_GRANULARITY（按粒度移动光标），
                 // 那不是提交搜索的动作，是这个 bug 的根因之一。
@@ -388,6 +416,11 @@ class DouyinCollectService : AccessibilityService() {
             if (found == null && state == State.WAITING_SEARCH_RESULTS) {
                 // 真机复现：抖音搜索默认落在"主页"标签（空，找账号用），视频内容在"综合"/
                 // "视频"标签。先尝试切标签重试一次，不是每次超时都直接判失败。
+                val diagRoot = rootInActiveWindow
+                android.util.Log.i(TAG, "timeout fired: triedTab=$triedTabSwitch pkg=${diagRoot?.packageName}" +
+                    " 综合=${diagRoot?.let { findNodeByText(it, "综合") != null }}" +
+                    " 视频=${diagRoot?.let { findNodeByText(it, "视频") != null }}" +
+                    " editText=${diagRoot?.let { findFirstEditText(it) != null }}")
                 if (shouldRetryWithTabSwitch(triedTabSwitch) && trySwitchToVideoTab()) {
                     triedTabSwitch = true
                     searchTriggeredAtMs = android.os.SystemClock.elapsedRealtime()
@@ -402,8 +435,15 @@ class DouyinCollectService : AccessibilityService() {
     /** 找"综合"或"视频"标签并点击切换，返回是否成功找到并点击。 */
     private fun trySwitchToVideoTab(): Boolean {
         val root = rootInActiveWindow ?: return false
-        val tab = findNodeByText(root, "综合") ?: findNodeByText(root, "视频") ?: return false
-        tab.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+        val tab = findNodeByText(root, "综合") ?: findNodeByText(root, "视频") ?: run {
+            android.util.Log.i(TAG, "trySwitchToVideoTab: no 综合/视频 tab node found")
+            return false
+        }
+        // 真机实测(Douyin 39.5.0)：命中的"综合"Button clickable=false，对其祖先 ActionBar$Tab
+        // performAction(ACTION_CLICK) 不切标签，只有坐标手势有效。走 clickNodeRobustly 统一判据。
+        val b = android.graphics.Rect().also { tab.getBoundsInScreen(it) }
+        android.util.Log.i(TAG, "trySwitchToVideoTab: tapping tab bounds=$b clickable=${tab.isClickable}")
+        clickNodeRobustly(tab)
         return true
     }
 
@@ -419,7 +459,17 @@ class DouyinCollectService : AccessibilityService() {
         if (currentMode == Mode.STAGE1_SEARCH) {
             // Stage1：收集多张视频卡的 video_id，不进评论区
             val videoCards = findVideoCards(root, MAX_VIDEOS_PER_SEARCH)
+            android.util.Log.i(TAG, "handleSearchResults: pkg=${root.packageName} cards=${videoCards.size}")
             if (videoCards.isEmpty()) return
+            // 单飞闩：triggerSearch 二次触发会把 state 重置回 WAITING_SEARCH_RESULTS，让第二个
+            // 搜索结果事件再次走到这里并发启动第二个 collectVideoCards → 两协程互相 recycle 抖音
+            // UIA 树 → ALL_SHARE_FAILED。state 守卫挡不住(已被重置)，用单调闩确保一 task 只采集一次。
+            if (!mayStartStage1Work(collectionLaunched)) {
+                android.util.Log.w(TAG,
+                    "collectVideoCards 已在飞行中，忽略重复搜索结果事件（防并发采集 recycle UIA 树）")
+                return
+            }
+            collectionLaunched = true
             state = State.COLLECTING_VIDEO_CARDS
             scope.launch { collectVideoCards(videoCards) }
         } else {
@@ -475,25 +525,49 @@ class DouyinCollectService : AccessibilityService() {
     private suspend fun captureShareUrlForCard(index: Int): String? {
         return withTimeoutOrNull(PER_CARD_TIMEOUT_MS) {
             // 1. 重抓卡并点开详情
-            val listRoot = rootInActiveWindow ?: return@withTimeoutOrNull null
-            val card = findVideoCards(listRoot, MAX_VIDEOS_PER_SEARCH).getOrNull(index)
-                ?: return@withTimeoutOrNull null
+            val listRoot = rootInActiveWindow ?: run {
+                android.util.Log.w(TAG, "capture abort card#$index: STEP1_listRoot_null")
+                return@withTimeoutOrNull null
+            }
+            val cards = findVideoCards(listRoot, MAX_VIDEOS_PER_SEARCH)
+            val card = cards.getOrNull(index) ?: run {
+                android.util.Log.w(TAG,
+                    "capture abort card#$index: STEP1_no_card (found=${cards.size} listChild=${listRoot.childCount})")
+                dumpNodeDescs(listRoot, "list")
+                return@withTimeoutOrNull null
+            }
             tapNodeCenter(card)
             delay(RandomDelay.sample(RandomDelay.NAV_MS))
-            val detailRoot = awaitRootInActiveWindow(attempts = 6) ?: return@withTimeoutOrNull null
+            val detailRoot = awaitRootInActiveWindow(attempts = 6) ?: run {
+                android.util.Log.w(TAG, "capture abort card#$index: STEP1_detailRoot_null (tap didn't yield a window)")
+                return@withTimeoutOrNull null
+            }
+            // 详情页树全景：定位分享按钮实际 desc / 是否折叠
+            dumpNodeDescs(detailRoot, "detail")
 
             // 2. 点分享
             val shareBtn = findNodeByContentDescPrefix(detailRoot, "分享")
                 ?: findNodeByContentDescPrefix(detailRoot, "转发")
-                ?: return@withTimeoutOrNull null
+                ?: run {
+                    android.util.Log.w(TAG,
+                        "capture abort card#$index: STEP2_no_share_btn (detailChild=${detailRoot.childCount})")
+                    return@withTimeoutOrNull null
+                }
             tapNodeCenter(shareBtn)
             delay(RandomDelay.sample(RandomDelay.CLICK_MS))
 
             // 3. 等分享面板出现（内容锚点，不用裸 root）
-            awaitSharePanel() ?: return@withTimeoutOrNull null
+            awaitSharePanel() ?: run {
+                android.util.Log.w(TAG, "capture abort card#$index: STEP3_share_panel_not_shown")
+                dumpNodeDescs(rootInActiveWindow, "panel-miss")
+                return@withTimeoutOrNull null
+            }
 
             // 4. 清剪贴板基线（透明 Activity clear 模式）
-            if (!clearClipboardBaseline()) return@withTimeoutOrNull null
+            if (!clearClipboardBaseline()) {
+                android.util.Log.w(TAG, "capture abort card#$index: STEP4_clear_baseline_failed")
+                return@withTimeoutOrNull null
+            }
 
             // 4.5 clear 透明 Activity 两次焦点切换后，step3 抓的旧节点快照已失效
             //（AccessibilityNodeInfo 跨窗口 stale，遍历为空 → 整任务假失败）。
@@ -505,7 +579,11 @@ class DouyinCollectService : AccessibilityService() {
             }
 
             // 5. 面板里找"分享链接"（别名表 + 面板子树 + 滚动 ≤3）
-            val linkBtn = findShareLinkButton(panelRoot) ?: return@withTimeoutOrNull null
+            val linkBtn = findShareLinkButton(panelRoot) ?: run {
+                android.util.Log.w(TAG, "capture abort card#$index: STEP5_no_share_link_btn")
+                dumpNodeDescs(panelRoot, "panel")
+                return@withTimeoutOrNull null
+            }
 
             // 6. 点"分享链接" → 拉起透明 Activity 读剪贴板
             val token = ++shareTokenSeq
@@ -894,6 +972,36 @@ class DouyinCollectService : AccessibilityService() {
         return null
     }
 
+    /**
+     * 诊断用：把节点树前 limit 个节点的 (className / clickable / desc / text / bounds) 打印到 logcat。
+     * 用于现场定位抖音无障碍树是否被折叠、分享按钮 contentDescription 实际文案是什么。
+     * tag 标注是哪个阶段（如 "detail" / "panel"），便于 grep。
+     */
+    private fun dumpNodeDescs(root: AccessibilityNodeInfo?, tag: String, limit: Int = 80) {
+        if (root == null) {
+            android.util.Log.w(TAG, "DUMP[$tag] root=null")
+            return
+        }
+        val queue = ArrayDeque<AccessibilityNodeInfo>()
+        queue.add(root)
+        val bounds = Rect()
+        var n = 0
+        while (queue.isNotEmpty() && n < limit) {
+            val node = queue.removeFirst()
+            node.getBoundsInScreen(bounds)
+            val desc = node.contentDescription?.toString()?.take(40)
+            val txt = node.text?.toString()?.take(40)
+            if (!desc.isNullOrBlank() || !txt.isNullOrBlank() || node.isClickable) {
+                android.util.Log.i(TAG,
+                    "DUMP[$tag] #$n cls=${node.className} click=${node.isClickable} " +
+                        "b=${bounds.width()}x${bounds.height()} desc=$desc txt=$txt")
+                n++
+            }
+            for (i in 0 until node.childCount) node.getChild(i)?.let { queue.add(it) }
+        }
+        android.util.Log.i(TAG, "DUMP[$tag] end printed=$n childCount(root)=${root.childCount}")
+    }
+
     /** 按精确文本匹配（用于 resource-id 混淆、且节点 clickable=false 不支持无障碍点击的按钮）。 */
     private fun findNodeByText(root: AccessibilityNodeInfo, text: String): AccessibilityNodeInfo? {
         val queue = ArrayDeque<AccessibilityNodeInfo>()
@@ -907,6 +1015,25 @@ class DouyinCollectService : AccessibilityService() {
     }
 
     /** 用 dispatchGesture 在节点 bounds 中心模拟一次真实触摸点击（绕开 clickable=false 的无障碍点击限制）。 */
+    /**
+     * 稳健点击：命中节点自身可点击时直接 performAction(ACTION_CLICK)；自身不可点击时
+     * （抖音混淆节点，ACTION_CLICK 空操作、且对可点击祖先 performAction 实测也不生效）
+     * 退回坐标手势点击命中节点中心。判据见 [mustGestureTap] 的真机根因说明。
+     */
+    private fun clickNodeRobustly(node: AccessibilityNodeInfo) {
+        val chain = ArrayList<AccessibilityNodeInfo>()
+        var cur: AccessibilityNodeInfo? = node
+        while (cur != null) {
+            chain.add(cur)
+            cur = cur.parent
+        }
+        if (mustGestureTap(chain.map { it.isClickable })) {
+            tapNodeCenter(node)
+        } else {
+            node.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+        }
+    }
+
     private fun tapNodeCenter(node: AccessibilityNodeInfo) {
         val bounds = Rect()
         node.getBoundsInScreen(bounds)
@@ -1079,6 +1206,23 @@ class DouyinCollectService : AccessibilityService() {
             return !alreadyTriedTabSwitch
         }
 
+        /**
+         * Stage1 单飞闩判据。真机复现(2026-07-11, e8597732 考研 ALL_SHARE_FAILED 0/3)：
+         * 单个 task 只派发一次，但 triggerSearch 在 collectVideoCards 已启动后二次触发，把 state
+         * 从 COLLECTING_VIDEO_CARDS 重置回 WAITING_SEARCH_RESULTS，第二个 cards=3 搜索结果事件
+         * 再次进入 handleSearchResults → 并发启动第二个 collectVideoCards 协程。两个协程同时驱动
+         * 抖音 UI，互相 recycle 对方的 AccessibilityNodeInfo 树 → 详情页树塌缩(childCount>0 但
+         * getChild 全 null，分享按钮找不到 STEP2)/分享面板抓不到(STEP3)/卡数掉到 1(STEP1) →
+         * 全卡片取链失败 ALL_SHARE_FAILED。仅靠 state 守卫不够（state 会被 triggerSearch 重置）；
+         * 必须用单调闩：一个 task 只允许启动一次采集 / 一次搜索触发，收到新 task 才在 startCollect 复位。
+         *
+         * @param collectionAlreadyLaunched 本 task 是否已启动过采集（或已触发过搜索并进入采集）。
+         * @return true = 允许启动；false = 已在飞行中，忽略本次重复触发。
+         */
+        internal fun mayStartStage1Work(collectionAlreadyLaunched: Boolean): Boolean {
+            return !collectionAlreadyLaunched
+        }
+
         // 回调（同进程直接调用）是主投递路径；兜底广播只在回调缺席时才发，
         // 否则回调+广播双投递会把队列里下一个在跑的 job 提前 markCurrentDone。
         internal fun shouldSendFallbackBroadcast(callbackRegistered: Boolean): Boolean {
@@ -1090,6 +1234,43 @@ class DouyinCollectService : AccessibilityService() {
         internal fun isBusyStateStale(stateChangedAtMs: Long, nowMs: Long, thresholdMs: Long): Boolean {
             return nowMs - stateChangedAtMs > thresholdMs
         }
+
+        /**
+         * 判定是否必须退回坐标手势点击（dispatchGesture）而非 performAction(ACTION_CLICK)。
+         *
+         * 真机实测（Douyin 39.5.0）两处实证：
+         *   ① 搜索入口 "搜索" TextView（id 混淆 4ty）：整条祖先链 clickable 全 false → NO_SEARCH_INPUT。
+         *   ② 搜索结果 "综合"/"视频" 标签：命中的 Button 自身 clickable=false，祖先 ActionBar$Tab
+         *      clickable=true，但对该祖先 performAction(ACTION_CLICK) 实测【不切标签】，只有对命中
+         *      节点中心坐标手势才生效（uiautomator dump + input tap 实证）→ 否则停在空"主页" → SEARCH_TIMEOUT。
+         *
+         * Android performAction(ACTION_CLICK) 只作用于被调用的节点、不冒泡到祖先；findNodeByText/Id
+         * 命中的往往是内层不可点击元素。②证明"链上有可点击祖先"不足以让 ACTION_CLICK 生效，
+         * 故判据取【命中节点自身是否可点击】：自身不可点击就必须坐标手势模拟真实触摸。
+         *
+         * @param clickableChain 目标节点到根，每一级的 isClickable 值（index 0 = 命中节点自身）。
+         * @return true = 命中节点自身不可点击（或空链），ACTION_CLICK 点不动，必须坐标手势。
+         */
+        internal fun mustGestureTap(clickableChain: List<Boolean>): Boolean =
+            clickableChain.firstOrNull() != true
+
+        /**
+         * Stage1 启动抖音的 Intent flags。
+         *
+         * 真机复现(2026-07-11)：仅用 getLaunchIntentForPackage 默认叠加的 NEW_TASK 会 resume
+         * 到上次采集流程残留的 DetailActivity——采集取分享链会点进视频详情页，任务中途死亡就
+         * 把抖音 task 栈留在 detail 页。下一个 Stage1 启动即 resume 到详情页而非首页 feed，
+         * openSearchBar 找不到"搜索"入口(searchBtn=false) → 关键词打进详情页聊天框 → 结果页
+         * 永不出现 → SEARCH_TIMEOUT（dumpsys 证 topResumedActivity=DetailActivity）。
+         *
+         * 必须叠加 FLAG_ACTIVITY_CLEAR_TASK 强制清空 task 栈、从 launcher activity 全新启动，
+         * 回到干净首页 feed（真机实证 CLEAR_TASK 只清 activity 栈、不动登录态，登录保持）。
+         *
+         * @param base getLaunchIntentForPackage 返回的 intent 原有 flags。
+         * @return 叠加 NEW_TASK|CLEAR_TASK 后的 flags。
+         */
+        internal fun stage1LaunchFlags(base: Int): Int =
+            base or Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
 
         // Stage1 派发（关键词搜索+收集视频卡）
         fun dispatchTask(context: Context, keyword: String, taskId: String) {

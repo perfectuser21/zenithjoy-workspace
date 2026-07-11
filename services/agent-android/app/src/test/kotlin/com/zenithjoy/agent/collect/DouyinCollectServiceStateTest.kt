@@ -1,5 +1,6 @@
 package com.zenithjoy.agent.collect
 
+import android.content.Intent
 import org.junit.Assert.*
 import org.junit.Test
 
@@ -56,6 +57,29 @@ class DouyinCollectServiceStateTest {
         )
     }
 
+    // ── mayStartStage1Work（单飞闩） ─────────────────────────────────────────
+    // 真机复现(2026-07-11, e8597732 考研 ALL_SHARE_FAILED 0/3)：单个 task 只派发一次，
+    // 但 triggerSearch 在采集已启动后二次触发，把 state 从 COLLECTING_VIDEO_CARDS 重置回
+    // WAITING_SEARCH_RESULTS，第二个 cards=3 搜索结果事件再次进入 handleSearchResults →
+    // 并发启动第二个 collectVideoCards 协程。两个协程同时驱动抖音 UI，互相 recycle 对方的
+    // AccessibilityNodeInfo 树 → 详情页树塌缩(childCount>0 但 getChild 全 null，分享按钮
+    // 找不到 STEP2)/分享面板抓不到(STEP3)/卡数掉到 1(STEP1) → 全卡片取链失败 ALL_SHARE_FAILED。
+    // 仅靠 state 守卫不够（state 会被 triggerSearch 重置）；必须用单调闩：一个 task 只允许
+    // 启动一次采集 / 一次搜索触发，收到新 task（startCollect）才复位。
+
+    @Test
+    fun `first stage1 work is allowed when collection not yet launched`() {
+        assertTrue(DouyinCollectService.mayStartStage1Work(collectionAlreadyLaunched = false))
+    }
+
+    @Test
+    fun `second concurrent stage1 work is blocked after collection launched (真机 ALL_SHARE_FAILED 根因)`() {
+        assertFalse(
+            "采集已启动后禁止再启动第二个 collectVideoCards / 再触发搜索，否则两协程并发 recycle UIA 树 → ALL_SHARE_FAILED",
+            DouyinCollectService.mayStartStage1Work(collectionAlreadyLaunched = true)
+        )
+    }
+
     // ── shouldRetryWithTabSwitch ─────────────────────────────────────────────
     // 真机复现(2026-07-10)：抖音搜索默认落在"主页"标签（空，找账号用），视频内容在
     // "综合"/"视频"标签。第一次搜索结果超时应该先切标签重试一次，不能直接判失败。
@@ -109,5 +133,85 @@ class DouyinCollectServiceStateTest {
         assertFalse(
             DouyinCollectService.isBusyStateStale(stateChangedAtMs = 1_000L, nowMs = 181_000L, thresholdMs = 180_000L)
         )
+    }
+
+    // ── mustGestureTap ──────────────────────────────────────────────────────
+    // 真机复现(Douyin 39.5.0)：无障碍节点广泛 clickable=false + resource-id 混淆。
+    // Android performAction(ACTION_CLICK) 只作用于被调用的节点、不冒泡到祖先。findNodeByText
+    // 命中的往往是内层不可点击元素（TextView/Button），对它 ACTION_CLICK 是空操作。
+    //
+    // 两处真机实证：
+    //   ① 搜索入口 "搜索" TextView(id 4ty)：整条祖先链 clickable 全 false → NO_SEARCH_INPUT。
+    //   ② 搜索结果 "综合"/"视频" 标签：命中的 Button 自身 clickable=false，祖先 ActionBar$Tab
+    //      clickable=true，但对该祖先 performAction(ACTION_CLICK) 实测【不生效】——只有对
+    //      命中节点中心坐标手势才真正切换标签（uiautomator dump + input tap 实证）→ 未修时
+    //      标签切不动、结果页停在空的"主页" → SEARCH_TIMEOUT。
+    //
+    // 结论：判据不能是"整条链是否有可点击节点"（②的祖先可点击却仍点不动），而应是
+    // 【命中节点自身是否可点击】——自身不可点击就必须退回坐标手势模拟真实触摸。
+
+    @Test
+    fun `all-false clickable chain must gesture tap (真机 bug 场景)`() {
+        // index 0 = 节点自身，到根全 false（正是 Douyin 搜索 TextView 的真机链）
+        assertTrue(
+            DouyinCollectService.mustGestureTap(listOf(false, false, false, false, false, false))
+        )
+    }
+
+    @Test
+    fun `node itself clickable does not need gesture tap`() {
+        assertFalse(
+            DouyinCollectService.mustGestureTap(listOf(true, false, false))
+        )
+    }
+
+    @Test
+    fun `non-clickable node with clickable ancestor must gesture tap (真机 综合标签场景)`() {
+        // "综合" 标签真机链：Button(false) → RelativeLayout(false) → ActionBar$Tab(true)。
+        // 祖先可点击，但对祖先 ACTION_CLICK 实测不切标签，只有坐标手势有效——
+        // 命中节点(index 0)自身不可点击即必须坐标手势。
+        assertTrue(
+            DouyinCollectService.mustGestureTap(listOf(false, false, true, false))
+        )
+    }
+
+    @Test
+    fun `empty chain defensively must gesture tap`() {
+        assertTrue(
+            DouyinCollectService.mustGestureTap(emptyList())
+        )
+    }
+
+    // ── stage1LaunchFlags ────────────────────────────────────────────────────
+    // 真机复现(2026-07-11)：采集取分享链会点进视频 DetailActivity，任务中途死亡把抖音 task
+    // 栈留在详情页。仅 NEW_TASK 启动会 resume 到残留详情页而非首页 feed → openSearchBar
+    // 找不到"搜索"入口 → 关键词打进详情页聊天框 → 结果页永不出现 → SEARCH_TIMEOUT。
+    // dumpsys 证 topResumedActivity=DetailActivity；CLEAR_TASK 清栈后回干净首页 feed 恢复。
+    // 结论：Stage1 启动 flags 必须叠加 FLAG_ACTIVITY_CLEAR_TASK，否则换台机器/换个任务必复发。
+
+    @Test
+    fun `stage1 launch flags must include CLEAR_TASK to escape stale DetailActivity`() {
+        val flags = DouyinCollectService.stage1LaunchFlags(base = 0)
+        assertTrue(
+            "Stage1 启动必须带 CLEAR_TASK 清空残留 DetailActivity 栈，否则 resume 到详情页 → SEARCH_TIMEOUT",
+            (flags and Intent.FLAG_ACTIVITY_CLEAR_TASK) != 0
+        )
+    }
+
+    @Test
+    fun `stage1 launch flags must include NEW_TASK`() {
+        // CLEAR_TASK 必须与 NEW_TASK 同用才生效（Android 契约）。
+        val flags = DouyinCollectService.stage1LaunchFlags(base = 0)
+        assertTrue(
+            (flags and Intent.FLAG_ACTIVITY_NEW_TASK) != 0
+        )
+    }
+
+    @Test
+    fun `stage1 launch flags preserve existing base flags`() {
+        // 不能丢弃 getLaunchIntentForPackage 原有 flags。
+        val base = 0x00100000 // 任意已有 flag 位
+        val flags = DouyinCollectService.stage1LaunchFlags(base = base)
+        assertTrue((flags and base) == base)
     }
 }
