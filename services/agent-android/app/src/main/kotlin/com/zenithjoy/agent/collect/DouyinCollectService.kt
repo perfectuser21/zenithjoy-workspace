@@ -249,7 +249,10 @@ class DouyinCollectService : AccessibilityService() {
         return try {
             val pm = applicationContext.packageManager
             val launchIntent = pm.getLaunchIntentForPackage(DOUYIN_PKG) ?: return false
-            launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            // 必须叠加 CLEAR_TASK：仅 NEW_TASK 会 resume 到上次采集残留的 DetailActivity
+            // （取分享链会点进视频详情页，任务中途死留栈）→ 在详情页跑搜索 → SEARCH_TIMEOUT。
+            // CLEAR_TASK 强制清栈从 launcher 全新启动回干净首页 feed（不动登录态，真机实证）。
+            launchIntent.flags = stage1LaunchFlags(launchIntent.flags)
             applicationContext.startActivity(launchIntent)
             true
         } catch (e: Exception) {
@@ -1228,7 +1231,8 @@ class DouyinCollectService : AccessibilityService() {
          * @param base getLaunchIntentForPackage 返回的 intent 原有 flags。
          * @return 叠加 NEW_TASK|CLEAR_TASK 后的 flags。
          */
-        internal fun stage1LaunchFlags(base: Int): Int = base
+        internal fun stage1LaunchFlags(base: Int): Int =
+            base or Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
 
         // Stage1 派发（关键词搜索+收集视频卡）
         fun dispatchTask(context: Context, keyword: String, taskId: String) {
