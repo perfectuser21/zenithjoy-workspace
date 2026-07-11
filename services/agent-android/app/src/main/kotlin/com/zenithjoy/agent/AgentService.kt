@@ -147,7 +147,7 @@ class AgentService : Service() {
         config = AgentConfig(this)
         reporter = CollectReporter(
             httpBase = config.deriveHttpBase(),
-            agentId = config.agentId,
+            agentId = { config.agentId },
         )
         startForeground(NOTIFICATION_ID, buildNotification())
         registerReceiver(collectResultReceiver,
@@ -347,13 +347,13 @@ class AgentService : Service() {
         // reporter 使用最新 agentId（initAgent 之后才确定）
         reporter = CollectReporter(
             httpBase = config.deriveHttpBase(),
-            agentId = config.agentId,
+            agentId = { config.agentId },
         )
 
         // 两阶段采集任务轮询（Path 2 Step 5）
         // 与 keywordPollLoop 并行双跑，通过 collectTaskIds Set 在 onCollectResult 中区分路由
         collectPollLoop = AcquisitionCollectPollLoop(
-            agentId = config.agentId,
+            agentId = { config.agentId },
             httpBase = config.deriveHttpBase(),
             scope = scope,
             onStage1Task = { taskId, keyword ->

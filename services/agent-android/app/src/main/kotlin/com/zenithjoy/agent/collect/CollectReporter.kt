@@ -9,7 +9,8 @@ import java.util.concurrent.TimeUnit
 
 class CollectReporter(
     private val httpBase: String,
-    private val agentId: String,
+    // 实时读取，不是构造时快照——heartbeat 的 onAgentIdReceived 可能在构造完成后覆写 config.agentId。
+    private val agentId: () -> String,
     private val httpClient: OkHttpClient = defaultClient(),
     private val gson: Gson = Gson(),
     private val sleepFn: (Long) -> Unit = { Thread.sleep(it) },
@@ -126,7 +127,7 @@ class CollectReporter(
         val request = Request.Builder()
             .url(url)
             .post(body.toRequestBody("application/json".toMediaType()))
-            .header("x-agent-id", agentId)
+            .header("x-agent-id", agentId())
             .build()
         return httpClient.newCall(request).execute()
     }

@@ -24,7 +24,8 @@ import java.util.concurrent.TimeUnit
  * AgentService.onCollectResult 中区分路由：命中 → /collect/report，否则 → /comment-score-result。
  */
 class AcquisitionCollectPollLoop(
-    private val agentId: String,
+    // 实时读取，不是构造时快照——heartbeat 的 onAgentIdReceived 可能在构造完成后覆写 config.agentId。
+    private val agentId: () -> String,
     private val httpBase: String,
     private val scope: CoroutineScope,
     private val intervalMs: Long = 30_000L,
@@ -75,12 +76,13 @@ class AcquisitionCollectPollLoop(
 
     /** 单次轮询，供测试直接调用。注意：此函数是同步的（非 suspend），保持与 AcquisitionKeywordPollLoop 一致的接口风格。 */
     fun pollOnce() {
-        if (agentId.isEmpty()) return
+        val currentAgentId = agentId()
+        if (currentAgentId.isEmpty()) return
 
         val url = "${httpBase.trimEnd('/')}/api/acquisition/pending-collect-tasks"
         val request = Request.Builder()
             .url(url)
-            .header("x-agent-id", agentId)
+            .header("x-agent-id", currentAgentId)
             .get()
             .build()
 
