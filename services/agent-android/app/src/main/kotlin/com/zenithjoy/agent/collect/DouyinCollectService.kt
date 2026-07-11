@@ -61,6 +61,12 @@ class DouyinCollectService : AccessibilityService() {
     // 真机复现(2026-07-10)：抖音搜索默认落在"主页"标签（找账号主页用的，天然没有视频卡片），
     // 真实视频内容在"综合"/"视频"标签。首次超时先尝试切标签重试一次，避免误判 SEARCH_TIMEOUT。
     private var triedTabSwitch = false
+    // 看门狗重入根治(真机复现 2026-07-11 xian-rog 荣耀)：startSearchResultTimeout() 每次调用
+    // 都 new 一个协程，旧协程从不 cancel。tab 切换后 67ms 内又触发一次误判 SEARCH_TIMEOUT，
+    // 正是某个更早创建、还没到期的旧看门狗读到被别的协程改过的 triedTabSwitch 直接判定失败——
+    // 这时刚点下去的 tab 切换手势其实还没来得及生效。用单调递增 generation 给每个看门狗发号，
+    // 到期时只有仍是最新 generation 的那个才有权处理，见 [shouldHonorTimeoutFiring]。
+    private var timeoutGeneration = 0
 
     // Bug C 剪贴板路线：等待 ShareIngestActivity 读回的短链，带 token 防跨卡串号。
     // 载荷携带 (短链文案, clip 写入时间戳)——时间戳供服务侧新鲜度闸判残留旧短链串号。
@@ -410,11 +416,13 @@ class DouyinCollectService : AccessibilityService() {
     }
 
     private fun startSearchResultTimeout() {
+        val myGeneration = ++timeoutGeneration
         scope.launch {
             val found = withTimeoutOrNull(10_000L) {
                 while (state == State.WAITING_SEARCH_RESULTS) delay(300)
                 true
             }
+            if (!shouldHonorTimeoutFiring(myGeneration, timeoutGeneration)) return@launch
             if (found == null && state == State.WAITING_SEARCH_RESULTS) {
                 // 真机复现：抖音搜索默认落在"主页"标签（空，找账号用），视频内容在"综合"/
                 // "视频"标签。先尝试切标签重试一次，不是每次超时都直接判失败。
@@ -477,6 +485,10 @@ class DouyinCollectService : AccessibilityService() {
                     if (trySwitchToVideoTab()) {
                         android.util.Log.i(TAG, "handleSearchResults: 首次结果，先切「视频」tab 再采（避免撞直播间）")
                         searchTriggeredAtMs = android.os.SystemClock.elapsedRealtime()
+                        // 看门狗重入根治：必须重启看门狗（bump generation），否则原 triggerSearch()
+                        // 启动的旧看门狗仍会按创建时刻起算的 10s 预算独立到期，读到刚置位的
+                        // triedTabSwitch=true 直接误判 SEARCH_TIMEOUT，此时 tab 切换手势还没生效。
+                        startSearchResultTimeout()
                         return
                     }
                     // 找不到标签节点（罕见，如已就在纯净列表页）：不再等切换，直接按本批结果采集。
@@ -1227,6 +1239,17 @@ class DouyinCollectService : AccessibilityService() {
 
         internal fun shouldRetryWithTabSwitch(alreadyTriedTabSwitch: Boolean): Boolean {
             return !alreadyTriedTabSwitch
+        }
+
+        /**
+         * 看门狗重入根治(真机复现 2026-07-11 xian-rog 荣耀)：startSearchResultTimeout() 每次
+         * 调用都 new 一个协程，旧协程从不 cancel，多个看门狗可并发存活。到期时只有仍是最新
+         * generation 的看门狗才有权处理超时判定；被更新一轮 tab 切换重试取代的旧看门狗必须
+         * 静默放弃，否则会用创建时刻起算的 10s 预算、读到已被更新的 triedTabSwitch 状态，
+         * 在 tab 切换手势还没生效前就误判 SEARCH_TIMEOUT。
+         */
+        internal fun shouldHonorTimeoutFiring(myGeneration: Int, latestGeneration: Int): Boolean {
+            return myGeneration == latestGeneration
         }
 
         /**
