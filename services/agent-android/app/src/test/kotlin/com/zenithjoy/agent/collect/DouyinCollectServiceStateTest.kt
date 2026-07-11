@@ -112,10 +112,19 @@ class DouyinCollectServiceStateTest {
     }
 
     // ── mustGestureTap ──────────────────────────────────────────────────────
-    // 真机复现(Douyin 39.5.0)：搜索入口 "搜索" TextView(id 混淆为 4ty)整条无障碍祖先链
-    // clickable 全为 false。Android performAction(ACTION_CLICK) 不冒泡到祖先，对这种节点
-    // 是空操作——openSearchBar 点不动搜索按钮，页面不跳转搜索页，typeKeyword 找不到 EditText
-    // 报 NO_SEARCH_INPUT。此纯函数判定：链上无任何可点击节点时必须退回坐标手势点击。
+    // 真机复现(Douyin 39.5.0)：无障碍节点广泛 clickable=false + resource-id 混淆。
+    // Android performAction(ACTION_CLICK) 只作用于被调用的节点、不冒泡到祖先。findNodeByText
+    // 命中的往往是内层不可点击元素（TextView/Button），对它 ACTION_CLICK 是空操作。
+    //
+    // 两处真机实证：
+    //   ① 搜索入口 "搜索" TextView(id 4ty)：整条祖先链 clickable 全 false → NO_SEARCH_INPUT。
+    //   ② 搜索结果 "综合"/"视频" 标签：命中的 Button 自身 clickable=false，祖先 ActionBar$Tab
+    //      clickable=true，但对该祖先 performAction(ACTION_CLICK) 实测【不生效】——只有对
+    //      命中节点中心坐标手势才真正切换标签（uiautomator dump + input tap 实证）→ 未修时
+    //      标签切不动、结果页停在空的"主页" → SEARCH_TIMEOUT。
+    //
+    // 结论：判据不能是"整条链是否有可点击节点"（②的祖先可点击却仍点不动），而应是
+    // 【命中节点自身是否可点击】——自身不可点击就必须退回坐标手势模拟真实触摸。
 
     @Test
     fun `all-false clickable chain must gesture tap (真机 bug 场景)`() {
@@ -133,8 +142,11 @@ class DouyinCollectServiceStateTest {
     }
 
     @Test
-    fun `a clickable ancestor does not need gesture tap`() {
-        assertFalse(
+    fun `non-clickable node with clickable ancestor must gesture tap (真机 综合标签场景)`() {
+        // "综合" 标签真机链：Button(false) → RelativeLayout(false) → ActionBar$Tab(true)。
+        // 祖先可点击，但对祖先 ACTION_CLICK 实测不切标签，只有坐标手势有效——
+        // 命中节点(index 0)自身不可点击即必须坐标手势。
+        assertTrue(
             DouyinCollectService.mustGestureTap(listOf(false, false, true, false))
         )
     }
