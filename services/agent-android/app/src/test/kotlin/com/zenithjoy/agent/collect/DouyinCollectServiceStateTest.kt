@@ -57,6 +57,29 @@ class DouyinCollectServiceStateTest {
         )
     }
 
+    // ── mayStartStage1Work（单飞闩） ─────────────────────────────────────────
+    // 真机复现(2026-07-11, e8597732 考研 ALL_SHARE_FAILED 0/3)：单个 task 只派发一次，
+    // 但 triggerSearch 在采集已启动后二次触发，把 state 从 COLLECTING_VIDEO_CARDS 重置回
+    // WAITING_SEARCH_RESULTS，第二个 cards=3 搜索结果事件再次进入 handleSearchResults →
+    // 并发启动第二个 collectVideoCards 协程。两个协程同时驱动抖音 UI，互相 recycle 对方的
+    // AccessibilityNodeInfo 树 → 详情页树塌缩(childCount>0 但 getChild 全 null，分享按钮
+    // 找不到 STEP2)/分享面板抓不到(STEP3)/卡数掉到 1(STEP1) → 全卡片取链失败 ALL_SHARE_FAILED。
+    // 仅靠 state 守卫不够（state 会被 triggerSearch 重置）；必须用单调闩：一个 task 只允许
+    // 启动一次采集 / 一次搜索触发，收到新 task（startCollect）才复位。
+
+    @Test
+    fun `first stage1 work is allowed when collection not yet launched`() {
+        assertTrue(DouyinCollectService.mayStartStage1Work(collectionAlreadyLaunched = false))
+    }
+
+    @Test
+    fun `second concurrent stage1 work is blocked after collection launched (真机 ALL_SHARE_FAILED 根因)`() {
+        assertFalse(
+            "采集已启动后禁止再启动第二个 collectVideoCards / 再触发搜索，否则两协程并发 recycle UIA 树 → ALL_SHARE_FAILED",
+            DouyinCollectService.mayStartStage1Work(collectionAlreadyLaunched = true)
+        )
+    }
+
     // ── shouldRetryWithTabSwitch ─────────────────────────────────────────────
     // 真机复现(2026-07-10)：抖音搜索默认落在"主页"标签（空，找账号用），视频内容在
     // "综合"/"视频"标签。第一次搜索结果超时应该先切标签重试一次，不能直接判失败。
