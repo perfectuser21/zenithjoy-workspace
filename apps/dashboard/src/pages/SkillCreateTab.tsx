@@ -1,36 +1,46 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { adminFetch } from '../lib/admin-fetch';
 
 /**
- * 「创建 Skill」Tab —— 对话式创建 skill 草稿
+ * 「创建 Skill」Tab —— 对话式创建 skill 草稿（长跑异步版本）
  *
- * sprint_dir: sprints/07091721-conversational-skill-creation
+ * sprint_dir: sprints/07101942-skill-create-longrun
  *
- * 后端 /chat 端点是 POST（转发 mmv 上 claude -p --resume 的 stream-json 输出），
- * 浏览器原生 EventSource 只支持 GET，所以这里用 fetch + ReadableStream 手动解析
- * text/event-stream 格式（数据帧仍是标准 `data: ...\n\n` / `event: xxx\n...\n\n`），
- * 效果与 EventSource 等价，只是能配合 POST body 传消息内容。
+ * 核心改造：
+ * - 点"开始吧"后 API 立即返回 { status: "running" }，前端每 8 秒轮询 GET /:id
+ * - 前端展示 running / needs_input / done / error 四种状态 UI
+ * - needs_input：显示 AI 问题 + 答案输入框 + 提交按钮
+ * - done：显示 zip 下载链接
+ * - error：显示错误信息 + "重新开始"按钮
  */
 
 const DRAFT_ID_STORAGE_KEY = 'skill_draft_id';
 const GENERATE_TRIGGER = '生成吧';
+const POLL_INTERVAL_MS = 8000; // B-17：每 8 秒轮询一次
 
 interface ChatMessage {
   role: 'user' | 'assistant';
   content: string;
 }
 
-type ChatPhase = 'idle' | 'sending' | 'generating' | 'error' | 'done';
+type ChatPhase = 'idle' | 'sending' | 'running' | 'needs_input' | 'error' | 'done';
+
+interface DraftData {
+  id: string;
+  status: string;
+  messages_json: ChatMessage[];
+  pending_question: string | null;
+  result_json: { zip_path?: string; error_message?: string } | null;
+  job_id?: string | null;
+  callback_token?: string | null;
+}
 
 function draftUrl(id: string, suffix = ''): string {
-  // 创建草稿（POST /api/staff/skill-drafts）不带 id，URL 不能有多余的尾部斜杠——
-  // Playwright mock 用精确 glob '**/api/staff/skill-drafts' 匹配，带斜杠会导致 404。
   return id ? `/api/staff/skill-drafts/${id}${suffix}` : '/api/staff/skill-drafts';
 }
 
-/** 解析一个以 \n\n 分隔的 SSE 事件块，返回 { event, data }（event 缺省为 'message'）。 */
+/** 解析一个以 \n\n 分隔的 SSE 事件块，返回 { event, data } */
 function parseSseBlock(block: string): { event: string; data: string } {
   let event = 'message';
   const dataLines: string[] = [];
@@ -46,15 +56,72 @@ function parseSseBlock(block: string): { event: string; data: string } {
 
 export default function SkillCreateTab() {
   const { user } = useAuth();
-  const navigate = useNavigate();
 
   const [draftId, setDraftId] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [phase, setPhase] = useState<ChatPhase>('idle');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [jobId, setJobId] = useState<string | null>(null);
+  const [zipPath, setZipPath] = useState<string | null>(null);
+  const [pendingQuestion, setPendingQuestion] = useState<string | null>(null);
+  const [answerInput, setAnswerInput] = useState('');
   const initRef = useRef(false);
+  const pollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // 停止轮询
+  const stopPolling = useCallback(() => {
+    if (pollTimerRef.current) {
+      clearTimeout(pollTimerRef.current);
+      pollTimerRef.current = null;
+    }
+  }, []);
+
+  // 轮询 GET /:id 直到终态
+  const startPolling = useCallback(
+    (id: string) => {
+      stopPolling();
+
+      const poll = async () => {
+        try {
+          const res = await adminFetch(draftUrl(id), user?.email);
+          if (!res.ok) {
+            setPhase('error');
+            setErrorMessage('获取生成状态失败，请刷新页面');
+            return;
+          }
+          const json = (await res.json()) as { data: DraftData };
+          const data = json.data;
+
+          if (data.status === 'done') {
+            setPhase('done');
+            setZipPath(data.result_json?.zip_path ?? null);
+            stopPolling();
+          } else if (data.status === 'needs_input') {
+            setPhase('needs_input');
+            setPendingQuestion(data.pending_question ?? null);
+            stopPolling(); // 等员工答完再继续
+          } else if (data.status === 'error') {
+            setPhase('error');
+            setErrorMessage(data.result_json?.error_message ?? '生成失败，请重试');
+            stopPolling();
+          } else {
+            // running：继续轮询
+            pollTimerRef.current = setTimeout(() => {
+              void poll();
+            }, POLL_INTERVAL_MS);
+          }
+        } catch {
+          setPhase('error');
+          setErrorMessage('网络错误，请刷新页面重试');
+          stopPolling();
+        }
+      };
+
+      // 首次立即调用
+      void poll();
+    },
+    [user?.email, stopPolling]
+  );
 
   // 挂载时：localStorage 有 draft_id → 断点续聊拉历史；没有 → 创建新草稿
   useEffect(() => {
@@ -67,10 +134,25 @@ export default function SkillCreateTab() {
         try {
           const res = await adminFetch(draftUrl(savedId), user?.email);
           if (res.ok) {
-            const json = await res.json();
-            const data = json.data ?? json;
+            const json = (await res.json()) as { data: DraftData };
+            const data = json.data ?? (json as unknown as DraftData);
             setDraftId(savedId);
             setMessages(Array.isArray(data.messages_json) ? data.messages_json : []);
+
+            // 恢复非终态的轮询
+            if (data.status === 'running') {
+              setPhase('running');
+              startPolling(savedId);
+            } else if (data.status === 'needs_input') {
+              setPhase('needs_input');
+              setPendingQuestion(data.pending_question ?? null);
+            } else if (data.status === 'done') {
+              setPhase('done');
+              setZipPath(data.result_json?.zip_path ?? null);
+            } else if (data.status === 'error') {
+              setPhase('error');
+              setErrorMessage(data.result_json?.error_message ?? '生成失败，请重试');
+            }
             return;
           }
         } catch {
@@ -85,7 +167,7 @@ export default function SkillCreateTab() {
           body: JSON.stringify({}),
         });
         if (res.ok) {
-          const json = await res.json();
+          const json = (await res.json()) as { data: DraftData };
           const id: string = json.data?.id;
           if (id) {
             localStorage.setItem(DRAFT_ID_STORAGE_KEY, id);
@@ -99,31 +181,64 @@ export default function SkillCreateTab() {
     };
 
     void restore();
-  }, [user?.email]);
+  }, [user?.email, startPolling]);
 
+  // 组件卸载时停止轮询
+  useEffect(() => {
+    return () => {
+      stopPolling();
+    };
+  }, [stopPolling]);
+
+  // 触发后台生成（异步，立即返回 running）
   const triggerGenerate = useCallback(
     async (id: string) => {
-      setPhase('generating');
+      setPhase('running');
       try {
         const res = await adminFetch(draftUrl(id, '/generate'), user?.email, { method: 'POST' });
-        if (!res.ok) {
-          setPhase('error');
-          setErrorMessage('AI 暂时连不上，稍后重试');
+        if (res.status === 409) {
+          // 已在 running/needs_input 状态，直接开始轮询
+          startPolling(id);
           return;
         }
-        const json = await res.json();
-        const returnedJobId: string | undefined = json.data?.job_id;
-        setPhase('done');
-        if (returnedJobId) {
-          setJobId(returnedJobId);
-          navigate(`/staff/skill-eval?job_id=${returnedJobId}`, { replace: true });
+        if (!res.ok) {
+          setPhase('error');
+          setErrorMessage('触发生成失败，请重试');
+          return;
         }
+        // 立即开始轮询
+        startPolling(id);
       } catch {
         setPhase('error');
         setErrorMessage('AI 暂时连不上，稍后重试');
       }
     },
-    [navigate, user?.email]
+    [user?.email, startPolling]
+  );
+
+  // 提交答案（needs_input → running）
+  const submitAnswer = useCallback(
+    async (id: string, answer: string) => {
+      setPhase('running');
+      setPendingQuestion(null);
+      try {
+        const res = await adminFetch(draftUrl(id, '/answer'), user?.email, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ answer }),
+        });
+        if (!res.ok) {
+          setPhase('error');
+          setErrorMessage('提交答案失败，请重试');
+          return;
+        }
+        startPolling(id);
+      } catch {
+        setPhase('error');
+        setErrorMessage('网络错误，请重试');
+      }
+    },
+    [user?.email, startPolling]
   );
 
   const sendMessage = useCallback(
@@ -139,7 +254,6 @@ export default function SkillCreateTab() {
       setErrorMessage(null);
 
       let assembled = '';
-      // 先占位一条空的 assistant 气泡，SSE 到达时逐步填充（流式渲染）
       let assistantIndex = -1;
       setMessages((prev) => {
         assistantIndex = prev.length;
@@ -193,7 +307,7 @@ export default function SkillCreateTab() {
                 const parsed = JSON.parse(data) as { message?: string };
                 if (parsed.message) msg = parsed.message;
               } catch {
-                // data 不是合法 JSON，用默认文案
+                // ignore
               }
               setErrorMessage(msg);
             } else if (event === 'done') {
@@ -232,6 +346,50 @@ export default function SkillCreateTab() {
     void sendMessage(draftId, text);
   };
 
+  const handleRetry = () => {
+    setPhase('idle');
+    setErrorMessage(null);
+    setZipPath(null);
+    setPendingQuestion(null);
+    // 清除草稿状态，重新开始
+    localStorage.removeItem(DRAFT_ID_STORAGE_KEY);
+    setDraftId(null);
+    setMessages([]);
+    initRef.current = false;
+    // 重新触发 useEffect 初始化
+    setTimeout(() => {
+      initRef.current = false;
+      const restore = async () => {
+        try {
+          const res = await adminFetch(draftUrl(''), user?.email, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({}),
+          });
+          if (res.ok) {
+            const json = (await res.json()) as { data: DraftData };
+            const id: string = json.data?.id;
+            if (id) {
+              localStorage.setItem(DRAFT_ID_STORAGE_KEY, id);
+              setDraftId(id);
+            }
+          }
+        } catch {
+          setPhase('error');
+          setErrorMessage('创建草稿失败，请刷新页面');
+        }
+      };
+      void restore();
+    }, 0);
+  };
+
+  const handleAnswerSubmit = () => {
+    const answer = answerInput.trim();
+    if (!answer || !draftId) return;
+    setAnswerInput('');
+    void submitAnswer(draftId, answer);
+  };
+
   return (
     <div className="w-full max-w-2xl mx-auto flex flex-col h-full">
       <p className="text-gray-500 dark:text-gray-400 mb-4 text-sm">
@@ -265,22 +423,71 @@ export default function SkillCreateTab() {
           </div>
         )}
 
-        {phase === 'generating' && (
-          <div data-testid="skill-create-generating" className="flex items-center gap-2 text-blue-600 dark:text-blue-400 text-xs">
+        {phase === 'running' && (
+          <div data-testid="skill-create-running" className="flex items-center gap-2 text-blue-600 dark:text-blue-400 text-xs">
             <div className="w-3 h-3 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
-            正在生成 skill 并提交评测...
+            正在后台生成 skill，每 8 秒自动刷新状态...
+          </div>
+        )}
+
+        {phase === 'needs_input' && pendingQuestion && (
+          <div data-testid="skill-create-needs-input" className="p-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-xl space-y-3">
+            <p data-testid="skill-create-question" className="text-sm text-yellow-800 dark:text-yellow-200 font-medium">
+              AI 需要你的决策：{pendingQuestion}
+            </p>
+            <textarea
+              data-testid="skill-create-answer-input"
+              value={answerInput}
+              onChange={(e) => setAnswerInput(e.target.value)}
+              placeholder="输入你的答案..."
+              rows={2}
+              className="w-full text-sm rounded-lg border border-yellow-300 dark:border-yellow-700 bg-white dark:bg-slate-700 text-gray-900 dark:text-white px-3 py-2 resize-none"
+            />
+            <button
+              data-testid="skill-create-answer-submit"
+              onClick={handleAnswerSubmit}
+              disabled={!answerInput.trim()}
+              className="px-4 py-2 bg-yellow-600 hover:bg-yellow-700 disabled:bg-gray-300 dark:disabled:bg-slate-600 text-white text-sm font-medium rounded-xl transition-colors disabled:cursor-not-allowed"
+            >
+              提交答案
+            </button>
           </div>
         )}
 
         {phase === 'error' && (
-          <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-sm text-red-700 dark:text-red-400">
-            {errorMessage ?? 'AI 暂时连不上，稍后重试'}
+          <div data-testid="skill-create-error" className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg space-y-2">
+            <p data-testid="skill-create-error-message" className="text-sm text-red-700 dark:text-red-400">
+              {errorMessage ?? '生成失败，请重试'}
+            </p>
+            <button
+              data-testid="skill-create-retry"
+              onClick={handleRetry}
+              className="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white text-xs font-medium rounded-lg transition-colors"
+            >
+              重新开始
+            </button>
           </div>
         )}
 
-        {phase === 'done' && jobId && (
+        {phase === 'done' && zipPath && (
+          <div className="p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg space-y-2">
+            <p className="text-sm text-green-700 dark:text-green-400">
+              Skill 生成完成！
+            </p>
+            <a
+              data-testid="skill-create-download-link"
+              href={zipPath}
+              download
+              className="inline-flex items-center gap-1 px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white text-xs font-medium rounded-lg transition-colors"
+            >
+              下载 Skill zip
+            </a>
+          </div>
+        )}
+
+        {phase === 'done' && !zipPath && (
           <div className="p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg text-sm text-green-700 dark:text-green-400">
-            已提交评测（job_id: {jobId}），可切换到「评测上传」Tab 查看报告进度
+            Skill 生成完成！
           </div>
         )}
       </div>
@@ -298,13 +505,13 @@ export default function SkillCreateTab() {
           }}
           placeholder="描述你想要的 skill 需求..."
           rows={2}
-          disabled={phase === 'generating'}
+          disabled={phase === 'running' || phase === 'needs_input' || phase === 'done'}
           className="flex-1 text-sm rounded-lg border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-gray-900 dark:text-white px-3 py-2 disabled:opacity-50 resize-none"
         />
         <button
           data-testid="skill-create-send"
           onClick={handleSend}
-          disabled={!input.trim() || !draftId || phase === 'generating'}
+          disabled={!input.trim() || !draftId || phase === 'running' || phase === 'needs_input' || phase === 'done'}
           className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 dark:disabled:bg-slate-600 text-white text-sm font-medium rounded-xl transition-colors disabled:cursor-not-allowed"
         >
           发送

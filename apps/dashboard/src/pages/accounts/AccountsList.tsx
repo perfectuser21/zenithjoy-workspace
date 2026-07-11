@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Plus, RefreshCw, Filter } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { AccountCard } from '../../components/AccountCard';
@@ -14,11 +14,7 @@ export default function AccountsList() {
   const [loading, setLoading] = useState(true);
   const [healthChecking, setHealthChecking] = useState(false);
 
-  useEffect(() => {
-    loadAccounts();
-  }, [filter]);
-
-  const loadAccounts = async () => {
+  const loadAccounts = useCallback(async () => {
     try {
       setLoading(true);
       const platform = filter === 'all' ? undefined : filter;
@@ -29,7 +25,11 @@ export default function AccountsList() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [filter]);
+
+  useEffect(() => {
+    void loadAccounts();
+  }, [loadAccounts]);
 
   const handleAddAccount = () => {
     const platform = prompt('请选择平台 (xiaohongshu/douyin/bilibili/weibo)');
@@ -44,7 +44,7 @@ export default function AccountsList() {
     accountsApi.addAccount({ platform, accountId, displayName })
       .then(() => {
         alert('账号添加成功');
-        loadAccounts();
+        void loadAccounts();
       })
       .catch(error => {
         console.error('Failed to add account:', error);

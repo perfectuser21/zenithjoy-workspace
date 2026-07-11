@@ -36,7 +36,7 @@ jobs:
           FILES=$(git diff --name-only "$BASE...$HEAD")
           echo "$FILES"
           MATCH=false
-          if echo "$FILES" | grep -qE '^(apps/api/src/routes/skill-drafts\.ts|apps/api/src/services/skillDraftStateMachine\.ts|apps/api/db/migrations/.*skill_drafts.*\.sql|apps/dashboard/src/pages/SkillEvalPage\.tsx|apps/dashboard/src/pages/SkillCreateTab\.tsx|apps/dashboard/e2e/skill-create\.spec\.ts|sprints/07091721-conversational-skill-creation/|\.github/workflows/e2e-skill-create-windows\.yml$)'; then
+          if echo "$FILES" | grep -qE '^(apps/api/src/routes/skill-drafts\.ts|apps/api/src/services/skillDraftStateMachine\.ts|apps/api/db/migrations/.*skill_drafts.*\.sql|apps/dashboard/src/pages/SkillEvalPage\.tsx|apps/dashboard/src/pages/SkillCreateTab\.tsx|apps/dashboard/e2e/skill-create\.spec\.ts|apps/dashboard/e2e/skill-create-longrun\.spec\.ts|apps/api/src/routes/__tests__/skill-drafts-longrun\.test\.ts|apps/dashboard/src/components/staff/SkillCreate\.tsx|sprints/07091721-conversational-skill-creation/|sprints/07101942-skill-create-longrun/|\.github/workflows/e2e-skill-create-windows\.yml$)'; then
             MATCH=true
           fi
           echo "skill_create=$MATCH" >> "$GITHUB_OUTPUT"
@@ -150,7 +150,7 @@ jobs:
         working-directory: apps/dashboard
         env:
           E2E_BASE_URL: 'http://localhost:5174'
-        run: npx playwright test e2e/skill-create.spec.ts --reporter=list
+        run: npx playwright test e2e/skill-create.spec.ts e2e/skill-create-longrun.spec.ts --reporter=list
 
       - name: Dump apps/api log on failure
         if: failure()

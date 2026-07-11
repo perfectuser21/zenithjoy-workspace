@@ -4618,6 +4618,24 @@ agent_suite:
   product: 员工工具
   note: "sprint(07091721): 对话式创建Skill E2E Playwright——Golden Path（Tab→聊天→生成吧→报告页）+ 断点续聊"
 
+  # ── 后台长跑生成改造 ──────────────────────────────────────────────────────────
+
+- id: skill-create-longrun-unit
+  path: apps/api/src/routes/__tests__/skill-drafts-longrun.test.ts
+  type: unit
+  ci: L3
+  status: active
+  product: 员工工具
+  note: "sprint(07101942): 后台长跑生成改造——B-01~B-16 状态机/互斥锁/callback token/软超时/answer 端点单测（TDD Red 基线 4cc400a0）"
+
+- id: skill-create-longrun-e2e
+  path: apps/dashboard/e2e/skill-create-longrun.spec.ts
+  type: e2e
+  ci: windows_cloud
+  status: active
+  product: 员工工具
+  note: "sprint(07101942): 后台长跑生成改造 E2E Playwright——B-17~B-20 前端状态展示（running/needs_input/done/error + 轮询 + answer 提交）"
+
 - id: line02-acquisition-hub-android-entry-e2e
   path: apps/dashboard/e2e/acquisition-android-entry.spec.ts
   type: e2e

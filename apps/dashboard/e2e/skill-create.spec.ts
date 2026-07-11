@@ -84,7 +84,7 @@ function stubSkillDraftsApi(page: import('@playwright/test').Page, initialMessag
     }
   });
 
-  // POST /api/staff/skill-drafts/:id/generate → 生成完成
+  // POST /api/staff/skill-drafts/:id/generate → 立即返回 running（长跑改造后行为）
   page.route('**/api/staff/skill-drafts/mock-draft-001/generate', async (route) => {
     if (route.request().method() === 'POST') {
       await route.fulfill({
@@ -92,7 +92,7 @@ function stubSkillDraftsApi(page: import('@playwright/test').Page, initialMessag
         contentType: 'application/json',
         body: JSON.stringify({
           success: true,
-          data: { status: 'done', job_id: 'gen-job-001' },
+          data: { status: 'running' },
         }),
       });
     } else {
@@ -140,12 +140,10 @@ test(
       .or(page.locator('button:has-text("发送")'))
       .click();
 
+    // Step 4+5：长跑改造后 → /generate 立即返回 running，UI 显示"正在后台生成"状态（不跳转 URL）
     await expect(
-      page.locator('text=正在生成').or(page.locator('[data-testid="skill-create-generating"]'))
-    ).toBeVisible({ timeout: 5000 });
-
-    // Step 5：mock generate 完成 → 页面跳转到报告页，URL 含 job_id
-    await expect(page).toHaveURL(/job_id=gen-job-001/, { timeout: 15000 });
+      page.locator('[data-testid="skill-create-running"]')
+    ).toBeVisible({ timeout: 10000 });
   }
 );
 
