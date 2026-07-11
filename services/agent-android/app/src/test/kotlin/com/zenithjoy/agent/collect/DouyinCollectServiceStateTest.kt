@@ -213,6 +213,32 @@ class DouyinCollectServiceStateTest {
         )
     }
 
+    // ── shouldHonorTimeoutFiring（看门狗重入根治） ────────────────────────────
+    // 真机复现(2026-07-11 xian-rog 荣耀)：tab 点击后 67ms 内又打出一条 timeout fired
+    // triedTab=true → SEARCH_TIMEOUT，不符合 10s 超时协程的正常计时节奏。根因：
+    // startSearchResultTimeout() 每次调用都 new 一个协程，从不 cancel 旧协程——事件驱动
+    // 重试(handleSearchResults WAIT_FOR_TAB_SWITCH 分支)只重置 searchTriggeredAtMs 不重启
+    // 看门狗，超时驱动重试虽重新调用但也不 cancel 旧协程。多个看门狗并发存活，各自用创建
+    // 时刻起算的 10s 预算，与最新 triedTabSwitch 状态不同步——一个更早、还没到期的旧看门狗
+    // 读到已被别的协程改成 true 的 triedTabSwitch，直接判失败，这时刚点下去的 tab 切换手势
+    // 其实还没来得及生效。修法：每个看门狗持有创建时的 generation 快照，到期时只有仍是
+    // 最新 generation 的那个才有权处理，被更新的 generation 取代的旧看门狗必须静默放弃。
+
+    @Test
+    fun `stale watchdog generation must not fire after being superseded (真机 67ms 假超时根因)`() {
+        assertFalse(
+            "旧看门狗的 generation 已被新一轮 tab 切换重试取代，不该再判定超时",
+            DouyinCollectService.shouldHonorTimeoutFiring(myGeneration = 1, latestGeneration = 2)
+        )
+    }
+
+    @Test
+    fun `current watchdog generation is honored`() {
+        assertTrue(
+            DouyinCollectService.shouldHonorTimeoutFiring(myGeneration = 2, latestGeneration = 2)
+        )
+    }
+
     // ── stage1LaunchFlags ────────────────────────────────────────────────────
     // 真机复现(2026-07-11)：采集取分享链会点进视频 DetailActivity，任务中途死亡把抖音 task
     // 栈留在详情页。仅 NEW_TASK 启动会 resume 到残留详情页而非首页 feed → openSearchBar
