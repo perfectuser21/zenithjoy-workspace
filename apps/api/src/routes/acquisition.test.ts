@@ -635,6 +635,35 @@ describe('GET /api/acquisition/pending-collect-tasks — tenant + agent 隔离 [
   });
 });
 
+// 根因：POST /api/agent/heartbeat 返回给客户端的 agent_id 字段实际是 agents.id（UUID主键），
+// 但 agents 表还有一个同名的 agent_id 文本列（如 ws1-xxxx）。真机拿到心跳返回的 UUID 后，
+// 后续所有 x-agent-id 请求头都发 UUID，而这里的 SQL 只按文本 agent_id 精确匹配 → 永远查不到
+// 该 agent 所属 tenant，接口静默返回空列表，真机采集任务永远卡在 pending。
+// 修法对齐 agent-tenant-resolver.ts 已有的双路匹配模式（agent_id = $1 OR id::text = $1）。
+describe('GET /api/acquisition/pending-collect-tasks — x-agent-id 传 UUID 也要能匹配 [REGRESSION]', () => {
+  beforeEach(() => { vi.clearAllMocks(); });
+
+  it('x-agent-id 传 agents.id(UUID) → 仍能查到 tenant_id，不返回空列表', async () => {
+    const mod = await import('../db/connection');
+    const agentUuid = '3c886227-c21f-48f6-8570-53dd0369d330';
+    (mod.default.query as any)
+      .mockResolvedValueOnce({ rows: [{ tenant_id: 'tenant-A' }] }) // agents 表按 UUID 也要能命中
+      .mockResolvedValueOnce({ rows: [] }); // 任务表查询（本例只校验能走到这一步）
+
+    const res = await request(app)
+      .get('/api/acquisition/pending-collect-tasks')
+      .set('x-agent-id', agentUuid);
+
+    expect(res.body).toEqual({ tasks: [], total: 0 });
+    // 关键回归点：agents 表查询的 SQL 必须同时支持文本 agent_id 与 id::text 两种匹配，
+    // 不能只查文本列（否则 UUID 永远匹配不到，agents 表查询这一步就会短路返回空数组）。
+    const agentsLookupCall = (mod.default.query as any).mock.calls[0];
+    expect(agentsLookupCall[0]).toMatch(/agent_id\s*=\s*\$1\s*OR\s*id::text\s*=\s*\$1/i);
+    // 走到了任务表查询这一步，说明 tenant_id 解析成功了（没有在 agents 表这步就短路）
+    expect(mod.default.query).toHaveBeenCalledTimes(2);
+  });
+});
+
 describe('GET /api/acquisition/pending-collect-tasks — Stage2 只发未完成视频 [BEHAVIOR]', () => {
   it('stage_1_done 视频查询带 comments_reported_at IS NULL 过滤', async () => {
     vi.mocked(db.query).mockReset();
