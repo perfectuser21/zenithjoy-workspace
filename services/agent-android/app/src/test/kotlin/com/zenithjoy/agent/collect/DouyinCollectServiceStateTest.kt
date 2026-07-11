@@ -110,4 +110,39 @@ class DouyinCollectServiceStateTest {
             DouyinCollectService.isBusyStateStale(stateChangedAtMs = 1_000L, nowMs = 181_000L, thresholdMs = 180_000L)
         )
     }
+
+    // ── mustGestureTap ──────────────────────────────────────────────────────
+    // 真机复现(Douyin 39.5.0)：搜索入口 "搜索" TextView(id 混淆为 4ty)整条无障碍祖先链
+    // clickable 全为 false。Android performAction(ACTION_CLICK) 不冒泡到祖先，对这种节点
+    // 是空操作——openSearchBar 点不动搜索按钮，页面不跳转搜索页，typeKeyword 找不到 EditText
+    // 报 NO_SEARCH_INPUT。此纯函数判定：链上无任何可点击节点时必须退回坐标手势点击。
+
+    @Test
+    fun `all-false clickable chain must gesture tap (真机 bug 场景)`() {
+        // index 0 = 节点自身，到根全 false（正是 Douyin 搜索 TextView 的真机链）
+        assertTrue(
+            DouyinCollectService.mustGestureTap(listOf(false, false, false, false, false, false))
+        )
+    }
+
+    @Test
+    fun `node itself clickable does not need gesture tap`() {
+        assertFalse(
+            DouyinCollectService.mustGestureTap(listOf(true, false, false))
+        )
+    }
+
+    @Test
+    fun `a clickable ancestor does not need gesture tap`() {
+        assertFalse(
+            DouyinCollectService.mustGestureTap(listOf(false, false, true, false))
+        )
+    }
+
+    @Test
+    fun `empty chain defensively must gesture tap`() {
+        assertTrue(
+            DouyinCollectService.mustGestureTap(emptyList())
+        )
+    }
 }
