@@ -44,4 +44,11 @@ class ShareLinkExtractorTest {
     fun `does not extract non douyin domains`() {
         assertNull(ShareLinkExtractor.extract("https://evil.com/v.douyin.com/x"))
     }
+
+    // TC-S06: 抽出带 /i/ 路径段的短链变体
+    @Test
+    fun `extracts short link with i path segment`() {
+        val text = "复制打开抖音 https://v.douyin.com/i/AbC123/ 看看"
+        assertEquals("https://v.douyin.com/i/AbC123/", ShareLinkExtractor.extract(text))
+    }
 }

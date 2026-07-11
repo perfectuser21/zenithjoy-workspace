@@ -29,6 +29,10 @@ describe('extractShareUrl — 从分享文案抽 v.douyin.com 短链', () => {
   it('非 v.douyin.com 域名不抽（防钓鱼链接）', () => {
     expect(extractShareUrl('https://evil.com/v.douyin.com/x')).toBeNull();
   });
+
+  it('extracts short link with /i/ path segment', () => {
+    expect(extractShareUrl('打开抖音 https://v.douyin.com/i/AbC123/ 看')).toBe('https://v.douyin.com/i/AbC123/');
+  });
 });
 
 describe('parseMediaFromUrl — 从最终 URL 抽 kind+id', () => {
