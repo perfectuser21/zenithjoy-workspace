@@ -1,5 +1,6 @@
 package com.zenithjoy.agent.collect
 
+import android.content.Intent
 import org.junit.Assert.*
 import org.junit.Test
 
@@ -156,5 +157,38 @@ class DouyinCollectServiceStateTest {
         assertTrue(
             DouyinCollectService.mustGestureTap(emptyList())
         )
+    }
+
+    // ── stage1LaunchFlags ────────────────────────────────────────────────────
+    // 真机复现(2026-07-11)：采集取分享链会点进视频 DetailActivity，任务中途死亡把抖音 task
+    // 栈留在详情页。仅 NEW_TASK 启动会 resume 到残留详情页而非首页 feed → openSearchBar
+    // 找不到"搜索"入口 → 关键词打进详情页聊天框 → 结果页永不出现 → SEARCH_TIMEOUT。
+    // dumpsys 证 topResumedActivity=DetailActivity；CLEAR_TASK 清栈后回干净首页 feed 恢复。
+    // 结论：Stage1 启动 flags 必须叠加 FLAG_ACTIVITY_CLEAR_TASK，否则换台机器/换个任务必复发。
+
+    @Test
+    fun `stage1 launch flags must include CLEAR_TASK to escape stale DetailActivity`() {
+        val flags = DouyinCollectService.stage1LaunchFlags(base = 0)
+        assertTrue(
+            "Stage1 启动必须带 CLEAR_TASK 清空残留 DetailActivity 栈，否则 resume 到详情页 → SEARCH_TIMEOUT",
+            (flags and Intent.FLAG_ACTIVITY_CLEAR_TASK) != 0
+        )
+    }
+
+    @Test
+    fun `stage1 launch flags must include NEW_TASK`() {
+        // CLEAR_TASK 必须与 NEW_TASK 同用才生效（Android 契约）。
+        val flags = DouyinCollectService.stage1LaunchFlags(base = 0)
+        assertTrue(
+            (flags and Intent.FLAG_ACTIVITY_NEW_TASK) != 0
+        )
+    }
+
+    @Test
+    fun `stage1 launch flags preserve existing base flags`() {
+        // 不能丢弃 getLaunchIntentForPackage 原有 flags。
+        val base = 0x00100000 // 任意已有 flag 位
+        val flags = DouyinCollectService.stage1LaunchFlags(base = base)
+        assertTrue((flags and base) == base)
     }
 }

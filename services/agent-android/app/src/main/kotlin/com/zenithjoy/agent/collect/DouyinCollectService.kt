@@ -1213,6 +1213,23 @@ class DouyinCollectService : AccessibilityService() {
         internal fun mustGestureTap(clickableChain: List<Boolean>): Boolean =
             clickableChain.firstOrNull() != true
 
+        /**
+         * Stage1 启动抖音的 Intent flags。
+         *
+         * 真机复现(2026-07-11)：仅用 getLaunchIntentForPackage 默认叠加的 NEW_TASK 会 resume
+         * 到上次采集流程残留的 DetailActivity——采集取分享链会点进视频详情页，任务中途死亡就
+         * 把抖音 task 栈留在 detail 页。下一个 Stage1 启动即 resume 到详情页而非首页 feed，
+         * openSearchBar 找不到"搜索"入口(searchBtn=false) → 关键词打进详情页聊天框 → 结果页
+         * 永不出现 → SEARCH_TIMEOUT（dumpsys 证 topResumedActivity=DetailActivity）。
+         *
+         * 必须叠加 FLAG_ACTIVITY_CLEAR_TASK 强制清空 task 栈、从 launcher activity 全新启动，
+         * 回到干净首页 feed（真机实证 CLEAR_TASK 只清 activity 栈、不动登录态，登录保持）。
+         *
+         * @param base getLaunchIntentForPackage 返回的 intent 原有 flags。
+         * @return 叠加 NEW_TASK|CLEAR_TASK 后的 flags。
+         */
+        internal fun stage1LaunchFlags(base: Int): Int = base
+
         // Stage1 派发（关键词搜索+收集视频卡）
         fun dispatchTask(context: Context, keyword: String, taskId: String) {
             val intent = Intent(ACTION_COLLECT_TASK).apply {
