@@ -45,7 +45,7 @@ function isDouyinShortUrl(url: string): boolean {
 /** 从分享面板文案（含中文/emoji + 短链）里抽出第一个 v.douyin.com 短链，无则 null */
 export function extractShareUrl(text: string | null | undefined): string | null {
   if (!text) return null;
-  const m = text.match(/https?:\/\/v\.douyin\.com\/[A-Za-z0-9]+\/?/);
+  const m = text.match(/https?:\/\/v\.douyin\.com\/(?:i\/)?[A-Za-z0-9]+\/?/);
   return m ? m[0] : null;
 }
 

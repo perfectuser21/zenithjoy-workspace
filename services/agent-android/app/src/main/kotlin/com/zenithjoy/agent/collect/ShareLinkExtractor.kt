@@ -7,7 +7,7 @@ package com.zenithjoy.agent.collect
  */
 object ShareLinkExtractor {
 
-    private val SHORT_LINK = Regex("""https?://v\.douyin\.com/[A-Za-z0-9]+/?""")
+    private val SHORT_LINK = Regex("""https?://v\.douyin\.com/(?:i/)?[A-Za-z0-9]+/?""")
 
     /** 从分享文案抽出第一个 v.douyin.com 短链；无则 null（尾部中文标点/空白天然被正则排除） */
     fun extract(text: String?): String? {
