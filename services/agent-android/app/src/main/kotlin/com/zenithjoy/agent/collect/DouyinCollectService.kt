@@ -71,6 +71,8 @@ class DouyinCollectService : AccessibilityService() {
     private var shareTokenSeq = 0L
     private val seenShareUrls = mutableSetOf<String>()
 
+    internal enum class ResultsAction { WAIT_FOR_TAB_SWITCH, COLLECT, IGNORE }
+
     internal enum class State {
         IDLE,
         OPENING_DOUYIN,
@@ -432,11 +434,15 @@ class DouyinCollectService : AccessibilityService() {
         }
     }
 
-    /** 找"综合"或"视频"标签并点击切换，返回是否成功找到并点击。 */
+    /**
+     * 找"视频"标签并点击切换，退回"综合"（比空白"主页"tab 强，但会混直播间，仅兜底）。
+     * 优先级：视频 > 综合——目标是拿到纯视频结果，综合 tab 直播/视频/用户混排是
+     * ALL_SHARE_FAILED 根因（真机复现 2026-07-11），只在找不到"视频"标签时才退而求其次。
+     */
     private fun trySwitchToVideoTab(): Boolean {
         val root = rootInActiveWindow ?: return false
-        val tab = findNodeByText(root, "综合") ?: findNodeByText(root, "视频") ?: run {
-            android.util.Log.i(TAG, "trySwitchToVideoTab: no 综合/视频 tab node found")
+        val tab = findNodeByText(root, "视频") ?: findNodeByText(root, "综合") ?: run {
+            android.util.Log.i(TAG, "trySwitchToVideoTab: no 视频/综合 tab node found")
             return false
         }
         // 真机实测(Douyin 39.5.0)：命中的"综合"Button clickable=false，对其祖先 ActionBar$Tab
@@ -460,6 +466,23 @@ class DouyinCollectService : AccessibilityService() {
             // Stage1：收集多张视频卡的 video_id，不进评论区
             val videoCards = findVideoCards(root, MAX_VIDEOS_PER_SEARCH)
             android.util.Log.i(TAG, "handleSearchResults: pkg=${root.packageName} cards=${videoCards.size}")
+            // 根治 ALL_SHARE_FAILED（真机复现 2026-07-11）：搜索结果默认落"综合"tab，直播/视频/
+            // 用户混排且直播常排前，哪怕这批"卡片"非空也可能混了直播间——点开进直播间没有普通
+            // 视频分享取链路径，全卡失败。哪怕已经找到卡片，只要本 task 还没切过一次"视频"tab，
+            // 也先切标签、忽略这批结果，等标签切换后的下一个结果事件再采（那才是"视频"tab 的干净结果）。
+            when (decideStage1ResultsAction(videoCards.isNotEmpty(), triedTabSwitch)) {
+                ResultsAction.IGNORE -> return
+                ResultsAction.WAIT_FOR_TAB_SWITCH -> {
+                    triedTabSwitch = true
+                    if (trySwitchToVideoTab()) {
+                        android.util.Log.i(TAG, "handleSearchResults: 首次结果，先切「视频」tab 再采（避免撞直播间）")
+                        searchTriggeredAtMs = android.os.SystemClock.elapsedRealtime()
+                        return
+                    }
+                    // 找不到标签节点（罕见，如已就在纯净列表页）：不再等切换，直接按本批结果采集。
+                }
+                ResultsAction.COLLECT -> {}
+            }
             if (videoCards.isEmpty()) return
             // 单飞闩：triggerSearch 二次触发会把 state 重置回 WAITING_SEARCH_RESULTS，让第二个
             // 搜索结果事件再次走到这里并发启动第二个 collectVideoCards → 两协程互相 recycle 抖音
@@ -1204,6 +1227,23 @@ class DouyinCollectService : AccessibilityService() {
 
         internal fun shouldRetryWithTabSwitch(alreadyTriedTabSwitch: Boolean): Boolean {
             return !alreadyTriedTabSwitch
+        }
+
+        /**
+         * Stage1 搜索结果事件到达时该做什么。真机复现(2026-07-11)：搜索结果默认落"综合"tab，
+         * 直播/视频/用户混排且直播常排前，旧逻辑只要 findVideoCards 非空就立即采集，从没检查
+         * 过是否已切到"视频"tab——在"综合"tab 上一样能凑出卡片（其实混了直播间），点开即进
+         * 直播间（无普通视频分享取链路径）→ 全卡 ALL_SHARE_FAILED。
+         * 根治：哪怕本次事件已经找到卡片，只要本 task 还没切过一次"视频"tab，也必须先切标签、
+         * 忽略这批卡片，等标签切换后的下一个结果事件再采（那时才是"视频"tab 的干净结果）。
+         */
+        internal fun decideStage1ResultsAction(
+            videoCardsFound: Boolean,
+            alreadyTriedTabSwitch: Boolean,
+        ): ResultsAction {
+            if (!videoCardsFound) return ResultsAction.IGNORE
+            if (!alreadyTriedTabSwitch) return ResultsAction.WAIT_FOR_TAB_SWITCH
+            return ResultsAction.COLLECT
         }
 
         /**
