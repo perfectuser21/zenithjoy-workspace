@@ -26,10 +26,13 @@ class CollectReporterTest {
         server.shutdown()
     }
 
-    private fun makeReporter(sleepFn: (Long) -> Unit = {}): CollectReporter {
+    private fun makeReporter(
+        sleepFn: (Long) -> Unit = {},
+        agentId: () -> String = { "AGENT-TEST-001" },
+    ): CollectReporter {
         return CollectReporter(
             httpBase = server.url("/").toString().trimEnd('/'),
-            agentId = "AGENT-TEST-001",
+            agentId = agentId,
             httpClient = OkHttpClient(),
             sleepFn = sleepFn,
         )
@@ -171,5 +174,28 @@ class CollectReporterTest {
         val body = req.body.readUtf8()
         assertTrue("body should contain share_url key", body.contains("share_url"))
         assertTrue("body should contain the short link", body.contains("https://v.douyin.com/iRNBho6G/"))
+    }
+
+    // TC-R08: agent_id 漂移守卫 —— agentId 在 reporter 构造之后被覆写（如 heartbeat 心跳返回
+    // 服务端规范 id），reportVideos 必须用最新值，不能停在构造时的旧快照上。
+    @Test
+    fun `reportVideos_usesLiveAgentId_afterConstructionTimeOverride`() {
+        server.enqueue(MockResponse().setResponseCode(200).setBody("""{"ok":true}"""))
+
+        var currentAgentId = "AGENT-OLD-LOCAL"
+        val reporter = makeReporter(agentId = { currentAgentId })
+
+        // 模拟 heartbeat 的 onAgentIdReceived 覆写（构造完成之后才发生）
+        currentAgentId = "AGENT-NEW-FROM-SERVER"
+
+        val result = reporter.reportVideos("task-drift", emptyList())
+        assertTrue(result.success)
+
+        val req = server.takeRequest()
+        assertEquals(
+            "reporter 必须携带覆写后的最新 agentId，不能停在构造时快照",
+            "AGENT-NEW-FROM-SERVER",
+            req.getHeader("x-agent-id"),
+        )
     }
 }
