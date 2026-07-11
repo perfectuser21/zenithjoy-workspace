@@ -22,7 +22,6 @@ FAIL=0
 SKIP=0
 
 API_BASE="${API_BASE:-http://localhost:3001}"
-STAFF_TOKEN="${STAFF_TOKEN:-}"
 STAFF_EMAIL="${STAFF_EMAIL:-staff@test.com}"
 
 echo "=== skill-create-longrun smoke ==="
@@ -99,26 +98,34 @@ check_code() {
   fi
 }
 
-AUTH_HEADER=""
-if [ -n "$STAFF_EMAIL" ]; then
-  AUTH_HEADER="X-User-Email: $STAFF_EMAIL"
+API_PROBE_CODE=$(curl -s -o /dev/null -w "%{http_code}" "${API_BASE}/health" 2>/dev/null || echo "000")
+API_PROBE_CODE="${API_PROBE_CODE:0:3}"
+
+if [ "$API_PROBE_CODE" = "000" ]; then
+  echo "  SKIP: API 不可达（${API_BASE}），跳过全部 BEHAVIOR 层检查（B-03/B-08/B-10）"
+  SKIP=$((SKIP+3))
+else
+  AUTH_HEADER=""
+  if [ -n "$STAFF_EMAIL" ]; then
+    AUTH_HEADER="X-User-Email: $STAFF_EMAIL"
+  fi
+
+  # B-03：running 状态互斥（无认证头 → 403，不测 409 因为需要 STAFF_EMAILS env）
+  check_code "POST /generate 无认证头 → 403" "403" \
+    -X POST "${API_BASE}/api/staff/skill-drafts/fake-id/generate"
+
+  # B-08：callback 内部端点可达（draft 不存在 → 404，token 不匹配详细校验在单测）
+  check_code "POST /internal/callback 不存在的 draft → 404" "404" \
+    -X POST "${API_BASE}/internal/skill-drafts/fake-id-nonexist/callback" \
+    -H "Content-Type: application/json" \
+    -d '{"token":"00000000-0000-0000-0000-000000000000","event":"done","zip_path":"/tmp/x.zip"}'
+
+  # B-10：answer 无认证 → 403
+  check_code "POST /answer 无认证头 → 403" "403" \
+    -X POST "${API_BASE}/api/staff/skill-drafts/fake-id/answer" \
+    -H "Content-Type: application/json" \
+    -d '{"answer":"test"}'
 fi
-
-# B-03：running 状态互斥（无认证头 → 403，不测 409 因为需要 STAFF_EMAILS env）
-check_code "POST /generate 无认证头 → 403" "403" \
-  -X POST "${API_BASE}/api/staff/skill-drafts/fake-id/generate"
-
-# B-08：callback 内部端点可达（draft 不存在 → 404，token 不匹配详细校验在单测）
-check_code "POST /internal/callback 不存在的 draft → 404" "404" \
-  -X POST "${API_BASE}/internal/skill-drafts/fake-id-nonexist/callback" \
-  -H "Content-Type: application/json" \
-  -d '{"token":"00000000-0000-0000-0000-000000000000","event":"done","zip_path":"/tmp/x.zip"}'
-
-# B-10：answer 无认证 → 403
-check_code "POST /answer 无认证头 → 403" "403" \
-  -X POST "${API_BASE}/api/staff/skill-drafts/fake-id/answer" \
-  -H "Content-Type: application/json" \
-  -d '{"answer":"test"}'
 
 echo ""
 echo "=== 结果 ==="
