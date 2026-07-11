@@ -94,6 +94,37 @@ class DouyinCollectServiceStateTest {
         assertFalse(DouyinCollectService.shouldRetryWithTabSwitch(alreadyTriedTabSwitch = true))
     }
 
+    // ── decideStage1ResultsAction ────────────────────────────────────────────
+    // 真机复现(2026-07-11，用户现场肉眼定位)：搜索结果默认落"综合"tab，直播/视频/用户
+    // 混排且直播常排前。旧逻辑只要 findVideoCards 非空就立即采集，从没检查过是不是已经
+    // 切到"视频"tab —— 在"综合"tab 上一样能凑出 3 张"卡片"（其实混了直播间），脚本一点
+    // 就进直播间（无普通视频分享取链路径）→ 全卡 ALL_SHARE_FAILED。根治：即使已经找到卡片，
+    // 只要本 task 还没切过一次"视频"tab，也必须先切标签，不能直接采。
+
+    @Test
+    fun `must switch to video tab first even though cards already found on 综合 tab (真机撞直播间根因)`() {
+        assertEquals(
+            DouyinCollectService.ResultsAction.WAIT_FOR_TAB_SWITCH,
+            DouyinCollectService.decideStage1ResultsAction(videoCardsFound = true, alreadyTriedTabSwitch = false)
+        )
+    }
+
+    @Test
+    fun `collects once tab switch already attempted this task`() {
+        assertEquals(
+            DouyinCollectService.ResultsAction.COLLECT,
+            DouyinCollectService.decideStage1ResultsAction(videoCardsFound = true, alreadyTriedTabSwitch = true)
+        )
+    }
+
+    @Test
+    fun `ignores results event with no cards regardless of tab switch state`() {
+        assertEquals(
+            DouyinCollectService.ResultsAction.IGNORE,
+            DouyinCollectService.decideStage1ResultsAction(videoCardsFound = false, alreadyTriedTabSwitch = false)
+        )
+    }
+
     // ── shouldSendFallbackBroadcast ──────────────────────────────────────────
     // 队列状态机（CollectTaskQueue）对同一结果不幂等：回调+广播双投递会让
     // AgentService.reportCollectResult 把下一个在跑的 job 提前 markCurrentDone，
