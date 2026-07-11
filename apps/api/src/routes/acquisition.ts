@@ -342,7 +342,7 @@ acquisitionRouter.get('/pending-collect-tasks', async (req: Request, res: Respon
     }
 
     const agentRes = await pool.query<{ tenant_id: string }>(
-      `SELECT tenant_id FROM zenithjoy.agents WHERE agent_id = $1 LIMIT 1`,
+      `SELECT tenant_id FROM zenithjoy.agents WHERE agent_id = $1 OR id::text = $1 LIMIT 1`,
       [xAgentId]
     );
     const tenantId = agentRes.rows[0]?.tenant_id;
@@ -929,7 +929,7 @@ acquisitionRouter.post('/collect/report-videos', async (req: Request, res: Respo
   const xAgentId = req.header('x-agent-id') ?? '';
   if (!xAgentId) return fail(res, 401, 'MISSING_AGENT_ID', '缺 x-agent-id');
   const agentRes = await pool.query<{ tenant_id: string }>(
-    `SELECT tenant_id FROM zenithjoy.agents WHERE agent_id = $1 LIMIT 1`,
+    `SELECT tenant_id FROM zenithjoy.agents WHERE agent_id = $1 OR id::text = $1 LIMIT 1`,
     [xAgentId]
   );
   const tenantId = agentRes.rows[0]?.tenant_id;
