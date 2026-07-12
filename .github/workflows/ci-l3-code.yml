@@ -28,6 +28,7 @@ jobs:
       api: ${{ steps.filter.outputs.api }}
       geoai: ${{ steps.filter.outputs.geoai }}
       ci: ${{ steps.filter.outputs.ci }}
+      agent_modules: ${{ steps.filter.outputs.agent_modules }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -45,6 +46,7 @@ jobs:
               echo "api=true" >> $GITHUB_OUTPUT
               echo "geoai=true" >> $GITHUB_OUTPUT
               echo "ci=true" >> $GITHUB_OUTPUT
+              echo "agent_modules=true" >> $GITHUB_OUTPUT
               exit 0
             fi
             CHANGED=$(git diff --name-only "$BEFORE" "$AFTER" 2>/dev/null || git diff --name-only HEAD~1 HEAD)
@@ -61,6 +63,8 @@ jobs:
             && echo "geoai=true" >> $GITHUB_OUTPUT || echo "geoai=false" >> $GITHUB_OUTPUT
           echo "$CHANGED" | grep -qE "^\.github/|^tsconfig\.base\.json$|^package\.json$" \
             && echo "ci=true" >> $GITHUB_OUTPUT || echo "ci=false" >> $GITHUB_OUTPUT
+          echo "$CHANGED" | grep -qE "^services/agent/modules/|^services/agent/scripts/build-line-module\.sh$" \
+            && echo "agent_modules=true" >> $GITHUB_OUTPUT || echo "agent_modules=false" >> $GITHUB_OUTPUT
 
   # ─── Dashboard ───────────────────────────────────────────────────────
   dashboard-lint:
@@ -209,6 +213,31 @@ jobs:
       - name: dashboard 依赖漏洞门禁（含 dev）
         run: bash .github/workflows/scripts/audit-gate.sh apps/dashboard
 
+  # ─── Agent Line Modules ──────────────────────────────────────────────
+  # 2026-07-12 巡检抓漏：line-module TS 编译此前只在 push main 的 agent-installpack
+  # 跑，PR 阶段无闸 → PR#1245 的 TS2459 直接红在主干。此 job 把同一构建脚本前移到 PR 闸。
+  line-module-build:
+    name: Line Module Build (${{ matrix.lineId }})
+    needs: changes
+    if: needs.changes.outputs.agent_modules == 'true' || needs.changes.outputs.ci == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        lineId: [line04, line01, line02, line05]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: services/agent/package-lock.json
+      - run: npm ci --no-audit --no-fund
+        working-directory: services/agent
+      - run: bash scripts/build-line-module.sh ${{ matrix.lineId }}
+        working-directory: services/agent
+
   # ─── L3 Gate ──────────────────────────────────────────────────────────
   l3-passed:
     name: L3 Code Gate Passed
@@ -221,6 +250,7 @@ jobs:
       - api-typecheck
       - geoai-build
       - security
+      - line-module-build
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -281,6 +311,14 @@ jobs:
             FAILED=true
           fi
 
+          # Agent Line Modules (conditional)
+          if [ "${{ needs.changes.outputs.agent_modules }}" = "true" ] || [ "${{ needs.changes.outputs.ci }}" = "true" ]; then
+            if [ "${{ needs.line-module-build.result }}" != "success" ]; then
+              echo "FAIL: Line Module Build (${{ needs.line-module-build.result }})"
+              FAILED=true
+            fi
+          fi
+
           if [ "$FAILED" = "true" ]; then
             echo ""
             echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -294,6 +332,7 @@ jobs:
           [ "${{ needs.changes.outputs.dashboard }}" = "true" ] && echo "  Dashboard: checked" || echo "  Dashboard: skipped"
           [ "${{ needs.changes.outputs.api }}" = "true" ] && echo "  API: checked" || echo "  API: skipped"
           [ "${{ needs.changes.outputs.geoai }}" = "true" ] && echo "  GeoAI: checked" || echo "  GeoAI: skipped"
+          [ "${{ needs.changes.outputs.agent_modules }}" = "true" ] && echo "  Agent Line Modules: checked" || echo "  Agent Line Modules: skipped"
 
           echo ""
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
