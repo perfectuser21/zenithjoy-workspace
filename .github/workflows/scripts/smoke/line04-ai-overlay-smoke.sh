@@ -141,7 +141,115 @@ else
   echo "  [SKIP] $OVERLAY_DIR 不存在（实现后将存在）"
 fi
 
+
+# ════════════════════════════════════════════════════════
+# ─── 第二刀验收（BEHAVIOR-1..12 全链路）────────────────
+# ════════════════════════════════════════════════════════
+
+OVERLAY_FILE="$ROOT/services/agent/wechat-rpa/overlay/overlay_window.py"
+OVERLAY_HANDLER="$ROOT/services/agent/modules/line04/handlers/overlay.ts"
+
+# ─── ⑨ overlay_window.py 存在性 ───────────────────────────────────────────────
+echo ""
+echo "── ⑨ 第二刀 D1/D2/D3：overlay_window.py 存在并含三个核心类 ──"
+if [ -f "$OVERLAY_FILE" ]; then
+  for CLASS in PositionLoop EventTailConsumer OverlayApp; do
+    if grep -q "class $CLASS" "$OVERLAY_FILE"; then
+      echo "  PASS: class $CLASS 存在"
+    else
+      echo "  FAIL: class $CLASS 未在 overlay_window.py 中找到"
+      exit 1
+    fi
+  done
+else
+  echo "  FAIL: overlay_window.py 不存在（第二刀应已创建）"
+  exit 1
+fi
+
+# ─── ⑩ overlay_window.py 无干预 API（BEHAVIOR-11）────────────────────────────
+echo ""
+echo "── ⑩ BEHAVIOR-11：overlay_window.py 无 SendMessage/PostMessage/SetForegroundWindow ──"
+FORBIDDEN_API=$(grep -n "SendMessage\|PostMessage\|SetForegroundWindow" "$OVERLAY_FILE" 2>/dev/null || true)
+if [ -n "$FORBIDDEN_API" ]; then
+  echo "  FAIL: 含干预 Windows API（违反 BEHAVIOR-11/I11）："
+  echo "$FORBIDDEN_API"
+  exit 1
+else
+  echo "  PASS: 无干预 Windows API"
+fi
+
+# ─── ⑪ overlay_window.py 无禁用字样（BEHAVIOR-12）────────────────────────────
+echo ""
+echo "── ⑪ BEHAVIOR-12：HTML 模板无'错误'/'中断'字样 ──"
+BAD_TEXT=$(python3 -c "
+import pathlib
+src = pathlib.Path('$OVERLAY_FILE').read_text(encoding='utf-8')
+bads = [p for p in ['错误', '中断'] if p in src]
+if bads:
+    print('FAIL: ' + str(bads))
+else:
+    print('PASS')
+" 2>/dev/null || echo "SKIP: python3 不可用")
+if echo "$BAD_TEXT" | grep -q "FAIL"; then
+  echo "  $BAD_TEXT"
+  exit 1
+else
+  echo "  $BAD_TEXT"
+fi
+
+# ─── ⑫ EventTailConsumer 无写入（BEHAVIOR-8）─────────────────────────────────
+echo ""
+echo "── ⑫ BEHAVIOR-8：EventTailConsumer 严禁以写模式打开 events.jsonl ──"
+WRITE_MATCHES2=$(grep -P "open\(.*events\.jsonl.*['\"][wa]" "$OVERLAY_FILE" 2>/dev/null || true)
+if [ -n "$WRITE_MATCHES2" ]; then
+  echo "  FAIL: overlay_window.py 含 events.jsonl 写模式打开（违反 BEHAVIOR-8）："
+  echo "$WRITE_MATCHES2"
+  exit 1
+else
+  echo "  PASS: EventTailConsumer 无 events.jsonl 写入"
+fi
+
+# ─── ⑬ overlay.ts node handler 存在（BEHAVIOR-6）────────────────────────────
+echo ""
+echo "── ⑬ BEHAVIOR-6：overlay.ts node handler 存在并含 OverlayHandler 类 ──"
+if [ -f "$OVERLAY_HANDLER" ]; then
+  if grep -q "class OverlayHandler" "$OVERLAY_HANDLER"; then
+    echo "  PASS: OverlayHandler 类存在"
+  else
+    echo "  FAIL: OverlayHandler 类未在 overlay.ts 中找到"
+    exit 1
+  fi
+else
+  echo "  FAIL: overlay.ts 不存在（第二刀应已创建）"
+  exit 1
+fi
+
+# ─── ⑭ wechat-draft.ts reasoning 字段（BEHAVIOR-5）──────────────────────────
+echo ""
+echo "── ⑭ BEHAVIOR-5：wechat-draft.ts 含 reasoning 字段 + PII 过滤函数 ──"
+DRAFT_FILE="$ROOT/apps/api/src/services/wechat-draft.ts"
+if [ -f "$DRAFT_FILE" ]; then
+  if grep -q "filterPiiReasoning" "$DRAFT_FILE" && grep -q "reasoning" "$DRAFT_FILE"; then
+    echo "  PASS: wechat-draft.ts 含 reasoning + filterPiiReasoning"
+  else
+    echo "  FAIL: wechat-draft.ts 缺少 reasoning 字段或 filterPiiReasoning 函数"
+    exit 1
+  fi
+else
+  echo "  SKIP: wechat-draft.ts 不存在"
+fi
+
+# ─── ⑮ overlay lifecycle 第二刀测试（BEHAVIOR-2/3/4/8/10）─────────────────────
+echo ""
+echo "── ⑮ 第二刀 pytest：overlay lifecycle 新增测试 ──"
+if command -v pytest >/dev/null 2>&1; then
+  pytest "$SPRINT_TESTS/test_overlay_lifecycle.py" -v --tb=short \
+    -k "test_position_loop_four_rules or test_event_tail_consumer_readonly or test_event_tail_heartbeat_degraded or test_state_json_corruption_recovery or test_pii_second_gate"
+else
+  echo "  [SKIP] pytest 未安装"
+fi
+
 echo ""
 echo "══════════════════════════════════════════════════════"
-echo " ✅ line04-ai-overlay smoke 全部通过"
+echo " line04-ai-overlay smoke 第二刀验收全部通过"
 echo "══════════════════════════════════════════════════════"

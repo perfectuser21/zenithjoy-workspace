@@ -1,9 +1,9 @@
-# Contract Draft — Line04 AI 思考浮窗（贴靠微信·回复动态流+推理展示）
+# Contract Draft — Line04 AI 思考浮窗 第二刀
 
 sprint_dir: sprints/07121132-line04-ai-thinking-overlay
-task_id: a1bf1ba5-bf7c-4a87-842d-0dbe004698fb
-journey_id: bfeed805-deed-46c3-8624-87f0028101d4
-round: 1
+task_id: 8f93f2a1-fdc2-4d41-b97d-6a5ff984697c
+journey_id: 35ac40c2-ba63-81af-af97-e3bc8e3b0fb4
+round: 2
 date: 2026-07-12
 status: PROPOSED
 
@@ -11,272 +11,106 @@ status: PROPOSED
 
 ## 一、范围声明
 
-本 Sprint 推进 Path 4（客户私域 AI 接管）新增 Ability「AI 思考浮窗」从 ⬜ 到 thin ✅。
-
 ### 交付边界（本次 IN）
 
-| 编号 | 模块 | 交付物 |
-|------|------|--------|
-| D1 | 事件管道 | `_STATE_DIR/events.jsonl` 写入（listen_chat 唯一写者），4 类事件：reply_sent / reply_skipped / heartbeat / agent_online |
-| D2 | 中台合同 | `wechat-draft.ts` LLM JSON 扩展 `{reply, tags, reasoning≤30字}`，向后兼容 |
-| D3 | PII 双硬闸 | 中台侧 reasoning 截断+正则过滤；auto_reply.py 写 events 前二次同一纯函数 |
-| D4 | 浮窗进程 | `services/line04/overlay/` — Python pywebview+WebView2，line04 node 侧 spawn，守活+熔断+热更杀旧 |
-| D5 | 窗口行为 | WS_EX_NOACTIVATE+TOOLWINDOW，四行判据显隐，位置持久化 overlay-state.json |
-| D6 | UI 动态流 | 20 条上限/DOM 30 节点，发送中→已送达原地翻转，欢迎卡，默认态/降级态 |
-| D7 | listen_chat 明文日志收敛 | 4687/4691/4696 三处 content[:20] 改调脱敏函数 |
-| D8 | diag 上报 | overlay-diag.json（12 字段），line04 心跳随 diag 上报中台 |
+| # | 交付物 | 文件路径 | FR |
+|---|-------|---------|-----|
+| 1 | overlay_window.py — 无边框置顶窗 + HTML 动态流 UI（欢迎卡/默认态/动态条目/折叠徽标/降级态） | `services/agent/wechat-rpa/overlay/overlay_window.py` | FR-1 |
+| 2 | 贴靠+显隐循环（500ms 单循环，四行判据表，overlay-state.json 持久化/损坏弃用不崩） | 同上，`PositionLoop` 类 | FR-2 |
+| 3 | events tail 消费（.1 跨代回放/event_id 幂等去重/坏行跳过/heartbeat 180s 降级） | 同上，`EventTailConsumer` 类 | FR-3 |
+| 4 | 中台 wechat-draft.ts reasoning 真实现（LLM JSON 合同扩展 `{reply,tags,reasoning}` + PII 硬闸接线 + 替换 mock 存根） | `apps/api/src/services/wechat-draft.ts` | FR-4 |
+| 5 | node 侧接线（line04 handler spawn/preflight/watchdog/mutex 热更杀旧/用户关闭不重拉） | `services/agent/modules/line04/handlers/overlay.ts`（新增） | FR-5 |
+| 6 | CI pywebview 建窗探针（2s 建窗退出）+ notepad 替身 hwnd 贴靠/NOACTIVATE 断言 + 探针败纯函数 pytest 兜底 | GHA step 新增至现有 CI workflow | FR-6 |
 
 ### 不在本次范围（OUT）
 
-- 当前会话跟随（第二刀）
-- 完整客户画像卡片（第二刀）
-- 中台浮窗监控看板页（另立 sprint）
-- listen_chat 守活退避阶梯补充（超范围）
+- **第一刀已交付地基（禁重做）**：
+  - `services/agent/wechat-rpa/overlay/pii_filter.py`（PII 过滤纯函数）
+  - `services/agent/wechat-rpa/overlay/preflight.py`（软检测）
+  - `services/agent/wechat-rpa/overlay/watchdog.py`（熔断守活）
+  - `sprints/07121132-line04-ai-thinking-overlay/tests/` 全套骨架（只追加，不重写已有 test）
+  - `.github/workflows/scripts/smoke/line04-ai-overlay-smoke.sh`（只补充，不删旧项）
+  - events.jsonl 管道钩子（listen_chat O_APPEND 写者，listen_chat.py 不动）
+- 当前会话跟随（点开哪个客户浮窗切哪个）——第三刀
+- 完整客户画像卡片——第三刀
+- 中台浮窗监控看板页——另立 sprint
+- listen_chat 守活退避阶梯补充——超范围
 
 ---
 
-## 二、Invariant 确认（全部继承，不推翻）
+## 二、Test Contract 表
 
-| # | Invariant | 验证点 |
-|---|-----------|--------|
-| I1 | events.jsonl 唯一写者 = listen_chat（O_APPEND） | grep 型测试：浮窗代码中无 open(events.jsonl, 'w'/'a') |
-| I2 | reply_sent 挂点 = :4787 DELIVERED | 代码 diff 断言挂点行号 |
-| I3 | reasoning 单一来源 = LLM 合同 JSON 字段，≤30字 | vitest 断言长度 + openrouter.ts:126-132 不改动 |
-| I4 | customer_stage 复用 tags.stage（A1-A4） | vitest stage 取值域断言 |
-| I5 | PII 双硬闸：中台截断+正则 / auto_reply.py 二次过滤 | pytest PII 用例覆盖"复述客户原话"场景 |
-| I6 | 浮窗软检测禁止进 manifest requiredChecks | manifest 文件 grep 断言 |
-| I7 | 崩溃熔断 60min/8次/存活<60s | pytest 计时模拟 |
-| I8 | 用户关闭 = 退出码 0 + user_closed=true，守活不重拉 | pytest 退出码断言 |
-| I9 | events.jsonl 路径在 _STATE_DIR，严禁 C:\Users\Public | pytest 路径构造断言 |
-| I10 | event_id 幂等去重按整串精确匹配 | pytest 幂等测试 |
-| I11 | 浮窗只观察微信窗口，绝不干预 | 代码审查：无 SendMessage/PostMessage 到微信 hwnd |
-| I12 | 异常态一律温和文案+变灰，禁"错误/中断/!"字样 | grep 型测试：UI 文案扫描 |
-
----
-
-## 三、功能合同
-
-### FC-1：事件管道
-
-**写入合同**
-- listen_chat.py 在 :4787 DELIVERED 点追加 `reply_sent` 行（O_APPEND，不截断）
-- `reply_skipped` 与 `_skip_logged` 同点同去重，rate_limited/sender_cooldown 高频瞬态不写
-- `heartbeat` 60s 周期；`agent_online` 进程启动时写
-
-**行 schema 合同**
-```json
-{
-  "v": 1,
-  "event_id": "{epoch_ms}-{run_id 6位随机hex}-{seq进程内递增}",
-  "date": "YYYY-MM-DD",
-  "type": "reply_sent|reply_skipped|heartbeat|agent_online",
-  "contact": "string",
-  "stage": "A1|A2|A3|A4|null",
-  "reasoning": "≤30字客户可读文案",
-  "ts": 1234567890
-}
-```
-
-**读取合同**
-- 浮窗 tail 轮询 500ms，空闲退避 2s
-- 坏行/半行跳过，不崩溃
-- 文件轮转：5MB 改名 .1，今日计数回放跨两代（先 .1 后当前）
-- inode 变化重开句柄，event_id 幂等重放
-
-### FC-2：中台合同扩展
-
-**LLM 返回体**（`apps/api/src/services/wechat-draft.ts`）
-```json
-{"reply": "...", "tags": {"stage": "A1", ...}, "reasoning": "≤30字客户可读文案"}
-```
-- `reasoning` 字段新增，向后兼容（缺失时 agent 渲染降级文案「已回复 {联系人}」）
-- :548 正则兜底路径 reasoning → 缺省空字符串，agent 侧渲染降级
-
-**PII 中台侧过滤**
-- 手机号/微信号/身份证命中 → 整句替换为降级文案
-- 截断后正则过滤，返回前执行
-
-### FC-3：PII 双硬闸
-
-- auto_reply.py 写 events 前执行与中台相同的 PII 过滤纯函数（同一实现，不二次封装）
-- 纯函数签名：`def filter_pii(text: str) -> str`，无副作用
-- 单测必须含"LLM 复述客户原话"用例
-
-### FC-4：浮窗进程
-
-**spawn 合同**（line04 node 侧）
-- 参照 wechat-rpa.ts:19-27 env 注入 `ZJ_STATE_DIR` + 模块版本
-- spawn 前软检测：pywebview import + WebView2 注册表（HKLM+HKCU EdgeUpdate Clients pv 任一非空）
-- 软检测失败 → 不 spawn，写 `_STATE_DIR/overlay-diag.json`（覆盖写）
-
-**守活合同**
-- 固定 30s 重拉
-- 60min 内 8 次存活<60s → 熔断静默，agent 重启复位
-- WebView2 Evergreen 更新崩 → 独立错误码静默重建，不计入熔断
-
-**热更合同**
-- 命名 mutex `Global\zenithjoy-line04-overlay`
-- overlay.pid 存 PID+版本，校验映像名再 taskkill
-
-**关闭合同**
-- 用户关闭 → 退出码 0 + overlay-state.json `user_closed=true`
-- 守活不重拉；托盘菜单「显示 AI 浮窗」重开
-
-### FC-5：窗口行为
-
-**样式**：WS_EX_NOACTIVATE + WS_EX_TOOLWINDOW，无键鼠钩子，Per-Monitor V2 DPI
-
-**显隐判据表**（500ms 单循环合并贴靠+显隐+tail）
-
-| 微信窗口状态 | 浮窗行为 |
-|------------|--------|
-| 不存在 ∨ IsIconic | 隐藏 |
-| 存在 ∧ ¬IsIconic ∧ ¬IsWindowVisible | 隐藏（托盘静置） |
-| 存在 ∧ IsWindowVisible ∧ DWMWA_CLOAKED≠0 | 冻结（不更新位置，发送瞬态防闪烁） |
-| 其余 | 显示跟随 |
-
-**位置持久化**：overlay-state.json，损坏→弃用默认值+备份；恢复时 rect_visible 校验越界重置
-
-### FC-6：UI 动态流
-
-- 最多 20 条（DOM 30 节点硬顶 FIFO）；同联系人相邻动态聚合卡片
-- 两态：发送中（灰）→ 已送达（绿），原地翻转，不新增条目
-- skipped 类：低饱和灰条，不进未读计数
-- 欢迎卡（first_run_done 持久化）：「AI 客服已就位，正在守护你的微信会话」
-- 默认态（永不空白）：「AI 客服守护中 · 今日已回复 N · 最近动作 xx:xx」
-- 降级态（heartbeat >180s）：「AI 客服休息中，稍后自动恢复」（灰色）
-- 条目：联系人昵称 + 阶段色点(A1-A4) + reasoning(≤30字) + 相对时间；点开展开回复原文
-- 折叠态：新回复 → 徽标数字弹跳一次（无声音、无闪烁、不抢焦点）
-
-### FC-7：明文日志收敛
-
-- listen_chat.py 4687/4691/4696 三处 `content[:20]` → 调统一脱敏函数
-- grep 回归：`content\[:20\]` 字样在 listen_chat.py 中清零
-
-### FC-8：diag 上报
-
-overlay-diag.json 字段（12 项）：
-`agent_id, ts, overlay_pid, rss_mb, cpu_pct, attach_state, wechat_hwnd_found, render_lag_ms_p95, events_tail_offset, restart_count_60min, circuit_open, last_error`
+| BEHAVIOR ID | 描述 | 测试文件 | it() 名称子串 |
+|-------------|------|---------|--------------|
+| BEHAVIOR-1 | pywebview 无边框置顶窗 2s 内建窗，WS_EX_NOACTIVATE 不抢焦 | `tests/test_overlay_window.py` | `无边框置顶窗 2s 内建窗` |
+| BEHAVIOR-2a | 贴靠判据表 — 微信 IsIconic → 浮窗隐藏 | `tests/test_overlay_window.py` | `IsIconic 时浮窗隐藏` |
+| BEHAVIOR-2b | 贴靠判据表 — DWMWA_CLOAKED≠0 → 位置冻结不更新 | `tests/test_overlay_window.py` | `CLOAKED 态位置不更新` |
+| BEHAVIOR-2c | overlay-state.json 损坏 → 弃用默认值，不进崩溃循环 | `tests/test_overlay_window.py` | `state.json 损坏时弃用默认值` |
+| BEHAVIOR-3a | tail 消费 heartbeat >180s（3 周期）→ 渲染降级文案「AI 客服休息中」 | `tests/test_overlay_window.py` | `heartbeat 超 180s 降级文案` |
+| BEHAVIOR-3b | tail 消费 inode 变化 → 重开句柄，先读 .1 再读当前，两代合并今日计数 | `tests/test_overlay_window.py` | `inode 变化重开句柄` |
+| BEHAVIOR-3c | tail 消费坏行/半行跳过不崩；event_id 整串精确匹配幂等去重 | `tests/test_overlay_window.py` | `坏行跳过 幂等去重` |
+| BEHAVIOR-4 | generateChatDraft 真实 LLM 调用返回 `{reply, tags, reasoning}`，reasoning≤30字，PII 命中降级，兜底缺省正确 | `tests/wechat-draft-reasoning.test.ts` | `LLM 返回 reasoning → 响应体含 reasoning` |
+| BEHAVIOR-5a | overlay handler spawn 前 preflight 软检测：失败不 spawn，写 overlay-diag.json | `tests/overlay-handler.test.ts` | `preflight 失败不 spawn` |
+| BEHAVIOR-5b | mutex 热更杀旧；用户关闭（exit_code=0 + user_closed=true）→ 守活不重拉 | `tests/overlay-handler.test.ts` | `用户关闭不重拉` |
+| BEHAVIOR-6a | CI pywebview 建窗探针 `--probe` 模式 2s 退出，exit_code=0 | `tests/test_overlay_window.py` | `probe 模式 2s 内退出 exit_code 0` |
+| BEHAVIOR-6b | notepad 替身 hwnd 运行贴靠循环，GetForegroundWindow 不变（NOACTIVATE 有效） | `tests/test_overlay_window.py` | `notepad hwnd GetForegroundWindow 不变` |
 
 ---
 
-## 四、NFR 合同
-
-| 指标 | 阈值 | 超限动作 |
-|------|------|--------|
-| 内存 RSS | 连续 2 心跳 >200MB | 只留 20 条 + 强制 GC |
-| 内存 RSS | >300MB | 自杀重启 |
-| CPU 60s 均值 | >5% | 轮询降频 1s + diag 上报 |
-| events 落行→浮窗显示延迟 P95 | ≤1.2s（>2s 连续 3 次 → diag.render_lag） | — |
-| 崩溃熔断 | 60min 内 8 次存活<60s | 熔断静默，agent 重启复位 |
-| 浮窗不获焦 | GetForegroundWindow 不变 | — |
-
----
-
-## E2E 验收
+## 三、E2E 验收
 
 ### CI 层（windows_cloud，GHA windows-latest）
 
-#### 5.1 smoke 脚本（line04-ai-overlay-smoke.sh）
+1. **pywebview 建窗探针**：`python overlay_window.py --probe`，2s 建窗即退，exit_code=0；超时（>5s）→ step 失败，整体 CI 红
+2. **探针过 → notepad 替身**：spawn `notepad.exe` 取 hwnd，调 `PositionLoop.attach_to_hwnd(notepad_hwnd)` 跑 500ms，断言 `GetForegroundWindow() != notepad_hwnd`（不抢焦点）
+3. **探针败 → 纯函数 pytest 兜底**：不依赖 WebView2，仅跑 `PositionLoop` 四行判据表逻辑 + `EventTailConsumer` 消费逻辑（全绿才不阻 PR）
+4. **贴靠循环 pytest（4 case）**：IsIconic 隐藏 / 非 Visible 隐藏 / CLOAKED 冻结 / 正常跟随——各一 case，500ms 循环不阻塞主线程
+5. **tail 消费端 pytest（4 case）**：heartbeat >180s 降级文案 / inode 变化重开句柄 / 坏行跳过不崩 / event_id 幂等去重
+6. **overlay_window 纯函数 pytest（5 case）**：欢迎卡 first_run_done 幂等 / DOM 30 节点 FIFO / 同联系人聚合 / 发送中→已送达翻转 / skipped 灰条不进计数
+7. **中台 vitest（替换 mock 存根，3 主路径）**：正常 reasoning 调用 / PII 命中降级 / 兜底缺省「已回复 {联系人}」
+8. **smoke 补充**：`line04-ai-overlay-smoke.sh` 追加第二刀验收项（overlay_window.py 文件存在 + overlay.ts handler 可 require + reasoning 字段通过 API 回显）
+9. **grep 回归**：`listen_chat content[:20]` 清零断言仍通过，确认第一刀不被破坏
+10. **无 it.todo 断言**：`npx vitest run --reporter=verbose 2>&1 | grep -c "todo\|skip" = 0`；BEHAVIOR-5 所有 it() 必须为真实可执行断言，不许留 `it.todo`
 
-验收命令（`manual:bash`）：
-```bash
-bash .github/workflows/scripts/smoke/line04-ai-overlay-smoke.sh
-```
+### 真机层（xian-rog，手动验收）
 
-smoke 脚本验收内容：
-1. `pytest sprints/07121132-line04-ai-thinking-overlay/tests/test_events_pipeline.py -v` — events 管道全套（坏行/并发/轮转/幂等/PII/降级文案）通过
-2. `vitest run sprints/07121132-line04-ai-thinking-overlay/tests/wechat-draft-reasoning.test.ts` — draft-generate {reply,tags,reasoning} 三路断言通过
-3. `grep -nP 'content\[:20\]' services/agent/wechat-rpa/listen_chat.py` 输出为空（明文日志清零）
-4. overlay-diag.json schema 字段完整性校验（jq 断言 12 字段存在）
-5. 浮窗进程 pywebview 探针：2s 建窗退出码为 0
-
-#### 5.2 pytest events 层（`sprints/07121132-line04-ai-thinking-overlay/tests/test_events_pipeline.py`）
-
-- 坏行容错：含非 JSON 行时 tail 继续读后续有效行，不崩
-- 并发写读：双线程并发写 10000 行，读侧无丢失无重复
-- 跨午夜计数：跨 date 字段统计今日计数正确
-- 跨两代回放：.1 轮转后新建文件，浮窗两代合并读取，event_id 去重
-- event_id 幂等：相同 event_id 重放不计数
-- PII 过滤（含"复述客户原话"用例）：reasoning 含手机号/微信号 → 被替换
-- 降级文案：reasoning 缺失 → agent 渲染「已回复 {联系人}」
-
-#### 5.3 vitest 中台层（`sprints/07121132-line04-ai-thinking-overlay/tests/wechat-draft-reasoning.test.ts`）
-
-三路断言：
-- 正常路径：LLM 返回 `{reply, tags, reasoning}` → 响应体含 reasoning，长度 ≤30 字
-- 兜底缺省：:548 正则兜底路径 reasoning 缺省 → 返回降级文案
-- PII 命中降级：reasoning 含手机号 → 替换为降级文案
-
-#### 5.4 grep 回归
-
-```bash
-! grep -nP 'content\[:20\]' services/agent/wechat-rpa/listen_chat.py
-```
-输出必须为空（清零断言）
-
-#### 5.5 浮窗软检测单测（`sprints/07121132-line04-ai-thinking-overlay/tests/test_overlay_preflight.py`）
-
-- pywebview 不可用时：软检测返回 `{ok: false, reason: 'pywebview_missing'}`，写 overlay-diag.json
-- WebView2 注册表缺失时：软检测返回 `{ok: false, reason: 'webview2_missing'}`
-- 两项均存在：软检测通过，返回 `{ok: true}`
-
-### 真机层（xian-rog，手动验收，`manual:bash`）
-
-```bash
-# 1. 触发一条真实回复，验证 events.jsonl 新增 reply_sent 行
-tail -f "$ZJ_STATE_DIR/events.jsonl" | grep --line-buffered '"type":"reply_sent"'
-
-# 2. 浮窗截图存档
-python services/line04/overlay/screenshot.py --output /tmp/overlay-snapshot.png
-
-# 3. 验证 reasoning 无客户原文（PII 过滤已生效）
-python -c "
-import json, sys
-lines = open('$ZJ_STATE_DIR/events.jsonl').readlines()
-for l in reversed(lines[-10:]):
-    row = json.loads(l)
-    if row.get('type') == 'reply_sent':
-        r = row.get('reasoning', '')
-        assert len(r) <= 30, f'reasoning 超 30 字: {r}'
-        print('OK reasoning:', r)
-        break
-"
-
-# 4. 验证浮窗关闭后守活不重拉
-python services/line04/overlay/main.py --close-and-check
-cat "$ZJ_STATE_DIR/overlay-state.json" | python -c "import json,sys; d=json.load(sys.stdin); assert d['user_closed']==True"
-
-# 5. GetForegroundWindow 不变（记事本置前触发回复）
-python services/line04/tests/manual/test_noactivate.py
-```
+1. 真发一条消息 → `_STATE_DIR/events.jsonl` 新增 `reply_sent`（含 reasoning 字段，无 PII 内容）→ 浮窗截图含该联系人动态条目 → 今日计数 +1
+2. 微信最小化（IsIconic）→ 浮窗自动隐藏；发送瞬态（CLOAKED）→ 浮窗位置冻结，无闪烁
+3. 记事本置前触发回复 → `GetForegroundWindow()` 仍指向记事本（浮窗不抢焦）
+4. 关闭浮窗（exit_code=0）→ 重启 agent 前不被拉回；重启 agent 后浮窗正常拉起，位置从 overlay-state.json 恢复
+5. `WebView2` preflight 双查真机通过（pywebview + WebView2 均检测 OK），`overlay-diag.json` 12 字段完整（含 `attach_state`/`circuit_open`/`wechat_hwnd_found` 等）
+6. 热更验收：部署新版本 → mutex `Global\zenithjoy-line04-overlay` 杀旧进程 → 新浮窗拉起，折叠/位置状态从 overlay-state.json 恢复
 
 ---
 
-## 六、产物清单
+## 四、Golden Path 对照
 
-| 路径 | 类型 | 说明 |
-|------|------|------|
-| `.github/workflows/scripts/smoke/line04-ai-overlay-smoke.sh` | smoke | CI 接入，≥5 行实质内容 |
-| `services/line04/overlay/__init__.py` | impl | 浮窗进程入口 |
-| `services/line04/overlay/main.py` | impl | 主循环（tail+窗口贴靠+UI） |
-| `services/line04/overlay/tail_reader.py` | impl | events.jsonl tail 读取 |
-| `services/line04/overlay/window_manager.py` | impl | 显隐判据+DPI+NoActivate |
-| `services/line04/overlay/pii_filter.py` | impl | PII 过滤纯函数（与中台同逻辑） |
-| `services/line04/overlay/preflight.py` | impl | pywebview/WebView2 软检测 |
-| `services/line04/tests/test_events_pipeline.py` | test | pytest events 管道 7 用例 |
-| `services/line04/tests/manual/test_noactivate.py` | manual | GetForegroundWindow 不变验证 |
-| `apps/api/src/services/__tests__/wechat-draft.test.ts` | test | vitest 三路断言 |
-| `sprints/07121132-line04-ai-thinking-overlay/contract-draft.md` | contract | 本文件 |
-| `sprints/07121132-line04-ai-thinking-overlay/contract-dod.md` | dod | DoD 行为条目 |
+本刀推进 **Path 4 「客户私域 AI 接管」**，将「AI 思考浮窗」从 **thin-骨架**（第一刀地基：地基文件 + events 管道 + PII 双硬闸）推至 **thin-可用**（窗口本体 + 贴靠循环 + 真实 reasoning + 中台接线 + CI 全绿）。
+
+| Path 4 Step | 本刀覆盖 |
+|-------------|--------|
+| Step 3：名单内客户私聊 → DeepSeek reasoning → 写回复 | **直接推进**：FR-4 reasoning 真实现，`generateChatDraft` 返回 `{reply,tags,reasoning}` |
+| 浮窗可用性：操作员实时视觉反馈 | **新增**：FR-1 窗口本体 + FR-2 贴靠循环 + FR-3 tail 消费 |
+| 运维稳定性：watchdog + preflight + mutex 热更 | **新增**：FR-5 node 侧接线 |
+| CI 可验证性 | **新增**：FR-6 pywebview 探针 + notepad 替身 |
+
+Path 1 无影响（本刀不改 golden-path-1-smoke.sh 任何 step，listen_chat.py 不动）。
 
 ---
 
-## 七、风险与依赖
+## 五、Invariant 覆盖核查
 
-| 风险 | 等级 | 缓解 |
-|------|------|------|
-| WebView2 在 windows_cloud runner 未预装 | 中 | 软检测降级：GUI 层降级纯函数 pytest，smoke 仍可全绿 |
-| pywebview 在 Windows CI 环境安装失败 | 中 | 走 build-install-pack.sh WHEEL_PKGS 通道，离线安装 |
-| listen_chat.py :4787 行号因上游 PR 漂移 | 低 | reply_sent 挂点用函数名+上下文锁定，CI 加 grep 断言 |
-| events.jsonl 并发写乱序（非 O_APPEND） | 低 | pytest 并发测试覆盖，O_APPEND 原子性由 OS 保证 |
+| # | Invariant | 本刀涉及 | 覆盖方式 |
+|---|-----------|---------|---------|
+| I1 | events.jsonl 唯一写者 = listen_chat（浮窗只读） | 是 | FR-3 `EventTailConsumer` 全程 `open(path, 'r')`，无写入；pytest 断言无 write 系统调用 |
+| I2 | reply_sent 挂点 = listen_chat.py:4787 DELIVERED，禁挂 `_commit_reply_success` | 否 | 第一刀已覆盖，本刀不改 listen_chat.py |
+| I3 | reasoning 单一来源 = LLM 合同 JSON `reasoning` 字段（≤30字） | 是 | FR-4 `generateChatDraft` 截断 `reasoning.slice(0,30)`；vitest 断言 `length <= 30` |
+| I4 | customer_stage 复用既有 tags.stage（A1-A4），禁另造 | 是 | FR-4 LLM prompt system 约束 stage 枚举；vitest 断言 `validStages.has(stage)` |
+| I5 | PII 双硬闸：中台截断（第一闸）+ agent 写 events 前（第二闸） | 是 | FR-4 中台 reasoning PII 过滤接线（第一闸）；FR-3 渲染前调 pii_filter.py（第二闸复用第一刀） |
+| I6 | 浮窗软检测禁止进 manifest requiredChecks | 是 | FR-5 spawn 前调 preflight.py，失败仅不 spawn + 写 diag，不向上抛异常阻主链 |
+| I7 | 崩溃熔断（60min 8 次 <60s → 静默） | 是 | FR-5 接 watchdog.py `circuit_open` 属性；handler 检查 circuit_open=true → 不重拉 |
+| I8 | 用户关闭 = exit_code 0 + user_closed=true，守活不重拉 | 是 | FR-5 overlay.ts 读 exit_code + stdout 含 `user_closed=true` 分支；BEHAVIOR-5b 断言 |
+| I9 | events.jsonl 路径在 _STATE_DIR 下，严禁 C:\Users\Public | 是 | FR-3 从 `ZJ_STATE_DIR` env 构造路径；pytest 断言路径 `not in ('C:\\Users\\Public',)` |
+| I10 | event_id 幂等去重按整串精确匹配（epoch_ms 仅展示排序用） | 是 | FR-3 `seen_event_ids: set` 精确 `in` 匹配；BEHAVIOR-3c pytest 覆盖重放场景 |
+| I11 | 浮窗只观察微信窗口，绝不干预（防两进程拉扯） | 是 | FR-1/FR-2 overlay_window.py 无 UIA SendMessage/SetForeground/PostMessage；代码 grep 断言 |
+| I12 | 异常态一律温和文案+变灰，禁「错误/中断/!」字样 | 是 | FR-1 HTML 降级态文案白名单；pytest grep overlay_window.py 无禁用字样 |
