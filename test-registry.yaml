@@ -4668,3 +4668,19 @@ agent_suite:
   status: active
   product: AI员工
   note: "sprint(07120952): Line02 内容判定门槛 E2E Playwright——获客配置画像描述填写、线索outreach_eligible状态列展示"
+
+- id: line04-overlay-handler-unit
+  path: services/agent/modules/line04/__tests__/overlay-handler.test.ts
+  type: unit
+  ci: L3
+  status: active
+  product: 微信AI客服
+  note: "sprint(07121132): 第二刀 node OverlayHandler——preflight 软检测/熔断/用户关闭不重拉/diag 落盘"
+
+- id: line04-wechat-draft-reasoning-r2
+  path: sprints/07121132-line04-ai-thinking-overlay/tests/wechat-draft-reasoning-r2.test.ts
+  type: unit
+  ci: L3
+  status: active
+  product: 微信AI客服
+  note: "sprint(07121132): 第二刀 BEHAVIOR-5——generateChatDraft reasoning 真实现断言（替代第一刀 mock 存根，合同测试不可变故新建 r2）"
