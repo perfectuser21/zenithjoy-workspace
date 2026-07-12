@@ -47,11 +47,22 @@ psql "$DATABASE_URL" -t -c \
 API="http://localhost:3000"
 TENANT_ID="test-tenant-line02-judgment"
 
+# 前置数据检查：确保 acquisition_collect_tasks 中存在可用记录（BEHAVIOR(2) 的 INSERT 依赖此记录）
+# 若不存在则先创建占位记录，避免 LIMIT 1 子查询返回 NULL 导致 FK 约束失败
+TASK_COUNT=$(psql "$DATABASE_URL" -t -c \
+  "SELECT count(*) FROM zenithjoy.acquisition_collect_tasks WHERE tenant_id='$TENANT_ID';" | tr -d ' \n')
+if [ "$TASK_COUNT" -eq 0 ]; then
+  psql "$DATABASE_URL" -c \
+    "INSERT INTO zenithjoy.acquisition_collect_tasks (tenant_id, stage, status)
+     VALUES ('$TENANT_ID', 1, 'done') ON CONFLICT DO NOTHING;"
+fi
+
 # 获取或创建一个低分线索 ID（grade=感兴趣）
 LEAD_LOW_ID=$(psql "$DATABASE_URL" -t -c \
   "INSERT INTO zenithjoy.acquisition_leads (tenant_id, sec_uid, nickname, collect_task_id)
    VALUES ('$TENANT_ID','sec_dod_low','DoD低分线索',(SELECT id FROM zenithjoy.acquisition_collect_tasks WHERE tenant_id='$TENANT_ID' LIMIT 1))
-   ON CONFLICT DO NOTHING RETURNING id;" | tr -d ' \n')
+   ON CONFLICT (tenant_id, sec_uid) DO UPDATE SET nickname=EXCLUDED.nickname
+   RETURNING id;" | tr -d ' \n')
 
 # 插入低分评论
 psql "$DATABASE_URL" -c \
@@ -76,7 +87,7 @@ psql "$DATABASE_URL" -t -c \
 
 **对应 it() 子串**: `judgment api timeout should mark pending and not block other videos`
 
-**断言描述**: 当 ToAPIs Gemini 调用超过 8 秒时，超时视频 `judgment_status` 更新为 `pending`，并且同批次其他视频的 judgment_status 在合理时间内（<15 秒）完成更新（非超时视频不被 block）。
+**断言描述**: 当 ToAPIs Gemini 调用超过 8 秒时，超时视频 `judgment_status` 更新为 `pending`。**INV-3 不阻塞断言（超时不阻塞其他视频）由单元测试 TC-03 独立覆盖（mock 并发场景验证，Jest mock Gemini client 模拟 8s 超时 + 验证另一视频在 15s 内完成判定）；smoke 验证仅覆盖超时视频状态变为 pending 这一半，不重复验证并发隔离。**
 
 **manual:bash 验收命令**:
 ```bash
@@ -142,6 +153,19 @@ done
 cd /workspace && npx jest --testPathPattern="content-judgment.test" \
   --testNamePattern="same video_id with non-pending result should not re-call gemini" \
   --forceExit 2>&1 | tail -5
+
+# smoke 验证：对已有结果的 video_id 重复调用，验证 cache_hit=true
+API="http://localhost:3000"
+TENANT_ID="test-tenant-line02-judgment"
+
+# 先确保该 video_id 已有非 pending 结果（复用 BEHAVIOR(1) 的 dod-video-rejected）
+CACHED_RESULT=$(curl -sf -X POST "$API/api/acquisition/judge-video" \
+  -H "Content-Type: application/json" \
+  -d '{"tenant_id":"'"$TENANT_ID"'","video_id":"dod-video-rejected","capture_type":"screenshot","data_b64":"dGVzdA=="}')
+
+echo "$CACHED_RESULT" | jq -e '.cache_hit == true' \
+  && echo "PASS: INV-5 cache_hit=true（未重复调 Gemini）" \
+  || (echo "FAIL: cache_hit 字段缺失或为 false" && exit 1)
 ```
 
 ---
@@ -182,6 +206,21 @@ psql "$DATABASE_URL" -t -c \
 API="http://localhost:3000"
 TENANT_ID="test-tenant-line02-judgment"
 
+# 前置：INSERT 一条精准档线索，获取其 ID
+LEAD_HIGH_ID=$(psql "$DATABASE_URL" -t -c \
+  "INSERT INTO zenithjoy.acquisition_leads (tenant_id, sec_uid, nickname, collect_task_id)
+   VALUES ('$TENANT_ID','sec_dod_high','DoD精准档线索',(
+     SELECT id FROM zenithjoy.acquisition_collect_tasks WHERE tenant_id='$TENANT_ID' LIMIT 1
+   ))
+   ON CONFLICT (tenant_id, sec_uid) DO UPDATE SET nickname=EXCLUDED.nickname
+   RETURNING id;" | tr -d ' \n')
+
+# 插入精准档评论
+psql "$DATABASE_URL" -c \
+  "INSERT INTO zenithjoy.acquisition_lead_comments (lead_id, tenant_id, comment_text, grade)
+   VALUES ('$LEAD_HIGH_ID','$TENANT_ID','我正在找装修公司','精准')
+   ON CONFLICT DO NOTHING;"
+
 # 高分线索（精准档）→ outreach_eligible=true
 curl -sf -X POST "$API/api/acquisition/rescore-lead" \
   -H "Content-Type: application/json" \
@@ -208,16 +247,38 @@ cd /workspace && npx jest --testPathPattern="acquisition-dispatch.test" \
   --testNamePattern="dm_assignments cancelled when outreach_eligible turns false" \
   --forceExit 2>&1 | tail -5
 
-# 集成验证（需要预先存在 dm_assignments 记录）
+# 集成验证（预先创建一条已生成 dm_assignments 的线索，再降档触发 cancelled）
 API="http://localhost:3000"
 TENANT_ID="test-tenant-line02-judgment"
 
-# 触发 rescoreLead 将线索降档
+# Step1：INSERT 一条精准档线索（初始 outreach_eligible=true）
+LEAD_DOWNGRADE_ID=$(psql "$DATABASE_URL" -t -c \
+  "INSERT INTO zenithjoy.acquisition_leads (tenant_id, sec_uid, nickname, collect_task_id, outreach_eligible)
+   VALUES ('$TENANT_ID','sec_dod_downgrade','DoD降档线索',(
+     SELECT id FROM zenithjoy.acquisition_collect_tasks WHERE tenant_id='$TENANT_ID' LIMIT 1
+   ), true)
+   ON CONFLICT (tenant_id, sec_uid) DO UPDATE SET outreach_eligible=true
+   RETURNING id;" | tr -d ' \n')
+
+# Step2：直接 INSERT 一条 pending 状态的 dm_assignments（模拟已生成待发送状态）
+psql "$DATABASE_URL" -c \
+  "INSERT INTO zenithjoy.dm_assignments (lead_id, tenant_id, status)
+   VALUES ('$LEAD_DOWNGRADE_ID','$TENANT_ID','pending')
+   ON CONFLICT DO NOTHING;"
+
+# Step3：插入低分评论，使该线索降档到 感兴趣（低于精准阈值）
+psql "$DATABASE_URL" -c \
+  "DELETE FROM zenithjoy.acquisition_lead_comments WHERE lead_id='$LEAD_DOWNGRADE_ID';
+   INSERT INTO zenithjoy.acquisition_lead_comments (lead_id, tenant_id, comment_text, grade)
+   VALUES ('$LEAD_DOWNGRADE_ID','$TENANT_ID','随便看看','感兴趣');"
+
+# Step4：触发 rescoreLead 将线索降档 → outreach_eligible=false
 curl -sf -X POST "$API/api/acquisition/rescore-lead" \
   -H "Content-Type: application/json" \
   -d '{"lead_id":"'"$LEAD_DOWNGRADE_ID"'","tenant_id":"'"$TENANT_ID"'"}' \
   | jq -e '.outreach_eligible == false'
 
+# Step5：验证 dm_assignments 被标记为 cancelled（FR-8）
 psql "$DATABASE_URL" -t -c \
   "SELECT status FROM zenithjoy.dm_assignments WHERE lead_id='$LEAD_DOWNGRADE_ID';" \
   | grep "cancelled" && echo "PASS: FR-8 dm_assignments=cancelled" || (echo "FAIL: dm_assignments not cancelled" && exit 1)

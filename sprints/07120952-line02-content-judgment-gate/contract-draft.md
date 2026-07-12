@@ -25,7 +25,7 @@
 | INV-2 | `outreach_eligible = false` 的线索，`buildAssignments` **绝不**为其生成 `dm_assignments` 记录 | `SELECT count(*) FROM zenithjoy.dm_assignments WHERE lead_id=<ineligible_lead_id>` 必须返回 0 |
 | INV-3 | 判定 API 超时（>8 秒）**绝不**阻塞同一采集批次中其他视频的处理 | 超时场景下其他视频 `judgment_status` 在超时窗口内完成更新；超时视频状态为 `pending` |
 | INV-4 | 任何 `rejected`/`pending`/`skipped_capture_failed` 视频必须在 `acquisition_collect_videos` 表中留有记录 | `SELECT count(*) FROM zenithjoy.acquisition_collect_videos WHERE video_id=<vid> AND judgment_status IN ('rejected','pending','skipped_capture_failed')` 必须 ≥ 1 |
-| INV-5 | 同一 `video_id` 已有非 `pending` 判定结果时，判定 API **绝不**重复调用 Gemini | 对已有 `matched`/`rejected` 结果的 video_id 再次 POST `/api/acquisition/judge-video`，响应直接返回已有结果，不新增 Gemini 计费调用（日志无重复 upstream 请求） |
+| INV-5 | 同一 `video_id` 已有非 `pending` 判定结果时，判定 API **绝不**重复调用 Gemini | 对已有 `matched`/`rejected` 结果的 video_id 再次 POST `/api/acquisition/judge-video`，API 响应体含 `cache_hit: true` 字段，bash 用 `jq -e '.cache_hit == true'` 断言；不新增 Gemini 计费调用 |
 | INV-6 | `target_profile_desc` 为空的租户不受内容判定影响（所有视频默认 `matched`） | 空 `target_profile_desc` 租户调用判定 API 时，响应 `judgment_status == "matched"`，且 `acquisition_collect_videos.judgment_status` 落库为 `matched` |
 
 ---
@@ -85,9 +85,9 @@ AND column_name='outreach_eligible';
 |---------|--------------|------------|------|----------|
 | TC-01 | `rejected video should not generate stage2 task` | INV-1, FR-5 | smoke + psql | `content-judgment-gate-smoke.sh` §3 |
 | TC-02 | `outreach_eligible false lead should not appear in dm_assignments` | INV-2, FR-7 | smoke + psql | `content-judgment-gate-smoke.sh` §4 |
-| TC-03 | `judgment api timeout should mark pending and not block other videos` | INV-3 | unit（Jest mock 8s timeout） | `services/content-judgment.test.ts` |
+| TC-03 | `judgment api timeout should mark pending and not block other videos` | INV-3 | unit（Jest mock 8s timeout；**同时 mock 并发第二视频，断言其在 15s 内完成判定，验证不阻塞约束；smoke 脚本仅验证超时→pending，不重复覆盖并发隔离**） | `services/content-judgment.test.ts` |
 | TC-04 | `rejected video must have record in acquisition_collect_videos` | INV-4 | smoke + psql | `content-judgment-gate-smoke.sh` §3 |
-| TC-05 | `same video_id with non-pending result should not re-call gemini` | INV-5 | unit（spy Gemini client） | `services/content-judgment.test.ts` |
+| TC-05 | `same video_id with non-pending result should not re-call gemini` | INV-5 | unit（spy Gemini client；**API 响应体含 `cache_hit: boolean` 字段，断言 `cache_hit == true` 且 Gemini spy 调用次数为 0**） | `services/content-judgment.test.ts` |
 | TC-06 | `empty target_profile_desc should default all videos to matched` | INV-6 | smoke + unit | `content-judgment-gate-smoke.sh` §6 |
 | TC-07 | `judge-video api returns matched or pending for valid screenshot` | FR-4 | smoke curl | `content-judgment-gate-smoke.sh` §2 |
 | TC-08 | `rescore-lead updates outreach_eligible based on highest grade` | FR-6 | smoke curl + psql | `content-judgment-gate-smoke.sh` §4 |
@@ -167,7 +167,7 @@ psql "$DATABASE_URL" -t -c \
   | grep -E "^\s*0\s*$"
 ```
 
-**§5 精准档线索 outreach_eligible=true（FR-6, FR-7）**
+**§5 精准档线索 outreach_eligible=true，buildAssignments 生成 dm_assignments（FR-6, FR-7）**
 ```bash
 curl -sf -X POST "$API/api/acquisition/rescore-lead" \
   -d "{\"lead_id\":\"$LEAD_HIGH_ID\",\"tenant_id\":\"$TENANT_ID\"}" \
@@ -176,6 +176,17 @@ curl -sf -X POST "$API/api/acquisition/rescore-lead" \
 psql "$DATABASE_URL" -t -c \
   "SELECT outreach_eligible FROM zenithjoy.acquisition_leads WHERE id='$LEAD_HIGH_ID';" \
   | grep "t"
+
+# 调用 buildAssignments，验证 dm_assignments 实际生成（FR-7 正向路径）
+curl -sf -X POST "$API/api/acquisition/build-assignments" \
+  -H "Content-Type: application/json" \
+  -d "{\"tenant_id\":\"$TENANT_ID\"}" \
+  | jq -e '.success == true'
+
+psql "$DATABASE_URL" -t -c \
+  "SELECT count(*) FROM zenithjoy.dm_assignments WHERE lead_id='$LEAD_HIGH_ID';" \
+  | grep -E "^\s*[1-9][0-9]*\s*$" && echo "PASS: FR-7 dm_assignments ≥ 1 generated" \
+  || (echo "FAIL: buildAssignments 未为精准档线索生成 dm_assignments" && exit 1)
 ```
 
 **§6 空 target_profile_desc 租户所有视频默认 matched（INV-6）**
