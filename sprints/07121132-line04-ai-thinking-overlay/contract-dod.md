@@ -16,13 +16,13 @@ date: 2026-07-12
 **验收命令（manual:bash）**：
 ```bash
 # 1a. 单元：O_APPEND 写入，行 schema 合规
-pytest services/line04/tests/test_events_pipeline.py::test_reply_sent_schema -v
+pytest sprints/07121132-line04-ai-thinking-overlay/tests/test_events_pipeline.py::test_reply_sent_schema -v
 
 # 1b. grep 断言：浮窗代码中无 events.jsonl 写入行
 ! grep -rP "open\(.*events\.jsonl.*['\"][wa]" services/line04/overlay/
 
 # 1c. 字段完整性：v/event_id/date/type/contact/stage/reasoning/ts 全部存在
-pytest services/line04/tests/test_events_pipeline.py::test_event_schema_fields -v
+pytest sprints/07121132-line04-ai-thinking-overlay/tests/test_events_pipeline.py::test_event_schema_fields -v
 ```
 
 **通过标准**：
@@ -39,16 +39,16 @@ pytest services/line04/tests/test_events_pipeline.py::test_event_schema_fields -
 **验收命令（manual:bash）**：
 ```bash
 # 2a. 并发写读（10000 行，无丢失无重复）
-pytest services/line04/tests/test_events_pipeline.py::test_concurrent_write_read -v
+pytest sprints/07121132-line04-ai-thinking-overlay/tests/test_events_pipeline.py::test_concurrent_write_read -v
 
 # 2b. 坏行容错（含非 JSON 行，读侧不崩）
-pytest services/line04/tests/test_events_pipeline.py::test_bad_line_tolerance -v
+pytest sprints/07121132-line04-ai-thinking-overlay/tests/test_events_pipeline.py::test_bad_line_tolerance -v
 
 # 2c. event_id 幂等去重
-pytest services/line04/tests/test_events_pipeline.py::test_event_id_dedup -v
+pytest sprints/07121132-line04-ai-thinking-overlay/tests/test_events_pipeline.py::test_event_id_dedup -v
 
 # 2d. 跨两代轮转回放（5MB → .1 → 新建，两代合并读）
-pytest services/line04/tests/test_events_pipeline.py::test_rotation_replay -v
+pytest sprints/07121132-line04-ai-thinking-overlay/tests/test_events_pipeline.py::test_rotation_replay -v
 ```
 
 **通过标准**：
@@ -65,13 +65,13 @@ pytest services/line04/tests/test_events_pipeline.py::test_rotation_replay -v
 **验收命令（manual:bash）**：
 ```bash
 # 3a. 中台侧 PII 过滤（含"复述客户原话"用例）
-npx vitest run apps/api/src/services/__tests__/wechat-draft.test.ts --reporter=verbose -t "PII"
+npx vitest run sprints/07121132-line04-ai-thinking-overlay/tests/wechat-draft-reasoning.test.ts --reporter=verbose -t "PII"
 
 # 3b. agent 层 PII 二次过滤（auto_reply.py 层，与中台同一纯函数）
-pytest services/line04/tests/test_events_pipeline.py::test_pii_double_gate -v
+pytest sprints/07121132-line04-ai-thinking-overlay/tests/test_events_pipeline.py::test_pii_double_gate -v
 
 # 3c. 边界用例：手机号 13800138000 / 微信号 wxid_xxx / 身份证 110101199001011234
-pytest services/line04/tests/test_events_pipeline.py::test_pii_patterns -v
+pytest sprints/07121132-line04-ai-thinking-overlay/tests/test_events_pipeline.py::test_pii_patterns -v
 ```
 
 **通过标准**：
@@ -88,16 +88,16 @@ pytest services/line04/tests/test_events_pipeline.py::test_pii_patterns -v
 **验收命令（manual:bash）**：
 ```bash
 # 4a. 正常路径：LLM 返回 reasoning → 响应体含 reasoning，≤30 字
-npx vitest run apps/api/src/services/__tests__/wechat-draft.test.ts -t "reasoning normal path"
+npx vitest run sprints/07121132-line04-ai-thinking-overlay/tests/wechat-draft-reasoning.test.ts -t "reasoning normal path"
 
 # 4b. 兜底缺省路径：:548 正则兜底，reasoning 缺失 → 降级文案「已回复 {联系人}」
-npx vitest run apps/api/src/services/__tests__/wechat-draft.test.ts -t "reasoning fallback"
+npx vitest run sprints/07121132-line04-ai-thinking-overlay/tests/wechat-draft-reasoning.test.ts -t "reasoning fallback"
 
 # 4c. PII 命中降级：reasoning 含手机号 → 替换降级文案
-npx vitest run apps/api/src/services/__tests__/wechat-draft.test.ts -t "reasoning PII degraded"
+npx vitest run sprints/07121132-line04-ai-thinking-overlay/tests/wechat-draft-reasoning.test.ts -t "reasoning PII degraded"
 
 # 4d. 向后兼容：旧 LLM 返回 {reply, tags}（无 reasoning）→ agent 侧渲染降级文案，不崩
-npx vitest run apps/api/src/services/__tests__/wechat-draft.test.ts -t "reasoning backward compat"
+npx vitest run sprints/07121132-line04-ai-thinking-overlay/tests/wechat-draft-reasoning.test.ts -t "reasoning backward compat"
 ```
 
 **通过标准**：
@@ -115,16 +115,16 @@ npx vitest run apps/api/src/services/__tests__/wechat-draft.test.ts -t "reasonin
 **验收命令（manual:bash）**：
 ```bash
 # 5a. pywebview 不可用时降级
-pytest services/line04/tests/test_overlay_preflight.py::test_pywebview_missing -v
+pytest sprints/07121132-line04-ai-thinking-overlay/tests/test_overlay_preflight.py::test_pywebview_missing -v
 
 # 5b. WebView2 注册表缺失时降级
-pytest services/line04/tests/test_overlay_preflight.py::test_webview2_missing -v
+pytest sprints/07121132-line04-ai-thinking-overlay/tests/test_overlay_preflight.py::test_webview2_missing -v
 
 # 5c. 两项均存在时通过
-pytest services/line04/tests/test_overlay_preflight.py::test_preflight_pass -v
+pytest sprints/07121132-line04-ai-thinking-overlay/tests/test_overlay_preflight.py::test_preflight_pass -v
 
 # 5d. 降级时写 overlay-diag.json（字段完整性）
-pytest services/line04/tests/test_overlay_preflight.py::test_diag_written_on_failure -v
+pytest sprints/07121132-line04-ai-thinking-overlay/tests/test_overlay_preflight.py::test_diag_written_on_failure -v
 ```
 
 **通过标准**：
@@ -142,16 +142,16 @@ pytest services/line04/tests/test_overlay_preflight.py::test_diag_written_on_fai
 **验收命令（manual:bash）**：
 ```bash
 # 6a. 熔断触发（模拟 8 次存活 <60s）
-pytest services/line04/tests/test_overlay_lifecycle.py::test_circuit_breaker_trigger -v
+pytest sprints/07121132-line04-ai-thinking-overlay/tests/test_overlay_lifecycle.py::test_circuit_breaker_trigger -v
 
 # 6b. 熔断后不重拉
-pytest services/line04/tests/test_overlay_lifecycle.py::test_circuit_open_no_respawn -v
+pytest sprints/07121132-line04-ai-thinking-overlay/tests/test_overlay_lifecycle.py::test_circuit_open_no_respawn -v
 
 # 6c. agent 重启后熔断复位
-pytest services/line04/tests/test_overlay_lifecycle.py::test_circuit_reset_on_agent_restart -v
+pytest sprints/07121132-line04-ai-thinking-overlay/tests/test_overlay_lifecycle.py::test_circuit_reset_on_agent_restart -v
 
 # 6d. 用户主动关闭（退出码 0 + user_closed=true）→ 守活不重拉
-pytest services/line04/tests/test_overlay_lifecycle.py::test_user_close_no_respawn -v
+pytest sprints/07121132-line04-ai-thinking-overlay/tests/test_overlay_lifecycle.py::test_user_close_no_respawn -v
 ```
 
 **通过标准**：
@@ -169,7 +169,7 @@ pytest services/line04/tests/test_overlay_lifecycle.py::test_user_close_no_respa
 **验收命令（manual:bash）**：
 ```bash
 # 7a. grep 清零断言
-result=$(grep -nP 'content\[:20\]' services/line04/listen_chat.py 2>/dev/null)
+result=$(grep -nP 'content\[:20\]' services/agent/wechat-rpa/listen_chat.py 2>/dev/null)
 if [ -n "$result" ]; then
   echo "FAIL: 仍有明文日志: $result"
   exit 1
@@ -178,11 +178,11 @@ else
 fi
 
 # 7b. 脱敏函数单测（确认替换逻辑正确）
-pytest services/line04/tests/test_pii_filter.py::test_log_redaction -v
+pytest sprints/07121132-line04-ai-thinking-overlay/tests/test_pii_filter.py::test_log_redaction -v
 ```
 
 **通过标准**：
-- `grep -nP 'content\[:20\]' services/line04/listen_chat.py` 输出为空
+- `grep -nP 'content\[:20\]' services/agent/wechat-rpa/listen_chat.py` 输出为空
 - 脱敏函数对 "hello 13800138000" → 输出不含原始手机号
 
 ---

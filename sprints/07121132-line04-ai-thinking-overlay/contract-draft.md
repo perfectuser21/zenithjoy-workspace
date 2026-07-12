@@ -185,13 +185,13 @@ bash .github/workflows/scripts/smoke/line04-ai-overlay-smoke.sh
 ```
 
 smoke 脚本验收内容：
-1. `pytest services/line04/tests/test_events_pipeline.py -v` — events 管道全套（坏行/并发/轮转/幂等/PII/降级文案）通过
-2. `vitest run apps/api/src/services/__tests__/wechat-draft.test.ts` — draft-generate {reply,tags,reasoning} 三路断言通过
-3. `grep -nP 'content\[:20\]' services/line04/listen_chat.py` 输出为空（明文日志清零）
+1. `pytest sprints/07121132-line04-ai-thinking-overlay/tests/test_events_pipeline.py -v` — events 管道全套（坏行/并发/轮转/幂等/PII/降级文案）通过
+2. `vitest run sprints/07121132-line04-ai-thinking-overlay/tests/wechat-draft-reasoning.test.ts` — draft-generate {reply,tags,reasoning} 三路断言通过
+3. `grep -nP 'content\[:20\]' services/agent/wechat-rpa/listen_chat.py` 输出为空（明文日志清零）
 4. overlay-diag.json schema 字段完整性校验（jq 断言 12 字段存在）
 5. 浮窗进程 pywebview 探针：2s 建窗退出码为 0
 
-#### 5.2 pytest events 层（`services/line04/tests/test_events_pipeline.py`）
+#### 5.2 pytest events 层（`sprints/07121132-line04-ai-thinking-overlay/tests/test_events_pipeline.py`）
 
 - 坏行容错：含非 JSON 行时 tail 继续读后续有效行，不崩
 - 并发写读：双线程并发写 10000 行，读侧无丢失无重复
@@ -201,7 +201,7 @@ smoke 脚本验收内容：
 - PII 过滤（含"复述客户原话"用例）：reasoning 含手机号/微信号 → 被替换
 - 降级文案：reasoning 缺失 → agent 渲染「已回复 {联系人}」
 
-#### 5.3 vitest 中台层（`apps/api/src/services/__tests__/wechat-draft.test.ts`）
+#### 5.3 vitest 中台层（`sprints/07121132-line04-ai-thinking-overlay/tests/wechat-draft-reasoning.test.ts`）
 
 三路断言：
 - 正常路径：LLM 返回 `{reply, tags, reasoning}` → 响应体含 reasoning，长度 ≤30 字
@@ -211,11 +211,11 @@ smoke 脚本验收内容：
 #### 5.4 grep 回归
 
 ```bash
-! grep -nP 'content\[:20\]' services/line04/listen_chat.py
+! grep -nP 'content\[:20\]' services/agent/wechat-rpa/listen_chat.py
 ```
 输出必须为空（清零断言）
 
-#### 5.5 浮窗软检测单测
+#### 5.5 浮窗软检测单测（`sprints/07121132-line04-ai-thinking-overlay/tests/test_overlay_preflight.py`）
 
 - pywebview 不可用时：软检测返回 `{ok: false, reason: 'pywebview_missing'}`，写 overlay-diag.json
 - WebView2 注册表缺失时：软检测返回 `{ok: false, reason: 'webview2_missing'}`
