@@ -1,7 +1,7 @@
 /**
- * wechat-draft-reasoning.test.ts — 中台合同 reasoning 字段骨架测试
+ * wechat-draft-reasoning.test.ts — 中台合同 reasoning 字段测试
  *
- * 覆盖 BEHAVIOR-4：{reply, tags, reasoning} 三路断言
+ * 覆盖 BEHAVIOR-4（contract-dod.md）：{reply, tags, reasoning} 三路断言
  *   - 正常路径：LLM 返回 reasoning → 响应体含 reasoning，≤30 字
  *   - 兜底缺省：:548 正则兜底，reasoning 缺失 → 降级文案
  *   - PII 命中降级：reasoning 含手机号 → 替换降级文案
@@ -9,7 +9,11 @@
  *
  * 运行：npx vitest run sprints/07121132-line04-ai-thinking-overlay/tests/wechat-draft-reasoning.test.ts
  *
- * TODO: 实现完成后替换 mock 为真实 generateChatDraft 调用
+ * 【第一刀遗留说明，第二刀替换】
+ *   下方 mockGenerateDraft / filterPiiReasoning / agentRenderReasoning 均为第一刀 mock 存根，
+ *   第二刀实现完成后，「第二刀新增测试」describe 块将直接 import 真实 generateChatDraft，
+ *   mock 存根区块可整体删除（或保留作回归兜底）。
+ *   替换入口：apps/api/src/services/wechat-draft.ts → generateChatDraft
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
@@ -23,7 +27,7 @@ interface DraftResponse {
   message_id?: string;
 }
 
-// ─── 存根：PII 过滤函数（实现后替换为真实导入） ───────────────────────────────
+// ─── 存根：PII 过滤函数（第一刀遗留，实现后替换为真实导入） ─────────────────
 
 function filterPiiReasoning(reasoning: string): string {
   const phonePattern = /1[3-9]\d{9}/g;
@@ -36,7 +40,7 @@ function filterPiiReasoning(reasoning: string): string {
   return result;
 }
 
-// ─── 存根：generateChatDraft 模拟（实现后替换） ──────────────────────────────
+// ─── 存根：generateChatDraft 模拟（第一刀遗留，第二刀替换为真实 import） ─────
 
 async function mockGenerateDraft(opts: {
   llmReasoning?: string;
@@ -185,6 +189,37 @@ describe('wechat-draft reasoning 三路断言 [BEHAVIOR-4]', () => {
       // 空字符串视为缺省，渲染降级文案
       expect(rendered).toBe('已回复 王五');
     });
+  });
+
+});
+
+// ─── 第二刀新增测试骨架（BEHAVIOR-4，generator 填实现） ─────────────────────
+// 实现后：import { generateChatDraft } from '../../../../apps/api/src/services/wechat-draft';
+// 并删除上方 mockGenerateDraft 存根，改为真实调用。
+
+describe('[BEHAVIOR-4] generateChatDraft 真实 LLM 调用（第二刀）', () => {
+
+  describe('正常路径 — 真实 LLM reasoning 返回', () => {
+    it.todo('真实 generateChatDraft 返回 {reply, tags, reasoning}，reasoning ≤30 字');
+    it.todo('reasoning 字段在中台 HTTP 响应体中可见（透出 API 层）');
+    it.todo('stage 取值域严格限定 A1-A4（Invariant I4）');
+  });
+
+  describe('PII 硬闸接线 — 中台第一闸（第二刀接线）', () => {
+    it.todo('reasoning 含 11 位手机号 → 中台返回前替换为降级文案，不透传给 agent');
+    it.todo('reasoning 含 wxid_ 微信号 → 替换为降级文案');
+    it.todo('reasoning 含 18 位身份证号 → 替换为降级文案');
+    it.todo('PII 过滤后 reply 字段不受影响（只过滤 reasoning）');
+  });
+
+  describe('兜底缺省路径 — :548 正则兜底（第二刀覆盖真实路径）', () => {
+    it.todo('LLM 返回非 JSON 字符串 → :548 兜底路径，reasoning 字段为 undefined');
+    it.todo('reasoning 缺省时，agent 渲染端调用 agentRenderReasoning 返回「已回复 {联系人}」');
+  });
+
+  describe('向后兼容 — 旧 LLM 格式（无 reasoning 字段）', () => {
+    it.todo('旧格式 {reply, tags} 无 reasoning → generateChatDraft 不抛，API 响应不崩');
+    it.todo('reasoning 为空字符串时 agent 渲染端视为缺省，显示降级文案');
   });
 
 });
