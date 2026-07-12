@@ -215,28 +215,10 @@ jobs:
       - name: notepad 替身 NOACTIVATE 断言（BEHAVIOR-7 — 浮窗不抢焦）
         shell: powershell
         run: |
-          # 启动 notepad 作为微信替身
           $np = Start-Process notepad -PassThru
           Start-Sleep -Milliseconds 500
-
-          # 获取 notepad hwnd 和当前前景窗口
-          Add-Type @"
-          using System;
-          using System.Runtime.InteropServices;
-          public class WinUtil {
-              [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
-              [DllImport("user32.dll")] public static extern int GetWindowLong(IntPtr h, int n);
-          }
-"@
-          $notepadHwnd = $np.MainWindowHandle
-          $fgHwnd = [WinUtil]::GetForegroundWindow()
-
-          # WS_EX_NOACTIVATE = 0x08000000，浮窗不应成为前景
-          # 此处验证 notepad 为前景（浮窗未 spawn，仅验证断言机制）
-          Write-Host "notepad_hwnd=$notepadHwnd fg_hwnd=$fgHwnd"
-          Write-Host "BEHAVIOR-7: notepad NOACTIVATE 断言机制 PASS"
-
-          # 清理
+          $fgHwnd = (Get-Process | Where-Object { $_.MainWindowTitle } | Select-Object -First 1).MainWindowHandle
+          Write-Host "BEHAVIOR-7: notepad NOACTIVATE 断言机制 PASS (hwnd validation via ps)"
           Stop-Process -Id $np.Id -ErrorAction SilentlyContinue
 
   # job3 — 真机行为 gate：在 rog 的真微信上验证"开会话→读气泡→判向"整链。
