@@ -1,6 +1,7 @@
 # Contract Draft — Line02 内容判定门槛
 ## Sprint: 07120952-line02-content-judgment-gate
-## 版本: v1.0（首轮，无 reviewer feedback）
+## 版本: v1.1（响应 reviewer-feedback-r1.md：修复§4/§5 bash变量自包含、补 §5 dm_assignments验证、FR-8降档逻辑归单测）
+## FR-8 说明: TC-09（dm_assignments cancelled when outreach_eligible turns false）归为单元测试覆盖（services/acquisition-dispatch.test.ts），smoke 不重复暴露 $LEAD_DOWNGRADE_ID；BEHAVIOR(8) 在 contract-dod.md 中有完整自包含 manual:bash
 ## 日期: 2026-07-12
 
 ---
@@ -153,8 +154,20 @@ psql "$DATABASE_URL" -t -c \
 
 **§4 低分线索 outreach_eligible=false，dm_assignments 不生成（INV-2, FR-6, FR-7）**
 ```bash
-# 插入 grade=感兴趣 评论，触发 rescoreLead
+# 前置：创建测试用 collect_task（FK 依赖），低分线索
+TASK_ID=$(psql "$DATABASE_URL" -t -c \
+  "INSERT INTO zenithjoy.acquisition_collect_tasks (tenant_id, keyword, status)
+   VALUES ('$TENANT_ID','test-keyword','done') RETURNING id;" | tr -d ' \n')
+LEAD_LOW_ID=$(psql "$DATABASE_URL" -t -c \
+  "INSERT INTO zenithjoy.acquisition_leads (tenant_id, sec_uid, nickname, collect_task_id)
+   VALUES ('$TENANT_ID','sec_dod_low_§4','§4低分线索','$TASK_ID') RETURNING id;" | tr -d ' \n')
+psql "$DATABASE_URL" -c \
+  "INSERT INTO zenithjoy.acquisition_lead_comments (lead_id, tenant_id, comment_text, grade)
+   VALUES ('$LEAD_LOW_ID','$TENANT_ID','还不错','感兴趣');" 2>/dev/null || true
+
+# 触发 rescoreLead
 curl -sf -X POST "$API/api/acquisition/rescore-lead" \
+  -H "Content-Type: application/json" \
   -d "{\"lead_id\":\"$LEAD_LOW_ID\",\"tenant_id\":\"$TENANT_ID\"}" \
   | jq -e '.outreach_eligible == false'
 
@@ -169,7 +182,19 @@ psql "$DATABASE_URL" -t -c \
 
 **§5 精准档线索 outreach_eligible=true，buildAssignments 生成 dm_assignments（FR-6, FR-7）**
 ```bash
+# 前置：创建精准档线索（自包含，不依赖 §4 变量）
+TASK_ID_H=$(psql "$DATABASE_URL" -t -c \
+  "INSERT INTO zenithjoy.acquisition_collect_tasks (tenant_id, keyword, status)
+   VALUES ('$TENANT_ID','test-keyword-high','done') RETURNING id;" | tr -d ' \n')
+LEAD_HIGH_ID=$(psql "$DATABASE_URL" -t -c \
+  "INSERT INTO zenithjoy.acquisition_leads (tenant_id, sec_uid, nickname, collect_task_id)
+   VALUES ('$TENANT_ID','sec_dod_high_§5','§5精准档线索','$TASK_ID_H') RETURNING id;" | tr -d ' \n')
+psql "$DATABASE_URL" -c \
+  "INSERT INTO zenithjoy.acquisition_lead_comments (lead_id, tenant_id, comment_text, grade)
+   VALUES ('$LEAD_HIGH_ID','$TENANT_ID','请问怎么联系你们','精准');" 2>/dev/null || true
+
 curl -sf -X POST "$API/api/acquisition/rescore-lead" \
+  -H "Content-Type: application/json" \
   -d "{\"lead_id\":\"$LEAD_HIGH_ID\",\"tenant_id\":\"$TENANT_ID\"}" \
   | jq -e '.outreach_eligible == true'
 
