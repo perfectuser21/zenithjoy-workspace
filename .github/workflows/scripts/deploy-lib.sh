@@ -447,10 +447,16 @@ ensure_staging_plist() {
   local logdir="${ZJ_STAGING_LOG_DIR:-$HOME/Library/Logs}"
 
   if [ ! -f "$prod_plist" ]; then
-    echo "❌ ensure_staging_plist：生产 plist 不存在（${prod_plist}），无密钥来源，拒绝造残废 plist" >&2
-    return 1
+    # 生产 plist 缺失：若已有 staging plist（含上次成功注入的密钥），用它作 fallback key source；
+    # 首次全新机器（既无 prod 也无 staging plist）才真正失败。
+    if [ -f "$out_plist" ]; then
+      echo "⚠️ ensure_staging_plist：生产 plist 不存在（${prod_plist}），使用已有 staging plist 作 fallback key source" >&2
+      prod_plist="$out_plist"
+    else
+      echo "❌ ensure_staging_plist：生产 plist 不存在（${prod_plist}），且无 staging plist 可 fallback，拒绝造残废 plist" >&2
+      return 1
+    fi
   fi
-
   mkdir -p "$(dirname "$out_plist")" "$logdir" 2>/dev/null || true
 
   PROD_PLIST="$prod_plist" TEMPLATE="$template" OUT_PLIST="$out_plist" \
