@@ -4668,3 +4668,11 @@ agent_suite:
   status: active
   product: AI员工
   note: "sprint(07120952): Line02 内容判定门槛 E2E Playwright——获客配置画像描述填写、线索outreach_eligible状态列展示"
+
+- id: line02-content-judgment-dm-assignments-cancelled-status
+  path: apps/api/tests/integration/p2-line02-content-judgment/dm-assignments-cancelled-status.integration.test.ts
+  type: integration
+  ci: L4-INT
+  status: active
+  product: AI员工
+  note: "PR#1243: 真机验收复现——dm_assignments chk_dm_assign_status 约束缺 'cancelled'，rescoreLead() FR-8 降级取消直接违反 CHECK 约束；真 Postgres 校验 pg_get_constraintdef 含 'cancelled'"
