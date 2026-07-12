@@ -3946,6 +3946,13 @@ def _log(msg: str) -> None:
         pass
 
 
+def _redact(text: str, max_len: int = 6) -> str:
+    """脱敏函数：保留前 max_len 个字符，其余替换为 '***'，防止明文消息内容写入日志。"""
+    if not isinstance(text, str) or len(text) <= max_len:
+        return text
+    return text[:max_len] + "***"
+
+
 def _activate_uia() -> None:
     """设置系统屏幕阅读器标志，激活微信 4.0 的 UIAutomation provider（替代讲述人）。
 
@@ -4684,16 +4691,16 @@ def run_real_listen(args: argparse.Namespace) -> int:
                             _skip_logged.add(key)
                     elif _reason == "dup":
                         if key not in _skip_logged:
-                            _log(f"skip(dup) sender={m['sender']} content={m['content'][:20]!r}")
+                            _log(f"skip(dup) sender={m['sender']} content={_redact(m['content'])!r}")
                             _skip_logged.add(key)
                     elif _reason == "replied":
                         if key not in _skip_logged:
-                            _log(f"skip(replied) sender={m['sender']} content={m['content'][:20]!r}")
+                            _log(f"skip(replied) sender={m['sender']} content={_redact(m['content'])!r}")
                             _skip_logged.add(key)
                     elif _reason == "cooldown":
                         left = int(REPLY_FAIL_COOLDOWN - (now - reply_failed_at[key]))
                         if key not in _skip_logged:
-                            _log(f"skip(cooldown {left}s) sender={m['sender']} content={m['content'][:20]!r}")
+                            _log(f"skip(cooldown {left}s) sender={m['sender']} content={_redact(m['content'])!r}")
                             _skip_logged.add(key)
                     elif _reason == "rate_limited":
                         _log(f"rate_limiter: {m['sender']} 24h限额已满，跳过回复（下次允许: {_next_at}）")
