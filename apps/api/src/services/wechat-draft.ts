@@ -183,18 +183,46 @@ async function createRecord(
 }
 
 // ─── wechat-cs-reply 内核系统 prompt 段 ───────────────────────────────────────
-// 合同约束：LLM 必须返回 JSON { reply, tags }，tags 含 stage/escalate 等字段。
+// 合同约束：LLM 必须返回 JSON { reply, tags, reasoning }，tags 含 stage/escalate 等字段。
+// 第二刀扩展（BEHAVIOR-5）：新增 reasoning 字段（≤30字，AI 推理摘要），向后兼容（缺省不崩）。
 // 编造词规则通过 sanitizeReply 的 banned_phrases 兜底（人设层已配置）。
 
 const CS_REPLY_RULES = `你是专业客服，只回复客户问题，不编造承诺（退款/保成交/对赌）。
 
 【输出格式（严格 JSON，禁止换行前输出其他内容）】
 \`\`\`json
-{"reply":"<你的回复>","tags":{"stage":"<A1|A2|A3|A4|null>","signal":"<interested|neutral|frustrated|null>","inquiry":"<price|product|after_sale|null>","risk":"<complaint|churn|null>","gap":null,"escalate":<true|false>}}
+{"reply":"<你的回复>","tags":{"stage":"<A1|A2|A3|A4|null>","signal":"<interested|neutral|frustrated|null>","inquiry":"<price|product|after_sale|null>","risk":"<complaint|churn|null>","gap":null,"escalate":<true|false>},"reasoning":"<一句话推理≤30字>"}
 \`\`\`
 
 【阶段定义】A1=初识, A2=意向确认, A3=报价谈判, A4=成单跟进
-【escalate=true 条件】客户明显愤怒/投诉/提退款/威胁，需转人工`;
+【escalate=true 条件】客户明显愤怒/投诉/提退款/威胁，需转人工
+【reasoning 规则】≤30字简述本次回复的判断依据，不含 PII`;
+
+// ─── PII 过滤（reasoning 专用，第一硬闸）────────────────────────────────────
+// BEHAVIOR-5/BEHAVIOR-10：中台侧 reasoning 返回前过滤 PII（第一道硬闸）。
+// agent 侧 pii_filter.py 是第二道硬闸（渲染前），两道互为兜底。
+
+const PII_PHONE_RE = /1[3-9]\d{9}/;
+const PII_WECHAT_RE = /wxid_[A-Za-z0-9_]+/;
+const PII_IDCARD_RE = /\d{17}[\dXx]/;
+
+/**
+ * reasoning PII 硬闸（BEHAVIOR-5）：
+ * reasoning 含手机号/微信号/身份证 → 返回 undefined（不透传 PII 给 agent）。
+ * 向后兼容：reasoning 为 undefined/空串 → 返回 undefined。
+ */
+function filterPiiReasoning(reasoning: string | undefined): string | undefined {
+  if (!reasoning) return undefined;
+  if (
+    PII_PHONE_RE.test(reasoning) ||
+    PII_WECHAT_RE.test(reasoning) ||
+    PII_IDCARD_RE.test(reasoning)
+  ) {
+    return undefined;  // PII 命中 → 整体丢弃（不泄漏 PII 给 agent）
+  }
+  // 截断到 30 字
+  return reasoning.slice(0, 30) || undefined;
+}
 
 // 编造词（命中且非否定语境 → sanitizeReply 清空 → ai_failed）
 const FABRICATION_KEYWORDS = ['全额退款', '保证退款', '100%退款', '保成交', '对赌', '全额退'];
@@ -216,8 +244,8 @@ function containsFabricationKeywords(text: string): boolean {
   });
 }
 
-// JSON 解析 helper
-function extractJsonFromContent(content: string): { reply: string; tags: Record<string, unknown> } | null {
+// JSON 解析 helper（第二刀扩展：同时解析 reasoning 字段，BEHAVIOR-5）
+function extractJsonFromContent(content: string): { reply: string; tags: Record<string, unknown>; reasoning?: string } | null {
   // 先尝试提取 ```json ... ``` 代码块
   const codeBlockMatch = content.match(/```json\s*([\s\S]*?)```/);
   const jsonStr = codeBlockMatch ? codeBlockMatch[1].trim() : content.trim();
@@ -229,7 +257,12 @@ function extractJsonFromContent(content: string): { reply: string; tags: Record<
   try {
     const parsed = JSON.parse(braceMatch[0]);
     if (parsed && typeof parsed.reply === 'string') {
-      return { reply: parsed.reply, tags: parsed.tags ?? {} };
+      return {
+        reply: parsed.reply,
+        tags: parsed.tags ?? {},
+        // reasoning 可选（向后兼容旧 LLM 无此字段）
+        reasoning: typeof parsed.reasoning === 'string' ? parsed.reasoning : undefined,
+      };
     }
     return null;
   } catch {
@@ -345,6 +378,12 @@ export interface GenerateChatDraftResult {
   skip_reason?: 'group' | 'blacklisted';
   /** 仅 status:'sent' 时为生成文案；其余一律 undefined（agent 检测到 undefined 即跳过不发）。 */
   reply?: string;
+  /**
+   * AI 推理摘要（≤30字）。仅 status:'sent' 且 LLM 成功返回 reasoning 字段时存在。
+   * 向后兼容：旧 LLM 无此字段 → undefined；PII 命中 → undefined（不透传给 agent）。
+   * 供浮窗渲染 AI 思考流（BEHAVIOR-5，第二刀新增）。
+   */
+  reasoning?: string;
   /**
    * 仅 status:'sent' 时为 out 行落库返回的 wechat_messages.id（status='draft'）。
    * agent 真机发出后带此 id 回 POST /api/wechat/messages/:id/receipt（待建，Task 3）置 delivered/failed，
@@ -496,6 +535,7 @@ export async function generateChatDraft(
   // 3) 调 LLM（wechat-cs-reply 内核，WECHAT_CS_MODEL）
   let aiReply = '';
   let aiTags: Record<string, unknown> = {};
+  let aiReasoning: string | undefined = undefined;  // 第二刀新增（BEHAVIOR-5）
   let aiError: string | null = null;
   const cs = csLlm();
 
@@ -572,6 +612,9 @@ export async function generateChatDraft(
     } else {
       aiReply = sanitized;
       aiTags = (parsed.tags as Record<string, unknown>) ?? {};
+      // 第二刀：透出 reasoning（含 PII 硬闸过滤，BEHAVIOR-5）
+      // 兜底路径（正则兜底，parsed.reasoning 为 undefined）→ aiReasoning 保持 undefined
+      aiReasoning = filterPiiReasoning(parsed.reasoning);
     }
   } catch (err) {
     aiError = err instanceof Error ? err.message : String(err);
@@ -653,6 +696,8 @@ export async function generateChatDraft(
     draft_id: '',
     reply: aiReply,
     message_id: messageId,
+    // 第二刀：透出 reasoning（PII 已过滤，向后兼容：缺省/PII 命中时为 undefined）
+    ...(aiReasoning !== undefined ? { reasoning: aiReasoning } : {}),
   };
 }
 
