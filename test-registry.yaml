@@ -3578,7 +3578,7 @@ agent_suite:
     ci: windows_cloud
     status: pending-ci
     product: AI爆款视频翻拍
-    note: "Sprint 06100919 — Line07 Dashboard /video-remake 9节点流水线 Playwright E2E（N03/N04/N05/N09 + 100MB拒绝） (巡检2026-07-12: 零workflow点名，CI缺口)")
+    note: "Sprint 06100919 — Line07 Dashboard /video-remake 9节点流水线 Playwright E2E（N03/N04/N05/N09 + 100MB拒绝）(巡检2026-07-12: 零workflow点名，CI缺口)"
   - id: p2-dm-outreach-contract-handler
     path: sprints/06131229-path2-douyin-dm-outreach/tests/dm-outreach.test.ts
     type: unit
@@ -3729,7 +3729,7 @@ agent_suite:
     ci: L4
     status: pending-ci
     product: 客户管理
-    note: "#816 合并: 客户管理后台 Golden Path Playwright（公司名→成员→绑 1 成员 1 PC→诊断）+ 截图（windows_cloud）。 (巡检2026-07-12: 零workflow点名，CI缺口)")
+    note: "#816 合并: 客户管理后台 Golden Path Playwright（公司名→成员→绑 1 成员 1 PC→诊断）+ 截图（windows_cloud）。(巡检2026-07-12: 零workflow点名，CI缺口)"
   - id: agent-client-encapsulation-contract
     path: sprints/06220836-agent-client-encapsulation/tests/agent-client-encapsulation.test.ts
     type: unit
@@ -4639,7 +4639,7 @@ agent_suite:
   ci: L4
   status: pending-ci
   product: AI员工
-  note: "sprint(07091703): 智能获客Hub补下载安卓客户端入口——Playwright E2E 断言 /area/acquisition 页面可见「下载安卓客户端」卡片、点击跳转 /dashboard/android (巡检2026-07-12: 零workflow点名，CI缺口)")
+  note: "sprint(07091703): 智能获客Hub补下载安卓客户端入口——Playwright E2E 断言 /area/acquisition 页面可见「下载安卓客户端」卡片、点击跳转 /dashboard/android (巡检2026-07-12: 零workflow点名，CI缺口)"
 - id: line04-ai-overlay-wechat-draft-reasoning
   path: sprints/07121132-line04-ai-thinking-overlay/tests/wechat-draft-reasoning.test.ts
   type: unit
@@ -4663,7 +4663,7 @@ agent_suite:
   ci: windows_cloud
   status: pending-ci
   product: AI员工
-  note: "sprint(07120952): Line02 内容判定门槛 E2E Playwright——获客配置画像描述填写、线索outreach_eligible状态列展示 (巡检2026-07-12: 零workflow点名，CI缺口)")
+  note: "sprint(07120952): Line02 内容判定门槛 E2E Playwright——获客配置画像描述填写、线索outreach_eligible状态列展示 (巡检2026-07-12: 零workflow点名，CI缺口)"
 - id: line04-overlay-handler-unit
   path: services/agent/modules/line04/__tests__/overlay-handler.test.ts
   type: unit
