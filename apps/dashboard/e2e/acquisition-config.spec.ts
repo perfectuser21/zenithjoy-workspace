@@ -72,7 +72,7 @@ test('配置表单渲染 + 改值保存调 PUT 持久化', async ({ page }) => {
 
   // 改值
   await dmPerDay.fill('25');
-  await page.getByRole('button', { name: /保存配置|保存/ }).first().click();
+  await page.getByRole('button', { name: '保存配置' }).click();
 
   await expect.poll(() => putBody).not.toBeNull();
   expect((putBody as unknown as { dm_per_day: number }).dm_per_day).toBe(25);

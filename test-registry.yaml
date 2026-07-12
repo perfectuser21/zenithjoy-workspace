@@ -4651,3 +4651,20 @@ agent_suite:
   status: active
   product: 微信AI客服
   note: "sprint(07121132): AI 思考浮窗——中台合同 wechat-draft {reply,tags,reasoning} 三路断言（正常路径/兜底降级/PII命中/向后兼容），BEHAVIOR-3/4 覆盖"
+  # ── Line02 内容判定门槛 ─────────────────────────────────────────────────────
+
+- id: line02-content-judgment-unit
+  path: apps/api/src/services/content-judgment.test.ts
+  type: unit
+  ci: L3
+  status: active
+  product: AI员工
+  note: "sprint(07120952): Line02 内容判定门槛——ToAPIs Gemini 多模态调用幂等性/超时/空画像默认matched 单测（INV-3/INV-5/INV-6）"
+
+- id: line02-content-judgment-gate-e2e
+  path: apps/dashboard/e2e/content-judgment-gate.spec.ts
+  type: e2e
+  ci: windows_cloud
+  status: active
+  product: AI员工
+  note: "sprint(07120952): Line02 内容判定门槛 E2E Playwright——获客配置画像描述填写、线索outreach_eligible状态列展示"
