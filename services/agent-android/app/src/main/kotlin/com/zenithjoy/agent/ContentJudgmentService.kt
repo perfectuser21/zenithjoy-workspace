@@ -26,6 +26,7 @@ class ContentJudgmentService(
     private val httpBase: String,
     private val tenantId: () -> String,
     private val httpClient: OkHttpClient = defaultClient(),
+    private val screenCaptureService: ScreenCaptureService? = null,
 ) {
     companion object {
         private const val TAG = "ContentJudgmentService"
@@ -67,11 +68,27 @@ class ContentJudgmentService(
             return JudgmentResult(judgmentStatus = "pending", judgmentReason = "no_tenant")
         }
 
+        // FR-C: dataB64 为空时，尝试通过 screenCaptureService 截图
+        val actualDataB64: String
+        val actualCaptureType: String
+        if (dataB64.isEmpty() && screenCaptureService != null) {
+            val captured = screenCaptureService.captureToBase64()
+            if (captured == null) {
+                logW("截图失败 videoId=$videoId")
+                return JudgmentResult(judgmentStatus = "pending", judgmentReason = "skipped_capture_failed")
+            }
+            actualDataB64 = captured
+            actualCaptureType = captureType
+        } else {
+            actualDataB64 = dataB64
+            actualCaptureType = captureType
+        }
+
         val payload = buildPayload(
             tenantId = currentTenantId,
             videoId = videoId,
-            captureType = captureType,
-            dataB64 = dataB64,
+            captureType = actualCaptureType,
+            dataB64 = actualDataB64,
             forceResult = forceResult,
             forceTimeout = forceTimeout,
         )

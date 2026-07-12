@@ -352,10 +352,19 @@ class AgentService : Service() {
 
         // 两阶段采集任务轮询（Path 2 Step 5）
         // 与 keywordPollLoop 并行双跑，通过 collectTaskIds Set 在 onCollectResult 中区分路由
+        val screenCaptureService = ScreenCaptureService()
+        val judgmentService = ContentJudgmentService(
+            agentId = { config.agentId },
+            httpBase = config.deriveHttpBase(),
+            // tenantId 由服务端按 agent_id 反查，设备端不持有；/judge-video 服务端兼容 header 反查
+            tenantId = { config.agentId },
+            screenCaptureService = screenCaptureService,
+        )
         collectPollLoop = AcquisitionCollectPollLoop(
             agentId = { config.agentId },
             httpBase = config.deriveHttpBase(),
             scope = scope,
+            contentJudgmentService = judgmentService,
             onStage1Task = { taskId, keyword ->
                 android.util.Log.i(TAG, "collect stage_1 task: id=$taskId keyword=$keyword")
                 // 追踪该 taskId 的关键词，入队 Stage1 Job
