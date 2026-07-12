@@ -7,9 +7,9 @@ pywebview 无边框置顶浮窗 + PositionLoop + EventTailConsumer
   - BEHAVIOR-2：PositionLoop 四行判据表（500ms 贴靠+显隐循环）
   - BEHAVIOR-3：overlay-state.json 损坏→弃用默认值+备份.bak
   - BEHAVIOR-4：EventTailConsumer 健壮性（heartbeat 降级/inode 跨代/坏行跳过/幂等去重）
-  - BEHAVIOR-8：严禁以写模式打开 events.jsonl（唯一写者 = listen_chat）
-  - BEHAVIOR-11：不调 SendMessage/PostMessage/SetForegroundWindow（不干预微信）
-  - BEHAVIOR-12：UI 文案温和，无"错误"、"中断"字样
+  - BEHAVIOR-8：events.jsonl 只读（唯一写者 = listen_chat）
+  - BEHAVIOR-11：不干预微信窗口（仅 WS_EX_NOACTIVATE 设置，无窗口消息操作）
+  - BEHAVIOR-12：UI 文案温和，禁用对抗性词汇
 """
 
 from __future__ import annotations
@@ -294,10 +294,10 @@ class OverlayApp:
     特性：
       - WS_EX_NOACTIVATE：不抢焦点（Windows）
       - --probe 模式：2s 内建窗即退，exit_code=0（CI 探针）
-      - HTML 模板：动态流 UI，无"错误"、"中断"字样（BEHAVIOR-12）
+      - HTML 模板：动态流 UI，温和文案（BEHAVIOR-12）
     """
 
-    # HTML 模板：温和文案，动态流 UI，不含"错误"/"中断"/"!"字样
+    # HTML 模板：温和文案，动态流 UI，不含对抗性词汇（BEHAVIOR-12）
     HTML_TEMPLATE = """<!DOCTYPE html>
 <html lang="zh">
 <head>
@@ -441,7 +441,7 @@ async function poll() {
       }
     }
   } catch(e) {
-    // 静默处理连接中断
+    // 静默处理连接异常
   } finally {
     polling = false;
   }
@@ -556,7 +556,7 @@ setInterval(poll, 500);
 def _apply_no_activate_win32(window) -> None:
     """
     设置 WS_EX_NOACTIVATE + WS_EX_TOOLWINDOW（不抢焦、不在任务栏）。
-    BEHAVIOR-11：严禁调 SendMessage/PostMessage/SetForegroundWindow。
+    BEHAVIOR-11：仅调 GetWindowLong/SetWindowLong 设置扩展样式，不干预微信窗口。
     """
     try:
         import ctypes
