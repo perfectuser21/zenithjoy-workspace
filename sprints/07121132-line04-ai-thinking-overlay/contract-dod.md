@@ -11,7 +11,7 @@ date: 2026-07-12
 
 ---
 
-### [BEHAVIOR-1] overlay_window.py 无边框置顶窗建窗
+### [BEHAVIOR] [BEHAVIOR-1] overlay_window.py 无边框置顶窗建窗
 
 **场景**：在 windows_cloud GHA runner 上，调用 `python overlay_window.py --probe`，进程应在 2s 内完成 pywebview 窗口创建并以 exit_code=0 退出；窗口样式必须带 WS_EX_NOACTIVATE + WS_EX_TOOLWINDOW，不抢焦点。
 
@@ -34,7 +34,7 @@ print(f'PASS: 建窗 {elapsed:.2f}s, exit_code=0')
 
 ---
 
-### [BEHAVIOR-2] 贴靠+显隐循环四行判据表
+### [BEHAVIOR] [BEHAVIOR-2] 贴靠+显隐循环四行判据表
 
 **场景**：`PositionLoop` 类接收模拟微信窗口状态，严格按四行判据表决定浮窗行为：IsIconic→隐藏；CLOAKED→位置冻结；可见→跟随；不存在→隐藏。
 
@@ -47,7 +47,7 @@ python -m pytest tests/test_overlay_window.py -k "IsIconic or CLOAKED or positio
 
 ---
 
-### [BEHAVIOR-3] overlay-state.json 持久化健壮性
+### [BEHAVIOR] [BEHAVIOR-3] overlay-state.json 持久化健壮性
 
 **场景**：overlay-state.json 文件损坏（JSON parse error）时，`PositionLoop` 应弃用损坏文件并采用默认值（位置居右上，未折叠），不进崩溃循环，同时备份损坏文件为 `.bak`。
 
@@ -76,7 +76,7 @@ with tempfile.TemporaryDirectory() as d:
 
 ---
 
-### [BEHAVIOR-4] events tail 消费端健壮性（heartbeat 降级 + inode 变化 + 坏行跳过 + 幂等去重）
+### [BEHAVIOR] [BEHAVIOR-4] events tail 消费端健壮性（heartbeat 降级 + inode 变化 + 坏行跳过 + 幂等去重）
 
 **场景**：`EventTailConsumer` 应处理以下四种场景不崩溃：(a) heartbeat 超 180s→渲染降级文案；(b) 文件 inode 变化→重开句柄先读 `.1`；(c) 坏行（截断 JSON）→跳过继续；(d) 同 event_id 重放→不重复渲染。
 
@@ -89,7 +89,7 @@ python -m pytest tests/test_overlay_window.py -k "heartbeat or inode or bad_line
 
 ---
 
-### [BEHAVIOR-5] generateChatDraft LLM reasoning 真实现（替换 mock 存根）
+### [BEHAVIOR] [BEHAVIOR-5] generateChatDraft LLM reasoning 真实现（替换 mock 存根）
 
 **场景**：`wechat-draft.ts` 的 `generateChatDraft` 函数调用真实 LLM（TOAPI deepseek-v4-flash），返回体包含 `{reply, tags, reasoning}` 三字段；reasoning 必须 ≤30 字；含 PII 时替换为降级文案；LLM 返回非 JSON（:548 兜底路径）时 reasoning 缺省，渲染端显示「已回复 {联系人}」。
 
@@ -104,7 +104,7 @@ TOAPI_API_KEY=$(source ~/.credentials/openrouter.env && echo $TOAPI_API_KEY) \
 
 ---
 
-### [BEHAVIOR-6] node 侧 overlay handler 接线（spawn/preflight/watchdog/mutex）
+### [BEHAVIOR] [BEHAVIOR-6] node 侧 overlay handler 接线（spawn/preflight/watchdog/mutex）
 
 **场景**：`overlay.ts` handler 在 line04 模块启动时：(a) 先调 `preflight.py` 检测，失败→不 spawn，写 `overlay-diag.json`；(b) 检测 mutex `Global\zenithjoy-line04-overlay`，存在→ `taskkill` 旧进程再 spawn；(c) 监听 exit_code=0 + stdout `user_closed=true` → 不重拉；(d) `watchdog.circuit_open=true` → 不重拉。
 
@@ -119,7 +119,7 @@ node -e "require('./modules/line04/handlers/overlay.js'); console.log('PASS: han
 
 ---
 
-### [BEHAVIOR-7] CI pywebview 探针 + notepad 替身 NOACTIVATE 断言
+### [BEHAVIOR] [BEHAVIOR-7] CI pywebview 探针 + notepad 替身 NOACTIVATE 断言
 
 **场景**：GHA windows-latest runner 上，(a) pywebview 探针 2s 退出 exit_code=0；(b) spawn notepad.exe，取 hwnd，运行 500ms 贴靠循环，断言 `GetForegroundWindow() != notepad_hwnd`（不抢焦）。
 
