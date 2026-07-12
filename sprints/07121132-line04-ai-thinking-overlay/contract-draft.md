@@ -173,7 +173,7 @@ overlay-diag.json 字段（12 项）：
 
 ---
 
-## 五、E2E 验收
+## E2E 验收
 
 ### CI 层（windows_cloud，GHA windows-latest）
 

@@ -9,7 +9,7 @@ date: 2026-07-12
 
 ## DoD 条目（[BEHAVIOR] 可测试行为断言）
 
-### [BEHAVIOR-1] events.jsonl 写入正确性与唯一写者约束
+### [BEHAVIOR] [BEHAVIOR-1] events.jsonl 写入正确性与唯一写者约束
 
 **场景**：listen_chat 在 DELIVERED 调用点（:4787）追加 reply_sent 事件，浮窗只读。
 
@@ -32,7 +32,7 @@ pytest services/line04/tests/test_events_pipeline.py::test_event_schema_fields -
 
 ---
 
-### [BEHAVIOR-2] events.jsonl 并发写读无丢失、坏行容错、幂等去重
+### [BEHAVIOR] [BEHAVIOR-2] events.jsonl 并发写读无丢失、坏行容错、幂等去重
 
 **场景**：双线程并发写 10000 行；含坏行/半行时浮窗 tail 继续读；相同 event_id 重放不重计数。
 
@@ -58,7 +58,7 @@ pytest services/line04/tests/test_events_pipeline.py::test_rotation_replay -v
 
 ---
 
-### [BEHAVIOR-3] PII 双硬闸：reasoning 不得含手机号/微信号，含"复述客户原话"场景必须过滤
+### [BEHAVIOR] [BEHAVIOR-3] PII 双硬闸：reasoning 不得含手机号/微信号，含"复述客户原话"场景必须过滤
 
 **场景**：LLM 在 reasoning 中复述了客户原话（含手机号）→ 中台侧过滤 → agent 写 events 前二次过滤 → events.jsonl 中无 PII。
 
@@ -81,7 +81,7 @@ pytest services/line04/tests/test_events_pipeline.py::test_pii_patterns -v
 
 ---
 
-### [BEHAVIOR-4] 中台合同扩展：{reply, tags, reasoning} 三路断言
+### [BEHAVIOR] [BEHAVIOR-4] 中台合同扩展：{reply, tags, reasoning} 三路断言
 
 **场景**：wechat-draft.ts generateDraft 返回体包含 reasoning 字段，向后兼容；兜底路径 reasoning 降级；PII 命中降级。
 
@@ -108,7 +108,7 @@ npx vitest run apps/api/src/services/__tests__/wechat-draft.test.ts -t "reasonin
 
 ---
 
-### [BEHAVIOR-5] 浮窗软检测：pywebview/WebView2 缺失时降级，不 spawn，写 diag
+### [BEHAVIOR] [BEHAVIOR-5] 浮窗软检测：pywebview/WebView2 缺失时降级，不 spawn，写 diag
 
 **场景**：spawn 前检测两项软依赖，任一缺失 → 不 spawn 浮窗进程，写 overlay-diag.json。
 
@@ -135,7 +135,7 @@ pytest services/line04/tests/test_overlay_preflight.py::test_diag_written_on_fai
 
 ---
 
-### [BEHAVIOR-6] 崩溃熔断：60min 内 8 次存活<60s → 熔断静默
+### [BEHAVIOR] [BEHAVIOR-6] 崩溃熔断：60min 内 8 次存活<60s → 熔断静默
 
 **场景**：守活循环检测到 8 次快速崩溃后进入熔断，停止重拉；agent 重启后复位。
 
@@ -162,7 +162,7 @@ pytest services/line04/tests/test_overlay_lifecycle.py::test_user_close_no_respa
 
 ---
 
-### [BEHAVIOR-7] listen_chat 明文日志清零
+### [BEHAVIOR] [BEHAVIOR-7] listen_chat 明文日志清零
 
 **场景**：4687/4691/4696 三处 `content[:20]` 明文日志改调脱敏函数，grep 断言清零。
 
@@ -187,7 +187,7 @@ pytest services/line04/tests/test_pii_filter.py::test_log_redaction -v
 
 ---
 
-### [BEHAVIOR-8] smoke 全链路通过（CI 集成验收）
+### [BEHAVIOR] [BEHAVIOR-8] smoke 全链路通过（CI 集成验收）
 
 **场景**：所有 CI 检查均为真绿（非假绿占位）。
 
