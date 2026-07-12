@@ -20,7 +20,7 @@ function makePool(overrides?: {
   targetProfileDesc?: string;
 }): QueryablePool {
   return {
-    query: vi.fn(async (text: string, _params?: unknown[]) => {
+    query: vi.fn(async (text: string) => {
       // 查 judgment 缓存
       if (/SELECT.*judgment_status.*collect_videos/i.test(text)) {
         if (overrides?.existingJudgment) {
