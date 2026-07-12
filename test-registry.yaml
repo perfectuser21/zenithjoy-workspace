@@ -4643,3 +4643,21 @@ agent_suite:
   status: active
   product: AI员工
   note: "sprint(07091703): 智能获客Hub补下载安卓客户端入口——Playwright E2E 断言 /area/acquisition 页面可见「下载安卓客户端」卡片、点击跳转 /dashboard/android"
+
+  # ── Line02 内容判定门槛 ─────────────────────────────────────────────────────
+
+- id: line02-content-judgment-unit
+  path: apps/api/src/services/content-judgment.test.ts
+  type: unit
+  ci: L3
+  status: active
+  product: AI员工
+  note: "sprint(07120952): Line02 内容判定门槛——ToAPIs Gemini 多模态调用幂等性/超时/空画像默认matched 单测（INV-3/INV-5/INV-6）"
+
+- id: line02-content-judgment-gate-e2e
+  path: apps/dashboard/e2e/content-judgment-gate.spec.ts
+  type: e2e
+  ci: windows_cloud
+  status: active
+  product: AI员工
+  note: "sprint(07120952): Line02 内容判定门槛 E2E Playwright——获客配置画像描述填写、线索outreach_eligible状态列展示"

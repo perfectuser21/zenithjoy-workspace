@@ -240,15 +240,21 @@ export function computeRelevanceScore(comments: LeadComment[], now: Date = new D
   return Math.min(100, Math.round(maxWeight * decay + freqBonus));
 }
 
-// ── rescoreLead：查某 lead 全部评论历史 → 重算 relevance_score + 汇总字段 ────
+// ── rescoreLead：查某 lead 全部评论历史 → 重算 relevance_score + outreach_eligible + 汇总字段 ────
 // 从 acquisition_lead_comments 拉全量记录（用 COUNT/MAX 语义直接从真实行算，
 // 不依赖调用方维护的冗余 comment_count/last_commented_at，防竞态）。
+//
+// outreach_eligible 规则（content-judgment-gate FR-8）：
+//   精准 或 高意向 → true（可发 DM）
+//   仅感兴趣      → false（暂不发 DM）
+//   无评论        → false（暂不发 DM）
+// FR-8：outreach_eligible 从 true → false 时，取消该 lead 的所有 pending/queued dm_assignments
 export async function rescoreLead(
   pool: QueryablePool,
   tenantId: string,
   leadId: string,
   now: Date = new Date()
-): Promise<{ score: number; comment_count: number }> {
+): Promise<{ score: number; comment_count: number; outreach_eligible: boolean }> {
   const r = await pool.query(
     `SELECT c.grade, c.commented_at
        FROM zenithjoy.acquisition_lead_comments c
@@ -263,13 +269,38 @@ export async function rescoreLead(
   const lastCommentedAt = commentCount > 0
     ? new Date(Math.max(...comments.map((c) => new Date(c.commented_at).getTime()))).toISOString()
     : null;
+
+  // outreach_eligible：最高档是精准或高意向 → true，否则 false
+  const highestGrade = commentCount > 0
+    ? comments.reduce((best, c) => {
+        const grades = ['高意向', '精准', '感兴趣'];
+        const ci = grades.indexOf(c.grade ?? '');
+        const bi = grades.indexOf(best ?? '');
+        return ci >= 0 && (bi < 0 || ci < bi) ? c.grade : best;
+      }, null as string | null)
+    : null;
+  const outreachEligible = highestGrade === '高意向' || highestGrade === '精准';
+
   await pool.query(
     `UPDATE zenithjoy.acquisition_leads
-        SET relevance_score = $3, comment_count = $4, last_commented_at = $5, updated_at = now()
+        SET relevance_score = $3, comment_count = $4, last_commented_at = $5,
+            outreach_eligible = $6, updated_at = now()
       WHERE tenant_id = $1 AND id = $2`,
-    [tenantId, leadId, score, commentCount, lastCommentedAt]
+    [tenantId, leadId, score, commentCount, lastCommentedAt, outreachEligible]
   );
-  return { score, comment_count: commentCount };
+
+  // FR-8：outreach_eligible 变 false → 取消该 lead 的 pending/queued dm_assignments
+  if (!outreachEligible) {
+    await pool.query(
+      `UPDATE zenithjoy.dm_assignments
+          SET status = 'cancelled', updated_at = now()
+        WHERE tenant_id = $1 AND lead_id = $2
+          AND status IN ('queued', 'pending_dispatch')`,
+      [tenantId, leadId]
+    );
+  }
+
+  return { score, comment_count: commentCount, outreach_eligible: outreachEligible };
 }
 
 // ── 时段工具：now 是否在 [start,end] HH:MM 区间内（按 now 的本地小时分钟）──
@@ -458,11 +489,14 @@ export async function buildAssignments(
     }
   }
 
-  // ★ Step E: 处理已评分 leads（按分降序）
+  // ★ Step E: 处理已评分且 outreach_eligible=true 的 leads（按分降序）
+  // content-judgment-gate FR-8：只对 outreach_eligible=true 的 leads 派发 DM 任务
+  // outreach_eligible IS NULL 视为旧数据（未跑 rescoreLead），允许通过（向后兼容）
   const leadsRes = await pool.query(
     `SELECT id, profile_url, COALESCE(relevance_score, 0) AS relevance_score
        FROM zenithjoy.acquisition_leads
       WHERE tenant_id = $1 AND relevance_score IS NOT NULL
+        AND (outreach_eligible IS NULL OR outreach_eligible = true)
       ORDER BY relevance_score DESC, created_at ASC`,
     [tenantId]
   );

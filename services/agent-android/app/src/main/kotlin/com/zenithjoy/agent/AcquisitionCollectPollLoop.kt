@@ -34,6 +34,8 @@ class AcquisitionCollectPollLoop(
     private val onStage2Task: ((taskId: String, videoUrls: List<String>, checkpoint: Map<String, Any>?) -> Unit)? = null,
     private val onCancel: ((taskId: String) -> Unit)? = null,
     private val httpClient: OkHttpClient = defaultClient(),
+    // content-judgment-gate: 判决服务注入（null=跳过判决，所有视频直接进 Stage2）
+    private val contentJudgmentService: ContentJudgmentService? = null,
 ) {
     private val gson = Gson()
     private var job: Job? = null
@@ -113,7 +115,29 @@ class AcquisitionCollectPollLoop(
                     val videoUrls = task.video_urls ?: emptyList()
                     if (videoUrls.isEmpty()) return@forEach
                     collectTaskIds.add(task.task_id)
-                    onStage2Task?.invoke(task.task_id, videoUrls, task.checkpoint)
+
+                    // content-judgment-gate: 判决门——打开视频卡后先截图判决，
+                    // 只有 matched（或 pending=超时兜底）的视频才进入评论抓取 Stage2。
+                    // rejected → 跳过该视频，不派 Stage2 任务（FR-7）。
+                    // contentJudgmentService=null（默认）→ 跳过判决，保持旧行为向下兼容。
+                    val eligibleUrls = if (contentJudgmentService != null) {
+                        videoUrls.filter { videoUrl ->
+                            val videoId = videoUrl.substringAfterLast("/")
+                            val result = contentJudgmentService.judge(
+                                videoId = videoId,
+                                captureType = "screenshot",
+                                dataB64 = "", // 实际截图由 ContentJudgmentService 内部采集
+                            )
+                            // rejected → 不进评论抓取；matched 或 pending（超时兜底）→ 继续
+                            result.judgmentStatus != "rejected"
+                        }
+                    } else {
+                        videoUrls
+                    }
+
+                    if (eligibleUrls.isNotEmpty()) {
+                        onStage2Task?.invoke(task.task_id, eligibleUrls, task.checkpoint)
+                    }
                 }
             }
         }

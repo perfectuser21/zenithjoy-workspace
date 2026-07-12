@@ -15,6 +15,7 @@ export interface Lead {
   latest_reply?: string | null;
   latest_reply_at?: string | null;
   assignee?: string | null;
+  outreach_eligible?: boolean | null;
 }
 
 interface LeadsTableProps {
@@ -133,6 +134,18 @@ export default function LeadsTable({ leads, loading }: LeadsTableProps) {
       field: 'keyword',
       headerName: '关键词',
       width: 120,
+    },
+    {
+      field: 'outreach_eligible',
+      headerName: '触达状态',
+      width: 110,
+      cellRenderer: (p: ICellRendererParams<Lead>) => {
+        const v = p.value as boolean | null | undefined;
+        if (v === null || v === undefined) return <span className="text-gray-500 text-xs">—</span>;
+        return v
+          ? <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-900/40 text-green-300">可触达</span>
+          : <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-700 text-gray-400">不触达</span>;
+      },
     },
   ], []);
 
