@@ -389,10 +389,13 @@ acquisitionRouter.get('/pending-collect-tasks', async (req: Request, res: Respon
     const videoMap: Record<string, string[]> = {};
     const exhaustedTaskIds = new Set<string>();
     if (stage1DoneRows.length > 0) {
+      // 只排除已明确 rejected 的视频；pending（默认值，client 尚未调 judge-video 前的
+      // 常态）仍放行，避免在判决闸客户端接线完成前把 Stage2 主链路整体打断。
       const vRes = await pool.query<{ task_id: string; video_id: string }>(
         `SELECT task_id, video_id FROM zenithjoy.acquisition_collect_videos
           WHERE task_id = ANY($1::uuid[])
             AND comments_reported_at IS NULL
+            AND judgment_status != 'rejected'
           ORDER BY created_at ASC`,
         [stage1DoneRows.map((r) => r.id)]
       );
