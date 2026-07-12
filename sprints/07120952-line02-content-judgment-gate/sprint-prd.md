@@ -108,6 +108,33 @@ Agent 关键词搜索 → 逐个点开视频卡片 → 判定内容 → 只对 m
 - `.github/workflows/scripts/smoke/content-judgment-gate-smoke.sh`：新增（见验收条件）
 - `sprints/07120952-line02-content-judgment-gate/tests/android/ContentJudgmentLogicTest.kt`：新增 Android 单元测试
 
+## Invariant 约束
+
+这些约束在任何情况下不得违反（合同必须覆盖）：
+
+- [INVARIANT] `rejected` 或 `pending` 判定状态的视频，**绝不**生成 Stage2 抓评论任务（只有 `matched` 才进入后续采集）
+- [INVARIANT] `outreach_eligible = false` 的线索，`buildAssignments` **绝不**为其生成 `dm_assignments` 记录
+- [INVARIANT] 判定 API 超时（>8 秒）**绝不**阻塞同一采集批次中其他视频的处理
+- [INVARIANT] 任何 `rejected`/`pending`/`skipped_capture_failed` 视频必须在 `acquisition_collect_videos` 表中留有记录（不得静默丢弃）
+- [INVARIANT] 同一 `video_id` 已有非 `pending` 判定结果时，判定 API **绝不**重复调用 Gemini（幂等保护）
+- [INVARIANT] `target_profile_desc` 为空的租户不受内容判定影响（所有视频默认 `matched`，保持现有采集行为）
+
+## 累积 FR
+
+本 sprint 在 journey_id=afa6abca 下追加以下功能需求：
+
+| # | FR | 所在 Step |
+|---|---|---|
+| FR-1 | Dashboard 支持租户填写/更新 `target_profile_desc` 目标画像描述字段 | Step 1 |
+| FR-2 | 安卓 Agent 图文帖截图（`takeScreenshot()`）→ 发中台判定 API | Step 2 |
+| FR-3 | 安卓 Agent 视频帖 MediaProjection 录音（3~8 秒）→ 发中台判定 API | Step 2 |
+| FR-4 | 中台 `POST /api/acquisition/judge-video` 端点：接收 base64 内容 → 调 ToAPIs Gemini 多模态 → 返回 `matched`/`rejected`/`pending` | Step 3 |
+| FR-5 | Agent 收到 `matched` 才继续抓评论；`rejected`/`pending` 跳过并写库留痕 | Step 4 |
+| FR-6 | `rescoreLead` 函数末尾联动更新 `outreach_eligible`（基于最高评论档是否达「精准/高意向」） | Step 5-6 |
+| FR-7 | `buildAssignments` 新增 `outreach_eligible = true` 前置过滤条件 | Step 7 |
+| FR-8 | 已生成的 `dm_assignments` 在实际发送前若 `outreach_eligible` 被重算为 false → 标记 `cancelled` | Step 7 |
+| FR-9 | CRM 线索列表新增 `outreach_eligible` 状态标识列 | Step 6 |
+
 ## NFR（非功能需求）
 
 - **判定延迟**：单次 ToAPIs Gemini 调用超时上限 8 秒；超时转 `pending` 不阻塞采集主循环
