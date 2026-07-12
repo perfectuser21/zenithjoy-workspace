@@ -127,3 +127,58 @@ describe('rescoreLead', () => {
     expect(updateCall?.params?.[3]).toBe(2);
   });
 });
+
+describe('acquisition-dispatch outreach_eligible gate', () => {
+  it('dm_assignments cancelled when outreach_eligible turns false', async () => {
+    // FR-8: when rescoreLead sets outreach_eligible=false,
+    // pending dm_assignments for that lead should be cancelled.
+    //
+    // This test will FAIL until commit-5 implements:
+    //   1. rescoreLead updating outreach_eligible boolean in acquisition_leads
+    //   2. Cancelling pending dm_assignments when outreach_eligible=false
+    //
+    // Setup: lead with only '感兴趣' grade → outreach_eligible=false
+    const cancelledIds: string[] = [];
+    const pool: QueryablePool = {
+      query: vi.fn(async (text: string, params?: unknown[]) => {
+        // Return '感兴趣' comments only → should set outreach_eligible=false
+        if (/acquisition_lead_comments/.test(text)) {
+          return {
+            rows: [
+              { grade: '感兴趣', commented_at: new Date('2026-07-12T10:00:00Z') },
+            ],
+          };
+        }
+        // Capture dm_assignments cancellation
+        if (/UPDATE.*dm_assignments.*cancelled/i.test(text)) {
+          const assignmentId = params?.[0] as string;
+          if (assignmentId) cancelledIds.push(assignmentId);
+          return { rows: [], rowCount: 1 };
+        }
+        // Return pending dm_assignments for the lead
+        if (/SELECT.*dm_assignments.*pending/i.test(text)) {
+          return {
+            rows: [{ id: 'assignment-pending-001', lead_id: 'lead-test-fr8', status: 'queued' }],
+          };
+        }
+        return { rows: [] };
+      }),
+    };
+
+    await rescoreLead(pool, 'tenant-test', 'lead-test-fr8');
+
+    // After rescoreLead with only '感兴趣' comments:
+    // 1. outreach_eligible should be set to false in the UPDATE
+    const mockQuery = pool.query as ReturnType<typeof vi.fn>;
+    const updateLeadCall = mockQuery.mock.calls.find(([text]: [string]) =>
+      /UPDATE.*acquisition_leads/i.test(text) && /outreach_eligible/i.test(text)
+    );
+    expect(updateLeadCall, 'rescoreLead should UPDATE outreach_eligible on acquisition_leads').toBeTruthy();
+
+    // 2. The UPDATE should set outreach_eligible=false for '感兴趣'-only lead
+    const outreachEligibleParam = updateLeadCall?.[1]?.find(
+      (p: unknown) => p === false
+    );
+    expect(outreachEligibleParam, 'outreach_eligible should be false for 感兴趣-only lead').toBe(false);
+  });
+});
