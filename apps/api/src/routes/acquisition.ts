@@ -686,6 +686,7 @@ acquisitionRouter.get('/leads', tenantContextOptional, async (req: Request, res:
       latest_reply: string | null;
       latest_reply_at: string | null;
       assignee: string | null;
+      outreach_eligible: boolean | null;
     }
 
     const gradeClause = grade && typeof grade === 'string' ? `AND l.grade = $2` : '';
@@ -695,6 +696,7 @@ acquisitionRouter.get('/leads', tenantContextOptional, async (req: Request, res:
       `SELECT l.sec_uid, l.nickname, l.comment_text,
               l.source_video_ids, l.created_at, l.grade, l.keyword,
               l.latest_reply, l.latest_reply_at, l.assignee,
+              l.outreach_eligible,
               t.keywords AS task_keywords
          FROM zenithjoy.acquisition_leads l
          LEFT JOIN zenithjoy.acquisition_collect_tasks t ON t.id = l.collect_task_id
@@ -720,6 +722,7 @@ acquisitionRouter.get('/leads', tenantContextOptional, async (req: Request, res:
         latest_reply: r.latest_reply ?? null,
         latest_reply_at: r.latest_reply_at ?? null,
         assignee: r.assignee ?? null,
+        outreach_eligible: r.outreach_eligible ?? null,
       };
     });
 

@@ -222,6 +222,86 @@ function ConfigForm() {
   );
 }
 
+// ============ 目标客户画像描述块（content-judgment-gate） ============
+function TargetProfileDescBlock() {
+  const [desc, setDesc] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const [ok, setOk] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let alive = true;
+    fetch('/api/acquisition/config')
+      .then((r) => r.json())
+      .then((data: { data?: { target_profile_desc?: string }; target_profile_desc?: string }) => {
+        if (alive) {
+          const d = data?.data?.target_profile_desc ?? (data as { target_profile_desc?: string }).target_profile_desc ?? '';
+          setDesc(d);
+        }
+      })
+      .catch(() => {}) // 静默失败，不阻塞页面
+      .finally(() => { if (alive) setLoading(false); });
+    return () => { alive = false; };
+  }, []);
+
+  const onSave = async () => {
+    setSaving(true);
+    setErr(null);
+    setOk(null);
+    try {
+      const res = await fetch('/api/acquisition/config', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ target_profile_desc: desc }),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      setOk('已保存');
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : '保存失败');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <section className="bg-white dark:bg-slate-800 rounded-lg shadow p-6 border border-slate-200 dark:border-slate-700">
+      <h3 className="font-medium text-gray-900 dark:text-white mb-2">目标客户画像</h3>
+      <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">
+        描述目标客户的特征（行业、痛点、关键词等）。系统将用此画像判断抖音视频内容是否值得抓取评论。
+        留空 = 所有视频默认匹配（不过滤）。
+      </p>
+      {loading ? (
+        <p className="text-sm text-gray-400">加载中…</p>
+      ) : (
+        <>
+          <textarea
+            name="target_profile_desc"
+            aria-label="目标客户画像描述"
+            value={desc}
+            onChange={(e) => { setDesc(e.target.value); setOk(null); }}
+            placeholder="例：中小企业主，关注降本增效，有数字化转型需求，行业：制造业/餐饮/零售"
+            rows={4}
+            className="w-full rounded border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white px-3 py-2 text-sm"
+          />
+          <div className="flex items-center gap-3 mt-2">
+            <button
+              type="button"
+              onClick={onSave}
+              disabled={saving}
+              className="rounded bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white px-4 py-1.5 text-sm"
+            >
+              {saving ? '保存中…' : '保存画像'}
+            </button>
+            {ok && <span className="text-sm text-green-600">{ok}</span>}
+            {err && <span className="text-sm text-red-500">{err}</span>}
+          </div>
+        </>
+      )}
+    </section>
+  );
+}
+
 // ============ 推荐关键词 + 开场白话术块 ============
 function KeywordsAndOpeningBlock() {
   const [profile, setProfile] = useState<CompanyProfile | null>(null);
@@ -415,6 +495,7 @@ export default function AcquisitionConfigPage() {
           调整采集/触达/养号/Cookie 参数，管理采集关键词任务。
         </p>
       </div>
+      <TargetProfileDescBlock />
       <KeywordsAndOpeningBlock />
       <CollectTasksBlock />
       <ConfigForm />
