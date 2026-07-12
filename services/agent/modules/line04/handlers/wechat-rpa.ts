@@ -39,7 +39,7 @@ export function getPythonExeForTest(baseDir: string): string {
   return process.platform === 'win32' ? 'python' : 'python3';
 }
 
-function getPythonExe(): string {
+export function getPythonExe(): string {
   return getPythonExeForTest(getModuleRoot());
 }
 
