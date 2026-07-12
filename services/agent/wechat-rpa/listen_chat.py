@@ -3936,6 +3936,15 @@ def build_diag(*, main_window_found, login_present, logged_in, screen_locked,
     }
 
 
+def _redact_content(text: str) -> str:
+    """脱敏内容日志：去除 PII 并截断至 20 字符"""
+    import re
+    text = re.sub(r'1[3-9]\d{9}', '[手机]', str(text))
+    text = re.sub(r'wx[a-zA-Z0-9]{6,20}', '[微信]', text)
+    text = re.sub(r'\d{17}[\dXx]', '[身份证]', text)
+    return text[:20]
+
+
 def _log(msg: str) -> None:
     """同时打印 + 追加到公共日志文件，便于运营/支持 SSH 直接读监听到底干了啥（监听本身 stdio 被忽略）。"""
     print(f"[{time.strftime('%H:%M:%S')}][listen_chat] " + str(msg), flush=True)
@@ -4684,16 +4693,16 @@ def run_real_listen(args: argparse.Namespace) -> int:
                             _skip_logged.add(key)
                     elif _reason == "dup":
                         if key not in _skip_logged:
-                            _log(f"skip(dup) sender={m['sender']} content={m['content'][:20]!r}")
+                            _log(f"skip(dup) sender={m['sender']} content={_redact_content(m['content'])!r}")
                             _skip_logged.add(key)
                     elif _reason == "replied":
                         if key not in _skip_logged:
-                            _log(f"skip(replied) sender={m['sender']} content={m['content'][:20]!r}")
+                            _log(f"skip(replied) sender={m['sender']} content={_redact_content(m['content'])!r}")
                             _skip_logged.add(key)
                     elif _reason == "cooldown":
                         left = int(REPLY_FAIL_COOLDOWN - (now - reply_failed_at[key]))
                         if key not in _skip_logged:
-                            _log(f"skip(cooldown {left}s) sender={m['sender']} content={m['content'][:20]!r}")
+                            _log(f"skip(cooldown {left}s) sender={m['sender']} content={_redact_content(m['content'])!r}")
                             _skip_logged.add(key)
                     elif _reason == "rate_limited":
                         _log(f"rate_limiter: {m['sender']} 24h限额已满，跳过回复（下次允许: {_next_at}）")

@@ -345,6 +345,8 @@ export interface GenerateChatDraftResult {
   skip_reason?: 'group' | 'blacklisted';
   /** 仅 status:'sent' 时为生成文案；其余一律 undefined（agent 检测到 undefined 即跳过不发）。 */
   reply?: string;
+  /** AI 思考摘要（≤30字，PII 已过滤）；缺失时降级为「已回复 ${sender}」。仅 status:'sent' 时存在。 */
+  reasoning?: string;
   /**
    * 仅 status:'sent' 时为 out 行落库返回的 wechat_messages.id（status='draft'）。
    * agent 真机发出后带此 id 回 POST /api/wechat/messages/:id/receipt（待建，Task 3）置 delivered/failed，
@@ -497,6 +499,7 @@ export async function generateChatDraft(
   let aiReply = '';
   let aiTags: Record<string, unknown> = {};
   let aiError: string | null = null;
+  let aiReasoning: string | undefined;
   const cs = csLlm();
 
   // system prompt 注入 cs-reply 规则段
@@ -572,6 +575,11 @@ export async function generateChatDraft(
     } else {
       aiReply = sanitized;
       aiTags = (parsed.tags as Record<string, unknown>) ?? {};
+      // FR-2: 提取 reasoning 字段（≤30字），PII 过滤后存入 aiReasoning
+      const rawReasoning = typeof (parsed as Record<string, unknown>).reasoning === 'string'
+        ? ((parsed as Record<string, unknown>).reasoning as string).slice(0, 30)
+        : `已回复 ${sender}`;
+      aiReasoning = rawReasoning.replace(/1[3-9]\d{9}/g, '[手机]').replace(/wx[a-zA-Z0-9]{6,20}/g, '[微信]').replace(/\d{17}[\dXx]/g, '[身份证]');
     }
   } catch (err) {
     aiError = err instanceof Error ? err.message : String(err);
@@ -653,6 +661,7 @@ export async function generateChatDraft(
     draft_id: '',
     reply: aiReply,
     message_id: messageId,
+    reasoning: aiReasoning ?? `已回复 ${sender}`,
   };
 }
 

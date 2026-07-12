@@ -315,6 +315,35 @@ export function startWechatListener(apiBase: string, agentId?: string, machineId
     apiBase,
     '，timeout 86400 + 崩溃自愈）',
   );
+
+  // FR-7: 拉起 AI 思考浮窗（thin 骨架，仅 Windows + preflight 通过时生效）
+  spawnOverlay();
+}
+
+/**
+ * FR-7: AI 思考浮窗 spawn（thin 骨架）
+ * 仅在 Windows 平台且 preflight 检测通过时拉起 overlay_main.py。
+ * 加厚阶段补充：30s 心跳重拉 + 熔断保护 + IPC 事件桥接。
+ */
+function spawnOverlay(): void {
+  if (process.platform !== 'win32') {
+    return;
+  }
+  try {
+    const overlayScript = path.join(getModuleRoot(), '..', '..', '..', '..', 'services', 'line04', 'overlay', 'overlay_main.py');
+    const { spawnSync } = require('child_process');
+    // 异步 spawn（detached），不阻塞监听器启动
+    const { spawn } = require('child_process');
+    const child = spawn(getPythonExe(), [overlayScript], {
+      detached: true,
+      stdio: 'ignore',
+      windowsHide: true,
+    });
+    child.unref?.();
+    console.log('[wechat-rpa] overlay_main.py 已异步拉起（thin 骨架）');
+  } catch (err) {
+    console.warn('[wechat-rpa] overlay spawn 失败（非阻塞）:', err instanceof Error ? err.message : err);
+  }
 }
 
 // ── 自愈件4：自检上报增强（line04 模块侧）──

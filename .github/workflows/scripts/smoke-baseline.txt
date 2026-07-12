@@ -64,3 +64,4 @@ cross-line-seam-smoke.sh
 stage1-report-videos-smoke.sh
 node-agent-report-videos-smoke.sh
 skill-create-longrun-smoke.sh
+line04-ai-overlay-smoke.sh
