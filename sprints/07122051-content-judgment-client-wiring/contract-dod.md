@@ -20,18 +20,23 @@
 
 manual:bash cd /workspace/services/agent-android && ./gradlew :app:testDebugUnitTest --tests "*ContentJudgmentClientWiringTest*" && echo "SMOKE_PASS"
 
+manual:bash grep -c "createScreenCaptureIntent\|MediaProjectionManager" /workspace/services/agent-android/app/src/main/kotlin/com/zenithjoy/agent/MainActivity.kt
+
+manual:bash grep -c "FOREGROUND_SERVICE_MEDIA_PROJECTION" /workspace/services/agent-android/app/src/main/AndroidManifest.xml
+
 ---
 
 ## DoD 检查清单
 
 - [ ] FR-A: AgentService 实例化 ContentJudgmentService + ScreenCaptureService，注入 AcquisitionCollectPollLoop（非 null）
-- [ ] FR-B: 新建 ScreenCaptureService.kt，持有 MediaProjection，captureToBase64() 返回 JPEG/70/base64 或 null（失败不崩溃）
+- [ ] FR-B: 新建 ScreenCaptureService.kt（普通 Kotlin 类，非 Service 基类），通过可注入 lambda 封装截图实现，captureToBase64() 返回 JPEG/70/base64 或 null（失败不崩溃）
+- [ ] ScreenCaptureService 不继承 Service 基类
 - [ ] FR-C: ContentJudgmentService.judge() 空 dataB64 时调用 captureToBase64()；失败时 captureType=skipped_capture_failed
 - [ ] FR-D: 截图成功后 dataB64 非空传给 /judge-video API
-- [ ] FR-E: AndroidManifest.xml 新增 FOREGROUND_SERVICE_MEDIA_PROJECTION 权限声明
+- [ ] FR-E: AndroidManifest.xml 新增 FOREGROUND_SERVICE_MEDIA_PROJECTION 权限声明（无需新增 `<service>` 声明，ScreenCaptureService 非独立 Service）
 - [ ] FR-F: MainActivity 请求 MediaProjection 授权并将实例传给 AgentService
 - [ ] INV-1: 单元测试验证 rejected 视频不创建 Stage2 任务
-- [ ] INV-3: 单元测试验证判决超时 8s 不阻塞主循环
+- [ ] INV-3: 单元测试验证判决超时不阻塞主循环（使用 `forceTimeout=true` 参数触发超时路径，无需真实 8s delay；验证返回 `JudgmentResult(judgmentStatus="pending")`）
 - [ ] INV-4: 单元测试验证 skipped_capture_failed 时 collect_videos 记录存在
 - [ ] 测试文件 `ContentJudgmentClientWiringTest.kt` 包含 ≥7 条用例，全部 PASS
 - [ ] `./gradlew :app:testDebugUnitTest` BUILD SUCCESSFUL
