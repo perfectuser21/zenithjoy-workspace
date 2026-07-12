@@ -54,11 +54,7 @@ export async function judgeVideo(
 ): Promise<JudgeVideoResult> {
   // § 幂等检查：非 pending 结果已存在 → 直接返回 cache_hit: true
   const existing = await pool.query(
-    `SELECT judgment_status, judgment_reason
-       FROM zenithjoy.acquisition_collect_videos
-      WHERE tenant_id = $1 AND video_id = $2
-        AND judgment_status != 'pending'
-      LIMIT 1`,
+    `SELECT judgment_status, judgment_reason FROM zenithjoy.acquisition_collect_videos WHERE tenant_id = $1 AND video_id = $2 AND judgment_status != 'pending' LIMIT 1`,
     [tenantId, videoId]
   );
   if (existing.rows.length > 0) {
@@ -72,10 +68,7 @@ export async function judgeVideo(
 
   // § INV-6：target_profile_desc 为空 → 跳过 Gemini，直接返回 matched
   const configRes = await pool.query(
-    `SELECT target_profile_desc
-       FROM zenithjoy.acquisition_config
-      WHERE tenant_id = $1
-      LIMIT 1`,
+    `SELECT target_profile_desc FROM zenithjoy.acquisition_config WHERE tenant_id = $1 LIMIT 1`,
     [tenantId]
   );
   const targetProfileDesc: string = configRes.rows[0]?.target_profile_desc ?? '';
