@@ -13,8 +13,9 @@ import {
 import { tenantContextOptional } from '../middleware/tenant-context';
 import { licenseAuth } from '../middleware/license-auth';
 import { sseService } from '../services/sse.service';
-import { scoreLeads, buildAssignments, dispatchDue, rescoreLead } from '../services/acquisition-dispatch';
+import { scoreLeads, buildAssignments, dispatchDue, rescoreLead, upsertConfig } from '../services/acquisition-dispatch';
 import { resolveShareToMedia, type MediaKind } from '../services/douyin-share-resolver';
+import { judgeVideo } from '../services/content-judgment';
 
 export const acquisitionRouter = Router();
 
@@ -1419,4 +1420,127 @@ acquisitionRouter.get('/agent/task-stream', licenseAuth, (req: Request, res: Res
   }
   const channel = `agent-tasks:${tenantId}`;
   sseService.subscribe(channel, req, res, { type: 'connected', tenant_id: tenantId });
+});
+
+// ============================================================================
+// content-judgment-gate — 视频内容判决闸（Sprint 07120952）
+//   POST /judge-video          视频截图/录音上报 → Gemini 判决 → matched/rejected/pending
+//   POST /rescore-lead         重算单个 lead 的 relevance_score + outreach_eligible
+//   POST /build-assignments    手动触发 DM 指派（含 outreach_eligible 过滤）
+//   PATCH /config              更新配置（含 target_profile_desc）
+// ============================================================================
+
+// POST /api/acquisition/judge-video — 内容判决（commit-4）
+acquisitionRouter.post('/judge-video', tenantContextOptional, async (req: Request, res: Response) => {
+  const tenantId = tenantOf(req, res);
+  if (!tenantId) return;
+
+  const {
+    video_id: videoId,
+    capture_type: captureType,
+    data_b64: dataB64,
+    force_result: forceResult,
+    force_timeout: forceTimeout,
+  } = req.body ?? {};
+
+  if (!videoId || typeof videoId !== 'string') {
+    return fail(res, 400, 'MISSING_VIDEO_ID', '缺 video_id');
+  }
+  if (!captureType || typeof captureType !== 'string') {
+    return fail(res, 400, 'MISSING_CAPTURE_TYPE', '缺 capture_type');
+  }
+  if (typeof dataB64 !== 'string') {
+    return fail(res, 400, 'MISSING_DATA_B64', '缺 data_b64');
+  }
+
+  try {
+    const result = await judgeVideo(
+      pool,
+      tenantId,
+      videoId,
+      captureType,
+      dataB64,
+      forceResult,
+      forceTimeout === true,
+    );
+    return ok(res, result);
+  } catch (err) {
+    console.error('[acquisition] judge-video error:', (err as Error).message);
+    return fail(res, 500, 'JUDGE_ERROR', (err as Error).message);
+  }
+});
+
+// POST /api/acquisition/rescore-lead — 重算 lead 分数 + outreach_eligible（commit-4/5）
+acquisitionRouter.post('/rescore-lead', tenantContextOptional, async (req: Request, res: Response) => {
+  const tenantId = tenantOf(req, res);
+  if (!tenantId) return;
+
+  const { lead_id: leadId } = req.body ?? {};
+  if (!leadId || typeof leadId !== 'string') {
+    return fail(res, 400, 'MISSING_LEAD_ID', '缺 lead_id');
+  }
+
+  try {
+    const result = await rescoreLead(pool, tenantId, leadId);
+    return ok(res, result);
+  } catch (err) {
+    console.error('[acquisition] rescore-lead error:', (err as Error).message);
+    return fail(res, 500, 'RESCORE_ERROR', (err as Error).message);
+  }
+});
+
+// POST /api/acquisition/build-assignments — 手动触发 DM 指派（commit-4/5）
+acquisitionRouter.post('/build-assignments', tenantContextOptional, async (req: Request, res: Response) => {
+  const tenantId = tenantOf(req, res);
+  if (!tenantId) return;
+
+  try {
+    const result = await buildAssignments(pool, tenantId);
+    return ok(res, result);
+  } catch (err) {
+    console.error('[acquisition] build-assignments error:', (err as Error).message);
+    return fail(res, 500, 'BUILD_ASSIGNMENTS_ERROR', (err as Error).message);
+  }
+});
+
+// PATCH /api/acquisition/config — 更新配置（含 target_profile_desc）（commit-4）
+acquisitionRouter.patch('/config', tenantContextOptional, async (req: Request, res: Response) => {
+  const tenantId = tenantOf(req, res);
+  if (!tenantId) return;
+
+  const patch = req.body ?? {};
+  if (typeof patch !== 'object') {
+    return fail(res, 400, 'INVALID_BODY', '请求体应为 JSON 对象');
+  }
+
+  try {
+    const saved = await upsertConfig(pool, tenantId, patch);
+    // upsertConfig 返回 AcquisitionConfig，需要补充 target_profile_desc（不在标准类型里）
+    const targetProfileDesc = typeof patch.target_profile_desc === 'string'
+      ? patch.target_profile_desc
+      : undefined;
+
+    // 如果 patch 包含 target_profile_desc，单独写入（因为 upsertConfig sanitizePatch 可能不含此字段）
+    if (targetProfileDesc !== undefined) {
+      await pool.query(
+        `INSERT INTO zenithjoy.acquisition_config (tenant_id, target_profile_desc, updated_at)
+         VALUES ($1, $2, now())
+         ON CONFLICT (tenant_id) DO UPDATE SET
+           target_profile_desc = EXCLUDED.target_profile_desc,
+           updated_at = now()`,
+        [tenantId, targetProfileDesc]
+      );
+    }
+
+    // 读最新配置返回（含 target_profile_desc）
+    const fullConfig = await pool.query(
+      `SELECT *, target_profile_desc FROM zenithjoy.acquisition_config WHERE tenant_id = $1`,
+      [tenantId]
+    );
+    const row = fullConfig.rows[0] ?? {};
+    return ok(res, { ...saved, target_profile_desc: row.target_profile_desc ?? null });
+  } catch (err) {
+    console.error('[acquisition] config PATCH error:', (err as Error).message);
+    return fail(res, 500, 'CONFIG_ERROR', (err as Error).message);
+  }
 });
