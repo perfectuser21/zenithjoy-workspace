@@ -3,7 +3,7 @@
 sprint_dir: sprints/07121132-line04-ai-thinking-overlay
 task_id: 8f93f2a1-fdc2-4d41-b97d-6a5ff984697c
 journey_id: 35ac40c2-ba63-81af-af97-e3bc8e3b0fb4
-round: 1
+round: 2
 date: 2026-07-12
 status: PROPOSED
 
@@ -70,6 +70,7 @@ status: PROPOSED
 7. **中台 vitest（替换 mock 存根，3 主路径）**：正常 reasoning 调用 / PII 命中降级 / 兜底缺省「已回复 {联系人}」
 8. **smoke 补充**：`line04-ai-overlay-smoke.sh` 追加第二刀验收项（overlay_window.py 文件存在 + overlay.ts handler 可 require + reasoning 字段通过 API 回显）
 9. **grep 回归**：`listen_chat content[:20]` 清零断言仍通过，确认第一刀不被破坏
+10. **无 it.todo 断言**：`npx vitest run --reporter=verbose 2>&1 | grep -c "todo\|skip" = 0`；BEHAVIOR-5 所有 it() 必须为真实可执行断言，不许留 `it.todo`
 
 ### 真机层（xian-rog，手动验收）
 

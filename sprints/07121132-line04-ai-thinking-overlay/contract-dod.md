@@ -158,6 +158,125 @@ else:
 
 ---
 
+### [BEHAVIOR] [BEHAVIOR-8] EventTailConsumer 只读断言（I1：唯一写者 = listen_chat）
+
+**场景**：`EventTailConsumer`（浮窗读端）全程只以只读模式操作 events.jsonl，严禁任何写入调用。
+
+**验收命令（manual:bash）**：
+```bash
+# grep 断言：overlay 目录下无任何对 events.jsonl 的写入调用
+! grep -rP "open\(.*events\.jsonl.*['\"][wa]" services/agent/wechat-rpa/overlay/
+# Python AST 层验证：EventTailConsumer 无 open(...,'w') 或 open(...,'a')
+python -c "
+import ast, pathlib
+src = pathlib.Path('services/agent/wechat-rpa/overlay/overlay_window.py').read_text(errors='replace')
+tree = ast.parse(src)
+for node in ast.walk(tree):
+    if isinstance(node, ast.Call):
+        func = getattr(node, 'func', None)
+        name = getattr(func, 'id', '') or getattr(func, 'attr', '')
+        if name == 'open' and node.args:
+            for kw in getattr(node, 'keywords', []):
+                if kw.arg == 'mode' and hasattr(kw.value, 's') and kw.value.s in ('w','a'):
+                    raise AssertionError(f'line {node.lineno}: open() 含写模式')
+            if len(node.args) >= 2:
+                m = getattr(node.args[1], 's', '')
+                assert m not in ('w','a'), f'line {node.lineno}: open() 含写模式'
+print('PASS: EventTailConsumer 无写入调用')
+"
+```
+**通过标准**：grep 无输出，Python 脚本输出 `PASS`。
+
+---
+
+### [BEHAVIOR] [BEHAVIOR-9] listen_chat reply_sent 挂点回归（I2）
+
+**场景**：listen_chat.py 的 reply_sent 事件写入挂点仍在第 4787 行 DELIVERED 调用点，_commit_reply_success 本体未被挂入。
+
+**验收命令（manual:bash）**：
+```bash
+# 确认 4787 行附近含 DELIVERED/reply_sent 挂点
+grep -n "reply_sent\|DELIVERED" services/agent/wechat-rpa/listen_chat.py | grep -E "478[5-9]:"
+# 确认 _commit_reply_success 本体行不直接写 reply_sent
+python -c "
+import re, pathlib
+lines = pathlib.Path('services/agent/wechat-rpa/listen_chat.py').read_text().splitlines()
+in_func = False
+for i, l in enumerate(lines, 1):
+    if 'def _commit_reply_success' in l: in_func = True
+    if in_func and l.strip().startswith('def ') and '_commit_reply_success' not in l: in_func = False
+    if in_func and 'reply_sent' in l and 'write_event' in l:
+        raise AssertionError(f'line {i}: _commit_reply_success 本体写 reply_sent（应挂 DELIVERED 点）')
+print('PASS: reply_sent 挂点位置正确')
+"
+```
+**通过标准**：第一条 grep 有输出（4785-4789 行含 DELIVERED）；Python 脚本输出 `PASS`。
+
+---
+
+### [BEHAVIOR] [BEHAVIOR-10] PII 第二闸（agent 侧渲染前过滤，I5）
+
+**场景**：`EventTailConsumer` 在渲染 reasoning 到 UI 前，调用 `pii_filter.filterPiiReasoning`（同一纯函数）进行第二次过滤，含手机号/微信号时替换为降级文案。
+
+**验收命令（manual:bash）**：
+```bash
+cd services/agent/wechat-rpa/overlay
+python -m pytest tests/test_overlay_window.py -k "pii or second_gate or filter_reasoning" -v
+# 若命名不含上述关键字，改跑完整模块确认 PII case 覆盖
+python -c "
+from pii_filter import filter_pii_reasoning
+# 含手机号 → 降级文案
+r = filter_pii_reasoning('客户手机是13800138000，意向很高')
+assert '13800138000' not in r, f'PII 未过滤: {r}'
+# 正常 reasoning → 原样
+r2 = filter_pii_reasoning('处于比价阶段')
+assert r2 == '处于比价阶段', f'正常文案被改: {r2}'
+print('PASS: PII 第二闸有效')
+"
+```
+**通过标准**：pytest 绿 或 Python 脚本输出 `PASS`。
+
+---
+
+### [BEHAVIOR] [BEHAVIOR-11] 浮窗不干预微信窗口（I11）
+
+**场景**：overlay_window.py 中不含任何主动操控微信窗口的 Win32 API 调用（SendMessage / PostMessage / SetForegroundWindow）。
+
+**验收命令（manual:bash）**：
+```bash
+python -c "
+import pathlib
+src = pathlib.Path('services/agent/wechat-rpa/overlay/overlay_window.py').read_text(errors='replace')
+forbidden = ['SendMessage', 'PostMessage', 'SetForegroundWindow', 'BringWindowToTop']
+for fn in forbidden:
+    assert fn not in src, f'overlay_window.py 含禁用 Win32 调用: {fn}'
+print('PASS: 无干预微信窗口 API')
+"
+```
+**通过标准**：脚本输出 `PASS`，无 AssertionError。
+
+---
+
+### [BEHAVIOR] [BEHAVIOR-12] 异常态温和文案（I12：禁"错误/中断/!"）
+
+**场景**：overlay_window.py 中所有异常/降级文案不含"错误"、"中断"、"!"（叹号）字样。
+
+**验收命令（manual:bash）**：
+```bash
+python -c "
+import pathlib
+src = pathlib.Path('services/agent/wechat-rpa/overlay/overlay_window.py').read_text(errors='replace')
+for pat in ['错误', '中断', '!']:
+    assert pat not in src, f'overlay_window.py 含禁用字样: {pat}'
+print('PASS: 无禁用字样，异常态文案温和')
+"
+# 同时扫 HTML 模板字符串（如内嵌在 py 文件中）
+grep -n '"错误\|"中断\|"!' services/agent/wechat-rpa/overlay/overlay_window.py && echo "WARN: 发现禁用字样" || echo "PASS: HTML 模板扫描干净"
+```
+**通过标准**：Python 脚本输出 `PASS`；grep 无匹配输出。
+
+---
+
 ### [CONFIG] CI 探针配置
 
 **交付物**：在现有 CI workflow（`.github/workflows/` 下含 `line04` 的 yml）新增以下两个 step：
