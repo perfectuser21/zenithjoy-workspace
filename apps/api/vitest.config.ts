@@ -24,6 +24,8 @@ export default defineConfig({
       '../../sprints/07032333-line02-dispatch-real-scheduling/tests/**/*.test.ts',
       // 抖音私信主动触达 Android 执行路径：resolveDevicePlatform + isDuplicateDmOutreachResult
       '../../sprints/07052218-douyin-dm-outreach-android/tests/*.test.ts',
+      // Line04 AI 思考浮窗：wechat-draft reasoning 三路断言（normal/fallback/PII）
+      '../../sprints/07121132-line04-ai-thinking-overlay/tests/**/*.test.ts',
     ],
     exclude: ['node_modules/**', 'tests/integration/**', 'tests/ws1/**', 'tests/ws2/**', 'tests/ws3/**', 'tests/ws4/**', 'tests/ws5/**', 'tests/ws6/**'],
     coverage: {
