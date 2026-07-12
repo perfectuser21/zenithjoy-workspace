@@ -1,0 +1,47 @@
+name: Line Modules Build Gate
+
+# PR 阶段必跑：防止 overlay.ts 等模块引入未导出符号后在 main push 才报红
+# （agent-installpack.yml 的 build-line-modules job 只在 push main 触发）
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'services/agent/modules/**'
+      - 'services/agent/src/**'
+      - 'services/agent/package*.json'
+      - 'services/agent/tsconfig*.json'
+      - '.github/workflows/ci-line-modules-build.yml'
+  merge_group:
+
+concurrency:
+  group: line-modules-build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-line-modules:
+    name: Build line module (${{ matrix.lineId }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        lineId: [line04, line01, line02, line05]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install
+        working-directory: services/agent
+        run: npm ci
+
+      - name: Build line module ${{ matrix.lineId }}
+        working-directory: services/agent
+        run: |
+          if [ -f scripts/build-line-module.sh ]; then
+            bash scripts/build-line-module.sh ${{ matrix.lineId }}
+          else
+            echo "::warning::scripts/build-line-module.sh not found, skipping"
+          fi
