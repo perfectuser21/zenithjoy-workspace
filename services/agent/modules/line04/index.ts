@@ -11,6 +11,7 @@ import {
   collectListenerHealth,
   buildHealthStatusMessage,
 } from './handlers/wechat-rpa';
+import { getOverlayHandler } from './handlers/overlay';
 
 export interface ModuleConfig {
   agentId: string;
@@ -54,6 +55,16 @@ export function handleConfig(cfg: ModuleConfig, send: Send): void {
   // machineId 下发给 listener → 按它拉「自己那份」每客服配置（真发跟随中台 auto_agent 开关）。
   if (cfg.apiBase) {
     startWechatListener(cfg.apiBase, cfg.agentId || undefined, cfg.machineId || undefined);
+  }
+  // AI 思考浮窗（第二刀接线）：随 listener 拉起，仅 Windows。
+  // preflight 软检测失败/依赖缺失时 handler 内部写 overlay-diag.json 降级，不影响主链。
+  if (process.platform === 'win32') {
+    const overlayStateDir = process.env.ZJ_STATE_DIR
+      || process.env.PUBLIC
+      || 'C:\\Users\\Public';
+    getOverlayHandler(overlayStateDir, process.env.ZJ_MODULE_VERSION)
+      .start()
+      .catch(() => { /* 浮窗启动失败不阻塞模块（diag 已落盘） */ });
   }
   send({ type: 'ready' });
   // 自愈件4：周期性把 listen_chat 真实健康上报 core（管理员/诊断页看模块"实际健康"）。
