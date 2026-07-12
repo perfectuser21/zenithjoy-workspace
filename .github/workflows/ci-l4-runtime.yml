@@ -119,9 +119,9 @@ jobs:
           node-version: '20'
       - run: npm ci
         working-directory: services/agent
-      - name: Run tests (src/ only — publishers require Chrome CDP not available in CI)
+      - name: Run tests (src/ + modules/ + publishers/douyin+wechat — vitest config include)
         working-directory: services/agent
-        run: npx vitest run src/
+        run: npx vitest run
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'

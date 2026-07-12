@@ -25,6 +25,16 @@ export default defineConfig({
       // Line04 DesktopLeaseBroker 状态机 sprint 合约测试
       '../../sprints/0703-line04-desktop-lease-broker/tests/**/*.test.ts',
     ],
-    exclude: ['node_modules/**', 'dist/**', 'dist-pkg/**'],
+    exclude: [
+      'node_modules/**',
+      'dist/**',
+      'dist-pkg/**',
+      // 以下用 node:test runner 写的 CJS 文件，与 vitest runner 不兼容（require('node:test') 覆盖 global）
+      // 巡检2026-07-12：smoke债登记——应迁移到 vitest globals，目前走 node --test 单独跑
+      'publishers/kuaishou-publisher/**/*.test.cjs',
+      'publishers/weibo-publisher/**/*.test.cjs',
+      'publishers/zhihu-publisher/**/*.test.cjs',
+      'publishers/xiaohongshu-publisher/**/*.test.cjs',
+    ],
   },
 });
