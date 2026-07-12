@@ -9,7 +9,7 @@
 
 ---
 
-### [BEHAVIOR-1] rejected/pending 视频绝不生成 Stage2 抓评论任务（INV-1）
+### [BEHAVIOR] (1) rejected/pending 视频绝不生成 Stage2 抓评论任务（INV-1）
 
 **对应 it() 子串**: `rejected video should not generate stage2 task`
 
@@ -36,7 +36,7 @@ psql "$DATABASE_URL" -t -c \
 
 ---
 
-### [BEHAVIOR-2] outreach_eligible=false 线索绝不出现在 dm_assignments（INV-2）
+### [BEHAVIOR] (2) outreach_eligible=false 线索绝不出现在 dm_assignments（INV-2）
 
 **对应 it() 子串**: `outreach_eligible false lead should not appear in dm_assignments`
 
@@ -72,7 +72,7 @@ psql "$DATABASE_URL" -t -c \
 
 ---
 
-### [BEHAVIOR-3] 判定 API 超时（>8s）标记 pending 且不阻塞其他视频（INV-3）
+### [BEHAVIOR] (3) 判定 API 超时（>8s）标记 pending 且不阻塞其他视频（INV-3）
 
 **对应 it() 子串**: `judgment api timeout should mark pending and not block other videos`
 
@@ -104,7 +104,7 @@ psql "$DATABASE_URL" -t -c \
 
 ---
 
-### [BEHAVIOR-4] rejected/pending/skipped_capture_failed 视频必须留记录（INV-4）
+### [BEHAVIOR] (4) rejected/pending/skipped_capture_failed 视频必须留记录（INV-4）
 
 **对应 it() 子串**: `rejected video must have record in acquisition_collect_videos`
 
@@ -130,7 +130,7 @@ done
 
 ---
 
-### [BEHAVIOR-5] 同一 video_id 已有非 pending 结果时不重复调 Gemini（INV-5）
+### [BEHAVIOR] (5) 同一 video_id 已有非 pending 结果时不重复调 Gemini（INV-5）
 
 **对应 it() 子串**: `same video_id with non-pending result should not re-call gemini`
 
@@ -146,7 +146,7 @@ cd /workspace && npx jest --testPathPattern="content-judgment.test" \
 
 ---
 
-### [BEHAVIOR-6] 空 target_profile_desc 租户所有视频默认 matched（INV-6）
+### [BEHAVIOR] (6) 空 target_profile_desc 租户所有视频默认 matched（INV-6）
 
 **对应 it() 子串**: `empty target_profile_desc should default all videos to matched`
 
@@ -171,7 +171,7 @@ psql "$DATABASE_URL" -t -c \
 
 ---
 
-### [BEHAVIOR-7] rescoreLead 正确联动 outreach_eligible（FR-6）
+### [BEHAVIOR] (7) rescoreLead 正确联动 outreach_eligible（FR-6）
 
 **对应 it() 子串**: `rescore-lead updates outreach_eligible based on highest grade`
 
@@ -195,7 +195,7 @@ psql "$DATABASE_URL" -t -c \
 
 ---
 
-### [BEHAVIOR-8] 已生成 dm_assignments 在 outreach_eligible 降为 false 后标记 cancelled（FR-8）
+### [BEHAVIOR] (8) 已生成 dm_assignments 在 outreach_eligible 降为 false 后标记 cancelled（FR-8）
 
 **对应 it() 子串**: `dm_assignments cancelled when outreach_eligible turns false`
 
