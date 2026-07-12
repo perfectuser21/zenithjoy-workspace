@@ -1,0 +1,55 @@
+name: Agent Line Module Build (PR Gate)
+
+# PR 阶段 line-module 构建门禁。
+# agent-installpack.yml 的 build-line-modules job 只在 push main 上跑，
+# 导致 PR 合并时 overlay.ts 这类 TS 错误漏检（PR#1245 实锤）。
+# 本工作流补上该 gap：services/agent/** 有变动的 PR 必须通过 line-module build。
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'services/agent/**'
+      - '.github/workflows/agent-line-module-build-pr.yml'
+
+concurrency:
+  group: line-module-build-pr-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-line-modules:
+    name: Build Line Module (${{ matrix.lineId }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        lineId: [line04, line01, line02, line05]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: services/agent/package-lock.json
+      - name: Install
+        working-directory: services/agent
+        run: npm ci
+      - name: Build line module (${{ matrix.lineId }})
+        working-directory: services/agent
+        run: bash scripts/build-line-module.sh ${{ matrix.lineId }}
+
+  line-module-build-passed:
+    name: Line Module Build Gate Passed
+    needs: build-line-modules
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check results
+        run: |
+          if [ "${{ needs.build-line-modules.result }}" != "success" ]; then
+            echo "FAIL: line-module build (${{ needs.build-line-modules.result }})"
+            exit 1
+          fi
+          echo "OK: all line-module builds passed"
