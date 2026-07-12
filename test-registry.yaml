@@ -4684,3 +4684,10 @@ agent_suite:
   status: active
   product: 微信AI客服
   note: "sprint(07121132): 第二刀 BEHAVIOR-5——generateChatDraft reasoning 真实现断言（替代第一刀 mock 存根，合同测试不可变故新建 r2）"
+- id: line02-content-judgment-dm-assignments-cancelled-status
+  path: apps/api/tests/integration/p2-line02-content-judgment/dm-assignments-cancelled-status.integration.test.ts
+  type: integration
+  ci: L4-INT
+  status: active
+  product: AI员工
+  note: "PR#1243: 真机验收复现——dm_assignments chk_dm_assign_status 约束缺 'cancelled'，rescoreLead() FR-8 降级取消直接违反 CHECK 约束；真 Postgres 校验 pg_get_constraintdef 含 'cancelled'"
