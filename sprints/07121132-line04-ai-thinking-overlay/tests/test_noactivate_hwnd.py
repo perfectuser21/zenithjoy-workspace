@@ -33,27 +33,62 @@ class TestNoActivateFlags:
     @pytest.mark.skipif(not IS_WINDOWS, reason="Win32 API only on Windows")
     def test_foreground_unchanged_on_attach(self):
         """
-        贴靠操作不改变前台窗口
-        Windows 真机测试：CI 用 notepad 替身
+        [CI 层 - notepad 替身测试]
+        spawn notepad 并置为前台 → 模拟 overlay SetWindowPos(SWP_NOACTIVATE) →
+        断言 GetForegroundWindow() 仍为 notepad_hwnd。
+
+        注意：此测试在 windows_cloud GHA runner 上真实运行（IS_WINDOWS=True）。
+        真机层（xian-rog）以真实浮窗进程的 GetWindowLongW 验收（见 BEHAVIOR-INV-3 备注）。
         """
         import ctypes
+        import subprocess
+        import time
+
         user32 = ctypes.windll.user32
 
-        # 记录当前前台窗口
-        hwnd_before = user32.GetForegroundWindow()
-        assert hwnd_before != 0, "Should have a foreground window"
-
-        # 模拟浮窗贴靠操作（不调用 SetForegroundWindow）
-        # 实际实现：MoveWindow / SetWindowPos 带 SWP_NOACTIVATE
         SWP_NOACTIVATE = 0x0010
-        SWP_NOMOVE = 0x0002
-        SWP_NOSIZE = 0x0001
-        HWND_TOPMOST = -1
+        SWP_NOMOVE     = 0x0002
+        SWP_NOSIZE     = 0x0001
+        HWND_TOPMOST   = -1
 
-        # 这里不实际移动，只验证前台窗口未变
-        hwnd_after = user32.GetForegroundWindow()
-        assert hwnd_after == hwnd_before, \
-            f"Foreground window changed: {hwnd_before} -> {hwnd_after}"
+        # 1. spawn notepad 作为替身前台窗口
+        proc = subprocess.Popen(["notepad.exe"])
+        try:
+            # 等待 notepad 窗口出现（最多 3 秒）
+            notepad_hwnd = 0
+            for _ in range(30):
+                time.sleep(0.1)
+                notepad_hwnd = user32.FindWindowW("Notepad", None)
+                if notepad_hwnd:
+                    break
+            assert notepad_hwnd != 0, "notepad window did not appear within 3s"
+
+            # 2. 将 notepad 置为前台窗口
+            user32.SetForegroundWindow(notepad_hwnd)
+            time.sleep(0.1)
+
+            fg_after_set = user32.GetForegroundWindow()
+            assert fg_after_set == notepad_hwnd, \
+                f"SetForegroundWindow failed: expected {notepad_hwnd}, got {fg_after_set}"
+
+            # 3. 模拟 overlay 贴靠更新（SetWindowPos + SWP_NOACTIVATE）
+            #    此处对 notepad 本身执行一次 SWP_NOACTIVATE 以验证该标志不夺焦
+            result = user32.SetWindowPos(
+                notepad_hwnd,
+                HWND_TOPMOST,
+                0, 0, 0, 0,
+                SWP_NOACTIVATE | SWP_NOMOVE | SWP_NOSIZE,
+            )
+            assert result != 0, "SetWindowPos returned 0 (failed)"
+
+            # 4. 断言前台窗口未变
+            fg_after_attach = user32.GetForegroundWindow()
+            assert fg_after_attach == notepad_hwnd, (
+                f"Foreground window changed after SWP_NOACTIVATE attach: "
+                f"{notepad_hwnd} -> {fg_after_attach}"
+            )
+        finally:
+            proc.terminate()
 
     @pytest.mark.skipif(not IS_WINDOWS, reason="Win32 API only on Windows")
     def test_overlay_window_has_noactivate_style(self):

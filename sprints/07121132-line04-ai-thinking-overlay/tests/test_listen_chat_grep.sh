@@ -9,7 +9,7 @@ LISTEN_CHAT_FILE="${1:-services/listen_chat.py}"
 
 if [ ! -f "$LISTEN_CHAT_FILE" ]; then
   echo "SKIP: $LISTEN_CHAT_FILE not found (not yet implemented)"
-  exit 0
+  exit 77  # exit 77 = skip 语义，非 pass；CI 须用 continue-on-error 或检查退出码 77
 fi
 
 echo "=== Checking $LISTEN_CHAT_FILE for plaintext content logging ==="

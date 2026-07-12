@@ -55,6 +55,11 @@ cd /workspace
 python -m pytest sprints/07121132-line04-ai-thinking-overlay/tests/test_pii_filter.py -v
 # 验证 events.jsonl 中无明文 PII（使用测试生成的样本文件）
 python -m pytest sprints/07121132-line04-ai-thinking-overlay/tests/test_pii_no_leak.py -v
+# grep 回归（listen_chat.py 明文日志清零）
+# 注意：test_listen_chat_grep.sh 在 listen_chat.py 不存在时退出码为 77（skip），不计为 PASS
+# 此 grep 回归测试仅在 listen_chat.py 存在时纳入强制通过判定（退出码须为 0）
+bash sprints/07121132-line04-ai-thinking-overlay/tests/test_listen_chat_grep.sh || \
+  { ec=$?; [ $ec -eq 77 ] && echo "[SKIP] listen_chat.py not yet present" || exit $ec; }
 ```
 
 ---
@@ -72,9 +77,14 @@ python -m pytest sprints/07121132-line04-ai-thinking-overlay/tests/test_pii_no_l
 
 ```bash
 # manual:bash
-# CI 环境：notepad 替身 NOACTIVATE 测试
+# CI 环境（windows_cloud）：notepad 替身 NOACTIVATE 测试
+# spawn notepad → SetForegroundWindow → SetWindowPos(SWP_NOACTIVATE) → 断言 notepad 仍为前台
 python -m pytest sprints/07121132-line04-ai-thinking-overlay/tests/test_noactivate_hwnd.py -v -k "test_foreground_unchanged"
 ```
+
+> **CI 层 vs 真机层分工**：  
+> - CI 层（windows_cloud）：notepad 替身验证 SWP_NOACTIVATE 不夺焦（上述命令）+ 常量值断言  
+> - 真机层（xian-rog）：以真实浮窗进程的 `GetWindowLongW(overlay_hwnd, GWL_EXSTYLE) & WS_EX_NOACTIVATE` 验收，不在本 sprint CI 中强制
 
 ---
 
@@ -237,6 +247,28 @@ python -m pytest sprints/07121132-line04-ai-thinking-overlay/tests/test_events_j
 
 ---
 
+### [BEHAVIOR-FUNC-5] 内存/CPU 自愈门槛（FR-9）
+
+**断言**：浮窗进程上报的 `overlay-diag.json` 中 `diag` 字典**必须包含 `rss_mb` 和 `cpu_pct` 字段**；thin 阶段以字段存在为准。自愈逻辑（GC 触发阈值 RSS>200MB、自杀重启阈值 RSS>300MB、降频阈值 CPU>5%）在集成阶段验收，不在本 sprint 强制断言。
+
+**触发条件**：浮窗进程运行期间定期上报 diag（每 30s）
+
+**预期结果**：
+- `overlay-diag.json` 的 `diag` 字段含 `rss_mb`（数值型）和 `cpu_pct`（数值型）
+- CI 骨架测试：构造 mock diag dict，断言字段存在且为 float/int
+
+```bash
+# manual:bash
+python -m pytest sprints/07121132-line04-ai-thinking-overlay/tests/test_memory_cpu_guard.py -v
+```
+
+> **集成阶段补充验收（不阻塞本 sprint）**：  
+> - RSS>200MB → GC 触发（mock `psutil.Process.memory_info` 返回 210MB，断言 `gc.collect()` 被调用一次）  
+> - RSS>300MB → `sys.exit(1)` 被调用（mock 返回 310MB）  
+> - CPU>5% 持续 3 次采样 → 降频（poll interval ×2，mock `psutil.cpu_percent`）
+
+---
+
 ## smoke 接入验收
 
 ```bash
@@ -286,7 +318,10 @@ echo "=== 10. 禁止 Public 路径 ==="
   -i "C:\\\\Users\\\\Public\|C:/Users/Public" apps/ services/ \
   && echo "PASS: no hardcoded C:\\Users\\Public"
 
-echo "=== 11. smoke ==="
+echo "=== 11. 内存/CPU 自愈字段断言 ==="
+python -m pytest sprints/07121132-line04-ai-thinking-overlay/tests/test_memory_cpu_guard.py -v
+
+echo "=== 12. smoke ==="
 bash .github/workflows/scripts/smoke/line04-ai-overlay-smoke.sh
 
 echo "=== ALL PASS ==="
@@ -296,8 +331,8 @@ echo "=== ALL PASS ==="
 
 ## DoD 铁律覆盖情况
 
-| # | Invariant | 覆盖 [BEHAVIOR] 条目 | 状态 |
-|---|-----------|---------------------|------|
+| # | Invariant / 功能 | 覆盖 [BEHAVIOR] 条目 | 状态 |
+|---|-----------------|---------------------|------|
 | 1 | 主链零影响 | BEHAVIOR-INV-1 | ✅ |
 | 2 | PII 双硬闸 | BEHAVIOR-INV-2 | ✅ |
 | 3 | 禁止抢焦点 | BEHAVIOR-INV-3 | ✅ |
@@ -306,5 +341,6 @@ echo "=== ALL PASS ==="
 | 6 | 熔断保护 | BEHAVIOR-INV-6 | ✅ |
 | 7 | reasoning 单一来源 | BEHAVIOR-INV-7 | ✅ |
 | 8 | 禁止 C:\Users\Public | BEHAVIOR-INV-8 | ✅ |
+| 9 | 内存/CPU 自愈（FR-9） | BEHAVIOR-FUNC-5 | ✅（thin：字段存在；自愈逻辑集成阶段） |
 
-**铁律覆盖：8/8**
+**铁律覆盖：8/8（FR 新增：9/9）**
