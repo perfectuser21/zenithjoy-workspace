@@ -1,0 +1,15 @@
+{
+  "phase": "gan",
+  "round": 2,
+  "verdict": "APPROVED",
+  "rubric": {
+    "铁律覆盖完整性": 10,
+    "验收命令可执行性": 9,
+    "E2E验收充分性": 9,
+    "BEHAVIOR与it()匹配度": 8,
+    "范围边界清晰度": 10,
+    "加权总分": 9.3
+  },
+  "invariants_covered": ["I1","I2","I3","I4","I5","I6","I7","I8","I9","I10","I11","I12"],
+  "invariants_missing": []
+}
