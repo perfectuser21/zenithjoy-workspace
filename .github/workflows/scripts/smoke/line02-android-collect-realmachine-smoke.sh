@@ -82,7 +82,7 @@ for i in $(seq 1 "$POLL_MAX"); do
   case "$STATUS" in
     done|completed) break;;
     failed|error|cancelled)
-      EC=$(curl -fsSk -m 10 "$API_BASE/api/acquisition/collect-tasks/$TASK/videos" -H "X-Tenant-Id: $TENANT" 2>/dev/null | jq -r '.task.error_code // "?"')
+      EC=$(curl -fsSk -m 10 "$API_BASE/api/acquisition/collect-tasks/$TASK/videos" -H "X-Tenant-Id: $TENANT" 2>/dev/null | jq -r '.data.task.error_code // "?"')
       fail "采集任务终态=$STATUS error_code=$EC —— 采集链断(广告abort/多卡STEP1_no_card/SEARCH_TIMEOUT 复发?查 logcat DouyinCollectService)";;
   esac
   sleep 10
@@ -90,11 +90,12 @@ done
 case "$STATUS" in done|completed) : ;; *) fail "采集未在 $((POLL_MAX*10))s 内完成(status=$STATUS,疑似卡死)";; esac
 
 # ── 4. 断言:collected≥2 + ≥2 真实 video_id 落库 ──────────────────────
+# videos 端点结构:{success, data:{videos:[{video_id,...}], total, task:{status,...}}}——注意 .data 层
 VIDEOS=$(curl -fsSk -m 10 "$API_BASE/api/acquisition/collect-tasks/$TASK/videos" -H "X-Tenant-Id: $TENANT" 2>/dev/null)
-COUNT=$(echo "$VIDEOS" | jq '[.videos[]? // .data[]?] | length' 2>/dev/null || echo 0)
+COUNT=$(echo "$VIDEOS" | jq '.data.videos | length' 2>/dev/null || echo 0)
 [ "${COUNT:-0}" -ge 2 ] \
   || fail "collected=$COUNT < 2 —— 多卡采集退化(navback 回列表/abort 复发,只采到第一张)"
-REAL=$(echo "$VIDEOS" | jq -r '[.videos[]?,.data[]?] | .[].video_id // empty' 2>/dev/null | grep -cE '^[0-9]{15,}$')
+REAL=$(echo "$VIDEOS" | jq -r '.data.videos[].video_id // empty' 2>/dev/null | grep -cE '^[0-9]{15,}$')
 [ "${REAL:-0}" -ge 2 ] \
   || fail "真实 video_id 数=$REAL < 2 —— share_url 取链/服务端 302 解析退化(造假 id?)"
 
