@@ -69,3 +69,4 @@ line04-ai-overlay-r2-smoke.sh
 content-judgment-gate-smoke.sh
 content-judgment-client-wiring-smoke.sh
 dev-quick-verify-smoke.sh
+dao1e-langgraph-brain-api-smoke.sh

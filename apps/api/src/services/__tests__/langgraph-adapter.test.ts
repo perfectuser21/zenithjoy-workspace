@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import {
   buildStagesFromEvents,
   extractArticlePath,
@@ -11,10 +11,9 @@ vi.mock('../../db/connection', () => ({
   default: { query: vi.fn() },
 }));
 
-import pool from '../../db/connection';
-import { existsLangGraphTask } from '../langgraph-adapter';
+import { existsLangGraphTask, fetchLangGraphEvents, listLangGraphOnlyRuns } from '../langgraph-adapter';
 
-const mockQuery = pool.query as unknown as ReturnType<typeof vi.fn>;
+afterEach(() => vi.restoreAllMocks());
 
 function mkEvent(id: number, node: string, extra: Record<string, unknown> = {}): PipelineEvent {
   return {
@@ -254,23 +253,87 @@ describe('manifest schema 三版兼容（extractArticlePath/extractCopyPath/extr
 });
 
 describe('existsLangGraphTask', () => {
-  beforeEach(() => {
-    mockQuery.mockReset();
-  });
-
-  it('returns true when tasks 表有匹配行', async () => {
-    mockQuery.mockResolvedValueOnce({ rows: [{ '?column?': 1 }] });
+  it('returns true when Brain API HEAD 返回 200', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(new Response(null, { status: 200 }));
     const ok = await existsLangGraphTask('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa');
     expect(ok).toBe(true);
-    const call = mockQuery.mock.calls[0];
-    expect(call[0]).toContain('tasks');
-    expect(call[0]).toContain("task_type = 'content-pipeline'");
-    expect(call[1]).toEqual(['aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa']);
+    const call = (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls[0];
+    expect(call[0]).toContain('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa');
+    expect(call[1].method).toBe('HEAD');
   });
 
-  it('returns false when tasks 表无匹配行', async () => {
-    mockQuery.mockResolvedValueOnce({ rows: [] });
+  it('returns false when Brain API HEAD 返回 404', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(new Response(null, { status: 404 }));
     const ok = await existsLangGraphTask('00000000-0000-0000-0000-000000000000');
     expect(ok).toBe(false);
+  });
+
+  it('returns false when fetch 抛出异常', async () => {
+    vi.spyOn(globalThis, 'fetch').mockRejectedValueOnce(new Error('ECONNREFUSED'));
+    const ok = await existsLangGraphTask('some-id');
+    expect(ok).toBe(false);
+  });
+});
+
+describe('fetchLangGraphEvents', () => {
+  it('返回 Brain API events 数组', async () => {
+    const events = [
+      { id: 1, payload: { node: 'research', step_index: 1 }, created_at: '2026-07-13T01:00:00Z' },
+    ];
+    vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce({
+      ok: true, json: async () => events,
+    } as unknown as Response);
+    const result = await fetchLangGraphEvents('task-uuid-123');
+    expect(result).toEqual(events);
+    const [url] = (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls[0];
+    expect(url).toContain('task-uuid-123');
+    expect(url).toContain('/events');
+  });
+
+  it('API 失败时返回空数组', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce({ ok: false, status: 500 } as unknown as Response);
+    const result = await fetchLangGraphEvents('bad-id');
+    expect(result).toEqual([]);
+  });
+
+  it('fetch 抛出异常时返回空数组', async () => {
+    vi.spyOn(globalThis, 'fetch').mockRejectedValueOnce(new Error('network error'));
+    const result = await fetchLangGraphEvents('bad-id');
+    expect(result).toEqual([]);
+  });
+});
+
+describe('listLangGraphOnlyRuns', () => {
+  it('返回 Brain API pipelines 列表（包含 last_node/last_error）', async () => {
+    const rows = [
+      { id: 'uuid-1', title: '[内容工厂] 测试', status: 'running', created_at: '2026-07-13T01:00:00Z',
+        updated_at: '2026-07-13T02:00:00Z', last_node: 'research', last_error: null },
+    ];
+    vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce({
+      ok: true, json: async () => rows,
+    } as unknown as Response);
+    const result = await listLangGraphOnlyRuns(10);
+    expect(result).toHaveLength(1);
+    expect(result[0].id).toBe('uuid-1');
+    expect(result[0].topic).toBe('测试');
+    expect(result[0].status).toBe('running');
+    const [url] = (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls[0];
+    expect(url).toContain('with_last_event=1');
+    expect(url).toContain('limit=10');
+  });
+
+  it('last_error 非空时 status=failed', async () => {
+    const rows = [{ id: 'u2', title: '报错任务', status: 'running',
+      created_at: '2026-07-13T01:00:00Z', updated_at: '2026-07-13T01:00:00Z',
+      last_node: 'research', last_error: 'timeout' }];
+    vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce({ ok: true, json: async () => rows } as unknown as Response);
+    const result = await listLangGraphOnlyRuns();
+    expect(result[0].status).toBe('failed');
+  });
+
+  it('API 失败时返回空数组', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce({ ok: false, status: 503 } as unknown as Response);
+    const result = await listLangGraphOnlyRuns();
+    expect(result).toEqual([]);
   });
 });
