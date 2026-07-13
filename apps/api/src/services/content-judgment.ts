@@ -124,7 +124,7 @@ async function callGemini(
 
   try {
     const resp = await axios.post(
-      `${TOAPIS_BASE}/models/gemini-2.0-flash:generateContent`,
+      `${TOAPIS_BASE}/models/gemini-2.5-flash-official:generateContent`,
       {
         contents: [
           {
