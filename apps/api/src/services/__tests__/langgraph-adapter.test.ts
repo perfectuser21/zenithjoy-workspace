@@ -11,10 +11,10 @@ vi.mock('../../db/connection', () => ({
   default: { query: vi.fn() },
 }));
 
-import pool from '../../db/connection';
-import { existsLangGraphTask } from '../langgraph-adapter';
+import { existsLangGraphTask, fetchLangGraphEvents } from '../langgraph-adapter';
 
-const mockQuery = pool.query as unknown as ReturnType<typeof vi.fn>;
+const mockFetch = vi.fn();
+vi.stubGlobal('fetch', mockFetch);
 
 function mkEvent(id: number, node: string, extra: Record<string, unknown> = {}): PipelineEvent {
   return {
@@ -255,22 +255,69 @@ describe('manifest schema 三版兼容（extractArticlePath/extractCopyPath/extr
 
 describe('existsLangGraphTask', () => {
   beforeEach(() => {
-    mockQuery.mockReset();
+    mockFetch.mockReset();
   });
 
-  it('returns true when tasks 表有匹配行', async () => {
-    mockQuery.mockResolvedValueOnce({ rows: [{ '?column?': 1 }] });
+  it('returns true when Brain API 返回 content-pipeline 任务', async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ id: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', task_type: 'content-pipeline' }),
+    });
     const ok = await existsLangGraphTask('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa');
     expect(ok).toBe(true);
-    const call = mockQuery.mock.calls[0];
-    expect(call[0]).toContain('tasks');
-    expect(call[0]).toContain("task_type = 'content-pipeline'");
-    expect(call[1]).toEqual(['aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa']);
+    expect(mockFetch).toHaveBeenCalledWith(
+      expect.stringContaining('/api/brain/tasks/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa')
+    );
   });
 
-  it('returns false when tasks 表无匹配行', async () => {
-    mockQuery.mockResolvedValueOnce({ rows: [] });
+  it('returns false when Brain API 返回 404', async () => {
+    mockFetch.mockResolvedValueOnce({ ok: false });
     const ok = await existsLangGraphTask('00000000-0000-0000-0000-000000000000');
     expect(ok).toBe(false);
+  });
+
+  it('returns false when Brain API 返回非 content-pipeline 任务', async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ id: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', task_type: 'dev' }),
+    });
+    const ok = await existsLangGraphTask('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa');
+    expect(ok).toBe(false);
+  });
+
+  it('returns false when fetch 抛异常', async () => {
+    mockFetch.mockRejectedValueOnce(new Error('network error'));
+    const ok = await existsLangGraphTask('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa');
+    expect(ok).toBe(false);
+  });
+});
+
+describe('fetchLangGraphEvents', () => {
+  beforeEach(() => {
+    mockFetch.mockReset();
+  });
+
+  it('调 Brain API /events 返回事件数组', async () => {
+    const events: PipelineEvent[] = [
+      { id: 1, payload: { node: 'research', step_index: 1 }, created_at: '2026-07-13T00:00:00Z' },
+    ];
+    mockFetch.mockResolvedValueOnce({ ok: true, json: async () => events });
+    const result = await fetchLangGraphEvents('task-id-123');
+    expect(result).toEqual(events);
+    expect(mockFetch).toHaveBeenCalledWith(
+      expect.stringContaining('/api/brain/pipelines/task-id-123/events')
+    );
+  });
+
+  it('Brain API 失败时返回空数组', async () => {
+    mockFetch.mockResolvedValueOnce({ ok: false });
+    const result = await fetchLangGraphEvents('task-id-123');
+    expect(result).toEqual([]);
+  });
+
+  it('fetch 抛异常时返回空数组', async () => {
+    mockFetch.mockRejectedValueOnce(new Error('timeout'));
+    const result = await fetchLangGraphEvents('task-id-123');
+    expect(result).toEqual([]);
   });
 });
