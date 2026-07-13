@@ -164,9 +164,8 @@ describe('Pipeline API', () => {
     });
 
     it('should return 404 for non-existent id', async () => {
-      mockQuery
-        .mockResolvedValueOnce({ rows: [] })  // pipeline_runs miss
-        .mockResolvedValueOnce({ rows: [] }); // LangGraph-only miss
+      mockQuery.mockResolvedValueOnce({ rows: [] }); // pipeline_runs miss
+      // listLangGraphOnlyRuns now calls Brain HTTP API (fetch), not pool.query
 
       const response = await request(app).get('/api/pipeline/00000000-0000-0000-0000-000000000000');
 
