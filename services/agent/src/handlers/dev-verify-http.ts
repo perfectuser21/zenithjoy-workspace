@@ -21,6 +21,8 @@ export function isInternalAddress(addr: string | undefined): boolean {
   if (m172 && Number(m172[1]) >= 16 && Number(m172[1]) <= 31) return true;
   const m100 = ip.match(/^100\.(\d+)\./);
   if (m100 && Number(m100[1]) >= 64 && Number(m100[1]) <= 127) return true;
+  const v6 = ip.toLowerCase();
+  if (v6.startsWith('fd') || v6.startsWith('fc') || v6.startsWith('fe80:')) return true; // IPv6 ULA fc00::/7 + link-local
   return false;
 }
 
@@ -45,13 +47,19 @@ export async function handleDevVerifyHttp(
     return { status: 403, body: { ok: false, error: 'external_source_forbidden' } };
   }
 
+  // params 只接受纯 JSON 对象——它会原样进受控脚本 stdin，先掐掉畸形输入
+  const params = reqBody.params ?? {};
+  if (typeof params !== 'object' || params === null || Array.isArray(params)) {
+    return { status: 400, body: { ok: false, error: 'invalid_params' } };
+  }
+
   const appliedTimeoutMs = Math.min(
     typeof reqBody.timeout_ms === 'number' && reqBody.timeout_ms > 0 ? reqBody.timeout_ms : MAX_TIMEOUT_MS,
     MAX_TIMEOUT_MS,
   );
 
   const result = await handleDevQuickVerify(
-    { type: 'dev_quick_verify', payload: { action: reqBody.action ?? '', params: reqBody.params ?? {} } },
+    { type: 'dev_quick_verify', payload: { action: reqBody.action ?? '', params } },
     {
       isDevMachine: deps?.isDevMachine ?? isDevMachineFromEnv(),
       runAction: deps?.runAction ?? runRegisteredAction,

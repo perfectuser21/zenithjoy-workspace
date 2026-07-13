@@ -17,6 +17,8 @@ describe('isInternalAddress — 内网闸判定 [BEHAVIOR]', () => {
     expect(isInternalAddress('192.168.1.10')).toBe(true);
     expect(isInternalAddress('10.0.0.5')).toBe(true);
     expect(isInternalAddress('100.86.118.99')).toBe(true); // Tailscale 100.64/10
+    expect(isInternalAddress('fd12:3456::1')).toBe(true); // IPv6 ULA fd00::/8
+    expect(isInternalAddress('fe80::1')).toBe(true); // IPv6 link-local
   });
   it('拒公网地址', () => {
     expect(isInternalAddress('8.8.8.8')).toBe(false);
@@ -72,6 +74,20 @@ describe('handleDevVerifyHttp — HTTP 层合同 [BEHAVIOR]', () => {
     );
     expect(r.status).toBe(400);
     expect(r.body.rejected).toBe('not_whitelisted');
+  });
+
+  it('params 非纯对象 → 400 invalid_params,绝不执行', async () => {
+    let executed = false;
+    for (const bad of ['string', 42, [1, 2], null]) {
+      const r = await handleDevVerifyHttp(
+        { action: 'health_check', params: bad as never },
+        '127.0.0.1',
+        { isDevMachine: true, runAction: async () => { executed = true; return { stdout: '', stderr: '', exitCode: 0 }; } },
+      );
+      expect(r.status).toBe(400);
+      expect(r.body.error).toBe('invalid_params');
+    }
+    expect(executed).toBe(false);
   });
 
   it('超时 → 504 rejected=timeout', async () => {
