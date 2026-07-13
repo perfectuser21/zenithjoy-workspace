@@ -74,11 +74,17 @@ class ContentJudgmentService(
         if (dataB64.isEmpty() && screenCaptureService != null) {
             val captured = screenCaptureService.captureToBase64()
             if (captured == null) {
-                logW("截图失败 videoId=$videoId")
-                return JudgmentResult(judgmentStatus = "pending", judgmentReason = "skipped_capture_failed")
+                // 截图失败不再本地短路返回（旧行为：直接 return pending 且从不 POST，
+                // 导致服务端 judgment_reason 永远为空、DB 里 pending 空转查无原因）。
+                // 改为：带 capture_type=skipped_capture_failed 继续回报，让服务端把原因落到
+                // acquisition_collect_videos.judgment_reason —— 环境守卫：DB 一眼可辨截图失败。
+                logW("截图失败，改以 skipped_capture_failed 回报 videoId=$videoId")
+                actualDataB64 = ""
+                actualCaptureType = "skipped_capture_failed"
+            } else {
+                actualDataB64 = captured
+                actualCaptureType = captureType
             }
-            actualDataB64 = captured
-            actualCaptureType = captureType
         } else {
             actualDataB64 = dataB64
             actualCaptureType = captureType
