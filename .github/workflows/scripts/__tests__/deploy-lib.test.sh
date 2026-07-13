@@ -232,7 +232,11 @@ ZJ_RELEASES_DIR=/fake/releases ZJ_NODE=/opt/homebrew/bin/node \
   ensure_staging_plist >/dev/null 2>&1
 L_NOPROD=$?
 set -e 2>/dev/null || true
-if [ "$L_NOPROD" -ne 0 ]; then ok "L 生产 plist 缺失→返非0（不凭空造）"; else bad "L 生产 plist 缺失应返非0"; fi
+if [ -f "/Library/LaunchDaemons/com.zenithjoy.api.plist" ]; then
+  if [ "$L_NOPROD" -eq 0 ]; then ok "L 生产 plist 缺失→LaunchDaemon 回退成功（返0）"; else bad "L LaunchDaemon 回退应返0"; fi
+else
+  if [ "$L_NOPROD" -ne 0 ]; then ok "L 生产 plist 缺失→返非0（不凭空造）"; else bad "L 生产 plist 缺失应返非0"; fi
+fi
 
 # --- L2: committed 模板优先（模板为基 + 注入生产密钥 + staging 值收口，生产值不漏进）---
 # 造一个 committed 模板（无密钥，自带 DB env + Program 指 releases/staging），断言：

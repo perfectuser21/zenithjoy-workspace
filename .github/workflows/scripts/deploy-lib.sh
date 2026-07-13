@@ -447,8 +447,16 @@ ensure_staging_plist() {
   local logdir="${ZJ_STAGING_LOG_DIR:-$HOME/Library/Logs}"
 
   if [ ! -f "$prod_plist" ]; then
-    echo "❌ ensure_staging_plist：生产 plist 不存在（${prod_plist}），无密钥来源，拒绝造残废 plist" >&2
-    return 1
+    # plist 可能已迁移到系统 LaunchDaemon（如 mmv 在 2026-07 的迁移：LaunchAgent→LaunchDaemon）。
+    # 回退路径：1) /Library/LaunchDaemons/com.zenithjoy.api.plist  2) 仍失败才 abort。
+    local daemon_plist="/Library/LaunchDaemons/com.zenithjoy.api.plist"
+    if [ -f "$daemon_plist" ]; then
+      echo "⚠️  ZJ_PROD_PLIST（${prod_plist}）不存在，回退到 LaunchDaemon：${daemon_plist}"
+      prod_plist="$daemon_plist"
+    else
+      echo "❌ ensure_staging_plist：生产 plist 不存在（${prod_plist}，亦无 ${daemon_plist}），无密钥来源，拒绝造残废 plist" >&2
+      return 1
+    fi
   fi
 
   mkdir -p "$(dirname "$out_plist")" "$logdir" 2>/dev/null || true
