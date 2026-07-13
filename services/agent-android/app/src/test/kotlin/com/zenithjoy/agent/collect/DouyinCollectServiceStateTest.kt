@@ -271,4 +271,43 @@ class DouyinCollectServiceStateTest {
         val flags = DouyinCollectService.stage1LaunchFlags(base = base)
         assertTrue((flags and base) == base)
     }
+
+    // ── isBackAtResultList（navigateBackToResults 判据加强） ───────────────────
+    // 真机复现(2026-07-13 19:52 xian-rog，广告 abort 修复后浮现的下一层根因)：
+    // 采完 card#0 点开进【全屏视频播放页】(DUMP 显示"暂停视频 b=1200x2504"沉浸式流)，
+    // navigateBackToResults 旧判据 `findVideoCards(root,1).isNotEmpty()` 太弱——全屏视频那张
+    // 大卡(1200x2504 clickable)也满足 → 误判"已回搜索结果列表"停止 BACK → 重抓 findVideoCards
+    // 只 found=1 → card#1/#2 getOrNull(index)=null → STEP1_no_card → abort，collected 只 1/3。
+    // 结论：判据必须能区分【搜索结果多卡列表】vs【全屏播放页】——多卡列表 ≥2 张卡(双列)，
+    // 或带搜索 tab 栏(综合/视频)；全屏播放页只 1 张全屏卡且无 tab 栏。
+
+    @Test
+    fun `single fullscreen card without tab bar is NOT the result list (真机 STEP1_no_card 根因)`() {
+        assertFalse(
+            "全屏视频播放页只有 1 张大卡、无搜索 tab 栏——不是搜索结果列表，必须继续 BACK",
+            DouyinCollectService.isBackAtResultList(cardCount = 1, hasSearchTabBar = false)
+        )
+    }
+
+    @Test
+    fun `two or more cards means back at multi-card result list`() {
+        assertTrue(
+            DouyinCollectService.isBackAtResultList(cardCount = 2, hasSearchTabBar = false)
+        )
+    }
+
+    @Test
+    fun `search tab bar present means at result page even if only one card rendered`() {
+        assertTrue(
+            "带综合/视频 tab 栏即在搜索结果页(某刻只渲染 1 卡也算回到了)",
+            DouyinCollectService.isBackAtResultList(cardCount = 1, hasSearchTabBar = true)
+        )
+    }
+
+    @Test
+    fun `no cards and no tab bar is not the result list`() {
+        assertFalse(
+            DouyinCollectService.isBackAtResultList(cardCount = 0, hasSearchTabBar = false)
+        )
+    }
 }
