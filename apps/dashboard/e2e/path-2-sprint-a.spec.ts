@@ -17,43 +17,26 @@ import { test, expect } from '@playwright/test';
 
 test('path-2-sprint-a 客户绑飞书 8 步全链', async ({ page }) => {
   // ============ stub /api/feishu/oauth/status ============
-  let statusCalls = 0;
+  // 页面初始 fetch status 判定未绑定→渲染表单;0-touch 提交后页面自行 setStatus(已绑定),不再查此接口
+  // (页面已从 OAuth 跳转重构为 0-touch 同步绑定,spec 随之重写——巡检 2026-07-12 收编修复)
   await page.route('**/api/feishu/oauth/status*', async (route) => {
-    statusCalls += 1;
-    // 第 1 次：未绑定；第 2 次起：已绑定
-    if (statusCalls === 1) {
-      await route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({ success: true, data: { bound: false } }),
-      });
-    } else {
-      await route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({
-          success: true,
-          data: {
-            bound: true,
-            app_token: 'bascnFakeAppToken123',
-            bitable_url: 'https://example.feishu.cn/base/bascnFakeAppToken123',
-          },
-        }),
-      });
-    }
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ success: true, data: { bound: false } }),
+    });
   });
 
-  // stub /api/feishu/oauth/start → 不真跳，返一个 authorize_url
-  await page.route('**/api/feishu/oauth/start', async (route) => {
+  // stub 0-touch 同步绑定:提交 app_id/app_secret → 后端建 Bitable 返回 app_token + bitable_doc_url
+  await page.route('**/api/feishu/oauth/bind', async (route) => {
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify({
         success: true,
         data: {
-          authorize_url:
-            'https://passport.feishu.cn/suite/passport/oauth/authorize?app_id=cli_xxx&state=stub_state',
-          state: 'stub_state',
+          app_token: 'bascnFakeAppToken123',
+          bitable_doc_url: 'https://example.feishu.cn/base/bascnFakeAppToken123',
         },
       }),
     });
@@ -96,19 +79,9 @@ test('path-2-sprint-a 客户绑飞书 8 步全链', async ({ page }) => {
   // step2: 填表 + 提交（不真跳转，因 stub）
   await page.getByLabel(/app_id|App ID/i).fill('cli_smoke_app');
   await page.getByLabel(/app_secret|App Secret/i).fill('smoke_secret');
-  // 拦截 navigation 防止实际跳到 passport.feishu.cn
-  await page.evaluate(() => {
-    Object.defineProperty(window, 'location', {
-      value: { ...window.location, _href: '', set href(v: string) { (this as any)._href = v; } },
-      writable: true,
-    });
-  });
   await page.getByRole('button', { name: /开始绑定|绑定/i }).click();
-  // 等 fetch start 被调（请求拦截已 fulfill）
-  await page.waitForTimeout(200);
 
-  // step3: 重新加载页面（模拟 callback 后跳回） → 已绑定状态
-  await page.goto('/dashboard/feishu-bind?bound=1');
+  // step3: 0-touch 提交成功后页面直接切已绑定态(不再走 OAuth callback 跳回)
   await expect(page.getByText(/飞书已绑定/)).toBeVisible({ timeout: 5000 });
   await expect(
     page.getByRole('link', { name: /Bitable|多维表格/i })
@@ -118,7 +91,7 @@ test('path-2-sprint-a 客户绑飞书 8 步全链', async ({ page }) => {
   await page.getByRole('button', { name: /刷新状态/i }).click();
 
   // step5/step6: 渲染数据
-  await expect(page.getByText('装修')).toBeVisible({ timeout: 5000 });
+  await expect(page.getByText('装修', { exact: true })).toBeVisible({ timeout: 5000 });
   await expect(page.getByText('小户型')).toBeVisible();
   await expect(page.getByText(/送装修方案/)).toBeVisible();
   await expect(page.getByText(/对标视频.*1\s*个/)).toBeVisible();
