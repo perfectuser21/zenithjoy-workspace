@@ -19,6 +19,7 @@
 # Case P: resolve_promote_target_sha 零参数调用（模拟 SSH 拼接空参数丢失）+ 有效 staging 软链 → 回退到软链 sha，不因 set -u 崩溃
 # Case Q: resolve_promote_target_sha 传入显式 sha → 直接返回该 sha，忽略 staging 软链
 # Case R: resolve_promote_target_sha 零参数 + 无 staging 软链 → 返回非 0（报错，不能悄悄用空字符串当 sha）
+# Case S: staging_deploy_slot 健康检查等待窗口 ≥ 90s（30×3s），防 40s 超时漏斗回归
 set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -711,6 +712,18 @@ fi
 
 set -e 2>/dev/null || true
 rm -rf "$PBOX"
+
+# Case S: staging_deploy_slot 健康检查等待窗口 ≥ 90s（30×3s）
+# 回归：旧代码 20×2s=40s，Node.js 冷启动（npm ci 后首次启动）常超 40s → 部署误判失败、
+# staging_alert_p0 触发 Brain 蓝绿护栏任务（历史 5+ 次同根因）。
+# 改 30×3s=90s 后，断言代码中存在正确的循环常数，此测试永久防止退化。
+S_LOOP=$(grep -c 'seq 1 30' "$SCRIPT_DIR/deploy-lib.sh" || true)
+S_SLEEP=$(grep -A2 'for _ in.*seq 1 30' "$SCRIPT_DIR/deploy-lib.sh" | grep -c 'sleep 3' || true)
+if [ "$S_LOOP" -ge 1 ] && [ "$S_SLEEP" -ge 1 ]; then
+  ok "S staging startup wait: 30×3s=90s（防 40s 超时回归）"
+else
+  bad "S staging startup wait 配置不正确（loop=seq_1_30_count:${S_LOOP} sleep3_count:${S_SLEEP}，期望各 ≥1）"
+fi
 
 echo ""
 echo "deploy-lib.test.sh: PASSED=$PASSED FAILED=$FAILED"
