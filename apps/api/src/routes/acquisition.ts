@@ -1437,9 +1437,17 @@ acquisitionRouter.get('/agent/task-stream', licenseAuth, (req: Request, res: Res
 // ============================================================================
 
 // POST /api/acquisition/judge-video — 内容判决（commit-4）
-acquisitionRouter.post('/judge-video', tenantContextOptional, async (req: Request, res: Response) => {
-  const tenantId = tenantOf(req, res);
-  if (!tenantId) return;
+acquisitionRouter.post('/judge-video', async (req: Request, res: Response) => {
+  // 安卓 agent 按设计发 X-Tenant-Id = agentId（设备不持有真 tenant），不能信 header。
+  // 与 pending-collect-tasks / report-videos 一致：用 x-agent-id 反查真 tenant_id。
+  const xAgentId = req.header('x-agent-id') ?? '';
+  if (!xAgentId) return fail(res, 401, 'MISSING_AGENT_ID', '缺 x-agent-id');
+  const agentRes = await pool.query<{ tenant_id: string }>(
+    `SELECT tenant_id FROM zenithjoy.agents WHERE agent_id = $1 OR id::text = $1 LIMIT 1`,
+    [xAgentId]
+  );
+  const tenantId = agentRes.rows[0]?.tenant_id;
+  if (!tenantId) return fail(res, 403, 'AGENT_NOT_FOUND', 'agent 未注册/未知');
 
   const {
     video_id: videoId,
