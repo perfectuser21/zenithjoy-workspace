@@ -28,7 +28,7 @@ export interface JudgeVideoOptions {
 
 // ── 常量 ─────────────────────────────────────────────────────────────────────
 const JUDGMENT_TIMEOUT_MS = 20_000;  // 带图/音判定较慢，留余量（服务端即便 agent 8s 超时也要写库）
-const TOAPIS_BASE = 'https://api.toapis.com/v1';  // ToAPIs 代理，国内可用（OpenAI 兼容）
+const TOAPIS_BASE = process.env.TOAPIS_BASE_URL || 'https://toapis.com/v1';  // ToAPIs 代理，国内可用（OpenAI 兼容）；api. 子域 2026-07-14 实测全球挂起（gp2 smoke Step8c 真调抓到），默认切主域，可用 TOAPIS_BASE_URL 覆盖
 const JUDGMENT_MODEL = 'gemini-2.5-flash-official';
 
 // ── judgeVideo：核心判决函数 ─────────────────────────────────────────────────
