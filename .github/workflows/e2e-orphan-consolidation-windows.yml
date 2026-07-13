@@ -11,36 +11,20 @@ name: E2E Orphan Specs Consolidation (Windows)
 #
 # 门禁哲学(用户 2026-07-12 拍板「不留红」):9 个 spec 全绿才过,无棘轮债名单、
 # 无 continue-on-error 兜底掩红。任一 spec 红 → job 红 → 阻塞合并。
+#
+# ── gate 模式(用户 2026-07-13 拍板「焊死进 required」)────────────────────────
+# 本 workflow【无条件触发】(on 无 paths 过滤),内部 changes job 用 git diff 决定
+# 是否真跑重活(windows playwright)。不碰 dashboard 的 PR → changes 短路 → 重 job skip
+# → orphan-e2e-gate 秒过 N/A,不烧 windows runner。碰了 → 9 spec 全绿才让 gate 过。
+# gate job(Orphan E2E Gate Passed)因 always() 恒上报状态,故可安全加进 main required checks
+# 而不会让非 dashboard PR 永久 pending(避开「required + paths 冲突」陷阱)。
+# 回归守卫 lint-orphan-gate-alwayson.sh 在 gate job 里跑,防有人塞回 paths 过滤。
 
 on:
   push:
     branches: [main]
-    paths:
-      - 'apps/dashboard/e2e/acquisition-android-entry.spec.ts'
-      - 'apps/dashboard/e2e/content-judgment-gate.spec.ts'
-      - 'apps/dashboard/e2e/customer-admin-backend.spec.ts'
-      - 'apps/dashboard/e2e/line04-preflight-card.spec.ts'
-      - 'apps/dashboard/e2e/module-health.spec.ts'
-      - 'apps/dashboard/e2e/module-health-access.spec.ts'
-      - 'apps/dashboard/e2e/path-2-sprint-a.spec.ts'
-      - 'apps/dashboard/e2e/video-remake.spec.ts'
-      - 'apps/dashboard/e2e/wechat-cs-config.spec.ts'
-      - 'apps/dashboard/src/**'
-      - '.github/workflows/e2e-orphan-consolidation-windows.yml'
   pull_request:
     branches: [main]
-    paths:
-      - 'apps/dashboard/e2e/acquisition-android-entry.spec.ts'
-      - 'apps/dashboard/e2e/content-judgment-gate.spec.ts'
-      - 'apps/dashboard/e2e/customer-admin-backend.spec.ts'
-      - 'apps/dashboard/e2e/line04-preflight-card.spec.ts'
-      - 'apps/dashboard/e2e/module-health.spec.ts'
-      - 'apps/dashboard/e2e/module-health-access.spec.ts'
-      - 'apps/dashboard/e2e/path-2-sprint-a.spec.ts'
-      - 'apps/dashboard/e2e/video-remake.spec.ts'
-      - 'apps/dashboard/e2e/wechat-cs-config.spec.ts'
-      - 'apps/dashboard/src/**'
-      - '.github/workflows/e2e-orphan-consolidation-windows.yml'
   workflow_dispatch:
 
 concurrency:
@@ -48,8 +32,56 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # ── 变更检测(cheap,always)─────────────────────────────────────────────────
+  changes:
+    name: Detect Orphan-Relevant Changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      orphan: ${{ steps.filter.outputs.orphan }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect changed files
+        id: filter
+        run: |
+          if [ "${{ github.event_name }}" = "push" ]; then
+            BEFORE="${{ github.event.before }}"
+            AFTER="${{ github.event.after }}"
+            if [ "$BEFORE" = "0000000000000000000000000000000000000000" ]; then
+              echo "orphan=true" >> $GITHUB_OUTPUT
+              exit 0
+            fi
+            CHANGED=$(git diff --name-only "$BEFORE" "$AFTER" 2>/dev/null || git diff --name-only HEAD~1 HEAD)
+          else
+            BASE_REF="${{ github.base_ref }}"
+            CHANGED=$(git diff --name-only "origin/${BASE_REF}...HEAD" 2>/dev/null || echo "")
+          fi
+          echo "── changed files ──"
+          echo "$CHANGED"
+          echo "───────────────────"
+          # 触发重活的条件：9 个 orphan spec 之一 / dashboard src / 本 workflow / 守卫脚本
+          if echo "$CHANGED" | grep -qE '^apps/dashboard/e2e/(acquisition-android-entry|content-judgment-gate|customer-admin-backend|line04-preflight-card|module-health|module-health-access|path-2-sprint-a|video-remake|wechat-cs-config)\.spec\.ts$' \
+             || echo "$CHANGED" | grep -qE '^apps/dashboard/src/' \
+             || echo "$CHANGED" | grep -qxF '.github/workflows/e2e-orphan-consolidation-windows.yml' \
+             || echo "$CHANGED" | grep -qxF '.github/workflows/scripts/lint-orphan-gate-alwayson.sh'; then
+            echo "orphan=true" >> $GITHUB_OUTPUT
+            echo "→ orphan=true(运行 9 spec)"
+          else
+            echo "orphan=false" >> $GITHUB_OUTPUT
+            echo "→ orphan=false(gate 直接 N/A 通过,不烧 windows runner)"
+          fi
+
+  # ── 重活:9 spec 全绿(仅在 orphan=true 时跑)────────────────────────────────
   playwright-orphan-consolidation:
     name: Playwright — Orphan Specs Consolidation (Windows Chrome)
+    needs: changes
+    if: needs.changes.outputs.orphan == 'true'
     runs-on: windows-latest
     timeout-minutes: 45
 
@@ -158,9 +190,8 @@ jobs:
         working-directory: apps/dashboard
         run: npx playwright test e2e/wechat-cs-config.spec.ts --reporter=list
 
-      # ── 汇总 Gate：9 个全绿才过，不留红（无债名单、无兜底掩红）──────────────────
-
-      - name: Gate — 全部 orphan spec 必须绿
+      # ── 汇总:9 个全绿才让本 job 绿，不留红（无债名单、无兜底掩红）──────────────
+      - name: 汇总 — 全部 orphan spec 必须绿
         if: always()
         run: |
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -204,3 +235,39 @@ jobs:
             apps/dashboard/test-results/
             apps/dashboard/playwright-report/
           retention-days: 7
+
+  # ── 汇总 gate(always,产出 required context)────────────────────────────────
+  orphan-e2e-gate:
+    name: Orphan E2E Gate Passed
+    needs: [changes, playwright-orphan-consolidation]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      # 回归守卫：本 workflow 必须无条件触发（pull_request 无 paths 过滤），
+      # 否则 required gate 会让非匹配 PR 永久 pending。守卫红 = gate 红 = 挡合并。
+      - name: 回归守卫 — orphan workflow 必须无条件触发
+        run: bash .github/workflows/scripts/lint-orphan-gate-alwayson.sh
+
+      - name: Gate 判定
+        run: |
+          ORPHAN="${{ needs.changes.outputs.orphan }}"
+          RESULT="${{ needs.playwright-orphan-consolidation.result }}"
+          echo "orphan=$ORPHAN  playwright.result=$RESULT"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          if [ "$ORPHAN" != "true" ]; then
+            echo "  本 PR 未触及 orphan spec / dashboard src / 本 workflow"
+            echo "  → 无需运行 orphan specs → Gate PASS (N/A)"
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            exit 0
+          fi
+          if [ "$RESULT" = "success" ]; then
+            echo "  9 个 orphan spec 全绿 → Gate PASS"
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            exit 0
+          fi
+          echo "::error::orphan specs job 结果=$RESULT（非 success）→ Gate FAIL，阻塞合并（不留红）"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          exit 1
