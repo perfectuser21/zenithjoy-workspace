@@ -223,15 +223,23 @@ ZJ_RELEASES_DIR=/fake/releases ZJ_NODE=/opt/homebrew/bin/node ZJ_STAGING_LOG_DIR
   ensure_staging_plist >/dev/null 2>&1
 expect_eq "$(_lread env:PORT)" "5201" "L 幂等：二次运行仍正确"
 
-# 生产 plist 不存在 → 返非0（拒绝凭空造）
+# 生产 plist 不存在 → 降级无凭据模式，返0（staging 仍可起，/health 通过）
+# 治根（2026-07-13）：生产服务不走 launchd 时 plist 从未落磁盘，旧行为硬失败导致护栏持续误触。
+# 新行为：降级继续（warn 写 stderr），E2E 无凭据会失败（Cecelia 上报 FAIL），但不触发"起不来"护栏。
+LBOX_NPC=$(mktemp -d)
 set +e
-ZJ_PROD_PLIST="$LBOX/nonexistent.plist" ZJ_STAGING_PLIST="$LBOX/x.plist" ZJ_STAGING_PORT=5201 \
+ZJ_PROD_PLIST="$LBOX_NPC/nonexistent.plist" ZJ_STAGING_PLIST="$LBOX_NPC/x.plist" ZJ_STAGING_PORT=5201 \
 ZJ_STAGING_DB=zenithjoy_test ZJ_STAGING_LABEL=com.zenithjoy.api.staging \
-ZJ_RELEASES_DIR=/fake/releases ZJ_NODE=/opt/homebrew/bin/node \
+ZJ_RELEASES_DIR=/fake/releases ZJ_NODE=/opt/homebrew/bin/node ZJ_STAGING_LOG_DIR="$LBOX_NPC/logs" \
   ensure_staging_plist >/dev/null 2>&1
 L_NOPROD=$?
 set -e 2>/dev/null || true
-if [ "$L_NOPROD" -ne 0 ]; then ok "L 生产 plist 缺失→返非0（不凭空造）"; else bad "L 生产 plist 缺失应返非0"; fi
+# 新行为：降级返0（staging 可起），不再硬失败
+if [ "$L_NOPROD" -eq 0 ]; then ok "L 生产 plist 缺失→返0（降级无凭据，staging 可起）"; else bad "L 生产 plist 缺失应降级返0，实际返 ${L_NOPROD}"; fi
+if [ -f "$LBOX_NPC/x.plist" ]; then ok "L 降级模式仍生成 staging plist"; else bad "L 降级模式未生成 staging plist（无凭据路径应写出 plist）"; fi
+_lnpc_port() { /usr/bin/python3 -c "import plistlib,sys; d=plistlib.load(open('$LBOX_NPC/x.plist','rb')); print(d.get('EnvironmentVariables',{}).get('PORT',''))" 2>/dev/null || echo ""; }
+expect_eq "$(_lnpc_port)" "5201" "L 降级模式 PORT=5201（staging 值，非生产 5200）"
+rm -rf "$LBOX_NPC"
 
 # --- L2: committed 模板优先（模板为基 + 注入生产密钥 + staging 值收口，生产值不漏进）---
 # 造一个 committed 模板（无密钥，自带 DB env + Program 指 releases/staging），断言：

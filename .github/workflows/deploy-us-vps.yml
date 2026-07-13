@@ -63,6 +63,9 @@ jobs:
           printf '%s\n' "$SSH_KEY" > "$KEY_FILE"
           chmod 600 "$KEY_FILE"
 
+          # 捕获 ssh 退出码：GitHub Actions run: 不是 set -e 环境，rm 会覆盖 ssh 的退出码。
+          # 用 ssh_rc 显式捕获，确保 CI step 失败时 notify-failure job 能触发。
+          ssh_rc=0
           # 用 bash -s -- "$DEPLOY_SHA" 把 SHA 作为 $1 传入，避免 heredoc 展开时注入
           ssh -o StrictHostKeyChecking=no \
               -o ConnectTimeout=30 \
@@ -70,7 +73,7 @@ jobs:
               -i "$KEY_FILE" \
               -p 22 \
               "${SSH_USER}@${SSH_HOST}" \
-              bash -s -- "$DEPLOY_SHA" << 'REMOTE_EOF'
+              bash -s -- "$DEPLOY_SHA" << 'REMOTE_EOF' || ssh_rc=$?
           set -euo pipefail
           DEPLOY_SHA="$1"
           REPO=/Users/administrator/perfect21/zenithjoy
@@ -123,6 +126,7 @@ jobs:
           REMOTE_EOF
 
           rm -f "$KEY_FILE"
+          exit $ssh_rc
 
   notify-failure:
     name: Notify Brain on failure
