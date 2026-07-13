@@ -12,12 +12,14 @@ export default defineConfig({
       'publishers/**/__tests__/**/*.test.cjs',
       // Path 2 Sprint B-1 WS2b — douyin-comment-crawl.cjs 测试在 scripts/__tests__/
       'scripts/**/__tests__/**/*.test.cjs',
-      // zj-douyin-article-agent-port sprint 路由覆盖测试
-      '../../sprints/zj-douyin-article-agent-port/tests/**/*.test.ts',
-      // agent-python-embedded sprint 合约测试
-      '../../sprints/06031608-agent-python-embedded/tests/**/*.test.ts',
-      // agent-module-e2e-verify sprint 合约测试
-      '../../sprints/06081800-agent-module-e2e-verify/tests/**/*.test.ts',
+      // ⚠️ 以下三个 sprint 合约测试已从常青跑集摘除（巡检 2026-07-12 收编 triage）：
+      // 时点断言腐烂（/workspace 容器绝对路径、版本钉死 ===1.1.26/===1.1.79、Narrator 已换 SPI 机制、
+      // preflight version-only 合同已被 4.1.10 事故后硬拦决策推翻），而 lint-contract-test-immutability
+      // 机械闸禁止修改已落盘合同测试——不可维护的时点合同不进常青 CI。其持久不变量已由
+      // publishers/douyin-publisher/__tests__/ 与 modules/line04/__tests__/ 的常青测试覆盖。
+      // - '../../sprints/zj-douyin-article-agent-port/tests/**/*.test.ts'
+      // - '../../sprints/06031608-agent-python-embedded/tests/**/*.test.ts'
+      // - '../../sprints/06081800-agent-module-e2e-verify/tests/**/*.test.ts'
       // Path 2 抖音私信主动触达 sprint 合约测试（douyin-dm-outreach handler）
       '../../sprints/06131229-path2-douyin-dm-outreach/tests/**/*.test.ts',
       // Agent 客户端封装（去黑窗 + 托盘静默通知）sprint 合约测试
