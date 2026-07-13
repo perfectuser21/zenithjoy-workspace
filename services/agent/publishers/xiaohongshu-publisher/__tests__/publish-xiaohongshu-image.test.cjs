@@ -10,8 +10,6 @@
  *   node --test packages/workflows/skills/xiaohongshu-publisher/scripts/__tests__/publish-xiaohongshu-image.test.cjs
  */
 
-const { test, describe } = require('node:test');
-const assert = require('node:assert/strict');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
@@ -31,21 +29,21 @@ const { findImages } = require('../utils.cjs');
 // ============================================================
 describe('isLoginError', () => {
   test('普通发布页 URL 返回 false', () => {
-    assert.equal(isLoginError('https://creator.xiaohongshu.com/publish/publish'), false);
+    expect(isLoginError('https://creator.xiaohongshu.com/publish/publish')).toBe(false);
   });
 
   test('含 login 的 URL 返回 true', () => {
-    assert.equal(isLoginError('https://creator.xiaohongshu.com/login?redirect=...'), true);
+    expect(isLoginError('https://creator.xiaohongshu.com/login?redirect=...')).toBe(true);
   });
 
   test('含 passport 的 URL 返回 true', () => {
-    assert.equal(isLoginError('https://passport.xiaohongshu.com/login'), true);
+    expect(isLoginError('https://passport.xiaohongshu.com/login')).toBe(true);
   });
 
   test('undefined/null 返回 false', () => {
-    assert.equal(isLoginError(undefined), false);
-    assert.equal(isLoginError(null), false);
-    assert.equal(isLoginError(''), false);
+    expect(isLoginError(undefined)).toBe(false);
+    expect(isLoginError(null)).toBe(false);
+    expect(isLoginError('')).toBe(false);
   });
 });
 
@@ -54,28 +52,28 @@ describe('isLoginError', () => {
 // ============================================================
 describe('isPublishSuccess', () => {
   test('URL 跳离发布页时返回 true', () => {
-    assert.equal(isPublishSuccess('https://creator.xiaohongshu.com/creator/note/123', ''), true);
+    expect(isPublishSuccess('https://creator.xiaohongshu.com/creator/note/123', '')).toBe(true);
   });
 
   test('仍在发布页且无成功关键词返回 false', () => {
-    assert.equal(isPublishSuccess('https://creator.xiaohongshu.com/publish/publish', '请填写标题'), false);
+    expect(isPublishSuccess('https://creator.xiaohongshu.com/publish/publish', '请填写标题')).toBe(false);
   });
 
   test('正文含"发布成功"返回 true', () => {
-    assert.equal(isPublishSuccess('https://creator.xiaohongshu.com/publish/publish', '发布成功！笔记正在审核'), true);
+    expect(isPublishSuccess('https://creator.xiaohongshu.com/publish/publish', '发布成功！笔记正在审核')).toBe(true);
   });
 
   test('正文含"笔记已发布"返回 true', () => {
-    assert.equal(isPublishSuccess('https://creator.xiaohongshu.com/publish/publish', '笔记已发布'), true);
+    expect(isPublishSuccess('https://creator.xiaohongshu.com/publish/publish', '笔记已发布')).toBe(true);
   });
 
   test('正文含"创作成功"返回 true', () => {
-    assert.equal(isPublishSuccess('https://creator.xiaohongshu.com/publish/publish', '创作成功'), true);
+    expect(isPublishSuccess('https://creator.xiaohongshu.com/publish/publish', '创作成功')).toBe(true);
   });
 
   test('url 为空时仅依赖 bodyText', () => {
-    assert.equal(isPublishSuccess('', '发布成功'), true);
-    assert.equal(isPublishSuccess('', '请填写内容'), false);
+    expect(isPublishSuccess('', '发布成功')).toBe(true);
+    expect(isPublishSuccess('', '请填写内容')).toBe(false);
   });
 });
 
@@ -93,31 +91,31 @@ function escapeForJS(text) {
 
 describe('escapeForJS', () => {
   test('普通文本不变', () => {
-    assert.equal(escapeForJS('hello world'), 'hello world');
+    expect(escapeForJS('hello world')).toBe('hello world');
   });
 
   test('转义单引号', () => {
-    assert.equal(escapeForJS("it's"), "it\\'s");
+    expect(escapeForJS("it's")).toBe("it\\'s");
   });
 
   test('转义双引号', () => {
-    assert.equal(escapeForJS('say "hi"'), 'say \\"hi\\"');
+    expect(escapeForJS('say "hi"')).toBe('say \\"hi\\"');
   });
 
   test('转义换行符', () => {
-    assert.equal(escapeForJS('line1\nline2'), 'line1\\nline2');
+    expect(escapeForJS('line1\nline2')).toBe('line1\\nline2');
   });
 
   test('转义反斜杠', () => {
-    assert.equal(escapeForJS('C:\\path'), 'C:\\\\path');
+    expect(escapeForJS('C:\\path')).toBe('C:\\\\path');
   });
 
   test('转义混合字符', () => {
     const input = "it's a \"test\"\nline2";
     const result = escapeForJS(input);
-    assert.ok(result.includes("\\'"));
-    assert.ok(result.includes('\\"'));
-    assert.ok(result.includes('\\n'));
+    expect(result.includes("\\'")).toBeTruthy();
+    expect(result.includes('\\"')).toBeTruthy();
+    expect(result.includes('\\n')).toBeTruthy();
   });
 });
 
@@ -135,11 +133,11 @@ describe('findImages (来自本地 utils.cjs)', () => {
     fs.writeFileSync(path.join(tmpDir, 'readme.txt'), '');
 
     const images = findImages(tmpDir);
-    assert.equal(images.length, 3);
+    expect(images.length).toBe(3);
     // 按字母序排列
-    assert.ok(path.basename(images[0]) === 'a.png');
-    assert.ok(path.basename(images[1]) === 'b.jpg');
-    assert.ok(path.basename(images[2]) === 'c.webp');
+    expect(path.basename(images[0]) === 'a.png').toBeTruthy();
+    expect(path.basename(images[1]) === 'b.jpg').toBeTruthy();
+    expect(path.basename(images[2]) === 'c.webp').toBeTruthy();
 
     fs.rmSync(tmpDir, { recursive: true });
   });
@@ -147,7 +145,7 @@ describe('findImages (来自本地 utils.cjs)', () => {
   test('空目录返回空数组', () => {
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'xhs-test-'));
     const images = findImages(tmpDir);
-    assert.equal(images.length, 0);
+    expect(images.length).toBe(0);
     fs.rmSync(tmpDir, { recursive: true });
   });
 
@@ -156,7 +154,7 @@ describe('findImages (来自本地 utils.cjs)', () => {
     fs.writeFileSync(path.join(tmpDir, 'content.txt'), '正文');
     fs.writeFileSync(path.join(tmpDir, 'done.txt'), '2026-03-07');
     const images = findImages(tmpDir);
-    assert.equal(images.length, 0);
+    expect(images.length).toBe(0);
     fs.rmSync(tmpDir, { recursive: true });
   });
 });
@@ -178,15 +176,15 @@ describe('Windows 路径转换', () => {
     const contentDir = '/Users/administrator/.xiaohongshu-queue/2026-03-07/image-1';
     const imgFile = '/Users/administrator/.xiaohongshu-queue/2026-03-07/image-1/photo.jpg';
     const result = buildWindowsPath(contentDir, imgFile);
-    assert.equal(result, 'C:\\Users\\xuxia\\xiaohongshu-media\\2026-03-07\\image-1\\photo.jpg');
+    expect(result).toBe('C:\\Users\\xuxia\\xiaohongshu-media\\2026-03-07\\image-1\\photo.jpg');
   });
 
   test('正斜杠全部转换为反斜杠', () => {
     const contentDir = '/tmp/test/2026-03-07/image-2';
     const imgFile = '/tmp/test/2026-03-07/image-2/cover.png';
     const result = buildWindowsPath(contentDir, imgFile);
-    assert.ok(!result.includes('/'), '结果不应包含正斜杠');
-    assert.ok(result.includes('\\'));
+    expect(!result.includes('/')).toBeTruthy();
+    expect(result.includes('\\')).toBeTruthy();
   });
 
   test('多张图片生成正确路径', () => {
@@ -195,10 +193,10 @@ describe('Windows 路径转换', () => {
       path.join(contentDir, f)
     );
     const windowsPaths = imgs.map(img => buildWindowsPath(contentDir, img));
-    assert.equal(windowsPaths.length, 3);
-    assert.ok(windowsPaths[0].endsWith('\\a.jpg'));
-    assert.ok(windowsPaths[1].endsWith('\\b.jpg'));
-    assert.ok(windowsPaths[2].endsWith('\\c.jpg'));
+    expect(windowsPaths.length).toBe(3);
+    expect(windowsPaths[0].endsWith('\\a.jpg')).toBeTruthy();
+    expect(windowsPaths[1].endsWith('\\b.jpg')).toBeTruthy();
+    expect(windowsPaths[2].endsWith('\\c.jpg')).toBeTruthy();
   });
 });
 
@@ -212,7 +210,7 @@ describe('内容读取', () => {
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'xhs-content-'));
     fs.writeFileSync(path.join(tmpDir, 'content.txt'), '  测试正文  \n');
     const content = fs.readFileSync(path.join(tmpDir, 'content.txt'), 'utf8').trim();
-    assert.equal(content, '测试正文');
+    expect(content).toBe('测试正文');
     fs.rmSync(tmpDir, { recursive: true });
   });
 
@@ -222,7 +220,7 @@ describe('内容读取', () => {
     const content = fs.existsSync(contentFile)
       ? fs.readFileSync(contentFile, 'utf8').trim()
       : '';
-    assert.equal(content, '');
+    expect(content).toBe('');
     fs.rmSync(tmpDir, { recursive: true });
   });
 
@@ -230,7 +228,7 @@ describe('内容读取', () => {
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'xhs-title-'));
     fs.writeFileSync(path.join(tmpDir, 'title.txt'), '这是一个很长很长很长很长很长的标题啊啊啊');
     const title = fs.readFileSync(path.join(tmpDir, 'title.txt'), 'utf8').trim().slice(0, 20);
-    assert.equal(title.length, 20);
+    expect(title.length).toBe(20);
     fs.rmSync(tmpDir, { recursive: true });
   });
 
@@ -238,8 +236,8 @@ describe('内容读取', () => {
     const contentText = '#旅行# 今天去了北京，天气很好，风景优美。';
     // 去掉话题标签，取前 20 字
     const titleFromContent = contentText.replace(/#[^#]+#/g, '').trim().slice(0, 20);
-    assert.ok(titleFromContent.startsWith('今天去了北京'));
-    assert.ok(titleFromContent.length <= 20);
+    expect(titleFromContent.startsWith('今天去了北京')).toBeTruthy();
+    expect(titleFromContent.length <= 20).toBeTruthy();
   });
 });
 
@@ -290,8 +288,8 @@ describe('批量发布队列逻辑', () => {
     const isDone = (dir) => fs.existsSync(path.join(dir, 'done.txt'));
 
     const toPublish = dirs.filter(d => hasImage(d) && !isDone(d));
-    assert.equal(toPublish.length, 1);
-    assert.ok(toPublish[0].includes('image-1'));
+    expect(toPublish.length).toBe(1);
+    expect(toPublish[0].includes('image-1')).toBeTruthy();
 
     fs.rmSync(queueDir, { recursive: true });
   });
@@ -303,9 +301,9 @@ describe('批量发布队列逻辑', () => {
     const doneFile = path.join(img1, 'done.txt');
     fs.writeFileSync(doneFile, new Date().toISOString());
 
-    assert.ok(fs.existsSync(doneFile));
+    expect(fs.existsSync(doneFile)).toBeTruthy();
     const content = fs.readFileSync(doneFile, 'utf8');
-    assert.ok(content.length > 0);
+    expect(content.length > 0).toBeTruthy();
 
     fs.rmSync(queueDir, { recursive: true });
   });
@@ -322,11 +320,11 @@ describe('批量发布队列逻辑', () => {
     // 验证 JSON 序列化和反序列化
     const json = JSON.stringify(stats, null, 2);
     const parsed = JSON.parse(json);
-    assert.equal(parsed.date, '2026-03-07');
-    assert.equal(parsed.total, 2);
-    assert.equal(parsed.success, 1);
-    assert.equal(parsed.failed, 1);
-    assert.equal(parsed.skipped, 1);
+    expect(parsed.date).toBe('2026-03-07');
+    expect(parsed.total).toBe(2);
+    expect(parsed.success).toBe(1);
+    expect(parsed.failed).toBe(1);
+    expect(parsed.skipped).toBe(1);
   });
 });
 
@@ -343,7 +341,7 @@ describe('日志格式 [XHS] 前缀', () => {
       '[XHS] ❌ 发布失败: CDP 连接失败'
     ];
     for (const log of logs) {
-      assert.ok(log.startsWith(EXPECTED_PREFIX), `日志应以 ${EXPECTED_PREFIX} 开头: ${log}`);
+      expect(log.startsWith(EXPECTED_PREFIX)).toBeTruthy();
     }
   });
 });
@@ -356,15 +354,15 @@ describe('图片数量限制', () => {
     const allImages = Array.from({ length: 12 }, (_, i) => `image${i + 1}.jpg`);
     const MAX_IMAGES = 9;
     const toUpload = allImages.slice(0, MAX_IMAGES);
-    assert.equal(toUpload.length, 9);
-    assert.equal(toUpload[0], 'image1.jpg');
-    assert.equal(toUpload[8], 'image9.jpg');
+    expect(toUpload.length).toBe(9);
+    expect(toUpload[0]).toBe('image1.jpg');
+    expect(toUpload[8]).toBe('image9.jpg');
   });
 
   test('少于 9 张全部上传', () => {
     const allImages = ['a.jpg', 'b.jpg', 'c.jpg'];
     const MAX_IMAGES = 9;
     const toUpload = allImages.slice(0, MAX_IMAGES);
-    assert.equal(toUpload.length, 3);
+    expect(toUpload.length).toBe(3);
   });
 });
