@@ -51,12 +51,13 @@
 > **个微 + LLM agent 通道纪律**：thin 阶段 = PoC 当底（xian-pc 桌面 `wechat_bot.py`/`wechat_rpa.py` 已验证 wxauto4+pyautogui） + A 路线护栏（飞书审核台，AI 草稿不自动发）。MiniMax PoC key 不入 git，sprint 1 第一刀切 OpenRouter DeepSeek（已就绪 `~/.credentials/openrouter.env`）。
 > **第一刀只 1 个干净测试号 + 1 个客户名单 + 1 种主动动作（朋友圈每日 1 条）**。私聊只**被动回**，不主动发起新会话。多号矩阵 + 主动 outreach + 完全自主 AI agent 加厚阶段才上，必须有真实业务证据驱动。
 
-### 4 条铁律（违反 = PR 被拒）
+### 5 条铁律（违反 = PR 被拒）
 
-1. **每个 PR 必须推进 `golden-path-1-smoke.sh` 至少多过一关**。PR 描述强制声明：「本 PR 把 Path X 的 Step Y 从 ❌/🔴 推到 ✅」。
+1. **每个 PR 必须推进其声明的 Path 对应 `golden-path-N-smoke.sh` 至少多过一关，或保持其全绿**。PR 描述强制声明：「本 PR 把 Path X 的 Step Y 从 ❌/🔴 推到 ✅」或「本 PR 保持 Path X smoke 全绿」。
 2. **多 Path 可并行启 sprint，但每个 sprint 必须显式声明推进哪条 Path 的哪些 Step**。Path 1 必须保持推进态势（不允许停滞 ≥2 周），Path 2/4 启 sprint 不阻塞 Path 1。新加 feature 的想法对照各 Path 步骤检查 — 不在任何 Path 上 → backlog。
 3. **新 Feature 默认 thin**。要建 medium/thick 必须通过 `/dev` 路径C 走 harness 加厚流程（含 `replaces_old_thin` 删旧文件证据）。
 4. **加厚是"先减肥再增肌"**：升级 thickness 必须两段式 commit：`commit 1 删旧 mock/hardcode` → `commit 2 写新实现`。改名 `_legacy` / TODO 注释不算删除。
+5. **真机 bug 修复 PR 必须回流 smoke**：除 vitest regression test 外，必须把复现判据回流进对应 `golden-path-N-smoke.sh`（真机不可及的步骤允许 API 层等价断言，但须在 smoke 内注明「真机段等价断言」+ TODO 标记）。只进 vitest 不进 smoke = 同一坑必然摔第二次（UIA 死区 #1136→#1163 两天两修实证）。
 
 ### 调用 harness-planner 前必填 4 问
 
