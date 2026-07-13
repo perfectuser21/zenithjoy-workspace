@@ -49,7 +49,7 @@ command -v jq >/dev/null 2>&1 || envfail "runner 缺 jq"
 DEV=$("$ADB" devices 2>/dev/null | awk '/[[:space:]]device$/{print $1; exit}')
 ok "设备在线: $DEV"
 
-curl -fsS -m 10 "$API_BASE/api/acquisition/overview" -H "X-Tenant-Id: $TENANT" >/dev/null 2>&1 \
+curl -fsSk -m 10 "$API_BASE/api/acquisition/overview" -H "X-Tenant-Id: $TENANT" >/dev/null 2>&1 \
   || envfail "staging API 不可达: $API_BASE"
 ok "staging API 可达"
 
@@ -65,7 +65,7 @@ ACC=$("$ADB" shell settings get secure enabled_accessibility_services 2>/dev/nul
 case "$ACC" in *com.zenithjoy.agent*) ok "无障碍已开";; *) envfail "无障碍未开(采集依赖):$ACC";; esac
 
 # ── 2. 派"装修"任务(collect/start) ───────────────────────────────────
-RESP=$(curl -fsS -m 15 -X POST "$API_BASE/api/acquisition/collect/start" \
+RESP=$(curl -fsSk -m 15 -X POST "$API_BASE/api/acquisition/collect/start" \
   -H "Content-Type: application/json" -H "X-Tenant-Id: $TENANT" \
   -d "{\"keywords\":[\"$KW\"],\"agent_id\":\"$AGENT_ID\"}" 2>&1)
 TASK=$(echo "$RESP" | jq -r '.data.task_id // .data.id // empty' 2>/dev/null)
@@ -75,14 +75,14 @@ ok "派任务 task_id=$TASK"
 # ── 3. 轮询任务终态 ──────────────────────────────────────────────────
 STATUS=""; VC=0
 for i in $(seq 1 "$POLL_MAX"); do
-  J=$(curl -fsS -m 10 "$API_BASE/api/acquisition/collect/$TASK" -H "X-Tenant-Id: $TENANT" 2>/dev/null)
+  J=$(curl -fsSk -m 10 "$API_BASE/api/acquisition/collect/$TASK" -H "X-Tenant-Id: $TENANT" 2>/dev/null)
   STATUS=$(echo "$J" | jq -r '.data.status // empty')
   VC=$(echo "$J" | jq -r '.data.video_count // 0')
   echo "  [$i/$POLL_MAX] status=$STATUS video_count=$VC"
   case "$STATUS" in
     done|completed) break;;
     failed|error|cancelled)
-      EC=$(curl -fsS -m 10 "$API_BASE/api/acquisition/collect-tasks/$TASK/videos" -H "X-Tenant-Id: $TENANT" 2>/dev/null | jq -r '.task.error_code // "?"')
+      EC=$(curl -fsSk -m 10 "$API_BASE/api/acquisition/collect-tasks/$TASK/videos" -H "X-Tenant-Id: $TENANT" 2>/dev/null | jq -r '.task.error_code // "?"')
       fail "采集任务终态=$STATUS error_code=$EC —— 采集链断(广告abort/多卡STEP1_no_card/SEARCH_TIMEOUT 复发?查 logcat DouyinCollectService)";;
   esac
   sleep 10
@@ -90,7 +90,7 @@ done
 case "$STATUS" in done|completed) : ;; *) fail "采集未在 $((POLL_MAX*10))s 内完成(status=$STATUS,疑似卡死)";; esac
 
 # ── 4. 断言:collected≥2 + ≥2 真实 video_id 落库 ──────────────────────
-VIDEOS=$(curl -fsS -m 10 "$API_BASE/api/acquisition/collect-tasks/$TASK/videos" -H "X-Tenant-Id: $TENANT" 2>/dev/null)
+VIDEOS=$(curl -fsSk -m 10 "$API_BASE/api/acquisition/collect-tasks/$TASK/videos" -H "X-Tenant-Id: $TENANT" 2>/dev/null)
 COUNT=$(echo "$VIDEOS" | jq '[.videos[]? // .data[]?] | length' 2>/dev/null || echo 0)
 [ "${COUNT:-0}" -ge 2 ] \
   || fail "collected=$COUNT < 2 —— 多卡采集退化(navback 回列表/abort 复发,只采到第一张)"
