@@ -27,8 +27,9 @@ export interface JudgeVideoOptions {
 }
 
 // ── 常量 ─────────────────────────────────────────────────────────────────────
-const JUDGMENT_TIMEOUT_MS = 8_000;
-const TOAPIS_BASE = 'https://api.toapis.com/v1';  // ToAPIs 代理，国内可用
+const JUDGMENT_TIMEOUT_MS = 20_000;  // 带图/音判定较慢，留余量（服务端即便 agent 8s 超时也要写库）
+const TOAPIS_BASE = 'https://api.toapis.com/v1';  // ToAPIs 代理，国内可用（OpenAI 兼容）
+const JUDGMENT_MODEL = 'gemini-2.5-flash-official';
 
 // ── judgeVideo：核心判决函数 ─────────────────────────────────────────────────
 /**
@@ -121,28 +122,27 @@ async function callGemini(
 
   const prompt = buildPrompt(targetProfileDesc, captureType);
   const mimeType = captureType === 'audio' ? 'audio/pcm' : 'image/jpeg';
+  // TOAPIS 是 OpenAI 兼容代理：多模态必须走 /chat/completions + image_url / input_audio。
+  // Gemini 原生 generateContent + inline_data 在 TOAPIS 上会挂起（2026-07-13 真机排查坐实：
+  // 文本秒回、Gemini 原生带图请求 >40s 超时；OpenAI 式 chat/completions 带图 4.7s 正常返回）。
+  const mediaPart =
+    captureType === 'audio'
+      ? { type: 'input_audio', input_audio: { data: dataB64, format: 'wav' } }
+      : { type: 'image_url', image_url: { url: `data:${mimeType};base64,${dataB64}` } };
 
   try {
     const resp = await axios.post(
-      `${TOAPIS_BASE}/models/gemini-2.5-flash-official:generateContent`,
+      `${TOAPIS_BASE}/chat/completions`,
       {
-        contents: [
+        model: JUDGMENT_MODEL,
+        messages: [
           {
-            parts: [
-              { text: prompt },
-              {
-                inline_data: {
-                  mime_type: mimeType,
-                  data: dataB64,
-                },
-              },
-            ],
+            role: 'user',
+            content: [{ type: 'text', text: prompt }, mediaPart],
           },
         ],
-        generationConfig: {
-          maxOutputTokens: 200,
-          temperature: 0.1,
-        },
+        max_tokens: 200,
+        temperature: 0.1,
       },
       {
         headers: {
@@ -153,7 +153,7 @@ async function callGemini(
       }
     );
 
-    const text: string = resp.data?.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
+    const text: string = resp.data?.choices?.[0]?.message?.content ?? '';
     return parseGeminiResponse(pool, tenantId, videoId, captureType, text);
   } catch (err) {
     const isTimeout = axios.isAxiosError(err) && err.code === 'ECONNABORTED';
