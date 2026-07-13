@@ -48,10 +48,11 @@ export async function handleDevVerifyHttp(
   }
 
   // params 只接受纯 JSON 对象——它会原样进受控脚本 stdin，先掐掉畸形输入
-  const params = reqBody.params ?? {};
-  if (typeof params !== 'object' || params === null || Array.isArray(params)) {
+  const rawParams = reqBody.params;
+  if (rawParams !== undefined && (typeof rawParams !== 'object' || rawParams === null || Array.isArray(rawParams))) {
     return { status: 400, body: { ok: false, error: 'invalid_params' } };
   }
+  const params = rawParams ?? {};
 
   const appliedTimeoutMs = Math.min(
     typeof reqBody.timeout_ms === 'number' && reqBody.timeout_ms > 0 ? reqBody.timeout_ms : MAX_TIMEOUT_MS,
