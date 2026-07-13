@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import {
   buildStagesFromEvents,
   extractArticlePath,
@@ -254,7 +254,7 @@ describe('manifest schema 三版兼容（extractArticlePath/extractCopyPath/extr
 
 describe('existsLangGraphTask', () => {
   it('returns true when Brain API HEAD 返回 200', async () => {
-    vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(new Response(null, { status: 200 }) as any);
+    vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(new Response(null, { status: 200 }));
     const ok = await existsLangGraphTask('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa');
     expect(ok).toBe(true);
     const call = (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls[0];
@@ -263,7 +263,7 @@ describe('existsLangGraphTask', () => {
   });
 
   it('returns false when Brain API HEAD 返回 404', async () => {
-    vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(new Response(null, { status: 404 }) as any);
+    vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(new Response(null, { status: 404 }));
     const ok = await existsLangGraphTask('00000000-0000-0000-0000-000000000000');
     expect(ok).toBe(false);
   });
@@ -282,7 +282,7 @@ describe('fetchLangGraphEvents', () => {
     ];
     vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce({
       ok: true, json: async () => events,
-    } as any);
+    } as unknown as Response);
     const result = await fetchLangGraphEvents('task-uuid-123');
     expect(result).toEqual(events);
     const [url] = (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls[0];
@@ -291,7 +291,7 @@ describe('fetchLangGraphEvents', () => {
   });
 
   it('API 失败时返回空数组', async () => {
-    vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce({ ok: false, status: 500 } as any);
+    vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce({ ok: false, status: 500 } as unknown as Response);
     const result = await fetchLangGraphEvents('bad-id');
     expect(result).toEqual([]);
   });
@@ -311,7 +311,7 @@ describe('listLangGraphOnlyRuns', () => {
     ];
     vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce({
       ok: true, json: async () => rows,
-    } as any);
+    } as unknown as Response);
     const result = await listLangGraphOnlyRuns(10);
     expect(result).toHaveLength(1);
     expect(result[0].id).toBe('uuid-1');
@@ -326,13 +326,13 @@ describe('listLangGraphOnlyRuns', () => {
     const rows = [{ id: 'u2', title: '报错任务', status: 'running',
       created_at: '2026-07-13T01:00:00Z', updated_at: '2026-07-13T01:00:00Z',
       last_node: 'research', last_error: 'timeout' }];
-    vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce({ ok: true, json: async () => rows } as any);
+    vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce({ ok: true, json: async () => rows } as unknown as Response);
     const result = await listLangGraphOnlyRuns();
     expect(result[0].status).toBe('failed');
   });
 
   it('API 失败时返回空数组', async () => {
-    vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce({ ok: false, status: 503 } as any);
+    vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce({ ok: false, status: 503 } as unknown as Response);
     const result = await listLangGraphOnlyRuns();
     expect(result).toEqual([]);
   });
