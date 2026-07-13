@@ -762,14 +762,16 @@ ZJ_START_PY
   fi
   rm -f "${_stg_py}"
 
-  # 等 staging health
+  # 等 staging health（30×3s=90s）
+  # 治根（历史 5+ 次蓝绿护栏误触发）：旧 20×2s=40s 不够——Node.js 冷启动（npm ci 后首次）
+  # 需要初始化 DB 连接池、跑 Prisma schema 验证等，实测可达 60s+。改 90s 覆盖冷启动窗口。
   local up=0
-  for _ in $(seq 1 20); do
+  for _ in $(seq 1 30); do
     if curl -sf "http://localhost:${ZJ_STAGING_PORT}/health" >/dev/null 2>&1; then up=1; break; fi
-    sleep 2
+    sleep 3
   done
   if [ "$up" -ne 1 ]; then
-    echo "❌ 常驻 staging 20s 内没起来"
+    echo "❌ 常驻 staging 90s 内没起来"
     tail -20 /Users/administrator/Library/Logs/zenithjoy-api.staging.error.log 2>/dev/null || true
     return 1
   fi
