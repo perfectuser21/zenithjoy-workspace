@@ -762,18 +762,25 @@ class DouyinCollectService : AccessibilityService() {
         return null
     }
 
-    // 从视频详情/分享面板 BACK 回搜索结果页，锚点 = 抖音包内能再找到视频卡。最多按 3 次。
+    // 从视频详情/分享面板 BACK 回搜索结果页。判据加强（真机 2026-07-13 19:52 xian-rog）：
+    // 不能只看"抖音包内有一张卡"——采完 card#0 点开进的全屏视频播放页那张 1200×2504 大卡也满足，
+    // 会误判"已回列表"停在播放页 → 重抓 findVideoCards 只 found=1 → 下一张卡 STEP1_no_card → abort。
+    // 必须是【搜索结果多卡列表】：≥2 张卡（双列）或带搜索 tab 栏（综合/视频）。最多按 MAX_BACK_TO_RESULTS 次。
     private suspend fun navigateBackToResults() {
-        repeat(3) {
+        repeat(MAX_BACK_TO_RESULTS) {
             val root = rootInActiveWindow
             if (root != null && root.packageName == DOUYIN_PKG &&
-                findVideoCards(root, 1).isNotEmpty()) {
+                isBackAtResultList(findVideoCards(root, 2).size, hasSearchTabBar(root))) {
                 return
             }
             performGlobalAction(GLOBAL_ACTION_BACK)
             delay(RandomDelay.sample(RandomDelay.NAV_MS))
         }
     }
+
+    // 搜索结果页顶部有"综合/视频/图文/直播"tab 栏；全屏视频播放页没有。回到列表的强锚点之一。
+    private fun hasSearchTabBar(root: AccessibilityNodeInfo): Boolean =
+        findNodeByText(root, "综合") != null || findNodeByText(root, "视频") != null
 
     private fun reportVideoCards(videos: List<VideoCardInfo>, error: String) {
         if (resultReported) return
@@ -1165,6 +1172,18 @@ class DouyinCollectService : AccessibilityService() {
         const val MAX_VIDEOS_PER_SEARCH = 3  // Stage1 每关键词最多收集视频卡数量
         // abort 阈值：连续多少张【内容卡】取链失败才放弃整轮。广告/直播跳过不计入（真机 2026-07-13）。
         private const val MAX_CONSECUTIVE_CONTENT_FAILURES = 2
+        // navigateBackToResults 最多按几次 BACK 回搜索结果列表（真机：分享面板→播放页→列表可能 ≥2 跳）。
+        private const val MAX_BACK_TO_RESULTS = 5
+
+        /**
+         * navigateBackToResults 判据（真机 2026-07-13 19:52 xian-rog，广告 abort 修复后浮现的下一层）：
+         * 采完 card#0 点开进全屏视频播放页，旧判据"抖音包内有 1 张卡"太弱——全屏视频那张大卡
+         * (1200×2504 clickable)也满足 → 误判"已回搜索结果列表"停止 BACK → 重抓 findVideoCards 只
+         * found=1 → card#1+ getOrNull(index)=null → STEP1_no_card → abort，collected 只 1/3。
+         * 【搜索结果多卡列表】判据：≥2 张卡（双列）或带搜索 tab 栏（综合/视频）；全屏播放页两者皆不满足。
+         */
+        internal fun isBackAtResultList(cardCount: Int, hasSearchTabBar: Boolean): Boolean =
+            cardCount >= 2 || hasSearchTabBar
         // Bug C 剪贴板取链：单张卡片全程硬超时 + 各阶段等待预算
         private const val PER_CARD_TIMEOUT_MS = 25_000L
         private const val CLEAR_WAIT_MS = 2_000L
