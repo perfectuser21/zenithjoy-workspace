@@ -2,6 +2,16 @@ import { readFileSync, existsSync, statSync } from 'fs';
 import { dirname, resolve, sep } from 'path';
 import pool from '../db/connection';
 
+const BRAIN_URL = process.env.CECELIA_BRAIN_URL || 'http://localhost:5221';
+
+async function brainGet<T>(path: string): Promise<T> {
+  const res = await fetch(`${BRAIN_URL}${path}`);
+  if (!res.ok) {
+    throw new Error(`Brain API ${path} returned ${res.status}`);
+  }
+  return res.json() as Promise<T>;
+}
+
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const DOCKER_ROOT = '/home/cecelia/content-output';
 const HOST_ROOT = `${process.env.HOME}/content-output`;
@@ -65,27 +75,26 @@ export interface PipelineEvent {
 }
 
 export async function fetchLangGraphEvents(ceceliaTaskId: string): Promise<PipelineEvent[]> {
-  const { rows } = await pool.query<PipelineEvent>(
-    `SELECT id, payload, created_at
-     FROM cecelia_events
-     WHERE event_type = 'content_pipeline_step' AND task_id = $1
-     ORDER BY id`,
-    [ceceliaTaskId]
-  );
-  return rows;
+  try {
+    return await brainGet<PipelineEvent[]>(`/api/brain/pipelines/${encodeURIComponent(ceceliaTaskId)}/events`);
+  } catch {
+    return [];
+  }
 }
 
 /**
- * 任务存在性探针：查 tasks 表确认 :id 是已派发的 content-pipeline 任务。
+ * 任务存在性探针：确认 :id 是已派发的 content-pipeline 任务。
  * 用于 /output /stages 区分"LangGraph 任务刚触发无事件"（→ pending）
  * 与"任意 UUID 乱输"（→ 404）。
+ * 通过 Brain HTTP API 查询，不再直连 cecelia DB。
  */
 export async function existsLangGraphTask(taskId: string): Promise<boolean> {
-  const { rows } = await pool.query(
-    `SELECT 1 FROM tasks WHERE id = $1 AND task_type = 'content-pipeline' LIMIT 1`,
-    [taskId]
-  );
-  return rows.length > 0;
+  try {
+    const task = await brainGet<{ task_type?: string } | null>(`/api/brain/tasks/${encodeURIComponent(taskId)}`);
+    return task != null && task.task_type === 'content-pipeline';
+  } catch {
+    return false;
+  }
 }
 
 export interface LangGraphListRow {
@@ -104,51 +113,40 @@ export interface LangGraphListRow {
   source: 'langgraph';
 }
 
-// 列出"只走 LangGraph、没写 zenithjoy.pipeline_runs"的任务
+interface BrainPipelineRow {
+  id: string;
+  title: string | null;
+  created_at: string;
+  updated_at: string;
+  last_node: string | null;
+  last_error: string | null;
+}
+
+// 列出"只走 LangGraph、没写 pipeline_runs"的任务。
+// 通过 Brain HTTP API 获取任务列表（with_last_event=1），
+// 再用本地 zenithjoy pool 过滤掉已有 pipeline_runs 记录的条目。
 export async function listLangGraphOnlyRuns(limit = 50): Promise<LangGraphListRow[]> {
-  // tasks/cecelia_events tables live in the Brain DB schema and may not exist in all environments
-  let rows: {
-    id: string;
-    title: string | null;
-    created_at: string;
-    updated_at: string;
-    last_node: string | null;
-    last_error: string | null;
-  }[];
+  let brainRows: BrainPipelineRow[];
   try {
-    const result = await pool.query<{
-      id: string;
-      title: string | null;
-      created_at: string;
-      updated_at: string;
-      last_node: string | null;
-      last_error: string | null;
-    }>(
-      `SELECT t.id::text AS id,
-              t.title,
-              t.created_at,
-              COALESCE(t.updated_at, t.created_at) AS updated_at,
-              last_e.payload->>'node' AS last_node,
-              last_e.payload->>'error' AS last_error
-       FROM tasks t
-       JOIN LATERAL (
-         SELECT payload FROM cecelia_events
-         WHERE task_id = t.id AND event_type = 'content_pipeline_step'
-         ORDER BY id DESC LIMIT 1
-       ) last_e ON TRUE
-       WHERE t.task_type = 'content-pipeline'
-         AND NOT EXISTS (
-           SELECT 1 FROM zenithjoy.pipeline_runs pr
-           WHERE pr.cecelia_task_id::uuid = t.id
-         )
-       ORDER BY t.created_at DESC
-       LIMIT $1`,
-      [limit]
+    brainRows = await brainGet<BrainPipelineRow[]>(
+      `/api/brain/pipelines?limit=${limit}&with_last_event=1`
     );
-    rows = result.rows;
   } catch {
     return [];
   }
+
+  // 拿到所有已在 pipeline_runs 中注册的 cecelia_task_id（zenithjoy 本地 schema）
+  let knownCeceliaIds = new Set<string>();
+  try {
+    const { rows } = await pool.query<{ cecelia_task_id: string }>(
+      `SELECT cecelia_task_id::text FROM zenithjoy.pipeline_runs WHERE cecelia_task_id IS NOT NULL`
+    );
+    knownCeceliaIds = new Set(rows.map((r) => r.cecelia_task_id));
+  } catch {
+    // zenithjoy.pipeline_runs 不可达时退化为不过滤（宁多勿漏）
+  }
+
+  const rows = brainRows.filter((r) => !knownCeceliaIds.has(r.id));
 
   return rows.map((r) => ({
     id: r.id,
@@ -158,7 +156,9 @@ export async function listLangGraphOnlyRuns(limit = 50): Promise<LangGraphListRo
       ? 'failed'
       : r.last_node === 'export'
       ? 'completed'
-      : 'running',
+      : r.last_node
+      ? 'running'
+      : 'pending',
     content_type: 'content-pipeline',
     output_dir: null,
     output_manifest: null,
