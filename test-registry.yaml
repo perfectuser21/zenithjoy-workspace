@@ -2102,6 +2102,14 @@ tests:
     product: RPA开发快验通道
     note: "T1 dev_quick_verify handler — 白名单红线+研发机闸+同步超时(合同点 Alex 07-13 拍板)"
 
+  - id: agent-dev-verify-http-layer
+    path: services/agent/src/handlers/__tests__/dev-verify-http.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: RPA开发快验通道
+    note: "T1 HTTP 层 — 内网闸(loopback/RFC1918/Tailscale)+设计稿字段契约 exit_code/elapsed_ms+超时上限截断"
+
   - id: agent-module-preflight
     path: services/agent/src/preflight/__tests__/preflight.test.ts
     type: unit

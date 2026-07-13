@@ -32,6 +32,11 @@ echo "[3] index.js 含 dev_quick_verify 消息分发接线"
 grep -q "dev_quick_verify" "$DIST_INDEX" || { echo "FAIL: index 未接线 dev_quick_verify（handler 是死代码）"; exit 1; }
 echo "  ✅ PASS"
 
+echo "[3b] HTTP 层接线:health-server 注册 /api/agent-ops/rpa/dev-verify"
+grep -q "api/agent-ops/rpa/dev-verify" "$AGENT_DIR/dist/handlers/health-server.js" || { echo "FAIL: health-server 未注册 dev-verify HTTP 路由(Brain 打不进来)"; exit 1; }
+grep -q "isInternalAddress" "$AGENT_DIR/dist/handlers/dev-verify-http.js" || { echo "FAIL: 内网闸缺失"; exit 1; }
+echo "  ✅ PASS"
+
 echo "[4] 白名单无任意命令执行动作"
 for bad in "'shell'" "'exec'" "'eval'" "'run_script'"; do
   if grep -o "DEV_VERIFY_WHITELIST[^;]*" "$AGENT_DIR/src/handlers/dev-quick-verify.ts" | grep -q "$bad"; then
