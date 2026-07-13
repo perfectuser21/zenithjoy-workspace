@@ -96,7 +96,7 @@ jobs:
           export ZJ_PROD_LABEL=com.zenithjoy.api
           export ZJ_STAGING_LABEL=com.zenithjoy.api.staging
           export ZJ_STAGING_DB=zenithjoy_test
-          export ZJ_PROD_PLIST="$HOME/Library/LaunchAgents/com.zenithjoy.api.plist"
+          export ZJ_PROD_PLIST="/Library/LaunchDaemons/com.zenithjoy.api.plist"
           export ZJ_NODE=/opt/homebrew/bin/node
           export ZJ_RELEASES_DIR="${ZJ_RELEASES_DIR:-/Users/administrator/zenithjoy-releases}"
           export ZJ_KEEP_RELEASES="${ZJ_KEEP_RELEASES:-5}"
