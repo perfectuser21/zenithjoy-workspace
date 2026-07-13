@@ -12,6 +12,9 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { judgeVideo, type JudgeVideoResult } from './content-judgment';
+import axios from 'axios';
+
+vi.mock('axios');
 import type { QueryablePool } from './acquisition-dispatch';
 
 // Mock: 模拟 DB pool
@@ -118,4 +121,41 @@ describe('content-judgment judgeVideo', () => {
     // 空画像时不应是缓存命中（是主动跳过 Gemini 的逻辑）
     expect(result.cache_hit).toBeUndefined();
   });
+
+  /**
+   * TC-06: 多模态判定必须走 OpenAI 兼容格式（/chat/completions + image_url）。
+   * TOAPIS 是 OpenAI 兼容代理，Gemini 原生 generateContent + inline_data 会挂起
+   * （2026-07-13 真机排查坐实：文本秒回、Gemini 原生带图请求 >40s 超时）。
+   */
+  it('TC-06: 多模态判定走 OpenAI 式 chat/completions + image_url', async () => {
+    process.env.TOAPIS_API_KEY = 'test-toapis-key';
+    const mockedPost = vi.mocked(axios.post);
+    mockedPost.mockResolvedValue({
+      data: { choices: [{ message: { content: 'MATCHED' } }] },
+    } as never);
+
+    const pool = makePool({ targetProfileDesc: '家装/室内设计目标客户' });
+    const result: JudgeVideoResult = await judgeVideo(
+      pool,
+      'tenant-openai',
+      'video-openai-001',
+      'screenshot',
+      btoa('fake-screenshot'),
+    );
+
+    expect(mockedPost).toHaveBeenCalledTimes(1);
+    const [url, body] = mockedPost.mock.calls[0] as [string, Record<string, unknown>];
+    // 端点必须是 OpenAI 兼容 chat/completions，不能是 Gemini 原生 generateContent
+    expect(url).toContain('/chat/completions');
+    expect(url).not.toContain('generateContent');
+    // body 必须是 OpenAI messages 结构，且截图走 image_url（不是 Gemini inline_data）
+    const messages = body.messages as Array<{ content: Array<{ type: string }> }>;
+    expect(Array.isArray(messages)).toBe(true);
+    const parts = messages[0].content;
+    expect(parts.some((p) => p.type === 'image_url')).toBe(true);
+    expect(JSON.stringify(body)).not.toContain('inline_data');
+    // 从 OpenAI choices[0].message.content 解析出判定
+    expect(result.judgment_status).toBe('matched');
+  });
+
 });
