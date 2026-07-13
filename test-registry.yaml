@@ -2683,13 +2683,8 @@ tests:
     product: 新媒体运营
     note: "ZJ10 Customer Mgmt WS4 — 客户管理 E2E 合同测试"
 
-  - id: zj10-customer-mgmt-e2e-spec
-    path: apps/dashboard/e2e/customer-management.spec.ts
-    type: e2e
-    ci: windows_cloud
-    status: active
-    product: 新媒体运营
-    note: "ZJ10 Customer Mgmt WS4 — Playwright E2E 走客户概览/platform-sessions/publish-logs/403 全链（page.route stub，windows_cloud）。收编入 e2e-orphan-consolidation-windows.yml（2026-07-12 ci-patrol 巡检）"
+  # zj10-customer-mgmt-e2e-spec (customer-management.spec.ts) 已删除:被 customer-admin-backend.spec.ts
+  # 取代(旧 testid customers-table/session-status 全失效),2026-07-12 ci-patrol 收编 triage 判过时删除。
 
 agent_suite:
   managed_by: services/agent/src/__tests__ + services/agent/publishers
@@ -2728,13 +2723,9 @@ agent_suite:
     path: apps/dashboard/src/api/__tests__/wechat.api.test.ts
     status: active
     note: "Path 4 Sprint 1 ws2 — Dashboard 微信 API client postWechatQrBind 契约"
-  - id: path4-sprint-1-ws2-wechat-bind-e2e
-    path: apps/dashboard/e2e/wechat-bind-button.spec.ts
-    type: e2e
-    ci: windows_cloud
-    status: active
-    product: 客户私域AI接管
-    note: "Path 4 Sprint 1 ws2 — Dashboard 绑微信按钮 Playwright e2e（visible/happy/disabled 3 case）。收编入 e2e-orphan-consolidation-windows.yml（2026-07-12 ci-patrol 巡检）"
+  # path4-sprint-1-ws2-wechat-bind-e2e (wechat-bind-button.spec.ts) 已删除:/dashboard/agent-machines
+  # 路由已删 + 「绑定微信」按钮迁至 CsAccountWorkbenchPage(已有 cs-account-workbench.spec.ts 覆盖),
+  # 2026-07-12 ci-patrol 收编 triage 判过时删除。
 
   # ── Path 4 Sprint 1 ws3 — DeepSeek 私聊草稿 + listen_chat + A 路线护栏 ──────────
   - id: path4-sprint-1-ws3-wechat-draft-service
@@ -3341,13 +3332,8 @@ agent_suite:
     product: 客户私域AI接管
     note: "Path 4 Step 2 Notion CRM 服务单元测试"
 
-  - id: path4-crm-config-e2e
-    path: apps/dashboard/e2e/crm-config.spec.ts
-    type: e2e
-    ci: windows_cloud
-    status: active
-    product: 客户私域AI接管
-    note: "Path 4 Step 2 CRM 配置页 Playwright E2E — 微信联系人匹配 + 5条精确卡。收编入 e2e-orphan-consolidation-windows.yml（2026-07-12 ci-patrol 巡检）"
+  # path4-crm-config-e2e (crm-config.spec.ts) 已删除:CrmConfigPage 组件已删(navigation.config.test.ts
+  # 断言其路由映射=undefined),2026-07-12 ci-patrol 收编 triage 判过时删除。
 
   - id: agent-wechat-rpa-real-v1177
     path: .github/workflows/scripts/smoke/wechat-rpa-real-agent-smoke.sh
