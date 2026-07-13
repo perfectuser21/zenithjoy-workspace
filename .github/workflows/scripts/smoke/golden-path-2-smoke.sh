@@ -188,19 +188,28 @@ ok "Step 8b report-videos（x-agent-id 真实调用方 shape）→ 视频行落�
 
 # 1x1 PNG（合法图片，多模态判定最小输入）
 PNG_B64="iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="
-S8_HTTP=$(curl -s -o "$S8_TMP" -w "%{http_code}" --max-time 60 \
-  -X POST "$API_BASE/api/acquisition/judge-video" \
-  -H "Content-Type: application/json" -H "x-agent-id: $AGENT_PK" \
-  -d "{\"video_id\":\"$VIDEO_ID\",\"capture_type\":\"screenshot\",\"data_b64\":\"$PNG_B64\"}")
-[ "$S8_HTTP" = "200" ] || fail "Step 8c judge-video expected 200, got $S8_HTTP: $(cat "$S8_TMP")" 8
-JUDGE_STATUS=$(python3 -c "import json,sys; print(json.load(open(sys.argv[1]))['data']['judgment_status'])" "$S8_TMP" 2>/dev/null)
-JUDGE_REASON=$(python3 -c "import json,sys; print(json.load(open(sys.argv[1]))['data'].get('judgment_reason') or '')" "$S8_TMP" 2>/dev/null)
+# 真调重试：LLM 上游偶发 >20s（服务端 JUDGMENT_TIMEOUT_MS）→ pending/gemini_timeout；
+# 重试仍是真请求真响应（judgeVideo 对 pending 不缓存，每次重新真调）。禁止改用 force_*。
+JUDGE_STATUS=""; JUDGE_REASON=""
+for S8_TRY in 1 2 3; do
+  S8_HTTP=$(curl -s -o "$S8_TMP" -w "%{http_code}" --max-time 60 \
+    -X POST "$API_BASE/api/acquisition/judge-video" \
+    -H "Content-Type: application/json" -H "x-agent-id: $AGENT_PK" \
+    -d "{\"video_id\":\"$VIDEO_ID\",\"capture_type\":\"screenshot\",\"data_b64\":\"$PNG_B64\"}")
+  [ "$S8_HTTP" = "200" ] || fail "Step 8c judge-video expected 200, got $S8_HTTP: $(cat "$S8_TMP")" 8
+  JUDGE_STATUS=$(python3 -c "import json,sys; print(json.load(open(sys.argv[1]))['data']['judgment_status'])" "$S8_TMP" 2>/dev/null)
+  JUDGE_REASON=$(python3 -c "import json,sys; print(json.load(open(sys.argv[1]))['data'].get('judgment_reason') or '')" "$S8_TMP" 2>/dev/null)
+  case "$JUDGE_REASON" in
+    force_result|no_api_key) fail "Step 8c reason=$JUDGE_REASON 不是真调（禁止 mock 顶替）" 8 ;;
+  esac
+  case "$JUDGE_STATUS" in
+    matched|rejected) break ;;
+    *) echo "  ↻ Step 8c 第 ${S8_TRY} 次真调未出结果（status=$JUDGE_STATUS reason=$JUDGE_REASON），5s 后重试"; sleep 5 ;;
+  esac
+done
 case "$JUDGE_STATUS" in
   matched|rejected) : ;;
-  *) fail "Step 8c 真调判定未出结果：status=$JUDGE_STATUS reason=${JUDGE_REASON}（no_api_key=API 进程缺 TOAPIS_API_KEY；pending=上游超时）" 8 ;;
-esac
-case "$JUDGE_REASON" in
-  force_result|no_api_key) fail "Step 8c reason=$JUDGE_REASON 不是真调（禁止 mock 顶替）" 8 ;;
+  *) fail "Step 8c 真调判定 3 次未出结果：status=$JUDGE_STATUS reason=${JUDGE_REASON}（no_api_key=API 进程缺 TOAPIS_API_KEY；pending=上游超时）" 8 ;;
 esac
 # video_id 本轮唯一（RND 后缀）+ 8b 已验 created_at 时间窗 → 此处按内容断言判定结果落库
 S8_ROW=$(psq "SELECT count(*) FROM zenithjoy.acquisition_collect_videos WHERE tenant_id='$TENANT_ID' AND video_id='$VIDEO_ID' AND judgment_status IN ('matched','rejected')")
