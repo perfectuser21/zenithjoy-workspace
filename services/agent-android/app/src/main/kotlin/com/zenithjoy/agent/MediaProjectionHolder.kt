@@ -8,70 +8,108 @@ import android.os.Handler
 import android.os.Looper
 
 /**
- * MediaProjectionHolder — 进程内单例，持有一次性系统截屏授权结果。
+ * MediaProjectionHolder — 进程内单例，持有一次性系统截屏授权并按生命周期状态机换出实例。
  *
- * 设计（sprints/07122051-content-judgment-client-wiring Golden Path 第 1 步）：
- *   1. MainActivity 弹 MediaProjectionManager.createScreenCaptureIntent() 系统授权框，
- *      拿到 resultCode + data 后调 cacheAuthorization() 缓存。
- *   2. AgentService 启动/需要截图时调 getOrCreateProjection() 换出真实 MediaProjection
- *      实例（懒创建，一次授权可反复用于多次截图，直到用户撤销或系统回收）。
- *   3. MediaProjection.Callback.onStop() 触发时（用户在系统通知里点了"停止投屏"，
- *      或系统主动回收）清空缓存，下次 MainActivity 会自动重新弹一次授权框
- *      （通过 hasAuthorization() 判定）。
+ * 真机 Android 14 bug（logcat 实锤）：
+ *   ScreenCaptureReal: captureOnce failed: Don't re-use the resultData to retrieve the same
+ *   projection instance, and don't use a token that has timed out
+ *   MediaProjectionHolder: MediaProjection stopped — clearing cached authorization
  *
- * 注意：resultCode/data 只能被消费一次换取 MediaProjection 实例（Android API 约束），
- * 换出后的 MediaProjection 实例本身可反复使用于多次 createVirtualDisplay()。
+ * 根因：resultCode/data 只能换取一次 MediaProjection 实例（A14 强约束）。旧实现在 projection
+ * 为 null 但 resultCode/data 仍在时会**再次** getMediaProjection → reuse 崩溃。
+ *
+ * 修复：授权生命周期交给纯状态机 [MediaProjectionAuthState] 管：
+ *   - 一份同意（onConsent）只允许 mint 一次（shouldMint 仅 AUTHORIZED 为 true）；
+ *   - 实例被 stop → onStopped 丢弃同意凭据进 REVOKED，此后绝不再拿旧 resultData 重换，
+ *     只能等 MainActivity 重新弹授权框（hasAuthorization()==false 触发）。
+ *
+ * 换出后的 MediaProjection 实例本身可反复用于多次 createVirtualDisplay()（release
+ * VirtualDisplay ≠ stop MediaProjection），见 ScreenCaptureReal。
  */
 object MediaProjectionHolder {
     private const val TAG = "MediaProjectionHolder"
 
+    /** 实际调 getMediaProjection 的动作抽成可注入 lambda（默认走系统 Manager），便于测试不依赖 Android。 */
+    fun interface Minter {
+        fun mint(context: Context, resultCode: Int, data: Intent): MediaProjection?
+    }
+
+    private val defaultMinter = Minter { context, rc, d ->
+        val manager = context.getSystemService(Context.MEDIA_PROJECTION_SERVICE) as? MediaProjectionManager
+            ?: return@Minter null
+        try {
+            manager.getMediaProjection(rc, d)
+        } catch (e: Exception) {
+            logW("getMediaProjection failed: ${e.message}")
+            null
+        }
+    }
+
+    @Volatile private var minter: Minter = defaultMinter
+    private val authState = MediaProjectionAuthState()
     @Volatile private var resultCode: Int? = null
     @Volatile private var data: Intent? = null
     @Volatile private var projection: MediaProjection? = null
+
+    /** 测试注入用：替换真正换实例的动作。 */
+    @Synchronized
+    fun setMinterForTest(m: Minter) {
+        minter = m
+    }
 
     /** MainActivity 拿到系统截屏授权结果后调用，缓存待 AgentService 换取实例。 */
     @Synchronized
     fun cacheAuthorization(resultCode: Int, data: Intent) {
         this.resultCode = resultCode
         this.data = data
-        // 新授权到来时旧实例（若有）已失效，清空强制下次重新换取
+        // 丢弃旧实例引用（不 stop，交给系统），进入 AUTHORIZED，允许换一次新实例
         projection = null
+        authState.onConsent()
     }
 
-    /** 状态自检用：是否已有可用的授权数据（不代表 MediaProjection 实例已成功换出）。 */
-    fun hasAuthorization(): Boolean = resultCode != null && data != null
+    /** 状态自检：是否持有可用授权（LIVE 或 AUTHORIZED）。供 AgentService FGS 类型与 MainActivity 横幅判断。 */
+    fun hasAuthorization(): Boolean = authState.hasUsableAuthorization()
 
-    /** 状态自检用：MediaProjection 实例是否已成功换出并仍然存活。 */
+    /** 状态自检：MediaProjection 实例是否已换出并仍存活。 */
     fun hasLiveProjection(): Boolean = projection != null
 
     /**
      * 换出（或复用已换出的）MediaProjection 实例。
-     * @return null 表示尚未授权，或换取失败（调用方应回退到"截图未授权"状态提示）
+     * 关键：**绝不在非 shouldMint 时调 getMediaProjection**（杜绝拿一次性 resultData 重换的 A14 崩溃）。
+     * @return null 表示无可用授权 / 已 REVOKED 需重新授权 / 换取失败（上层回退到"截图未授权"提示）
      */
     @Synchronized
     fun getOrCreateProjection(context: Context): MediaProjection? {
+        // 已有活实例直接复用
         projection?.let { return it }
+        // 只有 AUTHORIZED（一份同意的唯一一次机会）才允许换实例
+        if (!authState.shouldMint()) {
+            return null
+        }
         val rc = resultCode ?: return null
         val d = data ?: return null
-        val manager = context.getSystemService(Context.MEDIA_PROJECTION_SERVICE) as? MediaProjectionManager
-            ?: return null
-        val p = try {
-            manager.getMediaProjection(rc, d)
-        } catch (e: Exception) {
-            android.util.Log.w(TAG, "getMediaProjection failed: ${e.message}")
-            null
-        } ?: return null
+        val p = minter.mint(context, rc, d) ?: return null
         p.registerCallback(object : MediaProjection.Callback() {
             override fun onStop() {
-                android.util.Log.w(TAG, "MediaProjection stopped — clearing cached authorization")
-                clear()
+                logW("MediaProjection stopped — revoking authorization (需重新授权)")
+                onProjectionStopped()
             }
         }, Handler(Looper.getMainLooper()))
         projection = p
+        authState.onMinted()
         return p
     }
 
-    /** 清空缓存的授权与实例（onStop 回调或用户主动重置 License 时调用）。 */
+    /** onStop 回调：标 REVOKED + 作废凭据（保证之后 shouldMint 恒 false，不会拿旧 resultData 重换）。 */
+    @Synchronized
+    private fun onProjectionStopped() {
+        authState.onStopped()
+        projection = null
+        resultCode = null
+        data = null
+    }
+
+    /** 清空缓存的授权与实例（用户主动重置 License 时调用）。 */
     @Synchronized
     fun clear() {
         try {
@@ -82,5 +120,14 @@ object MediaProjectionHolder {
         projection = null
         resultCode = null
         data = null
+        authState.onCleared()
+    }
+
+    private fun logW(message: String) {
+        try {
+            android.util.Log.w(TAG, message)
+        } catch (_: RuntimeException) {
+            // JVM 单测环境下 android.util.Log 未 mock，吞掉
+        }
     }
 }

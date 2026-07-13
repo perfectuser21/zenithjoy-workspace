@@ -77,6 +77,15 @@ export async function judgeVideo(
     return { judgment_status: 'matched' };
   }
 
+  // § 客户端截图失败：capture_type=skipped_capture_failed → 直接标 pending 并记原因，不调 Gemini。
+  //   Agent 端 Android 14 MediaProjection 授权失效/截图返回 null 时会带这个 capture_type 上报，
+  //   目的是让 judgment_reason 落到 acquisition_collect_videos —— 环境守卫：DB 里一眼可辨"截图失败"
+  //   而非空转 pending（此前 Agent 截图失败时本地短路、从不 POST，judgment_reason 永远为空）。
+  if (captureType === 'skipped_capture_failed') {
+    await markPending(pool, tenantId, videoId, captureType, 'skipped_capture_failed');
+    return { judgment_status: 'pending', judgment_reason: 'skipped_capture_failed' };
+  }
+
   // § 测试 hook（仅非生产）
   if (process.env.NODE_ENV !== 'production') {
     if (forceTimeout) {

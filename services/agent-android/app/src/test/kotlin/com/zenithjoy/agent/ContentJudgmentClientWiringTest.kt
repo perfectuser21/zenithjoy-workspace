@@ -4,6 +4,13 @@ import org.junit.Test
 import org.junit.Assert.*
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import okhttp3.Interceptor
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.OkHttpClient
+import okhttp3.Protocol
+import okhttp3.Response
+import okhttp3.ResponseBody.Companion.toResponseBody
+import okio.Buffer
 
 class ContentJudgmentClientWiringTest {
 
@@ -43,19 +50,49 @@ class ContentJudgmentClientWiringTest {
         assertNull("captureImpl 返回 null 时 captureToBase64() 应返回 null", result)
     }
 
-    // TC-4: FR-C — ContentJudgmentService 截图失败时返回 skipped_capture_failed + pending
+    // TC-4: FR-C — 截图失败时不再本地短路，而是带 capture_type=skipped_capture_failed 回报服务端，
+    //   让 judgment_reason 落到 acquisition_collect_videos（修真机 Android 14 MediaProjection bug 的
+    //   环境守卫：DB 里一眼可辨"截图失败"而非空转 pending）。
     @Test
-    fun `ContentJudgmentService returns pending with skipped_capture_failed when capture fails`() {
+    fun `ContentJudgmentService reports skipped_capture_failed to server when capture fails`() {
         val failCapture = ScreenCaptureService(captureImpl = { null })
+        // 拦截器：捕获实际发出的请求体，并返回服务端对 skipped_capture_failed 的标准应答。
+        var capturedBody: String? = null
+        val client = OkHttpClient.Builder()
+            .addInterceptor(Interceptor { chain ->
+                val req = chain.request()
+                val buffer = Buffer()
+                req.body?.writeTo(buffer)
+                capturedBody = buffer.readUtf8()
+                Response.Builder()
+                    .request(req)
+                    .protocol(Protocol.HTTP_1_1)
+                    .code(200)
+                    .message("OK")
+                    .body(
+                        """{"judgment_status":"pending","judgment_reason":"skipped_capture_failed"}"""
+                            .toResponseBody("application/json".toMediaType()),
+                    )
+                    .build()
+            })
+            .build()
         val service = ContentJudgmentService(
             agentId = { "test" },
             httpBase = "http://localhost:3000",
             tenantId = { "tenant" },
+            httpClient = client,
             screenCaptureService = failCapture,
         )
         val result = service.judge(videoId = "vid-001", captureType = "screenshot", dataB64 = "")
-        assertEquals("截图失败应返回 pending", "pending", result.judgmentStatus)
-        assertEquals("截图失败原因应为 skipped_capture_failed", "skipped_capture_failed", result.judgmentReason)
+
+        // 关键：截图失败必须真的 POST（旧行为是本地短路、从不回报，导致 DB judgment_reason 永空）。
+        assertNotNull("截图失败时仍应发出回报请求", capturedBody)
+        assertTrue(
+            "回报请求应带 capture_type=skipped_capture_failed，原因才能落库",
+            capturedBody!!.contains("\"capture_type\":\"skipped_capture_failed\""),
+        )
+        assertEquals("服务端应答透传：pending", "pending", result.judgmentStatus)
+        assertEquals("服务端应答透传：skipped_capture_failed", "skipped_capture_failed", result.judgmentReason)
     }
 
     // TC-5: FR-D — dataB64 非空时直接使用，不调用 screenCaptureService
