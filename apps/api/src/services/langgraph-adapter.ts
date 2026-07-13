@@ -6,7 +6,8 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 const DOCKER_ROOT = '/home/cecelia/content-output';
 const HOST_ROOT = `${process.env.HOME}/content-output`;
 
-const BRAIN_URL = process.env.BRAIN_API_URL || 'http://localhost:5221';
+// 复用 pipeline.controller.ts 同款环境变量（同一个 Brain 地址，不新起变量名）
+const BRAIN_URL = process.env.CECELIA_BRAIN_URL || 'http://localhost:5221';
 
 export function isUuid(s: string | null | undefined): boolean {
   return !!s && UUID_RE.test(s);

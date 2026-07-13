@@ -164,9 +164,9 @@ describe('Pipeline API', () => {
     });
 
     it('should return 404 for non-existent id', async () => {
-      mockQuery
-        .mockResolvedValueOnce({ rows: [] })  // pipeline_runs miss
-        .mockResolvedValueOnce({ rows: [] }); // LangGraph-only miss
+      mockQuery.mockResolvedValueOnce({ rows: [] }); // pipeline_runs miss
+      // listLangGraphOnlyRuns 现在走 Brain HTTP API（刀1e），不再直连 DB
+      mockFetch.mockResolvedValueOnce({ ok: true, json: async () => [] }); // LangGraph-only miss
 
       const response = await request(app).get('/api/pipeline/00000000-0000-0000-0000-000000000000');
 
@@ -176,18 +176,19 @@ describe('Pipeline API', () => {
 
   describe('GET /api/pipeline', () => {
     it('should return merged list of pipeline_runs + LangGraph-only tasks', async () => {
-      mockQuery
-        .mockResolvedValueOnce({ rows: [PIPELINE_RUN] })
-        .mockResolvedValueOnce({
-          rows: [{
-            id: 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb',
-            title: '[内容流水线] 测试主题 2026-04-20',
-            created_at: '2026-04-20T00:00:00Z',
-            updated_at: '2026-04-20T00:00:00Z',
-            last_node: 'export',
-            last_error: null,
-          }],
-        });
+      mockQuery.mockResolvedValueOnce({ rows: [PIPELINE_RUN] });
+      // listLangGraphOnlyRuns 现在走 Brain HTTP API（刀1e），不再直连 DB
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => [{
+          id: 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb',
+          title: '[内容流水线] 测试主题 2026-04-20',
+          created_at: '2026-04-20T00:00:00Z',
+          updated_at: '2026-04-20T00:00:00Z',
+          last_node: 'export',
+          last_error: null,
+        }],
+      });
 
       const response = await request(app).get('/api/pipeline');
 
@@ -202,9 +203,8 @@ describe('Pipeline API', () => {
     });
 
     it('should return empty array when no runs in either source', async () => {
-      mockQuery
-        .mockResolvedValueOnce({ rows: [] })
-        .mockResolvedValueOnce({ rows: [] });
+      mockQuery.mockResolvedValueOnce({ rows: [] });
+      mockFetch.mockResolvedValueOnce({ ok: true, json: async () => [] });
 
       const response = await request(app).get('/api/pipeline');
 
@@ -298,10 +298,11 @@ describe('Pipeline API', () => {
     });
 
     it('should return pending when LangGraph task exists but no events yet', async () => {
-      mockQuery
-        .mockResolvedValueOnce({ rows: [] })                              // pipeline_runs miss
-        .mockResolvedValueOnce({ rows: [] })                              // cecelia_events empty
-        .mockResolvedValueOnce({ rows: [{ '?column?': 1 }] });            // tasks exists
+      mockQuery.mockResolvedValueOnce({ rows: [] }); // pipeline_runs miss
+      // fetchLangGraphEvents / existsLangGraphTask 现在走 Brain HTTP API（刀1e），不再直连 DB
+      mockFetch
+        .mockResolvedValueOnce({ ok: true, json: async () => [] })      // cecelia_events empty
+        .mockResolvedValueOnce({ status: 200 });                        // tasks exists (HEAD)
 
       const taskId = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
       const response = await request(app).get(`/api/pipeline/${taskId}/output`);
@@ -313,14 +314,13 @@ describe('Pipeline API', () => {
       expect(response.body.output.cards_text).toBeNull();
       expect(response.body.output.image_urls).toEqual([]);
       expect(response.body.output.export_path).toBeNull();
-      expect(mockFetch).not.toHaveBeenCalled();
     });
 
     it('should return 404 when LangGraph task does not exist', async () => {
-      mockQuery
-        .mockResolvedValueOnce({ rows: [] })                              // pipeline_runs miss
-        .mockResolvedValueOnce({ rows: [] })                              // cecelia_events empty
-        .mockResolvedValueOnce({ rows: [] });                             // tasks miss
+      mockQuery.mockResolvedValueOnce({ rows: [] }); // pipeline_runs miss
+      mockFetch
+        .mockResolvedValueOnce({ ok: true, json: async () => [] })      // cecelia_events empty
+        .mockResolvedValueOnce({ status: 404 });                        // tasks miss (HEAD)
 
       const response = await request(app).get(
         '/api/pipeline/00000000-0000-0000-0000-000000000000/output'
@@ -331,9 +331,8 @@ describe('Pipeline API', () => {
 
     it('should return pending output when output_manifest is null and no LangGraph events', async () => {
       // pipeline_runs 有 row 但 manifest=null，cecelia_events 也为空 → 返回 pending
-      mockQuery
-        .mockResolvedValueOnce({ rows: [{ ...PIPELINE_RUN, status: 'running', output_manifest: null }] })
-        .mockResolvedValueOnce({ rows: [] }); // no LangGraph events
+      mockQuery.mockResolvedValueOnce({ rows: [{ ...PIPELINE_RUN, status: 'running', output_manifest: null }] });
+      mockFetch.mockResolvedValueOnce({ ok: true, json: async () => [] }); // no LangGraph events
 
       const response = await request(app).get(`/api/pipeline/${PIPELINE_RUN.id}/output`);
 
@@ -343,8 +342,6 @@ describe('Pipeline API', () => {
       expect(response.body.output.article_text).toBeNull();
       expect(response.body.output.cards_text).toBeNull();
       expect(response.body.output.image_urls).toEqual([]);
-      // 严禁 HTTP fallback 到 cecelia Brain（只允许本地 cecelia_events 表查询）
-      expect(mockFetch).not.toHaveBeenCalled();
     });
   });
 
@@ -355,23 +352,22 @@ describe('Pipeline API', () => {
         status: 'completed',
         output_manifest: { status: 'ready_for_publish' },
       };
-      mockQuery
-        .mockResolvedValueOnce({ rows: [runWithManifest] })
-        .mockResolvedValueOnce({ rows: [] }); // no LangGraph events
+      mockQuery.mockResolvedValueOnce({ rows: [runWithManifest] });
+      // fetchLangGraphEvents 现在走 Brain HTTP API（刀1e），只要 :id 是合法 UUID 就会尝试调用
+      mockFetch.mockResolvedValueOnce({ ok: true, json: async () => [] }); // no LangGraph events
 
       const response = await request(app).get(`/api/pipeline/${PIPELINE_RUN.id}/stages`);
 
       expect(response.status).toBe(200);
       expect(response.body).toHaveProperty('stages');
       expect(response.body.overall_status).toBe('ready_for_publish');
-      expect(mockFetch).not.toHaveBeenCalled();
     });
 
     it('should return pending when LangGraph task exists but no events yet', async () => {
-      mockQuery
-        .mockResolvedValueOnce({ rows: [] })                              // pipeline_runs miss
-        .mockResolvedValueOnce({ rows: [] })                              // cecelia_events empty
-        .mockResolvedValueOnce({ rows: [{ '?column?': 1 }] });            // tasks exists
+      mockQuery.mockResolvedValueOnce({ rows: [] }); // pipeline_runs miss
+      mockFetch
+        .mockResolvedValueOnce({ ok: true, json: async () => [] })      // cecelia_events empty
+        .mockResolvedValueOnce({ status: 200 });                        // tasks exists (HEAD)
 
       const taskId = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
       const response = await request(app).get(`/api/pipeline/${taskId}/stages`);
@@ -383,10 +379,10 @@ describe('Pipeline API', () => {
     });
 
     it('should return 404 when LangGraph task does not exist', async () => {
-      mockQuery
-        .mockResolvedValueOnce({ rows: [] })                              // pipeline_runs miss
-        .mockResolvedValueOnce({ rows: [] })                              // cecelia_events empty
-        .mockResolvedValueOnce({ rows: [] });                             // tasks miss
+      mockQuery.mockResolvedValueOnce({ rows: [] }); // pipeline_runs miss
+      mockFetch
+        .mockResolvedValueOnce({ ok: true, json: async () => [] })      // cecelia_events empty
+        .mockResolvedValueOnce({ status: 404 });                        // tasks miss (HEAD)
 
       const response = await request(app).get(
         '/api/pipeline/00000000-0000-0000-0000-000000000000/stages'
@@ -409,9 +405,8 @@ describe('Pipeline API', () => {
           created_at: '2026-04-19T11:00:30.000Z',
         },
       ];
-      mockQuery
-        .mockResolvedValueOnce({ rows: [] })              // pipeline_runs miss
-        .mockResolvedValueOnce({ rows: fakeEvents });      // cecelia_events hit
+      mockQuery.mockResolvedValueOnce({ rows: [] }); // pipeline_runs miss
+      mockFetch.mockResolvedValueOnce({ ok: true, json: async () => fakeEvents }); // cecelia_events hit
 
       const response = await request(app).get(`/api/pipeline/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa/stages`);
 
@@ -428,9 +423,8 @@ describe('Pipeline API', () => {
 
     it('should return empty events array when no LangGraph events', async () => {
       const runWithManifest = { ...PIPELINE_RUN, output_manifest: null };
-      mockQuery
-        .mockResolvedValueOnce({ rows: [runWithManifest] })
-        .mockResolvedValueOnce({ rows: [] });
+      mockQuery.mockResolvedValueOnce({ rows: [runWithManifest] });
+      mockFetch.mockResolvedValueOnce({ ok: true, json: async () => [] });
 
       const response = await request(app).get(`/api/pipeline/${PIPELINE_RUN.id}/stages`);
 
