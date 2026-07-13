@@ -149,6 +149,7 @@ jobs:
           wechat-rpa-auto-reply-smoke.sh
           wechat-cs-visible-delivery-smoke.sh
           line04-preflight-smoke.sh
+          line02-android-collect-realmachine-smoke.sh
           "
 
           is_denied() {
