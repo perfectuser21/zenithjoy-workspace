@@ -112,8 +112,8 @@ ok "Step 3 ✅ x-agent-id 真实调用方 shape 通 + 无 header 401"
 # ───────────────────────────────────────────────────────────────────
 echo "▶ Step 4: 3 张本地表存在"
 for T in acquisition_config acquisition_collect_videos acquisition_leads; do
-  CNT=$(psq "SELECT count(*) FROM information_schema.tables WHERE table_schema='zenithjoy' AND table_name='$T'")
-  [ "$CNT" = "1" ] || fail "Step 4 本地表 zenithjoy.$T 不存在" 4
+  EXISTS=$(psq "SELECT 1 FROM information_schema.tables WHERE table_schema='zenithjoy' AND table_name='$T' LIMIT 1")
+  [ "$EXISTS" = "1" ] || fail "Step 4 本地表 zenithjoy.$T 不存在" 4
 done
 ok "Step 4 ✅ acquisition_config / acquisition_collect_videos / acquisition_leads 三表在库"
 
@@ -211,8 +211,7 @@ case "$JUDGE_STATUS" in
   matched|rejected) : ;;
   *) fail "Step 8c 真调判定 3 次未出结果：status=$JUDGE_STATUS reason=${JUDGE_REASON}（no_api_key=API 进程缺 TOAPIS_API_KEY；pending=上游超时）" 8 ;;
 esac
-# video_id 本轮唯一（RND 后缀）+ 8b 已验 created_at 时间窗 → 此处按内容断言判定结果落库
-S8_ROW=$(psq "SELECT count(*) FROM zenithjoy.acquisition_collect_videos WHERE tenant_id='$TENANT_ID' AND video_id='$VIDEO_ID' AND judgment_status IN ('matched','rejected')")
+S8_ROW=$(psq "SELECT count(*) FROM zenithjoy.acquisition_collect_videos WHERE tenant_id='$TENANT_ID' AND video_id='$VIDEO_ID' AND judgment_status IN ('matched','rejected') AND updated_at > NOW() - interval '300 seconds'")
 [ "$S8_ROW" = "1" ] || fail "Step 8c 判定结果未落库 acquisition_collect_videos.judgment_status" 8
 ok "Step 8c judge-video 真调 → judgment_status=$JUDGE_STATUS 已落库（LLM 真请求真响应）"
 ok "Step 8 ✅ 采集+判定服务端链路全通"
